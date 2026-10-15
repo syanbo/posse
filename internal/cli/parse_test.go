@@ -1,0 +1,37 @@
+package cli
+
+import (
+	"flag"
+	"reflect"
+	"testing"
+)
+
+func TestParseInterleaved(t *testing.T) {
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	lines := fs.Int("lines", 0, "")
+	screen := fs.Bool("screen", false, "")
+	pos, err := parse(fs, []string{"t_1", "--lines", "5", "--screen", "extra", "--", "--not-a-flag", "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *lines != 5 || !*screen {
+		t.Fatalf("flags: lines=%d screen=%v", *lines, *screen)
+	}
+	if want := []string{"t_1", "extra", "--not-a-flag", "x"}; !reflect.DeepEqual(pos, want) {
+		t.Fatalf("pos = %q, want %q", pos, want)
+	}
+}
+
+func TestParseErrors(t *testing.T) {
+	fs := flag.NewFlagSet("t", flag.ContinueOnError)
+	fs.Int("lines", 0, "")
+	if _, err := parse(fs, []string{"--nope"}); err == nil {
+		t.Fatal("unknown flag accepted")
+	}
+	if _, err := parse(fs, []string{"--lines"}); err == nil {
+		t.Fatal("missing value accepted")
+	}
+	if _, err := parse(fs, []string{"--lines=3"}); err != nil {
+		t.Fatal(err)
+	}
+}
