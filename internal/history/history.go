@@ -1,0 +1,493 @@
+// Package history 把 claude、codex、cursor、grok 的会话记录增量索引进 SQLite，提供全文搜索。
+// 索引只读各 agent 的会话文件，不写回；索引库是可以随时删掉重建的派生数据。
+package history
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+var ErrNotFound = errors.New("session not found")
+
+// Agents 是支持索引的 agent，顺序即界面里的筛选顺序。
+var Agents = []string{"claude", "codex", "cursor", "grok"}
+
+type Session struct {
+	Agent     string    `json:"agent"`
+	ID        string    `json:"id"` // agent 自己的会话 ID，恢复会话时用它
+	Title     string    `json:"title"`
+	Cwd       string    `json:"cwd,omitempty"`
+	Branch    string    `json:"branch,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Messages  int       `json:"messages"`
+	Path      string    `json:"path"`            // 会话文件
+	Model     string    `json:"model,omitempty"` // 最近一次回复用的模型
+}
+
+type Message struct {
+	Seq  int       `json:"seq"`
+	Role string    `json:"role"` // user | assistant | tool
+	Text string    `json:"text"`
+	At   time.Time `json:"at,omitzero"`
+}
+
+// Hit 是一个命中的会话，带上最相关的一条消息的摘要。
+type Hit struct {
+	Session
+	Matches int       `json:"matches"` // 会话里命中的消息数
+	Role    string    `json:"role"`
+	Seq     int       `json:"seq"`
+	At      time.Time `json:"at,omitzero"`
+	Snippet string    `json:"snippet"`
+	Spans   []Span    `json:"spans,omitempty"`
+}
+
+type Index struct{ db *sql.DB }
+
+const schema = `
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	agent TEXT NOT NULL,
+	session_id TEXT NOT NULL,
+	path TEXT NOT NULL UNIQUE,
+	title TEXT NOT NULL DEFAULT '',
+	first_prompt TEXT NOT NULL DEFAULT '',
+	cwd TEXT NOT NULL DEFAULT '',
+	branch TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL DEFAULT 0,
+	updated_at INTEGER NOT NULL DEFAULT 0,
+	messages INTEGER NOT NULL DEFAULT 0,
+	-- 增量读取的进度：offset 之前的内容已入库；tail 是 offset 前的最后一段字节，
+	-- 对不上说明文件被改写，要整份重读；state 是解析器跨批次要记住的东西
+	size INTEGER NOT NULL DEFAULT 0,
+	mtime INTEGER NOT NULL DEFAULT 0,
+	offset INTEGER NOT NULL DEFAULT 0,
+	tail BLOB,
+	state TEXT NOT NULL DEFAULT '',
+	-- 元数据旁路文件（grok 的 summary.json）的 mtime
+	meta_mtime INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS sessions_sid ON sessions(session_id);
+CREATE INDEX IF NOT EXISTS sessions_updated ON sessions(updated_at);
+CREATE TABLE IF NOT EXISTS messages (
+	id INTEGER PRIMARY KEY,
+	session INTEGER NOT NULL,
+	seq INTEGER NOT NULL,
+	role TEXT NOT NULL,
+	at INTEGER NOT NULL DEFAULT 0,
+	text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS messages_session ON messages(session, seq);
+-- 不存原文（原文在 messages 里），索引的是 splitCJK 处理过的文本。
+-- 每条消息只填自己角色那一列，列权重让用户说的话比工具输出更相关
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+	user, assistant, tool, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2'
+);
+INSERT INTO messages_fts(messages_fts, rank) VALUES('rank', 'bm25(4.0, 2.0, 1.0)');
+-- 会话标题（没有标题时是第一句话），rowid 是 sessions.id
+CREATE VIRTUAL TABLE IF NOT EXISTS titles_fts USING fts5(
+	title, content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 2'
+);
+`
+
+// schemaVersion 变化时清空重建：索引是派生数据，重建比迁移简单可靠。解析规则变了也要改它。
+const schemaVersion = "5"
+
+// Open 打开索引供更新用，版本不对时清空重建。
+func Open(path string) (*Index, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=cache_size(-4000)&_pragma=synchronous(NORMAL)")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	x := &Index{db: db}
+	if err := x.migrate(false); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open history index: %w", err)
+	}
+	return x, nil
+}
+
+// ErrStale 表示索引是另一个版本的 hive 建的。常驻进程跨应用升级继续运行，
+// 只读的一方不迁移，免得新旧两个版本轮流清空重建。
+var ErrStale = errors.New("the history index was built by a different hive version; restart the daemon (hive daemon stop)")
+
+// OpenReader 打开索引只做查询，不建表、不迁移；索引还不存在时查询返回空结果。
+// SQLite 的分配器不把内存还给系统，页缓存给小些，查询速度不受影响（页面在系统文件缓存里）。
+func OpenReader(path string) (*Index, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(10000)&_pragma=cache_size(-500)&_pragma=query_only(1)")
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	return &Index{db: db}, nil
+}
+
+func (x *Index) Close() error { return x.db.Close() }
+
+// ready 检查索引能否查询：还没建好返回 false，版本不对返回 ErrStale。
+func (x *Index) ready(ctx context.Context) (bool, error) {
+	var v string
+	err := x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='schema'`).Scan(&v)
+	switch {
+	case err != nil && (errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "no such table")):
+		return false, nil
+	case err != nil:
+		return false, err
+	case v != schemaVersion:
+		return false, ErrStale
+	}
+	return true, nil
+}
+
+// Reset 清空索引，下次更新整份重建。在原文件上重建表而不删文件，别的进程开着的连接也能看到新内容。
+func (x *Index) Reset() error { return x.migrate(true) }
+
+func (x *Index) migrate(force bool) error {
+	if !force && x.schemaCurrent() {
+		return nil
+	}
+	// 常驻进程和索引子进程可能同时打开新库，用写事务串行化，进来后再确认一次版本
+	conn, err := x.db.Conn(context.Background())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ctx := context.Background()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return err
+	}
+	commit := false
+	defer func() {
+		if !commit {
+			conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+	var v string
+	if !force && conn.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='schema'`).Scan(&v) == nil && v == schemaVersion {
+		return nil
+	}
+	for _, t := range []string{"titles_fts", "messages_fts", "messages", "sessions", "meta"} {
+		if _, err := conn.ExecContext(ctx, "DROP TABLE IF EXISTS "+t); err != nil {
+			return err
+		}
+	}
+	if _, err := conn.ExecContext(ctx, schema); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('schema',?)`, schemaVersion); err != nil {
+		return err
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return err
+	}
+	commit = true
+	return nil
+}
+
+func (x *Index) schemaCurrent() bool {
+	var v string
+	return x.db.QueryRow(`SELECT value FROM meta WHERE key='schema'`).Scan(&v) == nil && v == schemaVersion
+}
+
+func ms(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
+}
+
+func fromMS(v int64) time.Time {
+	if v == 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(v)
+}
+
+const sessionCols = `agent, session_id, title, first_prompt, cwd, branch, created_at, updated_at, messages, path, state`
+
+func scanSession(sc interface{ Scan(...any) error }, extra ...any) (Session, error) {
+	var s Session
+	var first string
+	var created, updated int64
+	var state string
+	dest := append([]any{&s.Agent, &s.ID, &s.Title, &first, &s.Cwd, &s.Branch, &created, &updated, &s.Messages, &s.Path, &state}, extra...)
+	if err := sc.Scan(dest...); err != nil {
+		return s, err
+	}
+	// 模型只记在增量读取的状态里，不单独成列
+	var st struct {
+		Model string `json:"model"`
+	}
+	if json.Unmarshal([]byte(state), &st) == nil {
+		s.Model = st.Model
+	}
+	if s.Title == "" {
+		s.Title = first
+	}
+	s.CreatedAt, s.UpdatedAt = fromMS(created), fromMS(updated)
+	return s, nil
+}
+
+type ListOptions struct {
+	Agent string
+	Cwd   string // 只列这个目录（含子目录）里的会话
+	Limit int
+}
+
+func (o ListOptions) where(alias string) (string, []any) {
+	var where []string
+	var args []any
+	// 没有任何消息的会话（只开了没说话）不列出来
+	where = append(where, alias+"messages > 0")
+	if o.Agent != "" {
+		where = append(where, alias+"agent = ?")
+		args = append(args, o.Agent)
+	}
+	if o.Cwd != "" {
+		cwd := strings.TrimRight(o.Cwd, "/")
+		where = append(where, "("+alias+"cwd = ? OR "+alias+"cwd LIKE ? ESCAPE '\\')")
+		args = append(args, cwd, likeEscape(cwd)+"/%")
+	}
+	return " WHERE " + strings.Join(where, " AND "), args
+}
+
+func likeEscape(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// Sessions 按最近更新排列会话。
+func (x *Index) Sessions(ctx context.Context, o ListOptions) ([]Session, error) {
+	if ok, err := x.ready(ctx); !ok {
+		return nil, err
+	}
+	where, args := o.where("")
+	q := `SELECT ` + sessionCols + ` FROM sessions` + where + ` ORDER BY updated_at DESC`
+	if o.Limit > 0 {
+		q += fmt.Sprintf(" LIMIT %d", o.Limit)
+	}
+	rows, err := x.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Session
+	for rows.Next() {
+		s, err := scanSession(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// Find 按会话 ID 或其前缀查找；前缀对应多个会话时报错列出候选。
+func (x *Index) Find(ctx context.Context, id string) (Session, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Session{}, ErrNotFound
+	}
+	if ok, err := x.ready(ctx); !ok {
+		if err == nil {
+			err = ErrNotFound
+		}
+		return Session{}, err
+	}
+	rows, err := x.db.QueryContext(ctx, `SELECT `+sessionCols+` FROM sessions WHERE session_id = ? OR session_id LIKE ? ESCAPE '\' ORDER BY session_id = ? DESC, updated_at DESC LIMIT 6`,
+		id, likeEscape(id)+"%", id)
+	if err != nil {
+		return Session{}, err
+	}
+	defer rows.Close()
+	var found []Session
+	for rows.Next() {
+		s, err := scanSession(rows)
+		if err != nil {
+			return Session{}, err
+		}
+		found = append(found, s)
+	}
+	if err := rows.Err(); err != nil {
+		return Session{}, err
+	}
+	switch {
+	case len(found) == 0:
+		return Session{}, ErrNotFound
+	case found[0].ID == id || len(found) == 1:
+		return found[0], nil
+	}
+	var ids []string
+	for _, s := range found {
+		ids = append(ids, s.Agent+" "+s.ID)
+	}
+	return Session{}, fmt.Errorf("session %q is ambiguous: %s", id, strings.Join(ids, ", "))
+}
+
+// Transcript 返回会话的全部已索引消息。
+func (x *Index) Transcript(ctx context.Context, s Session) ([]Message, error) {
+	rows, err := x.db.QueryContext(ctx, `SELECT m.seq, m.role, m.at, m.text FROM messages m JOIN sessions s ON s.id = m.session
+		WHERE s.path = ? ORDER BY m.seq`, s.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Message
+	for rows.Next() {
+		var m Message
+		var at int64
+		if err := rows.Scan(&m.Seq, &m.Role, &at, &m.Text); err != nil {
+			return nil, err
+		}
+		m.At = fromMS(at)
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+type SearchOptions struct {
+	ListOptions
+	Role string // 只搜某一类消息：user | assistant | tool
+}
+
+// Search 全文搜索，每个会话一条结果。标题命中的排在前面，其余按最相关的一条消息排，
+// 同一会话里命中的消息越多越靠前。没有消息同时含所有词时，退而返回含任一词的结果，any 为真。
+func (x *Index) Search(ctx context.Context, query string, o SearchOptions) (hits []Hit, any bool, err error) {
+	terms := parseTerms(query)
+	if len(terms) == 0 {
+		return nil, false, nil
+	}
+	if ok, err := x.ready(ctx); !ok {
+		return nil, false, err
+	}
+	hits, err = x.search(ctx, terms, matchExpr(terms), o)
+	if err != nil || len(hits) > 0 || len(terms) < 2 {
+		return hits, false, err
+	}
+	hits, err = x.search(ctx, terms, anyExpr(terms), o)
+	return hits, len(hits) > 0, err
+}
+
+func (x *Index) search(ctx context.Context, terms []term, match string, o SearchOptions) ([]Hit, error) {
+	limit := o.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	where, args := o.where("s.")
+	msgWhere, msgArgs := where, append([]any{}, args...)
+	if o.Role != "" {
+		msgWhere += " AND m.role = ?"
+		msgArgs = append(msgArgs, o.Role)
+	}
+	// 指定了消息角色时标题不参与匹配
+	titled := `SELECT rowid AS session FROM titles_fts WHERE titles_fts MATCH ?`
+	if o.Role != "" {
+		titled = `SELECT 0 AS session WHERE ? IS NULL`
+	}
+	q := `WITH hits AS (
+		SELECT m.id, m.session, m.seq, m.role, m.at, f.rank AS rank
+		FROM messages_fts f JOIN messages m ON m.id = f.rowid JOIN sessions s ON s.id = m.session
+		` + msgWhere + ` AND messages_fts MATCH ?
+	), best AS (
+		-- 会话按最相关的一条排序；摘要优先取对话里的那条，没有才用工具输出
+		SELECT session, id, seq, role, at, best_rank AS rank, n FROM (
+			SELECT *, MIN(rank) OVER w AS best_rank, COUNT(*) OVER w AS n,
+				ROW_NUMBER() OVER (PARTITION BY session ORDER BY role = 'tool', rank) AS pick
+			FROM hits WINDOW w AS (PARTITION BY session)
+		) WHERE pick = 1
+	), titled AS (` + titled + `
+	), cand AS (
+		SELECT session FROM best UNION SELECT session FROM titled
+	)
+	SELECT ` + prefixCols("s.", sessionCols) + `, COALESCE(b.n, 0), COALESCE(b.role, ''), COALESCE(b.seq, 0), COALESCE(b.at, 0),
+		COALESCE(m.text, ''), t.session IS NOT NULL AS title_hit
+	FROM cand c JOIN sessions s ON s.id = c.session
+	LEFT JOIN best b ON b.session = c.session
+	LEFT JOIN messages m ON m.id = b.id
+	LEFT JOIN titled t ON t.session = c.session
+	` + where + `
+	ORDER BY title_hit DESC, COALESCE(b.rank - 0.5 * ln(b.n), 0) ASC, s.updated_at DESC LIMIT ?`
+	all := append(msgArgs, match, match)
+	all = append(all, args...)
+	all = append(all, limit)
+	rows, err := x.db.QueryContext(ctx, q, all...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ns := needles(terms)
+	var out []Hit
+	for rows.Next() {
+		var h Hit
+		var at int64
+		var text string
+		var titleHit bool
+		s, err := scanSession(rows, &h.Matches, &h.Role, &h.Seq, &at, &text, &titleHit)
+		if err != nil {
+			return nil, err
+		}
+		h.Session, h.At = s, fromMS(at)
+		if text == "" {
+			// 只有标题命中
+			h.Role, text = "title", s.Title
+		}
+		h.Snippet, h.Spans = snippet(text, ns, 120)
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+func prefixCols(prefix, cols string) string {
+	parts := strings.Split(cols, ",")
+	for i, p := range parts {
+		parts[i] = prefix + strings.TrimSpace(p)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// Stats 是索引规模，给状态栏和 CLI 显示。
+type Stats struct {
+	Sessions  int            `json:"sessions"`
+	Messages  int            `json:"messages"`
+	ByAgent   map[string]int `json:"byAgent"`
+	IndexedAt time.Time      `json:"indexedAt,omitzero"`
+}
+
+func (x *Index) Stats(ctx context.Context) (Stats, error) {
+	st := Stats{ByAgent: map[string]int{}}
+	if ok, err := x.ready(ctx); !ok {
+		return st, err
+	}
+	rows, err := x.db.QueryContext(ctx, `SELECT agent, COUNT(*), SUM(messages) FROM sessions WHERE messages > 0 GROUP BY agent`)
+	if err != nil {
+		return st, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var agent string
+		var n, m int
+		if err := rows.Scan(&agent, &n, &m); err != nil {
+			return st, err
+		}
+		st.ByAgent[agent] = n
+		st.Sessions += n
+		st.Messages += m
+	}
+	if err := rows.Err(); err != nil {
+		return st, err
+	}
+	var at string
+	if x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='indexed_at'`).Scan(&at) == nil {
+		st.IndexedAt, _ = time.Parse(time.RFC3339Nano, at)
+	}
+	return st, nil
+}

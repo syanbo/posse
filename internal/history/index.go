@@ -1,0 +1,455 @@
+package history
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
+	"math"
+	"os"
+	"path/filepath"
+	"time"
+)
+
+// Roots 是各 agent 会话目录所在的用户主目录；测试时指向临时目录。
+type Roots struct{ Home string }
+
+// source 是一份要索引的会话文件。transcript 是按行追加的 JSONL；
+// meta 是可选的元数据旁路文件，变化时整份重读。
+type source struct {
+	agent      string
+	transcript string
+	meta       string
+	cwd        string // 记录里没有目录时的备选（cursor 从项目目录名还原）
+	parser     parser
+}
+
+// fileState 是一份会话文件解析到一半时需要记住的东西，存进 sessions.state，
+// 下次增量读取时接着用。
+type fileState struct {
+	SessionID   string `json:"sid,omitempty"`
+	Title       string `json:"title,omitempty"`
+	TitleManual bool   `json:"manual,omitempty"` // 用户起的标题，自动标题不再覆盖
+	FirstPrompt string `json:"first,omitempty"`
+	Cwd         string `json:"cwd,omitempty"`
+	Branch      string `json:"branch,omitempty"`
+	Created     int64  `json:"created,omitempty"`
+	Updated     int64  `json:"updated,omitempty"`
+	Seq         int    `json:"seq,omitempty"`
+	Mode        string `json:"mode,omitempty"` // codex 的记录格式
+	// Skip 为真表示这份文件不是用户的会话（如 agent 内部的子任务），不入库
+	Skip bool `json:"skip,omitempty"`
+	// Model 是最近一次回复用的模型
+	Model string `json:"model,omitempty"`
+	// LastAt 是上一条有时间的消息的时间：记录里没有时间的消息沿用它
+	LastAt int64 `json:"lastAt,omitempty"`
+	// grok 的消息时间表，读新行前从旁路文件现建，不存
+	grok *grokTimes
+}
+
+// preparer 是读新行之前还要准备旁路数据的 parser。
+type preparer interface {
+	prepare(transcript string, st *fileState)
+}
+
+// parser 解析一种 agent 的会话文件。
+type parser interface {
+	// line 解析一行记录，返回其中要索引的消息，并更新 st 里的元数据
+	line(raw []byte, st *fileState) []Message
+	// meta 读取元数据旁路文件；没有旁路文件的 agent 不会被调用
+	meta(path string, st *fileState) error
+}
+
+// Progress 是一次索引的进度，Done 计已检查的文件数。
+type Progress struct {
+	Done  int `json:"done"`
+	Total int `json:"total"`
+}
+
+// maxLine 以上的单行记录直接跳过：几乎都是内嵌图片或超大工具输出，没有可搜的文字。
+const maxLine = 32 << 20
+
+// tailLen 是用来发现文件被改写的校验长度。
+const tailLen = 64
+
+// Update 增量更新索引：新文件整份读入，追加过的文件只读新增的行，消失的文件从索引删除。
+func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)) error {
+	sources := discover(roots)
+	known, err := x.knownFiles(ctx)
+	if err != nil {
+		return err
+	}
+	redo, err := x.staleParsers(ctx)
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for i, src := range sources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		seen[src.transcript] = true
+		k := known[src.transcript]
+		if redo[src.agent] && k.id != 0 {
+			// 进度作废，整份重读；会话 ID 不变
+			k.size, k.offset = -1, math.MaxInt64
+		}
+		if err := x.updateFile(ctx, src, k); err != nil {
+			// 单个文件读不了（权限、半截写入）不影响其他文件，下次再试
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+		}
+		if progress != nil && (i%20 == 0 || i == len(sources)-1) {
+			progress(Progress{Done: i + 1, Total: len(sources)})
+		}
+	}
+	for path, k := range known {
+		if !seen[path] {
+			if err := x.deleteSession(ctx, k.id); err != nil {
+				return err
+			}
+		}
+	}
+	if err := x.applyCodexTitles(ctx, roots); err != nil {
+		return err
+	}
+	for agent := range redo {
+		if _, err := x.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+			"parser:"+agent, parserVersions[agent]); err != nil {
+			return err
+		}
+	}
+	_, err = x.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('indexed_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		time.Now().UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+type knownFile struct {
+	id        int64
+	size      int64
+	mtime     int64
+	offset    int64
+	tail      []byte
+	state     string
+	metaMtime int64
+}
+
+// parserVersions 是各家解析规则的版本。只改了某一家的解析时改这里：只重读这一家的文件，表结构版本不变，
+// 跨版本继续运行的旧常驻进程照常能查询。表结构或分词变了才改 schemaVersion（整份重建，旧常驻进程要重启）。
+var parserVersions = map[string]string{
+	"claude": "2", // 记下模型
+	"codex":  "2", // 记下模型
+	"grok":   "3", // 消息时间取自 updates.jsonl；记下模型
+}
+
+// staleParsers 返回解析规则比索引里记录的新的 agent。
+func (x *Index) staleParsers(ctx context.Context) (map[string]bool, error) {
+	out := map[string]bool{}
+	for agent, v := range parserVersions {
+		var have string
+		err := x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key=?`, "parser:"+agent).Scan(&have)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		if have != v {
+			out[agent] = true
+		}
+	}
+	return out, nil
+}
+
+func (x *Index) knownFiles(ctx context.Context) (map[string]knownFile, error) {
+	rows, err := x.db.QueryContext(ctx, `SELECT path, id, size, mtime, offset, tail, state, meta_mtime FROM sessions`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]knownFile{}
+	for rows.Next() {
+		var path string
+		var k knownFile
+		if err := rows.Scan(&path, &k.id, &k.size, &k.mtime, &k.offset, &k.tail, &k.state, &k.metaMtime); err != nil {
+			return nil, err
+		}
+		out[path] = k
+	}
+	return out, rows.Err()
+}
+
+func mtimeOf(path string) int64 {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return fi.ModTime().UnixNano()
+}
+
+func (x *Index) updateFile(ctx context.Context, src source, k knownFile) error {
+	f, err := os.Open(src.transcript)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	size, mtime := fi.Size(), fi.ModTime().UnixNano()
+	metaMtime := int64(0)
+	if src.meta != "" {
+		metaMtime = mtimeOf(src.meta)
+	}
+	if k.id != 0 && size == k.size && mtime == k.mtime && metaMtime == k.metaMtime {
+		return nil
+	}
+
+	var st fileState
+	offset := k.offset
+	reset := k.id == 0 || size < k.offset || !tailMatches(f, k.offset, k.tail)
+	if reset {
+		offset = 0
+	} else if k.state != "" {
+		json.Unmarshal([]byte(k.state), &st)
+	}
+	var msgs []Message
+	var tail []byte
+	if pr, ok := src.parser.(preparer); ok && size > offset {
+		pr.prepare(src.transcript, &st)
+	}
+	if size > offset {
+		if _, err := f.Seek(offset, io.SeekStart); err != nil {
+			return err
+		}
+		var n int64
+		msgs, n, tail, err = readLines(f, src.parser, &st)
+		if err != nil {
+			return err
+		}
+		offset += n
+	} else {
+		tail = k.tail
+	}
+	if src.meta != "" && (reset || metaMtime != k.metaMtime) {
+		src.parser.meta(src.meta, &st)
+	}
+	if st.Cwd == "" {
+		st.Cwd = src.cwd
+	}
+	if st.Updated == 0 {
+		st.Updated = fi.ModTime().UnixMilli()
+	}
+	if st.Created == 0 {
+		st.Created = st.Updated
+	}
+	if st.SessionID == "" {
+		st.SessionID = sessionIDFromPath(src.transcript)
+	}
+	return x.save(ctx, src, k.id, reset, st, msgs, size, mtime, offset, tail, metaMtime)
+}
+
+// tailMatches 核对 offset 之前的字节是否和上次读到的一致。
+func tailMatches(f *os.File, offset int64, tail []byte) bool {
+	if offset == 0 {
+		return true
+	}
+	if len(tail) == 0 || int64(len(tail)) > offset {
+		return false
+	}
+	buf := make([]byte, len(tail))
+	if _, err := f.ReadAt(buf, offset-int64(len(tail))); err != nil {
+		return false
+	}
+	return bytes.Equal(buf, tail)
+}
+
+// readLines 读到最后一个完整行为止，返回解析出的消息、消费的字节数和最后 tailLen 字节。
+func readLines(r io.Reader, p parser, st *fileState) ([]Message, int64, []byte, error) {
+	br := bufio.NewReaderSize(r, 256<<10)
+	var msgs []Message
+	var consumed int64
+	var last []byte
+	var long []byte   // 超过缓冲区的行在这里拼接
+	var pending int64 // 当前行已读、还没遇到换行的字节数
+	skipping := false
+	for {
+		chunk, err := br.ReadSlice('\n')
+		if errors.Is(err, bufio.ErrBufferFull) {
+			pending += int64(len(chunk))
+			if !skipping {
+				long = append(long, chunk...)
+				if len(long) > maxLine {
+					long, skipping = nil, true
+				}
+			}
+			continue
+		}
+		if err == io.EOF {
+			// 没有换行结尾的最后一段可能还在写，留到下次从行首重读
+			break
+		}
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		consumed += pending + int64(len(chunk))
+		pending = 0
+		line := chunk
+		if long != nil {
+			long = append(long, chunk...)
+			line = long
+		}
+		if !skipping && !st.Skip {
+			if trimmed := bytes.TrimSpace(line); len(trimmed) > 0 && trimmed[0] == '{' {
+				for _, m := range p.line(trimmed, st) {
+					m.Seq = st.Seq
+					st.Seq++
+					msgs = append(msgs, m)
+				}
+			}
+		}
+		// 跳过的超长行只剩最后一段，也足够当校验：它就是 offset 前紧挨着的字节
+		last = append(last[:0], line[max(0, len(line)-tailLen):]...)
+		long, skipping = nil, false
+	}
+	return msgs, consumed, last, nil
+}
+
+func sessionIDFromPath(path string) string {
+	base := filepath.Base(path)
+	return base[:len(base)-len(filepath.Ext(base))]
+}
+
+func (x *Index) save(ctx context.Context, src source, id int64, reset bool, st fileState, msgs []Message,
+	size, mtime, offset int64, tail []byte, metaMtime int64) error {
+	tx, err := x.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if id != 0 && (reset || st.Skip) {
+		if err := deleteMessages(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	stateJSON, _ := json.Marshal(st)
+	count := 0
+	if !st.Skip {
+		count = st.Seq
+	}
+	if id == 0 {
+		res, err := tx.ExecContext(ctx, `INSERT INTO sessions(agent, session_id, path, title, first_prompt, cwd, branch, created_at, updated_at,
+			messages, size, mtime, offset, tail, state, meta_mtime) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			src.agent, st.SessionID, src.transcript, st.Title, st.FirstPrompt, st.Cwd, st.Branch, st.Created, st.Updated,
+			count, size, mtime, offset, tail, string(stateJSON), metaMtime)
+		if err != nil {
+			return err
+		}
+		id, _ = res.LastInsertId()
+	} else {
+		_, err := tx.ExecContext(ctx, `UPDATE sessions SET session_id=?, title=?, first_prompt=?, cwd=?, branch=?, created_at=?, updated_at=?,
+			messages=?, size=?, mtime=?, offset=?, tail=?, state=?, meta_mtime=? WHERE id=?`,
+			st.SessionID, st.Title, st.FirstPrompt, st.Cwd, st.Branch, st.Created, st.Updated,
+			count, size, mtime, offset, tail, string(stateJSON), metaMtime, id)
+		if err != nil {
+			return err
+		}
+	}
+	if !st.Skip && len(msgs) > 0 {
+		insMsg, err := tx.PrepareContext(ctx, `INSERT INTO messages(session, seq, role, at, text) VALUES(?,?,?,?,?)`)
+		if err != nil {
+			return err
+		}
+		defer insMsg.Close()
+		insFTS, err := tx.PrepareContext(ctx, `INSERT INTO messages_fts(rowid, user, assistant, tool) VALUES(?,?,?,?)`)
+		if err != nil {
+			return err
+		}
+		defer insFTS.Close()
+		for _, m := range msgs {
+			res, err := insMsg.ExecContext(ctx, id, m.Seq, m.Role, ms(m.At), m.Text)
+			if err != nil {
+				return err
+			}
+			rowid, _ := res.LastInsertId()
+			cols := [3]string{}
+			switch m.Role {
+			case "user":
+				cols[0] = splitCJK(m.Text)
+			case "assistant":
+				cols[1] = splitCJK(m.Text)
+			default:
+				cols[2] = splitCJK(m.Text)
+			}
+			if _, err := insFTS.ExecContext(ctx, rowid, cols[0], cols[1], cols[2]); err != nil {
+				return err
+			}
+		}
+	}
+	if err := setTitle(ctx, tx, id, st.Title, st.FirstPrompt, st.Skip); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// setTitle 更新标题索引；跳过的会话不进标题索引。
+func setTitle(ctx context.Context, tx *sql.Tx, id int64, title, first string, skip bool) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM titles_fts WHERE rowid=?`, id); err != nil {
+		return err
+	}
+	if title == "" {
+		title = first
+	}
+	if skip || title == "" {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO titles_fts(rowid, title) VALUES(?,?)`, id, splitCJK(title))
+	return err
+}
+
+func deleteMessages(ctx context.Context, tx *sql.Tx, session int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM messages_fts WHERE rowid IN (SELECT id FROM messages WHERE session=?)`, session); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE session=?`, session)
+	return err
+}
+
+func (x *Index) deleteSession(ctx context.Context, id int64) error {
+	tx, err := x.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := deleteMessages(ctx, tx, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM titles_fts WHERE rowid=?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE id=?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// walkFiles 列出 root 下满足 keep 的文件；目录不存在时返回空。
+func walkFiles(root string, keep func(path string, d fs.DirEntry) bool) []string {
+	var out []string
+	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if d != nil && d.IsDir() && path != root {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !d.IsDir() && keep(path, d) {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out
+}
