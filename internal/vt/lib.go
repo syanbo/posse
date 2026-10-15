@@ -28,22 +28,7 @@ var (
 	fnTerminalNew, fnTerminalFree, fnTerminalReset, fnTerminalResize, fnTerminalSet, fnTerminalGet,
 	fnTerminalVTWrite, fnTerminalCompress, fnTerminalCompressionActivity uintptr
 
-	fnRenderStateNew, fnRenderStateFree, fnRenderStateBeginUpdate, fnRenderStateEndUpdate, fnRenderStateClean,
-	fnRenderStateGet, fnRowIteratorNew, fnRowIteratorFree, fnRowIteratorNext, fnRowGet,
-	fnRowCellsNew, fnRowCellsFree, fnRowCellsSelect, fnRowCellsGet uintptr
-
-	fnKeyEncoderNew, fnKeyEncoderFree, fnKeyEncoderSetopt, fnKeyEncoderSetoptFromTerminal, fnKeyEncoderEncode,
-	fnKeyEventNew, fnKeyEventFree, fnKeyEventSetAction, fnKeyEventSetKey, fnKeyEventSetMods,
-	fnKeyEventSetConsumedMods, fnKeyEventSetComposing, fnKeyEventSetUTF8, fnKeyEventSetUnshifted uintptr
-
-	fnMouseEncoderNew, fnMouseEncoderFree, fnMouseEncoderSetopt, fnMouseEncoderSetoptFromTerminal,
-	fnMouseEncoderReset, fnMouseEncoderEncode, fnMouseEventNew, fnMouseEventFree, fnMouseEventSetAction,
-	fnMouseEventSetButton, fnMouseEventClearButton, fnMouseEventSetMods uintptr
-
-	fnFocusEncode, fnPasteEncode, fnPasteIsSafe, fnFree uintptr
-
-	fnGestureNew, fnGestureFree, fnGestureReset, fnGestureGet, fnGestureEventNew, fnGestureEventFree,
-	fnGestureEventSet, fnGestureEvent, fnSelectAll uintptr
+	fnFree, fnSelectAll uintptr
 
 	fnGridRefHyperlinkURI, fnGridRefGraphemes, fnGridRefCell, fnTypeJSON, fnFormatterFormatAlloc, fnFormatterFree uintptr
 
@@ -51,7 +36,7 @@ var (
 	fnGridRefStyle, fnGridRefRow, fnRowDataGet uintptr
 
 	// Bound with registerFunc below: they take structs or floats.
-	fnTerminalScrollViewport, fnTerminalGridRef, fnMouseEventSetPosition, fnSelectionFormatAlloc, fnFormatterTerminalNew uintptr
+	fnTerminalScrollViewport, fnTerminalGridRef, fnSelectionFormatAlloc, fnFormatterTerminalNew uintptr
 )
 
 // Functions taking structs or floats by value, which purego passes as the
@@ -59,7 +44,6 @@ var (
 var (
 	terminalScrollViewport func(t uintptr, v scrollViewport)
 	terminalGridRef        func(t uintptr, p point, out *GridRef) int32
-	mouseEventSetPosition  func(ev uintptr, pos mousePosition)
 	selectionFormatAlloc   func(t uintptr, alloc uintptr, opts selectionFormatOptions, out *uintptr, n *uintptr) int32
 	formatterTerminalNew   func(alloc uintptr, out *uintptr, t uintptr, opts formatterOptions) int32
 )
@@ -79,59 +63,7 @@ var symbols = []struct {
 	{"ghostty_terminal_compression_activity", &fnTerminalCompressionActivity},
 	{"ghostty_terminal_scroll_viewport", &fnTerminalScrollViewport},
 	{"ghostty_terminal_grid_ref", &fnTerminalGridRef},
-	{"ghostty_render_state_new", &fnRenderStateNew},
-	{"ghostty_render_state_free", &fnRenderStateFree},
-	{"ghostty_render_state_begin_update", &fnRenderStateBeginUpdate},
-	{"ghostty_render_state_end_update", &fnRenderStateEndUpdate},
-	{"ghostty_render_state_clean", &fnRenderStateClean},
-	{"ghostty_render_state_get", &fnRenderStateGet},
-	{"ghostty_render_state_row_iterator_new", &fnRowIteratorNew},
-	{"ghostty_render_state_row_iterator_free", &fnRowIteratorFree},
-	{"ghostty_render_state_row_iterator_next", &fnRowIteratorNext},
-	{"ghostty_render_state_row_get", &fnRowGet},
-	{"ghostty_render_state_row_cells_new", &fnRowCellsNew},
-	{"ghostty_render_state_row_cells_free", &fnRowCellsFree},
-	{"ghostty_render_state_row_cells_select", &fnRowCellsSelect},
-	{"ghostty_render_state_row_cells_get", &fnRowCellsGet},
-	{"ghostty_key_encoder_new", &fnKeyEncoderNew},
-	{"ghostty_key_encoder_free", &fnKeyEncoderFree},
-	{"ghostty_key_encoder_setopt", &fnKeyEncoderSetopt},
-	{"ghostty_key_encoder_setopt_from_terminal", &fnKeyEncoderSetoptFromTerminal},
-	{"ghostty_key_encoder_encode", &fnKeyEncoderEncode},
-	{"ghostty_key_event_new", &fnKeyEventNew},
-	{"ghostty_key_event_free", &fnKeyEventFree},
-	{"ghostty_key_event_set_action", &fnKeyEventSetAction},
-	{"ghostty_key_event_set_key", &fnKeyEventSetKey},
-	{"ghostty_key_event_set_mods", &fnKeyEventSetMods},
-	{"ghostty_key_event_set_consumed_mods", &fnKeyEventSetConsumedMods},
-	{"ghostty_key_event_set_composing", &fnKeyEventSetComposing},
-	{"ghostty_key_event_set_utf8", &fnKeyEventSetUTF8},
-	{"ghostty_key_event_set_unshifted_codepoint", &fnKeyEventSetUnshifted},
-	{"ghostty_mouse_encoder_new", &fnMouseEncoderNew},
-	{"ghostty_mouse_encoder_free", &fnMouseEncoderFree},
-	{"ghostty_mouse_encoder_setopt", &fnMouseEncoderSetopt},
-	{"ghostty_mouse_encoder_setopt_from_terminal", &fnMouseEncoderSetoptFromTerminal},
-	{"ghostty_mouse_encoder_reset", &fnMouseEncoderReset},
-	{"ghostty_mouse_encoder_encode", &fnMouseEncoderEncode},
-	{"ghostty_mouse_event_new", &fnMouseEventNew},
-	{"ghostty_mouse_event_free", &fnMouseEventFree},
-	{"ghostty_mouse_event_set_action", &fnMouseEventSetAction},
-	{"ghostty_mouse_event_set_button", &fnMouseEventSetButton},
-	{"ghostty_mouse_event_clear_button", &fnMouseEventClearButton},
-	{"ghostty_mouse_event_set_mods", &fnMouseEventSetMods},
-	{"ghostty_mouse_event_set_position", &fnMouseEventSetPosition},
-	{"ghostty_focus_encode", &fnFocusEncode},
-	{"ghostty_paste_encode", &fnPasteEncode},
-	{"ghostty_paste_is_safe", &fnPasteIsSafe},
 	{"ghostty_free", &fnFree},
-	{"ghostty_selection_gesture_new", &fnGestureNew},
-	{"ghostty_selection_gesture_free", &fnGestureFree},
-	{"ghostty_selection_gesture_reset", &fnGestureReset},
-	{"ghostty_selection_gesture_get", &fnGestureGet},
-	{"ghostty_selection_gesture_event_new", &fnGestureEventNew},
-	{"ghostty_selection_gesture_event_free", &fnGestureEventFree},
-	{"ghostty_selection_gesture_event_set", &fnGestureEventSet},
-	{"ghostty_selection_gesture_event", &fnGestureEvent},
 	{"ghostty_terminal_select_all", &fnSelectAll},
 	{"ghostty_terminal_selection_format_alloc", &fnSelectionFormatAlloc},
 	{"ghostty_grid_ref_hyperlink_uri", &fnGridRefHyperlinkURI},
@@ -174,7 +106,6 @@ func load(path string) error {
 	}
 	registerFunc(&terminalScrollViewport, fnTerminalScrollViewport)
 	registerFunc(&terminalGridRef, fnTerminalGridRef)
-	registerFunc(&mouseEventSetPosition, fnMouseEventSetPosition)
 	registerFunc(&selectionFormatAlloc, fnSelectionFormatAlloc)
 	registerFunc(&formatterTerminalNew, fnFormatterTerminalNew)
 	makeCallbacks()
@@ -237,13 +168,6 @@ func ok(r uintptr) bool { return int32(r) == 0 }
 // undefined.
 func cbool(r uintptr) bool { return byte(r) != 0 }
 
-func b2u(b bool) uintptr {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // mem converts an address the library gave into a pointer.
 func mem(p uintptr) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&p)) }
 
@@ -298,22 +222,14 @@ var enums = []struct {
 	typ, name string
 	value     int64
 }{
-	{"GhosttyKey", "A", int64(KeyA)},
-	{"GhosttyKey", "ARROW_UP", int64(KeyArrowUp)},
-	{"GhosttyKey", "ESCAPE", int64(KeyEscape)},
-	{"GhosttyKey", "F1", int64(KeyF1)},
-	{"GhosttyKeyAction", "REPEAT", int64(KeyRepeat)},
-	{"GhosttyMouseAction", "MOTION", int64(MouseMotion)},
-	{"GhosttyMouseButton", "FIVE", WheelDown},
 	{"GhosttyRenderStateCursorVisualStyle", "BLOCK_HOLLOW", int64(CursorBlockHollow)},
-	{"GhosttyRenderStateDirty", "FULL", int64(Full)},
 	{"GhosttyCellWide", "SPACER_HEAD", int64(SpacerHead)},
 	{"GhosttyStyleColorTag", "RGB", colorRGB},
-	{"GhosttySgrUnderline", "DASHED", UnderlineDashed},
+	// 快照的 sgr 直接把下划线样式值写成 SGR 4:n 的参数
+	{"GhosttySgrUnderline", "DASHED", 5},
 	{"GhosttyTerminalScrollViewportTag", "ROW", 3},
 	{"GhosttyPointTag", "VIEWPORT", 1},
 	{"GhosttyClipboardWriteResult", "UNSUPPORTED", 2},
-	{"GhosttySelectionGestureEventType", "DRAG", gestureDrag},
 }
 
 type fieldInfo struct {

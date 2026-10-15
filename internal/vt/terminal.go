@@ -1,6 +1,7 @@
 package vt
 
 import (
+	"bytes"
 	"errors"
 	"runtime"
 	"strings"
@@ -459,26 +460,13 @@ const formatVT = 1
 // palette is left out, as the terminal it restores in has colors of its
 // own.
 func (t *Terminal) VT() []byte {
-	opts := formatterOptions{size: unsafe.Sizeof(formatterOptions{}), emit: formatVT}
+	opts := formatterOptions{emit: formatVT}
 	x := &opts.extra
-	x.size = unsafe.Sizeof(opts.extra)
 	x.modes, x.scrollingRegion, x.tabstops, x.pwd, x.keyboard = true, true, true, true, true
-	x.screen.size = unsafe.Sizeof(opts.extra.screen)
 	x.screen.cursor, x.screen.style, x.screen.hyperlink, x.screen.protection, x.screen.kittyKeyboard, x.screen.charsets = true, true, true, true, true, true
-	var f uintptr
-	if formatterTerminalNew(0, &f, t.h, opts) != 0 {
-		return nil
-	}
-	defer call(fnFormatterFree, f)
-	var p, n uintptr
-	if !ok(call(fnFormatterFormatAlloc, f, 0, uintptr(unsafe.Pointer(&p)), uintptr(unsafe.Pointer(&n)))) {
-		return nil
-	}
-	b := []byte(goString(p, n))
-	if p != 0 {
-		call(fnFree, 0, p, n)
-	}
-	return b
+	var out []byte
+	t.format(opts, func(b []byte) { out = bytes.Clone(b) })
+	return out
 }
 
 // Compress compresses some of the scrollback, as when the terminal is

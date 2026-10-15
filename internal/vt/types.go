@@ -27,33 +27,18 @@ type style struct {
 	underline                                                               int32
 }
 
-// renderCursor is a GhosttyRenderStateCursor.
-type renderCursor struct {
-	size                                       uintptr
-	viewportHasValue                           bool
-	viewportX, viewportY                       uint16
-	wideTail, visible, blinking, passwordInput bool
-	visualStyle                                int32
-}
+// Wide is how wide a cell's character is.
+type Wide uint8
 
-// renderColors is a GhosttyRenderStateColors.
-type renderColors struct {
-	size                           uintptr
-	background, foreground, cursor RGB
-	cursorHasValue                 bool
-	palette                        [256]RGB
-}
-
-// rowSelection is a GhosttyRenderStateRowSelection.
-type rowSelection struct {
-	size         uintptr
-	startX, endX uint16
-}
-
-// cellsView is a GhosttyCellsView.
-type cellsView struct {
-	ptr, len uintptr
-}
+const (
+	Narrow Wide = iota
+	// WideChar takes this cell and the next, a SpacerTail.
+	WideChar
+	SpacerTail
+	// SpacerHead ends a soft-wrapped row before a wide character that did
+	// not fit.
+	SpacerHead
+)
 
 // cString is a GhosttyString.
 type cString struct {
@@ -134,24 +119,6 @@ type formatterExtra struct {
 	}
 }
 
-// mouseEncoderSize is a GhosttyMouseEncoderSize.
-type mouseEncoderSize struct {
-	size                                                 uintptr
-	screenWidth, screenHeight, cellWidth, cellHeight     uint32
-	paddingTop, paddingBottom, paddingRight, paddingLeft uint32
-}
-
-// mousePosition is a GhosttyMousePosition.
-type mousePosition struct{ x, y float32 }
-
-// gestureGeometry is a GhosttySelectionGestureGeometry.
-type gestureGeometry struct {
-	columns, cellWidth, paddingLeft, screenHeight uint32
-}
-
-// surfacePosition is a GhosttySurfacePosition.
-type surfacePosition struct{ x, y float64 }
-
 // sizeReport is a GhosttySizeReportSize.
 type sizeReport struct {
 	rows, columns         uint16
@@ -203,18 +170,10 @@ type deviceAttributes struct {
 	unitID                             uint32
 }
 
-// RowID identifies a row across render state updates (a
-// GhosttyRenderStateRowId).
-type RowID struct{ bits [2]uint64 }
-
 func layouts() map[string]layout {
 	var (
 		sc  styleColor
 		s   style
-		c   renderCursor
-		rc  renderColors
-		rs  rowSelection
-		cv  cellsView
 		sb  Scrollbar
 		sv  scrollViewport
 		mc  modeConfig
@@ -222,7 +181,6 @@ func layouts() map[string]layout {
 		pt  point
 		sel Selection
 		sfo selectionFormatOptions
-		mes mouseEncoderSize
 		cw  clipboardWrite
 		cc  clipboardContent
 		cwr clipboardWriteReply
@@ -240,37 +198,18 @@ func layouts() map[string]layout {
 			"blink": unsafe.Offsetof(s.blink), "inverse": unsafe.Offsetof(s.inverse), "invisible": unsafe.Offsetof(s.invisible),
 			"strikethrough": unsafe.Offsetof(s.strikethrough), "overline": unsafe.Offsetof(s.overline), "underline": unsafe.Offsetof(s.underline),
 		}},
-		"GhosttyRenderStateCursor": {unsafe.Sizeof(c), map[string]uintptr{
-			"viewport_has_value": unsafe.Offsetof(c.viewportHasValue), "viewport_x": unsafe.Offsetof(c.viewportX),
-			"viewport_y": unsafe.Offsetof(c.viewportY), "wide_tail": unsafe.Offsetof(c.wideTail), "visible": unsafe.Offsetof(c.visible),
-			"blinking": unsafe.Offsetof(c.blinking), "password_input": unsafe.Offsetof(c.passwordInput), "visual_style": unsafe.Offsetof(c.visualStyle),
-		}},
-		"GhosttyRenderStateColors": {unsafe.Sizeof(rc), map[string]uintptr{
-			"background": unsafe.Offsetof(rc.background), "foreground": unsafe.Offsetof(rc.foreground), "cursor": unsafe.Offsetof(rc.cursor),
-			"cursor_has_value": unsafe.Offsetof(rc.cursorHasValue), "palette": unsafe.Offsetof(rc.palette),
-		}},
-		"GhosttyRenderStateRowSelection": {unsafe.Sizeof(rs), map[string]uintptr{"start_x": unsafe.Offsetof(rs.startX), "end_x": unsafe.Offsetof(rs.endX)}},
-		"GhosttyCellsView":               {unsafe.Sizeof(cv), map[string]uintptr{"ptr": 0, "len": unsafe.Offsetof(cv.len)}},
-		"GhosttyString":                  {unsafe.Sizeof(cString{}), map[string]uintptr{"ptr": 0, "len": unsafe.Offsetof(cString{}.len)}},
-		"GhosttyTerminalScrollbar":       {unsafe.Sizeof(sb), map[string]uintptr{"total": 0, "offset": unsafe.Offsetof(sb.Offset), "len": unsafe.Offsetof(sb.Len)}},
-		"GhosttyTerminalScrollViewport":  {unsafe.Sizeof(sv), map[string]uintptr{"tag": 0, "value": unsafe.Offsetof(sv.value)}},
-		"GhosttyTerminalModeConfig":      {unsafe.Sizeof(mc), map[string]uintptr{"mode": 0, "value": unsafe.Offsetof(mc.value)}},
-		"GhosttyGridRef":                 {unsafe.Sizeof(gr), map[string]uintptr{"node": unsafe.Offsetof(gr.node), "x": unsafe.Offsetof(gr.x), "y": unsafe.Offsetof(gr.y)}},
-		"GhosttyPoint":                   {unsafe.Sizeof(pt), map[string]uintptr{"tag": 0, "value": unsafe.Offsetof(pt.x)}},
-		"GhosttyPointCoordinate":         {8, map[string]uintptr{"x": unsafe.Offsetof(pt.x) - unsafe.Offsetof(pt.x), "y": unsafe.Offsetof(pt.y) - unsafe.Offsetof(pt.x)}},
-		"GhosttySelection":               {unsafe.Sizeof(sel), map[string]uintptr{"start": unsafe.Offsetof(sel.start), "end": unsafe.Offsetof(sel.end), "rectangle": unsafe.Offsetof(sel.rectangle)}},
+		"GhosttyString":                 {unsafe.Sizeof(cString{}), map[string]uintptr{"ptr": 0, "len": unsafe.Offsetof(cString{}.len)}},
+		"GhosttyTerminalScrollbar":      {unsafe.Sizeof(sb), map[string]uintptr{"total": 0, "offset": unsafe.Offsetof(sb.Offset), "len": unsafe.Offsetof(sb.Len)}},
+		"GhosttyTerminalScrollViewport": {unsafe.Sizeof(sv), map[string]uintptr{"tag": 0, "value": unsafe.Offsetof(sv.value)}},
+		"GhosttyTerminalModeConfig":     {unsafe.Sizeof(mc), map[string]uintptr{"mode": 0, "value": unsafe.Offsetof(mc.value)}},
+		"GhosttyGridRef":                {unsafe.Sizeof(gr), map[string]uintptr{"node": unsafe.Offsetof(gr.node), "x": unsafe.Offsetof(gr.x), "y": unsafe.Offsetof(gr.y)}},
+		"GhosttyPoint":                  {unsafe.Sizeof(pt), map[string]uintptr{"tag": 0, "value": unsafe.Offsetof(pt.x)}},
+		"GhosttyPointCoordinate":        {8, map[string]uintptr{"x": unsafe.Offsetof(pt.x) - unsafe.Offsetof(pt.x), "y": unsafe.Offsetof(pt.y) - unsafe.Offsetof(pt.x)}},
+		"GhosttySelection":              {unsafe.Sizeof(sel), map[string]uintptr{"start": unsafe.Offsetof(sel.start), "end": unsafe.Offsetof(sel.end), "rectangle": unsafe.Offsetof(sel.rectangle)}},
 		"GhosttyTerminalSelectionFormatOptions": {unsafe.Sizeof(sfo), map[string]uintptr{
 			"emit": unsafe.Offsetof(sfo.emit), "unwrap": unsafe.Offsetof(sfo.unwrap), "trim": unsafe.Offsetof(sfo.trim), "selection": unsafe.Offsetof(sfo.selection),
 		}},
-		"GhosttyMouseEncoderSize": {unsafe.Sizeof(mes), map[string]uintptr{
-			"screen_width": unsafe.Offsetof(mes.screenWidth), "screen_height": unsafe.Offsetof(mes.screenHeight),
-			"cell_width": unsafe.Offsetof(mes.cellWidth), "cell_height": unsafe.Offsetof(mes.cellHeight),
-			"padding_top": unsafe.Offsetof(mes.paddingTop), "padding_left": unsafe.Offsetof(mes.paddingLeft),
-		}},
-		"GhosttyMousePosition":            {unsafe.Sizeof(mousePosition{}), map[string]uintptr{"x": 0, "y": 4}},
-		"GhosttySelectionGestureGeometry": {unsafe.Sizeof(gestureGeometry{}), map[string]uintptr{"columns": 0, "cell_width": 4, "padding_left": 8, "screen_height": 12}},
-		"GhosttySurfacePosition":          {unsafe.Sizeof(surfacePosition{}), map[string]uintptr{"x": 0, "y": 8}},
-		"GhosttySizeReportSize":           {unsafe.Sizeof(sizeReport{}), map[string]uintptr{"rows": 0, "columns": 2, "cell_width": 4, "cell_height": 8}},
+		"GhosttySizeReportSize": {unsafe.Sizeof(sizeReport{}), map[string]uintptr{"rows": 0, "columns": 2, "cell_width": 4, "cell_height": 8}},
 		"GhosttyClipboardWrite": {unsafe.Sizeof(cw), map[string]uintptr{
 			"location": unsafe.Offsetof(cw.location), "contents": unsafe.Offsetof(cw.contents), "contents_len": unsafe.Offsetof(cw.contentsLen),
 			"name": unsafe.Offsetof(cw.name), "granted": unsafe.Offsetof(cw.granted), "ctx": unsafe.Offsetof(cw.ctx), "reply": unsafe.Offsetof(cw.reply),
@@ -280,7 +219,6 @@ func layouts() map[string]layout {
 		"GhosttyTerminalDesktopNotification": {unsafe.Sizeof(dn), map[string]uintptr{"title": unsafe.Offsetof(dn.title), "body": unsafe.Offsetof(dn.body)}},
 		"GhosttyTerminalProgressReport":      {unsafe.Sizeof(pr), map[string]uintptr{"state": unsafe.Offsetof(pr.state), "progress": unsafe.Offsetof(pr.progress)}},
 		"GhosttyDeviceAttributes":            {unsafe.Sizeof(da), map[string]uintptr{"primary": 0, "secondary": unsafe.Offsetof(da.deviceType), "tertiary": unsafe.Offsetof(da.unitID)}},
-		"GhosttyRenderStateRowId":            {unsafe.Sizeof(RowID{}), map[string]uintptr{"bits": 0}},
 		"GhosttyFormatterTerminalOptions": {unsafe.Sizeof(fo), map[string]uintptr{
 			"emit": unsafe.Offsetof(fo.emit), "unwrap": unsafe.Offsetof(fo.unwrap), "trim": unsafe.Offsetof(fo.trim),
 			"extra": unsafe.Offsetof(fo.extra), "selection": unsafe.Offsetof(fo.selection),

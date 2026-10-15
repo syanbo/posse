@@ -15,17 +15,23 @@ import (
 func (t *Terminal) Snapshot() []byte {
 	full := t.VT()
 	// 完整输出是"状态 + 内容 + 状态"，各项状态在内容前后的位置不固定，所以直接定位内容段替换；
-	// 内容很短又出现多次时无法确定位置，退回原输出
-	content := t.format(formatterOptions{emit: formatVT})
-	i := bytes.Index(full, content)
-	if i < 0 || (len(content) < 16 && bytes.Count(full, content) > 1) {
+	// 内容很短又出现多次时无法确定位置，退回原输出。内容段只用来定位，直接在库的缓冲里比较，不复制
+	i, n := -1, 0
+	t.format(formatterOptions{emit: formatVT}, func(content []byte) {
+		n = len(content)
+		i = bytes.Index(full, content)
+		if i >= 0 && n < 16 && bytes.Count(full, content) > 1 {
+			i = -1
+		}
+	})
+	if i < 0 {
 		return full
 	}
 	var out bytes.Buffer
 	out.Grow(len(full) + len(full)/4)
 	out.Write(full[:i])
 	t.writeCells(&out)
-	out.Write(full[i+len(content):])
+	out.Write(full[i+n:])
 	return out.Bytes()
 }
 
@@ -295,22 +301,26 @@ func sgr(s style) string {
 	return string(append(p, 'm'))
 }
 
-func (t *Terminal) format(opts formatterOptions) []byte {
+// format 把格式化输出交给 use，失败时给 nil。b 是库持有的内存，只在 use 期间有效。
+func (t *Terminal) format(opts formatterOptions, use func(b []byte)) {
 	opts.size = unsafe.Sizeof(formatterOptions{})
 	opts.extra.size = unsafe.Sizeof(opts.extra)
 	opts.extra.screen.size = unsafe.Sizeof(opts.extra.screen)
 	var f uintptr
 	if formatterTerminalNew(0, &f, t.h, opts) != 0 {
-		return nil
+		use(nil)
+		return
 	}
 	defer call(fnFormatterFree, f)
 	var p, n uintptr
 	if !ok(call(fnFormatterFormatAlloc, f, 0, uintptr(unsafe.Pointer(&p)), uintptr(unsafe.Pointer(&n)))) {
-		return nil
+		use(nil)
+		return
 	}
-	b := []byte(goString(p, n))
-	if p != 0 {
-		call(fnFree, 0, p, n)
+	if p == 0 {
+		use([]byte{})
+		return
 	}
-	return b
+	defer call(fnFree, 0, p, n)
+	use(unsafe.Slice((*byte)(mem(p)), n))
 }
