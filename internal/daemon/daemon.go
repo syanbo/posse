@@ -21,6 +21,7 @@ import (
 
 	"hive/internal/agent"
 	"hive/internal/history"
+	"hive/internal/mobile"
 	"hive/internal/procmem"
 	"hive/internal/rpc"
 	"hive/internal/store"
@@ -59,6 +60,7 @@ type Daemon struct {
 	stopping atomic.Bool
 
 	history historyState
+	mobile  *mobile.Server
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -117,10 +119,14 @@ func Run(ctx context.Context, cfg Config) error {
 		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	d.startMobile()
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
 	log.Printf("hive daemon %s listening on %s (pid %d)", Version, sock, os.Getpid())
 	err = srv.Serve(ctx, ln)
+	if d.mobile != nil {
+		d.mobile.Close()
+	}
 	d.closeAll()
 	d.closeHistory()
 	return err
@@ -195,6 +201,9 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("history.resume", d.historyResume)
 	srv.Handle("history.index", d.historyIndexNow)
 	srv.Handle("hook.event", d.hookEvent)
+	srv.Handle("mobile.pair", d.mobilePair)
+	srv.Handle("mobile.devices", d.mobileDevices)
+	srv.Handle("mobile.rm", d.mobileRm)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 
