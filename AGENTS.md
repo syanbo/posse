@@ -37,6 +37,7 @@ internal/agent      agent 启动命令与 hooks 事件到状态的映射
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
+internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
 third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
 ```
 
@@ -72,3 +73,10 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
 - 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
+- 手机遥控（`internal/mobile`）复用 Orca 的手机 App（App Store / GitHub 上的 APK），hive 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现：
+  - 只做局域网/Tailscale 直连（Orca 的 local-only），不做云端中转和推送（推送只能经 Orca 的网关）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
+  - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox，`e2ee_test.go` 有 Orca 的测试向量）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。端到端测试用 `HIVE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突。
+  - 主机密钥和配对的手机存在 `$HIVE_HOME/mobile.json`（0600）。手机按公钥认主机，换密钥等于所有手机重新配对。配对码在窗口底栏的手机图标、"新建"菜单或 `hive mobile pair`。
+  - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
+  - 手机看终端时终端按手机屏幕排版（`Terminal.HoldSize`），界面这时的尺寸变化先记下，手机全部离开后恢复；手机接入不接管终端查询的应答（`Watch`）。终端输出走 Orca 的 16 字节头二进制帧，按 UTF-8 字符边界切块。
+  - 手机上传的图片存成 `$TMPDIR/hive-mobile-*`，App 再把路径输入终端。
