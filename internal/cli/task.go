@@ -237,7 +237,7 @@ func cmdTaskReply(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 2, "task reply <message> <answer>"); err != nil {
+	if err := need(pos, 2, "task reply"); err != nil {
 		return err
 	}
 	params := map[string]any{"message": pos[0], "body": strings.Join(pos[1:], " "), "caller": caller()}
@@ -250,7 +250,7 @@ func cmdTaskSend(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 2, "task send <task> <message>"); err != nil {
+	if err := need(pos, 2, "task send"); err != nil {
 		return err
 	}
 	params := map[string]any{"task": pos[0], "body": strings.Join(pos[1:], " "), "caller": caller()}
@@ -263,7 +263,7 @@ func cmdTaskClose(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "task close <task>"); err != nil {
+	if err := need(pos, 1, "task close"); err != nil {
 		return err
 	}
 	var t taskInfo
@@ -281,10 +281,7 @@ func cmdTaskDone(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	task := ""
-	if len(pos) > 0 && strings.HasPrefix(pos[0], "k_") {
-		task, pos = pos[0], pos[1:]
-	}
+	task, pos := splitTaskArg(pos)
 	if *summary == "" {
 		*summary = strings.Join(pos, " ")
 	}
@@ -298,6 +295,14 @@ func cmdTaskDone(e *env, args []string) error {
 	return e.do("task.done", params, &t, func() { fmt.Fprintf(e.out, "reported %s as %s\n", t.ID, t.Status) })
 }
 
+// splitTaskArg 拆出开头可省略的任务 ID（k_ 开头）；省略时常驻进程按调用方的终端找任务。
+func splitTaskArg(pos []string) (task string, rest []string) {
+	if len(pos) > 0 && strings.HasPrefix(pos[0], "k_") {
+		return pos[0], pos[1:]
+	}
+	return "", pos
+}
+
 func cmdTaskAsk(e *env, args []string) error {
 	fs := flag.NewFlagSet("task ask", flag.ContinueOnError)
 	resume := fs.String("resume", "", "")
@@ -306,10 +311,7 @@ func cmdTaskAsk(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	task := ""
-	if len(pos) > 0 && strings.HasPrefix(pos[0], "k_") {
-		task, pos = pos[0], pos[1:]
-	}
+	task, pos := splitTaskArg(pos)
 	params := map[string]any{"task": task, "caller": caller(), "question": strings.Join(pos, " "), "resume": *resume,
 		"timeoutMs": timeout.Milliseconds()}
 	var r struct{ Answer string }
@@ -364,7 +366,7 @@ func cmdWorkspaceDiff(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "workspace diff <workspace>"); err != nil {
+	if err := need(pos, 1, "workspace diff"); err != nil {
 		return err
 	}
 	var r struct {
@@ -391,7 +393,7 @@ func cmdWorkspaceMerge(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "workspace merge <workspace>"); err != nil {
+	if err := need(pos, 1, "workspace merge"); err != nil {
 		return err
 	}
 	var r struct{ Merged, Into string }

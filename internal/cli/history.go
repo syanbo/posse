@@ -72,7 +72,7 @@ func cmdHistorySearch(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "history search <query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]"); err != nil {
+	if err := need(pos, 1, "history search"); err != nil {
 		return err
 	}
 	dir, err := historyCwd(*cwd, *here)
@@ -157,7 +157,7 @@ func cmdHistoryShow(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "history show <session> [--tail N] [--tools]"); err != nil {
+	if err := need(pos, 1, "history show"); err != nil {
 		return err
 	}
 	var res struct {
@@ -192,7 +192,7 @@ func cmdHistoryResume(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "history resume <session> [--workspace W]"); err != nil {
+	if err := need(pos, 1, "history resume"); err != nil {
 		return err
 	}
 	var t struct {

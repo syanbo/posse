@@ -139,7 +139,7 @@ func cmdProjectAdd(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "project add <path> [--name N] [--setup SCRIPT]"); err != nil {
+	if err := need(pos, 1, "project add"); err != nil {
 		return err
 	}
 	var p projectInfo
@@ -168,7 +168,7 @@ func cmdProjectSet(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "project set <project> [--name N] [--setup SCRIPT]"); err != nil {
+	if err := need(pos, 1, "project set"); err != nil {
 		return err
 	}
 	params := map[string]any{"project": absPath(pos[0])}
@@ -191,7 +191,7 @@ func cmdProjectRm(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "project rm <project> [--force]"); err != nil {
+	if err := need(pos, 1, "project rm"); err != nil {
 		return err
 	}
 	return e.do("project.rm", map[string]any{"project": absPath(pos[0]), "force": *force}, nil, func() {
@@ -213,7 +213,7 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 2, "workspace create <project> <name> [options]"); err != nil {
+	if err := need(pos, 2, "workspace create"); err != nil {
 		return err
 	}
 	var w workspaceInfo
@@ -301,7 +301,7 @@ func cmdWorkspaceShow(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "workspace show <workspace>"); err != nil {
+	if err := need(pos, 1, "workspace show"); err != nil {
 		return err
 	}
 	var w workspaceInfo
@@ -324,7 +324,7 @@ func cmdWorkspaceRm(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "workspace rm <workspace> [--force] [--delete-branch]"); err != nil {
+	if err := need(pos, 1, "workspace rm"); err != nil {
 		return err
 	}
 	return e.do("workspace.rm", map[string]any{"workspace": pos[0], "force": *force, "deleteBranch": *delBranch}, nil, func() {
@@ -344,7 +344,7 @@ func cmdTerminalCreate(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "terminal create <workspace> [--agent A] [--prompt P] [-- command args...]"); err != nil {
+	if err := need(pos, 1, "terminal create"); err != nil {
 		return err
 	}
 	var t terminalInfo
@@ -477,7 +477,7 @@ func cmdTerminalClose(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := need(pos, 1, "terminal close <terminal> [--grace 2s]"); err != nil {
+	if err := need(pos, 1, "terminal close"); err != nil {
 		return err
 	}
 	return e.do("terminal.close", map[string]any{"terminal": pos[0], "graceMs": grace.Milliseconds()}, nil, func() {

@@ -31,7 +31,15 @@ type env struct {
 type command struct {
 	name    string
 	summary string
+	args    string // 命令名之后的参数说明，帮助和参数不足的报错共用
 	run     func(e *env, args []string) error
+}
+
+func (c command) usage() string {
+	if c.args == "" {
+		return c.name
+	}
+	return c.name + " " + c.args
 }
 
 // commands 按帮助里的展示顺序排列。
@@ -39,50 +47,50 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"app", "Open the Hive window", cmdApp},
-		{"daemon run", "Run the daemon in the foreground", cmdDaemonRun},
-		{"daemon status", "Show daemon status", cmdDaemonStatus},
-		{"daemon stop", "Stop the daemon and every terminal it hosts", cmdDaemonStop},
-		{"project add", "Add a folder or git repository: project add <path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
-		{"project list", "List projects", cmdProjectList},
-		{"project set", "Update a project: project set <project> [--name N] [--setup SCRIPT]", cmdProjectSet},
-		{"project rm", "Forget a project (files stay): project rm <project> [--force]", cmdProjectRm},
-		{"workspace create", "Create a workspace: workspace create <project> <name> [--mode auto|folder|worktree] [--branch B] [--base REF] [--no-setup] [--agent claude|codex|grok] [--prompt P]", cmdWorkspaceCreate},
-		{"workspace list", "List workspaces: workspace list [--project P] [--dirty]", cmdWorkspaceList},
-		{"workspace show", "Show a workspace: workspace show <workspace>", cmdWorkspaceShow},
-		{"workspace current", "Show the workspace of this terminal or directory", cmdWorkspaceCurrent},
-		{"workspace rm", "Remove a workspace (and its git worktree): workspace rm <workspace> [--force] [--delete-branch]", cmdWorkspaceRm},
-		{"workspace diff", "Show what a worktree changed since its base: workspace diff <workspace>", cmdWorkspaceDiff},
-		{"workspace merge", "Merge a worktree's branch into the project directory: workspace merge <workspace>", cmdWorkspaceMerge},
-		{"terminal create", "Start a terminal: terminal create <workspace> [--agent claude|codex|grok] [--prompt P] [--cols N --rows N] [-- command args...]", cmdTerminalCreate},
-		{"terminal list", "List terminals: terminal list [--workspace W]", cmdTerminalList},
-		{"terminal show", "Show a terminal and its screen: terminal show <terminal>", cmdTerminalShow},
-		{"terminal read", "Read output: terminal read <terminal> [--lines N] [--screen]", cmdTerminalRead},
-		{"terminal send", "Send input: terminal send <terminal> [--text T] [--enter] [--key K]...", cmdTerminalSend},
-		{"terminal wait", "Wait: terminal wait <terminal> --for exit|idle|text|status [--idle 3s] [--text S] [--status idle,waiting] [--timeout 10m]", cmdTerminalWait},
-		{"terminal resize", "Resize: terminal resize <terminal> --cols N --rows N", cmdTerminalResize},
-		{"terminal close", "Close a terminal: terminal close <terminal> [--grace 2s]", cmdTerminalClose},
-		{"task guide", "How to coordinate worker agents with hive task (--skill for a SKILL.md)", cmdTaskGuide},
-		{"task start", "Dispatch a task to a new worker: task start --agent claude|codex|grok [--title T] (--spec S | --spec-file F|- | SPEC) [--workspace W] [--worktree NAME [--base REF]]", cmdTaskStart},
-		{"task list", "List the tasks you dispatched: task list [--all]", cmdTaskList},
-		{"task show", "Show a task with its messages and the worker's screen: task show <task>", cmdTaskShow},
-		{"task wait", "Wait for a worker to finish, ask or exit: task wait [--timeout 10m]", cmdTaskWait},
-		{"task inbox", "Read new messages from your workers without waiting", cmdTaskInbox},
-		{"task reply", "Answer a worker's question: task reply <message> <answer>", cmdTaskReply},
-		{"task send", "Send a worker an extra instruction: task send <task> <message>", cmdTaskSend},
-		{"task close", "Close a worker terminal (stops the task if still running): task close <task>", cmdTaskClose},
-		{"task clear", "Forget finished tasks", cmdTaskClear},
-		{"task ask", "Worker: ask the coordinator and wait for the answer: task ask <task> <question> [--resume MSG]", cmdTaskAsk},
-		{"task check", "Worker: read new messages from the coordinator: task check <task>", cmdTaskCheck},
-		{"task done", "Worker: report the outcome once: task done <task> --summary S [--report FILE] [--failed]", cmdTaskDone},
-		{"history search", "Search past claude/codex/cursor/grok sessions: history search <query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
-		{"history list", "List recent sessions: history list [--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
-		{"history show", "Print a session's messages: history show <session> [--tail N] [--tools]", cmdHistoryShow},
-		{"history resume", "Continue a past session in a new hive terminal: history resume <session> [--workspace W]", cmdHistoryResume},
-		{"history index", "Update the session history index now: history index [--rebuild]", cmdHistoryIndex},
-		{"import orca", "Import Orca's projects and folder workspaces (idempotent): import orca [--dry-run]", cmdImportOrca},
-		{"hook", "Report an agent hook event (used by agent hooks): hook <agent> <event> < payload.json", cmdHook},
-		{"version", "Print the version", cmdVersion},
+		{"app", "Open the Hive window", "", cmdApp},
+		{"daemon run", "Run the daemon in the foreground", "", cmdDaemonRun},
+		{"daemon status", "Show daemon status", "", cmdDaemonStatus},
+		{"daemon stop", "Stop the daemon and every terminal it hosts", "", cmdDaemonStop},
+		{"project add", "Add a folder or git repository", "<path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
+		{"project list", "List projects", "", cmdProjectList},
+		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT]", cmdProjectSet},
+		{"project rm", "Forget a project (files stay)", "<project> [--force]", cmdProjectRm},
+		{"workspace create", "Create a workspace", "<project> <name> [--mode auto|folder|worktree] [--branch B] [--base REF] [--no-setup] [--agent claude|codex|grok] [--prompt P]", cmdWorkspaceCreate},
+		{"workspace list", "List workspaces", "[--project P] [--dirty]", cmdWorkspaceList},
+		{"workspace show", "Show a workspace", "<workspace>", cmdWorkspaceShow},
+		{"workspace current", "Show the workspace of this terminal or directory", "", cmdWorkspaceCurrent},
+		{"workspace rm", "Remove a workspace (and its git worktree)", "<workspace> [--force] [--delete-branch]", cmdWorkspaceRm},
+		{"workspace diff", "Show what a worktree changed since its base", "<workspace>", cmdWorkspaceDiff},
+		{"workspace merge", "Merge a worktree's branch into the project directory", "<workspace>", cmdWorkspaceMerge},
+		{"terminal create", "Start a terminal", "<workspace> [--agent claude|codex|grok] [--prompt P] [--cols N --rows N] [-- command args...]", cmdTerminalCreate},
+		{"terminal list", "List terminals", "[--workspace W]", cmdTerminalList},
+		{"terminal show", "Show a terminal and its screen", "<terminal>", cmdTerminalShow},
+		{"terminal read", "Read output", "<terminal> [--lines N] [--screen]", cmdTerminalRead},
+		{"terminal send", "Send input", "<terminal> [--text T] [--enter] [--key K]...", cmdTerminalSend},
+		{"terminal wait", "Wait", "<terminal> --for exit|idle|text|status [--idle 3s] [--text S] [--status idle,waiting] [--timeout 10m]", cmdTerminalWait},
+		{"terminal resize", "Resize", "<terminal> --cols N --rows N", cmdTerminalResize},
+		{"terminal close", "Close a terminal", "<terminal> [--grace 2s]", cmdTerminalClose},
+		{"task guide", "How to coordinate worker agents with hive task (--skill for a SKILL.md)", "", cmdTaskGuide},
+		{"task start", "Dispatch a task to a new worker", "--agent claude|codex|grok [--title T] (--spec S | --spec-file F|- | SPEC) [--workspace W] [--worktree NAME [--base REF]]", cmdTaskStart},
+		{"task list", "List the tasks you dispatched", "[--all]", cmdTaskList},
+		{"task show", "Show a task with its messages and the worker's screen", "<task>", cmdTaskShow},
+		{"task wait", "Wait for a worker to finish, ask or exit", "[--timeout 10m]", cmdTaskWait},
+		{"task inbox", "Read new messages from your workers without waiting", "", cmdTaskInbox},
+		{"task reply", "Answer a worker's question", "<message> <answer>", cmdTaskReply},
+		{"task send", "Send a worker an extra instruction", "<task> <message>", cmdTaskSend},
+		{"task close", "Close a worker terminal (stops the task if still running)", "<task>", cmdTaskClose},
+		{"task clear", "Forget finished tasks", "", cmdTaskClear},
+		{"task ask", "Worker: ask the coordinator and wait for the answer", "<task> <question> [--resume MSG]", cmdTaskAsk},
+		{"task check", "Worker: read new messages from the coordinator", "<task>", cmdTaskCheck},
+		{"task done", "Worker: report the outcome once", "<task> --summary S [--report FILE] [--failed]", cmdTaskDone},
+		{"history search", "Search past claude/codex/cursor/grok sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
+		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
+		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},
+		{"history resume", "Continue a past session in a new hive terminal", "<session> [--workspace W]", cmdHistoryResume},
+		{"history index", "Update the session history index now", "[--rebuild]", cmdHistoryIndex},
+		{"import orca", "Import Orca's projects and folder workspaces (idempotent)", "[--dry-run]", cmdImportOrca},
+		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
+		{"version", "Print the version", "", cmdVersion},
 	}
 }
 
@@ -143,7 +151,11 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: hive <command> [options] [--json]")
 	fmt.Fprintln(w)
 	for _, c := range commands {
-		fmt.Fprintf(w, "  %-18s %s\n", c.name, c.summary)
+		if c.args == "" {
+			fmt.Fprintf(w, "  %-18s %s\n", c.name, c.summary)
+		} else {
+			fmt.Fprintf(w, "  %-18s %s: %s\n", c.name, c.summary, c.usage())
+		}
 	}
 	fmt.Fprintln(w, "\nEnvironment: HIVE_HOME (default ~/.hive). Inside hive terminals HIVE_TERMINAL_ID and HIVE_WORKSPACE_ID are set.")
 	fmt.Fprintln(w, "Agents coordinating other agents: run `hive task guide` first.")
@@ -232,12 +244,19 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 	return pos, nil
 }
 
-// need 校验位置参数个数。
-func need(pos []string, n int, usage string) error {
-	if len(pos) < n {
-		return fmt.Errorf("usage: hive %s", usage)
+// need 校验位置参数个数，不足时按命令表里的用法报错。
+func need(pos []string, n int, name string) error {
+	if len(pos) >= n {
+		return nil
 	}
-	return nil
+	usage := name
+	for _, c := range commands {
+		if c.name == name {
+			usage = c.usage()
+			break
+		}
+	}
+	return fmt.Errorf("usage: hive %s", usage)
 }
 
 type multiFlag []string
