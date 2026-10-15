@@ -7,8 +7,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	"hive/internal/agent"
 )
 
 //go:embed task_guide.md
@@ -52,38 +55,97 @@ func cmdTaskStart(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	text := *spec
-	switch {
-	case *specFile == "-":
-		b, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		text = string(b)
-	case *specFile != "":
-		b, err := os.ReadFile(*specFile)
-		if err != nil {
-			return err
-		}
-		text = string(b)
-	case text == "":
+	text, err := readSpec(*spec, *specFile)
+	if err != nil {
+		return err
+	}
+	if text == "" {
 		text = strings.Join(pos, " ")
 	}
 	cwd, _ := os.Getwd()
 	params := map[string]any{"caller": caller(), "cwd": cwd, "agent": *agentName, "command": command, "title": *title,
 		"spec": text, "workspace": *ws, "worktree": *worktree, "base": *base}
 	var t taskInfo
+	return e.do("task.start", params, &t, func() { e.printStarted(t) })
+}
+
+// readSpec 取 --spec 或 --spec-file（- 表示标准输入）的内容，都没给时返回空。
+func readSpec(spec, file string) (string, error) {
+	var b []byte
+	var err error
+	switch file {
+	case "":
+		return spec, nil
+	case "-":
+		b, err = io.ReadAll(os.Stdin)
+	default:
+		b, err = os.ReadFile(file)
+	}
+	return string(b), err
+}
+
+func (e *env) printStarted(t taskInfo) {
+	who := t.Agent
+	if who == "" {
+		who = "worker"
+	}
+	fmt.Fprintf(e.out, "started task %s: %s in %s (terminal %s)\n", t.ID, who, t.Workspace, t.Worker)
+	if t.Branch != "" && t.WorkspaceKind == "worktree" {
+		fmt.Fprintf(e.out, "worktree branch %s from %s\n", t.Branch, t.BaseRef)
+	}
+	fmt.Fprintln(e.out, "wait for results with: hive task wait")
+}
+
+// retryable 是可以重试的任务状态：worker 已经确定不在做了。
+var retryable = []string{"failed", "exited", "lost", "stopped"}
+
+// cmdTaskRetry 用原任务的说明、agent 和工作区重新派发；在客户端组合 show 和 start，不改常驻进程。
+func cmdTaskRetry(e *env, args []string) error {
+	fs := flag.NewFlagSet("task retry", flag.ContinueOnError)
+	spec := fs.String("spec", "", "")
+	specFile := fs.String("spec-file", "", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "task retry"); err != nil {
+		return err
+	}
+	var old taskInfo
+	if err := e.call("task.show", map[string]any{"task": pos[0], "caller": caller()}, &old); err != nil {
+		return err
+	}
+	params, err := retryParams(old, *spec, *specFile)
+	if err != nil {
+		return err
+	}
+	var t taskInfo
 	return e.do("task.start", params, &t, func() {
-		who := t.Agent
-		if who == "" {
-			who = "worker"
-		}
-		fmt.Fprintf(e.out, "started task %s: %s in %s (terminal %s)\n", t.ID, who, t.Workspace, t.Worker)
-		if t.Branch != "" && t.WorkspaceKind == "worktree" {
-			fmt.Fprintf(e.out, "worktree branch %s from %s\n", t.Branch, t.BaseRef)
-		}
-		fmt.Fprintln(e.out, "wait for results with: hive task wait")
+		fmt.Fprintf(e.out, "retrying %s\n", old.ID)
+		e.printStarted(t)
 	})
+}
+
+func retryParams(old taskInfo, spec, specFile string) (map[string]any, error) {
+	if !slices.Contains(retryable, old.Status) {
+		return nil, fmt.Errorf("task %s is %s; only %s tasks can be retried", old.ID, old.Status, strings.Join(retryable, ", "))
+	}
+	if old.Agent == "" {
+		return nil, fmt.Errorf("task %s ran a command, not an agent; start it again with hive task start", old.ID)
+	}
+	text, err := readSpec(spec, specFile)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(text) == "" {
+		text = old.Spec
+	}
+	title := old.Title
+	if !strings.HasSuffix(title, " (retry)") {
+		title += " (retry)"
+	}
+	cwd, _ := os.Getwd()
+	return map[string]any{"caller": caller(), "cwd": cwd, "agent": old.Agent, "title": title, "spec": text, "workspace": old.WorkspaceID}, nil
 }
 
 // splitCommand 把 "--" 之后的部分当作 worker 要运行的命令，之前的照常解析。
@@ -352,7 +414,7 @@ func cmdTaskGuide(e *env, args []string) error {
 		return err
 	}
 	if *skill {
-		fmt.Fprint(e.out, "---\nname: hive-tasks\ndescription: Dispatch work to other agents (claude, codex, grok) in Hive terminals and coordinate them with `hive task`: start workers, wait for results, answer their questions, merge worktrees. Use when running inside Hive (HIVE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off or supervise work with other agents.\n---\n\n")
+		fmt.Fprint(e.out, agent.SkillFrontmatter())
 	}
 	fmt.Fprint(e.out, taskGuide)
 	return nil

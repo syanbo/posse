@@ -78,6 +78,7 @@ func init() {
 		{"task inbox", "Read new messages from your workers without waiting", "", cmdTaskInbox},
 		{"task reply", "Answer a worker's question", "<message> <answer>", cmdTaskReply},
 		{"task send", "Send a worker an extra instruction", "<task> <message>", cmdTaskSend},
+		{"task retry", "Start a failed, exited or lost task again in a new worker", "<task> [--spec S | --spec-file F|-]", cmdTaskRetry},
 		{"task close", "Close a worker terminal (stops the task if still running)", "<task>", cmdTaskClose},
 		{"task clear", "Forget finished tasks", "", cmdTaskClear},
 		{"task ask", "Worker: ask the coordinator and wait for the answer", "<task> <question> [--resume MSG]", cmdTaskAsk},
@@ -128,10 +129,28 @@ func Main(args []string) int {
 		usage(e.errOut)
 		return 2
 	}
+	// agent 常先试 --help 看用法
+	if wantsHelp(cargs) {
+		fmt.Fprintf(e.out, "Usage: hive %s\n\n%s\n", cmd.usage(), cmd.summary)
+		return 0
+	}
 	if err := cmd.run(e, cargs); err != nil {
 		return e.fail(err)
 	}
 	return 0
+}
+
+// wantsHelp 报告参数里（"--" 之前）有没有 -h 或 --help。
+func wantsHelp(args []string) bool {
+	for _, a := range args {
+		switch a {
+		case "--":
+			return false
+		case "-h", "--help":
+			return true
+		}
+	}
+	return false
 }
 
 func lookup(args []string) (*command, []string) {

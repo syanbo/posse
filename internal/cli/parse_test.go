@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +49,14 @@ func TestNeedUsesCommandTable(t *testing.T) {
 	for _, c := range commands {
 		if c.args != "" && c.args[0] == ' ' {
 			t.Errorf("%s: args %q", c.name, c.args)
+		}
+	}
+}
+
+func TestWantsHelp(t *testing.T) {
+	for args, want := range map[string]bool{"--help": true, "k_1 -h": true, "k_1": false, "-- ls --help": false} {
+		if got := wantsHelp(strings.Fields(args)); got != want {
+			t.Errorf("wantsHelp(%q) = %v", args, got)
 		}
 	}
 }
