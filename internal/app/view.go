@@ -13,6 +13,7 @@ import (
 )
 
 func (a *app) build(c *ui.Context) {
+	a.runPending()
 	c.SetTheme(hiveTheme(c.Theme().Dark))
 	t := c.Theme()
 	p := colors(t)
@@ -33,6 +34,13 @@ func (a *app) build(c *ui.Context) {
 		a.ensureView("")
 	}
 	a.shortcuts(c, w, cur)
+	// 看不见的文件标签放掉文件清单，再显示时重列
+	for id, v := range a.files {
+		if w == nil || id != w.ID || !a.filesActive(w) {
+			v.list = nil
+		}
+	}
+	a.dirtyCount.Store(int32(len(a.dirtyDocs())))
 
 	vibrant := c.Vibrancy()
 	if vibrant {
@@ -64,6 +72,8 @@ func (a *app) build(c *ui.Context) {
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
 	a.mobileDialog(c)
+	a.quickDialog(c)
+	a.unsavedDialog(c)
 	a.confirmDialog(c)
 }
 
@@ -71,7 +81,35 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w != nil && c.Shortcut(ui.Cmd, ui.KeyT) {
 		a.startTerminal(w.ID, "")
 	}
-	if cur != nil && c.Shortcut(ui.Cmd, ui.KeyW) {
+	if w != nil {
+		if c.Shortcut(ui.Cmd, ui.KeyP) {
+			a.openQuick(w)
+		}
+		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF) {
+			v := a.showFiles(w)
+			v.side, v.search.focus = 1, true
+		}
+		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
+			if a.filesActive(w) {
+				a.leaveFiles(w)
+			} else {
+				a.showFiles(w)
+			}
+		}
+	}
+	if a.filesActive(w) {
+		v := a.filesFor(w)
+		if c.Shortcut(ui.Cmd, ui.KeyS) && v.cur != nil {
+			a.saveDoc(v.cur, false)
+		}
+		if c.Shortcut(ui.Cmd, ui.KeyW) {
+			if v.cur != nil {
+				a.closeDoc(v, v.cur)
+			} else {
+				a.leaveFiles(w)
+			}
+		}
+	} else if cur != nil && c.Shortcut(ui.Cmd, ui.KeyW) {
 		a.askClose(*cur)
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
@@ -515,6 +553,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 	a.overPanelButton = false
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
+		a.filesTab(c, w, a.filesActive(w))
 		for _, term := range w.Terminals {
 			a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 		}
@@ -554,9 +593,12 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	body.Children(func() {
-		if cur == nil || a.view == nil {
+		switch {
+		case a.filesActive(w):
+			a.filesPage(c, w)
+		case cur == nil || a.view == nil:
 			a.emptyWorkspace(c, w)
-		} else {
+		default:
 			// 留一点内边距，文字不贴边
 			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10)
 			a.view.dir = a.view.term.Dir()
@@ -646,6 +688,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					shortcutHint(c, "⌘T", "新建终端")
 					shortcutHint(c, "⌘N", "新建工作区")
 					shortcutHint(c, "⌘1…9", "切换终端")
+					shortcutHint(c, "⌘P", "打开文件")
 				})
 			})
 		})

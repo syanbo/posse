@@ -160,6 +160,21 @@ func previewMarkdown(a *app) {
 	}}
 }
 
+// previewFiles 在 w1 的文件标签里依次打开 rels（最后一个是当前文件），等它们读进来；之后不再轮询磁盘。
+func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	for _, rel := range rels {
+		a.openFile(w, filepath.Join(root, rel), 0, [2]int{})
+		v := a.files[w.ID]
+		until(t, tt, rel, func() bool { return v.cur.kind != docLoading && v.list != nil && len(v.tree.Rows()) > 0 })
+	}
+	v := a.files[w.ID]
+	v.poll.at = time.Now().Add(time.Hour)
+	return v
+}
+
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("HIVE_PREVIEW_DIR")
 	f, err := os.Create(filepath.Join(dir, name))
@@ -272,6 +287,30 @@ func TestPreview(t *testing.T) {
 		a.dAgents = [3]bool{true, true, false}
 		a.dTitle, a.dSpec = "给登录页加上记住密码", "在登录页加一个“记住密码”开关，密码存进系统钥匙串。"
 		savePNG(t, newPreviewTester(a, dark), "dispatch-"+suffix+".png")
+
+		// 文件标签：树展开到打开的文件，README 有未保存的修改
+		a = previewApp(t)
+		v := previewFiles(t, a, "internal/app/view.go", "README.md", "main.go")
+		v.doc(filepath.Join(v.root, "README.md")).ed.Insert("<!-- draft -->\n")
+		savePNG(t, newPreviewTester(a, dark), "files-"+suffix+".png")
+
+		a = previewApp(t)
+		v = previewFiles(t, a, "README.md")
+		v.cur.preview = true
+		savePNG(t, newPreviewTester(a, dark), "files-markdown-"+suffix+".png")
+
+		a = previewApp(t)
+		v = previewFiles(t, a, "main.go")
+		v.side, v.search.query.Text = 1, "config"
+		a.startSearch(v, 0)
+		until(t, ui.NewTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
+		savePNG(t, newPreviewTester(a, dark), "files-search-"+suffix+".png")
+
+		a = previewApp(t)
+		previewFiles(t, a, "main.go")
+		a.openQuick(&a.workspaces[0])
+		a.quick.query = "view"
+		savePNG(t, newPreviewTester(a, dark), "quick-open-"+suffix+".png")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

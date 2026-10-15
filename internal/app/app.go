@@ -134,10 +134,19 @@ type app struct {
 	wantTask string
 
 	history historyView
-	usage   usageView  // 右侧"技能与 MCP"面板
-	recent  recentView // 右侧历史面板
-	images  imagesView // 右侧图片面板
-	mobile  mobileView // "连接手机"对话框
+	usage   usageView             // 右侧"技能与 MCP"面板
+	recent  recentView            // 右侧历史面板
+	images  imagesView            // 右侧图片面板
+	mobile  mobileView            // "连接手机"对话框
+	files   map[string]*filesView // 工作区 ID → 文件标签
+	quick   quickOpen             // ⌘P 快速打开
+	unsaved *unsavedAsk           // 问要不要保存修改的对话框
+	// 关窗口和退出的钩子里要读，用原子量
+	dirtyCount atomic.Int32 // 有未保存改动的文件数，每帧更新
+	closeOK    atomic.Bool  // 用户处理完未保存的改动，放行这次关闭
+	quitting   atomic.Bool  // 这次关窗口是退出引起的
+	pendingMu  sync.Mutex
+	pending    []func() // 测试里没有窗口时，update 交来的函数
 	// imagesDrawn 是这一帧画没画图片面板，没画就放掉它的位图
 	imagesDrawn bool
 	// linkCard 是终端里点击文件链接或路径后弹出的卡片
@@ -228,6 +237,7 @@ func Run(c *client.Client) error {
 			Vibrancy:      mygo.VibrancySidebar,
 			Content:       ui.View(a.build),
 		})
+		a.watchClose()
 		mygo.App.OnNotificationClick(func(id string) {
 			// 通知 ID 形如 hive:<工作区>:<终端> 或 hive-task:<任务>
 			parts := strings.Split(id, ":")
@@ -416,6 +426,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 			delete(a.lastStatus, id)
 		}
 	}
+	a.pruneFiles()
 }
 
 // indexWorkspaces 按项目分好工作区，侧栏每帧要用。
@@ -498,12 +509,15 @@ func (a *app) openTerminal(workspaceID, terminalID string) {
 	a.activeTerm[workspaceID] = terminalID
 }
 
-// currentTerminal 返回选中工作区里应显示的终端，记住的那个不在了就换成第一个。
+// currentTerminal 返回选中工作区里应显示的终端，记住的那个不在了就换成第一个；选中文件标签时为 nil。
 func (a *app) currentTerminal(w *workspace) *terminalInfo {
 	if w == nil || len(w.Terminals) == 0 {
 		return nil
 	}
 	id := a.activeTerm[w.ID]
+	if id == filesTabID {
+		return nil
+	}
 	for i := range w.Terminals {
 		if w.Terminals[i].ID == id {
 			return &w.Terminals[i]
@@ -592,6 +606,7 @@ func (a *app) saveState() {
 	}
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
+	s.Files = cloneFilesState(s.Files)
 	go saveUIState(a.home, s)
 }
 

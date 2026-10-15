@@ -14,6 +14,27 @@ type uiState struct {
 	Selected     string   `json:"selected,omitempty"`     // 侧栏上次选中的一项，下次打开时选回来
 	ProjectOrder []string `json:"projectOrder,omitempty"` // 侧栏里项目的顺序，拖动调整
 	RightPanel   string   `json:"rightPanel,omitempty"`   // 右侧开着的面板：panelUsage、panelHistory、panelImages 或空
+	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
+	Files map[string]filesState `json:"files,omitempty"`
+}
+
+// filesState 是一个工作区的文件标签，路径都是绝对路径。
+type filesState struct {
+	Open     []string `json:"open,omitempty"`
+	Current  string   `json:"current,omitempty"`
+	Expanded []string `json:"expanded,omitempty"`
+}
+
+// cloneFilesState 深拷贝，交给写 ui.json 的协程，界面线程接着改原来的不会有数据竞争。
+func cloneFilesState(m map[string]filesState) map[string]filesState {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]filesState, len(m))
+	for k, v := range m {
+		out[k] = filesState{Open: slices.Clone(v.Open), Current: v.Current, Expanded: slices.Clone(v.Expanded)}
+	}
+	return out
 }
 
 func uiStatePath(home string) string { return filepath.Join(home, "ui.json") }

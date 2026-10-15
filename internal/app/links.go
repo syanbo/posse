@@ -193,6 +193,16 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 			}
 			a.linkCard = nil
 		}
+		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
+			w := a.workspaceOf(card.path)
+			if w == nil {
+				w = a.workspace(a.selected)
+			}
+			if w != nil {
+				a.openFile(w, card.path, 0, [2]int{})
+			}
+			a.linkCard = nil
+		}
 		if !card.isDir && linkCardItem(c, iconFolder, "在访达中显示") {
 			mygo.Shell.ShowItemInFolder(card.path)
 			a.linkCard = nil
