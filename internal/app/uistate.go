@@ -13,7 +13,7 @@ import (
 type uiState struct {
 	Selected     string   `json:"selected,omitempty"`     // 侧栏上次选中的一项，下次打开时选回来
 	ProjectOrder []string `json:"projectOrder,omitempty"` // 侧栏里项目的顺序，拖动调整
-	RightPanel   string   `json:"rightPanel,omitempty"`   // 右侧开着的面板：panelUsage、panelHistory 或空
+	RightPanel   string   `json:"rightPanel,omitempty"`   // 右侧开着的面板：panelUsage、panelHistory、panelImages 或空
 }
 
 func uiStatePath(home string) string { return filepath.Join(home, "ui.json") }
