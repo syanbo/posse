@@ -197,6 +197,7 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 	b.WriteString("  Read follow-up notes from the coordinator. Run it at natural checkpoints and once more right before reporting.\n\n")
 	fmt.Fprintf(&b, "hive task done %s --summary \"<3 sentences: what you did, what you found, what is left>\" [--report <file>] [--failed]\n", t.ID)
 	b.WriteString("  Report exactly once when you finish. Pass --failed when the task could not be completed; never hide a failure in prose. Add --report only for a file you actually wrote.\n\n")
+	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
 	b.WriteString("After `hive task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
 	if w.Kind == "worktree" {
 		fmt.Fprintf(&b, "\nYou work in your own git worktree on branch %s, created from %s. Commit your changes on this branch before reporting.\n", w.Branch, w.BaseRef)

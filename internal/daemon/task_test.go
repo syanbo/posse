@@ -96,7 +96,7 @@ func TestDeliverNudgesIdleCoordinator(t *testing.T) {
 func TestWorkerPrompt(t *testing.T) {
 	task := store.Task{ID: "k_1", Spec: "do it"}
 	p := workerPrompt(task, store.Workspace{Kind: "worktree", Branch: "feat", BaseRef: "main"})
-	for _, want := range []string{"hive task ask k_1", "hive task done k_1 --summary", "the user", "branch feat, created from main", "=== TASK ===\ndo it"} {
+	for _, want := range []string{"hive task ask k_1", "hive task done k_1 --summary", "the user", "branch feat, created from main", "edit only what it lets you change", "=== TASK ===\ndo it"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}
