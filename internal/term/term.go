@@ -469,7 +469,7 @@ func (t *Terminal) Close(grace time.Duration) {
 
 // strippedEnv 是不应从启动常驻进程的环境泄漏进新终端的变量。
 var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "HIVE_", "TERM_PROGRAM"}
-var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true}
+var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true, "FORCE_HYPERLINK": true}
 
 // Environ 生成终端进程的环境变量。
 func Environ(extra []string) []string {
@@ -488,7 +488,9 @@ func Environ(extra []string) []string {
 		}
 		env = append(env, kv)
 	}
-	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive")
+	// 终端支持超链接（OSC 8），但 TERM_PROGRAM=hive 不在常见的支持名单里：Claude Code 等按 supports-hyperlinks
+	// 判断，要 FORCE_HYPERLINK 才会把 [Image #N]、文件路径输出成可点的链接
+	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive", "FORCE_HYPERLINK=1")
 	if !hasLang {
 		env = append(env, "LANG=en_US.UTF-8")
 	}

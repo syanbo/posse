@@ -41,4 +41,10 @@ func TestEnvironStripsHostAgentVars(t *testing.T) {
 	if !strings.Contains(env, "HIVE_TERMINAL_ID=t_1") || !strings.Contains(env, "TERM=xterm-256color") {
 		t.Fatal("missing expected variables")
 	}
+	// 程序据此把 [Image #N]、路径输出成超链接；外面设的值（比如 0）不能盖过它
+	t.Setenv("FORCE_HYPERLINK", "0")
+	env = strings.Join(Environ(nil), "\n")
+	if !strings.Contains(env, "FORCE_HYPERLINK=1") || strings.Contains(env, "FORCE_HYPERLINK=0") {
+		t.Fatalf("FORCE_HYPERLINK not forced on: %q", env)
+	}
 }
