@@ -193,7 +193,7 @@ func TestIndexAgents(t *testing.T) {
 		}
 	}
 
-	msgs, err := x.Transcript(ctx, got["codex"])
+	msgs, err := x.Transcript(ctx, got["codex"], TranscriptOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestIndexAgents(t *testing.T) {
 		t.Errorf("codex transcript = %+v", msgs)
 	}
 
-	msgs, err = x.Transcript(ctx, got["grok"])
+	msgs, err = x.Transcript(ctx, got["grok"], TranscriptOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestLongLines(t *testing.T) {
 	if hits := search(t, x, "after", SearchOptions{}); len(hits) != 1 {
 		t.Fatalf("line after a long line missing: %v", ids(hits))
 	}
-	msgs, _ := x.Transcript(context.Background(), Session{Path: claude})
+	msgs, _ := x.Transcript(context.Background(), Session{Path: claude}, TranscriptOptions{})
 	if n := len([]rune(msgs[0].Text)); n != toolClip+1 {
 		t.Errorf("tool text clipped to %d runes, want %d", n, toolClip+1)
 	}
@@ -436,7 +436,7 @@ func TestParserVersionReparse(t *testing.T) {
 		return Session{}
 	}
 	before := grok()
-	msgs, _ := x.Transcript(ctx, before)
+	msgs, _ := x.Transcript(ctx, before, TranscriptOptions{})
 	if !msgs[0].At.IsZero() {
 		t.Fatalf("time without updates.jsonl: %v", msgs[0].At)
 	}
@@ -444,14 +444,14 @@ func TestParserVersionReparse(t *testing.T) {
 	// 补上时间来源；聊天记录本身没变，正常的增量更新不会重读
 	os.WriteFile(updates, body, 0o644)
 	update(t, x, home)
-	if msgs, _ = x.Transcript(ctx, grok()); !msgs[0].At.IsZero() {
+	if msgs, _ = x.Transcript(ctx, grok(), TranscriptOptions{}); !msgs[0].At.IsZero() {
 		t.Fatal("reparsed without a parser change")
 	}
 	// 索引里记的是旧版解析规则
 	x.db.Exec(`UPDATE meta SET value='1' WHERE key='parser:grok'`)
 	update(t, x, home)
 	after := grok()
-	msgs, _ = x.Transcript(ctx, after)
+	msgs, _ = x.Transcript(ctx, after, TranscriptOptions{})
 	if msgs[0].At.Unix() != 1790000100 {
 		t.Fatalf("after reparse: %+v", msgs)
 	}

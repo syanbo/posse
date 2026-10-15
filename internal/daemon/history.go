@@ -273,6 +273,9 @@ func (d *Daemon) historyList(ctx context.Context, raw json.RawMessage) (any, err
 
 type historyShowParams struct {
 	Session string `json:"session"`
+	Tail    int    `json:"tail"` // 只要最后几条，0 为全部
+	// Tools 为 false 时不要工具消息；界面只传 session，不传时包含
+	Tools *bool `json:"tools"`
 }
 
 type historyShowResult struct {
@@ -315,7 +318,7 @@ func (d *Daemon) historyShow(ctx context.Context, raw json.RawMessage) (any, err
 		return nil, err
 	}
 	idx, _ := d.historyIndex()
-	msgs, err := idx.Transcript(ctx, s)
+	msgs, err := idx.Transcript(ctx, s, history.TranscriptOptions{Tail: p.Tail, NoTools: p.Tools != nil && !*p.Tools})
 	if err != nil {
 		return nil, err
 	}

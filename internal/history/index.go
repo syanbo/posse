@@ -24,7 +24,7 @@ type source struct {
 	agent      string
 	transcript string
 	meta       string
-	cwd        string // 记录里没有目录时的备选（cursor 从项目目录名还原）
+	cwd        func() string // 记录里没有目录时的备选（cursor 从项目目录名还原）
 	parser     parser
 }
 
@@ -47,8 +47,16 @@ type fileState struct {
 	Model string `json:"model,omitempty"`
 	// LastAt 是上一条有时间的消息的时间：记录里没有时间的消息沿用它
 	LastAt int64 `json:"lastAt,omitempty"`
+	// GrokUpdates 是 grok 的 updates.jsonl 里最后对上的回复分段的行尾位置，下次从这里接着建时间表
+	GrokUpdates int64 `json:"grokUpdates,omitempty"`
 	// grok 的消息时间表，读新行前从旁路文件现建，不存
 	grok *grokTimes
+}
+
+// parser 解析一种 agent 的会话文件。
+type parser interface {
+	// line 解析一行记录，返回其中要索引的消息，并更新 st 里的元数据
+	line(raw []byte, st *fileState) []Message
 }
 
 // preparer 是读新行之前还要准备旁路数据的 parser。
@@ -56,12 +64,15 @@ type preparer interface {
 	prepare(transcript string, st *fileState)
 }
 
-// parser 解析一种 agent 的会话文件。
-type parser interface {
-	// line 解析一行记录，返回其中要索引的消息，并更新 st 里的元数据
-	line(raw []byte, st *fileState) []Message
-	// meta 读取元数据旁路文件；没有旁路文件的 agent 不会被调用
+// metaReader 是有元数据旁路文件的 parser。
+type metaReader interface {
 	meta(path string, st *fileState) error
+}
+
+// lineFilter 是能只看原始字节就排除无关行的 parser：wants 为假的行 line 一定什么都不做，
+// 省掉完整解析 JSON。只能匹配字段值，不能连键带值匹配（冒号后可能有空格）。
+type lineFilter interface {
+	wants(raw []byte, st *fileState) bool
 }
 
 // Progress 是一次索引的进度，Done 计已检查的文件数。
@@ -98,7 +109,7 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 			// 进度作废，整份重读；会话 ID 不变
 			k.size, k.offset = -1, math.MaxInt64
 		}
-		if err := x.updateFile(ctx, src, k); err != nil {
+		if err := x.updateFile(ctx, src, k, roots); err != nil {
 			// 单个文件读不了（权限、半截写入）不影响其他文件，下次再试
 			if errors.Is(err, context.Canceled) {
 				return err
@@ -131,6 +142,7 @@ func (x *Index) Update(ctx context.Context, roots Roots, progress func(Progress)
 
 type knownFile struct {
 	id        int64
+	title     string // 标题索引里的内容，见 indexedTitle
 	size      int64
 	mtime     int64
 	offset    int64
@@ -142,9 +154,9 @@ type knownFile struct {
 // parserVersions 是各家解析规则的版本。只改了某一家的解析时改这里：只重读这一家的文件，表结构版本不变，
 // 跨版本继续运行的旧常驻进程照常能查询。表结构或分词变了才改 schemaVersion（整份重建，旧常驻进程要重启）。
 var parserVersions = map[string]string{
-	"claude": "2", // 记下模型
+	"claude": "3", // 斜杠命令带上参数
 	"codex":  "2", // 记下模型
-	"grok":   "3", // 消息时间取自 updates.jsonl；记下模型
+	"grok":   "4", // 增量读取时回复不再对上已用过的分段
 }
 
 // staleParsers 返回解析规则比索引里记录的新的 agent。
@@ -164,7 +176,9 @@ func (x *Index) staleParsers(ctx context.Context) (map[string]bool, error) {
 }
 
 func (x *Index) knownFiles(ctx context.Context) (map[string]knownFile, error) {
-	rows, err := x.db.QueryContext(ctx, `SELECT path, id, size, mtime, offset, tail, state, meta_mtime FROM sessions`)
+	rows, err := x.db.QueryContext(ctx, `SELECT path, id, size, mtime, offset, tail, state, meta_mtime,
+		CASE WHEN COALESCE(json_extract(NULLIF(state, ''), '$.skip'), 0) THEN '' ELSE COALESCE(NULLIF(title, ''), first_prompt) END
+		FROM sessions`)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +187,7 @@ func (x *Index) knownFiles(ctx context.Context) (map[string]knownFile, error) {
 	for rows.Next() {
 		var path string
 		var k knownFile
-		if err := rows.Scan(&path, &k.id, &k.size, &k.mtime, &k.offset, &k.tail, &k.state, &k.metaMtime); err != nil {
+		if err := rows.Scan(&path, &k.id, &k.size, &k.mtime, &k.offset, &k.tail, &k.state, &k.metaMtime, &k.title); err != nil {
 			return nil, err
 		}
 		out[path] = k
@@ -189,13 +203,9 @@ func mtimeOf(path string) int64 {
 	return fi.ModTime().UnixNano()
 }
 
-func (x *Index) updateFile(ctx context.Context, src source, k knownFile) error {
-	f, err := os.Open(src.transcript)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	fi, err := f.Stat()
+func (x *Index) updateFile(ctx context.Context, src source, k knownFile, roots Roots) error {
+	// 先 stat：绝大多数文件没变，不用打开
+	fi, err := os.Stat(src.transcript)
 	if err != nil {
 		return err
 	}
@@ -207,6 +217,11 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile) error {
 	if k.id != 0 && size == k.size && mtime == k.mtime && metaMtime == k.metaMtime {
 		return nil
 	}
+	f, err := os.Open(src.transcript)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
 
 	var st fileState
 	offset := k.offset
@@ -234,11 +249,19 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile) error {
 	} else {
 		tail = k.tail
 	}
-	if src.meta != "" && (reset || metaMtime != k.metaMtime) {
-		src.parser.meta(src.meta, &st)
+	if mr, ok := src.parser.(metaReader); ok && src.meta != "" && (reset || metaMtime != k.metaMtime) {
+		if mr.meta(src.meta, &st) != nil {
+			// 旁路文件可能正写到一半，不记它的 mtime，下次再读
+			metaMtime = 0
+		}
 	}
-	if st.Cwd == "" {
-		st.Cwd = src.cwd
+	if src.agent == "codex" {
+		if t := x.loadCodexTitles(roots).titles[st.SessionID]; t != "" {
+			st.Title = t
+		}
+	}
+	if st.Cwd == "" && src.cwd != nil {
+		st.Cwd = src.cwd()
 	}
 	if st.Updated == 0 {
 		st.Updated = fi.ModTime().UnixMilli()
@@ -249,7 +272,7 @@ func (x *Index) updateFile(ctx context.Context, src source, k knownFile) error {
 	if st.SessionID == "" {
 		st.SessionID = sessionIDFromPath(src.transcript)
 	}
-	return x.save(ctx, src, k.id, reset, st, msgs, size, mtime, offset, tail, metaMtime)
+	return x.save(ctx, src, k, reset, st, msgs, size, mtime, offset, tail, metaMtime)
 }
 
 // tailMatches 核对 offset 之前的字节是否和上次读到的一致。
@@ -269,8 +292,33 @@ func tailMatches(f *os.File, offset int64, tail []byte) bool {
 
 // readLines 读到最后一个完整行为止，返回解析出的消息、消费的字节数和最后 tailLen 字节。
 func readLines(r io.Reader, p parser, st *fileState) ([]Message, int64, []byte, error) {
-	br := bufio.NewReaderSize(r, 256<<10)
+	filter, _ := p.(lineFilter)
 	var msgs []Message
+	n, tail, err := scanLines(r, func(line []byte, _ int64) {
+		if st.Skip {
+			return
+		}
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 || trimmed[0] != '{' || (filter != nil && !filter.wants(trimmed, st)) {
+			return
+		}
+		for _, m := range p.line(trimmed, st) {
+			m.Seq = st.Seq
+			st.Seq++
+			msgs = append(msgs, m)
+		}
+	})
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	return msgs, n, tail, nil
+}
+
+// scanLines 逐个交出完整的行（含换行符），到最后一个完整行为止；超过 maxLine 的行跳过。
+// fn 拿到的 line 只在调用期间有效，n 是到这一行结尾为止消费的字节数。
+// 返回消费的字节数和最后 tailLen 字节。
+func scanLines(r io.Reader, fn func(line []byte, n int64)) (int64, []byte, error) {
+	br := bufio.NewReaderSize(r, 256<<10)
 	var consumed int64
 	var last []byte
 	var long []byte   // 超过缓冲区的行在这里拼接
@@ -293,7 +341,7 @@ func readLines(r io.Reader, p parser, st *fileState) ([]Message, int64, []byte, 
 			break
 		}
 		if err != nil {
-			return nil, 0, nil, err
+			return consumed, last, err
 		}
 		consumed += pending + int64(len(chunk))
 		pending = 0
@@ -302,20 +350,14 @@ func readLines(r io.Reader, p parser, st *fileState) ([]Message, int64, []byte, 
 			long = append(long, chunk...)
 			line = long
 		}
-		if !skipping && !st.Skip {
-			if trimmed := bytes.TrimSpace(line); len(trimmed) > 0 && trimmed[0] == '{' {
-				for _, m := range p.line(trimmed, st) {
-					m.Seq = st.Seq
-					st.Seq++
-					msgs = append(msgs, m)
-				}
-			}
+		if !skipping {
+			fn(line, consumed)
 		}
 		// 跳过的超长行只剩最后一段，也足够当校验：它就是 offset 前紧挨着的字节
 		last = append(last[:0], line[max(0, len(line)-tailLen):]...)
 		long, skipping = nil, false
 	}
-	return msgs, consumed, last, nil
+	return consumed, last, nil
 }
 
 func sessionIDFromPath(path string) string {
@@ -323,8 +365,9 @@ func sessionIDFromPath(path string) string {
 	return base[:len(base)-len(filepath.Ext(base))]
 }
 
-func (x *Index) save(ctx context.Context, src source, id int64, reset bool, st fileState, msgs []Message,
+func (x *Index) save(ctx context.Context, src source, k knownFile, reset bool, st fileState, msgs []Message,
 	size, mtime, offset int64, tail []byte, metaMtime int64) error {
+	id := k.id
 	tx, err := x.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -389,21 +432,32 @@ func (x *Index) save(ctx context.Context, src source, id int64, reset bool, st f
 			}
 		}
 	}
-	if err := setTitle(ctx, tx, id, st.Title, st.FirstPrompt, st.Skip); err != nil {
-		return err
+	if k.id == 0 || k.title != indexedTitle(st.Title, st.FirstPrompt, st.Skip) {
+		if err := setTitle(ctx, tx, id, st.Title, st.FirstPrompt, st.Skip); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
 
-// setTitle 更新标题索引；跳过的会话不进标题索引。
+// indexedTitle 是进标题索引的内容：标题，没有时是第一句话；跳过的会话不进。
+func indexedTitle(title, first string, skip bool) string {
+	if skip {
+		return ""
+	}
+	if title == "" {
+		return first
+	}
+	return title
+}
+
+// setTitle 更新标题索引。
 func setTitle(ctx context.Context, tx *sql.Tx, id int64, title, first string, skip bool) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM titles_fts WHERE rowid=?`, id); err != nil {
 		return err
 	}
+	title = indexedTitle(title, first, skip)
 	if title == "" {
-		title = first
-	}
-	if skip || title == "" {
 		return nil
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO titles_fts(rowid, title) VALUES(?,?)`, id, splitCJK(title))

@@ -2,10 +2,11 @@ package history
 
 import (
 	"bufio"
+	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -39,17 +40,20 @@ func discover(r Roots) []source {
 	for _, m := range globFiles(filepath.Join(r.Home, ".cursor", "chats", "*", "*", "meta.json")) {
 		cursorMeta[filepath.Base(filepath.Dir(m))] = m
 	}
+	// 还原目录要逐段 stat，只在文件真要重读、记录里又没有目录时才做，同一项目只做一次
 	cursorDirs := map[string]string{}
 	for _, p := range globFiles(filepath.Join(r.Home, ".cursor", "projects", "*", "agent-transcripts", "*", "*.jsonl")) {
 		src := source{agent: "cursor", transcript: p, meta: cursorMeta[sessionIDFromPath(p)], parser: cursorParser{}}
 		if src.meta == "" {
 			project := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(p))))
-			dir, ok := cursorDirs[project]
-			if !ok {
-				dir = cursorProjectDir(project)
-				cursorDirs[project] = dir
+			src.cwd = func() string {
+				dir, ok := cursorDirs[project]
+				if !ok {
+					dir = cursorProjectDir(project)
+					cursorDirs[project] = dir
+				}
+				return dir
 			}
-			src.cwd = dir
 		}
 		out = append(out, src)
 	}
@@ -124,12 +128,62 @@ func userText(st *fileState, s string) string {
 	return s
 }
 
+// toolArgs 是工具参数里用得上的字段。cmd、command 在 codex 里可能是参数数组，先留原文。
+type toolArgs struct {
+	Command     json.RawMessage `json:"command"`
+	Cmd         json.RawMessage `json:"cmd"`
+	FilePath    string          `json:"file_path"`
+	Path        string          `json:"path"`
+	TargetFile  string          `json:"target_file"`
+	Pattern     string          `json:"pattern"`
+	Query       string          `json:"query"`
+	URL         string          `json:"url"`
+	Description string          `json:"description"`
+	Prompt      string          `json:"prompt"`
+}
+
+// decodeToolArgs 解析工具参数。某个字段类型不符（比如 path 是对象）只丢这个字段，
+// 其余照常取；不是合法 JSON 时 ok 为假。
+func decodeToolArgs(raw []byte) (a toolArgs, ok bool) {
+	err := json.Unmarshal(raw, &a)
+	var typeErr *json.UnmarshalTypeError
+	return a, err == nil || errors.As(err, &typeErr)
+}
+
+// commandOf 取工具参数里的命令：cmd、command 可能是字符串，也可能是参数数组。
+func commandOf(args []byte) string {
+	a, ok := decodeToolArgs(args)
+	if !ok {
+		return ""
+	}
+	for _, raw := range []json.RawMessage{a.Cmd, a.Command} {
+		if s := rawString(raw); s != "" {
+			return s
+		}
+		var list []string
+		if len(raw) > 0 && raw[0] == '[' && json.Unmarshal(raw, &list) == nil && len(list) > 0 {
+			// ["bash", "-lc", "cat …"] 取最后一段
+			return list[len(list)-1]
+		}
+	}
+	return ""
+}
+
+// rawString 取 JSON 字符串的值；不是字符串返回 ""。
+func rawString(raw json.RawMessage) string {
+	var s string
+	if len(raw) > 0 && raw[0] == '"' && json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return ""
+}
+
 // toolCall 把工具调用压成一行"名称 参数"，参数优先取命令、路径这类可搜的字段。
 func toolCall(name string, input json.RawMessage) string {
-	var fields map[string]any
-	if json.Unmarshal(input, &fields) == nil {
-		for _, k := range []string{"command", "cmd", "file_path", "path", "target_file", "pattern", "query", "url", "description", "prompt"} {
-			if v, ok := fields[k].(string); ok && v != "" {
+	if a, ok := decodeToolArgs(input); ok {
+		for _, v := range []string{rawString(a.Command), rawString(a.Cmd), a.FilePath, a.Path, a.TargetFile,
+			a.Pattern, a.Query, a.URL, a.Description, a.Prompt} {
+			if v != "" {
 				return clip(name+" "+v, toolClip)
 			}
 		}
@@ -141,21 +195,46 @@ func toolCall(name string, input json.RawMessage) string {
 	return clip(name+" "+string(input), toolClip)
 }
 
+// contentBlock 是 claude、cursor 消息内容里的一块。
+type contentBlock struct {
+	Type    string          `json:"type"`
+	Text    string          `json:"text"`
+	Name    string          `json:"name"`
+	Input   json.RawMessage `json:"input"`
+	Content json.RawMessage `json:"content"`
+}
+
+// contentBlocks 解析字符串或块数组形式的消息内容，字符串当成一个 text 块；两者都不是时 ok 为假。
+// 按首字节分派，免得每条内容先按字符串试一遍失败再按数组解析。
+func contentBlocks(raw json.RawMessage) (blocks []contentBlock, ok bool) {
+	raw = bytes.TrimLeft(raw, " \t\r\n")
+	if len(raw) == 0 {
+		return nil, false
+	}
+	switch raw[0] {
+	case '"':
+		var s string
+		if json.Unmarshal(raw, &s) != nil {
+			return nil, false
+		}
+		return []contentBlock{{Type: "text", Text: s}}, true
+	case '[':
+		if json.Unmarshal(raw, &blocks) != nil {
+			return nil, false
+		}
+		return blocks, true
+	case 'n':
+		// null 和空字符串一样，没有内容
+		return nil, string(raw) == "null"
+	}
+	return nil, false
+}
+
 // textOf 取字符串或 [{type:text,text}] 数组里的文字。
 func textOf(raw json.RawMessage) string {
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return s
-	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &parts) != nil {
-		return ""
-	}
+	blocks, _ := contentBlocks(raw)
 	var b []string
-	for _, p := range parts {
+	for _, p := range blocks {
 		if p.Text != "" {
 			b = append(b, p.Text)
 		}
@@ -170,14 +249,6 @@ func msg(role, text string, at int64) Message {
 // --- claude：~/.claude/projects/<编码后的目录>/<会话>.jsonl
 
 type claudeParser struct{}
-
-type claudeBlock struct {
-	Type    string          `json:"type"`
-	Text    string          `json:"text"`
-	Name    string          `json:"name"`
-	Input   json.RawMessage `json:"input"`
-	Content json.RawMessage `json:"content"`
-}
 
 type claudeRecord struct {
 	Type             string `json:"type"`
@@ -197,9 +268,17 @@ type claudeRecord struct {
 	} `json:"message"`
 }
 
-var claudeCommand = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>.*?(?:<command-args>(.*?)</command-args>)?`)
+var (
+	claudeCommandName = regexp.MustCompile(`(?s)<command-name>(.*?)</command-name>`)
+	claudeCommandArgs = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
+)
 
-func (claudeParser) meta(string, *fileState) error { return nil }
+// claudeTypes 是 claudeParser.line 会处理的记录类型。
+var claudeTypes = quoted("user", "assistant", "custom-title", "ai-title", "summary")
+
+func (claudeParser) wants(raw []byte, _ *fileState) bool {
+	return hasFieldValue(raw, typeKey, claudeTypes)
+}
 
 func (claudeParser) line(raw []byte, st *fileState) []Message {
 	var r claudeRecord
@@ -248,11 +327,8 @@ func (claudeParser) line(raw []byte, st *fileState) []Message {
 	if r.Type == "user" && (r.IsMeta || r.IsCompactSummary) {
 		return nil
 	}
-	var blocks []claudeBlock
-	var s string
-	if json.Unmarshal(r.Message.Content, &s) == nil {
-		blocks = []claudeBlock{{Type: "text", Text: s}}
-	} else if json.Unmarshal(r.Message.Content, &blocks) != nil {
+	blocks, ok := contentBlocks(r.Message.Content)
+	if !ok {
 		return nil
 	}
 	var out []Message
@@ -283,11 +359,15 @@ func claudeUserText(st *fileState, s string) string {
 	t := strings.TrimSpace(s)
 	switch {
 	case strings.HasPrefix(t, "<command-name>"), strings.HasPrefix(t, "<command-message>"):
-		m := claudeCommand.FindStringSubmatch(t)
+		m := claudeCommandName.FindStringSubmatch(t)
 		if m == nil {
 			return ""
 		}
-		return userText(st, strings.TrimSpace(m[1]+" "+m[2]))
+		cmd := strings.TrimSpace(m[1])
+		if a := claudeCommandArgs.FindStringSubmatch(t); a != nil {
+			cmd = strings.TrimSpace(cmd + " " + strings.TrimSpace(a[1]))
+		}
+		return userText(st, cmd)
 	case strings.HasPrefix(t, "<local-command-"), strings.HasPrefix(t, "<bash-stdout>"), strings.HasPrefix(t, "<bash-stderr>"),
 		strings.HasPrefix(t, "<task-notification>"), strings.HasPrefix(t, "[Request interrupted"):
 		return ""
@@ -353,7 +433,19 @@ type codexItem struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-func (codexParser) meta(string, *fileState) error { return nil }
+// codexParser.line 会处理的记录类型：两种格式都要的元数据，加上各自格式读消息的那一类
+// （新格式的 item_completed 是 payload 里的 type）。
+var (
+	codexPagedTypes  = quoted("session_meta", "turn_context", "item_completed")
+	codexLegacyTypes = quoted("session_meta", "turn_context", "response_item")
+)
+
+func (codexParser) wants(raw []byte, st *fileState) bool {
+	if st.Mode == "paginated" {
+		return hasFieldValue(raw, typeKey, codexPagedTypes)
+	}
+	return hasFieldValue(raw, typeKey, codexLegacyTypes)
+}
 
 // codexInjected 是 Codex 以用户身份写进会话、但不是用户输入的内容的开头。
 var codexInjected = []string{
@@ -532,6 +624,48 @@ func codexOutput(raw json.RawMessage) string {
 	return o.Output
 }
 
+var typeKey = []byte(`"type"`)
+
+func quoted(values ...string) [][]byte {
+	out := make([][]byte, len(values))
+	for i, v := range values {
+		out[i] = []byte(`"` + v + `"`)
+	}
+	return out
+}
+
+// hasFieldValue 粗筛一行 JSON：是否有某个 key 字段（带引号）的值是 values 之一（带引号）。
+// 冒号两侧可能有空格，所以不能把键和值拼成一个串去找。嵌套对象里的同名字段也算，宁多勿漏：
+// 漏掉的行不会进索引，多放过的只是照常解析。只扫一遍，比逐个值 bytes.Contains 省。
+func hasFieldValue(raw, key []byte, values [][]byte) bool {
+	for {
+		i := bytes.Index(raw, key)
+		if i < 0 {
+			return false
+		}
+		raw = raw[i+len(key):]
+		rest := bytes.TrimLeft(raw, " \t\r\n")
+		if len(rest) == 0 || rest[0] != ':' {
+			continue
+		}
+		rest = bytes.TrimLeft(rest[1:], " \t\r\n")
+		for _, v := range values {
+			if bytes.HasPrefix(rest, v) {
+				return true
+			}
+		}
+	}
+}
+
+func containsAny(b []byte, subs [][]byte) bool {
+	for _, sub := range subs {
+		if bytes.Contains(b, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasAnyPrefix(s string, prefixes []string) bool {
 	for _, p := range prefixes {
 		if strings.HasPrefix(s, p) {
@@ -548,7 +682,7 @@ type cursorParser struct{}
 type cursorRecord struct {
 	Role    string `json:"role"`
 	Message struct {
-		Content []claudeBlock `json:"content"`
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
 
@@ -588,8 +722,9 @@ func (cursorParser) line(raw []byte, st *fileState) []Message {
 	if json.Unmarshal(raw, &r) != nil {
 		return nil
 	}
+	blocks, _ := contentBlocks(r.Message.Content)
 	var out []Message
-	for _, b := range r.Message.Content {
+	for _, b := range blocks {
 		switch {
 		case b.Type == "text" && r.Role == "user":
 			// cursor 记录里没有时间字段，用户消息开头的 <timestamp> 是唯一的时间来源
@@ -677,18 +812,21 @@ func cursorProjectDir(name string) string {
 
 type grokParser struct{}
 
+// grokToolCall 是 chat_history.jsonl 里助手记录发起的一次工具调用。
+type grokToolCall struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 type grokRecord struct {
 	Type        string          `json:"type"`
 	Content     json.RawMessage `json:"content"`
 	PromptIndex *int            `json:"prompt_index"`
 	ModelID     string          `json:"model_id"`
 	ToolCallID  string          `json:"tool_call_id"`
-	ToolCalls   []struct {
-		ID        string `json:"id"`
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"tool_calls"`
-	Kind struct {
+	ToolCalls   []grokToolCall  `json:"tool_calls"`
+	Kind        struct {
 		ToolType string `json:"tool_type"`
 		Action   struct {
 			Query string `json:"query"`
@@ -698,6 +836,16 @@ type grokRecord struct {
 
 var grokQuery = regexp.MustCompile(`(?s)<user_query>(.*?)</user_query>`)
 
+// grokTypes 是 grokParser.line 会处理的记录类型；别的记录只可能带模型。
+var (
+	grokTypes   = quoted("user", "assistant", "tool_result", "backend_tool_call")
+	grokModelID = []byte(`"model_id"`)
+)
+
+func (grokParser) wants(raw []byte, _ *fileState) bool {
+	return hasFieldValue(raw, typeKey, grokTypes) || bytes.Contains(raw, grokModelID)
+}
+
 // grokTimes 是从同目录 updates.jsonl 建的消息时间表：chat_history.jsonl 的记录不带时间。
 // 用户消息按 prompt_index 对上 user_message_chunk；agent 的回复按开头对上 agent_message_chunk；
 // 工具调用和结果按调用 ID 对上 tool_call。
@@ -706,23 +854,42 @@ type grokTimes struct {
 	chunks  []grokChunk
 	next    int // chunks 里下一条还没对上的
 	tools   map[string]int64
+	// matched 是最后一个对上的回复分段在 updates.jsonl 里的行尾位置
+	matched int64
 }
 
 type grokChunk struct {
-	text string
-	at   int64
+	text    string
+	at, end int64 // end 是所在行的行尾位置
 }
 
+// grokUpdateTypes 先粗筛 updates.jsonl：大部分字节是工具输出（tool_call_update）和思考过程，用不上。
+var (
+	grokUpdateKey   = []byte(`"sessionUpdate"`)
+	grokUpdateTypes = quoted("user_message_chunk", "agent_message_chunk", "tool_call")
+)
+
+// prepare 从上次最后对上的回复分段之后读 updates.jsonl 建时间表：回复按顺序对上分段，
+// 这样和整份读时的 next 一致，新回复不会对上已经用过的分段。之前的用户消息和工具调用
+// 都已经对上过，不用再读。
 func (grokParser) prepare(transcript string, st *fileState) {
 	f, err := os.Open(filepath.Join(filepath.Dir(transcript), "updates.jsonl"))
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	gt := &grokTimes{prompts: map[int]int64{}, tools: map[string]int64{}}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64<<10), maxLine)
-	for sc.Scan() {
+	from := st.GrokUpdates
+	if fi, err := f.Stat(); err != nil || fi.Size() < from {
+		from = 0
+	}
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return
+	}
+	gt := &grokTimes{prompts: map[int]int64{}, tools: map[string]int64{}, matched: from}
+	scanLines(f, func(line []byte, n int64) {
+		if !hasFieldValue(line, grokUpdateKey, grokUpdateTypes) {
+			return
+		}
 		var r struct {
 			Timestamp int64 `json:"timestamp"`
 			Params    struct {
@@ -738,8 +905,8 @@ func (grokParser) prepare(transcript string, st *fileState) {
 				} `json:"update"`
 			} `json:"params"`
 		}
-		if json.Unmarshal(sc.Bytes(), &r) != nil || r.Timestamp == 0 {
-			continue
+		if json.Unmarshal(line, &r) != nil || r.Timestamp == 0 {
+			return
 		}
 		at := r.Timestamp * 1000
 		u := r.Params.Update
@@ -752,14 +919,14 @@ func (grokParser) prepare(transcript string, st *fileState) {
 			}
 		case "agent_message_chunk":
 			if t := strings.TrimSpace(u.Content.Text); t != "" {
-				gt.chunks = append(gt.chunks, grokChunk{t, at})
+				gt.chunks = append(gt.chunks, grokChunk{t, at, from + n})
 			}
 		case "tool_call":
 			if id := grokCallID(u.ToolCallID); id != "" {
 				gt.tools[id] = at
 			}
 		}
-	}
+	})
 	st.grok = gt
 }
 
@@ -784,9 +951,9 @@ func (gt *grokTimes) at(r grokRecord) int64 {
 	case "assistant":
 		if t := strings.TrimSpace(textOf(r.Content)); t != "" {
 			for i := gt.next; i < len(gt.chunks); i++ {
-				if strings.HasPrefix(t, gt.chunks[i].text) || strings.HasPrefix(gt.chunks[i].text, t) {
-					gt.next = i + 1
-					return gt.chunks[i].at
+				if c := gt.chunks[i]; strings.HasPrefix(t, c.text) || strings.HasPrefix(c.text, t) {
+					gt.next, gt.matched = i+1, c.end
+					return c.at
 				}
 			}
 		}
@@ -810,6 +977,9 @@ func (grokParser) line(raw []byte, st *fileState) []Message {
 		st.Model = r.ModelID
 	}
 	at := st.grok.at(r)
+	if st.grok != nil {
+		st.GrokUpdates = st.grok.matched
+	}
 	if at == 0 {
 		at = st.LastAt
 	} else {
@@ -899,7 +1069,40 @@ type codexIndexEntry struct {
 	ThreadName string `json:"thread_name"`
 }
 
-// applyCodexTitles 把 session_index.jsonl 里的会话名写到 codex 会话上；同一会话后出现的名字为准。
+// codexTitles 是 session_index.jsonl 里的会话名，同一会话后出现的名字为准。
+type codexTitles struct {
+	mtime  int64
+	titles map[string]string
+}
+
+// loadCodexTitles 读 session_index.jsonl，文件没变时沿用上次读的。
+func (x *Index) loadCodexTitles(r Roots) codexTitles {
+	path := filepath.Join(r.Home, ".codex", "session_index.jsonl")
+	mtime := mtimeOf(path)
+	if mtime == x.codex.mtime && x.codex.titles != nil {
+		return x.codex
+	}
+	ct := codexTitles{mtime: mtime, titles: map[string]string{}}
+	f, err := os.Open(path)
+	if err != nil {
+		x.codex = ct
+		return ct
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	for sc.Scan() {
+		var e codexIndexEntry
+		if json.Unmarshal(sc.Bytes(), &e) == nil && e.ID != "" && e.ThreadName != "" {
+			ct.titles[e.ID] = e.ThreadName
+		}
+	}
+	x.codex = ct
+	return ct
+}
+
+// applyCodexTitles 在 session_index.jsonl 变化后把会话名写到已入库的 codex 会话上。
+// 会话文件有新内容时，updateFile 在保存前就带上了名字，这里只管只改了名的会话。
 func (x *Index) applyCodexTitles(ctx context.Context, r Roots) error {
 	path := filepath.Join(r.Home, ".codex", "session_index.jsonl")
 	mtime := mtimeOf(path)
@@ -908,48 +1111,53 @@ func (x *Index) applyCodexTitles(ctx context.Context, r Roots) error {
 	}
 	var seen string
 	x.db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key='codex_titles_mtime'`).Scan(&seen)
-	// 新会话入库时也要能拿到标题，所以除了文件变化，还要看有没有没标题的 codex 会话
-	var untitled int
-	x.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE agent='codex' AND title=''`).Scan(&untitled)
-	if seen == strconv.FormatInt(mtime, 10) && untitled == 0 {
+	if seen == strconv.FormatInt(mtime, 10) {
 		return nil
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-	titles := map[string]string{}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64<<10), 4<<20)
-	for sc.Scan() {
-		var e codexIndexEntry
-		if json.Unmarshal(sc.Bytes(), &e) == nil && e.ID != "" && e.ThreadName != "" {
-			titles[e.ID] = e.ThreadName
-		}
-	}
+	titles := x.loadCodexTitles(r).titles
 	tx, err := x.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for sid, title := range titles {
+	// 跳过的会话 messages 记 0，不进标题索引，也就不用改名
+	rows, err := tx.QueryContext(ctx, `SELECT id, session_id, title FROM sessions WHERE agent='codex' AND messages > 0`)
+	if err != nil {
+		return err
+	}
+	type rename struct {
+		id    int64
+		title string
+	}
+	var todo []rename
+	for rows.Next() {
 		var id int64
-		var skip bool
-		var state string
-		err := tx.QueryRowContext(ctx, `SELECT id, state FROM sessions WHERE agent='codex' AND session_id=? AND title<>?`, sid, title).Scan(&id, &state)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
+		var sid, title string
+		if err := rows.Scan(&id, &sid, &title); err != nil {
+			rows.Close()
+			return err
 		}
+		if t := titles[sid]; t != "" && t != title {
+			todo = append(todo, rename{id, t})
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(todo) > 0 {
+		upd, err := tx.PrepareContext(ctx, `UPDATE sessions SET title=? WHERE id=?`)
 		if err != nil {
 			return err
 		}
-		skip = strings.Contains(state, `"skip":true`)
-		if _, err := tx.ExecContext(ctx, `UPDATE sessions SET title=? WHERE id=?`, title, id); err != nil {
-			return err
-		}
-		if err := setTitle(ctx, tx, id, title, "", skip); err != nil {
-			return err
+		defer upd.Close()
+		for _, t := range todo {
+			if _, err := upd.ExecContext(ctx, t.title, t.id); err != nil {
+				return err
+			}
+			if err := setTitle(ctx, tx, t.id, t.title, "", false); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('codex_titles_mtime',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,

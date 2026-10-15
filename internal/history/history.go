@@ -5,7 +5,6 @@ package history
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,7 +49,10 @@ type Hit struct {
 	Spans   []Span    `json:"spans,omitempty"`
 }
 
-type Index struct{ db *sql.DB }
+type Index struct {
+	db    *sql.DB
+	codex codexTitles // 更新索引时读过的 codex 会话名
+}
 
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -153,8 +155,10 @@ func (x *Index) ready(ctx context.Context) (bool, error) {
 func (x *Index) Reset() error { return x.migrate(true) }
 
 func (x *Index) migrate(force bool) error {
-	if !force && x.schemaCurrent() {
-		return nil
+	if !force {
+		if ok, _ := x.ready(context.Background()); ok {
+			return nil
+		}
 	}
 	// 常驻进程和索引子进程可能同时打开新库，用写事务串行化，进来后再确认一次版本
 	conn, err := x.db.Conn(context.Background())
@@ -194,11 +198,6 @@ func (x *Index) migrate(force bool) error {
 	return nil
 }
 
-func (x *Index) schemaCurrent() bool {
-	var v string
-	return x.db.QueryRow(`SELECT value FROM meta WHERE key='schema'`).Scan(&v) == nil && v == schemaVersion
-}
-
 func ms(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
@@ -213,23 +212,24 @@ func fromMS(v int64) time.Time {
 	return time.UnixMilli(v)
 }
 
-const sessionCols = `agent, session_id, title, first_prompt, cwd, branch, created_at, updated_at, messages, path, state`
+// sessionCols 是 scanSession 读的列，prefix 是表的别名（如 "s."）。
+// 模型只记在增量读取的状态里，不单独成列。
+func sessionCols(prefix string) string {
+	var b strings.Builder
+	for _, c := range []string{"agent", "session_id", "title", "first_prompt", "cwd", "branch", "created_at", "updated_at", "messages", "path"} {
+		b.WriteString(prefix + c + ", ")
+	}
+	b.WriteString("COALESCE(json_extract(NULLIF(" + prefix + "state, ''), '$.model'), '')")
+	return b.String()
+}
 
 func scanSession(sc interface{ Scan(...any) error }, extra ...any) (Session, error) {
 	var s Session
 	var first string
 	var created, updated int64
-	var state string
-	dest := append([]any{&s.Agent, &s.ID, &s.Title, &first, &s.Cwd, &s.Branch, &created, &updated, &s.Messages, &s.Path, &state}, extra...)
+	dest := append([]any{&s.Agent, &s.ID, &s.Title, &first, &s.Cwd, &s.Branch, &created, &updated, &s.Messages, &s.Path, &s.Model}, extra...)
 	if err := sc.Scan(dest...); err != nil {
 		return s, err
-	}
-	// 模型只记在增量读取的状态里，不单独成列
-	var st struct {
-		Model string `json:"model"`
-	}
-	if json.Unmarshal([]byte(state), &st) == nil {
-		s.Model = st.Model
 	}
 	if s.Title == "" {
 		s.Title = first
@@ -271,7 +271,7 @@ func (x *Index) Sessions(ctx context.Context, o ListOptions) ([]Session, error) 
 		return nil, err
 	}
 	where, args := o.where("")
-	q := `SELECT ` + sessionCols + ` FROM sessions` + where + ` ORDER BY updated_at DESC`
+	q := `SELECT ` + sessionCols("") + ` FROM sessions` + where + ` ORDER BY updated_at DESC`
 	if o.Limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", o.Limit)
 	}
@@ -303,7 +303,7 @@ func (x *Index) Find(ctx context.Context, id string) (Session, error) {
 		}
 		return Session{}, err
 	}
-	rows, err := x.db.QueryContext(ctx, `SELECT `+sessionCols+` FROM sessions WHERE session_id = ? OR session_id LIKE ? ESCAPE '\' ORDER BY session_id = ? DESC, updated_at DESC LIMIT 6`,
+	rows, err := x.db.QueryContext(ctx, `SELECT `+sessionCols("")+` FROM sessions WHERE session_id = ? OR session_id LIKE ? ESCAPE '\' ORDER BY session_id = ? DESC, updated_at DESC LIMIT 6`,
 		id, likeEscape(id)+"%", id)
 	if err != nil {
 		return Session{}, err
@@ -333,10 +333,26 @@ func (x *Index) Find(ctx context.Context, id string) (Session, error) {
 	return Session{}, fmt.Errorf("session %q is ambiguous: %s", id, strings.Join(ids, ", "))
 }
 
-// Transcript 返回会话的全部已索引消息。
-func (x *Index) Transcript(ctx context.Context, s Session) ([]Message, error) {
-	rows, err := x.db.QueryContext(ctx, `SELECT m.seq, m.role, m.at, m.text FROM messages m JOIN sessions s ON s.id = m.session
-		WHERE s.path = ? ORDER BY m.seq`, s.Path)
+// TranscriptOptions 筛选 Transcript 返回的消息，零值是全部。
+type TranscriptOptions struct {
+	Tail    int  // 只要最后几条
+	NoTools bool // 不要工具调用和输出
+}
+
+// Transcript 按顺序返回会话的已索引消息。
+func (x *Index) Transcript(ctx context.Context, s Session, o TranscriptOptions) ([]Message, error) {
+	where := ""
+	if o.NoTools {
+		where = " AND m.role <> 'tool'"
+	}
+	limit := -1
+	if o.Tail > 0 {
+		limit = o.Tail
+	}
+	rows, err := x.db.QueryContext(ctx, `SELECT seq, role, at, text FROM (
+		SELECT m.seq, m.role, m.at, m.text FROM messages m JOIN sessions s ON s.id = m.session
+		WHERE s.path = ?`+where+` ORDER BY m.seq DESC LIMIT ?
+	) ORDER BY seq`, s.Path, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +424,7 @@ func (x *Index) search(ctx context.Context, terms []term, match string, o Search
 	), cand AS (
 		SELECT session FROM best UNION SELECT session FROM titled
 	)
-	SELECT ` + prefixCols("s.", sessionCols) + `, COALESCE(b.n, 0), COALESCE(b.role, ''), COALESCE(b.seq, 0), COALESCE(b.at, 0),
+	SELECT ` + sessionCols("s.") + `, COALESCE(b.n, 0), COALESCE(b.role, ''), COALESCE(b.seq, 0), COALESCE(b.at, 0),
 		COALESCE(m.text, ''), t.session IS NOT NULL AS title_hit
 	FROM cand c JOIN sessions s ON s.id = c.session
 	LEFT JOIN best b ON b.session = c.session
@@ -444,14 +460,6 @@ func (x *Index) search(ctx context.Context, terms []term, match string, o Search
 		out = append(out, h)
 	}
 	return out, rows.Err()
-}
-
-func prefixCols(prefix, cols string) string {
-	parts := strings.Split(cols, ",")
-	for i, p := range parts {
-		parts[i] = prefix + strings.TrimSpace(p)
-	}
-	return strings.Join(parts, ", ")
 }
 
 // Stats 是索引规模，给状态栏和 CLI 显示。

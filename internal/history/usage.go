@@ -1,8 +1,6 @@
 package history
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -76,18 +74,13 @@ func (s *UsageScanner) Scan() (Usage, error) {
 	if _, err := f.Seek(s.offset, 0); err != nil {
 		return Usage{}, err
 	}
-	br := bufio.NewReaderSize(f, 256<<10)
-	for {
-		line, err := br.ReadBytes('\n')
-		if err != nil {
-			break
-		}
-		s.offset += int64(len(line))
+	n, _, err := scanLines(f, func(line []byte, _ int64) {
 		if hasUsageMarker(line) {
 			s.line(line)
 		}
-	}
-	return s.result(), nil
+	})
+	s.offset += n
+	return s.result(), err
 }
 
 // usageMarkers 先粗筛，只有可能相关的行才解析 JSON。
@@ -96,14 +89,7 @@ var usageMarkers = [][]byte{
 	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"),
 }
 
-func hasUsageMarker(line []byte) bool {
-	for _, m := range usageMarkers {
-		if bytes.Contains(line, m) {
-			return true
-		}
-	}
-	return false
-}
+func hasUsageMarker(line []byte) bool { return containsAny(line, usageMarkers) }
 
 func (s *UsageScanner) line(b []byte) {
 	switch s.agent {
@@ -125,20 +111,7 @@ func (s *UsageScanner) claudeLine(b []byte) {
 	if json.Unmarshal(b, &r) != nil {
 		return
 	}
-	var str string
-	if json.Unmarshal(r.Message.Content, &str) == nil {
-		s.skillBase(str)
-		return
-	}
-	var blocks []struct {
-		Type  string          `json:"type"`
-		Name  string          `json:"name"`
-		Text  string          `json:"text"`
-		Input json.RawMessage `json:"input"`
-	}
-	if json.Unmarshal(r.Message.Content, &blocks) != nil {
-		return
-	}
+	blocks, _ := contentBlocks(r.Message.Content)
 	for _, bl := range blocks {
 		switch bl.Type {
 		case "text":
@@ -147,11 +120,8 @@ func (s *UsageScanner) claudeLine(b []byte) {
 			if name, ok := strings.CutPrefix(bl.Name, "mcp__"); ok {
 				s.addMCP(name)
 			} else if bl.Name == "Read" {
-				var in struct {
-					FilePath string `json:"file_path"`
-				}
-				json.Unmarshal(bl.Input, &in)
-				s.skillRead(in.FilePath)
+				a, _ := decodeToolArgs(bl.Input)
+				s.skillRead(a.FilePath)
 			}
 		}
 	}
@@ -189,29 +159,6 @@ func (s *UsageScanner) skillCommand(cmd string) {
 	}
 }
 
-// commandOf 取工具参数里的命令：cmd、command 可能是字符串，也可能是参数数组。
-func commandOf(args string) string {
-	var a struct {
-		Cmd     json.RawMessage `json:"cmd"`
-		Command json.RawMessage `json:"command"`
-	}
-	if json.Unmarshal([]byte(args), &a) != nil {
-		return ""
-	}
-	for _, raw := range []json.RawMessage{a.Cmd, a.Command} {
-		var str string
-		if json.Unmarshal(raw, &str) == nil && str != "" {
-			return str
-		}
-		var list []string
-		if json.Unmarshal(raw, &list) == nil && len(list) > 0 {
-			// ["bash", "-lc", "cat …"] 取最后一段
-			return list[len(list)-1]
-		}
-	}
-	return ""
-}
-
 // addMCP 记一次 MCP 调用，name 是 <服务>__<工具>；服务名里可能有下划线，所以按最后一个 "__" 切。
 func (s *UsageScanner) addMCP(name string) {
 	i := strings.LastIndex(name, "__")
@@ -241,7 +188,6 @@ func (s *UsageScanner) codexLine(b []byte) {
 			Role      string `json:"role"`
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
-			Input     string `json:"input"`
 			Content   []struct {
 				Text string `json:"text"`
 			} `json:"content"`
@@ -272,8 +218,9 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
 			s.addMCP(name)
-		} else {
-			s.skillCommand(commandOf(p.Arguments))
+		} else if p.Type == "function_call" {
+			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令
+			s.skillCommand(commandOf([]byte(p.Arguments)))
 		}
 	case p.Item.Type == "McpToolCall":
 		if s.once(p.Item.ID) {
@@ -306,10 +253,7 @@ func (s *UsageScanner) once(id string) bool {
 
 func (s *UsageScanner) grokLine(b []byte) {
 	var r struct {
-		ToolCalls []struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		} `json:"tool_calls"`
+		ToolCalls []grokToolCall `json:"tool_calls"`
 	}
 	if json.Unmarshal(b, &r) != nil {
 		return
@@ -326,13 +270,10 @@ func (s *UsageScanner) grokLine(b []byte) {
 		}
 		switch c.Name {
 		case "read_file":
-			var a struct {
-				TargetFile string `json:"target_file"`
-			}
-			json.Unmarshal([]byte(c.Arguments), &a)
+			a, _ := decodeToolArgs([]byte(c.Arguments))
 			s.skillRead(a.TargetFile)
 		case "run_terminal_command":
-			s.skillCommand(commandOf(c.Arguments))
+			s.skillCommand(commandOf([]byte(c.Arguments)))
 		}
 	}
 }
