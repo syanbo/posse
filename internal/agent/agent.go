@@ -34,12 +34,12 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 	var sessionID string
 	switch name {
 	case "claude":
-		settings, err := l.claudeSettings()
+		settings, plugin, err := l.claudeFiles()
 		if err != nil {
 			return Launch{}, err
 		}
 		sessionID = newUUID()
-		parts = []string{"claude", "--settings", Quote(settings), "--session-id", sessionID}
+		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--session-id", sessionID}
 	case "codex":
 		parts = []string{"codex"}
 		for _, a := range l.codexArgs() {
@@ -48,7 +48,7 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 	case "grok":
 		// grok 的 hooks 只能写进 ~/.grok，不改用户配置，状态靠终端标题判断
 		sessionID = newUUID()
-		parts = []string{"grok", "--session-id", sessionID}
+		parts = []string{"grok", "--session-id", sessionID, "--rules", Quote(guideHint)}
 		if prompt != "" {
 			parts = append(parts, "--verbatim")
 		}
@@ -71,12 +71,12 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 	var parts []string
 	switch name {
 	case "claude":
-		settings, err := l.claudeSettings()
+		settings, plugin, err := l.claudeFiles()
 		if err != nil {
 			return Launch{}, err
 		}
 		// 恢复后沿用原会话 ID，hooks 上报的也是它
-		parts = []string{"claude", "--settings", Quote(settings), "--resume", Quote(sessionID)}
+		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--resume", Quote(sessionID)}
 	case "codex":
 		parts = []string{"codex"}
 		for _, a := range l.codexArgs() {
@@ -84,7 +84,7 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		}
 		parts = append(parts, "resume", Quote(sessionID))
 	case "grok":
-		parts = []string{"grok", "--resume", Quote(sessionID)}
+		parts = []string{"grok", "--resume", Quote(sessionID), "--rules", Quote(guideHint)}
 	case "cursor":
 		parts = []string{"cursor-agent", "--resume", Quote(sessionID)}
 	default:
@@ -95,6 +95,15 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		cmd = "cd " + Quote(dir) + " && " + cmd
 	}
 	return Launch{Argv: ShellArgv(cmd), SessionID: sessionID}, nil
+}
+
+// claudeFiles 写出 Claude 启动时要用的 hooks 设置和编排技能插件。
+func (l Launcher) claudeFiles() (settings, plugin string, err error) {
+	if settings, err = l.claudeSettings(); err != nil {
+		return "", "", err
+	}
+	plugin, err = l.claudePlugin()
+	return settings, plugin, err
 }
 
 func (l Launcher) hookCommand(agentName, event string) string {
@@ -165,7 +174,8 @@ func (l Launcher) codexArgs() []string {
 		key, _ := json.Marshal("/<session-flags>/config.toml:" + ev.key + ":0:0")
 		state = append(state, fmt.Sprintf(`%s={trusted_hash="%s"}`, key, codexHookHash(ev.key, cmd, ev.timeout)))
 	}
-	return append(args, "-c", "hooks.state={"+strings.Join(state, ",")+"}")
+	args = append(args, "-c", "hooks.state={"+strings.Join(state, ",")+"}")
+	return append(args, codexGuideArgs()...)
 }
 
 // codexHookHash 复刻 Codex 对 hook 定义的指纹：键排序的紧凑 JSON 取 sha256。

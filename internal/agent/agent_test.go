@@ -44,8 +44,8 @@ func TestCodexHookHash(t *testing.T) {
 func TestResume(t *testing.T) {
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
 	for agent, want := range map[string]string{
-		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --resume 'sid'",
-		"grok":   "cd '/w/it'\\''s' && grok --resume 'sid'",
+		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --plugin-dir '" + l.Home + "/claude-plugin' --resume 'sid'",
+		"grok":   "cd '/w/it'\\''s' && grok --resume 'sid' --rules " + Quote(guideHint),
 		"cursor": "cd '/w/it'\\''s' && cursor-agent --resume 'sid'",
 	} {
 		r, err := l.Resume(agent, "sid", "/w/it's")
