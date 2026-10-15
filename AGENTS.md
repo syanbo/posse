@@ -37,6 +37,7 @@ internal/agent      agent 启动命令与 hooks 事件到状态的映射
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
+third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
 ```
 
 ## 关键约定
@@ -67,3 +68,4 @@ internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。cursor 不支持。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
+- 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
