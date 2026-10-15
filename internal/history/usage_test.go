@@ -120,3 +120,22 @@ func TestUsageGrok(t *testing.T) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 }
+
+func TestUsageCursor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c1.jsonl")
+	writeLines(t, path,
+		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"/Users/x/.claude/skills/browser-skill/SKILL.md"}},{"type":"tool_use","name":"CallDynamicTool","input":{"namespace":"probe","toolName":"ping","arguments":{}}}]}}`+"\n",
+		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"CallDynamicTool","input":{"namespace":"cursor","toolName":"WebSearch","arguments":{}}},{"type":"tool_use","name":"Shell","input":{"command":"cat ~/.agents/skills/orchestration/SKILL.md"}},{"type":"tool_use","name":"GetDynamicTools","input":{"namespace":"probe","toolName":"ping"}}]}}`+"\n",
+	)
+	u, err := NewUsageScanner("cursor", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Usage{
+		Skills: []UsageItem{{"browser-skill", 1}, {"orchestration", 1}},
+		MCP:    []MCPUsage{{Server: "probe", Count: 1, Tools: []UsageItem{{"ping", 1}}}},
+	}
+	if !reflect.DeepEqual(u, want) {
+		t.Fatalf("got %+v\nwant %+v", u, want)
+	}
+}

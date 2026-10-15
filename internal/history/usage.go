@@ -36,6 +36,8 @@ type Usage struct {
 //   - codex：用户点名的技能注入成 "<skill><name>…</name>"；MCP 调用是 McpToolCall 条目，同一次调用会记多遍，按 id 去重；
 //     执行的命令是 CommandExecution 条目，parsed_cmd 标出了读的文件。
 //   - grok：MCP 经 use_tool 调用，tool_name 是 <服务>__<工具>。
+//   - cursor：MCP 经 CallDynamicTool 调用，namespace 是服务名（插件带的服务是 plugin-<插件>-<服务>），
+//     namespace 为 cursor 的是它自带的工具（WebSearch 等），不算 MCP。
 //   - 各家模型自己读 <名字>/SKILL.md（Read、read_file，或 cat、sed 这类读文件的命令）也算用了那个技能。
 //     只认读文件的调用：写文件、grep 的参数里提到 SKILL.md 不算，系统提示里的技能列表也不算。
 type UsageScanner struct {
@@ -86,7 +88,7 @@ func (s *UsageScanner) Scan() (Usage, error) {
 // usageMarkers 先粗筛，只有可能相关的行才解析 JSON。
 var usageMarkers = [][]byte{
 	[]byte("Base directory for this skill"), []byte("mcp__"), []byte("<skill>"),
-	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"),
+	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"), []byte("CallDynamicTool"),
 }
 
 func hasUsageMarker(line []byte) bool { return containsAny(line, usageMarkers) }
@@ -99,6 +101,40 @@ func (s *UsageScanner) line(b []byte) {
 		s.codexLine(b)
 	case "grok":
 		s.grokLine(b)
+	case "cursor":
+		s.cursorLine(b)
+	}
+}
+
+func (s *UsageScanner) cursorLine(b []byte) {
+	var r struct {
+		Message struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(b, &r) != nil {
+		return
+	}
+	blocks, _ := contentBlocks(r.Message.Content)
+	for _, bl := range blocks {
+		if bl.Type != "tool_use" {
+			continue
+		}
+		switch bl.Name {
+		case "CallDynamicTool":
+			var a struct {
+				Namespace string `json:"namespace"`
+				ToolName  string `json:"toolName"`
+			}
+			if json.Unmarshal(bl.Input, &a) == nil && a.Namespace != "cursor" {
+				s.addMCPTool(a.Namespace, a.ToolName)
+			}
+		case "Read", "ReadFile":
+			a, _ := decodeToolArgs(bl.Input)
+			s.skillRead(a.Path)
+		case "Shell":
+			s.skillCommand(commandOf(bl.Input))
+		}
 	}
 }
 
@@ -333,6 +369,8 @@ func TranscriptPath(agent, sessionID, reported string) string {
 		pattern = filepath.Join(home, ".grok", "sessions", "*", sessionID, "chat_history.jsonl")
 	case "codex":
 		pattern = filepath.Join(home, ".codex", "sessions", "*", "*", "*", "rollout-*-"+sessionID+".jsonl")
+	case "cursor":
+		pattern = filepath.Join(home, ".cursor", "projects", "*", "agent-transcripts", sessionID, sessionID+".jsonl")
 	default:
 		return ""
 	}
