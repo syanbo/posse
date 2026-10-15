@@ -1,0 +1,103 @@
+package daemon
+
+import (
+	"context"
+	"encoding/json"
+	"reflect"
+	"testing"
+	"time"
+
+	"hive/internal/store"
+)
+
+// stripIdle 去掉随时间变化的 idleMs，便于比较两次生成的结果。
+func stripIdle(t *testing.T, v any) any {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out any
+	json.Unmarshal(b, &out)
+	var walk func(any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			delete(v, "idleMs")
+			for _, x := range v {
+				walk(x)
+			}
+		case []any:
+			for _, x := range v {
+				walk(x)
+			}
+		}
+	}
+	walk(out)
+	return out
+}
+
+// 列表接口批量查询，结果要与逐条查询的结果一致。
+func TestListsMatchPerItemLookups(t *testing.T) {
+	ctx := context.Background()
+	d, w := newTestDaemon(t)
+	p2 := store.Project{ID: store.NewID("p_"), Name: "other", Path: d.cfg.Home + "/other", Kind: "folder", CreatedAt: time.Now()}
+	if err := d.store.AddProject(p2); err != nil {
+		t.Fatal(err)
+	}
+	empty := store.Project{ID: store.NewID("p_"), Name: "empty", Path: d.cfg.Home + "/empty", Kind: "folder", CreatedAt: time.Now()}
+	if err := d.store.AddProject(empty); err != nil {
+		t.Fatal(err)
+	}
+	var ws2 []store.Workspace
+	for _, name := range []string{"main", "side"} {
+		x := store.Workspace{ID: store.NewID("w_"), ProjectID: p2.ID, Name: name, Path: d.cfg.Home, Kind: "folder", CreatedAt: time.Now()}
+		if err := d.store.AddWorkspace(x); err != nil {
+			t.Fatal(err)
+		}
+		ws2 = append(ws2, x)
+	}
+	for _, ws := range []store.Workspace{w, w, ws2[1]} {
+		if _, err := d.startTerminal(ws, []string{"/bin/sh", "-c", "sleep 30"}, "", 80, 24); err != nil {
+			t.Fatal(err)
+		}
+	}
+	call(t, d.taskStart, map[string]any{"workspace": ws2[0].ID, "command": []string{"/bin/sh", "-c", "sleep 30"}, "spec": "a"})
+	call(t, d.taskStart, map[string]any{"workspace": w.ID, "command": []string{"/bin/sh", "-c", "sleep 30"}, "spec": "b"})
+	gone := store.Task{ID: store.NewID("k_"), Title: "gone", Spec: "x", WorkspaceID: "w_missing", Worker: "t_missing", Status: store.TaskRunning, CreatedAt: time.Now()}
+	if err := d.store.AddTask(gone); err != nil {
+		t.Fatal(err)
+	}
+
+	ps, _ := d.store.Projects()
+	var wantProjects []projectInfo
+	for _, p := range ps {
+		ws, _ := d.store.Workspaces(p.ID)
+		wantProjects = append(wantProjects, projectInfo{Project: p, Workspaces: len(ws)})
+	}
+	if got := call(t, d.projectList, nil); !reflect.DeepEqual(stripIdle(t, got), stripIdle(t, wantProjects)) {
+		t.Fatalf("project.list = %+v, want %+v", got, wantProjects)
+	}
+
+	all, _ := d.store.Workspaces("")
+	var wantWS []workspaceInfo
+	for _, x := range all {
+		wantWS = append(wantWS, d.workspaceInfo(ctx, x, false))
+	}
+	if got := call(t, d.workspaceList, nil); !reflect.DeepEqual(stripIdle(t, got), stripIdle(t, wantWS)) {
+		t.Fatalf("workspace.list differs\n got %v\nwant %v", stripIdle(t, got), stripIdle(t, wantWS))
+	}
+
+	ts, _ := d.store.Tasks(store.TaskFilter{})
+	questions, _ := d.store.OpenQuestions()
+	var wantTasks []taskInfo
+	for _, x := range ts {
+		wantTasks = append(wantTasks, d.taskInfo(x, questions, nil))
+	}
+	if len(wantTasks) != 3 {
+		t.Fatalf("got %d tasks", len(wantTasks))
+	}
+	if got := call(t, d.taskList, map[string]any{"all": true}); !reflect.DeepEqual(stripIdle(t, got), stripIdle(t, wantTasks)) {
+		t.Fatalf("task.list differs\n got %v\nwant %v", stripIdle(t, got), stripIdle(t, wantTasks))
+	}
+}

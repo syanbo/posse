@@ -48,3 +48,59 @@ func TestEnvironStripsHostAgentVars(t *testing.T) {
 		t.Fatalf("FORCE_HYPERLINK not forced on: %q", env)
 	}
 }
+
+func TestContainsTextMatchesLines(t *testing.T) {
+	script := `printf 'alpha beta   \n\tgamma\t\n\nlast line'; sleep 5`
+	tm, err := Start(Options{ID: "t_text", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 40, Rows: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
+	for !tm.ContainsText("last line") {
+		if time.Now().After(deadline) {
+			t.Fatalf("output never appeared:\n%s", strings.Join(tm.Lines(), "\n"))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, sub := range []string{"alpha", "beta", "beta ", "beta   ", "\tgamma", "gamma\t", "a\n", "beta\n\tgamma", "last line", "missing", " "} {
+		want := false
+		for _, l := range tm.Lines() {
+			if strings.Contains(l, sub) {
+				want = true
+			}
+		}
+		if got := tm.ContainsText(sub); got != want {
+			t.Errorf("ContainsText(%q) = %v, want %v", sub, got, want)
+		}
+	}
+	if c, r := tm.Size(); c != 40 || r != 10 {
+		t.Fatalf("Size = %d, %d", c, r)
+	}
+	tm.Resize(50, 12)
+	if c, r := tm.Size(); c != 50 || r != 12 {
+		t.Fatalf("Size after resize = %d, %d", c, r)
+	}
+}
+
+// 不取输出的接入者排队字节数有上限，超过后被断开。
+func TestStalledSubscriberIsBounded(t *testing.T) {
+	tm, err := Start(Options{ID: "t_flood", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", `head -c 12000000 /dev/zero | tr '\0' x`}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	_, sub := tm.Attach(0, 0)
+	select {
+	case <-tm.Exited():
+	case <-time.After(20 * time.Second):
+		t.Fatal("program did not exit")
+	}
+	total := 0
+	for chunk := range sub.C {
+		total += len(chunk)
+	}
+	if total > maxQueuedBytes || total == 0 {
+		t.Fatalf("stalled subscriber got %d bytes queued", total)
+	}
+}

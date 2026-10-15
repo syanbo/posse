@@ -114,11 +114,17 @@ func DiffSummary(ctx context.Context, dir, base string) (Changes, error) {
 		return c, err
 	}
 	c.Files, c.Insertions, c.Deletions = parseShortStat(stat)
-	if out, err := run(ctx, dir, "ls-files", "--others", "--exclude-standard"); err == nil && out != "" {
-		c.Untracked = strings.Count(out, "\n") + 1
-	}
-	if out, err := DirtyTracked(ctx, dir); err == nil {
-		c.Dirty = out != ""
+	// -uall 逐个列出未跟踪文件（"??"，与 ls-files --others --exclude-standard 一致），其余行是已跟踪文件的改动
+	if out, err := run(ctx, dir, "status", "--porcelain", "-uall"); err == nil {
+		for _, line := range strings.Split(out, "\n") {
+			switch {
+			case line == "":
+			case strings.HasPrefix(line, "??"):
+				c.Untracked++
+			default:
+				c.Dirty = true
+			}
+		}
 	}
 	return c, nil
 }

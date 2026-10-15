@@ -11,23 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/daemon"
 	"hive/internal/rpc"
 )
 
 type Client struct {
 	Home   string
 	Socket string
-}
-
-// FromEnv 按 HIVE_HOME（默认 ~/.hive）定位常驻进程。
-func FromEnv() *Client {
-	home := os.Getenv("HIVE_HOME")
-	if home == "" {
-		h, _ := os.UserHomeDir()
-		home = filepath.Join(h, ".hive")
-	}
-	return &Client{Home: home, Socket: daemon.SocketPath(home)}
 }
 
 func (c *Client) Call(ctx context.Context, method string, params, out any) error {

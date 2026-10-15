@@ -82,7 +82,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 func (s *Server) serveConn(parent context.Context, conn net.Conn) {
 	defer conn.Close()
-	r := bufio.NewReaderSize(conn, 64<<10)
+	r := bufio.NewReader(conn)
 	line, err := r.ReadBytes('\n')
 	if err != nil {
 		return
@@ -140,86 +140,67 @@ func WriteResult(conn net.Conn, result any) { writeResponse(conn, result, nil) }
 
 // Open 发起流式请求：读完回复行后返回连接，之后用帧通信。
 func Open(ctx context.Context, socket, method string, params, out any) (net.Conn, *bufio.Reader, error) {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "unix", socket)
-	if err != nil {
-		return nil, nil, err
-	}
-	req := Request{Method: method}
-	if params != nil {
-		if req.Params, err = json.Marshal(params); err != nil {
-			conn.Close()
-			return nil, nil, err
-		}
-	}
-	b, _ := json.Marshal(req)
-	if _, err := conn.Write(append(b, '\n')); err != nil {
-		conn.Close()
-		return nil, nil, err
-	}
-	r := bufio.NewReaderSize(conn, 64<<10)
-	line, err := r.ReadBytes('\n')
-	if err != nil {
-		conn.Close()
-		return nil, nil, fmt.Errorf("read response: %w", err)
-	}
-	var resp Response
-	if err := json.Unmarshal(line, &resp); err != nil {
-		conn.Close()
-		return nil, nil, fmt.Errorf("decode response: %w", err)
-	}
-	if resp.Error != nil {
-		conn.Close()
-		return nil, nil, resp.Error
-	}
-	if out != nil && len(resp.Result) > 0 {
-		if err := json.Unmarshal(resp.Result, out); err != nil {
-			conn.Close()
-			return nil, nil, err
-		}
-	}
-	return conn, r, nil
+	return request(ctx, socket, method, params, out, false)
 }
 
 // Call 连接 socket 发起一次请求；out 为 nil 时丢弃结果。
 func Call(ctx context.Context, socket, method string, params, out any) error {
+	conn, _, err := request(ctx, socket, method, params, out, true)
+	if err != nil {
+		return err
+	}
+	conn.Close()
+	return nil
+}
+
+// request 发出请求并读回复行，成功时返回仍打开的连接；watch 为 true 时 ctx 取消会中断等待回复。
+func request(ctx context.Context, socket, method string, params, out any, watch bool) (_ net.Conn, _ *bufio.Reader, err error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", socket)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	defer conn.Close()
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
-	defer stop()
-
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
+	if watch {
+		stop := context.AfterFunc(ctx, func() { conn.Close() })
+		defer stop()
+	}
 	req := Request{Method: method}
 	if params != nil {
 		if req.Params, err = json.Marshal(params); err != nil {
-			return err
+			return nil, nil, err
 		}
 	}
 	b, _ := json.Marshal(req)
-	if _, err := conn.Write(append(b, '\n')); err != nil {
-		return err
+	if _, err = conn.Write(append(b, '\n')); err != nil {
+		return nil, nil, err
 	}
-	line, err := bufio.NewReaderSize(conn, 64<<10).ReadBytes('\n')
+	// 请求和回复各一行，默认缓冲足够；之后的帧用 io.ReadFull 读，大帧直接从连接读入
+	r := bufio.NewReader(conn)
+	line, err := r.ReadBytes('\n')
 	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
+		if watch && ctx.Err() != nil {
+			return nil, nil, ctx.Err()
 		}
-		return fmt.Errorf("read response: %w", err)
+		return nil, nil, fmt.Errorf("read response: %w", err)
 	}
 	var resp Response
-	if err := json.Unmarshal(line, &resp); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+	if err = json.Unmarshal(line, &resp); err != nil {
+		return nil, nil, fmt.Errorf("decode response: %w", err)
 	}
 	if resp.Error != nil {
-		return resp.Error
+		return nil, nil, resp.Error
 	}
 	if out != nil && len(resp.Result) > 0 {
-		return json.Unmarshal(resp.Result, out)
+		if err = json.Unmarshal(resp.Result, out); err != nil {
+			return nil, nil, err
+		}
 	}
-	return nil
+	return conn, r, nil
 }
 
 // Decode 把请求参数解到 v；空参数视为 {}。

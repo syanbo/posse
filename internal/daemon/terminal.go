@@ -360,7 +360,7 @@ func (d *Daemon) terminalWait(ctx context.Context, raw json.RawMessage) (any, er
 				changed = nil
 			} else {
 				lastText = time.Now()
-				matched = containsLine(s.Lines(), p.Text)
+				matched = s.ContainsText(p.Text)
 				if !matched && !s.Running() {
 					return nil, rpc.Errorf(rpc.CodeConflict, "terminal exited before %q appeared", p.Text)
 				}
@@ -383,15 +383,6 @@ func (d *Daemon) terminalWait(ctx context.Context, raw json.RawMessage) (any, er
 			return nil, rpc.Errorf(rpc.CodeTimeout, "timed out after %s waiting for %s", timeout, p.For)
 		}
 	}
-}
-
-func containsLine(lines []string, sub string) bool {
-	for _, l := range lines {
-		if strings.Contains(l, sub) {
-			return true
-		}
-	}
-	return false
 }
 
 type terminalResizeParams struct {
@@ -434,10 +425,7 @@ func (d *Daemon) terminalClose(ctx context.Context, raw json.RawMessage) (any, e
 	if p.GraceMs > 0 {
 		grace = time.Duration(p.GraceMs) * time.Millisecond
 	}
-	s.Close(grace)
-	d.mu.Lock()
-	delete(d.terms, s.ID)
-	d.mu.Unlock()
+	d.closeSession(s, grace)
 	return map[string]any{"closed": s.ID, "exitCode": s.ExitCode()}, nil
 }
 

@@ -38,10 +38,24 @@ type taskInfo struct {
 	Screen        []string        `json:"screen,omitempty"`
 }
 
-func (d *Daemon) taskInfo(t store.Task, questions map[string]int) taskInfo {
+// taskInfo 的 idx 为 nil 时逐条查询工作区和项目，列表接口传入批量查好的 idx。
+func (d *Daemon) taskInfo(t store.Task, questions map[string]int, idx *workspaceIndex) taskInfo {
 	info := taskInfo{Task: t, Questions: questions[t.ID]}
-	if w, err := d.store.Workspace(t.WorkspaceID); err == nil {
-		info.Workspace, info.WorkspaceKind, info.Branch, info.BaseRef = d.workspaceLabel(w), w.Kind, w.Branch, w.BaseRef
+	var w store.Workspace
+	found := false
+	if idx != nil {
+		w, found = idx.workspaces[t.WorkspaceID]
+	} else if ws, err := d.store.Workspace(t.WorkspaceID); err == nil {
+		w, found = ws, true
+	}
+	if found {
+		label := ""
+		if idx != nil {
+			label = idx.label(w)
+		} else {
+			label = d.workspaceLabel(w)
+		}
+		info.Workspace, info.WorkspaceKind, info.Branch, info.BaseRef = label, w.Kind, w.Branch, w.BaseRef
 	} else {
 		info.Workspace = "(removed workspace)"
 	}
@@ -122,11 +136,11 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	t.Worker = s.ID
 	if err := d.store.AddTask(t); err != nil {
-		d.closeSession(s)
+		d.closeSession(s, 2*time.Second)
 		return nil, err
 	}
 	d.taskNotify()
-	return d.taskInfo(t, nil), nil
+	return d.taskInfo(t, nil, nil), nil
 }
 
 // taskWorkspace 决定 worker 在哪里工作：指定的工作区，否则派发方所在的工作区；
@@ -194,15 +208,7 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 
 func firstLine(s string, n int) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return truncateRunes(strings.TrimSpace(line), n)
-}
-
-func truncateRunes(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
+	return agent.Truncate(line, n)
 }
 
 // --- 查询
@@ -230,9 +236,13 @@ func (d *Daemon) taskList(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return nil, err
 	}
+	idx, err := d.loadWorkspaceIndex(true)
+	if err != nil {
+		return nil, err
+	}
 	out := []taskInfo{}
 	for _, t := range ts {
-		out = append(out, d.taskInfo(t, questions))
+		out = append(out, d.taskInfo(t, questions, idx))
 	}
 	return out, nil
 }
@@ -255,7 +265,7 @@ func (d *Daemon) taskShow(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	info := d.taskInfo(t, questions)
+	info := d.taskInfo(t, questions, nil)
 	if info.Messages, err = d.store.Messages(t.ID); err != nil {
 		return nil, err
 	}
@@ -355,7 +365,7 @@ func (d *Daemon) taskDone(ctx context.Context, raw json.RawMessage) (any, error)
 		return nil, err
 	}
 	t, _ = d.store.Task(t.ID)
-	return d.taskInfo(t, nil), nil
+	return d.taskInfo(t, nil, nil), nil
 }
 
 type taskAskParams struct {
@@ -619,11 +629,11 @@ func (d *Daemon) taskClose(ctx context.Context, raw json.RawMessage) (any, error
 		}
 	}
 	if s, err := d.session(t.Worker); err == nil {
-		d.closeSession(s)
+		d.closeSession(s, 2*time.Second)
 	}
 	d.taskNotify()
 	t, _ = d.store.Task(t.ID)
-	return d.taskInfo(t, nil), nil
+	return d.taskInfo(t, nil, nil), nil
 }
 
 func (d *Daemon) taskClear(ctx context.Context, raw json.RawMessage) (any, error) {

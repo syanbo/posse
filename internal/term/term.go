@@ -25,6 +25,9 @@ const DefaultScrollback = 4 << 20
 // 终端空闲这么久之后压缩回滚区
 const compressAfter = 5 * time.Second
 
+// 每个接入者排队未取走的输出上限；条数上限之外再限字节数，免得界面卡住时积压大量内存
+const maxQueuedBytes = 4 << 20
+
 type Options struct {
 	ID          string
 	WorkspaceID string
@@ -77,6 +80,8 @@ type Terminal struct {
 
 	lastOutput atomic.Int64
 	lastInput  atomic.Int64
+	// size 是列数<<32|行数，与内核尺寸同步更新，读取时不必抢 smu
+	size atomic.Uint64
 	// answer 为 true 时由常驻进程里的内核应答程序的终端查询；
 	// 界面接入后改由界面应答，避免程序收到两份回复。
 	answer atomic.Bool
@@ -95,6 +100,7 @@ type Terminal struct {
 
 	mu      sync.Mutex
 	changed chan struct{} // 有新输出或状态变化时关闭并替换
+	watched bool          // changed 已交给调用方；没人拿走时不必替换
 	title   string
 	agent   AgentState
 	closing bool
@@ -105,7 +111,12 @@ type Terminal struct {
 // C 被关闭表示程序已结束，或接入者跟不上被断开。
 type Subscriber struct {
 	C chan []byte
+	// queued 是已放进 C 还没取走的字节数
+	queued atomic.Int64
 }
+
+// Received 由接入者在从 C 取出 p 后调用，释放排队额度。
+func (s *Subscriber) Received(p []byte) { s.queued.Add(-int64(len(p))) }
 
 func Start(o Options) (*Terminal, error) {
 	if len(o.Command) == 0 {
@@ -134,6 +145,7 @@ func Start(o Options) (*Terminal, error) {
 	}
 	t.answer.Store(true)
 	t.lastOutput.Store(time.Now().UnixNano())
+	t.storeSize(o.Cols, o.Rows)
 
 	emu, err := vt.NewTerminal(o.Cols, o.Rows, vt.Effects{
 		WritePTY: func(p []byte) {
@@ -217,13 +229,16 @@ func (t *Terminal) readLoop() {
 			if len(t.subs) > 0 {
 				chunk := append([]byte(nil), buf[:n]...)
 				for s := range t.subs {
-					select {
-					case s.C <- chunk:
-					default:
-						// 跟不上的接入者直接断开，重新接入会拿到完整快照
-						delete(t.subs, s)
-						close(s.C)
+					if s.queued.Add(int64(n)) <= maxQueuedBytes {
+						select {
+						case s.C <- chunk:
+							continue
+						default:
+						}
 					}
+					// 跟不上的接入者直接断开，重新接入会拿到完整快照
+					delete(t.subs, s)
+					close(s.C)
 				}
 				t.answer.Store(len(t.subs) == 0)
 			}
@@ -298,8 +313,11 @@ func (t *Terminal) Detach(s *Subscriber) {
 
 func (t *Terminal) notify() {
 	t.mu.Lock()
-	close(t.changed)
-	t.changed = make(chan struct{})
+	if t.watched {
+		close(t.changed)
+		t.changed = make(chan struct{})
+		t.watched = false
+	}
 	t.mu.Unlock()
 }
 
@@ -307,6 +325,7 @@ func (t *Terminal) notify() {
 func (t *Terminal) Changed() <-chan struct{} {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.watched = true
 	return t.changed
 }
 
@@ -358,19 +377,21 @@ func (t *Terminal) SetAgent(s AgentState) {
 	t.notify()
 }
 
+// Size 返回终端尺寸；终端关闭后为 0, 0。
 func (t *Terminal) Size() (cols, rows int) {
-	t.smu.Lock()
-	defer t.smu.Unlock()
-	if t.emu == nil {
-		return 0, 0
-	}
-	return t.emu.Size()
+	v := t.size.Load()
+	return int(v >> 32), int(uint32(v))
+}
+
+// storeSize 按内核的取值范围记录尺寸。
+func (t *Terminal) storeSize(cols, rows int) {
+	t.size.Store(uint64(max(1, min(cols, 0xFFFF)))<<32 | uint64(max(1, min(rows, 0xFFFF))))
 }
 
 func (t *Terminal) Resize(cols, rows int) {
 	t.smu.Lock()
-	if t.emu != nil {
-		t.emu.Resize(cols, rows, 8, 16)
+	if t.emu != nil && t.emu.Resize(cols, rows, 8, 16) == nil {
+		t.storeSize(cols, rows)
 	}
 	t.smu.Unlock()
 	pty.Setsize(t.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
@@ -415,6 +436,27 @@ func (t *Terminal) Lines() []string {
 		lines = lines[:len(lines)-1]
 	}
 	return lines
+}
+
+// ContainsText 判断 Lines() 的某一行是否包含 sub。
+func (t *Terminal) ContainsText(sub string) bool {
+	// sub 不跨行、也不以空白结尾时，在整段文本里能找到就等于在某一行里能找到（行尾被去掉的只有空白），
+	// 免去逐行切分和去空白
+	if sub != "" && !strings.Contains(sub, "\n") && !strings.HasSuffix(sub, " ") && !strings.HasSuffix(sub, "\t") {
+		t.smu.Lock()
+		text := ""
+		if t.emu != nil {
+			text = t.emu.Text()
+		}
+		t.smu.Unlock()
+		return strings.Contains(text, sub)
+	}
+	for _, l := range t.Lines() {
+		if strings.Contains(l, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // Screen 返回当前屏幕的每一行。
@@ -463,6 +505,7 @@ func (t *Terminal) Close(grace time.Duration) {
 	if t.emu != nil {
 		t.emu.Free()
 		t.emu = nil
+		t.size.Store(0)
 	}
 	t.smu.Unlock()
 }

@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
@@ -90,6 +89,9 @@ func Run(ctx context.Context, cfg Config) error {
 	} else if n > 0 {
 		log.Printf("marked %d terminals from the previous daemon as lost", n)
 	}
+	if err := st.PruneTerminals(); err != nil {
+		return err
+	}
 	if err := st.MarkRunningTasksLost(time.Now()); err != nil {
 		return err
 	}
@@ -147,21 +149,7 @@ func lock(path string, wait time.Duration) (func(), error) {
 func (d *Daemon) closeAll() {
 	// 常驻进程退出时关掉的 worker 不算意外退出，也不再提醒任何人
 	d.stopping.Store(true)
-	d.mu.Lock()
-	terms := make([]*session, 0, len(d.terms))
-	for _, s := range d.terms {
-		terms = append(terms, s)
-	}
-	d.mu.Unlock()
-	var wg sync.WaitGroup
-	for _, s := range terms {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			s.Close(2 * time.Second)
-		}()
-	}
-	wg.Wait()
+	d.closeSessions(d.sessionsIn(""), 2*time.Second)
 }
 
 func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
@@ -233,18 +221,9 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 	d.mu.Unlock()
 	return statusResult{
 		Version: Version, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
-		Terminals: total, Running: running, RSSKB: selfRSS(), FootprintKB: int64(procmem.Footprint(os.Getpid()) >> 10),
+		Terminals: total, Running: running,
+		RSSKB: int64(procmem.Resident(os.Getpid()) >> 10), FootprintKB: int64(procmem.Footprint(os.Getpid()) >> 10),
 	}, nil
-}
-
-// selfRSS 读取本进程常驻内存，包含 libghostty-vt 分配的部分。
-func selfRSS() int64 {
-	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(os.Getpid())).Output()
-	if err != nil {
-		return 0
-	}
-	v, _ := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
-	return v
 }
 
 // --- 查找
@@ -301,12 +280,57 @@ func (d *Daemon) workspaceLabel(w store.Workspace) string {
 	return p.Name + "/" + w.Name
 }
 
+// workspaceIndex 是一次请求里批量查好的工作区和项目名，列表接口用它代替逐条查询。
+type workspaceIndex struct {
+	workspaces map[string]store.Workspace
+	projects   map[string]string // 项目 ID → 名称
+}
+
+func (d *Daemon) loadWorkspaceIndex(withWorkspaces bool) (*workspaceIndex, error) {
+	ps, err := d.store.Projects()
+	if err != nil {
+		return nil, err
+	}
+	x := &workspaceIndex{projects: make(map[string]string, len(ps))}
+	for _, p := range ps {
+		x.projects[p.ID] = p.Name
+	}
+	if withWorkspaces {
+		ws, err := d.store.Workspaces("")
+		if err != nil {
+			return nil, err
+		}
+		x.workspaces = make(map[string]store.Workspace, len(ws))
+		for _, w := range ws {
+			x.workspaces[w.ID] = w
+		}
+	}
+	return x, nil
+}
+
+// label 与 workspaceLabel 相同。
+func (x *workspaceIndex) label(w store.Workspace) string {
+	if name, ok := x.projects[w.ProjectID]; ok {
+		return name + "/" + w.Name
+	}
+	return w.Name
+}
+
 // closeSession 结束终端并从托管列表里移除。
-func (d *Daemon) closeSession(s *session) {
-	s.Close(2 * time.Second)
+func (d *Daemon) closeSession(s *session, grace time.Duration) {
+	s.Close(grace)
 	d.mu.Lock()
 	delete(d.terms, s.ID)
 	d.mu.Unlock()
+}
+
+// closeSessions 并行关闭多个终端，等全部结束后返回。
+func (d *Daemon) closeSessions(ss []*session, grace time.Duration) {
+	var wg sync.WaitGroup
+	for _, s := range ss {
+		wg.Go(func() { d.closeSession(s, grace) })
+	}
+	wg.Wait()
 }
 
 func (d *Daemon) sessionsIn(workspaceID string) []*session {
@@ -318,6 +342,24 @@ func (d *Daemon) sessionsIn(workspaceID string) []*session {
 			out = append(out, s)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	sortSessions(out)
 	return out
+}
+
+// sessionsByWorkspace 按工作区分组全部终端，各组按创建时间排序。
+func (d *Daemon) sessionsByWorkspace() map[string][]*session {
+	d.mu.Lock()
+	out := map[string][]*session{}
+	for _, s := range d.terms {
+		out[s.WorkspaceID] = append(out[s.WorkspaceID], s)
+	}
+	d.mu.Unlock()
+	for _, ss := range out {
+		sortSessions(ss)
+	}
+	return out
+}
+
+func sortSessions(ss []*session) {
+	sort.Slice(ss, func(i, j int) bool { return ss[i].CreatedAt.Before(ss[j].CreatedAt) })
 }

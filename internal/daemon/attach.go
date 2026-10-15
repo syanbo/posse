@@ -70,6 +70,8 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 		}
 	}()
 
+	// chunk 是广播给所有接入者的同一切片，合并时不能往它后面追加，改用本连接自己的缓冲
+	var merged []byte
 	for {
 		select {
 		case chunk, ok := <-sub.C:
@@ -82,21 +84,27 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 				}
 				return nil
 			}
+			sub.Received(chunk)
 			// 合并已经排队的输出，减少帧数
-			buf := chunk
+			frame, own := chunk, false
 		drain:
-			for len(buf) < 256<<10 {
+			for len(frame) < 256<<10 {
 				select {
 				case more, ok := <-sub.C:
 					if !ok {
 						break drain
 					}
-					buf = append(buf, more...)
+					sub.Received(more)
+					if !own {
+						merged, own = append(merged[:0], frame...), true
+					}
+					merged = append(merged, more...)
+					frame = merged
 				default:
 					break drain
 				}
 			}
-			if err := write(rpc.FrameOutput, buf); err != nil {
+			if err := write(rpc.FrameOutput, frame); err != nil {
 				return nil
 			}
 		case <-inputDone:

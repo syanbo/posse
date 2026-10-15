@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS messages (
 	nudged_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS messages_task ON messages(task_id);
+CREATE INDEX IF NOT EXISTS messages_reply ON messages(reply_to);
 `
 
 const taskCols = `id,title,spec,coordinator,workspace_id,worker,agent,grp,status,summary,report,created_at,ended_at`

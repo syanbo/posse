@@ -92,13 +92,13 @@ func (d *Daemon) projectList(ctx context.Context, _ json.RawMessage) (any, error
 	if err != nil {
 		return nil, err
 	}
+	counts, err := d.store.WorkspaceCounts()
+	if err != nil {
+		return nil, err
+	}
 	out := []projectInfo{}
 	for _, p := range ps {
-		ws, err := d.store.Workspaces(p.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, projectInfo{Project: p, Workspaces: len(ws)})
+		out = append(out, projectInfo{Project: p, Workspaces: counts[p.ID]})
 	}
 	return out, nil
 }
@@ -323,17 +323,26 @@ func (d *Daemon) workspaceList(ctx context.Context, raw json.RawMessage) (any, e
 	if err != nil {
 		return nil, err
 	}
+	idx, err := d.loadWorkspaceIndex(false)
+	if err != nil {
+		return nil, err
+	}
+	sessions := d.sessionsByWorkspace()
 	out := []workspaceInfo{}
 	for _, w := range ws {
-		out = append(out, d.workspaceInfo(ctx, w, p.Dirty))
+		out = append(out, d.buildWorkspaceInfo(ctx, w, p.Dirty, idx.label(w), sessions[w.ID]))
 	}
 	return out, nil
 }
 
 func (d *Daemon) workspaceInfo(ctx context.Context, w store.Workspace, dirty bool) workspaceInfo {
-	info := workspaceInfo{Workspace: w, Label: d.workspaceLabel(w), Terminals: []terminalInfo{}}
+	return d.buildWorkspaceInfo(ctx, w, dirty, d.workspaceLabel(w), d.sessionsIn(w.ID))
+}
+
+func (d *Daemon) buildWorkspaceInfo(ctx context.Context, w store.Workspace, dirty bool, label string, sessions []*session) workspaceInfo {
+	info := workspaceInfo{Workspace: w, Label: label, Terminals: []terminalInfo{}}
 	info.Project, _, _ = strings.Cut(info.Label, "/")
-	for _, s := range d.sessionsIn(w.ID) {
+	for _, s := range sessions {
 		info.Terminals = append(info.Terminals, d.terminalInfo(s))
 	}
 	if dirty && w.Kind != "folder" {
@@ -468,12 +477,7 @@ func (d *Daemon) runningIn(workspaceID string) int {
 }
 
 func (d *Daemon) closeWorkspaceTerminals(workspaceID string) {
-	for _, s := range d.sessionsIn(workspaceID) {
-		s.Close(2 * time.Second)
-		d.mu.Lock()
-		delete(d.terms, s.ID)
-		d.mu.Unlock()
-	}
+	d.closeSessions(d.sessionsIn(workspaceID), 2*time.Second)
 }
 
 // --- helpers

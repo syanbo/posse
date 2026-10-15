@@ -211,6 +211,25 @@ func (s *Store) Workspaces(projectID string) ([]Workspace, error) {
 	return out, rows.Err()
 }
 
+// WorkspaceCounts 返回每个项目的工作区数量，没有工作区的项目不在其中。
+func (s *Store) WorkspaceCounts() (map[string]int, error) {
+	rows, err := s.db.Query(`SELECT project_id, COUNT(*) FROM workspaces GROUP BY project_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) Workspace(id string) (Workspace, error) {
 	return scanWorkspace(s.db.QueryRow(`SELECT `+workspaceCols+` FROM workspaces WHERE id=?`, id))
 }
@@ -249,11 +268,6 @@ func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
 	return err
 }
 
-func (s *Store) SetTerminalTitle(id, title string) error {
-	_, err := s.db.Exec(`UPDATE terminals SET title=? WHERE id=?`, title, id)
-	return err
-}
-
 // MarkRunningLost 在常驻进程启动时调用：上一个进程托管的终端都已随之结束。
 func (s *Store) MarkRunningLost(at time.Time) (int64, error) {
 	res, err := s.db.Exec(`UPDATE terminals SET state='lost', ended_at=? WHERE state='running'`, ms(at))
@@ -261,6 +275,12 @@ func (s *Store) MarkRunningLost(at time.Time) (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// PruneTerminals 删除所有已结束的终端记录；没有地方读历史记录，不清理表会一直增长。
+func (s *Store) PruneTerminals() error {
+	_, err := s.db.Exec(`DELETE FROM terminals WHERE state!='running'`)
+	return err
 }
 
 func (s *Store) DeleteEndedTerminals(workspaceID string) error {

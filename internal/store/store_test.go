@@ -35,6 +35,30 @@ func TestStore(t *testing.T) {
 	if n, err := s.MarkRunningLost(time.Now()); err != nil || n != 1 {
 		t.Fatalf("MarkRunningLost = %d, %v", n, err)
 	}
+	if err := s.AddTerminal(Terminal{ID: "t_2", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PruneTerminals(); err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	rows, err := s.db.Query(`SELECT id FROM terminals`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id string
+		rows.Scan(&id)
+		left = append(left, id)
+	}
+	rows.Close()
+	if len(left) != 1 || left[0] != "t_2" {
+		t.Fatalf("terminals after prune = %v, want [t_2]", left)
+	}
+	counts, err := s.WorkspaceCounts()
+	if err != nil || counts[p.ID] != 2 || len(counts) != 1 {
+		t.Fatalf("WorkspaceCounts = %v, %v", counts, err)
+	}
 	if err := s.DeleteProject(p.ID); err != nil {
 		t.Fatal(err)
 	}

@@ -58,7 +58,7 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 	case st.Status == StatusWaiting && p.ToolName != "":
 		st.Message = p.ToolName
 	case event == "Stop":
-		st.Message = truncate(p.LastMessage, 300)
+		st.Message = Truncate(p.LastMessage, 300)
 	case event == "StopFailure":
 		st.Message = p.Error
 	}
@@ -151,7 +151,8 @@ func TitleStatus(agentName, title, current string) (string, bool) {
 	return "", false
 }
 
-func truncate(s string, n int) string {
+// Truncate 去掉首尾空白后截到 n 个字符，截断时补省略号。
+func Truncate(s string, n int) string {
 	r := []rune(strings.TrimSpace(s))
 	if len(r) <= n {
 		return string(r)
