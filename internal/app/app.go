@@ -33,6 +33,7 @@ type agentState struct {
 
 type terminalInfo struct {
 	ID, WorkspaceID, Title, Agent string
+	Dir                           string // 终端启动时的目录
 	AgentState                    *agentState
 	Running                       bool
 	ExitCode                      *int
@@ -80,6 +81,8 @@ type termView struct {
 	id   string
 	conn *client.Conn
 	term *terminal.Terminal
+	// dir 是 shell 报告的当前目录（OSC 7），每帧取一次：终端的回调持着终端的锁，不能再调 term.Dir
+	dir string
 }
 
 type app struct {
@@ -119,6 +122,15 @@ type app struct {
 	history historyView
 	usage   usageView  // 右侧"技能与 MCP"面板
 	recent  recentView // 右侧历史面板
+	images  imagesView // 右侧图片面板
+	// linkCard 是终端里点击文件链接或路径后弹出的卡片
+	linkCard *linkCard
+	// linkChecks 缓存终端里的链接能不能打开（文件还在不在），悬停时每帧都要问
+	linkChecks map[string]linkCheck
+	// 悬停在终端里的图片链接上时预览：hoverImage 是图片路径，previews 是解码好的预览
+	hoverImage     string
+	previews       map[string]*ui.Bitmap
+	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
@@ -405,6 +417,7 @@ func (a *app) ensureView(id string) {
 		a.view.term.Close()
 		a.view = nil
 	}
+	a.linkCard, a.hoverImage = nil, ""
 	if id == "" {
 		return
 	}
@@ -418,6 +431,10 @@ func (a *app) ensureView(id string) {
 		DarkTheme: dark,
 		// 回滚区与常驻进程一致，接入时的快照不会超出
 		Scrollback: 4 << 20,
+		// Cmd+点击：网址交给系统用默认浏览器打开，路径在访达里打开
+		OpenLink:    func(link string) bool { return a.openLink(v, link) },
+		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
+		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
 		// Claude 和 Codex 收到 Ctrl+V 才去读剪贴板里的图片；剪贴板里只有图片时 Cmd+V 拿不到文本，
 		// 转成 Ctrl+V，和 Ghostty 里的习惯一致
 		OnPaste: func(text string) bool {

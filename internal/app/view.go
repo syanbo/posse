@@ -516,6 +516,9 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			branch = metaMono(c, iconBranch, w.Branch, "")
 		}
 		metaRow(c, branch)
+		if cur != nil && cur.Agent == "claude" {
+			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
+		}
 		if cur != nil && cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
 		}
@@ -537,11 +540,19 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.emptyWorkspace(c, w)
 		} else {
 			// 留一点内边距，文字不贴边
-			ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10).Children(func() {
+			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10)
+			a.view.dir = a.view.term.Dir()
+			area.Children(func() {
 				terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
 			})
+			a.linkCardView(c, area)
+			a.hoverPreviewView(c, area)
 		}
 		if shown < 0.01 {
+			// 面板完全收起后放掉图片的位图
+			if a.images.term != "" {
+				a.images = imagesView{}
+			}
 			return
 		}
 		var panel ui.Element
@@ -553,6 +564,11 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		case panelHistory:
 			panel, drawn = a.recentPanel(c, w), true
+		case panelImages:
+			if cur != nil && cur.Agent != "" {
+				panel, drawn = a.imagesPanel(c, cur), true
+				a.imagePreview(c)
+			}
 		}
 		if drawn {
 			panel.Opacity(shown).Transform(ui.Translation((1-shown)*24, 0))
