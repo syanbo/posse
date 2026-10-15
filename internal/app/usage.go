@@ -17,8 +17,7 @@ type usageView struct {
 	data    history.Usage
 	found   bool // 找到了会话文件
 	err     string
-	busy    bool // 后台正在读
-	scanned time.Time
+	poll    panelPoll
 }
 
 // usageRefresh 是面板开着时多久增量读一次会话文件。
@@ -30,15 +29,14 @@ func usageSupported(agent string) bool {
 }
 
 // pollUsage 在主线程调用：换了终端就重来，到点了就在后台读会话文件的新内容。
-func (a *app) pollUsage(cur *terminalInfo) {
+func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 	u := &a.usage
 	if u.term != cur.ID {
 		*u = usageView{term: cur.ID}
 	}
-	if u.busy || !usageSupported(cur.Agent) || time.Since(u.scanned) < usageRefresh {
+	if !usageSupported(cur.Agent) || !u.poll.due(c, usageRefresh) {
 		return
 	}
-	u.busy = true
 	id, agent, scanner := cur.ID, cur.Agent, u.scanner
 	var sid, reported string
 	if cur.AgentState != nil {
@@ -61,7 +59,8 @@ func (a *app) pollUsage(cur *terminalInfo) {
 			if u.term != id {
 				return
 			}
-			u.busy, u.scanned, u.scanner, u.found = false, time.Now(), scanner, scanner != nil
+			u.poll.done()
+			u.scanner, u.found = scanner, scanner != nil
 			u.err = ""
 			if err != nil {
 				u.err = err.Error()
@@ -74,7 +73,7 @@ func (a *app) pollUsage(cur *terminalInfo) {
 
 // usagePanel 是终端右侧的面板。
 func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
-	a.pollUsage(cur)
+	a.pollUsage(c, cur)
 	u := &a.usage
 	return a.rightPanel(c, "技能与 MCP", func() {
 		ui.Scroll(c).Grow(1).Children(func() {
@@ -86,7 +85,7 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, agentTitle(cur.Agent)+" 的会话暂不支持统计。")
 				case u.err != "":
 					usageNote(c, "读会话文件失败："+u.err)
-				case !u.found && u.scanned.IsZero():
+				case !u.found && u.poll.at.IsZero():
 					usageNote(c, "正在读取…")
 				case !u.found:
 					usageNote(c, "还没找到会话文件，agent 开始对话后会出现。")

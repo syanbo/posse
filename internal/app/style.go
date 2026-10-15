@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/plugins/terminal"
@@ -85,6 +87,56 @@ func terminalThemes() (light, dark *terminal.Theme) {
 	light.Background, light.Foreground = hiveTheme(false).Background, hiveTheme(false).Text
 	dark.Background, dark.Foreground = hiveTheme(true).Background, hiveTheme(true).Text
 	return light, dark
+}
+
+// floating 是浮在内容上面的卡片（右侧面板、链接卡片、图片预览）：顶栏底色、描边和投影，位置由调用方定。
+func floating(c *ui.Context, e ui.Element) ui.Element {
+	t := c.Theme()
+	p := colors(t)
+	shadow := ui.RGBA(0, 0, 0, 0.18)
+	if t.Dark {
+		shadow = ui.RGBA(0, 0, 0, 0.45)
+	}
+	return e.Radius(12).Background(p.band).Border(1, p.line).Shadow(0, 8, 24, 0, shadow)
+}
+
+// pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
+func pendingLabel(c *ui.Context) ui.Element {
+	return ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(c.Theme()).honey)
+}
+
+// workspaceIcon 是工作区的图标：worktree 是分支，其余是文件夹。
+func workspaceIcon(kind string) *ui.SVG {
+	if kind == "worktree" {
+		return iconBranch
+	}
+	return iconFolder
+}
+
+// markSpans 把 text 按 marks（markRanges 的结果）切成几段，命中的段铺上 mark 底色，其余沿用 base 的样式。
+func markSpans(text string, marks [][2]int, base ui.Span, mark ui.Color) []ui.Span {
+	out := make([]ui.Span, 0, 2*len(marks)+1)
+	last := 0
+	for _, m := range marks {
+		s := base
+		s.Text = text[last:m[0]]
+		out = append(out, s)
+		s.Text, s.Background = text[m[0]:m[1]], mark
+		out = append(out, s)
+		last = m[1]
+	}
+	base.Text = text[last:]
+	return append(out, base)
+}
+
+// homeDir 是用户主目录，显示路径时每帧都要用，只取一次。
+var homeDir, _ = os.UserHomeDir()
+
+func shortPath(p string) string {
+	if homeDir != "" && strings.HasPrefix(p, homeDir) {
+		return "~" + p[len(homeDir):]
+	}
+	return p
 }
 
 // card 是放在画布上的一块内容。

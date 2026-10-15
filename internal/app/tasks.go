@@ -1,11 +1,10 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +19,12 @@ import (
 // applyTasks 在主线程更新任务列表，并为用户自己派发的任务发通知；agent 派发的由它自己跟进。
 func (a *app) applyTasks(ts []taskInfo) {
 	a.tasks = ts
+	a.indexTasks()
+	for id := range a.lastTask {
+		if a.task(id) == nil {
+			delete(a.lastTask, id)
+		}
+	}
 	for _, t := range ts {
 		key := fmt.Sprintf("%s:%d", t.Status, t.Questions)
 		prev, seen := a.lastTask[t.ID]
@@ -64,14 +69,15 @@ func (a *app) task(id string) *taskInfo {
 	return nil
 }
 
-// workerTask 返回以这个终端为 worker 的任务。
-func (a *app) workerTask(terminalID string) *taskInfo {
-	for i := len(a.tasks) - 1; i >= 0; i-- {
-		if a.tasks[i].Worker == terminalID {
-			return &a.tasks[i]
+// indexTasks 排好总览的顺序，记下每个 worker 终端的任务标题（同一终端有多个时取最后一个）。
+func (a *app) indexTasks() {
+	a.sorted = sortTasks(a.tasks)
+	a.workerTitle = make(map[string]string, len(a.tasks))
+	for _, t := range a.tasks {
+		if t.Worker != "" {
+			a.workerTitle[t.Worker] = truncate(t.Title, 22)
 		}
 	}
-	return nil
 }
 
 func (a *app) openTask(id string) {
@@ -86,6 +92,8 @@ func (a *app) selectTask(id string) {
 	a.taskSel, a.replyText, a.noteText = id, "", ""
 	a.detail = nil
 	a.setWantedTask(id)
+	// 详情刚清空，即使拉到的和上次一样也要交给界面
+	a.pollForce.Store(true)
 	go a.refresh()
 }
 
@@ -111,17 +119,14 @@ func (a *app) taskCounts() (running, waiting int) {
 func taskGlyph(t taskInfo) string {
 	switch {
 	case needsUser(t):
-		return "waiting"
+		return agent.StatusWaiting
 	case t.Status == "running":
-		if t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status != "waiting" {
+		if t.Terminal != nil && t.Terminal.AgentState != nil {
 			return t.Terminal.AgentState.Status
 		}
-		if t.Terminal != nil && t.Terminal.AgentState != nil {
-			return "waiting"
-		}
-		return "working"
+		return agent.StatusWorking
 	case t.Status == "done":
-		return "idle"
+		return agent.StatusIdle
 	}
 	return "ended"
 }
@@ -135,7 +140,7 @@ func taskStatusText(t taskInfo) string {
 		if t.Questions > 0 {
 			return "等派发方回复"
 		}
-		if t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status == "waiting" {
+		if t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status == agent.StatusWaiting {
 			return "待处理：worker 在等你批准"
 		}
 		return "进行中"
@@ -168,16 +173,6 @@ func elapsed(t time.Time) string {
 
 // --- 动作
 
-func (a *app) call(method string, params any, out any, timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	err := a.c.Call(ctx, method, params, out)
-	if err != nil {
-		a.win.Update(func() { a.err = err.Error() })
-	}
-	return err
-}
-
 func (a *app) openDispatch() {
 	a.dispatching = true
 	a.dTitle, a.dSpec, a.dMode = "", "", 0
@@ -189,21 +184,12 @@ func (a *app) openDispatch() {
 		a.dWorkspace = w.Label
 	} else if t := a.task(a.taskSel); t != nil {
 		a.dWorkspace = t.Workspace
-	} else if len(a.workspaces) > 0 && !a.hasWorkspaceLabel(a.dWorkspace) {
+	} else if len(a.workspaces) > 0 && a.workspaceByLabel(a.dWorkspace) == nil {
 		a.dWorkspace = a.workspaces[0].Label
 	}
 }
 
 func randomSuffix() string { return fmt.Sprintf("%04x", time.Now().UnixNano()&0xffff) }
-
-func (a *app) hasWorkspaceLabel(label string) bool {
-	for _, w := range a.workspaces {
-		if w.Label == label {
-			return true
-		}
-	}
-	return false
-}
 
 func (a *app) workspaceByLabel(label string) *workspace {
 	for i := range a.workspaces {
@@ -306,17 +292,9 @@ func (a *app) viewDiff(t taskInfo) {
 		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
 			return
 		}
-		a.win.Update(func() {
-			a.selected, a.revealSel = t.WorkspaceID, true
-			a.activeTerm[t.WorkspaceID] = term.ID
-		})
+		a.win.Update(func() { a.openTerminal(t.WorkspaceID, term.ID) })
 		a.refresh()
 	}()
-}
-
-func (a *app) showWorker(t taskInfo) {
-	a.selected, a.revealSel = t.WorkspaceID, true
-	a.activeTerm[t.WorkspaceID] = t.Worker
 }
 
 // --- 侧栏入口
@@ -328,12 +306,12 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 	if running > 0 || waiting > 0 {
 		trailing = func() {
 			if waiting > 0 {
-				ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(t).honey)
-				statusGlyph(c, "waiting", 12)
+				pendingLabel(c)
+				statusGlyph(c, agent.StatusWaiting, 12)
 				return
 			}
 			ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
-			statusGlyph(c, "working", 12)
+			statusGlyph(c, agent.StatusWorking, 12)
 		}
 	}
 	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", trailing)
@@ -374,7 +352,7 @@ func (a *app) taskBoard(c *ui.Context) {
 		return
 	}
 	if a.task(a.taskSel) == nil {
-		a.selectTask(a.sortedTasks()[0].ID)
+		a.selectTask(a.sorted[0].ID)
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
 		card(c).Width(360).Shrink(0).Clip().Children(func() {
@@ -390,39 +368,36 @@ func (a *app) taskBoard(c *ui.Context) {
 	})
 }
 
-// sortedTasks 把等用户回复的放最前，其次进行中的，最后已结束的；同类里新的在前。
-func (a *app) sortedTasks() []taskInfo {
-	ts := append([]taskInfo(nil), a.tasks...)
-	rank := func(t taskInfo) int {
-		switch {
-		case needsUser(t):
-			return 0
-		case t.Status == "running":
-			return 1
-		}
-		return 2
+// taskSection 是任务在总览里的分组：0 等用户回复，1 进行中，2 已结束。
+func taskSection(t taskInfo) int {
+	switch {
+	case needsUser(t):
+		return 0
+	case t.Status == "running":
+		return 1
 	}
-	sort.SliceStable(ts, func(i, j int) bool {
-		if ri, rj := rank(ts[i]), rank(ts[j]); ri != rj {
-			return ri < rj
+	return 2
+}
+
+// sortTasks 按分组排，同组里新的在前。
+func sortTasks(tasks []taskInfo) []taskInfo {
+	ts := slices.Clone(tasks)
+	slices.SortStableFunc(ts, func(x, y taskInfo) int {
+		if sx, sy := taskSection(x), taskSection(y); sx != sy {
+			return sx - sy
 		}
-		return ts[i].CreatedAt.After(ts[j].CreatedAt)
+		return y.CreatedAt.Compare(x.CreatedAt)
 	})
 	return ts
 }
 
 func (a *app) taskList(c *ui.Context) {
 	t := c.Theme()
+	// 列表里有"几分钟"这样的相对时间，界面不再每秒重建，自己约下一帧
+	c.After(30 * time.Second)
 	section := -1
-	for _, task := range a.sortedTasks() {
-		s := 2
-		switch {
-		case needsUser(task):
-			s = 0
-		case task.Status == "running":
-			s = 1
-		}
-		if s != section {
+	for _, task := range a.sorted {
+		if s := taskSection(task); s != section {
 			section = s
 			label := []string{"需要你回复", "进行中", "已结束"}[s]
 			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(11).FontWeight(600).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
@@ -528,11 +503,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 							ui.Text(c, taskStatusText(task)).FontSize(12).TextColor(color).MaxLines(1)
 						})
 					}
-					icon := iconFolder
-					if task.WorkspaceKind == "worktree" {
-						icon = iconBranch
-					}
-					metaRow(c, status, meta(c, agentTitle(task.Agent)), metaMono(c, icon, task.Workspace, ""),
+					metaRow(c, status, meta(c, agentTitle(task.Agent)), metaMono(c, workspaceIcon(task.WorkspaceKind), task.Workspace, ""),
 						meta(c, a.coordinatorLabel(task)), meta(c, task.CreatedAt.Format("1月2日 15:04")))
 				})
 			})
@@ -575,12 +546,8 @@ func (a *app) coordinatorLabel(task taskInfo) string {
 	if task.Coordinator == "" {
 		return "你派发的"
 	}
-	for _, w := range a.workspaces {
-		for _, term := range w.Terminals {
-			if term.ID == task.Coordinator {
-				return agentTitle(term.Agent) + " 派发的"
-			}
-		}
+	if _, term := a.findTerminal(task.Coordinator); term != nil {
+		return agentTitle(term.Agent) + " 派发的"
 	}
 	return "agent 派发的"
 }
@@ -592,7 +559,7 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 	ui.Row(c).Gap(8).Children(func() {
 		if task.Terminal != nil {
 			if pressable(textButton(c, "打开 worker 终端")).Clicked() {
-				a.showWorker(task)
+				a.openTerminal(task.WorkspaceID, task.Worker)
 			}
 		}
 		if task.WorkspaceKind == "worktree" {

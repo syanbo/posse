@@ -12,7 +12,7 @@ import (
 
 func TestResolveLinkPath(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	base := filepath.Join(home, "proj")
 	os.MkdirAll(filepath.Join(base, "internal/app"), 0o755)
 	os.WriteFile(filepath.Join(base, "internal/app/view.go"), nil, 0o644)

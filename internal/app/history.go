@@ -19,7 +19,10 @@ import (
 const historyBoardID = "history"
 
 // historyAgents 与界面上的筛选分段一一对应，0 是全部。
-var historyAgents = append([]string{""}, history.Agents...)
+var (
+	historyAgents      = append([]string{""}, history.Agents...)
+	historyAgentLabels = append([]string{"全部"}, agentTitles(history.Agents)...)
+)
 
 type historyStatus struct {
 	Sessions int              `json:"sessions"`
@@ -34,6 +37,27 @@ type historyDetail struct {
 	Terminal string            `json:"terminal"`
 
 	md map[int][]mdBlock // 消息序号 → 解析好的 Markdown
+	// shown 是不显示工具调用时要列出的消息，shownFor 是算它时的命中序号
+	shown    []history.Message
+	shownFor int
+	hasShown bool
+}
+
+// visible 返回要列出的消息：不显示工具调用时去掉工具消息，但命中的那条留着。结果缓存在会话上。
+func (d *historyDetail) visible(tools bool, hitSeq int) []history.Message {
+	if tools {
+		return d.Messages
+	}
+	if !d.hasShown || d.shownFor != hitSeq {
+		d.shown = make([]history.Message, 0, len(d.Messages))
+		for _, m := range d.Messages {
+			if m.Role != "tool" || m.Seq == hitSeq {
+				d.shown = append(d.shown, m)
+			}
+		}
+		d.shownFor, d.hasShown = hitSeq, true
+	}
+	return d.shown
 }
 
 // historyView 是历史页的状态。界面线程读写；req 和 want 由 mu 保护，供请求协程核对自己是否过期。
@@ -41,6 +65,7 @@ type historyView struct {
 	query    string
 	agent    int
 	sessions []history.Session // 没有搜索词时：最近的会话
+	groups   []string          // 与 sessions 对应的"今天、昨天……"分组
 	hits     []history.Hit     // 有搜索词时
 	anyWord  bool              // 没有同时含所有词的结果，列出的是含任一词的
 	status   historyStatus
@@ -60,6 +85,15 @@ type historyView struct {
 	wAgent  int
 	visible bool
 	fetched time.Time
+}
+
+// setSessions 换上新的会话列表，顺便分好组：分组要比较日期，不放在每帧里做。
+func (h *historyView) setSessions(ss []history.Session) {
+	h.sessions = ss
+	h.groups = make([]string, len(ss))
+	for i, s := range ss {
+		h.groups[i] = dayGroup(s.UpdatedAt)
+	}
 }
 
 func (h *historyView) want() (query string, agent int, req int) {
@@ -106,11 +140,10 @@ func (a *app) fetchHistory(req int) {
 	if stale {
 		return
 	}
+	if err != nil {
+		return
+	}
 	a.win.Update(func() {
-		if err != nil {
-			a.err = err.Error()
-			return
-		}
 		h.loaded = true
 		h.status, h.anyWord = res.Status, res.Any
 		// 列表按会话 ID 保持滚动位置，定期刷新时有用；换了搜索词或筛选就该从第一条看起
@@ -119,9 +152,11 @@ func (a *app) fetchHistory(req int) {
 			h.list.ScrollTo(0, ui.Start)
 		}
 		if method == "history.list" {
-			h.sessions, h.hits = res.Sessions, nil
+			h.setSessions(res.Sessions)
+			h.hits = nil
 		} else {
-			h.hits, h.sessions = res.Hits, nil
+			h.hits = res.Hits
+			h.setSessions(nil)
 		}
 		// 首次建索引时每隔一会儿再查一次，结果随索引进度补全
 		if res.Status.Indexing {
@@ -166,16 +201,13 @@ func (a *app) selectSession(id string, seq int) {
 	}
 	go func() {
 		var d historyDetail
-		err := a.call("history.show", map[string]any{"session": id}, &d, 30*time.Second)
+		if a.call("history.show", map[string]any{"session": id}, &d, 30*time.Second) != nil {
+			return
+		}
 		a.win.Update(func() {
-			if h.sel != id {
-				return
+			if h.sel == id {
+				h.detail = &d
 			}
-			if err != nil {
-				a.err = err.Error()
-				return
-			}
-			h.detail = &d
 		})
 	}()
 }
@@ -195,8 +227,7 @@ func (a *app) resumeSession(s history.Session) {
 					"Hive 里还没有包含这个目录的工作区。添加后会话在这个项目里继续。",
 					"添加并继续", func() {
 						go func() {
-							if err := a.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second); err != nil {
-								a.win.Update(func() { a.err = err.Error() })
+							if a.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second) != nil {
 								return
 							}
 							a.refresh()
@@ -207,30 +238,10 @@ func (a *app) resumeSession(s history.Session) {
 			return
 		}
 		a.refresh()
-		a.win.Update(func() {
-			if err != nil {
-				a.err = err.Error()
-				return
-			}
-			a.openTerminal(t.WorkspaceID, t.ID)
-		})
-	}()
-}
-
-func (a *app) openTerminal(workspaceID, terminalID string) {
-	a.selected, a.revealSel = workspaceID, true
-	a.activeTerm[workspaceID] = terminalID
-}
-
-func (a *app) terminalWorkspace(terminalID string) string {
-	for _, w := range a.workspaces {
-		for _, t := range w.Terminals {
-			if t.ID == terminalID {
-				return w.ID
-			}
+		if err == nil {
+			a.win.Update(func() { a.openTerminal(t.WorkspaceID, t.ID) })
 		}
-	}
-	return ""
+	}()
 }
 
 // ago 是会话最后使用的时间，写成"20 分钟前"。
@@ -356,7 +367,7 @@ func (a *app) historyBoard(c *ui.Context) {
 			a.searchHistory(250 * time.Millisecond)
 		}
 		ui.Spacer(c)
-		if segmented(c, &h.agent, "按 agent 筛选", "全部", "Claude", "Codex", "Cursor", "Grok") {
+		if segmented(c, &h.agent, "按 agent 筛选", historyAgentLabels...) {
 			a.searchHistory(0)
 		}
 	})
@@ -403,10 +414,9 @@ func (a *app) sessionList(c *ui.Context) {
 		return
 	}
 	// 按"今天、昨天、本周、更早"分组，组标题跟在第一行前面
-	groups := make([]string, len(h.sessions))
-	for i, s := range h.sessions {
-		groups[i] = dayGroup(s.UpdatedAt)
-	}
+	groups := h.groups
+	// 列表里有"几分钟前"，界面不再每秒重建，自己约下一帧
+	c.After(30 * time.Second)
 	h.list.Key = func(i int) any { return h.sessions[i].Agent + h.sessions[i].ID }
 	ui.List(c, &h.list, len(h.sessions), func(i int) {
 		s := h.sessions[i]
@@ -425,6 +435,7 @@ func (a *app) hitList(c *ui.Context) {
 		a.historyEmpty(c, "没有找到“"+strings.TrimSpace(h.query)+"”", "中文按字匹配，英文按词的开头匹配；加引号可以搜整句。")
 		return
 	}
+	c.After(30 * time.Second)
 	h.list.Key = func(i int) any { return h.hits[i].Agent + h.hits[i].ID }
 	ui.List(c, &h.list, len(h.hits), func(i int) {
 		hit := h.hits[i]
@@ -530,8 +541,8 @@ func (a *app) sessionDetail(c *ui.Context) {
 		ui.Row(c).Gap(8).Children(func() {
 			if d.Terminal != "" {
 				if pressable(accentButton(c, "切到正在运行的终端")).Clicked() {
-					if w := a.terminalWorkspace(d.Terminal); w != "" {
-						a.openTerminal(w, d.Terminal)
+					if w, _ := a.findTerminal(d.Terminal); w != nil {
+						a.openTerminal(w.ID, d.Terminal)
 					}
 				}
 			} else if pressable(accentButton(c, "在 Hive 里继续")).Tooltip(resumeCommand(s)).Clicked() {
@@ -547,16 +558,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 			ui.Checkbox(c, &h.tools, "显示工具调用")
 		})
 	})
-	msgs := d.Messages
-	if !h.tools {
-		msgs = make([]history.Message, 0, len(d.Messages))
-		for _, m := range d.Messages {
-			// 命中的是工具消息时，即使不显示工具调用也留着它
-			if m.Role != "tool" || m.Seq == h.hitSeq {
-				msgs = append(msgs, m)
-			}
-		}
-	}
+	msgs := d.visible(h.tools, h.hitSeq)
 	if len(msgs) == 0 {
 		card(c).Children(func() {
 			a.historyEmpty(c, "这个会话没有可显示的消息", "打开“显示工具调用”可以看到工具的输入和输出。")
@@ -647,15 +649,7 @@ func highlighted(c *ui.Context, text string, words []string) ui.Element {
 	if len(marks) == 0 {
 		return ui.Text(c, text)
 	}
-	mark := colors(c.Theme()).honey.Alpha(0.28)
-	var spans []ui.Span
-	last := 0
-	for _, m := range marks {
-		spans = append(spans, ui.Span{Text: text[last:m[0]]}, ui.Span{Text: text[m[0]:m[1]], Background: mark})
-		last = m[1]
-	}
-	spans = append(spans, ui.Span{Text: text[last:]})
-	return ui.RichText(c, spans...)
+	return ui.RichText(c, markSpans(text, marks, ui.Span{}, colors(c.Theme()).honey.Alpha(0.28))...)
 }
 
 // markRanges 返回 text 里搜索词出现的字节区间，按位置排好、互不重叠。

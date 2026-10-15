@@ -336,18 +336,7 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 	if in.url != "" {
 		base.Color = t.Accent
 	}
-	var out []ui.Span
-	last := 0
-	for _, m := range markRanges(in.text, r.words) {
-		s := base
-		s.Text = in.text[last:m[0]]
-		out = append(out, s)
-		s.Text, s.Background = in.text[m[0]:m[1]], colors(t).honey.Alpha(0.28)
-		out = append(out, s)
-		last = m[1]
-	}
-	base.Text = in.text[last:]
-	return append(out, base)
+	return markSpans(in.text, markRanges(in.text, r.words), base, colors(t).honey.Alpha(0.28))
 }
 
 func webURL(u string) bool {

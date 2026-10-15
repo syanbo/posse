@@ -2,13 +2,14 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
+
+	"hive/internal/agent"
 )
 
 func (a *app) build(c *ui.Context) {
@@ -37,6 +38,7 @@ func (a *app) build(c *ui.Context) {
 	if vibrant {
 		c.Root().Background(ui.Transparent)
 	}
+	a.imagesDrawn = false
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		side := ui.Column(c).Width(248).Shrink(0)
 		if !vibrant {
@@ -55,6 +57,10 @@ func (a *app) build(c *ui.Context) {
 			}
 		})
 	})
+	// 图片面板这一帧没画（收起了、换到别的页面或普通终端）就放掉位图
+	if !a.imagesDrawn && a.images.term != "" {
+		a.images = imagesView{}
+	}
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
 	a.confirmDialog(c)
@@ -132,10 +138,16 @@ func (a *app) sidebar(c *ui.Context) {
 			a.historySidebarItem(c)
 			// 任务、历史是全局页面，和下面的项目用一道细线隔开
 			ui.Box(c).Height(1).Shrink(0).Margin(6, 12, 6, 12).Background(colors(t).line)
+			// 要定位的工作区所在的项目
+			reveal := ""
+			if w := a.workspace(a.selected); a.revealSel && w != nil {
+				reveal = w.ProjectID
+			}
 			// 遍历拷贝：拖放排序会在这一帧里改 a.projects
-			for _, p := range slices.Clone(a.projects) {
-				if ws := a.workspacesOf(p.ID); len(ws) > 0 {
-					a.projectItem(c, p, ws)
+			a.navProjects = append(a.navProjects[:0], a.projects...)
+			for _, p := range a.navProjects {
+				if ws := a.byProject[p.ID]; len(ws) > 0 {
+					a.projectItem(c, p, ws, reveal == p.ID)
 				}
 			}
 		})
@@ -156,7 +168,8 @@ func (a *app) sidebar(c *ui.Context) {
 
 // projectItem 是侧栏里的一个项目：项目行就是它的主工作区，其余工作区缩进在下面，默认收起，单击项目行展开。
 // 收起时项目行汇总所有工作区的状态，子工作区等你处理也看得到。
-func (a *app) projectItem(c *ui.Context, p project, ws []workspace) {
+// reveal 表示要定位的工作区在这个项目里。
+func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool) {
 	head, rest := ws[0], ws[1:]
 	open := a.sectionsOpen[p.ID]
 	if open == nil {
@@ -164,7 +177,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace) {
 		a.sectionsOpen[p.ID] = open
 	}
 	// 要定位的工作区在收起的项目里时先展开，不然看不到选中项
-	if w := a.workspace(a.selected); a.revealSel && w != nil && w.ProjectID == p.ID && w.ID != head.ID {
+	if reveal && a.revealSel && a.selected != head.ID {
 		*open = true
 	}
 	group := ui.Column(c.Key(p.ID)).Gap(2).Shrink(0)
@@ -223,25 +236,19 @@ func disclosure(c *ui.Context, open *bool, n int) {
 // extra 画在行尾最后（展开箭头）。
 func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []workspace, extra func()) ui.Element {
 	t := c.Theme()
-	icon := iconFolder
-	if w.Kind == "worktree" {
-		icon = iconBranch
-	}
-	all := append([]workspace{w}, also...)
-	running := 0
-	for _, x := range all {
-		for _, term := range x.Terminals {
-			if term.Running {
-				running++
-			}
+	running, status := terminalSummary(w.Terminals)
+	for i := range also {
+		r, s := terminalSummary(also[i].Terminals)
+		running += r
+		if statusRank(s) > statusRank(status) {
+			status = s
 		}
 	}
-	status := workspaceStatus(all...)
 	var trailing func()
 	if status != "" || running > 0 || extra != nil {
 		trailing = func() {
-			if status == "waiting" {
-				ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(t).honey)
+			if status == agent.StatusWaiting {
+				pendingLabel(c)
 			} else if running > 0 {
 				ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
 			}
@@ -262,20 +269,16 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []works
 			sub = ""
 		}
 	}
-	item := a.navRow(c, w.ID, icon, label, sub, trailing)
+	item := a.navRow(c, w.ID, workspaceIcon(w.Kind), label, sub, trailing)
 	if a.revealSel && w.ID == a.selected {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
 	item.ContextMenu(func(m *ui.Menu) {
-		if m.Item("启动 Claude").Chosen() {
-			a.startTerminal(w.ID, "claude")
-		}
-		if m.Item("启动 Codex").Chosen() {
-			a.startTerminal(w.ID, "codex")
-		}
-		if m.Item("启动 Grok").Chosen() {
-			a.startTerminal(w.ID, "grok")
+		for _, ag := range agentChoices {
+			if m.Item("启动 " + agentTitle(ag)).Chosen() {
+				a.startTerminal(w.ID, ag)
+			}
 		}
 		if m.Item("打开终端").Chosen() {
 			a.startTerminal(w.ID, "")
@@ -404,21 +407,33 @@ func mb(kb int64) string {
 	return fmt.Sprintf("%.0f MB", float64(kb)/1024)
 }
 
-// workspaceStatus 汇总工作区里 agent 的状态，等你处理优先。
-func workspaceStatus(ws ...workspace) string {
-	rank := map[string]int{"waiting": 4, "working": 3, "idle": 2, "starting": 1}
-	best := ""
-	for _, w := range ws {
-		for _, t := range w.Terminals {
-			if !t.Running || t.AgentState == nil {
-				continue
-			}
-			if s := t.AgentState.Status; rank[s] > rank[best] {
-				best = s
-			}
+// terminalSummary 返回运行中的终端数和其中 agent 最要紧的状态。
+func terminalSummary(ts []terminalInfo) (running int, status string) {
+	for _, t := range ts {
+		if !t.Running {
+			continue
+		}
+		running++
+		if t.AgentState != nil && statusRank(t.AgentState.Status) > statusRank(status) {
+			status = t.AgentState.Status
 		}
 	}
-	return best
+	return running, status
+}
+
+// statusRank 是汇总状态时的优先级，等你处理最高；不认识的状态不参与汇总。
+func statusRank(s string) int {
+	switch s {
+	case agent.StatusWaiting:
+		return 4
+	case agent.StatusWorking:
+		return 3
+	case agent.StatusIdle:
+		return 2
+	case agent.StatusStarting:
+		return 1
+	}
+	return 0
 }
 
 // statusGlyph 画状态的蜂巢格：形状区分进行中与已停下，颜色只是辅助。
@@ -427,17 +442,17 @@ func statusGlyph(c *ui.Context, status string, size float32) {
 	p := colors(t)
 	icon, color := iconHexOutline, t.TextMuted
 	switch status {
-	case "waiting":
+	case agent.StatusWaiting:
 		icon, color = iconHexAlert, p.honey
-	case "working":
+	case agent.StatusWorking:
 		// 平时画星号（见下）；减少动态效果时退回静止的实心蜂巢格，用中性色
 		icon, color = iconHexFill, t.TextMuted
-	case "idle":
+	case agent.StatusIdle:
 		icon, color = iconHexOutline, p.sage
-	case "starting":
+	case agent.StatusStarting:
 		icon, color = iconHexOutline, t.TextMuted
 	}
-	if status == "working" && !c.Preferences().ReduceMotion {
+	if status == agent.StatusWorking && !c.Preferences().ReduceMotion {
 		workingStar(c, size, t.Accent).Tooltip(statusText(status))
 		return
 	}
@@ -464,15 +479,15 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 
 func statusText(status string) string {
 	switch status {
-	case "waiting":
+	case agent.StatusWaiting:
 		return "待处理：agent 在等你批准或回答"
-	case "working":
+	case agent.StatusWorking:
 		return "工作中"
-	case "idle":
+	case agent.StatusIdle:
 		return "本轮完成，等你下一步"
-	case "starting":
+	case agent.StatusStarting:
 		return "启动中"
-	case "exited":
+	case agent.StatusExited:
 		return "已退出"
 	}
 	return status
@@ -497,14 +512,10 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 		}
 		iconButton(c.Key("new"), iconPlus, "新建终端").Menu(func(m *ui.Menu) {
-			if m.Item("Claude").Chosen() {
-				a.startTerminal(w.ID, "claude")
-			}
-			if m.Item("Codex").Chosen() {
-				a.startTerminal(w.ID, "codex")
-			}
-			if m.Item("Grok").Chosen() {
-				a.startTerminal(w.ID, "grok")
+			for _, ag := range agentChoices {
+				if m.Item(agentTitle(ag)).Chosen() {
+					a.startTerminal(w.ID, ag)
+				}
 			}
 			if m.Item("终端").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
 				a.startTerminal(w.ID, "")
@@ -549,10 +560,6 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.hoverPreviewView(c, area)
 		}
 		if shown < 0.01 {
-			// 面板完全收起后放掉图片的位图
-			if a.images.term != "" {
-				a.images = imagesView{}
-			}
 			return
 		}
 		var panel ui.Element
@@ -611,11 +618,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 			ui.Column(c).Width(600).Gap(14).Children(func() {
 				card(c).Padding(20).Children(func() {
 					ui.Row(c).Gap(16).Children(func() {
-						icon := iconFolder
-						if w.Kind == "worktree" {
-							icon = iconBranch
-						}
-						tile(c, icon, 52, p.tint, t.Accent)
+						tile(c, workspaceIcon(w.Kind), 52, p.tint, t.Accent)
 						ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
 							ui.Text(c, displayName(w)).FontSize(20).FontWeight(600).MaxLines(1)
 							var branch func()
@@ -627,9 +630,9 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					})
 				})
 				ui.Grid(c).Columns(4).Gap(10).Children(func() {
-					a.launchTile(c, w, "claude", "Anthropic")
-					a.launchTile(c, w, "codex", "OpenAI")
-					a.launchTile(c, w, "grok", "xAI")
+					for _, ag := range agentChoices {
+						a.launchTile(c, w, ag, agentVendor(ag))
+					}
 					a.launchTile(c, w, "", "⌘T")
 				})
 				ui.Row(c).Gap(14).Padding(2, 4).Children(func() {
@@ -694,8 +697,8 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		status = term.AgentState.Status
 	}
 	name, detail := tabLabel(term)
-	if task := a.workerTask(term.ID); task != nil && term.Running {
-		detail = truncate(task.Title, 22)
+	if title, ok := a.workerTitle[term.ID]; ok && term.Running {
+		detail = title
 	}
 	row.Children(func() {
 		if status != "" {
@@ -710,8 +713,8 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			nameText.TextColor(t.TextMuted)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
-		if status == "waiting" {
-			ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(t).honey).Shrink(0)
+		if status == agent.StatusWaiting {
+			pendingLabel(c).Shrink(0)
 		} else if detail != "" {
 			ui.Text(c, detail).FontSize(12).TextColor(t.TextMuted).Shrink(1).MaxLines(1)
 		}
@@ -776,11 +779,19 @@ func agentTitle(agent string) string {
 	return agent
 }
 
-func shortPath(p string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home) {
-		return "~" + p[len(home):]
+// agentVendor 是空工作区启动格里 agent 名字下面的一行小字。
+func agentVendor(agent string) string {
+	switch agent {
+	case "claude":
+		return "Anthropic"
+	case "codex":
+		return "OpenAI"
+	case "grok":
+		return "xAI"
+	case "cursor":
+		return "Cursor"
 	}
-	return p
+	return ""
 }
 
 // --- 控件
@@ -860,7 +871,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 				ui.Text(c, hint).FontSize(12).TextColor(t.TextMuted)
 			})
 			submitted := ui.TextInput(c, &a.newName).Placeholder("名称，比如 feat-login").AutoFocus().Submitted()
-			segmented(c, &a.newAgent, "同时启动", "只建工作区", "Claude", "Codex", "Grok")
+			segmented(c, &a.newAgent, "同时启动", newAgentLabels...)
 			if a.newAgent != 0 {
 				if ui.TextInput(c, &a.newPrompt).Placeholder("交给 agent 的任务（可留空）").Submitted() {
 					submitted = true

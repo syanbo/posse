@@ -159,7 +159,7 @@ func TestRightPanelDismiss(t *testing.T) {
 	a.selected = "w1"
 	open := func() {
 		a.state.RightPanel = panelHistory
-		a.recent = recentView{key: "0\x00p1", loaded: true, fetched: time.Now(), sessions: a.history.sessions}
+		a.recent = recentView{key: "0\x00p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions}
 	}
 	open()
 	tt := newPreviewTester(a, true)

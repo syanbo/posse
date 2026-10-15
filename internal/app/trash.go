@@ -17,12 +17,11 @@ func sessionTrashPaths(s history.Session) []string {
 	if s.Path == "" || s.ID == "" {
 		return nil
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if homeDir == "" {
 		return nil
 	}
 	under := func(path string, root ...string) bool {
-		rel, err := filepath.Rel(filepath.Join(append([]string{home}, root...)...), path)
+		rel, err := filepath.Rel(filepath.Join(append([]string{homeDir}, root...)...), path)
 		return err == nil && !strings.HasPrefix(rel, "..")
 	}
 	isDir := func(path string) bool {
@@ -83,7 +82,7 @@ func (a *app) askTrashSession(d *historyDetail) {
 				if a.history.sel == s.ID {
 					a.history.sel, a.history.detail = "", nil
 				}
-				a.recent.fetched = time.Time{}
+				a.recent.poll.at = time.Time{}
 			})
 			a.searchHistory(0)
 		})

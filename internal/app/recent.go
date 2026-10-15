@@ -11,20 +11,13 @@ import (
 	"hive/internal/history"
 )
 
-// 右侧面板：标签栏右边的按钮打开，同一时间只开一个，开着哪个记在 ui.json。
-const (
-	panelUsage   = "usage"
-	panelHistory = "history"
-)
-
 // recentView 是右侧历史面板的状态：当前项目或全部的最近会话。
 type recentView struct {
 	scope    int    // 0 当前项目，1 全部
 	key      string // 结果对应的范围（筛选 + 项目），变了就重新查
 	sessions []history.Session
 	loaded   bool
-	busy     bool
-	fetched  time.Time
+	poll     panelPoll
 }
 
 // recentRefresh 是面板开着时多久重新查一次；历史索引本身最多 15 秒更新一次。
@@ -33,20 +26,19 @@ const recentRefresh = 15 * time.Second
 const recentLimit = 50
 
 // pollRecent 在主线程调用：换了项目或筛选就重新查，到点了在后台刷新。
-func (a *app) pollRecent(w *workspace) {
+func (a *app) pollRecent(c *ui.Context, w *workspace) {
 	r := &a.recent
 	key := fmt.Sprint(r.scope, "\x00", w.ProjectID)
 	if r.key != key {
 		*r = recentView{scope: r.scope, key: key}
 	}
-	if r.busy || time.Since(r.fetched) < recentRefresh {
+	if !r.poll.due(c, recentRefresh) {
 		return
 	}
-	r.busy = true
 	// 当前项目：项目目录和它的各个 worktree 目录，worktree 不在项目目录下面
 	var dirs []string
 	if r.scope == 0 {
-		for _, x := range a.workspacesOf(w.ProjectID) {
+		for _, x := range a.byProject[w.ProjectID] {
 			dirs = append(dirs, x.Path)
 		}
 		dirs = topDirs(dirs)
@@ -76,9 +68,9 @@ func (a *app) pollRecent(w *workspace) {
 			if r.key != key {
 				return
 			}
-			r.busy, r.fetched = false, time.Now()
+			r.poll.done()
+			// 出错时 a.call 已经报过了
 			if firstErr != nil && len(all) == 0 {
-				a.err = firstErr.Error()
 				return
 			}
 			r.sessions, r.loaded = all, true
@@ -106,12 +98,12 @@ func topDirs(dirs []string) []string {
 // recentPanel 是右侧的历史面板：点一个会话跳到历史页打开它。
 func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 	t := c.Theme()
-	a.pollRecent(w)
+	a.pollRecent(c, w)
 	r := &a.recent
 	return a.rightPanel(c, "历史", func() {
 		ui.Box(c).Padding(0, 12, 10, 12).Children(func() {
 			if segmented(c, &r.scope, "范围", "当前项目", "全部") {
-				r.fetched = time.Time{}
+				r.poll.at = time.Time{}
 			}
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
@@ -157,46 +149,6 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 			})
 		})
 	})
-}
-
-// rightPanel 是右侧面板的外框：浮在终端右侧的卡片，有标题和关闭按钮，body 自己决定滚动。
-func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
-	t := c.Theme()
-	p := colors(t)
-	shadow := ui.RGBA(0, 0, 0, 0.18)
-	if t.Dark {
-		shadow = ui.RGBA(0, 0, 0, 0.45)
-	}
-	return ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(280).Radius(12).Background(p.band).
-		Border(1, p.line).Shadow(0, 8, 24, 0, shadow).Children(func() {
-		ui.Row(c).Padding(14, 12, 10, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(13).FontWeight(600).Grow(1)
-			if iconButtonSized(c, iconClose, "关闭", 22, 12).Clicked() {
-				a.state.RightPanel = ""
-				a.saveState()
-			}
-		})
-		body()
-	})
-}
-
-// panelButton 是标签栏右边打开某个右侧面板的按钮，开着时垫一层强调色淡底。
-func (a *app) panelButton(c *ui.Context, name string, icon *ui.SVG, label string) {
-	b := iconButton(c.Key("panel-"+name), icon, label)
-	if b.Hovered() {
-		a.overPanelButton = true
-	}
-	if a.state.RightPanel == name {
-		b.Background(colors(c.Theme()).tint)
-	}
-	if b.Clicked() {
-		if a.state.RightPanel == name {
-			a.state.RightPanel = ""
-		} else {
-			a.state.RightPanel = name
-		}
-		a.saveState()
-	}
 }
 
 // playButton 是卡片上"在 Hive 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。

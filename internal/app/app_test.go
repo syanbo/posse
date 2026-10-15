@@ -1,9 +1,14 @@
 package app
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"hive/internal/rpc"
 )
 
 func TestApplyKeepsSelection(t *testing.T) {
@@ -73,5 +78,25 @@ func TestShortModel(t *testing.T) {
 		if got := shortModel(id); got != want {
 			t.Errorf("shortModel(%q) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+// setHome 在测试期间换掉缓存的主目录。
+func setHome(t *testing.T, home string) {
+	old := homeDir
+	homeDir = home
+	t.Cleanup(func() { homeDir = old })
+}
+
+// 常驻进程不在时 socket 连不上，轮询据此才去拉起它。
+func TestIsDialError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := rpc.Call(ctx, filepath.Join(t.TempDir(), "hived.sock"), "project.list", nil, nil)
+	if !isDialError(err) {
+		t.Fatalf("missing socket: %v is not a dial error", err)
+	}
+	if isDialError(context.DeadlineExceeded) {
+		t.Fatal("timeout counted as dial error")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,16 +18,14 @@ import (
 	"golang.org/x/image/draw"
 )
 
-const panelImages = "images"
-
 // imagesView 是右侧"图片"面板的状态：当前 Claude 会话里粘贴过的图片（终端里显示成 [Image #N]）。
 // 截图解码后一张十几 MB，所以只留缩到面板宽度的缩略图，悬停放大时才解码那一张。
 type imagesView struct {
-	term    string
-	dir     string // 会话的图片目录，找到后不再找
-	items   []imageItem
-	busy    bool
-	scanned time.Time
+	term   string
+	dir    string // 会话的图片目录，找到后不再找
+	items  []imageItem
+	poll   panelPoll
+	failed map[string]bool // 解码失败的图片，不再重试
 
 	hover   int // 悬停的图片序号，0 表示没有
 	big     *ui.Bitmap
@@ -114,15 +113,14 @@ func scaledImage(path string, width int) (*image.RGBA, error) {
 }
 
 // pollImages 在主线程调用：换了终端就重来，到点了在后台找目录、列图片、给新图片做缩略图。
-func (a *app) pollImages(cur *terminalInfo) {
+func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 	v := &a.images
 	if v.term != cur.ID {
 		*v = imagesView{term: cur.ID}
 	}
-	if cur.Agent != "claude" || v.busy || time.Since(v.scanned) < imagesRefresh {
+	if cur.Agent != "claude" || !v.poll.due(c, imagesRefresh) {
 		return
 	}
-	v.busy = true
 	id, dir := cur.ID, v.dir
 	var sid, transcript string
 	if cur.AgentState != nil {
@@ -132,16 +130,20 @@ func (a *app) pollImages(cur *terminalInfo) {
 	for _, it := range v.items {
 		have[it.path] = it.thumb
 	}
+	skip := maps.Clone(v.failed)
 	go func() {
 		if dir == "" {
 			dir = claudeImageDir(sid, transcript)
 		}
 		items := listImages(dir)
 		thumbs := map[string]*image.RGBA{}
+		var failed []string
 		for _, it := range items {
-			if have[it.path] == nil {
+			if have[it.path] == nil && !skip[it.path] {
 				if img, err := scaledImage(it.path, thumbWidth); err == nil {
 					thumbs[it.path] = img
+				} else {
+					failed = append(failed, it.path)
 				}
 			}
 		}
@@ -157,15 +159,26 @@ func (a *app) pollImages(cur *terminalInfo) {
 					items[i].thumb = ui.NewBitmap(img)
 				}
 			}
-			v.dir, v.items, v.busy, v.scanned = dir, items, false, time.Now()
+			for _, p := range failed {
+				v.markFailed(p)
+			}
+			v.dir, v.items = dir, items
+			v.poll.done()
 		})
 	}()
+}
+
+func (v *imagesView) markFailed(path string) {
+	if v.failed == nil {
+		v.failed = map[string]bool{}
+	}
+	v.failed[path] = true
 }
 
 // loadBig 在后台解码悬停的那张图的放大版，只留这一张。
 func (a *app) loadBig(it imageItem) {
 	v := &a.images
-	if v.bigN == it.n || v.bigBusy {
+	if v.bigN == it.n || v.bigBusy || v.failed[it.path] {
 		return
 	}
 	v.bigBusy = true
@@ -174,8 +187,12 @@ func (a *app) loadBig(it imageItem) {
 		img, err := scaledImage(it.path, bigWidth)
 		a.win.Update(func() {
 			v := &a.images
+			if v.term != id {
+				return
+			}
 			v.bigBusy = false
-			if v.term != id || err != nil {
+			if err != nil {
+				v.markFailed(it.path)
 				return
 			}
 			v.big, v.bigN = ui.NewBitmap(img), it.n
@@ -186,9 +203,10 @@ func (a *app) loadBig(it imageItem) {
 // imagesPanel 是右侧的图片面板：缩略图标上 #N，悬停在左边放大，点击用默认应用（预览）打开原图。
 func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	t := c.Theme()
-	a.pollImages(cur)
+	a.pollImages(c, cur)
 	v := &a.images
 	v.hover = 0
+	a.imagesDrawn = true
 	return a.rightPanel(c, "图片", func() {
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
@@ -196,7 +214,7 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				case cur.Agent != "claude":
 					usageNote(c, "目前只支持 Claude 会话：终端里的 [Image #N] 对应这里的 #N。")
 					return
-				case v.scanned.IsZero():
+				case v.poll.at.IsZero():
 					usageNote(c, "正在读取…")
 					return
 				case len(v.items) == 0:
@@ -235,13 +253,7 @@ func (a *app) imagePreview(c *ui.Context) {
 	if v.hover == 0 || v.big == nil || v.bigN != v.hover {
 		return
 	}
-	t := c.Theme()
-	shadow := ui.RGBA(0, 0, 0, 0.18)
-	if t.Dark {
-		shadow = ui.RGBA(0, 0, 0, 0.45)
-	}
-	ui.Box(c).Absolute().Top(8).Right(8+280+8).Width(560).Padding(8).Radius(12).Background(colors(t).band).
-		Border(1, colors(t).line).Shadow(0, 8, 24, 0, shadow).Children(func() {
+	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Width(560).Padding(8)).Children(func() {
 		ui.Image(c, v.big).Width(544).Radius(6)
 	})
 }

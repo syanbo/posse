@@ -5,20 +5,25 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/agent"
 	"hive/internal/client"
 	"hive/internal/procmem"
 )
@@ -28,7 +33,7 @@ type project struct {
 }
 
 type agentState struct {
-	Status, Event, Message    string
+	Status, Message           string
 	SessionID, TranscriptPath string
 }
 
@@ -46,12 +51,12 @@ type workspace struct {
 }
 
 type taskInfo struct {
-	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Group, Status, Summary, Report string
-	Workspace, WorkspaceKind, Branch, BaseRef                                                string
-	CreatedAt                                                                                time.Time
-	EndedAt                                                                                  *time.Time
-	Terminal                                                                                 *terminalInfo
-	Questions                                                                                int
+	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Status, Summary, Report string
+	Workspace, WorkspaceKind, Branch, BaseRef                                         string
+	CreatedAt                                                                         time.Time
+	EndedAt                                                                           *time.Time
+	Terminal                                                                          *terminalInfo
+	Questions                                                                         int
 }
 
 type taskMessage struct {
@@ -69,18 +74,16 @@ type taskDetail struct {
 type worktreeDiff struct {
 	Commits, Files, Insertions, Deletions, Untracked int
 	Dirty                                            bool
-	at                                               time.Time
 }
 
 type daemonStatus struct {
-	FootprintKB        int64
-	Terminals, Running int
+	FootprintKB int64
+	Running     int
 }
 
-// termView 是当前接入的终端：界面侧的终端内核加上到常驻进程的连接。
+// termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
 type termView struct {
 	id   string
-	conn *client.Conn
 	term *terminal.Terminal
 	// dir 是 shell 报告的当前目录（OSC 7），每帧取一次：终端的回调持着终端的锁，不能再调 term.Dir
 	dir string
@@ -98,6 +101,12 @@ type app struct {
 	loaded     bool
 	err        string
 
+	// 由 apply、applyTasks 算好的派生数据，免得每帧重算
+	byProject   map[string][]workspace // 项目 ID → 它的工作区，主工作区在前
+	sorted      []taskInfo             // 任务总览的顺序，见 sortTasks
+	workerTitle map[string]string      // worker 终端 ID → 任务标题（已截短），标签页上显示
+	navProjects []project              // 侧栏这一帧遍历的项目，复用底层数组
+
 	selected     string            // 侧栏选中的工作区 ID
 	revealSel    bool              // 下一帧把选中项滚进可见区
 	activeTerm   map[string]string // 工作区 ID → 选中的终端 ID
@@ -105,10 +114,14 @@ type app struct {
 	navOrder     []string          // 侧栏看得见的行，按显示顺序，供方向键移动
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
-	view         *termView
-	fontSize     float32
-	home         string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
-	state        uiState // 写进 ui.json 的界面状态
+	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
+	lastPoll  *pollResult
+	diffAt    map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	pollForce atomic.Bool          // 下一次轮询无论有没有变化都交给界面
+	view      *termView
+	fontSize  float32
+	home      string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
+	state     uiState // 写进 ui.json 的界面状态
 
 	// 任务总览
 	taskSel   string                   // 选中的任务 ID
@@ -116,7 +129,7 @@ type app struct {
 	diffs     map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
 	replyText string
 	noteText  string
-	// want 由界面线程写、轮询协程读：总览里正在看哪个任务
+	// wantTask 由界面线程写、轮询协程读：总览里正在看哪个任务
 	wantMu   sync.Mutex
 	wantTask string
 
@@ -124,6 +137,8 @@ type app struct {
 	usage   usageView  // 右侧"技能与 MCP"面板
 	recent  recentView // 右侧历史面板
 	images  imagesView // 右侧图片面板
+	// imagesDrawn 是这一帧画没画图片面板，没画就放掉它的位图
+	imagesDrawn bool
 	// linkCard 是终端里点击文件链接或路径后弹出的卡片
 	linkCard *linkCard
 	// linkChecks 缓存终端里的链接能不能打开（文件还在不在），悬停时每帧都要问
@@ -150,7 +165,7 @@ type app struct {
 	creating   bool
 	newProject string
 	newName    string
-	newAgent   int // 0 无，1 claude，2 codex
+	newAgent   int // agentNames 的序号，0 是不启动 agent
 	newPrompt  string
 
 	confirming   bool
@@ -162,10 +177,22 @@ type app struct {
 	refreshMu sync.Mutex
 }
 
-var agentNames = []string{"", "claude", "codex", "grok"}
-
-// agentChoices 是派发任务时可选的 agent。
+// agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
 var agentChoices = []string{"claude", "codex", "grok"}
+
+// agentNames 与新建工作区对话框的"同时启动"分段一一对应，0 是只建工作区。
+var (
+	agentNames     = append([]string{""}, agentChoices...)
+	newAgentLabels = append([]string{"只建工作区"}, agentTitles(agentChoices)...)
+)
+
+func agentTitles(agents []string) []string {
+	out := make([]string, len(agents))
+	for i, ag := range agents {
+		out[i] = agentTitle(ag)
+	}
+	return out
+}
 
 // taskBoardID 是侧栏里"任务"一项的 ID；工作区 ID 都以 w_ 开头，不会冲突。
 const taskBoardID = "tasks"
@@ -205,10 +232,7 @@ func Run(c *client.Client) error {
 			parts := strings.Split(id, ":")
 			switch {
 			case len(parts) == 3 && parts[0] == "hive":
-				a.win.Update(func() {
-					a.selected, a.revealSel = parts[1], true
-					a.activeTerm[parts[1]] = parts[2]
-				})
+				a.win.Update(func() { a.openTerminal(parts[1], parts[2]) })
 			case len(parts) == 2 && parts[0] == "hive-task":
 				a.win.Update(func() { a.openTask(parts[1]) })
 			default:
@@ -231,63 +255,120 @@ func (a *app) poll() {
 	}
 }
 
+// pollResult 是一次轮询拿到的、界面要显示的数据。内存按界面显示的精度（MB）记，
+// 只有零头变了不算变化。
+type pollResult struct {
+	err        string
+	projects   []project
+	workspaces []workspace
+	tasks      []taskInfo
+	running    int
+	daemonMB   string
+	selfMB     string
+	totalMB    string
+	detail     *taskDetail
+	diff       *worktreeDiff
+	diffFor    string
+	daemonKB   int64
+	selfKB     int64
+}
+
 func (a *app) refresh() {
 	a.refreshMu.Lock()
 	defer a.refreshMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	var ps []project
-	var ws []workspace
-	var ts []taskInfo
+	var r pollResult
 	var st daemonStatus
-	err := a.c.EnsureDaemon()
-	if err == nil {
-		err = a.c.Call(ctx, "project.list", nil, &ps)
+	err := a.c.Call(ctx, "project.list", nil, &r.projects)
+	if isDialError(err) {
+		// 连不上才去拉起常驻进程：每秒都先探一次 socket 是白白多一次连接
+		if err = a.c.EnsureDaemon(); err == nil {
+			err = a.c.Call(ctx, "project.list", nil, &r.projects)
+		}
 	}
 	if err == nil {
-		err = a.c.Call(ctx, "workspace.list", nil, &ws)
+		err = a.c.Call(ctx, "workspace.list", nil, &r.workspaces)
 	}
 	if err == nil {
-		err = a.c.Call(ctx, "task.list", nil, &ts)
+		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "daemon.status", nil, &st)
 	}
 	// 总览里选中的任务：拉完整内容，worktree 的改动统计每 5 秒更新一次
-	var detail *taskDetail
-	var diff *worktreeDiff
-	diffFor := ""
 	if id := a.wantedTask(); err == nil && id != "" {
 		var d taskDetail
 		if a.c.Call(ctx, "task.show", map[string]any{"task": id}, &d) == nil {
-			detail = &d
-			if d.WorkspaceKind == "worktree" && a.diffStale(d.WorkspaceID) {
+			r.detail = &d
+			if d.WorkspaceKind == "worktree" && time.Since(a.diffAt[d.WorkspaceID]) > 5*time.Second {
 				var w worktreeDiff
 				if a.c.Call(ctx, "workspace.diff", map[string]any{"workspace": d.WorkspaceID}, &w) == nil {
-					w.at, diff, diffFor = time.Now(), &w, d.WorkspaceID
+					if a.diffAt == nil {
+						a.diffAt = map[string]time.Time{}
+					}
+					a.diffAt[d.WorkspaceID] = time.Now()
+					r.diff, r.diffFor = &w, d.WorkspaceID
 				}
 			}
 		}
 	}
-	self := int64(procmem.Footprint(os.Getpid()) >> 10)
+	if err != nil {
+		r = pollResult{err: err.Error()}
+	} else {
+		for id := range a.diffAt {
+			if !slices.ContainsFunc(r.workspaces, func(w workspace) bool { return w.ID == id }) {
+				delete(a.diffAt, id)
+			}
+		}
+		self := int64(procmem.Footprint(os.Getpid()) >> 10)
+		r.running, r.daemonKB, r.selfKB = st.Running, st.FootprintKB, self
+		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self)
+	}
+	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
+	if r.diff == nil && a.lastPoll != nil && a.lastPoll.diffFor != "" {
+		r.diff, r.diffFor = a.lastPoll.diff, a.lastPoll.diffFor
+	}
+	force := a.pollForce.Swap(false)
+	if !force && a.lastPoll != nil && samePoll(a.lastPoll, &r) {
+		return
+	}
+	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
+	a.lastPoll = &r
 	a.win.Update(func() {
-		if err != nil {
-			a.err = err.Error()
+		if r.err != "" {
+			a.err = r.err
 			return
 		}
-		a.err = ""
-		a.daemon, a.selfKB = st, self
-		a.apply(ps, ws)
-		a.applyTasks(ts)
-		if detail != nil && detail.ID == a.taskSel {
-			a.detail = detail
+		// 只清掉轮询自己报的连接错误，动作的报错留着等用户关掉
+		if prevErr {
+			a.err = ""
 		}
-		if diff != nil {
-			a.wantMu.Lock()
-			a.diffs[diffFor] = diff
-			a.wantMu.Unlock()
+		a.daemon, a.selfKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running}, r.selfKB
+		// apply 会就地排序，r 还要留给下次比较
+		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
+		a.applyTasks(r.tasks)
+		if r.detail != nil && r.detail.ID == a.taskSel {
+			a.detail = r.detail
 		}
+		if r.diff != nil {
+			a.diffs[r.diffFor] = r.diff
+		}
+		a.pruneDiffs()
 	})
+}
+
+// samePoll 比较两次轮询界面看得到的部分；KB 精度的内存不比。
+func samePoll(x, y *pollResult) bool {
+	a, b := *x, *y
+	a.daemonKB, a.selfKB, b.daemonKB, b.selfKB = 0, 0, 0, 0
+	return reflect.DeepEqual(a, b)
+}
+
+// isDialError 判断是不是连不上常驻进程的 socket（没在运行）。
+func isDialError(err error) bool {
+	var op *net.OpError
+	return errors.As(err, &op) && op.Op == "dial"
 }
 
 func (a *app) wantedTask() string {
@@ -302,14 +383,6 @@ func (a *app) setWantedTask(id string) {
 	a.wantMu.Unlock()
 }
 
-// diffStale 在轮询协程里调用，所以只读 at，不碰界面状态的其他字段。
-func (a *app) diffStale(workspaceID string) bool {
-	a.wantMu.Lock()
-	defer a.wantMu.Unlock()
-	d := a.diffs[workspaceID]
-	return d == nil || time.Since(d.at) > 5*time.Second
-}
-
 // apply 在主线程更新状态，并为状态变化发通知。
 func (a *app) apply(ps []project, ws []workspace) {
 	sortProjects(ps, a.state.ProjectOrder)
@@ -320,6 +393,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 		return ws[i].Kind == "main" && ws[j].Kind != "main"
 	})
 	a.projects, a.workspaces, a.loaded = ps, ws, true
+	a.indexWorkspaces()
 	for _, p := range ps {
 		if a.sectionsOpen[p.ID] == nil {
 			a.sectionsOpen[p.ID] = new(bool)
@@ -329,9 +403,33 @@ func (a *app) apply(ps []project, ws []workspace) {
 	if a.selected != taskBoardID && a.selected != historyBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
+	seen := map[string]bool{}
 	for _, w := range ws {
 		for _, t := range w.Terminals {
 			a.noticeStatus(w, t)
+			seen[t.ID] = true
+		}
+	}
+	for id := range a.lastStatus {
+		if !seen[id] {
+			delete(a.lastStatus, id)
+		}
+	}
+}
+
+// indexWorkspaces 按项目分好工作区，侧栏每帧要用。
+func (a *app) indexWorkspaces() {
+	a.byProject = make(map[string][]workspace, len(a.projects))
+	for _, w := range a.workspaces {
+		a.byProject[w.ProjectID] = append(a.byProject[w.ProjectID], w)
+	}
+}
+
+// pruneDiffs 去掉已经不在的工作区的改动统计。
+func (a *app) pruneDiffs() {
+	for id := range a.diffs {
+		if a.workspace(id) == nil {
+			delete(a.diffs, id)
 		}
 	}
 }
@@ -348,9 +446,9 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	}
 	var title string
 	switch {
-	case status == "waiting":
+	case status == agent.StatusWaiting:
 		title = agentTitle(t.Agent) + " 等待你处理"
-	case status == "idle" && prev == "working":
+	case status == agent.StatusIdle && prev == agent.StatusWorking:
 		title = agentTitle(t.Agent) + " 已完成"
 	default:
 		return
@@ -380,14 +478,23 @@ func (a *app) workspace(id string) *workspace {
 	return nil
 }
 
-func (a *app) workspacesOf(projectID string) []workspace {
-	var out []workspace
-	for _, w := range a.workspaces {
-		if w.ProjectID == projectID {
-			out = append(out, w)
+// findTerminal 找终端和它所在的工作区，找不到返回 nil。
+func (a *app) findTerminal(id string) (*workspace, *terminalInfo) {
+	for i := range a.workspaces {
+		w := &a.workspaces[i]
+		for j := range w.Terminals {
+			if w.Terminals[j].ID == id {
+				return w, &w.Terminals[j]
+			}
 		}
 	}
-	return out
+	return nil, nil
+}
+
+// openTerminal 选中工作区并切到其中的终端，侧栏滚到它。
+func (a *app) openTerminal(workspaceID, terminalID string) {
+	a.selected, a.revealSel = workspaceID, true
+	a.activeTerm[workspaceID] = terminalID
 }
 
 // currentTerminal 返回选中工作区里应显示的终端，记住的那个不在了就换成第一个。
@@ -418,12 +525,13 @@ func (a *app) ensureView(id string) {
 		a.view.term.Close()
 		a.view = nil
 	}
-	a.linkCard, a.hoverImage = nil, ""
+	// 悬停预览只对这个终端里的链接有用，换终端就放掉
+	a.linkCard, a.hoverImage, a.previews = nil, "", nil
 	if id == "" {
 		return
 	}
 	conn := a.c.Attach(id)
-	v := &termView{id: id, conn: conn}
+	v := &termView{id: id}
 	light, dark := terminalThemes()
 	t, err := terminal.New(terminal.Options{
 		Conn:      conn,
@@ -443,9 +551,7 @@ func (a *app) ensureView(id string) {
 			if text != "" || v.term == nil {
 				return false
 			}
-			switch a.terminalAgent(id) {
-			case "claude", "codex":
-			default:
+			if _, t := a.findTerminal(id); t == nil || (t.Agent != "claude" && t.Agent != "codex") {
 				return false
 			}
 			png := mygo.Clipboard.ReadImage()
@@ -502,18 +608,6 @@ func (a *app) pasteImage(v *termView, png []byte) {
 	})
 }
 
-// terminalAgent 返回终端里运行的 agent，普通 shell 为空。
-func (a *app) terminalAgent(id string) string {
-	for _, w := range a.workspaces {
-		for _, t := range w.Terminals {
-			if t.ID == id {
-				return t.Agent
-			}
-		}
-	}
-	return ""
-}
-
 func (a *app) setFontSize(size float32) {
 	a.fontSize = min(max(size, 9), 28)
 	if a.view != nil {
@@ -523,20 +617,23 @@ func (a *app) setFontSize(size float32) {
 
 // --- 动作：都在后台 goroutine 里调用常驻进程，完成后刷新
 
+// call 调用常驻进程，出错时显示在侧栏的提示里。
+func (a *app) call(method string, params any, out any, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	err := a.c.Call(ctx, method, params, out)
+	if err != nil {
+		a.win.Update(func() { a.err = err.Error() })
+	}
+	return err
+}
+
 func (a *app) startTerminal(workspaceID, agent string) {
 	go func() {
 		var t terminalInfo
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err := a.c.Call(ctx, "terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t)
-		a.win.Update(func() {
-			if err != nil {
-				a.err = err.Error()
-				return
-			}
-			a.selected = workspaceID
-			a.activeTerm[workspaceID] = t.ID
-		})
+		if a.call("terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t, 10*time.Second) == nil {
+			a.win.Update(func() { a.openTerminal(workspaceID, t.ID) })
+		}
 		a.refresh()
 	}()
 }
@@ -554,11 +651,7 @@ func (a *app) askClose(t terminalInfo) {
 }
 
 func (a *app) closeTerminal(id string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := a.c.Call(ctx, "terminal.close", map[string]any{"terminal": id}, nil); err != nil {
-		a.win.Update(func() { a.err = err.Error() })
-	}
+	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
 	a.refresh()
 }
 
@@ -568,11 +661,7 @@ func (a *app) askRemoveWorkspace(w workspace) {
 		body = "会关闭终端并删除 git worktree 目录（分支保留）。有未提交的改动时会拒绝删除。"
 	}
 	a.confirm("删除工作区 "+displayName(&w)+"？", body, "删除", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := a.c.Call(ctx, "workspace.rm", map[string]any{"workspace": w.ID, "force": w.Kind != "worktree"}, nil); err != nil {
-			a.win.Update(func() { a.err = err.Error() })
-		}
+		a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": w.Kind != "worktree"}, nil, 30*time.Second)
 		a.refresh()
 	})
 }
@@ -581,7 +670,7 @@ func (a *app) askRemoveWorkspace(w workspace) {
 // 常驻进程要求先删掉 worktree 工作区，这里先挡住并说明要删哪些。
 func (a *app) askRemoveProject(w workspace) {
 	var worktrees []string
-	for _, x := range a.workspacesOf(w.ProjectID) {
+	for _, x := range a.byProject[w.ProjectID] {
 		if x.Kind == "worktree" {
 			worktrees = append(worktrees, x.Name)
 		}
@@ -591,11 +680,7 @@ func (a *app) askRemoveProject(w workspace) {
 		return
 	}
 	a.confirm("从 Hive 移除项目 "+w.Project+"？", "只从 Hive 里移除，磁盘上的文件不会删除。项目里运行中的终端会被关闭。", "移除", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := a.c.Call(ctx, "project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil); err != nil {
-			a.win.Update(func() { a.err = err.Error() })
-		}
+		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
 		a.refresh()
 	})
 }
@@ -610,11 +695,7 @@ func (a *app) addProject() {
 	if err != nil || len(paths) == 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var p project
-	if err := a.c.Call(ctx, "project.add", map[string]any{"path": paths[0]}, &p); err != nil {
-		a.win.Update(func() { a.err = err.Error() })
+	if a.call("project.add", map[string]any{"path": paths[0]}, nil, 10*time.Second) != nil {
 		return
 	}
 	a.refresh()
@@ -651,8 +732,6 @@ func (a *app) openNewWorkspace() {
 }
 
 func (a *app) createWorkspace(params map[string]any) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
 	var w struct {
 		ID        string
 		Terminals []terminalInfo
@@ -661,20 +740,17 @@ func (a *app) createWorkspace(params map[string]any) {
 			Output string
 		}
 	}
-	err := a.c.Call(ctx, "workspace.create", params, &w)
-	a.win.Update(func() {
-		if err != nil {
-			a.err = err.Error()
-			return
-		}
-		if w.Setup != nil && !w.Setup.OK {
-			a.err = "setup 脚本失败：" + truncate(w.Setup.Output, 200)
-		}
-		a.selected, a.revealSel = w.ID, true
-		if len(w.Terminals) > 0 {
-			a.activeTerm[w.ID] = w.Terminals[0].ID
-		}
-	})
+	if a.call("workspace.create", params, &w, 2*time.Minute) == nil {
+		a.win.Update(func() {
+			if w.Setup != nil && !w.Setup.OK {
+				a.err = "setup 脚本失败：" + truncate(w.Setup.Output, 200)
+			}
+			a.selected, a.revealSel = w.ID, true
+			if len(w.Terminals) > 0 {
+				a.openTerminal(w.ID, w.Terminals[0].ID)
+			}
+		})
+	}
 	a.refresh()
 }
 

@@ -78,6 +78,8 @@ func previewApp(t *testing.T) *app {
 		{ID: "k4", Title: "打 qa 包并安装到两台安卓机", Agent: "grok", Workspace: "Works/app", WorkspaceID: "w7", Status: "failed", Coordinator: "t1",
 			Summary: "打包在 resguardArmQa 失败，原因是 JDK 版本不对。没有改构建配置。", CreatedAt: now.Add(-5 * time.Hour), EndedAt: &ended},
 	}
+	a.indexWorkspaces()
+	a.indexTasks()
 	a.diffs["w6"] = &worktreeDiff{Commits: 2, Files: 3, Insertions: 86, Deletions: 7, Dirty: true}
 	a.selected = "w1"
 	a.activeTerm["w1"] = "t1"
@@ -123,7 +125,7 @@ func previewHistory(a *app, query string) {
 	a.selected = historyBoardID
 	h.query = query
 	if query == "" {
-		h.sessions = sessions
+		h.setSessions(sessions)
 		return
 	}
 	snip := "…先看看 Library/Caches 有多大，再决定清理磁盘上的哪些缓存。"
@@ -197,7 +199,7 @@ func TestPreview(t *testing.T) {
 		// 右侧"技能与 MCP"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)
 		a.state.RightPanel = panelUsage
-		a.usage = usageView{term: "t1", found: true, scanned: time.Now(), data: history.Usage{
+		a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
 			Skills: []history.UsageItem{{Name: "computer-use", Count: 3}, {Name: "chatgpt-imagegen", Count: 1}},
 			MCP: []history.MCPUsage{
 				{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},
@@ -211,7 +213,7 @@ func TestPreview(t *testing.T) {
 		previewHistory(a, "")
 		a.selected = "w1" // previewHistory 会切到历史页
 		a.state.RightPanel = panelHistory
-		a.recent = recentView{key: "0\x00p1", loaded: true, fetched: time.Now(), sessions: a.history.sessions}
+		a.recent = recentView{key: "0\x00p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions}
 		savePNG(t, newPreviewTester(a, dark), "recent-"+suffix+".png")
 
 		a = previewApp(t)
@@ -220,6 +222,7 @@ func TestPreview(t *testing.T) {
 
 		a = previewApp(t)
 		a.projects, a.workspaces, a.selected = nil, nil, ""
+		a.indexWorkspaces()
 		savePNG(t, newPreviewTester(a, dark), "first-run-"+suffix+".png")
 
 		a = previewApp(t)
@@ -242,6 +245,7 @@ func TestPreview(t *testing.T) {
 
 		a = previewApp(t)
 		a.selected, a.tasks = taskBoardID, nil
+		a.indexTasks()
 		savePNG(t, newPreviewTester(a, dark), "tasks-empty-"+suffix+".png")
 
 		a = previewApp(t)

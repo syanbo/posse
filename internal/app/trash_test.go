@@ -11,7 +11,7 @@ import (
 
 func TestSessionTrashPaths(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setHome(t, home)
 	mk := func(path string, dir bool) string {
 		p := filepath.Join(home, path)
 		if dir {

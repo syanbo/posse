@@ -69,17 +69,14 @@ func (a *app) linkBase(v *termView) string {
 	if v.dir != "" {
 		return v.dir
 	}
-	for _, w := range a.workspaces {
-		for _, t := range w.Terminals {
-			if t.ID == v.id {
-				if t.Dir != "" {
-					return t.Dir
-				}
-				return w.Path
-			}
-		}
+	w, t := a.findTerminal(v.id)
+	switch {
+	case t == nil:
+		return ""
+	case t.Dir != "":
+		return t.Dir
 	}
-	return ""
+	return w.Path
 }
 
 // linePos 是路径末尾的 :行 或 :行:列。
@@ -93,11 +90,10 @@ func resolveLinkPath(link, base string) string {
 		return ""
 	}
 	if p == "~" || strings.HasPrefix(p, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
+		if homeDir == "" {
 			return ""
 		}
-		p = filepath.Join(home, p[1:])
+		p = filepath.Join(homeDir, p[1:])
 	} else if !filepath.IsAbs(p) {
 		if base == "" {
 			return ""
@@ -172,12 +168,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 	if b.W > 0 {
 		x = max(8, min(x, b.W-width-8))
 	}
-	shadow := ui.RGBA(0, 0, 0, 0.18)
-	if t.Dark {
-		shadow = ui.RGBA(0, 0, 0, 0.45)
-	}
-	el := ui.Column(c).Absolute().Left(x).Width(width).Padding(6).Gap(2).Radius(12).Background(p.band).
-		Border(1, p.line).Shadow(0, 8, 24, 0, shadow)
+	el := floating(c, ui.Column(c).Absolute().Left(x).Width(width).Padding(6).Gap(2))
 	// 点在下半部分时往上弹：卡片的下边贴着点击处上方，卡片多高都对得上；否则顶边贴着点击处下方
 	if b.H > 0 && card.y > b.H*0.55 {
 		el.Bottom(max(8, b.H-card.y+10))
@@ -236,7 +227,7 @@ func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
 const (
 	hoverPreviewWidth = 360
 	hoverPreviewPx    = 720 // 2 倍屏下正好是预览宽度
-	hoverPreviewKeep  = 6   // 最多留几张解码好的预览
+	hoverPreviewKeep  = 2   // 最多留几张解码好的预览，换终端时全部放掉
 )
 
 // onHoverLink 是终端的悬停回调：持着终端的锁调用，只记下状态、在后台解码，不碰终端。
@@ -283,19 +274,12 @@ func (a *app) hoverPreviewView(c *ui.Context, area ui.Element) {
 	if !ok {
 		return
 	}
-	t := c.Theme()
-	p := colors(t)
 	b := area.Bounds()
 	left := x + 12
 	if b.W > 0 {
 		left = max(8, min(left, b.W-hoverPreviewWidth-8))
 	}
-	shadow := ui.RGBA(0, 0, 0, 0.18)
-	if t.Dark {
-		shadow = ui.RGBA(0, 0, 0, 0.45)
-	}
-	el := ui.Box(c).Absolute().Left(left).Width(hoverPreviewWidth).Padding(6).Radius(12).Background(p.band).
-		Border(1, p.line).Shadow(0, 8, 24, 0, shadow)
+	el := floating(c, ui.Box(c).Absolute().Left(left).Width(hoverPreviewWidth).Padding(6))
 	if b.H > 0 && y > b.H*0.5 {
 		el.Bottom(max(8, b.H-y+14))
 	} else {
