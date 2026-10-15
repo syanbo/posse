@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -98,6 +99,15 @@ type Terminal struct {
 	titleDirty bool
 	idle       *time.Timer
 
+	// pmu 串行化调整 PTY 尺寸和关闭 PTY
+	pmu       sync.Mutex
+	ptyClosed bool
+
+	// zmu 保护尺寸的归属：手机查看期间终端按手机屏幕排版，界面的尺寸先记在 desk，手机全部离开后再恢复
+	zmu   sync.Mutex
+	holds []sizeHold
+	desk  [2]int
+
 	mu      sync.Mutex
 	changed chan struct{} // 有新输出或状态变化时关闭并替换
 	watched bool          // changed 已交给调用方；没人拿走时不必替换
@@ -113,6 +123,13 @@ type Subscriber struct {
 	C chan []byte
 	// queued 是已放进 C 还没取走的字节数
 	queued atomic.Int64
+	// quiet 的接入者（手机）不应答终端查询，仍由常驻进程里的内核应答
+	quiet bool
+}
+
+type sizeHold struct {
+	key        any
+	cols, rows int
 }
 
 // Received 由接入者在从 C 取出 p 后调用，释放排队额度。
@@ -240,7 +257,7 @@ func (t *Terminal) readLoop() {
 					delete(t.subs, s)
 					close(s.C)
 				}
-				t.answer.Store(len(t.subs) == 0)
+				t.updateAnswer()
 			}
 			t.smu.Unlock()
 			t.lastOutput.Store(time.Now().UnixNano())
@@ -285,7 +302,15 @@ func (t *Terminal) Attach(cols, rows int) ([]byte, *Subscriber) {
 	if cols > 0 && rows > 0 {
 		t.Resize(cols, rows)
 	}
-	s := &Subscriber{C: make(chan []byte, 1024)}
+	return t.subscribe(&Subscriber{C: make(chan []byte, 1024)})
+}
+
+// Watch 与 Attach 相同但不改尺寸，接入者也不接管终端查询的应答。
+func (t *Terminal) Watch() ([]byte, *Subscriber) {
+	return t.subscribe(&Subscriber{C: make(chan []byte, 1024), quiet: true})
+}
+
+func (t *Terminal) subscribe(s *Subscriber) ([]byte, *Subscriber) {
 	t.smu.Lock()
 	defer t.smu.Unlock()
 	var snap []byte
@@ -297,8 +322,19 @@ func (t *Terminal) Attach(cols, rows int) ([]byte, *Subscriber) {
 		return snap, s
 	}
 	t.subs[s] = struct{}{}
-	t.answer.Store(false)
+	t.updateAnswer()
 	return snap, s
+}
+
+// updateAnswer 在持有 smu 时调用：没有会应答的接入者时由内核应答。
+func (t *Terminal) updateAnswer() {
+	for s := range t.subs {
+		if !s.quiet {
+			t.answer.Store(false)
+			return
+		}
+	}
+	t.answer.Store(true)
 }
 
 func (t *Terminal) Detach(s *Subscriber) {
@@ -308,7 +344,7 @@ func (t *Terminal) Detach(s *Subscriber) {
 		delete(t.subs, s)
 		close(s.C)
 	}
-	t.answer.Store(len(t.subs) == 0)
+	t.updateAnswer()
 }
 
 func (t *Terminal) notify() {
@@ -388,13 +424,60 @@ func (t *Terminal) storeSize(cols, rows int) {
 	t.size.Store(uint64(max(1, min(cols, 0xFFFF)))<<32 | uint64(max(1, min(rows, 0xFFFF))))
 }
 
+// Resize 是界面或 CLI 调整尺寸；手机查看期间只记下来，等手机离开再生效。
 func (t *Terminal) Resize(cols, rows int) {
+	t.zmu.Lock()
+	defer t.zmu.Unlock()
+	if len(t.holds) > 0 {
+		t.desk = [2]int{cols, rows}
+		return
+	}
+	t.resize(cols, rows)
+}
+
+// HoldSize 让终端按 key（一个手机订阅）的尺寸排版，直到 ReleaseSize；多个手机时最后来的说了算。
+func (t *Terminal) HoldSize(key any, cols, rows int) {
+	t.zmu.Lock()
+	defer t.zmu.Unlock()
+	if len(t.holds) == 0 {
+		t.desk[0], t.desk[1] = t.Size()
+	}
+	t.holds = slices.DeleteFunc(t.holds, func(h sizeHold) bool { return h.key == key })
+	t.holds = append(t.holds, sizeHold{key, cols, rows})
+	if c, r := t.Size(); c != cols || r != rows {
+		t.resize(cols, rows)
+	}
+}
+
+func (t *Terminal) ReleaseSize(key any) {
+	t.zmu.Lock()
+	defer t.zmu.Unlock()
+	n := len(t.holds)
+	t.holds = slices.DeleteFunc(t.holds, func(h sizeHold) bool { return h.key == key })
+	if len(t.holds) == n || !t.Running() {
+		return
+	}
+	want := t.desk
+	if len(t.holds) > 0 {
+		h := t.holds[len(t.holds)-1]
+		want = [2]int{h.cols, h.rows}
+	}
+	if c, r := t.Size(); want[0] > 0 && want[1] > 0 && (c != want[0] || r != want[1]) {
+		t.resize(want[0], want[1])
+	}
+}
+
+func (t *Terminal) resize(cols, rows int) {
 	t.smu.Lock()
 	if t.emu != nil && t.emu.Resize(cols, rows, 8, 16) == nil {
 		t.storeSize(cols, rows)
 	}
 	t.smu.Unlock()
-	pty.Setsize(t.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	t.pmu.Lock()
+	if !t.ptyClosed {
+		pty.Setsize(t.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	}
+	t.pmu.Unlock()
 }
 
 // Send 直接写入 PTY，等同于用户键入。
@@ -489,7 +572,7 @@ func (t *Terminal) Close(grace time.Duration) {
 			syscall.Kill(-pid, syscall.SIGHUP)
 		}
 		// 关闭主端等同于挂断终端，前台作业（如 agent，自成进程组）也会收到 SIGHUP
-		t.pty.Close()
+		t.closePTY()
 		select {
 		case <-t.exited:
 		case <-time.After(grace):
@@ -499,7 +582,7 @@ func (t *Terminal) Close(grace time.Duration) {
 			<-t.exited
 		}
 	}
-	t.pty.Close()
+	t.closePTY()
 	t.idle.Stop()
 	t.smu.Lock()
 	if t.emu != nil {
@@ -508,6 +591,16 @@ func (t *Terminal) Close(grace time.Duration) {
 		t.size.Store(0)
 	}
 	t.smu.Unlock()
+}
+
+// closePTY 与调整尺寸互斥：手机离开时恢复尺寸可能和关闭终端同时发生。
+func (t *Terminal) closePTY() {
+	t.pmu.Lock()
+	defer t.pmu.Unlock()
+	if !t.ptyClosed {
+		t.ptyClosed = true
+		t.pty.Close()
+	}
 }
 
 // strippedEnv 是不应从启动常驻进程的环境泄漏进新终端的变量。
