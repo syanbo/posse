@@ -1,0 +1,93 @@
+package cli
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"strings"
+	"time"
+
+	"rsc.io/qr"
+)
+
+type mobileDevice struct {
+	ID, Name           string
+	PairedAt, LastSeen time.Time
+}
+
+func cmdMobilePair(e *env, args []string) error {
+	fs := flag.NewFlagSet("mobile pair", flag.ContinueOnError)
+	rotate := fs.Bool("new", false, "")
+	addr := fs.String("address", "", "")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	var info struct{ URL, Code, Endpoint string }
+	return e.do("mobile.pair", map[string]any{"rotate": *rotate, "address": *addr}, &info, func() {
+		if err := printQR(e.out, info.URL); err != nil {
+			fmt.Fprintln(e.errOut, err)
+		}
+		fmt.Fprintf(e.out, "\nScan with the Orca mobile app (Pair Desktop → Continue), or tap \"Paste code instead\" and paste:\n%s\n\nPhone connects to %s (same Wi-Fi or Tailscale).\n", info.Code, info.Endpoint)
+	})
+}
+
+func cmdMobileDevices(e *env, args []string) error {
+	var ds []mobileDevice
+	return e.do("mobile.devices", nil, &ds, func() {
+		if len(ds) == 0 {
+			fmt.Fprintln(e.out, "no paired phones; run `hive mobile pair`")
+			return
+		}
+		tw := e.table()
+		fmt.Fprintln(tw, "ID\tNAME\tPAIRED\tLAST SEEN")
+		for _, d := range ds {
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", d.ID, d.Name, d.PairedAt.Local().Format("2006-01-02 15:04"), d.LastSeen.Local().Format("2006-01-02 15:04"))
+		}
+		tw.Flush()
+	})
+}
+
+func cmdMobileRm(e *env, args []string) error {
+	if err := need(args, 1, "mobile rm"); err != nil {
+		return err
+	}
+	return e.do("mobile.rm", map[string]any{"device": args[0]}, nil, func() {
+		fmt.Fprintf(e.out, "removed %s\n", args[0])
+	})
+}
+
+// printQR 用半格字符画二维码，两行模块合成一行字符；显式指定黑底白块，浅色主题的终端里也扫得出。
+func printQR(w io.Writer, text string) error {
+	code, err := qr.Encode(text, qr.L)
+	if err != nil {
+		return err
+	}
+	const quiet = 2
+	n := code.Size
+	light := func(x, y int) bool {
+		if x < 0 || y < 0 || x >= n || y >= n {
+			return true
+		}
+		return !code.Black(x, y)
+	}
+	var b strings.Builder
+	for y := -quiet; y < n+quiet; y += 2 {
+		b.WriteString("\x1b[97;40m")
+		for x := -quiet; x < n+quiet; x++ {
+			top, bot := light(x, y), light(x, y+1)
+			switch {
+			case top && bot:
+				b.WriteString("█")
+			case top:
+				b.WriteString("▀")
+			case bot:
+				b.WriteString("▄")
+			default:
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString("\x1b[0m\n")
+	}
+	_, err = io.WriteString(w, b.String())
+	return err
+}
