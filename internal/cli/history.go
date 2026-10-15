@@ -165,7 +165,7 @@ func cmdHistoryShow(e *env, args []string) error {
 		Messages []history.Message
 		Terminal string
 	}
-	return e.do("history.show", map[string]any{"session": pos[0]}, &res, func() {
+	return e.do("history.show", map[string]any{"session": pos[0], "tail": *tail, "tools": *tools}, &res, func() {
 		s := res.Session
 		fmt.Fprintf(e.out, "%s  %s\n%s\n", s.Agent, s.ID, s.Title)
 		if s.Cwd != "" {
@@ -175,20 +175,7 @@ func cmdHistoryShow(e *env, args []string) error {
 		if res.Terminal != "" {
 			fmt.Fprintf(e.out, "running in hive terminal %s\n", res.Terminal)
 		}
-		msgs := res.Messages
-		if !*tools {
-			var keep []history.Message
-			for _, m := range msgs {
-				if m.Role != "tool" {
-					keep = append(keep, m)
-				}
-			}
-			msgs = keep
-		}
-		if *tail > 0 && len(msgs) > *tail {
-			msgs = msgs[len(msgs)-*tail:]
-		}
-		for _, m := range msgs {
+		for _, m := range res.Messages {
 			fmt.Fprintf(e.out, "\n── %s", m.Role)
 			if !m.At.IsZero() {
 				fmt.Fprintf(e.out, "  %s", m.At.Local().Format("2006-01-02 15:04"))
