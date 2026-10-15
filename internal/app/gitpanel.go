@@ -32,7 +32,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 		ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	}
-	a.changesHeader(c, v)
+	a.changesHeader(c, w, v)
 	if len(g.rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
 			ui.Text(c, "没有改动").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
@@ -49,7 +49,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 }
 
 // changesHeader 是改动列表上方一行：分支、领先和落后的提交数，以及刷新、搁置。
-func (a *app) changesHeader(c *ui.Context, v *filesView) {
+func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	g := &v.git
 	st := g.status
@@ -69,6 +69,9 @@ func (a *app) changesHeader(c *ui.Context, v *filesView) {
 		ui.Spacer(c)
 		if g.busy != "" {
 			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		}
+		if pressable(iconButtonSized(c, iconHistory, "Git 日志", 24, 14)).Clicked() {
+			a.openLog(w, "", "")
 		}
 		if pressable(iconButtonSized(c, iconRefresh, "刷新", 24, 14)).Clicked() {
 			a.refreshGit(v)

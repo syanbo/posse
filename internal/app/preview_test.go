@@ -209,6 +209,19 @@ func previewPush(t *testing.T, a *app) {
 	until(t, tt, "commit files", func() bool { return a.push.commit.files != nil })
 }
 
+// previewLog 把 feat 合并进 main，打开日志并选中合并提交。
+func previewLog(t *testing.T, a *app) {
+	root := branchWorkspace(t, a)
+	gitRun(t, root, "merge", "-q", "--no-ff", "-m", "Merge branch 'feat'", "feat")
+	gitRun(t, root, "tag", "v0.2.0")
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openLog(&a.workspaces[0], "", "")
+	v := a.files["w1"]
+	until(t, tt, "log", func() bool { return v.cur.kind == docLog })
+	a.selectCommit(v, &v.cur.log.commit, v.cur.log.commits[0])
+	until(t, tt, "detail", func() bool { return v.cur.log.commit.files != nil })
+}
+
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("HIVE_PREVIEW_DIR")
 	f, err := os.Create(filepath.Join(dir, name))
@@ -359,6 +372,10 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewPush(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-push-"+suffix+".png")
+
+		a = previewApp(t)
+		previewLog(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-log-"+suffix+".png")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

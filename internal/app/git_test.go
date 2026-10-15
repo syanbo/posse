@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -285,5 +286,89 @@ func TestPushDialog(t *testing.T) {
 	until(t, tt, "pushed", func() bool { return a.push == nil && a.files[w.ID].git.busy == "" })
 	if n := gitRun(t, root, "rev-list", "--count", "origin/main..main"); n != "0" {
 		t.Fatalf("still %s ahead", n)
+	}
+}
+
+// 提交图：m 合并了 b，b 和 a 都从 r 分出来
+//
+//	m
+//	|\
+//	a b
+//	|/
+//	r
+func TestBuildGraph(t *testing.T) {
+	cs := []gitx.CommitInfo{
+		{Hash: "m", Parents: []string{"a", "b"}},
+		{Hash: "a", Parents: []string{"r"}},
+		{Hash: "b", Parents: []string{"r"}},
+		{Hash: "r"},
+	}
+	g := buildGraph(cs)
+	if g[0].lane != 0 || len(g[0].out) != 2 || g[0].parents[0] != 0 || g[0].parents[1] != 1 {
+		t.Fatalf("merge row %+v", g[0])
+	}
+	if g[1].lane != 0 || g[2].lane != 1 {
+		t.Fatalf("a on %d, b on %d", g[1].lane, g[2].lane)
+	}
+	// r 上两条线汇合：之后只剩没有线
+	if g[3].lane != 0 || len(g[3].in) != 2 || len(g[3].out) != 0 {
+		t.Fatalf("root row %+v", g[3])
+	}
+	if refs := refNames("HEAD -> main, origin/main, tag: v1"); len(refs) != 3 || !refs[0].head || refs[2].name != "v1" {
+		t.Fatalf("refs %+v", refs)
+	}
+}
+
+func TestLogBlameAndReword(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openLog(w, "", "")
+	v := a.files[w.ID]
+	until(t, tt, "log", func() bool { return v.cur.kind == docLog && tt.HasText("fix: 本地修复") })
+	for _, want := range []string{"feat: 新功能", "work", "base", "main", "origin/main"} {
+		if !tt.HasText(want) {
+			t.Fatalf("log lacks %q: %v", want, tt.Texts())
+		}
+	}
+	ld := v.cur.log
+	// 按文字筛选
+	ld.text = "新功能"
+	a.applyLogFilter(v, v.cur)
+	until(t, tt, "filtered", func() bool { return len(ld.commits) == 1 && !ld.loading })
+	ld.text = ""
+	a.applyLogFilter(v, v.cur)
+	until(t, tt, "unfiltered", func() bool { return len(ld.commits) == 4 && !ld.loading })
+	// 选中提交看详情
+	if err := tt.Click("fix: 本地修复"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "detail", func() bool { return ld.commit != nil && ld.commit.files != nil && tt.HasText("main.go") })
+	// 改提交信息：读出原信息填进对话框，改完执行
+	a.askMessage(v, "改提交信息", ld.commit.info.Hash, "", func(msg string) {
+		a.gitDo(v, "改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ld.commit.info.Hash, msg) })
+	})
+	until(t, tt, "prompt", func() bool { return a.promptDlg != nil && a.promptDlg.value == "fix: 本地修复" })
+	a.promptDlg.do("fix: 本地修复（改过）", false)
+	a.promptDlg = nil
+	until(t, tt, "reworded", func() bool {
+		return v.git.busy == "" && gitRun(t, root, "log", "-1", "--format=%s") == "fix: 本地修复（改过）"
+	})
+
+	// 文件历史和 Annotate
+	a.openLog(w, "", "main.go")
+	until(t, tt, "file history", func() bool { return v.cur.kind == docLog && len(v.cur.log.commits) == 3 })
+	a.openBlame(w, v, filepath.Join(root, "main.go"))
+	until(t, tt, "blame", func() bool { return v.cur.kind == docBlame && tt.HasText("// local edit") })
+	if !tt.HasText("t") || len(v.cur.blame.lines) == 0 {
+		t.Fatal("blame lines missing")
+	}
+	// 日志、Annotate 不记进 ui.json
+	for _, p := range a.state.Files[w.ID].Open {
+		if strings.HasPrefix(p, "log:") || strings.HasPrefix(p, "blame:") {
+			t.Fatalf("virtual doc saved: %s", p)
+		}
 	}
 }

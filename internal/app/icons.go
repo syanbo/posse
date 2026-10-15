@@ -40,6 +40,7 @@ var (
 	iconFetch      = icon(`<path d="M17.5 6.5 7 17M7 9.5V17h7.5"/>`)
 	iconPush       = icon(`<path d="M6.5 17.5 17 7M9.5 7H17v7.5"/>`)
 	iconCommit     = icon(`<circle cx="12" cy="12" r="3.25"/><path d="M3.5 12h5.25M15.25 12h5.25"/>`)
+	iconBlame      = icon(`<path d="M4.5 6h4M4.5 10h4M4.5 14h4M4.5 18h4M11.5 6h8M11.5 10h6M11.5 14h8M11.5 18h5"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
 	iconHistory = icon(`<path d="M3.75 12a8.25 8.25 0 1 0 2.4-5.8"/><path d="M3.5 4v3.25h3.25"/><path d="M12 7.75V12l2.75 1.75"/>`)

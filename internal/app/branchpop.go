@@ -383,6 +383,10 @@ func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Bra
 		a.askWorktreeFrom(w, b.Name)
 	}
 	m.Separator()
+	if m.Item("在日志里显示").Chosen() {
+		done()
+		a.openLog(w, b.Name, "")
+	}
 	if !b.Remote && b.Upstream != "" && m.Item("更新").Chosen() {
 		done()
 		if b.Current {
@@ -505,6 +509,7 @@ type promptReq struct {
 	title, body, placeholder, initial, verb string
 	check                                   string // 非空时多一个勾选项
 	checked                                 bool
+	multiline                               bool // 多行输入（提交信息）
 	do                                      func(value string, checked bool)
 }
 
@@ -530,7 +535,12 @@ func (a *app) promptDialog(c *ui.Context) {
 			if p.body != "" {
 				ui.Text(c, p.body).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
 			}
-			submitted := ui.TextInput(c, &p.value).Placeholder(p.placeholder).Label(p.title).AutoFocus().Submitted()
+			var submitted bool
+			if p.multiline {
+				ui.TextArea(c, &p.value).Label(p.title).AutoFocus().Height(120).FontSize(12.5)
+			} else {
+				submitted = ui.TextInput(c, &p.value).Placeholder(p.placeholder).Label(p.title).AutoFocus().Submitted()
+			}
 			if p.check != "" {
 				ui.Checkbox(c, &p.checked, p.check)
 			}

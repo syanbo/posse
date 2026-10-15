@@ -161,17 +161,17 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				a.openFile(w, r.Path, 0, [2]int{})
 			}
 		}
-		pathMenu(c, row, r.Path, v.root, a)
+		a.pathMenu(c, row, w, v, r.Path, r.Dir)
 	}).Grow(1).Padding(0, 0, 8, 0)
 }
 
-// pathMenu 是文件树和检索结果里一行的右键菜单。
-func pathMenu(c *ui.Context, e ui.Element, path, root string, a *app) {
+// pathMenu 是文件树和检索结果里一行的右键菜单；在 git 仓库里的文件多了文件历史和 Annotate。
+func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, path string, dir bool) {
 	e.ContextMenu(func(m *ui.Menu) {
 		if m.Item("复制路径").Chosen() {
 			c.WriteClipboard(path)
 		}
-		if rel, err := filepath.Rel(root, path); err == nil && m.Item("复制相对路径").Chosen() {
+		if rel, err := filepath.Rel(v.root, path); err == nil && m.Item("复制相对路径").Chosen() {
 			c.WriteClipboard(rel)
 		}
 		m.Separator()
@@ -182,6 +182,9 @@ func pathMenu(c *ui.Context, e ui.Element, path, root string, a *app) {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.err = err.Error()
 			}
+		}
+		if !dir {
+			a.gitFileMenu(m, w, v, path)
 		}
 	})
 }
@@ -255,7 +258,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 				ui.Spacer(c)
 				ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
-			pathMenu(c, row, abs, v.root, a)
+			a.pathMenu(c, row, w, v, abs, false)
 			return
 		}
 		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(3, 8, 3, 8).Gap(8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
@@ -346,6 +349,20 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
+	switch {
+	case d.log != nil && d.kind == docLog:
+		a.logView(c, w, v, d)
+		return
+	case d.blame != nil && d.kind == docBlame:
+		a.blameView(c, w, v, d)
+		return
+	case (d.log != nil || d.blame != nil) && d.kind == docError:
+		docMessage(c, d, d.err)
+		return
+	case d.log != nil || d.blame != nil:
+		ui.Text(c, "正在读取…").FontSize(12).TextColor(c.Theme().TextMuted).Padding(16, 18)
+		return
+	}
 	if d.comp != nil {
 		if d.kind == docCompare {
 			a.compareView(c, w, v, d)
@@ -365,7 +382,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		}
 		return
 	}
-	a.docBar(c, v, d)
+	a.docBar(c, w, v, d)
 	a.docBanner(c, d)
 	switch d.kind {
 	case docText:
@@ -446,6 +463,8 @@ func (a *app) docStrip(c *ui.Context, v *filesView) {
 					detail = d.diff.tabLabel()
 				case d.comp != nil:
 					detail = "比较"
+				case d.log != nil && d.log.filter.Path != "":
+					detail = "文件历史"
 				case names[d.name()] > 1:
 					detail = filepath.Base(filepath.Dir(d.path))
 				}
@@ -506,7 +525,7 @@ func (a *app) docTab(c *ui.Context, v *filesView, d *fileDoc, detail string) {
 }
 
 // docBar 是文件上方的一行：相对路径和操作。
-func (a *app) docBar(c *ui.Context, v *filesView, d *fileDoc) {
+func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	rel, err := filepath.Rel(v.root, d.path)
 	if err != nil || strings.HasPrefix(rel, "..") {
@@ -531,6 +550,14 @@ func (a *app) docBar(c *ui.Context, v *filesView, d *fileDoc) {
 		if d.kind == docText && !d.readOnly && d.isModified() {
 			if pressable(iconButtonSized(c, iconSave, "保存 ⌘S", 24, 14)).Clicked() {
 				a.saveDoc(d, false)
+			}
+		}
+		if d.kind == docText && v.git.relPath(d.path) != "" {
+			if pressable(iconButtonSized(c, iconHistory, "文件历史", 24, 14)).Clicked() {
+				a.openLog(w, "", v.git.relPath(d.path))
+			}
+			if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", 24, 14)).Clicked() {
+				a.openBlame(w, v, d.path)
 			}
 		}
 		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", 24, 14)).Clicked() {
