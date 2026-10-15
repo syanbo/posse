@@ -137,6 +137,7 @@ type app struct {
 	usage   usageView  // 右侧"技能与 MCP"面板
 	recent  recentView // 右侧历史面板
 	images  imagesView // 右侧图片面板
+	mobile  mobileView // "连接手机"对话框
 	// imagesDrawn 是这一帧画没画图片面板，没画就放掉它的位图
 	imagesDrawn bool
 	// linkCard 是终端里点击文件链接或路径后弹出的卡片

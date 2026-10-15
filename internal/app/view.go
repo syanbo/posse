@@ -63,6 +63,7 @@ func (a *app) build(c *ui.Context) {
 	}
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
+	a.mobileDialog(c)
 	a.confirmDialog(c)
 }
 
@@ -116,6 +117,9 @@ func (a *app) sidebar(c *ui.Context) {
 				go a.addProject()
 			}
 			m.Separator()
+			if m.Item("连接手机…").Chosen() {
+				a.openMobile()
+			}
 			if m.Item("从 Orca 导入项目").Chosen() {
 				go a.importOrca()
 			}
@@ -394,6 +398,9 @@ func (a *app) footer(c *ui.Context) {
 		}
 		ui.Text(c, running).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 		ui.Spacer(c)
+		if pressable(iconButtonSized(c, iconPhone, "连接手机", 24, 14)).Tooltip("连接手机").Clicked() {
+			a.openMobile()
+		}
 		total := a.daemon.FootprintKB + a.selfKB
 		tip := fmt.Sprintf("常驻进程 %s，窗口 %s（与活动监视器的“内存”一致）", mb(a.daemon.FootprintKB), mb(a.selfKB))
 		ui.Text(c, mb(total)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(tip)

@@ -272,5 +272,15 @@ func TestPreview(t *testing.T) {
 		a.dAgents = [3]bool{true, true, false}
 		a.dTitle, a.dSpec = "给登录页加上记住密码", "在登录页加一个“记住密码”开关，密码存进系统钥匙串。"
 		savePNG(t, newPreviewTester(a, dark), "dispatch-"+suffix+".png")
+
+		a = previewApp(t)
+		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"
+		img, err := qrImage(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.mobile = mobileView{open: true, url: url, endpoint: "ws://172.31.0.230:6788", qr: ui.NewBitmap(img),
+			devices: []mobileDevice{{ID: "d1", Name: "手机 10-16 00:30", LastSeen: time.Now().Add(-3 * time.Minute)}}}
+		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
 	}
 }

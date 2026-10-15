@@ -30,6 +30,7 @@ var (
 	iconImage      = icon(`<rect x="3.75" y="5" width="16.5" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20.25 15.5-4.5-4.5-8.5 8"/>`)
 	iconCopy       = icon(`<rect x="8.5" y="8.5" width="11" height="11" rx="2.25"/><path d="M15.5 8.5V6.25a1.75 1.75 0 0 0-1.75-1.75h-7.5A1.75 1.75 0 0 0 4.5 6.25v7.5c0 .97.78 1.75 1.75 1.75H8.5"/>`)
 	iconOpen       = icon(`<path d="M13.5 4.5h6v6M19.5 4.5 11 13M18 14v4.25c0 .97-.78 1.75-1.75 1.75h-10.5c-.97 0-1.75-.78-1.75-1.75V7.75C4 6.78 4.78 6 5.75 6H10"/>`)
+	iconPhone      = icon(`<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M10.5 17.75h3"/>`)
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
 	iconHistory = icon(`<path d="M3.75 12a8.25 8.25 0 1 0 2.4-5.8"/><path d="M3.5 4v3.25h3.25"/><path d="M12 7.75V12l2.75 1.75"/>`)
