@@ -1,0 +1,11 @@
+{
+  "name": "Hive",
+  "identifier": "com.dengbo.hive",
+  "version": "0.1.0",
+  "main": "./cmd/hive",
+  "icon": "design/icon.png",
+  "out": "build",
+  "macos": {
+    "minimumSystemVersion": "13.0"
+  }
+}
