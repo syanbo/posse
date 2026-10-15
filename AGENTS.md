@@ -28,7 +28,7 @@ cmd/hive            单一二进制：窗口（hive app，或从 Hive.app 无参
 internal/rpc        unix socket 协议：每连接一次请求，请求/响应各一行 JSON
 internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排
 internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
-internal/vt         libghostty-vt 绑定，复制自 MyGo；snapshot.go 逐格生成快照内容
+internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区已删，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
 internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
 internal/store      SQLite（modernc，纯 Go）：项目、工作区、终端记录；task.go 是任务和消息
 internal/history    会话历史：读 claude/codex/cursor/grok 的会话文件，增量索引进 $HIVE_HOME/history.db（FTS5），搜索和摘要
@@ -63,9 +63,12 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 索引更新在子进程 `hive history index --progress` 里做（首次约 6 秒、读几 GB，常驻进程内存不受影响），按文件的 size/mtime 增量读新增的完整行；offset 前的字节对不上就整份重读，文件消失就删除。没有后台轮询：查询时索引超过 15 秒没更新才更新一次，最多等 3 秒，没做完先用已有结果。历史页开着时每 15 秒刷新一次。
   - 中文逐字切开再交给 unicode61 分词（`splitCJK`），中文按子串匹配；英文末尾按前缀匹配；各词 AND，全都没有时退回 OR 并告诉调用方。排序：标题命中优先，再按 bm25（用户 4、助手 2、工具 1）和命中消息数。
   - 只改了某一家的解析规则时改 `parserVersions`（index.go）：只重读这一家的文件，会话 ID 不变，跨版本继续运行的旧常驻进程照常能查。改表结构或分词才改 `schemaVersion`：旧索引清空重建，旧常驻进程会报 ErrStale，要重启它（会断掉所有终端）。
-  - grok 的 `chat_history.jsonl` 不带时间：用户消息按 `prompt_index`、回复按开头文字、工具按调用 ID，对上同目录 `updates.jsonl` 里带时间戳的记录；对不上的沿用前一条的时间。
+  - grok 的 `chat_history.jsonl` 不带时间：用户消息按 `prompt_index`、回复按开头文字、工具按调用 ID，对上同目录 `updates.jsonl` 里带时间戳的记录；对不上的沿用前一条的时间。增量更新时从状态里记的位置（`GrokUpdates`，最后对上的回复分段的行尾）接着读 `updates.jsonl`。
+  - 解析前先按各家 parser 的 `wants` 粗筛（只认 `"type"` 等字段的值，冒号后有空格也能匹配），无关的行不做 JSON 解码；改粗筛规则要跑 `TestLineFilterSameResult`。
+  - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。cursor 不支持。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
 - 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
+- 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
