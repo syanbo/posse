@@ -372,3 +372,37 @@ func TestLogBlameAndReword(t *testing.T) {
 		}
 	}
 }
+
+// 合并停在冲突上：自动切到改动，横幅说明冲突，采用一方后继续
+func TestConflictBanner(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	gitRun(t, root, "switch", "-q", "feat")
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// feat edit\n"), 0o644)
+	gitRun(t, root, "commit", "-q", "-am", "feat: 也改了 main.go")
+	gitRun(t, root, "switch", "-q", "main")
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := a.showFiles(w)
+	until(t, tt, "status", func() bool { return v.git.status != nil })
+	v.side = sideFiles
+	a.gitDo(v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
+	until(t, tt, "banner", func() bool { return v.side == sideChanges && tt.HasText("正在合并，有 1 个文件冲突。") })
+	if !strings.Contains(a.err, "合并失败") {
+		t.Fatalf("merge error not shown: %q", a.err)
+	}
+	ours, theirs := sideNames("merge")
+	if ours != "当前分支的（ours）" || !strings.Contains(theirs, "合入") {
+		t.Fatal(ours, theirs)
+	}
+	a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
+	until(t, tt, "resolved", func() bool { return tt.HasText("正在合并，没有冲突了，可以继续。") })
+	if err := tt.Click("继续"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "merged", func() bool { return v.git.status.Operation == "" && v.git.busy == "" })
+	if b, _ := os.ReadFile(filepath.Join(root, "main.go")); !strings.Contains(string(b), "// feat edit") {
+		t.Fatal("theirs not taken")
+	}
+}

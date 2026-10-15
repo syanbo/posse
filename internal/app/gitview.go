@@ -161,6 +161,10 @@ func (a *app) refreshGit(v *filesView) {
 
 // gitChanged 在状态变了之后更新依赖它的东西：打开的 diff 重读，编辑器的比较基准跟着 HEAD 走。
 func (a *app) gitChanged(v *filesView, old *gitx.Status) {
+	// 操作停在冲突上：切到改动，横幅在那里
+	if op := v.git.status.Operation; op != "" && (old == nil || old.Operation != op) {
+		v.side = sideChanges
+	}
 	headMoved := old != nil && old.Commit != v.git.status.Commit
 	for _, d := range v.docs {
 		switch {

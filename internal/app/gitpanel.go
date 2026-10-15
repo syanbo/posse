@@ -33,6 +33,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	a.changesHeader(c, w, v)
+	a.operationBanner(c, w, v)
 	if len(g.rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
 			ui.Text(c, "没有改动").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
@@ -175,7 +176,14 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 				a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		case e.Conflict:
-			if m.Item("标记为已解决").Chosen() {
+			ours, theirs := sideNames(g.status.Operation)
+			if m.Item("采用" + ours).Chosen() {
+				a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, true) })
+			}
+			if m.Item("采用" + theirs).Chosen() {
+				a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, false) })
+			}
+			if m.Item("改完了，标记为已解决").Chosen() {
 				a.gitDo(v, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		default:
@@ -224,6 +232,57 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 				})
 			})
 		}
+	})
+}
+
+var opNames = map[string]string{"rebase": "rebase", "merge": "合并", "cherry-pick": "cherry-pick", "revert": "revert"}
+
+// sideNames 是冲突两边在这个操作里各是什么：rebase 时 ours 是要 rebase 到的分支，theirs 是你正在重放的提交。
+func sideNames(op string) (ours, theirs string) {
+	if op == "rebase" {
+		return "目标分支的（ours）", "你的提交的（theirs）"
+	}
+	return "当前分支的（ours）", "合入的提交的（theirs）"
+}
+
+// operationBanner 是 rebase、合并等操作进行到一半时的横幅：冲突数，继续、跳过、中止。
+func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
+	g := &v.git
+	op := g.status.Operation
+	if op == "" {
+		return
+	}
+	t := c.Theme()
+	conflicts := 0
+	for _, e := range g.status.Entries {
+		if e.Conflict {
+			conflicts++
+		}
+	}
+	msg := "正在" + opNames[op] + "，没有冲突了，可以继续。"
+	if conflicts > 0 {
+		msg = fmt.Sprintf("正在%s，有 %d 个文件冲突。解决后点继续：右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决。", opNames[op], conflicts)
+	}
+	ui.Column(c).Shrink(0).Margin(2, 10, 8, 10).Padding(10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+		ui.Text(c, msg).FontSize(12).LineHeight(1.45)
+		ui.Row(c).Gap(6).Children(func() {
+			cont := pressable(accentButton(c, "继续"))
+			if conflicts > 0 {
+				cont.Disabled(true)
+			} else if cont.Clicked() {
+				a.gitDo(v, "继续"+opNames[op], func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, op) })
+			}
+			if (op == "rebase" || op == "cherry-pick") && pressable(textButton(c, "跳过这个提交")).Clicked() {
+				a.gitDo(v, "跳过", func(ctx context.Context, root string) error { return gitx.Skip(ctx, root, op) })
+			}
+			if pressable(textButton(c, "中止")).Clicked() {
+				a.confirm("中止"+opNames[op]+"？", "会回到开始"+opNames[op]+"之前的样子，已经解决的冲突也会丢掉。", "中止", func() {
+					a.update(func() {
+						a.gitDo(v, "中止", func(ctx context.Context, root string) error { return gitx.Abort(ctx, root, op) })
+					})
+				})
+			}
+		})
 	})
 }
 
