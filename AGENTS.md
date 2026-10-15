@@ -49,8 +49,8 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
 - 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，并注入 `HIVE_HOME`、`HIVE_SOCKET`、`HIVE_TERMINAL_ID`、`HIVE_WORKSPACE_ID`；PATH 最前面是 hive 所在目录。
 - 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$HIVE_HOME/worktrees/<项目>/<名称>`）。
-- agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）。
-- `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文），始终 exit 0，不拉起常驻进程。
+- agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $HIVE_HOME/cursor-plugin`，hooks 放在 hive 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
+- `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文），唯一例外是 Cursor：它要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；始终 exit 0，不拉起常驻进程。
 - 没有 hook 的情况靠终端标题兜底：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`。
 - 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重。界面接入期间由界面应答终端查询。
 - 多 agent 编排（`hive task`）：派发方是调用方所在的终端（`HIVE_TERMINAL_ID`），为空表示用户（界面或终端之外）。worker 是新开的 agent 终端，带 `HIVE_TASK_ID`，启动提示由 `workerPrompt` 生成，写明 `hive task ask/check/done` 的用法。`ask/check/done` 只接受 worker 自己的终端，`reply/send/close` 只接受派发方，用户（调用方为空）可以接手任何任务。
@@ -59,6 +59,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 编排技能 `hive-tasks` 随 agent 启动按会话注入，不写全局目录，正文都指向 `hive task guide`（技能文本在 `internal/agent/skill.go`）：Claude 加 `--plugin-dir $HIVE_HOME/claude-plugin`（hive 生成的插件，只含这个技能，内容没变不重写）；Codex 和 Grok 没有按会话加载技能的办法，分别用 `-c developer_instructions=…` 和 `--rules` 放一句指路。`-c` 会整个替换 developer_instructions，用户的 `config.toml` 里设了它时不注入。这些参数由常驻进程生成，改了要重启常驻进程，之后新开的 agent 才带上。
 - 所有子命令都认 `-h` / `--help`（在 `--` 之前），打印这条命令的用法：agent 常先这样试。
 - grok 不注入 hooks（只能写进 `~/.grok/hooks`），状态靠终端标题：盲文转圈符开头是工作中，含 Action Required 是待处理，其余是空闲。
+- Cursor（`cursor-agent`）的状态：beforeSubmitPrompt 和工具事件是工作中，stop 是空闲，sessionEnd 是退出；sessionStart 不改状态（命令行带初始提示时第一轮不发 beforeSubmitPrompt）。会话 ID 不能预先指定，由 hook 报上来。Cursor 没有"等待批准"的事件，标题只是会话名，待处理目前认不出来。
 - `workspace merge` 在项目目录以 `--no-ff` 合入 worktree 分支：要求两边已跟踪文件干净、分支有新提交、项目目录在基准分支上；失败时 `merge --abort`。未跟踪文件不挡合并，但 `workspace rm` 仍会因它拒绝删除。
 - Hive.app 里的可执行文件叫 `Hive`，agent 在终端里调用 `hive` 能找到它，依赖 APFS 默认的大小写不敏感。
 - 会话历史（`hive history`）：
@@ -79,7 +80,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 变暗（被 gitignore 忽略）、快速打开、检索共用一份 `git ls-files -co --exclude-standard` 的清单（不是 git 仓库时遍历目录，跳过 node_modules 等），超过 10 秒就重列，文件标签看不见时放掉。检索在后台逐个读清单里的文件，每次检索带编号、旧的结果丢掉，有未保存改动的文件搜编辑器里的内容，最多 2000 行。
   - 打开的文件、当前文件和展开的目录按工作区存在 ui.json 的 `files`；`saveState` 把它深拷贝后交给写文件的协程。后台读文件的结果经 `a.update` 交回界面线程，测试里没有窗口时排到下一帧开头执行。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
-- "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。cursor 不支持。
+- "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
 - 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
