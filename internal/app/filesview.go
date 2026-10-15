@@ -346,6 +346,14 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
+	if d.comp != nil {
+		if d.kind == docCompare {
+			a.compareView(c, w, v, d)
+		} else {
+			docMessage(c, d, d.err)
+		}
+		return
+	}
 	if d.diff != nil {
 		a.diffBar(c, w, v, d)
 		if d.kind == docDiff {
@@ -434,10 +442,10 @@ func (a *app) docStrip(c *ui.Context, v *filesView) {
 			for _, d := range v.docs {
 				detail := ""
 				switch {
-				case d.diff != nil && d.diff.staged:
-					detail = "已暂存的改动"
 				case d.diff != nil:
-					detail = "改动"
+					detail = d.diff.tabLabel()
+				case d.comp != nil:
+					detail = "比较"
 				case names[d.name()] > 1:
 					detail = filepath.Base(filepath.Dir(d.path))
 				}

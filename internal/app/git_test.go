@@ -168,3 +168,122 @@ func TestStashTitle(t *testing.T) {
 		}
 	}
 }
+
+// branchWorkspace 在 gitWorkspace 的基础上：提交掉改动，建一个裸仓库当 origin 并推上去，
+// 再建一个比 main 多一个提交的 feat 分支和一个检出在另一个 worktree 里的 agent 分支。
+func branchWorkspace(t *testing.T, a *app) string {
+	t.Helper()
+	root := gitWorkspace(t, a)
+	gitRun(t, root, "add", ".")
+	gitRun(t, root, "commit", "-q", "-m", "work")
+	gitRun(t, root, "branch", "-M", "main")
+	bare := filepath.Join(t.TempDir(), "origin.git")
+	gitRun(t, root, "init", "-q", "--bare", "-b", "main", bare)
+	gitRun(t, root, "remote", "add", "origin", bare)
+	gitRun(t, root, "push", "-q", "-u", "origin", "main")
+	gitRun(t, root, "switch", "-q", "-c", "feat")
+	os.WriteFile(filepath.Join(root, "feat.txt"), []byte("feat\n"), 0o644)
+	gitRun(t, root, "add", "feat.txt")
+	gitRun(t, root, "commit", "-q", "-m", "feat: 新功能")
+	gitRun(t, root, "switch", "-q", "main")
+	gitRun(t, root, "worktree", "add", "-q", "-b", "agent", filepath.Join(t.TempDir(), "agent-wt"))
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// local edit\n"), 0o644)
+	gitRun(t, root, "commit", "-q", "-am", "fix: 本地修复")
+	a.workspaces[0].Branch = "main"
+	a.indexWorkspaces()
+	return root
+}
+
+func TestBranchPopupAndCompare(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openBranches(w)
+	v := a.files[w.ID]
+	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("本地") })
+	for _, want := range []string{"更新项目", "Push…", "新建分支…", "feat", "agent", "在另一个 worktree", "远端 origin", "origin/main", "↑1"} {
+		if !tt.HasText(want) {
+			t.Fatalf("popup lacks %q: %v", want, tt.Texts())
+		}
+	}
+	a.branchPop.query = "fea"
+	tt.Frame()
+	if tt.HasText("agent") || !tt.HasText("feat") {
+		t.Fatal("search did not filter")
+	}
+	a.branchPop = nil
+
+	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && tt.HasText("只在 feat 里") })
+	cd := v.cur.comp
+	if len(cd.onlyOther) != 1 || len(cd.onlyCur) != 1 || cd.onlyOther[0].Subject != "feat: 新功能" {
+		t.Fatalf("compare %+v / %+v", cd.onlyOther, cd.onlyCur)
+	}
+	if err := tt.Click("feat: 新功能"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "commit files", func() bool { return cd.commit != nil && cd.commit.files != nil && tt.HasText("feat.txt") })
+	if err := tt.Click("feat.txt"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "commit diff", func() bool { return v.cur.diff != nil && v.cur.kind == docDiff })
+	if v.cur.diff.oldRev != "" || v.cur.diff.state.New.String() != "feat\n" {
+		t.Fatalf("added file diff: old %q new %q", v.cur.diff.oldRev, v.cur.diff.state.New.String())
+	}
+	// 和工作区比较
+	a.openCompare(w, v, "feat", "main", true)
+	until(t, tt, "files compare", func() bool { return v.cur.kind == docCompare && tt.HasText("工作区和 feat 有 2 个文件不同") })
+
+	// 删除没合并的分支：确认后再问一次强制删除
+	b := gitxBranch(v, "feat")
+	a.askDeleteBranch(v, b)
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "force ask", func() bool { return a.confirming && strings.Contains(a.confirmTitle, "还没合并") })
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "deleted", func() bool { return v.git.busy == "" && gitxBranch(v, "feat").Name == "" })
+	if out := gitRun(t, root, "branch", "--list", "feat"); out != "" {
+		t.Fatalf("feat still exists: %q", out)
+	}
+
+	// agent 正在工作时，检出要先确认
+	w.Terminals[0].AgentState = &agentState{Status: "working"}
+	ran := false
+	a.guardAgent(w, "检出", func() { ran = true })
+	if ran || !a.confirming || !strings.Contains(a.confirmTitle, "正在这个工作区里工作") {
+		t.Fatalf("guard did not ask: ran=%v %q", ran, a.confirmTitle)
+	}
+}
+
+func gitxBranch(v *filesView, name string) gitx.Branch {
+	for _, b := range v.git.branches.list {
+		if b.Name == name && !b.Remote {
+			return b
+		}
+	}
+	return gitx.Branch{}
+}
+
+func TestPushDialog(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
+	until(t, tt, "push plan", func() bool { return a.push != nil && a.push.loaded && tt.HasText("fix: 本地修复") })
+	if !tt.HasText("main → origin : main") {
+		t.Fatalf("push header: %v", tt.Texts())
+	}
+	if err := tt.Click("推送"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "pushed", func() bool { return a.push == nil && a.files[w.ID].git.busy == "" })
+	if n := gitRun(t, root, "rev-list", "--count", "origin/main..main"); n != "0" {
+		t.Fatalf("still %s ahead", n)
+	}
+}

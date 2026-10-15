@@ -184,12 +184,29 @@ func previewGit(t *testing.T, a *app) {
 	until(t, tt, "stash", func() bool { return len(v.git.stashes) == 1 })
 	for _, r := range v.git.rows {
 		if !r.header && r.entry.Path == "main.go" {
-			a.openDiff(&a.workspaces[0], r.entry, false, true)
+			a.openDiff(&a.workspaces[0], changeSpec(r.entry, false), nil, true)
 		}
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
 	v.git.message = "feat(cmd): 启动时记录配置"
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+}
+
+func previewBranches(t *testing.T, a *app) {
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openBranches(&a.workspaces[0])
+	v := a.files["w1"]
+	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
+}
+
+func previewPush(t *testing.T, a *app) {
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openPush(&a.workspaces[0])
+	until(t, tt, "push plan", func() bool { return a.push.loaded })
+	a.selectCommit(a.files["w1"], &a.push.commit, a.push.plan.Commits[0])
+	until(t, tt, "commit files", func() bool { return a.push.commit.files != nil })
 }
 
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
@@ -333,6 +350,15 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewGit(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-changes-"+suffix+".png")
+
+		// 分支弹窗：在终端标签上点分支名打开
+		a = previewApp(t)
+		previewBranches(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-branches-"+suffix+".png")
+
+		a = previewApp(t)
+		previewPush(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-push-"+suffix+".png")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

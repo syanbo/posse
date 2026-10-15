@@ -45,6 +45,7 @@ type gitState struct {
 	busy     string // 正在执行的操作，期间按钮不可点
 	err      string
 	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
+	branches branchInfo
 }
 
 type changeGroup uint8
@@ -236,40 +237,86 @@ func (a *app) loadHead(v *filesView, d *fileDoc) {
 
 // --- diff 标签页
 
-// diffDoc 是 diff 标签页：文件在 HEAD 里的内容对比暂存区（staged）或工作区。
-type diffDoc struct {
-	rel, orig string // 相对仓库根目录；重命名时 orig 是原路径
-	staged    bool
-	state     editor.DiffState
-	hunk      int  // F7 走到的改动
-	first     bool // 读进来后跳到第一处改动；⇧F7 从后一个文件过来时为假，跳到最后一处
-	jumped    bool // 已经跳过
-	binary    bool
-	stamp     files.Stamp // 工作区文件的磁盘戳，变了才重读
-	sig       string      // 暂存区 diff 读的时候的 HEAD 和暂存区状态，变了才重读
+// diffSpec 说明一个 diff 比较哪两个版本的哪个文件。版本的写法：newRev 为空是工作区，":" 是暂存区，
+// 其余是提交或分支；oldRev 为空表示旧的一边没有这个文件（新文件、根提交）。路径相对仓库根目录。
+type diffSpec struct {
+	rel, orig      string // 重命名时 orig 是旧路径
+	oldRev, newRev string
+	label          string // 标签页上的补充说明，为空时按版本推断
 }
 
-func diffKey(abs string, staged bool) string {
+func (s diffSpec) worktree() bool { return s.newRev == "" }
+func (s diffSpec) staged() bool   { return s.newRev == ":" }
+
+// changeSpec 是改动列表里一个文件的 diff：HEAD 对比工作区，或对比暂存区。
+func changeSpec(e gitx.Entry, staged bool) diffSpec {
+	s := diffSpec{rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
 	if staged {
-		return "diff:staged:" + abs
+		s.newRev = ":"
 	}
-	return "diff:" + abs
+	return s
+}
+
+// diffDoc 是 diff 标签页。
+type diffDoc struct {
+	diffSpec
+	siblings []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
+	state    editor.DiffState
+	hunk     int  // F7 走到的改动
+	first    bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
+	jumped   bool // 已经跳过
+	binary   bool
+	stamp    files.Stamp // 工作区文件的磁盘戳，变了才重读
+	sig      string      // 暂存区 diff 读的时候的 HEAD 和暂存区状态，变了才重读
+}
+
+// label 是标签页上的补充说明。
+func (df *diffDoc) tabLabel() string {
+	switch {
+	case df.label != "":
+		return df.label
+	case df.staged():
+		return "已暂存的改动"
+	case df.worktree() && df.oldRev == "HEAD":
+		return "改动"
+	}
+	return shortRev(df.oldRev) + " → " + shortRev(df.newRev)
+}
+
+// shortRev 是版本在界面上的写法：提交取前 7 位，空的是工作区。
+func shortRev(rev string) string {
+	switch {
+	case rev == "":
+		return "工作区"
+	case rev == ":":
+		return "暂存区"
+	case len(rev) == 40:
+		return rev[:7]
+	}
+	return rev
+}
+
+func diffKey(abs string, s diffSpec) string {
+	return "diff:" + s.oldRev + ".." + s.newRev + ":" + abs
 }
 
 // openDiff 在文档区打开一个文件的 diff；已经开着就切过去。
-func (a *app) openDiff(w *workspace, e gitx.Entry, staged, first bool) {
+func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool) {
 	v := a.showFiles(w)
 	g := &v.git
-	abs := g.absPath(e.Path)
-	key := diffKey(abs, staged)
+	key := diffKey(g.absPath(s.rel), s)
 	for _, d := range v.docs {
 		if d.path == key {
 			v.cur = d
 			return
 		}
 	}
-	d := &fileDoc{path: key, diff: &diffDoc{rel: e.Path, orig: e.Orig, staged: staged, first: first, sig: stagedSig(g, e.Path)}}
-	d.diff.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
+	df := &diffDoc{diffSpec: s, siblings: siblings, first: first}
+	if s.staged() {
+		df.sig = stagedSig(g, s.rel)
+	}
+	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
+	d := &fileDoc{path: key, diff: df}
 	i := len(v.docs)
 	if j := slices.Index(v.docs, v.cur); j >= 0 {
 		i = j + 1
@@ -280,35 +327,45 @@ func (a *app) openDiff(w *workspace, e gitx.Entry, staged, first bool) {
 	a.loadDiff(v, d)
 }
 
-// loadDiff 在后台读两边的内容：HEAD 里的（重命名时读原路径），和暂存区或工作区的。
+// showRev 读一边的内容：版本里没有这个文件时是空的。
+func showRev(ctx context.Context, root, rev, rel string) ([]byte, error) {
+	b, err := gitx.Show(ctx, root, rev, rel)
+	if errors.Is(err, gitx.ErrNotFound) {
+		return nil, nil
+	}
+	return b, err
+}
+
+// loadDiff 在后台读两边的内容。
 func (a *app) loadDiff(v *filesView, d *fileDoc) {
 	g := &v.git
 	root, df := g.repo, d.diff
+	spec := df.diffSpec
 	go func() {
 		ctx := context.Background()
-		oldPath := df.rel
-		if df.orig != "" {
-			oldPath = df.orig
+		oldPath := spec.rel
+		if spec.orig != "" {
+			oldPath = spec.orig
 		}
-		old, err := gitx.Show(ctx, root, "HEAD", oldPath)
-		if errors.Is(err, gitx.ErrNotFound) {
-			old, err = nil, nil
+		var old, nw []byte
+		var err error
+		if spec.oldRev != "" {
+			old, err = showRev(ctx, root, spec.oldRev, oldPath)
 		}
-		var nw []byte
 		var stamp files.Stamp
 		if err == nil {
-			abs := filepath.Join(root, filepath.FromSlash(df.rel))
-			if df.staged {
-				nw, err = gitx.Show(ctx, root, "", df.rel)
-				if errors.Is(err, gitx.ErrNotFound) {
-					nw, err = nil, nil
-				}
-			} else {
+			switch {
+			case spec.worktree():
+				abs := filepath.Join(root, filepath.FromSlash(spec.rel))
 				stamp = files.StatFile(abs)
 				nw, err = os.ReadFile(abs)
 				if os.IsNotExist(err) {
 					nw, err = nil, nil
 				}
+			case spec.staged():
+				nw, err = showRev(ctx, root, "", spec.rel)
+			default:
+				nw, err = showRev(ctx, root, spec.newRev, spec.rel)
 			}
 		}
 		a.update(func() {
@@ -321,7 +378,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				df.binary, d.kind = true, docBinary
 				return
 			}
-			lang := editor.LanguageFor(df.rel)
+			lang := editor.LanguageFor(spec.rel)
 			if df.state.Old == nil {
 				df.state.Old, df.state.New = editor.NewBuffer(string(old)), editor.NewBuffer(string(nw))
 				df.state.Old.SetLanguage(lang)
@@ -335,16 +392,22 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 	}()
 }
 
-// reloadDiff 在状态变了之后重读 diff：工作区 diff 看文件的磁盘戳，暂存区 diff 看 HEAD 和这个文件的暂存状态。
+// reloadDiff 在状态变了之后重读 diff：工作区一边看文件的磁盘戳，暂存区一边看 HEAD 和这个文件的暂存状态；
+// 两边都是固定版本的不重读。
 func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 	df := d.diff
-	if df.staged {
+	switch {
+	case df.staged():
 		sig := stagedSig(&v.git, df.rel)
 		if sig == df.sig {
 			return
 		}
 		df.sig = sig
-	} else if files.StatFile(v.git.absPath(df.rel)).Same(df.stamp) {
+	case df.worktree():
+		if files.StatFile(v.git.absPath(df.rel)).Same(df.stamp) {
+			return
+		}
+	default:
 		return
 	}
 	a.loadDiff(v, d)
@@ -358,7 +421,8 @@ func stagedSig(g *gitState, rel string) string {
 	return g.status.Commit + "\x00" + strconv.Itoa(s.Added) + "/" + strconv.Itoa(s.Deleted)
 }
 
-// stepDiff 是 F7 / ⇧F7：在当前 diff 里跳到下一处 / 上一处改动，到头了打开改动列表里的下一个 / 上一个文件。
+// stepDiff 是 F7 / ⇧F7：在当前 diff 里跳到下一处 / 上一处改动，到头了打开同一组里的下一个 / 上一个文件
+// （改动列表，或比较、提交里的文件）。
 func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	df := d.diff
 	hunks := df.state.Hunks()
@@ -367,15 +431,17 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 		df.state.GoToHunk(next)
 		return
 	}
-	rows := v.git.rows
-	i := slices.IndexFunc(rows, func(r changeRow) bool {
-		return !r.header && r.group != groupStash && r.entry.Path == df.rel && (r.group == groupStaged) == df.staged
-	})
-	for j := i + dir; i >= 0 && j >= 0 && j < len(rows); j += dir {
-		if r := rows[j]; !r.header && r.group != groupStash {
-			a.openDiff(w, r.entry, r.group == groupStaged, dir > 0)
-			return
+	list := df.siblings
+	if list == nil {
+		for _, r := range v.git.rows {
+			if !r.header && r.group != groupStash && !r.entry.Conflict {
+				list = append(list, changeSpec(r.entry, r.group == groupStaged))
+			}
 		}
+	}
+	i := slices.IndexFunc(list, func(s diffSpec) bool { return s.rel == df.rel && s.oldRev == df.oldRev && s.newRev == df.newRev })
+	if j := i + dir; i >= 0 && j >= 0 && j < len(list) {
+		a.openDiff(w, list[j], df.siblings, dir > 0)
 	}
 }
 
@@ -396,7 +462,7 @@ func diffJump(df *diffDoc) {
 // revertHunk 回滚工作区 diff 里的一处改动，立刻写回磁盘（和 WebStorm 一样不用再保存）。
 func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 	df := d.diff
-	if df.staged {
+	if !df.worktree() {
 		return
 	}
 	df.state.Revert(i)
@@ -430,6 +496,9 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 				a.err = what + "失败：" + err.Error()
 			}
 			a.refreshGit(v)
+			if g.branches.list != nil {
+				a.loadBranches(v)
+			}
 		})
 	}()
 }

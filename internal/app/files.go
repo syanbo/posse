@@ -41,7 +41,8 @@ const (
 	docBinary
 	docTooLarge
 	docError
-	docDiff // Git 的 diff 标签页（gitview.go）
+	docDiff    // Git 的 diff 标签页（gitview.go）
+	docCompare // 分支比较（compare.go）
 )
 
 // fileDoc 是文件标签里打开的一个文件。
@@ -70,14 +71,26 @@ type fileDoc struct {
 	shown    int  // 编辑器建过几帧：第一帧还没有尺寸，跳行要等到第二帧
 	focus    bool // 下一帧把焦点给编辑器
 	started  bool // 已经开始读文件
-	// diff 不为空时这是一个 diff 标签页，path 是 diffKey
+	// diff 不为空时这是一个 diff 标签页，path 是 diffKey；comp 不为空时是分支比较，path 是 compareKey
 	diff *diffDoc
+	comp *compareDoc
 	// headBuf 是文件在 HEAD 里的内容，编辑器行号旁的改动标记以它为基准；headFor 是读它时的 HEAD
 	headBuf *editor.Buffer
 	headFor string
 }
 
-func (d *fileDoc) name() string { return filepath.Base(d.path) }
+func (d *fileDoc) name() string {
+	if cd := d.comp; cd != nil {
+		if cd.files {
+			return "工作区 ↔ " + cd.other
+		}
+		return cd.other + " ↔ " + cd.cur
+	}
+	return filepath.Base(d.path)
+}
+
+// virtual 报告这个标签页不对应磁盘上的文件（diff、比较）：不轮询磁盘，不记进 ui.json。
+func (d *fileDoc) virtual() bool { return d.diff != nil || d.comp != nil }
 
 // isModified 报告有没有未保存的改动，只在缓冲区变了之后重新比较。
 func (d *fileDoc) isModified() bool {
@@ -193,11 +206,11 @@ func (a *app) leaveFiles(w *workspace) {
 func (a *app) saveFilesState(v *filesView) {
 	st := filesState{Expanded: v.tree.Expansions()}
 	for _, d := range v.docs {
-		if d.diff == nil {
+		if !d.virtual() {
 			st.Open = append(st.Open, d.path)
 		}
 	}
-	if v.cur != nil && v.cur.diff == nil {
+	if v.cur != nil && !v.cur.virtual() {
 		st.Current = v.cur.path
 	}
 	if a.state.Files == nil {
@@ -400,7 +413,7 @@ func (a *app) pollFiles(v *filesView) {
 	}
 	var docs []docReq
 	for _, d := range v.docs {
-		if d.kind != docLoading && d.diff == nil {
+		if d.kind != docLoading && !d.virtual() {
 			docs = append(docs, docReq{d, d.seen, d.kind == docImage})
 		}
 	}

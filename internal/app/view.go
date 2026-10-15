@@ -73,6 +73,8 @@ func (a *app) build(c *ui.Context) {
 	a.dispatchDialog(c)
 	a.mobileDialog(c)
 	a.quickDialog(c)
+	a.pushDialog(c)
+	a.promptDialog(c)
 	a.unsavedDialog(c)
 	a.confirmDialog(c)
 }
@@ -88,6 +90,12 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF) {
 			v := a.showFiles(w)
 			v.side, v.search.focus = 1, true
+		}
+		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyK) {
+			a.openPush(w)
+		}
+		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Alt, ui.KeyN) {
+			a.askNewBranch(w, a.filesFor(w), "")
 		}
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
 			if a.filesActive(w) {
@@ -569,11 +577,9 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		})
 		ui.Spacer(c)
-		var branch func()
 		if w.Branch != "" {
-			branch = metaMono(c, iconBranch, w.Branch, "")
+			a.branchButton(c, w)
 		}
-		metaRow(c, branch)
 		if cur != nil && cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
 		}
@@ -609,6 +615,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
 		}
+		a.branchPopupView(c, w)
 		if shown < 0.01 {
 			return
 		}

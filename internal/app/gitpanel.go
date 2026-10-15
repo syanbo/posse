@@ -109,7 +109,8 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	}
 	e := r.entry
 	staged := r.group == groupStaged
-	key := diffKey(g.absPath(e.Path), staged)
+	spec := changeSpec(e, staged)
+	key := diffKey(g.absPath(e.Path), spec)
 	row := ui.Row(c.Key(key)).Height(26).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectable(c, row, v.cur != nil && v.cur.path == key)
@@ -150,12 +151,12 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		if e.Conflict {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
 		} else {
-			a.openDiff(w, e, staged, true)
+			a.openDiff(w, spec, nil, true)
 		}
 	}
 	row.ContextMenu(func(m *ui.Menu) {
 		if !e.Conflict && m.Item("显示 diff").Chosen() {
-			a.openDiff(w, e, staged, true)
+			a.openDiff(w, spec, nil, true)
 		}
 		if letter != 'D' && m.Item("打开文件").Chosen() {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
@@ -276,8 +277,8 @@ func commitTip(all bool) string {
 func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df := d.diff
 	df.state.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
-	df.state.HunkActions = !df.staged
-	if !df.staged {
+	df.state.HunkActions = df.worktree()
+	if df.worktree() {
 		df.state.RenderHunkActions = func(c *ui.Context, bar ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()
 			bar.Row().Gap(4)
@@ -334,8 +335,8 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
 	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 14).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
-		if df.staged {
-			ui.Text(c, "已暂存").FontSize(11).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
+		if label := df.tabLabel(); label != "改动" {
+			ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
@@ -391,7 +392,7 @@ func (a *app) gitShortcuts(c *ui.Context, w *workspace, v *filesView) {
 			a.stepDiff(w, v, d, -1)
 		case c.Shortcut(0, ui.KeyF4):
 			a.diffToEditor(w, v, d)
-		case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && !d.diff.staged && d.kind == docDiff:
+		case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && d.diff.worktree() && d.kind == docDiff:
 			if hunks := d.diff.state.Hunks(); d.diff.hunk < len(hunks) {
 				a.revertHunk(v, d, d.diff.hunk)
 			}
