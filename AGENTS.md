@@ -14,7 +14,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - go.mod 要求 Go 1.27.1（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。
 - 终端内核 libghostty-vt 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
 - 端到端测试用独立目录，不要碰 `~/.hive`：`HIVE_HOME=/tmp/hive-e2e/home ./bin/hive ...`
-- 改界面后用离屏预览自查（屏幕锁定时也能用）：`HIVE_PREVIEW_DIR=/tmp/hive-preview go test ./internal/app -run TestPreview`，生成深浅两套主界面、空工作区、首次使用、新建对话框、任务总览、派发对话框、历史页（含 Markdown 回复）的 PNG。
+- 改界面后用离屏预览自查（屏幕锁定时也能用）：`HIVE_PREVIEW_DIR=/tmp/hive-preview go test ./internal/app -run TestPreview`，生成深浅两套主界面、空工作区、首次使用、新建对话框、任务总览、派发对话框、历史页（含 Markdown 回复）、文件标签（含检索、Markdown 预览、快速打开）的 PNG。
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 界面约定见 `internal/app/style.go` 开头，质感参照 AndroidMirror：顶栏、画布、卡片三层底色；选中项是强调色淡底加左侧竖条；只有"待处理"用琥珀色加文字；状态用蜂巢格形状区分（实心工作中、空心带点待处理、空心完成）；不用"A · B"中点串拼接信息。每帧开头 `SetTheme(hiveTheme(...))` 换成 Claude 橙（深色 #D97757、浅色 #C15F3C）和 8px 圆角，终端底色经 `terminalThemes` 跟主题一致。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。
 - 应用图标是 `design/icon.png`（由 `design/icon-art.png` 套 macOS 图标模板的圆角和投影得到），`mygo.json` 的 `icon` 指向它。不要放进 `resources/`：那里的文件会原样打进 app。
@@ -35,8 +35,9 @@ internal/history    会话历史：读 claude/codex/cursor/grok 的会话文件�
 internal/gitx       调用系统 git 管理 worktree
 internal/agent      agent 启动命令与 hooks 事件到状态的映射
 internal/cli        子命令解析与输出（--json 给 agent 用）
-internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
+internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，files.go、filesview.go 是文件标签，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
+internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索
 internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
 third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
 ```
@@ -68,6 +69,13 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 解析前先按各家 parser 的 `wants` 粗筛（只认 `"type"` 等字段的值，冒号后有空格也能匹配），无关的行不做 JSON 解码；改粗筛规则要跑 `TestLineFilterSameResult`。
   - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
+- 文件标签：每个工作区一个，排在终端标签前面，浏览、查看、轻量编辑和检索工作区目录。全部在窗口进程里，不经过常驻进程。
+  - `activeTerm[工作区]` 为 `filesTabID` 时选中它，`currentTerminal` 返回 nil，终端断开接入。没有终端的工作区也能打开。快捷键：⌘P 快速打开（`路径:行号` 跳行），⇧⌘F 检索，⇧⌘E 在文件和终端之间切换，⌘S 保存，⌘W 关当前文件（没有文件时回到终端）。
+  - 编辑区是 mygo 的 `ui/editor`（行号、高亮、⌘F 查找替换都是它的）。未保存判断用 `editor.Buffer.Modified`，按缓冲区版本缓存；不能拿版本号判断，撤销也会让版本号加一。超过 5 MB 只读，超过 50 MB 或二进制不读内容。
+  - 不用 fsnotify：macOS 上它基于 kqueue，监听一个目录要为其中每个文件各开一个描述符。改为文件标签看得见时每秒 stat 一次展开的目录和打开的文件，磁盘戳带 inode，"写临时文件再改名"的保存也认得出。磁盘上变了：没有未保存的改动就重载，有就显示冲突横幅；文件没了标出已删除。
+  - 保存在同一目录写临时文件再改名，保留权限位，符号链接写到它指向的文件；保存前磁盘戳和打开时不一样就先问，不默默覆盖 agent 的修改。有未保存的文件时 `Window.OnClose` 拦住关窗口和退出（退出会先关窗口）。
+  - 变暗（被 gitignore 忽略）、快速打开、检索共用一份 `git ls-files -co --exclude-standard` 的清单（不是 git 仓库时遍历目录，跳过 node_modules 等），超过 10 秒就重列，文件标签看不见时放掉。检索在后台逐个读清单里的文件，每次检索带编号、旧的结果丢掉，有未保存改动的文件搜编辑器里的内容，最多 2000 行。
+  - 打开的文件、当前文件和展开的目录按工作区存在 ui.json 的 `files`；`saveState` 把它深拷贝后交给写文件的协程。后台读文件的结果经 `a.update` 交回界面线程，测试里没有窗口时排到下一帧开头执行。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。cursor 不支持。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
