@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -435,18 +436,26 @@ func (a *app) ensureView(id string) {
 		OpenLink:    func(link string) bool { return a.openLink(v, link) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
-		// Claude 和 Codex 收到 Ctrl+V 才去读剪贴板里的图片；剪贴板里只有图片时 Cmd+V 拿不到文本，
-		// 转成 Ctrl+V，和 Ghostty 里的习惯一致
+		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
+		// Claude 和 Codex 会把粘贴的图片路径当成附件。让它们收 Ctrl+V 自己读剪贴板也行，
+		// 但它们读剪贴板要调系统命令，粘贴时界面会闪一下
 		OnPaste: func(text string) bool {
 			if text != "" || v.term == nil {
 				return false
 			}
 			switch a.terminalAgent(id) {
 			case "claude", "codex":
+			default:
+				return false
+			}
+			png := mygo.Clipboard.ReadImage()
+			if len(png) == 0 {
+				// 不是图片（比如复制的是文件），交给程序自己处理
 				v.term.Send([]byte{0x16})
 				return true
 			}
-			return false
+			go a.pasteImage(v, png)
+			return true
 		},
 		// 连接结束：程序退出时刷新列表；程序仍在运行（被判定跟不上而断开）时重新接入
 		OnExit: func(int) {
@@ -477,6 +486,20 @@ func (a *app) saveState() {
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
 	go saveUIState(a.home, s)
+}
+
+// pasteImage 把剪贴板里的图片存成临时文件，再把路径粘贴进终端。
+func (a *app) pasteImage(v *termView, png []byte) {
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("hive-paste-%d.png", time.Now().UnixNano()))
+	if err := os.WriteFile(path, png, 0o600); err != nil {
+		a.win.Update(func() { a.err = "粘贴图片失败：" + err.Error() })
+		return
+	}
+	a.win.Update(func() {
+		if a.view == v {
+			v.term.Paste(path)
+		}
+	})
 }
 
 // terminalAgent 返回终端里运行的 agent，普通 shell 为空。
