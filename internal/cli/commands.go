@@ -492,6 +492,11 @@ func cmdHook(e *env, args []string) error {
 	}
 	id := os.Getenv("HIVE_TERMINAL_ID")
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
+	// Cursor 要从 stdout 读一个 JSON 回应，空对象表示不干预（不放行也不拦截）；
+	// 其他 agent 不能有输出，Claude 会把它注入模型上下文
+	if args[0] == "cursor" {
+		fmt.Fprintln(e.out, "{}")
+	}
 	if id == "" {
 		return nil
 	}

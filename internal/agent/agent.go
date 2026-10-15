@@ -15,7 +15,7 @@ import (
 )
 
 // Known 是支持一键启动的 agent。
-var Known = []string{"claude", "codex", "grok"}
+var Known = []string{"claude", "codex", "grok", "cursor"}
 
 // Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 hive 可执行文件。
 type Launcher struct {
@@ -52,6 +52,13 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 		if prompt != "" {
 			parts = append(parts, "--verbatim")
 		}
+	case "cursor":
+		plugin, err := l.cursorPlugin()
+		if err != nil {
+			return Launch{}, err
+		}
+		// 会话 ID 要等 sessionStart hook 报上来
+		parts = []string{"cursor-agent", "--plugin-dir", Quote(plugin)}
 	default:
 		return Launch{}, fmt.Errorf("unknown agent %q (known: %s)", name, strings.Join(Known, ", "))
 	}
@@ -63,7 +70,6 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 
 // Resume 生成继续某个历史会话的启动命令，hooks 的注入方式与 Launch 相同。
 // dir 是会话原来的目录：claude 按目录查找会话，必须回到原目录才能恢复。
-// cursor 只能恢复不能新开：hive 不管理它的状态，只是方便从历史里接着聊。
 func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 	if sessionID == "" {
 		return Launch{}, fmt.Errorf("session id required")
@@ -86,7 +92,11 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 	case "grok":
 		parts = []string{"grok", "--resume", Quote(sessionID), "--rules", Quote(guideHint)}
 	case "cursor":
-		parts = []string{"cursor-agent", "--resume", Quote(sessionID)}
+		plugin, err := l.cursorPlugin()
+		if err != nil {
+			return Launch{}, err
+		}
+		parts = []string{"cursor-agent", "--plugin-dir", Quote(plugin), "--resume", Quote(sessionID)}
 	default:
 		return Launch{}, fmt.Errorf("cannot resume %q sessions", name)
 	}

@@ -46,7 +46,7 @@ func TestResume(t *testing.T) {
 	for agent, want := range map[string]string{
 		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --plugin-dir '" + l.Home + "/claude-plugin' --resume 'sid'",
 		"grok":   "cd '/w/it'\\''s' && grok --resume 'sid' --rules " + Quote(guideHint),
-		"cursor": "cd '/w/it'\\''s' && cursor-agent --resume 'sid'",
+		"cursor": "cd '/w/it'\\''s' && cursor-agent --plugin-dir '" + l.Home + "/cursor-plugin' --resume 'sid'",
 	} {
 		r, err := l.Resume(agent, "sid", "/w/it's")
 		if err != nil {

@@ -17,7 +17,7 @@ const (
 	StatusExited   = "exited"
 )
 
-// hookPayload 是 Claude Code 和 Codex hooks 输入里 hive 用到的字段。
+// hookPayload 是 Claude Code、Codex、Cursor hooks 输入里 hive 用到的字段。
 type hookPayload struct {
 	SessionID        string `json:"session_id"`
 	TranscriptPath   string `json:"transcript_path"`
@@ -48,6 +48,8 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 		st.Status = claudeStatus(event, p)
 	case "codex":
 		st.Status = codexStatus(event, p)
+	case "cursor":
+		st.Status = cursorStatus(event)
 	}
 	if st.Status == "" {
 		return st, false

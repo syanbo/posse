@@ -396,8 +396,7 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	if err != nil {
 		return nil, err
 	}
-	// 只记会话 ID 的情况：codex 的第一个 hook 要到第一轮对话才来，cursor 没有 hooks 也没有可识别的标题，
-	// 先显示"启动中"就会一直停在那里
+	// 只记会话 ID 的情况：codex、cursor 改状态的第一个 hook 要到第一轮对话才来，先显示"启动中"就会一直停在那里
 	st := term.AgentState{Status: agent.StatusStarting, SessionID: s.ID, At: time.Now()}
 	if s.Agent == "codex" || s.Agent == "cursor" {
 		st.Status = ""
