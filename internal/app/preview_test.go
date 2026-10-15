@@ -175,6 +175,23 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	return v
 }
 
+// previewGit 切到 w1 的改动列表，打开 main.go 的 diff。
+func previewGit(t *testing.T, a *app) {
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	gitRun(t, v.root, "stash", "push", "-q", "-m", "试验：换一种日志格式", "--", "README.md")
+	until(t, tt, "stash", func() bool { return len(v.git.stashes) == 1 })
+	for _, r := range v.git.rows {
+		if !r.header && r.entry.Path == "main.go" {
+			a.openDiff(&a.workspaces[0], r.entry, false, true)
+		}
+	}
+	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
+	v.git.message = "feat(cmd): 启动时记录配置"
+	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+}
+
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("HIVE_PREVIEW_DIR")
 	f, err := os.Create(filepath.Join(dir, name))
@@ -311,6 +328,11 @@ func TestPreview(t *testing.T) {
 		a.openQuick(&a.workspaces[0])
 		a.quick.query = "view"
 		savePNG(t, newPreviewTester(a, dark), "quick-open-"+suffix+".png")
+
+		// 左栏"改动"和 main.go 的 diff
+		a = previewApp(t)
+		previewGit(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-changes-"+suffix+".png")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

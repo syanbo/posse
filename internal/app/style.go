@@ -238,7 +238,7 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 			}
 			seg.Background(seg.AnimateColor("bg", bg, hover))
 			seg.Children(func() {
-				text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0)
+				text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).SingleLine().Shrink(0)
 				if i == *sel {
 					text.FontWeight(600)
 				}

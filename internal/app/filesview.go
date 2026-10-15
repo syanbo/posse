@@ -63,6 +63,9 @@ func (a *app) filesPage(c *ui.Context, w *workspace) {
 	if v.poll.due(c, filesPollEvery) {
 		a.pollFiles(v)
 	}
+	if v.git.poll.due(c, gitPollEvery) {
+		a.pollGit(v)
+	}
 	a.refreshList(v, false, nil)
 	if d := v.cur; d != nil && d.kind == docLoading && !d.started {
 		d.started = true
@@ -71,20 +74,30 @@ func (a *app) filesPage(c *ui.Context, w *workspace) {
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(filesSideWidth).Shrink(0).Background(p.band).Children(func() { a.filesSide(c, w, v) })
 		ui.Box(c).Width(1).Shrink(0).Background(p.line)
-		ui.Column(c).Grow(1).Shrink(1).Background(t.Background).Children(func() { a.docArea(c, v) })
+		ui.Column(c).Grow(1).Shrink(1).Background(t.Background).Children(func() { a.docArea(c, w, v) })
 	})
 }
 
 func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).Height(40).Shrink(0).Padding(0, 10).AlignItems(ui.Center).Children(func() {
-		if segmented(c, &v.side, "左栏", "文件", "检索") && v.side == 1 {
-			v.search.focus = true
+		changes := "改动"
+		if n := v.git.changeCount(); n > 0 {
+			changes = fmt.Sprintf("改动 %d", n)
 		}
+		// 撑满左栏宽度：分段平分宽度，"改动 12"这样长一些的才放得下
+		ui.Column(c).Grow(1).Children(func() {
+			if segmented(c, &v.side, "左栏", "文件", "检索", changes) && v.side == sideSearch {
+				v.search.focus = true
+			}
+		})
 	})
-	if v.side == 0 {
+	switch v.side {
+	case sideFiles:
 		a.treeView(c, w, v)
-	} else {
+	case sideSearch:
 		a.searchView(c, w, v)
+	default:
+		a.changesView(c, w, v)
 	}
 }
 
@@ -321,7 +334,7 @@ func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 
 // --- 打开的文件
 
-func (a *app) docArea(c *ui.Context, v *filesView) {
+func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	if v.cur == nil {
 		filesEmpty(c)
@@ -331,6 +344,17 @@ func (a *app) docArea(c *ui.Context, v *filesView) {
 	d := v.cur
 	if d.kind == docLoading {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		return
+	}
+	if d.diff != nil {
+		a.diffBar(c, w, v, d)
+		if d.kind == docDiff {
+			a.diffView(c, v, d)
+		} else if d.kind == docBinary {
+			docMessage(c, d, "二进制文件，不显示 diff")
+		} else {
+			docMessage(c, d, d.err)
+		}
 		return
 	}
 	a.docBar(c, v, d)
@@ -409,7 +433,12 @@ func (a *app) docStrip(c *ui.Context, v *filesView) {
 		ui.Row(c).Height(36).Padding(0, 8).Gap(2).AlignItems(ui.Center).Children(func() {
 			for _, d := range v.docs {
 				detail := ""
-				if names[d.name()] > 1 {
+				switch {
+				case d.diff != nil && d.diff.staged:
+					detail = "已暂存的改动"
+				case d.diff != nil:
+					detail = "改动"
+				case names[d.name()] > 1:
 					detail = filepath.Base(filepath.Dir(d.path))
 				}
 				a.docTab(c, v, d, detail)

@@ -99,6 +99,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	if a.filesActive(w) {
 		v := a.filesFor(w)
+		a.gitShortcuts(c, w, v)
 		if c.Shortcut(ui.Cmd, ui.KeyS) && v.cur != nil {
 			a.saveDoc(v.cur, false)
 		}

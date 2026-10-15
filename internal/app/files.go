@@ -41,6 +41,7 @@ const (
 	docBinary
 	docTooLarge
 	docError
+	docDiff // Git 的 diff 标签页（gitview.go）
 )
 
 // fileDoc 是文件标签里打开的一个文件。
@@ -69,6 +70,11 @@ type fileDoc struct {
 	shown    int  // 编辑器建过几帧：第一帧还没有尺寸，跳行要等到第二帧
 	focus    bool // 下一帧把焦点给编辑器
 	started  bool // 已经开始读文件
+	// diff 不为空时这是一个 diff 标签页，path 是 diffKey
+	diff *diffDoc
+	// headBuf 是文件在 HEAD 里的内容，编辑器行号旁的改动标记以它为基准；headFor 是读它时的 HEAD
+	headBuf *editor.Buffer
+	headFor string
 }
 
 func (d *fileDoc) name() string { return filepath.Base(d.path) }
@@ -118,10 +124,11 @@ type filesView struct {
 	listing  bool
 	docs     []*fileDoc
 	cur      *fileDoc
-	side     int // 左栏：0 文件树，1 检索
+	side     int // 左栏：sideFiles、sideSearch、sideChanges
 	search   fileSearch
 	poll     panelPoll
 	prevTerm string // 切到文件标签前选中的终端，⇧⌘E 切回去
+	git      gitState
 }
 
 // filesFor 返回工作区的文件标签，没有就新建，并恢复上次打开的文件和展开的目录。
@@ -186,9 +193,11 @@ func (a *app) leaveFiles(w *workspace) {
 func (a *app) saveFilesState(v *filesView) {
 	st := filesState{Expanded: v.tree.Expansions()}
 	for _, d := range v.docs {
-		st.Open = append(st.Open, d.path)
+		if d.diff == nil {
+			st.Open = append(st.Open, d.path)
+		}
 	}
-	if v.cur != nil {
+	if v.cur != nil && v.cur.diff == nil {
 		st.Current = v.cur.path
 	}
 	if a.state.Files == nil {
@@ -391,7 +400,7 @@ func (a *app) pollFiles(v *filesView) {
 	}
 	var docs []docReq
 	for _, d := range v.docs {
-		if d.kind != docLoading {
+		if d.kind != docLoading && d.diff == nil {
 			docs = append(docs, docReq{d, d.seen, d.kind == docImage})
 		}
 	}

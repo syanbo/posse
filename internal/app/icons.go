@@ -33,6 +33,10 @@ var (
 	iconPhone      = icon(`<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M10.5 17.75h3"/>`)
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
 	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
+	iconRefresh    = icon(`<path d="M19.25 12a7.25 7.25 0 1 1-2.12-5.13"/><path d="M19.5 4.5v3.75h-3.75"/>`)
+	iconShelve     = icon(`<rect x="4" y="4.5" width="16" height="5" rx="1.5"/><path d="M5.5 9.5v8.25c0 .97.78 1.75 1.75 1.75h9.5c.97 0 1.75-.78 1.75-1.75V9.5M10 13h4"/>`)
+	iconUp         = icon(`<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>`)
+	iconDown       = icon(`<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
 	iconHistory = icon(`<path d="M3.75 12a8.25 8.25 0 1 0 2.4-5.8"/><path d="M3.5 4v3.25h3.25"/><path d="M12 7.75V12l2.75 1.75"/>`)
