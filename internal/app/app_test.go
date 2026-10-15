@@ -100,3 +100,9 @@ func TestIsDialError(t *testing.T) {
 		t.Fatal("timeout counted as dial error")
 	}
 }
+
+func TestAgentChoicesCount(t *testing.T) {
+	if len(agentChoices) != nAgents {
+		t.Fatalf("nAgents = %d, agentChoices has %d", nAgents, len(agentChoices))
+	}
+}

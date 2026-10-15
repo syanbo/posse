@@ -678,7 +678,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 						})
 					})
 				})
-				ui.Grid(c).Columns(4).Gap(10).Children(func() {
+				ui.Grid(c).Columns(len(agentChoices) + 1).Gap(10).Children(func() {
 					for _, ag := range agentChoices {
 						a.launchTile(c, w, ag, agentVendor(ag))
 					}

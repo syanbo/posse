@@ -167,8 +167,8 @@ type app struct {
 	dWorkspace  string // 工作区显示名
 	dTitle      string
 	dSpec       string
-	dAgents     [3]bool // 与 agentChoices 对应
-	dMode       int     // 0 当前目录，1 各自新建 worktree
+	dAgents     [nAgents]bool // 与 agentChoices 对应
+	dMode       int           // 0 当前目录，1 各自新建 worktree
 	dBranch     string
 
 	// 新建工作区对话框
@@ -188,7 +188,10 @@ type app struct {
 }
 
 // agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
-var agentChoices = []string{"claude", "codex", "grok"}
+var agentChoices = []string{"claude", "codex", "grok", "cursor"}
+
+// nAgents 是 agentChoices 的个数，派发对话框的勾选框按它定长。
+const nAgents = 4
 
 // agentNames 与新建工作区对话框的"同时启动"分段一一对应，0 是只建工作区。
 var (

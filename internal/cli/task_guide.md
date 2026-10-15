@@ -1,6 +1,6 @@
 # Hive tasks: coordinate other agents
 
-`hive task` dispatches work to other agents (claude, codex or grok), each in its own Hive terminal the user can watch, and brings their results back to you. Workers report through Hive; never scrape their terminals for results.
+`hive task` dispatches work to other agents (claude, codex, grok or cursor), each in its own Hive terminal the user can watch, and brings their results back to you. Workers report through Hive; never scrape their terminals for results.
 
 **Done means:** every task you started has one explicit outcome, every worker terminal is closed or deliberately kept, and your report to the user names, per task, the outcome, the evidence and anything unresolved.
 

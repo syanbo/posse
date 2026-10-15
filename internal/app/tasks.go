@@ -177,7 +177,7 @@ func (a *app) openDispatch() {
 	a.dispatching = true
 	a.dTitle, a.dSpec, a.dMode = "", "", 0
 	a.dBranch = "task-" + randomSuffix()
-	if a.dAgents == [3]bool{} {
+	if a.dAgents == [nAgents]bool{} {
 		a.dAgents[0] = true
 	}
 	if w := a.workspace(a.selected); w != nil {
