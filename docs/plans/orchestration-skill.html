@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hive 编排技能计划</title>
+<style>
+  :root {
+    --bg: #faf9f7; --surface: #ffffff; --text: #1f1e1c; --muted: #6b6862;
+    --line: #e6e2dc; --accent: #c15f3c; --accent-soft: #c15f3c14; --code: #f3f0eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1a18; --surface: #232220; --text: #ecebe8; --muted: #9b978f;
+      --line: #34322e; --accent: #d97757; --accent-soft: #d977571f; --code: #2b2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 32px 96px; }
+  nav {
+    position: sticky; top: 0; z-index: 1; background: var(--bg); border-bottom: 1px solid var(--line);
+    padding: 10px 32px; display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px;
+  }
+  nav a { color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--accent); }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .byline { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+  h2 {
+    font-size: 20px; margin: 48px 0 12px; padding-left: 12px;
+    border-left: 3px solid var(--accent); scroll-margin-top: 56px;
+  }
+  .lead { font-weight: 500; }
+  a { color: var(--accent); }
+  code {
+    font: 13px/1.5 "JetBrains Mono", ui-monospace, Menlo, monospace;
+    background: var(--code); padding: 1px 5px; border-radius: 4px;
+  }
+  pre {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%; border-collapse: collapse; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 14px;
+  }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { background: var(--accent-soft); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 500; }
+  ol > li { margin-bottom: 14px; }
+  ol ul { margin-top: 4px; }
+  .phase { font-weight: 600; }
+  .todo { list-style: none; padding-left: 0; }
+  .todo li {
+    background: var(--accent-soft); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 8px 12px; margin-bottom: 8px;
+  }
+  .todo li::before { content: "☐ "; color: var(--accent); }
+</style>
+</head>
+<body>
+<nav>
+  <a href="#scope">目标与范围</a>
+  <a href="#now">现状对照</a>
+  <a href="#decisions">关键决策</a>
+  <a href="#guide">正文改写要点</a>
+  <a href="#steps">步骤与验收</a>
+  <a href="#risks">风险</a>
+  <a href="#result">实现结果</a>
+</nav>
+<main>
+<h1>Hive 编排技能计划</h1>
+<div class="byline">2026-10-16</div>
+
+<h2 id="scope">目标与范围</h2>
+<p class="lead">把 <code>hive task</code> 的用法做成随 hive 版本更新的技能，在 hive 启动的 agent 里自动可用。正文借鉴 Orca orchestration 的结果约定、角色区分和收尾规则；常驻进程的协议不改，所以不用重启它，也不会断开终端。</p>
+<p>要做：</p>
+<ul>
+  <li>技能文件只放触发描述，正文由 hive 程序提供，和程序版本一致</li>
+  <li>按会话注入给 hive 启动的 agent，不写用户的全局配置（和 hooks 的做法一致）</li>
+  <li>改写正文：角色判断、任务说明的写法、拆分和等待的规则、逐个任务收尾汇报、失败后怎么处理</li>
+  <li>补一个只在 CLI 里实现的 <code>hive task retry</code>，用原任务的说明重新派发</li>
+</ul>
+<p>不做：Orca 的 Run / Task / Dispatch 三层模型、依赖图调度、心跳、远程放置。hive 是单机的，一个任务就对应一次尝试；有先后顺序的工作由协调方分批派发。</p>
+
+<h2 id="now">现状对照</h2>
+<p class="lead">hive 已经覆盖了日常编排的主干：派发、等待、问答、追加说明、关闭，以及 worktree 合并。差的是技能分发和正文里的约定，缺少的能力只有重试一项。</p>
+<table>
+  <tr><th>能力</th><th>hive 现状</th><th>Orca</th><th>取舍</th></tr>
+  <tr><td>派发</td><td><code>task start</code>：agent、工作区、<code>--worktree</code>、group；最多嵌套 3 层</td><td><code>worker-start</code>，可挂到某个 Task</td><td>够用</td></tr>
+  <tr><td>等待</td><td><code>task wait</code> / <code>inbox</code>；协调方空闲时 hive 往它终端里输入提醒</td><td><code>check --wait</code>，处理完再 ack</td><td>够用；正文补上"超时只是检查点"</td></tr>
+  <tr><td>问答、追加说明</td><td><code>ask</code> / <code>reply</code>，<code>send</code> / <code>check</code></td><td>同样有</td><td>够用</td></tr>
+  <tr><td>结果</td><td><code>done --summary --report --failed</code></td><td><code>worker_done --outcome --files-modified --report-path</code></td><td>够用；改动的文件靠 <code>workspace diff</code> 看</td></tr>
+  <tr><td>异常</td><td>worker 没汇报就退出记为 exited；常驻进程重启时还在跑的记为 lost</td><td>分层判断存活，只有确证退出才允许停止或重试</td><td>把"确证才动"写进正文</td></tr>
+  <tr><td>收尾</td><td><code>task close</code></td><td><code>worker-retain</code> / <code>worker-release</code></td><td>正文要求每个 worker 都关闭或明确保留</td></tr>
+  <tr><td>重试</td><td>没有，只能重新 <code>start</code></td><td><code>worker-start --task</code></td><td>新增 <code>task retry</code>，只在 CLI 里实现</td></tr>
+  <tr><td>依赖</td><td>没有</td><td>Task DAG</td><td>不做，正文教分批派发</td></tr>
+  <tr><td>技能分发</td><td><code>task guide --skill</code> 能输出 SKILL.md（名字 <code>hive-tasks</code>），但没有装到任何地方；worker 一侧的用法写在 <code>workerPrompt</code> 里</td><td>只有占位 SKILL.md，正文用 <code>orca skills get</code> 取；装在 <code>~/.agents/skills</code>，再链接到 <code>~/.claude/skills</code>、<code>~/.grok/skills</code></td><td>沿用"占位 + 程序取正文"的结构，改成按会话注入</td></tr>
+</table>
+<p>需要注意：本机 <code>~/.claude/skills</code> 和 <code>~/.grok/skills</code> 里的 <code>orchestration</code> 都是 Orca 的。hive 终端会去掉 <code>ORCA_*</code> 变量，但这个技能照样会被加载，而且描述写得很宽，可能会接走 hive 里的编排请求。</p>
+
+<h2 id="decisions">关键决策</h2>
+<table>
+  <tr><th>事项</th><th>决定</th><th>理由</th></tr>
+  <tr><td>技能名和触发</td><td>沿用 <code>hive-tasks</code>；描述写明"在 Hive 终端里（<code>HIVE_TERMINAL_ID</code> 已设）要派发、并行、监督其他 agent 时用"，并列出 claude、codex、grok</td><td>用环境条件和 Orca 的技能分开</td></tr>
+  <tr><td>正文来源</td><td>技能文件只写一句"先运行 <code>hive task guide</code>"，正文仍内嵌在程序里（<code>internal/cli/task_guide.md</code>）</td><td>和 Orca 的做法一样，正文不会和程序版本脱节</td></tr>
+  <tr><td>Claude 注入</td><td>hive 在 <code>$HIVE_HOME/claude-plugin</code> 生成一个只含 <code>hive-tasks</code> 技能的插件，启动和恢复会话时加 <code>--plugin-dir</code>；内容没变不重写</td><td>已核实：插件里的技能能被自动触发，和 <code>--settings</code> 一起用正常</td></tr>
+  <tr><td>Codex、Grok 注入</td><td>这两家没有按会话加载技能的办法，改为放一句指路（"要派发时先运行 <code>hive task guide</code>"）：Codex 用 <code>-c developer_instructions=…</code>，Grok 用 <code>--rules</code></td><td>已核实：Codex 的 <code>-c skills.config</code> 加不进外部技能，插件要装进全局缓存；指路方式两家都生效。<code>-c</code> 会整个替换 developer_instructions，用户的 config.toml 里设了它时不注入</td></tr>
+  <tr><td>worker 一侧</td><td>worker 不需要技能：它的约定继续由 <code>workerPrompt</code> 在启动提示里给出，只补"可以改哪些文件"和"验收证据"两点</td><td>worker 的启动提示本身就是权威说明，和 Orca 注入的前言是同一个作用</td></tr>
+  <tr><td>重试</td><td><code>hive task retry &lt;task&gt;</code> 先读原任务（show），再用同样的说明、agent 和工作区调用 <code>task.start</code>，标题加"（重试）"；只允许对 failed、exited、lost 的任务这样做</td><td>不改常驻进程，也不改表结构</td></tr>
+  <tr><td>常驻进程</td><td>不改协议</td><td>改协议要重启常驻进程，会断开所有终端</td></tr>
+</table>
+
+<h2 id="guide">正文改写要点</h2>
+<p class="lead">现在的正文共 41 行，改写后控制在 80 行以内：只写协调方当场要用的规则，细节交给 <code>--help</code>。</p>
+<ol>
+  <li><b>结果约定</b>：每个任务都要有一个明确的结论，每个 worker 终端都要有去向（关闭或明确保留）。最后按任务向用户汇报：结论、证据、没解决的问题。</li>
+  <li><b>先判断角色</b>：用户要求监督、等结果、并行汇总时，用 <code>hive task</code>；只是"交给另一个 agent 自己干"时，用 <code>hive terminal create --agent</code> 或 <code>hive workspace create --agent --prompt</code>，不建任务；有 <code>HIVE_TASK_ID</code> 说明自己是 worker，只按启动提示做事，不再当协调方。</li>
+  <li><b>任务说明</b>必须能独立看懂，写清五项：目标（文件、设备、环境）、要得到的结果、约束和不许碰的东西、可以改哪些文件、证明完成的证据。</li>
+  <li><b>拆分</b>：互相独立的任务全部派出后再等；有先后的分批派发；并行改代码一律用 <code>--worktree</code>；嵌套最多 3 层，到上限就自己做。</li>
+  <li><b>等待</b>：<code>task wait</code> 超时或返回空只是检查点，不算失败；连续三次空等后用 <code>task list</code> / <code>task show</code> 看 worker 的屏幕；只有确证 worker 退出（exited、lost）才重试或关闭，看不到动静不算。</li>
+  <li><b>问答</b>：worker 问的问题能自己判断的就直接 <code>reply</code>，判断不了才问用户；<code>send</code> 只追加说明，不能当作 worker 已经收到。</li>
+  <li><b>验收和收尾</b>：拿到 <code>done</code> 后先核对报告里关键的结论，worktree 用 <code>workspace diff</code> 看改动，没问题再 <code>merge</code>；然后 <code>task close</code>，或者在给用户的汇报里说明保留哪个 worker、为什么保留。</li>
+  <li><b>失败</b>：failed 先看总结和报告；exited 和 lost 先看 <code>task show</code> 里的屏幕结尾；确定要重来就用 <code>task retry</code>，不要再开一个说明相同、但没关联到原任务的新任务。</li>
+</ol>
+
+<h2 id="steps">步骤与验收</h2>
+<ol>
+  <li><b>核实注入方式</b>（只读调研，不改代码）：分别用 Claude 的 <code>--plugin-dir</code>、Codex 的配置项、Grok 的参数各起一个临时会话，看 <code>hive-tasks</code> 能不能被列出、能不能被自动触发。
+    <ul><li>验收：一张"agent × 注入方式 × 能否触发"的结论表，写回本计划</li></ul>
+  </li>
+  <li><b>改写正文和 worker 提示</b>：<code>task_guide.md</code>、<code>--skill</code> 的描述、<code>workerPrompt</code>。
+    <ul><li>验收：<code>hive task guide</code> 的输出不超过 80 行；单测检查 <code>workerPrompt</code> 里有所有子命令的用法</li></ul>
+  </li>
+  <li><b>按会话注入</b>：在 <code>internal/agent</code> 里按第 1 步的结论加启动参数；插件目录由 <code>Launcher</code> 生成，内容不变时不重写。
+    <ul><li>验收：单测检查生成的命令行和插件目录内容；端到端在 <code>/tmp/hive-e2e/home</code> 里新开一个 Claude 终端，问它有哪些技能，<code>hive-tasks</code> 要在列表里</li></ul>
+  </li>
+  <li><b>CLI</b>：<code>hive task retry</code>；只有第 1 步核实到某个 agent 没法按会话注入时，才做 <code>hive skill install</code>。
+    <ul><li>验收：单测覆盖 retry 复用原参数、拒绝重试还在进行的任务</li></ul>
+  </li>
+  <li><b>场景演练</b>：在 e2e 环境的一个小仓库里，让 Claude 当协调方，说"把这两件事派给 codex 和 grok 并行做完，用 worktree，合并前给我看结果"。
+    <ul><li>验收：它加载了技能；派发时带 worktree；每个任务都等到结论；汇报逐任务写了证据；worker 都被关闭；故意让一个 worker 失败时，它会用 <code>retry</code>。同一个场景用 Codex 当协调方再跑一次</li></ul>
+  </li>
+  <li><b>文档</b>：更新 AGENTS.md 里多 agent 编排的约定。</li>
+</ol>
+<p>每一步都要跑 <code>go vet ./... &amp;&amp; go test ./... &amp;&amp; go tool mygo vet</code>。新技能只有新开的 agent 终端才会带上，已经开着的终端要重开。</p>
+
+<h2 id="risks">风险</h2>
+<table>
+  <tr><th>风险</th><th>应对</th></tr>
+  <tr><td>Codex 或 Grok 没有按会话加载技能的方式</td><td>退回显式安装，由你执行；或者在这两家的协调方终端里，把正文放进启动提示（只限 hive 启动的 agent 终端）</td></tr>
+  <tr><td>插件里的技能不会被自动触发</td><td>在描述里写清触发词；实在不行，就在 hive 启动的 Claude 终端里用 <code>--append-system-prompt</code> 加一句"需要派发时先运行 <code>hive task guide</code>"</td></tr>
+  <tr><td>和 Orca 的全局技能抢触发</td><td>描述里写明 Hive 环境；最终是否移除 Orca 的技能由你决定（见下）</td></tr>
+  <tr><td>正文变长，占用上下文</td><td>正文只在用到时才读，控制在 80 行以内</td></tr>
+</table>
+
+<h2 id="result">实现结果（2026-10-16）</h2>
+<p class="lead">已实现，在 <code>调研</code> 分支。Orca 的全局技能按你的决定保留；三家都能按会话注入，不需要 <code>hive skill install</code>。</p>
+<table>
+  <tr><th>项目</th><th>结果</th></tr>
+  <tr><td>注入</td><td>Claude 加载 <code>hive:hive-tasks</code> 技能；Codex、Grok 在附加指令里得到指路（<code>internal/agent/skill.go</code>）</td></tr>
+  <tr><td>正文</td><td><code>task_guide.md</code> 改写为 60 行：结果约定、角色判断、任务说明五项、分批派发、等待规则、核对合并、重试、收尾</td></tr>
+  <tr><td>worker 提示</td><td>补上"只改说明允许改的文件，总结里写清验收证据"</td></tr>
+  <tr><td>新命令</td><td><code>hive task retry</code>；所有子命令支持 <code>-h</code> / <code>--help</code>（演练中发现 Codex 会先这样试，原来直接报错）</td></tr>
+  <tr><td><code>go vet</code>、<code>go test ./...</code>、<code>mygo vet</code></td><td>通过；新增注入、重试参数、正文长度和覆盖的子命令、<code>--help</code> 的单测</td></tr>
+  <tr><td>演练一：Claude 当协调方</td><td>加载了技能；按五项写说明，用 worktree 并行派给 codex 和 grok；逐个看 diff，合并后在 main 上复验；关掉两个 worker；逐任务汇报证据。中途 Codex worker 卡在"信任目录"提示，由我代为确认</td></tr>
+  <tr><td>演练二：Codex 当协调方</td><td>用 worktree 派给 claude；我在中途关掉 worker 的终端，它看到 exited 后用 <code>task retry</code> 重派，结果核对后合并，两个 worker 都关掉</td></tr>
+  <tr><td>生效条件</td><td>注入参数和 worker 提示由常驻进程生成，要重启 <code>~/.hive</code> 的常驻进程后，新开的 agent 才带上；重启会断开所有终端</td></tr>
+</table>
+</main>
+</body>
+</html>

@@ -55,7 +55,9 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重。界面接入期间由界面应答终端查询。
 - 多 agent 编排（`hive task`）：派发方是调用方所在的终端（`HIVE_TERMINAL_ID`），为空表示用户（界面或终端之外）。worker 是新开的 agent 终端，带 `HIVE_TASK_ID`，启动提示由 `workerPrompt` 生成，写明 `hive task ask/check/done` 的用法。`ask/check/done` 只接受 worker 自己的终端，`reply/send/close` 只接受派发方，用户（调用方为空）可以接手任何任务。
 - 派发方的收件箱是 question/done/exit 三类消息，worker 的是 answer/note。派发方 agent 空闲（hooks 或标题报告 idle）且 5 秒内没有人键入时，hive 往它终端里输入一行 `Hive: … Run \`hive task inbox\` to read.` 并回车；每条消息只提醒一次。worker 终端或其中的 agent 没汇报就退出时，任务记为 exited 并通知派发方；`task close` 先改状态再关终端，不算意外退出。常驻进程重启时还在进行的任务记为 lost。
-- worker 最多嵌套 3 层。`hive task guide` 是给协调方 agent 看的说明（源文件 `internal/cli/task_guide.md`），`--skill` 输出带 frontmatter 的 SKILL.md。
+- worker 最多嵌套 3 层。`hive task guide` 是给协调方 agent 看的说明（源文件 `internal/cli/task_guide.md`，测试限制在 80 行以内），`--skill` 输出带 frontmatter 的 SKILL.md。`hive task retry` 在 CLI 里组合 show 和 start，用原任务的说明、agent 和工作区重派，只接受 failed、exited、lost、stopped 的任务。
+- 编排技能 `hive-tasks` 随 agent 启动按会话注入，不写全局目录，正文都指向 `hive task guide`（技能文本在 `internal/agent/skill.go`）：Claude 加 `--plugin-dir $HIVE_HOME/claude-plugin`（hive 生成的插件，只含这个技能，内容没变不重写）；Codex 和 Grok 没有按会话加载技能的办法，分别用 `-c developer_instructions=…` 和 `--rules` 放一句指路。`-c` 会整个替换 developer_instructions，用户的 `config.toml` 里设了它时不注入。这些参数由常驻进程生成，改了要重启常驻进程，之后新开的 agent 才带上。
+- 所有子命令都认 `-h` / `--help`（在 `--` 之前），打印这条命令的用法：agent 常先这样试。
 - grok 不注入 hooks（只能写进 `~/.grok/hooks`），状态靠终端标题：盲文转圈符开头是工作中，含 Action Required 是待处理，其余是空闲。
 - `workspace merge` 在项目目录以 `--no-ff` 合入 worktree 分支：要求两边已跟踪文件干净、分支有新提交、项目目录在基准分支上；失败时 `merge --abort`。未跟踪文件不挡合并，但 `workspace rm` 仍会因它拒绝删除。
 - Hive.app 里的可执行文件叫 `Hive`，agent 在终端里调用 `hive` 能找到它，依赖 APFS 默认的大小写不敏感。
