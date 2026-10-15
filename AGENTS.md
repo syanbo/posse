@@ -32,10 +32,10 @@ internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程�
 internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
 internal/store      SQLite（modernc，纯 Go）：项目、工作区、终端记录；task.go 是任务和消息
 internal/history    会话历史：读 claude/codex/cursor/grok 的会话文件，增量索引进 $HIVE_HOME/history.db（FTS5），搜索和摘要
-internal/gitx       调用系统 git 管理 worktree
+internal/gitx       调用系统 git：管理 worktree（常驻进程），以及界面的状态、diff、分支、推送、日志、冲突（status.go、branch.go、push.go、log.go、progress.go）
 internal/agent      agent 启动命令与 hooks 事件到状态的映射
 internal/cli        子命令解析与输出（--json 给 agent 用）
-internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，files.go、filesview.go 是文件标签，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
+internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，底栏内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与 MCP"面板，files.go、filesview.go 是文件标签，gitview.go、gitpanel.go、branchpop.go、compare.go、logview.go 是 Git 界面，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索
 internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
@@ -79,6 +79,12 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 保存在同一目录写临时文件再改名，保留权限位，符号链接写到它指向的文件；保存前磁盘戳和打开时不一样就先问，不默默覆盖 agent 的修改。有未保存的文件时 `Window.OnClose` 拦住关窗口和退出（退出会先关窗口）。
   - 变暗（被 gitignore 忽略）、快速打开、检索共用一份 `git ls-files -co --exclude-standard` 的清单（不是 git 仓库时遍历目录，跳过 node_modules 等），超过 10 秒就重列，文件标签看不见时放掉。检索在后台逐个读清单里的文件，每次检索带编号、旧的结果丢掉，有未保存改动的文件搜编辑器里的内容，最多 2000 行。
   - 打开的文件、当前文件和展开的目录按工作区存在 ui.json 的 `files`；`saveState` 把它深拷贝后交给写文件的协程。后台读文件的结果经 `a.update` 交回界面线程，测试里没有窗口时排到下一帧开头执行。
+- Git 界面照 WebStorm 的用法做（依据和取舍见 `docs/plans/git-ops.html`），全部在窗口进程里调用系统 git，常驻进程不参与：
+  - 路径都相对仓库根目录；仓库根目录换成工作区路径的写法（`repoRoot`），git 给的是解析过符号链接的（如 `/private/var`），混用会把同一个文件当成两个。界面调用的 gitx 函数用 `runRaw`（原样输出、`LC_ALL=C`、失败返回 `*gitx.Error`，`Msg` 是 git 自己的报错）。
+  - 文件标签左栏"改动"：文件标签看得见时每 1.5 秒读一次 `status --porcelain=v2`，不用手动刷新；没有已暂存的文件时提交按钮是 `commit -a`，有就只提交已暂存的。编辑器行号旁标出相对 HEAD 的改动（`State.DiffBase`），⌥⌘Z 回滚一段。
+  - diff 标签页用 mygo 的 `editor.DiffView`，默认左右对照、忽略空白（`third_party/mygo` 加的 `IgnoreWhitespace`，只忽略空白，不忽略空行）。`diffSpec` 的版本：newRev 空是工作区、`":"` 是暂存区，oldRev 空是"这一边没有"。F7 / ⇧F7 跨文件跳改动，F4 跳到编辑器；工作区 diff 的逐段回滚立刻写回磁盘。diff、比较、日志、Annotate 是 `virtual` 标签页，不轮询磁盘、不记进 ui.json。
+  - 分支弹窗：点标签栏的分支名，⌥⌘N 新建分支，⇧⌘K Push（WebStorm 的 ⌘T 更新项目和 hive 的新建终端冲突，放进弹窗）。更新当前分支是 `pull --rebase --autostash`，其他分支只快进。被另一个 worktree 检出的分支，检出改成切到那个工作区；"基于它新建工作区"走 hive 的 worktree 工作区。检出、rebase、合并、更新、reset 之类改动工作目录的操作，工作区里有 agent 正在工作时先确认（`guardAgent`）。
+  - 强制推送一律 `--force-with-lease`。改提交信息、和上一个提交合并、删除提交用交互式 rebase，hive 生成脚本改写待办列表和提交信息（`rebaseTodo`），不打开编辑器；范围里有合并提交时拒绝。rebase、合并等停在冲突上时，改动列表顶部有继续 / 跳过 / 中止的横幅，冲突文件可以整个采用一方（rebase 时 ours 是目标分支）。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
