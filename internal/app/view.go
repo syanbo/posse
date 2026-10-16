@@ -522,7 +522,12 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 		p.After(starFrame - now%starFrame)
 		fs := size * 1.15
 		w, h := p.MeasureText(0, ui.Span{Text: glyph, Size: fs})
-		p.Text(r.X+(r.W-w)/2, r.Y+(r.H-h)/2, glyph, fs, color)
+		// 按行框居中时星号的墨迹偏下约八分之一字号（实测），往上挪回来；"·" 本来就在中间
+		lift := size * 0.125
+		if glyph == "·" {
+			lift = size * 0.02
+		}
+		p.Text(r.X+(r.W-w)/2, r.Y+(r.H-h)/2-lift, glyph, fs, color)
 	})
 }
 
