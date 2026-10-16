@@ -30,7 +30,7 @@ var hover = ui.Animation{Duration: 120 * time.Millisecond}
 const (
 	fsCaption   = 11   // 说明、计数、快捷键
 	fsMeta      = 12   // 元信息：路径、时间、作者
-	fsBody      = 13.5 // 正文、列表
+	fsBody      = 14   // 正文、列表
 	fsRead      = 14.5 // 阅读：Markdown 回复
 	fsCardTitle = 15
 	fsPageTitle = 18

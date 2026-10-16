@@ -60,10 +60,10 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 					turn = 90
 				}
 				ui.Icon(c, iconChevron).FontSize(12).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				ui.Icon(c, iconFolder).FontSize(15).TextColor(t.Accent).Shrink(0)
+				ui.Icon(c, iconFolder).FontSize(16).TextColor(t.Accent).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
-				ui.Icon(c, iconFile).FontSize(15).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconFile).FontSize(16).TextColor(t.TextMuted).Shrink(0)
 			}
 			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if ignored {
@@ -175,8 +175,8 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		if r.header {
 			row := ui.Row(c).Padding(8, 12, 3, 14).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
-				ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
-				ui.Text(c, filepath.Base(h.Path)).FontSize(13).FontWeight(500).SingleLine().Shrink(0)
+				ui.Icon(c, iconFile).FontSize(16).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, filepath.Base(h.Path)).FontSize(fsBody).FontWeight(500).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
 					ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
