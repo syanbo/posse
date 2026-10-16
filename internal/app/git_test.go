@@ -106,7 +106,7 @@ func TestGitChangesAndDiff(t *testing.T) {
 	v.side = sideChanges
 	v.git.message = "feat: 加日志"
 	tt.Frame()
-	if err := tt.Click("提交"); err != nil {
+	if err := tt.Click(commitTip(true)); err != nil {
 		t.Fatal(err)
 	}
 	until(t, tt, "commit", func() bool { return v.git.busy == "" && v.git.changeCount() == 1 })

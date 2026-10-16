@@ -39,6 +39,8 @@ type gitState struct {
 	stashes  []gitx.Stash
 	rows     []changeRow
 	list     ui.ListState
+	tab      int // 改动页的分页：0 提交（文件改动），1 搁置（git stash），照 WebStorm 的提交工具窗口
+	stashLst ui.ListState
 	poll     panelPoll
 	message  string
 	amend    bool

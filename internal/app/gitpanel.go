@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -34,19 +35,68 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	a.changesHeader(c, w, v)
 	a.operationBanner(c, w, v)
-	if len(g.rows) == 0 {
+	// 分页：提交看文件改动和提交框，搁置看 stash
+	var files, stashes []changeRow
+	for _, r := range g.rows {
+		switch {
+		case r.group != groupStash:
+			files = append(files, r)
+		case !r.header:
+			stashes = append(stashes, r)
+		}
+	}
+	ui.Row(c).Gap(4).Padding(2, 10, 6, 10).AlignItems(ui.Center).Children(func() {
+		changesTab(c, &g.tab, 0, "提交", g.changeCount())
+		changesTab(c, &g.tab, 1, "搁置", len(stashes))
+	})
+	rows, list, empty := files, &g.list, "没有改动"
+	if g.tab == 1 {
+		rows, list, empty = stashes, &g.stashLst, "没有搁置的改动"
+	}
+	if len(rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
-			ui.Text(c, "没有改动").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+			ui.Text(c, empty).FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
 		})
 	} else {
-		rows := g.rows
-		g.list.Key = func(i int) any {
+		list.Key = func(i int) any {
 			r := rows[i]
 			return [3]any{r.group, r.header, r.entry.Path + r.stash.Ref}
 		}
-		ui.List(c, &g.list, len(rows), func(i int) { a.changeRow(c, w, v, rows[i]) }).Grow(1).Padding(0, 0, 8, 0)
+		ui.List(c, list, len(rows), func(i int) { a.changeRow(c, w, v, rows[i]) }).Grow(1).Padding(0, 0, 8, 0)
 	}
-	a.commitBox(c, v)
+	if g.tab == 0 {
+		a.commitBox(c, v)
+	}
+}
+
+// changesTab 是改动页的一个分页：文字加个数，选中的垫一层填充底。
+func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
+	t := c.Theme()
+	active := *sel == i
+	row := ui.Row(c.Key(label)).Height(26).Padding(0, 10).Gap(5).Radius(6).AlignItems(ui.Center).
+		Role(ui.RoleTab).Label(label).Checked(active)
+	bg := ui.Transparent
+	switch {
+	case active:
+		bg = colors(t).fill
+	case row.Hovered():
+		bg = colors(t).wash
+	}
+	row.Background(row.AnimateColor("bg", bg, hover))
+	row.Children(func() {
+		text := ui.Text(c, label).FontSize(12.5)
+		if active {
+			text.FontWeight(500)
+		} else {
+			text.TextColor(t.TextMuted)
+		}
+		if n > 0 {
+			ui.Text(c, strconv.Itoa(n)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted)
+		}
+	})
+	if row.Clicked() {
+		*sel = i
+	}
 }
 
 // changesHeader 是改动列表上方一行：分支、领先和落后的提交数，以及刷新、搁置。
@@ -312,7 +362,8 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 				a.setAmend(v, amend)
 			}
 			ui.Spacer(c)
-			btn := pressable(accentButton(c, label)).Tooltip(commitTip(all) + " ⌘K")
+			// 读屏念说明：上面"提交"分页也叫"提交"
+			btn := pressable(accentButton(c, label)).Label(commitTip(all)).Tooltip(commitTip(all) + " ⌘K")
 			if g.busy != "" || g.changeCount() == 0 && !g.amend {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
