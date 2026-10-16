@@ -2,8 +2,10 @@ package app
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -103,27 +105,56 @@ func (a *app) pollRecent(c *ui.Context, w *workspace) {
 		if len(all) > recentLimit {
 			all = all[:recentLimit]
 		}
-		// 聊天内容按会话缓存，会话没更新就不重取；每个会话一次 history.show
+		// 聊天内容按会话缓存，会话没更新就不重取。先用缓存把列表显示出来，缺的再并发取（每个会话一次 history.show）
 		previews := make(map[string]recentPreview, len(all))
+		var missing []history.Session
 		for _, s := range all {
 			k := sessionKey(s)
 			if p, ok := cached[k]; ok && p.at.Equal(s.UpdatedAt) {
 				previews[k] = p
 			} else {
-				previews[k] = a.sessionPreview(s)
+				missing = append(missing, s)
 			}
 		}
+		shown := maps.Clone(previews)
+		a.win.Update(func() {
+			r := &a.recent
+			if r.key != key {
+				return
+			}
+			if len(missing) == 0 {
+				r.poll.done()
+			}
+			// 出错时 a.call 已经报过了
+			if firstErr != nil && len(all) == 0 {
+				return
+			}
+			r.sessions, r.loaded, r.previews = all, true, shown
+		})
+		if len(missing) == 0 {
+			return
+		}
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 4)
+		for _, s := range missing {
+			wg.Go(func() {
+				sem <- struct{}{}
+				p := a.sessionPreview(s)
+				<-sem
+				mu.Lock()
+				previews[sessionKey(s)] = p
+				mu.Unlock()
+			})
+		}
+		wg.Wait()
 		a.win.Update(func() {
 			r := &a.recent
 			if r.key != key {
 				return
 			}
 			r.poll.done()
-			// 出错时 a.call 已经报过了
-			if firstErr != nil && len(all) == 0 {
-				return
-			}
-			r.sessions, r.loaded, r.previews = all, true, previews
+			r.previews = previews
 		})
 	}()
 }
