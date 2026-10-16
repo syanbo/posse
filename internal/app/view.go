@@ -157,21 +157,18 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+12).DragWindow().Children(func() {
 		ui.Spacer(c)
 		iconButton(c, iconPlus, "新建").Menu(func(m *ui.Menu) {
+			if m.Item("添加项目…").Chosen() {
+				go a.addProject()
+			}
 			if m.Item("新建工作区…").Shortcut(ui.Cmd, ui.KeyN).Chosen() {
 				a.openNewWorkspace()
 			}
 			if m.Item("派发任务…").Chosen() {
 				a.openDispatch()
 			}
-			if m.Item("添加项目…").Chosen() {
-				go a.addProject()
-			}
 			m.Separator()
 			if m.Item("连接手机…").Chosen() {
 				a.openMobile()
-			}
-			if m.Item("从 Orca 导入项目").Chosen() {
-				go a.importOrca()
 			}
 		})
 	})
@@ -670,14 +667,11 @@ func (a *app) firstRun(c *ui.Context) {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", 20)
-				ui.Text(c, "Hive 按项目管理终端和 agent。可以直接选一个文件夹，也可以把 Orca 里的项目一次搬过来。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+				ui.Text(c, "Hive 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
 				if pressable(accentButton(c, "添加项目…")).Clicked() {
 					go a.addProject()
-				}
-				if pressable(textButton(c, "从 Orca 导入")).Clicked() {
-					go a.importOrca()
 				}
 			})
 		})

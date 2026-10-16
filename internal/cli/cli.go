@@ -92,7 +92,6 @@ func init() {
 		{"mobile pair", "Show a QR code to pair the Orca mobile app with this computer", "[--new] [--address IP]", cmdMobilePair},
 		{"mobile devices", "List paired phones", "", cmdMobileDevices},
 		{"mobile rm", "Unpair a phone", "<device>", cmdMobileRm},
-		{"import orca", "Import Orca's projects and folder workspaces (idempotent)", "[--dry-run]", cmdImportOrca},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
 		{"version", "Print the version", "", cmdVersion},
 	}

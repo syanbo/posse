@@ -771,26 +771,6 @@ func (a *app) addProject() {
 	a.refresh()
 }
 
-func (a *app) importOrca() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	report, err := a.c.ImportOrca(ctx, false)
-	a.win.Update(func() {
-		if err != nil {
-			a.err = "从 Orca 导入失败：" + err.Error()
-			return
-		}
-		added := 0
-		for _, line := range report {
-			if strings.HasSuffix(line, ": added") {
-				added++
-			}
-		}
-		a.confirm("已从 Orca 导入", fmt.Sprintf("新增 %d 个，已存在的 %d 个未改动。", added, len(report)-added), "好", nil)
-	})
-	a.refresh()
-}
-
 func (a *app) openNewWorkspace() {
 	a.creating = true
 	a.newName, a.newPrompt, a.newAgent = "", "", 1
