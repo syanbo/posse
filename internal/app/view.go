@@ -402,7 +402,7 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 	}
 }
 
-// navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时排在 sub 前面；
+// navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
 // 选中和悬停的样式见 selectable。
 func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
 	t := c.Theme()
@@ -422,17 +422,15 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 			if selected {
 				text.FontWeight(600)
 			}
-			if sub != "" {
-				// 放不下时先截路径，分支名尽量完整
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					if branch != "" {
-						ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).MaxWidth(130).Children(func() {
-							ui.Icon(c, iconBranch).FontSize(10).TextColor(t.TextMuted).Shrink(0)
-							ui.Text(c, branch).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
-						})
-					}
-					ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			// 分支独占一行，路径在它下面
+			if branch != "" {
+				ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, iconBranch).FontSize(10).TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, branch).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				})
+			}
+			if sub != "" {
+				ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 		// 行尾的数字、状态和箭头在整行里上下居中，两行的工作区也一样
