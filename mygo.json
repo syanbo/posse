@@ -6,6 +6,7 @@
   "icon": "design/icon.png",
   "out": "build",
   "macos": {
-    "minimumSystemVersion": "13.0"
+    "minimumSystemVersion": "13.0",
+    "signingIdentity": "4073BAFE9C1AA0F7F41305F0190ABF6F150A6377"
   }
 }
