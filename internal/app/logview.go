@@ -18,8 +18,8 @@ import (
 
 const (
 	logPage   = 300
-	logRowH   = 28
-	laneWidth = 12
+	logRowH   = 32
+	laneWidth = 14
 )
 
 type logDoc struct {
@@ -347,7 +347,8 @@ func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo, gr graphRow) {
 	t := c.Theme()
 	ld := d.log
-	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 12, 0, 4).Gap(8).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
+	// 左边留出选中项的竖条，提交图不和它挤在一起
+	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
 	selectable(c, row, ld.commit != nil && ld.commit.info.Hash == ci.Hash)
 	row.Children(func() {
 		graphCell(c, gr, ci.Hash)
