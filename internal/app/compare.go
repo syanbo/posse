@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -24,6 +25,8 @@ type compareDoc struct {
 	changes    []gitx.FileChange
 	commit     *commitView // 选中的提交
 	list       ui.ListState
+	listOther  ui.ListState // 只在 other 里的提交
+	listCur    ui.ListState // 只在 cur 里的提交
 }
 
 // commitView 是选中的一个提交和它改的文件。
@@ -135,10 +138,15 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		return
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
-		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
-			ui.Column(c).Padding(8, 8, 16, 8).Gap(1).Children(func() {
-				a.commitSection(c, v, &cd.commit, fmt.Sprintf("只在 %s 里", cd.other), cd.onlyOther)
-				a.commitSection(c, v, &cd.commit, fmt.Sprintf("只在 %s 里", cd.cur), cd.onlyCur)
+		// 照 WebStorm：上下两栏，各是一边独有的提交
+		ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			a.compareBar(c, w, v, d)
+			ui.Column(c).Grow(1).Shrink(1).Children(func() {
+				a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther)
+			})
+			ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+			ui.Column(c).Grow(1).Shrink(1).Children(func() {
+				a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur)
 			})
 		})
 		if cd.commit != nil {
@@ -148,34 +156,115 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	})
 }
 
-func (a *app) commitSection(c *ui.Context, v *filesView, sel **commitView, title string, list []gitx.CommitInfo) {
+// compareBar 是比较页顶上一行：比较的两个分支，交换两边，刷新。
+func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
-	ui.Row(c).Padding(10, 8, 4, 8).Gap(6).Children(func() {
-		ui.Text(c, title).FontSize(11.5).FontWeight(500).TextColor(t.TextMuted)
-		ui.Text(c, fmt.Sprintf("%d 个提交", len(list))).FontSize(11.5).TextColor(t.TextMuted)
-	})
-	if len(list) == 0 {
-		ui.Text(c, "没有").FontSize(12).TextColor(t.TextMuted).Padding(2, 8)
-	}
-	for _, ci := range list {
-		if commitRow(c, ci, *sel != nil && (*sel).info.Hash == ci.Hash) {
-			a.selectCommit(v, sel, ci)
+	cd := d.comp
+	ui.Row(c).Height(40).Shrink(0).Padding(0, 10, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "比较").FontSize(12.5).TextColor(t.TextMuted)
+		ui.Text(c, cd.other).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+		ui.Text(c, "和").FontSize(12.5).TextColor(t.TextMuted)
+		ui.Text(c, cd.cur).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+		ui.Spacer(c)
+		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
+			cd.other, cd.cur = cd.cur, cd.other
+			cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
+			cd.listOther, cd.listCur = cd.listCur, cd.listOther
+			d.path = compareKey(cd.other, cd.cur, false)
 		}
-	}
+		if pressable(iconButtonSized(c, iconRefresh, "刷新", 24, 14)).Clicked() {
+			a.loadCompare(v, d)
+		}
+	})
+	ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
 }
 
-// commitRow 是一个提交：标题、短哈希、作者、时间。返回是否点了它。
-func commitRow(c *ui.Context, ci gitx.CommitInfo, selected bool) bool {
+// commitPane 是一边独有的提交：琥珀色横幅说明是哪边，下面是提交列表。
+func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui.ListState, in, notIn string, commits []gitx.CommitInfo) {
 	t := c.Theme()
-	row := ui.Row(c.Key(ci.Hash)).Height(28).Padding(0, 10).Gap(10).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
-	selectable(c, row, selected)
+	p := colors(t)
+	ui.Row(c).Height(34).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.honey.Alpha(0.12)).Children(func() {
+		ui.Icon(c, iconHexAlert).FontSize(13).TextColor(p.honey).Shrink(0)
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
+			ui.Text(c, "存在于").FontSize(12.5)
+			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(600).SingleLine().Shrink(1)
+			ui.Text(c, "中但不存在于").FontSize(12.5)
+			ui.Text(c, notIn).FontSize(12.5).Font(monoFont).FontWeight(600).SingleLine().Shrink(1)
+			ui.Text(c, "中的提交").FontSize(12.5)
+		})
+		ui.Spacer(c)
+		ui.Text(c, fmt.Sprintf("%d 个", len(commits))).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+	})
+	if len(commits) == 0 {
+		ui.Text(c, fmt.Sprintf("没有，%s 已经包含 %s 的全部提交", notIn, in)).FontSize(12).TextColor(t.TextMuted).Padding(12, 16)
+		return
+	}
+	list.Key = func(i int) any { return commits[i].Hash }
+	ui.List(c, list, len(commits), func(i int) {
+		ci := commits[i]
+		if commitRow(c, ci, *sel != nil && (*sel).info.Hash == ci.Hash, i == 0, i == len(commits)-1) {
+			a.selectCommit(v, sel, ci)
+		}
+	}).Grow(1).Padding(4, 0, 8, 0)
+}
+
+// commitRow 是比较页的一个提交，和 Git 日志一个样子：左边一条线串起圆点，标题、分支和标签、作者、时间。
+// first、last 决定线从哪画到哪。返回是否点了它。
+func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool) bool {
+	t := c.Theme()
+	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
+	bg := ui.Transparent
+	switch {
+	case selected:
+		bg = colors(t).tint
+	case row.Hovered():
+		bg = colors(t).wash
+	}
+	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
+		lane := laneColor(0)
+		ui.Box(c).Width(12).Height(logRowH).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+			cx, cy := r.X+r.W/2, r.Y+r.H/2
+			top, bot := r.Y, r.Y+r.H
+			if first {
+				top = cy
+			}
+			if last {
+				bot = cy
+			}
+			if bot > top {
+				p.Fill(ui.Rect{X: cx - 0.8, Y: top, W: 1.6, H: bot - top}, lane, 0)
+			}
+			p.Fill(ui.Rect{X: cx - 4, Y: cy - 4, W: 8, H: 8}, lane, 4)
+		})
 		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Grow(1).Shrink(1)
-		ui.Text(c, ci.Hash[:7]).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, ci.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().MaxWidth(110).Shrink(0)
-		ui.Text(c, ago(ci.Time)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		for _, ref := range refNames(ci.Refs) {
+			rbg, fg := t.Surface, t.TextMuted
+			if ref.head {
+				rbg, fg = colors(t).tint, t.Accent
+			}
+			ui.Text(c, ref.name).FontSize(10.5).Font(monoFont).TextColor(fg).Padding(1, 5).Radius(4).Background(rbg).SingleLine().Shrink(0).MaxWidth(160)
+		}
+		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().MaxWidth(110).Shrink(0)
+		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(88).TextAlign(ui.End).Shrink(0)
 	})
 	return row.Clicked()
+}
+
+// commitTime 写成"今天 14:26""昨天 17:04""10月3日"，跨年的带年份，和 WebStorm 一样看得出先后。
+func commitTime(at time.Time) string {
+	at = at.Local()
+	now := time.Now()
+	day := func(t time.Time) time.Time { return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local) }
+	switch d := day(now).Sub(day(at)); {
+	case d == 0:
+		return "今天 " + at.Format("15:04")
+	case d == 24*time.Hour:
+		return "昨天 " + at.Format("15:04")
+	case at.Year() == now.Year():
+		return at.Format("1月2日")
+	}
+	return at.Format("2006-01-02")
 }
 
 // commitDetail 是选中提交的说明和它改的文件，点文件看这个提交里的改动。
@@ -318,8 +407,8 @@ func (a *app) pushDialog(c *ui.Context) {
 					}
 					ui.Scroll(c).Grow(1).Children(func() {
 						ui.Column(c).Gap(1).Children(func() {
-							for _, ci := range plan.Commits {
-								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash) {
+							for i, ci := range plan.Commits {
+								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1) {
 									a.selectCommit(v, &ps.commit, ci)
 								}
 							}

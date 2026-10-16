@@ -201,6 +201,21 @@ func previewBranches(t *testing.T, a *app) {
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
 }
 
+// previewCompare 打开 feat 和 main 的比较，选中 feat 独有的那个提交。
+func previewCompare(t *testing.T, a *app) {
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	a.loadBranches(v) // 顺带查出仓库根目录
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
+	cd := v.cur.comp
+	a.selectCommit(v, &cd.commit, cd.onlyOther[0])
+	until(t, tt, "commit files", func() bool { return cd.commit.files != nil })
+}
+
 func previewPush(t *testing.T, a *app) {
 	branchWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -402,6 +417,10 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewPush(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-push-"+suffix+".png")
+
+		a = previewApp(t)
+		previewCompare(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-compare-"+suffix+".png")
 
 		a = previewApp(t)
 		previewLog(t, a)

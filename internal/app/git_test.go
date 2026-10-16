@@ -217,7 +217,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 
 	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff
 	a.openCompare(w, v, "feat", "main", false)
-	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && tt.HasText("只在 feat 里") })
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && tt.HasText("中但不存在于") })
 	cd := v.cur.comp
 	if len(cd.onlyOther) != 1 || len(cd.onlyCur) != 1 || cd.onlyOther[0].Subject != "feat: 新功能" {
 		t.Fatalf("compare %+v / %+v", cd.onlyOther, cd.onlyCur)

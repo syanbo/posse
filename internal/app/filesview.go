@@ -398,13 +398,15 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
-// docIcon 是文件标签的图标：Git 日志、Annotate 用各自的图标，其余是文件。
+// docIcon 是文件标签的图标：Git 日志、Annotate、分支比较用各自的图标，其余是文件。
 func docIcon(d *fileDoc) *ui.SVG {
 	switch {
 	case d.log != nil:
 		return iconGitLog
 	case d.blame != nil:
 		return iconBlame
+	case d.comp != nil:
+		return iconBranch
 	}
 	return iconFile
 }
