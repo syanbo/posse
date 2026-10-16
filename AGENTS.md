@@ -106,4 +106,5 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 主机密钥和配对的手机存在 `$HIVE_HOME/mobile.json`（0600）。手机按公钥认主机，换密钥等于所有手机重新配对。配对码在窗口底栏的手机图标、"新建"菜单或 `hive mobile pair`。
   - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
   - 手机看终端时终端按手机屏幕排版（`Terminal.HoldSize`），界面这时的尺寸变化先记下，手机全部离开后恢复；手机接入不接管终端查询的应答（`Watch`）。终端输出走 Orca 的 16 字节头二进制帧，按 UTF-8 字符边界切块。
+  - 文件页（`files.go`）：`files.readDir`（按目录读，手机优先用它，没有才退回 `files.list`）、`files.list`、`files.searchPaths`、`files.read`、`files.readPreview`、`files.stat`，只读，路径相对工作区、拒绝绝对路径和 `..`，限制照 Orca（文本 512 KB 截断、图片 10 MB、清单 5000 个）。音视频、编辑保存、在桌面打开没做。
   - 手机上传的图片存成 `$TMPDIR/hive-mobile-*`，App 再把路径输入终端。

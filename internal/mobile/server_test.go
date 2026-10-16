@@ -26,12 +26,17 @@ type fakeHost struct {
 	mu    sync.Mutex
 	terms map[string]*term.Terminal
 	order []string
+	dir   string // 工作区目录，空是 /tmp
 }
 
 func (h *fakeHost) State() State {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	w := Workspace{ID: "w1", ProjectID: "p1", Name: "main", Path: "/tmp", Kind: "main", CreatedAt: time.Now()}
+	dir := h.dir
+	if dir == "" {
+		dir = "/tmp"
+	}
+	w := Workspace{ID: "w1", ProjectID: "p1", Name: "main", Path: dir, Kind: "main", CreatedAt: time.Now()}
 	for _, id := range h.order {
 		t := h.terms[id]
 		w.Terminals = append(w.Terminals, Terminal{ID: id, Agent: "claude", Status: "waiting", Running: t.Running(), CreatedAt: t.CreatedAt, LastOutput: t.LastOutput()})

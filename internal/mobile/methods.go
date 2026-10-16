@@ -472,6 +472,9 @@ func (c *conn) dispatch(req request) error {
 		"clipboard.abortImageUpload", "clipboard.saveImageAsTempFile":
 		return c.image(req.ID, req.Method, p)
 	}
+	if c.fileMethod(req, p) {
+		return nil
+	}
 	return errorf("method_not_found", "Unknown method: %s", req.Method)
 }
 
