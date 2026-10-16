@@ -184,19 +184,21 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 									ui.Text(c, ago(s.UpdatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 								}
 							})
-							// 全部会话时看目录才知道是哪个项目的
-							if r.scope == 1 && s.Cwd != "" {
-								ui.Text(c, shortPath(s.Cwd)).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
-							}
-							sessionMeta(c, s)
-							// 和任务卡片一样带一段聊天内容
+							// 标题下面是最后一段聊天内容，再下面是目录和消息数
 							if p := r.previews[sessionKey(s)]; p.text != "" {
 								text := p.text
 								if p.user {
 									text = "你：" + text
 								}
-								ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35).Padding(2, 0, 0, 0)
+								ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
+								// 细线把聊天内容和下面的目录、消息数分开
+								ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
 							}
+							// 全部会话时看目录才知道是哪个项目的
+							if r.scope == 1 && s.Cwd != "" {
+								ui.Text(c, shortPath(s.Cwd)).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
+							}
+							sessionMeta(c, s)
 						})
 					})
 					if row.Clicked() {
