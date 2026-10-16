@@ -321,7 +321,12 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []works
 			sub = ""
 		}
 	}
-	item := a.navRow(c, w.ID, workspaceIcon(w.Kind), label, sub, trailing)
+	// 项目目录和同目录的工作区：第二行先写当前分支（worktree 的第二行已经是分支）
+	branch := ""
+	if w.Kind != "worktree" {
+		branch = w.Branch
+	}
+	item := a.navRow(c, w.ID, workspaceIcon(w.Kind), label, sub, branch, trailing)
 	if a.revealSel && w.ID == a.selected {
 		item.ScrollIntoView()
 		a.revealSel = false
@@ -387,8 +392,9 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 	}
 }
 
-// navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支）；选中和悬停的样式见 selectable。
-func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub string, trailing func()) ui.Element {
+// navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时排在 sub 前面；
+// 选中和悬停的样式见 selectable。
+func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
 	t := c.Theme()
 	selected := a.selected == id
 	a.navOrder = append(a.navOrder, id)
@@ -407,7 +413,16 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub string, 
 				text.FontWeight(600)
 			}
 			if sub != "" {
-				ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
+				// 放不下时先截路径，分支名尽量完整
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					if branch != "" {
+						ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).MaxWidth(130).Children(func() {
+							ui.Icon(c, iconBranch).FontSize(10).TextColor(t.TextMuted).Shrink(0)
+							ui.Text(c, branch).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+						})
+					}
+					ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+				})
 			}
 		})
 		// 行尾的数字、状态和箭头在整行里上下居中，两行的工作区也一样

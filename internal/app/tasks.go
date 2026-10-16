@@ -314,7 +314,7 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 			statusGlyph(c, agent.StatusWorking, 12)
 		}
 	}
-	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", trailing)
+	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", "", trailing)
 	if a.revealSel && a.selected == taskBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
