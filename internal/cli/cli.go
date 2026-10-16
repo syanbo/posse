@@ -89,7 +89,7 @@ func init() {
 		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},
 		{"history resume", "Continue a past session in a new hive terminal", "<session> [--workspace W]", cmdHistoryResume},
 		{"history index", "Update the session history index now", "[--rebuild]", cmdHistoryIndex},
-		{"mobile pair", "Show a QR code to pair the Orca mobile app with this computer", "[--new] [--address IP]", cmdMobilePair},
+		{"mobile pair", "Show a QR code to pair the Orca mobile app with this computer", "[--new] [--address HOST[:PORT]|URL]", cmdMobilePair},
 		{"mobile devices", "List paired phones", "", cmdMobileDevices},
 		{"mobile rm", "Unpair a phone", "<device>", cmdMobileRm},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},

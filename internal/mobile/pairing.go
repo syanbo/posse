@@ -9,9 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -184,6 +186,58 @@ func offerCode(endpoint, token string, pub [32]byte, deviceID string) string {
 		"pairedDeviceId": deviceID, "scope": "mobile",
 	})
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+var errAddress = errors.New("address must be a host, host:port, IP, or http(s)/ws(s) URL")
+
+// ResolveEndpoint 照 Orca 桌面端（src/main/runtime/pairing-endpoint.ts）把地址换成配对码里的 endpoint：
+// 带 :// 的是整条 URL，http、https 换成 ws、wss，路径保留，给隧道、反向代理用；
+// 否则是主机或 主机:端口，端口缺省用本机监听的 port。
+func ResolveEndpoint(addr string, port int) (string, error) {
+	addr = strings.TrimSpace(addr)
+	if addr == "" || strings.ContainsFunc(addr, func(r rune) bool { return r <= ' ' || r == 0x7f }) {
+		return "", errAddress
+	}
+	if strings.Contains(addr, "://") {
+		u, err := url.Parse(addr)
+		if err != nil {
+			return "", errAddress
+		}
+		switch u.Scheme = strings.ToLower(u.Scheme); u.Scheme {
+		case "http":
+			u.Scheme = "ws"
+		case "https":
+			u.Scheme = "wss"
+		}
+		if u.Scheme != "ws" && u.Scheme != "wss" || u.Hostname() == "" || u.User != nil ||
+			u.Fragment != "" || u.Port() == "0" || wildcardHost(u.Hostname()) {
+			return "", errAddress
+		}
+		if u.Path == "/" && u.RawQuery == "" {
+			u.Path = ""
+		}
+		return u.String(), nil
+	}
+	host, p := addr, strconv.Itoa(port)
+	if ip := net.ParseIP(addr); ip == nil && strings.Contains(addr, ":") || strings.HasPrefix(addr, "[") {
+		h, pp, err := net.SplitHostPort(addr)
+		if err != nil {
+			return "", errAddress
+		}
+		host, p = h, pp
+	}
+	if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 || strings.HasPrefix(p, "0") {
+		return "", errAddress
+	}
+	if host == "" || strings.ContainsAny(host, "/?#@[]") || wildcardHost(host) {
+		return "", errAddress
+	}
+	return "ws://" + net.JoinHostPort(host, p), nil
+}
+
+func wildcardHost(h string) bool {
+	h = strings.ToLower(strings.Trim(h, "[]"))
+	return h == "*" || h == "0.0.0.0" || h == "::" || h == "::ffff:0:0"
 }
 
 // LocalAddress 选手机能连到的本机地址：优先 Tailscale（100.64.0.0/10），其次局域网的私有地址。

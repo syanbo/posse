@@ -316,3 +316,29 @@ func TestUTF8Complete(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveEndpoint(t *testing.T) {
+	ok := map[string]string{
+		"100.64.1.2":                      "ws://100.64.1.2:6788",
+		"home.example.com:8443":           "ws://home.example.com:8443",
+		"fd00::1":                         "ws://[fd00::1]:6788",
+		"[fd00::1]:9000":                  "ws://[fd00::1]:9000",
+		"https://orca.example.uk/v11v7w0": "wss://orca.example.uk/v11v7w0",
+		"HTTPS://example.com/":            "wss://example.com",
+		"http://10.0.0.2:8080":            "ws://10.0.0.2:8080",
+		"wss://example.com/a?b=1":         "wss://example.com/a?b=1",
+		"  ws://example.com:6788  ":       "ws://example.com:6788",
+	}
+	for in, want := range ok {
+		got, err := ResolveEndpoint(in, 6788)
+		if err != nil || got != want {
+			t.Errorf("ResolveEndpoint(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "0.0.0.0", "host:0", "host:65536", "host/path", "ftp://example.com",
+		"https://user@example.com", "https://example.com/#x", "ws://0.0.0.0:1", "a b", "host:"} {
+		if got, err := ResolveEndpoint(in, 6788); err == nil {
+			t.Errorf("ResolveEndpoint(%q) = %q, want error", in, got)
+		}
+	}
+}

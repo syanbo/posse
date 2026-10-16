@@ -106,6 +106,7 @@ func (s *Server) Close() {
 }
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
+// addr 为空时自动选 Tailscale 或局域网地址，写法见 ResolveEndpoint。
 func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	if err := s.listen(); err != nil {
 		return PairInfo{}, err
@@ -116,11 +117,14 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	if addr == "" {
 		return PairInfo{}, errors.New("no LAN or Tailscale address found; connect to a network first")
 	}
+	ep, err := ResolveEndpoint(addr, s.Port())
+	if err != nil {
+		return PairInfo{}, err
+	}
 	d, err := s.pair.pending(rotate)
 	if err != nil {
 		return PairInfo{}, err
 	}
-	ep := "ws://" + net.JoinHostPort(addr, strconv.Itoa(s.Port()))
 	code := offerCode(ep, d.Token, s.pair.pub, d.ID)
 	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: ep}, nil
 }

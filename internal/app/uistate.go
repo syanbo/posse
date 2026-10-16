@@ -16,6 +16,8 @@ type uiState struct {
 	RightPanel      string   `json:"rightPanel,omitempty"`      // 右侧开着的浮层面板：panelUsage、panelHistory、panelImages 或空
 	FilesPanel      bool     `json:"filesPanel,omitempty"`      // 文件栏开着（停靠在右边，不是浮层）
 	FilesPanelWidth float32  `json:"filesPanelWidth,omitempty"` // 文件栏的宽度，0 表示默认
+	MobileAddress   string   `json:"mobileAddress,omitempty"`   // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
+	MobileAddresses []string `json:"mobileAddresses,omitempty"` // 用过的自定义地址，配对对话框里可选
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`
 }

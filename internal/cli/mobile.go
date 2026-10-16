@@ -27,7 +27,7 @@ func cmdMobilePair(e *env, args []string) error {
 		if err := printQR(e.out, info.URL); err != nil {
 			fmt.Fprintln(e.errOut, err)
 		}
-		fmt.Fprintf(e.out, "\nScan with the Orca mobile app (Pair Desktop → Continue), or tap \"Paste code instead\" and paste:\n%s\n\nPhone connects to %s (same Wi-Fi or Tailscale).\n", info.Code, info.Endpoint)
+		fmt.Fprintf(e.out, "\nScan with the Orca mobile app (Pair Desktop → Continue), or tap \"Paste code instead\" and paste:\n%s\n\nPhone connects to %s; it must be able to reach this address.\n", info.Code, info.Endpoint)
 	})
 }
 

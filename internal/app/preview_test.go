@@ -466,7 +466,9 @@ func TestPreview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		a.mobile = mobileView{open: true, url: url, endpoint: "ws://172.31.0.230:6788", qr: ui.NewBitmap(img),
+		a.state.MobileAddress = "https://orca.example.uk/v11v7w0"
+		a.state.MobileAddresses = []string{a.state.MobileAddress}
+		a.mobile = mobileView{open: true, url: url, endpoint: "wss://orca.example.uk/v11v7w0", qr: ui.NewBitmap(img),
 			devices: []mobileDevice{{ID: "d1", Name: "手机 10-16 00:30", LastSeen: time.Now().Add(-3 * time.Minute)}}}
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
 

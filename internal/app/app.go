@@ -679,6 +679,7 @@ func (a *app) saveState() {
 	}
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
+	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	go saveUIState(a.home, s)
 }
