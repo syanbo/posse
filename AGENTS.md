@@ -74,7 +74,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
 - 文件：照 Orca 分两处，全部在窗口进程里，不经过常驻进程。
-  - 文件栏（`filespanel.go`）停靠在主区域最右边，分段切换文件树、检索、改动；它挤窄标签栏和终端（编辑器），不浮在上面、点别处也不收起，和"图片 / 技能与 MCP / 历史"这些浮层面板分开（开关是 ui.json 的 `filesPanel`，旧版记在 `rightPanel: files` 的读进来自动改过来）。宽度存在 `filesPanelWidth`，所有工作区共用；拖左边缘调宽（220–640），松手才写文件。快捷键：⌘L 开关，⇧⌘E 文件树、⇧⌘G 改动（已经在那一页时关掉），⇧⌘F 检索，⌘K 提交。
+  - 文件栏（`filespanel.go`）停靠在主区域最右边，分段切换文件树、检索、改动；它挤窄标签栏和终端（编辑器），不浮在上面、点别处也不收起，和"图片 / 技能与 MCP / 历史"这些浮层面板分开（开关是 ui.json 的 `filesPanel`，旧版记在 `rightPanel: files` 的读进来自动改过来）。宽度存在 `filesPanelWidth`，所有工作区共用；拖左边缘调宽（220–640），松手才写文件。快捷键：⌘L 开关，⇧⌘E 文件树、⇧⌘G 改动（已经在那一页时关掉；编辑器有焦点时让给它的"查找上一个"），⇧⌘F 检索，⌘K 提交。
   - 打开的文件照 Orca 是标签栏里的标签，排在终端标签后面（`docTabs`），带未保存的圆点。文件树里单击打开的是预览标签（斜体，`fileDoc.transient`），下一次单击换掉它；双击文件或标签、从别处打开（⌘P、检索、改动、链接）、改了内容都会常驻。`activeTerm[工作区]` 为 `filesTabID` 时选中的是文件（哪个看 `filesView.cur`），`currentTerminal` 返回 nil，终端断开接入。没有终端的工作区也能开。⌘P 快速打开（`路径:行号` 跳行，不离开终端，选中后才切过来），⌘S 保存，⌘W 关当前文件，关掉最后一个就回到之前的终端。
   - 编辑区是 mygo 的 `ui/editor`（行号、高亮、⌘F 查找替换都是它的）。未保存判断用 `editor.Buffer.Modified`，按缓冲区版本缓存；不能拿版本号判断，撤销也会让版本号加一。超过 5 MB 只读，超过 50 MB 或二进制不读内容。
   - 不用 fsnotify：macOS 上它基于 kqueue，监听一个目录要为其中每个文件各开一个描述符。改为文件栏或文件标签看得见时每秒 stat 一次展开的目录和打开的文件，磁盘戳带 inode，"写临时文件再改名"的保存也认得出。磁盘上变了：没有未保存的改动就重载，有就显示冲突横幅；文件没了标出已删除。
@@ -84,7 +84,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
 - Git 界面照 WebStorm 的用法做（依据和取舍见 `docs/plans/git-ops.html`），全部在窗口进程里调用系统 git，常驻进程不参与：
   - 路径都相对仓库根目录；仓库根目录换成工作区路径的写法（`repoRoot`），git 给的是解析过符号链接的（如 `/private/var`），混用会把同一个文件当成两个。界面调用的 gitx 函数用 `runRaw`（原样输出、`LC_ALL=C`、失败返回 `*gitx.Error`，`Msg` 是 git 自己的报错）。
-  - 文件栏"改动"：文件栏或文件标签看得见时每 1.5 秒读一次 `status --porcelain=v2`，不用手动刷新；照 WebStorm 不分暂存和未暂存：每个文件一个勾选框（已跟踪的默认勾、新文件默认不勾），提交勾选的文件——新文件先 `add`，再 `commit --only -- <文件>`，暂存区里没勾的原样留着。编辑器行号旁标出相对 HEAD 的改动（`State.DiffBase`），⌥⌘Z 回滚一段。
+  - 文件栏"改动"：文件栏或文件标签看得见时每 1.5 秒读一次 `status --porcelain=v2`，不用手动刷新；照 WebStorm 不分暂存和未暂存：每个文件一个勾选框（已跟踪的默认勾、新文件默认不勾），提交勾选的文件——新文件先 `add`，再 `commit --only -- <文件>`，暂存区里没勾的原样留着。合并、拣选、还原进行中 git 不许部分提交，这时按钮是"提交合并结果"：勾选的先 `add`，再整体提交。编辑器行号旁标出相对 HEAD 的改动（`State.DiffBase`），⌥⌘Z 回滚一段。
   - 图片（png/jpg/gif/webp）的 diff 左右对照两张图（`imageDiffView`），各标版本、像素尺寸和文件大小，透明处垫棋盘格；新增的一边写新文件、删除的写已删除。
   - diff 标签页用 mygo 的 `editor.DiffView`，默认左右对照、忽略空白（`third_party/mygo` 加的 `IgnoreWhitespace`，只忽略空白，不忽略空行）。`diffSpec` 的版本：newRev 空是工作区、`":"` 是暂存区，oldRev 空是"这一边没有"。F7 / ⇧F7 跨文件跳改动，F4 跳到编辑器；工作区 diff 的逐段回滚立刻写回磁盘。diff、比较、日志、Annotate 是 `virtual` 标签页，不轮询磁盘、不记进 ui.json。
   - 分支弹窗：点标签栏的分支名，⌥⌘N 新建分支，⇧⌘K Push（WebStorm 的 ⌘T 更新项目和 hive 的新建终端冲突，放进弹窗）。更新当前分支是 `pull --rebase --autostash`，其他分支只快进。被另一个 worktree 检出的分支，检出改成切到那个工作区；"基于它新建工作区"走 hive 的 worktree 工作区。检出、rebase、合并、更新、reset 之类改动工作目录的操作，工作区里有 agent 正在工作时先确认（`guardAgent`）。

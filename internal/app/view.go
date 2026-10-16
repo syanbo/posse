@@ -92,6 +92,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF) {
 			a.openFilesPanel(w, sideSearch).search.focus = true
 		}
+		// 窗口的快捷键先于焦点拿到按键。⌘L 照旧开关文件栏（编辑器的"选中整行"让出），
+		// ⇧⌘G 在编辑器有焦点时让给它的"查找上一个"
+		editing := a.filesActive(w) && a.filesFor(w).cur != nil && c.FocusWithin(a.filesFor(w).cur.edRef)
 		if c.Shortcut(ui.Cmd, ui.KeyL) {
 			if a.filesPanelOpen() {
 				a.closeFilesPanel()
@@ -99,7 +102,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 				a.openFilesPanel(w, a.filesFor(w).side)
 			}
 		}
-		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyG) {
+		if !editing && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyG) {
 			a.toggleFilesPanel(w, sideChanges)
 		}
 		if c.Shortcut(ui.Cmd, ui.KeyK) && a.filesShown(w) && a.filesFor(w).git.repo != "" {
@@ -122,7 +125,13 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.saveDoc(v.cur, false)
 		}
 	}
-	// 打包的 app 里 ⌘W 先被菜单拿走（installMenu），这里管没有菜单的情况（测试）
+	// 打包的 app 里 ⌘W 先被菜单拿走（installMenu），菜单只记下来，到这里和快捷键一样在有对话框时不动
+	if a.menuCloseTab {
+		a.menuCloseTab = false
+		if !c.ModalOpen() {
+			a.closeTab()
+		}
+	}
 	if c.Shortcut(ui.Cmd, ui.KeyW) {
 		a.closeTab()
 	}

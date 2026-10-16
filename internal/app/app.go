@@ -147,10 +147,12 @@ type app struct {
 	files   map[string]*filesView // 工作区 ID → 文件标签
 	quick   quickOpen             // ⌘P 快速打开
 	unsaved *unsavedAsk           // 问要不要保存修改的对话框
+	// 菜单的 ⌘W 记在这里，下一帧再关标签
+	menuCloseTab bool
 	// Git：分支弹窗、输入框对话框、Push 对话框
 	branchPop   *branchPopup
-	branchFolds map[string]bool
-	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用 // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	branchFolds map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
 	promptDlg   *promptState
 	push        *pushState
 	// 关窗口和退出的钩子里要读，用原子量
@@ -546,7 +548,7 @@ func (a *app) installMenu() {
 		{Role: mygo.RoleAppMenu},
 		{Label: "File", Submenu: []*mygo.MenuItem{
 			{Label: "关闭标签", Accelerator: "Cmd+W", Click: func(*mygo.MenuItem, *mygo.Window) {
-				a.win.Update(a.closeTab)
+				a.win.Update(func() { a.menuCloseTab = true })
 			}},
 			{Role: mygo.RoleClose, Accelerator: "Cmd+Shift+W"},
 		}},

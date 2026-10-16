@@ -318,7 +318,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			return
 		}
 		d.ed.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
-		el := editor.View(c.Key("ed:"+d.path), &d.ed).Grow(1).AutoFocus()
+		el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Grow(1).AutoFocus()
 		if d.focus {
 			el.Focus()
 			d.focus = false

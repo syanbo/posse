@@ -75,6 +75,7 @@ type fileDoc struct {
 	gotoSpan [2]int
 	shown    int  // 编辑器建过几帧：第一帧还没有尺寸，跳行要等到第二帧
 	focus    bool // 下一帧把焦点给编辑器
+	edRef    ui.Ref
 	started  bool // 已经开始读文件
 	// diff 不为空时这是一个 diff 标签页，path 是 diffKey；comp 不为空时是分支比较，path 是 compareKey
 	diff  *diffDoc
@@ -110,10 +111,15 @@ func (d *fileDoc) virtual() bool {
 	return d.diff != nil || d.comp != nil || d.log != nil || d.blame != nil
 }
 
-// isModified 报告有没有未保存的改动，只在缓冲区变了之后重新比较。
-// isPreview 报告文档还是预览标签；改过内容的不算，免得被下一次单击换掉。
-func (d *fileDoc) isPreview() bool { return d.transient && !d.isModified() }
+// isPreview 报告文档还是预览标签。改过内容就转为常驻，保存或撤销回原样之后也不会被下一次单击换掉。
+func (d *fileDoc) isPreview() bool {
+	if d.transient && d.isModified() {
+		d.transient = false
+	}
+	return d.transient
+}
 
+// isModified 报告有没有未保存的改动，只在缓冲区变了之后重新比较。
 func (d *fileDoc) isModified() bool {
 	if d.kind != docText || d.ed.Buffer == nil {
 		return false

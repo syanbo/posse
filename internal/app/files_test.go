@@ -124,6 +124,13 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	if d.ed.Buffer.String() != sampleGo || d.isModified() {
 		t.Fatal("doc content or modified state wrong after open")
 	}
+	// 编辑器有焦点时 ⇧⌘G 是它的"查找上一个"，不去开关改动页
+	side := v.side
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyG)
+	tt.Frame()
+	if !a.filesPanelOpen() || v.side != side {
+		t.Fatal("⇧⌘G in the editor should stay with the editor")
+	}
 	// 文件栏浮在编辑区上，后面要点编辑区右边的横幅按钮，先收起来
 	tt.Key(ui.Cmd, ui.KeyL)
 	tt.Frame()
@@ -392,6 +399,17 @@ func TestPreviewTabs(t *testing.T) {
 	if len(v.docs) != 3 || v.doc(main) == nil {
 		t.Fatalf("an edited preview tab should stay: %d docs", len(v.docs))
 	}
+	// 改回原样（像保存或撤销之后那样没有未保存的改动）也还是常驻
+	orig, _ := os.ReadFile(main)
+	d.ed.Select(0, len(d.ed.Buffer.String()))
+	d.ed.Insert(string(orig))
+	if d.isModified() || d.isPreview() {
+		t.Fatalf("modified=%v preview=%v after reverting the edit", d.isModified(), d.isPreview())
+	}
+	a.previewFile(w, readme)
+	if v.doc(main) == nil {
+		t.Fatal("a once-edited tab should not be replaced")
+	}
 }
 
 // 浮层面板和分支弹窗互斥：点分支按钮收起历史面板，点面板按钮关掉分支弹窗。
@@ -459,5 +477,33 @@ func TestCloseDocTabsByButton(t *testing.T) {
 	}
 	if a.activeTerm[w.ID] != "t1" {
 		t.Fatalf("should go back to the terminal, got %q", a.activeTerm[w.ID])
+	}
+}
+
+// 菜单的 ⌘W 和快捷键一样：有对话框时不关后面的标签。
+func TestMenuCloseTabBehindDialog(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "opened", func() bool { return v.cur != nil && v.cur.kind == docText })
+	a.confirm("确认？", "", "好", func() {})
+	tt.Frame()
+	tt.Frame()
+	a.menuCloseTab = true
+	tt.Frame()
+	if len(v.docs) != 1 {
+		t.Fatal("⌘W from the menu closed a tab behind the dialog")
+	}
+	a.confirming = false
+	tt.Frame()
+	tt.Frame()
+	a.menuCloseTab = true
+	tt.Frame()
+	if len(v.docs) != 0 {
+		t.Fatal("⌘W from the menu should close the tab")
 	}
 }

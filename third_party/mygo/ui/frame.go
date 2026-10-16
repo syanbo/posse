@@ -34,6 +34,13 @@ func (c *Context) build() *context {
 	return &rt.c
 }
 
+// ModalOpen reports whether a dialog was on top in the last frame. Hive: work
+// started outside the view (a menu item) checks it the way Shortcut does.
+func (c *Context) ModalOpen() bool {
+	rt := c.runtime()
+	return rt != nil && rt.modal != 0
+}
+
 // Valid reports whether this context is building a view.
 func (c *Context) Valid() bool { return c.build() != nil }
 
