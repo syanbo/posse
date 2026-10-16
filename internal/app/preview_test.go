@@ -223,6 +223,26 @@ func previewLog(t *testing.T, a *app) {
 	until(t, tt, "detail", func() bool { return v.cur.log.commit.files != nil })
 }
 
+// previewUsageEvents 是一段从 10:02 开始的使用记录，最后几条是连着调同一个工具。
+func previewUsageEvents() []history.UsageEvent {
+	at := time.Date(2026, 10, 16, 10, 2, 0, 0, time.Local)
+	var evs []history.UsageEvent
+	add := func(min int, e history.UsageEvent) {
+		e.At = at.Add(time.Duration(min) * time.Minute)
+		evs = append(evs, e)
+	}
+	add(0, history.UsageEvent{Skill: "computer-use"})
+	add(1, history.UsageEvent{Server: "codex-cu", Tool: "js_reset"})
+	add(2, history.UsageEvent{Server: "codex-cu", Tool: "js"})
+	add(3, history.UsageEvent{Server: "codex-cu", Tool: "js"})
+	add(9, history.UsageEvent{Skill: "chatgpt-imagegen"})
+	add(12, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
+	add(13, history.UsageEvent{Server: "androidmirror", Tool: "screen_act"})
+	add(14, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
+	add(15, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
+	return evs
+}
+
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("HIVE_PREVIEW_DIR")
 	f, err := os.Create(filepath.Join(dir, name))
@@ -268,6 +288,7 @@ func TestPreview(t *testing.T) {
 				{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},
 				{Server: "androidmirror", Count: 4, Tools: []history.UsageItem{{Name: "screen_observe", Count: 3}, {Name: "screen_act", Count: 1}}},
 			},
+			Events: previewUsageEvents(),
 		}}
 		savePNG(t, newPreviewTester(a, dark), "usage-"+suffix+".png")
 

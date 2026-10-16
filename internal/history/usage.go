@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // UsageItem 是一个技能或 MCP 工具在会话里用了几次。
@@ -26,7 +27,20 @@ type MCPUsage struct {
 type Usage struct {
 	Skills []UsageItem `json:"skills"`
 	MCP    []MCPUsage  `json:"mcp"`
+	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），只留最近 maxUsageEvents 条
+	Events []UsageEvent `json:"events,omitempty"`
 }
+
+// UsageEvent 是一次使用：技能（Skill 非空）或 MCP 工具（Server、Tool）。At 取自那一行记录，
+// grok、cursor 的会话文件不带时间，为零值。
+type UsageEvent struct {
+	At     time.Time `json:"at,omitzero"`
+	Skill  string    `json:"skill,omitempty"`
+	Server string    `json:"server,omitempty"`
+	Tool   string    `json:"tool,omitempty"`
+}
+
+const maxUsageEvents = 300
 
 // UsageScanner 增量读一个会话文件，统计用到的技能和 MCP 工具。不是并发安全的。
 //
@@ -46,6 +60,8 @@ type UsageScanner struct {
 	skills      map[string]int
 	mcp         map[string]map[string]int
 	seen        map[string]bool // codex 条目的 id
+	events      []UsageEvent
+	at          time.Time // 正在解析的那一行的时间
 }
 
 func NewUsageScanner(agent, path string) *UsageScanner {
@@ -56,7 +72,7 @@ func NewUsageScanner(agent, path string) *UsageScanner {
 
 func (s *UsageScanner) reset() {
 	s.offset = 0
-	s.skills, s.mcp, s.seen = map[string]int{}, map[string]map[string]int{}, map[string]bool{}
+	s.skills, s.mcp, s.seen, s.events = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil
 }
 
 // Scan 读文件新增的完整行（末尾没写完的一行留到下次），返回到目前为止的统计；文件变短说明被重写，从头再读。
@@ -94,6 +110,12 @@ var usageMarkers = [][]byte{
 func hasUsageMarker(line []byte) bool { return containsAny(line, usageMarkers) }
 
 func (s *UsageScanner) line(b []byte) {
+	// claude、codex 每行带 timestamp
+	var ts struct {
+		Timestamp time.Time `json:"timestamp"`
+	}
+	json.Unmarshal(b, &ts)
+	s.at = ts.Timestamp
 	switch s.agent {
 	case "claude":
 		s.claudeLine(b)
@@ -171,7 +193,21 @@ func (s *UsageScanner) skillBase(text string) {
 	}
 	dir, _, _ := strings.Cut(strings.TrimSpace(rest), "\n")
 	if name := filepath.Base(strings.TrimSpace(dir)); name != "" && name != "." && name != "/" {
-		s.skills[name]++
+		s.addSkill(name)
+	}
+}
+
+// addSkill 记一次技能使用。
+func (s *UsageScanner) addSkill(name string) {
+	s.skills[name]++
+	s.event(UsageEvent{Skill: name})
+}
+
+func (s *UsageScanner) event(e UsageEvent) {
+	e.At = s.at
+	s.events = append(s.events, e)
+	if len(s.events) > maxUsageEvents*2 {
+		s.events = slices.Clone(s.events[len(s.events)-maxUsageEvents:])
 	}
 }
 
@@ -181,7 +217,7 @@ func (s *UsageScanner) skillRead(path string) {
 		return
 	}
 	if name := filepath.Base(filepath.Dir(path)); name != "" && name != "." && name != "/" {
-		s.skills[name]++
+		s.addSkill(name)
 	}
 }
 
@@ -191,7 +227,7 @@ var skillCmdRe = regexp.MustCompile(`^\s*(?:cat|sed|head|tail|nl|less|bat)\b[^|;
 // skillCommand 认出 shell 命令读了某个技能；一条命令只算一个。
 func (s *UsageScanner) skillCommand(cmd string) {
 	if m := skillCmdRe.FindStringSubmatch(cmd); m != nil {
-		s.skills[m[1]]++
+		s.addSkill(m[1])
 	}
 }
 
@@ -212,6 +248,7 @@ func (s *UsageScanner) addMCPTool(server, tool string) {
 		s.mcp[server] = map[string]int{}
 	}
 	s.mcp[server][tool]++
+	s.event(UsageEvent{Server: server, Tool: tool})
 }
 
 var codexSkillRe = regexp.MustCompile(`^<skill>\s*<name>([^<]+)</name>`)
@@ -248,7 +285,7 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case r.Type == "response_item" && p.Type == "message" && p.Role == "user":
 		for _, c := range p.Content {
 			if m := codexSkillRe.FindStringSubmatch(strings.TrimSpace(c.Text)); m != nil {
-				s.skills[strings.TrimSpace(m[1])]++
+				s.addSkill(strings.TrimSpace(m[1]))
 			}
 		}
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
@@ -316,6 +353,7 @@ func (s *UsageScanner) grokLine(b []byte) {
 
 func (s *UsageScanner) result() Usage {
 	var u Usage
+	u.Events = slices.Clone(s.events[max(0, len(s.events)-maxUsageEvents):])
 	for name, n := range s.skills {
 		u.Skills = append(u.Skills, UsageItem{name, n})
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -89,24 +90,11 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, "正在读取…")
 				case !u.found:
 					usageNote(c, "还没找到会话文件，agent 开始对话后会出现。")
+				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0:
+					usageNote(c, "这个会话还没用到技能和 MCP。")
 				default:
-					usageSection(c, "技能", len(u.data.Skills), "这个会话还没用到技能。", func() {
-						for _, s := range u.data.Skills {
-							usageRow(c, s.Name, s.Count, 0)
-						}
-					})
-					usageSection(c, "MCP", len(u.data.MCP), "这个会话还没调用 MCP。", func() {
-						for _, m := range u.data.MCP {
-							ui.Column(c).Gap(1).Children(func() {
-								usageRow(c, m.Server, m.Count, 600)
-								for _, tool := range m.Tools {
-									ui.Box(c).Padding(0, 0, 0, 12).Children(func() {
-										usageRow(c, tool.Name, tool.Count, 0)
-									})
-								}
-							})
-						}
-					})
+					usageSummary(c, u.data)
+					usageTimeline(c, u.data.Events)
 				}
 			})
 		})
@@ -117,32 +105,96 @@ func usageNote(c *ui.Context, text string) {
 	ui.Text(c, text).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5).Padding(0, 4)
 }
 
-// usageSection 是面板里的一节：标题带个数，空的时候显示 empty。
-func usageSection(c *ui.Context, title string, n int, empty string, rows func()) {
-	t := c.Theme()
-	ui.Column(c).Gap(4).Children(func() {
-		ui.Row(c).Gap(6).Padding(0, 4).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-			if n > 0 {
-				ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
-			}
-		})
-		if n == 0 {
-			usageNote(c, empty)
-			return
+// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数。
+func usageSummary(c *ui.Context, u history.Usage) {
+	ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
+		for _, sk := range u.Skills {
+			usageChip(c, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
 		}
-		card(c).Padding(6, 8).Gap(1).Children(rows)
+		for _, m := range u.MCP {
+			usageChip(c, iconExtensions, mcpColor(c), m.Server, m.Count)
+		}
 	})
 }
 
-// usageRow 是一个技能或工具和它用了几次；weight 非零时名称加粗（MCP 服务名）。
-func usageRow(c *ui.Context, name string, count int, weight int) {
+func usageChip(c *ui.Context, icon *ui.SVG, color ui.Color, name string, n int) {
 	t := c.Theme()
-	ui.Row(c).Height(24).Gap(8).AlignItems(ui.Center).Children(func() {
-		text := ui.Text(c, name).FontSize(12).Font(monoFont).SingleLine().Grow(1).Shrink(1).Tooltip(name)
-		if weight != 0 {
-			text.FontWeight(weight)
+	ui.Row(c).Height(22).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).Background(colors(t).fill).
+		Tooltip(name).Children(func() {
+		ui.Icon(c, icon).FontSize(11).TextColor(color).Shrink(0)
+		ui.Text(c, name).FontSize(11).Font(monoFont).SingleLine().MaxWidth(150)
+		ui.Text(c, fmt.Sprintf("×%d", n)).FontSize(10.5).FontFeatures("tnum").TextColor(t.TextMuted)
+	})
+}
+
+func mcpColor(c *ui.Context) ui.Color {
+	if c.Theme().Dark {
+		return ui.Hex("#7AA2F7")
+	}
+	return ui.Hex("#3B6FD9")
+}
+
+// usageStep 是时间线上的一项：连着几次调用同一个工具（或同一个技能）合成一项。
+type usageStep struct {
+	ev    history.UsageEvent
+	first time.Time // 这几次里最早的
+	n     int
+}
+
+// usageSteps 把逐次记录合并成时间线，新的在前。
+func usageSteps(events []history.UsageEvent) []usageStep {
+	var steps []usageStep
+	for _, e := range events {
+		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool {
+			steps[k].ev.At = e.At
+			steps[k].n++
+			continue
 		}
-		ui.Text(c, fmt.Sprintf("×%d", count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		steps = append(steps, usageStep{ev: e, first: e.At, n: 1})
+	}
+	slices.Reverse(steps)
+	return steps
+}
+
+// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色；右边是名字、所属服务和时间。
+func usageTimeline(c *ui.Context, events []history.UsageEvent) {
+	t := c.Theme()
+	p := colors(t)
+	steps := usageSteps(events)
+	ui.Column(c).Gap(0).Padding(6, 4, 0, 4).Children(func() {
+		ui.Text(c, "时间线").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
+		for i, st := range steps {
+			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
+			if st.ev.Skill != "" {
+				color, kind, name = p.honey, "技能", st.ev.Skill
+			}
+			last := i == len(steps)-1
+			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(10).AlignItems(ui.Stretch).Children(func() {
+				// 圆点和连到下一项的线
+				rail := ui.Box(c).Width(12).Shrink(0)
+				line := p.line
+				rail.Draw(func(pt *ui.Painter, r ui.Rect) {
+					cx := r.X + r.W/2
+					if !last {
+						pt.Fill(ui.Rect{X: cx - 0.75, Y: r.Y + 14, W: 1.5, H: r.H - 14}, line, 0)
+					}
+					pt.Fill(ui.Rect{X: cx - 4, Y: r.Y + 5, W: 8, H: 8}, color, 4)
+				})
+				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 14, 0).Children(func() {
+					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).Tooltip(name)
+						if st.n > 1 {
+							ui.Text(c, fmt.Sprintf("×%d", st.n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+						}
+						ui.Spacer(c)
+						if !st.ev.At.IsZero() {
+							ui.Text(c, st.ev.At.Local().Format("15:04")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
+								Tooltip(st.first.Local().Format("1月2日 15:04:05") + " 起")
+						}
+					})
+					ui.Text(c, kind).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				})
+			})
+		}
 	})
 }

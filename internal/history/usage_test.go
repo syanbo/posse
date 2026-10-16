@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func writeLines(t *testing.T, path string, lines ...string) {
@@ -18,6 +19,32 @@ func writeLines(t *testing.T, path string, lines ...string) {
 		if _, err := f.WriteString(l); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// counts 只留累计次数，逐次记录另外测。
+func counts(u Usage) Usage {
+	u.Events = nil
+	return u
+}
+
+// 逐次记录带上那一行的时间，按会话里的先后排。
+func TestUsageEvents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	writeLines(t, path,
+		`{"type":"assistant","timestamp":"2026-10-16T08:00:00.000Z","message":{"content":[{"type":"tool_use","name":"mcp__androidmirror__screen_open","input":{}}]}}`+"\n",
+		`{"type":"user","timestamp":"2026-10-16T08:01:00.000Z","message":{"content":"Base directory for this skill: /x/skills/computer-use"}}`+"\n",
+	)
+	u, err := NewUsageScanner("claude", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []UsageEvent{
+		{At: time.Date(2026, 10, 16, 8, 0, 0, 0, time.UTC), Server: "androidmirror", Tool: "screen_open"},
+		{At: time.Date(2026, 10, 16, 8, 1, 0, 0, time.UTC), Skill: "computer-use"},
+	}
+	if len(u.Events) != 2 || !u.Events[0].At.Equal(want[0].At) || u.Events[0].Tool != "screen_open" || u.Events[1].Skill != "computer-use" || !u.Events[1].At.Equal(want[1].At) {
+		t.Fatalf("events %+v", u.Events)
 	}
 }
 
@@ -49,7 +76,7 @@ func TestUsageClaude(t *testing.T) {
 			{Server: "claude_ai_Claude_Docs", Count: 1, Tools: []UsageItem{{"batch", 1}}},
 		},
 	}
-	if !reflect.DeepEqual(u, want) {
+	if !reflect.DeepEqual(counts(u), want) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 
@@ -94,7 +121,7 @@ func TestUsageCodex(t *testing.T) {
 		Skills: []UsageItem{{"fiction-plot", 1}, {"iphone-use", 1}, {"runner", 1}, {"unslop", 1}},
 		MCP:    []MCPUsage{{Server: "androidmirror", Count: 2, Tools: []UsageItem{{"screen_act", 1}, {"screen_observe", 1}}}},
 	}
-	if !reflect.DeepEqual(u, want) {
+	if !reflect.DeepEqual(counts(u), want) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 }
@@ -116,7 +143,7 @@ func TestUsageGrok(t *testing.T) {
 			{Server: "mobile", Count: 1, Tools: []UsageItem{{"mobile_list_apps", 1}}},
 		},
 	}
-	if !reflect.DeepEqual(u, want) {
+	if !reflect.DeepEqual(counts(u), want) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 }
@@ -135,7 +162,7 @@ func TestUsageCursor(t *testing.T) {
 		Skills: []UsageItem{{"browser-skill", 1}, {"orchestration", 1}},
 		MCP:    []MCPUsage{{Server: "probe", Count: 1, Tools: []UsageItem{{"ping", 1}}}},
 	}
-	if !reflect.DeepEqual(u, want) {
+	if !reflect.DeepEqual(counts(u), want) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 }
