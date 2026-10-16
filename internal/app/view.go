@@ -389,25 +389,24 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub string, 
 	if sub != "" {
 		height = 46
 	}
-	row := ui.Row(c.Key(id)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).Label(label).Role(ui.RoleButton)
+	row := ui.Row(c.Key(id)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
+		Label(label).Role(ui.RoleButton)
 	selectable(c, row, selected)
 	row.Children(func() {
 		ui.Icon(c, icon).FontSize(16).TextColor(t.Accent).Shrink(0)
-		// 行尾的状态和箭头跟名称放在第一行，路径独占第二行的整行宽度
 		ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
-			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-				text := ui.Text(c, label).FontSize(13).SingleLine().Grow(1).Shrink(1)
-				if selected {
-					text.FontWeight(600)
-				}
-				if trailing != nil {
-					trailing()
-				}
-			})
+			text := ui.Text(c, label).FontSize(13).SingleLine()
+			if selected {
+				text.FontWeight(600)
+			}
 			if sub != "" {
 				ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
 			}
 		})
+		// 行尾的数字、状态和箭头在整行里上下居中，两行的工作区也一样
+		if trailing != nil {
+			ui.Row(c).Gap(10).AlignItems(ui.Center).Shrink(0).Children(trailing)
+		}
 	})
 	if row.Clicked() {
 		a.selected = id
