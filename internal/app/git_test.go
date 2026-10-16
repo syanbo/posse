@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -406,6 +407,43 @@ func TestConflictBanner(t *testing.T) {
 	until(t, tt, "merged", func() bool { return v.git.status.Operation == "" && v.git.busy == "" })
 	if b, _ := os.ReadFile(filepath.Join(root, "main.go")); !strings.Contains(string(b), "// feat edit") {
 		t.Fatal("theirs not taken")
+	}
+}
+
+// 合并停在冲突上，手动解决后从改动页提交：git 不许 commit --only，要整体提交成合并提交。
+func TestCommitDuringMerge(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	gitRun(t, root, "switch", "-q", "feat")
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// feat edit\n"), 0o644)
+	gitRun(t, root, "commit", "-q", "-am", "feat: 也改了 main.go")
+	gitRun(t, root, "switch", "-q", "main")
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := a.openFilesPanel(w, sideChanges)
+	until(t, tt, "status", func() bool { return v.git.status != nil })
+	a.gitDo(v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
+	until(t, tt, "conflict", func() bool { return v.git.status.Operation == "merge" && v.git.busy == "" })
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// resolved\n"), 0o644)
+	a.gitDo(v, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "main.go") })
+	until(t, tt, "resolved", func() bool {
+		return v.git.busy == "" && !slices.ContainsFunc(v.git.status.Entries, func(e gitx.Entry) bool { return e.Conflict })
+	})
+	v.git.message = "merge feat"
+	until(t, tt, "button", func() bool { return tt.HasText("提交合并结果") })
+	a.err = ""
+	if err := tt.Click("提交合并结果"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "committed", func() bool {
+		return v.git.busy == "" && (a.err != "" || gitRun(t, root, "log", "-1", "--format=%s") == "merge feat")
+	})
+	if a.err != "" {
+		t.Fatal(a.err)
+	}
+	if parents := gitRun(t, root, "log", "-1", "--format=%P"); len(strings.Fields(parents)) != 2 {
+		t.Fatalf("not a merge commit: %q", parents)
 	}
 }
 

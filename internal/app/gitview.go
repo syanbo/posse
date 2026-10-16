@@ -590,6 +590,22 @@ func (g *gitState) pickedPaths() (paths, add []string, n int) {
 	return paths, add, n
 }
 
+// wholeCommit 返回进行中、只能整体提交的操作的名字（合并、拣选、还原），没有时为空。
+func (g *gitState) wholeCommit() string {
+	if g.status == nil {
+		return ""
+	}
+	switch g.status.Operation {
+	case "merge":
+		return "合并"
+	case "cherry-pick":
+		return "拣选"
+	case "revert":
+		return "还原"
+	}
+	return ""
+}
+
 func (a *app) commit(v *filesView) {
 	g := &v.git
 	msg := strings.TrimSpace(g.message)
@@ -598,13 +614,25 @@ func (a *app) commit(v *filesView) {
 		return
 	}
 	paths, add, n := g.pickedPaths()
-	amend := g.amend
-	if n == 0 && !amend {
+	amend, whole := g.amend, g.wholeCommit() != ""
+	if n == 0 && !amend && !whole {
 		a.err = "先勾选要提交的文件"
 		return
 	}
 	a.gitDo(v, "提交", func(ctx context.Context, root string) error {
-		if err := gitx.CommitPaths(ctx, root, msg, paths, add, amend); err != nil {
+		var err error
+		if whole {
+			// 合并、拣选、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
+			if len(paths) > 0 {
+				err = gitx.Stage(ctx, root, paths...)
+			}
+			if err == nil {
+				err = gitx.Commit(ctx, root, msg, false, amend)
+			}
+		} else {
+			err = gitx.CommitPaths(ctx, root, msg, paths, add, amend)
+		}
+		if err != nil {
 			return err
 		}
 		a.update(func() { g.message, g.amend, g.picks = "", false, nil })

@@ -372,7 +372,13 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	g := &v.git
 	_, _, picked := g.pickedPaths()
 	label := fmt.Sprintf("提交 %d 个文件", picked)
-	if picked == 0 && g.amend {
+	tip := "提交勾选的文件，没勾的改动留在工作区 ⌘K"
+	whole := g.wholeCommit()
+	switch {
+	case whole != "":
+		label = "提交" + whole + "结果"
+		tip = whole + "进行中只能整体提交：勾选的文件先加入 Git，再连同已加入的一起提交 ⌘K"
+	case picked == 0 && g.amend:
 		label = "只改提交信息"
 	}
 	ui.Box(c).Height(1).Shrink(0).Background(p.line)
@@ -388,8 +394,8 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 				a.setAmend(v, amend)
 			}
 			ui.Spacer(c)
-			btn := pressable(accentButton(c, label)).Tooltip("提交勾选的文件，没勾的改动留在工作区 ⌘K")
-			if g.busy != "" || picked == 0 && !g.amend {
+			btn := pressable(accentButton(c, label)).Tooltip(tip)
+			if g.busy != "" || picked == 0 && !g.amend && whole == "" {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.commit(v)
