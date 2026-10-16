@@ -669,17 +669,32 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.openLog(w, "", "")
 		}
 	}
-	if cur != nil && cur.Agent == "claude" {
-		a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
-	}
-	if cur != nil && cur.Agent != "" {
-		a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
-	}
+	// 图片、技能与 MCP 跟着会话走，放在终端右上角（sessionButtons）；历史按项目，留在这里
 	a.panelButton(c, panelHistory, iconHistory, "历史会话")
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
 		a.filesPanelButton(c, w)
 	}
+}
+
+// sessionButtons 是 agent 终端右上角的一组按钮：这个会话粘贴过的图片、用到的技能与 MCP。
+// 放在终端里而不是标签栏，标签多时也看得出是哪个会话的；鼠标在终端上或面板开着时才显示，平时不挡终端内容。
+func (a *app) sessionButtons(c *ui.Context, area ui.Element, cur *terminalInfo) {
+	if cur.Agent == "" {
+		return
+	}
+	open := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
+	if !area.Hovered() && !open {
+		return
+	}
+	p := colors(c.Theme())
+	ui.Row(c).Absolute().Top(4).Right(6).Gap(2).Padding(2).Radius(8).Background(p.raised).
+		BorderWidth(1).BorderColor(p.line).Children(func() {
+		if cur.Agent == "claude" {
+			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
+		}
+		a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+	})
 }
 
 // mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。
@@ -708,6 +723,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.view.dir = a.view.term.Dir()
 			area.Children(func() {
 				terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
+				a.sessionButtons(c, area, cur)
 			})
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
