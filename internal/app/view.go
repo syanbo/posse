@@ -684,7 +684,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		return
 	}
 	p := colors(c.Theme())
-	ui.Row(c).Absolute().Top(4).Right(6).Gap(2).Padding(2).Radius(8).Background(p.raised).
+	ui.Row(c).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
 		BorderWidth(1).BorderColor(p.line).Children(func() {
 		if cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
