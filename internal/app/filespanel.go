@@ -107,7 +107,8 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 					v.search.focus = true
 				}
 			})
-			a.filesPanelButton(c, w)
+			// 开关按钮浮在这里（见 main），留出它的位置
+			ui.Box(c).Width(28).Shrink(0)
 		})
 		switch v.side {
 		case sideFiles:

@@ -154,8 +154,10 @@ type app struct {
 	branchFolds map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
 	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
 	fetchAt     map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
-	promptDlg   *promptState
-	push        *pushState
+	// 文件栏展开的进度：0 收起，1 打开，中间是动画
+	filesPanelShown float32
+	promptDlg       *promptState
+	push            *pushState
 	// 关窗口和退出的钩子里要读，用原子量
 	dirtyCount atomic.Int32 // 有未保存改动的文件数，每帧更新
 	closeOK    atomic.Bool  // 用户处理完未保存的改动，放行这次关闭

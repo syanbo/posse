@@ -598,12 +598,29 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		a.filesTick(c, w)
 	}
 	// 文件栏停靠在最右边，挤窄左边的标签栏和终端（编辑器）
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+	// 打开、收起时文件栏从右边缘滑进滑出。终端只在开始（打开）或结束（收起）时改一次宽度：
+	// 动画里每帧改宽度会让终端里的程序反复按新列数重排
+	row := ui.Row(c).Grow(1).AlignItems(ui.Stretch)
+	open := float32(0)
+	if a.filesPanelOpen() {
+		open = 1
+	}
+	a.filesPanelShown = row.AnimateTo("files-panel", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
+	row.Children(func() {
 		// Basis(0)+Clip：标签多到放不下时左边自己裁掉，不把文件栏挤出窗口
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Clip().Children(func() { a.mainColumn(c, w, cur) })
-		if a.filesPanelOpen() {
-			ui.Box(c).Width(1).Shrink(0).Background(p.line)
-			a.filesPanel(c, w)
+		if a.filesPanelOpen() || a.filesPanelShown > 0 {
+			width := a.filesPanelWidth() + 1
+			ui.Box(c).Width(width).Shrink(0).Clip().Background(p.card).Children(func() {
+				ui.Row(c).Absolute().Top(0).Bottom(0).Left((1 - a.filesPanelShown) * width).Width(width).AlignItems(ui.Stretch).Children(func() {
+					ui.Box(c).Width(1).Shrink(0).Background(p.line)
+					a.filesPanel(c, w)
+				})
+				// 开关固定在右上角，和关着时标签栏里的同一个位置，不跟着文件栏滑动
+				ui.Row(c).Absolute().Top(0).Right(14).Height(titleHeight(c)).Padding(0, 0, 1, 0).AlignItems(ui.Center).Children(func() {
+					a.filesPanelButton(c, w)
+				})
+			})
 		}
 	})
 }
@@ -659,7 +676,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	a.panelButton(c, panelHistory, iconHistory, "历史会话")
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
-	if !a.filesPanelOpen() {
+	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
 		a.filesPanelButton(c, w)
 	}
 }
