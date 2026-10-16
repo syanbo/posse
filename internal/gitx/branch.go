@@ -57,6 +57,15 @@ func Branches(ctx context.Context, dir string) ([]Branch, error) {
 	return list, nil
 }
 
+// Tags 列出标签，新的在前。
+func Tags(ctx context.Context, dir string) ([]string, error) {
+	out, err := run(ctx, dir, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags")
+	if err != nil || out == "" {
+		return nil, err
+	}
+	return strings.Split(out, "\n"), nil
+}
+
 // parseTrack 解析 "ahead 2, behind 1"、"gone"。
 func parseTrack(s string) (ahead, behind int, gone bool) {
 	if s == "gone" {

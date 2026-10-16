@@ -395,6 +395,17 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
+// docIcon 是文件标签的图标：Git 日志、Annotate 用各自的图标，其余是文件。
+func docIcon(d *fileDoc) *ui.SVG {
+	switch {
+	case d.log != nil:
+		return iconGitLog
+	case d.blame != nil:
+		return iconBlame
+	}
+	return iconFile
+}
+
 // docTab 是标签栏里的一个文件，样子和终端标签一样。
 func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string) {
 	t := c.Theme()
@@ -413,7 +424,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {
-		ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, docIcon(d)).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		name := ui.Text(c, d.name()).FontSize(12).SingleLine().MaxWidth(180)
 		tabText(c, name, active)
 		if d.isPreview() {

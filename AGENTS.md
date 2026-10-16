@@ -86,6 +86,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 文件栏"改动"：文件栏或文件标签看得见时每 1.5 秒读一次 `status --porcelain=v2`，不用手动刷新；没有已暂存的文件时提交按钮是 `commit -a`，有就只提交已暂存的。编辑器行号旁标出相对 HEAD 的改动（`State.DiffBase`），⌥⌘Z 回滚一段。
   - diff 标签页用 mygo 的 `editor.DiffView`，默认左右对照、忽略空白（`third_party/mygo` 加的 `IgnoreWhitespace`，只忽略空白，不忽略空行）。`diffSpec` 的版本：newRev 空是工作区、`":"` 是暂存区，oldRev 空是"这一边没有"。F7 / ⇧F7 跨文件跳改动，F4 跳到编辑器；工作区 diff 的逐段回滚立刻写回磁盘。diff、比较、日志、Annotate 是 `virtual` 标签页，不轮询磁盘、不记进 ui.json。
   - 分支弹窗：点标签栏的分支名，⌥⌘N 新建分支，⇧⌘K Push（WebStorm 的 ⌘T 更新项目和 hive 的新建终端冲突，放进弹窗）。更新当前分支是 `pull --rebase --autostash`，其他分支只快进。被另一个 worktree 检出的分支，检出改成切到那个工作区；"基于它新建工作区"走 hive 的 worktree 工作区。检出、rebase、合并、更新、reset 之类改动工作目录的操作，工作区里有 agent 正在工作时先确认（`guardAgent`）。
+  - Git 日志：标签栏右侧常驻入口（分支按钮旁）。左边分支树照 WebStorm 分 HEAD、本地、远程（按远端分组）、标签，点一项只看它的提交，再点一次回到全部分支；分支和标签随分支弹窗一起读（`loadBranches`）。
   - 强制推送一律 `--force-with-lease`。改提交信息、和上一个提交合并、删除提交用交互式 rebase，hive 生成脚本改写待办列表和提交信息（`rebaseTodo`），不打开编辑器；范围里有合并提交时拒绝。rebase、合并等停在冲突上时，改动列表顶部有继续 / 跳过 / 中止的横幅，冲突文件可以整个采用一方（rebase 时 ours 是目标分支）。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。

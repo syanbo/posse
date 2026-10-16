@@ -12,7 +12,7 @@ import (
 	"hive/internal/gitx"
 )
 
-// Git 日志标签页，照 WebStorm 的 Log：中间是提交图和筛选栏（文字或哈希、分支、作者，文件历史时是路径），
+// Git 日志标签页，照 WebStorm 的 Log：左边是分支树（logrefs.go），中间是提交图和筛选栏（文字或哈希、分支、作者，文件历史时是路径），
 // 右边是选中提交的说明和改的文件。提交的右键菜单有 cherry-pick、reset、revert、改提交信息、
 // 和上一个提交合并、删除提交。
 
@@ -34,6 +34,8 @@ type logDoc struct {
 	commit   *commitView
 	list     ui.ListState
 	reloaded time.Time
+	refsOpen map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
+	refQuery string
 }
 
 func logKey(f gitx.LogFilter) string {
@@ -212,12 +214,25 @@ func graphCell(c *ui.Context, r graphRow, hash string) ui.Element {
 
 // --- 日志界面
 
+// logView 是日志标签页：左边分支树，右边筛选栏、提交列表和选中提交的详情。
 func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
+	p := colors(c.Theme())
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Width(220).Shrink(0).Background(p.band).Children(func() { a.logRefs(c, v, d) })
+		ui.Box(c).Width(1).Shrink(0).Background(p.line)
+		ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			a.logFilterBar(c, v, d)
+			ui.Box(c).Height(1).Shrink(0).Background(p.line)
+			a.logList(c, w, v, d)
+		})
+	})
+}
+
+// logList 是提交列表和右边选中提交的详情。
+func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	p := colors(t)
 	ld := d.log
-	a.logFilterBar(c, v, d)
-	ui.Box(c).Height(1).Shrink(0).Background(p.line)
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			if len(ld.commits) == 0 {

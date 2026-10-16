@@ -161,3 +161,17 @@ func runErr(ctx context.Context, dir string, args ...string) error {
 	_, err := runRaw(ctx, dir, nil, nil, args...)
 	return err
 }
+
+func TestTags(t *testing.T) {
+	ctx := context.Background()
+	dir := newRepo(t)
+	if tags, err := Tags(ctx, dir); err != nil || len(tags) != 0 {
+		t.Fatalf("no tags: %v %v", tags, err)
+	}
+	gitIn(t, dir, "tag", "v0.1.0")
+	gitIn(t, dir, "tag", "-a", "v0.2.0", "-m", "release")
+	tags, err := Tags(ctx, dir)
+	if err != nil || !slices.Contains(tags, "v0.1.0") || !slices.Contains(tags, "v0.2.0") || len(tags) != 2 {
+		t.Fatalf("tags: %v %v", tags, err)
+	}
+}

@@ -24,6 +24,7 @@ type branchPopup struct {
 type branchInfo struct {
 	list    []gitx.Branch
 	recent  []string
+	tags    []string // Git 日志左边的"标签"
 	loading bool
 	again   bool // 读的期间又要求重读（期间做了操作），读完再读一次
 }
@@ -49,14 +50,15 @@ func (a *app) loadBranches(v *filesView) {
 			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
 		}
 		var list []gitx.Branch
-		var recent []string
+		var recent, tags []string
 		if root != "" {
 			list, _ = gitx.Branches(ctx, root)
 			recent = gitx.RecentBranches(ctx, root, 6)
+			tags, _ = gitx.Tags(ctx, root)
 		}
 		a.update(func() {
 			again := g.branches.again
-			g.branches = branchInfo{list: list, recent: recent}
+			g.branches = branchInfo{list: list, recent: recent, tags: tags}
 			if !g.checked {
 				g.checked, g.repo = true, root
 			}

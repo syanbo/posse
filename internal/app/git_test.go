@@ -405,3 +405,26 @@ func TestConflictBanner(t *testing.T) {
 		t.Fatal("theirs not taken")
 	}
 }
+
+// 日志左边的分支树：点一个分支只看它的提交，再点一次回到全部分支。
+func TestLogRefTree(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openLog(&a.workspaces[0], "", "")
+	v := a.files["w1"]
+	until(t, tt, "log", func() bool { return v.cur.kind == docLog && v.git.branches.list != nil })
+	ld := v.cur.log
+	all := len(ld.commits)
+	if !tt.HasText("本地") || !tt.HasText("远程") {
+		t.Fatalf("ref tree missing: %v", tt.Texts())
+	}
+	if err := tt.Click("本地分支 main"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "filtered", func() bool { return ld.filter.Branch == "main" && !ld.loading && len(ld.commits) < all })
+	if err := tt.Click("本地分支 main"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "all again", func() bool { return ld.filter.Branch == "" && !ld.loading && len(ld.commits) == all })
+}
