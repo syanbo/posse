@@ -49,7 +49,8 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	v.treeList.Key = func(i int) any { return rows[i].Path }
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
-		row := ui.Row(c.Key(r.Path)).Height(28).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*16).Gap(6).Radius(6).
+		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
+		row := ui.Row(c.Key(r.Path)).Height(24).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*18).Gap(6).Radius(6).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectable(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -65,7 +66,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				ui.Box(c).Width(12).Shrink(0)
 				ui.Icon(c, iconFile).FontSize(16).TextColor(t.TextMuted).Shrink(0)
 			}
-			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
+			name := ui.Text(c, r.Name).FontSize(13).SingleLine().Shrink(1).Grow(1)
 			if ignored {
 				name.TextColor(t.TextMuted)
 			}
