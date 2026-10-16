@@ -53,3 +53,29 @@ func TestTreeFootprint(t *testing.T) {
 		exec.Command("kill", strconv.Itoa(k)).Run()
 	}
 }
+
+func TestArgsAndName(t *testing.T) {
+	cmd := exec.Command("/bin/sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	if args := Args(cmd.Process.Pid); len(args) != 2 || args[1] != "30" {
+		t.Fatalf("args %q", args)
+	}
+	for in, want := range map[string]string{
+		"npm exec @sentry/mcp-server@0.42.0":                        "@sentry/mcp-server",
+		"node /Users/x/.npm/_npx/3d5/node_modules/.bin/sentry-mcp":  "sentry-mcp",
+		"/usr/bin/python3 -I /Users/x/.local/bin/codex-cu-mcp":      "codex-cu-mcp",
+		"/Applications/iPhoneUse.app/Contents/MacOS/iphone-use-mcp": "iphone-use-mcp",
+		"claude --settings /x/hooks.json":                           "claude",
+	} {
+		if got := Name(strings.Fields(in)); got != want {
+			t.Errorf("Name(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// 改写过的进程标题：整条命令是一个参数
+	if got := Name([]string{"npm exec @mobilenext/mobile-mcp@latest", "", "", ""}); got != "@mobilenext/mobile-mcp" {
+		t.Errorf("retitled npm: %q", got)
+	}
+}

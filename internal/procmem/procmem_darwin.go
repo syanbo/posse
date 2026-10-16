@@ -59,3 +59,31 @@ func Children() map[int][]int {
 	}
 	return out
 }
+
+// Args 返回进程的启动参数（argv）；取不到时返回 nil。
+func Args(pid int) []string {
+	b, err := unix.SysctlRaw("kern.procargs2", pid)
+	if err != nil || len(b) < 4 {
+		return nil
+	}
+	argc := int(int32(uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24))
+	b = b[4:]
+	// 先是可执行文件的路径，再是对齐用的 NUL，然后才是 argv
+	i := 0
+	for i < len(b) && b[i] != 0 {
+		i++
+	}
+	for i < len(b) && b[i] == 0 {
+		i++
+	}
+	var args []string
+	for len(args) < argc && i < len(b) {
+		j := i
+		for j < len(b) && b[j] != 0 {
+			j++
+		}
+		args = append(args, string(b[i:j]))
+		i = j + 1
+	}
+	return args
+}

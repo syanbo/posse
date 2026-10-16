@@ -16,10 +16,11 @@ import (
 // 终端的内存由窗口进程按 pid 统计整棵进程树的 phys_footprint，和活动监视器一致；只在浮窗开着时统计。
 
 type memView struct {
-	open  bool
-	poll  panelPoll
-	rows  []memWorkspace
-	terms int64 // 所有终端合计（KB）
+	open     bool
+	expanded map[string]bool // 展开了进程明细的终端
+	poll     panelPoll
+	rows     []memWorkspace
+	terms    int64 // 所有终端合计（KB）
 }
 
 type memWorkspace struct {
@@ -29,8 +30,47 @@ type memWorkspace struct {
 }
 
 type memTerminal struct {
-	term terminalInfo
+	term  terminalInfo
+	kb    int64
+	procs []memProc
+}
+
+// memProc 是终端里的一个程序：shell、agent 本体，或 agent 拉起的一棵子进程（同名的合在一起）。
+type memProc struct {
+	name string
 	kb   int64
+	n    int
+}
+
+// memBreakdown 拆开一个终端的进程树。shell 下面只有一个程序时（agent），再拆一层它拉起的子进程，
+// 这样 MCP 服务一个个分开；每个子进程按整棵子树算。
+func memBreakdown(shell int, children map[int][]int) []memProc {
+	kb := func(pid int) int64 { return int64(procmem.Footprint(pid) >> 10) }
+	tree := func(pid int) int64 { return int64(procmem.TreeFootprint(pid, children) >> 10) }
+	name := func(pid int) string {
+		if n := procmem.Name(procmem.Args(pid)); n != "" {
+			return n
+		}
+		return fmt.Sprint("pid ", pid)
+	}
+	procs := []memProc{{name: name(shell), kb: kb(shell), n: 1}}
+	kids := children[shell]
+	if len(kids) == 1 {
+		main := kids[0]
+		procs = append(procs, memProc{name: name(main), kb: kb(main), n: 1})
+		kids = children[main]
+	}
+	for _, k := range kids {
+		p := memProc{name: name(k), kb: tree(k), n: 1}
+		if i := slices.IndexFunc(procs, func(x memProc) bool { return x.name == p.name }); i >= 0 {
+			procs[i].kb += p.kb
+			procs[i].n++
+			continue
+		}
+		procs = append(procs, p)
+	}
+	slices.SortStableFunc(procs, func(x, y memProc) int { return cmp.Compare(y.kb, x.kb) })
+	return procs
 }
 
 const memRefresh = 3 * time.Second
@@ -76,7 +116,7 @@ func (a *app) loadMemory() {
 			for _, t := range j.terms {
 				kb := int64(procmem.TreeFootprint(t.Pid, children) >> 10)
 				r.kb += kb
-				r.terms = append(r.terms, memTerminal{t, kb})
+				r.terms = append(r.terms, memTerminal{t, kb, memBreakdown(t.Pid, children)})
 			}
 			slices.SortFunc(r.terms, func(x, y memTerminal) int { return cmp.Compare(y.kb, x.kb) })
 			total += r.kb
@@ -123,14 +163,17 @@ func (a *app) memoryButton(c *ui.Context) {
 	})
 }
 
-// memLine 是浮窗里的一行：名称和内存。level 0 是小节合计，1 是一项，2 是终端（缩进、次要色）。
-func memLine(c *ui.Context, key string, lead func(), label, value string, level int) {
+// memLine 是浮窗里的一行：名称和内存。level 0 是小节合计，1 是一项，2 是终端（缩进、次要色），3 是终端里的程序。
+func memLine(c *ui.Context, key string, lead func(), label, value string, level int) ui.Element {
 	t := c.Theme()
 	h, fs, pad := float32(28), float32(13), float32(0)
-	if level == 2 {
-		h, fs, pad = 26, 12, 24
+	switch level {
+	case 2:
+		h, fs, pad = 26, 12, 8
+	case 3:
+		h, fs, pad = 22, 11.5, 50
 	}
-	ui.Row(c.Key(key)).Height(h).Gap(8).Padding(0, 0, 0, pad).AlignItems(ui.Center).Children(func() {
+	return ui.Row(c.Key(key)).Height(h).Gap(8).Padding(0, 0, 0, pad).AlignItems(ui.Center).Children(func() {
 		if lead != nil {
 			lead()
 		}
@@ -140,9 +183,12 @@ func memLine(c *ui.Context, key string, lead func(), label, value string, level 
 		case 0:
 			l.FontWeight(500)
 			v.FontWeight(500)
-		case 2:
+		case 2, 3:
 			l.TextColor(t.TextMuted)
 			v.TextColor(t.TextMuted)
+		}
+		if level == 3 {
+			l.Font(monoFont)
 		}
 	})
 }
@@ -198,13 +244,37 @@ func (a *app) memoryPanel(c *ui.Context) {
 								if detail != "" {
 									name = detail
 								}
-								memLine(c, x.term.ID, func() {
+								open := m.expanded[x.term.ID]
+								row := memLine(c, x.term.ID, func() {
+									chevron := iconChevron
+									if open {
+										chevron = iconDown
+									}
+									ui.Icon(c, chevron).FontSize(10).TextColor(t.TextMuted).Shrink(0)
 									if x.term.Agent != "" {
 										agentTile(c, x.term.Agent, 13)
 									} else {
 										ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 									}
-								}, name, mb(x.kb), 2)
+								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(6).Tooltip("展开看里面的程序")
+								if row.Hovered() {
+									row.Background(colors(t).wash)
+								}
+								if row.Clicked() {
+									if m.expanded == nil {
+										m.expanded = map[string]bool{}
+									}
+									m.expanded[x.term.ID] = !open
+								}
+								if open {
+									for i, pr := range x.procs {
+										label := pr.name
+										if pr.n > 1 {
+											label = fmt.Sprintf("%s ×%d", pr.name, pr.n)
+										}
+										memLine(c, fmt.Sprint(x.term.ID, "-", i), nil, label, mb(pr.kb), 3).Tooltip(pr.name)
+									}
+								}
 							}
 						})
 					}

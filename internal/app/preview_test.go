@@ -420,10 +420,14 @@ func TestPreview(t *testing.T) {
 		// 底栏的内存浮窗
 		a = previewApp(t)
 		w := a.workspaces[0]
-		a.mem = memView{open: true, poll: panelPoll{at: time.Now().Add(time.Hour)}, terms: 1460 << 10, rows: []memWorkspace{
-			{id: w.ID, label: displayName(&w), kb: 1210 << 10, terms: []memTerminal{{w.Terminals[0], 820 << 10}, {w.Terminals[1], 360 << 10}, {w.Terminals[2], 30 << 10}}},
-			{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10}}},
-		}}
+		claude := []memProc{{"claude", 420 << 10, 1}, {"@sentry/mcp-server", 115 << 10, 1}, {"@mobilenext/mobile-mcp", 91 << 10, 1},
+			{"codex-cu-mcp", 30 << 10, 1}, {"iphone-use-mcp", 7 << 10, 2}, {"androidmirror-mcp-server", 5 << 10, 1}, {"zsh", 5 << 10, 1}}
+		a.mem = memView{open: true, poll: panelPoll{at: time.Now().Add(time.Hour)}, terms: 1460 << 10, expanded: map[string]bool{"t1": true},
+			rows: []memWorkspace{
+				{id: w.ID, label: displayName(&w), kb: 1210 << 10, terms: []memTerminal{
+					{w.Terminals[0], 820 << 10, claude}, {w.Terminals[1], 360 << 10, nil}, {w.Terminals[2], 30 << 10, nil}}},
+				{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10, nil}}},
+			}}
 		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
 	}
 }
