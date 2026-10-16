@@ -534,21 +534,15 @@ func TestFilesPanelToggleStays(t *testing.T) {
 	}
 }
 
-// 图片、技能与 MCP 跟着会话走：按钮在 agent 终端右上角，鼠标在终端上或面板开着时才显示。
+// 图片、技能与 MCP 跟着会话走：按钮常驻在 agent 终端右上角，普通终端没有。
 func TestSessionButtons(t *testing.T) {
 	a := previewApp(t)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
-	if _, ok := tt.Find("这个会话用到的技能与 MCP"); ok {
-		t.Fatal("hidden until the pointer is over the terminal")
-	}
-	tt.Move(700, 400)
-	tt.Frame()
-	tt.Frame()
 	r, ok := tt.Find("这个会话用到的技能与 MCP")
 	if _, img := tt.Find("这个会话粘贴过的图片"); !ok || !img {
-		t.Fatal("buttons should show over a claude terminal")
+		t.Fatal("buttons should show on a claude terminal")
 	}
 	if r.X < 900 || r.Y > 120 {
 		t.Fatalf("buttons should sit at the terminal's top right: %v", r)
@@ -560,11 +554,4 @@ func TestSessionButtons(t *testing.T) {
 	if a.state.RightPanel != panelUsage {
 		t.Fatal("click should open the panel")
 	}
-	tt.Move(100, 400) // 移到侧栏上
-	tt.Frame()
-	if _, ok := tt.Find("这个会话用到的技能与 MCP"); !ok {
-		t.Fatal("buttons stay while the panel is open")
-	}
-	a.state.RightPanel = ""
-	until(t, tt, "faded out", func() bool { _, ok := tt.Find("这个会话用到的技能与 MCP"); return !ok })
 }

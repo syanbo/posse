@@ -678,24 +678,14 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 }
 
 // sessionButtons 是 agent 终端右上角的一组按钮：这个会话粘贴过的图片、用到的技能与 MCP。
-// 放在终端里而不是标签栏，标签多时也看得出是哪个会话的；鼠标在终端上或面板开着时才显示，平时不挡终端内容。
-func (a *app) sessionButtons(c *ui.Context, area ui.Element, cur *terminalInfo) {
+// 放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
+func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	if cur.Agent == "" {
-		return
-	}
-	open := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
-	target := float32(0)
-	if area.Hovered() || open {
-		target = 1
-	}
-	// 淡入淡出，顺带往下滑一点；淡出走完才移除
-	shown := area.AnimateTo("session-buttons", target, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut})
-	if shown < 0.01 {
 		return
 	}
 	p := colors(c.Theme())
 	ui.Row(c).Absolute().Top(4).Right(6).Gap(2).Padding(2).Radius(8).Background(p.raised).
-		BorderWidth(1).BorderColor(p.line).Opacity(shown).Transform(ui.Translation(0, (shown-1)*4)).Children(func() {
+		BorderWidth(1).BorderColor(p.line).Children(func() {
 		if cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
 		}
@@ -729,7 +719,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.view.dir = a.view.term.Dir()
 			area.Children(func() {
 				terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
-				a.sessionButtons(c, area, cur)
+				a.sessionButtons(c, cur)
 			})
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
