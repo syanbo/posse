@@ -88,7 +88,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 图片（png/jpg/gif/webp）的 diff 左右对照两张图（`imageDiffView`），各标版本、像素尺寸和文件大小，透明处垫棋盘格；新增的一边写新文件、删除的写已删除。
   - diff 标签页用 mygo 的 `editor.DiffView`，默认左右对照、忽略空白（`third_party/mygo` 加的 `IgnoreWhitespace`，只忽略空白，不忽略空行）。`diffSpec` 的版本：newRev 空是工作区、`":"` 是暂存区，oldRev 空是"这一边没有"。F7 / ⇧F7 跨文件跳改动，F4 跳到编辑器；工作区 diff 的逐段回滚立刻写回磁盘。diff、比较、日志、Annotate 是 `virtual` 标签页，不轮询磁盘、不记进 ui.json。
   - 分支弹窗：点标签栏的分支名，⌥⌘N 新建分支，⇧⌘K Push（WebStorm 的 ⌘T 更新项目和 hive 的新建终端冲突，放进弹窗）。更新当前分支是 `pull --rebase --autostash`，其他分支只快进。被另一个 worktree 检出的分支，检出改成切到那个工作区；"基于它新建工作区"走 hive 的 worktree 工作区。检出、rebase、合并、更新、reset 之类改动工作目录的操作，工作区里有 agent 正在工作时先确认（`guardAgent`）。
-  - 自动 fetch：分支按钮画出来时，按项目每 5 分钟在后台 `fetch --all` 一次（打开后先拉一次），同一项目的 worktree 共用计时；失败不报错，下次再试。进行中占着改动页的 busy，不和手动 git 操作同时改引用。传入、传出提交数每 10 秒只用本地的远端引用算。
+  - 自动 fetch：分支按钮画出来时，按项目每 5 分钟在后台 `fetch --all` 一次（打开后先拉一次），同一项目的 worktree 共用计时；失败不报错，下次再试。进行中占着改动页的 busy，不和手动 git 操作同时改引用。传入、传出提交数每 10 秒只用本地的远端引用算。自动、手动 fetch 和其他 git 操作之后，同一项目里开着的分支比较都会重读（`reloadCompares`）。
   - Git 日志：标签栏右侧常驻入口（分支按钮旁）。左边分支树照 WebStorm 分 HEAD、本地、远程（按远端分组）、标签，点一项只看它的提交，再点一次回到全部分支；分支和标签随分支弹窗一起读（`loadBranches`）。
   - 强制推送一律 `--force-with-lease`。改提交信息、和上一个提交合并、删除提交用交互式 rebase，hive 生成脚本改写待办列表和提交信息（`rebaseTodo`），不打开编辑器；范围里有合并提交时拒绝。rebase、合并等停在冲突上时，改动列表顶部有继续 / 跳过 / 中止的横幅，冲突文件可以整个采用一方（rebase 时 ours 是目标分支）。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。

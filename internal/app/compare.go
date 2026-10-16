@@ -63,6 +63,22 @@ func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files b
 	a.loadCompare(v, d)
 }
 
+// reloadCompares 重读一个项目里所有开着的分支比较：fetch、拉取之后远端分支变了。
+// 同一项目的工作区共用引用，别的工作区里开着的也要重读。
+func (a *app) reloadCompares(projectID string) {
+	for _, w := range a.byProject[projectID] {
+		v := a.files[w.ID]
+		if v == nil {
+			continue
+		}
+		for _, d := range v.docs {
+			if d.comp != nil {
+				a.loadCompare(v, d)
+			}
+		}
+	}
+}
+
 func (a *app) loadCompare(v *filesView, d *fileDoc) {
 	cd, root := d.comp, v.git.repo
 	other, cur := cd.other, cd.cur

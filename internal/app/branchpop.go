@@ -127,7 +127,7 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 	if v != nil {
 		v.git.busy = "Fetch"
 	}
-	dir := w.Path
+	dir, project := w.Path, w.ProjectID
 	go func() {
 		gitx.Fetch(context.Background(), dir)
 		a.update(func() {
@@ -138,6 +138,7 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 				}
 			}
 			tr.poll = panelPoll{}
+			a.reloadCompares(project)
 		})
 	}()
 }

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
@@ -571,21 +572,45 @@ func TestImageDiff(t *testing.T) {
 	until(t, tt, "new image", func() bool { return v.cur.kind == docImageDiff && tt.HasText("新文件") })
 }
 
-// 分支按钮第一次画出来就自动 fetch，远端的新提交算进传入；五分钟内不再拉。
+// 分支按钮第一次画出来就自动 fetch，远端的新提交算进传入；五分钟内不再拉。到点再拉时，开着的分支比较跟着重读。
 func TestAutoFetch(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	until(t, tt, "first fetch", func() bool { _, ok := a.fetchAt[w.ProjectID]; return ok && a.track["w1"].poll.at != time.Time{} })
+	at := a.fetchAt[w.ProjectID]
+	tt.Frame()
+	if !a.fetchAt[w.ProjectID].Equal(at) {
+		t.Fatal("should not fetch again within the interval")
+	}
+	v := a.openFilesPanel(w, sideChanges)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "origin/main", "main", false)
+	d := v.cur
+	until(t, tt, "compare", func() bool { return d.kind == docCompare || d.err != "" })
+	if d.err != "" {
+		t.Fatal(d.err)
+	}
+	if len(d.comp.onlyOther) != 0 {
+		t.Fatalf("origin/main has nothing new yet: %d", len(d.comp.onlyOther))
+	}
+
 	other := filepath.Join(t.TempDir(), "other")
 	gitRun(t, root, "clone", "-q", gitRun(t, root, "remote", "get-url", "origin"), other)
 	os.WriteFile(filepath.Join(other, "remote.txt"), []byte("x\n"), 0o644)
 	gitRun(t, other, "add", "remote.txt")
 	gitRun(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "remote")
 	gitRun(t, other, "push", "-q", "origin", "main")
-	tt := ui.NewTester(a.build, 1200, 760)
-	until(t, tt, "fetched", func() bool { tr := a.track["w1"]; return tr != nil && tr.behind == 1 })
-	at := a.fetchAt[a.workspaces[0].ProjectID]
-	tt.Frame()
-	if !a.fetchAt[a.workspaces[0].ProjectID].Equal(at) {
-		t.Fatal("should not fetch again within the interval")
-	}
+	a.fetchAt[w.ProjectID] = time.Time{} // 当作五分钟到了
+	until(t, tt, "fetched", func() bool { return a.track["w1"].behind == 1 && len(d.comp.onlyOther) == 1 })
+
+	// 手动 Fetch 同样重读
+	os.WriteFile(filepath.Join(other, "remote2.txt"), []byte("y\n"), 0o644)
+	gitRun(t, other, "add", "remote2.txt")
+	gitRun(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "remote 2")
+	gitRun(t, other, "push", "-q", "origin", "main")
+	until(t, tt, "idle", func() bool { return v.git.busy == "" })
+	a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
+	until(t, tt, "manual fetch", func() bool { return len(d.comp.onlyOther) == 2 })
 }

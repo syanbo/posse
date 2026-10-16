@@ -503,9 +503,12 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 			if g.branches.list != nil {
 				a.loadBranches(v)
 			}
-			// Fetch、更新、推送之后分支按钮上的传入、传出马上重算
+			// Fetch、更新、推送之后分支按钮上的传入、传出马上重算，开着的分支比较也重读
 			if tr := a.track[v.wsID]; tr != nil {
 				tr.poll = panelPoll{}
+			}
+			if w := a.workspace(v.wsID); w != nil {
+				a.reloadCompares(w.ProjectID)
 			}
 		})
 	}()
