@@ -73,7 +73,7 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 	}
 }
 
-// filesPanelButton 是标签栏右边开关文件栏的按钮，开着时垫一层强调色淡底。
+// filesPanelButton 是开关文件栏的按钮：关着时在标签栏最右边，开着时在文件栏顶栏最右边，垫一层强调色淡底。
 func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 	b := iconButton(c.Key("files-panel"), iconPanelRight, "文件栏 ⌘L")
 	if a.filesPanelOpen() {
@@ -88,13 +88,14 @@ func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 	}
 }
 
-// filesPanel 画文件栏：顶上和标签栏一样高，放分段和关闭按钮；左边缘拖动调宽。
+// filesPanel 画文件栏：顶上和标签栏一样高，放分段和开关按钮；左边缘拖动调宽。
 func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	p := colors(c.Theme())
 	v := a.filesFor(w)
 	col := ui.Column(c).Width(a.filesPanelWidth()).Shrink(0).Background(p.band)
 	col.Children(func() {
-		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 8, 0, 10).Gap(6).AlignItems(ui.Center).
+		// 右边距和标签栏一样，开关按钮打开前后不挪位置
+		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 10).Gap(6).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
 			changes := "改动"
 			if n := v.git.changeCount(); n > 0 {
@@ -106,9 +107,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 					v.search.focus = true
 				}
 			})
-			if iconButtonSized(c, iconClose, "关闭 ⌘L", 24, 13).Clicked() {
-				a.closeFilesPanel()
-			}
+			a.filesPanelButton(c, w)
 		})
 		switch v.side {
 		case sideFiles:

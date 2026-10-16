@@ -658,7 +658,10 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 		a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
 	}
 	a.panelButton(c, panelHistory, iconHistory, "历史会话")
-	a.filesPanelButton(c, w)
+	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
+	if !a.filesPanelOpen() {
+		a.filesPanelButton(c, w)
+	}
 }
 
 // mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。

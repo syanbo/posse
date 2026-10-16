@@ -507,3 +507,29 @@ func TestMenuCloseTabBehindDialog(t *testing.T) {
 		t.Fatal("⌘W from the menu should close the tab")
 	}
 }
+
+// 文件栏的开关照 Orca 固定在右上角：打开后挪到文件栏顶栏的右端，位置不变。
+func TestFilesPanelToggleStays(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	before, ok := tt.Find("文件栏 ⌘L")
+	if !ok {
+		t.Fatal("toggle missing")
+	}
+	a.openFilesPanel(w, sideFiles)
+	tt.Frame()
+	tt.Frame()
+	if after, _ := tt.Find("文件栏 ⌘L"); after != before || countText(tt, "文件栏 ⌘L") > 1 {
+		t.Fatalf("toggle moved: %v → %v", before, after)
+	}
+	if err := tt.Click("文件栏 ⌘L"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.filesPanelOpen() {
+		t.Fatal("the toggle in the panel should close it")
+	}
+}
