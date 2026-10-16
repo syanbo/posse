@@ -51,7 +51,9 @@ const (
 type fileDoc struct {
 	path string
 	kind docKind
-	ed   editor.State
+	// transient 是预览标签（照 Orca）：文件树里单击打开，再单击别的文件就被换掉；双击、改了内容就常驻
+	transient bool
+	ed        editor.State
 	// base 是编辑器内容所依据的磁盘版本，保存前比对它，防止覆盖 agent 刚写的内容；
 	// seen 是轮询最近看到的磁盘版本，变了才重读。两者在冲突时不同。
 	base, seen files.Stamp
@@ -108,6 +110,9 @@ func (d *fileDoc) virtual() bool {
 }
 
 // isModified 报告有没有未保存的改动，只在缓冲区变了之后重新比较。
+// isPreview 报告文档还是预览标签；改过内容的不算，免得被下一次单击换掉。
+func (d *fileDoc) isPreview() bool { return d.transient && !d.isModified() }
+
 func (d *fileDoc) isModified() bool {
 	if d.kind != docText || d.ed.Buffer == nil {
 		return false
@@ -301,8 +306,17 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 	}()
 }
 
-// openFile 在工作区的文件标签里打开文件并切过去；line 从 1 起，0 表示不跳行。
+// openFile 打开文件并切过去，标签常驻；line 从 1 起，0 表示不跳行。
 func (a *app) openFile(w *workspace, path string, line int, span [2]int) {
+	a.openDoc(w, path, line, span, false)
+}
+
+// previewFile 是文件树里的单击：用预览标签打开，换掉上一个还没常驻的预览标签。
+func (a *app) previewFile(w *workspace, path string) {
+	a.openDoc(w, path, 0, [2]int{}, true)
+}
+
+func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview bool) {
 	v := a.showFiles(w)
 	path = filepath.Clean(path)
 	var d *fileDoc
@@ -311,8 +325,16 @@ func (a *app) openFile(w *workspace, path string, line int, span [2]int) {
 			d = x
 		}
 	}
-	if d == nil {
-		d = &fileDoc{path: path}
+	switch {
+	case d != nil:
+		// 已经开着的预览标签被正常打开（双击、跳转）就常驻
+		d.transient = d.transient && preview
+	case preview && slices.ContainsFunc(v.docs, (*fileDoc).isPreview):
+		i := slices.IndexFunc(v.docs, (*fileDoc).isPreview)
+		d = &fileDoc{path: path, transient: true}
+		v.docs[i] = d
+	default:
+		d = &fileDoc{path: path, transient: preview}
 		// 插在当前文件后面，和编辑器一样
 		i := len(v.docs)
 		if j := slices.Index(v.docs, v.cur); j >= 0 {

@@ -357,3 +357,39 @@ func TestDocTabsInTabBar(t *testing.T) {
 		t.Fatalf("clicking the doc tab should show it: active=%v cur=%v", a.filesActive(w), v.cur.path)
 	}
 }
+
+// 预览标签（照 Orca）：树里单击打开的文件被下一次单击换掉；双击、跳转或改了内容就常驻。
+func TestPreviewTabs(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFilesPanel(w, sideFiles)
+	until(t, tt, "tree", func() bool { return tt.HasText("main.go") })
+	if err := tt.Click("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	v := a.files[w.ID]
+	main, readme := filepath.Join(root, "main.go"), filepath.Join(root, "README.md")
+	if len(v.docs) != 1 || !v.docs[0].isPreview() {
+		t.Fatalf("single click should open a preview tab: %d docs", len(v.docs))
+	}
+	a.previewFile(w, readme)
+	if len(v.docs) != 1 || v.docs[0].path != readme {
+		t.Fatal("the next single click should replace the preview tab")
+	}
+	// 再次正常打开（双击）就常驻，之后的单击另开一个预览标签
+	a.openFile(w, readme, 0, [2]int{})
+	a.previewFile(w, main)
+	if len(v.docs) != 2 || v.doc(readme).isPreview() || !v.doc(main).isPreview() {
+		t.Fatal("double click should pin the tab")
+	}
+	// 改了内容的预览标签不会被换掉
+	d := v.doc(main)
+	until(t, tt, "loaded", func() bool { return d.kind == docText })
+	d.ed.Insert("x")
+	a.previewFile(w, filepath.Join(root, "docs", "plan.md"))
+	if len(v.docs) != 3 || v.doc(main) == nil {
+		t.Fatalf("an edited preview tab should stay: %d docs", len(v.docs))
+	}
+}

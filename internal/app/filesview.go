@@ -76,10 +76,13 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			row.Opacity(0.7)
 		}
 		if row.Clicked() {
-			if r.Dir {
+			switch {
+			case r.Dir:
 				a.toggleDir(v, r.Path)
-			} else {
+			case row.DoubleClicked():
 				a.openFile(w, r.Path, 0, [2]int{})
+			default:
+				a.previewFile(w, r.Path)
 			}
 		}
 		a.pathMenu(c, row, w, v, r.Path, r.Dir)
@@ -413,6 +416,9 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 		ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		name := ui.Text(c, d.name()).FontSize(12).SingleLine().MaxWidth(180)
 		tabText(c, name, active)
+		if d.isPreview() {
+			name.Italic()
+		}
 		if d.deleted {
 			name.Strikethrough()
 		}
@@ -436,6 +442,10 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			a.closeDoc(v, d)
 		}
 	})
+	// 双击预览标签让它常驻
+	if d.transient && row.DoubleClicked() {
+		d.transient = false
+	}
 	if row.Clicked() && !active {
 		a.showFiles(w)
 		if v.cur != d {
