@@ -111,15 +111,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if c.Shortcut(ui.Cmd, ui.KeyS) && v.cur != nil {
 			a.saveDoc(v.cur, false)
 		}
-		if c.Shortcut(ui.Cmd, ui.KeyW) {
-			if v.cur != nil {
-				a.closeDoc(v, v.cur)
-			} else {
-				a.leaveFiles(w)
-			}
-		}
-	} else if cur != nil && c.Shortcut(ui.Cmd, ui.KeyW) {
-		a.askClose(*cur)
+	}
+	// 打包的 app 里 ⌘W 先被菜单拿走（installMenu），这里管没有菜单的情况（测试）
+	if c.Shortcut(ui.Cmd, ui.KeyW) {
+		a.closeTab()
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
 		a.openNewWorkspace()

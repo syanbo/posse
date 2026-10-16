@@ -246,6 +246,7 @@ func Run(c *client.Client) error {
 			Content:       ui.View(a.build),
 		})
 		a.watchClose()
+		a.installMenu()
 		mygo.App.OnNotificationClick(func(id string) {
 			// 通知 ID 形如 hive:<工作区>:<终端> 或 hive-task:<任务>
 			parts := strings.Split(id, ":")
@@ -521,6 +522,44 @@ func (a *app) findTerminal(id string) (*workspace, *terminalInfo) {
 func (a *app) openTerminal(workspaceID, terminalID string) {
 	a.selected, a.revealSel = workspaceID, true
 	a.activeTerm[workspaceID] = terminalID
+}
+
+// installMenu 换掉 mygo 的默认菜单：macOS 先把按键交给菜单，默认的"关闭窗口"占着 ⌘W，界面收不到，
+// 关最后一个标签就把窗口连同 app 关了；View 菜单还占着 ⌘R、⌘=、⌘-、⌘0（字号）。⌘W 改成关闭当前标签。
+func (a *app) installMenu() {
+	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+		{Role: mygo.RoleAppMenu},
+		{Label: "File", Submenu: []*mygo.MenuItem{
+			{Label: "关闭标签", Accelerator: "Cmd+W", Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(a.closeTab)
+			}},
+			{Role: mygo.RoleClose, Accelerator: "Cmd+Shift+W"},
+		}},
+		{Role: mygo.RoleEditMenu},
+		{Label: "Window", Submenu: []*mygo.MenuItem{
+			{Role: mygo.RoleMinimize},
+			{Role: mygo.RoleZoom},
+			{Role: mygo.RoleToggleFullScreen},
+			mygo.Separator(),
+			{Role: mygo.RoleFront},
+		}},
+	}))
+}
+
+// closeTab 是 ⌘W：文件标签里关当前文件（没有文件时回到终端），否则关当前终端（先问）。
+func (a *app) closeTab() {
+	w := a.workspace(a.selected)
+	if a.filesActive(w) {
+		if v := a.filesFor(w); v.cur != nil {
+			a.closeDoc(v, v.cur)
+		} else {
+			a.leaveFiles(w)
+		}
+		return
+	}
+	if cur := a.currentTerminal(w); cur != nil {
+		a.askClose(*cur)
+	}
 }
 
 // currentTerminal 返回选中工作区里应显示的终端，记住的那个不在了就换成第一个；选中文件标签时为 nil。
