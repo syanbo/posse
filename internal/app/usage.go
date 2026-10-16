@@ -122,7 +122,7 @@ func usageSection(c *ui.Context, title string, n int, empty string, rows func())
 	t := c.Theme()
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).Gap(6).Padding(0, 4).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(t.TextMuted)
+			ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 			if n > 0 {
 				ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 			}

@@ -50,7 +50,7 @@ func (a *app) build(c *ui.Context) {
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		side := ui.Column(c).Width(248).Shrink(0)
 		if !vibrant {
-			side.Background(t.Surface)
+			side.Background(p.side)
 		}
 		side.Children(func() { a.sidebar(c) })
 		ui.Box(c).Width(1).Shrink(0).Background(p.line)
@@ -433,7 +433,7 @@ func (a *app) footer(c *ui.Context) {
 	if !a.loaded {
 		return
 	}
-	// 底栏比侧栏深一层，和 AndroidMirror 的状态栏一样
+	// 底栏比侧栏深一层
 	shade := ui.RGBA(0, 0, 0, 0.03)
 	if t.Dark {
 		shade = ui.RGBA(0, 0, 0, 0.18)
@@ -652,7 +652,7 @@ func (a *app) firstRun(c *ui.Context) {
 		card(c).Width(440).Padding(24).Gap(18).Children(func() {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
-				ui.Text(c, "把项目放进来").FontSize(20).FontWeight(600)
+				titleText(c, "把项目放进来", 20)
 				ui.Text(c, "Hive 按项目管理终端和 agent。可以直接选一个文件夹，也可以把 Orca 里的项目一次搬过来。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
@@ -677,7 +677,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					ui.Row(c).Gap(16).Children(func() {
 						tile(c, workspaceIcon(w.Kind), 52, p.tint, t.Accent)
 						ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
-							ui.Text(c, displayName(w)).FontSize(20).FontWeight(600).MaxLines(1)
+							titleText(c, displayName(w), 20).MaxLines(1)
 							var branch func()
 							if w.Branch != "" {
 								branch = metaMono(c, iconBranch, w.Branch, "")
@@ -703,7 +703,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 	})
 }
 
-// launchTile 是空工作区里启动 agent 的一格，像 AndroidMirror 里的应用图标。
+// launchTile 是空工作区里启动 agent 的一格：agent 的色块图标和名字。
 func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	t := c.Theme()
 	name := agentTitle(agent)
@@ -720,7 +720,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	b.Children(func() {
 		agentTile(c, agent, 40).Tooltip("")
 		ui.Column(c).Gap(2).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, name).FontSize(13).FontWeight(600)
+			ui.Text(c, name).FontSize(13).FontWeight(500)
 			ui.Text(c, note).FontSize(11).TextColor(t.TextMuted)
 		})
 	})
@@ -854,11 +854,11 @@ func agentVendor(agent string) string {
 
 // --- 控件
 
-// pressable 给按钮按下时 0.96 的缩放反馈。
+// pressable 给按钮按下时 0.98 的缩放反馈。
 func pressable(e ui.Element) ui.Element {
 	scale := float32(1)
 	if e.Pressed() {
-		scale = 0.96
+		scale = 0.98
 	}
 	s := e.AnimateWith("press", scale, 100*time.Millisecond, ui.EaseOut)
 	return e.Scale(s, s)
@@ -888,7 +888,7 @@ func (a *app) confirmDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.confirming, func() {
 		ui.Column(c).Width(340).Gap(10).Children(func() {
-			ui.Text(c, a.confirmTitle).FontSize(15).FontWeight(600)
+			titleText(c, a.confirmTitle, fsCardTitle)
 			if a.confirmBody != "" {
 				ui.Text(c, a.confirmBody).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
 			}
@@ -911,7 +911,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.creating, func() {
 		ui.Column(c).Width(380).Gap(12).Children(func() {
-			ui.Text(c, "新建工作区").FontSize(15).FontWeight(600)
+			titleText(c, "新建工作区", fsCardTitle)
 			var names []string
 			kind := ""
 			for _, p := range a.projects {

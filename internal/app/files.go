@@ -576,7 +576,7 @@ func (a *app) unsavedDialog(c *ui.Context) {
 			if len(u.docs) > 1 {
 				title = "有 " + strconv.Itoa(len(u.docs)) + " 个文件的修改还没保存"
 			}
-			ui.Text(c, title).FontSize(15).FontWeight(600)
+			titleText(c, title, fsCardTitle)
 			body := "不保存的话，这些修改会丢失。"
 			if len(u.docs) > 1 {
 				var names []string

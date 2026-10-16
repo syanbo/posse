@@ -39,7 +39,7 @@ func (p *panelPoll) done() { p.busy, p.at = false, time.Now() }
 func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
 	return floating(c, ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(280)).Children(func() {
 		ui.Row(c).Padding(14, 12, 10, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, title).FontSize(13).FontWeight(600).Grow(1)
+			cardTitle(c, title).Grow(1)
 			if iconButtonSized(c, iconClose, "关闭", 22, 12).Clicked() {
 				a.state.RightPanel = ""
 				a.saveState()

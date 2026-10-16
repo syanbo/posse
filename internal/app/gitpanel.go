@@ -102,7 +102,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	g := &v.git
 	if r.header {
 		ui.Row(c).Height(26).Padding(6, 16, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(600).TextColor(t.TextMuted)
+			ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 			ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
 		return
@@ -129,7 +129,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		color = t.Danger
 	}
 	row.Children(func() {
-		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(600).TextColor(color).Width(10).Shrink(0)
+		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
 		name := ui.Text(c, filepath.Base(e.Path)).FontSize(12.5).SingleLine().Shrink(0)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)

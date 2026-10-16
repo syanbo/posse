@@ -125,7 +125,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			specs[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → 工作区"}
 		}
 		ui.Row(c).Height(36).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("工作区和 %s 有 %d 个文件不同", cd.other, len(cd.changes))).FontSize(12.5).FontWeight(600)
+			ui.Text(c, fmt.Sprintf("工作区和 %s 有 %d 个文件不同", cd.other, len(cd.changes))).FontSize(12.5).FontWeight(500)
 		})
 		if len(cd.changes) == 0 {
 			ui.Text(c, "没有差别").FontSize(12).TextColor(t.TextMuted).Padding(8, 16)
@@ -151,7 +151,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 func (a *app) commitSection(c *ui.Context, v *filesView, sel **commitView, title string, list []gitx.CommitInfo) {
 	t := c.Theme()
 	ui.Row(c).Padding(10, 8, 4, 8).Gap(6).Children(func() {
-		ui.Text(c, title).FontSize(11.5).FontWeight(600).TextColor(t.TextMuted)
+		ui.Text(c, title).FontSize(11.5).FontWeight(500).TextColor(t.TextMuted)
 		ui.Text(c, fmt.Sprintf("%d 个提交", len(list))).FontSize(11.5).TextColor(t.TextMuted)
 	})
 	if len(list) == 0 {
@@ -183,7 +183,7 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	t := c.Theme()
 	ci := cv.info
 	ui.Column(c).Padding(12, 14, 8, 14).Gap(4).Shrink(0).Children(func() {
-		ui.Text(c, ci.Subject).FontSize(13).FontWeight(600).LineHeight(1.35).Selectable()
+		ui.Text(c, ci.Subject).FontSize(13).FontWeight(500).LineHeight(1.35).Selectable()
 		ui.Text(c, ci.Hash[:10]+"  "+ci.Author+"  "+ci.Time.Format("2006-01-02 15:04")).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Selectable()
 		if ci.Refs != "" {
 			ui.Text(c, ci.Refs).FontSize(11).TextColor(t.TextMuted).SingleLine()
@@ -217,7 +217,7 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 			color = t.TextMuted
 		}
 		row.Children(func() {
-			ui.Text(c, string(f.Status)).FontSize(11).Font(monoFont).FontWeight(600).TextColor(color).Width(10).Shrink(0)
+			ui.Text(c, string(f.Status)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
 			name := ui.Text(c, filepath.Base(f.Path)).FontSize(12.5).SingleLine().Shrink(0)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
@@ -294,7 +294,7 @@ func (a *app) pushDialog(c *ui.Context) {
 		}
 		v := a.filesFor(w)
 		ui.Column(c).Width(760).Gap(12).Children(func() {
-			ui.Text(c, "推送提交").FontSize(15).FontWeight(600)
+			titleText(c, "推送提交", fsCardTitle)
 			ui.Row(c).Height(320).Gap(0).AlignItems(ui.Stretch).Children(func() {
 				ui.Column(c).Width(380).Shrink(0).Children(func() {
 					plan := ps.plan
@@ -307,7 +307,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						return
 					}
 					ui.Row(c).Gap(6).Padding(2, 4, 8, 4).Children(func() {
-						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(12.5).Font(monoFont).FontWeight(600).SingleLine().Shrink(1)
+						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
 						if plan.NewBranch {
 							ui.Text(c, "新分支").FontSize(11).TextColor(colors(t).sage).Shrink(0)
 						}
@@ -334,7 +334,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					}
 					cv := ps.commit
 					ui.Column(c).Padding(4, 14, 6, 14).Gap(4).Shrink(0).Children(func() {
-						ui.Text(c, cv.info.Subject).FontSize(13).FontWeight(600)
+						ui.Text(c, cv.info.Subject).FontSize(13).FontWeight(500)
 						ui.Text(c, cv.info.Hash[:10]+"  "+cv.info.Author).FontSize(11).Font(monoFont).TextColor(t.TextMuted)
 					})
 					ui.Scroll(c).Grow(1).Children(func() {

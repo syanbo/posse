@@ -47,6 +47,7 @@ type mdBlock struct {
 	level   int        // 标题级别
 	inlines []mdInline // 段落和标题
 	code    string     // 代码块
+	lang    string     // 代码块的语言（围栏后面写的）
 	blocks  []mdBlock  // 引用的内容
 	items   []mdItem   // 列表项
 	ordered bool
@@ -76,7 +77,7 @@ func mdBlocks(n ast.Node, src []byte) []mdBlock {
 		case *ast.Heading:
 			out = append(out, mdBlock{kind: mdHeading, level: c.Level, inlines: mdInlines(c, src)})
 		case *ast.FencedCodeBlock:
-			out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src)})
+			out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src), lang: string(c.Language(src))})
 		case *ast.CodeBlock:
 			out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src)})
 		case *ast.HTMLBlock:
@@ -209,7 +210,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	switch b.kind {
 	case mdPara:
-		r.inline(c, b.inlines).FontSize(13).LineHeight(1.55)
+		r.inline(c, b.inlines).FontSize(fsRead).LineHeight(1.6)
 	case mdHeading:
 		size := map[int]float32{1: 17, 2: 15.5, 3: 14}[b.level]
 		if size == 0 {
@@ -217,8 +218,22 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		}
 		r.inline(c, b.inlines).FontSize(size).FontWeight(600).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
-		ui.Box(c).Padding(8, 12).Radius(6).Background(codeBackground(t)).Children(func() {
-			highlighted(c, b.code, r.words).Font(monoFont).FontSize(12).LineHeight(1.5)
+		// 上面一条语言栏，右边是复制按钮
+		ui.Column(c).Radius(rCode).Background(codeBackground(t)).Clip().Children(func() {
+			ui.Row(c).Height(28).Padding(0, 4, 0, 12).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
+				lang := b.lang
+				if lang == "" {
+					lang = "代码"
+				}
+				ui.Text(c, lang).FontSize(fsCaption).Font(monoFont).TextColor(t.TextMuted)
+				ui.Spacer(c)
+				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", 22, 12)).Clicked() {
+					c.WriteClipboard(b.code)
+				}
+			})
+			ui.Box(c).Padding(8, 12, 10, 12).Children(func() {
+				highlighted(c, b.code, r.words).Font(monoFont).FontSize(12).LineHeight(1.5)
+			})
 		})
 	case mdQuote:
 		ui.Row(c).AlignItems(ui.Stretch).Gap(10).Children(func() {
@@ -284,7 +299,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 					box.Children(func() {
 						e := r.inline(c, cell).FontSize(12.5).LineHeight(1.45)
 						if ri == 0 {
-							e.FontWeight(600)
+							e.FontWeight(500)
 						}
 						if ci < len(b.align) && b.align[ci] != 0 {
 							e.TextAlign(b.align[ci])
@@ -344,5 +359,5 @@ func webURL(u string) bool {
 }
 
 func codeBackground(t *ui.Theme) ui.Color {
-	return t.Text.Alpha(0.06)
+	return colors(t).code
 }

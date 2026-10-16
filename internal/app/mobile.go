@@ -103,7 +103,7 @@ func (a *app) mobileDialog(c *ui.Context) {
 	m := &a.mobile
 	ui.Modal(c, &m.open, func() {
 		ui.Column(c).Width(400).Gap(12).Children(func() {
-			ui.Text(c, "连接手机").FontSize(15).FontWeight(600)
+			titleText(c, "连接手机", fsCardTitle)
 			ui.Text(c, "用 Orca 手机 App 扫码（Pair Desktop → Continue）。手机要和这台电脑在同一个 Wi-Fi 或 Tailscale 里，之后在手机上就能看终端、打字和新开 agent。").
 				FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
 			ui.Row(c).Justify(ui.Center).Children(func() {
@@ -134,7 +134,7 @@ func (a *app) mobileDialog(c *ui.Context) {
 			}
 			if len(m.devices) > 0 {
 				ui.Box(c).Height(1).Background(colors(t).line)
-				ui.Text(c, "已配对").FontSize(11).FontWeight(600).TextColor(t.TextMuted)
+				ui.Text(c, "已配对").FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 				for _, d := range m.devices {
 					ui.Row(c.Key(d.ID)).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, d.Name).FontSize(13).Grow(1).Shrink(1).SingleLine()

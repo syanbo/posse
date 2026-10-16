@@ -37,27 +37,50 @@ type historyDetail struct {
 	Terminal string            `json:"terminal"`
 
 	md map[int][]mdBlock // 消息序号 → 解析好的 Markdown
-	// shown 是不显示工具调用时要列出的消息，shownFor 是算它时的命中序号
-	shown    []history.Message
-	shownFor int
-	hasShown bool
+	// items 是要列出的行，itemsKey 是算它时的条件（是否全显示工具、命中序号、展开了哪些工具组）
+	items    []transcriptItem
+	itemsKey string
+	opened   map[int]bool // 展开了的工具组，键是组里第一条的序号
+	openedV  int          // opened 每变一次加一
 }
 
-// visible 返回要列出的消息：不显示工具调用时去掉工具消息，但命中的那条留着。结果缓存在会话上。
-func (d *historyDetail) visible(tools bool, hitSeq int) []history.Message {
-	if tools {
-		return d.Messages
+// transcriptItem 是对话里的一行：一条消息，或折成一行的一串连续工具调用。
+type transcriptItem struct {
+	msg   history.Message
+	tools []history.Message
+}
+
+// visible 返回要列出的行：全显示工具时逐条列出；否则连续的工具调用折成一行"工具调用 N 次"，
+// 点开的组和命中的那条照常列出。结果缓存在会话上。
+func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
+	key := fmt.Sprint(tools, hitSeq, d.openedV)
+	if d.items != nil && key == d.itemsKey {
+		return d.items
 	}
-	if !d.hasShown || d.shownFor != hitSeq {
-		d.shown = make([]history.Message, 0, len(d.Messages))
-		for _, m := range d.Messages {
-			if m.Role != "tool" || m.Seq == hitSeq {
-				d.shown = append(d.shown, m)
-			}
+	d.items, d.itemsKey = d.items[:0], key
+	for i := 0; i < len(d.Messages); i++ {
+		m := d.Messages[i]
+		if m.Role != "tool" || tools {
+			d.items = append(d.items, transcriptItem{msg: m})
+			continue
 		}
-		d.shownFor, d.hasShown = hitSeq, true
+		j := i
+		for j < len(d.Messages) && d.Messages[j].Role == "tool" {
+			j++
+		}
+		run := d.Messages[i:j]
+		hit := slices.ContainsFunc(run, func(t history.Message) bool { return t.Seq == hitSeq })
+		if d.opened[run[0].Seq] || hit {
+			d.items = append(d.items, transcriptItem{msg: run[0], tools: run})
+			for _, t := range run {
+				d.items = append(d.items, transcriptItem{msg: t})
+			}
+		} else {
+			d.items = append(d.items, transcriptItem{msg: run[0], tools: run})
+		}
+		i = j - 1
 	}
-	return d.shown
+	return d.items
 }
 
 // historyView 是历史页的状态。界面线程读写；req 和 want 由 mu 保护，供请求协程核对自己是否过期。
@@ -353,7 +376,7 @@ func (a *app) historySidebarItem(c *ui.Context) {
 func (a *app) historyBoard(c *ui.Context) {
 	h := &a.history
 	band(c, func() {
-		ui.Text(c, "历史").FontSize(15).FontWeight(600).Margin(0, 6, 0, 0)
+		titleText(c, "历史", fsCardTitle).Margin(0, 6, 0, 0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
 		search := ui.TextInput(c, &h.query).Label("搜索会话").Placeholder("搜索会话内容  ⌘F").Width(340)
 		if c.Shortcut(ui.Cmd, ui.KeyF) {
@@ -418,15 +441,15 @@ func (a *app) sessionList(c *ui.Context) {
 	// 列表里有"几分钟前"，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
 	h.list.Key = func(i int) any { return h.sessions[i].Agent + h.sessions[i].ID }
-	ui.List(c, &h.list, len(h.sessions), func(i int) {
+	fadeEdges(ui.List(c, &h.list, len(h.sessions), func(i int) {
 		s := h.sessions[i]
 		ui.Column(c).Children(func() {
 			if i == 0 || groups[i] != groups[i-1] {
-				ui.Text(c, groups[i]).FontSize(11).FontWeight(600).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+				ui.Text(c, groups[i]).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
 			}
 			a.sessionRow(c, s, nil)
 		})
-	}).Grow(1).Padding(4, 0, 8, 0)
+	}).Grow(1).Padding(4, 0, 8, 0).Gap(4), &h.list, colors(t).card)
 }
 
 func (a *app) hitList(c *ui.Context) {
@@ -437,16 +460,16 @@ func (a *app) hitList(c *ui.Context) {
 	}
 	c.After(30 * time.Second)
 	h.list.Key = func(i int) any { return h.hits[i].Agent + h.hits[i].ID }
-	ui.List(c, &h.list, len(h.hits), func(i int) {
+	fadeEdges(ui.List(c, &h.list, len(h.hits), func(i int) {
 		hit := h.hits[i]
 		a.sessionRow(c, hit.Session, &hit)
-	}).Grow(1).Padding(8, 0)
+	}).Grow(1).Padding(8, 0).Gap(4), &h.list, colors(c.Theme()).card)
 }
 
 func (a *app) historyEmpty(c *ui.Context, title, body string) {
 	t := c.Theme()
 	ui.Column(c).Padding(28, 20).Gap(6).Children(func() {
-		ui.Text(c, title).FontSize(13).FontWeight(600)
+		ui.Text(c, title).FontSize(13).FontWeight(500)
 		ui.Text(c, body).FontSize(12).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }
@@ -508,7 +531,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 			card(c).Width(420).Padding(24).Gap(14).Children(func() {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
-					ui.Text(c, "会话历史").FontSize(18).FontWeight(600)
+					titleText(c, "会话历史", fsPageTitle)
 					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Hive 里接着聊。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if n := h.status.Sessions; n > 0 {
@@ -527,7 +550,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 		ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 			agentTile(c, s.Agent, 44)
 			ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
-				ui.Text(c, oneLine(s.Title)).FontSize(18).FontWeight(600).LineHeight(1.3).MaxLines(2).Selectable()
+				titleText(c, oneLine(s.Title), fsPageTitle).LineHeight(1.3).MaxLines(2).Selectable()
 				var cwd, branch func()
 				if s.Cwd != "" {
 					cwd = metaMono(c, iconFolder, shortPath(s.Cwd), s.Cwd)
@@ -566,50 +589,87 @@ func (a *app) sessionDetail(c *ui.Context) {
 		return
 	}
 	ns := queryWords(h.query)
-	h.messages.Key = func(i int) any { return msgs[i].Seq }
+	h.messages.Key = func(i int) any { return [2]any{msgs[i].msg.Seq, msgs[i].tools != nil} }
 	if !h.placed {
 		// 从搜索结果打开时定位到命中的消息，否则从第一句读起
 		h.placed = true
 		h.messages.ScrollTo(0, ui.Start)
-		for i, m := range msgs {
-			if m.Seq == h.hitSeq {
+		for i, it := range msgs {
+			if it.tools == nil && it.msg.Seq == h.hitSeq {
 				h.messages.ScrollTo(i, ui.Center)
 				break
 			}
 		}
 	}
-	card(c).Grow(1).Clip().Children(func() {
-		ui.List(c, &h.messages, len(msgs), func(i int) {
-			a.messageView(c, s, msgs[i], ns, msgs[i].Seq == h.hitSeq)
-		}).Grow(1).Padding(10, 0, 24, 0).Gap(4)
+	// 对话直接铺在画布上，不装卡片；版心限宽居中，一行不至于太长
+	transcript := ui.List(c, &h.messages, len(msgs), func(i int) {
+		ui.Row(c).Justify(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).MaxWidth(transcriptWidth).Children(func() {
+				it := msgs[i]
+				if it.tools != nil {
+					a.toolRun(c, d, it.tools)
+					return
+				}
+				a.messageView(c, s, it.msg, ns, it.msg.Seq == h.hitSeq)
+			})
+		})
+	}).Grow(1).Padding(8, 0, 32, 0).Gap(6)
+	fadeEdges(transcript, &h.messages, colors(t).canvas)
+}
+
+// transcriptWidth 是对话的版心宽度：14.5pt 的正文一行四十几个汉字。
+const transcriptWidth = 680
+
+// toolRun 是折起来的一串工具调用：点一下展开或收起。
+func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
+	t := c.Theme()
+	open := d.opened[run[0].Seq]
+	row := ui.Row(c.Key("tools")).Height(26).Padding(0, 10).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	selectable(c, row, false)
+	row.Children(func() {
+		turn := float32(0)
+		if open {
+			turn = 90
+		}
+		ui.Icon(c, iconChevron).FontSize(11).TextColor(t.TextMuted).Rotate(turn)
+		ui.Text(c, fmt.Sprintf("工具调用 %d 次", len(run))).FontSize(fsMeta).TextColor(t.TextMuted)
 	})
+	if row.Clicked() {
+		if d.opened == nil {
+			d.opened = map[int]bool{}
+		}
+		if open {
+			delete(d.opened, run[0].Seq)
+		} else {
+			d.opened[run[0].Seq] = true
+		}
+		d.openedV++
+	}
 }
 
 func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, ns []string, hit bool) {
 	t := c.Theme()
 	who := map[string]string{"user": "你", "assistant": agentTitle(s.Agent), "tool": "工具"}[m.Role]
-	whoColor := t.Text
-	if m.Role == "tool" {
-		whoColor = t.TextMuted
+	whoColor := t.TextMuted
+	if m.Role == "user" {
+		whoColor = t.Accent
 	}
-	box := ui.Column(c).Margin(0, 12).Padding(10, 16, 12, 14).Gap(6).MaxWidth(860).Radius(10)
+	// agent 的回复不装框，直接铺开；命中搜索的那条铺一层琥珀淡底
+	box := ui.Column(c).Margin(0, 16).Padding(10, 16, 12, 16).Gap(6).Radius(10)
 	switch {
 	case hit:
 		box.Background(colors(t).honey.Alpha(0.1))
 	case m.Role == "user":
-		// 自己说的话用强调色淡底加左侧竖条，和侧栏选中项一个样式，一眼和 agent 的回复分开
+		// 自己说的话靠右，强调色淡底，竖条也在靠外的右边，一眼和 agent 的回复分开
 		accent := t.Accent
-		box.Background(colors(t).tint)
+		box.Background(colors(t).tint).AlignSelf(ui.End).MaxWidth(transcriptWidth * 0.8)
 		box.Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Fill(ui.Rect{X: r.X, Y: r.Y + 10, W: 3, H: r.H - 20}, accent, 1.5)
+			p.Fill(ui.Rect{X: r.X + r.W - 3, Y: r.Y + 10, W: 3, H: r.H - 20}, accent, 1.5)
 		})
-	}
-	if m.Role == "user" {
-		whoColor = t.Accent
 	}
 	box.Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, who).FontSize(12).FontWeight(600).TextColor(whoColor)
+			ui.Text(c, who).FontSize(fsMeta).FontWeight(500).TextColor(whoColor)
 			if !m.At.IsZero() {
 				ui.Text(c, m.At.Local().Format("1月2日 15:04")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
@@ -624,7 +684,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 				mdView{words: ns}.blocks(c, a.markdown(m))
 			})
 		default:
-			highlighted(c, text, ns).FontSize(13).LineHeight(1.5).Selectable()
+			highlighted(c, text, ns).FontSize(fsBody).LineHeight(1.55).Selectable()
 		}
 	})
 }

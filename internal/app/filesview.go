@@ -195,7 +195,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	s := &v.search
 	ui.Column(c).Padding(0, 10, 8, 10).Gap(6).Shrink(0).Children(func() {
-		in := ui.TextInput(c, &s.query.Text).Placeholder("在文件里检索").Label("检索")
+		in := fieldInput(c, &s.query.Text, "在文件里检索")
 		if s.focus {
 			in.Focus()
 			s.focus = false
@@ -223,10 +223,10 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			}
 		})
 		if s.showFilter {
-			if ui.TextInput(c.Key("include"), &s.query.Include).Placeholder("包含，如 *.go, src/").Label("包含的文件").Changed() {
+			if fieldInput(c.Key("include"), &s.query.Include, "包含，如 *.go, src/").Changed() {
 				a.startSearch(v, 300*time.Millisecond)
 			}
-			if ui.TextInput(c.Key("exclude"), &s.query.Exclude).Placeholder("排除，如 vendor, *_test.go").Label("排除的文件").Changed() {
+			if fieldInput(c.Key("exclude"), &s.query.Exclude, "排除，如 vendor, *_test.go").Changed() {
 				a.startSearch(v, 300*time.Millisecond)
 			}
 		}
@@ -251,7 +251,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			row := ui.Row(c).Padding(8, 12, 3, 14).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
 				ui.Icon(c, iconFile).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-				ui.Text(c, filepath.Base(h.Path)).FontSize(12).FontWeight(600).SingleLine().Shrink(0)
+				ui.Text(c, filepath.Base(h.Path)).FontSize(12).FontWeight(500).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
 					ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
@@ -437,7 +437,7 @@ func filesEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
-		ui.Text(c, "在左边的文件树里选一个文件").FontSize(14).FontWeight(600)
+		titleText(c, "在左边的文件树里选一个文件", fsCardTitle)
 		ui.Row(c).Gap(14).Children(func() {
 			shortcutHint(c, "⌘P", "按名称打开")
 			shortcutHint(c, "⇧⌘F", "在文件里检索")
@@ -667,7 +667,7 @@ func (a *app) quickDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &q.open, func() {
 		ui.Column(c).Width(560).Gap(10).Children(func() {
-			in := ui.TextInput(c, &q.query).Placeholder("按名称查找文件，加 :行号 跳到那一行").Label("快速打开").AutoFocus()
+			in := fieldInput(c, &q.query, "按名称查找文件，加 :行号 跳到那一行").AutoFocus()
 			path, line := files.SplitLine(q.query)
 			if v.list != nil && (q.list != v.list || q.key != path) {
 				q.matches, q.key, q.list, q.sel = files.Fuzzy(v.list.Files, path, 50), path, v.list, 0

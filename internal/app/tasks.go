@@ -332,7 +332,7 @@ func (a *app) taskBoard(c *ui.Context) {
 		}
 	}
 	band(c, func() {
-		ui.Text(c, "任务").FontSize(15).FontWeight(600)
+		titleText(c, "任务", fsCardTitle)
 		ui.Spacer(c)
 		if ended > 0 {
 			if pressable(textButton(c, "清除已结束")).Clicked() {
@@ -400,7 +400,7 @@ func (a *app) taskList(c *ui.Context) {
 		if s := taskSection(task); s != section {
 			section = s
 			label := []string{"需要你回复", "进行中", "已结束"}[s]
-			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(11).FontWeight(600).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
 		}
 		a.taskRow(c, task)
 	}
@@ -465,7 +465,7 @@ func (a *app) emptyBoard(c *ui.Context) {
 		card(c).Width(460).Padding(24).Gap(18).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
-				ui.Text(c, "还没有任务").FontSize(20).FontWeight(600)
+				titleText(c, "还没有任务", 20)
 				ui.Text(c, "把一件事交给 Claude、Codex 或 Grok 去做，它们做完会在这里汇报，有问题也会在这里问你。也可以让一个 agent 当协调者，派活给其他 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
@@ -492,7 +492,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 				agentTile(c, task.Agent, 44)
 				ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
-					ui.Text(c, task.Title).FontSize(18).FontWeight(600).LineHeight(1.3).Selectable()
+					titleText(c, task.Title, fsPageTitle).LineHeight(1.3).Selectable()
 					status := func() {
 						ui.Row(c).Gap(5).Children(func() {
 							taskGlyphIcon(c, task, 12)
@@ -520,19 +520,19 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 				}
 			})
 		}
-		a.thread(c, task, msgs)
-		if task.Status == "running" && task.Terminal != nil {
-			a.block(c, "补充说明", func() {
-				ui.Row(c).Gap(8).Children(func() {
-					submitted := ui.TextInput(c, &a.noteText).Placeholder("worker 会在下一个检查点读到").Grow(1).Submitted()
-					if pressable(textButton(c, "发送")).Clicked() {
-						submitted = true
-					}
-					if submitted && strings.TrimSpace(a.noteText) != "" {
-						go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
-					}
-				})
-			})
+		if open := a.thread(c, task, msgs); open != nil && task.Status == "running" {
+			q := *open
+			placeholder := "回答 worker 的提问"
+			if task.Coordinator != "" {
+				placeholder = "替派发方回答（它也可能自己回答）"
+			}
+			if composer(c, &a.replyText, placeholder, "回复", true) {
+				go a.reply(q.ID, strings.TrimSpace(a.replyText))
+			}
+		} else if task.Status == "running" && task.Terminal != nil {
+			if composer(c, &a.noteText, "补充说明：worker 会在下一个检查点读到", "发送", false) {
+				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
+			}
 		}
 		if task.Spec != "" {
 			a.block(c, "任务说明", func() {
@@ -622,7 +622,8 @@ const monoFont = "SF Mono, Menlo, monospace"
 
 var messageLabels = map[string]string{"question": "提问", "answer": "回复", "note": "补充说明", "done": "汇报", "exit": "退出"}
 
-func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) {
+// thread 画往来消息，返回还没回答的提问（没有为 nil）。
+func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMessage {
 	t := c.Theme()
 	answered := map[string]bool{}
 	var open *taskMessage
@@ -642,7 +643,7 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) {
 		}
 	}
 	if len(shown) == 0 {
-		return
+		return open
 	}
 	a.block(c, "往来消息", func() {
 		ui.Column(c).Gap(14).Children(func() {
@@ -661,29 +662,15 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) {
 							if task.Coordinator == "" {
 								label, color = "待你回复", colors(t).honey
 							}
-							ui.Text(c, label).FontSize(11).FontWeight(600).TextColor(color)
+							ui.Text(c, label).FontSize(11).FontWeight(500).TextColor(color)
 						}
 					})
 					ui.Text(c, m.Body).FontSize(13).LineHeight(1.55).Selectable()
 				})
 			}
 		})
-		if open != nil && task.Status == "running" {
-			q := *open
-			ui.Column(c).Gap(8).Padding(4, 0, 0, 0).Children(func() {
-				placeholder := "回答 worker 的提问"
-				if task.Coordinator != "" {
-					placeholder = "替派发方回答（它也可能自己回答）"
-				}
-				ui.TextArea(c, &a.replyText).Placeholder(placeholder).Height(84)
-				ui.Row(c).Justify(ui.End).Children(func() {
-					if pressable(accentButton(c, "回复")).Clicked() && strings.TrimSpace(a.replyText) != "" {
-						go a.reply(q.ID, strings.TrimSpace(a.replyText))
-					}
-				})
-			})
-		}
 	})
+	return open
 }
 
 // --- 派发对话框
@@ -692,7 +679,7 @@ func (a *app) dispatchDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.dispatching, func() {
 		ui.Column(c).Width(460).Gap(12).Children(func() {
-			ui.Text(c, "派发任务").FontSize(15).FontWeight(600)
+			titleText(c, "派发任务", fsCardTitle)
 			var labels []string
 			for _, w := range a.workspaces {
 				labels = append(labels, w.Label)

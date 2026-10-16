@@ -111,7 +111,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(420).MaxHeight(600).Padding(6).Gap(2))
 	panel.Children(func() {
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
-			ui.TextInput(c, &bp.query).Placeholder("搜索分支").Label("搜索分支").AutoFocus().Grow(1)
+			ui.Column(c).Grow(1).Children(func() { fieldInput(c, &bp.query, "搜索分支").AutoFocus() })
 			busy := g.busy == "Fetch"
 			fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取", 28, 15))
 			if busy {
@@ -218,7 +218,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 	}
 	match := func(b gitx.Branch) bool { return query == "" || strings.Contains(strings.ToLower(b.Name), query) }
 	header := func(title string) {
-		ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(t.TextMuted).Padding(8, 10, 2, 10)
+		ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(8, 10, 2, 10)
 	}
 	var recent []gitx.Branch
 	if query == "" {
@@ -291,7 +291,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		ui.Icon(c, iconBranch).FontSize(13).TextColor(color).Shrink(0)
 		name := ui.Text(c, b.Name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1)
 		if b.Current {
-			name.FontWeight(600)
+			name.FontWeight(500)
 		}
 		if b.Ahead > 0 {
 			ui.Text(c, fmt.Sprintf("↑%d", b.Ahead)).FontSize(11).FontFeatures("tnum").TextColor(p.sage).Tooltip(fmt.Sprintf("%d 个提交待推送", b.Ahead)).Shrink(0)
@@ -531,7 +531,7 @@ func (a *app) promptDialog(c *ui.Context) {
 			return
 		}
 		ui.Column(c).Width(360).Gap(12).Children(func() {
-			ui.Text(c, p.title).FontSize(15).FontWeight(600)
+			titleText(c, p.title, fsCardTitle)
 			if p.body != "" {
 				ui.Text(c, p.body).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
 			}
@@ -539,7 +539,7 @@ func (a *app) promptDialog(c *ui.Context) {
 			if p.multiline {
 				ui.TextArea(c, &p.value).Label(p.title).AutoFocus().Height(120).FontSize(12.5)
 			} else {
-				submitted = ui.TextInput(c, &p.value).Placeholder(p.placeholder).Label(p.title).AutoFocus().Submitted()
+				submitted = fieldInput(c, &p.value, p.placeholder).AutoFocus().Submitted()
 			}
 			if p.check != "" {
 				ui.Checkbox(c, &p.checked, p.check)
