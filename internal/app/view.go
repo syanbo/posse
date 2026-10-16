@@ -849,7 +849,10 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
-			pendingLabel(c).Shrink(0)
+			// 字号、字重和别的标签标题一样，只用琥珀色区分
+			label := ui.Text(c, "待处理").FontSize(12).Shrink(0)
+			tabText(c, label, active)
+			label.TextColor(colors(t).honey)
 		} else if detail != "" {
 			title := ui.Text(c, detail).FontSize(12).Shrink(1).MaxLines(1)
 			if term.Agent != "" {
