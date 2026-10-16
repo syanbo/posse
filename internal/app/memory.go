@@ -256,7 +256,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 									} else {
 										ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 									}
-								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(6).Tooltip("展开看里面的程序")
+								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(6)
 								if row.Hovered() {
 									row.Background(colors(t).wash)
 								}
@@ -272,7 +272,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 										if pr.n > 1 {
 											label = fmt.Sprintf("%s ×%d", pr.name, pr.n)
 										}
-										memLine(c, fmt.Sprint(x.term.ID, "-", i), nil, label, mb(pr.kb), 3).Tooltip(pr.name)
+										memLine(c, fmt.Sprint(x.term.ID, "-", i), nil, label, mb(pr.kb), 3)
 									}
 								}
 							}
