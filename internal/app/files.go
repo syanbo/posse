@@ -152,10 +152,10 @@ type filesView struct {
 	listing  bool
 	docs     []*fileDoc
 	cur      *fileDoc
-	side     int // 左栏：sideFiles、sideSearch、sideChanges
+	side     int // 文件栏：sideFiles、sideSearch、sideChanges
 	search   fileSearch
 	poll     panelPoll
-	prevTerm string // 切到文件标签前选中的终端，⇧⌘E 切回去
+	prevTerm string // 切到文件标签前选中的终端，关掉最后一个文件时切回去
 	git      gitState
 }
 
@@ -537,6 +537,10 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 		}
 	}
 	a.saveFilesState(v)
+	// 最后一个文件关了，文件标签也就不显示了，切回之前的终端
+	if w := a.workspace(v.wsID); len(v.docs) == 0 && a.filesActive(w) {
+		a.leaveFiles(w)
+	}
 }
 
 // dirtyDocs 是所有工作区里有未保存改动的文档。

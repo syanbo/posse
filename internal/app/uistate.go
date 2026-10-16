@@ -11,9 +11,10 @@ import (
 // uiState 是只有界面关心的状态，存在 $HIVE_HOME/ui.json：放进常驻进程要改协议，
 // 而重启常驻进程会断掉所有终端。
 type uiState struct {
-	Selected     string   `json:"selected,omitempty"`     // 侧栏上次选中的一项，下次打开时选回来
-	ProjectOrder []string `json:"projectOrder,omitempty"` // 侧栏里项目的顺序，拖动调整
-	RightPanel   string   `json:"rightPanel,omitempty"`   // 右侧开着的面板：panelUsage、panelHistory、panelImages 或空
+	Selected        string   `json:"selected,omitempty"`        // 侧栏上次选中的一项，下次打开时选回来
+	ProjectOrder    []string `json:"projectOrder,omitempty"`    // 侧栏里项目的顺序，拖动调整
+	RightPanel      string   `json:"rightPanel,omitempty"`      // 右侧开着的面板：panelUsage、panelHistory、panelImages、panelFiles 或空
+	FilesPanelWidth float32  `json:"filesPanelWidth,omitempty"` // 文件栏的宽度，0 表示默认
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`
 }

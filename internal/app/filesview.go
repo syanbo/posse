@@ -13,13 +13,14 @@ import (
 	"hive/internal/files"
 )
 
-const filesSideWidth = 260
-
-// filesTab 是标签栏最前面的"文件"标签；有未保存的文件时名字后面带一个点。
+// filesTab 是标签栏右侧按钮组最前面的"文件"标签，放打开的文件；没有打开的文件时不显示。有未保存的文件时名字后面带一个点。
 func (a *app) filesTab(c *ui.Context, w *workspace, active bool) {
 	t := c.Theme()
+	if v := a.files[w.ID]; !active && (v == nil || len(v.docs) == 0) {
+		return
+	}
 	row := ui.Row(c.Key(filesTabID)).Height(28).Padding(0, 10, 0, 8).Gap(6).Radius(8).Shrink(0).
-		Role(ui.RoleButton).Label("文件").Tooltip("文件 ⇧⌘E")
+		Role(ui.RoleButton).Label("文件").Tooltip("打开的文件")
 	bg := ui.Transparent
 	switch {
 	case active:
@@ -55,50 +56,9 @@ func dot(c *ui.Context, color ui.Color) ui.Element {
 	return ui.Box(c).Size(6, 6).Radius(3).Background(color).Shrink(0)
 }
 
-// filesPage 是文件标签的内容：左栏文件树或检索，右边打开的文件。
+// filesPage 是文件标签的内容：打开的文件。文件树、检索和改动在右边的文件栏里。
 func (a *app) filesPage(c *ui.Context, w *workspace) {
-	t := c.Theme()
-	p := colors(t)
-	v := a.filesFor(w)
-	if v.poll.due(c, filesPollEvery) {
-		a.pollFiles(v)
-	}
-	if v.git.poll.due(c, gitPollEvery) {
-		a.pollGit(v)
-	}
-	a.refreshList(v, false, nil)
-	if d := v.cur; d != nil && d.kind == docLoading && !d.started {
-		d.started = true
-		a.loadDoc(d)
-	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(filesSideWidth).Shrink(0).Background(p.band).Children(func() { a.filesSide(c, w, v) })
-		ui.Box(c).Width(1).Shrink(0).Background(p.line)
-		ui.Column(c).Grow(1).Shrink(1).Background(t.Background).Children(func() { a.docArea(c, w, v) })
-	})
-}
-
-func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
-	ui.Row(c).Height(40).Shrink(0).Padding(0, 10).AlignItems(ui.Center).Children(func() {
-		changes := "改动"
-		if n := v.git.changeCount(); n > 0 {
-			changes = fmt.Sprintf("改动 %d", n)
-		}
-		// 撑满左栏宽度：分段平分宽度，"改动 12"这样长一些的才放得下
-		ui.Column(c).Grow(1).Children(func() {
-			if segmented(c, &v.side, "左栏", "文件", "检索", changes) && v.side == sideSearch {
-				v.search.focus = true
-			}
-		})
-	})
-	switch v.side {
-	case sideFiles:
-		a.treeView(c, w, v)
-	case sideSearch:
-		a.searchView(c, w, v)
-	default:
-		a.changesView(c, w, v)
-	}
+	ui.Column(c).Grow(1).Shrink(1).Background(c.Theme().Background).Children(func() { a.docArea(c, w, a.filesFor(w)) })
 }
 
 // --- 文件树
@@ -437,11 +397,11 @@ func filesEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
-		titleText(c, "在左边的文件树里选一个文件", fsCardTitle)
+		titleText(c, "在右边的文件栏里选一个文件", fsCardTitle)
 		ui.Row(c).Gap(14).Children(func() {
 			shortcutHint(c, "⌘P", "按名称打开")
 			shortcutHint(c, "⇧⌘F", "在文件里检索")
-			shortcutHint(c, "⇧⌘E", "回到终端")
+			shortcutHint(c, "⌘L", "文件栏")
 		})
 	})
 }
@@ -646,9 +606,9 @@ type quickOpen struct {
 	moved   bool        // 这一帧用方向键换了选中项，要滚到它
 }
 
-// openQuick 打开快速打开：切到文件标签，清单不新鲜就重列。
+// openQuick 打开快速打开，清单不新鲜就重列；选中文件后才切到文件标签。
 func (a *app) openQuick(w *workspace) {
-	v := a.showFiles(w)
+	v := a.filesFor(w)
 	a.quick = quickOpen{open: true, ws: w.ID}
 	a.refreshList(v, false, nil)
 }

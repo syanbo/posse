@@ -34,9 +34,9 @@ func (a *app) build(c *ui.Context) {
 		a.ensureView("")
 	}
 	a.shortcuts(c, w, cur)
-	// 看不见的文件标签放掉文件清单，再显示时重列
+	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
 	for id, v := range a.files {
-		if w == nil || id != w.ID || !a.filesActive(w) {
+		if w == nil || id != w.ID || !a.filesShown(w) && !(a.quick.open && a.quick.ws == id) {
 			v.list = nil
 		}
 	}
@@ -88,8 +88,20 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.openQuick(w)
 		}
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF) {
-			v := a.showFiles(w)
-			v.side, v.search.focus = 1, true
+			a.openFilesPanel(w, sideSearch).search.focus = true
+		}
+		if c.Shortcut(ui.Cmd, ui.KeyL) {
+			if a.filesPanelOpen() {
+				a.closeFilesPanel()
+			} else {
+				a.openFilesPanel(w, a.filesFor(w).side)
+			}
+		}
+		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyG) {
+			a.toggleFilesPanel(w, sideChanges)
+		}
+		if c.Shortcut(ui.Cmd, ui.KeyK) && a.filesShown(w) && a.filesFor(w).git.repo != "" {
+			a.openFilesPanel(w, sideChanges).git.focusMsg = true
 		}
 		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyK) {
 			a.openPush(w)
@@ -98,11 +110,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.askNewBranch(w, a.filesFor(w), "")
 		}
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
-			if a.filesActive(w) {
-				a.leaveFiles(w)
-			} else {
-				a.showFiles(w)
-			}
+			a.toggleFilesPanel(w, sideFiles)
 		}
 	}
 	if a.filesActive(w) {
@@ -560,9 +568,11 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		return
 	}
 	a.overPanelButton = false
+	if a.filesShown(w) {
+		a.filesTick(c, w)
+	}
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
-		a.filesTab(c, w, a.filesActive(w))
 		for _, term := range w.Terminals {
 			a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 		}
@@ -577,6 +587,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		})
 		ui.Spacer(c)
+		a.filesTab(c, w, a.filesActive(w))
 		if w.Branch != "" {
 			a.branchButton(c, w)
 		}
@@ -587,6 +598,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
 		}
 		a.panelButton(c, panelHistory, iconHistory, "历史会话")
+		a.panelButton(c, panelFiles, iconPanelRight, "文件栏 ⌘L")
 	})
 	// 右侧面板浮在上面，不挤压终端：终端宽度一变，程序就要按新列数重排输出
 	body := ui.Column(c).Grow(1)
@@ -628,6 +640,8 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		case panelHistory:
 			panel, drawn = a.recentPanel(c, w), true
+		case panelFiles:
+			panel, drawn = a.filesPanel(c, w), true
 		case panelImages:
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.imagesPanel(c, cur), true
@@ -637,7 +651,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if drawn {
 			panel.Opacity(shown).Transform(ui.Translation((1-shown)*24, 0))
 			// 点面板外面任何地方都收起，这一下照常落到下面的终端或按钮上
-			if a.state.RightPanel != "" && panel.PressedOutside() && !a.overPanelButton {
+			if a.state.RightPanel != "" && !a.dialogOpen() && !a.resizingPanel && panel.PressedOutside() && !a.overPanelButton {
 				a.state.RightPanel = ""
 				a.saveState()
 			}

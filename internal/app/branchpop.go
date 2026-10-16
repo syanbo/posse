@@ -177,8 +177,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if popupItem(c, iconCommit, "提交…", "⌘K") {
 		a.branchPop = nil
-		v := a.showFiles(w)
-		v.side, v.git.focusMsg = sideChanges, true
+		a.openFilesPanel(w, sideChanges).git.focusMsg = true
 	}
 	if popupItem(c, iconPush, "Push…", "⇧⌘K") {
 		a.branchPop = nil

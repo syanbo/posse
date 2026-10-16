@@ -45,8 +45,7 @@ func gitWorkspace(t *testing.T, a *app) string {
 
 func openChanges(t *testing.T, a *app, tt *ui.Tester) *filesView {
 	t.Helper()
-	v := a.showFiles(&a.workspaces[0])
-	v.side = sideChanges
+	v := a.openFilesPanel(&a.workspaces[0], sideChanges)
 	until(t, tt, "git status", func() bool { return v.git.status != nil && len(v.git.rows) > 0 })
 	return v
 }
@@ -384,7 +383,7 @@ func TestConflictBanner(t *testing.T) {
 	gitRun(t, root, "switch", "-q", "main")
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
-	v := a.showFiles(w)
+	v := a.openFilesPanel(w, sideFiles)
 	until(t, tt, "status", func() bool { return v.git.status != nil })
 	v.side = sideFiles
 	a.gitDo(v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })

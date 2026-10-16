@@ -460,7 +460,4 @@ func (a *app) gitShortcuts(c *ui.Context, w *workspace, v *filesView) {
 			}
 		}
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyK) && v.git.repo != "" {
-		v.side, v.git.focusMsg = sideChanges, true
-	}
 }

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"hive/internal/client"
 )
 
 const sampleGo = `package main
@@ -94,9 +96,14 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
+	a.showFiles(w)
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
-	v := a.showFiles(w)
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
+	v := a.filesFor(w)
+	if !a.filesPanelOpen() || v.side != sideFiles {
+		t.Fatal("⇧⌘E should open the files panel on the tree")
+	}
 	until(t, tt, "tree", func() bool { return v.tree.Loaded(root) && tt.HasText("main.go") })
 	// 选中文件标签：不被换回第一个终端，终端断开接入
 	if a.activeTerm[w.ID] != filesTabID || a.view != nil {
@@ -116,6 +123,12 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	d := v.doc(path)
 	if d.ed.Buffer.String() != sampleGo || d.isModified() {
 		t.Fatal("doc content or modified state wrong after open")
+	}
+	// 文件栏浮在编辑区上，后面要点编辑区右边的横幅按钮，先收起来
+	tt.Key(ui.Cmd, ui.KeyL)
+	tt.Frame()
+	if a.filesPanelOpen() {
+		t.Fatal("⌘L should close the files panel")
 	}
 
 	// 编辑后 ⌘S 保存到磁盘，未保存标记消失
@@ -187,41 +200,50 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	if a.unsaved == nil {
 		t.Fatal("closing a modified doc should ask")
 	}
+	// 关掉最后一个文件会切回终端并接入它：给一个连不上的 socket，接入失败而不是空指针
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
 	if err := tt.Click("不保存"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
 	if v.doc(path) != nil {
 		t.Fatal("doc still open")
 	}
-	// 没有文件时回到之前的终端（再画一帧就要真的接入终端，测试里没有常驻进程，只看选中项）
-	a.leaveFiles(w)
+	// 关掉最后一个文件就回到之前的终端
+	if len(v.docs) != 0 {
+		t.Fatalf("docs left open: %d", len(v.docs))
+	}
 	if a.activeTerm[w.ID] != "t1" {
 		t.Fatalf("activeTerm = %q, want back to t1", a.activeTerm[w.ID])
 	}
 }
 
-// 没有终端的工作区也能打开文件标签，而不是落到空工作区的页面。
+// 没有终端的工作区也能开文件栏、打开文件，而不是一直停在空工作区的页面。
 func TestFilesTabWithoutTerminals(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)
 	a.selected = "w2"
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
-	if !tt.HasText("切换终端") {
+	if !tt.HasText("切换终端") || tt.HasText("文件") && a.filesActive(a.workspace("w2")) {
 		t.Fatal("expected the empty workspace page first")
 	}
-	if err := tt.Click("文件"); err != nil {
+	tt.Key(ui.Cmd, ui.KeyL)
+	until(t, tt, "tree", func() bool { return a.filesPanelOpen() && tt.HasText("main.go") })
+	if err := tt.Click("main.go"); err != nil {
 		t.Fatal(err)
 	}
-	until(t, tt, "files page", func() bool { return tt.HasText("在左边的文件树里选一个文件") })
-	if tt.HasText("切换终端") {
-		t.Fatal("empty workspace page still shown")
+	w := a.workspace("w2")
+	until(t, tt, "opened", func() bool { return a.filesActive(w) && !tt.HasText("切换终端") })
+	// 没有终端可回：关掉文件后留在文件标签
+	tt.Key(ui.Cmd, ui.KeyW)
+	until(t, tt, "empty files", func() bool { return tt.HasText("在右边的文件栏里选一个文件") })
+	if !a.filesActive(w) {
+		t.Fatal("should stay on files without terminals")
 	}
-	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
+	tt.Key(ui.Cmd, ui.KeyL)
 	tt.Frame()
-	if !a.filesActive(a.workspace("w2")) {
-		t.Fatal("⇧⌘E should stay on files without terminals")
+	if a.filesPanelOpen() {
+		t.Fatal("⌘L should close the files panel")
 	}
 }
 
@@ -233,8 +255,8 @@ func TestQuickOpenAndSearch(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyP)
 	tt.Frame()
-	if !a.quick.open || !a.filesActive(w) {
-		t.Fatal("⌘P should open quick open on the files tab")
+	if !a.quick.open || a.filesActive(w) {
+		t.Fatal("⌘P should open quick open without leaving the terminal")
 	}
 	v := a.files[w.ID]
 	until(t, tt, "list", func() bool { return v.list != nil && len(a.quick.matches) > 0 })
@@ -255,8 +277,8 @@ func TestQuickOpenAndSearch(t *testing.T) {
 
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyF)
 	tt.Frame()
-	if v.side != 1 {
-		t.Fatal("⇧⌘F should switch to search")
+	if v.side != sideSearch || !a.filesPanelOpen() {
+		t.Fatal("⇧⌘F should open the files panel on search")
 	}
 	tt.Frame()
 	tt.Type("func")

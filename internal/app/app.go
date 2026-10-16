@@ -166,6 +166,7 @@ type app struct {
 	lastPanel string
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
+	resizingPanel   bool // 正在拖文件栏的左边缘，松手时写 ui.json
 
 	// 派发任务对话框
 	dispatching bool
