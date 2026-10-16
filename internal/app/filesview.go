@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -379,7 +380,8 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	for _, d := range v.docs {
 		names[d.name()]++
 	}
-	for _, d := range v.docs {
+	// 点 × 会在这次遍历里关掉文件，slices.Delete 把末尾那格清成 nil：遍历副本
+	for _, d := range slices.Clone(v.docs) {
 		detail := ""
 		switch {
 		case d.diff != nil:

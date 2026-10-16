@@ -418,3 +418,34 @@ func TestBranchPopupClosesPanel(t *testing.T) {
 		t.Fatalf("panel=%v popup=%v", a.filesPanelOpen(), a.branchPop != nil)
 	}
 }
+
+// 点标签上的 × 连着关文件：关闭发生在画标签的遍历里，不能遍历到被清空的格子而崩溃。
+func TestCloseDocTabsByButton(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "opened", func() bool { return v.cur != nil && v.cur.kind == docText })
+	// 不是当前的标签，指针先移上去 × 才出来，所以每个点到关掉为止
+	for want := 1; want >= 0; want-- {
+		for range 3 {
+			if len(v.docs) == want {
+				break
+			}
+			if err := tt.Click("关闭文件"); err != nil {
+				t.Fatal(err)
+			}
+			tt.Frame()
+		}
+		if len(v.docs) != want {
+			t.Fatalf("docs = %d, want %d", len(v.docs), want)
+		}
+	}
+	if a.activeTerm[w.ID] != "t1" {
+		t.Fatalf("should go back to the terminal, got %q", a.activeTerm[w.ID])
+	}
+}
