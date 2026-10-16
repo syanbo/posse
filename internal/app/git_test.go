@@ -51,7 +51,8 @@ func gitWorkspace(t *testing.T, a *app) string {
 func openChanges(t *testing.T, a *app, tt *ui.Tester) *filesView {
 	t.Helper()
 	v := a.openFilesPanel(&a.workspaces[0], sideChanges)
-	until(t, tt, "git status", func() bool { return v.git.status != nil && len(v.git.rows) > 0 })
+	// 文件栏滑进来之前点不准
+	until(t, tt, "git status", func() bool { return v.git.status != nil && len(v.git.rows) > 0 && a.filesPanelShown == 1 })
 	return v
 }
 
