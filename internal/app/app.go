@@ -148,9 +148,10 @@ type app struct {
 	quick   quickOpen             // ⌘P 快速打开
 	unsaved *unsavedAsk           // 问要不要保存修改的对话框
 	// Git：分支弹窗、输入框对话框、Push 对话框
-	branchPop *branchPopup
-	promptDlg *promptState
-	push      *pushState
+	branchPop   *branchPopup
+	branchFolds map[string]bool // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	promptDlg   *promptState
+	push        *pushState
 	// 关窗口和退出的钩子里要读，用原子量
 	dirtyCount atomic.Int32 // 有未保存改动的文件数，每帧更新
 	closeOK    atomic.Bool  // 用户处理完未保存的改动，放行这次关闭

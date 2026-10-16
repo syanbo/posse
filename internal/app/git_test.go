@@ -428,3 +428,39 @@ func TestLogRefTree(t *testing.T) {
 	}
 	until(t, tt, "all again", func() bool { return ld.filter.Branch == "" && !ld.loading && len(ld.commits) == all })
 }
+
+// 分支弹窗：远端默认收起，点标题展开；搜索时全部展开。
+func TestBranchPopupFolds(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openBranches(&a.workspaces[0])
+	v := a.files["w1"]
+	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("远端 origin") })
+	// 本地 main 后面也写着跟踪的 origin/main，远端那组展开后这几个字多出一处
+	remoteRow := func() bool { return countText(tt, "origin/main") > 2 }
+	if remoteRow() {
+		t.Fatal("remote group should start collapsed")
+	}
+	if err := tt.Click("远端 origin"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "expanded", remoteRow)
+	if err := tt.Click("远端 origin"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "collapsed", func() bool { return !remoteRow() })
+	a.branchPop.query = "main"
+	until(t, tt, "search expands", remoteRow)
+}
+
+// countText 是界面上恰好显示 s 的文字有几处。
+func countText(tt *ui.Tester, s string) int {
+	n := 0
+	for _, x := range tt.Texts() {
+		if x == s {
+			n++
+		}
+	}
+	return n
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -223,8 +224,34 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		return
 	}
 	match := func(b gitx.Branch) bool { return query == "" || strings.Contains(strings.ToLower(b.Name), query) }
-	header := func(title string) {
-		ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(8, 10, 2, 10)
+	// header 是一组的标题，点了折叠或展开；最近和本地默认展开，远端默认收起，搜索时全部展开
+	header := func(key, title string, n int) bool {
+		open, set := a.branchFolds[key]
+		if !set {
+			open = !strings.HasPrefix(key, "remote:")
+		}
+		row := ui.Row(c.Key("fold:"+key)).Height(26).Padding(6, 10, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+			Role(ui.RoleButton).Label(title)
+		if row.Hovered() {
+			row.Background(colors(t).wash)
+		}
+		row.Children(func() {
+			chevron := iconChevron
+			if open || query != "" {
+				chevron = iconDown
+			}
+			ui.Icon(c, chevron).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		})
+		if row.Clicked() && query == "" {
+			if a.branchFolds == nil {
+				a.branchFolds = map[string]bool{}
+			}
+			a.branchFolds[key] = !open
+			open = !open
+		}
+		return open || query != ""
 	}
 	var recent []gitx.Branch
 	if query == "" {
@@ -234,8 +261,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 			}
 		}
 	}
-	if len(recent) > 0 {
-		header("最近")
+	if len(recent) > 0 && header("recent", "最近", len(recent)) {
 		for _, b := range recent {
 			a.branchRow(c, w, v, b, "recent")
 		}
@@ -257,14 +283,15 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		}
 		remotes[r] = append(remotes[r], b)
 	}
-	if len(local) > 0 {
-		header("本地")
+	if len(local) > 0 && header("local", "本地", len(local)) {
 		for _, b := range local {
 			a.branchRow(c, w, v, b, "local")
 		}
 	}
 	for _, r := range remoteNames {
-		header("远端 " + r)
+		if !header("remote:"+r, "远端 "+r, len(remotes[r])) {
+			continue
+		}
 		for _, b := range remotes[r] {
 			a.branchRow(c, w, v, b, "remote")
 		}
