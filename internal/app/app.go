@@ -25,6 +25,7 @@ import (
 
 	"hive/internal/agent"
 	"hive/internal/client"
+	"hive/internal/gitx"
 	"hive/internal/procmem"
 )
 
@@ -307,6 +308,12 @@ func (a *app) refresh() {
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "workspace.list", nil, &r.workspaces)
+		// 常驻进程只在建工作区时记分支，main 工作区切分支后就过时了；以 HEAD 为准
+		for i := range r.workspaces {
+			if b := gitx.Head(r.workspaces[i].Path); b != "" {
+				r.workspaces[i].Branch = b
+			}
+		}
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
