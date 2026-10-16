@@ -660,13 +660,8 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 	case hit:
 		box.Background(colors(t).honey.Alpha(0.1))
 	case m.Role == "user":
-		// 自己说的话靠右，强调色淡底，右边一道短竖条，一眼和 agent 的回复分开。竖条和侧栏选中项一样短，
-		// 和第一行（"你"和时间）对齐，离边缘留一点，不贴边也不随消息拉长
-		accent := t.Accent
+		// 自己说的话靠右、强调色淡底，一眼和 agent 的回复分开
 		box.Background(colors(t).tint).AlignSelf(ui.End).MaxWidth(transcriptWidth * 0.8)
-		box.Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Fill(ui.Rect{X: r.X + r.W - 8, Y: r.Y + 10, W: 3, H: min(r.H-20, 18)}, accent, 1.5)
-		})
 	}
 	box.Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
