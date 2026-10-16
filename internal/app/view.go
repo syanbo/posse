@@ -590,6 +590,9 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		ui.Spacer(c)
 		if w.Branch != "" {
 			a.branchButton(c, w)
+			if iconButton(c.Key("git-log"), iconGitLog, "Git 日志").Clicked() {
+				a.openLog(w, "", "")
+			}
 		}
 		if cur != nil && cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")

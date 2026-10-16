@@ -71,7 +71,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if g.busy != "" {
 			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		}
-		if pressable(iconButtonSized(c, iconHistory, "Git 日志", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 24, 14)).Clicked() {
 			a.openLog(w, "", "")
 		}
 		if pressable(iconButtonSized(c, iconRefresh, "刷新", 24, 14)).Clicked() {

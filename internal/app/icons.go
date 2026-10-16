@@ -41,6 +41,7 @@ var (
 	iconPush       = icon(`<path d="M6.5 17.5 17 7M9.5 7H17v7.5"/>`)
 	iconCommit     = icon(`<circle cx="12" cy="12" r="3.25"/><path d="M3.5 12h5.25M15.25 12h5.25"/>`)
 	iconBlame      = icon(`<path d="M4.5 6h4M4.5 10h4M4.5 14h4M4.5 18h4M11.5 6h8M11.5 10h6M11.5 14h8M11.5 18h5"/>`)
+	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`) // 提交时间线，和分支、"历史会话"的时钟区分开
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
