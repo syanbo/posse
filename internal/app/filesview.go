@@ -13,45 +13,6 @@ import (
 	"hive/internal/files"
 )
 
-// filesTab 是标签栏右侧按钮组最前面的"文件"标签，放打开的文件；没有打开的文件时不显示。有未保存的文件时名字后面带一个点。
-func (a *app) filesTab(c *ui.Context, w *workspace, active bool) {
-	t := c.Theme()
-	if v := a.files[w.ID]; !active && (v == nil || len(v.docs) == 0) {
-		return
-	}
-	row := ui.Row(c.Key(filesTabID)).Height(28).Padding(0, 10, 0, 8).Gap(6).Radius(8).Shrink(0).
-		Role(ui.RoleButton).Label("文件").Tooltip("打开的文件")
-	bg := ui.Transparent
-	switch {
-	case active:
-		bg = t.SurfacePressed
-	case row.Hovered():
-		bg = colors(t).wash
-	}
-	row.Background(row.AnimateColor("bg", bg, hover))
-	dirty := false
-	if v := a.files[w.ID]; v != nil {
-		for _, d := range v.docs {
-			dirty = dirty || d.isModified()
-		}
-	}
-	row.Children(func() {
-		ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
-		name := ui.Text(c, "文件").FontSize(12).Shrink(0)
-		if active {
-			name.FontWeight(500)
-		} else {
-			name.TextColor(t.TextMuted)
-		}
-		if dirty {
-			dot(c, t.Accent).Tooltip("有未保存的修改")
-		}
-	})
-	if row.Clicked() {
-		a.showFiles(w)
-	}
-}
-
 func dot(c *ui.Context, color ui.Color) ui.Element {
 	return ui.Box(c).Size(6, 6).Radius(3).Background(color).Shrink(0)
 }
@@ -303,7 +264,6 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		filesEmpty(c)
 		return
 	}
-	a.docStrip(c, v)
 	d := v.cur
 	if d.kind == docLoading {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
@@ -406,38 +366,38 @@ func filesEmpty(c *ui.Context) {
 	})
 }
 
-// docStrip 是打开的文件的一排小标签；同名文件后面带上级目录名。
-func (a *app) docStrip(c *ui.Context, v *filesView) {
-	t := c.Theme()
-	p := colors(t)
+// docTabs 把工作区打开的文件画成标签栏里的标签，排在终端后面；同名文件后面带上级目录名。
+func (a *app) docTabs(c *ui.Context, w *workspace) {
+	v := a.files[w.ID]
+	if v == nil {
+		return
+	}
 	names := map[string]int{}
 	for _, d := range v.docs {
 		names[d.name()]++
 	}
-	ui.ScrollHorizontal(c).Height(36).Shrink(0).Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
-		ui.Row(c).Height(36).Padding(0, 8).Gap(2).AlignItems(ui.Center).Children(func() {
-			for _, d := range v.docs {
-				detail := ""
-				switch {
-				case d.diff != nil:
-					detail = d.diff.tabLabel()
-				case d.comp != nil:
-					detail = "比较"
-				case d.log != nil && d.log.filter.Path != "":
-					detail = "文件历史"
-				case names[d.name()] > 1:
-					detail = filepath.Base(filepath.Dir(d.path))
-				}
-				a.docTab(c, v, d, detail)
-			}
-		})
-	})
+	for _, d := range v.docs {
+		detail := ""
+		switch {
+		case d.diff != nil:
+			detail = d.diff.tabLabel()
+		case d.comp != nil:
+			detail = "比较"
+		case d.log != nil && d.log.filter.Path != "":
+			detail = "文件历史"
+		case names[d.name()] > 1:
+			detail = filepath.Base(filepath.Dir(d.path))
+		}
+		a.docTab(c, w, v, d, detail)
+	}
 }
 
-func (a *app) docTab(c *ui.Context, v *filesView, d *fileDoc, detail string) {
+// docTab 是标签栏里的一个文件，样子和终端标签一样。
+func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string) {
 	t := c.Theme()
-	active := v.cur == d
-	row := ui.Row(c.Key(d.path)).Height(26).Padding(0, 4, 0, 10).Gap(6).Radius(6).Shrink(0).MaxWidth(240).
+	active := a.filesActive(w) && v.cur == d
+	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
+	row := ui.Row(c.Key("doc:"+d.path)).Height(28).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(0).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(shortPath(d.path))
 	hovered := row.Hovered()
 	bg := ui.Transparent
@@ -450,18 +410,17 @@ func (a *app) docTab(c *ui.Context, v *filesView, d *fileDoc, detail string) {
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {
-		name := ui.Text(c, d.name()).FontSize(12).SingleLine().Shrink(1)
-		if !active {
-			name.TextColor(t.TextMuted)
-		}
+		ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+		name := ui.Text(c, d.name()).FontSize(12).SingleLine().MaxWidth(180)
+		tabText(c, name, active)
 		if d.deleted {
 			name.Strikethrough()
 		}
 		if detail != "" {
-			ui.Text(c, detail).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, detail).FontSize(11).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
-		btn := ui.Box(c.Key("close")).Size(18, 18).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
+		btn := ui.Box(c.Key("close")).Size(20, 20).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
 		if btn.Hovered() {
 			btn.Background(t.SurfacePressed)
 		}
@@ -470,17 +429,20 @@ func (a *app) docTab(c *ui.Context, v *filesView, d *fileDoc, detail string) {
 			case modified && !hovered:
 				dot(c, t.Accent)
 			case active || hovered:
-				ui.Icon(c, iconClose).FontSize(11).TextColor(t.TextMuted)
+				ui.Icon(c, iconClose).FontSize(12).TextColor(t.TextMuted)
 			}
 		})
 		if (active || hovered) && btn.Clicked() {
 			a.closeDoc(v, d)
 		}
 	})
-	if row.Clicked() && v.cur != d {
-		v.cur = d
+	if row.Clicked() && !active {
+		a.showFiles(w)
+		if v.cur != d {
+			v.cur = d
+			a.saveFilesState(v)
+		}
 		d.focus = true
-		a.saveFilesState(v)
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 // 全部在窗口进程里，不经过常驻进程。看得见时每秒 stat 一次展开的目录和打开的文件，
 // 发现 agent 的修改；不用 fsnotify：macOS 上它基于 kqueue，监听一个目录要为其中每个文件各开一个描述符。
 
-// filesTabID 是 activeTerm 里表示"选中文件标签"的值；终端 ID 都以 t_ 开头，不会冲突。
+// filesTabID 是 activeTerm 里表示"选中了打开的文件"的值，选中哪个看 filesView.cur；终端 ID 都以 t_ 开头，不会冲突。
 const filesTabID = "files"
 
 const (

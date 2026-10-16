@@ -576,6 +576,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		for _, term := range w.Terminals {
 			a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 		}
+		a.docTabs(c, w)
 		iconButton(c.Key("new"), iconPlus, "新建终端").Menu(func(m *ui.Menu) {
 			for _, ag := range agentChoices {
 				if m.Item(agentTitle(ag)).Chosen() {
@@ -587,7 +588,6 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		})
 		ui.Spacer(c)
-		a.filesTab(c, w, a.filesActive(w))
 		if w.Branch != "" {
 			a.branchButton(c, w)
 		}

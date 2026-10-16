@@ -332,3 +332,28 @@ func TestFilesStateSaved(t *testing.T) {
 		t.Fatal(bv.cur.path)
 	}
 }
+
+// 打开的文件是标签栏里的标签：在终端上点它切到那个文件，再点终端标签切回去。
+func TestDocTabsInTabBar(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "opened", func() bool { return v.cur != nil && v.cur.kind == docText && tt.HasText("README.md") })
+	a.activeTerm[w.ID] = "t3"
+	tt.Frame()
+	if a.filesActive(w) {
+		t.Fatal("should be on the terminal")
+	}
+	if err := tt.Click("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.filesActive(w) || v.cur != v.doc(filepath.Join(root, "README.md")) {
+		t.Fatalf("clicking the doc tab should show it: active=%v cur=%v", a.filesActive(w), v.cur.path)
+	}
+}
