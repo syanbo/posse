@@ -570,3 +570,22 @@ func TestImageDiff(t *testing.T) {
 	a.openDiff(&a.workspaces[0], diffSpec{rel: "new.png", oldRev: "HEAD"}, nil, true)
 	until(t, tt, "new image", func() bool { return v.cur.kind == docImageDiff && tt.HasText("新文件") })
 }
+
+// 分支按钮第一次画出来就自动 fetch，远端的新提交算进传入；五分钟内不再拉。
+func TestAutoFetch(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	other := filepath.Join(t.TempDir(), "other")
+	gitRun(t, root, "clone", "-q", gitRun(t, root, "remote", "get-url", "origin"), other)
+	os.WriteFile(filepath.Join(other, "remote.txt"), []byte("x\n"), 0o644)
+	gitRun(t, other, "add", "remote.txt")
+	gitRun(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "remote")
+	gitRun(t, other, "push", "-q", "origin", "main")
+	tt := ui.NewTester(a.build, 1200, 760)
+	until(t, tt, "fetched", func() bool { tr := a.track["w1"]; return tr != nil && tr.behind == 1 })
+	at := a.fetchAt[a.workspaces[0].ProjectID]
+	tt.Frame()
+	if !a.fetchAt[a.workspaces[0].ProjectID].Equal(at) {
+		t.Fatal("should not fetch again within the interval")
+	}
+}

@@ -153,6 +153,7 @@ type app struct {
 	branchPop   *branchPopup
 	branchFolds map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
 	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
+	fetchAt     map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
 	promptDlg   *promptState
 	push        *pushState
 	// 关窗口和退出的钩子里要读，用原子量

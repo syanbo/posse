@@ -90,6 +90,7 @@ func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
 		tr = &trackInfo{}
 		a.track[w.ID] = tr
 	}
+	a.autoFetch(c, w, tr)
 	if tr.poll.due(c, trackRefresh) {
 		dir := w.Path
 		go func() {
@@ -101,6 +102,44 @@ func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
 		}()
 	}
 	return tr
+}
+
+// autoFetchEvery 是多久自动 fetch 一次。只拉看得见的工作区所在的项目，同一项目的 worktree 共用远端引用，按项目计时。
+const autoFetchEvery = 5 * time.Minute
+
+// autoFetch 到点了在后台 fetch，失败不报错，下次再试。进行中占着改动页的 busy（分支弹窗的按钮转圈），
+// 免得和用户手动的 git 操作同时改引用。
+func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
+	if a.fetchAt == nil {
+		a.fetchAt = map[string]time.Time{}
+	}
+	last, ok := a.fetchAt[w.ProjectID]
+	if wait := autoFetchEvery - time.Since(last); ok && wait > 0 {
+		c.After(wait)
+		return
+	}
+	v := a.files[w.ID]
+	if v != nil && v.git.busy != "" {
+		c.After(time.Second)
+		return
+	}
+	a.fetchAt[w.ProjectID] = time.Now()
+	if v != nil {
+		v.git.busy = "Fetch"
+	}
+	dir := w.Path
+	go func() {
+		gitx.Fetch(context.Background(), dir)
+		a.update(func() {
+			if v != nil && v.git.busy == "Fetch" {
+				v.git.busy = ""
+				if v.git.branches.list != nil {
+					a.loadBranches(v)
+				}
+			}
+			tr.poll = panelPoll{}
+		})
+	}()
 }
 
 // trackTip 是分支按钮的悬停提示：分支名和传入、传出的提交数。
@@ -199,7 +238,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				ui.Row(c).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c).Label("正在 Fetch")
 				})
-			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取", 28, 15)); g.busy == "" && fetch.Clicked() {
+			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", 28, 15)); g.busy == "" && fetch.Clicked() {
 				a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
 			} else if g.busy != "" {
 				fetch.Opacity(0.4)
