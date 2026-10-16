@@ -128,7 +128,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	})
 }
 
-func statusLetter(e gitx.Entry, group changeGroup) byte {
+func statusLetter(e gitx.Entry) byte {
 	switch {
 	case e.Untracked:
 		return '?'
@@ -182,13 +182,13 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		return
 	}
 	e := r.entry
-	spec := changeSpec(e, false)
+	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
 	// 比组标题缩进一层：勾选框和组标题的文字对齐
 	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 30).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectable(c, row, v.cur != nil && v.cur.path == key)
-	letter := statusLetter(e, r.group)
+	letter := statusLetter(e)
 	color := t.Accent
 	switch letter {
 	case 'A', '?':
@@ -569,8 +569,6 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 	df := d.diff
 	newLabel := "现在（工作区）"
 	switch {
-	case df.staged():
-		newLabel = "现在（暂存区）"
 	case !df.worktree():
 		newLabel = "现在（" + shortRev(df.newRev) + "）"
 	}

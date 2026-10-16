@@ -188,7 +188,7 @@ func previewGit(t *testing.T, a *app) {
 	until(t, tt, "stash", func() bool { return len(v.git.stashes) == 1 })
 	for _, r := range v.git.rows {
 		if !r.header && r.entry.Path == "main.go" {
-			a.openDiff(&a.workspaces[0], changeSpec(r.entry, false), nil, true)
+			a.openDiff(&a.workspaces[0], changeSpec(r.entry), nil, true)
 		}
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })

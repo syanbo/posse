@@ -35,8 +35,7 @@ type gitState struct {
 	repo     string // 仓库根目录；不是 git 仓库时为空
 	status   *gitx.Status
 	head     map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
-	staged   map[string]gitx.LineStats
-	picks    map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
+	picks    map[string]bool           // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
 	stashes  []gitx.Stash
 	rows     []changeRow
 	list     ui.ListState
@@ -55,13 +54,12 @@ type changeGroup uint8
 
 const (
 	groupConflict changeGroup = iota
-	groupStaged
 	groupChanged
 	groupUntracked
 	groupStash
 )
 
-var groupTitles = [...]string{"冲突", "已暂存", "改动", "未跟踪", "搁置"}
+var groupTitles = [...]string{"冲突", "改动", "未跟踪", "搁置"}
 
 // changeRow 是改动列表的一行：组标题、一个文件，或一次搁置。
 type changeRow struct {
@@ -72,10 +70,10 @@ type changeRow struct {
 	stash  gitx.Stash
 }
 
-// changeRows 按组排好改动：冲突、已暂存（有才显示）、改动、未跟踪、搁置。
-// 和 WebStorm 一样不强调暂存区：没有已暂存的文件时，所有已跟踪的改动都在"改动"里。
+// changeRows 按组排好改动：冲突、改动、未跟踪、搁置。
+// 和 WebStorm 一样不分暂存区：已跟踪的改动不管暂存了没有都在"改动"里，提交时按勾选。
 func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
-	var groups [5][]changeRow
+	var groups [4][]changeRow
 	for _, e := range st.Entries {
 		switch {
 		case e.Conflict:
@@ -83,7 +81,6 @@ func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
 		case e.Untracked:
 			groups[groupUntracked] = append(groups[groupUntracked], changeRow{group: groupUntracked, entry: e})
 		default:
-			// 照 WebStorm：暂存了的和没暂存的合在一起，提交时按勾选
 			groups[groupChanged] = append(groups[groupChanged], changeRow{group: groupChanged, entry: e})
 		}
 	}
@@ -120,13 +117,12 @@ func (a *app) pollGit(v *filesView) {
 			root = repoRoot(v.root, gitx.TopLevel(ctx, v.root))
 		}
 		var st *gitx.Status
-		var head, staged map[string]gitx.LineStats
+		var head map[string]gitx.LineStats
 		var stashes []gitx.Stash
 		var err error
 		if root != "" {
 			if st, err = gitx.ReadStatus(ctx, root); err == nil {
 				head, _ = gitx.NumStatHEAD(ctx, root)
-				staged, _ = gitx.NumStat(ctx, root, true)
 				stashes, _ = gitx.Stashes(ctx, root)
 			}
 		}
@@ -142,7 +138,7 @@ func (a *app) pollGit(v *filesView) {
 			}
 			old := g.status
 			g.err = ""
-			g.status, g.head, g.staged, g.stashes = st, head, staged, stashes
+			g.status, g.head, g.stashes = st, head, stashes
 			// 不在改动里的文件不再记它的勾选
 			for p := range g.picks {
 				if !slices.ContainsFunc(st.Entries, func(e gitx.Entry) bool { return e.Path == p }) {
@@ -246,7 +242,7 @@ func (a *app) loadHead(v *filesView, d *fileDoc) {
 
 // --- diff 标签页
 
-// diffSpec 说明一个 diff 比较哪两个版本的哪个文件。版本的写法：newRev 为空是工作区，":" 是暂存区，
+// diffSpec 说明一个 diff 比较哪两个版本的哪个文件。版本的写法：newRev 为空是工作区，
 // 其余是提交或分支；oldRev 为空表示旧的一边没有这个文件（新文件、根提交）。路径相对仓库根目录。
 type diffSpec struct {
 	rel, orig      string // 重命名时 orig 是旧路径
@@ -255,15 +251,10 @@ type diffSpec struct {
 }
 
 func (s diffSpec) worktree() bool { return s.newRev == "" }
-func (s diffSpec) staged() bool   { return s.newRev == ":" }
 
-// changeSpec 是改动列表里一个文件的 diff：HEAD 对比工作区，或对比暂存区。
-func changeSpec(e gitx.Entry, staged bool) diffSpec {
-	s := diffSpec{rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
-	if staged {
-		s.newRev = ":"
-	}
-	return s
+// changeSpec 是改动列表里一个文件的 diff：HEAD 对比工作区。
+func changeSpec(e gitx.Entry) diffSpec {
+	return diffSpec{rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
 }
 
 // diffDoc 是 diff 标签页。
@@ -277,7 +268,6 @@ type diffDoc struct {
 	binary   bool
 	images   [2]diffImage // 图片文件的两边：改之前、改之后
 	stamp    files.Stamp  // 工作区文件的磁盘戳，变了才重读
-	sig      string       // 暂存区 diff 读的时候的 HEAD 和暂存区状态，变了才重读
 }
 
 // diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
@@ -304,8 +294,6 @@ func (df *diffDoc) tabLabel() string {
 	switch {
 	case df.label != "":
 		return df.label
-	case df.staged():
-		return "已暂存的改动"
 	case df.worktree() && df.oldRev == "HEAD":
 		return "改动"
 	}
@@ -317,8 +305,6 @@ func shortRev(rev string) string {
 	switch {
 	case rev == "":
 		return "工作区"
-	case rev == ":":
-		return "暂存区"
 	case len(rev) == 40:
 		return rev[:7]
 	}
@@ -341,9 +327,6 @@ func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool
 		}
 	}
 	df := &diffDoc{diffSpec: s, siblings: siblings, first: first}
-	if s.staged() {
-		df.sig = stagedSig(g, s.rel)
-	}
 	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
 	d := &fileDoc{path: key, diff: df}
 	i := len(v.docs)
@@ -392,8 +375,6 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				if os.IsNotExist(err) {
 					nw, err, newExists = nil, nil, false
 				}
-			case spec.staged():
-				nw, err = showRev(ctx, root, "", spec.rel)
 			default:
 				nw, err = showRev(ctx, root, spec.newRev, spec.rel)
 			}
@@ -432,33 +413,13 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 	}()
 }
 
-// reloadDiff 在状态变了之后重读 diff：工作区一边看文件的磁盘戳，暂存区一边看 HEAD 和这个文件的暂存状态；
-// 两边都是固定版本的不重读。
+// reloadDiff 在状态变了之后重读 diff：只有工作区一边会变，看文件的磁盘戳；两边都是固定版本的不重读。
 func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 	df := d.diff
-	switch {
-	case df.staged():
-		sig := stagedSig(&v.git, df.rel)
-		if sig == df.sig {
-			return
-		}
-		df.sig = sig
-	case df.worktree():
-		if files.StatFile(v.git.absPath(df.rel)).Same(df.stamp) {
-			return
-		}
-	default:
+	if !df.worktree() || files.StatFile(v.git.absPath(df.rel)).Same(df.stamp) {
 		return
 	}
 	a.loadDiff(v, d)
-}
-
-func stagedSig(g *gitState, rel string) string {
-	if g.status == nil {
-		return ""
-	}
-	s := g.staged[rel]
-	return g.status.Commit + "\x00" + strconv.Itoa(s.Added) + "/" + strconv.Itoa(s.Deleted)
 }
 
 // stepDiff 是 F7 / ⇧F7：在当前 diff 里跳到下一处 / 上一处改动，到头了打开同一组里的下一个 / 上一个文件
@@ -476,7 +437,7 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	if list == nil {
 		for _, r := range v.git.rows {
 			if !r.header && r.group != groupStash && !r.entry.Conflict {
-				list = append(list, changeSpec(r.entry, r.group == groupStaged))
+				list = append(list, changeSpec(r.entry))
 			}
 		}
 	}
