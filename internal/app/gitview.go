@@ -34,8 +34,9 @@ type gitState struct {
 	checked  bool   // 查过是不是 git 仓库
 	repo     string // 仓库根目录；不是 git 仓库时为空
 	status   *gitx.Status
-	unstaged map[string]gitx.LineStats
+	head     map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
 	staged   map[string]gitx.LineStats
+	picks    map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
 	stashes  []gitx.Stash
 	rows     []changeRow
 	list     ui.ListState
@@ -82,12 +83,8 @@ func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
 		case e.Untracked:
 			groups[groupUntracked] = append(groups[groupUntracked], changeRow{group: groupUntracked, entry: e})
 		default:
-			if e.Staged() {
-				groups[groupStaged] = append(groups[groupStaged], changeRow{group: groupStaged, entry: e})
-			}
-			if e.Unstaged() {
-				groups[groupChanged] = append(groups[groupChanged], changeRow{group: groupChanged, entry: e})
-			}
+			// 照 WebStorm：暂存了的和没暂存的合在一起，提交时按勾选
+			groups[groupChanged] = append(groups[groupChanged], changeRow{group: groupChanged, entry: e})
 		}
 	}
 	for _, s := range stashes {
@@ -123,12 +120,12 @@ func (a *app) pollGit(v *filesView) {
 			root = repoRoot(v.root, gitx.TopLevel(ctx, v.root))
 		}
 		var st *gitx.Status
-		var unstaged, staged map[string]gitx.LineStats
+		var head, staged map[string]gitx.LineStats
 		var stashes []gitx.Stash
 		var err error
 		if root != "" {
 			if st, err = gitx.ReadStatus(ctx, root); err == nil {
-				unstaged, _ = gitx.NumStat(ctx, root, false)
+				head, _ = gitx.NumStatHEAD(ctx, root)
 				staged, _ = gitx.NumStat(ctx, root, true)
 				stashes, _ = gitx.Stashes(ctx, root)
 			}
@@ -145,7 +142,13 @@ func (a *app) pollGit(v *filesView) {
 			}
 			old := g.status
 			g.err = ""
-			g.status, g.unstaged, g.staged, g.stashes = st, unstaged, staged, stashes
+			g.status, g.head, g.staged, g.stashes = st, head, staged, stashes
+			// 不在改动里的文件不再记它的勾选
+			for p := range g.picks {
+				if !slices.ContainsFunc(st.Entries, func(e gitx.Entry) bool { return e.Path == p }) {
+					delete(g.picks, p)
+				}
+			}
 			g.rows = changeRows(st, stashes)
 			a.gitChanged(v, old)
 		})
@@ -556,14 +559,43 @@ func (a *app) askRollback(v *filesView, entries []gitx.Entry) {
 	})
 }
 
-// commitMode 是提交按钮做什么：有已暂存的文件时只提交它们，否则提交所有已跟踪文件的改动。
-func (g *gitState) commitMode() (label string, all bool) {
-	for _, r := range g.rows {
-		if r.group == groupStaged {
-			return "提交已暂存的", false
+// picked 报告文件勾没勾上提交：用户点过的按他的，否则已跟踪的改动默认勾上，新文件和冲突默认不勾。
+func (g *gitState) picked(e gitx.Entry) bool {
+	if e.Conflict {
+		return false
+	}
+	if on, ok := g.picks[e.Path]; ok {
+		return on
+	}
+	return !e.Untracked
+}
+
+func (g *gitState) setPicked(e gitx.Entry, on bool) {
+	if g.picks == nil {
+		g.picks = map[string]bool{}
+	}
+	g.picks[e.Path] = on
+}
+
+// pickedPaths 是这次要提交的文件，和其中要先加入 Git 的新文件；重命名的连原路径一起提交。
+func (g *gitState) pickedPaths() (paths, add []string, n int) {
+	if g.status == nil {
+		return nil, nil, 0
+	}
+	for _, e := range g.status.Entries {
+		if !g.picked(e) {
+			continue
+		}
+		n++
+		paths = append(paths, e.Path)
+		if e.Orig != "" {
+			paths = append(paths, e.Orig)
+		}
+		if e.Untracked {
+			add = append(add, e.Path)
 		}
 	}
-	return "提交", true
+	return paths, add, n
 }
 
 func (a *app) commit(v *filesView) {
@@ -573,13 +605,17 @@ func (a *app) commit(v *filesView) {
 		a.err = "先写提交信息"
 		return
 	}
-	_, all := g.commitMode()
+	paths, add, n := g.pickedPaths()
 	amend := g.amend
+	if n == 0 && !amend {
+		a.err = "先勾选要提交的文件"
+		return
+	}
 	a.gitDo(v, "提交", func(ctx context.Context, root string) error {
-		if err := gitx.Commit(ctx, root, msg, all, amend); err != nil {
+		if err := gitx.CommitPaths(ctx, root, msg, paths, add, amend); err != nil {
 			return err
 		}
-		a.update(func() { g.message, g.amend = "", false })
+		a.update(func() { g.message, g.amend, g.picks = "", false, nil })
 		return nil
 	})
 }

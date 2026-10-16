@@ -102,11 +102,11 @@ func TestGitChangesAndDiff(t *testing.T) {
 		t.Fatal("diff base is not HEAD")
 	}
 
-	// 提交：没有已暂存的文件时提交所有已跟踪的改动，未跟踪的留下
+	// 提交：默认勾着已跟踪的改动，未跟踪的不勾、留下
 	v.side = sideChanges
 	v.git.message = "feat: 加日志"
 	tt.Frame()
-	if err := tt.Click(commitTip(true)); err != nil {
+	if err := tt.Click("提交 1 个文件"); err != nil {
 		t.Fatal(err)
 	}
 	until(t, tt, "commit", func() bool { return v.git.busy == "" && v.git.changeCount() == 1 })
@@ -463,4 +463,39 @@ func countText(tt *ui.Tester, s string) int {
 		}
 	}
 	return n
+}
+
+// 勾选提交：取消勾选的文件（即使已经暂存）不进提交、留在暂存区；勾上的新文件一起提交。
+func TestCommitPicked(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	gitRun(t, root, "add", "README.md")
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	if !tt.HasText("提交 2 个文件") {
+		t.Fatalf("default picks tracked changes: %v", tt.Texts())
+	}
+	for _, name := range []string{"勾选 README.md", "勾选 notes.txt"} {
+		if err := tt.Click(name); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	if v.git.picked(gitx.Entry{Path: "README.md"}) || !v.git.picked(gitx.Entry{Path: "notes.txt", Untracked: true}) {
+		t.Fatal("clicking the boxes should flip the picks")
+	}
+	v.git.message = "pick"
+	tt.Frame()
+	if err := tt.Click("提交 2 个文件"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "commit", func() bool { return v.git.busy == "" && gitRun(t, root, "log", "-1", "--format=%s") == "pick" })
+	files := gitRun(t, root, "show", "--name-status", "--format=", "HEAD")
+	if !strings.Contains(files, "main.go") || !strings.Contains(files, "notes.txt") || strings.Contains(files, "README.md") {
+		t.Fatalf("committed files:\n%s", files)
+	}
+	if st := gitRun(t, root, "status", "--porcelain"); !strings.Contains(st, "M  README.md") {
+		t.Fatalf("README.md should stay staged: %q", st)
+	}
 }

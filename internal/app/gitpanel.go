@@ -134,10 +134,10 @@ func statusLetter(e gitx.Entry, group changeGroup) byte {
 		return '?'
 	case e.Conflict:
 		return 'U'
-	case group == groupStaged:
-		return e.X
+	case e.Y != '.':
+		return e.Y
 	}
-	return e.Y
+	return e.X
 }
 
 // changeRow 画改动列表的一行。
@@ -147,6 +147,31 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	g := &v.git
 	if r.header {
 		ui.Row(c).Height(26).Padding(6, 16, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+			// 改动和未跟踪的组标题能一键全选、全不选
+			if r.group == groupChanged || r.group == groupUntracked {
+				var in []gitx.Entry
+				on := 0
+				for _, e := range g.status.Entries {
+					if !e.Conflict && e.Untracked == (r.group == groupUntracked) {
+						in = append(in, e)
+						if g.picked(e) {
+							on++
+						}
+					}
+				}
+				state := pickNone
+				switch {
+				case on == len(in):
+					state = pickAll
+				case on > 0:
+					state = pickSome
+				}
+				if pickBox(c, fmt.Sprint("group-", r.group), groupTitles[r.group], state) {
+					for _, e := range in {
+						g.setPicked(e, state != pickAll)
+					}
+				}
+			}
 			ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 			ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
@@ -157,8 +182,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		return
 	}
 	e := r.entry
-	staged := r.group == groupStaged
-	spec := changeSpec(e, staged)
+	spec := changeSpec(e, false)
 	key := diffKey(g.absPath(e.Path), spec)
 	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
@@ -174,6 +198,15 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		color = t.Danger
 	}
 	row.Children(func() {
+		if !e.Conflict {
+			state := pickNone
+			if g.picked(e) {
+				state = pickAll
+			}
+			if pickBox(c, "pick", e.Path, state) {
+				g.setPicked(e, state != pickAll)
+			}
+		}
 		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
 		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0)
 		if letter == 'D' {
@@ -183,11 +216,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 		ui.Spacer(c)
-		stats := g.unstaged
-		if staged {
-			stats = g.staged
-		}
-		if s, ok := stats[e.Path]; ok && !s.Binary && r.group != groupUntracked {
+		if s, ok := g.head[e.Path]; ok && !s.Binary && r.group != groupUntracked {
 			if s.Added > 0 {
 				ui.Text(c, fmt.Sprintf("+%d", s.Added)).FontSize(11).FontFeatures("tnum").TextColor(p.sage).Shrink(0)
 			}
@@ -212,10 +241,6 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 		m.Separator()
 		switch {
-		case staged:
-			if m.Item("取消暂存").Chosen() {
-				a.gitDo(v, "取消暂存", func(ctx context.Context, root string) error { return gitx.Unstage(ctx, root, e.Path) })
-			}
 		case e.Untracked:
 			if m.Item("加入 Git").Chosen() {
 				a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
@@ -230,10 +255,6 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 			if m.Item("改完了，标记为已解决").Chosen() {
 				a.gitDo(v, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
-			}
-		default:
-			if m.Item("暂存").Chosen() {
-				a.gitDo(v, "暂存", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		}
 		if !e.Conflict {
@@ -348,7 +369,11 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	t := c.Theme()
 	p := colors(t)
 	g := &v.git
-	label, all := g.commitMode()
+	_, _, picked := g.pickedPaths()
+	label := fmt.Sprintf("提交 %d 个文件", picked)
+	if picked == 0 && g.amend {
+		label = "只改提交信息"
+	}
 	ui.Box(c).Height(1).Shrink(0).Background(p.line)
 	ui.Column(c).Shrink(0).Padding(10).Gap(8).Children(func() {
 		msg := ui.TextArea(c, &g.message).Placeholder("提交信息").Label("提交信息").Height(72).FontSize(12.5)
@@ -362,22 +387,14 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 				a.setAmend(v, amend)
 			}
 			ui.Spacer(c)
-			// 读屏念说明：上面"提交"分页也叫"提交"
-			btn := pressable(accentButton(c, label)).Label(commitTip(all)).Tooltip(commitTip(all) + " ⌘K")
-			if g.busy != "" || g.changeCount() == 0 && !g.amend {
+			btn := pressable(accentButton(c, label)).Tooltip("提交勾选的文件，没勾的改动留在工作区 ⌘K")
+			if g.busy != "" || picked == 0 && !g.amend {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.commit(v)
 			}
 		})
 	})
-}
-
-func commitTip(all bool) string {
-	if all {
-		return "提交所有已跟踪文件的改动；未跟踪的文件要先加入 Git"
-	}
-	return "只提交已暂存的文件"
 }
 
 // --- diff 标签页
@@ -506,4 +523,37 @@ func (a *app) gitShortcuts(c *ui.Context, w *workspace, v *filesView) {
 			}
 		}
 	}
+}
+
+const (
+	pickNone = iota
+	pickAll
+	pickSome
+)
+
+// pickBox 是改动列表里的勾选框：空框、勾上（强调色加对勾）、部分勾上（强调色加横线）。返回这一帧是否点了它。
+func pickBox(c *ui.Context, key, name string, state int) bool {
+	t := c.Theme()
+	on := state == pickAll
+	box := ui.CheckboxBase(c.Key("pick:"+key), &on).Size(14, 14).Radius(4).Label("勾选 " + name)
+	if state == pickSome {
+		box.Mixed()
+	}
+	accent, line := t.Accent, t.TextMuted.Alpha(0.6)
+	box.Draw(func(p *ui.Painter, r ui.Rect) {
+		if state == pickNone {
+			p.Stroke(r, line, 4, 1.2)
+			return
+		}
+		p.Fill(r, accent, 4)
+		white := ui.RGBA(255, 255, 255, 1)
+		if state == pickSome {
+			p.Fill(ui.Rect{X: r.X + 3.5, Y: r.Y + r.H/2 - 0.8, W: r.W - 7, H: 1.6}, white, 1)
+			return
+		}
+		var path ui.Path
+		path.MoveTo(r.X+3.5, r.Y+7.2).LineTo(r.X+6, r.Y+9.6).LineTo(r.X+10.5, r.Y+4.6)
+		p.StrokePath(&path, 1.6, white)
+	})
+	return box.Changed()
 }
