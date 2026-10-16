@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
@@ -333,6 +334,12 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []works
 		}
 		if m.Item("打开终端").Chosen() {
 			a.startTerminal(w.ID, "")
+		}
+		m.Separator()
+		if m.Item("在访达中打开").Chosen() {
+			if err := mygo.Shell.OpenPath(w.Path); err != nil {
+				a.err = "在访达中打开失败：" + err.Error()
+			}
 		}
 		m.Separator()
 		if m.Item("在此项目新建工作区…").Chosen() {
