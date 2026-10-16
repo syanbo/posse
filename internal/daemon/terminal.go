@@ -407,6 +407,27 @@ func (d *Daemon) terminalResize(ctx context.Context, raw json.RawMessage) (any, 
 	return d.terminalInfo(s), nil
 }
 
+type terminalClearParams struct {
+	Terminal string `json:"terminal"`
+	Redraw   bool   `json:"redraw"`
+}
+
+// terminalClear 清屏并清空回滚区，见 term.Terminal.Clear。
+func (d *Daemon) terminalClear(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p terminalClearParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	s, err := d.session(p.Terminal)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Clear(p.Redraw); err != nil {
+		return nil, err
+	}
+	return d.terminalInfo(s), nil
+}
+
 type terminalCloseParams struct {
 	Terminal string `json:"terminal"`
 	GraceMs  int    `json:"graceMs"`

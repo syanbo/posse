@@ -243,22 +243,7 @@ func (t *Terminal) readLoop() {
 					title = t.emu.Title()
 				}
 			}
-			if len(t.subs) > 0 {
-				chunk := append([]byte(nil), buf[:n]...)
-				for s := range t.subs {
-					if s.queued.Add(int64(n)) <= maxQueuedBytes {
-						select {
-						case s.C <- chunk:
-							continue
-						default:
-						}
-					}
-					// 跟不上的接入者直接断开，重新接入会拿到完整快照
-					delete(t.subs, s)
-					close(s.C)
-				}
-				t.updateAnswer()
-			}
+			t.broadcast(buf[:n])
 			t.smu.Unlock()
 			t.lastOutput.Store(time.Now().UnixNano())
 			t.idle.Reset(compressAfter)
@@ -278,6 +263,47 @@ func (t *Terminal) readLoop() {
 	}
 	t.subs = nil
 	t.smu.Unlock()
+}
+
+// broadcast 在持有 smu 时把一段输出推给所有接入者。
+func (t *Terminal) broadcast(data []byte) {
+	if len(t.subs) == 0 {
+		return
+	}
+	chunk := append([]byte(nil), data...)
+	for s := range t.subs {
+		if s.queued.Add(int64(len(chunk))) <= maxQueuedBytes {
+			select {
+			case s.C <- chunk:
+				continue
+			default:
+			}
+		}
+		// 跟不上的接入者直接断开，重新接入会拿到完整快照
+		delete(t.subs, s)
+		close(s.C)
+	}
+	t.updateAnswer()
+}
+
+// clearSeq 清掉屏幕和回滚区，光标回到左上角。
+var clearSeq = []byte("\x1b[H\x1b[2J\x1b[3J")
+
+// Clear 清屏并清空回滚区（界面的 ⌘K）：终端内核和各接入者都当作程序输出了一段清屏，
+// 之后接入拿到的快照也是空的。redraw 时再给程序发 Ctrl+L，让 shell 重画提示符、TUI 重画界面；
+// 在清屏之后发，程序重画的内容不会被清掉。
+func (t *Terminal) Clear(redraw bool) error {
+	t.smu.Lock()
+	if t.emu != nil {
+		t.emu.Write(clearSeq)
+	}
+	t.broadcast(clearSeq)
+	t.smu.Unlock()
+	t.notify()
+	if redraw {
+		return t.Send([]byte{0x0c})
+	}
+	return nil
 }
 
 // compress 在终端空闲时压缩回滚区，降低常驻内存。

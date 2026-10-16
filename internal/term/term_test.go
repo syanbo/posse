@@ -104,3 +104,40 @@ func TestStalledSubscriberIsBounded(t *testing.T) {
 		t.Fatalf("stalled subscriber got %d bytes queued", total)
 	}
 }
+
+// Clear 清掉屏幕和回滚区：之后的快照、行里都没有旧内容，接入者收到同样的清屏；redraw 时程序收到 Ctrl+L。
+func TestClear(t *testing.T) {
+	script := `seq 1 200; stty raw -echo; od -An -c -N1`
+	tm, err := Start(Options{ID: "t_clear", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 40, Rows: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
+	for !tm.ContainsText("200") {
+		if time.Now().After(deadline) {
+			t.Fatal("output never appeared")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond) // 等 stty 生效
+	_, sub := tm.Attach(0, 0)
+	if err := tm.Clear(true); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-sub.C; string(got) != string(clearSeq) {
+		t.Fatalf("subscriber got %q", got)
+	}
+	for _, l := range tm.Lines() {
+		if strings.TrimSpace(l) != "" && !strings.Contains(l, "\\f") && !strings.Contains(l, "014") {
+			t.Fatalf("old output left after clear: %q", tm.Lines())
+		}
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for !tm.ContainsText(`\f`) && !tm.ContainsText("014") {
+		if time.Now().After(deadline) {
+			t.Fatalf("program never got Ctrl+L: %q", tm.Lines())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
