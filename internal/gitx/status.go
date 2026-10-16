@@ -189,6 +189,15 @@ func NumStat(ctx context.Context, dir string, staged bool) (map[string]LineStats
 	return parseNumStat(out), nil
 }
 
+// NumStatHEAD 是工作区相对 HEAD 的增删行数（暂存的和没暂存的合在一起）；还没有提交时退回暂存区相对空树。
+func NumStatHEAD(ctx context.Context, dir string) (map[string]LineStats, error) {
+	out, err := runRaw(ctx, dir, nil, nil, "diff", "HEAD", "--numstat", "-z", "--find-renames")
+	if err != nil {
+		return NumStat(ctx, dir, true)
+	}
+	return parseNumStat(out), nil
+}
+
 func parseNumStat(out []byte) map[string]LineStats {
 	m := map[string]LineStats{}
 	fields := strings.Split(string(out), "\x00")
@@ -280,6 +289,22 @@ func Commit(ctx context.Context, dir, message string, all, amend bool) error {
 		args = append(args, "--amend")
 	}
 	_, err := runRaw(ctx, dir, []byte(message), nil, args...)
+	return err
+}
+
+// CommitPaths 只提交 paths 这些文件（照 WebStorm 勾选文件提交）：add 里的新文件先加入 Git，
+// 再 commit --only，暂存区里别的文件原样留着、不进这次提交。amend 且 paths 为空时只改提交信息。
+func CommitPaths(ctx context.Context, dir, message string, paths, add []string, amend bool) error {
+	if len(add) > 0 {
+		if err := Stage(ctx, dir, add...); err != nil {
+			return err
+		}
+	}
+	args := []string{"commit", "-F", "-", "--only"}
+	if amend {
+		args = append(args, "--amend")
+	}
+	_, err := runRaw(ctx, dir, []byte(message), nil, pathArgs(args, paths)...)
 	return err
 }
 

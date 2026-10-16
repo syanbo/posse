@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -196,5 +197,45 @@ func TestInProgressMerge(t *testing.T) {
 	a, _ := entry(st, "a.txt")
 	if st.Operation != "merge" || !a.Conflict {
 		t.Fatalf("op %q a %+v", st.Operation, a)
+	}
+}
+
+// 勾选提交：只提交选中的文件（含新文件和删除），暂存区里没选的留着；只改提交信息也行。
+func TestCommitPaths(t *testing.T) {
+	ctx := context.Background()
+	dir := newRepo(t)
+	write(t, filepath.Join(dir, "a.txt"), "changed\n")
+	gitIn(t, dir, "add", "a.txt") // 暂存了但这次不勾
+	write(t, filepath.Join(dir, "src", "b.go"), "package src // changed\n")
+	os.Remove(filepath.Join(dir, "old.txt"))
+	write(t, filepath.Join(dir, "new.txt"), "new\n")
+	if err := CommitPaths(ctx, dir, "pick", []string{"src/b.go", "old.txt", "new.txt"}, []string{"new.txt"}, false); err != nil {
+		t.Fatal(err)
+	}
+	files := gitIn(t, dir, "show", "--name-status", "--format=", "HEAD")
+	for _, want := range []string{"M\tsrc/b.go", "D\told.txt", "A\tnew.txt"} {
+		if !strings.Contains(files, want) {
+			t.Fatalf("commit lacks %q:\n%s", want, files)
+		}
+	}
+	if strings.Contains(files, "a.txt") {
+		t.Fatalf("unpicked a.txt committed:\n%s", files)
+	}
+	if st := gitIn(t, dir, "status", "--porcelain"); !strings.Contains(st, "M  a.txt") {
+		t.Fatalf("a.txt should stay staged: %q", st)
+	}
+	// 只改提交信息
+	if err := CommitPaths(ctx, dir, "pick 2", nil, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if msg := gitIn(t, dir, "log", "-1", "--format=%s"); msg != "pick 2" {
+		t.Fatalf("amend message %q", msg)
+	}
+	if st := gitIn(t, dir, "status", "--porcelain"); !strings.Contains(st, "M  a.txt") {
+		t.Fatalf("amend should leave a.txt staged: %q", st)
+	}
+	// 相对 HEAD 的行数：a.txt 改了一行
+	if s, _ := NumStatHEAD(ctx, dir); s["a.txt"].Added != 1 || s["a.txt"].Deleted != 3 {
+		t.Fatalf("numstat HEAD %+v", s["a.txt"])
 	}
 }
