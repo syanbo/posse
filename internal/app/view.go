@@ -438,15 +438,11 @@ func (a *app) footer(c *ui.Context) {
 		shade = ui.RGBA(0, 0, 0, 0.18)
 	}
 	ui.Row(c).Height(34).Padding(0, 14).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		n := a.daemon.Running
-		ui.Row(c).Gap(5).AlignItems(ui.Center).Tooltip(fmt.Sprintf("%d 个终端在运行", n)).Children(func() {
-			ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-			ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
-		})
-		ui.Spacer(c)
 		if pressable(iconButtonSized(c, iconPhone, "连接手机", 24, 14)).Tooltip("连接手机").Clicked() {
 			a.openMobile()
 		}
+		ui.Spacer(c)
+		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 		a.memoryButton(c)
 	})
 }
