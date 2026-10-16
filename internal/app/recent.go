@@ -18,6 +18,45 @@ type recentView struct {
 	sessions []history.Session
 	loaded   bool
 	poll     panelPoll
+	previews map[string]recentPreview // 键是 agent:会话 ID
+}
+
+// recentPreview 是会话卡片上的一段聊天内容：最后一条回复，没有回复时是最后一句提问。
+type recentPreview struct {
+	at   time.Time // 取的时候会话的 UpdatedAt，会话更新了才重取
+	user bool
+	text string
+}
+
+func sessionKey(s history.Session) string { return s.Agent + ":" + s.ID }
+
+// sessionPreview 用 history.show 取会话末尾几条消息（不含工具），挑出要显示的那段。
+func (a *app) sessionPreview(s history.Session) recentPreview {
+	var d struct {
+		Messages []history.Message `json:"messages"`
+	}
+	p := recentPreview{at: s.UpdatedAt}
+	if a.call("history.show", map[string]any{"session": s.ID, "tail": 6, "tools": false}, &d, 10*time.Second) != nil {
+		return p
+	}
+	for i := len(d.Messages) - 1; i >= 0; i-- {
+		m := d.Messages[i]
+		text := oneLine(m.Text)
+		if text == "" {
+			continue
+		}
+		if m.Role == "assistant" {
+			p.user, p.text = false, text
+			break
+		}
+		if m.Role == "user" && p.text == "" {
+			p.user, p.text = true, text
+		}
+	}
+	if r := []rune(p.text); len(r) > 240 {
+		p.text = string(r[:240])
+	}
+	return p
 }
 
 // recentRefresh 是面板开着时多久重新查一次；历史索引本身最多 15 秒更新一次。
@@ -45,6 +84,7 @@ func (a *app) pollRecent(c *ui.Context, w *workspace) {
 	} else {
 		dirs = []string{""}
 	}
+	cached := r.previews
 	go func() {
 		var all []history.Session
 		var firstErr error
@@ -63,6 +103,16 @@ func (a *app) pollRecent(c *ui.Context, w *workspace) {
 		if len(all) > recentLimit {
 			all = all[:recentLimit]
 		}
+		// 聊天内容按会话缓存，会话没更新就不重取；每个会话一次 history.show
+		previews := make(map[string]recentPreview, len(all))
+		for _, s := range all {
+			k := sessionKey(s)
+			if p, ok := cached[k]; ok && p.at.Equal(s.UpdatedAt) {
+				previews[k] = p
+			} else {
+				previews[k] = a.sessionPreview(s)
+			}
+		}
 		a.win.Update(func() {
 			r := &a.recent
 			if r.key != key {
@@ -73,7 +123,7 @@ func (a *app) pollRecent(c *ui.Context, w *workspace) {
 			if firstErr != nil && len(all) == 0 {
 				return
 			}
-			r.sessions, r.loaded = all, true
+			r.sessions, r.loaded, r.previews = all, true, previews
 		})
 	}()
 }
@@ -117,7 +167,7 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 					usageNote(c, "还没有会话记录。")
 				}
 				for _, s := range r.sessions {
-					row := ui.Row(c.Key(s.Agent+":"+s.ID)).Padding(7, 8).Gap(10).Radius(8).AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Title)
+					row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
 					selectable(c, row, a.selected == historyBoardID && a.history.sel == s.ID)
 					row.Children(func() {
 						agentTile(c, s.Agent, 20)
@@ -139,6 +189,14 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 								ui.Text(c, shortPath(s.Cwd)).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
 							}
 							sessionMeta(c, s)
+							// 和任务卡片一样带一段聊天内容
+							if p := r.previews[sessionKey(s)]; p.text != "" {
+								text := p.text
+								if p.user {
+									text = "你：" + text
+								}
+								ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35).Padding(2, 0, 0, 0)
+							}
 						})
 					})
 					if row.Clicked() {
