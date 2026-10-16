@@ -759,17 +759,25 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		} else {
 			ui.Icon(c, iconTerminal).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		}
-		nameText := ui.Text(c, name).FontSize(12).Shrink(0)
-		if active {
-			nameText.FontWeight(500)
-		} else {
-			nameText.TextColor(t.TextMuted)
+		// agent 终端用图标代替名字（悬停提示是名字）；还没有标题时照旧写名字，标签不至于只剩图标。
+		// 图标和左边的状态格一样大
+		waiting := status == agent.StatusWaiting
+		if term.Agent != "" {
+			agentTile(c, term.Agent, 13)
+		}
+		if term.Agent == "" || detail == "" && !waiting {
+			tabText(c, ui.Text(c, name).FontSize(12).Shrink(0), active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
-		if status == agent.StatusWaiting {
+		if waiting {
 			pendingLabel(c).Shrink(0)
 		} else if detail != "" {
-			ui.Text(c, detail).FontSize(12).TextColor(t.TextMuted).Shrink(1).MaxLines(1)
+			title := ui.Text(c, detail).FontSize(12).Shrink(1).MaxLines(1)
+			if term.Agent != "" {
+				tabText(c, title, active)
+			} else {
+				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
+			}
 		}
 		closeBtn := ui.Box(c.Key("close")).Size(20, 20).Radius(4).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
 		closeBg := ui.Transparent
@@ -788,6 +796,16 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	})
 	if row.Clicked() {
 		a.activeTerm[w.ID] = term.ID
+	}
+}
+
+// tabText 是标签上的主文字：选中时加粗，否则用次要色。中文字形在行框里偏下，提半个像素才看着居中。
+func tabText(c *ui.Context, e ui.Element, active bool) {
+	e.Margin(0, 0, cjkLift, 0)
+	if active {
+		e.FontWeight(500)
+	} else {
+		e.TextColor(c.Theme().TextMuted)
 	}
 }
 

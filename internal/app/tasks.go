@@ -417,7 +417,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 				ui.Text(c, task.Title).FontSize(13).FontWeight(500).MaxLines(1).Grow(1).Shrink(1)
 				ui.Text(c, elapsed(task.CreatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
-			ui.Row(c).Gap(8).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				// 结束但不是完成的任务，状态写成文字，不只靠颜色
 				if task.Status != "running" && task.Status != "done" {
 					color := t.TextMuted
@@ -426,7 +426,8 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 					}
 					ui.Text(c, taskStatusText(task)).FontSize(11).FontWeight(500).TextColor(color).Shrink(0)
 				}
-				ui.Text(c, agentTitle(task.Agent)).FontSize(11).TextColor(t.TextMuted)
+				// 图标代替 agent 名字，悬停提示是名字
+				agentTile(c, task.Agent, 13)
 				ui.Text(c, task.Workspace).FontSize(11).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			})
 			preview, color := taskStatusText(task), t.TextMuted
