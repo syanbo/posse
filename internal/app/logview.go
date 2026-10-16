@@ -347,9 +347,16 @@ func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo, gr graphRow) {
 	t := c.Theme()
 	ld := d.log
-	// 左边留出选中项的竖条，提交图不和它挤在一起
 	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
-	selectable(c, row, ld.commit != nil && ld.commit.info.Hash == ci.Hash)
+	// 选中只铺淡底、不画竖条：竖条贴着提交图的线，看着像多出一条线
+	bg := ui.Transparent
+	switch {
+	case ld.commit != nil && ld.commit.info.Hash == ci.Hash:
+		bg = colors(t).tint
+	case row.Hovered():
+		bg = colors(t).wash
+	}
+	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
 		graphCell(c, gr, ci.Hash)
 		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(0)
