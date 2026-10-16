@@ -408,8 +408,11 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 	t := c.Theme()
 	selected := a.selected == id
 	a.navOrder = append(a.navOrder, id)
-	height := float32(32)
-	if sub != "" {
+	height, gap := float32(32), float32(2)
+	switch {
+	case sub != "" && branch != "":
+		height, gap = 64, 3
+	case sub != "" || branch != "":
 		height = 46
 	}
 	row := ui.Row(c.Key(id)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
@@ -417,7 +420,7 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 	selectable(c, row, selected)
 	row.Children(func() {
 		ui.Icon(c, icon).FontSize(16).TextColor(t.Accent).Shrink(0)
-		ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
+		ui.Column(c).Gap(gap).Grow(1).Shrink(1).Children(func() {
 			text := ui.Text(c, label).FontSize(13).SingleLine()
 			if selected {
 				text.FontWeight(600)
