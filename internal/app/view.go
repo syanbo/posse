@@ -438,18 +438,16 @@ func (a *app) footer(c *ui.Context) {
 		shade = ui.RGBA(0, 0, 0, 0.18)
 	}
 	ui.Row(c).Height(34).Padding(0, 14).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		running := "没有运行中的终端"
-		if n := a.daemon.Running; n > 0 {
-			running = fmt.Sprintf("%d 个终端在运行", n)
-		}
-		ui.Text(c, running).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		n := a.daemon.Running
+		ui.Row(c).Gap(5).AlignItems(ui.Center).Tooltip(fmt.Sprintf("%d 个终端在运行", n)).Children(func() {
+			ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		})
 		ui.Spacer(c)
 		if pressable(iconButtonSized(c, iconPhone, "连接手机", 24, 14)).Tooltip("连接手机").Clicked() {
 			a.openMobile()
 		}
-		total := a.daemon.FootprintKB + a.selfKB
-		tip := fmt.Sprintf("常驻进程 %s，窗口 %s（与活动监视器的“内存”一致）", mb(a.daemon.FootprintKB), mb(a.selfKB))
-		ui.Text(c, mb(total)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(tip)
+		a.memoryButton(c)
 	})
 }
 

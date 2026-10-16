@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFootprint(t *testing.T) {
@@ -24,5 +25,31 @@ func TestResidentMatchesPS(t *testing.T) {
 	// 两次读取之间内存会有小幅变化
 	if rss < kb/2 || rss > kb*2 {
 		t.Fatalf("Resident %d KB, ps %d KB", rss, kb)
+	}
+}
+
+// 子进程的内存算进进程树。
+func TestTreeFootprint(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "sleep 30 & wait")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer cmd.Process.Kill()
+	var kids []int
+	for range 50 {
+		if kids = Children()[cmd.Process.Pid]; len(kids) > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(kids) == 0 {
+		t.Fatal("child of sh not listed")
+	}
+	self, tree := Footprint(cmd.Process.Pid), TreeFootprint(cmd.Process.Pid, Children())
+	if self == 0 || tree <= self {
+		t.Fatalf("tree %d should exceed sh alone %d", tree, self)
+	}
+	for _, k := range kids {
+		exec.Command("kill", strconv.Itoa(k)).Run()
 	}
 }

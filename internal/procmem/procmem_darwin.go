@@ -6,6 +6,7 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -42,3 +43,19 @@ func Footprint(pid int) uint64 { return read(pid, idxFootprint) }
 
 // Resident 返回进程的常驻内存（字节），与 ps 的 RSS 一致；取不到时返回 0。
 func Resident(pid int) uint64 { return read(pid, idxResident) }
+
+// Children 返回此刻所有进程的父子关系：父进程 pid → 子进程 pid。
+func Children() map[int][]int {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
+	if err != nil {
+		return nil
+	}
+	out := make(map[int][]int, len(procs))
+	for _, p := range procs {
+		pid, ppid := int(p.Proc.P_pid), int(p.Eproc.Ppid)
+		if pid != ppid {
+			out[ppid] = append(out[ppid], pid)
+		}
+	}
+	return out
+}

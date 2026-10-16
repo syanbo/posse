@@ -44,6 +44,7 @@ type terminalInfo struct {
 	AgentState                    *agentState
 	Running                       bool
 	ExitCode                      *int
+	Pid                           int // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
 }
 
 type workspace struct {
@@ -139,6 +140,7 @@ type app struct {
 	recent  recentView            // 右侧历史面板
 	images  imagesView            // 右侧图片面板
 	mobile  mobileView            // "连接手机"对话框
+	mem     memView               // 底栏的内存浮窗
 	files   map[string]*filesView // 工作区 ID → 文件标签
 	quick   quickOpen             // ⌘P 快速打开
 	unsaved *unsavedAsk           // 问要不要保存修改的对话框

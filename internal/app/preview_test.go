@@ -395,5 +395,14 @@ func TestPreview(t *testing.T) {
 		a.mobile = mobileView{open: true, url: url, endpoint: "ws://172.31.0.230:6788", qr: ui.NewBitmap(img),
 			devices: []mobileDevice{{ID: "d1", Name: "手机 10-16 00:30", LastSeen: time.Now().Add(-3 * time.Minute)}}}
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
+
+		// 底栏的内存浮窗
+		a = previewApp(t)
+		w := a.workspaces[0]
+		a.mem = memView{open: true, poll: panelPoll{at: time.Now().Add(time.Hour)}, terms: 1460 << 10, rows: []memWorkspace{
+			{id: w.ID, label: displayName(&w), kb: 1210 << 10, terms: []memTerminal{{w.Terminals[0], 820 << 10}, {w.Terminals[1], 360 << 10}, {w.Terminals[2], 30 << 10}}},
+			{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10}}},
+		}}
+		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
 	}
 }
