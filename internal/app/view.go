@@ -447,9 +447,13 @@ func (a *app) footer(c *ui.Context) {
 	})
 }
 
+// mb 把 KB 写成界面上的内存：1 GB 以上用 GB、一位小数，以下用整数 MB。
 func mb(kb int64) string {
-	if kb <= 0 {
+	switch {
+	case kb <= 0:
 		return "—"
+	case kb >= 1<<20:
+		return fmt.Sprintf("%.1f GB", float64(kb)/(1<<20))
 	}
 	return fmt.Sprintf("%.0f MB", float64(kb)/1024)
 }
