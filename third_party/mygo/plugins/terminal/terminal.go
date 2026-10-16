@@ -590,6 +590,29 @@ func (t *Terminal) Paste(text string) {
 	t.redraw()
 }
 
+// ScrollToEdge scrolls the scrollback to its top, or to the bottom where the
+// screen is. Hive: for Command-Up and Command-Down.
+func (t *Terminal) ScrollToEdge(top bool) {
+	t.mu.Lock()
+	if t.term != nil {
+		if top {
+			t.term.ScrollToTop()
+		} else {
+			t.term.ScrollToBottom()
+		}
+	}
+	t.mu.Unlock()
+	t.redraw()
+}
+
+// AltScreen reports whether a full-screen program (vim, less) shows its
+// alternate screen. Hive: its editing keys leave those programs the keys.
+func (t *Terminal) AltScreen() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.term != nil && t.term.AltScreen()
+}
+
 // Feed shows data as if the program wrote it: text and escape sequences.
 func (t *Terminal) Feed(data []byte) { t.write(data) }
 

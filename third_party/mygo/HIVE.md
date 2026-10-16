@@ -24,6 +24,7 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
 - `paint.go`：在悬停的链接下面画一条单下划线。
+- `terminal.go`：加 `Terminal.ScrollToEdge`、`AltScreen`，给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
 ## 升级 mygo
 

@@ -150,10 +150,11 @@ type app struct {
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool
 	// Git：分支弹窗、输入框对话框、Push 对话框
-	branchPop   *branchPopup
-	branchFolds map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
-	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
-	fetchAt     map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
+	branchPop     *branchPopup
+	branchFolds   map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	track         map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
+	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
+	filesPanelRef ui.Ref
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
 	promptDlg       *promptState
@@ -632,6 +633,7 @@ func (a *app) ensureView(id string) {
 		OpenLink:    func(link string) bool { return a.openLink(v, link) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
+		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
 		// Claude 和 Codex 会把粘贴的图片路径当成附件。让它们收 Ctrl+V 自己读剪贴板也行，
 		// 但它们读剪贴板要调系统命令，粘贴时界面会闪一下

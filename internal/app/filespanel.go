@@ -92,7 +92,7 @@ func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	p := colors(c.Theme())
 	v := a.filesFor(w)
-	col := ui.Column(c).Width(a.filesPanelWidth()).Shrink(0).Background(p.band)
+	col := ui.Column(c).Width(a.filesPanelWidth()).Shrink(0).Background(p.band).Ref(&a.filesPanelRef)
 	col.Children(func() {
 		// 右边距和标签栏一样，开关按钮打开前后不挪位置
 		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 10).Gap(6).AlignItems(ui.Center).

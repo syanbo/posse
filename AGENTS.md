@@ -47,6 +47,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 
 - 常驻进程持有 `$HIVE_HOME/hived.lock` 的文件锁直到完全退出；socket 和 pid 文件只在持锁时创建和删除。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
+- 终端快捷键（`internal/app/termkeys.go`，照 Ghostty、iTerm、Orca 的默认）：终端视图把带 Command 的键都交给 app、Option 不当 Meta，所以在 `OnKey` 里处理。⌘←/⌘→/⌘⌫ 发 Ctrl+A/E/U，⌥←/⌥→/⌥⌫ 发 Meta+B/F/退格；Claude、Codex 终端里 ⇧↩ 发 Ctrl+J（换行不发送）；⌘↑/⌘↓ 回滚到顶/到底；这些在全屏程序（vim、less）里原样交给程序。⌘K 由常驻进程 `terminal.clear` 清屏和回滚区（之后接入的快照也是空的）再发 Ctrl+L 重画；旧常驻进程没有这个接口时只清界面这边。⌘A 全选走 Edit 菜单。⌘⇧[ / ⌘⇧]（⌃Tab / ⌃⇧Tab）按标签栏顺序切标签。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
 - 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，并注入 `HIVE_HOME`、`HIVE_SOCKET`、`HIVE_TERMINAL_ID`、`HIVE_WORKSPACE_ID`；PATH 最前面是 hive 所在目录。
 - 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$HIVE_HOME/worktrees/<项目>/<名称>`）。
@@ -74,7 +75,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
 - 文件：照 Orca 分两处，全部在窗口进程里，不经过常驻进程。
-  - 文件栏（`filespanel.go`）停靠在主区域最右边，分段切换文件树、检索、改动；它挤窄标签栏和终端（编辑器），不浮在上面、点别处也不收起，和"图片 / 技能与 MCP / 历史"这些浮层面板分开（开关是 ui.json 的 `filesPanel`，旧版记在 `rightPanel: files` 的读进来自动改过来）。开关按钮照 Orca 固定在右上角：关着时在标签栏最右边，开着时在文件栏顶栏最右边，位置不变。打开、收起时文件栏从右边缘滑进滑出（200ms），终端只在打开开始、收起结束时改一次宽度，免得里面的程序跟着动画反复重排。宽度存在 `filesPanelWidth`，所有工作区共用；拖左边缘调宽（220–640），松手才写文件。快捷键：⌘L 开关，⇧⌘E 文件树、⇧⌘G 改动（已经在那一页时关掉；编辑器有焦点时让给它的"查找上一个"），⇧⌘F 检索，⌘K 提交。
+  - 文件栏（`filespanel.go`）停靠在主区域最右边，分段切换文件树、检索、改动；它挤窄标签栏和终端（编辑器），不浮在上面、点别处也不收起，和"图片 / 技能与 MCP / 历史"这些浮层面板分开（开关是 ui.json 的 `filesPanel`，旧版记在 `rightPanel: files` 的读进来自动改过来）。开关按钮照 Orca 固定在右上角：关着时在标签栏最右边，开着时在文件栏顶栏最右边，位置不变。打开、收起时文件栏从右边缘滑进滑出（200ms），终端只在打开开始、收起结束时改一次宽度，免得里面的程序跟着动画反复重排。宽度存在 `filesPanelWidth`，所有工作区共用；拖左边缘调宽（220–640），松手才写文件。快捷键：⌘L 开关，⇧⌘E 文件树、⇧⌘G 改动（已经在那一页时关掉；编辑器有焦点时让给它的"查找上一个"），⇧⌘F 检索，⌘K 提交（只在文件标签在前台或焦点在文件栏里时，终端里 ⌘K 是清屏）。
   - 打开的文件照 Orca 是标签栏里的标签，排在终端标签后面（`docTabs`），带未保存的圆点。文件树里单击打开的是预览标签（斜体，`fileDoc.transient`），下一次单击换掉它；双击文件或标签、从别处打开（⌘P、检索、改动、链接）、改了内容都会常驻。`activeTerm[工作区]` 为 `filesTabID` 时选中的是文件（哪个看 `filesView.cur`），`currentTerminal` 返回 nil，终端断开接入。没有终端的工作区也能开。⌘P 快速打开（`路径:行号` 跳行，不离开终端，选中后才切过来），⌘S 保存，⌘W 关当前文件，关掉最后一个就回到之前的终端。
   - 编辑区是 mygo 的 `ui/editor`（行号、高亮、⌘F 查找替换都是它的）。未保存判断用 `editor.Buffer.Modified`，按缓冲区版本缓存；不能拿版本号判断，撤销也会让版本号加一。超过 5 MB 只读，超过 50 MB 或二进制不读内容。
   - 不用 fsnotify：macOS 上它基于 kqueue，监听一个目录要为其中每个文件各开一个描述符。改为文件栏或文件标签看得见时每秒 stat 一次展开的目录和打开的文件，磁盘戳带 inode，"写临时文件再改名"的保存也认得出。磁盘上变了：没有未保存的改动就重载，有就显示冲突横幅；文件没了标出已删除。

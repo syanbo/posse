@@ -105,7 +105,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if !editing && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyG) {
 			a.toggleFilesPanel(w, sideChanges)
 		}
-		if c.Shortcut(ui.Cmd, ui.KeyK) && a.filesShown(w) && a.filesFor(w).git.repo != "" {
+		// ⌘K 在终端里是清屏（termKey），焦点在文件、文件栏上时才是提交；不注册快捷键，终端才收得到这个键
+		commitKey := a.filesShown(w) && a.filesFor(w).git.repo != "" && (a.filesActive(w) || c.FocusWithin(a.filesPanelRef))
+		if commitKey && c.Shortcut(ui.Cmd, ui.KeyK) {
 			a.openFilesPanel(w, sideChanges).git.focusMsg = true
 		}
 		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyK) {
@@ -148,6 +150,12 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		a.setFontSize(defaultFontSize)
 	}
 	if w != nil {
+		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketRight) || c.Shortcut(ui.Ctrl, ui.KeyTab) {
+			a.stepTab(w, 1)
+		}
+		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketLeft) || c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab) {
+			a.stepTab(w, -1)
+		}
 		keys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9}
 		for i, k := range keys {
 			if i < len(w.Terminals) && c.Shortcut(ui.Cmd, k) {

@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
+	"hive/internal/client"
 	"hive/internal/gitx"
 )
 
@@ -614,4 +615,29 @@ func TestAutoFetch(t *testing.T) {
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
 	a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
 	until(t, tt, "manual fetch", func() bool { return len(d.comp.onlyOther) == 2 })
+}
+
+// ⌘K：文件标签在前台时把焦点给提交信息，终端在前台时不注册（留给终端清屏）。
+func TestCommitShortcut(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.activeTerm[w.ID] = w.Terminals[0].ID
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Frame()
+	if v.git.focusMsg {
+		t.Fatal("⌘K in a terminal should not go to the commit box")
+	}
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Frame()
+	if !v.git.focusMsg && !tt.Focused("提交信息") {
+		t.Fatal("⌘K with a file in front should focus the commit message")
+	}
 }
