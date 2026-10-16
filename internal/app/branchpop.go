@@ -93,6 +93,11 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 		if open {
 			a.branchPop = nil
 		} else {
+			// 两个按钮都算"面板按钮"，点它们不会触发对方的点外面收起，只能在这里互相关掉
+			if a.state.RightPanel != "" {
+				a.state.RightPanel = ""
+				a.saveState()
+			}
 			a.openBranches(w)
 		}
 	}

@@ -393,3 +393,28 @@ func TestPreviewTabs(t *testing.T) {
 		t.Fatalf("an edited preview tab should stay: %d docs", len(v.docs))
 	}
 }
+
+// 右侧面板和分支弹窗互斥：点分支按钮收起文件栏，点面板按钮关掉分支弹窗。
+func TestBranchPopupClosesPanel(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	w.Branch = "main"
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFilesPanel(w, sideFiles)
+	tt.Frame()
+	if err := tt.Click("分支 main"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.filesPanelOpen() || a.branchPop == nil {
+		t.Fatalf("panel=%v popup=%v", a.filesPanelOpen(), a.branchPop != nil)
+	}
+	if err := tt.Click("文件栏 ⌘L"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.filesPanelOpen() || a.branchPop != nil {
+		t.Fatalf("panel=%v popup=%v", a.filesPanelOpen(), a.branchPop != nil)
+	}
+}

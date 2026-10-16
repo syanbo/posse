@@ -64,6 +64,7 @@ func (a *app) panelButton(c *ui.Context, name string, icon *ui.SVG, label string
 			a.state.RightPanel = ""
 		} else {
 			a.state.RightPanel = name
+			a.branchPop = nil // 和分支弹窗互斥，见 branchButton
 		}
 		a.saveState()
 	}
