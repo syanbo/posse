@@ -55,7 +55,8 @@ func (a *app) build(c *ui.Context) {
 		}
 		side.Children(func() { a.sidebar(c) })
 		ui.Box(c).Width(1).Shrink(0).Background(p.line)
-		ui.Column(c).Grow(1).Background(p.canvas).Children(func() {
+		// 只占剩下的宽度：标签多了也不撑出窗口（右边停靠的文件栏要完整显示）
+		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Background(p.canvas).Children(func() {
 			switch {
 			case board:
 				a.taskBoard(c)
@@ -587,38 +588,73 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.filesShown(w) {
 		a.filesTick(c, w)
 	}
+	// 文件栏停靠在最右边，挤窄左边的标签栏和终端（编辑器）
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+		// Basis(0)+Clip：标签多到放不下时左边自己裁掉，不把文件栏挤出窗口
+		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Clip().Children(func() { a.mainColumn(c, w, cur) })
+		if a.filesPanelOpen() {
+			ui.Box(c).Width(1).Shrink(0).Background(p.line)
+			a.filesPanel(c, w)
+		}
+	})
+}
+
+// mainColumn 是主区域里文件栏左边的部分：标签栏和终端（或编辑器），浮层面板也浮在这里面。
+func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
+	t := c.Theme()
+	p := colors(t)
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
-		for _, term := range w.Terminals {
-			a.tab(c, w, term, cur != nil && cur.ID == term.ID)
-		}
-		a.docTabs(c, w)
-		iconButton(c.Key("new"), iconPlus, "新建终端").Menu(func(m *ui.Menu) {
-			for _, ag := range agentChoices {
-				if m.Item(agentTitle(ag)).Chosen() {
-					a.startTerminal(w.ID, ag)
+		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示
+		ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
+			ui.Row(c).Height(titleHeight(c)).Gap(2).AlignItems(ui.Center).Children(func() {
+				for _, term := range w.Terminals {
+					a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 				}
-			}
-			if m.Item("终端").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
-				a.startTerminal(w.ID, "")
-			}
+				a.docTabs(c, w)
+				a.newTerminalButton(c, w)
+			})
 		})
-		ui.Spacer(c)
-		if w.Branch != "" {
-			a.branchButton(c, w)
-			if iconButton(c.Key("git-log"), iconGitLog, "Git 日志").Clicked() {
-				a.openLog(w, "", "")
+		ui.Row(c).Shrink(0).Gap(2).AlignItems(ui.Center).Children(func() { a.tabBarButtons(c, w, cur) })
+	})
+	a.mainBody(c, w, cur)
+}
+
+// newTerminalButton 是标签后面的"+"，选 agent 或普通终端。
+func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
+	iconButton(c.Key("new"), iconPlus, "新建终端").Menu(func(m *ui.Menu) {
+		for _, ag := range agentChoices {
+			if m.Item(agentTitle(ag)).Chosen() {
+				a.startTerminal(w.ID, ag)
 			}
 		}
-		if cur != nil && cur.Agent == "claude" {
-			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
+		if m.Item("终端").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
+			a.startTerminal(w.ID, "")
 		}
-		if cur != nil && cur.Agent != "" {
-			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
-		}
-		a.panelButton(c, panelHistory, iconHistory, "历史会话")
-		a.panelButton(c, panelFiles, iconPanelRight, "文件栏 ⌘L")
 	})
+}
+
+// tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
+func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
+	if w.Branch != "" {
+		a.branchButton(c, w)
+		if iconButton(c.Key("git-log"), iconGitLog, "Git 日志").Clicked() {
+			a.openLog(w, "", "")
+		}
+	}
+	if cur != nil && cur.Agent == "claude" {
+		a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
+	}
+	if cur != nil && cur.Agent != "" {
+		a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+	}
+	a.panelButton(c, panelHistory, iconHistory, "历史会话")
+	a.filesPanelButton(c, w)
+}
+
+// mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。
+func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
+	t := c.Theme()
 	// 右侧面板浮在上面，不挤压终端：终端宽度一变，程序就要按新列数重排输出
 	body := ui.Column(c).Grow(1)
 	if a.state.RightPanel != "" {
@@ -659,8 +695,6 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		case panelHistory:
 			panel, drawn = a.recentPanel(c, w), true
-		case panelFiles:
-			panel, drawn = a.filesPanel(c, w), true
 		case panelImages:
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.imagesPanel(c, cur), true
@@ -670,7 +704,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if drawn {
 			panel.Opacity(shown).Transform(ui.Translation((1-shown)*24, 0))
 			// 点面板外面任何地方都收起，这一下照常落到下面的终端或按钮上
-			if a.state.RightPanel != "" && !a.dialogOpen() && !a.resizingPanel && panel.PressedOutside() && !a.overPanelButton {
+			if a.state.RightPanel != "" && panel.PressedOutside() && !a.overPanelButton {
 				a.state.RightPanel = ""
 				a.saveState()
 			}
@@ -779,6 +813,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	case hovered:
 		bg = colors(t).wash
 	}
+	a.revealTab(row, term.ID, active)
 	row.Background(row.AnimateColor("bg", bg, hover))
 	status := ""
 	if term.AgentState != nil && term.Running {
@@ -831,6 +866,15 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	})
 	if row.Clicked() {
 		a.activeTerm[w.ID] = term.ID
+	}
+}
+
+// revealTab 在标签刚变成当前的那一帧把它滚进可见范围：标签多了要左右滚动时，切过去的那个不会藏在外面。
+// 只在切换时滚一次，用户自己滚开了不拉回来。
+func (a *app) revealTab(row ui.Element, id string, active bool) {
+	if active && a.shownTab != id {
+		a.shownTab = id
+		row.ScrollIntoView()
 	}
 }
 

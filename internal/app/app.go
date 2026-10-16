@@ -171,6 +171,7 @@ type app struct {
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
+	shownTab  string // 最近一次滚进可见范围的标签，见 revealTab
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
 	resizingPanel   bool // 正在拖文件栏的左边缘，松手时写 ui.json

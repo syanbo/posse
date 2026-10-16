@@ -394,28 +394,40 @@ func TestPreviewTabs(t *testing.T) {
 	}
 }
 
-// 右侧面板和分支弹窗互斥：点分支按钮收起文件栏，点面板按钮关掉分支弹窗。
+// 浮层面板和分支弹窗互斥：点分支按钮收起历史面板，点面板按钮关掉分支弹窗。
+// 文件栏停靠在右边，不受分支弹窗影响。
 func TestBranchPopupClosesPanel(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	w.Branch = "main"
 	tt := ui.NewTester(a.build, 1200, 760)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 历史面板会去查会话，连不上就报错
 	a.openFilesPanel(w, sideFiles)
+	a.state.RightPanel = panelHistory
 	tt.Frame()
 	if err := tt.Click("分支 main"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.filesPanelOpen() || a.branchPop == nil {
-		t.Fatalf("panel=%v popup=%v", a.filesPanelOpen(), a.branchPop != nil)
+	if a.state.RightPanel != "" || a.branchPop == nil || !a.filesPanelOpen() {
+		t.Fatalf("overlay=%q popup=%v files=%v", a.state.RightPanel, a.branchPop != nil, a.filesPanelOpen())
 	}
-	if err := tt.Click("文件栏 ⌘L"); err != nil {
+	if err := tt.Click("历史会话"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.filesPanelOpen() || a.branchPop != nil {
-		t.Fatalf("panel=%v popup=%v", a.filesPanelOpen(), a.branchPop != nil)
+	if a.state.RightPanel != panelHistory || a.branchPop != nil {
+		t.Fatalf("overlay=%q popup=%v", a.state.RightPanel, a.branchPop != nil)
+	}
+}
+
+// 旧版 ui.json 里文件栏记成浮层面板，读进来改成停靠的文件栏。
+func TestFilesPanelStateMigrates(t *testing.T) {
+	home := t.TempDir()
+	os.WriteFile(uiStatePath(home), []byte(`{"rightPanel":"files"}`), 0o600)
+	if s := loadUIState(home); s.RightPanel != "" || !s.FilesPanel {
+		t.Fatalf("%+v", s)
 	}
 }
 

@@ -428,6 +428,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	case hovered:
 		bg = colors(t).wash
 	}
+	a.revealTab(row, "doc:"+d.path, active)
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {

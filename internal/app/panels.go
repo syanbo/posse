@@ -11,7 +11,7 @@ const (
 	panelUsage   = "usage"
 	panelHistory = "history"
 	panelImages  = "images"
-	panelFiles   = "files" // 文件栏，见 filespanel.go
+	panelFiles   = "files" // 旧版 ui.json 里文件栏也是浮层面板，读进来时改成 FilesPanel
 )
 
 // panelPoll 是右侧面板的定时刷新：面板开着时每隔一段时间在后台读一次，同一时间只读一次。
