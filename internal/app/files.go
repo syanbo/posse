@@ -39,6 +39,7 @@ const (
 	docText
 	docImage
 	docBinary
+	docImageDiff // 图片的 diff：左右两张图（gitpanel.go 的 imageDiffView）
 	docTooLarge
 	docError
 	docDiff    // Git 的 diff 标签页（gitview.go）

@@ -1,6 +1,9 @@
 package app
 
 import (
+	"bytes"
+	"image"
+	"image/color"
 	"image/png"
 	"io"
 	"os"
@@ -199,6 +202,33 @@ func previewBranches(t *testing.T, a *app) {
 	a.openBranches(&a.workspaces[0])
 	v := a.files["w1"]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
+}
+
+// previewImageDiff 打开一张改了尺寸和颜色的图片的 diff。
+func previewImageDiff(t *testing.T, a *app) {
+	root := gitWorkspace(t, a)
+	pngOf := func(w, h int, c color.RGBA) []byte {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				if (x-w/2)*(x-w/2)+(y-h/2)*(y-h/2) < (h/2)*(h/2) {
+					img.SetRGBA(x, y, c)
+				}
+			}
+		}
+		var b bytes.Buffer
+		png.Encode(&b, img)
+		return b.Bytes()
+	}
+	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(320, 240, color.RGBA{217, 119, 87, 255}), 0o644)
+	gitRun(t, root, "add", "logo.png")
+	gitRun(t, root, "commit", "-q", "-m", "logo")
+	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(480, 360, color.RGBA{90, 130, 220, 255}), 0o644)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	a.openDiff(&a.workspaces[0], diffSpec{rel: "logo.png", oldRev: "HEAD"}, nil, true)
+	until(t, tt, "image diff", func() bool { return v.cur.kind == docImageDiff })
+	a.state.RightPanel = ""
 }
 
 // previewCompare 打开 feat 和 main 的比较，选中 feat 独有的那个提交。
@@ -421,6 +451,10 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewCompare(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-compare-"+suffix+".png")
+
+		a = previewApp(t)
+		previewImageDiff(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-image-diff-"+suffix+".png")
 
 		a = previewApp(t)
 		previewLog(t, a)

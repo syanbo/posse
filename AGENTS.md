@@ -85,6 +85,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - Git 界面照 WebStorm 的用法做（依据和取舍见 `docs/plans/git-ops.html`），全部在窗口进程里调用系统 git，常驻进程不参与：
   - 路径都相对仓库根目录；仓库根目录换成工作区路径的写法（`repoRoot`），git 给的是解析过符号链接的（如 `/private/var`），混用会把同一个文件当成两个。界面调用的 gitx 函数用 `runRaw`（原样输出、`LC_ALL=C`、失败返回 `*gitx.Error`，`Msg` 是 git 自己的报错）。
   - 文件栏"改动"：文件栏或文件标签看得见时每 1.5 秒读一次 `status --porcelain=v2`，不用手动刷新；照 WebStorm 不分暂存和未暂存：每个文件一个勾选框（已跟踪的默认勾、新文件默认不勾），提交勾选的文件——新文件先 `add`，再 `commit --only -- <文件>`，暂存区里没勾的原样留着。编辑器行号旁标出相对 HEAD 的改动（`State.DiffBase`），⌥⌘Z 回滚一段。
+  - 图片（png/jpg/gif/webp）的 diff 左右对照两张图（`imageDiffView`），各标版本、像素尺寸和文件大小，透明处垫棋盘格；新增的一边写新文件、删除的写已删除。
   - diff 标签页用 mygo 的 `editor.DiffView`，默认左右对照、忽略空白（`third_party/mygo` 加的 `IgnoreWhitespace`，只忽略空白，不忽略空行）。`diffSpec` 的版本：newRev 空是工作区、`":"` 是暂存区，oldRev 空是"这一边没有"。F7 / ⇧F7 跨文件跳改动，F4 跳到编辑器；工作区 diff 的逐段回滚立刻写回磁盘。diff、比较、日志、Annotate 是 `virtual` 标签页，不轮询磁盘、不记进 ui.json。
   - 分支弹窗：点标签栏的分支名，⌥⌘N 新建分支，⇧⌘K Push（WebStorm 的 ⌘T 更新项目和 hive 的新建终端冲突，放进弹窗）。更新当前分支是 `pull --rebase --autostash`，其他分支只快进。被另一个 worktree 检出的分支，检出改成切到那个工作区；"基于它新建工作区"走 hive 的 worktree 工作区。检出、rebase、合并、更新、reset 之类改动工作目录的操作，工作区里有 agent 正在工作时先确认（`guardAgent`）。
   - Git 日志：标签栏右侧常驻入口（分支按钮旁）。左边分支树照 WebStorm 分 HEAD、本地、远程（按远端分组）、标签，点一项只看它的提交，再点一次回到全部分支；分支和标签随分支弹窗一起读（`loadBranches`）。

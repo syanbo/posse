@@ -480,16 +480,19 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if pressable(iconButtonSized(c, iconDown, "下一处改动 F7", 24, 14)).Clicked() {
 			a.stepDiff(w, v, d, 1)
 		}
-		split := df.state.Layout == editor.DiffSplit
-		if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
-			if split {
-				df.state.Layout = editor.DiffUnified
-			} else {
-				df.state.Layout = editor.DiffSplit
+		// 排版和忽略空白只对文字的 diff 有用
+		if d.kind != docImageDiff {
+			split := df.state.Layout == editor.DiffSplit
+			if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+				if split {
+					df.state.Layout = editor.DiffUnified
+				} else {
+					df.state.Layout = editor.DiffSplit
+				}
 			}
-		}
-		if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-			df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+				df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+			}
 		}
 		if pressable(iconButtonSized(c, iconOpen, "在编辑器中打开 F4", 24, 14)).Clicked() {
 			a.diffToEditor(w, v, d)
@@ -557,4 +560,82 @@ func pickBox(c *ui.Context, key, name string, state int) bool {
 		p.StrokePath(&path, 1.6, white)
 	})
 	return box.Changed()
+}
+
+// imageDiffView 是图片的 diff：左右两张图对照（照 WebStorm），各自标出版本、尺寸和文件大小；
+// 透明的地方垫棋盘格，看得出哪里是透明的。
+func imageDiffView(c *ui.Context, d *fileDoc) {
+	t := c.Theme()
+	df := d.diff
+	newLabel := "现在（工作区）"
+	switch {
+	case df.staged():
+		newLabel = "现在（暂存区）"
+	case !df.worktree():
+		newLabel = "现在（" + shortRev(df.newRev) + "）"
+	}
+	oldLabel := "原来"
+	if df.oldRev != "" {
+		oldLabel += "（" + shortRev(df.oldRev) + "）"
+	}
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+		for i, side := range df.images {
+			if i == 1 {
+				ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
+			}
+			label := oldLabel
+			if i == 1 {
+				label = newLabel
+			}
+			ui.Column(c.Key(fmt.Sprint("img-", i))).Grow(1).Shrink(1).Basis(0).Padding(12, 16).Gap(10).Children(func() {
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, label).FontSize(12.5).FontWeight(500)
+					switch {
+					case side.size < 0 && i == 0:
+						ui.Text(c, "新文件").FontSize(11.5).TextColor(colors(t).sage)
+					case side.size < 0:
+						ui.Text(c, "已删除").FontSize(11.5).TextColor(t.Danger)
+					case side.img != nil:
+						ui.Text(c, fmt.Sprintf("%d×%d", side.w, side.h)).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted)
+						ui.Text(c, byteSize(side.size)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted)
+					}
+				})
+				ui.Box(c).Grow(1).Center().Children(func() {
+					switch {
+					case side.err != "":
+						ui.Text(c, side.err).FontSize(12).TextColor(t.TextMuted)
+					case side.img != nil:
+						// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
+						w, h := side.img.Size()
+						checker := ui.RGBA(128, 128, 128, 0.18)
+						ui.Box(c).Shrink(1).Draw(func(p *ui.Painter, r ui.Rect) {
+							const sq = 8
+							p.Clip(r, 0, func() {
+								for y := float32(0); y < r.H; y += sq {
+									for x := float32(0); x < r.W; x += sq {
+										if (int(x/sq)+int(y/sq))%2 == 0 {
+											p.Fill(ui.Rect{X: r.X + x, Y: r.Y + y, W: sq, H: sq}, checker, 0)
+										}
+									}
+								}
+							})
+						}).Children(func() {
+							ui.Image(c, side.img).Fit(ui.Contain).MaxWidth(float32(w) / 2).MaxHeight(float32(h) / 2).Shrink(1)
+						})
+					}
+				})
+			})
+		}
+	})
+}
+
+// byteSize 把字节数写成 B、KB、MB。
+func byteSize(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1<<20:
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
 }

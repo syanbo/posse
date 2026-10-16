@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -498,4 +501,34 @@ func TestCommitPicked(t *testing.T) {
 	if st := gitRun(t, root, "status", "--porcelain"); !strings.Contains(st, "M  README.md") {
 		t.Fatalf("README.md should stay staged: %q", st)
 	}
+}
+
+// 图片的 diff：两边都解码成图，带原始尺寸；新增的图左边标成新文件。
+func TestImageDiff(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	pngOf := func(w, h int) []byte {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		var b bytes.Buffer
+		png.Encode(&b, img)
+		return b.Bytes()
+	}
+	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(40, 20), 0o644)
+	gitRun(t, root, "add", "logo.png")
+	gitRun(t, root, "commit", "-q", "-m", "logo")
+	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(80, 30), 0o644)
+	os.WriteFile(filepath.Join(root, "new.png"), pngOf(10, 10), 0o644)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	a.openDiff(&a.workspaces[0], diffSpec{rel: "logo.png", oldRev: "HEAD"}, nil, true)
+	until(t, tt, "image diff", func() bool { return v.cur.kind == docImageDiff })
+	im := v.cur.diff.images
+	if im[0].w != 40 || im[0].h != 20 || im[1].w != 80 || im[1].h != 30 {
+		t.Fatalf("sizes %dx%d → %dx%d", im[0].w, im[0].h, im[1].w, im[1].h)
+	}
+	if !tt.HasText("40×20") || !tt.HasText("80×30") {
+		t.Fatalf("dimensions not shown: %v", tt.Texts())
+	}
+	a.openDiff(&a.workspaces[0], diffSpec{rel: "new.png", oldRev: "HEAD"}, nil, true)
+	until(t, tt, "new image", func() bool { return v.cur.kind == docImageDiff && tt.HasText("新文件") })
 }

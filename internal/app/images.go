@@ -1,10 +1,13 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"image"
+	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,6 +19,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 // imagesView 是右侧"图片"面板的状态：当前 Claude 会话里粘贴过的图片（终端里显示成 [Image #N]）。
@@ -97,9 +101,19 @@ func scaledImage(path string, width int) (*image.RGBA, error) {
 		return nil, err
 	}
 	defer f.Close()
-	src, _, err := image.Decode(f)
+	img, _, err := decodeScaled(f, width)
+	return img, err
+}
+
+// scaledImageBytes 是 scaledImage 读内存里的图片（diff 里某个版本的内容），顺带返回原始尺寸。
+func scaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
+	return decodeScaled(bytes.NewReader(b), width)
+}
+
+func decodeScaled(r io.Reader, width int) (*image.RGBA, image.Point, error) {
+	src, _, err := image.Decode(r)
 	if err != nil {
-		return nil, err
+		return nil, image.Point{}, err
 	}
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -109,7 +123,7 @@ func scaledImage(path string, width int) (*image.RGBA, error) {
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
-	return dst, nil
+	return dst, b.Size(), nil
 }
 
 // pollImages 在主线程调用：换了终端就重来，到点了在后台找目录、列图片、给新图片做缩略图。

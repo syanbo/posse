@@ -275,8 +275,28 @@ type diffDoc struct {
 	first    bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
 	jumped   bool // 已经跳过
 	binary   bool
-	stamp    files.Stamp // 工作区文件的磁盘戳，变了才重读
-	sig      string      // 暂存区 diff 读的时候的 HEAD 和暂存区状态，变了才重读
+	images   [2]diffImage // 图片文件的两边：改之前、改之后
+	stamp    files.Stamp  // 工作区文件的磁盘戳，变了才重读
+	sig      string       // 暂存区 diff 读的时候的 HEAD 和暂存区状态，变了才重读
+}
+
+// diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
+type diffImage struct {
+	img  *ui.Bitmap
+	w, h int
+	size int
+	err  string
+}
+
+func loadDiffImage(b []byte, exists bool) diffImage {
+	if !exists {
+		return diffImage{size: -1}
+	}
+	img, dim, err := scaledImageBytes(b, imageMaxPx)
+	if err != nil {
+		return diffImage{size: len(b), err: "解不开这张图：" + err.Error()}
+	}
+	return diffImage{img: ui.NewBitmap(img), w: dim.X, h: dim.Y, size: len(b)}
 }
 
 // label 是标签页上的补充说明。
@@ -358,6 +378,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 		}
 		var old, nw []byte
 		var err error
+		oldExists, newExists := spec.oldRev != "", true
 		if spec.oldRev != "" {
 			old, err = showRev(ctx, root, spec.oldRev, oldPath)
 		}
@@ -369,7 +390,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				stamp = files.StatFile(abs)
 				nw, err = os.ReadFile(abs)
 				if os.IsNotExist(err) {
-					nw, err = nil, nil
+					nw, err, newExists = nil, nil, false
 				}
 			case spec.staged():
 				nw, err = showRev(ctx, root, "", spec.rel)
@@ -377,12 +398,22 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				nw, err = showRev(ctx, root, spec.newRev, spec.rel)
 			}
 		}
+		// 图片：两边都解码成位图，左右对照看
+		var images [2]diffImage
+		isImage := err == nil && isImagePath(spec.rel)
+		if isImage {
+			images = [2]diffImage{loadDiffImage(old, oldExists && len(old) > 0), loadDiffImage(nw, newExists)}
+		}
 		a.update(func() {
 			if err != nil {
 				d.kind, d.err = docError, err.Error()
 				return
 			}
 			df.stamp = stamp
+			if isImage {
+				df.binary, df.images, d.kind = true, images, docImageDiff
+				return
+			}
 			if files.IsBinary(old) || files.IsBinary(nw) {
 				df.binary, d.kind = true, docBinary
 				return

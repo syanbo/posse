@@ -300,6 +300,8 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		a.diffBar(c, w, v, d)
 		if d.kind == docDiff {
 			a.diffView(c, v, d)
+		} else if d.kind == docImageDiff {
+			imageDiffView(c, d)
 		} else if d.kind == docBinary {
 			docMessage(c, d, "二进制文件，不显示 diff")
 		} else {
@@ -551,7 +553,7 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 
 func docMessage(c *ui.Context, d *fileDoc, msg string) {
 	t := c.Theme()
-	ui.Column(c).Grow(1).Center().Gap(12).Children(func() {
+	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Children(func() {
 		ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted)
 		if d.kind != docError || !d.deleted {
 			if pressable(textButton(c, "用默认应用打开")).Clicked() {
