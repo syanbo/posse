@@ -435,6 +435,7 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	if next := df.hunk + dir; d.kind == docDiff && next >= 0 && next < len(hunks) {
 		df.hunk = next
 		df.state.GoToHunk(next)
+		df.state.Current = next + 1
 		return
 	}
 	list := df.siblings
@@ -463,6 +464,8 @@ func diffJump(df *diffDoc) {
 		df.hunk = n - 1
 	}
 	df.state.GoToHunk(df.hunk)
+	// 当前这一处加深显示，上下切换时看得出走到了哪
+	df.state.Current = df.hunk + 1
 }
 
 // revertHunk 回滚工作区 diff 里的一处改动，立刻写回磁盘（和 WebStorm 一样不用再保存）。

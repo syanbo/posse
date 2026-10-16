@@ -11,6 +11,8 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 - `diffview.go`：加 `DiffState.IgnoreWhitespace`。
 - `diffmodel.go`：开着它时比较前去掉每行的空白（`cmpLines`），只差空白的行算没改；两边没改的段行数仍然相等，左右对照照常对齐。显示、行内高亮和回滚用的仍是原文。没有做"忽略空行"：把只增删空行的段去掉会让两边对不齐。
 
+- `diffview.go`、`diffside.go`：加 `DiffState.Current`（改动的序号加一，0 表示没有），这一处的底色和行号栏比别的改动深、竖条总是显示，F7 上下切换时看得出走到了哪。
+
 终端插件 `plugins/terminal`：
 
 - `links.go`：加 `spanAt`，返回链接在一行里覆盖的列；`trimURL` 也去掉结尾的中文标点（"。，）"等）。

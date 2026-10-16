@@ -62,6 +62,21 @@ func (s *diffSide) lineStyle(line int) lineLook {
 		if d.Indicators != DiffBars {
 			st.bar = ui.Color{}
 		}
+		// The current change: tinted more, its bar shown whatever the indicators.
+		if d.Current > 0 && s.hunkOf(line) == d.Current-1 {
+			base := dc.added
+			if s.old {
+				base = dc.deleted
+			}
+			bg, g := st.bg, st.gutter
+			if bg.A == 0 {
+				bg = ed.theme.Background
+			}
+			if g.A == 0 {
+				g = ed.theme.Background
+			}
+			st.bg, st.gutter, st.bar = mixLab(bg, base, 0.22), mixLab(g, base, 0.4), base
+		}
 	}
 	side := DiffNew
 	if s.old {

@@ -50,6 +50,10 @@ type DiffState struct {
 	Theme      *Theme
 	// Bindings add key bindings to the editors of the sides.
 	Bindings []Binding
+	// Current marks the change being looked at, its index in Hunks plus
+	// one (none when 0), stronger than the others, as stepping through
+	// them shows which one is current (Hive).
+	Current int
 	// HunkActions shows Revert and Keep on the change under the pointer,
 	// or the caret's, which put the old lines back in New, or make the
 	// new lines Old's, as an agent's changes are reviewed.
