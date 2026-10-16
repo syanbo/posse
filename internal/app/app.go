@@ -47,6 +47,9 @@ type terminalInfo struct {
 	Pid                           int // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
 }
 
+// navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
+type navTarget struct{ ws, term string }
+
 type workspace struct {
 	ID, ProjectID, Name, Path, Kind, Branch, Project, Label string
 	Terminals                                               []terminalInfo
@@ -114,7 +117,8 @@ type app struct {
 	revealSel    bool              // 下一帧把选中项滚进可见区
 	activeTerm   map[string]string // 工作区 ID → 选中的终端 ID
 	sectionsOpen map[string]*bool  // 项目 ID → 侧栏分组是否展开
-	navOrder     []string          // 侧栏看得见的行，按显示顺序，供方向键移动
+	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
+	navCur       int               // navOrder 里当前选中的行，没有时为 -1
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
@@ -443,7 +447,8 @@ func (a *app) apply(ps []project, ws []workspace) {
 	a.indexWorkspaces()
 	for _, p := range ps {
 		if a.sectionsOpen[p.ID] == nil {
-			a.sectionsOpen[p.ID] = new(bool)
+			open := true
+			a.sectionsOpen[p.ID] = &open
 		}
 	}
 	// 只在选中的工作区被删掉时换到第一个；任务和历史不是工作区，要保留

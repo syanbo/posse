@@ -108,40 +108,48 @@ func waitState(t *testing.T, home string, ok func(uiState) bool) {
 	}
 }
 
-// 有多个工作区的项目默认收起：项目行选中主工作区，展开箭头点开后才看到其余工作区。
-func TestProjectExpand(t *testing.T) {
+// 侧栏最多三层：项目、工作区（只有主工作区时省掉）、agent 会话；shell 不进侧栏。
+func TestSidebarTree(t *testing.T) {
 	a := previewApp(t)
+	offlineClient(t, a)
 	a.sectionsOpen = map[string]*bool{}
 	tt := newPreviewTester(a, true)
+	for _, label := range []string{"重写 hive 界面", "feat-login", "ios-crash"} {
+		if _, ok := tt.Find(label); !ok {
+			t.Fatalf("%q not shown", label)
+		}
+	}
+	// 标签栏里有 zsh，只能从侧栏的行里看
+	for _, n := range a.navOrder {
+		if n.term == "t3" {
+			t.Fatal("shell terminal shown in sidebar")
+		}
+	}
+	// 单击会话切到这个终端。测试里没有常驻进程，先让界面以为已经接入了它，免得去接入
+	// Apps 下面的第一个 Codex 是 t2（feat-login 里的 t5 排在后面）
+	a.view.id = "t2"
+	if err := tt.Click("Codex"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != "w1" || a.activeTerm["w1"] != "t2" {
+		t.Fatalf("after click: selected %q term %q", a.selected, a.activeTerm["w1"])
+	}
+	// 项目标题行只展开收起，不改选中
+	if err := tt.Click("Skill"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != "w1" || *a.sectionsOpen["p5"] {
+		t.Fatalf("after header click: selected %q open %v", a.selected, *a.sectionsOpen["p5"])
+	}
 	if _, ok := tt.Find("feat-login"); ok {
 		t.Fatal("worktree row shown while project is collapsed")
 	}
-	// 单击项目行：选中主工作区并展开
-	if err := tt.Click("Skill"); err != nil {
+	if err := tt.Click("展开 3 个工作区"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.selected != "w5" || !*a.sectionsOpen["p5"] {
-		t.Fatalf("after click: selected %q open %v, want w5 open", a.selected, *a.sectionsOpen["p5"])
-	}
-	// 已选中并展开时再单击收起
-	if err := tt.Click("Skill"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if *a.sectionsOpen["p5"] {
-		t.Fatal("second click did not collapse")
-	}
-	// 箭头只展开收起，不改选中
-	a.selected = "w2"
-	tt.Frame()
-	if err := tt.Click("展开 2 个工作区"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.selected != "w2" || !*a.sectionsOpen["p5"] {
-		t.Fatalf("after toggle: selected %q open %v", a.selected, *a.sectionsOpen["p5"])
-	}
 	// ios-crash 没有终端，选中它不会去接入常驻进程
 	if err := tt.Click("ios-crash"); err != nil {
 		t.Fatal(err)
@@ -149,6 +157,15 @@ func TestProjectExpand(t *testing.T) {
 	tt.Frame()
 	if a.selected != "w9" {
 		t.Fatalf("selected %q, want w9", a.selected)
+	}
+	// 方向键：从 ios-crash 往上是 feat-login 里的会话
+	a.navCur = -1
+	tt.Frame()
+	if a.navCur < 0 || a.navOrder[a.navCur] != (navTarget{ws: "w9"}) {
+		t.Fatalf("navCur %d not on w9", a.navCur)
+	}
+	if prev := a.navOrder[a.navCur-1]; prev != (navTarget{ws: "w6", term: "t5"}) {
+		t.Fatalf("row above ios-crash = %+v", prev)
 	}
 }
 

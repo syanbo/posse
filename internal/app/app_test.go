@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/client"
 	"hive/internal/rpc"
 )
 
@@ -25,35 +26,43 @@ func TestApplyKeepsSelection(t *testing.T) {
 		if a.selected != want {
 			t.Errorf("selected %q after refresh = %q, want %q", sel, a.selected, want)
 		}
-		if *a.sectionsOpen["p1"] {
-			t.Errorf("new section starts open")
+		if !*a.sectionsOpen["p1"] {
+			t.Errorf("new section starts collapsed")
 		}
 	}
 }
 
 func TestRevealOpensSection(t *testing.T) {
 	a := previewApp(t)
-	// 刚启动时还没选中项，刷新后落到第一个工作区，分组都保持收起
+	offlineClient(t, a)
+	// 刚启动时分组都展开，会话都看得见
 	a.selected, a.sectionsOpen = "", map[string]*bool{}
 	a.apply(a.projects, a.workspaces)
 	ui.NewTester(a.build, 1200, 760).Frame()
 	for id, open := range a.sectionsOpen {
-		if *open {
-			t.Fatalf("section %s open after launch, selected %s", id, a.selected)
+		if !*open {
+			t.Fatalf("section %s collapsed after launch", id)
 		}
 	}
-	// w8 是 Works（p6）下面的子工作区，Skill（p5）不受影响
+	// 只有主工作区的项目：定位到 shell 时项目行就看得见，不用展开；定位到会话才展开
+	*a.sectionsOpen["p1"] = false
+	a.selected, a.revealSel = "w1", true
+	a.activeTerm["w1"] = "t3"
+	ui.NewTester(a.build, 1200, 760).Frame()
+	if *a.sectionsOpen["p1"] {
+		t.Fatal("revealing the project row opened it")
+	}
+	a.activeTerm["w1"], a.revealSel = "t1", true
+	ui.NewTester(a.build, 1200, 760).Frame()
+	if !*a.sectionsOpen["p1"] {
+		t.Fatal("revealing a session did not open its project")
+	}
+	// 最后再切到没有终端的 w8（会断开接入的终端）。w8 是 Works（p6）下面的工作区，收起时定位要展开，Skill（p5）不受影响
+	*a.sectionsOpen["p6"], *a.sectionsOpen["p5"] = false, false
 	a.selected, a.revealSel = "w8", true
 	ui.NewTester(a.build, 1200, 760).Frame()
 	if !*a.sectionsOpen["p6"] || *a.sectionsOpen["p5"] || a.revealSel {
 		t.Fatalf("after reveal: p6=%v p5=%v revealSel=%v", *a.sectionsOpen["p6"], *a.sectionsOpen["p5"], a.revealSel)
-	}
-	// 定位项目行本身（主工作区）不用展开
-	*a.sectionsOpen["p6"] = false
-	a.selected, a.revealSel = "w7", true
-	ui.NewTester(a.build, 1200, 760).Frame()
-	if *a.sectionsOpen["p6"] {
-		t.Fatal("revealing the project row opened it")
 	}
 	// 用户收起分组后，不定位就不再自动展开
 	*a.sectionsOpen["p6"] = false
@@ -61,6 +70,11 @@ func TestRevealOpensSection(t *testing.T) {
 	if *a.sectionsOpen["p6"] {
 		t.Fatal("section reopened without reveal")
 	}
+}
+
+// offlineClient 让界面换终端时去接入一个不存在的常驻进程：接入失败，但不会因为没有客户端崩溃。
+func offlineClient(t *testing.T, a *app) {
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "none.sock")}
 }
 
 func TestShortModel(t *testing.T) {

@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -198,7 +197,7 @@ func (a *app) sidebar(c *ui.Context) {
 		}
 		ui.Text(c, msg).FontSize(12).TextColor(color).Padding(6, 16)
 	}
-	a.navOrder = a.navOrder[:0]
+	a.navOrder, a.navCur = a.navOrder[:0], -1
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
 	nav.Children(func() {
 		ui.Column(c).Padding(4, 10, 12, 10).Gap(2).Children(func() {
@@ -224,51 +223,68 @@ func (a *app) sidebar(c *ui.Context) {
 	})
 	// 侧栏有焦点时，上下方向键在看得见的行之间移动
 	if n := len(a.navOrder); n > 0 {
-		i := slices.Index(a.navOrder, a.selected)
+		i, to := a.navCur, -1
 		switch {
 		case nav.Shortcut(0, ui.KeyDown):
-			a.selected = a.navOrder[min(i+1, n-1)]
+			to = min(i+1, n-1)
 		case nav.Shortcut(0, ui.KeyUp):
-			a.selected = a.navOrder[max(i-1, 0)]
+			to = max(i-1, 0)
+		}
+		if to >= 0 {
+			a.selected = a.navOrder[to].ws
+			if term := a.navOrder[to].term; term != "" {
+				a.activeTerm[a.selected] = term
+			}
 		}
 	}
 	a.errorBar(c)
 	a.footer(c)
 }
 
-// projectItem 是侧栏里的一个项目：项目行就是它的主工作区，其余工作区缩进在下面，默认收起，单击项目行展开。
-// 收起时项目行汇总所有工作区的状态，子工作区等你处理也看得到。
-// reveal 表示要定位的工作区在这个项目里。
+// projectItem 是侧栏里的一个项目。只有主工作区时项目行就是它，agent 会话缩进在下面；
+// 有其他工作区时多一层：项目标题行下面是各工作区（主工作区单独占一行），会话再缩进在各自工作区下面。
+// 收起时项目行汇总所有终端的状态，等你处理也看得到。reveal 表示要定位的工作区在这个项目里。
 func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool) {
-	head, rest := ws[0], ws[1:]
+	head := ws[0]
 	open := a.sectionsOpen[p.ID]
 	if open == nil {
 		open = new(bool)
+		*open = true
 		a.sectionsOpen[p.ID] = open
 	}
-	// 要定位的工作区在收起的项目里时先展开，不然看不到选中项
-	if reveal && a.revealSel && a.selected != head.ID {
+	nested := len(ws) > 1
+	// 要定位的行在收起的项目里时先展开；只有主工作区、定位的又不是会话时项目行本身就看得见
+	if reveal && a.revealSel && !*open && (nested || a.selectedSession(a.workspace(a.selected)) != "") {
 		*open = true
 	}
 	group := ui.Column(c.Key(p.ID)).Gap(2).Shrink(0)
 	group.Children(func() {
-		var also []workspace
-		var toggle func()
-		if len(rest) > 0 {
-			if !*open {
-				also = rest
+		if !nested {
+			sessions := agentSessions(head.Terminals)
+			var toggle func()
+			if len(sessions) > 0 {
+				toggle = func() { disclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions))) }
 			}
-			toggle = func() { disclosure(c, open, len(rest)) }
+			// 单击项目行就展开；已经选中并展开时再单击收起
+			wasSelected := a.selected == head.ID
+			if row := a.sidebarItem(c, head, p.Name, false, !*open, toggle); row.Clicked() && len(sessions) > 0 {
+				*open = !*open || !wasSelected
+			}
+			if *open {
+				a.sessionRows(c, head, sessions)
+			}
+			return
 		}
-		// 单击项目行就展开；已经选中并展开时再单击收起
-		wasSelected := a.selected == head.ID
-		if row := a.sidebarItem(c, head, p.Name, also, toggle); row.Clicked() && len(rest) > 0 {
-			*open = !*open || !wasSelected
-		}
+		a.projectHeader(c, p, ws, open)
 		if *open {
-			ui.Column(c).Gap(2).Padding(0, 0, 0, 22).Children(func() {
-				for _, w := range rest {
-					a.sidebarItem(c, w, w.Name, nil, nil)
+			ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
+				for _, w := range ws {
+					label := w.Name
+					if w.Kind == "main" {
+						label = "主工作区"
+					}
+					a.sidebarItem(c, w, label, true, false, nil)
+					a.sessionRows(c, w, agentSessions(w.Terminals))
 				}
 			})
 		}
@@ -276,9 +292,36 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 	a.reorderable(c, group, p.ID)
 }
 
-// disclosure 是项目行尾的展开箭头，展开时转向下。
-func disclosure(c *ui.Context, open *bool, n int) {
-	label := fmt.Sprintf("展开 %d 个工作区", n)
+// navIndent 是侧栏下一层相对上一层的缩进。
+const navIndent = 22
+
+// projectHeader 是有多个工作区的项目的标题行：只管展开收起，不选中工作区；收起时汇总所有工作区的终端。
+func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool) {
+	t := c.Theme()
+	running, status := 0, ""
+	for i := range ws {
+		r, s := terminalSummary(ws[i].Terminals)
+		running += r
+		if statusRank(s) > statusRank(status) {
+			status = s
+		}
+	}
+	trailing := func() {
+		if !*open {
+			summaryTrailing(c, running, status)
+		}
+		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
+	}
+	icon := func() { ui.Icon(c, iconFolder).FontSize(16).TextColor(t.Accent).Shrink(0) }
+	row := a.navRowAt(c, "head", false, icon, p.Name, shortPath(ws[0].Path), "", trailing)
+	if row.Clicked() {
+		*open = !*open
+	}
+	row.ContextMenu(func(m *ui.Menu) { a.workspaceMenu(m, ws[0]) })
+}
+
+// disclosure 是行尾的展开箭头，展开时转向下；label 是收起时的说明。
+func disclosure(c *ui.Context, open *bool, label string) {
 	if *open {
 		label = "收起"
 	}
@@ -302,29 +345,52 @@ func disclosure(c *ui.Context, open *bool, n int) {
 	}
 }
 
-// sidebarItem 是侧栏里的一个工作区；also 的终端也计入运行数和状态（收起的子工作区），
-// extra 画在行尾最后（展开箭头）。
-func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []workspace, extra func()) ui.Element {
-	t := c.Theme()
-	running, status := terminalSummary(w.Terminals)
-	for i := range also {
-		r, s := terminalSummary(also[i].Terminals)
-		running += r
-		if statusRank(s) > statusRank(status) {
-			status = s
+// summaryTrailing 是行尾的运行终端数和最要紧的状态。
+func summaryTrailing(c *ui.Context, running int, status string) {
+	if status == agent.StatusWaiting {
+		pendingLabel(c)
+	} else if running > 0 {
+		ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
+	}
+	if status != "" {
+		statusGlyph(c, status, 12)
+	}
+}
+
+// agentSessions 是侧栏列出的会话：运行中的 agent 终端，普通 shell 只在标签栏。
+func agentSessions(ts []terminalInfo) []terminalInfo {
+	var out []terminalInfo
+	for _, t := range ts {
+		if t.Agent != "" && t.Running {
+			out = append(out, t)
 		}
+	}
+	return out
+}
+
+// selectedSession 返回工作区当前显示的 agent 会话；当前是 shell、文件或没有终端时为空。
+func (a *app) selectedSession(w *workspace) string {
+	if w == nil || a.filesActive(w) {
+		return ""
+	}
+	if cur := a.currentTerminal(w); cur != nil && cur.Agent != "" && cur.Running {
+		return cur.ID
+	}
+	return ""
+}
+
+// sidebarItem 是侧栏里的一个工作区。nested 表示在项目标题下面（主工作区和同目录工作区的路径标题行已经写了）；
+// collapsed 表示它的会话收起了，这时行尾汇总会话状态，当前会话也算选中这一行。extra 画在行尾最后（展开箭头）。
+func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, collapsed bool, extra func()) ui.Element {
+	running, status := terminalSummary(w.Terminals)
+	if !collapsed && len(agentSessions(w.Terminals)) > 0 {
+		// 会话在下面各自显示状态
+		status = ""
 	}
 	var trailing func()
 	if status != "" || running > 0 || extra != nil {
 		trailing = func() {
-			if status == agent.StatusWaiting {
-				pendingLabel(c)
-			} else if running > 0 {
-				ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
-			}
-			if status != "" {
-				statusGlyph(c, status, 12)
-			}
+			summaryTrailing(c, running, status)
 			if extra != nil {
 				extra()
 			}
@@ -333,6 +399,9 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []works
 	// worktree 都在 $HIVE_HOME/worktrees 下，路径截断后看不出什么，改显示分支；
 	// 分支默认和工作区同名，同名时只留一行
 	sub := shortPath(w.Path)
+	if nested {
+		sub = ""
+	}
 	if w.Kind == "worktree" {
 		sub = w.Branch
 		if sub == label {
@@ -344,41 +413,112 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, also []works
 	if w.Kind != "worktree" {
 		branch = w.Branch
 	}
-	item := a.navRow(c, w.ID, workspaceIcon(w.Kind), label, sub, branch, trailing)
-	if a.revealSel && w.ID == a.selected {
+	selected := a.selected == w.ID && (collapsed || a.selectedSession(a.workspace(w.ID)) == "")
+	if selected || collapsed || len(agentSessions(w.Terminals)) == 0 {
+		a.navOrder = append(a.navOrder, navTarget{ws: w.ID})
+		if selected {
+			a.navCur = len(a.navOrder) - 1
+		}
+	}
+	t := c.Theme()
+	icon := func() { ui.Icon(c, workspaceIcon(w.Kind)).FontSize(16).TextColor(t.Accent).Shrink(0) }
+	item := a.navRowAt(c, w.ID, selected, icon, label, sub, branch, trailing)
+	if item.Clicked() {
+		a.selected = w.ID
+	}
+	if a.revealSel && selected {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
-	item.ContextMenu(func(m *ui.Menu) {
-		for _, ag := range agentChoices {
-			if m.Item("启动 " + agentTitle(ag)).Chosen() {
-				a.startTerminal(w.ID, ag)
+	item.ContextMenu(func(m *ui.Menu) { a.workspaceMenu(m, w) })
+	return item
+}
+
+// sessionRows 把工作区里的 agent 会话缩进列在它下面，单击切到对应的终端标签。
+func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
+	if len(sessions) == 0 {
+		return
+	}
+	cur := ""
+	if a.selected == w.ID {
+		cur = a.selectedSession(a.workspace(w.ID))
+	}
+	ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
+		for _, term := range sessions {
+			selected := cur == term.ID
+			a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
+			if selected {
+				a.navCur = len(a.navOrder) - 1
 			}
-		}
-		if m.Item("打开终端").Chosen() {
-			a.startTerminal(w.ID, "")
-		}
-		m.Separator()
-		if m.Item("在访达中打开").Chosen() {
-			if err := mygo.Shell.OpenPath(w.Path); err != nil {
-				a.err = "在访达中打开失败：" + err.Error()
+			// 和标签一样：任务 worker 用任务标题
+			name, detail := tabLabel(term)
+			if title, ok := a.workerTitle[term.ID]; ok {
+				detail = title
 			}
-		}
-		m.Separator()
-		if m.Item("在此项目新建工作区…").Chosen() {
-			a.openNewWorkspace()
-			a.newProject = w.Project
-		}
-		// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
-		if w.Kind == "main" {
-			if m.Item("移除项目…").Chosen() {
-				a.askRemoveProject(w)
+			if detail == "" {
+				detail = name
 			}
-		} else if m.Item("删除工作区…").Chosen() {
-			a.askRemoveWorkspace(w)
+			status := ""
+			if term.AgentState != nil {
+				status = term.AgentState.Status
+			}
+			var trailing func()
+			if status != "" {
+				trailing = func() {
+					if status == agent.StatusWaiting {
+						pendingLabel(c)
+					}
+					statusGlyph(c, status, 12)
+				}
+			}
+			icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
+			row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
+			if row.Clicked() {
+				a.selected = w.ID
+				a.activeTerm[w.ID] = term.ID
+			}
+			if a.revealSel && selected {
+				row.ScrollIntoView()
+				a.revealSel = false
+			}
+			row.ContextMenu(func(m *ui.Menu) {
+				if m.Item("关闭会话…").Chosen() {
+					a.askClose(term)
+				}
+			})
 		}
 	})
-	return item
+}
+
+// workspaceMenu 是工作区行（和项目标题行）的右键菜单。
+func (a *app) workspaceMenu(m *ui.Menu, w workspace) {
+	for _, ag := range agentChoices {
+		if m.Item("启动 " + agentTitle(ag)).Chosen() {
+			a.startTerminal(w.ID, ag)
+		}
+	}
+	if m.Item("打开终端").Chosen() {
+		a.startTerminal(w.ID, "")
+	}
+	m.Separator()
+	if m.Item("在访达中打开").Chosen() {
+		if err := mygo.Shell.OpenPath(w.Path); err != nil {
+			a.err = "在访达中打开失败：" + err.Error()
+		}
+	}
+	m.Separator()
+	if m.Item("在此项目新建工作区…").Chosen() {
+		a.openNewWorkspace()
+		a.newProject = w.Project
+	}
+	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
+	if w.Kind == "main" {
+		if m.Item("移除项目…").Chosen() {
+			a.askRemoveProject(w)
+		}
+	} else if m.Item("删除工作区…").Chosen() {
+		a.askRemoveWorkspace(w)
+	}
 }
 
 // projectDrag 是侧栏里拖动的项目。
@@ -413,9 +553,22 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 // navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
 // 选中和悬停的样式见 selectable。
 func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
-	t := c.Theme()
 	selected := a.selected == id
-	a.navOrder = append(a.navOrder, id)
+	a.navOrder = append(a.navOrder, navTarget{ws: id})
+	if selected {
+		a.navCur = len(a.navOrder) - 1
+	}
+	accent := c.Theme().Accent
+	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(16).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
+	if row.Clicked() {
+		a.selected = id
+	}
+	return row
+}
+
+// navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
+func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), label, sub, branch string, trailing func()) ui.Element {
+	t := c.Theme()
 	height, gap := float32(32), float32(2)
 	switch {
 	case sub != "" && branch != "":
@@ -423,11 +576,11 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 	case sub != "" || branch != "":
 		height = 46
 	}
-	row := ui.Row(c.Key(id)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
 	selectable(c, row, selected)
 	row.Children(func() {
-		ui.Icon(c, icon).FontSize(16).TextColor(t.Accent).Shrink(0)
+		icon()
 		ui.Column(c).Gap(gap).Grow(1).Shrink(1).Children(func() {
 			text := ui.Text(c, label).FontSize(13).SingleLine()
 			if selected {
@@ -449,9 +602,6 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Shrink(0).Children(trailing)
 		}
 	})
-	if row.Clicked() {
-		a.selected = id
-	}
 	return row
 }
 
