@@ -116,13 +116,13 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if g.busy != "" {
 			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		}
-		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 28, 16)).Clicked() {
 			a.openLog(w, "", "")
 		}
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, "刷新", 28, 16)).Clicked() {
 			a.refreshGit(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "搁置全部改动（git stash，含未跟踪文件）", 24, 14)).Clicked() {
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "搁置全部改动（git stash，含未跟踪文件）", 28, 16)).Clicked() {
 			a.gitDo(v, "搁置", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, "") })
 		}
 	})
@@ -184,7 +184,8 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	e := r.entry
 	spec := changeSpec(e, false)
 	key := diffKey(g.absPath(e.Path), spec)
-	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
+	// 比组标题缩进一层：勾选框和组标题的文字对齐
+	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 30).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectable(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e, r.group)
