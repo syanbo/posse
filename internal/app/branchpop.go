@@ -310,7 +310,8 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	cur, _ := currentBranch(g.branches.list)
 	other, inOther := gitx.WorktreeOf(b, g.repo)
 	otherWs := a.workspaceAt(other)
-	row := ui.Row(c.Key(group+":"+b.Name)).Height(28).Padding(0, 10).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
+	// 左边多缩进一些，分支图标和组标题的文字对齐，一眼看出属于哪一组
+	row := ui.Row(c.Key(group+":"+b.Name)).Height(28).Padding(0, 10, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = p.wash
