@@ -566,8 +566,5 @@ func TestSessionButtons(t *testing.T) {
 		t.Fatal("buttons stay while the panel is open")
 	}
 	a.state.RightPanel = ""
-	tt.Frame()
-	if _, ok := tt.Find("这个会话用到的技能与 MCP"); ok {
-		t.Fatal("buttons should hide when the pointer leaves")
-	}
+	until(t, tt, "faded out", func() bool { _, ok := tt.Find("这个会话用到的技能与 MCP"); return !ok })
 }

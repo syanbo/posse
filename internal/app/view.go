@@ -684,12 +684,18 @@ func (a *app) sessionButtons(c *ui.Context, area ui.Element, cur *terminalInfo) 
 		return
 	}
 	open := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
-	if !area.Hovered() && !open {
+	target := float32(0)
+	if area.Hovered() || open {
+		target = 1
+	}
+	// 淡入淡出，顺带往下滑一点；淡出走完才移除
+	shown := area.AnimateTo("session-buttons", target, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut})
+	if shown < 0.01 {
 		return
 	}
 	p := colors(c.Theme())
 	ui.Row(c).Absolute().Top(4).Right(6).Gap(2).Padding(2).Radius(8).Background(p.raised).
-		BorderWidth(1).BorderColor(p.line).Children(func() {
+		BorderWidth(1).BorderColor(p.line).Opacity(shown).Transform(ui.Translation(0, (shown-1)*4)).Children(func() {
 		if cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
 		}
