@@ -156,6 +156,8 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	// 对端没发关闭帧就断开时，websocket 库只返回读错误、不关底层连接，要自己关
+	defer ws.CloseNow()
 	// 图片上传按块发，每块不超过几百 KB
 	ws.SetReadLimit(4 << 20)
 	ctx, cancel := context.WithCancel(r.Context())

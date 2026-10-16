@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -341,4 +342,39 @@ func TestResolveEndpoint(t *testing.T) {
 			t.Errorf("ResolveEndpoint(%q) = %q, want error", in, got)
 		}
 	}
+}
+
+// 手机不发关闭帧直接断开（断网、App 被杀）时，服务端也要关掉自己这一端的连接。
+func TestAbruptDisconnectReleasesConn(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := openFDs(t)
+	for range 3 {
+		p := dialPhone(t, srv, info)
+		result(t, p.next(p.call("status.get", nil)))
+		p.ws.CloseNow()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for openFDs(t) > base {
+		if time.Now().After(deadline) {
+			t.Fatalf("server kept %d connections open after the phones dropped", openFDs(t)-base)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func openFDs(t *testing.T) int {
+	es, err := os.ReadDir("/dev/fd")
+	if err != nil {
+		t.Skip(err)
+	}
+	return len(es)
 }
