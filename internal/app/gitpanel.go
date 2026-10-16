@@ -115,7 +115,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	staged := r.group == groupStaged
 	spec := changeSpec(e, staged)
 	key := diffKey(g.absPath(e.Path), spec)
-	row := ui.Row(c.Key(key)).Height(26).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
+	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectable(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e, r.group)
@@ -130,7 +130,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	}
 	row.Children(func() {
 		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
-		name := ui.Text(c, filepath.Base(e.Path)).FontSize(12.5).SingleLine().Shrink(0)
+		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
@@ -213,12 +213,12 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 
 func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	t := c.Theme()
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(26).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
+	row := ui.Row(c.Key("stash:"+s.Ref)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectable(c, row, false)
 	row.Children(func() {
-		ui.Icon(c, iconShelve).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, stashTitle(s.Message)).FontSize(12).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
+		ui.Icon(c, iconShelve).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, stashTitle(s.Message)).FontSize(13).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
 		ui.Text(c, ago(s.When)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
 	row.Menu(func(m *ui.Menu) {

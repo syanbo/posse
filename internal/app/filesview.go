@@ -49,7 +49,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	v.treeList.Key = func(i int) any { return rows[i].Path }
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
-		row := ui.Row(c.Key(r.Path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*14).Gap(5).Radius(6).
+		row := ui.Row(c.Key(r.Path)).Height(28).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*16).Gap(6).Radius(6).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectable(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -59,13 +59,13 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				if v.tree.Expanded(r.Path) {
 					turn = 90
 				}
-				ui.Icon(c, iconChevron).FontSize(11).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				ui.Icon(c, iconFolder).FontSize(14).TextColor(t.Accent).Shrink(0)
+				ui.Icon(c, iconChevron).FontSize(12).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
+				ui.Icon(c, iconFolder).FontSize(15).TextColor(t.Accent).Shrink(0)
 			} else {
-				ui.Box(c).Width(11).Shrink(0)
-				ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+				ui.Box(c).Width(12).Shrink(0)
+				ui.Icon(c, iconFile).FontSize(15).TextColor(t.TextMuted).Shrink(0)
 			}
-			name := ui.Text(c, r.Name).FontSize(12.5).SingleLine().Shrink(1).Grow(1)
+			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if ignored {
 				name.TextColor(t.TextMuted)
 			}
@@ -175,8 +175,8 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		if r.header {
 			row := ui.Row(c).Padding(8, 12, 3, 14).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
-				ui.Icon(c, iconFile).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-				ui.Text(c, filepath.Base(h.Path)).FontSize(12).FontWeight(500).SingleLine().Shrink(0)
+				ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, filepath.Base(h.Path)).FontSize(13).FontWeight(500).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
 					ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
