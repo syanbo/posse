@@ -65,17 +65,22 @@ func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files b
 
 func (a *app) loadCompare(v *filesView, d *fileDoc) {
 	cd, root := d.comp, v.git.repo
+	other, cur := cd.other, cd.cur
 	go func() {
 		ctx := context.Background()
 		var onlyOther, onlyCur []gitx.CommitInfo
 		var changes []gitx.FileChange
 		var err error
 		if cd.files {
-			changes, err = gitx.DiffWithWorkingTree(ctx, root, cd.other)
-		} else if onlyOther, err = gitx.CommitsBetween(ctx, root, cd.cur, cd.other, 1000); err == nil {
-			onlyCur, err = gitx.CommitsBetween(ctx, root, cd.other, cd.cur, 1000)
+			changes, err = gitx.DiffWithWorkingTree(ctx, root, other)
+		} else if onlyOther, err = gitx.CommitsBetween(ctx, root, cur, other, 1000); err == nil {
+			onlyCur, err = gitx.CommitsBetween(ctx, root, other, cur, 1000)
 		}
 		a.update(func() {
+			// 读的时候用户点了交换：结果跟着对调
+			if cd.other != other {
+				onlyOther, onlyCur = onlyCur, onlyOther
+			}
 			if err != nil {
 				d.kind, d.err = docError, err.Error()
 				return
@@ -167,6 +172,11 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 		ui.Text(c, cd.cur).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
+			// 对调后的比较已经开着就切过去，不留两个同样的标签
+			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.cur, cd.other, false) }); i >= 0 {
+				v.cur = v.docs[i]
+				return
+			}
 			cd.other, cd.cur = cd.cur, cd.other
 			cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
 			cd.listOther, cd.listCur = cd.listCur, cd.listOther
