@@ -194,15 +194,18 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	panel.Children(func() {
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Children(func() { fieldInput(c, &bp.query, "搜索分支").AutoFocus() })
-			busy := g.busy == "Fetch"
-			fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取", 28, 15))
-			if busy {
-				fetch.Opacity(0.4)
-			} else if fetch.Clicked() {
+			// Fetch 进行中按钮换成转圈，不另起一行文字
+			if g.busy == "Fetch" {
+				ui.Row(c).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+					ui.Spinner(c).Label("正在 Fetch")
+				})
+			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取", 28, 15)); g.busy == "" && fetch.Clicked() {
 				a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
+			} else if g.busy != "" {
+				fetch.Opacity(0.4)
 			}
 		})
-		if g.busy != "" {
+		if g.busy != "" && g.busy != "Fetch" {
 			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Padding(0, 10, 4, 10)
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
