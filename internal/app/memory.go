@@ -35,6 +35,20 @@ type memTerminal struct {
 
 const memRefresh = 3 * time.Second
 
+// terminalsFootprint 是所有运行中终端的进程树内存之和（KB）。
+func terminalsFootprint(ws []workspace) int64 {
+	children := procmem.Children()
+	var kb int64
+	for _, w := range ws {
+		for _, t := range w.Terminals {
+			if t.Running && t.Pid > 0 {
+				kb += int64(procmem.TreeFootprint(t.Pid, children) >> 10)
+			}
+		}
+	}
+	return kb
+}
+
 // loadMemory 在后台统计各终端的进程树。
 func (a *app) loadMemory() {
 	type job struct {
@@ -77,11 +91,11 @@ func (a *app) loadMemory() {
 	}()
 }
 
-// memoryButton 是底栏右边的终端数和内存，点开看各工作区。
+// memoryButton 是底栏右边的终端数和总内存（hive 自己加上终端里的程序），点开看各工作区。
 func (a *app) memoryButton(c *ui.Context) {
 	t := c.Theme()
 	m := &a.mem
-	total := a.daemon.FootprintKB + a.selfKB
+	total := a.daemon.FootprintKB + a.selfKB + a.termKB
 	n := a.daemon.Running
 	b := ui.Row(c.Key("memory")).Height(24).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(fmt.Sprintf("%d 个终端在运行，内存 %s", n, mb(total))).Tooltip("终端和内存")
@@ -149,7 +163,11 @@ func (a *app) memoryPanel(c *ui.Context) {
 	ui.Column(c).Width(320).Gap(14).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			titleText(c, "内存", fsCardTitle).Grow(1)
-			ui.Text(c, mb(a.daemon.FootprintKB+a.selfKB+m.terms)).FontSize(fsCardTitle).FontWeight(500).FontFeatures("tnum")
+			terms := a.termKB
+			if m.rows != nil {
+				terms = m.terms
+			}
+			ui.Text(c, mb(a.daemon.FootprintKB+a.selfKB+terms)).FontSize(fsCardTitle).FontWeight(500).FontFeatures("tnum")
 		})
 		ui.Column(c).Children(func() {
 			memSection(c, "HIVE", mb(a.daemon.FootprintKB+a.selfKB))

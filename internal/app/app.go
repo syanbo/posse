@@ -100,6 +100,7 @@ type app struct {
 	tasks      []taskInfo
 	daemon     daemonStatus
 	selfKB     int64
+	termKB     int64 // 所有终端进程树的内存，底栏的总内存要加上它
 	loaded     bool
 	err        string
 
@@ -119,7 +120,9 @@ type app struct {
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
 	lastPoll  *pollResult
 	diffAt    map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	pollForce atomic.Bool          // 下一次轮询无论有没有变化都交给界面
+	termAt    time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm  int64
+	pollForce atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	view      *termView
 	fontSize  float32
 	home      string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
@@ -294,6 +297,7 @@ type pollResult struct {
 	diffFor    string
 	daemonKB   int64
 	selfKB     int64
+	termKB     int64
 }
 
 func (a *app) refresh() {
@@ -351,8 +355,12 @@ func (a *app) refresh() {
 			}
 		}
 		self := int64(procmem.Footprint(os.Getpid()) >> 10)
-		r.running, r.daemonKB, r.selfKB = st.Running, st.FootprintKB, self
-		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self)
+		// 终端的进程树每 5 秒统计一次：几十个进程，几毫秒
+		if time.Since(a.termAt) > 5*time.Second {
+			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
+		}
+		r.running, r.daemonKB, r.selfKB, r.termKB = st.Running, st.FootprintKB, self, a.lastTerm
+		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 	}
 	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
 	if r.diff == nil && a.lastPoll != nil && a.lastPoll.diffFor != "" {
@@ -373,7 +381,7 @@ func (a *app) refresh() {
 		if prevErr {
 			a.err = ""
 		}
-		a.daemon, a.selfKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running}, r.selfKB
+		a.daemon, a.selfKB, a.termKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running}, r.selfKB, r.termKB
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
 		a.applyTasks(r.tasks)
@@ -391,6 +399,7 @@ func (a *app) refresh() {
 func samePoll(x, y *pollResult) bool {
 	a, b := *x, *y
 	a.daemonKB, a.selfKB, b.daemonKB, b.selfKB = 0, 0, 0, 0
+	a.termKB, b.termKB = 0, 0
 	return reflect.DeepEqual(a, b)
 }
 

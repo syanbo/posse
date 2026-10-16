@@ -89,7 +89,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - Git 日志：标签栏右侧常驻入口（分支按钮旁）。左边分支树照 WebStorm 分 HEAD、本地、远程（按远端分组）、标签，点一项只看它的提交，再点一次回到全部分支；分支和标签随分支弹窗一起读（`loadBranches`）。
   - 强制推送一律 `--force-with-lease`。改提交信息、和上一个提交合并、删除提交用交互式 rebase，hive 生成脚本改写待办列表和提交信息（`rebaseTodo`），不打开编辑器；范围里有合并提交时拒绝。rebase、合并等停在冲突上时，改动列表顶部有继续 / 跳过 / 中止的横幅，冲突文件可以整个采用一方（rebase 时 ours 是目标分支）。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
-- 底栏的内存按钮打开浮窗：hive 自己（常驻进程、窗口）和各工作区终端里的程序。终端按 `terminalInfo.Pid` 统计整棵进程树的 phys_footprint（`procmem.TreeFootprint`，子进程关系取自 sysctl `kern.proc.all`），只在浮窗开着时每 3 秒算一次，不经过常驻进程。
+- 底栏的内存按钮打开浮窗：hive 自己（常驻进程、窗口）和各工作区终端里的程序。终端按 `terminalInfo.Pid` 统计整棵进程树的 phys_footprint（`procmem.TreeFootprint`，子进程关系取自 sysctl `kern.proc.all`），浮窗开着时每 3 秒按工作区算一次；底栏显示的是总内存（hive 自己加终端），终端合计在每秒的轮询里每 5 秒算一次，按 MB 变了才重建界面。都不经过常驻进程。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。面板顶上是每个技能、MCP 服务的次数，下面是时间线（`Usage.Events`，取每行的 timestamp，grok、cursor 的会话文件没有时间），连着调同一个工具合成一项。
 - agent 图标（`brandIcon`）：Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons，都是单色填充路径，放在各家颜色的方块里。
 - 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
