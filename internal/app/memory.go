@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"time"
@@ -107,16 +108,22 @@ func (a *app) loadMemory() {
 			jobs = append(jobs, job{w, ts})
 		}
 	}
+	// 进程明细要逐个读 argv，只给展开了的终端算
+	expanded := maps.Clone(a.mem.expanded)
 	go func() {
 		children := procmem.Children()
-		var rows []memWorkspace
+		rows := []memWorkspace{} // 非 nil：nil 表示还没统计完
 		var total int64
 		for _, j := range jobs {
 			r := memWorkspace{id: j.ws.ID, label: displayName(&j.ws)}
 			for _, t := range j.terms {
 				kb := int64(procmem.TreeFootprint(t.Pid, children) >> 10)
 				r.kb += kb
-				r.terms = append(r.terms, memTerminal{t, kb, memBreakdown(t.Pid, children)})
+				var procs []memProc
+				if expanded[t.ID] {
+					procs = memBreakdown(t.Pid, children)
+				}
+				r.terms = append(r.terms, memTerminal{t, kb, procs})
 			}
 			slices.SortFunc(r.terms, func(x, y memTerminal) int { return cmp.Compare(y.kb, x.kb) })
 			total += r.kb
@@ -127,6 +134,14 @@ func (a *app) loadMemory() {
 			m := &a.mem
 			m.poll.done()
 			m.rows, m.terms = rows, total
+			// 统计途中才展开的终端没有明细，接着再统计一次
+			for _, r := range rows {
+				for _, x := range r.terms {
+					if m.expanded[x.term.ID] && x.procs == nil {
+						m.poll.at = time.Time{}
+					}
+				}
+			}
 		})
 	}()
 }
@@ -265,6 +280,12 @@ func (a *app) memoryPanel(c *ui.Context) {
 										m.expanded = map[string]bool{}
 									}
 									m.expanded[x.term.ID] = !open
+									if !open && x.procs == nil && !m.poll.busy {
+										m.poll.at = time.Time{} // 马上统计这个终端的明细
+									}
+								}
+								if open && x.procs == nil {
+									memLine(c, x.term.ID+"-loading", nil, "正在统计…", "", 3)
 								}
 								if open {
 									for i, pr := range x.procs {
