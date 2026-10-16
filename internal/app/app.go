@@ -149,7 +149,8 @@ type app struct {
 	unsaved *unsavedAsk           // 问要不要保存修改的对话框
 	// Git：分支弹窗、输入框对话框、Push 对话框
 	branchPop   *branchPopup
-	branchFolds map[string]bool // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
+	branchFolds map[string]bool
+	track       map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用 // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
 	promptDlg   *promptState
 	push        *pushState
 	// 关窗口和退出的钩子里要读，用原子量

@@ -61,12 +61,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		}
 		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, head).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
-		if st.Ahead > 0 {
-			ui.Text(c, fmt.Sprintf("↑%d", st.Ahead)).FontSize(11).FontFeatures("tnum").TextColor(colors(t).sage).Tooltip(fmt.Sprintf("有 %d 个提交还没推送", st.Ahead)).Shrink(0)
-		}
-		if st.Behind > 0 {
-			ui.Text(c, fmt.Sprintf("↓%d", st.Behind)).FontSize(11).FontFeatures("tnum").TextColor(t.Accent).Tooltip(fmt.Sprintf("远端有 %d 个提交还没拉取", st.Behind)).Shrink(0)
-		}
+		trackBadge(c, st.Ahead, st.Behind, true)
 		ui.Spacer(c)
 		if g.busy != "" {
 			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Shrink(0)

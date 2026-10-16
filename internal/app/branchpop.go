@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -70,11 +71,83 @@ func (a *app) loadBranches(v *filesView) {
 	}()
 }
 
-// branchButton 是标签栏右边的分支名，点开分支弹窗。
+// trackInfo 是当前分支相对跟踪的远端分支的传入、传出提交数。
+type trackInfo struct {
+	ahead, behind int
+	poll          panelPoll
+}
+
+// trackRefresh 是分支按钮多久重算一次传入、传出；只用本地已有的远端引用，几毫秒。
+const trackRefresh = 10 * time.Second
+
+// pollTrack 在分支按钮画出来时调用，到点了在后台重算。
+func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
+	if a.track == nil {
+		a.track = map[string]*trackInfo{}
+	}
+	tr := a.track[w.ID]
+	if tr == nil {
+		tr = &trackInfo{}
+		a.track[w.ID] = tr
+	}
+	if tr.poll.due(c, trackRefresh) {
+		dir := w.Path
+		go func() {
+			ahead, behind, _ := gitx.AheadBehind(context.Background(), dir)
+			a.update(func() {
+				tr.ahead, tr.behind = ahead, behind
+				tr.poll.done()
+			})
+		}()
+	}
+	return tr
+}
+
+// trackTip 是分支按钮的悬停提示：分支名和传入、传出的提交数。
+func trackTip(branch string, tr *trackInfo) string {
+	tip := "Git 分支：" + branch
+	if tr.behind > 0 {
+		tip += fmt.Sprintf("\n%d 个传入提交", tr.behind)
+	}
+	if tr.ahead > 0 {
+		tip += fmt.Sprintf("\n%d 个传出提交", tr.ahead)
+	}
+	return tip
+}
+
+// incomingColor 是传入提交的蓝色，传出用 sage 绿，和 WebStorm 一样分开。
+func incomingColor(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.Hex("#7AA2F7")
+	}
+	return ui.Hex("#3B6FD9")
+}
+
+// trackBadge 是传入（↙ 蓝）、传出（↗ 绿）的箭头和数字；showCount 为假时只画箭头（标签栏的分支按钮）。
+func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
+	t := c.Theme()
+	item := func(icon *ui.SVG, color ui.Color, n int, tip string) {
+		ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
+			ui.Icon(c, icon).FontSize(12).TextColor(color).Shrink(0)
+			if showCount {
+				ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(color)
+			}
+		})
+	}
+	if behind > 0 {
+		item(iconFetch, incomingColor(t), behind, fmt.Sprintf("%d 个传入提交（远端有、还没拉取）", behind))
+	}
+	if ahead > 0 {
+		item(iconPush, colors(t).sage, ahead, fmt.Sprintf("%d 个传出提交（本地有、还没推送）", ahead))
+	}
+}
+
+// branchButton 是标签栏右边的分支名，点开分支弹窗；有传入、传出提交时名字后面带箭头。
 func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
+	tr := a.pollTrack(c, w)
 	b := ui.Row(c.Key("branch")).Height(26).Padding(0, 6, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(1).
-		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip("Git 分支")
+		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip(trackTip(w.Branch, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
 	switch {
@@ -90,6 +163,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	b.Children(func() {
 		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, w.Branch).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		trackBadge(c, tr.ahead, tr.behind, false)
 		ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted).Shrink(0)
 	})
 	if b.Clicked() {
@@ -327,12 +401,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		if b.Current {
 			name.FontWeight(500)
 		}
-		if b.Ahead > 0 {
-			ui.Text(c, fmt.Sprintf("↑%d", b.Ahead)).FontSize(11).FontFeatures("tnum").TextColor(p.sage).Tooltip(fmt.Sprintf("%d 个提交待推送", b.Ahead)).Shrink(0)
-		}
-		if b.Behind > 0 {
-			ui.Text(c, fmt.Sprintf("↓%d", b.Behind)).FontSize(11).FontFeatures("tnum").TextColor(t.Accent).Tooltip(fmt.Sprintf("远端有 %d 个提交待拉取", b.Behind)).Shrink(0)
-		}
+		trackBadge(c, b.Ahead, b.Behind, true)
 		ui.Spacer(c)
 		switch {
 		case inOther && otherWs != nil:

@@ -57,6 +57,22 @@ func Branches(ctx context.Context, dir string) ([]Branch, error) {
 	return list, nil
 }
 
+// AheadBehind 返回当前分支比它跟踪的远端分支多几个提交（传出）、少几个（传入）；没有跟踪分支时 ok 为 false。
+// 只比本地已有的远端引用，不联网：要看远端最新的得先 Fetch。
+func AheadBehind(ctx context.Context, dir string) (ahead, behind int, ok bool) {
+	out, err := run(ctx, dir, "rev-list", "--left-right", "--count", "HEAD...@{upstream}")
+	if err != nil {
+		return 0, 0, false
+	}
+	f := strings.Fields(out)
+	if len(f) != 2 {
+		return 0, 0, false
+	}
+	ahead, _ = strconv.Atoi(f[0])
+	behind, _ = strconv.Atoi(f[1])
+	return ahead, behind, true
+}
+
 // Tags 列出标签，新的在前。
 func Tags(ctx context.Context, dir string) ([]string, error) {
 	out, err := run(ctx, dir, "for-each-ref", "--sort=-creatordate", "--format=%(refname:short)", "refs/tags")

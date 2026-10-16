@@ -175,3 +175,27 @@ func TestTags(t *testing.T) {
 		t.Fatalf("tags: %v %v", tags, err)
 	}
 }
+
+func TestAheadBehind(t *testing.T) {
+	ctx := context.Background()
+	dir, bare := withRemote(t)
+	if a, b, ok := AheadBehind(ctx, dir); !ok || a != 0 || b != 0 {
+		t.Fatalf("in sync: %d %d %v", a, b, ok)
+	}
+	other := clone(t, bare)
+	write(t, filepath.Join(other, "x.txt"), "x\n")
+	gitIn(t, other, "add", ".")
+	gitIn(t, other, "commit", "-q", "-m", "x")
+	gitIn(t, other, "push", "-q")
+	write(t, filepath.Join(dir, "y.txt"), "y\n")
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-q", "-m", "y")
+	gitIn(t, dir, "fetch", "-q")
+	if a, b, ok := AheadBehind(ctx, dir); !ok || a != 1 || b != 1 {
+		t.Fatalf("diverged: %d %d %v", a, b, ok)
+	}
+	gitIn(t, dir, "switch", "-q", "-c", "local-only")
+	if _, _, ok := AheadBehind(ctx, dir); ok {
+		t.Fatal("branch without upstream should report !ok")
+	}
+}
