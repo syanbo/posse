@@ -331,7 +331,7 @@ func (a *app) taskBoard(c *ui.Context) {
 			ended++
 		}
 	}
-	band(c, func() {
+	a.band(c, func() {
 		titleText(c, "任务", fsCardTitle)
 		ui.Spacer(c)
 		if ended > 0 {

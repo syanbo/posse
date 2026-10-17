@@ -274,20 +274,6 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
-	switch {
-	case d.log != nil && d.kind == docLog:
-		a.logView(c, w, v, d)
-		return
-	case d.blame != nil && d.kind == docBlame:
-		a.blameView(c, w, v, d)
-		return
-	case (d.log != nil || d.blame != nil) && d.kind == docError:
-		docMessage(c, d, d.err)
-		return
-	case d.log != nil || d.blame != nil:
-		ui.Text(c, "正在读取…").FontSize(12).TextColor(c.Theme().TextMuted).Padding(16, 18)
-		return
-	}
 	if d.comp != nil {
 		if d.kind == docCompare {
 			a.compareView(c, w, v, d)
@@ -307,22 +293,33 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		} else {
 			docMessage(c, d, d.err)
 		}
+		diffHint(c, d.diff)
 		return
 	}
 	a.docBar(c, w, v, d)
 	a.docBanner(c, d)
 	switch d.kind {
 	case docText:
+		// Annotate 开着时在这个标签里显示逐行作者，关掉回到编辑器
+		if d.blame != nil {
+			a.blameView(c, w, v, d)
+			return
+		}
 		if d.preview && isMarkdown(d.path) {
 			markdownPreview(c, d)
 			return
 		}
 		d.ed.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
-		el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Grow(1).AutoFocus()
-		if d.focus {
-			el.Focus()
-			d.focus = false
-		}
+		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
+		// 包一层：改动卡片按行的位置浮在编辑器上面
+		ui.Box(c).Grow(1).Children(func() {
+			el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Fill().AutoFocus()
+			if d.focus {
+				el.Focus()
+				d.focus = false
+			}
+			a.changePopup(c, w, v, d)
+		})
 		d.shown++
 		if d.gotoLine > 0 {
 			// 编辑器第一帧还没有尺寸，跳行要等它排过版
@@ -391,8 +388,6 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 			detail = d.diff.tabLabel()
 		case d.comp != nil:
 			detail = "比较"
-		case d.log != nil && d.log.filter.Path != "":
-			detail = "文件历史"
 		case names[d.name()] > 1:
 			detail = filepath.Base(filepath.Dir(d.path))
 		}
@@ -400,13 +395,9 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
-// docIcon 是文件标签的图标：Git 日志、Annotate、分支比较用各自的图标，其余是文件。
+// docIcon 是文件标签的图标：分支比较用分支图标，其余是文件。
 func docIcon(d *fileDoc) *ui.SVG {
 	switch {
-	case d.log != nil:
-		return iconGitLog
-	case d.blame != nil:
-		return iconBlame
 	case d.comp != nil:
 		return iconBranch
 	}
@@ -507,8 +498,17 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			if pressable(iconButtonSized(c, iconHistory, "文件历史", 24, 14)).Clicked() {
 				a.openLog(w, "", v.git.relPath(d.path))
 			}
-			if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", 24, 14)).Clicked() {
+			if d.blame != nil {
+				if pressable(textButton(c, "关闭 Annotate")).Clicked() {
+					d.blame = nil
+				}
+			} else if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", 24, 14)).Clicked() {
 				a.openBlame(w, v, d.path)
+			}
+			if e := v.git.entry(d.path); e != nil && !e.Conflict {
+				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", 24, 14)).Clicked() {
+					a.rollbackDoc(v, d)
+				}
 			}
 		}
 		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", 24, 14)).Clicked() {

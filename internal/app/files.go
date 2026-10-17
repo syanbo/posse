@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -45,7 +46,6 @@ const (
 	docDiff    // Git 的 diff 标签页（gitview.go）
 	docCompare // 分支比较（compare.go）
 	docLog     // Git 日志（logview.go）
-	docBlame   // Annotate（logview.go）
 )
 
 // fileDoc 是文件标签里打开的一个文件。
@@ -78,10 +78,12 @@ type fileDoc struct {
 	edRef    ui.Ref
 	started  bool // 已经开始读文件
 	// diff 不为空时这是一个 diff 标签页，path 是 diffKey；comp 不为空时是分支比较，path 是 compareKey
-	diff  *diffDoc
-	comp  *compareDoc
-	log   *logDoc
-	blame *blameDoc
+	diff *diffDoc
+	comp *compareDoc
+	log  *logDoc
+	// change 是编辑器行号旁改动标记弹出的卡片（changepop.go），nil 是没开
+	change *changePop
+	blame  *blameDoc
 	// headBuf 是文件在 HEAD 里的内容，编辑器行号旁的改动标记以它为基准；headFor 是读它时的 HEAD
 	headBuf *editor.Buffer
 	headFor string
@@ -94,8 +96,8 @@ func (d *fileDoc) name() string {
 		}
 		return "Git 日志"
 	}
-	if d.blame != nil {
-		return filepath.Base(d.blame.rel)
+	if d.diff != nil {
+		return "差异：" + path.Base(d.diff.rel)
 	}
 	if cd := d.comp; cd != nil {
 		if cd.files {
@@ -108,7 +110,7 @@ func (d *fileDoc) name() string {
 
 // virtual 报告这个标签页不对应磁盘上的文件（diff、比较）：不轮询磁盘，不记进 ui.json。
 func (d *fileDoc) virtual() bool {
-	return d.diff != nil || d.comp != nil || d.log != nil || d.blame != nil
+	return d.diff != nil || d.comp != nil || d.log != nil
 }
 
 // isPreview 报告文档还是预览标签。改过内容就转为常驻，保存或撤销回原样之后也不会被下一次单击换掉。
@@ -167,7 +169,9 @@ type filesView struct {
 	side     int // 文件栏：sideFiles、sideSearch、sideChanges
 	search   fileSearch
 	poll     panelPoll
-	prevTerm string // 切到文件标签前选中的终端，关掉最后一个文件时切回去
+	prevTerm string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去
+	logs     []*fileDoc // 底部 Git 日志浮层里的日志和文件历史（logview.go），不在标签栏
+	logCur   *fileDoc
 	git      gitState
 }
 

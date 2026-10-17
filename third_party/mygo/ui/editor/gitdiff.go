@@ -125,3 +125,64 @@ func (ed *editor) revertHunks() bool {
 	}
 	return ed.apply(edits, editOther, nil)
 }
+
+// changeBarX is where the change bars are, from the editor's left
+// (Hive: shared by painting and OnChangeClick).
+func (ed *editor) changeBarX() float32 {
+	x := ed.gutterW - 4 - 3
+	if ed.o.folding && ed.o.decor == nil {
+		x -= ed.view.lineHeight * 0.8
+	}
+	return x
+}
+
+// BaseChange is a change against the DiffBase (Hive): lines OldStart up to
+// OldEnd of the base became lines NewStart up to NewEnd of the buffer,
+// one of the ranges empty where lines were only added or deleted. Old is
+// the base's lines.
+type BaseChange struct {
+	OldStart, OldEnd, NewStart, NewEnd int
+	Old                                string
+}
+
+// Changes returns the changes against the DiffBase, in order (Hive).
+func (st *State) Changes() []BaseChange {
+	if st.ed.gitDiff == nil {
+		return nil
+	}
+	d := &st.ed.gitDiff.d
+	out := make([]BaseChange, len(d.hunks))
+	for i, h := range d.hunks {
+		ch := BaseChange{OldStart: h.A0, OldEnd: h.A1, NewStart: h.B0, NewEnd: h.B1}
+		if h.A1 > h.A0 {
+			ch.Old = d.oldText.Slice(d.oldText.LineStart(h.A0), d.oldText.LineEnd(h.A1-1))
+		}
+		out[i] = ch
+	}
+	return out
+}
+
+// RevertChange puts back the base's lines of change i of Changes, as an
+// edit Undo takes back (Hive).
+func (st *State) RevertChange(i int) bool {
+	if st.ed.gitDiff == nil || st.ed.o.readOnly {
+		return false
+	}
+	d := &st.ed.gitDiff.d
+	if i < 0 || i >= len(d.hunks) {
+		return false
+	}
+	return st.ed.apply([]Edit{hunkEdit(d.hunks[i], d.oldText, d.newText)}, editOther, nil)
+}
+
+// LineBottom returns the bottom of line, relative to the editor's top
+// as it scrolls now (Hive).
+func (st *State) LineBottom(line int) float32 {
+	h := &st.ed.view.heights
+	n := st.ed.view.text.LineCount()
+	if n == 0 {
+		return 0
+	}
+	line = max(0, min(line, n-1))
+	return float32(float64(h.geometry(line).below) - st.ed.scrollY)
+}

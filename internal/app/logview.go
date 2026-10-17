@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
+	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -36,6 +38,7 @@ type logDoc struct {
 	reloaded time.Time
 	refsOpen map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
 	refQuery string
+	hist     *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
 }
 
 func logKey(f gitx.LogFilter) string {
@@ -45,14 +48,15 @@ func logKey(f gitx.LogFilter) string {
 	return "log:"
 }
 
-// openLog 打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支。
+// openLog 在底部浮层里打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支。
 func (a *app) openLog(w *workspace, branch, path string) {
-	v := a.showFiles(w)
+	v := a.filesFor(w)
 	f := gitx.LogFilter{Branch: branch, Path: path}
 	key := logKey(f)
-	for _, d := range v.docs {
+	a.setLogPanel(true)
+	for _, d := range v.logs {
 		if d.path == key {
-			v.cur = d
+			v.logCur = d
 			if d.log.filter.Branch != branch {
 				d.log.filter.Branch = branch
 				a.loadLog(v, d, false)
@@ -61,13 +65,164 @@ func (a *app) openLog(w *workspace, branch, path string) {
 		}
 	}
 	d := &fileDoc{path: key, log: &logDoc{filter: f}, started: true}
-	i := len(v.docs)
-	if j := slices.Index(v.docs, v.cur); j >= 0 {
-		i = j + 1
+	// 整个仓库的日志排在最前面，文件历史按打开的先后排在后面
+	if path == "" {
+		v.logs = slices.Insert(v.logs, 0, d)
+	} else {
+		v.logs = append(v.logs, d)
 	}
-	v.docs = slices.Insert(v.docs, i, d)
-	v.cur = d
+	v.logCur = d
 	a.loadLog(v, d, false)
+}
+
+func (a *app) setLogPanel(open bool) {
+	if a.state.LogPanel != open {
+		a.state.LogPanel = open
+		a.saveState()
+	}
+}
+
+// toggleLogPanel 是 ⌘9 和标签栏的日志按钮：开着就隐藏，关着就打开（还没有日志时打开整个仓库的）。
+func (a *app) toggleLogPanel(w *workspace) {
+	if a.state.LogPanel {
+		a.setLogPanel(false)
+		return
+	}
+	if v := a.filesFor(w); v.logCur == nil {
+		a.openLog(w, "", "")
+		return
+	}
+	a.setLogPanel(true)
+}
+
+// closeLog 关掉浮层里的一个文件历史；整个仓库的日志不关，只能隐藏浮层。
+func (a *app) closeLog(v *filesView, d *fileDoc) {
+	i := slices.Index(v.logs, d)
+	if i < 0 {
+		return
+	}
+	v.logs = slices.Delete(v.logs, i, i+1)
+	if v.logCur == d {
+		v.logCur = nil
+		if len(v.logs) > 0 {
+			v.logCur = v.logs[max(i-1, 0)]
+		}
+	}
+}
+
+// Git 日志浮层的高度，拖上边缘调整；上限还要给终端留出几行。
+const (
+	logPanelDefault = 340
+	logPanelMin     = 180
+	logPanelRoom    = 120
+)
+
+func (a *app) logPanelHeight(avail float32) float32 {
+	h := a.state.LogPanelHeight
+	if h == 0 {
+		h = logPanelDefault
+	}
+	if avail > 0 {
+		h = min(h, avail-logPanelRoom)
+	}
+	return max(h, logPanelMin)
+}
+
+// logPanel 是从终端那一栏底边滑上来的 Git 日志浮层，照 WebStorm 底部的 Git 工具窗口：盖在终端上面、不改终端尺寸
+// （改了里面的程序要按新行数重排），点别处不收，只有隐藏按钮、⌘9 和标签栏的日志按钮开关。
+// 顶上一排是日志和文件历史的小标签，拖上边缘调高度。body 是终端那一栏，按它的高度限制浮层高度。
+func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
+	open := float32(0)
+	if a.state.LogPanel && w.Branch != "" {
+		open = 1
+	}
+	shown := body.AnimateTo("log-panel", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
+	if shown < 0.01 {
+		return
+	}
+	v := a.filesFor(w)
+	if v.logCur == nil {
+		if open == 0 {
+			return
+		}
+		a.openLog(w, "", "")
+	}
+	t := c.Theme()
+	p := colors(t)
+	h := a.logPanelHeight(body.Bounds().H)
+	panel := ui.Column(c.Key("log-panel")).Absolute().Left(0).Right(0).Bottom(-(1-shown)*h).Height(h).
+		Background(p.card).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
+	panel.Children(func() {
+		ui.Row(c).Height(34).Shrink(0).Padding(0, 10, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
+			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+			// 点 × 会在这次遍历里关掉文件历史：遍历副本
+			for _, d := range slices.Clone(v.logs) {
+				a.logTab(c, v, d)
+			}
+			ui.Spacer(c)
+			if iconButton(c.Key("log-hide"), iconMinus, "隐藏 ⌘9").Clicked() {
+				a.setLogPanel(false)
+			}
+		})
+		d := v.logCur
+		switch {
+		case d == nil:
+		case d.kind == docLog:
+			a.logView(c, w, v, d)
+		case d.kind == docError:
+			docMessage(c, d, d.err)
+		default:
+			ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		}
+		// 拖上边缘调高度，松手才写 ui.json
+		grip := ui.Box(c.Key("log-panel-grip")).Absolute().Left(0).Right(0).Top(-3).Height(6).Cursor(ui.CursorResizeNS)
+		if _, dy, held := grip.Dragged(); held {
+			a.state.LogPanelHeight = a.logPanelHeight(body.Bounds().H) - dy
+			a.state.LogPanelHeight = a.logPanelHeight(body.Bounds().H)
+			a.resizingLog = true
+		} else if a.resizingLog {
+			a.resizingLog = false
+			a.saveState()
+		}
+		if grip.Hovered() || a.resizingLog {
+			accent := t.Accent
+			grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+				pt.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2 - 1, W: r.W, H: 2}, accent, 0)
+			})
+		}
+	})
+}
+
+// logTab 是浮层顶上的一个小标签：整个仓库的日志写"日志"，文件历史写"历史"加文件名、可以关掉。
+func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
+	t := c.Theme()
+	active := v.logCur == d
+	label := "日志"
+	if f := d.log.filter; f.Path != "" {
+		label = "历史：" + path.Base(f.Path)
+	}
+	row := ui.Row(c.Key(d.path)).Height(26).Padding(0, 6, 0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+		Label(label).Role(ui.RoleButton)
+	selectedBg(c, row, active)
+	row.Children(func() {
+		ui.Icon(c, iconGitLog).FontSize(13).TextColor(t.Accent).Shrink(0)
+		tabText(c, ui.Text(c, label).FontSize(12).Shrink(0), active)
+		if d.log.filter.Path == "" {
+			ui.Box(c).Width(4)
+			return
+		}
+		x := ui.Box(c.Key("close")).Size(18, 18).Radius(4).Center().Shrink(0).Label("关闭" + label)
+		if x.Hovered() {
+			x.Background(t.SurfacePressed)
+		}
+		x.Children(func() { ui.Icon(c, iconClose).FontSize(11).TextColor(t.TextMuted) })
+		if x.Clicked() {
+			a.closeLog(v, d)
+		}
+	})
+	if row.Clicked() {
+		v.logCur = d
+	}
 }
 
 // loadLog 读日志：more 为真时接着往后读一页。
@@ -216,6 +371,10 @@ func graphCell(c *ui.Context, r graphRow, hash string) ui.Element {
 
 // logView 是日志标签页：左边分支树，右边筛选栏、提交列表和选中提交的详情。
 func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
+	if d.log.filter.Path != "" {
+		a.fileHistoryView(c, w, v, d)
+		return
+	}
 	p := colors(c.Theme())
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(220).Shrink(0).Background(p.band).Children(func() { a.logRefs(c, v, d) })
@@ -483,44 +642,42 @@ func (a *app) askMessage(v *filesView, title, hash, second string, do func(strin
 
 // --- Annotate
 
-// blameDoc 是 Annotate 标签页：每行最后改它的提交，同一个提交的连续几行只在第一行写作者和日期。
+// blameDoc 是文件标签里开着的 Annotate：每行最后改它的提交，同一个提交的连续几行只在第一行写作者和日期。
+// 和 WebStorm 一样在同一个标签里开关，不另开标签。
 type blameDoc struct {
-	rel   string
-	lines []gitx.BlameLine
-	list  ui.ListState
-	sel   *commitView
+	rel     string
+	lines   []gitx.BlameLine
+	loading bool
+	err     string
+	list    ui.ListState
+	sel     *commitView
 }
 
+// openBlame 在这个文件的标签里打开 Annotate（文件没开着就先打开）。
 func (a *app) openBlame(w *workspace, v *filesView, abs string) {
 	rel := v.git.relPath(abs)
 	if rel == "" {
 		a.err = "这个文件不在 git 仓库里"
 		return
 	}
-	v = a.showFiles(w)
-	key := "blame:" + abs
-	for _, d := range v.docs {
-		if d.path == key {
-			v.cur = d
-			return
-		}
+	a.openFile(w, abs, 0, [2]int{})
+	v = a.filesFor(w)
+	d := v.cur
+	if d == nil || d.path != filepath.Clean(abs) {
+		return
 	}
-	d := &fileDoc{path: key, blame: &blameDoc{rel: rel}, started: true}
-	i := len(v.docs)
-	if j := slices.Index(v.docs, v.cur); j >= 0 {
-		i = j + 1
-	}
-	v.docs = slices.Insert(v.docs, i, d)
-	v.cur = d
+	bd := &blameDoc{rel: rel, loading: true}
+	d.blame = bd
 	root := v.git.repo
 	go func() {
 		lines, err := gitx.Blame(context.Background(), root, rel)
 		a.update(func() {
+			bd.loading = false
 			if err != nil {
-				d.kind, d.err = docError, err.Error()
+				bd.err = err.Error()
 				return
 			}
-			d.blame.lines, d.kind = lines, docBlame
+			bd.lines = lines
 		})
 	}()
 }
@@ -529,6 +686,14 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	bd := d.blame
 	lines := bd.lines
+	switch {
+	case bd.err != "":
+		docMessage(c, d, bd.err)
+		return
+	case bd.loading:
+		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		return
+	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		bd.list.Key = func(i int) any { return i }
 		ui.List(c, &bd.list, len(lines), func(i int) {

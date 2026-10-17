@@ -498,6 +498,16 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
+	// Hive: a click on a change bar.
+	if ed.o.onChangeClick != nil && ed.gitDiff != nil && ed.gitDiff.status(line) != 0 {
+		barX := ed.changeBarX()
+		if ev.X >= barX-6 && ev.X <= barX+9 {
+			if i := ed.gitDiff.d.hunkAtNew(line); i >= 0 {
+				ed.o.onChangeClick(i, float32(float64(g.below)-ed.scrollY))
+				return true
+			}
+		}
+	}
 	if ed.o.folding && ed.o.decor == nil && ev.X >= ed.foldX() {
 		if ed.foldable(line) || ed.isFolded(line) {
 			ed.toggleFoldLine(line)

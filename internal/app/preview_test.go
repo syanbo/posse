@@ -263,9 +263,9 @@ func previewLog(t *testing.T, a *app) {
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
-	until(t, tt, "log", func() bool { return v.cur.kind == docLog })
-	a.selectCommit(v, &v.cur.log.commit, v.cur.log.commits[0])
-	until(t, tt, "detail", func() bool { return v.cur.log.commit.files != nil })
+	until(t, tt, "log", func() bool { return v.logCur.kind == docLog })
+	a.selectCommit(v, &v.logCur.log.commit, v.logCur.log.commits[0])
+	until(t, tt, "detail", func() bool { return v.logCur.log.commit.files != nil })
 }
 
 // previewUsageEvents 是一段从 10:02 开始的使用记录，最后几条是连着调同一个工具。
@@ -304,7 +304,7 @@ func newPreviewTester(a *app, dark bool) *ui.Tester {
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.SetScale(2)
 	tt.SetDark(dark)
-	tt.SetTitleBar(ui.TitleBar{Height: 28, Left: 78})
+	tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 70}) // TrafficLightPosition{16, 13} 时红绿灯占的位置
 	// 背景色有 120ms 的过渡，等它走完再取图
 	for range 3 {
 		tt.Frame()
@@ -323,6 +323,14 @@ func TestPreview(t *testing.T) {
 		suffix := map[bool]string{true: "dark", false: "light"}[dark]
 		a := previewApp(t)
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
+
+		// 侧栏收起；加宽的侧栏
+		a = previewApp(t)
+		a.state.SidebarHidden = true
+		savePNG(t, newPreviewTester(a, dark), "sidebar-hidden-"+suffix+".png")
+		a = previewApp(t)
+		a.state.SidebarWidth = 340
+		savePNG(t, newPreviewTester(a, dark), "sidebar-wide-"+suffix+".png")
 
 		// 右侧"技能与 MCP"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)

@@ -82,6 +82,11 @@ type State struct {
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
 	OnGutterClick func(line int)
+	// OnChangeClick is called for a click on a change bar in the gutter
+	// (the marks against the DiffBase), with the index of the change in
+	// Changes and the bottom of the clicked line, relative to the
+	// editor's top (Hive: its popup to roll a change back).
+	OnChangeClick func(change int, y float32)
 	// ContextMenu adds items to the editor's context menu, after its
 	// own.
 	ContextMenu func(m *ui.Menu)
@@ -149,7 +154,7 @@ func (st *State) options() options {
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
 		diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
-		onGutterClick: st.OnGutterClick, contextMenu: st.ContextMenu, minDigits: 3,
+		onGutterClick: st.OnGutterClick, onChangeClick: st.OnChangeClick, contextMenu: st.ContextMenu, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,
 	}

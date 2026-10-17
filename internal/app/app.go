@@ -184,7 +184,11 @@ type app struct {
 	shownTab  string // 最近一次滚进可见范围的标签，见 revealTab
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
-	resizingPanel   bool // 正在拖文件栏的左边缘，松手时写 ui.json
+	resizingPanel   bool    // 正在拖文件栏的左边缘，松手时写 ui.json
+	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
+	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
+	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
+	rollback        rollbackDlg
 
 	// 派发任务对话框
 	dispatching bool
@@ -261,8 +265,10 @@ func Run(c *client.Client) error {
 			Height:        780,
 			StateKey:      "main",
 			TitleBarStyle: mygo.TitleBarHidden,
-			Vibrancy:      mygo.VibrancySidebar,
-			Content:       ui.View(a.build),
+			// 红绿灯在 40 高的顶栏里上下居中，和右边的应用名、侧栏开关、标签对齐（照 Orca）
+			TrafficLightPosition: &mygo.Point{X: 16, Y: 13},
+			Vibrancy:             mygo.VibrancySidebar,
+			Content:              ui.View(a.build),
 		})
 		a.watchClose()
 		a.installMenu()

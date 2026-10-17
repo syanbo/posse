@@ -261,24 +261,16 @@ func cardTitle(c *ui.Context, title string) ui.Element {
 }
 
 // band 是主区域顶上的一条栏：页面标题和操作，可以拖动窗口。
-func band(c *ui.Context, fn func()) {
+func (a *app) band(c *ui.Context, fn func()) {
 	p := colors(c.Theme())
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 20).Gap(10).Background(p.band).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 20+a.barInset(c)).Gap(10).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(fn)
 }
 
 // selectable 给列表里的一行加上选中和悬停的底；选中时左边有强调色竖条。
 func selectable(c *ui.Context, row ui.Element, selected bool) ui.Element {
 	t := c.Theme()
-	p := colors(t)
-	bg := ui.Transparent
-	switch {
-	case selected:
-		bg = p.tint
-	case row.Hovered():
-		bg = p.wash
-	}
-	row.Background(row.AnimateColor("bg", bg, hover))
+	selectedBg(c, row, selected)
 	if selected {
 		accent := t.Accent
 		row.Draw(func(pt *ui.Painter, r ui.Rect) {
@@ -287,6 +279,19 @@ func selectable(c *ui.Context, row ui.Element, selected bool) ui.Element {
 		})
 	}
 	return row
+}
+
+// selectedBg 只给一行加选中和悬停的底，不画竖条（侧栏的行）。
+func selectedBg(c *ui.Context, row ui.Element, selected bool) ui.Element {
+	p := colors(c.Theme())
+	bg := ui.Transparent
+	switch {
+	case selected:
+		bg = p.tint
+	case row.Hovered():
+		bg = p.wash
+	}
+	return row.Background(row.AnimateColor("bg", bg, hover))
 }
 
 // tile 是带底色的方形图标，用在卡片标题旁边。

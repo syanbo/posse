@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/egoist/mygo/ui"
 )
 
 func ids(ps []project) []string {
@@ -139,7 +141,7 @@ func TestSidebarTree(t *testing.T) {
 	if err := tt.Click("Skill"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	settle(tt)
 	if a.selected != "w1" || *a.sectionsOpen["p5"] {
 		t.Fatalf("after header click: selected %q open %v", a.selected, *a.sectionsOpen["p5"])
 	}
@@ -149,7 +151,7 @@ func TestSidebarTree(t *testing.T) {
 	if err := tt.Click("展开 3 个工作区"); err != nil {
 		t.Fatal(err)
 	}
-	tt.Frame()
+	settle(tt)
 	// ios-crash 没有终端，选中它不会去接入常驻进程
 	if err := tt.Click("ios-crash"); err != nil {
 		t.Fatal(err)
@@ -167,6 +169,66 @@ func TestSidebarTree(t *testing.T) {
 	if prev := a.navOrder[a.navCur-1]; prev != (navTarget{ws: "w6", term: "t5"}) {
 		t.Fatalf("row above ios-crash = %+v", prev)
 	}
+}
+
+// 侧栏：拖右边缘调宽（有上下限），开关和 ⌘B 收起展开，都记进 ui.json。
+func TestSidebarToggleAndResize(t *testing.T) {
+	home := t.TempDir()
+	a := previewApp(t)
+	a.home = home
+	tt := newPreviewTester(a, true)
+	x := float32(sidebarDefault)
+	tt.Move(x, 400)
+	tt.Press(x, 400)
+	tt.Move(x+60, 400)
+	tt.Move(x+80, 400)
+	tt.Frame()
+	tt.Release(x+80, 400)
+	tt.Frame()
+	if a.state.SidebarWidth != sidebarDefault+80 {
+		t.Fatalf("width after drag = %v", a.state.SidebarWidth)
+	}
+	waitState(t, home, func(s uiState) bool { return s.SidebarWidth == sidebarDefault+80 })
+	// 拖得太窄停在下限
+	x = a.sidebarWidth()
+	tt.Move(x, 400)
+	tt.Press(x, 400)
+	tt.Move(x-400, 400)
+	tt.Frame()
+	tt.Release(x-400, 400)
+	tt.Frame()
+	if a.sidebarWidth() != sidebarMin {
+		t.Fatalf("width after narrow drag = %v", a.sidebarWidth())
+	}
+
+	if err := tt.Click("收起侧栏 ⌘B"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	if !a.state.SidebarHidden {
+		t.Fatal("sidebar not hidden")
+	}
+	if _, ok := tt.Find("任务"); ok {
+		t.Fatal("sidebar rows shown while hidden")
+	}
+	waitState(t, home, func(s uiState) bool { return s.SidebarHidden })
+	tt.Key(ui.Cmd, ui.KeyB)
+	tt.Frame()
+	if a.state.SidebarHidden {
+		t.Fatal("⌘B did not show the sidebar")
+	}
+	if _, ok := tt.Find("收起侧栏 ⌘B"); !ok {
+		t.Fatal("toggle missing after showing sidebar")
+	}
+}
+
+// settle 多画几帧，等滑进滑出的动画（200ms）走完。
+func settle(tt *ui.Tester) {
+	for range 4 {
+		tt.Frame()
+		time.Sleep(80 * time.Millisecond)
+	}
+	tt.Frame()
 }
 
 // 右侧面板：点外面收起；点面板里面不收；开着时点标签栏的按钮是收起，不会收起又打开。

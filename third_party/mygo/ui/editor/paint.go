@@ -631,10 +631,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 				}
 			}
 			// Change bars.
-			barX := r.X + ed.gutterW - 4 - 3
-			if ed.o.folding && ed.o.decor == nil {
-				barX -= lh * 0.8
-			}
+			barX := r.X + ed.changeBarX()
 			if ed.gitDiff != nil {
 				switch ed.gitDiff.status(line) {
 				case 1:

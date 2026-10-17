@@ -47,13 +47,32 @@ func (a *app) build(c *ui.Context) {
 		c.Root().Background(ui.Transparent)
 	}
 	a.imagesDrawn = false
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
-		side := ui.Column(c).Width(248).Shrink(0)
-		if !vibrant {
-			side.Background(p.side)
+	root := ui.Row(c).Fill().AlignItems(ui.Stretch)
+	// 收起、展开时侧栏从左边缘滑出滑进。主区域只在展开开始、收起结束时改一次宽度，
+	// 免得终端里的程序跟着动画反复按新列数重排（和右边的文件栏一样）
+	open := float32(1)
+	if a.state.SidebarHidden {
+		open = 0
+	}
+	a.sidebarShown = root.AnimateTo("sidebar", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
+	root.Children(func() {
+		if a.sidebarSlot() {
+			width := a.sidebarWidth() + 1
+			slot := ui.Box(c).Width(width).Shrink(0).Clip()
+			if !vibrant {
+				slot.Background(p.side)
+			}
+			slot.Children(func() {
+				ui.Row(c).Absolute().Top(0).Bottom(0).Left(-(1 - a.sidebarShown) * width).Width(width).AlignItems(ui.Stretch).Children(func() {
+					side := ui.Column(c).Width(a.sidebarWidth()).Shrink(0)
+					if !vibrant {
+						side.Background(p.side)
+					}
+					side.Children(func() { a.sidebar(c) })
+					ui.Box(c).Width(1).Shrink(0).Background(p.line)
+				})
+			})
 		}
-		side.Children(func() { a.sidebar(c) })
-		ui.Box(c).Width(1).Shrink(0).Background(p.line)
 		// 只占剩下的宽度：标签多了也不撑出窗口（右边停靠的文件栏要完整显示）
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Background(p.canvas).Children(func() {
 			switch {
@@ -65,6 +84,15 @@ func (a *app) build(c *ui.Context) {
 				a.main(c, w, cur)
 			}
 		})
+		// 最后画，压在分隔线和主区域上面，才接得到分隔线两侧的拖动
+		if !a.state.SidebarHidden {
+			a.sidebarGrip(c)
+		}
+	})
+	// 应用名和侧栏开关固定在红绿灯右边，不跟着侧栏滑动，收起、展开都在同一个位置（照 Orca）
+	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
+		titleText(c, "Hive", 14).Width(appNameWidth).Shrink(0)
+		a.sidebarButton(c)
 	})
 	// 图片面板这一帧没画（收起了、换到别的页面或普通终端）就放掉位图
 	if !a.imagesDrawn && a.images.term != "" {
@@ -77,6 +105,7 @@ func (a *app) build(c *ui.Context) {
 	a.pushDialog(c)
 	a.promptDialog(c)
 	a.unsavedDialog(c)
+	a.rollbackDialog(c)
 	a.confirmDialog(c)
 }
 
@@ -109,6 +138,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if commitKey && c.Shortcut(ui.Cmd, ui.KeyK) {
 			a.openFilesPanel(w, sideChanges).git.focusMsg = true
 		}
+		// ⌥⌘Z：焦点在改动页时批量回滚（编辑器、diff 里是回滚当前这一处，见 gitShortcuts）
+		if a.filesPanelOpen() && a.filesFor(w).side == sideChanges && c.FocusWithin(a.filesPanelRef) && c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) {
+			a.openRollback(a.filesFor(w))
+		}
 		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyK) {
 			a.openPush(w)
 		}
@@ -139,6 +172,12 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
 		a.openNewWorkspace()
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyB) {
+		a.toggleSidebar()
+	}
+	if w != nil && w.Branch != "" && c.Shortcut(ui.Cmd, ui.Key9) {
+		a.toggleLogPanel(w)
+	}
 	if c.Shortcut(ui.Cmd, ui.KeyEqual) {
 		a.setFontSize(a.fontSize + 1)
 	}
@@ -164,6 +203,76 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 }
 
+// 侧栏的宽度，拖右边缘调整。
+const (
+	sidebarDefault = 248
+	sidebarMin     = 200
+	sidebarMax     = 420
+)
+
+func (a *app) sidebarWidth() float32 {
+	w := a.state.SidebarWidth
+	if w == 0 {
+		w = sidebarDefault
+	}
+	return min(max(w, sidebarMin), sidebarMax)
+}
+
+func (a *app) toggleSidebar() {
+	a.state.SidebarHidden = !a.state.SidebarHidden
+	a.saveState()
+}
+
+// sidebarButton 是收起、展开侧栏的开关，在红绿灯右边，两种状态下位置不变。
+func (a *app) sidebarButton(c *ui.Context) {
+	label := "收起侧栏 ⌘B"
+	if a.state.SidebarHidden {
+		label = "展开侧栏 ⌘B"
+	}
+	// 图标比普通按钮大，方框的高度和旁边 Hive 的字高相当（照 Orca）
+	if iconButtonSized(c.Key("sidebar-toggle"), iconPanelLeft, label, toggleBox, 21).Clicked() {
+		a.toggleSidebar()
+	}
+}
+
+// sidebarSlot 报告侧栏占不占位置：展开着，或者收起动画还没走完。
+func (a *app) sidebarSlot() bool { return !a.state.SidebarHidden || a.sidebarShown > 0 }
+
+// 红绿灯右边的应用名占的宽度，和应用名加侧栏开关一共占的宽度。
+const (
+	titleGap     = 18 // 红绿灯到应用名
+	appNameWidth = 38
+	appNameGap   = 12 // 应用名到侧栏开关
+	toggleBox    = 30
+	titleLead    = appNameWidth + appNameGap + toggleBox
+)
+
+// barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名、侧栏开关。
+func (a *app) barInset(c *ui.Context) float32 {
+	if a.sidebarSlot() {
+		return 0
+	}
+	return c.TitleBar().Left + titleGap + titleLead
+}
+
+// sidebarGrip 是侧栏右边缘的拖动条，松手才写 ui.json。
+func (a *app) sidebarGrip(c *ui.Context) {
+	grip := ui.Box(c.Key("sidebar-grip")).Absolute().Top(0).Bottom(0).Left(a.sidebarWidth() - 2).Width(6).Cursor(ui.CursorResizeEW)
+	if dx, _, held := grip.Dragged(); held {
+		a.state.SidebarWidth = min(max(a.sidebarWidth()+dx, sidebarMin), sidebarMax)
+		a.resizingSide = true
+	} else if a.resizingSide {
+		a.resizingSide = false
+		a.saveState()
+	}
+	if grip.Hovered() || a.resizingSide {
+		accent := c.Theme().Accent
+		grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+			pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y, W: 2, H: r.H}, accent, 0)
+		})
+	}
+}
+
 // titleHeight 是顶栏高度：隐藏标题栏后，红绿灯按钮叠在侧栏顶部。
 func titleHeight(c *ui.Context) float32 { return max(c.TitleBar().Height, 40) }
 
@@ -172,7 +281,10 @@ func titleHeight(c *ui.Context) float32 { return max(c.TitleBar().Height, 40) }
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+12).DragWindow().Children(func() {
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
+		BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
+		// 应用名和侧栏开关浮在这里（见 build），留出它们的位置
+		ui.Box(c).Width(titleLead).Shrink(0)
 		ui.Spacer(c)
 		iconButton(c, iconPlus, "新建").Menu(func(m *ui.Menu) {
 			if m.Item("添加项目…").Chosen() {
@@ -258,6 +370,12 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 		*open = true
 	}
 	group := ui.Column(c.Key(p.ID)).Gap(2).Shrink(0)
+	// 展开收起时子项的高度跟着动画伸缩（箭头同时转），收起动画走完才不画
+	target := float32(0)
+	if *open {
+		target = 1
+	}
+	shown := group.AnimateTo("open", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	group.Children(func() {
 		if !nested {
 			sessions := agentSessions(head.Terminals)
@@ -270,13 +388,11 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 			if row := a.sidebarItem(c, head, p.Name, false, !*open, toggle); row.Clicked() && len(sessions) > 0 {
 				*open = !*open || !wasSelected
 			}
-			if *open {
-				a.sessionRows(c, head, sessions)
-			}
+			collapsible(c, shown, func() { a.sessionRows(c, head, sessions) })
 			return
 		}
 		a.projectHeader(c, p, ws, open)
-		if *open {
+		collapsible(c, shown, func() {
 			ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
 				for _, w := range ws {
 					label := w.Name
@@ -287,9 +403,26 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 					a.sessionRows(c, w, agentSessions(w.Terminals))
 				}
 			})
-		}
+		})
 	})
 	a.reorderable(c, group, p.ID)
+}
+
+// collapsible 按展开的进度 shown（0 到 1）画 fn：完全展开时照常排，动画中裁到自然高度乘进度并跟着淡入淡出，
+// 收起后不画。自然高度取上一帧量到的，刚开始展开的第一帧还没量过，高度为 0，正好是动画的起点。
+func collapsible(c *ui.Context, shown float32, fn func()) {
+	if shown <= 0.001 {
+		return
+	}
+	wrap := ui.Column(c.Key("collapsible")).Shrink(0).Clip()
+	var inner ui.Element
+	wrap.Children(func() {
+		inner = ui.Column(c).Shrink(0).Gap(2)
+		inner.Children(fn)
+	})
+	if shown < 0.999 {
+		wrap.Height(inner.Bounds().H * shown).Opacity(shown)
+	}
 }
 
 // navIndent 是侧栏下一层相对上一层的缩进。
@@ -320,10 +453,10 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	row.ContextMenu(func(m *ui.Menu) { a.workspaceMenu(m, ws[0]) })
 }
 
-// disclosure 是行尾的展开箭头，展开时转向下；label 是收起时的说明。
+// disclosure 是展开箭头，展开时转向下；label 是收起时的说明（"展开…"），展开后说明换成"收起…"。
 func disclosure(c *ui.Context, open *bool, label string) {
 	if *open {
-		label = "收起"
+		label = "收起" + strings.TrimPrefix(label, "展开")
 	}
 	t := c.Theme()
 	b := ui.Box(c).Size(20, 20).Radius(5).Center().Shrink(0).Label(label).Tooltip(label)
@@ -551,7 +684,7 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 }
 
 // navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
-// 选中和悬停的样式见 selectable。
+// 选中和悬停的样式见 selectedBg。
 func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
 	selected := a.selected == id
 	a.navOrder = append(a.navOrder, navTarget{ws: id})
@@ -578,14 +711,12 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 	}
 	row := ui.Row(c.Key(key)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
-	selectable(c, row, selected)
+	selectedBg(c, row, selected)
 	row.Children(func() {
 		icon()
 		ui.Column(c).Gap(gap).Grow(1).Shrink(1).Children(func() {
-			text := ui.Text(c, label).FontSize(13).SingleLine()
-			if selected {
-				text.FontWeight(600)
-			}
+			// 选中只靠底色区分，文字不加粗
+			ui.Text(c, label).FontSize(13).SingleLine()
 			// 分支独占一行，路径在它下面
 			if branch != "" {
 				ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
@@ -746,7 +877,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
 	if w == nil {
-		band(c, func() {})
+		a.band(c, func() {})
 		if a.loaded && len(a.projects) == 0 {
 			a.firstRun(c)
 		}
@@ -788,7 +919,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8).Gap(2).Background(p.band).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示
 		ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
@@ -823,8 +954,12 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w.Branch != "" {
 		a.branchButton(c, w)
-		if iconButton(c.Key("git-log"), iconGitLog, "Git 日志").Clicked() {
-			a.openLog(w, "", "")
+		b := iconButton(c.Key("git-log"), iconGitLog, "Git 日志 ⌘9")
+		if a.state.LogPanel {
+			b.Background(colors(c.Theme()).tint)
+		}
+		if b.Clicked() {
+			a.toggleLogPanel(w)
 		}
 	}
 	// 图片、技能与 MCP 跟着会话走，放在终端右上角（sessionButtons）；历史按项目，留在这里
@@ -882,6 +1017,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
 		}
+		a.logPanel(c, w, body)
 		a.branchPopupView(c, w)
 		if shown < 0.01 {
 			return

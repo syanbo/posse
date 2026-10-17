@@ -38,6 +38,7 @@ type gitState struct {
 	picks    map[string]bool           // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
 	stashes  []gitx.Stash
 	rows     []changeRow
+	folded   map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
 	list     ui.ListState
 	tab      int // 改动页的分页：0 提交（文件改动），1 搁置（git stash），照 WebStorm 的提交工具窗口
 	stashLst ui.ListState
@@ -97,6 +98,20 @@ func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
 		rows = append(rows, rs...)
 	}
 	return rows
+}
+
+// groupOpen 返回组展开与否的开关，没有就新建一个展开的。
+func (g *gitState) groupOpen(gr changeGroup) *bool {
+	if g.folded == nil {
+		g.folded = map[changeGroup]*bool{}
+	}
+	open := g.folded[gr]
+	if open == nil {
+		open = new(bool)
+		*open = true
+		g.folded[gr] = open
+	}
+	return open
 }
 
 // changeCount 是左栏"改动"上显示的数：有改动的文件数，不含搁置。
@@ -268,6 +283,8 @@ type diffDoc struct {
 	binary   bool
 	images   [2]diffImage // 图片文件的两边：改之前、改之后
 	stamp    files.Stamp  // 工作区文件的磁盘戳，变了才重读
+	hint     string       // F7 到头时 diff 栏下面的提示（diffHint）
+	hintAt   time.Time
 }
 
 // diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
@@ -315,19 +332,27 @@ func diffKey(abs string, s diffSpec) string {
 	return "diff:" + s.oldRev + ".." + s.newRev + ":" + abs
 }
 
-// openDiff 在文档区打开一个文件的 diff；已经开着就切过去。
+// openDiff 在文档区打开一个文件的 diff。每个工作区只有一个 diff 标签：已经开着就在里面换成这个文件，
+// 排版和忽略空白沿用；换文件用 diff 上方的文件菜单或 F7。
 func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool) {
 	v := a.showFiles(w)
 	g := &v.git
 	key := diffKey(g.absPath(s.rel), s)
-	for _, d := range v.docs {
-		if d.path == key {
-			v.cur = d
-			return
-		}
-	}
 	df := &diffDoc{diffSpec: s, siblings: siblings, first: first}
 	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
+	for _, d := range v.docs {
+		if d.diff == nil {
+			continue
+		}
+		v.cur = d
+		if d.path == key {
+			return
+		}
+		df.state.Layout, df.state.IgnoreWhitespace = d.diff.state.Layout, d.diff.state.IgnoreWhitespace
+		d.path, d.diff, d.kind, d.err = key, df, docLoading, ""
+		a.loadDiff(v, d)
+		return
+	}
 	d := &fileDoc{path: key, diff: df}
 	i := len(v.docs)
 	if j := slices.Index(v.docs, v.cur); j >= 0 {
@@ -337,6 +362,20 @@ func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool
 	v.cur = d
 	d.started = true
 	a.loadDiff(v, d)
+}
+
+// diffGroup 是 diff 标签里可以切换的文件：比较、提交里同一组的文件，没有就是改动列表。
+func diffGroup(v *filesView, df *diffDoc) []diffSpec {
+	if df.siblings != nil {
+		return df.siblings
+	}
+	var list []diffSpec
+	for _, r := range v.git.rows {
+		if !r.header && r.group != groupStash && !r.entry.Conflict {
+			list = append(list, changeSpec(r.entry))
+		}
+	}
+	return list
 }
 
 // showRev 读一边的内容：版本里没有这个文件时是空的。
@@ -386,6 +425,10 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 			images = [2]diffImage{loadDiffImage(old, oldExists && len(old) > 0), loadDiffImage(nw, newExists)}
 		}
 		a.update(func() {
+			// 读的时候标签已经换成别的文件
+			if d.diff != df {
+				return
+			}
 			if err != nil {
 				d.kind, d.err = docError, err.Error()
 				return
@@ -424,6 +467,7 @@ func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 
 // stepDiff 是 F7 / ⇧F7：在当前 diff 里跳到下一处 / 上一处改动，到头了打开同一组里的下一个 / 上一个文件
 // （改动列表，或比较、提交里的文件）。
+// 已经是第一处或最后一处、前后也没有文件可换时，在 diff 栏下面提示一下。
 func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	df := d.diff
 	hunks := df.state.Hunks()
@@ -433,18 +477,48 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 		df.state.Current = next + 1
 		return
 	}
-	list := df.siblings
-	if list == nil {
-		for _, r := range v.git.rows {
-			if !r.header && r.group != groupStash && !r.entry.Conflict {
-				list = append(list, changeSpec(r.entry))
-			}
-		}
-	}
+	list := diffGroup(v, df)
 	i := slices.IndexFunc(list, func(s diffSpec) bool { return s.rel == df.rel && s.oldRev == df.oldRev && s.newRev == df.newRev })
 	if j := i + dir; i >= 0 && j >= 0 && j < len(list) {
 		a.openDiff(w, list[j], df.siblings, dir > 0)
+		return
 	}
+	msg := "已经是最后一处改动"
+	if dir < 0 {
+		msg = "已经是第一处改动"
+	}
+	df.hint, df.hintAt = msg, time.Now()
+}
+
+// diffHintFor 是提示显示多久，头尾各有 diffHintFade 的淡入淡出。
+const (
+	diffHintFor  = 1500 * time.Millisecond
+	diffHintFade = 200 * time.Millisecond
+)
+
+// diffHint 把 F7 到头的提示画在 diff 栏正下方、diff 区域居中：上下箭头在左上角，视线还在那里，
+// 比 mygo 的 toast（只能在窗口底部）近。配色和 toast 一样反过来。连按时重新计时，不叠起来。
+func diffHint(c *ui.Context, df *diffDoc) {
+	age := time.Since(df.hintAt)
+	if df.hint == "" || age >= diffHintFor {
+		return
+	}
+	opacity := float32(1)
+	switch left := diffHintFor - age; {
+	case age < diffHintFade:
+		opacity = float32(age) / float32(diffHintFade)
+		c.AnimationFrame()
+	case left < diffHintFade:
+		opacity = float32(left) / float32(diffHintFade)
+		c.AnimationFrame()
+	default:
+		c.After(left - diffHintFade)
+	}
+	t := c.Theme()
+	ui.Row(c.Key("diff-hint")).Absolute().Top(44).Left(0).Right(0).Justify(ui.Center).Children(func() {
+		ui.Text(c, df.hint).FontSize(12.5).TextColor(t.Background).Background(t.Text).Padding(7, 14).Radius(8).
+			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.25)).Opacity(opacity)
+	})
 }
 
 // diffJump 在 diff 第一次显示时跳到第一处（或从后一个文件退回来时的最后一处）改动。
@@ -486,6 +560,11 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 
 // gitDo 在后台执行一个 git 操作，期间 busy 显示操作名；出错显示在错误条上。
 func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root string) error) {
+	a.gitDoThen(v, what, fn, nil)
+}
+
+// gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。
+func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
 	g := &v.git
 	if g.busy != "" || g.repo == "" {
 		return
@@ -498,6 +577,8 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 			g.busy = ""
 			if err != nil {
 				a.err = what + "失败：" + err.Error()
+			} else if done != nil {
+				done()
 			}
 			a.refreshGit(v)
 			if g.branches.list != nil {
@@ -514,8 +595,8 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 	}()
 }
 
-// askRollback 回滚文件前确认：已跟踪的恢复成 HEAD 的样子，新文件会被删除。
-func (a *app) askRollback(v *filesView, entries []gitx.Entry) {
+// askRollback 回滚文件前确认：已跟踪的恢复成 HEAD 的样子，新文件会被删除。then 非空时回滚成功后在界面线程上调用。
+func (a *app) askRollback(v *filesView, entries []gitx.Entry, then func()) {
 	var tracked, fresh []string
 	for _, e := range entries {
 		switch {
@@ -539,7 +620,7 @@ func (a *app) askRollback(v *filesView, entries []gitx.Entry) {
 	}
 	a.confirm(title, body, "回滚", func() {
 		a.update(func() {
-			a.gitDo(v, "回滚", func(ctx context.Context, root string) error {
+			a.gitDoThen(v, "回滚", func(ctx context.Context, root string) error {
 				if len(tracked) > 0 {
 					if err := gitx.Rollback(ctx, root, tracked...); err != nil {
 						return err
@@ -549,8 +630,75 @@ func (a *app) askRollback(v *filesView, entries []gitx.Entry) {
 					return gitx.RemoveNew(ctx, root, fresh...)
 				}
 				return nil
-			})
+			}, then)
 		})
+	})
+}
+
+// rollbackDoc 是编辑器顶栏的"回滚这个文件"：回滚后编辑器按磁盘重载（没保存的改动一起丢掉，和 WebStorm 一样），
+// 新文件被删掉后关掉标签。
+func (a *app) rollbackDoc(v *filesView, d *fileDoc) {
+	e := v.git.entry(d.path)
+	if e == nil || e.Conflict {
+		return
+	}
+	fresh := isNewEntry(*e)
+	a.askRollback(v, []gitx.Entry{*e}, func() {
+		if fresh {
+			a.closeDoc(v, d)
+		} else {
+			a.reloadDoc(d)
+		}
+	})
+}
+
+// entry 返回绝对路径 abs 在 git 状态里的改动，没有改动时为 nil。
+func (g *gitState) entry(abs string) *gitx.Entry {
+	rel := g.relPath(abs)
+	if g.status == nil || rel == "" {
+		return nil
+	}
+	for i := range g.status.Entries {
+		if g.status.Entries[i].Path == rel {
+			return &g.status.Entries[i]
+		}
+	}
+	return nil
+}
+
+// rollbackDiffFile 是 diff 栏的"回滚这个文件"：确认后回滚，接着看同一组的下一个文件（没有就看上一个），
+// 都没有了就关掉 diff 标签。
+func (a *app) rollbackDiffFile(w *workspace, v *filesView, d *fileDoc) {
+	df := d.diff
+	var entry *gitx.Entry
+	if st := v.git.status; st != nil {
+		for i := range st.Entries {
+			if st.Entries[i].Path == df.rel {
+				entry = &st.Entries[i]
+			}
+		}
+	}
+	if entry == nil || !df.worktree() {
+		return
+	}
+	list := diffGroup(v, df)
+	i := slices.IndexFunc(list, func(s diffSpec) bool { return s.rel == df.rel })
+	var next *diffSpec
+	switch {
+	case i >= 0 && i+1 < len(list):
+		next = &list[i+1]
+	case i > 0:
+		next = &list[i-1]
+	}
+	a.askRollback(v, []gitx.Entry{*entry}, func() {
+		if v.cur != d || d.diff != df {
+			return
+		}
+		if next != nil {
+			a.openDiff(w, *next, df.siblings, true)
+		} else {
+			a.closeDoc(v, d)
+		}
 	})
 }
 

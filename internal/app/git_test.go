@@ -74,27 +74,50 @@ func TestGitChangesAndDiff(t *testing.T) {
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
 	d := v.cur
+	if d.name() != "差异：README.md" {
+		t.Fatalf("diff tab title %q", d.name())
+	}
 	if n := len(d.diff.state.Hunks()); n != 1 {
 		t.Fatalf("README hunks %d", n)
 	}
-	// F7：README 只有一处改动，跳到下一个文件 main.go
+	// F7：README 只有一处改动，在同一个 diff 标签里换到下一个文件 main.go
 	tt.Key(0, ui.KeyF7)
 	until(t, tt, "next file", func() bool {
-		return v.cur != d && v.cur.diff != nil && v.cur.diff.rel == "main.go" && v.cur.kind == docDiff
+		return v.cur == d && d.diff.rel == "main.go" && d.kind == docDiff
 	})
-	main := v.cur
-	if n := len(main.diff.state.Hunks()); n != 2 {
+	if n := len(d.diff.state.Hunks()); n != 2 {
 		t.Fatalf("main.go hunks %d", n)
 	}
 	tt.Key(0, ui.KeyF7)
 	tt.Frame()
-	if main.diff.hunk != 1 {
-		t.Fatalf("F7 inside file: hunk %d", main.diff.hunk)
+	if d.diff.hunk != 1 {
+		t.Fatalf("F7 inside file: hunk %d", d.diff.hunk)
 	}
 	// ⇧F7 两次：回到第一处，再退回 README 的最后一处
 	tt.Key(ui.Shift, ui.KeyF7)
 	tt.Key(ui.Shift, ui.KeyF7)
-	until(t, tt, "back to README", func() bool { return v.cur == d })
+	until(t, tt, "back to README", func() bool { return v.cur == d && d.diff.rel == "README.md" && d.kind == docDiff })
+	// 点改动列表里的另一个文件：还是这一个 diff 标签
+	if err := tt.Click("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "clicked main.go", func() bool { return d.diff.rel == "main.go" && d.kind == docDiff })
+	diffs := 0
+	for _, x := range v.docs {
+		if x.diff != nil {
+			diffs++
+		}
+	}
+	if diffs != 1 || v.cur != d {
+		t.Fatalf("%d diff tabs", diffs)
+	}
+	tt.Key(ui.Shift, ui.KeyF7)
+	tt.Key(ui.Shift, ui.KeyF7)
+	tt.Key(ui.Shift, ui.KeyF7)
+	until(t, tt, "README again", func() bool { return d.diff.rel == "README.md" && d.kind == docDiff })
+	// README 是第一个文件、只有一处改动：再往前就到头了，diff 栏下面提示
+	tt.Key(ui.Shift, ui.KeyF7)
+	until(t, tt, "start hint", func() bool { return tt.HasText("已经是第一处改动") })
 	// 回滚一处：立刻写回磁盘
 	a.revertHunk(v, d, 0)
 	if b, _ := os.ReadFile(filepath.Join(root, "README.md")); !strings.Contains(string(b), "## 构建") {
@@ -124,7 +147,7 @@ func TestGitChangesAndDiff(t *testing.T) {
 		t.Fatal("message kept after commit")
 	}
 	// 回滚未跟踪的文件要确认，确认后删除
-	a.askRollback(v, []gitx.Entry{{Path: "notes.txt", Untracked: true}})
+	a.askRollback(v, []gitx.Entry{{Path: "notes.txt", Untracked: true}}, nil)
 	if !a.confirming || !strings.Contains(a.confirmBody, "新文件会被删除") {
 		t.Fatalf("rollback should ask: %v %q", a.confirming, a.confirmBody)
 	}
@@ -333,19 +356,19 @@ func TestLogBlameAndReword(t *testing.T) {
 	tt.Frame()
 	a.openLog(w, "", "")
 	v := a.files[w.ID]
-	until(t, tt, "log", func() bool { return v.cur.kind == docLog && tt.HasText("fix: 本地修复") })
+	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && tt.HasText("fix: 本地修复") })
 	for _, want := range []string{"feat: 新功能", "work", "base", "main", "origin/main"} {
 		if !tt.HasText(want) {
 			t.Fatalf("log lacks %q: %v", want, tt.Texts())
 		}
 	}
-	ld := v.cur.log
+	ld := v.logCur.log
 	// 按文字筛选
 	ld.text = "新功能"
-	a.applyLogFilter(v, v.cur)
+	a.applyLogFilter(v, v.logCur)
 	until(t, tt, "filtered", func() bool { return len(ld.commits) == 1 && !ld.loading })
 	ld.text = ""
-	a.applyLogFilter(v, v.cur)
+	a.applyLogFilter(v, v.logCur)
 	until(t, tt, "unfiltered", func() bool { return len(ld.commits) == 4 && !ld.loading })
 	// 选中提交看详情
 	if err := tt.Click("fix: 本地修复"); err != nil {
@@ -365,11 +388,29 @@ func TestLogBlameAndReword(t *testing.T) {
 
 	// 文件历史和 Annotate
 	a.openLog(w, "", "main.go")
-	until(t, tt, "file history", func() bool { return v.cur.kind == docLog && len(v.cur.log.commits) == 3 })
+	until(t, tt, "file history", func() bool { return v.logCur.kind == docLog && len(v.logCur.log.commits) == 3 })
+	// Annotate 在这个文件自己的标签里开关，不另开标签
 	a.openBlame(w, v, filepath.Join(root, "main.go"))
-	until(t, tt, "blame", func() bool { return v.cur.kind == docBlame && tt.HasText("// local edit") })
-	if !tt.HasText("t") || len(v.cur.blame.lines) == 0 {
-		t.Fatal("blame lines missing")
+	d := v.cur
+	tabs := len(v.docs)
+	until(t, tt, "blame", func() bool {
+		return d.blame != nil && !d.blame.loading && len(d.blame.lines) > 0 && tt.HasText("// local edit")
+	})
+	if d.path != filepath.Join(root, "main.go") || d.name() != "main.go" {
+		t.Fatalf("annotate not in the file tab: %s", d.name())
+	}
+	// 再点一次 Annotate 不会多出标签
+	a.openBlame(w, v, filepath.Join(root, "main.go"))
+	if len(v.docs) != tabs || v.cur != d {
+		t.Fatalf("annotate opened another tab: %d -> %d", tabs, len(v.docs))
+	}
+	until(t, tt, "blame again", func() bool { return !d.blame.loading })
+	if err := tt.Click("关闭 Annotate"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if d.blame != nil || v.cur != d || len(v.docs) != tabs {
+		t.Fatal("closing annotate should go back to the editor in the same tab")
 	}
 	// 日志、Annotate 不记进 ui.json
 	for _, p := range a.state.Files[w.ID].Open {
@@ -457,8 +498,9 @@ func TestLogRefTree(t *testing.T) {
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
-	until(t, tt, "log", func() bool { return v.cur.kind == docLog && v.git.branches.list != nil })
-	ld := v.cur.log
+	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && v.git.branches.list != nil })
+	ld := v.logCur.log
+	settle(tt) // 浮层滑上来之后位置才固定，再去点
 	all := len(ld.commits)
 	if !tt.HasText("本地") || !tt.HasText("远程") {
 		t.Fatalf("ref tree missing: %v", tt.Texts())
@@ -640,4 +682,251 @@ func TestCommitShortcut(t *testing.T) {
 	if !v.git.focusMsg && !tt.Focused("提交信息") {
 		t.Fatal("⌘K with a file in front should focus the commit message")
 	}
+}
+
+// Git 日志浮层：盖在终端上、不改终端尺寸；隐藏按钮和 ⌘9 开关，文件历史可以关掉，整个仓库的日志留着。
+func TestLogPanel(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	settle(tt)
+	cols, rows := a.view.term.Size()
+	tt.Key(ui.Cmd, ui.Key9)
+	v := a.files[w.ID]
+	until(t, tt, "log", func() bool { return a.state.LogPanel && v.logCur != nil && v.logCur.kind == docLog })
+	settle(tt)
+	if c2, r2 := a.view.term.Size(); c2 != cols || r2 != rows {
+		t.Fatalf("terminal resized under the panel: %dx%d -> %dx%d", cols, rows, c2, r2)
+	}
+	if a.filesActive(w) {
+		t.Fatal("log opened as a tab")
+	}
+	a.openLog(w, "", "main.go")
+	until(t, tt, "history", func() bool { return v.logCur.kind == docLog && tt.HasText("历史：main.go") })
+	if err := tt.Click("关闭历史：main.go"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(v.logs) != 1 || v.logCur != v.logs[0] || v.logCur.log.filter.Path != "" {
+		t.Fatalf("after closing history: %d logs", len(v.logs))
+	}
+	if err := tt.Click("隐藏 ⌘9"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	if a.state.LogPanel || tt.HasText("隐藏 ⌘9") {
+		t.Fatal("hide button did not hide the panel")
+	}
+	tt.Key(ui.Cmd, ui.Key9)
+	settle(tt)
+	if !a.state.LogPanel || len(v.logs) != 1 {
+		t.Fatalf("⌘9 reopen: open %v logs %d", a.state.LogPanel, len(v.logs))
+	}
+}
+
+// 回滚：改动页批量回滚（勾选、新文件只在勾了"删除新文件"时删）、diff 栏回滚整个文件后换到下一个、
+// 编辑器改动标记的卡片回滚一处。
+func TestRollback(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
+
+	// 编辑器卡片：main.go 有两处改动，回滚第一处只改编辑器里的内容
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	d := v.cur
+	until(t, tt, "diff base", func() bool { return d.kind == docText && d.ed.DiffBase != nil && len(d.ed.Changes()) == 2 })
+	d.ed.OnChangeClick(0, 0)
+	until(t, tt, "change popup", func() bool { return tt.HasText("第 1 / 2 处") })
+	if err := tt.Click("下一处改动"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "second change", func() bool {
+		return tt.HasText("第 2 / 2 处") && tt.HasText("这里新增了 2 行，上一次提交时没有")
+	})
+	if err := tt.Click("上一处改动"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("回滚这一处 ⌥⌘Z"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "reverted in editor", func() bool { return d.change == nil && len(d.ed.Changes()) == 1 })
+	if strings.Contains(d.ed.Buffer.String(), "log(cfg)") || !d.isModified() {
+		t.Fatalf("first change not reverted in the buffer: %q", d.ed.Buffer.String())
+	}
+	d.ed.OnChangeClick(0, 0)
+	tt.Frame()
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if d.change != nil {
+		t.Fatal("Esc did not close the popup")
+	}
+	d.ed.Run(editor.Undo)
+	until(t, tt, "undo", func() bool { return len(d.ed.Changes()) == 2 && !d.isModified() })
+
+	// diff 栏回滚整个文件：README 回滚后换到同一组的下一个文件
+	a.openDiff(w, diffSpec{rel: "README.md", oldRev: "HEAD"}, nil, true)
+	dd := v.cur
+	until(t, tt, "diff", func() bool { return dd.kind == docDiff })
+	a.rollbackDiffFile(w, v, dd)
+	if !a.confirming {
+		t.Fatal("rollback should ask")
+	}
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "README rolled back", func() bool {
+		return v.git.busy == "" && v.git.changeCount() == 2 && dd.diff.rel == "main.go"
+	})
+
+	// 批量回滚：默认勾着已跟踪的 main.go，新文件 notes.txt 不勾
+	a.openRollback(v)
+	r := &a.rollback
+	if !r.open || len(r.entries) != 2 || !r.on["main.go"] || r.on["notes.txt"] {
+		t.Fatalf("rollback dialog %+v", r.on)
+	}
+	tt.Frame()
+	// 勾上新文件但不删：未跟踪的不动，也不算进按钮上的数
+	r.on["notes.txt"] = true
+	tt.Frame()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "batch", func() bool { return v.git.busy == "" && v.git.changeCount() == 1 })
+	if !exists("notes.txt") {
+		t.Fatal("untracked file deleted without asking")
+	}
+	// 再回滚一次，勾上"删除新文件"
+	a.openRollback(v)
+	r.on["notes.txt"], r.delNew = true, true
+	tt.Frame()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "clean", func() bool { return v.git.busy == "" && v.git.changeCount() == 0 })
+	if exists("notes.txt") {
+		t.Fatal("new file kept with delete checked")
+	}
+}
+
+// 改动列表的组可以展开收起：收起后只留标题，F7 仍能跳到收起组里的文件。
+func TestChangeGroupsFold(t *testing.T) {
+	a := previewApp(t)
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	if !tt.HasText("notes.txt") || !tt.HasText("main.go") {
+		t.Fatalf("files missing: %v", tt.Texts())
+	}
+	if err := tt.Click("收起未跟踪"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("notes.txt") || !tt.HasText("main.go") {
+		t.Fatal("untracked group did not fold")
+	}
+	// 点组名也能切换
+	if err := tt.Click("改动"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if tt.HasText("README.md") || *v.git.groupOpen(groupChanged) {
+		t.Fatal("changed group did not fold by its title")
+	}
+	if err := tt.Click("改动"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("README.md") {
+		t.Fatal("changed group did not unfold")
+	}
+}
+
+// 编辑器顶栏回滚整个文件：没保存的改动一起丢掉、按磁盘重载；新文件回滚就是删掉并关掉标签。
+func TestRollbackDoc(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	d := v.cur
+	until(t, tt, "open", func() bool { return d.kind == docText && tt.HasText("回滚这个文件…") })
+	d.ed.Insert("// 没保存\n")
+	tt.Frame()
+	if err := tt.Click("回滚这个文件…"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.confirming {
+		t.Fatal("rollback should ask")
+	}
+	a.confirming = false
+	a.confirmDo()
+	head := gitRun(t, root, "show", "HEAD:main.go")
+	until(t, tt, "reloaded", func() bool {
+		return v.git.busy == "" && !d.isModified() && strings.TrimSpace(d.ed.Buffer.String()) == strings.TrimSpace(head)
+	})
+	until(t, tt, "button gone", func() bool { return !tt.HasText("回滚这个文件…") })
+
+	a.openFile(w, filepath.Join(root, "notes.txt"), 0, [2]int{})
+	n := v.cur
+	until(t, tt, "notes", func() bool { return n.kind == docText && tt.HasText("回滚这个文件…") })
+	a.rollbackDoc(v, n)
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "deleted", func() bool { return !slices.Contains(v.docs, n) })
+	if _, err := os.Stat(filepath.Join(root, "notes.txt")); !os.IsNotExist(err) {
+		t.Fatal("new file not deleted")
+	}
+}
+
+// 文件历史：左边是改过这个文件的提交，默认选第一个；右边是这个提交对这个文件的 diff，换提交就换 diff。
+func TestFileHistory(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openLog(w, "", "main.go")
+	v := a.files[w.ID]
+	d := v.logCur
+	until(t, tt, "history", func() bool {
+		h := d.log.hist
+		return d.kind == docLog && h != nil && h.diff != nil && h.diff.kind == docDiff
+	})
+	settle(tt)
+	ld := d.log
+	if len(ld.commits) < 2 {
+		t.Fatalf("main.go has %d commits", len(ld.commits))
+	}
+	first, second := ld.commits[0], ld.commits[1]
+	if ld.hist.sel != first.Hash || ld.hist.diff.diff.newRev != first.Hash {
+		t.Fatal("first commit not selected")
+	}
+	if ld.hist.diff.diff.state.Layout != editor.DiffUnified {
+		t.Fatal("history diff should start unified")
+	}
+	if !tt.HasText(first.Subject) || !tt.HasText(shortRev(first.Hash)) {
+		t.Fatalf("history view lacks the first commit: %v", tt.Texts())
+	}
+	if err := tt.Click(second.Subject); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "second", func() bool {
+		hd := ld.hist.diff
+		return ld.hist.sel == second.Hash && hd.diff.newRev == second.Hash && hd.kind == docDiff
+	})
+	// 往前跳过头：提示一下
+	for range len(ld.hist.diff.diff.state.Hunks()) + 1 {
+		if err := tt.Click("上一处差异"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	until(t, tt, "hint", func() bool { return tt.HasText("已经是第一处差异") })
 }

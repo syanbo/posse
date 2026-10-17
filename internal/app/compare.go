@@ -323,7 +323,7 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 		f := files[i]
 		key := diffKey(v.git.absPath(f.Path), specs[i])
 		row := ui.Row(c.Key(f.Path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(f.Path)
-		selectable(c, row, v.cur != nil && v.cur.path == key)
+		selectedBg(c, row, v.cur != nil && v.cur.path == key)
 		color := t.Accent
 		switch f.Status {
 		case 'A':

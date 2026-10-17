@@ -37,9 +37,10 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	a.operationBanner(c, w, v)
 	// 分页：提交看文件改动和提交框，搁置看 stash
 	var files, stashes []changeRow
+	// 收起的组只留标题；F7 等仍按全部的 g.rows 走
 	for _, r := range g.rows {
 		switch {
-		case r.group != groupStash:
+		case r.group != groupStash && (r.header || *g.groupOpen(r.group)):
 			files = append(files, r)
 		case !r.header:
 			stashes = append(stashes, r)
@@ -122,10 +123,27 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if pressable(iconButtonSized(c, iconRefresh, "刷新", 28, 16)).Clicked() {
 			a.refreshGit(v)
 		}
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, "回滚… ⌥⌘Z", 28, 16)).Clicked() {
+			a.openRollback(v)
+		}
 		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "搁置全部改动（git stash，含未跟踪文件）", 28, 16)).Clicked() {
 			a.gitDo(v, "搁置", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, "") })
 		}
 	})
+}
+
+// letterColor 是状态字母的颜色：新增绿、删除灰、冲突红，其余强调色。
+func letterColor(c *ui.Context, letter byte) ui.Color {
+	t := c.Theme()
+	switch letter {
+	case 'A', '?':
+		return colors(t).sage
+	case 'D':
+		return t.TextMuted
+	case 'U':
+		return t.Danger
+	}
+	return t.Accent
 }
 
 func statusLetter(e gitx.Entry) byte {
@@ -146,7 +164,11 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	p := colors(t)
 	g := &v.git
 	if r.header {
-		ui.Row(c).Height(26).Padding(6, 16, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+		open := g.groupOpen(r.group)
+		head := ui.Row(c).Height(26).Padding(6, 16, 0, 10).Gap(6).AlignItems(ui.Center)
+		head.Children(func() {
+			// 箭头在最左边，点它或组名展开收起
+			disclosure(c, open, "展开"+groupTitles[r.group])
 			// 改动和未跟踪的组标题能一键全选、全不选
 			if r.group == groupChanged || r.group == groupUntracked {
 				var in []gitx.Entry
@@ -172,8 +194,14 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 					}
 				}
 			}
-			ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-			ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group]).Cursor(ui.CursorPointer)
+			title.Children(func() {
+				ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
+				ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+			})
+			if title.Clicked() {
+				*open = !*open
+			}
 		})
 		return
 	}
@@ -184,20 +212,12 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	e := r.entry
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
-	// 比组标题缩进一层：勾选框和组标题的文字对齐
-	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 30).Gap(6).Radius(6).
+	// 比组标题缩进一层：勾选框和组名的文字对齐
+	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 50).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
-	selectable(c, row, v.cur != nil && v.cur.path == key)
+	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
-	color := t.Accent
-	switch letter {
-	case 'A', '?':
-		color = p.sage
-	case 'D':
-		color = t.TextMuted
-	case 'U':
-		color = t.Danger
-	}
+	color := letterColor(c, letter)
 	row.Children(func() {
 		if !e.Conflict {
 			state := pickNone
@@ -264,7 +284,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 				label = "删除…"
 			}
 			if m.Item(label).Shortcut(ui.Cmd|ui.Alt, ui.KeyZ).Chosen() {
-				a.askRollback(v, []gitx.Entry{e})
+				a.askRollback(v, []gitx.Entry{e}, nil)
 			}
 		}
 		m.Separator()
@@ -465,8 +485,40 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	df := d.diff
-	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 14).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
+	ui.Row(c).Height(36).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+		// 上一处、下一处放在最左边（照 WebStorm 的 diff 工具栏），到头了换到同一组的上一个、下一个文件
+		if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 30, 19)).Clicked() {
+			a.stepDiff(w, v, d, -1)
+		}
+		if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 30, 19)).Clicked() {
+			a.stepDiff(w, v, d, 1)
+		}
+		// 点路径弹出同一组的文件，在这个标签里换着看
+		group := diffGroup(v, df)
+		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(4).AlignItems(ui.Center).Shrink(1).
+			Role(ui.RoleButton).Label("切换文件").Tooltip("切换文件 F7 / ⇧F7")
+		if path.Hovered() && len(group) > 1 {
+			path.Background(t.SurfaceHover)
+		}
+		path.Children(func() {
+			ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			if len(group) > 1 {
+				ui.Icon(c, iconDown).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			}
+		})
+		if len(group) > 1 {
+			path.Menu(func(m *ui.Menu) {
+				for _, s := range group {
+					label := s.rel
+					if s.rel == df.rel {
+						label = "✓ " + label
+					}
+					if m.Item(label).Chosen() {
+						a.openDiff(w, s, df.siblings, true)
+					}
+				}
+			})
+		}
 		if label := df.tabLabel(); label != "改动" {
 			ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
 		}
@@ -480,12 +532,6 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			ui.Text(c, msg).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).Padding(0, 0, 0, 8)
 		}
 		ui.Spacer(c)
-		if pressable(iconButtonSized(c, iconUp, "上一处改动 ⇧F7", 24, 14)).Clicked() {
-			a.stepDiff(w, v, d, -1)
-		}
-		if pressable(iconButtonSized(c, iconDown, "下一处改动 F7", 24, 14)).Clicked() {
-			a.stepDiff(w, v, d, 1)
-		}
 		// 排版和忽略空白只对文字的 diff 有用
 		if d.kind != docImageDiff {
 			split := df.state.Layout == editor.DiffSplit
@@ -499,6 +545,9 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
 				df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
 			}
+		}
+		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", 24, 14)).Clicked() {
+			a.rollbackDiffFile(w, v, d)
 		}
 		if pressable(iconButtonSized(c, iconOpen, "在编辑器中打开 F4", 24, 14)).Clicked() {
 			a.diffToEditor(w, v, d)

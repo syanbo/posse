@@ -39,6 +39,7 @@ type options struct {
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
 	onGutterClick func(int)
+	onChangeClick func(int, float32) // Hive
 	contextMenu   func(m *ui.Menu)
 	// The parts' render functions, nil for the editor's own.
 	renderFindBar     func(*ui.Context, ui.Element, *FindBar)

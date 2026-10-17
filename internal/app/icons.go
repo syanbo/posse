@@ -31,8 +31,12 @@ var (
 	iconCopy       = icon(`<rect x="8.5" y="8.5" width="11" height="11" rx="2.25"/><path d="M15.5 8.5V6.25a1.75 1.75 0 0 0-1.75-1.75h-7.5A1.75 1.75 0 0 0 4.5 6.25v7.5c0 .97.78 1.75 1.75 1.75H8.5"/>`)
 	iconOpen       = icon(`<path d="M13.5 4.5h6v6M19.5 4.5 11 13M18 14v4.25c0 .97-.78 1.75-1.75 1.75h-10.5c-.97 0-1.75-.78-1.75-1.75V7.75C4 6.78 4.78 6 5.75 6H10"/>`)
 	iconPhone      = icon(`<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M10.5 17.75h3"/>`)
+	iconArrowUp    = icon(`<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>`)
+	iconArrowDown  = icon(`<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>`)
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
 	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
+	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)
+	iconRollback   = icon(`<path d="M9 14 4.5 9.5 9 5"/><path d="M4.75 9.5h9.5a5.25 5.25 0 0 1 0 10.5H11"/>`)
 	iconRefresh    = icon(`<path d="M19.25 12a7.25 7.25 0 1 1-2.12-5.13"/><path d="M19.5 4.5v3.75h-3.75"/>`)
 	iconShelve     = icon(`<rect x="4" y="4.5" width="16" height="5" rx="1.5"/><path d="M5.5 9.5v8.25c0 .97.78 1.75 1.75 1.75h9.5c.97 0 1.75-.78 1.75-1.75V9.5M10 13h4"/>`)
 	iconUp         = icon(`<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>`)
@@ -44,6 +48,8 @@ var (
 	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`) // 提交时间线，和分支、"历史会话"的时钟区分开
 	iconMemory     = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/>`)
 	iconSkill      = icon(`<path d="M12 4.5 13.8 9l4.7 1.8-4.7 1.8L12 17.2l-1.8-4.6-4.7-1.8L10.2 9z"/><path d="M18 15.5v4M16 17.5h4"/>`)
+	iconMinus      = icon(`<path d="M6 12h12"/>`)
+	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
