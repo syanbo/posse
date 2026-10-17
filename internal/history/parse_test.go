@@ -267,3 +267,51 @@ func TestCodexTitles(t *testing.T) {
 		t.Fatalf("renamed title not searchable: %v", ids(hits))
 	}
 }
+
+// 工作中插进来的话（queued_command，来源是 human）算用户消息；后台任务通知不算。
+func TestClaudeQueuedPrompt(t *testing.T) {
+	home := t.TempDir()
+	fixtures(t, home)
+	x := openIndex(t)
+	update(t, x, home)
+	path := filepath.Join(home, ".claude", "projects", "-work-shop", claudeSID+".jsonl")
+	msgs, err := x.Transcript(context.Background(), Session{Path: path}, TranscriptOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var users []string
+	for _, m := range msgs {
+		if m.Role == "user" {
+			users = append(users, m.Text)
+		}
+		if strings.Contains(m.Text, "bgtasknote") {
+			t.Fatalf("task notification indexed: %q", m.Text)
+		}
+	}
+	want := []string{"顺便看看 Downloads", "[Image #1] 这个也删"}
+	if len(users) < 2 || !reflect.DeepEqual(users[len(users)-2:], want) {
+		t.Fatalf("user messages %q", users)
+	}
+
+	page, err := ReadChatTail("claude", "", path, 40, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var chat []string
+	for _, m := range page.Messages {
+		if m.Role != "user" {
+			continue
+		}
+		for _, b := range m.Blocks {
+			if b.Type == "text" {
+				chat = append(chat, b.Text)
+			}
+		}
+		if strings.Contains(fmt.Sprint(m.Blocks), "bgtasknote") {
+			t.Fatal("task notification in chat")
+		}
+	}
+	if len(chat) < 2 || !reflect.DeepEqual(chat[len(chat)-2:], want) {
+		t.Fatalf("chat user messages %q", chat)
+	}
+}

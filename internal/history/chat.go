@@ -392,6 +392,7 @@ type claudeLine struct {
 		ID      string          `json:"id"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	Attachment claudeAttachment `json:"attachment"`
 }
 
 type claudePiece struct {
@@ -417,6 +418,11 @@ func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
 	var r claudeLine
 	if json.Unmarshal(raw, &r) != nil {
 		return nil
+	}
+	if r.Type == "attachment" {
+		if prompt := r.Attachment.humanPrompt(); prompt != nil {
+			r.Type, r.Message.Content = "user", prompt
+		}
 	}
 	if r.Type != "user" && r.Type != "assistant" {
 		return nil

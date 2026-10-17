@@ -67,7 +67,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - Hive.app 里的可执行文件叫 `Hive`，agent 在终端里调用 `hive` 能找到它，依赖 APFS 默认的大小写不敏感。
 - 会话历史（`hive history`）：
   - 只读各 agent 的会话目录，不写回（唯一的例外：用户在历史页点"移到废纸篓"，由窗口进程把会话文件或会话目录移到 macOS 废纸篓，只认各家会话目录里、路径和会话 ID 对得上的，见 `internal/app/trash.go`）：claude `~/.claude/projects/*/*.jsonl`（不含 subagents）、codex `~/.codex/sessions` 和 `archived_sessions`（标题取 `session_index.jsonl`）、cursor `~/.cursor/projects/*/agent-transcripts/*/*.jsonl`（标题、目录、时间取 `~/.cursor/chats/*/<会话>/meta.json`）、grok `~/.grok/sessions/*/*/chat_history.jsonl`（元数据取同目录 `summary.json`）。
-  - 不入库的内容：agent 以用户身份注入的提醒、技能正文、AGENTS.md/环境信息、本地命令输出、压缩摘要、思考过程；不是用户发起的会话（claude/cursor 子 agent、codex 的 guardian/automation、grok 内部的目标规划）。工具调用和输出各截到 3072 个字符。新格式（`history_mode=paginated`）的 codex 会话只读 `event_msg` 的 `item_completed`。
+  - 不入库的内容：agent 以用户身份注入的提醒、技能正文、AGENTS.md/环境信息、本地命令输出、压缩摘要、思考过程；不是用户发起的会话（claude/cursor 子 agent、codex 的 guardian/automation、grok 内部的目标规划）。工具调用和输出各截到 3072 个字符。新格式（`history_mode=paginated`）的 codex 会话只读 `event_msg` 的 `item_completed`。用户在 Claude 工作时插进来的话不是 `type: user`，而是 `type: attachment` 的 `queued_command`（`origin.kind` 为 human、`commandMode` 为 prompt），历史和手机会话页都按用户消息收；同样是 queued_command 的后台任务通知、子 agent 回报不算。
   - 索引更新在子进程 `hive history index --progress` 里做（首次约 6 秒、读几 GB，常驻进程内存不受影响），按文件的 size/mtime 增量读新增的完整行；offset 前的字节对不上就整份重读，文件消失就删除。没有后台轮询：查询时索引超过 15 秒没更新才更新一次，最多等 3 秒，没做完先用已有结果。历史页开着时每 15 秒刷新一次。
   - 中文逐字切开再交给 unicode61 分词（`splitCJK`），中文按子串匹配；英文末尾按前缀匹配；各词 AND，全都没有时退回 OR 并告诉调用方。排序：标题命中优先，再按 bm25（用户 4、助手 2、工具 1）和命中消息数。
   - 只改了某一家的解析规则时改 `parserVersions`（index.go）：只重读这一家的文件，会话 ID 不变，跨版本继续运行的旧常驻进程照常能查。改表结构或分词才改 `schemaVersion`：旧索引清空重建，旧常驻进程会报 ErrStale，要重启它（会断掉所有终端）。

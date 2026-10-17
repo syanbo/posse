@@ -266,6 +266,26 @@ type claudeRecord struct {
 		Content json.RawMessage `json:"content"`
 		Model   string          `json:"model"`
 	} `json:"message"`
+	Attachment claudeAttachment `json:"attachment"`
+}
+
+// claudeAttachment 是 type 为 attachment 的记录。用户在 agent 工作时插进来的话记成 queued_command，
+// 不是 type 为 user 的记录；后台任务通知、子 agent 回报也是 queued_command，但来源不是 human。
+type claudeAttachment struct {
+	Type        string          `json:"type"`
+	Prompt      json.RawMessage `json:"prompt"`
+	CommandMode string          `json:"commandMode"`
+	Origin      struct {
+		Kind string `json:"kind"`
+	} `json:"origin"`
+}
+
+// humanPrompt 返回用户插进来的话（字符串或内容块数组），不是就返回 nil。
+func (a claudeAttachment) humanPrompt() json.RawMessage {
+	if a.Type != "queued_command" || a.Origin.Kind != "human" || a.CommandMode != "prompt" {
+		return nil
+	}
+	return a.Prompt
 }
 
 var (
@@ -276,8 +296,14 @@ var (
 // claudeTypes 是 claudeParser.line 会处理的记录类型。
 var claudeTypes = quoted("user", "assistant", "custom-title", "ai-title", "summary")
 
+var (
+	claudeAttachmentType = quoted("attachment")
+	claudeQueuedCommand  = []byte(`"queued_command"`)
+)
+
 func (claudeParser) wants(raw []byte, _ *fileState) bool {
-	return hasFieldValue(raw, typeKey, claudeTypes)
+	return hasFieldValue(raw, typeKey, claudeTypes) ||
+		(hasFieldValue(raw, typeKey, claudeAttachmentType) && bytes.Contains(raw, claudeQueuedCommand))
 }
 
 func (claudeParser) line(raw []byte, st *fileState) []Message {
@@ -306,6 +332,12 @@ func (claudeParser) line(raw []byte, st *fileState) []Message {
 			st.Title = r.Summary
 		}
 		return nil
+	case "attachment":
+		prompt := r.Attachment.humanPrompt()
+		if prompt == nil {
+			return nil
+		}
+		r.Type, r.Message.Content = "user", prompt
 	case "user", "assistant":
 	default:
 		return nil

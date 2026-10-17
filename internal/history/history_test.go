@@ -79,6 +79,10 @@ func fixtures(t *testing.T, home string) {
 		`{"type":"user","timestamp":"2026-10-01T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","content":"12G\t/Users/x/Library/Caches"}]}}`,
 		`{"type":"user","timestamp":"2026-10-01T10:00:04Z","message":{"role":"user","content":"<local-command-stdout>compacted output</local-command-stdout>"}}`,
 		`{"type":"user","timestamp":"2026-10-01T10:00:05Z","message":{"role":"user","content":"<command-name>/review</command-name>\n<command-message>review</command-message>\n<command-args>branch-x</command-args>"}}`,
+		// 工作中插进来的话；后台任务通知同样是 queued_command，但不是人发的
+		`{"type":"attachment","timestamp":"2026-10-01T10:00:06Z","attachment":{"type":"queued_command","prompt":"顺便看看 Downloads","commandMode":"prompt","origin":{"kind":"human"}}}`,
+		`{"type":"attachment","timestamp":"2026-10-01T10:00:07Z","attachment":{"type":"queued_command","prompt":[{"type":"text","text":"[Image #1] 这个也删"},{"type":"image","source":{"type":"base64","data":"x"}}],"commandMode":"prompt","origin":{"kind":"human"}}}`,
+		`{"type":"attachment","timestamp":"2026-10-01T10:00:08Z","attachment":{"type":"queued_command","prompt":"<task-notification>bgtasknote</task-notification>","commandMode":"task-notification","origin":{"kind":"task-notification"}}}`,
 		`{"type":"ai-title","aiTitle":"磁盘清理","sessionId":"`+claudeSID+`"}`,
 	)
 	// 子 agent 的过程记录不算会话
