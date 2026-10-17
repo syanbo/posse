@@ -1,22 +1,35 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flterm/flterm.dart' hide TerminalScreen;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
+import '../chat/chat.dart';
 import '../chat/send.dart';
+import '../files/files.dart';
+import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
+import '../ui/theme.dart';
+import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import 'frames.dart';
 
 /// 终端视图。单测不要 import 这个文件：flterm 带原生库，宿主 VM 测试不该编它。
 class TerminalScreen extends StatefulWidget {
-  const TerminalScreen({super.key, required this.model, required this.tab});
+  const TerminalScreen({
+    super.key,
+    required this.model,
+    required this.tab,
+    this.onOpenChat,
+  });
 
   final HiveAppModel model;
   final SessionTab tab;
+
+  /// 设置里选了先开终端时，从这里切到对话页。
+  final VoidCallback? onOpenChat;
 
   @override
   State<TerminalScreen> createState() => _TerminalScreenState();
@@ -37,6 +50,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _gen = 0;
   Future<void> _gate = Future<void>.value();
   String? _notice;
+  final _focus = FocusNode();
 
   @override
   void initState() {
@@ -55,6 +69,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     widget.model.removeListener(_onModel);
     unawaited(_detach());
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -65,8 +80,15 @@ class _TerminalScreenState extends State<TerminalScreen>
     }
   }
 
+  String _titleKey = '';
+
   void _onModel() {
     if (widget.model.rpc != _bound) _schedule();
+    // 标题或状态变了才重建，轮询没变化时不动终端视图
+    final tab = _liveTab;
+    final key =
+        '${tab.title}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$_ended|${widget.model.rpc == null}';
+    if (key != _titleKey && mounted) setState(() => _titleKey = key);
   }
 
   void _onResize(int cols, int rows) {
@@ -93,15 +115,17 @@ class _TerminalScreenState extends State<TerminalScreen>
     final gen = ++_gen;
     final cols = _cols;
     final rows = _rows;
-    await _detach();
-    if (gen != _gen || !mounted) return;
-    // 先听二进制流，再发订阅，快照帧才不会在监听挂上之前过去。
+    // 先用新尺寸订阅，再退掉旧的。常驻进程的尺寸锁定是叠起来的：先退旧的会有一瞬间没有手机，
+    // 终端退回桌面的宽度，agent 按桌面宽度重画一遍，屏幕就乱了。
+    final oldRpc = _bound;
+    final oldStream = _stream;
+    final oldBinary = _binary;
+    _asm.expect();
     _binary = rpc.binary.listen(
       (bytes) {
         if (!mounted || gen != _gen) return;
         final piece = _asm.add(bytes);
-        if (piece == null) return;
-        _apply(piece.bytes);
+        if (piece != null) _apply(piece.bytes);
       },
       onDone: () {
         if (gen != _gen) return;
@@ -109,6 +133,7 @@ class _TerminalScreenState extends State<TerminalScreen>
         _bound = null;
       },
     );
+    await oldBinary?.cancel();
     try {
       final stream = await rpc.subscribe('terminal.subscribe', {
         'terminal': widget.tab.terminalId,
@@ -124,6 +149,12 @@ class _TerminalScreenState extends State<TerminalScreen>
       _heldRows = rows;
       stream.frames.listen((frame) {
         if (!mounted || gen != _gen) return;
+        final sid = frame['streamId'];
+        if (frame['type'] == 'subscribed' && sid is num) {
+          for (final piece in _asm.accept(sid.toInt())) {
+            _apply(piece.bytes);
+          }
+        }
         if (frame['type'] == 'end') {
           setState(() => _notice = '终端已经退出');
         }
@@ -133,6 +164,10 @@ class _TerminalScreenState extends State<TerminalScreen>
       await _binary?.cancel();
       _binary = null;
       setState(() => _notice = '$error');
+    } finally {
+      if (oldRpc != null && oldStream != null) {
+        await _drop(oldRpc, oldStream);
+      }
     }
   }
 
@@ -188,65 +223,194 @@ class _TerminalScreenState extends State<TerminalScreen>
     setState(() => _notice = note);
   }
 
+  /// 连着电脑、工作区列表也回来了，却找不到这个终端：它已经关掉了（或者常驻进程重启过）。
+  bool get _ended {
+    final model = widget.model;
+    if (model.rpc == null || model.worktrees.isEmpty) return false;
+    final tabs = model.tabs[widget.tab.worktreeId] ?? const <SessionTab>[];
+    return !tabs.any((t) => t.terminalId == widget.tab.terminalId);
+  }
+
+  /// 首页每 3 秒刷新的那份标签里找这个终端，状态跟着变；找不到就用打开时的。
+  SessionTab get _liveTab {
+    for (final tab in widget.model.tabs[widget.tab.worktreeId] ?? const []) {
+      if (tab.terminalId == widget.tab.terminalId) return tab;
+    }
+    return widget.tab;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    final c = HiveColors.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(widget.tab.title)),
+      backgroundColor: c.card,
+      appBar: AppBar(
+        backgroundColor: c.band,
+        titleSpacing: 0,
+        title: SessionTitle(tab: _liveTab, model: widget.model, ended: _ended),
+        actions: [
+          FilesButton(
+            model: widget.model,
+            worktree: widget.tab.worktreeId,
+            title: worktreePath(widget.model, widget.tab.worktreeId),
+          ),
+          if (widget.onOpenChat != null)
+            IconButton(
+              tooltip: '对话',
+              onPressed: widget.onOpenChat,
+              icon: const Icon(Icons.forum_outlined),
+            ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            icon: const Icon(Icons.more_horiz_rounded),
+            onSelected: (value) async {
+              if (value != 'close') return;
+              final nav = Navigator.of(context);
+              if (await closeSession(context, widget.model, widget.tab)) {
+                nav.pop();
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'close',
+                child: Text(widget.tab.agent == null ? '关闭终端' : '关闭会话'),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: c.line),
+        ),
+      ),
       body: Column(
         children: [
-          if (_notice != null)
-            Material(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+          ConnectionBanner(model: widget.model),
+          if (_notice != null) NoticeBar(_notice!),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 4, 0),
+              child: TerminalView(
+                controller: _controller,
+                theme: terminalTheme(
+                  c,
+                  fontSize: widget.model.settings.terminalFontSize,
                 ),
-                child: Text(_notice!),
+                // 进来先看画面，点一下终端才弹键盘，不然键盘挡住半屏
+                autofocus: false,
+                focusNode: _focus,
+                padding: EdgeInsets.zero,
               ),
             ),
-          Expanded(
-            child: TerminalView(
-              controller: _controller,
-              theme: dark ? TerminalTheme.dark() : TerminalTheme.light(),
-              autofocus: true,
-              padding: EdgeInsets.zero,
-            ),
           ),
-          _KeyBar(onKey: _send),
+          _KeyBar(
+            onKey: _send,
+            keyboardUp: MediaQuery.viewInsetsOf(context).bottom > 0,
+            onKeyboard: () {
+              if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+                _focus.unfocus();
+              } else {
+                _focus.requestFocus();
+                // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
+                SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+              }
+            },
+          ),
         ],
       ),
     );
   }
 }
 
+/// 终端底色和卡片一致，前景用 Hive 的文字色，等宽字体用 Menlo。
+TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
+  final base = c.dark ? TerminalTheme.dark() : TerminalTheme.light();
+  return TerminalTheme(
+    palette: ColorPalette(
+      ansiColors: base.palette.ansiColors,
+      background: c.card,
+      foreground: c.text,
+    ),
+    fontFamily: monoFamily,
+    fontFamilyFallback: monoFallback,
+    fontSize: fontSize,
+  );
+}
+
 class _KeyBar extends StatelessWidget {
-  const _KeyBar({required this.onKey});
+  const _KeyBar({
+    required this.onKey,
+    required this.keyboardUp,
+    required this.onKeyboard,
+  });
 
   final Future<void> Function(List<int> bytes) onKey;
+  final bool keyboardUp;
+  final VoidCallback onKeyboard;
+
+  /// 键盘开关：弹着时放下来看输出，收着时点它弹出来打字。
+  Widget _hideKeyboard(HiveColors c) {
+    return Material(
+      color: c.fill,
+      borderRadius: BorderRadius.circular(Rd.button),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Rd.button),
+        onTap: onKeyboard,
+        child: SizedBox(
+          width: 44,
+          child: Icon(
+            keyboardUp ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
+            size: 20,
+            color: c.text,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
+    final c = HiveColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.band,
+        border: Border(top: BorderSide(color: c.line)),
+      ),
       child: SafeArea(
         top: false,
         child: SizedBox(
           height: 48,
-          child: ListView(
+          child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            children: [
-              for (final key in termKeys)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: OutlinedButton(
-                    onPressed: () => onKey(key.bytes),
-                    child: Text(key.label),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            itemCount: termKeys.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(width: 6),
+            itemBuilder: (context, i) {
+              if (i == 0) return _hideKeyboard(c);
+              final key = termKeys[i - 1];
+              return Material(
+                color: c.fill,
+                borderRadius: BorderRadius.circular(Rd.button),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(Rd.button),
+                  onTap: () => onKey(key.bytes),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.center,
+                    child: Text(
+                      key.label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: c.text,
+                      ),
+                    ),
                   ),
                 ),
-            ],
+              );
+            },
           ),
         ),
       ),

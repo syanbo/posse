@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../ui/theme.dart';
+
 class MarkdownView extends StatelessWidget {
   const MarkdownView(this.data, {super.key, this.style});
 
@@ -10,8 +12,11 @@ class MarkdownView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = style ?? DefaultTextStyle.of(context).style;
-    final nodes = md.Document(extensionSet: md.ExtensionSet.gitHubFlavored)
-        .parse(data);
+    // 默认会把 < " & 编码成 HTML 实体；这里直接画文字，不经过 HTML
+    final nodes = md.Document(
+      extensionSet: md.ExtensionSet.gitHubFlavored,
+      encodeHtml: false,
+    ).parse(data);
     if (nodes.isEmpty) return Text(data, style: base);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,8 +115,10 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
     'strong' => base.copyWith(fontWeight: FontWeight.w600),
     'em' => base.copyWith(fontStyle: FontStyle.italic),
     'code' => base.copyWith(
-      fontFamily: 'monospace',
-      fontSize: 12,
+      fontFamily: monoFamily,
+      fontFamilyFallback: monoFallback,
+      fontSize: (base.fontSize ?? 15) * 0.88,
+      color: _accent(context),
       backgroundColor: _codeBg(context),
     ),
     'a' => base.copyWith(
@@ -142,10 +149,10 @@ Widget _codeBlock(BuildContext context, md.Element node, TextStyle base) {
   final muted = _muted(context);
   return Container(
     width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 8),
+    margin: const EdgeInsets.only(top: 2, bottom: 10),
     decoration: BoxDecoration(
       color: _codeBg(context),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(Rd.code),
     ),
     clipBehavior: Clip.antiAlias,
     child: Column(
@@ -158,22 +165,17 @@ Widget _codeBlock(BuildContext context, md.Element node, TextStyle base) {
           ),
           child: Text(
             lang.isEmpty ? '代码' : lang,
-            style: base.copyWith(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: muted,
-            ),
+            style: mono(12, color: muted),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        // 代码不折行，横向滚动，缩进才对得齐
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
           child: Text(
             node.textContent.trimRight(),
-            style: base.copyWith(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              height: 1.5,
-            ),
+            softWrap: false,
+            style: mono(12.5, height: 1.55, color: base.color),
           ),
         ),
       ],
@@ -181,22 +183,10 @@ Widget _codeBlock(BuildContext context, md.Element node, TextStyle base) {
   );
 }
 
-Color _accent(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-    ? const Color(0xFFD97757)
-    : const Color(0xFFC15F3C);
+Color _accent(BuildContext context) => HiveColors.of(context).accent;
 
-Color _muted(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-    ? const Color(0xFF9C9893)
-    : const Color(0xFF6F6B66);
+Color _muted(BuildContext context) => HiveColors.of(context).muted;
 
-Color _codeBg(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-    ? const Color(0xFF141413)
-    : const Color(0xFFF5F4F1);
+Color _codeBg(BuildContext context) => HiveColors.of(context).code;
 
-Color _line(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-    ? const Color(0x14FFFFFF)
-    : const Color(0x14000000);
+Color _line(BuildContext context) => HiveColors.of(context).line;

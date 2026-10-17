@@ -1,5 +1,22 @@
 const chatAgents = {'claude', 'codex', 'grok'};
 
+/// worktree.ps 里一个 agent 的摘要：首页据此显示谁在做什么，不用逐个订阅标签。
+class AgentPeek {
+  const AgentPeek({
+    required this.agent,
+    required this.state,
+    this.message,
+    this.tool,
+    this.updatedAt = 0,
+  });
+
+  final String agent;
+  final String state;
+  final String? message;
+  final String? tool;
+  final int updatedAt;
+}
+
 class WorktreeRow {
   const WorktreeRow({
     required this.id,
@@ -9,6 +26,9 @@ class WorktreeRow {
     required this.branch,
     required this.status,
     required this.live,
+    this.isMain = false,
+    this.agents = const [],
+    this.lastActivityAt = 0,
   });
 
   final String id;
@@ -18,6 +38,9 @@ class WorktreeRow {
   final String branch;
   final String status;
   final int live;
+  final bool isMain;
+  final List<AgentPeek> agents;
+  final int lastActivityAt;
 
   String get subtitle {
     if (branch.isNotEmpty) return branch;
@@ -90,6 +113,33 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
         status: item['status'] as String? ?? 'inactive',
         live: item['liveTerminalCount'] is num
             ? (item['liveTerminalCount'] as num).toInt()
+            : 0,
+        isMain: item['isMainWorktree'] == true,
+        agents: _agents(item['agents']),
+        lastActivityAt: item['lastActivityAt'] is num
+            ? (item['lastActivityAt'] as num).toInt()
+            : 0,
+      ),
+    );
+  }
+  return out;
+}
+
+List<AgentPeek> _agents(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <AgentPeek>[];
+  for (final item in raw) {
+    if (item is! Map) continue;
+    final agent = item['agentType'];
+    if (agent is! String || agent.isEmpty) continue;
+    out.add(
+      AgentPeek(
+        agent: agent,
+        state: item['state'] as String? ?? '',
+        message: item['lastAssistantMessage'] as String?,
+        tool: item['toolName'] as String?,
+        updatedAt: item['updatedAt'] is num
+            ? (item['updatedAt'] as num).toInt()
             : 0,
       ),
     );

@@ -238,7 +238,10 @@ class PhoneRpc {
     if (message['ok'] == true) {
       final result = message['result'];
       waiter.complete(
-        result is Map ? result.cast<String, Object?>() : <String, Object?>{},
+        // 有的方法（如 files.readDir）返回数组，放在 value 里交给调用方
+        result is Map
+            ? result.cast<String, Object?>()
+            : <String, Object?>{'value': result},
       );
     } else {
       final error = message['error'];

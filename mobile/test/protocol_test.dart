@@ -224,9 +224,108 @@ void main() {
     await link.close();
     await networks.close();
   });
+
+  test(
+    'a dropped connection is cleared and retried until it comes back',
+    () async {
+      final hostKeys = generateKeyPair();
+      final offer = PairingOffer(
+        endpoint: 'only',
+        endpoints: const [],
+        deviceToken: 'tok',
+        publicKeyB64: b64(hostKeys.publicKey),
+      );
+      final hosts = <ByteSocket>[];
+      var failures = 0;
+      var changes = 0;
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (failures > 0) {
+            failures--;
+            throw StateError('down');
+          }
+          final (client, host) = pipePair();
+          hosts.add(host);
+          unawaited(_host(host, hostKeys, offer.deviceToken));
+          return client;
+        },
+      );
+      link.onActivity = () => changes++;
+      final first = await link.start();
+      // 电脑那头断了，前两次重连也失败（常驻进程还在重启）
+      failures = 2;
+      await hosts.single.close();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(link.rpc, isNull);
+      expect(changes, greaterThan(0));
+      final back = await link.connections.first.timeout(
+        const Duration(seconds: 5),
+      );
+      expect(identical(back, first), isFalse);
+      expect((await back.call('status.get', {}))['protocolVersion'], 3);
+      await link.close();
+    },
+  );
+
+  test('an address that never answers does not stall reconnecting', () async {
+    final hostKeys = generateKeyPair();
+    final offer = PairingOffer(
+      endpoint: 'good',
+      endpoints: const ['hang'],
+      deviceToken: 'tok',
+      publicKeyB64: b64(hostKeys.publicKey),
+    );
+    final hosts = <ByteSocket>[];
+    var down = false;
+    final link = HiveLink(
+      offer: offer,
+      attemptTimeout: const Duration(milliseconds: 200),
+      connect: (url, cancel) async {
+        // 这个地址既不通也不报错，只能靠超时放弃
+        if (url == 'hang') return Completer<ByteSocket>().future;
+        if (down) throw StateError('refused');
+        final (client, host) = pipePair();
+        hosts.add(host);
+        unawaited(_host(host, hostKeys, offer.deviceToken));
+        return client;
+      },
+    );
+    await link.start();
+    down = true;
+    await hosts.single.close();
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(link.rpc, isNull);
+    // 电脑回来了：挂着的地址每轮 200ms 超时，重连照样接上
+    down = false;
+    final back = await link.connections.first.timeout(
+      const Duration(seconds: 5),
+    );
+    expect((await back.call('status.get', {}))['protocolVersion'], 3);
+    await link.close();
+  });
 }
 
+/// 假电脑。手机挂断时读者报 socket closed，对它来说就是正常结束。
 Future<void> _host(
+  ByteSocket socket,
+  KeyPair hostKeys,
+  String token, {
+  bool rejectCapabilities = false,
+}) async {
+  try {
+    await _serve(
+      socket,
+      hostKeys,
+      token,
+      rejectCapabilities: rejectCapabilities,
+    );
+  } on E2eeException {
+    // 对端挂断
+  }
+}
+
+Future<void> _serve(
   ByteSocket socket,
   KeyPair hostKeys,
   String token, {

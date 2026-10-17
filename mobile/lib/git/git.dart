@@ -1,6 +1,9 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
+import '../ui/theme.dart';
+import '../ui/widgets.dart';
 import 'status.dart';
 
 String gitWorktree(String id) => id.startsWith('id:') ? id : 'id:$id';
@@ -17,7 +20,8 @@ Future<GitDiffView> loadGitDiff(PhoneRpc rpc, String worktree, String path) {
       .then(parseGitDiff);
 }
 
-class GitScreen extends StatefulWidget {
+/// 单独打开的改动页。工作区页里用的是不带顶栏的 GitPane。
+class GitScreen extends StatelessWidget {
   const GitScreen({
     super.key,
     required this.title,
@@ -30,10 +34,25 @@ class GitScreen extends StatefulWidget {
   final Future<GitDiffView> Function(String path) loadDiff;
 
   @override
-  State<GitScreen> createState() => _GitScreenState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: GitPane(loadStatus: loadStatus, loadDiff: loadDiff),
+    );
+  }
 }
 
-class _GitScreenState extends State<GitScreen> {
+class GitPane extends StatefulWidget {
+  const GitPane({super.key, required this.loadStatus, required this.loadDiff});
+
+  final Future<GitStatusView> Function() loadStatus;
+  final Future<GitDiffView> Function(String path) loadDiff;
+
+  @override
+  State<GitPane> createState() => _GitPaneState();
+}
+
+class _GitPaneState extends State<GitPane> {
   GitStatusView? _status;
   String? _error;
   var _loading = true;
@@ -45,10 +64,7 @@ class _GitScreenState extends State<GitScreen> {
   }
 
   Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() => _error = null);
     try {
       final status = await widget.loadStatus();
       if (!mounted) return;
@@ -65,87 +81,217 @@ class _GitScreenState extends State<GitScreen> {
     }
   }
 
-  Future<void> _open(GitFileChange file) async {
+  void _open(GitFileChange file) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) {
-        return _DiffDrawer(
-          path: file.path,
-          load: () => widget.loadDiff(file.path),
-        );
-      },
+      useSafeArea: true,
+      builder: (context) =>
+          _DiffSheet(file: file, load: () => widget.loadDiff(file.path)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final status = _status;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        actions: [
-          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
-        ],
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_error != null && status == null) {
+      return EmptyState(
+        icon: Icons.cloud_off_rounded,
+        text: _error!,
+        error: true,
+        action: TextButton(onPressed: _reload, child: const Text('重试')),
+      );
+    }
+    final files = status?.files ?? const <GitFileChange>[];
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: _reload),
+        SliverList.list(
+          children: [
+            if (_error != null) NoticeBar(_error!),
+            if (status != null) _BranchCard(status: status),
+            if (files.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 48),
+                child: EmptyState(
+                  icon: Icons.check_circle_outline_rounded,
+                  text: '工作区是干净的，没有改动',
                 ),
+              )
+            else
+              Section(
+                title: '${files.length} 个文件有改动',
+                inset: 40,
+                children: [for (final file in files) _fileRow(context, file)],
               ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text(
-                    status?.headline ?? '',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Expanded(
-                  child: status == null || status.files.isEmpty
-                      ? const Center(child: Text('没有改动'))
-                      : ListView.builder(
-                          itemCount: status.files.length,
-                          itemBuilder: (context, index) {
-                            final file = status.files[index];
-                            return ListTile(
-                              title: Text(file.path),
-                              subtitle: file.stats.isEmpty
-                                  ? null
-                                  : Text(file.stats),
-                              onTap: () => _open(file),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _fileRow(BuildContext context, GitFileChange file) {
+    final c = HiveColors.of(context);
+    final slash = file.path.lastIndexOf('/');
+    final name = slash < 0 ? file.path : file.path.substring(slash + 1);
+    final dir = slash < 0 ? '' : file.path.substring(0, slash);
+    return RowTile(
+      leading: SizedBox(
+        width: 14,
+        child: Text(
+          _letter(file),
+          style: mono(
+            13,
+            color: _letterColor(c, file),
+          ).copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
+      title: Text(name),
+      subtitle: dir.isEmpty
+          ? null
+          : Text(dir, style: mono(12, color: c.muted), maxLines: 1),
+      trailing: _Stats(file: file),
+      onTap: () => _open(file),
     );
   }
 }
 
-class _DiffDrawer extends StatefulWidget {
-  const _DiffDrawer({required this.path, required this.load});
+/// 手机拿到的改动里没有 git 的状态字母，只分得出冲突、未跟踪和其余的改动。
+String _letter(GitFileChange file) {
+  if (file.conflict) return 'U';
+  if (file.untracked) return '?';
+  return 'M';
+}
 
-  final String path;
+Color _letterColor(HiveColors c, GitFileChange file) {
+  if (file.conflict) return c.danger;
+  if (file.untracked) return c.sage;
+  return c.accent;
+}
+
+class _Stats extends StatelessWidget {
+  const _Stats({required this.file});
+
+  final GitFileChange file;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    const tnum = [FontFeature.tabularFigures()];
+    if (file.binary || (file.added == 0 && file.deleted == 0)) {
+      final label = file.stats;
+      if (label.isEmpty) return const SizedBox.shrink();
+      return Text(label, style: TextStyle(fontSize: 12, color: c.faint));
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (file.added > 0)
+          Text(
+            '+${file.added}',
+            style: TextStyle(fontSize: 13, color: c.sage, fontFeatures: tnum),
+          ),
+        if (file.added > 0 && file.deleted > 0) const SizedBox(width: 6),
+        if (file.deleted > 0)
+          Text(
+            '−${file.deleted}',
+            style: TextStyle(fontSize: 13, color: c.danger, fontFeatures: tnum),
+          ),
+      ],
+    );
+  }
+}
+
+class _BranchCard extends StatelessWidget {
+  const _BranchCard({required this.status});
+
+  final GitStatusView status;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final chips = <(IconData, String, Color)>[
+      if (status.ahead > 0)
+        (Icons.arrow_upward_rounded, '领先 ${status.ahead}', c.muted),
+      if (status.behind > 0)
+        (Icons.arrow_downward_rounded, '落后 ${status.behind}', c.muted),
+      if (status.operation.isNotEmpty)
+        (Icons.warning_amber_rounded, status.operation, c.honey),
+    ];
+    return Section(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.call_split_rounded, size: 18, color: c.accent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      status.branch.isEmpty ? '分离头指针' : status.branch,
+                      overflow: TextOverflow.ellipsis,
+                      style: mono(
+                        14,
+                        color: c.text,
+                      ).copyWith(fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+              if (status.upstream.isNotEmpty || chips.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    if (status.upstream.isNotEmpty)
+                      Text(
+                        '跟踪 ${status.upstream}',
+                        style: TextStyle(fontSize: 12, color: c.muted),
+                      ),
+                    for (final (icon, text, color) in chips)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 14, color: color),
+                          const SizedBox(width: 3),
+                          Text(
+                            text,
+                            style: TextStyle(fontSize: 12, color: color),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiffSheet extends StatefulWidget {
+  const _DiffSheet({required this.file, required this.load});
+
+  final GitFileChange file;
   final Future<GitDiffView> Function() load;
 
   @override
-  State<_DiffDrawer> createState() => _DiffDrawerState();
+  State<_DiffSheet> createState() => _DiffSheetState();
 }
 
-class _DiffDrawerState extends State<_DiffDrawer> {
+class _DiffSheetState extends State<_DiffSheet> {
   GitDiffView? _diff;
   String? _error;
 
@@ -166,54 +312,112 @@ class _DiffDrawerState extends State<_DiffDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height * 0.7;
+    final c = HiveColors.of(context);
+    final height = MediaQuery.sizeOf(context).height * 0.82;
     final diff = _diff;
-    return SafeArea(
-      child: SizedBox(
-        height: height,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    return SizedBox(
+      height: height,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.file.path,
+                    style: mono(
+                      14,
+                      color: c.text,
+                    ).copyWith(fontWeight: FontWeight.w500),
+                  ),
+                ),
+                _Stats(file: widget.file),
+              ],
+            ),
+          ),
+          if (diff?.truncated == true)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                widget.path,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                '差异太长，只显示前面一部分',
+                style: TextStyle(fontSize: 12, color: c.honey),
               ),
             ),
-            if (diff?.truncated == true)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('差异太长，只显示前面一部分'),
-              ),
-            Expanded(
-              child: _error != null
-                  ? Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    )
-                  : diff == null
-                  ? const Center(child: CircularProgressIndicator())
-                  : Scrollbar(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                        child: SelectableText(
-                          diff.diff.isEmpty ? '没有差异' : diff.diff,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            height: 1.35,
-                          ),
-                        ),
+          Divider(height: 1, color: c.line),
+          Expanded(
+            child: _error != null
+                ? EmptyState(
+                    icon: Icons.error_outline_rounded,
+                    text: _error!,
+                    error: true,
+                  )
+                : diff == null
+                ? const Center(child: CircularProgressIndicator())
+                : diff.diff.isEmpty
+                ? const EmptyState(icon: Icons.notes_rounded, text: '没有差异')
+                : _DiffLines(text: diff.diff),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// unified diff 按行上色：新增绿底、删除红底、段头淡底。长行横向滚动，不折行，对得齐。
+class _DiffLines extends StatelessWidget {
+  const _DiffLines({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final lines = text.split('\n');
+    if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
+    // 跳过 diff --git、index、---、+++ 这些文件头，标题里已经有路径
+    final start = lines.indexWhere((l) => l.startsWith('@@'));
+    final body = start < 0 ? lines : lines.sublist(start);
+    final alpha = c.dark ? 0.16 : 0.10;
+    return Scrollbar(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 24),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SelectionArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final line in body)
+                  Container(
+                    color: line.startsWith('@@')
+                        ? c.fill
+                        : line.startsWith('+')
+                        ? c.sage.withValues(alpha: alpha)
+                        : line.startsWith('-')
+                        ? c.danger.withValues(alpha: alpha)
+                        : null,
+                    constraints: BoxConstraints(
+                      minWidth: MediaQuery.sizeOf(context).width,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 1,
+                    ),
+                    child: Text(
+                      line.isEmpty ? ' ' : line,
+                      softWrap: false,
+                      style: mono(
+                        12,
+                        height: 1.55,
+                        color: line.startsWith('@@') ? c.muted : c.text,
                       ),
                     ),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

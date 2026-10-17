@@ -15,6 +15,7 @@ Uint8List frame(int op, List<int> payload, {int sid = 7, int seq = 3}) {
 }
 
 void main() {
+  _overlapTest();
   test('parses the 16-byte header and reassembles a snapshot', () {
     final parsed = parseTermFrame(
       frame(termOpOutput, [0x61], seq: (1 << 32) + 5),
@@ -48,4 +49,33 @@ void main() {
     expect(byLabel['←'], [0x1b, 0x5b, 0x44]);
     expect(byLabel['→'], [0x1b, 0x5b, 0x43]);
   });
+}
+
+Uint8List _frame(int op, int sid, List<int> payload) {
+  final b = Uint8List(16 + payload.length);
+  b[0] = termFrameMagic;
+  b[1] = termFrameVersion;
+  b[2] = op;
+  ByteData.sublistView(b).setUint32(4, sid, Endian.little);
+  b.setRange(16, b.length, payload);
+  return b;
+}
+
+void _overlapTest() {
+  test(
+    'a new subscription only takes its own frames, buffered until known',
+    () {
+      final asm = TermAssembler()..expect();
+      // 旧订阅还在推，新订阅的快照在知道编号之前就到了
+      expect(asm.add(_frame(termOpOutput, 1, [0x61])), isNull);
+      expect(asm.add(_frame(termOpSnapshotStart, 2, [])), isNull);
+      expect(asm.add(_frame(termOpSnapshotChunk, 2, [0x62])), isNull);
+      expect(asm.add(_frame(termOpSnapshotEnd, 2, [])), isNull);
+      final early = asm.accept(2);
+      expect(early.single.snapshot, isTrue);
+      expect(early.single.bytes, [0x62]);
+      expect(asm.add(_frame(termOpOutput, 1, [0x61])), isNull);
+      expect(asm.add(_frame(termOpOutput, 2, [0x63]))!.bytes, [0x63]);
+    },
+  );
 }

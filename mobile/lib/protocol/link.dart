@@ -95,11 +95,15 @@ class HiveLink {
     required this.offer,
     required this.connect,
     Stream<String>? networkSignatures,
+    this.attemptTimeout = const Duration(seconds: 10),
   }) : networkSignatures = networkSignatures ?? const Stream.empty();
+
+  /// 每次尝试（连上加握手）最多等多久。
 
   final PairingOffer offer;
   final SocketConnector connect;
   final Stream<String> networkSignatures;
+  final Duration attemptTimeout;
 
   PhoneRpc? rpc;
   Object? lastError;
@@ -126,32 +130,25 @@ class HiveLink {
     try {
       final won = await raceEndpoints<PhoneRpc>(
         urls: offer.dialUrls,
-        attempt: (url, cancel) async {
-          final socket = await connect(url, cancel);
-          if (cancel.cancelled) {
-            await socket.close();
-            throw const RaceCancelled();
-          }
-          try {
-            return await handshake(
-              socket: socket,
-              offer: offer,
-              cancel: cancel,
-            );
-          } catch (error) {
-            await socket.close();
-            rethrow;
-          }
-        },
+        // 每次尝试有时限，超时就算失败；不然某个地址一直挂着，断线重连会停在这一轮
+        attempt: (url, cancel) => _attempt(url, cancel).timeout(
+          attemptTimeout,
+          onTimeout: () {
+            cancel.cancel();
+            throw TimeoutException('connect $url');
+          },
+        ),
         abandon: (value) => value.close(),
       );
       if (epoch != _epoch) {
         await won.value.close();
         throw const RaceCancelled();
       }
-      // 套接字自己断了再握手。主动 close 不会进这里。
+      // 套接字自己断了再握手。主动 close 不会进这里。先把死掉的连接放掉，界面才知道断了。
       won.value.watchClose(() {
         if (epoch != _epoch || !identical(rpc, won.value)) return;
+        rpc = null;
+        onActivity?.call();
         unawaited(_reopen());
       });
       final previous = rpc;
@@ -170,18 +167,54 @@ class HiveLink {
     }
   }
 
+  Future<PhoneRpc> _attempt(String url, CancelToken cancel) async {
+    final socket = await connect(url, cancel);
+    if (cancel.cancelled) {
+      unawaited(socket.close().catchError((Object _) {}));
+      throw const RaceCancelled();
+    }
+    try {
+      return await handshake(socket: socket, offer: offer, cancel: cancel);
+    } catch (error) {
+      unawaited(socket.close().catchError((Object _) {}));
+      rethrow;
+    }
+  }
+
   Future<void> _reopenNow() async {
     try {
       await open();
     } catch (_) {}
   }
 
+  var _closed = false;
+  var _reopening = false;
+
+  /// 断线后一直重连，间隔从 0.3 秒翻倍到 5 秒，连上或者 [close] 为止。电脑重启常驻进程时手机自己接上。
   Future<void> _reopen() async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    await _reopenNow();
+    if (_reopening) return;
+    _reopening = true;
+    var delay = const Duration(milliseconds: 300);
+    try {
+      while (!_closed && rpc == null) {
+        await Future<void>.delayed(delay);
+        if (_closed || rpc != null) return;
+        try {
+          await open();
+          return;
+        } catch (_) {}
+        // 局域网里电脑重启常驻进程只要几秒，间隔封顶 5 秒，回来得快
+        delay = delay * 2 > const Duration(seconds: 5)
+            ? const Duration(seconds: 5)
+            : delay * 2;
+      }
+    } finally {
+      _reopening = false;
+    }
   }
 
   Future<void> close() async {
+    _closed = true;
     _epoch++;
     await _network?.cancel();
     _network = null;

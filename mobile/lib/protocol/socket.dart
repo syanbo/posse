@@ -45,7 +45,8 @@ class WebSocketByteSocket implements ByteSocket {
     try {
       await channel.ready;
     } catch (error) {
-      await socket.close();
+      // 没连上的通道关起来可能永远不结束，不能等它，否则这次尝试一直挂着、重连也停在这里
+      unawaited(socket.close().catchError((Object _) {}));
       rethrow;
     }
     if (cancel.cancelled) {
@@ -107,6 +108,11 @@ class PipeSocket implements ByteSocket {
   Future<void> close() async {
     _closed = true;
     if (!_incoming.isClosed) await _incoming.close();
+    // 和真的 WebSocket 一样，一头挂断另一头也收到结束
+    final other = peer;
+    if (other != null && !other._incoming.isClosed) {
+      await other._incoming.close();
+    }
   }
 }
 
