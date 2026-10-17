@@ -640,8 +640,18 @@ func (t *Terminal) closePTY() {
 }
 
 // strippedEnv 是不应从启动常驻进程的环境泄漏进新终端的变量。
-var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "HIVE_", "TERM_PROGRAM"}
-var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true, "FORCE_HYPERLINK": true}
+var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "HIVE_", "TERM_PROGRAM", "GROK_"}
+var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true, "FORCE_HYPERLINK": true,
+	// agent 给工具调用设的非交互环境（关颜色、关分页、git 不开编辑器不问密码）。agent 在终端里用 open 拉起 Hive.app 时，
+	// 窗口和常驻进程会继承它们，再漏进之后的每个终端：Claude Code 看到 NO_COLOR 就整屏没颜色。
+	// 交互 shell 会重新读用户的启动文件，用户自己设的照样生效。
+	"NO_COLOR": true, "FORCE_COLOR": true, "CLICOLOR": true, "CLICOLOR_FORCE": true,
+	"PAGER": true, "GIT_PAGER": true, "GH_PAGER": true, "AWS_PAGER": true, "MANPAGER": true, "SYSTEMD_PAGER": true,
+	"GIT_EDITOR": true, "GIT_SEQUENCE_EDITOR": true, "GIT_TERMINAL_PROMPT": true,
+	"NPM_CONFIG_COLOR": true, "PIP_NO_COLOR": true, "PIP_PROGRESS_BAR": true, "CARGO_TERM_COLOR": true}
+
+// strippedValues 只在值和 agent 的非交互设置一样时去掉：这些变量平时也用来放 JVM 参数。
+var strippedValues = map[string]string{"GRADLE_OPTS": "-Dorg.gradle.console=plain", "MAVEN_OPTS": "-Dstyle.color=never"}
 
 // Environ 生成终端进程的环境变量。
 func Environ(extra []string) []string {
@@ -649,7 +659,7 @@ func Environ(extra []string) []string {
 	hasLang := false
 	for _, kv := range os.Environ() {
 		k, v, _ := strings.Cut(kv, "=")
-		if strippedNames[k] || hasAnyPrefix(k, strippedPrefixes) {
+		if strippedNames[k] || hasAnyPrefix(k, strippedPrefixes) || (strippedValues[k] != "" && strippedValues[k] == v) {
 			continue
 		}
 		switch k {

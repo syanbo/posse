@@ -32,8 +32,18 @@ func TestEchoAndQueries(t *testing.T) {
 func TestEnvironStripsHostAgentVars(t *testing.T) {
 	t.Setenv("ORCA_PANE_KEY", "x")
 	t.Setenv("CLAUDECODE", "1")
+	// 从 agent 的工具调用里拉起 Hive.app 时带进来的非交互环境
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "0")
+	t.Setenv("GIT_EDITOR", "true")
+	t.Setenv("GROK_AGENT", "1")
+	t.Setenv("GRADLE_OPTS", "-Dorg.gradle.console=plain")
+	t.Setenv("MAVEN_OPTS", "-Xmx2g")
 	env := strings.Join(Environ([]string{"HIVE_TERMINAL_ID=t_1"}), "\n")
-	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE="} {
+	if !strings.Contains(env, "MAVEN_OPTS=-Xmx2g") {
+		t.Fatal("user's MAVEN_OPTS dropped")
+	}
+	for _, bad := range []string{"ORCA_PANE_KEY=", "CLAUDECODE=", "NO_COLOR=", "FORCE_COLOR=", "GIT_EDITOR=", "GROK_AGENT=", "GRADLE_OPTS="} {
 		if strings.Contains(env, bad) {
 			t.Fatalf("environment leaks %s", bad)
 		}
