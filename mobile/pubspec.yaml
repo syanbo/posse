@@ -1,0 +1,26 @@
+name: hive_mobile
+description: "Hive mobile client"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  connectivity_plus: ^7.3.2
+  crypto: ^3.0.7
+  flterm: ^0.0.5
+  flutter:
+    sdk: flutter
+  markdown: ^7.3.1
+  pinenacl: ^0.6.0
+  shared_preferences: ^2.5.6
+  web_socket_channel: ^3.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

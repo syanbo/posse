@@ -11,7 +11,7 @@ import (
 	"rsc.io/qr"
 )
 
-// mobileView 是"连接手机"对话框：Orca 手机 App 扫码配对，下面列出配对过的手机。
+// mobileView 是"连接手机"对话框：手机扫码配对，下面列出配对过的手机。
 type mobileView struct {
 	open     bool
 	url      string
@@ -143,7 +143,7 @@ func (a *app) mobileDialog(c *ui.Context) {
 	ui.Modal(c, &m.open, func() {
 		ui.Column(c).Width(400).Gap(12).Children(func() {
 			titleText(c, "连接手机", fsCardTitle)
-			ui.Text(c, "用 Orca 手机 App 扫码（Pair Desktop → Continue），之后在手机上就能看终端、打字和新开 agent。").
+			ui.Text(c, "用 Hive Mobile 扫这个码。扫不了就点「复制配对码」，贴进 App 的配对页。").
 				FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
 			a.mobileAddressPicker(c)
 			ui.Row(c).Justify(ui.Center).Children(func() {
