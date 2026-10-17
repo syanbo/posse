@@ -196,6 +196,26 @@ func previewGit(t *testing.T, a *app) {
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
+// previewRollback 在几层目录里各改几个文件，打开批量回滚对话框，收起其中一个目录。
+func previewRollback(t *testing.T, a *app) {
+	root := gitWorkspace(t, a)
+	for _, rel := range []string{"internal/app/view.go", "internal/app/rollback.go", "internal/gitx/status.go", "docs/plans/git-ops.html", "design/notes.md"} {
+		os.MkdirAll(filepath.Join(root, filepath.Dir(rel)), 0o755)
+		os.WriteFile(filepath.Join(root, rel), []byte("package x\n"), 0o644)
+	}
+	gitRun(t, root, "add", "internal", "docs")
+	gitRun(t, root, "commit", "-q", "-m", "tree")
+	os.WriteFile(filepath.Join(root, "internal/app/view.go"), []byte("package x\n\nfunc view() {}\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "internal/gitx/status.go"), []byte("package y\n"), 0o644)
+	os.Remove(filepath.Join(root, "docs/plans/git-ops.html"))
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	until(t, tt, "status", func() bool { return v.git.changeCount() == 7 })
+	a.openRollback(v)
+	a.rollback.folded["design"] = true
+	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+}
+
 func previewBranches(t *testing.T, a *app) {
 	branchWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -446,6 +466,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewGit(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-changes-"+suffix+".png")
+
+		// 批量回滚对话框：按目录排的文件树
+		a = previewApp(t)
+		previewRollback(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-rollback-"+suffix+".png")
 
 		// 分支弹窗：在终端标签上点分支名打开
 		a = previewApp(t)

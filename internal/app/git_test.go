@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -929,4 +930,28 @@ func TestFileHistory(t *testing.T) {
 		}
 	}
 	until(t, tt, "hint", func() bool { return tt.HasText("已经是第一处差异") })
+}
+
+// 回滚对话框的文件树：目录在前、文件在后，单子目录的中间层并成一行，收起的目录不列下面的行。
+func TestRollbackTree(t *testing.T) {
+	entries := []gitx.Entry{{Path: "internal/app/view.go"}, {Path: "README.md"}, {Path: "internal/app/rollback.go"}, {Path: "docs/a.md"}, {Path: "docs/plans/b.html"}}
+	show := func(rows []rollbackRow) string {
+		var b strings.Builder
+		for _, r := range rows {
+			fmt.Fprintf(&b, "%s%s", strings.Repeat("  ", r.depth), r.name)
+			if r.dir {
+				fmt.Fprintf(&b, "/%d", len(r.files))
+			}
+			b.WriteString("\n")
+		}
+		return b.String()
+	}
+	want := "docs/2\n  plans/1\n    b.html\n  a.md\ninternal/app/2\n  rollback.go\n  view.go\nREADME.md\n"
+	if got := show(rollbackTree(entries, nil)); got != want {
+		t.Fatalf("tree:\n%s\nwant:\n%s", got, want)
+	}
+	want = "docs/2\ninternal/app/2\n  rollback.go\n  view.go\nREADME.md\n"
+	if got := show(rollbackTree(entries, map[string]bool{"docs": true})); got != want {
+		t.Fatalf("folded:\n%s", got)
+	}
 }
