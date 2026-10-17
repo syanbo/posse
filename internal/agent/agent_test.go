@@ -1,7 +1,10 @@
 package agent
 
 import (
+	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -15,6 +18,33 @@ func TestQuoteRoundTrip(t *testing.T) {
 		if string(out) != s {
 			t.Fatalf("Quote(%q) round-trips to %q", s, out)
 		}
+	}
+}
+
+func TestClaudePermissionTimeout(t *testing.T) {
+	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	if _, err := l.claudeSettings(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(l.Home, "claude-hooks.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Timeout int `json:"timeout"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Hooks["PermissionRequest"][0].Hooks[0].Timeout != 40 {
+		t.Fatalf("PermissionRequest timeout %+v", doc.Hooks["PermissionRequest"])
+	}
+	if doc.Hooks["Stop"][0].Hooks[0].Timeout != 5 {
+		t.Fatalf("Stop timeout %+v", doc.Hooks["Stop"])
 	}
 }
 

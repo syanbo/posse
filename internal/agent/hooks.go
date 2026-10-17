@@ -19,17 +19,18 @@ const (
 
 // hookPayload 是 Claude Code、Codex、Cursor hooks 输入里 hive 用到的字段。
 type hookPayload struct {
-	SessionID        string `json:"session_id"`
-	TranscriptPath   string `json:"transcript_path"`
-	AgentID          string `json:"agent_id"`
-	Source           string `json:"source"`
-	Reason           string `json:"reason"`
-	Trigger          string `json:"trigger"`
-	ToolName         string `json:"tool_name"`
-	NotificationType string `json:"notification_type"`
-	Message          string `json:"message"`
-	LastMessage      string `json:"last_assistant_message"`
-	Error            string `json:"error"`
+	SessionID        string          `json:"session_id"`
+	TranscriptPath   string          `json:"transcript_path"`
+	AgentID          string          `json:"agent_id"`
+	Source           string          `json:"source"`
+	Reason           string          `json:"reason"`
+	Trigger          string          `json:"trigger"`
+	ToolName         string          `json:"tool_name"`
+	ToolInput        json.RawMessage `json:"tool_input"`
+	NotificationType string          `json:"notification_type"`
+	Message          string          `json:"message"`
+	LastMessage      string          `json:"last_assistant_message"`
+	Error            string          `json:"error"`
 }
 
 // MapEvent 把 hooks 事件映射成 agent 状态；不影响状态的事件返回 false。
@@ -64,7 +65,69 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 	case event == "StopFailure":
 		st.Message = p.Error
 	}
+	if st.Status == StatusWaiting {
+		st.ToolName = p.ToolName
+		switch {
+		case event == "PreToolUse" && (p.ToolName == "AskUserQuestion" || p.ToolName == "request_user_input"):
+			// 答题卡要原样的 tool_input，手机按 questions 画选项
+			st.Prompt = string(p.ToolInput)
+		case event == "PermissionRequest" && p.ToolName != "":
+			summary := approvalSummary(p.ToolInput)
+			st.ToolInput = summary
+			b, _ := json.Marshal(approvalPrompt{Approval: approvalBody{Tool: p.ToolName, Summary: summary}})
+			st.Prompt = string(b)
+		}
+	}
 	return st, true
+}
+
+type approvalBody struct {
+	Tool    string `json:"tool"`
+	Summary string `json:"summary"`
+}
+
+type approvalPrompt struct {
+	Approval approvalBody `json:"approval"`
+}
+
+// approvalSummary 从权限请求的 tool_input 里取一行摘要：命令、路径、URL 或匹配式，最长 200 个字符。
+func approvalSummary(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return ""
+	}
+	for _, k := range []string{"command", "file_path", "path", "url", "pattern"} {
+		v := m[k]
+		if len(v) == 0 {
+			continue
+		}
+		var s string
+		if json.Unmarshal(v, &s) == nil && s != "" {
+			return cutRunes(s, 200)
+		}
+		var list []string
+		if json.Unmarshal(v, &list) == nil && len(list) > 0 {
+			s = strings.Join(list, " ")
+			if len(list) >= 3 && (list[1] == "-lc" || list[1] == "-c") {
+				s = list[len(list)-1]
+			}
+			if s != "" {
+				return cutRunes(s, 200)
+			}
+		}
+	}
+	return ""
+}
+
+func cutRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
 
 func claudeStatus(event string, p hookPayload) string {

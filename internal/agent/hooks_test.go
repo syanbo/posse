@@ -2,7 +2,10 @@ package agent
 
 import (
 	"encoding/json"
+	"strconv"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestMapEvent(t *testing.T) {
@@ -31,6 +34,42 @@ func TestMapEvent(t *testing.T) {
 		if got := map[bool]string{true: st.Status, false: ""}[ok]; got != c.want {
 			t.Errorf("%s %s %s = %q, want %q", c.agent, c.event, c.payload, got, c.want)
 		}
+	}
+}
+
+func TestMapEventPrompt(t *testing.T) {
+	ask := `{"z":1,"a":2}`
+	st, ok := MapEvent("claude", "PreToolUse", json.RawMessage(
+		`{"session_id":"s1","transcript_path":"/tmp/s.jsonl","tool_name":"AskUserQuestion","tool_input":`+ask+`}`))
+	if !ok || st.Status != StatusWaiting || st.SessionID != "s1" || st.TranscriptPath != "/tmp/s.jsonl" ||
+		st.ToolName != "AskUserQuestion" || st.Prompt != ask {
+		t.Fatalf("ask %+v ok=%v", st, ok)
+	}
+	st, ok = MapEvent("codex", "PreToolUse", json.RawMessage(
+		`{"tool_name":"request_user_input","tool_input":`+ask+`}`))
+	if !ok || st.Status != StatusWaiting || st.ToolName != "request_user_input" || st.Prompt != ask {
+		t.Fatalf("codex ask %+v ok=%v", st, ok)
+	}
+
+	long := strings.Repeat("界", 250)
+	payload := `{"tool_name":"Bash","tool_input":{"file_path":"/tmp/ignored","command":["/bin/zsh","-lc",` + strconv.Quote(long) + `]}}`
+	st, ok = MapEvent("claude", "PermissionRequest", json.RawMessage(payload))
+	wantSum := strings.Repeat("界", 200)
+	wantPrompt := `{"approval":{"tool":"Bash","summary":"` + wantSum + `"}}`
+	if !ok || st.ToolName != "Bash" || st.ToolInput != wantSum || st.Prompt != wantPrompt {
+		t.Fatalf("approval toolInput=%q prompt=%q ok=%v", st.ToolInput, st.Prompt, ok)
+	}
+	if strings.Contains(st.ToolInput, "…") || utf8.RuneCountInString(st.ToolInput) != 200 {
+		t.Fatalf("summary cut %q (%d)", st.ToolInput, utf8.RuneCountInString(st.ToolInput))
+	}
+	st, ok = MapEvent("claude", "PermissionRequest", json.RawMessage(`{"tool_name":"Read","tool_input":{"command":"go test"}}`))
+	if !ok || st.ToolInput != "go test" || st.Prompt != `{"approval":{"tool":"Read","summary":"go test"}}` {
+		t.Fatalf("plain command %+v", st)
+	}
+
+	st, ok = MapEvent("claude", "Stop", json.RawMessage(`{"session_id":"s2","last_assistant_message":"done"}`))
+	if !ok || st.Status != StatusIdle || st.SessionID != "s2" || st.Prompt != "" || st.ToolName != "" || st.ToolInput != "" {
+		t.Fatalf("stop %+v", st)
 	}
 }
 

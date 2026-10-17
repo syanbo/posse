@@ -224,6 +224,34 @@ func parseNumStat(out []byte) map[string]LineStats {
 	return m
 }
 
+// DiffText 是工作区相对 HEAD 的统一 diff。rel 相对仓库根。没有提交时退回工作区 diff。
+// 未跟踪文件用 --no-index 对空文件比较。超过 200KB 截断，truncated 为真。
+func DiffText(ctx context.Context, dir, rel string) (text string, truncated bool, err error) {
+	out, err := diffStdout(ctx, dir, "diff", "--no-ext-diff", "HEAD", "--", rel)
+	if err != nil {
+		out, err = diffStdout(ctx, dir, "diff", "--no-ext-diff", "--", rel)
+	}
+	if err == nil && len(out) == 0 {
+		if alt, altErr := diffStdout(ctx, dir, "diff", "--no-ext-diff", "--no-index", "--", "/dev/null", rel); altErr == nil && len(alt) > 0 {
+			out = alt
+		}
+	}
+	const max = 200_000
+	if len(out) > max {
+		out = out[:max]
+		truncated = true
+	}
+	return string(out), truncated, err
+}
+
+func diffStdout(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	out, err := runRaw(ctx, dir, nil, nil, args...)
+	if err != nil && len(out) == 0 {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ErrNotFound 表示这个版本里没有这个文件。
 var ErrNotFound = errors.New("not in this revision")
 

@@ -48,6 +48,9 @@ type AgentState struct {
 	SessionID      string    `json:"sessionId,omitempty"`
 	TranscriptPath string    `json:"transcriptPath,omitempty"`
 	Message        string    `json:"message,omitempty"`
+	ToolName       string    `json:"toolName,omitempty"`
+	ToolInput      string    `json:"toolInput,omitempty"` // 权限请求的一行摘要
+	Prompt         string    `json:"prompt,omitempty"`    // 手机上的 interactivePrompt：答题卡原文或审批 JSON
 	At             time.Time `json:"at"`
 }
 
@@ -427,12 +430,19 @@ func (t *Terminal) Agent() AgentState {
 
 func (t *Terminal) SetAgent(s AgentState) {
 	t.mu.Lock()
-	// 有的事件不带会话信息，沿用之前拿到的
+	// 有的事件不带会话信息，沿用之前拿到的。离开等待就清掉卡片，免得上一张审批卡
+	// 停在已经继续干活的会话上。仍在等待、但这次没带新提示的事件要留着原卡片：
+	// Claude 的 Notification permission_prompt 会在答题卡还在时再响一次，payload 是空的。
 	if s.SessionID == "" {
 		s.SessionID = t.agent.SessionID
 	}
 	if s.TranscriptPath == "" {
 		s.TranscriptPath = t.agent.TranscriptPath
+	}
+	if s.Status != "waiting" {
+		s.ToolName, s.ToolInput, s.Prompt = "", "", ""
+	} else if s.Prompt == "" {
+		s.ToolName, s.ToolInput, s.Prompt = t.agent.ToolName, t.agent.ToolInput, t.agent.Prompt
 	}
 	t.agent = s
 	t.mu.Unlock()

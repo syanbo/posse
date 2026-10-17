@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,7 +40,22 @@ func (h *fakeHost) State() State {
 	w := Workspace{ID: "w1", ProjectID: "p1", Name: "main", Path: dir, Kind: "main", CreatedAt: time.Now()}
 	for _, id := range h.order {
 		t := h.terms[id]
-		w.Terminals = append(w.Terminals, Terminal{ID: id, Agent: "claude", Status: "waiting", Running: t.Running(), CreatedAt: t.CreatedAt, LastOutput: t.LastOutput()})
+		// 没有 hook 上报时保持 claude/waiting：已有的手机会话测试靠这个变成 permission。
+		// 终端上一旦有真实 agent 状态，就原样带上会话和审批字段。
+		row := Terminal{ID: id, Agent: "claude", Status: "waiting", Running: t.Running(), CreatedAt: t.CreatedAt, LastOutput: t.LastOutput()}
+		if a := t.Agent(); a.Status != "" || a.SessionID != "" || a.TranscriptPath != "" || a.ToolName != "" || a.ToolInput != "" || a.Prompt != "" || a.Message != "" {
+			if a.Status != "" {
+				row.Status = a.Status
+			}
+			row.StatusAt = a.At
+			row.Message = a.Message
+			row.SessionID = a.SessionID
+			row.TranscriptPath = a.TranscriptPath
+			row.ToolName = a.ToolName
+			row.ToolInput = a.ToolInput
+			row.Prompt = a.Prompt
+		}
+		w.Terminals = append(w.Terminals, row)
 	}
 	return State{Projects: []Project{{ID: "p1", Name: "demo", Path: "/tmp"}}, Workspaces: []Workspace{w}}
 }
@@ -66,6 +82,7 @@ type phone struct {
 	n      int
 	binary chan []byte
 	resp   chan map[string]any
+	held   []map[string]any
 }
 
 func dialPhone(t *testing.T, srv *Server, info PairInfo) *phone {
@@ -172,9 +189,20 @@ func (p *phone) call(method string, params any) string {
 	return id
 }
 
-// next 等下一条 id 匹配的回复。
+// next 等下一条 id 匹配的回复。别的 id 先留着，免得两条流交错时把其中一条丢掉。
 func (p *phone) next(id string) map[string]any {
-	timeout := time.After(10 * time.Second)
+	m, ok := p.nextWithin(id, 10*time.Second)
+	if !ok {
+		p.t.Fatalf("no reply for %s", id)
+	}
+	return m
+}
+
+func (p *phone) nextWithin(id string, d time.Duration) (map[string]any, bool) {
+	if m, ok := p.pull(id); ok {
+		return m, true
+	}
+	timeout := time.After(d)
 	for {
 		select {
 		case m, ok := <-p.resp:
@@ -182,12 +210,42 @@ func (p *phone) next(id string) map[string]any {
 				p.t.Fatal("connection closed")
 			}
 			if m["id"] == id {
-				return m
+				return m, true
 			}
+			p.held = append(p.held, m)
 		case <-timeout:
-			p.t.Fatalf("no reply for %s", id)
+			return nil, false
 		}
 	}
+}
+
+func (p *phone) nextAny(d time.Duration) (map[string]any, bool) {
+	if len(p.held) > 0 {
+		m := p.held[0]
+		p.held = p.held[1:]
+		return m, true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case m, ok := <-p.resp:
+		if !ok {
+			p.t.Fatal("connection closed")
+		}
+		return m, true
+	case <-timer.C:
+		return nil, false
+	}
+}
+
+func (p *phone) pull(id string) (map[string]any, bool) {
+	for i, m := range p.held {
+		if m["id"] == id {
+			p.held = append(p.held[:i], p.held[i+1:]...)
+			return m, true
+		}
+	}
+	return nil, false
 }
 
 func result(t *testing.T, m map[string]any) map[string]any {
@@ -382,4 +440,122 @@ func openFDs(t *testing.T) int {
 		t.Skip(err)
 	}
 	return len(es)
+}
+
+func TestOfferEndpoints(t *testing.T) {
+	code := offerCode("ws://127.0.0.1:6788", []string{
+		"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/hive", "",
+	}, "tok", rep32(9), "dev")
+	raw, err := base64.RawURLEncoding.DecodeString(code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer struct {
+		V            int      `json:"v"`
+		Endpoint     string   `json:"endpoint"`
+		Endpoints    []string `json:"endpoints"`
+		DeviceToken  string   `json:"deviceToken"`
+		PublicKeyB64 string   `json:"publicKeyB64"`
+		PairedDevice string   `json:"pairedDeviceId"`
+		Scope        string   `json:"scope"`
+	}
+	if err := json.Unmarshal(raw, &offer); err != nil {
+		t.Fatal(err)
+	}
+	if offer.V != 2 || offer.Endpoint != "ws://127.0.0.1:6788" || offer.DeviceToken != "tok" ||
+		offer.Scope != "mobile" || offer.PairedDevice != "dev" || offer.PublicKeyB64 != b64(rep32(9)) {
+		t.Fatalf("offer %+v", offer)
+	}
+	want := []string{"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/hive"}
+	if !reflect.DeepEqual(offer.Endpoints, want) {
+		t.Fatalf("endpoints %v", offer.Endpoints)
+	}
+}
+
+func TestPairKeepsPrimaryEndpoint(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "ws://127.0.0.1:" + strconv.Itoa(srv.Port())
+	if info.Endpoint != want || len(info.Endpoints) == 0 || info.Endpoints[0] != want {
+		t.Fatalf("pair %+v", info)
+	}
+	seen := map[string]bool{}
+	for _, ep := range info.Endpoints {
+		if seen[ep] {
+			t.Fatalf("duplicate %s in %v", ep, info.Endpoints)
+		}
+		seen[ep] = true
+		if !strings.HasPrefix(ep, "ws://") && !strings.HasPrefix(ep, "wss://") {
+			t.Fatalf("endpoint %s", ep)
+		}
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(info.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer struct {
+		Endpoint  string   `json:"endpoint"`
+		Endpoints []string `json:"endpoints"`
+	}
+	if err := json.Unmarshal(raw, &offer); err != nil {
+		t.Fatal(err)
+	}
+	if offer.Endpoint != want || !reflect.DeepEqual(offer.Endpoints, info.Endpoints) {
+		t.Fatalf("code endpoint %s list %v", offer.Endpoint, offer.Endpoints)
+	}
+}
+
+func TestClientCapabilities(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	defer p.ws.CloseNow()
+	id := p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "hive-flutter", "version": 1,
+		"capabilities": []string{"hive.permission.v1", "hive.git.v1"},
+	})
+	if result(t, p.next(id)) == nil {
+		t.Fatal("empty result")
+	}
+	c := onlyConn(t, srv)
+	if c.clientName != "hive-flutter" || c.clientVersion != 1 ||
+		!c.hasCapability("hive.permission.v1") || !c.hasCapability("hive.git.v1") || c.hasCapability("nope") {
+		t.Fatalf("caps %s %d %v", c.clientName, c.clientVersion, c.caps)
+	}
+	id = p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "other", "version": 2, "capabilities": []string{},
+	})
+	result(t, p.next(id))
+	if c.hasCapability("hive.permission.v1") || c.clientName != "other" || c.clientVersion != 2 {
+		t.Fatal("capabilities were not replaced")
+	}
+}
+
+func onlyConn(t *testing.T, srv *Server) *conn {
+	t.Helper()
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if len(srv.conns) != 1 {
+		t.Fatalf("conns %d", len(srv.conns))
+	}
+	for c := range srv.conns {
+		return c
+	}
+	return nil
 }

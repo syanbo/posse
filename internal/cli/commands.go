@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -508,12 +509,46 @@ func cmdHook(e *env, args []string) error {
 	if json.Valid(payload) {
 		params["payload"] = json.RawMessage(payload)
 	}
+	// Claude 的 PermissionRequest 可以在 stdout 带回决定。其余事件仍是 2 秒，并且不输出。
+	if args[0] == "claude" && args[1] == "PermissionRequest" {
+		ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+		var out struct {
+			Behavior string `json:"behavior"`
+		}
+		err := rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
+		cancel()
+		if err == nil {
+			if line := permissionDecision(out.Behavior); line != "" {
+				fmt.Fprintln(e.out, line)
+			}
+			return nil
+		}
+		var re *rpc.Error
+		if !errors.As(err, &re) || re.Code != rpc.CodeUnknown {
+			fmt.Fprintln(e.errOut, "hive hook:", err)
+			return nil
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := rpc.Call(ctx, socket, "hook.event", params, nil); err != nil {
 		fmt.Fprintln(e.errOut, "hive hook:", err)
 	}
 	return nil
+}
+
+// permissionDecision 是交回给 Claude Code 的决定。空字符串表示不干预，让 TUI 自己弹框。
+func permissionDecision(behavior string) string {
+	if behavior != "allow" && behavior != "deny" {
+		return ""
+	}
+	b, _ := json.Marshal(map[string]any{
+		"hookSpecificOutput": map[string]any{
+			"hookEventName": "PermissionRequest",
+			"decision":      map[string]string{"behavior": behavior},
+		},
+	})
+	return string(b)
 }
 
 func cmdVersion(e *env, args []string) error {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"hive/internal/history"
 	"hive/internal/term"
 )
 
@@ -43,6 +44,11 @@ type Terminal struct {
 	Status                string // agent 状态：starting | working | waiting | idle | exited，普通终端为空
 	StatusAt              time.Time
 	Message               string
+	SessionID             string
+	TranscriptPath        string
+	ToolName              string
+	ToolInput             string
+	Prompt                string // interactivePrompt
 	Running               bool
 	CreatedAt, LastOutput time.Time
 }
@@ -135,12 +141,25 @@ func agentRow(t Terminal, now time.Time) map[string]any {
 	if st == "working" || st == "waiting" {
 		updated = now.UnixMilli()
 	}
-	return map[string]any{
+	row := map[string]any{
 		"paneKey": parentTab(t.ID) + ":" + leafID(t.ID), "parentPaneKey": nil,
 		"state": st, "agentType": t.Agent, "prompt": "", "taskTitle": nil, "displayName": nil,
-		"lastAssistantMessage": nilIfEmpty(t.Message), "toolName": nil, "toolInput": nil,
-		"interrupted": false, "stateStartedAt": ms(t.StatusAt), "updatedAt": updated, "stateHistory": []any{},
+		"lastAssistantMessage": nilIfEmpty(t.Message), "toolName": nilIfEmpty(t.ToolName), "toolInput": nilIfEmpty(t.ToolInput),
+		"interactivePrompt": nilIfEmpty(t.Prompt),
+		"interrupted":       false, "stateStartedAt": ms(t.StatusAt), "updatedAt": updated, "stateHistory": []any{},
 	}
+	if t.SessionID != "" {
+		ps := map[string]any{"key": "session_id", "id": t.SessionID}
+		path := t.TranscriptPath
+		if path == "" {
+			path = history.TranscriptPath(t.Agent, t.SessionID, "")
+		}
+		if path != "" {
+			ps["transcriptPath"] = path
+		}
+		row["providerSession"] = ps
+	}
+	return row
 }
 
 func nilIfEmpty(s string) any {
@@ -295,7 +314,7 @@ func tabsKey(w Workspace) []string {
 		if t.Running {
 			state = agentState(t)
 		}
-		out = append(out, t.ID+"\x00"+tabTitle(t)+"\x00"+state)
+		out = append(out, t.ID+"\x00"+tabTitle(t)+"\x00"+state+"\x00"+t.SessionID+"\x00"+t.ToolName+"\x00"+t.Prompt)
 	}
 	return out
 }
@@ -334,7 +353,19 @@ func (c *conn) dispatch(req request) error {
 		p = json.RawMessage("{}")
 	}
 	switch req.Method {
-	case "runtime.clientCapabilities.update", "worktree.activate", "session.tabs.activate", "terminal.focus",
+	case "runtime.clientCapabilities.update":
+		var body struct {
+			Client       string   `json:"client"`
+			Version      int      `json:"version"`
+			Capabilities []string `json:"capabilities"`
+		}
+		if json.Unmarshal(p, &body) != nil {
+			return c.fail(req.ID, "bad_params", "client capabilities")
+		}
+		// 每次声明整份替换。后面的扩展推送只发给带上对应能力的连接。
+		c.setClientCaps(body.Client, body.Version, body.Capabilities)
+		return c.reply(req.ID, map[string]any{})
+	case "worktree.activate", "session.tabs.activate", "terminal.focus",
 		"terminal.setDisplayMode":
 		if req.Method == "session.tabs.activate" {
 			var a struct {
@@ -452,6 +483,18 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{"unsubscribed": true})
 	case "terminal.send":
 		return c.sendInput(req.ID, p)
+	case "nativeChat.readSession":
+		return c.readNativeChat(req.ID, p)
+	case "nativeChat.subscribe":
+		return c.subscribeNativeChat(req.ID, p)
+	case "nativeChat.unsubscribe":
+		return c.unsubscribeNativeChat(req.ID, p)
+	case "agent.permission.decide":
+		return c.decidePermission(req.ID, p)
+	case "git.status":
+		return c.gitStatus(req.ID, p)
+	case "git.diff":
+		return c.gitDiff(req.ID, p)
 	case "terminal.close", "session.tabs.close":
 		var a struct {
 			termParams
@@ -544,7 +587,7 @@ func (c *conn) eventsStream(ctx contextDone, id string) {
 				if t.Running {
 					st = agentState(t)
 				}
-				b.WriteString("|" + t.ID + ":" + st + ":" + tabTitle(t))
+				b.WriteString("|" + t.ID + ":" + st + ":" + tabTitle(t) + ":" + t.SessionID + ":" + t.Prompt)
 			}
 			b.WriteByte('\n')
 		}
@@ -586,28 +629,35 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 		return errorf("not_found", "terminal %s not found", a.Terminal)
 	}
 	n := 0
+	accepted, outcome := true, "accepted"
+	write := func(p []byte) bool {
+		if err := t.Send(p); err != nil {
+			accepted, outcome = false, "refused"
+			return false
+		}
+		n += len(p)
+		return true
+	}
 	// 终端查询由常驻进程里的内核应答，手机 xterm 的应答丢掉，免得程序收到两份
 	if a.InputKind != "query-reply" {
 		if a.Text != "" {
-			if err := t.Send([]byte(a.Text)); err != nil {
-				return errorf("terminal_exited", "%v", err)
-			}
-			n += len(a.Text)
+			write([]byte(a.Text))
 		}
-		if a.Enter {
+		if accepted && a.Enter {
 			// TUI 会把与文本同批到达的回车当成粘贴内容，分开发送才算提交
 			if a.Text != "" {
 				time.Sleep(120 * time.Millisecond)
 			}
-			t.Send([]byte("\r"))
-			n++
+			write([]byte("\r"))
 		}
-		if a.Interrupt {
-			t.Send([]byte{3})
-			n++
+		if accepted && a.Interrupt {
+			write([]byte{3})
 		}
 	}
-	return c.reply(id, map[string]any{"send": map[string]any{"accepted": true, "handle": a.Terminal, "bytesWritten": n}})
+	return c.reply(id, map[string]any{"send": map[string]any{
+		"accepted": accepted, "handle": a.Terminal, "bytesWritten": n,
+		"writeSettlement": map[string]any{"outcome": outcome},
+	}})
 }
 
 func (c *conn) createTerminal(id string, p json.RawMessage) error {

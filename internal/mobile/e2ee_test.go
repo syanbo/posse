@@ -40,6 +40,12 @@ func TestTranscriptVector(t *testing.T) {
 			t.Errorf("got %x want %s", got, name)
 		}
 	}
+	// 主机发出的第一帧文本。Dart 侧用同一把 sendKey 解开，两边不能各算各的。
+	frame := s.seal([]byte("hi"), kindText)
+	const wantFrame = "339ae1f2bdff63481857d2810201000000000000000000002f21aaab2d6989389cd450263b93b3c5bf64fd318b70ca4c2844bc702ffd9811d0dfa9fea3f633ad6d946eaba8e61619d0ebdf9658edc1d2f8ded559"
+	if got := hex.EncodeToString(frame); got != wantFrame {
+		t.Fatalf("seal frame %s", got)
+	}
 }
 
 // TestHandshakeRoundTrip 扮演手机：发 hello，按 ready 自己派生密钥，双向收发几帧。

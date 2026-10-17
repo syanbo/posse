@@ -475,6 +475,28 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	return st, nil
 }
 
+// hookPermission 先照常记下等待状态，再只在有 Hive 手机看着这个会话时挂起等决定。
+// 没有手机、桌面有人键入、或 30 秒到了，都返回空 behavior，hook 不往 stdout 写，TUI 自己弹框。
+func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p hookEventParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	behavior := ""
+	s, err := d.session(p.TerminalID)
+	if err != nil {
+		return map[string]any{"behavior": behavior}, nil
+	}
+	if st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload); ok {
+		st.At = time.Now()
+		d.setAgent(s.Terminal, st)
+	}
+	if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
+		behavior = d.mobile.HoldPermission(ctx, s.Terminal.ID, p.Payload, s.Terminal.LastInput)
+	}
+	return map[string]any{"behavior": behavior}, nil
+}
+
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
 func (d *Daemon) setAgent(t *term.Terminal, st term.AgentState) {
 	t.SetAgent(st)

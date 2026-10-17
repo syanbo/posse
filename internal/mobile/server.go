@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,13 +34,17 @@ type Server struct {
 	conns   map[*conn]struct{}
 	tabs    map[string]*tabState // 工作区 ID → 标签快照的版本
 	nextSID uint32
+
+	permMu sync.Mutex
+	perms  map[string]*permWait
 }
 
 // PairInfo 是给界面和 CLI 显示的配对信息。
 type PairInfo struct {
-	URL      string `json:"url"` // orca://pair?code=…，二维码内容
-	Code     string `json:"code"`
-	Endpoint string `json:"endpoint"`
+	URL       string   `json:"url"` // orca://pair?code=…，二维码内容
+	Code      string   `json:"code"`
+	Endpoint  string   `json:"endpoint"`
+	Endpoints []string `json:"endpoints,omitempty"`
 }
 
 func New(home string, host Host, port int) (*Server, error) {
@@ -107,26 +112,41 @@ func (s *Server) Close() {
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
 // addr 为空时自动选 Tailscale 或局域网地址，写法见 ResolveEndpoint。
+// 主 endpoint 保持这一条（Orca App 只读它）；endpoints 再加上本机其余可达地址，给 Hive 客户端并发握手。
 func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	if err := s.listen(); err != nil {
 		return PairInfo{}, err
 	}
-	if addr == "" {
-		addr = LocalAddress()
+	port := s.Port()
+	var primary string
+	if addr != "" {
+		ep, err := ResolveEndpoint(addr, port)
+		if err != nil {
+			return PairInfo{}, err
+		}
+		primary = ep
 	}
-	if addr == "" {
-		return PairInfo{}, errors.New("no LAN or Tailscale address found; connect to a network first")
+	var extras []string
+	for _, host := range LocalEndpoints() {
+		ep, err := ResolveEndpoint(host, port)
+		if err != nil {
+			continue
+		}
+		extras = append(extras, ep)
 	}
-	ep, err := ResolveEndpoint(addr, s.Port())
-	if err != nil {
-		return PairInfo{}, err
+	if primary == "" {
+		if len(extras) == 0 {
+			return PairInfo{}, errors.New("no LAN or Tailscale address found; connect to a network first")
+		}
+		primary = extras[0]
 	}
+	eps := uniqueEndpoints(primary, extras)
 	d, err := s.pair.pending(rotate)
 	if err != nil {
 		return PairInfo{}, err
 	}
-	code := offerCode(ep, d.Token, s.pair.pub, d.ID)
-	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: ep}, nil
+	code := offerCode(primary, eps, d.Token, s.pair.pub, d.ID)
+	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: primary, Endpoints: eps}, nil
 }
 
 func (s *Server) Devices() []Device { return s.pair.devices() }
@@ -162,7 +182,7 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	ws.SetReadLimit(4 << 20)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	c := &conn{srv: s, ws: ws, ctx: ctx, streams: map[string]context.CancelFunc{}, uploads: map[string]*upload{}}
+	c := &conn{srv: s, ws: ws, ctx: ctx, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
 	if err := c.handshake(); err != nil {
 		return
 	}
@@ -197,9 +217,40 @@ type conn struct {
 
 	wmu sync.Mutex // 加密计数器和发送顺序必须一致，发送整体串行
 
-	smu     sync.Mutex
-	streams map[string]context.CancelFunc // 请求 ID → 停止这个流
-	uploads map[string]*upload
+	smu       sync.Mutex
+	streams   map[string]context.CancelFunc // 订阅键 → 停止这个流
+	streamGen map[string]uint64
+	nextGen   uint64
+	uploads   map[string]*upload
+
+	// 握手之后 runtime.clientCapabilities.update 记在这条连接上。没声明的（Orca App）能力为空。
+	clientName    string
+	clientVersion int
+	caps          map[string]struct{}
+
+	// 这条连接上还开着的对话订阅。键是流的 key，值是它看着的终端。
+	chatWatch map[string]chatWatch
+}
+
+func (c *conn) setClientCaps(client string, version int, names []string) {
+	set := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		if name != "" {
+			set[name] = struct{}{}
+		}
+	}
+	c.smu.Lock()
+	c.clientName = client
+	c.clientVersion = version
+	c.caps = set
+	c.smu.Unlock()
+}
+
+func (c *conn) hasCapability(name string) bool {
+	c.smu.Lock()
+	defer c.smu.Unlock()
+	_, ok := c.caps[name]
+	return ok
 }
 
 func (c *conn) handshake() error {
@@ -344,20 +395,31 @@ func errorf(code, format string, a ...any) error {
 
 // startStream 登记一个流，返回它的 context；同 ID 的旧流先停掉。
 func (c *conn) startStream(id string) context.Context {
+	ctx, _ := c.startKeyedStream(id)
+	return ctx
+}
+
+// startKeyedStream 用 key 登记取消。同 key 的新订阅替换旧订阅。
+// gen 用来让退出的旧流不要删掉已经换上的新流。
+func (c *conn) startKeyedStream(key string) (context.Context, uint64) {
 	ctx, cancel := context.WithCancel(c.ctx)
 	c.smu.Lock()
-	if old := c.streams[id]; old != nil {
+	if old := c.streams[key]; old != nil {
 		old()
 	}
-	c.streams[id] = cancel
+	c.nextGen++
+	gen := c.nextGen
+	c.streams[key] = cancel
+	c.streamGen[key] = gen
 	c.smu.Unlock()
-	return ctx
+	return ctx, gen
 }
 
 func (c *conn) stopStream(id string) bool {
 	c.smu.Lock()
 	cancel := c.streams[id]
 	delete(c.streams, id)
+	delete(c.streamGen, id)
 	c.smu.Unlock()
 	if cancel != nil {
 		cancel()
@@ -365,9 +427,36 @@ func (c *conn) stopStream(id string) bool {
 	return cancel != nil
 }
 
+// stopStreamsPrefix 停掉某个前缀下的全部流。prefix 为空则全部停掉。
+func (c *conn) stopStreamsPrefix(prefix string) {
+	c.smu.Lock()
+	var cancels []context.CancelFunc
+	for id, cancel := range c.streams {
+		if prefix == "" || strings.HasPrefix(id, prefix) {
+			cancels = append(cancels, cancel)
+			delete(c.streams, id)
+			delete(c.streamGen, id)
+		}
+	}
+	c.smu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
 func (c *conn) endStream(id string) {
 	c.smu.Lock()
 	delete(c.streams, id)
+	delete(c.streamGen, id)
+	c.smu.Unlock()
+}
+
+func (c *conn) endStreamGen(id string, gen uint64) {
+	c.smu.Lock()
+	if c.streamGen[id] == gen {
+		delete(c.streams, id)
+		delete(c.streamGen, id)
+	}
 	c.smu.Unlock()
 }
 
@@ -376,6 +465,7 @@ func (c *conn) stopStreams() {
 	for id, cancel := range c.streams {
 		cancel()
 		delete(c.streams, id)
+		delete(c.streamGen, id)
 	}
 	c.smu.Unlock()
 }

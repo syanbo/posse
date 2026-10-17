@@ -139,7 +139,12 @@ func (l Launcher) claudeSettings() (string, error) {
 	}
 	hooks := map[string][]group{}
 	for _, ev := range claudeEvents {
-		g := group{Hooks: []handler{{Type: "command", Command: l.hookCommand("claude", ev), Timeout: 5}}}
+		// PermissionRequest 要能挂起等手机决定，超时必须盖过常驻进程的 30 秒等待。
+		timeout := 5
+		if ev == "PermissionRequest" {
+			timeout = 40
+		}
+		g := group{Hooks: []handler{{Type: "command", Command: l.hookCommand("claude", ev), Timeout: timeout}}}
 		switch ev {
 		case "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure":
 			g.Matcher = "*"

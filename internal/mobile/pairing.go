@@ -180,12 +180,33 @@ func (p *pairing) remove(id string) bool {
 }
 
 // offerCode 是二维码里 orca://pair?code= 后面的部分：Orca 手机 App 的配对信息，base64url 不补位。
-func offerCode(endpoint, token string, pub [32]byte, deviceID string) string {
+// endpoints 是给 Hive 自己的客户端并发握手用的地址列表，主 endpoint 放在第一位。
+// Orca 的 PairingOfferSchema 不是 strict，多出来的字段会被忽略。
+func offerCode(endpoint string, endpoints []string, token string, pub [32]byte, deviceID string) string {
 	b, _ := json.Marshal(map[string]any{
-		"v": 2, "endpoint": endpoint, "deviceToken": token, "publicKeyB64": b64(pub),
+		"v": 2, "endpoint": endpoint, "endpoints": uniqueEndpoints(endpoint, endpoints),
+		"deviceToken": token, "publicKeyB64": b64(pub),
 		"pairedDeviceId": deviceID, "scope": "mobile",
 	})
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// uniqueEndpoints 把主地址放在最前，去掉空串和重复。
+func uniqueEndpoints(primary string, extra []string) []string {
+	out := make([]string, 0, 1+len(extra))
+	seen := map[string]bool{}
+	add := func(s string) {
+		if s == "" || seen[s] {
+			return
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	add(primary)
+	for _, s := range extra {
+		add(s)
+	}
+	return out
 }
 
 var errAddress = errors.New("address must be a host, host:port, IP, or http(s)/ws(s) URL")
@@ -240,11 +261,19 @@ func wildcardHost(h string) bool {
 	return h == "*" || h == "0.0.0.0" || h == "::" || h == "::ffff:0:0"
 }
 
-// LocalAddress 选手机能连到的本机地址：优先 Tailscale（100.64.0.0/10），其次局域网的私有地址。
-func LocalAddress() string {
+// LocalEndpoints 列出手机可能连得上的本机 IPv4：Tailscale（100.64.0.0/10）在前，其余私有地址在后。
+func LocalEndpoints() []string {
 	ifaces, _ := net.Interfaces()
-	var lan string
+	var ts, lan []string
+	seen := map[string]bool{}
 	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+	add := func(dst *[]string, ip string) {
+		if seen[ip] {
+			return
+		}
+		seen[ip] = true
+		*dst = append(*dst, ip)
+	}
 	for _, ifc := range ifaces {
 		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
 			continue
@@ -261,12 +290,20 @@ func LocalAddress() string {
 			}
 			ip := ipn.IP.To4()
 			if cgnat.Contains(ip) {
-				return ip.String()
-			}
-			if lan == "" && ip.IsPrivate() {
-				lan = ip.String()
+				add(&ts, ip.String())
+			} else if ip.IsPrivate() {
+				add(&lan, ip.String())
 			}
 		}
 	}
-	return lan
+	return append(ts, lan...)
+}
+
+// LocalAddress 选手机能连到的本机地址：优先 Tailscale，其次局域网的私有地址。
+func LocalAddress() string {
+	eps := LocalEndpoints()
+	if len(eps) == 0 {
+		return ""
+	}
+	return eps[0]
 }

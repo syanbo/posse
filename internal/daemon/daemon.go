@@ -202,6 +202,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("history.resume", d.historyResume)
 	srv.Handle("history.index", d.historyIndexNow)
 	srv.Handle("hook.event", d.hookEvent)
+	srv.Handle("hook.permission.hold", d.hookPermission)
 	srv.Handle("mobile.pair", d.mobilePair)
 	srv.Handle("mobile.devices", d.mobileDevices)
 	srv.Handle("mobile.rm", d.mobileRm)

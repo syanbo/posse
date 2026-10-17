@@ -52,7 +52,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，并注入 `HIVE_HOME`、`HIVE_SOCKET`、`HIVE_TERMINAL_ID`、`HIVE_WORKSPACE_ID`；PATH 最前面是 hive 所在目录。
 - 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$HIVE_HOME/worktrees/<项目>/<名称>`）。
 - agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $HIVE_HOME/cursor-plugin`，hooks 放在 hive 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
-- `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文），唯一例外是 Cursor：它要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；始终 exit 0，不拉起常驻进程。
+- `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有两处：Cursor 要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出。始终 exit 0，不拉起常驻进程。
 - 没有 hook 的情况靠终端标题兜底：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`。
 - 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重。界面接入期间由界面应答终端查询。
 - 多 agent 编排（`hive task`）：派发方是调用方所在的终端（`HIVE_TERMINAL_ID`），为空表示用户（界面或终端之外）。worker 是新开的 agent 终端，带 `HIVE_TASK_ID`，启动提示由 `workerPrompt` 生成，写明 `hive task ask/check/done` 的用法。`ask/check/done` 只接受 worker 自己的终端，`reply/send/close` 只接受派发方，用户（调用方为空）可以接手任何任务。
@@ -102,7 +102,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
 - 手机遥控（`internal/mobile`）复用 Orca 的手机 App（App Store / GitHub 上的 APK），hive 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现：
   - 只做局域网/Tailscale 直连（Orca 的 local-only），不做云端中转和推送（推送只能经 Orca 的网关）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
-  - 配对码里的地址默认自动选（Tailscale 优先，其次局域网）；也可以自定义（配对对话框，或 `hive mobile pair --address`），规则照 Orca 的 `pairing-endpoint.ts`（`mobile.ResolveEndpoint`）：主机或 主机:端口 拼成 `ws://`，完整 URL 的 http/https 换成 ws/wss、路径保留，用于隧道或反向代理（服务端不看请求路径）。界面选的地址和用过的自定义地址存在 ui.json 的 `mobileAddress`、`mobileAddresses`。
+  - 配对码里的地址默认自动选（Tailscale 优先，其次局域网）；也可以自定义（配对对话框，或 `hive mobile pair --address`），规则照 Orca 的 `pairing-endpoint.ts`（`mobile.ResolveEndpoint`）：主机或 主机:端口 拼成 `ws://`，完整 URL 的 http/https 换成 ws/wss、路径保留，用于隧道或反向代理（服务端不看请求路径）。界面选的地址和用过的自定义地址存在 ui.json 的 `mobileAddress`、`mobileAddresses`。配对码 JSON 另有 `endpoints`（主 `endpoint` 在第一位，后面是本机 Tailscale 和局域网地址），Orca App 会忽略这个未知字段。`runtime.clientCapabilities.update` 记在这条连接上，没声明能力的连接不收 Hive 扩展推送。带 `hive.permission.v1` 且正在订阅该终端对话时，Claude 的 PermissionRequest 走 `hook.permission.hold`：往这条对话流推 `type:permission`，等 `agent.permission.decide`；桌面有人键入或 30 秒到了就返回空 behavior，hook 不写 stdout。带 `hive.git.v1` 才能调只读 `git.status` / `git.diff`（拒绝绝对路径和 `..`）；checkout、commit、push 不开放。这两项在常驻进程里，不走窗口进程的 Git 界面。
   - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox，`e2ee_test.go` 有 Orca 的测试向量）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。端到端测试用 `HIVE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突。
   - 主机密钥和配对的手机存在 `$HIVE_HOME/mobile.json`（0600）。手机按公钥认主机，换密钥等于所有手机重新配对。配对码在窗口底栏的手机图标、"新建"菜单或 `hive mobile pair`。
   - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
