@@ -16,7 +16,7 @@ func TestCursorPlugin(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(l.Home, "cursor-plugin")
-	if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, "cursor-agent --plugin-dir '"+dir+"' 'do it'; exec ") {
+	if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, "cursor-agent --plugin-dir '"+dir+"' 'do it'; if [ ") {
 		t.Fatalf("launch: %q", cmd)
 	}
 	var manifest map[string]string

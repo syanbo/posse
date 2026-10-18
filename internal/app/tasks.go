@@ -501,7 +501,7 @@ func taskGlyphIcon(c *ui.Context, task taskInfo, size float32) {
 func (a *app) emptyBoard(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		card(c).Width(460).Padding(24).Gap(18).Children(func() {
+		emptyCard(c).Width(460).Padding(24).Gap(18).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "还没有任务", 20)

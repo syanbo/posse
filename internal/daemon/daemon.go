@@ -21,6 +21,7 @@ import (
 
 	"hive/internal/agent"
 	"hive/internal/history"
+	"hive/internal/host"
 	"hive/internal/mobile"
 	"hive/internal/procmem"
 	"hive/internal/rpc"
@@ -41,12 +42,45 @@ func SocketPath(home string) string { return filepath.Join(home, "hived.sock") }
 
 // session 是一个托管中的终端及其在 hive 里的元数据。
 type session struct {
-	*term.Terminal
+	host.Terminal
+	// 建好后不变的信息，从 Terminal.Info 抄一份，免得到处调方法
+	ID          string
+	WorkspaceID string
+	Dir         string
+	Command     []string
+	CreatedAt   time.Time
+
 	mu       sync.Mutex
 	agent    string // 终端里的 agent：启动时指定的，或之后在前台认出来的
 	hooked   bool   // agent 是 hive 启动的那个，带着注入的 hooks
-	hookedPg int    // 带 hooks 的那个 agent 的进程组，第一次在前台看到时记下
+	hookedPg int    // 带 hooks 的那个 agent 的进程组，第一次在前台看到或收到 hook 时记下
 	fg       int    // 上次检查时的前台进程组
+}
+
+// markHooked 在收到 hook 事件时调用：用户在 shell 里经 hive 的同名脚本手动启动的 agent 也带着 hooks，
+// 状态以 hooks 为准，不再只看标题。
+func (s *session) markHooked(name string) {
+	pg := s.Foreground()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agent, s.hooked, s.hookedPg = name, true, pg
+	if pg > 0 {
+		s.fg = pg
+	}
+}
+
+// terminalHost 是托管终端的宿主；测试里直接构造的 Daemon 没设，用进程内的。
+func (d *Daemon) terminalHost() host.Host {
+	if d.host == nil {
+		return host.Local{}
+	}
+	return d.host
+}
+
+func (s *session) isHooked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hooked
 }
 
 func (s *session) agentName() string {
@@ -93,7 +127,37 @@ type Daemon struct {
 
 	history historyState
 	mobile  *mobile.Server
-	awake   *awake // 防休眠，测试里为空
+	host    host.Host // 托管终端，测试里为空时用进程内的
+	awake   *awake    // 防休眠，测试里为空
+
+	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
+	shellMu     sync.Mutex
+	shellReady  bool
+	userZdotdir string // 用户原来的 ZDOTDIR
+}
+
+func (d *Daemon) shellFiles() error {
+	d.shellMu.Lock()
+	defer d.shellMu.Unlock()
+	if d.shellReady {
+		return nil
+	}
+	if err := agent.WriteShellFiles(d.cfg.Home, d.launcher.Exe); err != nil {
+		log.Printf("shell integration: %v", err)
+		return err
+	}
+	d.shellReady = true
+	return nil
+}
+
+// userZdotdir 取用户原来的 ZDOTDIR。常驻进程可能是从 hive 终端里拉起的，
+// 那时 ZDOTDIR 已经指向 hive 的集成目录，原来的在 HIVE_USER_ZDOTDIR 里。
+func userZdotdir(home string) string {
+	z := os.Getenv("ZDOTDIR")
+	if z == agent.ZshDir(home) {
+		return os.Getenv("HIVE_USER_ZDOTDIR")
+	}
+	return z
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -149,7 +213,7 @@ func Run(ctx context.Context, cfg Config) error {
 		exe = resolved
 	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
-		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home)}
+		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer d.awake.close()
@@ -247,6 +311,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 
 type statusResult struct {
 	Version   string    `json:"version"`
+	Build     string    `json:"build"`
 	Pid       int       `json:"pid"`
 	Home      string    `json:"home"`
 	StartedAt time.Time `json:"startedAt"`
@@ -268,7 +333,7 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 	}
 	d.mu.Unlock()
 	r := statusResult{
-		Version: Version, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
+		Version: Version, Build: Build, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
 		Terminals: total, Running: running,
 		RSSKB: int64(procmem.Resident(os.Getpid()) >> 10), FootprintKB: int64(procmem.Footprint(os.Getpid()) >> 10),
 	}

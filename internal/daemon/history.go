@@ -16,9 +16,9 @@ import (
 
 	"hive/internal/agent"
 	"hive/internal/history"
+	"hive/internal/host"
 	"hive/internal/rpc"
 	"hive/internal/store"
-	"hive/internal/term"
 )
 
 // historyFresh 内的索引视为最新；超过后下一次查询先做一次增量更新。
@@ -397,7 +397,7 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 		return nil, err
 	}
 	// 只记会话 ID 的情况：codex、cursor 改状态的第一个 hook 要到第一轮对话才来，先显示"启动中"就会一直停在那里
-	st := term.AgentState{Status: agent.StatusStarting, SessionID: s.ID, At: time.Now()}
+	st := host.AgentState{Status: agent.StatusStarting, SessionID: s.ID, At: time.Now()}
 	if s.Agent == "codex" || s.Agent == "cursor" {
 		st.Status = ""
 	}

@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"hive/internal/history"
-	"hive/internal/term"
+	"hive/internal/host"
 )
 
 // Host 是常驻进程提供给手机的数据和操作。
 type Host interface {
 	State() State
-	Terminal(id string) *term.Terminal // 没有时为 nil
+	Terminal(id string) host.Terminal // 没有时为 nil
 	// CreateTerminal 开一个终端：agent 非空时启动 agent（可带首条提示），否则运行 command，都为空是 shell
 	CreateTerminal(workspaceID, agent, prompt, command string) (string, error)
 	CloseTerminal(id string) error

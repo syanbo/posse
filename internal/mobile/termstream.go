@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"time"
 	"unicode/utf8"
 
-	"hive/internal/term"
+	"hive/internal/host"
 )
 
 // 终端输出流用 Orca 的二进制帧（src/shared/terminal-stream-protocol.ts）：16 字节头 + 负载，加密后走 WebSocket 二进制帧。
@@ -62,7 +63,8 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 	if t == nil {
 		return errorf("not_found", "terminal %s not found", a.Terminal)
 	}
-	key := new(byte)
+	// HoldSize 的 key 要能区分同时看着的几路流；之后宿主独立成进程时它会跨进程传，所以用字符串
+	key := fmt.Sprintf("mobile:%p", new(byte))
 	// 和 Orca 一样，手机看着的时候终端按手机屏幕排版，离开后恢复成界面的尺寸
 	if v := a.Viewport; v != nil && v.Cols >= 20 && v.Rows >= 8 && t.Running() {
 		t.HoldSize(key, min(v.Cols, 500), min(v.Rows, 200))
@@ -72,7 +74,7 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 }
 
 // terminalStream 先发快照再推实时输出。尺寸变了（另一台手机或界面）就重发一份快照，手机据此重排。
-func (c *conn) terminalStream(ctx context.Context, id string, t *term.Terminal, key *byte) {
+func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, key string) {
 	defer t.ReleaseSize(key)
 	sid := c.srv.streamID()
 	var seq uint64
@@ -82,7 +84,7 @@ func (c *conn) terminalStream(ctx context.Context, id string, t *term.Terminal, 
 		cols, rows := t.Size()
 		if kind == "scrollback" {
 			if c.stream(id, map[string]any{"type": "subscribed", "streamId": sid, "cols": cols, "rows": rows, "displayMode": "auto"}) != nil {
-				t.Detach(sub)
+				sub.Close()
 				return
 			}
 		}
@@ -97,20 +99,20 @@ func (c *conn) terminalStream(ctx context.Context, id string, t *term.Terminal, 
 			snap = snap[n:]
 		}
 		if !ok || c.sendBinary(streamFrame(opSnapshotEnd, sid, seq, nil)) != nil {
-			t.Detach(sub)
+			sub.Close()
 			return
 		}
 		kind = "resized"
 		switch c.pump(ctx, sid, &seq, t, sub, cols, rows) {
 		case pumpStop:
-			t.Detach(sub)
+			sub.Close()
 			return
 		case pumpExited:
 			c.stream(id, map[string]any{"type": "end"})
 			c.endStream(id)
 			return
 		}
-		t.Detach(sub)
+		sub.Close()
 	}
 }
 
@@ -121,7 +123,7 @@ const (
 )
 
 // pump 转发输出直到流被取消、程序结束，或需要重发快照（尺寸变化、接入者跟不上被断开）。
-func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t *term.Terminal, sub *term.Subscriber, cols, rows int) int {
+func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t host.Terminal, sub host.Subscription, cols, rows int) int {
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
 	var carry []byte
@@ -134,7 +136,7 @@ func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t *term.Termin
 				return pumpResync
 			}
 			continue
-		case chunk, ok := <-sub.C:
+		case chunk, ok := <-sub.Output():
 			if !ok {
 				if !t.Running() {
 					return pumpExited
@@ -146,7 +148,7 @@ func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t *term.Termin
 		drain:
 			for len(buf) < maxOutput {
 				select {
-				case more, ok := <-sub.C:
+				case more, ok := <-sub.Output():
 					if !ok {
 						break drain
 					}

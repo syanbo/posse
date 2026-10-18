@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"hive/internal/agent"
+	"hive/internal/host"
 	"hive/internal/rpc"
 	"hive/internal/store"
-	"hive/internal/term"
 )
 
 type terminalInfo struct {
@@ -21,7 +21,7 @@ type terminalInfo struct {
 	Command      []string         `json:"command"`
 	Dir          string           `json:"dir"`
 	Agent        string           `json:"agent,omitempty"`
-	AgentState   *term.AgentState `json:"agentState,omitempty"`
+	AgentState   *host.AgentState `json:"agentState,omitempty"`
 	Running      bool             `json:"running"`
 	ExitCode     *int             `json:"exitCode,omitempty"`
 	Pid          int              `json:"pid"`
@@ -60,7 +60,7 @@ func (d *Daemon) startAgent(w store.Workspace, name, prompt string, cols, rows i
 		return nil, err
 	}
 	if l.SessionID != "" {
-		s.SetAgent(term.AgentState{Status: agent.StatusStarting, SessionID: l.SessionID, At: time.Now()})
+		s.SetAgent(host.AgentState{Status: agent.StatusStarting, SessionID: l.SessionID, At: time.Now()})
 	}
 	return s, nil
 }
@@ -77,12 +77,15 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 	if agentName != "" {
 		env = append(env, "HIVE_AGENT="+agentName)
 	}
-	t, err := term.Start(term.Options{
+	if err := d.shellFiles(); err == nil {
+		env = append(env, agent.ShellEnv(d.cfg.Home, argv[0], d.userZdotdir)...)
+	}
+	t, err := d.terminalHost().Start(host.StartOptions{
 		ID: id, WorkspaceID: w.ID, Dir: w.Path, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback,
-		OnTitle: func(t *term.Terminal, title string) {
+		OnTitle: func(id, title string) {
 			d.mu.Lock()
-			s := d.terms[t.ID]
+			s := d.terms[id]
 			d.mu.Unlock()
 			if s == nil {
 				return
@@ -90,7 +93,7 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 			// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
 			name, hooked, changed := s.detectAgent()
 			if changed {
-				t.ResetAgent(term.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
+				s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
 			}
 			if name == "" {
 				return
@@ -99,26 +102,28 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 			if !hooked {
 				status = agent.TitleOnlyStatus
 			}
-			if st, ok := status(name, title, t.Agent().Status); ok {
-				d.setAgent(t, term.AgentState{Status: st, Event: "title", At: time.Now()})
+			if st, ok := status(name, title, s.Agent().Status); ok {
+				d.setAgent(s, host.AgentState{Status: st, Event: "title", At: time.Now()})
 			}
 		},
-		OnExit: func(t *term.Terminal, code int) {
-			if err := d.store.EndTerminal(t.ID, "exited", &code, time.Now()); err != nil {
-				log.Printf("terminal %s: record exit: %v", t.ID, err)
+		OnExit: func(id string, code int) {
+			if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
+				log.Printf("terminal %s: record exit: %v", id, err)
 			}
-			d.workerGone(t.ID, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
+			d.workerGone(id, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
 			d.refreshAwake()
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	s := &session{Terminal: t, agent: agentName, hooked: agentName != ""}
+	info := t.Info()
+	s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
+		agent: agentName, hooked: agentName != ""}
 	d.mu.Lock()
 	d.terms[id] = s
 	d.mu.Unlock()
-	if err := d.store.AddTerminal(store.Terminal{ID: id, WorkspaceID: w.ID, Command: argv, Agent: agentName, State: "running", CreatedAt: t.CreatedAt}); err != nil {
+	if err := d.store.AddTerminal(store.Terminal{ID: id, WorkspaceID: w.ID, Command: argv, Agent: agentName, State: "running", CreatedAt: info.CreatedAt}); err != nil {
 		log.Printf("terminal %s: record: %v", id, err)
 	}
 	return s, nil
@@ -428,7 +433,7 @@ type terminalClearParams struct {
 	Redraw   bool   `json:"redraw"`
 }
 
-// terminalClear 清屏并清空回滚区，见 term.Terminal.Clear。
+// terminalClear 清屏并清空回滚区，见 host.Terminal.Clear。
 func (d *Daemon) terminalClear(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p terminalClearParams
 	if err := rpc.Decode(raw, &p); err != nil {
@@ -482,12 +487,15 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if err != nil {
 		return nil, err
 	}
+	if s.agentName() != p.Agent || !s.isHooked() {
+		s.markHooked(p.Agent)
+	}
 	st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload)
 	if !ok {
 		return map[string]bool{"ignored": true}, nil
 	}
 	st.At = time.Now()
-	d.setAgent(s.Terminal, st)
+	d.setAgent(s, st)
 	return st, nil
 }
 
@@ -505,22 +513,22 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 	}
 	if st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload); ok {
 		st.At = time.Now()
-		d.setAgent(s.Terminal, st)
+		d.setAgent(s, st)
 	}
 	if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
-		behavior = d.mobile.HoldPermission(ctx, s.Terminal.ID, p.Payload, s.Terminal.LastInput)
+		behavior = d.mobile.HoldPermission(ctx, s.ID, p.Payload, s.LastInput)
 	}
 	return map[string]any{"behavior": behavior}, nil
 }
 
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
-func (d *Daemon) setAgent(t *term.Terminal, st term.AgentState) {
-	t.SetAgent(st)
+func (d *Daemon) setAgent(s *session, st host.AgentState) {
+	s.SetAgent(st)
 	d.refreshAwake()
 	switch st.Status {
 	case agent.StatusIdle:
-		go d.deliver(t.ID)
+		go d.deliver(s.ID)
 	case agent.StatusExited:
-		go d.workerGone(t.ID, "worker agent exited before reporting")
+		go d.workerGone(s.ID, "worker agent exited before reporting")
 	}
 }

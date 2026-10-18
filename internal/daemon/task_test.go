@@ -71,22 +71,22 @@ func TestDeliverNudgesIdleCoordinator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d.setAgent(coord.Terminal, term.AgentState{Status: agent.StatusWorking})
+	d.setAgent(coord, term.AgentState{Status: agent.StatusWorking})
 	info := call(t, d.taskStart, map[string]any{"caller": coord.ID, "command": []string{"/bin/sh", "-c", "sleep 30"}, "spec": "x"}).(taskInfo)
 	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "all good"})
 	time.Sleep(300 * time.Millisecond)
 	if strings.Contains(strings.Join(coord.Lines(), "\n"), "Hive:") {
 		t.Fatal("nudged a working agent")
 	}
-	d.setAgent(coord.Terminal, term.AgentState{Status: agent.StatusIdle})
+	d.setAgent(coord, term.AgentState{Status: agent.StatusIdle})
 	waitScreen(t, coord, "Hive: "+info.ID+" finished. Run `hive task inbox` to read.")
 	time.Sleep(300 * time.Millisecond)
 	// PTY 回显一次、cat 再输出一次，所以一次提醒在屏幕上出现两遍
 	once := strings.Count(strings.Join(coord.Lines(), "\n"), "Hive:")
 
 	// 已提醒过的消息不再重复提醒
-	d.setAgent(coord.Terminal, term.AgentState{Status: agent.StatusWorking})
-	d.setAgent(coord.Terminal, term.AgentState{Status: agent.StatusIdle})
+	d.setAgent(coord, term.AgentState{Status: agent.StatusWorking})
+	d.setAgent(coord, term.AgentState{Status: agent.StatusIdle})
 	time.Sleep(300 * time.Millisecond)
 	if n := strings.Count(strings.Join(coord.Lines(), "\n"), "Hive:"); n != once {
 		t.Fatalf("nudged again: %d occurrences, %d after the first nudge", n, once)

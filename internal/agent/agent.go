@@ -214,7 +214,10 @@ func ShellArgv(cmd string) []string {
 	if cmd == "" {
 		return []string{sh, "-l"}
 	}
-	return []string{sh, "-l", "-i", "-c", cmd + "; exec " + Quote(sh) + " -l"}
+	// agent 退出后换回的 shell 也走 hive 的 zsh 集成（HIVE_ZDOTDIR 只在 zsh 终端里有），
+	// 在里面手动再敲 claude 照样带 hooks
+	back := "exec " + Quote(sh) + " -l"
+	return []string{sh, "-l", "-i", "-c", cmd + `; if [ -n "$HIVE_ZDOTDIR" ]; then ZDOTDIR=$HIVE_ZDOTDIR ` + back + "; else " + back + "; fi"}
 }
 
 func UserShell() string {

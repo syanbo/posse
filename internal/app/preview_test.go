@@ -516,6 +516,12 @@ func TestPreview(t *testing.T) {
 			}}
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
 
+		// 设置页：常驻进程还在跑旧的包
+		a.selected = settingsBoardID
+		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
+		savePNG(t, newPreviewTester(a, dark), "settings-"+suffix+".png")
+		a.daemon.Pid = 0
+
 		// 底栏的内存浮窗
 		a = previewApp(t)
 		w := a.workspaces[0]

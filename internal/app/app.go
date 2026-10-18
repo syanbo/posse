@@ -85,6 +85,10 @@ type daemonStatus struct {
 	FootprintKB int64
 	Running     int
 	Awake       *awakeStatus // 旧常驻进程没有防休眠时为空
+	Version     string       `json:"version"`
+	Build       string       `json:"build"` // 旧常驻进程没有这个字段时为空
+	Pid         int          `json:"pid"`
+	StartedAt   time.Time    `json:"startedAt"`
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -261,6 +265,9 @@ func Run(c *client.Client) error {
 		state:        loadUIState(c.Home),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
+	if a.state.FontSize > 0 {
+		a.fontSize = a.state.FontSize
+	}
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:         "Hive",
@@ -321,6 +328,7 @@ type pollResult struct {
 	selfKB     int64
 	termKB     int64
 	awake      *awakeStatus
+	daemonInfo daemonStatus // 版本、构建、pid、启动时间，设置页的"关于"用
 }
 
 func (a *app) refresh() {
@@ -383,6 +391,7 @@ func (a *app) refresh() {
 			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 	}
 	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
@@ -404,7 +413,9 @@ func (a *app) refresh() {
 		if prevErr {
 			a.err = ""
 		}
-		a.daemon, a.selfKB, a.termKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running, Awake: r.awake}, r.selfKB, r.termKB
+		info := r.daemonInfo
+		info.FootprintKB, info.Running, info.Awake = r.daemonKB, r.running, r.awake
+		a.daemon, a.selfKB, a.termKB = info, r.selfKB, r.termKB
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
 		a.applyTasks(r.tasks)
@@ -461,8 +472,8 @@ func (a *app) apply(ps []project, ws []workspace) {
 			a.sectionsOpen[p.ID] = &open
 		}
 	}
-	// 只在选中的工作区被删掉时换到第一个；任务、历史和手机不是工作区，要保留
-	if a.selected != taskBoardID && a.selected != historyBoardID && a.selected != mobileBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
+	// 只在选中的工作区被删掉时换到第一个；任务、历史、手机和设置不是工作区，要保留
+	if a.selected != taskBoardID && a.selected != historyBoardID && a.selected != mobileBoardID && a.selected != settingsBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
 	seen := map[string]bool{}
@@ -564,7 +575,21 @@ func (a *app) openTerminal(workspaceID, terminalID string) {
 // 关最后一个标签就把窗口连同 app 关了；View 菜单还占着 ⌘R、⌘=、⌘-、⌘0（字号）。⌘W 改成关闭当前标签。
 func (a *app) installMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		{Role: mygo.RoleAppMenu},
+		{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{
+			{Role: mygo.RoleAbout},
+			mygo.Separator(),
+			{Label: "设置…", Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(a.openSettings)
+			}},
+			mygo.Separator(),
+			{Role: mygo.RoleServices},
+			mygo.Separator(),
+			{Role: mygo.RoleHide},
+			{Role: mygo.RoleHideOthers},
+			{Role: mygo.RoleUnhide},
+			mygo.Separator(),
+			{Role: mygo.RoleQuit},
+		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
 			{Label: "关闭标签", Accelerator: "Cmd+W", Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuCloseTab = true })
@@ -716,11 +741,17 @@ func (a *app) pasteImage(v *termView, png []byte) {
 }
 
 func (a *app) setFontSize(size float32) {
-	a.fontSize = min(max(size, 9), 28)
+	a.fontSize = min(max(size, minFontSize), maxFontSize)
 	if a.view != nil {
 		a.view.term.SetFont(a.termFont())
 	}
+	if a.state.FontSize != a.fontSize {
+		a.state.FontSize = a.fontSize
+		a.saveState()
+	}
 }
+
+const minFontSize, maxFontSize = 9, 28
 
 // --- 动作：都在后台 goroutine 里调用常驻进程，完成后刷新
 

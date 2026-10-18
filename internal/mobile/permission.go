@@ -27,7 +27,7 @@ type permTarget struct {
 func (c *conn) noteChat(key string, gen uint64, reqID string, a chatSub) {
 	id := ""
 	if t := c.sessionTerminal(a.Agent, a.SessionID); t != nil {
-		id = t.ID
+		id = t.Info().ID
 	}
 	c.smu.Lock()
 	defer c.smu.Unlock()

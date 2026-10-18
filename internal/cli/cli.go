@@ -93,6 +93,7 @@ func init() {
 		{"mobile devices", "List paired phones", "", cmdMobileDevices},
 		{"mobile rm", "Unpair a phone", "<device>", cmdMobileRm},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
+		{"agent exec", "Run claude, codex or cursor-agent with Hive's hooks (used by the shims in $HIVE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
 		{"version", "Print the version", "", cmdVersion},
 	}
 }

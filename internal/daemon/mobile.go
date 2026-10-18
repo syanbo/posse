@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"hive/internal/agent"
+	"hive/internal/host"
 	"hive/internal/mobile"
 	"hive/internal/rpc"
-	"hive/internal/term"
 )
 
 // mobileHost 把常驻进程的项目、工作区和终端交给手机服务。
@@ -69,7 +69,7 @@ func (h mobileHost) State() mobile.State {
 	return st
 }
 
-func (h mobileHost) Terminal(id string) *term.Terminal {
+func (h mobileHost) Terminal(id string) host.Terminal {
 	s, err := h.d.session(id)
 	if err != nil {
 		return nil

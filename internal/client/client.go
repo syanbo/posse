@@ -44,7 +44,9 @@ func (c *Client) EnsureDaemon() error {
 	if err := os.MkdirAll(c.Home, 0o700); err != nil {
 		return err
 	}
-	logf, err := os.OpenFile(filepath.Join(c.Home, "daemon.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	logPath := filepath.Join(c.Home, "daemon.log")
+	rotateLog(logPath, maxDaemonLog)
+	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return err
 	}
@@ -67,4 +69,14 @@ func (c *Client) EnsureDaemon() error {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return fmt.Errorf("daemon did not start; see %s", filepath.Join(c.Home, "daemon.log"))
+}
+
+// maxDaemonLog 是 daemon.log 的上限：拉起常驻进程前超过它就改名成 daemon.log.1，只留一份旧的。
+// 日志由拉起方打开后交给常驻进程，常驻进程运行期间不轮转，按现在的写入量一次运行涨不了多少。
+const maxDaemonLog = 5 << 20
+
+func rotateLog(path string, max int64) {
+	if fi, err := os.Stat(path); err == nil && fi.Size() > max {
+		os.Rename(path, path+".1")
+	}
 }

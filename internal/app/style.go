@@ -250,6 +250,11 @@ func card(c *ui.Context) ui.Element {
 	return edge(c, ui.Column(c).Background(p.card).Radius(rCard))
 }
 
+// emptyCard 是页面没有内容时居中的说明卡片：只靠底色和画布分开，不描边。
+func emptyCard(c *ui.Context) ui.Element {
+	return ui.Column(c).Background(colors(c.Theme()).card).Radius(rCard)
+}
+
 // titleText 是页面、对话框和卡片的标题：界面上只有标题用 600 的字重。
 func titleText(c *ui.Context, text string, size float32) ui.Element {
 	return ui.Text(c, text).FontSize(size).FontWeight(600)

@@ -126,3 +126,25 @@ func TestDetectForegroundAgent(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// 经同名脚本手动启动的 agent 带着 hooks：收到 hook 就按它记 agent，状态以 hooks 为准。
+func TestHookMarksManualAgent(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "grok", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.hooked = false
+	s.mu.Unlock()
+	raw, _ := json.Marshal(map[string]any{"terminalId": s.ID, "agent": "claude", "event": "UserPromptSubmit", "payload": map[string]any{"session_id": "sid"}})
+	if _, err := d.hookEvent(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	if s.agentName() != "claude" || !s.isHooked() {
+		t.Fatalf("agent %q hooked %v", s.agentName(), s.isHooked())
+	}
+	if st := s.Agent(); st.Status != agent.StatusWorking || st.SessionID != "sid" {
+		t.Fatalf("state %+v", st)
+	}
+}

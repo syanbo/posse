@@ -82,7 +82,7 @@ func TestResume(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, want+"; exec ") || r.SessionID != "sid" {
+		if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, want+"; if [ ") || r.SessionID != "sid" {
 			t.Errorf("%s: %q", agent, cmd)
 		}
 	}
@@ -90,7 +90,7 @@ func TestResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, "codex '-c'") || !strings.Contains(cmd, " resume 'sid'; exec ") {
+	if cmd := r.Argv[len(r.Argv)-1]; !strings.HasPrefix(cmd, "codex '-c'") || !strings.Contains(cmd, " resume 'sid'; if [ ") {
 		t.Errorf("codex: %q", cmd)
 	}
 	if _, err := l.Resume("claude", "", ""); err == nil {

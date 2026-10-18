@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"hive/internal/history"
-	"hive/internal/term"
+	"hive/internal/host"
 )
 
 const (
@@ -122,7 +122,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	}
 }
 
-func (c *conn) sessionTerminal(agentName, sessionID string) *term.Terminal {
+func (c *conn) sessionTerminal(agentName, sessionID string) host.Terminal {
 	if sessionID == "" {
 		return nil
 	}

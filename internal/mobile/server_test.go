@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
 
+	"hive/internal/host"
 	"hive/internal/term"
 )
 
@@ -60,10 +61,13 @@ func (h *fakeHost) State() State {
 	return State{Projects: []Project{{ID: "p1", Name: "demo", Path: "/tmp"}}, Workspaces: []Workspace{w}}
 }
 
-func (h *fakeHost) Terminal(id string) *term.Terminal {
+func (h *fakeHost) Terminal(id string) host.Terminal {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.terms[id]
+	if t, ok := h.terms[id]; ok {
+		return host.Wrap(t)
+	}
+	return nil
 }
 
 func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, error) {

@@ -15,11 +15,12 @@ type awakeStatus struct {
 	Working int    `json:"working"`
 }
 
-var awakeModes = []struct{ mode, short, item string }{
-	{"off", "关闭", "关闭"},
-	{"auto", "自动", "agent 工作时"},
-	{"display", "亮屏", "agent 工作时，屏幕也亮"},
-	{"on", "始终", "始终"},
+// short 是底栏按钮上的字，item 是菜单项，seg 是设置页分段按钮上的字（菜单项太长放不下）。
+var awakeModes = []struct{ mode, short, item, seg string }{
+	{"off", "关闭", "关闭", "关闭"},
+	{"auto", "自动", "agent 工作时", "agent 工作时"},
+	{"display", "亮屏", "agent 工作时，屏幕也亮", "工作时亮屏"},
+	{"on", "始终", "始终", "始终"},
 }
 
 // awakeTip 是按钮的悬停说明。

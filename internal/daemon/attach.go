@@ -34,7 +34,7 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 		return err
 	}
 	snap, sub := s.Attach(p.Cols, p.Rows)
-	defer s.Detach(sub)
+	defer sub.Close()
 	cols, rows := s.Size()
 	rpc.WriteResult(conn, terminalAttachResult{Cols: cols, Rows: rows, Running: s.Running()})
 
@@ -74,7 +74,7 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 	var merged []byte
 	for {
 		select {
-		case chunk, ok := <-sub.C:
+		case chunk, ok := <-sub.Output():
 			if !ok {
 				// 程序结束时通知界面退出码；被判定跟不上而断开时直接关连接，界面会重新接入
 				select {
@@ -90,7 +90,7 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 		drain:
 			for len(frame) < 256<<10 {
 				select {
-				case more, ok := <-sub.C:
+				case more, ok := <-sub.Output():
 					if !ok {
 						break drain
 					}

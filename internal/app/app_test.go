@@ -189,3 +189,16 @@ func TestDiffFixedRevs(t *testing.T) {
 		}
 	}
 }
+
+func TestVersionLabel(t *testing.T) {
+	for build, want := range map[string]string{
+		"":                              "0.1.0",
+		"663c0c7 2026-10-18T05:18:04Z":  "0.1.0（663c0c7）",
+		"663c0c7+ 2026-10-18T05:18:04Z": "0.1.0（663c0c7，有未提交改动）",
+		" 2026-10-18T05:18:04Z":         "0.1.0",
+	} {
+		if got := versionLabel("0.1.0", build); got != want {
+			t.Errorf("versionLabel(%q) = %q, want %q", build, got, want)
+		}
+	}
+}

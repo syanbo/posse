@@ -83,6 +83,8 @@ func (a *app) build(c *ui.Context) {
 				a.historyBoard(c)
 			case a.selected == mobileBoardID:
 				a.mobileBoard(c)
+			case a.selected == settingsBoardID:
+				a.settingsBoard(c)
 			default:
 				a.main(c, w, cur)
 			}
@@ -768,7 +770,10 @@ func (a *app) footer(c *ui.Context) {
 	if t.Dark {
 		shade = ui.RGBA(0, 0, 0, 0.18)
 	}
-	ui.Row(c).Height(34).Padding(0, 14).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Row(c).Height(34).Padding(0, 14, 0, 8).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+		if pressable(iconButtonSized(c, iconSettings, "设置 ⌘,", 24, 14)).Tooltip("设置 ⌘,").Clicked() {
+			a.openSettings()
+		}
 		a.awakeButton(c)
 		ui.Spacer(c)
 		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
@@ -1064,7 +1069,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) firstRun(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		card(c).Width(440).Padding(24).Gap(18).Children(func() {
+		emptyCard(c).Width(440).Padding(24).Gap(18).Children(func() {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", 20)

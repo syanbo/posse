@@ -28,6 +28,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 cmd/hive            单一二进制：窗口（hive app，或从 Hive.app 无参数启动）、常驻进程（hive daemon run）和 CLI 共用
 internal/rpc        unix socket 协议：每连接一次请求，请求/响应各一行 JSON
 internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排
+internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），现在是包着 internal/term 的进程内实现；终端宿主独立成进程的方案见 docs/plans/terminal-host.md
 internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
 internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区已删，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
 internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
@@ -47,6 +48,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 ## 关键约定
 
 - 常驻进程持有 `$HIVE_HOME/hived.lock` 的文件锁直到完全退出；socket 和 pid 文件只在持锁时创建和删除。
+- `daemon.log` 由拉起常驻进程的一方（`client.EnsureDaemon`）打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - 终端快捷键（`internal/app/termkeys.go`，照 Ghostty、iTerm、Orca 的默认）：终端视图把带 Command 的键都交给 app、Option 不当 Meta，所以在 `OnKey` 里处理。⌘←/⌘→/⌘⌫ 发 Ctrl+A/E/U，⌥←/⌥→/⌥⌫ 发 Meta+B/F/退格；Claude、Codex 终端里 ⇧↩ 发 Ctrl+J（换行不发送）；⌘↑/⌘↓ 回滚到顶/到底；这些在全屏程序（vim、less）里原样交给程序。⌘K 由常驻进程 `terminal.clear` 清屏和回滚区（之后接入的快照也是空的）再发 Ctrl+L 重画；旧常驻进程没有这个接口时只清界面这边。⌘A 全选走 Edit 菜单。⌘⇧[ / ⌘⇧]（⌃Tab / ⌃⇧Tab）按标签栏顺序切标签。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
@@ -55,7 +57,8 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $HIVE_HOME/cursor-plugin`，hooks 放在 hive 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
 - `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有两处：Cursor 要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出。始终 exit 0，不拉起常驻进程。
 - 没有 hook 的情况靠终端标题兜底：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`。
-- 终端里的 agent 不只看启动参数：每次标题变化时取 PTY 的前台进程组（`Terminal.Foreground`），按它的 argv 认出 agent（`agent.FromProcess`），和记录的不同就换过来、清掉旧会话信息（`session.detectAgent`）。这样在 grok 退出后的 shell 里手动敲 `claude`，图标和状态都跟着变。手动启动的没有 hooks，状态只靠标题（`agent.TitleOnlyStatus`：Claude 以 `✳` 开头是空闲，转动的圆形符号是工作中）。前台换成 shell、编辑器等不是 agent 的程序时不改，免得 agent 临时让出前台被当成退出。
+- 终端里的 agent 不只看启动参数：每次标题变化时取 PTY 的前台进程组（`Terminal.Foreground`），按它的 argv 认出 agent（`agent.FromProcess`），和记录的不同就换过来、清掉旧会话信息（`session.detectAgent`）。这样在 grok 退出后的 shell 里手动敲 `claude`，图标和状态都跟着变。没有经过下面同名脚本启动的（grok，或脚本没生效时）没有 hooks，状态只靠标题（`agent.TitleOnlyStatus`：Claude 以 `✳` 开头是空闲，转动的圆形符号是工作中）。前台换成 shell、编辑器等不是 agent 的程序时不改，免得 agent 临时让出前台被当成退出。
+- 手动启动也带 hooks（`internal/agent/manual.go`）：常驻进程写出 `$HIVE_HOME/bin/{claude,codex,cursor-agent}`，转给 `hive agent exec <命令> --`，它在 PATH 里跳过这个目录找到真正的程序，按 `ManualArgs` 补上和界面启动一样的参数（Claude 不指定 `--session-id`，会话 ID 由 hooks 报上来），环境里加 `HIVE_AGENT_SHIM=1` 后 exec 过去。`-p`、`exec`、`mcp`、`login` 这类非交互、管理用法原样运行；环境里已经有 `HIVE_AGENT_SHIM`（agent 自己跑工具时再调）或不在 hive 终端里也原样运行。用户的 `.zshrc` 常把 `~/.local/bin` 插到 PATH 最前，所以照 Ghostty 的 shell 集成：zsh 终端带 `ZDOTDIR=$HIVE_HOME/shell/zsh`，那里的 `.zshenv` 先还原用户的 ZDOTDIR（`HIVE_USER_ZDOTDIR`）、读用户的 `.zshenv`，再加一个 precmd 每次出提示符前把 `$HIVE_HOME/bin` 挪回最前；之后的 `.zprofile`、`.zshrc` 照常从用户目录读。agent 退出后 `exec` 回的 zsh 经 `HIVE_ZDOTDIR` 再走一次集成（`ShellArgv`）。用户手动开的嵌套 zsh、bash、fish 不走集成。收到 hook 事件时常驻进程按它记 agent 并标成有 hooks（`session.markHooked`）。改了脚本或集成文件要重启常驻进程，之后新开的终端才生效。
 - 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重。界面接入期间由界面应答终端查询。
 - 多 agent 编排（`hive task`）：派发方是调用方所在的终端（`HIVE_TERMINAL_ID`），为空表示用户（界面或终端之外）。worker 是新开的 agent 终端，带 `HIVE_TASK_ID`，启动提示由 `workerPrompt` 生成，写明 `hive task ask/check/done` 的用法。`ask/check/done` 只接受 worker 自己的终端，`reply/send/close` 只接受派发方，用户（调用方为空）可以接手任何任务。
 - 派发方的收件箱是 question/done/exit 三类消息，worker 的是 answer/note。派发方 agent 空闲（hooks 或标题报告 idle）且 5 秒内没有人键入时，hive 往它终端里输入一行 `Hive: … Run \`hive task inbox\` to read.` 并回车；每条消息只提醒一次。worker 终端或其中的 agent 没汇报就退出时，任务记为 exited 并通知派发方；`task close` 先改状态再关终端，不算意外退出。常驻进程重启时还在进行的任务记为 lost。
@@ -97,6 +100,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 侧栏：项目 → 工作区（只有主工作区时省掉这层）→ 运行中的 agent 会话（shell 只在标签栏）。顶栏照 Orca：红绿灯（`TrafficLightPosition{16, 13}`，在 40 高的顶栏里上下居中）右边是应用名 Hive 和侧栏开关，侧栏顶栏底下的分割线和标签栏的接成一条。开关和 ⌘B 收起展开，侧栏从左边缘滑进滑出（200ms，主区域只在展开开始、收起结束时改一次宽度），应用名和开关固定在原位不跟着滑，侧栏不占位置时主区域顶栏让出它们的位置（`barInset`）；拖右边缘调宽（200–420），松手才写 ui.json（`sidebarHidden`、`sidebarWidth`）。
 - 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
 - 防休眠照 Orca 的 agent-awake（Magpie 同样）：常驻进程按档位起 `/usr/bin/caffeinate -i -s -w <常驻进程 pid>` 托住系统不睡，屏幕照常熄灭，合盖仍会睡（`internal/daemon/awake.go`）。档位存在 `$HIVE_HOME/awake.json`，默认 auto：有 agent 处于工作中且状态 2 小时内更新过才托住（卡住的"工作中"不算），display 和 auto 一样看 agent，另加 `-d` 屏幕也不熄（照 Magpie 的 Screen on too，给操作桌面界面的 agent 用），off 不管，on 一直托住系统。agent 状态变化、终端退出时重算，另外每 30 秒重算一次，caffeinate 意外退出也在这时补上；`-w` 让常驻进程被强杀时它跟着退出。状态随 `daemon.status` 的 `awake` 给界面，`awake.set` 改档位。底栏最左边是咖啡杯按钮（`internal/app/awake.go`），托住时图标是强调色，点开选档位；旧常驻进程没有这个字段时按钮变灰。
+- 设置页（`internal/app/settings.go`，`settingsBoardID`）：⌘,（应用菜单的"设置…"）和底栏最左边的齿轮打开，不在侧栏里。分防休眠、终端字号（存在 ui.json 的 `fontSize`）、关于三块；关于里比较窗口和常驻进程的 `daemon.Build`（git 提交加进程启动时可执行文件的修改时间，有未提交改动时提交后面带 `+`），对不上说明常驻进程还在跑旧包，"重启常驻进程"变成主按钮。重启是先确认、`daemon.stop`，下一次轮询连不上时窗口用自己的包拉起新的。手机配对仍在「手机」页。
 - 底栏的内存按钮打开浮窗：hive 自己（常驻进程、窗口）和各工作区终端里的程序。终端按 `terminalInfo.Pid` 统计整棵进程树的 phys_footprint（`procmem.TreeFootprint`，子进程关系取自 sysctl `kern.proc.all`），浮窗开着时每 3 秒按工作区算一次；底栏显示的是总内存（hive 自己加终端），终端合计在每秒的轮询里每 5 秒算一次，按 MB 变了才重建界面。都不经过常驻进程。点终端展开进程明细（`memBreakdown`）：shell、agent 本体，和 agent 拉起的每棵子进程（MCP 服务等），名字取自 argv（`procmem.Name`，跳过 npm、node、python 这类启动器；npm 会把整条命令改写进第一个参数）。
 - 图片、"技能与 MCP"两个面板跟着会话走，开关在 agent 终端内容区的右上角（`sessionButtons`），常驻显示；历史面板按项目，开关留在标签栏。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。面板顶上是每个技能、MCP 服务的次数，下面是时间线（`Usage.Events`，取每行的 timestamp，grok、cursor 的会话文件没有时间），连着调同一个工具合成一项。
