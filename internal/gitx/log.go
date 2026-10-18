@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,19 +27,25 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 		args = append(args, "--author="+f.Author, "--regexp-ignore-case", "--fixed-strings")
 	}
 	text := strings.TrimSpace(f.Text)
-	switch {
-	case text != "" && looksLikeHashPrefix(text):
-		// 哈希的开头：只看这一个提交
-		args = append(args, "--no-walk", text)
-	default:
-		if text != "" {
-			args = append(args, "--grep="+text, "--regexp-ignore-case", "--fixed-strings")
+	if looksLikeHashPrefix(text) && skip == 0 {
+		// 像哈希的开头：先只看这一个提交；对不上（纯数字的日期、单号也像哈希）再按提交信息搜
+		hash := append(slices.Clone(args), "--no-walk", strings.ToLower(text), "--")
+		if f.Path != "" {
+			hash = append(hash, literal(f.Path)...)
 		}
-		if f.Branch != "" {
-			args = append(args, f.Branch)
-		} else {
-			args = append(args, "--branches", "--remotes", "--tags", "HEAD")
+		if out, err := runRaw(ctx, dir, nil, nil, hash...); err == nil {
+			if list := parseCommits(out); len(list) > 0 {
+				return list, nil
+			}
 		}
+	}
+	if text != "" {
+		args = append(args, "--grep="+text, "--regexp-ignore-case", "--fixed-strings")
+	}
+	if f.Branch != "" {
+		args = append(args, f.Branch)
+	} else {
+		args = append(args, "--branches", "--remotes", "--tags", "HEAD")
 	}
 	args = append(args, "--")
 	if f.Path != "" {
@@ -46,11 +53,6 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 	}
 	out, err := runRaw(ctx, dir, nil, nil, args...)
 	if err != nil {
-		// 哈希开头对不上任何提交时 git 会报 unknown revision，当成没有结果
-		var ge *Error
-		if text != "" && looksLikeHashPrefix(text) && errors.As(err, &ge) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return parseCommits(out), nil
@@ -62,7 +64,7 @@ func looksLikeHashPrefix(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !strings.ContainsRune("0123456789abcdef", r) {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
 			return false
 		}
 	}

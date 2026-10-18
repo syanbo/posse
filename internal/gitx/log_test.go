@@ -59,6 +59,16 @@ func TestLogFilters(t *testing.T) {
 	if got, _ := Log(ctx, dir, LogFilter{Author: "T"}, 0, 100); len(got) != 4 {
 		t.Fatalf("author %d", len(got))
 	}
+	// 大写的哈希也认；纯数字像哈希但对不上时按提交信息搜
+	if got, _ := Log(ctx, dir, LogFilter{Text: strings.ToUpper(h[0][:8])}, 0, 100); len(got) != 1 || got[0].Hash != h[0] {
+		t.Fatalf("upper hash %+v", got)
+	}
+	write(t, filepath.Join(dir, "d.txt"), "d\n")
+	gitIn(t, dir, "add", "d.txt")
+	gitIn(t, dir, "commit", "-q", "-m", "修复工单 20261018")
+	if got, err := Log(ctx, dir, LogFilter{Text: "20261018"}, 0, 100); err != nil || len(got) != 1 || got[0].Subject != "修复工单 20261018" {
+		t.Fatalf("numeric text %+v %v", got, err)
+	}
 }
 
 func TestRewriteHistory(t *testing.T) {
