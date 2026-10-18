@@ -576,9 +576,12 @@ func coreModal(c *context, open *bool, fn func()) *node {
 	}
 	t := c.theme
 	return coreDialogBase(c, open, func(back, panel *node) {
-		back.Background(RGBA(0, 0, 0, 0.4))
+		// Hive：打开时遮罩淡入，对话框淡入并从 96% 放大到原大，只播一次
+		k := back.Keyframes("hive-in", hiveInFrames)
+		back.Background(RGBA(0, 0, 0, 0.4*k))
 		panel.Padding(t.Space(5)).Gap(t.Space(3)).Radius(t.Space(2.5)).Background(t.Background).MaxWidth(c.w - t.Space(10)).MaxHeight(c.h - t.Space(10))
 		panel.Shadow(0, 10, 30, 0, RGBA(0, 0, 0, 0.3))
+		panel.Opacity(k).Scale(0.96+0.04*k, 0.96+0.04*k)
 		fn()
 	})
 }
@@ -602,7 +605,13 @@ func stylePanel(c *context, panel *node) {
 	t := c.theme
 	panel.Margin(t.Space(1), 0, 0, 0).Padding(t.Space(1)).Radius(t.Radius+2).Background(t.Background).Border(1, t.Border)
 	panel.Shadow(0, 6, 20, 0, RGBA(0, 0, 0, 0.18))
+	// Hive：弹出时淡入并从上方 4 DIP 落到位
+	k := panel.Keyframes("hive-in", hiveInFrames)
+	panel.Opacity(k).Translate(0, -4*(1-k))
 }
+
+// hiveInFrames 是 Hive 加的弹出过渡：160 ms 从 0 到 1，先快后慢。
+var hiveInFrames = []Keyframe{{At: 0, Value: 0}, {At: 160 * time.Millisecond, Value: 1, Ease: EaseOut}}
 
 // Select creates a drop-down choosing one of options into *selected.
 func coreSelect(c *context, selected *string, options []string) *node {

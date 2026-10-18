@@ -125,15 +125,20 @@ func terminalThemes() (light, dark *terminal.Theme) {
 
 // floating 是浮在内容上面的卡片（右侧面板、链接卡片、图片预览）：顶栏底色、描边和投影，位置由调用方定。
 // 深色下不画白框，用 1px 内高光（像边缘接到顶光）配深而散的投影；浅色下是细外环加投影。
+// 出现时淡入并从 97% 放大到原大（160ms，只播一次，之后不再请求帧）；自己带动画的调用方（右侧面板）
+// 之后再设 Opacity、Transform 会盖掉这里的。
 func floating(c *ui.Context, e ui.Element) ui.Element {
 	t := c.Theme()
 	p := colors(t)
-	e.Radius(rFloat).Background(p.raised)
+	k := e.Keyframes("pop-in", popInFrames)
+	e.Radius(rFloat).Background(p.raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
 	if t.Dark {
 		return e.InsetShadow(0, 0, 0, 1, ui.RGBA(255, 255, 255, 0.1)).Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.5))
 	}
 	return e.Border(1, p.line).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.12))
 }
+
+var popInFrames = []ui.Keyframe{{At: 0, Value: 0}, {At: 160 * time.Millisecond, Value: 1, Ease: ui.EaseOut}}
 
 // fieldInput 是放在框里（浮层、对话框、卡片）的单行输入：填充底、不加框，聚焦时描焦点色。
 // 返回里面的输入框，调用方照常问 Submitted、Changed、Shortcut。
@@ -300,13 +305,18 @@ func agentTile(c *ui.Context, agent string, size float32) ui.Element {
 	case "claude":
 		icon, bg, fg = iconClaude, ui.Hex("#D97757"), ui.Hex("#FFFFFF")
 	case "codex":
-		icon, bg, fg = iconCodex, ui.Hex("#4F5DF5"), ui.Hex("#FFFFFF") // Codex 应用图标的蓝紫
+		icon, bg, fg = iconCodex, ui.Hex("#FFFFFF"), ui.Hex("#000000") // ChatGPT 应用图标的白底黑标
 	case "grok":
 		icon, bg, fg = iconGrok, t.Text, t.Background
 	case "cursor":
 		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), ui.Hex("#FFFFFF")
 	}
-	return tile(c, icon, size, bg, fg).Tooltip(agentTitle(agent))
+	e := tile(c, icon, size, bg, fg).Tooltip(agentTitle(agent))
+	if agent == "codex" {
+		// 白底在浅色卡片上会融掉，描一圈细边
+		e.InsetShadow(0, 0, 0, 1, ui.RGBA(0, 0, 0, 0.12))
+	}
+	return e
 }
 
 // cjkLift 把按钮里的文字往上提：中文字形来自苹方回退，在系统字体的行框里偏低，按行框居中看起来下沉约 1pt。

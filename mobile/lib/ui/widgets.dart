@@ -22,7 +22,7 @@ class AgentTile extends StatelessWidget {
     final c = HiveColors.of(context);
     final (String? path, Color bg, Color fg) = switch (agent) {
       'claude' => (brandClaudePath, const Color(0xFFD97757), Colors.white),
-      'codex' => (brandCodexPath, const Color(0xFF4F5DF5), Colors.white),
+      'codex' => (brandCodexPath, Colors.white, Colors.black),
       'grok' => (brandGrokPath, c.text, c.card),
       'cursor' => (brandCursorPath, const Color(0xFF6E56CF), Colors.white),
       _ => (null, c.fill, c.muted),
@@ -33,6 +33,8 @@ class AgentTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(size * 0.26),
+        // Codex 的白底在浅色卡片上会融掉，描一圈细边（和桌面端一致）
+        border: agent == 'codex' ? Border.all(color: const Color(0x1F000000)) : null,
       ),
       alignment: Alignment.center,
       child: path == null
