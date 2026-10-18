@@ -111,6 +111,8 @@ void main() {
       );
       final rpc = await link.start();
       expect(connects, 2);
+      // 记下的是先握手成功的那个地址，界面上显示它
+      expect(link.url, 'fast');
       final status = await rpc.call('status.get', {});
       expect(status['protocolVersion'], 3);
       final seen = link.connections.first;

@@ -106,6 +106,9 @@ class HiveLink {
   final Duration attemptTimeout;
 
   PhoneRpc? rpc;
+
+  /// 这次连上的是配对码里的哪个地址（几个地址同时试，先握手成功的那个）。
+  String? url;
   Object? lastError;
   void Function()? onActivity;
   var _epoch = 0;
@@ -153,6 +156,7 @@ class HiveLink {
       });
       final previous = rpc;
       rpc = won.value;
+      url = won.url;
       lastError = null;
       if (!_ready.isClosed) _ready.add(won.value);
       onActivity?.call();

@@ -126,8 +126,13 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 		}
 		primary = ep
 	}
+	// 选了地址就只写这一个：手机会同时连配对码里的所有地址、谁先连上用谁，
+	// 再带上 Tailscale、局域网的话，选的局域网或自定义地址总被抢先的那个挤掉
 	var extras []string
 	for _, host := range LocalEndpoints() {
+		if primary != "" {
+			break
+		}
 		ep, err := ResolveEndpoint(host, port)
 		if err != nil {
 			continue

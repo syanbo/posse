@@ -290,6 +290,9 @@ class HiveAppModel extends ChangeNotifier {
 
   PhoneRpc? get rpc => link?.rpc;
 
+  /// 现在连着的地址，没连上时为空。
+  String? get connectedUrl => link?.rpc == null ? null : link?.url;
+
   /// 配对过的电脑，同一时间只连其中一台。
   List<SavedComputer> get computers => saved.computers;
 
@@ -312,7 +315,8 @@ class HiveAppModel extends ChangeNotifier {
   }
 
   /// 连一台电脑：新配对码或已保存的电脑都走这里。连上之后才断开原来那台，连不上时原来的连接不受影响。
-  Future<void> connectCode(String raw) async {
+  /// 返回这次有没有连上；连不上的原因在 [error]。
+  Future<bool> connectCode(String raw) async {
     final gen = ++_connectGen;
     connecting = true;
     error = null;
@@ -336,7 +340,7 @@ class HiveAppModel extends ChangeNotifier {
       await created.start();
       if (gen != _connectGen) {
         await created.close();
-        return;
+        return false;
       }
       final previous = link;
       final switched = offer?.publicKeyB64 != parsed.publicKeyB64;
@@ -356,9 +360,11 @@ class HiveAppModel extends ChangeNotifier {
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
         unawaited(refreshWorktrees());
       });
+      return true;
     } catch (caught) {
       if (!identical(link, next)) await next?.close();
       if (gen == _connectGen) error = friendlyError(caught);
+      return false;
     } finally {
       if (gen == _connectGen) {
         connecting = false;

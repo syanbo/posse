@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 
 	"hive/internal/host"
+	"hive/internal/rpc"
 	"hive/internal/term"
 )
 
@@ -76,6 +77,15 @@ func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, e
 
 func (h *fakeHost) CloseTerminal(id string) error { return nil }
 func (h *fakeHost) Agents() []string              { return []string{"claude"} }
+
+// History 假装常驻进程：list 回一个会话，resume 报找不到工作区。
+func (h *fakeHost) History(_ context.Context, method string, params json.RawMessage) (any, error) {
+	switch method {
+	case "history.list", "history.search":
+		return map[string]any{"sessions": []map[string]any{{"agent": "claude", "id": "s1", "title": "修 bug", "path": "/tmp/s1.jsonl"}}, "params": json.RawMessage(params)}, nil
+	}
+	return nil, &rpc.Error{Code: rpc.CodeNotFound, Message: "no workspace contains /x; pass a workspace"}
+}
 
 // phone 扮演 Orca 手机 App 的连接。
 type phone struct {
@@ -527,7 +537,8 @@ func TestPairKeepsPrimaryEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "ws://127.0.0.1:" + strconv.Itoa(srv.Port())
-	if info.Endpoint != want || len(info.Endpoints) == 0 || info.Endpoints[0] != want {
+	// 选了地址就只有它：再带上本机其他地址，手机并发连接时会被先连上的挤掉
+	if info.Endpoint != want || len(info.Endpoints) != 1 || info.Endpoints[0] != want {
 		t.Fatalf("pair %+v", info)
 	}
 	seen := map[string]bool{}

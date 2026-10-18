@@ -36,30 +36,37 @@ class _PairScreenState extends State<PairScreen> {
   final _code = TextEditingController();
   String? _note;
   var _manual = false;
-  String? _startedOn;
   var _closing = false;
 
   @override
   void initState() {
     super.initState();
-    _startedOn = widget.model.offer?.publicKeyB64;
     widget.model.addListener(_onModel);
   }
 
-  /// 添加模式下，连上了另一台电脑就回到首页。
   void _onModel() {
-    if (!mounted) return;
-    final now = widget.model.offer?.publicKeyB64;
-    if (widget.adding && now != null && now != _startedOn) {
-      // 通知可能来自根页面重建的过程中，这时导航器锁着，等这一帧画完再关
-      if (_closing) return;
+    if (mounted && !_closing) setState(() {});
+  }
+
+  /// 扫码、粘贴、手动输入都走这里：连上了在底部提示连的是哪台电脑、走的哪个地址，
+  /// 添加模式下回到首页（重新扫同一台电脑换地址也一样）；连不上的原因留在这一页上。
+  Future<void> _connect(String code) async {
+    setState(() => _note = null);
+    final model = widget.model;
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+    if (!await model.connectCode(code)) return;
+    final name = model.current?.label ?? '电脑';
+    final where = hostOf(model.connectedUrl);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(where == null ? '已连上 $name' : '已连上 $name，地址 $where'),
+      ),
+    );
+    if (widget.adding && mounted && !_closing) {
       _closing = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.of(context).pop();
-      });
-      return;
+      nav.pop();
     }
-    setState(() {});
   }
 
   @override
@@ -92,8 +99,7 @@ class _PairScreenState extends State<PairScreen> {
       setState(() => _note = '打不开相机，可以把配对码贴进来。');
       return;
     }
-    setState(() => _note = null);
-    widget.model.connectCode(pick.code!);
+    await _connect(pick.code!);
   }
 
   /// 剪贴板里是配对码就直接连，不是就展开输入框让用户自己贴。
@@ -102,8 +108,7 @@ class _PairScreenState extends State<PairScreen> {
     final text = data?.text?.trim() ?? '';
     if (!mounted) return;
     if (isPairingCode(text)) {
-      setState(() => _note = null);
-      widget.model.connectCode(text);
+      await _connect(text);
       return;
     }
     setState(() {
@@ -194,7 +199,7 @@ class _PairScreenState extends State<PairScreen> {
               ),
               const SizedBox(height: 10),
               FilledButton(
-                onPressed: busy ? null : () => model.connectCode(_code.text),
+                onPressed: busy ? null : () => _connect(_code.text),
                 child: Text(busy ? '正在连接…' : '连接'),
               ),
             ],
@@ -226,6 +231,14 @@ class _PairScreenState extends State<PairScreen> {
       subtitle: Text(detail),
     );
   }
+}
+
+/// 地址里给人看的部分：主机加端口，路径不写。
+String? hostOf(String? url) {
+  if (url == null) return null;
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.host.isEmpty) return null;
+  return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
 }
 
 /// 工作区在列表里的名字：主工作区和项目同名时只写项目名。
@@ -1016,8 +1029,11 @@ class _ComputerSheet extends StatelessWidget {
                             color: c.accent,
                           ),
                           title: Text(computer.label),
+                          // 连着的那台写实际连上的地址，其余写配对码里的主地址
                           subtitle: Text(
-                            _endpoint(computer),
+                            computer.id == active && model.connectedUrl != null
+                                ? hostOf(model.connectedUrl) ?? ''
+                                : _endpoint(computer),
                             style: mono(12, color: c.muted),
                           ),
                           trailing: computer.id == active

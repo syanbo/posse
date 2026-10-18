@@ -261,6 +261,13 @@ func wildcardHost(h string) bool {
 	return h == "*" || h == "0.0.0.0" || h == "::" || h == "::ffff:0:0"
 }
 
+// IsTailscale 报告 ip 是不是 Tailscale 的地址（100.64.0.0/10）。
+func IsTailscale(ip string) bool {
+	_, cgnat, _ := net.ParseCIDR("100.64.0.0/10")
+	p := net.ParseIP(ip)
+	return p != nil && cgnat.Contains(p)
+}
+
 // LocalEndpoints 列出手机可能连得上的本机 IPv4：Tailscale（100.64.0.0/10）在前，其余私有地址在后。
 func LocalEndpoints() []string {
 	ifaces, _ := net.Interfaces()

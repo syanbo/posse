@@ -10,6 +10,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
+
+	"hive/internal/mobile"
 )
 
 // mobileBoardID 是侧栏里「手机」一项的 ID。工作区 ID 都以 w_ 开头，不会冲突。
@@ -28,8 +30,9 @@ type mobileView struct {
 	seq      int       // 每次取码加一，只认最后一次的结果
 	loadedAt time.Time // 上次取码完成的时间，到点了再取一次
 	err      string
-	errAddr  string // err 是用哪个地址取码时出的错
-	custom   string // 正在输入的自定义地址
+	errAddr  string   // err 是用哪个地址取码时出的错
+	custom   string   // 正在输入的自定义地址
+	locals   []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
 }
 
 // mobilePoll 是手机页开着时重取配对码和设备列表的间隔：手机扫码连上后旧码就作废了，
@@ -37,7 +40,7 @@ type mobileView struct {
 const mobilePoll = 3 * time.Second
 
 // mobileAuto 是地址下拉里"自动"一项的文字。
-const mobileAuto = "自动（Tailscale 或局域网）"
+const mobileAuto = "自动（手机同时试本机所有地址）"
 
 type mobileDevice struct {
 	ID       string    `json:"id"`
@@ -114,11 +117,13 @@ func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
 	if err == nil {
 		img, err = qrImage(info.URL)
 	}
+	locals := mobile.LocalEndpoints()
 	a.update(func() {
 		m := &a.mobile
 		if seq != m.seq {
 			return
 		}
+		m.locals = locals
 		m.loading, m.loadedAt = false, time.Now()
 		if err != nil {
 			if !poll {
@@ -154,7 +159,8 @@ func (a *app) setMobileAddress(addr string) {
 		return
 	}
 	st.MobileAddress = addr
-	if addr != "" && !slices.Contains(st.MobileAddresses, addr) {
+	// 检测到的本机地址每次都列在下拉里，不记进自定义的列表
+	if addr != "" && !slices.Contains(st.MobileAddresses, addr) && !slices.Contains(a.mobile.locals, addr) {
 		st.MobileAddresses = append(st.MobileAddresses, addr)
 	}
 	a.saveState()
@@ -309,20 +315,32 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 	ui.Column(c).Gap(6).Children(func() {
 		ui.Text(c, "此电脑的地址").FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			cur := mobileAuto
-			if st.MobileAddress != "" {
-				cur = st.MobileAddress
+			// 下拉：自动、检测到的 Tailscale 和局域网地址、用过的自定义地址；选了具体地址，配对码里只有它
+			labels := []string{mobileAuto}
+			addrs := []string{""}
+			for _, ip := range m.locals {
+				kind := "局域网 "
+				if mobile.IsTailscale(ip) {
+					kind = "Tailscale "
+				}
+				labels, addrs = append(labels, kind+ip), append(addrs, ip)
 			}
+			for _, s := range st.MobileAddresses {
+				if !slices.Contains(addrs, s) {
+					labels, addrs = append(labels, s), append(addrs, s)
+				}
+			}
+			if i := slices.Index(addrs, st.MobileAddress); i < 0 {
+				labels, addrs = append(labels, st.MobileAddress), append(addrs, st.MobileAddress)
+			}
+			cur := labels[slices.Index(addrs, st.MobileAddress)]
 			sel := cur
 			ui.Box(c).Grow(1).Shrink(1).Children(func() {
-				if ui.Select(c, &sel, append([]string{mobileAuto}, st.MobileAddresses...)).Changed() && sel != cur {
-					if sel == mobileAuto {
-						sel = ""
-					}
-					a.useMobileAddress(sel)
+				if ui.Select(c, &sel, labels).Changed() && sel != cur {
+					a.useMobileAddress(addrs[slices.Index(labels, sel)])
 				}
 			})
-			if st.MobileAddress != "" && pressable(textButton(c, "移除")).Tooltip("从列表里删掉这个地址，改回自动").Clicked() {
+			if slices.Contains(st.MobileAddresses, st.MobileAddress) && pressable(textButton(c, "移除")).Tooltip("从列表里删掉这个地址，改回自动").Clicked() {
 				a.removeMobileAddress(st.MobileAddress)
 			}
 		})
@@ -337,7 +355,7 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 				a.useMobileAddress(m.custom)
 			}
 		})
-		ui.Text(c, "手机要能连到它：同一 Wi-Fi、Tailscale，或转到本机的隧道。").
+		ui.Text(c, "手机要能连到它：同一 Wi-Fi、Tailscale，或转到本机的隧道。选了具体地址，手机就只连这一个。").
 			FontSize(11.5).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }
