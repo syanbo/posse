@@ -651,7 +651,8 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 }
 
 // navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
-// 收起时行尾写 +N，有 worker 等你处理时这一行也显示待处理。
+// 和项目行一样，单击切到这个会话、收着的顺便展开，已经在看它时再单击收起；收起时行尾写 +N，
+// 有 worker 等你处理时这一行也显示待处理。
 func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool) {
 	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
 	if selected {
@@ -683,15 +684,16 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			if status != "" {
 				statusGlyph(c, status, 12)
 			}
-			if open != nil {
-				disclosure(c, open, fmt.Sprintf("展开 %d 个任务 worker", len(workers)))
-			}
 		}
 	}
 	icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
 	row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
 	a.reorderableTerm(c, row, w.ID, term.ID, false)
 	if row.Clicked() {
+		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
+		if open != nil {
+			*open = !*open || !viewing
+		}
 		a.selected = w.ID
 		a.activeTerm[w.ID] = term.ID
 	}

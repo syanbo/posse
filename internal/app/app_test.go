@@ -245,11 +245,22 @@ func TestSidebarTaskTree(t *testing.T) {
 		t.Fatalf("idle coordinator with running tasks: %q", got)
 	}
 
-	// 收起 t1 的 worker：t6 不再列出，行尾写 +1；t6 等你处理时 t1 这一行显示待处理
-	if err := tt.Click("收起 1 个任务 worker"); err != nil {
-		t.Fatal(err)
+	// 正在看 t1 时再单击它的行，收起它的 worker：t6 不再列出，行尾写 +1；t6 等你处理时 t1 这一行显示待处理
+	clickT1 := func() {
+		t.Helper()
+		r, ok := tt.Find("重写 hive 界面")
+		if !ok || r.X > 300 {
+			t.Fatalf("t1 row not found in the sidebar: %v %v", r, ok)
+		}
+		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+		tt.Frame()
 	}
+	a.selected, a.activeTerm["w1"] = "w1", "t1"
 	tt.Frame()
+	if _, ok := tt.Find("收起 1 个任务 worker"); ok {
+		t.Fatal("the worker group should have no arrow button")
+	}
+	clickT1()
 	terms := func() (out []string) {
 		for _, n := range a.navOrder {
 			if n.ws == "w1" && n.term != "" {
@@ -277,10 +288,11 @@ func TestSidebarTaskTree(t *testing.T) {
 	if a.navCur < 0 || a.navOrder[a.navCur].term != "t1" {
 		t.Fatalf("selection should land on the folded coordinator, got %+v", a.navOrder[a.navCur])
 	}
-	if err := tt.Click("展开 1 个任务 worker"); err != nil {
-		t.Fatal(err)
+	// 没在看 t1 时单击：切到 t1，顺便展开
+	clickT1()
+	if a.activeTerm["w1"] != "t1" {
+		t.Fatalf("click should switch to t1, got %q", a.activeTerm["w1"])
 	}
-	tt.Frame()
 	if got := terms(); !slices.Contains(got, "t6") {
 		t.Fatalf("expanded order %v", got)
 	}
