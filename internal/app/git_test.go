@@ -1084,3 +1084,53 @@ func TestRollbackDetail(t *testing.T) {
 	}
 	until(t, tt, "rolled back", func() bool { return v.git.busy == "" && v.git.changeCount() == 2 })
 }
+
+// 改动卡片的"提交此更改"：只提交这一处，文件里另一处改动留在工作区；复制改之前的内容。
+func TestCommitChangeFromPopup(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	d := v.cur
+	until(t, tt, "diff base", func() bool { return d.kind == docText && d.ed.DiffBase != nil && len(d.ed.Changes()) == 2 })
+	d.ed.OnChangeClick(0, 0)
+	until(t, tt, "popup", func() bool { return tt.HasText("第 1 / 2 处") })
+	if err := tt.Click("提交此更改"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("feat: 只加 log 调用")
+	tt.Key(0, ui.KeyEnter)
+	until(t, tt, "committed", func() bool { return v.git.busy == "" && d.change == nil && len(d.ed.Changes()) == 1 })
+	head := gitRun(t, root, "show", "HEAD:main.go")
+	if !strings.Contains(head, "log(cfg)") || strings.Contains(head, "func log") {
+		t.Fatalf("HEAD main.go: %q", head)
+	}
+	if msg := gitRun(t, root, "log", "-1", "--format=%s"); msg != "feat: 只加 log 调用" {
+		t.Fatalf("message %q", msg)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "main.go")); !strings.Contains(string(b), "func log") {
+		t.Fatal("worktree lost the other change")
+	}
+	// 改了没保存时不让提交这一处
+	d.ed.Buffer.Set("// x\n" + d.ed.Buffer.String())
+	d.ed.OnChangeClick(0, 0)
+	until(t, tt, "popup again", func() bool { return tt.HasText("先保存再提交这一处") })
+}
+
+func TestChangeContent(t *testing.T) {
+	base := "a\nb\nc\nd\n"
+	buf := "a\nB\nc\nd\nE\n"
+	// 只取第二行的修改，不带末尾新加的 E
+	if got := changeContent(base, buf, editor.BaseChange{OldStart: 1, OldEnd: 2, NewStart: 1, NewEnd: 2}); got != "a\nB\nc\nd\n" {
+		t.Fatalf("modify: %q", got)
+	}
+	if got := changeContent(base, buf, editor.BaseChange{OldStart: 4, OldEnd: 4, NewStart: 4, NewEnd: 5}); got != "a\nb\nc\nd\nE\n" {
+		t.Fatalf("add: %q", got)
+	}
+	if got := changeContent(base, "a\nd\n", editor.BaseChange{OldStart: 1, OldEnd: 3, NewStart: 1, NewEnd: 1}); got != "a\nd\n" {
+		t.Fatalf("delete: %q", got)
+	}
+}

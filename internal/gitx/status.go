@@ -331,6 +331,56 @@ func Commit(ctx context.Context, dir, message string, all, amend bool) error {
 	return err
 }
 
+// ErrStagedChange 表示文件在暂存区里有改动：只提交一处时不知道该以哪个版本为准，不做。
+var ErrStagedChange = errors.New("这个文件有已暂存的改动，到改动页里整个提交它")
+
+// CommitChange 只提交文件里的一处改动（照 WebStorm 行号旁弹窗的"提交此更改"）：content 是 HEAD 的内容
+// 只换上这一处之后的样子。在临时的暂存区里提交（钩子照常执行），工作区不动；
+// 真正的暂存区里这个文件换成刚提交的版本，剩下的改动仍然是未暂存的。
+func CommitChange(ctx context.Context, dir, path string, content []byte, message string) error {
+	tree, err := runRaw(ctx, dir, nil, nil, "ls-tree", "-z", "HEAD", "--", path)
+	if err != nil {
+		return err
+	}
+	// mode blob 对象\t路径
+	meta, _, _ := strings.Cut(string(tree), "\t")
+	f := strings.Fields(meta)
+	if len(f) != 3 || f[1] != "blob" {
+		return errors.New("上一次提交里没有这个文件")
+	}
+	mode, headBlob := f[0], f[2]
+	staged, err := runRaw(ctx, dir, nil, nil, "ls-files", "-s", "-z", "--", literal(path)[0])
+	if err != nil {
+		return err
+	}
+	if s := strings.Fields(string(staged)); len(s) < 2 || s[1] != headBlob {
+		return ErrStagedChange
+	}
+	out, err := runRaw(ctx, dir, content, nil, "hash-object", "-w", "--stdin", "--path", path)
+	if err != nil {
+		return err
+	}
+	blob := strings.TrimSpace(string(out))
+	tmp, err := os.MkdirTemp("", "hive-index-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	env := []string{"GIT_INDEX_FILE=" + filepath.Join(tmp, "index")}
+	info := mode + "," + blob + "," + path
+	if _, err := runRaw(ctx, dir, nil, env, "read-tree", "HEAD"); err != nil {
+		return err
+	}
+	if _, err := runRaw(ctx, dir, nil, env, "update-index", "--cacheinfo", info); err != nil {
+		return err
+	}
+	if _, err := runRaw(ctx, dir, []byte(message), env, "commit", "-q", "-F", "-"); err != nil {
+		return err
+	}
+	_, err = runRaw(ctx, dir, nil, nil, "update-index", "--cacheinfo", info)
+	return err
+}
+
 // CommitPaths 只提交 paths 这些文件（照 WebStorm 勾选文件提交）：add 里的新文件先加入 Git，
 // 再 commit --only，暂存区里别的文件原样留着、不进这次提交。amend 且 paths 为空时只改提交信息。
 func CommitPaths(ctx context.Context, dir, message string, paths, add []string, amend bool) error {

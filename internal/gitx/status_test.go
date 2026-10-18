@@ -286,3 +286,34 @@ func TestReadStatusNoIndexWrite(t *testing.T) {
 		t.Fatal("ReadStatus rewrote .git/index")
 	}
 }
+
+// 只提交一处改动：提交里只有这一处，工作区不动，剩下的改动仍是未暂存的；暂存区有这个文件的改动时拒绝。
+func TestCommitChange(t *testing.T) {
+	ctx := context.Background()
+	dir := newRepo(t)
+	write(t, filepath.Join(dir, "a.txt"), "ONE\ntwo\nTHREE\n")
+	write(t, filepath.Join(dir, "src", "b.go"), "package src // staged\n")
+	gitIn(t, dir, "add", "src/b.go")
+	if err := CommitChange(ctx, dir, "a.txt", []byte("ONE\ntwo\nthree\n"), "只改第一行"); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, dir, "show", "HEAD:a.txt"); got != "ONE\ntwo\nthree" {
+		t.Fatalf("committed %q", got)
+	}
+	if got := gitIn(t, dir, "show", "--name-only", "--format=%s", "HEAD"); got != "只改第一行\n\na.txt" {
+		t.Fatalf("commit %q", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(b) != "ONE\ntwo\nTHREE\n" {
+		t.Fatalf("worktree changed: %q", b)
+	}
+	st, _ := ReadStatus(ctx, dir)
+	if a, _ := entry(st, "a.txt"); a.Staged() || !a.Unstaged() {
+		t.Errorf("a.txt %+v", a)
+	}
+	if b, _ := entry(st, "src/b.go"); !b.Staged() {
+		t.Errorf("other staged file lost: %+v", b)
+	}
+	if err := CommitChange(ctx, dir, "src/b.go", []byte("x\n"), "x"); !errors.Is(err, ErrStagedChange) {
+		t.Fatalf("staged file: %v", err)
+	}
+}

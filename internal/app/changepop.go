@@ -1,17 +1,22 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
+
+	"hive/internal/gitx"
 )
 
-// changePop 是编辑器行号旁改动标记（相对 HEAD）点开的卡片，照 WebStorm 的 gutter 弹窗：
-// 上一处 / 下一处、回滚这一处、看这个文件的 diff，下面是改之前的内容。回滚改的是编辑器里的内容，
-// 和 ⌥⌘Z 一样可以撤销，保存后才写回磁盘。
+// changePop 是编辑器行号旁改动标记（相对 HEAD）点开的卡片，照 WebStorm 的 gutter 弹窗排成一行：
+// 上一处 / 下一处、回滚这一处、看这个文件的 diff、复制改之前的内容、只提交这一处，下面是改之前的内容。
+// 回滚改的是编辑器里的内容，和 ⌥⌘Z 一样可以撤销，保存后才写回磁盘。
 type changePop struct {
-	index int
+	index   int
+	message string // "提交此更改"的提交信息
 }
 
 // changePopMax 是卡片里最多显示几行改之前的内容。
@@ -50,15 +55,25 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动", 26, 15)).Clicked() {
 				step(cp.index + 1)
 			}
-			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6)
-			ui.Spacer(c)
+			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
 			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, "回滚这一处 ⌥⌘Z", 26, 15)).Clicked() {
 				d.ed.RevertChange(cp.index)
 				d.change = nil
 			}
-			if rel := v.git.relPath(d.path); rel != "" && pressable(iconButtonSized(c, iconGitLog, "显示 diff", 26, 15)).Clicked() {
+			rel := v.git.relPath(d.path)
+			if rel != "" && pressable(iconButtonSized(c, iconDiff, "显示 diff", 26, 15)).Clicked() {
 				d.change = nil
 				a.openDiff(w, diffSpec{rel: rel, oldRev: "HEAD"}, nil, true)
+			}
+			copyOld := pressable(iconButtonSized(c, iconCopy, "复制改之前的内容", 26, 15))
+			if ch.Old == "" {
+				copyOld.Disabled(true)
+			} else if copyOld.Clicked() {
+				c.WriteClipboard(ch.Old)
+				d.change = nil
+			}
+			if rel != "" {
+				a.commitChangeInput(c, v, d, cp, rel, ch)
 			}
 			if pressable(iconButtonSized(c, iconClose, "关闭 Esc", 26, 14)).Clicked() {
 				d.change = nil
@@ -86,4 +101,60 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	if panel.PressedOutside() || c.Shortcut(0, ui.KeyEscape) {
 		d.change = nil
 	}
+}
+
+// commitChangeInput 是卡片里的"提交此更改"：写好提交信息回车，只把这一处提交上去，文件里别的改动不动。
+// 提交的是编辑器里这一处的内容，所以有没保存的改动时先保存；合并、rebase 进行中不做。
+func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *changePop, rel string, ch editor.BaseChange) {
+	g := &v.git
+	placeholder := "提交此更改"
+	blocked := ""
+	switch {
+	case d.headBuf == nil:
+		blocked = "上一次提交里没有这个文件"
+	case d.isModified():
+		blocked = "先保存再提交这一处"
+	case g.status != nil && g.status.Operation != "":
+		blocked = "合并或 rebase 进行中，到改动页里提交"
+	}
+	if blocked != "" {
+		placeholder = blocked
+	}
+	ui.Column(c).Grow(1).Shrink(1).Padding(0, 4).Children(func() {
+		in := fieldInput(c, &cp.message, placeholder)
+		if blocked != "" {
+			in.Disabled(true)
+			return
+		}
+		msg := strings.TrimSpace(cp.message)
+		if !in.Submitted() || msg == "" || g.pending("提交") {
+			return
+		}
+		content := changeContent(d.headBuf.String(), d.ed.Buffer.String(), ch)
+		a.gitDoThen(v, "提交", func(ctx context.Context, root string) error {
+			return gitx.CommitChange(ctx, root, rel, []byte(content), msg)
+		}, func() {
+			if d.change == cp {
+				d.change = nil
+			}
+		})
+	})
+}
+
+// changeContent 是 HEAD 的内容只换上这一处改动后的样子：基准的 OldStart 到 OldEnd 行换成编辑器里的
+// NewStart 到 NewEnd 行，别的改动不带上。
+func changeContent(base, buf string, ch editor.BaseChange) string {
+	old, cur := strings.SplitAfter(base, "\n"), strings.SplitAfter(buf, "\n")
+	clamp := func(lines []string, i int) int { return max(0, min(i, len(lines))) }
+	var b strings.Builder
+	for _, l := range old[:clamp(old, ch.OldStart)] {
+		b.WriteString(l)
+	}
+	for _, l := range cur[clamp(cur, ch.NewStart):clamp(cur, ch.NewEnd)] {
+		b.WriteString(l)
+	}
+	for _, l := range old[clamp(old, ch.OldEnd):] {
+		b.WriteString(l)
+	}
+	return b.String()
 }

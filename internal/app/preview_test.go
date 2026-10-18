@@ -217,6 +217,17 @@ func previewRollback(t *testing.T, a *app) {
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
+func previewChangePop(t *testing.T, a *app) {
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	a.openFile(&a.workspaces[0], filepath.Join(root, "main.go"), 0, [2]int{})
+	d := v.cur
+	until(t, tt, "diff base", func() bool { return d.kind == docText && len(d.ed.Changes()) == 2 })
+	d.ed.OnChangeClick(0, 0)
+	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+}
+
 func previewRollbackDetail(t *testing.T, a *app) {
 	gitWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -483,6 +494,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewRollback(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-rollback-"+suffix+".png")
+
+		// 编辑器行号旁的改动卡片
+		a = previewApp(t)
+		previewChangePop(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-change-pop-"+suffix+".png")
 
 		// 回滚对话框里点开文件：右边是 diff，可以逐处回滚
 		a = previewApp(t)
