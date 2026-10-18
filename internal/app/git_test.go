@@ -524,11 +524,26 @@ func TestLogRefTree(t *testing.T) {
 	if err := tt.Click("本地分支 main"); err != nil {
 		t.Fatal(err)
 	}
-	until(t, tt, "filtered", func() bool { return ld.filter.Branch == "refs/heads/main" && !ld.loading && len(ld.commits) < all })
+	until(t, tt, "filtered", func() bool {
+		return slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) && !ld.loading && len(ld.commits) < all
+	})
+	main := len(ld.commits)
+	// ⌘ 单击再加一个分支：两边的提交都列出来
+	if err := tt.ClickWith(ui.Cmd, "本地分支 feat"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "two branches", func() bool { return len(ld.filter.Branches) == 2 && !ld.loading && len(ld.commits) > main })
+	if !tt.HasText("2 个分支") {
+		t.Fatal("filter bar should say 2 个分支")
+	}
+	if err := tt.ClickWith(ui.Cmd, "本地分支 feat"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "feat removed", func() bool { return len(ld.filter.Branches) == 1 && !ld.loading && len(ld.commits) == main })
 	if err := tt.Click("本地分支 main"); err != nil {
 		t.Fatal(err)
 	}
-	until(t, tt, "all again", func() bool { return ld.filter.Branch == "" && !ld.loading && len(ld.commits) == all })
+	until(t, tt, "all again", func() bool { return len(ld.filter.Branches) == 0 && !ld.loading && len(ld.commits) == all })
 }
 
 // 分支弹窗：远端默认收起，点标题展开；搜索时全部展开。
@@ -1257,13 +1272,13 @@ func TestLogFilterEdges(t *testing.T) {
 	d := v.logCur
 	ld := d.log
 	until(t, tt, "log", func() bool { return d.kind == docLog && !ld.loading && v.git.branches.list != nil })
-	ld.filter.Branch = "refs/heads/feat"
+	ld.filter.Branches = []string{"refs/heads/feat"}
 	a.loadLog(v, d, false)
 	until(t, tt, "branch feat", func() bool { return !ld.loading && len(ld.commits) > 0 })
 	if ld.commits[0].Subject != "feat: 新功能" {
 		t.Fatalf("branch feat shows %q", ld.commits[0].Subject)
 	}
-	ld.filter.Branch = ""
+	ld.filter.Branches = nil
 	ld.filter.Author = "a["
 	a.loadLog(v, d, false)
 	until(t, tt, "author", func() bool { return !ld.loading })
@@ -1277,7 +1292,7 @@ func TestLogFilterEdges(t *testing.T) {
 		t.Fatal("graph drawn for author filter")
 	}
 	// 选中的分支被删了：错误写在列表里，清除筛选回到全部
-	ld.filter.Author, ld.filter.Branch = "", "refs/heads/gone"
+	ld.filter.Author, ld.filter.Branches = "", []string{"refs/heads/gone"}
 	a.loadLog(v, d, false)
 	settle(tt)
 	until(t, tt, "error in list", func() bool { return !ld.loading && ld.err != "" && tt.HasText("清除筛选") })

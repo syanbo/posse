@@ -11,12 +11,12 @@ import (
 	"time"
 )
 
-// LogFilter 是日志的筛选。Branch 为空时看所有分支、远端分支和标签。
+// LogFilter 是日志的筛选。Branches 为空时看所有分支、远端分支和标签，否则看这几个引用上的提交。
 type LogFilter struct {
-	Branch string
-	Author string
-	Text   string // 提交信息里的文字，或提交哈希的开头
-	Path   string // 只看改过这个文件的提交（文件历史），相对仓库根目录
+	Branches []string
+	Author   string
+	Text     string // 提交信息里的文字，或提交哈希的开头
+	Path     string // 只看改过这个文件的提交（文件历史），相对仓库根目录
 }
 
 // Log 读日志，按拓扑顺序（画提交图要的顺序），跳过 skip 个，最多 limit 个。
@@ -42,8 +42,8 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 	if text != "" {
 		args = append(args, "--grep="+text, "--regexp-ignore-case", "--fixed-strings")
 	}
-	if f.Branch != "" {
-		args = append(args, f.Branch)
+	if len(f.Branches) > 0 {
+		args = append(args, f.Branches...)
 	} else {
 		args = append(args, "--branches", "--remotes", "--tags", "HEAD")
 	}

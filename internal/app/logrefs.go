@@ -29,13 +29,23 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	match := func(name string) bool { return query == "" || strings.Contains(strings.ToLower(name), query) }
 	// 筛选时各组都展开，只列出对得上的
 	open := func(key string) bool { return query != "" || ld.refsOpen[key] }
-	pick := func(ref string) {
-		if ld.filter.Branch == ref {
-			ref = ""
+	// 单击只看这一个（再点一次回到全部），⌘ 单击照 WebStorm 加进或移出已选的几个
+	pick := func(ref string, add bool) {
+		sel := ld.filter.Branches
+		switch {
+		case add && slices.Contains(sel, ref):
+			sel = slices.DeleteFunc(slices.Clone(sel), func(s string) bool { return s == ref })
+		case add:
+			sel = append(slices.Clone(sel), ref)
+		case len(sel) == 1 && sel[0] == ref:
+			sel = nil
+		default:
+			sel = []string{ref}
 		}
-		ld.filter.Branch = ref
+		ld.filter.Branches = sel
 		a.loadLog(v, d, false)
 	}
+	picked := func(ref string) bool { return slices.Contains(ld.filter.Branches, ref) }
 	var local, remote []gitx.Branch
 	for _, b := range g.branches.list {
 		if !match(b.Name) {
@@ -60,14 +70,14 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 				if cur, ok := currentBranch(g.branches.list); ok {
 					label = "HEAD（" + cur.Name + "）"
 				}
-				if a.refRow(c, "HEAD", label, label, 0, ld.filter.Branch == "HEAD", nil) {
-					pick("HEAD")
+				if ok, add := a.refRow(c, "HEAD", label, label, 0, picked("HEAD"), nil); ok {
+					pick("HEAD", add)
 				}
 			}
 			if a.refGroup(c, ld, "local", "本地", len(local), open("local")) {
 				for _, b := range local {
-					if a.refRow(c, "l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, ld.filter.Branch == branchRef(b), refMark(b)) {
-						pick(branchRef(b))
+					if ok, add := a.refRow(c, "l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, picked(branchRef(b)), refMark(b)); ok {
+						pick(branchRef(b), add)
 					}
 				}
 			}
@@ -86,8 +96,8 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 					}
 					for _, b := range remote {
 						if rest, ok := strings.CutPrefix(b.Name, r+"/"); ok {
-							if a.refRow(c, "r:"+b.Name, rest, "远程分支 "+b.Name, 2, ld.filter.Branch == branchRef(b), nil) {
-								pick(branchRef(b))
+							if ok, add := a.refRow(c, "r:"+b.Name, rest, "远程分支 "+b.Name, 2, picked(branchRef(b)), nil); ok {
+								pick(branchRef(b), add)
 							}
 						}
 					}
@@ -95,8 +105,8 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			if a.refGroup(c, ld, "tags", "标签", len(tags), open("tags")) {
 				for _, tag := range tags {
-					if a.refRow(c, "t:"+tag, tag, "标签 "+tag, 1, ld.filter.Branch == "refs/tags/"+tag, nil) {
-						pick("refs/tags/" + tag)
+					if ok, add := a.refRow(c, "t:"+tag, tag, "标签 "+tag, 1, picked("refs/tags/"+tag), nil); ok {
+						pick("refs/tags/"+tag, add)
 					}
 				}
 			}
@@ -160,7 +170,7 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 }
 
 // refRow 是一个分支或标签，返回这一帧是否点了它；name 是读屏念的名字，带上种类免得和别处同名。
-func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) bool {
+func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) (clicked, add bool) {
 	row := ui.Row(c.Key(key)).Height(26).Padding(0, 8, 0, 20+float32(indent)*14).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(name).Tooltip(label)
 	selectedBg(c, row, selected)
@@ -170,5 +180,8 @@ func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selecte
 			trailing(c)
 		}
 	})
-	return row.Clicked()
+	if !row.Clicked() {
+		return false, false
+	}
+	return true, row.ClickModifiers()&ui.Cmd != 0
 }

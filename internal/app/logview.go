@@ -52,15 +52,18 @@ func logKey(f gitx.LogFilter) string {
 // openLog 在底部浮层里打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支。
 func (a *app) openLog(w *workspace, branch, path string) {
 	v := a.filesFor(w)
-	f := gitx.LogFilter{Branch: branch, Path: path}
+	f := gitx.LogFilter{Path: path}
+	if branch != "" {
+		f.Branches = []string{branch}
+	}
 	key := logKey(f)
 	a.setLogPanel(true)
 	v.console = false
 	for _, d := range v.logs {
 		if d.path == key {
 			v.logCur = d
-			if d.log.filter.Branch != branch {
-				d.log.filter.Branch = branch
+			if !slices.Equal(d.log.filter.Branches, f.Branches) {
+				d.log.filter.Branches = f.Branches
 				a.loadLog(v, d, false)
 			}
 			return
@@ -503,9 +506,12 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		if author.Changed() || author.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		branch := refShort(ld.filter.Branch)
-		if branch == "" {
-			branch = "全部分支"
+		branch := "全部分支"
+		switch n := len(ld.filter.Branches); {
+		case n == 1:
+			branch = refShort(ld.filter.Branches[0])
+		case n > 1:
+			branch = fmt.Sprintf("%d 个分支", n)
 		}
 		ui.Row(c.Key("branch-filter")).Height(26).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
 			Role(ui.RoleButton).Label("按分支筛选").Children(func() {
@@ -513,8 +519,8 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			ui.Text(c, branch).FontSize(11.5).Font(monoFont).SingleLine().MaxWidth(160)
 			ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted)
 		}).Menu(func(m *ui.Menu) {
-			if m.Item("全部分支").Checked(ld.filter.Branch == "").Chosen() {
-				ld.filter.Branch = ""
+			if m.Item("全部分支").Checked(len(ld.filter.Branches) == 0).Chosen() {
+				ld.filter.Branches = nil
 				a.loadLog(v, d, false)
 			}
 			if v.git.branches.list == nil {
@@ -522,8 +528,8 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			m.Separator()
 			for _, b := range v.git.branches.list {
-				if m.Item(b.Name).Checked(ld.filter.Branch == branchRef(b)).Chosen() {
-					ld.filter.Branch = branchRef(b)
+				if m.Item(b.Name).Checked(slices.Contains(ld.filter.Branches, branchRef(b))).Chosen() {
+					ld.filter.Branches = []string{branchRef(b)}
 					a.loadLog(v, d, false)
 				}
 			}
@@ -546,14 +552,14 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 
 // filtered 报告日志有没有按文字、作者或分支筛选（文件历史的路径不算）。
 func (ld *logDoc) filtered() bool {
-	return ld.filter.Branch != "" || ld.filter.Author != "" || strings.TrimSpace(ld.filter.Text) != ""
+	return len(ld.filter.Branches) > 0 || ld.filter.Author != "" || strings.TrimSpace(ld.filter.Text) != ""
 }
 
 // clearLogFilter 清掉文字、作者和分支的筛选，读全部分支。
 func (a *app) clearLogFilter(v *filesView, d *fileDoc) {
 	ld := d.log
 	ld.text, ld.author = "", ""
-	ld.filter.Text, ld.filter.Author, ld.filter.Branch = "", "", ""
+	ld.filter.Text, ld.filter.Author, ld.filter.Branches = "", "", nil
 	a.loadLog(v, d, false)
 }
 
