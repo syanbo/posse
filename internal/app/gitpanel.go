@@ -194,7 +194,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 					}
 				}
 			}
-			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group]).Cursor(ui.CursorPointer)
+			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group])
 			title.Children(func() {
 				ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
 				ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -475,7 +475,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, "向上展开", 20, 12)).Clicked() {
 				s.ExpandUp()
 			}
-			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(4).Role(ui.RoleButton).Label("全部展开").Cursor(ui.CursorPointer)
+			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(4).Role(ui.RoleButton).Label("全部展开")
 			b.Children(func() { ui.Text(c, fmt.Sprintf("%d 行未改动", s.Lines)).FontSize(11.5).TextColor(t.TextMuted) })
 			if b.Clicked() {
 				s.ExpandAll()

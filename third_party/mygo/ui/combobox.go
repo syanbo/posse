@@ -181,6 +181,7 @@ func (p *comboboxParts) Popup(fn func(panel *node)) *node {
 		panel = coreBox(c).MinWidth(b.W).Role(RoleList).AttachTo(p.anchor, AnchorBottomLeft, AnchorTopLeft)
 		// Pressing an option keeps the focus in the input.
 		panel.flags |= flagClickable | flagKeepFocus
+		panel.Cursor(CursorDefault) // Hive
 		panel.choosesItems = true
 		panel.Children(func() { fn(panel) })
 	})

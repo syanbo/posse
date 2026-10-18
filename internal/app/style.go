@@ -111,6 +111,8 @@ func hiveTheme(dark bool) *ui.Theme {
 		t.Selection, t.Focus = ui.RGBA(193, 95, 60, 0.22), ui.RGBA(193, 95, 60, 0.5)
 	}
 	t.Radius = 8
+	// 照 Orca：能点的地方是手形指针，拖动中是抓握的手
+	t.PointerCursor = true
 	hiveThemes[i] = t
 	return t
 }

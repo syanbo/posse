@@ -982,9 +982,13 @@ func (rt *engine) updateCursor() {
 		return
 	}
 	c := CursorDefault
-	if rt.pressed != nil && rt.pressed.cursor != 0 {
+	pointer := rt.c.theme != nil && rt.c.theme.PointerCursor
+	switch {
+	case pointer && rt.drag != nil && !rt.drag.native:
+		c = CursorGrabbing
+	case rt.pressed != nil && rt.pressed.cursor != 0:
 		c = rt.pressed.cursor - 1
-	} else {
+	default:
 		for _, id := range rt.hover {
 			s := rt.states[id]
 			if s == nil {
@@ -995,6 +999,10 @@ func (rt *engine) updateCursor() {
 				break
 			}
 			if s.flags&flagClickable != 0 {
+				// Hive: the hand, with Theme.PointerCursor
+				if pointer && s.flags&flagDisabled == 0 {
+					c = CursorPointer
+				}
 				break
 			}
 		}

@@ -546,7 +546,7 @@ func thousands(n int) string {
 func (a *app) cwdLink(c *ui.Context, dir string) func() {
 	return func() {
 		t := c.Theme()
-		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label("在访达中打开").Cursor(ui.CursorPointer).Tooltip("在访达中打开 " + dir)
+		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label("在访达中打开").Tooltip("在访达中打开 " + dir)
 		color := t.TextMuted
 		if b.Hovered() {
 			color = t.Accent
@@ -621,7 +621,7 @@ func (a *app) sessionList(c *ui.Context) {
 		}
 		open := h.isGroupOpen(r.group)
 		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(10, 12, 4, 8).Gap(4).Radius(6).AlignItems(ui.Center).
-			Role(ui.RoleButton).Label(r.group).Cursor(ui.CursorPointer)
+			Role(ui.RoleButton).Label(r.group)
 		head.Children(func() {
 			turn := float32(0)
 			if open {

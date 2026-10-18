@@ -137,3 +137,51 @@ func TestFadeEdges(t *testing.T) {
 		t.Fatalf("bottom faded at the end: r=%d g=%d", r, g)
 	}
 }
+
+// 照 Orca：能点的地方是手形指针，对话框里的文字和空白处是箭头。
+func TestPointerCursor(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	a.selected = "w1"
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	at := func(s string) ui.Cursor {
+		t.Helper()
+		r, ok := tt.Find(s)
+		if !ok {
+			t.Fatalf("%q missing", s)
+		}
+		tt.Move(r.X+r.W/2, r.Y+r.H/2)
+		tt.Frame()
+		return tt.Cursor()
+	}
+	if c := at("zsh"); c != ui.CursorPointer {
+		t.Errorf("tab cursor = %v", c)
+	}
+	if c := at("任务"); c != ui.CursorPointer {
+		t.Errorf("sidebar row cursor = %v", c)
+	}
+	// 拖项目排序时是抓握的手
+	r, _ := tt.Find("Chat")
+	tt.Press(r.X+r.W/2, r.Y+r.H/2)
+	tt.Move(r.X+r.W/2, r.Y+r.H/2+30)
+	tt.Frame()
+	if c := tt.Cursor(); c != ui.CursorGrabbing {
+		t.Errorf("dragging cursor = %v", c)
+	}
+	tt.Release(r.X+r.W/2, r.Y+r.H/2+30)
+	tt.Frame()
+	a.confirm("关闭 终端？", "里面正在运行的程序会被结束。", "关闭", nil)
+	tt.Frame()
+	if c := at("里面正在运行的程序会被结束。"); c != ui.CursorDefault {
+		t.Errorf("dialog text cursor = %v", c)
+	}
+	if c := at("关闭"); c != ui.CursorPointer {
+		t.Errorf("dialog button cursor = %v", c)
+	}
+	tt.Move(5, 700)
+	tt.Frame()
+	if c := tt.Cursor(); c != ui.CursorDefault {
+		t.Errorf("backdrop cursor = %v", c)
+	}
+}

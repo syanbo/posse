@@ -54,6 +54,11 @@ type Theme struct {
 	// FontSize is the size of text, Font its family ("" is the system's).
 	FontSize float32
 	Font     string
+	// PointerCursor shows the pointing hand over the elements that take
+	// clicks, unless disabled, and the closed hand while a value is dragged
+	// in the window, as web pages do, rather than the arrow of native
+	// controls. Hive
+	PointerCursor bool
 }
 
 // Space returns n units of the theme's Spacing, to size elements of your

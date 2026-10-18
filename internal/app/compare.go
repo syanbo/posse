@@ -348,7 +348,7 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 		r := rows[i]
 		row := ui.Row(c.Key(r.path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*18).Gap(6).Radius(6).AlignItems(ui.Center)
 		if r.dir {
-			row.Role(ui.RoleButton).Label(r.path).Cursor(ui.CursorPointer)
+			row.Role(ui.RoleButton).Label(r.path)
 			row.Children(func() {
 				// 整行可点，箭头只是指示，不另接点击
 				turn := float32(90)

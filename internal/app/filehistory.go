@@ -106,7 +106,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	}
 	ui.List(c, &ld.list, rows, func(i int) {
 		if i == len(ld.commits) {
-			b := ui.Box(c.Key("more")).Height(30).Padding(0, 14).Role(ui.RoleButton).Label("加载更早的提交").Cursor(ui.CursorPointer)
+			b := ui.Box(c.Key("more")).Height(30).Padding(0, 14).Role(ui.RoleButton).Label("加载更早的提交")
 			b.Children(func() { ui.Text(c, "加载更早的提交").FontSize(12).TextColor(t.Accent) })
 			if b.Clicked() && !ld.loading {
 				a.loadLog(v, d, true)

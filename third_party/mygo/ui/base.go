@@ -435,6 +435,7 @@ func popover(c *context, anchor *node, open *bool, modal bool, fn func(panel *no
 		if modal {
 			back := coreBox(c).Absolute().Left(0).Top(0).Right(0).Bottom(0)
 			back.flags |= flagClickable
+			back.Cursor(CursorDefault) // Hive: it takes clicks to close, not as a button
 			back.popover = anchor
 			if back.Clicked() {
 				*open = false
@@ -444,6 +445,7 @@ func popover(c *context, anchor *node, open *bool, modal bool, fn func(panel *no
 		panel = coreBox(c).Role(RolePopup).AttachTo(anchor, AnchorBottomLeft, AnchorTopLeft)
 		// Presses on it stay in it.
 		panel.flags |= flagClickable
+		panel.Cursor(CursorDefault) // Hive
 		panel.Children(func() { fn(panel) })
 		if panel.OverlayShortcut(0, KeyEscape) || !modal && panel.PressedOutside() {
 			*open = false
@@ -468,6 +470,7 @@ func coreDialogBase(c *context, open *bool, fn func(backdrop, panel *node)) *nod
 	coreOverlay(c, func() {
 		back := coreBox(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().Modal()
 		back.flags |= flagClickable
+		back.Cursor(CursorDefault) // Hive
 		dismissed := back.Clicked() || back.OverlayShortcut(0, KeyEscape)
 		if dismissed {
 			*open = false
@@ -476,6 +479,7 @@ func coreDialogBase(c *context, open *bool, fn func(backdrop, panel *node)) *nod
 			panel = coreBox(c).Role(RoleDialog)
 			panel.dismissed = dismissed
 			panel.flags |= flagClickable
+			panel.Cursor(CursorDefault) // Hive
 			panel.Children(func() { fn(back, panel) })
 		})
 	})
