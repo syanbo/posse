@@ -220,6 +220,9 @@ type app struct {
 	confirmDo    func()
 
 	refreshMu sync.Mutex
+
+	// 常驻进程跑的是旧包时交给本窗口的包接着跑（upgrade.go）
+	upgrade upgradeState
 }
 
 // agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
@@ -393,6 +396,7 @@ func (a *app) refresh() {
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
+		a.autoUpgrade(r.daemonInfo)
 	}
 	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
 	if r.diff == nil && a.lastPoll != nil && a.lastPoll.diffFor != "" {

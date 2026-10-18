@@ -79,6 +79,7 @@ type Terminal struct {
 	CreatedAt   time.Time
 
 	cmd *exec.Cmd
+	pid int // 接过来的终端没有 cmd，pid 来自交接记录
 	pty *os.File
 	// replies 把内核对终端查询的应答交给写入协程：应答产生于持锁的 Write 期间，不能在那里阻塞
 	replies chan []byte
@@ -93,13 +94,19 @@ type Terminal struct {
 
 	exited   chan struct{}
 	exitCode atomic.Int64
+	readDone chan struct{} // 读协程结束（PTY 读到结尾）时关闭
+
+	// pauseMu 保护 pause：交接期间读协程停在 park 里
+	pauseMu sync.Mutex
+	pause   *pauseState
 
 	// smu 保护 emu（libghostty-vt 非线程安全），并串行化"喂给内核 + 广播给接入者"，
 	// 接入时的快照与之后的输出流因此恰好衔接
 	smu        sync.Mutex
 	emu        *vt.Terminal
 	subs       map[*Subscriber]struct{}
-	ended      bool // PTY 已读到结尾
+	ended      bool   // PTY 已读到结尾
+	tail       []byte // 读到的输出末尾没写完的转义序列或 UTF-8 字符，交接时带过去
 	titleDirty bool
 	idle       *time.Timer
 
@@ -149,9 +156,44 @@ func Start(o Options) (*Terminal, error) {
 	if o.Cols <= 0 || o.Rows <= 0 {
 		o.Cols, o.Rows = 120, 40
 	}
-	if o.Scrollback == 0 {
-		o.Scrollback = DefaultScrollback
+	t := newTerminal(o)
+	t.storeSize(o.Cols, o.Rows)
+	emu, err := t.newEmu(o.Cols, o.Rows, o.Scrollback)
+	if err != nil {
+		return nil, err
 	}
+	t.emu = emu
+
+	cmd := exec.Command(o.Command[0], o.Command[1:]...)
+	cmd.Dir = o.Dir
+	cmd.Env = Environ(o.Env)
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(o.Cols), Rows: uint16(o.Rows)})
+	if err == nil {
+		f, err = pollable(f)
+	}
+	if err != nil {
+		emu.Free()
+		return nil, err
+	}
+	t.cmd, t.pty = cmd, f
+	t.idle = time.AfterFunc(compressAfter, t.compress)
+	t.run()
+	go func() {
+		code := 0
+		if err := cmd.Wait(); err != nil {
+			var ee *exec.ExitError
+			if errors.As(err, &ee) {
+				code = ee.ExitCode()
+			} else {
+				code = -1
+			}
+		}
+		t.finish(code, o.OnExit)
+	}()
+	return t, nil
+}
+
+func newTerminal(o Options) *Terminal {
 	t := &Terminal{
 		ID:          o.ID,
 		WorkspaceID: o.WorkspaceID,
@@ -160,15 +202,21 @@ func Start(o Options) (*Terminal, error) {
 		CreatedAt:   time.Now(),
 		replies:     make(chan []byte, 256),
 		exited:      make(chan struct{}),
+		readDone:    make(chan struct{}),
 		changed:     make(chan struct{}),
 		subs:        map[*Subscriber]struct{}{},
 		onTitle:     o.OnTitle,
 	}
 	t.answer.Store(true)
 	t.lastOutput.Store(time.Now().UnixNano())
-	t.storeSize(o.Cols, o.Rows)
+	return t
+}
 
-	emu, err := vt.NewTerminal(o.Cols, o.Rows, vt.Effects{
+func (t *Terminal) newEmu(cols, rows, scrollback int) (*vt.Terminal, error) {
+	if scrollback == 0 {
+		scrollback = DefaultScrollback
+	}
+	emu, err := vt.NewTerminal(cols, rows, vt.Effects{
 		WritePTY: func(p []byte) {
 			if !t.answer.Load() {
 				return
@@ -187,20 +235,12 @@ func Start(o Options) (*Terminal, error) {
 	emu.SetTerminfoName("xterm-256color")
 	// 字素簇占其宽度的格数，与界面里的 MyGo 终端一致
 	emu.SetModeDefault(vt.ModeGraphemes, true)
-	emu.SetScrollback(o.Scrollback)
-	t.emu = emu
+	emu.SetScrollback(scrollback)
+	return emu, nil
+}
 
-	cmd := exec.Command(o.Command[0], o.Command[1:]...)
-	cmd.Dir = o.Dir
-	cmd.Env = Environ(o.Env)
-	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(o.Cols), Rows: uint16(o.Rows)})
-	if err != nil {
-		emu.Free()
-		return nil, err
-	}
-	t.cmd, t.pty = cmd, f
-	t.idle = time.AfterFunc(compressAfter, t.compress)
-
+// run 起读协程和应答写入协程。
+func (t *Terminal) run() {
 	go t.readLoop()
 	go func() {
 		for {
@@ -212,25 +252,17 @@ func Start(o Options) (*Terminal, error) {
 			}
 		}
 	}()
-	go func() {
-		code := 0
-		if err := cmd.Wait(); err != nil {
-			var ee *exec.ExitError
-			if errors.As(err, &ee) {
-				code = ee.ExitCode()
-			} else {
-				code = -1
-			}
-		}
-		t.exitCode.Store(int64(code))
-		// 先记录退出再放行等待者，常驻进程关闭时才不会在写库前关掉存储
-		if o.OnExit != nil {
-			o.OnExit(t, code)
-		}
-		close(t.exited)
-		t.notify()
-	}()
-	return t, nil
+}
+
+// finish 记下程序退出。
+func (t *Terminal) finish(code int, onExit func(*Terminal, int)) {
+	t.exitCode.Store(int64(code))
+	// 先记录退出再放行等待者，常驻进程关闭时才不会在写库前关掉存储
+	if onExit != nil {
+		onExit(t, code)
+	}
+	close(t.exited)
+	t.notify()
 }
 
 func (t *Terminal) readLoop() {
@@ -240,6 +272,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.smu.Lock()
 			title := ""
+			t.tail = carry(t.tail, buf[:n])
 			if t.emu != nil {
 				t.emu.Write(buf[:n])
 				if t.titleDirty {
@@ -257,9 +290,14 @@ func (t *Terminal) readLoop() {
 			t.notify()
 		}
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				t.park()
+				continue
+			}
 			break
 		}
 	}
+	defer close(t.readDone)
 	t.smu.Lock()
 	t.ended = true
 	for s := range t.subs {
@@ -409,6 +447,9 @@ func (t *Terminal) Running() bool {
 func (t *Terminal) ExitCode() int { return int(t.exitCode.Load()) }
 
 func (t *Terminal) Pid() int {
+	if t.cmd == nil {
+		return t.pid
+	}
 	if t.cmd.Process == nil {
 		return 0
 	}
@@ -539,11 +580,21 @@ func (t *Terminal) resize(cols, rows int) {
 		t.storeSize(cols, rows)
 	}
 	t.smu.Unlock()
+	t.setPTYSize(cols, rows)
+}
+
+// setPTYSize 只改 PTY 的尺寸。不用 pty.Setsize：它经 Fd() 把 PTY 改回阻塞模式。
+func (t *Terminal) setPTYSize(cols, rows int) {
 	t.pmu.Lock()
-	if !t.ptyClosed {
-		pty.Setsize(t.pty, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
+	defer t.pmu.Unlock()
+	if t.ptyClosed {
+		return
 	}
-	t.pmu.Unlock()
+	if rc, err := t.pty.SyscallConn(); err == nil {
+		rc.Control(func(fd uintptr) {
+			unix.IoctlSetWinsize(int(fd), unix.TIOCSWINSZ, &unix.Winsize{Col: uint16(cols), Row: uint16(rows)})
+		})
+	}
 }
 
 // Send 直接写入 PTY，等同于用户键入。

@@ -51,6 +51,7 @@ func init() {
 		{"daemon run", "Run the daemon in the foreground", "", cmdDaemonRun},
 		{"daemon status", "Show daemon status", "", cmdDaemonStatus},
 		{"daemon stop", "Stop the daemon and every terminal it hosts", "", cmdDaemonStop},
+		{"daemon handoff", "Restart the daemon from this hive binary, keeping every terminal running", "", cmdDaemonHandoff},
 		{"project add", "Add a folder or git repository", "<path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
 		{"project list", "List projects", "", cmdProjectList},
 		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT]", cmdProjectSet},

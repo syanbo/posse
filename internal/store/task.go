@@ -163,9 +163,10 @@ func (s *Store) FinishTask(id, status, summary, report string, at time.Time) (bo
 	return n > 0, err
 }
 
-// MarkRunningTasksLost 在常驻进程启动时调用：worker 终端已随上一个进程结束。
-func (s *Store) MarkRunningTasksLost(at time.Time) error {
-	_, err := s.db.Exec(`UPDATE tasks SET status='lost', ended_at=? WHERE status='running'`, ms(at))
+// MarkRunningTasksLost 在常驻进程启动时调用：worker 终端已随上一个进程结束，交接过来的 worker 除外。
+func (s *Store) MarkRunningTasksLost(at time.Time, keepWorkers []string) error {
+	q, args := notIn("worker", keepWorkers)
+	_, err := s.db.Exec(`UPDATE tasks SET status='lost', ended_at=? WHERE status='running'`+q, append([]any{ms(at)}, args...)...)
 	return err
 }
 

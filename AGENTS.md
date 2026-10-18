@@ -28,7 +28,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 cmd/hive            单一二进制：窗口（hive app，或从 Hive.app 无参数启动）、常驻进程（hive daemon run）和 CLI 共用
 internal/rpc        unix socket 协议：每连接一次请求，请求/响应各一行 JSON
 internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排
-internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），现在是包着 internal/term 的进程内实现；终端宿主独立成进程的方案见 docs/plans/terminal-host.md
+internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），包着 internal/term 的进程内实现；升级交接（Pause 导出、Adopt 重建）也在这层，方案见 docs/plans/terminal-host.md
 internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
 internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区已删，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
 internal/client     CLI 与界面共用的客户端：拉起常驻进程、接入终端（Conn）
@@ -48,6 +48,9 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 ## 关键约定
 
 - 常驻进程持有 `$HIVE_HOME/hived.lock` 的文件锁直到完全退出；socket 和 pid 文件只在持锁时创建和删除。
+- 升级交接（`daemon.handoff`，`hive daemon handoff` 手动触发，`internal/daemon/handoff.go`）：旧进程用调用方给的 hive 拉起 `daemon run`（环境 `HIVE_HANDOFF_FD` 指向 socketpair 的一端），停接新连接、停读所有 PTY，经 SCM_RIGHTS 交出 hived.sock 的监听描述符和每个 PTY 主端，连同交接记录（`term.State`：快照、标题、读到一半的转义序列或 UTF-8 字符 `tail`、agent 状态、hooks 标记）。新进程按同尺寸重建内核、接着读 PTY，用 kqueue（`EVFILT_PROC` `NOTE_EXITSTATUS`）盯不是自己子进程的 pid 拿退出码，再把 PTY 行数改一下又改回来让程序整屏重画；回话之后旧进程退出，不关终端、不删 socket，新进程等它放锁。交接的终端和以它们为 worker 的任务不记为 lost。新进程没回话或报错时旧进程杀掉它、恢复读 PTY 照常运行。协议版本是 `handoffVersion`，改了记录或帧格式要加一。手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
+- 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），被打断的长等待回 `restarting`（`rpc.Retryable` 也认回复前就断开的连接）。CLI 的 `terminal wait`、`task wait`、`task ask` 走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 的 restarting 带回问题 ID（`Error.Data` 的 `resume`），重发时改成 `--resume`，不会再问一遍。Claude 的权限挂起（`hook.permission.hold`）被打断时 hook 到新进程上再挂，总时间仍是 35 秒。
+- PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
 - `daemon.log` 由拉起常驻进程的一方（`client.EnsureDaemon`）打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - 终端快捷键（`internal/app/termkeys.go`，照 Ghostty、iTerm、Orca 的默认）：终端视图把带 Command 的键都交给 app、Option 不当 Meta，所以在 `OnKey` 里处理。⌘←/⌘→/⌘⌫ 发 Ctrl+A/E/U，⌥←/⌥→/⌥⌫ 发 Meta+B/F/退格；Claude、Codex 终端里 ⇧↩ 发 Ctrl+J（换行不发送）；⌘↑/⌘↓ 回滚到顶/到底；这些在全屏程序（vim、less）里原样交给程序。⌘K 由常驻进程 `terminal.clear` 清屏和回滚区（之后接入的快照也是空的）再发 Ctrl+L 重画；旧常驻进程没有这个接口时只清界面这边。⌘A 全选走 Edit 菜单。⌘⇧[ / ⌘⇧]（⌃Tab / ⌃⇧Tab）按标签栏顺序切标签。
@@ -98,9 +101,9 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - Git 日志：照 WebStorm 底部的 Git 工具窗口，是从终端那一栏底边滑上来的浮层（`logPanel`），盖在终端上、不改终端尺寸，也不盖右边的文件栏；点别处不收，只有浮层右上角的隐藏按钮、⌘9 和标签栏的日志按钮（分支按钮旁）开关。顶上一排小标签：整个仓库的"日志"（不能关）和文件历史（可以关），存在 `filesView.logs`，不进标签栏、不记进 ui.json。拖上边缘调高度（`logPanelHeight`，至少给终端留 120），开关和高度记在 ui.json。在浮层里点文件，diff 开在上面的标签里。文件历史照 WebStorm 的"历史记录"（`filehistory.go`）：左边是改过这个文件的提交（作者、时间、信息、标签，右键菜单和日志一样），右边是选中提交对这个文件的 diff（默认上下合并，排版和忽略空白换提交时沿用），不跟踪重命名。左边分支树照 WebStorm 分 HEAD、本地、远程（按远端分组）、标签，点一项只看它的提交，再点一次回到全部分支；分支和标签随分支弹窗一起读（`loadBranches`）。
   - 强制推送一律 `--force-with-lease`。改提交信息、和上一个提交合并、删除提交用交互式 rebase，hive 生成脚本改写待办列表和提交信息（`rebaseTodo`），不打开编辑器；范围里有合并提交时拒绝。rebase、合并等停在冲突上时，改动列表顶部有继续 / 跳过 / 中止的横幅，冲突文件可以整个采用一方（rebase 时 ours 是目标分支）。
 - 侧栏：项目 → 工作区（只有主工作区时省掉这层）→ 运行中的 agent 会话（shell 只在标签栏）。顶栏照 Orca：红绿灯（`TrafficLightPosition{16, 13}`，在 40 高的顶栏里上下居中）右边是应用名 Hive 和侧栏开关，侧栏顶栏底下的分割线和标签栏的接成一条。开关和 ⌘B 收起展开，侧栏从左边缘滑进滑出（200ms，主区域只在展开开始、收起结束时改一次宽度），应用名和开关固定在原位不跟着滑，侧栏不占位置时主区域顶栏让出它们的位置（`barInset`）；拖右边缘调宽（200–420），松手才写 ui.json（`sidebarHidden`、`sidebarWidth`）。
-- 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要重启它，会断掉所有终端。
+- 界面状态（侧栏项目顺序、上次选中项、右侧面板开关）存在 `$HIVE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉它，`hive daemon handoff` 交接不断终端，重启会断掉所有终端。
 - 防休眠照 Orca 的 agent-awake（Magpie 同样）：常驻进程按档位起 `/usr/bin/caffeinate -i -s -w <常驻进程 pid>` 托住系统不睡，屏幕照常熄灭，合盖仍会睡（`internal/daemon/awake.go`）。档位存在 `$HIVE_HOME/awake.json`，默认 auto：有 agent 处于工作中且状态 2 小时内更新过才托住（卡住的"工作中"不算），display 和 auto 一样看 agent，另加 `-d` 屏幕也不熄（照 Magpie 的 Screen on too，给操作桌面界面的 agent 用），off 不管，on 一直托住系统。agent 状态变化、终端退出时重算，另外每 30 秒重算一次，caffeinate 意外退出也在这时补上；`-w` 让常驻进程被强杀时它跟着退出。状态随 `daemon.status` 的 `awake` 给界面，`awake.set` 改档位。底栏最左边是咖啡杯按钮（`internal/app/awake.go`），托住时图标是强调色，点开选档位；旧常驻进程没有这个字段时按钮变灰。
-- 设置页（`internal/app/settings.go`，`settingsBoardID`）：⌘,（应用菜单的"设置…"）和底栏最左边的齿轮打开，不在侧栏里。分防休眠、终端字号（存在 ui.json 的 `fontSize`）、关于三块；关于里比较窗口和常驻进程的 `daemon.Build`（git 提交加进程启动时可执行文件的修改时间，有未提交改动时提交后面带 `+`），对不上说明常驻进程还在跑旧包，"重启常驻进程"变成主按钮。重启是先确认、`daemon.stop`，下一次轮询连不上时窗口用自己的包拉起新的。手机配对仍在「手机」页。
+- 设置页（`internal/app/settings.go`，`settingsBoardID`）：⌘,（应用菜单的"设置…"）和底栏最左边的齿轮打开，不在侧栏里。分防休眠、终端字号（存在 ui.json 的 `fontSize`）、关于三块；关于里比较窗口和常驻进程的 `daemon.Build`（git 提交加进程启动时可执行文件的修改时间，有未提交改动时提交后面带 `+`）。对不上时"更新常驻进程"是主按钮：`daemon.handoff` 把终端交给用窗口的包启动的新进程，终端不断，不用确认；窗口的包比常驻进程新（按构建标识里的时间比，打开旧 Hive.app 不会把常驻进程换回旧包）时轮询里自动做一次（`internal/app/upgrade.go`，按常驻进程 pid 只自动试一次，失败报在错误条上，终端不受影响）。旧常驻进程没有这个接口（unknown_method）时只能重启，"重启常驻进程"变成主按钮：先确认、`daemon.stop`，下一次轮询连不上时窗口用自己的包拉起新的。手机配对仍在「手机」页。
 - 底栏的内存按钮打开浮窗：hive 自己（常驻进程、窗口）和各工作区终端里的程序。终端按 `terminalInfo.Pid` 统计整棵进程树的 phys_footprint（`procmem.TreeFootprint`，子进程关系取自 sysctl `kern.proc.all`），浮窗开着时每 3 秒按工作区算一次；底栏显示的是总内存（hive 自己加终端），终端合计在每秒的轮询里每 5 秒算一次，按 MB 变了才重建界面。都不经过常驻进程。点终端展开进程明细（`memBreakdown`）：shell、agent 本体，和 agent 拉起的每棵子进程（MCP 服务等），名字取自 argv（`procmem.Name`，跳过 npm、node、python 这类启动器；npm 会把整条命令改写进第一个参数）。
 - 图片、"技能与 MCP"两个面板跟着会话走，开关在 agent 终端内容区的右上角（`sessionButtons`），常驻显示；历史面板按项目，开关留在标签栏。
 - "技能与 MCP"面板由窗口进程增量只读解析当前终端的会话文件（`history.UsageScanner`），路径优先用 hooks 报的 `transcriptPath`，否则按会话 ID 在各家目录里找；只认实际使用的记录（注入的技能说明、读 SKILL.md 的调用、MCP 调用），系统提示里的技能列表不算。面板顶上是每个技能、MCP 服务的次数，下面是时间线（`Usage.Events`，取每行的 timestamp，grok、cursor 的会话文件没有时间），连着调同一个工具合成一项。

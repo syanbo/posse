@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -268,9 +269,10 @@ func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
 	return err
 }
 
-// MarkRunningLost 在常驻进程启动时调用：上一个进程托管的终端都已随之结束。
-func (s *Store) MarkRunningLost(at time.Time) (int64, error) {
-	res, err := s.db.Exec(`UPDATE terminals SET state='lost', ended_at=? WHERE state='running'`, ms(at))
+// MarkRunningLost 在常驻进程启动时调用：上一个进程托管的终端都已随之结束，keep 里的是交接过来的、还在运行。
+func (s *Store) MarkRunningLost(at time.Time, keep []string) (int64, error) {
+	q, args := notIn("id", keep)
+	res, err := s.db.Exec(`UPDATE terminals SET state='lost', ended_at=? WHERE state='running'`+q, append([]any{ms(at)}, args...)...)
 	if err != nil {
 		return 0, err
 	}
@@ -286,4 +288,16 @@ func (s *Store) PruneTerminals() error {
 func (s *Store) DeleteEndedTerminals(workspaceID string) error {
 	_, err := s.db.Exec(`DELETE FROM terminals WHERE workspace_id=? AND state!='running'`, workspaceID)
 	return err
+}
+
+// notIn 生成 " AND col NOT IN (?,...)" 和参数；ids 为空时什么都不加。
+func notIn(col string, ids []string) (string, []any) {
+	if len(ids) == 0 {
+		return "", nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	return " AND " + col + " NOT IN (?" + strings.Repeat(",?", len(ids)-1) + ")", args
 }

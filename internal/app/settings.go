@@ -135,13 +135,30 @@ func (a *app) aboutSettings(c *ui.Context) {
 				ui.Text(c, fmt.Sprintf("pid %d，%s启动", d.Pid, ago(d.StartedAt))).FontSize(12).TextColor(t.TextMuted)
 			})
 		}
+		updating, unsupported := a.upgrade.status(d.Pid)
 		if d.Pid != 0 && stale {
-			ui.Text(c, "常驻进程还在跑旧的包：新装的功能要重启它才用得上。重启会断掉所有终端。").
-				FontSize(12.5).TextColor(t.Text).LineHeight(1.5)
+			note := "常驻进程还在跑旧的包：「更新常驻进程」把终端交给新包接着跑，终端不断。"
+			switch {
+			case updating:
+				note = "正在把终端交给新包里的常驻进程…"
+			case unsupported || d.Build == "":
+				note = "常驻进程还在跑旧的包，这个版本还不能不断终端地更新，只能重启一次：重启会断掉所有终端。"
+			}
+			ui.Text(c, note).FontSize(12.5).TextColor(t.Text).LineHeight(1.5)
 		}
+		canUpdate := d.Pid != 0 && stale && !unsupported && d.Build != ""
 		ui.Row(c).Gap(8).Padding(4, 0, 0, 0).Children(func() {
+			if canUpdate {
+				b := pressable(accentButton(c, "更新常驻进程"))
+				if updating {
+					b.Disabled(true)
+				}
+				if b.Clicked() {
+					a.upgradeDaemon(d.Pid, false)
+				}
+			}
 			button := textButton
-			if d.Pid != 0 && stale {
+			if d.Pid != 0 && stale && !canUpdate {
 				button = accentButton
 			}
 			if pressable(button(c, "重启常驻进程")).Clicked() {

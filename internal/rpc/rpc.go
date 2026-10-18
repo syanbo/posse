@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,8 @@ type Response struct {
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// Data 是给调用方程序看的附加信息，如 restarting 时接着等要用的参数
+	Data json.RawMessage `json:"data,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
@@ -37,7 +40,21 @@ const (
 	CodeTimeout    = "timeout"
 	CodeInternal   = "internal"
 	CodeUnknown    = "unknown_method"
+	// CodeRestarting 是常驻进程退出（交接给新进程或重启）时打断的长等待，调用方可以重发
+	CodeRestarting = "restarting"
 )
+
+// ErrNoResponse 是连接在回复之前就断了，多半是常驻进程退出了。
+var ErrNoResponse = errors.New("connection closed before response")
+
+// Retryable 判断长等待能不能换到新的常驻进程上重发。
+func Retryable(err error) bool {
+	var re *Error
+	if errors.As(err, &re) {
+		return re.Code == CodeRestarting
+	}
+	return errors.Is(err, ErrNoResponse)
+}
 
 func Errorf(code, format string, args ...any) *Error {
 	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
@@ -53,6 +70,7 @@ type StreamHandler func(ctx context.Context, params json.RawMessage, conn net.Co
 type Server struct {
 	handlers map[string]Handler
 	streams  map[string]StreamHandler
+	active   sync.WaitGroup
 }
 
 func NewServer() *Server {
@@ -72,11 +90,29 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		conn, err := ln.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
+				s.drain(3 * time.Second)
 				return nil
 			}
 			return err
 		}
-		go s.serveConn(ctx, conn)
+		s.active.Add(1)
+		go func() {
+			defer s.active.Done()
+			s.serveConn(ctx, conn)
+		}()
+	}
+}
+
+// drain 等正在处理的请求写完回复（被打断的长等待回 restarting），免得进程先退出、调用方只看到断开。
+func (s *Server) drain(max time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		s.active.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(max):
 	}
 }
 
@@ -111,6 +147,9 @@ func (s *Server) serveConn(parent context.Context, conn net.Conn) {
 		return
 	}
 	result, err := h(ctx, req.Params)
+	if err != nil && parent.Err() != nil && errors.Is(err, context.Canceled) {
+		err = Errorf(CodeRestarting, "daemon is shutting down; retry")
+	}
 	writeResponse(conn, result, err)
 }
 
@@ -186,7 +225,7 @@ func request(ctx context.Context, socket, method string, params, out any, watch 
 		if watch && ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
-		return nil, nil, fmt.Errorf("read response: %w", err)
+		return nil, nil, fmt.Errorf("read response: %w: %w", ErrNoResponse, err)
 	}
 	var resp Response
 	if err = json.Unmarshal(line, &resp); err != nil {

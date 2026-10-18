@@ -32,7 +32,7 @@ func TestStore(t *testing.T) {
 	if err := s.AddTerminal(Terminal{ID: "t_1", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.MarkRunningLost(time.Now()); err != nil || n != 1 {
+	if n, err := s.MarkRunningLost(time.Now(), nil); err != nil || n != 1 {
 		t.Fatalf("MarkRunningLost = %d, %v", n, err)
 	}
 	if err := s.AddTerminal(Terminal{ID: "t_2", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {

@@ -129,6 +129,8 @@ type Daemon struct {
 	mobile  *mobile.Server
 	host    host.Host // 托管终端，测试里为空时用进程内的
 	awake   *awake    // 防休眠，测试里为空
+	ln      *gateListener
+	handoff handoffState
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -169,41 +171,31 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := os.MkdirAll(cfg.Home, 0o700); err != nil {
 		return err
 	}
-	unlock, err := lock(filepath.Join(cfg.Home, "hived.lock"), 10*time.Second)
+	// 升级交接：旧进程还活着、持着锁，先把终端接过来，回话之后旧进程才退出、放锁
+	in, err := receiveHandoff()
 	if err != nil {
 		return err
 	}
-	defer unlock()
-	// 持有锁之后才动 socket：旧进程可能仍在关闭终端，必须等它完全退出
 	sock := SocketPath(cfg.Home)
-	os.Remove(sock)
+	lockPath := filepath.Join(cfg.Home, "hived.lock")
+	var unlock func()
+	if in == nil {
+		if unlock, err = lock(lockPath, 10*time.Second); err != nil {
+			return err
+		}
+		// 持有锁之后才动 socket：旧进程可能仍在关闭终端，必须等它完全退出
+		os.Remove(sock)
+	}
 
 	st, err := store.Open(filepath.Join(cfg.Home, "hive.db"))
 	if err != nil {
+		if in != nil {
+			in.answer(err)
+			in.close()
+		}
 		return err
 	}
 	defer st.Close()
-	if n, err := st.MarkRunningLost(time.Now()); err != nil {
-		return err
-	} else if n > 0 {
-		log.Printf("marked %d terminals from the previous daemon as lost", n)
-	}
-	if err := st.PruneTerminals(); err != nil {
-		return err
-	}
-	if err := st.MarkRunningTasksLost(time.Now()); err != nil {
-		return err
-	}
-
-	ln, err := net.Listen("unix", sock)
-	if err != nil {
-		return err
-	}
-	os.Chmod(sock, 0o600)
-	defer os.Remove(sock)
-	pidFile := filepath.Join(cfg.Home, "hived.pid")
-	os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600)
-	defer os.Remove(pidFile)
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -214,6 +206,62 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
 		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
+
+	var keep []string
+	var ln *net.UnixListener
+	if in != nil {
+		err := d.adopt(in)
+		if aerr := in.answer(err); err == nil && aerr != nil {
+			err = aerr
+		}
+		if err != nil {
+			in.close()
+			return fmt.Errorf("adopt: %w", err)
+		}
+		keep, ln = in.ids(), in.ln
+		log.Printf("took over %d terminals", len(in.batch.Terms))
+		// 旧进程退出前要关手机服务、历史索引，多等一会儿
+		if unlock, err = lock(lockPath, time.Minute); err != nil {
+			return err
+		}
+	}
+	defer unlock()
+
+	if n, err := st.MarkRunningLost(time.Now(), keep); err != nil {
+		return err
+	} else if n > 0 {
+		log.Printf("marked %d terminals from the previous daemon as lost", n)
+	}
+	if err := st.PruneTerminals(); err != nil {
+		return err
+	}
+	if err := st.MarkRunningTasksLost(time.Now(), keep); err != nil {
+		return err
+	}
+
+	if ln == nil {
+		l, err := net.Listen("unix", sock)
+		if err != nil {
+			return err
+		}
+		os.Chmod(sock, 0o600)
+		ln = l.(*net.UnixListener)
+	}
+	d.ln = newGateListener(ln)
+	// 交接出去之后 socket 归新进程
+	defer func() {
+		if !d.handoff.handedOff() {
+			os.Remove(sock)
+		}
+	}()
+	pidFile := filepath.Join(cfg.Home, "hived.pid")
+	os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600)
+	defer func() {
+		if !d.handoff.handedOff() {
+			os.Remove(pidFile)
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer d.awake.close()
@@ -221,8 +269,8 @@ func Run(ctx context.Context, cfg Config) error {
 	d.startMobile()
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
-	log.Printf("hive daemon %s listening on %s (pid %d)", Version, sock, os.Getpid())
-	err = srv.Serve(ctx, ln)
+	log.Printf("hive daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
+	err = srv.Serve(ctx, d.ln)
 	if d.mobile != nil {
 		d.mobile.Close()
 	}
@@ -252,6 +300,10 @@ func lock(path string, wait time.Duration) (func(), error) {
 }
 
 func (d *Daemon) closeAll() {
+	// 交接出去的终端由新进程接着跑
+	if d.handoff.handedOff() {
+		return
+	}
 	// 常驻进程退出时关掉的 worker 不算意外退出，也不再提醒任何人
 	d.stopping.Store(true)
 	d.closeSessions(d.sessionsIn(""), 2*time.Second)
@@ -259,6 +311,9 @@ func (d *Daemon) closeAll() {
 
 func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("daemon.status", d.status)
+	srv.Handle("daemon.handoff", func(ctx context.Context, raw json.RawMessage) (any, error) {
+		return d.daemonHandoff(ctx, raw, stop)
+	})
 	srv.Handle("awake.set", d.awakeSet)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出

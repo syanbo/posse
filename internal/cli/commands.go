@@ -63,6 +63,48 @@ func (e *env) do(method string, params, v any, human func()) error {
 	return e.emit(raw, human)
 }
 
+// doWait 是长等待版的 do：常驻进程交接给新进程（或重启）打断等待时，换到新进程上接着等，
+// 超时按剩下的时间算。task.ask 打断时带回问题 ID，改成 resume，不再问一遍。
+func (e *env) doWait(method string, params map[string]any, v any, human func()) error {
+	start := time.Now()
+	total, _ := params["timeoutMs"].(int64)
+	var raw json.RawMessage
+	for attempt := 1; ; attempt++ {
+		err := e.call(method, params, &raw)
+		if err == nil {
+			break
+		}
+		if !rpc.Retryable(err) || attempt >= 10 {
+			return err
+		}
+		var re *rpc.Error
+		if errors.As(err, &re) && len(re.Data) > 0 {
+			var data struct{ Resume string }
+			if json.Unmarshal(re.Data, &data) == nil && data.Resume != "" {
+				params["resume"] = data.Resume
+			}
+		}
+		// 不知道问题有没有记下时不重发，免得重复提问
+		if method == "task.ask" && params["resume"] == "" {
+			return err
+		}
+		if total > 0 {
+			left := total - time.Since(start).Milliseconds()
+			if left <= 0 {
+				return err
+			}
+			params["timeoutMs"] = left
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if v != nil && len(raw) > 0 {
+		if err := json.Unmarshal(raw, v); err != nil {
+			return err
+		}
+	}
+	return e.emit(raw, human)
+}
+
 func (e *env) table() *tabwriter.Writer { return tabwriter.NewWriter(e.out, 0, 0, 2, ' ', 0) }
 
 func termArg(pos []string) string {
@@ -128,6 +170,27 @@ func cmdDaemonStop(e *env, args []string) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return e.emit(map[string]bool{"stopped": true}, func() { fmt.Fprintln(e.out, "daemon stopped") })
+}
+
+// cmdDaemonHandoff 让正在运行的常驻进程把终端交给用这个 hive 启动的新进程。
+func cmdDaemonHandoff(e *env, args []string) error {
+	if _, err := parse(flag.NewFlagSet("daemon handoff", flag.ContinueOnError), args); err != nil {
+		return err
+	}
+	if !e.daemonUp() {
+		return e.emit(map[string]bool{"running": false}, func() { fmt.Fprintln(e.out, "daemon not running") })
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	var r struct{ Pid, Terminals int }
+	return e.do("daemon.handoff", map[string]string{"exe": exe}, &r, func() {
+		fmt.Fprintf(e.out, "handed %d terminals to the new daemon (pid %d)\n", r.Terminals, r.Pid)
+	})
 }
 
 // --- projects
@@ -452,7 +515,7 @@ func cmdTerminalWait(e *env, args []string) error {
 	params := map[string]any{"terminal": termArg(pos), "for": *forWhat, "idleMs": idle.Milliseconds(), "text": *text,
 		"status": *status, "timeoutMs": timeout.Milliseconds()}
 	var r struct{ Terminal terminalInfo }
-	return e.do("terminal.wait", params, &r, func() {
+	return e.doWait("terminal.wait", params, &r, func() {
 		fmt.Fprintf(e.out, "%s: %s\n", r.Terminal.ID, terminalState(r.Terminal))
 	})
 }
@@ -516,6 +579,11 @@ func cmdHook(e *env, args []string) error {
 			Behavior string `json:"behavior"`
 		}
 		err := rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
+		// 常驻进程交接时被打断：到新进程上再挂一次，总时间还是 35 秒
+		for rpc.Retryable(err) && ctx.Err() == nil {
+			time.Sleep(300 * time.Millisecond)
+			err = rpc.Call(ctx, socket, "hook.permission.hold", params, &out)
+		}
 		cancel()
 		if err == nil {
 			if line := permissionDecision(out.Behavior); line != "" {

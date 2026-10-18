@@ -66,6 +66,9 @@ func (d *Daemon) startAgent(w store.Workspace, name, prompt string, cols, rows i
 }
 
 func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName string, cols, rows int, extraEnv ...string) (*session, error) {
+	if d.handoff.active() {
+		return nil, rpc.Errorf(rpc.CodeConflict, "daemon is handing off to a new version, try again")
+	}
 	id := store.NewID("t_")
 	env := append([]string{
 		"HIVE_HOME=" + d.cfg.Home,
@@ -83,36 +86,7 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 	t, err := d.terminalHost().Start(host.StartOptions{
 		ID: id, WorkspaceID: w.ID, Dir: w.Path, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback,
-		OnTitle: func(id, title string) {
-			d.mu.Lock()
-			s := d.terms[id]
-			d.mu.Unlock()
-			if s == nil {
-				return
-			}
-			// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
-			name, hooked, changed := s.detectAgent()
-			if changed {
-				s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
-			}
-			if name == "" {
-				return
-			}
-			status := agent.TitleStatus
-			if !hooked {
-				status = agent.TitleOnlyStatus
-			}
-			if st, ok := status(name, title, s.Agent().Status); ok {
-				d.setAgent(s, host.AgentState{Status: st, Event: "title", At: time.Now()})
-			}
-		},
-		OnExit: func(id string, code int) {
-			if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
-				log.Printf("terminal %s: record exit: %v", id, err)
-			}
-			d.workerGone(id, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
-			d.refreshAwake()
-		},
+		OnTitle: d.onTitle, OnExit: d.onExit,
 	})
 	if err != nil {
 		return nil, err
@@ -127,6 +101,42 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 		log.Printf("terminal %s: record: %v", id, err)
 	}
 	return s, nil
+}
+
+func (d *Daemon) onTitle(id, title string) {
+	d.mu.Lock()
+	s := d.terms[id]
+	d.mu.Unlock()
+	if s == nil {
+		return
+	}
+	// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
+	name, hooked, changed := s.detectAgent()
+	if changed {
+		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
+	}
+	if name == "" {
+		return
+	}
+	status := agent.TitleStatus
+	if !hooked {
+		status = agent.TitleOnlyStatus
+	}
+	if st, ok := status(name, title, s.Agent().Status); ok {
+		d.setAgent(s, host.AgentState{Status: st, Event: "title", At: time.Now()})
+	}
+}
+
+func (d *Daemon) onExit(id string, code int) {
+	// 交接期间旧进程不处理退出：成功了由新进程盯着，失败了恢复时补上
+	if d.handoff.deferExit(id, code) {
+		return
+	}
+	if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
+		log.Printf("terminal %s: record exit: %v", id, err)
+	}
+	d.workerGone(id, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
+	d.refreshAwake()
 }
 
 type terminalCreateParams struct {
@@ -517,6 +527,10 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 	}
 	if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
 		behavior = d.mobile.HoldPermission(ctx, s.ID, p.Payload, s.LastInput)
+		// 常驻进程退出打断的挂起：让 hook 到新进程上再挂一次，手机重连后还能批
+		if behavior == "" && ctx.Err() != nil {
+			return nil, rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; retry")
+		}
 	}
 	return map[string]any{"behavior": behavior}, nil
 }

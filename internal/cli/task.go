@@ -271,7 +271,7 @@ func taskInbox(e *env, args []string, block bool) error {
 	}
 	var items []inboxItem
 	params := map[string]any{"caller": caller(), "block": block, "timeoutMs": timeout.Milliseconds()}
-	return e.do("task.wait", params, &items, func() {
+	return e.doWait("task.wait", params, &items, func() {
 		if len(items) == 0 {
 			fmt.Fprintln(e.out, "no new task messages")
 			return
@@ -377,7 +377,7 @@ func cmdTaskAsk(e *env, args []string) error {
 	params := map[string]any{"task": task, "caller": caller(), "question": strings.Join(pos, " "), "resume": *resume,
 		"timeoutMs": timeout.Milliseconds()}
 	var r struct{ Answer string }
-	return e.do("task.ask", params, &r, func() { fmt.Fprintln(e.out, r.Answer) })
+	return e.doWait("task.ask", params, &r, func() { fmt.Fprintln(e.out, r.Answer) })
 }
 
 func cmdTaskCheck(e *env, args []string) error {

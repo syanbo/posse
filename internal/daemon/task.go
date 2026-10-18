@@ -434,7 +434,10 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 		select {
 		case <-changed:
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			// 常驻进程退出时问题已经记下了，调用方要改成 resume 接着等，不能再问一遍
+			e := rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; keep waiting with: hive task ask %s --resume %s", t.ID, q.ID)
+			e.Data, _ = json.Marshal(map[string]string{"resume": q.ID})
+			return nil, e
 		case <-deadline.C:
 			return nil, rpc.Errorf(rpc.CodeTimeout, "no answer yet to question %s; keep waiting with: hive task ask %s --resume %s", q.ID, t.ID, q.ID)
 		}
