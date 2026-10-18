@@ -328,3 +328,24 @@ func TestSessionButtonsFold(t *testing.T) {
 		t.Fatal("buttons missing after unfolding")
 	}
 }
+
+// 手机占着终端尺寸时，终端上方有提示和"改回电脑尺寸"，点了提示条就收起。
+func TestPhoneSizedBar(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	a.workspaces[0].Terminals[0].PhoneSized = true
+	a.selected, a.activeTerm["w1"] = "w1", a.workspaces[0].Terminals[0].ID
+	tt := ui.NewTester(a.build, 1200, 760)
+	settle(tt)
+	if !tt.HasText("手机正在看这个终端，按手机屏幕排版") {
+		t.Fatalf("bar missing: %v", tt.Texts())
+	}
+	if err := tt.Click("改回电脑尺寸"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	// 测试里没有常驻进程，错误条上会有"改回电脑尺寸失败"，看提示条本身
+	if a.workspaces[0].Terminals[0].PhoneSized || tt.HasText("手机正在看这个终端，按手机屏幕排版") {
+		t.Fatal("bar should go away after reclaiming")
+	}
+}

@@ -72,6 +72,7 @@ class AppSettings {
     this.terminalFontSize = 12.5,
     this.showReasoning = true,
     this.expandTools = false,
+    this.deskLayout = false,
   });
 
   /// dark、light 或 system。默认深色。
@@ -83,12 +84,16 @@ class AppSettings {
   bool showReasoning;
   bool expandTools;
 
+  /// 终端按电脑的布局看：不改终端尺寸，按电脑的列数排、左右滑着看。默认按手机屏幕重排。
+  bool deskLayout;
+
   Map<String, Object?> toJson() => {
     'theme': theme,
     'openMode': openMode,
     'terminalFontSize': terminalFontSize,
     'showReasoning': showReasoning,
     'expandTools': expandTools,
+    'deskLayout': deskLayout,
   };
 
   static AppSettings decode(String? data) {
@@ -112,6 +117,9 @@ class AppSettings {
       }
       if (map['expandTools'] is bool) {
         out.expandTools = map['expandTools'] as bool;
+      }
+      if (map['deskLayout'] is bool) {
+        out.deskLayout = map['deskLayout'] as bool;
       }
     } catch (_) {}
     return out;

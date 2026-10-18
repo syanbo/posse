@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 const termFrameMagic = 0x74;
@@ -36,11 +37,14 @@ TermFrame? parseTermFrame(Uint8List bytes) {
 }
 
 class TermBytes {
-  const TermBytes.output(this.bytes) : snapshot = false;
-  const TermBytes.snapshot(this.bytes) : snapshot = true;
+  const TermBytes.output(this.bytes) : snapshot = false, cols = 0;
+  const TermBytes.snapshot(this.bytes, {this.cols = 0}) : snapshot = true;
 
   final Uint8List bytes;
   final bool snapshot;
+
+  /// 快照时终端的列数（快照开头的元数据里带着），电脑布局按它排；不知道时为 0。
+  final int cols;
 }
 
 /// 把 Orca 的 16 字节头帧收成「要写进终端的一段字节」。
@@ -51,6 +55,7 @@ class TermBytes {
 class TermAssembler {
   final BytesBuilder _chunks = BytesBuilder(copy: false);
   var _open = false;
+  var _cols = 0;
   int? _sid;
   var _waiting = false; // 换了订阅、还不知道新编号
   final _pending = <TermFrame>[];
@@ -94,6 +99,13 @@ class TermAssembler {
       case termOpSnapshotStart:
         _chunks.clear();
         _open = true;
+        _cols = 0;
+        try {
+          final meta = jsonDecode(utf8.decode(frame.payload));
+          if (meta is Map && meta['cols'] is num) {
+            _cols = (meta['cols'] as num).toInt();
+          }
+        } catch (_) {}
         return null;
       case termOpSnapshotChunk:
         if (_open) _chunks.add(frame.payload);
@@ -103,7 +115,7 @@ class TermAssembler {
         _open = false;
         final bytes = _chunks.toBytes();
         _chunks.clear();
-        return TermBytes.snapshot(bytes);
+        return TermBytes.snapshot(bytes, cols: _cols);
       case termOpOutput:
         if (_open || frame.payload.isEmpty) return null;
         return TermBytes.output(Uint8List.fromList(frame.payload));
@@ -123,7 +135,7 @@ class TermKey {
 const termKeys = <TermKey>[
   TermKey('Esc', [0x1b]),
   TermKey('Tab', [0x09]),
-  TermKey('回车', [0x0d]),
+  TermKey('Enter', [0x0d]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),

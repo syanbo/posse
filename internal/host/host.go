@@ -73,6 +73,9 @@ type Terminal interface {
 	// HoldSize 让终端暂时按 key 的尺寸排版（手机看着时），ReleaseSize 放掉
 	HoldSize(key string, cols, rows int)
 	ReleaseSize(key string)
+	// SizeHeld 报告是不是按手机的尺寸排版，ReclaimSize 让电脑收回尺寸（放掉所有手机的占用）
+	SizeHeld() bool
+	ReclaimSize()
 	Clear(redraw bool) error
 
 	Lines() []string
@@ -159,6 +162,8 @@ func (l *local) Inject(data []byte) error      { return l.t.Inject(data) }
 func (l *local) Resize(cols, rows int)         { l.t.Resize(cols, rows) }
 func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
 func (l *local) ReleaseSize(key string)        { l.t.ReleaseSize(key) }
+func (l *local) SizeHeld() bool                { return l.t.SizeHeld() }
+func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
 func (l *local) Clear(redraw bool) error       { return l.t.Clear(redraw) }
 func (l *local) Lines() []string               { return l.t.Lines() }
 func (l *local) ContainsText(sub string) bool  { return l.t.ContainsText(sub) }

@@ -47,6 +47,7 @@ type terminalInfo struct {
 	ExitCode                      *int
 	Pid                           int  // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
 	WaitingTasks                  bool // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
+	PhoneSized                    bool // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。

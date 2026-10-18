@@ -151,3 +151,28 @@ func TestClear(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// 电脑收回尺寸：放掉手机的占用、按界面最后要的尺寸重排；手机之后离开不再改尺寸。
+func TestReclaimSize(t *testing.T) {
+	tm, err := Start(Options{ID: "t_r", Dir: t.TempDir(), Cols: 100, Rows: 30, Command: []string{"/bin/sh", "-c", "sleep 5"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	tm.HoldSize("phone", 40, 20)
+	tm.Resize(120, 32) // 手机看着时界面改了窗口大小，先记下
+	if !tm.SizeHeld() {
+		t.Fatal("held")
+	}
+	if c, r := tm.Size(); c != 40 || r != 20 {
+		t.Fatalf("phone size %dx%d", c, r)
+	}
+	tm.ReclaimSize()
+	if c, r := tm.Size(); tm.SizeHeld() || c != 120 || r != 32 {
+		t.Fatalf("reclaimed %dx%d held %v", c, r, tm.SizeHeld())
+	}
+	tm.ReleaseSize("phone")
+	if c, r := tm.Size(); c != 120 || r != 32 {
+		t.Fatalf("after phone left %dx%d", c, r)
+	}
+}

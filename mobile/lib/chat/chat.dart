@@ -1105,6 +1105,11 @@ class _ChatScreenState extends State<ChatScreen> {
         .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
         .toList();
     final c = HiveColors.of(context);
+    // agent 在干活时对话最后一行转着星号，看得出它还在；停下、断线或会话结束就不画
+    final working =
+        !_ended &&
+        widget.model.rpc != null &&
+        agentStateOf(tab.state) == AgentState.working;
     return Scaffold(
       backgroundColor: canvas,
       appBar: AppBar(
@@ -1159,12 +1164,16 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _scroll,
                     padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
                     // 还有更早的消息时，列表最上面多一行：滚到顶才看得见，读的时候转圈
-                    itemCount: entries.length + (_window.hasMore ? 1 : 0),
+                    itemCount:
+                        entries.length +
+                        (_window.hasMore ? 1 : 0) +
+                        (working ? 1 : 0),
                     itemBuilder: (context, index) {
                       if (_window.hasMore) {
                         if (index == 0) return _earlierRow(c);
                         index--;
                       }
+                      if (index == entries.length) return _workingRow(c);
                       final entry = entries[index];
                       if (entry.tools) {
                         return ToolRun(
@@ -1194,6 +1203,27 @@ class _ChatScreenState extends State<ChatScreen> {
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
           if (_notice != null) NoticeBar(_notice!),
           _composer(),
+        ],
+      ),
+    );
+  }
+
+  /// 对话最后一行：agent 正在干活。照 Claude Code，转动的星号加正在用的工具。
+  Widget _workingRow(HiveColors c) {
+    final tool = tab.toolName;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Row(
+        children: [
+          WorkingStar(size: 14, color: c.accent),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              tool == null || tool.isEmpty ? '工作中…' : '正在用 $tool…',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: c.muted),
+            ),
+          ),
         ],
       ),
     );

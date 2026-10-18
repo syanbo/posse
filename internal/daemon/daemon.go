@@ -416,6 +416,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("terminal.wait", d.terminalWait)
 	srv.Handle("terminal.resize", d.terminalResize)
 	srv.Handle("terminal.clear", d.terminalClear)
+	srv.Handle("terminal.reclaimSize", d.terminalReclaimSize)
 	srv.Handle("terminal.close", d.terminalClose)
 	srv.Handle("workspace.diff", d.workspaceDiff)
 	srv.Handle("workspace.merge", d.workspaceMerge)

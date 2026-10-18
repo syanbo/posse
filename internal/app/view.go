@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -1242,6 +1243,40 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	})
 }
 
+// phoneSizedBar 是终端上方的一行：手机正看着这个终端，它按手机屏幕排版、只占左边一截；
+// 手机切到后台时连接常常还挂着，所以给一个按钮让电脑收回尺寸（手机重新打开这个终端才会再占）。
+func (a *app) phoneSizedBar(c *ui.Context, id string) {
+	t := c.Theme()
+	p := colors(t)
+	ui.Row(c.Key("phone-sized")).Height(32).Shrink(0).Padding(0, 8, 0, 14).Gap(8).AlignItems(ui.Center).
+		Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+		ui.Icon(c, iconPhone).FontSize(14).TextColor(t.Accent).Shrink(0)
+		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(12).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Spacer(c)
+		if pressable(textButton(c, "改回电脑尺寸")).Clicked() {
+			a.reclaimSize(id)
+		}
+	})
+}
+
+// reclaimSize 让常驻进程放掉手机对终端尺寸的占用，按窗口的尺寸重排。
+func (a *app) reclaimSize(id string) {
+	for i := range a.workspaces {
+		for j := range a.workspaces[i].Terminals {
+			if a.workspaces[i].Terminals[j].ID == id {
+				a.workspaces[i].Terminals[j].PhoneSized = false
+			}
+		}
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.c.Call(ctx, "terminal.reclaimSize", map[string]any{"terminal": id}, nil); err != nil {
+			a.update(func() { a.err = "改回电脑尺寸失败：" + err.Error() })
+		}
+	}()
+}
+
 // mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。
 func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
@@ -1263,6 +1298,9 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		case cur == nil || a.view == nil:
 			a.emptyWorkspace(c, w)
 		default:
+			if cur.PhoneSized {
+				a.phoneSizedBar(c, cur.ID)
+			}
 			// 留一点内边距，文字不贴边
 			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10)
 			a.view.dir = a.view.term.Dir()

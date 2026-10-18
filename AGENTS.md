@@ -124,6 +124,6 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
   - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox，`e2ee_test.go` 有 Orca 的测试向量）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。端到端测试用 `HIVE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突。
   - 主机密钥和配对的手机存在 `$HIVE_HOME/mobile.json`（0600）。手机按公钥认主机，换密钥等于所有手机重新配对。配对码在侧栏「历史」下面的「手机」页、「新建」菜单或 `hive mobile pair`。
   - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
-  - 手机看终端时终端按手机屏幕排版（`Terminal.HoldSize`），界面这时的尺寸变化先记下，手机全部离开后恢复；手机接入不接管终端查询的应答（`Watch`）。终端输出走 Orca 的 16 字节头二进制帧，按 UTF-8 字符边界切块。
+  - 手机看终端时终端按手机屏幕排版（`Terminal.HoldSize`），界面这时的尺寸变化先记下，手机全部离开后恢复；手机接入不接管终端查询的应答（`Watch`）。终端输出走 Orca 的 16 字节头二进制帧，按 UTF-8 字符边界切块。终端被手机占着尺寸时 `terminalInfo.phoneSized` 为真，窗口在终端上方显示一行提示和"改回电脑尺寸"（`terminal.reclaimSize` → `Terminal.ReclaimSize`，放掉所有手机的占用、按界面最后要的尺寸重排；手机的订阅还在，离开时不再改尺寸，重新打开这个终端才会再占）：手机切到后台时连接常常还挂着，不然电脑上一直是窄的。手机终端的"更多"里有"电脑布局"（`AppSettings.deskLayout`）：订阅时不带手机尺寸，终端保持电脑的列数（快照开头的元数据里带着），手机按它放宽视图、左右滑着看。
   - 文件页（`files.go`）：`files.readDir`（按目录读，手机优先用它，没有才退回 `files.list`）、`files.list`、`files.searchPaths`、`files.read`、`files.readPreview`、`files.stat`，只读，路径相对工作区、拒绝绝对路径和 `..`，限制照 Orca（文本 512 KB 截断、图片 10 MB、清单 5000 个）。音视频、编辑保存、在桌面打开没做。
   - 手机上传的图片存成 `$TMPDIR/hive-mobile-*`，App 再把路径输入终端。

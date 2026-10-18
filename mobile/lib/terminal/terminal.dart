@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flterm/flterm.dart' hide TerminalScreen;
+// ignore: implementation_imports
+import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -48,6 +50,12 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _rows = 0;
   var _heldCols = 0;
   var _heldRows = 0;
+
+  /// 当前订阅是不是按电脑布局订的（没带手机尺寸），以及电脑那边的列数。
+  var _heldDesk = false;
+  var _deskCols = 0;
+
+  bool get _desk => widget.model.settings.deskLayout;
   var _applying = false;
   var _gen = 0;
   Future<void> _gate = Future<void>.value();
@@ -109,10 +117,11 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _open() async {
     final rpc = widget.model.rpc;
     if (!mounted || rpc == null || _cols < 20 || _rows < 8) return;
+    final desk = _desk;
     if (identical(rpc, _bound) &&
         _stream != null &&
-        _cols == _heldCols &&
-        _rows == _heldRows) {
+        _heldDesk == desk &&
+        (desk || (_cols == _heldCols && _rows == _heldRows))) {
       return;
     }
     final gen = ++_gen;
@@ -129,7 +138,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       (bytes) {
         if (!mounted || gen != _gen) return;
         final piece = _asm.add(bytes);
-        if (piece != null) _apply(piece.bytes);
+        if (piece != null) _applyPiece(piece);
       },
       onDone: () {
         if (gen != _gen) return;
@@ -139,9 +148,10 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
     await oldBinary?.cancel();
     try {
+      // 电脑布局不带手机尺寸：常驻进程不改终端尺寸，电脑上照常
       final stream = await rpc.subscribe('terminal.subscribe', {
         'terminal': widget.tab.terminalId,
-        'viewport': {'cols': cols, 'rows': rows},
+        if (!desk) 'viewport': {'cols': cols, 'rows': rows},
       });
       if (gen != _gen || !mounted) {
         await _drop(rpc, stream);
@@ -151,12 +161,13 @@ class _TerminalScreenState extends State<TerminalScreen>
       _stream = stream;
       _heldCols = cols;
       _heldRows = rows;
+      _heldDesk = desk;
       stream.frames.listen((frame) {
         if (!mounted || gen != _gen) return;
         final sid = frame['streamId'];
         if (frame['type'] == 'subscribed' && sid is num) {
           for (final piece in _asm.accept(sid.toInt())) {
-            _apply(piece.bytes);
+            _applyPiece(piece);
           }
         }
         if (frame['type'] == 'end') {
@@ -197,6 +208,41 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   /// 快照和输出是远端画面。写进去时本地模拟器可能应答查询，那些字节不能再送回 PTY。
+  Widget _terminalView(HiveColors c) => TerminalView(
+    controller: _controller,
+    theme: terminalTheme(c, fontSize: widget.model.settings.terminalFontSize),
+    // 进来先看画面，点一下终端才弹键盘，不然键盘挡住半屏
+    autofocus: false,
+    focusNode: _focus,
+    padding: EdgeInsets.zero,
+  );
+
+  /// 电脑布局：终端视图按电脑的列数放宽，左右滑着看；手机布局直接铺满。
+  Widget _deskView(HiveColors c) {
+    if (!_desk || _deskCols <= 0) return _terminalView(c);
+    final size = widget.model.settings.terminalFontSize;
+    final cell = measureCellMetrics(
+      fontSize: size,
+      fontFamily: monoFamily,
+      fontFamilyFallback: monoFallback,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+    // 多留半格，免得按像素取整后少算一列
+    final width = (_deskCols + 0.5) * cell.cellWidth;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(width: width, child: _terminalView(c)),
+    );
+  }
+
+  /// 快照带着终端的列数：电脑布局时按它排，电脑那边改了窗口大小会重发快照
+  void _applyPiece(TermBytes piece) {
+    if (piece.snapshot && piece.cols > 0 && piece.cols != _deskCols) {
+      setState(() => _deskCols = piece.cols);
+    }
+    _apply(piece.bytes);
+  }
+
   /// 新订阅从快照开始，切开的半个字符不能接到上一次的输出上。
   var _bullets = BulletFix();
 
@@ -326,6 +372,14 @@ class _TerminalScreenState extends State<TerminalScreen>
                 widget.onOpenChat?.call();
                 return;
               }
+              if (value == 'desk') {
+                widget.model.updateSettings(
+                  (s) => s.deskLayout = !s.deskLayout,
+                );
+                setState(() {});
+                _schedule();
+                return;
+              }
               if (value != 'close') return;
               final nav = Navigator.of(context);
               if (await closeSession(context, widget.model, widget.tab)) {
@@ -335,6 +389,12 @@ class _TerminalScreenState extends State<TerminalScreen>
             itemBuilder: (_) => [
               if (widget.onOpenChat != null)
                 const PopupMenuItem(value: 'chat', child: Text('切换到对话')),
+              // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
+              CheckedPopupMenuItem(
+                value: 'desk',
+                checked: _desk,
+                child: const Text('电脑布局'),
+              ),
               PopupMenuItem(
                 value: 'close',
                 child: Text(widget.tab.agent == null ? '关闭终端' : '关闭会话'),
@@ -355,17 +415,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 4, 0),
-              child: TerminalView(
-                controller: _controller,
-                theme: terminalTheme(
-                  c,
-                  fontSize: widget.model.settings.terminalFontSize,
-                ),
-                // 进来先看画面，点一下终端才弹键盘，不然键盘挡住半屏
-                autofocus: false,
-                focusNode: _focus,
-                padding: EdgeInsets.zero,
-              ),
+              child: _deskView(c),
             ),
           ),
           _KeyBar(

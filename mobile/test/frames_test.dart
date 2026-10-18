@@ -43,10 +43,10 @@ void main() {
     final byLabel = {for (final key in termKeys) key.label: key.bytes};
     expect(byLabel['Esc'], [0x1b]);
     expect(byLabel['Tab'], [0x09]);
-    expect(byLabel['回车'], [0x0d]);
-    // 回车排在 Tab 后面
+    expect(byLabel['Enter'], [0x0d]);
+    // Enter 排在 Tab 后面
     final labels = termKeys.map((k) => k.label).toList();
-    expect(labels.indexOf('回车'), labels.indexOf('Tab') + 1);
+    expect(labels.indexOf('Enter'), labels.indexOf('Tab') + 1);
     expect(byLabel['⇧Tab'], [0x1b, 0x5b, 0x5a]);
     expect(byLabel['^C'], [0x03]);
     expect(byLabel['↑'], [0x1b, 0x5b, 0x41]);

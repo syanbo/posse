@@ -575,6 +575,27 @@ func (t *Terminal) ReleaseSize(key any) {
 	}
 }
 
+// SizeHeld 报告终端现在是不是按手机的尺寸排版。
+func (t *Terminal) SizeHeld() bool {
+	t.zmu.Lock()
+	defer t.zmu.Unlock()
+	return len(t.holds) > 0
+}
+
+// ReclaimSize 让电脑收回尺寸：放掉所有手机的占用，按界面最后要的尺寸重排。手机的订阅还在，
+// 之后它离开时 ReleaseSize 找不到自己的占用，什么也不做；手机重新打开这个终端才会再占。
+func (t *Terminal) ReclaimSize() {
+	t.zmu.Lock()
+	defer t.zmu.Unlock()
+	if len(t.holds) == 0 {
+		return
+	}
+	t.holds = nil
+	if c, r := t.Size(); t.Running() && t.desk[0] > 0 && t.desk[1] > 0 && (c != t.desk[0] || r != t.desk[1]) {
+		t.resize(t.desk[0], t.desk[1])
+	}
+}
+
 func (t *Terminal) resize(cols, rows int) {
 	t.smu.Lock()
 	if t.emu != nil && t.emu.Resize(cols, rows, 8, 16) == nil {
