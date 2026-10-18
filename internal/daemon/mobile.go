@@ -112,6 +112,28 @@ func (h mobileHost) CloseTerminal(id string) error {
 
 func (h mobileHost) Agents() []string { return agent.Known }
 
+func (h mobileHost) History(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	d := h.d
+	switch method {
+	case "history.list":
+		return d.historyList(ctx, params)
+	case "history.search":
+		return d.historySearch(ctx, params)
+	case "history.resume":
+		res, err := d.historyResume(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		r := res.(historyResumeResult)
+		w, err := d.workspace(r.WorkspaceID)
+		if err != nil {
+			return nil, err
+		}
+		return mobile.ResumeResult{Terminal: r.ID, Worktree: w.ProjectID + "::" + w.ID, AlreadyOpen: r.AlreadyOpen}, nil
+	}
+	return nil, rpc.Errorf(rpc.CodeBadRequest, "unknown method %s", method)
+}
+
 type mobilePairParams struct {
 	Rotate  bool   `json:"rotate"`
 	Address string `json:"address"`

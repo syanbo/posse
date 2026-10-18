@@ -194,3 +194,35 @@ func TestGitStatusAndDiff(t *testing.T) {
 		t.Fatalf("path escaped: %v", bad)
 	}
 }
+
+// 手机端历史：没声明 hive.history.v1 的连接（Orca App）看不到；声明后转给常驻进程，报错换成看得懂的话。
+func TestHistoryMethods(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	if hidden := p.next(p.call("history.list", map[string]any{})); hidden["ok"] != false {
+		t.Fatalf("orca connection saw history.list: %v", hidden)
+	}
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.history.v1"},
+	})))
+	list := result(t, p.next(p.call("history.search", map[string]any{"query": "bug", "limit": 50})))
+	ss, _ := list["sessions"].([]any)
+	params, _ := list["params"].(map[string]any)
+	if len(ss) != 1 || params["query"] != "bug" {
+		t.Fatalf("history.search %v", list)
+	}
+	res := p.next(p.call("history.resume", map[string]any{"session": "s1"}))
+	e, _ := res["error"].(map[string]any)
+	if res["ok"] != false || e["code"] != "not_found" || !strings.Contains(e["message"].(string), "加成项目") {
+		t.Fatalf("history.resume %v", res)
+	}
+}

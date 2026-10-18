@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -24,6 +25,16 @@ type Host interface {
 	CreateTerminal(workspaceID, agent, prompt, command string) (string, error)
 	CloseTerminal(id string) error
 	Agents() []string
+	// History 调常驻进程的会话历史接口：history.list、history.search 原样返回；
+	// history.resume 返回 ResumeResult。错误可以是 *rpc.Error，带上它的错误码
+	History(ctx context.Context, method string, params json.RawMessage) (any, error)
+}
+
+// ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
+type ResumeResult struct {
+	Terminal    string `json:"terminal"`
+	Worktree    string `json:"worktree"`
+	AlreadyOpen bool   `json:"alreadyOpen,omitempty"`
 }
 
 type State struct {
@@ -491,6 +502,8 @@ func (c *conn) dispatch(req request) error {
 		return c.unsubscribeNativeChat(req.ID, p)
 	case "agent.permission.decide":
 		return c.decidePermission(req.ID, p)
+	case "history.list", "history.search", "history.resume":
+		return c.history(req.ID, req.Method, p)
 	case "git.status":
 		return c.gitStatus(req.ID, p)
 	case "git.diff":
