@@ -123,7 +123,7 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 	t := c.Theme()
 	row := ui.Row(c.Key("g:"+key)).Height(26).Padding(0, 8, 0, 4+float32(indent)*14).Gap(4).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(label)
-	selectable(c, row, false)
+	selectedBg(c, row, false)
 	row.Children(func() {
 		chevron := iconChevron
 		if open {
@@ -145,7 +145,7 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) bool {
 	row := ui.Row(c.Key(key)).Height(26).Padding(0, 8, 0, 20+float32(indent)*14).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(name).Tooltip(label)
-	selectable(c, row, selected)
+	selectedBg(c, row, selected)
 	row.Children(func() {
 		ui.Text(c, label).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).Grow(1)
 		if trailing != nil {

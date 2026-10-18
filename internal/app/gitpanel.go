@@ -302,7 +302,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	t := c.Theme()
 	row := ui.Row(c.Key("stash:"+s.Ref)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
-	selectable(c, row, false)
+	selectedBg(c, row, false)
 	row.Children(func() {
 		ui.Icon(c, iconShelve).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, stashTitle(s.Message)).FontSize(13).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)

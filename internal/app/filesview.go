@@ -52,7 +52,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
 		row := ui.Row(c.Key(r.Path)).Height(24).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*18).Gap(6).Radius(6).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
-		selectable(c, row, r.Path == curPath)
+		selectedBg(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
 		row.Children(func() {
 			if r.Dir {
@@ -188,7 +188,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			return
 		}
 		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(3, 8, 3, 8).Gap(8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
-		selectable(c, row, false)
+		selectedBg(c, row, false)
 		text, spans := trimHit(h)
 		row.Children(func() {
 			ui.Text(c, fmt.Sprint(h.Line+1)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Width(30).Shrink(0).TextAlign(ui.End)
@@ -660,7 +660,7 @@ func (a *app) quickDialog(c *ui.Context) {
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	t := c.Theme()
 	row := ui.Row(c.Key(m.Path)).Height(30).Padding(0, 10).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
-	selectable(c, row, selected)
+	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()
 	}

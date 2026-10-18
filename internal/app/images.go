@@ -237,7 +237,7 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				}
 				for _, it := range v.items {
 					card := ui.Column(c.Key(it.path)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label(fmt.Sprintf("图片 #%d", it.n))
-					selectable(c, card, false)
+					selectedBg(c, card, false)
 					card.Children(func() {
 						if it.thumb != nil {
 							ui.Image(c, it.thumb).Width(244).Radius(6)

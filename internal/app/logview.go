@@ -516,7 +516,6 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 	t := c.Theme()
 	ld := d.log
 	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
-	// 选中只铺淡底、不画竖条：竖条贴着提交图的线，看着像多出一条线
 	bg := ui.Transparent
 	switch {
 	case ld.commit != nil && ld.commit.info.Hash == ci.Hash:

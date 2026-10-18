@@ -479,7 +479,7 @@ func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 	t := c.Theme()
 	h := &a.history
 	row := ui.Row(c.Key(s.Agent+s.ID)).Margin(0, 8).Padding(10, 12, 10, 14).Gap(12).Radius(8).AlignItems(ui.Center)
-	selectable(c, row, h.sel == s.ID)
+	selectedBg(c, row, h.sel == s.ID)
 	row.Children(func() {
 		agentTile(c, s.Agent, 28)
 		ui.Column(c).Gap(3).Grow(1).Shrink(1).Children(func() {
@@ -625,7 +625,7 @@ func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
 	row := ui.Row(c.Key("tools")).Height(26).Padding(0, 10).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
-	selectable(c, row, false)
+	selectedBg(c, row, false)
 	row.Children(func() {
 		turn := float32(0)
 		if open {

@@ -199,7 +199,7 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 				}
 				for _, s := range r.sessions {
 					row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
-					selectable(c, row, a.selected == historyBoardID && a.history.sel == s.ID)
+					selectedBg(c, row, a.selected == historyBoardID && a.history.sel == s.ID)
 					row.Children(func() {
 						agentTile(c, s.Agent, 20)
 						ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {

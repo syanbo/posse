@@ -447,7 +447,7 @@ func (a *app) taskList(c *ui.Context) {
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
 	t := c.Theme()
 	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(10, 12, 10, 14).Gap(10).Radius(8).AlignItems(ui.Start)
-	selectable(c, row, a.taskSel == task.ID)
+	selectedBg(c, row, a.taskSel == task.ID)
 	row.Children(func() {
 		ui.Box(c).Padding(2, 0, 0, 0).Children(func() { taskGlyphIcon(c, task, 13) })
 		ui.Column(c).Grow(1).Shrink(1).Gap(3).Children(func() {

@@ -15,7 +15,7 @@ import (
 //     深色下侧栏 side 比画布明显浅一档。分层靠明度差和 8% 透明的细线，不靠粗线。
 //   - 单闭合边框：从画布往里看，任何一条视线最多穿过一层闭合的框。有框的容器里，按钮和输入不再加框，
 //     用填充（fill）或幽灵样式；容器内部分区用单向细线。
-//   - 陶土色用在主按钮、焦点、工作中的星号、链接、图标，以及选中项：强调色淡底加左边 3px 竖条。
+//   - 陶土色用在主按钮、焦点、工作中的星号、链接、图标，以及选中项：强调色淡底，不画竖条。
 //     悬停是中性的透明底（wash）。
 //   - 只有"待处理"用琥珀色并配文字，是界面上唯一醒目的东西；本轮完成用绿色提示可以看结果，
 //     工作中用中性色，最安静。状态靠形状区分而不只靠颜色：实心蜂巢格是正在进行，空心是停下来了。
@@ -267,21 +267,7 @@ func (a *app) band(c *ui.Context, fn func()) {
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(fn)
 }
 
-// selectable 给列表里的一行加上选中和悬停的底；选中时左边有强调色竖条。
-func selectable(c *ui.Context, row ui.Element, selected bool) ui.Element {
-	t := c.Theme()
-	selectedBg(c, row, selected)
-	if selected {
-		accent := t.Accent
-		row.Draw(func(pt *ui.Painter, r ui.Rect) {
-			h := min(r.H-12, 18)
-			pt.Fill(ui.Rect{X: r.X + 3, Y: r.Y + (r.H-h)/2, W: 3, H: h}, accent, 1.5)
-		})
-	}
-	return row
-}
-
-// selectedBg 只给一行加选中和悬停的底，不画竖条（侧栏的行）。
+// selectedBg 给列表里的一行加选中和悬停的底：选中是强调色淡底，不画竖条。
 func selectedBg(c *ui.Context, row ui.Element, selected bool) ui.Element {
 	p := colors(c.Theme())
 	bg := ui.Transparent
