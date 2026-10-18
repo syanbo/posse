@@ -42,6 +42,17 @@ func WithOp(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, opKey{}, opInfo{name, opSeq.Add(1)})
 }
 
+// OpResult 报出操作的结果：失败时 msg 是界面上显示的报错（不一定来自 git，比如"范围里有合并提交"），
+// 记在这个操作下面。成功时不报，命令都已经记过了。
+func OpResult(ctx context.Context, dir, msg string) {
+	op, _ := ctx.Value(opKey{}).(opInfo)
+	if Trace == nil || op.id == 0 || msg == "" {
+		return
+	}
+	now := time.Now()
+	Trace(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: now, Done: true, Err: msg})
+}
+
 func traceStart(ctx context.Context, dir string, args []string) *Run {
 	if Trace == nil {
 		return nil

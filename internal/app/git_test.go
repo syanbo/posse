@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -1522,6 +1523,10 @@ func TestGitConsole(t *testing.T) {
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
 	a.gitDo(v, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
 	until(t, tt, "failed", func() bool { return v.git.busy == "" && a.consoleErr })
+	// 检出不存在的修订，和不是 git 报出来的失败，也都记在各自的操作下面
+	a.gitDo(v, "检出", func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, "no-such-rev") })
+	a.gitDo(v, "合并提交", func(ctx context.Context, root string) error { return errors.New("范围里有合并提交") })
+	until(t, tt, "queued ops", func() bool { return v.git.busy == "" && len(v.git.queue) == 0 })
 	a.openLog(w, "", "")
 	until(t, tt, "console tab", func() bool { return tt.HasText("操作记录") && tt.HasText("提交日志") })
 	if _, ok := tt.Find("有失败的 git 命令"); !ok {
@@ -1532,7 +1537,8 @@ func TestGitConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	until(t, tt, "console", func() bool { return v.console && tt.HasText("git rebase --continue") })
-	for _, want := range []string{"加入 Git", "继续", "失败", "git add -A -- ':(literal)new.txt'"} {
+	until(t, tt, "all ops", func() bool { return tt.HasText("范围里有合并提交") })
+	for _, want := range []string{"加入 Git", "继续", "检出", "失败", "合并提交", "git add -A -- ':(literal)new.txt'"} {
 		if !tt.HasText(want) {
 			t.Fatalf("console lacks %q: %v", want, tt.Texts())
 		}

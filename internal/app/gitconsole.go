@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,6 +53,10 @@ func (o gitOpRecord) failed() bool {
 		}
 	}
 	return false
+}
+
+func (o gitOpRecord) canceled() bool {
+	return slices.ContainsFunc(o.runs, func(r gitx.Run) bool { return len(r.Args) == 0 && r.Err == "已取消" })
 }
 
 func (o gitOpRecord) running() bool {
@@ -156,6 +161,8 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 			switch {
 			case op.running():
 				ui.Text(c, "进行中…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			case op.canceled():
+				ui.Text(c, "已取消").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			case op.failed():
 				ui.Text(c, "失败").FontSize(11).TextColor(t.Danger).Shrink(0)
 			default:
@@ -163,7 +170,14 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 			}
 		})
 		for _, r := range op.runs {
-			gitRunRow(c, r)
+			if len(r.Args) > 0 {
+				gitRunRow(c, r)
+				continue
+			}
+			// 操作的结果：和某条命令的报错一样时不再写一遍
+			if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
+				ui.Text(c, r.Err).FontSize(11.5).LineHeight(1.4).TextColor(t.Danger).Padding(0, 0, 0, 64).Selectable()
+			}
 		}
 	})
 }

@@ -718,6 +718,12 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 	go func() {
 		err := op.fn(ctx, root)
 		canceled := ctx.Err() != nil
+		switch {
+		case canceled:
+			gitx.OpResult(ctx, root, "已取消")
+		case err != nil:
+			gitx.OpResult(ctx, root, err.Error())
+		}
 		cancel()
 		a.update(func() {
 			g.busy, g.cancel = "", nil

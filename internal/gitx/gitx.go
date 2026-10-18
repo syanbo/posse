@@ -19,13 +19,16 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
+	rec := traceStart(ctx, dir, args)
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(errb.String())
 		if msg == "" {
 			msg = err.Error()
 		}
+		traceEnd(rec, out.Bytes(), errb.Bytes(), msg)
 		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
 	}
+	traceEnd(rec, out.Bytes(), errb.Bytes(), "")
 	return strings.TrimSpace(out.String()), nil
 }
 

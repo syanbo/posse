@@ -59,4 +59,11 @@ func TestTrace(t *testing.T) {
 	if len(runs) != 4 || runs[0].Op != "提交" || runs[0].OpID == 0 || runs[3].OpID != runs[0].OpID {
 		t.Fatalf("op runs %+v", runs)
 	}
+	// 另一条执行路径（run）也记；操作的结果单独记一条，没有命令行
+	runs = nil
+	TopLevel(op, dir)
+	OpResult(op, dir, "范围里有合并提交")
+	if len(runs) != 3 || runs[1].Args[0] != "rev-parse" || len(runs[2].Args) != 0 || runs[2].Err != "范围里有合并提交" || runs[2].OpID != runs[0].OpID {
+		t.Fatalf("run() and op result %+v", runs)
+	}
 }
