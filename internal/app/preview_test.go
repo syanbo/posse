@@ -217,6 +217,17 @@ func previewRollback(t *testing.T, a *app) {
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
+func previewRollbackDetail(t *testing.T, a *app) {
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	a.openRollback(v)
+	e, _ := a.rollback.entry("main.go")
+	a.rollbackShow(e, true)
+	until(t, tt, "detail", func() bool { return a.rollback.detail.kind == docDiff && a.rollback.detail.diff.jumped })
+	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+}
+
 func previewBranches(t *testing.T, a *app) {
 	branchWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -472,6 +483,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewRollback(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-rollback-"+suffix+".png")
+
+		// 回滚对话框里点开文件：右边是 diff，可以逐处回滚
+		a = previewApp(t)
+		previewRollbackDetail(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-rollback-detail-"+suffix+".png")
 
 		// 分支弹窗：在终端标签上点分支名打开
 		a = previewApp(t)

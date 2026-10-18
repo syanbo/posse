@@ -1022,3 +1022,65 @@ func TestRevertHunkStaleDisk(t *testing.T) {
 		t.Fatalf("err %q", a.err)
 	}
 }
+
+// 回滚对话框里点文件名在右边看 diff：逐处回滚写回磁盘，列表跟着更新；勾选框不打开 diff；F7 跨文件。
+func TestRollbackDetail(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openRollback(v)
+	r := &a.rollback
+	tt.Frame()
+	// 文件栏里也有"勾选 README.md"，按对话框里这一行的位置点它的勾选框
+	row, ok := tt.Find("查看 README.md")
+	if !ok {
+		t.Fatal("no README row")
+	}
+	tt.ClickAt(row.X+4+20+6+7, row.Y+row.H/2)
+	tt.Frame()
+	if r.detail != nil || r.on["README.md"] {
+		t.Fatalf("checkbox should only toggle: detail %v on %v", r.detail != nil, r.on["README.md"])
+	}
+	if err := tt.Click("查看 main.go"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "detail", func() bool {
+		return r.detail != nil && r.detail.kind == docDiff && r.detail.diff.jumped && len(r.detail.diff.state.Hunks()) == 2
+	})
+	d := r.detail
+	tt.Key(0, ui.KeyF7)
+	tt.Frame()
+	if d.diff.hunk != 1 {
+		t.Fatalf("F7 in detail: hunk %d", d.diff.hunk)
+	}
+	// ⌥⌘Z 只回滚第二处（新加的 func log），第一处留着
+	tt.Key(ui.Cmd|ui.Alt, ui.KeyZ)
+	b, _ := os.ReadFile(filepath.Join(root, "main.go"))
+	if strings.Contains(string(b), "func log") || !strings.Contains(string(b), "log(cfg)") {
+		t.Fatalf("hunk revert: %q", b)
+	}
+	until(t, tt, "one hunk left", func() bool { return len(d.diff.state.Hunks()) == 1 && tt.HasText("第 1 / 1 处  +1 −0") })
+	if d.diff.hunk != 0 || !tt.HasText("回滚这一处") {
+		t.Fatalf("current hunk after revert: %d", d.diff.hunk)
+	}
+	if !r.open || r.detail != d {
+		t.Fatal("dialog should stay on the file")
+	}
+	// 到头了换到树里的下一个文件（当前已经是最后一处）
+	tt.Key(0, ui.KeyF7)
+	until(t, tt, "next file", func() bool { return r.detail.diff.rel == "notes.txt" && r.detail.kind == docDiff })
+	if err := tt.Click("收起 diff"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if r.detail != nil || !r.open {
+		t.Fatal("close detail")
+	}
+	// 回滚剩下勾着的 main.go：整个文件恢复
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "rolled back", func() bool { return v.git.busy == "" && v.git.changeCount() == 2 })
+}

@@ -577,6 +577,11 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 		return
 	}
 	df.state.Revert(i)
+	// 少了一处，当前位置收回到范围内，停在原来后面那一处上
+	if n := len(df.state.Hunks()); n > 0 {
+		df.hunk = min(df.hunk, n-1)
+		df.state.Current = df.hunk + 1
+	}
 	snap := df.state.New.Snapshot()
 	st, err := files.WriteFile(abs, func(w io.Writer) error { _, err := snap.WriteTo(w); return err })
 	if err != nil {
