@@ -517,7 +517,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					a.push = nil
 				}
 				ready := ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
-				force := pressable(textButton(c, "强制推送…")).Tooltip("--force-with-lease：远端有你没拉到的提交时会被拒绝，不会覆盖别人的提交")
+				force := pressable(textButton(c, "强制推送…")).Tooltip("--force-with-lease --force-if-includes：远端有你没合进来的提交时会被拒绝，不会覆盖别人的提交")
 				push := pressable(accentButton(c, "推送"))
 				if !ready {
 					force.Disabled(true)
@@ -527,7 +527,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					a.doPush(v, ps, false)
 				}
 				if ready && force.Clicked() {
-					a.confirm("强制推送 "+ps.plan.Branch+"？", "会用本地的历史替换远端的 "+ps.plan.Remote+"/"+ps.plan.RemoteBranch+"。远端有你还没拉到的提交时会被拒绝，不会覆盖别人的提交。", "强制推送", func() {
+					a.confirm("强制推送 "+ps.plan.Branch+"？", "会用本地的历史替换远端的 "+ps.plan.Remote+"/"+ps.plan.RemoteBranch+"。远端有你还没合进来的提交时会被拒绝，不会覆盖别人的提交。", "强制推送", func() {
 						a.update(func() { a.doPush(v, ps, true) })
 					})
 				}
@@ -552,7 +552,7 @@ func (a *app) doPush(v *filesView, ps *pushState, force bool) {
 		})
 		if gitx.Rejected(err) {
 			if force {
-				return fmt.Errorf("远端有你还没拉到的提交，强制推送被拒绝；先 Fetch 看看是谁推的")
+				return fmt.Errorf("远端有你还没合进来的提交，强制推送被拒绝；先更新分支看看是谁推的")
 			}
 			return fmt.Errorf("远端有你还没拉到的提交；先更新分支再推送，或者确认后强制推送")
 		}

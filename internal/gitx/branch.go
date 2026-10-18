@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
@@ -204,8 +205,10 @@ func Update(ctx context.Context, dir string, b Branch) error {
 		return ErrNoUpstream
 	}
 	if b.Current {
-		_, err := runRaw(ctx, dir, nil, nil, "pull", "--rebase", "--autostash")
-		return err
+		if _, err := runRaw(ctx, dir, nil, nil, "pull", "--rebase", "--autostash"); err != nil {
+			return err
+		}
+		return autostashConflict(ctx, dir)
 	}
 	remote, branch, ok := strings.Cut(b.Upstream, "/")
 	if !ok {
@@ -213,6 +216,22 @@ func Update(ctx context.Context, dir string, b Branch) error {
 	}
 	_, err := runRaw(ctx, dir, nil, nil, "fetch", remote, branch+":refs/heads/"+b.Name)
 	return err
+}
+
+// ErrStashConflict 表示操作本身成功了，但取回临时搁置的本地改动时冲突：git 照样返回成功，
+// 冲突标记已经写进文件，原来的改动留在搁置列表里。
+var ErrStashConflict = errors.New("已经完成，但取回本地改动时有冲突：冲突的文件已标出来，原来的改动还留在搁置里，解决完可以删掉那条搁置")
+
+// autostashConflict 在带 --autostash 的操作成功后检查有没有冲突文件。
+func autostashConflict(ctx context.Context, dir string) error {
+	out, err := runRaw(ctx, dir, nil, nil, "diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(out)) > 0 {
+		return ErrStashConflict
+	}
+	return nil
 }
 
 // Rebase 把当前分支 rebase 到 onto 上。

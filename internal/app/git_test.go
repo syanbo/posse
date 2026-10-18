@@ -955,3 +955,70 @@ func TestRollbackTree(t *testing.T) {
 		t.Fatalf("folded:\n%s", got)
 	}
 }
+
+// 有操作在执行（自动 Fetch）时，用户的操作排在后面，不被丢掉。
+func TestGitOpQueue(t *testing.T) {
+	a := previewApp(t)
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	until(t, tt, "idle", func() bool { return v.git.busy == "" })
+	v.git.busy = "Fetch"
+	var ran []string
+	for _, what := range []string{"检出", "提交"} {
+		a.gitDo(v, what, func(ctx context.Context, root string) error {
+			a.update(func() { ran = append(ran, what) })
+			return nil
+		})
+	}
+	if len(v.git.queue) != 2 || !v.git.pending("提交") || v.git.busyText() != "Fetch…，接着检出等 2 个" {
+		t.Fatalf("queue %d %q", len(v.git.queue), v.git.busyText())
+	}
+	v.git.busy = ""
+	a.gitNext(v)
+	until(t, tt, "queued ops ran", func() bool { return len(ran) == 2 && v.git.busy == "" })
+	if ran[0] != "检出" || ran[1] != "提交" {
+		t.Fatalf("order %v", ran)
+	}
+}
+
+// 终端里提交之后 HEAD 变了，开着的 diff 跟着重读，不再显示已经提交的改动。
+func TestDiffFollowsHead(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "main.go"}), nil, true)
+	d := v.cur
+	until(t, tt, "diff", func() bool { return d.kind == docDiff && len(d.diff.state.Hunks()) == 2 })
+	gitRun(t, root, "commit", "-q", "-am", "agent commit")
+	until(t, tt, "diff reloaded", func() bool {
+		a.refreshGit(v)
+		return d.kind == docDiff && len(d.diff.state.Hunks()) == 0
+	})
+}
+
+// diff 读进来之后文件又被改了：回滚一处不能拿旧内容覆盖新写的。
+func TestRevertHunkStaleDisk(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "README.md"}), nil, true)
+	d := v.cur
+	until(t, tt, "diff", func() bool { return d.kind == docDiff && len(d.diff.state.Hunks()) == 1 })
+	path := filepath.Join(root, "README.md")
+	b, _ := os.ReadFile(path)
+	agent := string(b) + "agent 刚写的\n"
+	os.WriteFile(path, []byte(agent), 0o644)
+	a.revertHunk(v, d, 0)
+	if got, _ := os.ReadFile(path); string(got) != agent {
+		t.Fatalf("revert overwrote newer content: %q", got)
+	}
+	if !strings.Contains(a.err, "刚被改过") {
+		t.Fatalf("err %q", a.err)
+	}
+}

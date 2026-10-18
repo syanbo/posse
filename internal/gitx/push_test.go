@@ -3,6 +3,7 @@ package gitx
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -46,9 +47,19 @@ func TestPush(t *testing.T) {
 	if err := Push(ctx, dir, plan, false, false); !Rejected(err) {
 		t.Fatalf("expected rejection, got %v", err)
 	}
+	// 自动 fetch 把 origin/feat 刷新到别人的提交：只拉到、没合进来，强制推送仍被拒（--force-if-includes）
 	gitIn(t, dir, "fetch", "-q")
-	// 拉到之后 lease 认得远端的位置，强制推送成功
+	if err := Push(ctx, dir, plan, true, false); !Rejected(err) {
+		t.Fatalf("force after fetch without integrating should be rejected, got %v", err)
+	}
+	if got := gitIn(t, other, "ls-remote", "origin", "refs/heads/feat"); !strings.HasPrefix(got, gitIn(t, other, "rev-parse", "HEAD")) {
+		t.Fatalf("other's commit was overwritten: %s", got)
+	}
+	// 把别人的提交合进来之后再改写，强制推送成功
+	gitIn(t, dir, "rebase", "-q", "origin/feat")
+	gitIn(t, dir, "commit", "-q", "--amend", "-m", "feat amended again")
+	plan, _ = PushPreview(ctx, dir, "feat")
 	if err := Push(ctx, dir, plan, true, false); err != nil {
-		t.Fatalf("force with lease after fetch: %v", err)
+		t.Fatalf("force after integrating: %v", err)
 	}
 }

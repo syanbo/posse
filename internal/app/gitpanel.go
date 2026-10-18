@@ -115,7 +115,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		trackBadge(c, st.Ahead, st.Behind, true)
 		ui.Spacer(c)
 		if g.busy != "" {
-			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		}
 		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 28, 16)).Clicked() {
 			a.openLog(w, "", "")
@@ -418,7 +418,8 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 			}
 			ui.Spacer(c)
 			btn := pressable(accentButton(c, label)).Tooltip(tip)
-			if g.busy != "" || picked == 0 && !g.amend && whole == "" {
+			// 自动 Fetch 期间也能点，提交排在它后面
+			if g.busy != "" && g.busy != "Fetch" || g.pending("提交") || picked == 0 && !g.amend && whole == "" {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.commit(v)

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,6 +47,7 @@ type gitState struct {
 	message  string
 	amend    bool
 	busy     string // 正在执行的操作，期间按钮不可点
+	queue    []gitOp
 	err      string
 	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
 	branches branchInfo
@@ -185,7 +187,12 @@ func (a *app) gitChanged(v *filesView, old *gitx.Status) {
 	for _, d := range v.docs {
 		switch {
 		case d.diff != nil && d.kind != docLoading:
-			a.reloadDiff(v, d)
+			// 终端里提交、reset 之后 HEAD 变了：工作区文件没动，旧的一边却换了
+			if headMoved && !d.diff.fixedRevs() {
+				a.loadDiff(v, d)
+			} else {
+				a.reloadDiff(v, d)
+			}
 		case d.kind == docText && (headMoved || d.headFor != v.git.status.Commit):
 			a.loadHead(v, d)
 		}
@@ -562,9 +569,15 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 	if !df.worktree() {
 		return
 	}
+	abs := v.git.absPath(df.rel)
+	// 读进来之后文件又被改过（agent 在写）：拿旧内容回滚会把新写的冲掉，先重读
+	if !files.StatFile(abs).Same(df.stamp) {
+		a.err = "文件刚被改过，已重新读取，请再看一眼要回滚的改动"
+		a.loadDiff(v, d)
+		return
+	}
 	df.state.Revert(i)
 	snap := df.state.New.Snapshot()
-	abs := v.git.absPath(df.rel)
 	st, err := files.WriteFile(abs, func(w io.Writer) error { _, err := snap.WriteTo(w); return err })
 	if err != nil {
 		a.err = "回滚失败：" + err.Error()
@@ -582,22 +595,57 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 	a.gitDoThen(v, what, fn, nil)
 }
 
-// gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。
+// gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。已经有操作在执行（比如自动 Fetch）时排在后面，
+// 不丢掉用户的点击。
 func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
 	g := &v.git
-	if g.busy != "" || g.repo == "" {
+	if g.repo == "" {
 		return
 	}
-	g.busy = what
+	op := gitOp{what: what, fn: fn, done: done}
+	if g.busy != "" {
+		g.queue = append(g.queue, op)
+		return
+	}
+	a.gitRun(v, op)
+}
+
+// gitOp 是一个排队等着执行的 git 操作。
+type gitOp struct {
+	what string
+	fn   func(ctx context.Context, root string) error
+	done func()
+}
+
+// pending 报告 what 正在执行或排着队。
+func (g *gitState) pending(what string) bool {
+	return g.busy == what || slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.what == what })
+}
+
+// busyText 是忙碌时显示的文字：正在执行的操作，后面排着的跟在后面。
+func (g *gitState) busyText() string {
+	s := g.busy + "…"
+	if n := len(g.queue); n > 0 {
+		s += "，接着" + g.queue[0].what
+		if n > 1 {
+			s += fmt.Sprintf("等 %d 个", n)
+		}
+	}
+	return s
+}
+
+func (a *app) gitRun(v *filesView, op gitOp) {
+	g := &v.git
+	g.busy = op.what
 	root := g.repo
 	go func() {
-		err := fn(context.Background(), root)
+		err := op.fn(context.Background(), root)
 		a.update(func() {
 			g.busy = ""
 			if err != nil {
-				a.err = what + "失败：" + err.Error()
-			} else if done != nil {
-				done()
+				a.err = op.what + "失败：" + err.Error()
+			} else if op.done != nil {
+				op.done()
 			}
 			a.refreshGit(v)
 			// Fetch、更新、推送之后传入传出马上重算，分支弹窗、比较、diff、日志也重读
@@ -606,8 +654,20 @@ func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, 
 			} else if g.branches.list != nil {
 				a.loadBranches(v)
 			}
+			a.gitNext(v)
 		})
 	}()
+}
+
+// gitNext 在一个操作结束后执行排队的下一个。
+func (a *app) gitNext(v *filesView) {
+	g := &v.git
+	if g.busy != "" || len(g.queue) == 0 {
+		return
+	}
+	op := g.queue[0]
+	g.queue = g.queue[1:]
+	a.gitRun(v, op)
 }
 
 // askRollback 回滚文件前确认：已跟踪的恢复成 HEAD 的样子，新文件会被删除。then 非空时回滚成功后在界面线程上调用。

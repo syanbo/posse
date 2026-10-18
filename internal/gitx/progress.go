@@ -41,9 +41,9 @@ func TakeSide(ctx context.Context, dir, path string, ours bool) error {
 	if ours {
 		side = "--ours"
 	}
-	if _, err := runRaw(ctx, dir, nil, nil, "checkout", side, "--", path); err != nil {
+	if _, err := runRaw(ctx, dir, nil, nil, "checkout", side, "--", literal(path)[0]); err != nil {
 		return err
 	}
-	_, err := runRaw(ctx, dir, nil, nil, "add", "--", path)
+	_, err := runRaw(ctx, dir, nil, nil, "add", "--", literal(path)[0])
 	return err
 }

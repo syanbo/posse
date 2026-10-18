@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newRepo 建一个有一次提交的仓库：a.txt、src/b.go、old.txt。
@@ -237,5 +238,51 @@ func TestCommitPaths(t *testing.T) {
 	// 相对 HEAD 的行数：a.txt 改了一行
 	if s, _ := NumStatHEAD(ctx, dir); s["a.txt"].Added != 1 || s["a.txt"].Deleted != 3 {
 		t.Fatalf("numstat HEAD %+v", s["a.txt"])
+	}
+}
+
+// 路径里的 [ ] * 按字面处理：回滚、提交 app/[id]/page.tsx 不能连带 app/i/page.tsx。
+func TestLiteralPathspecs(t *testing.T) {
+	ctx := context.Background()
+	dir := newRepo(t)
+	for _, p := range []string{"app/[id]/page.tsx", "app/i/page.tsx", "app/d/page.tsx", "x*.txt", "xy.txt"} {
+		write(t, filepath.Join(dir, p), "base\n")
+	}
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-q", "-m", "routes")
+	for _, p := range []string{"app/[id]/page.tsx", "app/i/page.tsx", "app/d/page.tsx", "x*.txt", "xy.txt"} {
+		write(t, filepath.Join(dir, p), "changed\n")
+	}
+	if err := Rollback(ctx, dir, "app/[id]/page.tsx"); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]string{"app/[id]/page.tsx": "base\n", "app/i/page.tsx": "changed\n", "app/d/page.tsx": "changed\n"} {
+		if b, _ := os.ReadFile(filepath.Join(dir, p)); string(b) != want {
+			t.Errorf("%s = %q, want %q", p, b, want)
+		}
+	}
+	if err := CommitPaths(ctx, dir, "only star", []string{"x*.txt"}, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, dir, "show", "--name-only", "--format=", "HEAD"); got != "x*.txt" {
+		t.Errorf("committed %q", got)
+	}
+}
+
+// 轮询读状态不重写 index，不和终端里的 git 命令抢 index.lock。
+func TestReadStatusNoIndexWrite(t *testing.T) {
+	dir := newRepo(t)
+	index := filepath.Join(dir, ".git", "index")
+	// 让 index 里的 stat 信息过时，git status 默认会顺手刷新写回
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(dir, "a.txt"), old, old)
+	before, _ := os.Stat(index)
+	time.Sleep(10 * time.Millisecond)
+	if _, err := ReadStatus(context.Background(), dir); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.Stat(index)
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatal("ReadStatus rewrote .git/index")
 	}
 }

@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -197,5 +198,24 @@ func TestAheadBehind(t *testing.T) {
 	gitIn(t, dir, "switch", "-q", "-c", "local-only")
 	if _, _, ok := AheadBehind(ctx, dir); ok {
 		t.Fatal("branch without upstream should report !ok")
+	}
+}
+
+// 更新当前分支时取回本地改动冲突：git 返回成功，Update 要报出来。
+func TestUpdateAutostashConflict(t *testing.T) {
+	ctx := context.Background()
+	dir, bare := withRemote(t)
+	other := clone(t, bare)
+	write(t, filepath.Join(other, "a.txt"), "theirs\n")
+	gitIn(t, other, "commit", "-q", "-am", "theirs")
+	gitIn(t, other, "push", "-q", "origin", "main")
+	write(t, filepath.Join(dir, "a.txt"), "mine\n")
+	list, _ := Branches(ctx, dir)
+	b, _ := find(list, "main", false)
+	if err := Update(ctx, dir, b); !errors.Is(err, ErrStashConflict) {
+		t.Fatalf("want ErrStashConflict, got %v", err)
+	}
+	if got := gitIn(t, dir, "stash", "list"); got == "" {
+		t.Fatal("local changes should stay in the stash")
 	}
 }

@@ -41,7 +41,7 @@ func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]Commi
 	}
 	args = append(args, "--")
 	if f.Path != "" {
-		args = append(args, f.Path)
+		args = append(args, literal(f.Path)...)
 	}
 	out, err := runRaw(ctx, dir, nil, nil, args...)
 	if err != nil {
@@ -150,15 +150,20 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 	if err := os.WriteFile(edit, []byte("#!/bin/sh\ncat '"+msgFile+"' > \"$1\"\n"), 0o755); err != nil {
 		return err
 	}
-	args := []string{"rebase", "-i", "--autostash"}
+	// 不受用户配置影响：commit.cleanup 默认会删掉 # 开头的行（#123 这类引用），
+	// abbreviateCommands 让待办写成 "p <哈希>"、脚本认不出，autoSquash 会顺手并掉范围里无关的 fixup! 提交
+	args := []string{"-c", "commit.cleanup=whitespace", "-c", "rebase.abbreviateCommands=false",
+		"rebase", "-i", "--autostash", "--no-autosquash"}
 	if base == "" {
 		args = append(args, "--root")
 	} else {
 		args = append(args, base)
 	}
 	env := []string{"GIT_SEQUENCE_EDITOR=" + seq, "GIT_EDITOR=" + edit}
-	_, err = runRaw(ctx, dir, nil, env, args...)
-	return err
+	if _, err := runRaw(ctx, dir, nil, env, args...); err != nil {
+		return err
+	}
+	return autostashConflict(ctx, dir)
 }
 
 // Reword 改提交信息；是 HEAD 时直接 amend。

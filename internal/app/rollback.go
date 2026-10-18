@@ -131,7 +131,7 @@ func (r *rollbackDlg) setPicked(files []int, on bool) {
 
 func (a *app) openRollback(v *filesView) {
 	g := &v.git
-	if g.status == nil || g.busy != "" {
+	if g.status == nil {
 		return
 	}
 	r := rollbackDlg{open: true, v: v, on: map[string]bool{}, folded: map[string]bool{}}

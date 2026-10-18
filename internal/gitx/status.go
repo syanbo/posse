@@ -22,7 +22,8 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C"), env...)
+	// 不拿可选的锁：每 1.5 秒的 status 会顺手重写 index，和终端里 agent 的 git 命令抢 index.lock
+	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0"), env...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
@@ -227,9 +228,9 @@ func parseNumStat(out []byte) map[string]LineStats {
 // DiffText 是工作区相对 HEAD 的统一 diff。rel 相对仓库根。没有提交时退回工作区 diff。
 // 未跟踪文件用 --no-index 对空文件比较。超过 200KB 截断，truncated 为真。
 func DiffText(ctx context.Context, dir, rel string) (text string, truncated bool, err error) {
-	out, err := diffStdout(ctx, dir, "diff", "--no-ext-diff", "HEAD", "--", rel)
+	out, err := diffStdout(ctx, dir, "diff", "--no-ext-diff", "HEAD", "--", literal(rel)[0])
 	if err != nil {
-		out, err = diffStdout(ctx, dir, "diff", "--no-ext-diff", "--", rel)
+		out, err = diffStdout(ctx, dir, "diff", "--no-ext-diff", "--", literal(rel)[0])
 	}
 	if err == nil && len(out) == 0 {
 		if alt, altErr := diffStdout(ctx, dir, "diff", "--no-ext-diff", "--no-index", "--", "/dev/null", rel); altErr == nil && len(alt) > 0 {
@@ -270,7 +271,17 @@ func Show(ctx context.Context, dir, rev, path string) ([]byte, error) {
 }
 
 func pathArgs(cmd []string, paths []string) []string {
-	return append(append(cmd, "--"), paths...)
+	return append(append(cmd, "--"), literal(paths...)...)
+}
+
+// literal 让 git 按字面认路径：app/[id]/page.tsx 当通配符会连带匹配 app/i/page.tsx。
+// 不用 GIT_LITERAL_PATHSPECS：stash push -u 内部要用 pathspec 魔法，设了就清不掉未跟踪文件。
+func literal(paths ...string) []string {
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = ":(literal)" + p
+	}
+	return out
 }
 
 // Stage 把文件加入暂存区（含未跟踪文件和删除）。

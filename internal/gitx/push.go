@@ -56,12 +56,13 @@ func defaultRemote(ctx context.Context, dir string) (string, error) {
 	return names[0], nil
 }
 
-// Push 按计划推送；force 时用 --force-with-lease：远端有你没拉到的提交时会被拒绝，不会覆盖别人的提交。
+// Push 按计划推送；force 时用 --force-with-lease 加 --force-if-includes：远端有你没合进来的提交时会被拒绝，
+// 不会覆盖别人的提交。只用 lease 不够：自动 fetch 把远端引用刷新到别人的提交后，lease 照样放行。
 // tags 为真时一起推送指向这些提交的附注标签。
 func Push(ctx context.Context, dir string, plan PushPlan, force, tags bool) error {
 	args := []string{"push"}
 	if force {
-		args = append(args, "--force-with-lease")
+		args = append(args, "--force-with-lease", "--force-if-includes")
 	}
 	if plan.NewBranch {
 		args = append(args, "--set-upstream")

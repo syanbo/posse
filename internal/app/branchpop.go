@@ -131,11 +131,12 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 	go func() {
 		gitx.Fetch(context.Background(), dir)
 		a.update(func() {
-			if v != nil && v.git.busy == "Fetch" {
-				v.git.busy = ""
-			}
 			tr.poll = panelPoll{}
 			a.refsChanged(project)
+			if v != nil && v.git.busy == "Fetch" {
+				v.git.busy = ""
+				a.gitNext(v)
+			}
 		})
 	}()
 }
@@ -242,8 +243,8 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				fetch.Opacity(0.4)
 			}
 		})
-		if g.busy != "" && g.busy != "Fetch" {
-			ui.Text(c, g.busy+"…").FontSize(11).TextColor(t.TextMuted).Padding(0, 10, 4, 10)
+		if g.busy != "" && (g.busy != "Fetch" || len(g.queue) > 0) {
+			ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).Padding(0, 10, 4, 10)
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
 		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {

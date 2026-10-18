@@ -143,3 +143,23 @@ func TestCherryPickRevertResetBlame(t *testing.T) {
 		t.Fatalf("uncommitted line %+v", lines[1])
 	}
 }
+
+// 改写不受用户配置影响：# 开头的行保留，缩写待办和 autoSquash 不让改写失效或误伤别的提交。
+func TestRewriteIgnoresUserConfig(t *testing.T) {
+	ctx := context.Background()
+	dir, h := history(t)
+	gitIn(t, dir, "config", "rebase.abbreviateCommands", "true")
+	gitIn(t, dir, "config", "rebase.autoSquash", "true")
+	write(t, filepath.Join(dir, "c.txt"), "fix\n")
+	gitIn(t, dir, "commit", "-q", "-am", "fixup! c2: 加 c")
+	msg := "#123 修 a\n\n# 不是注释\n正文"
+	if err := Reword(ctx, dir, h[0], msg); err != nil {
+		t.Fatal(err)
+	}
+	if got := gitIn(t, dir, "log", "--format=%B", "-n", "1", "HEAD~3"); got != msg {
+		t.Fatalf("message = %q", got)
+	}
+	if s := subjects(t, dir); s != "fixup! c2: 加 c | c3: 再改 a | c2: 加 c | #123 修 a | base" {
+		t.Fatalf("history: %s", s)
+	}
+}
