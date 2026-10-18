@@ -8,7 +8,11 @@ import 'socket.dart';
 
 const hiveClientName = 'hive-flutter';
 const hiveClientVersion = 1;
-const hiveCapabilities = ['hive.permission.v1', 'hive.git.v1'];
+const hiveCapabilities = [
+  'hive.permission.v1',
+  'hive.git.v1',
+  'hive.history.v1',
+];
 
 class RpcException implements Exception {
   RpcException(this.code, this.message);

@@ -1,3 +1,5 @@
+import '../history/history.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -375,6 +377,17 @@ class WorkspaceScreen extends StatelessWidget {
         ),
         actions: [
           // 刷新靠下拉，切换和忘掉电脑在标题旁的电脑胶囊里；这里只留扫码添加电脑
+          IconButton(
+            tooltip: '历史',
+            onPressed: model.rpc == null
+                ? null
+                : () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => HistoryScreen(model: model),
+                    ),
+                  ),
+            icon: Icon(Icons.history_rounded, size: 22, color: c.text),
+          ),
           IconButton(
             tooltip: '新建会话',
             onPressed: model.rpc == null
