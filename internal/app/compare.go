@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"time"
 
@@ -25,16 +24,18 @@ type compareDoc struct {
 	changes    []gitx.FileChange
 	commit     *commitView // 选中的提交
 	list       ui.ListState
-	listOther  ui.ListState // 只在 other 里的提交
-	listCur    ui.ListState // 只在 cur 里的提交
+	folded     map[string]bool // 文件树里收起的目录
+	listOther  ui.ListState    // 只在 other 里的提交
+	listCur    ui.ListState    // 只在 cur 里的提交
 }
 
 // commitView 是选中的一个提交和它改的文件。
 type commitView struct {
-	info  gitx.CommitInfo
-	files []gitx.FileChange
-	err   string
-	list  ui.ListState
+	info   gitx.CommitInfo
+	files  []gitx.FileChange
+	err    string
+	list   ui.ListState
+	folded map[string]bool // 文件树里收起的目录
 }
 
 func compareKey(other, cur string, files bool) string {
@@ -170,7 +171,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			ui.Text(c, "没有差别").FontSize(12).TextColor(t.TextMuted).Padding(8, 16)
 			return
 		}
-		a.fileChangeList(c, w, v, &cd.list, cd.changes, specs)
+		a.fileChangeList(c, w, v, &cd.list, &cd.folded, cd.changes, specs)
 		return
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
@@ -325,20 +326,53 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	case cv.files == nil:
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
 	default:
-		a.fileChangeList(c, w, v, &cv.list, cv.files, commitSpecs(ci, cv.files))
+		a.fileChangeList(c, w, v, &cv.list, &cv.folded, cv.files, commitSpecs(ci, cv.files))
 	}
 }
 
-// fileChangeList 是一组改了的文件，点开对应的 diff，F7 在这组里跳。
-func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui.ListState, files []gitx.FileChange, specs []diffSpec) {
+// fileChangeList 是一组改了的文件，照 WebStorm 按目录排成树，点文件打开对应的 diff，F7 在这组里跳。
+// specs 为空时只列文件、不能点（Push 对话框里 diff 会被对话框挡住）。
+func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, specs []diffSpec) {
 	t := c.Theme()
 	p := colors(t)
-	list.Key = func(i int) any { return files[i].Path }
-	ui.List(c, list, len(files), func(i int) {
-		f := files[i]
-		key := diffKey(v.git.absPath(f.Path), specs[i])
-		row := ui.Row(c.Key(f.Path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(f.Path)
-		selectedBg(c, row, v.cur != nil && v.cur.path == key)
+	if *folded == nil {
+		*folded = map[string]bool{}
+	}
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.Path
+	}
+	rows := changeTree(paths, *folded)
+	list.Key = func(i int) any { return rows[i].path }
+	ui.List(c, list, len(rows), func(i int) {
+		r := rows[i]
+		row := ui.Row(c.Key(r.path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*18).Gap(6).Radius(6).AlignItems(ui.Center)
+		if r.dir {
+			row.Role(ui.RoleButton).Label(r.path).Cursor(ui.CursorPointer)
+			row.Children(func() {
+				// 整行可点，箭头只是指示，不另接点击
+				turn := float32(90)
+				if (*folded)[r.path] {
+					turn = 0
+				}
+				ui.Box(c).Size(20, 20).Center().Shrink(0).Children(func() {
+					chev := ui.Icon(c, iconChevron).FontSize(12).TextColor(t.TextMuted)
+					chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
+				})
+				ui.Icon(c, iconFolder).FontSize(15).TextColor(t.Accent).Shrink(0)
+				ui.Text(c, r.name).FontSize(12.5).SingleLine().Shrink(1).Tooltip(r.path)
+				ui.Text(c, fmt.Sprint(len(r.files))).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			})
+			if row.Clicked() {
+				(*folded)[r.path] = !(*folded)[r.path]
+			}
+			return
+		}
+		f := files[r.entry]
+		if specs != nil {
+			row.Role(ui.RoleButton).Label(f.Path)
+			selectedBg(c, row, v.cur != nil && v.cur.path == diffKey(v.git.absPath(f.Path), specs[r.entry]))
+		}
 		color := t.Accent
 		switch f.Status {
 		case 'A':
@@ -347,17 +381,16 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 			color = t.TextMuted
 		}
 		row.Children(func() {
+			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
+			ui.Box(c).Width(20).Shrink(0)
 			ui.Text(c, string(f.Status)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
-			name := ui.Text(c, filepath.Base(f.Path)).FontSize(12.5).SingleLine().Shrink(0)
+			name := ui.Text(c, r.name).FontSize(12.5).SingleLine().Shrink(1).Tooltip(f.Path)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
 			}
-			if dir := filepath.Dir(f.Path); dir != "." {
-				ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
-			}
 		})
-		if row.Clicked() {
-			a.openDiff(w, specs[i], specs, true)
+		if specs != nil && row.Clicked() {
+			a.openDiff(w, specs[r.entry], specs, true)
 		}
 	}).Grow(1).Padding(0, 0, 8, 0)
 }
@@ -467,16 +500,14 @@ func (a *app) pushDialog(c *ui.Context) {
 						ui.Text(c, cv.info.Subject).FontSize(13).FontWeight(500)
 						ui.Text(c, cv.info.Hash[:10]+"  "+cv.info.Author).FontSize(11).Font(monoFont).TextColor(t.TextMuted)
 					})
-					ui.Scroll(c).Grow(1).Children(func() {
-						ui.Column(c).Padding(0, 14).Children(func() {
-							for _, f := range cv.files {
-								ui.Row(c).Height(24).Gap(6).AlignItems(ui.Center).Children(func() {
-									ui.Text(c, string(f.Status)).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Width(10)
-									ui.Text(c, f.Path).FontSize(12).SingleLine().Shrink(1)
-								})
-							}
-						})
-					})
+					switch {
+					case cv.err != "":
+						ui.Text(c, cv.err).FontSize(12).TextColor(t.Danger).Padding(6, 14)
+					case cv.files == nil:
+						ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
+					default:
+						a.fileChangeList(c, w, v, &cv.list, &cv.folded, cv.files, nil)
+					}
 				})
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

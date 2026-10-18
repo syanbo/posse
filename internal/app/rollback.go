@@ -23,46 +23,54 @@ type rollbackDlg struct {
 	on      map[string]bool
 	delNew  bool
 	list    ui.ListState
-	folded  map[string]bool // 收起的目录，按 rollbackRow.path
+	folded  map[string]bool // 收起的目录，按 treeRow.path
 }
 
-// rollbackRow 是回滚对话框文件树的一行：目录行的 files 是它下面所有文件在 entries 里的下标。
-type rollbackRow struct {
+// treeRow 是改动文件树的一行：目录行的 files 是它下面所有文件在 paths 里的下标。
+type treeRow struct {
 	dir   bool
-	path  string // 目录是相对仓库根目录的路径，文件是 Entry.Path
+	path  string // 目录是相对仓库根目录的路径，文件是它自己的路径
 	name  string // 只有一个子目录、没有文件的中间层并进来，如 internal/app
 	depth int
 	entry int
 	files []int
 }
 
-type rollbackNode struct {
-	dirs  map[string]*rollbackNode
+type treeNode struct {
+	dirs  map[string]*treeNode
 	files []int
 }
 
-// rollbackTree 照 WebStorm 的改动树按目录排：目录在前、文件在后，各按名字排；
-// 只有一个子目录、没有文件的目录和子目录并成一行。收起的目录不列出下面的行。
-func rollbackTree(entries []gitx.Entry, folded map[string]bool) []rollbackRow {
-	root := &rollbackNode{}
+func rollbackTree(entries []gitx.Entry, folded map[string]bool) []treeRow {
+	paths := make([]string, len(entries))
 	for i, e := range entries {
+		paths[i] = e.Path
+	}
+	return changeTree(paths, folded)
+}
+
+// changeTree 照 WebStorm 的改动树按目录排：目录在前、文件在后，各按名字排；
+// 只有一个子目录、没有文件的目录和子目录并成一行。收起的目录不列出下面的行。
+func changeTree(paths []string, folded map[string]bool) []treeRow {
+	root := &treeNode{}
+	for i, p := range paths {
 		n := root
-		if dir := filepath.Dir(e.Path); dir != "." {
+		if dir := filepath.Dir(p); dir != "." {
 			for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
 				if n.dirs == nil {
-					n.dirs = map[string]*rollbackNode{}
+					n.dirs = map[string]*treeNode{}
 				}
 				if n.dirs[part] == nil {
-					n.dirs[part] = &rollbackNode{}
+					n.dirs[part] = &treeNode{}
 				}
 				n = n.dirs[part]
 			}
 		}
 		n.files = append(n.files, i)
 	}
-	var rows []rollbackRow
-	var walk func(n *rollbackNode, prefix string, depth int)
-	walk = func(n *rollbackNode, prefix string, depth int) {
+	var rows []treeRow
+	var walk func(n *treeNode, prefix string, depth int)
+	walk = func(n *treeNode, prefix string, depth int) {
 		for _, name := range slices.Sorted(maps.Keys(n.dirs)) {
 			sub, label := n.dirs[name], name
 			for len(sub.files) == 0 && len(sub.dirs) == 1 {
@@ -74,7 +82,7 @@ func rollbackTree(entries []gitx.Entry, folded map[string]bool) []rollbackRow {
 			if prefix != "" {
 				path = prefix + "/" + label
 			}
-			row := rollbackRow{dir: true, path: path, name: label, depth: depth, entry: -1}
+			row := treeRow{dir: true, path: path, name: label, depth: depth, entry: -1}
 			collectFiles(sub, &row.files)
 			rows = append(rows, row)
 			if !folded[path] {
@@ -82,16 +90,16 @@ func rollbackTree(entries []gitx.Entry, folded map[string]bool) []rollbackRow {
 			}
 		}
 		files := slices.Clone(n.files)
-		slices.SortFunc(files, func(x, y int) int { return strings.Compare(entries[x].Path, entries[y].Path) })
+		slices.SortFunc(files, func(x, y int) int { return strings.Compare(paths[x], paths[y]) })
 		for _, i := range files {
-			rows = append(rows, rollbackRow{path: entries[i].Path, name: filepath.Base(entries[i].Path), depth: depth, entry: i})
+			rows = append(rows, treeRow{path: paths[i], name: filepath.Base(paths[i]), depth: depth, entry: i})
 		}
 	}
 	walk(root, "", 0)
 	return rows
 }
 
-func collectFiles(n *rollbackNode, out *[]int) {
+func collectFiles(n *treeNode, out *[]int) {
 	*out = append(*out, n.files...)
 	for _, d := range n.dirs {
 		collectFiles(d, out)
@@ -250,7 +258,7 @@ func (a *app) rollbackDialog(c *ui.Context) {
 
 // rollbackRowView 画文件树的一行。尺寸照文件栏的文件树（行高 24 起、每层缩进 18）；
 // 文件没有展开箭头，留出同样的宽度，勾选框和上一层目录名对齐。
-func (a *app) rollbackRowView(c *ui.Context, g *gitState, row rollbackRow) {
+func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	t := c.Theme()
 	p := colors(t)
 	r := &a.rollback
