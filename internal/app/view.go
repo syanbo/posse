@@ -1007,11 +1007,13 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 	})
 }
 
-// 等待任务的波形照 Orca 后台任务的 Activity 图标；一段亮的像心电图一样从左描到右，一圈 pulseCycle，
-// 分 pulseSteps 步重绘（和星号一样只重绘不重建界面，步数少一点省 CPU）。
+// 等待任务的波形照 Orca 后台任务的 Activity 图标：一段亮的像心电图一样从左边进、右边出（pulseSweep），
+// 两头加减速，之后停 pulseRest 再来一次。描的时候按 pulseFrame 重绘（只重绘不重建界面），停的时候不重绘，省 CPU。
 const (
-	pulseCycle = 1200 * time.Millisecond
-	pulseSteps = 12
+	pulseSweep = 1100 * time.Millisecond
+	pulseRest  = 500 * time.Millisecond
+	pulseFrame = time.Second / 40
+	pulseLen   = 0.4 // 亮段占整条波形的比例
 )
 
 // waitingPulse 画等待任务的波形；still 时（减少动态效果）整条画实，不动。
@@ -1037,14 +1039,24 @@ func waitingPulse(c *ui.Context, size float32, color ui.Color, still bool) ui.El
 			p.StrokePath(wave(), width, color)
 			return
 		}
-		step := pulseCycle / pulseSteps
-		now := time.Duration(p.Now().UnixNano())
-		p.After(step - now%step)
-		head := float32(now%pulseCycle/step+1) / pulseSteps
 		p.StrokePath(wave(), width, color.Alpha(0.3))
-		p.StrokePath(wave().Trim(max(0, head-0.45), head), width, color)
+		// 按同一个时钟算，几个等待中的图标一起动
+		now := time.Duration(p.Now().UnixNano())
+		at := now % (pulseSweep + pulseRest)
+		if at >= pulseSweep {
+			p.After(pulseSweep + pulseRest - at)
+			return
+		}
+		p.After(min(pulseFrame-now%pulseFrame, pulseSweep-at))
+		// 亮段的头从 0 走到 1+pulseLen，尾巴跟着走出右端
+		x := float32(at) / float32(pulseSweep)
+		head := smoothstep(x) * (1 + pulseLen)
+		p.StrokePath(wave().Trim(max(0, head-pulseLen), min(1, head)), width, color)
 	})
 }
+
+// smoothstep 是两头慢中间快的缓动。
+func smoothstep(x float32) float32 { return x * x * (3 - 2*x) }
 
 func statusText(status string) string {
 	switch status {
