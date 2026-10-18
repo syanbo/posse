@@ -5,24 +5,36 @@ import (
 	"image"
 	"image/color"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 )
 
-// mobileView 是"连接手机"对话框：手机扫码配对，下面列出配对过的手机。
+// mobileBoardID 是侧栏里「手机」一项的 ID。工作区 ID 都以 w_ 开头，不会冲突。
+const mobileBoardID = "mobile"
+
+// mobileView 是「手机」页：扫码配对，右边是地址和已配对的手机。
 type mobileView struct {
-	open     bool
+	shown    bool
 	url      string
 	code     string
 	endpoint string
 	qr       *ui.Bitmap
 	devices  []mobileDevice
+	devList  ui.ListState
 	loading  bool
+	seq      int       // 每次取码加一，只认最后一次的结果
+	loadedAt time.Time // 上次取码完成的时间，到点了再取一次
 	err      string
+	errAddr  string // err 是用哪个地址取码时出的错
 	custom   string // 正在输入的自定义地址
 }
+
+// mobilePoll 是手机页开着时重取配对码和设备列表的间隔：手机扫码连上后旧码就作废了，
+// 要换上新码，列表里也要出现这台手机。
+const mobilePoll = 3 * time.Second
 
 // mobileAuto 是地址下拉里"自动"一项的文字。
 const mobileAuto = "自动（Tailscale 或局域网）"
@@ -35,13 +47,56 @@ type mobileDevice struct {
 }
 
 func (a *app) openMobile() {
-	a.mobile = mobileView{open: true, loading: true}
-	go a.loadMobile(false, a.state.MobileAddress)
+	a.selected, a.revealSel = mobileBoardID, true
+}
+
+// setMobileVisible 每次进入这一页都重新取配对码和设备列表，之前的码可能已经被手机用掉。
+// 离开时放掉二维码位图；再进来先用上次的内容重画，新的取回来再换。
+func (a *app) setMobileVisible(on bool) {
+	m := &a.mobile
+	if m.shown == on {
+		return
+	}
+	m.shown = on
+	if !on {
+		m.qr = nil
+		return
+	}
+	if m.url != "" && m.qr == nil {
+		if img, err := qrImage(m.url); err == nil {
+			m.qr = ui.NewBitmap(img)
+		}
+	}
+	a.startMobile(false, a.state.MobileAddress, false)
+}
+
+// startMobile 在界面线程里发起一次取码。poll 是手机页的定时刷新：出错不显示，也不改选中的地址。
+func (a *app) startMobile(rotate bool, addr string, poll bool) {
+	m := &a.mobile
+	m.seq++
+	m.loading = true
+	if !poll {
+		m.err = ""
+	}
+	go a.loadMobile(m.seq, rotate, addr, poll)
+}
+
+// pollMobile 在手机页开着、没有正在取码时，每隔 mobilePoll 取一次。
+func (a *app) pollMobile(c *ui.Context) {
+	m := &a.mobile
+	if m.loading {
+		return
+	}
+	if wait := mobilePoll - time.Since(m.loadedAt); wait > 0 {
+		c.After(wait)
+		return
+	}
+	a.startMobile(false, a.state.MobileAddress, true)
 }
 
 // loadMobile 按 addr 取配对码并画成二维码；rotate 时换一个新码，旧码作废。
 // 成功后 addr 才成为选中的地址，自定义的记进 ui.json：填错的地址不留下。
-func (a *app) loadMobile(rotate bool, addr string) {
+func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
 	var info struct {
 		URL      string `json:"url"`
 		Code     string `json:"code"`
@@ -50,7 +105,7 @@ func (a *app) loadMobile(rotate bool, addr string) {
 	var devices []mobileDevice
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// 出错显示在对话框里，不走错误条
+	// 出错显示在这一页上，不走错误条
 	err := a.c.Call(ctx, "mobile.pair", map[string]any{"rotate": rotate, "address": addr}, &info)
 	if err == nil {
 		err = a.c.Call(ctx, "mobile.devices", nil, &devices)
@@ -59,15 +114,33 @@ func (a *app) loadMobile(rotate bool, addr string) {
 	if err == nil {
 		img, err = qrImage(info.URL)
 	}
-	a.win.Update(func() {
+	a.update(func() {
 		m := &a.mobile
-		m.loading = false
-		if err != nil {
-			m.err = err.Error()
+		if seq != m.seq {
 			return
 		}
-		m.err, m.url, m.code, m.endpoint, m.devices = "", info.URL, info.Code, info.Endpoint, devices
-		m.qr = ui.NewBitmap(img)
+		m.loading, m.loadedAt = false, time.Now()
+		if err != nil {
+			if !poll {
+				m.err, m.errAddr = err.Error(), addr
+			}
+			return
+		}
+		if m.url != info.URL || m.qr == nil {
+			m.qr = nil
+			if m.shown {
+				m.qr = ui.NewBitmap(img)
+			}
+		}
+		m.url, m.code, m.endpoint, m.devices = info.URL, info.Code, info.Endpoint, devices
+		if poll {
+			// 定时刷新用的是选中的地址：之前用它出的错（比如断网）这时已经好了，填错的自定义地址的报错还留着
+			if m.errAddr == addr {
+				m.err = ""
+			}
+			return
+		}
+		m.err = ""
 		if addr == m.custom {
 			m.custom = ""
 		}
@@ -89,9 +162,7 @@ func (a *app) setMobileAddress(addr string) {
 
 // useMobileAddress 换配对码里的地址。地址不对时报错，二维码和下拉都还是原来的。
 func (a *app) useMobileAddress(addr string) {
-	m := &a.mobile
-	m.loading, m.err = true, ""
-	go a.loadMobile(false, addr)
+	a.startMobile(false, addr, false)
 }
 
 func (a *app) removeMobileAddress(addr string) {
@@ -137,21 +208,33 @@ func (a *app) removeDevice(d mobileDevice) {
 	})
 }
 
-func (a *app) mobileDialog(c *ui.Context) {
+// mobileSidebarItem 是侧栏里「历史」下面的「手机」，和任务、历史同一行样式。
+func (a *app) mobileSidebarItem(c *ui.Context) {
+	item := a.navRow(c, mobileBoardID, iconPhone, "手机", "", "", nil)
+	if a.revealSel && a.selected == mobileBoardID {
+		item.ScrollIntoView()
+		a.revealSel = false
+	}
+}
+
+// mobileBoard 是主区域的手机页，顶栏和任务、历史一样。
+func (a *app) mobileBoard(c *ui.Context) {
 	t := c.Theme()
 	m := &a.mobile
-	ui.Modal(c, &m.open, func() {
-		ui.Column(c).Width(400).Gap(12).Children(func() {
-			titleText(c, "连接手机", fsCardTitle)
-			ui.Text(c, "用 Hive Mobile 扫这个码。扫不了就点「复制配对码」，贴进 App 的配对页。").
-				FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
-			a.mobileAddressPicker(c)
+	a.pollMobile(c)
+	a.band(c, func() {
+		titleText(c, "手机", fsCardTitle)
+	})
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
+		card(c).Width(360).Shrink(0).Padding(20).Gap(14).Children(func() {
+			ui.Text(c, "用 Hive Mobile 扫这个码。扫不了就复制配对码，贴进 App 的配对页。").
+				FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			ui.Row(c).Justify(ui.Center).Children(func() {
-				box := ui.Box(c).Size(232, 232).Radius(12).Background(ui.RGBA(255, 255, 255, 1)).Center()
+				box := ui.Box(c).Size(208, 208).Radius(12).Background(ui.RGBA(255, 255, 255, 1)).Center()
 				box.Children(func() {
 					switch {
 					case m.qr != nil:
-						ui.Image(c, m.qr).Size(220, 220)
+						ui.Image(c, m.qr).Size(196, 196)
 					case m.loading:
 						ui.Text(c, "正在生成…").FontSize(12).TextColor(ui.RGBA(0, 0, 0, 0.5))
 					}
@@ -161,41 +244,60 @@ func (a *app) mobileDialog(c *ui.Context) {
 				ui.Text(c, m.err).FontSize(12).TextColor(t.Danger).LineHeight(1.45)
 			}
 			if m.endpoint != "" {
-				ui.Text(c, "手机将连接 "+m.endpoint).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).Center()
+				ui.Text(c, "手机将连接 "+m.endpoint).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).Center().SingleLine()
 				ui.Row(c).Gap(8).Justify(ui.Center).Children(func() {
 					if pressable(textButton(c, "复制配对码")).Tooltip("扫不了码时，在 App 的配对页粘贴").Clicked() {
 						c.WriteClipboard(m.code)
 					}
 					if pressable(textButton(c, "换一个码")).Tooltip("作废还没用过的旧码").Clicked() {
-						m.loading, m.qr = true, nil
-						go a.loadMobile(true, a.state.MobileAddress)
+						m.qr = nil
+						a.startMobile(true, a.state.MobileAddress, false)
 					}
 				})
 			}
-			if len(m.devices) > 0 {
-				ui.Box(c).Height(1).Background(colors(t).line)
-				ui.Text(c, "已配对").FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-				for _, d := range m.devices {
-					ui.Row(c.Key(d.ID)).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, d.Name).FontSize(13).Grow(1).Shrink(1).SingleLine()
-						ui.Text(c, "上次连接 "+ago(d.LastSeen)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
-						if pressable(textButton(c, "移除")).Clicked() {
-							a.removeDevice(d)
-						}
-					})
-				}
-			}
-			ui.Row(c).Justify(ui.End).Padding(4, 0, 0, 0).Children(func() {
-				if pressable(accentButton(c, "完成")).Clicked() {
-					m.open = false
-				}
+		})
+		card(c).Grow(1).Shrink(1).MinHeight(0).Clip().Children(func() {
+			ui.Column(c).Padding(16, 16, 12, 16).Gap(10).Shrink(0).Children(func() {
+				a.mobileAddressPicker(c)
 			})
+			ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+			a.mobileDevices(c)
 		})
 	})
-	// 关掉后释放二维码位图
-	if !m.open && m.qr != nil {
-		m.qr = nil
+}
+
+// mobileDevices 列出配对过的手机。列表占卡片剩下的高度。
+func (a *app) mobileDevices(c *ui.Context) {
+	t := c.Theme()
+	m := &a.mobile
+	n := len(m.devices)
+	ui.Row(c).Padding(12, 20, 4, 20).Shrink(0).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "已配对").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Grow(1)
+		ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(colors(t).faint)
+	})
+	if n == 0 {
+		ui.Text(c, "还没有配对过的手机").FontSize(13).TextColor(t.TextMuted).Padding(8, 20)
+		return
 	}
+	m.devList.Key = func(i int) any {
+		if i < 0 || i >= len(m.devices) {
+			return i
+		}
+		return m.devices[i].ID
+	}
+	list := ui.List(c, &m.devList, n, func(i int) {
+		d := m.devices[i]
+		row := ui.Row(c).Margin(0, 8).Padding(8, 12).Gap(8).Radius(8).AlignItems(ui.Center)
+		selectedBg(c, row, false)
+		row.Children(func() {
+			ui.Text(c, d.Name).FontSize(13).Grow(1).Shrink(1).SingleLine()
+			ui.Text(c, "上次连接 "+ago(d.LastSeen)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			if pressable(textButton(c, "移除")).Clicked() {
+				a.removeDevice(d)
+			}
+		})
+	}).Grow(1).MinHeight(0).Padding(0, 0, 8, 0)
+	fadeEdges(list, &m.devList, colors(t).card)
 }
 
 // mobileAddressPicker 选配对码里写的地址：自动，或自定义的主机、主机:端口、完整 URL
@@ -235,7 +337,7 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 				a.useMobileAddress(m.custom)
 			}
 		})
-		ui.Text(c, "手机要能连到这个地址：同一个 Wi-Fi、Tailscale，或转发到本机的隧道、端口映射。").
+		ui.Text(c, "手机要能连到它：同一 Wi-Fi、Tailscale，或转到本机的隧道。").
 			FontSize(11.5).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }

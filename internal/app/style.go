@@ -362,7 +362,8 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
-				bg, fg = t.Accent, t.AccentText
+				// 和列表选中项同一种强调色淡底，实心橙只留给主按钮
+				bg, fg = p.tint, t.Text
 			case seg.Hovered():
 				fg = t.Text
 			}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"hive/internal/agent"
 	"hive/internal/store"
 )
 
@@ -99,5 +100,29 @@ func TestListsMatchPerItemLookups(t *testing.T) {
 	}
 	if got := call(t, d.taskList, map[string]any{"all": true}); !reflect.DeepEqual(stripIdle(t, got), stripIdle(t, wantTasks)) {
 		t.Fatalf("task.list differs\n got %v\nwant %v", stripIdle(t, got), stripIdle(t, wantTasks))
+	}
+}
+
+// 用 grok 开的终端里，用户自己启动了 claude：agent 换成 claude，状态按 Claude 的标题判断。
+func TestDetectForegroundAgent(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	script := `exec -a claude /bin/sh -c 'printf "\033]0;✳ hi\007"; sleep 0.3; printf "\033]0;◑ work\007"; sleep 30'`
+	s, err := d.startTerminal(ws, []string{"/bin/zsh", "-f", "-c", script}, "grok", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		info := d.terminalInfo(s)
+		if info.Agent == "claude" && info.AgentState != nil && info.AgentState.Status == agent.StatusWorking {
+			if info.AgentState.SessionID != "" {
+				t.Fatalf("kept grok's session %q", info.AgentState.SessionID)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("agent %q state %+v", info.Agent, info.AgentState)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

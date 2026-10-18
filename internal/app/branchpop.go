@@ -133,12 +133,9 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 		a.update(func() {
 			if v != nil && v.git.busy == "Fetch" {
 				v.git.busy = ""
-				if v.git.branches.list != nil {
-					a.loadBranches(v)
-				}
 			}
 			tr.poll = panelPoll{}
-			a.reloadCompares(project)
+			a.refsChanged(project)
 		})
 	}()
 }

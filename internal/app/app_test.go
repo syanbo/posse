@@ -18,6 +18,7 @@ func TestApplyKeepsSelection(t *testing.T) {
 	for sel, want := range map[string]string{
 		taskBoardID:    taskBoardID,
 		historyBoardID: historyBoardID,
+		mobileBoardID:  mobileBoardID,
 		"w_1":          "w_1",
 		"w_gone":       "w_1",
 	} {
@@ -29,6 +30,52 @@ func TestApplyKeepsSelection(t *testing.T) {
 		if !*a.sectionsOpen["p1"] {
 			t.Errorf("new section starts collapsed")
 		}
+	}
+}
+
+// 点侧栏「任务」回到总览，不留在上次打开的任务里；详情里的「总览」也一样。
+// worker 终端的标签栏有「返回任务」。
+func TestTaskHome(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	a.taskSel = "k2"
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if err := tt.Click("任务"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != taskBoardID || !a.taskHome || a.taskSel != "" {
+		t.Fatalf("after sidebar: selected %q home %v sel %q", a.selected, a.taskHome, a.taskSel)
+	}
+	tt.Frame()
+	if a.taskSel != "" || !a.taskHome {
+		t.Fatalf("overview reselected %q home %v", a.taskSel, a.taskHome)
+	}
+	if _, ok := tt.Find("从左边选一个任务"); !ok {
+		t.Fatal("overview hint missing")
+	}
+
+	a.taskHome, a.taskSel = false, "k2"
+	tt.Frame()
+	if err := tt.Click("总览"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.taskHome || a.taskSel != "" {
+		t.Fatalf("after 总览: home %v sel %q", a.taskHome, a.taskSel)
+	}
+}
+
+func TestWorkerReturnsToTask(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	a.activeTerm["w1"] = "t6"
+	a.view.id = "t6"
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if _, ok := tt.Find("返回任务"); !ok {
+		t.Fatal("worker has no return button")
 	}
 }
 
@@ -118,5 +165,27 @@ func TestIsDialError(t *testing.T) {
 func TestAgentChoicesCount(t *testing.T) {
 	if len(agentChoices) != nAgents {
 		t.Fatalf("nAgents = %d, agentChoices has %d", nAgents, len(agentChoices))
+	}
+}
+
+// 引用变了要重读的 diff：HEAD、分支名会随 fetch 移动，提交哈希不会。
+func TestDiffFixedRevs(t *testing.T) {
+	h := "0123456789abcdef0123456789abcdef01234567"
+	for _, c := range []struct {
+		s    diffSpec
+		want bool
+	}{
+		{diffSpec{oldRev: h + "^", newRev: h}, true},
+		{diffSpec{oldRev: h + "~2", newRev: h}, true},
+		{diffSpec{oldRev: "", newRev: h}, true},
+		{diffSpec{oldRev: h}, true},
+		{diffSpec{oldRev: "HEAD"}, false},
+		{diffSpec{oldRev: "origin/main"}, false},
+		{diffSpec{oldRev: h, newRev: "feature"}, false},
+		{diffSpec{oldRev: "abc1234", newRev: h}, false},
+	} {
+		if got := c.s.fixedRevs(); got != c.want {
+			t.Errorf("%+v fixedRevs = %v, want %v", c.s, got, c.want)
+		}
 	}
 }

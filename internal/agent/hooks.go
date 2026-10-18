@@ -216,6 +216,25 @@ func TitleStatus(agentName, title, current string) (string, bool) {
 	return "", false
 }
 
+// TitleOnlyStatus 给没有注入 hooks 的 agent（用户在终端里自己启动的）判断状态：
+// Claude 只能靠标题，开头是转动的圆形符号就是工作中。其余和 TitleStatus 一样。
+func TitleOnlyStatus(agentName, title, current string) (string, bool) {
+	if agentName == "claude" {
+		st := ""
+		switch r, _ := utf8.DecodeRuneInString(title); {
+		case r == '✳':
+			st = StatusIdle
+		case r >= '◐' && r <= '◓', r >= 0x2800 && r <= 0x28FF:
+			st = StatusWorking
+		}
+		if st != "" && st != current {
+			return st, true
+		}
+		return "", false
+	}
+	return TitleStatus(agentName, title, current)
+}
+
 // Truncate 去掉首尾空白后截到 n 个字符，截断时补省略号。
 func Truncate(s string, n int) string {
 	r := []rune(strings.TrimSpace(s))

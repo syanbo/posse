@@ -227,6 +227,15 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 
 // loadLog 读日志：more 为真时接着往后读一页。
 func (a *app) loadLog(v *filesView, d *fileDoc, more bool) {
+	a.readLog(v, d, more, logPage)
+}
+
+// reloadLog 引用变了之后从头重读，已经往后翻过的页数一起读回来，列表不缩回第一页。
+func (a *app) reloadLog(v *filesView, d *fileDoc) {
+	a.readLog(v, d, false, max(logPage, len(d.log.commits)))
+}
+
+func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 	ld := d.log
 	ld.gen++
 	gen := ld.gen
@@ -241,7 +250,7 @@ func (a *app) loadLog(v *filesView, d *fileDoc, more bool) {
 		if root == "" {
 			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
 		}
-		list, err := gitx.Log(ctx, root, f, skip, logPage)
+		list, err := gitx.Log(ctx, root, f, skip, limit)
 		if root == "" {
 			list, err = nil, fmt.Errorf("这个工作区不是 git 仓库")
 		}
@@ -262,7 +271,7 @@ func (a *app) loadLog(v *filesView, d *fileDoc, more bool) {
 			} else {
 				ld.commits = list
 			}
-			ld.more = len(list) == logPage
+			ld.more = len(list) == limit
 			ld.graph = buildGraph(ld.commits)
 			ld.reloaded = time.Now()
 			d.kind = docLog

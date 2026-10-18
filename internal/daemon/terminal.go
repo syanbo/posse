@@ -36,7 +36,7 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 	cols, rows := s.Size()
 	info := terminalInfo{
 		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: s.Title(), Command: s.Command, Dir: s.Dir,
-		Agent: s.agent, Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
+		Agent: s.agentName(), Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
 	}
 	if st := s.Agent(); st.Status != "" {
@@ -81,10 +81,25 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 		ID: id, WorkspaceID: w.ID, Dir: w.Path, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback,
 		OnTitle: func(t *term.Terminal, title string) {
-			if agentName == "" {
+			d.mu.Lock()
+			s := d.terms[t.ID]
+			d.mu.Unlock()
+			if s == nil {
 				return
 			}
-			if st, ok := agent.TitleStatus(agentName, title, t.Agent().Status); ok {
+			// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
+			name, hooked, changed := s.detectAgent()
+			if changed {
+				t.ResetAgent(term.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
+			}
+			if name == "" {
+				return
+			}
+			status := agent.TitleStatus
+			if !hooked {
+				status = agent.TitleOnlyStatus
+			}
+			if st, ok := status(name, title, t.Agent().Status); ok {
 				d.setAgent(t, term.AgentState{Status: st, Event: "title", At: time.Now()})
 			}
 		},
@@ -93,12 +108,13 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 				log.Printf("terminal %s: record exit: %v", t.ID, err)
 			}
 			d.workerGone(t.ID, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
+			d.refreshAwake()
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	s := &session{Terminal: t, agent: agentName}
+	s := &session{Terminal: t, agent: agentName, hooked: agentName != ""}
 	d.mu.Lock()
 	d.terms[id] = s
 	d.mu.Unlock()
@@ -500,6 +516,7 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
 func (d *Daemon) setAgent(t *term.Terminal, st term.AgentState) {
 	t.SetAgent(st)
+	d.refreshAwake()
 	switch st.Status {
 	case agent.StatusIdle:
 		go d.deliver(t.ID)

@@ -337,7 +337,7 @@ func (d *Daemon) sessionRunning(s history.Session) *session {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, t := range d.terms {
-		if t.agent == s.Agent && t.Running() && t.Agent().SessionID == s.ID {
+		if t.agentName() == s.Agent && t.Running() && t.Agent().SessionID == s.ID {
 			return t
 		}
 	}

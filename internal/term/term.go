@@ -17,6 +17,7 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/egoist/mygo/plugins/terminal"
+	"golang.org/x/sys/unix"
 
 	"hive/internal/vt"
 )
@@ -412,6 +413,35 @@ func (t *Terminal) Pid() int {
 		return 0
 	}
 	return t.cmd.Process.Pid
+}
+
+// Foreground 返回终端前台进程组的 ID，取不到（已关闭等）时返回 0。
+// 经 SyscallConn 取描述符：调 Fd() 会把 PTY 改成阻塞模式。
+func (t *Terminal) Foreground() int {
+	t.pmu.Lock()
+	defer t.pmu.Unlock()
+	if t.ptyClosed {
+		return 0
+	}
+	rc, err := t.pty.SyscallConn()
+	if err != nil {
+		return 0
+	}
+	pg := 0
+	rc.Control(func(fd uintptr) {
+		if v, err := unix.IoctlGetInt(int(fd), unix.TIOCGPGRP); err == nil {
+			pg = v
+		}
+	})
+	return pg
+}
+
+// ResetAgent 整个换掉 agent 状态，不沿用之前的会话信息：终端里换了一个 agent 时用。
+func (t *Terminal) ResetAgent(s AgentState) {
+	t.mu.Lock()
+	t.agent = s
+	t.mu.Unlock()
+	t.notify()
 }
 
 func (t *Terminal) LastOutput() time.Time { return time.Unix(0, t.lastOutput.Load()) }

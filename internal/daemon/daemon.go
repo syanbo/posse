@@ -42,7 +42,39 @@ func SocketPath(home string) string { return filepath.Join(home, "hived.sock") }
 // session 是一个托管中的终端及其在 hive 里的元数据。
 type session struct {
 	*term.Terminal
-	agent string
+	mu       sync.Mutex
+	agent    string // 终端里的 agent：启动时指定的，或之后在前台认出来的
+	hooked   bool   // agent 是 hive 启动的那个，带着注入的 hooks
+	hookedPg int    // 带 hooks 的那个 agent 的进程组，第一次在前台看到时记下
+	fg       int    // 上次检查时的前台进程组
+}
+
+func (s *session) agentName() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agent
+}
+
+// detectAgent 看终端前台是哪个 agent。用户在 shell 里自己启动了另一个 agent（或者退出后
+// 再手动启动一次）时换成它，这时没有 hooks。前台回到 shell 或别的程序时不改：
+// agent 临时打开编辑器、跑 ! 命令也会让出前台，不能当成退出。
+func (s *session) detectAgent() (name string, hooked, changed bool) {
+	pg := s.Foreground()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if pg <= 0 || pg == s.fg {
+		return s.agent, s.hooked, false
+	}
+	s.fg = pg
+	found := agent.FromProcess(procmem.Args(pg))
+	switch {
+	case found == "":
+	case s.hooked && found == s.agent && (s.hookedPg == 0 || s.hookedPg == pg):
+		s.hookedPg = pg
+	case found != s.agent || s.hooked:
+		s.agent, s.hooked, changed = found, false, true
+	}
+	return s.agent, s.hooked, changed
 }
 
 type Daemon struct {
@@ -61,6 +93,7 @@ type Daemon struct {
 
 	history historyState
 	mobile  *mobile.Server
+	awake   *awake // 防休眠，测试里为空
 }
 
 func Run(ctx context.Context, cfg Config) error {
@@ -116,9 +149,11 @@ func Run(ctx context.Context, cfg Config) error {
 		exe = resolved
 	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
-		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}}
+		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home)}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer d.awake.close()
+	go d.awakeLoop(ctx)
 	d.startMobile()
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
@@ -160,6 +195,7 @@ func (d *Daemon) closeAll() {
 
 func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("daemon.status", d.status)
+	srv.Handle("awake.set", d.awakeSet)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出
 		time.AfterFunc(100*time.Millisecond, stop)
@@ -218,7 +254,8 @@ type statusResult struct {
 	Running   int       `json:"running"`
 	RSSKB     int64     `json:"rssKB"`
 	// FootprintKB 是 phys_footprint，与活动监视器一致；内存预算以它为准
-	FootprintKB int64 `json:"footprintKB"`
+	FootprintKB int64        `json:"footprintKB"`
+	Awake       *awakeStatus `json:"awake,omitempty"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -230,11 +267,16 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 		}
 	}
 	d.mu.Unlock()
-	return statusResult{
+	r := statusResult{
 		Version: Version, Pid: os.Getpid(), Home: d.cfg.Home, StartedAt: d.started,
 		Terminals: total, Running: running,
 		RSSKB: int64(procmem.Resident(os.Getpid()) >> 10), FootprintKB: int64(procmem.Footprint(os.Getpid()) >> 10),
-	}, nil
+	}
+	if d.awake != nil {
+		st := d.awake.status()
+		r.Awake = &st
+	}
+	return r, nil
 }
 
 // --- 查找

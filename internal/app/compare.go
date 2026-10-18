@@ -63,17 +63,32 @@ func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files b
 	a.loadCompare(v, d)
 }
 
-// reloadCompares 重读一个项目里所有开着的分支比较：fetch、拉取之后远端分支变了。
+// refsChanged 在 fetch、拉取、推送等改了引用的操作之后，重读一个项目里所有依赖引用的界面：
+// 分支按钮的传入传出、分支弹窗、分支比较、按分支名比较的 diff、日志和文件历史。
 // 同一项目的工作区共用引用，别的工作区里开着的也要重读。
-func (a *app) reloadCompares(projectID string) {
+func (a *app) refsChanged(projectID string) {
 	for _, w := range a.byProject[projectID] {
+		if tr := a.track[w.ID]; tr != nil {
+			tr.poll = panelPoll{}
+		}
 		v := a.files[w.ID]
 		if v == nil {
 			continue
 		}
+		if v.git.branches.list != nil {
+			a.loadBranches(v)
+		}
 		for _, d := range v.docs {
-			if d.comp != nil {
+			switch {
+			case d.comp != nil:
 				a.loadCompare(v, d)
+			case d.diff != nil && d.kind != docLoading && !d.diff.fixedRevs():
+				a.loadDiff(v, d)
+			}
+		}
+		for _, d := range v.logs {
+			if d.log != nil && !d.log.loading {
+				a.reloadLog(v, d)
 			}
 		}
 	}

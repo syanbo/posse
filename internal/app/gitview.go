@@ -267,6 +267,25 @@ type diffSpec struct {
 
 func (s diffSpec) worktree() bool { return s.newRev == "" }
 
+// fixedRevs 说明两边都是提交哈希（可带 ^、~N），引用变了内容也不变；
+// HEAD、分支名这类会随 fetch、拉取移动。工作区一边另看磁盘戳。
+func (s diffSpec) fixedRevs() bool {
+	return isCommitRev(s.oldRev) && (s.worktree() || s.newRev == ":" || isCommitRev(s.newRev))
+}
+
+func isCommitRev(rev string) bool {
+	if rev == "" {
+		return true
+	}
+	if i := strings.IndexAny(rev, "^~"); i >= 0 {
+		rev = rev[:i]
+	}
+	if len(rev) != 40 && len(rev) != 64 {
+		return false
+	}
+	return strings.Trim(rev, "0123456789abcdef") == ""
+}
+
 // changeSpec 是改动列表里一个文件的 diff：HEAD 对比工作区。
 func changeSpec(e gitx.Entry) diffSpec {
 	return diffSpec{rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
@@ -581,15 +600,11 @@ func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, 
 				done()
 			}
 			a.refreshGit(v)
-			if g.branches.list != nil {
-				a.loadBranches(v)
-			}
-			// Fetch、更新、推送之后分支按钮上的传入、传出马上重算，开着的分支比较也重读
-			if tr := a.track[v.wsID]; tr != nil {
-				tr.poll = panelPoll{}
-			}
+			// Fetch、更新、推送之后传入传出马上重算，分支弹窗、比较、diff、日志也重读
 			if w := a.workspace(v.wsID); w != nil {
-				a.reloadCompares(w.ProjectID)
+				a.refsChanged(w.ProjectID)
+			} else if g.branches.list != nil {
+				a.loadBranches(v)
 			}
 		})
 	}()

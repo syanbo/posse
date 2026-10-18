@@ -22,6 +22,7 @@ func (a *app) build(c *ui.Context) {
 		a.setWantedTask("")
 	}
 	a.setHistoryVisible(a.selected == historyBoardID)
+	a.setMobileVisible(a.selected == mobileBoardID)
 	if a.loaded && a.selected != a.state.Selected {
 		a.state.Selected = a.selected
 		a.saveState()
@@ -80,6 +81,8 @@ func (a *app) build(c *ui.Context) {
 				a.taskBoard(c)
 			case a.selected == historyBoardID:
 				a.historyBoard(c)
+			case a.selected == mobileBoardID:
+				a.mobileBoard(c)
 			default:
 				a.main(c, w, cur)
 			}
@@ -100,7 +103,6 @@ func (a *app) build(c *ui.Context) {
 	}
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
-	a.mobileDialog(c)
 	a.quickDialog(c)
 	a.pushDialog(c)
 	a.promptDialog(c)
@@ -317,7 +319,8 @@ func (a *app) sidebar(c *ui.Context) {
 				a.taskSidebarItem(c)
 			}
 			a.historySidebarItem(c)
-			// 任务、历史是全局页面，和下面的项目用一道细线隔开
+			a.mobileSidebarItem(c)
+			// 任务、历史、手机是全局页面，和下面的项目用一道细线隔开
 			ui.Box(c).Height(1).Shrink(0).Margin(6, 12, 6, 12).Background(colors(t).line)
 			// 要定位的工作区所在的项目
 			reveal := ""
@@ -343,6 +346,9 @@ func (a *app) sidebar(c *ui.Context) {
 			to = max(i-1, 0)
 		}
 		if to >= 0 {
+			if a.navOrder[to].ws == taskBoardID {
+				a.showTaskHome()
+			}
 			a.selected = a.navOrder[to].ws
 			if term := a.navOrder[to].term; term != "" {
 				a.activeTerm[a.selected] = term
@@ -694,6 +700,9 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 	accent := c.Theme().Accent
 	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(16).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
 	if row.Clicked() {
+		if id == taskBoardID {
+			a.showTaskHome()
+		}
 		a.selected = id
 	}
 	return row
@@ -760,9 +769,7 @@ func (a *app) footer(c *ui.Context) {
 		shade = ui.RGBA(0, 0, 0, 0.18)
 	}
 	ui.Row(c).Height(34).Padding(0, 14).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		if pressable(iconButtonSized(c, iconPhone, "连接手机", 24, 14)).Tooltip("连接手机").Clicked() {
-			a.openMobile()
-		}
+		a.awakeButton(c)
 		ui.Spacer(c)
 		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 		a.memoryButton(c)
@@ -952,6 +959,11 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 
 // tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
+	if cur != nil {
+		if task := a.taskByWorker(cur.ID); task != nil && pressable(textButton(c, "返回任务")).Clicked() {
+			a.openTask(task.ID)
+		}
+	}
 	if w.Branch != "" {
 		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, "Git 日志 ⌘9")
@@ -1070,20 +1082,25 @@ func (a *app) firstRun(c *ui.Context) {
 func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(48, 24).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Width(600).Gap(14).Children(func() {
-				card(c).Padding(20).Children(func() {
-					ui.Row(c).Gap(16).Children(func() {
-						tile(c, workspaceIcon(w.Kind), 52, p.tint, t.Accent)
-						ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
-							titleText(c, displayName(w), 20).MaxLines(1)
-							var branch func()
-							if w.Branch != "" {
-								branch = metaMono(c, iconBranch, w.Branch, "")
-							}
-							metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
-						})
+	// 名称、启动按钮和快捷键是一整块，在主区域里上下左右居中，名称上面不再套卡片。
+	// 窗口矮时可以滚动：滚动区里不能靠 Grow 撑满，用它上一帧的高度当内容的最小高度，变了再画一帧。
+	sc := ui.Scroll(c.Key("empty-workspace")).Grow(1)
+	if h := sc.LayoutBounds().H; h != a.emptyHeight {
+		a.emptyHeight = h
+		c.AnimationFrame()
+	}
+	sc.Children(func() {
+		ui.Column(c).MinHeight(a.emptyHeight).Center().Padding(24).Children(func() {
+			ui.Column(c).Width(600).Gap(18).Children(func() {
+				ui.Row(c).Gap(16).Padding(0, 4).AlignItems(ui.Center).Children(func() {
+					tile(c, workspaceIcon(w.Kind), 52, p.tint, t.Accent)
+					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
+						titleText(c, displayName(w), 20).MaxLines(1)
+						var branch func()
+						if w.Branch != "" {
+							branch = metaMono(c, iconBranch, w.Branch, "")
+						}
+						metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
 					})
 				})
 				ui.Grid(c).Columns(len(agentChoices) + 1).Gap(10).Children(func() {
@@ -1092,7 +1109,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					}
 					a.launchTile(c, w, "", "⌘T")
 				})
-				ui.Row(c).Gap(14).Padding(2, 4).Children(func() {
+				ui.Row(c).Gap(14).Padding(2, 4).Justify(ui.Center).Children(func() {
 					shortcutHint(c, "⌘T", "新建终端")
 					shortcutHint(c, "⌘N", "新建工作区")
 					shortcutHint(c, "⌘1…9", "切换终端")

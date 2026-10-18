@@ -58,7 +58,7 @@ func (h mobileHost) State() mobile.State {
 			}
 			a := s.Agent()
 			mw.Terminals = append(mw.Terminals, mobile.Terminal{
-				ID: s.ID, Title: s.Title(), Agent: s.agent, Status: a.Status, StatusAt: a.At, Message: a.Message,
+				ID: s.ID, Title: s.Title(), Agent: s.agentName(), Status: a.Status, StatusAt: a.At, Message: a.Message,
 				SessionID: a.SessionID, TranscriptPath: a.TranscriptPath,
 				ToolName: a.ToolName, ToolInput: a.ToolInput, Prompt: a.Prompt,
 				Running: true, CreatedAt: s.CreatedAt, LastOutput: s.LastOutput(),

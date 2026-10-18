@@ -46,6 +46,7 @@ var (
 	iconCommit     = icon(`<circle cx="12" cy="12" r="3.25"/><path d="M3.5 12h5.25M15.25 12h5.25"/>`)
 	iconBlame      = icon(`<path d="M4.5 6h4M4.5 10h4M4.5 14h4M4.5 18h4M11.5 6h8M11.5 10h6M11.5 14h8M11.5 18h5"/>`)
 	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`) // 提交时间线，和分支、"历史会话"的时钟区分开
+	iconCoffee     = icon(`<path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/>`)
 	iconMemory     = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/>`)
 	iconSkill      = icon(`<path d="M12 4.5 13.8 9l4.7 1.8-4.7 1.8L12 17.2l-1.8-4.6-4.7-1.8L10.2 9z"/><path d="M18 15.5v4M16 17.5h4"/>`)
 	iconMinus      = icon(`<path d="M6 12h12"/>`)

@@ -69,6 +69,21 @@ func (a *app) task(id string) *taskInfo {
 	return nil
 }
 
+// taskByWorker 找这个终端上的任务：有进行中的就用它，否则用最后一个。
+func (a *app) taskByWorker(terminalID string) *taskInfo {
+	var found *taskInfo
+	for i := range a.tasks {
+		if a.tasks[i].Worker != terminalID {
+			continue
+		}
+		found = &a.tasks[i]
+		if a.tasks[i].Status == "running" {
+			return found
+		}
+	}
+	return found
+}
+
 // indexTasks 排好总览的顺序，记下每个 worker 终端的任务标题（同一终端有多个时取最后一个）。
 func (a *app) indexTasks() {
 	a.sorted = sortTasks(a.tasks)
@@ -85,10 +100,19 @@ func (a *app) openTask(id string) {
 	a.selectTask(id)
 }
 
+// showTaskHome 回到任务总览，不停留在上一个任务的详情里。
+func (a *app) showTaskHome() {
+	a.taskHome = true
+	a.taskSel, a.detail = "", nil
+	a.replyText, a.noteText = "", ""
+	a.setWantedTask("")
+}
+
 func (a *app) selectTask(id string) {
-	if a.taskSel == id {
+	if a.taskSel == id && !a.taskHome {
 		return
 	}
+	a.taskHome = false
 	a.taskSel, a.replyText, a.noteText = id, "", ""
 	a.detail = nil
 	a.setWantedTask(id)
@@ -324,7 +348,11 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 // --- 总览
 
 func (a *app) taskBoard(c *ui.Context) {
-	a.setWantedTask(a.taskSel)
+	if a.taskHome {
+		a.setWantedTask("")
+	} else {
+		a.setWantedTask(a.taskSel)
+	}
 	ended := 0
 	for _, x := range a.tasks {
 		if x.Status != "running" {
@@ -351,7 +379,8 @@ func (a *app) taskBoard(c *ui.Context) {
 		a.emptyBoard(c)
 		return
 	}
-	if a.task(a.taskSel) == nil {
+	// 从别的页面进来、还没指定要看总览时，打开列表里的第一个。点侧栏「任务」是要总览，不帮它再选上一个。
+	if !a.taskHome && a.task(a.taskSel) == nil {
 		a.selectTask(a.sorted[0].ID)
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
@@ -360,10 +389,19 @@ func (a *app) taskBoard(c *ui.Context) {
 				ui.Column(c).Padding(6, 0, 10, 0).Children(func() { a.taskList(c) })
 			})
 		})
-		ui.Scroll(c).Grow(1).Children(func() {
-			if sel := a.task(a.taskSel); sel != nil {
-				a.taskDetailView(c, *sel)
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
+			if sel := a.task(a.taskSel); sel != nil && !a.taskHome {
+				ui.Row(c).Shrink(0).Padding(0, 0, 8, 0).Children(func() {
+					if pressable(textButton(c, "总览")).Clicked() {
+						a.showTaskHome()
+					}
+				})
+				ui.Scroll(c).Grow(1).Children(func() { a.taskDetailView(c, *sel) })
+				return
 			}
+			ui.Column(c).Grow(1).Center().Children(func() {
+				ui.Text(c, "从左边选一个任务").FontSize(13).TextColor(c.Theme().TextMuted)
+			})
 		})
 	})
 }

@@ -84,6 +84,7 @@ type worktreeDiff struct {
 type daemonStatus struct {
 	FootprintKB int64
 	Running     int
+	Awake       *awakeStatus // 旧常驻进程没有防休眠时为空
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -133,6 +134,7 @@ type app struct {
 	state     uiState // 写进 ui.json 的界面状态
 
 	// 任务总览
+	taskHome  bool                     // 只要总览：不自动打开上次看的任务
 	taskSel   string                   // 选中的任务 ID
 	detail    *taskDetail              // 选中任务的消息等完整内容
 	diffs     map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
@@ -142,15 +144,16 @@ type app struct {
 	wantMu   sync.Mutex
 	wantTask string
 
-	history historyView
-	usage   usageView             // 右侧"技能与 MCP"面板
-	recent  recentView            // 右侧历史面板
-	images  imagesView            // 右侧图片面板
-	mobile  mobileView            // "连接手机"对话框
-	mem     memView               // 底栏的内存浮窗
-	files   map[string]*filesView // 工作区 ID → 文件标签
-	quick   quickOpen             // ⌘P 快速打开
-	unsaved *unsavedAsk           // 问要不要保存修改的对话框
+	history     historyView
+	usage       usageView             // 右侧"技能与 MCP"面板
+	recent      recentView            // 右侧历史面板
+	images      imagesView            // 右侧图片面板
+	mobile      mobileView            // 侧栏「手机」页：配对码和已配对的手机
+	mem         memView               // 底栏的内存浮窗
+	emptyHeight float32               // 空工作区页滚动区上一帧的高度
+	files       map[string]*filesView // 工作区 ID → 文件标签
+	quick       quickOpen             // ⌘P 快速打开
+	unsaved     *unsavedAsk           // 问要不要保存修改的对话框
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool
 	// Git：分支弹窗、输入框对话框、Push 对话框
@@ -317,6 +320,7 @@ type pollResult struct {
 	daemonKB   int64
 	selfKB     int64
 	termKB     int64
+	awake      *awakeStatus
 }
 
 func (a *app) refresh() {
@@ -378,7 +382,7 @@ func (a *app) refresh() {
 		if time.Since(a.termAt) > 5*time.Second {
 			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
 		}
-		r.running, r.daemonKB, r.selfKB, r.termKB = st.Running, st.FootprintKB, self, a.lastTerm
+		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 	}
 	// 改动统计只在拉到时才有，没拉到时沿用上次的，不算变化
@@ -400,7 +404,7 @@ func (a *app) refresh() {
 		if prevErr {
 			a.err = ""
 		}
-		a.daemon, a.selfKB, a.termKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running}, r.selfKB, r.termKB
+		a.daemon, a.selfKB, a.termKB = daemonStatus{FootprintKB: r.daemonKB, Running: r.running, Awake: r.awake}, r.selfKB, r.termKB
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
 		a.applyTasks(r.tasks)
@@ -457,8 +461,8 @@ func (a *app) apply(ps []project, ws []workspace) {
 			a.sectionsOpen[p.ID] = &open
 		}
 	}
-	// 只在选中的工作区被删掉时换到第一个；任务和历史不是工作区，要保留
-	if a.selected != taskBoardID && a.selected != historyBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
+	// 只在选中的工作区被删掉时换到第一个；任务、历史和手机不是工作区，要保留
+	if a.selected != taskBoardID && a.selected != historyBoardID && a.selected != mobileBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
 	seen := map[string]bool{}
@@ -646,13 +650,13 @@ func (a *app) ensureView(id string) {
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
 		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
-		// Claude 和 Codex 会把粘贴的图片路径当成附件。让它们收 Ctrl+V 自己读剪贴板也行，
-		// 但它们读剪贴板要调系统命令，粘贴时界面会闪一下
+		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
+		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
 		OnPaste: func(text string) bool {
 			if text != "" || v.term == nil {
 				return false
 			}
-			if _, t := a.findTerminal(id); t == nil || (t.Agent != "claude" && t.Agent != "codex") {
+			if _, t := a.findTerminal(id); t == nil || t.Agent == "" {
 				return false
 			}
 			png := mygo.Clipboard.ReadImage()
