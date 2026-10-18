@@ -39,7 +39,8 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 		Agent: s.agentName(), Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
 	}
-	if st := s.Agent(); st.Status != "" {
+	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示
+	if st := s.Agent(); st.Status != "" && info.Agent != "" {
 		info.AgentState = &st
 	}
 	if !info.Running {

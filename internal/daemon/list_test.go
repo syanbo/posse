@@ -148,3 +148,29 @@ func TestHookMarksManualAgent(t *testing.T) {
 		t.Fatalf("state %+v", st)
 	}
 }
+
+// agent 退出（SessionEnd）后终端退回普通 shell：不再有 agent，也不再给出最后的状态。
+func TestSessionEndClearsAgent(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "claude", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range []map[string]any{
+		{"terminalId": s.ID, "agent": "claude", "event": "UserPromptSubmit", "payload": map[string]any{"session_id": "sid"}},
+		{"terminalId": s.ID, "agent": "claude", "event": "SessionEnd", "payload": map[string]any{"session_id": "sid", "reason": "prompt_input_exit"}},
+	} {
+		raw, _ := json.Marshal(ev)
+		if _, err := d.hookEvent(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	info := d.terminalInfo(s)
+	if info.Agent != "" || info.AgentState != nil {
+		t.Fatalf("agent %q state %+v", info.Agent, info.AgentState)
+	}
+	// terminal wait --for status 仍然等得到退出
+	if st := s.Agent(); st.Status != agent.StatusExited {
+		t.Fatalf("state %+v", st)
+	}
+}
