@@ -34,7 +34,9 @@ class AgentTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(size * 0.26),
         // Codex 的白底在浅色卡片上会融掉，描一圈细边（和桌面端一致）
-        border: agent == 'codex' ? Border.all(color: const Color(0x1F000000)) : null,
+        border: agent == 'codex'
+            ? Border.all(color: const Color(0x1F000000))
+            : null,
       ),
       alignment: Alignment.center,
       child: path == null

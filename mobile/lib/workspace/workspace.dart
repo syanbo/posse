@@ -58,7 +58,7 @@ class _PairScreenState extends State<PairScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
     if (!await model.connectCode(code)) return;
-    final name = model.current?.label ?? '电脑';
+    final name = model.current == null ? '电脑' : model.labelOf(model.current);
     final where = hostOf(model.connectedUrl);
     messenger.showSnackBar(
       SnackBar(
@@ -894,7 +894,7 @@ class _ConnectionLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
     final online = model.rpc != null;
-    final name = model.current?.label ?? '';
+    final name = model.labelOf(model.current);
     final text = model.connecting
         ? '正在连接…'
         : online
@@ -942,7 +942,7 @@ class _ComputerSheet extends StatelessWidget {
         return SafeArea(
           top: false,
           child: Section(
-            title: computer.label,
+            title: model.labelOf(computer),
             inset: 48,
             children: [
               RowTile(
@@ -987,7 +987,7 @@ class _ComputerSheet extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('忘掉 ${computer.label}'),
+        title: Text('忘掉 ${model.labelOf(computer)}'),
         content: const Text('之后要重新扫码才能连上它。'),
         actions: [
           TextButton(
@@ -1010,7 +1010,7 @@ class _ComputerSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) {
-        final active = model.offer?.publicKeyB64;
+        final active = model.activeId;
         return SafeArea(
           top: false,
           child: Column(
@@ -1041,7 +1041,7 @@ class _ComputerSheet extends StatelessWidget {
                             size: 24,
                             color: c.accent,
                           ),
-                          title: Text(computer.label),
+                          title: Text(model.labelOf(computer)),
                           // 连着的那台写实际连上的地址，其余写配对码里的主地址
                           subtitle: Text(
                             computer.id == active && model.connectedUrl != null

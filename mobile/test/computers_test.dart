@@ -18,7 +18,7 @@ void main() {
     final code = pairCode('k1', 'ws://192.168.1.2:6788');
     final saved = SavedComputers.decode(code);
     expect(saved.computers, hasLength(1));
-    expect(saved.active, 'k1');
+    expect(saved.active, 'k1@ws://192.168.1.2:6788');
     expect(saved.current!.label, '192.168.1.2');
   });
 
@@ -37,7 +37,8 @@ void main() {
     );
     final back = SavedComputers.decode(saved.encode());
     expect(back.computers.map((c) => c.label), ['MacBook', 'b']);
-    expect(back.current!.id, 'k2');
+    // 旧版只按公钥存的 ID 读出来补上地址，当前选中的跟着换
+    expect(back.current!.id, 'k2@ws://b:2');
     expect(back.computers.first.projectOrder, ['hive', 'Works']);
     expect(SavedComputers.decode('not json').computers, isEmpty);
   });
@@ -69,5 +70,30 @@ void main() {
     expect(back.computers.single.label, '公司电脑');
     model.renameComputer('k', '');
     expect(computer.label, 'MacBook-Pro-4');
+  });
+
+  test('the same computer can be saved once per address', () async {
+    final store = MemoryPairingStore();
+    final model = HiveAppModel(store: store);
+    final remote = pairCode('k', 'wss://tun.example/hive');
+    final lan = pairCode('k', 'ws://192.168.1.5:6788');
+    model.saved = SavedComputers(
+      computers: [SavedComputer(id: 'k', code: remote, name: 'MacBook')],
+    );
+    // 旧版的 ID 迁移后，再存一项同一台电脑的局域网地址，两项都在
+    model.saved = SavedComputers.decode(model.saved.encode());
+    model.saved.computers.add(
+      SavedComputer(id: 'k@ws://192.168.1.5:6788', code: lan, name: 'MacBook'),
+    );
+    expect(model.saved.computers.map((c) => c.id), [
+      'k@wss://tun.example/hive',
+      'k@ws://192.168.1.5:6788',
+    ]);
+    expect(model.computers.map(model.labelOf), [
+      'MacBook（tun.example）',
+      'MacBook（192.168.1.5）',
+    ]);
+    model.renameComputer('k@ws://192.168.1.5:6788', '家里');
+    expect(model.labelOf(model.computers.last), '家里');
   });
 }

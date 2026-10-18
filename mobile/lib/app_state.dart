@@ -196,7 +196,7 @@ class SavedComputer {
     final order = raw['projectOrder'];
     final collapsed = raw['collapsed'];
     return SavedComputer(
-      id: id,
+      id: _migrateId(id, code),
       code: code,
       name: raw['name'] as String? ?? '',
       customName: raw['customName'] as String? ?? '',
@@ -205,6 +205,21 @@ class SavedComputer {
           ? collapsed.whereType<String>().toList()
           : null,
     );
+  }
+}
+
+/// 手机上一台"电脑"的 ID：电脑的公钥加配对码里的主地址。同一台电脑扫远程（隧道）和局域网的码
+/// 是两项，各走各的地址，可以来回切；只按公钥认的话，后扫的会把先扫的挤掉。
+String computerId(PairingOffer offer) =>
+    '${offer.publicKeyB64}@${offer.endpoint.trim()}';
+
+/// 旧版只按公钥存 ID，读出来时按它的配对码补上地址。
+String _migrateId(String id, String code) {
+  if (id.contains('@')) return id;
+  try {
+    return computerId(PairingOffer.parse(code));
+  } catch (_) {
+    return id;
   }
 }
 
@@ -236,8 +251,8 @@ class SavedComputers {
       try {
         final offer = PairingOffer.parse(text);
         return SavedComputers(
-          computers: [SavedComputer(id: offer.publicKeyB64, code: text)],
-          active: offer.publicKeyB64,
+          computers: [SavedComputer(id: computerId(offer), code: text)],
+          active: computerId(offer),
         );
       } catch (_) {
         return SavedComputers();
@@ -247,13 +262,18 @@ class SavedComputers {
       final map = jsonDecode(text);
       if (map is! Map) return SavedComputers();
       final list = map['computers'];
-      return SavedComputers(
-        computers: [
-          if (list is List)
-            for (final item in list) ?SavedComputer.fromJson(item),
-        ],
-        active: map['active'] as String?,
-      );
+      final computers = [
+        if (list is List)
+          for (final item in list) ?SavedComputer.fromJson(item),
+      ];
+      var active = map['active'] as String?;
+      if (active != null && !active.contains('@')) {
+        active = computers
+            .where((c) => c.id.startsWith('$active@'))
+            .firstOrNull
+            ?.id;
+      }
+      return SavedComputers(computers: computers, active: active);
     } catch (_) {
       return SavedComputers();
     }
@@ -297,6 +317,27 @@ class HiveAppModel extends ChangeNotifier {
   List<SavedComputer> get computers => saved.computers;
 
   SavedComputer? get current => saved.current;
+
+  /// 列表里显示的名字：同一台电脑存了几个地址（远程、局域网）时，没改过名的后面带上地址区分。
+  String labelOf(SavedComputer? c) {
+    if (c == null) return '';
+    if (c.customName.isNotEmpty) return c.label;
+    final key = c.id.split('@').first;
+    final twins = saved.computers.where((o) => o.id.split('@').first == key);
+    if (twins.length < 2) return c.label;
+    try {
+      final uri = Uri.parse(PairingOffer.parse(c.code).endpoint);
+      return '${c.label}（${uri.host}）';
+    } catch (_) {
+      return c.label;
+    }
+  }
+
+  /// 正在连（或连着）的那一项的 ID，见 [computerId]。
+  String? get activeId {
+    final o = offer;
+    return o == null ? null : computerId(o);
+  }
 
   /// 改一项设置：先改内存里的再存盘，界面马上跟着变。
   void updateSettings(void Function(AppSettings s) change) {
@@ -354,7 +395,7 @@ class HiveAppModel extends ChangeNotifier {
       _remember(parsed, raw.trim());
       // 先离开配对页。工作区列表回来再补，不让扫码结果卡在「正在连接」。
       notifyListeners();
-      unawaited(_fetchName(created, parsed.publicKeyB64));
+      unawaited(_fetchName(created, computerId(parsed)));
       await refreshWorktrees();
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -374,7 +415,7 @@ class HiveAppModel extends ChangeNotifier {
   }
 
   void _remember(PairingOffer offer, String code) {
-    final id = offer.publicKeyB64;
+    final id = computerId(offer);
     final existing = saved.computers.where((c) => c.id == id).firstOrNull;
     if (existing == null) {
       saved.computers.add(SavedComputer(id: id, code: code));
@@ -420,14 +461,14 @@ class HiveAppModel extends ChangeNotifier {
 
   Future<void> switchTo(String id) async {
     final computer = saved.computers.where((c) => c.id == id).firstOrNull;
-    if (computer == null || computer.id == offer?.publicKeyB64) return;
+    if (computer == null || computer.id == activeId) return;
     await connectCode(computer.code);
   }
 
   /// 忘掉一台电脑。忘掉的是正在连的那台时，接着连剩下的第一台，一台都没有就回到配对页。
   Future<void> removeComputer(String id) async {
     saved.computers.removeWhere((c) => c.id == id);
-    final wasActive = offer?.publicKeyB64 == id || saved.active == id;
+    final wasActive = activeId == id || saved.active == id;
     if (wasActive) saved.active = null;
     await store.write(saved.computers.isEmpty ? null : saved.encode());
     if (!wasActive) {
@@ -441,7 +482,7 @@ class HiveAppModel extends ChangeNotifier {
 
   /// 忘掉当前这台电脑。
   Future<void> forget() async {
-    final id = offer?.publicKeyB64 ?? saved.active;
+    final id = activeId ?? saved.active;
     if (id == null) {
       await _disconnect();
       return;

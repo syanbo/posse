@@ -150,7 +150,11 @@ class SettingsScreen extends StatelessWidget {
                       size: 24,
                       color: c.accent,
                     ),
-                    title: Text(model.current?.label ?? '没有连接'),
+                    title: Text(
+                      model.current == null
+                          ? '没有连接'
+                          : model.labelOf(model.current),
+                    ),
                     subtitle: Text('共配对 ${model.computers.length} 台'),
                     onTap: onComputers,
                   ),
