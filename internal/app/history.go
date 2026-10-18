@@ -109,8 +109,13 @@ type historyView struct {
 	detail    *historyDetail
 	tools     bool // 显示工具调用
 	list      ui.ListState
-	shown     string // 列表当前结果对应的查询条件，换了条件才回到顶部
-	messages  ui.ListState
+	// resQuery、resAgent 是列表上这份结果对应的查询条件：新结果回来之前照旧显示它，
+	// 不至于一敲字就闪出"没有找到"；换了条件的结果回来时列表回到顶部
+	resQuery string
+	resAgent int
+	askedAt  time.Time // 最近一次请求发出（防抖结束）的时间
+	failed   string    // 最近一次请求的错误
+	messages ui.ListState
 
 	mu      sync.Mutex
 	req     int // 列表请求的序号，只采用最新一次的结果
@@ -129,6 +134,11 @@ func (h *historyView) setSessions(ss []history.Session) {
 	}
 }
 
+// pending 报告搜索框或筛选已经变了、对应的结果还没回来：列表上仍是上一次的结果。
+func (h *historyView) pending() bool {
+	return h.loaded && (h.resQuery != strings.TrimSpace(h.query) || h.resAgent != h.agent)
+}
+
 func (h *historyView) want() (query string, agent int, req int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -145,6 +155,7 @@ func (a *app) searchHistory(delay time.Duration) {
 	h.req++
 	req := h.req
 	h.mu.Unlock()
+	h.askedAt = time.Now().Add(delay)
 	time.AfterFunc(delay, func() { a.fetchHistory(req) })
 }
 
@@ -174,14 +185,15 @@ func (a *app) fetchHistory(req int) {
 		return
 	}
 	if err != nil {
+		a.win.Update(func() { h.failed = err.Error() })
 		return
 	}
 	a.win.Update(func() {
-		h.loaded = true
+		h.loaded, h.failed = true, ""
 		h.status, h.anyWord = res.Status, res.Any
 		// 列表按会话 ID 保持滚动位置，定期刷新时有用；换了搜索词或筛选就该从第一条看起
-		if shown := fmt.Sprint(agentIdx, "\x00", params["query"]); shown != h.shown {
-			h.shown = shown
+		if q := params["query"].(string); q != h.resQuery || agentIdx != h.resAgent {
+			h.resQuery, h.resAgent = q, agentIdx
 			h.list.ScrollTo(0, ui.Start)
 		}
 		if method == "history.list" {
@@ -408,7 +420,7 @@ func (a *app) historyBoard(c *ui.Context) {
 			a.searchHistory(0)
 		}
 	})
-	searching := strings.TrimSpace(h.query) != ""
+	searching := h.resQuery != ""
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
@@ -442,7 +454,7 @@ func (a *app) stepSession(step int) {
 		row int // 在列表里是第几行
 	}
 	var items []item
-	if strings.TrimSpace(h.query) != "" {
+	if h.resQuery != "" {
 		for i, hit := range h.hits {
 			seq := -1
 			if hit.Role != "title" {
@@ -484,7 +496,7 @@ func (a *app) historyTotals(c *ui.Context) {
 	h := &a.history
 	st := h.status
 	sessions, messages, byAgent := st.Sessions, fmt.Sprintf("%s 条消息", thousands(st.Messages)), st.ByAgent
-	if strings.TrimSpace(h.query) != "" {
+	if h.resQuery != "" {
 		byAgent = map[string]int{}
 		n := 0
 		for _, hit := range h.hits {
@@ -492,7 +504,7 @@ func (a *app) historyTotals(c *ui.Context) {
 			n += hit.Matches
 		}
 		sessions, messages = len(h.hits), fmt.Sprintf("%s 条消息命中", thousands(n))
-	} else if ag := historyAgents[h.agent]; ag != "" {
+	} else if ag := historyAgents[h.resAgent]; ag != "" {
 		sessions = st.ByAgent[ag]
 	}
 	// 没有结果时下面的空状态已经说明了
@@ -500,7 +512,7 @@ func (a *app) historyTotals(c *ui.Context) {
 		return
 	}
 	count := thousands(sessions) + " 个会话"
-	if strings.TrimSpace(h.query) != "" {
+	if h.resQuery != "" {
 		count = thousands(sessions) + " 个会话匹配"
 		if sessions >= historyLimit {
 			// 搜索只取最相关的前 historyLimit 个
@@ -510,11 +522,11 @@ func (a *app) historyTotals(c *ui.Context) {
 	ui.Column(c).Padding(14, 20, 10, 20).Gap(8).Children(func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, count).FontSize(13).FontWeight(500).FontFeatures("tnum")
-			if h.agent == 0 || strings.TrimSpace(h.query) != "" {
+			if h.resAgent == 0 || h.resQuery != "" {
 				ui.Text(c, messages).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
 		})
-		if h.agent != 0 {
+		if h.resAgent != 0 {
 			return
 		}
 		ui.Row(c).Gap(14).Wrap().Children(func() {
@@ -580,7 +592,22 @@ func (a *app) historyNotice(c *ui.Context, searching bool) {
 	t := c.Theme()
 	h := &a.history
 	var msg string
+	// 结果没回来时先照旧显示上一次的；超过 150ms 才提示，快的查询不闪
+	waiting := false
+	if h.pending() && h.failed == "" {
+		if wait := time.Until(h.askedAt.Add(150 * time.Millisecond)); wait > 0 {
+			c.After(wait)
+		} else {
+			waiting = true
+		}
+	}
 	switch {
+	case h.failed != "":
+		msg = "查询失败：" + h.failed
+	case waiting && strings.TrimSpace(h.query) != "":
+		msg = "正在搜索…"
+	case waiting:
+		msg = "正在加载…"
 	case h.status.Indexing && h.status.Progress.Total > 0:
 		msg = fmt.Sprintf("正在建立索引，已检查 %d / %d 个会话文件，结果会陆续补全", h.status.Progress.Done, h.status.Progress.Total)
 	case h.status.Indexing:
@@ -599,7 +626,7 @@ func (a *app) historyNotice(c *ui.Context, searching bool) {
 func (a *app) sessionList(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
-	if h.loaded && len(h.sessions) == 0 && !h.status.Indexing {
+	if h.loaded && len(h.sessions) == 0 && !h.status.Indexing && !h.pending() {
 		a.historyEmpty(c, "还没有会话记录", "Hive 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
 		return
 	}
@@ -676,8 +703,8 @@ func (h *historyView) groupRows() []historyRow {
 
 func (a *app) hitList(c *ui.Context) {
 	h := &a.history
-	if h.loaded && len(h.hits) == 0 && !h.status.Indexing {
-		a.historyEmpty(c, "没有找到“"+strings.TrimSpace(h.query)+"”", "中文按字匹配，英文按词的开头匹配；加引号可以搜整句。")
+	if h.loaded && len(h.hits) == 0 && !h.status.Indexing && !h.pending() {
+		a.historyEmpty(c, "没有找到“"+h.resQuery+"”", "中文按字匹配，英文按词的开头匹配；加引号可以搜整句。")
 		return
 	}
 	c.After(30 * time.Second)
@@ -810,7 +837,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 		})
 		return
 	}
-	ns := queryWords(h.query)
+	ns := queryWords(h.resQuery)
 	h.messages.Key = func(i int) any { return [2]any{msgs[i].msg.Seq, msgs[i].tools != nil} }
 	if !h.placed {
 		// 从搜索结果打开时定位到命中的消息，否则从第一句读起

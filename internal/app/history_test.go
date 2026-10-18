@@ -3,6 +3,7 @@ package app
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -56,5 +57,32 @@ func TestHistoryTotalsFollowSearch(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("3 个会话匹配") || !tt.HasText("5 条消息命中") || tt.HasText("424 个会话") {
 		t.Fatalf("search totals: %v", tt.Texts())
+	}
+}
+
+// 敲搜索词后结果回来之前照旧显示原来的列表，不闪"没有找到"；等久了提示正在搜索，
+// 这个词的结果确实为空才显示"没有找到"。
+func TestHistorySearchPending(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	previewHistory(a, "")
+	h := &a.history
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	h.query, h.askedAt = "xyz", time.Now()
+	tt.Frame()
+	if tt.HasText("没有找到“xyz”") || !tt.HasText("清理磁盘") || tt.HasText("正在搜索…") {
+		t.Fatal("old list should stay while the search runs")
+	}
+	h.askedAt = time.Now().Add(-time.Second)
+	tt.Frame()
+	if !tt.HasText("正在搜索…") {
+		t.Fatal("slow search shows no progress")
+	}
+	h.hits, h.resQuery = nil, "xyz"
+	h.setSessions(nil)
+	tt.Frame()
+	if !tt.HasText("没有找到“xyz”") || tt.HasText("正在搜索…") {
+		t.Fatal("empty result should say so")
 	}
 }

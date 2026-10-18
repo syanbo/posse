@@ -126,7 +126,7 @@ func previewHistory(a *app, query string) {
 	h := &a.history
 	h.loaded, h.status = true, historyStatus{Sessions: 424, Messages: 18342, ByAgent: map[string]int{"claude": 251, "codex": 120, "cursor": 9, "grok": 44}}
 	a.selected = historyBoardID
-	h.query = query
+	h.query, h.resQuery = query, query
 	if query == "" {
 		h.setSessions(sessions)
 		return
