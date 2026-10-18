@@ -1021,11 +1021,6 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 
 // tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
-	if cur != nil {
-		if task := a.taskByWorker(cur.ID); task != nil && pressable(textButton(c, "返回任务")).Clicked() {
-			a.openTask(task.ID)
-		}
-	}
 	if w.Branch != "" {
 		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, "Git 日志 ⌘9")
@@ -1044,19 +1039,25 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 }
 
-// sessionButtons 是 agent 终端右上角的一组按钮：这个会话粘贴过的图片、用到的技能与 MCP。
-// 放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
+// sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
+// 这个会话粘贴过的图片、用到的技能与 MCP。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
-	if cur.Agent == "" {
+	task := a.taskByWorker(cur.ID)
+	if cur.Agent == "" && task == nil {
 		return
 	}
 	p := colors(c.Theme())
-	ui.Row(c).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
+	ui.Column(c).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
 		BorderWidth(1).BorderColor(p.line).Children(func() {
+		if task != nil && iconButton(c.Key("back-to-task"), iconTasks, "返回任务").Clicked() {
+			a.openTask(task.ID)
+		}
 		if cur.Agent == "claude" {
 			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
 		}
-		a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+		if cur.Agent != "" {
+			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+		}
 	})
 }
 

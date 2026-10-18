@@ -34,7 +34,7 @@ func TestApplyKeepsSelection(t *testing.T) {
 }
 
 // 点侧栏「任务」回到总览，不留在上次打开的任务里；详情里的「总览」也一样。
-// worker 终端的标签栏有「返回任务」。
+// worker 终端右上角的会话按钮里有「返回任务」。
 func TestTaskHome(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
@@ -76,6 +76,13 @@ func TestWorkerReturnsToTask(t *testing.T) {
 	tt.Frame()
 	if _, ok := tt.Find("返回任务"); !ok {
 		t.Fatal("worker has no return button")
+	}
+	if err := tt.Click("返回任务"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != taskBoardID {
+		t.Fatalf("return to task: selected %q", a.selected)
 	}
 }
 
