@@ -99,6 +99,7 @@ type Terminal struct {
 	// pauseMu 保护 pause：交接期间读协程停在 park 里
 	pauseMu sync.Mutex
 	pause   *pauseState
+	start   func() // 接过来的终端还没开始读 PTY 时，Resume 调它
 
 	// smu 保护 emu（libghostty-vt 非线程安全），并串行化"喂给内核 + 广播给接入者"，
 	// 接入时的快照与之后的输出流因此恰好衔接

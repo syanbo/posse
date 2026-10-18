@@ -59,10 +59,15 @@ type handoffAck struct {
 
 // handoffState 记着旧进程这边的交接进度。
 type handoffState struct {
-	mu    sync.Mutex
-	on    bool // 交接进行中
-	done  bool // 已经交出去了，退出时不关终端、不删 socket
-	exits []pendingExit
+	// startMu 让新建终端（读锁，覆盖检查、启动、登记整段）和交接开始（写锁）互斥，
+	// 交接取终端快照时不会漏掉正在建的终端
+	startMu sync.RWMutex
+
+	mu       sync.Mutex
+	on       bool            // 交接进行中
+	done     bool            // 已经交出去了，退出时不关终端、不删 socket
+	exported map[string]bool // PTY 已经交出去的终端，退出由新进程处理
+	exits    []pendingExit
 }
 
 type pendingExit struct {
@@ -82,11 +87,22 @@ func (h *handoffState) handedOff() bool {
 	return h.done
 }
 
-// deferExit 在交接期间记下终端退出，返回 true 表示调用方不用处理。
+func (h *handoffState) export(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.exported == nil {
+		h.exported = map[string]bool{}
+	}
+	h.exported[id] = true
+}
+
+// deferExit 在 PTY 已经交出去的终端退出时记下，返回 true 表示调用方不用处理：
+// 交接成功由新进程盯着（它收不到退出码时记 -1），失败时恢复后补上。
+// 还没交出去的终端照常处理，交过去的是已结束的记录，新进程不再处理它的退出。
 func (h *handoffState) deferExit(id string, code int) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if !h.on && !h.done {
+	if !h.exported[id] {
 		return false
 	}
 	if h.on {
@@ -181,13 +197,15 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 		exe = d.launcher.Exe
 	}
 	h := &d.handoff
+	h.startMu.Lock()
 	h.mu.Lock()
-	if h.on || h.done {
-		h.mu.Unlock()
+	busy := h.on || h.done
+	h.on = !busy
+	h.mu.Unlock()
+	h.startMu.Unlock()
+	if busy {
 		return nil, rpc.Errorf(rpc.CodeConflict, "handoff already in progress")
 	}
-	h.on = true
-	h.mu.Unlock()
 
 	n, pid, err := d.handOver(exe)
 	h.mu.Lock()
@@ -196,6 +214,8 @@ func (d *Daemon) daemonHandoff(ctx context.Context, raw json.RawMessage, stop co
 	h.exits = nil
 	if err == nil {
 		h.done = true
+	} else {
+		h.exported = nil
 	}
 	h.mu.Unlock()
 	if err != nil {
@@ -231,7 +251,13 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	cmd.Dir = d.cfg.Home
 	cmd.Env = append(os.Environ(), "HIVE_HOME="+d.cfg.Home, handoffEnv+"=3")
 	cmd.ExtraFiles = []*os.File{theirs}
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	// 和 EnsureDaemon 一样重新打开日志、太大先轮转：一直交接下去常驻进程不重启，不能一直沿用旧的
+	if logf, lerr := OpenLog(d.cfg.Home); lerr == nil {
+		defer logf.Close()
+		cmd.Stdout, cmd.Stderr = logf, logf
+	} else {
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	err = cmd.Start()
 	theirs.Close()
@@ -289,6 +315,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 		paused = append(paused, s)
 		if f != nil {
 			files = append(files, f)
+			d.handoff.export(s.ID)
 		}
 		s.mu.Lock()
 		batch.Terms = append(batch.Terms, handoffTerm{Term: rec, Agent: s.agent, Hooked: s.hooked, HookedPg: s.hookedPg, Fg: s.fg})

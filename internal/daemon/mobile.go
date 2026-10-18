@@ -18,7 +18,8 @@ import (
 type mobileHost struct{ d *Daemon }
 
 // startMobile 打开手机服务；已经配对过手机时立刻监听。端口可用 HIVE_MOBILE_PORT 改（端到端测试用，免得和日常的冲突）。
-func (d *Daemon) startMobile() {
+// newMobile 读手机配置，还不监听：交接过来时端口还在旧进程手里。
+func (d *Daemon) newMobile() {
 	port := mobile.DefaultPort
 	if v, err := strconv.Atoi(os.Getenv("HIVE_MOBILE_PORT")); err == nil {
 		port = v
@@ -28,10 +29,16 @@ func (d *Daemon) startMobile() {
 		log.Printf("mobile: %v", err)
 		return
 	}
-	if err := m.Start(); err != nil {
+	d.mobile = m
+}
+
+func (d *Daemon) startMobile() {
+	if d.mobile == nil {
+		return
+	}
+	if err := d.mobile.Start(); err != nil {
 		log.Printf("%v", err)
 	}
-	d.mobile = m
 }
 
 func (h mobileHost) State() mobile.State {

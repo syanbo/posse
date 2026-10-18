@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"hive/internal/daemon"
 	"hive/internal/rpc"
 )
 
@@ -44,9 +45,7 @@ func (c *Client) EnsureDaemon() error {
 	if err := os.MkdirAll(c.Home, 0o700); err != nil {
 		return err
 	}
-	logPath := filepath.Join(c.Home, "daemon.log")
-	rotateLog(logPath, maxDaemonLog)
-	logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	logf, err := daemon.OpenLog(c.Home)
 	if err != nil {
 		return err
 	}
@@ -60,7 +59,8 @@ func (c *Client) EnsureDaemon() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
-	cmd.Process.Release()
+	// 窗口一直开着，常驻进程交接或重启退出后要由这里收走，否则留下僵尸进程
+	go cmd.Wait()
 	// 旧进程若还在退出，新进程要等它释放锁，所以多给些时间
 	for i := 0; i < 300; i++ {
 		if c.Up() {
@@ -69,14 +69,4 @@ func (c *Client) EnsureDaemon() error {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return fmt.Errorf("daemon did not start; see %s", filepath.Join(c.Home, "daemon.log"))
-}
-
-// maxDaemonLog 是 daemon.log 的上限：拉起常驻进程前超过它就改名成 daemon.log.1，只留一份旧的。
-// 日志由拉起方打开后交给常驻进程，常驻进程运行期间不轮转，按现在的写入量一次运行涨不了多少。
-const maxDaemonLog = 5 << 20
-
-func rotateLog(path string, max int64) {
-	if fi, err := os.Stat(path); err == nil && fi.Size() > max {
-		os.Rename(path, path+".1")
-	}
 }

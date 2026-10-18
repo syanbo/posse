@@ -46,6 +46,12 @@ func TestPauseAdopt(t *testing.T) {
 	if nt.Title() != "hello" || nt.Pid() != old.Pid() || !nt.ContainsText("ready") {
 		t.Fatalf("adopted state: title %q pid %d/%d lines %q", nt.Title(), nt.Pid(), old.Pid(), nt.Lines())
 	}
+	// Resume 之前不读：交接没确认时输出还留在内核里
+	time.Sleep(100 * time.Millisecond)
+	if nt.ContainsText("got abc") {
+		t.Fatal("adopted terminal read before Resume")
+	}
+	nt.Resume()
 	waitFor(t, "output after handoff", func() bool { return nt.ContainsText("got abc 你") })
 	if err := nt.Send([]byte("z\n")); err != nil {
 		t.Fatal(err)
@@ -172,5 +178,6 @@ func TestAdoptRestoresDeskSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer nt.Close(time.Second)
+	nt.Resume()
 	waitFor(t, "desk size", func() bool { c, r := nt.Size(); return c == 100 && r == 30 })
 }

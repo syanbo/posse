@@ -66,6 +66,8 @@ func (d *Daemon) startAgent(w store.Workspace, name, prompt string, cols, rows i
 }
 
 func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName string, cols, rows int, extraEnv ...string) (*session, error) {
+	d.handoff.startMu.RLock()
+	defer d.handoff.startMu.RUnlock()
 	if d.handoff.active() {
 		return nil, rpc.Errorf(rpc.CodeConflict, "daemon is handing off to a new version, try again")
 	}
@@ -380,7 +382,8 @@ func (d *Daemon) terminalWait(ctx context.Context, raw json.RawMessage) (any, er
 			matched = !s.Running()
 		case "idle":
 			since := time.Since(s.LastOutput())
-			matched = since >= idle || !s.Running()
+			// 交接期间不读 PTY，没有输出不代表空闲；等交接结束回 restarting，CLI 到新进程上接着等
+			matched = (since >= idle && !d.handoff.active()) || !s.Running()
 			if !matched {
 				tick = time.After(idle - since)
 			}

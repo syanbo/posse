@@ -113,14 +113,17 @@ func (t *Terminal) Pause() (State, *os.File, error) {
 	return s, f, nil
 }
 
-// Resume 在交接失败后接着读 PTY。
+// Resume 在交接失败后接着读 PTY；接过来的终端在新进程回话成功后由它开始读。
 func (t *Terminal) Resume() {
 	t.pauseMu.Lock()
-	p := t.pause
-	t.pause = nil
+	p, start := t.pause, t.start
+	t.pause, t.start = nil, nil
 	t.pauseMu.Unlock()
 	if p != nil {
 		close(p.resume)
+	}
+	if start != nil {
+		start()
 	}
 }
 
@@ -137,6 +140,7 @@ func (t *Terminal) park() {
 }
 
 // Adopt 接过旧常驻进程交来的终端：f 是 PTY 主端（Ended 时为 nil），程序不是自己的子进程，退出靠 kqueue 盯 pid。
+// 先不读 PTY，等调用方确认交接成功后 Resume。
 func Adopt(o Options, s State, f *os.File) (*Terminal, error) {
 	if err := loadLib(); err != nil {
 		return nil, err
@@ -181,22 +185,24 @@ func Adopt(o Options, s State, f *os.File) (*Terminal, error) {
 		return nil, err
 	}
 	t.idle = time.AfterFunc(compressAfter, t.compress)
-	t.run()
 	watchExit(s.Pid, func(code int) { t.finish(code, o.OnExit) })
-	// 光标保存位置、调色板这些快照带不过去：改一下尺寸再改回来，让程序整屏重画。
-	// 手机看着时换回界面的尺寸，本身就会重画
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		if s.DeskCols > 0 && s.DeskRows > 0 && (s.DeskCols != s.Cols || s.DeskRows != s.Rows) {
-			t.Resize(s.DeskCols, s.DeskRows)
-			return
-		}
-		if s.Rows > 1 {
-			t.setPTYSize(s.Cols, s.Rows-1)
-			time.Sleep(50 * time.Millisecond)
-		}
-		t.setPTYSize(s.Cols, s.Rows)
-	}()
+	t.start = func() {
+		t.run()
+		// 光标保存位置、调色板这些快照带不过去：改一下尺寸再改回来，让程序整屏重画。
+		// 手机看着时换回界面的尺寸，本身就会重画
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			if s.DeskCols > 0 && s.DeskRows > 0 && (s.DeskCols != s.Cols || s.DeskRows != s.Rows) {
+				t.Resize(s.DeskCols, s.DeskRows)
+				return
+			}
+			if s.Rows > 1 {
+				t.setPTYSize(s.Cols, s.Rows-1)
+				time.Sleep(50 * time.Millisecond)
+			}
+			t.setPTYSize(s.Cols, s.Rows)
+		}()
+	}
 	return t, nil
 }
 
@@ -274,7 +280,8 @@ func carry(tail, p []byte) []byte {
 	if len(tail) == 0 {
 		c := safeCut(p)
 		if c == len(p) {
-			return tail
+			// 不留着底层数组：写过一段长 OSC 后它可能有 1MB
+			return nil
 		}
 		if len(p)-c > maxTail {
 			return nil
@@ -283,7 +290,7 @@ func carry(tail, p []byte) []byte {
 	}
 	all := append(tail, p...)
 	c := safeCut(all)
-	if len(all)-c > maxTail {
+	if c == len(all) || len(all)-c > maxTail {
 		return nil
 	}
 	return all[:copy(all, all[c:])]

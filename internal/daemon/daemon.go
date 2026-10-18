@@ -178,10 +178,17 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	sock := SocketPath(cfg.Home)
 	lockPath := filepath.Join(cfg.Home, "hived.lock")
+	var lockMu sync.Mutex
 	var unlock func()
 	if in == nil {
 		if unlock, err = lock(lockPath, 10*time.Second); err != nil {
 			return err
+		}
+		// 交接过来的新进程拿到监听后不等锁就开始服务：socket 有人应答就说明它在，不能删掉它的 socket
+		if c, err := net.DialTimeout("unix", sock, 500*time.Millisecond); err == nil {
+			c.Close()
+			unlock()
+			return errors.New("another daemon is serving " + sock)
 		}
 		// 持有锁之后才动 socket：旧进程可能仍在关闭终端，必须等它完全退出
 		os.Remove(sock)
@@ -207,6 +214,8 @@ func Run(ctx context.Context, cfg Config) error {
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
 		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var keep []string
 	var ln *net.UnixListener
 	if in != nil {
@@ -219,13 +228,21 @@ func Run(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("adopt: %w", err)
 		}
 		keep, ln = in.ids(), in.ln
-		log.Printf("took over %d terminals", len(in.batch.Terms))
-		// 旧进程退出前要关手机服务、历史索引，多等一会儿
-		if unlock, err = lock(lockPath, time.Minute); err != nil {
-			return err
+		// 回话成功才开始读 PTY：失败时旧进程恢复读，这边不能先读走输出
+		d.mu.Lock()
+		for _, s := range d.terms {
+			s.Resume()
 		}
+		d.mu.Unlock()
+		log.Printf("took over %d terminals", len(in.batch.Terms))
 	}
-	defer unlock()
+	defer func() {
+		lockMu.Lock()
+		if unlock != nil {
+			unlock()
+		}
+		lockMu.Unlock()
+	}()
 
 	if n, err := st.MarkRunningLost(time.Now(), keep); err != nil {
 		return err
@@ -248,7 +265,7 @@ func Run(ctx context.Context, cfg Config) error {
 		ln = l.(*net.UnixListener)
 	}
 	d.ln = newGateListener(ln)
-	// 交接出去之后 socket 归新进程
+	// 交接出去之后 socket 和 pid 文件归新进程
 	defer func() {
 		if !d.handoff.handedOff() {
 			os.Remove(sock)
@@ -262,11 +279,29 @@ func Run(ctx context.Context, cfg Config) error {
 		}
 	}()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	defer d.awake.close()
 	go d.awakeLoop(ctx)
-	d.startMobile()
+	d.newMobile()
+	if in == nil {
+		d.startMobile()
+	} else {
+		// 交接过来的不等锁就开始服务（hook 只等 2 秒），旧进程退出放锁之后才开手机服务：端口在它手里。
+		// 一直等下去，等不到也不退出，终端都在这个进程里
+		go func() {
+			for ctx.Err() == nil {
+				u, err := lock(lockPath, time.Minute)
+				if err != nil {
+					log.Printf("waiting for the old daemon to exit: %v", err)
+					continue
+				}
+				lockMu.Lock()
+				unlock = u
+				lockMu.Unlock()
+				d.startMobile()
+				return
+			}
+		}()
+	}
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
 	log.Printf("hive daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
