@@ -64,6 +64,9 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 			return [3]any{r.group, r.header, r.entry.Path + r.stash.Ref}
 		}
 		ui.List(c, list, len(rows), func(i int) { a.changeRow(c, w, v, rows[i]) }).Grow(1).Padding(0, 0, 8, 0)
+		if g.tab == 0 {
+			a.changesKeys(c, w, v, rows)
+		}
 	}
 	// ⌘K 时在搁置分页上：切回提交分页，提交框才在
 	if g.focusMsg {
@@ -71,6 +74,58 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if g.tab == 0 {
 		a.commitBox(c, v)
+	}
+}
+
+// changesKeys 是改动列表的键盘操作，照 WebStorm 的 Commit 工具窗口：焦点在列表里（点过一行）时
+// ↑↓ 换文件并在 diff 标签里预览，空格勾选、取消勾选，回车打开文件。冲突文件点开是编辑器，不在 ↑↓ 之列。
+func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []changeRow) {
+	g := &v.git
+	var files []int
+	cur := -1
+	for i, r := range rows {
+		if r.header || r.entry.Conflict {
+			continue
+		}
+		if v.cur != nil && v.cur.path == diffKey(g.absPath(r.entry.Path), changeSpec(r.entry)) {
+			cur = len(files)
+		}
+		files = append(files, i)
+	}
+	if len(files) == 0 {
+		return
+	}
+	step := 0
+	switch {
+	case g.list.Shortcut(c, 0, ui.KeyDown):
+		step = 1
+	case g.list.Shortcut(c, 0, ui.KeyUp):
+		step = -1
+	}
+	if step != 0 {
+		j := cur + step
+		if cur < 0 {
+			j = 0
+		}
+		if j >= 0 && j < len(files) {
+			a.openDiff(w, changeSpec(rows[files[j]].entry), nil, true)
+			g.list.ScrollIntoView(files[j])
+			// 打开 diff 不该把焦点从列表拿走，接着按 ↑↓
+			g.list.Focus(c)
+		}
+		return
+	}
+	if cur < 0 {
+		return
+	}
+	e := rows[files[cur]].entry
+	switch {
+	case g.list.Shortcut(c, 0, ui.KeySpace):
+		g.setPicked(e, !g.picked(e))
+	case g.list.Shortcut(c, 0, ui.KeyEnter):
+		if statusLetter(e) != 'D' {
+			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
+		}
 	}
 }
 
@@ -258,6 +313,8 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
 		} else {
 			a.openDiff(w, spec, nil, true)
+			// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
+			g.list.Focus(c)
 		}
 	}
 	row.ContextMenu(func(m *ui.Menu) {

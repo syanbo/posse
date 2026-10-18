@@ -1444,3 +1444,37 @@ func TestChangeBarClick(t *testing.T) {
 		t.Fatal("clicking the text should close the card")
 	}
 }
+
+// 改动列表点过一行后：↑↓ 换文件预览 diff，空格勾选，回车打开文件。
+func TestChangesKeyboard(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	if err := tt.Click("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "README diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.rel == "README.md" })
+	key := func(k ui.Key, want string) {
+		t.Helper()
+		tt.Key(0, k)
+		until(t, tt, want, func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.rel == want })
+	}
+	key(ui.KeyDown, "main.go")
+	key(ui.KeyDown, "notes.txt")
+	notes := slices.IndexFunc(v.git.status.Entries, func(e gitx.Entry) bool { return e.Path == "notes.txt" })
+	e := v.git.status.Entries[notes]
+	if v.git.picked(e) {
+		t.Fatal("untracked file should start unpicked")
+	}
+	tt.Key(0, ui.KeySpace)
+	tt.Frame()
+	if !v.git.picked(e) {
+		t.Fatal("space should pick notes.txt")
+	}
+	key(ui.KeyDown, "notes.txt") // 到底不动
+	key(ui.KeyUp, "main.go")
+	tt.Key(0, ui.KeyEnter)
+	until(t, tt, "open main.go", func() bool { return v.cur != nil && v.cur.diff == nil && v.cur.path == filepath.Join(root, "main.go") })
+}
