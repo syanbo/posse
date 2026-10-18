@@ -1,11 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../workspace/models.dart';
+import 'clipboard_paste.dart';
+import 'image_pick.dart';
+import 'image_upload.dart';
 import 'markdown_view.dart';
 import 'merge.dart';
 import 'models.dart';
@@ -680,6 +685,12 @@ class _ChatScreenState extends State<ChatScreen> {
   var _sending = false;
   var _loadingEarlier = false;
 
+  /// 选好、还没发出去的图片。发出去时按顺序存到电脑的临时目录，再把路径写进终端。
+  final _pending = <Uint8List>[];
+
+  /// 已经传到电脑上的图片和路径。发送失败后重发不再传一遍。
+  final _uploaded = <Uint8List, String>{};
+
   /// 这个会话的终端已经不在了：输入框停用，顶上说一声。
   var _ended = false;
   var _gone = false;
@@ -900,9 +911,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _send(String text, {required bool enter}) async {
+  Future<SendOutcome> _send(String text, {required bool enter}) async {
     final current = _rpc;
-    if (current == null) return;
+    if (current == null) return SendOutcome.unknown;
     final outcome = await sendTerminal(
       current,
       terminal: tab.terminalId,
@@ -910,13 +921,129 @@ class _ChatScreenState extends State<ChatScreen> {
       enter: enter,
     );
     final note = sendOutcomeText(outcome);
-    if (!mounted) return;
+    if (!mounted) return outcome;
     setState(() {
       _notice = note.isEmpty ? null : note;
       if (outcome == SendOutcome.accepted && enter && text == _input.text) {
         _input.clear();
       }
     });
+    return outcome;
+  }
+
+  void _addImages(List<Uint8List> images) {
+    if (!mounted || images.isEmpty) return;
+    final room = maxChatImages - _pending.length;
+    setState(() {
+      _pending.addAll(images.take(room));
+      if (images.length > room) _notice = '一次最多 $maxChatImages 张';
+    });
+  }
+
+  void _insertText(String text) {
+    final value = _input.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final next = value.text.replaceRange(start, end, text);
+    _input.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    setState(() {});
+  }
+
+  /// 文字插进输入框，图片加进待发列表。两边都没有就告诉用户。
+  Future<void> _pasteClipboard() async {
+    if (_sending) return;
+    try {
+      final paste = await readClipboardPaste();
+      if (!mounted) return;
+      if (paste.isText) {
+        _insertText(paste.text!);
+        return;
+      }
+      if (paste.isImage) {
+        _addImages([paste.image!]);
+        return;
+      }
+      setState(() => _notice = '剪贴板里没有文字或图片');
+    } catch (error) {
+      if (mounted) setState(() => _notice = friendlyError(error));
+    }
+  }
+
+  void _onContentInserted(KeyboardInsertedContent content) {
+    final data = content.data;
+    if (data == null ||
+        data.isEmpty ||
+        !content.mimeType.startsWith('image/')) {
+      return;
+    }
+    _addImages([data]);
+  }
+
+  Future<void> _pickImage() async {
+    if (_rpc == null || _sending) return;
+    try {
+      final ask = await askImageSource(context, clipboard: true);
+      if (ask == null || !mounted) return;
+      switch (ask) {
+        case ImageAsk.gallery:
+          final room = maxChatImages - _pending.length;
+          if (room < 1) {
+            setState(() => _notice = '一次最多 $maxChatImages 张');
+            return;
+          }
+          _addImages(await pickGalleryImages(limit: room));
+        case ImageAsk.camera:
+          final one = await pickOneImage(ImageSource.camera);
+          if (one != null) _addImages([one]);
+        case ImageAsk.clipboard:
+          await _pasteClipboard();
+      }
+    } catch (error) {
+      if (mounted) setState(() => _notice = friendlyError(error));
+    }
+  }
+
+  /// 有图就按顺序全部上传，说明和路径一次提交。任何一张失败，输入和图片都留着。
+  Future<void> _submit() async {
+    final current = _rpc;
+    final images = List<Uint8List>.from(_pending);
+    final caption = _input.text;
+    if (current == null || _sending) return;
+    if (caption.trim().isEmpty && images.isEmpty) return;
+    setState(() {
+      _sending = true;
+      if (images.isNotEmpty) _notice = '正在发送图片…';
+    });
+    try {
+      var text = caption;
+      if (images.isNotEmpty) {
+        final paths = <String>[];
+        for (final image in images) {
+          paths.add(_uploaded[image] ??= await uploadImage(current, image));
+        }
+        text = imageMessage(caption, paths);
+      }
+      final outcome = await _send(text, enter: true);
+      if (!mounted) return;
+      if (outcome == SendOutcome.accepted) {
+        setState(() {
+          // 上传期间改过的输入和新加的图片留着，只去掉发出去的
+          if (_input.text == caption) _input.clear();
+          _pending.removeRange(0, images.length);
+          for (final image in images) {
+            _uploaded.remove(image);
+          }
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _notice = friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _decide(String key) async {
@@ -1095,6 +1222,61 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void _pasteFromMenu(EditableTextState state) {
+    state.hideToolbar();
+    unawaited(_pasteClipboard());
+  }
+
+  /// 系统菜单和 Flutter 菜单的粘贴都走同一条：只认文字和图片。
+  Widget _composerMenu(BuildContext context, EditableTextState state) {
+    if (SystemContextMenu.isSupported(context)) {
+      final label = WidgetsLocalizations.of(context).pasteButtonLabel;
+      final items = <IOSSystemContextMenuItem>[];
+      var sawPaste = false;
+      for (final item in SystemContextMenu.getDefaultItems(state)) {
+        if (item is IOSSystemContextMenuItemPaste) {
+          sawPaste = true;
+          items.add(
+            IOSSystemContextMenuItemCustom(
+              title: label,
+              onPressed: () => _pasteFromMenu(state),
+            ),
+          );
+        } else {
+          items.add(item);
+        }
+      }
+      if (!sawPaste) {
+        items.add(
+          IOSSystemContextMenuItemCustom(
+            title: label,
+            onPressed: () => _pasteFromMenu(state),
+          ),
+        );
+      }
+      return SystemContextMenu.editableText(
+        editableTextState: state,
+        items: items,
+      );
+    }
+    final items = state.contextMenuButtonItems.map((item) {
+      if (item.type != ContextMenuButtonType.paste) return item;
+      return item.copyWith(onPressed: () => _pasteFromMenu(state));
+    }).toList();
+    if (!items.any((item) => item.type == ContextMenuButtonType.paste)) {
+      items.add(
+        ContextMenuButtonItem(
+          type: ContextMenuButtonType.paste,
+          onPressed: () => _pasteFromMenu(state),
+        ),
+      );
+    }
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: state.contextMenuAnchors,
+      buttonItems: items,
+    );
+  }
+
   Widget _composer() {
     final c = HiveColors.of(context);
     if (_ended) {
@@ -1115,7 +1297,10 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     }
-    final ready = !_sending && _input.text.trim().isNotEmpty;
+    final ready =
+        !_sending &&
+        _rpc != null &&
+        (_pending.isNotEmpty || _input.text.trim().isNotEmpty);
     return SafeArea(
       top: false,
       child: Padding(
@@ -1128,50 +1313,139 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
           padding: const EdgeInsets.all(6),
-          child: Row(
-            // 发送按钮和输入框上下居中
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _input,
-                  minLines: 1,
-                  maxLines: 6,
-                  textInputAction: TextInputAction.newline,
-                  onChanged: (_) => setState(() {}),
-                  style: TextStyle(fontSize: Fs.body, color: c.text),
-                  decoration: InputDecoration(
-                    hintText: '回复 ${chatWho('assistant', tab.agent)}',
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    isDense: true,
-                    // 单行时和 34 高的发送按钮一样高
-                    contentPadding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+              if (_pending.isNotEmpty)
+                SizedBox(
+                  height: 56,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                    itemCount: _pending.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      return SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(Rd.button),
+                              child: Image.memory(
+                                _pending[index],
+                                width: 48,
+                                height: 48,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: Tooltip(
+                                message: '不发这张',
+                                child: GestureDetector(
+                                  onTap: _sending
+                                      ? null
+                                      : () => setState(
+                                          () => _uploaded.remove(
+                                            _pending.removeAt(index),
+                                          ),
+                                        ),
+                                  child: const DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Color(0xCC1A1A19),
+                                      borderRadius: BorderRadius.only(
+                                        topRight: Radius.circular(Rd.button),
+                                        bottomLeft: Radius.circular(Rd.button),
+                                      ),
+                                    ),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 14,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: ready ? c.accent : c.fill,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  tooltip: '发送',
-                  onPressed: ready
-                      ? () => _send(_input.text, enter: true)
-                      : null,
-                  icon: Icon(
-                    Icons.arrow_upward_rounded,
-                    size: 20,
-                    color: ready ? Colors.white : c.faint,
+              Row(
+                // 发送按钮和输入框上下居中
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: '发送图片',
+                    onPressed: _sending || _rpc == null ? null : _pickImage,
+                    icon: Icon(
+                      Icons.image_outlined,
+                      size: 22,
+                      color: _pending.isEmpty ? c.muted : c.accent,
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      minLines: 1,
+                      maxLines: 6,
+                      textInputAction: TextInputAction.newline,
+                      onChanged: (_) => setState(() {}),
+                      contentInsertionConfiguration:
+                          ContentInsertionConfiguration(
+                            onContentInserted: _onContentInserted,
+                          ),
+                      contextMenuBuilder: _composerMenu,
+                      style: TextStyle(fontSize: Fs.body, color: c.text),
+                      decoration: InputDecoration(
+                        hintText: '回复 ${chatWho('assistant', tab.agent)}',
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        // 单行时和 34 高的发送按钮一样高
+                        contentPadding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+                      ),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: ready ? c.accent : c.fill,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      tooltip: '发送',
+                      onPressed: ready ? _submit : null,
+                      icon: _sending
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: c.muted,
+                              ),
+                            )
+                          : Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 20,
+                              color: ready ? Colors.white : c.faint,
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

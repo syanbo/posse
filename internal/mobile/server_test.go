@@ -367,6 +367,45 @@ func TestPhoneSession(t *testing.T) {
 	}
 }
 
+func TestTerminalSendRawKeepsUTF8(t *testing.T) {
+	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"/bin/sh"}, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	host := &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}, order: []string{"t_1"}}
+	srv, err := New(t.TempDir(), host, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	const text = "看下今天"
+	raw := base64.StdEncoding.EncodeToString([]byte(text))
+	send := result(t, p.next(p.call("terminal.send", map[string]any{
+		"terminal": "t_1", "raw": raw, "enter": true,
+	})))
+	if send["send"].(map[string]any)["accepted"] != true {
+		t.Fatalf("raw send %v", send)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !tm.ContainsText(text) {
+		if time.Now().After(deadline) {
+			t.Fatalf("pty did not echo raw utf-8 %q\n%s", text, strings.Join(tm.Lines(), "\n"))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	bad := p.next(p.call("terminal.send", map[string]any{"terminal": "t_1", "raw": "!!!!"}))
+	if bad["ok"] != false {
+		t.Fatalf("bad raw accepted %v", bad)
+	}
+}
+
 func TestUTF8Complete(t *testing.T) {
 	b := []byte("ab你")
 	for i := range len(b) + 1 {

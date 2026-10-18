@@ -1,17 +1,26 @@
+import 'dart:convert';
+
 import '../protocol/rpc.dart';
 
 enum SendOutcome { accepted, refused, unknown }
 
+/// [raw] 是终端模拟器要写进 PTY 的原始字节。对话输入走 [text]，由服务端按 UTF-8 写入。
+/// 带 [raw] 时也按 UTF-8 解出一份 text：不认 raw 的旧版 Hive 照样收得到按键。
 Future<SendOutcome> sendTerminal(
   PhoneRpc rpc, {
   required String terminal,
-  required String text,
+  String text = '',
+  List<int>? raw,
   required bool enter,
 }) async {
   try {
     final result = await rpc.call('terminal.send', {
       'terminal': terminal,
-      'text': text,
+      if (raw != null) ...{
+        'raw': base64.encode(raw),
+        'text': utf8.decode(raw, allowMalformed: true),
+      } else
+        'text': text,
       'enter': enter,
       'requireWriteSettlement': true,
     });

@@ -12,7 +12,9 @@ dependencies:
   flterm: ^0.0.5
   flutter:
     sdk: flutter
+  image_picker: ^1.2.4
   markdown: ^7.3.1
+  pasteboard: ^0.5.0
   pinenacl: ^0.6.0
   shared_preferences: ^2.5.6
   web_socket_channel: ^3.0.3

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flterm/flterm.dart' hide TerminalScreen;
 import 'package:flutter/material.dart';
@@ -7,6 +6,9 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../chat/chat.dart';
+import '../chat/clipboard_paste.dart';
+import '../chat/image_pick.dart';
+import '../chat/image_upload.dart';
 import '../chat/send.dart';
 import '../files/files.dart';
 import '../workspace/session_actions.dart';
@@ -51,6 +53,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _gate = Future<void>.value();
   String? _notice;
   final _focus = FocusNode();
+  var _busy = false;
 
   @override
   void initState() {
@@ -209,13 +212,69 @@ class _TerminalScreenState extends State<TerminalScreen>
     unawaited(_send(bytes));
   }
 
+  Future<void> _sendImage() async {
+    final rpc = widget.model.rpc;
+    if (rpc == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final ask = await askImageSource(context);
+      if (ask == null || !mounted) return;
+      final bytes = await pickAskedImage(ask);
+      if (bytes == null || !mounted) return;
+      await _typeImagePath(rpc, bytes);
+    } catch (error) {
+      if (mounted) setState(() => _notice = friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 文字交给终端自己的粘贴（不回车）。图片上传后只把路径打进去，和发送图片一样。
+  Future<void> _pasteClipboard() async {
+    final rpc = widget.model.rpc;
+    if (rpc == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final paste = await readClipboardPaste();
+      if (!mounted) return;
+      if (paste.isText) {
+        _controller.paste(paste.text!);
+        return;
+      }
+      if (paste.isImage) {
+        await _typeImagePath(rpc, paste.image!);
+        return;
+      }
+      setState(() => _notice = '剪贴板里没有文字或图片');
+    } catch (error) {
+      if (mounted) setState(() => _notice = friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _typeImagePath(PhoneRpc rpc, Uint8List bytes) async {
+    setState(() => _notice = '正在发送图片…');
+    final path = await uploadImage(rpc, bytes);
+    final outcome = await sendTerminal(
+      rpc,
+      terminal: widget.tab.terminalId,
+      text: path,
+      // 不回车：agent 里还能接着写说明，shell 里也不会把路径当命令执行
+      enter: false,
+    );
+    if (!mounted) return;
+    final note = sendOutcomeText(outcome);
+    setState(() => _notice = note.isEmpty ? null : note);
+  }
+
   Future<void> _send(List<int> bytes) async {
     final rpc = widget.model.rpc;
     if (rpc == null || bytes.isEmpty) return;
     final outcome = await sendTerminal(
       rpc,
       terminal: widget.tab.terminalId,
-      text: latin1.decode(bytes),
+      raw: bytes,
       enter: false,
     );
     final note = sendOutcomeText(outcome);
@@ -306,6 +365,8 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
           _KeyBar(
             onKey: _send,
+            onImage: widget.model.rpc == null || _busy ? null : _sendImage,
+            onPaste: widget.model.rpc == null || _busy ? null : _pasteClipboard,
             keyboardUp: MediaQuery.viewInsetsOf(context).bottom > 0,
             onKeyboard: () {
               if (MediaQuery.viewInsetsOf(context).bottom > 0) {
@@ -341,13 +402,41 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
 class _KeyBar extends StatelessWidget {
   const _KeyBar({
     required this.onKey,
+    required this.onImage,
+    required this.onPaste,
     required this.keyboardUp,
     required this.onKeyboard,
   });
 
   final Future<void> Function(List<int> bytes) onKey;
+  final VoidCallback? onImage;
+  final VoidCallback? onPaste;
   final bool keyboardUp;
   final VoidCallback onKeyboard;
+
+  Widget _iconKey(
+    HiveColors c, {
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: c.fill,
+        borderRadius: BorderRadius.circular(Rd.button),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Rd.button),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            child: Icon(icon, size: 20, color: c.text),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// 键盘开关：弹着时放下来看输出，收着时点它弹出来打字。
   Widget _hideKeyboard(HiveColors c) {
@@ -384,11 +473,27 @@ class _KeyBar extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            itemCount: termKeys.length + 1,
+            itemCount: termKeys.length + 3,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, i) {
               if (i == 0) return _hideKeyboard(c);
-              final key = termKeys[i - 1];
+              if (i == 1) {
+                return _iconKey(
+                  c,
+                  icon: Icons.image_outlined,
+                  label: '发送图片',
+                  onTap: onImage,
+                );
+              }
+              if (i == 2) {
+                return _iconKey(
+                  c,
+                  icon: Icons.content_paste_rounded,
+                  label: '粘贴',
+                  onTap: onPaste,
+                );
+              }
+              final key = termKeys[i - 3];
               return Material(
                 color: c.fill,
                 borderRadius: BorderRadius.circular(Rd.button),
