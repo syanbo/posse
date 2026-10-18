@@ -28,3 +28,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon.png
+
+# 带改动的 flterm 0.0.5（改动见 third_party/flterm/HIVE.md）
+dependency_overrides:
+  flterm:
+    path: third_party/flterm

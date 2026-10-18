@@ -1116,22 +1116,23 @@ class _ChatScreenState extends State<ChatScreen> {
             worktree: tab.worktreeId,
             title: worktreePath(widget.model, tab.worktreeId),
           ),
-          if (widget.onOpenTerminal != null)
-            IconButton(
-              tooltip: '终端',
-              onPressed: widget.onOpenTerminal,
-              icon: const Icon(Icons.terminal_rounded),
-            ),
+          // 切到终端放进"更多"里，和终端页对称
           PopupMenuButton<String>(
             tooltip: '更多',
             icon: const Icon(Icons.more_horiz_rounded),
             onSelected: (value) async {
+              if (value == 'terminal') {
+                widget.onOpenTerminal?.call();
+                return;
+              }
               if (value != 'close') return;
               final nav = Navigator.of(context);
               if (await closeSession(context, widget.model, tab)) nav.pop();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'close', child: Text('关闭会话')),
+            itemBuilder: (_) => [
+              if (widget.onOpenTerminal != null)
+                const PopupMenuItem(value: 'terminal', child: Text('切换到终端')),
+              const PopupMenuItem(value: 'close', child: Text('关闭会话')),
             ],
           ),
           const SizedBox(width: 4),

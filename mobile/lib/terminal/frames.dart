@@ -123,6 +123,7 @@ class TermKey {
 const termKeys = <TermKey>[
   TermKey('Esc', [0x1b]),
   TermKey('Tab', [0x09]),
+  TermKey('回车', [0x0d]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
@@ -130,3 +131,42 @@ const termKeys = <TermKey>[
   TermKey('←', [0x1b, 0x5b, 0x44]),
   TermKey('→', [0x1b, 0x5b, 0x43]),
 ];
+
+/// Claude Code 每条回复前的圆点是 ⏺（U+23FA）。手机的等宽字体里没有它，iOS 退到 Apple Color Emoji，
+/// 画成一个蓝底的按钮图标；换成同宽的 ●（U+25CF）。两个都是三字节 UTF-8，长度不变。
+/// 输出是分块来的，一个字符可能被切在两块之间，切开的前半截留到下一块再接上。
+class BulletFix {
+  final _carry = <int>[];
+
+  static const _from = [0xe2, 0x8f, 0xba];
+  static const _to = [0xe2, 0x97, 0x8f];
+
+  Uint8List apply(Uint8List chunk) {
+    final input = _carry.isEmpty
+        ? chunk
+        : Uint8List.fromList([..._carry, ...chunk]);
+    _carry.clear();
+    var end = input.length;
+    // 末尾是 ⏺ 的前一两个字节时先留着
+    if (end >= 1 && input[end - 1] == _from[0]) {
+      end -= 1;
+    } else if (end >= 2 &&
+        input[end - 2] == _from[0] &&
+        input[end - 1] == _from[1]) {
+      end -= 2;
+    }
+    _carry.addAll(input.sublist(end));
+    Uint8List? out;
+    for (var i = 0; i + 2 < end; i++) {
+      if (input[i] == _from[0] &&
+          input[i + 1] == _from[1] &&
+          input[i + 2] == _from[2]) {
+        out ??= Uint8List.fromList(input.sublist(0, end));
+        out.setRange(i, i + 3, _to);
+        i += 2;
+      }
+    }
+    return out ??
+        (end == input.length ? input : Uint8List.sublistView(input, 0, end));
+  }
+}

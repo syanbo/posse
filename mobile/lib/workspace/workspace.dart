@@ -386,7 +386,8 @@ class WorkspaceScreen extends StatelessWidget {
                       builder: (_) => HistoryScreen(model: model),
                     ),
                   ),
-            icon: Icon(Icons.history_rounded, size: 22, color: c.text),
+            // 圆形的图标墨迹比方形的小一圈，大两号才和扫码、设置看起来一样大
+            icon: Icon(Icons.history_rounded, size: 24, color: c.text),
           ),
           IconButton(
             tooltip: '新建会话',
@@ -395,7 +396,7 @@ class WorkspaceScreen extends StatelessWidget {
                 : () => showNewSession(context, model),
             icon: Icon(
               Icons.add_circle_outline_rounded,
-              size: 22,
+              size: 24,
               color: c.text,
             ),
           ),

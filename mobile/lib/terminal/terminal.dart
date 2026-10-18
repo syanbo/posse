@@ -124,6 +124,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     final oldStream = _stream;
     final oldBinary = _binary;
     _asm.expect();
+    _bullets = BulletFix();
     _binary = rpc.binary.listen(
       (bytes) {
         if (!mounted || gen != _gen) return;
@@ -196,10 +197,13 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   /// 快照和输出是远端画面。写进去时本地模拟器可能应答查询，那些字节不能再送回 PTY。
+  /// 新订阅从快照开始，切开的半个字符不能接到上一次的输出上。
+  var _bullets = BulletFix();
+
   void _apply(Uint8List bytes) {
     _applying = true;
     try {
-      _controller.write(bytes);
+      _controller.write(_bullets.apply(bytes));
     } catch (error) {
       if (mounted) setState(() => _notice = '$error');
     } finally {
@@ -313,16 +317,15 @@ class _TerminalScreenState extends State<TerminalScreen>
             worktree: widget.tab.worktreeId,
             title: worktreePath(widget.model, widget.tab.worktreeId),
           ),
-          if (widget.onOpenChat != null)
-            IconButton(
-              tooltip: '对话',
-              onPressed: widget.onOpenChat,
-              icon: const Icon(Icons.forum_outlined),
-            ),
+          // 切到对话放进"更多"里，顶栏只留文件和更多
           PopupMenuButton<String>(
             tooltip: '更多',
             icon: const Icon(Icons.more_horiz_rounded),
             onSelected: (value) async {
+              if (value == 'chat') {
+                widget.onOpenChat?.call();
+                return;
+              }
               if (value != 'close') return;
               final nav = Navigator.of(context);
               if (await closeSession(context, widget.model, widget.tab)) {
@@ -330,6 +333,8 @@ class _TerminalScreenState extends State<TerminalScreen>
               }
             },
             itemBuilder: (_) => [
+              if (widget.onOpenChat != null)
+                const PopupMenuItem(value: 'chat', child: Text('切换到对话')),
               PopupMenuItem(
                 value: 'close',
                 child: Text(widget.tab.agent == null ? '关闭终端' : '关闭会话'),

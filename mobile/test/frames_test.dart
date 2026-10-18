@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +43,10 @@ void main() {
     final byLabel = {for (final key in termKeys) key.label: key.bytes};
     expect(byLabel['Esc'], [0x1b]);
     expect(byLabel['Tab'], [0x09]);
+    expect(byLabel['回车'], [0x0d]);
+    // 回车排在 Tab 后面
+    final labels = termKeys.map((k) => k.label).toList();
+    expect(labels.indexOf('回车'), labels.indexOf('Tab') + 1);
     expect(byLabel['⇧Tab'], [0x1b, 0x5b, 0x5a]);
     expect(byLabel['^C'], [0x03]);
     expect(byLabel['↑'], [0x1b, 0x5b, 0x41]);
@@ -49,6 +54,24 @@ void main() {
     expect(byLabel['←'], [0x1b, 0x5b, 0x44]);
     expect(byLabel['→'], [0x1b, 0x5b, 0x43]);
   });
+
+  test(
+    'the bullet Claude prints is drawn as a text dot, even split across chunks',
+    () {
+      final fix = BulletFix();
+      final bullet = utf8.encode('⏺ 好');
+      expect(utf8.decode(fix.apply(Uint8List.fromList(bullet))), '● 好');
+      // ⏺ 被切在两块之间：前半截留到下一块
+      final a = fix.apply(Uint8List.fromList([0x41, 0xe2, 0x8f]));
+      final b = fix.apply(Uint8List.fromList([0xba, 0x42]));
+      expect(utf8.decode([...a, ...b]), 'A●B');
+      // 别的以 E2 开头的字符原样
+      expect(
+        utf8.decode(fix.apply(Uint8List.fromList(utf8.encode('→ ✳')))),
+        '→ ✳',
+      );
+    },
+  );
 }
 
 Uint8List _frame(int op, int sid, List<int> payload) {
