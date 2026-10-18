@@ -271,7 +271,8 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	d := v.cur
-	if d.kind == docLoading {
+	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
+	if d.kind == docLoading && d.diff == nil {
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
@@ -285,13 +286,18 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if d.diff != nil {
 		a.diffBar(c, w, v, d)
-		if d.kind == docDiff {
+		switch d.kind {
+		case docLoading:
+			ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		case docDiff:
 			a.diffView(c, v, d)
-		} else if d.kind == docImageDiff {
+		case docImageDiff:
 			imageDiffView(c, d)
-		} else if d.kind == docBinary {
+		case docBinary:
 			docMessage(c, d, "二进制文件，不显示 diff")
-		} else {
+		case docTooLarge:
+			docMessage(c, d, tooLargeDiff)
+		default:
 			docMessage(c, d, d.err)
 		}
 		diffHint(c, d.diff)
@@ -623,7 +629,8 @@ func docMessage(c *ui.Context, d *fileDoc, msg string) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Children(func() {
 		ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted)
-		if d.kind != docError || !d.deleted {
+		// diff、日志这些不是磁盘上的文件（路径是 diff:…、log:…），没有可打开的
+		if filepath.IsAbs(d.path) && (d.kind != docError || !d.deleted) {
 			if pressable(textButton(c, "用默认应用打开")).Clicked() {
 				mygo.Shell.OpenPath(d.path)
 			}

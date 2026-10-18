@@ -115,7 +115,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		trackBadge(c, st.Ahead, st.Behind, true)
 		ui.Spacer(c)
 		if g.busy != "" {
-			ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			busyLine(c, g)
 		}
 		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 28, 16)).Clicked() {
 			a.openLog(w, "", "")
@@ -448,6 +448,8 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 	}
 	df.state.RenderSeparator = diffSeparator
+	// 切换忽略空白也会让改动数变
+	clampHunk(df)
 	editor.DiffView(c.Key(d.path), &df.state).Grow(1)
 	d.shown++
 	if !df.jumped {

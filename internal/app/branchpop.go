@@ -124,17 +124,19 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 		return
 	}
 	a.fetchAt[w.ProjectID] = time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
 	if v != nil {
-		v.git.busy = "Fetch"
+		v.git.busy, v.git.cancel = "Fetch", cancel
 	}
 	dir, project := w.Path, w.ProjectID
 	go func() {
-		gitx.Fetch(context.Background(), dir)
+		gitx.Fetch(ctx, dir)
+		cancel()
 		a.update(func() {
 			tr.poll = panelPoll{}
 			a.refsChanged(project)
 			if v != nil && v.git.busy == "Fetch" {
-				v.git.busy = ""
+				v.git.busy, v.git.cancel = "", nil
 				a.gitNext(v)
 			}
 		})
@@ -234,9 +236,12 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			ui.Column(c).Grow(1).Children(func() { fieldInput(c, &bp.query, "搜索分支").AutoFocus() })
 			// Fetch 进行中按钮换成转圈，不另起一行文字
 			if g.busy == "Fetch" {
-				ui.Row(c).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Children(func() {
-					ui.Spinner(c).Label("正在 Fetch")
-				})
+				spin := ui.Row(c.Key("fetching")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+					Role(ui.RoleButton).Label("取消 Fetch").Tooltip("正在 Fetch，点一下取消")
+				spin.Children(func() { ui.Spinner(c).Label("正在 Fetch") })
+				if spin.Clicked() && g.cancel != nil {
+					g.cancel()
+				}
 			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", 28, 15)); g.busy == "" && fetch.Clicked() {
 				a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
 			} else if g.busy != "" {
@@ -244,7 +249,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			}
 		})
 		if g.busy != "" && (g.busy != "Fetch" || len(g.queue) > 0) {
-			ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).Padding(0, 10, 4, 10)
+			ui.Row(c).Padding(0, 10, 4, 10).Children(func() { busyLine(c, g) })
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
 		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
@@ -529,7 +534,7 @@ func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Bra
 	m.Separator()
 	if m.Item("在日志里显示").Chosen() {
 		done()
-		a.openLog(w, b.Name, "")
+		a.openLog(w, branchRef(b), "")
 	}
 	if !b.Remote && b.Upstream != "" && m.Item("更新").Chosen() {
 		done()

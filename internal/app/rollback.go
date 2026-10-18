@@ -435,6 +435,8 @@ func (a *app) rollbackDetail(c *ui.Context) {
 				imageDiffView(c, d)
 			case d.kind == docBinary:
 				muted("二进制文件，只能整个回滚")
+			case d.kind == docTooLarge:
+				muted(tooLargeDiff)
 			default:
 				a.diffView(c, r.v, d)
 			}

@@ -48,6 +48,7 @@ type gitState struct {
 	amend    bool
 	busy     string // 正在执行的操作，期间按钮不可点
 	queue    []gitOp
+	cancel   context.CancelFunc // 正在执行的是网络操作时可以取消
 	err      string
 	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
 	branches branchInfo
@@ -413,6 +414,23 @@ func showRev(ctx context.Context, root, rev, rel string) ([]byte, error) {
 	return b, err
 }
 
+// diffMaxSize 以上的文件不比较。
+const diffMaxSize = 2 << 20
+
+var tooLargeDiff = fmt.Sprintf("文件超过 %d MB，不在这里比较", diffMaxSize>>20)
+
+// clampHunk 在改动数变少（重读、切换忽略空白、回滚了一处）之后把当前位置收回到范围内。
+func clampHunk(df *diffDoc) {
+	n := len(df.state.Hunks())
+	if df.hunk < n {
+		return
+	}
+	df.hunk = max(n-1, 0)
+	if df.jumped && n > 0 {
+		df.state.Current = df.hunk + 1
+	}
+}
+
 // loadDiff 在后台读两边的内容。
 func (a *app) loadDiff(v *filesView, d *fileDoc) {
 	g := &v.git
@@ -442,6 +460,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				}
 			default:
 				nw, err = showRev(ctx, root, spec.newRev, spec.rel)
+				newExists = len(nw) > 0
 			}
 		}
 		// 图片：两边都解码成位图，左右对照看
@@ -460,6 +479,11 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				return
 			}
 			df.stamp = stamp
+			// 比较在界面线程上做，几 MB 的 lock 文件就要卡一两秒
+			if !isImage && max(len(old), len(nw)) > diffMaxSize {
+				d.kind = docTooLarge
+				return
+			}
 			if isImage {
 				df.binary, df.images, d.kind = true, images, docImageDiff
 				return
@@ -478,6 +502,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 				df.state.New.Reset(string(nw))
 			}
 			d.kind = docDiff
+			clampHunk(df)
 		})
 	}()
 }
@@ -496,6 +521,10 @@ func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 // 已经是第一处或最后一处、前后也没有文件可换时，在 diff 栏下面提示一下。
 func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	df := d.diff
+	// 还在读：连按 F7 时不跳过没读完的文件
+	if d.kind == docLoading {
+		return
+	}
 	hunks := df.state.Hunks()
 	if next := df.hunk + dir; d.kind == docDiff && next >= 0 && next < len(hunks) {
 		df.hunk = next
@@ -506,6 +535,15 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 	list := diffGroup(v, df)
 	i := slices.IndexFunc(list, func(s diffSpec) bool { return s.rel == df.rel && s.oldRev == df.oldRev && s.newRev == df.newRev })
 	if j := i + dir; i >= 0 && j >= 0 && j < len(list) {
+		a.openDiff(w, list[j], df.siblings, dir > 0)
+		return
+	}
+	// 这个文件已经不在列表里（刚提交、被回滚、成了冲突文件）：从列表的头或尾接着走
+	if i < 0 && len(list) > 0 {
+		j := 0
+		if dir < 0 {
+			j = len(list) - 1
+		}
 		a.openDiff(w, list[j], df.siblings, dir > 0)
 		return
 	}
@@ -577,11 +615,8 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 		return
 	}
 	df.state.Revert(i)
-	// 少了一处，当前位置收回到范围内，停在原来后面那一处上
-	if n := len(df.state.Hunks()); n > 0 {
-		df.hunk = min(df.hunk, n-1)
-		df.state.Current = df.hunk + 1
-	}
+	// 少了一处，停在原来后面那一处上
+	clampHunk(df)
 	snap := df.state.New.Snapshot()
 	st, err := files.WriteFile(abs, func(w io.Writer) error { _, err := snap.WriteTo(w); return err })
 	if err != nil {
@@ -627,6 +662,19 @@ func (g *gitState) pending(what string) bool {
 	return g.busy == what || slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.what == what })
 }
 
+// busyLine 画忙碌的文字，网络操作后面跟一个"取消"。
+func busyLine(c *ui.Context, g *gitState) {
+	t := c.Theme()
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(1).Children(func() {
+		ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		if g.cancel != nil {
+			if ui.Text(c.Key("cancel-git"), "取消").FontSize(11).TextColor(t.Accent).Role(ui.RoleButton).Label("取消 " + g.busy).Clicked() {
+				g.cancel()
+			}
+		}
+	})
+}
+
 // busyText 是忙碌时显示的文字：正在执行的操作，后面排着的跟在后面。
 func (g *gitState) busyText() string {
 	s := g.busy + "…"
@@ -639,15 +687,28 @@ func (g *gitState) busyText() string {
 	return s
 }
 
+// networkOp 报告操作要连远端：可能很慢、等不到回应，忙碌时给"取消"。
+func networkOp(what string) bool {
+	return what == "Fetch" || what == "Push" || strings.HasPrefix(what, "更新")
+}
+
 func (a *app) gitRun(v *filesView, op gitOp) {
 	g := &v.git
 	g.busy = op.what
 	root := g.repo
+	ctx, cancel := context.WithCancel(context.Background())
+	if networkOp(op.what) {
+		g.cancel = cancel
+	}
 	go func() {
-		err := op.fn(context.Background(), root)
+		err := op.fn(ctx, root)
+		canceled := ctx.Err() != nil
+		cancel()
 		a.update(func() {
-			g.busy = ""
-			if err != nil {
+			g.busy, g.cancel = "", nil
+			if canceled {
+				a.err = op.what + "已取消"
+			} else if err != nil {
 				a.err = op.what + "失败：" + err.Error()
 			} else if op.done != nil {
 				op.done()

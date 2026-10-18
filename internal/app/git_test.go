@@ -509,7 +509,7 @@ func TestLogRefTree(t *testing.T) {
 	if err := tt.Click("本地分支 main"); err != nil {
 		t.Fatal(err)
 	}
-	until(t, tt, "filtered", func() bool { return ld.filter.Branch == "main" && !ld.loading && len(ld.commits) < all })
+	until(t, tt, "filtered", func() bool { return ld.filter.Branch == "refs/heads/main" && !ld.loading && len(ld.commits) < all })
 	if err := tt.Click("本地分支 main"); err != nil {
 		t.Fatal(err)
 	}
@@ -615,6 +615,17 @@ func TestImageDiff(t *testing.T) {
 	}
 	a.openDiff(&a.workspaces[0], diffSpec{rel: "new.png", oldRev: "HEAD"}, nil, true)
 	until(t, tt, "new image", func() bool { return v.cur.kind == docImageDiff && tt.HasText("新文件") })
+	// 提交里删掉的图片：新的一边是"已删除"
+	gitRun(t, root, "rm", "-qf", "logo.png")
+	gitRun(t, root, "commit", "-q", "-m", "rm logo")
+	head := gitRun(t, root, "rev-parse", "HEAD")
+	a.openDiff(&a.workspaces[0], diffSpec{rel: "logo.png", oldRev: head + "^", newRev: head}, nil, true)
+	until(t, tt, "deleted image", func() bool {
+		return v.cur.kind == docImageDiff && v.cur.diff.rel == "logo.png" && v.cur.diff.oldRev != "HEAD"
+	})
+	if im := v.cur.diff.images; im[1].size != -1 || im[1].err != "" {
+		t.Fatalf("deleted side %+v", im[1])
+	}
 }
 
 // 分支按钮第一次画出来就自动 fetch，远端的新提交算进传入；五分钟内不再拉。到点再拉时，开着的分支比较跟着重读。
@@ -1133,4 +1144,121 @@ func TestChangeContent(t *testing.T) {
 	if got := changeContent(base, "a\nd\n", editor.BaseChange{OldStart: 1, OldEnd: 3, NewStart: 1, NewEnd: 1}); got != "a\nd\n" {
 		t.Fatalf("delete: %q", got)
 	}
+}
+
+// 网络操作可以取消：取消后报"已取消"，排着的下一个接着执行。
+func TestCancelNetworkOp(t *testing.T) {
+	a := previewApp(t)
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	until(t, tt, "idle", func() bool { return v.git.busy == "" })
+	a.gitDo(v, "Push", func(ctx context.Context, root string) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	ran := false
+	a.gitDo(v, "提交", func(ctx context.Context, root string) error { ran = true; return nil })
+	tt.Frame()
+	if err := tt.Click("取消 Push"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "canceled", func() bool { return ran && v.git.busy == "" })
+	if a.err != "Push已取消" {
+		t.Fatalf("err %q", a.err)
+	}
+}
+
+// 当前文件已经不在改动列表里（刚提交）时 F7 从列表开头接着走；改动数变少后当前位置收回范围内。
+func TestStepDiffAfterCommit(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	w := &a.workspaces[0]
+	a.openDiff(w, changeSpec(gitx.Entry{Path: "main.go"}), nil, true)
+	d := v.cur
+	until(t, tt, "diff", func() bool { return d.kind == docDiff && d.diff.jumped && len(d.diff.state.Hunks()) == 2 })
+	tt.Key(0, ui.KeyF7)
+	tt.Frame()
+	if d.diff.hunk != 1 {
+		t.Fatalf("hunk %d", d.diff.hunk)
+	}
+	// 外部只留下一处改动：位置收回到最后一处
+	b, _ := os.ReadFile(filepath.Join(root, "main.go"))
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(strings.Replace(string(b), "\nfunc log(c *config) {}\n", "", 1)), 0o644)
+	until(t, tt, "one hunk", func() bool { a.refreshGit(v); return d.kind == docDiff && len(d.diff.state.Hunks()) == 1 })
+	if d.diff.hunk != 0 {
+		t.Fatalf("hunk not clamped: %d", d.diff.hunk)
+	}
+	gitRun(t, root, "commit", "-q", "-am", "agent")
+	until(t, tt, "main.go committed", func() bool {
+		a.refreshGit(v)
+		return v.git.changeCount() == 1 && d.kind == docDiff && len(d.diff.state.Hunks()) == 0
+	})
+	tt.Key(0, ui.KeyF7)
+	until(t, tt, "moved to the list", func() bool { return d.diff.rel == "notes.txt" && d.kind == docDiff })
+}
+
+// 大文件不比较，提示一句；diff 不是磁盘上的文件，不给"用默认应用打开"。
+func TestDiffLargeFile(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	os.WriteFile(filepath.Join(root, "big.lock"), []byte(strings.Repeat("x\n", diffMaxSize)), 0o644)
+	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.lock", Untracked: true}), nil, true)
+	d := v.cur
+	until(t, tt, "too large", func() bool { return d.kind == docTooLarge && tt.HasText(tooLargeDiff) })
+	if tt.HasText("用默认应用打开") {
+		t.Fatal("virtual diff doc offers to open diff: path")
+	}
+}
+
+// 日志：分支和标签同名时按分支筛；作者框里的 "a[" 不报错；读出错时筛选栏还在、可以清除筛选；
+// 按作者筛选时不画提交图。
+func TestLogFilterEdges(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	gitRun(t, root, "tag", "feat", "main~2") // 和分支 feat 同名、指向更早的提交
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openLog(&a.workspaces[0], "", "")
+	v := a.files["w1"]
+	d := v.logCur
+	ld := d.log
+	until(t, tt, "log", func() bool { return d.kind == docLog && !ld.loading && v.git.branches.list != nil })
+	ld.filter.Branch = "refs/heads/feat"
+	a.loadLog(v, d, false)
+	until(t, tt, "branch feat", func() bool { return !ld.loading && len(ld.commits) > 0 })
+	if ld.commits[0].Subject != "feat: 新功能" {
+		t.Fatalf("branch feat shows %q", ld.commits[0].Subject)
+	}
+	ld.filter.Branch = ""
+	ld.filter.Author = "a["
+	a.loadLog(v, d, false)
+	until(t, tt, "author", func() bool { return !ld.loading })
+	if ld.err != "" || d.kind != docLog {
+		t.Fatalf("author a[: %q", ld.err)
+	}
+	ld.filter.Author = "t"
+	a.loadLog(v, d, false)
+	until(t, tt, "author t", func() bool { return !ld.loading && len(ld.commits) > 0 })
+	if ld.graph != nil {
+		t.Fatal("graph drawn for author filter")
+	}
+	// 选中的分支被删了：错误写在列表里，清除筛选回到全部
+	ld.filter.Author, ld.filter.Branch = "", "refs/heads/gone"
+	a.loadLog(v, d, false)
+	settle(tt)
+	until(t, tt, "error in list", func() bool { return !ld.loading && ld.err != "" && tt.HasText("清除筛选") })
+	if d.kind != docLog || !tt.HasText("提交信息或哈希") {
+		t.Fatal("filter bar gone on error")
+	}
+	if err := tt.Click("清除筛选"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "cleared", func() bool { return !ld.loading && ld.err == "" && len(ld.commits) > 0 && ld.graph != nil })
 }

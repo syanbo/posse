@@ -38,6 +38,7 @@ type logDoc struct {
 	reloaded time.Time
 	refsOpen map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
 	refQuery string
+	err      string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
 	hist     *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
 }
 
@@ -262,8 +263,15 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				return
 			}
 			ld.loading = false
-			if err != nil {
+			// 出错时筛选栏和分支树照样画，错误写在列表里，改了筛选再读；不是 git 仓库才整页报错
+			if root == "" {
 				d.kind, d.err = docError, err.Error()
+				return
+			}
+			ld.err = ""
+			if err != nil {
+				ld.err, ld.commits, ld.graph, ld.more = err.Error(), nil, nil, false
+				d.kind = docLog
 				return
 			}
 			if more {
@@ -272,7 +280,11 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				ld.commits = list
 			}
 			ld.more = len(list) == limit
-			ld.graph = buildGraph(ld.commits)
+			// 按作者、文字筛出来的提交父提交多半不在结果里，画出来每个都是一条新线；这时只画点
+			ld.graph = nil
+			if f.Author == "" && strings.TrimSpace(f.Text) == "" {
+				ld.graph = buildGraph(ld.commits)
+			}
 			ld.reloaded = time.Now()
 			d.kind = docLog
 		})
@@ -404,11 +416,19 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			if len(ld.commits) == 0 {
-				msg := "没有符合条件的提交"
-				if ld.loading {
+				msg, col := "没有符合条件的提交", t.TextMuted
+				switch {
+				case ld.loading:
 					msg = "正在读取…"
+				case ld.err != "":
+					msg, col = ld.err, t.Danger
 				}
-				ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted).Padding(12, 16)
+				ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
+					ui.Text(c, msg).FontSize(12).TextColor(col).LineHeight(1.4)
+					if !ld.loading && ld.filtered() && pressable(textButton(c, "清除筛选")).Clicked() {
+						a.clearLogFilter(v, d)
+					}
+				})
 				return
 			}
 			commits, graph := ld.commits, ld.graph
@@ -431,7 +451,11 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					}
 					return
 				}
-				a.logRow(c, w, v, d, commits[i], graph[i])
+				var gr graphRow // 没有提交图时只画点
+				if graph != nil {
+					gr = graph[i]
+				}
+				a.logRow(c, w, v, d, commits[i], gr)
 			}).Grow(1)
 		})
 		if ld.commit != nil {
@@ -454,7 +478,7 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		if author.Changed() || author.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		branch := ld.filter.Branch
+		branch := refShort(ld.filter.Branch)
 		if branch == "" {
 			branch = "全部分支"
 		}
@@ -473,8 +497,8 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			m.Separator()
 			for _, b := range v.git.branches.list {
-				if m.Item(b.Name).Checked(ld.filter.Branch == b.Name).Chosen() {
-					ld.filter.Branch = b.Name
+				if m.Item(b.Name).Checked(ld.filter.Branch == branchRef(b)).Chosen() {
+					ld.filter.Branch = branchRef(b)
 					a.loadLog(v, d, false)
 				}
 			}
@@ -493,6 +517,19 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			a.loadLog(v, d, false)
 		}
 	})
+}
+
+// filtered 报告日志有没有按文字、作者或分支筛选（文件历史的路径不算）。
+func (ld *logDoc) filtered() bool {
+	return ld.filter.Branch != "" || ld.filter.Author != "" || strings.TrimSpace(ld.filter.Text) != ""
+}
+
+// clearLogFilter 清掉文字、作者和分支的筛选，读全部分支。
+func (a *app) clearLogFilter(v *filesView, d *fileDoc) {
+	ld := d.log
+	ld.text, ld.author = "", ""
+	ld.filter.Text, ld.filter.Author, ld.filter.Branch = "", "", ""
+	a.loadLog(v, d, false)
 }
 
 // applyLogFilter 在输入停顿 300ms 后按新的文字和作者重读。
@@ -571,15 +608,9 @@ func refNames(d string) []refName {
 // commitMenu 是日志里一个提交的操作；改写历史的几项只对当前分支上的提交有效（gitx 会检查）。
 func (a *app) commitMenu(c *ui.Context, m *ui.Menu, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	short := ci.Hash[:7]
-	reload := func() { a.loadLog(v, d, false) }
+	// 做完由 gitDo 里的 refsChanged 重读日志，翻过的页数一起读回来
 	do := func(what string, fn func(ctx context.Context, root string) error) {
-		a.guardAgent(w, what, func() {
-			a.gitDo(v, what, func(ctx context.Context, root string) error {
-				err := fn(ctx, root)
-				a.update(reload)
-				return err
-			})
-		})
+		a.guardAgent(w, what, func() { a.gitDo(v, what, fn) })
 	}
 	if m.Item("复制提交哈希").Chosen() {
 		c.WriteClipboard(ci.Hash)

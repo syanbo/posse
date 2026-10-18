@@ -11,26 +11,48 @@ type PushPlan struct {
 	Branch       string
 	Remote       string
 	RemoteBranch string
-	NewBranch    bool // 远端还没有跟踪分支：推送时设上游
+	NewBranch    bool // 远端还没有这个分支
+	SetUpstream  bool // 推送时设上游：还没有跟踪分支，或跟踪的远端分支已被删除
+	Gone         bool // 跟踪的远端分支已被删除
 	Commits      []CommitInfo
 }
 
-// PushPreview 算出推送 branch 会推什么：有跟踪分支时是它之后的提交；没有时推到默认远端的同名分支，
-// 列出所有远端分支里都没有的提交。
+// PushPreview 算出推送 branch 会推什么，目标和 git push 一样：远端按 branch.<名>.pushRemote、remote.pushDefault、
+// 跟踪的远端的顺序；推到跟踪的远端时是跟踪的那个分支，推到别的远端（fork）时是同名分支。
+// 远端已有这个分支时列出它之后的提交，没有时列出所有远端分支里都没有的提交。
 func PushPreview(ctx context.Context, dir, branch string) (PushPlan, error) {
 	plan := PushPlan{Branch: branch}
-	if up, err := run(ctx, dir, "rev-parse", "--abbrev-ref", branch+"@{upstream}"); err == nil && up != "" {
-		plan.Remote, plan.RemoteBranch, _ = strings.Cut(up, "/")
-		cs, err := CommitsBetween(ctx, dir, up, branch, 500)
-		plan.Commits = cs
-		return plan, err
-	}
-	remote, err := defaultRemote(ctx, dir)
+	out, err := runRaw(ctx, dir, nil, nil, "for-each-ref", "--format=%(push:remotename)%00%(push:remoteref)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:track)", "refs/heads/"+branch)
 	if err != nil {
 		return plan, err
 	}
-	plan.Remote, plan.RemoteBranch, plan.NewBranch = remote, branch, true
-	out, err := runRaw(ctx, dir, nil, nil, "log", commitFormat, "-n", "500", branch, "--not", "--remotes", "--")
+	f := strings.Split(strings.TrimSpace(string(out)), "\x00")
+	if len(f) != 5 {
+		return plan, errors.New("没有这个分支：" + branch)
+	}
+	pushRemote, pushRef, upRemote, upRef := f[0], f[1], f[2], f[3]
+	plan.Gone = f[4] == "[gone]"
+	plan.SetUpstream = upRef == "" || plan.Gone
+	plan.Remote, plan.RemoteBranch = pushRemote, branch
+	switch {
+	case pushRef != "":
+		plan.RemoteBranch = strings.TrimPrefix(pushRef, "refs/heads/")
+	case pushRemote == upRemote && upRef != "":
+		plan.RemoteBranch = strings.TrimPrefix(upRef, "refs/heads/")
+	}
+	if plan.Remote == "" {
+		if plan.Remote, err = defaultRemote(ctx, dir); err != nil {
+			return plan, err
+		}
+	}
+	tracking := "refs/remotes/" + plan.Remote + "/" + plan.RemoteBranch
+	if _, err := run(ctx, dir, "rev-parse", "--verify", "--quiet", tracking); err == nil {
+		cs, err := CommitsBetween(ctx, dir, tracking, branch, 500)
+		plan.Commits = cs
+		return plan, err
+	}
+	plan.NewBranch = true
+	out, err = runRaw(ctx, dir, nil, nil, "log", commitFormat, "-n", "500", branch, "--not", "--remotes", "--")
 	if err != nil {
 		return plan, err
 	}
@@ -64,7 +86,7 @@ func Push(ctx context.Context, dir string, plan PushPlan, force, tags bool) erro
 	if force {
 		args = append(args, "--force-with-lease", "--force-if-includes")
 	}
-	if plan.NewBranch {
+	if plan.SetUpstream {
 		args = append(args, "--set-upstream")
 	}
 	if tags {

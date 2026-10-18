@@ -63,3 +63,34 @@ func TestPush(t *testing.T) {
 		t.Fatalf("force after integrating: %v", err)
 	}
 }
+
+// 推送目标和 git push 一致：remote.pushDefault 指向 fork 时推到 fork 的同名分支、不改上游；
+// 跟踪的远端分支被删了时标出来，推送时重新设上游。
+func TestPushTarget(t *testing.T) {
+	ctx := context.Background()
+	dir, _ := withRemote(t)
+	fork := filepath.Join(t.TempDir(), "fork.git")
+	gitIn(t, dir, "init", "-q", "--bare", "-b", "main", fork)
+	gitIn(t, dir, "remote", "add", "fork", fork)
+	gitIn(t, dir, "config", "remote.pushDefault", "fork")
+	plan, err := PushPreview(ctx, dir, "main")
+	if err != nil || plan.Remote != "fork" || plan.RemoteBranch != "main" || !plan.NewBranch || plan.SetUpstream {
+		t.Fatalf("fork plan %+v %v", plan, err)
+	}
+	if err := Push(ctx, dir, plan, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if up := gitIn(t, dir, "rev-parse", "--abbrev-ref", "main@{u}"); up != "origin/main" {
+		t.Fatalf("upstream changed to %s", up)
+	}
+	gitIn(t, dir, "config", "--unset", "remote.pushDefault")
+
+	gitIn(t, dir, "switch", "-q", "-c", "feat")
+	gitIn(t, dir, "push", "-q", "-u", "origin", "feat:old-name")
+	gitIn(t, dir, "push", "-q", "origin", ":old-name")
+	gitIn(t, dir, "fetch", "-q", "-p")
+	plan, err = PushPreview(ctx, dir, "feat")
+	if err != nil || !plan.Gone || !plan.SetUpstream || plan.RemoteBranch != "old-name" {
+		t.Fatalf("gone plan %+v %v", plan, err)
+	}
+}

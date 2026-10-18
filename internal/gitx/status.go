@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -18,10 +19,19 @@ import (
 
 // runRaw 原样返回 git 的标准输出（不去首尾空白），stdin 非空时作为输入，env 追加到环境变量。
 func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	limit := 2 * time.Minute
+	if len(args) > 0 && (args[0] == "fetch" || args[0] == "pull" || args[0] == "push") {
+		limit = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+	// 新会话里跑：没有控制终端，ssh 要口令或确认主机指纹时直接失败，不会在 /dev/tty 上一直等。
+	// 取消、超时时整组杀掉，连同 git 拉起的 ssh；ssh 拿着输出管道不放时最多再等 2 秒
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 2 * time.Second
 	// 不拿可选的锁：每 1.5 秒的 status 会顺手重写 index，和终端里 agent 的 git 命令抢 index.lock
 	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0"), env...)
 	if stdin != nil {

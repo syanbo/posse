@@ -22,7 +22,8 @@ type LogFilter struct {
 func Log(ctx context.Context, dir string, f LogFilter, skip, limit int) ([]CommitInfo, error) {
 	args := []string{"log", commitFormat, "--date-order", "-n", strconv.Itoa(limit), "--skip", strconv.Itoa(skip)}
 	if f.Author != "" {
-		args = append(args, "--author="+f.Author, "--regexp-ignore-case")
+		// 按字面匹配：作者框里敲到一半的 "a[" 当正则会报错
+		args = append(args, "--author="+f.Author, "--regexp-ignore-case", "--fixed-strings")
 	}
 	text := strings.TrimSpace(f.Text)
 	switch {

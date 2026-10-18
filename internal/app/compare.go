@@ -410,11 +410,9 @@ type pushState struct {
 
 // openPush 推送当前分支。
 func (a *app) openPush(w *workspace) {
-	branch := w.Branch
-	if v := a.files[w.ID]; v != nil && v.git.status != nil && v.git.status.Head != "" {
-		branch = v.git.status.Head
-	}
-	if branch == "" {
+	// 直接读 HEAD：文件栏没打开过时没有状态，w.Branch 在游离时是哈希
+	branch, detached := gitx.HeadRef(w.Path)
+	if branch == "" || detached {
 		a.err = "现在不在分支上（分离的 HEAD），没法推送"
 		return
 	}
@@ -475,6 +473,9 @@ func (a *app) pushDialog(c *ui.Context) {
 							ui.Text(c, "新分支").FontSize(11).TextColor(colors(t).sage).Shrink(0)
 						}
 					})
+					if plan.Gone {
+						ui.Text(c, "跟踪的远端分支已经被删了，推送会在 "+plan.Remote+" 上重新建出 "+plan.RemoteBranch+"").FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
+					}
 					if len(plan.Commits) == 0 {
 						ui.Text(c, "没有要推送的提交").FontSize(12).TextColor(t.TextMuted).Padding(4)
 						return

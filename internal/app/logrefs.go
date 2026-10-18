@@ -66,8 +66,8 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			if a.refGroup(c, ld, "local", "本地", len(local), open("local")) {
 				for _, b := range local {
-					if a.refRow(c, "l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, ld.filter.Branch == b.Name, refMark(b)) {
-						pick(b.Name)
+					if a.refRow(c, "l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, ld.filter.Branch == branchRef(b), refMark(b)) {
+						pick(branchRef(b))
 					}
 				}
 			}
@@ -86,8 +86,8 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 					}
 					for _, b := range remote {
 						if rest, ok := strings.CutPrefix(b.Name, r+"/"); ok {
-							if a.refRow(c, "r:"+b.Name, rest, "远程分支 "+b.Name, 2, ld.filter.Branch == b.Name, nil) {
-								pick(b.Name)
+							if a.refRow(c, "r:"+b.Name, rest, "远程分支 "+b.Name, 2, ld.filter.Branch == branchRef(b), nil) {
+								pick(branchRef(b))
 							}
 						}
 					}
@@ -95,13 +95,31 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			if a.refGroup(c, ld, "tags", "标签", len(tags), open("tags")) {
 				for _, tag := range tags {
-					if a.refRow(c, "t:"+tag, tag, "标签 "+tag, 1, ld.filter.Branch == tag, nil) {
-						pick(tag)
+					if a.refRow(c, "t:"+tag, tag, "标签 "+tag, 1, ld.filter.Branch == "refs/tags/"+tag, nil) {
+						pick("refs/tags/" + tag)
 					}
 				}
 			}
 		})
 	})
+}
+
+// branchRef 是日志按分支筛选用的完整引用名：分支和标签同名时 git 会取标签。
+func branchRef(b gitx.Branch) string {
+	if b.Remote {
+		return "refs/remotes/" + b.Name
+	}
+	return "refs/heads/" + b.Name
+}
+
+// refShort 是筛选栏上显示的名字。
+func refShort(ref string) string {
+	for _, p := range []string{"refs/heads/", "refs/remotes/", "refs/tags/"} {
+		if s, ok := strings.CutPrefix(ref, p); ok {
+			return s
+		}
+	}
+	return ref
 }
 
 // refMark 是本地分支名后面的小字：当前分支。
