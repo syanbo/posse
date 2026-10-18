@@ -615,6 +615,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 			}
 			icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
 			row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
+			a.reorderableTerm(c, row, w.ID, term.ID, false)
 			if row.Clicked() {
 				a.selected = w.ID
 				a.activeTerm[w.ID] = term.ID
@@ -674,15 +675,7 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 		e.Opacity(0.4)
 	}
 	if d, over := ui.DragOver[projectDrag](e); over && d.id != id {
-		accent := c.Theme().Accent
-		below := projectIndex(a.projects, d.id) < projectIndex(a.projects, id)
-		e.DrawOver(func(p *ui.Painter, r ui.Rect) {
-			y := r.Y - 1
-			if below {
-				y = r.Y + r.H - 1
-			}
-			p.Fill(ui.Rect{X: r.X + 8, Y: y, W: r.W - 16, H: 2}, accent, 1)
-		})
+		dropMark(c, e, projectIndex(a.projects, d.id) < projectIndex(a.projects, id), false)
 	}
 	if d, ok := ui.Drop[projectDrag](e); ok && d.id != id {
 		a.state.ProjectOrder = moveProject(a.projects, d.id, id)
@@ -690,6 +683,59 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 		a.saveState()
 		c.AnimationFrame() // 这一帧已经按旧顺序画了，再画一帧
 	}
+}
+
+// termDrag 是拖动中的终端：标签栏的标签或侧栏的会话，只能落在同一个工作区里。
+type termDrag struct{ ws, id string }
+
+// reorderableTerm 让终端标签或侧栏的会话行可以拖动排序，两处共用一个顺序（ui.json 的 termOrder），
+// 样子和拖项目一样。across 表示横排的标签，落点画成竖线。
+func (a *app) reorderableTerm(c *ui.Context, e ui.Element, wsID, id string, across bool) {
+	e.Drag(termDrag{wsID, id})
+	if e.Dragging() {
+		e.Opacity(0.4)
+	}
+	w := a.workspace(wsID)
+	if w == nil {
+		return
+	}
+	index := func(id string) int {
+		return slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == id })
+	}
+	if d, over := ui.DragOver[termDrag](e); over && d.ws == wsID && d.id != id {
+		dropMark(c, e, index(d.id) < index(id), across)
+	}
+	if d, ok := ui.Drop[termDrag](e); ok && d.ws == wsID && d.id != id {
+		order := moveTerminal(w.Terminals, d.id, id)
+		if a.state.TermOrder == nil {
+			a.state.TermOrder = map[string][]string{}
+		}
+		a.state.TermOrder[wsID] = order
+		sortTerminals(w.Terminals, order)
+		a.saveState()
+		c.AnimationFrame()
+	}
+}
+
+// dropMark 在拖动排序的目标上画一道强调色的线表示落点，after 表示落在它后面（下面或右边）；
+// across 表示横排，线是竖的。
+func dropMark(c *ui.Context, e ui.Element, after, across bool) {
+	accent := c.Theme().Accent
+	e.DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if across {
+			x := r.X
+			if after {
+				x = r.X + r.W - 2
+			}
+			p.Fill(ui.Rect{X: x, Y: r.Y + 4, W: 2, H: r.H - 8}, accent, 1)
+			return
+		}
+		y := r.Y - 1
+		if after {
+			y = r.Y + r.H - 1
+		}
+		p.Fill(ui.Rect{X: r.X + 8, Y: y, W: r.W - 16, H: 2}, accent, 1)
+	})
 }
 
 // navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
@@ -937,7 +983,8 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示
 		ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
 			ui.Row(c).Height(titleHeight(c)).Gap(2).AlignItems(ui.Center).Children(func() {
-				for _, term := range w.Terminals {
+				// 拖动排序会在这次遍历里重排 w.Terminals：遍历副本
+				for _, term := range slices.Clone(w.Terminals) {
 					a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 				}
 				a.docTabs(c, w)
@@ -1231,6 +1278,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			a.askClose(term)
 		}
 	})
+	a.reorderableTerm(c, row, w.ID, term.ID, true)
 	if row.Clicked() {
 		a.activeTerm[w.ID] = term.ID
 	}

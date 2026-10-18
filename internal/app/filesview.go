@@ -461,6 +461,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 		a.closeDoc(v, d)
 	}
 	row.ContextMenu(func(m *ui.Menu) { a.docTabMenu(c, m, v, d) })
+	a.reorderableDoc(c, row, w.ID, v, d)
 	if row.Clicked() && !active {
 		a.showFiles(w)
 		if v.cur != d {
@@ -468,6 +469,31 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			a.saveFilesState(v)
 		}
 		d.focus = true
+	}
+}
+
+// docDrag 是拖动中的文件标签，只在同一个工作区的文件标签之间换位置。
+type docDrag struct{ ws, path string }
+
+// reorderableDoc 让文件标签可以拖动排序，顺序随打开的文件存进 ui.json。
+func (a *app) reorderableDoc(c *ui.Context, row ui.Element, wsID string, v *filesView, d *fileDoc) {
+	row.Drag(docDrag{wsID, d.path})
+	if row.Dragging() {
+		row.Opacity(0.4)
+	}
+	index := func(path string) int {
+		return slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == path })
+	}
+	if g, over := ui.DragOver[docDrag](row); over && g.ws == wsID && g.path != d.path {
+		dropMark(c, row, index(g.path) < index(d.path), true)
+	}
+	if g, ok := ui.Drop[docDrag](row); ok && g.ws == wsID && g.path != d.path {
+		if from, to := index(g.path), index(d.path); from >= 0 && to >= 0 {
+			moved := v.docs[from]
+			v.docs = slices.Insert(slices.Delete(v.docs, from, from+1), to, moved)
+			a.saveFilesState(v)
+			c.AnimationFrame()
+		}
 	}
 }
 

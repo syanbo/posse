@@ -23,6 +23,8 @@ type uiState struct {
 	MobileAddress   string   `json:"mobileAddress,omitempty"`   // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
 	MobileAddresses []string `json:"mobileAddresses,omitempty"` // 用过的自定义地址，配对对话框里可选
 	FontSize        float32  `json:"fontSize,omitempty"`        // 终端字号，0 表示默认
+	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
+	TermOrder map[string][]string `json:"termOrder,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`
 }
@@ -94,6 +96,34 @@ func moveProject(ps []project, id, target string) []string {
 	for i, p := range ps {
 		order[i] = p.ID
 	}
+	return moveID(order, id, target)
+}
+
+// sortTerminals 按 order 排列终端；不在 order 里的（新开的）保持常驻进程给的创建顺序，排在后面。
+func sortTerminals(ts []terminalInfo, order []string) {
+	if len(order) == 0 {
+		return
+	}
+	rank := func(id string) int {
+		if i := slices.Index(order, id); i >= 0 {
+			return i
+		}
+		return len(order)
+	}
+	slices.SortStableFunc(ts, func(a, b terminalInfo) int { return rank(a.ID) - rank(b.ID) })
+}
+
+// moveTerminal 把终端 id 挪到 target 的位置，返回新的顺序，规则同 moveProject。
+func moveTerminal(ts []terminalInfo, id, target string) []string {
+	order := make([]string, len(ts))
+	for i, t := range ts {
+		order[i] = t.ID
+	}
+	return moveID(order, id, target)
+}
+
+// moveID 把 order 里的 id 挪到 target 的位置。
+func moveID(order []string, id, target string) []string {
 	from, to := slices.Index(order, id), slices.Index(order, target)
 	if from < 0 || to < 0 || from == to {
 		return order

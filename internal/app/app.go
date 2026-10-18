@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net"
 	"os"
 	"path/filepath"
@@ -464,6 +465,11 @@ func (a *app) setWantedTask(id string) {
 // apply 在主线程更新状态，并为状态变化发通知。
 func (a *app) apply(ps []project, ws []workspace) {
 	sortProjects(ps, a.state.ProjectOrder)
+	for i := range ws {
+		// ws 是浅拷贝，终端列表还和上次轮询的结果共用，排序前先复制
+		ws[i].Terminals = slices.Clone(ws[i].Terminals)
+		sortTerminals(ws[i].Terminals, a.state.TermOrder[ws[i].ID])
+	}
 	sort.SliceStable(ws, func(i, j int) bool {
 		if ws[i].Project != ws[j].Project {
 			return ws[i].Project < ws[j].Project
@@ -472,6 +478,11 @@ func (a *app) apply(ps []project, ws []workspace) {
 	})
 	a.projects, a.workspaces, a.loaded = ps, ws, true
 	a.indexWorkspaces()
+	for id := range a.state.TermOrder {
+		if a.workspace(id) == nil {
+			delete(a.state.TermOrder, id)
+		}
+	}
 	for _, p := range ps {
 		if a.sectionsOpen[p.ID] == nil {
 			open := true
@@ -728,6 +739,7 @@ func (a *app) saveState() {
 	}
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
+	s.TermOrder = maps.Clone(s.TermOrder)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	go saveUIState(a.home, s)
