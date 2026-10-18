@@ -16,6 +16,9 @@ import (
 	"hive/internal/rpc"
 )
 
+// historyLimit 是列表和搜索最多取的会话数。
+const historyLimit = 200
+
 // historyBoardID 是侧栏里"历史"一项的 ID。
 const historyBoardID = "history"
 
@@ -151,7 +154,7 @@ func (a *app) fetchHistory(req int) {
 	if req != cur || a.c == nil {
 		return
 	}
-	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": 200}
+	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": historyLimit}
 	var res struct {
 		Sessions []history.Session `json:"sessions"`
 		Hits     []history.Hit     `json:"hits"`
@@ -474,23 +477,41 @@ func (a *app) stepSession(step int) {
 	h.list.ScrollIntoView(items[to].row)
 }
 
-// historyTotals 是列表顶上的总计：会话数、消息数和各 agent 的会话数，跟着筛选走。
+// historyTotals 是列表顶上的总计，跟着筛选走：平时是会话数、消息数和各 agent 的会话数；
+// 搜索时是匹配的会话数、命中的消息数和各 agent 的匹配数。
 func (a *app) historyTotals(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
 	st := h.status
-	if st.Sessions == 0 {
+	sessions, messages, byAgent := st.Sessions, fmt.Sprintf("%s 条消息", thousands(st.Messages)), st.ByAgent
+	if strings.TrimSpace(h.query) != "" {
+		byAgent = map[string]int{}
+		n := 0
+		for _, hit := range h.hits {
+			byAgent[hit.Agent]++
+			n += hit.Matches
+		}
+		sessions, messages = len(h.hits), fmt.Sprintf("%s 条消息命中", thousands(n))
+	} else if ag := historyAgents[h.agent]; ag != "" {
+		sessions = st.ByAgent[ag]
+	}
+	// 没有结果时下面的空状态已经说明了
+	if sessions == 0 {
 		return
 	}
-	sessions := st.Sessions
-	if ag := historyAgents[h.agent]; ag != "" {
-		sessions = st.ByAgent[ag]
+	count := thousands(sessions) + " 个会话"
+	if strings.TrimSpace(h.query) != "" {
+		count = thousands(sessions) + " 个会话匹配"
+		if sessions >= historyLimit {
+			// 搜索只取最相关的前 historyLimit 个
+			count = fmt.Sprintf("前 %d 个匹配的会话", historyLimit)
+		}
 	}
 	ui.Column(c).Padding(14, 20, 10, 20).Gap(8).Children(func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("%s 个会话", thousands(sessions))).FontSize(13).FontWeight(500).FontFeatures("tnum")
-			if h.agent == 0 {
-				ui.Text(c, fmt.Sprintf("%s 条消息", thousands(st.Messages))).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+			ui.Text(c, count).FontSize(13).FontWeight(500).FontFeatures("tnum")
+			if h.agent == 0 || strings.TrimSpace(h.query) != "" {
+				ui.Text(c, messages).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
 		})
 		if h.agent != 0 {
@@ -498,7 +519,7 @@ func (a *app) historyTotals(c *ui.Context) {
 		}
 		ui.Row(c).Gap(14).Wrap().Children(func() {
 			for _, ag := range history.Agents {
-				n := st.ByAgent[ag]
+				n := byAgent[ag]
 				if n == 0 {
 					continue
 				}

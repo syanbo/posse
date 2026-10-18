@@ -42,3 +42,19 @@ func TestHistoryArrowKeys(t *testing.T) {
 	step(ui.KeyDown, "grok:s2")
 	step(ui.KeyDown, "codex:s3")
 }
+
+// 搜索时顶上的总计换成搜索结果的数目。
+func TestHistoryTotalsFollowSearch(t *testing.T) {
+	a := previewApp(t)
+	previewHistory(a, "")
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if !tt.HasText("424 个会话") {
+		t.Fatalf("totals: %v", tt.Texts())
+	}
+	previewHistory(a, "磁盘")
+	tt.Frame()
+	if !tt.HasText("3 个会话匹配") || !tt.HasText("5 条消息命中") || tt.HasText("424 个会话") {
+		t.Fatalf("search totals: %v", tt.Texts())
+	}
+}
