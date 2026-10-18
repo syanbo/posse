@@ -1009,10 +1009,10 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 
 // 等待任务的波形照 Orca 后台任务的 Activity 图标：一段亮的像心电图一样从左边进、右边出（pulseSweep），
 // 两头加减速，之后停 pulseRest 再来一次。描的时候按 pulseFrame 重绘（只重绘不重建界面），停的时候不重绘：
-// 平均每秒约 11 次，和原来 12 步一圈（每秒 10 次）差不多；亮段位置按时间连续算，所以帧少也不跳格。
+// 平均每秒约 15 次，和原来 12 步一圈（每秒 10 次）相近；亮段位置按时间连续算，所以帧少也不跳格。
 const (
 	pulseSweep = 1000 * time.Millisecond
-	pulseRest  = 800 * time.Millisecond
+	pulseRest  = 300 * time.Millisecond
 	pulseFrame = time.Second / 20
 	pulseLen   = 0.4 // 亮段占整条波形的比例
 )
