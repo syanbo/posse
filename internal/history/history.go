@@ -27,8 +27,10 @@ type Session struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Messages  int       `json:"messages"`
-	Path      string    `json:"path"`            // 会话文件
+	Path      string    `json:"path"`            // 会话文件；分成几段的是最新的一段
 	Model     string    `json:"model,omitempty"` // 最近一次回复用的模型
+	// Parts 是分成几段的会话的全部文件，从早到晚；只有一段时为空。只有 Find 填它
+	Parts []string `json:"parts,omitempty"`
 }
 
 type Message struct {
@@ -265,13 +267,70 @@ func likeEscape(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
+// groupKeyOf 是 groupKey 带上表别名，第二列叫 gkey。
+func groupKeyOf(alias string) string {
+	return alias + `agent AS agent, CASE ` + alias + `agent WHEN 'codex' THEN ` + alias + `session_id ELSE ` + alias + `path END AS gkey`
+}
+
+// Codex 新格式（history_mode=paginated）的会话会分成几个文件：后一段的 session_meta 带 history_base，
+// 接着前一段往下记，会话 ID 相同。索引里每个文件一行，查询时按 groupKey 合成一个会话：信息取最新的一段，
+// 消息数相加，创建时间取最早的一段。别家同一个 ID 的不同文件是不同的会话（Cursor 在两个项目里
+// 出现过同一个 ID、内容毫不相干的对话），按文件分开。
+const groupKey = `agent, CASE agent WHEN 'codex' THEN session_id ELSE path END`
+
+// merged 是合并后的会话表，供 FROM 使用：part 为 1 的行代表一个会话，parts 是它有几段。
+// where 筛的是每一段（ListOptions.where 用空别名生成）。
+func merged(where string) string {
+	return `(SELECT id, agent, session_id, title, cwd, branch, updated_at, path, state,
+		FIRST_VALUE(first_prompt) OVER (PARTITION BY ` + groupKey + ` ORDER BY created_at, id) AS first_prompt,
+		MIN(created_at) OVER g AS created_at, SUM(messages) OVER g AS messages, COUNT(*) OVER g AS parts,
+		ROW_NUMBER() OVER (PARTITION BY ` + groupKey + ` ORDER BY updated_at DESC, id DESC) AS part
+		FROM sessions` + where + ` WINDOW g AS (PARTITION BY ` + groupKey + `))`
+}
+
+// part 是分成几段的会话里的一段，offset 是它的消息序号在整个会话里要加的数。
+type part struct {
+	id     int64
+	path   string
+	offset int
+}
+
+// parts 按从早到晚列出 s 的各段；只有一段时返回 nil。
+func (x *Index) parts(ctx context.Context, s Session) ([]part, error) {
+	if s.Agent != "codex" {
+		return nil, nil
+	}
+	rows, err := x.db.QueryContext(ctx, `SELECT s.id, s.path, COALESCE((SELECT MAX(seq) + 1 FROM messages WHERE session = s.id), 0)
+		FROM sessions s WHERE agent = ? AND session_id = ? ORDER BY created_at, id`, s.Agent, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []part
+	offset := 0
+	for rows.Next() {
+		var p part
+		var n int
+		if err := rows.Scan(&p.id, &p.path, &n); err != nil {
+			return nil, err
+		}
+		p.offset = offset
+		offset += n
+		out = append(out, p)
+	}
+	if len(out) < 2 {
+		return nil, rows.Err()
+	}
+	return out, rows.Err()
+}
+
 // Sessions 按最近更新排列会话。
 func (x *Index) Sessions(ctx context.Context, o ListOptions) ([]Session, error) {
 	if ok, err := x.ready(ctx); !ok {
 		return nil, err
 	}
 	where, args := o.where("")
-	q := `SELECT ` + sessionCols("") + ` FROM sessions` + where + ` ORDER BY updated_at DESC`
+	q := `SELECT ` + sessionCols("") + ` FROM ` + merged(where) + ` WHERE part = 1 ORDER BY updated_at DESC`
 	if o.Limit > 0 {
 		q += fmt.Sprintf(" LIMIT %d", o.Limit)
 	}
@@ -303,20 +362,22 @@ func (x *Index) Find(ctx context.Context, id string) (Session, error) {
 		}
 		return Session{}, err
 	}
-	rows, err := x.db.QueryContext(ctx, `SELECT `+sessionCols("")+` FROM sessions WHERE session_id = ? OR session_id LIKE ? ESCAPE '\' ORDER BY session_id = ? DESC, updated_at DESC LIMIT 6`,
+	rows, err := x.db.QueryContext(ctx, `SELECT `+sessionCols("")+` FROM `+merged("")+` WHERE part = 1 AND (session_id = ? OR session_id LIKE ? ESCAPE '\') ORDER BY session_id = ? DESC, updated_at DESC LIMIT 6`,
 		id, likeEscape(id)+"%", id)
 	if err != nil {
 		return Session{}, err
 	}
-	defer rows.Close()
 	var found []Session
 	for rows.Next() {
 		s, err := scanSession(rows)
 		if err != nil {
+			rows.Close()
 			return Session{}, err
 		}
 		found = append(found, s)
 	}
+	// 索引只有一个连接，补查 Parts 之前先关掉结果集
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return Session{}, err
 	}
@@ -324,13 +385,43 @@ func (x *Index) Find(ctx context.Context, id string) (Session, error) {
 	case len(found) == 0:
 		return Session{}, ErrNotFound
 	case found[0].ID == id || len(found) == 1:
-		return found[0], nil
+		return x.withParts(ctx, found[0])
 	}
 	var ids []string
 	for _, s := range found {
 		ids = append(ids, s.Agent+" "+s.ID)
 	}
 	return Session{}, fmt.Errorf("session %q is ambiguous: %s", id, strings.Join(ids, ", "))
+}
+
+// FindPath 返回包含这个会话文件的会话：同一个 ID 有几个不同会话时（见 groupKey）用它定位。
+func (x *Index) FindPath(ctx context.Context, path string) (Session, error) {
+	if ok, err := x.ready(ctx); !ok {
+		if err == nil {
+			err = ErrNotFound
+		}
+		return Session{}, err
+	}
+	row := x.db.QueryRowContext(ctx, `SELECT `+sessionCols("m.")+` FROM `+merged("")+` m JOIN sessions s
+		ON s.path = ? AND m.agent = s.agent AND (m.path = s.path OR (m.agent = 'codex' AND m.session_id = s.session_id))
+		WHERE m.part = 1 AND m.messages > 0`, path)
+	s, err := scanSession(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrNotFound
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	return x.withParts(ctx, s)
+}
+
+// withParts 给分成几段的会话填上 Parts。
+func (x *Index) withParts(ctx context.Context, s Session) (Session, error) {
+	ps, err := x.parts(ctx, s)
+	for _, p := range ps {
+		s.Parts = append(s.Parts, p.path)
+	}
+	return s, err
 }
 
 // TranscriptOptions 筛选 Transcript 返回的消息，零值是全部。
@@ -349,6 +440,32 @@ func (x *Index) Transcript(ctx context.Context, s Session, o TranscriptOptions) 
 	if o.Tail > 0 {
 		limit = o.Tail
 	}
+	ps, err := x.parts(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	if ps != nil {
+		// 分成几段的会话按段接起来，序号顺延
+		var out []Message
+		for _, p := range ps {
+			rows, err := x.db.QueryContext(ctx, `SELECT m.seq, m.role, m.at, m.text FROM messages m WHERE m.session = ?`+where+` ORDER BY m.seq`, p.id)
+			if err != nil {
+				return nil, err
+			}
+			msgs, err := scanMessages(rows)
+			if err != nil {
+				return nil, err
+			}
+			for i := range msgs {
+				msgs[i].Seq += p.offset
+			}
+			out = append(out, msgs...)
+		}
+		if limit >= 0 && len(out) > limit {
+			out = out[len(out)-limit:]
+		}
+		return out, nil
+	}
 	rows, err := x.db.QueryContext(ctx, `SELECT seq, role, at, text FROM (
 		SELECT m.seq, m.role, m.at, m.text FROM messages m JOIN sessions s ON s.id = m.session
 		WHERE s.path = ?`+where+` ORDER BY m.seq DESC LIMIT ?
@@ -356,6 +473,10 @@ func (x *Index) Transcript(ctx context.Context, s Session, o TranscriptOptions) 
 	if err != nil {
 		return nil, err
 	}
+	return scanMessages(rows)
+}
+
+func scanMessages(rows *sql.Rows) ([]Message, error) {
 	defer rows.Close()
 	var out []Message
 	for rows.Next() {
@@ -405,35 +526,38 @@ func (x *Index) search(ctx context.Context, terms []term, match string, o Search
 		msgArgs = append(msgArgs, o.Role)
 	}
 	// 指定了消息角色时标题不参与匹配
-	titled := `SELECT rowid AS session FROM titles_fts WHERE titles_fts MATCH ?`
+	// 结果按合并后的会话（groupKey）算：分成几段的会话只出一条
+	titled := `SELECT DISTINCT ` + groupKeyOf("s.") + ` FROM titles_fts JOIN sessions s ON s.id = titles_fts.rowid WHERE titles_fts MATCH ?`
 	if o.Role != "" {
-		titled = `SELECT 0 AS session WHERE ? IS NULL`
+		titled = `SELECT '' AS agent, '' AS gkey WHERE ? IS NULL`
 	}
+	listWhere, listArgs := o.where("")
 	q := `WITH hits AS (
-		SELECT m.id, m.session, m.seq, m.role, m.at, f.rank AS rank
+		SELECT m.id, ` + groupKeyOf("s.") + `, m.seq, m.role, m.at, f.rank AS rank, s.path
 		FROM messages_fts f JOIN messages m ON m.id = f.rowid JOIN sessions s ON s.id = m.session
 		` + msgWhere + ` AND messages_fts MATCH ?
 	), best AS (
 		-- 会话按最相关的一条排序；摘要优先取对话里的那条，没有才用工具输出
-		SELECT session, id, seq, role, at, best_rank AS rank, n FROM (
+		SELECT agent, gkey, id, seq, role, at, best_rank AS rank, n, path FROM (
 			SELECT *, MIN(rank) OVER w AS best_rank, COUNT(*) OVER w AS n,
-				ROW_NUMBER() OVER (PARTITION BY session ORDER BY role = 'tool', rank) AS pick
-			FROM hits WINDOW w AS (PARTITION BY session)
+				ROW_NUMBER() OVER (PARTITION BY agent, gkey ORDER BY role = 'tool', rank) AS pick
+			FROM hits WINDOW w AS (PARTITION BY agent, gkey)
 		) WHERE pick = 1
 	), titled AS (` + titled + `
 	), cand AS (
-		SELECT session FROM best UNION SELECT session FROM titled
+		SELECT agent, gkey FROM best UNION SELECT agent, gkey FROM titled
+	), sess AS (
+		SELECT *, CASE agent WHEN 'codex' THEN session_id ELSE path END AS gkey FROM ` + merged(listWhere) + ` WHERE part = 1
 	)
 	SELECT ` + sessionCols("s.") + `, COALESCE(b.n, 0), COALESCE(b.role, ''), COALESCE(b.seq, 0), COALESCE(b.at, 0),
-		COALESCE(m.text, ''), t.session IS NOT NULL AS title_hit
-	FROM cand c JOIN sessions s ON s.id = c.session
-	LEFT JOIN best b ON b.session = c.session
+		COALESCE(m.text, ''), t.agent IS NOT NULL AS title_hit, COALESCE(b.path, ''), s.parts
+	FROM cand c JOIN sess s ON s.agent = c.agent AND s.gkey = c.gkey
+	LEFT JOIN best b ON b.agent = c.agent AND b.gkey = c.gkey
 	LEFT JOIN messages m ON m.id = b.id
-	LEFT JOIN titled t ON t.session = c.session
-	` + where + `
+	LEFT JOIN titled t ON t.agent = c.agent AND t.gkey = c.gkey
 	ORDER BY title_hit DESC, COALESCE(b.rank - 0.5 * ln(b.n), 0) ASC, s.updated_at DESC LIMIT ?`
 	all := append(msgArgs, match, match)
-	all = append(all, args...)
+	all = append(all, listArgs...)
 	all = append(all, limit)
 	rows, err := x.db.QueryContext(ctx, q, all...)
 	if err != nil {
@@ -442,14 +566,24 @@ func (x *Index) search(ctx context.Context, terms []term, match string, o Search
 	defer rows.Close()
 	ns := needles(terms)
 	var out []Hit
+	type partHit struct {
+		i    int
+		path string
+	}
+	var partHits []partHit
 	for rows.Next() {
 		var h Hit
 		var at int64
 		var text string
 		var titleHit bool
-		s, err := scanSession(rows, &h.Matches, &h.Role, &h.Seq, &at, &text, &titleHit)
+		var hitPath string
+		var nparts int
+		s, err := scanSession(rows, &h.Matches, &h.Role, &h.Seq, &at, &text, &titleHit, &hitPath, &nparts)
 		if err != nil {
 			return nil, err
+		}
+		if nparts > 1 && hitPath != "" {
+			partHits = append(partHits, partHit{len(out), hitPath})
 		}
 		h.Session, h.At = s, fromMS(at)
 		if text == "" {
@@ -459,7 +593,24 @@ func (x *Index) search(ctx context.Context, terms []term, match string, o Search
 		h.Snippet, h.Spans = snippet(text, ns, 120)
 		out = append(out, h)
 	}
-	return out, rows.Err()
+	// 索引只有一个连接，换算序号之前先关掉结果集
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, ph := range partHits {
+		// 命中的序号是那一段里的，换成整个会话里的
+		ps, err := x.parts(ctx, out[ph.i].Session)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range ps {
+			if p.path == ph.path {
+				out[ph.i].Seq += p.offset
+			}
+		}
+	}
+	return out, nil
 }
 
 // Stats 是索引规模，给状态栏和 CLI 显示。
@@ -475,7 +626,7 @@ func (x *Index) Stats(ctx context.Context) (Stats, error) {
 	if ok, err := x.ready(ctx); !ok {
 		return st, err
 	}
-	rows, err := x.db.QueryContext(ctx, `SELECT agent, COUNT(*), SUM(messages) FROM sessions WHERE messages > 0 GROUP BY agent`)
+	rows, err := x.db.QueryContext(ctx, `SELECT agent, COUNT(DISTINCT CASE agent WHEN 'codex' THEN session_id ELSE path END), SUM(messages) FROM sessions WHERE messages > 0 GROUP BY agent`)
 	if err != nil {
 		return st, err
 	}

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"hive/internal/agent"
@@ -26,6 +27,8 @@ var (
 
 type historyStatus struct {
 	Sessions int              `json:"sessions"`
+	Messages int              `json:"messages"`
+	ByAgent  map[string]int   `json:"byAgent"`
 	Indexing bool             `json:"indexing"`
 	Progress history.Progress `json:"progress"`
 	Error    string           `json:"error"`
@@ -36,7 +39,9 @@ type historyDetail struct {
 	Messages []history.Message `json:"messages"`
 	Terminal string            `json:"terminal"`
 
-	md map[int][]mdBlock // 消息序号 → 解析好的 Markdown
+	context   history.Context // 最后一次请求占用的上下文，由窗口进程读会话文件得到
+	contextOK bool
+	md        map[int][]mdBlock // 消息序号 → 解析好的 Markdown
 	// items 是要列出的行，itemsKey 是算它时的条件（是否全显示工具、命中序号、展开了哪些工具组）
 	items    []transcriptItem
 	itemsKey string
@@ -89,18 +94,20 @@ type historyView struct {
 	agent    int
 	sessions []history.Session // 没有搜索词时：最近的会话
 	groups   []string          // 与 sessions 对应的"今天、昨天……"分组
-	hits     []history.Hit     // 有搜索词时
-	anyWord  bool              // 没有同时含所有词的结果，列出的是含任一词的
-	status   historyStatus
-	loaded   bool
-	sel      string // 选中的会话 ID
-	hitSeq   int    // 从搜索结果打开时命中的消息序号，-1 表示没有
-	placed   bool   // 打开会话后是否已经定位过
-	detail   *historyDetail
-	tools    bool // 显示工具调用
-	list     ui.ListState
-	shown    string // 列表当前结果对应的查询条件，换了条件才回到顶部
-	messages ui.ListState
+	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
+	groupOpen map[string]bool
+	hits      []history.Hit // 有搜索词时
+	anyWord   bool          // 没有同时含所有词的结果，列出的是含任一词的
+	status    historyStatus
+	loaded    bool
+	sel       string // 选中的会话（sessionKey）
+	hitSeq    int    // 从搜索结果打开时命中的消息序号，-1 表示没有
+	placed    bool   // 打开会话后是否已经定位过
+	detail    *historyDetail
+	tools     bool // 显示工具调用
+	list      ui.ListState
+	shown     string // 列表当前结果对应的查询条件，换了条件才回到顶部
+	messages  ui.ListState
 
 	mu      sync.Mutex
 	req     int // 列表请求的序号，只采用最新一次的结果
@@ -216,19 +223,23 @@ func (a *app) setHistoryVisible(v bool) {
 	}
 }
 
-func (a *app) selectSession(id string, seq int) {
+// selectSession 打开一个会话。按会话文件认：同一个 ID 可能是几个不同的会话（见 history.FindPath）。
+func (a *app) selectSession(sess history.Session, seq int) {
 	h := &a.history
-	h.sel, h.hitSeq, h.placed = id, seq, false
-	if h.detail != nil && h.detail.Session.ID != id {
+	key := sessionKey(sess)
+	h.sel, h.hitSeq, h.placed = key, seq, false
+	if h.detail != nil && sessionKey(h.detail.Session) != key {
 		h.detail = nil
 	}
 	go func() {
 		var d historyDetail
-		if a.call("history.show", map[string]any{"session": id}, &d, 30*time.Second) != nil {
+		if a.call("history.show", map[string]any{"session": sess.ID, "path": sess.Path}, &d, 30*time.Second) != nil {
 			return
 		}
+		s := d.Session
+		d.context, d.contextOK = history.ReadContext(s.Agent, s.Path, s.Model)
 		a.win.Update(func() {
-			if h.sel == id {
+			if h.sel == key {
 				h.detail = &d
 			}
 		})
@@ -396,7 +407,10 @@ func (a *app) historyBoard(c *ui.Context) {
 	})
 	searching := strings.TrimSpace(h.query) != ""
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
-		card(c).Width(380).Shrink(0).Clip().Children(func() {
+		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
+		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
+		list.Children(func() {
+			a.historyTotals(c)
 			a.historyNotice(c, searching)
 			if searching {
 				a.hitList(c)
@@ -406,6 +420,138 @@ func (a *app) historyBoard(c *ui.Context) {
 		})
 		ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() { a.sessionDetail(c) })
 	})
+	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
+	switch {
+	case c.Shortcut(0, ui.KeyDown):
+		a.stepSession(1)
+	case c.Shortcut(0, ui.KeyUp):
+		a.stepSession(-1)
+	}
+}
+
+// stepSession 选中列表里看得见的下一个（step 为 1）或上一个会话，折起来的分组跳过；
+// 还没选中时下键选第一个、上键选最后一个。到头了不动。
+func (a *app) stepSession(step int) {
+	h := &a.history
+	type item struct {
+		s   history.Session
+		seq int
+		row int // 在列表里是第几行
+	}
+	var items []item
+	if strings.TrimSpace(h.query) != "" {
+		for i, hit := range h.hits {
+			seq := -1
+			if hit.Role != "title" {
+				seq = hit.Seq
+			}
+			items = append(items, item{hit.Session, seq, i})
+		}
+	} else {
+		for i, r := range h.groupRows() {
+			if r.session >= 0 {
+				items = append(items, item{h.sessions[r.session], -1, i})
+			}
+		}
+	}
+	if len(items) == 0 {
+		return
+	}
+	to := 0
+	if step < 0 {
+		to = len(items) - 1
+	}
+	for i, it := range items {
+		if sessionKey(it.s) == h.sel {
+			to = i + step
+			break
+		}
+	}
+	if to < 0 || to >= len(items) {
+		return
+	}
+	a.selectSession(items[to].s, items[to].seq)
+	h.list.ScrollIntoView(items[to].row)
+}
+
+// historyTotals 是列表顶上的总计：会话数、消息数和各 agent 的会话数，跟着筛选走。
+func (a *app) historyTotals(c *ui.Context) {
+	t := c.Theme()
+	h := &a.history
+	st := h.status
+	if st.Sessions == 0 {
+		return
+	}
+	sessions := st.Sessions
+	if ag := historyAgents[h.agent]; ag != "" {
+		sessions = st.ByAgent[ag]
+	}
+	ui.Column(c).Padding(14, 20, 10, 20).Gap(8).Children(func() {
+		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, fmt.Sprintf("%s 个会话", thousands(sessions))).FontSize(13).FontWeight(500).FontFeatures("tnum")
+			if h.agent == 0 {
+				ui.Text(c, fmt.Sprintf("%s 条消息", thousands(st.Messages))).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+			}
+		})
+		if h.agent != 0 {
+			return
+		}
+		ui.Row(c).Gap(14).Wrap().Children(func() {
+			for _, ag := range history.Agents {
+				n := st.ByAgent[ag]
+				if n == 0 {
+					continue
+				}
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					agentTile(c, ag, 16)
+					ui.Text(c, thousands(n)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(agentTitle(ag))
+				})
+			}
+		})
+	})
+	ui.Box(c).Height(1).Margin(0, 20).Background(colors(t).line)
+}
+
+// thousands 把整数写成带千分位的：12345 → 12,345。
+func thousands(n int) string {
+	s := fmt.Sprint(n)
+	for i := len(s) - 3; i > 0 && s[i-1] != '-'; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+// cwdLink 是会话目录，点一下在访达中打开。
+func (a *app) cwdLink(c *ui.Context, dir string) func() {
+	return func() {
+		t := c.Theme()
+		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label("在访达中打开").Cursor(ui.CursorPointer).Tooltip("在访达中打开 " + dir)
+		color := t.TextMuted
+		if b.Hovered() {
+			color = t.Accent
+		}
+		b.Children(func() {
+			ui.Icon(c, iconFolder).FontSize(13).TextColor(color)
+			ui.Text(c, shortPath(dir)).FontSize(11.5).Font(monoFont).TextColor(color).MaxLines(1).Shrink(1)
+		})
+		if b.Clicked() {
+			if err := mygo.Shell.OpenPath(dir); err != nil {
+				a.err = err.Error()
+			}
+		}
+	}
+}
+
+// contextMeta 是会话最后一次请求占用的上下文比例；读不到用量的会话（grok、cursor）不显示。
+func contextMeta(c *ui.Context, d *historyDetail) func() {
+	if !d.contextOK {
+		return nil
+	}
+	return func() {
+		ctx := d.context
+		ui.Text(c, fmt.Sprintf("上下文 %d%%", ctx.Percent())).FontSize(12).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
+			Tooltip(fmt.Sprintf("最后一次请求用了 %s / %s token", thousands(ctx.Used), thousands(ctx.Window)))
+	}
 }
 
 // historyNotice 是列表上方的一行说明：建索引进度、退而求其次的结果。
@@ -436,20 +582,75 @@ func (a *app) sessionList(c *ui.Context) {
 		a.historyEmpty(c, "还没有会话记录", "Hive 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
 		return
 	}
-	// 按"今天、昨天、本周、更早"分组，组标题跟在第一行前面
-	groups := h.groups
+	// 按"今天、昨天、本周、更早"分组；默认只展开第一组，其余只列组标题和会话数
+	rows := h.groupRows()
 	// 列表里有"几分钟前"，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
-	h.list.Key = func(i int) any { return h.sessions[i].Agent + h.sessions[i].ID }
-	fadeEdges(ui.List(c, &h.list, len(h.sessions), func(i int) {
-		s := h.sessions[i]
-		ui.Column(c).Children(func() {
-			if i == 0 || groups[i] != groups[i-1] {
-				ui.Text(c, groups[i]).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+	h.list.Key = func(i int) any {
+		if r := rows[i]; r.session >= 0 {
+			return sessionKey(h.sessions[r.session])
+		}
+		return "group:" + rows[i].group
+	}
+	fadeEdges(ui.List(c, &h.list, len(rows), func(i int) {
+		r := rows[i]
+		if r.session >= 0 {
+			a.sessionRow(c, h.sessions[r.session], nil)
+			return
+		}
+		open := h.isGroupOpen(r.group)
+		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(10, 12, 4, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+			Role(ui.RoleButton).Label(r.group).Cursor(ui.CursorPointer)
+		head.Children(func() {
+			turn := float32(0)
+			if open {
+				turn = 90
 			}
-			a.sessionRow(c, s, nil)
+			chev := ui.Icon(c, iconChevron).FontSize(11).TextColor(t.TextMuted)
+			chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
+			ui.Text(c, r.group).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
+		if head.Clicked() {
+			if h.groupOpen == nil {
+				h.groupOpen = map[string]bool{}
+			}
+			h.groupOpen[r.group] = !open
+		}
 	}).Grow(1).Padding(4, 0, 8, 0).Gap(4), &h.list, colors(t).card)
+}
+
+// historyRow 是会话列表的一行：分组标题（session 为 -1）或一个会话。
+type historyRow struct {
+	group   string
+	count   int // 分组里的会话数
+	session int
+}
+
+func (h *historyView) isGroupOpen(g string) bool {
+	if open, ok := h.groupOpen[g]; ok {
+		return open
+	}
+	return len(h.groups) > 0 && g == h.groups[0]
+}
+
+// groupRows 列出分组标题和展开的分组里的会话。
+func (h *historyView) groupRows() []historyRow {
+	var rows []historyRow
+	for i := 0; i < len(h.sessions); {
+		g, j := h.groups[i], i
+		for j < len(h.sessions) && h.groups[j] == g {
+			j++
+		}
+		rows = append(rows, historyRow{group: g, count: j - i, session: -1})
+		if h.isGroupOpen(g) {
+			for k := i; k < j; k++ {
+				rows = append(rows, historyRow{group: g, session: k})
+			}
+		}
+		i = j
+	}
+	return rows
 }
 
 func (a *app) hitList(c *ui.Context) {
@@ -459,7 +660,7 @@ func (a *app) hitList(c *ui.Context) {
 		return
 	}
 	c.After(30 * time.Second)
-	h.list.Key = func(i int) any { return h.hits[i].Agent + h.hits[i].ID }
+	h.list.Key = func(i int) any { return sessionKey(h.hits[i].Session) }
 	fadeEdges(ui.List(c, &h.list, len(h.hits), func(i int) {
 		hit := h.hits[i]
 		a.sessionRow(c, hit.Session, &hit)
@@ -478,8 +679,8 @@ func (a *app) historyEmpty(c *ui.Context, title, body string) {
 func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 	t := c.Theme()
 	h := &a.history
-	row := ui.Row(c.Key(s.Agent+s.ID)).Margin(0, 8).Padding(10, 12, 10, 14).Gap(12).Radius(8).AlignItems(ui.Center)
-	selectedBg(c, row, h.sel == s.ID)
+	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(10, 12, 10, 14).Gap(12).Radius(8).AlignItems(ui.Center)
+	selectedBg(c, row, h.sel == sessionKey(s))
 	row.Children(func() {
 		agentTile(c, s.Agent, 28)
 		ui.Column(c).Gap(3).Grow(1).Shrink(1).Children(func() {
@@ -502,7 +703,7 @@ func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 		if hit != nil && hit.Role != "title" {
 			seq = hit.Seq
 		}
-		a.selectSession(s.ID, seq)
+		a.selectSession(s, seq)
 	}
 }
 
@@ -553,12 +754,12 @@ func (a *app) sessionDetail(c *ui.Context) {
 				titleText(c, oneLine(s.Title), fsPageTitle).LineHeight(1.3).MaxLines(2).Selectable()
 				var cwd, branch func()
 				if s.Cwd != "" {
-					cwd = metaMono(c, iconFolder, shortPath(s.Cwd), s.Cwd)
+					cwd = a.cwdLink(c, s.Cwd)
 				}
 				if s.Branch != "" {
 					branch = metaMono(c, iconBranch, s.Branch, "")
 				}
-				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, s.UpdatedAt.Local().Format("1月2日 15:04")), meta(c, fmt.Sprintf("%d 条消息", s.Messages)))
+				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, s.UpdatedAt.Local().Format("1月2日 15:04")), meta(c, fmt.Sprintf("%d 条消息", s.Messages)), contextMeta(c, d))
 			})
 		})
 		ui.Row(c).Gap(8).Children(func() {
@@ -759,7 +960,7 @@ func dayGroup(t time.Time) string {
 	case !t.Before(today.AddDate(0, 0, -30)):
 		return "最近 30 天"
 	}
-	return "更早"
+	return "1 个月前"
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

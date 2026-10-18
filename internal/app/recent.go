@@ -30,7 +30,13 @@ type recentPreview struct {
 	text string
 }
 
-func sessionKey(s history.Session) string { return s.Agent + ":" + s.ID }
+// sessionKey 按会话文件认会话：同一个 ID 可能是几个不同的会话（见 history.FindPath）。
+func sessionKey(s history.Session) string {
+	if s.Path != "" {
+		return s.Path
+	}
+	return s.Agent + ":" + s.ID
+}
 
 // sessionPreview 用 history.show 取会话末尾几条消息（不含工具），挑出要显示的那段。
 func (a *app) sessionPreview(s history.Session) recentPreview {
@@ -38,7 +44,7 @@ func (a *app) sessionPreview(s history.Session) recentPreview {
 		Messages []history.Message `json:"messages"`
 	}
 	p := recentPreview{at: s.UpdatedAt}
-	if a.call("history.show", map[string]any{"session": s.ID, "tail": 6, "tools": false}, &d, 10*time.Second) != nil {
+	if a.call("history.show", map[string]any{"session": s.ID, "path": s.Path, "tail": 6, "tools": false}, &d, 10*time.Second) != nil {
 		return p
 	}
 	for i := len(d.Messages) - 1; i >= 0; i-- {
@@ -101,7 +107,7 @@ func (a *app) pollRecent(c *ui.Context, w *workspace) {
 			all = append(all, res.Sessions...)
 		}
 		slices.SortFunc(all, func(x, y history.Session) int { return y.UpdatedAt.Compare(x.UpdatedAt) })
-		all = slices.CompactFunc(all, func(x, y history.Session) bool { return x.Agent == y.Agent && x.ID == y.ID })
+		all = slices.CompactFunc(all, func(x, y history.Session) bool { return sessionKey(x) == sessionKey(y) })
 		if len(all) > recentLimit {
 			all = all[:recentLimit]
 		}
@@ -199,7 +205,7 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 				}
 				for _, s := range r.sessions {
 					row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
-					selectedBg(c, row, a.selected == historyBoardID && a.history.sel == s.ID)
+					selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
 					row.Children(func() {
 						agentTile(c, s.Agent, 20)
 						ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
@@ -234,7 +240,7 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 					})
 					if row.Clicked() {
 						a.selected, a.revealSel = historyBoardID, true
-						a.selectSession(s.ID, -1)
+						a.selectSession(s, -1)
 					}
 				}
 			})

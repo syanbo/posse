@@ -40,9 +40,17 @@ func sessionTrashPaths(s history.Session) []string {
 		}
 		return out
 	case "codex":
-		if under(s.Path, ".codex") {
-			return []string{s.Path}
+		// 分成几段的会话各段一起移走
+		parts := s.Parts
+		if len(parts) == 0 {
+			parts = []string{s.Path}
 		}
+		for _, p := range parts {
+			if !under(p, ".codex") {
+				return nil
+			}
+		}
+		return parts
 	case "grok":
 		// 一个会话一个目录：chat_history、updates、summary 等都在里面
 		if dir := filepath.Dir(s.Path); filepath.Base(dir) == s.ID && under(dir, ".grok", "sessions") {
@@ -79,7 +87,7 @@ func (a *app) askTrashSession(d *historyDetail) {
 			}
 			a.call("history.index", map[string]any{"wait": true}, nil, time.Minute)
 			a.win.Update(func() {
-				if a.history.sel == s.ID {
+				if a.history.sel == sessionKey(s) {
 					a.history.sel, a.history.detail = "", nil
 				}
 				a.recent.poll.at = time.Time{}

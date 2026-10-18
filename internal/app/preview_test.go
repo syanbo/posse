@@ -124,7 +124,7 @@ func previewHistory(a *app, query string) {
 		{Agent: "grok", ID: "s6", Title: "Ghostty 快捷键与浅色主题轮播", Cwd: home + "/Desktop/AI/Grok", UpdatedAt: now.Add(-46 * 24 * time.Hour), Messages: 72},
 	}
 	h := &a.history
-	h.loaded, h.status = true, historyStatus{Sessions: 424}
+	h.loaded, h.status = true, historyStatus{Sessions: 424, Messages: 18342, ByAgent: map[string]int{"claude": 251, "codex": 120, "cursor": 9, "grok": 44}}
 	a.selected = historyBoardID
 	h.query = query
 	if query == "" {
@@ -138,7 +138,7 @@ func previewHistory(a *app, query string) {
 		{Session: sessions[0], Matches: 4, Role: "assistant", Seq: 3, Snippet: snip, Spans: []history.Span{{Start: i, End: i + len("磁盘")}}},
 		{Session: sessions[4], Matches: 1, Role: "tool", Seq: 9, Snippet: "df -h / 磁盘只剩约 2.5Gi", Spans: []history.Span{{Start: 8, End: 14}}},
 	}
-	h.sel, h.hitSeq, h.placed = "s1", 3, false
+	h.sel, h.hitSeq, h.placed = "claude:s1", 3, false
 	h.detail = &historyDetail{Session: sessions[0], Messages: []history.Message{
 		{Seq: 0, Role: "user", Text: "我的 Mac 磁盘快满了，帮我看看能清理什么", At: now.Add(-40 * time.Minute)},
 		{Seq: 1, Role: "assistant", Text: "先看各目录占用，再按能否安全删除分类。", At: now.Add(-39 * time.Minute)},
@@ -146,13 +146,14 @@ func previewHistory(a *app, query string) {
 		{Seq: 3, Role: "assistant", Text: "Caches 有 12G，Xcode 的 DerivedData 有 31G。先看看 Library/Caches 有多大，再决定清理磁盘上的哪些缓存：\n\n- DerivedData 可以整个删，下次编译会重建\n- 模拟器运行时用 xcrun simctl delete unavailable 清理", At: now.Add(-38 * time.Minute)},
 		{Seq: 4, Role: "user", Text: "DerivedData 删掉吧，模拟器先别动", At: now.Add(-30 * time.Minute)},
 	}}
+	h.detail.context, h.detail.contextOK = history.Context{Used: 372_480, Window: 1_000_000}, true
 }
 
 // previewMarkdown 打开一个回复里有标题、表格、列表和代码的会话。
 func previewMarkdown(a *app) {
 	h := &a.history
 	now := time.Now()
-	h.sel, h.hitSeq, h.placed = "s1", -1, false
+	h.sel, h.hitSeq, h.placed = "claude:s1", -1, false
 	h.detail = &historyDetail{Session: h.sessions[0], Messages: []history.Message{
 		{Seq: 0, Role: "user", Text: "评估一下用 mygo 重写 Orca", At: now.Add(-40 * time.Minute)},
 		{Seq: 1, Role: "assistant", At: now.Add(-39 * time.Minute), Text: "我按 [egoist/mygo](https://pkg.go.dev/github.com/egoist/mygo) 来理解\"mygo\"，先实测了 Orca。\n\n" +

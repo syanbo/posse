@@ -273,7 +273,9 @@ func (d *Daemon) historyList(ctx context.Context, raw json.RawMessage) (any, err
 
 type historyShowParams struct {
 	Session string `json:"session"`
-	Tail    int    `json:"tail"` // 只要最后几条，0 为全部
+	// Path 是会话文件，有它时按文件找：同一个 ID 可能对应几个不同的会话（见 history.FindPath）
+	Path string `json:"path"`
+	Tail int    `json:"tail"` // 只要最后几条，0 为全部
 	// Tools 为 false 时不要工具消息；界面只传 session，不传时包含
 	Tools *bool `json:"tools"`
 }
@@ -308,12 +310,30 @@ func (d *Daemon) findHistorySession(ctx context.Context, id string) (history.Ses
 	return s, err
 }
 
+func (d *Daemon) findHistoryPath(ctx context.Context, path string) (history.Session, error) {
+	idx, err := d.historyIndex()
+	if err != nil {
+		return history.Session{}, err
+	}
+	s, err := idx.FindPath(ctx, path)
+	if errors.Is(err, history.ErrNotFound) {
+		return s, rpc.Errorf(rpc.CodeNotFound, "session file %q not indexed", path)
+	}
+	return s, err
+}
+
 func (d *Daemon) historyShow(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p historyShowParams
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.findHistorySession(ctx, p.Session)
+	var s history.Session
+	var err error
+	if p.Path != "" {
+		s, err = d.findHistoryPath(ctx, p.Path)
+	} else {
+		s, err = d.findHistorySession(ctx, p.Session)
+	}
 	if err != nil {
 		return nil, err
 	}
