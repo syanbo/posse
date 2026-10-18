@@ -52,3 +52,70 @@ Future<bool> closeSession(
   await model.refreshWorktrees();
   return true;
 }
+
+/// 会话页、终端页右上角的"更多"：从底部滑上来的面板，和电脑列表的操作面板一样。
+/// [switchLabel] 是切到另一种看法（对话或终端），为空不显示；[desk] 不为空时有"电脑布局"开关，
+/// 拨动立刻生效、面板不收。返回 'switch' 或 'close'，点外面收起时为 null。
+Future<String?> showSessionMore(
+  BuildContext context, {
+  required SessionTab tab,
+  String? switchLabel,
+  IconData switchIcon = Icons.swap_horiz_rounded,
+  bool? desk,
+  ValueChanged<bool>? onDesk,
+}) {
+  return showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) {
+      final c = HiveColors.of(sheet);
+      var on = desk ?? false;
+      return SafeArea(
+        top: false,
+        child: Section(
+          inset: 48,
+          children: [
+            if (switchLabel != null)
+              RowTile(
+                chevron: false,
+                leading: Icon(switchIcon, size: 22, color: c.accent),
+                title: Text(switchLabel),
+                onTap: () => Navigator.of(sheet).pop('switch'),
+              ),
+            if (desk != null)
+              StatefulBuilder(
+                builder: (context, setSheet) {
+                  void flip(bool value) {
+                    setSheet(() => on = value);
+                    onDesk?.call(value);
+                  }
+
+                  return RowTile(
+                    chevron: false,
+                    leading: Icon(
+                      Icons.desktop_mac_outlined,
+                      size: 22,
+                      color: c.accent,
+                    ),
+                    title: const Text('电脑布局'),
+                    subtitle: const Text('保持电脑的宽度，左右滑着看'),
+                    trailing: Switch.adaptive(value: on, onChanged: flip),
+                    onTap: () => flip(!on),
+                  );
+                },
+              ),
+            RowTile(
+              chevron: false,
+              leading: Icon(Icons.close_rounded, size: 22, color: c.danger),
+              title: Text(
+                tab.agent == null ? '关闭终端' : '关闭会话',
+                style: TextStyle(color: c.danger),
+              ),
+              onTap: () => Navigator.of(sheet).pop('close'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}

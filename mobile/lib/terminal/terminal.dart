@@ -364,42 +364,32 @@ class _TerminalScreenState extends State<TerminalScreen>
             title: worktreePath(widget.model, widget.tab.worktreeId),
           ),
           // 切到对话放进"更多"里，顶栏只留文件和更多
-          PopupMenuButton<String>(
+          IconButton(
             tooltip: '更多',
             icon: const Icon(Icons.more_horiz_rounded),
-            onSelected: (value) async {
-              if (value == 'chat') {
-                widget.onOpenChat?.call();
-                return;
-              }
-              if (value == 'desk') {
-                widget.model.updateSettings(
-                  (s) => s.deskLayout = !s.deskLayout,
-                );
-                setState(() {});
-                _schedule();
-                return;
-              }
-              if (value != 'close') return;
+            onPressed: () async {
               final nav = Navigator.of(context);
-              if (await closeSession(context, widget.model, widget.tab)) {
+              final action = await showSessionMore(
+                context,
+                tab: widget.tab,
+                switchLabel: widget.onOpenChat == null ? null : '切换到对话',
+                switchIcon: Icons.chat_bubble_outline_rounded,
+                // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
+                desk: _desk,
+                onDesk: (value) {
+                  widget.model.updateSettings((s) => s.deskLayout = value);
+                  if (!mounted) return;
+                  setState(() {});
+                  _schedule();
+                },
+              );
+              if (!mounted) return;
+              if (action == 'switch') widget.onOpenChat?.call();
+              if (action == 'close' &&
+                  await closeSession(this.context, widget.model, widget.tab)) {
                 nav.pop();
               }
             },
-            itemBuilder: (_) => [
-              if (widget.onOpenChat != null)
-                const PopupMenuItem(value: 'chat', child: Text('切换到对话')),
-              // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
-              CheckedPopupMenuItem(
-                value: 'desk',
-                checked: _desk,
-                child: const Text('电脑布局'),
-              ),
-              PopupMenuItem(
-                value: 'close',
-                child: Text(widget.tab.agent == null ? '关闭终端' : '关闭会话'),
-              ),
-            ],
           ),
           const SizedBox(width: 4),
         ],
