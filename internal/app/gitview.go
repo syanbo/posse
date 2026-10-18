@@ -657,7 +657,12 @@ func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, 
 
 // notify 在窗口底部提示一句（操作成功之类），带 action 时提示上有一个按钮。
 func (a *app) notify(title, action string, onAction func()) {
-	a.toasts = append(a.toasts, ui.Toast{Title: title, Type: "success", Action: action, OnAction: onAction})
+	t := ui.Toast{Title: title, Type: "success", Action: action, OnAction: onAction}
+	// 带"恢复"这类按钮的多留一会儿，来得及点
+	if action != "" {
+		t.Timeout = 8 * time.Second
+	}
+	a.toasts = append(a.toasts, t)
 }
 
 // gitOp 是一个排队等着执行的 git 操作。

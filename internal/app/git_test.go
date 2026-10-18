@@ -1408,3 +1408,39 @@ func TestLogKeyboard(t *testing.T) {
 		t.Fatalf("up: %s", ld.commit.info.Subject)
 	}
 }
+
+// 真的点行号旁的色条：卡片打开，不会被打开它的这次点击当成"点外面"关掉；之后点正文才关。
+func TestChangeBarClick(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	var d *fileDoc
+	var r ui.Rect
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.build(c)
+		if d != nil {
+			r = d.edRef.Bounds(c)
+		}
+	}, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openFile(&a.workspaces[0], filepath.Join(root, "main.go"), 0, [2]int{})
+	d = v.cur
+	until(t, tt, "diff base", func() bool { return d.kind == docText && len(d.ed.Changes()) == 2 })
+	settle(tt)
+	y := r.Y + d.ed.LineBottom(d.ed.Changes()[0].NewStart) - 8
+	// 色条在行号栏右边、折叠箭头左边；扫一遍行号栏，至少有一处能点开
+	opened := false
+	for x := float32(20); x < 60 && !opened; x += 3 {
+		tt.ClickAt(r.X+x, y)
+		tt.Frame()
+		opened = d.change != nil
+	}
+	if !opened || !tt.HasText("第 1 / 2 处") {
+		t.Fatal("clicking the change bar did not open the card")
+	}
+	tt.ClickAt(r.X+r.W/2, r.Y+40)
+	tt.Frame()
+	if d.change != nil {
+		t.Fatal("clicking the text should close the card")
+	}
+}

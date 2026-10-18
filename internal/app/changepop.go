@@ -17,6 +17,7 @@ import (
 type changePop struct {
 	index   int
 	message string // "提交此更改"的提交信息
+	opened  bool   // 已经画过一帧：打开它的那次点击在卡片外面（色条上），不能当成点外面关掉
 }
 
 // changePopMax 是卡片里最多显示几行改之前的内容。
@@ -98,7 +99,9 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		})
 	})
 	// 焦点还在编辑器里，Esc 在窗口这一级接（卡片开着时才注册，不抢编辑器平时的 Esc）
-	if panel.PressedOutside() || c.Shortcut(0, ui.KeyEscape) {
+	outside := panel.PressedOutside() && cp.opened
+	cp.opened = true
+	if outside || c.Shortcut(0, ui.KeyEscape) {
 		d.change = nil
 	}
 }
