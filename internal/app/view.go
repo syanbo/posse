@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -1028,9 +1029,14 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10)
 			a.view.dir = a.view.term.Dir()
 			area.Children(func() {
-				terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
+				tv := terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
+				if a.focusTerm {
+					a.focusTerm = false
+					tv.Focus()
+				}
 				a.sessionButtons(c, cur)
 			})
+			a.termDrop(c, area)
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
 		}
@@ -1228,6 +1234,46 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	if row.Clicked() {
 		a.activeTerm[w.ID] = term.ID
 	}
+	// 中键关闭，和浏览器、Orca 一样
+	if row.MiddleClicked() {
+		a.askClose(term)
+	}
+	row.Tooltip(tabTooltip(term))
+	row.ContextMenu(func(m *ui.Menu) { a.tabMenu(m, w, term) })
+}
+
+// tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
+func tabTooltip(t terminalInfo) string {
+	name := agentTitle(t.Agent)
+	title := bareTitle(t)
+	switch {
+	case name == "" && title == "":
+		return "终端"
+	case name == "":
+		return title
+	case title == "" || strings.EqualFold(title, name) || title == "Claude Code":
+		return name
+	}
+	return name + "\n" + title
+}
+
+// tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
+func (a *app) tabMenu(m *ui.Menu, w *workspace, term terminalInfo) {
+	if m.Item("关闭").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+		a.askClose(term)
+	}
+	i := slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == term.ID })
+	if i < 0 {
+		return
+	}
+	others := slices.Concat(w.Terminals[:i], w.Terminals[i+1:])
+	right := slices.Clone(w.Terminals[i+1:])
+	if m.Item("关闭其他终端").Disabled(len(others) == 0).Chosen() {
+		a.askCloseAll(others)
+	}
+	if m.Item("关闭右侧终端").Disabled(len(right) == 0).Chosen() {
+		a.askCloseAll(right)
+	}
 }
 
 // revealTab 在标签刚变成当前的那一帧把它滚进可见范围：标签多了要左右滚动时，切过去的那个不会藏在外面。
@@ -1252,7 +1298,7 @@ func tabText(c *ui.Context, e ui.Element, active bool) {
 // tabLabel 返回标签的名字和补充说明（终端标题），分开显示而不是用分隔符拼接。
 func tabLabel(t terminalInfo) (string, string) {
 	name := agentTitle(t.Agent)
-	title := strings.TrimSpace(strings.TrimLeft(t.Title, "✳⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏◐◓◑◒ "))
+	title := bareTitle(t)
 	detail := ""
 	switch {
 	case name == "" && title != "":
@@ -1266,6 +1312,11 @@ func tabLabel(t terminalInfo) (string, string) {
 		detail = "已退出"
 	}
 	return truncate(name, 24), truncate(detail, 22)
+}
+
+// bareTitle 是去掉 agent 状态前缀（✳、转圈符）的终端标题。
+func bareTitle(t terminalInfo) string {
+	return strings.TrimSpace(strings.TrimLeft(t.Title, "✳⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏◐◓◑◒ "))
 }
 
 // displayName 是工作区的显示名：主工作区就是项目本身。

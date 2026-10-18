@@ -183,7 +183,9 @@ type app struct {
 	// linkChecks 缓存终端里的链接能不能打开（文件还在不在），悬停时每帧都要问
 	linkChecks map[string]linkCheck
 	// 悬停在终端里的图片链接上时预览：hoverImage 是图片路径，previews 是解码好的预览
-	hoverImage     string
+	hoverImage string
+	// focusTerm 让下一帧把焦点交给终端：从文件栏拖文件进来后接着就能打字
+	focusTerm      bool
 	previews       map[string]*ui.Bitmap
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
@@ -681,6 +683,7 @@ func (a *app) ensureView(id string) {
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
 		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
 		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
+		Menu: func(m *ui.Menu) { a.termMenu(m, v, id) },
 		OnPaste: func(text string) bool {
 			if text != "" || v.term == nil {
 				return false
@@ -790,6 +793,27 @@ func (a *app) askClose(t terminalInfo) {
 		name = "终端"
 	}
 	a.confirm("关闭 "+name+"？", "里面正在运行的程序会被结束。", "关闭", func() { a.closeTerminal(t.ID) })
+}
+
+// askCloseAll 一次关掉几个终端：有程序在运行时只问一次。
+func (a *app) askCloseAll(terms []terminalInfo) {
+	running := 0
+	for _, t := range terms {
+		if t.Running {
+			running++
+		}
+	}
+	closeAll := func() {
+		for _, t := range terms {
+			a.call("terminal.close", map[string]any{"terminal": t.ID}, nil, 10*time.Second)
+		}
+		a.refresh()
+	}
+	if running == 0 {
+		go closeAll()
+		return
+	}
+	a.confirm(fmt.Sprintf("关闭 %d 个终端？", len(terms)), "里面正在运行的程序会被结束。", "关闭", closeAll)
 }
 
 func (a *app) closeTerminal(id string) {

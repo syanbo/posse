@@ -323,6 +323,12 @@ func (t *Tester) RightClickAt(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: 1})
 }
 
+// MiddleClickAt clicks with the middle button at (x, y). Hive
+func (t *Tester) MiddleClickAt(x, y float32) {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerDown, X: float64(x), Y: float64(y), Button: 2})
+	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: 2})
+}
+
 // Menu returns the labels of the items of the context menu shown, "-" for
 // separators, or nil when none is.
 func (t *Tester) Menu() []string {

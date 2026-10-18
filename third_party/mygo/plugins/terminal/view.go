@@ -221,6 +221,11 @@ func (v *view) caret() ui.Rect {
 // menu is the terminal's context menu.
 func (v *view) menu(m *ui.Menu) {
 	t := v.t
+	// Hive: the app's own menu.
+	if t.opts.Menu != nil {
+		t.opts.Menu(m)
+		return
+	}
 	cmd := ui.Cmd
 	if runtime.GOOS != "darwin" {
 		cmd |= ui.Shift

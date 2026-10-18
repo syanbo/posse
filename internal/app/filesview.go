@@ -88,6 +88,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			}
 		}
 		a.pathMenu(c, row, w, v, r.Path, r.Dir)
+		a.dragPath(row, r.Path)
 	}).Grow(1).Padding(0, 0, 8, 0)
 }
 
@@ -456,6 +457,10 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	if d.transient && row.DoubleClicked() {
 		d.transient = false
 	}
+	if row.MiddleClicked() {
+		a.closeDoc(v, d)
+	}
+	row.ContextMenu(func(m *ui.Menu) { a.docTabMenu(c, m, v, d) })
 	if row.Clicked() && !active {
 		a.showFiles(w)
 		if v.cur != d {
@@ -463,6 +468,42 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			a.saveFilesState(v)
 		}
 		d.focus = true
+	}
+}
+
+// docTabMenu 是文件标签的右键菜单（照 Orca）：关闭这个、其他的、右边的、全部文件，复制路径和在访达中显示。
+// 有未保存的文件时先问一次。
+func (a *app) docTabMenu(c *ui.Context, m *ui.Menu, v *filesView, d *fileDoc) {
+	i := slices.Index(v.docs, d)
+	if i < 0 {
+		return
+	}
+	if m.Item("关闭").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+		a.closeDoc(v, d)
+	}
+	others := slices.Concat(v.docs[:i], v.docs[i+1:])
+	right := slices.Clone(v.docs[i+1:])
+	if m.Item("关闭其他文件").Disabled(len(others) == 0).Chosen() {
+		a.closeDocs(v, others)
+	}
+	if m.Item("关闭右侧文件").Disabled(len(right) == 0).Chosen() {
+		a.closeDocs(v, right)
+	}
+	if m.Item("关闭所有文件").Chosen() {
+		a.closeDocs(v, slices.Clone(v.docs))
+	}
+	if d.virtual() {
+		return
+	}
+	m.Separator()
+	if m.Item("复制路径").Chosen() {
+		c.WriteClipboard(d.path)
+	}
+	if rel, err := filepath.Rel(v.root, d.path); err == nil && m.Item("复制相对路径").Chosen() {
+		c.WriteClipboard(rel)
+	}
+	if m.Item("在访达中显示").Chosen() {
+		mygo.Shell.ShowItemInFolder(d.path)
 	}
 }
 

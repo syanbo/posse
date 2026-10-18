@@ -246,6 +246,9 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 		}
 	})
+	if letter != 'D' {
+		a.dragPath(row, g.absPath(e.Path))
+	}
 	if row.Clicked() {
 		if e.Conflict {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})

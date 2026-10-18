@@ -388,6 +388,8 @@ func (rt *engine) pointerUp(button, clicks int) {
 			s.clickMods = s.pressMods
 		case 1:
 			s.rightClicks++
+		case 2:
+			s.middleClicks++ // Hive
 		}
 	}
 	rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
@@ -946,6 +948,20 @@ func (e *node) RightClicked() bool {
 	}
 	e.flags |= flagClickable
 	if e.disabled() || e.st.rightClicks == 0 {
+		return false
+	}
+	e.c.rt.consumed = true
+	return true
+}
+
+// MiddleClicked reports a click with the middle button, as closing a
+// tab does. Hive
+func (e *node) MiddleClicked() bool {
+	if !e.hasState() {
+		return false
+	}
+	e.flags |= flagClickable
+	if e.disabled() || e.st.middleClicks == 0 {
 		return false
 	}
 	e.c.rt.consumed = true

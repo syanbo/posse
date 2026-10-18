@@ -122,6 +122,10 @@ type Options struct {
 	// nothing, as when an app uploads the clipboard's files for a remote
 	// program and pastes their paths instead.
 	OnPaste func(text string) bool
+	// Menu, when set, builds the view's context menu in place of the
+	// terminal's own (Copy, Paste, Select All, Clear Scrollback), with
+	// Selection, Paste and SelectAll for its items. (Hive)
+	Menu func(m *ui.Menu)
 	// OnKey sees a key press before the terminal encodes it, on the main
 	// thread, and reports whether it took the key; a key taken sends
 	// nothing, neither the text it types nor its release. Unlike a
@@ -587,6 +591,43 @@ func (t *Terminal) Paste(text string) {
 	t.term.ScrollToBottom()
 	t.mu.Unlock()
 	t.Send(data)
+	t.redraw()
+}
+
+// Selection returns the selected text, "" when nothing is selected. Hive:
+// for a context menu of the app's own (Options.Menu).
+func (t *Terminal) Selection() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.term == nil {
+		return ""
+	}
+	text, ok := t.term.SelectionText()
+	if !ok {
+		return ""
+	}
+	return text
+}
+
+// PasteClipboard pastes the clipboard as the Paste item of the
+// terminal's menu does, through Options.OnPaste, on the main thread.
+// Hive: for Options.Menu.
+func (t *Terminal) PasteClipboard() {
+	if t.v != nil {
+		t.v.paste()
+	}
+}
+
+// SelectAll selects the whole scrollback and screen. Hive: for
+// Options.Menu.
+func (t *Terminal) SelectAll() {
+	t.mu.Lock()
+	if t.term != nil {
+		if s, ok := t.term.SelectAll(); ok {
+			t.term.SetSelection(&s)
+		}
+	}
+	t.mu.Unlock()
 	t.redraw()
 }
 

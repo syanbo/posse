@@ -556,6 +556,26 @@ func (a *app) closeDoc(v *filesView, d *fileDoc) {
 	a.dropDoc(v, d)
 }
 
+// closeDocs 关闭几个文档，其中有未保存改动的先一起问一次。
+func (a *app) closeDocs(v *filesView, docs []*fileDoc) {
+	var dirty []*fileDoc
+	for _, d := range docs {
+		if d.isModified() {
+			dirty = append(dirty, d)
+		}
+	}
+	drop := func() {
+		for _, d := range docs {
+			a.dropDoc(v, d)
+		}
+	}
+	if len(dirty) > 0 {
+		a.askUnsaved(dirty, drop)
+		return
+	}
+	drop()
+}
+
 func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	i := slices.Index(v.docs, d)
 	if i < 0 {

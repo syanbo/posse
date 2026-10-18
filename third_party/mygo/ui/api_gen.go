@@ -4214,6 +4214,19 @@ func (_handle Element) Right(v float32) Element {
 	return wrapElement(_node.Right(v))
 }
 
+// MiddleClicked reports a click with the middle button, as closing a
+// tab does. Hive
+func (_handle Element) MiddleClicked() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	_ctx.rt.applyInputs()
+	return _node.MiddleClicked()
+}
+
 // RightClicked reports a click with the secondary button, as for a
 // context menu.
 func (_handle Element) RightClicked() bool {
