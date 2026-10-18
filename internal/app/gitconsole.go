@@ -109,7 +109,7 @@ func (a *app) consoleTab(c *ui.Context, v *filesView) {
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, v.console)
 	row.Children(func() {
-		ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.Accent).Shrink(0)
+		ui.Icon(c, iconOpLog).FontSize(13).TextColor(t.Accent).Shrink(0)
 		tabText(c, ui.Text(c, label).FontSize(12).Shrink(0), v.console)
 		if a.consoleErr && !v.console {
 			ui.Box(c).Size(6, 6).Radius(3).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
