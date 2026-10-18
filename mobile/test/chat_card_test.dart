@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/chat/chat.dart';
+import 'package:hive_mobile/chat/echo.dart';
 import 'package:hive_mobile/chat/models.dart';
 import 'package:hive_mobile/chat/prompt.dart';
 
@@ -99,5 +100,31 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('提交'));
     expect(lines, ['甲', '丙, 丁']);
+  });
+
+  testWidgets('刚发的话先画出来，进行中那一行照着状态行写', (tester) async {
+    final echoes = LocalEchoes();
+    final sending = echoes.add('改一下标题', images: 2);
+    final sent = echoes.add('再跑一遍测试')..sent = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              EchoBubble(echo: sending),
+              EchoBubble(echo: sent),
+              const WorkingRow(status: 'Puzzling… (12s · ↓ 1.2k tokens)'),
+              const WorkingRow(tool: 'Bash'),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('发送中…'), findsOneWidget);
+    expect(find.text('已发送'), findsOneWidget);
+    expect(find.text('2 张图片'), findsOneWidget);
+    expect(find.text('改一下标题'), findsOneWidget);
+    expect(find.text('Puzzling… (12s · ↓ 1.2k tokens)'), findsOneWidget);
+    expect(find.text('正在用 Bash…'), findsOneWidget);
   });
 }

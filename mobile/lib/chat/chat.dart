@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -11,9 +10,7 @@ import '../workspace/models.dart';
 import 'clipboard_paste.dart';
 import 'image_pick.dart';
 import 'image_upload.dart';
-import 'markdown_view.dart';
 import 'merge.dart';
-import 'models.dart';
 import 'permission.dart';
 import 'prompt.dart';
 import 'send.dart';
@@ -22,637 +19,16 @@ import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import 'bubbles.dart';
+import 'cards.dart';
+import 'composer.dart';
+import 'echo.dart';
+import 'session_bar.dart';
 
-Color chatAccent(BuildContext context) => HiveColors.of(context).accent;
-
-Color chatMuted(BuildContext context) => HiveColors.of(context).muted;
-
-/// 自己的话用强调色淡底。深色 20%、浅色 12%，和桌面历史详情的 tint 一致。
-Color chatTint(BuildContext context) => HiveColors.of(context).tint;
-
-Color chatCard(BuildContext context) => HiveColors.of(context).card;
-
-/// 等你回应的卡片（批准、提问）：卡片底加琥珀色细边，是界面上唯一醒目的东西。
-BoxDecoration _askCard(HiveColors c) => BoxDecoration(
-  color: c.card,
-  borderRadius: BorderRadius.circular(Rd.card),
-  border: Border.all(color: c.honey.withValues(alpha: 0.5)),
-);
-
-/// 会话页和终端页共用的顶栏标题：agent 图标、标题，下面一行是状态。
-class SessionTitle extends StatelessWidget {
-  const SessionTitle({
-    super.key,
-    required this.tab,
-    this.model,
-    this.ended = false,
-  });
-
-  final SessionTab tab;
-
-  /// 给了就在 agent 图标右下角画连接状态的小圆点：绿色连着，琥珀色断开或正在重连。
-  final HiveAppModel? model;
-
-  @override
-  Widget build(BuildContext context) {
-    final model = this.model;
-    if (model == null) return _content(context, offline: false, ended: false);
-    return ListenableBuilder(
-      listenable: model,
-      builder: (context, _) => _content(
-        context,
-        offline: model.rpc == null || model.connecting,
-        ended: ended,
-      ),
-    );
-  }
-
-  /// 会话的终端已经不在了（关掉了，或者常驻进程重启过）。
-  final bool ended;
-
-  Widget _content(
-    BuildContext context, {
-    required bool offline,
-    required bool ended,
-  }) {
-    final c = HiveColors.of(context);
-    // 断线时手上的状态已经过时，不显示；会话结束了也没有状态可言
-    final state = offline || ended ? AgentState.none : agentStateOf(tab.state);
-    final stateText = ended
-        ? '会话已经结束'
-        : offline
-        ? '等连上电脑'
-        : switch (state) {
-            AgentState.working =>
-              tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
-            AgentState.waiting => '等你处理',
-            AgentState.done => '本轮完成',
-            _ => tab.agent == null ? '终端' : chatWho('assistant', tab.agent),
-          };
-    return Row(
-      children: [
-        _withLink(c, AgentTile(agent: tab.agent, size: 28)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                cleanTitle(tab.title),
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: c.text,
-                ),
-              ),
-              Row(
-                children: [
-                  // 没有状态（普通终端）时不留空位，文字和标题左边对齐
-                  if (state != AgentState.none) ...[
-                    StatusHex(state: state, size: 11),
-                    const SizedBox(width: 4),
-                  ],
-                  Flexible(
-                    child: Text(
-                      stateText,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: state == AgentState.waiting ? c.honey : c.muted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-extension on SessionTitle {
-  Widget _withLink(HiveColors c, Widget tile) {
-    final model = this.model;
-    if (model == null) return tile;
-    return ListenableBuilder(
-      listenable: model,
-      builder: (context, _) {
-        final online = model.rpc != null && !model.connecting;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            tile,
-            Positioned(
-              right: -3,
-              bottom: -3,
-              child: Tooltip(
-                message: online ? '已连接电脑' : '和电脑的连接断开了',
-                child: Container(
-                  width: 11,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    color: online ? c.sage : c.honey,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.canvas, width: 2),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// 和电脑断开、正在重连时，顶栏下面的一条提示。连着时不占地方。
-class ConnectionBanner extends StatelessWidget {
-  const ConnectionBanner({super.key, required this.model});
-
-  final HiveAppModel model;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: model,
-      builder: (context, _) {
-        if (model.rpc != null && !model.connecting) {
-          return const SizedBox.shrink();
-        }
-        final c = HiveColors.of(context);
-        final name = model.current?.label ?? '电脑';
-        return Container(
-          width: double.infinity,
-          color: c.honey.withValues(alpha: c.dark ? 0.14 : 0.10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.8,
-                  color: c.honey,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  model.connecting ? '正在连接 $name…' : '和 $name 的连接断开了，正在重连',
-                  style: TextStyle(fontSize: 13, color: c.honey),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class ApprovalCard extends StatelessWidget {
-  const ApprovalCard({
-    super.key,
-    required this.approval,
-    required this.busy,
-    required this.onDecision,
-  });
-
-  final Approval approval;
-  final bool busy;
-  final void Function(String key) onDecision;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-      decoration: _askCard(c),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const StatusHex(state: AgentState.waiting, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '允许 ${approval.tool}？',
-                  style: TextStyle(
-                    fontSize: Fs.cardTitle,
-                    fontWeight: FontWeight.w600,
-                    color: c.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (approval.summary.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(maxHeight: 140),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: c.code,
-                borderRadius: BorderRadius.circular(Rd.button),
-              ),
-              child: SingleChildScrollView(
-                child: Text(
-                  approval.summary,
-                  style: mono(12.5, color: c.muted, height: 1.45),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: busy ? null : () => onDecision(denyKey),
-                  child: const Text('拒绝'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: busy ? null : () => onDecision(allowKey),
-                  child: const Text('允许'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class QuestionCard extends StatefulWidget {
-  const QuestionCard({
-    super.key,
-    required this.questions,
-    required this.onSubmit,
-  });
-
-  final List<AskQuestion> questions;
-  final void Function(List<String> lines) onSubmit;
-
-  @override
-  State<QuestionCard> createState() => _QuestionCardState();
-}
-
-class _QuestionCardState extends State<QuestionCard> {
-  final _selected = <int, Set<String>>{};
-  final _other = <int, TextEditingController>{};
-
-  @override
-  void dispose() {
-    for (final controller in _other.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
-  TextEditingController _otherOf(int index) =>
-      _other.putIfAbsent(index, TextEditingController.new);
-
-  bool get _ready {
-    for (var i = 0; i < widget.questions.length; i++) {
-      final other = _other[i]?.text.trim() ?? '';
-      if ((_selected[i]?.isNotEmpty ?? false) || other.isNotEmpty) continue;
-      return false;
-    }
-    return widget.questions.isNotEmpty;
-  }
-
-  void _submit() {
-    final lines = <String>[];
-    for (var i = 0; i < widget.questions.length; i++) {
-      final other = _other[i]?.text.trim() ?? '';
-      if (other.isNotEmpty) {
-        lines.add(other);
-        continue;
-      }
-      lines.add(formatAnswer(widget.questions[i], [...?_selected[i]]));
-    }
-    widget.onSubmit(lines);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
-    final questions = widget.questions;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-      ),
-      decoration: _askCard(c),
-      // 题目多时只滚题目，提交按钮一直在卡片底部
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < questions.length; i++) ...[
-                    if (questions[i].header != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(
-                          questions[i].header!,
-                          style: TextStyle(color: c.accent, fontSize: 12),
-                        ),
-                      ),
-                    Text(
-                      questions[i].question,
-                      style: TextStyle(
-                        fontSize: Fs.body,
-                        fontWeight: FontWeight.w600,
-                        color: c.text,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (final option in questions[i].options)
-                          FilterChip(
-                            label: Text(option.label),
-                            showCheckmark: false,
-                            side: BorderSide.none,
-                            backgroundColor: c.fill,
-                            selectedColor: c.tint,
-                            labelStyle: TextStyle(
-                              color:
-                                  (_selected[i]?.contains(option.label) ??
-                                      false)
-                                  ? c.accent
-                                  : c.text,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(Rd.button),
-                            ),
-                            selected:
-                                _selected[i]?.contains(option.label) ?? false,
-                            onSelected: (selected) => setState(() {
-                              final set = _selected.putIfAbsent(i, () => {});
-                              if (questions[i].multiSelect) {
-                                selected
-                                    ? set.add(option.label)
-                                    : set.remove(option.label);
-                              } else {
-                                set
-                                  ..clear()
-                                  ..add(option.label);
-                                _otherOf(i).clear();
-                              }
-                            }),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _otherOf(i),
-                      decoration: const InputDecoration(
-                        hintText: '其他回答',
-                        isDense: true,
-                      ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton(
-              onPressed: _ready ? _submit : null,
-              child: const Text('提交'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class MessageBubble extends StatelessWidget {
-  const MessageBubble({
-    super.key,
-    required this.message,
-    required this.blocks,
-    required this.agent,
-  });
-
-  final ChatMessage message;
-  final List<ChatBlock> blocks;
-  final String? agent;
-
-  @override
-  Widget build(BuildContext context) {
-    final mine = message.role == 'user';
-    final width = MediaQuery.sizeOf(context).width;
-    final muted = chatMuted(context);
-    final who = chatWho(message.role, agent);
-    final time = chatTimeLabel(message.timestamp);
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              who,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: mine ? chatAccent(context) : muted,
-              ),
-            ),
-            if (time != null) ...[
-              const SizedBox(width: 8),
-              Text(
-                time,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: muted,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 6),
-        for (final block in blocks) _block(context, message.role, block),
-      ],
-    );
-    // 回复直接铺在底上。只有自己的话靠右、强调色淡底。
-    if (!mine) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: body,
-      );
-    }
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: width * 0.8),
-        margin: const EdgeInsets.fromLTRB(48, 4, 16, 10),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-        decoration: BoxDecoration(
-          color: chatTint(context),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: body,
-      ),
-    );
-  }
-
-  Widget _block(BuildContext context, String role, ChatBlock block) {
-    final muted = chatMuted(context);
-    if (block.type == 'image-ref') {
-      return Text(
-        block.path ?? block.url ?? '图片',
-        style: TextStyle(fontSize: 13, color: muted),
-      );
-    }
-    final text = block.text ?? '';
-    if (role == 'user') {
-      return Text(text, style: const TextStyle(fontSize: 15, height: 1.55));
-    }
-    final style = role == 'reasoning'
-        ? TextStyle(fontStyle: FontStyle.italic, color: muted, height: 1.55)
-        : role == 'system'
-        ? TextStyle(fontSize: 13, color: muted, height: 1.5)
-        : const TextStyle(fontSize: 15, height: 1.55);
-    return MarkdownView(text, style: style);
-  }
-}
-
-class ToolRun extends StatefulWidget {
-  const ToolRun({super.key, required this.blocks, this.initiallyOpen = false});
-
-  final List<ChatBlock> blocks;
-  final bool initiallyOpen;
-
-  @override
-  State<ToolRun> createState() => _ToolRunState();
-}
-
-class _ToolRunState extends State<ToolRun> {
-  late var _open = widget.initiallyOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = chatMuted(context);
-    final count = toolRunCount(widget.blocks);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() => _open = !_open),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
-              decoration: BoxDecoration(
-                color: HiveColors.of(context).fill,
-                borderRadius: BorderRadius.circular(Rd.button),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.build_outlined, size: 14, color: muted),
-                  const SizedBox(width: 6),
-                  Text(
-                    '工具调用 $count 次',
-                    style: TextStyle(fontSize: 12.5, color: muted),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    _open
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    size: 16,
-                    color: muted,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_open)
-            for (final block in widget.blocks) _toolBody(context, block, muted),
-        ],
-      ),
-    );
-  }
-
-  Widget _toolBody(BuildContext context, ChatBlock block, Color muted) {
-    final title = block.isError
-        ? '工具失败'
-        : (block.name?.isNotEmpty ?? false)
-        ? block.name!
-        : '工具';
-    final detail = block.type == 'tool-result'
-        ? (block.output ?? '')
-        : _preview(block.input);
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-      decoration: BoxDecoration(
-        color: HiveColors.of(context).code,
-        borderRadius: BorderRadius.circular(Rd.button),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: block.isError
-                  ? Theme.of(context).colorScheme.error
-                  : muted,
-            ),
-          ),
-          if (detail.isNotEmpty)
-            Text(
-              detail,
-              maxLines: 8,
-              overflow: TextOverflow.ellipsis,
-              style: mono(12, height: 1.45, color: muted),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-String _preview(Object? input) {
-  if (input == null) return '';
-  if (input is String) return input;
-  try {
-    return const JsonEncoder.withIndent('  ').convert(input);
-  } catch (_) {
-    return '$input';
-  }
-}
+export 'bubbles.dart';
+export 'cards.dart';
+export 'chat_style.dart';
+export 'session_bar.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
@@ -690,6 +66,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// 已经传到电脑上的图片和路径。发送失败后重发不再传一遍。
   final _uploaded = <Uint8List, String>{};
+
+  /// 发出去、会话文件里还没出现的话。
+  final _echoes = LocalEchoes();
+
+  /// 电脑推来的 agent 状态行（终端底部转圈那一行），没有时为空。
+  String? _status;
 
   /// 这个会话的终端已经不在了：输入框停用，顶上说一声。
   var _ended = false;
@@ -774,6 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (gen != _openGen || _gone) return;
     final subId = '${tab.agent}:${tab.sessionId}:live';
     _chatSubId = subId;
+    _status = null;
     try {
       final chat = await rpc.subscribe('nativeChat.subscribe', {
         'agent': tab.agent,
@@ -815,7 +198,16 @@ class _ChatScreenState extends State<ChatScreen> {
           });
           return;
         }
-        setState(() => _window.applyFrame(frame));
+        if (frame['type'] == 'status') {
+          final text = frame['text'];
+          final next = text is String && text.isNotEmpty ? text : null;
+          if (next != _status) setState(() => _status = next);
+          return;
+        }
+        setState(() {
+          _window.applyFrame(frame);
+          _echoes.reconcile(_window.messages);
+        });
         _stickToBottom();
       });
       tabs.frames.listen((frame) {
@@ -848,7 +240,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 第一次拿到消息时直接跳到最新一条；之后只在已经看着底部时跟着往下。
   var _landed = false;
 
-  void _stickToBottom() {
+  /// [force]：自己刚发了话，不管停在哪都回到底部。
+  void _stickToBottom({bool force = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
       final position = _scroll.position;
@@ -864,7 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         return;
       }
-      if (position.maxScrollExtent - position.pixels < 80) {
+      if (force || position.maxScrollExtent - position.pixels < 80) {
         _scroll.jumpTo(position.maxScrollExtent);
       }
       // 消息不满一屏或者停在顶部附近时，不会再有滚动来触发，直接接着读
@@ -1014,10 +407,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final caption = _input.text;
     if (current == null || _sending) return;
     if (caption.trim().isEmpty && images.isEmpty) return;
+    // 斜杠命令 agent 不记成用户消息，等不到对应的那条，不先画
+    final echo = caption.trimLeft().startsWith('/') && images.isEmpty
+        ? null
+        : _echoes.add(caption.trim(), images: images.length);
     setState(() {
       _sending = true;
+      // 输入框马上清空，话先画在对话末尾；没发出去再放回来
+      _input.clear();
       if (images.isNotEmpty) _notice = '正在发送图片…';
     });
+    _stickToBottom(force: true);
+    var accepted = false;
     try {
       var text = caption;
       if (images.isNotEmpty) {
@@ -1027,12 +428,12 @@ class _ChatScreenState extends State<ChatScreen> {
         }
         text = imageMessage(caption, paths);
       }
-      final outcome = await _send(text, enter: true);
+      accepted = await _send(text, enter: true) == SendOutcome.accepted;
       if (!mounted) return;
-      if (outcome == SendOutcome.accepted) {
+      if (accepted) {
         setState(() {
-          // 上传期间改过的输入和新加的图片留着，只去掉发出去的
-          if (_input.text == caption) _input.clear();
+          echo?.sent = true;
+          // 上传期间新加的图片留着，只去掉发出去的
           _pending.removeRange(0, images.length);
           for (final image in images) {
             _uploaded.remove(image);
@@ -1042,7 +443,15 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (error) {
       if (mounted) setState(() => _notice = friendlyError(error));
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          if (!accepted) {
+            if (echo != null) _echoes.remove(echo);
+            if (_input.text.isEmpty) _input.text = caption;
+          }
+        });
+      }
     }
   }
 
@@ -1106,10 +515,12 @@ class _ChatScreenState extends State<ChatScreen> {
         .toList();
     final c = HiveColors.of(context);
     // agent 在干活时对话最后一行转着星号，看得出它还在；停下、断线或会话结束就不画
+    final echoes = _echoes.items;
     final working =
         !_ended &&
         widget.model.rpc != null &&
-        agentStateOf(tab.state) == AgentState.working;
+        (agentStateOf(tab.state) == AgentState.working ||
+            (_status?.isNotEmpty ?? false));
     return Scaffold(
       backgroundColor: canvas,
       appBar: AppBar(
@@ -1166,6 +577,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     // 还有更早的消息时，列表最上面多一行：滚到顶才看得见，读的时候转圈
                     itemCount:
                         entries.length +
+                        echoes.length +
                         (_window.hasMore ? 1 : 0) +
                         (working ? 1 : 0),
                     itemBuilder: (context, index) {
@@ -1173,11 +585,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (index == 0) return _earlierRow(c);
                         index--;
                       }
-                      if (index == entries.length) return _workingRow(c);
+                      if (index >= entries.length) {
+                        final at = index - entries.length;
+                        if (at < echoes.length) {
+                          return EchoBubble(echo: echoes[at]);
+                        }
+                        return WorkingRow(status: _status, tool: tab.toolName);
+                      }
                       final entry = entries[index];
                       if (entry.tools) {
                         return ToolRun(
-                          key: ValueKey(_toolKey(entry.blocks, index)),
+                          key: ValueKey(toolKey(entry.blocks, index)),
                           blocks: entry.blocks,
                           initiallyOpen: settings.expandTools,
                         );
@@ -1202,27 +620,20 @@ class _ChatScreenState extends State<ChatScreen> {
           else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
           if (_notice != null) NoticeBar(_notice!),
-          _composer(),
-        ],
-      ),
-    );
-  }
-
-  /// 对话最后一行：agent 正在干活。照 Claude Code，转动的星号加正在用的工具。
-  Widget _workingRow(HiveColors c) {
-    final tool = tab.toolName;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: Row(
-        children: [
-          WorkingStar(size: 14, color: c.accent),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              tool == null || tool.isEmpty ? '工作中…' : '正在用 $tool…',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: c.muted),
-            ),
+          ChatComposer(
+            controller: _input,
+            images: _pending,
+            sending: _sending,
+            connected: _rpc != null,
+            ended: _ended,
+            hint: '回复 ${chatWho('assistant', tab.agent)}',
+            onChanged: (_) => setState(() {}),
+            onSubmit: _submit,
+            onPickImage: _pickImage,
+            onRemoveImage: (index) =>
+                setState(() => _uploaded.remove(_pending.removeAt(index))),
+            onPaste: () => unawaited(_pasteClipboard()),
+            onContentInserted: _onContentInserted,
           ),
         ],
       ),
@@ -1252,246 +663,4 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-
-  void _pasteFromMenu(EditableTextState state) {
-    state.hideToolbar();
-    unawaited(_pasteClipboard());
-  }
-
-  /// 系统菜单和 Flutter 菜单的粘贴都走同一条：只认文字和图片。
-  Widget _composerMenu(BuildContext context, EditableTextState state) {
-    if (SystemContextMenu.isSupported(context)) {
-      final label = WidgetsLocalizations.of(context).pasteButtonLabel;
-      final items = <IOSSystemContextMenuItem>[];
-      var sawPaste = false;
-      for (final item in SystemContextMenu.getDefaultItems(state)) {
-        if (item is IOSSystemContextMenuItemPaste) {
-          sawPaste = true;
-          items.add(
-            IOSSystemContextMenuItemCustom(
-              title: label,
-              onPressed: () => _pasteFromMenu(state),
-            ),
-          );
-        } else {
-          items.add(item);
-        }
-      }
-      if (!sawPaste) {
-        items.add(
-          IOSSystemContextMenuItemCustom(
-            title: label,
-            onPressed: () => _pasteFromMenu(state),
-          ),
-        );
-      }
-      return SystemContextMenu.editableText(
-        editableTextState: state,
-        items: items,
-      );
-    }
-    final items = state.contextMenuButtonItems.map((item) {
-      if (item.type != ContextMenuButtonType.paste) return item;
-      return item.copyWith(onPressed: () => _pasteFromMenu(state));
-    }).toList();
-    if (!items.any((item) => item.type == ContextMenuButtonType.paste)) {
-      items.add(
-        ContextMenuButtonItem(
-          type: ContextMenuButtonType.paste,
-          onPressed: () => _pasteFromMenu(state),
-        ),
-      );
-    }
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: state.contextMenuAnchors,
-      buttonItems: items,
-    );
-  }
-
-  Widget _composer() {
-    final c = HiveColors.of(context);
-    if (_ended) {
-      return SafeArea(
-        top: false,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: c.fill,
-            borderRadius: BorderRadius.circular(Rd.composer),
-          ),
-          child: Text(
-            '这个会话已经结束，记录还在。要继续请在首页新建会话，或者在电脑的历史页恢复。',
-            style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
-          ),
-        ),
-      );
-    }
-    final ready =
-        !_sending &&
-        _rpc != null &&
-        (_pending.isNotEmpty || _input.text.trim().isNotEmpty);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: BorderRadius.circular(Rd.composer),
-            border: Border.all(color: c.line),
-          ),
-          // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
-          padding: const EdgeInsets.all(6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_pending.isNotEmpty)
-                SizedBox(
-                  height: 56,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-                    itemCount: _pending.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      return SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(Rd.button),
-                              child: Image.memory(
-                                _pending[index],
-                                width: 48,
-                                height: 48,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: Tooltip(
-                                message: '不发这张',
-                                child: GestureDetector(
-                                  onTap: _sending
-                                      ? null
-                                      : () => setState(
-                                          () => _uploaded.remove(
-                                            _pending.removeAt(index),
-                                          ),
-                                        ),
-                                  child: const DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: Color(0xCC1A1A19),
-                                      borderRadius: BorderRadius.only(
-                                        topRight: Radius.circular(Rd.button),
-                                        bottomLeft: Radius.circular(Rd.button),
-                                      ),
-                                    ),
-                                    child: SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: Icon(
-                                        Icons.close_rounded,
-                                        size: 14,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              Row(
-                // 发送按钮和输入框上下居中
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: '发送图片',
-                    onPressed: _sending || _rpc == null ? null : _pickImage,
-                    icon: Icon(
-                      Icons.image_outlined,
-                      size: 22,
-                      color: _pending.isEmpty ? c.muted : c.accent,
-                    ),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      minLines: 1,
-                      maxLines: 6,
-                      textInputAction: TextInputAction.newline,
-                      onChanged: (_) => setState(() {}),
-                      contentInsertionConfiguration:
-                          ContentInsertionConfiguration(
-                            onContentInserted: _onContentInserted,
-                          ),
-                      contextMenuBuilder: _composerMenu,
-                      style: TextStyle(fontSize: Fs.body, color: c.text),
-                      decoration: InputDecoration(
-                        hintText: '回复 ${chatWho('assistant', tab.agent)}',
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isDense: true,
-                        // 单行时和 34 高的发送按钮一样高
-                        contentPadding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
-                      ),
-                    ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: ready ? c.accent : c.fill,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      tooltip: '发送',
-                      onPressed: ready ? _submit : null,
-                      icon: _sending
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: c.muted,
-                              ),
-                            )
-                          : Icon(
-                              Icons.arrow_upward_rounded,
-                              size: 20,
-                              color: ready ? Colors.white : c.faint,
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _toolKey(List<ChatBlock> blocks, int index) {
-  final ids = blocks
-      .map((block) => block.callId)
-      .whereType<String>()
-      .where((id) => id.isNotEmpty)
-      .join(',');
-  if (ids.isNotEmpty) return ids;
-  return 'tools-$index-${blocks.length}';
 }

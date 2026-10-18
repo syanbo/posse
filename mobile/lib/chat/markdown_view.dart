@@ -12,17 +12,28 @@ class MarkdownView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = style ?? DefaultTextStyle.of(context).style;
-    // 默认会把 < " & 编码成 HTML 实体；这里直接画文字，不经过 HTML
-    final nodes = md.Document(
-      extensionSet: md.ExtensionSet.gitHubFlavored,
-      encodeHtml: false,
-    ).parse(data);
+    final nodes = _parse(data);
     if (nodes.isEmpty) return Text(data, style: base);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [for (final node in nodes) _block(context, node, base)],
     );
   }
+}
+
+/// 对话页每秒都会重建（标签状态、状态行），同一段回复不必每次重新解析。
+final _parsed = <String, List<md.Node>>{};
+
+List<md.Node> _parse(String data) {
+  final hit = _parsed.remove(data);
+  if (hit != null) return _parsed[data] = hit;
+  // 默认会把 < " & 编码成 HTML 实体；这里直接画文字，不经过 HTML
+  final nodes = md.Document(
+    extensionSet: md.ExtensionSet.gitHubFlavored,
+    encodeHtml: false,
+  ).parse(data);
+  if (_parsed.length >= 200) _parsed.remove(_parsed.keys.first);
+  return _parsed[data] = nodes;
 }
 
 Widget _block(BuildContext context, md.Node node, TextStyle base) {

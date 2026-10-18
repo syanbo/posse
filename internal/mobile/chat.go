@@ -15,6 +15,7 @@ import (
 const (
 	chatPoll    = 500 * time.Millisecond
 	chatPollMax = 5 * time.Second
+	statusEvery = 250 * time.Millisecond
 )
 
 type chatSub struct {
@@ -93,11 +94,36 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	var wake <-chan struct{}
+	var term host.Terminal
+	// 状态行每次终端有输出都可能变，转圈符号一秒好几帧；最多这么久看一次屏幕，
+	// 跳过的那次约好稍后再看，停下来的最后一帧不会漏
+	status, statusAt := "", time.Time{}
+	var recheck <-chan time.Time
+	sendStatus := func() bool {
+		if term == nil || !c.hasCapability("hive.status.v1") {
+			return true
+		}
+		if wait := statusEvery - time.Since(statusAt); wait > 0 {
+			if recheck == nil {
+				recheck = time.After(wait)
+			}
+			return true
+		}
+		recheck = nil
+		statusAt = time.Now()
+		next := agentStatus(term.Screen())
+		if next == status {
+			return true
+		}
+		status = next
+		return c.stream(reqID, map[string]any{"type": "status", "text": next}) == nil
+	}
 	arm := func(wait time.Duration) {
 		c.noteChat(key, gen, reqID, a)
 		wake = nil
-		if t := c.sessionTerminal(a.Agent, a.SessionID); t != nil {
-			wake = t.Changed()
+		term = c.sessionTerminal(a.Agent, a.SessionID)
+		if term != nil {
+			wake = term.Changed()
 		}
 		timer.Reset(wait)
 	}
@@ -107,18 +133,30 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		return
 	}
 	arm(wait)
+	if !sendStatus() {
+		return
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-wake:
 		case <-timer.C:
+		case <-recheck:
+			recheck = nil
+			if !sendStatus() {
+				return
+			}
+			continue
 		}
 		ok, wait = c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay)
 		if !ok {
 			return
 		}
 		arm(wait)
+		if !sendStatus() {
+			return
+		}
 	}
 }
 
