@@ -589,52 +589,91 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 	if a.selected == w.ID {
 		cur = a.selectedSession(a.workspace(w.ID))
 	}
-	ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
-		for _, term := range sessions {
-			selected := cur == term.ID
-			a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
-			if selected {
-				a.navCur = len(a.navOrder) - 1
-			}
-			// 和标签一样：任务 worker 用任务标题
-			name, detail := tabLabel(term)
-			if title, ok := a.workerTitle[term.ID]; ok {
-				detail = title
-			}
-			if detail == "" {
-				detail = name
-			}
-			status := ""
-			if term.AgentState != nil {
-				status = term.AgentState.Status
-			}
-			var trailing func()
-			if status != "" {
-				trailing = func() {
-					if status == agent.StatusWaiting {
-						pendingLabel(c)
-					}
-					statusGlyph(c, status, 12)
+	// 任务的 worker 排在派发它的会话下面、多缩进一层；派发方不在这个工作区（别的工作区、用户派发）的照常排
+	listed := map[string]bool{}
+	for _, term := range sessions {
+		listed[term.ID] = true
+	}
+	children := map[string][]terminalInfo{}
+	var top []terminalInfo
+	for _, term := range sessions {
+		if coord := a.coordOf[term.ID]; coord != "" && coord != term.ID && listed[coord] {
+			children[coord] = append(children[coord], term)
+		} else {
+			top = append(top, term)
+		}
+	}
+	var rows func(list []terminalInfo, depth int)
+	rows = func(list []terminalInfo, depth int) {
+		ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
+			for _, term := range list {
+				a.navSession(c, w, term, cur == term.ID)
+				// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归
+				if kids := children[term.ID]; len(kids) > 0 && depth < 4 {
+					rows(kids, depth+1)
 				}
 			}
-			icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
-			row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
-			a.reorderableTerm(c, row, w.ID, term.ID, false)
-			if row.Clicked() {
-				a.selected = w.ID
-				a.activeTerm[w.ID] = term.ID
+		})
+	}
+	rows(top, 0)
+}
+
+// navSession 是侧栏里的一个 agent 会话。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool) {
+	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
+	if selected {
+		a.navCur = len(a.navOrder) - 1
+	}
+	// 和标签一样：任务 worker 用任务标题
+	name, detail := tabLabel(term)
+	if title, ok := a.workerTitle[term.ID]; ok {
+		detail = title
+	}
+	if detail == "" {
+		detail = name
+	}
+	status := a.sessionStatus(term)
+	var trailing func()
+	if status != "" {
+		trailing = func() {
+			if status == agent.StatusWaiting {
+				pendingLabel(c)
 			}
-			if a.revealSel && selected {
-				row.ScrollIntoView()
-				a.revealSel = false
-			}
-			row.ContextMenu(func(m *ui.Menu) {
-				if m.Item("关闭会话…").Chosen() {
-					a.askClose(term)
-				}
-			})
+			statusGlyph(c, status, 12)
+		}
+	}
+	icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
+	row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
+	a.reorderableTerm(c, row, w.ID, term.ID, false)
+	if row.Clicked() {
+		a.selected = w.ID
+		a.activeTerm[w.ID] = term.ID
+	}
+	if a.revealSel && selected {
+		row.ScrollIntoView()
+		a.revealSel = false
+	}
+	row.ContextMenu(func(m *ui.Menu) {
+		if m.Item("关闭会话…").Chosen() {
+			a.askClose(term)
 		}
 	})
+}
+
+// statusTasks 是界面自己的状态：会话在等它派出去的任务（阻塞在 hive task wait 上，或者停下来等 Hive 提醒），
+// 不是在干活，也不用用户处理。
+const statusTasks = "tasks"
+
+// sessionStatus 是会话显示的状态：有进行中的任务、自己又没在干别的时是"等待任务"。
+func (a *app) sessionStatus(term terminalInfo) string {
+	status := ""
+	if term.AgentState != nil {
+		status = term.AgentState.Status
+	}
+	if a.runningFor[term.ID] > 0 && (term.WaitingTasks || status == agent.StatusIdle) {
+		return statusTasks
+	}
+	return status
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
@@ -892,6 +931,10 @@ func statusGlyph(c *ui.Context, status string, size float32) {
 		workingStar(c, size, t.Accent).Tooltip(statusText(status))
 		return
 	}
+	if status == statusTasks {
+		waitingPulse(c, size, t.Accent, c.Preferences().ReduceMotion).Tooltip(statusText(status))
+		return
+	}
 	ui.Icon(c, icon).FontSize(size).TextColor(color).Shrink(0).Tooltip(statusText(status))
 }
 
@@ -918,6 +961,45 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 	})
 }
 
+// 等待任务的波形照 Orca 后台任务的 Activity 图标；一段亮的像心电图一样从左描到右，一圈 pulseCycle，
+// 分 pulseSteps 步重绘（和星号一样只重绘不重建界面，步数少一点省 CPU）。
+const (
+	pulseCycle = 1200 * time.Millisecond
+	pulseSteps = 12
+)
+
+// waitingPulse 画等待任务的波形；still 时（减少动态效果）整条画实，不动。
+func waitingPulse(c *ui.Context, size float32, color ui.Color, still bool) ui.Element {
+	return ui.Box(c).Size(size, size).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+		// 24×24 网格上的波形：平线、起、落、平线
+		pts := [][2]float32{{2, 12}, {6.5, 12}, {9.5, 5}, {14.5, 19}, {17.5, 12}, {22, 12}}
+		wave := func() *ui.Path {
+			var path ui.Path
+			k := r.W / 24
+			for i, pt := range pts {
+				x, y := r.X+pt[0]*k, r.Y+pt[1]*k
+				if i == 0 {
+					path.MoveTo(x, y)
+				} else {
+					path.LineTo(x, y)
+				}
+			}
+			return &path
+		}
+		width := max(1.3, size/9)
+		if still {
+			p.StrokePath(wave(), width, color)
+			return
+		}
+		step := pulseCycle / pulseSteps
+		now := time.Duration(p.Now().UnixNano())
+		p.After(step - now%step)
+		head := float32(now%pulseCycle/step+1) / pulseSteps
+		p.StrokePath(wave(), width, color.Alpha(0.3))
+		p.StrokePath(wave().Trim(max(0, head-0.45), head), width, color)
+	})
+}
+
 func statusText(status string) string {
 	switch status {
 	case agent.StatusWaiting:
@@ -930,6 +1012,8 @@ func statusText(status string) string {
 		return "启动中"
 	case agent.StatusExited:
 		return "已退出"
+	case statusTasks:
+		return "等待任务：在等它派出去的 agent"
 	}
 	return status
 }
@@ -1238,7 +1322,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	row.Background(row.AnimateColor("bg", bg, hover))
 	status := ""
 	if term.AgentState != nil && term.Running {
-		status = term.AgentState.Status
+		status = a.sessionStatus(term)
 	}
 	name, detail := tabLabel(term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Running {

@@ -163,7 +163,8 @@ type Daemon struct {
 	terms map[string]*session
 
 	tmu      sync.Mutex
-	tchanged chan struct{} // 任务或消息变化时关闭并替换
+	waiting  map[string]int // 正阻塞在 task wait 里的派发方终端（同一终端可能同时有几次）
+	tchanged chan struct{}  // 任务或消息变化时关闭并替换
 	nudgeMu  sync.Mutex
 	stopping atomic.Bool
 

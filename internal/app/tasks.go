@@ -88,9 +88,19 @@ func (a *app) taskByWorker(terminalID string) *taskInfo {
 func (a *app) indexTasks() {
 	a.sorted = sortTasks(a.tasks)
 	a.workerTitle = make(map[string]string, len(a.tasks))
+	a.coordOf = map[string]string{}
+	a.runningFor = map[string]int{}
 	for _, t := range a.tasks {
 		if t.Worker != "" {
 			a.workerTitle[t.Worker] = truncate(t.Title, 22)
+			if t.Coordinator != "" {
+				a.coordOf[t.Worker] = t.Coordinator
+			} else {
+				delete(a.coordOf, t.Worker)
+			}
+		}
+		if t.Coordinator != "" && t.Status == "running" {
+			a.runningFor[t.Coordinator]++
 		}
 	}
 }

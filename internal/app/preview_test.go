@@ -370,6 +370,12 @@ func TestPreview(t *testing.T) {
 		a := previewApp(t)
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
 
+		// 协调者阻塞在 hive task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
+		a = previewApp(t)
+		a.workspaces[0].Terminals[0].AgentState = &agentState{Status: "working"}
+		a.workspaces[0].Terminals[0].WaitingTasks = true
+		savePNG(t, newPreviewTester(a, dark), "tasks-waiting-"+suffix+".png")
+
 		// 侧栏收起；加宽的侧栏
 		a = previewApp(t)
 		a.state.SidebarHidden = true

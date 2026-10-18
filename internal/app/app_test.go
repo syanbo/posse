@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -211,5 +212,36 @@ func TestVersionLabel(t *testing.T) {
 		if got := versionLabel("0.1.0", build); got != want {
 			t.Errorf("versionLabel(%q) = %q, want %q", build, got, want)
 		}
+	}
+}
+
+// 侧栏：任务的 worker 排在派发它的会话下面；派发方在等任务时状态是"等待任务"，自己在干别的时照常。
+func TestSidebarTaskTree(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	var order []string
+	for _, n := range a.navOrder {
+		if n.ws == "w1" && n.term != "" {
+			order = append(order, n.term)
+		}
+	}
+	// t6 是 t1 派发的 worker，排在 t1 后面、t2 前面
+	if i := slices.Index(order, "t1"); i < 0 || i+1 >= len(order) || order[i+1] != "t6" {
+		t.Fatalf("sidebar order %v", order)
+	}
+	t1 := a.workspaces[0].Terminals[0]
+	t1.AgentState = &agentState{Status: "working"}
+	if got := a.sessionStatus(t1); got != "working" {
+		t.Fatalf("working coordinator: %q", got)
+	}
+	t1.WaitingTasks = true
+	if got := a.sessionStatus(t1); got != statusTasks {
+		t.Fatalf("waiting coordinator: %q", got)
+	}
+	t1.WaitingTasks, t1.AgentState = false, &agentState{Status: "idle"}
+	if got := a.sessionStatus(t1); got != statusTasks {
+		t.Fatalf("idle coordinator with running tasks: %q", got)
 	}
 }

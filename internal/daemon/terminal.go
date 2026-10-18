@@ -30,6 +30,7 @@ type terminalInfo struct {
 	CreatedAt    time.Time        `json:"createdAt"`
 	LastOutputAt time.Time        `json:"lastOutputAt"`
 	IdleMs       int64            `json:"idleMs"`
+	WaitingTasks bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 hive task wait 上
 }
 
 func (d *Daemon) terminalInfo(s *session) terminalInfo {
@@ -38,6 +39,7 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: s.Title(), Command: s.Command, Dir: s.Dir,
 		Agent: s.agentName(), Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
+		WaitingTasks: d.waitingTasks(s.ID),
 	}
 	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示
 	if st := s.Agent(); st.Status != "" && info.Agent != "" {

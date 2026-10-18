@@ -45,7 +45,8 @@ type terminalInfo struct {
 	AgentState                    *agentState
 	Running                       bool
 	ExitCode                      *int
-	Pid                           int // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
+	Pid                           int  // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
+	WaitingTasks                  bool // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
@@ -117,6 +118,8 @@ type app struct {
 	byProject   map[string][]workspace // 项目 ID → 它的工作区，主工作区在前
 	sorted      []taskInfo             // 任务总览的顺序，见 sortTasks
 	workerTitle map[string]string      // worker 终端 ID → 任务标题（已截短），标签页上显示
+	coordOf     map[string]string      // worker 终端 ID → 派发它的终端（用户派发的没有），侧栏把 worker 排在它下面
+	runningFor  map[string]int         // 派发方终端 ID → 它还在进行中的任务数
 	navProjects []project              // 侧栏这一帧遍历的项目，复用底层数组
 
 	selected     string            // 侧栏选中的工作区 ID

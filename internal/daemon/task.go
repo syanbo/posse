@@ -73,6 +73,30 @@ func (d *Daemon) taskChanged() <-chan struct{} {
 	return d.tchanged
 }
 
+// waitingOn 记下 caller 开始等任务，返回的函数在等完时调用。
+func (d *Daemon) waitingOn(caller string) func() {
+	d.tmu.Lock()
+	if d.waiting == nil {
+		d.waiting = map[string]int{}
+	}
+	d.waiting[caller]++
+	d.tmu.Unlock()
+	return func() {
+		d.tmu.Lock()
+		if d.waiting[caller]--; d.waiting[caller] <= 0 {
+			delete(d.waiting, caller)
+		}
+		d.tmu.Unlock()
+	}
+}
+
+// waitingTasks 报告终端是不是正阻塞在 task wait 里。
+func (d *Daemon) waitingTasks(terminalID string) bool {
+	d.tmu.Lock()
+	defer d.tmu.Unlock()
+	return d.waiting[terminalID] > 0
+}
+
 func (d *Daemon) taskNotify() {
 	d.tmu.Lock()
 	close(d.tchanged)
@@ -512,6 +536,9 @@ func (d *Daemon) taskWait(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
+	if p.Block && p.Caller != "" {
+		defer d.waitingOn(p.Caller)()
+	}
 	for {
 		changed := d.taskChanged()
 		msgs, err := d.store.Inbox(store.Inbox{Coordinator: &p.Caller, Unread: true})
