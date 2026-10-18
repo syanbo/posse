@@ -61,7 +61,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 	st := a.daemon.Awake
 	settingsCard(c, "防休眠", "agent 工作时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「工作时亮屏」给操作桌面界面的 agent 用：屏幕熄了会跟着锁屏。", func() {
 		if st == nil {
-			ui.Text(c, "重启常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
+			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
 			return
 		}
 		sel := 0
@@ -98,17 +98,24 @@ func (a *app) fontSettings(c *ui.Context) {
 	})
 }
 
-// versionLabel 把版本和构建标识（提交加可执行文件时间）写成"0.1.0（提交，有未提交改动）"的样子；
-// 没有提交信息时只写版本。
+// versionLabel 把版本和构建标识（提交加可执行文件时间）写成"0.1.0（提交，有未提交改动，10-18 15:15 构建）"的样子。
+// 带上构建时间：同一个提交打两次包时，只看提交分不出窗口和常驻进程哪个旧。两样都没有时只写版本。
 func versionLabel(version, build string) string {
 	rev, _, _ := strings.Cut(build, " ")
-	switch {
-	case rev == "":
-		return version
-	case strings.HasSuffix(rev, "+"):
-		return version + "（" + strings.TrimSuffix(rev, "+") + "，有未提交改动）"
+	var parts []string
+	if rev != "" {
+		parts = append(parts, strings.TrimSuffix(rev, "+"))
 	}
-	return version + "（" + rev + "）"
+	if strings.HasSuffix(rev, "+") {
+		parts = append(parts, "有未提交改动")
+	}
+	if t, ok := buildTime(build); ok {
+		parts = append(parts, t.Local().Format("01-02 15:04")+" 构建")
+	}
+	if len(parts) == 0 {
+		return version
+	}
+	return version + "（" + strings.Join(parts, "，") + "）"
 }
 
 func (a *app) aboutSettings(c *ui.Context) {
@@ -136,20 +143,33 @@ func (a *app) aboutSettings(c *ui.Context) {
 			})
 		}
 		updating, unsupported := a.upgrade.status(d.Pid)
+		canUpdate := d.Pid != 0 && stale && !unsupported && d.Build != ""
+		// 窗口比常驻进程旧（打开了旧的 Hive.app）时不催更新：更新会把常驻进程换成窗口的旧版本
+		windowOlder := false
+		if mine, ok := buildTime(daemon.Build); ok {
+			if theirs, ok := buildTime(d.Build); ok {
+				windowOlder = mine.Before(theirs)
+			}
+		}
 		if d.Pid != 0 && stale {
-			note := "常驻进程还在跑旧的包：「更新常驻进程」把终端交给新包接着跑，终端不断。"
+			note := "常驻进程的版本比窗口旧。更新常驻进程，终端不会断开。"
 			switch {
 			case updating:
-				note = "正在把终端交给新包里的常驻进程…"
-			case unsupported || d.Build == "":
-				note = "常驻进程还在跑旧的包，这个版本还不能不断终端地更新，只能重启一次：重启会断掉所有终端。"
+				note = "正在更新常驻进程…"
+			case !canUpdate:
+				note = "常驻进程的版本比窗口旧，而且不支持不断开终端的更新，需要重启一次。重启会关闭所有终端。"
+			case windowOlder:
+				note = "窗口的版本比常驻进程旧，可能打开的是旧的 Hive.app。更新会把常驻进程换成窗口的版本。"
 			}
 			ui.Text(c, note).FontSize(12.5).TextColor(t.Text).LineHeight(1.5)
 		}
-		canUpdate := d.Pid != 0 && stale && !unsupported && d.Build != ""
 		ui.Row(c).Gap(8).Padding(4, 0, 0, 0).Children(func() {
 			if canUpdate {
-				b := pressable(accentButton(c, "更新常驻进程"))
+				update := accentButton
+				if windowOlder {
+					update = textButton
+				}
+				b := pressable(update(c, "更新常驻进程"))
 				if updating {
 					b.Disabled(true)
 				}

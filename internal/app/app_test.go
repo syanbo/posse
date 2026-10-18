@@ -191,11 +191,15 @@ func TestDiffFixedRevs(t *testing.T) {
 }
 
 func TestVersionLabel(t *testing.T) {
+	local := time.Local
+	time.Local = time.FixedZone("CST", 8*3600)
+	defer func() { time.Local = local }()
 	for build, want := range map[string]string{
 		"":                              "0.1.0",
-		"663c0c7 2026-10-18T05:18:04Z":  "0.1.0（663c0c7）",
-		"663c0c7+ 2026-10-18T05:18:04Z": "0.1.0（663c0c7，有未提交改动）",
-		" 2026-10-18T05:18:04Z":         "0.1.0",
+		"663c0c7":                       "0.1.0（663c0c7）",
+		"663c0c7 2026-10-18T05:18:04Z":  "0.1.0（663c0c7，10-18 13:18 构建）",
+		"663c0c7+ 2026-10-18T05:18:04Z": "0.1.0（663c0c7，有未提交改动，10-18 13:18 构建）",
+		" 2026-10-18T05:18:04Z":         "0.1.0（10-18 13:18 构建）",
 	} {
 		if got := versionLabel("0.1.0", build); got != want {
 			t.Errorf("versionLabel(%q) = %q, want %q", build, got, want)
