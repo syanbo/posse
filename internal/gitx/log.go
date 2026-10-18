@@ -92,6 +92,22 @@ func Reset(ctx context.Context, dir, hash, mode string) error {
 	return err
 }
 
+// RemotesContaining 列出包含 hash 的远端分支：改写它之后要强制推送。
+func RemotesContaining(ctx context.Context, dir, hash string) []string {
+	out, err := run(ctx, dir, "branch", "-r", "--contains", hash, "--format=%(refname)")
+	if err != nil || out == "" {
+		return nil
+	}
+	var list []string
+	for _, l := range strings.Split(out, "\n") {
+		// origin/HEAD 只是指针（短名字会缩成 origin，所以按完整引用名认）
+		if l = strings.TrimSpace(l); l != "" && !strings.HasSuffix(l, "/HEAD") {
+			list = append(list, strings.TrimPrefix(l, "refs/remotes/"))
+		}
+	}
+	return list
+}
+
 // ErrRewriteMerges 表示要改写的历史里有合并提交：交互式 rebase 会把它们拉平，不做。
 var ErrRewriteMerges = errors.New("这段历史里有合并提交，改写会把它们拉平，hive 不做这种改写")
 

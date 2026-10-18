@@ -457,6 +457,24 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				}
 				a.logRow(c, w, v, d, commits[i], gr)
 			}).Grow(1)
+			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，照 WebStorm 的日志
+			step := 0
+			switch {
+			case ld.list.Shortcut(c, 0, ui.KeyDown):
+				step = 1
+			case ld.list.Shortcut(c, 0, ui.KeyUp):
+				step = -1
+			}
+			if step != 0 {
+				i := -1
+				if ld.commit != nil {
+					i = slices.IndexFunc(commits, func(ci gitx.CommitInfo) bool { return ci.Hash == ld.commit.info.Hash })
+				}
+				if j := i + step; j >= 0 && j < len(commits) {
+					a.selectCommit(v, &ld.commit, commits[j])
+					ld.list.ScrollIntoView(j)
+				}
+			}
 		})
 		if ld.commit != nil {
 			ui.Box(c).Width(1).Shrink(0).Background(p.line)
@@ -563,22 +581,48 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
 		graphCell(c, gr, ci.Hash)
-		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(0)
-		for _, ref := range refNames(ci.Refs) {
+		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉
+		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(1).MinWidth(90)
+		refChips(c, ci.Refs)
+		ui.Spacer(c)
+		ui.Text(c, ci.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
+		ui.Text(c, ago(ci.Time)).FontSize(11).TextColor(t.TextMuted).Width(56).Shrink(0).TextAlign(ui.End)
+	})
+	if row.Clicked() {
+		a.selectCommit(v, &ld.commit, ci)
+		// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
+		ld.list.Focus(c)
+	}
+	row.ContextMenu(func(m *ui.Menu) { a.commitMenu(c, m, w, v, d, ci) })
+}
+
+// authorW 是日志和比较里作者一列的宽度。
+const authorW = 64
+
+// refChipsMax 是一行最多列几个分支和标签，其余写成 +N（选中后详情里有全部）。
+const refChipsMax = 2
+
+// refChips 画提交上的分支和标签：当前分支是强调色淡底。整组比标题先让位，放不下时从右边裁掉，
+// 不把每个都缩成"…"。
+func refChips(c *ui.Context, refs string) {
+	t := c.Theme()
+	names := refNames(refs)
+	if len(names) == 0 {
+		return
+	}
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(6).MinWidth(0).Clip().Children(func() {
+		for i, ref := range names {
+			if i == refChipsMax {
+				ui.Text(c, fmt.Sprintf("+%d", len(names)-i)).FontSize(10.5).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)
+				break
+			}
 			bg, fg := t.Surface, t.TextMuted
 			if ref.head {
 				bg, fg = colors(t).tint, t.Accent
 			}
 			ui.Text(c, ref.name).FontSize(10.5).Font(monoFont).TextColor(fg).Padding(1, 5).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(160)
 		}
-		ui.Spacer(c)
-		ui.Text(c, ci.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().MaxWidth(120).Shrink(0)
-		ui.Text(c, ago(ci.Time)).FontSize(11).TextColor(t.TextMuted).Width(72).Shrink(0).TextAlign(ui.End)
 	})
-	if row.Clicked() {
-		a.selectCommit(v, &ld.commit, ci)
-	}
-	row.ContextMenu(func(m *ui.Menu) { a.commitMenu(c, m, w, v, d, ci) })
 }
 
 type refName struct {
@@ -646,22 +690,49 @@ func (a *app) commitMenu(c *ui.Context, m *ui.Menu, w *workspace, v *filesView, 
 	}
 	m.Separator()
 	if m.Item("改提交信息…").Chosen() {
-		a.askMessage(v, "改 "+short+" 的提交信息", ci.Hash, "", func(msg string) {
-			do("改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
-		})
-	}
-	if len(ci.Parents) == 1 && m.Item("和上一个提交合并…").Chosen() {
-		a.askMessage(v, "和上一个提交合并", ci.Parents[0], ci.Hash, func(msg string) {
-			do("合并提交", func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
-		})
-	}
-	if m.Item("删除这个提交…").Chosen() {
-		a.confirm("从历史里删除 "+short+"？", "“"+ci.Subject+"”会从当前分支的历史里去掉，它的改动也一起去掉。", "删除提交", func() {
-			a.update(func() {
-				do("删除提交", func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
+		a.guardPushed(v, ci.Hash, func() {
+			a.askMessage(v, "改 "+short+" 的提交信息", ci.Hash, "", func(msg string) {
+				do("改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
 			})
 		})
 	}
+	if len(ci.Parents) == 1 && m.Item("和上一个提交合并…").Chosen() {
+		a.guardPushed(v, ci.Parents[0], func() {
+			a.askMessage(v, "和上一个提交合并", ci.Parents[0], ci.Hash, func(msg string) {
+				do("合并提交", func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
+			})
+		})
+	}
+	if m.Item("删除这个提交…").Chosen() {
+		a.guardPushed(v, ci.Hash, func() {
+			a.confirm("从历史里删除 "+short+"？", "“"+ci.Subject+"”会从当前分支的历史里去掉，它的改动也一起去掉。", "删除提交", func() {
+				a.update(func() {
+					do("删除提交", func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
+				})
+			})
+		})
+	}
+}
+
+// guardPushed 在改写从 oldest 开始的历史之前查它推送过没有：推送过的先说明之后要强制推送，确认了再继续。
+func (a *app) guardPushed(v *filesView, oldest string, then func()) {
+	root := v.git.repo
+	go func() {
+		remotes := gitx.RemotesContaining(context.Background(), root, oldest)
+		a.update(func() {
+			if len(remotes) == 0 {
+				then()
+				return
+			}
+			where := remotes[0]
+			if len(remotes) > 1 {
+				where += fmt.Sprintf(" 等 %d 个远端分支", len(remotes))
+			}
+			a.confirm("这些提交已经推送过", "它们在 "+where+" 上。改写之后要强制推送，别人基于旧提交的工作会对不上。", "仍然改写", func() {
+				a.update(then)
+			})
+		})
+	}()
 }
 
 // askMessage 读出提交信息（两个提交时拼在一起）填进输入框，让用户改完再执行。

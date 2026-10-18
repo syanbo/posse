@@ -333,6 +333,9 @@ func previewUsageEvents() []history.UsageEvent {
 
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("HIVE_PREVIEW_DIR")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	f, err := os.Create(filepath.Join(dir, name))
 	if err != nil {
 		t.Fatal(err)

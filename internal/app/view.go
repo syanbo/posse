@@ -16,6 +16,10 @@ import (
 func (a *app) build(c *ui.Context) {
 	a.runPending()
 	c.SetTheme(hiveTheme(c.Theme().Dark))
+	for _, t := range a.toasts {
+		c.AddToast(t)
+	}
+	a.toasts = nil
 	t := c.Theme()
 	p := colors(t)
 	board := a.selected == taskBoardID
@@ -981,7 +985,12 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示
-		ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
+		strip := ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0)
+		// 文件栏滑进来、窗口变窄之后，当前标签可能被挤到外面：宽度变了就再滚一次
+		if sw := strip.Bounds().W; sw != a.tabStripW {
+			a.tabStripW, a.shownTab = sw, ""
+		}
+		strip.Children(func() {
 			ui.Row(c).Height(titleHeight(c)).Gap(2).AlignItems(ui.Center).Children(func() {
 				// 拖动排序会在这次遍历里重排 w.Terminals：遍历副本
 				for _, term := range slices.Clone(w.Terminals) {

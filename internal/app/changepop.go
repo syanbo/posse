@@ -137,6 +137,7 @@ func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *cha
 			if d.change == cp {
 				d.change = nil
 			}
+			a.notify("已提交这一处："+msg, "", nil)
 		})
 	})
 }

@@ -317,3 +317,10 @@ func TestCommitChange(t *testing.T) {
 		t.Fatalf("staged file: %v", err)
 	}
 }
+
+func TestWithoutHints(t *testing.T) {
+	msg := "error: failed to push some refs to 'x'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart.\n"
+	if got := withoutHints(msg); got != "error: failed to push some refs to 'x'" {
+		t.Fatalf("%q", got)
+	}
+}

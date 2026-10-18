@@ -268,17 +268,32 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	a.openCompare(w, v, "feat", "main", true)
 	until(t, tt, "files compare", func() bool { return v.cur.kind == docCompare && tt.HasText("工作区和 feat 有 2 个文件不同") })
 
-	// 删除没合并的分支：确认后再问一次强制删除
+	// 删除没合并的分支：问一次强制删除；删掉后提示里可以恢复
 	b := gitxBranch(v, "feat")
+	tip := gitRun(t, root, "rev-parse", "feat")
 	a.askDeleteBranch(v, b)
-	a.confirming = false
-	a.confirmDo()
 	until(t, tt, "force ask", func() bool { return a.confirming && strings.Contains(a.confirmTitle, "还没合并") })
 	a.confirming = false
 	a.confirmDo()
 	until(t, tt, "deleted", func() bool { return v.git.busy == "" && gitxBranch(v, "feat").Name == "" })
 	if out := gitRun(t, root, "branch", "--list", "feat"); out != "" {
 		t.Fatalf("feat still exists: %q", out)
+	}
+	until(t, tt, "restore toast", func() bool { return tt.HasText("已删除分支 feat") })
+	if err := tt.Click("恢复"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "restored", func() bool { return v.git.busy == "" && gitxBranch(v, "feat").Name == "feat" })
+	if got := gitRun(t, root, "rev-parse", "feat"); got != tip {
+		t.Fatalf("restored at %s, want %s", got, tip)
+	}
+	// 已经合并的分支直接删，不弹确认
+	gitRun(t, root, "branch", "merged")
+	until(t, tt, "merged listed", func() bool { a.loadBranches(v); return gitxBranch(v, "merged").Name != "" })
+	a.askDeleteBranch(v, gitxBranch(v, "merged"))
+	until(t, tt, "merged deleted", func() bool { return v.git.busy == "" && gitRun(t, root, "branch", "--list", "merged") == "" })
+	if a.confirming {
+		t.Fatal("merged branch should not ask")
 	}
 
 	// agent 正在工作时，检出要先确认
@@ -1261,4 +1276,135 @@ func TestLogFilterEdges(t *testing.T) {
 		t.Fatal(err)
 	}
 	until(t, tt, "cleared", func() bool { return !ld.loading && ld.err == "" && len(ld.commits) > 0 && ld.graph != nil })
+}
+
+// 改写推送过的提交先提醒；没推送的直接往下走。操作停在冲突上时文件栏自动打开到改动页。
+func TestGuardPushedAndConflictPanel(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := a.filesFor(w)
+	until(t, tt, "repo", func() bool {
+		if !v.git.checked {
+			a.refreshGit(v)
+		}
+		return v.git.status != nil
+	})
+	ran := false
+	a.guardPushed(v, gitRun(t, root, "rev-parse", "HEAD"), func() { ran = true })
+	until(t, tt, "local commit", func() bool { return ran })
+	if a.confirming {
+		t.Fatal("unpushed commit should not ask")
+	}
+	ran = false
+	a.guardPushed(v, gitRun(t, root, "rev-parse", "origin/main"), func() { ran = true })
+	until(t, tt, "pushed asks", func() bool { return a.confirming && strings.Contains(a.confirmBody, "origin/main") })
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "then", func() bool { return ran })
+
+	// cherry-pick 冲突：文件栏关着也打开到改动页
+	a.closeFilesPanel()
+	gitRun(t, root, "switch", "-q", "-c", "side", "HEAD~1")
+	os.WriteFile(filepath.Join(root, "main.go"), []byte("package main // side\n"), 0o644)
+	gitRun(t, root, "commit", "-q", "-am", "side")
+	side := gitRun(t, root, "rev-parse", "HEAD")
+	gitRun(t, root, "switch", "-q", "main")
+	tt.Frame()
+	a.gitDo(v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, side) })
+	until(t, tt, "panel opened", func() bool {
+		return v.git.status != nil && v.git.status.Operation == "cherry-pick" && a.filesPanelOpen() && v.side == sideChanges
+	})
+}
+
+// 提交框：取消"修改上一次提交"时清掉自动填的旧信息；没写信息时提交按钮不可点；⌘K 在搁置分页上切回提交分页。
+func TestCommitBoxDetails(t *testing.T) {
+	a := previewApp(t)
+	gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	g := &v.git
+	a.setAmend(v, true)
+	until(t, tt, "last message", func() bool { return g.message == "base" })
+	a.setAmend(v, false)
+	if g.message != "" {
+		t.Fatalf("message kept: %q", g.message)
+	}
+	tt.Frame()
+	if err := tt.Click("提交 2 个文件"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if g.busy != "" || a.err != "" {
+		t.Fatalf("commit without message: busy %q err %q", g.busy, a.err)
+	}
+	g.tab, g.focusMsg = 1, true
+	tt.Frame()
+	if g.tab != 0 || !tt.HasText("修改上一次提交") {
+		t.Fatal("⌘K should switch back to the commit tab")
+	}
+}
+
+// 分支弹窗：搜索后回车检出第一个对得上的；↑↓ 换选中。
+func TestBranchPopupKeyboard(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openBranches(w)
+	v := a.files["w1"]
+	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
+	tt.Type("fea")
+	tt.Frame()
+	bp := a.branchPop
+	if bp.hl != 0 || len(bp.rows) == 0 || bp.rows[0].Name != "feat" {
+		t.Fatalf("hl %d rows %v", bp.hl, bp.rows)
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if bp.hl != min(1, len(bp.rows)-1) {
+		t.Fatalf("down: %d", bp.hl)
+	}
+	tt.Key(0, ui.KeyUp)
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	// 预览数据里这个工作区有 agent 在工作，检出先确认
+	if !a.confirming {
+		t.Fatal("checkout should go through guardAgent")
+	}
+	a.confirming = false
+	a.confirmDo()
+	until(t, tt, "checked out", func() bool { return v.git.busy == "" && gitRun(t, root, "branch", "--show-current") == "feat" })
+	if a.branchPop != nil {
+		t.Fatal("popup should close")
+	}
+}
+
+// Git 日志：点一个提交后 ↑↓ 换选中。
+func TestLogKeyboard(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openLog(&a.workspaces[0], "", "")
+	v := a.files["w1"]
+	ld := v.logCur.log
+	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && len(ld.commits) > 2 })
+	settle(tt)
+	if err := tt.Click(ld.commits[0].Subject); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "selected", func() bool { return ld.commit != nil && ld.commit.info.Hash == ld.commits[0].Hash })
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if ld.commit.info.Hash != ld.commits[2].Hash {
+		t.Fatalf("down twice: %s", ld.commit.info.Subject)
+	}
+	tt.Key(0, ui.KeyUp)
+	tt.Frame()
+	if ld.commit.info.Hash != ld.commits[1].Hash {
+		t.Fatalf("up: %s", ld.commit.info.Subject)
+	}
 }

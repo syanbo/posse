@@ -20,6 +20,10 @@ import (
 type branchPopup struct {
 	ws    string
 	query string
+	// 搜索框里 ↑↓ 选中的分支（在 rows 里的位置，-1 是没选），回车检出；搜索时默认选第一个
+	hl     int
+	rows   []gitx.Branch // 上一帧列出来的分支，按显示顺序
+	scroll bool          // 下一帧把选中的分支滚进视野
 }
 
 // branchInfo 是分支弹窗要的数据，打开弹窗、Fetch、操作之后在后台重读。
@@ -34,7 +38,7 @@ type branchInfo struct {
 // openBranches 打开工作区的分支弹窗，并在后台读分支。
 func (a *app) openBranches(w *workspace) {
 	v := a.filesFor(w)
-	a.branchPop = &branchPopup{ws: w.ID}
+	a.branchPop = &branchPopup{ws: w.ID, hl: -1}
 	a.loadBranches(v)
 }
 
@@ -233,7 +237,22 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(420).MaxHeight(600).Padding(6).Gap(2))
 	panel.Children(func() {
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Children(func() { fieldInput(c, &bp.query, "搜索分支").AutoFocus() })
+			ui.Column(c).Grow(1).Children(func() {
+				in := fieldInput(c, &bp.query, "搜索分支").AutoFocus()
+				switch {
+				case in.Changed():
+					bp.hl = -1
+					if strings.TrimSpace(bp.query) != "" {
+						bp.hl = 0
+					}
+				case in.Shortcut(0, ui.KeyDown):
+					bp.hl, bp.scroll = min(bp.hl+1, len(bp.rows)-1), true
+				case in.Shortcut(0, ui.KeyUp):
+					bp.hl, bp.scroll = max(bp.hl-1, 0), true
+				case in.Submitted() && bp.hl >= 0 && bp.hl < len(bp.rows):
+					a.checkoutBranch(w, v, bp.rows[bp.hl])
+				}
+			})
 			// Fetch 进行中按钮换成转圈，不另起一行文字
 			if g.busy == "Fetch" {
 				spin := ui.Row(c.Key("fetching")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
@@ -243,7 +262,8 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 					g.cancel()
 				}
 			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", 28, 15)); g.busy == "" && fetch.Clicked() {
-				a.gitDo(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
+				a.gitDoThen(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
+					func() { a.notify("Fetch 完成", "", nil) })
 			} else if g.busy != "" {
 				fetch.Opacity(0.4)
 			}
@@ -252,6 +272,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			ui.Row(c).Padding(0, 10, 4, 10).Children(func() { busyLine(c, g) })
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
+		bp.rows = bp.rows[:0]
 		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
 			ui.Column(c).Gap(1).Children(func() {
 				if query == "" {
@@ -299,7 +320,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 			a.err = "当前分支没有跟踪的远端分支，没法更新"
 		} else {
 			a.guardAgent(w, "更新项目", func() {
-				a.gitDo(v, "更新项目", func(ctx context.Context, root string) error { return gitx.Update(ctx, root, cur) })
+				a.updateBranch(v, "更新项目", cur)
 			})
 		}
 	}
@@ -432,8 +453,17 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	otherWs := a.workspaceAt(other)
 	// 左边多缩进一些，分支图标和组标题的文字对齐，一眼看出属于哪一组
 	row := ui.Row(c.Key(group+":"+b.Name)).Height(28).Padding(0, 10, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
+	bp := a.branchPop
+	keyed := bp != nil && bp.hl == len(bp.rows)
+	if bp != nil {
+		bp.rows = append(bp.rows, b)
+	}
+	if keyed && bp.scroll {
+		row.ScrollIntoView()
+		bp.scroll = false
+	}
 	bg := ui.Transparent
-	if row.Hovered() {
+	if row.Hovered() || keyed {
 		bg = p.wash
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
@@ -463,6 +493,25 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	row.Menu(func(m *ui.Menu) { a.branchMenu(m, w, v, b, cur, otherWs, inOther) })
 }
 
+// checkoutBranch 是分支弹窗里回车或菜单"检出"：在别的工作区检出着的切到那个工作区，当前分支什么也不做。
+func (a *app) checkoutBranch(w *workspace, v *filesView, b gitx.Branch) {
+	a.branchPop = nil
+	if b.Current {
+		return
+	}
+	if other, inOther := gitx.WorktreeOf(b, v.git.repo); inOther {
+		if ws := a.workspaceAt(other); ws != nil {
+			a.selected, a.revealSel = ws.ID, true
+		} else {
+			a.err = b.Name + " 检出在另一个 worktree 里"
+		}
+		return
+	}
+	a.guardAgent(w, "检出", func() {
+		a.gitDo(v, "检出", func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
+	})
+}
+
 // branchMenu 是一个分支的操作，顺序照 WebStorm。
 func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Branch, otherWs *workspace, inOther bool) {
 	done := func() { a.branchPop = nil }
@@ -483,10 +532,7 @@ func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Bra
 			m.Item("检出在另一个 worktree 里").Disabled(true)
 		default:
 			if m.Item("检出").Chosen() {
-				done()
-				a.guardAgent(w, "检出", func() {
-					a.gitDo(v, "检出", func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
-				})
+				a.checkoutBranch(w, v, b)
 			}
 		}
 	}
@@ -540,10 +586,10 @@ func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Bra
 		done()
 		if b.Current {
 			a.guardAgent(w, "更新", func() {
-				a.gitDo(v, "更新", func(ctx context.Context, root string) error { return gitx.Update(ctx, root, b) })
+				a.updateBranch(v, "更新", b)
 			})
 		} else {
-			a.gitDo(v, "更新 "+b.Name, func(ctx context.Context, root string) error { return gitx.Update(ctx, root, b) })
+			a.updateBranch(v, "更新 "+b.Name, b)
 		}
 	}
 	if !b.Remote && m.Item("Push…").Chosen() {
@@ -557,13 +603,38 @@ func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Bra
 			a.gitDo(v, "重命名", func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
 		}})
 	}
-	if !b.Current && !inOther && m.Item("删除…").Chosen() {
+	// 本地分支直接删、可以恢复，不再弹确认；远端分支要确认
+	del := "删除"
+	if b.Remote {
+		del = "删除…"
+	}
+	if !b.Current && !inOther && m.Item(del).Chosen() {
 		done()
 		a.askDeleteBranch(v, b)
 	}
 }
 
-// askDeleteBranch 删除分支前确认；本地分支没合并时再问一次是否强制删除，远端分支删除的是远端上的。
+// updateBranch 用远端更新分支，做完提示拉到了几个提交。
+func (a *app) updateBranch(v *filesView, what string, b gitx.Branch) {
+	var n int
+	a.gitDoThen(v, what, func(ctx context.Context, root string) error {
+		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
+		err := gitx.Update(ctx, root, b)
+		if err == nil {
+			n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
+		}
+		return err
+	}, func() {
+		if n == 0 {
+			a.notify(b.Name+" 已经是最新的", "", nil)
+		} else {
+			a.notify(fmt.Sprintf("%s 拉到了 %d 个提交", b.Name, n), "", nil)
+		}
+	})
+}
+
+// askDeleteBranch 删除分支，照 WebStorm：已经合并的本地分支直接删，提示里可以恢复；没合并的先问一次是否强制删除。
+// 远端分支删的是远端上的，别人也拉不到了，先确认。
 func (a *app) askDeleteBranch(v *filesView, b gitx.Branch) {
 	if b.Remote {
 		a.confirm("删除远端分支 "+b.Name+"？", "会推送到远端，把远端上的这个分支删掉，其他人也拉不到了。", "删除", func() {
@@ -573,21 +644,29 @@ func (a *app) askDeleteBranch(v *filesView, b gitx.Branch) {
 		})
 		return
 	}
-	a.confirm("删除分支 "+b.Name+"？", "只删除本地分支，远端的不受影响。", "删除", func() {
-		a.update(func() {
-			a.gitDo(v, "删除分支", func(ctx context.Context, root string) error {
-				err := gitx.DeleteBranch(ctx, root, b.Name, false)
-				if gitx.NotMerged(err) {
-					a.update(func() {
-						a.confirm("分支 "+b.Name+" 还没合并", "它上面有别的分支里没有的提交，强制删除后这些提交就找不回来了（除非记得哈希）。", "强制删除", func() {
-							a.update(func() {
-								a.gitDo(v, "强制删除分支", func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) })
-							})
-						})
-					})
-					return nil
-				}
-				return err
+	var tip string
+	deleted := func() {
+		a.notify("已删除分支 "+b.Name, "恢复", func() {
+			a.gitDo(v, "恢复分支", func(ctx context.Context, root string) error { return gitx.CreateBranch(ctx, root, b.Name, tip, false) })
+		})
+	}
+	var unmerged bool
+	a.gitDoThen(v, "删除分支", func(ctx context.Context, root string) error {
+		tip = gitx.Tip(ctx, root, "refs/heads/"+b.Name)
+		err := gitx.DeleteBranch(ctx, root, b.Name, false)
+		if gitx.NotMerged(err) {
+			unmerged = true
+			return nil
+		}
+		return err
+	}, func() {
+		if !unmerged {
+			deleted()
+			return
+		}
+		a.confirm("分支 "+b.Name+" 还没合并", "它上面有别的分支里没有的提交。强制删除后可以在提示里马上恢复，过后就只能靠记得的哈希找回。", "强制删除", func() {
+			a.update(func() {
+				a.gitDoThen(v, "强制删除分支", func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
 			})
 		})
 	})

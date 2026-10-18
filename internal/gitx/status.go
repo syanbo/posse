@@ -40,7 +40,7 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errb.String())
+		msg := withoutHints(errb.String())
 		if msg == "" {
 			msg = strings.TrimSpace(out.String())
 		}
@@ -50,6 +50,17 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 		return out.Bytes(), &Error{Args: args, Msg: msg}
 	}
 	return out.Bytes(), nil
+}
+
+// withoutHints 去掉 git 报错里的 "hint:" 行：那是教命令行怎么做的，界面上照着做不了，还把真正的原因挤到后面。
+func withoutHints(msg string) string {
+	var keep []string
+	for _, line := range strings.Split(msg, "\n") {
+		if !strings.HasPrefix(line, "hint:") {
+			keep = append(keep, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(keep, "\n"))
 }
 
 // Error 是 git 命令失败：Msg 是 git 自己的报错，界面直接显示它。

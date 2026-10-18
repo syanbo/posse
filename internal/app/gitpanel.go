@@ -65,6 +65,10 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 		}
 		ui.List(c, list, len(rows), func(i int) { a.changeRow(c, w, v, rows[i]) }).Grow(1).Padding(0, 0, 8, 0)
 	}
+	// ⌘K 时在搁置分页上：切回提交分页，提交框才在
+	if g.focusMsg {
+		g.tab = 0
+	}
 	if g.tab == 0 {
 		a.commitBox(c, v)
 	}
@@ -419,7 +423,10 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 			ui.Spacer(c)
 			btn := pressable(accentButton(c, label)).Tooltip(tip)
 			// 自动 Fetch 期间也能点，提交排在它后面
-			if g.busy != "" && g.busy != "Fetch" || g.pending("提交") || picked == 0 && !g.amend && whole == "" {
+			if strings.TrimSpace(g.message) == "" {
+				btn.Tooltip("先写提交信息")
+			}
+			if g.busy != "" && g.busy != "Fetch" || g.pending("提交") || strings.TrimSpace(g.message) == "" || picked == 0 && !g.amend && whole == "" {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.commit(v)
@@ -532,6 +539,9 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			n := len(df.state.Hunks())
 			added, deleted := df.state.Stats()
 			msg := "没有差异"
+			if n == 0 && df.state.IgnoreWhitespace && df.state.Old.String() != df.state.New.String() {
+				msg = "只有空白不同，关掉“忽略空白”能看到"
+			}
 			if n > 0 {
 				msg = fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)
 			}

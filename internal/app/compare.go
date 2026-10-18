@@ -178,13 +178,16 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		// 照 WebStorm：上下两栏，各是一边独有的提交
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			a.compareBar(c, w, v, d)
-			ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			// 两栏各按提交数撑高，最多各占一半；提交少时空白留在最下面，不夹在两栏中间
+			paneH := func(n int) float32 { return 34 + float32(max(n, 1))*logRowH + 16 }
+			ui.Column(c).Grow(1).Shrink(1).MaxHeight(paneH(len(cd.onlyOther))).Children(func() {
 				a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther)
 			})
 			ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
-			ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).MaxHeight(paneH(len(cd.onlyCur))).Children(func() {
 				a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur)
 			})
+			ui.Box(c).Grow(0.001)
 		})
 		if cd.commit != nil {
 			ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
@@ -225,13 +228,14 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui.ListState, in, notIn string, commits []gitx.CommitInfo) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c).Height(34).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.honey.Alpha(0.12)).Children(func() {
-		ui.Icon(c, iconHexAlert).FontSize(13).TextColor(p.honey).Shrink(0)
+	// 琥珀色只给"待处理"，这里用顶栏的底
+	ui.Row(c).Height(34).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).Children(func() {
+		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
 			ui.Text(c, "存在于").FontSize(12.5)
-			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(600).SingleLine().Shrink(1)
+			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
 			ui.Text(c, "中但不存在于").FontSize(12.5)
-			ui.Text(c, notIn).FontSize(12.5).Font(monoFont).FontWeight(600).SingleLine().Shrink(1)
+			ui.Text(c, notIn).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
 			ui.Text(c, "中的提交").FontSize(12.5)
 		})
 		ui.Spacer(c)
@@ -280,14 +284,8 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool) bo
 			p.Fill(ui.Rect{X: cx - 4, Y: cy - 4, W: 8, H: 8}, lane, 4)
 		})
 		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Grow(1).Shrink(1)
-		for _, ref := range refNames(ci.Refs) {
-			rbg, fg := t.Surface, t.TextMuted
-			if ref.head {
-				rbg, fg = colors(t).tint, t.Accent
-			}
-			ui.Text(c, ref.name).FontSize(10.5).Font(monoFont).TextColor(fg).Padding(1, 5).Radius(4).Background(rbg).SingleLine().Shrink(0).MaxWidth(160)
-		}
-		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().MaxWidth(110).Shrink(0)
+		refChips(c, ci.Refs)
+		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
 		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(88).TextAlign(ui.End).Shrink(0)
 	})
 	return row.Clicked()
@@ -543,7 +541,7 @@ func (a *app) pushDialog(c *ui.Context) {
 func (a *app) doPush(v *filesView, ps *pushState, force bool) {
 	ps.pushing = true
 	plan, tags := ps.plan, ps.tags
-	a.gitDo(v, "Push", func(ctx context.Context, root string) error {
+	a.gitDoThen(v, "Push", func(ctx context.Context, root string) error {
 		err := gitx.Push(ctx, root, plan, force, tags)
 		a.update(func() {
 			ps.pushing = false
@@ -558,5 +556,11 @@ func (a *app) doPush(v *filesView, ps *pushState, force bool) {
 			return fmt.Errorf("远端有你还没拉到的提交；先更新分支再推送，或者确认后强制推送")
 		}
 		return err
+	}, func() {
+		msg := fmt.Sprintf("已推送 %d 个提交到 %s/%s", len(plan.Commits), plan.Remote, plan.RemoteBranch)
+		if len(plan.Commits) == 0 {
+			msg = "已推送到 " + plan.Remote + "/" + plan.RemoteBranch
+		}
+		a.notify(msg, "", nil)
 	})
 }

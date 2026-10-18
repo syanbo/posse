@@ -218,6 +218,28 @@ func Update(ctx context.Context, dir string, b Branch) error {
 	return err
 }
 
+// Tip 返回引用指向的提交，没有时为空。
+func Tip(ctx context.Context, dir, ref string) string {
+	out, err := run(ctx, dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	return out
+}
+
+// Incoming 数 to 里有、from 里没有的提交，from 为空时是 0。
+func Incoming(ctx context.Context, dir, from, to string) int {
+	if from == "" {
+		return 0
+	}
+	out, err := run(ctx, dir, "rev-list", "--count", from+".."+to)
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(out)
+	return n
+}
+
 // ErrStashConflict 表示操作本身成功了，但取回临时搁置的本地改动时冲突：git 照样返回成功，
 // 冲突标记已经写进文件，原来的改动留在搁置列表里。
 var ErrStashConflict = errors.New("已经完成，但取回本地改动时有冲突：冲突的文件已标出来，原来的改动还留在搁置里，解决完可以删掉那条搁置")

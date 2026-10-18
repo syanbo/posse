@@ -46,6 +46,7 @@ type gitState struct {
 	poll     panelPoll
 	message  string
 	amend    bool
+	amendMsg string // 勾"修改上一次提交"时自动填进来的信息
 	busy     string // 正在执行的操作，期间按钮不可点
 	queue    []gitOp
 	cancel   context.CancelFunc // 正在执行的是网络操作时可以取消
@@ -183,6 +184,10 @@ func (a *app) gitChanged(v *filesView, old *gitx.Status) {
 	// 操作停在冲突上：切到改动，横幅在那里
 	if op := v.git.status.Operation; op != "" && (old == nil || old.Operation != op) {
 		v.side = sideChanges
+		// 刚停在冲突上（日志里 cherry-pick、分支弹窗里合并）：文件栏关着也打开，不然看不到继续 / 中止
+		if w := a.workspace(v.wsID); w != nil && old != nil {
+			a.openFilesPanel(w, sideChanges)
+		}
 	}
 	headMoved := old != nil && old.Commit != v.git.status.Commit
 	for _, d := range v.docs {
@@ -650,6 +655,11 @@ func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, 
 	a.gitRun(v, op)
 }
 
+// notify 在窗口底部提示一句（操作成功之类），带 action 时提示上有一个按钮。
+func (a *app) notify(title, action string, onAction func()) {
+	a.toasts = append(a.toasts, ui.Toast{Title: title, Type: "success", Action: action, OnAction: onAction})
+}
+
 // gitOp 是一个排队等着执行的 git 操作。
 type gitOp struct {
 	what string
@@ -911,7 +921,7 @@ func (a *app) commit(v *filesView) {
 		a.err = "先勾选要提交的文件"
 		return
 	}
-	a.gitDo(v, "提交", func(ctx context.Context, root string) error {
+	a.gitDoThen(v, "提交", func(ctx context.Context, root string) error {
 		var err error
 		if whole {
 			// 合并、拣选、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
@@ -929,6 +939,9 @@ func (a *app) commit(v *filesView) {
 		}
 		a.update(func() { g.message, g.amend, g.picks = "", false, nil })
 		return nil
+	}, func() {
+		subject, _, _ := strings.Cut(msg, "\n")
+		a.notify("已提交："+subject, "", nil)
 	})
 }
 
@@ -936,7 +949,15 @@ func (a *app) commit(v *filesView) {
 func (a *app) setAmend(v *filesView, on bool) {
 	g := &v.git
 	g.amend = on
-	if !on || strings.TrimSpace(g.message) != "" || g.repo == "" {
+	// 取消时把自动填进来的旧信息清掉，免得被当成新提交的信息；改过的留着
+	if !on {
+		if g.message == g.amendMsg {
+			g.message = ""
+		}
+		g.amendMsg = ""
+		return
+	}
+	if strings.TrimSpace(g.message) != "" || g.repo == "" {
 		return
 	}
 	root := g.repo
@@ -944,7 +965,7 @@ func (a *app) setAmend(v *filesView, on bool) {
 		msg := gitx.LastMessage(context.Background(), root)
 		a.update(func() {
 			if g.amend && strings.TrimSpace(g.message) == "" {
-				g.message = msg
+				g.message, g.amendMsg = msg, msg
 			}
 		})
 	}()
