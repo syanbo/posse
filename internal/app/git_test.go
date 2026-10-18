@@ -673,8 +673,20 @@ func TestAutoFetch(t *testing.T) {
 	gitRun(t, other, "add", "remote.txt")
 	gitRun(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "remote")
 	gitRun(t, other, "push", "-q", "origin", "main")
+	// 同一项目的另一个 worktree 开着改动页：fetch 期间它也被占住，那边的 git 操作排队
+	wt := strings.TrimSpace(gitRun(t, root, "worktree", "list", "--porcelain"))
+	wtPath := strings.TrimPrefix(strings.Split(strings.Split(wt, "\n\n")[1], "\n")[0], "worktree ")
+	a.workspaces = append(a.workspaces, workspace{ID: "wt", ProjectID: w.ProjectID, Name: "agent", Kind: "worktree", Path: wtPath, Branch: "agent"})
+	a.indexWorkspaces()
+	w = a.workspace("w1")
+	ov := a.openFilesPanel(a.workspace("wt"), sideChanges)
+	a.selected = "wt"
+	until(t, tt, "other repo", func() bool { return ov.git.repo != "" })
+	a.selected = "w1"
+	tt.Frame()
 	a.fetchAt[w.ProjectID] = time.Time{} // 当作五分钟到了
-	until(t, tt, "fetched", func() bool { return a.track["w1"].behind == 1 && len(d.comp.onlyOther) == 1 })
+	until(t, tt, "other busy", func() bool { return ov.git.busy == "Fetch" })
+	until(t, tt, "fetched", func() bool { return a.track["w1"].behind == 1 && len(d.comp.onlyOther) == 1 && ov.git.busy == "" })
 
 	// 手动 Fetch 同样重读
 	os.WriteFile(filepath.Join(other, "remote2.txt"), []byte("y\n"), 0o644)

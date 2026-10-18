@@ -122,14 +122,23 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 		c.After(wait)
 		return
 	}
-	v := a.files[w.ID]
-	if v != nil && v.git.busy != "" {
-		c.After(time.Second)
-		return
+	// 同一项目的 worktree 共用远端引用：fetch 期间把它们开着的改动页都占住，那边手动的 git 操作排队，不同时改引用
+	var views []*filesView
+	for i := range a.workspaces {
+		if a.workspaces[i].ProjectID != w.ProjectID {
+			continue
+		}
+		if v := a.files[a.workspaces[i].ID]; v != nil {
+			if v.git.busy != "" {
+				c.After(time.Second)
+				return
+			}
+			views = append(views, v)
+		}
 	}
 	a.fetchAt[w.ProjectID] = time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
-	if v != nil {
+	for _, v := range views {
 		v.git.busy, v.git.cancel = "Fetch", cancel
 	}
 	dir, project := w.Path, w.ProjectID
@@ -139,9 +148,11 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 		a.update(func() {
 			tr.poll = panelPoll{}
 			a.refsChanged(project)
-			if v != nil && v.git.busy == "Fetch" {
-				v.git.busy, v.git.cancel = "", nil
-				a.gitNext(v)
+			for _, v := range views {
+				if v.git.busy == "Fetch" {
+					v.git.busy, v.git.cancel = "", nil
+					a.gitNext(v)
+				}
 			}
 		})
 	}()

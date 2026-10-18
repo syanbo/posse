@@ -28,9 +28,10 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	// 新会话里跑：没有控制终端，ssh 要口令或确认主机指纹时直接失败，不会在 /dev/tty 上一直等。
-	// 取消、超时时整组杀掉，连同 git 拉起的 ssh；ssh 拿着输出管道不放时最多再等 2 秒
+	// 取消、超时时给整组发 SIGTERM，连同 git 拉起的 ssh：git 收到 SIGTERM 会删掉自己的 .lock 再退出，SIGKILL 会把锁留下；
+	// 2 秒还没退（或 ssh 拿着输出管道不放）由 WaitDelay 强杀
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
 	// 不拿可选的锁：每 1.5 秒的 status 会顺手重写 index，和终端里 agent 的 git 命令抢 index.lock
 	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0"), env...)
