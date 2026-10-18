@@ -170,6 +170,8 @@ type app struct {
 	branchFolds   map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
 	track         map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
 	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
+	gitRuns       []gitx.Run            // Git 控制台的命令记录（gitconsole.go），所有项目共用，按目录分
+	consoleErr    map[string]bool       // 项目 ID → 有没在控制台看过的失败命令
 	filesPanelRef ui.Ref
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
@@ -277,6 +279,7 @@ func Run(c *client.Client) error {
 		state:        loadUIState(c.Home),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
+	a.traceGit()
 	if a.state.FontSize > 0 {
 		a.fontSize = a.state.FontSize
 	}

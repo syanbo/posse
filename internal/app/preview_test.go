@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/gitx"
 	"hive/internal/history"
 )
 
@@ -311,6 +312,25 @@ func previewLog(t *testing.T, a *app) {
 	until(t, tt, "detail", func() bool { return v.logCur.log.commit.files != nil })
 }
 
+func previewConsole(t *testing.T, a *app) {
+	previewLog(t, a)
+	dir := a.workspaces[0].Path
+	at := time.Date(2026, 10, 18, 14, 3, 0, 0, time.Local)
+	for i, r := range []gitx.Run{
+		{Args: []string{"fetch", "--all"}, Took: 1240 * time.Millisecond, Out: "From github.com:dengbo/hive\n   7117cfb..acc6bc5  main       -> origin/main"},
+		{Args: []string{"add", "-A", "--", ":(literal)internal/app/view.go"}},
+		{Args: []string{"commit", "-q", "--only", "-F", "-", "--", ":(literal)internal/app/view.go"}, Took: 310 * time.Millisecond},
+		{Args: []string{"push", "--force-with-lease", "--force-if-includes", "origin", "main:main"}, Took: 2100 * time.Millisecond,
+			Err: "To github.com:dengbo/hive.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:dengbo/hive.git'"},
+		{Args: []string{"pull", "--rebase", "--autostash"}, Took: 1800 * time.Millisecond, Out: "Successfully rebased and updated refs/heads/main."},
+	} {
+		r.ID, r.Dir, r.Start, r.Done = int64(i+1), dir, at.Add(time.Duration(i*40)*time.Second), true
+		a.gitRuns = append(a.gitRuns, r)
+	}
+	a.gitRuns = append(a.gitRuns, gitx.Run{ID: 9, Dir: dir, Args: []string{"push", "origin", "main:main"}, Start: at.Add(4 * time.Minute)})
+	a.files["w1"].console = true
+}
+
 // previewUsageEvents 是一段从 10:02 开始的使用记录，最后几条是连着调同一个工具。
 func previewUsageEvents() []history.UsageEvent {
 	at := time.Date(2026, 10, 16, 10, 2, 0, 0, time.Local)
@@ -534,6 +554,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewLog(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-log-"+suffix+".png")
+
+		// 日志浮层的控制台：Hive 执行的 git 命令，失败的是红的
+		a = previewApp(t)
+		previewConsole(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-console-"+suffix+".png")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

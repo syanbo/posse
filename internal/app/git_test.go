@@ -1490,3 +1490,46 @@ func TestChangesKeyboard(t *testing.T) {
 	tt.Key(0, ui.KeyEnter)
 	until(t, tt, "open main.go", func() bool { return v.cur != nil && v.cur.diff == nil && v.cur.path == filepath.Join(root, "main.go") })
 }
+
+// Git 控制台：日志浮层里"控制台"标签列出界面执行的改动命令和失败的命令，没看过的失败带红点。
+func TestGitConsole(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	os.WriteFile(filepath.Join(root, "new.txt"), []byte("x\n"), 0o644)
+	a.traceGit()
+	defer func() { gitx.Trace = nil }()
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
+	until(t, tt, "idle", func() bool { return v.git.busy == "" })
+	a.gitDo(v, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
+	until(t, tt, "failed", func() bool { return v.git.busy == "" && a.consoleErr[w.ProjectID] })
+	a.openLog(w, "", "")
+	until(t, tt, "console tab", func() bool { return tt.HasText("控制台") })
+	if _, ok := tt.Find("有失败的 git 命令"); !ok {
+		t.Fatal("console tab should flag the failed command")
+	}
+	settle(tt)
+	if err := tt.Click("控制台"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "console", func() bool { return v.console && tt.HasText("git rebase --continue") })
+	if !tt.HasText("git add -A -- ':(literal)new.txt'") || a.consoleErr[w.ProjectID] {
+		t.Fatalf("console: %v", tt.Texts())
+	}
+	for _, s := range tt.Texts() {
+		if strings.Contains(s, "status") {
+			t.Fatalf("polling queries should not be logged: %q", s)
+		}
+	}
+	// 点回日志标签
+	if err := tt.Click("日志"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.console {
+		t.Fatal("clicking the log tab should leave the console")
+	}
+}

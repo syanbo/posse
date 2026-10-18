@@ -40,6 +40,7 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
+	rec := traceStart(dir, args)
 	if err := cmd.Run(); err != nil {
 		msg := withoutHints(errb.String())
 		if msg == "" {
@@ -48,8 +49,13 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 		if msg == "" {
 			msg = err.Error()
 		}
+		if ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			msg = "已取消"
+		}
+		traceEnd(rec, out.Bytes(), errb.Bytes(), msg)
 		return out.Bytes(), &Error{Args: args, Msg: msg}
 	}
+	traceEnd(rec, out.Bytes(), errb.Bytes(), "")
 	return out.Bytes(), nil
 }
 

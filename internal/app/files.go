@@ -172,7 +172,12 @@ type filesView struct {
 	prevTerm string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去
 	logs     []*fileDoc // 底部 Git 日志浮层里的日志和文件历史（logview.go），不在标签栏
 	logCur   *fileDoc
-	git      gitState
+	// 日志浮层里选的是"控制台"标签（gitconsole.go）；consoleLast、consoleDone 记上次看到的最后一条，变了才滚到底
+	console     bool
+	consoleList ui.ListState
+	consoleLast int64
+	consoleDone bool
+	git         gitState
 }
 
 // filesFor 返回工作区的文件标签，没有就新建，并恢复上次打开的文件和展开的目录。

@@ -55,6 +55,7 @@ func (a *app) openLog(w *workspace, branch, path string) {
 	f := gitx.LogFilter{Branch: branch, Path: path}
 	key := logKey(f)
 	a.setLogPanel(true)
+	v.console = false
 	for _, d := range v.logs {
 		if d.path == key {
 			v.logCur = d
@@ -157,8 +158,12 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		ui.Row(c).Height(34).Shrink(0).Padding(0, 10, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
 			// 点 × 会在这次遍历里关掉文件历史：遍历副本
-			for _, d := range slices.Clone(v.logs) {
+			for i, d := range slices.Clone(v.logs) {
 				a.logTab(c, v, d)
+				// 控制台排在整个仓库的日志后面、文件历史前面
+				if i == 0 {
+					a.consoleTab(c, w, v)
+				}
 			}
 			ui.Spacer(c)
 			if iconButton(c.Key("log-hide"), iconMinus, "隐藏 ⌘9").Clicked() {
@@ -167,6 +172,8 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		})
 		d := v.logCur
 		switch {
+		case v.console:
+			a.gitConsole(c, w, v)
 		case d == nil:
 		case d.kind == docLog:
 			a.logView(c, w, v, d)
@@ -197,7 +204,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 // logTab 是浮层顶上的一个小标签：整个仓库的日志写"日志"，文件历史写"历史"加文件名、可以关掉。
 func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
-	active := v.logCur == d
+	active := v.logCur == d && !v.console
 	label := "日志"
 	if f := d.log.filter; f.Path != "" {
 		label = "历史：" + path.Base(f.Path)
@@ -222,7 +229,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 	})
 	if row.Clicked() {
-		v.logCur = d
+		v.logCur, v.console = d, false
 	}
 }
 

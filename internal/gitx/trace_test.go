@@ -1,0 +1,54 @@
+package gitx
+
+import (
+	"context"
+	"strings"
+	"sync"
+	"testing"
+)
+
+func TestReadOnly(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"status", "--porcelain=v2"}, true},
+		{[]string{"-c", "commit.cleanup=whitespace", "rebase", "-i"}, false},
+		{[]string{"branch", "-r", "--contains", "abc", "--format=%(refname)"}, true},
+		{[]string{"branch", "-D", "feat"}, false},
+		{[]string{"branch", "new"}, false},
+		{[]string{"stash", "list"}, true},
+		{[]string{"stash", "push", "-u"}, false},
+		{[]string{"hash-object", "--stdin"}, true},
+		{[]string{"hash-object", "-w", "--stdin"}, false},
+		{[]string{"fetch", "--all"}, false},
+		{[]string{"commit", "-q", "-F", "-"}, false},
+	} {
+		if got := readOnly(c.args); got != c.want {
+			t.Errorf("readOnly(%v) = %v", c.args, got)
+		}
+	}
+}
+
+// 控制台只收改动仓库的命令（开始和结束各一次）和失败的命令，成功的查询不收。
+func TestTrace(t *testing.T) {
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q")
+	var mu sync.Mutex
+	var runs []Run
+	Trace = func(r Run) { mu.Lock(); runs = append(runs, r); mu.Unlock() }
+	defer func() { Trace = nil }()
+	ctx := context.Background()
+	runRaw(ctx, dir, nil, nil, "status", "--porcelain=v2")
+	runRaw(ctx, dir, nil, nil, "branch", "-D", "nope")
+	runRaw(ctx, dir, nil, nil, "log", "-1")
+	if len(runs) != 3 {
+		t.Fatalf("runs %+v", runs)
+	}
+	if runs[0].Done || !runs[1].Done || runs[0].ID != runs[1].ID || !strings.Contains(runs[1].Err, "nope") {
+		t.Fatalf("branch -D %+v", runs[:2])
+	}
+	if r := runs[2]; r.Args[0] != "log" || r.Err == "" {
+		t.Fatalf("failed query %+v", r)
+	}
+}
