@@ -316,18 +316,22 @@ func previewConsole(t *testing.T, a *app) {
 	previewLog(t, a)
 	dir := a.workspaces[0].Path
 	at := time.Date(2026, 10, 18, 14, 3, 0, 0, time.Local)
-	for i, r := range []gitx.Run{
-		{Args: []string{"fetch", "--all"}, Took: 1240 * time.Millisecond, Out: "From github.com:dengbo/hive\n   7117cfb..acc6bc5  main       -> origin/main"},
-		{Args: []string{"add", "-A", "--", ":(literal)internal/app/view.go"}},
-		{Args: []string{"commit", "-q", "--only", "-F", "-", "--", ":(literal)internal/app/view.go"}, Took: 310 * time.Millisecond},
-		{Args: []string{"push", "--force-with-lease", "--force-if-includes", "origin", "main:main"}, Took: 2100 * time.Millisecond,
-			Err: "To github.com:dengbo/hive.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:dengbo/hive.git'"},
-		{Args: []string{"pull", "--rebase", "--autostash"}, Took: 1800 * time.Millisecond, Out: "Successfully rebased and updated refs/heads/main."},
-	} {
-		r.ID, r.Dir, r.Start, r.Done = int64(i+1), dir, at.Add(time.Duration(i*40)*time.Second), true
+	id := int64(0)
+	add := func(op string, opID int64, dir string, sec int, r gitx.Run) {
+		id++
+		r.ID, r.Op, r.OpID, r.Dir, r.Start, r.Done = id, op, opID, dir, at.Add(time.Duration(sec)*time.Second), true
 		a.gitRuns = append(a.gitRuns, r)
 	}
-	a.gitRuns = append(a.gitRuns, gitx.Run{ID: 9, Dir: dir, Args: []string{"push", "origin", "main:main"}, Start: at.Add(4 * time.Minute)})
+	add("自动 Fetch", 1, "/Users/x/Skill", 0, gitx.Run{Args: []string{"fetch", "--all"}, Took: 1240 * time.Millisecond,
+		Out: "From github.com:dengbo/skill\n   7117cfb..acc6bc5  main       -> origin/main"})
+	add("提交", 2, dir, 40, gitx.Run{Args: []string{"add", "-A", "--", ":(literal)internal/app/view.go"}})
+	add("提交", 2, dir, 40, gitx.Run{Args: []string{"commit", "-q", "--only", "-F", "-", "--", ":(literal)internal/app/view.go"}, Took: 310 * time.Millisecond})
+	add("Push", 3, dir, 80, gitx.Run{Args: []string{"push", "--force-with-lease", "--force-if-includes", "origin", "main:main"}, Took: 2100 * time.Millisecond,
+		Err: "To github.com:dengbo/hive.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:dengbo/hive.git'"})
+	add("更新项目", 4, dir, 120, gitx.Run{Args: []string{"pull", "--rebase", "--autostash"}, Took: 1800 * time.Millisecond, Out: "Successfully rebased and updated refs/heads/main."})
+	add("更新项目", 4, dir, 122, gitx.Run{Args: []string{"diff", "--name-only", "--diff-filter=U"}})
+	add("Push", 5, dir, 240, gitx.Run{Args: []string{"push", "origin", "main:main"}})
+	a.gitRuns[len(a.gitRuns)-1].Done = false
 	a.files["w1"].console = true
 }
 

@@ -1506,7 +1506,8 @@ func TestChangesKeyboard(t *testing.T) {
 	until(t, tt, "open main.go", func() bool { return v.cur != nil && v.cur.diff == nil && v.cur.path == filepath.Join(root, "main.go") })
 }
 
-// Git 控制台：日志浮层里"控制台"标签列出界面执行的改动命令和失败的命令，没看过的失败带红点。
+// Git 操作记录：日志浮层里"操作记录"标签按操作列出界面执行的 git 命令（含操作里顺带的查询），
+// 没看过的失败带红点；轮询的查询不记。
 func TestGitConsole(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
@@ -1520,27 +1521,31 @@ func TestGitConsole(t *testing.T) {
 	a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
 	a.gitDo(v, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
-	until(t, tt, "failed", func() bool { return v.git.busy == "" && a.consoleErr[w.ProjectID] })
+	until(t, tt, "failed", func() bool { return v.git.busy == "" && a.consoleErr })
 	a.openLog(w, "", "")
-	until(t, tt, "console tab", func() bool { return tt.HasText("控制台") })
+	until(t, tt, "console tab", func() bool { return tt.HasText("操作记录") && tt.HasText("提交日志") })
 	if _, ok := tt.Find("有失败的 git 命令"); !ok {
 		t.Fatal("console tab should flag the failed command")
 	}
 	settle(tt)
-	if err := tt.Click("控制台"); err != nil {
+	if err := tt.Click("操作记录"); err != nil {
 		t.Fatal(err)
 	}
 	until(t, tt, "console", func() bool { return v.console && tt.HasText("git rebase --continue") })
-	if !tt.HasText("git add -A -- ':(literal)new.txt'") || a.consoleErr[w.ProjectID] {
-		t.Fatalf("console: %v", tt.Texts())
+	for _, want := range []string{"加入 Git", "继续", "失败", "git add -A -- ':(literal)new.txt'"} {
+		if !tt.HasText(want) {
+			t.Fatalf("console lacks %q: %v", want, tt.Texts())
+		}
+	}
+	if a.consoleErr {
+		t.Fatal("opening the console should clear the red dot")
 	}
 	for _, s := range tt.Texts() {
 		if strings.Contains(s, "status") {
 			t.Fatalf("polling queries should not be logged: %q", s)
 		}
 	}
-	// 点回日志标签
-	if err := tt.Click("日志"); err != nil {
+	if err := tt.Click("提交日志"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

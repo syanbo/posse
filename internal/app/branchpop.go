@@ -137,7 +137,7 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 		}
 	}
 	a.fetchAt[w.ProjectID] = time.Now()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), "自动 Fetch"))
 	for _, v := range views {
 		v.git.busy, v.git.cancel = "Fetch", cancel
 	}

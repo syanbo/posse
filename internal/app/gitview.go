@@ -711,7 +711,7 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 	g := &v.git
 	g.busy = op.what
 	root := g.repo
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), op.what))
 	if networkOp(op.what) {
 		g.cancel = cancel
 	}

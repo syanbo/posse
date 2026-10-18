@@ -1,6 +1,7 @@
 package gitx
 
 import (
+	"context"
 	"slices"
 	"strconv"
 	"strings"
@@ -8,10 +9,12 @@ import (
 	"time"
 )
 
-// Run 是界面执行的一条 git 命令，给 Git 控制台看（照 WebStorm 的 Console）。
+// Run 是界面执行的一条 git 命令，给"操作记录"看（照 WebStorm Git 工具窗口的 Console）。
 // 开始时报一次（Done 为假），结束时用同一个 ID 再报一次。
 type Run struct {
 	ID    int64
+	Op    string // 所属的操作（界面上的"推送""储藏"等，WithOp 带进来）；空的是后台读取
+	OpID  int64  // 同一次操作的命令 OpID 相同
 	Dir   string
 	Args  []string
 	Start time.Time
@@ -21,29 +24,42 @@ type Run struct {
 	Err   string // 失败时 git 的报错，成功为空
 }
 
-// Trace 收到每条会改动仓库的命令，以及所有失败的命令；只读的查询（每 1.5 秒的 status、diff、log 等）成功时不报，
-// 不然控制台全是轮询。在执行 git 的协程里调用，不能阻塞。
+// Trace 收到操作里的每条命令（包括它顺带做的查询），以及操作之外会改动仓库的命令和失败的命令；
+// 操作之外成功的查询（每 1.5 秒的 status、diff、log 等）不报，不然全是轮询。在执行 git 的协程里调用，不能阻塞。
 var Trace func(Run)
 
-var traceSeq atomic.Int64
+var traceSeq, opSeq atomic.Int64
 
-func traceStart(dir string, args []string) *Run {
+type opKey struct{}
+
+type opInfo struct {
+	name string
+	id   int64
+}
+
+// WithOp 标出 ctx 下执行的命令属于哪个操作。
+func WithOp(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, opKey{}, opInfo{name, opSeq.Add(1)})
+}
+
+func traceStart(ctx context.Context, dir string, args []string) *Run {
 	if Trace == nil {
 		return nil
 	}
-	r := &Run{ID: traceSeq.Add(1), Dir: dir, Args: slices.Clone(args), Start: time.Now()}
-	if !readOnly(args) {
+	op, _ := ctx.Value(opKey{}).(opInfo)
+	r := &Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Args: slices.Clone(args), Start: time.Now()}
+	if r.Op != "" || !readOnly(args) {
 		Trace(*r)
 	}
 	return r
 }
 
 func traceEnd(r *Run, stdout, stderr []byte, errMsg string) {
-	if r == nil || Trace == nil || (errMsg == "" && readOnly(r.Args)) {
+	if r == nil || Trace == nil || (errMsg == "" && r.Op == "" && readOnly(r.Args)) {
 		return
 	}
 	r.Took, r.Done, r.Err = time.Since(r.Start), true, errMsg
-	// 只读的命令成功时的输出是界面要解析的数据，失败时才值得看；改动的命令两样都留
+	// 查询的标准输出是界面要解析的数据，失败时才值得看；改动的命令两样都留
 	text := strings.TrimRight(string(stderr), "\n")
 	if !readOnly(r.Args) {
 		if o := strings.TrimRight(string(stdout), "\n"); o != "" {

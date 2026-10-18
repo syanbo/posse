@@ -51,4 +51,12 @@ func TestTrace(t *testing.T) {
 	if r := runs[2]; r.Args[0] != "log" || r.Err == "" {
 		t.Fatalf("failed query %+v", r)
 	}
+	// 操作里的命令连查询一起记，带着操作名，同一个操作的 OpID 相同
+	runs = nil
+	op := WithOp(ctx, "提交")
+	runRaw(op, dir, nil, nil, "status", "--porcelain=v2")
+	runRaw(op, dir, nil, nil, "branch", "x")
+	if len(runs) != 4 || runs[0].Op != "提交" || runs[0].OpID == 0 || runs[3].OpID != runs[0].OpID {
+		t.Fatalf("op runs %+v", runs)
+	}
 }

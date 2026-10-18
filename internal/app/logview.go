@@ -163,9 +163,9 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 			// 点 × 会在这次遍历里关掉文件历史：遍历副本
 			for i, d := range slices.Clone(v.logs) {
 				a.logTab(c, v, d)
-				// 控制台排在整个仓库的日志后面、文件历史前面
+				// 操作记录排在整个仓库的提交日志后面、文件历史前面
 				if i == 0 {
-					a.consoleTab(c, w, v)
+					a.consoleTab(c, v)
 				}
 			}
 			ui.Spacer(c)
@@ -176,7 +176,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		d := v.logCur
 		switch {
 		case v.console:
-			a.gitConsole(c, w, v)
+			a.gitConsole(c, v)
 		case d == nil:
 		case d.kind == docLog:
 			a.logView(c, w, v, d)
@@ -204,11 +204,11 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	})
 }
 
-// logTab 是浮层顶上的一个小标签：整个仓库的日志写"日志"，文件历史写"历史"加文件名、可以关掉。
+// logTab 是浮层顶上的一个小标签：整个仓库的日志写"提交日志"，文件历史写"历史"加文件名、可以关掉。
 func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	active := v.logCur == d && !v.console
-	label := "日志"
+	label := "提交日志"
 	if f := d.log.filter; f.Path != "" {
 		label = "历史：" + path.Base(f.Path)
 	}

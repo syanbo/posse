@@ -40,7 +40,7 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	rec := traceStart(dir, args)
+	rec := traceStart(ctx, dir, args)
 	if err := cmd.Run(); err != nil {
 		msg := withoutHints(errb.String())
 		if msg == "" {

@@ -109,7 +109,7 @@ func dropPieces(paths []string) []dropPiece {
 	return out
 }
 
-var shellSafeRe = regexp.MustCompile(`^[a-zA-Z0-9_./@:-]+$`)
+var shellSafeRe = regexp.MustCompile(`^[a-zA-Z0-9_./@:%+=,-]+$`)
 
 func shellSafe(p string) bool { return shellSafeRe.MatchString(p) }
 
