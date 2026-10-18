@@ -186,10 +186,11 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 func gitRunRow(c *ui.Context, r gitx.Run) {
 	t := c.Theme()
 	cmd := "git " + quoteArgs(r.Args)
-	col := ui.Column(c.Key(r.ID)).Padding(0, 0, 0, 64).Gap(2).Shrink(0)
+	// 可选的是整列：文字自己可选时右键弹的是它的编辑菜单，盖掉下面的"复制命令"
+	col := ui.Column(c.Key(r.ID)).Padding(0, 0, 0, 64).Gap(2).Shrink(0).Selectable()
 	col.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			line := ui.Text(c, cmd).FontSize(11.5).Font(monoFont).Shrink(1).Selectable()
+			line := ui.Text(c, cmd).FontSize(11.5).Font(monoFont).Shrink(1)
 			if r.Err != "" {
 				line.TextColor(t.Danger)
 			}
@@ -203,7 +204,7 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 			out = strings.TrimLeft(out+"\n"+r.Err, "\n")
 		}
 		if out != "" {
-			text := ui.Text(c, out).FontSize(11).Font(monoFont).LineHeight(1.4).Padding(0, 0, 0, 12).Selectable()
+			text := ui.Text(c, out).FontSize(11).Font(monoFont).LineHeight(1.4).Padding(0, 0, 0, 12)
 			if r.Err != "" {
 				text.TextColor(t.Danger)
 			} else {
@@ -218,6 +219,8 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 		if out := strings.TrimSpace(r.Out + "\n" + r.Err); out != "" && m.Item("复制输出").Chosen() {
 			c.WriteClipboard(out)
 		}
+		m.Separator()
+		m.EditItems()
 	})
 }
 

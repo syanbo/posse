@@ -1546,6 +1546,20 @@ func TestGitConsole(t *testing.T) {
 	if a.consoleErr {
 		t.Fatal("opening the console should clear the red dot")
 	}
+	// 右键命令：是"复制命令"，不是可选文字自带的编辑菜单
+	if err := tt.RightClick("git rebase --continue"); err != nil {
+		t.Fatal(err)
+	}
+	if menu := tt.Menu(); !slices.Contains(menu, "复制命令") {
+		t.Fatalf("context menu %v", menu)
+	}
+	if err := tt.ChooseMenuItem("复制命令"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := tt.Clipboard(); got != "git rebase --continue" {
+		t.Fatalf("copied %q", got)
+	}
 	for _, s := range tt.Texts() {
 		if strings.Contains(s, "status") {
 			t.Fatalf("polling queries should not be logged: %q", s)
