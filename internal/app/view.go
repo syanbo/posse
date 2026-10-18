@@ -603,13 +603,45 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 			top = append(top, term)
 		}
 	}
+	// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归
+	var below func(id string, depth int) []terminalInfo
+	below = func(id string, depth int) []terminalInfo {
+		var out []terminalInfo
+		for _, k := range children[id] {
+			out = append(out, k)
+			if depth < 4 {
+				out = append(out, below(k.ID, depth+1)...)
+			}
+		}
+		return out
+	}
 	var rows func(list []terminalInfo, depth int)
 	rows = func(list []terminalInfo, depth int) {
 		ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
 			for _, term := range list {
-				a.navSession(c, w, term, cur == term.ID)
-				// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归
-				if kids := children[term.ID]; len(kids) > 0 && depth < 4 {
+				kids := children[term.ID]
+				if len(kids) == 0 || depth >= 4 {
+					a.navSession(c, w, term, cur == term.ID, nil, nil)
+					continue
+				}
+				open := a.workersOpen[term.ID]
+				if open == nil {
+					open = new(bool)
+					*open = true
+					if a.workersOpen == nil {
+						a.workersOpen = map[string]*bool{}
+					}
+					a.workersOpen[term.ID] = open
+				}
+				all := below(term.ID, depth+1)
+				hidden := slices.ContainsFunc(all, func(k terminalInfo) bool { return k.ID == cur })
+				// 要定位的会话收在里面时先展开
+				if !*open && hidden && a.revealSel {
+					*open = true
+				}
+				// 收起时当前会话在里面，这一行算选中
+				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open)
+				if *open {
 					rows(kids, depth+1)
 				}
 			}
@@ -618,8 +650,9 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 	rows(top, 0)
 }
 
-// navSession 是侧栏里的一个 agent 会话。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool) {
+// navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
+// 收起时行尾写 +N，有 worker 等你处理时这一行也显示待处理。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool) {
 	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
 	if selected {
 		a.navCur = len(a.navOrder) - 1
@@ -633,13 +666,26 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		detail = name
 	}
 	status := a.sessionStatus(term)
+	folded := open != nil && !*open
+	if folded && slices.ContainsFunc(workers, func(k terminalInfo) bool { return a.sessionStatus(k) == agent.StatusWaiting }) {
+		status = agent.StatusWaiting
+	}
 	var trailing func()
-	if status != "" {
+	if status != "" || open != nil {
 		trailing = func() {
 			if status == agent.StatusWaiting {
 				pendingLabel(c)
 			}
-			statusGlyph(c, status, 12)
+			if folded {
+				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
+					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
+			}
+			if status != "" {
+				statusGlyph(c, status, 12)
+			}
+			if open != nil {
+				disclosure(c, open, fmt.Sprintf("展开 %d 个任务 worker", len(workers)))
+			}
 		}
 	}
 	icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }

@@ -244,4 +244,44 @@ func TestSidebarTaskTree(t *testing.T) {
 	if got := a.sessionStatus(t1); got != statusTasks {
 		t.Fatalf("idle coordinator with running tasks: %q", got)
 	}
+
+	// 收起 t1 的 worker：t6 不再列出，行尾写 +1；t6 等你处理时 t1 这一行显示待处理
+	if err := tt.Click("收起 1 个任务 worker"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	terms := func() (out []string) {
+		for _, n := range a.navOrder {
+			if n.ws == "w1" && n.term != "" {
+				out = append(out, n.term)
+			}
+		}
+		return out
+	}
+	if got := terms(); slices.Contains(got, "t6") || !slices.Contains(got, "t1") {
+		t.Fatalf("folded order %v", got)
+	}
+	if _, ok := tt.Find("+1"); !ok {
+		t.Fatal("folded coordinator should show +1")
+	}
+	ws := &a.workspaces[0]
+	t6 := slices.IndexFunc(ws.Terminals, func(x terminalInfo) bool { return x.ID == "t6" })
+	ws.Terminals[t6].AgentState = &agentState{Status: "waiting"}
+	tt.Frame()
+	if r, ok := tt.Find("待处理"); !ok || r.X > 300 {
+		t.Fatalf("folded coordinator should surface the worker's pending state: %v %v", r, ok)
+	}
+	// 收起时当前会话是 t6：t1 这一行算选中
+	a.selected, a.activeTerm["w1"] = "w1", "t6"
+	tt.Frame()
+	if a.navCur < 0 || a.navOrder[a.navCur].term != "t1" {
+		t.Fatalf("selection should land on the folded coordinator, got %+v", a.navOrder[a.navCur])
+	}
+	if err := tt.Click("展开 1 个任务 worker"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := terms(); !slices.Contains(got, "t6") {
+		t.Fatalf("expanded order %v", got)
+	}
 }

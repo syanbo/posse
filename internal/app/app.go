@@ -126,6 +126,7 @@ type app struct {
 	revealSel    bool              // 下一帧把选中项滚进可见区
 	activeTerm   map[string]string // 工作区 ID → 选中的终端 ID
 	sectionsOpen map[string]*bool  // 项目 ID → 侧栏分组是否展开
+	workersOpen  map[string]*bool  // 派发方终端 ID → 侧栏里它的 worker 是否展开（默认展开，不记进 ui.json）
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
