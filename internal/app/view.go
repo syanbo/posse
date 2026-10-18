@@ -1008,11 +1008,12 @@ func workingStar(c *ui.Context, size float32, color ui.Color) ui.Element {
 }
 
 // 等待任务的波形照 Orca 后台任务的 Activity 图标：一段亮的像心电图一样从左边进、右边出（pulseSweep），
-// 两头加减速，之后停 pulseRest 再来一次。描的时候按 pulseFrame 重绘（只重绘不重建界面），停的时候不重绘，省 CPU。
+// 两头加减速，之后停 pulseRest 再来一次。描的时候按 pulseFrame 重绘（只重绘不重建界面），停的时候不重绘：
+// 平均每秒约 11 次，和原来 12 步一圈（每秒 10 次）差不多；亮段位置按时间连续算，所以帧少也不跳格。
 const (
-	pulseSweep = 1100 * time.Millisecond
-	pulseRest  = 500 * time.Millisecond
-	pulseFrame = time.Second / 40
+	pulseSweep = 1000 * time.Millisecond
+	pulseRest  = 800 * time.Millisecond
+	pulseFrame = time.Second / 20
 	pulseLen   = 0.4 // 亮段占整条波形的比例
 )
 
@@ -1183,14 +1184,46 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
 // 这个会话粘贴过的图片、用到的技能与 MCP。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
+// 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	task := a.taskByWorker(cur.ID)
 	if cur.Agent == "" && task == nil {
 		return
 	}
-	p := colors(c.Theme())
-	ui.Column(c).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
-		BorderWidth(1).BorderColor(p.line).Children(func() {
+	t := c.Theme()
+	p := colors(t)
+	toggle := func() {
+		a.state.SessionButtonsHidden = !a.state.SessionButtonsHidden
+		a.saveState()
+	}
+	if a.state.SessionButtonsHidden {
+		label := "展开会话按钮"
+		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(6).Center().
+			Background(p.raised).BorderWidth(1).BorderColor(p.line).Label(label).Tooltip(label)
+		fg := t.TextMuted
+		if h.Hovered() {
+			h.Background(t.SurfaceHover)
+			fg = t.Text
+		}
+		h.Children(func() {
+			// 箭头朝左，指向要展开的方向；往左挪一点，避开伸到边外的那部分
+			ui.Icon(c, iconChevron).FontSize(11).TextColor(fg).Rotate(180).Margin(0, 4, 0, 0)
+		})
+		if h.Clicked() {
+			toggle()
+		}
+		return
+	}
+	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
+		BorderWidth(1).BorderColor(p.line)
+	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
+	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
+	opacity := float32(0.5)
+	if col.Hovered() || ours {
+		opacity = 1
+	}
+	col.Opacity(col.AnimateTo("fade", opacity, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}))
+	col.Children(func() {
 		if task != nil && iconButton(c.Key("back-to-task"), iconTasks, "返回任务").Clicked() {
 			a.openTask(task.ID)
 		}
@@ -1199,6 +1232,10 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		if cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+		}
+		ui.Box(c).Height(1).Margin(1, 4).Background(p.line)
+		if iconButtonSized(c.Key("session-fold"), iconChevron, "收起会话按钮", 28, 12).Clicked() {
+			toggle()
 		}
 	})
 }

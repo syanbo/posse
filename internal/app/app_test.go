@@ -285,3 +285,34 @@ func TestSidebarTaskTree(t *testing.T) {
 		t.Fatalf("expanded order %v", got)
 	}
 }
+
+// 会话按钮收起成右边缘的把手，点把手展开；状态记进 ui.json。
+func TestSessionButtonsFold(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	settle(tt)
+	if _, ok := tt.Find("这个会话粘贴过的图片"); !ok {
+		t.Fatal("session buttons missing")
+	}
+	if err := tt.Click("收起会话按钮"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	if !a.state.SessionButtonsHidden {
+		t.Fatal("fold not saved")
+	}
+	if _, ok := tt.Find("这个会话粘贴过的图片"); ok {
+		t.Fatal("buttons still shown after folding")
+	}
+	if err := tt.Click("展开会话按钮"); err != nil {
+		t.Fatal(err)
+	}
+	settle(tt)
+	if a.state.SessionButtonsHidden {
+		t.Fatal("handle should unfold")
+	}
+	if _, ok := tt.Find("这个会话粘贴过的图片"); !ok {
+		t.Fatal("buttons missing after unfolding")
+	}
+}

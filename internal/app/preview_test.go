@@ -396,6 +396,11 @@ func TestPreview(t *testing.T) {
 		a.workspaces[0].Terminals[0].WaitingTasks = true
 		savePNG(t, newPreviewTester(a, dark), "tasks-waiting-"+suffix+".png")
 
+		// 会话按钮收成右边缘的把手
+		a = previewApp(t)
+		a.state.SessionButtonsHidden = true
+		savePNG(t, newPreviewTester(a, dark), "session-buttons-folded-"+suffix+".png")
+
 		// 侧栏收起；加宽的侧栏
 		a = previewApp(t)
 		a.state.SidebarHidden = true

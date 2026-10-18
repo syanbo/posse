@@ -11,18 +11,19 @@ import (
 // uiState 是只有界面关心的状态，存在 $HIVE_HOME/ui.json：放进常驻进程要改协议，
 // 而重启常驻进程会断掉所有终端。
 type uiState struct {
-	Selected        string   `json:"selected,omitempty"`        // 侧栏上次选中的一项，下次打开时选回来
-	ProjectOrder    []string `json:"projectOrder,omitempty"`    // 侧栏里项目的顺序，拖动调整
-	RightPanel      string   `json:"rightPanel,omitempty"`      // 右侧开着的浮层面板：panelUsage、panelHistory、panelImages 或空
-	FilesPanel      bool     `json:"filesPanel,omitempty"`      // 文件栏开着（停靠在右边，不是浮层）
-	FilesPanelWidth float32  `json:"filesPanelWidth,omitempty"` // 文件栏的宽度，0 表示默认
-	SidebarHidden   bool     `json:"sidebarHidden,omitempty"`   // 左边的侧栏收起了
-	SidebarWidth    float32  `json:"sidebarWidth,omitempty"`    // 侧栏的宽度，0 表示默认
-	LogPanel        bool     `json:"logPanel,omitempty"`        // 底部的 Git 日志浮层开着
-	LogPanelHeight  float32  `json:"logPanelHeight,omitempty"`  // Git 日志浮层的高度，0 表示默认
-	MobileAddress   string   `json:"mobileAddress,omitempty"`   // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
-	MobileAddresses []string `json:"mobileAddresses,omitempty"` // 用过的自定义地址，配对对话框里可选
-	FontSize        float32  `json:"fontSize,omitempty"`        // 终端字号，0 表示默认
+	Selected             string   `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来
+	ProjectOrder         []string `json:"projectOrder,omitempty"`         // 侧栏里项目的顺序，拖动调整
+	RightPanel           string   `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelHistory、panelImages 或空
+	FilesPanel           bool     `json:"filesPanel,omitempty"`           // 文件栏开着（停靠在右边，不是浮层）
+	FilesPanelWidth      float32  `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
+	SidebarHidden        bool     `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
+	SessionButtonsHidden bool     `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
+	SidebarWidth         float32  `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
+	LogPanel             bool     `json:"logPanel,omitempty"`             // 底部的 Git 日志浮层开着
+	LogPanelHeight       float32  `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
+	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
+	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
+	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
 	TermOrder map[string][]string `json:"termOrder,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
