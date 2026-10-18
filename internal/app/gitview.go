@@ -41,7 +41,7 @@ type gitState struct {
 	rows     []changeRow
 	folded   map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
 	list     ui.ListState
-	tab      int // 改动页的分页：0 提交（文件改动），1 搁置（git stash），照 WebStorm 的提交工具窗口
+	tab      int // 改动页的分页：0 提交（文件改动），1 储藏（git stash），照 WebStorm 的提交工具窗口
 	stashLst ui.ListState
 	poll     panelPoll
 	message  string
@@ -64,9 +64,9 @@ const (
 	groupStash
 )
 
-var groupTitles = [...]string{"冲突", "改动", "未跟踪", "搁置"}
+var groupTitles = [...]string{"冲突", "改动", "未跟踪", "储藏"}
 
-// changeRow 是改动列表的一行：组标题、一个文件，或一次搁置。
+// changeRow 是改动列表的一行：组标题、一个文件，或一条储藏。
 type changeRow struct {
 	group  changeGroup
 	header bool
@@ -75,7 +75,7 @@ type changeRow struct {
 	stash  gitx.Stash
 }
 
-// changeRows 按组排好改动：冲突、改动、未跟踪、搁置。
+// changeRows 按组排好改动：冲突、改动、未跟踪、储藏。
 // 和 WebStorm 一样不分暂存区：已跟踪的改动不管暂存了没有都在"改动"里，提交时按勾选。
 func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
 	var groups [4][]changeRow
@@ -118,7 +118,7 @@ func (g *gitState) groupOpen(gr changeGroup) *bool {
 	return open
 }
 
-// changeCount 是左栏"改动"上显示的数：有改动的文件数，不含搁置。
+// changeCount 是左栏"改动"上显示的数：有改动的文件数，不含储藏。
 func (g *gitState) changeCount() int {
 	if g.status == nil {
 		return 0

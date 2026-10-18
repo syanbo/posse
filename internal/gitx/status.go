@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// 界面的 Git 操作（窗口进程调用）：状态、改动、提交、搁置。dir 是仓库根目录（TopLevel），
+// 界面的 Git 操作（窗口进程调用）：状态、改动、提交、储藏。dir 是仓库根目录（TopLevel），
 // 路径都相对它、用 "/" 分隔：porcelain 输出的路径就是相对根目录的。
 
 // runRaw 原样返回 git 的标准输出（不去首尾空白），stdin 非空时作为输入，env 追加到环境变量。
@@ -434,14 +434,14 @@ func LastMessage(ctx context.Context, dir string) string {
 	return strings.TrimRight(string(out), "\n")
 }
 
-// Stash 是一次搁置。
+// Stash 是一次储藏（git stash）。
 type Stash struct {
 	Ref     string // stash@{n}
 	Message string
 	When    time.Time
 }
 
-// StashPush 搁置全部改动，含未跟踪文件。
+// StashPush 储藏全部改动，含未跟踪文件。
 func StashPush(ctx context.Context, dir, message string) error {
 	args := []string{"stash", "push", "--include-untracked"}
 	if message != "" {
@@ -468,7 +468,13 @@ func Stashes(ctx context.Context, dir string) ([]Stash, error) {
 	return list, nil
 }
 
-// StashPop 取回搁置的改动并删掉这次搁置；有冲突时 git 会保留它。
+// StashApply 把储藏的改动应用到工作区，储藏留着。
+func StashApply(ctx context.Context, dir, ref string) error {
+	_, err := runRaw(ctx, dir, nil, nil, "stash", "apply", "--index", ref)
+	return err
+}
+
+// StashPop 取回储藏的改动并删掉这条储藏；有冲突时 git 会保留它。
 func StashPop(ctx context.Context, dir, ref string) error {
 	_, err := runRaw(ctx, dir, nil, nil, "stash", "pop", "--index", ref)
 	return err

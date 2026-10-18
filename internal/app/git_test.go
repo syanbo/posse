@@ -1345,7 +1345,7 @@ func TestGuardPushedAndConflictPanel(t *testing.T) {
 	})
 }
 
-// 提交框：取消"修改上一次提交"时清掉自动填的旧信息；没写信息时提交按钮不可点；⌘K 在搁置分页上切回提交分页。
+// 提交框：取消"修改上一次提交"时清掉自动填的旧信息；没写信息时提交按钮不可点；⌘K 在储藏分页上切回提交分页。
 func TestCommitBoxDetails(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
@@ -1546,5 +1546,48 @@ func TestGitConsole(t *testing.T) {
 	tt.Frame()
 	if v.console {
 		t.Fatal("clicking the log tab should leave the console")
+	}
+}
+
+// 储藏（照 WebStorm）：顶上的按钮先问说明（可以留空）再 git stash；储藏标签里单击一条，"应用"留着它，"弹出"取回并删掉。
+func TestStashTab(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	settle(tt)
+	if err := tt.Click("储藏更改…（git stash，含未跟踪文件）"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.promptDlg == nil || !a.promptDlg.optional {
+		t.Fatal("stash should ask for an optional message")
+	}
+	a.promptDlg.do("试一下储藏", false)
+	a.promptDlg = nil
+	until(t, tt, "stashed", func() bool { return v.git.busy == "" && len(v.git.status.Entries) == 0 })
+	v.git.tab = 1
+	until(t, tt, "stash row", func() bool { return tt.HasText("试一下储藏") })
+	apply := func(item string) {
+		t.Helper()
+		if err := tt.Click("On main: 试一下储藏"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.ChooseMenuItem(item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply("应用")
+	until(t, tt, "applied", func() bool { return v.git.busy == "" && len(v.git.status.Entries) > 0 })
+	if out := gitRun(t, root, "stash", "list"); !strings.Contains(out, "试一下储藏") {
+		t.Fatalf("apply should keep the stash: %q", out)
+	}
+	gitRun(t, root, "checkout", "--", ".")
+	gitRun(t, root, "clean", "-fdq")
+	apply("弹出")
+	until(t, tt, "popped", func() bool { return v.git.busy == "" && len(v.git.status.Entries) > 0 })
+	if out := gitRun(t, root, "stash", "list"); strings.TrimSpace(out) != "" {
+		t.Fatalf("pop should drop the stash: %q", out)
 	}
 }

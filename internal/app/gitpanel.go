@@ -14,7 +14,7 @@ import (
 	"hive/internal/gitx"
 )
 
-// changesView 是文件标签左栏的"改动"：分支和同步状态、改动列表（含搁置），底部是提交框。
+// changesView 是文件标签左栏的"改动"：分支和同步状态、改动列表（含储藏），底部是提交框。
 func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	g := &v.git
@@ -35,7 +35,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	a.changesHeader(c, w, v)
 	a.operationBanner(c, w, v)
-	// 分页：提交看文件改动和提交框，搁置看 stash
+	// 分页：提交看文件改动和提交框，储藏看 stash（照 WebStorm 的"储藏"标签）
 	var files, stashes []changeRow
 	// 收起的组只留标题；F7 等仍按全部的 g.rows 走
 	for _, r := range g.rows {
@@ -48,11 +48,11 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	ui.Row(c).Gap(4).Padding(2, 10, 6, 10).AlignItems(ui.Center).Children(func() {
 		changesTab(c, &g.tab, 0, "提交", g.changeCount())
-		changesTab(c, &g.tab, 1, "搁置", len(stashes))
+		changesTab(c, &g.tab, 1, "储藏", len(stashes))
 	})
 	rows, list, empty := files, &g.list, "没有改动"
 	if g.tab == 1 {
-		rows, list, empty = stashes, &g.stashLst, "没有搁置的改动"
+		rows, list, empty = stashes, &g.stashLst, "没有储藏"
 	}
 	if len(rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
@@ -68,7 +68,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 			a.changesKeys(c, w, v, rows)
 		}
 	}
-	// ⌘K 时在搁置分页上：切回提交分页，提交框才在
+	// ⌘K 时在储藏分页上：切回提交分页，提交框才在
 	if g.focusMsg {
 		g.tab = 0
 	}
@@ -159,7 +159,7 @@ func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
 	}
 }
 
-// changesHeader 是改动列表上方一行：分支、领先和落后的提交数，以及刷新、搁置。
+// changesHeader 是改动列表上方一行：分支、领先和落后的提交数，以及刷新、储藏。
 func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	g := &v.git
@@ -185,8 +185,11 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, "回滚… ⌥⌘Z", 28, 16)).Clicked() {
 			a.openRollback(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "搁置全部改动（git stash，含未跟踪文件）", 28, 16)).Clicked() {
-			a.gitDo(v, "搁置", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, "") })
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "储藏更改…（git stash，含未跟踪文件）", 28, 16)).Clicked() {
+			a.prompt(promptReq{title: "储藏更改", body: "把全部改动（含未跟踪文件）存进 git stash，工作区回到干净的状态。",
+				placeholder: "说明（可以留空）", verb: "储藏", optional: true, do: func(msg string, _ bool) {
+					a.gitDo(v, "储藏", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, msg) })
+				}})
 		}
 	})
 }
@@ -373,13 +376,18 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 		ui.Text(c, ago(s.When)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
 	row.Menu(func(m *ui.Menu) {
-		if m.Item("取回改动").Chosen() {
-			a.gitDo(v, "取回搁置", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
+		// 照 WebStorm 储藏标签的右键：弹出（取回并删掉）、应用（储藏留着）、删除
+		if m.Item("弹出").Chosen() {
+			a.gitDo(v, "弹出储藏", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
 		}
+		if m.Item("应用").Chosen() {
+			a.gitDo(v, "应用储藏", func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
+		}
+		m.Separator()
 		if m.Item("删除…").Chosen() {
-			a.confirm("删除这次搁置？", "搁置的改动会丢失："+s.Message, "删除", func() {
+			a.confirm("删除这条储藏？", "储藏的改动会丢失："+s.Message, "删除", func() {
 				a.update(func() {
-					a.gitDo(v, "删除搁置", func(ctx context.Context, root string) error { return gitx.StashDrop(ctx, root, s.Ref) })
+					a.gitDo(v, "删除储藏", func(ctx context.Context, root string) error { return gitx.StashDrop(ctx, root, s.Ref) })
 				})
 			})
 		}
@@ -437,7 +445,7 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 	})
 }
 
-// stashTitle 去掉 git 加在搁置说明前面的 "On <分支>: " 或 "WIP on <分支>: "。
+// stashTitle 去掉 git 加在储藏说明前面的 "On <分支>: " 或 "WIP on <分支>: "。
 func stashTitle(msg string) string {
 	for _, p := range []string{"WIP on ", "On "} {
 		if rest, ok := strings.CutPrefix(msg, p); ok {

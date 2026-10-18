@@ -749,6 +749,7 @@ type promptReq struct {
 	check                                   string // 非空时多一个勾选项
 	checked                                 bool
 	multiline                               bool // 多行输入（提交信息）
+	optional                                bool // 可以留空（储藏的说明）
 	do                                      func(value string, checked bool)
 }
 
@@ -791,7 +792,7 @@ func (a *app) promptDialog(c *ui.Context) {
 					submitted = true
 				}
 			})
-			if v := strings.TrimSpace(p.value); submitted && v != "" {
+			if v := strings.TrimSpace(p.value); submitted && (v != "" || p.optional) {
 				a.promptDlg = nil
 				p.do(v, p.checked)
 			}

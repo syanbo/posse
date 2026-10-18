@@ -66,7 +66,7 @@ func TestBranchesAndUpdate(t *testing.T) {
 	if _, ok := find(list, "origin/HEAD", true); ok {
 		t.Fatal("origin/HEAD listed")
 	}
-	// 更新当前分支：rebase 到远端上，未提交的改动临时搁置再取回
+	// 更新当前分支：rebase 到远端上，未提交的改动临时储藏再取回
 	write(t, filepath.Join(dir, "src", "b.go"), "package src // dirty\n")
 	if err := Update(ctx, dir, main); err != nil {
 		t.Fatal(err)

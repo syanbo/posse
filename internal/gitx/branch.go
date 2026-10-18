@@ -198,7 +198,7 @@ func CreateBranch(ctx context.Context, dir, name, from string, checkout bool) er
 // ErrNoUpstream 表示分支没有跟踪的远端分支，没法更新。
 var ErrNoUpstream = errors.New("这个分支没有跟踪的远端分支")
 
-// Update 用远端更新分支。当前分支：拉取后把本地提交 rebase 上去，未提交的改动临时搁置再取回；
+// Update 用远端更新分支。当前分支：拉取后把本地提交 rebase 上去，未提交的改动临时储藏再取回；
 // 其他分支：只能快进（git fetch 远端分支到本地分支），分叉时报错。
 func Update(ctx context.Context, dir string, b Branch) error {
 	if b.Upstream == "" {
@@ -240,9 +240,9 @@ func Incoming(ctx context.Context, dir, from, to string) int {
 	return n
 }
 
-// ErrStashConflict 表示操作本身成功了，但取回临时搁置的本地改动时冲突：git 照样返回成功，
-// 冲突标记已经写进文件，原来的改动留在搁置列表里。
-var ErrStashConflict = errors.New("已经完成，但取回本地改动时有冲突：冲突的文件已标出来，原来的改动还留在搁置里，解决完可以删掉那条搁置")
+// ErrStashConflict 表示操作本身成功了，但取回临时储藏的本地改动时冲突：git 照样返回成功，
+// 冲突标记已经写进文件，原来的改动留在储藏列表里。
+var ErrStashConflict = errors.New("已经完成，但取回本地改动时有冲突：冲突的文件已标出来，原来的改动还留在储藏里，解决完可以删掉那条储藏")
 
 // autostashConflict 在带 --autostash 的操作成功后检查有没有冲突文件。
 func autostashConflict(ctx context.Context, dir string) error {
