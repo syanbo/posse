@@ -50,23 +50,63 @@ type session struct {
 	Command     []string
 	CreatedAt   time.Time
 
-	mu       sync.Mutex
-	agent    string // 终端里的 agent：启动时指定的，或之后在前台认出来的
-	hooked   bool   // agent 是 hive 启动的那个，带着注入的 hooks
-	hookedPg int    // 带 hooks 的那个 agent 的进程组，第一次在前台看到或收到 hook 时记下
-	fg       int    // 上次检查时的前台进程组
+	mu      sync.Mutex
+	agent   string // 终端里的 agent：启动时指定的，或之后在前台认出来的
+	hooked  bool   // agent 是 hive 启动的那个，带着注入的 hooks
+	agentPg int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
+	fg      int    // 上次检查时的前台进程组
 }
 
 // markHooked 在收到 hook 事件时调用：用户在 shell 里经 hive 的同名脚本手动启动的 agent 也带着 hooks，
 // 状态以 hooks 为准，不再只看标题。
 func (s *session) markHooked(name string) {
 	pg := s.Foreground()
+	// hook 可能在 agent 让出前台（开着编辑器）时到达，这时的前台不是 agent，不能记成它的进程组
+	isAgent := pg > 0 && agent.FromProcess(procmem.Args(pg)) == name
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.agent, s.hooked, s.hookedPg = name, true, pg
+	if name != s.agent {
+		s.agentPg = 0
+	}
+	s.agent, s.hooked = name, true
+	if isAgent {
+		s.agentPg = pg
+	}
 	if pg > 0 {
 		s.fg = pg
 	}
+}
+
+// clearAgent 在 agent 退出后摘掉它，终端退回普通 shell；之后在前台认出新的 agent 再挂上。
+// pg 不为 0 时只在记下的还是这个进程组时才摘，免得检查期间换上的新 agent 被摘掉。
+func (s *session) clearAgent(pg int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.agent == "" || pg != 0 && pg != s.agentPg {
+		return false
+	}
+	s.agent, s.hooked, s.agentPg = "", false, 0
+	return true
+}
+
+// goneAgentPg 返回已经不在了的 agent 进程组，agent 还在或不知道时返回 0。崩溃、被杀、
+// 没有 hooks 的 agent 退出都不发 SessionEnd，只能这样发现；只看前台不行，agent 临时打开编辑器
+// 也会让出前台。看组长而不是整个组：agent 退出后它拉起的 MCP 服务等可能还留在组里。
+func (s *session) goneAgentPg() int {
+	s.mu.Lock()
+	name, pg := s.agent, s.agentPg
+	s.mu.Unlock()
+	if name == "" || pg <= 0 {
+		return 0
+	}
+	if err := syscall.Kill(pg, 0); errors.Is(err, syscall.ESRCH) {
+		return pg
+	}
+	// 进程还在但 exec 成了别的程序（如 agent 退出后 exec 回 shell）；读不到 argv 时当作还在
+	if args := procmem.Args(pg); args != nil && agent.FromProcess(args) != name {
+		return pg
+	}
+	return 0
 }
 
 // terminalHost 是托管终端的宿主；测试里直接构造的 Daemon 没设，用进程内的。
@@ -103,10 +143,12 @@ func (s *session) detectAgent() (name string, hooked, changed bool) {
 	found := agent.FromProcess(procmem.Args(pg))
 	switch {
 	case found == "":
-	case s.hooked && found == s.agent && (s.hookedPg == 0 || s.hookedPg == pg):
-		s.hookedPg = pg
+	case s.hooked && found == s.agent && (s.agentPg == 0 || s.agentPg == pg):
+		s.agentPg = pg
 	case found != s.agent || s.hooked:
-		s.agent, s.hooked, changed = found, false, true
+		s.agent, s.hooked, s.agentPg, changed = found, false, pg, true
+	default:
+		s.agentPg = pg
 	}
 	return s.agent, s.hooked, changed
 }
@@ -281,6 +323,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	defer d.awake.close()
 	go d.awakeLoop(ctx)
+	go d.agentLoop(ctx)
 	d.newMobile()
 	if in == nil {
 		d.startMobile()

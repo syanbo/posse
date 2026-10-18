@@ -112,6 +112,7 @@ func (d *Daemon) onTitle(id, title string) {
 	if s == nil {
 		return
 	}
+	d.checkAgentGone(s)
 	// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
 	name, hooked, changed := s.detectAgent()
 	if changed {
@@ -546,6 +547,42 @@ func (d *Daemon) setAgent(s *session, st host.AgentState) {
 	case agent.StatusIdle:
 		go d.deliver(s.ID)
 	case agent.StatusExited:
+		s.clearAgent(0)
 		go d.workerGone(s.ID, "worker agent exited before reporting")
 	}
 }
+
+// checkAgentGone 发现 agent 进程已经不在时按退出处理。
+func (d *Daemon) checkAgentGone(s *session) {
+	pg := s.goneAgentPg()
+	if pg == 0 || !s.Running() || !s.clearAgent(pg) {
+		return
+	}
+	s.SetAgent(host.AgentState{Status: agent.StatusExited, Event: "process", At: time.Now()})
+	d.refreshAwake()
+	go d.workerGone(s.ID, "worker agent exited before reporting")
+}
+
+// agentLoop 定期检查各终端的 agent 还在不在：退出后 shell 不一定改标题，等不到 onTitle。
+func (d *Daemon) agentLoop(ctx context.Context) {
+	tick := time.NewTicker(agentTick)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		d.mu.Lock()
+		ss := make([]*session, 0, len(d.terms))
+		for _, s := range d.terms {
+			ss = append(ss, s)
+		}
+		d.mu.Unlock()
+		for _, s := range ss {
+			d.checkAgentGone(s)
+		}
+	}
+}
+
+const agentTick = 2 * time.Second
