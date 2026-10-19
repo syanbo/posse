@@ -151,7 +151,13 @@ func (l Launcher) claudeSettings() (string, error) {
 		}
 		hooks[ev] = []group{g}
 	}
-	b, err := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
+	doc := map[string]any{"hooks": hooks}
+	// 套餐用量只出现在 statusLine 的输入里。--settings 里的 statusLine 会盖掉用户自己的，
+	// 所以只在用户没配时注入一个不输出的 hive statusline（不输出时界面和没配一样）
+	if !userHasStatusLine() {
+		doc["statusLine"] = map[string]string{"type": "command", "command": Quote(l.Exe) + " statusline"}
+	}
+	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -160,6 +166,31 @@ func (l Launcher) claudeSettings() (string, error) {
 		return path, nil
 	}
 	return path, os.WriteFile(path, b, 0o600)
+}
+
+// claudeUserSettings 是 Claude 的用户级设置文件，测试里换掉。
+var claudeUserSettings = func() string {
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, ".claude")
+	}
+	return filepath.Join(dir, "settings.json")
+}
+
+// userHasStatusLine 看用户自己有没有配 statusLine；读不出来时当配了，不去盖它。
+func userHasStatusLine() bool {
+	b, err := os.ReadFile(claudeUserSettings())
+	if os.IsNotExist(err) {
+		return false
+	}
+	var s struct {
+		StatusLine json.RawMessage `json:"statusLine"`
+	}
+	if err != nil || json.Unmarshal(b, &s) != nil {
+		return true
+	}
+	return len(s.StatusLine) > 0 && string(s.StatusLine) != "null"
 }
 
 var codexEvents = []struct {

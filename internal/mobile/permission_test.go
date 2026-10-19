@@ -246,3 +246,29 @@ func TestHistoryMethods(t *testing.T) {
 		t.Fatalf("history.resume %v", res)
 	}
 }
+
+// 套餐用量：没声明 hive.usage.v1 的连接看不到；声明后原样拿到常驻进程的读数。
+func TestUsageMethod(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	if hidden := p.next(p.call("usage.get", nil)); hidden["ok"] != false {
+		t.Fatalf("orca connection saw usage.get: %v", hidden)
+	}
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.usage.v1"},
+	})))
+	got := result(t, p.next(p.call("usage.get", nil)))
+	us, _ := got["usages"].([]any)
+	if len(us) != 1 || us[0].(map[string]any)["agent"] != "codex" {
+		t.Fatalf("usage.get %v", got)
+	}
+}

@@ -17,6 +17,7 @@ import (
 
 	"hive/internal/gitx"
 	"hive/internal/history"
+	"hive/internal/usage"
 )
 
 // nopConn 让界面里的终端只显示喂进去的内容。
@@ -68,6 +69,7 @@ func previewApp(t *testing.T) *app {
 		a.sectionsOpen[p.ID] = &open
 	}
 	now := time.Now()
+	a.daemon.Usage = previewPlan(now)
 	a.workspaces[0].Terminals = append(a.workspaces[0].Terminals, terminalInfo{ID: "t6", Agent: "grok", Title: "⠹ - Running tool - grok", Running: true, AgentState: state("working")})
 	ended := now.Add(-3 * time.Minute)
 	a.tasks = []taskInfo{
@@ -628,7 +630,38 @@ func TestPreview(t *testing.T) {
 				{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10, nil}}},
 			}}
 		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
+
+		// 状态栏的套餐用量详情
+		a = previewApp(t)
+		a.planOpen = true
+		savePNG(t, newPreviewTester(a, dark), "plan-"+suffix+".png")
+		// 切到剩余
+		a = previewApp(t)
+		a.planOpen = true
+		a.state.UsageRemaining = true
+		savePNG(t, newPreviewTester(a, dark), "plan-left-"+suffix+".png")
 	}
+}
+
+// previewPlan 是四家都有读数的样子：Claude 的 5 小时快用完了，Cursor 带金额。
+func previewPlan(now time.Time) *planStatus {
+	at := func(d time.Duration) int64 { return now.Add(d).UnixMilli() }
+	return &planStatus{Usages: []usage.Usage{
+		{Agent: "claude", UpdatedAt: at(-2 * time.Minute), Windows: []usage.Window{
+			{Percent: 86, Minutes: 300, ResetsAt: at(95 * time.Minute)}, {Percent: 41, Minutes: 7 * 24 * 60, ResetsAt: at(73 * time.Hour)},
+			{Percent: 12, Minutes: 7 * 24 * 60, ResetsAt: at(73 * time.Hour), Name: "Fable", At: at(-3 * time.Hour)}},
+			Shares: &usage.Shares{Items: []usage.Share{{Name: "Claude Code", Percent: 92}, {Name: "Chats", Percent: 8}}, At: at(-3 * time.Hour)}},
+		{Agent: "codex", Plan: "plus", UpdatedAt: at(-25 * time.Minute), Windows: []usage.Window{
+			{Percent: 7, Minutes: 300, ResetsAt: at(4 * time.Hour)}, {Percent: 18, Minutes: 7 * 24 * 60, ResetsAt: at(120 * time.Hour)}},
+			Resets: &usage.Resets{Count: 3, ExpiresAt: at(80 * time.Hour)}},
+		{Agent: "grok", Plan: "SuperGrok Heavy", UpdatedAt: at(-3 * time.Hour), Windows: []usage.Window{
+			{Percent: 53, Minutes: 7 * 24 * 60, ResetsAt: at(90 * time.Hour)}}},
+		{Agent: "cursor", Plan: "Ultra", UpdatedAt: at(-40 * time.Minute), Windows: []usage.Window{
+			{Percent: 10.3, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour)},
+			{Percent: 2.5, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour), Name: "Auto"},
+			{Percent: 18.2, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour), Name: "API"}},
+			Spend: &usage.Spend{Used: 4110, Limit: 40000}, OnDemand: &usage.Spend{Used: 250, Limit: 2000}},
+	}}
 }
 
 // previewImages 是图片面板读过一次之后的样子，缩略图是合成的色块：一张手机截图、一张横的预览图、一张粘贴的。

@@ -28,6 +28,8 @@ type Host interface {
 	// History 调常驻进程的会话历史接口：history.list、history.search 原样返回；
 	// history.resume 返回 ResumeResult。错误可以是 *rpc.Error，带上它的错误码
 	History(ctx context.Context, method string, params json.RawMessage) (any, error)
+	// Usage 是各 agent 的套餐用量，和 daemon.status 里给窗口的一样
+	Usage() any
 }
 
 // ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
@@ -504,6 +506,12 @@ func (c *conn) dispatch(req request) error {
 		return c.decidePermission(req.ID, p)
 	case "history.list", "history.search", "history.resume":
 		return c.history(req.ID, req.Method, p)
+	case "usage.get":
+		// Hive 扩展：声明了 hive.usage.v1 的连接才有，手机首页的用量卡片用
+		if !c.hasCapability("hive.usage.v1") {
+			return errorf("method_not_found", "Unknown method: %s", req.Method)
+		}
+		return c.reply(req.ID, c.srv.host.Usage())
 	case "git.status":
 		return c.gitStatus(req.ID, p)
 	case "git.diff":

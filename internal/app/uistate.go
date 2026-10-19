@@ -25,6 +25,7 @@ type uiState struct {
 	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
 	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
+	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
 	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
 	TermOrder map[string][]string `json:"termOrder,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID

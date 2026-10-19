@@ -82,18 +82,21 @@ func (a *app) build(c *ui.Context) {
 		}
 		// 只占剩下的宽度：标签多了也不撑出窗口（右边停靠的文件栏要完整显示）
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Background(p.canvas).Children(func() {
-			switch {
-			case board:
-				a.taskBoard(c)
-			case a.selected == historyBoardID:
-				a.historyBoard(c)
-			case a.selected == mobileBoardID:
-				a.mobileBoard(c)
-			case a.selected == settingsBoardID:
-				a.settingsBoard(c)
-			default:
-				a.main(c, w, cur)
-			}
+			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+				switch {
+				case board:
+					a.taskBoard(c)
+				case a.selected == historyBoardID:
+					a.historyBoard(c)
+				case a.selected == mobileBoardID:
+					a.mobileBoard(c)
+				case a.selected == settingsBoardID:
+					a.settingsBoard(c)
+				default:
+					a.main(c, w, cur)
+				}
+			})
+			a.statusBar(c)
 		})
 		// 最后画，压在分隔线和主区域上面，才接得到分隔线两侧的拖动
 		if !a.state.SidebarHidden {
@@ -904,12 +907,7 @@ func (a *app) footer(c *ui.Context) {
 	if !a.loaded {
 		return
 	}
-	// 底栏比侧栏深一层
-	shade := ui.RGBA(0, 0, 0, 0.03)
-	if t.Dark {
-		shade = ui.RGBA(0, 0, 0, 0.18)
-	}
-	ui.Row(c).Height(34).Padding(0, 14, 0, 8).Shrink(0).Background(shade).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Row(c).Height(footHeight).Padding(0, 14, 0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
 		if pressable(iconButtonSized(c, iconSettings, "设置 ⌘,", 24, 14)).Tooltip("设置 ⌘,").Clicked() {
 			a.openSettings()
 		}
@@ -918,6 +916,17 @@ func (a *app) footer(c *ui.Context) {
 		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 		a.memoryButton(c)
 	})
+}
+
+// footHeight 是侧栏底栏和主区域状态栏的高度：两条并排，看起来是贯穿窗口的一条。
+const footHeight = 34
+
+// footShade 是底栏的底色，比侧栏深一层。
+func footShade(t *ui.Theme) ui.Color {
+	if t.Dark {
+		return ui.RGBA(0, 0, 0, 0.18)
+	}
+	return ui.RGBA(0, 0, 0, 0.03)
 }
 
 // mb 把 KB 写成界面上的内存：1 GB 以上用 GB、一位小数，以下用整数 MB。

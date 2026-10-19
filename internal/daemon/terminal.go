@@ -125,6 +125,9 @@ func (d *Daemon) onTitle(id, title string) {
 	if name == "" {
 		return
 	}
+	if name == "grok" {
+		go d.grokUsage(false)
+	}
 	status := agent.TitleStatus
 	if !hooked {
 		status = agent.TitleOnlyStatus
@@ -524,6 +527,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if s.agentName() != p.Agent || !s.isHooked() {
 		s.markHooked(p.Agent)
 	}
+	d.usageHook(p.Agent, p.Event, p.Payload)
 	st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload)
 	if !ok {
 		return map[string]bool{"ignored": true}, nil

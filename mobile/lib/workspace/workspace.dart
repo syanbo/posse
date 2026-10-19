@@ -1,4 +1,5 @@
 import '../history/history.dart';
+import '../usage/usage.dart';
 
 import 'dart:async';
 import 'dart:io';
@@ -497,6 +498,7 @@ class WorkspaceScreen extends StatelessWidget {
                         child: Column(
                           children: [
                             if (waiting > 0) _WaitingBanner(count: waiting),
+                            UsageCard(model: model),
                           ],
                         ),
                       ),

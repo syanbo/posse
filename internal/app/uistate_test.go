@@ -252,8 +252,8 @@ func TestRightPanelDismiss(t *testing.T) {
 
 	open()
 	tt.Frame()
-	// 面板里列表下面的空白处（窗口 1200×760，面板贴右边 280 宽）
-	tt.ClickAt(1050, 720)
+	// 面板里列表下面的空白处（窗口 1200×760，面板贴右边 280 宽，底下是 34 高的状态栏）
+	tt.ClickAt(1050, 660)
 	tt.Frame()
 	if a.state.RightPanel != panelHistory {
 		t.Fatal("click inside closed the panel")

@@ -29,6 +29,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Width(640).Gap(16).Children(func() {
 				a.awakeSettings(c)
+				a.planSettings(c)
 				a.fontSettings(c)
 				a.aboutSettings(c)
 			})

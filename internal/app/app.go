@@ -88,6 +88,7 @@ type daemonStatus struct {
 	FootprintKB int64
 	Running     int
 	Awake       *awakeStatus // 旧常驻进程没有防休眠时为空
+	Usage       *planStatus  // 旧常驻进程没有套餐用量时为空
 	Version     string       `json:"version"`
 	Build       string       `json:"build"` // 旧常驻进程没有这个字段时为空
 	Pid         int          `json:"pid"`
@@ -160,6 +161,7 @@ type app struct {
 	images      imagesView            // 右侧图片面板
 	mobile      mobileView            // 侧栏「手机」页：配对码和已配对的手机
 	mem         memView               // 底栏的内存浮窗
+	planOpen    bool                  // 状态栏的套餐用量详情
 	emptyHeight float32               // 空工作区页滚动区上一帧的高度
 	files       map[string]*filesView // 工作区 ID → 文件标签
 	quick       quickOpen             // ⌘P 快速打开
@@ -347,6 +349,7 @@ type pollResult struct {
 	selfKB     int64
 	termKB     int64
 	awake      *awakeStatus
+	usage      *planStatus
 	daemonInfo daemonStatus // 版本、构建、pid、启动时间，设置页的"关于"用
 }
 
@@ -410,6 +413,7 @@ func (a *app) refresh() {
 			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
+		r.usage = st.Usage
 		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 		a.autoUpgrade(r.daemonInfo)
@@ -434,7 +438,7 @@ func (a *app) refresh() {
 			a.err = ""
 		}
 		info := r.daemonInfo
-		info.FootprintKB, info.Running, info.Awake = r.daemonKB, r.running, r.awake
+		info.FootprintKB, info.Running, info.Awake, info.Usage = r.daemonKB, r.running, r.awake, r.usage
 		a.daemon, a.selfKB, a.termKB = info, r.selfKB, r.termKB
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))

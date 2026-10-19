@@ -172,6 +172,7 @@ type Daemon struct {
 	mobile  *mobile.Server
 	host    host.Host // 托管终端，测试里为空时用进程内的
 	awake   *awake    // 防休眠，测试里为空
+	usage   usageState
 	ln      *gateListener
 	handoff handoffState
 
@@ -324,6 +325,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	defer d.awake.close()
 	go d.awakeLoop(ctx)
+	d.openUsage()
 	go d.agentLoop(ctx)
 	d.newMobile()
 	if in == nil {
@@ -394,6 +396,9 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 		return d.daemonHandoff(ctx, raw, stop)
 	})
 	srv.Handle("awake.set", d.awakeSet)
+	srv.Handle("usage.get", d.usageGet)
+	srv.Handle("usage.set", d.usageSet)
+	srv.Handle("usage.report", d.usageReport)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出
 		time.AfterFunc(100*time.Millisecond, stop)
@@ -456,6 +461,7 @@ type statusResult struct {
 	// FootprintKB 是 phys_footprint，与活动监视器一致；内存预算以它为准
 	FootprintKB int64        `json:"footprintKB"`
 	Awake       *awakeStatus `json:"awake,omitempty"`
+	Usage       *usageStatus `json:"usage,omitempty"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -476,6 +482,7 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 		st := d.awake.status()
 		r.Awake = &st
 	}
+	r.Usage = d.usageStatus()
 	return r, nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"hive/internal/host"
 	"hive/internal/mobile"
 	"hive/internal/rpc"
+	"hive/internal/usage"
 )
 
 // mobileHost 把常驻进程的项目、工作区和终端交给手机服务。
@@ -111,6 +112,13 @@ func (h mobileHost) CloseTerminal(id string) error {
 }
 
 func (h mobileHost) Agents() []string { return agent.Known }
+
+func (h mobileHost) Usage() any {
+	if st := h.d.usageStatus(); st != nil {
+		return st
+	}
+	return usageStatus{Usages: []usage.Usage{}}
+}
 
 func (h mobileHost) History(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	d := h.d

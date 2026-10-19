@@ -97,3 +97,37 @@ func TestResume(t *testing.T) {
 		t.Error("empty session id accepted")
 	}
 }
+
+func TestClaudeStatusLineOnlyWithoutUsers(t *testing.T) {
+	user := filepath.Join(t.TempDir(), "settings.json")
+	old := claudeUserSettings
+	claudeUserSettings = func() string { return user }
+	defer func() { claudeUserSettings = old }()
+	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	statusLine := func() string {
+		if _, err := l.claudeSettings(); err != nil {
+			t.Fatal(err)
+		}
+		b, _ := os.ReadFile(filepath.Join(l.Home, "claude-hooks.json"))
+		var doc struct {
+			StatusLine struct {
+				Command string `json:"command"`
+			} `json:"statusLine"`
+		}
+		json.Unmarshal(b, &doc)
+		return doc.StatusLine.Command
+	}
+	// 没有用户设置、用户设置里没有 statusLine：注入
+	if got := statusLine(); got != "'/bin/hive' statusline" {
+		t.Fatalf("no user settings: %q", got)
+	}
+	os.WriteFile(user, []byte(`{"model":"opus","statusLine":null}`), 0o600)
+	if got := statusLine(); got == "" {
+		t.Fatal("null statusLine: not injected")
+	}
+	// 用户自己配了：不盖它
+	os.WriteFile(user, []byte(`{"statusLine":{"type":"command","command":"node sl.js"}}`), 0o600)
+	if got := statusLine(); got != "" {
+		t.Fatalf("user statusLine overridden by %q", got)
+	}
+}
