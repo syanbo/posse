@@ -6,7 +6,7 @@ import 'transcript.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 
-/// 会话页和终端页共用的顶栏标题：agent 图标、标题，下面一行是状态。
+/// 会话页和终端页共用的顶栏标题：agent 图标、标题，下面一行是状态；和电脑断开时这一行临时换成重连进度。
 class SessionTitle extends StatelessWidget {
   const SessionTitle({
     super.key,
@@ -23,12 +23,15 @@ class SessionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = this.model;
-    if (model == null) return _content(context, offline: false, ended: false);
+    if (model == null) {
+      return _content(context, offline: false, connecting: false, ended: false);
+    }
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) => _content(
         context,
         offline: model.rpc == null || model.connecting,
+        connecting: model.connecting,
         ended: ended,
       ),
     );
@@ -40,6 +43,7 @@ class SessionTitle extends StatelessWidget {
   Widget _content(
     BuildContext context, {
     required bool offline,
+    required bool connecting,
     required bool ended,
   }) {
     final c = HiveColors.of(context);
@@ -47,8 +51,6 @@ class SessionTitle extends StatelessWidget {
     final state = offline || ended ? AgentState.none : agentStateOf(tab.state);
     final stateText = ended
         ? '会话已经结束'
-        : offline
-        ? '等连上电脑'
         : switch (state) {
             AgentState.working =>
               tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
@@ -73,25 +75,37 @@ class SessionTitle extends StatelessWidget {
                   color: c.text,
                 ),
               ),
-              Row(
-                children: [
-                  // 没有状态（普通终端）时不留空位，文字和标题左边对齐
-                  if (state != AgentState.none) ...[
-                    StatusHex(state: state, size: 11),
-                    const SizedBox(width: 4),
-                  ],
-                  Flexible(
-                    child: Text(
-                      stateText,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: state == AgentState.waiting ? c.honey : c.muted,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [...previous, ?current],
+                ),
+                child: offline && !ended
+                    ? _reconnecting(c, connecting)
+                    : Row(
+                        key: const ValueKey('state'),
+                        children: [
+                          // 没有状态（普通终端）时不留空位，文字和标题左边对齐
+                          if (state != AgentState.none) ...[
+                            StatusHex(state: state, size: 11),
+                            const SizedBox(width: 4),
+                          ],
+                          Flexible(
+                            child: Text(
+                              stateText,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: state == AgentState.waiting
+                                    ? c.honey
+                                    : c.muted,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -102,6 +116,26 @@ class SessionTitle extends StatelessWidget {
 }
 
 extension on SessionTitle {
+  Widget _reconnecting(HiveColors c, bool connecting) {
+    return Row(
+      key: const ValueKey('reconnecting'),
+      children: [
+        SizedBox.square(
+          dimension: 10,
+          child: CircularProgressIndicator(strokeWidth: 1.5, color: c.honey),
+        ),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            connecting ? '正在连接电脑…' : '连接断开，正在重连…',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: c.honey),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _withLink(HiveColors c, Widget tile) {
     final model = this.model;
     if (model == null) return tile;
@@ -130,50 +164,6 @@ extension on SessionTitle {
               ),
             ),
           ],
-        );
-      },
-    );
-  }
-}
-
-/// 和电脑断开、正在重连时，顶栏下面的一条提示。连着时不占地方。
-class ConnectionBanner extends StatelessWidget {
-  const ConnectionBanner({super.key, required this.model});
-
-  final HiveAppModel model;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: model,
-      builder: (context, _) {
-        if (model.rpc != null && !model.connecting) {
-          return const SizedBox.shrink();
-        }
-        final c = HiveColors.of(context);
-        final name = model.current?.label ?? '电脑';
-        return Container(
-          width: double.infinity,
-          color: c.honey.withValues(alpha: c.dark ? 0.14 : 0.10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.8,
-                  color: c.honey,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  model.connecting ? '正在连接 $name…' : '和 $name 的连接断开了，正在重连',
-                  style: TextStyle(fontSize: 13, color: c.honey),
-                ),
-              ),
-            ],
-          ),
         );
       },
     );

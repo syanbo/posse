@@ -594,7 +594,6 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          ConnectionBanner(model: widget.model),
           if (!tab.eligible)
             const Expanded(child: Center(child: Text('这个会话没有原生存档')))
           else ...[

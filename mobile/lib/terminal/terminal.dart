@@ -710,7 +710,6 @@ class _TerminalScreenState extends State<TerminalScreen>
       ),
       body: Column(
         children: [
-          ConnectionBanner(model: widget.model),
           if (_notice != null) NoticeBar(_notice!),
           Expanded(
             child: Padding(
