@@ -33,14 +33,24 @@ func cmdUsage(e *env, args []string) error {
 			}
 			fmt.Fprintf(e.out, "%s, as of %s ago\n", head, now.Sub(time.UnixMilli(u.UpdatedAt)).Round(time.Minute))
 			for _, w := range u.Windows {
-				line := fmt.Sprintf("  %-8s %3.0f%% used", windowName(w.Minutes), w.Percent)
+				name := windowName(w.Minutes)
+				if w.Name != "" {
+					name = w.Name + " " + name
+				}
+				line := fmt.Sprintf("  %-10s %3.0f%% used", name, w.Percent)
 				if w.ResetsAt > 0 {
 					line += ", resets " + time.UnixMilli(w.ResetsAt).Local().Format("Jan 2 15:04")
 				}
 				fmt.Fprintln(e.out, line)
 			}
 			if u.Spend != nil {
-				fmt.Fprintf(e.out, "  spend    $%.2f of $%.2f\n", u.Spend.Used/100, u.Spend.Limit/100)
+				fmt.Fprintf(e.out, "  plan spend   $%.2f of $%.2f\n", u.Spend.Used/100, u.Spend.Limit/100)
+			}
+			if u.OnDemand != nil {
+				fmt.Fprintf(e.out, "  on-demand    $%.2f\n", u.OnDemand.Used/100)
+			}
+			if u.Resets != nil {
+				fmt.Fprintf(e.out, "  reset credits %d\n", u.Resets.Count)
 			}
 		}
 	})
