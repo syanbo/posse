@@ -198,6 +198,18 @@ void main() {
               {'path': 'src/gone.txt', 'x': 'D', 'y': '.'},
               {'path': 'new.txt', 'x': '?', 'y': '?', 'untracked': true},
               {'path': 'shot.png', 'x': '?', 'y': '?', 'untracked': true},
+              {
+                'path': '${'very_long_name_' * 8}.txt',
+                'x': '?',
+                'y': '?',
+                'untracked': true,
+              },
+              {
+                'path': 'docs/new.md',
+                'x': 'R',
+                'y': '.',
+                'orig': 'docs/old.md',
+              },
             ],
           }),
           loadDiff: (file) async => parseGitDiff({'path': file.path}),
@@ -217,10 +229,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('a.txt'), findsNothing);
     // 平铺时目录写在文件名后面
-    await tester.tap(find.byTooltip('平铺'));
+    await tester.tap(find.text('平铺'));
     await tester.pumpAndSettle();
-    expect(find.text('a.txt  src'), findsOneWidget);
-    await tester.tap(find.byTooltip('按目录'));
+    expect(find.text('src'), findsNWidgets(2));
+    expect(find.text('docs  ← docs/old.md'), findsOneWidget);
+    await tester.tap(find.text('按目录'));
     await tester.pumpAndSettle();
+    expect(find.text('← old.md'), findsOneWidget);
+    // 很长的文件名不撑破行
+    expect(tester.takeException(), isNull);
   });
 }

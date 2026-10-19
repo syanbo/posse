@@ -187,7 +187,7 @@ class _GitPaneState extends State<GitPane> {
 
   Widget _listHeader(HiveColors c, int count) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
       child: Row(
         children: [
           Expanded(
@@ -196,15 +196,7 @@ class _GitPaneState extends State<GitPane> {
               style: TextStyle(fontSize: Fs.meta, color: c.muted),
             ),
           ),
-          IconButton(
-            tooltip: _tree ? '平铺' : '按目录',
-            onPressed: () => setState(() => _tree = !_tree),
-            icon: Icon(
-              _tree ? Icons.account_tree_outlined : Icons.view_list_rounded,
-              size: 20,
-              color: c.muted,
-            ),
-          ),
+          _ModeSwitch(tree: _tree, onChanged: (v) => setState(() => _tree = v)),
         ],
       ),
     );
@@ -357,11 +349,11 @@ class _GitPaneState extends State<GitPane> {
     final from = kind == ChangeKind.renamed && file.orig.isNotEmpty
         ? file.orig.substring(file.orig.lastIndexOf('/') + 1)
         : null;
-    final note = flat && file.dir.isNotEmpty
-        ? file.dir
-        : from != null
-        ? '← $from'
-        : null;
+    // 平铺时目录和改名的原名都要写；原名改到别的目录时写全路径
+    final note = [
+      if (flat && file.dir.isNotEmpty) file.dir,
+      if (from != null) '← ${flat ? file.orig : from}',
+    ].join('  ');
     return InkWell(
       onTap: () => _open(file),
       child: SizedBox(
@@ -383,37 +375,112 @@ class _GitPaneState extends State<GitPane> {
                 ),
               ),
               const SizedBox(width: 8),
+              // 文件名完整显示，放不下时先截淡色的目录和原名；文件名本身最多占四分之三
               Expanded(
-                child: Text.rich(
-                  TextSpan(
+                child: LayoutBuilder(
+                  builder: (context, box) => Row(
                     children: [
-                      TextSpan(
-                        text: file.name,
-                        style: TextStyle(
-                          color: deleted ? c.muted : c.text,
-                          decoration: deleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                          decorationColor: c.muted,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: box.maxWidth * 0.75,
+                        ),
+                        child: Text(
+                          file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: Fs.body,
+                            color: deleted ? c.muted : c.text,
+                            decoration: deleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            decorationColor: c.muted,
+                          ),
                         ),
                       ),
-                      if (note != null)
-                        TextSpan(
-                          text: '  $note',
-                          style: mono(12, color: c.faint),
+                      if (note.isNotEmpty)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Text(
+                              note,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: mono(12, color: c.faint),
+                            ),
+                          ),
                         ),
                     ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: Fs.body),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 16),
               _Stats(file: file, inList: true),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 按目录 / 平铺：两个字写出来的小分段，选中的是强调色淡底。
+class _ModeSwitch extends StatelessWidget {
+  const _ModeSwitch({required this.tree, required this.onChanged});
+
+  final bool tree;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    Widget option(bool value, IconData icon, String label) {
+      final on = tree == value;
+      return Semantics(
+        button: true,
+        selected: on,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: on ? null : () => onChanged(value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: on ? c.tint : Colors.transparent,
+              borderRadius: BorderRadius.circular(Rd.button),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: on ? c.accent : c.faint),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: on ? c.accent : c.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: c.fill,
+        borderRadius: BorderRadius.circular(Rd.button + 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          option(true, Icons.account_tree_outlined, '按目录'),
+          option(false, Icons.view_list_rounded, '平铺'),
+        ],
       ),
     );
   }
