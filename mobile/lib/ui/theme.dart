@@ -25,9 +25,10 @@ abstract final class Rd {
   static const composer = 20.0;
 }
 
-/// 等宽字体。iOS 没有叫 monospace 的字体，写了等于没写；中文落到苹方。
+/// 等宽字体。iOS 用 Menlo，中文落到苹方；安卓没有 Menlo，落到 monospace（Droid Sans Mono）。
+/// 不能写 Courier：安卓把它映射成笔画很细的打字机字体 Cutive Mono，代码和终端看着灰蒙蒙的。
 const monoFamily = 'Menlo';
-const monoFallback = ['Courier', 'PingFang SC'];
+const monoFallback = ['monospace', 'PingFang SC'];
 
 TextStyle mono(double size, {Color? color, double? height}) => TextStyle(
   fontFamily: monoFamily,
