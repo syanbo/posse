@@ -188,6 +188,10 @@ class TerminalRenderBox extends RenderBox {
   var _needsFrameSync = false;
   var _stickToBottom = true;
   var _lastScrollbackRows = 0;
+
+  /// Hive: 上次布局时的屏幕。切进备用屏幕时回滚行数常常不变（刚建的终端都是 0），
+  /// 只重画不重新布局的话，滚动范围停在主屏幕的 0..0，备用屏幕里滑不动，要等改尺寸才好。
+  TerminalScreen? _lastScreen;
   var _preeditText = '';
   LinkSnapshot _linkSnapshot;
 
@@ -576,7 +580,8 @@ class TerminalRenderBox extends RenderBox {
   void _onTerminalChanged() {
     if (_paintState.rows == 0 || _performingLayout) return;
 
-    if (_terminal.scrollbackRows != _lastScrollbackRows) {
+    if (_terminal.scrollbackRows != _lastScrollbackRows ||
+        _terminal.activeScreen != _lastScreen) {
       _needsFrameSync = true;
       markNeedsLayout();
       return;
@@ -594,6 +599,7 @@ class TerminalRenderBox extends RenderBox {
   // back to within one cell of the bottom edge.
   void _syncScrollLayout() {
     _offset.applyViewportDimension(size.height);
+    _lastScreen = _terminal.activeScreen;
 
     if (_terminal.activeScreen == .alternate) {
       _offset.applyContentDimensions(0, 0);

@@ -444,6 +444,11 @@ class _TerminalViewState extends State<TerminalView> {
   void _onControllerChanged() {
     _links.invalidateContent();
     _syncLinkInteraction();
+    if (_scrollController.activeScreen != _controller.activeScreen &&
+        _scrollController.hasClients) {
+      // Hive: 换屏时滚动换算的基准对齐当前位置，不然第一次滑动按主屏幕的偏移算出一大串滚轮
+      _lastAlternatePixels = _scrollController.position.pixels;
+    }
     _scrollController.activeScreen = _controller.activeScreen;
     _updateTextInputGeometry();
     setState(_syncBlink);
