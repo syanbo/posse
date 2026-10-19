@@ -207,6 +207,8 @@ type app struct {
 	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
 	rollback        rollbackDlg
+	rollbackBox     dialogBox  // 回滚对话框拖到的位置、拉伸过的尺寸
+	pushBox         dialogBox  // Push 对话框的
 	toasts          []ui.Toast // 等下一帧交给 mygo 显示的提示：后台操作完成时手里没有 Context
 
 	// 派发任务对话框

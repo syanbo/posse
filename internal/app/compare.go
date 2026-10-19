@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 
 	"hive/internal/gitx"
 )
@@ -171,7 +172,8 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			ui.Text(c, "没有差别").FontSize(12).TextColor(t.TextMuted).Padding(8, 16)
 			return
 		}
-		a.fileChangeList(c, w, v, &cd.list, &cd.folded, cd.changes, specs)
+		selected, open := a.tabDiffs(w, v, specs)
+		a.fileChangeList(c, &cd.list, &cd.folded, cd.changes, selected, open)
 		return
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
@@ -324,13 +326,20 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	case cv.files == nil:
 		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
 	default:
-		a.fileChangeList(c, w, v, &cv.list, &cv.folded, cv.files, commitSpecs(ci, cv.files))
+		selected, open := a.tabDiffs(w, v, commitSpecs(ci, cv.files))
+		a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, open)
 	}
 }
 
-// fileChangeList 是一组改了的文件，照 WebStorm 按目录排成树，点文件打开对应的 diff，F7 在这组里跳。
-// specs 为空时只列文件、不能点（Push 对话框里 diff 会被对话框挡住）。
-func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, specs []diffSpec) {
+// tabDiffs 让文件列表点开的 diff 进文档区的 diff 标签，F7 在这组里跳。
+func (a *app) tabDiffs(w *workspace, v *filesView, specs []diffSpec) (selected func(int) bool, open func(int)) {
+	selected = func(i int) bool { return v.cur != nil && v.cur.path == diffKey(v.git.absPath(specs[i].rel), specs[i]) }
+	open = func(i int) { a.openDiff(w, specs[i], specs, true) }
+	return selected, open
+}
+
+// fileChangeList 是一组改了的文件，照 WebStorm 按目录排成树，点文件交给 open 打开它的 diff（参数是 files 的下标）。
+func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, selected func(int) bool, open func(int)) {
 	t := c.Theme()
 	p := colors(t)
 	if *folded == nil {
@@ -367,10 +376,8 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 			return
 		}
 		f := files[r.entry]
-		if specs != nil {
-			row.Role(ui.RoleButton).Label(f.Path)
-			selectedBg(c, row, v.cur != nil && v.cur.path == diffKey(v.git.absPath(f.Path), specs[r.entry]))
-		}
+		row.Role(ui.RoleButton).Label(f.Path)
+		selectedBg(c, row, selected(r.entry))
 		color := t.Accent
 		switch f.Status {
 		case 'A':
@@ -387,8 +394,8 @@ func (a *app) fileChangeList(c *ui.Context, w *workspace, v *filesView, list *ui
 				name.Strikethrough().TextColor(t.TextMuted)
 			}
 		})
-		if specs != nil && row.Clicked() {
-			a.openDiff(w, specs[r.entry], specs, true)
+		if row.Clicked() {
+			open(r.entry)
 		}
 	}).Grow(1).Padding(0, 0, 8, 0)
 }
@@ -402,6 +409,7 @@ type pushState struct {
 	loaded  bool
 	err     string
 	commit  *commitView
+	detail  *fileDoc // 右边看着的文件 diff，不在文档区里（文档区的 diff 会被对话框挡住）
 	tags    bool
 	pushing bool
 }
@@ -421,6 +429,7 @@ func (a *app) openPushBranch(w *workspace, branch string) {
 	v := a.filesFor(w)
 	ps := &pushState{ws: w.ID, branch: branch}
 	a.push = ps
+	a.pushBox.reset()
 	ws := v.root
 	go func() {
 		ctx := context.Background()
@@ -442,7 +451,14 @@ func (a *app) pushDialog(c *ui.Context) {
 	t := c.Theme()
 	ps := a.push
 	open := ps != nil
-	ui.Modal(c, &open, func() {
+	box := &a.pushBox
+	box.min = [2]ui.Rect{{W: 560, H: 300}, {W: 860, H: 420}}
+	box.mode = 0
+	if ps != nil && ps.detail != nil {
+		box.mode = 1
+	}
+	panel := ui.Modal(c, &open, func() {
+		defer box.grips(c)
 		if ps == nil {
 			return
 		}
@@ -452,10 +468,27 @@ func (a *app) pushDialog(c *ui.Context) {
 			return
 		}
 		v := a.filesFor(w)
-		ui.Column(c).Width(760).Gap(12).Children(func() {
-			titleText(c, "推送提交", fsCardTitle)
-			ui.Row(c).Height(320).Gap(0).AlignItems(ui.Stretch).Children(func() {
-				ui.Column(c).Width(380).Shrink(0).Children(func() {
+		// 看 diff 时对话框加宽加高，最右边是 diff
+		width, height, listW := float32(760), float32(320), float32(380)
+		if ps.detail != nil {
+			width, height, listW = 1080, 560, 280
+		}
+		dlg := ui.Column(c).Gap(12)
+		if box.sized() {
+			dlg.Grow(1).Shrink(1)
+		} else {
+			dlg.Width(width)
+		}
+		dlg.Children(func() {
+			box.title(c, "推送提交")
+			body := ui.Row(c).Gap(0).AlignItems(ui.Stretch)
+			if box.sized() {
+				body.Grow(1).Shrink(1)
+			} else {
+				body.Height(height)
+			}
+			body.Children(func() {
+				ui.Column(c).Width(listW).Shrink(0).Children(func() {
 					plan := ps.plan
 					switch {
 					case !ps.loaded:
@@ -483,13 +516,20 @@ func (a *app) pushDialog(c *ui.Context) {
 							for i, ci := range plan.Commits {
 								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1) {
 									a.selectCommit(v, &ps.commit, ci)
+									ps.detail = nil
 								}
 							}
 						})
 					})
 				})
 				ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
-				ui.Column(c).Grow(1).Children(func() {
+				files := ui.Column(c)
+				if ps.detail != nil {
+					files.Width(240).Shrink(0)
+				} else {
+					files.Grow(1)
+				}
+				files.Children(func() {
 					if ps.commit == nil {
 						ui.Text(c, "选一个提交看它改的文件").FontSize(12).TextColor(t.TextMuted).Padding(12, 14)
 						return
@@ -505,9 +545,13 @@ func (a *app) pushDialog(c *ui.Context) {
 					case cv.files == nil:
 						ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
 					default:
-						a.fileChangeList(c, w, v, &cv.list, &cv.folded, cv.files, nil)
+						selected := func(i int) bool { return ps.detail != nil && ps.detail.diff.rel == cv.files[i].Path }
+						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) })
 					}
 				})
+				if ps.detail != nil {
+					a.pushDetail(c, v, ps)
+				}
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Checkbox(c, &ps.tags, "一起推送标签")
@@ -533,9 +577,124 @@ func (a *app) pushDialog(c *ui.Context) {
 			})
 		})
 	})
+	box.apply(panel)
 	if !open && ps != nil && !ps.pushing {
 		a.push = nil
 	}
+}
+
+// pushShow 在对话框右边打开选中提交里第 i 个文件的 diff；排版和忽略空白沿用上一个，地方窄，默认上下合并。
+func (a *app) pushShow(v *filesView, ps *pushState, i int, first bool) {
+	cv := ps.commit
+	df := &diffDoc{diffSpec: commitSpecs(cv.info, cv.files)[i], first: first}
+	df.state = editor.DiffState{Layout: editor.DiffUnified, IgnoreWhitespace: true}
+	if old := ps.detail; old != nil {
+		df.state.Layout, df.state.IgnoreWhitespace = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
+	}
+	ps.detail = &fileDoc{path: diffKey(v.git.absPath(df.rel), df.diffSpec), diff: df, kind: docLoading, started: true}
+	a.loadDiff(v, ps.detail)
+}
+
+// pushStep 是 diff 里的上一处 / 下一处：到头了换到文件树里的上一个 / 下一个文件。
+func (a *app) pushStep(v *filesView, ps *pushState, dir int) {
+	d, cv := ps.detail, ps.commit
+	df := d.diff
+	if next := df.hunk + dir; d.kind == docDiff && next >= 0 && next < len(df.state.Hunks()) {
+		df.hunk = next
+		df.state.GoToHunk(next)
+		df.state.Current = next + 1
+		return
+	}
+	paths := make([]string, len(cv.files))
+	for i, f := range cv.files {
+		paths[i] = f.Path
+	}
+	var order []int
+	for _, row := range changeTree(paths, nil) {
+		if !row.dir {
+			order = append(order, row.entry)
+		}
+	}
+	if j := slices.IndexFunc(order, func(i int) bool { return paths[i] == df.rel }) + dir; j >= 0 && j < len(order) {
+		a.pushShow(v, ps, order[j], dir > 0)
+		return
+	}
+	msg := "已经是最后一处改动"
+	if dir < 0 {
+		msg = "已经是第一处改动"
+	}
+	df.hint, df.hintAt = msg, time.Now()
+}
+
+// pushDetail 是对话框右边的 diff，只读。
+func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
+	t := c.Theme()
+	d := ps.detail
+	df := d.diff
+	switch {
+	case c.Shortcut(0, ui.KeyF7):
+		a.pushStep(v, ps, 1)
+	case c.Shortcut(ui.Shift, ui.KeyF7):
+		a.pushStep(v, ps, -1)
+	}
+	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
+		ui.Row(c).Height(36).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
+			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
+				a.pushStep(v, ps, -1)
+			}
+			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 28, 17)).Clicked() {
+				a.pushStep(v, ps, 1)
+			}
+			ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)
+			if d.kind == docDiff {
+				if n := len(df.state.Hunks()); n > 0 {
+					added, deleted := df.state.Stats()
+					ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				}
+			}
+			ui.Spacer(c)
+			if d.kind == docDiff {
+				split := df.state.Layout == editor.DiffSplit
+				if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+					if split {
+						df.state.Layout = editor.DiffUnified
+					} else {
+						df.state.Layout = editor.DiffSplit
+					}
+				}
+				if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+					df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+				}
+			}
+			if pressable(iconButtonSized(c, iconClose, "收起 diff", 24, 14)).Clicked() {
+				ps.detail = nil
+			}
+		})
+		if ps.detail == nil {
+			return
+		}
+		ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+		ui.Column(c).Grow(1).Shrink(1).Children(func() {
+			muted := func(msg string) {
+				ui.Text(c, msg).FontSize(12.5).TextColor(t.TextMuted).Padding(16)
+			}
+			switch d.kind {
+			case docLoading:
+				muted("正在读取…")
+			case docError:
+				ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
+			case docImageDiff:
+				imageDiffView(c, d)
+			case docBinary:
+				muted("二进制文件，不显示内容")
+			case docTooLarge:
+				muted(tooLargeDiff)
+			default:
+				a.diffView(c, v, d)
+			}
+			diffHint(c, df)
+		})
+	})
 }
 
 func (a *app) doPush(v *filesView, ps *pushState, force bool) {

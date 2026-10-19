@@ -299,6 +299,13 @@ func previewPush(t *testing.T, a *app) {
 	until(t, tt, "commit files", func() bool { return a.push.commit.files != nil })
 }
 
+func previewPushDetail(t *testing.T, a *app) {
+	previewPush(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.pushShow(a.files["w1"], a.push, 0, true)
+	until(t, tt, "push diff", func() bool { return a.push.detail.kind == docDiff })
+}
+
 // previewLog 把 feat 合并进 main，打开日志并选中合并提交。
 func previewLog(t *testing.T, a *app) {
 	root := branchWorkspace(t, a)
@@ -551,6 +558,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewPush(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-push-"+suffix+".png")
+
+		// Push 对话框里点开文件：右边是 diff
+		a = previewApp(t)
+		previewPushDetail(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-push-detail-"+suffix+".png")
 
 		a = previewApp(t)
 		previewCompare(t, a)

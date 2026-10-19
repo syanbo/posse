@@ -145,6 +145,7 @@ func (a *app) openRollback(v *filesView) {
 		return
 	}
 	a.rollback = r
+	a.rollbackBox.reset()
 }
 
 // sync 按最新的状态列文件：已经列着的保留勾选，新出现的按提交时的勾选，没有改动了的去掉。
@@ -262,29 +263,43 @@ func (a *app) rollbackDialog(c *ui.Context) {
 			a.reloadDiff(r.v, d)
 		}
 	}
-	ui.Modal(c, &r.open, func() {
+	box := &a.rollbackBox
+	box.min = [2]ui.Rect{{W: 420, H: 300}, {W: 760, H: 420}}
+	box.mode = 0
+	if r.detail != nil {
+		box.mode = 1
+	}
+	panel := ui.Modal(c, &r.open, func() {
+		defer box.grips(c)
 		if r.detail == nil {
 			a.rollbackMain(c, t, g)
 			return
 		}
 		// 右边看 diff：对话框加宽，左边是文件树
-		ui.Row(c).Width(1080).Height(560).Gap(16).AlignItems(ui.Stretch).Children(func() {
+		row := ui.Row(c).Gap(16).AlignItems(ui.Stretch)
+		if box.sized() {
+			row.Grow(1).Shrink(1)
+		} else {
+			row.Width(1080).Height(560)
+		}
+		row.Children(func() {
 			ui.Column(c).Width(400).Shrink(0).Children(func() { a.rollbackMain(c, t, g) })
 			a.rollbackDetail(c)
 		})
 	})
+	box.apply(panel)
 }
 
 func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 	r := &a.rollback
 	col := ui.Column(c).Gap(10)
-	if r.detail == nil {
+	if r.detail == nil && !a.rollbackBox.sized() {
 		col.Width(560)
 	} else {
-		col.Grow(1)
+		col.Grow(1).Shrink(1)
 	}
 	col.Children(func() {
-		titleText(c, "回滚改动", fsCardTitle)
+		a.rollbackBox.title(c, "回滚改动")
 		ui.Text(c, "勾上的已跟踪文件会恢复成上一次提交时的样子，没提交的改动会丢失。点文件名看 diff，可以只回滚其中几处。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
 		all := make([]int, len(r.entries))
 		for i := range all {
@@ -316,10 +331,10 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 			}
 		})
 		box := ui.Column(c).Radius(rInput).Background(colors(t).fill)
-		if r.detail == nil {
+		if r.detail == nil && !a.rollbackBox.sized() {
 			box.Height(min(float32(len(rows))*26+8, 360))
 		} else {
-			box.Grow(1)
+			box.Grow(1).Shrink(1)
 		}
 		box.Children(func() {
 			r.list.Key = func(i int) any { return rows[i].path }
