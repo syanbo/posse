@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import 'custom_keys_screen.dart';
 
 const appVersion = '0.1.0';
 
-/// 设置：外观、打开会话的方式、终端字号、对话里显示什么，以及配对的电脑。改了立即生效并存在手机上。
+/// 设置：外观、打开会话的方式、终端字号和快捷键、对话里显示什么，以及配对的电脑。改了立即生效并存在手机上。
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
@@ -121,6 +122,19 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                   const _Note('手机看终端时终端按手机屏幕排版，字越小一行放得越多。'),
+                  RowTile(
+                    title: const Text('快捷键'),
+                    subtitle: Text(
+                      s.customKeys.isEmpty
+                          ? '在键盘上方的快捷键栏加自己的键'
+                          : '自定义 ${s.customKeys.length} 个',
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CustomKeysScreen(model: model),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               Section(

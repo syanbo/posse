@@ -8,6 +8,7 @@ import 'protocol/link.dart';
 import 'protocol/pairing.dart';
 import 'protocol/rpc.dart';
 import 'protocol/socket.dart';
+import 'settings/custom_keys.dart';
 import 'workspace/models.dart';
 
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
@@ -74,7 +75,8 @@ class AppSettings {
     this.expandTools = false,
     this.deskLayout = false,
     this.deskZoom = 1,
-  });
+    List<CustomKey>? customKeys,
+  }) : customKeys = customKeys ?? [];
 
   /// dark、light 或 system。默认深色。
   String theme;
@@ -91,6 +93,9 @@ class AppSettings {
   /// 电脑布局在「刚好缩进屏幕宽度」之上的倍数，吸在 0.5–2 的固定档。1 是一整行落在屏幕里。
   double deskZoom;
 
+  /// 终端快捷键栏上自己加的键，排在图片、粘贴后面、内置键前面。
+  List<CustomKey> customKeys;
+
   Map<String, Object?> toJson() => {
     'theme': theme,
     'openMode': openMode,
@@ -99,6 +104,7 @@ class AppSettings {
     'expandTools': expandTools,
     'deskLayout': deskLayout,
     'deskZoom': deskZoom,
+    'customKeys': [for (final k in customKeys) k.toJson()],
   };
 
   static AppSettings decode(String? data) {
@@ -128,6 +134,10 @@ class AppSettings {
       }
       final zoom = map['deskZoom'];
       if (zoom is num) out.deskZoom = zoom.toDouble().clamp(0.5, 2);
+      final keys = map['customKeys'];
+      if (keys is List) {
+        out.customKeys = [for (final k in keys) ?CustomKey.fromJson(k)];
+      }
     } catch (_) {}
     return out;
   }

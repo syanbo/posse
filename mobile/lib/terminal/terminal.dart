@@ -18,6 +18,7 @@ import '../chat/send.dart';
 import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
+import '../settings/custom_keys.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -627,14 +628,14 @@ class _TerminalScreenState extends State<TerminalScreen>
     setState(() => _notice = note.isEmpty ? null : note);
   }
 
-  Future<void> _send(List<int> bytes) async {
+  Future<void> _send(List<int> bytes, {bool enter = false}) async {
     final rpc = widget.model.rpc;
     if (rpc == null || bytes.isEmpty) return;
     final outcome = await sendTerminal(
       rpc,
       terminal: widget.tab.terminalId,
       raw: bytes,
-      enter: false,
+      enter: enter,
     );
     final note = sendOutcomeText(outcome);
     if (!mounted || note.isEmpty) return;
@@ -743,6 +744,8 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
           _KeyBar(
             onKey: _send,
+            customKeys: widget.model.settings.customKeys,
+            onCustom: (key) => _send(key.bytes, enter: key.enter),
             onImage: widget.model.rpc == null || _busy ? null : _sendImage,
             onPaste: widget.model.rpc == null || _busy ? null : _pasteClipboard,
             keyboardUp: MediaQuery.viewInsetsOf(context).bottom > 0,
@@ -811,6 +814,8 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
 class _KeyBar extends StatelessWidget {
   const _KeyBar({
     required this.onKey,
+    required this.customKeys,
+    required this.onCustom,
     required this.onImage,
     required this.onPaste,
     required this.keyboardUp,
@@ -818,6 +823,8 @@ class _KeyBar extends StatelessWidget {
   });
 
   final Future<void> Function(List<int> bytes) onKey;
+  final List<CustomKey> customKeys;
+  final void Function(CustomKey key) onCustom;
   final VoidCallback? onImage;
   final VoidCallback? onPaste;
   final bool keyboardUp;
@@ -839,8 +846,33 @@ class _KeyBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(Rd.button),
           onTap: onTap,
           child: SizedBox(
-            width: 44,
-            child: Icon(icon, size: 20, color: c.text),
+            width: 40,
+            child: Icon(icon, size: 18, color: c.text),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _textKey(HiveColors c, String label, VoidCallback onTap) {
+    return Material(
+      color: c.fill,
+      borderRadius: BorderRadius.circular(Rd.button),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Rd.button),
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: c.text,
+            ),
           ),
         ),
       ),
@@ -856,10 +888,10 @@ class _KeyBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(Rd.button),
         onTap: onKeyboard,
         child: SizedBox(
-          width: 44,
+          width: 40,
           child: Icon(
             keyboardUp ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
-            size: 20,
+            size: 18,
             color: c.text,
           ),
         ),
@@ -878,11 +910,11 @@ class _KeyBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 48,
+          height: 40,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            itemCount: termKeys.length + 3,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            itemCount: termKeys.length + customKeys.length + 3,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, i) {
               if (i == 0) return _hideKeyboard(c);
@@ -902,28 +934,13 @@ class _KeyBar extends StatelessWidget {
                   onTap: onPaste,
                 );
               }
-              final key = termKeys[i - 3];
-              return Material(
-                color: c.fill,
-                borderRadius: BorderRadius.circular(Rd.button),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(Rd.button),
-                  onTap: () => onKey(key.bytes),
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    alignment: Alignment.center,
-                    child: Text(
-                      key.label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: c.text,
-                      ),
-                    ),
-                  ),
-                ),
-              );
+              final n = i - 3;
+              if (n < customKeys.length) {
+                final key = customKeys[n];
+                return _textKey(c, key.shown, () => onCustom(key));
+              }
+              final key = termKeys[n - customKeys.length];
+              return _textKey(c, key.label, () => onKey(key.bytes));
             },
           ),
         ),
