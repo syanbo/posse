@@ -541,7 +541,7 @@ func TestSessionButtons(t *testing.T) {
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("这个会话用到的技能与 MCP")
-	if _, img := tt.Find("这个会话粘贴过的图片"); !ok || !img {
+	if _, img := tt.Find("这个会话里生成和粘贴的图片"); !ok || !img {
 		t.Fatal("buttons should show on a claude terminal")
 	}
 	if r.X < 900 || r.Y > 120 {

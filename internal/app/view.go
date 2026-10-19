@@ -1230,8 +1230,8 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		if task != nil && iconButton(c.Key("back-to-task"), iconTasks, "返回任务").Clicked() {
 			a.openTask(task.ID)
 		}
-		if cur.Agent == "claude" {
-			a.panelButton(c, panelImages, iconImage, "这个会话粘贴过的图片")
+		if imagesSupported(cur.Agent) {
+			a.panelButton(c, panelImages, iconImage, "这个会话里生成和粘贴的图片")
 		}
 		if cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")

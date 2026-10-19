@@ -433,6 +433,12 @@ func TestPreview(t *testing.T) {
 		}}
 		savePNG(t, newPreviewTester(a, dark), "usage-"+suffix+".png")
 
+		// 右侧图片面板：agent 生成的在上、粘贴的在下，刚读过一次
+		a = previewApp(t)
+		a.state.RightPanel = panelImages
+		a.images = previewImages()
+		savePNG(t, newPreviewTester(a, dark), "images-"+suffix+".png")
+
 		// 右侧历史面板：当前项目的会话已经查过一次
 		a = previewApp(t)
 		previewHistory(a, "")
@@ -622,5 +628,30 @@ func TestPreview(t *testing.T) {
 				{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10, nil}}},
 			}}
 		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
+	}
+}
+
+// previewImages 是图片面板读过一次之后的样子，缩略图是合成的色块：一张手机截图、一张横的预览图、一张粘贴的。
+func previewImages() imagesView {
+	block := func(w, h int, top, bottom color.RGBA) *ui.Bitmap {
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		for y := range h {
+			k := float64(y) / float64(h)
+			c := color.RGBA{uint8(float64(top.R)*(1-k) + float64(bottom.R)*k), uint8(float64(top.G)*(1-k) + float64(bottom.G)*k), uint8(float64(top.B)*(1-k) + float64(bottom.B)*k), 255}
+			for x := range w {
+				img.SetRGBA(x, y, c)
+			}
+		}
+		return ui.NewBitmap(img)
+	}
+	now := time.Now()
+	return imagesView{term: "t1", poll: panelPoll{at: now}, madeAll: 3,
+		made: []imageItem{
+			{key: "s:3", label: "phone_screenshot", at: now.Add(-2 * time.Minute), tool: &history.ToolImage{Tool: "mcp__iphone-use__phone_screenshot"}, thumb: block(236, 512, color.RGBA{40, 44, 52, 255}, color.RGBA{217, 119, 87, 255})},
+			{key: "s:2", label: "git-compare-dark.png", at: now.Add(-9 * time.Minute), tool: &history.ToolImage{Tool: "Read", Path: "/tmp/hive-preview/git-compare-dark.png"}, thumb: block(512, 324, color.RGBA{38, 38, 36, 255}, color.RGBA{91, 141, 239, 255})},
+		},
+		pasted: []imageItem{
+			{key: "p:1", n: 1, label: "#1", path: "/tmp/1.png", thumb: block(512, 300, color.RGBA{243, 242, 239, 255}, color.RGBA{141, 187, 146, 255})},
+		},
 	}
 }
