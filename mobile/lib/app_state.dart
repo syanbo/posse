@@ -407,8 +407,15 @@ class HiveAppModel extends ChangeNotifier {
       next = created;
       created.onActivity = () {
         if (gen != _connectGen || !identical(link, created)) return;
-        if (created.rpc == null && created.lastError != null) {
-          error = friendlyError(created.lastError!);
+        if (created.rpc == null) {
+          if (created.lastError != null) {
+            error = friendlyError(created.lastError!);
+          }
+        } else if (error != null) {
+          // 重连上了：断线期间重试失败留下的报错不再作数，不等下一次轮询才清，
+          // 不然首页会先闪一下红色的「连不上电脑」
+          error = null;
+          unawaited(refreshWorktrees());
         }
         notifyListeners();
       };

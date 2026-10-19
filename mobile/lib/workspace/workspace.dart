@@ -415,28 +415,40 @@ class WorkspaceScreen extends StatelessWidget {
         ),
         actions: [
           // 刷新靠下拉；切换、忘掉、扫码添加电脑都在标题旁的电脑胶囊里，加电脑不常用，不占顶栏
-          IconButton(
-            tooltip: '历史',
-            onPressed: model.rpc == null
-                ? null
-                : () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => HistoryScreen(model: model),
-                    ),
+          // 断线时历史和新建都点不了，收起来把位置让给电脑胶囊写全连接状态
+          AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            child: model.rpc == null
+                ? const SizedBox.shrink()
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: '历史',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => HistoryScreen(model: model),
+                          ),
+                        ),
+                        // 圆形的图标墨迹比方形的小一圈，大两号才和设置看起来一样大
+                        icon: Icon(
+                          Icons.history_rounded,
+                          size: 24,
+                          color: c.text,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '新建会话',
+                        onPressed: () => showNewSession(context, model),
+                        icon: Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 24,
+                          color: c.text,
+                        ),
+                      ),
+                    ],
                   ),
-            // 圆形的图标墨迹比方形的小一圈，大两号才和设置看起来一样大
-            icon: Icon(Icons.history_rounded, size: 24, color: c.text),
-          ),
-          IconButton(
-            tooltip: '新建会话',
-            onPressed: model.rpc == null
-                ? null
-                : () => showNewSession(context, model),
-            icon: Icon(
-              Icons.add_circle_outline_rounded,
-              size: 24,
-              color: c.text,
-            ),
           ),
           IconButton(
             tooltip: '设置',
@@ -467,65 +479,76 @@ class WorkspaceScreen extends StatelessWidget {
                       child: const Text('重试'),
                     ),
                   ))
-          // iOS 原生的下拉刷新；长按项目卡片拖动排序，顺序按电脑分别存在手机上
-          : CustomScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              slivers: [
-                CupertinoSliverRefreshControl(
-                  onRefresh: model.refreshWorktrees,
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Column(
-                      children: [
-                        if (model.error != null) NoticeBar(model.error!),
-                        if (waiting > 0) _WaitingBanner(count: waiting),
-                      ],
-                    ),
+          // iOS 原生的下拉刷新；长按项目卡片拖动排序，顺序按电脑分别存在手机上。
+          // 报错浮在列表上面、断线写在电脑胶囊里，都不插进列表，免得列表跟着跳
+          : Stack(
+              children: [
+                CustomScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
-                ),
-                SliverReorderableList(
-                  itemCount: names.length,
-                  proxyDecorator: (child, _, animation) => AnimatedBuilder(
-                    animation: animation,
-                    builder: (context, child) => Transform.scale(
-                      scale:
-                          1 + 0.02 * Curves.easeOut.transform(animation.value),
-                      child: Material(
-                        color: Colors.transparent,
-                        elevation: 8 * animation.value,
-                        shadowColor: Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(Rd.card),
-                        child: child,
-                      ),
+                  slivers: [
+                    CupertinoSliverRefreshControl(
+                      onRefresh: model.refreshWorktrees,
                     ),
-                    child: child,
-                  ),
-                  onReorderItem: (from, to) {
-                    final order = List.of(names);
-                    order.insert(to, order.removeAt(from));
-                    model.setProjectOrder(order);
-                  },
-                  itemBuilder: (context, i) =>
-                      ReorderableDelayedDragStartListener(
-                        key: ValueKey(names[i]),
-                        index: i,
-                        child: Section(
-                          inset: 48,
-                          // 左右和卡片之间一样宽
-                          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                          children: _project(
-                            context,
-                            names[i],
-                            projects[names[i]]!,
-                          ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Column(
+                          children: [
+                            if (waiting > 0) _WaitingBanner(count: waiting),
+                          ],
                         ),
                       ),
+                    ),
+                    SliverReorderableList(
+                      itemCount: names.length,
+                      proxyDecorator: (child, _, animation) => AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, child) => Transform.scale(
+                          scale:
+                              1 +
+                              0.02 * Curves.easeOut.transform(animation.value),
+                          child: Material(
+                            color: Colors.transparent,
+                            elevation: 8 * animation.value,
+                            shadowColor: Colors.black.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(Rd.card),
+                            child: child,
+                          ),
+                        ),
+                        child: child,
+                      ),
+                      onReorderItem: (from, to) {
+                        final order = List.of(names);
+                        order.insert(to, order.removeAt(from));
+                        model.setProjectOrder(order);
+                      },
+                      itemBuilder: (context, i) =>
+                          ReorderableDelayedDragStartListener(
+                            key: ValueKey(names[i]),
+                            index: i,
+                            child: Section(
+                              inset: 48,
+                              // 左右和卡片之间一样宽
+                              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                              children: _project(
+                                context,
+                                names[i],
+                                projects[names[i]]!,
+                              ),
+                            ),
+                          ),
+                    ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                  ],
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                Positioned(
+                  top: 8,
+                  left: 16,
+                  right: 16,
+                  child: _FloatingError(model: model),
+                ),
               ],
             ),
     );
@@ -919,6 +942,86 @@ class _WaitingBanner extends StatelessWidget {
   }
 }
 
+/// 首页列表上面浮着的报错（连着电脑时刷新失败之类）。断线不在这里说，电脑胶囊会写。
+/// 浮在上面、不拦点击，出现和消失都不挤动列表。
+class _FloatingError extends StatelessWidget {
+  const _FloatingError({required this.model});
+
+  final HiveAppModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final error = model.rpc == null || model.connecting ? null : model.error;
+    return IgnorePointer(
+      child: Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween(
+                begin: const Offset(0, -0.4),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: error == null
+              ? const SizedBox.shrink(key: ValueKey('none'))
+              : Container(
+                  key: ValueKey(error),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.raised,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: c.line),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: c.dark ? 0.35 : 0.12,
+                        ),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        size: 16,
+                        color: c.danger,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          error,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.35,
+                            color: c.danger,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 标题旁的电脑胶囊：连着时是电脑名；断线时换成琥珀色的转圈和完整的状态，胶囊跟着放大，连上后缩回去。
 class _ConnectionLine extends StatelessWidget {
   const _ConnectionLine({required this.model});
 
@@ -927,34 +1030,59 @@ class _ConnectionLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final online = model.rpc != null;
-    final name = model.labelOf(model.current);
+    final offline = model.rpc == null || model.connecting;
     final text = model.connecting
-        ? '正在连接…'
-        : online
-        ? name
-        : '连接断开，正在重试';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            color: online && !model.connecting ? c.sage : c.honey,
-            shape: BoxShape.circle,
-          ),
+        ? '正在连接电脑…'
+        : offline
+        ? '连接断开，正在重连…'
+        : model.labelOf(model.current);
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.centerLeft,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.centerLeft,
+          children: [...previous, ?current],
         ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            text,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, color: c.muted),
-          ),
+        child: Row(
+          key: ValueKey(text),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (offline)
+              SizedBox.square(
+                dimension: 11,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.6,
+                  color: c.honey,
+                ),
+              )
+            else
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(
+                  color: c.sage,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: offline ? c.honey : c.muted,
+                ),
+              ),
+            ),
+            Icon(Icons.expand_more_rounded, size: 16, color: c.faint),
+          ],
         ),
-        Icon(Icons.expand_more_rounded, size: 16, color: c.faint),
-      ],
+      ),
     );
   }
 }

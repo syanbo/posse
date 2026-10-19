@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/protocol/e2ee.dart';
 import 'package:hive_mobile/protocol/link.dart';
 import 'package:hive_mobile/protocol/pairing.dart';
@@ -269,6 +270,62 @@ void main() {
       await link.close();
     },
   );
+
+  test('reconnecting clears the errors left by failed retries', () async {
+    final hostKeys = generateKeyPair();
+    final code = base64Url.encode(
+      utf8.encode(
+        jsonEncode({
+          'v': 2,
+          'endpoint': 'only',
+          'deviceToken': 'tok',
+          'publicKeyB64': b64(hostKeys.publicKey),
+        }),
+      ),
+    );
+    final hosts = <ByteSocket>[];
+    var failures = 0;
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+      networkSignatures: const Stream.empty(),
+      connect: (url, cancel) async {
+        if (failures > 0) {
+          failures--;
+          throw StateError('down');
+        }
+        final (client, host) = pipePair();
+        hosts.add(host);
+        unawaited(_host(host, hostKeys, 'tok'));
+        return client;
+      },
+    );
+    expect(await model.connectCode(code), isTrue);
+
+    Future<void> until(bool Function() done) async {
+      for (var i = 0; i < 100 && !done(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(done(), isTrue);
+    }
+
+    // 常驻进程重启：断开，前两次重连失败，留下报错
+    failures = 2;
+    await hosts.last.close();
+    await until(() => model.rpc == null && model.error != null);
+    // 连上之后，首页不能有哪一刻是"连着却还挂着报错"（那会闪一下红色胶囊）
+    var stale = false;
+    model.addListener(() {
+      if (model.rpc != null && !model.connecting && model.error != null) {
+        stale = true;
+      }
+    });
+    await until(() => model.rpc != null);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(stale, isFalse);
+    expect(model.error, isNull);
+    await model.link?.close();
+  });
 
   test('an address that never answers does not stall reconnecting', () async {
     final hostKeys = generateKeyPair();
