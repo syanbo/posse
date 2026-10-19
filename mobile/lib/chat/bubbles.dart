@@ -311,13 +311,3 @@ String _preview(Object? input) {
     return '$input';
   }
 }
-
-String toolKey(List<ChatBlock> blocks, int index) {
-  final ids = blocks
-      .map((block) => block.callId)
-      .whereType<String>()
-      .where((id) => id.isNotEmpty)
-      .join(',');
-  if (ids.isNotEmpty) return ids;
-  return 'tools-$index-${blocks.length}';
-}

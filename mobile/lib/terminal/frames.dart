@@ -37,14 +37,16 @@ TermFrame? parseTermFrame(Uint8List bytes) {
 }
 
 class TermBytes {
-  const TermBytes.output(this.bytes) : snapshot = false, cols = 0;
-  const TermBytes.snapshot(this.bytes, {this.cols = 0}) : snapshot = true;
+  const TermBytes.output(this.bytes) : snapshot = false, cols = 0, rows = 0;
+  const TermBytes.snapshot(this.bytes, {this.cols = 0, this.rows = 0})
+    : snapshot = true;
 
   final Uint8List bytes;
   final bool snapshot;
 
-  /// 快照时终端的列数（快照开头的元数据里带着），电脑布局按它排；不知道时为 0。
+  /// 快照时终端的列数、行数（快照开头的元数据里带着），电脑布局按它排；不知道时为 0。
   final int cols;
+  final int rows;
 }
 
 /// 把 Orca 的 16 字节头帧收成「要写进终端的一段字节」。
@@ -56,6 +58,7 @@ class TermAssembler {
   final BytesBuilder _chunks = BytesBuilder(copy: false);
   var _open = false;
   var _cols = 0;
+  var _rows = 0;
   int? _sid;
   var _waiting = false; // 换了订阅、还不知道新编号
   final _pending = <TermFrame>[];
@@ -100,10 +103,12 @@ class TermAssembler {
         _chunks.clear();
         _open = true;
         _cols = 0;
+        _rows = 0;
         try {
           final meta = jsonDecode(utf8.decode(frame.payload));
-          if (meta is Map && meta['cols'] is num) {
-            _cols = (meta['cols'] as num).toInt();
+          if (meta is Map) {
+            if (meta['cols'] is num) _cols = (meta['cols'] as num).toInt();
+            if (meta['rows'] is num) _rows = (meta['rows'] as num).toInt();
           }
         } catch (_) {}
         return null;
@@ -115,7 +120,7 @@ class TermAssembler {
         _open = false;
         final bytes = _chunks.toBytes();
         _chunks.clear();
-        return TermBytes.snapshot(bytes, cols: _cols);
+        return TermBytes.snapshot(bytes, cols: _cols, rows: _rows);
       case termOpOutput:
         if (_open || frame.payload.isEmpty) return null;
         return TermBytes.output(Uint8List.fromList(frame.payload));

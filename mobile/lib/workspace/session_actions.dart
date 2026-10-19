@@ -98,8 +98,8 @@ Future<String?> showSessionMore(
                       color: c.accent,
                     ),
                     title: const Text('电脑布局'),
-                    subtitle: const Text('保持电脑的宽度，左右滑着看'),
-                    trailing: Switch.adaptive(value: on, onChanged: flip),
+                    subtitle: const Text('缩到屏幕宽度，双指放大后可以滑动'),
+                    trailing: HiveSwitch(value: on, onChanged: flip),
                     onTap: () => flip(!on),
                   );
                 },

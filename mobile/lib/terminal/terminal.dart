@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flterm/flterm.dart' hide TerminalScreen;
 // ignore: implementation_imports
+import 'package:flterm/src/foundation.dart' show CellMetrics;
+// ignore: implementation_imports
 import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +20,7 @@ import '../protocol/rpc.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
+import 'desk_fit.dart';
 import 'frames.dart';
 
 /// 终端视图。单测不要 import 这个文件：flterm 带原生库，宿主 VM 测试不该编它。
@@ -51,17 +54,45 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _heldCols = 0;
   var _heldRows = 0;
 
-  /// 当前订阅是不是按电脑布局订的（没带手机尺寸），以及电脑那边的列数。
+  /// 当前订阅是不是按电脑布局订的（没带手机尺寸），以及电脑那边的列数、行数。
   var _heldDesk = false;
   var _deskCols = 0;
+  var _deskRows = 0;
 
   bool get _desk => widget.model.settings.deskLayout;
+
+  /// 电脑布局的画面：平移、捏合中的临时倍数。静止时字号已经按吸定的倍数排过，这里的倍数是 1。
+  final _deskKey = GlobalKey();
+  final _deskScroll = TerminalScrollController();
+  var _panX = 0.0;
+  var _panY = 0.0;
+  var _pinch = 1.0;
+
+  /// 平移和捏合中只重画这一层，不重建整个终端页。
+  final _pose = ValueNotifier<int>(0);
+  var _pinching = false;
+  var _pinchScale0 = 1.0;
+  Offset _focalContent = Offset.zero;
   var _applying = false;
   var _gen = 0;
   Future<void> _gate = Future<void>.value();
   String? _notice;
   final _focus = FocusNode();
   var _busy = false;
+  var _showCopy = false;
+
+  void _onController() {
+    final selected = _controller.hasSelection;
+    if (selected == _showCopy || !mounted) return;
+    setState(() => _showCopy = selected);
+  }
+
+  Future<void> _copySelection() async {
+    final text = _controller.selectedText();
+    _controller.clearSelection();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+  }
 
   @override
   void initState() {
@@ -69,7 +100,8 @@ class _TerminalScreenState extends State<TerminalScreen>
     WidgetsBinding.instance.addObserver(this);
     _controller = TerminalController()
       ..onOutput = _onOutput
-      ..onResize = _onResize;
+      ..onResize = _onResize
+      ..addListener(_onController);
     widget.model.addListener(_onModel);
   }
 
@@ -79,7 +111,10 @@ class _TerminalScreenState extends State<TerminalScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.model.removeListener(_onModel);
     unawaited(_detach());
+    _controller.removeListener(_onController);
     _controller.dispose();
+    _deskScroll.dispose();
+    _pose.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -103,11 +138,50 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   void _onResize(int cols, int rows) {
+    // 电脑布局把控件排成桌面的格子，这里报上来的是电脑的列数。记成手机视口的话，
+    // 关掉电脑布局会按桌面宽度去 HoldSize。
+    if (_desk) return;
     if (cols < 20 || rows < 8) return;
     if (cols == _cols && rows == _rows) return;
     _cols = cols;
     _rows = rows;
     _schedule();
+  }
+
+  /// 电脑布局时 flterm 的 onResize 不能用，手机这块区域的列数从布局算，留给关掉时订阅。
+  void _notePhoneBox(BoxConstraints box) {
+    if (!_desk && _cols >= 20) return;
+    final cell = _cellMetrics(widget.model.settings.terminalFontSize);
+    if (cell.cellWidth <= 0 || cell.cellHeight <= 0) return;
+    final cols = (box.maxWidth / cell.cellWidth).floor();
+    final rows = (box.maxHeight / cell.cellHeight).floor();
+    if (cols < 20 || rows < 8) return;
+    if (cols == _cols && rows == _rows) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_desk && _cols >= 20) return;
+      if (cols == _cols && rows == _rows) return;
+      _cols = cols;
+      _rows = rows;
+      _schedule();
+    });
+  }
+
+  /// 每次量都要排两段文字，电脑布局一次构建要量好几次，按字号记下来。
+  final _metricsCache = <(double, double), CellMetrics>{};
+
+  CellMetrics _cellMetrics(double fontSize) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    if (_metricsCache.length > 32) _metricsCache.clear();
+    return _metricsCache.putIfAbsent(
+      (fontSize, dpr),
+      () => measureCellMetrics(
+        fontSize: fontSize,
+        fontFamily: monoFamily,
+        fontFamilyFallback: monoFallback,
+        devicePixelRatio: dpr,
+      ),
+    );
   }
 
   void _schedule() {
@@ -208,37 +282,215 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   /// 快照和输出是远端画面。写进去时本地模拟器可能应答查询，那些字节不能再送回 PTY。
-  Widget _terminalView(HiveColors c) => TerminalView(
+  Widget _terminalView(
+    HiveColors c, {
+    double? fontSize,
+    ScrollPhysics? scrollPhysics,
+    TerminalScrollController? scrollController,
+  }) => TerminalView(
     controller: _controller,
-    theme: terminalTheme(c, fontSize: widget.model.settings.terminalFontSize),
+    theme: terminalTheme(
+      c,
+      fontSize: fontSize ?? widget.model.settings.terminalFontSize,
+    ),
     // 进来先看画面，点一下终端才弹键盘，不然键盘挡住半屏
     autofocus: false,
     focusNode: _focus,
     padding: EdgeInsets.zero,
+    scrollPhysics: scrollPhysics,
+    scrollController: scrollController,
   );
 
-  /// 电脑布局：终端视图按电脑的列数放宽，左右滑着看；手机布局直接铺满。
-  Widget _deskView(HiveColors c) {
+  /// 电脑布局：按快照的列和行排成桌面那一块，再缩进屏幕宽度。手势在这块表面上，
+  /// 不另加横向滚动，免得和终端自己的纵向滚动抢。还没有快照时先铺满。
+  Widget _deskView(HiveColors c, BoxConstraints box) {
     if (!_desk || _deskCols <= 0) return _terminalView(c);
-    final size = widget.model.settings.terminalFontSize;
-    final cell = measureCellMetrics(
-      fontSize: size,
-      fontFamily: monoFamily,
-      fontFamilyFallback: monoFallback,
-      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-    );
+    final base = widget.model.settings.terminalFontSize;
+    final zoom = widget.model.settings.deskZoom;
+    final baseCell = _cellMetrics(base);
     // 多留半格，免得按像素取整后少算一列
-    final width = (_deskCols + 0.5) * cell.cellWidth;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: SizedBox(width: width, child: _terminalView(c)),
+    final fit = deskFitScale(
+      viewportWidth: box.maxWidth,
+      gridWidth: (_deskCols + 0.5) * baseCell.cellWidth,
+    );
+    final font = (base * fit * zoom).clamp(2.0, 64.0);
+    final cell = _cellMetrics(font);
+    final gridW = (_deskCols + 0.5) * cell.cellWidth;
+    final gridH = _deskRows > 0
+        ? (_deskRows + 0.5) * cell.cellHeight
+        : box.maxHeight;
+    return SizedBox.expand(
+      key: _deskKey,
+      child: ClipRect(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onScaleStart: _scaleStart,
+          onScaleUpdate: (d) => _scaleUpdate(d, gridW, gridH, box),
+          onScaleEnd: (d) => _scaleEnd(gridW, gridH, box),
+          // 外面是屏幕大小的紧约束，格子要按桌面的列数排，不然 flterm 算出的列数变少、行尾折下去。
+          // 平移放在 OverflowBox 里面：它按屏幕大小判断点击，里面的 Transform 再换算到格子上。
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: 0,
+            maxWidth: double.infinity,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: ValueListenableBuilder<int>(
+              valueListenable: _pose,
+              builder: (context, _, child) => Transform(
+                alignment: Alignment.topLeft,
+                transform: Matrix4.identity()
+                  ..translateByDouble(_panX, _panY, 0, 1)
+                  ..scaleByDouble(_pinch, _pinch, 1, 1),
+                child: child,
+              ),
+              child: SizedBox(
+                width: gridW,
+                height: gridH,
+                child: _terminalView(
+                  c,
+                  fontSize: font,
+                  scrollPhysics: const NeverScrollableScrollPhysics(),
+                  scrollController: _deskScroll,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  /// 快照带着终端的列数：电脑布局时按它排，电脑那边改了窗口大小会重发快照
+  RenderBox? get _deskBox {
+    final box = _deskKey.currentContext?.findRenderObject();
+    if (box is RenderBox && box.hasSize) return box;
+    return null;
+  }
+
+  void _scaleStart(ScaleStartDetails _) {
+    _pinching = false;
+  }
+
+  void _scaleUpdate(
+    ScaleUpdateDetails details,
+    double gridW,
+    double gridH,
+    BoxConstraints box,
+  ) {
+    // Hive: 鼠标跟踪时这一指也不交给程序拖选，滑动仍平移和滚动。
+    final render = _deskBox;
+    if (render == null) return;
+    final local = render.globalToLocal(details.focalPoint);
+    if (details.pointerCount < 2 && _controller.hasSelection) return;
+    if (details.pointerCount >= 2) {
+      if (!_pinching) {
+        // 第二指落下时才记下锚点，单指平移不占用这个点
+        _pinching = true;
+        _controller.clearSelection();
+        _pinchScale0 = details.scale == 0 ? 1 : details.scale;
+        _focalContent = Offset(
+          (local.dx - _panX) / _pinch,
+          (local.dy - _panY) / _pinch,
+        );
+      }
+      final zoom = widget.model.settings.deskZoom;
+      final raw = details.scale / _pinchScale0;
+      final lo = deskZoomStops.first / zoom;
+      final hi = deskZoomStops.last / zoom;
+      final next = raw.clamp(lo, hi);
+      _pinch = next;
+      _panX = local.dx - _focalContent.dx * next;
+      _panY = local.dy - _focalContent.dy * next;
+      final clamped = clampDeskPan(
+        panX: _panX,
+        panY: _panY,
+        contentWidth: gridW * next,
+        contentHeight: gridH * next,
+        viewportWidth: box.maxWidth,
+        viewportHeight: box.maxHeight,
+      );
+      _panX = clamped.x;
+      _panY = clamped.y;
+      _pose.value++;
+      return;
+    }
+    if (_pinching) {
+      _commitPinch(gridW, gridH, box);
+      return;
+    }
+    final drag = deskDrag(
+      panX: _panX,
+      panY: _panY,
+      dx: details.focalPointDelta.dx,
+      dy: details.focalPointDelta.dy,
+      contentWidth: gridW * _pinch,
+      contentHeight: gridH * _pinch,
+      viewportWidth: box.maxWidth,
+      viewportHeight: box.maxHeight,
+    );
+    _panX = drag.panX;
+    _panY = drag.panY;
+    _scrollDesk(drag.scrollDy);
+    _pose.value++;
+  }
+
+  void _scaleEnd(double gridW, double gridH, BoxConstraints box) {
+    if (_pinching) _commitPinch(gridW, gridH, box);
+  }
+
+  /// 松手吸到固定档，按新倍数重排字号。锚点按捏合开始时按住的那一格换算。
+  void _commitPinch(double gridW, double gridH, BoxConstraints box) {
+    final zoom = widget.model.settings.deskZoom;
+    final pinch = _pinch;
+    final next = snapDeskZoom(zoom * pinch);
+    final k = zoom == 0 ? 1.0 : next / zoom;
+    _pinch = 1;
+    _pinching = false;
+    _panX += _focalContent.dx * (pinch - k);
+    _panY += _focalContent.dy * (pinch - k);
+    final clamped = clampDeskPan(
+      panX: _panX,
+      panY: _panY,
+      contentWidth: gridW * k,
+      contentHeight: gridH * k,
+      viewportWidth: box.maxWidth,
+      viewportHeight: box.maxHeight,
+    );
+    _panX = clamped.x;
+    _panY = clamped.y;
+    if (next != zoom) {
+      widget.model.updateSettings((s) => s.deskZoom = next);
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _scrollDesk(double dy) {
+    if (dy == 0 || !_deskScroll.hasClients) return;
+    final pos = _deskScroll.position;
+    if (!pos.minScrollExtent.isFinite || !pos.maxScrollExtent.isFinite) {
+      // 备用屏幕没有回滚范围。改像素后由终端换成滚轮或方向键。
+      pos.jumpTo(pos.pixels - dy);
+      return;
+    }
+    final next = (pos.pixels - dy).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if (next != pos.pixels) pos.jumpTo(next);
+  }
+
+  /// 快照带着终端的列数和行数：电脑布局按它排，电脑那边改了窗口大小会重发快照。
   void _applyPiece(TermBytes piece) {
-    if (piece.snapshot && piece.cols > 0 && piece.cols != _deskCols) {
-      setState(() => _deskCols = piece.cols);
+    if (piece.snapshot &&
+        piece.cols > 0 &&
+        (piece.cols != _deskCols || piece.rows != _deskRows)) {
+      setState(() {
+        _deskCols = piece.cols;
+        _deskRows = piece.rows;
+        _panX = 0;
+        _panY = 0;
+        _pinch = 1;
+      });
     }
     _apply(piece.bytes);
   }
@@ -405,7 +657,31 @@ class _TerminalScreenState extends State<TerminalScreen>
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 4, 0),
-              child: _deskView(c),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _notePhoneBox(constraints);
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _deskView(c, constraints),
+                      if (_showCopy)
+                        Positioned(
+                          top: 8,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _CopyChip(
+                                onCopy: () => unawaited(_copySelection()),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           _KeyBar(
@@ -424,6 +700,37 @@ class _TerminalScreenState extends State<TerminalScreen>
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 长按选出的字留在这里。点一下写入剪贴板，点终端别处会先清掉选区。
+class _CopyChip extends StatelessWidget {
+  const _CopyChip({required this.onCopy});
+
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    return Material(
+      color: c.raised,
+      borderRadius: BorderRadius.circular(Rd.button),
+      child: InkWell(
+        onTap: onCopy,
+        borderRadius: BorderRadius.circular(Rd.button),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Text(
+            '复制',
+            style: TextStyle(
+              color: c.accent,
+              fontSize: Fs.meta,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
       ),
     );
   }

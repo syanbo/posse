@@ -241,6 +241,11 @@ class ChatWindow {
       if (applied.beforeOffset != null) beforeOffset = applied.beforeOffset;
       if (applied.cursorInvalidated) {
         hasMore = true;
+        // 窗口顶上被裁掉了，往前翻要从现在的第一条往前读，不然裁掉的那段永远读不回来
+        final first = merger.list.isEmpty
+            ? null
+            : merger.list.first.transcriptOffset;
+        if (first != null) beforeOffset = first;
       } else if (applied.hasMore != null) {
         hasMore = applied.hasMore!;
       }

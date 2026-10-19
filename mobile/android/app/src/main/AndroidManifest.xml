@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 连电脑的 WebSocket 要它；模板只在 debug、profile 的清单里加了，release 包连不上 -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="hive_mobile"
         android:name="${applicationName}"

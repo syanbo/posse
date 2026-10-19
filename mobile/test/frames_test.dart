@@ -39,6 +39,22 @@ void main() {
     expect(out.bytes, [0x1b, 0x5b, 0x41]);
   });
 
+  test('快照元数据里的列数和行数一起带上', () {
+    final asm = TermAssembler();
+    expect(
+      asm.add(
+        frame(termOpSnapshotStart, utf8.encode('{"cols":120,"rows":40}')),
+      ),
+      isNull,
+    );
+    expect(asm.add(frame(termOpSnapshotChunk, utf8.encode('hi'))), isNull);
+    final piece = asm.add(frame(termOpSnapshotEnd, const []));
+    expect(piece!.snapshot, isTrue);
+    expect(piece.cols, 120);
+    expect(piece.rows, 40);
+    expect(utf8.decode(piece.bytes), 'hi');
+  });
+
   test('key bar bytes are the terminal sequences', () {
     final byLabel = {for (final key in termKeys) key.label: key.bytes};
     expect(byLabel['Esc'], [0x1b]);

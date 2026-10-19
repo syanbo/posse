@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/ui/theme.dart';
 import 'package:hive_mobile/workspace/models.dart';
 import 'package:hive_mobile/workspace/session_actions.dart';
 
@@ -42,6 +43,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(flips, [true]);
     expect(find.text('切换到对话'), findsOneWidget, reason: '拨开关面板不收');
+
+    final sw = tester.widget<Switch>(find.byType(Switch));
+    expect(sw.activeTrackColor, HiveColors.light.accent);
+    final scales = tester
+        .widgetList<Transform>(
+          find.ancestor(
+            of: find.byType(Switch),
+            matching: find.byType(Transform),
+          ),
+        )
+        .map((t) => t.transform.entry(0, 0));
+    expect(scales, contains(closeTo(0.8, 0.001)));
 
     await tester.tap(find.text('切换到对话'));
     await tester.pumpAndSettle();

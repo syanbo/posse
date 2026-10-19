@@ -51,6 +51,23 @@ Map<String, Object?> frame(
 }
 
 void main() {
+  test('不限条数时追加不裁窗口，之后按条数再裁', () {
+    final window = ChatWindow();
+    window.applyFrame(
+      frame('snapshot', [
+        for (var i = 0; i < 3; i++) message('m$i', offset: 10 + i),
+      ]),
+      limit: 3,
+    );
+    window.applyFrame(frame('appended', [message('m3', offset: 13)]), limit: 0);
+    expect(window.messages.map((item) => item.id), ['m0', 'm1', 'm2', 'm3']);
+    window.applyFrame(frame('appended', [message('m4', offset: 14)]), limit: 3);
+    expect(window.messages.map((item) => item.id), ['m2', 'm3', 'm4']);
+    expect(window.hasMore, isTrue);
+    // 往前翻从裁剩的第一条往前读
+    expect(window.beforeOffset, 12);
+  });
+
   test('same id replaces only when the source is not less authoritative', () {
     final window = ChatWindow();
     window.applyFrame(

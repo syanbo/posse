@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'brand_paths.dart';
@@ -153,7 +154,12 @@ class WorkingStar extends StatelessWidget {
       child: ValueListenableBuilder<int>(
         valueListenable: _starClock,
         builder: (context, tick, _) {
-          final glyph = _starFrames[tick % _starFrames.length];
+          var glyph = _starFrames[tick % _starFrames.length];
+          // Android 把 ✳（默认 emoji 样式）交给彩色 emoji 字体、不认 U+FE0E，会画成绿色。
+          // 换成同样是星号、只有文字样式的 ✱，系统的符号字体里有
+          if (glyph == '✳' && defaultTargetPlatform == TargetPlatform.android) {
+            glyph = '✱';
+          }
           // 行高 1、上下均分时星号的墨迹本来就在正中，不用像桌面端那样往上挪
           // 字号比格子大一点，放在 OverflowBox 里居中，不被格子挤得折行
           return OverflowBox(
@@ -364,6 +370,27 @@ class RowTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 设置页和会话面板共用的开关。系统开关在卡片里显得大，缩到八成，打开时轨道用强调色。
+class HiveSwitch extends StatelessWidget {
+  const HiveSwitch({super.key, required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    return Transform.scale(
+      scale: 0.8,
+      child: Switch.adaptive(
+        value: value,
+        activeTrackColor: c.accent,
+        onChanged: onChanged,
       ),
     );
   }

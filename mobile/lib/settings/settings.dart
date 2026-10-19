@@ -231,15 +231,7 @@ class _Toggle extends StatelessWidget {
                 style: TextStyle(fontSize: Fs.body, color: c.text),
               ),
             ),
-            // 系统开关在卡片里显得大，缩到八成
-            Transform.scale(
-              scale: 0.8,
-              child: Switch.adaptive(
-                value: value,
-                activeTrackColor: c.accent,
-                onChanged: onChanged,
-              ),
-            ),
+            HiveSwitch(value: value, onChanged: onChanged),
           ],
         ),
       ),

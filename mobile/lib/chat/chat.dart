@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:scrollview_observer/scrollview_observer.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
@@ -15,6 +16,7 @@ import 'permission.dart';
 import 'prompt.dart';
 import 'send.dart';
 import 'transcript.dart';
+import 'anchor.dart';
 import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../ui/theme.dart';
@@ -52,6 +54,14 @@ class _ChatScreenState extends State<ChatScreen> {
   final _window = ChatWindow();
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  late final ListObserverController _observer = ListObserverController(
+    controller: _scroll,
+  )..cacheJumpIndexOffset = false;
+  late final ChatScrollObserver _chatObserver = ChatScrollObserver(_observer)
+    ..fixedPositionOffset = 80
+    ..toRebuildScrollViewCallback = () {
+      if (mounted) setState(() {});
+    };
   SessionTab? _tab;
   RpcStream? _chat;
   RpcStream? _tabs;
@@ -69,6 +79,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// 发出去、会话文件里还没出现的话。
   final _echoes = LocalEchoes();
+
+  /// 人在看更早的消息时，底部又来了新内容。不用观察器的位置回调：它推迟到帧后，
+  /// 每次布局都发，先后次序和贴底的跳转对不上，按钮会闪或在底部亮着。
+  var _newBelow = false;
+
+  /// 自己刚发了话：之后的新内容都贴底跟着，直到人自己拖动列表。
+  var _stick = false;
 
   /// 电脑推来的 agent 状态行（终端底部转圈那一行），没有时为空。
   String? _status;
@@ -92,11 +109,14 @@ class _ChatScreenState extends State<ChatScreen> {
     _scheduleOpen();
   }
 
-  /// 滚到顶附近就读更早的消息，不用另外点按钮。
+  /// 倒序列表的偏移 0 是底部。靠近顶部就读更早的消息；回到底部就收起「新消息」。
   void _onScroll() {
-    if (!_scroll.hasClients || !_landed) return;
+    if (!_scroll.hasClients) return;
     final position = _scroll.position;
-    if (position.pixels <= position.minScrollExtent + 120) {
+    if (_newBelow && position.pixels <= 80) {
+      setState(() => _newBelow = false);
+    }
+    if (position.maxScrollExtent - position.pixels <= 120) {
       unawaited(_loadEarlier());
     }
   }
@@ -201,28 +221,43 @@ class _ChatScreenState extends State<ChatScreen> {
         if (frame['type'] == 'status') {
           final text = frame['text'];
           final next = text is String && text.isNotEmpty ? text : null;
-          if (next != _status) setState(() => _status = next);
+          if (next != _status) {
+            final before = _tail();
+            _status = next;
+            _anchor(before);
+            setState(() {});
+          }
           return;
         }
-        setState(() {
-          _window.applyFrame(frame);
-          _echoes.reconcile(_window.messages);
-        });
-        _stickToBottom();
+        final before = _tail();
+        // 人往上翻着看时不裁窗口：裁掉的正是在看的那段，展开的工具组也会跟着收起。回到底部的下一帧再裁
+        final atBottom = !_scroll.hasClients || _scroll.position.pixels <= 80;
+        _window.applyFrame(frame, limit: atBottom ? 40 : 0);
+        _echoes.reconcile(_window.messages);
+        _anchor(before);
+        setState(() {});
+        _loadEarlierIfAtTop();
       });
       tabs.frames.listen((frame) {
         if (!mounted || gen != _openGen) return;
         final nextTabs = tabsFromFrame(tab.worktreeId, frame);
         if (nextTabs == null) return;
+        final before = _tail();
+        var changed = false;
         final alive = nextTabs.any((t) => t.terminalId == tab.terminalId);
-        if (alive == _ended) setState(() => _ended = !alive);
+        if (alive == _ended) {
+          _ended = !alive;
+          changed = true;
+        }
         for (final next in nextTabs) {
           if (next.terminalId != tab.terminalId) continue;
-          setState(() {
-            _tab = next;
-            _perm = _perm.observe(waiting: next.state == 'waiting');
-          });
+          _tab = next;
+          _perm = _perm.observe(waiting: next.state == 'waiting');
+          changed = true;
         }
+        if (!changed) return;
+        _anchor(before);
+        setState(() {});
       });
     } catch (error) {
       if (gen != _openGen || _gone) return;
@@ -237,31 +272,24 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// 第一次拿到消息时直接跳到最新一条；之后只在已经看着底部时跟着往下。
-  var _landed = false;
-
-  /// [force]：自己刚发了话，不管停在哪都回到底部。
-  void _stickToBottom({bool force = false}) {
+  /// 倒序列表打开就停在最新一条。自己刚发的话无条件回到底部。
+  void _jumpToLatest() {
+    _newBelow = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
+      if (!mounted) return;
+      if (_scroll.hasClients && _scroll.position.pixels != 0) {
+        _scroll.jumpTo(0);
+      }
+      if (_newBelow) setState(() => _newBelow = false);
+    });
+  }
+
+  /// 内容不满一屏时没有滚动事件，看完一页如果还贴着顶部就继续往前读。
+  void _loadEarlierIfAtTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients || _loadingEarlier) return;
       final position = _scroll.position;
-      if (!_landed) {
-        if (_window.messages.isEmpty) return;
-        _landed = true;
-        _scroll.jumpTo(position.maxScrollExtent);
-        // 内容高度要等图片、代码块排完才稳定，下一帧再贴一次底
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scroll.hasClients) {
-            _scroll.jumpTo(_scroll.position.maxScrollExtent);
-          }
-        });
-        return;
-      }
-      if (force || position.maxScrollExtent - position.pixels < 80) {
-        _scroll.jumpTo(position.maxScrollExtent);
-      }
-      // 消息不满一屏或者停在顶部附近时，不会再有滚动来触发，直接接着读
-      if (position.pixels <= position.minScrollExtent + 120) {
+      if (position.maxScrollExtent - position.pixels <= 120) {
         unawaited(_loadEarlier());
       }
     });
@@ -287,16 +315,13 @@ class _ChatScreenState extends State<ChatScreen> {
         'beforeOffset': before,
       });
       if (!mounted) return;
-      // 更早的消息加在上面，内容整体变高；按高度差往下挪，正在看的那条留在原处
-      final oldExtent = _scroll.hasClients
-          ? _scroll.position.maxScrollExtent
-          : 0.0;
-      setState(() => _window.applyOlderPage(page));
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_scroll.hasClients) return;
-        final grown = _scroll.position.maxScrollExtent - oldExtent;
-        if (grown > 0) _scroll.jumpTo(_scroll.position.pixels + grown);
-      });
+      // 更早的消息加在倒序列表的尾部（视觉顶部）。底部偏移是 0，已有下标不变，不用挪像素。
+      final beforeCount = _window.messages.length;
+      final tail = _tail();
+      _window.applyOlderPage(page);
+      _anchor(tail);
+      setState(() {});
+      if (_window.messages.length > beforeCount) _loadEarlierIfAtTop();
     } catch (error) {
       if (mounted) setState(() => _notice = '$error');
     } finally {
@@ -408,16 +433,18 @@ class _ChatScreenState extends State<ChatScreen> {
     if (current == null || _sending) return;
     if (caption.trim().isEmpty && images.isEmpty) return;
     // 斜杠命令 agent 不记成用户消息，等不到对应的那条，不先画
+    // 自己发的话无条件回到底部，不设保持位置：它晚一帧生效，会把刚贴底的画面拉回去
     final echo = caption.trimLeft().startsWith('/') && images.isEmpty
         ? null
         : _echoes.add(caption.trim(), images: images.length);
+    _stick = true;
     setState(() {
       _sending = true;
       // 输入框马上清空，话先画在对话末尾；没发出去再放回来
       _input.clear();
       if (images.isNotEmpty) _notice = '正在发送图片…';
     });
-    _stickToBottom(force: true);
+    _jumpToLatest();
     var accepted = false;
     try {
       var text = caption;
@@ -444,13 +471,14 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _notice = friendlyError(error));
     } finally {
       if (mounted) {
-        setState(() {
-          _sending = false;
-          if (!accepted) {
-            if (echo != null) _echoes.remove(echo);
-            if (_input.text.isEmpty) _input.text = caption;
-          }
-        });
+        final before = _tail();
+        _sending = false;
+        if (!accepted) {
+          if (echo != null) _echoes.remove(echo);
+          if (_input.text.isEmpty) _input.text = caption;
+        }
+        _anchor(before);
+        setState(() {});
       }
     }
   }
@@ -513,14 +541,19 @@ class _ChatScreenState extends State<ChatScreen> {
     final entries = foldTranscript(_window.messages)
         .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
         .toList();
+    final entryKeys = transcriptKeys(entries);
     final c = HiveColors.of(context);
-    // agent 在干活时对话最后一行转着星号，看得出它还在；停下、断线或会话结束就不画
     final echoes = _echoes.items;
-    final working =
-        !_ended &&
-        widget.model.rpc != null &&
-        (agentStateOf(tab.state) == AgentState.working ||
-            (_status?.isNotEmpty ?? false));
+    final working = _working;
+    // 倒序列表底部一加行，所有下标都挪一格。按身份认行，展开着的工具组这类状态才不会错配到别的行上
+    final rowKeys = <String>[
+      if (working) 'working',
+      for (var i = echoes.length - 1; i >= 0; i--)
+        'echo:${identityHashCode(echoes[i])}',
+      for (var i = entries.length - 1; i >= 0; i--) entryKeys[i],
+      if (_window.hasMore) 'earlier',
+    ];
+    final rowIndex = {for (var i = 0; i < rowKeys.length; i++) rowKeys[i]: i};
     return Scaffold(
       backgroundColor: canvas,
       appBar: AppBar(
@@ -569,46 +602,56 @@ class _ChatScreenState extends State<ChatScreen> {
               const LinearProgressIndicator(minHeight: 2),
             if (_window.error != null) NoticeBar(_window.error!),
             Expanded(
-              child: SelectionArea(
-                child: Scrollbar(
-                  controller: _scroll,
-                  child: ListView.builder(
-                    controller: _scroll,
-                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                    // 还有更早的消息时，列表最上面多一行：滚到顶才看得见，读的时候转圈
-                    itemCount:
-                        entries.length +
-                        echoes.length +
-                        (_window.hasMore ? 1 : 0) +
-                        (working ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (_window.hasMore) {
-                        if (index == 0) return _earlierRow(c);
-                        index--;
-                      }
-                      if (index >= entries.length) {
-                        final at = index - entries.length;
-                        if (at < echoes.length) {
-                          return EchoBubble(echo: echoes[at]);
-                        }
-                        return WorkingRow(status: _status, tool: tab.toolName);
-                      }
-                      final entry = entries[index];
-                      if (entry.tools) {
-                        return ToolRun(
-                          key: ValueKey(toolKey(entry.blocks, index)),
-                          blocks: entry.blocks,
-                          initiallyOpen: settings.expandTools,
-                        );
-                      }
-                      return MessageBubble(
-                        message: entry.message!,
-                        blocks: entry.blocks,
-                        agent: tab.agent,
-                      );
-                    },
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: NotificationListener<ScrollStartNotification>(
+                      onNotification: (n) {
+                        if (n.dragDetails != null) _stick = false;
+                        return false;
+                      },
+                      child: SelectionArea(
+                        child: Scrollbar(
+                          controller: _scroll,
+                          child: ListViewObserver(
+                            controller: _observer,
+                            child: ListView.builder(
+                              controller: _scroll,
+                              reverse: true,
+                              physics: _listPhysics(context),
+                              padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                              // 下标 0 是视觉底部。还有更早的消息时，列表最上面多一行。
+                              // 行按身份认（rowKeys）：展开着的工具组不会在别的行插进来时收起
+                              itemCount: rowKeys.length,
+                              findChildIndexCallback: (key) =>
+                                  key is ValueKey<String>
+                                  ? rowIndex[key.value]
+                                  : null,
+                              itemBuilder: (context, index) => KeyedSubtree(
+                                key: ValueKey(rowKeys[index]),
+                                child: _row(
+                                  c,
+                                  index,
+                                  working: working,
+                                  echoes: echoes,
+                                  entries: entries,
+                                  settings: settings,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  if (_newBelow)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 12,
+                      child: Center(child: _newBelowButton(c)),
+                    ),
+                ],
               ),
             ),
           ],
@@ -638,6 +681,126 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _row(
+    HiveColors c,
+    int index, {
+    required bool working,
+    required List<LocalEcho> echoes,
+    required List<TranscriptEntry> entries,
+    required AppSettings settings,
+  }) {
+    var at = index;
+    if (working) {
+      if (at == 0) {
+        return WorkingRow(status: _status, tool: tab.toolName);
+      }
+      at--;
+    }
+    if (at < echoes.length) {
+      return EchoBubble(echo: echoes[echoes.length - 1 - at]);
+    }
+    at -= echoes.length;
+    if (at < entries.length) {
+      final entry = entries[entries.length - 1 - at];
+      if (entry.tools) {
+        return ToolRun(
+          blocks: entry.blocks,
+          initiallyOpen: settings.expandTools,
+        );
+      }
+      return MessageBubble(
+        message: entry.message!,
+        blocks: entry.blocks,
+        agent: tab.agent,
+      );
+    }
+    return _earlierRow(c);
+  }
+
+  ScrollPhysics _listPhysics(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
+      return ChatObserverBouncingScrollPhysics(observer: _chatObserver);
+    }
+    return ChatObserverClampingScrollPhysics(observer: _chatObserver);
+  }
+
+  /// agent 在干活时对话最后一行转着星号，看得出它还在；停下、断线或会话结束就不画。
+  bool get _working {
+    return !_ended &&
+        _rpc != null &&
+        (agentStateOf(tab.state) == AgentState.working ||
+            (_status?.isNotEmpty ?? false));
+  }
+
+  /// 倒序列表的下标顺序：下标 0 是视觉底部。不含「更早的消息」那一行，它只加在尾部。
+  ChatTail _tail() {
+    final settings = widget.model.settings;
+    final entries = foldTranscript(_window.messages)
+        .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
+        .toList();
+    final echoes = _echoes.items;
+    final keys = <String>[];
+    final sizes = <int>[];
+    if (_working) {
+      keys.add('working');
+      sizes.add(_status?.length ?? 0);
+    }
+    for (var i = echoes.length - 1; i >= 0; i--) {
+      final echo = echoes[i];
+      keys.add('echo:${identityHashCode(echo)}');
+      sizes.add(echo.text.length + echo.images);
+    }
+    final ids = transcriptKeys(entries);
+    for (var i = entries.length - 1; i >= 0; i--) {
+      keys.add(ids[i]);
+      sizes.add(entrySize(entries[i]));
+    }
+    return ChatTail(keys, sizes);
+  }
+
+  /// 插入、删除或变高之前记下参照行，布局后按它修正偏移。纯往顶部追加历史时不修正。
+  void _anchor(ChatTail before) {
+    if (!_scroll.hasClients) return;
+    if (_stick) {
+      _jumpToLatest();
+      return;
+    }
+    final first = _observer.observeFirstItem()?.index ?? 0;
+    final plan = anchorPlan(before, _tail(), from: first);
+    if (plan == null) return;
+    if (_scroll.position.pixels > _chatObserver.fixedPositionOffset) {
+      _newBelow = true;
+    }
+    _chatObserver.standby(
+      mode: ChatScrollObserverHandleMode.specified,
+      refIndexType: ChatScrollObserverRefIndexType.itemIndex,
+      refItemIndex: plan.before,
+      refItemIndexAfterUpdate: plan.after,
+    );
+  }
+
+  Widget _newBelowButton(HiveColors c) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        backgroundColor: c.card,
+        foregroundColor: c.accent,
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: c.line),
+        ),
+      ),
+      onPressed: () {
+        if (_scroll.hasClients) _scroll.jumpTo(0);
+        setState(() => _newBelow = false);
+      },
+      child: const Text('新消息'),
     );
   }
 
