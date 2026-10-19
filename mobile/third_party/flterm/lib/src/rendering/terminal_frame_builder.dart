@@ -582,9 +582,16 @@ final class _ForegroundEmitter {
               ..pop())
             .build()
           ..layout(const ParagraphConstraints(width: .infinity));
+    // Hive: 格子宽度向上取整到设备像素，字号小时比字形本身的步进宽出一成多，
+    // 一长串符号按原宽画会比格子短，后面按格子定位的字就和它隔开一截。
+    final natural = paragraph.maxIntrinsicWidth;
+    final target = _frame.cellWidth * text.length;
+    var scaleX = natural > 0 ? target / natural : 1.0;
+    if ((scaleX - 1).abs() < 0.005) scaleX = 1;
     _sprites.shaped.add(
       ShapedRun(
         paragraph: paragraph,
+        scaleX: scaleX,
         offset: Offset(
           textX,
           row.rowY + _state.metrics.baseline - paragraph.alphabeticBaseline,

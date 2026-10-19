@@ -2,9 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:meta/meta.dart';
 
-/// Gesture detector that recognizes taps, mouse drags, and touch long presses.
+/// Gesture detector that recognizes taps and mouse drags.
 ///
-/// Drag is restricted to mouse devices, long press to touch devices.
+/// Drag is restricted to mouse devices. Touch long-press selection is timed
+/// by [TerminalGestureDetector] and does not compete with scrolling.
 ///
 /// ```dart
 /// TerminalRawGestureDetector(
@@ -24,6 +25,9 @@ class TerminalRawGestureDetector extends StatelessWidget {
   /// Fires when a tap ends.
   final GestureTapUpCallback? onTapUp;
 
+  /// Fires when a tap loses the arena, for example to a scroll.
+  final GestureTapCancelCallback? onTapCancel;
+
   /// Fires when a mouse drag begins.
   final GestureDragStartCallback? onDragStart;
 
@@ -33,26 +37,15 @@ class TerminalRawGestureDetector extends StatelessWidget {
   /// Fires when a mouse drag ends or is cancelled.
   final VoidCallback? onDragEnd;
 
-  /// Fires when a touch long press begins.
-  final GestureLongPressStartCallback? onLongPressStart;
-
-  /// Fires as a touch long press moves.
-  final GestureLongPressMoveUpdateCallback? onLongPressMoveUpdate;
-
-  /// Fires when a touch long press ends.
-  final VoidCallback? onLongPressUp;
-
   const TerminalRawGestureDetector({
     super.key,
     required this.child,
     this.onTapDown,
     this.onTapUp,
+    this.onTapCancel,
     this.onDragStart,
     this.onDragUpdate,
     this.onDragEnd,
-    this.onLongPressStart,
-    this.onLongPressMoveUpdate,
-    this.onLongPressUp,
   });
 
   @override
@@ -65,18 +58,8 @@ class TerminalRawGestureDetector extends StatelessWidget {
               () => TapGestureRecognizer(debugOwner: this),
               (instance) => instance
                 ..onTapDown = onTapDown
-                ..onTapUp = onTapUp,
-            ),
-        LongPressGestureRecognizer:
-            GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(
-                debugOwner: this,
-                supportedDevices: const {PointerDeviceKind.touch},
-              ),
-              (instance) => instance
-                ..onLongPressStart = onLongPressStart?.call
-                ..onLongPressMoveUpdate = onLongPressMoveUpdate
-                ..onLongPressUp = onLongPressUp,
+                ..onTapUp = onTapUp
+                ..onTapCancel = onTapCancel,
             ),
         PanGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(

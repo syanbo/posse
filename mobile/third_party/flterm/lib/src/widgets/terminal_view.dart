@@ -285,6 +285,8 @@ class _TerminalViewState extends State<TerminalView> {
 
     _scrollController = widget.scrollController ?? TerminalScrollController();
     _ownsScrollController = widget.scrollController == null;
+    // Hive: 接上时控制器可能已经在备用屏幕（less 停着不输出），不同步的话滚动按主屏幕夹住，不会换成方向键。
+    _scrollController.activeScreen = _controller.activeScreen;
     _scrollController.addListener(_onScrollChanged);
 
     _binding.brightness = _themeBrightness;
@@ -293,58 +295,54 @@ class _TerminalViewState extends State<TerminalView> {
   }
 
   Widget _build(BuildContext context, TerminalRenderCache cache) {
-    return GestureDetector(
-      behavior: .translucent,
-      onTap: _controller.requestFocus,
-      child: ColoredBox(
-        // Backdrop tinted by backgroundOpacity. The repaint boundary
-        // TerminalRenderBox skips its own grid fill below 1.0 and
-        // relies on this as the sole tint source, so default background
-        // cells show through to whatever sits behind the widget without
-        // composing twice across the two layers.
-        color: _theme.background.withValues(alpha: _theme.backgroundOpacity),
-        child: Padding(
-          padding: widget.padding,
-          child: Focus(
-            onKeyEvent: _handleKeyEvent,
-            child: TerminalShortcutScope(
-              onPaste: _handlePaste,
-              controller: _controller,
-              shortcuts: widget.shortcuts,
-              enableSelectAll: widget.gestureSettings.selectAllShortcut,
-              child: MouseRegion(
-                onHover: _handleMouseHover,
-                onExit: _handleMouseExit,
-                cursor: _effectiveMouseCursor(),
-                child: Focus(
-                  focusNode: _focusNode,
-                  autofocus: widget.autofocus,
-                  onFocusChange: _handleFocusChange,
-                  child: TerminalGestureDetector(
-                    links: _links,
-                    metrics: _metrics,
-                    binding: _binding,
-                    visibleRows: _visibleRows,
-                    settings: widget.gestureSettings,
-                    scrollController: _scrollController,
-                    onLinkActivate: widget.linkSettings.onActivate,
-                    child: Scrollable(
-                      controller: _scrollController,
-                      physics: widget.scrollPhysics,
-                      viewportBuilder: (_, offset) => TerminalRenderer(
-                        key: _rendererKey,
-                        theme: _theme,
-                        offset: offset,
-                        metrics: _metrics,
-                        renderObserver: _controller,
-                        terminal: _binding.terminal,
-                        renderCache: cache,
-                        preeditText: _binding.preeditText,
-                        blinkVisible: _blinkVisible,
-                        linkSnapshot: _links.snapshot(),
-                        onResize: _handleResize,
-                        onViewportChanged: _binding.handleViewportChanged,
-                      ),
+    return ColoredBox(
+      // Backdrop tinted by backgroundOpacity. The repaint boundary
+      // TerminalRenderBox skips its own grid fill below 1.0 and
+      // relies on this as the sole tint source, so default background
+      // cells show through to whatever sits behind the widget without
+      // composing twice across the two layers.
+      color: _theme.background.withValues(alpha: _theme.backgroundOpacity),
+      child: Padding(
+        padding: widget.padding,
+        child: Focus(
+          onKeyEvent: _handleKeyEvent,
+          child: TerminalShortcutScope(
+            onPaste: _handlePaste,
+            controller: _controller,
+            shortcuts: widget.shortcuts,
+            enableSelectAll: widget.gestureSettings.selectAllShortcut,
+            child: MouseRegion(
+              onHover: _handleMouseHover,
+              onExit: _handleMouseExit,
+              cursor: _effectiveMouseCursor(),
+              child: Focus(
+                focusNode: _focusNode,
+                autofocus: widget.autofocus,
+                onFocusChange: _handleFocusChange,
+                child: TerminalGestureDetector(
+                  links: _links,
+                  metrics: _metrics,
+                  binding: _binding,
+                  visibleRows: _visibleRows,
+                  settings: widget.gestureSettings,
+                  scrollController: _scrollController,
+                  onLinkActivate: widget.linkSettings.onActivate,
+                  child: Scrollable(
+                    controller: _scrollController,
+                    physics: widget.scrollPhysics,
+                    viewportBuilder: (_, offset) => TerminalRenderer(
+                      key: _rendererKey,
+                      theme: _theme,
+                      offset: offset,
+                      metrics: _metrics,
+                      renderObserver: _controller,
+                      terminal: _binding.terminal,
+                      renderCache: cache,
+                      preeditText: _binding.preeditText,
+                      blinkVisible: _blinkVisible,
+                      linkSnapshot: _links.snapshot(),
+                      onResize: _handleResize,
+                      onViewportChanged: _binding.handleViewportChanged,
                     ),
                   ),
                 ),

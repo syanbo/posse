@@ -13,10 +13,14 @@ final class ShapedRun {
   final Offset offset;
   final Rect clip;
 
+  /// Hive: 横向拉伸，让这段文字的宽度对上格子。
+  final double scaleX;
+
   const ShapedRun({
     required this.paragraph,
     required this.offset,
     required this.clip,
+    this.scaleX = 1,
   });
 
   void dispose() => paragraph.dispose();
