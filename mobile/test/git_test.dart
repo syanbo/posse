@@ -146,4 +146,81 @@ void main() {
     expect(find.text('二进制文件，手机上看不了差异'), findsOneWidget);
     expect(find.byTooltip('查看完整文件'), findsNothing);
   });
+
+  test('changes fold into a directory tree, single-child dirs merged', () {
+    final files = parseGitStatus({
+      'files': [
+        {'path': 'lib/src/ui/a.dart', 'x': '.', 'y': 'M'},
+        {'path': 'lib/src/ui/b.dart', 'x': 'D', 'y': '.'},
+        {'path': 'lib/main.dart', 'x': 'A', 'y': '.'},
+        {'path': 'README.md', 'x': 'R', 'y': '.', 'orig': 'old.md'},
+      ],
+    }).files;
+    String show(List<ChangeRow> rows) => [
+      for (final r in rows)
+        '${'  ' * r.depth}${r.file == null ? '${r.label}/ ${r.count}' : r.label}',
+    ].join('\n');
+    expect(
+      show(changeTree(files)),
+      'lib/ 3\n'
+      '  src/ui/ 2\n'
+      '    a.dart\n'
+      '    b.dart\n'
+      '  main.dart\n'
+      'README.md',
+    );
+    expect(
+      show(changeTree(files, folded: {'lib/src/ui'})),
+      'lib/ 3\n  src/ui/ 2\n  main.dart\nREADME.md',
+    );
+    expect(
+      [for (final f in files) f.kind],
+      [
+        ChangeKind.modified,
+        ChangeKind.deleted,
+        ChangeKind.added,
+        ChangeKind.renamed,
+      ],
+    );
+  });
+
+  testWidgets('changes list groups by kind and folds directories', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GitScreen(
+          title: 'demo',
+          loadStatus: () async => parseGitStatus({
+            'branch': 'main',
+            'files': [
+              {'path': 'src/a.txt', 'x': '.', 'y': 'M', 'added': 1},
+              {'path': 'src/gone.txt', 'x': 'D', 'y': '.'},
+              {'path': 'new.txt', 'x': '?', 'y': '?', 'untracked': true},
+              {'path': 'shot.png', 'x': '?', 'y': '?', 'untracked': true},
+            ],
+          }),
+          loadDiff: (file) async => parseGitDiff({'path': file.path}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('改动'), findsOneWidget);
+    expect(find.text('未跟踪'), findsOneWidget);
+    expect(find.text('D'), findsOneWidget);
+    expect(find.text('a.txt'), findsOneWidget);
+    // 未跟踪的图片也标图片，不写新文件
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('新文件'), findsNothing);
+    // 收起目录
+    await tester.tap(find.text('src'));
+    await tester.pumpAndSettle();
+    expect(find.text('a.txt'), findsNothing);
+    // 平铺时目录写在文件名后面
+    await tester.tap(find.byTooltip('平铺'));
+    await tester.pumpAndSettle();
+    expect(find.text('a.txt  src'), findsOneWidget);
+    await tester.tap(find.byTooltip('按目录'));
+    await tester.pumpAndSettle();
+  });
 }

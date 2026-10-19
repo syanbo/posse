@@ -10,12 +10,38 @@ class GitFileChange {
     required this.conflict,
     required this.binary,
     this.orig = '',
+    this.x = '',
+    this.y = '',
   });
 
   final String path;
 
   /// 改名前的路径，没改名时为空。
   final String orig;
+
+  /// git status 的两个状态字母：暂存区、工作区（`.` 是没变）。
+  final String x;
+  final String y;
+
+  ChangeKind get kind {
+    if (conflict) return ChangeKind.conflict;
+    if (untracked) return ChangeKind.untracked;
+    if (x == 'R' || y == 'R' || orig.isNotEmpty) return ChangeKind.renamed;
+    if (x == 'D' || y == 'D') return ChangeKind.deleted;
+    if (x == 'A') return ChangeKind.added;
+    return ChangeKind.modified;
+  }
+
+  String get name {
+    final slash = path.lastIndexOf('/');
+    return slash < 0 ? path : path.substring(slash + 1);
+  }
+
+  String get dir {
+    final slash = path.lastIndexOf('/');
+    return slash < 0 ? '' : path.substring(0, slash);
+  }
+
   final int added;
   final int deleted;
   final bool untracked;
@@ -29,7 +55,8 @@ class GitFileChange {
   ).hasMatch(path);
 
   String get stats {
-    if (binary) return isImage ? '图片' : '二进制';
+    if (isImage) return '图片';
+    if (binary) return '二进制';
     if (untracked && added == 0 && deleted == 0) return '新文件';
     final parts = <String>[
       if (added > 0) '+$added',
@@ -39,6 +66,79 @@ class GitFileChange {
     return parts.join(' ');
   }
 }
+
+enum ChangeKind { conflict, modified, added, deleted, renamed, untracked }
+
+/// 改动列表里的一行：目录（[file] 为空）或文件。目录的 [label] 是并起来的路径（只有一个子目录的中间层并成一行，照桌面端的 changeTree）。
+class ChangeRow {
+  const ChangeRow({
+    required this.key,
+    required this.label,
+    required this.depth,
+    this.file,
+    this.count = 0,
+  });
+
+  /// 目录是它的完整路径，用来记折叠。
+  final String key;
+  final String label;
+  final int depth;
+  final GitFileChange? file;
+
+  /// 目录下一共几个改动的文件。
+  final int count;
+}
+
+class _Dir {
+  final dirs = <String, _Dir>{};
+  final files = <GitFileChange>[];
+
+  int get count => files.length + dirs.values.fold(0, (n, d) => n + d.count);
+}
+
+/// 把改动按目录排成树再摊平成行，目录在前、各自按名字排；[folded] 里的目录不展开。
+List<ChangeRow> changeTree(
+  List<GitFileChange> files, {
+  Set<String> folded = const {},
+}) {
+  final root = _Dir();
+  for (final f in files) {
+    var d = root;
+    if (f.dir.isNotEmpty) {
+      for (final part in f.dir.split('/')) {
+        d = d.dirs.putIfAbsent(part, _Dir.new);
+      }
+    }
+    d.files.add(f);
+  }
+  final out = <ChangeRow>[];
+  void walk(_Dir d, String prefix, int depth) {
+    final names = d.dirs.keys.toList()..sort(_byName);
+    for (final name in names) {
+      var label = name;
+      var sub = d.dirs[name]!;
+      while (sub.files.isEmpty && sub.dirs.length == 1) {
+        final only = sub.dirs.keys.single;
+        label = '$label/$only';
+        sub = sub.dirs[only]!;
+      }
+      final key = prefix.isEmpty ? label : '$prefix/$label';
+      out.add(
+        ChangeRow(key: key, label: label, depth: depth, count: sub.count),
+      );
+      if (!folded.contains(key)) walk(sub, key, depth + 1);
+    }
+    final list = [...d.files]..sort((a, b) => _byName(a.name, b.name));
+    for (final f in list) {
+      out.add(ChangeRow(key: f.path, label: f.name, depth: depth, file: f));
+    }
+  }
+
+  walk(root, '', 0);
+  return out;
+}
+
+int _byName(String a, String b) => a.toLowerCase().compareTo(b.toLowerCase());
 
 class GitStatusView {
   const GitStatusView({
@@ -120,6 +220,8 @@ GitStatusView parseGitStatus(Map<String, Object?> raw) {
           conflict: item['conflict'] == true,
           binary: item['binary'] == true,
           orig: item['orig'] as String? ?? '',
+          x: item['x'] as String? ?? '',
+          y: item['y'] as String? ?? '',
         ),
       );
     }

@@ -76,6 +76,11 @@ class GitPane extends StatefulWidget {
 }
 
 class _GitPaneState extends State<GitPane> {
+  /// 按目录还是平铺，这次打开 App 期间各工作区共用。
+  static var _tree = true;
+
+  /// 收起的组和目录：组是 `ChangeKind`，目录是 `ChangeKind:路径`。
+  final _folded = <String>{};
   GitStatusView? _status;
   String? _error;
   var _loading = true;
@@ -129,6 +134,7 @@ class _GitPaneState extends State<GitPane> {
         action: TextButton(onPressed: _reload, child: const Text('重试')),
       );
     }
+    final c = HiveColors.of(context);
     final files = status?.files ?? const <GitFileChange>[];
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -148,12 +154,17 @@ class _GitPaneState extends State<GitPane> {
                   text: '工作区是干净的，没有改动',
                 ),
               )
-            else
-              Section(
-                title: '${files.length} 个文件有改动',
-                inset: 40,
-                children: [for (final file in files) _fileRow(context, file)],
-              ),
+            else ...[
+              _listHeader(c, files.length),
+              for (final (kind, label) in _groups)
+                if (files.any((f) => _groupOf(f) == kind))
+                  _group(
+                    context,
+                    kind,
+                    label,
+                    files.where((f) => _groupOf(f) == kind).toList(),
+                  ),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -161,56 +172,282 @@ class _GitPaneState extends State<GitPane> {
     );
   }
 
-  Widget _fileRow(BuildContext context, GitFileChange file) {
+  /// 照桌面端分组：冲突、改动、未跟踪。
+  static const _groups = [
+    (ChangeKind.conflict, '冲突'),
+    (ChangeKind.modified, '改动'),
+    (ChangeKind.untracked, '未跟踪'),
+  ];
+
+  static ChangeKind _groupOf(GitFileChange f) => switch (f.kind) {
+    ChangeKind.conflict => ChangeKind.conflict,
+    ChangeKind.untracked => ChangeKind.untracked,
+    _ => ChangeKind.modified,
+  };
+
+  Widget _listHeader(HiveColors c, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$count 个文件有改动',
+              style: TextStyle(fontSize: Fs.meta, color: c.muted),
+            ),
+          ),
+          IconButton(
+            tooltip: _tree ? '平铺' : '按目录',
+            onPressed: () => setState(() => _tree = !_tree),
+            icon: Icon(
+              _tree ? Icons.account_tree_outlined : Icons.view_list_rounded,
+              size: 20,
+              color: c.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _group(
+    BuildContext context,
+    ChangeKind kind,
+    String label,
+    List<GitFileChange> files,
+  ) {
     final c = HiveColors.of(context);
-    final slash = file.path.lastIndexOf('/');
-    final name = slash < 0 ? file.path : file.path.substring(slash + 1);
-    final dir = slash < 0 ? '' : file.path.substring(0, slash);
-    return RowTile(
-      leading: SizedBox(
-        width: 14,
-        child: Text(
-          _letter(file),
-          style: mono(
-            13,
-            color: _letterColor(c, file),
-          ).copyWith(fontWeight: FontWeight.w600),
+    final folded = _folded.contains('$kind');
+    final rows = _tree
+        ? changeTree(
+            files,
+            folded: {
+              for (final k in _folded)
+                if (k.startsWith('$kind:')) k.substring('$kind:'.length),
+            },
+          )
+        : [
+            for (final f in [
+              ...files,
+            ]..sort((a, b) => a.path.compareTo(b.path)))
+              ChangeRow(key: f.path, label: f.name, depth: 0, file: f),
+          ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: BorderRadius.circular(Rd.card),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            _foldRow(
+              c,
+              open: !folded,
+              onTap: () => _fold('$kind'),
+              depth: 0,
+              child: Row(
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: Fs.meta,
+                      fontWeight: FontWeight.w500,
+                      color: kind == ChangeKind.conflict ? c.danger : c.text,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${files.length}',
+                    style: TextStyle(fontSize: 12, color: c.faint),
+                  ),
+                ],
+              ),
+            ),
+            if (!folded)
+              for (final row in rows)
+                row.file == null
+                    ? _dirRow(c, kind, row)
+                    : _fileRow(c, row.file!, row.depth + 1, flat: !_tree),
+            if (!folded) const SizedBox(height: 4),
+          ],
         ),
       ),
-      title: Text(name),
-      subtitle: dir.isEmpty
-          ? null
-          : Text(dir, style: mono(12, color: c.muted), maxLines: 1),
-      trailing: _Stats(file: file),
+    );
+  }
+
+  void _fold(String key) => setState(() {
+    if (!_folded.remove(key)) _folded.add(key);
+  });
+
+  /// 带展开箭头的一行：组标题和目录共用。
+  Widget _foldRow(
+    HiveColors c, {
+    required bool open,
+    required VoidCallback onTap,
+    required int depth,
+    required Widget child,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 40,
+        child: Padding(
+          padding: EdgeInsets.only(left: 8 + depth * 16.0, right: 14),
+          child: Row(
+            children: [
+              AnimatedRotation(
+                turns: open ? 0.25 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: c.faint,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(child: child),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dirRow(HiveColors c, ChangeKind kind, ChangeRow row) {
+    final key = '$kind:${row.key}';
+    final open = !_folded.contains(key);
+    return _foldRow(
+      c,
+      open: open,
+      onTap: () => _fold(key),
+      depth: row.depth + 1,
+      child: Row(
+        children: [
+          Icon(
+            open ? Icons.folder_open_outlined : Icons.folder_outlined,
+            size: 18,
+            color: c.accent,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              row.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: mono(13.5, color: c.text),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('${row.count}', style: TextStyle(fontSize: 12, color: c.faint)),
+        ],
+      ),
+    );
+  }
+
+  Widget _fileRow(
+    HiveColors c,
+    GitFileChange file,
+    int depth, {
+    required bool flat,
+  }) {
+    final kind = file.kind;
+    final deleted = kind == ChangeKind.deleted;
+    final from = kind == ChangeKind.renamed && file.orig.isNotEmpty
+        ? file.orig.substring(file.orig.lastIndexOf('/') + 1)
+        : null;
+    final note = flat && file.dir.isNotEmpty
+        ? file.dir
+        : from != null
+        ? '← $from'
+        : null;
+    return InkWell(
       onTap: () => _open(file),
+      child: SizedBox(
+        height: 40,
+        child: Padding(
+          // 和目录的文件夹图标对齐：箭头 18 加间距 4
+          padding: EdgeInsets.only(left: 30 + depth * 16.0, right: 14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                child: Text(
+                  _letter(kind),
+                  textAlign: TextAlign.center,
+                  style: mono(
+                    12.5,
+                    color: _letterColor(c, kind),
+                  ).copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: file.name,
+                        style: TextStyle(
+                          color: deleted ? c.muted : c.text,
+                          decoration: deleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                          decorationColor: c.muted,
+                        ),
+                      ),
+                      if (note != null)
+                        TextSpan(
+                          text: '  $note',
+                          style: mono(12, color: c.faint),
+                        ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: Fs.body),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _Stats(file: file, inList: true),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-/// 手机拿到的改动里没有 git 的状态字母，只分得出冲突、未跟踪和其余的改动。
-String _letter(GitFileChange file) {
-  if (file.conflict) return 'U';
-  if (file.untracked) return '?';
-  return 'M';
-}
+String _letter(ChangeKind kind) => switch (kind) {
+  ChangeKind.conflict => 'U',
+  ChangeKind.added => 'A',
+  ChangeKind.untracked => '?',
+  ChangeKind.deleted => 'D',
+  ChangeKind.renamed => 'R',
+  ChangeKind.modified => 'M',
+};
 
-Color _letterColor(HiveColors c, GitFileChange file) {
-  if (file.conflict) return c.danger;
-  if (file.untracked) return c.sage;
-  return c.accent;
-}
+Color _letterColor(HiveColors c, ChangeKind kind) => switch (kind) {
+  ChangeKind.conflict || ChangeKind.deleted => c.danger,
+  ChangeKind.added || ChangeKind.untracked => c.sage,
+  _ => c.accent,
+};
 
 class _Stats extends StatelessWidget {
-  const _Stats({required this.file});
+  const _Stats({required this.file, this.inList = false});
 
   final GitFileChange file;
+
+  /// 列表里已经按组和状态字母分开了，不再写「新文件」。
+  final bool inList;
 
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
     const tnum = [FontFeature.tabularFigures()];
     if (file.binary || (file.added == 0 && file.deleted == 0)) {
-      final label = file.stats;
+      final label = inList && file.stats == '新文件' ? '' : file.stats;
       if (label.isEmpty) return const SizedBox.shrink();
       return Text(label, style: TextStyle(fontSize: 12, color: c.faint));
     }
