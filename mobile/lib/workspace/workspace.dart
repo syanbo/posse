@@ -23,12 +23,22 @@ import 'new_session.dart';
 import 'session_actions.dart';
 
 class PairScreen extends StatefulWidget {
-  const PairScreen({super.key, required this.model, this.adding = false});
+  const PairScreen({
+    super.key,
+    required this.model,
+    this.adding = false,
+    this.note,
+    this.manual = false,
+  });
 
   final HiveAppModel model;
 
   /// 已经连着一台电脑，再加一台：有返回按钮，连上新电脑后自动关掉。
   final bool adding;
+
+  /// 从首页直接扫码没成功时带过来：为什么没成，要不要一进来就展开手动输入。
+  final String? note;
+  final bool manual;
 
   @override
   State<PairScreen> createState() => _PairScreenState();
@@ -36,8 +46,8 @@ class PairScreen extends StatefulWidget {
 
 class _PairScreenState extends State<PairScreen> {
   final _code = TextEditingController();
-  String? _note;
-  var _manual = false;
+  late String? _note = widget.note;
+  late var _manual = widget.manual;
   var _closing = false;
 
   @override
@@ -54,17 +64,8 @@ class _PairScreenState extends State<PairScreen> {
   /// 添加模式下回到首页（重新扫同一台电脑换地址也一样）；连不上的原因留在这一页上。
   Future<void> _connect(String code) async {
     setState(() => _note = null);
-    final model = widget.model;
-    final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
-    if (!await model.connectCode(code)) return;
-    final name = model.current == null ? '电脑' : model.labelOf(model.current);
-    final where = hostOf(model.connectedUrl);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(where == null ? '已连上 $name' : '已连上 $name，地址 $where'),
-      ),
-    );
+    if (!await connectAndAnnounce(context, widget.model, code)) return;
     if (widget.adding && mounted && !_closing) {
       _closing = true;
       nav.pop();
@@ -79,29 +80,18 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Future<void> _scan() async {
-    bool granted = false;
-    try {
-      granted = await qrChannel.invokeMethod<bool>('authorize') ?? false;
-    } on MissingPluginException {
-      return;
-    } on PlatformException {
-      if (!mounted) return;
-      setState(() => _note = '打不开相机，可以把配对码贴进来。');
-      return;
-    }
+    final pick = await scanPairingCode(context);
     if (!mounted) return;
-    if (!granted) {
-      setState(() => _note = '需要相机权限才能扫码，也可以把配对码贴进来。');
-      return;
+    switch (pick.end) {
+      case ScanEnd.code:
+        await _connect(pick.code!);
+      case ScanEnd.manual:
+        setState(() => _manual = true);
+      case ScanEnd.denied || ScanEnd.failed:
+        setState(() => _note = scanNote(pick.end));
+      case ScanEnd.cancelled || ScanEnd.unsupported:
+        break;
     }
-    final pick = await Navigator.of(context)
-        .push<ScanPick>(MaterialPageRoute(builder: (_) => const QrScanPage()));
-    if (!mounted || pick == null) return;
-    if (pick.failed || pick.code == null) {
-      setState(() => _note = '打不开相机，可以把配对码贴进来。');
-      return;
-    }
-    await _connect(pick.code!);
   }
 
   /// 剪贴板里是配对码就直接连，不是就展开输入框让用户自己贴。
@@ -235,6 +225,30 @@ class _PairScreenState extends State<PairScreen> {
   }
 }
 
+/// 连上了在底部提示连的是哪台电脑、走的哪个地址。连不上的原因在 model.error。
+Future<bool> connectAndAnnounce(
+  BuildContext context,
+  HiveAppModel model,
+  String code,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  if (!await model.connectCode(code)) return false;
+  final name = model.current == null ? '电脑' : model.labelOf(model.current);
+  final where = hostOf(model.connectedUrl);
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(where == null ? '已连上 $name' : '已连上 $name，地址 $where'),
+    ),
+  );
+  return true;
+}
+
+String? scanNote(ScanEnd end) => switch (end) {
+  ScanEnd.denied => '需要相机权限才能扫码：在系统设置里允许 Hive 使用相机，也可以把配对码贴进来。',
+  ScanEnd.failed => '打不开相机，可以把配对码贴进来。',
+  _ => null,
+};
+
 /// 地址里给人看的部分：主机加端口，路径不写。
 String? hostOf(String? url) {
   if (url == null) return null;
@@ -298,10 +312,34 @@ class WorkspaceScreen extends StatelessWidget {
 
   final HiveAppModel model;
 
-  void _addComputer(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PairScreen(model: model, adding: true),
+  /// 直接开相机，扫到就连；取消就回首页。没权限、开不了相机、选了手动输入或连不上时
+  /// 才进「添加电脑」页，带上原因。没有原生扫码的平台直接进那一页。
+  Future<void> _addComputer(BuildContext context) async {
+    final pick = await scanPairingCode(context);
+    if (!context.mounted) return;
+    String? note;
+    switch (pick.end) {
+      case ScanEnd.cancelled:
+        return;
+      case ScanEnd.code:
+        if (await connectAndAnnounce(context, model, pick.code!)) return;
+        if (!context.mounted) return;
+        note = model.error ?? '连不上这台电脑。';
+      case ScanEnd.denied || ScanEnd.failed:
+        note = scanNote(pick.end);
+      case ScanEnd.manual || ScanEnd.unsupported:
+        break;
+    }
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PairScreen(
+            model: model,
+            adding: true,
+            note: note,
+            manual: pick.end == ScanEnd.manual,
+          ),
+        ),
       ),
     );
   }
@@ -376,7 +414,7 @@ class WorkspaceScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          // 刷新靠下拉，切换和忘掉电脑在标题旁的电脑胶囊里；这里只留扫码添加电脑
+          // 刷新靠下拉；切换、忘掉、扫码添加电脑都在标题旁的电脑胶囊里，加电脑不常用，不占顶栏
           IconButton(
             tooltip: '历史',
             onPressed: model.rpc == null
@@ -386,7 +424,7 @@ class WorkspaceScreen extends StatelessWidget {
                       builder: (_) => HistoryScreen(model: model),
                     ),
                   ),
-            // 圆形的图标墨迹比方形的小一圈，大两号才和扫码、设置看起来一样大
+            // 圆形的图标墨迹比方形的小一圈，大两号才和设置看起来一样大
             icon: Icon(Icons.history_rounded, size: 24, color: c.text),
           ),
           IconButton(
@@ -399,11 +437,6 @@ class WorkspaceScreen extends StatelessWidget {
               size: 24,
               color: c.text,
             ),
-          ),
-          IconButton(
-            tooltip: '扫码添加电脑',
-            onPressed: () => _addComputer(context),
-            icon: Icon(Icons.qr_code_scanner_rounded, size: 22, color: c.text),
           ),
           IconButton(
             tooltip: '设置',
