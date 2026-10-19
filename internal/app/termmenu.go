@@ -1,7 +1,10 @@
 package app
 
 import (
+	"net/url"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -59,7 +62,7 @@ func (a *app) dragPath(row ui.Element, path string) {
 }
 
 // termDrop 让终端区接住从访达和文件栏拖来的文件，把路径贴进终端；拖到上面时画一圈强调色的框。
-func (a *app) termDrop(c *ui.Context, area ui.Element) {
+func (a *app) termDrop(c *ui.Context, area ui.Element, agent string) {
 	_, inner := ui.DragOver[pathDrag](area)
 	if area.FileDragOver() || inner {
 		accent := c.Theme().Accent
@@ -75,7 +78,7 @@ func (a *app) termDrop(c *ui.Context, area ui.Element) {
 		return
 	}
 	term := a.view.term
-	for _, p := range dropPieces(paths) {
+	for _, p := range dropPieces(paths, agent) {
 		if p.paste {
 			term.Paste(p.text)
 		} else {
@@ -91,27 +94,57 @@ type dropPiece struct {
 	paste bool
 }
 
-// dropPieces 照 Orca 把拖进来的路径变成输入：图片按粘贴发，Claude、Codex 认得出粘贴的图片路径、当成附件，
-// 路径里没有特殊字符时原样发（转义了它们就找不到文件），有空格等字符时转义，shell 里仍是一个参数；
-// 其他文件转义后当作键入，后面带一个空格。两张原样的图片之间不加空格，否则空格会留在 agent 的输入框里。
-func dropPieces(paths []string) []dropPiece {
+// dropPieces 照 Orca 把拖进来的路径变成输入：agent 认得出的图片按粘贴发，当成附件（pastedImage），
+// 路径里没有特殊字符时原样发，有空格等字符时用反斜杠转义（路径里有单引号时，Claude、Grok 认不出单引号括起来的写法），
+// shell 里仍是一个参数；Cursor 连反斜杠转义的单引号也认不出，改发 file:// 链接。
+// 其他文件加单引号后当作键入，后面带一个空格。两张原样的图片之间不加空格，否则空格会留在 agent 的输入框里。
+func dropPieces(paths []string, agent string) []dropPiece {
 	var out []dropPiece
 	for i, p := range paths {
-		if !isImagePath(p) {
+		if !pastedImage(agent, p) {
 			out = append(out, dropPiece{text: shellQuote(p) + " "})
 			continue
 		}
-		out = append(out, dropPiece{text: shellQuote(p), paste: true})
-		if i+1 < len(paths) && !(shellSafe(p) && isImagePath(paths[i+1]) && shellSafe(paths[i+1])) {
+		text := shellEscape(p)
+		if agent == "cursor" && !shellSafe(p) {
+			text = (&url.URL{Scheme: "file", Path: p}).String()
+		}
+		out = append(out, dropPiece{text: text, paste: true})
+		if i+1 < len(paths) && !(shellSafe(p) && pastedImage(agent, paths[i+1]) && shellSafe(paths[i+1])) {
 			out = append(out, dropPiece{text: " "})
 		}
 	}
 	return out
 }
 
+// imageExts 是粘贴路径时 agent 除了 png、jpg、gif、webp 以外还当成图片附件的扩展名，Claude 只认这四种
+// （实测 Claude Code 2.1.303、Codex 0.163.0、Grok 1.0.63、Cursor 2026.10.16）。
+var imageExts = map[string][]string{
+	"codex":  {".tif", ".tiff"},
+	"grok":   {".tif", ".tiff", ".bmp"},
+	"cursor": {".tif", ".tiff", ".bmp", ".heic"},
+}
+
+// pastedImage 判断路径按图片粘贴。
+func pastedImage(agent, p string) bool {
+	return isImagePath(p) || slices.Contains(imageExts[agent], strings.ToLower(filepath.Ext(p)))
+}
+
 var shellSafeRe = regexp.MustCompile(`^[a-zA-Z0-9_./@:%+=,-]+$`)
 
 func shellSafe(p string) bool { return shellSafeRe.MatchString(p) }
+
+// shellEscape 给 ASCII 特殊字符前加反斜杠，中文等非 ASCII 字符在 shell 里不特殊，原样留着。
+func shellEscape(p string) string {
+	var b strings.Builder
+	for _, r := range p {
+		if r < 0x80 && !shellSafe(string(r)) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
 
 // shellQuote 给路径加单引号，没有特殊字符时原样返回。
 func shellQuote(p string) string {

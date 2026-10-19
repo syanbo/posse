@@ -12,21 +12,34 @@ import (
 
 func TestDropPieces(t *testing.T) {
 	for _, tc := range []struct {
+		agent string
 		paths []string
 		want  []dropPiece
 	}{
-		{[]string{"/a/main.go"}, []dropPiece{{"/a/main.go ", false}}},
-		{[]string{"/a/my notes.md"}, []dropPiece{{"'/a/my notes.md' ", false}}},
-		{[]string{"/a/it's.txt"}, []dropPiece{{`'/a/it'\''s.txt' `, false}}},
-		{[]string{"/a/x.png"}, []dropPiece{{"/a/x.png", true}}},
+		{"", []string{"/a/main.go"}, []dropPiece{{"/a/main.go ", false}}},
+		{"", []string{"/a/my notes.md"}, []dropPiece{{"'/a/my notes.md' ", false}}},
+		{"", []string{"/a/it's.txt"}, []dropPiece{{`'/a/it'\''s.txt' `, false}}},
+		{"claude", []string{"/a/x.png"}, []dropPiece{{"/a/x.png", true}}},
 		// 两张原样的图片之间不加空格
-		{[]string{"/a/x.png", "/a/y.jpg"}, []dropPiece{{"/a/x.png", true}, {"/a/y.jpg", true}}},
+		{"claude", []string{"/a/x.png", "/a/y.jpg"}, []dropPiece{{"/a/x.png", true}, {"/a/y.jpg", true}}},
 		// 转义过的图片后面要有空格，shell 里才是两个参数
-		{[]string{"/a/x (1).png", "/a/y.png"}, []dropPiece{{"'/a/x (1).png'", true}, {" ", false}, {"/a/y.png", true}}},
-		{[]string{"/a/x.png", "/a/b.go"}, []dropPiece{{"/a/x.png", true}, {" ", false}, {"/a/b.go ", false}}},
+		{"claude", []string{"/a/x (1).png", "/a/y.png"}, []dropPiece{{`/a/x\ \(1\).png`, true}, {" ", false}, {"/a/y.png", true}}},
+		{"claude", []string{"/a/x.png", "/a/b.go"}, []dropPiece{{"/a/x.png", true}, {" ", false}, {"/a/b.go ", false}}},
+		// 单引号和中文：Claude 认反斜杠转义，中文不转义
+		{"claude", []string{"/a/it's 图.png"}, []dropPiece{{`/a/it\'s\ 图.png`, true}}},
+		// 认作图片的格式按 agent 不同
+		{"codex", []string{"/a/x.TIFF", "/a/y.tif"}, []dropPiece{{"/a/x.TIFF", true}, {"/a/y.tif", true}}},
+		{"claude", []string{"/a/x.tiff"}, []dropPiece{{"/a/x.tiff ", false}}},
+		{"codex", []string{"/a/x.bmp"}, []dropPiece{{"/a/x.bmp ", false}}},
+		{"grok", []string{"/a/x.bmp"}, []dropPiece{{"/a/x.bmp", true}}},
+		{"grok", []string{"/a/x.heic"}, []dropPiece{{"/a/x.heic ", false}}},
+		{"cursor", []string{"/a/x.heic"}, []dropPiece{{"/a/x.heic", true}}},
+		{"", []string{"/a/x.heic"}, []dropPiece{{"/a/x.heic ", false}}},
+		// Cursor 有特殊字符时发 file:// 链接
+		{"cursor", []string{"/a/it's 图.png"}, []dropPiece{{"file:///a/it%27s%20%E5%9B%BE.png", true}}},
 	} {
-		if got := dropPieces(tc.paths); !slices.Equal(got, tc.want) {
-			t.Errorf("dropPieces(%q) = %+v, want %+v", tc.paths, got, tc.want)
+		if got := dropPieces(tc.paths, tc.agent); !slices.Equal(got, tc.want) {
+			t.Errorf("dropPieces(%q, %q) = %+v, want %+v", tc.paths, tc.agent, got, tc.want)
 		}
 	}
 }

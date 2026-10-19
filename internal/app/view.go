@@ -1312,7 +1312,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				}
 				a.sessionButtons(c, cur)
 			})
-			a.termDrop(c, area)
+			a.termDrop(c, area, cur.Agent)
 			a.linkCardView(c, area)
 			a.hoverPreviewView(c, area)
 		}
