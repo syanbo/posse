@@ -206,6 +206,7 @@ type app struct {
 	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
 	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
+	resizingCompare bool    // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
 	rollback        rollbackDlg
 	rollbackBox     dialogBox  // 回滚对话框拖到的位置、拉伸过的尺寸
 	pushBox         dialogBox  // Push 对话框的

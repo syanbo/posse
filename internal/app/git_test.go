@@ -1616,3 +1616,57 @@ func TestStashTab(t *testing.T) {
 		t.Fatalf("pop should drop the stash: %q", out)
 	}
 }
+
+// 分支比较上下两栏默认各一半，拖中间的分隔条调比例，松手写进 ui.json。
+func TestCompareSplit(t *testing.T) {
+	a := previewApp(t)
+	branchWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	a.loadBranches(v)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && v.cur.comp.onlyCur != nil })
+	top, ok1 := tt.Find("存在于")
+	if !ok1 {
+		t.Fatal("no pane title")
+	}
+	var heads []float32
+	for _, s := range []string{"feat: 新功能", "fix: 本地修复"} {
+		r, ok := tt.Find(s)
+		if !ok {
+			t.Fatalf("no %q", s)
+		}
+		heads = append(heads, r.Y)
+	}
+	// 两栏一样高：下一栏的提交离上一栏的提交差不多半个区域（窗口 760 高）
+	gap := heads[1] - heads[0]
+	if gap < 250 {
+		t.Fatalf("panes not split evenly: first commit at %v, second at %v (title %v)", heads[0], heads[1], top)
+	}
+	// 分隔条在下一栏标题上方
+	y := heads[1] - 48 // 隔着下一栏的标题（38）和列表上内边距，落在分隔条中间
+	tt.Move(600, y)
+	tt.Frame()
+	if tt.Cursor() != ui.CursorResizeNS {
+		t.Fatalf("cursor at grip %v (y %v, heads %v)", tt.Cursor(), y, heads)
+	}
+	tt.Press(600, y)
+	for i := 1; i <= 4; i++ {
+		tt.Move(600, y-float32(i)*25)
+		tt.Frame()
+	}
+	tt.Release(600, y-100)
+	tt.Frame()
+	if s := a.state.CompareSplit; s >= 0.45 || s <= 0.2 {
+		t.Fatalf("split %v after dragging up 100", s)
+	}
+	if a.resizingCompare {
+		t.Fatal("still resizing after release")
+	}
+	r, _ := tt.Find("fix: 本地修复")
+	if d := heads[1] - r.Y; d < 95 || d > 105 {
+		t.Fatalf("lower pane moved %v, want 100", d)
+	}
+}

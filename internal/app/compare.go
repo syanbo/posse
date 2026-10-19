@@ -180,16 +180,19 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		// 照 WebStorm：上下两栏，各是一边独有的提交
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			a.compareBar(c, w, v, d)
-			// 两栏各按提交数撑高，最多各占一半；提交少时空白留在最下面，不夹在两栏中间
-			paneH := func(n int) float32 { return 34 + float32(max(n, 1))*logRowH + 16 }
-			ui.Column(c).Grow(1).Shrink(1).MaxHeight(paneH(len(cd.onlyOther))).Children(func() {
-				a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther)
+			// 照 WebStorm 上下两栏默认各一半，拖中间的分隔条调比例，所有比较共用
+			split := a.compareSplit()
+			panes := ui.Column(c.Key("compare-panes")).Grow(1).Shrink(1)
+			panes.Children(func() {
+				// 两边各一种颜色（照 WebStorm 的分支颜色）：标题里的分支名和提交的圆点同色，一眼分得出是哪边
+				ui.Column(c).Height(0).Grow(split).Shrink(1).Children(func() {
+					a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther, laneColor(0))
+				})
+				a.compareGrip(c, panes.Bounds().H)
+				ui.Column(c).Height(0).Grow(1 - split).Shrink(1).Children(func() {
+					a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur, laneColor(1))
+				})
 			})
-			ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
-			ui.Column(c).Grow(1).Shrink(1).MaxHeight(paneH(len(cd.onlyCur))).Children(func() {
-				a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur)
-			})
-			ui.Box(c).Grow(0.001)
 		})
 		if cd.commit != nil {
 			ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
@@ -198,15 +201,48 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	})
 }
 
+// compareSplit 是分支比较上一栏占两栏的比例。
+func (a *app) compareSplit() float32 {
+	if s := a.state.CompareSplit; s > 0 && s < 1 {
+		return s
+	}
+	return 0.5
+}
+
+// compareGrip 是两栏之间的分隔条：隔开两栏，上下拖调比例，松手才写 ui.json。total 是两栏连同它的高度。
+func (a *app) compareGrip(c *ui.Context, total float32) {
+	t := c.Theme()
+	const gripH = 14
+	grip := ui.Box(c.Key("compare-grip")).Height(gripH).Shrink(0).Background(colors(t).side).
+		BorderWidth(1, 0, 1, 0).BorderColor(colors(t).line).Cursor(ui.CursorResizeNS)
+	if _, dy, held := grip.Dragged(); held && total > gripH {
+		room := total - gripH
+		// 每栏至少留出标题和一行提交
+		least := min(float32(38+logRowH+8)/room, 0.5)
+		a.state.CompareSplit = min(max(a.compareSplit()+dy/room, least), 1-least)
+		a.resizingCompare = true
+	} else if a.resizingCompare && !held {
+		a.resizingCompare = false
+		a.saveState()
+	}
+	if grip.Hovered() || a.resizingCompare {
+		accent := t.Accent
+		grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+			pt.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2 - 1, W: r.W, H: 2}, accent, 0)
+		})
+	}
+}
+
 // compareBar 是比较页顶上一行：比较的两个分支，交换两边，刷新。
 func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	cd := d.comp
 	ui.Row(c).Height(40).Shrink(0).Padding(0, 10, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, "比较").FontSize(12.5).TextColor(t.TextMuted)
-		ui.Text(c, cd.other).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+		// 颜色和下面两栏对应
+		ui.Text(c, cd.other).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(laneColor(0)).SingleLine().Shrink(1)
 		ui.Text(c, "和").FontSize(12.5).TextColor(t.TextMuted)
-		ui.Text(c, cd.cur).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+		ui.Text(c, cd.cur).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(laneColor(1)).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
@@ -226,16 +262,16 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 	ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
 }
 
-// commitPane 是一边独有的提交：琥珀色横幅说明是哪边，下面是提交列表。
-func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui.ListState, in, notIn string, commits []gitx.CommitInfo) {
+// commitPane 是一边独有的提交：标题说明是哪边，in 这个分支名和下面提交的圆点都是 lane 色。
+func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui.ListState, in, notIn string, commits []gitx.CommitInfo, lane ui.Color) {
 	t := c.Theme()
 	p := colors(t)
 	// 琥珀色只给"待处理"，这里用顶栏的底
-	ui.Row(c).Height(34).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).Children(func() {
-		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
+	ui.Row(c).Height(38).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+		ui.Icon(c, iconBranch).FontSize(14).TextColor(lane).Shrink(0)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
 			ui.Text(c, "存在于").FontSize(12.5)
-			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(lane).SingleLine().Shrink(1)
 			ui.Text(c, "中但不存在于").FontSize(12.5)
 			ui.Text(c, notIn).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
 			ui.Text(c, "中的提交").FontSize(12.5)
@@ -250,15 +286,15 @@ func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui
 	list.Key = func(i int) any { return commits[i].Hash }
 	ui.List(c, list, len(commits), func(i int) {
 		ci := commits[i]
-		if commitRow(c, ci, *sel != nil && (*sel).info.Hash == ci.Hash, i == 0, i == len(commits)-1) {
+		if commitRow(c, ci, *sel != nil && (*sel).info.Hash == ci.Hash, i == 0, i == len(commits)-1, lane) {
 			a.selectCommit(v, sel, ci)
 		}
 	}).Grow(1).Padding(4, 0, 8, 0)
 }
 
 // commitRow 是比较页的一个提交，和 Git 日志一个样子：左边一条线串起圆点，标题、分支和标签、作者、时间。
-// first、last 决定线从哪画到哪。返回是否点了它。
-func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool) bool {
+// first、last 决定线从哪画到哪，lane 是线和圆点的颜色。返回是否点了它。
+func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, lane ui.Color) bool {
 	t := c.Theme()
 	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
 	bg := ui.Transparent
@@ -270,7 +306,6 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool) bo
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		lane := laneColor(0)
 		ui.Box(c).Width(12).Height(logRowH).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy := r.X+r.W/2, r.Y+r.H/2
 			top, bot := r.Y, r.Y+r.H
@@ -514,7 +549,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					ui.Scroll(c).Grow(1).Children(func() {
 						ui.Column(c).Gap(1).Children(func() {
 							for i, ci := range plan.Commits {
-								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1) {
+								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(0)) {
 									a.selectCommit(v, &ps.commit, ci)
 									ps.detail = nil
 								}
