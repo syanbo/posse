@@ -7,6 +7,7 @@ import 'package:flterm/src/foundation.dart' show CellMetrics;
 import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../chat/chat.dart';
@@ -22,6 +23,7 @@ import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import 'desk_fit.dart';
 import 'frames.dart';
+import 'link_target.dart';
 
 /// 终端视图。单测不要 import 这个文件：flterm 带原生库，宿主 VM 测试不该编它。
 class TerminalScreen extends StatefulWidget {
@@ -299,7 +301,48 @@ class _TerminalScreenState extends State<TerminalScreen>
     padding: EdgeInsets.zero,
     scrollPhysics: scrollPhysics,
     scrollController: scrollController,
+    linkSettings: LinkSettings(onActivate: _onLink),
   );
+
+  /// 轻点终端里的链接：网址交给系统浏览器，工作区里的文件在文件页里看。
+  void _onLink(ActivatedLink link) {
+    final root = widget.model.worktrees
+        .where((w) => w.id == widget.tab.worktreeId)
+        .firstOrNull
+        ?.path;
+    final target = resolveLink(
+      uri: link.uri,
+      filePath: link.file?.path,
+      resolvedPath: link.file?.resolvedPath,
+      root: root,
+    );
+    switch (target) {
+      case OpenUrl(:final uri):
+        unawaited(_openUrl(uri));
+      case OpenFile(:final path):
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => FileViewer(
+              model: widget.model,
+              worktree: widget.tab.worktreeId,
+              path: path,
+            ),
+          ),
+        );
+      case NotInWorkspace():
+        setState(() => _notice = '这个文件不在当前工作区里，手机上打不开');
+      case null:
+        break;
+    }
+  }
+
+  Future<void> _openUrl(Uri uri) async {
+    var ok = false;
+    try {
+      ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!ok && mounted) setState(() => _notice = '打不开这个链接：$uri');
+  }
 
   /// 电脑布局：按快照的列和行排成桌面那一块，再缩进屏幕宽度。手势在这块表面上，
   /// 不另加横向滚动，免得和终端自己的纵向滚动抢。还没有快照时先铺满。
