@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"image"
@@ -11,6 +12,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -25,16 +27,18 @@ import (
 	"hive/internal/history"
 )
 
-// imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片和粘贴过的图片。
+// imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片、视频和粘贴过的图片。
 //   - 粘贴的：Claude 存在会话的图片目录里，终端里显示成 [Image #N]；
 //   - agent 生成的：Claude 工具返回的图片（截图、读进来的图片文件），内嵌在会话文件里；
-//     Codex 图像生成和跑代码产出的图片，存在 ~/.codex/generated_images/<会话 ID>/。
+//     Codex 图像生成和跑代码产出的图片，存在 ~/.codex/generated_images/<会话 ID>/；
+//     两家工具输出里提到的视频文件（录屏工具返回的路径等），缩略图由 Quick Look 取第一帧。
 //
 // 截图解码后一张十几 MB，所以只留缩到面板宽度的缩略图，悬停放大时才解码那一张。
 type imagesView struct {
 	term    string
 	dir     string // 会话的图片目录，找到后不再找
 	scanner *history.ImageScanner
+	videos  *history.VideoScanner
 	pasted  []imageItem
 	made    []imageItem // agent 生成的，新的在前，最多 maxMadeImages 张
 	madeAll int         // agent 生成的一共几张
@@ -48,14 +52,15 @@ type imagesView struct {
 }
 
 type imageItem struct {
-	key   string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置
+	key   string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置，视频是路径加修改时间
 	n     int    // 粘贴的图片的序号
 	label string
 	at    time.Time
-	path  string             // 磁盘上的图片
+	path  string             // 磁盘上的图片或视频
 	tool  *history.ToolImage // Claude 工具返回的图片，内容在会话文件 src 里
 	src   string
 	thumb *ui.Bitmap
+	video bool
 }
 
 const (
@@ -179,6 +184,54 @@ func codexImages(sid string) []imageItem {
 	return out
 }
 
+// videoItems 把工具输出里提到、磁盘上还在的视频排成新的在前。key 带上修改时间：
+// 录屏开始时工具就返回了路径，文件还没写完时取不到缩略图，写完后换了 key 再取。
+func videoItems(videos []history.ToolVideo) []imageItem {
+	var out []imageItem
+	for i := len(videos) - 1; i >= 0; i-- {
+		v := videos[i]
+		fi, err := os.Stat(v.Path)
+		if err != nil || fi.IsDir() {
+			continue
+		}
+		at := v.At
+		if at.IsZero() {
+			at = fi.ModTime()
+		}
+		key := fmt.Sprintf("%s@%d", v.Path, fi.ModTime().UnixNano())
+		out = append(out, imageItem{key: key, label: filepath.Base(v.Path), at: at, path: v.Path, video: true})
+	}
+	return out
+}
+
+// videoThumb 用 Quick Look 取视频的缩略图（第一帧），存在临时目录里，同一个 key 只取一次。
+func videoThumb(it imageItem) (string, error) {
+	dir := filepath.Join(os.TempDir(), "hive-video-thumbs")
+	sum := sha1.Sum([]byte(it.key))
+	out := filepath.Join(dir, fmt.Sprintf("%x.png", sum[:8]))
+	if _, err := os.Stat(out); err == nil {
+		return out, nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	tmp, err := os.MkdirTemp(dir, "ql-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "/usr/bin/qlmanage", "-t", "-s", strconv.Itoa(bigWidth), "-o", tmp, it.path).Run(); err != nil {
+		return "", err
+	}
+	// qlmanage 取不到缩略图时退出码也是 0，只是不出文件
+	if err := os.Rename(filepath.Join(tmp, filepath.Base(it.path)+".png"), out); err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
 // source 是图片从哪来：磁盘上的文件，或 Claude 读的文件、返回它的工具。
 func (it imageItem) source() string {
 	switch {
@@ -217,6 +270,13 @@ func toolImageItems(src string, imgs []history.ToolImage) []imageItem {
 
 // decodeItem 解码一张图片并缩到最宽 width 像素。
 func decodeItem(it imageItem, width int) (*image.RGBA, error) {
+	if it.video {
+		thumb, err := videoThumb(it)
+		if err != nil {
+			return nil, err
+		}
+		return scaledImage(thumb, width)
+	}
 	if it.tool == nil {
 		return scaledImage(it.path, width)
 	}
@@ -237,7 +297,7 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 	if !imagesSupported(cur.Agent) || !v.poll.due(c, imagesRefresh) {
 		return
 	}
-	id, agent, dir, scanner := cur.ID, cur.Agent, v.dir, v.scanner
+	id, agent, dir, scanner, videos := cur.ID, cur.Agent, v.dir, v.scanner, v.videos
 	var sid, transcript string
 	if cur.AgentState != nil {
 		sid, transcript = cur.AgentState.SessionID, cur.AgentState.TranscriptPath
@@ -269,6 +329,17 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 		case "codex":
 			made = codexImages(sid)
 		}
+		if videos == nil {
+			if path := history.TranscriptPath(agent, sid, transcript); path != "" {
+				videos = history.NewVideoScanner(agent, path)
+			}
+		}
+		if videos != nil {
+			if vs, err := videos.Scan(); err == nil {
+				made = append(made, videoItems(vs)...)
+				slices.SortStableFunc(made, func(a, b imageItem) int { return b.at.Compare(a.at) })
+			}
+		}
 		all := len(made)
 		made = made[:min(len(made), maxMadeImages)]
 		thumbs := map[string]*image.RGBA{}
@@ -299,7 +370,7 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 			for _, k := range failed {
 				v.markFailed(k)
 			}
-			v.dir, v.scanner, v.pasted, v.made, v.madeAll = dir, scanner, pasted, made, all
+			v.dir, v.scanner, v.videos, v.pasted, v.made, v.madeAll = dir, scanner, videos, pasted, made, all
 			v.poll.done()
 		})
 	}()
@@ -337,7 +408,7 @@ func (a *app) loadBig(it imageItem) {
 	}()
 }
 
-// openImage 用默认应用（预览）打开原图。Claude 工具返回的图片只在会话文件里，先写到临时目录：
+// openImage 用默认应用打开原图或视频。Claude 工具返回的图片只在会话文件里，先写到临时目录：
 // 读的那个文件之后可能被改掉，打开的是 agent 当时看到的样子。
 func (a *app) openImage(it imageItem) {
 	if it.tool == nil {
@@ -401,13 +472,13 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, "正在读取…")
 					return
 				case len(v.made) == 0 && len(v.pasted) == 0:
-					usageNote(c, "这个会话还没有图片。")
+					usageNote(c, "这个会话还没有图片或视频。")
 					return
 				}
 				if len(v.made) > 0 {
 					a.imageGroup(c, "Agent 生成", v.madeAll, v.made)
 					if v.madeAll > len(v.made) {
-						usageNote(c, fmt.Sprintf("只列出最近 %d 张。", len(v.made)))
+						usageNote(c, fmt.Sprintf("只列出最近 %d 项。", len(v.made)))
 					}
 				}
 				if len(v.pasted) > 0 {
@@ -427,7 +498,11 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	for _, it := range items {
-		card := ui.Column(c.Key(it.key)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label("图片 " + it.label)
+		kind := "图片 "
+		if it.video {
+			kind = "视频 "
+		}
+		card := ui.Column(c.Key(it.key)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label(kind + it.label)
 		selectedBg(c, card, false)
 		card.Children(func() {
 			if it.thumb != nil {
@@ -438,10 +513,19 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 					dw = dw * thumbMaxH / dh
 				}
 				ui.Row(c).Justify(ui.Center).Children(func() {
-					ui.Image(c, it.thumb).Width(dw).Radius(6)
+					ui.Box(c).Children(func() {
+						ui.Image(c, it.thumb).Width(dw).Radius(6)
+						if it.video {
+							playBadge(c)
+						}
+					})
 				})
 			} else {
-				ui.Box(c).Height(120).Radius(6).Background(t.Surface)
+				ui.Box(c).Height(120).Radius(6).Background(t.Surface).Children(func() {
+					if it.video {
+						playBadge(c)
+					}
+				})
 			}
 			ui.Row(c).Gap(8).Padding(0, 2).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, it.label).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.source())
@@ -459,6 +543,15 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 			a.openImage(it)
 		}
 	}
+}
+
+// playBadge 是盖在视频缩略图正中的播放标记，深色圆底让它在亮暗画面上都看得见。
+func playBadge(c *ui.Context) {
+	ui.Box(c).Absolute().Top(0).Right(0).Bottom(0).Left(0).Center().Children(func() {
+		ui.Box(c).Size(36, 36).Radius(18).Center().Background(ui.RGBA(0, 0, 0, 0.55)).Children(func() {
+			ui.Icon(c, iconPlay).FontSize(22).TextColor(ui.RGBA(255, 255, 255, 1))
+		})
+	})
 }
 
 // imagePreview 是悬停时浮在图片面板左边的大图。
