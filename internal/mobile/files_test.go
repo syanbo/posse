@@ -70,6 +70,11 @@ func TestPhoneFiles(t *testing.T) {
 	if b, _ := base64.StdEncoding.DecodeString(img["content"].(string)); string(b) != "\x89PNG\x00" || img["mimeType"] != "image/png" {
 		t.Fatalf("preview %v", img)
 	}
+	// 按段读：从中间读到末尾，size 是整个文件
+	part := result(t, p.next(p.call("files.readRange", map[string]any{"worktree": wt, "relativePath": "logo.png", "offset": 2, "limit": 10})))
+	if b, _ := base64.StdEncoding.DecodeString(part["content"].(string)); string(b) != "NG\x00" || part["size"] != float64(5) {
+		t.Fatalf("range %v", part)
+	}
 
 	for _, bad := range []string{"../etc/passwd", "/etc/passwd", "src/../../x"} {
 		m := p.next(p.call("files.read", map[string]any{"worktree": wt, "relativePath": bad}))

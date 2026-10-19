@@ -12,6 +12,7 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import '../workspace/workspace.dart';
+import 'video.dart';
 
 /// 目录里的一项。路径都相对工作区根目录，用 / 分隔。
 class FileEntry {
@@ -47,7 +48,7 @@ List<FileEntry> parseDir(String parent, Object? raw) {
 
 const _imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'};
 const _binaryExts = {
-  'avif', 'heic', 'mov', 'mp3', 'mp4', 'pdf', 'zip', 'gz', 'tar', 'dmg', //
+  'avif', 'heic', 'mp3', 'pdf', 'zip', 'gz', 'tar', 'dmg', //
   'woff', 'woff2', 'ttf', 'otf', 'so', 'dylib', 'a', 'o', 'class', 'jar',
 };
 
@@ -405,7 +406,7 @@ class _SearchSheetState extends State<_SearchSheet> {
   }
 }
 
-/// 只读看一个文件：文本带行号，Markdown 默认渲染（可切到源码），图片直接显示。
+/// 只读看一个文件：文本带行号，Markdown 默认渲染（可切到源码），图片直接显示，视频下载后播放。
 class FileViewer extends StatefulWidget {
   const FileViewer({
     super.key,
@@ -445,6 +446,7 @@ class _FileViewerState extends State<FileViewer> {
       return;
     }
     final ext = _ext(widget.path);
+    if (videoExts.contains(ext)) return;
     try {
       if (_imageExts.contains(ext)) {
         final res = await rpc.call('files.readPreview', {
@@ -514,6 +516,10 @@ class _FileViewerState extends State<FileViewer> {
         text: _error!,
         error: true,
       );
+    }
+    final rpc = widget.model.rpc;
+    if (videoExts.contains(_ext(widget.path)) && rpc != null) {
+      return VideoView(rpc: rpc, worktree: widget.worktree, path: widget.path);
     }
     if (_binary) {
       return const EmptyState(

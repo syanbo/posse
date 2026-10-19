@@ -21,6 +21,7 @@ const (
 	fileReadMax  = 512 << 10 // files.read 超出部分截掉
 	imageReadMax = 10 << 20  // files.readPreview 的图片
 	fileListMax  = 5000      // files.list 最多返回多少个文件
+	rangeMax     = 1 << 20   // files.readRange 一次最多给多少字节
 	searchMax    = 32
 )
 
@@ -40,6 +41,7 @@ type fileParams struct {
 	RelativePath string `json:"relativePath"`
 	Query        string `json:"query"`
 	Limit        int    `json:"limit"`
+	Offset       int64  `json:"offset"`
 }
 
 // fileMethod 处理 files.*；不认识的方法返回 false。git ls-files 和读大文件可能要一会儿，
@@ -59,6 +61,8 @@ func (c *conn) fileMethod(req request, p json.RawMessage) bool {
 		run = previewReply
 	case "files.stat":
 		run = statReply
+	case "files.readRange":
+		run = rangeReply
 	default:
 		return false
 	}
@@ -247,4 +251,38 @@ func statReply(root string, a fileParams) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"size": fi.Size(), "isDirectory": fi.IsDir(), "mtime": fi.ModTime().UnixMilli()}, nil
+}
+
+// rangeReply 按段读文件（Hive 扩展，手机放视频时分段下载到本地再播），base64。
+// size 是文件现在的大小，手机按它判断读完没有。
+func rangeReply(root string, a fileParams) (any, error) {
+	name, err := joinRel(root, a.RelativePath, false)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if fi.IsDir() {
+		return nil, errorf("not_a_file", "not_a_file")
+	}
+	n := a.Limit
+	if n <= 0 || n > rangeMax {
+		n = rangeMax
+	}
+	if a.Offset < 0 {
+		return nil, errorf("bad_params", "offset")
+	}
+	b := make([]byte, n)
+	got, err := f.ReadAt(b, a.Offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return map[string]any{"content": base64.StdEncoding.EncodeToString(b[:got]), "size": fi.Size()}, nil
 }
