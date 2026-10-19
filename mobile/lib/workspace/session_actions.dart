@@ -13,7 +13,7 @@ Future<bool> closeSession(
   SessionTab tab,
 ) async {
   final who = tab.agent == null ? null : chatWho('assistant', tab.agent);
-  final ok = await showDialog<bool>(
+  final ok = await showHiveDialog<bool>(
     context: context,
     builder: (dialog) => AlertDialog(
       title: Text(who == null ? '关闭这个终端？' : '关闭这个会话？'),

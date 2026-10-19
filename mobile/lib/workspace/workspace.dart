@@ -1010,7 +1010,7 @@ class _ComputerSheet extends StatelessWidget {
   }
 
   Future<void> _rename(BuildContext context, SavedComputer computer) async {
-    final name = await showDialog<String>(
+    final name = await showHiveDialog<String>(
       context: context,
       builder: (_) => _RenameDialog(computer: computer),
     );
@@ -1018,7 +1018,7 @@ class _ComputerSheet extends StatelessWidget {
   }
 
   Future<void> _remove(BuildContext context, SavedComputer computer) async {
-    final ok = await showDialog<bool>(
+    final ok = await showHiveDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('忘掉 ${model.labelOf(computer)}'),

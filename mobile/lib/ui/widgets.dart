@@ -222,6 +222,51 @@ String agentStateText(AgentState state) => switch (state) {
   AgentState.none => '',
 };
 
+/// 弹框：从略小放大到原大、同时淡入，收起时缩回去、比出来快。Material 默认只淡入一下，看着生硬。
+/// 系统开了减少动态效果时只淡入淡出。
+Future<T?> showHiveDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+}) {
+  return Navigator.of(context, rootNavigator: true).push<T>(
+    _HiveDialogRoute<T>(
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      pageBuilder: (dialog, _, _) => SafeArea(child: Builder(builder: builder)),
+      transitionBuilder: (dialog, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        if (MediaQuery.disableAnimationsOf(dialog)) {
+          return FadeTransition(opacity: curved, child: child);
+        }
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.9, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _HiveDialogRoute<T> extends RawDialogRoute<T> {
+  _HiveDialogRoute({
+    required super.pageBuilder,
+    required super.transitionBuilder,
+    super.barrierLabel,
+  }) : super(
+         barrierColor: Colors.black54,
+         transitionDuration: const Duration(milliseconds: 240),
+       );
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 160);
+}
+
 /// 列表分组：上面一行小标题，下面一张卡片，行之间是缩进的细线。
 class Section extends StatelessWidget {
   const Section({
