@@ -126,7 +126,7 @@ class SettingsScreen extends StatelessWidget {
                     title: const Text('快捷键'),
                     subtitle: Text(
                       s.customKeys.isEmpty
-                          ? '在键盘上方的快捷键栏加自己的键'
+                          ? '调整键盘上方快捷键栏的顺序，加自己的键'
                           : '自定义 ${s.customKeys.length} 个',
                     ),
                     onTap: () => Navigator.of(context).push(

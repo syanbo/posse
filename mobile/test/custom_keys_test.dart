@@ -35,32 +35,66 @@ void main() {
     expect(_key('text', 'git status', label: ' gs ').shown, 'gs');
   });
 
-  test(
-    'custom keys survive a settings round trip and bad entries are dropped',
-    () {
-      final s = AppSettings(
-        customKeys: [
-          _key('text', '/clear', enter: true),
-          _key('ctrl', 'r', label: '搜索'),
+  test('the bar order survives a settings round trip, bad entries dropped', () {
+    final s = AppSettings(
+      barKeys: [
+        const BarKey.builtin('Esc'),
+        BarKey.custom(_key('text', '/clear', enter: true)),
+        const BarKey.builtin('image'),
+        BarKey.custom(_key('ctrl', 'r', label: '搜索')),
+      ],
+    );
+    final back = AppSettings.decode(
+      jsonEncode({
+        ...s.toJson(),
+        'barKeys': [
+          ...(s.toJson()['barKeys'] as List),
+          {'kind': 'ctrl', 'value': '1'},
+          {'kind': 'weird', 'value': 'x'},
+          {'builtin': 'nope'},
+          {'builtin': 'Esc'},
+          'junk',
         ],
-      );
-      final back = AppSettings.decode(
-        jsonEncode({
-          ...s.toJson(),
-          'customKeys': [
-            ...(s.toJson()['customKeys'] as List),
-            {'kind': 'ctrl', 'value': '1'},
-            {'kind': 'weird', 'value': 'x'},
-            'junk',
-          ],
-        }),
-      );
-      expect(back.customKeys.length, 2);
-      expect(back.customKeys[0].value, '/clear');
-      expect(back.customKeys[0].enter, isTrue);
-      expect(back.customKeys[1].label, '搜索');
-      expect(back.customKeys[1].bytes, [0x12]);
-      expect(AppSettings.decode(null).customKeys, isEmpty);
-    },
-  );
+      }),
+    );
+    final names = [for (final k in back.barKeys) k.builtin ?? k.custom!.shown];
+    // 存下的顺序在前，重复的 Esc 去掉，没存的内置键按默认顺序补在后面
+    expect(names, [
+      'Esc',
+      '/clear',
+      'image',
+      '搜索',
+      'paste',
+      'Tab',
+      'Enter',
+      '⇧Tab',
+      '^C',
+      '↑',
+      '↓',
+      '←',
+      '→',
+    ]);
+    expect(back.customKeys.map((k) => k.bytes), [
+      utf8.encode('/clear'),
+      [0x12],
+    ]);
+    expect(back.customKeys.first.enter, isTrue);
+  });
+
+  test('old settings with only custom keys keep the old bar order', () {
+    final back = AppSettings.decode(
+      jsonEncode({
+        'customKeys': [
+          {'kind': 'text', 'value': '/compact'},
+        ],
+      }),
+    );
+    expect(
+      [for (final k in back.barKeys) k.builtin ?? k.custom!.shown].take(4),
+      ['image', 'paste', '/compact', 'Esc'],
+    );
+    expect([
+      for (final k in AppSettings.decode(null).barKeys) k.builtin,
+    ], builtinBarKeys);
+  });
 }

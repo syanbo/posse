@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -5,35 +7,47 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'custom_keys.dart';
 
-/// 设置里的「终端快捷键」：自己加的键排在快捷键栏的图片、粘贴后面，拖右边的把手排序。
+/// 设置里的「终端快捷键」：快捷键栏上除键盘开关以外的键都在一张表里，拖右边的把手排序；
+/// 内置的不能改也不能删，自己加的点开修改。
 class CustomKeysScreen extends StatelessWidget {
   const CustomKeysScreen({super.key, required this.model});
 
   final HiveAppModel model;
 
-  void _save(List<CustomKey> keys) =>
-      model.updateSettings((s) => s.customKeys = keys);
+  void _save(List<BarKey> keys) =>
+      model.updateSettings((s) => s.barKeys = keys);
 
   Future<void> _edit(BuildContext context, {int? index}) async {
-    final keys = model.settings.customKeys;
+    final initial = index == null ? null : model.settings.barKeys[index].custom;
     final result = await showModalBottomSheet<_EditResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (_) => _KeyEditor(initial: index == null ? null : keys[index]),
+      builder: (_) => _KeyEditor(initial: initial),
     );
     if (result == null) return;
-    final next = List.of(model.settings.customKeys);
+    final next = List.of(model.settings.barKeys);
     if (result.key == null) {
       if (index != null) next.removeAt(index);
     } else if (index == null) {
-      next.add(result.key!);
+      next.insert(_insertAt(next), BarKey.custom(result.key!));
     } else {
-      next[index] = result.key!;
+      next[index] = BarKey.custom(result.key!);
     }
     _save(next);
   }
+
+  /// 新键接在自己加的最后一个后面；还没有时放在第一个终端键前面，和默认顺序一致。
+  static int _insertAt(List<BarKey> keys) {
+    final last = keys.lastIndexWhere((key) => key.custom != null);
+    if (last >= 0) return last + 1;
+    final term = keys.indexWhere((key) => key.termKey != null);
+    return term >= 0 ? term : keys.length;
+  }
+
+  static String _order(List<BarKey> keys) =>
+      jsonEncode([for (final key in keys) key.toJson()]);
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +55,8 @@ class CustomKeysScreen extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final c = HiveColors.of(context);
-        final keys = model.settings.customKeys;
+        final keys = model.settings.barKeys;
+        final reset = defaultBarKeys(model.settings.customKeys);
         return Scaffold(
           appBar: AppBar(
             title: const Text('终端快捷键'),
@@ -58,60 +73,68 @@ class CustomKeysScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8, bottom: 32),
             children: [
               Section(
-                title: '自定义',
+                title: '快捷键栏',
                 children: [
-                  if (keys.isEmpty)
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    itemCount: keys.length,
+                    proxyDecorator: (child, _, _) => Material(
+                      color: c.raised,
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(Rd.card),
+                      child: child,
+                    ),
+                    onReorderItem: (from, to) {
+                      final next = List.of(keys);
+                      next.insert(to, next.removeAt(from));
+                      _save(next);
+                    },
+                    itemBuilder: (context, i) => _KeyRow(
+                      key: ValueKey(i),
+                      index: i,
+                      item: keys[i],
+                      divider: i > 0,
+                      onTap: keys[i].custom == null
+                          ? null
+                          : () => _edit(context, index: i),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: Text(
+                  '最左边的键盘开关固定不动，其余按这里从上到下的顺序从左往右排。自己加的键点开可以修改或删除。',
+                  style: TextStyle(fontSize: 12.5, height: 1.5, color: c.muted),
+                ),
+              ),
+              Section(
+                children: [
+                  RowTile(
+                    chevron: false,
+                    leading: Icon(
+                      Icons.add_circle_outline_rounded,
+                      size: 22,
+                      color: c.accent,
+                    ),
+                    title: const Text('新建快捷键'),
+                    subtitle: const Text('一段常用的文字、Ctrl 组合键或 PgUp 这类特殊键'),
+                    onTap: () => _edit(context),
+                  ),
+                  if (_order(keys) != _order(reset))
                     RowTile(
+                      chevron: false,
                       leading: Icon(
-                        Icons.add_circle_outline_rounded,
+                        Icons.restart_alt_rounded,
                         size: 22,
                         color: c.accent,
                       ),
-                      title: const Text('新建快捷键'),
-                      subtitle: const Text('一段常用的文字、Ctrl 组合键或 PgUp 这类特殊键'),
-                      onTap: () => _edit(context),
-                    )
-                  else
-                    ReorderableListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      itemCount: keys.length,
-                      proxyDecorator: (child, _, _) => Material(
-                        color: c.raised,
-                        elevation: 6,
-                        borderRadius: BorderRadius.circular(Rd.card),
-                        child: child,
-                      ),
-                      onReorderItem: (from, to) {
-                        final next = List.of(keys);
-                        next.insert(to, next.removeAt(from));
-                        _save(next);
-                      },
-                      itemBuilder: (context, i) => _KeyRow(
-                        key: ValueKey(i),
-                        index: i,
-                        item: keys[i],
-                        divider: i > 0,
-                        onTap: () => _edit(context, index: i),
-                      ),
+                      title: const Text('恢复默认顺序'),
+                      subtitle: const Text('自己加的键保留，排回图片、粘贴后面'),
+                      onTap: () => _save(reset),
                     ),
-                ],
-              ),
-              Section(
-                title: '内置',
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    child: Text(
-                      'Esc、Tab、Enter、⇧Tab、^C 和方向键一直在，排在自定义的后面。',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.5,
-                        color: c.muted,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ],
@@ -132,13 +155,14 @@ class _KeyRow extends StatelessWidget {
   });
 
   final int index;
-  final CustomKey item;
+  final BarKey item;
   final bool divider;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
+    final custom = item.custom;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -149,8 +173,17 @@ class _KeyRow extends StatelessWidget {
           ),
         RowTile(
           chevron: false,
-          leading: _KeyCap(item.shown),
-          title: Text(describeKey(item)),
+          leading: switch (item.builtin) {
+            'image' => const _KeyCap(icon: Icons.image_outlined),
+            'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
+            _ => _KeyCap(label: custom?.shown ?? item.builtin),
+          },
+          title: Text(
+            custom != null
+                ? describeKey(custom)
+                : describeBuiltin(item.builtin!),
+          ),
+          subtitle: custom == null ? const Text('内置') : null,
           onTap: onTap,
           trailing: ReorderableDragStartListener(
             index: index,
@@ -173,11 +206,28 @@ String describeKey(CustomKey key) => switch (key.kind) {
   _ => key.value,
 };
 
+/// 内置键是做什么的。
+String describeBuiltin(String name) => switch (name) {
+  'image' => '发送图片',
+  'paste' => '粘贴剪贴板',
+  'Esc' => 'Esc：中断、退出',
+  'Tab' => 'Tab：补全',
+  'Enter' => '回车',
+  '⇧Tab' => 'Shift + Tab：切换模式',
+  '^C' => 'Ctrl + C：结束程序',
+  '↑' => '方向键：上',
+  '↓' => '方向键：下',
+  '←' => '方向键：左',
+  '→' => '方向键：右',
+  _ => name,
+};
+
 /// 和快捷键栏上一样的键帽，设置里一眼对得上。
 class _KeyCap extends StatelessWidget {
-  const _KeyCap(this.label);
+  const _KeyCap({this.label, this.icon});
 
-  final String label;
+  final String? label;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -191,16 +241,18 @@ class _KeyCap extends StatelessWidget {
         color: c.fill,
         borderRadius: BorderRadius.circular(Rd.button),
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: c.text,
-        ),
-      ),
+      child: icon != null
+          ? Icon(icon, size: 18, color: c.text)
+          : Text(
+              label ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: c.text,
+              ),
+            ),
     );
   }
 }

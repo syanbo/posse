@@ -743,7 +743,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
           _KeyBar(
             onKey: _send,
-            customKeys: widget.model.settings.customKeys,
+            keys: widget.model.settings.barKeys,
             onCustom: (key) => _send(key.bytes, enter: key.enter),
             onImage: widget.model.rpc == null || _busy ? null : _sendImage,
             onPaste: widget.model.rpc == null || _busy ? null : _pasteClipboard,
@@ -813,7 +813,7 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
 class _KeyBar extends StatelessWidget {
   const _KeyBar({
     required this.onKey,
-    required this.customKeys,
+    required this.keys,
     required this.onCustom,
     required this.onImage,
     required this.onPaste,
@@ -822,7 +822,9 @@ class _KeyBar extends StatelessWidget {
   });
 
   final Future<void> Function(List<int> bytes) onKey;
-  final List<CustomKey> customKeys;
+
+  /// 键盘开关后面的键，按设置里排的顺序。
+  final List<BarKey> keys;
   final void Function(CustomKey key) onCustom;
   final VoidCallback? onImage;
   final VoidCallback? onPaste;
@@ -913,33 +915,32 @@ class _KeyBar extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            itemCount: termKeys.length + customKeys.length + 3,
+            itemCount: keys.length + 1,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, i) {
               if (i == 0) return _hideKeyboard(c);
-              if (i == 1) {
-                return _iconKey(
-                  c,
-                  icon: Icons.image_outlined,
-                  label: '发送图片',
-                  onTap: onImage,
-                );
+              final key = keys[i - 1];
+              final custom = key.custom;
+              if (custom != null) {
+                return _textKey(c, custom.shown, () => onCustom(custom));
               }
-              if (i == 2) {
-                return _iconKey(
-                  c,
-                  icon: Icons.content_paste_rounded,
-                  label: '粘贴',
-                  onTap: onPaste,
-                );
+              final term = key.termKey;
+              if (term != null) {
+                return _textKey(c, term.label, () => onKey(term.bytes));
               }
-              final n = i - 3;
-              if (n < customKeys.length) {
-                final key = customKeys[n];
-                return _textKey(c, key.shown, () => onCustom(key));
-              }
-              final key = termKeys[n - customKeys.length];
-              return _textKey(c, key.label, () => onKey(key.bytes));
+              return key.builtin == 'image'
+                  ? _iconKey(
+                      c,
+                      icon: Icons.image_outlined,
+                      label: '发送图片',
+                      onTap: onImage,
+                    )
+                  : _iconKey(
+                      c,
+                      icon: Icons.content_paste_rounded,
+                      label: '粘贴',
+                      onTap: onPaste,
+                    );
             },
           ),
         ),

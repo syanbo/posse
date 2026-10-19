@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../terminal/frames.dart';
+
 /// 用户在设置里加的终端快捷键。三种：一段文字（可以带回车）、Ctrl/Alt 加一个键、常用的特殊键。
 class CustomKey {
   const CustomKey({
@@ -99,3 +101,60 @@ const specialKeys = <String, List<int>>{
   'F11': [0x1b, 0x5b, 0x32, 0x33, 0x7e],
   'F12': [0x1b, 0x5b, 0x32, 0x34, 0x7e],
 };
+
+/// 快捷键栏上的一个键：内置的（[builtin] 是它的名字）或自己加的（[custom]）。
+/// 键盘开关不在其中，固定在最左边。
+class BarKey {
+  const BarKey.builtin(String this.builtin) : custom = null;
+  const BarKey.custom(CustomKey this.custom) : builtin = null;
+
+  final String? builtin;
+  final CustomKey? custom;
+
+  /// 内置的终端键（Esc、方向键这些），图片和粘贴不是。
+  TermKey? get termKey {
+    for (final key in termKeys) {
+      if (key.label == builtin) return key;
+    }
+    return null;
+  }
+
+  Object? toJson() => builtin != null ? {'builtin': builtin} : custom!.toJson();
+
+  static BarKey? fromJson(Object? json) {
+    if (json is Map && json['builtin'] is String) {
+      final name = json['builtin'] as String;
+      return builtinBarKeys.contains(name) ? BarKey.builtin(name) : null;
+    }
+    final key = CustomKey.fromJson(json);
+    return key == null ? null : BarKey.custom(key);
+  }
+}
+
+/// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
+final builtinBarKeys = [
+  'image',
+  'paste',
+  for (final key in termKeys) key.label,
+];
+
+/// 默认顺序：图片、粘贴、自己加的键、终端键。旧版只存了自己加的键，读进来也排成这样。
+List<BarKey> defaultBarKeys([List<CustomKey> custom = const []]) => [
+  const BarKey.builtin('image'),
+  const BarKey.builtin('paste'),
+  for (final key in custom) BarKey.custom(key),
+  for (final key in termKeys) BarKey.builtin(key.label),
+];
+
+/// 去掉重复的内置键，缺的（新版本加的内置键）补在最后，每个内置键都在且只出现一次。
+List<BarKey> normalizeBarKeys(List<BarKey> keys) {
+  final seen = <String>{};
+  final out = [
+    for (final key in keys)
+      if (key.builtin == null || seen.add(key.builtin!)) key,
+  ];
+  for (final name in builtinBarKeys) {
+    if (!seen.contains(name)) out.add(BarKey.builtin(name));
+  }
+  return out;
+}
