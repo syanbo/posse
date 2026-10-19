@@ -60,4 +60,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(action, 'switch');
   });
+
+  testWidgets('拨电脑布局引起外层重建，开关仍跟着拨、能拨回去', (tester) async {
+    const tab = SessionTab(
+      worktreeId: 'p::w',
+      title: 'demo',
+      terminalId: 't1',
+      agent: 'claude',
+    );
+    // 和真机一样：改设置会让整个 App 换主题重建
+    final dark = ValueNotifier(false);
+    final flips = <bool>[];
+    await tester.pumpWidget(
+      ValueListenableBuilder<bool>(
+        valueListenable: dark,
+        builder: (context, isDark, _) => MaterialApp(
+          theme: isDark ? ThemeData.dark() : ThemeData.light(),
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showSessionMore(
+                context,
+                tab: tab,
+                desk: false,
+                onDesk: (value) {
+                  flips.add(value);
+                  dark.value = !dark.value;
+                },
+              ),
+              child: const Text('更多'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+
+    bool switchOn() => tester.widget<Switch>(find.byType(Switch)).value;
+    await tester.tap(find.text('电脑布局'));
+    await tester.pumpAndSettle();
+    expect(switchOn(), isTrue);
+    await tester.tap(find.text('电脑布局'));
+    await tester.pumpAndSettle();
+    expect(switchOn(), isFalse);
+    expect(flips, [true, false]);
+  });
 }

@@ -25,6 +25,9 @@ import 'desk_fit.dart';
 import 'frames.dart';
 import 'link_target.dart';
 
+/// 完全复位（RIS）并清掉回滚。
+final _resetBytes = Uint8List.fromList('\x1bc\x1b[3J'.codeUnits);
+
 /// 终端视图。单测不要 import 这个文件：flterm 带原生库，宿主 VM 测试不该编它。
 class TerminalScreen extends StatefulWidget {
   const TerminalScreen({
@@ -65,6 +68,10 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 电脑布局的画面：平移、捏合中的临时倍数。静止时字号已经按吸定的倍数排过，这里的倍数是 1。
   final _deskKey = GlobalKey();
+
+  /// 电脑布局和手机布局外面包的层级不同。没有固定的 key，换布局时会新建一个终端视图、
+  /// 帧末再销毁旧的；旧视图销毁时把控制器解绑（滚动、焦点、输入法），新视图刚接上就被断开。
+  final _viewKey = GlobalKey();
   final _deskScroll = TerminalScrollController();
   var _panX = 0.0;
   var _panY = 0.0;
@@ -290,6 +297,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     ScrollPhysics? scrollPhysics,
     TerminalScrollController? scrollController,
   }) => TerminalView(
+    key: _viewKey,
     controller: _controller,
     theme: terminalTheme(
       c,
@@ -534,6 +542,12 @@ class _TerminalScreenState extends State<TerminalScreen>
         _panY = 0;
         _pinch = 1;
       });
+    }
+    // 快照不清屏，是从左上角逐行盖上去的。重新订阅或电脑改了尺寸时本地终端里还有旧画面，
+    // 先完全复位、清掉回滚，不然没盖到的格子留成碎片，回滚区也会重复一份
+    if (piece.snapshot) {
+      _controller.clearSelection();
+      _apply(_resetBytes);
     }
     _apply(piece.bytes);
   }

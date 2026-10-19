@@ -64,12 +64,13 @@ Future<String?> showSessionMore(
   bool? desk,
   ValueChanged<bool>? onDesk,
 }) {
+  // 放在 builder 外面：拨开关会改设置、整个 App 重建，面板的 builder 跟着重跑，放在里面就被打回初值
+  var on = desk ?? false;
   return showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
     builder: (sheet) {
       final c = HiveColors.of(sheet);
-      var on = desk ?? false;
       return SafeArea(
         top: false,
         child: Section(

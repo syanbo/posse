@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'ui/keyboard.dart';
 import 'ui/theme.dart';
 import 'workspace/workspace.dart';
 
@@ -18,6 +19,8 @@ class HiveApp extends StatefulWidget {
 }
 
 class _HiveAppState extends State<HiveApp> {
+  final _keyboard = KeyboardDismisser();
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +44,7 @@ class _HiveAppState extends State<HiveApp> {
     return MaterialApp(
       title: 'Hive',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [_keyboard],
       theme: hiveTheme(Brightness.light),
       darkTheme: hiveTheme(Brightness.dark),
       // 默认深色，可在设置里换成浅色或跟随系统
