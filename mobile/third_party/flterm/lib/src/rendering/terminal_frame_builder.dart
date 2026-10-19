@@ -177,7 +177,11 @@ class TerminalFrameBuilder {
   void configure(int rows, int cols) {
     _sprites.configure(rows, cols);
     _dirtyRows.resize(rows);
+    _rowBuilder.edges.resize(rows);
   }
+
+  /// Hive: 每行最左、最右一格的底色，给格子外面的内边距接着画。
+  RowEdgeColors get edges => _rowBuilder.edges;
 
   /// Releases the owned libghostty iterators.
   void dispose() {
@@ -1128,6 +1132,7 @@ final class _TerminalRowBuilder {
   _PreeditRange? _preeditRange;
   LinkSnapshot linkSnapshot = .empty;
   var _hasLinks = false;
+  final edges = RowEdgeColors();
 
   _TerminalRowBuilder({
     required this._atlas,
@@ -1151,6 +1156,7 @@ final class _TerminalRowBuilder {
   void rebuildRow(int rowIndex, RowIterator rows, CellIterator cells) {
     _sprites.beginRow(rowIndex);
     _row.reset(rowIndex, _frame);
+    edges.clearRow(rowIndex);
     cells.reset(rows);
 
     while (cells.next() && _row.col < _frame.cols) {
@@ -1272,13 +1278,17 @@ final class _TerminalRowBuilder {
 
   void _flushBackgroundRun(_RowBuildState row, int endCol) {
     if (!row.bgRunExplicit || row.bgRunStart >= endCol) return;
+    final argb = _frame.resolveBgArgb(row.bgRunArgb, inverse: row.bgRunInverse);
     _sprites.background.add(
       row.bgRunStart * _frame.cellWidth,
       row.rowY,
       endCol * _frame.cellWidth,
       row.rowBottom,
-      _frame.resolveBgArgb(row.bgRunArgb, inverse: row.bgRunInverse),
+      argb,
     );
+    // Hive: 记下贴着左右两边的底色
+    if (row.bgRunStart == 0) edges.setLeft(row.row, argb);
+    if (endCol >= _frame.cols) edges.setRight(row.row, argb);
   }
 
   void _skipPreeditCell(CellIterator cell, _PreeditRange range, int span) {
@@ -1368,4 +1378,38 @@ final class _TerminalRowBuilder {
     }
     row.advance(span, _frame.cellWidth);
   }
+}
+
+/// Hive: 可见区域每一行两端格子的底色，0 表示用的是终端默认底色。程序（比如 grok）自己铺了底色时，
+/// 格子外面的内边距和铺不满的零头按它接着画，不露出一圈主题色。
+final class RowEdgeColors {
+  var _left = Int32List(0);
+  var _right = Int32List(0);
+
+  int get rows => _left.length;
+
+  void resize(int rows) {
+    if (rows == _left.length) return;
+    _left = Int32List(rows);
+    _right = Int32List(rows);
+  }
+
+  void clearRow(int row) {
+    if (row < 0 || row >= _left.length) return;
+    _left[row] = 0;
+    _right[row] = 0;
+  }
+
+  void setLeft(int row, int argb) {
+    if (row >= 0 && row < _left.length) _left[row] = argb;
+  }
+
+  void setRight(int row, int argb) {
+    if (row >= 0 && row < _right.length) _right[row] = argb;
+  }
+
+  /// 这一行最左一格的底色；没设过时是 0。
+  int left(int row) => _left[row] & 0xFFFFFFFF;
+
+  int right(int row) => _right[row] & 0xFFFFFFFF;
 }

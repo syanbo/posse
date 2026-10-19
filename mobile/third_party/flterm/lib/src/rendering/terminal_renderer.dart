@@ -7,6 +7,7 @@ import '../foundation.dart';
 import '../links/link_snapshot.dart';
 import 'atlas/atlas_config.dart';
 import 'paint_state.dart';
+import 'terminal_frame_builder.dart' show RowEdgeColors;
 import 'terminal_render_cache.dart';
 import 'terminal_render_pipeline.dart';
 
@@ -88,6 +89,10 @@ class TerminalRenderer extends LeafRenderObjectWidget {
   /// visible scrollback eligible for compression.
   final VoidCallback? onViewportChanged;
 
+  /// Hive: 格子外面还有多宽的内边距要接着画底色（见 [RowEdgeColors]）。
+  /// 格子铺不满的零头总是按两端的底色画；这里是再往外的那一圈。
+  final EdgeInsets backgroundBleed;
+
   const TerminalRenderer({
     super.key,
     required this.terminal,
@@ -101,6 +106,7 @@ class TerminalRenderer extends LeafRenderObjectWidget {
     this.linkSnapshot = .empty,
     this.onResize,
     this.onViewportChanged,
+    this.backgroundBleed = EdgeInsets.zero,
   });
 
   @override
@@ -117,6 +123,7 @@ class TerminalRenderer extends LeafRenderObjectWidget {
       preeditText: preeditText,
       linkSnapshot: linkSnapshot,
       renderObserver: renderObserver,
+      backgroundBleed: backgroundBleed,
     );
   }
 
@@ -154,7 +161,8 @@ class TerminalRenderer extends LeafRenderObjectWidget {
       ..renderObserver = renderObserver
       ..blinkVisible = blinkVisible
       ..preeditText = preeditText
-      ..linkSnapshot = linkSnapshot;
+      ..linkSnapshot = linkSnapshot
+      ..backgroundBleed = backgroundBleed;
   }
 }
 
@@ -210,7 +218,9 @@ class TerminalRenderBox extends RenderBox {
     this._preeditText = '',
     this._onResize,
     this._onViewportChanged,
-  }) : _paintState = TerminalPaintState(theme, metrics)
+    EdgeInsets backgroundBleed = EdgeInsets.zero,
+  }) : _bleed = backgroundBleed,
+       _paintState = TerminalPaintState(theme, metrics)
          ..blinkVisible = blinkVisible
          ..cursorFocused = _renderObserver.hasFocus {
     _atlasHandle = _renderCache.acquireAtlas(
@@ -228,6 +238,16 @@ class TerminalRenderBox extends RenderBox {
     );
 
     _applyTerminalThemeColors();
+  }
+
+  EdgeInsets _bleed;
+  var _available = Size.zero;
+  final _bleedPaint = Paint();
+
+  set backgroundBleed(EdgeInsets value) {
+    if (_bleed == value) return;
+    _bleed = value;
+    markNeedsPaint();
   }
 
   bool get blinkVisible => _paintState.blinkVisible;
@@ -438,6 +458,7 @@ class TerminalRenderBox extends RenderBox {
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
     _pipeline.paint(canvas);
+    _paintBleed(canvas);
     canvas.restore();
   }
 
@@ -448,6 +469,7 @@ class TerminalRenderBox extends RenderBox {
     final maxW = constraints.hasBoundedWidth ? constraints.maxWidth : 0.0;
     final maxH = constraints.hasBoundedHeight ? constraints.maxHeight : 0.0;
     final (newCols, newRows) = _paintState.metrics.gridSize(maxW, maxH);
+    _available = Size(maxW, maxH);
 
     size = constraints.constrain(
       Size(
@@ -491,6 +513,53 @@ class TerminalRenderBox extends RenderBox {
     if (gridChanged || atlasReconfigured) _markFrameDirty();
 
     _performingLayout = false;
+  }
+
+  /// Hive: 格子外面（铺不满的零头和 [_bleed] 那一圈）照 Ghostty 的 window-padding-color = extend，
+  /// 按最近一格的底色画：左右按每一行两端，上下按第一行、最后一行（两端同色才延伸，免得半行的状态栏拉成一片）。
+  /// 程序没设底色的格子还是主题色，普通 shell 看起来不变。画在自己的范围外面，外层没有裁剪。
+  void _paintBleed(Canvas canvas) {
+    if (_paintState.theme.backgroundOpacity < 1.0) return;
+    final rows = _paintState.rows, cols = _paintState.cols;
+    final edges = _pipeline.edges;
+    if (rows <= 0 || cols <= 0 || edges.rows != rows) return;
+    final cw = _paintState.metrics.cellWidth,
+        ch = _paintState.metrics.cellHeight;
+    final gridW = cols * cw, gridH = rows * ch;
+    final left = _bleed.left, top = _bleed.top;
+    final right =
+        (_available.width - gridW).clamp(0.0, double.infinity) + _bleed.right;
+    final bottom =
+        (_available.height - gridH).clamp(0.0, double.infinity) + _bleed.bottom;
+    if (left <= 0 && top <= 0 && right <= 0 && bottom <= 0) return;
+    final fallback = _paintState.terminalBackgroundArgb;
+    int pick(int argb) => argb == 0 ? fallback : argb;
+    int across(int row) {
+      final l = edges.left(row);
+      return l == edges.right(row) ? pick(l) : fallback;
+    }
+
+    void fill(Rect rect, int argb) {
+      _bleedPaint.color = Color(argb);
+      canvas.drawRect(rect, _bleedPaint);
+    }
+
+    for (var r = 0; r < rows; r++) {
+      final y = r * ch;
+      if (left > 0) {
+        fill(Rect.fromLTWH(-left, y, left, ch), pick(edges.left(r)));
+      }
+      if (right > 0) {
+        fill(Rect.fromLTWH(gridW, y, right, ch), pick(edges.right(r)));
+      }
+    }
+    if (top > 0) fill(Rect.fromLTRB(-left, -top, gridW + right, 0), across(0));
+    if (bottom > 0) {
+      fill(
+        Rect.fromLTRB(-left, gridH, gridW + right, gridH + bottom),
+        across(rows - 1),
+      );
+    }
   }
 
   void _applyTerminalThemeColors() {

@@ -79,6 +79,9 @@ class TerminalView extends StatefulWidget {
   /// the remaining space after padding. Defaults to 8px on all sides.
   final EdgeInsets padding;
 
+  /// Hive: 这个视图外面还有多宽的内边距，格子外面的底色要接着画过去，见 [TerminalRenderer.backgroundBleed]。
+  final EdgeInsets backgroundBleed;
+
   /// Scroll physics for scrollback navigation.
   ///
   /// Disabled automatically when the terminal program requests mouse
@@ -120,6 +123,7 @@ class TerminalView extends StatefulWidget {
     this.autofocus = false,
     this.showKeyboard = true,
     this.padding = const .all(8),
+    this.backgroundBleed = EdgeInsets.zero,
     this.mouseAutoHide = .onInput,
     this.linkSettings = const LinkSettings(),
     this.gestureSettings = const TerminalGestureSettings(),
@@ -343,6 +347,7 @@ class _TerminalViewState extends State<TerminalView> {
                       linkSnapshot: _links.snapshot(),
                       onResize: _handleResize,
                       onViewportChanged: _binding.handleViewportChanged,
+                      backgroundBleed: widget.backgroundBleed,
                     ),
                   ),
                 ),

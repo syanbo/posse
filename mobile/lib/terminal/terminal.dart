@@ -297,6 +297,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     double? fontSize,
     ScrollPhysics? scrollPhysics,
     TerminalScrollController? scrollController,
+    EdgeInsets backgroundBleed = EdgeInsets.zero,
   }) => TerminalView(
     key: _viewKey,
     controller: _controller,
@@ -308,6 +309,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     autofocus: false,
     focusNode: _focus,
     padding: EdgeInsets.zero,
+    backgroundBleed: backgroundBleed,
     scrollPhysics: scrollPhysics,
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
@@ -356,7 +358,11 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 电脑布局：按快照的列和行排成桌面那一块，再缩进屏幕宽度。手势在这块表面上，
   /// 不另加横向滚动，免得和终端自己的纵向滚动抢。还没有快照时先铺满。
   Widget _deskView(HiveColors c, BoxConstraints box) {
-    if (!_desk || _deskCols <= 0) return _terminalView(c);
+    // 程序自己铺了底色（比如 grok）时，外面的内边距接着画它的底色，不露出一圈主题色；
+    // 电脑布局能缩放、平移，不往外延
+    if (!_desk || _deskCols <= 0) {
+      return _terminalView(c, backgroundBleed: _termPadding);
+    }
     final base = widget.model.settings.terminalFontSize;
     final zoom = widget.model.settings.deskZoom;
     final baseCell = _cellMetrics(base);
@@ -713,7 +719,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           if (_notice != null) NoticeBar(_notice!),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 4, 0),
+              padding: _termPadding,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   _notePhoneBox(constraints);
@@ -809,6 +815,10 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
     fontSize: fontSize,
   );
 }
+
+/// 终端四周留的空，文字不贴屏幕边。程序铺了底色时这一圈会接着画它的底色，看着是一片，
+/// 加上程序自己的缩进（grok 左边 2 到 5 列）显得空，所以只留一点。
+const _termPadding = EdgeInsets.fromLTRB(4, 4, 4, 0);
 
 class _KeyBar extends StatelessWidget {
   const _KeyBar({
