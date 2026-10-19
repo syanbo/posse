@@ -1198,16 +1198,6 @@ class _TabScreenState extends State<TabScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: '在这个工作区新建会话',
-            onPressed: widget.model.rpc == null
-                ? null
-                : () => showNewSession(context, widget.model, worktree: row),
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 22),
-          ),
-          const SizedBox(width: 4),
-        ],
       ),
       body: Column(
         children: [
