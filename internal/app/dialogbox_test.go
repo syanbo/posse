@@ -37,6 +37,12 @@ func TestDialogMoveResize(t *testing.T) {
 		t.Fatalf("title moved %v → %v", title, moved)
 	}
 	box := &a.rollbackBox
+	// 标题上面的内边距也能拖
+	drag(moved.X+moved.W/2, box.last.Y+12, -20, 10)
+	if r, _ := tt.Find("回滚改动"); math.Abs(float64(r.X-(moved.X-20))) > 0.5 || math.Abs(float64(r.Y-(moved.Y+10))) > 0.5 {
+		t.Fatalf("dragging top padding: %v → %v", moved, r)
+	}
+	drag(moved.X+moved.W/2-20, box.last.Y+12, 20, -10)
 	w0, h0 := box.last.W, box.last.H
 	// Bounds 含拖动的平移，右下角的把手在面板角上
 	for _, p := range []struct {

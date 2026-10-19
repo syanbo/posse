@@ -17,6 +17,9 @@ type dialogBox struct {
 // dialogMargin 是 Modal 面板离窗口边至少留的距离（mygo 的 MaxWidth 是窗口宽减两倍它）。
 const dialogMargin = 20
 
+// dialogPad 是 mygo Modal 面板的内边距（主题的 Space(5)）。
+const dialogPad = 20
+
 // reset 在打开对话框时调用：回到居中。
 func (b *dialogBox) reset() { b.dx, b.dy, b.ax, b.ay = 0, 0, 0, 0 }
 
@@ -30,15 +33,24 @@ func (b *dialogBox) title(c *ui.Context, text string) {
 		ui.Spacer(c)
 	})
 	if dx, dy, held := row.Dragged(); held {
-		b.dx += dx
-		b.dy += dy
-		b.clampPos()
+		b.move(dx, dy)
 	}
+}
+
+func (b *dialogBox) move(dx, dy float32) {
+	b.dx += dx
+	b.dy += dy
+	b.clampPos()
 }
 
 // grips 在 Modal 的内容最后调用，在面板四边和四角放拉伸的把手。
 func (b *dialogBox) grips(c *ui.Context) {
 	const edge, corner = 6, 14
+	// 标题上面的内边距也能拖动整个对话框（先放，四边和四角的把手盖在它上面）
+	top := ui.Box(c.Key("dialog-drag-top")).Absolute().Top(0).Left(0).Right(0).Height(dialogPad)
+	if dx, dy, held := top.Dragged(); held {
+		b.move(dx, dy)
+	}
 	grip := func(key string, sx, sy float32, cursor ui.Cursor) ui.Element {
 		e := ui.Box(c.Key("dialog-grip-" + key)).Absolute().Cursor(cursor)
 		if dx, dy, held := e.Dragged(); held {
