@@ -1476,7 +1476,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			agentTile(c, term.Agent, 13)
 		}
 		if term.Agent == "" || detail == "" && !waiting {
-			tabText(c, ui.Text(c, name).FontSize(12).Shrink(0), active)
+			tabText(c, ui.Text(c, name).FontSize(12).Shrink(1).SingleLine(), active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
