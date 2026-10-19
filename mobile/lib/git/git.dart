@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
+import '../ui/code.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'status.dart';
@@ -14,9 +15,17 @@ Future<GitStatusView> loadGitStatus(PhoneRpc rpc, String worktree) {
       .then(parseGitStatus);
 }
 
-Future<GitDiffView> loadGitDiff(PhoneRpc rpc, String worktree, String path) {
+Future<GitDiffView> loadGitDiff(
+  PhoneRpc rpc,
+  String worktree,
+  GitFileChange file,
+) {
   return rpc
-      .call('git.diff', {'worktree': gitWorktree(worktree), 'path': path})
+      .call('git.diff', {
+        'worktree': gitWorktree(worktree),
+        'path': file.path,
+        if (file.orig.isNotEmpty) 'orig': file.orig,
+      })
       .then(parseGitDiff);
 }
 
@@ -27,26 +36,40 @@ class GitScreen extends StatelessWidget {
     required this.title,
     required this.loadStatus,
     required this.loadDiff,
+    this.onOpenFile,
   });
 
   final String title;
   final Future<GitStatusView> Function() loadStatus;
-  final Future<GitDiffView> Function(String path) loadDiff;
+  final Future<GitDiffView> Function(GitFileChange file) loadDiff;
+  final void Function(String path)? onOpenFile;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: GitPane(loadStatus: loadStatus, loadDiff: loadDiff),
+      body: GitPane(
+        loadStatus: loadStatus,
+        loadDiff: loadDiff,
+        onOpenFile: onOpenFile,
+      ),
     );
   }
 }
 
 class GitPane extends StatefulWidget {
-  const GitPane({super.key, required this.loadStatus, required this.loadDiff});
+  const GitPane({
+    super.key,
+    required this.loadStatus,
+    required this.loadDiff,
+    this.onOpenFile,
+  });
 
   final Future<GitStatusView> Function() loadStatus;
-  final Future<GitDiffView> Function(String path) loadDiff;
+  final Future<GitDiffView> Function(GitFileChange file) loadDiff;
+
+  /// 从 diff 页跳到这个文件的完整内容；为空时 diff 页不显示这个按钮。
+  final void Function(String path)? onOpenFile;
 
   @override
   State<GitPane> createState() => _GitPaneState();
@@ -82,13 +105,15 @@ class _GitPaneState extends State<GitPane> {
   }
 
   void _open(GitFileChange file) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) =>
-          _DiffSheet(file: file, load: () => widget.loadDiff(file.path)),
+    final open = widget.onOpenFile;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DiffViewer(
+          file: file,
+          load: () => widget.loadDiff(file),
+          onOpenFile: open == null ? null : () => open(file.path),
+        ),
+      ),
     );
   }
 
@@ -281,17 +306,25 @@ class _BranchCard extends StatelessWidget {
   }
 }
 
-class _DiffSheet extends StatefulWidget {
-  const _DiffSheet({required this.file, required this.load});
+/// 看一个文件的改动：和文件页一样整页打开、一样的顶栏和代码排版。
+/// 左边是行号（删掉的行是旧文件的行号），再是上色的 +/−，段头写从第几行开始。
+class DiffViewer extends StatefulWidget {
+  const DiffViewer({
+    super.key,
+    required this.file,
+    required this.load,
+    this.onOpenFile,
+  });
 
   final GitFileChange file;
   final Future<GitDiffView> Function() load;
+  final VoidCallback? onOpenFile;
 
   @override
-  State<_DiffSheet> createState() => _DiffSheetState();
+  State<DiffViewer> createState() => _DiffViewerState();
 }
 
-class _DiffSheetState extends State<_DiffSheet> {
+class _DiffViewerState extends State<DiffViewer> {
   GitDiffView? _diff;
   String? _error;
 
@@ -312,113 +345,329 @@ class _DiffSheetState extends State<_DiffSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
-    final height = MediaQuery.sizeOf(context).height * 0.82;
-    final diff = _diff;
-    return SizedBox(
-      height: height,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.file.path,
-                    style: mono(
-                      14,
-                      color: c.text,
-                    ).copyWith(fontWeight: FontWeight.w500),
-                  ),
-                ),
-                _Stats(file: widget.file),
-              ],
-            ),
-          ),
-          if (diff?.truncated == true)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
-                '差异太长，只显示前面一部分',
-                style: TextStyle(fontSize: 12, color: c.honey),
-              ),
-            ),
-          Divider(height: 1, color: c.line),
-          Expanded(
-            child: _error != null
-                ? EmptyState(
-                    icon: Icons.error_outline_rounded,
-                    text: _error!,
-                    error: true,
-                  )
-                : diff == null
-                ? const Center(child: CircularProgressIndicator())
-                : diff.diff.isEmpty
-                ? const EmptyState(icon: Icons.notes_rounded, text: '没有差异')
-                : _DiffLines(text: diff.diff),
-          ),
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: FilePathTitle(widget.file.path),
+        actions: [
+          _Stats(file: widget.file),
+          if (widget.onOpenFile != null)
+            IconButton(
+              tooltip: '查看完整文件',
+              onPressed: widget.onOpenFile,
+              icon: const Icon(Icons.description_outlined, size: 22),
+            )
+          else
+            const SizedBox(width: 12),
+          const SizedBox(width: 4),
         ],
       ),
+      body: _body(),
+    );
+  }
+
+  Widget _body() {
+    final diff = _diff;
+    if (_error != null) {
+      return EmptyState(
+        icon: Icons.error_outline_rounded,
+        text: _error!,
+        error: true,
+      );
+    }
+    if (diff == null) return const Center(child: CircularProgressIndicator());
+    final images = diff.images;
+    if (images != null) return _ImageDiff(old: images.old, now: images.now);
+    if (widget.file.binary) {
+      return const EmptyState(
+        icon: Icons.insert_drive_file_outlined,
+        text: '二进制文件，手机上看不了差异',
+      );
+    }
+    final rows = parseDiffRows(diff.diff);
+    if (rows.isEmpty) {
+      return const EmptyState(icon: Icons.notes_rounded, text: '没有差异');
+    }
+    return _DiffLines(
+      rows: rows,
+      notice: diff.truncated ? const CodeNotice('差异太长，只显示前面一部分') : null,
     );
   }
 }
 
-/// unified diff 按行上色：新增绿底、删除红底、段头淡底。长行横向滚动，不折行，对得齐。
-class _DiffLines extends StatelessWidget {
-  const _DiffLines({required this.text});
+/// 图片的 diff：改之前在上、现在在下（手机竖着放不下左右对照），各标像素尺寸和文件大小，
+/// 透明处垫棋盘格；点一张全屏看、可以双指放大。
+class _ImageDiff extends StatelessWidget {
+  const _ImageDiff({required this.old, required this.now});
 
-  final String text;
+  final ImageSide? old;
+  final ImageSide? now;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        _ImageSideView(label: '改之前', side: old, missing: '新文件，之前没有'),
+        const SizedBox(height: 20),
+        _ImageSideView(label: '现在', side: now, missing: '已删除'),
+      ],
+    );
+  }
+}
+
+class _ImageSideView extends StatefulWidget {
+  const _ImageSideView({
+    required this.label,
+    required this.side,
+    required this.missing,
+  });
+
+  final String label;
+  final ImageSide? side;
+  final String missing;
+
+  @override
+  State<_ImageSideView> createState() => _ImageSideViewState();
+}
+
+class _ImageSideViewState extends State<_ImageSideView> {
+  MemoryImage? _image;
+  ImageStream? _stream;
+  late final _listener = ImageStreamListener((info, _) {
+    if (mounted) {
+      setState(() => _pixels = '${info.image.width} × ${info.image.height}');
+    }
+  });
+  String? _pixels;
+
+  @override
+  void initState() {
+    super.initState();
+    final bytes = widget.side?.bytes;
+    if (bytes != null) _image = MemoryImage(bytes);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final image = _image;
+    if (image == null || _stream != null) return;
+    _stream = image.resolve(createLocalImageConfiguration(context))
+      ..addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    super.dispose();
+  }
+
+  void _zoom(MemoryImage image) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(widget.label)),
+          body: InteractiveViewer(
+            maxScale: 8,
+            child: Center(child: Image(image: image)),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final lines = text.split('\n');
-    if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
-    // 跳过 diff --git、index、---、+++ 这些文件头，标题里已经有路径
-    final start = lines.indexWhere((l) => l.startsWith('@@'));
-    final body = start < 0 ? lines : lines.sublist(start);
-    final alpha = c.dark ? 0.16 : 0.10;
-    return Scrollbar(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 24),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SelectionArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final line in body)
-                  Container(
-                    color: line.startsWith('@@')
-                        ? c.fill
-                        : line.startsWith('+')
-                        ? c.sage.withValues(alpha: alpha)
-                        : line.startsWith('-')
-                        ? c.danger.withValues(alpha: alpha)
-                        : null,
-                    constraints: BoxConstraints(
-                      minWidth: MediaQuery.sizeOf(context).width,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 1,
-                    ),
-                    child: Text(
-                      line.isEmpty ? ' ' : line,
-                      softWrap: false,
-                      style: mono(
-                        12,
-                        height: 1.55,
-                        color: line.startsWith('@@') ? c.muted : c.text,
-                      ),
-                    ),
-                  ),
-              ],
+    final side = widget.side;
+    final image = _image;
+    final meta = [?_pixels, if (side != null) formatBytes(side.size)];
+    final Widget body;
+    if (side == null) {
+      body = _placeholder(c, widget.missing);
+    } else if (image == null) {
+      body = _placeholder(c, '图片超过 10 MB，手机上不显示');
+    } else {
+      body = GestureDetector(
+        onTap: () => _zoom(image),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(Rd.code),
+          child: CustomPaint(
+            painter: _Checkerboard(c),
+            child: Image(
+              image: image,
+              errorBuilder: (_, _, _) => _placeholder(c, '这张图手机上画不出来'),
             ),
           ),
         ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: Fs.meta,
+                fontWeight: FontWeight.w500,
+                color: c.text,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                meta.join('    '),
+                style: TextStyle(fontSize: 12, color: c.faint),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Center(child: body),
+      ],
+    );
+  }
+
+  Widget _placeholder(HiveColors c, String text) => Container(
+    height: 120,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: c.fill,
+      borderRadius: BorderRadius.circular(Rd.code),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(fontSize: Fs.meta, color: c.faint),
+    ),
+  );
+}
+
+/// 透明图片底下的棋盘格，看得出哪里是透明的。
+class _Checkerboard extends CustomPainter {
+  _Checkerboard(this.c);
+
+  final HiveColors c;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const cell = 8.0;
+    canvas.drawRect(Offset.zero & size, Paint()..color = c.card);
+    final dark = Paint()..color = c.fill;
+    for (var y = 0.0; y < size.height; y += cell) {
+      for (
+        var x = ((y / cell).floor().isOdd ? cell : 0.0);
+        x < size.width;
+        x += cell * 2
+      ) {
+        canvas.drawRect(Rect.fromLTWH(x, y, cell, cell), dark);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Checkerboard old) => old.c != c;
+}
+
+class _DiffLines extends StatelessWidget {
+  const _DiffLines({required this.rows, this.notice});
+
+  final List<DiffRow> rows;
+  final Widget? notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final style = codeStyle(c);
+    final faint = style.copyWith(color: c.faint);
+    var widest = 1;
+    for (final row in rows) {
+      final n = row.number;
+      if (n != null && row.kind != DiffKind.hunk) {
+        widest = widest < '$n'.length ? '$n'.length : widest;
+      }
+    }
+    final alpha = c.dark ? 0.16 : 0.10;
+    final screen = MediaQuery.sizeOf(context).width;
+
+    Widget line(DiffRow row) {
+      final (bg, sign, signColor) = switch (row.kind) {
+        DiffKind.added => (c.sage.withValues(alpha: alpha), '+', c.sage),
+        DiffKind.deleted => (c.danger.withValues(alpha: alpha), '−', c.danger),
+        _ => (null, ' ', c.faint),
+      };
+      if (row.kind == DiffKind.hunk) {
+        final at = row.number == null ? '' : '第 ${row.number} 行';
+        final label = [at, row.text].where((s) => s.isNotEmpty).join('  ');
+        return Container(
+          color: c.fill,
+          margin: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.fromLTRB(8, 2, 16, 2),
+          child: SelectionContainer.disabled(
+            child: Text(
+              label.isEmpty ? '⋯' : label,
+              softWrap: false,
+              style: faint.copyWith(color: c.muted),
+            ),
+          ),
+        );
+      }
+      final number = row.number == null ? '' : '${row.number}';
+      return Container(
+        color: bg,
+        padding: const EdgeInsets.only(left: 8, right: 16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SelectionContainer.disabled(
+              child: Text.rich(
+                TextSpan(
+                  style: faint,
+                  children: [
+                    TextSpan(text: '${number.padLeft(widest)} '),
+                    TextSpan(
+                      text: sign,
+                      style: TextStyle(color: signColor),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: codeGutterGap - 6),
+            Text(
+              row.text.isEmpty ? ' ' : row.text,
+              softWrap: false,
+              style: row.kind == DiffKind.note
+                  ? style.copyWith(color: c.muted)
+                  : style,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SelectionArea(
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
+        children: [
+          ?notice,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(top: 8),
+            // 每行的底色都铺到最长那一行，横着滑过去右边是齐的
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: screen),
+              child: IntrinsicWidth(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [for (final row in rows) line(row)],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

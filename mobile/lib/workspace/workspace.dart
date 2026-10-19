@@ -1215,8 +1215,17 @@ class _TabScreenState extends State<TabScreen> {
               children: [
                 GitPane(
                   loadStatus: () => _git((rpc) => loadGitStatus(rpc, row.id)),
-                  loadDiff: (path) =>
-                      _git((rpc) => loadGitDiff(rpc, row.id, path)),
+                  loadDiff: (file) =>
+                      _git((rpc) => loadGitDiff(rpc, row.id, file)),
+                  onOpenFile: (path) => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => FileViewer(
+                        model: widget.model,
+                        worktree: row.id,
+                        path: path,
+                      ),
+                    ),
+                  ),
                 ),
                 FilesPane(model: widget.model, worktree: row.id),
               ],

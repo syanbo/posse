@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../chat/markdown_view.dart';
 import '../protocol/rpc.dart';
+import '../ui/code.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -485,26 +486,10 @@ class _FileViewerState extends State<FileViewer> {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final slash = widget.path.lastIndexOf('/');
-    final name = slash < 0 ? widget.path : widget.path.substring(slash + 1);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, overflow: TextOverflow.ellipsis),
-            if (slash > 0)
-              Text(
-                widget.path.substring(0, slash),
-                overflow: TextOverflow.ellipsis,
-                style: mono(
-                  12,
-                  color: c.muted,
-                ).copyWith(fontWeight: FontWeight.w400),
-              ),
-          ],
-        ),
+        title: FilePathTitle(widget.path),
         actions: [
           if (_markdown && _text != null && !_binary)
             TextButton(
@@ -545,15 +530,7 @@ class _FileViewerState extends State<FileViewer> {
     }
     final text = _text;
     if (text == null) return const Center(child: CircularProgressIndicator());
-    final notice = _truncated
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
-              '文件太大，只显示前 512 KB',
-              style: TextStyle(fontSize: 12, color: c.honey),
-            ),
-          )
-        : null;
+    final notice = _truncated ? const CodeNotice('文件太大，只显示前 512 KB') : null;
     if (_markdown && !_source) {
       return SelectionArea(
         child: ListView(
@@ -584,7 +561,7 @@ class _CodeView extends StatelessWidget {
     final c = HiveColors.of(context);
     final lines = const LineSplitter().convert(text);
     final gutter = '${lines.length}'.length;
-    final style = mono(12.5, height: 1.6, color: c.text);
+    final style = codeStyle(c);
     return SelectionArea(
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
@@ -592,7 +569,7 @@ class _CodeView extends StatelessWidget {
           ?notice,
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+            padding: codePadding,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -606,7 +583,7 @@ class _CodeView extends StatelessWidget {
                     style: style.copyWith(color: c.faint),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: codeGutterGap),
                 Text(lines.join('\n'), softWrap: false, style: style),
               ],
             ),

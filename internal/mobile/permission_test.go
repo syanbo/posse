@@ -2,7 +2,9 @@ package mobile
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -147,9 +149,16 @@ func TestGitStatusAndDiff(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd("add", "a.txt")
+	if err := os.WriteFile(filepath.Join(dir, "old.png"), []byte("\x89PNG-old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd("add", "a.txt", "old.png")
 	cmd("commit", "-m", "init")
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd("mv", "old.png", "new.png")
+	if err := os.WriteFile(filepath.Join(dir, "new.png"), []byte("\x89PNG-new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,8 +191,19 @@ func TestGitStatusAndDiff(t *testing.T) {
 		t.Fatalf("status %v", st)
 	}
 	files, _ := st["files"].([]any)
-	if len(files) != 1 || files[0].(map[string]any)["path"] != "a.txt" || files[0].(map[string]any)["added"] != float64(1) {
+	if len(files) != 2 || files[0].(map[string]any)["path"] != "a.txt" || files[0].(map[string]any)["added"] != float64(1) {
 		t.Fatalf("files %v", files)
+	}
+	// 图片带上改之前和现在两张，改名的按原来的路径读旧图
+	img := result(t, p.next(p.call("git.diff", map[string]any{"worktree": "id:p1::w1", "path": "new.png", "orig": "old.png"})))
+	sides, _ := img["images"].(map[string]any)
+	side := func(k string) string {
+		m, _ := sides[k].(map[string]any)
+		b, _ := base64.StdEncoding.DecodeString(fmt.Sprint(m["content"]))
+		return string(b)
+	}
+	if side("old") != "\x89PNG-old" || side("new") != "\x89PNG-new" {
+		t.Fatalf("image sides %v", img["images"])
 	}
 	diff := result(t, p.next(p.call("git.diff", map[string]any{"worktree": "id:p1::w1", "path": "a.txt"})))
 	if !strings.Contains(diff["diff"].(string), "+two") {

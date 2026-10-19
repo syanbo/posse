@@ -2,8 +2,11 @@ package mobile
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,6 +56,7 @@ func (c *conn) gitDiff(id string, p json.RawMessage) error {
 	var a struct {
 		wtParams
 		Path string `json:"path"`
+		Orig string `json:"orig"`
 	}
 	if json.Unmarshal(p, &a) != nil || a.Worktree == "" {
 		return c.fail(id, "bad_params", "worktree")
@@ -71,7 +75,36 @@ func (c *conn) gitDiff(id string, p json.RawMessage) error {
 	if err != nil {
 		return errorf("git", "%v", err)
 	}
-	return c.reply(id, map[string]any{"path": rel, "diff": text, "truncated": truncated})
+	reply := map[string]any{"path": rel, "diff": text, "truncated": truncated}
+	if imageMime[strings.ToLower(path.Ext(rel))] {
+		old := rel
+		if o, ok := cleanRepoPath(a.Orig); ok {
+			old = o
+		}
+		reply["images"] = imageSides(ctx, w.Path, old, rel)
+	}
+	return c.reply(id, reply)
+}
+
+// imageMime 是手机能画出来的图片：diff 时把改之前（HEAD）和现在（工作区）两张图都带上。
+var imageMime = map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".bmp": true}
+
+// imageSides 读图片 diff 的两边，base64；这一边没有（新文件、已删除）是 nil，超过 imageReadMax 只报大小。
+func imageSides(ctx context.Context, dir, old, rel string) map[string]any {
+	side := func(b []byte, err error) any {
+		if err != nil {
+			return nil
+		}
+		if len(b) > imageReadMax {
+			return map[string]any{"size": len(b), "tooLarge": true}
+		}
+		return map[string]any{"size": len(b), "content": base64.StdEncoding.EncodeToString(b)}
+	}
+	before, err := gitx.Show(ctx, dir, "HEAD", old)
+	out := map[string]any{"old": side(before, err)}
+	now, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	out["new"] = side(now, err)
+	return out
 }
 
 func cleanRepoPath(p string) (string, bool) {

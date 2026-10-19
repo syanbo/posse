@@ -581,3 +581,10 @@ String cleanTitle(String title) {
 /// 用户目录换成 ~，路径短一截。
 String tildePath(String path) =>
     path.replaceFirst(RegExp(r'^/Users/[^/]+(?=/|$)'), '~');
+
+/// 文件大小，按 1024 进位：12 B、3.4 KB、5.6 MB。
+String formatBytes(int n) {
+  if (n < 1024) return '$n B';
+  if (n < 1024 * 1024) return '${(n / 1024).toStringAsFixed(1)} KB';
+  return '${(n / 1024 / 1024).toStringAsFixed(1)} MB';
+}
