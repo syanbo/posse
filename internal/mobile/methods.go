@@ -512,6 +512,8 @@ func (c *conn) dispatch(req request) error {
 			return errorf("method_not_found", "Unknown method: %s", req.Method)
 		}
 		return c.reply(req.ID, c.srv.host.Usage())
+	case "session.context":
+		return c.sessionContext(req.ID, p)
 	case "git.status":
 		return c.gitStatus(req.ID, p)
 	case "git.diff":

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../workspace/models.dart';
+import 'context_meter.dart';
 import 'transcript.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -104,6 +105,10 @@ class SessionTitle extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (model != null && !ended) ...[
+                            const SizedBox(width: 10),
+                            ContextMeter(tab: tab, model: model!),
+                          ],
                         ],
                       ),
               ),

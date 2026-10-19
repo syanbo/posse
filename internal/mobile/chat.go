@@ -281,3 +281,22 @@ func fileInode(fi os.FileInfo) uint64 {
 	}
 	return 0
 }
+
+// sessionContext 是会话最后一次请求占用的上下文（Hive 扩展，声明了 hive.context.v1 才有）：
+// 手机终端太窄，Claude 自己状态栏里的百分比常被截掉，手机把它写在标题下面。
+// 只有 claude 和 codex 的会话文件记了用量，别家和还没有回复的会话回 known=false。
+func (c *conn) sessionContext(id string, p json.RawMessage) error {
+	if !c.hasCapability("hive.context.v1") {
+		return errorf("method_not_found", "Unknown method: session.context")
+	}
+	var a chatSub
+	if err := json.Unmarshal(p, &a); err != nil {
+		return errorf("invalid_params", "%v", err)
+	}
+	path := history.TranscriptPath(a.Agent, a.SessionID, a.TranscriptPath)
+	ctx, ok := history.ReadContext(a.Agent, path, "")
+	if !ok {
+		return c.reply(id, map[string]any{"known": false})
+	}
+	return c.reply(id, map[string]any{"known": true, "used": ctx.Used, "window": ctx.Window, "percent": ctx.Percent()})
+}

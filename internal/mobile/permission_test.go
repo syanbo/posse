@@ -272,3 +272,38 @@ func TestUsageMethod(t *testing.T) {
 		t.Fatalf("usage.get %v", got)
 	}
 }
+
+// 会话上下文：没声明 hive.context.v1 的连接看不到；声明后按会话文件最后一条回复的用量算。
+func TestSessionContext(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s1.jsonl")
+	line := `{"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"cache_read_input_tokens":49990,"output_tokens":0}}}` + "\n"
+	if err := os.WriteFile(path, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	args := map[string]any{"agent": "claude", "sessionId": "s1", "transcriptPath": path}
+	if hidden := p.next(p.call("session.context", args)); hidden["ok"] != false {
+		t.Fatalf("orca connection saw session.context: %v", hidden)
+	}
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.context.v1"},
+	})))
+	got := result(t, p.next(p.call("session.context", args)))
+	if got["known"] != true || got["percent"] != float64(25) || got["window"] != float64(200000) {
+		t.Fatalf("session.context %v", got)
+	}
+	none := result(t, p.next(p.call("session.context", map[string]any{"agent": "grok", "sessionId": "x"})))
+	if none["known"] != false {
+		t.Fatalf("grok context %v", none)
+	}
+}

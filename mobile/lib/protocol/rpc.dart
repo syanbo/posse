@@ -14,6 +14,7 @@ const hiveCapabilities = [
   'hive.history.v1',
   'hive.status.v1',
   'hive.usage.v1',
+  'hive.context.v1',
 ];
 
 class RpcException implements Exception {
