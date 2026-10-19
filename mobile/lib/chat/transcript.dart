@@ -13,10 +13,25 @@ class TranscriptEntry {
   final bool tools;
 }
 
+/// Claude 执行排队的斜杠命令时，会话文件里先写一条命令原文，紧接着又写一条命令外壳，
+/// 电脑那边把外壳也换成命令原文，两条只差几毫秒。同一句话两秒内又出现就只留第一条。
+const _repeatWindowMs = 2000;
+
+bool _repeatsUser(ChatMessage? last, ChatMessage message) {
+  if (last == null || message.role != 'user') return false;
+  final a = last.timestamp, b = message.timestamp;
+  if (a == null || b == null || (b - a).abs() > _repeatWindowMs) return false;
+  final text = message.text.trim();
+  return text.isNotEmpty &&
+      text == last.text.trim() &&
+      message.blocks.every((block) => block.type == 'text');
+}
+
 /// 连续的工具调用折成一行。桌面历史详情默认也这样，避免每条工具占一整块。
 List<TranscriptEntry> foldTranscript(List<ChatMessage> messages) {
   final out = <TranscriptEntry>[];
   final run = <ChatBlock>[];
+  ChatMessage? lastUser;
 
   void flush() {
     if (run.isEmpty) return;
@@ -26,6 +41,8 @@ List<TranscriptEntry> foldTranscript(List<ChatMessage> messages) {
 
   for (final message in messages) {
     if (message.blocks.isEmpty) continue;
+    if (_repeatsUser(lastUser, message)) continue;
+    if (message.role == 'user') lastUser = message;
     if (message.role == 'tool' || message.blocks.every(isToolBlock)) {
       run.addAll(message.blocks);
       continue;

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,6 +188,38 @@ func TestChatClaude(t *testing.T) {
 	}
 	if utf8.RuneCountInString(bud[0].(string)) != 3000 || utf8.RuneCountInString(bud[1].(string)) != 1000 {
 		t.Fatalf("budget lens %d %d", utf8.RuneCountInString(bud[0].(string)), utf8.RuneCountInString(bud[1].(string)))
+	}
+}
+
+// 斜杠命令的外壳写成命令本身，本地命令输出、后台任务通知不当成用户消息，中断标记照旧是系统消息。
+func TestChatClaudeCommands(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.jsonl")
+	writeFile(t, path,
+		`{"type":"user","uuid":"c1","message":{"content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}`,
+		`{"type":"user","uuid":"c2","message":{"content":"<command-name>/effort</command-name>\n<command-message>effort</command-message>\n<command-args>high</command-args>"}}`,
+		`{"type":"user","uuid":"o1","message":{"content":"<local-command-stdout>\u001b[2mCompacted\u001b[22m</local-command-stdout>"}}`,
+		`{"type":"user","uuid":"n1","message":{"content":"<task-notification>\n<task-id>x</task-id>\n</task-notification>"}}`,
+		`{"type":"user","uuid":"b1","message":{"content":"<bash-input>ls</bash-input>"}}`,
+		`{"type":"user","uuid":"i1","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}`,
+		`{"type":"user","uuid":"r1","message":{"content":"看看<system-reminder>injected</system-reminder>"}}`,
+	)
+	page, err := ReadChatTail("claude", "", path, 40, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, m := range page.Messages {
+		got[m.ID] = m.Role + ":" + m.Blocks[0].Text
+	}
+	want := map[string]string{
+		"c1": "user:/compact",
+		"c2": "user:/effort high",
+		"b1": "user:! ls",
+		"i1": "system:Request interrupted by user",
+		"r1": "user:看看",
+	}
+	if !maps.Equal(got, want) {
+		t.Fatalf("messages = %v, want %v", got, want)
 	}
 }
 

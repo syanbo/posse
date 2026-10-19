@@ -444,10 +444,16 @@ func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
 				}
 				continue
 			}
-			if strings.TrimSpace(p.Text) == "" {
+			text := p.Text
+			// 和历史索引一样：斜杠命令的外壳写成 "/命令 参数"，本地命令输出、后台任务通知不算用户说的话；
+			// 中断标记留着，下面换成系统消息
+			if r.Type == "user" && !strings.Contains(text, "[Request interrupted by user]") {
+				text = claudeUserText(&fileState{}, text)
+			}
+			if strings.TrimSpace(text) == "" {
 				continue
 			}
-			blocks = append(blocks, ChatBlock{Type: "text", Text: p.Text})
+			blocks = append(blocks, ChatBlock{Type: "text", Text: text})
 		case "thinking":
 			thinking = true
 			if filtered {

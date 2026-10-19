@@ -41,6 +41,24 @@ void main() {
     expect(entries[3].blocks.single.text, '改好了');
   });
 
+  test('a queued slash command written twice shows once', () {
+    final entries = foldTranscript([
+      message('p', 'user', const [
+        ChatBlock(type: 'text', text: '/compact'),
+      ], timestamp: 1000),
+      message('w', 'user', const [
+        ChatBlock(type: 'text', text: '/compact'),
+      ], timestamp: 1005),
+      message('a', 'assistant', const [ChatBlock(type: 'text', text: '好')]),
+      // 隔了一会儿再说同一句是两次
+      message('again', 'user', const [
+        ChatBlock(type: 'text', text: '/compact'),
+      ], timestamp: 60000),
+    ]);
+
+    expect(entries.map((entry) => entry.message?.id), ['p', 'a', 'again']);
+  });
+
   test('time label matches the history detail clock', () {
     final at = DateTime(2026, 10, 1, 15, 4);
     expect(chatTimeLabel(at.millisecondsSinceEpoch), '10月1日 15:04');
