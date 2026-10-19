@@ -322,8 +322,9 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 		})
 		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Grow(1).Shrink(1)
 		refChips(c, ci.Refs)
-		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(88).TextAlign(ui.End).Shrink(0)
+		// 作者按名字本身的宽度紧挨着时间，不占固定的一列，标题多显示一些；时间列靠右对齐，作者也就右对齐
+		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
+		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(72).TextAlign(ui.End).Shrink(0)
 	})
 	return row.Clicked()
 }
@@ -547,7 +548,8 @@ func (a *app) pushDialog(c *ui.Context) {
 						return
 					}
 					ui.Scroll(c).Grow(1).Children(func() {
-						ui.Column(c).Gap(1).Children(func() {
+						// 行之间不留缝，左边的竖线才连得起来
+						ui.Column(c).Children(func() {
 							for i, ci := range plan.Commits {
 								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(0)) {
 									a.selectCommit(v, &ps.commit, ci)
