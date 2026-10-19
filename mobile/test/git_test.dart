@@ -205,6 +205,12 @@ void main() {
                 'untracked': true,
               },
               {
+                'path': 'moved.txt',
+                'x': 'R',
+                'y': '.',
+                'orig': 'src/moved.txt',
+              },
+              {
                 'path': 'docs/new.md',
                 'x': 'R',
                 'y': '.',
@@ -232,7 +238,8 @@ void main() {
     await tester.tap(find.text('平铺'));
     await tester.pumpAndSettle();
     expect(find.text('src'), findsNWidgets(2));
-    expect(find.text('docs  ← docs/old.md'), findsOneWidget);
+    expect(find.text('docs  ← old.md'), findsOneWidget);
+    expect(find.text('← src/moved.txt'), findsOneWidget);
     await tester.tap(find.text('按目录'));
     await tester.pumpAndSettle();
     expect(find.text('← old.md'), findsOneWidget);

@@ -349,10 +349,13 @@ class _GitPaneState extends State<GitPane> {
     final from = kind == ChangeKind.renamed && file.orig.isNotEmpty
         ? file.orig.substring(file.orig.lastIndexOf('/') + 1)
         : null;
-    // 平铺时目录和改名的原名都要写；原名改到别的目录时写全路径
+    // 平铺时目录和改名的原名都要写；从别的目录挪过来的写原来的全路径，同目录改名只写原名
+    final moved = file.orig.contains('/')
+        ? file.orig.substring(0, file.orig.lastIndexOf('/')) != file.dir
+        : file.dir.isNotEmpty;
     final note = [
       if (flat && file.dir.isNotEmpty) file.dir,
-      if (from != null) '← ${flat ? file.orig : from}',
+      if (from != null) '← ${flat && moved ? file.orig : from}',
     ].join('  ');
     return InkWell(
       onTap: () => _open(file),
