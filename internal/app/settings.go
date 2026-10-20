@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/agent"
 	"hive/internal/daemon"
 )
 
@@ -19,7 +20,7 @@ func (a *app) openSettings() {
 	a.selected = settingsBoardID
 }
 
-// settingsBoard 是设置页：防休眠、终端字号、关于（版本、重启常驻进程、日志和数据目录）。
+// settingsBoard 是设置页：防休眠、agent 权限、套餐用量、终端字号、关于（版本、重启常驻进程、日志和数据目录）。
 // 手机配对仍在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
 	a.band(c, func() {
@@ -29,6 +30,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Width(640).Gap(16).Children(func() {
 				a.awakeSettings(c)
+				a.permissionSettings(c)
 				a.planSettings(c)
 				a.fontSettings(c)
 				a.aboutSettings(c)
@@ -78,6 +80,38 @@ func (a *app) awakeSettings(c *ui.Context) {
 		}
 		ui.Text(c, awakeTip(st)).FontSize(12).TextColor(c.Theme().TextMuted)
 	})
+}
+
+var permissionModes = []struct{ mode, seg, tip string }{
+	{agent.PermissionSkip, "跳过审批", "启动时带上各家跳过确认的参数：Claude --dangerously-skip-permissions，Codex --dangerously-bypass-approvals-and-sandbox（同时不用沙盒），Grok --permission-mode bypassPermissions，Cursor --yolo。"},
+	{agent.PermissionAsk, "逐项确认", "照各家自己的设置，读写文件、执行命令前停下来问；Claude 的确认也会推到配对的手机上。"},
+}
+
+func (a *app) permissionSettings(c *ui.Context) {
+	settingsCard(c, "agent 权限", "在 Hive 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
+		sel := 0
+		var labels []string
+		for i, m := range permissionModes {
+			labels = append(labels, m.seg)
+			if m.mode == a.permission {
+				sel = i
+			}
+		}
+		if segmented(c, &sel, "agent 权限", labels...) {
+			a.setPermission(permissionModes[sel].mode)
+		}
+		ui.Text(c, permissionModes[sel].tip).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5)
+	})
+}
+
+func (a *app) setPermission(mode string) {
+	if a.home != "" {
+		if err := agent.SetPermissionMode(a.home, mode); err != nil {
+			a.err = err.Error()
+			return
+		}
+	}
+	a.permission = mode
 }
 
 func (a *app) fontSettings(c *ui.Context) {

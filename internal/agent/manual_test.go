@@ -10,6 +10,7 @@ import (
 
 func TestManualArgs(t *testing.T) {
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	SetPermissionMode(l.Home, PermissionAsk)
 	settings, plugin := filepath.Join(l.Home, "claude-hooks.json"), filepath.Join(l.Home, "claude-plugin")
 	for _, c := range []struct {
 		cmd    string

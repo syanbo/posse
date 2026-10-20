@@ -113,6 +113,7 @@ func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 	default:
 		return args, nil
 	}
+	extra = append(extra, l.manualPermissionArgs(Shimmed[cmd], args)...)
 	return append(extra, args...), nil
 }
 

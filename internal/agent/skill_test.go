@@ -66,6 +66,7 @@ func TestCodexGuideArgs(t *testing.T) {
 
 func TestGrokRules(t *testing.T) {
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	SetPermissionMode(l.Home, PermissionAsk)
 	r, err := l.Launch("grok", "do it")
 	if err != nil {
 		t.Fatal(err)

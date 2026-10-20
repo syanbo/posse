@@ -134,15 +134,16 @@ type app struct {
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
-	lastPoll  *pollResult
-	diffAt    map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	termAt    time.Time            // 上次统计终端内存的时间（轮询协程里用）
-	lastTerm  int64
-	pollForce atomic.Bool // 下一次轮询无论有没有变化都交给界面
-	view      *termView
-	fontSize  float32
-	home      string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
-	state     uiState // 写进 ui.json 的界面状态
+	lastPoll   *pollResult
+	diffAt     map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	termAt     time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm   int64
+	pollForce  atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	view       *termView
+	fontSize   float32
+	permission string  // agent 的权限档位，存在 $HIVE_HOME/agents.json
+	home       string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
+	state      uiState // 写进 ui.json 的界面状态
 
 	// 任务总览
 	taskHome  bool                     // 只要总览：不自动打开上次看的任务
@@ -283,6 +284,7 @@ func Run(c *client.Client) error {
 		fontSize:     defaultFontSize,
 		home:         c.Home,
 		state:        loadUIState(c.Home),
+		permission:   agent.PermissionMode(c.Home),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
 	a.traceGit()

@@ -62,6 +62,7 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 	default:
 		return Launch{}, fmt.Errorf("unknown agent %q (known: %s)", name, strings.Join(Known, ", "))
 	}
+	parts = append(parts, l.permissionArgs(name)...)
 	if prompt != "" {
 		parts = append(parts, Quote(prompt))
 	}
@@ -88,6 +89,7 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		for _, a := range l.codexArgs() {
 			parts = append(parts, Quote(a))
 		}
+		parts = append(parts, l.permissionArgs(name)...)
 		parts = append(parts, "resume", Quote(sessionID))
 	case "grok":
 		parts = []string{"grok", "--resume", Quote(sessionID), "--rules", Quote(guideHint)}
@@ -99,6 +101,10 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 		parts = []string{"cursor-agent", "--plugin-dir", Quote(plugin), "--resume", Quote(sessionID)}
 	default:
 		return Launch{}, fmt.Errorf("cannot resume %q sessions", name)
+	}
+	// codex 的已经加在 resume 子命令前面
+	if name != "codex" {
+		parts = append(parts, l.permissionArgs(name)...)
 	}
 	cmd := strings.Join(parts, " ")
 	if dir != "" {
