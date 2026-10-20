@@ -195,28 +195,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 style: TextStyle(fontSize: Fs.meta, color: c.text, height: 1.4),
               ),
             ),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  where,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                historyTime(s.updatedAt, now),
-                style: TextStyle(
-                  fontSize: Fs.caption,
-                  color: c.faint,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+          Text(
+            where,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: Fs.caption, color: c.muted),
           ),
         ],
+      ),
+      // 时间放在右边和箭头一起上下居中，不跟着副标题沉到底
+      trailing: Text(
+        historyTime(s.updatedAt, now),
+        style: TextStyle(
+          fontSize: Fs.caption,
+          color: c.faint,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
