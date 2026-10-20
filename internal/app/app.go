@@ -111,6 +111,7 @@ type app struct {
 	workspaces []workspace
 	tasks      []taskInfo
 	daemon     daemonStatus
+	planBusy   bool // 套餐用量正在刷新
 	selfKB     int64
 	termKB     int64 // 所有终端进程树的内存，底栏的总内存要加上它
 	loaded     bool

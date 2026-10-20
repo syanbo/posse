@@ -398,6 +398,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("awake.set", d.awakeSet)
 	srv.Handle("usage.get", d.usageGet)
 	srv.Handle("usage.set", d.usageSet)
+	srv.Handle("usage.refresh", d.usageRefresh)
 	srv.Handle("usage.report", d.usageReport)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出

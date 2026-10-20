@@ -21,6 +21,7 @@ import (
 //     Stop 之后拉起 codex app-server 问一次，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
 //   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
+//   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
 const (
 	cursorEvery   = 5 * time.Minute
 	codexAskEvery = 5 * time.Minute
@@ -64,7 +65,7 @@ func (d *Daemon) openUsage() {
 		}
 		d.grokUsage(true)
 		// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
-		d.cursorUsage()
+		d.cursorUsage(false)
 	}()
 }
 
@@ -107,10 +108,10 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 			}()
 		}
 		if event == "Stop" {
-			go d.codexAsk()
+			go d.codexAsk(false)
 		}
 	case agentName == "cursor" && event == "stop":
-		go d.cursorUsage()
+		go d.cursorUsage(false)
 	}
 }
 
@@ -152,13 +153,14 @@ func (d *Daemon) grokUsage(force bool) {
 	}
 }
 
-func (d *Daemon) cursorUsage() {
+// cursorUsage 向 Cursor 查一次用量。force 是用户点了刷新：不管间隔，钥匙串上次超时也再试。
+func (d *Daemon) cursorUsage(force bool) {
 	s := &d.usage
 	if s.store.CursorOff() {
 		return
 	}
 	s.mu.Lock()
-	if s.cursorBusy || s.cursorDenied || time.Since(s.cursorAt) < cursorEvery {
+	if s.cursorBusy || (!force && (s.cursorDenied || time.Since(s.cursorAt) < cursorEvery)) {
 		s.mu.Unlock()
 		return
 	}
@@ -192,14 +194,14 @@ func (d *Daemon) cursorUsage() {
 	s.store.Update(u)
 }
 
-// codexAsk 让 Codex 自己查一次限额和重置卡。
-func (d *Daemon) codexAsk() {
+// codexAsk 让 Codex 自己查一次限额和重置卡。force 是用户点了刷新，不管间隔。
+func (d *Daemon) codexAsk(force bool) {
 	s := &d.usage
 	if s.store.CodexOff() {
 		return
 	}
 	s.mu.Lock()
-	if s.codexBusy || time.Since(s.codexAskAt) < codexAskEvery {
+	if s.codexBusy || (!force && time.Since(s.codexAskAt) < codexAskEvery) {
 		s.mu.Unlock()
 		return
 	}
@@ -240,6 +242,37 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 	}
 	u, ok := usage.ClaudeStatusLine(p.Payload, time.Now())
 	return map[string]bool{"updated": ok && d.usage.store.Update(u)}, nil
+}
+
+// usageRefresh 是界面上的刷新：各家都马上取一次，等都做完再回。设置页里关掉的查询照样不做；
+// Claude 没有可查的接口，只能重读它自己的缓存，statusLine 的读数要等它下次运行。
+func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, error) {
+	if d.usage.store == nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "usage is not available")
+	}
+	d.usage.mu.Lock()
+	d.usage.claudeMod = time.Time{}
+	d.usage.mu.Unlock()
+	var wg sync.WaitGroup
+	for _, f := range []func(){
+		d.claudeCacheUsage,
+		func() {
+			if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
+				d.usage.store.Update(u)
+			}
+			d.codexAsk(true)
+		},
+		func() { d.grokUsage(true) },
+		func() { d.cursorUsage(true) },
+	} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f()
+		}()
+	}
+	wg.Wait()
+	return d.usageStatus(), nil
 }
 
 func (d *Daemon) usageGet(ctx context.Context, raw json.RawMessage) (any, error) {

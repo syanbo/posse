@@ -1,12 +1,15 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/rpc"
 	"hive/internal/usage"
 )
 
@@ -237,6 +240,13 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			titleText(c, "套餐用量", fsCardTitle).Grow(1)
+			// 查询进行中按钮换成转圈
+			if a.planBusy {
+				ui.Row(c.Key("plan-refreshing")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+					Tooltip("正在查询").Children(func() { ui.Spinner(c).Label("正在查询") })
+			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, "立即查询各家用量", 28, 15)).Clicked() {
+				a.refreshPlan()
+			}
 			sel := 0
 			if a.state.UsageRemaining {
 				sel = 1
@@ -286,9 +296,32 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 				}
 			})
 		}
-		ui.Text(c, "agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，Cursor 在常驻进程启动和它用过之后查，Codex 重置卡在它用过之后查。").
+		ui.Text(c, "agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。").
 			FontSize(11).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
+}
+
+// refreshPlan 让常驻进程马上向各家取一次用量，做完才回（Codex、Cursor 要联网，最长半分钟）。
+func (a *app) refreshPlan() {
+	a.planBusy = true
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		var st planStatus
+		err := a.c.Call(ctx, "usage.refresh", nil, &st)
+		a.update(func() {
+			a.planBusy = false
+			var re *rpc.Error
+			switch {
+			case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
+				a.err = "常驻进程版本较旧，不支持刷新套餐用量：到设置页更新常驻进程后再试。"
+			case err != nil:
+				a.err = "刷新套餐用量失败：" + err.Error()
+			default:
+				a.daemon.Usage = &st
+			}
+		})
+	}()
 }
 
 // planSettings 是设置页里两项查询的开关：Cursor 用量和 Codex 重置卡本地没有，要在它们用过之后查一次。
