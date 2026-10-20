@@ -448,7 +448,54 @@ func (rt *engine) showMenu() {
 		return
 	}
 	rt.menu.pending = nil
+	if rt.present != nil {
+		rt.present(menuEntries(p.menu), p.x, p.y, func(id int) { rt.menuChosen(p, id) })
+		rt.requestFrame()
+		return
+	}
 	rt.host.popupMenu(p.menu, p.x, p.y, func(id int) { rt.menuChosen(p, id) })
+}
+
+// MenuEntry is an item of a menu the app shows itself (PresentMenus): a
+// separator, or an item with its ID to choose it by. (Hive)
+type MenuEntry struct {
+	ID        int
+	Label     string
+	Shortcut  string // as "Super+Shift+Z", empty without one
+	Separator bool
+	Enabled   bool
+	Checked   bool
+	Submenu   []MenuEntry
+}
+
+func menuEntries(m *platform.Menu) []MenuEntry {
+	if m == nil {
+		return nil
+	}
+	var out []MenuEntry
+	for _, it := range m.Items {
+		if !it.Visible && it.Type != platform.MenuItemSeparator {
+			continue
+		}
+		out = append(out, MenuEntry{
+			ID: it.ID, Label: it.Label, Shortcut: it.Accelerator, Separator: it.Type == platform.MenuItemSeparator,
+			Enabled: it.Enabled, Checked: it.Checked, Submenu: menuEntries(it.Submenu),
+		})
+	}
+	return out
+}
+
+// PresentMenus has show present the window's menus in place of the native
+// ones: context menus, menu buttons and the editing menus of text inputs,
+// selectable text and editors. show runs on the main thread after the
+// event that opened the menu, with its items and where, in DIPs relative to
+// the window; the app draws them and calls choose with the ID of the item
+// chosen, outside the building of a frame. Call it in every frame, or
+// with nil to go back to native menus. (Hive)
+func (c *Context) PresentMenus(show func(items []MenuEntry, x, y float32, choose func(id int))) {
+	if rt := c.runtime(); rt != nil {
+		rt.present = show
+	}
 }
 
 // menuChosen takes the item id chosen from the menu p: the next frame

@@ -64,6 +64,9 @@ type host interface {
 // the view function, lays them out, paints them and routes input to the
 // elements of the last frame. Main thread only, except where noted.
 type engine struct {
+	// present shows the window's menus in place of the native ones, when
+	// the app set it with PresentMenus. (Hive)
+	present func(items []MenuEntry, x, y float32, choose func(id int))
 	// byPosition holds the keys whose press stood for its physical key
 	// (keyDownPhysical), until their release does the same.
 	byPosition      map[Key]bool
