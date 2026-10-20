@@ -163,7 +163,8 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (!_desk && _cols >= 20) return;
     final cell = _cellMetrics(widget.model.settings.terminalFontSize);
     if (cell.cellWidth <= 0 || cell.cellHeight <= 0) return;
-    final cols = (box.maxWidth / cell.cellWidth).floor();
+    var cols = (box.maxWidth / cell.cellWidth).floor();
+    if (_cropGrok) cols += _grokMargin * 2;
     final rows = (box.maxHeight / cell.cellHeight).floor();
     if (cols < 20 || rows < 8) return;
     if (cols == _cols && rows == _rows) return;
@@ -355,12 +356,34 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (!ok && mounted) setState(() => _notice = '打不开这个链接：$uri');
   }
 
+  /// grok 自己在左右各留 [_grokMargin] 列空白、整屏铺底色，窄屏上再加外面的内边距显得空。
+  /// 手机布局时把终端排宽 2×[_grokMargin] 列，左右各裁掉这么多，grok 的内容贴着屏幕边。
+  bool get _cropGrok => widget.tab.agent == 'grok' && !_desk;
+
+  Widget _croppedView(HiveColors c, BoxConstraints box) {
+    final cell = _cellMetrics(widget.model.settings.terminalFontSize);
+    final margin = cell.cellWidth * _grokMargin;
+    final width = box.maxWidth + margin * 2;
+    return ClipRect(
+      child: Transform.translate(
+        offset: Offset(-margin, 0),
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: width,
+          maxWidth: width,
+          child: _terminalView(c),
+        ),
+      ),
+    );
+  }
+
   /// 电脑布局：按快照的列和行排成桌面那一块，再缩进屏幕宽度。手势在这块表面上，
   /// 不另加横向滚动，免得和终端自己的纵向滚动抢。还没有快照时先铺满。
   Widget _deskView(HiveColors c, BoxConstraints box) {
     // 程序自己铺了底色（比如 grok）时，外面的内边距接着画它的底色，不露出一圈主题色；
     // 电脑布局能缩放、平移，不往外延
     if (!_desk || _deskCols <= 0) {
+      if (_cropGrok) return _croppedView(c, box);
       return _terminalView(c, backgroundBleed: _termPadding);
     }
     final base = widget.model.settings.terminalFontSize;
@@ -719,7 +742,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           if (_notice != null) NoticeBar(_notice!),
           Expanded(
             child: Padding(
-              padding: _termPadding,
+              padding: _cropGrok ? EdgeInsets.zero : _termPadding,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   _notePhoneBox(constraints);
@@ -819,6 +842,9 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
 /// 终端四周留的空，文字不贴屏幕边。程序铺了底色时这一圈会接着画它的底色，看着是一片，
 /// 加上程序自己的缩进（grok 左边 2 到 5 列）显得空，所以只留一点。
 const _termPadding = EdgeInsets.fromLTRB(4, 4, 4, 0);
+
+/// grok 左右各自留的空白列数（46 列宽时实测）。
+const _grokMargin = 2;
 
 class _KeyBar extends StatelessWidget {
   const _KeyBar({

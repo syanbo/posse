@@ -332,13 +332,20 @@ class UsageCardView extends StatelessWidget {
             builder: (_) => UsageSheet(usages: shown),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+            child: Row(
               children: [
-                for (var i = 0; i < shown.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 10),
-                  _UsageRow(usage: shown[i], remaining: remaining),
-                ],
+                Expanded(
+                  child: Wrap(
+                    spacing: 16,
+                    runSpacing: 6,
+                    children: [
+                      for (final u in shown)
+                        _UsageChip(usage: u, remaining: remaining),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 18, color: c.faint),
               ],
             ),
           ),
@@ -348,9 +355,9 @@ class UsageCardView extends StatelessWidget {
   }
 }
 
-/// 卡片里的一家：图标、名字，右边各窗口的名字、百分比和细进度条。
-class _UsageRow extends StatelessWidget {
-  const _UsageRow({required this.usage, required this.remaining});
+/// 卡片里的一家，和桌面状态栏一样只写一个窗口：图标、窗口简称、百分比。有 5 小时就是它。
+class _UsageChip extends StatelessWidget {
+  const _UsageChip({required this.usage, required this.remaining});
 
   final AgentUsage usage;
   final bool remaining;
@@ -358,79 +365,44 @@ class _UsageRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
+    final main = usage.mainWindows;
+    final pool = main.isEmpty ? usage.windows : main;
+    final w = pool.firstWhere(
+      (w) => windowLabel(w.minutes) == '5 小时',
+      orElse: () => pool.first,
+    );
+    final urgent = w.percent >= usageUrgent;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        AgentTile(agent: usage.agent, size: 22),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 64,
-          child: Text(
-            agentTitle(usage.agent),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: c.text,
-            ),
+        AgentTile(agent: usage.agent, size: 16),
+        const SizedBox(width: 6),
+        Text(
+          windowShort(w.minutes),
+          style: TextStyle(fontSize: Fs.caption, color: c.muted),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          '${shownPercent(w, remaining).round()}%',
+          style: TextStyle(
+            fontSize: Fs.caption,
+            fontWeight: FontWeight.w500,
+            color: urgent ? c.danger : c.text,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
-        for (final w in usage.mainWindows.take(2)) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            child: _MiniWindow(window: w, remaining: remaining),
-          ),
-        ],
-        // 只有一个窗口时占住第二格，进度条和别的行对齐
-        if (usage.mainWindows.length == 1) ...[
-          const SizedBox(width: 12),
-          const Expanded(child: SizedBox.shrink()),
-        ],
       ],
     );
   }
 }
 
-class _MiniWindow extends StatelessWidget {
-  const _MiniWindow({required this.window, required this.remaining});
-
-  final UsageWindow window;
-  final bool remaining;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
-    final urgent = window.percent >= usageUrgent;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                windowLabel(window.minutes),
-                style: TextStyle(fontSize: Fs.caption, color: c.muted),
-              ),
-            ),
-            Text(
-              '${shownPercent(window, remaining).round()}%',
-              style: TextStyle(
-                fontSize: Fs.caption,
-                fontWeight: FontWeight.w500,
-                color: urgent ? c.danger : c.text,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        UsageBar(
-          percent: shownPercent(window, remaining),
-          urgent: urgent,
-          height: 4,
-        ),
-      ],
-    );
-  }
-}
+/// 窗口简称，和桌面状态栏一致：5h、周、月。
+String windowShort(int minutes) => switch (windowLabel(minutes)) {
+  '5 小时' => '5h',
+  '每周' => '周',
+  '每月' => '月',
+  final other => other,
+};
 
 /// 进度条：画已用或剩余的那一段，陶土色，快用完时变红。
 class UsageBar extends StatelessWidget {

@@ -122,7 +122,7 @@ class ChatComposer extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
         child: Container(
           decoration: BoxDecoration(
             color: c.card,
@@ -130,7 +130,7 @@ class ChatComposer extends StatelessWidget {
             border: Border.all(color: c.line),
           ),
           // 四边一样宽：单行时按钮正好在框的正中，多行时停在底部
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -199,6 +199,12 @@ class ChatComposer extends StatelessWidget {
                 children: [
                   IconButton(
                     tooltip: '发送图片',
+                    // 默认 48 的点按区把整条撑高，收到和发送按钮一样 34
+                    constraints: const BoxConstraints.tightFor(
+                      width: 34,
+                      height: 34,
+                    ),
+                    padding: EdgeInsets.zero,
                     onPressed: sending || !connected ? null : onPickImage,
                     icon: Icon(
                       Icons.image_outlined,
@@ -227,7 +233,7 @@ class ChatComposer extends StatelessWidget {
                         focusedBorder: InputBorder.none,
                         isDense: true,
                         // 单行时和 34 高的发送按钮一样高
-                        contentPadding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+                        contentPadding: const EdgeInsets.fromLTRB(6, 7, 4, 7),
                       ),
                     ),
                   ),

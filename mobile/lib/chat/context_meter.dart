@@ -20,7 +20,7 @@ Future<int?> readSessionContext(PhoneRpc rpc, SessionTab tab) async {
   return (res['percent'] as num?)?.toInt();
 }
 
-/// 标题下面状态行末尾的上下文用量：小圆环加「上下文 42%」。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
+/// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
 /// 只有 Claude、Codex 记了用量；每 15 秒和每次状态变化时重读，电脑上的 hive 太旧（没有这个接口）就不再问。
 class ContextMeter extends StatefulWidget {
   const ContextMeter({
@@ -119,7 +119,7 @@ class _ContextMeterState extends State<ContextMeter> {
           ),
           const SizedBox(width: 4),
           Text(
-            '上下文 $percent%',
+            '$percent%',
             style: TextStyle(
               fontSize: 12,
               color: color,

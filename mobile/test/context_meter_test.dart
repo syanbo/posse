@@ -43,11 +43,11 @@ void main() {
     }
 
     await show(_tab('claude', 'working'));
-    expect(find.text('上下文 42%'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
     percent = 81;
     await show(_tab('claude', 'idle'));
     expect(reads, 2);
-    expect(find.text('上下文 81%'), findsOneWidget);
+    expect(find.text('81%'), findsOneWidget);
   });
 
   testWidgets('agents without usage records show nothing', (tester) async {
@@ -66,6 +66,6 @@ void main() {
     );
     await tester.pump();
     expect(reads, 0);
-    expect(find.textContaining('上下文'), findsNothing);
+    expect(find.textContaining('%'), findsNothing);
   });
 }

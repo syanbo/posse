@@ -276,17 +276,25 @@ class Section extends StatelessWidget {
     required this.children,
     this.inset = 16,
     this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 20),
+    this.folded,
   });
 
   final String? title;
   final Widget? trailing;
   final List<Widget> children;
 
+  /// 不为空时，children 只有第一行（标题行）常显，其余行收在可展开的一块里：
+  /// true 收起、false 展开，切换时上下滑动。
+  final bool? folded;
+
   /// 分隔线左边留出的宽度，对齐行里的文字而不是图标。
   final double inset;
 
   /// 卡片外边距。放在已经有左右内边距的页面里时传 bottom-only。
   final EdgeInsets margin;
+
+  List<Widget> _rows(HiveColors c, List<Widget> rows, {required bool first}) =>
+      _rowsImpl(c, rows, inset, first: first);
 
   @override
   Widget build(BuildContext context) {
@@ -321,23 +329,100 @@ class Section extends StatelessWidget {
               borderRadius: BorderRadius.circular(Rd.card),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0)
-                    Padding(
-                      padding: EdgeInsets.only(left: inset),
-                      child: Divider(height: 1, thickness: 1, color: c.line),
-                    ),
-                  children[i],
-                ],
-              ],
-            ),
+            child: folded == null
+                ? Column(children: _rows(c, children, first: true))
+                : Column(
+                    children: [
+                      children.first,
+                      Fold(
+                        open: !folded!,
+                        child: Column(
+                          children: _rows(c, children.sublist(1), first: false),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
+}
+
+/// 行之间画分隔线；first 为假时第一行上面也画（接在常显的标题行后面）。
+List<Widget> _rowsImpl(
+  HiveColors c,
+  List<Widget> rows,
+  double inset, {
+  required bool first,
+}) => [
+  for (var i = 0; i < rows.length; i++) ...[
+    if (i > 0 || !first)
+      Padding(
+        padding: EdgeInsets.only(left: inset),
+        child: Divider(height: 1, thickness: 1, color: c.line),
+      ),
+    rows[i],
+  ],
+];
+
+/// 展开收起时上下滑动的一块，收起后不占高度。减少动态效果时直接切换。
+class Fold extends StatefulWidget {
+  const Fold({super.key, required this.open, required this.child});
+
+  final bool open;
+  final Widget child;
+
+  @override
+  State<Fold> createState() => _FoldState();
+}
+
+class _FoldState extends State<Fold> with SingleTickerProviderStateMixin {
+  late final _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: widget.open ? 1 : 0,
+  );
+  late final _curve = CurvedAnimation(
+    parent: _ctrl,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  @override
+  void didUpdateWidget(Fold old) {
+    super.didUpdateWidget(old);
+    if (old.open == widget.open) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = widget.open ? 1 : 0;
+    } else if (widget.open) {
+      _ctrl.forward();
+    } else {
+      _ctrl.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _ctrl,
+    // 收起停稳后不再构建里面的行
+    builder: (context, child) => _ctrl.value == 0
+        ? const SizedBox(width: double.infinity)
+        : ClipRect(
+            child: Align(
+              alignment: Alignment.topCenter,
+              heightFactor: _curve.value,
+              child: Opacity(opacity: _curve.value, child: child),
+            ),
+          ),
+    child: widget.child,
+  );
 }
 
 /// 卡片里的一行：左边图标，中间标题和副标题，右边状态。按下是中性的淡底。

@@ -534,6 +534,7 @@ class WorkspaceScreen extends StatelessWidget {
                               inset: 48,
                               // 左右和卡片之间一样宽
                               margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                              folded: model.isCollapsed(names[i]),
                               children: _project(
                                 context,
                                 names[i],
@@ -578,7 +579,7 @@ class WorkspaceScreen extends StatelessWidget {
           onToggle: () => model.toggleProject(name),
           onOpen: () => _openWorkspace(context, row),
         ),
-        if (!collapsed) ...sessions,
+        ...sessions,
       ];
     }
     final main = rows.firstWhere((r) => r.isMain, orElse: () => rows.first);
@@ -593,32 +594,31 @@ class WorkspaceScreen extends StatelessWidget {
         onToggle: () => model.toggleProject(name),
         onOpen: () => _openWorkspace(context, main),
       ),
-      if (!collapsed)
-        for (final row in rows) ...[
-          _Indented(
-            indent: 34,
-            child: RowTile(
-              // 主工作区、同一目录上的文件夹工作区、git worktree 各用各的图标
-              leading: Icon(
-                row.isMain
-                    ? Icons.home_outlined
-                    : row.branch.isEmpty
-                    ? Icons.folder_copy_outlined
-                    : Icons.call_split_rounded,
-                // folder_copy 的墨迹比另外两个满，同样字号看着大一圈
-                size: row.isMain || row.branch.isNotEmpty ? 20 : 17,
-                color: c.accent,
-              ),
-              title: Text(row.isMain ? '主工作区' : row.name),
-              subtitle: row.branch.isEmpty
-                  ? null
-                  : Text(row.branch, style: mono(12, color: c.muted)),
-              trailing: _count(c, row),
-              onTap: () => _openWorkspace(context, row),
+      for (final row in rows) ...[
+        _Indented(
+          indent: 34,
+          child: RowTile(
+            // 主工作区、同一目录上的文件夹工作区、git worktree 各用各的图标
+            leading: Icon(
+              row.isMain
+                  ? Icons.home_outlined
+                  : row.branch.isEmpty
+                  ? Icons.folder_copy_outlined
+                  : Icons.call_split_rounded,
+              // folder_copy 的墨迹比另外两个满，同样字号看着大一圈
+              size: row.isMain || row.branch.isNotEmpty ? 20 : 17,
+              color: c.accent,
             ),
+            title: Text(row.isMain ? '主工作区' : row.name),
+            subtitle: row.branch.isEmpty
+                ? null
+                : Text(row.branch, style: mono(12, color: c.muted)),
+            trailing: _count(c, row),
+            onTap: () => _openWorkspace(context, row),
           ),
-          ..._sessions(context, row, indent: 82),
-        ],
+        ),
+        ..._sessions(context, row, indent: 82),
+      ],
     ];
   }
 
@@ -834,7 +834,8 @@ class _ProjectHeader extends StatelessWidget {
                         if (expandable)
                           AnimatedRotation(
                             turns: collapsed ? -0.25 : 0,
-                            duration: const Duration(milliseconds: 150),
+                            // 和下面的 Fold 同时转完
+                            duration: const Duration(milliseconds: 220),
                             child: Icon(
                               Icons.expand_more_rounded,
                               size: 18,
