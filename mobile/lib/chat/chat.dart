@@ -664,19 +664,29 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-                  if (_upload case (final i, final n, final done))
+                  // 提示、上传进度、「新消息」都浮在列表底部，不挤动列表
+                  if (_notice != null || _upload != null || _newBelow)
                     Positioned(
                       left: 0,
                       right: 0,
                       bottom: 12,
-                      child: UploadBar(index: i, count: n, done: done),
-                    )
-                  else if (_newBelow)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 12,
-                      child: Center(child: _newBelowButton(c)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_notice != null)
+                            NoticeBar(
+                              _notice!,
+                              floating: true,
+                              onClose: () => _flash(null),
+                            ),
+                          if (_notice != null && (_upload != null || _newBelow))
+                            const SizedBox(height: 8),
+                          if (_upload case (final i, final n, final done))
+                            UploadBar(index: i, count: n, done: done)
+                          else if (_newBelow)
+                            Center(child: _newBelowButton(c)),
+                        ],
+                      ),
                     ),
                 ],
               ),
@@ -690,7 +700,6 @@ class _ChatScreenState extends State<ChatScreen> {
             )
           else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
-          if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
           ChatComposer(
             controller: _input,
             images: _pending,

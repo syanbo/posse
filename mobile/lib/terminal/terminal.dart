@@ -795,7 +795,6 @@ class _TerminalScreenState extends State<TerminalScreen>
       ),
       body: Column(
         children: [
-          if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
           Expanded(
             child: Padding(
               padding: _cropGrok ? EdgeInsets.zero : _termPadding,
@@ -813,17 +812,27 @@ class _TerminalScreenState extends State<TerminalScreen>
                           bottom: 12,
                           child: UploadBar(index: 0, count: 1, done: done),
                         ),
-                      if (_showCopy)
+                      // 提示和复制按钮都浮在终端上面：占布局的话终端会变矮，agent 跟着重排
+                      if (_notice != null || _showCopy)
                         Positioned(
                           top: 8,
                           left: 0,
                           right: 0,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              _CopyChip(
-                                onCopy: () => unawaited(_copySelection()),
-                              ),
+                              if (_notice != null)
+                                NoticeBar(
+                                  _notice!,
+                                  floating: true,
+                                  onClose: () => _flash(null),
+                                ),
+                              if (_notice != null && _showCopy)
+                                const SizedBox(height: 8),
+                              if (_showCopy)
+                                _CopyChip(
+                                  onCopy: () => unawaited(_copySelection()),
+                                ),
                             ],
                           ),
                         ),

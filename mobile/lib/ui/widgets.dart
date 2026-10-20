@@ -626,22 +626,37 @@ class EmptyState extends StatelessWidget {
 
 /// 错误条：一行文字，留在原处，等下一次成功时消失。
 class NoticeBar extends StatelessWidget {
-  const NoticeBar(this.text, {super.key, this.onClose});
+  const NoticeBar(this.text, {super.key, this.onClose, this.floating = false});
 
   final String text;
 
   /// 点一下关掉。
   final VoidCallback? onClose;
 
+  /// 浮在内容上面（放进 Stack 用）：底色不透明、带阴影，出现消失不挪动下面的终端或列表。
+  final bool floating;
+
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
+    final tint = c.danger.withValues(alpha: c.dark ? 0.16 : 0.08);
     final bar = Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      margin: floating
+          ? const EdgeInsets.symmetric(horizontal: 16)
+          : const EdgeInsets.fromLTRB(16, 4, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: c.danger.withValues(alpha: c.dark ? 0.16 : 0.08),
+        color: floating ? Color.alphaBlend(tint, c.card) : tint,
         borderRadius: BorderRadius.circular(Rd.input),
+        boxShadow: floating
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: c.dark ? 0.4 : 0.12),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
