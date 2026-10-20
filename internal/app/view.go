@@ -242,8 +242,8 @@ func (a *app) sidebarButton(c *ui.Context) {
 	if a.state.SidebarHidden {
 		label = "展开侧栏 ⌘B"
 	}
-	// 图标比普通按钮大，方框的高度和旁边 Hive 的字高相当（照 Orca）
-	if iconButtonSized(c.Key("sidebar-toggle"), iconPanelLeft, label, toggleBox, 21).Clicked() {
+	// 和侧栏顶栏右边的设置按钮一样大
+	if iconButton(c.Key("sidebar-toggle"), iconPanelLeft, label).Clicked() {
 		a.toggleSidebar()
 	}
 }
@@ -256,7 +256,7 @@ const (
 	titleGap     = 18 // 红绿灯到应用名
 	appNameWidth = 38
 	appNameGap   = 12 // 应用名到侧栏开关
-	toggleBox    = 30
+	toggleBox    = 28 // iconButton 的方框
 	titleLead    = appNameWidth + appNameGap + toggleBox
 )
 
