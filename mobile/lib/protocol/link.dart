@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'e2ee.dart';
+import 'latency.dart';
 import 'pairing.dart';
 import 'race.dart';
 import 'rpc.dart';
@@ -112,6 +113,16 @@ class HiveLink {
 
   PhoneRpc? rpc;
 
+  /// 当前连接的延迟，见 [LatencyMeter]；没连上时为空。
+  LatencyMeter? meter;
+
+  /// [meter] 的读数变了。
+  void Function()? onLatency;
+
+  /// 测延迟的间隔和每次等多久，测试里改小。
+  Duration latencyInterval = const Duration(seconds: 5);
+  Duration latencyTimeout = const Duration(seconds: 5);
+
   /// 这次连上的是配对码里的哪个地址（几个地址同时试，先握手成功的那个）。
   String? url;
   Object? lastError;
@@ -156,12 +167,24 @@ class HiveLink {
       won.value.watchClose(() {
         if (epoch != _epoch || !identical(rpc, won.value)) return;
         rpc = null;
+        meter?.stop();
+        meter = null;
         onActivity?.call();
         unawaited(_reopen());
       });
       final previous = rpc;
       rpc = won.value;
       url = won.url;
+      meter?.stop();
+      final latest = LatencyMeter(
+        won.value,
+        interval: latencyInterval,
+        timeout: latencyTimeout,
+        onChange: () {
+          if (identical(rpc, won.value)) onLatency?.call();
+        },
+      );
+      meter = latest..start();
       lastError = null;
       if (!_ready.isClosed) _ready.add(won.value);
       onActivity?.call();
@@ -230,6 +253,8 @@ class HiveLink {
   Future<void> close() async {
     _closed = true;
     _epoch++;
+    meter?.stop();
+    meter = null;
     await _network?.cancel();
     _network = null;
     await rpc?.close();

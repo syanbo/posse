@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../workspace/models.dart';
 import 'context_meter.dart';
+import 'latency_label.dart';
 import 'transcript.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -96,18 +97,17 @@ class SessionTitle extends StatelessWidget {
                             child: Text(
                               stateText,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                                color: state == AgentState.waiting
-                                    ? c.honey
-                                    : c.muted,
+                              style: statusLineStyle(
+                                state == AgentState.waiting ? c.honey : c.muted,
                               ),
                             ),
                           ),
                           if (model != null && !ended) ...[
-                            const SizedBox(width: 10),
                             ContextMeter(tab: tab, model: model!),
+                            LatencyLabel(
+                              latency: model!.latency,
+                              unresponsive: model!.unresponsive,
+                            ),
                           ],
                         ],
                       ),
@@ -134,7 +134,7 @@ extension on SessionTitle {
           child: Text(
             connecting ? '正在连接电脑…' : '连接断开，正在重连…',
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: c.honey),
+            style: statusLineStyle(c.honey),
           ),
         ),
       ],

@@ -1,0 +1,169 @@
+import 'dart:async';
+
+import 'package:fake_async/fake_async.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/chat/latency_label.dart';
+import 'package:hive_mobile/protocol/latency.dart';
+import 'package:hive_mobile/protocol/rpc.dart';
+
+/// 只认 ping 的连接：[reply] 决定每次怎么回。
+class _PingRpc implements PhoneRpc {
+  _PingRpc(this.reply);
+
+  Future<void> Function(_PingRpc rpc, String method) reply;
+  final methods = <String>[];
+  var dropped = false;
+
+  @override
+  var receivedBytes = 0;
+  @override
+  var sentBytes = 0;
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
+    methods.add(method);
+    await reply(this, method);
+    return {};
+  }
+
+  @override
+  void drop() => dropped = true;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+LatencyMeter _meter(_PingRpc rpc) => LatencyMeter(rpc, onChange: () {});
+
+void main() {
+  test('shows the median of the last three round trips', () async {
+    final delays = [0, 60, 300, 40];
+    var i = 0;
+    final rpc = _PingRpc(
+      (_, _) => Future.delayed(Duration(milliseconds: delays[i++])),
+    );
+    final meter = _meter(rpc);
+    for (var n = 0; n < delays.length; n++) {
+      await meter.tick();
+    }
+    // 最近三次是 60、300、40：中位数 60，一次 300 的抖动不算
+    final ms = meter.latency!.inMilliseconds;
+    expect(ms, inInclusiveRange(55, 200));
+    expect(rpc.methods.toSet(), {'runtime.ping'});
+  });
+
+  test('a ping stuck behind a large reply is not a sample', () async {
+    final rpc = _PingRpc((rpc, _) async => rpc.receivedBytes += 1 << 20);
+    final meter = _meter(rpc);
+    await meter.tick();
+    expect(meter.latency, isNull);
+    expect(meter.unresponsive, isFalse);
+  });
+
+  test(
+    'an old desktop without runtime.ping is timed with status.get',
+    () async {
+      final rpc = _PingRpc((_, method) async {
+        if (method == 'runtime.ping') {
+          throw RpcException('method_not_found', method);
+        }
+      });
+      final meter = _meter(rpc);
+      await meter.tick();
+      await meter.tick();
+      expect(rpc.methods, ['runtime.ping', 'status.get']);
+      expect(meter.latency, isNotNull);
+    },
+  );
+
+  test('three silent timeouts drop the connection', () async {
+    final rpc = _PingRpc((_, method) async => throw TimeoutException(method));
+    final meter = _meter(rpc);
+    await meter.tick();
+    expect(meter.unresponsive, isTrue);
+    expect(rpc.dropped, isFalse);
+    await meter.tick();
+    await meter.tick();
+    expect(rpc.dropped, isTrue);
+  });
+
+  test('a silent desktop is dropped about three timeouts later', () {
+    fakeAsync((async) {
+      // 像真的连接一样：等满超时才抛
+      final rpc = _PingRpc((_, method) async {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        throw TimeoutException(method);
+      });
+      LatencyMeter(rpc, onChange: () {}).start();
+      async.elapse(const Duration(seconds: 14));
+      expect(rpc.dropped, isFalse);
+      // 第一次 ping 一发出就没回：5、10、15 秒各超时一次，不在两次之间再空等一个间隔
+      async.elapse(const Duration(seconds: 2));
+      expect(rpc.dropped, isTrue);
+      expect(rpc.methods.length, 3);
+    });
+  });
+
+  test('timeouts while data keeps arriving are not a dead link', () async {
+    // 慢线路上下大文件：ping 排在后面超时了，但一直在收数据
+    final rpc = _PingRpc((rpc, method) async {
+      rpc.receivedBytes += 1 << 20;
+      throw TimeoutException(method);
+    });
+    final meter = _meter(rpc);
+    for (var n = 0; n < 5; n++) {
+      await meter.tick();
+    }
+    expect(meter.unresponsive, isFalse);
+    expect(rpc.dropped, isFalse);
+  });
+
+  testWidgets('latency label: muted, amber when slow, red when silent', (
+    tester,
+  ) async {
+    Future<Text> show(Duration? latency, {bool unresponsive = false}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            appBar: AppBar(
+              title: LatencyLabel(latency: latency, unresponsive: unresponsive),
+            ),
+          ),
+        ),
+      );
+      return tester.widget<Text>(find.byType(Text).last);
+    }
+
+    // 还没测到：不占位置
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: LatencyLabel())),
+    );
+    expect(find.byType(Text), findsNothing);
+    final fast = await show(const Duration(milliseconds: 42));
+    expect(fast.data, '42 ms');
+    // 在顶栏里也不跟着标题变粗
+    expect(fast.style!.fontWeight, FontWeight.w400);
+    final slow = await show(const Duration(milliseconds: 420));
+    expect(slow.style!.color, isNot(fast.style!.color));
+    final silent = await show(null, unresponsive: true);
+    expect(silent.data, '无响应');
+  });
+
+  test('signal bars drop as latency grows', () {
+    IconData at(int ms) => latencyIcon(Duration(milliseconds: ms));
+    expect(at(40), Icons.signal_cellular_alt);
+    expect(at(149), Icons.signal_cellular_alt);
+    expect(at(150), Icons.signal_cellular_alt_2_bar);
+    expect(at(299), Icons.signal_cellular_alt_2_bar);
+    expect(at(300), Icons.signal_cellular_alt_1_bar);
+    expect(
+      latencyIcon(null, unresponsive: true),
+      Icons.signal_cellular_connected_no_internet_0_bar,
+    );
+  });
+}

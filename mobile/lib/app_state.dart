@@ -353,6 +353,13 @@ class HiveAppModel extends ChangeNotifier {
 
   PhoneRpc? get rpc => link?.rpc;
 
+  /// 和电脑之间的往返延迟，没连上或还没测到时为空。
+  Duration? get latency => link?.rpc == null ? null : link?.meter?.latency;
+
+  /// 最近一次测延迟超时，期间也没收到电脑的任何数据。
+  bool get unresponsive =>
+      link?.rpc != null && (link?.meter?.unresponsive ?? false);
+
   /// 现在连着的地址，没连上时为空。
   String? get connectedUrl => link?.rpc == null ? null : link?.url;
 
@@ -433,6 +440,9 @@ class HiveAppModel extends ChangeNotifier {
           unawaited(refreshWorktrees());
         }
         notifyListeners();
+      };
+      created.onLatency = () {
+        if (gen == _connectGen && identical(link, created)) notifyListeners();
       };
       await created.start();
       if (gen != _connectGen) {

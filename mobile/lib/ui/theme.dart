@@ -30,6 +30,14 @@ abstract final class Rd {
 const monoFamily = 'Menlo';
 const monoFallback = ['monospace', 'PingFang SC'];
 
+/// 会话页、终端页标题下面那一行（状态、上下文、延迟）的文字。写明字重：不写会继承顶栏标题的粗体。
+TextStyle statusLineStyle(Color color) => TextStyle(
+  fontSize: 12,
+  fontWeight: FontWeight.w400,
+  color: color,
+  fontFeatures: const [FontFeature.tabularFigures()],
+);
+
 TextStyle mono(double size, {Color? color, double? height}) => TextStyle(
   fontFamily: monoFamily,
   fontFamilyFallback: monoFallback,

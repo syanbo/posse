@@ -54,6 +54,11 @@ class PhoneRpc {
   Stream<Uint8List> get binary => _binary.stream;
   var _n = 0;
   var _bad = 0;
+
+  /// 收到、发出的帧一共多少字节。测延迟时用来判断这段时间连接上有没有别的大块数据在排队，
+  /// 以及连接是不是还活着（一直在收东西就不算没响应）。
+  var receivedBytes = 0;
+  var sentBytes = 0;
   var _closed = false;
   var _ended = false;
   var _unexpectedLoss = false;
@@ -141,6 +146,7 @@ class PhoneRpc {
     final result = _tail.then((_) async {
       if (_closed) throw StateError('closed');
       final frame = session.seal(plain, direction: direction, kind: kind);
+      sentBytes += frame.length;
       if (kind == kindText) {
         await socket.sendText(base64.encode(frame));
       } else {
@@ -160,6 +166,10 @@ class PhoneRpc {
     await _reader.cancel();
     await socket.close();
   }
+
+  /// 连接已经死了但系统还没报错（切网络、手机休眠后的半开连接）：当成意外断开，
+  /// 和读出错一样交给 [watchClose] 去重连。
+  void drop() => _lost();
 
   void _lost() {
     if (_ended) return;
@@ -211,6 +221,7 @@ class PhoneRpc {
         return;
       }
       if (_closed) return;
+      receivedBytes += event.bytes.length;
       try {
         final plain = event.binary
             ? session.open(

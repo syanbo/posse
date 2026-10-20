@@ -102,12 +102,14 @@ class _ContextMeterState extends State<ContextMeter> {
         : percent >= 75
         ? c.honey
         : c.muted;
+    // 前面的间距放在这里：没有读数时整个不占位置，后面的延迟不会多空一截
     return Semantics(
       label: '上下文已用 $percent%',
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(width: 10),
           SizedBox.square(
             dimension: 10,
             child: CircularProgressIndicator(
@@ -118,14 +120,7 @@ class _ContextMeterState extends State<ContextMeter> {
             ),
           ),
           const SizedBox(width: 4),
-          Text(
-            '$percent%',
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
+          Text('$percent%', style: statusLineStyle(color)),
         ],
       ),
     );

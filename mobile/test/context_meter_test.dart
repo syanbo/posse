@@ -44,6 +44,11 @@ void main() {
 
     await show(_tab('claude', 'working'));
     expect(find.text('42%'), findsOneWidget);
+    // 和前面的状态文字同一个样式，写明字重，放进顶栏也不会继承标题的粗体
+    expect(
+      tester.widget<Text>(find.text('42%')).style!.fontWeight,
+      FontWeight.w400,
+    );
     percent = 81;
     await show(_tab('claude', 'idle'));
     expect(reads, 2);

@@ -127,6 +127,41 @@ void main() {
     },
   );
 
+  test('a link that stops answering pings is dropped and reopened', () async {
+    final hostKeys = generateKeyPair();
+    final offer = PairingOffer(
+      endpoint: 'only',
+      endpoints: const [],
+      deviceToken: 'tok',
+      publicKeyB64: b64(hostKeys.publicKey),
+    );
+    var connects = 0;
+    final link =
+        HiveLink(
+            offer: offer,
+            connect: (url, cancel) async {
+              connects++;
+              final (client, host) = pipePair();
+              // 第一条连接握手后就不出声了，socket 却一直开着
+              unawaited(_host(host, hostKeys, 'tok', silent: connects == 1));
+              return client;
+            },
+          )
+          ..latencyInterval = const Duration(milliseconds: 30)
+          ..latencyTimeout = const Duration(milliseconds: 60);
+    final first = await link.start();
+    final next = await link.connections.first.timeout(
+      const Duration(seconds: 3),
+    );
+    expect(identical(next, first), isFalse);
+    expect(connects, 2);
+    // 新连接上回得了 ping，延迟测得出来
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(link.meter?.latency, isNotNull);
+    expect(link.meter?.unresponsive, isFalse);
+    await link.close();
+  });
+
   test('a signature during the first handshake does not cancel it', () async {
     final hostKeys = generateKeyPair();
     final offer = PairingOffer(
@@ -371,6 +406,7 @@ Future<void> _host(
   KeyPair hostKeys,
   String token, {
   bool rejectCapabilities = false,
+  bool silent = false,
 }) async {
   try {
     await _serve(
@@ -378,17 +414,20 @@ Future<void> _host(
       hostKeys,
       token,
       rejectCapabilities: rejectCapabilities,
+      silent: silent,
     );
   } on E2eeException {
     // 对端挂断
   }
 }
 
+/// [silent]：握手之后不回 runtime.ping，模拟手机切网络后系统还没发现的半开连接。
 Future<void> _serve(
   ByteSocket socket,
   KeyPair hostKeys,
   String token, {
   bool rejectCapabilities = false,
+  bool silent = false,
 }) async {
   final reader = SocketReader(socket.events);
   final helloEvent = await reader.next(CancelToken());
@@ -457,6 +496,7 @@ Future<void> _serve(
     }
     final id = request['id'];
     final method = request['method'];
+    if (silent && method == 'runtime.ping') continue;
     Object result = <String, Object?>{};
     var ok = true;
     Object? error;
