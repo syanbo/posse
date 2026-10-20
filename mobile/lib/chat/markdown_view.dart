@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../ui/highlight.dart';
 import '../ui/theme.dart';
 
 class MarkdownView extends StatelessWidget {
@@ -183,10 +184,20 @@ Widget _codeBlock(BuildContext context, md.Element node, TextStyle base) {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-          child: Text(
-            node.textContent.trimRight(),
-            softWrap: false,
-            style: mono(12.5, height: 1.55, color: base.color),
+          child: Highlighted(
+            code: node.textContent.trimRight(),
+            language: languageForFence(lang),
+            builder: (context, hl) {
+              final style = mono(12.5, height: 1.55, color: base.color);
+              final code = node.textContent.trimRight();
+              return hl == null
+                  ? Text(code, softWrap: false, style: style)
+                  : Text.rich(
+                      codeSpan(hl, HiveColors.of(context)),
+                      softWrap: false,
+                      style: style,
+                    );
+            },
           ),
         ),
       ],

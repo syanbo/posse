@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
+import '../ui/highlight.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'status.dart';
@@ -697,6 +698,7 @@ class _DiffViewerState extends State<DiffViewer> {
     }
     return _DiffLines(
       rows: rows,
+      language: languageForPath(widget.file.path),
       notice: diff.truncated ? const CodeNotice('差异太长，只显示前面一部分') : null,
     );
   }
@@ -878,14 +880,50 @@ class _Checkerboard extends CustomPainter {
   bool shouldRepaint(_Checkerboard old) => old.c != c;
 }
 
+/// diff 的两边各自接成一段代码着色（跨行的注释、字符串才对），再按行对回每一行。
+/// 旧的一边是上下文和删掉的行，新的一边是上下文和加上的行。
 class _DiffLines extends StatelessWidget {
-  const _DiffLines({required this.rows, this.notice});
+  const _DiffLines({required this.rows, this.language, this.notice});
 
   final List<DiffRow> rows;
+  final String? language;
   final Widget? notice;
 
   @override
   Widget build(BuildContext context) {
+    final old = <String>[], now = <String>[];
+    final at = List<int>.filled(rows.length, -1);
+    for (var i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      if (row.kind == DiffKind.deleted || row.kind == DiffKind.context) {
+        if (row.kind == DiffKind.deleted) at[i] = old.length;
+        old.add(row.text);
+      }
+      if (row.kind == DiffKind.added || row.kind == DiffKind.context) {
+        at[i] = now.length;
+        now.add(row.text);
+      }
+    }
+    return Highlighted(
+      code: old.join('\n'),
+      language: language,
+      builder: (context, oldHl) => Highlighted(
+        code: now.join('\n'),
+        language: language,
+        builder: (context, nowHl) {
+          List<Seg>? segs(int i) {
+            final side = rows[i].kind == DiffKind.deleted ? oldHl : nowHl;
+            final n = at[i];
+            return side == null || n < 0 || n >= side.length ? null : side[n];
+          }
+
+          return _lines(context, segs);
+        },
+      ),
+    );
+  }
+
+  Widget _lines(BuildContext context, List<Seg>? Function(int i) segs) {
     final c = HiveColors.of(context);
     final style = codeStyle(c);
     final faint = style.copyWith(color: c.faint);
@@ -899,7 +937,9 @@ class _DiffLines extends StatelessWidget {
     final alpha = c.dark ? 0.16 : 0.10;
     final screen = MediaQuery.sizeOf(context).width;
 
-    Widget line(DiffRow row) {
+    Widget line(int index) {
+      final row = rows[index];
+      final hl = segs(index);
       final (bg, sign, signColor) = switch (row.kind) {
         DiffKind.added => (c.sage.withValues(alpha: alpha), '+', c.sage),
         DiffKind.deleted => (c.danger.withValues(alpha: alpha), '−', c.danger),
@@ -943,13 +983,20 @@ class _DiffLines extends StatelessWidget {
               ),
             ),
             const SizedBox(width: codeGutterGap - 6),
-            Text(
-              row.text.isEmpty ? ' ' : row.text,
-              softWrap: false,
-              style: row.kind == DiffKind.note
-                  ? style.copyWith(color: c.muted)
-                  : style,
-            ),
+            if (hl != null && hl.isNotEmpty)
+              Text.rich(
+                TextSpan(children: lineSpans(hl, c)),
+                softWrap: false,
+                style: style,
+              )
+            else
+              Text(
+                row.text.isEmpty ? ' ' : row.text,
+                softWrap: false,
+                style: row.kind == DiffKind.note
+                    ? style.copyWith(color: c.muted)
+                    : style,
+              ),
           ],
         ),
       );
@@ -969,7 +1016,7 @@ class _DiffLines extends StatelessWidget {
               child: IntrinsicWidth(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [for (final row in rows) line(row)],
+                  children: [for (var i = 0; i < rows.length; i++) line(i)],
                 ),
               ),
             ),

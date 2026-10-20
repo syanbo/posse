@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../chat/markdown_view.dart';
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
+import '../ui/highlight.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -551,15 +552,20 @@ class _FileViewerState extends State<FileViewer> {
         ),
       );
     }
-    return _CodeView(text: text, notice: notice);
+    return _CodeView(
+      text: text,
+      language: languageForPath(widget.path),
+      notice: notice,
+    );
   }
 }
 
-/// 源码：左边行号，不折行，整块横向滚动，缩进对得齐。
+/// 源码：左边行号，不折行，整块横向滚动，缩进对得齐。认得出语言时着色，太大的文件不着色。
 class _CodeView extends StatelessWidget {
-  const _CodeView({required this.text, this.notice});
+  const _CodeView({required this.text, this.language, this.notice});
 
   final String text;
+  final String? language;
   final Widget? notice;
 
   @override
@@ -568,11 +574,14 @@ class _CodeView extends StatelessWidget {
     final lines = const LineSplitter().convert(text);
     final gutter = '${lines.length}'.length;
     final style = codeStyle(c);
+    final code = lines.join('\n');
+    final big = language != null && code.length > highlightLimit;
     return SelectionArea(
       child: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
           ?notice,
+          if (big) const CodeNotice('文件较大，不着色'),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: codePadding,
@@ -590,7 +599,17 @@ class _CodeView extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: codeGutterGap),
-                Text(lines.join('\n'), softWrap: false, style: style),
+                Highlighted(
+                  code: code,
+                  language: language,
+                  builder: (context, hl) => hl == null
+                      ? Text(code, softWrap: false, style: style)
+                      : Text.rich(
+                          codeSpan(hl, c),
+                          softWrap: false,
+                          style: style,
+                        ),
+                ),
               ],
             ),
           ),
