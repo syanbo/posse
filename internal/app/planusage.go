@@ -134,9 +134,8 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 				color = t.Danger
 			}
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
-				Tooltip(fmt.Sprintf("%s %s %s %s", agentTitle(u.Agent), windowName(w), a.shownWord(), percentText(a.shown(w)))).
 				Children(func() {
-					agentTile(c, u.Agent, 14)
+					agentIcon(c, u.Agent, 14)
 					ui.Text(c, windowShort(w.Minutes)).FontSize(11).TextColor(t.TextMuted).SingleLine()
 					ui.Text(c, percentText(a.shown(w))).FontSize(11).FontFeatures("tnum").TextColor(color).SingleLine()
 				})

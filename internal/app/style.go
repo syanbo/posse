@@ -301,6 +301,11 @@ func tile(c *ui.Context, icon *ui.SVG, size float32, bg, fg ui.Color) ui.Element
 
 // agentTile 是 agent 的色块图标。
 func agentTile(c *ui.Context, agent string, size float32) ui.Element {
+	return agentIcon(c, agent, size).Tooltip(agentTitle(agent))
+}
+
+// agentIcon 是不带悬停提示的 agentTile，用在旁边已经写着名字或用不着提示的地方。
+func agentIcon(c *ui.Context, agent string, size float32) ui.Element {
 	t := c.Theme()
 	icon, bg, fg := iconTerminal, t.SurfacePressed, t.Text
 	switch agent {
@@ -313,7 +318,7 @@ func agentTile(c *ui.Context, agent string, size float32) ui.Element {
 	case "cursor":
 		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), ui.Hex("#FFFFFF")
 	}
-	e := tile(c, icon, size, bg, fg).Tooltip(agentTitle(agent))
+	e := tile(c, icon, size, bg, fg)
 	if agent == "codex" {
 		// 白底在浅色卡片上会融掉，描一圈细边
 		e.InsetShadow(0, 0, 0, 1, ui.RGBA(0, 0, 0, 0.12))
