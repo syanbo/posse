@@ -284,6 +284,9 @@ const taskBoardID = "tasks"
 
 const defaultFontSize = 14
 
+// 窗口最小尺寸：默认宽的侧栏（248）旁边，默认字号的终端还有约 75 列；高度够放下对话框和 30 行左右的终端。
+const minWindowWidth, minWindowHeight = 900, 560
+
 // termFontFamily 与用户的 Ghostty 一致。中文显式回退到 PingFang SC：系统等宽字体的级联
 // 会取到比例宽度的"，""。"，在两格里居中后前后各空出一大块。
 const termFontFamily = "JetBrainsMono Nerd Font Mono, JetBrains Mono, PingFang SC, monospace"
@@ -313,6 +316,8 @@ func Run(c *client.Client) error {
 			Title:         "Hive",
 			Width:         1200,
 			Height:        780,
+			MinWidth:      minWindowWidth,
+			MinHeight:     minWindowHeight,
 			StateKey:      "main",
 			TitleBarStyle: mygo.TitleBarHidden,
 			// 红绿灯在 40 高的顶栏里上下居中，和右边的应用名、侧栏开关、标签对齐（照 Orca）

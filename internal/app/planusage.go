@@ -84,55 +84,68 @@ func (a *app) shownWord() string {
 }
 
 // statusBar 是主区域最下面的状态栏，和侧栏的底栏同高同色，并排看是贯穿窗口的一条。
-// 每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比；整排是一个按钮，
-// 点开的浮窗里是各家所有窗口、重置时间这些详情和"已用 / 剩余"切换。
+// 左边是套餐用量，每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
+// 点开的浮窗里是各家所有窗口、重置时间这些详情和"已用 / 剩余"切换；最右边是终端和内存、防休眠。
 func (a *app) statusBar(c *ui.Context) {
 	t := c.Theme()
 	p := colors(t)
 	st := a.daemon.Usage
-	ui.Row(c).Height(footHeight).Padding(0, 10, 0, 6).Shrink(0).AlignItems(ui.Center).Clip().
+	ui.Row(c).Height(footHeight).Padding(0, 8, 0, 6).Shrink(0).AlignItems(ui.Center).Clip().
 		Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Children(func() {
-		if st == nil {
-			return
+		// 窗口窄时裁掉用量，右边的按钮不被挤出去
+		ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().AlignItems(ui.Center).Children(func() { a.planButton(c, st) })
+		if a.loaded {
+			// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
+			a.memoryButton(c)
+			a.awakeButton(c)
 		}
-		var shown []usage.Usage
-		for _, u := range st.Usages {
-			if len(u.Windows) > 0 {
-				shown = append(shown, u)
-			}
-		}
-		if len(shown) == 0 {
-			ui.Text(c, "agent 运行后在这里显示套餐用量").FontSize(11).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
-			return
-		}
-		b := ui.Row(c.Key("plan")).Height(26).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
-			Role(ui.RoleButton).Label("套餐用量")
-		bg := ui.Transparent
-		if a.planOpen || b.Hovered() {
-			bg = p.wash
-		}
-		b.Background(b.AnimateColor("bg", bg, hover))
-		b.Children(func() {
-			for _, u := range shown {
-				w := headWindow(u)
-				color := t.Text
-				if w.Percent >= planUrgent {
-					color = t.Danger
-				}
-				ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
-					Tooltip(fmt.Sprintf("%s %s %s %s", agentTitle(u.Agent), windowLabel(w.Minutes), a.shownWord(), percentText(a.shown(w)))).
-					Children(func() {
-						agentTile(c, u.Agent, 14)
-						ui.Text(c, windowShort(w.Minutes)).FontSize(11).TextColor(t.TextMuted).SingleLine()
-						ui.Text(c, percentText(a.shown(w))).FontSize(11).FontFeatures("tnum").TextColor(color).SingleLine()
-					})
-			}
-		})
-		if b.Clicked() {
-			a.planOpen = !a.planOpen
-		}
-		ui.Popover(c, b, &a.planOpen, func() { a.planPanel(c, shown) })
 	})
+}
+
+// planButton 是状态栏左边的套餐用量按钮，没有读数时是一行说明。
+func (a *app) planButton(c *ui.Context, st *planStatus) {
+	t := c.Theme()
+	p := colors(t)
+	if st == nil {
+		return
+	}
+	var shown []usage.Usage
+	for _, u := range st.Usages {
+		if len(u.Windows) > 0 {
+			shown = append(shown, u)
+		}
+	}
+	if len(shown) == 0 {
+		ui.Text(c, "agent 运行后在这里显示套餐用量").FontSize(11).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
+		return
+	}
+	b := ui.Row(c.Key("plan")).Height(26).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
+		Role(ui.RoleButton).Label("套餐用量")
+	bg := ui.Transparent
+	if a.planOpen || b.Hovered() {
+		bg = p.wash
+	}
+	b.Background(b.AnimateColor("bg", bg, hover))
+	b.Children(func() {
+		for _, u := range shown {
+			w := headWindow(u)
+			color := t.Text
+			if w.Percent >= planUrgent {
+				color = t.Danger
+			}
+			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
+				Tooltip(fmt.Sprintf("%s %s %s %s", agentTitle(u.Agent), windowLabel(w.Minutes), a.shownWord(), percentText(a.shown(w)))).
+				Children(func() {
+					agentTile(c, u.Agent, 14)
+					ui.Text(c, windowShort(w.Minutes)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, percentText(a.shown(w))).FontSize(11).FontFeatures("tnum").TextColor(color).SingleLine()
+				})
+		}
+	})
+	if b.Clicked() {
+		a.planOpen = !a.planOpen
+	}
+	ui.Popover(c, b, &a.planOpen, func() { a.planPanel(c, shown) })
 }
 
 // headWindow 是状态栏里代表这一家的窗口：总额度里有 5 小时就是它，否则是第一个。

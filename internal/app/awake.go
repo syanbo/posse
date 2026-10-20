@@ -42,7 +42,7 @@ func awakeTip(st *awakeStatus) string {
 	return "防休眠：agent 工作时电脑不休眠，现在没有 agent 在工作"
 }
 
-// awakeButton 在底栏最右边：咖啡杯图标加档位，托着不让睡时图标是强调色。点开选档位。
+// awakeButton 在主区域状态栏最右边：咖啡杯图标加档位，托着不让睡时图标是强调色。点开选档位。
 func (a *app) awakeButton(c *ui.Context) {
 	t := c.Theme()
 	st := a.daemon.Awake

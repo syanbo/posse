@@ -408,6 +408,13 @@ func TestPreview(t *testing.T) {
 		a := previewApp(t)
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
 
+		// 窗口缩到最小
+		a = previewApp(t)
+		tt := newPreviewTester(a, dark)
+		tt.SetSize(minWindowWidth, minWindowHeight)
+		tt.Frame()
+		savePNG(t, tt, "min-size-"+suffix+".png")
+
 		// 协调者阻塞在 hive task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
 		a = previewApp(t)
 		a.workspaces[0].Terminals[0].AgentState = &agentState{Status: "working"}

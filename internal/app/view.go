@@ -931,10 +931,6 @@ func (a *app) footer(c *ui.Context) {
 				a.openMobile()
 			}
 		})
-		ui.Spacer(c)
-		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
-		a.memoryButton(c)
-		a.awakeButton(c)
 	})
 }
 
