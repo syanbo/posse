@@ -3,8 +3,12 @@ import 'dart:math';
 
 import '../protocol/rpc.dart';
 
-/// 单块 base64 的字符数。整段 JSON 要低于服务端 WebSocket 的 4MB 读取上限。
-const imageChunkChars = 512 * 1024;
+/// 单块 base64 的字符数。整段 JSON 要低于服务端 WebSocket 的 4MB 读取上限；
+/// 块小一些进度才走得匀，4G 上一张几 MB 的照片也能看出在动。
+const imageChunkChars = 256 * 1024;
+
+/// 上传进度：已经传到电脑上的比例，0 到 1。
+typedef UploadProgress = void Function(double done);
 
 /// 说明在前，每张图的路径各占一行。没有说明时只发路径，电脑上的 agent 按这些文件读图。
 String imageMessage(String caption, List<String> paths) {
@@ -25,16 +29,22 @@ List<(int, String)> imageChunks(String encoded) {
   return out;
 }
 
-/// 把图片存到电脑的临时目录，返回路径。小图一次传完，大图按块传。
-Future<String> uploadImage(PhoneRpc rpc, List<int> bytes) async {
+/// 把图片存到电脑的临时目录，返回路径。小图一次传完，大图按块传，每传完一块报一次进度。
+Future<String> uploadImage(
+  PhoneRpc rpc,
+  List<int> bytes, {
+  UploadProgress? onProgress,
+}) async {
   if (bytes.isEmpty) throw StateError('图片是空的');
   final encoded = base64.encode(bytes);
   if (encoded.length <= imageChunkChars) {
-    return imagePath(
+    final path = imagePath(
       await rpc.call('clipboard.saveImageAsTempFile', {
         'contentBase64': encoded,
       }),
     );
+    onProgress?.call(1);
+    return path;
   }
   final start = await rpc.call('clipboard.startImageUpload', {
     'expectedBase64Length': encoded.length,
@@ -47,10 +57,14 @@ Future<String> uploadImage(PhoneRpc rpc, List<int> bytes) async {
       'offset': off,
       'contentBase64': chunk,
     });
+    // 落盘还要一步，传完最后一块先停在 99%
+    onProgress?.call(min((off + chunk.length) / encoded.length, 0.99));
   }
-  return imagePath(
+  final path = imagePath(
     await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
   );
+  onProgress?.call(1);
+  return path;
 }
 
 /// save 和 commit 把路径放在 value 里（结果是字符串，不是对象）。

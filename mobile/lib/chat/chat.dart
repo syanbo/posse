@@ -71,6 +71,9 @@ class _ChatScreenState extends State<ChatScreen> {
   var _sending = false;
   var _loadingEarlier = false;
 
+  /// 正在上传的图片：第几张、共几张、这一张传了多少。没在传时为空。
+  (int, int, double)? _upload;
+
   /// 选好、还没发出去的图片。发出去时按顺序存到电脑的临时目录，再把路径写进终端。
   final _pending = <Uint8List>[];
 
@@ -449,7 +452,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _sending = true;
       // 输入框马上清空，话先画在对话末尾；没发出去再放回来
       _input.clear();
-      if (images.isNotEmpty) _notice = '正在发送图片…';
+      if (images.isNotEmpty) _upload = (0, images.length, 0);
     });
     _jumpToLatest();
     var accepted = false;
@@ -457,9 +460,19 @@ class _ChatScreenState extends State<ChatScreen> {
       var text = caption;
       if (images.isNotEmpty) {
         final paths = <String>[];
-        for (final image in images) {
-          paths.add(_uploaded[image] ??= await uploadImage(current, image));
+        for (final (i, image) in images.indexed) {
+          if (mounted) setState(() => _upload = (i, images.length, 0));
+          paths.add(
+            _uploaded[image] ??= await uploadImage(
+              current,
+              image,
+              onProgress: (done) {
+                if (mounted) setState(() => _upload = (i, images.length, done));
+              },
+            ),
+          );
         }
+        if (mounted) setState(() => _upload = null);
         text = imageMessage(caption, paths);
       }
       accepted = await _send(text, enter: true) == SendOutcome.accepted;
@@ -480,6 +493,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         final before = _tail();
         _sending = false;
+        _upload = null;
         if (!accepted) {
           if (echo != null) _echoes.remove(echo);
           if (_input.text.isEmpty) _input.text = caption;
@@ -670,6 +684,8 @@ class _ChatScreenState extends State<ChatScreen> {
           else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
           if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
+          if (_upload case (final i, final n, final done))
+            UploadBar(index: i, count: n, done: done),
           ChatComposer(
             controller: _input,
             images: _pending,

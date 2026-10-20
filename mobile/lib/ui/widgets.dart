@@ -666,6 +666,67 @@ class NoticeBar extends StatelessWidget {
   }
 }
 
+/// 发图片时输入框上面的进度：第几张、传了多少。中性色，和报错的 [NoticeBar] 区分开。
+class UploadBar extends StatelessWidget {
+  const UploadBar({
+    super.key,
+    required this.index,
+    required this.count,
+    required this.done,
+  });
+
+  /// 正在传第几张（从 0 数）。
+  final int index;
+  final int count;
+
+  /// 这一张传了多少，0 到 1。
+  final double done;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final which = count > 1 ? ' ${index + 1}/$count' : '';
+    // 整体进度按张数摊开，多张时进度条一路走到底，不在每张开头跳回去
+    final overall = count == 0 ? 0.0 : (index + done) / count;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '正在发送图片$which',
+                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                ),
+              ),
+              Text(
+                '${(done * 100).round()}%',
+                style: TextStyle(
+                  fontSize: Fs.caption,
+                  color: c.muted,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: overall,
+              minHeight: 3,
+              color: c.accent,
+              backgroundColor: c.fill,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 一次性的提示（剪贴板是空的、发送失败……）过一会儿自己消失，不一直挡在输入框上面。
 const noticeLife = Duration(seconds: 4);
 

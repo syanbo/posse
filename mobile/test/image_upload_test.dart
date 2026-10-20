@@ -6,8 +6,59 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/chat/image_pick.dart';
 import 'package:hive_mobile/chat/image_upload.dart';
 import 'package:hive_mobile/chat/paste_choice.dart';
+import 'package:hive_mobile/protocol/rpc.dart';
+
+/// 只认上传用的几条 RPC。
+class _UploadRpc implements PhoneRpc {
+  final methods = <String>[];
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params,
+  ) async {
+    methods.add(method);
+    return switch (method) {
+      'clipboard.startImageUpload' => {'uploadId': 'u1'},
+      'clipboard.commitImageUpload' ||
+      'clipboard.saveImageAsTempFile' => {'value': '/tmp/hive-mobile-1.png'},
+      _ => {},
+    };
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
 
 void main() {
+  test(
+    'a large image reports progress chunk by chunk and ends at 100%',
+    () async {
+      final rpc = _UploadRpc();
+      final seen = <double>[];
+      // 三块多一点
+      final bytes = Uint8List(imageChunkChars * 3 * 3 ~/ 4 + 100);
+      final path = await uploadImage(rpc, bytes, onProgress: seen.add);
+      expect(path, '/tmp/hive-mobile-1.png');
+      expect(
+        rpc.methods
+            .where((m) => m == 'clipboard.appendImageUploadChunk')
+            .length,
+        4,
+      );
+      expect(seen.length, 5);
+      for (var i = 1; i < seen.length; i++) {
+        expect(seen[i], greaterThanOrEqualTo(seen[i - 1]));
+      }
+      expect(seen[3], lessThan(1));
+      expect(seen.last, 1);
+
+      final small = <double>[];
+      await uploadImage(_UploadRpc(), Uint8List(10), onProgress: small.add);
+      expect(small, [1]);
+    },
+  );
+
   test('caption sits above each path, and a bare image is just the paths', () {
     expect(
       imageMessage('  看一下  ', ['/tmp/hive-mobile-a.png']),

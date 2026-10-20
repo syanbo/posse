@@ -88,6 +88,9 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _gate = Future<void>.value();
   String? _notice;
 
+  /// 正在上传的图片传了多少，0 到 1；没在传时为空。
+  double? _upload;
+
   Timer? _noticeTimer;
 
   /// 一次性的提示，[noticeLife] 后自己消失；期间换了别的提示就不动它。
@@ -146,17 +149,24 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && widget.model.rpc != _bound) {
-      _schedule();
-    }
+    // 回到前台总是重取一次画面：后台期间连接可能卡过，留着的半截画面不会自己好
+    if (state == AppLifecycleState.resumed) _schedule(fresh: true);
   }
 
   String _titleKey = '';
+  AgentState? _agentState;
 
   void _onModel() {
     if (widget.model.rpc != _bound) _schedule();
     // 标题或状态变了才重建，轮询没变化时不动终端视图
     final tab = _liveTab;
+    // agent 停下来（一轮做完、等人）时按电脑上的画面重来一遍：手机上偶尔会和电脑对不上，
+    // agent 只重画变了的格子，错位的地方不会自己好；停下时重取，不打断它干活时的输出
+    final agentState = agentStateOf(tab.state);
+    if (_agentState == AgentState.working && agentState != AgentState.working) {
+      _schedule(fresh: true);
+    }
+    _agentState = agentState;
     final key =
         '${tab.title}|${tab.state}|${tab.toolName}|${widget.model.settings.terminalFontSize}|$_ended|${widget.model.rpc == null}';
     if (key != _titleKey && mounted) setState(() => _titleKey = key);
@@ -210,15 +220,17 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
   }
 
-  void _schedule() {
-    _gate = _gate.then((_) => _open()).catchError((Object _) {});
+  /// [fresh] 时尺寸没变也重新订阅，拿一份新快照。
+  void _schedule({bool fresh = false}) {
+    _gate = _gate.then((_) => _open(fresh: fresh)).catchError((Object _) {});
   }
 
-  Future<void> _open() async {
+  Future<void> _open({bool fresh = false}) async {
     final rpc = widget.model.rpc;
     if (!mounted || rpc == null || _cols < 20 || _rows < 8) return;
     final desk = _desk;
-    if (identical(rpc, _bound) &&
+    if (!fresh &&
+        identical(rpc, _bound) &&
         _stream != null &&
         _heldDesk == desk &&
         (desk || (_cols == _heldCols && _rows == _heldRows))) {
@@ -658,8 +670,19 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   Future<void> _typeImagePath(PhoneRpc rpc, Uint8List bytes) async {
-    setState(() => _notice = '正在发送图片…');
-    final path = await uploadImage(rpc, bytes);
+    setState(() => _upload = 0);
+    final String path;
+    try {
+      path = await uploadImage(
+        rpc,
+        bytes,
+        onProgress: (done) {
+          if (mounted) setState(() => _upload = done);
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _upload = null);
+    }
     final outcome = await sendTerminal(
       rpc,
       terminal: widget.tab.terminalId,
@@ -755,6 +778,8 @@ class _TerminalScreenState extends State<TerminalScreen>
       body: Column(
         children: [
           if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
+          if (_upload case final done?)
+            UploadBar(index: 0, count: 1, done: done),
           Expanded(
             child: Padding(
               padding: _cropGrok ? EdgeInsets.zero : _termPadding,
