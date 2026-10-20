@@ -660,6 +660,23 @@ func TestPreview(t *testing.T) {
 			}}
 		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
 
+		// 标签栏"+"的新建菜单，指针停在 Cursor 上（标签栏里也有 Codex，按快捷键提示找行）
+		a = previewApp(t)
+		tt = newPreviewTester(a, dark)
+		if err := tt.Click("新建终端"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if r, ok := tt.Find("⌘T"); ok {
+			tt.Move(r.X-60, r.Y+r.H/2-30)
+		}
+		for range 3 {
+			tt.Frame()
+			time.Sleep(80 * time.Millisecond)
+		}
+		tt.Frame()
+		savePNG(t, tt, "new-menu-"+suffix+".png")
+
 		// 状态栏的套餐用量详情
 		a = previewApp(t)
 		a.planOpen = true

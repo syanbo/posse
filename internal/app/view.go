@@ -1188,14 +1188,15 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 
 // newTerminalButton 是标签后面的"+"，选 agent 或普通终端。
 func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
-	iconButton(c.Key("new"), iconPlus, "新建终端").Menu(func(m *ui.Menu) {
-		for _, ag := range agentChoices {
-			if m.Item(agentTitle(ag)).Chosen() {
+	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
+		for _, ag := range slices.Concat(agentChoices, []string{""}) {
+			name, keys := agentTitle(ag), ""
+			if ag == "" {
+				name, keys = "终端", "⌘T"
+			}
+			if m.Item(c, func() { agentTile(c, ag, 18) }, name, keys) {
 				a.startTerminal(w.ID, ag)
 			}
-		}
-		if m.Item("终端").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
-			a.startTerminal(w.ID, "")
 		}
 	})
 }
