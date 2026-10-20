@@ -13,7 +13,7 @@ import (
 	"hive/internal/daemon"
 )
 
-// settingsBoardID 是设置页的 ID，不在侧栏里，从 ⌘, 和底栏的齿轮进来。
+// settingsBoardID 是设置页的 ID，不在侧栏里，从 ⌘, 和侧栏顶栏的齿轮进来。
 const settingsBoardID = "settings"
 
 func (a *app) openSettings() {

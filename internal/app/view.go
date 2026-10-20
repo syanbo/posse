@@ -299,21 +299,9 @@ func (a *app) sidebar(c *ui.Context) {
 		// 应用名和侧栏开关浮在这里（见 build），留出它们的位置
 		ui.Box(c).Width(titleLead).Shrink(0)
 		ui.Spacer(c)
-		iconButton(c, iconPlus, "新建").Menu(func(m *ui.Menu) {
-			if m.Item("添加项目…").Chosen() {
-				go a.addProject()
-			}
-			if m.Item("新建工作区…").Shortcut(ui.Cmd, ui.KeyN).Chosen() {
-				a.openNewWorkspace()
-			}
-			if m.Item("派发任务…").Chosen() {
-				a.openDispatch()
-			}
-			m.Separator()
-			if m.Item("连接手机…").Chosen() {
-				a.openMobile()
-			}
-		})
+		if pressable(iconButton(c, iconSettings, "设置 ⌘,")).Tooltip("设置 ⌘,").Clicked() {
+			a.openSettings()
+		}
 	})
 	if !a.loaded {
 		msg, color := "正在连接常驻进程…", t.TextMuted
@@ -927,14 +915,26 @@ func (a *app) footer(c *ui.Context) {
 	if !a.loaded {
 		return
 	}
-	ui.Row(c).Height(footHeight).Padding(0, 14, 0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		if pressable(iconButtonSized(c, iconSettings, "设置 ⌘,", 24, 14)).Tooltip("设置 ⌘,").Clicked() {
-			a.openSettings()
-		}
-		a.awakeButton(c)
+	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+		iconButtonSized(c, iconPlus, "新建", 24, 14).Menu(func(m *ui.Menu) {
+			if m.Item("添加项目…").Chosen() {
+				go a.addProject()
+			}
+			if m.Item("新建工作区…").Shortcut(ui.Cmd, ui.KeyN).Chosen() {
+				a.openNewWorkspace()
+			}
+			if m.Item("派发任务…").Chosen() {
+				a.openDispatch()
+			}
+			m.Separator()
+			if m.Item("连接手机…").Chosen() {
+				a.openMobile()
+			}
+		})
 		ui.Spacer(c)
 		// 终端数和内存放在一个按钮里：点开的浮窗按工作区列的就是这些终端占的内存
 		a.memoryButton(c)
+		a.awakeButton(c)
 	})
 }
 
