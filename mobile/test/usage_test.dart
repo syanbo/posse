@@ -90,6 +90,46 @@ void main() {
     expect(find.text('套餐内已用 \$32.55，额度 \$400.00'), findsOneWidget);
   });
 
+  testWidgets('a tall usage sheet still closes', (tester) async {
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final now = DateTime.now();
+    final usages = [
+      for (final agent in ['claude', 'codex', 'grok', 'cursor'])
+        AgentUsage(
+          agent: agent,
+          windows: [
+            for (final m in [300, 10080, 44640, 0])
+              UsageWindow(percent: 40, minutes: m),
+          ],
+          updatedAt: now,
+        ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: hiveTheme(Brightness.light),
+        home: Scaffold(body: UsageCardView(usages: usages)),
+      ),
+    );
+    Future<void> open() async {
+      await tester.tap(find.byType(UsageCardView));
+      await tester.pumpAndSettle();
+      expect(find.text('套餐用量'), findsOneWidget);
+    }
+
+    await open();
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('套餐用量'), findsNothing);
+
+    // 上面留着遮罩，点一下也关
+    await open();
+    await tester.tapAt(const Offset(195, 40));
+    await tester.pumpAndSettle();
+    expect(find.text('套餐用量'), findsNothing);
+  });
+
   test('parses pools and facts', () {
     final u = parseUsages({
       'usages': [

@@ -329,6 +329,11 @@ class UsageCardView extends StatelessWidget {
             context: context,
             showDragHandle: true,
             isScrollControlled: true,
+            useSafeArea: true,
+            // 内容多时会铺满全屏：上面留一截遮罩能点掉，拖动把手也不会躲到状态栏下面
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+            ),
             builder: (_) => UsageSheet(usages: shown),
           ),
           child: Padding(
@@ -456,6 +461,7 @@ class UsageSheet extends StatelessWidget {
     final c = HiveColors.of(context);
     final now = DateTime.now();
     return SafeArea(
+      top: false,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         child: Column(
@@ -480,6 +486,12 @@ class UsageSheet extends StatelessWidget {
                     selected: remaining ? 1 : 0,
                     onChanged: (i) => setUsageRemaining(i == 1),
                   ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close_rounded, size: 20, color: c.muted),
                 ),
               ],
             ),
