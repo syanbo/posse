@@ -371,12 +371,29 @@ func (c *conn) dispatch(req request) error {
 			Client       string   `json:"client"`
 			Version      int      `json:"version"`
 			Capabilities []string `json:"capabilities"`
+			// Hive 扩展：这台手机的安装 ID、型号和它存着的这台电脑的全部 token，见 pairing.identify
+			Phone *struct {
+				ID     string   `json:"id"`
+				Name   string   `json:"name"`
+				Tokens []string `json:"tokens"`
+			} `json:"phone"`
 		}
 		if json.Unmarshal(p, &body) != nil {
 			return c.fail(req.ID, "bad_params", "client capabilities")
 		}
 		// 每次声明整份替换。后面的扩展推送只发给带上对应能力的连接。
 		c.setClientCaps(body.Client, body.Version, body.Capabilities)
+		if ph := body.Phone; ph != nil && ph.ID != "" {
+			name := strings.TrimSpace(ph.Name)
+			if len([]rune(name)) > 64 {
+				name = string([]rune(name)[:64])
+			}
+			removed := s.pair.identify(c.device.ID, ph.ID, name, ph.Tokens)
+			s.mu.Lock()
+			c.device.Phone = ph.ID
+			s.mu.Unlock()
+			s.dropDevices(removed)
+		}
 		return c.reply(req.ID, map[string]any{})
 	case "worktree.activate", "session.tabs.activate", "terminal.focus",
 		"terminal.setDisplayMode":

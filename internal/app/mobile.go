@@ -25,14 +25,15 @@ type mobileView struct {
 	endpoint string
 	qr       *ui.Bitmap
 	devices  []mobileDevice
-	devList  ui.ListState
-	loading  bool
-	seq      int       // 每次取码加一，只认最后一次的结果
-	loadedAt time.Time // 上次取码完成的时间，到点了再取一次
-	err      string
-	errAddr  string   // err 是用哪个地址取码时出的错
-	custom   string   // 正在输入的自定义地址
-	locals   []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
+	// othersOpen 展开没报过身份的配对，不记进 ui.json
+	othersOpen bool
+	loading    bool
+	seq        int       // 每次取码加一，只认最后一次的结果
+	loadedAt   time.Time // 上次取码完成的时间，到点了再取一次
+	err        string
+	errAddr    string   // err 是用哪个地址取码时出的错
+	custom     string   // 正在输入的自定义地址
+	locals     []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
 }
 
 // mobilePoll 是手机页开着时重取配对码和设备列表的间隔：手机扫码连上后旧码就作废了，
@@ -45,8 +46,11 @@ const mobileAuto = "自动（手机同时试本机所有地址）"
 type mobileDevice struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
+	Phone    string    `json:"phone"`
 	PairedAt time.Time `json:"pairedAt"`
 	LastSeen time.Time `json:"lastSeen"`
+	Links    int       `json:"links"`
+	Online   bool      `json:"online"`
 }
 
 func (a *app) openMobile() {
@@ -205,13 +209,27 @@ func qrImage(text string) (*image.RGBA, error) {
 
 func (a *app) removeDevice(d mobileDevice) {
 	a.confirm("移除「"+d.Name+"」？", "这台手机会立刻断开，要再用得重新扫码配对。", "移除", func() {
-		if a.call("mobile.rm", map[string]any{"device": d.ID}, nil, 10*time.Second) != nil {
-			return
-		}
-		var devices []mobileDevice
-		a.call("mobile.devices", nil, &devices, 10*time.Second)
-		a.win.Update(func() { a.mobile.devices = devices })
+		a.dropDevices([]mobileDevice{d})
 	})
+}
+
+func (a *app) removeDevices(ds []mobileDevice) {
+	note := "这些配对码全部作废，还在用其中某个码的手机会断开，要再用得重新扫码配对。"
+	a.confirm("移除其他配对 "+strconv.Itoa(len(ds))+" 个？", note, "全部移除", func() {
+		a.dropDevices(ds)
+	})
+}
+
+// dropDevices 在后台逐个移除，再重读列表。
+func (a *app) dropDevices(ds []mobileDevice) {
+	for _, d := range ds {
+		if a.call("mobile.rm", map[string]any{"device": d.ID}, nil, 10*time.Second) != nil {
+			break
+		}
+	}
+	var devices []mobileDevice
+	a.call("mobile.devices", nil, &devices, 10*time.Second)
+	a.win.Update(func() { a.mobile.devices = devices })
 }
 
 // mobileSidebarItem 是侧栏里「历史」下面的「手机」，和任务、历史同一行样式。
@@ -223,87 +241,167 @@ func (a *app) mobileSidebarItem(c *ui.Context) {
 	}
 }
 
-// mobileBoard 是主区域的手机页，顶栏和任务、历史一样。
+// mobileBoard 是主区域的手机页，顶栏和任务、历史一样。内容是居中的一栏：上面配对新手机
+// （二维码和地址），下面已配对的手机；窗口再宽也不拉开，免得名字和按钮隔着半个屏幕。
 func (a *app) mobileBoard(c *ui.Context) {
-	t := c.Theme()
-	m := &a.mobile
 	a.pollMobile(c)
 	a.band(c, func() {
 		titleText(c, "手机", fsCardTitle)
 	})
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
-		card(c).Width(360).Shrink(0).Padding(20).Gap(14).Children(func() {
-			ui.Text(c, "用 Hive Mobile 扫这个码。扫不了就复制配对码，贴进 App 的配对页。").
-				FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
-			ui.Row(c).Justify(ui.Center).Children(func() {
-				box := ui.Box(c).Size(208, 208).Radius(12).Background(ui.RGBA(255, 255, 255, 1)).Center()
-				box.Children(func() {
-					switch {
-					case m.qr != nil:
-						ui.Image(c, m.qr).Size(196, 196)
-					case m.loading:
-						ui.Text(c, "正在生成…").FontSize(12).TextColor(ui.RGBA(0, 0, 0, 0.5))
-					}
-				})
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Width(720).Gap(16).Children(func() {
+				a.mobilePairCard(c)
+				a.mobileDevices(c)
 			})
-			if m.err != "" {
-				ui.Text(c, m.err).FontSize(12).TextColor(t.Danger).LineHeight(1.45)
-			}
-			if m.endpoint != "" {
-				ui.Text(c, "手机将连接 "+m.endpoint).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).Center().SingleLine()
-				ui.Row(c).Gap(8).Justify(ui.Center).Children(func() {
-					if pressable(textButton(c, "复制配对码")).Tooltip("扫不了码时，在 App 的配对页粘贴").Clicked() {
-						c.WriteClipboard(m.code)
-					}
-					if pressable(textButton(c, "换一个码")).Tooltip("作废还没用过的旧码").Clicked() {
-						m.qr = nil
-						a.startMobile(true, a.state.MobileAddress, false)
-					}
-				})
-			}
-		})
-		card(c).Grow(1).Shrink(1).MinHeight(0).Clip().Children(func() {
-			ui.Column(c).Padding(16, 16, 12, 16).Gap(10).Shrink(0).Children(func() {
-				a.mobileAddressPicker(c)
-			})
-			ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
-			a.mobileDevices(c)
 		})
 	})
 }
 
-// mobileDevices 列出配对过的手机。列表占卡片剩下的高度。
+// mobilePairCard 左边二维码，右边说明、按钮和地址。
+func (a *app) mobilePairCard(c *ui.Context) {
+	t := c.Theme()
+	m := &a.mobile
+	card(c).Padding(20).Children(func() {
+		ui.Row(c).Gap(24).AlignItems(ui.Start).Children(func() {
+			box := ui.Box(c).Size(208, 208).Shrink(0).Radius(12).Background(ui.RGBA(255, 255, 255, 1)).Center()
+			box.Children(func() {
+				switch {
+				case m.qr != nil:
+					ui.Image(c, m.qr).Size(196, 196)
+				case m.loading:
+					ui.Text(c, "正在生成…").FontSize(12).TextColor(ui.RGBA(0, 0, 0, 0.5))
+				}
+			})
+			ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() {
+				ui.Column(c).Gap(4).Children(func() {
+					cardTitle(c, "配对新手机")
+					ui.Text(c, "用 Hive Mobile 扫左边的码。扫不了就复制配对码，贴进 App 的配对页。").
+						FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
+				})
+				if m.err != "" {
+					ui.Text(c, m.err).FontSize(12).TextColor(t.Danger).LineHeight(1.45)
+				}
+				if m.endpoint != "" {
+					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+						if pressable(textButton(c, "复制配对码")).Tooltip("扫不了码时，在 App 的配对页粘贴").Clicked() {
+							c.WriteClipboard(m.code)
+						}
+						if pressable(textButton(c, "换一个码")).Tooltip("作废还没用过的旧码").Clicked() {
+							m.qr = nil
+							a.startMobile(true, a.state.MobileAddress, false)
+						}
+					})
+				}
+				ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+				a.mobileAddressPicker(c)
+			})
+		})
+	})
+}
+
+// mobileDevices 列出配对过的手机。Hive Mobile 报过身份的一台一行；没报过的（旧版 App、Orca App，
+// 或重新扫码后手机已经不用的码）收成一行"其他配对"，展开才逐个列出。
 func (a *app) mobileDevices(c *ui.Context) {
 	t := c.Theme()
 	m := &a.mobile
-	n := len(m.devices)
-	ui.Row(c).Padding(12, 20, 4, 20).Shrink(0).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "已配对").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Grow(1)
-		ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(colors(t).faint)
-	})
-	if n == 0 {
-		ui.Text(c, "还没有配对过的手机").FontSize(13).TextColor(t.TextMuted).Padding(8, 20)
-		return
-	}
-	m.devList.Key = func(i int) any {
-		if i < 0 || i >= len(m.devices) {
-			return i
+	var phones, others []mobileDevice
+	for _, d := range m.devices {
+		if d.Phone != "" {
+			phones = append(phones, d)
+		} else {
+			others = append(others, d)
 		}
-		return m.devices[i].ID
 	}
-	list := ui.List(c, &m.devList, n, func(i int) {
-		d := m.devices[i]
-		row := ui.Row(c).Margin(0, 8).Padding(8, 12).Gap(8).Radius(8).AlignItems(ui.Center)
-		selectedBg(c, row, false)
-		row.Children(func() {
-			ui.Text(c, d.Name).FontSize(13).Grow(1).Shrink(1).SingleLine()
-			ui.Text(c, "上次连接 "+ago(d.LastSeen)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-			if pressable(textButton(c, "移除")).Clicked() {
-				a.removeDevice(d)
+	byRecent := func(x, y mobileDevice) int { return y.LastSeen.Compare(x.LastSeen) }
+	slices.SortStableFunc(phones, byRecent)
+	slices.SortStableFunc(others, byRecent)
+	card(c).Padding(20, 12, 12, 12).Gap(4).Children(func() {
+		ui.Row(c).Padding(0, 8, 6, 8).AlignItems(ui.Center).Children(func() {
+			cardTitle(c, "已配对的手机").Grow(1)
+			if len(phones) > 0 {
+				ui.Text(c, strconv.Itoa(len(phones))).FontSize(fsCaption).FontFeatures("tnum").TextColor(colors(t).faint)
 			}
 		})
-	}).Grow(1).MinHeight(0).Padding(0, 0, 8, 0)
-	fadeEdges(list, &m.devList, colors(t).card)
+		if len(m.devices) == 0 {
+			ui.Text(c, "还没有配对过的手机").FontSize(13).TextColor(t.TextMuted).Padding(4, 8, 8, 8)
+			return
+		}
+		for _, d := range phones {
+			a.mobileDeviceRow(c, d)
+		}
+		if len(others) == 0 {
+			return
+		}
+		if len(phones) > 0 {
+			ui.Box(c).Height(1).Margin(6, 8).Shrink(0).Background(colors(t).line)
+		}
+		online := 0
+		for _, d := range others {
+			if d.Online {
+				online++
+			}
+		}
+		row := ui.Row(c).Padding(8, 8).Gap(12).Radius(8).AlignItems(ui.Center)
+		selectedBg(c, row, false)
+		if row.Clicked() {
+			m.othersOpen = !m.othersOpen
+		}
+		row.Children(func() {
+			tile(c, iconPhone, 32, colors(t).fill, t.TextMuted)
+			ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
+				ui.Text(c, "其他配对 "+strconv.Itoa(len(others))+" 个").FontSize(13)
+				note := "旧版 App 或 Orca App 连的，重新扫码后手机不再用的码也在这里。更新 Hive Mobile 后，还在用的会归到对应的手机。"
+				if online > 0 {
+					note = "其中 " + strconv.Itoa(online) + " 个正连着。" + note
+				}
+				ui.Text(c, note).FontSize(fsMeta).TextColor(t.TextMuted).LineHeight(1.45)
+			})
+			label := "展开"
+			if m.othersOpen {
+				label = "收起"
+			}
+			ui.Text(c, label).FontSize(fsMeta).TextColor(t.TextMuted).Shrink(0)
+			if pressable(textButton(c, "全部移除")).Clicked() {
+				a.removeDevices(others)
+			}
+		})
+		if m.othersOpen {
+			for _, d := range others {
+				a.mobileDeviceRow(c, d)
+			}
+		}
+	})
+}
+
+// mobileDeviceRow 是一台手机：名字，下面是配对时间和存了几个配对码；右边在线或上次连接、移除。
+func (a *app) mobileDeviceRow(c *ui.Context, d mobileDevice) {
+	t := c.Theme()
+	row := ui.Row(c).Padding(8, 8).Gap(12).Radius(8).AlignItems(ui.Center)
+	selectedBg(c, row, false)
+	row.Children(func() {
+		fg := t.TextMuted
+		if d.Online {
+			fg = t.Accent
+		}
+		tile(c, iconPhone, 32, colors(t).fill, fg)
+		ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
+			ui.Text(c, d.Name).FontSize(13).SingleLine()
+			sub := d.PairedAt.Local().Format("1月2日") + "配对"
+			if d.Links > 1 {
+				sub += "，存了 " + strconv.Itoa(d.Links) + " 个配对码（不同地址或重新扫过）"
+			}
+			ui.Text(c, sub).FontSize(fsMeta).TextColor(t.TextMuted).SingleLine()
+		})
+		if d.Online {
+			ui.Text(c, "已连接").FontSize(fsMeta).TextColor(t.Accent).Shrink(0)
+		} else {
+			ui.Text(c, ago(d.LastSeen)+"连过").FontSize(fsMeta).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		}
+		if pressable(textButton(c, "移除")).Clicked() {
+			a.removeDevice(d)
+		}
+	})
 }
 
 // mobileAddressPicker 选配对码里写的地址：自动，或自定义的主机、主机:端口、完整 URL

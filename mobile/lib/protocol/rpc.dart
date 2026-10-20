@@ -74,12 +74,15 @@ class PhoneRpc {
     unawaited(_read());
   }
 
-  Future<void> declareCapabilities() async {
+  /// [phone] 是 Hive 扩展：这台手机的安装 ID、型号和存着的这台电脑的全部 token，
+  /// 电脑按它把同一台手机的配对合成一项、作废换掉的 token。
+  Future<void> declareCapabilities({Map<String, Object?>? phone}) async {
     try {
       await call('runtime.clientCapabilities.update', {
         'client': hiveClientName,
         'version': hiveClientVersion,
         'capabilities': hiveCapabilities,
+        'phone': ?phone,
       });
     } on RpcException catch (error) {
       // 旧常驻进程没有这条扩展，照常使用它已经有的方法。

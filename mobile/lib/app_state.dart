@@ -4,11 +4,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'protocol/e2ee.dart';
 import 'protocol/link.dart';
 import 'protocol/pairing.dart';
 import 'protocol/rpc.dart';
 import 'protocol/socket.dart';
 import 'settings/custom_keys.dart';
+import 'settings/phone_model.dart';
 import 'workspace/models.dart';
 
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
@@ -75,6 +77,7 @@ class AppSettings {
     this.expandTools = false,
     this.deskLayout = false,
     this.deskZoom = 1,
+    this.phoneId = '',
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys();
 
@@ -93,6 +96,9 @@ class AppSettings {
   /// 电脑布局在「刚好缩进屏幕宽度」之上的倍数，吸在 0.5–2 的固定档。1 是一整行落在屏幕里。
   double deskZoom;
 
+  /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
+  String phoneId;
+
   /// 终端快捷键栏上的键和顺序（键盘开关除外，它固定在最左边），内置的和自己加的混排。
   List<BarKey> barKeys;
 
@@ -106,6 +112,7 @@ class AppSettings {
     'expandTools': expandTools,
     'deskLayout': deskLayout,
     'deskZoom': deskZoom,
+    'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
   };
 
@@ -136,6 +143,8 @@ class AppSettings {
       }
       final zoom = map['deskZoom'];
       if (zoom is num) out.deskZoom = zoom.toDouble().clamp(0.5, 2);
+      final phoneId = map['phoneId'];
+      if (phoneId is String) out.phoneId = phoneId;
       final bar = map['barKeys'];
       final custom = map['customKeys'];
       if (bar is List) {
@@ -382,6 +391,11 @@ class HiveAppModel extends ChangeNotifier {
 
   Future<void> restore() async {
     settings = AppSettings.decode(await settingsStore.read());
+    if (settings.phoneId.isEmpty) {
+      settings.phoneId = hexOf(randomBytes(16));
+      unawaited(settingsStore.write(jsonEncode(settings.toJson())));
+    }
+    _phoneName ??= await phoneModel();
     saved = SavedComputers.decode(await store.read());
     notifyListeners();
     final active = saved.current ?? saved.computers.firstOrNull;
@@ -403,6 +417,7 @@ class HiveAppModel extends ChangeNotifier {
         offer: parsed,
         connect: connect,
         networkSignatures: networkSignatures ?? connectivitySignatures(),
+        phone: () => _phoneInfo(parsed),
       );
       next = created;
       created.onActivity = () {
@@ -434,6 +449,12 @@ class HiveAppModel extends ChangeNotifier {
       }
       await previous?.close();
       _remember(parsed, raw.trim());
+      // 新扫的码顶掉了同一项里的旧码：再报一次，电脑那边马上作废旧码
+      unawaited(
+        created.rpc
+            ?.declareCapabilities(phone: _phoneInfo(parsed))
+            .catchError((Object _) {}),
+      );
       // 先离开配对页。工作区列表回来再补，不让扫码结果卡在「正在连接」。
       notifyListeners();
       unawaited(_fetchName(created, computerId(parsed)));
@@ -453,6 +474,25 @@ class HiveAppModel extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  String? _phoneName;
+
+  /// 报给电脑的手机身份：安装 ID、型号，和存着的这台电脑（同一个公钥）的全部 token。
+  Map<String, Object?>? _phoneInfo(PairingOffer offer) {
+    if (settings.phoneId.isEmpty) return null;
+    final tokens = <String>{offer.deviceToken};
+    for (final c in saved.computers) {
+      try {
+        final o = PairingOffer.parse(c.code);
+        if (o.publicKeyB64 == offer.publicKeyB64) tokens.add(o.deviceToken);
+      } catch (_) {}
+    }
+    return {
+      'id': settings.phoneId,
+      'name': _phoneName ?? '',
+      'tokens': tokens.toList(),
+    };
   }
 
   void _remember(PairingOffer offer, String code) {

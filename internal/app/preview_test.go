@@ -600,15 +600,12 @@ func TestPreview(t *testing.T) {
 		now := time.Now()
 		a.selected = mobileBoardID
 		a.mobile = mobileView{shown: true, loadedAt: now, url: url, endpoint: "wss://orca.example.uk/v11v7w0", qr: ui.NewBitmap(img),
+			othersOpen: true,
 			devices: []mobileDevice{
-				{ID: "d1", Name: "手机 10-17 14:58", LastSeen: now.Add(-20 * time.Hour)},
-				{ID: "d2", Name: "手机 10-17 15:07", LastSeen: now.Add(-10 * time.Hour)},
-				{ID: "d3", Name: "手机 10-17 20:40", LastSeen: now.Add(-14 * time.Hour)},
-				{ID: "d4", Name: "手机 10-17 21:50", LastSeen: now.Add(-13 * time.Hour)},
-				{ID: "d5", Name: "手机 10-17 22:06", LastSeen: now.Add(-10 * time.Hour)},
-				{ID: "d6", Name: "手机 10-17 22:35", LastSeen: now.Add(-12 * time.Hour)},
-				{ID: "d7", Name: "手机 10-17 23:20", LastSeen: now.Add(-2 * time.Minute)},
-				{ID: "d8", Name: "手机 10-18 00:12", LastSeen: now.Add(-8 * time.Hour)},
+				{ID: "d1", Name: "iPhone 16 Pro", Phone: "p1", PairedAt: now.Add(-72 * time.Hour), LastSeen: now, Links: 2, Online: true},
+				{ID: "d2", Name: "Pixel 8", Phone: "p2", PairedAt: now.Add(-50 * time.Hour), LastSeen: now.Add(-10 * time.Hour), Links: 1},
+				{ID: "d3", Name: "手机 10-17 20:40", PairedAt: now.Add(-60 * time.Hour), LastSeen: now.Add(-60 * time.Hour), Links: 1},
+				{ID: "d4", Name: "手机 10-17 21:50", PairedAt: now.Add(-59 * time.Hour), LastSeen: now.Add(-40 * time.Hour), Links: 1},
 			}}
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
 

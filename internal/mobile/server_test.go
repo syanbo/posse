@@ -616,3 +616,53 @@ func onlyConn(t *testing.T, srv *Server) *conn {
 	}
 	return nil
 }
+
+func TestPhoneIdentityMergesTokens(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	pair := func() *phone {
+		info, err := srv.Pair(false, "127.0.0.1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return dialPhone(t, srv, info)
+	}
+	identify := func(p *phone, tokens ...string) {
+		result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+			"client": "hive-flutter", "version": 1, "capabilities": []string{},
+			"phone": map[string]any{"id": "install-1", "name": "iPhone 16 Pro", "tokens": tokens},
+		})))
+	}
+	p1 := pair()
+	defer p1.ws.CloseNow()
+	identify(p1, p1.token)
+	// 重新扫码：手机只存着新 token，旧的作废
+	p2 := pair()
+	defer p2.ws.CloseNow()
+	identify(p2, p2.token)
+	ds := srv.Devices()
+	if len(ds) != 1 || ds[0].Name != "iPhone 16 Pro" || ds[0].Links != 1 || !ds[0].Online {
+		t.Fatalf("after rescan %+v", ds)
+	}
+	if srv.pair.valid(p1.token) {
+		t.Fatal("replaced token still valid")
+	}
+	// 旧版 App 连上的 token 先单独算一台，手机报上它还存着时归过来
+	p3 := pair()
+	defer p3.ws.CloseNow()
+	if n := len(srv.Devices()); n != 2 {
+		t.Fatalf("legacy device not listed separately: %d", n)
+	}
+	identify(p2, p2.token, p3.token)
+	ds = srv.Devices()
+	if len(ds) != 1 || ds[0].Links != 2 {
+		t.Fatalf("after claim %+v", ds)
+	}
+	if !srv.RemoveDevice(ds[0].ID) || len(srv.Devices()) != 0 || srv.pair.valid(p2.token) || srv.pair.valid(p3.token) {
+		t.Fatal("remove did not drop every token of the phone")
+	}
+}

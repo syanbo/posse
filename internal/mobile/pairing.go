@@ -21,13 +21,19 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
-// Device 是一台配对过的手机。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
+// Device 是一个配对码换来的设备 token。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
+// 同一台手机每扫一次码就多一个 token（重新扫码、远程和局域网各存一份），Hive 客户端连上后报上
+// 自己的安装 ID（Phone），列表按它合成一台手机；Orca App 不报，一个 token 算一台。
 type Device struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
-	Token    string    `json:"token"`
+	Token    string    `json:"token,omitempty"`
+	Phone    string    `json:"phone,omitempty"`
 	PairedAt time.Time `json:"pairedAt"`
 	LastSeen time.Time `json:"lastSeen,omitzero"`
+	// 以下只在列表里给出，不存盘：合进来的 token 个数，和是否有连接开着
+	Links  int  `json:"links,omitempty"`
+	Online bool `json:"online,omitempty"`
 }
 
 // state 是 $HIVE_HOME/mobile.json：主机的长期密钥对和配对过的手机。手机把公钥记为这台主机的身份，
@@ -152,14 +158,80 @@ func (p *pairing) valid(token string) bool {
 	})
 }
 
+// identify 记下 token 属于哪台手机（Hive 客户端的安装 ID）。held 是这台手机还存着的、
+// 这台电脑发的全部 token：同一台手机不再存着的 token 是重新扫码换掉或在手机上删掉的，一并作废；
+// 还没认领的旧 token 在 held 里就归到这台手机。held 为空时不清理。
+func (p *pairing) identify(id, phone, name string, held []string) (removed []string) {
+	if phone == "" {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	holds := func(token string) bool {
+		return slices.ContainsFunc(held, func(h string) bool {
+			return subtle.ConstantTimeCompare([]byte(h), []byte(token)) == 1
+		})
+	}
+	changed := false
+	claim := func(d *Device) {
+		if d.Phone != phone || name != "" && d.Name != name {
+			d.Phone = phone
+			if name != "" {
+				d.Name = name
+			}
+			changed = true
+		}
+	}
+	keep := p.st.Devices[:0]
+	for i := range p.st.Devices {
+		d := p.st.Devices[i]
+		switch {
+		case d.ID == id:
+			claim(&d)
+		case d.LastSeen.IsZero():
+		case d.Phone == phone && len(held) > 0 && !holds(d.Token):
+			removed = append(removed, d.ID)
+			changed = true
+			continue
+		case d.Phone == "" && holds(d.Token):
+			claim(&d)
+		}
+		keep = append(keep, d)
+	}
+	p.st.Devices = keep
+	if changed {
+		p.save()
+	}
+	return removed
+}
+
+// devices 列出配对过的手机：同一台手机的 token 合成一项，ID 取最近连过的那个，配对时间取最早的。
 func (p *pairing) devices() []Device {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var out []Device
+	at := map[string]int{}
 	for _, d := range p.st.Devices {
-		if !d.LastSeen.IsZero() {
-			d.Token = ""
+		if d.LastSeen.IsZero() {
+			continue
+		}
+		d.Token = ""
+		d.Links = 1
+		i, ok := at[d.Phone]
+		if d.Phone == "" || !ok {
+			if d.Phone != "" {
+				at[d.Phone] = len(out)
+			}
 			out = append(out, d)
+			continue
+		}
+		g := &out[i]
+		g.Links++
+		if d.PairedAt.Before(g.PairedAt) {
+			g.PairedAt = d.PairedAt
+		}
+		if d.LastSeen.After(g.LastSeen) {
+			g.ID, g.Name, g.LastSeen = d.ID, d.Name, d.LastSeen
 		}
 	}
 	return out
@@ -167,16 +239,25 @@ func (p *pairing) devices() []Device {
 
 func (p *pairing) paired() bool { return len(p.devices()) > 0 }
 
-func (p *pairing) remove(id string) bool {
+// remove 移除一台手机：报过安装 ID 的连同它的其他 token 一起移除。返回移除的设备 ID。
+func (p *pairing) remove(id string) []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	n := len(p.st.Devices)
-	p.st.Devices = slices.DeleteFunc(p.st.Devices, func(d Device) bool { return d.ID == id })
-	if len(p.st.Devices) == n {
-		return false
+	i := slices.IndexFunc(p.st.Devices, func(d Device) bool { return d.ID == id })
+	if i < 0 {
+		return nil
 	}
+	phone := p.st.Devices[i].Phone
+	var removed []string
+	p.st.Devices = slices.DeleteFunc(p.st.Devices, func(d Device) bool {
+		if d.ID == id || phone != "" && d.Phone == phone {
+			removed = append(removed, d.ID)
+			return true
+		}
+		return false
+	})
 	p.save()
-	return true
+	return removed
 }
 
 // offerCode 是二维码里 orca://pair?code= 后面的部分：Orca 手机 App 的配对信息，base64url 不补位。

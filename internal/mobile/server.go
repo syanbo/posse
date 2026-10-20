@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,17 +155,43 @@ func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	return PairInfo{URL: "orca://pair?code=" + code, Code: code, Endpoint: primary, Endpoints: eps}, nil
 }
 
-func (s *Server) Devices() []Device { return s.pair.devices() }
+// Devices 列出配对过的手机，标出现在连着的。
+func (s *Server) Devices() []Device {
+	out := s.pair.devices()
+	s.mu.Lock()
+	online := map[string]bool{}
+	for c := range s.conns {
+		online[c.device.ID] = true
+		if c.device.Phone != "" {
+			online[c.device.Phone] = true
+		}
+	}
+	s.mu.Unlock()
+	for i, d := range out {
+		out[i].Online = online[d.ID] || d.Phone != "" && online[d.Phone]
+	}
+	return out
+}
 
 // RemoveDevice 移除配对，并断开这台手机现有的连接。
 func (s *Server) RemoveDevice(id string) bool {
-	if !s.pair.remove(id) {
+	removed := s.pair.remove(id)
+	if len(removed) == 0 {
 		return false
+	}
+	s.dropDevices(removed)
+	return true
+}
+
+// dropDevices 断开用这些设备 token 连着的连接。
+func (s *Server) dropDevices(ids []string) {
+	if len(ids) == 0 {
+		return
 	}
 	s.mu.Lock()
 	var drop []*conn
 	for c := range s.conns {
-		if c.device.ID == id {
+		if slices.Contains(ids, c.device.ID) {
 			drop = append(drop, c)
 		}
 	}
@@ -172,7 +199,6 @@ func (s *Server) RemoveDevice(id string) bool {
 	for _, c := range drop {
 		c.ws.Close(4001, "Unauthorized")
 	}
-	return true
 }
 
 func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {

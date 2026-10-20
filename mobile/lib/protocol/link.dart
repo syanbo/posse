@@ -20,6 +20,7 @@ Future<PhoneRpc> handshake({
   required ByteSocket socket,
   required PairingOffer offer,
   required CancelToken cancel,
+  Map<String, Object?>? phone,
 }) async {
   final keys = generateKeyPair();
   final clientNonce = randomBytes(32);
@@ -81,7 +82,7 @@ Future<PhoneRpc> handshake({
       throw E2eeException('authentication rejected');
     }
     rpc.start();
-    await rpc.declareCapabilities();
+    await rpc.declareCapabilities(phone: phone);
     return rpc;
   } catch (error) {
     await reader.cancel();
@@ -96,6 +97,7 @@ class HiveLink {
     required this.connect,
     Stream<String>? networkSignatures,
     this.attemptTimeout = const Duration(seconds: 10),
+    this.phone,
   }) : networkSignatures = networkSignatures ?? const Stream.empty();
 
   /// 每次尝试（连上加握手）最多等多久。
@@ -104,6 +106,9 @@ class HiveLink {
   final SocketConnector connect;
   final Stream<String> networkSignatures;
   final Duration attemptTimeout;
+
+  /// 每次握手时报给电脑的手机身份，见 [PhoneRpc.declareCapabilities]。
+  final Map<String, Object?>? Function()? phone;
 
   PhoneRpc? rpc;
 
@@ -178,7 +183,12 @@ class HiveLink {
       throw const RaceCancelled();
     }
     try {
-      return await handshake(socket: socket, offer: offer, cancel: cancel);
+      return await handshake(
+        socket: socket,
+        offer: offer,
+        cancel: cancel,
+        phone: phone?.call(),
+      );
     } catch (error) {
       unawaited(socket.close().catchError((Object _) {}));
       rethrow;
