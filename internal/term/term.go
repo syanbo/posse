@@ -388,7 +388,10 @@ func (t *Terminal) subscribe(s *Subscriber) ([]byte, *Subscriber) {
 	defer t.smu.Unlock()
 	var snap []byte
 	if t.emu != nil {
+		// PTY 一次读约 1KB，常停在转义序列中间，内核已经吃进前半截。快照后面接上这半截，
+		// 接入方的解析器才和内核在同一处；否则后半截被当成文字，少一次光标移动，按差异重画的 agent 就一直错位
 		snap = t.emu.Snapshot()
+		snap = append(snap[:len(snap):len(snap)], t.tail...)
 	}
 	if t.ended {
 		close(s.C)

@@ -176,3 +176,39 @@ func TestReclaimSize(t *testing.T) {
 		t.Fatalf("after phone left %dx%d", c, r)
 	}
 }
+
+func TestWatchCarriesPartialSequence(t *testing.T) {
+	// 先输出半个 SGR 序列，等它被读进内核后接入，再输出后半截
+	script := `printf '\033[3'; sleep 1; printf '1mRED\033[0m'; sleep 5`
+	tm, err := Start(Options{ID: "t_tail", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		tm.smu.Lock()
+		n := len(tm.tail)
+		tm.smu.Unlock()
+		if n > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("partial sequence never arrived")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	snap, sub := tm.Watch()
+	defer tm.Detach(sub)
+	if !strings.HasSuffix(string(snap), "\x1b[3") {
+		t.Fatalf("snapshot does not end with the partial sequence: %q", snap[max(0, len(snap)-20):])
+	}
+	select {
+	case rest := <-sub.C:
+		if !strings.HasPrefix(string(rest), "1mRED") {
+			t.Fatalf("rest %q", rest)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("rest never arrived")
+	}
+}
