@@ -604,6 +604,24 @@ func TestClientCapabilities(t *testing.T) {
 	}
 }
 
+func TestRuntimePing(t *testing.T) {
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	defer p.ws.CloseNow()
+	if r := result(t, p.next(p.call("runtime.ping", map[string]any{}))); len(r) != 0 {
+		t.Fatalf("ping result %v", r)
+	}
+}
+
 func onlyConn(t *testing.T, srv *Server) *conn {
 	t.Helper()
 	srv.mu.Lock()

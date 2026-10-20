@@ -411,6 +411,9 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
+	case "runtime.ping":
+		// Hive 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
+		return c.reply(req.ID, map[string]any{})
 	case "repo.list":
 		repos := []map[string]any{}
 		for _, pr := range s.host.State().Projects {
