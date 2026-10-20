@@ -153,18 +153,18 @@ func (a *app) memoryButton(c *ui.Context) {
 	total := a.daemon.FootprintKB + a.selfKB + a.termKB
 	n := a.daemon.Running
 	b := ui.Row(c.Key("memory")).Height(24).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label(fmt.Sprintf("%d 个终端在运行，内存 %s", n, mb(total))).Tooltip("终端和内存")
+		Role(ui.RoleButton).Label(fmt.Sprintf("内存 %s，%d 个终端在运行", mb(total), n)).Tooltip("内存和终端")
 	bg := ui.Transparent
 	if m.open || b.Hovered() {
 		bg = colors(t).wash
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
-		ui.Box(c).Size(1, 12).Margin(0, 2).Background(colors(t).line)
 		ui.Icon(c, iconMemory).FontSize(13).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, mb(total)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Box(c).Size(1, 12).Margin(0, 2).Background(colors(t).line)
+		ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	if b.Clicked() {
 		m.open = !m.open
