@@ -36,6 +36,13 @@ func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 	return v
 }
 
+// revealInFiles 打开文件栏的文件树，展开到 path 并选中它（链接卡片的"在文件栏中显示"）。
+func (a *app) revealInFiles(w *workspace, path string) {
+	v := a.openFilesPanel(w, sideFiles)
+	a.loadDirs(v, v.tree.Reveal(path))
+	v.reveal, v.revealCur, v.revealScroll = path, v.cur, true
+}
+
 // toggleFilesPanel 开着且就在 side 上时关掉，否则打开到 side（⇧⌘E、⇧⌘G）。
 func (a *app) toggleFilesPanel(w *workspace, side int) {
 	if a.filesPanelOpen() && a.filesFor(w).side == side {

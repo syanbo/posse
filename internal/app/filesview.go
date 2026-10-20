@@ -40,6 +40,18 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	if v.cur != nil {
 		curPath = v.cur.path
 	}
+	if v.reveal != "" && v.cur != v.revealCur {
+		v.reveal = ""
+	}
+	if v.reveal != "" {
+		curPath = v.reveal
+		if v.revealScroll {
+			if i := slices.IndexFunc(rows, func(r files.Row) bool { return r.Path == v.reveal }); i >= 0 {
+				v.treeList.ScrollTo(i, ui.Center)
+				v.revealScroll = false
+			}
+		}
+	}
 	modified := map[string]bool{}
 	for _, d := range v.docs {
 		if d.isModified() {
@@ -78,6 +90,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			row.Opacity(0.7)
 		}
 		if row.Clicked() {
+			v.reveal = ""
 			switch {
 			case r.Dir:
 				a.toggleDir(v, r.Path)

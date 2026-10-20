@@ -555,3 +555,30 @@ func TestSessionButtons(t *testing.T) {
 		t.Fatal("click should open the panel")
 	}
 }
+
+// 链接卡片的"在文件栏中显示"：打开文件树、展开上级目录、选中这一项，点树上别的行就不再选中它
+func TestRevealInFiles(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	path := filepath.Join(root, "internal", "files", "tree.go")
+	a.revealInFiles(w, path)
+	v := a.filesFor(w)
+	until(t, tt, "revealed", func() bool { return tt.HasText("tree.go") && !v.revealScroll })
+	if !a.filesPanelOpen() || v.side != sideFiles || !v.tree.Expanded(filepath.Join(root, "internal", "files")) {
+		t.Fatal("files panel not opened to the revealed path")
+	}
+	if v.reveal != path {
+		t.Fatalf("reveal = %q", v.reveal)
+	}
+	if err := tt.Click("README.md"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.reveal != "" {
+		t.Fatal("clicking another row should drop the reveal")
+	}
+}

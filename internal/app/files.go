@@ -161,17 +161,21 @@ type filesView struct {
 	root     string
 	tree     *files.Tree
 	treeList ui.ListState
-	list     *files.List // 文件清单：快速打开、检索、判断忽略；文件标签不可见时放掉
-	listAt   time.Time
-	listing  bool
-	docs     []*fileDoc
-	cur      *fileDoc
-	side     int // 文件栏：sideFiles、sideSearch、sideChanges
-	search   fileSearch
-	poll     panelPoll
-	prevTerm string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去
-	logs     []*fileDoc // 底部 Git 日志浮层里的日志和文件历史（logview.go），不在标签栏
-	logCur   *fileDoc
+	// reveal 是"在文件栏中显示"选中的路径：当前文件没换、也没在树上点别的之前，树上选中它而不是当前文件
+	reveal       string
+	revealCur    *fileDoc
+	revealScroll bool        // 它的行出现后滚到中间（上级目录可能还在后台读）
+	list         *files.List // 文件清单：快速打开、检索、判断忽略；文件标签不可见时放掉
+	listAt       time.Time
+	listing      bool
+	docs         []*fileDoc
+	cur          *fileDoc
+	side         int // 文件栏：sideFiles、sideSearch、sideChanges
+	search       fileSearch
+	poll         panelPoll
+	prevTerm     string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去
+	logs         []*fileDoc // 底部 Git 日志浮层里的日志和文件历史（logview.go），不在标签栏
+	logCur       *fileDoc
 	// 日志浮层里选的是"操作记录"标签（gitconsole.go）；consoleLast、consoleDone 记上次看到的最后一条，变了才滚到底
 	console     bool
 	consoleList ui.ListState

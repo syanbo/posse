@@ -13,7 +13,7 @@ import (
 )
 
 // openLink 处理终端里 Cmd+点击的链接。网址（http、mailto 等）返回 false，交给系统用默认浏览器打开；
-// 文件链接（如 Claude 的 [Image #N] 指向的 file://）和路径弹出链接卡片：图片带预览，可以打开、在访达中显示、复制路径。
+// 文件链接（如 Claude 的 [Image #N] 指向的 file://）和路径弹出链接卡片：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
 func (a *app) openLink(v *termView, link string) bool {
 	path, local := a.linkPath(v, link)
 	if !local {
@@ -181,6 +181,11 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 			ui.Image(c, card.preview).Width(width-12).Radius(8).Margin(2, 0, 4, 0)
 		}
 		ui.Box(c).Height(1).Margin(2, 6).Background(p.line)
+		// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
+		if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示") {
+			a.revealInFiles(w, card.path)
+			a.linkCard = nil
+		}
 		openLabel := "打开"
 		if card.isDir {
 			openLabel = "在访达中打开"
