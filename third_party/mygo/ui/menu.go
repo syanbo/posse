@@ -69,6 +69,24 @@ func (e *node) Menu(build func(m *Menu)) *node {
 	return e
 }
 
+// ContextMenuAsked gives the element a context menu the app draws
+// itself: right clicks, the menu key and Shift+F10 open it as they do
+// ContextMenu's, a text input's or selectable text's included, and in the
+// frame after it reports where, in DIPs relative to the window. (Hive: its
+// menus look like the rest of the app, which a native menu cannot.)
+func (e *node) ContextMenuAsked() (x, y float32, ok bool) {
+	e.flags |= flagContextMenu
+	mr := &e.c.rt.menu
+	if mr.asked != e.id || mr.button {
+		return 0, 0, false
+	}
+	mr.asked = 0
+	if e.disabled() {
+		return 0, 0, false
+	}
+	return mr.x, mr.y, true
+}
+
 // buildMenu builds the element's menu, its menu button's or its context
 // menu, as it opens, and again for the item chosen from it.
 func (e *node) buildMenu(button bool, build func(m *Menu)) {

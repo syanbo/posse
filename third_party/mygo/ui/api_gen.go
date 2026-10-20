@@ -2771,6 +2771,21 @@ func (_handle Element) ContextMenu(build func(m *Menu)) Element {
 	return wrapElement(_node.ContextMenu(build))
 }
 
+// ContextMenuAsked gives the element a context menu the app draws
+// itself: right clicks, the menu key and Shift+F10 open it as they do
+// ContextMenu's, and in the frame after it reports where, in DIPs relative
+// to the window. (Hive)
+func (_handle Element) ContextMenuAsked() (x, y float32, ok bool) {
+	_node := _handle.node()
+	if _node == nil {
+		return 0, 0, false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	_ctx.rt.applyInputs()
+	return _node.ContextMenuAsked()
+}
+
 // Cursor sets the pointer's shape over the element.
 func (_handle Element) Cursor(c Cursor) Element {
 	_node := _handle.node()

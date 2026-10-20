@@ -21,6 +21,8 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/theme.go`、`ui/runtime.go`（`updateCursor`）：加 `Theme.PointerCursor`，开着时能点的元素（没有禁用）显示手形指针、窗口内拖动值时显示抓握的手，照网页的习惯；mygo 默认照原生控件用箭头。只为挡住点击才标成可点的对话框遮罩和面板、弹出面板（`base.go`、`combobox.go`）明确设成箭头。
 
+`ui/menu.go`、`ui/api_gen.go`：加 `Element.ContextMenuAsked`，元素照 `ContextMenu` 接右键、菜单键和 Shift+F10（文字选区也一样），但不弹系统菜单，下一帧报告位置（窗口坐标），Hive 自己画菜单。
+
 `ui/frame.go`：加 `Context.ModalOpen`，报告上一帧有没有对话框在最上层；Hive 的菜单项（⌘W 关闭标签）在帧外触发，用它和快捷键一样在对话框打开时不动作。
 
 终端插件 `plugins/terminal`：
@@ -32,6 +34,7 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
 - `paint.go`：在悬停的链接下面画一条单下划线，颜色取链接第一个字的颜色（`textColorAt`）。
+- `terminal.go`、`view.go`：加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Hive 自己画菜单。
 - `terminal.go`：加 `Options.Menu`（换掉插件自带的英文右键菜单）和给它用的 `Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）。
 - `terminal.go`：加 `Terminal.ScrollToEdge`、`AltScreen`，给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 

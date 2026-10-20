@@ -38,7 +38,14 @@ func View(c *ui.Context, t *Terminal) ui.Element {
 	e.HandleInput(v.input)
 	e.TextCaret(v.caret())
 	e.Draw(v.paint)
-	e.ContextMenu(v.menu)
+	// Hive: the app draws its own menu.
+	if fn := v.t.opts.ContextMenu; fn != nil {
+		if x, y, ok := e.ContextMenuAsked(); ok {
+			fn(x, y)
+		}
+	} else {
+		e.ContextMenu(v.menu)
+	}
 	return e
 }
 

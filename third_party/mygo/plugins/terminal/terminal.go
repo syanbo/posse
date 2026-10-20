@@ -126,6 +126,10 @@ type Options struct {
 	// terminal's own (Copy, Paste, Select All, Clear Scrollback), with
 	// Selection, Paste and SelectAll for its items. (Hive)
 	Menu func(m *ui.Menu)
+	// ContextMenu, when set, is called in place of showing a menu, with
+	// where the view was right-clicked, in DIPs relative to the window, for
+	// the app to draw its own. (Hive)
+	ContextMenu func(x, y float32)
 	// OnKey sees a key press before the terminal encodes it, on the main
 	// thread, and reports whether it took the key; a key taken sends
 	// nothing, neither the text it types nor its release. Unlike a
