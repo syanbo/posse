@@ -93,8 +93,8 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0:
 					usageNote(c, "这个会话还没用到技能和 MCP。")
 				default:
-					usageSummary(c, u.data)
-					usageTimeline(c, u.data.Events)
+					a.usageSummary(c, u.data)
+					a.usageTimeline(c, u.data.Events)
 				}
 			})
 		})
@@ -105,26 +105,41 @@ func usageNote(c *ui.Context, text string) {
 	ui.Text(c, text).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5).Padding(0, 4)
 }
 
-// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数。
-func usageSummary(c *ui.Context, u history.Usage) {
+// copyName 把技能、MCP 服务或工具的名字复制到剪贴板：常要拿去搜配置、写进提示里。
+func (a *app) copyName(c *ui.Context, name string) {
+	c.WriteClipboard(name)
+	a.notify("已复制 "+name, "", nil)
+}
+
+// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数。点标签复制名字。
+func (a *app) usageSummary(c *ui.Context, u history.Usage) {
 	ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
 		for _, sk := range u.Skills {
-			usageChip(c, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
+			a.usageChip(c, "skill-"+sk.Name, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
 		}
 		for _, m := range u.MCP {
-			usageChip(c, iconExtensions, mcpColor(c), m.Server, m.Count)
+			a.usageChip(c, "mcp-"+m.Server, iconExtensions, mcpColor(c), m.Server, m.Count)
 		}
 	})
 }
 
-func usageChip(c *ui.Context, icon *ui.SVG, color ui.Color, name string, n int) {
+func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color, name string, n int) {
 	t := c.Theme()
-	ui.Row(c).Height(22).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).Background(colors(t).fill).
-		Tooltip(name).Children(func() {
+	b := ui.Row(c.Key(key)).Height(22).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).
+		Role(ui.RoleButton).Label("复制 " + name)
+	bg := colors(t).fill
+	if b.Hovered() {
+		bg = colors(t).wash
+	}
+	b.Background(b.AnimateColor("bg", bg, hover))
+	b.Children(func() {
 		ui.Icon(c, icon).FontSize(11).TextColor(color).Shrink(0)
 		ui.Text(c, name).FontSize(11).Font(monoFont).SingleLine().MaxWidth(150)
 		ui.Text(c, fmt.Sprintf("×%d", n)).FontSize(10.5).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
+	if b.Clicked() {
+		a.copyName(c, name)
+	}
 }
 
 func mcpColor(c *ui.Context) ui.Color {
@@ -156,8 +171,8 @@ func usageSteps(events []history.UsageEvent) []usageStep {
 	return steps
 }
 
-// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色；右边是名字、所属服务和时间。
-func usageTimeline(c *ui.Context, events []history.UsageEvent) {
+// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色；右边是名字、所属服务和时间。点名字复制。
+func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent) {
 	t := c.Theme()
 	p := colors(t)
 	steps := usageSteps(events)
@@ -182,7 +197,14 @@ func usageTimeline(c *ui.Context, events []history.UsageEvent) {
 				})
 				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 14, 0).Children(func() {
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).Tooltip(name)
+						nt := ui.Text(c, name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).
+							Role(ui.RoleButton).Label("复制 " + name)
+						if nt.Hovered() {
+							nt.TextColor(t.Accent)
+						}
+						if nt.Clicked() {
+							a.copyName(c, name)
+						}
 						if st.n > 1 {
 							ui.Text(c, fmt.Sprintf("×%d", st.n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 						}
