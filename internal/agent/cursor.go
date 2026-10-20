@@ -14,7 +14,7 @@ var cursorEvents = []string{
 	"afterShellExecution", "stop", "sessionEnd",
 }
 
-// cursorPlugin 写出 hive 的 Cursor 插件：hooks 和编排技能；内容没变时不重写。
+// cursorPlugin 写出 hive 的 Cursor 插件：hooks、编排和会话命名技能；内容没变时不重写。
 func (l Launcher) cursorPlugin() (string, error) {
 	dir := filepath.Join(l.Home, "cursor-plugin")
 	manifest, err := json.MarshalIndent(map[string]string{
@@ -40,9 +40,10 @@ func (l Launcher) cursorPlugin() (string, error) {
 		return "", err
 	}
 	files := map[string][]byte{
-		filepath.Join(dir, ".cursor-plugin", "plugin.json"): manifest,
-		filepath.Join(dir, "hooks", "hooks.json"):           hooksJSON,
-		filepath.Join(dir, "skills", SkillName, "SKILL.md"): []byte(SkillFrontmatter() + skillBody),
+		filepath.Join(dir, ".cursor-plugin", "plugin.json"):      manifest,
+		filepath.Join(dir, "hooks", "hooks.json"):                hooksJSON,
+		filepath.Join(dir, "skills", SkillName, "SKILL.md"):      []byte(SkillFrontmatter() + skillBody),
+		filepath.Join(dir, "skills", NamerSkillName, "SKILL.md"): []byte(namerSkill),
 	}
 	for path, b := range files {
 		if err := writeIfChanged(path, b); err != nil {

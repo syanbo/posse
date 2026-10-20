@@ -37,6 +37,7 @@ type project struct {
 type agentState struct {
 	Status, Message           string
 	SessionID, TranscriptPath string
+	Title                     string // hive session title 起的会话名
 }
 
 type terminalInfo struct {

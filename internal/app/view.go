@@ -1581,10 +1581,13 @@ func tabText(c *ui.Context, e ui.Element, active bool) {
 	}
 }
 
-// tabLabel 返回标签的名字和补充说明（终端标题），分开显示而不是用分隔符拼接。
+// tabLabel 返回标签的名字和补充说明（会话名，没有时是终端标题），分开显示而不是用分隔符拼接。
 func tabLabel(t terminalInfo) (string, string) {
 	name := agentTitle(t.Agent)
 	title := bareTitle(t)
+	if t.AgentState != nil && t.AgentState.Title != "" {
+		title = t.AgentState.Title
+	}
 	detail := ""
 	switch {
 	case name == "" && title != "":

@@ -534,7 +534,18 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	st.At = time.Now()
 	d.setAgent(s, st)
+	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 hive hook 写到 stdout
+	if p.Agent == "claude" && p.Event == "UserPromptSubmit" {
+		if title := s.TakeTitle(); title != "" {
+			return hookEventResult{AgentState: st, SessionTitle: title}, nil
+		}
+	}
 	return st, nil
+}
+
+type hookEventResult struct {
+	host.AgentState
+	SessionTitle string `json:"sessionTitle,omitempty"`
 }
 
 // hookPermission 先照常记下等待状态，再只在有 Hive 手机看着这个会话时挂起等决定。

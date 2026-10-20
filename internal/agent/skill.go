@@ -19,7 +19,27 @@ const (
 	SkillDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Hive terminals and coordinate them with `hive task`: start workers, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Hive (HIVE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
 	skillBody        = "Before running any `hive task` command, run `hive task guide` and follow it: it is the guide for this exact hive version.\n"
 	// guideHint 是给 Codex、Grok 的附加指令
-	guideHint = "You are running in a Hive terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `hive task guide`, then coordinate them with `hive task` as it says."
+	guideHint = "You are running in a Hive terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `hive task guide`, then coordinate them with `hive task` as it says. " +
+		"When the user asks to name or title this session (e.g. session-namer), run `hive session guide` and follow it."
+)
+
+// 会话命名技能：只在用户主动调用时用（disable-model-invocation），规则由 `hive session guide` 输出。
+// Claude 里是插件技能，调用写 /hive:session-namer。
+const (
+	NamerSkillName = "session-namer"
+	namerSkill     = `---
+name: session-namer
+description: Name the current session (MMDD｜类型｜摘要) with hive session title. Use only when the user invokes session-namer.
+disable-model-invocation: true
+argument-hint: "[摘要或完整标题，可省略]"
+allowed-tools: Bash(hive session guide), Bash(hive session title:*)
+---
+
+User arguments: $ARGUMENTS
+(If the line above still shows the literal ` + "`$ARGUMENTS`" + `, the arguments are whatever the user typed after invoking this skill, possibly nothing.)
+
+Run ` + "`hive session guide`" + ` and follow it: draft the title from the arguments and this session, then set it with ` + "`hive session title`" + `.
+`
 )
 
 // SkillFrontmatter 是技能文件开头的元数据。
@@ -27,7 +47,7 @@ func SkillFrontmatter() string {
 	return "---\nname: " + SkillName + "\ndescription: " + SkillDescription + "\n---\n\n"
 }
 
-// claudePlugin 写出只含编排技能的 Claude 插件目录，经 --plugin-dir 按会话加载；内容没变时不重写。
+// claudePlugin 写出 hive 的 Claude 插件目录（编排、会话命名两个技能），经 --plugin-dir 按会话加载；内容没变时不重写。
 func (l Launcher) claudePlugin() (string, error) {
 	dir := filepath.Join(l.Home, "claude-plugin")
 	manifest, err := json.MarshalIndent(map[string]string{
@@ -39,8 +59,9 @@ func (l Launcher) claudePlugin() (string, error) {
 		return "", err
 	}
 	files := map[string][]byte{
-		filepath.Join(dir, ".claude-plugin", "plugin.json"): manifest,
-		filepath.Join(dir, "skills", SkillName, "SKILL.md"): []byte(SkillFrontmatter() + skillBody),
+		filepath.Join(dir, ".claude-plugin", "plugin.json"):      manifest,
+		filepath.Join(dir, "skills", SkillName, "SKILL.md"):      []byte(SkillFrontmatter() + skillBody),
+		filepath.Join(dir, "skills", NamerSkillName, "SKILL.md"): []byte(namerSkill),
 	}
 	for path, b := range files {
 		if err := writeIfChanged(path, b); err != nil {

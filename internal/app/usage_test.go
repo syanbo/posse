@@ -38,3 +38,14 @@ func TestUsageCopyName(t *testing.T) {
 	}
 }
 
+// 起过名的会话在标签和侧栏上写会话名，没起名时写终端标题
+func TestTabLabelSessionTitle(t *testing.T) {
+	term := terminalInfo{Agent: "claude", Title: "✳ 自动标题", Running: true, AgentState: &agentState{Status: "idle"}}
+	if _, d := tabLabel(term); d != "自动标题" {
+		t.Fatalf("untitled %q", d)
+	}
+	term.AgentState.Title = "1020｜feat｜会话命名"
+	if _, d := tabLabel(term); d != "1020｜feat｜会话命名" {
+		t.Fatalf("titled %q", d)
+	}
+}

@@ -85,6 +85,8 @@ func init() {
 		{"task ask", "Worker: ask the coordinator and wait for the answer", "<task> <question> [--resume MSG]", cmdTaskAsk},
 		{"task check", "Worker: read new messages from the coordinator", "<task>", cmdTaskCheck},
 		{"task done", "Worker: report the outcome once", "<task> --summary S [--report FILE] [--failed]", cmdTaskDone},
+		{"session title", "Name the agent session running in this terminal", "'<MMDD｜类型｜摘要>'", cmdSessionTitle},
+		{"session guide", "How to draft a session title (for agents)", "", cmdSessionGuide},
 		{"history search", "Search past claude/codex/cursor/grok sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
 		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
 		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},

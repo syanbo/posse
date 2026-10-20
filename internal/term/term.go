@@ -44,15 +44,19 @@ type Options struct {
 
 // AgentState 来自 agent 的 hooks 上报。
 type AgentState struct {
-	Status         string    `json:"status"` // working | waiting | idle | exited
-	Event          string    `json:"event,omitempty"`
-	SessionID      string    `json:"sessionId,omitempty"`
-	TranscriptPath string    `json:"transcriptPath,omitempty"`
-	Message        string    `json:"message,omitempty"`
-	ToolName       string    `json:"toolName,omitempty"`
-	ToolInput      string    `json:"toolInput,omitempty"` // 权限请求的一行摘要
-	Prompt         string    `json:"prompt,omitempty"`    // 手机上的 interactivePrompt：答题卡原文或审批 JSON
-	At             time.Time `json:"at"`
+	Status         string `json:"status"` // working | waiting | idle | exited
+	Event          string `json:"event,omitempty"`
+	SessionID      string `json:"sessionId,omitempty"`
+	TranscriptPath string `json:"transcriptPath,omitempty"`
+	Message        string `json:"message,omitempty"`
+	ToolName       string `json:"toolName,omitempty"`
+	ToolInput      string `json:"toolInput,omitempty"` // 权限请求的一行摘要
+	Prompt         string `json:"prompt,omitempty"`    // 手机上的 interactivePrompt：答题卡原文或审批 JSON
+	// Title 是 hive session title 给这个会话起的标题，界面和手机用它当会话名；
+	// TitlePending 是 Claude 还没拿到它（下一次 UserPromptSubmit 时经 hook 交过去）
+	Title        string    `json:"title,omitempty"`
+	TitlePending bool      `json:"titlePending,omitempty"`
+	At           time.Time `json:"at"`
 }
 
 var libOnce sync.Once
@@ -486,6 +490,28 @@ func (t *Terminal) ResetAgent(s AgentState) {
 	t.notify()
 }
 
+// SetTitle 记下会话标题；agent 还没报过会话 ID 时用调用方给的。
+func (t *Terminal) SetTitle(title, sessionID string, pending bool) {
+	t.mu.Lock()
+	if t.agent.SessionID == "" {
+		t.agent.SessionID = sessionID
+	}
+	t.agent.Title, t.agent.TitlePending = title, pending
+	t.mu.Unlock()
+	t.notify()
+}
+
+// TakeTitle 返回还没交给 agent 的标题并标成已交，没有时返回空。
+func (t *Terminal) TakeTitle() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.agent.TitlePending {
+		return ""
+	}
+	t.agent.TitlePending = false
+	return t.agent.Title
+}
+
 func (t *Terminal) LastOutput() time.Time { return time.Unix(0, t.lastOutput.Load()) }
 
 func (t *Terminal) Title() string {
@@ -510,6 +536,10 @@ func (t *Terminal) SetAgent(s AgentState) {
 	}
 	if s.TranscriptPath == "" {
 		s.TranscriptPath = t.agent.TranscriptPath
+	}
+	// 标题跟着会话走：同一个会话的后续事件沿用，换了会话（新开的 agent、/clear）就不再是它的标题
+	if s.Title == "" && s.SessionID == t.agent.SessionID {
+		s.Title, s.TitlePending = t.agent.Title, t.agent.TitlePending
 	}
 	if s.Status != "waiting" {
 		s.ToolName, s.ToolInput, s.Prompt = "", "", ""
