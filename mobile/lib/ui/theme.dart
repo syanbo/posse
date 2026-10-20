@@ -28,7 +28,8 @@ abstract final class Rd {
 /// 等宽字体。iOS 用 Menlo，中文落到苹方；安卓没有 Menlo，落到 monospace（Droid Sans Mono）。
 /// 不能写 Courier：安卓把它映射成笔画很细的打字机字体 Cutive Mono，代码和终端看着灰蒙蒙的。
 const monoFamily = 'Menlo';
-const monoFallback = ['monospace', 'PingFang SC'];
+// Symbols Nerd Font Mono 是 App 自带的，补上终端提示符里 Nerd Font 的图标（见 pubspec.yaml）
+const monoFallback = ['monospace', 'Symbols Nerd Font Mono', 'PingFang SC'];
 
 /// 会话页、终端页标题下面那一行（状态、上下文、延迟）的文字。写明字重：不写会继承顶栏标题的粗体。
 TextStyle statusLineStyle(Color color) => TextStyle(

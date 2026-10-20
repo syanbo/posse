@@ -34,6 +34,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon.png
+  # Nerd Fonts 的纯图标字体（MIT，许可在同目录）：starship、lazygit 等提示符里私有区的图标（如分支 U+E0A0）
+  # 系统字体都没有，不带它在终端里是缺字方框。用 Mono 版，图标按一格宽画，不挤歪后面的字
+  fonts:
+    - family: Symbols Nerd Font Mono
+      fonts:
+        - asset: assets/fonts/SymbolsNerdFontMono-Regular.ttf
 
 # 带改动的 flterm 0.0.5（改动见 third_party/flterm/HIVE.md）
 dependency_overrides:
