@@ -456,7 +456,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	if row.Clicked() {
 		*open = !*open
 	}
-	row.ContextMenu(func(m *ui.Menu) { a.workspaceMenu(m, ws[0]) })
+	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(m, ws[0]) })
 }
 
 // disclosure 是展开箭头，展开时转向下；label 是收起时的说明（"展开…"），展开后说明换成"收起…"。
@@ -569,7 +569,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
-	item.ContextMenu(func(m *ui.Menu) { a.workspaceMenu(m, w) })
+	contextMenu(c, item, func(m *popMenu) { a.workspaceMenu(m, w) })
 	return item
 }
 
@@ -699,7 +699,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		row.ScrollIntoView()
 		a.revealSel = false
 	}
-	row.ContextMenu(func(m *ui.Menu) {
+	contextMenu(c, row, func(m *popMenu) {
 		if m.Item("关闭会话…").Chosen() {
 			a.askClose(term)
 		}
@@ -723,7 +723,7 @@ func (a *app) sessionStatus(term terminalInfo) string {
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
-func (a *app) workspaceMenu(m *ui.Menu, w workspace) {
+func (a *app) workspaceMenu(m *popMenu, w workspace) {
 	for _, ag := range agentChoices {
 		if m.Item("启动 " + agentTitle(ag)).Chosen() {
 			a.startTerminal(w.ID, ag)
@@ -733,7 +733,7 @@ func (a *app) workspaceMenu(m *ui.Menu, w workspace) {
 		a.startTerminal(w.ID, "")
 	}
 	m.Separator()
-	if m.Item("在访达中打开").Chosen() {
+	if m.Item("在访达中打开").Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(w.Path); err != nil {
 			a.err = "在访达中打开失败：" + err.Error()
 		}
@@ -916,7 +916,7 @@ func (a *app) footer(c *ui.Context) {
 		return
 	}
 	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		iconButtonSized(c, iconPlus, "新建", 24, 14).Menu(func(m *ui.Menu) {
+		menuButton(c, iconButtonSized(c, iconPlus, "新建", 24, 14), func(m *popMenu) {
 			if m.Item("添加项目…").Chosen() {
 				go a.addProject()
 			}
@@ -1190,11 +1190,15 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
 		for _, ag := range slices.Concat(agentChoices, []string{""}) {
-			name, keys := agentTitle(ag), ""
+			name := agentTitle(ag)
 			if ag == "" {
-				name, keys = "终端", "⌘T"
+				name = "终端"
 			}
-			if m.Item(c, func() { agentTile(c, ag, 18) }, name, keys) {
+			it := m.Item(name).Lead(func() { agentIcon(c, ag, 18) })
+			if ag == "" {
+				it.Shortcut(ui.Cmd, ui.KeyT)
+			}
+			if it.Chosen() {
 				a.startTerminal(w.ID, ag)
 			}
 		}
@@ -1345,6 +1349,10 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				if a.focusTerm {
 					a.focusTerm = false
 					tv.Focus()
+				}
+				// 右键菜单由终端插件交来位置，Hive 自己画（termMenu）
+				if v := a.view; a.termCtxID == v.id {
+					contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 				}
 				a.sessionButtons(c, cur)
 			})
@@ -1572,7 +1580,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		a.askClose(term)
 	}
 	row.Tooltip(tabTooltip(term))
-	row.ContextMenu(func(m *ui.Menu) { a.tabMenu(m, w, term) })
+	contextMenu(c, row, func(m *popMenu) { a.tabMenu(m, w, term) })
 }
 
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
@@ -1594,7 +1602,7 @@ func tabTooltip(t terminalInfo) string {
 }
 
 // tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
-func (a *app) tabMenu(m *ui.Menu, w *workspace, term terminalInfo) {
+func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	if m.Item("重命名…").Chosen() {
 		a.startRename(term)
 	}

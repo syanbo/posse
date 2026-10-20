@@ -340,15 +340,13 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 			}
 		}
 	})
-	col.ContextMenu(func(m *ui.Menu) {
+	contextMenu(c, col, func(m *popMenu) {
 		if m.Item("复制命令").Chosen() {
 			c.WriteClipboard(cmd)
 		}
 		if out := strings.TrimSpace(r.Out + "\n" + r.Err); out != "" && m.Item("复制输出").Chosen() {
 			c.WriteClipboard(out)
 		}
-		m.Separator()
-		m.EditItems()
 	})
 }
 

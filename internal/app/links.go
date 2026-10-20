@@ -186,13 +186,14 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 			a.revealInFiles(w, card.path)
 			a.linkCard = nil
 		}
-		openLabel := "打开"
+		openIcon, openLabel := iconOpen, "打开"
 		if card.isDir {
-			openLabel = "在访达中打开"
+			// 在访达里的动作都用文件夹图标
+			openIcon, openLabel = iconFolder, "在访达中打开"
 		} else if isImagePath(card.path) {
 			openLabel = "用预览打开"
 		}
-		if linkCardItem(c, iconOpen, openLabel) {
+		if linkCardItem(c, openIcon, openLabel) {
 			if err := mygo.Shell.OpenPath(card.path); err != nil {
 				a.err = err.Error()
 			}

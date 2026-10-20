@@ -677,6 +677,34 @@ func TestPreview(t *testing.T) {
 		tt.Frame()
 		savePNG(t, tt, "new-menu-"+suffix+".png")
 
+		// 自绘菜单：标签的右键菜单（快捷键、禁用项）、防休眠档位（勾选）、提交的右键菜单展开子菜单
+		a = previewApp(t)
+		tt = newPreviewTester(a, dark)
+		if err := tt.RightClick("zsh"); err != nil {
+			t.Fatal(err)
+		}
+		settleMenu(tt)
+		savePNG(t, tt, "menu-tab-"+suffix+".png")
+		a = previewApp(t)
+		tt = newPreviewTester(a, dark)
+		if err := tt.Click("防休眠：自动"); err != nil {
+			t.Fatal(err)
+		}
+		settleMenu(tt)
+		savePNG(t, tt, "menu-check-"+suffix+".png")
+		a = previewApp(t)
+		previewLog(t, a)
+		tt = newPreviewTester(a, dark)
+		if err := tt.RightClick("Merge branch 'feat'"); err != nil {
+			t.Fatal(err)
+		}
+		settleMenu(tt)
+		if r, ok := tt.Find("把当前分支重置到这里"); ok {
+			tt.Move(r.X+r.W/2, r.Y+r.H/2)
+		}
+		settleMenu(tt)
+		savePNG(t, tt, "menu-submenu-"+suffix+".png")
+
 		// 双击标签改名
 		a = previewApp(t)
 		if cur := a.currentTerminal(a.workspace(a.selected)); cur != nil {
@@ -741,4 +769,13 @@ func previewImages() imagesView {
 			{key: "p:1", n: 1, label: "#1", path: "/tmp/1.png", thumb: block(512, 300, color.RGBA{243, 242, 239, 255}, color.RGBA{141, 187, 146, 255})},
 		},
 	}
+}
+
+// settleMenu 走几帧，等悬停和弹出的过渡走完再取图。
+func settleMenu(tt *ui.Tester) {
+	for range 3 {
+		tt.Frame()
+		time.Sleep(80 * time.Millisecond)
+	}
+	tt.Frame()
 }

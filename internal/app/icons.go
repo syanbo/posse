@@ -33,6 +33,7 @@ var (
 	iconPhone      = icon(`<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M10.5 17.75h3"/>`)
 	iconArrowUp    = icon(`<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>`)
 	iconArrowDown  = icon(`<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>`)
+	iconCheck      = icon(`<path d="m5 12.5 4.5 4.5L19 7.5"/>`)
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
 	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
 	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)

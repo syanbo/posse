@@ -133,7 +133,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		if row.Clicked() && h.sel != ci.Hash {
 			a.selectHistory(v, d, ci)
 		}
-		row.ContextMenu(func(m *ui.Menu) { a.commitMenu(c, m, w, v, d, ci) })
+		contextMenu(c, row, func(m *popMenu) { a.commitMenu(c, m, w, v, d, ci) })
 	}).Grow(1)
 }
 

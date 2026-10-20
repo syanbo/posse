@@ -76,7 +76,7 @@ func (a *app) awakeButton(c *ui.Context) {
 	if st == nil {
 		return
 	}
-	b.Menu(func(m *ui.Menu) {
+	menuButton(c, b, func(m *popMenu) {
 		for _, o := range awakeModes {
 			if m.Item(o.item).Checked(o.mode == st.Mode).Chosen() {
 				a.setAwake(o.mode)

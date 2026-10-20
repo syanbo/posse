@@ -501,7 +501,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 			ui.Text(c, b.Upstream).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 	})
-	row.Menu(func(m *ui.Menu) { a.branchMenu(m, w, v, b, cur, otherWs, inOther) })
+	menuButton(c, row, func(m *popMenu) { a.branchMenu(m, w, v, b, cur, otherWs, inOther) })
 }
 
 // checkoutBranch 是分支弹窗里回车或菜单"检出"：在别的工作区检出着的切到那个工作区，当前分支什么也不做。
@@ -524,7 +524,7 @@ func (a *app) checkoutBranch(w *workspace, v *filesView, b gitx.Branch) {
 }
 
 // branchMenu 是一个分支的操作，顺序照 WebStorm。
-func (a *app) branchMenu(m *ui.Menu, w *workspace, v *filesView, b, cur gitx.Branch, otherWs *workspace, inOther bool) {
+func (a *app) branchMenu(m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, otherWs *workspace, inOther bool) {
 	done := func() { a.branchPop = nil }
 	q := "‘" + b.Name + "’"
 	curName := cur.Name

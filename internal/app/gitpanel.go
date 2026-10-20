@@ -320,7 +320,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			g.list.Focus(c)
 		}
 	}
-	row.ContextMenu(func(m *ui.Menu) {
+	contextMenu(c, row, func(m *popMenu) {
 		if !e.Conflict && m.Item("显示 diff").Chosen() {
 			a.openDiff(w, spec, nil, true)
 		}
@@ -356,7 +356,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 		m.Separator()
 		abs := g.absPath(e.Path)
-		if letter != 'D' && m.Item("在访达中显示").Chosen() {
+		if letter != 'D' && m.Item("在访达中显示").Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
 		if m.Item("复制路径").Chosen() {
@@ -375,7 +375,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 		ui.Text(c, stashTitle(s.Message)).FontSize(13).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
 		ui.Text(c, ago(s.When)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
-	row.Menu(func(m *ui.Menu) {
+	menuButton(c, row, func(m *popMenu) {
 		// 照 WebStorm 储藏标签的右键：弹出（取回并删掉）、应用（储藏留着）、删除
 		if m.Item("弹出").Chosen() {
 			a.gitDo(v, "弹出储藏", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
@@ -585,7 +585,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 		})
 		if len(group) > 1 {
-			path.Menu(func(m *ui.Menu) {
+			menuButton(c, path, func(m *popMenu) {
 				for _, s := range group {
 					label := s.rel
 					if s.rel == df.rel {

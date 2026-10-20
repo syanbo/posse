@@ -66,12 +66,10 @@ func TestTerminalTabMouse(t *testing.T) {
 	if err := tt.RightClick("zsh"); err != nil {
 		t.Fatal(err)
 	}
-	if m := tt.Menu(); !slices.Contains(m, "关闭其他终端") || !slices.Contains(m, "关闭右侧终端") {
-		t.Fatalf("menu = %q", m)
+	if !menuHas(tt, "关闭其他终端") || !menuHas(tt, "关闭右侧终端") {
+		t.Fatalf("menu = %q", tt.Texts())
 	}
-	if err := tt.ChooseMenuItem("关闭右侧终端"); err != nil {
-		t.Fatal(err)
-	}
+	chooseMenu(t, tt, "关闭右侧终端")
 	tt.Frame()
 	if !a.confirming || a.confirmTitle != "关闭 1 个终端？" {
 		t.Fatalf("close right: confirming %v %q", a.confirming, a.confirmTitle)
@@ -102,14 +100,28 @@ func TestDocTabMouse(t *testing.T) {
 	if err := tt.RightClick("main.go"); err != nil {
 		t.Fatal(err)
 	}
-	if m := tt.Menu(); !slices.Contains(m, "复制相对路径") {
-		t.Fatalf("menu = %q", m)
+	if !menuHas(tt, "复制相对路径") {
+		t.Fatalf("menu = %q", tt.Texts())
 	}
-	if err := tt.ChooseMenuItem("关闭所有文件"); err != nil {
-		t.Fatal(err)
-	}
+	chooseMenu(t, tt, "关闭所有文件")
 	tt.Frame()
 	if len(v.docs) != 0 || a.activeTerm[w.ID] != "t1" {
 		t.Fatalf("close all: %d docs, active %q", len(v.docs), a.activeTerm[w.ID])
 	}
+}
+
+// menuHas 报告 Hive 自绘的菜单里有没有 label 这一项。
+func menuHas(tt *ui.Tester, label string) bool {
+	tt.Frame()
+	return tt.HasText(label)
+}
+
+// chooseMenu 点 Hive 自绘菜单里的 label 一项。
+func chooseMenu(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	tt.Frame()
+	if err := tt.Click(label); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
 }

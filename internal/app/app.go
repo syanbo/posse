@@ -209,7 +209,9 @@ type app struct {
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
-	shownTab  string // 最近一次滚进可见范围的标签，见 revealTab
+	shownTab  string    // 最近一次滚进可见范围的标签，见 revealTab
+	termCtx   menuState // 终端内容区的右键菜单（termMenu）
+	termCtxID string    // 它是哪个终端的：切走了就不画
 	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
 	renaming, renameText string
 	tabStripW            float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
@@ -762,7 +764,9 @@ func (a *app) ensureView(id string) {
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
 		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
 		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
-		Menu: func(m *ui.Menu) { a.termMenu(m, v, id) },
+		ContextMenu: func(x, y float32) {
+			a.termCtx, a.termCtxID = menuState{open: true, x: x, y: y}, id
+		},
 		OnPaste: func(text string) bool {
 			if text != "" || v.term == nil {
 				return false

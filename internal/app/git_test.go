@@ -1554,12 +1554,10 @@ func TestGitConsole(t *testing.T) {
 	if err := tt.RightClick("git rebase --continue"); err != nil {
 		t.Fatal(err)
 	}
-	if menu := tt.Menu(); !slices.Contains(menu, "复制命令") {
-		t.Fatalf("context menu %v", menu)
+	if !menuHas(tt, "复制命令") {
+		t.Fatalf("context menu %v", tt.Texts())
 	}
-	if err := tt.ChooseMenuItem("复制命令"); err != nil {
-		t.Fatal(err)
-	}
+	chooseMenu(t, tt, "复制命令")
 	tt.Frame()
 	if got := tt.Clipboard(); got != "git rebase --continue" {
 		t.Fatalf("copied %q", got)
@@ -1603,9 +1601,7 @@ func TestStashTab(t *testing.T) {
 		if err := tt.Click("On main: 试一下储藏"); err != nil {
 			t.Fatal(err)
 		}
-		if err := tt.ChooseMenuItem(item); err != nil {
-			t.Fatal(err)
-		}
+		chooseMenu(t, tt, item)
 	}
 	apply("应用")
 	until(t, tt, "applied", func() bool { return v.git.busy == "" && len(v.git.status.Entries) > 0 })

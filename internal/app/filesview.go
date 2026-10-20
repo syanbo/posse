@@ -107,7 +107,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 
 // pathMenu 是文件树和检索结果里一行的右键菜单；在 git 仓库里的文件多了文件历史和 Annotate。
 func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, path string, dir bool) {
-	e.ContextMenu(func(m *ui.Menu) {
+	contextMenu(c, e, func(m *popMenu) {
 		if m.Item("复制路径").Chosen() {
 			c.WriteClipboard(path)
 		}
@@ -115,7 +115,7 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 			c.WriteClipboard(rel)
 		}
 		m.Separator()
-		if m.Item("在访达中显示").Chosen() {
+		if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(path)
 		}
 		if m.Item("用默认应用打开").Chosen() {
@@ -479,7 +479,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	if row.MiddleClicked() {
 		a.closeDoc(v, d)
 	}
-	row.ContextMenu(func(m *ui.Menu) { a.docTabMenu(c, m, v, d) })
+	contextMenu(c, row, func(m *popMenu) { a.docTabMenu(c, m, v, d) })
 	a.reorderableDoc(c, row, w.ID, v, d)
 	if row.Clicked() && !active {
 		a.showFiles(w)
@@ -518,7 +518,7 @@ func (a *app) reorderableDoc(c *ui.Context, row ui.Element, wsID string, v *file
 
 // docTabMenu 是文件标签的右键菜单（照 Orca）：关闭这个、其他的、右边的、全部文件，复制路径和在访达中显示。
 // 有未保存的文件时先问一次。
-func (a *app) docTabMenu(c *ui.Context, m *ui.Menu, v *filesView, d *fileDoc) {
+func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	i := slices.Index(v.docs, d)
 	if i < 0 {
 		return
@@ -547,7 +547,7 @@ func (a *app) docTabMenu(c *ui.Context, m *ui.Menu, v *filesView, d *fileDoc) {
 	if rel, err := filepath.Rel(v.root, d.path); err == nil && m.Item("复制相对路径").Chosen() {
 		c.WriteClipboard(rel)
 	}
-	if m.Item("在访达中显示").Chosen() {
+	if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
 		mygo.Shell.ShowItemInFolder(d.path)
 	}
 }

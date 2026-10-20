@@ -14,7 +14,7 @@ import (
 
 // termMenu 是终端内容区的右键菜单（照 Orca 的终端菜单），换掉终端插件自带的英文菜单：
 // 清屏和 ⌘K 一样由常驻进程清，关闭和 ⌘W 一样先问。
-func (a *app) termMenu(m *ui.Menu, v *termView, id string) {
+func (a *app) termMenu(m *popMenu, v *termView, id string) {
 	if v.term == nil {
 		return
 	}

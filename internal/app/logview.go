@@ -513,12 +513,13 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		case n > 1:
 			branch = fmt.Sprintf("%d 个分支", n)
 		}
-		ui.Row(c.Key("branch-filter")).Height(26).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
+		filter := ui.Row(c.Key("branch-filter")).Height(26).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
 			Role(ui.RoleButton).Label("按分支筛选").Children(func() {
 			ui.Icon(c, iconBranch).FontSize(12).TextColor(t.TextMuted)
 			ui.Text(c, branch).FontSize(11.5).Font(monoFont).SingleLine().MaxWidth(160)
 			ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted)
-		}).Menu(func(m *ui.Menu) {
+		})
+		menuButton(c, filter, func(m *popMenu) {
 			if m.Item("全部分支").Checked(len(ld.filter.Branches) == 0).Chosen() {
 				ld.filter.Branches = nil
 				a.loadLog(v, d, false)
@@ -606,7 +607,7 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 		// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
 		ld.list.Focus(c)
 	}
-	row.ContextMenu(func(m *ui.Menu) { a.commitMenu(c, m, w, v, d, ci) })
+	contextMenu(c, row, func(m *popMenu) { a.commitMenu(c, m, w, v, d, ci) })
 }
 
 // authorW 是日志和比较里作者一列的宽度。
@@ -663,7 +664,7 @@ func refNames(d string) []refName {
 }
 
 // commitMenu 是日志里一个提交的操作；改写历史的几项只对当前分支上的提交有效（gitx 会检查）。
-func (a *app) commitMenu(c *ui.Context, m *ui.Menu, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo) {
+func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	short := ci.Hash[:7]
 	// 做完由 gitDo 里的 refsChanged 重读日志，翻过的页数一起读回来
 	do := func(what string, fn func(ctx context.Context, root string) error) {
@@ -683,7 +684,7 @@ func (a *app) commitMenu(c *ui.Context, m *ui.Menu, w *workspace, v *filesView, 
 	if m.Item("Cherry-pick").Chosen() {
 		do("Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
 	}
-	m.Submenu("把当前分支重置到这里", func(sm *ui.Menu) {
+	m.Submenu("把当前分支重置到这里", func(sm *popMenu) {
 		if sm.Item("Soft：改动留在暂存区").Chosen() {
 			do("重置", func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "soft") })
 		}
@@ -858,7 +859,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 }
 
 // gitFileMenu 是文件在 Git 下的操作：文件历史、Annotate。用在文件树和打开的文件上。
-func (a *app) gitFileMenu(m *ui.Menu, w *workspace, v *filesView, abs string) {
+func (a *app) gitFileMenu(m *popMenu, w *workspace, v *filesView, abs string) {
 	rel := v.git.relPath(abs)
 	if rel == "" {
 		return
