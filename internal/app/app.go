@@ -253,6 +253,10 @@ type app struct {
 	exe         exeWatch
 	exeReplaced atomic.Bool // 轮询线程里只报一次
 	staleApp    bool
+
+	// unread 是本轮完成时你不在看的会话（终端 ID），看过或再开始干活就清掉；只在窗口进程内存里（unread.go）
+	unread  map[string]bool
+	focused atomic.Bool // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
 // agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
@@ -318,6 +322,7 @@ func Run(c *client.Client) error {
 		})
 		a.watchClose()
 		a.installMenu()
+		a.watchFocus()
 		mygo.App.OnNotificationClick(func(id string) {
 			// 通知 ID 形如 hive:<工作区>:<终端> 或 hive-task:<任务>
 			parts := strings.Split(id, ":")
@@ -541,6 +546,11 @@ func (a *app) apply(ps []project, ws []workspace) {
 			delete(a.lastStatus, id)
 		}
 	}
+	for id := range a.unread {
+		if !seen[id] {
+			delete(a.unread, id)
+		}
+	}
 	a.pruneFiles()
 }
 
@@ -571,6 +581,9 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	if !seen || prev == status || t.Agent == "" {
 		return
 	}
+	if status != agent.StatusIdle {
+		delete(a.unread, t.ID)
+	}
 	var title string
 	switch {
 	case status == agent.StatusWaiting:
@@ -583,6 +596,9 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	// 正在看的终端不打扰
 	if a.win.IsFocused() && a.selected == w.ID && a.view != nil && a.view.id == t.ID {
 		return
+	}
+	if status == agent.StatusIdle {
+		a.markUnread(t.ID)
 	}
 	body := w.Label
 	if t.AgentState != nil && t.AgentState.Message != "" {

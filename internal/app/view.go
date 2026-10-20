@@ -451,7 +451,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	t := c.Theme()
 	running, status := 0, ""
 	for i := range ws {
-		r, s := terminalSummary(ws[i].Terminals)
+		r, s := a.terminalSummary(ws[i].Terminals)
 		running += r
 		if statusRank(s) > statusRank(status) {
 			status = s
@@ -533,7 +533,7 @@ func (a *app) selectedSession(w *workspace) string {
 // sidebarItem 是侧栏里的一个工作区。nested 表示在项目标题下面（主工作区和同目录工作区的路径标题行已经写了）；
 // collapsed 表示它的会话收起了，这时行尾汇总会话状态，当前会话也算选中这一行。extra 画在行尾最后（展开箭头）。
 func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, collapsed bool, extra func()) ui.Element {
-	running, status := terminalSummary(w.Terminals)
+	running, status := a.terminalSummary(w.Terminals)
 	if !collapsed && len(agentSessions(w.Terminals)) > 0 {
 		// 会话在下面各自显示状态
 		status = ""
@@ -673,8 +673,13 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	}
 	status := a.sessionStatus(term)
 	folded := open != nil && !*open
-	if folded && slices.ContainsFunc(workers, func(k terminalInfo) bool { return a.sessionStatus(k) == agent.StatusWaiting }) {
-		status = agent.StatusWaiting
+	if folded {
+		// 收起的 worker 里最要紧的状态是待处理或完成未读时，派发方这一行替它们显示
+		for _, k := range workers {
+			if ks := a.sessionStatus(k); (ks == agent.StatusWaiting || ks == statusUnread) && statusRank(ks) > statusRank(status) {
+				status = ks
+			}
+		}
 	}
 	var trailing func()
 	if status != "" || open != nil {
@@ -726,7 +731,7 @@ func (a *app) sessionStatus(term terminalInfo) string {
 	if a.runningFor[term.ID] > 0 && (term.WaitingTasks || status == agent.StatusIdle) {
 		return statusTasks
 	}
-	return status
+	return a.shownStatus(term.ID, status)
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
@@ -956,23 +961,27 @@ func mb(kb int64) string {
 }
 
 // terminalSummary 返回运行中的终端数和其中 agent 最要紧的状态。
-func terminalSummary(ts []terminalInfo) (running int, status string) {
+func (a *app) terminalSummary(ts []terminalInfo) (running int, status string) {
 	for _, t := range ts {
 		if !t.Running {
 			continue
 		}
 		running++
-		if t.AgentState != nil && statusRank(t.AgentState.Status) > statusRank(status) {
-			status = t.AgentState.Status
+		if t.AgentState != nil {
+			if s := a.shownStatus(t.ID, t.AgentState.Status); statusRank(s) > statusRank(status) {
+				status = s
+			}
 		}
 	}
 	return running, status
 }
 
-// statusRank 是汇总状态时的优先级，等你处理最高；不认识的状态不参与汇总。
+// statusRank 是汇总状态时的优先级，等你处理最高，其次是完成了还没看的；不认识的状态不参与汇总。
 func statusRank(s string) int {
 	switch s {
 	case agent.StatusWaiting:
+		return 5
+	case statusUnread:
 		return 4
 	case agent.StatusWorking:
 		return 3
@@ -1007,6 +1016,9 @@ func statusGlyph(c *ui.Context, status string, size float32) {
 	if status == statusTasks {
 		waitingPulse(c, size, t.Accent, c.Preferences().ReduceMotion).Tooltip(statusText(status))
 		return
+	}
+	if status == statusUnread {
+		icon, color = iconBell, t.Accent
 	}
 	ui.Icon(c, icon).FontSize(size).TextColor(color).Shrink(0).Tooltip(statusText(status))
 }
@@ -1100,6 +1112,8 @@ func statusText(status string) string {
 		return "已退出"
 	case statusTasks:
 		return "等待任务：在等它派出去的 agent"
+	case statusUnread:
+		return "本轮完成，你还没看"
 	}
 	return status
 }
@@ -1117,6 +1131,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 		return
 	}
 	a.overPanelButton = false
+	a.markRead(cur)
 	if a.filesShown(w) {
 		a.filesTick(c, w)
 	}

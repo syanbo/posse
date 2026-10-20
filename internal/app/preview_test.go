@@ -427,6 +427,13 @@ func TestPreview(t *testing.T) {
 		a.state.SidebarWidth = 340
 		savePNG(t, newPreviewTester(a, dark), "sidebar-wide-"+suffix+".png")
 
+		// 不在看的会话本轮完成：标签和侧栏是铃铛，收起的项目也汇总成铃铛
+		a = previewApp(t)
+		a.workspaces[0].Terminals[1].AgentState = &agentState{Status: "idle"}
+		a.unread = map[string]bool{"t2": true, "t4": true}
+		*a.sectionsOpen["p3"] = false
+		savePNG(t, newPreviewTester(a, dark), "unread-"+suffix+".png")
+
 		// 窗口的 Hive.app 被换掉：侧栏底部提示重开
 		a = previewApp(t)
 		a.staleApp = true
