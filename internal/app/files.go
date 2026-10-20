@@ -63,7 +63,7 @@ type fileDoc struct {
 	deleted    bool
 	err        string
 	img        *ui.Bitmap
-	preview    bool // Markdown 显示预览
+	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
 	md         []mdBlock
 	mdVer      uint64
 	// 未保存判断按缓冲区版本缓存：Modified 在有改动时要整份比较文本
@@ -201,7 +201,7 @@ func (a *app) filesFor(w *workspace) *filesView {
 		}
 	}
 	for _, p := range saved.Open {
-		d := &fileDoc{path: p}
+		d := &fileDoc{path: p, preview: isMarkdown(p)}
 		v.docs = append(v.docs, d)
 		if p == saved.Current {
 			v.cur = d
@@ -351,10 +351,10 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 		d.transient = d.transient && preview
 	case preview && slices.ContainsFunc(v.docs, (*fileDoc).isPreview):
 		i := slices.IndexFunc(v.docs, (*fileDoc).isPreview)
-		d = &fileDoc{path: path, transient: true}
+		d = &fileDoc{path: path, transient: true, preview: isMarkdown(path)}
 		v.docs[i] = d
 	default:
-		d = &fileDoc{path: path, transient: preview}
+		d = &fileDoc{path: path, transient: preview, preview: isMarkdown(path)}
 		// 插在当前文件后面，和编辑器一样
 		i := len(v.docs)
 		if j := slices.Index(v.docs, v.cur); j >= 0 {
@@ -365,7 +365,8 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 	v.cur = d
 	d.focus = true
 	if line > 0 {
-		d.gotoLine, d.gotoSpan = line, span
+		// 跳到某一行（检索结果、路径:行号）要看源码，Markdown 也切到编辑器
+		d.gotoLine, d.gotoSpan, d.preview = line, span, false
 	}
 	if strings.HasPrefix(path, v.root+string(filepath.Separator)) {
 		a.loadDirs(v, v.tree.Reveal(path))

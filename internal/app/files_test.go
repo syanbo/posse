@@ -582,3 +582,28 @@ func TestRevealInFiles(t *testing.T) {
 		t.Fatal("clicking another row should drop the reveal")
 	}
 }
+
+// Markdown 默认打开成预览，跳到某一行时切回源码
+func TestMarkdownOpensInPreview(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	readme := filepath.Join(root, "README.md")
+	a.openFile(w, readme, 0, [2]int{})
+	v := a.filesFor(w)
+	if d := v.doc(readme); d == nil || !d.preview {
+		t.Fatal("markdown should open in preview")
+	}
+	if d := v.doc(filepath.Join(root, "main.go")); d != nil {
+		t.Fatal("unexpected doc")
+	}
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	if d := v.doc(filepath.Join(root, "main.go")); d == nil || d.preview {
+		t.Fatal("go file should not preview")
+	}
+	plan := filepath.Join(root, "docs", "plan.md")
+	a.openFile(w, plan, 1, [2]int{})
+	if d := v.doc(plan); d == nil || d.preview {
+		t.Fatal("jumping to a line should show the source")
+	}
+}
