@@ -438,7 +438,21 @@ func LastMessage(ctx context.Context, dir string) string {
 type Stash struct {
 	Ref     string // stash@{n}
 	Message string
+	Branch  string // 储藏时所在的分支，取自 git 写的 "On <分支>:"；分离的 HEAD 为空
 	When    time.Time
+}
+
+// stashBranch 从储藏消息里取分支："On main: 说明"（带说明）或 "WIP on main: abc123 提交信息"。
+func stashBranch(msg string) string {
+	for _, p := range []string{"WIP on ", "On "} {
+		if rest, ok := strings.CutPrefix(msg, p); ok {
+			if b, _, ok := strings.Cut(rest, ": "); ok && b != "(no branch)" {
+				return b
+			}
+			return ""
+		}
+	}
+	return ""
 }
 
 // StashPush 储藏全部改动，含未跟踪文件。
@@ -463,7 +477,7 @@ func Stashes(ctx context.Context, dir string) ([]Stash, error) {
 			continue
 		}
 		sec, _ := strconv.ParseInt(p[1], 10, 64)
-		list = append(list, Stash{Ref: p[0], Message: p[2], When: time.Unix(sec, 0)})
+		list = append(list, Stash{Ref: p[0], Message: p[2], Branch: stashBranch(p[2]), When: time.Unix(sec, 0)})
 	}
 	return list, nil
 }
