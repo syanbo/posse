@@ -422,6 +422,11 @@ func TestPreview(t *testing.T) {
 		a.state.SidebarWidth = 340
 		savePNG(t, newPreviewTester(a, dark), "sidebar-wide-"+suffix+".png")
 
+		// 窗口的 Hive.app 被换掉：侧栏底部提示重开
+		a = previewApp(t)
+		a.staleApp = true
+		savePNG(t, newPreviewTester(a, dark), "stale-app-"+suffix+".png")
+
 		// 右侧"技能与 MCP"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)
 		a.state.RightPanel = panelUsage

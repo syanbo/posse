@@ -14,12 +14,12 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - go.mod 要求 Go 1.27.1（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。
 - 终端内核 libghostty-vt 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
 - 端到端测试用独立目录，不要碰 `~/.hive`：`HIVE_HOME=/tmp/hive-e2e/home ./bin/hive ...`
-- 改界面后用离屏预览自查（屏幕锁定时也能用）：`HIVE_PREVIEW_DIR=/tmp/hive-preview go test ./internal/app -run TestPreview`，生成深浅两套主界面、空工作区、首次使用、新建对话框、任务总览、派发对话框、历史页（含 Markdown 回复）、文件标签（含检索、Markdown 预览、快速打开）、会话按钮收起后的把手、套餐用量详情（已用和剩余）、Git 界面（改动和 diff、改动卡片、回滚对话框和它的 diff、分支弹窗、Push 和它的 diff、比较、图片 diff、日志、操作记录）的 PNG。
+- 改界面后用离屏预览自查（屏幕锁定时也能用）：`HIVE_PREVIEW_DIR=/tmp/hive-preview go test ./internal/app -run TestPreview`，生成深浅两套主界面、空工作区、首次使用、新建对话框、任务总览、派发对话框、历史页（含 Markdown 回复）、文件标签（含检索、Markdown 预览、快速打开）、会话按钮收起后的把手、Hive.app 被换掉后的重开提示、套餐用量详情（已用和剩余）、Git 界面（改动和 diff、改动卡片、回滚对话框和它的 diff、分支弹窗、Push 和它的 diff、比较、图片 diff、日志、操作记录）的 PNG。
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 界面约定见 `internal/app/style.go` 开头，参照 Claude 桌面端的克制（依据见 `docs/plans/ui-claude-polish.html`）：暖灰底色分侧栏、顶栏、画布、卡片、浮层几层，靠明度差和 8% 透明细线分层；单闭合边框（有框的容器里按钮和输入不再加框）；陶土色给主按钮、焦点、工作中的星号、链接和图标，选中项只是强调色淡底，所有列表都不画竖条（侧栏选中的文字也不加粗；历史里自己的消息是靠右的强调色淡底），悬停是中性透明底；侧栏的工作区两行（名称，下面是路径或分支）；只有"待处理"用琥珀色加文字；状态用蜂巢格形状区分（实心工作中、空心带点待处理、空心完成）；不用"A · B"中点串拼接信息；字号和圆角用 style.go 里的常量，字重三档（只有 `titleText` 用 600）；框里的次级按钮用 `textButton`（填充底），框里的输入用 `fieldInput`，发送类输入用 `composer`（一体输入区，⌘↩ 发送），可滚动列表用 `fadeEdges` 提示还有内容。浮层（`floating`）和 mygo 的对话框、弹出面板出现时有 160ms 的淡入过渡（`Keyframes`，只播一次）。改动文件列表（提交详情、分支比较、Push、回滚）都按目录排成树（`changeTree`）。mygo 会把字重取整到固定档位（470 和 500 画出来一样），别指望细调字重。每帧开头 `SetTheme(hiveTheme(...))` 换成暖灰、Claude 橙（深色 #D97757、浅色 #C15F3C）和 8px 圆角，终端底色经 `terminalThemes` 跟卡片一致。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。
 - `mygo.json` 用开发证书签名（`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
 - 应用图标是 `design/icon.png`（由 `design/icon-art.png` 套 macOS 图标模板的圆角和投影得到），`mygo.json` 的 `icon` 指向它。不要放进 `resources/`：那里的文件会原样打进 app。
-- 测试 Hive.app 时用 `open -n --env HIVE_HOME=/tmp/hive-e2e/home build/darwin-arm64/Hive.app` 启动。直接运行包内二进制时，Computer Use 按 bundle id 连接会经 LaunchServices 另起一个不带 `HIVE_HOME` 的实例，误用 `~/.hive`。
+- 测试 Hive.app 时用 `open -n --env HIVE_HOME=/tmp/hive-e2e/home build/darwin-arm64/Hive.app` 启动。直接运行包内二进制时，Computer Use 按 bundle id 连接会经 LaunchServices 另起一个不带 `HIVE_HOME` 的实例，误用 `~/.hive`；同时开着两份包时按 .app 路径连接也一样，测试包比常驻进程新时它还会把日常的常驻进程交接到测试包上（用 build 里的包 `hive daemon handoff` 换回来）。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
@@ -128,6 +128,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 鼠标指针照 Orca（网页习惯）：主题开着 `PointerCursor`，能点的元素（`Clicked`、`OnClick`、列表的可选行等）都是手形，禁用的是箭头，拖动排序、拖文件时是抓握的手；文字输入、终端、编辑器是 I 形，拖边调宽是左右或上下箭头。新控件不用再单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。
 - 鼠标照 Orca：终端标签和文件标签中键关闭、右键菜单（关闭、关闭其他、关闭右侧；文件标签另有关闭所有文件、复制路径、在访达中显示），终端标签悬停提示完整的名字和标题。终端的右键菜单由 Hive 提供（`termmenu.go`，`terminal.Options.Menu`）：复制、粘贴、全选、清屏（和 ⌘K 一样由常驻进程清）、复制会话 ID、关闭终端。从访达或文件栏（文件树、改动列表）拖文件到终端贴入路径（`dropPieces`）：图片按粘贴发（agent 认得出粘贴的图片路径，当成附件：都认 png、jpg、gif、webp，另认的按 agent 不同，见 `imageExts`），有特殊字符时用反斜杠转义（路径带单引号时 Claude、Grok 认不出单引号括起来的写法），Cursor 连这个也认不出，改发 `file://` 链接；其余文件单引号转义后当键入、后面带空格；文件栏滑进来的途中不能拖（行在不动的指针下移动，mygo 会把点击当成拖动）。
 - 终端里的链接：鼠标放上去有下划线和手形指针，原地单击或 Cmd+点击打开，拖动是选文字（改在 `third_party/mygo` 的终端插件里）；指向不存在文件的链接不显示下划线、点不了。终端环境带 `FORCE_HYPERLINK=1`（和 Orca 一样），Claude Code 才会把 `[Image #N]` 输出成超链接。网址交给默认浏览器；文件链接（如 Claude 的 `[Image #N]` 指向的 `file://`）和路径弹出链接卡片（`internal/app/links.go`）。
+- 窗口所在的 Hive.app 被换掉（重新打包、覆盖安装）后，系统核实不了窗口进程的代码身份，TCC 直接拒绝它读桌面、文稿等目录（EPERM，不弹授权）。窗口按 inode 每秒查一次自己的可执行文件（`internal/app/relaunch.go`），变了就在侧栏底部提示重开；重开先处理未保存的文件，再退出，由后台脚本等进程退出后带上 `HIVE_*` 环境 `open -n` 新包。终端不受影响。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
 - 手机遥控（`internal/mobile`）复用 Orca 的手机 App（App Store / GitHub 上的 APK），hive 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现：
   - 只做局域网/Tailscale 直连（Orca 的 local-only），不做云端中转和推送（推送只能经 Orca 的网关）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。

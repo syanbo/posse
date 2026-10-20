@@ -243,6 +243,11 @@ type app struct {
 
 	// 常驻进程跑的是旧包时交给本窗口的包接着跑（upgrade.go）
 	upgrade upgradeState
+
+	// 窗口自己的 Hive.app 被换掉后提示重开（relaunch.go）
+	exe         exeWatch
+	exeReplaced atomic.Bool // 轮询线程里只报一次
+	staleApp    bool
 }
 
 // agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
@@ -287,6 +292,7 @@ func Run(c *client.Client) error {
 		home:         c.Home,
 		state:        loadUIState(c.Home),
 		permission:   agent.PermissionMode(c.Home),
+		exe:          newExeWatch(),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
 	a.traceGit()
@@ -330,6 +336,7 @@ func Run(c *client.Client) error {
 func (a *app) poll() {
 	for {
 		a.refresh()
+		a.checkReplaced()
 		a.historyTick()
 		time.Sleep(time.Second)
 	}

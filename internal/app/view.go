@@ -366,6 +366,7 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 		}
 	}
+	a.staleBar(c)
 	a.errorBar(c)
 	a.footer(c)
 }
@@ -887,6 +888,20 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 		}
 	})
 	return row
+}
+
+// staleBar 提示窗口的 Hive.app 已被换掉：不重开的话，桌面、文稿里的项目读不了文件、跑不了 git。
+func (a *app) staleBar(c *ui.Context) {
+	if !a.staleApp || !a.loaded {
+		return
+	}
+	t := c.Theme()
+	ui.Column(c).Margin(0, 10, 8, 10).Padding(10, 10, 10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+		ui.Text(c, "Hive 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(11).TextColor(t.TextMuted).LineHeight(1.45)
+		if pressable(accentButton(c, "重开窗口")).Clicked() {
+			a.relaunch()
+		}
+	})
 }
 
 func (a *app) errorBar(c *ui.Context) {
