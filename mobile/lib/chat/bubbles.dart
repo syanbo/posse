@@ -30,6 +30,47 @@ Widget _mine(BuildContext context, Widget body) {
 }
 
 /// 刚发出去、agent 还没写进会话文件的话。样子和自己的话一样，时间处写发送中或已发送。
+/// 倒序列表离视觉顶部不到这么远就读更早的一页。
+const earlierThreshold = 120.0;
+
+/// 倒序列表（偏移 0 是底部）是否已经翻到靠近最早的那头。
+bool nearEarliest(ScrollPosition position) =>
+    position.maxScrollExtent - position.pixels <= earlierThreshold;
+
+/// 列表最上面那一行：翻到这里会自动读更早的消息，读着时转圈；没读成（断线）时留个按钮手动再试。
+class EarlierRow extends StatelessWidget {
+  const EarlierRow({super.key, required this.loading, required this.onLoad});
+
+  final bool loading;
+  final VoidCallback onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    return SizedBox(
+      height: 44,
+      child: Center(
+        child: loading
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  backgroundColor: Colors.transparent,
+                  foregroundColor: c.muted,
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                onPressed: onLoad,
+                child: const Text('更早的消息'),
+              ),
+      ),
+    );
+  }
+}
+
 class EchoBubble extends StatelessWidget {
   const EchoBubble({super.key, required this.echo});
 

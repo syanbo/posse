@@ -129,9 +129,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_newBelow && position.pixels <= 80) {
       setState(() => _newBelow = false);
     }
-    if (position.maxScrollExtent - position.pixels <= 120) {
-      unawaited(_loadEarlier());
-    }
+    if (nearEarliest(position)) unawaited(_loadEarlier());
   }
 
   void _onModel() {
@@ -302,10 +300,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void _loadEarlierIfAtTop() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients || _loadingEarlier) return;
-      final position = _scroll.position;
-      if (position.maxScrollExtent - position.pixels <= 120) {
-        unawaited(_loadEarlier());
-      }
+      if (nearEarliest(_scroll.position)) unawaited(_loadEarlier());
     });
   }
 
@@ -728,7 +723,7 @@ class _ChatScreenState extends State<ChatScreen> {
         agent: tab.agent,
       );
     }
-    return _earlierRow(c);
+    return EarlierRow(loading: _loadingEarlier, onLoad: _loadEarlier);
   }
 
   ScrollPhysics _listPhysics(BuildContext context) {
@@ -812,30 +807,6 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _newBelow = false);
       },
       child: const Text('新消息'),
-    );
-  }
-
-  Widget _earlierRow(HiveColors c) {
-    return SizedBox(
-      height: 44,
-      child: Center(
-        child: _loadingEarlier
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 30),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: c.muted,
-                  textStyle: const TextStyle(fontSize: 13),
-                ),
-                onPressed: _loadEarlier,
-                child: const Text('更早的消息'),
-              ),
-      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../chat/anchor.dart';
 import '../chat/chat.dart';
 import '../chat/merge.dart';
 import '../chat/transcript.dart';
@@ -226,7 +227,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-/// 一个历史会话的对话，只读。往上翻读更早的，底部"在电脑上继续"。
+/// 一个历史会话的对话，只读。列表和对话页一样（往上翻自动读更早的），只有底部换成"在电脑上继续"。
 class HistorySessionScreen extends StatefulWidget {
   const HistorySessionScreen({
     super.key,
@@ -243,6 +244,7 @@ class HistorySessionScreen extends StatefulWidget {
 
 class _HistorySessionScreenState extends State<HistorySessionScreen> {
   final _window = ChatWindow();
+  final _scroll = ScrollController();
   var _loading = false;
   var _resuming = false;
   String? _error;
@@ -250,13 +252,36 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     unawaited(_page(initial: true));
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scroll.hasClients && nearEarliest(_scroll.position)) {
+      unawaited(_page());
+    }
+  }
+
+  /// 内容不满一屏时没有滚动事件，读完一页如果还贴着顶部就继续往前读。
+  void _pageIfAtTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients && nearEarliest(_scroll.position)) {
+        unawaited(_page());
+      }
+    });
   }
 
   /// 读一页：第一次读最后 40 条，之后从已经读到的最早一条往前读。
   Future<void> _page({bool initial = false}) async {
     final rpc = widget.model.rpc;
     if (rpc == null || _loading) return;
+    if (!initial && (!_window.hasMore || _window.beforeOffset == null)) return;
     final s = widget.session;
     setState(() => _loading = true);
     try {
@@ -268,10 +293,12 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         if (!initial) 'beforeOffset': _window.beforeOffset,
       });
       if (!mounted) return;
+      final before = _window.messages.length;
       setState(() {
         _window.applyOlderPage(page);
         _error = null;
       });
+      if (_window.messages.length > before) _pageIfAtTop();
     } catch (e) {
       if (mounted) setState(() => _error = friendlyError(e));
     } finally {
@@ -334,7 +361,15 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
     final entries = foldTranscript(_window.messages)
         .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
         .toList();
+    final entryKeys = transcriptKeys(entries);
+    // 和对话页一样按身份认行：读进更早的一页时，展开着的工具组不会错配到别的行上
+    final rowKeys = <String>[
+      for (var i = entries.length - 1; i >= 0; i--) entryKeys[i],
+      if (_window.hasMore) 'earlier',
+    ];
+    final rowIndex = {for (var i = 0; i < rowKeys.length; i++) rowKeys[i]: i};
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         titleSpacing: 0,
         title: Row(
@@ -376,26 +411,21 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
           if (_error != null) NoticeBar(_error!),
           Expanded(
             child: SelectionArea(
-              // 倒着排：一打开就在最新的消息，往上翻到头读更早的
-              child: ListView.builder(
-                reverse: true,
-                padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
-                itemCount: entries.length + (_window.hasMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == entries.length) return _earlier(c);
-                  final entry = entries[entries.length - 1 - index];
-                  if (entry.tools) {
-                    return ToolRun(
-                      blocks: entry.blocks,
-                      initiallyOpen: settings.expandTools,
-                    );
-                  }
-                  return MessageBubble(
-                    message: entry.message!,
-                    blocks: entry.blocks,
-                    agent: s.agent,
-                  );
-                },
+              child: Scrollbar(
+                controller: _scroll,
+                // 倒着排：一打开就在最新的消息，往上翻到头自动读更早的
+                child: ListView.builder(
+                  controller: _scroll,
+                  reverse: true,
+                  padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                  itemCount: rowKeys.length,
+                  findChildIndexCallback: (key) =>
+                      key is ValueKey<String> ? rowIndex[key.value] : null,
+                  itemBuilder: (context, index) => KeyedSubtree(
+                    key: ValueKey(rowKeys[index]),
+                    child: _row(index, entries, s.agent),
+                  ),
+                ),
               ),
             ),
           ),
@@ -420,24 +450,21 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
     );
   }
 
-  Widget _earlier(HiveColors c) {
-    return SizedBox(
-      height: 44,
-      child: Center(
-        child: _loading
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: c.muted,
-                ),
-                onPressed: _page,
-                child: const Text('更早的消息'),
-              ),
-      ),
+  Widget _row(int index, List<TranscriptEntry> entries, String agent) {
+    if (index >= entries.length) {
+      return EarlierRow(loading: _loading, onLoad: () => unawaited(_page()));
+    }
+    final entry = entries[entries.length - 1 - index];
+    if (entry.tools) {
+      return ToolRun(
+        blocks: entry.blocks,
+        initiallyOpen: widget.model.settings.expandTools,
+      );
+    }
+    return MessageBubble(
+      message: entry.message!,
+      blocks: entry.blocks,
+      agent: agent,
     );
   }
 }
