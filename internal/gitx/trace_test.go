@@ -67,3 +67,37 @@ func TestTrace(t *testing.T) {
 		t.Fatalf("run() and op result %+v", runs)
 	}
 }
+
+func TestChangesRepo(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"commit", "-m", "x"}, true},
+		{[]string{"-c", "user.name=t", "commit", "-qm", "x"}, true},
+		{[]string{"-C", "/repo", "push"}, true},
+		{[]string{"--no-optional-locks", "status", "--porcelain"}, false},
+		{[]string{"rev-parse", "--show-toplevel"}, false},
+		{[]string{"remote", "-v"}, false},
+		{[]string{"remote", "add", "fork", "url"}, true},
+		{[]string{"config", "user.name"}, false},
+		{[]string{"ls-remote", "origin"}, false},
+		{[]string{"add", "-n", "."}, false},
+		{[]string{"add", "."}, true},
+		{[]string{"stash"}, true},
+		{[]string{"stash", "list"}, false},
+		{[]string{"branch", "--show-current"}, false},
+		{[]string{"branch", "-D", "old"}, true},
+		{[]string{"tag", "-l"}, false},
+		{[]string{"tag", "v1"}, true},
+		{[]string{"worktree", "list"}, false},
+		{[]string{"worktree", "add", "../x"}, true},
+		{[]string{"apply", "--check", "p.diff"}, false},
+		{[]string{"maintenance", "run", "--auto"}, false},
+		{nil, false},
+	} {
+		if got := ChangesRepo(c.args); got != c.want {
+			t.Errorf("ChangesRepo(%q) = %v", c.args, got)
+		}
+	}
+}

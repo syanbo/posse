@@ -168,13 +168,14 @@ type Daemon struct {
 	nudgeMu  sync.Mutex
 	stopping atomic.Bool
 
-	history historyState
-	mobile  *mobile.Server
-	host    host.Host // 托管终端，测试里为空时用进程内的
-	awake   *awake    // 防休眠，测试里为空
-	usage   usageState
-	ln      *gateListener
-	handoff handoffState
+	history  historyState
+	mobile   *mobile.Server
+	host     host.Host // 托管终端，测试里为空时用进程内的
+	awake    *awake    // 防休眠，测试里为空
+	usage    usageState
+	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
+	ln       *gateListener
+	handoff  handoffState
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -326,6 +327,7 @@ func Run(ctx context.Context, cfg Config) error {
 	defer d.awake.close()
 	go d.awakeLoop(ctx)
 	d.openUsage()
+	d.openGitTrace(ctx)
 	go d.agentLoop(ctx)
 	d.newMobile()
 	if in == nil {
@@ -400,6 +402,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("usage.set", d.usageSet)
 	srv.Handle("usage.refresh", d.usageRefresh)
 	srv.Handle("session.title", d.sessionTitle)
+	srv.Handle("git.trace", d.gitTraceList)
 	srv.Handle("usage.report", d.usageReport)
 	srv.Handle("daemon.stop", func(ctx context.Context, _ json.RawMessage) (any, error) {
 		// 先回复再退出
@@ -464,6 +467,8 @@ type statusResult struct {
 	FootprintKB int64        `json:"footprintKB"`
 	Awake       *awakeStatus `json:"awake,omitempty"`
 	Usage       *usageStatus `json:"usage,omitempty"`
+	// GitTraceSeq 是终端 git 命令记录的最新序号，界面看到它变了再取（git.trace）
+	GitTraceSeq int64 `json:"gitTraceSeq,omitempty"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -485,6 +490,7 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 		r.Awake = &st
 	}
 	r.Usage = d.usageStatus()
+	r.GitTraceSeq = d.gitTrace.latest()
 	return r, nil
 }
 

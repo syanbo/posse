@@ -86,6 +86,7 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 	if agentName != "" {
 		env = append(env, "HIVE_AGENT="+agentName)
 	}
+	env = append(env, gitTraceEnv(d.cfg.Home)...)
 	if err := d.shellFiles(); err == nil {
 		env = append(env, agent.ShellEnv(d.cfg.Home, argv[0], d.userZdotdir)...)
 	}

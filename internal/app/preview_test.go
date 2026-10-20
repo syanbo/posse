@@ -341,6 +341,11 @@ func previewConsole(t *testing.T, a *app) {
 	add("更新项目", 4, dir, 122, gitx.Run{Args: []string{"diff", "--name-only", "--diff-filter=U"}})
 	add("Push", 5, dir, 240, gitx.Run{Args: []string{"push", "origin", "main:main"}})
 	a.gitRuns[len(a.gitRuns)-1].Done = false
+	// 终端里 agent 执行的 git 命令
+	a.addTermRuns([]termGitRun{
+		{Seq: 1, Agent: "claude", Dir: dir, Args: []string{"commit", "-m", "fix(app): 修复标签拖动"}, Start: at.Add(60 * time.Second), TookMs: 180},
+		{Seq: 2, Agent: "codex", Dir: dir, Args: []string{"pull", "--rebase"}, Start: at.Add(150 * time.Second), TookMs: 1300, Code: 1},
+	}, true)
 	a.files["w1"].console = true
 }
 

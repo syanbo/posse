@@ -37,6 +37,14 @@ type opInfo struct {
 	id   int64
 }
 
+// Seed 让之后的命令和操作编号接在 id、op 后面：窗口读回上次留下的记录时用，新旧编号不撞。
+func Seed(id, op int64) {
+	for cur := traceSeq.Load(); cur < id && !traceSeq.CompareAndSwap(cur, id); cur = traceSeq.Load() {
+	}
+	for cur := opSeq.Load(); cur < op && !opSeq.CompareAndSwap(cur, op); cur = opSeq.Load() {
+	}
+}
+
 // WithOp 标出 ctx 下执行的命令属于哪个操作。
 func WithOp(ctx context.Context, name string) context.Context {
 	return context.WithValue(ctx, opKey{}, opInfo{name, opSeq.Add(1)})
@@ -131,6 +139,42 @@ func readOnly(args []string) bool {
 			slices.ContainsFunc(rest, func(a string) bool { return strings.HasPrefix(a, "--format") })
 	case "tag":
 		return len(rest) == 0 || has("-l", "--list")
+	}
+	return false
+}
+
+// ChangesRepo 判断终端里的一条 git 命令会不会改动仓库。和 readOnly 反过来只认确定会改的：
+// 提示符、编辑器、agent 跑的查询五花八门，不认识的都当查询，免得操作记录被刷屏。
+func ChangesRepo(args []string) bool {
+	i := 0
+	for i < len(args) && strings.HasPrefix(args[i], "-") {
+		switch args[i] {
+		case "-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path":
+			i++
+		}
+		i++
+	}
+	if i >= len(args) {
+		return false
+	}
+	cmd, rest := args[i], args[i+1:]
+	has := func(flags ...string) bool {
+		return slices.ContainsFunc(rest, func(a string) bool { return slices.Contains(flags, a) })
+	}
+	switch cmd {
+	case "commit", "push", "pull", "fetch", "merge", "rebase", "cherry-pick", "revert", "reset", "checkout", "switch",
+		"restore", "am", "rm", "mv", "init", "clone":
+		return true
+	case "add", "clean":
+		return !has("-n", "--dry-run")
+	case "apply":
+		return !has("--check", "--stat", "--numstat", "--summary")
+	case "stash", "branch", "tag":
+		return !readOnly(args[i:])
+	case "worktree":
+		return len(rest) > 0 && slices.Contains([]string{"add", "remove", "move", "prune", "repair", "lock", "unlock"}, rest[0])
+	case "remote":
+		return len(rest) > 0 && slices.Contains([]string{"add", "remove", "rm", "rename", "set-url", "set-head", "set-branches", "prune", "update"}, rest[0])
 	}
 	return false
 }

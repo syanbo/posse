@@ -34,7 +34,7 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 2 * time.Second
 	// 不拿可选的锁：每 1.5 秒的 status 会顺手重写 index，和终端里 agent 的 git 命令抢 index.lock
-	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0"), env...)
+	cmd.Env = append(append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "GIT_TRACE2_EVENT=0"), env...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}

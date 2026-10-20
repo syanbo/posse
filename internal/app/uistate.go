@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 // uiState 是只有界面关心的状态，存在 $HIVE_HOME/ui.json：放进常驻进程要改协议，
@@ -26,6 +27,8 @@ type uiState struct {
 	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
+	// GitConsoleCleared 是在 Git 操作记录里点清空的时间，更早的记录（界面的和终端的）都不再显示
+	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
 	TermOrder map[string][]string `json:"termOrder,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID

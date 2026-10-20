@@ -94,6 +94,7 @@ type daemonStatus struct {
 	Build       string       `json:"build"` // 旧常驻进程没有这个字段时为空
 	Pid         int          `json:"pid"`
 	StartedAt   time.Time    `json:"startedAt"`
+	GitTraceSeq int64        `json:"gitTraceSeq"` // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -178,6 +179,10 @@ type app struct {
 	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
 	gitRuns       []gitx.Run            // Git 操作记录里的命令（gitconsole.go），所有项目共用
 	consoleErr    bool                  // 有没在操作记录里看过的失败命令
+	consoleQ      chan []byte           // 交给写 git-console.jsonl 的协程
+	consoleOnce   sync.Once
+	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
+	traceLoaded   bool
 	filesPanelRef ui.Ref
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
@@ -392,6 +397,9 @@ func (a *app) refresh() {
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "daemon.status", nil, &st)
+	}
+	if err == nil {
+		a.pollGitTrace(ctx, st.GitTraceSeq)
 	}
 	// 总览里选中的任务：拉完整内容，worktree 的改动统计每 5 秒更新一次
 	if id := a.wantedTask(); err == nil && id != "" {

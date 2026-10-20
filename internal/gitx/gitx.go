@@ -16,7 +16,8 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	// 禁止 git 弹出交互式凭据提示，否则常驻进程会挂住
-	cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0")
+	// 窗口从 Hive 终端里拉起时会继承终端的 GIT_TRACE2_EVENT：自己的命令另有记录，不再报给操作记录
+	cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_TRACE2_EVENT=0")
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	rec := traceStart(ctx, dir, args)

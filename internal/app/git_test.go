@@ -1674,3 +1674,50 @@ func TestCompareSplit(t *testing.T) {
 		t.Fatalf("lower pane moved %v, want 100", d)
 	}
 }
+
+// 操作记录写盘：完成的命令追加到 git-console.jsonl，下次打开读回、编号接着往下；
+// 终端里的命令按时间排进来，之后到的失败标红点；清空后两边更早的都不再显示
+func TestGitConsolePersist(t *testing.T) {
+	home := t.TempDir()
+	a := &app{home: home}
+	a.traceGit()
+	defer func() { gitx.Trace = nil }()
+	t0 := time.Now().Add(-time.Minute)
+	a.addGitRun(gitx.Run{ID: 1, Op: "提交", OpID: 1, Dir: "/r", Args: []string{"commit", "-m", "x"}, Start: t0, Done: true})
+	a.addGitRun(gitx.Run{ID: 2, Op: "推送", OpID: 2, Dir: "/r", Args: []string{"push"}, Start: t0.Add(20 * time.Second)})
+	until := time.Now().Add(2 * time.Second)
+	for time.Now().Before(until) {
+		if b, _ := os.ReadFile(gitConsolePath(home)); strings.Count(string(b), "\n") == 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	b := &app{home: home}
+	b.loadGitRuns()
+	if len(b.gitRuns) != 1 || b.gitRuns[0].Args[0] != "commit" {
+		t.Fatalf("reloaded %+v", b.gitRuns) // 没完成的推送不写盘
+	}
+	b.addTermRuns([]termGitRun{
+		{Seq: 7, Agent: "claude", Dir: "/r", Args: []string{"add", "."}, Start: t0.Add(-time.Second), TookMs: 5},
+		{Seq: 8, Dir: "/r", Args: []string{"pull"}, Start: t0.Add(10 * time.Second), Code: 1},
+	}, true)
+	if len(b.gitRuns) != 3 || b.gitRuns[0].ID != -7 || b.gitRuns[0].Op != "Claude 终端" || b.gitRuns[2].Err != "退出码 1" || b.consoleErr {
+		t.Fatalf("merged %+v err=%v", b.gitRuns, b.consoleErr)
+	}
+	b.addTermRuns([]termGitRun{{Seq: 9, Args: []string{"push"}, Start: time.Now(), Code: 128}, {Seq: 8, Args: []string{"pull"}, Start: t0}}, false)
+	if len(b.gitRuns) != 4 || !b.consoleErr {
+		t.Fatalf("later failure %d %v", len(b.gitRuns), b.consoleErr)
+	}
+
+	b.state.GitConsoleCleared = time.Now()
+	b.addTermRuns([]termGitRun{{Seq: 3, Args: []string{"commit"}, Start: t0}}, false)
+	if len(b.gitRuns) != 4 {
+		t.Fatalf("a run older than the clear was added: %d", len(b.gitRuns))
+	}
+	c := &app{home: home, state: uiState{GitConsoleCleared: b.state.GitConsoleCleared}}
+	c.loadGitRuns()
+	if len(c.gitRuns) != 0 {
+		t.Fatalf("cleared runs came back: %+v", c.gitRuns)
+	}
+}

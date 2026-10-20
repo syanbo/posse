@@ -1,7 +1,11 @@
 package app
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,20 +17,141 @@ import (
 )
 
 // Git 操作记录：照 WebStorm Git 工具窗口的 Console，列出所有项目里界面执行过的 Git 操作（提交、推送、储藏……），
-// 每个操作下面是它调用的 git 命令、输出和报错。记录来自 gitx.Trace，只在窗口进程内存里，不写盘。
+// 每个操作下面是它调用的 git 命令、输出和报错。界面的记录来自 gitx.Trace，命令完成后追加到
+// $HIVE_HOME/git-console.jsonl，窗口打开时读回；Hive 终端里改动仓库的 git 命令由常驻进程经 trace2 收集
+// （internal/daemon/gittrace.go），轮询时按序号取新的，按时间排进同一个列表，只有命令和退出码、没有输出。
 
 // gitConsoleMax 是最多留多少条命令，超过丢掉最早的。
 const gitConsoleMax = 1000
 
-// traceGit 让 gitx 把命令报给界面线程。
+// traceGit 读回上次留下的记录，再让 gitx 把命令报给界面线程。
 func (a *app) traceGit() {
+	a.loadGitRuns()
 	gitx.Trace = func(r gitx.Run) { a.update(func() { a.addGitRun(r) }) }
+}
+
+func gitConsolePath(home string) string { return filepath.Join(home, "git-console.jsonl") }
+
+// loadGitRuns 读回界面上次的记录，gitx 的编号接在后面；文件攒到上限的两倍时只留最近的重写。
+func (a *app) loadGitRuns() {
+	if a.home == "" {
+		return
+	}
+	b, err := os.ReadFile(gitConsolePath(a.home))
+	if err != nil {
+		return
+	}
+	var runs []gitx.Run
+	var maxID, maxOp int64
+	n := 0
+	for _, line := range bytes.Split(b, []byte("\n")) {
+		var r gitx.Run
+		if json.Unmarshal(line, &r) != nil || r.ID <= 0 {
+			continue
+		}
+		n++
+		maxID, maxOp = max(maxID, r.ID), max(maxOp, r.OpID)
+		if r.Start.Before(a.state.GitConsoleCleared) {
+			continue
+		}
+		runs = append(runs, r)
+	}
+	gitx.Seed(maxID, maxOp)
+	if len(runs) > gitConsoleMax {
+		runs = runs[len(runs)-gitConsoleMax:]
+	}
+	a.gitRuns = runs
+	if n > 2*gitConsoleMax {
+		var buf bytes.Buffer
+		for _, r := range runs {
+			line, _ := json.Marshal(r)
+			buf.Write(append(line, '\n'))
+		}
+		os.WriteFile(gitConsolePath(a.home), buf.Bytes(), 0o600)
+	}
+}
+
+// saveGitRun 把完成的命令交给写文件的协程；nil 表示清空文件。写不过来就丢，记录不能卡住界面。
+func (a *app) saveGitRun(line []byte) {
+	if a.home == "" {
+		return
+	}
+	a.consoleOnce.Do(func() {
+		a.consoleQ = make(chan []byte, 256)
+		go func(path string, q <-chan []byte) {
+			for line := range q {
+				if line == nil {
+					os.WriteFile(path, nil, 0o600)
+					continue
+				}
+				f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
+				if err != nil {
+					continue
+				}
+				f.Write(append(line, '\n'))
+				f.Close()
+			}
+		}(gitConsolePath(a.home), a.consoleQ)
+	})
+	select {
+	case a.consoleQ <- line:
+	default:
+	}
+}
+
+// termGitRun 是常驻进程记下的一条终端 git 命令（git.trace）。
+type termGitRun struct {
+	Seq                  int64
+	Terminal, Agent, Dir string
+	Args                 []string
+	Start                time.Time
+	TookMs               int64
+	Code                 int
+}
+
+// addTermRuns 把终端里的命令按时间排进记录。编号取负的序号，和界面的不撞；
+// initial 是窗口打开后第一次取的历史，里面失败的不再标红点。
+func (a *app) addTermRuns(recs []termGitRun, initial bool) {
+	for _, x := range recs {
+		if x.Start.Before(a.state.GitConsoleCleared) {
+			continue
+		}
+		r := gitx.Run{ID: -x.Seq, Op: "终端", Dir: x.Dir, Args: x.Args, Start: x.Start,
+			Took: time.Duration(x.TookMs) * time.Millisecond, Done: true}
+		if x.Agent != "" {
+			r.Op = agentTitle(x.Agent) + " 终端"
+		}
+		switch {
+		case x.Code == -1:
+			r.Err = "没有正常结束"
+		case x.Code != 0:
+			r.Err = fmt.Sprintf("退出码 %d", x.Code)
+		}
+		if slices.ContainsFunc(a.gitRuns, func(o gitx.Run) bool { return o.ID == r.ID }) {
+			continue
+		}
+		if r.Err != "" && !initial {
+			a.consoleErr = true
+		}
+		i := len(a.gitRuns)
+		for i > 0 && a.gitRuns[i-1].Start.After(r.Start) {
+			i--
+		}
+		a.gitRuns = slices.Insert(a.gitRuns, i, r)
+	}
+	if len(a.gitRuns) > gitConsoleMax {
+		a.gitRuns = append(a.gitRuns[:0], a.gitRuns[len(a.gitRuns)-gitConsoleMax:]...)
+	}
 }
 
 // addGitRun 记下一条命令：同一个 ID 的结束记录换掉开始时那条。失败的命令在记录看不见时给标签标个红点。
 func (a *app) addGitRun(r gitx.Run) {
 	if r.Err != "" {
 		a.consoleErr = true
+	}
+	if r.Done {
+		line, _ := json.Marshal(r)
+		a.saveGitRun(line)
 	}
 	for i := len(a.gitRuns) - 1; i >= 0 && i >= len(a.gitRuns)-50; i-- {
 		if a.gitRuns[i].ID == r.ID {
@@ -126,11 +251,14 @@ func (a *app) gitConsole(c *ui.Context, v *filesView) {
 	a.consoleErr = false
 	ops := groupGitRuns(a.gitRuns)
 	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "所有项目里 Hive 执行的 Git 操作，和每个操作调用的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, "所有项目里 Hive 执行的 Git 操作和它们调用的 git 命令，以及 Hive 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", 26, 15)).Clicked() {
 			a.gitRuns = nil
 			ops = nil
+			a.state.GitConsoleCleared = time.Now()
+			a.saveState()
+			a.saveGitRun(nil)
 		}
 	})
 	if len(ops) == 0 {
@@ -233,4 +361,26 @@ func quoteArgs(args []string) string {
 		q[i] = shellQuote(s)
 	}
 	return strings.Join(q, " ")
+}
+
+// pollGitTrace 在轮询里调用：常驻进程的序号变了就取新的终端 git 命令。序号变小说明记录文件没了，从头取。
+func (a *app) pollGitTrace(ctx context.Context, seq int64) {
+	initial := !a.traceLoaded
+	a.traceLoaded = true
+	if seq == a.traceSeq {
+		return
+	}
+	after := a.traceSeq
+	if seq < after {
+		after = 0
+	}
+	var res struct {
+		Records []termGitRun
+		Seq     int64
+	}
+	if a.c.Call(ctx, "git.trace", map[string]any{"after": after}, &res) != nil {
+		return
+	}
+	a.traceSeq = res.Seq
+	a.update(func() { a.addTermRuns(res.Records, initial) })
 }
