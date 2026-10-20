@@ -102,3 +102,13 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 		t.Fatalf("conflict stop reported as error or success: err=%q toasts=%v", a.err, a.toasts)
 	}
 }
+
+func TestMergedBody(t *testing.T) {
+	if got := mergedBody("feat", nil); strings.Contains(got, "没提交") {
+		t.Fatalf("clean worktree: %q", got)
+	}
+	got := mergedBody("feat", []string{".env", "tmp/a.log", "tmp/b.log", "out.bin"})
+	if !strings.Contains(got, "没提交的文件一起删掉：.env、tmp/a.log、tmp/b.log 等 4 个文件。") {
+		t.Fatalf("untracked listed: %q", got)
+	}
+}

@@ -175,9 +175,11 @@ func (a *app) askMergeWorkspace(wsID string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				err := a.c.Call(ctx, "workspace.merge", map[string]any{"workspace": wsID}, nil)
-				var files []string
+				var files, untracked []string
 				if err != nil {
 					files = conflicts()
+				} else {
+					untracked = untrackedFiles(ctx, ws.Path)
 				}
 				a.update(func() {
 					a.refsChanged(ws.ProjectID)
@@ -187,7 +189,7 @@ func (a *app) askMergeWorkspace(wsID string) {
 					case err != nil:
 						a.err = err.Error()
 					default:
-						a.confirm("已合并到 "+base, "worktree 和分支 "+branch+" 还在，不需要了可以删掉。", "删除工作区", func() {
+						a.confirm("已合并到 "+base, mergedBody(branch, untracked), "删除工作区", func() {
 							a.call("workspace.rm", map[string]any{"workspace": wsID, "force": true, "deleteBranch": true}, nil, 30*time.Second)
 							a.refresh()
 						})
@@ -197,6 +199,29 @@ func (a *app) askMergeWorkspace(wsID string) {
 			})
 		})
 	}()
+}
+
+// untrackedFiles 是 worktree 里没提交的文件。合并要求已跟踪的文件干净，剩下的只会是未跟踪的；
+// 照 WebStorm 删工作区用 worktree remove --force，它们会一起删掉，删之前列出来。
+func untrackedFiles(ctx context.Context, dir string) []string {
+	st, err := gitx.ReadStatus(ctx, dir)
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, e := range st.Entries {
+		files = append(files, e.Path)
+	}
+	return files
+}
+
+// mergedBody 是合并成功后问要不要删工作区的说明。
+func mergedBody(branch string, untracked []string) string {
+	body := "worktree 和分支 " + branch + " 还在，不需要了可以删掉。"
+	if len(untracked) > 0 {
+		body += "删除时会连同没提交的文件一起删掉：" + fileList(untracked, 3) + "。"
+	}
+	return body
 }
 
 // fileList 列出前 n 个文件，多的写"等 N 个"。
