@@ -10,7 +10,7 @@ import (
 	"hive/internal/history"
 )
 
-// usageView 是右侧"技能与 MCP"面板的状态：当前终端的会话用到了哪些技能、MCP 工具和命令行程序。
+// usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具和命令行程序。
 // 会话文件在窗口进程里增量只读解析，不经过常驻进程。
 type usageView struct {
 	term    string // 统计的是哪个终端
@@ -76,7 +76,7 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollUsage(c, cur)
 	u := &a.usage
-	return a.rightPanel(c, "技能与 MCP", func() {
+	return a.rightPanel(c, "技能与工具", func() {
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(14).Children(func() {
 				switch {

@@ -1212,7 +1212,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.toggleLogPanel(w)
 		}
 	}
-	// 图片、技能与 MCP 跟着会话走，放在终端右上角（sessionButtons）；历史按项目，留在这里
+	// 图片、技能与工具跟着会话走，放在终端右上角（sessionButtons）；历史按项目，留在这里
 	a.panelButton(c, panelHistory, iconHistory, "历史会话")
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
@@ -1221,7 +1221,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 }
 
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
-// 这个会话粘贴过的图片、用到的技能与 MCP。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
+// 这个会话粘贴过的图片、用到的技能与工具。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	task := a.taskByWorker(cur.ID)
@@ -1269,7 +1269,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 			a.panelButton(c, panelImages, iconImage, "这个会话里生成和粘贴的图片")
 		}
 		if cur.Agent != "" {
-			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与 MCP")
+			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
 		}
 		ui.Box(c).Height(1).Margin(1, 4).Background(p.line)
 		if iconButtonSized(c.Key("session-fold"), iconChevron, "收起会话按钮", 28, 12).Clicked() {

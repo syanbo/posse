@@ -534,20 +534,20 @@ func TestFilesPanelToggleStays(t *testing.T) {
 	}
 }
 
-// 图片、技能与 MCP 跟着会话走：按钮常驻在 agent 终端右上角，普通终端没有。
+// 图片、技能与工具跟着会话走：按钮常驻在 agent 终端右上角，普通终端没有。
 func TestSessionButtons(t *testing.T) {
 	a := previewApp(t)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
-	r, ok := tt.Find("这个会话用到的技能与 MCP")
+	r, ok := tt.Find("这个会话用到的技能与工具")
 	if _, img := tt.Find("这个会话里生成和粘贴的图片"); !ok || !img {
 		t.Fatal("buttons should show on a claude terminal")
 	}
 	if r.X < 900 || r.Y > 120 {
 		t.Fatalf("buttons should sit at the terminal's top right: %v", r)
 	}
-	if err := tt.Click("这个会话用到的技能与 MCP"); err != nil {
+	if err := tt.Click("这个会话用到的技能与工具"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

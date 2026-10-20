@@ -449,7 +449,7 @@ func TestPreview(t *testing.T) {
 		a.staleApp = true
 		savePNG(t, newPreviewTester(a, dark), "stale-app-"+suffix+".png")
 
-		// 右侧"技能与 MCP"面板：刚读过一次，预览期间不会再去找会话文件
+		// 右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)
 		a.state.RightPanel = panelUsage
 		a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
