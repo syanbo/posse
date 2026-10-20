@@ -187,3 +187,32 @@ class BulletFix {
         (end == input.length ? input : Uint8List.sublistView(input, 0, end));
   }
 }
+
+/// flterm 在每次布局后都按算出来的格子数改本地终端，哪怕只是页面推入、键盘弹起途中的一瞬间很小的尺寸。
+/// 备用屏幕（Claude Code 的全屏界面）缩小时被裁掉的格子回不来，agent 又只重画变了的格子，
+/// 所以本地尺寸只要变过，回到能用的尺寸时就得重新订阅拿一份快照，哪怕和上次订阅的一样大。
+class ResizeGate {
+  int cols = 0;
+  int rows = 0;
+  var _dirty = false;
+
+  /// 记下 flterm 报上来的尺寸，返回要不要按 [cols]、[rows] 重新订阅。
+  bool report(int c, int r) {
+    if (c == cols && r == rows && !_dirty) return false;
+    // 太小的尺寸不订阅（常驻进程会按它排版），但本地内容已经被裁过了
+    if (c < 20 || r < 8) {
+      _dirty = true;
+      return false;
+    }
+    cols = c;
+    rows = r;
+    _dirty = false;
+    return true;
+  }
+
+  /// 电脑布局时本地终端按电脑的尺寸排，手机这块的列数另算（[set]），不走 [report]。
+  void set(int c, int r) {
+    cols = c;
+    rows = r;
+  }
+}

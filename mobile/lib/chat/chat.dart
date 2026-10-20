@@ -664,7 +664,14 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-                  if (_newBelow)
+                  if (_upload case (final i, final n, final done))
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 12,
+                      child: UploadBar(index: i, count: n, done: done),
+                    )
+                  else if (_newBelow)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -684,8 +691,6 @@ class _ChatScreenState extends State<ChatScreen> {
           else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
           if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
-          if (_upload case (final i, final n, final done))
-            UploadBar(index: i, count: n, done: done),
           ChatComposer(
             controller: _input,
             images: _pending,

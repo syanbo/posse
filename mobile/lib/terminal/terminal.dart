@@ -57,6 +57,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   PhoneRpc? _bound;
   var _cols = 0;
   var _rows = 0;
+  final _resizes = ResizeGate();
   var _heldCols = 0;
   var _heldRows = 0;
 
@@ -132,8 +133,25 @@ class _TerminalScreenState extends State<TerminalScreen>
     widget.model.addListener(_onModel);
   }
 
+  Animation<double>? _entry;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final entry = ModalRoute.of(context)?.animation;
+    if (entry == _entry) return;
+    _entry?.removeStatusListener(_onEntry);
+    _entry = entry?..addStatusListener(_onEntry);
+  }
+
+  /// 推入动画（连同从对话页过来时键盘收起）途中尺寸会连着变几次，停稳后再按电脑上的画面重来一遍。
+  void _onEntry(AnimationStatus status) {
+    if (status == AnimationStatus.completed) _schedule(fresh: true);
+  }
+
   @override
   void dispose() {
+    _entry?.removeStatusListener(_onEntry);
     _noticeTimer?.cancel();
     _gen++;
     WidgetsBinding.instance.removeObserver(this);
@@ -176,11 +194,10 @@ class _TerminalScreenState extends State<TerminalScreen>
     // 电脑布局把控件排成桌面的格子，这里报上来的是电脑的列数。记成手机视口的话，
     // 关掉电脑布局会按桌面宽度去 HoldSize。
     if (_desk) return;
-    if (cols < 20 || rows < 8) return;
-    if (cols == _cols && rows == _rows) return;
+    if (!_resizes.report(cols, rows)) return;
     _cols = cols;
     _rows = rows;
-    _schedule();
+    _schedule(fresh: true);
   }
 
   /// 电脑布局时 flterm 的 onResize 不能用，手机这块区域的列数从布局算，留给关掉时订阅。
@@ -199,6 +216,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (cols == _cols && rows == _rows) return;
       _cols = cols;
       _rows = rows;
+      _resizes.set(cols, rows);
       _schedule();
     });
   }
@@ -778,8 +796,6 @@ class _TerminalScreenState extends State<TerminalScreen>
       body: Column(
         children: [
           if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
-          if (_upload case final done?)
-            UploadBar(index: 0, count: 1, done: done),
           Expanded(
             child: Padding(
               padding: _cropGrok ? EdgeInsets.zero : _termPadding,
@@ -790,6 +806,13 @@ class _TerminalScreenState extends State<TerminalScreen>
                     fit: StackFit.expand,
                     children: [
                       _deskView(c, constraints),
+                      if (_upload case final done?)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 12,
+                          child: UploadBar(index: 0, count: 1, done: done),
+                        ),
                       if (_showCopy)
                         Positioned(
                           top: 8,

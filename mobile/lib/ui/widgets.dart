@@ -666,7 +666,8 @@ class NoticeBar extends StatelessWidget {
   }
 }
 
-/// 发图片时输入框上面的进度：第几张、传了多少。中性色，和报错的 [NoticeBar] 区分开。
+/// 发图片的进度：第几张、传了多少。浮在内容上面（放进 Stack 用），出现和消失都不挪动列表或终端，
+/// 终端也就不会因此改尺寸、让 agent 重排。
 class UploadBar extends StatelessWidget {
   const UploadBar({
     super.key,
@@ -688,40 +689,58 @@ class UploadBar extends StatelessWidget {
     final which = count > 1 ? ' ${index + 1}/$count' : '';
     // 整体进度按张数摊开，多张时进度条一路走到底，不在每张开头跳回去
     final overall = count == 0 ? 0.0 : (index + done) / count;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '正在发送图片$which',
-                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
-                ),
+    return IgnorePointer(
+      child: Center(
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          decoration: BoxDecoration(
+            color: c.card,
+            borderRadius: BorderRadius.circular(Rd.card),
+            border: Border.all(color: c.line),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: c.dark ? 0.4 : 0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
-              Text(
-                '${(done * 100).round()}%',
-                style: TextStyle(
-                  fontSize: Fs.caption,
-                  color: c.muted,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '正在发送图片$which',
+                      style: TextStyle(fontSize: Fs.caption, color: c.text),
+                    ),
+                  ),
+                  Text(
+                    '${(done * 100).round()}%',
+                    style: TextStyle(
+                      fontSize: Fs.caption,
+                      color: c.muted,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: overall,
+                  minHeight: 3,
+                  color: c.accent,
+                  backgroundColor: c.fill,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: overall,
-              minHeight: 3,
-              color: c.accent,
-              backgroundColor: c.fill,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

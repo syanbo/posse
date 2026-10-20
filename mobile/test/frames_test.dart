@@ -117,4 +117,17 @@ void _overlapTest() {
       expect(asm.add(_frame(termOpOutput, 2, [0x63]))!.bytes, [0x63]);
     },
   );
+
+  test('a size flterm shrank through resubscribes even when it comes back the same', () {
+    final gate = ResizeGate();
+    expect(gate.report(49, 44), isTrue);
+    expect(gate.report(49, 44), isFalse);
+    // 页面推入、键盘动画途中一瞬间很小：不订阅，但本地内容已被裁
+    expect(gate.report(49, 3), isFalse);
+    expect(gate.report(12, 0), isFalse);
+    expect(gate.report(49, 44), isTrue);
+    expect(gate.report(49, 44), isFalse);
+    expect(gate.report(49, 22), isTrue);
+    expect((gate.cols, gate.rows), (49, 22));
+  });
 }
