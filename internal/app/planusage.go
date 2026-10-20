@@ -134,7 +134,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 				color = t.Danger
 			}
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
-				Tooltip(fmt.Sprintf("%s %s %s %s", agentTitle(u.Agent), windowLabel(w.Minutes), a.shownWord(), percentText(a.shown(w)))).
+				Tooltip(fmt.Sprintf("%s %s %s %s", agentTitle(u.Agent), windowName(w), a.shownWord(), percentText(a.shown(w)))).
 				Children(func() {
 					agentTile(c, u.Agent, 14)
 					ui.Text(c, windowShort(w.Minutes)).FontSize(11).TextColor(t.TextMuted).SingleLine()
@@ -148,20 +148,53 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 	ui.Popover(c, b, &a.planOpen, func() { a.planPanel(c, shown) })
 }
 
-// headWindow 是状态栏里代表这一家的窗口：总额度里有 5 小时就是它，否则是第一个。
-func headWindow(u usage.Usage) usage.Window {
+// planWindows 是这一家要显示的窗口。Cursor 有分池时照它的控制台和 Magpie 只列两池：
+// 总的 totalPercentUsed 按 Auto 池折算，远低于两池，和它们并排看着像算错了。
+func planWindows(u usage.Usage) []usage.Window {
+	if u.Agent != "cursor" {
+		return u.Windows
+	}
+	var pools []usage.Window
 	for _, w := range u.Windows {
+		if w.Name != "" {
+			pools = append(pools, w)
+		}
+	}
+	if len(pools) == 0 {
+		return u.Windows
+	}
+	return pools
+}
+
+// headWindow 是状态栏里代表这一家的窗口：总额度里有 5 小时就是它；只有分池时取用得最多的一池，否则是第一个。
+func headWindow(u usage.Usage) usage.Window {
+	ws := planWindows(u)
+	for _, w := range ws {
 		if w.Name == "" && windowLabel(w.Minutes) == "5 小时" {
 			return w
 		}
 	}
-	return u.Windows[0]
+	head := ws[0]
+	if head.Name != "" {
+		for _, w := range ws {
+			if w.Percent > head.Percent {
+				head = w
+			}
+		}
+	}
+	return head
 }
 
-// windowName 是详情里窗口的名字：分池带上池名，"Fable 每周"、"Auto 每月"。
+// cursorPools 是 Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
+var cursorPools = map[string]string{"Auto": "Cursor 模型", "API": "其他模型"}
+
+// windowName 是详情里窗口的名字：分池带上池名，"Fable 每周"；Cursor 的两池只写池名，重置时间在同一行。
 func windowName(w usage.Window) string {
 	if w.Name == "" {
 		return windowLabel(w.Minutes)
+	}
+	if n, ok := cursorPools[w.Name]; ok {
+		return n
 	}
 	return w.Name + " " + windowLabel(w.Minutes)
 }
@@ -171,7 +204,8 @@ func money(cents float64) string {
 	return fmt.Sprintf("$%.2f", cents/100)
 }
 
-// planFacts 是详情里窗口下面的几行：套餐内金额、按需用量、本周用量用在哪、重置卡。
+// planFacts 是详情里窗口下面的几行：按需用量、本周用量用在哪、重置卡。
+// Cursor 套餐内的金额（totalSpend / limit）不写：它和两池的百分比不是同一个分母，Cursor 自己的控制台也不列。
 // 和整家的读数不是同一份的，后面写上是多久前的。
 func planFacts(u usage.Usage) []string {
 	stale := func(at int64) string {
@@ -181,9 +215,6 @@ func planFacts(u usage.Usage) []string {
 		return ""
 	}
 	var out []string
-	if sp := u.Spend; sp != nil && sp.Limit > 0 {
-		out = append(out, fmt.Sprintf("套餐内已用 %s，额度 %s", money(sp.Used), money(sp.Limit)))
-	}
 	if od := u.OnDemand; od != nil {
 		line := "按需用量 " + money(od.Used)
 		if od.Limit > 0 {
@@ -284,7 +315,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(11).TextColor(t.TextMuted).Shrink(0).
 						Tooltip("读数来自 agent 最近一次运行：" + time.UnixMilli(u.UpdatedAt).Local().Format("1月2日 15:04"))
 				})
-				for j, w := range u.Windows {
+				for j, w := range planWindows(u) {
 					color := t.Text
 					if w.Percent >= planUrgent {
 						color = t.Danger

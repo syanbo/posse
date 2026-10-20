@@ -71,9 +71,13 @@ void main() {
               AgentUsage(
                 agent: 'cursor',
                 plan: 'Ultra',
-                windows: const [UsageWindow(percent: 8, minutes: 44640)],
+                windows: const [
+                  UsageWindow(percent: 3, minutes: 44640),
+                  UsageWindow(percent: 1, minutes: 44640, name: 'Auto'),
+                  UsageWindow(percent: 77, minutes: 44640, name: 'API'),
+                ],
                 updatedAt: now,
-                spend: const UsageMoney(used: 3255, limit: 40000),
+                spend: const UsageMoney(used: 8452, limit: 40000),
               ),
             ],
           ),
@@ -85,9 +89,15 @@ void main() {
     await tester.pump();
     expect(find.text('剩余 14%'), findsOneWidget);
     usageRemaining.value = false;
+    await tester.pump();
     expect(find.text('每周'), findsOneWidget);
     expect(find.text('Ultra'), findsOneWidget);
-    expect(find.text('套餐内已用 \$32.55，额度 \$400.00'), findsOneWidget);
+    // Cursor 照它的控制台只列两池，不写总的百分比和套餐内金额
+    expect(find.text('Cursor 模型'), findsOneWidget);
+    expect(find.text('其他模型'), findsOneWidget);
+    expect(find.text('已用 77%'), findsOneWidget);
+    expect(find.text('已用 3%'), findsNothing);
+    expect(find.textContaining('套餐内已用'), findsNothing);
   });
 
   testWidgets('a tall usage sheet still closes', (tester) async {
@@ -158,7 +168,8 @@ void main() {
       ],
     });
     expect(windowName(u[0].windows[1]), 'Fable 每周');
-    expect(u[0].mainWindows.length, 1);
+    expect(u[0].shownWindows.length, 2);
+    expect(u[0].headWindow.name, '');
     final now = DateTime.fromMillisecondsSinceEpoch(3600000);
     expect(usageFacts(u[0], now).single, startsWith('本周用量用在 Claude Code 92%（'));
     expect(usageFacts(u[1], now).single, startsWith('重置卡 3 张，最早一张 '));

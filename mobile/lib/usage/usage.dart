@@ -121,19 +121,39 @@ class AgentUsage {
     );
   }
 
-  /// 状态栏、首页卡片用的总额度窗口。
-  List<UsageWindow> get mainWindows =>
-      windows.where((w) => w.name.isEmpty).toList();
+  /// 要显示的窗口，和桌面端 planWindows 一致：Cursor 有分池时照它的控制台只列两池，
+  /// 总的百分比按 Auto 池折算，远低于两池，并排看着像算错了。
+  List<UsageWindow> get shownWindows {
+    if (agent != 'cursor') return windows;
+    final pools = windows.where((w) => w.name.isNotEmpty).toList();
+    return pools.isEmpty ? windows : pools;
+  }
+
+  /// 首页卡片代表这一家的窗口，和桌面状态栏一致：总额度里有 5 小时就是它；
+  /// 只有分池时取用得最多的一池，否则是第一个。
+  UsageWindow get headWindow {
+    final ws = shownWindows;
+    for (final w in ws) {
+      if (w.name.isEmpty && windowLabel(w.minutes) == '5 小时') return w;
+    }
+    if (ws.first.name.isEmpty) return ws.first;
+    return ws.reduce((a, b) => b.percent > a.percent ? b : a);
+  }
 }
 
-/// 详情里窗口的名字：分池带上池名，"Fable 每周"、"Auto 每月"。
-String windowName(UsageWindow w) => w.name.isEmpty
-    ? windowLabel(w.minutes)
-    : '${w.name} ${windowLabel(w.minutes)}';
+/// Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
+const _cursorPools = {'Auto': 'Cursor 模型', 'API': '其他模型'};
+
+/// 详情里窗口的名字：分池带上池名，"Fable 每周"；Cursor 的两池只写池名，重置时间在同一行。
+String windowName(UsageWindow w) {
+  if (w.name.isEmpty) return windowLabel(w.minutes);
+  return _cursorPools[w.name] ?? '${w.name} ${windowLabel(w.minutes)}';
+}
 
 String _money(double cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 
-/// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内金额、按需用量、本周用量用在哪、重置卡。
+/// 详情里窗口下面的几行，和桌面端 planFacts 一致：按需用量、本周用量用在哪、重置卡。
+/// Cursor 套餐内的金额不写：它和两池的百分比不是同一个分母，Cursor 自己的控制台也不列。
 /// 和整家的读数不是同一份的，后面写上是多久前的。
 List<String> usageFacts(AgentUsage u, DateTime now) {
   String stale(DateTime? at) =>
@@ -141,10 +161,6 @@ List<String> usageFacts(AgentUsage u, DateTime now) {
       ? '（${agoText(at, now)}的读数）'
       : '';
   final out = <String>[];
-  final sp = u.spend;
-  if (sp != null && sp.limit > 0) {
-    out.add('套餐内已用 ${_money(sp.used)}，额度 ${_money(sp.limit)}');
-  }
   final od = u.onDemand;
   if (od != null) {
     final limit = od.limit > 0 ? '，上限 ${_money(od.limit)}' : '';
@@ -370,12 +386,7 @@ class _UsageChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final main = usage.mainWindows;
-    final pool = main.isEmpty ? usage.windows : main;
-    final w = pool.firstWhere(
-      (w) => windowLabel(w.minutes) == '5 小时',
-      orElse: () => pool.first,
-    );
+    final w = usage.headWindow;
     final urgent = w.percent >= usageUrgent;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -527,7 +538,7 @@ class UsageSheet extends StatelessWidget {
                   ),
                 ],
               ),
-              for (final w in u.windows) ...[
+              for (final w in u.shownWindows) ...[
                 const SizedBox(height: 12),
                 Row(
                   children: [
