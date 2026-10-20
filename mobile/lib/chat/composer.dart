@@ -199,12 +199,13 @@ class ChatComposer extends StatelessWidget {
                 children: [
                   IconButton(
                     tooltip: '发送图片',
-                    // 默认 48 的点按区把整条撑高，收到和发送按钮一样 34
-                    constraints: const BoxConstraints.tightFor(
-                      width: 34,
-                      height: 34,
+                    // Material 会把点按区补到 48、撑高整条，收到和发送按钮一样 34
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size.square(34),
+                      minimumSize: const Size.square(34),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    padding: EdgeInsets.zero,
                     onPressed: sending || !connected ? null : onPickImage,
                     icon: Icon(
                       Icons.image_outlined,
@@ -233,7 +234,7 @@ class ChatComposer extends StatelessWidget {
                         focusedBorder: InputBorder.none,
                         isDense: true,
                         // 单行时和 34 高的发送按钮一样高
-                        contentPadding: const EdgeInsets.fromLTRB(6, 7, 4, 7),
+                        contentPadding: const EdgeInsets.fromLTRB(6, 5, 4, 6),
                       ),
                     ),
                   ),
