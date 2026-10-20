@@ -92,12 +92,12 @@ void main() {
     await tester.pump();
     expect(find.text('每周'), findsOneWidget);
     expect(find.text('Ultra'), findsOneWidget);
-    // Cursor 照它的控制台只列两池，不写总的百分比和套餐内金额
+    // Cursor 照它的控制台只列两池，不写总的百分比
     expect(find.text('Cursor 模型'), findsOneWidget);
     expect(find.text('其他模型'), findsOneWidget);
     expect(find.text('已用 77%'), findsOneWidget);
     expect(find.text('已用 3%'), findsNothing);
-    expect(find.textContaining('套餐内已用'), findsNothing);
+    expect(find.text('套餐内用量 \$84.52 / \$400.00（21%）'), findsOneWidget);
   });
 
   testWidgets('a tall usage sheet still closes', (tester) async {

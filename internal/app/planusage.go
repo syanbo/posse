@@ -204,8 +204,7 @@ func money(cents float64) string {
 	return fmt.Sprintf("$%.2f", cents/100)
 }
 
-// planFacts 是详情里窗口下面的几行：按需用量、本周用量用在哪、重置卡。
-// Cursor 套餐内的金额（totalSpend / limit）不写：它和两池的百分比不是同一个分母，Cursor 自己的控制台也不列。
+// planFacts 是详情里窗口下面的几行：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 // 和整家的读数不是同一份的，后面写上是多久前的。
 func planFacts(u usage.Usage) []string {
 	stale := func(at int64) string {
@@ -215,6 +214,10 @@ func planFacts(u usage.Usage) []string {
 		return ""
 	}
 	var out []string
+	if sp := u.Spend; sp != nil && sp.Limit > 0 {
+		// Cursor 的套餐内用量按 API 价折成金额（Ultra 月费 $200，含 $400），和两池的百分比分母不同
+		out = append(out, fmt.Sprintf("套餐内用量 %s / %s（%.0f%%）", money(sp.Used), money(sp.Limit), sp.Used/sp.Limit*100))
+	}
 	if od := u.OnDemand; od != nil {
 		line := "按需用量 " + money(od.Used)
 		if od.Limit > 0 {

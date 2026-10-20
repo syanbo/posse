@@ -152,8 +152,7 @@ String windowName(UsageWindow w) {
 
 String _money(double cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 
-/// 详情里窗口下面的几行，和桌面端 planFacts 一致：按需用量、本周用量用在哪、重置卡。
-/// Cursor 套餐内的金额不写：它和两池的百分比不是同一个分母，Cursor 自己的控制台也不列。
+/// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 /// 和整家的读数不是同一份的，后面写上是多久前的。
 List<String> usageFacts(AgentUsage u, DateTime now) {
   String stale(DateTime? at) =>
@@ -161,6 +160,12 @@ List<String> usageFacts(AgentUsage u, DateTime now) {
       ? '（${agoText(at, now)}的读数）'
       : '';
   final out = <String>[];
+  final sp = u.spend;
+  if (sp != null && sp.limit > 0) {
+    out.add(
+      '套餐内用量 ${_money(sp.used)} / ${_money(sp.limit)}（${(sp.used / sp.limit * 100).round()}%）',
+    );
+  }
   final od = u.onDemand;
   if (od != null) {
     final limit = od.limit > 0 ? '，上限 ${_money(od.limit)}' : '';

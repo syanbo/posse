@@ -86,16 +86,29 @@ func FetchCursor(ctx context.Context, client *http.Client, token string, now tim
 	}
 	// 套餐名拿不到不影响用量
 	if raw, err := cursorCall(ctx, client, token, "GetPlanInfo"); err == nil {
-		var p struct {
-			PlanInfo struct {
-				PlanName string `json:"planName"`
-			} `json:"planInfo"`
-		}
-		if json.Unmarshal(raw, &p) == nil {
-			u.Plan = strings.TrimSpace(p.PlanInfo.PlanName)
-		}
+		u.Plan = cursorPlan(raw)
 	}
 	return u, nil
+}
+
+// cursorPlan 是套餐名带月费，照 Cursor 控制台写成 "Ultra $200/月"。
+// 月费和套餐内用量（planUsage.limit，Ultra 是 $400）不是一回事，放在套餐名旁边免得混。
+func cursorPlan(raw []byte) string {
+	var p struct {
+		PlanInfo struct {
+			PlanName string `json:"planName"`
+			Price    string `json:"price"`
+		} `json:"planInfo"`
+	}
+	if json.Unmarshal(raw, &p) != nil {
+		return ""
+	}
+	name := strings.TrimSpace(p.PlanInfo.PlanName)
+	price := strings.TrimSpace(p.PlanInfo.Price)
+	if name == "" || price == "" {
+		return name
+	}
+	return name + " " + strings.Replace(price, "/mo", "/月", 1)
 }
 
 func cursorCall(ctx context.Context, client *http.Client, token, method string) ([]byte, error) {

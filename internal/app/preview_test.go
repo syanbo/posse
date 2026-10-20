@@ -677,7 +677,7 @@ func previewPlan(now time.Time) *planStatus {
 			Resets: &usage.Resets{Count: 3, ExpiresAt: at(80 * time.Hour)}},
 		{Agent: "grok", Plan: "SuperGrok Heavy", UpdatedAt: at(-3 * time.Hour), Windows: []usage.Window{
 			{Percent: 53, Minutes: 7 * 24 * 60, ResetsAt: at(90 * time.Hour)}}},
-		{Agent: "cursor", Plan: "Ultra", UpdatedAt: at(-40 * time.Minute), Windows: []usage.Window{
+		{Agent: "cursor", Plan: "Ultra $200/月", UpdatedAt: at(-40 * time.Minute), Windows: []usage.Window{
 			{Percent: 10.3, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour)},
 			{Percent: 2.5, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour), Name: "Auto"},
 			{Percent: 18.2, Minutes: 31 * 24 * 60, ResetsAt: at(20 * 24 * time.Hour), Name: "API"}},
