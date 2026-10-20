@@ -128,6 +128,11 @@ func (d *Daemon) onTitle(id, title string) {
 	}
 	if name == "grok" {
 		go d.grokUsage(false)
+		if n, ok := agent.GrokName(title); ok {
+			s.mu.Lock()
+			s.grokName = n
+			s.mu.Unlock()
+		}
 	}
 	status := agent.TitleStatus
 	if !hooked {

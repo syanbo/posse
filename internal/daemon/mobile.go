@@ -67,8 +67,19 @@ func (h mobileHost) State() mobile.State {
 			a := s.Agent()
 			// 起过名的会话用会话名当标签名，和桌面一样
 			title := s.Title()
-			if a.Title != "" && s.agentName() != "" {
+			switch name := s.agentName(); {
+			case a.Title != "" && name != "":
 				title = a.Title
+			case name == "grok":
+				s.mu.Lock()
+				title = s.grokName
+				s.mu.Unlock()
+				if n, ok := agent.GrokName(s.Title()); ok {
+					title = n
+				}
+				if title == "" {
+					title = "grok"
+				}
 			}
 			mw.Terminals = append(mw.Terminals, mobile.Terminal{
 				ID: s.ID, Title: title, Agent: s.agentName(), Status: a.Status, StatusAt: a.At, Message: a.Message,

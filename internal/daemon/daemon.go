@@ -55,6 +55,8 @@ type session struct {
 	hooked  bool   // agent 是 hive 启动的那个，带着注入的 hooks
 	agentPg int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
 	fg      int    // 上次检查时的前台进程组
+	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
+	grokName string
 }
 
 // markHooked 在收到 hook 事件时调用：用户在 shell 里经 hive 的同名脚本手动启动的 agent 也带着 hooks，

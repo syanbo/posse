@@ -86,6 +86,23 @@ func TestTitleStatus(t *testing.T) {
 }
 
 // 标题取自 grok 1.0.58 实际运行时的终端标题
+func TestGrokName(t *testing.T) {
+	cases := []struct {
+		title, want string
+		ok          bool
+	}{
+		{"grok", "", true},
+		{"会话拖放文件 - grok", "会话拖放文件", true},
+		{"⠹ - Waiting for response… - grok", "", false},
+		{"Action Required - grok", "", false},
+	}
+	for _, c := range cases {
+		if got, ok := GrokName(c.title); got != c.want || ok != c.ok {
+			t.Errorf("GrokName(%q) = %q, %v", c.title, got, ok)
+		}
+	}
+}
+
 func TestGrokTitleStatus(t *testing.T) {
 	cases := []struct{ title, current, want string }{
 		{"grok", StatusStarting, StatusIdle},

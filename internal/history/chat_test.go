@@ -382,6 +382,7 @@ func TestChatGrok(t *testing.T) {
 		`{"type":"reasoning","summary":[],"encrypted_content":"xx"}`,
 		`{"type":"assistant","model_id":"grok-4.7-build","content":"先读当前配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{\"target_file\":\"~/.config/ghostty/config\"}"}]}`,
 		`{"type":"tool_result","tool_call_id":"call-a-1","content":"theme = Mocha"}`,
+		`{"type":"user","content":[{"type":"text","text":"[Image extracted from tool result above]"},{"type":"image","url":"data:image/png;base64,AA=="}],"synthetic_reason":"system_reminder"}`,
 		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"hive"}}}`,
 	)
 	writeFile(t, filepath.Join(dir, "updates.jsonl"),

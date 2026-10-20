@@ -188,6 +188,17 @@ func codexStatus(event string, p hookPayload) string {
 	return ""
 }
 
+// GrokName 从 grok 的终端标题里取会话名（去掉末尾的 " - grok"）。工作中、待处理时标题是状态
+// （"⠹ - Waiting for response… - grok"），不是名字，返回 false。
+func GrokName(title string) (string, bool) {
+	t := strings.TrimSpace(title)
+	if r, _ := utf8.DecodeRuneInString(t); r >= 0x2800 && r <= 0x28FF || strings.Contains(strings.ToLower(t), "action required") {
+		return "", false
+	}
+	t = strings.TrimSpace(strings.TrimSuffix(t, "grok"))
+	return strings.TrimSpace(strings.TrimSuffix(t, " -")), true
+}
+
 // TitleStatus 用终端标题补 hooks 的盲区：Claude 被 Esc 中断时不发 hook，
 // Codex 本轮出错时不发 hook，grok 没有注入 hooks。只在标题给出明确信号时返回。
 func TitleStatus(agentName, title, current string) (string, bool) {

@@ -781,6 +781,10 @@ func decodeGrokLine(raw []byte, off int64, gt *grokTimes, last *int64) *ChatMess
 	role := ""
 	switch r.Type {
 	case "user":
+		// grok 把工具结果里的截图以用户身份另发一条（"[Image extracted from tool result above]"），不是用户说的
+		if r.Synthetic != "" {
+			return nil
+		}
 		text := grokUserText(textOf(r.Content))
 		if text == "" {
 			return nil

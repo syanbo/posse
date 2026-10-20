@@ -858,6 +858,7 @@ type grokRecord struct {
 	ModelID     string          `json:"model_id"`
 	ToolCallID  string          `json:"tool_call_id"`
 	ToolCalls   []grokToolCall  `json:"tool_calls"`
+	Synthetic   string          `json:"synthetic_reason"`
 	Kind        struct {
 		ToolType string `json:"tool_type"`
 		Action   struct {
