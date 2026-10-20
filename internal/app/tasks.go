@@ -298,21 +298,6 @@ func (a *app) askCloseTask(t taskInfo) {
 	})
 }
 
-func (a *app) askMerge(t taskInfo) {
-	a.confirm("把 "+t.Branch+" 合并到 "+t.BaseRef+"？", "在项目目录里以 merge commit 合入。项目目录必须在 "+t.BaseRef+" 分支上，两边都不能有未提交的改动（未跟踪的新文件不算）；冲突时会自动还原。", "合并", func() {
-		if a.call("workspace.merge", map[string]any{"workspace": t.WorkspaceID}, nil, 2*time.Minute) != nil {
-			return
-		}
-		a.win.Update(func() {
-			a.confirm("已合并到 "+t.BaseRef, "worktree 和分支 "+t.Branch+" 还在，不需要了可以删掉。", "删除工作区", func() {
-				a.call("workspace.rm", map[string]any{"workspace": t.WorkspaceID, "force": true, "deleteBranch": true}, nil, 30*time.Second)
-				a.refresh()
-			})
-		})
-		a.refresh()
-	})
-}
-
 // viewDiff 在 worktree 里开一个终端显示相对分叉点的改动，看完留在 shell 里。
 func (a *app) viewDiff(t taskInfo) {
 	sh := os.Getenv("SHELL")
@@ -616,7 +601,7 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 				a.viewDiff(task)
 			}
 			if task.Status != "running" && pressable(textButton(c, "合并到 "+task.BaseRef)).Clicked() {
-				a.askMerge(task)
+				a.askMergeWorkspace(task.WorkspaceID)
 			}
 		}
 		ui.Spacer(c)

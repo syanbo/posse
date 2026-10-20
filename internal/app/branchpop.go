@@ -78,6 +78,8 @@ func (a *app) loadBranches(v *filesView) {
 // trackInfo 是当前分支相对跟踪的远端分支的传入、传出提交数。
 type trackInfo struct {
 	ahead, behind int
+	base          gitx.Divergence // worktree 相对基准分支，见 worktreebase.go
+	baseOK        bool
 	poll          panelPoll
 }
 
@@ -96,11 +98,13 @@ func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
 	}
 	a.autoFetch(c, w, tr)
 	if tr.poll.due(c, trackRefresh) {
-		dir := w.Path
+		dir, ws, prev := w.Path, *w, tr.base
 		go func() {
 			ahead, behind, _ := gitx.AheadBehind(context.Background(), dir)
+			base, baseOK := pollBase(context.Background(), &ws, &prev)
 			a.update(func() {
 				tr.ahead, tr.behind = ahead, behind
+				tr.base, tr.baseOK = base, baseOK
 				tr.poll.done()
 			})
 		}()
@@ -202,7 +206,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
 	b := ui.Row(c.Key("branch")).Height(26).Padding(0, 6, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(1).
-		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip(trackTip(w.Branch, tr))
+		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip(trackTip(w.Branch, tr) + baseTip(w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
 	switch {

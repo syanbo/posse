@@ -34,6 +34,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	a.changesHeader(c, w, v)
+	a.baseRow(c, w, v)
 	a.operationBanner(c, w, v)
 	// 分页：提交看文件改动和提交框，储藏看 stash（照 WebStorm 的"储藏"标签）
 	var files, stashes []changeRow
@@ -367,21 +368,47 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 
 func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	t := c.Theme()
+	// 储藏是整个仓库共用的：别的 worktree 里存的也列在这里，标出分支，取回前先确认
+	other := ""
+	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
+		other = s.Branch
+	}
 	row := ui.Row(c.Key("stash:"+s.Ref)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		ui.Icon(c, iconShelve).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, stashTitle(s.Message)).FontSize(13).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
+		if other != "" {
+			ui.Text(c, other).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip("在分支 " + other + " 上存的")
+		}
 		ui.Text(c, ago(s.When)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 	})
+	owner := a.stashOwner(v, other)
+	take := func(what string, fn func(ctx context.Context, root string) error) {
+		if other == "" {
+			a.gitDo(v, what, fn)
+			return
+		}
+		where := "分支 " + other
+		if owner != nil {
+			where = "工作区 " + displayName(owner) + "（分支 " + other + "）"
+		}
+		a.confirm(what+"别的分支的储藏？", "这条储藏是在"+where+"里存的，"+what+"会把那边的改动放进当前目录。", "仍然"+what, func() {
+			a.update(func() { a.gitDo(v, what, fn) })
+		})
+	}
 	menuButton(c, row, func(m *popMenu) {
+		if owner != nil && m.Item("切到工作区 "+displayName(owner)).Chosen() {
+			a.selected, a.revealSel = owner.ID, true
+			a.openFilesPanel(owner, sideChanges).git.tab = 1
+		}
 		// 照 WebStorm 储藏标签的右键：弹出（取回并删掉）、应用（储藏留着）、删除
 		if m.Item("弹出").Chosen() {
-			a.gitDo(v, "弹出储藏", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
+			take("弹出储藏", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
 		}
 		if m.Item("应用").Chosen() {
-			a.gitDo(v, "应用储藏", func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
+			take("应用储藏", func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
 		}
 		m.Separator()
 		if m.Item("删除…").Chosen() {
@@ -392,6 +419,20 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 			})
 		}
 	})
+}
+
+// stashOwner 找同一项目里当前检出 branch 的工作区；没有（分支没人检出、不是同一项目）为 nil。
+func (a *app) stashOwner(v *filesView, branch string) *workspace {
+	cur := a.workspace(v.wsID)
+	if branch == "" || cur == nil {
+		return nil
+	}
+	for _, w := range a.byProject[cur.ProjectID] {
+		if w.ID != cur.ID && w.Branch == branch {
+			return a.workspace(w.ID)
+		}
+	}
+	return nil
 }
 
 var opNames = map[string]string{"rebase": "rebase", "merge": "合并", "cherry-pick": "cherry-pick", "revert": "revert"}

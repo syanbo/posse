@@ -200,6 +200,17 @@ func previewGit(t *testing.T, a *app) {
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
+// previewWorktree 把 w1 换成和基准分支有冲突的 worktree，打开改动页的 tab 分页。
+func previewWorktree(t *testing.T, a *app, tab int) {
+	worktreeWorkspace(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := openChanges(t, a, tt)
+	until(t, tt, "base", func() bool { return a.track["w1"] != nil && a.track["w1"].baseOK })
+	v.git.tab = tab
+	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+	a.track["w1"].poll.at = time.Now().Add(time.Hour)
+}
+
 // previewRollback 在几层目录里各改几个文件，打开批量回滚对话框，收起其中一个目录。
 func previewRollback(t *testing.T, a *app) {
 	root := gitWorkspace(t, a)
@@ -586,6 +597,14 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewGit(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-changes-"+suffix+".png")
+
+		// worktree 的改动页：相对基准分支的提交数、会冲突的文件，同步和合并；储藏分页里别的分支存的标出分支
+		a = previewApp(t)
+		previewWorktree(t, a, 0)
+		savePNG(t, newPreviewTester(a, dark), "git-worktree-"+suffix+".png")
+		a = previewApp(t)
+		previewWorktree(t, a, 1)
+		savePNG(t, newPreviewTester(a, dark), "git-worktree-stash-"+suffix+".png")
 
 		// 批量回滚对话框：按目录排的文件树
 		a = previewApp(t)

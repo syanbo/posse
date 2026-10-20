@@ -741,6 +741,12 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 			a.err = "在访达中打开失败：" + err.Error()
 		}
 	}
+	if hasBase(&w) {
+		m.Separator()
+		if m.Item("合并到 " + w.BaseRef + "…").Chosen() {
+			a.askMergeWorkspace(w.ID)
+		}
+	}
 	m.Separator()
 	if m.Item("在此项目新建工作区…").Chosen() {
 		a.openNewWorkspace()

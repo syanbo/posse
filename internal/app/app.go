@@ -56,8 +56,8 @@ type terminalInfo struct {
 type navTarget struct{ ws, term string }
 
 type workspace struct {
-	ID, ProjectID, Name, Path, Kind, Branch, Project, Label string
-	Terminals                                               []terminalInfo
+	ID, ProjectID, Name, Path, Kind, Branch, BaseRef, Project, Label string
+	Terminals                                                        []terminalInfo
 }
 
 type taskInfo struct {
