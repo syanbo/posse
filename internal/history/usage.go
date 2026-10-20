@@ -23,24 +23,39 @@ type MCPUsage struct {
 	Tools  []UsageItem `json:"tools"`
 }
 
-// Usage 是一个会话用到的技能和 MCP 工具，按次数从多到少。
+// CLIUsage 是一个命令行程序在几条命令里出现过，Source 见 SourceHomebrew 等。
+type CLIUsage struct {
+	Name   string `json:"name"`
+	Source string `json:"source,omitempty"`
+	Count  int    `json:"count"`
+}
+
+// Usage 是一个会话用到的技能、MCP 工具和命令行程序，按次数从多到少。
 type Usage struct {
 	Skills []UsageItem `json:"skills"`
 	MCP    []MCPUsage  `json:"mcp"`
+	CLI    []CLIUsage  `json:"cli,omitempty"`
 	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），只留最近 maxUsageEvents 条
 	Events []UsageEvent `json:"events,omitempty"`
 }
 
-// UsageEvent 是一次使用：技能（Skill 非空）或 MCP 工具（Server、Tool）。At 取自那一行记录，
+// UsageEvent 是一次使用：技能（Skill 非空）、MCP 工具（Server、Tool）或命令行程序（CLI、Source，
+// Command 是它所在的那条命令，截到 maxEventCommand 个字符）。At 取自那一行记录，
 // grok、cursor 的会话文件不带时间，为零值。
 type UsageEvent struct {
-	At     time.Time `json:"at,omitzero"`
-	Skill  string    `json:"skill,omitempty"`
-	Server string    `json:"server,omitempty"`
-	Tool   string    `json:"tool,omitempty"`
+	At      time.Time `json:"at,omitzero"`
+	Skill   string    `json:"skill,omitempty"`
+	Server  string    `json:"server,omitempty"`
+	Tool    string    `json:"tool,omitempty"`
+	CLI     string    `json:"cli,omitempty"`
+	Source  string    `json:"source,omitempty"`
+	Command string    `json:"command,omitempty"`
 }
 
-const maxUsageEvents = 300
+const (
+	maxUsageEvents  = 300
+	maxEventCommand = 300
+)
 
 // UsageScanner 增量读一个会话文件，统计用到的技能和 MCP 工具。不是并发安全的。
 //
@@ -52,6 +67,9 @@ const maxUsageEvents = 300
 //   - grok：MCP 经 use_tool 调用，tool_name 是 <服务>__<工具>。
 //   - cursor：MCP 经 CallDynamicTool 调用，namespace 是服务名（插件带的服务是 plugin-<插件>-<服务>），
 //     namespace 为 cursor 的是它自带的工具（WebSearch 等），不算 MCP。
+//   - 执行的命令：claude 的 Bash、codex 的 exec_command/shell（新版另有 CommandExecution，和前者同一个 id）、
+//     grok 的 run_terminal_command、cursor 的 Shell。一条命令里的每个程序记一次（见 cliPrograms），
+//     来源（Homebrew、系统、其他）按本机的安装位置判断。
 //   - 各家模型自己读 <名字>/SKILL.md（Read、read_file，或 cat、sed 这类读文件的命令）也算用了那个技能。
 //     只认读文件的调用：写文件、grep 的参数里提到 SKILL.md 不算，系统提示里的技能列表也不算。
 type UsageScanner struct {
@@ -59,7 +77,9 @@ type UsageScanner struct {
 	offset      int64
 	skills      map[string]int
 	mcp         map[string]map[string]int
-	seen        map[string]bool // codex 条目的 id
+	cli         map[string]int
+	sources     map[string]string // 程序名 → 来源，第一次见到时查
+	seen        map[string]bool   // codex 条目的 id
 	events      []UsageEvent
 	at          time.Time // 正在解析的那一行的时间
 }
@@ -73,6 +93,7 @@ func NewUsageScanner(agent, path string) *UsageScanner {
 func (s *UsageScanner) reset() {
 	s.offset = 0
 	s.skills, s.mcp, s.seen, s.events = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil
+	s.cli, s.sources = map[string]int{}, map[string]string{}
 }
 
 // Scan 读文件新增的完整行（末尾没写完的一行留到下次），返回到目前为止的统计；文件变短说明被重写，从头再读。
@@ -105,6 +126,8 @@ func (s *UsageScanner) Scan() (Usage, error) {
 var usageMarkers = [][]byte{
 	[]byte("Base directory for this skill"), []byte("mcp__"), []byte("<skill>"),
 	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"), []byte("CallDynamicTool"),
+	[]byte(`"Bash"`), []byte(`"Shell"`), []byte("run_terminal_command"), []byte("exec_command"),
+	[]byte(`"shell"`), []byte("CommandExecution"),
 }
 
 func hasUsageMarker(line []byte) bool { return containsAny(line, usageMarkers) }
@@ -155,7 +178,7 @@ func (s *UsageScanner) cursorLine(b []byte) {
 			a, _ := decodeToolArgs(bl.Input)
 			s.skillRead(a.Path)
 		case "Shell":
-			s.skillCommand(commandOf(bl.Input))
+			s.command(commandOf(bl.Input))
 		}
 	}
 }
@@ -180,6 +203,8 @@ func (s *UsageScanner) claudeLine(b []byte) {
 			} else if bl.Name == "Read" {
 				a, _ := decodeToolArgs(bl.Input)
 				s.skillRead(a.FilePath)
+			} else if bl.Name == "Bash" {
+				s.command(commandOf(bl.Input))
 			}
 		}
 	}
@@ -231,6 +256,29 @@ func (s *UsageScanner) skillCommand(cmd string) {
 	}
 }
 
+// command 处理一条 shell 命令：读技能和用到的程序。
+func (s *UsageScanner) command(cmd string) {
+	s.skillCommand(cmd)
+	s.cliCommand(cmd)
+}
+
+// cliCommand 记下一条命令运行的程序。
+func (s *UsageScanner) cliCommand(cmd string) {
+	for _, p := range cliPrograms(cmd) {
+		src, ok := s.sources[p.Name]
+		if !ok {
+			src = cliSource(p.Name, p.Path)
+			s.sources[p.Name] = src
+		}
+		s.cli[p.Name]++
+		short := cmd
+		if r := []rune(short); len(r) > maxEventCommand {
+			short = string(r[:maxEventCommand]) + "…"
+		}
+		s.event(UsageEvent{CLI: p.Name, Source: src, Command: short})
+	}
+}
+
 // addMCP 记一次 MCP 调用，name 是 <服务>__<工具>；服务名里可能有下划线，所以按最后一个 "__" 切。
 func (s *UsageScanner) addMCP(name string) {
 	i := strings.LastIndex(name, "__")
@@ -260,15 +308,17 @@ func (s *UsageScanner) codexLine(b []byte) {
 			Type      string `json:"type"`
 			Role      string `json:"role"`
 			Name      string `json:"name"`
+			CallID    string `json:"call_id"`
 			Arguments string `json:"arguments"`
 			Content   []struct {
 				Text string `json:"text"`
 			} `json:"content"`
 			Item struct {
-				Type      string `json:"type"`
-				ID        string `json:"id"`
-				Server    string `json:"server"`
-				Tool      string `json:"tool"`
+				Type      string          `json:"type"`
+				ID        string          `json:"id"`
+				Server    string          `json:"server"`
+				Tool      string          `json:"tool"`
+				Command   json.RawMessage `json:"command"`
 				ParsedCmd []struct {
 					Type string `json:"type"`
 					Path string `json:"path"`
@@ -291,9 +341,10 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
 			s.addMCP(name)
-		} else if p.Type == "function_call" {
-			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令
-			s.skillCommand(commandOf([]byte(p.Arguments)))
+		} else if p.Type == "function_call" && s.once(p.CallID) {
+			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令。
+			// 同一条命令随后的 CommandExecution 用 call_id 当 id，靠 once 不重复算
+			s.command(commandOf([]byte(p.Arguments)))
 		}
 	case p.Item.Type == "McpToolCall":
 		if s.once(p.Item.ID) {
@@ -307,6 +358,9 @@ func (s *UsageScanner) codexLine(b []byte) {
 				if c.Type == "read" {
 					s.skillRead(c.Path)
 				}
+			}
+			if len(p.Item.Command) > 0 {
+				s.cliCommand(commandOf(append(append([]byte(`{"command":`), p.Item.Command...), '}')))
 			}
 		}
 	}
@@ -346,7 +400,7 @@ func (s *UsageScanner) grokLine(b []byte) {
 			a, _ := decodeToolArgs([]byte(c.Arguments))
 			s.skillRead(a.TargetFile)
 		case "run_terminal_command":
-			s.skillCommand(commandOf([]byte(c.Arguments)))
+			s.command(commandOf([]byte(c.Arguments)))
 		}
 	}
 }
@@ -372,6 +426,15 @@ func (s *UsageScanner) result() Usage {
 			return b.Count - a.Count
 		}
 		return strings.Compare(a.Server, b.Server)
+	})
+	for name, n := range s.cli {
+		u.CLI = append(u.CLI, CLIUsage{Name: name, Source: s.sources[name], Count: n})
+	}
+	slices.SortFunc(u.CLI, func(a, b CLIUsage) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Name, b.Name)
 	})
 	return u
 }

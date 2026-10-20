@@ -366,6 +366,9 @@ func previewUsageEvents() []history.UsageEvent {
 	add(13, history.UsageEvent{Server: "androidmirror", Tool: "screen_act"})
 	add(14, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
 	add(15, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
+	add(16, history.UsageEvent{CLI: "go", Source: history.SourceHomebrew, Command: "go vet ./... && go test ./internal/history"})
+	add(17, history.UsageEvent{CLI: "bsk", Command: "bsk snapshot --session abcd"})
+	add(18, history.UsageEvent{CLI: "git", Source: history.SourceSystem, Command: "git status --short"})
 	return evs
 }
 
@@ -454,6 +457,11 @@ func TestPreview(t *testing.T) {
 			MCP: []history.MCPUsage{
 				{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},
 				{Server: "androidmirror", Count: 4, Tools: []history.UsageItem{{Name: "screen_observe", Count: 3}, {Name: "screen_act", Count: 1}}},
+			},
+			CLI: []history.CLIUsage{
+				{Name: "go", Source: history.SourceHomebrew, Count: 12}, {Name: "git", Source: history.SourceSystem, Count: 9},
+				{Name: "rg", Source: history.SourceHomebrew, Count: 6}, {Name: "bsk", Count: 4}, {Name: "adb", Count: 2},
+				{Name: "fvm", Source: history.SourceHomebrew, Count: 1}, {Name: "xcrun", Source: history.SourceSystem, Count: 1},
 			},
 			Events: previewUsageEvents(),
 		}}

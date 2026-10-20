@@ -10,7 +10,7 @@ import (
 	"hive/internal/history"
 )
 
-// usageView 是右侧"技能与 MCP"面板的状态：当前终端的会话用到了哪些技能和 MCP 工具。
+// usageView 是右侧"技能与 MCP"面板的状态：当前终端的会话用到了哪些技能、MCP 工具和命令行程序。
 // 会话文件在窗口进程里增量只读解析，不经过常驻进程。
 type usageView struct {
 	term    string // 统计的是哪个终端
@@ -90,8 +90,8 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, "正在读取…")
 				case !u.found:
 					usageNote(c, "还没找到会话文件，agent 开始对话后会出现。")
-				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0:
-					usageNote(c, "这个会话还没用到技能和 MCP。")
+				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0:
+					usageNote(c, "这个会话还没用到技能、MCP 和命令行工具。")
 				default:
 					a.usageSummary(c, u.data)
 					a.usageTimeline(c, u.data.Events)
@@ -111,16 +111,53 @@ func (a *app) copyName(c *ui.Context, name string) {
 	a.notify("已复制 "+name, "", nil)
 }
 
-// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数。点标签复制名字。
+// cliSources 是命令行程序分组的顺序和名字。
+var cliSources = []struct{ source, label string }{
+	{history.SourceHomebrew, "Homebrew"},
+	{history.SourceOther, "其他命令行"},
+	{history.SourceSystem, "系统自带"},
+}
+
+func cliSourceLabel(source string) string {
+	for _, s := range cliSources {
+		if s.source == source {
+			return s.label
+		}
+	}
+	return ""
+}
+
+// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数；命令行程序按来源分组。点标签复制名字。
 func (a *app) usageSummary(c *ui.Context, u history.Usage) {
-	ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
-		for _, sk := range u.Skills {
-			a.usageChip(c, "skill-"+sk.Name, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
+	if len(u.Skills) > 0 || len(u.MCP) > 0 {
+		ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
+			for _, sk := range u.Skills {
+				a.usageChip(c, "skill-"+sk.Name, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
+			}
+			for _, m := range u.MCP {
+				a.usageChip(c, "mcp-"+m.Server, iconExtensions, mcpColor(c), m.Server, m.Count)
+			}
+		})
+	}
+	for _, g := range cliSources {
+		var items []history.CLIUsage
+		for _, it := range u.CLI {
+			if it.Source == g.source {
+				items = append(items, it)
+			}
 		}
-		for _, m := range u.MCP {
-			a.usageChip(c, "mcp-"+m.Server, iconExtensions, mcpColor(c), m.Server, m.Count)
+		if len(items) == 0 {
+			continue
 		}
-	})
+		ui.Column(c).Gap(6).Padding(0, 4).Children(func() {
+			ui.Text(c, g.label).FontSize(11).FontWeight(500).TextColor(c.Theme().TextMuted)
+			ui.Row(c).Wrap().Gap(6).Children(func() {
+				for _, it := range items {
+					a.usageChip(c, "cli-"+it.Name, iconTerminal, cliColor(c), it.Name, it.Count)
+				}
+			})
+		})
+	}
 }
 
 func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color, name string, n int) {
@@ -149,6 +186,13 @@ func mcpColor(c *ui.Context) ui.Color {
 	return ui.Hex("#3B6FD9")
 }
 
+func cliColor(c *ui.Context) ui.Color {
+	if c.Theme().Dark {
+		return ui.Hex("#5FBFA0")
+	}
+	return ui.Hex("#21866A")
+}
+
 // usageStep 是时间线上的一项：连着几次调用同一个工具（或同一个技能）合成一项。
 type usageStep struct {
 	ev    history.UsageEvent
@@ -160,8 +204,8 @@ type usageStep struct {
 func usageSteps(events []history.UsageEvent) []usageStep {
 	var steps []usageStep
 	for _, e := range events {
-		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool {
-			steps[k].ev.At = e.At
+		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool && steps[k].ev.CLI == e.CLI {
+			steps[k].ev.At, steps[k].ev.Command = e.At, e.Command
 			steps[k].n++
 			continue
 		}
@@ -171,7 +215,8 @@ func usageSteps(events []history.UsageEvent) []usageStep {
 	return steps
 }
 
-// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色；右边是名字、所属服务和时间。点名字复制。
+// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色、命令行程序是绿色；
+// 右边是名字、所属服务（命令行程序是来源）和时间。点名字复制，命令行程序悬停看最近一次的完整命令。
 func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent) {
 	t := c.Theme()
 	p := colors(t)
@@ -180,8 +225,11 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent) {
 		ui.Text(c, "时间线").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {
 			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
-			if st.ev.Skill != "" {
+			switch {
+			case st.ev.Skill != "":
 				color, kind, name = p.honey, "技能", st.ev.Skill
+			case st.ev.CLI != "":
+				color, kind, name = cliColor(c), cliSourceLabel(st.ev.Source), st.ev.CLI
 			}
 			last := i == len(steps)-1
 			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(10).AlignItems(ui.Stretch).Children(func() {
@@ -201,6 +249,9 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent) {
 							Role(ui.RoleButton).Label("复制 " + name)
 						if nt.Hovered() {
 							nt.TextColor(t.Accent)
+						}
+						if st.ev.Command != "" {
+							nt.Tooltip(st.ev.Command)
 						}
 						if nt.Clicked() {
 							a.copyName(c, name)

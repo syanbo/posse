@@ -166,3 +166,42 @@ func TestUsageCursor(t *testing.T) {
 		t.Fatalf("got %+v\nwant %+v", u, want)
 	}
 }
+
+// 四家执行的命令都记下用到的程序；Codex 的 function_call 和同 id 的 CommandExecution 只算一次。
+func TestUsageCLI(t *testing.T) {
+	defer func(b, l, s []string) { brewDirs, brewLinks, systemDirs = b, l, s }(brewDirs, brewLinks, systemDirs)
+	brewDirs, brewLinks, systemDirs = nil, nil, nil
+	dir := t.TempDir()
+	cases := []struct {
+		agent, line string
+	}{
+		{"claude", `{"type":"assistant","timestamp":"2026-10-16T08:00:00.000Z","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status && gh pr list"}}]}}`},
+		{"grok", `{"type":"assistant","tool_calls":[{"name":"run_terminal_command","arguments":"{\"command\":\"git status && gh pr list\"}"}]}`},
+		{"cursor", `{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Shell","input":{"command":"git status && gh pr list"}}]}}`},
+		{"codex", `{"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"c1","arguments":"{\"cmd\":\"git status && gh pr list\"}"}}` + "\n" +
+			`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"c1","command":["/bin/zsh","-lc","git status && gh pr list"]}}}`},
+	}
+	for _, c := range cases {
+		path := filepath.Join(dir, c.agent+".jsonl")
+		writeLines(t, path, c.line+"\n")
+		u, err := NewUsageScanner(c.agent, path).Scan()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []CLIUsage{{Name: "gh", Count: 1}, {Name: "git", Count: 1}}
+		if !reflect.DeepEqual(u.CLI, want) || len(u.Events) != 2 || u.Events[0].CLI != "git" || u.Events[0].Command != "git status && gh pr list" {
+			t.Errorf("%s: cli %+v events %+v", c.agent, u.CLI, u.Events)
+		}
+	}
+
+	// 新版 Codex 的命令只有 CommandExecution（id 是 exec-…），读 SKILL.md 的照样算技能
+	path := filepath.Join(dir, "codex2.jsonl")
+	writeLines(t, path,
+		`{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"c9","input":"tools.exec_command({cmd:\"go test\"})"}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"exec-1","command":["/bin/zsh","-lc","go test ./... && cat /u/skills/runner/SKILL.md"],"parsed_cmd":[{"type":"unknown"},{"type":"read","path":"/u/skills/runner/SKILL.md"}]}}}`+"\n",
+	)
+	u, _ := NewUsageScanner("codex", path).Scan()
+	if !reflect.DeepEqual(u.CLI, []CLIUsage{{Name: "go", Count: 1}}) || !reflect.DeepEqual(u.Skills, []UsageItem{{"runner", 1}}) {
+		t.Fatalf("codex exec: %+v", counts(u))
+	}
+}
