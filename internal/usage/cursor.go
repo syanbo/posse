@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -16,15 +17,39 @@ import (
 // Cursor 本地不留用量，只能向它查：和 cursor-agent 自己的 /usage 一样调 DashboardService 的
 // GetCurrentPeriodUsage（本期用了百分之几、花了多少、计费周期）和 GetPlanInfo（套餐名）。
 // token 是 cursor-agent 登录时存进钥匙串的，只读不续：过期了就跳过，等 Cursor 自己刷新。
+// cursor-agent 经 /usr/bin/security 写这一项，访问控制里只放行了它（分区 apple-tool:），
+// 所以也经它读：不弹授权窗。换成 Security 框架直接读，每次 token 更新后都要用户再点一次允许。
 
 const cursorAPI = "https://api2.cursor.sh/aiserver.v1.DashboardService/"
 
-// ErrCursorDenied 是用户在钥匙串弹窗里拒绝了，或者没有登录 cursor-agent。
-var ErrCursorDenied = errors.New("cursor token unavailable")
+var (
+	// ErrCursorLoggedOut 是没有登录 cursor-agent（钥匙串里没有这一项）。
+	ErrCursorLoggedOut = errors.New("cursor-agent not logged in")
+	// ErrCursorDenied 是读钥匙串要弹授权窗（这一项不是 cursor-agent 照常写的），没有读到。
+	ErrCursorDenied = errors.New("cursor token needs keychain approval")
+)
 
 // CursorToken 从钥匙串读 cursor-agent 的 access token。
-func CursorToken() (string, error) {
-	return keychainPassword("cursor-access-token", "cursor-user")
+func CursorToken(ctx context.Context) (string, error) {
+	// 正常几十毫秒；超时多半是弹出了授权窗，杀掉进程窗口就收回
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/bin/security", "find-generic-password",
+		"-s", "cursor-access-token", "-a", "cursor-user", "-w").Output()
+	var ee *exec.ExitError
+	switch {
+	case ctx.Err() != nil:
+		return "", ErrCursorDenied
+	case errors.As(err, &ee) && ee.ExitCode() == 44: // errSecItemNotFound
+		return "", ErrCursorLoggedOut
+	case err != nil:
+		return "", fmt.Errorf("security: %w", err)
+	}
+	token := strings.TrimSpace(string(out))
+	if token == "" {
+		return "", ErrCursorLoggedOut
+	}
+	return token, nil
 }
 
 // tokenExpired 看 JWT 的 exp；解不出来时当没过期，交给接口去判断。

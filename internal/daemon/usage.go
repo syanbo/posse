@@ -20,7 +20,7 @@ import (
 //   - Codex：Stop、PostToolUse 时读会话文件末尾的 rate_limits；重置卡只有 Codex 自己知道，
 //     Stop 之后拉起 codex app-server 问一次，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
-//   - Cursor：stop 时向 Cursor 查一次，至少隔 cursorEvery
+//   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
 const (
 	cursorEvery   = 5 * time.Minute
 	codexAskEvery = 5 * time.Minute
@@ -39,7 +39,7 @@ type usageState struct {
 	claudeMod    time.Time            // 上次读 Claude 缓存时文件的修改时间
 	cursorAt     time.Time
 	cursorBusy   bool
-	cursorDenied bool // 钥匙串被拒绝或没有登录：本次常驻进程运行期间不再弹窗
+	cursorDenied bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
 	codexAskAt   time.Time
 	codexBusy    bool
 }
@@ -63,6 +63,8 @@ func (d *Daemon) openUsage() {
 			d.usage.store.Update(u)
 		}
 		d.grokUsage(true)
+		// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
+		d.cursorUsage()
 	}()
 }
 
@@ -167,7 +169,10 @@ func (d *Daemon) cursorUsage() {
 		s.cursorBusy = false
 		s.mu.Unlock()
 	}()
-	token, err := usage.CursorToken()
+	token, err := usage.CursorToken(context.Background())
+	if errors.Is(err, usage.ErrCursorLoggedOut) {
+		return
+	}
 	if err != nil {
 		if errors.Is(err, usage.ErrCursorDenied) {
 			s.mu.Lock()
@@ -260,7 +265,7 @@ func (d *Daemon) usageSet(ctx context.Context, raw json.RawMessage) (any, error)
 	if p.CursorOff != nil {
 		d.usage.store.SetCursorOff(*p.CursorOff)
 		if !*p.CursorOff {
-			// 重新打开时允许再弹一次钥匙串授权，下次 Cursor 用完就查
+			// 重新打开时再试一次钥匙串，下次 Cursor 用完就查
 			d.usage.mu.Lock()
 			d.usage.cursorDenied, d.usage.cursorAt = false, time.Time{}
 			d.usage.mu.Unlock()

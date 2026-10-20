@@ -286,7 +286,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 				}
 			})
 		}
-		ui.Text(c, "agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后查一次。").
+		ui.Text(c, "agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，Cursor 在常驻进程启动和它用过之后查，Codex 重置卡在它用过之后查。").
 			FontSize(11).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }
@@ -294,7 +294,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 // planSettings 是设置页里两项查询的开关：Cursor 用量和 Codex 重置卡本地没有，要在它们用过之后查一次。
 func (a *app) planSettings(c *ui.Context) {
 	st := a.daemon.Usage
-	settingsCard(c, "套餐用量", "底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，在它们用过之后查一次（至少隔 5 分钟）：Cursor 第一次要允许 Hive 读钥匙串里它的登录信息；Codex 的重置卡由 Codex 用自己的登录去查。", func() {
+	settingsCard(c, "套餐用量", "底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。", func() {
 		if st == nil {
 			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
 			return
