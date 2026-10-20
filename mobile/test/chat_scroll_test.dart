@@ -26,8 +26,9 @@ class FakeRpc implements PhoneRpc {
   @override
   Future<Map<String, Object?>> call(
     String method,
-    Map<String, Object?> params,
-  ) async {
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
     calls.add(method);
     if (method == 'terminal.send') {
       return {

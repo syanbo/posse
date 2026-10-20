@@ -93,10 +93,12 @@ class PhoneRpc {
     }
   }
 
+  /// [timeout] 默认 20 秒；回复很大、要排在别的大回复后面发的调用（视频分段）给得更长。
   Future<Map<String, Object?>> call(
     String method,
-    Map<String, Object?> params,
-  ) async {
+    Map<String, Object?> params, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
     final id = 'rpc-${++_n}';
     final waiter = Completer<Map<String, Object?>>();
     _wait[id] = waiter;
@@ -107,7 +109,7 @@ class PhoneRpc {
       rethrow;
     }
     return waiter.future.timeout(
-      const Duration(seconds: 20),
+      timeout,
       onTimeout: () {
         _wait.remove(id);
         throw TimeoutException(method);

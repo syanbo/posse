@@ -15,8 +15,9 @@ class _UploadRpc implements PhoneRpc {
   @override
   Future<Map<String, Object?>> call(
     String method,
-    Map<String, Object?> params,
-  ) async {
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
     methods.add(method);
     return switch (method) {
       'clipboard.startImageUpload' => {'uploadId': 'u1'},
