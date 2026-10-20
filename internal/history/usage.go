@@ -341,10 +341,10 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
 			s.addMCP(name)
-		} else if p.Type == "function_call" && s.once(p.CallID) {
+		} else if cmd := commandOf([]byte(p.Arguments)); p.Type == "function_call" && cmd != "" && s.once(cmdKey(p.CallID)) {
 			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令。
 			// 同一条命令随后的 CommandExecution 用 call_id 当 id，靠 once 不重复算
-			s.command(commandOf([]byte(p.Arguments)))
+			s.command(cmd)
 		}
 	case p.Item.Type == "McpToolCall":
 		if s.once(p.Item.ID) {
@@ -353,7 +353,7 @@ func (s *UsageScanner) codexLine(b []byte) {
 	// 新版 Codex 把命令包在 exec 的脚本里跑，每条实际执行的命令记一条 CommandExecution，
 	// parsed_cmd 已经标出读了哪个文件
 	case p.Item.Type == "CommandExecution":
-		if s.once(p.Item.ID) {
+		if s.once(cmdKey(p.Item.ID)) {
 			for _, c := range p.Item.ParsedCmd {
 				if c.Type == "read" {
 					s.skillRead(c.Path)
@@ -364,6 +364,15 @@ func (s *UsageScanner) codexLine(b []byte) {
 			}
 		}
 	}
+}
+
+// cmdKey 是命令在 seen 里的 key：McpToolCall 条目的 id 也是调用它的 function_call 的 call_id，
+// 命令和 MCP 调用分开记，免得 MCP 调用被当成重复。没有 id 的照算。
+func cmdKey(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "cmd:" + id
 }
 
 // once 报告 id 是不是第一次见：同一个条目会在开始、完成时各记一遍。没有 id 的照算。

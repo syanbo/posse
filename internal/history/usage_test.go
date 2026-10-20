@@ -204,4 +204,15 @@ func TestUsageCLI(t *testing.T) {
 	if !reflect.DeepEqual(u.CLI, []CLIUsage{{Name: "go", Count: 1}}) || !reflect.DeepEqual(u.Skills, []UsageItem{{"runner", 1}}) {
 		t.Fatalf("codex exec: %+v", counts(u))
 	}
+
+	// MCP 调用的 function_call（namespace 是 mcp__…）和随后的 McpToolCall 同一个 id，MCP 照算
+	path = filepath.Join(dir, "codex3.jsonl")
+	writeLines(t, path,
+		`{"type":"response_item","payload":{"type":"function_call","name":"js","namespace":"mcp__cua_repl","call_id":"c5","arguments":"{\"code\":\"1\"}"}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"c5","server":"cua_repl","tool":"js"}}}`+"\n",
+	)
+	u, _ = NewUsageScanner("codex", path).Scan()
+	if len(u.MCP) != 1 || u.MCP[0].Count != 1 {
+		t.Fatalf("codex mcp after function_call: %+v", counts(u))
+	}
 }
