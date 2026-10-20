@@ -478,7 +478,7 @@ func TestPreview(t *testing.T) {
 		previewHistory(a, "")
 		a.selected = "w1" // previewHistory 会切到历史页
 		a.state.RightPanel = panelHistory
-		a.recent = recentView{key: "0\x00p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions,
+		a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions,
 			previews: map[string]recentPreview{}}
 		for i, s := range a.history.sessions {
 			p := recentPreview{at: s.UpdatedAt, text: "迁移按三步走：先把终端和常驻进程换成 Go，再做多 agent 编排，最后补手机遥控。内存目标是窗口关掉后只剩 20 MB。"}

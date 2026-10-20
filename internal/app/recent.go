@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -13,10 +12,9 @@ import (
 	"hive/internal/history"
 )
 
-// recentView 是右侧历史面板的状态：当前项目或全部的最近会话。
+// recentView 是右侧历史面板的状态：当前项目的最近会话。
 type recentView struct {
-	scope    int    // 0 当前项目，1 全部
-	key      string // 结果对应的范围（筛选 + 项目），变了就重新查
+	key      string // 结果对应的项目，变了就重新查
 	sessions []history.Session
 	loaded   bool
 	poll     panelPoll
@@ -72,26 +70,22 @@ const recentRefresh = 15 * time.Second
 
 const recentLimit = 50
 
-// pollRecent 在主线程调用：换了项目或筛选就重新查，到点了在后台刷新。
+// pollRecent 在主线程调用：换了项目就重新查，到点了在后台刷新。
 func (a *app) pollRecent(c *ui.Context, w *workspace) {
 	r := &a.recent
-	key := fmt.Sprint(r.scope, "\x00", w.ProjectID)
+	key := w.ProjectID
 	if r.key != key {
-		*r = recentView{scope: r.scope, key: key}
+		*r = recentView{key: key}
 	}
 	if !r.poll.due(c, recentRefresh) {
 		return
 	}
 	// 当前项目：项目目录和它的各个 worktree 目录，worktree 不在项目目录下面
 	var dirs []string
-	if r.scope == 0 {
-		for _, x := range a.byProject[w.ProjectID] {
-			dirs = append(dirs, x.Path)
-		}
-		dirs = topDirs(dirs)
-	} else {
-		dirs = []string{""}
+	for _, x := range a.byProject[w.ProjectID] {
+		dirs = append(dirs, x.Path)
 	}
+	dirs = topDirs(dirs)
 	cached := r.previews
 	go func() {
 		var all []history.Session
@@ -188,20 +182,13 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 	a.pollRecent(c, w)
 	r := &a.recent
 	return a.rightPanel(c, "历史", func() {
-		ui.Box(c).Padding(0, 12, 10, 12).Children(func() {
-			if segmented(c, &r.scope, "范围", "当前项目", "全部") {
-				r.poll.at = time.Time{}
-			}
-		})
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 8, 16, 8).Gap(2).Children(func() {
 				switch {
 				case !r.loaded:
 					usageNote(c, "正在读取…")
-				case len(r.sessions) == 0 && r.scope == 0:
-					usageNote(c, "这个项目还没有会话记录。")
 				case len(r.sessions) == 0:
-					usageNote(c, "还没有会话记录。")
+					usageNote(c, "这个项目还没有会话记录。")
 				}
 				for _, s := range r.sessions {
 					row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
@@ -230,10 +217,6 @@ func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
 								ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 								// 细线把聊天内容和下面的目录、消息数分开
 								ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
-							}
-							// 全部会话时看目录才知道是哪个项目的
-							if r.scope == 1 && s.Cwd != "" {
-								ui.Text(c, shortPath(s.Cwd)).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
 							}
 							sessionMeta(c, s)
 						})
