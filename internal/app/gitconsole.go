@@ -273,7 +273,7 @@ func (a *app) gitConsole(c *ui.Context, v *filesView) {
 	}
 }
 
-// gitOpRow 是一个操作：时间、操作名、项目，右边是结果；下面缩进列出它的 git 命令。
+// gitOpRow 是一个操作：时间、操作名、项目，右边是结果；下面靠左列出它的 git 命令。
 func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 	t := c.Theme()
 	first, last := op.runs[0], op.runs[len(op.runs)-1]
@@ -304,7 +304,7 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 			}
 			// 操作的结果：和某条命令的报错一样时不再写一遍
 			if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
-				ui.Text(c, r.Err).FontSize(11.5).LineHeight(1.4).TextColor(t.Danger).Padding(0, 0, 0, 64).Selectable()
+				ui.Text(c, r.Err).FontSize(11.5).LineHeight(1.4).TextColor(t.Danger).Selectable()
 			}
 		}
 	})
@@ -315,7 +315,7 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 	t := c.Theme()
 	cmd := "git " + quoteArgs(r.Args)
 	// 可选的是整列：文字自己可选时右键弹的是它的编辑菜单，盖掉下面的"复制命令"
-	col := ui.Column(c.Key(r.ID)).Padding(0, 0, 0, 64).Gap(2).Shrink(0).Selectable()
+	col := ui.Column(c.Key(r.ID)).Gap(2).Shrink(0).Selectable()
 	col.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			line := ui.Text(c, cmd).FontSize(11.5).Font(monoFont).Shrink(1)
