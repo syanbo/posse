@@ -125,3 +125,41 @@ func chooseMenu(t *testing.T, tt *ui.Tester, label string) {
 	}
 	tt.Frame()
 }
+
+// 文字输入框的编辑菜单由 mygo 交给 Hive 自绘：中文的剪切、复制、粘贴、全选，选了照常生效
+func TestTextInputMenuDrawn(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	a.openFilesPanel(w, sideSearch)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if err := tt.Click("在文件里检索"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("hello")
+	tt.Frame()
+	if err := tt.RightClick("在文件里检索"); err != nil {
+		t.Fatal(err)
+	}
+	if !menuHas(tt, "全选") || !menuHas(tt, "粘贴") {
+		t.Fatalf("edit menu = %q", tt.Texts())
+	}
+	if m := tt.Menu(); len(m) != 0 {
+		t.Fatalf("native menu shown: %q", m)
+	}
+	chooseMenu(t, tt, "全选")
+	tt.Frame()
+	if err := tt.RightClick("在文件里检索"); err != nil {
+		t.Fatal(err)
+	}
+	chooseMenu(t, tt, "剪切")
+	tt.Frame()
+	if got := tt.Clipboard(); got != "hello" {
+		t.Fatalf("cut %q", got)
+	}
+	if v := a.filesFor(w); v.search.query.Text != "" {
+		t.Fatalf("left %q", v.search.query.Text)
+	}
+}

@@ -17,6 +17,8 @@ import (
 func (a *app) build(c *ui.Context) {
 	a.runPending()
 	c.SetTheme(hiveTheme(c.Theme().Dark))
+	// 文字输入框、编辑器这些 mygo 自己的菜单也由 Hive 自绘（sysMenuView）
+	c.PresentMenus(a.presentMenu)
 	for _, t := range a.toasts {
 		c.AddToast(t)
 	}
@@ -120,6 +122,7 @@ func (a *app) build(c *ui.Context) {
 	a.unsavedDialog(c)
 	a.rollbackDialog(c)
 	a.confirmDialog(c)
+	a.sysMenuView(c)
 }
 
 func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {

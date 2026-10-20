@@ -211,6 +211,7 @@ type app struct {
 	lastPanel string
 	shownTab  string    // 最近一次滚进可见范围的标签，见 revealTab
 	termCtx   menuState // 终端内容区的右键菜单（termMenu）
+	sysMenu   sysMenu   // mygo 交来的编辑菜单（menu.go 的 presentMenu）
 	termCtxID string    // 它是哪个终端的：切走了就不画
 	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
 	renaming, renameText string

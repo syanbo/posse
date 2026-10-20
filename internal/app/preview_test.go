@@ -552,6 +552,18 @@ func TestPreview(t *testing.T) {
 		v.doc(filepath.Join(v.root, "README.md")).ed.Insert("<!-- draft -->\n")
 		savePNG(t, newPreviewTester(a, dark), "files-"+suffix+".png")
 
+		// 编辑器的右键菜单：mygo 交来的菜单也是 Hive 自绘，英文换成中文
+		a = previewApp(t)
+		previewFiles(t, a, "internal/app/view.go", "README.md", "main.go")
+		tt = newPreviewTester(a, dark)
+		tt.RightClickAt(700, 260)
+		settleMenu(tt)
+		if r, ok := tt.Find("转换"); ok {
+			tt.Move(r.X+r.W/2, r.Y+r.H/2)
+		}
+		settleMenu(tt)
+		savePNG(t, tt, "menu-editor-"+suffix+".png")
+
 		a = previewApp(t)
 		v = previewFiles(t, a, "README.md")
 		v.cur.preview = true
