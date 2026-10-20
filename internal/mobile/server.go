@@ -203,6 +203,8 @@ func (s *Server) dropDevices(ids []string) {
 
 func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	// 手机 App 的 WebSocket 不带 Origin；安全靠 E2EE 和设备 token
+	// 不开 permessage-deflate：消息都是密文的 base64，只有 HuffmanOnly 压得动（约少四分之一），
+	// websocket 库写死用 BestSpeed，Go 1.27 的 BestSpeed 遇到这种数据原样存储，开了只白费 CPU
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
@@ -340,17 +342,26 @@ func (c *conn) sendJSON(v any) error {
 	}
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
+	frame := c.sess.sealText(b)
+	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
 	defer cancel()
-	return c.ws.Write(ctx, websocket.MessageText, c.sess.sealText(b))
+	return c.ws.Write(ctx, websocket.MessageText, frame)
 }
 
 func (c *conn) sendBinary(p []byte) error {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	ctx, cancel := context.WithTimeout(c.ctx, 15*time.Second)
+	frame := c.sess.seal(p, kindBinary)
+	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
 	defer cancel()
-	return c.ws.Write(ctx, websocket.MessageBinary, c.sess.seal(p, kindBinary))
+	return c.ws.Write(ctx, websocket.MessageBinary, frame)
+}
+
+// writeTimeout 是发一条消息最多等多久：至少 15 秒，大消息再按每秒 64 KB 的最低速度加。
+// 写超时时 websocket 库会关掉整条连接（手机上所有终端跟着掉线），一张大图、一段视频在
+// 慢的线路上（跨境隧道晚高峰）发得久一点不该把连接拖断。
+func writeTimeout(n int) time.Duration {
+	return 15*time.Second + time.Duration(n/(64<<10))*time.Second
 }
 
 type request struct {

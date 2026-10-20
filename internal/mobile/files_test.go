@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"hive/internal/term"
 )
@@ -84,5 +85,15 @@ func TestPhoneFiles(t *testing.T) {
 	}
 	if m := p.next(p.call("files.read", map[string]any{"worktree": wt, "relativePath": "logo.png"})); m["ok"] != false {
 		t.Fatalf("binary read accepted: %v", m)
+	}
+}
+
+func TestWriteTimeoutGrowsWithSize(t *testing.T) {
+	if got := writeTimeout(100); got != 15*time.Second {
+		t.Fatalf("small message %v", got)
+	}
+	// 10 MB 的图片预览线上约 18 MB：按每秒 64 KB 也要给到 5 分钟上下，而不是一刀切的 15 秒
+	if got := writeTimeout(18 << 20); got < 4*time.Minute {
+		t.Fatalf("18 MB message %v", got)
 	}
 }
