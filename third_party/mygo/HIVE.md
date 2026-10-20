@@ -25,13 +25,13 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 
 终端插件 `plugins/terminal`：
 
-- `links.go`：加 `spanAt`，返回链接在一行里覆盖的列；`trimURL` 也去掉结尾的中文标点（"。，）"等）。
+- `links.go`：加 `spanAt`，返回链接在一行里覆盖的列；`trimURL` 也去掉结尾的中文标点（"。，）"等）；网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出。
 - `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Hive 用来预览图片）。
 - `view.go`：
   - 指针在链接上时（不必按 Command）显示手形指针，并记下链接的范围（`hover`）。
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
-- `paint.go`：在悬停的链接下面画一条单下划线。
+- `paint.go`：在悬停的链接下面画一条单下划线，颜色取链接第一个字的颜色（`textColorAt`）。
 - `terminal.go`：加 `Options.Menu`（换掉插件自带的英文右键菜单）和给它用的 `Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）。
 - `terminal.go`：加 `Terminal.ScrollToEdge`、`AltScreen`，给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 

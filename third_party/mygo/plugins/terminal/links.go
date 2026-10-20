@@ -8,12 +8,17 @@ import (
 
 // urlPattern finds the URLs programs print as text, which a Command+click
 // opens as it does hyperlinks.
-var urlPattern = regexp.MustCompile(`(?:https?|ftp|file)://[^\s"'<>` + "`" + `\x00-\x1f]+|mailto:[^\s"'<>` + "`" + `]+`)
+var urlPattern = regexp.MustCompile(`(?:https?|ftp|file)://[^\s"'<>` + "`" + `\x00-\x1f` + fullWidthPunct + `]+|mailto:[^\s"'<>` + "`" + fullWidthPunct + `]+`)
+
+// fullWidthPunct ends a URL or a path: Chinese and Japanese text puts its
+// punctuation right after one, with no space, as "见 ~/a.md)，然后" does.
+// (Hive)
+const fullWidthPunct = "。，、；：！？（）【】「」『』〈〉《》…“”‘’"
 
 // pathPattern finds the file paths programs print as text: absolute, from
 // ~, ./ or ../, with a slash, or a file name with a :line; each may end in
 // :line or :line:col.
-var pathPattern = regexp.MustCompile(`(?:(?:~|\.{1,2})?/[^\s"'<>` + "`" + `\x00-\x1f:]+|[\w.@+-]+(?:/[\w.@+-]+)+/?)(?::\d+(?::\d+)?)?|[\w@+-][\w.@+-]*\.\w+:\d+(?::\d+)?`)
+var pathPattern = regexp.MustCompile(`(?:(?:~|\.{1,2})?/[^\s"'<>` + "`" + `\x00-\x1f:` + fullWidthPunct + `]+|[\w.@+-]+(?:/[\w.@+-]+)+/?)(?::\d+(?::\d+)?)?|[\w@+-][\w.@+-]*\.\w+:\d+(?::\d+)?`)
 
 // urlAt returns the URL of text, a row whose runes are in columns cols, at
 // column col, or "".

@@ -457,15 +457,29 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 			}
 		})
 	}
-	// Hive: the link under the pointer, underlined in the text's color.
+	// Hive: the link under the pointer, underlined in the color of its
+	// first character, as a colored path gets a line of its own color.
 	if h := v.hover; h.link != "" && h.row >= 0 && h.row < len(v.lines) {
 		ry := oy + float32(h.row)*ch
-		v.drawDeco(p, deco{h.x0, h.x1, vt.UnderlineSingle, color(v.colors.Foreground)}, ox, ry, cw, ch, base)
+		v.drawDeco(p, deco{h.x0, h.x1, vt.UnderlineSingle, v.textColorAt(&v.lines[h.row], h.x0)}, ox, ry, cw, ch, base)
 	}
 	if v.preedit != "" && v.focused {
 		v.drawPreedit(p, ox, oy, cw, ch, base)
 	}
 	v.drawScrollbar(p, r)
+}
+
+// textColorAt is the color of the glyph at column x of a row, or the
+// default text color where there is none. (Hive)
+func (v *view) textColorAt(line *rowCache, x int) ui.Color {
+	for _, run := range line.runs {
+		for _, col := range run.cols {
+			if int(col) == x {
+				return run.c
+			}
+		}
+	}
+	return color(v.colors.Foreground)
 }
 
 // drawText draws the glyphs, drawn characters and lines of a row, in their

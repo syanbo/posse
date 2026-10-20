@@ -190,3 +190,42 @@ func TestLinkCardPlacement(t *testing.T) {
 		}
 	}
 }
+
+// 路径后面紧跟全角标点和中文（中间没有空格）时，标点和后面的字不算路径，链接照样能用。
+func TestPathBeforeFullWidthPunct(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.md")
+	os.WriteFile(file, nil, 0o644)
+
+	a := previewApp(t)
+	v := &termView{id: "t1"}
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	var hovered []string
+	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: a.termFont(),
+		OpenLink:    func(link string) bool { return a.openLink(v, link) },
+		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
+		OnHoverLink: func(link string) { hovered = append(hovered, link) }})
+	if err != nil {
+		t.Skip("terminal unavailable:", err)
+	}
+	t.Cleanup(func() { term.Close() })
+	v.term = term
+	a.view = v
+	// 路径照 Claude Code 的代码片段带颜色，悬停的下划线跟文字同色
+	term.Feed([]byte("见 (\x1b[38;2;177;185;249m" + file + ")\x1b[39m，去掉右括号后展开\r\n"))
+	tt := newPreviewTester(a, true)
+	for x := float32(250); x < 1100; x += 6 {
+		tt.Move(x, 51)
+		tt.Frame()
+	}
+	if len(hovered) == 0 || hovered[0] != file {
+		t.Fatalf("hovered %q, want %q", hovered, file)
+	}
+	if os.Getenv("HIVE_PREVIEW_DIR") != "" {
+		tt.Move(400, 51)
+		tt.Frame()
+		tt.Frame()
+		savePNG(t, tt, "link-hover-color.png")
+	}
+}
