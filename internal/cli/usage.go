@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"hive/internal/agent"
 	"hive/internal/rpc"
 	plan "hive/internal/usage"
 )
@@ -76,12 +77,16 @@ func cmdUsageReport(e *env, args []string) error {
 	return nil
 }
 
-// cmdStatusline 是 hive 注入给 Claude 的 statusLine（只在用户没配 statusLine 时）：把用量转给常驻进程，
-// 自己不输出。项目里配了 statusLine 时 --settings 会盖掉它，这里替它跑一遍。
+// cmdStatusline 是 hive 注入给 Claude 的 statusLine：把用量转给常驻进程，自己不输出。
+// --settings 会盖掉项目和用户配的 statusLine，这里按 Claude 的顺序（项目优先）替它跑一遍，输出原样交回。
 func cmdStatusline(e *env, args []string) error {
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
 	reportUsage(e, payload)
-	if cmd, dir := projectStatusLine(payload); cmd != "" {
+	cmd, dir := projectStatusLine(payload)
+	if cmd == "" {
+		cmd = userStatusLine()
+	}
+	if cmd != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		c := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
@@ -103,6 +108,21 @@ func reportUsage(e *env, payload []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	rpc.Call(ctx, socket, "usage.report", map[string]any{"agent": "claude", "payload": json.RawMessage(payload)}, nil)
+}
+
+// userStatusLine 是用户级设置里配的 statusLine 命令，在 Claude 的工作目录里跑。
+func userStatusLine() string {
+	sl, _ := agent.UserStatusLine()
+	cmd, _ := sl["command"].(string)
+	if isHiveStatusLine(cmd) {
+		return ""
+	}
+	return cmd
+}
+
+// isHiveStatusLine 认出 hive 自己的 statusline，替用户跑命令时不再调回来。
+func isHiveStatusLine(cmd string) bool {
+	return strings.HasSuffix(strings.TrimSpace(cmd), " statusline")
 }
 
 // projectStatusLine 找项目里配的 statusLine：本地设置优先，和 Claude 的顺序一样。
@@ -133,7 +153,7 @@ func projectStatusLine(payload []byte) (cmd, dir string) {
 			} `json:"statusLine"`
 		}
 		if json.Unmarshal(b, &s) == nil && s.StatusLine != nil && s.StatusLine.Command != "" &&
-			!strings.HasSuffix(strings.TrimSpace(s.StatusLine.Command), " statusline") {
+			!isHiveStatusLine(s.StatusLine.Command) {
 			return s.StatusLine.Command, dir
 		}
 	}

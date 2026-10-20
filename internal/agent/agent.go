@@ -158,10 +158,16 @@ func (l Launcher) claudeSettings() (string, error) {
 		hooks[ev] = []group{g}
 	}
 	doc := map[string]any{"hooks": hooks}
-	// 套餐用量只出现在 statusLine 的输入里。--settings 里的 statusLine 会盖掉用户自己的，
-	// 所以只在用户没配时注入一个不输出的 hive statusline（不输出时界面和没配一样）
-	if !userHasStatusLine() {
-		doc["statusLine"] = map[string]string{"type": "command", "command": Quote(l.Exe) + " statusline"}
+	// 套餐用量只出现在 statusLine 的输入里，注入 hive statusline 转给常驻进程。--settings 里的
+	// statusLine 会盖掉用户自己的，所以沿用用户的其余字段（refreshInterval、padding），
+	// 由 hive statusline 替它跑原来的命令；用户设置读不出来时不注入，免得把它的状态行弄没
+	if user, ok := UserStatusLine(); ok {
+		sl := map[string]any{}
+		for k, v := range user {
+			sl[k] = v
+		}
+		sl["type"], sl["command"] = "command", Quote(l.Exe)+" statusline"
+		doc["statusLine"] = sl
 	}
 	b, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -184,19 +190,19 @@ var claudeUserSettings = func() string {
 	return filepath.Join(dir, "settings.json")
 }
 
-// userHasStatusLine 看用户自己有没有配 statusLine；读不出来时当配了，不去盖它。
-func userHasStatusLine() bool {
+// UserStatusLine 是用户级设置里的 statusLine，没配时为空；设置文件读不出来时 ok 为 false。
+func UserStatusLine() (sl map[string]any, ok bool) {
 	b, err := os.ReadFile(claudeUserSettings())
 	if os.IsNotExist(err) {
-		return false
+		return nil, true
 	}
 	var s struct {
-		StatusLine json.RawMessage `json:"statusLine"`
+		StatusLine map[string]any `json:"statusLine"`
 	}
 	if err != nil || json.Unmarshal(b, &s) != nil {
-		return true
+		return nil, false
 	}
-	return len(s.StatusLine) > 0 && string(s.StatusLine) != "null"
+	return s.StatusLine, true
 }
 
 var codexEvents = []struct {

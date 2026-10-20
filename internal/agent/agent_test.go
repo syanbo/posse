@@ -99,12 +99,13 @@ func TestResume(t *testing.T) {
 	}
 }
 
-func TestClaudeStatusLineOnlyWithoutUsers(t *testing.T) {
+func TestClaudeStatusLineKeepsUsers(t *testing.T) {
 	user := filepath.Join(t.TempDir(), "settings.json")
 	old := claudeUserSettings
 	claudeUserSettings = func() string { return user }
 	defer func() { claudeUserSettings = old }()
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	var refresh float64
 	statusLine := func() string {
 		if _, err := l.claudeSettings(); err != nil {
 			t.Fatal(err)
@@ -112,10 +113,12 @@ func TestClaudeStatusLineOnlyWithoutUsers(t *testing.T) {
 		b, _ := os.ReadFile(filepath.Join(l.Home, "claude-hooks.json"))
 		var doc struct {
 			StatusLine struct {
-				Command string `json:"command"`
+				Command         string  `json:"command"`
+				RefreshInterval float64 `json:"refreshInterval"`
 			} `json:"statusLine"`
 		}
 		json.Unmarshal(b, &doc)
+		refresh = doc.StatusLine.RefreshInterval
 		return doc.StatusLine.Command
 	}
 	// 没有用户设置、用户设置里没有 statusLine：注入
@@ -126,9 +129,14 @@ func TestClaudeStatusLineOnlyWithoutUsers(t *testing.T) {
 	if got := statusLine(); got == "" {
 		t.Fatal("null statusLine: not injected")
 	}
-	// 用户自己配了：不盖它
-	os.WriteFile(user, []byte(`{"statusLine":{"type":"command","command":"node sl.js"}}`), 0o600)
+	// 用户自己配了：照样注入，沿用其余字段，命令由 hive statusline 替它跑
+	os.WriteFile(user, []byte(`{"statusLine":{"type":"command","command":"node sl.js","refreshInterval":10}}`), 0o600)
+	if got := statusLine(); got != "'/bin/hive' statusline" || refresh != 10 {
+		t.Fatalf("user statusLine: %q refresh %v", got, refresh)
+	}
+	// 设置文件坏了：不注入，免得把用户的状态行弄没
+	os.WriteFile(user, []byte(`{"statusLine":`), 0o600)
 	if got := statusLine(); got != "" {
-		t.Fatalf("user statusLine overridden by %q", got)
+		t.Fatalf("broken settings: %q", got)
 	}
 }
