@@ -247,8 +247,12 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	}
 	a.branchPop = nil
 
-	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff
+	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff；底部的日志浮层先收起
+	a.state.LogPanel = true
 	a.openCompare(w, v, "feat", "main", false)
+	if a.state.LogPanel {
+		t.Fatal("log panel still open over the compare view")
+	}
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && tt.HasText("中但不存在于") })
 	cd := v.cur.comp
 	if len(cd.onlyOther) != 1 || len(cd.onlyCur) != 1 || cd.onlyOther[0].Subject != "feat: 新功能" {
