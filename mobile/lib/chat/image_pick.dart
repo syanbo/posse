@@ -27,7 +27,6 @@ Future<ImageAsk?> askImageSource(
       return SafeArea(
         top: false,
         child: Section(
-          title: '发送图片',
           inset: 48,
           children: [
             RowTile(
