@@ -46,9 +46,10 @@ type terminalInfo struct {
 	AgentState                    *agentState
 	Running                       bool
 	ExitCode                      *int
-	Pid                           int  // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
-	WaitingTasks                  bool // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
-	PhoneSized                    bool // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
+	Pid                           int    // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
+	WaitingTasks                  bool   // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
+	PhoneSized                    bool   // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
+	Name                          string // 用户改的标签名（ui.json 的 termNames），只在窗口进程里
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
@@ -208,8 +209,10 @@ type app struct {
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
-	shownTab  string  // 最近一次滚进可见范围的标签，见 revealTab
-	tabStripW float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
+	shownTab  string // 最近一次滚进可见范围的标签，见 revealTab
+	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
+	renaming, renameText string
+	tabStripW            float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
 	resizingPanel   bool    // 正在拖文件栏的左边缘，松手时写 ui.json
@@ -515,6 +518,9 @@ func (a *app) apply(ps []project, ws []workspace) {
 		// ws 是浅拷贝，终端列表还和上次轮询的结果共用，排序前先复制
 		ws[i].Terminals = slices.Clone(ws[i].Terminals)
 		sortTerminals(ws[i].Terminals, a.state.TermOrder[ws[i].ID])
+		for j := range ws[i].Terminals {
+			ws[i].Terminals[j].Name = a.state.TermNames[ws[i].Terminals[j].ID]
+		}
 	}
 	sort.SliceStable(ws, func(i, j int) bool {
 		if ws[i].Project != ws[j].Project {
@@ -527,6 +533,11 @@ func (a *app) apply(ps []project, ws []workspace) {
 	for id := range a.state.TermOrder {
 		if a.workspace(id) == nil {
 			delete(a.state.TermOrder, id)
+		}
+	}
+	for id := range a.state.TermNames {
+		if _, t := a.findTerminal(id); t == nil {
+			delete(a.state.TermNames, id)
 		}
 	}
 	for _, p := range ps {
@@ -797,6 +808,7 @@ func (a *app) saveState() {
 	s := a.state
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
 	s.TermOrder = maps.Clone(s.TermOrder)
+	s.TermNames = maps.Clone(s.TermNames)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	go saveUIState(a.home, s)

@@ -677,6 +677,14 @@ func TestPreview(t *testing.T) {
 		tt.Frame()
 		savePNG(t, tt, "new-menu-"+suffix+".png")
 
+		// 双击标签改名
+		a = previewApp(t)
+		if cur := a.currentTerminal(a.workspace(a.selected)); cur != nil {
+			a.startRename(*cur)
+			a.renameText = "登录页重构"
+		}
+		savePNG(t, newPreviewTester(a, dark), "tab-rename-"+suffix+".png")
+
 		// 状态栏的套餐用量详情
 		a = previewApp(t)
 		a.planOpen = true

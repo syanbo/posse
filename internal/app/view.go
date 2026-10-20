@@ -653,7 +653,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	}
 	// 和标签一样：任务 worker 用任务标题
 	name, detail := tabLabel(term)
-	if title, ok := a.workerTitle[term.ID]; ok {
+	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
 		detail = title
 	}
 	if detail == "" {
@@ -1496,8 +1496,17 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		status = a.sessionStatus(term)
 	}
 	name, detail := tabLabel(term)
-	if title, ok := a.workerTitle[term.ID]; ok && term.Running {
+	if title, ok := a.workerTitle[term.ID]; ok && term.Running && term.Name == "" {
 		detail = title
+	}
+	renaming := a.renaming == term.ID
+	if renaming && !active {
+		// 用快捷键切走了：按现在输入的保存
+		a.finishRename(term)
+		renaming = false
+	}
+	if renaming {
+		row.Border(1, t.Focus)
 	}
 	row.Children(func() {
 		if status != "" {
@@ -1510,6 +1519,10 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		waiting := status == agent.StatusWaiting
 		if term.Agent != "" {
 			agentTile(c, term.Agent, 13)
+		}
+		if renaming {
+			a.renameInput(c, term)
+			return
 		}
 		if term.Agent == "" || detail == "" && !waiting {
 			tabText(c, ui.Text(c, name).FontSize(12).Shrink(1).SingleLine(), active)
@@ -1543,9 +1556,16 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			a.askClose(term)
 		}
 	})
-	a.reorderableTerm(c, row, w.ID, term.ID, true)
+	// 改名时不能拖：在输入框里拖着选文字会变成拖标签
+	if !renaming {
+		a.reorderableTerm(c, row, w.ID, term.ID, true)
+	}
 	if row.Clicked() {
 		a.activeTerm[w.ID] = term.ID
+	}
+	// 双击改名，和 iTerm、Ghostty 一样
+	if row.DoubleClicked() && !renaming {
+		a.startRename(term)
 	}
 	// 中键关闭，和浏览器、Orca 一样
 	if row.MiddleClicked() {
@@ -1559,6 +1579,9 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 func tabTooltip(t terminalInfo) string {
 	name := agentTitle(t.Agent)
 	title := bareTitle(t)
+	if t.Name != "" {
+		title = t.Name
+	}
 	switch {
 	case name == "" && title == "":
 		return "终端"
@@ -1572,6 +1595,13 @@ func tabTooltip(t terminalInfo) string {
 
 // tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
 func (a *app) tabMenu(m *ui.Menu, w *workspace, term terminalInfo) {
+	if m.Item("重命名…").Chosen() {
+		a.startRename(term)
+	}
+	if term.Name != "" && m.Item("恢复默认名称").Chosen() {
+		a.renameTerminal(term.ID, "")
+	}
+	m.Separator()
 	if m.Item("关闭").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
 		a.askClose(term)
 	}
@@ -1614,6 +1644,9 @@ func tabLabel(t terminalInfo) (string, string) {
 	title := bareTitle(t)
 	if t.AgentState != nil && t.AgentState.Title != "" {
 		title = t.AgentState.Title
+	}
+	if t.Name != "" {
+		title = t.Name
 	}
 	detail := ""
 	switch {

@@ -31,6 +31,8 @@ type uiState struct {
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
 	TermOrder map[string][]string `json:"termOrder,omitempty"`
+	// TermNames 是用户给终端标签改的名字，键是终端 ID；终端没了就删掉
+	TermNames map[string]string `json:"termNames,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`
 }
