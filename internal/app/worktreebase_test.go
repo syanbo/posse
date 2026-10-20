@@ -97,4 +97,8 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 	if !tt.HasText("中止") {
 		t.Fatalf("no operation banner: %v", tt.Texts())
 	}
+	// 停在冲突上是预期的：横幅说明怎么继续，错误条和"已合并"提示都不出
+	if a.err != "" || len(a.toasts) != 0 {
+		t.Fatalf("conflict stop reported as error or success: err=%q toasts=%v", a.err, a.toasts)
+	}
 }

@@ -110,10 +110,21 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 func (a *app) syncBase(w *workspace, rebase bool) {
 	base := w.BaseRef
 	what := "把 " + base + " 合并进来"
-	fn := func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, base) }
+	run := gitx.MergeInto
 	if rebase {
-		what = "rebase 到 " + base
-		fn = func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, base) }
+		what, run = "rebase 到 "+base, gitx.Rebase
+	}
+	// 停在冲突上是这一步预期之内的结果：横幅会说明怎么继续，不再在错误条上报"失败"
+	stopped := false
+	fn := func(ctx context.Context, root string) error {
+		err := run(ctx, root, base)
+		if err != nil {
+			if st, _ := gitx.ReadStatus(ctx, root); st != nil && st.Operation != "" {
+				stopped = true
+				return nil
+			}
+		}
+		return err
 	}
 	a.guardAgent(w, what, func() {
 		v := a.openFilesPanel(w, sideChanges)
@@ -122,7 +133,11 @@ func (a *app) syncBase(w *workspace, rebase bool) {
 		if !v.git.checked {
 			v.git.checked, v.git.repo = true, filepath.Clean(w.Path)
 		}
-		a.gitDoThen(v, what, fn, func() { a.notify("已"+what, "", nil) })
+		a.gitDoThen(v, what, fn, func() {
+			if !stopped {
+				a.notify("已"+what, "", nil)
+			}
+		})
 	})
 }
 
