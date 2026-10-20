@@ -165,7 +165,15 @@ class _VideoViewState extends State<VideoView> {
         },
       );
       if (_disposed) return;
-      final player = VideoPlayerController.file(file);
+      // 安卓用平台视图：默认的纹理把解码器接到 Flutter 的 Surface 上，有的机型（华为麒麟 9010 的海思解码器）
+      // 在这种 Surface 上配不出输出缓冲区（setParameter 报 UnsupportedSetting），关掉 Impeller 也一样；
+      // 平台视图给的是普通窗口，同一个解码器能播。iOS 的纹理没有这个问题
+      final player = VideoPlayerController.file(
+        file,
+        viewType: Platform.isAndroid
+            ? VideoViewType.platformView
+            : VideoViewType.textureView,
+      );
       await player.initialize();
       if (_disposed) {
         await player.dispose();
