@@ -77,11 +77,11 @@ func TestAgentImages(t *testing.T) {
 	if err := os.WriteFile(transcript, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	imgs, err := history.NewImageScanner(transcript).Scan()
+	imgs, err := history.NewImageScanner("claude", transcript).Scan()
 	if err != nil {
 		t.Fatal(err)
 	}
-	made := toolImageItems(transcript, imgs)
+	_, made := sessionImageItems(transcript, imgs)
 	if len(made) != 2 || made[0].label != "preview.png" || made[1].label != "phone_screenshot" || made[0].source() != "/tmp/x/preview.png" {
 		t.Fatalf("claude items %+v", made)
 	}

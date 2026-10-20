@@ -24,7 +24,7 @@ type usageView struct {
 // usageRefresh 是面板开着时多久增量读一次会话文件。
 const usageRefresh = 3 * time.Second
 
-// usageSupported 报告能不能统计这个 agent 的会话：cursor 的会话文件里没有技能和 MCP 的记录方式可依。
+// usageSupported 报告能不能统计这个 agent 的会话。
 func usageSupported(agent string) bool {
 	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor"
 }

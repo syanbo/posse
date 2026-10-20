@@ -28,10 +28,11 @@ import (
 )
 
 // imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片、视频和粘贴过的图片。
-//   - 粘贴的：Claude 存在会话的图片目录里，终端里显示成 [Image #N]；
-//   - agent 生成的：Claude 工具返回的图片（截图、读进来的图片文件），内嵌在会话文件里；
+//   - 粘贴的：终端里显示成 [Image #N]。Claude 存在会话的图片目录里，Codex 内嵌在会话文件里，
+//     Grok、Cursor 存在自己的 assets 目录、会话文件里列出路径；
+//   - agent 生成的：Claude、Grok 工具返回的图片（截图、读进来的图片文件），内嵌在会话文件里；
 //     Codex 图像生成和跑代码产出的图片，存在 ~/.codex/generated_images/<会话 ID>/；
-//     两家工具输出里提到的视频文件（录屏工具返回的路径等），缩略图由 Quick Look 取第一帧。
+//     Claude、Codex、Grok 工具输出里提到的视频文件（录屏工具返回的路径等），缩略图由 Quick Look 取第一帧。
 //
 // 截图解码后一张十几 MB，所以只留缩到面板宽度的缩略图，悬停放大时才解码那一张。
 type imagesView struct {
@@ -73,7 +74,9 @@ const (
 )
 
 // imagesSupported 报告能不能列这个 agent 的图片。
-func imagesSupported(agent string) bool { return agent == "claude" || agent == "codex" }
+func imagesSupported(agent string) bool {
+	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor"
+}
 
 // claudeImageDir 找 Claude 会话保存粘贴图片的目录：/private/tmp/claude-<uid>/<项目目录编码>/<会话 ID>/images。
 // 项目目录编码和会话文件所在目录同名；拿不到会话文件时按会话 ID 找。
@@ -251,21 +254,34 @@ func isImageFile(name string) bool {
 	return false
 }
 
-// toolImageItems 把 Claude 工具返回的图片排成新的在前，标上读的文件名或工具名。
-func toolImageItems(src string, imgs []history.ToolImage) []imageItem {
-	out := make([]imageItem, 0, len(imgs))
+// sessionImageItems 把会话文件里找到的图片分成粘贴的和 agent 生成的，都是新的在前：
+// 粘贴的标上序号（agent 每次启动序号从 #1 重新数，所以 key 用位置或文件路径），
+// 生成的标上读的文件名或工具名。
+func sessionImageItems(src string, imgs []history.ToolImage) (pasted, made []imageItem) {
 	for i := len(imgs) - 1; i >= 0; i-- {
 		im := imgs[i]
-		label := im.Tool
-		if im.Path != "" {
-			label = filepath.Base(im.Path)
-		} else if j := strings.LastIndex(label, "__"); j >= 0 {
-			// mcp__iphone-use__phone_screenshot 只写工具名
-			label = label[j+2:]
+		it := imageItem{key: fmt.Sprintf("%s:%d:%d", src, im.Offset, im.Index), at: im.At, tool: &im, src: src}
+		if im.OnDisk {
+			it.key, it.path, it.tool, it.src = im.Path, im.Path, nil, ""
 		}
-		out = append(out, imageItem{key: fmt.Sprintf("%s:%d:%d", src, im.Offset, im.Index), label: label, at: im.At, tool: &im, src: src})
+		if im.Pasted {
+			it.n, it.label = im.N, "粘贴"
+			if im.N > 0 {
+				it.label = fmt.Sprintf("#%d", im.N)
+			}
+			pasted = append(pasted, it)
+			continue
+		}
+		it.label = im.Tool
+		if im.Path != "" {
+			it.label = filepath.Base(im.Path)
+		} else if j := strings.LastIndex(it.label, "__"); j >= 0 {
+			// mcp__iphone-use__phone_screenshot 只写工具名
+			it.label = it.label[j+2:]
+		}
+		made = append(made, it)
 	}
-	return out
+	return pasted, made
 }
 
 // decodeItem 解码一张图片并缩到最宽 width 像素。
@@ -315,19 +331,22 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 				dir = claudeImageDir(sid, transcript)
 			}
 			pasted = listImages(dir)
-			// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
-			if scanner == nil {
-				if path := history.TranscriptPath(agent, sid, transcript); path != "" {
-					scanner = history.NewImageScanner(path)
-				}
-			}
-			if scanner != nil {
-				if imgs, err := scanner.Scan(); err == nil {
-					made = toolImageItems(scanner.Path(), imgs)
-				}
-			}
 		case "codex":
 			made = codexImages(sid)
+		}
+		// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
+		if scanner == nil {
+			if path := history.TranscriptPath(agent, sid, transcript); path != "" {
+				scanner = history.NewImageScanner(agent, path)
+			}
+		}
+		if scanner != nil {
+			if imgs, err := scanner.Scan(); err == nil {
+				p, m := sessionImageItems(scanner.Path(), imgs)
+				pasted = append(pasted, p...)
+				made = append(made, m...)
+				slices.SortStableFunc(made, func(a, b imageItem) int { return b.at.Compare(a.at) })
+			}
 		}
 		if videos == nil {
 			if path := history.TranscriptPath(agent, sid, transcript); path != "" {
@@ -446,7 +465,7 @@ func writeToolImage(it imageItem) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	name := it.label
+	name := strings.TrimPrefix(it.label, "#")
 	if ext2 := filepath.Ext(name); ext2 != "" {
 		name = strings.TrimSuffix(name, ext2)
 	}
@@ -466,7 +485,7 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
 				case !imagesSupported(cur.Agent):
-					usageNote(c, "目前只支持 Claude 和 Codex 会话。")
+					usageNote(c, "目前只支持 Claude、Codex、Grok 和 Cursor 会话。")
 					return
 				case v.poll.at.IsZero():
 					usageNote(c, "正在读取…")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func TestImageScanner(t *testing.T) {
 		f.Close()
 	}
 	write(lines...)
-	s := NewImageScanner(path)
+	s := NewImageScanner("claude", path)
 	got, err := s.Scan()
 	if err != nil || len(got) != 1 || got[0].Tool != "Read" || got[0].Path != "/tmp/a.png" || got[0].At.IsZero() {
 		t.Fatalf("first scan %+v %v", got, err)
@@ -46,5 +47,92 @@ func TestImageScanner(t *testing.T) {
 		if err != nil || string(b) != want {
 			t.Fatalf("image %d = %q %v", i, b, err)
 		}
+	}
+}
+
+func TestCodexImageScanner(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("pasted"))
+	lines := []string{
+		`{"timestamp":"2026-10-20T06:00:36.562Z","type":"response_item","payload":{"type":"message","role":"user","content":[` +
+			`{"type":"input_text","text":"<image name=[Image #2] path=\"/tmp/hive-paste-1.png\">"},{"type":"input_image","image_url":"` + url + `"},` +
+			`{"type":"input_text","text":"</image>"},{"type":"input_text","text":"[Image #2] 核实"}]}}`,
+		// 新格式里同一条消息的完成事件只带路径，不重复算
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"local_image","path":"/tmp/hive-paste-1.png"}]}}}`,
+		// 工具输出里的图片另有 generated_images，不算粘贴的
+		`{"type":"response_item","payload":{"type":"function_call_output","output":[{"type":"input_image","image_url":"` + url + `"}]}}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewImageScanner("codex", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].N != 2 || got[0].Path != "/tmp/hive-paste-1.png" || got[0].Media != "image/png" || got[0].At.IsZero() {
+		t.Fatalf("got %+v", got)
+	}
+	b, err := ReadToolImage(path, got[0])
+	if err != nil || string(b) != "pasted" {
+		t.Fatalf("read %q, %v", b, err)
+	}
+}
+
+func TestGrokImageScanner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "chat_history.jsonl")
+	asset := filepath.Join(dir, "assets", "image-1.png")
+	os.MkdirAll(filepath.Dir(asset), 0o755)
+	os.WriteFile(asset, []byte("pasted"), 0o644)
+	url := func(s string) string { return "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte(s)) }
+	lines := []string{
+		// 子 agent 开头带的图片不是工具返回的
+		`{"type":"user","synthetic_reason":"system_reminder","content":[{"type":"text","text":"[Image extracted from tool result above]"},{"type":"image","url":"` + url("x") + `"}]}`,
+		`{"type":"user","content":[{"type":"text","text":"<image_files>\nThe following images were provided by the user and saved to the workspace for future use:\n1. ` + asset + `\n\nThese images can be copied.\n</image_files>\n\n<user_query>\n[Image #1] 看看\n</user_query>"},{"type":"image","url":"` + url("pasted") + `"}]}`,
+		`{"type":"assistant","tool_calls":[{"id":"c1","name":"read_file","arguments":"{\"target_file\":\"/tmp/a.png\"}"},{"id":"c2","name":"use_tool","arguments":"{\"tool_name\":\"phone_screenshot\"}"}]}`,
+		`{"type":"tool_result","tool_call_id":"c1","content":"Read image file: /tmp/a.png","images":[{"type":"image","url":"` + url("read") + `"}]}`,
+		`{"type":"tool_result","tool_call_id":"c2","content":"[image content will be provided separately]"}`,
+		`{"type":"user","synthetic_reason":"system_reminder","content":[{"type":"text","text":"[Image extracted from tool result above]"},{"type":"image","url":"` + url("shot") + `"}]}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := NewImageScanner("grok", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		pasted bool
+		n      int
+		tool   string
+		data   string
+	}{{true, 1, "", "pasted"}, {false, 0, "read_file", "read"}, {false, 0, "phone_screenshot", "shot"}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i, w := range want {
+		b, err := ReadToolImage(path, got[i])
+		if got[i].Pasted != w.pasted || got[i].N != w.n || got[i].Tool != w.tool || err != nil || string(b) != w.data {
+			t.Fatalf("%d: %+v %q %v", i, got[i], b, err)
+		}
+	}
+	if got[0].Path != asset || !got[0].OnDisk || got[1].Path != "/tmp/a.png" {
+		t.Fatalf("paths %+v", got)
+	}
+}
+
+func TestCursorImageScanner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	a, b := filepath.Join(dir, "image-1-0.jpg"), filepath.Join(dir, "image-1-1.jpg")
+	os.WriteFile(a, []byte("a"), 0o644)
+	line := `{"role":"user","message":{"content":[{"type":"text","text":"[Image]\n<image_files>\nThe following images were provided by the user and saved to disk for future use:\n1. ` + a + `\n2. ` + b + `\n\nThese files can be read with tools.\n</image_files>\n<user_query>\n[Image #1] [Image #2] 这是什么\n</user_query>"}]}}`
+	os.WriteFile(path, []byte(line+"\n"), 0o644)
+	got, err := NewImageScanner("cursor", path).Scan()
+	if err != nil || len(got) != 2 || got[0].N != 1 || got[1].N != 2 || got[1].Path != b || !got[0].Pasted || got[0].At.IsZero() {
+		t.Fatalf("got %+v %v", got, err)
+	}
+	if data, err := ReadToolImage(path, got[0]); err != nil || string(data) != "a" {
+		t.Fatalf("read %q %v", data, err)
 	}
 }

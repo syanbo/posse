@@ -17,7 +17,7 @@ type ToolVideo struct {
 	At   time.Time // 最后一次出现在工具输出里的时间
 }
 
-// VideoScanner 增量读 Claude 或 Codex 的会话文件，从工具输出里找视频文件的路径。
+// VideoScanner 增量读 Claude、Codex 或 grok 的会话文件，从工具输出里找视频文件的路径（cursor 的会话文件不记工具输出）。
 // 只看工具输出：用户消息里提到的视频不是 agent 产出的。不是并发安全的。
 type VideoScanner struct {
 	agent  string
@@ -112,6 +112,13 @@ func (s *VideoScanner) line(b []byte) {
 			outputs = append(outputs, p.Item.Result)
 		}
 		at = l.Timestamp
+	case "grok":
+		// 会话文件不带时间，At 留空
+		var l grokImageLine
+		if json.Unmarshal(b, &l) != nil || l.Type != "tool_result" {
+			return
+		}
+		outputs = append(outputs, l.Content)
 	}
 	for _, raw := range outputs {
 		var v any
