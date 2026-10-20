@@ -87,6 +87,20 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _gen = 0;
   Future<void> _gate = Future<void>.value();
   String? _notice;
+
+  Timer? _noticeTimer;
+
+  /// 一次性的提示，[noticeLife] 后自己消失；期间换了别的提示就不动它。
+  void _flash(String? text) {
+    if (!mounted) return;
+    _noticeTimer?.cancel();
+    setState(() => _notice = text);
+    if (text == null) return;
+    _noticeTimer = Timer(noticeLife, () {
+      if (mounted && _notice == text) setState(() => _notice = null);
+    });
+  }
+
   final _focus = FocusNode();
   var _busy = false;
   var _showCopy = false;
@@ -117,6 +131,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   @override
   void dispose() {
+    _noticeTimer?.cancel();
     _gen++;
     WidgetsBinding.instance.removeObserver(this);
     widget.model.removeListener(_onModel);
@@ -342,7 +357,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
         );
       case NotInWorkspace():
-        setState(() => _notice = '这个文件不在当前工作区里，手机上打不开');
+        _flash('这个文件不在当前工作区里，手机上打不开');
       case null:
         break;
     }
@@ -353,7 +368,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     try {
       ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
-    if (!ok && mounted) setState(() => _notice = '打不开这个链接：$uri');
+    if (!ok && mounted) _flash('打不开这个链接：$uri');
   }
 
   /// grok 自己在左右各留 [_grokMargin] 列空白、整屏铺底色，窄屏上再加外面的内边距显得空。
@@ -612,7 +627,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (bytes == null || !mounted) return;
       await _typeImagePath(rpc, bytes);
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) _flash(friendlyError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -634,9 +649,9 @@ class _TerminalScreenState extends State<TerminalScreen>
         await _typeImagePath(rpc, paste.image!);
         return;
       }
-      setState(() => _notice = '剪贴板里没有文字或图片');
+      _flash('剪贴板里没有文字或图片');
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) _flash(friendlyError(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -654,7 +669,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
     if (!mounted) return;
     final note = sendOutcomeText(outcome);
-    setState(() => _notice = note.isEmpty ? null : note);
+    _flash(note.isEmpty ? null : note);
   }
 
   Future<void> _send(List<int> bytes, {bool enter = false}) async {
@@ -668,7 +683,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
     final note = sendOutcomeText(outcome);
     if (!mounted || note.isEmpty) return;
-    setState(() => _notice = note);
+    _flash(note);
   }
 
   /// 连着电脑、工作区列表也回来了，却找不到这个终端：它已经关掉了（或者常驻进程重启过）。
@@ -739,7 +754,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       ),
       body: Column(
         children: [
-          if (_notice != null) NoticeBar(_notice!),
+          if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
           Expanded(
             child: Padding(
               padding: _cropGrok ? EdgeInsets.zero : _termPadding,

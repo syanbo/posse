@@ -97,6 +97,19 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _gate = Future<void>.value();
   String? _notice;
 
+  Timer? _noticeTimer;
+
+  /// 一次性的提示，[noticeLife] 后自己消失；期间换了别的提示就不动它。
+  void _flash(String? text) {
+    if (!mounted) return;
+    _noticeTimer?.cancel();
+    setState(() => _notice = text);
+    if (text == null) return;
+    _noticeTimer = Timer(noticeLife, () {
+      if (mounted && _notice == text) setState(() => _notice = null);
+    });
+  }
+
   SessionTab get tab => _tab ?? widget.tab;
 
   PhoneRpc? get _rpc => widget.model.rpc;
@@ -132,6 +145,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _noticeTimer?.cancel();
     _gone = true;
     _openGen++;
     widget.model.removeListener(_onModel);
@@ -340,8 +354,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     final note = sendOutcomeText(outcome);
     if (!mounted) return outcome;
+    _flash(note.isEmpty ? null : note);
     setState(() {
-      _notice = note.isEmpty ? null : note;
       if (outcome == SendOutcome.accepted && enter && text == _input.text) {
         _input.clear();
       }
@@ -352,10 +366,8 @@ class _ChatScreenState extends State<ChatScreen> {
   void _addImages(List<Uint8List> images) {
     if (!mounted || images.isEmpty) return;
     final room = maxChatImages - _pending.length;
-    setState(() {
-      _pending.addAll(images.take(room));
-      if (images.length > room) _notice = '一次最多 $maxChatImages 张';
-    });
+    setState(() => _pending.addAll(images.take(room)));
+    if (images.length > room) _flash('一次最多 $maxChatImages 张');
   }
 
   void _insertText(String text) {
@@ -385,9 +397,9 @@ class _ChatScreenState extends State<ChatScreen> {
         _addImages([paste.image!]);
         return;
       }
-      setState(() => _notice = '剪贴板里没有文字或图片');
+      _flash('剪贴板里没有文字或图片');
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) _flash(friendlyError(error));
     }
   }
 
@@ -410,7 +422,7 @@ class _ChatScreenState extends State<ChatScreen> {
         case ImageAsk.gallery:
           final room = maxChatImages - _pending.length;
           if (room < 1) {
-            setState(() => _notice = '一次最多 $maxChatImages 张');
+            _flash('一次最多 $maxChatImages 张');
             return;
           }
           _addImages(await pickGalleryImages(limit: room));
@@ -421,7 +433,7 @@ class _ChatScreenState extends State<ChatScreen> {
           await _pasteClipboard();
       }
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) _flash(friendlyError(error));
     }
   }
 
@@ -468,7 +480,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) _flash(friendlyError(error));
     } finally {
       if (mounted) {
         final before = _tail();
@@ -662,7 +674,7 @@ class _ChatScreenState extends State<ChatScreen> {
             )
           else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
             QuestionCard(questions: prompt.questions, onSubmit: _answer),
-          if (_notice != null) NoticeBar(_notice!),
+          if (_notice != null) NoticeBar(_notice!, onClose: () => _flash(null)),
           ChatComposer(
             controller: _input,
             images: _pending,

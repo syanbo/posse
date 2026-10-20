@@ -626,14 +626,17 @@ class EmptyState extends StatelessWidget {
 
 /// 错误条：一行文字，留在原处，等下一次成功时消失。
 class NoticeBar extends StatelessWidget {
-  const NoticeBar(this.text, {super.key});
+  const NoticeBar(this.text, {super.key, this.onClose});
 
   final String text;
+
+  /// 点一下关掉。
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    return Container(
+    final bar = Container(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -654,8 +657,17 @@ class NoticeBar extends StatelessWidget {
         ],
       ),
     );
+    if (onClose == null) return bar;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onClose,
+      child: bar,
+    );
   }
 }
+
+/// 一次性的提示（剪贴板是空的、发送失败……）过一会儿自己消失，不一直挡在输入框上面。
+const noticeLife = Duration(seconds: 4);
 
 /// 终端标题里 agent 自己加的状态符号（Claude 的 ✳、转圈的盲文字符）。界面另有状态图标，标题里不再重复。
 String cleanTitle(String title) {
