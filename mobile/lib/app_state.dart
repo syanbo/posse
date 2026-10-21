@@ -20,7 +20,7 @@ String friendlyError(Object error) {
   if (error is TimeoutException) return '电脑没有回应，可能已经休眠或者网络断了';
   if (error is FirstConnectFailed) {
     return '连不上电脑：确认电脑上的 Hive 开着、手机和电脑在同一个网络，'
-        '并在手机设置里允许 Hive Mobile 使用无线数据和本地网络';
+        '并在手机设置里允许 Hive 使用无线数据和本地网络';
   }
   if (error is RpcException) return error.message;
   final text = '$error';

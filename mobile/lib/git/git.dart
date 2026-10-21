@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'status.dart';
@@ -130,7 +131,7 @@ class _GitPaneState extends State<GitPane> {
   @override
   Widget build(BuildContext context) {
     final status = _status;
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HiveLoader());
     if (_error != null && status == null) {
       return EmptyState(
         icon: Icons.cloud_off_rounded,
@@ -699,7 +700,7 @@ class _DiffViewerState extends State<DiffViewer> {
         error: true,
       );
     }
-    if (diff == null) return const Center(child: CircularProgressIndicator());
+    if (diff == null) return const Center(child: HiveLoader());
     final images = diff.images;
     if (images != null) return _ImageDiff(old: images.old, now: images.now);
     if (widget.file.binary) {

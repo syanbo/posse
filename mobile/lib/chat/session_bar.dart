@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../ui/loading.dart';
 import '../workspace/models.dart';
 import 'context_meter.dart';
 import 'latency_label.dart';
@@ -125,10 +126,7 @@ extension on SessionTitle {
     return Row(
       key: const ValueKey('reconnecting'),
       children: [
-        SizedBox.square(
-          dimension: 10,
-          child: CircularProgressIndicator(strokeWidth: 1.5, color: c.honey),
-        ),
+        HexSpinner(size: 10, color: c.honey),
         const SizedBox(width: 5),
         Flexible(
           child: Text(

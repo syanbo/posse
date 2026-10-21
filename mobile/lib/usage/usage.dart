@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_state.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 
@@ -130,12 +131,14 @@ class AgentUsage {
   }
 
   /// 首页卡片代表这一家的窗口，和桌面状态栏一致：总额度里有 5 小时就是它；
-  /// 只有分池时取用得最多的一池，否则是第一个。
+  /// 只有分池时取用得最多的一池，否则是第一个。Claude 读数里没有 5 小时就是这个窗口里
+  /// 还没用过，照样写 5 小时，不换成每周。
   UsageWindow get headWindow {
     final ws = shownWindows;
     for (final w in ws) {
       if (w.name.isEmpty && windowLabel(w.minutes) == '5 小时') return w;
     }
+    if (agent == 'claude') return const UsageWindow(percent: 0, minutes: 300);
     if (ws.first.name.isEmpty) return ws.first;
     return ws.reduce((a, b) => b.percent > a.percent ? b : a);
   }
@@ -555,14 +558,7 @@ class _UsageSheetState extends State<UsageSheet> {
                   visualDensity: VisualDensity.compact,
                   onPressed: _refreshing ? null : _refresh,
                   icon: _refreshing
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: c.muted,
-                          ),
-                        )
+                      ? HexSpinner(color: c.muted)
                       : Icon(Icons.refresh_rounded, size: 20, color: c.muted),
                 ),
               SizedBox(

@@ -9,6 +9,7 @@ import '../app_state.dart';
 import '../files/video.dart';
 import '../history/models.dart' show historyTime;
 import '../protocol/rpc.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -171,7 +172,7 @@ class _MediaScreenState extends State<MediaScreen> {
           error: true,
         );
       }
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: HiveLoader());
     }
     if (list.isEmpty) {
       return const EmptyState(
@@ -570,7 +571,7 @@ class _ImageViewState extends State<_ImageView> {
       );
     }
     final file = _file;
-    if (file == null) return const Center(child: CircularProgressIndicator());
+    if (file == null) return const Center(child: HiveLoader());
     return InteractiveViewer(
       maxScale: 6,
       child: Center(child: Image.file(file)),

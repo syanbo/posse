@@ -8,6 +8,7 @@ import '../chat/anchor.dart';
 import '../chat/chat.dart';
 import '../chat/merge.dart';
 import '../chat/transcript.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -112,7 +113,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               decoration: InputDecoration(
                 hintText: '搜索提问、回复和工具输出',
                 prefixIcon: Icon(Icons.search_rounded, color: c.muted),
-                suffixIcon: searching
+                // 已有结果时重读，转圈放在搜索框里，不挤动下面的列表
+                suffixIcon: _loading && _sessions.isNotEmpty
+                    ? const Center(widthFactor: 1, child: HexSpinner())
+                    : searching
                     ? IconButton(
                         tooltip: '清除',
                         icon: Icon(Icons.close_rounded, color: c.muted),
@@ -125,12 +129,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
           ),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
           if (_error != null) NoticeBar(_error!),
           if (searching && _any && _sessions.isNotEmpty)
             const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
           Expanded(
-            child: _sessions.isEmpty && !_loading && _error == null
+            child: _loading && _sessions.isEmpty
+                ? const Center(child: HiveLoader())
+                : _sessions.isEmpty && _error == null
                 ? EmptyState(
                     icon: Icons.history_rounded,
                     text: searching ? '没有找到' : '电脑上还没有会话历史',
@@ -400,28 +405,29 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       ),
       body: Column(
         children: [
-          if (_loading && entries.isEmpty)
-            const LinearProgressIndicator(minHeight: 2),
           if (_error != null) NoticeBar(_error!),
           Expanded(
-            child: SelectionArea(
-              child: Scrollbar(
-                controller: _scroll,
-                // 倒着排：一打开就在最新的消息，往上翻到头自动读更早的
-                child: ListView.builder(
-                  controller: _scroll,
-                  reverse: true,
-                  padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                  itemCount: rowKeys.length,
-                  findChildIndexCallback: (key) =>
-                      key is ValueKey<String> ? rowIndex[key.value] : null,
-                  itemBuilder: (context, index) => KeyedSubtree(
-                    key: ValueKey(rowKeys[index]),
-                    child: _row(index, entries, s.agent),
+            child: _loading && entries.isEmpty
+                ? const Center(child: HiveLoader())
+                : SelectionArea(
+                    child: Scrollbar(
+                      controller: _scroll,
+                      // 倒着排：一打开就在最新的消息，往上翻到头自动读更早的
+                      child: ListView.builder(
+                        controller: _scroll,
+                        reverse: true,
+                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                        itemCount: rowKeys.length,
+                        findChildIndexCallback: (key) => key is ValueKey<String>
+                            ? rowIndex[key.value]
+                            : null,
+                        itemBuilder: (context, index) => KeyedSubtree(
+                          key: ValueKey(rowKeys[index]),
+                          child: _row(index, entries, s.agent),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
           SafeArea(
             top: false,

@@ -179,7 +179,7 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   RowTile(
                     chevron: false,
-                    title: const Text('Hive Mobile'),
+                    title: const Text('Hive'),
                     trailing: Text(appVersion, style: mono(13, color: c.muted)),
                   ),
                 ],

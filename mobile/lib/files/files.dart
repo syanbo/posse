@@ -9,6 +9,7 @@ import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -232,7 +233,7 @@ class _FilesPaneState extends State<FilesPane> {
     }
     if (rows.isEmpty) {
       return _loading.contains('')
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: HiveLoader())
           : const EmptyState(icon: Icons.folder_open_rounded, text: '目录是空的');
     }
     return ListView.builder(
@@ -261,12 +262,7 @@ class _FilesPaneState extends State<FilesPane> {
                 width: 18,
                 child: e.dir
                     ? (_loading.contains(e.path)
-                          ? const SizedBox.square(
-                              dimension: 12,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                              ),
-                            )
+                          ? const HexSpinner(size: 12)
                           : AnimatedRotation(
                               turns: open ? 0.25 : 0,
                               duration: const Duration(milliseconds: 150),
@@ -545,7 +541,7 @@ class _FileViewerState extends State<FileViewer> {
       );
     }
     final text = _text;
-    if (text == null) return const Center(child: CircularProgressIndicator());
+    if (text == null) return const Center(child: HiveLoader());
     final notice = _truncated ? const CodeNotice('文件太大，只显示前 512 KB') : null;
     if (_markdown && !_source) {
       return SelectionArea(

@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../chat/markdown_view.dart';
 import '../app_state.dart';
 import '../terminal/link_target.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 
 /// 文件页里渲染一个 Markdown 文件：表格、任务列表、嵌套列表、图片都画出来。
@@ -340,10 +341,7 @@ class _WorkspaceImageState extends State<_WorkspaceImage> {
               color: c.code,
               borderRadius: BorderRadius.circular(Rd.button),
             ),
-            child: const SizedBox.square(
-              dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: const HexSpinner(size: 18),
           );
         }
         return _ImageAlt(alt ?? path, c);

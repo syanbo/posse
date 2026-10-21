@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 
 /// 对话页底部的输入区：待发的图片、选图按钮、输入框和发送按钮。状态都在对话页里，这里只画。
@@ -251,14 +252,7 @@ class ChatComposer extends StatelessWidget {
                       tooltip: '发送',
                       onPressed: ready ? onSubmit : null,
                       icon: sending
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: c.muted,
-                              ),
-                            )
+                          ? HexSpinner(color: c.muted)
                           : Icon(
                               Icons.arrow_upward_rounded,
                               size: 20,

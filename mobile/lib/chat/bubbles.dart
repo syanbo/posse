@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'markdown_view.dart';
 import 'models.dart';
 import 'transcript.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import 'chat_style.dart';
 import 'echo.dart';
@@ -51,10 +52,7 @@ class EarlierRow extends StatelessWidget {
       height: 44,
       child: Center(
         child: loading
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const HexSpinner(size: 18)
             : TextButton(
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 30),

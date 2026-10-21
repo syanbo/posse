@@ -1,10 +1,10 @@
 import '../history/history.dart';
+import '../ui/loading.dart';
 import '../usage/usage.dart';
 
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -488,7 +488,7 @@ class WorkspaceScreen extends StatelessWidget {
       ),
       body: model.worktrees.isEmpty
           ? (model.connecting
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: HiveLoader())
                 : model.disconnected
                 ? _DisconnectedList(
                     model: model,
@@ -505,7 +505,7 @@ class WorkspaceScreen extends StatelessWidget {
                       child: const Text('重试'),
                     ),
                   ))
-          // iOS 原生的下拉刷新；长按项目卡片拖动排序，顺序按电脑分别存在手机上。
+          // 长按项目卡片拖动排序，顺序按电脑分别存在手机上。
           // 报错浮在列表上面、断线写在电脑胶囊里，都不插进列表，免得列表跟着跳
           : Stack(
               children: [
@@ -514,9 +514,6 @@ class WorkspaceScreen extends StatelessWidget {
                     parent: AlwaysScrollableScrollPhysics(),
                   ),
                   slivers: [
-                    CupertinoSliverRefreshControl(
-                      onRefresh: model.refreshWorktrees,
-                    ),
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -1048,13 +1045,7 @@ class _ConnectionLine extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (offline)
-              SizedBox.square(
-                dimension: 11,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.6,
-                  color: c.honey,
-                ),
-              )
+              HexSpinner(size: 11, color: c.honey)
             else
               Container(
                 width: 7,
@@ -1210,12 +1201,7 @@ class _ComputerSheet extends StatelessWidget {
                           ),
                           trailing: computer.id == active
                               ? (model.connecting
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
+                                    ? const HexSpinner(size: 18)
                                     : Icon(
                                         Icons.check_rounded,
                                         color: c.accent,

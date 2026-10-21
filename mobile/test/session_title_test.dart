@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/chat/session_bar.dart';
+import 'package:hive_mobile/ui/loading.dart';
 import 'package:hive_mobile/ui/theme.dart';
 import 'package:hive_mobile/workspace/models.dart';
 
@@ -24,7 +25,7 @@ void main() {
   ) async {
     await tester.pumpWidget(host(const SessionTitle(tab: tab)));
     expect(find.text('本轮完成'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(HexSpinner), findsNothing);
   });
 
   testWidgets('disconnected: reconnect progress takes the state line', (
@@ -35,6 +36,7 @@ void main() {
     // 转圈一直在动，pumpAndSettle 等不到头
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('连接断开，正在重连…'), findsOneWidget);
+    expect(find.byType(HexSpinner), findsOneWidget);
     expect(find.text('本轮完成'), findsNothing);
 
     model.connecting = true;
