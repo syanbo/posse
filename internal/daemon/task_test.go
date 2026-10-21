@@ -93,6 +93,23 @@ func TestDeliverNudgesIdleCoordinator(t *testing.T) {
 	}
 }
 
+// 主线程已经停在输入框、只是后台子 agent 还在跑：状态是工作中，但照常提醒。
+func TestDeliverNudgesParkedCoordinator(t *testing.T) {
+	d, w := newTestDaemon(t)
+	coord, err := d.startTerminal(w, []string{"/bin/cat"}, "claude", 100, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.setAgent(coord, term.AgentState{Status: agent.StatusWorking})
+	info := call(t, d.taskStart, map[string]any{"caller": coord.ID, "command": []string{"/bin/sh", "-c", "sleep 30"}, "spec": "x"}).(taskInfo)
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "all good"})
+	d.setAgent(coord, term.AgentState{Status: agent.StatusIdle, Event: "Stop", Subagents: []string{"a1"}})
+	if st := coord.Agent(); st.Status != agent.StatusWorking {
+		t.Fatalf("state %+v", st)
+	}
+	waitScreen(t, coord, "Hive: "+info.ID+" finished.")
+}
+
 func TestWorkerPrompt(t *testing.T) {
 	task := store.Task{ID: "k_1", Spec: "do it"}
 	p := workerPrompt(task, store.Workspace{Kind: "worktree", Branch: "feat", BaseRef: "main"})

@@ -715,7 +715,7 @@ func (d *Daemon) deliver(terminalID string) {
 	d.nudgeMu.Lock()
 	defer d.nudgeMu.Unlock()
 	s, err := d.session(terminalID)
-	if err != nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle {
+	if err != nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) {
 		return
 	}
 	if wait := nudgeQuiet - time.Since(s.LastInput()); wait > 0 {

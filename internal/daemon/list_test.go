@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"hive/internal/agent"
+	"hive/internal/host"
 	"hive/internal/store"
 )
 
@@ -172,5 +173,77 @@ func TestSessionEndClearsAgent(t *testing.T) {
 	// terminal wait --for status 仍然等得到退出
 	if st := s.Agent(); st.Status != agent.StatusExited {
 		t.Fatalf("state %+v", st)
+	}
+}
+
+// 后台子 agent 还在跑时主线程停下：仍是工作中，等它结束、Claude 开新一轮再停下才是完成。
+// 事件顺序照 Claude Code 2.1.306 实测（后台子 agent 不发 SubagentStart）。
+func TestBackgroundSubagentKeepsWorking(t *testing.T) {
+	d, ws := newTestDaemon(t)
+	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "claude", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := func(event string, payload map[string]any) {
+		t.Helper()
+		payload["session_id"] = "sid"
+		raw, _ := json.Marshal(map[string]any{"terminalId": s.ID, "agent": "claude", "event": event, "payload": payload})
+		if _, err := d.hookEvent(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	running := []map[string]any{{"id": "a1", "type": "subagent", "status": "running"}}
+	hook("UserPromptSubmit", map[string]any{})
+	hook("Stop", map[string]any{"last_assistant_message": "launched", "background_tasks": running})
+	if st := s.Agent(); st.Status != agent.StatusWorking || !agent.Parked(st) || st.Message != "launched" {
+		t.Fatalf("parked state %+v", st)
+	}
+	// 标题兜底（Esc 后标题回到 ✳）也不把它记成完成
+	d.setAgent(s, host.AgentState{Status: agent.StatusIdle, Event: "title", At: time.Now()})
+	if st := s.Agent(); st.Status != agent.StatusWorking {
+		t.Fatalf("title made it idle: %+v", st)
+	}
+	// 子 agent 里的工具事件不动主线程的状态
+	hook("PreToolUse", map[string]any{"tool_name": "Bash", "agent_id": "a1"})
+	hook("SubagentStop", map[string]any{"agent_id": "a1", "background_tasks": running})
+	if st := s.Agent(); st.Status != agent.StatusWorking || len(st.Subagents) != 0 {
+		t.Fatalf("after SubagentStop %+v", st)
+	}
+	hook("UserPromptSubmit", map[string]any{"prompt": "<task-notification>"})
+	hook("Stop", map[string]any{"last_assistant_message": "finished", "background_tasks": []any{}})
+	if st := s.Agent(); st.Status != agent.StatusIdle {
+		t.Fatalf("final state %+v", st)
+	}
+}
+
+// 最后一个子 agent 结束后迟迟没有新一轮（被停掉了）：过一会儿按完成算。
+func TestStoppedSubagentEndsTurn(t *testing.T) {
+	old := subagentGrace
+	subagentGrace = 50 * time.Millisecond
+	t.Cleanup(func() { subagentGrace = old })
+	d, ws := newTestDaemon(t)
+	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "claude", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range []map[string]any{
+		{"event": "Stop", "payload": map[string]any{"session_id": "sid", "background_tasks": []map[string]any{{"id": "a1", "type": "subagent", "status": "running"}}}},
+		{"event": "SubagentStop", "payload": map[string]any{"session_id": "sid", "agent_id": "a1"}},
+	} {
+		ev["terminalId"], ev["agent"] = s.ID, "claude"
+		raw, _ := json.Marshal(ev)
+		if _, err := d.hookEvent(context.Background(), raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if st := s.Agent(); st.Status != agent.StatusWorking {
+		t.Fatalf("state %+v", st)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for s.Agent().Status != agent.StatusIdle {
+		if time.Now().After(deadline) {
+			t.Fatalf("still %+v", s.Agent())
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }

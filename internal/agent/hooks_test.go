@@ -37,6 +37,33 @@ func TestMapEvent(t *testing.T) {
 	}
 }
 
+// Claude 的 Stop 带着还在跑的后台任务：只有子 agent 类、状态是 running 的算，后台 shell 不算。
+func TestMapEventBackgroundTasks(t *testing.T) {
+	st, _ := MapEvent("claude", "Stop", json.RawMessage(`{"session_id":"s","last_assistant_message":"launched","background_tasks":[
+		{"id":"a1","type":"subagent","status":"running","agent_type":"general-purpose"},
+		{"id":"b1","type":"shell","status":"running","command":"npm run dev"},
+		{"id":"a2","type":"subagent","status":"completed"},
+		{"id":"w1","type":"workflow","status":"running"}]}`))
+	if st.Status != StatusIdle || strings.Join(st.Subagents, ",") != "a1,w1" {
+		t.Fatalf("state %+v", st)
+	}
+	// 没有后台任务时给空切片，换掉之前记的那份
+	st, _ = MapEvent("claude", "Stop", json.RawMessage(`{"background_tasks":[]}`))
+	if st.Subagents == nil || len(st.Subagents) != 0 {
+		t.Fatalf("subagents %#v", st.Subagents)
+	}
+	st, _ = MapEvent("claude", "SessionStart", json.RawMessage(`{"source":"resume"}`))
+	if st.Subagents == nil || len(st.Subagents) != 0 {
+		t.Fatalf("resume keeps subagents %#v", st.Subagents)
+	}
+	if id, ok := SubagentStopped("claude", "SubagentStop", json.RawMessage(`{"agent_id":"a1"}`)); !ok || id != "a1" {
+		t.Fatalf("SubagentStopped = %q %v", id, ok)
+	}
+	if _, ok := SubagentStopped("claude", "SubagentStart", json.RawMessage(`{"agent_id":"a1"}`)); ok {
+		t.Fatal("SubagentStart taken as a stop")
+	}
+}
+
 func TestMapEventPrompt(t *testing.T) {
 	ask := `{"z":1,"a":2}`
 	st, ok := MapEvent("claude", "PreToolUse", json.RawMessage(

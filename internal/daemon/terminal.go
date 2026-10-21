@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -558,6 +559,10 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		s.markHooked(p.Agent)
 	}
 	d.usageHook(p.Agent, p.Event, p.Payload)
+	if id, ok := agent.SubagentStopped(p.Agent, p.Event, p.Payload); ok {
+		d.subagentStopped(s, id)
+		return map[string]bool{"ignored": true}, nil
+	}
 	st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload)
 	if !ok {
 		return map[string]bool{"ignored": true}, nil
@@ -606,8 +611,21 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
 func (d *Daemon) setAgent(s *session, st host.AgentState) {
+	// 主线程停下时后台子 agent 还在跑：不算本轮完成（防休眠、terminal wait、界面和手机都按工作中）
+	if st.Status == agent.StatusIdle {
+		subs := st.Subagents
+		if cur := s.Agent(); subs == nil && (st.SessionID == "" || st.SessionID == cur.SessionID) {
+			subs = cur.Subagents
+		}
+		if len(subs) > 0 {
+			st.Status = agent.StatusWorking
+		}
+	}
 	s.SetAgent(st)
 	d.refreshAwake()
+	if agent.Parked(s.Agent()) {
+		go d.deliver(s.ID)
+	}
 	switch st.Status {
 	case agent.StatusIdle:
 		go d.deliver(s.ID)
@@ -616,6 +634,34 @@ func (d *Daemon) setAgent(s *session, st host.AgentState) {
 		go d.workerGone(s.ID, "worker agent exited before reporting")
 	}
 }
+
+// subagentStopped 划掉结束的子 agent。最后一个结束时主线程若停着，Claude 会自己开一轮处理它的结果
+// （UserPromptSubmit 带着 task-notification），那一轮的 Stop 才是本轮完成；等 subagentGrace 还没有
+// 新的主线程事件（子 agent 被停掉、没有新一轮）就按完成算，免得一直显示工作中。
+func (d *Daemon) subagentStopped(s *session, id string) {
+	if !slices.Contains(s.Agent().Subagents, id) {
+		return
+	}
+	st := s.DropSubagent(id)
+	if len(st.Subagents) > 0 || st.Status != agent.StatusWorking {
+		return
+	}
+	switch st.Event {
+	case "Stop", "StopFailure", "title":
+	default:
+		return
+	}
+	at := st.At
+	time.AfterFunc(subagentGrace, func() {
+		cur := s.Agent()
+		if cur.At.Equal(at) && cur.Status == agent.StatusWorking && len(cur.Subagents) == 0 {
+			d.setAgent(s, host.AgentState{Status: agent.StatusIdle, Event: cur.Event, Message: cur.Message, At: time.Now()})
+		}
+	})
+}
+
+// subagentGrace 是最后一个后台子 agent 结束后，等 Claude 开新一轮的时间（实测 0.1 秒内就开了）。
+var subagentGrace = 20 * time.Second
 
 // checkAgentGone 发现 agent 进程已经不在时按退出处理。
 func (d *Daemon) checkAgentGone(s *session) {

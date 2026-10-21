@@ -54,9 +54,12 @@ type AgentState struct {
 	Prompt         string `json:"prompt,omitempty"`    // 手机上的 interactivePrompt：答题卡原文或审批 JSON
 	// Title 是 hive session title 给这个会话起的标题，界面和手机用它当会话名；
 	// TitlePending 是 Claude 还没拿到它（下一次 UserPromptSubmit 时经 hook 交过去）
-	Title        string    `json:"title,omitempty"`
-	TitlePending bool      `json:"titlePending,omitempty"`
-	At           time.Time `json:"at"`
+	Title        string `json:"title,omitempty"`
+	TitlePending bool   `json:"titlePending,omitempty"`
+	// Subagents 是还在跑的后台子 agent（Claude 主线程 Stop 的 background_tasks，SubagentStop 划掉）：
+	// 它们跑着时主线程停下不算本轮完成
+	Subagents []string  `json:"subagents,omitempty"`
+	At        time.Time `json:"at"`
 }
 
 var libOnce sync.Once
@@ -544,6 +547,9 @@ func (t *Terminal) SetAgent(s AgentState) {
 	if s.Title == "" && s.SessionID == t.agent.SessionID {
 		s.Title, s.TitlePending = t.agent.Title, t.agent.TitlePending
 	}
+	if s.Subagents == nil && s.SessionID == t.agent.SessionID {
+		s.Subagents = t.agent.Subagents
+	}
 	if s.Status != "waiting" {
 		s.ToolName, s.ToolInput, s.Prompt = "", "", ""
 	} else if s.Prompt == "" {
@@ -552,6 +558,23 @@ func (t *Terminal) SetAgent(s AgentState) {
 	t.agent = s
 	t.mu.Unlock()
 	t.notify()
+}
+
+// DropSubagent 划掉一个结束的子 agent，返回改后的状态。
+func (t *Terminal) DropSubagent(id string) AgentState {
+	t.mu.Lock()
+	// 新建切片：交出去的旧状态里的切片不能跟着变
+	var list []string
+	for _, v := range t.agent.Subagents {
+		if v != id {
+			list = append(list, v)
+		}
+	}
+	t.agent.Subagents = list
+	s := t.agent
+	t.mu.Unlock()
+	t.notify()
+	return s
 }
 
 // Size 返回终端尺寸；终端关闭后为 0, 0。

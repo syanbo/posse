@@ -31,6 +31,29 @@ type hookPayload struct {
 	Message          string          `json:"message"`
 	LastMessage      string          `json:"last_assistant_message"`
 	Error            string          `json:"error"`
+	// BackgroundTasks 是 Claude 的 Stop 带的、这一轮结束时还在跑的后台任务
+	BackgroundTasks []backgroundTask `json:"background_tasks"`
+}
+
+type backgroundTask struct {
+	ID     string `json:"id"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
+// agentTasks 是算作"子 agent 还在干活"的后台任务类型。后台 shell、monitor 不算：
+// dev server 这类会一直挂着，算进去主线程就永远停不下来
+var agentTasks = map[string]bool{"subagent": true, "teammate": true, "workflow": true}
+
+// runningSubagents 取出还在跑的子 agent；没有时返回空切片（不是 nil），让状态换掉之前记的那份。
+func runningSubagents(p hookPayload) []string {
+	ids := []string{}
+	for _, t := range p.BackgroundTasks {
+		if agentTasks[t.Type] && t.Status == "running" && t.ID != "" {
+			ids = append(ids, t.ID)
+		}
+	}
+	return ids
 }
 
 // MapEvent 把 hooks 事件映射成 agent 状态；不影响状态的事件返回 false。
@@ -47,6 +70,13 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 	switch agentName {
 	case "claude":
 		st.Status = claudeStatus(event, p)
+		switch event {
+		case "Stop", "StopFailure":
+			st.Subagents = runningSubagents(p)
+		case "SessionStart":
+			// 重新打开的会话里没有还在跑的后台任务
+			st.Subagents = []string{}
+		}
 	case "codex":
 		st.Status = codexStatus(event, p)
 	case "cursor":
@@ -79,6 +109,29 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 		}
 	}
 	return st, true
+}
+
+// SubagentStopped 认出 Claude 的 SubagentStop，返回结束的子 agent 的 ID。
+// 不认 SubagentStart：后台子 agent 不发它（2.1.306 实测），还在跑的以主线程 Stop 的 background_tasks 为准。
+func SubagentStopped(agentName, event string, payload json.RawMessage) (id string, ok bool) {
+	if agentName != "claude" || event != "SubagentStop" {
+		return "", false
+	}
+	var p hookPayload
+	json.Unmarshal(payload, &p)
+	return p.AgentID, p.AgentID != ""
+}
+
+// Parked 是主线程已经停下（回到输入框），只是还有子 agent 在跑：状态算工作中，但可以往终端里打提醒。
+func Parked(st term.AgentState) bool {
+	if st.Status != StatusWorking || len(st.Subagents) == 0 {
+		return false
+	}
+	switch st.Event {
+	case "Stop", "StopFailure", "title":
+		return true
+	}
+	return false
 }
 
 type approvalBody struct {
