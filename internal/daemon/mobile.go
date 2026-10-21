@@ -65,9 +65,11 @@ func (h mobileHost) State() mobile.State {
 				continue
 			}
 			a := s.Agent()
-			// 起过名的会话用会话名当标签名，和桌面一样
+			// 用户起的名字优先，其次起过名的会话用会话名当标签名，和桌面一样
 			title := s.Title()
 			switch name := s.agentName(); {
+			case s.userName() != "":
+				title = s.userName()
 			case a.Title != "" && name != "":
 				title = a.Title
 			case name == "grok":

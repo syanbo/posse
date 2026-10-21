@@ -15,23 +15,30 @@ type uiState struct {
 	Selected             string   `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来
 	ProjectOrder         []string `json:"projectOrder,omitempty"`         // 侧栏里项目的顺序，拖动调整
 	RightPanel           string   `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelHistory、panelImages 或空
-	FilesPanel           bool     `json:"filesPanel,omitempty"`           // 文件栏开着（停靠在右边，不是浮层）
+	FilesPanel           bool     `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
 	FilesPanelWidth      float32  `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
 	SidebarHidden        bool     `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
 	SessionButtonsHidden bool     `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
 	SidebarWidth         float32  `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
-	LogPanel             bool     `json:"logPanel,omitempty"`             // 底部的 Git 日志浮层开着
+	LogPanel             bool     `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32  `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
 	CompareSplit         float32  `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
 	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
 	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
-	// GitConsoleCleared 是在 Git 操作记录里点清空的时间，更早的记录（界面的和终端的）都不再显示
+	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
+	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示
+	GitConsoleClearedAt map[string]time.Time `json:"gitConsoleClearedAt,omitempty"`
+	// FilesPanels、LogPanels 是开着文件栏（停靠在右边）、底部 Git 日志浮层的项目，键是项目 ID：
+	// 在 A 项目打开，切到 B 项目不跟着打开
+	FilesPanels map[string]bool `json:"filesPanels,omitempty"`
+	LogPanels   map[string]bool `json:"logPanels,omitempty"`
 	// TermOrder 是各工作区终端的顺序（标签栏和侧栏的会话共用），拖动调整，键是工作区 ID
 	TermOrder map[string][]string `json:"termOrder,omitempty"`
-	// TermNames 是用户给终端标签改的名字，键是终端 ID；终端没了就删掉
+	// TermNames 是还没交给常驻进程的标签名，键是终端 ID，空字符串表示恢复默认：常驻进程报上来的和它一样就删掉。
+	// 旧版界面把所有标签名都存在这里，读到后交给常驻进程；终端没了也删掉
 	TermNames map[string]string `json:"termNames,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`

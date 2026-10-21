@@ -22,6 +22,7 @@ const (
 	logPage   = 300
 	logRowH   = 32
 	laneWidth = 14
+	maxLanes  = 12 // 再多的线裁掉，不让提交图挤掉标题
 )
 
 type logDoc struct {
@@ -30,6 +31,7 @@ type logDoc struct {
 	author   string
 	commits  []gitx.CommitInfo
 	graph    []graphRow
+	lanes    int  // 提交图最宽处的线数，每行的图一样宽，标题才对齐
 	more     bool // 还有更早的提交
 	loading  bool
 	gen      int
@@ -80,16 +82,16 @@ func (a *app) openLog(w *workspace, branch, path string) {
 	a.loadLog(v, d, false)
 }
 
+// logPanelOpen 报告选中的工作区所在项目开着日志浮层。
+func (a *app) logPanelOpen() bool { return a.state.LogPanels[a.panelProject()] }
+
 func (a *app) setLogPanel(open bool) {
-	if a.state.LogPanel != open {
-		a.state.LogPanel = open
-		a.saveState()
-	}
+	a.setProjectPanel(&a.state.LogPanels, a.panelProject(), open)
 }
 
 // toggleLogPanel 是 ⌘9 和标签栏的日志按钮：开着就隐藏，关着就打开（还没有日志时打开整个仓库的）。
 func (a *app) toggleLogPanel(w *workspace) {
-	if a.state.LogPanel {
+	if a.logPanelOpen() {
 		a.setLogPanel(false)
 		return
 	}
@@ -138,7 +140,7 @@ func (a *app) logPanelHeight(avail float32) float32 {
 // 顶上一排是日志和文件历史的小标签，拖上边缘调高度。body 是终端那一栏，按它的高度限制浮层高度。
 func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	open := float32(0)
-	if a.state.LogPanel && w.Branch != "" {
+	if a.logPanelOpen() && w.Branch != "" {
 		open = 1
 	}
 	shown := body.AnimateTo("log-panel", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
@@ -165,7 +167,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 				a.logTab(c, v, d)
 				// 操作记录排在整个仓库的提交日志后面、文件历史前面
 				if i == 0 {
-					a.consoleTab(c, v)
+					a.consoleTab(c, w, v)
 				}
 			}
 			ui.Spacer(c)
@@ -176,7 +178,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		d := v.logCur
 		switch {
 		case v.console:
-			a.gitConsole(c, v)
+			a.gitConsole(c, w, v)
 		case d == nil:
 		case d.kind == docLog:
 			a.logView(c, w, v, d)
@@ -291,9 +293,13 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			}
 			ld.more = len(list) == limit
 			// 按作者、文字筛出来的提交父提交多半不在结果里，画出来每个都是一条新线；这时只画点
-			ld.graph = nil
+			ld.graph, ld.lanes = nil, 1
 			if f.Author == "" && strings.TrimSpace(f.Text) == "" {
 				ld.graph = buildGraph(ld.commits)
+				for _, r := range ld.graph {
+					ld.lanes = max(ld.lanes, len(r.in), len(r.out), r.lane+1)
+				}
+				ld.lanes = min(ld.lanes, maxLanes)
 			}
 			ld.reloaded = time.Now()
 			d.kind = docLog
@@ -358,10 +364,11 @@ var laneColors = []ui.Color{ui.Hex("#D97757"), ui.Hex("#5B8DEF"), ui.Hex("#3E9E6
 func laneColor(i int) ui.Color { return laneColors[i%len(laneColors)] }
 
 // graphCell 画一行的提交图。
-func graphCell(c *ui.Context, r graphRow, hash string) ui.Element {
-	n := max(len(r.in), len(r.out), r.lane+1)
+func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
+	// 超过上限的线裁掉，但提交自己那条线总要画得出来
+	n := max(lanes, r.lane+1, 1)
 	t := c.Theme()
-	return ui.Box(c).Width(float32(n*laneWidth + 6)).Height(logRowH).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
+	return ui.Box(c).Width(float32(n*laneWidth + 6)).Height(logRowH).Shrink(0).Clip().Draw(func(p *ui.Painter, rect ui.Rect) {
 		x := func(i int) float32 { return rect.X + 6 + float32(i*laneWidth) }
 		top, mid, bot := rect.Y, rect.Y+rect.H/2, rect.Y+rect.H
 		line := func(x0, y0, x1, y1 float32, col ui.Color) {
@@ -594,13 +601,14 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		graphCell(c, gr, ci.Hash)
+		graphCell(c, gr, ci.Hash, ld.lanes)
 		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉
-		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(1).MinWidth(90)
+		// 窗口太窄时标题至少留 90；短标题不撑到 90，后面的分支标签紧挨着它
+		sw, _ := c.MeasureText(0, ui.Span{Text: ci.Subject, Size: 12.5})
+		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(90, sw))
 		refChips(c, ci.Refs)
-		ui.Spacer(c)
 		ui.Text(c, ci.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
-		ui.Text(c, ago(ci.Time)).FontSize(11).TextColor(t.TextMuted).Width(56).Shrink(0).TextAlign(ui.End)
+		ui.Text(c, commitTime(ci.Time)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(ci.Time))
 	})
 	if row.Clicked() {
 		a.selectCommit(v, &ld.commit, ci)
@@ -616,27 +624,62 @@ const authorW = 64
 // refChipsMax 是一行最多列几个分支和标签，其余写成 +N（选中后详情里有全部）。
 const refChipsMax = 2
 
-// refChips 画提交上的分支和标签：当前分支是强调色淡底。整组比标题先让位，放不下时从右边裁掉，
-// 不把每个都缩成"…"。
+// refChips 画提交上的分支和标签：当前分支是强调色淡底。它占标题后面剩下的地方（代替 Spacer），
+// 标题不为它让位；按上一帧分到的宽度只列整个放得下的，其余写成 +N，不切掉半个、也不缩成"…"。
 func refChips(c *ui.Context, refs string) {
 	t := c.Theme()
 	names := refNames(refs)
+	box := ui.Row(c.Key("refs")).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(6).AlignItems(ui.Center).Clip()
 	if len(names) == 0 {
 		return
 	}
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(6).MinWidth(0).Clip().Children(func() {
-		for i, ref := range names {
-			if i == refChipsMax {
-				ui.Text(c, fmt.Sprintf("+%d", len(names)-i)).FontSize(10.5).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)
-				break
-			}
+	shown := refsFit(c, names, box.Bounds().W)
+	box.Children(func() {
+		for _, ref := range names[:shown] {
 			bg, fg := t.Surface, t.TextMuted
 			if ref.head {
 				bg, fg = colors(t).tint, t.Accent
 			}
-			ui.Text(c, ref.name).FontSize(10.5).Font(monoFont).TextColor(fg).Padding(1, 5).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(160)
+			ui.Text(c, ref.name).FontSize(refFontSize).Font(monoFont).TextColor(fg).Padding(1, refPadX).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(refChipMaxW)
+		}
+		if shown < len(names) {
+			ui.Text(c, fmt.Sprintf("+%d", len(names)-shown)).FontSize(refFontSize).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)
 		}
 	})
+}
+
+const (
+	refFontSize = 10.5
+	refPadX     = 5
+	refChipMaxW = 160
+)
+
+// refsFit 是 room 宽里能整个列出几个标签（最多 refChipsMax 个），列不全时还要给 +N 留地方；
+// room 为 0 是第一帧还没排过，照最多的列，放不下的被裁掉。
+func refsFit(c *ui.Context, names []refName, room float32) int {
+	most := min(len(names), refChipsMax)
+	if room <= 0 {
+		return most
+	}
+	plus := func(k int) float32 {
+		if k == len(names) {
+			return 0
+		}
+		w, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprintf("+%d", len(names)-k), Size: refFontSize})
+		return w + 6
+	}
+	used := float32(0)
+	for k := 0; k < most; k++ {
+		w, _ := c.MeasureText(0, ui.Span{Text: names[k].name, Font: monoFont, Size: refFontSize})
+		used += min(w+2*refPadX, refChipMaxW)
+		if k > 0 {
+			used += 6
+		}
+		if used+plus(k+1) > room {
+			return k
+		}
+	}
+	return most
 }
 
 type refName struct {

@@ -24,6 +24,7 @@ func (a *app) build(c *ui.Context) {
 		c.AddToast(t)
 	}
 	a.toasts = nil
+	a.snapPanels(c)
 	t := c.Theme()
 	p := colors(t)
 	board := a.selected == taskBoardID
@@ -1220,7 +1221,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w.Branch != "" {
 		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, "Git 日志 ⌘9")
-		if a.state.LogPanel {
+		if a.logPanelOpen() {
 			b.Background(colors(c.Theme()).tint)
 		}
 		if b.Clicked() {

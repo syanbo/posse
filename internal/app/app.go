@@ -49,7 +49,7 @@ type terminalInfo struct {
 	Pid                           int    // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
 	WaitingTasks                  bool   // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
 	PhoneSized                    bool   // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
-	Name                          string // 用户改的标签名（ui.json 的 termNames），只在窗口进程里
+	Name                          string // 用户改的标签名，常驻进程记着（terminal.rename），手机也用它
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
@@ -179,7 +179,9 @@ type app struct {
 	track         map[string]*trackInfo // 工作区 ID → 当前分支的传入、传出提交数，标签栏的分支按钮用
 	fetchAt       map[string]time.Time  // 项目 ID → 上次自动 fetch 的时间
 	gitRuns       []gitx.Run            // Git 操作记录里的命令（gitconsole.go），所有项目共用
-	consoleErr    bool                  // 有没在操作记录里看过的失败命令
+	runWS         map[string]string     // 命令目录 → 所在工作区 ID（runWorkspace），工作区列表变了就清掉
+	realPaths     map[string]string     // 工作区路径 → 解析过符号链接的路径
+	consoleErr    map[string]bool       // 有没在操作记录里看过的失败命令的目录，标签按项目带红点
 	consoleQ      chan []byte           // 交给写 git-console.jsonl 的协程
 	consoleOnce   sync.Once
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
@@ -215,6 +217,10 @@ type app struct {
 	termCtxID string    // 它是哪个终端的：切走了就不画
 	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
 	renaming, renameText string
+	lastPanels           panelSnap         // 上一帧的项目和它的文件栏、日志浮层开关（snapPanels）
+	nameSent             map[string]string // 已经交给常驻进程的标签名（terminal.rename），每个只发一次
+	renameQ              chan [2]string    // 交给按顺序发改名的协程（renameWorker）
+	renameOnce           sync.Once
 	tabStripW            float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
@@ -522,7 +528,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 		ws[i].Terminals = slices.Clone(ws[i].Terminals)
 		sortTerminals(ws[i].Terminals, a.state.TermOrder[ws[i].ID])
 		for j := range ws[i].Terminals {
-			ws[i].Terminals[j].Name = a.state.TermNames[ws[i].Terminals[j].ID]
+			a.syncTermName(&ws[i].Terminals[j])
 		}
 	}
 	sort.SliceStable(ws, func(i, j int) bool {
@@ -553,6 +559,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 	if a.selected != taskBoardID && a.selected != historyBoardID && a.selected != mobileBoardID && a.selected != settingsBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
+	a.migratePanels()
 	seen := map[string]bool{}
 	for _, w := range ws {
 		for _, t := range w.Terminals {
@@ -575,6 +582,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 
 // indexWorkspaces 按项目分好工作区，侧栏每帧要用。
 func (a *app) indexWorkspaces() {
+	a.runWS = nil
 	a.byProject = make(map[string][]workspace, len(a.projects))
 	for _, w := range a.workspaces {
 		a.byProject[w.ProjectID] = append(a.byProject[w.ProjectID], w)
@@ -814,6 +822,8 @@ func (a *app) saveState() {
 	s.ProjectOrder = slices.Clone(s.ProjectOrder)
 	s.TermOrder = maps.Clone(s.TermOrder)
 	s.TermNames = maps.Clone(s.TermNames)
+	s.GitConsoleClearedAt = maps.Clone(s.GitConsoleClearedAt)
+	s.FilesPanels, s.LogPanels = maps.Clone(s.FilesPanels), maps.Clone(s.LogPanels)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	go saveUIState(a.home, s)

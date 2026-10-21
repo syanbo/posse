@@ -2,13 +2,14 @@ package app
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 )
 
 // 文件栏：主区域最右边的一栏，放文件树、检索、改动，照 Orca 的右侧栏。它停靠在那里、挤窄终端和编辑器，
 // 不像"图片 / 技能与工具 / 历史"那样浮在上面、点别处就收起：边看文件边编辑时要一直开着。
-// 开关和宽度记在 ui.json，所有工作区共用。
+// 开关按项目记在 ui.json（在 A 项目打开，切到 B 项目不跟着打开），宽度所有项目共用。
 const (
 	filesPanelDefault = 300
 	filesPanelMin     = 220
@@ -23,16 +24,79 @@ func (a *app) filesPanelWidth() float32 {
 	return min(max(w, filesPanelMin), filesPanelMax)
 }
 
-func (a *app) filesPanelOpen() bool { return a.state.FilesPanel }
+// filesPanelOpen 报告选中的工作区所在项目开着文件栏。
+func (a *app) filesPanelOpen() bool { return a.state.FilesPanels[a.panelProject()] }
 
-// openFilesPanel 打开文件栏并切到 side。
+// panelProject 是选中的工作区所在的项目：文件栏和日志浮层的开关按项目记。
+func (a *app) panelProject() string {
+	if w := a.workspace(a.selected); w != nil {
+		return w.ProjectID
+	}
+	return ""
+}
+
+// setProjectPanel 记下项目的文件栏或日志浮层开没开，变了才写 ui.json。
+func (a *app) setProjectPanel(m *map[string]bool, project string, open bool) {
+	if project == "" || (*m)[project] == open {
+		return
+	}
+	if open {
+		if *m == nil {
+			*m = map[string]bool{}
+		}
+		(*m)[project] = true
+	} else {
+		delete(*m, project)
+	}
+	a.saveState()
+}
+
+// snapPanels 在每帧开头调用：切到面板开关不一样的项目时，文件栏和日志浮层直接是那个项目的样子，
+// 不播滑进滑出（只有点开关时才播）。这一帧别的动画也跟着跳到终点，所以开关一样时不调。
+func (a *app) snapPanels(c *ui.Context) {
+	now := panelSnap{a.panelProject(), a.filesPanelOpen(), a.logPanelOpen()}
+	if now.project != a.lastPanels.project && (now.files != a.lastPanels.files || now.log != a.lastPanels.log) {
+		c.DisableAnimations()
+	}
+	a.lastPanels = now
+}
+
+type panelSnap struct {
+	project    string
+	files, log bool
+}
+
+// migratePanels 在拿到工作区列表后调用：旧版不分项目的开关记到当前项目上，删掉的项目不再记着。
+func (a *app) migratePanels() {
+	if p := a.panelProject(); p != "" && (a.state.FilesPanel || a.state.LogPanel) {
+		if a.state.FilesPanel {
+			a.setProjectPanel(&a.state.FilesPanels, p, true)
+		}
+		if a.state.LogPanel {
+			a.setProjectPanel(&a.state.LogPanels, p, true)
+		}
+		a.state.FilesPanel, a.state.LogPanel = false, false
+		a.saveState()
+	}
+	pruned := false
+	for _, m := range []map[string]bool{a.state.FilesPanels, a.state.LogPanels} {
+		for id := range m {
+			if !slices.ContainsFunc(a.projects, func(p project) bool { return p.ID == id }) {
+				delete(m, id)
+				pruned = true
+			}
+		}
+	}
+	if pruned {
+		a.saveState()
+	}
+}
+
+// openFilesPanel 打开工作区所在项目的文件栏并切到 side。
 func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 	v := a.filesFor(w)
 	v.side = side
-	if !a.filesPanelOpen() {
-		a.state.FilesPanel = true
-		a.saveState()
-	}
+	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 	return v
 }
 
@@ -53,10 +117,7 @@ func (a *app) toggleFilesPanel(w *workspace, side int) {
 }
 
 func (a *app) closeFilesPanel() {
-	if a.filesPanelOpen() {
-		a.state.FilesPanel = false
-		a.saveState()
-	}
+	a.setProjectPanel(&a.state.FilesPanels, a.panelProject(), false)
 }
 
 // filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，或者选中了文件标签。

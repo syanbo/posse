@@ -607,3 +607,64 @@ func TestMarkdownOpensInPreview(t *testing.T) {
 		t.Fatal("jumping to a line should show the source")
 	}
 }
+
+// 文件栏和日志浮层按项目开关：在一个项目打开，切到别的项目是关着的，切回来还开着；
+// 同一项目的别的工作区跟着开。旧版不分项目的开关记到当前项目上。
+func TestPanelsFollowProject(t *testing.T) {
+	a := previewApp(t)
+	a.selected = "w1"
+	a.openFilesPanel(a.workspace("w1"), sideFiles)
+	a.setLogPanel(true)
+	a.selected = "w2"
+	if a.filesPanelOpen() || a.logPanelOpen() {
+		t.Fatal("another project's panels should stay closed")
+	}
+	a.selected = "w1"
+	if !a.filesPanelOpen() || !a.logPanelOpen() {
+		t.Fatal("panels should still be open when switching back")
+	}
+	a.selected = "w6" // Skill 的 worktree
+	a.openFilesPanel(a.workspace("w6"), sideFiles)
+	a.selected = "w5"
+	if !a.filesPanelOpen() {
+		t.Fatal("same project's main workspace should share the files panel")
+	}
+	a.closeFilesPanel()
+	a.selected = "w1"
+	if !a.filesPanelOpen() {
+		t.Fatal("closing in one project closed another")
+	}
+
+	b := previewApp(t)
+	b.selected = "w2"
+	b.state.FilesPanel = true
+	b.state.FilesPanels = map[string]bool{"gone": true}
+	b.migratePanels()
+	if !b.filesPanelOpen() || b.state.FilesPanel || b.state.FilesPanels["gone"] {
+		t.Fatalf("migrate %+v", b.state)
+	}
+}
+
+// 切到开着文件栏的项目时直接是展开的，不再滑进来；在当前项目点开关照常播动画。
+func TestPanelsSnapOnProjectSwitch(t *testing.T) {
+	a := previewApp(t)
+	a.selected = "w2"
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	a.openFilesPanel(a.workspace("w2"), sideFiles)
+	tt.Frame()
+	if a.filesPanelShown >= 1 {
+		t.Fatalf("toggling should animate, shown %v on the first frame", a.filesPanelShown)
+	}
+	settle(tt)
+	a.selected = "w4"
+	tt.Frame()
+	if a.filesPanelShown != 0 {
+		t.Fatalf("switching to a closed project should hide at once, shown %v", a.filesPanelShown)
+	}
+	a.selected = "w2"
+	tt.Frame()
+	if a.filesPanelShown != 1 {
+		t.Fatalf("switching back should show at once, shown %v", a.filesPanelShown)
+	}
+}

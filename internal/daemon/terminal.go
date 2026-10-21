@@ -18,6 +18,7 @@ type terminalInfo struct {
 	ID           string           `json:"id"`
 	WorkspaceID  string           `json:"workspaceId"`
 	Title        string           `json:"title,omitempty"`
+	Name         string           `json:"name,omitempty"` // 用户给标签起的名字
 	Command      []string         `json:"command"`
 	Dir          string           `json:"dir"`
 	Agent        string           `json:"agent,omitempty"`
@@ -37,7 +38,7 @@ type terminalInfo struct {
 func (d *Daemon) terminalInfo(s *session) terminalInfo {
 	cols, rows := s.Size()
 	info := terminalInfo{
-		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: s.Title(), Command: s.Command, Dir: s.Dir,
+		ID: s.ID, WorkspaceID: s.WorkspaceID, Title: s.Title(), Name: s.userName(), Command: s.Command, Dir: s.Dir,
 		Agent: s.agentName(), Running: s.Running(), Pid: s.Pid(), Cols: cols, Rows: rows,
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
 		WaitingTasks: d.waitingTasks(s.ID), PhoneSized: s.SizeHeld(),
@@ -473,6 +474,29 @@ func (d *Daemon) terminalClear(ctx context.Context, raw json.RawMessage) (any, e
 	if err := s.Clear(p.Redraw); err != nil {
 		return nil, err
 	}
+	return d.terminalInfo(s), nil
+}
+
+// terminalRename 记下用户给标签起的名字，空字符串恢复默认。
+func (d *Daemon) terminalRename(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p struct {
+		Terminal string `json:"terminal"`
+		Name     string `json:"name"`
+	}
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	s, err := d.session(p.Terminal)
+	if err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(p.Name)
+	if err := d.store.SetTerminalTitle(s.ID, name); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	s.name = name
+	s.mu.Unlock()
 	return d.terminalInfo(s), nil
 }
 

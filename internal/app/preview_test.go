@@ -172,7 +172,7 @@ func previewMarkdown(a *app) {
 func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	a.state.FilesPanel = true
+	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 	tt := ui.NewTester(a.build, 1200, 760)
 	for _, rel := range rels {
 		a.openFile(w, filepath.Join(root, rel), 0, [2]int{})

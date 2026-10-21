@@ -322,29 +322,41 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 			}
 			p.Fill(ui.Rect{X: cx - 4, Y: cy - 4, W: 8, H: 8}, lane, 4)
 		})
-		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Grow(1).Shrink(1)
+		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Shrink(1)
 		refChips(c, ci.Refs)
 		// 作者按名字本身的宽度紧挨着时间，不占固定的一列，标题多显示一些；时间列靠右对齐，作者也就右对齐
 		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(72).TextAlign(ui.End).Shrink(0)
+		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(ci.Time))
 	})
 	return row.Clicked()
 }
 
-// commitTime 写成"今天 14:26""昨天 17:04""10月3日"，跨年的带年份，和 WebStorm 一样看得出先后。
+// commitTime 写成"今天 14:26""昨天 17:04""10月3日 09:12"，跨年的只写日期，和 WebStorm 一样看得出先后。
 func commitTime(at time.Time) string {
 	at = at.Local()
 	now := time.Now()
-	day := func(t time.Time) time.Time { return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local) }
-	switch d := day(now).Sub(day(at)); {
-	case d == 0:
+	// 按日历日比，不按差几小时：夏令时切换那天两个零点之间不是 24 小时
+	sameDay := func(a, b time.Time) bool { return a.Year() == b.Year() && a.YearDay() == b.YearDay() }
+	switch {
+	case sameDay(at, now):
 		return "今天 " + at.Format("15:04")
-	case d == 24*time.Hour:
+	case sameDay(at, now.AddDate(0, 0, -1)):
 		return "昨天 " + at.Format("15:04")
 	case at.Year() == now.Year():
-		return at.Format("1月2日")
+		return at.Format("1月2日 15:04")
 	}
 	return at.Format("2006-01-02")
+}
+
+// commitTimeW 放得下 commitTime 最长的写法（"12月30日 23:59"）。
+const commitTimeW = 96
+
+var weekdays = [...]string{"日", "一", "二", "三", "四", "五", "六"}
+
+// commitStamp 是悬停时看的完整时间：2026-10-14 17:17:05 周三。
+func commitStamp(at time.Time) string {
+	at = at.Local()
+	return at.Format("2006-01-02 15:04:05") + " 周" + weekdays[at.Weekday()]
 }
 
 // commitDetail 是选中提交的说明和它改的文件，点文件看这个提交里的改动。

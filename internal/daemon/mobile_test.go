@@ -43,3 +43,36 @@ func TestMobileHistory(t *testing.T) {
 		t.Fatalf("resume unknown %v", err)
 	}
 }
+
+// 桌面改的标签名记在常驻进程里，手机的标签用它；清空后恢复默认，数据库里也跟着改。
+func TestTerminalRenameShowsOnMobile(t *testing.T) {
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/cat"}, "", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	title := func() string {
+		for _, mw := range (mobileHost{d}).State().Workspaces {
+			for _, mt := range mw.Terminals {
+				if mt.ID == s.ID {
+					return mt.Title
+				}
+			}
+		}
+		return "<missing>"
+	}
+	info := call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": " 登录页重构 "}).(terminalInfo)
+	if info.Name != "登录页重构" || title() != "登录页重构" {
+		t.Fatalf("renamed: info %q, mobile %q", info.Name, title())
+	}
+	if got, _ := d.store.TerminalTitle(s.ID); got != "登录页重构" {
+		t.Fatalf("stored %q", got)
+	}
+	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": ""})
+	if got := title(); got == "登录页重构" {
+		t.Fatalf("cleared name still shown: %q", got)
+	}
+	if got, _ := d.store.TerminalTitle(s.ID); got != "" {
+		t.Fatalf("stored after clear %q", got)
+	}
+}

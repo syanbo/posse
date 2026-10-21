@@ -248,9 +248,9 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	a.branchPop = nil
 
 	// 和当前分支比较：两边独有的提交，选中提交看文件，点文件看 diff；底部的日志浮层先收起
-	a.state.LogPanel = true
+	a.setLogPanel(true)
 	a.openCompare(w, v, "feat", "main", false)
-	if a.state.LogPanel {
+	if a.logPanelOpen() {
 		t.Fatal("log panel still open over the compare view")
 	}
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && tt.HasText("中但不存在于") })
@@ -753,7 +753,7 @@ func TestLogPanel(t *testing.T) {
 	cols, rows := a.view.term.Size()
 	tt.Key(ui.Cmd, ui.Key9)
 	v := a.files[w.ID]
-	until(t, tt, "log", func() bool { return a.state.LogPanel && v.logCur != nil && v.logCur.kind == docLog })
+	until(t, tt, "log", func() bool { return a.logPanelOpen() && v.logCur != nil && v.logCur.kind == docLog })
 	settle(tt)
 	if c2, r2 := a.view.term.Size(); c2 != cols || r2 != rows {
 		t.Fatalf("terminal resized under the panel: %dx%d -> %dx%d", cols, rows, c2, r2)
@@ -774,13 +774,13 @@ func TestLogPanel(t *testing.T) {
 		t.Fatal(err)
 	}
 	settle(tt)
-	if a.state.LogPanel || tt.HasText("隐藏 ⌘9") {
+	if a.logPanelOpen() || tt.HasText("隐藏 ⌘9") {
 		t.Fatal("hide button did not hide the panel")
 	}
 	tt.Key(ui.Cmd, ui.Key9)
 	settle(tt)
-	if !a.state.LogPanel || len(v.logs) != 1 {
-		t.Fatalf("⌘9 reopen: open %v logs %d", a.state.LogPanel, len(v.logs))
+	if !a.logPanelOpen() || len(v.logs) != 1 {
+		t.Fatalf("⌘9 reopen: open %v logs %d", a.logPanelOpen(), len(v.logs))
 	}
 }
 
@@ -1526,7 +1526,7 @@ func TestGitConsole(t *testing.T) {
 	a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
 	a.gitDo(v, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
-	until(t, tt, "failed", func() bool { return v.git.busy == "" && a.consoleErr })
+	until(t, tt, "failed", func() bool { return v.git.busy == "" && len(a.consoleErr) > 0 })
 	// 检出不存在的修订，和不是 git 报出来的失败，也都记在各自的操作下面
 	a.gitDo(v, "检出", func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, "no-such-rev") })
 	a.gitDo(v, "合并提交", func(ctx context.Context, root string) error { return errors.New("范围里有合并提交") })
@@ -1547,8 +1547,14 @@ func TestGitConsole(t *testing.T) {
 			t.Fatalf("console lacks %q: %v", want, tt.Texts())
 		}
 	}
-	if a.consoleErr {
+	if len(a.consoleErr) > 0 {
 		t.Fatal("opening the console should clear the red dot")
+	}
+	// 别的项目的命令不列在这个项目里
+	a.addGitRun(gitx.Run{ID: 9999, Op: "别的项目提交", OpID: 9999, Dir: a.workspaces[3].Path, Args: []string{"commit"}, Start: time.Now(), Done: true})
+	tt.Frame()
+	if tt.HasText("别的项目提交") {
+		t.Fatal("console shows another project's run")
 	}
 	// 右键命令：是"复制命令"，不是可选文字自带的编辑菜单
 	if err := tt.RightClick("git rebase --continue"); err != nil {
@@ -1698,11 +1704,11 @@ func TestGitConsolePersist(t *testing.T) {
 		{Seq: 7, Agent: "claude", Dir: "/r", Args: []string{"add", "."}, Start: t0.Add(-time.Second), TookMs: 5},
 		{Seq: 8, Dir: "/r", Args: []string{"pull"}, Start: t0.Add(10 * time.Second), Code: 1},
 	}, true)
-	if len(b.gitRuns) != 3 || b.gitRuns[0].ID != -7 || b.gitRuns[0].Op != "Claude 终端" || b.gitRuns[2].Err != "退出码 1" || b.consoleErr {
+	if len(b.gitRuns) != 3 || b.gitRuns[0].ID != -7 || b.gitRuns[0].Op != "Claude 终端" || b.gitRuns[2].Err != "退出码 1" || len(b.consoleErr) > 0 {
 		t.Fatalf("merged %+v err=%v", b.gitRuns, b.consoleErr)
 	}
 	b.addTermRuns([]termGitRun{{Seq: 9, Args: []string{"push"}, Start: time.Now(), Code: 128}, {Seq: 8, Args: []string{"pull"}, Start: t0}}, false)
-	if len(b.gitRuns) != 4 || !b.consoleErr {
+	if len(b.gitRuns) != 4 || len(b.consoleErr) == 0 {
 		t.Fatalf("later failure %d %v", len(b.gitRuns), b.consoleErr)
 	}
 
@@ -1715,5 +1721,84 @@ func TestGitConsolePersist(t *testing.T) {
 	c.loadGitRuns()
 	if len(c.gitRuns) != 0 {
 		t.Fatalf("cleared runs came back: %+v", c.gitRuns)
+	}
+}
+
+// 操作记录按项目分：命令归到目录最深的工作区所在项目（项目目录里套着别的项目），worktree 算它的项目；
+// 红点和清空也只管各自的项目
+func TestGitConsoleByProject(t *testing.T) {
+	a := &app{workspaces: []workspace{
+		{ID: "w1", ProjectID: "outer", Kind: "main", Path: "/x/Apps"},
+		{ID: "w2", ProjectID: "inner", Kind: "main", Path: "/x/Apps/hive"},
+		{ID: "w3", ProjectID: "inner", Kind: "worktree", Name: "feat", Path: "/h/worktrees/hive/feat"},
+	}}
+	t0 := time.Now().Add(-time.Minute)
+	a.addGitRun(gitx.Run{ID: 1, Dir: "/x/Apps", Args: []string{"fetch"}, Start: t0, Done: true})
+	a.addGitRun(gitx.Run{ID: 2, Dir: "/x/Apps/hive/internal", Args: []string{"commit"}, Start: t0, Done: true, Err: "退出码 1"})
+	a.addGitRun(gitx.Run{ID: 3, Dir: "/h/worktrees/hive/feat", Args: []string{"push"}, Start: t0, Done: true})
+	a.addGitRun(gitx.Run{ID: 4, Dir: "/x/Apps-old", Args: []string{"push"}, Start: t0, Done: true})
+	ids := func(p string) (out []int64) {
+		for _, r := range a.projectRuns(p) {
+			out = append(out, r.ID)
+		}
+		return
+	}
+	if got := ids("outer"); !slices.Equal(got, []int64{1}) {
+		t.Fatalf("outer %v", got)
+	}
+	if got := ids("inner"); !slices.Equal(got, []int64{2, 3}) {
+		t.Fatalf("inner %v", got)
+	}
+	if a.runWhere("/h/worktrees/hive/feat") != "feat" || a.runWhere("/x/Apps/hive") != "" {
+		t.Fatal("runWhere")
+	}
+	if a.projectConsoleErr("outer", true) || !a.projectConsoleErr("inner", true) || a.projectConsoleErr("inner", false) {
+		t.Fatal("red dot should follow the project")
+	}
+	a.state.GitConsoleClearedAt = map[string]time.Time{"inner": time.Now()}
+	if len(ids("inner")) != 0 || len(ids("outer")) != 1 {
+		t.Fatal("clearing one project hid another's runs")
+	}
+}
+
+// 日志的时间写到分钟：今天、昨天写"今天 14:26"，今年写"10月3日 09:12"，跨年的只写日期；悬停是到秒的完整时间。
+func TestCommitTime(t *testing.T) {
+	now := time.Now()
+	at := func(d time.Time, h, m int) time.Time {
+		return time.Date(d.Year(), d.Month(), d.Day(), h, m, 5, 0, time.Local)
+	}
+	if got := commitTime(at(now, 0, 1)); got != "今天 00:01" {
+		t.Errorf("today %q", got)
+	}
+	if got := commitTime(at(now.AddDate(0, 0, -1), 23, 59)); got != "昨天 23:59" {
+		t.Errorf("yesterday %q", got)
+	}
+	old := time.Date(now.Year()-1, 12, 30, 9, 2, 0, 0, time.Local)
+	if got := commitTime(old); got != fmt.Sprintf("%d-12-30", now.Year()-1) {
+		t.Errorf("last year %q", got)
+	}
+	if now.YearDay() > 3 {
+		d := time.Date(now.Year(), 1, 1, 9, 2, 0, 0, time.Local)
+		if got := commitTime(d); got != "1月1日 09:02" {
+			t.Errorf("this year %q", got)
+		}
+	}
+	if got := commitStamp(time.Date(2026, 10, 14, 17, 17, 5, 0, time.Local)); got != "2026-10-14 17:17:05 周三" {
+		t.Errorf("stamp %q", got)
+	}
+}
+
+// 终端里的 git 命令目录来自 trace2，是解析过符号链接的（macOS 的 /var 是 /private/var），
+// 也归到用原路径登记的工作区
+func TestRunWorkspaceRealPath(t *testing.T) {
+	dir := t.TempDir()
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil || real == dir {
+		t.Skipf("temp dir %s has no symlink (%v)", dir, err)
+	}
+	a := &app{workspaces: []workspace{{ID: "w1", ProjectID: "p1", Kind: "main", Path: dir}}}
+	a.addTermRuns([]termGitRun{{Seq: 1, Dir: filepath.Join(real, "sub"), Args: []string{"commit"}, Start: time.Now()}}, true)
+	if got := a.projectRuns("p1"); len(got) != 1 {
+		t.Fatalf("run under the real path not attributed: %+v", got)
 	}
 }

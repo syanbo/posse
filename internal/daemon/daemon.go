@@ -57,6 +57,13 @@ type session struct {
 	fg      int    // 上次检查时的前台进程组
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
+	name     string // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
+}
+
+func (s *session) userName() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.name
 }
 
 // markHooked 在收到 hook 事件时调用：用户在 shell 里经 hive 的同名脚本手动启动的 agent 也带着 hooks，
@@ -428,6 +435,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("terminal.wait", d.terminalWait)
 	srv.Handle("terminal.resize", d.terminalResize)
 	srv.Handle("terminal.clear", d.terminalClear)
+	srv.Handle("terminal.rename", d.terminalRename)
 	srv.Handle("terminal.reclaimSize", d.terminalReclaimSize)
 	srv.Handle("terminal.close", d.terminalClose)
 	srv.Handle("workspace.diff", d.workspaceDiff)

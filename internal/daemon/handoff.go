@@ -447,6 +447,8 @@ func (d *Daemon) adopt(in *incoming) error {
 		info := t.Info()
 		s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
 			agent: ht.Agent, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg}
+		// 标签名不在交接记录里：两边共用一个数据库
+		s.name, _ = d.store.TerminalTitle(s.ID)
 		d.mu.Lock()
 		d.terms[s.ID] = s
 		d.mu.Unlock()

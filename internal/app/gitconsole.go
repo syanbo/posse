@@ -16,10 +16,11 @@ import (
 	"hive/internal/gitx"
 )
 
-// Git 操作记录：照 WebStorm Git 工具窗口的 Console，列出所有项目里界面执行过的 Git 操作（提交、推送、储藏……），
+// Git 操作记录：照 WebStorm Git 工具窗口的 Console，列出日志浮层所在项目里界面执行过的 Git 操作（提交、推送、储藏……），
 // 每个操作下面是它调用的 git 命令、输出和报错。界面的记录来自 gitx.Trace，命令完成后追加到
 // $HIVE_HOME/git-console.jsonl，窗口打开时读回；Hive 终端里改动仓库的 git 命令由常驻进程经 trace2 收集
 // （internal/daemon/gittrace.go），轮询时按序号取新的，按时间排进同一个列表，只有命令和退出码、没有输出。
+// 所有项目的命令存在一起，显示时按命令所在目录归到项目（runWorkspace）。
 
 // gitConsoleMax 是最多留多少条命令，超过丢掉最早的。
 const gitConsoleMax = 1000
@@ -71,7 +72,7 @@ func (a *app) loadGitRuns() {
 	}
 }
 
-// saveGitRun 把完成的命令交给写文件的协程；nil 表示清空文件。写不过来就丢，记录不能卡住界面。
+// saveGitRun 把完成的命令交给写文件的协程。写不过来就丢，记录不能卡住界面。
 func (a *app) saveGitRun(line []byte) {
 	if a.home == "" {
 		return
@@ -80,10 +81,6 @@ func (a *app) saveGitRun(line []byte) {
 		a.consoleQ = make(chan []byte, 256)
 		go func(path string, q <-chan []byte) {
 			for line := range q {
-				if line == nil {
-					os.WriteFile(path, nil, 0o600)
-					continue
-				}
 				f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 				if err != nil {
 					continue
@@ -131,7 +128,7 @@ func (a *app) addTermRuns(recs []termGitRun, initial bool) {
 			continue
 		}
 		if r.Err != "" && !initial {
-			a.consoleErr = true
+			a.flagConsoleErr(r.Dir)
 		}
 		i := len(a.gitRuns)
 		for i > 0 && a.gitRuns[i-1].Start.After(r.Start) {
@@ -144,10 +141,18 @@ func (a *app) addTermRuns(recs []termGitRun, initial bool) {
 	}
 }
 
+// flagConsoleErr 记下 dir 里有没看过的失败命令。
+func (a *app) flagConsoleErr(dir string) {
+	if a.consoleErr == nil {
+		a.consoleErr = map[string]bool{}
+	}
+	a.consoleErr[dir] = true
+}
+
 // addGitRun 记下一条命令：同一个 ID 的结束记录换掉开始时那条。失败的命令在记录看不见时给标签标个红点。
 func (a *app) addGitRun(r gitx.Run) {
 	if r.Err != "" {
-		a.consoleErr = true
+		a.flagConsoleErr(r.Dir)
 	}
 	if r.Done {
 		line, _ := json.Marshal(r)
@@ -213,21 +218,87 @@ func groupGitRuns(runs []gitx.Run) []gitOpRecord {
 	return ops
 }
 
-// runWhere 是命令所在的项目和工作区（主工作区只写项目名）；对不上时是目录名。
-func (a *app) runWhere(dir string) string {
-	for _, w := range a.workspaces {
-		if dir == w.Path || strings.HasPrefix(dir, w.Path+string(filepath.Separator)) {
-			if w.Kind == "main" || w.Name == "" {
-				return w.Project
+// runWorkspace 是命令所在的工作区：目录在它下面的里面最深的那个（项目目录里可能套着别的项目）；对不上时是 nil。
+// 终端里的命令目录来自 trace2，是解析过符号链接的，所以也和工作区的真实路径比。按目录记下结果，每帧不用重找。
+func (a *app) runWorkspace(dir string) *workspace {
+	if id, ok := a.runWS[dir]; ok {
+		return a.workspace(id)
+	}
+	under := func(root string) bool {
+		return root != "" && (dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)))
+	}
+	var best *workspace
+	depth := 0
+	for i := range a.workspaces {
+		w := &a.workspaces[i]
+		for _, root := range []string{w.Path, a.realPath(w.Path)} {
+			if under(root) && len(root) > depth {
+				best, depth = w, len(root)
 			}
-			return w.Project + "/" + w.Name
 		}
 	}
-	return filepath.Base(dir)
+	if a.runWS == nil {
+		a.runWS = map[string]string{}
+	}
+	a.runWS[dir] = ""
+	if best != nil {
+		a.runWS[dir] = best.ID
+	}
+	return best
+}
+
+// realPath 是 path 解析过符号链接的样子，解析不了就是它自己。
+func (a *app) realPath(path string) string {
+	if p, ok := a.realPaths[path]; ok {
+		return p
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		real = path
+	}
+	if a.realPaths == nil {
+		a.realPaths = map[string]string{}
+	}
+	a.realPaths[path] = real
+	return real
+}
+
+// projectRuns 是项目里的命令：目录归到这个项目、晚于这个项目上次清空的。
+func (a *app) projectRuns(projectID string) []gitx.Run {
+	cleared := a.state.GitConsoleClearedAt[projectID]
+	var out []gitx.Run
+	for _, r := range a.gitRuns {
+		if w := a.runWorkspace(r.Dir); w != nil && w.ProjectID == projectID && !r.Start.Before(cleared) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// projectConsoleErr 报告项目里有没有没看过的失败命令；clear 时顺带标成看过。
+func (a *app) projectConsoleErr(projectID string, clear bool) bool {
+	found := false
+	for dir := range a.consoleErr {
+		if w := a.runWorkspace(dir); w != nil && w.ProjectID == projectID {
+			found = true
+			if clear {
+				delete(a.consoleErr, dir)
+			}
+		}
+	}
+	return found
+}
+
+// runWhere 是项目里的哪个工作区：主工作区不写。
+func (a *app) runWhere(dir string) string {
+	if w := a.runWorkspace(dir); w != nil && w.Kind != "main" {
+		return w.Name
+	}
+	return ""
 }
 
 // consoleTab 是日志浮层顶上的"操作记录"标签；有没看过的失败命令时带个红点。
-func (a *app) consoleTab(c *ui.Context, v *filesView) {
+func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	label := "操作记录"
 	row := ui.Row(c.Key("console-tab")).Height(26).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
@@ -236,7 +307,7 @@ func (a *app) consoleTab(c *ui.Context, v *filesView) {
 	row.Children(func() {
 		ui.Icon(c, iconOpLog).FontSize(13).TextColor(t.Accent).Shrink(0)
 		tabText(c, ui.Text(c, label).FontSize(12).Shrink(0), v.console)
-		if a.consoleErr && !v.console {
+		if !v.console && a.projectConsoleErr(w.ProjectID, false) {
 			ui.Box(c).Size(6, 6).Radius(3).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
 		}
 	})
@@ -245,20 +316,23 @@ func (a *app) consoleTab(c *ui.Context, v *filesView) {
 	}
 }
 
-// gitConsole 是操作记录的内容：最新的在最下面，有新命令时滚到底。
-func (a *app) gitConsole(c *ui.Context, v *filesView) {
+// gitConsole 是工作区所在项目的操作记录：最新的在最下面，有新命令时滚到底。
+func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
-	a.consoleErr = false
-	ops := groupGitRuns(a.gitRuns)
+	a.projectConsoleErr(w.ProjectID, true)
+	runs := a.projectRuns(w.ProjectID)
+	ops := groupGitRuns(runs)
 	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "所有项目里 Hive 执行的 Git 操作和它们调用的 git 命令，以及 Hive 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, w.Project+" 各工作区里 Hive 执行的 Git 操作和它们调用的 git 命令，以及 Hive 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
+		// 只清这个项目的：记下时间，文件里的记录留给别的项目
 		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", 26, 15)).Clicked() {
-			a.gitRuns = nil
-			ops = nil
-			a.state.GitConsoleCleared = time.Now()
+			runs, ops = nil, nil
+			if a.state.GitConsoleClearedAt == nil {
+				a.state.GitConsoleClearedAt = map[string]time.Time{}
+			}
+			a.state.GitConsoleClearedAt[w.ProjectID] = time.Now()
 			a.saveState()
-			a.saveGitRun(nil)
 		}
 	})
 	if len(ops) == 0 {
@@ -267,7 +341,7 @@ func (a *app) gitConsole(c *ui.Context, v *filesView) {
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
 	ui.List(c, &v.consoleList, len(ops), func(i int) { a.gitOpRow(c, ops[i]) }).Grow(1).Padding(0, 0, 8, 0)
-	if last := a.gitRuns[len(a.gitRuns)-1]; last.ID != v.consoleLast || last.Done != v.consoleDone {
+	if last := runs[len(runs)-1]; last.ID != v.consoleLast || last.Done != v.consoleDone {
 		v.consoleLast, v.consoleDone = last.ID, last.Done
 		v.consoleList.ScrollIntoView(len(ops) - 1)
 	}
@@ -284,7 +358,9 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 			if op.failed() {
 				name.TextColor(t.Danger)
 			}
-			ui.Text(c, a.runWhere(first.Dir)).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			if where := a.runWhere(first.Dir); where != "" {
+				ui.Text(c, where).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			}
 			ui.Spacer(c)
 			switch {
 			case op.running():

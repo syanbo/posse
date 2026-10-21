@@ -42,7 +42,7 @@ type Workspace struct {
 type Terminal struct {
 	ID          string     `json:"id"`
 	WorkspaceID string     `json:"workspaceId"`
-	Title       string     `json:"title,omitempty"`
+	Title       string     `json:"title,omitempty"` // 用户给标签起的名字，空是默认（会话标题或终端标题）
 	Command     []string   `json:"command"`
 	Agent       string     `json:"agent,omitempty"`
 	State       string     `json:"state"` // running | exited | lost
@@ -262,6 +262,20 @@ func (s *Store) AddTerminal(t Terminal) error {
 	_, err := s.db.Exec(`INSERT INTO terminals(id,workspace_id,title,command,agent,state,created_at) VALUES(?,?,?,?,?,?,?)`,
 		t.ID, t.WorkspaceID, t.Title, string(cmd), t.Agent, t.State, ms(t.CreatedAt))
 	return err
+}
+
+func (s *Store) SetTerminalTitle(id, title string) error {
+	_, err := s.db.Exec(`UPDATE terminals SET title=? WHERE id=?`, title, id)
+	return err
+}
+
+func (s *Store) TerminalTitle(id string) (string, error) {
+	var title string
+	err := s.db.QueryRow(`SELECT title FROM terminals WHERE id=?`, id).Scan(&title)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return title, err
 }
 
 func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
