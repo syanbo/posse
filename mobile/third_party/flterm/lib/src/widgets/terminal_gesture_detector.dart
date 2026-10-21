@@ -29,6 +29,9 @@ class TerminalGestureDetector extends StatefulWidget {
   final ValueChanged<ActivatedLink>? onLinkActivate;
   final ScrollController? scrollController;
 
+  /// Hive: 设了就由外层决定点击后键盘怎么办，这里不再聚焦。
+  final VoidCallback? onTap;
+
   const TerminalGestureDetector({
     super.key,
     required this.child,
@@ -38,6 +41,7 @@ class TerminalGestureDetector extends StatefulWidget {
     required this.links,
     this.onLinkActivate,
     this.scrollController,
+    this.onTap,
     this.settings = const TerminalGestureSettings(),
   });
 
@@ -295,7 +299,8 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
 
   /// Hive: 点击成立后才聚焦、开链接，或给正在跟踪鼠标的程序发一次点击。
   void _confirmTap(_Finger finger) {
-    _binding.requestFocus();
+    final onTap = widget.onTap;
+    if (onTap == null) _binding.requestFocus();
     if (widget.links.handlePress(
       localPosition: finger.local,
       metrics: widget.metrics,
@@ -309,6 +314,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       if (link != null) widget.onLinkActivate?.call(link);
       return;
     }
+    onTap?.call();
     if (!_isMouseTracked(HardwareKeyboard.instance.isShiftPressed)) return;
     _sendMouseEvent(.press, finger.local);
     _sendMouseEvent(.release, finger.local);

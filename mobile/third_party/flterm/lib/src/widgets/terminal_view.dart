@@ -114,6 +114,9 @@ class TerminalView extends StatefulWidget {
   /// fallbacks are used.
   final Uint8List? fontData;
 
+  /// Hive: 手指点击（不是链接）时调用，设了就不再自己聚焦，弹不弹键盘交给外层。
+  final VoidCallback? onTap;
+
   const TerminalView({
     super.key,
     required this.controller,
@@ -131,6 +134,7 @@ class TerminalView extends StatefulWidget {
     this.mouseAutoHide = .onInput,
     this.linkSettings = const LinkSettings(),
     this.gestureSettings = const TerminalGestureSettings(),
+    this.onTap,
   });
 
   @override
@@ -335,6 +339,7 @@ class _TerminalViewState extends State<TerminalView> {
                   settings: widget.gestureSettings,
                   scrollController: _scrollController,
                   onLinkActivate: widget.linkSettings.onActivate,
+                  onTap: widget.onTap,
                   child: Scrollable(
                     controller: _scrollController,
                     physics: widget.scrollPhysics,

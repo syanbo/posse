@@ -114,6 +114,17 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _busy = false;
   var _showCopy = false;
 
+  /// 点终端、点快捷键栏的键盘键都走这里：键盘弹着就放下，收着就弹出来。
+  void _toggleKeyboard() {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+      _focus.unfocus();
+      return;
+    }
+    _focus.requestFocus();
+    // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
+    SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
+
   void _onController() {
     final selected = _controller.hasSelection;
     if (selected == _showCopy || !mounted) return;
@@ -380,6 +391,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
     onContentRows: _onContentRows,
+    onTap: _toggleKeyboard,
   );
 
   void _onContentRows(int rows) => _contentRows.value = rows;
@@ -465,6 +477,8 @@ class _TerminalScreenState extends State<TerminalScreen>
       child: ClipRect(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          // 点在格子外面的空白处：格子里的点击由 flterm 先认领，到不了这里
+          onTap: _toggleKeyboard,
           onScaleStart: _scaleStart,
           onScaleUpdate: (d) => _scaleUpdate(d, gridW, gridH, box),
           onScaleEnd: (d) => _scaleEnd(gridW, gridH, box),
@@ -695,6 +709,8 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _sendImage() async {
     final rpc = widget.model.rpc;
     if (rpc == null || _busy) return;
+    // 选图的面板和相册都不需要键盘，挡着反而看不见
+    _focus.unfocus();
     setState(() => _busy = true);
     try {
       final ask = await askImageSource(context);
@@ -928,17 +944,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                       ? null
                       : _pasteClipboard,
                   keyboardUp: keyboard > 0,
-                  onKeyboard: () {
-                    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
-                      _focus.unfocus();
-                    } else {
-                      _focus.requestFocus();
-                      // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
-                      SystemChannels.textInput.invokeMethod<void>(
-                        'TextInput.show',
-                      );
-                    }
-                  },
+                  onKeyboard: _toggleKeyboard,
                 ),
               ),
             ],
