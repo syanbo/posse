@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -360,6 +361,139 @@ void main() {
     expect(stale, isFalse);
     expect(model.error, isNull);
     await model.link?.close();
+  });
+
+  group('permission prompts on first pairing', () {
+    String codeFor(KeyPair keys) => base64Url.encode(
+      utf8.encode(
+        jsonEncode({
+          'v': 2,
+          'endpoint': 'only',
+          'deviceToken': 'tok',
+          'publicKeyB64': b64(keys.publicKey),
+        }),
+      ),
+    );
+
+    // iOS 弹网络权限窗时连接直接失败；用户点了允许，不用再扫一次
+    test('keeps trying until the prompt is answered', () async {
+      final hostKeys = generateKeyPair();
+      var attempts = 0;
+      final model =
+          HiveAppModel(
+              store: MemoryPairingStore(),
+              settingsStore: MemorySettingsStore(),
+              networkSignatures: const Stream.empty(),
+              connect: (url, cancel) async {
+                if (attempts++ < 3) {
+                  throw const SocketException('No route to host');
+                }
+                final (client, host) = pipePair();
+                unawaited(_host(host, hostKeys, 'tok'));
+                return client;
+              },
+            )
+            ..inForeground = (() => true)
+            ..firstConnectRetry = const Duration(milliseconds: 10);
+      expect(await model.connectCode(codeFor(hostKeys)), isTrue);
+      expect(attempts, 4);
+      expect(model.rpc, isNotNull);
+      await model.link?.close();
+    });
+
+    test('gives up after the window and mentions permissions', () async {
+      final hostKeys = generateKeyPair();
+      final model =
+          HiveAppModel(
+              store: MemoryPairingStore(),
+              settingsStore: MemorySettingsStore(),
+              networkSignatures: const Stream.empty(),
+              connect: (url, cancel) async =>
+                  throw const SocketException('No route to host'),
+            )
+            ..inForeground = (() => true)
+            ..firstConnectRetry = const Duration(milliseconds: 10)
+            ..firstConnectWindow = const Duration(milliseconds: 100);
+      expect(await model.connectCode(codeFor(hostKeys)), isFalse);
+      expect(model.error, contains('本地网络'));
+    });
+
+    // 用户盯着权限弹窗看了很久：不在前台的时间不算，点完回来照样连上
+    test('time spent on the prompt does not count', () async {
+      final hostKeys = generateKeyPair();
+      var prompt = true;
+      final model =
+          HiveAppModel(
+              store: MemoryPairingStore(),
+              settingsStore: MemorySettingsStore(),
+              networkSignatures: const Stream.empty(),
+              connect: (url, cancel) async {
+                if (prompt) throw const SocketException('No route to host');
+                final (client, host) = pipePair();
+                unawaited(_host(host, hostKeys, 'tok'));
+                return client;
+              },
+            )
+            ..inForeground = (() => !prompt)
+            ..firstConnectRetry = const Duration(milliseconds: 10)
+            ..firstConnectWindow = const Duration(milliseconds: 100);
+      final connected = model.connectCode(codeFor(hostKeys));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      prompt = false;
+      expect(await connected, isTrue);
+      await model.link?.close();
+    });
+
+    // 电脑回了话但对不上（配对码里的主机密钥和它的不一样），重试也没用
+    test('a key mismatch is not retried', () async {
+      final hostKeys = generateKeyPair();
+      var attempts = 0;
+      final model =
+          HiveAppModel(
+              store: MemoryPairingStore(),
+              settingsStore: MemorySettingsStore(),
+              networkSignatures: const Stream.empty(),
+              connect: (url, cancel) async {
+                attempts++;
+                final (client, host) = pipePair();
+                unawaited(_host(host, hostKeys, 'tok'));
+                return client;
+              },
+            )
+            ..inForeground = (() => true)
+            ..firstConnectRetry = const Duration(milliseconds: 10);
+      expect(await model.connectCode(codeFor(generateKeyPair())), isFalse);
+      expect(attempts, 1);
+    });
+
+    test('a saved computer is tried once', () async {
+      final hostKeys = generateKeyPair();
+      final code = codeFor(hostKeys);
+      final store = MemoryPairingStore();
+      var down = false;
+      var attempts = 0;
+      final model =
+          HiveAppModel(
+              store: store,
+              settingsStore: MemorySettingsStore(),
+              networkSignatures: const Stream.empty(),
+              connect: (url, cancel) async {
+                attempts++;
+                if (down) throw const SocketException('Connection refused');
+                final (client, host) = pipePair();
+                unawaited(_host(host, hostKeys, 'tok'));
+                return client;
+              },
+            )
+            ..inForeground = (() => true)
+            ..firstConnectRetry = const Duration(milliseconds: 10);
+      expect(await model.connectCode(code), isTrue);
+      await model.link?.close();
+      down = true;
+      attempts = 0;
+      expect(await model.connectCode(code), isFalse);
+      expect(attempts, 1);
+    });
   });
 
   test('an address that never answers does not stall reconnecting', () async {

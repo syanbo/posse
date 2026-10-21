@@ -1048,6 +1048,7 @@ class _KeyBar extends StatelessWidget {
     HiveColors c, {
     IconData? icon,
     Widget? glyph,
+    double size = 18,
     required String label,
     required VoidCallback? onTap,
   }) {
@@ -1066,7 +1067,7 @@ class _KeyBar extends StatelessWidget {
                 ? null
                 : const EdgeInsets.symmetric(horizontal: 8),
             alignment: Alignment.center,
-            child: glyph ?? Icon(icon, size: 18, color: c.text),
+            child: glyph ?? Icon(icon, size: size, color: c.text),
           ),
         ),
       ),
@@ -1098,6 +1099,11 @@ class _KeyBar extends StatelessWidget {
     );
   }
 
+  /// 键盘的图形扁（24 格里只占 14 高），和图片同为 18 时看着偏小，所以单独放大；
+  /// 粘贴的图形本来就比图片高，只放大一点。
+  static const _keyboardIcon = 21.0;
+  static const _pasteIcon = 19.0;
+
   /// 键盘开关：弹着时放下来看输出，收着时点它弹出来打字。
   Widget _hideKeyboard(HiveColors c) {
     return Material(
@@ -1110,7 +1116,7 @@ class _KeyBar extends StatelessWidget {
           width: 40,
           child: Icon(
             keyboardUp ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
-            size: 18,
+            size: _keyboardIcon,
             color: c.text,
           ),
         ),
@@ -1164,6 +1170,7 @@ class _KeyBar extends StatelessWidget {
                   : _iconKey(
                       c,
                       icon: Icons.content_paste_rounded,
+                      size: _pasteIcon,
                       label: '粘贴',
                       onTap: onPaste,
                     );

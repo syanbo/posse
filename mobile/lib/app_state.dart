@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'protocol/e2ee.dart';
 import 'protocol/link.dart';
 import 'protocol/pairing.dart';
+import 'protocol/race.dart';
 import 'protocol/rpc.dart';
 import 'protocol/socket.dart';
 import 'settings/custom_keys.dart';
@@ -17,6 +18,10 @@ import 'workspace/models.dart';
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
 String friendlyError(Object error) {
   if (error is TimeoutException) return '电脑没有回应，可能已经休眠或者网络断了';
+  if (error is FirstConnectFailed) {
+    return '连不上电脑：确认电脑上的 Hive 开着、手机和电脑在同一个网络，'
+        '并在手机设置里允许 Hive Mobile 使用无线数据和本地网络';
+  }
   if (error is RpcException) return error.message;
   final text = '$error';
   if (error is StateError && text.contains('closed') ||
@@ -30,6 +35,11 @@ String friendlyError(Object error) {
   }
   if (error is FormatException) return '配对码不对，重新扫一次或者重新复制';
   return text;
+}
+
+/// 第一次配对一直连不上：可能电脑没开，也可能没给网络权限，见 [HiveAppModel._start]。
+class FirstConnectFailed implements Exception {
+  const FirstConnectFailed();
 }
 
 /// 保存配对过的电脑。内容是 [SavedComputers] 的 JSON；旧版只存一个配对码，读的时候兼容。
@@ -345,6 +355,15 @@ class HiveAppModel extends ChangeNotifier {
   final SocketConnector connect;
   final Stream<String>? networkSignatures;
 
+  /// 第一次配对时连不上，每隔 [firstConnectRetry] 重试，App 在前台累计 [firstConnectWindow] 为止，见 [_start]。
+  Duration firstConnectWindow = const Duration(seconds: 30);
+  Duration firstConnectRetry = const Duration(seconds: 1);
+
+  /// 系统权限弹窗开着时 App 不在前台（inactive）。测试里替换。
+  bool Function() inForeground = () =>
+      WidgetsBinding.instance.lifecycleState != AppLifecycleState.inactive &&
+      WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused;
+
   PairingOffer? offer;
   HiveLink? link;
   List<WorktreeRow> worktrees = const [];
@@ -450,7 +469,7 @@ class HiveAppModel extends ChangeNotifier {
       created.onLatency = () {
         if (gen == _connectGen && identical(link, created)) notifyListeners();
       };
-      await created.start();
+      await _start(created, gen, first: saved.computers.isEmpty);
       if (gen != _connectGen) {
         await created.close();
         return false;
@@ -489,6 +508,37 @@ class HiveAppModel extends ChangeNotifier {
         connecting = false;
         notifyListeners();
       }
+    }
+  }
+
+  /// iOS 在 App 第一次连局域网地址时才弹「本地网络」权限，弹窗开着时连接直接失败。
+  /// 所以第一次配对连不上时接着重试，等用户点完允许自然连上。
+  /// 弹窗开着时 App 不在前台，这段时间不算进时限，用户看多久都行；点允许前后网络状态不变，
+  /// 等不到网络变化的通知。配对过的电脑权限早就点过了，只连一次。
+  Future<void> _start(HiveLink link, int gen, {required bool first}) async {
+    if (!first) {
+      await link.start();
+      return;
+    }
+    var left = firstConnectWindow;
+    while (true) {
+      final started = DateTime.now();
+      try {
+        await link.start();
+        return;
+      } catch (error) {
+        // 电脑回了话（密钥不对、拒绝能力声明），等多久都一样
+        if (error is E2eeException ||
+            error is RpcException ||
+            error is RaceCancelled) {
+          rethrow;
+        }
+        if (gen != _connectGen) rethrow;
+      }
+      await Future<void>.delayed(firstConnectRetry);
+      if (gen != _connectGen) throw const RaceCancelled();
+      if (inForeground()) left -= DateTime.now().difference(started);
+      if (left <= Duration.zero) throw const FirstConnectFailed();
     }
   }
 

@@ -176,7 +176,10 @@ class _KeyRow extends StatelessWidget {
           chevron: false,
           leading: switch (item.builtin) {
             'image' => const _KeyCap(icon: Icons.image_outlined),
-            'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
+            'paste' => const _KeyCap(
+              icon: Icons.content_paste_rounded,
+              iconSize: 19,
+            ),
             sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
             _ => _KeyCap(label: custom?.shown ?? item.builtin),
           },
@@ -227,10 +230,11 @@ String describeBuiltin(String name) => switch (name) {
 
 /// 和快捷键栏上一样的键帽，设置里一眼对得上。
 class _KeyCap extends StatelessWidget {
-  const _KeyCap({this.label, this.icon, this.glyph});
+  const _KeyCap({this.label, this.icon, this.iconSize = 18, this.glyph});
 
   final String? label;
   final IconData? icon;
+  final double iconSize;
   final Widget? glyph;
 
   @override
@@ -248,7 +252,7 @@ class _KeyCap extends StatelessWidget {
       child: glyph != null
           ? glyph!
           : icon != null
-          ? Icon(icon, size: 18, color: c.text)
+          ? Icon(icon, size: iconSize, color: c.text)
           : Text(
               label ?? '',
               maxLines: 1,
