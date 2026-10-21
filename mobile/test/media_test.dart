@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/files/save.dart';
 import 'package:hive_mobile/files/video.dart';
 import 'package:hive_mobile/git/git.dart';
 import 'package:hive_mobile/git/status.dart';
@@ -63,7 +64,7 @@ void main() {
     final rpc = _FileRpc(data);
     final path = 'rec-${DateTime.now().microsecondsSinceEpoch}.mp4';
     final seen = <int>[];
-    final file = await fetchVideo(
+    final file = await fetchFile(
       rpc,
       worktree: 'w',
       path: path,
@@ -75,7 +76,7 @@ void main() {
     expect(seen.last, data.length);
 
     rpc.calls.clear();
-    final again = await fetchVideo(
+    final again = await fetchFile(
       rpc,
       worktree: 'w',
       path: path,
@@ -88,12 +89,63 @@ void main() {
     expect(File('${file.path}.part').existsSync(), isFalse);
   });
 
+  test('two fetches of one file take turns instead of both writing', () async {
+    final data = Uint8List.fromList(
+      List.generate((2.5 * (1 << 20)).toInt(), (i) => i % 251),
+    );
+    final rpc = _FileRpc(data);
+    final path = 'twice-${DateTime.now().microsecondsSinceEpoch}.mp4';
+    Future<File> fetch() => fetchFile(
+      rpc,
+      worktree: 'w',
+      path: path,
+      cancelled: () => false,
+      onProgress: (_, _) {},
+    );
+    final both = await Future.wait([fetch(), fetch()]);
+    expect(both[1].path, both[0].path);
+    expect(await both[0].readAsBytes(), data);
+    // 后来的等前面的下完，直接用缓存，不再取一遍
+    expect(rpc.offsets, [0, 1 << 20, 2 << 20]);
+    await both[0].delete();
+  });
+
+  test('pasted images get an extension from their bytes', () {
+    expect(sniffImageExt(_png), 'png');
+    expect(sniffImageExt(Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0])), 'jpg');
+    expect(sniffImageExt(Uint8List.fromList(utf8.encode('GIF89a'))), 'gif');
+    expect(
+      sniffImageExt(
+        Uint8List.fromList([
+          ...utf8.encode('RIFF'),
+          0,
+          0,
+          0,
+          0,
+          ...utf8.encode('WEBP'),
+        ]),
+      ),
+      'webp',
+    );
+    expect(sniffImageExt(Uint8List.fromList(utf8.encode('hello'))), '');
+  });
+
+  test('photos and common videos go to the album, the rest is shared', () {
+    expect(savesToAlbum('a/shot.PNG'), isTrue);
+    expect(savesToAlbum('rec.mov'), isTrue);
+    expect(savesToAlbum('rec.webm'), isFalse);
+    expect(savesToAlbum('icon.bmp'), isFalse);
+    expect(savesToAlbum('notes.md'), isFalse);
+    expect(savesToAlbum('粘贴'), isFalse);
+    expect(savesToAlbum('粘贴', image: true), isTrue);
+  });
+
   test('a chunk that times out once is retried', () async {
     final data = Uint8List.fromList(
       List.generate((2.5 * (1 << 20)).toInt(), (i) => i % 251),
     );
     final rpc = _FileRpc(data)..timeoutOnce.add(1 << 20);
-    final file = await fetchVideo(
+    final file = await fetchFile(
       rpc,
       worktree: 'w',
       path: 'retry-${DateTime.now().microsecondsSinceEpoch}.mp4',
@@ -113,7 +165,7 @@ void main() {
     // 第二批（2 MB 起）怎么都下不来：前两段留着，报超时
     final slow = _FileRpc(data)..timeoutAt.add(2 << 20);
     await expectLater(
-      fetchVideo(
+      fetchFile(
         slow,
         worktree: 'w',
         path: path,
@@ -125,7 +177,7 @@ void main() {
     // 网络好了再打开：从 2 MB 接着下，不再取前两段
     final rpc = _FileRpc(data);
     final seen = <int>[];
-    final file = await fetchVideo(
+    final file = await fetchFile(
       rpc,
       worktree: 'w',
       path: path,

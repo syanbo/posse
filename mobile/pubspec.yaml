@@ -14,12 +14,14 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_markdown_plus: ^1.0.12
+  gal: ^2.3.3
   image_picker: ^1.2.4
   markdown: ^7.3.1
   pasteboard: ^0.5.0
   pinenacl: ^0.6.0
   re_highlight: ^0.0.3
   scrollview_observer: ^1.27.3
+  share_plus: ^13.3.1
   shared_preferences: ^2.5.6
   url_launcher: ^6.3.3
   video_player: ^2.14.1

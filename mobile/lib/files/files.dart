@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -15,6 +16,7 @@ import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import '../workspace/workspace.dart';
 import 'markdown_doc.dart';
+import 'save.dart';
 import 'video.dart';
 
 /// 目录里的一项。路径都相对工作区根目录，用 / 分隔。
@@ -100,7 +102,35 @@ class FilesScreen extends StatelessWidget {
   }
 }
 
-/// 工作区的文件：照桌面端文件栏的树，目录点一下就地展开，文件点开看内容，顶上可以按路径找。只读。
+/// 把工作区里的文件下到手机（带进度），存到 [to]（不给时按格式定）。
+Future<void> _download(
+  BuildContext context,
+  HiveAppModel model,
+  String worktree,
+  String path, {
+  SaveTo? to,
+}) async {
+  final rpc = model.rpc;
+  if (rpc == null) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('还没连上电脑')));
+    return;
+  }
+  await downloadAndSave(
+    context,
+    name: path,
+    to: to,
+    fetch: (cancelled, onProgress) => fetchFile(
+      rpc,
+      worktree: worktree,
+      path: path,
+      cancelled: cancelled,
+      onProgress: onProgress,
+    ),
+  );
+}
+
+/// 工作区的文件：照桌面端文件栏的树，目录点一下就地展开，文件点开看内容、长按存到手机，顶上可以按路径找。只读。
 class FilesPane extends StatefulWidget {
   const FilesPane({super.key, required this.model, required this.worktree});
 
@@ -251,6 +281,19 @@ class _FilesPaneState extends State<FilesPane> {
     final open = _open.contains(e.path);
     return InkWell(
       onTap: () => e.dir ? _toggle(e) : _openFile(e.path),
+      onLongPress: e.dir
+          ? null
+          : () => showSaveSheet(
+              context,
+              to: saveTarget(e.path),
+              onSave: (to) => _download(
+                context,
+                widget.model,
+                widget.worktree,
+                e.path,
+                to: to,
+              ),
+            ),
       child: Padding(
         // 尺寸照桌面端文件树：每层缩进 18
         padding: EdgeInsets.fromLTRB(12 + depth * 18.0, 0, 12, 0),
@@ -426,6 +469,9 @@ class FileViewer extends StatefulWidget {
 class _FileViewerState extends State<FileViewer> {
   String? _text;
   Uint8List? _image;
+
+  /// 视频下好后在手机上的文件。
+  File? _video;
   var _binary = false;
   var _truncated = false;
   String? _error;
@@ -504,10 +550,33 @@ class _FileViewerState extends State<FileViewer> {
               onPressed: () => setState(() => _source = !_source),
               child: Text(_source ? '预览' : '源码'),
             ),
+          _saveButton(),
           const SizedBox(width: 4),
         ],
       ),
       body: _body(c),
+    );
+  }
+
+  /// 存到手机：图片用已经取来的那份，视频等下完，其他文件现下。
+  Widget _saveButton() {
+    final path = widget.path;
+    final to = saveTarget(path);
+    final isVideo = videoExts.contains(_ext(path));
+    final video = _video;
+    final image = _image;
+    return Builder(
+      builder: (button) => IconButton(
+        tooltip: saveLabel(to),
+        icon: Icon(saveIcon(to)),
+        onPressed: isVideo && video == null
+            ? null
+            : () => video != null
+                  ? saveToPhone(button, video, path)
+                  : image != null
+                  ? saveBytesToPhone(button, image, path)
+                  : _download(button, widget.model, widget.worktree, path),
+      ),
     );
   }
 
@@ -525,6 +594,9 @@ class _FileViewerState extends State<FileViewer> {
         rpc: rpc,
         worktree: widget.worktree,
         path: widget.path,
+        onReady: (file) {
+          if (mounted) setState(() => _video = file);
+        },
       );
     }
     if (_binary) {

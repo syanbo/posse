@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../files/save.dart';
 import '../files/video.dart';
 import '../history/models.dart' show historyTime;
 import '../protocol/rpc.dart';
@@ -257,7 +258,10 @@ class _MediaScreenState extends State<MediaScreen> {
   );
 }
 
-/// 一格：缩略图（竖的截图从顶上裁），视频盖播放标记，下面是名字和时间。
+/// 存到哪：图片进相册，相册不收的视频（webm）安卓存下载、iOS 分享。
+SaveTo _target(MediaItem item) => saveTarget(item.label, image: !item.video);
+
+/// 一格：缩略图（竖的截图从顶上裁），视频盖播放标记，下面是名字和时间。点开看，长按存到手机。
 class _MediaTile extends StatefulWidget {
   const _MediaTile({
     super.key,
@@ -329,6 +333,26 @@ class _MediaTileState extends State<_MediaTile> {
                 MediaViewer(model: widget.model, tab: widget.tab, item: item),
           ),
         ),
+        onLongPress: () {
+          final rpc = widget.model.rpc;
+          if (rpc == null) return;
+          showSaveSheet(
+            context,
+            to: _target(item),
+            onSave: (to) => downloadAndSave(
+              context,
+              name: item.label,
+              to: to,
+              fetch: (cancelled, onProgress) => fetchMedia(
+                rpc,
+                widget.tab,
+                item,
+                cancelled: cancelled,
+                onProgress: onProgress,
+              ),
+            ),
+          );
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -442,8 +466,8 @@ Future<File> fetchMedia(
   );
 }
 
-/// 看一项：图片取原图（agent 当时看到的样子），双指放大；视频下好后播放。
-class MediaViewer extends StatelessWidget {
+/// 看一项：图片取原图（agent 当时看到的样子），双指放大；视频下好后播放。取到手机上后顶栏可以存到手机。
+class MediaViewer extends StatefulWidget {
   const MediaViewer({
     super.key,
     required this.model,
@@ -456,9 +480,24 @@ class MediaViewer extends StatelessWidget {
   final MediaItem item;
 
   @override
+  State<MediaViewer> createState() => _MediaViewerState();
+}
+
+class _MediaViewerState extends State<MediaViewer> {
+  File? _file;
+
+  void _ready(File file) {
+    if (mounted) setState(() => _file = file);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final rpc = model.rpc;
+    final item = widget.item;
+    final tab = widget.tab;
+    final rpc = widget.model.rpc;
+    final file = _file;
+    final to = _target(item);
     final time = historyTime(item.at, DateTime.now());
     final sub = [
       if (item.source != item.label) item.source,
@@ -487,6 +526,18 @@ class MediaViewer extends StatelessWidget {
               ),
           ],
         ),
+        actions: [
+          Builder(
+            builder: (button) => IconButton(
+              tooltip: saveLabel(to),
+              icon: Icon(saveIcon(to)),
+              onPressed: file == null
+                  ? null
+                  : () => saveToPhone(button, file, item.label),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: rpc == null
           ? const EmptyState(
@@ -496,6 +547,7 @@ class MediaViewer extends StatelessWidget {
             )
           : item.video
           ? VideoView(
+              onReady: _ready,
               fetch: (cancelled, onProgress) => fetchMedia(
                 rpc,
                 tab,
@@ -504,17 +556,23 @@ class MediaViewer extends StatelessWidget {
                 onProgress: onProgress,
               ),
             )
-          : _ImageView(rpc: rpc, tab: tab, item: item),
+          : _ImageView(rpc: rpc, tab: tab, item: item, onReady: _ready),
     );
   }
 }
 
 class _ImageView extends StatefulWidget {
-  const _ImageView({required this.rpc, required this.tab, required this.item});
+  const _ImageView({
+    required this.rpc,
+    required this.tab,
+    required this.item,
+    required this.onReady,
+  });
 
   final PhoneRpc rpc;
   final SessionTab tab;
   final MediaItem item;
+  final ValueChanged<File> onReady;
 
   @override
   State<_ImageView> createState() => _ImageViewState();
@@ -546,7 +604,9 @@ class _ImageViewState extends State<_ImageView> {
         cancelled: () => _disposed,
         onProgress: (_, _) {},
       );
-      if (mounted) setState(() => _file = file);
+      if (!mounted) return;
+      setState(() => _file = file);
+      widget.onReady(file);
     } on VideoCancelled {
       return;
     } catch (e) {

@@ -12,7 +12,7 @@ import '../ui/widgets.dart';
 
 const videoExts = {'mp4', 'mov', 'm4v', 'webm'};
 
-/// 太大的视频不往手机上搬：走局域网也要好一会儿，还占手机空间。
+/// 太大的文件不往手机上搬：走局域网也要好一会儿，还占手机空间。
 const videoMax = 500 << 20;
 const _chunk = 1 << 20;
 
@@ -26,11 +26,11 @@ const _chunkTimeout = Duration(seconds: 60);
 /// 一段超时后再试几次。
 const _retries = 2;
 
-/// 把工作区里的视频分段下载到手机的临时目录（[files.readRange]），下好了再播。
-/// 按工作区、路径、大小和修改时间缓存，再打开同一个视频不重新下；
+/// 把工作区里的文件分段下载到手机的临时目录（[files.readRange]），视频下好了再播，也用于存到手机。
+/// 按工作区、路径、大小和修改时间缓存，再打开同一个文件不重新下；
 /// 没下完（网络断了、超时）留着下了的部分，下次接着下。
 /// [onProgress] 报已经下了多少字节和总共多少。
-Future<File> fetchVideo(
+Future<File> fetchFile(
   PhoneRpc rpc, {
   required String worktree,
   required String path,
@@ -67,9 +67,40 @@ typedef ChunkReader = Future<Map<String, Object?>> Function(
   Duration timeout,
 );
 
+/// 正在下的文件，按 [fetchChunked] 的 key：看视频时又点了存到手机，两边不能同时往一个 .part 里写。
+final _fetching = <String, Future<void>>{};
+
 /// 分段下载一个远端文件到手机的临时目录，[key] 相同的只下一次。[size] 不知道时由第一段的回复带回来。
-/// 分段按顺序写进 .part，没下完时留着，下次接着下。
+/// 分段按顺序写进 .part，没下完时留着，下次接着下。同一个 key 同时只有一个在下，后来的等前面的停了再接着下。
 Future<File> fetchChunked({
+  required String key,
+  required String ext,
+  int? size,
+  required ChunkReader read,
+  required bool Function() cancelled,
+  required void Function(int done, int total) onProgress,
+}) async {
+  for (var busy = _fetching[key]; busy != null; busy = _fetching[key]) {
+    await busy;
+  }
+  final run = _fetchChunked(
+    key: key,
+    ext: ext,
+    size: size,
+    read: read,
+    cancelled: cancelled,
+    onProgress: onProgress,
+  );
+  final settled = run.then<void>((_) {}, onError: (_) {});
+  _fetching[key] = settled;
+  try {
+    return await run;
+  } finally {
+    if (identical(_fetching[key], settled)) _fetching.remove(key);
+  }
+}
+
+Future<File> _fetchChunked({
   required String key,
   required String ext,
   int? size,
@@ -159,15 +190,16 @@ class VideoCancelled implements Exception {
 
 /// 文件页、图片与视频页里的视频：先下载（带进度），下好了原地播放，下面是进度条和时间，点画面暂停或继续。
 class VideoView extends StatefulWidget {
-  const VideoView({super.key, required this.fetch});
+  const VideoView({super.key, required this.fetch, this.onReady});
 
-  /// 工作区里的视频（[fetchVideo]）。
+  /// 工作区里的视频（[fetchFile]）。
   VideoView.file({
     super.key,
     required PhoneRpc rpc,
     required String worktree,
     required String path,
-  }) : fetch = ((cancelled, onProgress) => fetchVideo(
+    this.onReady,
+  }) : fetch = ((cancelled, onProgress) => fetchFile(
          rpc,
          worktree: worktree,
          path: path,
@@ -176,6 +208,9 @@ class VideoView extends StatefulWidget {
        ));
 
   final VideoFetcher fetch;
+
+  /// 下好了，交出手机上的文件（顶栏的存到手机用）。
+  final ValueChanged<File>? onReady;
 
   @override
   State<VideoView> createState() => _VideoViewState();
@@ -200,6 +235,7 @@ class _VideoViewState extends State<VideoView> {
         if (mounted) setState(() => _progress = (done, total));
       });
       if (_disposed) return;
+      widget.onReady?.call(file);
       // 安卓用平台视图：默认的纹理把解码器接到 Flutter 的 Surface 上，有的机型（华为麒麟 9010 的海思解码器）
       // 在这种 Surface 上配不出输出缓冲区（setParameter 报 UnsupportedSetting），关掉 Impeller 也一样；
       // 平台视图给的是普通窗口，同一个解码器能播。iOS 的纹理没有这个问题
