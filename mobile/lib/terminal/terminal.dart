@@ -152,6 +152,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   @override
   void dispose() {
+    _resizeTimer?.cancel();
     _entry?.removeStatusListener(_onEntry);
     _noticeTimer?.cancel();
     _gen++;
@@ -191,14 +192,25 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (key != _titleKey && mounted) setState(() => _titleKey = key);
   }
 
+  /// 尺寸停止变化多久才重新订阅。
+  static const _resizeSettle = Duration(milliseconds: 150);
+  Timer? _resizeTimer;
+
   void _onResize(int cols, int rows) {
     // 电脑布局把控件排成桌面的格子，这里报上来的是电脑的列数。记成手机视口的话，
     // 关掉电脑布局会按桌面宽度去 HoldSize。
     if (_desk) return;
-    if (!_resizes.report(cols, rows)) return;
-    _cols = cols;
-    _rows = rows;
-    _schedule(fresh: true);
+    // 键盘弹出、收起的动画里每一帧都报一个新行数，一次十来个。每个都订阅的话，电脑上的终端
+    // 跟着连改十来次尺寸，agent 每次都重画，手机也连着复位、写快照十来次。等尺寸稳定下来只订阅一次；
+    // 动画途中收到的旧尺寸输出会画乱本地画面，由这次的快照盖掉
+    _resizes.changed();
+    _resizeTimer?.cancel();
+    _resizeTimer = Timer(_resizeSettle, () {
+      if (!mounted || _desk || !_resizes.report(cols, rows)) return;
+      _cols = cols;
+      _rows = rows;
+      _schedule(fresh: true);
+    });
   }
 
   /// 电脑布局时 flterm 的 onResize 不能用，手机这块区域的列数从布局算，留给关掉时订阅。
@@ -241,6 +253,8 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// [fresh] 时尺寸没变也重新订阅，拿一份新快照。
   void _schedule({bool fresh = false}) {
+    // 尺寸还在变（键盘动画、从后台回来时重新布局）：等它停下来那次订阅，现在按旧尺寸订一份只会多一次错位
+    if (fresh && (_resizeTimer?.isActive ?? false)) return;
     _gate = _gate.then((_) => _open(fresh: fresh)).catchError((Object _) {});
   }
 

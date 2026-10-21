@@ -199,6 +199,9 @@ class ResizeGate {
   int rows = 0;
   var _dirty = false;
 
+  /// 本地尺寸变过。动画途中的尺寸不逐个 [report]（等稳定下来才报），但本地内容已经按它们裁过了。
+  void changed() => _dirty = true;
+
   /// 记下 flterm 报上来的尺寸，返回要不要按 [cols]、[rows] 重新订阅。
   bool report(int c, int r) {
     if (c == cols && r == rows && !_dirty) return false;

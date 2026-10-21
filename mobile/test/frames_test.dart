@@ -132,5 +132,9 @@ void _overlapTest() {
     expect(gate.report(49, 44), isFalse);
     expect(gate.report(49, 22), isTrue);
     expect((gate.cols, gate.rows), (49, 22));
+    // 键盘动画途中的尺寸没逐个报，回到原来的大小也要重取快照
+    gate.changed();
+    expect(gate.report(49, 22), isTrue);
+    expect(gate.report(49, 22), isFalse);
   });
 }

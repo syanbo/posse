@@ -829,6 +829,17 @@ class TerminalControllerImpl extends TerminalController
   }
 
   TerminalSizeInfo _handleSizeQuery() {
+    // Hive: 布局时记下的行列数优先。RenderState.update 会清掉终端上的行脏标记，渲染器自己的
+    // RenderState 就看不到这一批输出改了哪些行：Claude Code 每次改尺寸重画都带一个 CSI 16t，
+    // 重画里不再变的行（分隔线、状态栏）在画面上一直是旧的，内核里却是对的
+    if (_lastRows > 0 && _lastCols > 0) {
+      return TerminalSizeInfo(
+        rows: _lastRows,
+        columns: _lastCols,
+        cellWidth: (_lastMetrics.cellWidth * _lastDevicePixelRatio).round(),
+        cellHeight: (_lastMetrics.cellHeight * _lastDevicePixelRatio).round(),
+      );
+    }
     _renderState.update(terminal);
     return TerminalSizeInfo(
       rows: _renderState.rows,
