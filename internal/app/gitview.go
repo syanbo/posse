@@ -17,6 +17,7 @@ import (
 
 	"hive/internal/files"
 	"hive/internal/gitx"
+	"hive/internal/media"
 )
 
 // 文件标签里的 Git：左栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。
@@ -331,7 +332,7 @@ func loadDiffImage(b []byte, exists bool) diffImage {
 	if !exists {
 		return diffImage{size: -1}
 	}
-	img, dim, err := scaledImageBytes(b, imageMaxPx)
+	img, dim, err := media.ScaledImageBytes(b, imageMaxPx)
 	if err != nil {
 		return diffImage{size: len(b), err: "解不开这张图：" + err.Error()}
 	}

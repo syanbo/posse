@@ -558,6 +558,9 @@ func (c *conn) dispatch(req request) error {
 		"clipboard.abortImageUpload", "clipboard.saveImageAsTempFile":
 		return c.image(req.ID, req.Method, p)
 	}
+	if c.mediaMethod(req, p) {
+		return nil
+	}
 	if c.fileMethod(req, p) {
 		return nil
 	}

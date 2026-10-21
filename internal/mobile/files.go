@@ -75,19 +75,7 @@ func (c *conn) fileMethod(req request, p json.RawMessage) bool {
 		if ok {
 			res, err = run(w.Path, a)
 		}
-		if err == nil {
-			c.reply(req.ID, res)
-			return
-		}
-		var re *rpcError
-		switch {
-		case errors.As(err, &re):
-			c.fail(req.ID, re.code, re.msg)
-		case errors.Is(err, fs.ErrNotExist):
-			c.fail(req.ID, "not_found", err.Error())
-		default:
-			c.fail(req.ID, "internal_error", err.Error())
-		}
+		c.replyOrFail(req.ID, res, err)
 	}()
 	return true
 }

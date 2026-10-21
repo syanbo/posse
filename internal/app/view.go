@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"hive/internal/agent"
+	"hive/internal/media"
 )
 
 func (a *app) build(c *ui.Context) {
@@ -1279,7 +1280,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		if task != nil && iconButton(c.Key("back-to-task"), iconTasks, "返回任务").Clicked() {
 			a.openTask(task.ID)
 		}
-		if imagesSupported(cur.Agent) {
+		if media.Supported(cur.Agent) {
 			a.panelButton(c, panelImages, iconImage, "这个会话里生成和粘贴的图片")
 		}
 		if cur.Agent != "" {

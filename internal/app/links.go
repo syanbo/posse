@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"hive/internal/media"
 )
 
 // openLink 处理终端里 Cmd+点击的链接。网址（http、mailto 等）返回 false，交给系统用默认浏览器打开；
@@ -132,7 +133,7 @@ func (a *app) showLinkCard(path string) {
 	a.linkCard = card
 	if !card.isDir && isImagePath(path) {
 		go func() {
-			img, err := scaledImage(path, linkPreviewWidth)
+			img, err := media.ScaledImage(path, linkPreviewWidth)
 			if err != nil {
 				return
 			}
@@ -265,7 +266,7 @@ func (a *app) onHoverLink(v *termView, link string) {
 	}
 	a.previewLoading[path] = true
 	go func() {
-		img, err := scaledImage(path, hoverPreviewPx)
+		img, err := media.ScaledImage(path, hoverPreviewPx)
 		a.win.Update(func() {
 			delete(a.previewLoading, path)
 			if err != nil {

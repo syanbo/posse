@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -38,6 +39,8 @@ type Server struct {
 
 	permMu sync.Mutex
 	perms  map[string]*permWait
+
+	media mediaCache
 }
 
 // PairInfo 是给界面和 CLI 显示的配对信息。
@@ -373,6 +376,23 @@ type request struct {
 
 func (c *conn) reply(id string, result any) error {
 	return c.sendJSON(map[string]any{"id": id, "ok": true, "result": result})
+}
+
+// replyOrFail 回结果或错误：rpcError 带上它的错误码，文件不存在报 not_found。
+func (c *conn) replyOrFail(id string, res any, err error) {
+	if err == nil {
+		c.reply(id, res)
+		return
+	}
+	var re *rpcError
+	switch {
+	case errors.As(err, &re):
+		c.fail(id, re.code, re.msg)
+	case errors.Is(err, fs.ErrNotExist):
+		c.fail(id, "not_found", err.Error())
+	default:
+		c.fail(id, "internal_error", err.Error())
+	}
 }
 
 func (c *conn) stream(id string, result any) error {

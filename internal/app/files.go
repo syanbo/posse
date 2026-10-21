@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"hive/internal/files"
+	"hive/internal/media"
 )
 
 // 文件标签：每个工作区一个，和终端标签并列，浏览、查看、轻量编辑和检索工作区目录里的文件。
@@ -380,7 +381,7 @@ func (a *app) loadDoc(d *fileDoc) {
 	go func() {
 		if isImagePath(path) {
 			st := files.StatFile(path)
-			img, err := scaledImage(path, imageMaxPx)
+			img, err := media.ScaledImage(path, imageMaxPx)
 			a.update(func() {
 				d.base, d.seen = st, st
 				if err != nil {

@@ -520,7 +520,11 @@ class _FileViewerState extends State<FileViewer> {
     }
     final rpc = widget.model.rpc;
     if (videoExts.contains(_ext(widget.path)) && rpc != null) {
-      return VideoView(rpc: rpc, worktree: widget.worktree, path: widget.path);
+      return VideoView.file(
+        rpc: rpc,
+        worktree: widget.worktree,
+        path: widget.path,
+      );
     }
     if (_binary) {
       return const EmptyState(

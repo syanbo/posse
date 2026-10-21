@@ -1,4 +1,4 @@
-package app
+package media
 
 import (
 	"bytes"
@@ -32,23 +32,23 @@ func TestListAndScaleImages(t *testing.T) {
 	writePNG(t, filepath.Join(dir, "10.png"), 300, 200)
 	writePNG(t, filepath.Join(dir, "note.png"), 10, 10) // 不是序号命名
 	os.WriteFile(filepath.Join(dir, "3.txt"), nil, 0o644)
-	items := listImages(dir)
-	if len(items) != 2 || items[0].n != 10 || items[1].n != 2 {
+	items := ListImages(dir)
+	if len(items) != 2 || items[0].N != 10 || items[1].N != 2 {
 		t.Fatalf("items = %+v", items)
 	}
-	big, err := scaledImage(items[1].path, thumbWidth)
+	big, err := ScaledImage(items[1].Path, 512)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := big.Bounds(); b.Dx() != thumbWidth || b.Dy() != 1520*thumbWidth/2400 {
+	if b := big.Bounds(); b.Dx() != 512 || b.Dy() != 1520*512/2400 {
 		t.Fatalf("scaled to %v", b)
 	}
 	// 本来就小的不放大
-	small, _ := scaledImage(items[0].path, thumbWidth)
+	small, _ := ScaledImage(items[0].Path, 512)
 	if b := small.Bounds(); b.Dx() != 300 || b.Dy() != 200 {
 		t.Fatalf("small scaled to %v", b)
 	}
-	if got := claudeImageDir("../x", ""); got != "" {
+	if got := ClaudeImageDir("../x", ""); got != "" {
 		t.Fatalf("bad session id gave %q", got)
 	}
 }
@@ -81,15 +81,15 @@ func TestAgentImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, made := sessionImageItems(transcript, imgs)
-	if len(made) != 2 || made[0].label != "preview.png" || made[1].label != "phone_screenshot" || made[0].source() != "/tmp/x/preview.png" {
+	_, made := SessionItems(transcript, imgs)
+	if len(made) != 2 || made[0].Label != "preview.png" || made[1].Label != "phone_screenshot" || made[0].Source() != "/tmp/x/preview.png" {
 		t.Fatalf("claude items %+v", made)
 	}
-	thumb, err := decodeItem(made[1], thumbWidth)
+	thumb, err := Decode(made[1], 512)
 	if err != nil || thumb.Bounds().Dx() != 300 || thumb.Bounds().Dy() != 600 {
 		t.Fatalf("thumb %v %v", thumb.Bounds(), err)
 	}
-	path, err := writeToolImage(made[1])
+	path, err := WriteToolImage(made[1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,14 +108,14 @@ func TestAgentImages(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, ".DS_Store"), nil, 0o644)
 	old := time.Now().Add(-time.Minute)
 	os.Chtimes(filepath.Join(dir, "ig_abc.png"), old, old)
-	codex := codexImages("019f-codex")
-	if len(codex) != 2 || codex[0].label != "代码产出" || codex[1].label != "生成的图片" {
+	codex := CodexImages("019f-codex")
+	if len(codex) != 2 || codex[0].Label != "代码产出" || codex[1].Label != "生成的图片" {
 		t.Fatalf("codex items %+v", codex)
 	}
-	if _, err := decodeItem(codex[1], thumbWidth); err != nil {
+	if _, err := Decode(codex[1], 512); err != nil {
 		t.Fatal(err)
 	}
-	if got := codexImages("../x"); got != nil {
+	if got := CodexImages("../x"); got != nil {
 		t.Fatalf("bad session id gave %v", got)
 	}
 }

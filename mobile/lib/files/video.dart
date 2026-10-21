@@ -13,7 +13,7 @@ import '../ui/widgets.dart';
 const videoExts = {'mp4', 'mov', 'm4v', 'webm'};
 
 /// 太大的视频不往手机上搬：走局域网也要好一会儿，还占手机空间。
-const _videoMax = 500 << 20;
+const videoMax = 500 << 20;
 const _chunk = 1 << 20;
 
 /// 同时在路上的分段数。电脑那边回复是一条条发的，排在后面的要等前面的发完，
@@ -42,45 +42,80 @@ Future<File> fetchVideo(
     'relativePath': path,
   });
   final size = (stat['size'] as num?)?.toInt() ?? 0;
-  if (size > _videoMax) {
+  if (size > videoMax) {
     throw const VideoTooLarge();
   }
-  final key = sha1
-      .convert(utf8.encode('$worktree\n$path\n$size\n${stat['mtime']}'))
-      .toString();
-  final dot = path.lastIndexOf('.');
+  return fetchChunked(
+    key: '$worktree\n$path\n$size\n${stat['mtime']}',
+    ext: path.substring(path.lastIndexOf('.')),
+    size: size,
+    read: (offset, limit, timeout) => rpc.call('files.readRange', {
+      'worktree': worktree,
+      'relativePath': path,
+      'offset': offset,
+      'limit': limit,
+    }, timeout: timeout),
+    cancelled: cancelled,
+    onProgress: onProgress,
+  );
+}
+
+/// 读远端文件的一段：回复里 content 是 base64，size 是文件的总大小。
+typedef ChunkReader = Future<Map<String, Object?>> Function(
+  int offset,
+  int limit,
+  Duration timeout,
+);
+
+/// 分段下载一个远端文件到手机的临时目录，[key] 相同的只下一次。[size] 不知道时由第一段的回复带回来。
+/// 分段按顺序写进 .part，没下完时留着，下次接着下。
+Future<File> fetchChunked({
+  required String key,
+  required String ext,
+  int? size,
+  required ChunkReader read,
+  required bool Function() cancelled,
+  required void Function(int done, int total) onProgress,
+}) async {
+  final name = sha1.convert(utf8.encode(key)).toString();
   final dir = Directory('${Directory.systemTemp.path}/hive-video');
   await dir.create(recursive: true);
-  final file = File('${dir.path}/$key${path.substring(dot)}');
-  if (await file.exists() && await file.length() == size) return file;
+  final file = File('${dir.path}/$name$ext');
+  // 下完才改名，所以有这个文件就是下完了的
+  if (await file.exists() && (size == null || await file.length() == size)) {
+    return file;
+  }
 
   // 分段按顺序写进去，.part 的长度就是已经下好的字节数
   final part = File('${file.path}.part');
   var done = await part.exists() ? await part.length() : 0;
-  if (done > size) {
+  if (size != null && done > size) {
     await part.delete();
     done = 0;
   }
   final out = await part.open(
     mode: done > 0 ? FileMode.append : FileMode.write,
   );
+  var total = size;
   try {
-    onProgress(done, size);
-    while (done < size) {
+    onProgress(done, total ?? 0);
+    while (total == null || done < total) {
       if (cancelled()) throw const VideoCancelled();
+      final known = total;
       final chunks = await Future.wait([
-        for (var i = 0; i < _inFlight; i++)
-          if (done + i * _chunk < size)
-            _readChunk(rpc, worktree, path, done + i * _chunk, cancelled),
+        for (var i = 0; i < (known == null ? 1 : _inFlight); i++)
+          if (known == null || done + i * _chunk < known)
+            _readChunk(read, done + i * _chunk, cancelled),
       ]);
       var empty = false;
       for (final res in chunks) {
+        total ??= (res['size'] as num?)?.toInt() ?? 0;
         final bytes = base64Decode(res['content'] as String? ?? '');
         await out.writeFrom(bytes);
         done += bytes.length;
         empty |= bytes.isEmpty;
       }
-      onProgress(done, size);
+      onProgress(done, total!);
       // 读的途中文件变短了（被改写），后面读不到东西，别空转
       if (empty) break;
     }
@@ -95,25 +130,24 @@ Future<File> fetchVideo(
 
 /// 取一段，超时了再试；电脑报的错（文件没了等）不重试。
 Future<Map<String, Object?>> _readChunk(
-  PhoneRpc rpc,
-  String worktree,
-  String path,
+  ChunkReader read,
   int offset,
   bool Function() cancelled,
 ) async {
   for (var attempt = 0; ; attempt++) {
     try {
-      return await rpc.call('files.readRange', {
-        'worktree': worktree,
-        'relativePath': path,
-        'offset': offset,
-        'limit': _chunk,
-      }, timeout: _chunkTimeout);
+      return await read(offset, _chunk, _chunkTimeout);
     } on TimeoutException {
       if (attempt >= _retries || cancelled()) rethrow;
     }
   }
 }
+
+/// 把视频取到手机上：[cancelled] 为真时停下，[onProgress] 报进度。
+typedef VideoFetcher = Future<File> Function(
+  bool Function() cancelled,
+  void Function(int done, int total) onProgress,
+);
 
 class VideoTooLarge implements Exception {
   const VideoTooLarge();
@@ -123,18 +157,25 @@ class VideoCancelled implements Exception {
   const VideoCancelled();
 }
 
-/// 文件页里的视频：先下载（带进度），下好了原地播放，下面是进度条和时间，点画面暂停或继续。
+/// 文件页、图片与视频页里的视频：先下载（带进度），下好了原地播放，下面是进度条和时间，点画面暂停或继续。
 class VideoView extends StatefulWidget {
-  const VideoView({
-    super.key,
-    required this.rpc,
-    required this.worktree,
-    required this.path,
-  });
+  const VideoView({super.key, required this.fetch});
 
-  final PhoneRpc rpc;
-  final String worktree;
-  final String path;
+  /// 工作区里的视频（[fetchVideo]）。
+  VideoView.file({
+    super.key,
+    required PhoneRpc rpc,
+    required String worktree,
+    required String path,
+  }) : fetch = ((cancelled, onProgress) => fetchVideo(
+         rpc,
+         worktree: worktree,
+         path: path,
+         cancelled: cancelled,
+         onProgress: onProgress,
+       ));
+
+  final VideoFetcher fetch;
 
   @override
   State<VideoView> createState() => _VideoViewState();
@@ -155,15 +196,9 @@ class _VideoViewState extends State<VideoView> {
 
   Future<void> _load() async {
     try {
-      final file = await fetchVideo(
-        widget.rpc,
-        worktree: widget.worktree,
-        path: widget.path,
-        cancelled: () => _disposed,
-        onProgress: (done, total) {
-          if (mounted) setState(() => _progress = (done, total));
-        },
-      );
+      final file = await widget.fetch(() => _disposed, (done, total) {
+        if (mounted) setState(() => _progress = (done, total));
+      });
       if (_disposed) return;
       // 安卓用平台视图：默认的纹理把解码器接到 Flutter 的 Surface 上，有的机型（华为麒麟 9010 的海思解码器）
       // 在这种 Surface 上配不出输出缓冲区（setParameter 报 UnsupportedSetting），关掉 Impeller 也一样；

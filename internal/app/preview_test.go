@@ -17,6 +17,7 @@ import (
 
 	"hive/internal/gitx"
 	"hive/internal/history"
+	"hive/internal/media"
 	"hive/internal/usage"
 )
 
@@ -793,11 +794,11 @@ func previewImages() imagesView {
 	now := time.Now()
 	return imagesView{term: "t1", poll: panelPoll{at: now}, madeAll: 3,
 		made: []imageItem{
-			{key: "s:3", label: "phone_screenshot", at: now.Add(-2 * time.Minute), tool: &history.ToolImage{Tool: "mcp__iphone-use__phone_screenshot"}, thumb: block(236, 512, color.RGBA{40, 44, 52, 255}, color.RGBA{217, 119, 87, 255})},
-			{key: "s:2", label: "git-compare-dark.png", at: now.Add(-9 * time.Minute), tool: &history.ToolImage{Tool: "Read", Path: "/tmp/hive-preview/git-compare-dark.png"}, thumb: block(512, 324, color.RGBA{38, 38, 36, 255}, color.RGBA{91, 141, 239, 255})},
+			{Item: media.Item{Key: "s:3", Label: "phone_screenshot", At: now.Add(-2 * time.Minute), Tool: &history.ToolImage{Tool: "mcp__iphone-use__phone_screenshot"}}, thumb: block(236, 512, color.RGBA{40, 44, 52, 255}, color.RGBA{217, 119, 87, 255})},
+			{Item: media.Item{Key: "s:2", Label: "git-compare-dark.png", At: now.Add(-9 * time.Minute), Tool: &history.ToolImage{Tool: "Read", Path: "/tmp/hive-preview/git-compare-dark.png"}}, thumb: block(512, 324, color.RGBA{38, 38, 36, 255}, color.RGBA{91, 141, 239, 255})},
 		},
 		pasted: []imageItem{
-			{key: "p:1", n: 1, label: "#1", path: "/tmp/1.png", thumb: block(512, 300, color.RGBA{243, 242, 239, 255}, color.RGBA{141, 187, 146, 255})},
+			{Item: media.Item{Key: "p:1", N: 1, Label: "#1", Path: "/tmp/1.png"}, thumb: block(512, 300, color.RGBA{243, 242, 239, 255}, color.RGBA{141, 187, 146, 255})},
 		},
 	}
 }

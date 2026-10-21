@@ -1,45 +1,24 @@
 package app
 
 import (
-	"bytes"
-	"context"
-	"crypto/sha1"
 	"fmt"
 	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-	"io"
 	"maps"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"golang.org/x/image/draw"
-	_ "golang.org/x/image/webp"
 
-	"hive/internal/history"
+	"hive/internal/media"
 )
 
-// imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片、视频和粘贴过的图片。
-//   - 粘贴的：终端里显示成 [Image #N]。Claude 存在会话的图片目录里，Codex 内嵌在会话文件里，
-//     Grok、Cursor 存在自己的 assets 目录、会话文件里列出路径；
-//   - agent 生成的：Claude、Grok 工具返回的图片（截图、读进来的图片文件），内嵌在会话文件里；
-//     Codex 图像生成和跑代码产出的图片，存在 ~/.codex/generated_images/<会话 ID>/；
-//     Claude、Codex、Grok 工具输出里提到的视频文件（录屏工具返回的路径等），缩略图由 Quick Look 取第一帧。
+// imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片、视频和粘贴过的图片，怎么找见 media 包。
 //
 // 截图解码后一张十几 MB，所以只留缩到面板宽度的缩略图，悬停放大时才解码那一张。
 type imagesView struct {
 	term    string
-	dir     string // 会话的图片目录，找到后不再找
-	scanner *history.ImageScanner
-	videos  *history.VideoScanner
+	scanner *media.Scanner
 	pasted  []imageItem
 	made    []imageItem // agent 生成的，新的在前，最多 maxMadeImages 张
 	madeAll int         // agent 生成的一共几张
@@ -53,15 +32,8 @@ type imagesView struct {
 }
 
 type imageItem struct {
-	key   string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置，视频是路径加修改时间
-	n     int    // 粘贴的图片的序号
-	label string
-	at    time.Time
-	path  string             // 磁盘上的图片或视频
-	tool  *history.ToolImage // Claude 工具返回的图片，内容在会话文件 src 里
-	src   string
+	media.Item
 	thumb *ui.Bitmap
-	video bool
 }
 
 const (
@@ -73,235 +45,12 @@ const (
 	maxMadeImages = 40
 )
 
-// imagesSupported 报告能不能列这个 agent 的图片。
-func imagesSupported(agent string) bool {
-	return agent == "claude" || agent == "codex" || agent == "grok" || agent == "cursor"
-}
-
-// claudeImageDir 找 Claude 会话保存粘贴图片的目录：/private/tmp/claude-<uid>/<项目目录编码>/<会话 ID>/images。
-// 项目目录编码和会话文件所在目录同名；拿不到会话文件时按会话 ID 找。
-func claudeImageDir(sid, transcript string) string {
-	if sid == "" || strings.ContainsAny(sid, `/\*?[`) {
-		return ""
-	}
-	isDir := func(p string) bool {
-		fi, err := os.Stat(p)
-		return err == nil && fi.IsDir()
-	}
-	roots := []string{fmt.Sprintf("/private/tmp/claude-%d", os.Getuid()), filepath.Join(os.TempDir(), fmt.Sprintf("claude-%d", os.Getuid()))}
-	if transcript != "" {
-		for _, root := range roots {
-			if p := filepath.Join(root, filepath.Base(filepath.Dir(transcript)), sid, "images"); isDir(p) {
-				return p
-			}
-		}
-	}
-	for _, root := range roots {
-		if m, _ := filepath.Glob(filepath.Join(root, "*", sid, "images")); len(m) > 0 {
-			return m[0]
-		}
-	}
-	return ""
-}
-
-// listImages 列出目录里以序号命名的图片（1.png、2.jpg…），序号大的（新的）在前。
-func listImages(dir string) []imageItem {
-	entries, _ := os.ReadDir(dir)
-	var out []imageItem
-	for _, e := range entries {
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if e.IsDir() || (ext != ".png" && ext != ".jpg" && ext != ".jpeg") {
-			continue
-		}
-		n, err := strconv.Atoi(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())))
-		if err != nil {
-			continue
-		}
-		path := filepath.Join(dir, e.Name())
-		out = append(out, imageItem{key: path, n: n, label: fmt.Sprintf("#%d", n), path: path})
-	}
-	slices.SortFunc(out, func(a, b imageItem) int { return b.n - a.n })
-	return out
-}
-
-// scaledImage 解码图片并缩到最宽 width 像素；本来就更小的不放大。
-func scaledImage(path string, width int) (*image.RGBA, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	img, _, err := decodeScaled(f, width)
-	return img, err
-}
-
-// scaledImageBytes 是 scaledImage 读内存里的图片（diff 里某个版本的内容），顺带返回原始尺寸。
-func scaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
-	return decodeScaled(bytes.NewReader(b), width)
-}
-
-func decodeScaled(r io.Reader, width int) (*image.RGBA, image.Point, error) {
-	src, _, err := image.Decode(r)
-	if err != nil {
-		return nil, image.Point{}, err
-	}
-	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w > width {
-		h = max(h*width/w, 1)
-		w = width
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
-	return dst, b.Size(), nil
-}
-
-// codexImages 列出 Codex 会话生成的图片：ig_ 开头的是图像生成工具画的，exec- 开头的是跑代码产出的。新的在前。
-func codexImages(sid string) []imageItem {
-	home, err := os.UserHomeDir()
-	if sid == "" || strings.ContainsAny(sid, `/\*?[`) || err != nil {
-		return nil
-	}
-	dir := filepath.Join(home, ".codex", "generated_images", sid)
-	entries, _ := os.ReadDir(dir)
-	var out []imageItem
-	for _, e := range entries {
-		if e.IsDir() || !isImageFile(e.Name()) {
-			continue
-		}
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		label := e.Name()
-		switch {
-		case strings.HasPrefix(label, "ig_"):
-			label = "生成的图片"
-		case strings.HasPrefix(label, "exec-"):
-			label = "代码产出"
-		}
-		path := filepath.Join(dir, e.Name())
-		out = append(out, imageItem{key: path, label: label, at: fi.ModTime(), path: path})
-	}
-	slices.SortFunc(out, func(a, b imageItem) int { return b.at.Compare(a.at) })
-	return out
-}
-
-// videoItems 把工具输出里提到、磁盘上还在的视频排成新的在前。key 带上修改时间：
-// 录屏开始时工具就返回了路径，文件还没写完时取不到缩略图，写完后换了 key 再取。
-func videoItems(videos []history.ToolVideo) []imageItem {
-	var out []imageItem
-	for i := len(videos) - 1; i >= 0; i-- {
-		v := videos[i]
-		fi, err := os.Stat(v.Path)
-		if err != nil || fi.IsDir() {
-			continue
-		}
-		at := v.At
-		if at.IsZero() {
-			at = fi.ModTime()
-		}
-		key := fmt.Sprintf("%s@%d", v.Path, fi.ModTime().UnixNano())
-		out = append(out, imageItem{key: key, label: filepath.Base(v.Path), at: at, path: v.Path, video: true})
+func wrapItems(items []media.Item) []imageItem {
+	out := make([]imageItem, len(items))
+	for i, it := range items {
+		out[i].Item = it
 	}
 	return out
-}
-
-// videoThumb 用 Quick Look 取视频的缩略图（第一帧），存在临时目录里，同一个 key 只取一次。
-func videoThumb(it imageItem) (string, error) {
-	dir := filepath.Join(os.TempDir(), "hive-video-thumbs")
-	sum := sha1.Sum([]byte(it.key))
-	out := filepath.Join(dir, fmt.Sprintf("%x.png", sum[:8]))
-	if _, err := os.Stat(out); err == nil {
-		return out, nil
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	tmp, err := os.MkdirTemp(dir, "ql-")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(tmp)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := exec.CommandContext(ctx, "/usr/bin/qlmanage", "-t", "-s", strconv.Itoa(bigWidth), "-o", tmp, it.path).Run(); err != nil {
-		return "", err
-	}
-	// qlmanage 取不到缩略图时退出码也是 0，只是不出文件
-	if err := os.Rename(filepath.Join(tmp, filepath.Base(it.path)+".png"), out); err != nil {
-		return "", err
-	}
-	return out, nil
-}
-
-// source 是图片从哪来：磁盘上的文件，或 Claude 读的文件、返回它的工具。
-func (it imageItem) source() string {
-	switch {
-	case it.tool == nil:
-		return it.path
-	case it.tool.Path != "":
-		return it.tool.Path
-	}
-	return it.tool.Tool
-}
-
-func isImageFile(name string) bool {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		return true
-	}
-	return false
-}
-
-// sessionImageItems 把会话文件里找到的图片分成粘贴的和 agent 生成的，都是新的在前：
-// 粘贴的标上序号（agent 每次启动序号从 #1 重新数，所以 key 用位置或文件路径），
-// 生成的标上读的文件名或工具名。
-func sessionImageItems(src string, imgs []history.ToolImage) (pasted, made []imageItem) {
-	for i := len(imgs) - 1; i >= 0; i-- {
-		im := imgs[i]
-		it := imageItem{key: fmt.Sprintf("%s:%d:%d", src, im.Offset, im.Index), at: im.At, tool: &im, src: src}
-		if im.OnDisk {
-			it.key, it.path, it.tool, it.src = im.Path, im.Path, nil, ""
-		}
-		if im.Pasted {
-			it.n, it.label = im.N, "粘贴"
-			if im.N > 0 {
-				it.label = fmt.Sprintf("#%d", im.N)
-			}
-			pasted = append(pasted, it)
-			continue
-		}
-		it.label = im.Tool
-		if im.Path != "" {
-			it.label = filepath.Base(im.Path)
-		} else if j := strings.LastIndex(it.label, "__"); j >= 0 {
-			// mcp__iphone-use__phone_screenshot 只写工具名
-			it.label = it.label[j+2:]
-		}
-		made = append(made, it)
-	}
-	return pasted, made
-}
-
-// decodeItem 解码一张图片并缩到最宽 width 像素。
-func decodeItem(it imageItem, width int) (*image.RGBA, error) {
-	if it.video {
-		thumb, err := videoThumb(it)
-		if err != nil {
-			return nil, err
-		}
-		return scaledImage(thumb, width)
-	}
-	if it.tool == nil {
-		return scaledImage(it.path, width)
-	}
-	b, err := history.ReadToolImage(it.src, *it.tool)
-	if err != nil {
-		return nil, err
-	}
-	img, _, err := scaledImageBytes(b, width)
-	return img, err
 }
 
 // pollImages 在主线程调用：换了终端就重来，到点了在后台找图片、给新图片做缩略图。
@@ -310,65 +59,34 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 	if v.term != cur.ID {
 		*v = imagesView{term: cur.ID}
 	}
-	if !imagesSupported(cur.Agent) || !v.poll.due(c, imagesRefresh) {
+	if !media.Supported(cur.Agent) || !v.poll.due(c, imagesRefresh) {
 		return
 	}
-	id, agent, dir, scanner, videos := cur.ID, cur.Agent, v.dir, v.scanner, v.videos
 	var sid, transcript string
 	if cur.AgentState != nil {
 		sid, transcript = cur.AgentState.SessionID, cur.AgentState.TranscriptPath
 	}
+	id, scanner := cur.ID, v.scanner
+	if !scanner.Same(cur.Agent, sid, transcript) {
+		scanner = media.NewScanner(cur.Agent, sid, transcript)
+	}
 	have := map[string]*ui.Bitmap{}
 	for _, it := range slices.Concat(v.pasted, v.made) {
-		have[it.key] = it.thumb
+		have[it.Key] = it.thumb
 	}
 	skip := maps.Clone(v.failed)
 	go func() {
-		var pasted, made []imageItem
-		switch agent {
-		case "claude":
-			if dir == "" {
-				dir = claudeImageDir(sid, transcript)
-			}
-			pasted = listImages(dir)
-		case "codex":
-			made = codexImages(sid)
-		}
-		// 会话文件要等 agent 写下第一条记录才出现，找不到就下次再找
-		if scanner == nil {
-			if path := history.TranscriptPath(agent, sid, transcript); path != "" {
-				scanner = history.NewImageScanner(agent, path)
-			}
-		}
-		if scanner != nil {
-			if imgs, err := scanner.Scan(); err == nil {
-				p, m := sessionImageItems(scanner.Path(), imgs)
-				pasted = append(pasted, p...)
-				made = append(made, m...)
-				slices.SortStableFunc(made, func(a, b imageItem) int { return b.at.Compare(a.at) })
-			}
-		}
-		if videos == nil {
-			if path := history.TranscriptPath(agent, sid, transcript); path != "" {
-				videos = history.NewVideoScanner(agent, path)
-			}
-		}
-		if videos != nil {
-			if vs, err := videos.Scan(); err == nil {
-				made = append(made, videoItems(vs)...)
-				slices.SortStableFunc(made, func(a, b imageItem) int { return b.at.Compare(a.at) })
-			}
-		}
-		all := len(made)
-		made = made[:min(len(made), maxMadeImages)]
+		p, m := scanner.Scan()
+		all := len(m)
+		pasted, made := wrapItems(p), wrapItems(m[:min(len(m), maxMadeImages)])
 		thumbs := map[string]*image.RGBA{}
 		var failed []string
 		for _, it := range slices.Concat(made, pasted) {
-			if have[it.key] == nil && !skip[it.key] {
-				if img, err := decodeItem(it, thumbWidth); err == nil {
-					thumbs[it.key] = img
+			if have[it.Key] == nil && !skip[it.Key] {
+				if img, err := media.Decode(it.Item, thumbWidth); err == nil {
+					thumbs[it.Key] = img
 				} else {
-					failed = append(failed, it.key)
+					failed = append(failed, it.Key)
 				}
 			}
 		}
@@ -379,9 +97,9 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 			}
 			for _, items := range [][]imageItem{pasted, made} {
 				for i := range items {
-					if bm := have[items[i].key]; bm != nil {
+					if bm := have[items[i].Key]; bm != nil {
 						items[i].thumb = bm
-					} else if img := thumbs[items[i].key]; img != nil {
+					} else if img := thumbs[items[i].Key]; img != nil {
 						items[i].thumb = ui.NewBitmap(img)
 					}
 				}
@@ -389,7 +107,7 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 			for _, k := range failed {
 				v.markFailed(k)
 			}
-			v.dir, v.scanner, v.videos, v.pasted, v.made, v.madeAll = dir, scanner, videos, pasted, made, all
+			v.scanner, v.pasted, v.made, v.madeAll = scanner, pasted, made, all
 			v.poll.done()
 		})
 	}()
@@ -405,13 +123,13 @@ func (v *imagesView) markFailed(key string) {
 // loadBig 在后台解码悬停的那张图的放大版，只留这一张。
 func (a *app) loadBig(it imageItem) {
 	v := &a.images
-	if v.bigKey == it.key || v.bigBusy || v.failed[it.key] {
+	if v.bigKey == it.Key || v.bigBusy || v.failed[it.Key] {
 		return
 	}
 	v.bigBusy = true
 	id := v.term
 	go func() {
-		img, err := decodeItem(it, bigWidth)
+		img, err := media.Decode(it.Item, bigWidth)
 		a.update(func() {
 			v := &a.images
 			if v.term != id {
@@ -419,25 +137,25 @@ func (a *app) loadBig(it imageItem) {
 			}
 			v.bigBusy = false
 			if err != nil {
-				v.markFailed(it.key)
+				v.markFailed(it.Key)
 				return
 			}
-			v.big, v.bigKey = ui.NewBitmap(img), it.key
+			v.big, v.bigKey = ui.NewBitmap(img), it.Key
 		})
 	}()
 }
 
-// openImage 用默认应用打开原图或视频。Claude 工具返回的图片只在会话文件里，先写到临时目录：
+// openImage 用默认应用打开原图或视频。工具返回的图片只在会话文件里，先写到临时目录：
 // 读的那个文件之后可能被改掉，打开的是 agent 当时看到的样子。
 func (a *app) openImage(it imageItem) {
-	if it.tool == nil {
-		if err := mygo.Shell.OpenPath(it.path); err != nil {
+	if it.Tool == nil {
+		if err := mygo.Shell.OpenPath(it.Path); err != nil {
 			a.err = err.Error()
 		}
 		return
 	}
 	go func() {
-		path, err := writeToolImage(it)
+		path, err := media.WriteToolImage(it.Item)
 		if err == nil {
 			err = mygo.Shell.OpenPath(path)
 		}
@@ -445,33 +163,6 @@ func (a *app) openImage(it imageItem) {
 			a.update(func() { a.err = err.Error() })
 		}
 	}()
-}
-
-func writeToolImage(it imageItem) (string, error) {
-	b, err := history.ReadToolImage(it.src, *it.tool)
-	if err != nil {
-		return "", err
-	}
-	ext := ".png"
-	switch it.tool.Media {
-	case "image/jpeg":
-		ext = ".jpg"
-	case "image/gif":
-		ext = ".gif"
-	case "image/webp":
-		ext = ".webp"
-	}
-	dir := filepath.Join(os.TempDir(), "hive-images")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	name := strings.TrimPrefix(it.label, "#")
-	if ext2 := filepath.Ext(name); ext2 != "" {
-		name = strings.TrimSuffix(name, ext2)
-	}
-	sum := sha1.Sum([]byte(it.key))
-	path := filepath.Join(dir, fmt.Sprintf("%s-%x%s", name, sum[:4], ext))
-	return path, os.WriteFile(path, b, 0o600)
 }
 
 // imagesPanel 是右侧的图片面板：agent 生成的在上，粘贴的（标上 #N）在下；悬停在左边放大，点击用默认应用打开原图。
@@ -484,7 +175,7 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
-				case !imagesSupported(cur.Agent):
+				case !media.Supported(cur.Agent):
 					usageNote(c, "目前只支持 Claude、Codex、Grok 和 Cursor 会话。")
 					return
 				case v.poll.at.IsZero():
@@ -518,10 +209,10 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 	})
 	for _, it := range items {
 		kind := "图片 "
-		if it.video {
+		if it.Video {
 			kind = "视频 "
 		}
-		card := ui.Column(c.Key(it.key)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label(kind + it.label)
+		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label(kind + it.Label)
 		selectedBg(c, card, false)
 		card.Children(func() {
 			if it.thumb != nil {
@@ -534,28 +225,28 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 				ui.Row(c).Justify(ui.Center).Children(func() {
 					ui.Box(c).Children(func() {
 						ui.Image(c, it.thumb).Width(dw).Radius(6)
-						if it.video {
+						if it.Video {
 							playBadge(c)
 						}
 					})
 				})
 			} else {
 				ui.Box(c).Height(120).Radius(6).Background(t.Surface).Children(func() {
-					if it.video {
+					if it.Video {
 						playBadge(c)
 					}
 				})
 			}
 			ui.Row(c).Gap(8).Padding(0, 2).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, it.label).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.source())
-				if !it.at.IsZero() {
+				ui.Text(c, it.Label).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
+				if !it.At.IsZero() {
 					ui.Spacer(c)
-					ui.Text(c, commitTime(it.at)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, commitTime(it.At)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 				}
 			})
 		})
 		if card.Hovered() {
-			v.hover = it.key
+			v.hover = it.Key
 			a.loadBig(it)
 		}
 		if card.Clicked() {

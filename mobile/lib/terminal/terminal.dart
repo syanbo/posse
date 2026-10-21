@@ -25,6 +25,7 @@ import '../workspace/models.dart';
 import 'desk_fit.dart';
 import 'frames.dart';
 import 'link_target.dart';
+import '../chat/media.dart';
 
 /// 完全复位（RIS）并清掉回滚。
 final _resetBytes = Uint8List.fromList('\x1bc\x1b[3J'.codeUnits);
@@ -769,6 +770,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                 tab: widget.tab,
                 switchLabel: widget.onOpenChat == null ? null : '切换到对话',
                 switchIcon: Icons.chat_bubble_outline_rounded,
+                media: hasMedia(_liveTab),
                 // 打开时终端保持电脑的尺寸，手机左右滑着看；关着时按手机屏幕重排
                 desk: _desk,
                 onDesk: (value) {
@@ -779,6 +781,14 @@ class _TerminalScreenState extends State<TerminalScreen>
                 },
               );
               if (!mounted) return;
+              if (action == 'media') {
+                nav.push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        MediaScreen(model: widget.model, tab: _liveTab),
+                  ),
+                );
+              }
               if (action == 'switch') widget.onOpenChat?.call();
               if (action == 'close' &&
                   await closeSession(this.context, widget.model, widget.tab)) {
