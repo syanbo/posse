@@ -7,6 +7,26 @@ import 'brand_paths.dart';
 import 'svg_path.dart';
 import 'theme.dart';
 
+/// 所在页面的推入动画结束时完成，不在动画里就马上完成。
+///
+/// 进页时数据常在滑入途中到达，那一帧要建整页、排一屏文字，动画就顿一下。
+/// 首次拿到的数据等这里完成再上屏；必须在 initState 之后调用。
+Future<void> routeSettled(BuildContext context) {
+  final animation = ModalRoute.of(context)?.animation;
+  if (animation == null || animation.status != AnimationStatus.forward) {
+    return Future.value();
+  }
+  final done = Completer<void>();
+  void onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.forward) return;
+    animation.removeStatusListener(onStatus);
+    done.complete();
+  }
+
+  animation.addStatusListener(onStatus);
+  return done.future;
+}
+
 final _brandPaths = <String, Path>{};
 
 Path _brand(String d) => _brandPaths.putIfAbsent(d, () => parseSvgPath(d));
@@ -304,25 +324,7 @@ class Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (title != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title!,
-                      style: TextStyle(
-                        fontSize: Fs.meta,
-                        fontWeight: FontWeight.w500,
-                        color: c.muted,
-                      ),
-                    ),
-                  ),
-                  ?trailing,
-                ],
-              ),
-            ),
+          if (title != null) _SectionTitle(title!, trailing: trailing),
           Container(
             decoration: BoxDecoration(
               color: c.card,
@@ -342,6 +344,96 @@ class Section extends StatelessWidget {
                       ),
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title, {this.trailing});
+
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: Fs.meta,
+                fontWeight: FontWeight.w500,
+                color: c.muted,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// 和 [Section] 一样的卡片，放在 CustomScrollView 里按需建行：几百行的列表一次全建，
+/// 数据到的那一帧要几十毫秒。
+class SliverSection extends StatelessWidget {
+  const SliverSection({
+    super.key,
+    this.title,
+    required this.itemCount,
+    required this.itemBuilder,
+    this.inset = 16,
+    this.margin = const EdgeInsets.fromLTRB(16, 0, 16, 20),
+  });
+
+  final String? title;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final double inset;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    const radius = Radius.circular(Rd.card);
+    return SliverPadding(
+      padding: margin,
+      sliver: SliverMainAxisGroup(
+        slivers: [
+          if (title != null) SliverToBoxAdapter(child: _SectionTitle(title!)),
+          DecoratedSliver(
+            decoration: BoxDecoration(
+              color: c.card,
+              borderRadius: BorderRadius.circular(Rd.card),
+            ),
+            sliver: SliverList.separated(
+              itemCount: itemCount,
+              separatorBuilder: (_, _) => Padding(
+                padding: EdgeInsets.only(left: inset),
+                child: Divider(height: 1, thickness: 1, color: c.line),
+              ),
+              // 装饰不裁剪，首尾两行自己裁成圆角，按下的底色不溢出卡片
+              itemBuilder: (context, i) {
+                final row = itemBuilder(context, i);
+                final first = i == 0;
+                final last = i == itemCount - 1;
+                if (!first && !last) return row;
+                return ClipRRect(
+                  borderRadius: BorderRadius.vertical(
+                    top: first ? radius : Radius.zero,
+                    bottom: last ? radius : Radius.zero,
+                  ),
+                  child: row,
+                );
+              },
+            ),
           ),
         ],
       ),

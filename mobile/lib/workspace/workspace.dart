@@ -1269,6 +1269,9 @@ class TabScreen extends StatefulWidget {
 class _TabScreenState extends State<TabScreen> {
   late var _page = widget.page;
 
+  /// 打开过的页。IndexedStack 会给每一页排版，没打开过的先放空盒，进页时只建看得见的那页。
+  late final _seen = {widget.page};
+
   /// 工作区在列表里的最新一行，分支跟着首页的轮询变。
   WorktreeRow get _row {
     for (final row in widget.model.worktrees) {
@@ -1313,28 +1316,37 @@ class _TabScreenState extends State<TabScreen> {
             child: Segmented(
               labels: const ['改动', '文件'],
               selected: _page,
-              onChanged: (i) => setState(() => _page = i),
+              onChanged: (i) => setState(() {
+                _page = i;
+                _seen.add(i);
+              }),
             ),
           ),
           Expanded(
             child: IndexedStack(
               index: _page,
               children: [
-                GitPane(
-                  loadStatus: () => _git((rpc) => loadGitStatus(rpc, row.id)),
-                  loadDiff: (file) =>
-                      _git((rpc) => loadGitDiff(rpc, row.id, file)),
-                  onOpenFile: (path) => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => FileViewer(
-                        model: widget.model,
-                        worktree: row.id,
-                        path: path,
+                if (!_seen.contains(0))
+                  const SizedBox.shrink()
+                else
+                  GitPane(
+                    loadStatus: () => _git((rpc) => loadGitStatus(rpc, row.id)),
+                    loadDiff: (file) =>
+                        _git((rpc) => loadGitDiff(rpc, row.id, file)),
+                    onOpenFile: (path) => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => FileViewer(
+                          model: widget.model,
+                          worktree: row.id,
+                          path: path,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                FilesPane(model: widget.model, worktree: row.id),
+                if (!_seen.contains(1))
+                  const SizedBox.shrink()
+                else
+                  FilesPane(model: widget.model, worktree: row.id),
               ],
             ),
           ),

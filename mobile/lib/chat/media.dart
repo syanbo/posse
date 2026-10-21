@@ -128,6 +128,7 @@ class _MediaScreenState extends State<MediaScreen> {
     _busy = true;
     try {
       final res = await rpc.call('session.media', _sessionArgs(widget.tab));
+      if (mounted && _list == null) await routeSettled(context);
       if (mounted) {
         setState(() {
           _list = MediaList.fromJson(res);

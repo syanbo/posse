@@ -219,6 +219,10 @@ class _ChatScreenState extends State<ChatScreen> {
       _bound = rpc;
       _chat = chat;
       _tabs = tabs;
+      // 订阅是单订阅流，等动画的这段时间来的帧会留着
+      if (!mounted) return;
+      await routeSettled(context);
+      if (gen != _openGen || _gone) return;
       chat.frames.listen((frame) {
         if (!mounted || gen != _openGen) return;
         if (frame['type'] == 'permission') {

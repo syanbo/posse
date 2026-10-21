@@ -134,6 +134,8 @@ class _FilesPaneState extends State<FilesPane> {
         'relativePath': dir,
       });
       if (!mounted) return;
+      await routeSettled(context);
+      if (!mounted) return;
       setState(() {
         _children[dir] = parseDir(dir, res['value']);
         _error = null;
@@ -473,6 +475,8 @@ class _FileViewerState extends State<FileViewer> {
         'worktree': widget.worktree,
         'relativePath': widget.path,
       });
+      if (!mounted) return;
+      await routeSettled(context);
       if (!mounted) return;
       final content = res['content'] as String? ?? '';
       setState(() {

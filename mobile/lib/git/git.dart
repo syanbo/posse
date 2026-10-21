@@ -97,6 +97,8 @@ class _GitPaneState extends State<GitPane> {
     try {
       final status = await widget.loadStatus();
       if (!mounted) return;
+      await routeSettled(context);
+      if (!mounted) return;
       setState(() {
         _status = status;
         _loading = false;
@@ -155,20 +157,20 @@ class _GitPaneState extends State<GitPane> {
                   text: '工作区是干净的，没有改动',
                 ),
               )
-            else ...[
+            else
               _listHeader(c, files.length),
-              for (final (kind, label) in _groups)
-                if (files.any((f) => _groupOf(f) == kind))
-                  _group(
-                    context,
-                    kind,
-                    label,
-                    files.where((f) => _groupOf(f) == kind).toList(),
-                  ),
-            ],
-            const SizedBox(height: 32),
           ],
         ),
+        if (files.isNotEmpty)
+          for (final (kind, label) in _groups)
+            if (files.any((f) => _groupOf(f) == kind))
+              _group(
+                context,
+                kind,
+                label,
+                files.where((f) => _groupOf(f) == kind).toList(),
+              ),
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
   }
@@ -225,46 +227,56 @@ class _GitPaneState extends State<GitPane> {
             ]..sort((a, b) => a.path.compareTo(b.path)))
               ChangeRow(key: f.path, label: f.name, depth: 0, file: f),
           ];
-    return Padding(
+    final header = _foldRow(
+      c,
+      open: !folded,
+      onTap: () => _fold('$kind'),
+      depth: 0,
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: Fs.meta,
+              fontWeight: FontWeight.w500,
+              color: kind == ChangeKind.conflict ? c.danger : c.text,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${files.length}',
+            style: TextStyle(fontSize: 12, color: c.faint),
+          ),
+        ],
+      ),
+    );
+    const radius = Radius.circular(Rd.card);
+    // 改动多时一次全建，数据到的那一帧要几十毫秒；按需建行，装饰不裁剪，标题行自己裁圆角
+    return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Container(
+      sliver: DecoratedSliver(
         decoration: BoxDecoration(
           color: c.card,
           borderRadius: BorderRadius.circular(Rd.card),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            _foldRow(
-              c,
-              open: !folded,
-              onTap: () => _fold('$kind'),
-              depth: 0,
-              child: Row(
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: Fs.meta,
-                      fontWeight: FontWeight.w500,
-                      color: kind == ChangeKind.conflict ? c.danger : c.text,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${files.length}',
-                    style: TextStyle(fontSize: 12, color: c.faint),
-                  ),
-                ],
-              ),
-            ),
-            if (!folded)
-              for (final row in rows)
-                row.file == null
-                    ? _dirRow(c, kind, row)
-                    : _fileRow(c, row.file!, row.depth + 1, flat: !_tree),
-            if (!folded) const SizedBox(height: 4),
-          ],
+        sliver: SliverList.builder(
+          itemCount: folded ? 1 : rows.length + 2,
+          itemBuilder: (context, i) {
+            if (i == 0) {
+              return ClipRRect(
+                borderRadius: BorderRadius.vertical(
+                  top: radius,
+                  bottom: folded ? radius : Radius.zero,
+                ),
+                child: header,
+              );
+            }
+            if (i > rows.length) return const SizedBox(height: 4);
+            final row = rows[i - 1];
+            return row.file == null
+                ? _dirRow(c, kind, row)
+                : _fileRow(c, row.file!, row.depth + 1, flat: !_tree);
+          },
         ),
       ),
     );
@@ -645,6 +657,8 @@ class _DiffViewerState extends State<DiffViewer> {
   Future<void> _load() async {
     try {
       final diff = await widget.load();
+      if (!mounted) return;
+      await routeSettled(context);
       if (mounted) setState(() => _diff = diff);
     } catch (error) {
       if (mounted) setState(() => _error = '$error');

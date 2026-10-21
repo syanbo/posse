@@ -68,6 +68,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ? await rpc.call('history.list', {'limit': 300})
           : await rpc.call('history.search', {'query': q, 'limit': 100});
       if (!mounted || seq != _seq) return;
+      await routeSettled(context);
+      if (!mounted || seq != _seq) return;
       setState(() {
         _sessions = parseHistory(result);
         _any = result['any'] == true;
@@ -141,24 +143,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       CupertinoSliverRefreshControl(onRefresh: _load),
                       // 搜索结果按相关度排，不分组
                       if (searching)
-                        SliverToBoxAdapter(
-                          child: Section(
-                            inset: 52,
-                            children: [
-                              for (final s in _sessions) _row(context, s, now),
-                            ],
-                          ),
+                        SliverSection(
+                          inset: 52,
+                          itemCount: _sessions.length,
+                          itemBuilder: (context, i) =>
+                              _row(context, _sessions[i], now),
                         )
                       else
                         for (final (label, list) in groups)
-                          SliverToBoxAdapter(
-                            child: Section(
-                              title: label,
-                              inset: 52,
-                              children: [
-                                for (final s in list) _row(context, s, now),
-                              ],
-                            ),
+                          SliverSection(
+                            title: label,
+                            inset: 52,
+                            itemCount: list.length,
+                            itemBuilder: (context, i) =>
+                                _row(context, list[i], now),
                           ),
                       const SliverToBoxAdapter(child: SizedBox(height: 24)),
                     ],
@@ -286,6 +284,8 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         'limit': 40,
         if (!initial) 'beforeOffset': _window.beforeOffset,
       });
+      if (!mounted) return;
+      if (initial) await routeSettled(context);
       if (!mounted) return;
       final before = _window.messages.length;
       setState(() {
