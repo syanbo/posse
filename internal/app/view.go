@@ -664,28 +664,31 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	if detail == "" {
 		detail = name
 	}
-	status := a.sessionStatus(term)
+	status, statusID := a.sessionStatus(term), term.ID
 	folded := open != nil && !*open
 	if folded {
 		// 收起的 worker 里最要紧的状态是待处理或完成未读时，派发方这一行替它们显示
 		for _, k := range workers {
 			if ks := a.sessionStatus(k); (ks == agent.StatusWaiting || ks == statusUnread) && statusRank(ks) > statusRank(status) {
-				status = ks
+				status, statusID = ks, k.ID
 			}
 		}
 	}
 	var trailing func()
 	if status != "" || open != nil {
 		trailing = func() {
-			if status == agent.StatusWaiting {
+			switch status {
+			case agent.StatusWaiting:
 				pendingLabel(c)
+			case statusUnread:
+				doneLabel(c)
 			}
 			if folded {
 				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
 					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
 			}
 			if status != "" {
-				statusGlyph(c, status, 12)
+				a.statusIcon(c, statusID, status, 12)
 			}
 		}
 	}
@@ -1527,7 +1530,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	}
 	row.Children(func() {
 		if status != "" {
-			statusGlyph(c, status, 13)
+			a.statusIcon(c, term.ID, status, 13)
 		} else {
 			ui.Icon(c, iconTerminal).FontSize(14).TextColor(t.TextMuted).Shrink(0)
 		}

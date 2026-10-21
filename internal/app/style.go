@@ -217,6 +217,11 @@ func pendingLabel(c *ui.Context) ui.Element {
 	return ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(c.Theme()).honey)
 }
 
+// doneLabel 是"已完成"三个字，和"待处理"一样是要你看一眼的状态，用强调色。
+func doneLabel(c *ui.Context) ui.Element {
+	return ui.Text(c, "已完成").FontSize(11).FontWeight(600).TextColor(c.Theme().Accent)
+}
+
 // workspaceIcon 是工作区的图标：worktree 是分支，其余是文件夹。
 func workspaceIcon(kind string) *ui.SVG {
 	if kind == "worktree" {

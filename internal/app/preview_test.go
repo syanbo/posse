@@ -421,6 +421,7 @@ func TestPreview(t *testing.T) {
 	for _, dark := range []bool{true, false} {
 		suffix := map[bool]string{true: "dark", false: "light"}[dark]
 		a := previewApp(t)
+		a.unread = map[string]bool{"t4": true} // 完成了还没看：已完成、铃铛
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
 
 		// 窗口缩到最小

@@ -270,8 +270,9 @@ type app struct {
 	staleApp    bool
 
 	// unread 是本轮完成时你不在看的会话（终端 ID），看过或再开始干活就清掉；只在窗口进程内存里（unread.go）
-	unread  map[string]bool
-	focused atomic.Bool // 窗口有焦点：在后台时看着的会话也不算看过
+	unread   map[string]bool
+	unreadAt map[string]time.Time // 记成未读的时刻，铃铛每轮摇动从这时起算
+	focused  atomic.Bool          // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
 // agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
@@ -582,6 +583,11 @@ func (a *app) apply(ps []project, ws []workspace) {
 	for id := range a.unread {
 		if !seen[id] {
 			delete(a.unread, id)
+		}
+	}
+	for id := range a.unreadAt {
+		if !seen[id] {
+			delete(a.unreadAt, id)
 		}
 	}
 	a.pruneFiles()
