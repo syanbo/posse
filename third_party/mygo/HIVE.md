@@ -11,6 +11,7 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 - `diffview.go`：加 `DiffState.IgnoreWhitespace`。
 - `diffmodel.go`：开着它时比较前去掉每行的空白（`cmpLines`），只差空白的行算没改；两边没改的段行数仍然相等，左右对照照常对齐。显示、行内高亮和回滚用的仍是原文。没有做"忽略空行"：把只增删空行的段去掉会让两边对不齐。
 
+- `diffview.go`、`diffside.go`：加 `DiffState.RenderHunkMark`，左右对照时在旧版一侧的右边缘（挨着分隔线）给每处改动放一个按钮（`hunkTop` 找这处改动在旧版一侧的位置，没有行时是占位块），Hive 画成 WebStorm 的 `>>`；加 `DiffState.OldNumbersRight`，左右对照时旧版一侧的行号栏放到右边缘，两列行号挨着分隔线，`>>` 在行号左边（编辑器选项 `gutterRight`、`gutterExtra`，`editor.go` 的 `textLeft`、`rightGutter`、`inGutter`，`paint.go`、`input.go` 里原来按行号栏在左边算的地方改用它们）。
 - `diffview.go`、`diffside.go`：加 `DiffState.Current`（改动的序号加一，0 表示没有），这一处的底色和行号栏比别的改动深、竖条总是显示，F7 上下切换时看得出走到了哪。
 
 `ui/editor` 的编辑器（`gitdiff.go`、`input.go`、`paint.go`、`state.go`）：加 `State.OnChangeClick`，点行号栏里相对 DiffBase 的改动色条时回调（改动序号和这一行底边的位置），色条的位置抽成 `changeBarX` 和绘制共用；加 `State.Changes`（改动列表和改之前的内容）、`State.RevertChange`（回滚一处，可以撤销）、`State.LineBottom`（某一行底边相对编辑器顶的位置）。Hive 用它们做 WebStorm 那样的改动卡片。

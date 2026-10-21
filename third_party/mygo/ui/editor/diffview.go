@@ -58,6 +58,15 @@ type DiffState struct {
 	// or the caret's, which put the old lines back in New, or make the
 	// new lines Old's, as an agent's changes are reviewed.
 	HunkActions bool
+	// RenderHunkMark builds a button on every change at the right edge
+	// of the old side of a side-by-side view, by the divider, as
+	// WebStorm's >> that puts the old lines back (Hive).
+	RenderHunkMark func(c *ui.Context, btn ui.Element, a *DiffHunkActions)
+	// OldNumbersRight puts the old side's gutter at its right edge in a
+	// side-by-side view, the two columns of numbers together by the
+	// divider, as WebStorm's; RenderHunkMark's buttons go left of the
+	// numbers (Hive).
+	OldNumbersRight bool
 	// LineSelection lets the numbers of lines be clicked and dragged to
 	// select lines, which OnLineSelection reports.
 	LineSelection   bool
@@ -400,6 +409,12 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 				o.sharedScroll = nil
 			}
 			o.noScrollbar = i == 0
+			if i == 0 && d.OldNumbersRight {
+				o.gutterRight = true
+				if d.RenderHunkMark != nil {
+					o.gutterExtra = 28
+				}
+			}
 			if d.Indicators == DiffClassic {
 				o.signs = true
 			}

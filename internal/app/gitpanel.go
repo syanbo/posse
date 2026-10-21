@@ -322,9 +322,6 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 	}
 	contextMenu(c, row, func(m *popMenu) {
-		if !e.Conflict && m.Item("显示 diff").Chosen() {
-			a.openDiff(w, spec, nil, true)
-		}
 		if letter != 'D' && m.Item("打开文件").Chosen() {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
 		}
@@ -352,7 +349,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 				label = "删除…"
 			}
 			if m.Item(label).Shortcut(ui.Cmd|ui.Alt, ui.KeyZ).Chosen() {
-				a.askRollback(v, []gitx.Entry{e}, nil)
+				a.openRollbackFor(v, []string{e.Path}, nil)
 			}
 		}
 		m.Separator()
@@ -546,7 +543,24 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df := d.diff
 	df.state.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
-	df.state.HunkActions = df.worktree()
+	// 左右对照时照 WebStorm 在中间分隔线旁给每处改动放 >>，上下合并时只有悬停的那处有"回滚"
+	split := df.state.Layout == editor.DiffSplit
+	df.state.HunkActions = df.worktree() && !split
+	df.state.RenderHunkMark = nil
+	df.state.OldNumbersRight = true
+	if df.worktree() && split {
+		df.state.RenderHunkMark = func(c *ui.Context, btn ui.Element, act *editor.DiffHunkActions) {
+			t := c.Theme()
+			btn.Width(24).Radius(5).AlignItems(ui.Center).Justify(ui.Center).Label("回滚这处改动").Tooltip("回滚这处改动")
+			if btn.Hovered() {
+				btn.Background(colors(t).wash)
+			}
+			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(17).TextColor(t.Text.Alpha(0.75)) })
+			if btn.Clicked() {
+				a.revertHunk(v, d, act.Index)
+			}
+		}
+	}
 	if df.worktree() {
 		df.state.RenderHunkActions = func(c *ui.Context, bar ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()

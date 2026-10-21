@@ -37,6 +37,7 @@ var (
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
 	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
 	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)
+	iconRevertHunk = icon(`<path d="m6 7 5 5-5 5M13 7l5 5-5 5"/>`) // diff 里每处改动旁的 >>，照 WebStorm
 	iconRollback   = icon(`<path d="M9 14 4.5 9.5 9 5"/><path d="M4.75 9.5h9.5a5.25 5.25 0 0 1 0 10.5H11"/>`)
 	iconRefresh    = icon(`<path d="M19.25 12a7.25 7.25 0 1 1-2.12-5.13"/><path d="M19.5 4.5v3.75h-3.75"/>`)
 	iconShelve     = icon(`<rect x="4" y="4.5" width="16" height="5" rx="1.5"/><path d="M5.5 9.5v8.25c0 .97.78 1.75 1.75 1.75h9.5c.97 0 1.75-.78 1.75-1.75V9.5M10 13h4"/>`)

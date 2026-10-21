@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -758,58 +757,19 @@ func (a *app) gitNext(v *filesView) {
 	a.gitRun(v, op)
 }
 
-// askRollback 回滚文件前确认：已跟踪的恢复成 HEAD 的样子，新文件会被删除。then 非空时回滚成功后在界面线程上调用。
-func (a *app) askRollback(v *filesView, entries []gitx.Entry, then func()) {
-	var tracked, fresh []string
-	for _, e := range entries {
-		switch {
-		case e.Untracked || e.X == 'A':
-			fresh = append(fresh, e.Path)
-		default:
-			tracked = append(tracked, e.Path)
-			if e.Orig != "" {
-				tracked = append(tracked, e.Orig)
-			}
-		}
-	}
-	name := filepath.Base(entries[0].Path)
-	title := "回滚 " + name + " 的改动？"
-	if len(entries) > 1 {
-		title = "回滚这 " + strconv.Itoa(len(entries)) + " 个文件的改动？"
-	}
-	body := "已跟踪的文件会恢复成上一次提交时的样子，没提交的改动会丢失。"
-	if len(fresh) > 0 {
-		body = "新文件会被删除，已跟踪的文件会恢复成上一次提交时的样子，没提交的改动会丢失。"
-	}
-	a.confirm(title, body, "回滚", func() {
-		a.update(func() {
-			a.gitDoThen(v, "回滚", func(ctx context.Context, root string) error {
-				if len(tracked) > 0 {
-					if err := gitx.Rollback(ctx, root, tracked...); err != nil {
-						return err
-					}
-				}
-				if len(fresh) > 0 {
-					return gitx.RemoveNew(ctx, root, fresh...)
-				}
-				return nil
-			}, then)
-		})
-	})
-}
-
-// rollbackDoc 是编辑器顶栏的"回滚这个文件"：回滚后编辑器按磁盘重载（没保存的改动一起丢掉，和 WebStorm 一样），
+// rollbackDoc 是编辑器顶栏的"回滚这个文件"：打开回滚对话框只勾这个文件，回滚后编辑器按磁盘重载（没保存的改动一起丢掉，和 WebStorm 一样），
 // 新文件被删掉后关掉标签。
 func (a *app) rollbackDoc(v *filesView, d *fileDoc) {
 	e := v.git.entry(d.path)
 	if e == nil || e.Conflict {
 		return
 	}
-	fresh := isNewEntry(*e)
-	a.askRollback(v, []gitx.Entry{*e}, func() {
-		if fresh {
+	rel := e.Path
+	a.openRollbackFor(v, []string{rel}, func(restored, removed []string) {
+		switch {
+		case slices.Contains(removed, rel):
 			a.closeDoc(v, d)
-		} else {
+		case slices.Contains(restored, rel):
 			a.reloadDoc(d)
 		}
 	})
@@ -829,7 +789,7 @@ func (g *gitState) entry(abs string) *gitx.Entry {
 	return nil
 }
 
-// rollbackDiffFile 是 diff 栏的"回滚这个文件"：确认后回滚，接着看同一组的下一个文件（没有就看上一个），
+// rollbackDiffFile 是 diff 栏的"回滚这个文件"：在回滚对话框里回滚了这个文件后接着看同一组的下一个文件（没有就看上一个），
 // 都没有了就关掉 diff 标签。
 func (a *app) rollbackDiffFile(w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
@@ -853,8 +813,8 @@ func (a *app) rollbackDiffFile(w *workspace, v *filesView, d *fileDoc) {
 	case i > 0:
 		next = &list[i-1]
 	}
-	a.askRollback(v, []gitx.Entry{*entry}, func() {
-		if v.cur != d || d.diff != df {
+	a.openRollbackFor(v, []string{entry.Path}, func(restored, removed []string) {
+		if !slices.Contains(restored, df.rel) && !slices.Contains(removed, df.rel) || v.cur != d || d.diff != df {
 			return
 		}
 		if next != nil {

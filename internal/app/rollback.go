@@ -18,7 +18,8 @@ import (
 // rollbackDlg 是改动页的批量回滚，照 WebStorm 提交窗口的 Rollback：列出改动的文件，默认勾上提交时勾着的
 // （已跟踪的改动），新文件默认不勾。新文件（未跟踪的、刚加入 Git 的）只有勾了"删除新文件"才删磁盘上的，
 // 否则刚加入 Git 的移出暂存区、未跟踪的不动。
-// 点文件名在右边打开它的 diff（照 WebStorm 在回滚对话框里 ⌘D 看 diff），可以只回滚其中几处。
+// 点文件名在上面另开一个 diff 浮窗（照 WebStorm 在回滚对话框里 ⌘D 看 diff），可以只回滚其中几处。
+// 单个文件的回滚（编辑器顶栏、diff 栏、右键）也打开它，只勾这个文件，照 WebStorm。
 type rollbackDlg struct {
 	open      bool
 	v         *filesView
@@ -26,9 +27,10 @@ type rollbackDlg struct {
 	on        map[string]bool
 	delNew    bool
 	list      ui.ListState
-	folded    map[string]bool // 收起的目录，按 treeRow.path
-	statusFor *gitx.Status    // entries 取自哪一次状态：状态变了（逐处回滚之后）跟着更新
-	detail    *fileDoc        // 右边看着的文件 diff，不在文档区里
+	folded    map[string]bool                  // 收起的目录，按 treeRow.path
+	statusFor *gitx.Status                     // entries 取自哪一次状态：状态变了（逐处回滚之后）跟着更新
+	detail    *fileDoc                         // diff 浮窗里看着的文件，不在文档区里
+	then      func(restored, removed []string) // 整个文件回滚成功后在界面线程上调用，参数是恢复和删掉的路径
 }
 
 // treeRow 是改动文件树的一行：目录行的 files 是它下面所有文件在 paths 里的下标。
@@ -134,12 +136,24 @@ func (r *rollbackDlg) setPicked(files []int, on bool) {
 	}
 }
 
-func (a *app) openRollback(v *filesView) {
+func (a *app) openRollback(v *filesView) { a.openRollbackFor(v, nil, nil) }
+
+// openRollbackFor 打开回滚对话框，pick 非空时只勾这几个文件；勾的有新文件就默认勾上"删除新文件"，
+// 从这个文件发起回滚就是要它回到没有的样子。
+func (a *app) openRollbackFor(v *filesView, pick []string, then func(restored, removed []string)) {
 	g := &v.git
 	if g.status == nil {
 		return
 	}
-	r := rollbackDlg{open: true, v: v, on: map[string]bool{}, folded: map[string]bool{}}
+	r := rollbackDlg{open: true, v: v, on: map[string]bool{}, folded: map[string]bool{}, then: then}
+	if len(pick) > 0 {
+		for _, e := range g.status.Entries {
+			r.on[e.Path] = slices.Contains(pick, e.Path)
+			if r.on[e.Path] && isNewEntry(e) {
+				r.delNew = true
+			}
+		}
+	}
 	r.sync(g)
 	if len(r.entries) == 0 {
 		return
@@ -179,13 +193,15 @@ func (r *rollbackDlg) entry(path string) (gitx.Entry, bool) {
 	return r.entries[i], true
 }
 
-// rollbackShow 在右边打开文件的 diff；排版和忽略空白沿用上一个。
+// rollbackShow 在 diff 浮窗里打开文件的 diff；排版和忽略空白沿用上一个。
 func (a *app) rollbackShow(e gitx.Entry, first bool) {
 	r := &a.rollback
 	df := &diffDoc{diffSpec: changeSpec(e), first: first}
 	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
 	if old := r.detail; old != nil {
 		df.state.Layout, df.state.IgnoreWhitespace = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
+	} else {
+		a.rollbackDiffBox.reset()
 	}
 	r.detail = &fileDoc{path: diffKey(r.v.git.absPath(e.Path), df.diffSpec), diff: df, kind: docLoading, started: true}
 	a.loadDiff(r.v, r.detail)
@@ -264,36 +280,21 @@ func (a *app) rollbackDialog(c *ui.Context) {
 		}
 	}
 	box := &a.rollbackBox
-	box.min = [2]ui.Rect{{W: 420, H: 300}, {W: 760, H: 420}}
-	box.mode = 0
-	if r.detail != nil {
-		box.mode = 1
-	}
+	box.min[0] = ui.Rect{W: 420, H: 300}
 	panel := ui.Modal(c, &r.open, func() {
 		defer box.grips(c)
-		if r.detail == nil {
-			a.rollbackMain(c, t, g)
-			return
-		}
-		// 右边看 diff：对话框加宽，左边是文件树
-		row := ui.Row(c).Gap(16).AlignItems(ui.Stretch)
-		if box.sized() {
-			row.Grow(1).Shrink(1)
-		} else {
-			row.Width(1080).Height(560)
-		}
-		row.Children(func() {
-			ui.Column(c).Width(400).Shrink(0).Children(func() { a.rollbackMain(c, t, g) })
-			a.rollbackDetail(c)
-		})
+		a.rollbackMain(c, t, g)
 	})
 	box.apply(panel)
+	if r.open && r.detail != nil {
+		a.rollbackDiffDialog(c)
+	}
 }
 
 func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 	r := &a.rollback
 	col := ui.Column(c).Gap(10)
-	if r.detail == nil && !a.rollbackBox.sized() {
+	if !a.rollbackBox.sized() {
 		col.Width(560)
 	} else {
 		col.Grow(1).Shrink(1)
@@ -331,8 +332,8 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 			}
 		})
 		box := ui.Column(c).Radius(rInput).Background(colors(t).fill)
-		if r.detail == nil && !a.rollbackBox.sized() {
-			box.Height(min(float32(len(rows))*26+8, 360))
+		if !a.rollbackBox.sized() {
+			box.Height(min(max(float32(len(rows))*26+8, 300), 420)) // 文件少时也留出一块，不显得局促
 		} else {
 			box.Grow(1).Shrink(1)
 		}
@@ -354,7 +355,11 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				btn.Opacity(0.5)
 			} else if btn.Clicked() {
 				r.open = false
-				a.gitDo(r.v, "回滚", func(ctx context.Context, root string) error {
+				var done func()
+				if then := r.then; then != nil {
+					done = func() { then(restore, remove) }
+				}
+				a.gitDoThen(r.v, "回滚", func(ctx context.Context, root string) error {
 					if len(restore) > 0 {
 						if err := gitx.Rollback(ctx, root, restore...); err != nil {
 							return err
@@ -369,95 +374,111 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 						return gitx.RemoveNew(ctx, root, remove...)
 					}
 					return nil
-				})
+				}, done)
 			}
 		})
 	})
 }
 
-// rollbackDetail 是右边的 diff：每处改动旁边有"回滚"，立刻写回磁盘，列表跟着状态更新。
-func (a *app) rollbackDetail(c *ui.Context) {
+// rollbackDiffDialog 是回滚对话框上面的 diff 浮窗，照 WebStorm 另开一个窗口：可以拖动、拉伸，
+// 每处改动旁边有回滚（立刻写回磁盘，列表跟着状态更新），"包含在回滚中"就是文件树里的勾选。
+func (a *app) rollbackDiffDialog(c *ui.Context) {
 	r := &a.rollback
 	d := r.detail
 	t := c.Theme()
 	df := d.diff
 	_, listed := r.entry(df.rel)
-	switch {
-	case c.Shortcut(0, ui.KeyF7):
-		a.rollbackStep(1)
-	case c.Shortcut(ui.Shift, ui.KeyF7):
-		a.rollbackStep(-1)
-	case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && d.kind == docDiff && listed:
-		if hunks := df.state.Hunks(); df.hunk < len(hunks) {
-			a.revertHunk(r.v, d, df.hunk)
+	box := &a.rollbackDiffBox
+	box.min[0] = ui.Rect{W: 600, H: 360}
+	open := true
+	panel := ui.Modal(c, &open, func() {
+		defer box.grips(c)
+		switch {
+		case c.Shortcut(0, ui.KeyF7):
+			a.rollbackStep(1)
+		case c.Shortcut(ui.Shift, ui.KeyF7):
+			a.rollbackStep(-1)
+		case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && d.kind == docDiff && listed:
+			if hunks := df.state.Hunks(); df.hunk < len(hunks) {
+				a.revertHunk(r.v, d, df.hunk)
+			}
 		}
-	}
-	ui.Column(c).Grow(1).Shrink(1).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
-		ui.Row(c).Height(36).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
-			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
-				a.rollbackStep(-1)
-			}
-			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 28, 17)).Clicked() {
-				a.rollbackStep(1)
-			}
-			ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4)
-			if d.kind == docDiff && listed {
-				if n := len(df.state.Hunks()); n > 0 {
-					added, deleted := df.state.Stats()
-					ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		col := ui.Column(c).Gap(10)
+		if box.sized() {
+			col.Grow(1).Shrink(1)
+		} else {
+			col.Width(1080).Height(640)
+		}
+		col.Children(func() {
+			box.title(c, df.rel)
+			ui.Row(c).Height(28).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
+				if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
+					a.rollbackStep(-1)
 				}
-			}
-			ui.Spacer(c)
-			// 每处旁边的"回滚"要悬停才出现，这里常驻一个，作用在 F7 走到的那一处
-			if d.kind == docDiff && listed && df.hunk < len(df.state.Hunks()) {
-				if pressable(textButton(c, "回滚这一处")).Tooltip("回滚当前这处改动，立刻写回磁盘 ⌥⌘Z").Clicked() {
-					a.revertHunk(r.v, d, df.hunk)
+				if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 28, 17)).Clicked() {
+					a.rollbackStep(1)
 				}
-			}
-			if d.kind == docDiff {
-				split := df.state.Layout == editor.DiffSplit
-				if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
-					if split {
-						df.state.Layout = editor.DiffUnified
-					} else {
-						df.state.Layout = editor.DiffSplit
+				if d.kind == docDiff {
+					split := df.state.Layout == editor.DiffSplit
+					if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+						if split {
+							df.state.Layout = editor.DiffUnified
+						} else {
+							df.state.Layout = editor.DiffSplit
+						}
+					}
+					if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+						df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
 					}
 				}
-				if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-					df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+				if listed {
+					on := r.on[df.rel]
+					if ui.Checkbox(c.Key("include"), &on, "包含在回滚中").Padding(0, 6).Changed() {
+						r.on[df.rel] = !r.on[df.rel]
+					}
 				}
-			}
-			if pressable(iconButtonSized(c, iconClose, "收起 diff", 24, 14)).Clicked() {
-				r.detail = nil
-			}
-		})
-		if r.detail == nil {
-			return
-		}
-		ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
-		ui.Column(c).Grow(1).Shrink(1).Children(func() {
-			muted := func(msg string) {
-				ui.Text(c, msg).FontSize(12.5).TextColor(t.TextMuted).Padding(16)
-			}
-			switch {
-			case !listed:
-				muted("这个文件已经没有改动了")
-			case d.kind == docLoading:
-				muted("正在读取…")
-			case d.kind == docError:
-				ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
-			case d.kind == docImageDiff:
-				imageDiffView(c, d)
-			case d.kind == docBinary:
-				muted("二进制文件，只能整个回滚")
-			case d.kind == docTooLarge:
-				muted(tooLargeDiff)
-			default:
-				a.diffView(c, r.v, d)
-			}
-			diffHint(c, df)
+				ui.Spacer(c)
+				if d.kind == docDiff && listed {
+					if n := len(df.state.Hunks()); n > 0 {
+						added, deleted := df.state.Stats()
+						ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					}
+					// 每处旁边的 >> 要找到那一处才点得到，这里常驻一个，作用在 F7 走到的那一处
+					if df.hunk < len(df.state.Hunks()) {
+						if pressable(textButton(c, "回滚这一处")).Tooltip("回滚当前这处改动，立刻写回磁盘 ⌥⌘Z").Clicked() {
+							a.revertHunk(r.v, d, df.hunk)
+						}
+					}
+				}
+			})
+			ui.Column(c).Grow(1).Shrink(1).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
+				muted := func(msg string) {
+					ui.Text(c, msg).FontSize(12.5).TextColor(t.TextMuted).Padding(16)
+				}
+				switch {
+				case !listed:
+					muted("这个文件已经没有改动了")
+				case d.kind == docLoading:
+					muted("正在读取…")
+				case d.kind == docError:
+					ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
+				case d.kind == docImageDiff:
+					imageDiffView(c, d)
+				case d.kind == docBinary:
+					muted("二进制文件，只能整个回滚")
+				case d.kind == docTooLarge:
+					muted(tooLargeDiff)
+				default:
+					a.diffView(c, r.v, d)
+				}
+				diffHint(c, df)
+			})
 		})
 	})
+	box.apply(panel)
+	if !open {
+		r.detail = nil
+	}
 }
 
 // rollbackRowView 画文件树的一行。尺寸照文件栏的文件树（行高 24 起、每层缩进 18）；
@@ -468,7 +489,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	r := &a.rollback
 	line := ui.Row(c.Key(row.path)).Height(26).Padding(0, 10, 0, 4+float32(row.depth)*18).Gap(6).AlignItems(ui.Center)
 	if !row.dir {
-		// 文件行点了在右边看 diff；勾选框自己接住点击
+		// 文件行点了在 diff 浮窗里看；勾选框自己接住点击
 		line.Role(ui.RoleButton).Label("查看 " + row.path)
 		selectedBg(c, line, r.detail != nil && r.detail.diff.rel == row.path)
 		if line.Clicked() {
@@ -504,7 +525,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 		}
 		letter := statusLetter(e)
 		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(letterColor(c, letter)).Width(10).Shrink(0)
-		name := ui.Text(c, row.name).FontSize(13).SingleLine().Shrink(1).Tooltip(e.Path + "\n点开看 diff")
+		name := ui.Text(c, row.name).FontSize(13).SingleLine().Shrink(1)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}

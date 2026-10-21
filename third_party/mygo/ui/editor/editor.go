@@ -51,6 +51,11 @@ type options struct {
 	// noVScroll leaves vertical scrolling to the owner, as the sides of a
 	// split diff share theirs; noScrollbar draws no vertical scroll bar.
 	noScrollbar bool
+	// gutterRight puts the gutter at the right edge, by the divider, as
+	// the old side of a split diff has it in WebStorm; gutterExtra widens
+	// it, for buttons left of the numbers (Hive).
+	gutterRight bool
+	gutterExtra float32
 	// minDigits is how many digits the gutter has room for at least.
 	minDigits int
 	// sharedScroll scrolls the sides of a split diff together.
@@ -134,6 +139,7 @@ type editor struct {
 	reveal     reveal
 	r          ui.Rect // the element's box of the last frame, in the window
 	gutterW    float32
+	gutterX    float32 // where the gutter starts: 0, or the right edge less its width (Hive)
 	textX      float32
 	viewH      float32
 	focused    bool // the editor and its window have the keyboard
@@ -564,7 +570,7 @@ func (ed *editor) doReveal() {
 		}
 	}
 	// Sideways.
-	w := ed.r.W - ed.textX - 8
+	w := ed.r.W - ed.textX - ed.rightGutter() - 8
 	if !v.wrap && w > 0 {
 		x := cr.X
 		em := v.charWidth * 2
@@ -607,6 +613,7 @@ func (ed *editor) gutterWidth() float32 {
 	if w > 0 {
 		w += 4
 	}
+	w += ed.o.gutterExtra
 	if ed.o.decor != nil {
 		// Room for the change bars at the gutter's left edge.
 		w += 6
@@ -635,4 +642,27 @@ func (ed *editor) selectedText() string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// rightGutter is the width the gutter takes at the right of the text,
+// when it is there (Hive).
+func (ed *editor) rightGutter() float32 {
+	if ed.o.gutterRight {
+		return ed.gutterW
+	}
+	return 0
+}
+
+// textLeft is where the text's area starts, after a gutter at the left
+// (Hive).
+func (ed *editor) textLeft() float32 {
+	if ed.o.gutterRight {
+		return 0
+	}
+	return ed.gutterW
+}
+
+// inGutter reports whether x, in the editor, is over the gutter (Hive).
+func (ed *editor) inGutter(x float32) bool {
+	return x >= ed.gutterX && x < ed.gutterX+ed.gutterW
 }

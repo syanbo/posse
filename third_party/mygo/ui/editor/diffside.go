@@ -133,7 +133,7 @@ func (s *diffSide) paintBlock(p *ui.Painter, ed *editor, b *block, r ui.Rect) {
 			return
 		}
 		// A filler: hatched at -45°, every 8 DIPs, as Pierre's.
-		text := ui.Rect{X: r.X + ed.gutterW, Y: r.Y, W: r.W - ed.gutterW, H: r.H}
+		text := ui.Rect{X: r.X + ed.textLeft(), Y: r.Y, W: r.W - ed.gutterW, H: r.H}
 		p.Clip(text, 0, func() {
 			c := ct.Text.Alpha(0.07)
 			for x := text.X - r.H; x < text.X+text.W; x += 8 {
@@ -366,7 +366,7 @@ func (s *diffSide) buildBlocks(c *ui.Context, ed *editor) {
 			stacked[at] += float64(a.Height)
 			a := a
 			box := ui.Box(c).Key(fmt.Sprint("annotation ", a.Side, " ", a.Line, " ", a.Key, " ", n)).Absolute().
-				Left(ed.gutterW).Top(float32(top - ed.scrollY)).Width(ed.r.W - ed.gutterW).Height(a.Height).HandleInput(shield)
+				Left(ed.textLeft()).Top(float32(top - ed.scrollY)).Width(ed.r.W - ed.gutterW).Height(a.Height).HandleInput(shield)
 			box.Children(func() { d.RenderAnnotation(c, a) })
 		}
 	}
@@ -412,6 +412,18 @@ func (s *diffSide) buildBlocks(c *ui.Context, ed *editor) {
 			render(c, bar, &DiffHunkActions{Index: i, Hunk: DiffHunk{hk.A0, hk.A1, hk.B0, hk.B1}, d: d})
 		}
 	}
+	// Hive: a mark on every change by the divider, on the old side.
+	if d.RenderHunkMark != nil && s.old && !s.unified {
+		for i, hk := range d.model.hunks {
+			top, ok := s.hunkTop(h, v.text.LineCount(), hk.A0, hk.A1, i)
+			if !ok || top < y0-float64(v.lineHeight) || top > y1 {
+				continue
+			}
+			btn := ui.ButtonBase(c).Key(fmt.Sprint("hunk mark ", i)).Absolute().Left(ed.gutterX + 2).Top(float32(top - ed.scrollY)).
+				Height(v.lineHeight).KeepFocus().HandleInput(shield)
+			d.RenderHunkMark(c, btn, &DiffHunkActions{Index: i, Hunk: DiffHunk{hk.A0, hk.A1, hk.B0, hk.B1}, d: d})
+		}
+	}
 	// The gutter's button, on the line under the pointer.
 	if d.OnGutterButton != nil && ed.pointerIn && ed.hoverLine >= 0 && ed.hoverLine < v.text.LineCount() && ed.pointer.X < ed.gutterW+40 {
 		g := h.geometry(ed.hoverLine)
@@ -430,4 +442,38 @@ func (s *diffSide) buildBlocks(c *ui.Context, ed *editor) {
 			})
 		}
 	}
+}
+
+// hunkTop is where change i starts on this side: its first line, or the
+// filler standing for it when it has no lines here (Hive).
+func (s *diffSide) hunkTop(h *heights, n, l0, l1, i int) (float64, bool) {
+	if n == 0 {
+		return 0, false
+	}
+	if l1 > l0 && l0 < n {
+		g := h.geometry(l0)
+		return g.rows, !g.hidden
+	}
+	for _, line := range []int{min(l0, n-1), l0 - 1} {
+		if line < 0 {
+			continue
+		}
+		g := h.geometry(line)
+		above, below := h.blocksOf(line)
+		top := g.top
+		for _, b := range above {
+			if b.kind == blockSpacer && b.hunk == i {
+				return top, true
+			}
+			top += float64(b.height)
+		}
+		top = g.below
+		for _, b := range below {
+			if b.kind == blockSpacer && b.hunk == i {
+				return top, true
+			}
+			top += float64(b.height)
+		}
+	}
+	return 0, false
 }

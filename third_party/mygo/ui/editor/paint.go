@@ -41,12 +41,16 @@ func (ed *editor) layout(w, h, scale float32) {
 		pad = 8
 	}
 	ed.textX = ed.gutterW + pad
+	ed.gutterX = 0
+	if ed.o.gutterRight {
+		ed.textX, ed.gutterX = 12, w-ed.gutterW
+	}
 	if ed.o.signs {
 		ed.textX += 2 * v.charWidth
 	}
 	ed.viewH = h
 	wrap := ed.o.wrap != ed.toggledWrap
-	ww := w - ed.textX - scrollbarWidth - 4
+	ww := w - ed.textX - ed.rightGutter() - scrollbarWidth - 4
 	if ed.o.wrapColumn > 0 {
 		ww = min(ww, float32(ed.o.wrapColumn)*v.charWidth)
 	}
@@ -122,7 +126,7 @@ func (ed *editor) paint(p *ui.Painter, r ui.Rect) {
 		}
 	}
 	ed.paintBlocks(p, r, &f)
-	text := ui.Rect{X: r.X + ed.gutterW, Y: r.Y, W: r.W - ed.gutterW, H: r.H}
+	text := ui.Rect{X: r.X + ed.textLeft(), Y: r.Y, W: r.W - ed.gutterW, H: r.H}
 	p.Clip(text, 0, func() {
 		ed.paintLines(p, r, &f)
 	})
@@ -302,7 +306,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 	l := v.line(line)
 	lh := v.lineHeight
 	ox := r.X + ed.textX - ed.scrollX
-	textRect := ui.Rect{X: r.X + ed.gutterW, W: r.W - ed.gutterW}
+	textRect := ui.Rect{X: r.X + ed.textLeft(), W: r.W - ed.gutterW}
 	var style lineLook
 	if ed.o.decor != nil {
 		style = ed.o.decor.lineStyle(line)
@@ -575,6 +579,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 	ct := ed.theme
 	h := &v.heights
 	lh := v.lineHeight
+	r.X += ed.gutterX // Hive: the gutter can be at the right edge
 	gutter := ui.Rect{X: r.X, Y: r.Y, W: ed.gutterW, H: r.H}
 	numbersOn := ed.numbersOn()
 	cur := v.text.LineOf(ed.primary().head)
@@ -645,7 +650,11 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 				}
 			}
 			if style.bar.A > 0 {
-				ed.paintBar(p, ui.Rect{X: r.X, Y: y, W: 4, H: rowsH}, style)
+				bx := r.X
+				if ed.o.gutterRight {
+					bx += ed.gutterW - 4
+				}
+				ed.paintBar(p, ui.Rect{X: bx, Y: y, W: 4, H: rowsH}, style)
 			}
 			// Fold markers: always on folded lines, on the others while the
 			// pointer is over the gutter.

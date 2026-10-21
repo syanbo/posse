@@ -148,13 +148,15 @@ func TestGitChangesAndDiff(t *testing.T) {
 	if v.git.message != "" {
 		t.Fatal("message kept after commit")
 	}
-	// 回滚未跟踪的文件要确认，确认后删除
-	a.askRollback(v, []gitx.Entry{{Path: "notes.txt", Untracked: true}}, nil)
-	if !a.confirming || !strings.Contains(a.confirmBody, "新文件会被删除") {
-		t.Fatalf("rollback should ask: %v %q", a.confirming, a.confirmBody)
+	// 单独回滚未跟踪的文件也打开回滚对话框，只勾它、默认勾上删除新文件
+	a.openRollbackFor(v, []string{"notes.txt"}, nil)
+	if r := &a.rollback; !r.open || !r.on["notes.txt"] || !r.delNew {
+		t.Fatalf("rollback dialog %v %+v %v", r.open, r.on, r.delNew)
 	}
-	a.confirming = false
-	a.confirmDo()
+	tt.Frame()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
 	until(t, tt, "clean", func() bool { return v.git.busy == "" && v.git.changeCount() == 0 })
 	if _, err := os.Stat(filepath.Join(root, "notes.txt")); !os.IsNotExist(err) {
 		t.Fatal("untracked file not deleted")
@@ -833,11 +835,13 @@ func TestRollback(t *testing.T) {
 	dd := v.cur
 	until(t, tt, "diff", func() bool { return dd.kind == docDiff })
 	a.rollbackDiffFile(w, v, dd)
-	if !a.confirming {
-		t.Fatal("rollback should ask")
+	if r := &a.rollback; !r.open || !r.on["README.md"] || r.on["main.go"] {
+		t.Fatalf("rollback dialog %v %+v", r.open, r.on)
 	}
-	a.confirming = false
-	a.confirmDo()
+	tt.Frame()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
 	until(t, tt, "README rolled back", func() bool {
 		return v.git.busy == "" && v.git.changeCount() == 2 && dd.diff.rel == "main.go"
 	})
@@ -922,11 +926,13 @@ func TestRollbackDoc(t *testing.T) {
 	if err := tt.Click("回滚这个文件…"); err != nil {
 		t.Fatal(err)
 	}
-	if !a.confirming {
-		t.Fatal("rollback should ask")
+	tt.Frame()
+	if r := &a.rollback; !r.open || !r.on["main.go"] || r.on["README.md"] || r.on["notes.txt"] {
+		t.Fatalf("rollback dialog %v %+v", r.open, r.on)
 	}
-	a.confirming = false
-	a.confirmDo()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
 	head := gitRun(t, root, "show", "HEAD:main.go")
 	until(t, tt, "reloaded", func() bool {
 		return v.git.busy == "" && !d.isModified() && strings.TrimSpace(d.ed.Buffer.String()) == strings.TrimSpace(head)
@@ -937,8 +943,10 @@ func TestRollbackDoc(t *testing.T) {
 	n := v.cur
 	until(t, tt, "notes", func() bool { return n.kind == docText && tt.HasText("回滚这个文件…") })
 	a.rollbackDoc(v, n)
-	a.confirming = false
-	a.confirmDo()
+	tt.Frame()
+	if err := tt.Click("回滚 1 个文件"); err != nil {
+		t.Fatal(err)
+	}
 	until(t, tt, "deleted", func() bool { return !slices.Contains(v.docs, n) })
 	if _, err := os.Stat(filepath.Join(root, "notes.txt")); !os.IsNotExist(err) {
 		t.Fatal("new file not deleted")
@@ -1123,15 +1131,27 @@ func TestRollbackDetail(t *testing.T) {
 	if d.diff.hunk != 0 || !tt.HasText("回滚这一处") {
 		t.Fatalf("current hunk after revert: %d", d.diff.hunk)
 	}
+	// 左右对照时每处改动在分隔线旁有 >>
+	if _, ok := tt.Find("回滚这处改动"); !ok {
+		t.Fatal("no >> by the divider")
+	}
 	if !r.open || r.detail != d {
 		t.Fatal("dialog should stay on the file")
 	}
 	// 到头了换到树里的下一个文件（当前已经是最后一处）
 	tt.Key(0, ui.KeyF7)
 	until(t, tt, "next file", func() bool { return r.detail.diff.rel == "notes.txt" && r.detail.kind == docDiff })
-	if err := tt.Click("收起 diff"); err != nil {
+	// "包含在回滚中"就是文件树里的勾选
+	if err := tt.Click("包含在回滚中"); err != nil {
 		t.Fatal(err)
 	}
+	tt.Frame()
+	if !r.on["notes.txt"] {
+		t.Fatal("include in rollback")
+	}
+	r.on["notes.txt"] = false
+	// Esc 只关 diff 浮窗，回滚对话框留着
+	tt.Key(0, ui.KeyEscape)
 	tt.Frame()
 	if r.detail != nil || !r.open {
 		t.Fatal("close detail")

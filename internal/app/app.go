@@ -233,6 +233,7 @@ type app struct {
 	resizingCompare bool    // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
 	rollback        rollbackDlg
 	rollbackBox     dialogBox  // 回滚对话框拖到的位置、拉伸过的尺寸
+	rollbackDiffBox dialogBox  // 回滚对话框里点开的 diff 浮窗的
 	pushBox         dialogBox  // Push 对话框的
 	toasts          []ui.Toast // 等下一帧交给 mygo 显示的提示：后台操作完成时手里没有 Context
 

@@ -144,7 +144,7 @@ func (ed *editor) regionAt(x, y float32) region {
 	if horizontal && y >= ed.viewH-scrollbarWidth {
 		return regionHScroll
 	}
-	if x < ed.gutterW {
+	if ed.inGutter(x) {
 		return regionGutter
 	}
 	return regionText
@@ -412,7 +412,7 @@ func (ed *editor) scrollbars() (vertical, horizontal bool) {
 }
 
 func (ed *editor) maxScrollX() float32 {
-	return max(0, ed.view.maxLine+ed.view.charWidth*4-(ed.r.W-ed.textX))
+	return max(0, ed.view.maxLine+ed.view.charWidth*4-(ed.r.W-ed.textX-ed.rightGutter()))
 }
 
 // scrollbarPress grabs a thumb, or jumps to where the track was pressed.
@@ -494,7 +494,7 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 		return false
 	}
 	if ed.o.decor != nil {
-		if ed.o.decor.blockInput(ed, nil, ev, ui.Rect{Y: float32(g.rows - ed.scrollY), H: ed.view.lineHeight, W: ed.gutterW}) {
+		if ed.o.decor.blockInput(ed, nil, ev, ui.Rect{X: ed.gutterX, Y: float32(g.rows - ed.scrollY), H: ed.view.lineHeight, W: ed.gutterW}) {
 			return true
 		}
 	}
