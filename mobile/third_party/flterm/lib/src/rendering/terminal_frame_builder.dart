@@ -1361,6 +1361,8 @@ final class _TerminalRowBuilder {
       );
     }
     _syncBackgroundRun(row);
+    // Hive: 有字或程序铺了底色的行算有内容
+    if (cell.hasText || row.bgRunExplicit) edges.setInk(row.row);
 
     if (!row.hidden) {
       final x = row.spriteX;
@@ -1385,6 +1387,7 @@ final class _TerminalRowBuilder {
 final class RowEdgeColors {
   var _left = Int32List(0);
   var _right = Int32List(0);
+  var _ink = Uint8List(0);
 
   int get rows => _left.length;
 
@@ -1392,12 +1395,26 @@ final class RowEdgeColors {
     if (rows == _left.length) return;
     _left = Int32List(rows);
     _right = Int32List(rows);
+    _ink = Uint8List(rows);
   }
 
   void clearRow(int row) {
     if (row < 0 || row >= _left.length) return;
     _left[row] = 0;
     _right[row] = 0;
+    _ink[row] = 0;
+  }
+
+  void setInk(int row) {
+    if (row >= 0 && row < _ink.length) _ink[row] = 1;
+  }
+
+  /// Hive: 最后一行有内容（有字或铺了底色）的行号，整屏空白时为 -1。
+  int get lastInkRow {
+    for (var row = _ink.length - 1; row >= 0; row--) {
+      if (_ink[row] != 0) return row;
+    }
+    return -1;
   }
 
   void setLeft(int row, int argb) {

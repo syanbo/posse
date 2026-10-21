@@ -24,6 +24,7 @@ import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import 'desk_fit.dart';
 import 'frames.dart';
+import 'keyboard_lift.dart';
 import 'link_target.dart';
 import '../chat/media.dart';
 
@@ -82,6 +83,9 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 平移和捏合中只重画这一层，不重建整个终端页。
   final _pose = ValueNotifier<int>(0);
+
+  /// 终端画面里到第几行为止有内容，弹键盘时按它算往上挪多少。
+  final _contentRows = ValueNotifier<int>(0);
   var _pinching = false;
   var _pinchScale0 = 1.0;
   Offset _focalContent = Offset.zero;
@@ -163,6 +167,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     _controller.dispose();
     _deskScroll.dispose();
     _pose.dispose();
+    _contentRows.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -200,9 +205,9 @@ class _TerminalScreenState extends State<TerminalScreen>
     // 电脑布局把控件排成桌面的格子，这里报上来的是电脑的列数。记成手机视口的话，
     // 关掉电脑布局会按桌面宽度去 HoldSize。
     if (_desk) return;
-    // 键盘弹出、收起的动画里每一帧都报一个新行数，一次十来个。每个都订阅的话，电脑上的终端
-    // 跟着连改十来次尺寸，agent 每次都重画，手机也连着复位、写快照十来次。等尺寸稳定下来只订阅一次；
-    // 动画途中收到的旧尺寸输出会画乱本地画面，由这次的快照盖掉
+    // 推入页面、转屏、从后台回来重新布局时一次会连着报好几个尺寸。每个都订阅的话，电脑上的终端
+    // 跟着连改几次尺寸，agent 每次都重画，手机也连着复位、写快照几次。等尺寸稳定下来只订阅一次；
+    // 途中收到的旧尺寸输出会画乱本地画面，由这次的快照盖掉
     _resizes.changed();
     _resizeTimer?.cancel();
     _resizeTimer = Timer(_resizeSettle, () {
@@ -253,7 +258,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// [fresh] 时尺寸没变也重新订阅，拿一份新快照。
   void _schedule({bool fresh = false}) {
-    // 尺寸还在变（键盘动画、从后台回来时重新布局）：等它停下来那次订阅，现在按旧尺寸订一份只会多一次错位
+    // 尺寸还在变（推入动画、从后台回来时重新布局）：等它停下来那次订阅，现在按旧尺寸订一份只会多一次错位
     if (fresh && (_resizeTimer?.isActive ?? false)) return;
     _gate = _gate.then((_) => _open(fresh: fresh)).catchError((Object _) {});
   }
@@ -374,7 +379,10 @@ class _TerminalScreenState extends State<TerminalScreen>
     scrollPhysics: scrollPhysics,
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
+    onContentRows: _onContentRows,
   );
+
+  void _onContentRows(int rows) => _contentRows.value = rows;
 
   /// 轻点终端里的链接：网址交给系统浏览器，工作区里的文件在文件页里看。
   void _onLink(ActivatedLink link) {
@@ -446,15 +454,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (_cropGrok) return _croppedView(c, box);
       return _terminalView(c, backgroundBleed: _termPadding);
     }
-    final base = widget.model.settings.terminalFontSize;
-    final zoom = widget.model.settings.deskZoom;
-    final baseCell = _cellMetrics(base);
-    // 多留半格，免得按像素取整后少算一列
-    final fit = deskFitScale(
-      viewportWidth: box.maxWidth,
-      gridWidth: (_deskCols + 0.5) * baseCell.cellWidth,
-    );
-    final font = (base * fit * zoom).clamp(2.0, 64.0);
+    final font = _deskFont(box.maxWidth);
     final cell = _cellMetrics(font);
     final gridW = (_deskCols + 0.5) * cell.cellWidth;
     final gridH = _deskRows > 0
@@ -500,6 +500,37 @@ class _TerminalScreenState extends State<TerminalScreen>
         ),
       ),
     );
+  }
+
+  /// 电脑布局静止时的字号：缩进屏幕宽度，再乘吸定的倍数。
+  double _deskFont(double width) {
+    final base = widget.model.settings.terminalFontSize;
+    final zoom = widget.model.settings.deskZoom;
+    final baseCell = _cellMetrics(base);
+    // 多留半格，免得按像素取整后少算一列
+    final fit = deskFitScale(
+      viewportWidth: width,
+      gridWidth: (_deskCols + 0.5) * baseCell.cellWidth,
+    );
+    return (base * fit * zoom).clamp(2.0, 64.0);
+  }
+
+  /// 终端区域顶端到最后一行内容底边的距离。
+  double _contentBottom(double width) {
+    final rows = _contentRows.value;
+    if (_cropGrok) {
+      return rows *
+          _cellMetrics(widget.model.settings.terminalFontSize).cellHeight;
+    }
+    width -= _termPadding.horizontal;
+    if (!_desk || _deskCols <= 0) {
+      return _termPadding.top +
+          rows *
+              _cellMetrics(widget.model.settings.terminalFontSize).cellHeight;
+    }
+    // 不算平移和捏合：键盘弹着时上下拖动照常平移，不被挪动抵消
+    final cell = _cellMetrics(_deskFont(width));
+    return _termPadding.top + rows * cell.cellHeight;
   }
 
   RenderBox? get _deskBox {
@@ -817,73 +848,114 @@ class _TerminalScreenState extends State<TerminalScreen>
           child: Divider(height: 1, color: c.line),
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: _cropGrok ? EdgeInsets.zero : _termPadding,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _notePhoneBox(constraints);
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _deskView(c, constraints),
-                      if (_upload case final done?)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 12,
-                          child: UploadBar(index: 0, count: 1, done: done),
-                        ),
-                      // 提示和复制按钮都浮在终端上面：占布局的话终端会变矮，agent 跟着重排
-                      if (_notice != null || _showCopy)
-                        Positioned(
-                          top: 8,
-                          left: 0,
-                          right: 0,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_notice != null)
-                                NoticeBar(
-                                  _notice!,
-                                  floating: true,
-                                  onClose: () => _flash(null),
-                                ),
-                              if (_notice != null && _showCopy)
-                                const SizedBox(height: 8),
-                              if (_showCopy)
-                                _CopyChip(
-                                  onCopy: () => unawaited(_copySelection()),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  );
-                },
+      // 键盘弹出时终端不跟着变矮：行数不变，电脑上的 agent 不用按新尺寸重画。
+      // 快捷键栏贴着键盘，终端整体往上挪到最后一行内容露出来，挪出顶端的部分裁掉
+      resizeToAvoidBottomInset: false,
+      body: LayoutBuilder(
+        builder: (context, body) {
+          final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+          final safe = MediaQuery.viewPaddingOf(context).bottom;
+          final height = body.maxHeight - _keyBarHeight - safe;
+          // 键盘盖住的终端高度：快捷键栏下面的安全区本来就不算终端
+          final covered = (keyboard - safe).clamp(0.0, height);
+          return Stack(
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: height,
+                child: ClipRect(
+                  child: ListenableBuilder(
+                    listenable: _contentRows,
+                    builder: (context, child) {
+                      final lift = keyboardLift(
+                        contentBottom: _contentBottom(body.maxWidth),
+                        visible: height - covered,
+                        covered: covered,
+                      );
+                      return Transform.translate(
+                        offset: Offset(0, -lift),
+                        child: child,
+                      );
+                    },
+                    child: _terminalArea(c),
+                  ),
+                ),
               ),
-            ),
-          ),
-          _KeyBar(
-            onKey: _send,
-            keys: widget.model.settings.barKeys,
-            onCustom: (key) => _send(key.bytes, enter: key.enter),
-            onImage: widget.model.rpc == null || _busy ? null : _sendImage,
-            onPaste: widget.model.rpc == null || _busy ? null : _pasteClipboard,
-            keyboardUp: MediaQuery.viewInsetsOf(context).bottom > 0,
-            onKeyboard: () {
-              if (MediaQuery.viewInsetsOf(context).bottom > 0) {
-                _focus.unfocus();
-              } else {
-                _focus.requestFocus();
-                // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
-                SystemChannels.textInput.invokeMethod<void>('TextInput.show');
-              }
-            },
-          ),
-        ],
+              // 提示、复制按钮和上传进度浮在看得见的那块终端上面，不跟着终端挪：
+              // 占布局的话终端会变矮，agent 跟着重排
+              if (_upload case final done?)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: body.maxHeight - height + covered + 12,
+                  child: UploadBar(index: 0, count: 1, done: done),
+                ),
+              if (_notice != null || _showCopy)
+                Positioned(
+                  top: 12,
+                  left: 4,
+                  right: 4,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_notice != null)
+                        NoticeBar(
+                          _notice!,
+                          floating: true,
+                          onClose: () => _flash(null),
+                        ),
+                      if (_notice != null && _showCopy)
+                        const SizedBox(height: 8),
+                      if (_showCopy)
+                        _CopyChip(onCopy: () => unawaited(_copySelection())),
+                    ],
+                  ),
+                ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: keyboard,
+                child: _KeyBar(
+                  onKey: _send,
+                  keys: widget.model.settings.barKeys,
+                  onCustom: (key) => _send(key.bytes, enter: key.enter),
+                  onImage: widget.model.rpc == null || _busy
+                      ? null
+                      : _sendImage,
+                  onPaste: widget.model.rpc == null || _busy
+                      ? null
+                      : _pasteClipboard,
+                  keyboardUp: keyboard > 0,
+                  onKeyboard: () {
+                    if (MediaQuery.viewInsetsOf(context).bottom > 0) {
+                      _focus.unfocus();
+                    } else {
+                      _focus.requestFocus();
+                      // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
+                      SystemChannels.textInput.invokeMethod<void>(
+                        'TextInput.show',
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _terminalArea(HiveColors c) {
+    return Padding(
+      padding: _cropGrok ? EdgeInsets.zero : _termPadding,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _notePhoneBox(constraints);
+          return _deskView(c, constraints);
+        },
       ),
     );
   }
@@ -938,6 +1010,9 @@ TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
 /// 终端四周留的空，文字不贴屏幕边。程序铺了底色时这一圈会接着画它的底色，看着是一片，
 /// 加上程序自己的缩进（grok 左边 2 到 5 列）显得空，所以只留一点。
 const _termPadding = EdgeInsets.fromLTRB(4, 4, 4, 0);
+
+/// 快捷键栏不算底部安全区的高度：40 的按键行加 1 的上边线。
+const _keyBarHeight = 41.0;
 
 /// grok 左右各自留的空白列数（46 列宽时实测）。
 const _grokMargin = 2;
@@ -1048,7 +1123,7 @@ class _KeyBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 40,
+          height: _keyBarHeight - 1,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),

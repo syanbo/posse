@@ -1,4 +1,5 @@
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:libghostty/libghostty.dart';
 import 'package:meta/meta.dart';
@@ -93,6 +94,10 @@ class TerminalRenderer extends LeafRenderObjectWidget {
   /// 格子铺不满的零头总是按两端的底色画；这里是再往外的那一圈。
   final EdgeInsets backgroundBleed;
 
+  /// Hive: 画面里到第几行为止有内容（最后一行有字或底色的行和光标所在行取靠下的，行数从 1 算），
+  /// 变了在帧末报一次。手机弹键盘时按它决定终端往上挪多少。
+  final ValueChanged<int>? onContentRows;
+
   const TerminalRenderer({
     super.key,
     required this.terminal,
@@ -107,6 +112,7 @@ class TerminalRenderer extends LeafRenderObjectWidget {
     this.onResize,
     this.onViewportChanged,
     this.backgroundBleed = EdgeInsets.zero,
+    this.onContentRows,
   });
 
   @override
@@ -124,6 +130,7 @@ class TerminalRenderer extends LeafRenderObjectWidget {
       linkSnapshot: linkSnapshot,
       renderObserver: renderObserver,
       backgroundBleed: backgroundBleed,
+      onContentRows: onContentRows,
     );
   }
 
@@ -162,7 +169,8 @@ class TerminalRenderer extends LeafRenderObjectWidget {
       ..blinkVisible = blinkVisible
       ..preeditText = preeditText
       ..linkSnapshot = linkSnapshot
-      ..backgroundBleed = backgroundBleed;
+      ..backgroundBleed = backgroundBleed
+      ..onContentRows = onContentRows;
   }
 }
 
@@ -219,6 +227,7 @@ class TerminalRenderBox extends RenderBox {
     this._onResize,
     this._onViewportChanged,
     EdgeInsets backgroundBleed = EdgeInsets.zero,
+    this._onContentRows,
   }) : _bleed = backgroundBleed,
        _paintState = TerminalPaintState(theme, metrics)
          ..blinkVisible = blinkVisible
@@ -243,6 +252,33 @@ class TerminalRenderBox extends RenderBox {
   EdgeInsets _bleed;
   var _available = Size.zero;
   final _bleedPaint = Paint();
+
+  ValueChanged<int>? _onContentRows;
+  var _contentRows = -1;
+
+  set onContentRows(ValueChanged<int>? value) {
+    if (_onContentRows == value) return;
+    _onContentRows = value;
+    _contentRows = -1;
+    markNeedsPaint();
+  }
+
+  /// Hive: 画完这一帧后看内容底边变了没有，变了在帧末报（画的途中不能让外面 setState）。
+  void _reportContentRows() {
+    final callback = _onContentRows;
+    if (callback == null) return;
+    final cursor = _paintState.cursor;
+    var last = _pipeline.edges.lastInkRow;
+    if (cursor.visible && cursor.position.row > last) {
+      last = cursor.position.row;
+    }
+    final rows = last + 1;
+    if (rows == _contentRows) return;
+    _contentRows = rows;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (attached && _contentRows == rows) callback(rows);
+    });
+  }
 
   set backgroundBleed(EdgeInsets value) {
     if (_bleed == value) return;
@@ -460,6 +496,7 @@ class TerminalRenderBox extends RenderBox {
     _pipeline.paint(canvas);
     _paintBleed(canvas);
     canvas.restore();
+    _reportContentRows();
   }
 
   @override

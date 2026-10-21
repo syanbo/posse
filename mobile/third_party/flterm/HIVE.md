@@ -15,5 +15,6 @@ pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_ove
 - `lib/src/rendering/terminal_frame_builder.dart`、`terminal_render_pipeline.dart`、`terminal_renderer.dart`、`widgets/terminal_view.dart`：格子外面的底色照 Ghostty 的 `window-padding-color = extend` 画。出帧时记下每行最左、最右一格的底色（`RowEdgeColors`），渲染盒画完格子后把铺不满的零头和 `TerminalView.backgroundBleed` 那一圈按它补上：左右按每行两端，上下按第一行、最后一行（两端同色才延伸）。没设底色的格子还是主题色。grok 给每一格都铺 `#141414`、不查终端底色，原版外面露出一圈主题色，像套了个框。
 
 - `lib/src/widgets/terminal_controller_impl.dart`：回答终端的尺寸查询（CSI 14t/16t/18t）用布局时记下的行列数，不再调控制器自己那份 `RenderState.update`。update 会清掉终端上的行脏标记，渲染器自己的 RenderState 就看不到这一批输出改了哪些行；Claude Code 每次改尺寸重画都带一个 CSI 16t，弹出、收起键盘或从后台回来之后，重画里不再变的行（分隔线、状态栏）画面上一直是旧的（缺行或叠成两份），内核里却是对的。
+- `lib/src/rendering/terminal_frame_builder.dart`、`terminal_renderer.dart`、`widgets/terminal_view.dart`：出帧时记下每行有没有内容（有字或程序铺了底色，记在 `RowEdgeColors`），画完一帧把"到第几行为止有内容"（最后一行有内容的行和看得见的光标所在行取靠下的）和上次比，变了在帧末经 `TerminalView.onContentRows` 报出来。手机弹键盘时终端不改尺寸，按它决定往上挪多少；不用 libghostty 的 RenderState 取光标，它的 update 会清掉行脏标记。
 
 升级 flterm 时从 pub 缓存重新复制，再把上面的改动补回来。

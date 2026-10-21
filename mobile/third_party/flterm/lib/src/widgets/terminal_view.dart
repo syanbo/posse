@@ -82,6 +82,9 @@ class TerminalView extends StatefulWidget {
   /// Hive: 这个视图外面还有多宽的内边距，格子外面的底色要接着画过去，见 [TerminalRenderer.backgroundBleed]。
   final EdgeInsets backgroundBleed;
 
+  /// Hive: 画面里到第几行为止有内容，见 [TerminalRenderer.onContentRows]。
+  final ValueChanged<int>? onContentRows;
+
   /// Scroll physics for scrollback navigation.
   ///
   /// Disabled automatically when the terminal program requests mouse
@@ -124,6 +127,7 @@ class TerminalView extends StatefulWidget {
     this.showKeyboard = true,
     this.padding = const .all(8),
     this.backgroundBleed = EdgeInsets.zero,
+    this.onContentRows,
     this.mouseAutoHide = .onInput,
     this.linkSettings = const LinkSettings(),
     this.gestureSettings = const TerminalGestureSettings(),
@@ -348,6 +352,7 @@ class _TerminalViewState extends State<TerminalView> {
                       onResize: _handleResize,
                       onViewportChanged: _binding.handleViewportChanged,
                       backgroundBleed: widget.backgroundBleed,
+                      onContentRows: widget.onContentRows,
                     ),
                   ),
                 ),
