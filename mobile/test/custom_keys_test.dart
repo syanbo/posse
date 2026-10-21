@@ -67,6 +67,7 @@ void main() {
       'paste',
       'Tab',
       'Enter',
+      '立即发送',
       '⇧Tab',
       '^C',
       '↑',

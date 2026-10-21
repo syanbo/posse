@@ -141,6 +141,9 @@ const termKeys = <TermKey>[
   TermKey('Esc', [0x1b]),
   TermKey('Tab', [0x09]),
   TermKey('Enter', [0x0d]),
+  // Claude Code 的 chat:sendNow：干活时排着队的消息马上交给模型，不等这一轮做完。
+  // 默认绑定还有 Ctrl+Enter，但那要 kitty 键盘协议，手机终端发不出来，用 Ctrl+X Ctrl+S
+  TermKey('立即发送', [0x18, 0x13]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
