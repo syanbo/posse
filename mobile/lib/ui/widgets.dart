@@ -780,3 +780,27 @@ String formatBytes(int n) {
   if (n < 1024 * 1024) return '${(n / 1024).toStringAsFixed(1)} KB';
   return '${(n / 1024 / 1024).toStringAsFixed(1)} MB';
 }
+
+/// 立即发送（Ctrl+Enter）的键帽：⌃ 和 ↩ 用两个 Material 图标拼，笔画和别的图标键一致；
+/// 写成字符时两个符号都要退到别的字体，粗细、基线对不上。
+class SendNowGlyph extends StatelessWidget {
+  const SendNowGlyph({super.key, this.size = 18, this.color});
+
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.keyboard_control_key_rounded,
+          size: size * 0.85,
+          color: color,
+        ),
+        Icon(Icons.keyboard_return_rounded, size: size, color: color),
+      ],
+    );
+  }
+}

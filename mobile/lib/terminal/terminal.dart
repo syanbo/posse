@@ -965,7 +965,8 @@ class _KeyBar extends StatelessWidget {
 
   Widget _iconKey(
     HiveColors c, {
-    required IconData icon,
+    IconData? icon,
+    Widget? glyph,
     required String label,
     required VoidCallback? onTap,
   }) {
@@ -978,9 +979,13 @@ class _KeyBar extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(Rd.button),
           onTap: onTap,
-          child: SizedBox(
-            width: 40,
-            child: Icon(icon, size: 18, color: c.text),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 40),
+            padding: glyph == null
+                ? null
+                : const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            child: glyph ?? Icon(icon, size: 18, color: c.text),
           ),
         ),
       ),
@@ -1057,6 +1062,14 @@ class _KeyBar extends StatelessWidget {
                 return _textKey(c, custom.shown, () => onCustom(custom));
               }
               final term = key.termKey;
+              if (term != null && term.label == sendNowLabel) {
+                return _iconKey(
+                  c,
+                  glyph: SendNowGlyph(color: c.text),
+                  label: '立即发送',
+                  onTap: () => onKey(term.bytes),
+                );
+              }
               if (term != null) {
                 return _textKey(c, term.label, () => onKey(term.bytes));
               }

@@ -136,14 +136,17 @@ class TermKey {
   final List<int> bytes;
 }
 
+/// 立即发送的键帽 ⌃↩。U+FE0E 让 ↩ 按文字画：手机字体里没有它时会退到 emoji 字体，画成彩色图标。
+const sendNowLabel = '⌃↩\uFE0E';
+
 /// 软键盘上方的专用键。方向键是 VT 的 A/B/C/D，不带回车。
 const termKeys = <TermKey>[
   TermKey('Esc', [0x1b]),
   TermKey('Tab', [0x09]),
   TermKey('Enter', [0x0d]),
   // Claude Code 的 chat:sendNow：干活时排着队的消息马上交给模型，不等这一轮做完。
-  // 默认绑定还有 Ctrl+Enter，但那要 kitty 键盘协议，手机终端发不出来，用 Ctrl+X Ctrl+S
-  TermKey('立即发送', [0x18, 0x13]),
+  // 键帽照它的默认绑定 Ctrl+Enter 写，但那要 kitty 键盘协议，手机终端发不出来，发的是同样绑定的 Ctrl+X Ctrl+S
+  TermKey(sendNowLabel, [0x18, 0x13]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),

@@ -11,6 +11,7 @@ import 'protocol/rpc.dart';
 import 'protocol/socket.dart';
 import 'settings/custom_keys.dart';
 import 'settings/phone_model.dart';
+import 'terminal/frames.dart';
 import 'workspace/models.dart';
 
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
@@ -114,6 +115,7 @@ class AppSettings {
     'deskZoom': deskZoom,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
+    'barKeysVersion': barKeysVersion,
   };
 
   static AppSettings decode(String? data) {
@@ -148,8 +150,12 @@ class AppSettings {
       final bar = map['barKeys'];
       final custom = map['customKeys'];
       if (bar is List) {
+        // 版本 2 之前存的立即发送是读旧设置时补在最后的，不是自己挪的：丢掉让它回到 Enter 后面
+        final placed = map['barKeysVersion'] == barKeysVersion;
         out.barKeys = normalizeBarKeys([
-          for (final k in bar) ?BarKey.fromJson(k),
+          for (final k in bar)
+            if (BarKey.fromJson(k) case final key?)
+              if (placed || key.builtin != sendNowLabel) key,
         ]);
       } else if (custom is List) {
         out.barKeys = defaultBarKeys([

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/ui/theme.dart';
 import 'package:hive_mobile/chat/latency_label.dart';
 import 'package:hive_mobile/protocol/latency.dart';
 import 'package:hive_mobile/protocol/rpc.dart';
@@ -145,36 +146,49 @@ void main() {
     },
   );
 
-  testWidgets('latency label: muted, amber when slow, red when silent', (
-    tester,
-  ) async {
-    Future<Text> show(Duration? latency, {bool unresponsive = false}) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            appBar: AppBar(
-              title: LatencyLabel(latency: latency, unresponsive: unresponsive),
+  testWidgets(
+    'latency label: bars and bare number, green when fast, red when silent',
+    (tester) async {
+      Future<Icon> show(Duration? latency, {bool unresponsive = false}) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: hiveTheme(Brightness.dark),
+            home: Scaffold(
+              appBar: AppBar(
+                title: LatencyLabel(
+                  latency: latency,
+                  unresponsive: unresponsive,
+                ),
+              ),
             ),
           ),
-        ),
-      );
-      return tester.widget<Text>(find.byType(Text).last);
-    }
+        );
+        return tester.widget<Icon>(find.byType(Icon).last);
+      }
 
-    // 还没测到：不占位置
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: LatencyLabel())),
-    );
-    expect(find.byType(Text), findsNothing);
-    final fast = await show(const Duration(milliseconds: 42));
-    expect(fast.data, '42 ms');
-    // 在顶栏里也不跟着标题变粗
-    expect(fast.style!.fontWeight, FontWeight.w400);
-    final slow = await show(const Duration(milliseconds: 420));
-    expect(slow.style!.color, isNot(fast.style!.color));
-    final silent = await show(null, unresponsive: true);
-    expect(silent.data, '无响应');
-  });
+      // 还没测到：不占位置
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: LatencyLabel())),
+      );
+      expect(find.byType(Icon), findsNothing);
+      final fast = await show(const Duration(milliseconds: 42));
+      // 写数值不写单位，读屏念全
+      expect(find.text('42'), findsOneWidget);
+      expect(find.bySemanticsLabel('和电脑的延迟 42 毫秒'), findsOneWidget);
+      final c = HiveColors.of(tester.element(find.byType(LatencyLabel)));
+      expect(fast.color, c.sage);
+      final mid = await show(const Duration(milliseconds: 200));
+      expect(mid.color, c.muted);
+      final slow = await show(const Duration(milliseconds: 420));
+      expect(slow.color, c.honey);
+      final silent = await show(null, unresponsive: true);
+      expect(silent.color, c.danger);
+      final text = tester.widget<Text>(find.byType(Text).last);
+      expect(text.data, '无响应');
+      // 在顶栏里也不跟着标题变粗
+      expect(text.style!.fontWeight, FontWeight.w400);
+    },
+  );
 
   test('signal bars drop as latency grows', () {
     IconData at(int ms) => latencyIcon(Duration(milliseconds: ms));

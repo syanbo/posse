@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/settings/custom_keys.dart';
+import 'package:hive_mobile/terminal/frames.dart';
 
 CustomKey _key(
   String kind,
@@ -58,22 +59,22 @@ void main() {
       }),
     );
     final names = [for (final k in back.barKeys) k.builtin ?? k.custom!.shown];
-    // 存下的顺序在前，重复的 Esc 去掉，没存的内置键按默认顺序补在后面
+    // 存下的顺序不变，重复的 Esc 去掉；没存的内置键插在默认顺序里它前面那个键后面
     expect(names, [
       'Esc',
-      '/clear',
-      'image',
-      '搜索',
-      'paste',
       'Tab',
       'Enter',
-      '立即发送',
+      sendNowLabel,
       '⇧Tab',
       '^C',
       '↑',
       '↓',
       '←',
       '→',
+      '/clear',
+      'image',
+      'paste',
+      '搜索',
     ]);
     expect(back.customKeys.map((k) => k.bytes), [
       utf8.encode('/clear'),
@@ -97,5 +98,77 @@ void main() {
     expect([
       for (final k in AppSettings.decode(null).barKeys) k.builtin,
     ], builtinBarKeys);
+  });
+
+  // 立即发送是后来加的，旧设置读进来时被补在了最后、又存成了旧名字；改名后它回到 Enter 后面
+  test('send-now saved under its old name goes back after Enter', () {
+    final saved = [
+      'image',
+      'paste',
+      'Esc',
+      'Tab',
+      'Enter',
+      '⇧Tab',
+      '^C',
+      '↑',
+      '↓',
+      '←',
+      '→',
+      '立即发送',
+    ];
+    final keys = [
+      for (final name in saved) ?BarKey.fromJson({'builtin': name}),
+    ];
+    final names = [for (final k in normalizeBarKeys(keys)) k.builtin];
+    expect(names, [
+      'image',
+      'paste',
+      'Esc',
+      'Tab',
+      'Enter',
+      sendNowLabel,
+      '⇧Tab',
+      '^C',
+      '↑',
+      '↓',
+      '←',
+      '→',
+    ]);
+  });
+
+  // 上一版读旧设置时把立即发送补在最后、又按新名字存了：没有版本号的设置读进来回到 Enter 后面；
+  // 版本 2 之后自己挪到最后的不动
+  test('send-now at the end of an unversioned bar goes back after Enter', () {
+    List<String?> load(Object? version) {
+      final names = [
+        'image',
+        'paste',
+        'Esc',
+        'Tab',
+        'Enter',
+        '⇧Tab',
+        '^C',
+        '↑',
+        '↓',
+        '←',
+        '→',
+        sendNowLabel,
+      ];
+      final s = AppSettings.decode(
+        jsonEncode({
+          'barKeys': [
+            for (final n in names) {'builtin': n},
+          ],
+          'barKeysVersion': ?version,
+        }),
+      );
+      return [for (final k in s.barKeys) k.builtin];
+    }
+
+    final old = load(null);
+    expect(old.indexOf(sendNowLabel), old.indexOf('Enter') + 1);
+    final moved = load(barKeysVersion);
+    expect(moved.last, sendNowLabel);
+    expect(AppSettings().toJson()['barKeysVersion'], barKeysVersion);
   });
 }

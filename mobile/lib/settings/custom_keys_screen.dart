@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import '../terminal/frames.dart';
 import 'custom_keys.dart';
 
 /// 设置里的「终端快捷键」：快捷键栏上除键盘开关以外的键都在一张表里，拖右边的把手排序；
@@ -176,6 +177,7 @@ class _KeyRow extends StatelessWidget {
           leading: switch (item.builtin) {
             'image' => const _KeyCap(icon: Icons.image_outlined),
             'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
+            sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
             _ => _KeyCap(label: custom?.shown ?? item.builtin),
           },
           title: Text(
@@ -213,6 +215,7 @@ String describeBuiltin(String name) => switch (name) {
   'Esc' => 'Esc：中断、退出',
   'Tab' => 'Tab：补全',
   'Enter' => '回车',
+  sendNowLabel => 'Ctrl + Enter：排队的消息马上交给 Claude',
   '⇧Tab' => 'Shift + Tab：切换模式',
   '^C' => 'Ctrl + C：结束程序',
   '↑' => '方向键：上',
@@ -224,10 +227,11 @@ String describeBuiltin(String name) => switch (name) {
 
 /// 和快捷键栏上一样的键帽，设置里一眼对得上。
 class _KeyCap extends StatelessWidget {
-  const _KeyCap({this.label, this.icon});
+  const _KeyCap({this.label, this.icon, this.glyph});
 
   final String? label;
   final IconData? icon;
+  final Widget? glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +245,9 @@ class _KeyCap extends StatelessWidget {
         color: c.fill,
         borderRadius: BorderRadius.circular(Rd.button),
       ),
-      child: icon != null
+      child: glyph != null
+          ? glyph!
+          : icon != null
           ? Icon(icon, size: 18, color: c.text)
           : Text(
               label ?? '',

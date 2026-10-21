@@ -64,8 +64,8 @@ void main() {
     final labels = termKeys.map((k) => k.label).toList();
     expect(labels.indexOf('Enter'), labels.indexOf('Tab') + 1);
     // Claude 排队消息立即发送（chat:sendNow 的 Ctrl+X Ctrl+S），紧跟在 Enter 后面
-    expect(byLabel['立即发送'], [0x18, 0x13]);
-    expect(labels.indexOf('立即发送'), labels.indexOf('Enter') + 1);
+    expect(byLabel[sendNowLabel], [0x18, 0x13]);
+    expect(labels.indexOf(sendNowLabel), labels.indexOf('Enter') + 1);
     expect(byLabel['⇧Tab'], [0x1b, 0x5b, 0x5a]);
     expect(byLabel['^C'], [0x03]);
     expect(byLabel['↑'], [0x1b, 0x5b, 0x41]);

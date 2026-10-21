@@ -124,12 +124,20 @@ class BarKey {
   static BarKey? fromJson(Object? json) {
     if (json is Map && json['builtin'] is String) {
       final name = json['builtin'] as String;
+      // 改过名的是改名前存的，位置是当时自动补上的，丢掉让 normalizeBarKeys 放回默认位置
+      if (renamedBuiltins.containsKey(name)) return null;
       return builtinBarKeys.contains(name) ? BarKey.builtin(name) : null;
     }
     final key = CustomKey.fromJson(json);
     return key == null ? null : BarKey.custom(key);
   }
 }
+
+/// 快捷键栏存盘格式的版本，见 [AppSettings.decode]。
+const barKeysVersion = 2;
+
+/// 改过名的内置键：旧名字 → 新名字。旧名字存的顺序读进来不认，新名字回到默认位置。
+const renamedBuiltins = {'立即发送': sendNowLabel};
 
 /// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
 final builtinBarKeys = [
@@ -146,15 +154,26 @@ List<BarKey> defaultBarKeys([List<CustomKey> custom = const []]) => [
   for (final key in termKeys) BarKey.builtin(key.label),
 ];
 
-/// 去掉重复的内置键，缺的（新版本加的内置键）补在最后，每个内置键都在且只出现一次。
+/// 去掉重复的内置键；缺的（新版本加的内置键）插在默认顺序里它前面那个键后面，
+/// 前面的都没有就放最前，每个内置键都在且只出现一次。
 List<BarKey> normalizeBarKeys(List<BarKey> keys) {
   final seen = <String>{};
   final out = [
     for (final key in keys)
       if (key.builtin == null || seen.add(key.builtin!)) key,
   ];
-  for (final name in builtinBarKeys) {
-    if (!seen.contains(name)) out.add(BarKey.builtin(name));
+  for (var i = 0; i < builtinBarKeys.length; i++) {
+    final name = builtinBarKeys[i];
+    if (!seen.add(name)) continue;
+    var at = 0;
+    for (var j = i - 1; j >= 0; j--) {
+      final k = out.indexWhere((key) => key.builtin == builtinBarKeys[j]);
+      if (k >= 0) {
+        at = k + 1;
+        break;
+      }
+    }
+    out.insert(at, BarKey.builtin(name));
   }
   return out;
 }

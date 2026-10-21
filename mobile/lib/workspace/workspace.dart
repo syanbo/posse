@@ -17,6 +17,7 @@ import '../protocol/pairing.dart';
 import '../protocol/rpc.dart';
 import '../settings/settings.dart';
 import '../terminal/terminal.dart';
+import '../chat/latency_label.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'models.dart';
@@ -307,7 +308,7 @@ String sessionDetail(SessionTab tab) {
 }
 
 /// 首页照桌面端侧栏：项目 → 工作区（只有主工作区时省掉这层）→ 运行中的 agent 会话，都直接展开。
-/// shell 终端在会话下面合成一行"终端 N"，不和 agent 混在一起。
+/// 普通终端排在 agent 会话后面，也各占一行。
 class WorkspaceScreen extends StatelessWidget {
   const WorkspaceScreen({super.key, required this.model});
 
@@ -412,6 +413,14 @@ class WorkspaceScreen extends StatelessWidget {
                 ),
               ),
             ),
+            // 延迟在胶囊外面右边，不挤电脑名；断线时胶囊里写着重连，不显示
+            if (model.rpc != null && !model.connecting)
+              LatencyLabel(
+                latency: model.latency,
+                unresponsive: model.unresponsive,
+                gap: 8,
+                size: 13,
+              ),
           ],
         ),
         actions: [
@@ -427,6 +436,7 @@ class WorkspaceScreen extends StatelessWidget {
                     children: [
                       IconButton(
                         tooltip: '历史',
+                        visualDensity: VisualDensity.compact,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => HistoryScreen(model: model),
@@ -441,6 +451,7 @@ class WorkspaceScreen extends StatelessWidget {
                       ),
                       IconButton(
                         tooltip: '新建会话',
+                        visualDensity: VisualDensity.compact,
                         onPressed: () => showNewSession(context, model),
                         icon: Icon(
                           Icons.add_circle_outline_rounded,
@@ -453,6 +464,7 @@ class WorkspaceScreen extends StatelessWidget {
           ),
           IconButton(
             tooltip: '设置',
+            visualDensity: VisualDensity.compact,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => SettingsScreen(
@@ -463,7 +475,7 @@ class WorkspaceScreen extends StatelessWidget {
             ),
             icon: Icon(Icons.settings_outlined, size: 22, color: c.text),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
         ],
       ),
       body: model.worktrees.isEmpty
@@ -659,7 +671,7 @@ class WorkspaceScreen extends StatelessWidget {
     );
   }
 
-  /// 右边的终端数：桌面侧栏同样位置的数字。shell 不展开，数一下让人知道里面还有东西。
+  /// 右边的终端数：桌面侧栏同样位置的数字，项目收起时也知道里面有几个。
   Widget? _count(HiveColors c, WorktreeRow row) {
     if (row.live == 0) return null;
     return Text(
@@ -680,7 +692,7 @@ class WorkspaceScreen extends StatelessWidget {
     final c = HiveColors.of(context);
     final all = model.tabs[row.id] ?? const <SessionTab>[];
     final tabs = all.where((t) => t.agent != null);
-    final shells = all.where((t) => t.agent == null).toList();
+    final shells = all.where((t) => t.agent == null);
     return [
       for (final tab in tabs)
         _Indented(
@@ -701,55 +713,19 @@ class WorkspaceScreen extends StatelessWidget {
             onLongPress: () => closeSession(context, model, tab),
           ),
         ),
-      if (shells.isNotEmpty)
+      // 普通终端和 agent 会话一样各占一行，标题是标签名（桌面改过名的用改的名字）
+      for (final tab in shells)
         _Indented(
           indent: indent - 14,
           child: RowTile(
             leading: const AgentTile(agent: null, size: 28),
-            title: Text('终端 ${shells.length}'),
-            subtitle: Text(
-              shells.map((t) => cleanTitle(t.title)).join('  '),
-              maxLines: 1,
-            ),
-            onTap: () => shells.length == 1
-                ? openSession(context, model, shells.single)
-                : _showShells(context, shells),
-            onLongPress: shells.length == 1
-                ? () => closeSession(context, model, shells.single)
-                : () => _showShells(context, shells),
+            title: Text(cleanTitle(tab.title)),
+            subtitle: Text(model.rpc == null ? '等连上电脑' : '终端'),
+            onTap: () => openSession(context, model, tab),
+            onLongPress: () => closeSession(context, model, tab),
           ),
         ),
     ];
-  }
-
-  /// 工作区里有几个 shell 时先列出来挑一个。
-  void _showShells(BuildContext context, List<SessionTab> shells) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        top: false,
-        child: Section(
-          title: '终端',
-          inset: 64,
-          children: [
-            for (final tab in shells)
-              RowTile(
-                leading: const AgentTile(agent: null, size: 32),
-                title: Text(cleanTitle(tab.title)),
-                onTap: () {
-                  Navigator.of(sheet).pop();
-                  openSession(context, model, tab);
-                },
-                onLongPress: () async {
-                  Navigator.of(sheet).pop();
-                  await closeSession(context, model, tab);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _sessionState(HiveColors c, SessionTab tab) {
