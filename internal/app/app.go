@@ -878,10 +878,12 @@ func (a *app) call(method string, params any, out any, timeout time.Duration) er
 func (a *app) startTerminal(workspaceID, agent string) {
 	go func() {
 		var t terminalInfo
-		if a.call("terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t, 10*time.Second) == nil {
+		err := a.call("terminal.create", map[string]any{"workspace": workspaceID, "agent": agent}, &t, 10*time.Second)
+		// 先刷新让新终端进列表再选中：列表里还没有它时 currentTerminal 会把选中换回第一个
+		a.refresh()
+		if err == nil {
 			a.win.Update(func() { a.openTerminal(workspaceID, t.ID) })
 		}
-		a.refresh()
 	}()
 }
 

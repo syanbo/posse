@@ -311,8 +311,8 @@ func (a *app) viewDiff(t taskInfo) {
 		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
 			return
 		}
-		a.win.Update(func() { a.openTerminal(t.WorkspaceID, term.ID) })
 		a.refresh()
+		a.win.Update(func() { a.openTerminal(t.WorkspaceID, term.ID) })
 	}()
 }
 
