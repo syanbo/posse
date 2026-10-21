@@ -1802,3 +1802,51 @@ func TestRunWorkspaceRealPath(t *testing.T) {
 		t.Fatalf("run under the real path not attributed: %+v", got)
 	}
 }
+
+// 操作记录每个项目各留 gitConsoleMax 条：一个项目命令多，不挤掉别的项目的；对不上工作区的按目录算。
+// 文件攒到两倍时按留着的重写，读回来一样
+func TestGitConsolePerProject(t *testing.T) {
+	home := t.TempDir()
+	ws := []workspace{
+		{ID: "w1", ProjectID: "busy", Kind: "main", Path: "/x/busy"},
+		{ID: "w2", ProjectID: "quiet", Kind: "main", Path: "/x/quiet"},
+	}
+	a := &app{home: home, workspaces: ws}
+	t0 := time.Now().Add(-time.Hour)
+	id := int64(0)
+	add := func(dir string) {
+		id++
+		a.addGitRun(gitx.Run{ID: id, OpID: id, Dir: dir, Args: []string{"fetch"}, Start: t0.Add(time.Duration(id) * time.Second), Done: true})
+	}
+	add("/x/quiet")
+	add("/elsewhere")
+	for range 2*gitConsoleMax + 10 {
+		add("/x/busy/sub")
+	}
+	if got := len(a.projectRuns("busy")); got != gitConsoleMax {
+		t.Fatalf("busy kept %d", got)
+	}
+	if len(a.projectRuns("quiet")) != 1 || len(a.gitRuns) != gitConsoleMax+2 {
+		t.Fatalf("quiet %d, total %d", len(a.projectRuns("quiet")), len(a.gitRuns))
+	}
+	if last := a.gitRuns[len(a.gitRuns)-1]; last.ID != id {
+		t.Fatalf("newest dropped: %d", last.ID)
+	}
+	// 等写文件的协程做完，文件已经重写过（行数不到两倍上限）
+	var lines int
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		b, _ := os.ReadFile(gitConsolePath(home))
+		if lines = strings.Count(string(b), "\n"); lines < 2*gitConsoleMax && lines >= gitConsoleMax+2 {
+			break
+		}
+	}
+	if lines >= 2*gitConsoleMax {
+		t.Fatalf("file not rewritten: %d lines", lines)
+	}
+	b := &app{home: home, workspaces: ws}
+	b.loadGitRuns()
+	b.trimGitRuns()
+	if len(b.projectRuns("busy")) != gitConsoleMax || len(b.projectRuns("quiet")) != 1 {
+		t.Fatalf("reloaded busy %d quiet %d", len(b.projectRuns("busy")), len(b.projectRuns("quiet")))
+	}
+}

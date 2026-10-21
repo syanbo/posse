@@ -25,7 +25,8 @@ import (
 // 和查询不记。记录追加到 $HIVE_HOME/git-trace.jsonl，重启、交接之后接着用。
 
 const (
-	gitTraceMax = 1000
+	// gitTraceMax 是每个项目留多少条，超过丢掉这个项目最早的：一个项目命令多不挤掉别的项目的
+	gitTraceMax = 500
 	// gitTraceLine 是一行事件最长多少：start 的参数可能很长（git add 一长串文件）
 	gitTraceLine = 1 << 20
 )
@@ -33,8 +34,9 @@ const (
 type gitTraceRecord struct {
 	Seq      int64     `json:"seq"`
 	Terminal string    `json:"terminal,omitempty"`
-	Agent    string    `json:"agent,omitempty"` // 命令执行时终端里的 agent
-	Dir      string    `json:"dir,omitempty"`   // 仓库的工作目录；不在仓库里（clone、init）时是终端的目录
+	Project  string    `json:"project,omitempty"` // 终端所在的项目，按它分别限条数
+	Agent    string    `json:"agent,omitempty"`   // 命令执行时终端里的 agent
+	Dir      string    `json:"dir,omitempty"`     // 仓库的工作目录；不在仓库里（clone、init）时是终端的目录
 	Args     []string  `json:"args"`
 	Start    time.Time `json:"start"`
 	TookMs   int64     `json:"tookMs"`
@@ -46,7 +48,7 @@ type gitTrace struct {
 	mu    sync.Mutex
 	recs  []gitTraceRecord
 	seq   int64
-	lines int // 文件里的行数，到 2 倍上限时按内存里的重写
+	lines int // 文件里的行数，攒多了按内存里的重写
 }
 
 func gitTraceSocket(home string) string { return filepath.Join(home, "git-trace.sock") }
@@ -158,6 +160,9 @@ func (d *Daemon) readGitTrace(c net.Conn) {
 		if r.Dir == "" {
 			r.Dir = s.Dir
 		}
+		if w, err := d.store.Workspace(s.WorkspaceID); err == nil {
+			r.Project = w.ProjectID
+		}
 	}
 	d.gitTrace.add(r)
 }
@@ -176,9 +181,34 @@ func (g *gitTrace) load() {
 		g.recs = append(g.recs, r)
 		g.seq = max(g.seq, r.Seq)
 	}
-	if len(g.recs) > gitTraceMax {
-		g.recs = g.recs[len(g.recs)-gitTraceMax:]
+	g.recs = trimPerProject(g.recs)
+}
+
+// trimPerProject 每个项目只留最近 gitTraceMax 条；不在 Hive 终端里的（没有项目）按目录算。
+func trimPerProject(recs []gitTraceRecord) []gitTraceRecord {
+	count := map[string]int{}
+	keep := make([]bool, len(recs))
+	n := 0
+	for i := len(recs) - 1; i >= 0; i-- {
+		key := recs[i].Project
+		if key == "" {
+			key = "dir:" + recs[i].Dir
+		}
+		if count[key]++; count[key] <= gitTraceMax {
+			keep[i] = true
+			n++
+		}
 	}
+	if n == len(recs) {
+		return recs
+	}
+	out := make([]gitTraceRecord, 0, n)
+	for i, r := range recs {
+		if keep[i] {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func (g *gitTrace) add(r gitTraceRecord) {
@@ -186,11 +216,9 @@ func (g *gitTrace) add(r gitTraceRecord) {
 	defer g.mu.Unlock()
 	g.seq++
 	r.Seq = g.seq
-	g.recs = append(g.recs, r)
-	if len(g.recs) > gitTraceMax {
-		g.recs = append(g.recs[:0], g.recs[len(g.recs)-gitTraceMax:]...)
-	}
-	if g.lines >= 2*gitTraceMax {
+	g.recs = trimPerProject(append(g.recs, r))
+	// 文件攒到留着的两倍（至少 2 倍上限）时按内存里的重写
+	if g.lines >= 2*max(len(g.recs), gitTraceMax) {
 		var buf bytes.Buffer
 		for _, x := range g.recs {
 			line, _ := json.Marshal(x)

@@ -182,7 +182,9 @@ type app struct {
 	runWS         map[string]string     // 命令目录 → 所在工作区 ID（runWorkspace），工作区列表变了就清掉
 	realPaths     map[string]string     // 工作区路径 → 解析过符号链接的路径
 	consoleErr    map[string]bool       // 有没在操作记录里看过的失败命令的目录，标签按项目带红点
-	consoleQ      chan []byte           // 交给写 git-console.jsonl 的协程
+	consoleQ      chan consoleWrite     // 交给写 git-console.jsonl 的协程
+	consoleLines  int                   // git-console.jsonl 里有几行，攒多了重写
+	consoleSorted bool                  // 读回的记录已经按项目限过条数（要等拿到工作区列表）
 	consoleOnce   sync.Once
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
 	traceLoaded   bool
@@ -560,6 +562,10 @@ func (a *app) apply(ps []project, ws []workspace) {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
 	a.migratePanels()
+	if !a.consoleSorted {
+		a.consoleSorted = true
+		a.trimGitRuns()
+	}
 	seen := map[string]bool{}
 	for _, w := range ws {
 		for _, t := range w.Terminals {

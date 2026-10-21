@@ -48,7 +48,7 @@ func TestGitTrace(t *testing.T) {
 		t.Fatalf("records %q", got)
 	}
 	c := recs[1]
-	if c.Terminal != s.ID || c.Agent != "claude" || !strings.HasSuffix(c.Dir, "/r") || c.Code != 0 || c.Start.IsZero() {
+	if c.Terminal != s.ID || c.Project != w.ProjectID || c.Agent != "claude" || !strings.HasSuffix(c.Dir, "/r") || c.Code != 0 || c.Start.IsZero() {
 		t.Fatalf("commit record %+v", c)
 	}
 	if recs[2].Code == 0 {
@@ -67,5 +67,33 @@ func TestGitTrace(t *testing.T) {
 	g.add(gitTraceRecord{Args: []string{"push"}})
 	if _, s3 := g.since(0); s3 != seq+1 {
 		t.Fatalf("seq after reload %d", s3)
+	}
+}
+
+// 每个项目只留最近 gitTraceMax 条：一个项目命令多，不挤掉别的项目的；没有项目的按目录算
+func TestGitTracePerProject(t *testing.T) {
+	g := &gitTrace{path: filepath.Join(t.TempDir(), "git-trace.jsonl")}
+	g.add(gitTraceRecord{Project: "quiet", Args: []string{"commit"}})
+	g.add(gitTraceRecord{Dir: "/elsewhere", Args: []string{"init"}})
+	for range gitTraceMax + 100 {
+		g.add(gitTraceRecord{Project: "busy", Args: []string{"fetch"}})
+	}
+	recs, _ := g.since(0)
+	count := map[string]int{}
+	for _, r := range recs {
+		count[r.Project+r.Dir]++
+	}
+	if count["busy"] != gitTraceMax || count["quiet"] != 1 || count["/elsewhere"] != 1 {
+		t.Fatalf("kept %v", count)
+	}
+	// 留下的是最近的
+	if last := recs[len(recs)-1]; last.Seq != int64(gitTraceMax+102) {
+		t.Fatalf("last %+v", last)
+	}
+	// 文件重写过、读回来一样
+	back := &gitTrace{path: g.path}
+	back.load()
+	if again, _ := back.since(0); len(again) != len(recs) {
+		t.Fatalf("reloaded %d, want %d", len(again), len(recs))
 	}
 }

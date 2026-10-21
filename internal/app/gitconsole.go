@@ -20,10 +20,10 @@ import (
 // 每个操作下面是它调用的 git 命令、输出和报错。界面的记录来自 gitx.Trace，命令完成后追加到
 // $HIVE_HOME/git-console.jsonl，窗口打开时读回；Hive 终端里改动仓库的 git 命令由常驻进程经 trace2 收集
 // （internal/daemon/gittrace.go），轮询时按序号取新的，按时间排进同一个列表，只有命令和退出码、没有输出。
-// 所有项目的命令存在一起，显示时按命令所在目录归到项目（runWorkspace）。
+// 所有项目的命令存在一起，显示时按命令所在目录归到项目（runWorkspace），每个项目各留 gitConsoleMax 条。
 
-// gitConsoleMax 是最多留多少条命令，超过丢掉最早的。
-const gitConsoleMax = 1000
+// gitConsoleMax 是每个项目最多留多少条命令，超过丢掉这个项目最早的：一个项目命令多不挤掉别的项目的。
+const gitConsoleMax = 500
 
 // traceGit 读回上次留下的记录，再让 gitx 把命令报给界面线程。
 func (a *app) traceGit() {
@@ -33,7 +33,8 @@ func (a *app) traceGit() {
 
 func gitConsolePath(home string) string { return filepath.Join(home, "git-console.jsonl") }
 
-// loadGitRuns 读回界面上次的记录，gitx 的编号接在后面；文件攒到上限的两倍时只留最近的重写。
+// loadGitRuns 读回界面上次的记录，gitx 的编号接在后面。这时还不知道各命令属于哪个项目，
+// 拿到工作区列表后才按项目限条数（trimGitRuns）。
 func (a *app) loadGitRuns() {
 	if a.home == "" {
 		return
@@ -58,40 +59,91 @@ func (a *app) loadGitRuns() {
 		runs = append(runs, r)
 	}
 	gitx.Seed(maxID, maxOp)
-	if len(runs) > gitConsoleMax {
-		runs = runs[len(runs)-gitConsoleMax:]
+	a.gitRuns, a.consoleLines = runs, n
+}
+
+// trimGitRuns 每个项目只留最近 gitConsoleMax 条，对不上工作区的按目录算。文件攒到留着的两倍
+// （至少 2 倍上限）时按留着的重写。
+func (a *app) trimGitRuns() {
+	count := map[string]int{}
+	keep := make([]bool, len(a.gitRuns))
+	n := 0
+	for i := len(a.gitRuns) - 1; i >= 0; i-- {
+		key := "dir:" + a.gitRuns[i].Dir
+		if w := a.runWorkspace(a.gitRuns[i].Dir); w != nil {
+			key = w.ProjectID
+		}
+		if count[key]++; count[key] <= gitConsoleMax {
+			keep[i] = true
+			n++
+		}
 	}
-	a.gitRuns = runs
-	if n > 2*gitConsoleMax {
-		var buf bytes.Buffer
-		for _, r := range runs {
+	if n < len(a.gitRuns) {
+		out := make([]gitx.Run, 0, n)
+		for i, r := range a.gitRuns {
+			if keep[i] {
+				out = append(out, r)
+			}
+		}
+		a.gitRuns = out
+	}
+	// 文件里只有界面自己的、做完的命令；终端的由常驻进程存
+	saved := 0
+	for _, r := range a.gitRuns {
+		if r.ID > 0 && r.Done {
+			saved++
+		}
+	}
+	if a.consoleLines < 2*max(saved, gitConsoleMax) {
+		return
+	}
+	var buf bytes.Buffer
+	for _, r := range a.gitRuns {
+		if r.ID > 0 && r.Done {
 			line, _ := json.Marshal(r)
 			buf.Write(append(line, '\n'))
 		}
-		os.WriteFile(gitConsolePath(a.home), buf.Bytes(), 0o600)
 	}
+	a.consoleLines = saved
+	a.writeConsole(consoleWrite{data: buf.Bytes(), rewrite: true})
 }
 
-// saveGitRun 把完成的命令交给写文件的协程。写不过来就丢，记录不能卡住界面。
+// consoleWrite 是交给写 git-console.jsonl 的协程的一件事：追加一行，或者整个重写。
+type consoleWrite struct {
+	data    []byte
+	rewrite bool
+}
+
+// saveGitRun 把完成的命令追加到文件。
 func (a *app) saveGitRun(line []byte) {
+	a.consoleLines++
+	a.writeConsole(consoleWrite{data: append(line, '\n')})
+}
+
+// writeConsole 交给写文件的协程，追加和重写按顺序做。写不过来就丢，记录不能卡住界面。
+func (a *app) writeConsole(w consoleWrite) {
 	if a.home == "" {
 		return
 	}
 	a.consoleOnce.Do(func() {
-		a.consoleQ = make(chan []byte, 256)
-		go func(path string, q <-chan []byte) {
-			for line := range q {
+		a.consoleQ = make(chan consoleWrite, 256)
+		go func(path string, q <-chan consoleWrite) {
+			for w := range q {
+				if w.rewrite {
+					os.WriteFile(path, w.data, 0o600)
+					continue
+				}
 				f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 				if err != nil {
 					continue
 				}
-				f.Write(append(line, '\n'))
+				f.Write(w.data)
 				f.Close()
 			}
 		}(gitConsolePath(a.home), a.consoleQ)
 	})
 	select {
-	case a.consoleQ <- line:
+	case a.consoleQ <- w:
 	default:
 	}
 }
@@ -136,9 +188,7 @@ func (a *app) addTermRuns(recs []termGitRun, initial bool) {
 		}
 		a.gitRuns = slices.Insert(a.gitRuns, i, r)
 	}
-	if len(a.gitRuns) > gitConsoleMax {
-		a.gitRuns = append(a.gitRuns[:0], a.gitRuns[len(a.gitRuns)-gitConsoleMax:]...)
-	}
+	a.trimGitRuns()
 }
 
 // flagConsoleErr 记下 dir 里有没看过的失败命令。
@@ -165,9 +215,7 @@ func (a *app) addGitRun(r gitx.Run) {
 		}
 	}
 	a.gitRuns = append(a.gitRuns, r)
-	if len(a.gitRuns) > gitConsoleMax {
-		a.gitRuns = append(a.gitRuns[:0], a.gitRuns[len(a.gitRuns)-gitConsoleMax:]...)
-	}
+	a.trimGitRuns()
 }
 
 // gitOpRecord 是记录里的一个操作和它的命令；不属于任何操作的命令（后台读取失败等）各自算一个。
