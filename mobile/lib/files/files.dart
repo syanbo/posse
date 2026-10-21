@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
-import '../chat/markdown_view.dart';
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
@@ -13,6 +12,7 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import '../workspace/workspace.dart';
+import 'markdown_doc.dart';
 import 'video.dart';
 
 /// 目录里的一项。路径都相对工作区根目录，用 / 分隔。
@@ -548,9 +548,20 @@ class _FileViewerState extends State<FileViewer> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
             ?notice,
-            MarkdownView(
-              text,
-              style: TextStyle(fontSize: Fs.read, height: 1.6, color: c.text),
+            MarkdownDoc(
+              data: text,
+              model: widget.model,
+              worktree: widget.worktree,
+              path: widget.path,
+              openFile: (path) => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FileViewer(
+                    model: widget.model,
+                    worktree: widget.worktree,
+                    path: path,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

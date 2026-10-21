@@ -22,6 +22,31 @@ class MarkdownView extends StatelessWidget {
   }
 }
 
+/// GitHub 风格，但网址自动识别换成 [_Autolink]。对话页和文件预览共用。
+final markdownExtensions = md.ExtensionSet(
+  md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+  [
+    for (final s in md.ExtensionSet.gitHubFlavored.inlineSyntaxes)
+      if (s is! md.AutolinkExtensionSyntax) s,
+    _Autolink(),
+  ],
+);
+
+/// markdown 7.3.1 的网址自动识别允许网址里带 `]`，`[打开 https://a.com](https://a.com)` 会把
+/// `https://a.com](https://a.com)` 整段吞成一个网址，外面的链接就坏了。只把 `]` 排除在网址外，其余同原版。
+class _Autolink extends md.AutolinkExtensionSyntax {
+  static final _pattern = RegExp(
+    r'((?:(?:https?|ftp):\/\/|www\.)(?:[-_a-z0-9]+\.)*(?:[-a-z0-9]+\.[-a-z0-9]+)'
+    r'[^\s<\]]*[^\s<?!.,:*_~\]])'
+    r'|([-_.+a-z0-9]+@(?:[-_a-z0-9]+\.)+[-_a-z0-9]*[a-z0-9])',
+    multiLine: true,
+    caseSensitive: false,
+  );
+
+  @override
+  RegExp get pattern => _pattern;
+}
+
 /// 对话页每秒都会重建（标签状态、状态行），同一段回复不必每次重新解析。
 final _parsed = <String, List<md.Node>>{};
 
@@ -30,7 +55,7 @@ List<md.Node> _parse(String data) {
   if (hit != null) return _parsed[data] = hit;
   // 默认会把 < " & 编码成 HTML 实体；这里直接画文字，不经过 HTML
   final nodes = md.Document(
-    extensionSet: md.ExtensionSet.gitHubFlavored,
+    extensionSet: markdownExtensions,
     encodeHtml: false,
   ).parse(data);
   if (_parsed.length >= 200) _parsed.remove(_parsed.keys.first);
@@ -46,7 +71,7 @@ Widget _block(BuildContext context, md.Node node, TextStyle base) {
           child: Text.rich(TextSpan(children: _inline(context, node, base))),
         );
       case 'pre':
-        return _codeBlock(context, node, base);
+        return markdownCodeBlock(context, node, base);
       case 'ul':
       case 'ol':
         final ordered = node.tag == 'ol';
@@ -150,7 +175,12 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
   return [for (final child in children) ..._inline(context, child, style)];
 }
 
-Widget _codeBlock(BuildContext context, md.Element node, TextStyle base) {
+/// 围栏代码块：顶上一行语言名，代码不折行、横向滚动，认得出语言时着色。文件预览也用它。
+Widget markdownCodeBlock(
+  BuildContext context,
+  md.Element node,
+  TextStyle base,
+) {
   var lang = '';
   for (final child in node.children ?? const <md.Node>[]) {
     if (child is! md.Element || child.tag != 'code') continue;

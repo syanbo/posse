@@ -13,6 +13,7 @@ dependencies:
   flterm: ^0.0.5
   flutter:
     sdk: flutter
+  flutter_markdown_plus: ^1.0.12
   image_picker: ^1.2.4
   markdown: ^7.3.1
   pasteboard: ^0.5.0
