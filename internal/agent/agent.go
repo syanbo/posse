@@ -29,7 +29,45 @@ type Launch struct {
 	SessionID string
 }
 
-func (l Launcher) Launch(name, prompt string) (Launch, error) {
+// Model 是派发时指定的模型和思考深度，为空的项用 agent 自己的默认设置；值原样交给 agent 核对。
+type Model struct {
+	Name   string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+}
+
+// args 是 agent 启动参数里的模型部分。Cursor 没有单独的思考深度参数，只能写进模型名的方括号。
+func (m Model) args(agentName string) ([]string, error) {
+	var parts []string
+	model := m.Name
+	if m.Effort != "" && agentName == "cursor" {
+		if model == "" || strings.Contains(model, "[") {
+			return nil, fmt.Errorf("cursor takes effort inside the model name, e.g. --model 'claude-opus-4-8[effort=high]'")
+		}
+		model += "[effort=" + m.Effort + "]"
+	}
+	if model != "" {
+		parts = append(parts, "--model", Quote(model))
+	}
+	if m.Effort == "" {
+		return parts, nil
+	}
+	switch agentName {
+	case "claude":
+		parts = append(parts, "--effort", Quote(m.Effort))
+	case "codex":
+		v, _ := json.Marshal(m.Effort)
+		parts = append(parts, "-c", Quote("model_reasoning_effort="+string(v)))
+	case "grok":
+		parts = append(parts, "--reasoning-effort", Quote(m.Effort))
+	}
+	return parts, nil
+}
+
+func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
+	margs, err := m.args(name)
+	if err != nil {
+		return Launch{}, err
+	}
 	var parts []string
 	var sessionID string
 	switch name {
@@ -62,6 +100,7 @@ func (l Launcher) Launch(name, prompt string) (Launch, error) {
 	default:
 		return Launch{}, fmt.Errorf("unknown agent %q (known: %s)", name, strings.Join(Known, ", "))
 	}
+	parts = append(parts, margs...)
 	parts = append(parts, l.permissionArgs(name)...)
 	if prompt != "" {
 		parts = append(parts, Quote(prompt))

@@ -107,18 +107,19 @@ func (d *Daemon) taskNotify() {
 // --- 派发
 
 type taskStartParams struct {
-	Caller    string   `json:"caller"` // 调用方终端（HIVE_TERMINAL_ID），即派发方
-	Cwd       string   `json:"cwd"`
-	Workspace string   `json:"workspace"`
-	Worktree  string   `json:"worktree"` // 为 worker 新建这个名字的 git worktree
-	Base      string   `json:"base"`
-	Agent     string   `json:"agent"`
-	Command   []string `json:"command"` // 不用 agent 时直接运行的命令
-	Title     string   `json:"title"`
-	Spec      string   `json:"spec"`
-	Group     string   `json:"group"`
-	Cols      int      `json:"cols"`
-	Rows      int      `json:"rows"`
+	Caller    string `json:"caller"` // 调用方终端（HIVE_TERMINAL_ID），即派发方
+	Cwd       string `json:"cwd"`
+	Workspace string `json:"workspace"`
+	Worktree  string `json:"worktree"` // 为 worker 新建这个名字的 git worktree
+	Base      string `json:"base"`
+	Agent     string `json:"agent"`
+	agent.Model
+	Command []string `json:"command"` // 不用 agent 时直接运行的命令
+	Title   string   `json:"title"`
+	Spec    string   `json:"spec"`
+	Group   string   `json:"group"`
+	Cols    int      `json:"cols"`
+	Rows    int      `json:"rows"`
 }
 
 func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -135,6 +136,8 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent required (%s)", strings.Join(agent.Known, ", "))
 	case p.Agent != "" && len(p.Command) > 0:
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
+	case p.Model != (agent.Model{}) && p.Agent == "":
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	}
 	if depth := d.taskDepth(p.Caller); depth >= maxTaskDepth {
 		return nil, rpc.Errorf(rpc.CodeConflict, "workers are already nested %d deep; do this task yourself", depth)
@@ -144,14 +147,14 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, err
 	}
 	t := store.Task{ID: store.NewID("k_"), Title: p.Title, Spec: p.Spec, Coordinator: p.Caller, WorkspaceID: w.ID,
-		Agent: p.Agent, Group: p.Group, Status: store.TaskRunning, CreatedAt: time.Now()}
+		Agent: p.Agent, Model: p.Model.Name, Effort: p.Model.Effort, Group: p.Group, Status: store.TaskRunning, CreatedAt: time.Now()}
 	if t.Title == "" {
 		t.Title = firstLine(p.Spec, 60)
 	}
 	env := []string{"HIVE_TASK_ID=" + t.ID}
 	var s *session
 	if p.Agent != "" {
-		s, err = d.startAgent(w, p.Agent, workerPrompt(t, w), p.Cols, p.Rows, env...)
+		s, err = d.startAgent(w, p.Agent, p.Model, workerPrompt(t, w), p.Cols, p.Rows, env...)
 	} else {
 		s, err = d.startTerminal(w, p.Command, "", p.Cols, p.Rows, env...)
 	}

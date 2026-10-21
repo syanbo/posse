@@ -56,8 +56,8 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 }
 
 // startAgent 启动 agent；Claude 的会话 ID 在启动前就确定了。
-func (d *Daemon) startAgent(w store.Workspace, name, prompt string, cols, rows int, env ...string) (*session, error) {
-	l, err := d.launcher.Launch(name, prompt)
+func (d *Daemon) startAgent(w store.Workspace, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
+	l, err := d.launcher.Launch(name, model, prompt)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}
@@ -161,9 +161,10 @@ type terminalCreateParams struct {
 	Workspace string   `json:"workspace"`
 	Command   []string `json:"command"`
 	Agent     string   `json:"agent"`
-	Prompt    string   `json:"prompt"`
-	Cols      int      `json:"cols"`
-	Rows      int      `json:"rows"`
+	agent.Model
+	Prompt string `json:"prompt"`
+	Cols   int    `json:"cols"`
+	Rows   int    `json:"rows"`
 }
 
 func (d *Daemon) terminalCreate(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -179,8 +180,10 @@ func (d *Daemon) terminalCreate(ctx context.Context, raw json.RawMessage) (any, 
 	switch {
 	case p.Agent != "" && len(p.Command) > 0:
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
+	case p.Agent == "" && p.Model != (agent.Model{}):
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	case p.Agent != "":
-		s, err = d.startAgent(w, p.Agent, p.Prompt, p.Cols, p.Rows)
+		s, err = d.startAgent(w, p.Agent, p.Model, p.Prompt, p.Cols, p.Rows)
 	case len(p.Command) > 0:
 		s, err = d.startTerminal(w, p.Command, "", p.Cols, p.Rows)
 	default:

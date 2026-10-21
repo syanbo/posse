@@ -49,7 +49,7 @@ func TestClaudePermissionTimeout(t *testing.T) {
 }
 
 func TestLaunchUnknown(t *testing.T) {
-	if _, err := (Launcher{Exe: "/bin/hive", Home: t.TempDir()}).Launch("nope", ""); err == nil {
+	if _, err := (Launcher{Exe: "/bin/hive", Home: t.TempDir()}).Launch("nope", Model{}, ""); err == nil {
 		t.Fatal("unknown agent accepted")
 	}
 }

@@ -11,7 +11,7 @@ import (
 
 func TestClaudePlugin(t *testing.T) {
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
-	r, err := l.Launch("claude", "")
+	r, err := l.Launch("claude", Model{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestClaudePlugin(t *testing.T) {
 	// 内容没变时不重写，已经打开的 Claude 读到的文件不会被换掉
 	old := time.Now().Add(-time.Hour)
 	os.Chtimes(skill, old, old)
-	if _, err := l.Launch("claude", ""); err != nil {
+	if _, err := l.Launch("claude", Model{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if fi, _ := os.Stat(skill); !fi.ModTime().Equal(old) {
@@ -58,7 +58,7 @@ func TestCodexGuideArgs(t *testing.T) {
 	}
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
 	os.Remove(filepath.Join(home, "config.toml"))
-	r, _ := l.Launch("codex", "")
+	r, _ := l.Launch("codex", Model{}, "")
 	if cmd := r.Argv[len(r.Argv)-1]; !strings.Contains(cmd, "developer_instructions=") {
 		t.Fatalf("codex launch lacks the guide hint: %q", cmd)
 	}
@@ -67,7 +67,7 @@ func TestCodexGuideArgs(t *testing.T) {
 func TestGrokRules(t *testing.T) {
 	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
-	r, err := l.Launch("grok", "do it")
+	r, err := l.Launch("grok", Model{}, "do it")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -272,6 +272,8 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	base := fs.String("base", "", "")
 	noSetup := fs.Bool("no-setup", false, "")
 	agentName := fs.String("agent", "", "")
+	model := fs.String("model", "", "")
+	effort := fs.String("effort", "", "")
 	prompt := fs.String("prompt", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -282,7 +284,7 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	}
 	var w workspaceInfo
 	params := map[string]any{"project": absPath(pos[0]), "name": pos[1], "mode": *mode, "branch": *branch, "base": *base,
-		"noSetup": *noSetup, "agent": *agentName, "prompt": *prompt}
+		"noSetup": *noSetup, "agent": *agentName, "model": *model, "effort": *effort, "prompt": *prompt}
 	return e.do("workspace.create", params, &w, func() {
 		fmt.Fprintf(e.out, "created %s workspace %s (%s) at %s\n", w.Kind, w.Label, w.ID, w.Path)
 		if w.Branch != "" {
@@ -401,6 +403,8 @@ func cmdWorkspaceRm(e *env, args []string) error {
 func cmdTerminalCreate(e *env, args []string) error {
 	fs := flag.NewFlagSet("terminal create", flag.ContinueOnError)
 	agentName := fs.String("agent", "", "")
+	model := fs.String("model", "", "")
+	effort := fs.String("effort", "", "")
 	prompt := fs.String("prompt", "", "")
 	cols := fs.Int("cols", 0, "")
 	rows := fs.Int("rows", 0, "")
@@ -412,7 +416,7 @@ func cmdTerminalCreate(e *env, args []string) error {
 		return err
 	}
 	var t terminalInfo
-	params := map[string]any{"workspace": pos[0], "command": pos[1:], "agent": *agentName, "prompt": *prompt, "cols": *cols, "rows": *rows}
+	params := map[string]any{"workspace": pos[0], "command": pos[1:], "agent": *agentName, "model": *model, "effort": *effort, "prompt": *prompt, "cols": *cols, "rows": *rows}
 	return e.do("terminal.create", params, &t, func() {
 		fmt.Fprintf(e.out, "%s\n", t.ID)
 	})

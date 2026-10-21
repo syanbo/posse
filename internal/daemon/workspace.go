@@ -180,7 +180,8 @@ type workspaceCreateParams struct {
 	Base    string `json:"base"`
 	NoSetup bool   `json:"noSetup"`
 	Agent   string `json:"agent"`
-	Prompt  string `json:"prompt"`
+	agent.Model
+	Prompt string `json:"prompt"`
 }
 
 type workspaceInfo struct {
@@ -202,6 +203,9 @@ func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any,
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
+	if p.Agent == "" && p.Model != (agent.Model{}) {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
+	}
 	proj, err := d.project(p.Project)
 	if err != nil {
 		return nil, err
@@ -212,7 +216,7 @@ func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any,
 	}
 	info := workspaceInfo{Workspace: w, Project: proj.Name, Label: proj.Name + "/" + w.Name, Terminals: []terminalInfo{}, Setup: setup}
 	if p.Agent != "" {
-		s, err := d.startAgent(w, p.Agent, p.Prompt, 0, 0)
+		s, err := d.startAgent(w, p.Agent, p.Model, p.Prompt, 0, 0)
 		if err != nil {
 			return nil, err
 		}

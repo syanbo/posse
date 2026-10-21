@@ -96,10 +96,26 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	for _, col := range []string{"model", "effort"} {
+		if err := addColumn(db, "tasks", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
+	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// addColumn 给旧库补上后来加的列；CREATE TABLE IF NOT EXISTS 不会改已有的表。
+func addColumn(db *sql.DB, table, column, decl string) error {
+	var n int
+	if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name=?`, table, column).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	_, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + decl)
+	return err
+}
 
 func NewID(prefix string) string {
 	b := make([]byte, 4)

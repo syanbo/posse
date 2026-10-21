@@ -17,6 +17,8 @@ type Task struct {
 	WorkspaceID string     `json:"workspaceId"`
 	Worker      string     `json:"worker"`
 	Agent       string     `json:"agent,omitempty"`
+	Model       string     `json:"model,omitempty"` // 模型和思考深度，为空是 agent 自己的默认设置
+	Effort      string     `json:"effort,omitempty"`
 	Group       string     `json:"group,omitempty"` // 同一次派发给多个 agent 的任务共用
 	Status      string     `json:"status"`          // running | done | failed | stopped | exited | lost
 	Summary     string     `json:"summary,omitempty"`
@@ -59,6 +61,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 	workspace_id TEXT NOT NULL,
 	worker TEXT NOT NULL,
 	agent TEXT NOT NULL DEFAULT '',
+	model TEXT NOT NULL DEFAULT '',
+	effort TEXT NOT NULL DEFAULT '',
 	grp TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL,
 	summary TEXT NOT NULL DEFAULT '',
@@ -82,13 +86,13 @@ CREATE INDEX IF NOT EXISTS messages_task ON messages(task_id);
 CREATE INDEX IF NOT EXISTS messages_reply ON messages(reply_to);
 `
 
-const taskCols = `id,title,spec,coordinator,workspace_id,worker,agent,grp,status,summary,report,created_at,ended_at`
+const taskCols = `id,title,spec,coordinator,workspace_id,worker,agent,model,effort,grp,status,summary,report,created_at,ended_at`
 
 func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var created int64
 	var ended sql.NullInt64
-	err := row.Scan(&t.ID, &t.Title, &t.Spec, &t.Coordinator, &t.WorkspaceID, &t.Worker, &t.Agent, &t.Group,
+	err := row.Scan(&t.ID, &t.Title, &t.Spec, &t.Coordinator, &t.WorkspaceID, &t.Worker, &t.Agent, &t.Model, &t.Effort, &t.Group,
 		&t.Status, &t.Summary, &t.Report, &created, &ended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
@@ -102,8 +106,8 @@ func scanTask(row interface{ Scan(...any) error }) (Task, error) {
 }
 
 func (s *Store) AddTask(t Task) error {
-	_, err := s.db.Exec(`INSERT INTO tasks(`+taskCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
-		t.ID, t.Title, t.Spec, t.Coordinator, t.WorkspaceID, t.Worker, t.Agent, t.Group, t.Status, t.Summary, t.Report, ms(t.CreatedAt))
+	_, err := s.db.Exec(`INSERT INTO tasks(`+taskCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`,
+		t.ID, t.Title, t.Spec, t.Coordinator, t.WorkspaceID, t.Worker, t.Agent, t.Model, t.Effort, t.Group, t.Status, t.Summary, t.Report, ms(t.CreatedAt))
 	return err
 }
 

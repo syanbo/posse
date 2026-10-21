@@ -1,8 +1,10 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,5 +66,36 @@ func TestStore(t *testing.T) {
 	}
 	if _, err := s.Workspace(ws[0].ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("workspace survived project deletion: %v", err)
+	}
+}
+
+// 旧库的 tasks 表没有 model、effort 列，打开时补上，旧任务读出来为空
+func TestMigrateTaskModel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hive.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := strings.NewReplacer("\tmodel TEXT NOT NULL DEFAULT '',\n", "", "\teffort TEXT NOT NULL DEFAULT '',\n", "").Replace(taskSchema)
+	if _, err := db.Exec(old + `INSERT INTO tasks(id,title,spec,workspace_id,worker,status,created_at) VALUES('k_old','t','s','w','t_1','done',0)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	for range 2 {
+		s, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if task, err := s.Task("k_old"); err != nil || task.Model != "" {
+			t.Fatalf("old task %+v %v", task, err)
+		}
+		id := NewID("k_")
+		if err := s.AddTask(Task{ID: id, Title: "t", Spec: "s", WorkspaceID: "w", Worker: "t_2", Agent: "codex", Model: "gpt-5.5", Effort: "high", Status: TaskRunning}); err != nil {
+			t.Fatal(err)
+		}
+		if task, _ := s.Task(id); task.Model != "gpt-5.5" || task.Effort != "high" {
+			t.Fatalf("new task %+v", task)
+		}
+		s.Close()
 	}
 }

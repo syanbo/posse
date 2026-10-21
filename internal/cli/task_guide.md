@@ -7,13 +7,13 @@
 ## Pick your role
 
 - The user wants work supervised, parallelized or fanned out, with results coming back to you: you are the coordinator; use `hive task` as below.
-- The user only wants another agent to take something over: start it with `hive terminal create <workspace> --agent <name> --prompt "..."` or `hive workspace create <project> <name> --agent <name> --prompt "..."`. Create no task and do not wait for it.
+- The user only wants another agent to take something over: start it with `hive terminal create <workspace> --agent <name> --prompt "..."` or `hive workspace create <project> <name> --agent <name> --prompt "..."` (both also take `--model` and `--effort`, as below). Create no task and do not wait for it.
 - `HIVE_TASK_ID` is set: you are a worker. Follow the instructions you were started with; you may dispatch sub-workers only for work inside your own task.
 
 ## Dispatch
 
 ```sh
-hive task start --agent codex --title "short title" [--worktree <name>] --spec-file - <<'SPEC'
+hive task start --agent codex [--model <model>] [--effort <level>] --title "short title" [--worktree <name>] --spec-file - <<'SPEC'
 <self-contained task spec>
 SPEC
 ```
@@ -25,6 +25,15 @@ A spec must stand on its own; the worker cannot see your conversation. Name:
 - **Constraints:** what must stay true and what not to touch.
 - **Ownership:** which files the worker may edit.
 - **Acceptance:** the test, output or evidence that proves it is done.
+
+`--model` and `--effort` pick the worker's model and reasoning effort; leave them out and the agent uses its own defaults. Set them when the user names a model or effort, and otherwise only when the work clearly needs a stronger or a cheaper setting. Values go to the agent unchanged, so use its own names:
+
+- claude: `opus`, `sonnet`, `haiku` or a full model ID; effort `low`, `medium`, `high`, `xhigh` or `max`.
+- codex: an OpenAI model ID such as `gpt-5.5`; effort as in codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`.
+- grok: a model from `grok models`; effort as in grok's `--reasoning-effort`.
+- cursor: a model from `cursor-agent models`; `--effort` needs `--model` and becomes `<model>[effort=<level>]`.
+
+A wrong name usually makes the worker fail at startup; `hive task show <task>` then shows the agent's error.
 
 Start every independent task before you wait. Work with an order runs in waves: start the next wave after the one it depends on has settled. Parallel workers that edit code each get `--worktree <name>` (git projects only), so their edits never collide. Workers nest at most 3 deep; at the limit, do the work yourself. `--workspace <name>` starts a worker in another workspace.
 
@@ -50,12 +59,12 @@ A wait that times out or returns nothing is a checkpoint, not a failure: keep wa
 ```sh
 hive workspace diff <workspace>     # what a worktree worker changed
 hive workspace merge <workspace>    # merge its branch into the project directory (both sides must be clean)
-hive task retry <task>              # start a new worker with the same spec, agent and workspace
+hive task retry <task>              # start a new worker with the same spec, agent, model, effort and workspace
 hive task close <task>              # close the worker terminal; stops the task if it is still running
 hive task list                      # your tasks and their state
 hive task show <task>               # spec, messages, summary, worker screen
 ```
 
 1. For each `done`, check the evidence the spec asked for; for a worktree, read `workspace diff` before you merge.
-2. For `failed`, `exited` or `lost`, read the summary or the screen, then retry once with `hive task retry <task>` (add `--spec-file` to change the spec) or report it as unresolved. Never start an unrelated duplicate of a task.
+2. For `failed`, `exited` or `lost`, read the summary or the screen, then retry once with `hive task retry <task>` (add `--spec-file` to change the spec, `--model` or `--effort` to change the setting) or report it as unresolved. Never start an unrelated duplicate of a task.
 3. Close each worker once you have accepted its result, unless the user wants to keep it; say which ones you kept and why.

@@ -17,7 +17,7 @@ func TestPermissionArgs(t *testing.T) {
 		"grok":   " --permission-mode bypassPermissions",
 		"cursor": " --yolo",
 	} {
-		r, err := l.Launch(name, "do it")
+		r, err := l.Launch(name, Model{}, "do it")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func TestPermissionArgs(t *testing.T) {
 	if m := PermissionMode(l.Home); m != PermissionAsk {
 		t.Fatalf("mode %q after set", m)
 	}
-	r, _ = l.Launch("claude", "")
+	r, _ = l.Launch("claude", Model{}, "")
 	if cmd := r.Argv[len(r.Argv)-1]; strings.Contains(cmd, "dangerously") {
 		t.Errorf("ask mode still skips: %q", cmd)
 	}

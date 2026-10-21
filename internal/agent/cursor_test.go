@@ -12,7 +12,7 @@ import (
 func TestCursorPlugin(t *testing.T) {
 	l := Launcher{Exe: "/Applications/Hive.app/Contents/MacOS/Hive", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
-	r, err := l.Launch("cursor", "do it")
+	r, err := l.Launch("cursor", Model{}, "do it")
 	if err != nil {
 		t.Fatal(err)
 	}

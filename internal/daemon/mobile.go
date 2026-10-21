@@ -110,7 +110,7 @@ func (h mobileHost) CreateTerminal(workspaceID, agentName, prompt, command strin
 	}
 	var s *session
 	if agentName != "" {
-		s, err = h.d.startAgent(w, agentName, prompt, 0, 0)
+		s, err = h.d.startAgent(w, agentName, agent.Model{}, prompt, 0, 0)
 	} else {
 		s, err = h.d.startTerminal(w, agent.ShellArgv(command), "", 0, 0)
 	}

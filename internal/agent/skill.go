@@ -16,7 +16,7 @@ import (
 
 const (
 	SkillName        = "hive-tasks"
-	SkillDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Hive terminals and coordinate them with `hive task`: start workers, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Hive (HIVE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
+	SkillDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Hive terminals and coordinate them with `hive task`: start workers with a chosen model and reasoning effort, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Hive (HIVE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
 	skillBody        = "Before running any `hive task` command, run `hive task guide` and follow it: it is the guide for this exact hive version.\n"
 	// guideHint 是给 Codex、Grok 的附加指令
 	guideHint = "You are running in a Hive terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `hive task guide`, then coordinate them with `hive task` as it says. " +

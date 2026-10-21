@@ -24,14 +24,14 @@ type taskMessage struct {
 }
 
 type taskInfo struct {
-	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Group, Status, Summary, Report string
-	Workspace, WorkspaceKind, Branch, BaseRef                                                string
-	CreatedAt                                                                                time.Time
-	EndedAt                                                                                  *time.Time
-	Terminal                                                                                 *terminalInfo
-	Questions                                                                                int
-	Messages                                                                                 []taskMessage
-	Screen                                                                                   []string
+	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Model, Effort, Group, Status, Summary, Report string
+	Workspace, WorkspaceKind, Branch, BaseRef                                                               string
+	CreatedAt                                                                                               time.Time
+	EndedAt                                                                                                 *time.Time
+	Terminal                                                                                                *terminalInfo
+	Questions                                                                                               int
+	Messages                                                                                                []taskMessage
+	Screen                                                                                                  []string
 }
 
 type inboxItem struct {
@@ -45,6 +45,8 @@ func caller() string { return os.Getenv("HIVE_TERMINAL_ID") }
 func cmdTaskStart(e *env, args []string) error {
 	fs := flag.NewFlagSet("task start", flag.ContinueOnError)
 	agentName := fs.String("agent", "", "")
+	model := fs.String("model", "", "")
+	effort := fs.String("effort", "", "")
 	title := fs.String("title", "", "")
 	spec := fs.String("spec", "", "")
 	specFile := fs.String("spec-file", "", "")
@@ -63,7 +65,7 @@ func cmdTaskStart(e *env, args []string) error {
 		text = strings.Join(pos, " ")
 	}
 	cwd, _ := os.Getwd()
-	params := map[string]any{"caller": caller(), "cwd": cwd, "agent": *agentName, "command": command, "title": *title,
+	params := map[string]any{"caller": caller(), "cwd": cwd, "agent": *agentName, "model": *model, "effort": *effort, "command": command, "title": *title,
 		"spec": text, "workspace": *ws, "worktree": *worktree, "base": *base}
 	var t taskInfo
 	return e.do("task.start", params, &t, func() { e.printStarted(t) })
@@ -85,8 +87,8 @@ func readSpec(spec, file string) (string, error) {
 }
 
 func (e *env) printStarted(t taskInfo) {
-	who := t.Agent
-	if who == "" {
+	who := agentLabel(t)
+	if who == "-" {
 		who = "worker"
 	}
 	fmt.Fprintf(e.out, "started task %s: %s in %s (terminal %s)\n", t.ID, who, t.Workspace, t.Worker)
@@ -99,9 +101,23 @@ func (e *env) printStarted(t taskInfo) {
 // retryable 是可以重试的任务状态：worker 已经确定不在做了。
 var retryable = []string{"failed", "exited", "lost", "stopped"}
 
-// cmdTaskRetry 用原任务的说明、agent 和工作区重新派发；在客户端组合 show 和 start，不改常驻进程。
+// agentLabel 是 agent 名，带上指定的模型和思考深度，如 codex:gpt-5.5/high。
+func agentLabel(t taskInfo) string {
+	s := dash(t.Agent)
+	if t.Model != "" {
+		s += ":" + t.Model
+	}
+	if t.Effort != "" {
+		s += "/" + t.Effort
+	}
+	return s
+}
+
+// cmdTaskRetry 用原任务的说明、agent、模型和工作区重新派发；在客户端组合 show 和 start，不改常驻进程。
 func cmdTaskRetry(e *env, args []string) error {
 	fs := flag.NewFlagSet("task retry", flag.ContinueOnError)
+	model := fs.String("model", "", "")
+	effort := fs.String("effort", "", "")
 	spec := fs.String("spec", "", "")
 	specFile := fs.String("spec-file", "", "")
 	pos, err := parse(fs, args)
@@ -115,7 +131,7 @@ func cmdTaskRetry(e *env, args []string) error {
 	if err := e.call("task.show", map[string]any{"task": pos[0], "caller": caller()}, &old); err != nil {
 		return err
 	}
-	params, err := retryParams(old, *spec, *specFile)
+	params, err := retryParams(old, *model, *effort, *spec, *specFile)
 	if err != nil {
 		return err
 	}
@@ -126,7 +142,7 @@ func cmdTaskRetry(e *env, args []string) error {
 	})
 }
 
-func retryParams(old taskInfo, spec, specFile string) (map[string]any, error) {
+func retryParams(old taskInfo, model, effort, spec, specFile string) (map[string]any, error) {
 	if !slices.Contains(retryable, old.Status) {
 		return nil, fmt.Errorf("task %s is %s; only %s tasks can be retried", old.ID, old.Status, strings.Join(retryable, ", "))
 	}
@@ -144,8 +160,15 @@ func retryParams(old taskInfo, spec, specFile string) (map[string]any, error) {
 	if !strings.HasSuffix(title, " (retry)") {
 		title += " (retry)"
 	}
+	// 只换模型时沿用原来的思考深度，换不同家的模型时可能要一起改
+	if model == "" {
+		model = old.Model
+	}
+	if effort == "" {
+		effort = old.Effort
+	}
 	cwd, _ := os.Getwd()
-	return map[string]any{"caller": caller(), "cwd": cwd, "agent": old.Agent, "title": title, "spec": text, "workspace": old.WorkspaceID}, nil
+	return map[string]any{"caller": caller(), "cwd": cwd, "agent": old.Agent, "model": model, "effort": effort, "title": title, "spec": text, "workspace": old.WorkspaceID}, nil
 }
 
 // splitCommand 把 "--" 之后的部分当作 worker 要运行的命令，之前的照常解析。
@@ -176,7 +199,7 @@ func cmdTaskList(e *env, args []string) error {
 		w := e.table()
 		fmt.Fprintln(w, "TASK\tSTATUS\tAGENT\tWORKSPACE\tAGE\tTITLE")
 		for _, t := range ts {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", t.ID, taskState(t), dash(t.Agent), t.Workspace, age(t.CreatedAt), t.Title)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", t.ID, taskState(t), agentLabel(t), t.Workspace, age(t.CreatedAt), t.Title)
 		}
 		w.Flush()
 	})
@@ -218,7 +241,7 @@ func cmdTaskShow(e *env, args []string) error {
 	}
 	var t taskInfo
 	return e.do("task.show", map[string]any{"task": first(pos), "caller": caller()}, &t, func() {
-		fmt.Fprintf(e.out, "%s  %s  %s  %s  worker %s", t.ID, taskState(t), dash(t.Agent), t.Workspace, t.Worker)
+		fmt.Fprintf(e.out, "%s  %s  %s  %s  worker %s", t.ID, taskState(t), agentLabel(t), t.Workspace, t.Worker)
 		if t.Terminal == nil {
 			fmt.Fprint(e.out, " (closed)")
 		}
