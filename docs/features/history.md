@@ -15,3 +15,4 @@
   - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
 - 历史页列表顶上是总计（会话数、消息数、各 agent 会话数，取自 `history.list` 带回的 `status`）。详情里的路径点一下在访达中打开；"上下文 N%"是最后一次请求占的上下文，由窗口进程从会话文件末尾往前读（`history.ReadContext`）：Codex 取 `token_count` 的 `last_token_usage` 和 `model_context_window`；Claude 取最后一条助手消息的 usage（输入、缓存、输出相加），文件里没有窗口大小，按模型推断（Claude 5 起的 Opus、Sonnet 和带 `[1m]` 的是 100 万，其余 20 万，用量超过 20 万的算 100 万）；Grok 只有每轮累计、Cursor 没有记录，不显示。
+- 历史页顶栏的文件夹按钮（`historyDirFilter`）列出侧栏里的项目，选一个只看在它目录（含子目录）里开的会话，搜索也只在里面找；用的是 `history.list`、`history.search` 已有的 `cwd` 参数，不记进 ui.json。

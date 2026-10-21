@@ -7,6 +7,7 @@
   "out": "build",
   "macos": {
     "minimumSystemVersion": "13.0",
-    "signingIdentity": "EE5067D60707FF9D6DA346401A64E3911EA0006D"
+    "signingIdentity": "EE5067D60707FF9D6DA346401A64E3911EA0006D",
+    "icon": "design/Hive.icon"
   }
 }

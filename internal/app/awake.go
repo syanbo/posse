@@ -18,8 +18,8 @@ type awakeStatus struct {
 // short 是底栏按钮上的字，item 是菜单项，seg 是设置页分段按钮上的字（菜单项太长放不下）。
 var awakeModes = []struct{ mode, short, item, seg string }{
 	{"off", "关闭", "关闭", "关闭"},
-	{"auto", "自动", "agent 工作时", "agent 工作时"},
-	{"display", "亮屏", "agent 工作时，屏幕也亮", "工作时亮屏"},
+	{"auto", "自动", "Agent 工作时", "Agent 工作时"},
+	{"display", "亮屏", "Agent 工作时，屏幕也亮", "工作时亮屏"},
 	{"on", "始终", "始终", "始终"},
 }
 

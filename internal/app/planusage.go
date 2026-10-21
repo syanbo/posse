@@ -116,7 +116,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		}
 	}
 	if len(shown) == 0 {
-		ui.Text(c, "agent 运行后在这里显示套餐用量").FontSize(11).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
+		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(11).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
 		return
 	}
 	b := ui.Row(c.Key("plan")).Height(26).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
@@ -166,12 +166,16 @@ func planWindows(u usage.Usage) []usage.Window {
 }
 
 // headWindow 是状态栏里代表这一家的窗口：总额度里有 5 小时就是它；只有分池时取用得最多的一池，否则是第一个。
+// Claude 的套餐都有 5 小时窗口，读数里没有就是这个窗口里还没用过，照样写 5 小时，不换成每周。
 func headWindow(u usage.Usage) usage.Window {
 	ws := planWindows(u)
 	for _, w := range ws {
 		if w.Name == "" && windowLabel(w.Minutes) == "5 小时" {
 			return w
 		}
+	}
+	if u.Agent == "claude" {
+		return usage.Window{Minutes: 300}
 	}
 	head := ws[0]
 	if head.Name != "" {
@@ -342,7 +346,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 				}
 			})
 		}
-		ui.Text(c, "agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。").
+		ui.Text(c, "Agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。").
 			FontSize(11).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }

@@ -145,11 +145,35 @@ var popInFrames = []ui.Keyframe{{At: 0, Value: 0}, {At: 160 * time.Millisecond, 
 // fieldInput 是放在框里（浮层、对话框、卡片）的单行输入：填充底、不加框，聚焦时描焦点色。
 // 返回里面的输入框，调用方照常问 Submitted、Changed、Shortcut。
 func fieldInput(c *ui.Context, value *string, placeholder string) ui.Element {
+	return fieldInputWidth(c, value, placeholder, 0)
+}
+
+// fieldInputWidth 是定宽的 fieldInput，放在一行里用；width 为 0 时随父容器。
+// 所有输入框都是这一种样子（填充底、不画框，聚焦时一圈强调色），和标签改名的输入框一致，
+// 不用 mygo 自带的 TextInput、TextArea（白底灰框、聚焦时整条强调色框）。
+func fieldInputWidth(c *ui.Context, value *string, placeholder string, width float32) ui.Element {
 	t := c.Theme()
 	box := ui.Row(c).Height(30).Padding(0, 10).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
+	if width > 0 {
+		box.Width(width).Shrink(0)
+	}
 	var in ui.Element
 	box.Children(func() {
 		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Grow(1)
+	})
+	if in.Focused() {
+		box.Border(1, t.Focus)
+	}
+	return in
+}
+
+// fieldArea 是多行的 fieldInput，height 是文字区的高度。
+func fieldArea(c *ui.Context, value *string, placeholder string, height float32) ui.Element {
+	t := c.Theme()
+	box := ui.Column(c).Padding(7, 10).Radius(rInput).Background(colors(t).fill)
+	var in ui.Element
+	box.Children(func() {
+		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Height(height)
 	})
 	if in.Focused() {
 		box.Border(1, t.Focus)
@@ -370,8 +394,10 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 	changed := false
 	ui.Row(c).Padding(2).Gap(2).Radius(rInput).Background(p.fill).Shrink(0).Label(label).Role(ui.RoleRadioGroup).Children(func() {
 		for i, o := range options {
-			// 被拉宽时（对话框里）各段平分宽度
-			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(24).Padding(0, 12).Grow(1).Shrink(0).Radius(6).Center().Label(o).Role(ui.RoleRadio).Checked(i == *sel)
+			// 被拉宽时（对话框里）各段平分多出来的宽度；Grow 会把起始宽度设成 0，
+			// 字长的一段（"只建工作区"）要按字宽给够，不然被截成省略号
+			tw, _ := c.MeasureText(0, ui.Span{Text: o, Size: 12})
+			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(24).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(o).Role(ui.RoleRadio).Checked(i == *sel)
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
@@ -382,7 +408,7 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 			}
 			seg.Background(seg.AnimateColor("bg", bg, hover))
 			seg.Children(func() {
-				text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0)
+				text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0).SingleLine()
 				if i == *sel {
 					text.FontWeight(500)
 				}

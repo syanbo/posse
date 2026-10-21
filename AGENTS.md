@@ -18,7 +18,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 界面约定见 `internal/app/style.go` 开头和 `docs/features/ui.md`（参照 Claude 桌面端的克制，依据见 `docs/plans/ui-claude-polish.html`）。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。mygo 会把字重取整到固定档位，别指望细调字重。
 - `mygo.json` 用开发证书签名（`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
-- 应用图标是 `design/icon.png`（由 `design/icon-art.png` 套 macOS 图标模板的圆角和投影得到），`mygo.json` 的 `icon` 指向它。不要放进 `resources/`：那里的文件会原样打进 app。
+- 应用图标的原图是 `design/icon-art.png`（满版、不带圆角）。桌面端用 Icon Composer 文档 `design/Hive.icon`（`mygo.json` 的 `macos.icon`，里面一层就是这张图，关了玻璃、高光和阴影），由 Xcode 的 actool 编成 Assets.car，圆角由系统画、和别的 App 一样大：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 是同一张图，只在编不了 .icon 时用。手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 直接由原图缩放。旧版图标留在 `design/old-icon/`。不要放进 `resources/`：那里的文件会原样打进 app。
 - 测试 Hive.app 时用 `open -n --env HIVE_HOME=/tmp/hive-e2e/home build/darwin-arm64/Hive.app` 启动。直接运行包内二进制时，Computer Use 按 bundle id 连接会经 LaunchServices 另起一个不带 `HIVE_HOME` 的实例，误用 `~/.hive`；同时开着两份包时按 .app 路径连接也一样，测试包比常驻进程新时它还会把日常的常驻进程交接到测试包上（用 build 里的包 `hive daemon handoff` 换回来）。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 

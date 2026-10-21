@@ -153,6 +153,7 @@ type app struct {
 	// 任务总览
 	taskHome  bool                     // 只要总览：不自动打开上次看的任务
 	taskSel   string                   // 选中的任务 ID
+	lastWS    string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
 	detail    *taskDetail              // 选中任务的消息等完整内容
 	diffs     map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
 	replyText string
@@ -229,6 +230,7 @@ type app struct {
 	overPanelButton bool
 	resizingPanel   bool    // 正在拖文件栏的左边缘，松手时写 ui.json
 	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
+	resizingSplit   string  // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
 	resizingCompare bool    // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
@@ -339,7 +341,6 @@ func Run(c *client.Client) error {
 			TitleBarStyle: mygo.TitleBarHidden,
 			// 红绿灯在 40 高的顶栏里上下居中，和右边的应用名、侧栏开关、标签对齐（照 Orca）
 			TrafficLightPosition: &mygo.Point{X: 16, Y: 13},
-			Vibrancy:             mygo.VibrancySidebar,
 			Content:              ui.View(a.build),
 		})
 		a.watchClose()
@@ -561,7 +562,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 		}
 	}
 	// 只在选中的工作区被删掉时换到第一个；任务、历史、手机和设置不是工作区，要保留
-	if a.selected != taskBoardID && a.selected != historyBoardID && a.selected != mobileBoardID && a.selected != settingsBoardID && a.workspace(a.selected) == nil && len(ws) > 0 {
+	if !isBoard(a.selected) && a.workspace(a.selected) == nil && len(ws) > 0 {
 		a.selected, a.revealSel = ws[0].ID, true
 	}
 	a.migratePanels()
@@ -719,6 +720,10 @@ func (a *app) installMenu() {
 
 // closeTab 是 ⌘W：文件标签里关当前文件（没有文件时回到终端），否则关当前终端（先问）。
 func (a *app) closeTab() {
+	if isBoard(a.selected) {
+		a.closeBoard()
+		return
+	}
 	w := a.workspace(a.selected)
 	if a.filesActive(w) {
 		if v := a.filesFor(w); v.cur != nil {

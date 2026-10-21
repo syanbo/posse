@@ -407,6 +407,43 @@ func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
 
 // --- 日志界面
 
+// pane 是能拖分栏线调宽的一栏：默认宽度和上下限。
+type pane struct{ def, lo, hi float32 }
+
+var (
+	logRefsPane   = pane{220, 160, 480}
+	logDetailPane = pane{340, 260, 640}
+)
+
+func paneWidth(w float32, p pane) float32 {
+	if w == 0 {
+		w = p.def
+	}
+	return min(max(w, p.lo), p.hi)
+}
+
+// paneDivider 是两栏之间的分栏线，左右拖调宽 width 那一栏，松手才写 ui.json。
+// dir 是那一栏在线的哪边：1 是左边（往右拖变宽），-1 是右边。
+func (a *app) paneDivider(c *ui.Context, key string, width *float32, p pane, dir float32) {
+	line := colors(c.Theme()).line
+	ui.Box(c).Width(1).Shrink(0).Background(line).Children(func() {
+		grip := ui.Box(c.Key(key)).Absolute().Top(0).Bottom(0).Left(-3).Width(7).Cursor(ui.CursorResizeEW)
+		if dx, _, held := grip.Dragged(); held {
+			*width = min(max(paneWidth(*width, p)+dir*dx, p.lo), p.hi)
+			a.resizingSplit = key
+		} else if a.resizingSplit == key {
+			a.resizingSplit = ""
+			a.saveState()
+		}
+		if grip.Hovered() || a.resizingSplit == key {
+			accent := c.Theme().Accent
+			grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+				pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y, W: 2, H: r.H}, accent, 0)
+			})
+		}
+	})
+}
+
 // logView 是日志标签页：左边分支树，右边筛选栏、提交列表和选中提交的详情。
 func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	if d.log.filter.Path != "" {
@@ -415,8 +452,8 @@ func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	}
 	p := colors(c.Theme())
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(220).Shrink(0).Background(p.band).Children(func() { a.logRefs(c, v, d) })
-		ui.Box(c).Width(1).Shrink(0).Background(p.line)
+		ui.Column(c).Width(paneWidth(a.state.LogRefsWidth, logRefsPane)).Shrink(0).Background(p.band).Children(func() { a.logRefs(c, v, d) })
+		a.paneDivider(c, "log-refs-grip", &a.state.LogRefsWidth, logRefsPane, 1)
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			a.logFilterBar(c, v, d)
 			ui.Box(c).Height(1).Shrink(0).Background(p.line)
@@ -428,7 +465,6 @@ func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 // logList 是提交列表和右边选中提交的详情。
 func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
-	p := colors(t)
 	ld := d.log
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
@@ -494,8 +530,8 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 		})
 		if ld.commit != nil {
-			ui.Box(c).Width(1).Shrink(0).Background(p.line)
-			ui.Column(c).Width(340).Shrink(0).Children(func() { a.commitDetail(c, w, v, ld.commit) })
+			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
+			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, ld.commit) })
 		}
 	})
 }
@@ -505,11 +541,11 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	ld := d.log
 	ui.Row(c).Height(40).Shrink(0).Padding(0, 10, 0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		text := ui.TextInput(c, &ld.text).Placeholder("提交信息或哈希").Label("按提交信息或哈希筛选").Width(220)
+		text := fieldInputWidth(c, &ld.text, "提交信息或哈希", 220).Label("按提交信息或哈希筛选")
 		if text.Changed() || text.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		author := ui.TextInput(c.Key("author"), &ld.author).Placeholder("作者").Label("按作者筛选").Width(120)
+		author := fieldInputWidth(c.Key("author"), &ld.author, "作者", 120).Label("按作者筛选")
 		if author.Changed() || author.Submitted() {
 			a.applyLogFilter(v, d)
 		}
@@ -895,8 +931,8 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			})
 		}).Grow(1)
 		if bd.sel != nil {
-			ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
-			ui.Column(c).Width(340).Shrink(0).Children(func() { a.commitDetail(c, w, v, bd.sel) })
+			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
+			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, bd.sel) })
 		}
 	})
 }

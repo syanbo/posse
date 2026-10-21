@@ -65,9 +65,9 @@ type Usage struct {
 
 // merge 把新读数并进旧的：总额度取较新的一份，分池和各项各取较新的。
 func merge(old, in Usage) Usage {
-	main := in
+	main, other := in, old
 	if in.UpdatedAt < old.UpdatedAt {
-		main = old
+		main, other = old, in
 	}
 	out := Usage{Agent: main.Agent, Plan: main.Plan, Spend: main.Spend, UpdatedAt: main.UpdatedAt}
 	// 有的来源不带套餐名（Claude 的 statusLine），较新的读数没有时沿用旧的
@@ -78,6 +78,22 @@ func merge(old, in Usage) Usage {
 		if w.Name == "" {
 			out.Windows = append(out.Windows, w)
 		}
+	}
+	// Claude 的读数有时不带 5 小时窗口（刚重置、这个窗口里还没用过），只看较新的一份，状态栏会在
+	// 5 小时和每周之间来回跳。较旧的一份里有、这份没有的总额度窗口沿用，已过重置时间的算清零。
+	for _, w := range other.Windows {
+		if main.Agent != "claude" || w.Name != "" || slices.ContainsFunc(out.Windows, func(x Window) bool { return x.Name == "" && x.Minutes == w.Minutes }) {
+			continue
+		}
+		if w.ResetsAt != 0 && w.ResetsAt <= main.UpdatedAt {
+			w.Percent, w.ResetsAt = 0, 0
+		}
+		// 按窗口长短插回去，5 小时仍在每周前面
+		i := slices.IndexFunc(out.Windows, func(x Window) bool { return x.Name == "" && x.Minutes > w.Minutes })
+		if i < 0 {
+			i = len(out.Windows)
+		}
+		out.Windows = slices.Insert(out.Windows, i, w)
 	}
 	at := func(t, base int64) int64 {
 		if t == 0 {

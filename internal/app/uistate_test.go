@@ -1,6 +1,8 @@
 package app
 
 import (
+	"hive/internal/history"
+
 	"os"
 	"slices"
 	"testing"
@@ -254,5 +256,51 @@ func TestRightPanelDismiss(t *testing.T) {
 	tt.Frame()
 	if a.state.RightPanel != panelUsage {
 		t.Fatal("click inside closed the panel")
+	}
+}
+
+// 任务、历史、手机、设置页右上角的关闭回到上次看的工作区，⌘W 也一样；历史页的内容一起放掉。
+func TestCloseBoard(t *testing.T) {
+	a := previewApp(t)
+	a.home = t.TempDir()
+	// 回到有终端的工作区会去接常驻进程，预览里没有，从一个没终端的工作区开始
+	for _, w := range a.workspaces {
+		if len(w.Terminals) == 0 {
+			a.selected = w.ID
+			break
+		}
+	}
+	tt := newPreviewTester(a, true)
+	start := a.selected
+	for _, open := range []func(){
+		// 预览里没有常驻进程：先当作已经在看，不触发去读
+		func() {
+			a.history.visible = true
+			a.selected = historyBoardID
+			a.history.setSessions([]history.Session{{ID: "s"}})
+		},
+		func() { a.tasks, a.sorted, a.selected = nil, nil, taskBoardID },
+		func() { a.mobile.shown, a.mobile.loadedAt, a.selected = true, time.Now(), mobileBoardID },
+		func() { a.openSettings() },
+	} {
+		open()
+		tt.Frame()
+		if err := tt.Click("关闭 ⌘W"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+		if a.selected != start {
+			t.Fatalf("after close selected = %q, want %q", a.selected, start)
+		}
+	}
+	if a.history.sessions != nil {
+		t.Fatal("history sessions kept after close")
+	}
+	a.openSettings()
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyW)
+	tt.Frame()
+	if a.selected != start {
+		t.Fatalf("⌘W left selected = %q", a.selected)
 	}
 }

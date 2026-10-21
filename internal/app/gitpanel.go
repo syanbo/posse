@@ -513,7 +513,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	}
 	ui.Box(c).Height(1).Shrink(0).Background(p.line)
 	ui.Column(c).Shrink(0).Padding(10).Gap(8).Children(func() {
-		msg := ui.TextArea(c, &g.message).Placeholder("提交信息").Label("提交信息").Height(72).FontSize(12.5)
+		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(12.5)
 		if g.focusMsg {
 			msg.Focus()
 			g.focusMsg = false

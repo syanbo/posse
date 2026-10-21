@@ -266,6 +266,8 @@ func (a *app) mobileBoard(c *ui.Context) {
 	a.pollMobile(c)
 	a.band(c, func() {
 		titleText(c, "手机", fsCardTitle)
+		ui.Spacer(c)
+		a.closeBoardButton(c)
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {

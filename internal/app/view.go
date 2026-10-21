@@ -38,6 +38,9 @@ func (a *app) build(c *ui.Context) {
 		a.saveState()
 	}
 	w := a.workspace(a.selected)
+	if w != nil {
+		a.lastWS = w.ID
+	}
 	cur := a.currentTerminal(w)
 	if cur != nil {
 		a.ensureView(cur.ID)
@@ -53,10 +56,6 @@ func (a *app) build(c *ui.Context) {
 	}
 	a.dirtyCount.Store(int32(len(a.dirtyDocs())))
 
-	vibrant := c.Vibrancy()
-	if vibrant {
-		c.Root().Background(ui.Transparent)
-	}
 	a.imagesDrawn = false
 	root := ui.Row(c).Fill().AlignItems(ui.Stretch)
 	// 收起、展开时侧栏从左边缘滑出滑进。主区域只在展开开始、收起结束时改一次宽度，
@@ -69,17 +68,9 @@ func (a *app) build(c *ui.Context) {
 	root.Children(func() {
 		if a.sidebarSlot() {
 			width := a.sidebarWidth() + 1
-			slot := ui.Box(c).Width(width).Shrink(0).Clip()
-			if !vibrant {
-				slot.Background(p.side)
-			}
-			slot.Children(func() {
+			ui.Box(c).Width(width).Shrink(0).Clip().Background(p.side).Children(func() {
 				ui.Row(c).Absolute().Top(0).Bottom(0).Left(-(1 - a.sidebarShown) * width).Width(width).AlignItems(ui.Stretch).Children(func() {
-					side := ui.Column(c).Width(a.sidebarWidth()).Shrink(0)
-					if !vibrant {
-						side.Background(p.side)
-					}
-					side.Children(func() { a.sidebar(c) })
+					ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Background(p.side).Children(func() { a.sidebar(c) })
 					ui.Box(c).Width(1).Shrink(0).Background(p.line)
 				})
 			})
@@ -107,10 +98,13 @@ func (a *app) build(c *ui.Context) {
 			a.sidebarGrip(c)
 		}
 	})
-	// 应用名和侧栏开关固定在红绿灯右边，不跟着侧栏滑动，收起、展开都在同一个位置（照 Orca）
+	// 应用名固定在红绿灯右边，不跟着侧栏滑动。侧栏开关展开时在侧栏顶栏最右边，
+	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
 		titleText(c, "Hive", 14).Width(appNameWidth).Shrink(0)
-		a.sidebarButton(c)
+		if !a.sidebarSlot() {
+			a.sidebarButton(c)
+		}
 	})
 	// 图片面板这一帧没画（收起了、换到别的页面或普通终端）就放掉位图
 	if !a.imagesDrawn && a.images.term != "" {
@@ -221,6 +215,39 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 }
 
+// isBoard 报告选中的是不是任务、历史、手机、设置这几个不属于工作区的页面。
+func isBoard(id string) bool {
+	return id == taskBoardID || id == historyBoardID || id == mobileBoardID || id == settingsBoardID
+}
+
+// closeBoard 关掉当前的任务、历史、手机或设置页，回到上次看的工作区，放掉页面读进来的内容；
+// 再打开时重新读。
+func (a *app) closeBoard() {
+	switch a.selected {
+	case historyBoardID:
+		a.releaseHistory()
+	case taskBoardID:
+		a.detail, a.taskSel, a.taskHome = nil, "", false
+	case mobileBoardID:
+		a.mobile.devices = nil
+	}
+	next := a.lastWS
+	if a.workspace(next) == nil {
+		next = ""
+		if len(a.workspaces) > 0 {
+			next = a.workspaces[0].ID
+		}
+	}
+	a.selected, a.revealSel = next, true
+}
+
+// closeBoardButton 是页面顶栏最右边的关闭按钮。
+func (a *app) closeBoardButton(c *ui.Context) {
+	if iconButton(c.Key("close-board"), iconClose, "关闭 ⌘W").Clicked() {
+		a.closeBoard()
+	}
+}
+
 // 侧栏的宽度，拖右边缘调整。
 const (
 	sidebarDefault = 248
@@ -241,13 +268,12 @@ func (a *app) toggleSidebar() {
 	a.saveState()
 }
 
-// sidebarButton 是收起、展开侧栏的开关，在红绿灯右边，两种状态下位置不变。
+// sidebarButton 是收起、展开侧栏的开关。
 func (a *app) sidebarButton(c *ui.Context) {
 	label := "收起侧栏 ⌘B"
 	if a.state.SidebarHidden {
 		label = "展开侧栏 ⌘B"
 	}
-	// 和侧栏顶栏右边的设置按钮一样大
 	if iconButton(c.Key("sidebar-toggle"), iconPanelLeft, label).Clicked() {
 		a.toggleSidebar()
 	}
@@ -301,12 +327,10 @@ func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
-		// 应用名和侧栏开关浮在这里（见 build），留出它们的位置
-		ui.Box(c).Width(titleLead).Shrink(0)
+		// 应用名浮在这里（见 build），留出它的位置
+		ui.Box(c).Width(appNameWidth).Shrink(0)
 		ui.Spacer(c)
-		if pressable(iconButton(c, iconSettings, "设置 ⌘,")).Tooltip("设置 ⌘,").Clicked() {
-			a.openSettings()
-		}
+		a.sidebarButton(c)
 	})
 	if !a.loaded {
 		msg, color := "正在连接常驻进程…", t.TextMuted
@@ -945,6 +969,10 @@ func (a *app) footer(c *ui.Context) {
 				a.openMobile()
 			}
 		})
+		ui.Spacer(c)
+		if pressable(iconButtonSized(c, iconSettings, "设置 ⌘,", 24, 14)).Tooltip("设置 ⌘,").Clicked() {
+			a.openSettings()
+		}
 	})
 }
 
@@ -1806,10 +1834,10 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 				}
 				ui.Text(c, hint).FontSize(12).TextColor(t.TextMuted)
 			})
-			submitted := ui.TextInput(c, &a.newName).Placeholder("名称，比如 feat-login").AutoFocus().Submitted()
+			submitted := fieldInput(c, &a.newName, "名称，比如 feat-login").AutoFocus().Submitted()
 			segmented(c, &a.newAgent, "同时启动", newAgentLabels...)
 			if a.newAgent != 0 {
-				if ui.TextInput(c, &a.newPrompt).Placeholder("交给 agent 的任务（可留空）").Submitted() {
+				if fieldInput(c.Key("prompt"), &a.newPrompt, "交给 agent 的任务（可留空）").Submitted() {
 					submitted = true
 				}
 			}

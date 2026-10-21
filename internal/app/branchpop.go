@@ -781,7 +781,7 @@ func (a *app) promptDialog(c *ui.Context) {
 			}
 			var submitted bool
 			if p.multiline {
-				ui.TextArea(c, &p.value).Label(p.title).AutoFocus().Height(120).FontSize(12.5)
+				fieldArea(c, &p.value, p.placeholder, 106).Label(p.title).AutoFocus().FontSize(12.5)
 			} else {
 				submitted = fieldInput(c, &p.value, p.placeholder).AutoFocus().Submitted()
 			}

@@ -224,6 +224,22 @@ func TestMergeKeepsScopedWindows(t *testing.T) {
 	}
 }
 
+// 新读数没带 5 小时窗口时沿用旧的，已过重置时间的算清零；位置仍在每周前面。
+func TestMergeKeepsFiveHour(t *testing.T) {
+	s := Open(t.TempDir())
+	s.Update(Usage{Agent: "claude", UpdatedAt: 1000, Windows: []Window{{Percent: 52, Minutes: 300, ResetsAt: 9000}, {Percent: 40, Minutes: 10080}}})
+	s.Update(Usage{Agent: "claude", UpdatedAt: 5000, Windows: []Window{{Percent: 41, Minutes: 10080}}})
+	u := s.List(time.UnixMilli(6000))[0]
+	if len(u.Windows) != 2 || u.Windows[0].Minutes != 300 || u.Windows[0].Percent != 52 || u.Windows[1].Percent != 41 {
+		t.Fatalf("got %+v", u.Windows)
+	}
+	s.Update(Usage{Agent: "claude", UpdatedAt: 10000, Windows: []Window{{Percent: 42, Minutes: 10080}}})
+	u = s.List(time.UnixMilli(11000))[0]
+	if w := u.Windows[0]; w.Minutes != 300 || w.Percent != 0 || w.ResetsAt != 0 {
+		t.Fatalf("after reset %+v", u.Windows)
+	}
+}
+
 func TestCursorPools(t *testing.T) {
 	raw := `{"billingCycleStart":"1790812800000","billingCycleEnd":"1793491200000","planUsage":{"totalSpend":4110,"limit":40000,"autoPercentUsed":2.5,"apiPercentUsed":18.2,"totalPercentUsed":10.3},"spendLimitUsage":{"individualUsed":250,"individualLimit":2000}}`
 	u, ok := cursorUsage([]byte(raw), time.UnixMilli(1792430000000))

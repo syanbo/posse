@@ -25,6 +25,8 @@ func (a *app) openSettings() {
 func (a *app) settingsBoard(c *ui.Context) {
 	a.band(c, func() {
 		titleText(c, "设置", fsCardTitle)
+		ui.Spacer(c)
+		a.closeBoardButton(c)
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
@@ -62,7 +64,7 @@ func settingsRow(c *ui.Context, label string, right func()) {
 
 func (a *app) awakeSettings(c *ui.Context) {
 	st := a.daemon.Awake
-	settingsCard(c, "防休眠", "agent 工作时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「工作时亮屏」给操作桌面界面的 agent 用：屏幕熄了会跟着锁屏。", func() {
+	settingsCard(c, "防休眠", "Agent 工作时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「工作时亮屏」给操作桌面界面的 agent 用：屏幕熄了会跟着锁屏。", func() {
 		if st == nil {
 			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
 			return
@@ -88,7 +90,7 @@ var permissionModes = []struct{ mode, seg, tip string }{
 }
 
 func (a *app) permissionSettings(c *ui.Context) {
-	settingsCard(c, "agent 权限", "在 Hive 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
+	settingsCard(c, "Agent 权限", "在 Hive 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
 		sel := 0
 		var labels []string
 		for i, m := range permissionModes {
@@ -97,7 +99,7 @@ func (a *app) permissionSettings(c *ui.Context) {
 				sel = i
 			}
 		}
-		if segmented(c, &sel, "agent 权限", labels...) {
+		if segmented(c, &sel, "Agent 权限", labels...) {
 			a.setPermission(permissionModes[sel].mode)
 		}
 		ui.Text(c, permissionModes[sel].tip).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5)

@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -95,6 +96,7 @@ func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
 type historyView struct {
 	query    string
 	agent    int
+	dir      string            // 只看这个文件夹（含子目录）里的会话，空是全部；不记进 ui.json
 	sessions []history.Session // 没有搜索词时：最近的会话
 	groups   []string          // 与 sessions 对应的"今天、昨天……"分组
 	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
@@ -113,6 +115,7 @@ type historyView struct {
 	// 不至于一敲字就闪出"没有找到"；换了条件的结果回来时列表回到顶部
 	resQuery string
 	resAgent int
+	resDir   string
 	askedAt  time.Time // 最近一次请求发出（防抖结束）的时间
 	failed   string    // 最近一次请求的错误
 	messages ui.ListState
@@ -121,6 +124,7 @@ type historyView struct {
 	req     int // 列表请求的序号，只采用最新一次的结果
 	wQuery  string
 	wAgent  int
+	wDir    string
 	visible bool
 	fetched time.Time
 }
@@ -136,13 +140,13 @@ func (h *historyView) setSessions(ss []history.Session) {
 
 // pending 报告搜索框或筛选已经变了、对应的结果还没回来：列表上仍是上一次的结果。
 func (h *historyView) pending() bool {
-	return h.loaded && (h.resQuery != strings.TrimSpace(h.query) || h.resAgent != h.agent)
+	return h.loaded && (h.resQuery != strings.TrimSpace(h.query) || h.resAgent != h.agent || h.resDir != h.dir)
 }
 
-func (h *historyView) want() (query string, agent int, req int) {
+func (h *historyView) want() (query string, agent int, dir string, req int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.wQuery, h.wAgent, h.req
+	return h.wQuery, h.wAgent, h.wDir, h.req
 }
 
 // --- 数据
@@ -151,7 +155,7 @@ func (h *historyView) want() (query string, agent int, req int) {
 func (a *app) searchHistory(delay time.Duration) {
 	h := &a.history
 	h.mu.Lock()
-	h.wQuery, h.wAgent = h.query, h.agent
+	h.wQuery, h.wAgent, h.wDir = h.query, h.agent, h.dir
 	h.req++
 	req := h.req
 	h.mu.Unlock()
@@ -161,11 +165,11 @@ func (a *app) searchHistory(delay time.Duration) {
 
 func (a *app) fetchHistory(req int) {
 	h := &a.history
-	query, agentIdx, cur := h.want()
+	query, agentIdx, dir, cur := h.want()
 	if req != cur || a.c == nil {
 		return
 	}
-	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": historyLimit}
+	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "cwd": dir, "limit": historyLimit}
 	var res struct {
 		Sessions []history.Session `json:"sessions"`
 		Hits     []history.Hit     `json:"hits"`
@@ -192,8 +196,8 @@ func (a *app) fetchHistory(req int) {
 		h.loaded, h.failed = true, ""
 		h.status, h.anyWord = res.Status, res.Any
 		// 列表按会话 ID 保持滚动位置，定期刷新时有用；换了搜索词或筛选就该从第一条看起
-		if q := params["query"].(string); q != h.resQuery || agentIdx != h.resAgent {
-			h.resQuery, h.resAgent = q, agentIdx
+		if q := params["query"].(string); q != h.resQuery || agentIdx != h.resAgent || dir != h.resDir {
+			h.resQuery, h.resAgent, h.resDir = q, agentIdx, dir
 			h.list.ScrollTo(0, ui.Start)
 		}
 		if method == "history.list" {
@@ -225,6 +229,58 @@ func (a *app) historyTick() {
 	if due {
 		go a.fetchHistory(req)
 	}
+}
+
+// historyDirFilter 是按文件夹筛选：列出侧栏里的项目，选一个只看在它目录（含子目录）里开的会话。
+func (a *app) historyDirFilter(c *ui.Context) {
+	t := c.Theme()
+	h := &a.history
+	label := "全部文件夹"
+	if h.dir != "" {
+		label = filepath.Base(h.dir)
+		for _, p := range a.projects {
+			if p.Path == h.dir {
+				label = p.Name
+			}
+		}
+	}
+	btn := ui.Row(c.Key("dir-filter")).Height(30).Padding(0, 10).Gap(6).Radius(rInput).AlignItems(ui.Center).Shrink(0).
+		Background(colors(t).fill).Role(ui.RoleButton).Label("按文件夹筛选").Children(func() {
+		ui.Icon(c, iconFolder).FontSize(13).TextColor(t.TextMuted)
+		ui.Text(c, label).FontSize(12.5).SingleLine().MaxWidth(180)
+		ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted)
+	})
+	if h.dir != "" {
+		btn.Tooltip(h.dir)
+	}
+	pick := func(dir string) {
+		h.dir = dir
+		a.searchHistory(0)
+	}
+	menuButton(c, btn, func(m *popMenu) {
+		if m.Item("全部文件夹").Checked(h.dir == "").Chosen() {
+			pick("")
+		}
+		if len(a.projects) > 0 {
+			m.Separator()
+		}
+		for _, p := range a.projects {
+			if m.Item(p.Name).Checked(h.dir == p.Path).Chosen() {
+				pick(p.Path)
+			}
+		}
+	})
+}
+
+// releaseHistory 放掉历史页的列表和打开的会话；还在路上的请求作废。
+func (a *app) releaseHistory() {
+	h := &a.history
+	h.mu.Lock()
+	h.req++
+	h.mu.Unlock()
+	h.sessions, h.groups, h.hits, h.detail = nil, nil, nil, nil
+	h.sel, h.loaded, h.placed = "", false, false
+	h.list, h.messages = ui.ListState{}, ui.ListState{}
 }
 
 func (a *app) setHistoryVisible(v bool) {
@@ -404,7 +460,7 @@ func (a *app) historyBoard(c *ui.Context) {
 	a.band(c, func() {
 		titleText(c, "历史", fsCardTitle).Margin(0, 6, 0, 0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
-		search := ui.TextInput(c, &h.query).Label("搜索会话").Placeholder("搜索会话内容  ⌘F").Width(340)
+		search := fieldInputWidth(c, &h.query, "搜索会话内容  ⌘F", 340).Label("搜索会话")
 		if c.Shortcut(ui.Cmd, ui.KeyF) {
 			search.Focus()
 		}
@@ -415,10 +471,12 @@ func (a *app) historyBoard(c *ui.Context) {
 		if changed {
 			a.searchHistory(250 * time.Millisecond)
 		}
+		a.historyDirFilter(c)
 		ui.Spacer(c)
 		if segmented(c, &h.agent, "按 agent 筛选", historyAgentLabels...) {
 			a.searchHistory(0)
 		}
+		a.closeBoardButton(c)
 	})
 	searching := h.resQuery != ""
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
