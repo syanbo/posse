@@ -436,7 +436,13 @@ func (c *conn) serve() {
 			c.ws.Close(4001, "Unauthorized")
 			return
 		}
-		if err := c.dispatch(req); err != nil {
+		start := time.Now()
+		err = c.dispatch(req)
+		// 同一连接的请求在这里排队处理：一个卡住，后面的全部超时（手机上一直"电脑没有回应"）
+		if d := time.Since(start); d > 2*time.Second {
+			log.Printf("mobile: %s took %v", req.Method, d.Round(time.Millisecond))
+		}
+		if err != nil {
 			var re *rpcError
 			if errors.As(err, &re) {
 				c.fail(req.ID, re.code, re.msg)

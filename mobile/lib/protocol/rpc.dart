@@ -60,6 +60,9 @@ class PhoneRpc {
   /// 以及连接是不是还活着（一直在收东西就不算没响应）。
   var receivedBytes = 0;
   var sentBytes = 0;
+
+  /// 收到过几个请求的回复（不算订阅推送）。测延迟时用它判断电脑还在不在处理请求。
+  var repliesReceived = 0;
   var _closed = false;
   var _ended = false;
   var _unexpectedLoss = false;
@@ -259,6 +262,7 @@ class PhoneRpc {
     }
     final waiter = _wait.remove(id);
     if (waiter == null || waiter.isCompleted) return;
+    repliesReceived++;
     if (message['ok'] == true) {
       final result = message['result'];
       waiter.complete(

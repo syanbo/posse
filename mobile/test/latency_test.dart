@@ -19,6 +19,8 @@ class _PingRpc implements PhoneRpc {
   var receivedBytes = 0;
   @override
   var sentBytes = 0;
+  @override
+  var repliesReceived = 0;
 
   @override
   Future<Map<String, Object?>> call(
@@ -109,19 +111,39 @@ void main() {
     });
   });
 
-  test('timeouts while data keeps arriving are not a dead link', () async {
-    // 慢线路上下大文件：ping 排在后面超时了，但一直在收数据
-    final rpc = _PingRpc((rpc, method) async {
-      rpc.receivedBytes += 1 << 20;
-      throw TimeoutException(method);
-    });
-    final meter = _meter(rpc);
-    for (var n = 0; n < 5; n++) {
-      await meter.tick();
-    }
-    expect(meter.unresponsive, isFalse);
-    expect(rpc.dropped, isFalse);
-  });
+  test(
+    'timeouts while other replies keep arriving are not a dead link',
+    () async {
+      // 慢线路上分段下大文件：ping 排在后面超时了，但视频分段的回复一直在回来
+      final rpc = _PingRpc((rpc, method) async {
+        rpc.receivedBytes += 1 << 20;
+        rpc.repliesReceived++;
+        throw TimeoutException(method);
+      });
+      final meter = _meter(rpc);
+      for (var n = 0; n < 5; n++) {
+        await meter.tick();
+      }
+      expect(meter.unresponsive, isFalse);
+      expect(rpc.dropped, isFalse);
+    },
+  );
+
+  test(
+    'pushes alone do not keep a connection that stopped answering',
+    () async {
+      // 电脑那边处理请求卡住了，终端输出、标签推送照样在来：所有请求超时，要重连
+      final rpc = _PingRpc((rpc, method) async {
+        rpc.receivedBytes += 4 << 10;
+        throw TimeoutException(method);
+      });
+      final meter = _meter(rpc);
+      for (var n = 0; n < 3; n++) {
+        await meter.tick();
+      }
+      expect(rpc.dropped, isTrue);
+    },
+  );
 
   testWidgets('latency label: muted, amber when slow, red when silent', (
     tester,

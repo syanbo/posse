@@ -9,8 +9,10 @@ import 'rpc.dart';
 /// 测出来的不是网络延迟：这期间收发超过 [_crowded] 的样本不算。
 ///
 /// 顺带发现死掉的连接：切网络、手机休眠后 TCP 可能半开着，系统迟迟不报错。连续 [misses] 次超时、
-/// 期间一个字节都没收到，就 [PhoneRpc.drop] 交给重连；超时后不等间隔接着测，从停止回应算起
-/// 最多 [interval] + [misses]×[timeout]（默认 20 秒）。一直在收数据（慢线路上下大文件）不算没响应。
+/// 期间没有收到任何请求的回复，就 [PhoneRpc.drop] 交给重连；超时后不等间隔接着测，从停止回应算起
+/// 最多 [interval] + [misses]×[timeout]（默认 20 秒）。期间有别的回复回来（慢线路上分段下大文件，
+/// ping 排在后面）不算没响应。终端输出、标签这类推送不算：电脑那边这条连接处理请求卡住时推送照样在发，
+/// 按收到的字节算的话连接永远"活着"，所有请求一直超时，只能重开 App。
 class LatencyMeter {
   LatencyMeter(
     this.rpc, {
@@ -63,6 +65,7 @@ class LatencyMeter {
     _inFlight = true;
     final before = (latency, unresponsive);
     final rx = rpc.receivedBytes, tx = rpc.sentBytes;
+    final replies = rpc.repliesReceived;
     final watch = Stopwatch()..start();
     try {
       await rpc.call(_method, const {}, timeout: timeout);
@@ -79,8 +82,8 @@ class LatencyMeter {
       }
       // closed：连接已经断了，重连那边会处理
     } on TimeoutException {
-      // 这段时间还在收数据：连接活着，只是 ping 排在大回复后面
-      if (rpc.receivedBytes == rx) _missed++;
+      // 这段时间还有别的回复回来：电脑在处理请求，只是 ping 排在大回复后面
+      if (rpc.repliesReceived == replies) _missed++;
     } catch (_) {
       // 连接关掉后再发会抛错，下一轮这个测量器也停了
     } finally {
