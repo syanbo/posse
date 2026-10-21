@@ -7,8 +7,8 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 文件栏：主区域最右边的一栏，放文件树、检索、改动，照 Orca 的右侧栏。它停靠在那里、挤窄终端和编辑器，
-// 不像"图片 / 技能与工具 / 历史"那样浮在上面、点别处就收起：边看文件边编辑时要一直开着。
+// 文件栏：主区域最右边的一栏，顶上分"历史"（当前项目的会话）和"文件"，文件下面再分文件树、检索、改动，照 Orca 的右侧栏。它停靠在那里、挤窄终端和编辑器，
+// 不像"图片 / 技能与工具"那样浮在上面、点别处就收起：边看文件边编辑时要一直开着。
 // 开关按项目记在 ui.json（在 A 项目打开，切到 B 项目不跟着打开），宽度所有项目共用。
 const (
 	filesPanelDefault = 300
@@ -96,6 +96,7 @@ func (a *app) migratePanels() {
 func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 	v := a.filesFor(w)
 	v.side = side
+	a.setFilesPanelHistory(false)
 	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 	return v
 }
@@ -109,7 +110,7 @@ func (a *app) revealInFiles(w *workspace, path string) {
 
 // toggleFilesPanel 开着且就在 side 上时关掉，否则打开到 side（⇧⌘E、⇧⌘G）。
 func (a *app) toggleFilesPanel(w *workspace, side int) {
-	if a.filesPanelOpen() && a.filesFor(w).side == side {
+	if a.filesPanelOpen() && !a.state.FilesPanelHistory && a.filesFor(w).side == side {
 		a.closeFilesPanel()
 		return
 	}
@@ -151,55 +152,103 @@ func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 		if a.filesPanelOpen() {
 			a.closeFilesPanel()
 		} else {
-			a.openFilesPanel(w, a.filesFor(w).side)
+			a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 		}
 	}
 }
 
-// filesPanel 画文件栏：顶上和标签栏一样高，放分段和开关按钮；左边缘拖动调宽。
+// setFilesPanelHistory 切文件栏顶上的"历史""文件"，变了才写 ui.json。
+func (a *app) setFilesPanelHistory(on bool) {
+	if a.state.FilesPanelHistory != on {
+		a.state.FilesPanelHistory = on
+		a.saveState()
+	}
+}
+
+// filesPanel 画文件栏：顶上和标签栏一样高，放"历史""文件"两个图标页签和开关按钮；文件下面一行是文件、检索、改动。
+// 左边缘拖动调宽。
 func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	p := colors(c.Theme())
 	v := a.filesFor(w)
 	col := ui.Column(c).Width(a.filesPanelWidth()).Shrink(0).Background(p.band).Ref(&a.filesPanelRef)
 	col.Children(func() {
 		// 右边距和标签栏一样，开关按钮打开前后不挪位置
-		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 10).Gap(6).AlignItems(ui.Center).
+		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 10).Gap(4).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
-			changes := "改动"
-			if n := v.git.changeCount(); n > 0 {
-				changes = fmt.Sprintf("改动 %d", n)
+			if panelTab(c, iconHistory, "历史", a.state.FilesPanelHistory) {
+				a.setFilesPanelHistory(true)
 			}
-			// 撑满栏宽：分段平分宽度，"改动 12"这样长一些的才放得下
-			ui.Column(c).Grow(1).Children(func() {
-				if segmented(c, &v.side, "文件栏", "文件", "检索", changes) && v.side == sideSearch {
-					v.search.focus = true
-				}
-			})
+			if panelTab(c, iconFile, "文件", !a.state.FilesPanelHistory) {
+				a.setFilesPanelHistory(false)
+			}
+			ui.Spacer(c)
 			// 开关按钮浮在这里（见 main），留出它的位置
 			ui.Box(c).Width(28).Shrink(0)
 		})
-		switch v.side {
-		case sideFiles:
-			a.treeView(c, w, v)
-		case sideSearch:
-			a.searchView(c, w, v)
-		default:
-			a.changesView(c, w, v)
+		if a.state.FilesPanelHistory {
+			a.recentList(c, w)
+		} else {
+			a.filesSide(c, w, v)
 		}
-		// 拖动左边缘调宽，松手才写 ui.json
-		grip := ui.Box(c.Key("files-panel-grip")).Absolute().Top(0).Bottom(0).Left(-3).Width(6).Cursor(ui.CursorResizeEW)
-		if dx, _, held := grip.Dragged(); held {
-			a.state.FilesPanelWidth = min(max(a.filesPanelWidth()-dx, filesPanelMin), filesPanelMax)
-			a.resizingPanel = true
-		} else if a.resizingPanel {
-			a.resizingPanel = false
-			a.saveState()
-		}
-		if grip.Hovered() || a.resizingPanel {
-			accent := c.Theme().Accent
-			grip.Draw(func(pt *ui.Painter, r ui.Rect) {
-				pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y, W: 2, H: r.H}, accent, 0)
-			})
-		}
+		a.filesPanelGrip(c)
 	})
+}
+
+// panelTab 是文件栏顶上的图标页签：选中的垫一层强调色淡底、图标用正文色。返回这一帧是否点了它。
+func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
+	t := c.Theme()
+	b := ui.Box(c.Key("panel-tab-"+label)).Size(30, 28).Radius(7).Center().Shrink(0).
+		Role(ui.RoleTab).Label(label).Tooltip(label).Checked(active)
+	bg, fg := ui.Transparent, t.TextMuted
+	switch {
+	case active:
+		bg, fg = colors(t).tint, t.Text
+	case b.Hovered():
+		bg, fg = t.SurfaceHover, t.Text
+	}
+	b.Background(b.AnimateColor("bg", bg, hover))
+	b.Children(func() { ui.Icon(c, icon).FontSize(16).TextColor(fg) })
+	return b.Clicked() && !active
+}
+
+// filesSide 是文件栏"文件"页：上面一行分段切换文件树、检索、改动。
+func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
+	ui.Row(c).Shrink(0).Padding(8, 10, 4, 10).Children(func() {
+		changes := "改动"
+		if n := v.git.changeCount(); n > 0 {
+			changes = fmt.Sprintf("改动 %d", n)
+		}
+		// 撑满栏宽：分段平分宽度，"改动 12"这样长一些的才放得下
+		ui.Column(c).Grow(1).Children(func() {
+			if segmented(c, &v.side, "文件栏", "文件", "检索", changes) && v.side == sideSearch {
+				v.search.focus = true
+			}
+		})
+	})
+	switch v.side {
+	case sideFiles:
+		a.treeView(c, w, v)
+	case sideSearch:
+		a.searchView(c, w, v)
+	default:
+		a.changesView(c, w, v)
+	}
+}
+
+// filesPanelGrip 是文件栏左边缘调宽的把手，松手才写 ui.json。
+func (a *app) filesPanelGrip(c *ui.Context) {
+	grip := ui.Box(c.Key("files-panel-grip")).Absolute().Top(0).Bottom(0).Left(-3).Width(6).Cursor(ui.CursorResizeEW)
+	if dx, _, held := grip.Dragged(); held {
+		a.state.FilesPanelWidth = min(max(a.filesPanelWidth()-dx, filesPanelMin), filesPanelMax)
+		a.resizingPanel = true
+	} else if a.resizingPanel {
+		a.resizingPanel = false
+		a.saveState()
+	}
+	if grip.Hovered() || a.resizingPanel {
+		accent := c.Theme().Accent
+		grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+			pt.Fill(ui.Rect{X: r.X + r.W/2 - 1, Y: r.Y, W: 2, H: r.H}, accent, 0)
+		})
+	}
 }

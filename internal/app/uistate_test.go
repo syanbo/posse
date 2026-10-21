@@ -231,15 +231,12 @@ func settle(tt *ui.Tester) {
 	tt.Frame()
 }
 
-// 右侧面板：点外面收起；点面板里面不收；开着时点标签栏的按钮是收起，不会收起又打开。
+// 右侧面板：点外面收起；点面板里面不收。
 func TestRightPanelDismiss(t *testing.T) {
 	a := previewApp(t)
 	previewHistory(a, "")
 	a.selected = "w1"
-	open := func() {
-		a.state.RightPanel = panelHistory
-		a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions}
-	}
+	open := func() { a.state.RightPanel = panelUsage }
 	open()
 	tt := newPreviewTester(a, true)
 
@@ -255,20 +252,7 @@ func TestRightPanelDismiss(t *testing.T) {
 	// 面板里列表下面的空白处（窗口 1200×760，面板贴右边 280 宽，底下是 34 高的状态栏）
 	tt.ClickAt(1050, 660)
 	tt.Frame()
-	if a.state.RightPanel != panelHistory {
+	if a.state.RightPanel != panelUsage {
 		t.Fatal("click inside closed the panel")
-	}
-
-	b, ok := tt.Find("历史会话")
-	if !ok {
-		t.Fatal("panel button missing")
-	}
-	tt.Move(b.X+b.W/2, b.Y+b.H/2)
-	tt.Frame()
-	tt.ClickAt(b.X+b.W/2, b.Y+b.H/2)
-	tt.Frame()
-	tt.Frame()
-	if a.state.RightPanel != "" {
-		t.Fatalf("panel button left the panel %q", a.state.RightPanel)
 	}
 }

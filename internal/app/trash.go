@@ -95,3 +95,14 @@ func (a *app) askTrashSession(d *historyDetail) {
 			a.searchHistory(0)
 		})
 }
+
+// trashListedSession 是列表上的删除：先问常驻进程这个会话是不是正在终端里运行，再走 askTrashSession 确认。
+func (a *app) trashListedSession(s history.Session) {
+	go func() {
+		var d historyDetail
+		if a.call("history.show", map[string]any{"session": s.ID, "path": s.Path, "tail": 1, "tools": false}, &d, 10*time.Second) != nil {
+			return
+		}
+		a.win.Update(func() { a.askTrashSession(&d) })
+	}()
+}

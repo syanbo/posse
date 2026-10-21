@@ -176,57 +176,61 @@ func topDirs(dirs []string) []string {
 	return out
 }
 
-// recentPanel 是右侧的历史面板：点一个会话跳到历史页打开它。
-func (a *app) recentPanel(c *ui.Context, w *workspace) ui.Element {
+// recentList 是文件栏的"历史"页：当前项目的会话，点一个跳到历史页打开它。
+func (a *app) recentList(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	a.pollRecent(c, w)
 	r := &a.recent
-	return a.rightPanel(c, "历史", func() {
-		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(0, 8, 16, 8).Gap(2).Children(func() {
-				switch {
-				case !r.loaded:
-					usageNote(c, "正在读取…")
-				case len(r.sessions) == 0:
-					usageNote(c, "这个项目还没有会话记录。")
-				}
-				for _, s := range r.sessions {
-					row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
-					selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
-					row.Children(func() {
-						agentTile(c, s.Agent, 20)
-						ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
-							// 固定行高，悬停时时间换成按钮也不跳
-							ui.Row(c).Height(20).Gap(8).AlignItems(ui.Center).Children(func() {
-								ui.Text(c, oneLine(s.Title)).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).Shrink(1)
-								// 悬停时时间换成"继续"按钮：已在 Hive 里运行的会话切过去，否则开终端接着聊
-								if row.Hovered() {
-									if pressable(playButton(c)).Clicked() {
-										a.resumeSession(s)
-									}
-								} else {
-									ui.Text(c, ago(s.UpdatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Padding(8, 8, 16, 8).Gap(2).Children(func() {
+			switch {
+			case !r.loaded:
+				usageNote(c, "正在读取…")
+			case len(r.sessions) == 0:
+				usageNote(c, "这个项目还没有会话记录。")
+			}
+			for _, s := range r.sessions {
+				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
+				selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
+				row.Children(func() {
+					agentTile(c, s.Agent, 20)
+					ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
+						// 固定行高，悬停时时间换成按钮也不跳
+						ui.Row(c).Height(20).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, oneLine(s.Title)).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).Shrink(1)
+							// 悬停时时间换成"继续"按钮：已在 Hive 里运行的会话切过去，否则开终端接着聊
+							if row.Hovered() {
+								if pressable(playButton(c)).Clicked() {
+									a.resumeSession(s)
 								}
-							})
-							// 标题下面是最后一段聊天内容，再下面是目录和消息数
-							if p := r.previews[sessionKey(s)]; p.text != "" {
-								text := p.text
-								if p.user {
-									text = "你：" + text
-								}
-								ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
-								// 细线把聊天内容和下面的目录、消息数分开
-								ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
+							} else {
+								ui.Text(c, ago(s.UpdatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 							}
-							sessionMeta(c, s)
+						})
+						// 标题下面是最后一段聊天内容，再下面是目录和消息数
+						if p := r.previews[sessionKey(s)]; p.text != "" {
+							text := p.text
+							if p.user {
+								text = "你：" + text
+							}
+							ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
+							// 细线把聊天内容和下面的目录、消息数分开
+							ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
+						}
+						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
+						ui.Row(c).Height(20).AlignItems(ui.Center).Children(func() {
+							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
+							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", 22, 13).Clicked() {
+								a.trashListedSession(s)
+							}
 						})
 					})
-					if row.Clicked() {
-						a.selected, a.revealSel = historyBoardID, true
-						a.selectSession(s, -1)
-					}
+				})
+				if row.Clicked() {
+					a.selected, a.revealSel = historyBoardID, true
+					a.selectSession(s, -1)
 				}
-			})
+			}
 		})
 	})
 }

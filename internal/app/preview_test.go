@@ -485,11 +485,12 @@ func TestPreview(t *testing.T) {
 		a.images = previewImages()
 		savePNG(t, newPreviewTester(a, dark), "images-"+suffix+".png")
 
-		// 右侧历史面板：当前项目的会话已经查过一次
+		// 文件栏的历史页：当前项目的会话已经查过一次
 		a = previewApp(t)
 		previewHistory(a, "")
 		a.selected = "w1" // previewHistory 会切到历史页
-		a.state.RightPanel = panelHistory
+		a.state.FilesPanels = map[string]bool{"p1": true}
+		a.state.FilesPanelHistory = true
 		a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions,
 			previews: map[string]recentPreview{}}
 		for i, s := range a.history.sessions {

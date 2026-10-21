@@ -9,7 +9,7 @@ import (
 // 右侧面板：标签栏右边的按钮打开，同一时间只开一个，开着哪个记在 ui.json。
 const (
 	panelUsage   = "usage"
-	panelHistory = "history"
+	panelHistory = "history" // 旧版 ui.json 里历史是浮层面板，读进来时改成文件栏里的"历史"
 	panelImages  = "images"
 	panelFiles   = "files" // 旧版 ui.json 里文件栏也是浮层面板，读进来时改成 FilesPanel
 )
@@ -50,9 +50,9 @@ func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
 	})
 }
 
-// panelButton 是标签栏右边打开某个右侧面板的按钮，开着时垫一层强调色淡底。
+// panelButton 是终端右上角打开某个右侧面板的按钮（不带悬停提示，见 sessionButtons），开着时垫一层强调色淡底。
 func (a *app) panelButton(c *ui.Context, name string, icon *ui.SVG, label string) {
-	b := iconButton(c.Key("panel-"+name), icon, label)
+	b := quietIconButton(c.Key("panel-"+name), icon, label, 28, 16)
 	if b.Hovered() {
 		a.overPanelButton = true
 	}

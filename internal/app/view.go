@@ -1228,8 +1228,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.toggleLogPanel(w)
 		}
 	}
-	// 图片、技能与工具跟着会话走，放在终端右上角（sessionButtons）；历史按项目，留在这里
-	a.panelButton(c, panelHistory, iconHistory, "历史会话")
+	// 图片、技能与工具跟着会话走，放在终端右上角（sessionButtons）；历史按项目，在文件栏里
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
 		a.filesPanelButton(c, w)
@@ -1278,7 +1277,8 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	}
 	col.Opacity(col.AnimateTo("fade", opacity, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}))
 	col.Children(func() {
-		if task != nil && iconButton(c.Key("back-to-task"), iconTasks, "返回任务").Clicked() {
+		// 这一列的按钮不带悬停提示：它们贴着终端内容，提示会盖住旁边的字
+		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, "返回任务", 28, 16).Clicked() {
 			a.openTask(task.ID)
 		}
 		if media.Supported(cur.Agent) {
@@ -1288,7 +1288,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
 		}
 		ui.Box(c).Height(1).Margin(1, 4).Background(p.line)
-		if iconButtonSized(c.Key("session-fold"), iconChevron, "收起会话按钮", 28, 12).Clicked() {
+		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", 28, 12).Clicked() {
 			toggle()
 		}
 	})
@@ -1383,8 +1383,6 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.usagePanel(c, cur), true
 			}
-		case panelHistory:
-			panel, drawn = a.recentPanel(c, w), true
 		case panelImages:
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.imagesPanel(c, cur), true
@@ -1742,8 +1740,13 @@ func iconButton(c *ui.Context, icon *ui.SVG, label string) ui.Element {
 }
 
 func iconButtonSized(c *ui.Context, icon *ui.SVG, label string, box, glyph float32) ui.Element {
+	return quietIconButton(c, icon, label, box, glyph).Tooltip(label)
+}
+
+// quietIconButton 是不带悬停提示的图标按钮，用在一眼认得出、提示反而挡视线的地方（终端右上角的会话按钮）。
+func quietIconButton(c *ui.Context, icon *ui.SVG, label string, box, glyph float32) ui.Element {
 	t := c.Theme()
-	b := ui.Box(c).Size(box, box).Radius(box / 4).Center().Shrink(0).Label(label).Tooltip(label)
+	b := ui.Box(c).Size(box, box).Radius(box / 4).Center().Shrink(0).Label(label)
 	bg, fg := ui.Transparent, t.TextMuted
 	if b.Hovered() {
 		bg, fg = t.SurfaceHover, t.Text

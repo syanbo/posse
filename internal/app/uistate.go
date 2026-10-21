@@ -14,9 +14,10 @@ import (
 type uiState struct {
 	Selected             string   `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来
 	ProjectOrder         []string `json:"projectOrder,omitempty"`         // 侧栏里项目的顺序，拖动调整
-	RightPanel           string   `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelHistory、panelImages 或空
+	RightPanel           string   `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelImages 或空
 	FilesPanel           bool     `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
 	FilesPanelWidth      float32  `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
+	FilesPanelHistory    bool     `json:"filesPanelHistory,omitempty"`    // 文件栏顶上选的是"历史"（当前项目的会话），不是文件
 	SidebarHidden        bool     `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
 	SessionButtonsHidden bool     `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
 	SidebarWidth         float32  `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
@@ -72,6 +73,10 @@ func loadUIState(home string) uiState {
 	}
 	if s.RightPanel == panelFiles {
 		s.RightPanel, s.FilesPanel = "", true
+	}
+	// 历史以前也是浮层面板，现在在文件栏里
+	if s.RightPanel == panelHistory {
+		s.RightPanel, s.FilesPanelHistory = "", true
 	}
 	return s
 }

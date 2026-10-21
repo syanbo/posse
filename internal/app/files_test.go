@@ -412,7 +412,7 @@ func TestPreviewTabs(t *testing.T) {
 	}
 }
 
-// 浮层面板和分支弹窗互斥：点分支按钮收起历史面板，点面板按钮关掉分支弹窗。
+// 浮层面板和分支弹窗互斥：点分支按钮收起技能与工具面板。
 // 文件栏停靠在右边，不受分支弹窗影响。
 func TestBranchPopupClosesPanel(t *testing.T) {
 	a := previewApp(t)
@@ -420,9 +420,9 @@ func TestBranchPopupClosesPanel(t *testing.T) {
 	w := &a.workspaces[0]
 	w.Branch = "main"
 	tt := ui.NewTester(a.build, 1200, 760)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 历史面板会去查会话，连不上就报错
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 面板会去查常驻进程，连不上就报错
 	a.openFilesPanel(w, sideFiles)
-	a.state.RightPanel = panelHistory
+	a.state.RightPanel = panelUsage
 	tt.Frame()
 	if err := tt.Click("分支 main"); err != nil {
 		t.Fatal(err)
@@ -430,13 +430,6 @@ func TestBranchPopupClosesPanel(t *testing.T) {
 	tt.Frame()
 	if a.state.RightPanel != "" || a.branchPop == nil || !a.filesPanelOpen() {
 		t.Fatalf("overlay=%q popup=%v files=%v", a.state.RightPanel, a.branchPop != nil, a.filesPanelOpen())
-	}
-	if err := tt.Click("历史会话"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.state.RightPanel != panelHistory || a.branchPop != nil {
-		t.Fatalf("overlay=%q popup=%v", a.state.RightPanel, a.branchPop != nil)
 	}
 }
 
@@ -446,6 +439,43 @@ func TestFilesPanelStateMigrates(t *testing.T) {
 	os.WriteFile(uiStatePath(home), []byte(`{"rightPanel":"files"}`), 0o600)
 	if s := loadUIState(home); s.RightPanel != "" || !s.FilesPanel {
 		t.Fatalf("%+v", s)
+	}
+	// 历史以前也是浮层面板，现在是文件栏的"历史"页
+	os.WriteFile(uiStatePath(home), []byte(`{"rightPanel":"history"}`), 0o600)
+	if s := loadUIState(home); s.RightPanel != "" || !s.FilesPanelHistory {
+		t.Fatalf("%+v", s)
+	}
+}
+
+// 文件栏顶上切"历史""文件"；⇧⌘E 这类打开文件栏某一页的操作回到"文件"。
+func TestFilesPanelHistoryTab(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 历史会去查会话，连不上就报错
+	// 侧栏里也有"历史"，收起它，点到的才是文件栏的页签
+	a.state.SidebarHidden = true
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFilesPanel(w, sideChanges)
+	// 等文件栏滑进来
+	for range 20 {
+		tt.Frame()
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !tt.HasText("检索") {
+		t.Fatal("files tabs missing")
+	}
+	if err := tt.Click("历史"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.state.FilesPanelHistory || tt.HasText("检索") {
+		t.Fatalf("history tab: %v", a.state.FilesPanelHistory)
+	}
+	a.toggleFilesPanel(w, sideFiles)
+	tt.Frame()
+	if a.state.FilesPanelHistory || !a.filesPanelOpen() || a.filesFor(w).side != sideFiles {
+		t.Fatal("⇧⌘E should show the files tab")
 	}
 }
 
@@ -666,5 +696,29 @@ func TestPanelsSnapOnProjectSwitch(t *testing.T) {
 	tt.Frame()
 	if a.filesPanelShown != 1 {
 		t.Fatalf("switching back should show at once, shown %v", a.filesPanelShown)
+	}
+}
+
+// 文件栏历史页的会话卡片：悬停时右下角有"移到废纸篓"。
+func TestRecentTrashButton(t *testing.T) {
+	a := previewApp(t)
+	previewHistory(a, "")
+	a.selected = "w1"
+	a.state.FilesPanels = map[string]bool{"p1": true}
+	a.state.FilesPanelHistory = true
+	a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions}
+	tt := newPreviewTester(a, true)
+	if tt.HasText("移到废纸篓") {
+		t.Fatal("trash button shown without hover")
+	}
+	r, ok := tt.Find(oneLine(a.history.sessions[0].Title))
+	if !ok {
+		t.Fatal("no card")
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	tt.Frame()
+	if _, ok := tt.Find("移到废纸篓"); !ok {
+		t.Fatal("no trash button on hover")
 	}
 }
