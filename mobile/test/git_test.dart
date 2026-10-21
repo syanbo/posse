@@ -130,7 +130,10 @@ void main() {
     double rowWidth(String text) => tester
         .getSize(
           find
-              .ancestor(of: find.text(text), matching: find.byType(Container))
+              .ancestor(
+                of: find.textContaining(text, findRichText: true),
+                matching: find.byType(Container),
+              )
               .first,
         )
         .width;

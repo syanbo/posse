@@ -14,6 +14,7 @@ import '../ui/theme.dart';
 
 /// 文件页里渲染一个 Markdown 文件：表格、任务列表、嵌套列表、图片都画出来。
 /// 相对链接和图片按这个文件所在的目录算，工作区里的文件在文件页打开、图片向电脑要。
+/// 自己滚动，只排看得见的块：长文档整篇排进一列，打开那一帧要几十毫秒。
 class MarkdownDoc extends StatelessWidget {
   const MarkdownDoc({
     super.key,
@@ -36,8 +37,9 @@ class MarkdownDoc extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
     final base = TextStyle(fontSize: Fs.read, height: 1.6, color: c.text);
-    return MarkdownBody(
+    return Markdown(
       data: data,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       extensionSet: markdownExtensions,
       styleSheet: markdownDocStyle(c, base),
       builders: {'pre': _CodeBlockBuilder(base)},

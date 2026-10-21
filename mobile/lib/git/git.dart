@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -949,10 +951,14 @@ class _DiffLines extends StatelessWidget {
       }
     }
     final alpha = c.dark ? 0.16 : 0.10;
-    final screen = MediaQuery.sizeOf(context).width;
+    var columns = 0;
+    for (final row in rows) {
+      columns = math.max(columns, codeColumns(row.text));
+    }
 
     Widget line(int index) {
       final row = rows[index];
+      final newline = index < rows.length - 1 ? '\n' : '';
       final hl = segs(index);
       final (bg, sign, signColor) = switch (row.kind) {
         DiffKind.added => (c.sage.withValues(alpha: alpha), '+', c.sage),
@@ -980,7 +986,6 @@ class _DiffLines extends StatelessWidget {
         color: bg,
         padding: const EdgeInsets.only(left: 8, right: 16),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             SelectionContainer.disabled(
               child: Text.rich(
@@ -997,45 +1002,37 @@ class _DiffLines extends StatelessWidget {
               ),
             ),
             const SizedBox(width: codeGutterGap - 6),
-            if (hl != null && hl.isNotEmpty)
-              Text.rich(
-                TextSpan(children: lineSpans(hl, c)),
-                softWrap: false,
-                style: style,
-              )
-            else
-              Text(
-                row.text.isEmpty ? ' ' : row.text,
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    if (hl != null && hl.isNotEmpty)
+                      ...lineSpans(hl, c)
+                    else
+                      TextSpan(text: row.text),
+                    TextSpan(text: newline),
+                  ],
+                ),
+                maxLines: 1,
                 softWrap: false,
                 style: row.kind == DiffKind.note
                     ? style.copyWith(color: c.muted)
                     : style,
               ),
+            ),
           ],
         ),
       );
     }
 
     return SelectionArea(
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          ?notice,
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(top: 8),
-            // 每行的底色都铺到最长那一行，横着滑过去右边是齐的
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: screen),
-              child: IntrinsicWidth(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [for (var i = 0; i < rows.length; i++) line(i)],
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: CodeLines(
+        // 行号、空格和加减号，再加左右边距和行号后面的空
+        columns: widest + 2 + columns,
+        extra: 8 + 16 + codeGutterGap - 6,
+        header: [?notice],
+        itemCount: rows.length,
+        itemBuilder: (context, i) => line(i),
       ),
     );
   }

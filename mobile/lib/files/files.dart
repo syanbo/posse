@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -548,21 +549,23 @@ class _FileViewerState extends State<FileViewer> {
     final notice = _truncated ? const CodeNotice('文件太大，只显示前 512 KB') : null;
     if (_markdown && !_source) {
       return SelectionArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ?notice,
-            MarkdownDoc(
-              data: text,
-              model: widget.model,
-              worktree: widget.worktree,
-              path: widget.path,
-              openFile: (path) => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => FileViewer(
-                    model: widget.model,
-                    worktree: widget.worktree,
-                    path: path,
+            Expanded(
+              child: MarkdownDoc(
+                data: text,
+                model: widget.model,
+                worktree: widget.worktree,
+                path: widget.path,
+                openFile: (path) => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => FileViewer(
+                      model: widget.model,
+                      worktree: widget.worktree,
+                      path: path,
+                    ),
                   ),
                 ),
               ),
@@ -580,7 +583,7 @@ class _FileViewerState extends State<FileViewer> {
 }
 
 /// 源码：左边行号，不折行，整块横向滚动，缩进对得齐。认得出语言时着色，太大的文件不着色。
-class _CodeView extends StatelessWidget {
+class _CodeView extends StatefulWidget {
   const _CodeView({required this.text, this.language, this.notice});
 
   final String text;
@@ -588,51 +591,89 @@ class _CodeView extends StatelessWidget {
   final Widget? notice;
 
   @override
+  State<_CodeView> createState() => _CodeViewState();
+}
+
+class _CodeViewState extends State<_CodeView> {
+  late List<String> _lines;
+  late String _code;
+  late int _widest;
+
+  @override
+  void initState() {
+    super.initState();
+    _split();
+  }
+
+  @override
+  void didUpdateWidget(_CodeView old) {
+    super.didUpdateWidget(old);
+    if (old.text != widget.text) _split();
+  }
+
+  void _split() {
+    final lines = const LineSplitter().convert(widget.text);
+    _lines = lines.isEmpty ? [''] : lines;
+    _code = _lines.join('\n');
+    _widest = _lines.fold(0, (n, line) => math.max(n, codeColumns(line)));
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final lines = const LineSplitter().convert(text);
-    final gutter = '${lines.length}'.length;
     final style = codeStyle(c);
-    final code = lines.join('\n');
-    final big = language != null && code.length > highlightLimit;
-    return SelectionArea(
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          ?notice,
-          if (big) const CodeNotice('文件较大，不着色'),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: codePadding,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectionContainer.disabled(
-                  child: Text(
-                    [
-                      for (var i = 1; i <= lines.length; i++)
-                        '$i'.padLeft(gutter),
-                    ].join('\n'),
-                    textAlign: TextAlign.right,
-                    style: style.copyWith(color: c.faint),
-                  ),
-                ),
-                const SizedBox(width: codeGutterGap),
-                Highlighted(
-                  code: code,
-                  language: language,
-                  builder: (context, hl) => hl == null
-                      ? Text(code, softWrap: false, style: style)
-                      : Text.rich(
-                          codeSpan(hl, c),
-                          softWrap: false,
-                          style: style,
-                        ),
-                ),
-              ],
+    final faint = style.copyWith(color: c.faint);
+    final gutter = '${_lines.length}'.length;
+    final language = widget.language;
+    final big = language != null && _code.length > highlightLimit;
+
+    Widget row(int i, HlLines? hl) {
+      final last = i == _lines.length - 1;
+      final segs = hl != null && i < hl.length ? hl[i] : null;
+      return Padding(
+        padding: EdgeInsets.only(
+          left: codePadding.left,
+          right: codePadding.right,
+        ),
+        child: Row(
+          children: [
+            SelectionContainer.disabled(
+              child: Text('${i + 1}'.padLeft(gutter), style: faint),
             ),
-          ),
-        ],
+            const SizedBox(width: codeGutterGap),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    if (segs != null)
+                      ...lineSpans(segs, c)
+                    else
+                      TextSpan(text: _lines[i]),
+                    if (!last) const TextSpan(text: '\n'),
+                  ],
+                ),
+                maxLines: 1,
+                softWrap: false,
+                style: style,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SelectionArea(
+      child: Highlighted(
+        code: _code,
+        language: language,
+        builder: (context, hl) => CodeLines(
+          columns: gutter + _widest,
+          extra: codePadding.horizontal + codeGutterGap,
+          header: [?widget.notice, if (big) const CodeNotice('文件较大，不着色')],
+          itemCount: _lines.length,
+          prototype: row(0, null),
+          itemBuilder: (context, i) => row(i, hl),
+        ),
       ),
     );
   }

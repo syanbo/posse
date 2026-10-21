@@ -58,12 +58,7 @@ func main() {
 Widget _app(Widget child, {bool dark = false}) => MaterialApp(
   debugShowCheckedModeBanner: false,
   theme: hiveTheme(dark ? Brightness.dark : Brightness.light),
-  home: Scaffold(
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      children: [child],
-    ),
-  ),
+  home: Scaffold(body: child),
 );
 
 MarkdownDoc _doc(HiveAppModel model, void Function(String) open) => MarkdownDoc(
@@ -87,8 +82,14 @@ void main() {
     expect(find.byIcon(Icons.check_box_outline_blank), findsOneWidget);
     expect(find.text('◦'), findsOneWidget);
     expect(find.text('▪'), findsOneWidget);
-    // 没连电脑时图片画不出来，退成替代文字
-    expect(find.textContaining('示意图', findRichText: true), findsOneWidget);
+    // 没连电脑时图片画不出来，退成替代文字；图片在文末，只建看得见的块，先滚过去
+    final alt = find.textContaining('示意图', findRichText: true);
+    await tester.scrollUntilVisible(
+      alt,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(alt, findsOneWidget);
   });
 
   testWidgets('relative links open beside the markdown file', (tester) async {
