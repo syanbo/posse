@@ -133,7 +133,13 @@ func TestTaskLifecycle(t *testing.T) {
 		testTask
 		Screen []string
 	}
-	c.Call(ctx, "task.show", map[string]any{"task": task.ID}, &shown)
+	// worker 的 shell 起来、echo 出来要一点时间，机器忙时上面那串调用做完它还没输出
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
+		c.Call(ctx, "task.show", map[string]any{"task": task.ID}, &shown)
+		if strings.Contains(strings.Join(shown.Screen, "\n"), "task="+task.ID) || time.Now().After(deadline) {
+			break
+		}
+	}
 	if !strings.Contains(strings.Join(shown.Screen, "\n"), "task="+task.ID) {
 		t.Fatalf("worker did not get HIVE_TASK_ID; screen %q", shown.Screen)
 	}
