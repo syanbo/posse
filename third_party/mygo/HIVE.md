@@ -27,6 +27,8 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/frame.go`：加 `Context.ModalOpen`，报告上一帧有没有对话框在最上层；Hive 的菜单项（⌘W 关闭标签）在帧外触发，用它和快捷键一样在对话框打开时不动作。
 
+`internal/text/coretext_darwin.go`（`line`、`widenTo`）：Core Text 在中文和紧挨着的英文之间（如"狗粮icon"）自动加的间距只在字形位置里、不在 advance 里，mygo 按 advance 量宽度，单行文字按量出的宽度排版时放不下、末尾被省略。从左到右的段里把这段间距补进前一个字形的 advance；advance 为 0 的附加符号（重音、泰文标记）不补。
+
 终端插件 `plugins/terminal`：
 
 - `links.go`：加 `spanAt`，返回链接在一行里覆盖的列；`trimURL` 也去掉结尾的中文标点（"。，）"等）；网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出。

@@ -900,6 +900,7 @@ func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
 	sl := shapedLine{start: at(r.location), end: at(r.location + r.length)}
 	runs := ct.lineGetGlyphRuns(line)
 	mark := len(e.shapeScratch.runs)
+	var prev *Glyph // 上一段从左到右的段的最后一个字形
 	for i := range ct.arrayGetCount(runs) {
 		run := ct.arrayGetValueAtIndex(runs, i)
 		rr := ct.runGetStringRange(run)
@@ -926,10 +927,34 @@ func (e *coreText) line(line uintptr, index []int, n int) shapedLine {
 					Cluster: at(indices[j]), RTL: rtl,
 				}
 			}
+			if !rtl {
+				// Hive：Core Text 在中文和紧挨着的英文之间自动加的间距只体现在位置上，
+				// 不在 advance 里；记到前一个字形上，否则量出的宽度偏窄，单行文字被省略。
+				for j := range count - 1 {
+					widenTo(&sr.glyphs[j], sr.glyphs[j+1].X)
+				}
+				if prev != nil {
+					widenTo(prev, sr.glyphs[0].X)
+				}
+				prev = &sr.glyphs[count-1]
+			} else {
+				prev = nil
+			}
 		}
 		sl.runs = e.addRun(mark, sr)
 	}
 	return sl
+}
+
+// widenTo 把字形的 advance 补到下一个字形的位置，只补不减。advance 为 0 的是叠在前一个字上的
+// 附加符号（重音、泰文的标记），它和下一个字之间隔着的是前一个字，不补。
+func widenTo(g *Glyph, next float32) {
+	if g.Advance <= 0 {
+		return
+	}
+	if gap := next - (g.X + g.Advance); gap > 1e-3 {
+		g.Advance += gap
+	}
 }
 
 func (e *coreText) isColor(font uintptr) bool {
