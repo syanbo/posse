@@ -271,6 +271,10 @@ func TestUsageMethod(t *testing.T) {
 	if len(us) != 1 || us[0].(map[string]any)["agent"] != "codex" {
 		t.Fatalf("usage.get %v", got)
 	}
+	got = result(t, p.next(p.call("usage.refresh", nil)))
+	if us, _ := got["usages"].([]any); len(us) != 1 {
+		t.Fatalf("usage.refresh %v", got)
+	}
 }
 
 // 会话上下文：没声明 hive.context.v1 的连接看不到；声明后按会话文件最后一条回复的用量算。

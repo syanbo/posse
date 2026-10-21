@@ -75,8 +75,9 @@ func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, e
 	return "", errors.New("not supported")
 }
 
-func (h *fakeHost) CloseTerminal(id string) error { return nil }
-func (h *fakeHost) Agents() []string              { return []string{"claude"} }
+func (h *fakeHost) CloseTerminal(id string) error             { return nil }
+func (h *fakeHost) Agents() []string                          { return []string{"claude"} }
+func (h *fakeHost) RefreshUsage(context.Context) (any, error) { return h.Usage(), nil }
 func (h *fakeHost) Usage() any {
 	return map[string]any{"usages": []map[string]any{{"agent": "codex", "windows": []map[string]any{{"percent": 7, "minutes": 300}}}}}
 }

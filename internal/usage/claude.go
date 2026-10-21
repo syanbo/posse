@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -11,6 +13,7 @@ import (
 //   - statusLine 命令的输入：Claude 收到回复后把 rate_limits（five_hour、seven_day，used_percentage 和秒级 resets_at）
 //     交给 statusLine，hive 在用户没配 statusLine 时注入一个不输出的 hive statusline 转过来；
 //   - ~/.claude.json 的 cachedUsageUtilization：Claude 自己取用量（用户看 /usage）时存的，带 fetchedAtMs。
+// 套餐名取 ~/.claude.json 的 oauthAccount（登录时存的账户信息），见 claudePlan。
 
 // ClaudeStatusLine 解析 statusLine 的输入；没有订阅额度（API key、Bedrock 等）时没有 rate_limits。
 func ClaudeStatusLine(raw []byte, now time.Time) (Usage, bool) {
@@ -94,12 +97,24 @@ func ClaudeCache(path string) (Usage, bool) {
 				} `json:"spend"`
 			} `json:"utilization"`
 		} `json:"cachedUsageUtilization"`
+		Account *struct {
+			OrgType  string  `json:"organizationType"`
+			OrgTier  string  `json:"organizationRateLimitTier"`
+			UserTier *string `json:"userRateLimitTier"`
+		} `json:"oauthAccount"`
 	}
 	if json.Unmarshal(b, &cfg) != nil || cfg.Cache == nil {
 		return Usage{}, false
 	}
 	c := cfg.Cache.Utilization
 	u := Usage{Agent: "claude", UpdatedAt: cfg.Cache.FetchedAtMs}
+	if a := cfg.Account; a != nil {
+		tier := a.OrgTier
+		if a.UserTier != nil && *a.UserTier != "" {
+			tier = *a.UserTier
+		}
+		u.Plan = claudePlan(a.OrgType, tier)
+	}
 	add := func(w *window, minutes int, name string) {
 		if w == nil || w.Utilization == nil {
 			return
@@ -145,4 +160,20 @@ func ClaudeCache(path string) (Usage, bool) {
 		u.OnDemand = &Spend{Used: cents(sp.Used), Limit: cents(sp.Limit)}
 	}
 	return u, len(u.Windows) > 0
+}
+
+var claudeMultiplier = regexp.MustCompile(`_(\d+x)$`)
+
+// claudePlan 照 Claude 网页上的叫法写套餐名：organizationType 的 claude_max 写 Max，限额档位
+// 带倍数（default_claude_max_5x）时跟在后面，写成 "Max 5x"。认不出的类型去掉 claude_ 前缀、首字母大写。
+func claudePlan(orgType, tier string) string {
+	name := strings.TrimPrefix(orgType, "claude_")
+	if name == "" {
+		return ""
+	}
+	name = titleWord(name)
+	if m := claudeMultiplier.FindStringSubmatch(tier); m != nil {
+		name += " " + m[1]
+	}
+	return name
 }

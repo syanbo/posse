@@ -82,7 +82,7 @@ class PrefsPairingStore implements PairingStore {
 class AppSettings {
   AppSettings({
     this.theme = 'dark',
-    this.openMode = 'chat',
+    this.openMode = 'terminal',
     this.terminalFontSize = 12.5,
     this.showReasoning = true,
     this.expandTools = false,
@@ -371,6 +371,9 @@ class HiveAppModel extends ChangeNotifier {
   /// 有运行中终端的工作区的标签，首页照桌面侧栏把会话直接列在工作区下面。
   Map<String, List<SessionTab>> tabs = const {};
   var connecting = false;
+
+  /// 用户在电脑列表里点了断开：停在首页、不自动重连，点重新连接或选一台电脑才再连。只在这次运行里有效。
+  var disconnected = false;
   String? error;
   Timer? _poll;
   var _connectGen = 0;
@@ -440,6 +443,7 @@ class HiveAppModel extends ChangeNotifier {
   Future<bool> connectCode(String raw) async {
     final gen = ++_connectGen;
     connecting = true;
+    disconnected = false;
     error = null;
     notifyListeners();
     HiveLink? next;
@@ -635,6 +639,13 @@ class HiveAppModel extends ChangeNotifier {
       return;
     }
     await removeComputer(id);
+  }
+
+  /// 主动断开当前这台电脑，配对留着。
+  Future<void> disconnect() async {
+    await _disconnect();
+    disconnected = true;
+    notifyListeners();
   }
 
   Future<void> _disconnect() async {

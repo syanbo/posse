@@ -399,28 +399,24 @@ class WorkspaceScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Flexible(
-              child: Material(
-                color: c.fill,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
+            // 胶囊用掉按钮以外的全部宽度、靠左，电脑名写得下就写全
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Material(
+                  color: c.fill,
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () => _showComputers(context),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
-                    child: _ConnectionLine(model: model),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _showComputers(context),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+                      child: _ConnectionLine(model: model),
+                    ),
                   ),
                 ),
               ),
             ),
-            // 延迟在胶囊外面右边，不挤电脑名；断线时胶囊里写着重连，不显示
-            if (model.rpc != null && !model.connecting)
-              LatencyLabel(
-                latency: model.latency,
-                unresponsive: model.unresponsive,
-                gap: 8,
-                size: 13,
-              ),
           ],
         ),
         actions: [
@@ -434,6 +430,18 @@ class WorkspaceScreen extends StatelessWidget {
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 延迟排在按钮这一组最前面，左右各空 8，和图标按钮之间看着一样宽；
+                      // 胶囊里的连接状态变宽变窄它不挪，断线重连时不显示
+                      if (!model.connecting)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: LatencyLabel(
+                            latency: model.latency,
+                            unresponsive: model.unresponsive,
+                            gap: 0,
+                            size: 13,
+                          ),
+                        ),
                       IconButton(
                         tooltip: '历史',
                         visualDensity: VisualDensity.compact,
@@ -481,6 +489,11 @@ class WorkspaceScreen extends StatelessWidget {
       body: model.worktrees.isEmpty
           ? (model.connecting
                 ? const Center(child: CircularProgressIndicator())
+                : model.disconnected
+                ? _DisconnectedList(
+                    model: model,
+                    onAdd: () => _addComputer(context),
+                  )
                 : EmptyState(
                     icon: model.error == null
                         ? Icons.folder_open_rounded
@@ -1009,9 +1022,14 @@ class _ConnectionLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final offline = model.rpc == null || model.connecting;
+    // 主动断开的不算掉线：灰点加「已断开」，不转圈
+    final off = model.disconnected && !model.connecting;
+    final offline = !off && (model.rpc == null || model.connecting);
+    final current = model.current;
     final text = model.connecting
         ? '正在连接电脑…'
+        : off
+        ? '${current == null ? '' : '${model.labelOf(current)} · '}已断开'
         : offline
         ? '连接断开，正在重连…'
         : model.labelOf(model.current);
@@ -1042,7 +1060,7 @@ class _ConnectionLine extends StatelessWidget {
                 width: 7,
                 height: 7,
                 decoration: BoxDecoration(
-                  color: c.sage,
+                  color: off ? c.faint : c.sage,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1187,7 +1205,7 @@ class _ComputerSheet extends StatelessWidget {
                           subtitle: Text(
                             computer.id == active && model.connectedUrl != null
                                 ? hostOf(model.connectedUrl) ?? ''
-                                : _endpoint(computer),
+                                : computerEndpoint(computer),
                             style: mono(12, color: c.muted),
                           ),
                           trailing: computer.id == active
@@ -1214,6 +1232,19 @@ class _ComputerSheet extends StatelessWidget {
                 ),
               ),
               if (model.error != null) NoticeBar(model.error!),
+              // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
+              if (model.rpc != null || model.connecting)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      unawaited(model.disconnect());
+                    },
+                    icon: const Icon(Icons.link_off_rounded, size: 20),
+                    label: const Text('断开连接'),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: FilledButton.icon(
@@ -1236,14 +1267,64 @@ class _ComputerSheet extends StatelessWidget {
       },
     );
   }
+}
 
-  String _endpoint(SavedComputer computer) {
-    try {
-      final uri = Uri.parse(PairingOffer.parse(computer.code).endpoint);
-      return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
-    } catch (_) {
-      return '';
-    }
+/// 配对码里的主地址（host:port），电脑列表的副标题。
+String computerEndpoint(SavedComputer computer) {
+  try {
+    final uri = Uri.parse(PairingOffer.parse(computer.code).endpoint);
+    return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+  } catch (_) {
+    return '';
+  }
+}
+
+/// 主动断开后首页的样子：列出配对过的电脑和台数，点一台就连它；底下可以扫码添加。
+class _DisconnectedList extends StatelessWidget {
+  const _DisconnectedList({required this.model, required this.onAdd});
+
+  final HiveAppModel model;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HiveColors.of(context);
+    final computers = model.computers;
+    return ListView(
+      padding: EdgeInsets.only(
+        top: 8,
+        bottom: 16 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        Section(
+          title: '已断开 · 可以连接的电脑 ${computers.length} 台',
+          inset: 50,
+          children: [
+            for (final computer in computers)
+              RowTile(
+                leading: Icon(
+                  Icons.laptop_mac_rounded,
+                  size: 24,
+                  color: c.accent,
+                ),
+                title: Text(model.labelOf(computer)),
+                subtitle: Text(
+                  computerEndpoint(computer),
+                  style: mono(12, color: c.muted),
+                ),
+                onTap: () => model.connectCode(computer.code),
+              ),
+          ],
+        ),
+        Center(
+          child: TextButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+            label: const Text('扫码添加电脑'),
+          ),
+        ),
+      ],
+    );
   }
 }
 

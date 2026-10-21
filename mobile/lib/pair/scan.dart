@@ -96,6 +96,8 @@ class _QrScanPageState extends State<QrScanPage> {
   MethodChannel? _channel;
   late final ScanSession _session;
   String? _note;
+  Animation<double>? _enter;
+  var _shown = false;
 
   @override
   void initState() {
@@ -112,8 +114,31 @@ class _QrScanPageState extends State<QrScanPage> {
     );
   }
 
+  // 相机画面在弹出动画结束后才上屏：平台视图跟着滑动时 iOS 每帧都要重新合成它，会卡。
+  // 视图在 Offstage 里照样创建，相机在动画期间就开始启动，不多等。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final enter = ModalRoute.of(context)?.animation;
+    if (enter == _enter) return;
+    _enter?.removeStatusListener(_onEnter);
+    _enter = enter;
+    if (enter == null || enter.isCompleted) {
+      _shown = true;
+    } else {
+      enter.addStatusListener(_onEnter);
+    }
+  }
+
+  void _onEnter(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    _enter?.removeStatusListener(_onEnter);
+    setState(() => _shown = true);
+  }
+
   @override
   void dispose() {
+    _enter?.removeStatusListener(_onEnter);
     unawaited(_channel?.invokeMethod<void>('stop'));
     super.dispose();
   }
@@ -168,7 +193,13 @@ class _QrScanPageState extends State<QrScanPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          UiKitView(viewType: 'hive/qr', onPlatformViewCreated: _attach),
+          Offstage(
+            offstage: !_shown,
+            child: UiKitView(
+              viewType: 'hive/qr',
+              onPlatformViewCreated: _attach,
+            ),
+          ),
           LayoutBuilder(
             builder: (context, box) {
               final side = (box.maxWidth * 0.68).clamp(200.0, 320.0);

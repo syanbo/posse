@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -234,11 +235,29 @@ func (a *app) dropDevices(ds []mobileDevice) {
 
 // mobileSidebarItem 是侧栏里「历史」下面的「手机」，和任务、历史同一行样式。
 func (a *app) mobileSidebarItem(c *ui.Context) {
-	item := a.navRow(c, mobileBoardID, iconPhone, "手机", "", "", nil)
+	// 有手机连着时行尾一个绿点（几台时带数字），悬停写是哪几台
+	var trailing func()
+	if on := a.daemon.MobileOnline; len(on) > 0 {
+		trailing = func() { mobileOnlineMark(c, on) }
+	}
+	item := a.navRow(c, mobileBoardID, iconPhone, "手机", "", "", trailing)
 	if a.revealSel && a.selected == mobileBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
+}
+
+// mobileOnlineMark 是侧栏「手机」行尾的连接标识：绿点，连着不止一台时前面写台数。
+func mobileOnlineMark(c *ui.Context, names []string) {
+	t := c.Theme()
+	green := colors(t).sage
+	tip := strings.Join(names, "、") + " 正连着"
+	ui.Row(c).Gap(5).AlignItems(ui.Center).Label(tip).Tooltip(tip).Children(func() {
+		if len(names) > 1 {
+			ui.Text(c, strconv.Itoa(len(names))).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		}
+		ui.Box(c).Size(7, 7).Radius(3.5).Background(green)
+	})
 }
 
 // mobileBoard 是主区域的手机页，顶栏和任务、历史一样。内容是居中的一栏：上面配对新手机

@@ -52,4 +52,24 @@ void main() {
       greaterThanOrEqualTo(13.0 * 6),
     );
   });
+
+  testWidgets('a disconnect by hand says so and offers to reconnect', (
+    tester,
+  ) async {
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.disconnected = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: hiveTheme(Brightness.dark),
+        home: WorkspaceScreen(model: model),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('已断开'), findsOneWidget);
+    expect(find.text('连接断开，正在重连…'), findsNothing);
+    expect(find.textContaining('可以连接的电脑 0 台'), findsOneWidget);
+  });
 }

@@ -307,6 +307,49 @@ void main() {
     },
   );
 
+  test('disconnecting stays disconnected until asked to connect', () async {
+    final hostKeys = generateKeyPair();
+    final code = base64Url.encode(
+      utf8.encode(
+        jsonEncode({
+          'v': 2,
+          'endpoint': 'only',
+          'deviceToken': 'tok',
+          'publicKeyB64': b64(hostKeys.publicKey),
+        }),
+      ),
+    );
+    var dials = 0;
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+      networkSignatures: const Stream.empty(),
+      connect: (url, cancel) async {
+        dials++;
+        final (client, host) = pipePair();
+        unawaited(_host(host, hostKeys, 'tok'));
+        return client;
+      },
+    );
+    expect(await model.connectCode(code), isTrue);
+    await model.disconnect();
+    expect(model.rpc, isNull);
+    expect(model.disconnected, isTrue);
+    // 配对留着，也不自己重连
+    expect(model.computers, hasLength(1));
+    final before = dials;
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(dials, before);
+    expect(model.rpc, isNull);
+    // 假电脑回过 status.get 就不再回话，只等连上，不等工作区列表
+    unawaited(model.retry());
+    for (var i = 0; i < 100 && model.rpc == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(model.rpc, isNotNull);
+    expect(model.disconnected, isFalse);
+  });
+
   test('reconnecting clears the errors left by failed retries', () async {
     final hostKeys = generateKeyPair();
     final code = base64Url.encode(

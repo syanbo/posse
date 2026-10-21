@@ -109,7 +109,7 @@ func codexRateLimits(raw []byte, now time.Time) (Usage, bool) {
 	}
 	u := Usage{Agent: "codex", UpdatedAt: now.UnixMilli()}
 	if rl := r.RateLimits; rl != nil {
-		u.Plan = rl.PlanType
+		u.Plan = titleWord(rl.PlanType)
 		for _, w := range []*window{rl.Primary, rl.Secondary} {
 			if w != nil && w.Used != nil {
 				u.Windows = append(u.Windows, Window{Percent: clampPercent(*w.Used), Minutes: w.Minutes, ResetsAt: epochMs(w.ResetsAt.v)})

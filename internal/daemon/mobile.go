@@ -138,6 +138,10 @@ func (h mobileHost) Usage() any {
 	return usageStatus{Usages: []usage.Usage{}}
 }
 
+func (h mobileHost) RefreshUsage(ctx context.Context) (any, error) {
+	return h.d.usageRefresh(ctx, nil)
+}
+
 func (h mobileHost) History(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	d := h.d
 	switch method {

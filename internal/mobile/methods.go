@@ -30,6 +30,8 @@ type Host interface {
 	History(ctx context.Context, method string, params json.RawMessage) (any, error)
 	// Usage 是各 agent 的套餐用量，和 daemon.status 里给窗口的一样
 	Usage() any
+	// RefreshUsage 让各家马上取一次用量（同窗口的刷新），做完返回新的读数；Codex、Cursor 要联网，最长半分钟
+	RefreshUsage(ctx context.Context) (any, error)
 }
 
 // ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
@@ -532,6 +534,18 @@ func (c *conn) dispatch(req request) error {
 			return errorf("method_not_found", "Unknown method: %s", req.Method)
 		}
 		return c.reply(req.ID, c.srv.host.Usage())
+	case "usage.refresh":
+		if !c.hasCapability("hive.usage.v1") {
+			return errorf("method_not_found", "Unknown method: %s", req.Method)
+		}
+		// 要等联网，放到一边做：同一连接的请求排队处理，不能挡住后面的
+		go func() {
+			ctx, cancel := context.WithTimeout(c.ctx, 45*time.Second)
+			defer cancel()
+			res, err := c.srv.host.RefreshUsage(ctx)
+			c.replyOrFail(req.ID, res, err)
+		}()
+		return nil
 	case "session.context":
 		return c.sessionContext(req.ID, p)
 	case "git.status":

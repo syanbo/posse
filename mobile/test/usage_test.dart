@@ -28,7 +28,7 @@ void main() {
       'cursorOff': false,
     });
     expect(us.length, 2);
-    expect(us[0].plan, 'plus');
+    expect(us[0].plan, 'Plus'); // 旧常驻进程给的小写，显示时首字母大写
     expect(us[0].windows[0].resetsAt?.millisecondsSinceEpoch, 1792402032000);
     expect(us[0].windows[1].resetsAt, isNull);
     expect(us[1].spend?.limit, 40000);
@@ -173,5 +173,49 @@ void main() {
     final now = DateTime.fromMillisecondsSinceEpoch(3600000);
     expect(usageFacts(u[0], now).single, startsWith('本周用量用在 Claude Code 92%（'));
     expect(usageFacts(u[1], now).single, startsWith('重置卡 3 张，最早一张 '));
+  });
+
+  testWidgets('sheet refresh swaps in the new readings', (tester) async {
+    var fail = false;
+    Future<List<AgentUsage>> refresh() async {
+      if (fail) {
+        throw Exception('method_not_found: Unknown method: usage.refresh');
+      }
+      return [
+        AgentUsage(
+          agent: 'codex',
+          plan: 'Plus',
+          windows: const [UsageWindow(percent: 30, minutes: 300)],
+          updatedAt: DateTime.now(),
+        ),
+      ];
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: hiveTheme(Brightness.light),
+        home: Scaffold(
+          body: UsageSheet(
+            usages: [
+              AgentUsage(
+                agent: 'codex',
+                windows: const [UsageWindow(percent: 4, minutes: 300)],
+                updatedAt: DateTime.now(),
+              ),
+            ],
+            onRefresh: refresh,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('已用 4%'), findsOneWidget);
+    await tester.tap(find.byTooltip('刷新'));
+    await tester.pumpAndSettle();
+    expect(find.text('已用 30%'), findsOneWidget);
+    expect(find.text('Plus'), findsOneWidget);
+    fail = true;
+    await tester.tap(find.byTooltip('刷新'));
+    await tester.pumpAndSettle();
+    expect(find.text('电脑上的 Hive 太旧，更新后才能刷新'), findsOneWidget);
   });
 }

@@ -87,15 +87,16 @@ type worktreeDiff struct {
 }
 
 type daemonStatus struct {
-	FootprintKB int64
-	Running     int
-	Awake       *awakeStatus // 旧常驻进程没有防休眠时为空
-	Usage       *planStatus  // 旧常驻进程没有套餐用量时为空
-	Version     string       `json:"version"`
-	Build       string       `json:"build"` // 旧常驻进程没有这个字段时为空
-	Pid         int          `json:"pid"`
-	StartedAt   time.Time    `json:"startedAt"`
-	GitTraceSeq int64        `json:"gitTraceSeq"` // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
+	FootprintKB  int64
+	Running      int
+	Awake        *awakeStatus // 旧常驻进程没有防休眠时为空
+	Usage        *planStatus  // 旧常驻进程没有套餐用量时为空
+	Version      string       `json:"version"`
+	Build        string       `json:"build"` // 旧常驻进程没有这个字段时为空
+	Pid          int          `json:"pid"`
+	StartedAt    time.Time    `json:"startedAt"`
+	GitTraceSeq  int64        `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
+	MobileOnline []string     `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -392,7 +393,7 @@ type pollResult struct {
 	termKB     int64
 	awake      *awakeStatus
 	usage      *planStatus
-	daemonInfo daemonStatus // 版本、构建、pid、启动时间，设置页的"关于"用
+	daemonInfo daemonStatus // 版本、构建、pid、启动时间（设置页的"关于"用），连着的手机
 }
 
 func (a *app) refresh() {
@@ -459,7 +460,7 @@ func (a *app) refresh() {
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
-		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 		a.autoUpgrade(r.daemonInfo)
 	}

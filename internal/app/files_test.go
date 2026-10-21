@@ -722,3 +722,17 @@ func TestRecentTrashButton(t *testing.T) {
 		t.Fatal("no trash button on hover")
 	}
 }
+
+// 侧栏「手机」：有手机连着时行尾有绿点，悬停写是哪几台；没连着时没有。
+func TestMobileOnlineMark(t *testing.T) {
+	a := previewApp(t)
+	tt := newPreviewTester(a, true)
+	if tt.HasText("正连着") {
+		t.Fatal("mark without phones")
+	}
+	a.daemon.MobileOnline = []string{"iPhone 12 Pro", "Pixel"}
+	tt.Frame()
+	if _, ok := tt.Find("iPhone 12 Pro、Pixel 正连着"); !ok || !tt.HasText("2") {
+		t.Fatal("no online mark")
+	}
+}

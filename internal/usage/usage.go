@@ -4,10 +4,12 @@
 package usage
 
 import (
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -68,6 +70,10 @@ func merge(old, in Usage) Usage {
 		main = old
 	}
 	out := Usage{Agent: main.Agent, Plan: main.Plan, Spend: main.Spend, UpdatedAt: main.UpdatedAt}
+	// 有的来源不带套餐名（Claude 的 statusLine），较新的读数没有时沿用旧的
+	if out.Plan == "" {
+		out.Plan = cmp.Or(in.Plan, old.Plan)
+	}
 	for _, w := range main.Windows {
 		if w.Name == "" {
 			out.Windows = append(out.Windows, w)
@@ -269,4 +275,12 @@ func (s *Store) saveLocked() {
 	if os.WriteFile(tmp, b, 0o600) == nil {
 		os.Rename(tmp, s.path)
 	}
+}
+
+// titleWord 把 agent 给的小写套餐类型（plus、pro、team）写成首字母大写，照它们网页上的叫法。
+func titleWord(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }

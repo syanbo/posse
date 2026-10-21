@@ -54,7 +54,7 @@ func TestCodexRollout(t *testing.T) {
 	if !ok {
 		t.Fatal("no usage")
 	}
-	if u.Plan != "plus" || len(u.Windows) != 2 || u.Windows[0].Percent != 7 || u.Windows[1].Minutes != 10080 || u.Windows[1].ResetsAt != 1792900210000 {
+	if u.Plan != "Plus" || len(u.Windows) != 2 || u.Windows[0].Percent != 7 || u.Windows[1].Minutes != 10080 || u.Windows[1].ResetsAt != 1792900210000 {
 		t.Fatalf("got %+v", u)
 	}
 	if u.UpdatedAt != time.Date(2026, 10, 19, 5, 51, 57, 408e6, time.UTC).UnixMilli() {
@@ -240,7 +240,7 @@ func TestCodexRateLimits(t *testing.T) {
 	raw := `{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","primary":{"usedPercent":2,"windowDurationMins":300,"resetsAt":1792446937},"secondary":{"usedPercent":8,"windowDurationMins":10080,"resetsAt":1792900210},"credits":{"hasCredits":false},"planType":"plus"},
 		"rateLimitResetCredits":{"availableCount":3,"credits":[{"status":"available","expiresAt":1793292156},{"status":"available","expiresAt":1792693790},{"status":"redeemed","expiresAt":1790000000}]}}`
 	u, ok := codexRateLimits([]byte(raw), time.UnixMilli(1792430000000))
-	if !ok || u.Plan != "plus" || len(u.Windows) != 2 || u.Windows[0].Percent != 2 {
+	if !ok || u.Plan != "Plus" || len(u.Windows) != 2 || u.Windows[0].Percent != 2 {
 		t.Fatalf("got %+v", u)
 	}
 	if u.Resets == nil || u.Resets.Count != 3 || u.Resets.ExpiresAt != 1792693790000 {
@@ -255,5 +255,31 @@ func TestCursorPlan(t *testing.T) {
 	}
 	if got := cursorPlan([]byte(`{"planInfo":{"planName":"Pro"}}`)); got != "Pro" {
 		t.Fatalf("plan = %q", got)
+	}
+}
+
+// Claude 的套餐名取 oauthAccount：类型加限额倍数；statusLine 的读数不带套餐名，合并时沿用缓存里的。
+func TestClaudePlan(t *testing.T) {
+	for _, c := range []struct{ typ, tier, want string }{
+		{"claude_max", "default_claude_max_5x", "Max 5x"},
+		{"claude_max", "default_claude_max_20x", "Max 20x"},
+		{"claude_pro", "default_claude_ai", "Pro"},
+		{"claude_team", "", "Team"},
+		{"", "default_claude_max_5x", ""},
+	} {
+		if got := claudePlan(c.typ, c.tier); got != c.want {
+			t.Errorf("claudePlan(%q, %q) = %q, want %q", c.typ, c.tier, got, c.want)
+		}
+	}
+	path := filepath.Join(t.TempDir(), ".claude.json")
+	os.WriteFile(path, []byte(`{"oauthAccount":{"organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_5x","userRateLimitTier":null},
+		"cachedUsageUtilization":{"fetchedAtMs":1000,"utilization":{"five_hour":{"utilization":5,"resets_at":"2026-10-19T14:40:00Z"}}}}`), 0o600)
+	cache, ok := ClaudeCache(path)
+	if !ok || cache.Plan != "Max 5x" {
+		t.Fatalf("cache plan %q %v", cache.Plan, ok)
+	}
+	line, _ := ClaudeStatusLine([]byte(`{"rate_limits":{"five_hour":{"used_percentage":9,"resets_at":1792402032}}}`), time.UnixMilli(2000))
+	if got := merge(cache, line); got.Plan != "Max 5x" || got.Windows[0].Percent != 9 {
+		t.Fatalf("merged %+v", got)
 	}
 }

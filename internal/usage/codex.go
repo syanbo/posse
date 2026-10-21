@@ -45,7 +45,7 @@ func codexLine(line []byte) (Usage, bool) {
 	if rl == nil || (rl.LimitID != "" && rl.LimitID != "codex") {
 		return Usage{}, false
 	}
-	u := Usage{Agent: "codex", Plan: rl.PlanType, UpdatedAt: isoMs(rec.Timestamp)}
+	u := Usage{Agent: "codex", Plan: titleWord(rl.PlanType), UpdatedAt: isoMs(rec.Timestamp)}
 	for _, w := range []*window{rl.Primary, rl.Secondary} {
 		if w != nil && w.Used != nil {
 			u.Windows = append(u.Windows, Window{Percent: clampPercent(*w.Used), Minutes: w.Minutes, ResetsAt: epochMs(w.ResetsAt.v)})

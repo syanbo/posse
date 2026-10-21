@@ -99,7 +99,7 @@ class AgentUsage {
     final resets = j['resets'] as Map?;
     return AgentUsage(
       agent: j['agent'] as String? ?? '',
-      plan: j['plan'] as String? ?? '',
+      plan: planName(j['plan'] as String? ?? ''),
       windows: [
         for (final w in (j['windows'] as List?) ?? const [])
           UsageWindow.fromJson((w as Map).cast<String, Object?>()),
@@ -151,6 +151,11 @@ String windowName(UsageWindow w) {
 }
 
 String _money(double cents) => '\$${(cents / 100).toStringAsFixed(2)}';
+
+/// planName 照各家网页的叫法把套餐名首字母大写（Codex 给的是 plus、pro）。新的常驻进程已经这样写，
+/// 这里兜住还没升级的电脑。
+String planName(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
 /// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 /// 和整家的读数不是同一份的，后面写上是多久前的。
@@ -312,15 +317,33 @@ class _UsageCardState extends State<UsageCard> {
     }
   }
 
+  /// 详情里的刷新：电脑上各家马上取一次（Codex、Cursor 要联网，最长半分钟），首页卡片一起换上新读数。
+  Future<List<AgentUsage>> _refresh() async {
+    final rpc = widget.model.rpc;
+    if (rpc == null) throw StateError('电脑没有连上');
+    final res = await rpc.call(
+      'usage.refresh',
+      {},
+      timeout: const Duration(seconds: 50),
+    );
+    final us = parseUsages(res);
+    if (mounted && identical(rpc, widget.model.rpc)) {
+      setState(() => _usages = us);
+    }
+    return us;
+  }
+
   @override
-  Widget build(BuildContext context) => UsageCardView(usages: _usages);
+  Widget build(BuildContext context) =>
+      UsageCardView(usages: _usages, onRefresh: _refresh);
 }
 
 /// 卡片的样子，和取数据分开，测试和截图直接给读数。
 class UsageCardView extends StatelessWidget {
-  const UsageCardView({super.key, required this.usages});
+  const UsageCardView({super.key, required this.usages, this.onRefresh});
 
   final List<AgentUsage> usages;
+  final Future<List<AgentUsage>> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +378,7 @@ class UsageCardView extends StatelessWidget {
             constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(context).height * 0.85,
             ),
-            builder: (_) => UsageSheet(usages: shown),
+            builder: (_) => UsageSheet(usages: shown, onRefresh: onRefresh),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
@@ -462,10 +485,41 @@ class UsageBar extends StatelessWidget {
 }
 
 /// 点开卡片的详情：每家的套餐、各窗口的进度和重置时间、读数时间。
-class UsageSheet extends StatelessWidget {
-  const UsageSheet({super.key, required this.usages});
+class UsageSheet extends StatefulWidget {
+  const UsageSheet({super.key, required this.usages, this.onRefresh});
 
   final List<AgentUsage> usages;
+
+  /// 顶栏的刷新按钮，没有时不显示；返回新的读数
+  final Future<List<AgentUsage>> Function()? onRefresh;
+
+  @override
+  State<UsageSheet> createState() => _UsageSheetState();
+}
+
+class _UsageSheetState extends State<UsageSheet> {
+  late List<AgentUsage> usages = widget.usages;
+  bool _refreshing = false;
+  String _error = '';
+
+  Future<void> _refresh() async {
+    setState(() {
+      _refreshing = true;
+      _error = '';
+    });
+    try {
+      final us = await widget.onRefresh!();
+      if (!mounted) return;
+      setState(() => usages = us.where((u) => u.windows.isNotEmpty).toList());
+    } catch (e) {
+      if (!mounted) return;
+      // 电脑上的 Hive 太旧没有这个接口时说清楚，别的错误照常写
+      final old = e.toString().contains('method_not_found');
+      setState(() => _error = old ? '电脑上的 Hive 太旧，更新后才能刷新' : friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
@@ -476,138 +530,157 @@ class UsageSheet extends StatelessWidget {
   Widget _sheet(BuildContext context, bool remaining) {
     final c = HiveColors.of(context);
     final now = DateTime.now();
-    return SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+    // 滚动区铺到屏幕底边，内容底下垫出安全区：滚到底时最后一行在 Home 条上方，滚动时内容从它后面经过
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + bottom),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '套餐用量',
+                  style: TextStyle(
+                    fontSize: Fs.cardTitle,
+                    fontWeight: FontWeight.w600,
+                    color: c.text,
+                  ),
+                ),
+              ),
+              if (widget.onRefresh != null)
+                IconButton(
+                  tooltip: '刷新',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _refreshing ? null : _refresh,
+                  icon: _refreshing
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: c.muted,
+                          ),
+                        )
+                      : Icon(Icons.refresh_rounded, size: 20, color: c.muted),
+                ),
+              SizedBox(
+                width: 128,
+                child: Segmented(
+                  labels: const ['已用', '剩余'],
+                  selected: remaining ? 1 : 0,
+                  onChanged: (i) => setUsageRemaining(i == 1),
+                ),
+              ),
+              IconButton(
+                tooltip: '关闭',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Icon(Icons.close_rounded, size: 20, color: c.muted),
+              ),
+            ],
+          ),
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _error,
+                style: TextStyle(fontSize: Fs.caption, color: c.danger),
+              ),
+            ),
+          for (final u in usages) ...[
+            const SizedBox(height: 18),
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    '套餐用量',
-                    style: TextStyle(
-                      fontSize: Fs.cardTitle,
-                      fontWeight: FontWeight.w600,
-                      color: c.text,
+                AgentTile(agent: u.agent, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  agentTitle(u.agent),
+                  style: TextStyle(
+                    fontSize: Fs.body,
+                    fontWeight: FontWeight.w500,
+                    color: c.text,
+                  ),
+                ),
+                if (u.plan.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      u.plan,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: Fs.meta, color: c.muted),
                     ),
                   ),
-                ),
-                SizedBox(
-                  width: 128,
-                  child: Segmented(
-                    labels: const ['已用', '剩余'],
-                    selected: remaining ? 1 : 0,
-                    onChanged: (i) => setUsageRemaining(i == 1),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '关闭',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: Icon(Icons.close_rounded, size: 20, color: c.muted),
+                ] else
+                  const Spacer(),
+                Text(
+                  agoText(u.updatedAt, now),
+                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
                 ),
               ],
             ),
-            for (final u in usages) ...[
-              const SizedBox(height: 18),
+            for (final w in u.shownWindows) ...[
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  AgentTile(agent: u.agent, size: 22),
-                  const SizedBox(width: 10),
-                  Text(
-                    agentTitle(u.agent),
-                    style: TextStyle(
-                      fontSize: Fs.body,
-                      fontWeight: FontWeight.w500,
-                      color: c.text,
+                  Expanded(
+                    child: Text(
+                      windowName(w),
+                      style: TextStyle(fontSize: Fs.meta, color: c.text),
                     ),
                   ),
-                  if (u.plan.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        u.plan,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
-                      ),
-                    ),
-                  ] else
-                    const Spacer(),
                   Text(
-                    agoText(u.updatedAt, now),
+                    // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）
+                    w.at != null &&
+                            u.updatedAt.difference(w.at!) >
+                                const Duration(minutes: 10)
+                        ? '${resetText(w.resetsAt, now)}，${agoText(w.at!, now)}的读数'
+                        : resetText(w.resetsAt, now),
                     style: TextStyle(fontSize: Fs.caption, color: c.muted),
                   ),
                 ],
               ),
-              for (final w in u.shownWindows) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        windowName(w),
-                        style: TextStyle(fontSize: Fs.meta, color: c.text),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: UsageBar(
+                      percent: shownPercent(w, remaining),
+                      urgent: w.percent >= usageUrgent,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 76,
+                    child: Text(
+                      '${remaining ? '剩余' : '已用'} ${shownPercent(w, remaining).round()}%',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: Fs.meta,
+                        fontWeight: FontWeight.w500,
+                        color: w.percent >= usageUrgent ? c.danger : c.text,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                    Text(
-                      // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）
-                      w.at != null &&
-                              u.updatedAt.difference(w.at!) >
-                                  const Duration(minutes: 10)
-                          ? '${resetText(w.resetsAt, now)}，${agoText(w.at!, now)}的读数'
-                          : resetText(w.resetsAt, now),
-                      style: TextStyle(fontSize: Fs.caption, color: c.muted),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: UsageBar(
-                        percent: shownPercent(w, remaining),
-                        urgent: w.percent >= usageUrgent,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 76,
-                      child: Text(
-                        '${remaining ? '剩余' : '已用'} ${shownPercent(w, remaining).round()}%',
-                        textAlign: TextAlign.end,
-                        style: TextStyle(
-                          fontSize: Fs.meta,
-                          fontWeight: FontWeight.w500,
-                          color: w.percent >= usageUrgent ? c.danger : c.text,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              for (final f in usageFacts(u, now)) ...[
-                const SizedBox(height: 8),
-                Text(
-                  f,
-                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
-                ),
-              ],
-            ],
-            const SizedBox(height: 20),
-            Text(
-              '电脑上的 agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后电脑会查一次。',
-              style: TextStyle(
-                fontSize: Fs.caption,
-                color: c.muted,
-                height: 1.5,
+                  ),
+                ],
               ),
-            ),
+            ],
+            for (final f in usageFacts(u, now)) ...[
+              const SizedBox(height: 8),
+              Text(
+                f,
+                style: TextStyle(fontSize: Fs.caption, color: c.muted),
+              ),
+            ],
           ],
-        ),
+          const SizedBox(height: 20),
+          Text(
+            '电脑上的 agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后电脑会查一次。',
+            style: TextStyle(fontSize: Fs.caption, color: c.muted, height: 1.5),
+          ),
+        ],
       ),
     );
   }

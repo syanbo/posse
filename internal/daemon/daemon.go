@@ -479,6 +479,8 @@ type statusResult struct {
 	Usage       *usageStatus `json:"usage,omitempty"`
 	// GitTraceSeq 是终端 git 命令记录的最新序号，界面看到它变了再取（git.trace）
 	GitTraceSeq int64 `json:"gitTraceSeq,omitempty"`
+	// MobileOnline 是现在连着的手机的名字，界面在侧栏「手机」上标出来
+	MobileOnline []string `json:"mobileOnline,omitempty"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -501,6 +503,13 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 	}
 	r.Usage = d.usageStatus()
 	r.GitTraceSeq = d.gitTrace.latest()
+	if d.mobile != nil {
+		for _, dv := range d.mobile.Devices() {
+			if dv.Online {
+				r.MobileOnline = append(r.MobileOnline, dv.Name)
+			}
+		}
+	}
 	return r, nil
 }
 
