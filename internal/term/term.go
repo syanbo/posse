@@ -356,6 +356,14 @@ func (t *Terminal) Clear(redraw bool) error {
 	return nil
 }
 
+// CursorKeysApp 报告程序是否开着光标键应用模式（DECCKM）：开着时方向键、Home、End 要发 ESC O 开头的编码，
+// htop 这类 ncurses 程序只认这种。
+func (t *Terminal) CursorKeysApp() bool {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	return t.emu != nil && t.emu.Mode(vt.ModeCursorKeys)
+}
+
 // compress 在终端空闲时压缩回滚区，降低常驻内存。
 func (t *Terminal) compress() {
 	t.smu.Lock()

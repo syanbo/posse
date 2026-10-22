@@ -80,6 +80,8 @@ type Terminal interface {
 	ReleaseSize(key string)
 	// SizeHeld 报告是不是按手机的尺寸排版，ReclaimSize 让电脑收回尺寸（放掉所有手机的占用）
 	SizeHeld() bool
+	// CursorKeysApp 报告程序是否开着光标键应用模式，见 term.Terminal.CursorKeysApp
+	CursorKeysApp() bool
 	ReclaimSize()
 	Clear(redraw bool) error
 
@@ -173,6 +175,7 @@ func (l *local) Resize(cols, rows int)         { l.t.Resize(cols, rows) }
 func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
 func (l *local) ReleaseSize(key string)        { l.t.ReleaseSize(key) }
 func (l *local) SizeHeld() bool                { return l.t.SizeHeld() }
+func (l *local) CursorKeysApp() bool           { return l.t.CursorKeysApp() }
 func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
 func (l *local) Clear(redraw bool) error       { return l.t.Clear(redraw) }
 func (l *local) Lines() []string               { return l.t.Lines() }

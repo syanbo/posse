@@ -88,3 +88,17 @@ func TestMobileBranchFollowsHead(t *testing.T) {
 		}
 	}
 }
+
+// terminal send 的方向键跟着程序的光标键模式：开着应用模式（DECCKM）时发 ESC O A，ncurses 程序只认这种。
+func TestSendKeysFollowCursorMode(t *testing.T) {
+	d, w := newTestDaemon(t)
+	script := `printf '\033[?1h'; stty -icanon -echo; printf 'ready\n'; head -c 3 | od -An -c`
+	info := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "command": []string{"/bin/sh", "-c", script + "; sleep 5"}}).(terminalInfo)
+	s, err := d.session(info.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitScreen(t, s, "ready")
+	call(t, d.terminalSend, map[string]any{"terminal": info.ID, "keys": []string{"up"}})
+	waitScreen(t, s, "033   O   A")
+}

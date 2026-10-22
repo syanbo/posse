@@ -297,6 +297,14 @@ var keyBytes = map[string]string{
 	"ctrl-c": "\x03", "ctrl-d": "\x04", "ctrl-l": "\x0c", "ctrl-u": "\x15", "ctrl-z": "\x1a",
 }
 
+// cursorKeysApp 把方向键、Home、End 换成光标键应用模式下的编码（ESC [ A → ESC O A）。
+func cursorKeysApp(b string) string {
+	if len(b) == 3 && b[:2] == "\x1b[" && strings.IndexByte("ABCDHF", b[2]) >= 0 {
+		return "\x1bO" + b[2:]
+	}
+	return b
+}
+
 func (d *Daemon) terminalSend(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p terminalSendParams
 	if err := rpc.Decode(raw, &p); err != nil {
@@ -310,10 +318,14 @@ func (d *Daemon) terminalSend(ctx context.Context, raw json.RawMessage) (any, er
 		return nil, err
 	}
 	var keys []string
+	app := len(p.Keys) > 0 && s.CursorKeysApp()
 	for _, k := range p.Keys {
 		b, ok := keyBytes[strings.ToLower(k)]
 		if !ok {
 			return nil, rpc.Errorf(rpc.CodeBadRequest, "unknown key %q", k)
+		}
+		if app {
+			b = cursorKeysApp(b)
 		}
 		keys = append(keys, b)
 	}
