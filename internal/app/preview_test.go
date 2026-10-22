@@ -530,6 +530,23 @@ func TestPreview(t *testing.T) {
 		a.images = previewImages()
 		savePNG(t, newPreviewTester(a, dark), "images-"+suffix+".png")
 
+		// 悬停竖的长截图：大图按高缩小，整张在窗口里；右键弹出菜单
+		a = previewApp(t)
+		a.state.RightPanel = panelImages
+		a.images = previewImages()
+		a.images.big, a.images.bigKey = a.images.made[0].thumb, a.images.made[0].Key
+		tt = newPreviewTester(a, dark)
+		if r, ok := tt.Find("phone_screenshot"); ok {
+			tt.Move(r.X+r.W/2, r.Y-60)
+			tt.Frame()
+			savePNG(t, tt, "images-hover-"+suffix+".png")
+			tt.RightClickAt(r.X+r.W/2, r.Y-60)
+			settleMenu(tt)
+			savePNG(t, tt, "images-menu-"+suffix+".png")
+		} else {
+			t.Error("images: phone_screenshot not found")
+		}
+
 		// 文件栏的历史页：当前项目的会话已经查过一次
 		a = previewApp(t)
 		previewHistory(a, "")

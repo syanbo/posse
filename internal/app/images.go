@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"maps"
+	"os/exec"
 	"slices"
 	"time"
 
@@ -145,27 +146,68 @@ func (a *app) loadBig(it imageItem) {
 	}()
 }
 
-// openImage 用默认应用打开原图或视频。工具返回的图片只在会话文件里，先写到临时目录：
+// withImagePath 拿到原图或视频的路径后在主线程调用 f。工具返回的图片只在会话文件里，先写到临时目录：
 // 读的那个文件之后可能被改掉，打开的是 agent 当时看到的样子。
-func (a *app) openImage(it imageItem) {
+func (a *app) withImagePath(it imageItem, f func(path string) error) {
 	if it.Tool == nil {
-		if err := mygo.Shell.OpenPath(it.Path); err != nil {
+		if err := f(it.Path); err != nil {
 			a.err = err.Error()
 		}
 		return
 	}
 	go func() {
 		path, err := media.WriteToolImage(it.Item)
-		if err == nil {
-			err = mygo.Shell.OpenPath(path)
-		}
-		if err != nil {
-			a.update(func() { a.err = err.Error() })
-		}
+		a.update(func() {
+			if err == nil {
+				err = f(path)
+			}
+			if err != nil {
+				a.err = err.Error()
+			}
+		})
 	}()
 }
 
-// imagesPanel 是右侧的图片面板：agent 生成的在上，粘贴的（标上 #N）在下；悬停在左边放大，点击用默认应用打开原图。
+// openImage 是点卡片：图片在文件标签里预览（可缩放），视频和找不到工作区的用默认应用打开。
+func (a *app) openImage(it imageItem) {
+	a.withImagePath(it, func(path string) error {
+		w := a.workspaceOf(path)
+		if w == nil {
+			w = a.workspace(a.selected)
+		}
+		if it.Video || w == nil {
+			return mygo.Shell.OpenPath(path)
+		}
+		// 文件标签盖住了终端，面板留着会挡住图
+		a.state.RightPanel = ""
+		a.saveState()
+		a.previewFile(w, path)
+		return nil
+	})
+}
+
+// imageMenu 是卡片的右键菜单。图片指定用系统的"预览"打开：默认应用可能被改成别的编辑器。
+func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
+	contextMenu(c, card, func(m *popMenu) {
+		if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+			a.withImagePath(it, func(path string) error {
+				mygo.Shell.ShowItemInFolder(path)
+				return nil
+			})
+		}
+		if it.Video {
+			if m.Item("用默认应用打开").Chosen() {
+				a.withImagePath(it, mygo.Shell.OpenPath)
+			}
+		} else if m.Item("用系统预览打开").Chosen() {
+			a.withImagePath(it, func(path string) error {
+				return exec.Command("open", "-a", "Preview", path).Run()
+			})
+		}
+	})
+}
+
+// imagesPanel 是右侧的图片面板：agent 生成的在上，粘贴的（标上 #N）在下；悬停在左边放大，点击在文件标签里预览，右键在访达中显示或用系统预览打开。
 func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollImages(c, cur)
 	v := &a.images
@@ -252,6 +294,7 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 		if card.Clicked() {
 			a.openImage(it)
 		}
+		a.imageMenu(c, card, it)
 	}
 }
 
@@ -264,13 +307,26 @@ func playBadge(c *ui.Context) {
 	})
 }
 
-// imagePreview 是悬停时浮在图片面板左边的大图。
-func (a *app) imagePreview(c *ui.Context) {
+// imagePreview 是悬停时浮在图片面板左边的大图：宽不超过 544、高不超过 body，竖的长截图按高缩小，整张看得见。
+func (a *app) imagePreview(c *ui.Context, body ui.Element) {
 	v := &a.images
 	if v.hover == "" || v.big == nil || v.bigKey != v.hover {
 		return
 	}
-	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Width(560).Padding(8)).Children(func() {
-		ui.Image(c, v.big).Width(544).Radius(6)
+	w, h := v.big.Size()
+	dw := float32(544)
+	b := body.Bounds()
+	if b.W > 0 {
+		// 左边留 8，右边让开面板
+		dw = min(dw, max(b.W-8-(8+280+8)-16, 80))
+	}
+	if bh := b.H; bh > 0 {
+		// 上下各留 8，卡片自己的内边距各 8
+		if maxH := bh - 32; dw*float32(h)/float32(max(w, 1)) > maxH {
+			dw = max(maxH, 80) * float32(w) / float32(max(h, 1))
+		}
+	}
+	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Padding(8)).Children(func() {
+		ui.Image(c, v.big).Width(dw).Radius(6)
 	})
 }

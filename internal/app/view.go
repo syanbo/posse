@@ -1434,7 +1434,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		case panelImages:
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.imagesPanel(c, cur), true
-				a.imagePreview(c)
+				a.imagePreview(c, body)
 			}
 		}
 		if drawn {
