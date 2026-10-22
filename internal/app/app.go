@@ -330,6 +330,9 @@ func Run(c *client.Client) error {
 	if a.state.FontSize > 0 {
 		a.fontSize = a.state.FontSize
 	}
+	if a.state.IconSize > 0 {
+		iconSize = a.state.IconSize
+	}
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:         "Hive",

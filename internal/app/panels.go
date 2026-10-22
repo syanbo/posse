@@ -52,7 +52,7 @@ func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
 
 // panelButton 是终端右上角打开某个右侧面板的按钮（不带悬停提示，见 sessionButtons），开着时垫一层强调色淡底。
 func (a *app) panelButton(c *ui.Context, name string, icon *ui.SVG, label string) {
-	b := quietIconButton(c.Key("panel-"+name), icon, label, 28, 16)
+	b := quietIconButton(c.Key("panel-"+name), icon, label, buttonBox(), iconSize)
 	if b.Hovered() {
 		a.overPanelButton = true
 	}

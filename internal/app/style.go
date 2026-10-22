@@ -26,6 +26,21 @@ import (
 
 var hover = ui.Animation{Duration: 120 * time.Millisecond}
 
+// iconSize 是图标按钮和侧栏图标的字号，设置页可以换档（iconSizes，记在 ui.json）；
+// 标签页里和侧栏行尾的状态小一号（smallIcon），按钮框比图标大 12（buttonBox）。
+// 只在界面线程读写：控件函数大多拿不到 app，所以是包级变量。
+var iconSize float32 = defaultIconSize
+
+const defaultIconSize = 16
+
+var iconSizes = []struct {
+	size  float32
+	label string
+}{{14, "小"}, {16, "标准"}, {18, "大"}}
+
+func smallIcon() float32 { return iconSize - 2 }
+func buttonBox() float32 { return iconSize + 12 }
+
 // 字号阶梯（pt）。
 const (
 	fsCaption   = 11   // 说明、计数、快捷键

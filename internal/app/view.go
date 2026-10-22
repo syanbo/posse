@@ -535,7 +535,7 @@ func summaryTrailing(c *ui.Context, running int, status string) {
 		ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
 	}
 	if status != "" {
-		statusGlyph(c, status, 12)
+		statusGlyph(c, status, smallIcon())
 	}
 }
 
@@ -726,11 +726,11 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
 			}
 			if status != "" {
-				a.statusIcon(c, statusID, status, 12)
+				a.statusIcon(c, statusID, status, smallIcon())
 			}
 		}
 	}
-	icon := func() { agentTile(c, term.Agent, 16).Tooltip(name) }
+	icon := func() { agentTile(c, term.Agent, iconSize).Tooltip(name) }
 	row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
 	a.reorderableTerm(c, row, w.ID, term.ID, false)
 	if row.Clicked() {
@@ -888,7 +888,7 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 		a.navCur = len(a.navOrder) - 1
 	}
 	accent := c.Theme().Accent
-	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(16).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
+	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
 	if row.Clicked() {
 		if id == taskBoardID {
 			a.showTaskHome()
@@ -968,7 +968,7 @@ func (a *app) footer(c *ui.Context) {
 		return
 	}
 	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		menuButton(c, iconButtonSized(c, iconPlus, "新建", 24, 14), func(m *popMenu) {
+		menuButton(c, iconButton(c, iconPlus, "新建"), func(m *popMenu) {
 			if m.Item("添加项目…").Chosen() {
 				go a.addProject()
 			}
@@ -984,7 +984,7 @@ func (a *app) footer(c *ui.Context) {
 			}
 		})
 		ui.Spacer(c)
-		if pressable(iconButtonSized(c, iconSettings, "设置 ⌘,", 24, 14)).Tooltip("设置 ⌘,").Clicked() {
+		if iconButton(c, iconSettings, "设置 ⌘,").Clicked() {
 			a.openSettings()
 		}
 	})
@@ -1220,9 +1220,12 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
-		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
-		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示
-		strip := ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0)
+		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
+		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示。
+		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
+		// 触控板和滚轮照常能滚
+		strip := ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).
+			Height(titleHeight(c) + 24).AlignSelf(ui.Start).AlignItems(ui.Start)
 		// 文件栏滑进来、窗口变窄之后，当前标签可能被挤到外面：宽度变了就再滚一次
 		if sw := strip.Bounds().W; sw != a.tabStripW {
 			a.tabStripW, a.shownTab = sw, ""
@@ -1323,7 +1326,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	col.Opacity(col.AnimateTo("fade", opacity, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}))
 	col.Children(func() {
 		// 这一列的按钮不带悬停提示：它们贴着终端内容，提示会盖住旁边的字
-		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, "返回任务", 28, 16).Clicked() {
+		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, "返回任务", buttonBox(), iconSize).Clicked() {
 			a.openTask(task.ID)
 		}
 		if media.Supported(cur.Agent) {
@@ -1333,7 +1336,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
 		}
 		ui.Box(c).Height(1).Margin(1, 4).Background(p.line)
-		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", 28, 12).Clicked() {
+		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", buttonBox(), iconSize-4).Clicked() {
 			toggle()
 		}
 	})
@@ -1572,33 +1575,33 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	}
 	row.Children(func() {
 		if status != "" {
-			a.statusIcon(c, term.ID, status, 13)
+			a.statusIcon(c, term.ID, status, smallIcon())
 		} else {
-			ui.Icon(c, iconTerminal).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, iconTerminal).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
 		}
 		// agent 终端用图标代替名字（悬停提示是名字）；还没有标题时照旧写名字，标签不至于只剩图标。
 		// 图标和左边的状态格一样大
 		waiting := status == agent.StatusWaiting
 		if term.Agent != "" {
-			agentTile(c, term.Agent, 13)
+			agentTile(c, term.Agent, smallIcon())
 		}
 		if renaming {
 			a.renameInput(c, term)
 			return
 		}
 		if term.Agent == "" || detail == "" && !waiting {
-			tabText(c, ui.Text(c, name).FontSize(12).Shrink(1).SingleLine(), active)
+			tabText(c, ui.Text(c, name).FontSize(12).Shrink(1).SingleLine(), name, active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
 			// 字号、字重和别的标签标题一样，只用琥珀色区分
 			label := ui.Text(c, "待处理").FontSize(12).Shrink(0)
-			tabText(c, label, active)
+			tabText(c, label, "待处理", active)
 			label.TextColor(colors(t).honey)
 		} else if detail != "" {
 			title := ui.Text(c, detail).FontSize(12).Shrink(1).MaxLines(1)
 			if term.Agent != "" {
-				tabText(c, title, active)
+				tabText(c, title, detail, active)
 			} else {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
@@ -1691,8 +1694,10 @@ func (a *app) revealTab(row ui.Element, id string, active bool) {
 }
 
 // tabText 是标签上的主文字：选中时加粗，否则用次要色。中文字形在行框里偏下，提半个像素才看着居中。
-func tabText(c *ui.Context, e ui.Element, active bool) {
-	e.Margin(0, 0, cjkLift, 0)
+// 不管选没选中都按加粗的宽度占位，切换标签时文字变粗不会把后面的标签往右挤。
+func tabText(c *ui.Context, e ui.Element, text string, active bool) {
+	w, _ := c.MeasureText(0, ui.Span{Text: text, Size: 12, Weight: 500})
+	e.Width(w+1).Margin(0, 0, cjkLift, 0)
 	if active {
 		e.FontWeight(500)
 	} else {
@@ -1779,9 +1784,9 @@ func pressable(e ui.Element) ui.Element {
 	return e.Scale(s, s)
 }
 
-// iconButton 是只有图标的无边框按钮，28px 见方。
+// iconButton 是只有图标的无边框按钮，大小跟着设置里的图标大小（buttonBox、iconSize）。
 func iconButton(c *ui.Context, icon *ui.SVG, label string) ui.Element {
-	return iconButtonSized(c, icon, label, 28, 16)
+	return iconButtonSized(c, icon, label, buttonBox(), iconSize)
 }
 
 func iconButtonSized(c *ui.Context, icon *ui.SVG, label string, box, glyph float32) ui.Element {

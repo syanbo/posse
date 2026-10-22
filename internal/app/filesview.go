@@ -439,9 +439,9 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {
-		ui.Icon(c, docIcon(d)).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, docIcon(d)).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
 		name := ui.Text(c, d.name()).FontSize(12).SingleLine().MaxWidth(180)
-		tabText(c, name, active)
+		tabText(c, name, d.name(), active)
 		if d.isPreview() {
 			name.Italic()
 		}

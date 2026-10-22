@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -451,12 +452,28 @@ func TestPreview(t *testing.T) {
 		a.daemon.MobileOnline = []string{"iPhone 12 Pro"} // 侧栏「手机」行尾的绿点
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
 
+		// 设置里图标调成"大"：按钮、侧栏和标签页的图标一起变大
+		a = previewApp(t)
+		iconSize = 18
+		savePNG(t, newPreviewTester(a, dark), "icons-large-"+suffix+".png")
+		iconSize = defaultIconSize
+
 		// 窗口缩到最小
 		a = previewApp(t)
 		tt := newPreviewTester(a, dark)
 		tt.SetSize(minWindowWidth, minWindowHeight)
 		tt.Frame()
 		savePNG(t, tt, "min-size-"+suffix+".png")
+
+		// 标签放不下、鼠标停在标签栏上：横向滚动条不压在标签上
+		for i := range 4 {
+			a.workspaces[0].Terminals = append(a.workspaces[0].Terminals, terminalInfo{ID: "tx" + strconv.Itoa(i), Agent: "claude", Title: "✳ 朵朵兔三规则首版及健康分规则图", Running: true})
+		}
+		a.indexWorkspaces()
+		tt.Frame()
+		tt.Move(440, 20) // 标签栏里 Codex 标签的位置
+		tt.Frame()
+		savePNG(t, tt, "tabs-overflow-hover-"+suffix+".png")
 
 		// 协调者阻塞在 hive task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
 		a = previewApp(t)

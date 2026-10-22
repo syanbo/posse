@@ -20,7 +20,7 @@ func (a *app) openSettings() {
 	a.selected = settingsBoardID
 }
 
-// settingsBoard 是设置页：防休眠、agent 权限、套餐用量、终端字号、关于（版本、重启常驻进程、日志和数据目录）。
+// settingsBoard 是设置页：防休眠、agent 权限、套餐用量、图标大小、终端字号、关于（版本、重启常驻进程、日志和数据目录）。
 // 手机配对仍在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
 	a.band(c, func() {
@@ -34,6 +34,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 				a.awakeSettings(c)
 				a.permissionSettings(c)
 				a.planSettings(c)
+				a.interfaceSettings(c)
 				a.fontSettings(c)
 				a.aboutSettings(c)
 			})
@@ -114,6 +115,30 @@ func (a *app) setPermission(mode string) {
 		}
 	}
 	a.permission = mode
+}
+
+// interfaceSettings 是界面的图标大小：图标按钮、侧栏和标签页里的图标一起换档。
+func (a *app) interfaceSettings(c *ui.Context) {
+	settingsCard(c, "界面", "", func() {
+		settingsRow(c, "图标大小", func() {
+			sel := 0
+			var labels []string
+			for i, s := range iconSizes {
+				labels = append(labels, s.label)
+				if s.size == iconSize {
+					sel = i
+				}
+			}
+			if segmented(c, &sel, "图标大小", labels...) {
+				iconSize = iconSizes[sel].size
+				a.state.IconSize = 0
+				if iconSize != defaultIconSize {
+					a.state.IconSize = iconSize
+				}
+				a.saveState()
+			}
+		})
+	})
 }
 
 func (a *app) fontSettings(c *ui.Context) {
