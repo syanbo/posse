@@ -48,6 +48,23 @@ func TestImageScanner(t *testing.T) {
 			t.Fatalf("image %d = %q %v", i, b, err)
 		}
 	}
+
+	// 会话被压缩重写：文件不比原来短，但内容全换了，旧偏移作废，列表只剩新文件里的
+	old := got[1]
+	pad := strings.Repeat("x", 4000)
+	os.WriteFile(path, []byte(`{"type":"user","message":{"content":[{"type":"text","text":"`+pad+`"}]}}`+"\n"+
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t3","name":"Read","input":{"file_path":"/tmp/c.png"}}]}}`+"\n"+
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t3","content":[`+img("four")+`]}]}}`+"\n"), 0o644)
+	if _, err := ReadToolImage(path, old); err != errImageGone {
+		t.Fatalf("stale offset read err = %v, want errImageGone", err)
+	}
+	got, err = s.Scan()
+	if err != nil || len(got) != 1 || got[0].Path != "/tmp/c.png" {
+		t.Fatalf("scan after rewrite %+v %v", got, err)
+	}
+	if b, err := ReadToolImage(path, got[0]); err != nil || string(b) != "four" {
+		t.Fatalf("image after rewrite = %q %v", b, err)
+	}
 }
 
 func TestCodexImageScanner(t *testing.T) {

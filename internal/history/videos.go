@@ -23,6 +23,7 @@ type VideoScanner struct {
 	agent  string
 	path   string
 	offset int64
+	tail   []byte // offset 前的最后几个字节，用来发现文件被改写
 	videos []ToolVideo
 	seen   map[string]int // 路径 → 在 videos 里的位置
 }
@@ -51,18 +52,22 @@ func (s *VideoScanner) Scan() ([]ToolVideo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if fi.Size() < s.offset {
-		s.offset, s.videos, s.seen = 0, nil, map[string]int{}
+	// 文件变短或 offset 前的字节变了都是被重写了（同 ImageScanner），从头再读
+	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+		s.offset, s.tail, s.videos, s.seen = 0, nil, nil, map[string]int{}
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
 		return nil, err
 	}
-	n, _, err := scanLines(f, func(line []byte, _ int64) {
+	n, tail, err := scanLines(f, func(line []byte, _ int64) {
 		if containsAny(line, videoMarkers) {
 			s.line(line)
 		}
 	})
 	s.offset += n
+	if n > 0 {
+		s.tail = tail
+	}
 	return s.videos, err
 }
 

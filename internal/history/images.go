@@ -38,6 +38,7 @@ type ImageScanner struct {
 	agent  string
 	path   string
 	offset int64
+	tail   []byte             // offset 前的最后几个字节，用来发现文件被改写
 	tools  map[string]toolRef // 工具调用的 ID → 工具名和读的文件
 	last   *toolRef           // grok：上一行是工具结果时是它的工具
 	images []ToolImage
@@ -59,7 +60,9 @@ var imageMarkers = map[string][][]byte{
 	"cursor": {[]byte(`<image_files>`)},
 }
 
-// Scan 读文件新增的完整行，返回到目前为止的图片，按会话里的顺序；文件变短说明被重写，从头再读。
+// Scan 读文件新增的完整行，返回到目前为止的图片，按会话里的顺序。
+// 文件变短，或 offset 前的字节和上次不一样（grok 压缩上下文时整个重写会话文件，
+// 不一定变短），说明被重写了，记下的偏移都作废，从头再读。
 func (s *ImageScanner) Scan() ([]ToolImage, error) {
 	f, err := os.Open(s.path)
 	if err != nil {
@@ -70,8 +73,8 @@ func (s *ImageScanner) Scan() ([]ToolImage, error) {
 	if err != nil {
 		return nil, err
 	}
-	if fi.Size() < s.offset {
-		s.offset, s.tools, s.last, s.images = 0, map[string]toolRef{}, nil, nil
+	if fi.Size() < s.offset || !tailMatches(f, s.offset, s.tail) {
+		s.offset, s.tail, s.tools, s.last, s.images = 0, nil, map[string]toolRef{}, nil, nil
 	}
 	if _, err := f.Seek(s.offset, io.SeekStart); err != nil {
 		return nil, err
@@ -82,7 +85,7 @@ func (s *ImageScanner) Scan() ([]ToolImage, error) {
 	if parse == nil {
 		return nil, nil
 	}
-	n, _, err := scanLines(f, func(line []byte, end int64) {
+	n, tail, err := scanLines(f, func(line []byte, end int64) {
 		if s.agent == "grok" {
 			// grok 的 MCP 截图紧跟在工具结果后面，得知道上一行是什么
 			if !containsAny(line, markers) {
@@ -95,6 +98,9 @@ func (s *ImageScanner) Scan() ([]ToolImage, error) {
 		parse(line, base+end-int64(len(line)))
 	})
 	s.offset += n
+	if n > 0 {
+		s.tail = tail
+	}
 	return s.images, err
 }
 
@@ -397,13 +403,14 @@ func ReadToolImage(path string, img ToolImage) ([]byte, error) {
 		}
 		return decodeDataURL(urls[img.Index])
 	}
+	// 解析不了说明偏移处已经不是当初那一行（会话文件被重写、还没重扫），不是坏数据
 	var l claudeImageLine
-	if err := json.Unmarshal(b, &l); err != nil {
-		return nil, err
+	if json.Unmarshal(b, &l) != nil {
+		return nil, errImageGone
 	}
 	var blocks []claudeBlock
-	if err := json.Unmarshal(l.Message.Content, &blocks); err != nil {
-		return nil, err
+	if json.Unmarshal(l.Message.Content, &blocks) != nil {
+		return nil, errImageGone
 	}
 	index := 0
 	for _, bl := range blocks {

@@ -68,4 +68,9 @@ func TestVideoScannerIncremental(t *testing.T) {
 	if len(v) != 2 || v[0].Path != "/tmp/a.mp4" || v[0].At.Hour() != 3 {
 		t.Fatalf("second scan = %+v", v)
 	}
+	// 文件被重写成不比原来短的别的内容，从头再读
+	os.WriteFile(path, []byte(line("/tmp/c.mp4", "2026-10-19T04:00:00Z")+line("/tmp/c.mp4", "2026-10-19T05:00:00Z")+line("/tmp/c.mp4", "2026-10-19T06:00:00Z")), 0o644)
+	if v, _ = s.Scan(); len(v) != 1 || v[0].Path != "/tmp/c.mp4" {
+		t.Fatalf("scan after rewrite = %+v", v)
+	}
 }
