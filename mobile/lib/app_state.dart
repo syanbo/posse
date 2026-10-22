@@ -424,6 +424,9 @@ class HiveAppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 本地的设置和电脑列表读完了，闪屏等它再退。
+  bool restored = false;
+
   Future<void> restore() async {
     settings = AppSettings.decode(await settingsStore.read());
     if (settings.phoneId.isEmpty) {
@@ -432,6 +435,7 @@ class HiveAppModel extends ChangeNotifier {
     }
     _phoneName ??= await phoneModel();
     saved = SavedComputers.decode(await store.read());
+    restored = true;
     notifyListeners();
     final active = saved.current ?? saved.computers.firstOrNull;
     if (active == null) return;

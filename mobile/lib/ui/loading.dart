@@ -110,19 +110,19 @@ void _run(AnimationController clock, BuildContext context) {
 }
 
 /// 尖顶朝上的六边形的第 [i] 个顶点（从正上方起顺时针），中心 [c]、外接圆半径 [r]。
-Offset _corner(Offset c, double r, int i) {
+Offset hexCorner(Offset c, double r, int i) {
   final a = math.pi / 3 * (i % 6) - math.pi / 2;
   return c + Offset(math.cos(a), math.sin(a)) * r;
 }
 
 /// 圆角六边形：每个角从两边各退 [round] 处用贝塞尔连过去，填充一次就成形，
 /// 半透明的颜色不会因为填充和描边叠在一起出现一圈深色。
-Path _roundHex(Offset c, double r, double round) {
+Path roundHex(Offset c, double r, double round) {
   final path = Path();
   for (var i = 0; i < 6; i++) {
-    final v = _corner(c, r, i);
-    final from = Offset.lerp(v, _corner(c, r, i + 5), round / r)!;
-    final to = Offset.lerp(v, _corner(c, r, i + 1), round / r)!;
+    final v = hexCorner(c, r, i);
+    final from = Offset.lerp(v, hexCorner(c, r, i + 5), round / r)!;
+    final to = Offset.lerp(v, hexCorner(c, r, i + 1), round / r)!;
     i == 0 ? path.moveTo(from.dx, from.dy) : path.lineTo(from.dx, from.dy);
     path.quadraticBezierTo(v.dx, v.dy, to.dx, to.dy);
   }
@@ -146,7 +146,7 @@ class _CombPainter extends CustomPainter {
     final dim = color.withValues(alpha: 0.18);
     final paint = Paint();
     void cell(Offset c, Color fill) {
-      canvas.drawPath(_roundHex(c, r, round), paint..color = fill);
+      canvas.drawPath(roundHex(c, r, round), paint..color = fill);
     }
 
     cell(center, color.withValues(alpha: 0.28));
@@ -185,14 +185,14 @@ class _TracePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..color = color.withValues(alpha: 0.2);
     final outline = Path()
-      ..addPolygon([for (var i = 0; i < 6; i++) _corner(c, r, i)], true);
+      ..addPolygon([for (var i = 0; i < 6; i++) hexCorner(c, r, i)], true);
     canvas.drawPath(outline, paint);
 
     // 位置按边数算（0 到 6 是一圈），亮段占两条边。整段一笔画完再用扫描渐变
     // 由淡到亮：分几截画的话，每截的圆头叠在一起像一串珠子。
     Offset at(double s) {
       final i = s.floor();
-      return Offset.lerp(_corner(c, r, i), _corner(c, r, i + 1), s - i)!;
+      return Offset.lerp(hexCorner(c, r, i), hexCorner(c, r, i + 1), s - i)!;
     }
 
     final head = clock.value * 6 + 6;
@@ -201,7 +201,7 @@ class _TracePainter extends CustomPainter {
     final start = at(tail);
     seg.moveTo(start.dx, start.dy);
     for (var v = tail.floor() + 1; v < head; v++) {
-      final p = _corner(c, r, v);
+      final p = hexCorner(c, r, v);
       seg.lineTo(p.dx, p.dy);
     }
     final end = at(head);

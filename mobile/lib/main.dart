@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'ui/keyboard.dart';
+import 'ui/splash.dart';
 import 'ui/theme.dart';
 import 'workspace/workspace.dart';
 
@@ -20,6 +21,7 @@ class HiveApp extends StatefulWidget {
 
 class _HiveAppState extends State<HiveApp> {
   final _keyboard = KeyboardDismisser();
+  bool _splash = true;
 
   @override
   void initState() {
@@ -45,6 +47,18 @@ class _HiveAppState extends State<HiveApp> {
       title: 'Hive',
       debugShowCheckedModeBanner: false,
       navigatorObservers: [_keyboard],
+      // 闪屏盖在首页上面，首页在底下照常建好，淡出后直接露出来。
+      // 一直包一层 Stack：闪屏退了换成直接返回 child 的话，Navigator 换了位置会重建
+      builder: (context, child) => Stack(
+        children: [
+          child!,
+          if (_splash)
+            HiveSplash(
+              ready: widget.model.restored,
+              onDone: () => setState(() => _splash = false),
+            ),
+        ],
+      ),
       theme: hiveTheme(Brightness.light),
       darkTheme: hiveTheme(Brightness.dark),
       // 默认深色，可在设置里换成浅色或跟随系统
