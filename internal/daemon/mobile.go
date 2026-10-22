@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"hive/internal/agent"
+	"hive/internal/gitx"
 	"hive/internal/host"
 	"hive/internal/mobile"
 	"hive/internal/rpc"
@@ -58,6 +59,10 @@ func (h mobileHost) State() mobile.State {
 	}
 	byWS := d.sessionsByWorkspace()
 	for _, w := range ws {
+		// 数据库里的分支只在建工作区时记一次，main 工作区切分支后就过时了；和界面一样以 HEAD 为准
+		if b := gitx.Head(w.Path); b != "" {
+			w.Branch = b
+		}
 		mw := mobile.Workspace{ID: w.ID, ProjectID: w.ProjectID, Name: w.Name, Path: w.Path, Kind: w.Kind, Branch: w.Branch, CreatedAt: w.CreatedAt}
 		for _, s := range byWS[w.ID] {
 			// 手机上只显示还在运行的终端：退出的终端没有输出可看，订阅会立刻结束

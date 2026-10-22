@@ -76,3 +76,15 @@ func TestTerminalRenameShowsOnMobile(t *testing.T) {
 		t.Fatalf("stored after clear %q", got)
 	}
 }
+
+// 手机上工作区的分支以 HEAD 为准：数据库里记的是建工作区时的分支，在项目目录里切了分支也要跟着变。
+func TestMobileBranchFollowsHead(t *testing.T) {
+	d, w := newTestDaemon(t)
+	os.MkdirAll(filepath.Join(w.Path, ".git"), 0o755)
+	os.WriteFile(filepath.Join(w.Path, ".git", "HEAD"), []byte("ref: refs/heads/develop_710\n"), 0o644)
+	for _, mw := range (mobileHost{d}).State().Workspaces {
+		if mw.ID == w.ID && mw.Branch != "develop_710" {
+			t.Fatalf("branch = %q, want develop_710", mw.Branch)
+		}
+	}
+}
