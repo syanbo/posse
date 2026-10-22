@@ -289,6 +289,32 @@ func previewImageDiff(t *testing.T, a *app) {
 	a.state.RightPanel = ""
 }
 
+// previewImageDoc 在文件标签里打开一张带透明的竖长图，zoom 不为 0 时放大到这个比例。
+func previewImageDoc(t *testing.T, a *app, zoom float32) {
+	root := filesWorkspace(t, a)
+	img := image.NewNRGBA(image.Rect(0, 0, 600, 1300))
+	for y := 0; y < 1300; y++ {
+		for x := 0; x < 600; x++ {
+			if (x/50+y/50)%3 != 0 {
+				img.SetNRGBA(x, y, color.NRGBA{217, 119, 87, uint8(80 + y*175/1300)})
+			}
+		}
+	}
+	var b bytes.Buffer
+	png.Encode(&b, img)
+	os.WriteFile(filepath.Join(root, "tall.png"), b.Bytes(), 0o644)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFile(w, filepath.Join(root, "tall.png"), 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "image", func() bool { return v.cur.kind == docImage })
+	tt.Frame()
+	if zoom != 0 {
+		v.cur.setZoom(zoom, v.cur.iv.vw/2, v.cur.iv.vh/3)
+	}
+	v.poll.at = time.Now().Add(time.Hour)
+}
+
 // previewCompare 打开 feat 和 main 的比较，选中 feat 独有的那个提交。
 func previewCompare(t *testing.T, a *app) {
 	branchWorkspace(t, a)
@@ -646,6 +672,14 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewImageDiff(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-image-diff-"+suffix+".png")
+
+		a = previewApp(t)
+		previewImageDoc(t, a, 0)
+		savePNG(t, newPreviewTester(a, dark), "files-image-"+suffix+".png")
+
+		a = previewApp(t)
+		previewImageDoc(t, a, 2)
+		savePNG(t, newPreviewTester(a, dark), "files-image-zoom-"+suffix+".png")
 
 		a = previewApp(t)
 		previewLog(t, a)

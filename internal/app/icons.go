@@ -28,6 +28,7 @@ var (
 	iconExtensions = icon(`<rect x="4" y="4" width="7" height="7" rx="1.75"/><rect x="13" y="4" width="7" height="7" rx="1.75"/><rect x="4" y="13" width="7" height="7" rx="1.75"/><path d="M16.5 13.5v6M13.5 16.5h6"/>`)
 	iconPlay       = icon(`<path d="M8.5 6.2v11.6a.6.6 0 0 0 .92.5l9.1-5.8a.6.6 0 0 0 0-1L9.42 5.7a.6.6 0 0 0-.92.5z" fill="currentColor"/>`)
 	iconImage      = icon(`<rect x="3.75" y="5" width="16.5" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m20.25 15.5-4.5-4.5-8.5 8"/>`)
+	iconChecker    = icon(`<rect x="4.5" y="4.5" width="15" height="15" rx="2"/><path d="M4.5 4.5h7.5v7.5H4.5zM12 12h7.5v7.5H12z" fill="currentColor" stroke="none"/>`)
 	iconCopy       = icon(`<rect x="8.5" y="8.5" width="11" height="11" rx="2.25"/><path d="M15.5 8.5V6.25a1.75 1.75 0 0 0-1.75-1.75h-7.5A1.75 1.75 0 0 0 4.5 6.25v7.5c0 .97.78 1.75 1.75 1.75H8.5"/>`)
 	iconOpen       = icon(`<path d="M13.5 4.5h6v6M19.5 4.5 11 13M18 14v4.25c0 .97-.78 1.75-1.75 1.75h-10.5c-.97 0-1.75-.78-1.75-1.75V7.75C4 6.78 4.78 6 5.75 6H10"/>`)
 	iconPhone      = icon(`<rect x="6.5" y="3" width="11" height="18" rx="2.5"/><path d="M10.5 17.75h3"/>`)

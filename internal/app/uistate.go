@@ -30,6 +30,7 @@ type uiState struct {
 	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
+	ImageCheckerOff      bool     `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示

@@ -88,6 +88,7 @@ func shortcutText(mods ui.Modifiers, key ui.Key) string {
 	default:
 		b.WriteString(map[ui.Key]string{
 			ui.KeyEnter: "↩", ui.KeyEscape: "⎋", ui.KeyBackspace: "⌫", ui.KeyDelete: "⌦", ui.KeyTab: "⇥",
+			ui.KeyEqual: "=", ui.KeyMinus: "-",
 			ui.KeyUp: "↑", ui.KeyDown: "↓", ui.KeyLeft: "←", ui.KeyRight: "→",
 		}[key])
 	}

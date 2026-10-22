@@ -64,6 +64,8 @@ type fileDoc struct {
 	deleted    bool
 	err        string
 	img        *ui.Bitmap
+	imgInfo    imageInfo
+	iv         imageView
 	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
 	md         []mdBlock
 	mdVer      uint64
@@ -381,14 +383,16 @@ func (a *app) loadDoc(d *fileDoc) {
 	go func() {
 		if isImagePath(path) {
 			st := files.StatFile(path)
-			img, err := media.ScaledImage(path, imageMaxPx)
+			pi, err := media.DecodePreview(path, imageMaxPixels)
 			a.update(func() {
 				d.base, d.seen = st, st
 				if err != nil {
 					d.kind, d.err = docError, err.Error()
 					return
 				}
-				d.kind, d.img = docImage, ui.NewBitmap(img)
+				// 放大到超过原大时按像素块画，看得清每个像素
+				d.kind, d.img = docImage, ui.NewBitmap(pi.Img).Pixelated()
+				d.imgInfo = imageInfo{w: pi.Size.X, h: pi.Size.Y, format: pi.Format, bytes: st.Size, alpha: !pi.Img.Opaque()}
 			})
 			return
 		}

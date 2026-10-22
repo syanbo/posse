@@ -17,6 +17,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -284,6 +285,39 @@ func ScaledImage(path string, width int) (*image.RGBA, error) {
 // ScaledImageBytes 是 ScaledImage 读内存里的图片，顺带返回原始尺寸。
 func ScaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
 	return decodeScaled(bytes.NewReader(b), width)
+}
+
+// PreviewImage 是 DecodePreview 解出的图片。
+type PreviewImage struct {
+	Img    *image.RGBA
+	Size   image.Point // 原始尺寸
+	Format string      // image.Decode 认出的格式，如 png、jpeg
+}
+
+// DecodePreview 解码文件标签里预览的图片：按原分辨率，超过 maxPixels 个像素才等比缩小，放大看细节时还是原来的像素。
+func DecodePreview(path string, maxPixels int) (PreviewImage, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return PreviewImage{}, err
+	}
+	defer f.Close()
+	src, format, err := image.Decode(f)
+	if err != nil {
+		return PreviewImage{}, err
+	}
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if n := w * h; n > maxPixels {
+		k := math.Sqrt(float64(maxPixels) / float64(n))
+		w, h = max(int(float64(w)*k), 1), max(int(float64(h)*k), 1)
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	if w == b.Dx() {
+		draw.Draw(dst, dst.Bounds(), src, b.Min, draw.Src)
+	} else {
+		draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
+	}
+	return PreviewImage{Img: dst, Size: b.Size(), Format: format}, nil
 }
 
 func decodeScaled(r io.Reader, width int) (*image.RGBA, image.Point, error) {

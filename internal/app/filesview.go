@@ -350,11 +350,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			}
 		}
 	case docImage:
-		ui.Box(c).Grow(1).Padding(16).Center().Children(func() {
-			// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
-			w, h := d.img.Size()
-			ui.Image(c, d.img).Fit(ui.Contain).MaxWidth(float32(w) / 2).MaxHeight(float32(h) / 2).Shrink(1)
-		})
+		a.imageDocView(c, d)
 	case docBinary:
 		docMessage(c, d, "二进制文件，不显示内容")
 	case docTooLarge:
@@ -566,6 +562,9 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				Tooltip(fmt.Sprintf("文件超过 %d MB，只读打开", files.ReadOnlySize>>20))
 		}
 		ui.Spacer(c)
+		if d.kind == docImage {
+			a.imageBar(c, d)
+		}
 		if d.kind == docText && isMarkdown(d.path) {
 			label := "预览"
 			if d.preview {

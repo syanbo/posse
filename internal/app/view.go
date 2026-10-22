@@ -190,14 +190,28 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w != nil && w.Branch != "" && c.Shortcut(ui.Cmd, ui.Key9) {
 		a.toggleLogPanel(w)
 	}
+	// 图片标签在前台时 ⌘= ⌘- ⌘0 缩放图片，不改字号
+	img := a.frontImage(w)
 	if c.Shortcut(ui.Cmd, ui.KeyEqual) {
-		a.setFontSize(a.fontSize + 1)
+		if img != nil {
+			img.zoomStep(true)
+		} else {
+			a.setFontSize(a.fontSize + 1)
+		}
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyMinus) {
-		a.setFontSize(a.fontSize - 1)
+		if img != nil {
+			img.zoomStep(false)
+		} else {
+			a.setFontSize(a.fontSize - 1)
+		}
 	}
 	if c.Shortcut(ui.Cmd, ui.Key0) {
-		a.setFontSize(defaultFontSize)
+		if img != nil {
+			img.setZoom(0, 0, 0)
+		} else {
+			a.setFontSize(defaultFontSize)
+		}
 	}
 	if w != nil {
 		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketRight) || c.Shortcut(ui.Ctrl, ui.KeyTab) {
