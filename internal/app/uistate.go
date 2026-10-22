@@ -31,6 +31,7 @@ type uiState struct {
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
 	ImageCheckerOff      bool     `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
+	HistoryByFolder      bool     `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
 	IconSize             float32  `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`

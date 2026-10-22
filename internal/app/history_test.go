@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -84,5 +86,35 @@ func TestHistorySearchPending(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("没有找到“xyz”") || tt.HasText("正在搜索…") {
 		t.Fatal("empty result should say so")
+	}
+}
+
+// 按文件夹分组：会话归到所在的项目（工作区目录算项目的），不在项目里的用目录名；
+// 组按其中最近的会话排，切回按时间恢复原来的顺序。
+func TestHistoryGroupByFolder(t *testing.T) {
+	a := previewApp(t)
+	previewHistory(a, "")
+	h := &a.history
+	a.state.HistoryByFolder = true
+	a.setHistoryGrouping()
+	var got []string
+	for _, r := range h.groupRows() {
+		if r.session < 0 {
+			got = append(got, fmt.Sprintf("%s %d", r.group, r.count))
+		}
+	}
+	want := []string{"Apps 1", "Grok 2", "Claude 1", "Halloween-3 1", "Works 1"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("groups = %v, want %v", got, want)
+	}
+	if h.sessions[1].ID != "s2" || h.sessions[2].ID != "s6" {
+		t.Fatalf("same folder should be adjacent: %v %v", h.sessions[1].ID, h.sessions[2].ID)
+	}
+	a.state.HistoryByFolder = false
+	a.setHistoryGrouping()
+	for i, id := range []string{"s1", "s2", "s3", "s4", "s5", "s6"} {
+		if h.sessions[i].ID != id {
+			t.Fatalf("time order broken at %d: %s", i, h.sessions[i].ID)
+		}
 	}
 }

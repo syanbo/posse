@@ -584,6 +584,12 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "history-"+suffix+".png")
 
 		a = previewApp(t)
+		previewHistory(a, "")
+		a.state.HistoryByFolder = true
+		a.setHistoryGrouping()
+		savePNG(t, newPreviewTester(a, dark), "history-by-folder-"+suffix+".png")
+
+		a = previewApp(t)
 		previewHistory(a, "磁盘")
 		savePNG(t, newPreviewTester(a, dark), "history-search-"+suffix+".png")
 

@@ -11,8 +11,7 @@
   - grok 的 `chat_history.jsonl` 不带时间：用户消息按 `prompt_index`、回复按开头文字、工具按调用 ID，对上同目录 `updates.jsonl` 里带时间戳的记录；对不上的沿用前一条的时间。增量更新时从状态里记的位置（`GrokUpdates`，最后对上的回复分段的行尾）接着读 `updates.jsonl`。
   - 解析前先按各家 parser 的 `wants` 粗筛（只认 `"type"` 等字段的值，冒号后有空格也能匹配），无关的行不做 JSON 解码；改粗筛规则要跑 `TestLineFilterSameResult`。
   - 索引里一个文件一行，查询时按 `groupKey` 合成会话：Codex 新格式的会话会分成几个文件（后一段的 `session_meta` 带 `history_base`，会话 ID 相同），列表、搜索、`history show` 都合成一个，信息取最新一段、消息数相加、无标题时用第一段的提问，详情按段接起来、序号顺延，移到废纸篓时各段一起走（`Session.Parts`）。别家同一个 ID 的不同文件是不同会话（Cursor 出现过同一 ID 在两个项目里的两段无关对话），所以界面按会话文件认会话（`sessionKey`），`history.show` 带 `path` 时按文件找（`FindPath`）。索引只有一个连接，结果集没关之前不能再查。
-  - 历史列表按今天、昨天、最近 7 天、最近 30 天、1 个月前分组，默认只展开第一组，点组标题展开收起（不记进 ui.json）；↑/↓ 在看得见的会话之间换选中（`stepSession`），会话列表卡片可聚焦，点过之后方向键不被侧栏拿走。
+  - 历史列表默认按今天、昨天、最近 7 天、最近 30 天、1 个月前分组；顶栏的分段按钮（`historyGroupSwitch`）可以换成按文件夹分组：会话归到目录所在的项目（项目和它的工作区、worktree 目录取最长匹配，`folderGroup`），不在任何项目里的用目录名，组按其中最近的会话排先后，选择记在 ui.json 的 `historyByFolder`。默认只展开第一组，点组标题展开收起（不记进 ui.json）；↑/↓ 在看得见的会话之间换选中（`stepSession`），会话列表卡片可聚焦，点过之后方向键不被侧栏拿走。
   - `history show` 的 `--tail`、`--tools` 由常驻进程在 SQL 里筛选，`--json` 输出同样生效。
   - `history resume` 在会话目录所在的工作区里开终端，先 `cd` 回原目录（claude 按目录找会话）；同一会话已在 hive 终端里运行时直接返回那个终端。没有对应工作区时报 not_found，界面会问要不要把目录加成项目。
 - 历史页列表顶上是总计（会话数、消息数、各 agent 会话数，取自 `history.list` 带回的 `status`）。详情里的路径点一下在访达中打开；"上下文 N%"是最后一次请求占的上下文，由窗口进程从会话文件末尾往前读（`history.ReadContext`）：Codex 取 `token_count` 的 `last_token_usage` 和 `model_context_window`；Claude 取最后一条助手消息的 usage（输入、缓存、输出相加），文件里没有窗口大小，按模型推断（Claude 5 起的 Opus、Sonnet 和带 `[1m]` 的是 100 万，其余 20 万，用量超过 20 万的算 100 万）；Grok 只有每轮累计、Cursor 没有记录，不显示。
-- 历史页顶栏的文件夹按钮（`historyDirFilter`）列出侧栏里的项目，选一个只看在它目录（含子目录）里开的会话，搜索也只在里面找；用的是 `history.list`、`history.search` 已有的 `cwd` 参数，不记进 ui.json。

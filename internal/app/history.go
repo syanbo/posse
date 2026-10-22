@@ -96,9 +96,10 @@ func (d *historyDetail) visible(tools bool, hitSeq int) []transcriptItem {
 type historyView struct {
 	query    string
 	agent    int
-	dir      string            // 只看这个文件夹（含子目录）里的会话，空是全部；不记进 ui.json
 	sessions []history.Session // 没有搜索词时：最近的会话
-	groups   []string          // 与 sessions 对应的"今天、昨天……"分组
+	groups   []string          // 与 sessions 对应的分组："今天、昨天……"或文件夹
+	// folderOf 不为空时按文件夹分组，返回会话目录归到的组名
+	folderOf func(cwd string) string
 	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
 	groupOpen map[string]bool
 	hits      []history.Hit // 有搜索词时
@@ -115,7 +116,6 @@ type historyView struct {
 	// 不至于一敲字就闪出"没有找到"；换了条件的结果回来时列表回到顶部
 	resQuery string
 	resAgent int
-	resDir   string
 	askedAt  time.Time // 最近一次请求发出（防抖结束）的时间
 	failed   string    // 最近一次请求的错误
 	messages ui.ListState
@@ -124,29 +124,92 @@ type historyView struct {
 	req     int // 列表请求的序号，只采用最新一次的结果
 	wQuery  string
 	wAgent  int
-	wDir    string
 	visible bool
 	fetched time.Time
 }
 
-// setSessions 换上新的会话列表，顺便分好组：分组要比较日期，不放在每帧里做。
+// setSessions 换上新的会话列表，顺便分好组：分组要比较日期或目录，不放在每帧里做。
+// 按文件夹分组时同一组的排在一起，组按其中最近的会话排先后；组内都是最近的在前。
 func (h *historyView) setSessions(ss []history.Session) {
-	h.sessions = ss
-	h.groups = make([]string, len(ss))
+	ss = slices.Clone(ss)
+	// 换分组方式时传进来的是上一次排过的列表，先排回按时间
+	slices.SortStableFunc(ss, func(x, y history.Session) int { return y.UpdatedAt.Compare(x.UpdatedAt) })
+	groups := make([]string, len(ss))
 	for i, s := range ss {
-		h.groups[i] = dayGroup(s.UpdatedAt)
+		if h.folderOf != nil {
+			groups[i] = h.folderOf(s.Cwd)
+		} else {
+			groups[i] = dayGroup(s.UpdatedAt)
+		}
 	}
+	if h.folderOf != nil {
+		rank := map[string]int{}
+		for _, g := range groups {
+			if _, ok := rank[g]; !ok {
+				rank[g] = len(rank)
+			}
+		}
+		idx := make([]int, len(ss))
+		for i := range idx {
+			idx[i] = i
+		}
+		slices.SortStableFunc(idx, func(i, j int) int { return rank[groups[i]] - rank[groups[j]] })
+		sorted, sortedGroups := make([]history.Session, len(ss)), make([]string, len(ss))
+		for k, i := range idx {
+			sorted[k], sortedGroups[k] = ss[i], groups[i]
+		}
+		ss, groups = sorted, sortedGroups
+	}
+	if len(ss) == 0 {
+		ss, groups = nil, nil
+	}
+	h.sessions, h.groups = ss, groups
+}
+
+// setHistoryGrouping 按设置换分组方式（时间或文件夹），列表上已有的会话原地重新分组。
+func (a *app) setHistoryGrouping() {
+	h := &a.history
+	h.folderOf = nil
+	if a.state.HistoryByFolder {
+		h.folderOf = a.folderGroup
+	}
+	h.groupOpen = nil
+	h.setSessions(h.sessions)
+}
+
+// folderGroup 是按文件夹分组时会话归到的组：目录在哪个项目里（含它的 worktree）就是那个项目，
+// 都不在就用目录名。
+func (a *app) folderGroup(cwd string) string {
+	if cwd == "" {
+		return "未知文件夹"
+	}
+	name, best := "", -1
+	match := func(root, label string) {
+		if root != "" && len(root) > best && (cwd == root || strings.HasPrefix(cwd, strings.TrimSuffix(root, "/")+"/")) {
+			name, best = label, len(root)
+		}
+	}
+	for _, p := range a.projects {
+		match(p.Path, p.Name)
+	}
+	for _, w := range a.workspaces {
+		match(w.Path, w.Project)
+	}
+	if name == "" {
+		name = filepath.Base(cwd)
+	}
+	return name
 }
 
 // pending 报告搜索框或筛选已经变了、对应的结果还没回来：列表上仍是上一次的结果。
 func (h *historyView) pending() bool {
-	return h.loaded && (h.resQuery != strings.TrimSpace(h.query) || h.resAgent != h.agent || h.resDir != h.dir)
+	return h.loaded && (h.resQuery != strings.TrimSpace(h.query) || h.resAgent != h.agent)
 }
 
-func (h *historyView) want() (query string, agent int, dir string, req int) {
+func (h *historyView) want() (query string, agent int, req int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return h.wQuery, h.wAgent, h.wDir, h.req
+	return h.wQuery, h.wAgent, h.req
 }
 
 // --- 数据
@@ -155,7 +218,7 @@ func (h *historyView) want() (query string, agent int, dir string, req int) {
 func (a *app) searchHistory(delay time.Duration) {
 	h := &a.history
 	h.mu.Lock()
-	h.wQuery, h.wAgent, h.wDir = h.query, h.agent, h.dir
+	h.wQuery, h.wAgent = h.query, h.agent
 	h.req++
 	req := h.req
 	h.mu.Unlock()
@@ -165,11 +228,11 @@ func (a *app) searchHistory(delay time.Duration) {
 
 func (a *app) fetchHistory(req int) {
 	h := &a.history
-	query, agentIdx, dir, cur := h.want()
+	query, agentIdx, cur := h.want()
 	if req != cur || a.c == nil {
 		return
 	}
-	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "cwd": dir, "limit": historyLimit}
+	params := map[string]any{"query": strings.TrimSpace(query), "agent": historyAgents[agentIdx], "limit": historyLimit}
 	var res struct {
 		Sessions []history.Session `json:"sessions"`
 		Hits     []history.Hit     `json:"hits"`
@@ -196,8 +259,8 @@ func (a *app) fetchHistory(req int) {
 		h.loaded, h.failed = true, ""
 		h.status, h.anyWord = res.Status, res.Any
 		// 列表按会话 ID 保持滚动位置，定期刷新时有用；换了搜索词或筛选就该从第一条看起
-		if q := params["query"].(string); q != h.resQuery || agentIdx != h.resAgent || dir != h.resDir {
-			h.resQuery, h.resAgent, h.resDir = q, agentIdx, dir
+		if q := params["query"].(string); q != h.resQuery || agentIdx != h.resAgent {
+			h.resQuery, h.resAgent = q, agentIdx
 			h.list.ScrollTo(0, ui.Start)
 		}
 		if method == "history.list" {
@@ -231,45 +294,18 @@ func (a *app) historyTick() {
 	}
 }
 
-// historyDirFilter 是按文件夹筛选：列出侧栏里的项目，选一个只看在它目录（含子目录）里开的会话。
-func (a *app) historyDirFilter(c *ui.Context) {
-	t := c.Theme()
-	h := &a.history
-	label := "全部文件夹"
-	if h.dir != "" {
-		label = filepath.Base(h.dir)
-		for _, p := range a.projects {
-			if p.Path == h.dir {
-				label = p.Name
-			}
-		}
+// historyGroupSwitch 选会话列表按时间还是按文件夹分组，记在 ui.json。
+func (a *app) historyGroupSwitch(c *ui.Context) {
+	sel := 0
+	if a.state.HistoryByFolder {
+		sel = 1
 	}
-	btn := ui.Row(c.Key("dir-filter")).Height(30).Padding(0, 10).Gap(6).Radius(rInput).AlignItems(ui.Center).Shrink(0).
-		Background(colors(t).fill).Role(ui.RoleButton).Label("按文件夹筛选").Children(func() {
-		ui.Icon(c, iconFolder).FontSize(13).TextColor(t.TextMuted)
-		ui.Text(c, label).FontSize(12.5).SingleLine().MaxWidth(180)
-		ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted)
-	})
-	if h.dir != "" {
-		btn.Tooltip(h.dir)
+	if segmented(c, &sel, "会话分组方式", "按时间", "按文件夹") {
+		a.state.HistoryByFolder = sel == 1
+		a.saveState()
+		a.setHistoryGrouping()
+		a.history.list.ScrollTo(0, ui.Start)
 	}
-	pick := func(dir string) {
-		h.dir = dir
-		a.searchHistory(0)
-	}
-	menuButton(c, btn, func(m *popMenu) {
-		if m.Item("全部文件夹").Checked(h.dir == "").Chosen() {
-			pick("")
-		}
-		if len(a.projects) > 0 {
-			m.Separator()
-		}
-		for _, p := range a.projects {
-			if m.Item(p.Name).Checked(h.dir == p.Path).Chosen() {
-				pick(p.Path)
-			}
-		}
-	})
 }
 
 // releaseHistory 放掉历史页的列表和打开的会话；还在路上的请求作废。
@@ -290,6 +326,7 @@ func (a *app) setHistoryVisible(v bool) {
 	h.visible = v
 	h.mu.Unlock()
 	if opened {
+		a.setHistoryGrouping()
 		a.searchHistory(0)
 	}
 }
@@ -471,7 +508,7 @@ func (a *app) historyBoard(c *ui.Context) {
 		if changed {
 			a.searchHistory(250 * time.Millisecond)
 		}
-		a.historyDirFilter(c)
+		a.historyGroupSwitch(c)
 		ui.Spacer(c)
 		if segmented(c, &h.agent, "按 agent 筛选", historyAgentLabels...) {
 			a.searchHistory(0)
@@ -688,7 +725,7 @@ func (a *app) sessionList(c *ui.Context) {
 		a.historyEmpty(c, "还没有会话记录", "Hive 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
 		return
 	}
-	// 按"今天、昨天、本周、更早"分组；默认只展开第一组，其余只列组标题和会话数
+	// 按"今天、昨天、本周、更早"或文件夹分组；默认只展开第一组，其余只列组标题和会话数
 	rows := h.groupRows()
 	// 列表里有"几分钟前"，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
