@@ -53,7 +53,7 @@ func TestTaskHome(t *testing.T) {
 	if a.taskSel != "" || !a.taskHome {
 		t.Fatalf("overview reselected %q home %v", a.taskSel, a.taskHome)
 	}
-	if _, ok := tt.Find("从左边选一个任务"); !ok {
+	if _, ok := tt.Find("把活儿派给其他 agent，在这里看进度、回答它们的问题、合入结果。从左边选一个任务看详情。"); !ok {
 		t.Fatal("overview hint missing")
 	}
 

@@ -395,9 +395,35 @@ func (a *app) taskBoard(c *ui.Context) {
 				ui.Scroll(c).Grow(1).Children(func() { a.taskDetailView(c, *sel) })
 				return
 			}
-			ui.Column(c).Grow(1).Center().Children(func() {
-				ui.Text(c, "从左边选一个任务").FontSize(13).TextColor(c.Theme().TextMuted)
+			a.taskEmptyCard(c)
+		})
+	})
+}
+
+// taskEmptyCard 是没选任务时右边的说明卡片，和历史页没选会话时的一样。
+func (a *app) taskEmptyCard(c *ui.Context) {
+	t := c.Theme()
+	var counts [3]int
+	for _, k := range a.tasks {
+		counts[taskSection(k)]++
+	}
+	ui.Column(c).Grow(1).Center().Children(func() {
+		emptyCard(c).Width(420).Padding(24).Gap(14).Children(func() {
+			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
+			ui.Column(c).Gap(6).Children(func() {
+				titleText(c, "任务", fsPageTitle)
+				ui.Text(c, "把活儿派给其他 agent，在这里看进度、回答它们的问题、合入结果。从左边选一个任务看详情。").
+					FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			})
+			if len(a.tasks) > 0 {
+				ui.Row(c).Gap(14).Children(func() {
+					for i, label := range []string{"待处理", "进行中", "已结束"} {
+						if counts[i] > 0 {
+							ui.Text(c, fmt.Sprintf("%s %d", label, counts[i])).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+						}
+					}
+				})
+			}
 		})
 	})
 }
