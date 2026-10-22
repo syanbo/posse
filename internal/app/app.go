@@ -106,6 +106,9 @@ type termView struct {
 	term *terminal.Terminal
 	// dir 是 shell 报告的当前目录（OSC 7），每帧取一次：终端的回调持着终端的锁，不能再调 term.Dir
 	dir string
+	// attached 是接入的时间，painted 是屏幕上出现过内容；两者给 startingHint 用
+	attached time.Time
+	painted  bool
 }
 
 type app struct {
@@ -781,7 +784,7 @@ func (a *app) ensureView(id string) {
 		return
 	}
 	conn := a.c.Attach(id)
-	v := &termView{id: id}
+	v := &termView{id: id, attached: time.Now()}
 	light, dark := terminalThemes()
 	t, err := terminal.New(terminal.Options{
 		Conn:      conn,

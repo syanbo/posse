@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -1147,6 +1148,66 @@ func waitingPulse(c *ui.Context, size float32, color ui.Color, still bool) ui.El
 	})
 }
 
+// hiveLoader 是整块内容加载时的蜂巢动画，和手机端 HiveLoader（mobile/lib/ui/loading.dart）一样：
+// 七格按真实蜂巢排，外圈六格从右上起顺时针逐格亮起、后面拖约两格的时间渐暗，1.2 秒一圈。
+// 亮度按时间连续算，按 pulseFrame（每秒 20 次）重绘就够平滑，只重绘不重建界面；still 时停在一帧上。
+func hiveLoader(c *ui.Context, size float32, color ui.Color, still bool) ui.Element {
+	const cycle = 1200 * time.Millisecond
+	return ui.Box(c).Size(size, size).Shrink(0).Role(ui.RoleProgress).Label("正在加载").Draw(func(p *ui.Painter, r ui.Rect) {
+		// 横向放得下 3√3 个外接圆半径加两道缝
+		const gapRatio = 0.2
+		sqrt3 := float32(math.Sqrt(3))
+		rad := min(r.W, r.H) / (3*sqrt3 + 2*gapRatio)
+		step := sqrt3*rad + gapRatio*rad
+		cx, cy := r.X+r.W/2, r.Y+r.H/2
+		round := rad * 0.22
+		corner := func(x, y float32, i int) (float32, float32) {
+			a := math.Pi/3*float64(i%6) - math.Pi/2
+			return x + float32(math.Cos(a))*rad, y + float32(math.Sin(a))*rad
+		}
+		// 圆角六边形：每个角从两边各退 round 处用贝塞尔连过去，填充一次就成形，半透明的颜色不会叠出一圈深色
+		cell := func(x, y float32, fill ui.Color) {
+			var path ui.Path
+			k := round / rad
+			for i := range 6 {
+				vx, vy := corner(x, y, i)
+				px, py := corner(x, y, i+5)
+				nx, ny := corner(x, y, i+1)
+				fx, fy := vx+(px-vx)*k, vy+(py-vy)*k
+				tx, ty := vx+(nx-vx)*k, vy+(ny-vy)*k
+				if i == 0 {
+					path.MoveTo(fx, fy)
+				} else {
+					path.LineTo(fx, fy)
+				}
+				path.QuadTo(vx, vy, tx, ty)
+			}
+			p.FillPath(path.Close(), fill)
+		}
+		dim := color.Alpha(0.18)
+		cell(cx, cy, color.Alpha(0.28))
+		phase := float32(0.2)
+		if !still {
+			now := time.Duration(p.Now().UnixNano())
+			phase = float32(now%cycle) / float32(cycle)
+			p.After(pulseFrame - now%pulseFrame)
+		}
+		t := phase * 6
+		for i := range 6 {
+			// 从右上那格开始顺时针
+			a := math.Pi/3*float64(i) - math.Pi/3
+			x, y := cx+float32(math.Cos(a))*step, cy+float32(math.Sin(a))*step
+			// 亮过之后约两格的时间里慢慢暗下去
+			since := float32(math.Mod(float64(t-float32(i))+6, 6))
+			lit := max(0, 1-since/2.4)
+			cell(x, y, dim.Mix(color, easeOut(lit)))
+		}
+	})
+}
+
+// easeOut 是先快后慢的缓动（Flutter 的 Curves.easeOut 近似）。
+func easeOut(x float32) float32 { return 1 - (1-x)*(1-x)*(1-x) }
+
 // smoothstep 是两头慢中间快的缓动。
 func smoothstep(x float32) float32 { return x * x * (3 - 2*x) }
 
@@ -1413,6 +1474,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				if v := a.view; a.termCtxID == v.id {
 					contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 				}
+				a.startingHint(c, a.view, cur)
 				a.sessionButtons(c, cur)
 			})
 			a.termDrop(c, area, cur.Agent)
@@ -1445,6 +1507,37 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				a.saveState()
 			}
 		}
+	})
+}
+
+// startingHint 在程序还没画出任何内容时居中画蜂巢加载动画和"正在启动"：新开的终端要先跑完用户的
+// shell 配置再启动 agent，Claude 要一两秒才画第一屏，这期间整块空白像是没反应。
+// 接入后等 300ms 再显示，切到已有内容的终端时快照还没到不会闪一下；出现过内容就不再检查。
+func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
+	const settle, giveUp = 300 * time.Millisecond, 20 * time.Second
+	if v.painted || !cur.Running {
+		return
+	}
+	since := time.Since(v.attached)
+	if since > giveUp || strings.TrimSpace(v.term.Text()) != "" {
+		v.painted = true
+		return
+	}
+	c.After(100 * time.Millisecond)
+	if since < settle {
+		return
+	}
+	t := c.Theme()
+	name := "终端"
+	if cur.Agent != "" {
+		name = agentTitle(cur.Agent)
+	}
+	label := "正在启动 " + name
+	ui.Box(c.Key("starting-hint")).Absolute().Fill().Center().Cursor(ui.CursorDefault).Children(func() {
+		ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
+			hiveLoader(c, 44, t.Accent, c.Preferences().ReduceMotion)
+			ui.Text(c, label).FontSize(fsBody).TextColor(t.TextMuted)
+		})
 	})
 }
 
