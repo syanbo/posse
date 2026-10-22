@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -93,6 +94,8 @@ type Terminal struct {
 
 	lastOutput atomic.Int64
 	lastInput  atomic.Int64
+	// mouseLast 为 true 表示最近一次写进 PTY 的是鼠标报告，见 dropStaleMouse
+	mouseLast atomic.Bool
 	// size 是列数<<32|行数，与内核尺寸同步更新，读取时不必抢 smu
 	size atomic.Uint64
 	// answer 为 true 时由常驻进程里的内核应答程序的终端查询；
@@ -282,7 +285,11 @@ func (t *Terminal) readLoop() {
 			title := ""
 			t.tail = carry(t.tail, buf[:n])
 			if t.emu != nil {
+				tracking := mouseTracking(t.emu)
 				t.emu.Write(buf[:n])
+				if tracking && !mouseTracking(t.emu) {
+					t.dropStaleMouse()
+				}
 				if t.titleDirty {
 					t.titleDirty = false
 					title = t.emu.Title()
@@ -694,8 +701,36 @@ func (t *Terminal) Inject(data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
 	}
+	t.mouseLast.Store(mouseReport.Match(data))
 	_, err := t.pty.Write(data)
 	return err
+}
+
+// mouseReport 匹配整段都是鼠标报告的输入（SGR 和 X10 两种编码）。
+var mouseReport = regexp.MustCompile(`^(?:\x1b\[<\d+;\d+;\d+[Mm]|\x1b\[M[\x20-\xff]{3})+$`)
+
+func mouseTracking(emu *vt.Terminal) bool {
+	return emu.Mode(9) || emu.Mode(1000) || emu.Mode(1002) || emu.Mode(1003)
+}
+
+// dropStaleMouse 在程序关掉鼠标跟踪时丢掉 PTY 里还没读的输入，前提是最后写进去的是鼠标报告。
+// 程序退出前先不读输入、最后才关鼠标跟踪（Codex 的 Shutting down…），这期间鼠标在终端上移动的
+// 报告堆在 PTY 里，接着运行的 shell 会把它们读成一串"35;12;8M"。最后写的是键盘输入时不丢，免得吞掉用户打的字。
+func (t *Terminal) dropStaleMouse() {
+	if !t.mouseLast.Load() {
+		return
+	}
+	t.pmu.Lock()
+	defer t.pmu.Unlock()
+	if t.ptyClosed {
+		return
+	}
+	if rc, err := t.pty.SyscallConn(); err == nil {
+		rc.Control(func(fd uintptr) {
+			// 在主端 TIOCFLUSH FREAD 清的是从端还没读的输入队列
+			unix.IoctlSetPointerInt(int(fd), unix.TIOCFLUSH, 1)
+		})
+	}
 }
 
 // LastInput 是最近一次用户或其他程序键入的时间，从未键入时为零值。

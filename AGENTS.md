@@ -54,6 +54,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），被打断的长等待回 `restarting`（`rpc.Retryable` 也认回复前就断开的连接）。CLI 的 `terminal wait`、`task wait`、`task ask` 走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 的 restarting 带回问题 ID（`Error.Data` 的 `resume`），重发时改成 `--resume`，不会再问一遍。Claude 的权限挂起（`hook.permission.hold`）被打断时 hook 到新进程上再挂，总时间仍是 35 秒。
 - PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
 - `daemon.log` 由拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程，都经 `daemon.OpenLog`）打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
+- 程序关掉鼠标跟踪（9、1000、1002、1003 都关）时，如果最后写进 PTY 的是鼠标报告，常驻进程清掉 PTY 里还没读的输入（`dropStaleMouse`，主端 `TIOCFLUSH`）：Codex 退出时先不读输入、最后才关鼠标跟踪，这期间鼠标移动的报告会被接着运行的 shell 读成一串 `35;12;8M`。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
 - 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，并注入 `HIVE_HOME`、`HIVE_SOCKET`、`HIVE_TERMINAL_ID`、`HIVE_WORKSPACE_ID`，以及给 Git 操作记录用的 `GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`；PATH 最前面是 hive 所在目录。agent 给工具调用设的非交互变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，见 `term.Environ`）也去掉：agent 在终端里用 `open` 拉起 Hive.app 时，窗口和常驻进程会继承它们，Claude Code 看到 `NO_COLOR` 就整屏没颜色。

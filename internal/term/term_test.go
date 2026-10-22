@@ -212,3 +212,46 @@ func TestWatchCarriesPartialSequence(t *testing.T) {
 		t.Fatal("rest never arrived")
 	}
 }
+
+// 程序退出前不再读输入、鼠标跟踪还开着时，鼠标移动的报告堆在 PTY 里；程序关掉鼠标跟踪时丢掉它们，
+// 后面的 shell 读不到一串"35;12;8M"。最后写进去的是键盘输入时不丢。
+func TestMouseReportsDroppedWhenTrackingEnds(t *testing.T) {
+	for _, c := range []struct {
+		name, after, want string
+	}{
+		{"mouse", "", "got=[]"},
+		{"typed", "x", "8Mx]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// 开鼠标跟踪后睡一会儿（这时不读输入），关掉跟踪，再读 PTY 里剩下的
+			script := `stty raw -echo; printf '\033[?1000h\033[?1003h\033[?1006hready\r\n'; sleep 1; printf '\033[?1006l\033[?1003l\033[?1000l'; sleep 0.5; perl -e 'use IO::Select; $s = IO::Select->new(\*STDIN); $b = ""; while ($s->can_read(0.3)) { sysread(STDIN, $c, 256) or last; $b .= $c } $b =~ s/\e/^[/g; print "got=[$b]\r\n"'; stty sane`
+			tm, err := Start(Options{ID: "t_mouse", Dir: t.TempDir(), Command: []string{"/bin/bash", "--norc", "-c", script}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tm.Close(time.Second)
+			deadline := time.Now().Add(5 * time.Second)
+			for !tm.ContainsText("ready") {
+				if time.Now().After(deadline) {
+					t.Fatal("program never started")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			for i := range 5 {
+				tm.Send([]byte("\x1b[<35;" + string(rune('1'+i)) + ";8M"))
+			}
+			if c.after != "" {
+				tm.Send([]byte(c.after))
+			}
+			select {
+			case <-tm.Exited():
+			case <-time.After(10 * time.Second):
+				t.Fatal("program did not exit")
+			}
+			time.Sleep(100 * time.Millisecond)
+			if !tm.ContainsText(c.want) {
+				t.Fatalf("want %s, screen:\n%s", c.want, strings.Join(tm.Lines(), "\n"))
+			}
+		})
+	}
+}
