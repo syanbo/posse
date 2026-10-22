@@ -499,19 +499,29 @@ func readFrame(c *net.UnixConn, v any) error {
 }
 
 // sendFile 经 SCM_RIGHTS 发一个描述符。不调 Fd()：它会把和 PTY 共用的打开状态改成阻塞模式。
+// 前面的交接记录对方还没读完时，macOS 的 sendmsg 带描述符不等缓冲区腾出来，直接报 EMSGSIZE：
+// 终端多、回滚长时记录有几 MB，一定会碰上，隔一会儿重发，最多等 sendFileWait。
 func sendFile(c *net.UnixConn, f *os.File) error {
 	rc, err := f.SyscallConn()
 	if err != nil {
 		return err
 	}
-	var werr error
-	if err := rc.Control(func(fd uintptr) {
-		_, _, werr = c.WriteMsgUnix([]byte{0}, unix.UnixRights(int(fd)), nil)
-	}); err != nil {
-		return err
+	deadline := time.Now().Add(sendFileWait)
+	for {
+		var werr error
+		if err := rc.Control(func(fd uintptr) {
+			_, _, werr = c.WriteMsgUnix([]byte{0}, unix.UnixRights(int(fd)), nil)
+		}); err != nil {
+			return err
+		}
+		if !errors.Is(werr, unix.EMSGSIZE) || time.Now().After(deadline) {
+			return werr
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	return werr
 }
+
+const sendFileWait = 10 * time.Second
 
 func recvFile(c *net.UnixConn, name string) (*os.File, error) {
 	buf := make([]byte, 1)
