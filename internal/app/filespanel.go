@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"slices"
 
 	"github.com/egoist/mygo/ui"
@@ -214,13 +213,10 @@ func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
 // filesSide 是文件栏"文件"页：上面一行分段切换文件树、检索、改动。
 func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).Shrink(0).Padding(8, 10, 4, 10).Children(func() {
-		changes := "改动"
-		if n := v.git.changeCount(); n > 0 {
-			changes = fmt.Sprintf("改动 %d", n)
-		}
-		// 撑满栏宽：分段平分宽度，"改动 12"这样长一些的才放得下
+		// 撑满栏宽：分段平分宽度，带计数的"改动"长一些的才放得下
 		ui.Column(c).Grow(1).Children(func() {
-			if segmented(c, &v.side, "文件栏", "文件", "检索", changes) && v.side == sideSearch {
+			badges := []int{0, 0, v.git.changeCount()}
+			if segmentedBadges(c, &v.side, "文件栏", badges, "文件", "检索", "改动") && v.side == sideSearch {
 				v.search.focus = true
 			}
 		})

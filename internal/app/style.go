@@ -404,6 +404,11 @@ func liftButton(c *ui.Context, b ui.Element) ui.Element {
 
 // segmented 是分段选择：轨道是一层淡底，选中的一段填强调色；返回这一帧是否换了选择。
 func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
+	return segmentedBadges(c, sel, label, nil, options...)
+}
+
+// segmentedBadges 是带计数的分段：badges[i] 大于 0 时在第 i 段文字后面画强调色的数（文件栏"改动"的改动文件数）。
+func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, options ...string) bool {
 	t := c.Theme()
 	p := colors(t)
 	changed := false
@@ -412,7 +417,17 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 			// 被拉宽时（对话框里）各段平分多出来的宽度；Grow 会把起始宽度设成 0，
 			// 字长的一段（"只建工作区"）要按字宽给够，不然被截成省略号
 			tw, _ := c.MeasureText(0, ui.Span{Text: o, Size: 12})
-			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(24).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(o).Role(ui.RoleRadio).Checked(i == *sel)
+			n := 0
+			if i < len(badges) {
+				n = badges[i]
+			}
+			name := o
+			if n > 0 {
+				bw, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprint(n), Size: 10.5})
+				tw += max(bw+10, 16) + 5
+				name = fmt.Sprintf("%s %d", o, n)
+			}
+			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(24).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
@@ -423,10 +438,18 @@ func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
 			}
 			seg.Background(seg.AnimateColor("bg", bg, hover))
 			seg.Children(func() {
-				text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0).SingleLine()
-				if i == *sel {
-					text.FontWeight(500)
-				}
+				ui.Row(c).AlignItems(ui.Center).Children(func() {
+					text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0).SingleLine()
+					if i == *sel {
+						text.FontWeight(500)
+					}
+					if n > 0 {
+						ui.Box(c).Height(16).MinWidth(16).Padding(0, 5).Margin(0, 0, 0, 5).Radius(8).Center().Shrink(0).
+							Background(t.Accent.Alpha(0.18)).Children(func() {
+							ui.Text(c, fmt.Sprint(n)).FontSize(10.5).FontWeight(500).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
+						})
+					}
+				})
 			})
 			if seg.Clicked() && i != *sel {
 				*sel, changed = i, true

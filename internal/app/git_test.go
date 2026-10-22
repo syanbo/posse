@@ -893,17 +893,20 @@ func TestChangeGroupsFold(t *testing.T) {
 	if tt.HasText("notes.txt") || !tt.HasText("main.go") {
 		t.Fatal("untracked group did not fold")
 	}
-	// 点组名也能切换
-	if err := tt.Click("改动"); err != nil {
-		t.Fatal(err)
+	// 点组名也能切换；分段里也有"改动"两个字，按组标题前的勾选框找组名
+	clickTitle := func() {
+		r, ok := tt.Find("勾选 改动")
+		if !ok {
+			t.Fatalf("group checkbox missing: %v", tt.Texts())
+		}
+		tt.ClickAt(r.X+r.W+14, r.Y+r.H/2)
 	}
+	clickTitle()
 	tt.Frame()
 	if tt.HasText("README.md") || *v.git.groupOpen(groupChanged) {
 		t.Fatal("changed group did not fold by its title")
 	}
-	if err := tt.Click("改动"); err != nil {
-		t.Fatal(err)
-	}
+	clickTitle()
 	tt.Frame()
 	if !tt.HasText("README.md") {
 		t.Fatal("changed group did not unfold")
