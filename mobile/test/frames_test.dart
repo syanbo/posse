@@ -16,6 +16,14 @@ Uint8List frame(int op, List<int> payload, {int sid = 7, int seq = 3}) {
 }
 
 void main() {
+  test('cursor keys follow application mode', () {
+    expect(cursorKeysApp([0x1b, 0x5b, 0x41]), [0x1b, 0x4f, 0x41]);
+    expect(cursorKeysApp([0x1b, 0x5b, 0x46]), [0x1b, 0x4f, 0x46]);
+    // ⇧Tab、PgUp 不是光标键，照原样
+    expect(cursorKeysApp([0x1b, 0x5b, 0x5a]), [0x1b, 0x5b, 0x5a]);
+    expect(cursorKeysApp([0x1b, 0x5b, 0x35, 0x7e]), [0x1b, 0x5b, 0x35, 0x7e]);
+  });
+
   _overlapTest();
   test('parses the 16-byte header and reassembles a snapshot', () {
     final parsed = parseTermFrame(

@@ -120,6 +120,12 @@ class _TerminalScreenState extends State<TerminalScreen>
       _focus.unfocus();
       return;
     }
+    _showKeyboard();
+  }
+
+  /// 点终端只弹键盘、不收：输入框就在终端里，键盘弹着时点一下多半是在挪光标、点选项。收起用快捷键栏的键盘键。
+  void _showKeyboard() {
+    if (MediaQuery.viewInsetsOf(context).bottom > 0) return;
     _focus.requestFocus();
     // 已经有焦点但键盘被收起时，requestFocus 不会再弹，要让输入法重新出来
     SystemChannels.textInput.invokeMethod<void>('TextInput.show');
@@ -391,7 +397,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     scrollController: scrollController,
     linkSettings: LinkSettings(onActivate: _onLink),
     onContentRows: _onContentRows,
-    onTap: _toggleKeyboard,
+    onTap: _showKeyboard,
   );
 
   void _onContentRows(int rows) => _contentRows.value = rows;
@@ -478,7 +484,7 @@ class _TerminalScreenState extends State<TerminalScreen>
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           // 点在格子外面的空白处：格子里的点击由 flterm 先认领，到不了这里
-          onTap: _toggleKeyboard,
+          onTap: _showKeyboard,
           onScaleStart: _scaleStart,
           onScaleUpdate: (d) => _scaleUpdate(d, gridW, gridH, box),
           onScaleEnd: (d) => _scaleEnd(gridW, gridH, box),
@@ -775,6 +781,14 @@ class _TerminalScreenState extends State<TerminalScreen>
     _flash(note.isEmpty ? null : note);
   }
 
+  /// 专用键和自定义键按程序当前的光标键模式编码，见 [cursorKeysApp]。
+  Future<void> _sendKey(List<int> bytes, {bool enter = false}) => _send(
+    _controller.modeGet(const TerminalMode.cursorKeys())
+        ? cursorKeysApp(bytes)
+        : bytes,
+    enter: enter,
+  );
+
   Future<void> _send(List<int> bytes, {bool enter = false}) async {
     final rpc = widget.model.rpc;
     if (rpc == null || bytes.isEmpty) return;
@@ -934,9 +948,9 @@ class _TerminalScreenState extends State<TerminalScreen>
                 right: 0,
                 bottom: keyboard,
                 child: _KeyBar(
-                  onKey: _send,
+                  onKey: _sendKey,
                   keys: widget.model.settings.barKeys,
-                  onCustom: (key) => _send(key.bytes, enter: key.enter),
+                  onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
                   onImage: widget.model.rpc == null || _busy
                       ? null
                       : _sendImage,

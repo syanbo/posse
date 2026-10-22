@@ -136,6 +136,18 @@ class TermKey {
   final List<int> bytes;
 }
 
+/// 程序开着光标键应用模式（DECCKM）时，方向键、Home、End 换成 ESC O 开头的编码：
+/// htop 这类 ncurses 程序只认这种，键帽上写死的 ESC [ A 按了没反应。
+List<int> cursorKeysApp(List<int> bytes) {
+  if (bytes.length == 3 &&
+      bytes[0] == 0x1b &&
+      bytes[1] == 0x5b &&
+      'ABCDHF'.codeUnits.contains(bytes[2])) {
+    return [0x1b, 0x4f, bytes[2]];
+  }
+  return bytes;
+}
+
 /// 立即发送的键帽 ⌃↩。U+FE0E 让 ↩ 按文字画：手机字体里没有它时会退到 emoji 字体，画成彩色图标。
 const sendNowLabel = '⌃↩\uFE0E';
 

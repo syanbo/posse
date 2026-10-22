@@ -413,7 +413,7 @@ class TerminalControllerImpl extends TerminalController
   }
 
   @override
-  void handleScroll(int lines) {
+  void handleScroll(int lines, {Offset? at}) {
     if (_activeScreen != .alternate || lines == 0) return;
 
     if (_mouseTracking != .none) {
@@ -422,17 +422,30 @@ class TerminalControllerImpl extends TerminalController
 
       if (count > 0) _mouseEncoder.sync(terminal);
 
+      // Hive: 滚轮报在手指所在的格子，不知道时报在屏幕中间。原版报在左上角，
+      // Codex 按位置分区处理滚轮，第一行是钉住的问题，落在那里不滚。
+      final dpr = _lastDevicePixelRatio;
+      final x = at != null
+          ? at.dx * dpr
+          : _lastCols * _lastMetrics.cellWidth * dpr / 2;
+      final y = at != null
+          ? at.dy * dpr
+          : _lastRows * _lastMetrics.cellHeight * dpr / 2;
       for (var i = 0; i < count; i++) {
         _mouseEvent
           ..action = .press
           ..button = button
           ..mods = _currentMods()
-          ..setPosition(x: 0, y: 0);
+          ..setPosition(x: x, y: y);
         final result = _mouseEncoder.encode(_mouseEvent);
         if (result.isNotEmpty) _emitOutput(utf8.encode(result));
       }
       return;
     }
+
+    // Hive: 程序关了 alternate scroll（1007）就不把滑动换成方向键，和桌面一样。
+    // Codex 显式关掉它：方向键在它的输入框里是翻历史，不是滚动。
+    if (!terminal.modeGet(const .alternateScroll())) return;
 
     final up = _cursorKeyApplication ? _appCursorUp : _cursorUp;
     final down = _cursorKeyApplication ? _appCursorDown : _cursorDown;

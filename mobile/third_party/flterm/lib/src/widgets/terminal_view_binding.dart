@@ -69,8 +69,9 @@ abstract interface class TerminalViewBinding {
     required double devicePixelRatio,
   });
 
-  /// Reports scroll by line count.
-  void handleScroll(int lines);
+  /// Reports scroll by line count. [at] is where the finger is, in
+  /// logical pixels relative to the terminal (Hive).
+  void handleScroll(int lines, {Offset? at});
 
   /// Applies a press selection gesture.
   void handleSelectionPress({

@@ -155,6 +155,8 @@ class _TerminalViewState extends State<TerminalView> {
   var _ownsScrollController = false;
   var _mouseCursorHidden = false;
   var _lastAlternatePixels = 0.0;
+  // Hive: 手指最近一次按下、移动的位置，全屏程序跟踪鼠标时滚轮报在这里。抬手后的惯性滚动沿用它。
+  Offset? _scrollAnchor;
   var _visibleCols = 0;
   var _visibleRows = 0;
   var _devicePixelRatio = 1.0;
@@ -340,24 +342,28 @@ class _TerminalViewState extends State<TerminalView> {
                   scrollController: _scrollController,
                   onLinkActivate: widget.linkSettings.onActivate,
                   onTap: widget.onTap,
-                  child: Scrollable(
-                    controller: _scrollController,
-                    physics: widget.scrollPhysics,
-                    viewportBuilder: (_, offset) => TerminalRenderer(
-                      key: _rendererKey,
-                      theme: _theme,
-                      offset: offset,
-                      metrics: _metrics,
-                      renderObserver: _controller,
-                      terminal: _binding.terminal,
-                      renderCache: cache,
-                      preeditText: _binding.preeditText,
-                      blinkVisible: _blinkVisible,
-                      linkSnapshot: _links.snapshot(),
-                      onResize: _handleResize,
-                      onViewportChanged: _binding.handleViewportChanged,
-                      backgroundBleed: widget.backgroundBleed,
-                      onContentRows: widget.onContentRows,
+                  child: Listener(
+                    onPointerDown: (e) => _scrollAnchor = e.localPosition,
+                    onPointerMove: (e) => _scrollAnchor = e.localPosition,
+                    child: Scrollable(
+                      controller: _scrollController,
+                      physics: widget.scrollPhysics,
+                      viewportBuilder: (_, offset) => TerminalRenderer(
+                        key: _rendererKey,
+                        theme: _theme,
+                        offset: offset,
+                        metrics: _metrics,
+                        renderObserver: _controller,
+                        terminal: _binding.terminal,
+                        renderCache: cache,
+                        preeditText: _binding.preeditText,
+                        blinkVisible: _blinkVisible,
+                        linkSnapshot: _links.snapshot(),
+                        onResize: _handleResize,
+                        onViewportChanged: _binding.handleViewportChanged,
+                        backgroundBleed: widget.backgroundBleed,
+                        onContentRows: widget.onContentRows,
+                      ),
                     ),
                   ),
                 ),
@@ -495,7 +501,7 @@ class _TerminalViewState extends State<TerminalView> {
     final lines = (delta / cellHeight).truncate();
     if (lines == 0) return;
     _lastAlternatePixels += lines * cellHeight;
-    _binding.handleScroll(lines);
+    _binding.handleScroll(lines, at: _scrollAnchor);
     _links.invalidateContent();
     _syncLinkInteraction();
     _updateTextInputGeometry();
