@@ -61,8 +61,20 @@ Widget _app(Widget child, {bool dark = false}) => MaterialApp(
   home: Scaffold(body: child),
 );
 
-MarkdownDoc _doc(HiveAppModel model, void Function(String) open) => MarkdownDoc(
-  data: _sample,
+// 一格里是一整句话的表格：列宽封顶，句子在格子里折行
+const _longTable = '''
+| 阶段 | 做什么 | 客户端 | 目的 |
+| :-- | :-- | :-- | :-- |
+| A | Hive 常驻进程实现 Orca 的 `nativeChat.*` 协议，补齐 agent 状态行里手机要的字段 | 现有 Orca App（iOS / Android） | 不写一行客户端代码就能验证"结构化对话 + 审批卡片"是否够用，协议顺带定稿 |
+| B | Flutter 客户端，复用阶段 A 的协议，再加 Hive 自己的扩展（hook 审批决策、多地址竞速、Git 速览） | 自研，iOS 先、Android 后期 | 摆脱 Orca App 的节奏和 UI 限制 |
+''';
+
+MarkdownDoc _doc(
+  HiveAppModel model,
+  void Function(String) open, {
+  String data = _sample,
+}) => MarkdownDoc(
+  data: data,
   model: model,
   worktree: 'w1',
   path: 'docs/features/guide.md',
@@ -104,6 +116,37 @@ void main() {
     expect(find.textContaining('](https://', findRichText: true), findsNothing);
   });
 
+  testWidgets('long table cells wrap inside a capped column', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    final model = HiveAppModel(store: MemoryPairingStore());
+    await tester.pumpWidget(_app(_doc(model, (_) {}, data: _longTable)));
+    await tester.pump();
+    final cell = find.textContaining('补齐 agent 状态行', findRichText: true);
+    expect(cell, findsOneWidget);
+    final size = tester.getSize(cell);
+    expect(size.width, lessThanOrEqualTo(220));
+    // 折成了好几行，而不是一行拉到屏幕外
+    expect(size.height, greaterThan(40));
+    // 表头和第一列都在屏幕里
+    expect(tester.getTopLeft(find.text('做什么')).dx, lessThan(390));
+  });
+
+  testWidgets('table scrollbar is not lifted by the bottom safe area', (
+    tester,
+  ) async {
+    final model = HiveAppModel(store: MemoryPairingStore());
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(padding: EdgeInsets.only(bottom: 34)),
+        child: _app(_doc(model, (_) {}, data: _longTable)),
+      ),
+    );
+    await tester.pump();
+    // iOS 的横向滚动条按 MediaQuery 的底部安全区抬高，表格里要看到 0
+    final ctx = tester.element(find.byType(Table));
+    expect(MediaQuery.paddingOf(ctx).bottom, 0);
+  });
+
   // 离屏截图对比新旧渲染，给人看：
   // HIVE_SHOTS_DIR=/tmp/shots fvm flutter test test/markdown_doc_test.dart
   final dir = Platform.environment['HIVE_SHOTS_DIR'] ?? '';
@@ -128,6 +171,7 @@ void main() {
       final suffix = dark ? 'dark' : 'light';
       for (final (name, child) in [
         ('new', _doc(model, (_) {}) as Widget),
+        ('table', _doc(model, (_) {}, data: _longTable)),
         (
           'old',
           Builder(

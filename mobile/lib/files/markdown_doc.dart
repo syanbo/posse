@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -38,24 +39,30 @@ class MarkdownDoc extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
     final base = TextStyle(fontSize: Fs.read, height: 1.6, color: c.text);
-    return Markdown(
-      data: data,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      extensionSet: markdownExtensions,
-      styleSheet: markdownDocStyle(c, base),
-      builders: {'pre': _CodeBlockBuilder(base)},
-      paddingBuilders: {'hr': _RulePadding()},
-      bulletBuilder: (p) => _bullet(p, base, c),
-      checkboxBuilder: (checked) => Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: Icon(
-          checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
-          size: 18,
-          color: checked ? c.accent : c.muted,
+    // 表格的横向滚动条在 iOS 上是 CupertinoScrollbar，会按底部安全区抬高，压在表格最后一行上；
+    // 去掉底部安全区，滚动条落回表格下面的空隙。正文自己有底边距，不靠安全区
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
+      child: Markdown(
+        data: data,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        extensionSet: markdownExtensions,
+        styleSheet: markdownDocStyle(c, base),
+        builders: {'pre': _CodeBlockBuilder(base)},
+        paddingBuilders: {'hr': _RulePadding()},
+        bulletBuilder: (p) => _bullet(p, base, c),
+        checkboxBuilder: (checked) => Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Icon(
+            checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
+            size: 18,
+            color: checked ? c.accent : c.muted,
+          ),
         ),
+        imageBuilder: (uri, title, alt) => _image(uri, alt, c),
+        onTapLink: (text, href, title) => _tapLink(context, href),
       ),
-      imageBuilder: (uri, title, alt) => _image(uri, alt, c),
-      onTapLink: (text, href, title) => _tapLink(context, href),
     );
   }
 
@@ -190,8 +197,9 @@ MarkdownStyleSheet markdownDocStyle(HiveColors c, TextStyle base) {
     tableHeadAlign: TextAlign.left,
     tablePadding: const EdgeInsets.only(bottom: 10),
     tableBorder: TableBorder.all(color: c.line),
-    // 按内容宽排、超出屏幕左右滑（只有固定宽和内容宽两种才会套横向滚动）
-    tableColumnWidth: const IntrinsicColumnWidth(),
+    // 按内容宽排、超出屏幕左右滑（只有固定宽和内容宽两种才会套横向滚动）；
+    // 一列最宽 220，长句子在格子里折行，不会一行拉得比屏幕宽好几倍
+    tableColumnWidth: const _CappedColumnWidth(220),
     tableCellsPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     tableCellsDecoration: const BoxDecoration(),
     tableHeadCellsDecoration: BoxDecoration(color: c.code),
@@ -204,6 +212,21 @@ MarkdownStyleSheet markdownDocStyle(HiveColors c, TextStyle base) {
     codeblockDecoration: const BoxDecoration(),
     horizontalRuleDecoration: BoxDecoration(border: Border(top: rule)),
   );
+}
+
+/// 按内容宽、但不超过 [cap] 的列宽；放不下的长词（路径、代码）仍按它自己的宽度。
+/// 继承 IntrinsicColumnWidth：flutter_markdown_plus 只给它和固定宽的表格套横向滚动。
+class _CappedColumnWidth extends IntrinsicColumnWidth {
+  const _CappedColumnWidth(this.cap);
+
+  final double cap;
+
+  @override
+  double maxIntrinsicWidth(Iterable<RenderBox> cells, double containerWidth) {
+    final natural = super.maxIntrinsicWidth(cells, containerWidth);
+    final word = super.minIntrinsicWidth(cells, containerWidth);
+    return math.min(natural, math.max(cap, word));
+  }
 }
 
 class _CodeBlockBuilder extends MarkdownElementBuilder {
