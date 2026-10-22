@@ -237,10 +237,35 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	a.openBranches(w)
 	v := a.files[w.ID]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("本地") })
-	for _, want := range []string{"更新项目", "Push…", "新建分支…", "feat", "agent", "在另一个 worktree", "远端 origin", "origin/main", "1 个传出提交（本地有、还没推送）"} {
+	for _, want := range []string{"更新项目", "Push…", "新建分支…", "feat", "agent", "worktree · agent-wt", "远端 origin", "origin/main", "1 个传出提交（本地有、还没推送）"} {
 		if !tt.HasText(want) {
 			t.Fatalf("popup lacks %q: %v", want, tt.Texts())
 		}
+	}
+	// 不是 hive 工作区的 worktree：菜单能在 Hive 中打开、在访达中显示、复制路径
+	if err := tt.Click("agent"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("在 Hive 中打开") || !tt.HasText("在访达中显示 worktree") || !tt.HasText("复制 worktree 路径") {
+		t.Fatalf("worktree menu: %v", tt.Texts())
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	// 左边缘往左拖变宽，松手写进 ui.json
+	if r, ok := tt.Find("搜索分支"); ok {
+		// 输入框文字左边是框的内边距 10、行 2、弹窗 6，再往里 3 是把手中间
+		x, y := r.X-18+3, r.Y+60
+		tt.Press(x, y)
+		tt.Move(x-50, y)
+		tt.Move(x-100, y)
+		tt.Release(x-100, y)
+		tt.Frame()
+		if got := a.branchPopWidth(); got != branchPopDefault+100 || a.resizingBranch {
+			t.Fatalf("branch popup width %v after dragging its left edge", got)
+		}
+	} else {
+		t.Fatal("search field missing")
 	}
 	a.branchPop.query = "fea"
 	tt.Frame()

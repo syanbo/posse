@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"hive/internal/agent"
@@ -249,7 +251,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	p := colors(t)
 	v := a.filesFor(w)
 	g := &v.git
-	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(420).MaxHeight(600).Padding(6).Gap(2))
+	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(a.branchPopWidth()).MaxHeight(600).Padding(6).Gap(2))
 	panel.Children(func() {
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Children(func() {
@@ -297,9 +299,41 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				a.branchGroups(c, w, v, query)
 			})
 		})
+		a.branchPopGrip(c)
 	})
 	if panel.PressedOutside() && !a.overPanelButton || panel.Shortcut(0, ui.KeyEscape) {
 		a.branchPop = nil
+	}
+}
+
+const (
+	branchPopDefault = 420
+	branchPopMin     = 360
+	branchPopMax     = 800
+)
+
+func (a *app) branchPopWidth() float32 {
+	if w := a.state.BranchPopWidth; w > 0 {
+		return min(max(w, branchPopMin), branchPopMax)
+	}
+	return branchPopDefault
+}
+
+// branchPopGrip 是分支弹窗左边缘调宽的把手：弹窗贴着右边，往左拖变宽，长分支名和远端名看得全；松手才写 ui.json。
+func (a *app) branchPopGrip(c *ui.Context) {
+	grip := ui.Box(c.Key("branch-pop-grip")).Absolute().Top(0).Bottom(0).Left(0).Width(6).Cursor(ui.CursorResizeEW)
+	if dx, _, held := grip.Dragged(); held {
+		a.state.BranchPopWidth = min(max(a.branchPopWidth()-dx, branchPopMin), branchPopMax)
+		a.resizingBranch = true
+	} else if a.resizingBranch {
+		a.resizingBranch = false
+		a.saveState()
+	}
+	if grip.Hovered() || a.resizingBranch {
+		accent := c.Theme().Accent
+		grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+			pt.Fill(ui.Rect{X: r.X + 2, Y: r.Y + 12, W: 2, H: r.H - 24}, accent, 1)
+		})
 	}
 }
 
@@ -498,14 +532,15 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		case inOther && otherWs != nil:
 			ui.Text(c, "在 "+displayName(otherWs)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		case inOther:
-			ui.Text(c, "在另一个 worktree").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			// 不是 hive 建的 worktree（别的工具或命令行建的）：报目录名，悬停看完整路径
+			ui.Text(c, "worktree · "+filepath.Base(other)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(other)
 		case b.Gone:
 			ui.Text(c, "远端已删除").FontSize(11).TextColor(t.TextMuted).Shrink(0)
 		case b.Upstream != "":
 			ui.Text(c, b.Upstream).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 	})
-	menuButton(c, row, func(m *popMenu) { a.branchMenu(m, w, v, b, cur, otherWs, inOther) })
+	menuButton(c, row, func(m *popMenu) { a.branchMenu(c, m, w, v, b, cur, other, otherWs, inOther) })
 }
 
 // checkoutBranch 是分支弹窗里回车或菜单"检出"：在别的工作区检出着的切到那个工作区，当前分支什么也不做。
@@ -518,7 +553,7 @@ func (a *app) checkoutBranch(w *workspace, v *filesView, b gitx.Branch) {
 		if ws := a.workspaceAt(other); ws != nil {
 			a.selected, a.revealSel = ws.ID, true
 		} else {
-			a.err = b.Name + " 检出在另一个 worktree 里"
+			a.attachWorktree(w, other)
 		}
 		return
 	}
@@ -528,7 +563,7 @@ func (a *app) checkoutBranch(w *workspace, v *filesView, b gitx.Branch) {
 }
 
 // branchMenu 是一个分支的操作，顺序照 WebStorm。
-func (a *app) branchMenu(m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, otherWs *workspace, inOther bool) {
+func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, other string, otherWs *workspace, inOther bool) {
 	done := func() { a.branchPop = nil }
 	q := "‘" + b.Name + "’"
 	curName := cur.Name
@@ -544,7 +579,18 @@ func (a *app) branchMenu(m *popMenu, w *workspace, v *filesView, b, cur gitx.Bra
 				a.selected, a.revealSel = otherWs.ID, true
 			}
 		case inOther:
-			m.Item("检出在另一个 worktree 里").Disabled(true)
+			if m.Item("在 Hive 中打开").Chosen() {
+				done()
+				a.attachWorktree(w, other)
+			}
+			if m.Item("在访达中显示 worktree").Chosen() {
+				done()
+				mygo.Shell.ShowItemInFolder(other)
+			}
+			if m.Item("复制 worktree 路径").Chosen() {
+				done()
+				c.WriteClipboard(other)
+			}
 		default:
 			if m.Item("检出").Chosen() {
 				a.checkoutBranch(w, v, b)
@@ -711,6 +757,29 @@ func (a *app) askWorktreeFrom(w *workspace, base string) {
 	a.prompt(promptReq{title: "基于 " + base + " 新建工作区", placeholder: "工作区名，也是新分支名", verb: "新建", do: func(name string, _ bool) {
 		go a.createWorkspace(map[string]any{"project": w.Project, "name": name, "mode": "worktree", "base": base})
 	}})
+}
+
+// attachWorktree 把不是 hive 建的 worktree 加成项目的工作区并切过去，名字取目录名。
+// 常驻进程把它记成 folder：删工作区只删记录，不碰别人建的目录和分支。
+func (a *app) attachWorktree(w *workspace, dir string) {
+	name := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune(`/\:*?"<>|~^`, r) {
+			return '-'
+		}
+		return r
+	}, filepath.Base(dir))
+	name = strings.TrimLeft(name, "-.")
+	if name == "" || name == "main" {
+		name = "worktree"
+	}
+	taken := map[string]bool{}
+	for _, x := range a.byProject[w.ProjectID] {
+		taken[x.Name] = true
+	}
+	for i, base := 2, name; taken[name]; i++ {
+		name = fmt.Sprintf("%s-%d", base, i)
+	}
+	go a.createWorkspace(map[string]any{"project": w.Project, "name": name, "mode": "attach", "path": dir})
 }
 
 // workspaceAt 找目录正好是 dir 的工作区（比较时解析符号链接）。

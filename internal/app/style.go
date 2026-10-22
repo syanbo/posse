@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -259,6 +260,27 @@ func pendingLabel(c *ui.Context) ui.Element {
 // doneLabel 是"已完成"三个字，和"待处理"一样是要你看一眼的状态，用强调色。
 func doneLabel(c *ui.Context) ui.Element {
 	return ui.Text(c, "已完成").FontSize(11).FontWeight(600).TextColor(c.Theme().Accent)
+}
+
+// isWorktree 报告工作区是不是 git worktree：hive 建的（worktree），或者从别处加进来的（attach 记成 folder，
+// 但目录不是项目目录）。
+func (a *app) isWorktree(w *workspace) bool {
+	if w.Kind == "worktree" {
+		return true
+	}
+	if w.Kind != "folder" {
+		return false
+	}
+	ws := a.byProject[w.ProjectID]
+	return len(ws) > 0 && ws[0].Kind == "main" && filepath.Clean(ws[0].Path) != filepath.Clean(w.Path)
+}
+
+// wsIcon 是侧栏、空工作区页里工作区的图标：worktree（含加进来的）是分支，其余是文件夹。
+func (a *app) wsIcon(w *workspace) *ui.SVG {
+	if a.isWorktree(w) {
+		return iconBranch
+	}
+	return iconFolder
 }
 
 // workspaceIcon 是工作区的图标：worktree 是分支，其余是文件夹。

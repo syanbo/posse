@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"maps"
 	"net"
@@ -229,6 +230,7 @@ type app struct {
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
 	resizingPanel   bool    // 正在拖文件栏的左边缘，松手时写 ui.json
+	resizingBranch  bool    // 正在拖分支弹窗的左边缘，松手时写 ui.json
 	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string  // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
@@ -422,6 +424,7 @@ func (a *app) refresh() {
 				r.workspaces[i].Branch = b
 			}
 		}
+		r.workspaces = a.dropGoneWorktrees(ctx, r.workspaces)
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
@@ -1018,6 +1021,50 @@ func (a *app) createWorkspace(params map[string]any) {
 		})
 	}
 	a.refresh()
+}
+
+// dropGoneWorktrees 在每秒的轮询里找出目录已被删掉的 worktree 工作区（hive 建的和加进来的），
+// 删掉它的记录、清掉 git 的 worktree 记录，返回剩下的。上一级目录也不在时不动：可能是外接盘没挂上。
+// 里面还有终端在跑的也不动，等终端退出：删了记录，终端就没有归属了。
+func (a *app) dropGoneWorktrees(ctx context.Context, ws []workspace) []workspace {
+	mainPath := map[string]string{}
+	for _, w := range ws {
+		if w.Kind == "main" {
+			mainPath[w.ProjectID] = w.Path
+		}
+	}
+	var gone []workspace
+	keep := ws[:0:0]
+	for _, w := range ws {
+		isWT := w.Kind == "worktree" || w.Kind == "folder" && mainPath[w.ProjectID] != "" && filepath.Clean(w.Path) != filepath.Clean(mainPath[w.ProjectID])
+		if isWT && !slices.ContainsFunc(w.Terminals, func(t terminalInfo) bool { return t.Running }) {
+			if _, err := os.Stat(w.Path); errors.Is(err, fs.ErrNotExist) {
+				if _, err := os.Stat(filepath.Dir(w.Path)); err == nil {
+					gone = append(gone, w)
+					continue
+				}
+			}
+		}
+		keep = append(keep, w)
+	}
+	if len(gone) == 0 {
+		return ws
+	}
+	var names []string
+	for _, w := range gone {
+		if a.c.Call(ctx, "workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil) != nil {
+			keep = append(keep, w)
+			continue
+		}
+		names = append(names, displayName(&w))
+		if p := mainPath[w.ProjectID]; p != "" {
+			gitx.PruneWorktrees(ctx, p)
+		}
+	}
+	if len(names) > 0 && a.win != nil {
+		a.win.Update(func() { a.notify("目录已删除，移除了工作区 "+strings.Join(names, "、"), "", nil) })
+	}
+	return keep
 }
 
 func truncate(s string, n int) string {

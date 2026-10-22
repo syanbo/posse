@@ -603,7 +603,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		}
 	}
 	t := c.Theme()
-	icon := func() { ui.Icon(c, workspaceIcon(w.Kind)).FontSize(16).TextColor(t.Accent).Shrink(0) }
+	icon := func() { ui.Icon(c, a.wsIcon(&w)).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
 	item := a.navRowAt(c, w.ID, selected, icon, label, sub, branch, trailing)
 	if item.Clicked() {
 		a.selected = w.ID
@@ -1481,7 +1481,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 		ui.Column(c).MinHeight(a.emptyHeight).Center().Padding(24).Children(func() {
 			ui.Column(c).Width(600).Gap(18).Children(func() {
 				ui.Row(c).Gap(16).Padding(0, 4).AlignItems(ui.Center).Children(func() {
-					tile(c, workspaceIcon(w.Kind), 52, p.tint, t.Accent)
+					tile(c, a.wsIcon(w), 52, p.tint, t.Accent)
 					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
 						titleText(c, displayName(w), 20).MaxLines(1)
 						var branch func()

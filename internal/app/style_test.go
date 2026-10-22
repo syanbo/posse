@@ -185,3 +185,19 @@ func TestPointerCursor(t *testing.T) {
 		t.Errorf("backdrop cursor = %v", c)
 	}
 }
+
+// 加进来的 worktree 记成 folder，但目录不是项目目录：侧栏照样画分支图标。
+func TestIsWorktree(t *testing.T) {
+	a := &app{byProject: map[string][]workspace{"p": {
+		{ID: "m", ProjectID: "p", Kind: "main", Path: "/r"},
+		{ID: "f", ProjectID: "p", Kind: "folder", Path: "/r"},
+		{ID: "w", ProjectID: "p", Kind: "worktree", Path: "/h/wt"},
+		{ID: "x", ProjectID: "p", Kind: "folder", Path: "/elsewhere/wt"},
+	}}}
+	want := map[string]bool{"m": false, "f": false, "w": true, "x": true}
+	for _, w := range a.byProject["p"] {
+		if got := a.isWorktree(&w); got != want[w.ID] {
+			t.Errorf("isWorktree(%s) = %v", w.ID, got)
+		}
+	}
+}

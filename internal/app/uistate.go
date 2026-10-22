@@ -23,6 +23,7 @@ type uiState struct {
 	SidebarWidth         float32  `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
 	LogPanel             bool     `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32  `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
+	BranchPopWidth       float32  `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认
 	CompareSplit         float32  `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
 	LogRefsWidth         float32  `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
 	LogDetailWidth       float32  `json:"logDetailWidth,omitempty"`       // 日志、逐行追溯右边提交详情的宽度，0 表示默认
