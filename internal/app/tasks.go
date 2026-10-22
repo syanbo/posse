@@ -329,8 +329,8 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 				statusGlyph(c, agent.StatusWaiting, 12)
 				return
 			}
+			// 进行中只写个数，不再跟一个转动的图标：侧栏这一行是入口，不是哪个会话的状态
 			ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
-			statusGlyph(c, agent.StatusWorking, 12)
 		}
 	}
 	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", "", trailing)
