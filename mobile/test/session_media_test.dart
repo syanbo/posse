@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/chat/media.dart';
 import 'package:hive_mobile/protocol/rpc.dart';
+import 'package:hive_mobile/ui/media_pager.dart';
 import 'package:hive_mobile/workspace/models.dart';
 
 // 1×1 的 PNG
@@ -141,7 +142,7 @@ void main() {
     await tester.runAsync(() async {
       for (
         var i = 0;
-        i < 20 && find.byType(InteractiveViewer).evaluate().isEmpty;
+        i < 20 && find.byType(ZoomImage).evaluate().isEmpty;
         i++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -149,8 +150,22 @@ void main() {
       }
     });
     await tester.pumpAndSettle();
-    expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(find.byType(ZoomImage), findsOneWidget);
     expect(rpc.reads, [0]);
+    expect(find.textContaining('· 2/3'), findsOneWidget);
+
+    // 左滑翻到粘贴的那张，顶栏跟着换
+    await tester.fling(find.byType(ZoomImage), const Offset(-400, 0), 1500);
+    await tester.runAsync(() async {
+      for (var i = 0; i < 20 && find.text('#1').evaluate().isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await tester.pump();
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('#1'), findsOneWidget);
+    expect(find.textContaining('· 3/3'), findsOneWidget);
+    expect(rpc.reads, [0, 0]);
     // 清掉这次测试下到临时目录的文件
     for (final f in Directory(
       '${Directory.systemTemp.path}/hive-video',

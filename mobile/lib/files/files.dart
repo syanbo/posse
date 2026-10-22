@@ -11,6 +11,7 @@ import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
 import '../ui/loading.dart';
+import '../ui/media_pager.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -61,6 +62,12 @@ String _ext(String path) {
   final dot = path.lastIndexOf('.');
   final slash = path.lastIndexOf('/');
   return dot > slash ? path.substring(dot + 1).toLowerCase() : '';
+}
+
+/// 手机上能看的图片和视频：文件树里点开时和同目录的其他图片、视频一起左右翻。
+bool isMediaPath(String path) {
+  final ext = _ext(path);
+  return _imageExts.contains(ext) || videoExts.contains(ext);
 }
 
 /// 单独打开的文件页（会话页、终端页顶栏的文件按钮）。工作区详情页里用的是不带顶栏的 FilesPane。
@@ -189,12 +196,22 @@ class _FilesPaneState extends State<FilesPane> {
   }
 
   void _openFile(String path) {
+    final slash = path.lastIndexOf('/');
+    final dir = slash < 0 ? '' : path.substring(0, slash);
+    // 搜索结果的目录可能还没读过，那就只看这一个
+    final siblings = isMediaPath(path)
+        ? [
+            for (final e in _children[dir] ?? const <FileEntry>[])
+              if (!e.dir && isMediaPath(e.path)) e.path,
+          ]
+        : const <String>[];
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => FileViewer(
           model: widget.model,
           worktree: widget.worktree,
           path: path,
+          siblings: siblings,
         ),
       ),
     );
@@ -456,11 +473,16 @@ class FileViewer extends StatefulWidget {
     required this.model,
     required this.worktree,
     required this.path,
+    this.siblings = const [],
   });
 
   final HiveAppModel model;
   final String worktree;
   final String path;
+
+  /// 同一目录里的图片和视频（含 [path]），按文件树的顺序：打开的是图片或视频时左右滑切换。
+  /// 空的或不含 [path] 时只看这一个。
+  final List<String> siblings;
 
   @override
   State<FileViewer> createState() => _FileViewerState();
@@ -468,14 +490,22 @@ class FileViewer extends StatefulWidget {
 
 class _FileViewerState extends State<FileViewer> {
   String? _text;
-  Uint8List? _image;
-
-  /// 视频下好后在手机上的文件。
-  File? _video;
   var _binary = false;
   var _truncated = false;
   String? _error;
   var _source = false;
+
+  /// 左右翻的图片和视频，和当前看的是第几个。
+  late final List<String> _pages = widget.siblings.contains(widget.path)
+      ? widget.siblings
+      : [widget.path];
+  late var _index = _pages.indexOf(widget.path);
+
+  /// 取到手机上的图片和下好的视频，按路径记：顶栏的存到手机用，翻回来还在。
+  final _images = <String, Uint8List>{};
+  final _videos = <String, File>{};
+
+  String get _path => _pages[_index];
 
   bool get _markdown => {'md', 'markdown'}.contains(_ext(widget.path));
 
@@ -492,24 +522,9 @@ class _FileViewerState extends State<FileViewer> {
       return;
     }
     final ext = _ext(widget.path);
-    if (videoExts.contains(ext)) return;
+    // 图片和视频由翻页里的每一页自己取
+    if (isMediaPath(widget.path)) return;
     try {
-      if (_imageExts.contains(ext)) {
-        final res = await rpc.call('files.readPreview', {
-          'worktree': widget.worktree,
-          'relativePath': widget.path,
-        });
-        final content = res['content'];
-        if (!mounted) return;
-        setState(() {
-          if (res['isImage'] == true && content is String) {
-            _image = base64Decode(content);
-          } else {
-            _binary = true;
-          }
-        });
-        return;
-      }
       if (_binaryExts.contains(ext)) {
         setState(() => _binary = true);
         return;
@@ -539,7 +554,7 @@ class _FileViewerState extends State<FileViewer> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: FilePathTitle(widget.path),
+        title: FilePathTitle(_path),
         actions: [
           if (_markdown && _text != null && !_binary)
             TextButton(
@@ -560,11 +575,11 @@ class _FileViewerState extends State<FileViewer> {
 
   /// 存到手机：图片用已经取来的那份，视频等下完，其他文件现下。
   Widget _saveButton() {
-    final path = widget.path;
+    final path = _path;
     final to = saveTarget(path);
     final isVideo = videoExts.contains(_ext(path));
-    final video = _video;
-    final image = _image;
+    final video = _videos[path];
+    final image = _images[path];
     return Builder(
       builder: (button) => IconButton(
         tooltip: saveLabel(to),
@@ -589,13 +604,33 @@ class _FileViewerState extends State<FileViewer> {
       );
     }
     final rpc = widget.model.rpc;
-    if (videoExts.contains(_ext(widget.path)) && rpc != null) {
-      return VideoView.file(
-        rpc: rpc,
-        worktree: widget.worktree,
-        path: widget.path,
-        onReady: (file) {
-          if (mounted) setState(() => _video = file);
+    if (isMediaPath(widget.path) && rpc != null) {
+      return MediaPager(
+        count: _pages.length,
+        initialIndex: _index,
+        onChanged: (i) => setState(() => _index = i),
+        builder: (context, i) {
+          final path = _pages[i];
+          if (videoExts.contains(_ext(path))) {
+            return VideoView.file(
+              key: ValueKey(path),
+              rpc: rpc,
+              worktree: widget.worktree,
+              path: path,
+              onReady: (file) {
+                if (mounted) setState(() => _videos[path] = file);
+              },
+            );
+          }
+          return _ImageFile(
+            key: ValueKey(path),
+            rpc: rpc,
+            worktree: widget.worktree,
+            path: path,
+            onReady: (bytes) {
+              if (mounted) setState(() => _images[path] = bytes);
+            },
+          );
         },
       );
     }
@@ -603,13 +638,6 @@ class _FileViewerState extends State<FileViewer> {
       return const EmptyState(
         icon: Icons.insert_drive_file_outlined,
         text: '二进制文件，手机上看不了内容',
-      );
-    }
-    final image = _image;
-    if (image != null) {
-      return InteractiveViewer(
-        maxScale: 6,
-        child: Center(child: Image.memory(image)),
       );
     }
     final text = _text;
@@ -647,6 +675,77 @@ class _FileViewerState extends State<FileViewer> {
       language: languageForPath(widget.path),
       notice: notice,
     );
+  }
+}
+
+/// 工作区里的一张图片：经 `files.readPreview` 取来，双指放大。
+class _ImageFile extends StatefulWidget {
+  const _ImageFile({
+    super.key,
+    required this.rpc,
+    required this.worktree,
+    required this.path,
+    required this.onReady,
+  });
+
+  final PhoneRpc rpc;
+  final String worktree;
+  final String path;
+  final ValueChanged<Uint8List> onReady;
+
+  @override
+  State<_ImageFile> createState() => _ImageFileState();
+}
+
+class _ImageFileState extends State<_ImageFile> {
+  Uint8List? _image;
+  var _binary = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await widget.rpc.call('files.readPreview', {
+        'worktree': widget.worktree,
+        'relativePath': widget.path,
+      });
+      final content = res['content'];
+      if (!mounted) return;
+      if (res['isImage'] == true && content is String) {
+        final bytes = base64Decode(content);
+        setState(() => _image = bytes);
+        widget.onReady(bytes);
+      } else {
+        setState(() => _binary = true);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return EmptyState(
+        icon: Icons.error_outline_rounded,
+        text: _error!,
+        error: true,
+      );
+    }
+    if (_binary) {
+      return const EmptyState(
+        icon: Icons.insert_drive_file_outlined,
+        text: '二进制文件，手机上看不了内容',
+      );
+    }
+    final image = _image;
+    if (image == null) return const Center(child: HiveLoader());
+    return ZoomImage(child: Image.memory(image));
   }
 }
 

@@ -11,6 +11,7 @@ import '../files/video.dart';
 import '../history/models.dart' show historyTime;
 import '../protocol/rpc.dart';
 import '../ui/loading.dart';
+import '../ui/media_pager.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -182,11 +183,13 @@ class _MediaScreenState extends State<MediaScreen> {
       );
     }
     final now = DateTime.now();
+    // 点开后按这个顺序左右翻：先生成的、再粘贴的，和网格一致
+    final all = [...list.made, ...list.pasted];
     return CustomScrollView(
       slivers: [
         if (list.made.isNotEmpty) ...[
           _header(c, 'Agent 生成', list.madeAll),
-          _grid(list.made, now),
+          _grid(all, 0, list.made.length, now),
           if (list.madeAll > list.made.length)
             SliverToBoxAdapter(
               child: Padding(
@@ -200,7 +203,7 @@ class _MediaScreenState extends State<MediaScreen> {
         ],
         if (list.pasted.isNotEmpty) ...[
           _header(c, '粘贴的', list.pasted.length),
-          _grid(list.pasted, now),
+          _grid(all, list.made.length, list.pasted.length, now),
         ],
         const SliverSafeArea(
           top: false,
@@ -237,25 +240,28 @@ class _MediaScreenState extends State<MediaScreen> {
     ),
   );
 
-  Widget _grid(List<MediaItem> items, DateTime now) => SliverPadding(
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    sliver: SliverGrid.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 10,
-        childAspectRatio: 0.72,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, i) => _MediaTile(
-        key: ValueKey(items[i].id),
-        model: widget.model,
-        tab: widget.tab,
-        item: items[i],
-        now: now,
-      ),
-    ),
-  );
+  /// [all] 里从 [start] 起的 [count] 项。
+  Widget _grid(List<MediaItem> all, int start, int count, DateTime now) =>
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        sliver: SliverGrid.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.72,
+          ),
+          itemCount: count,
+          itemBuilder: (context, i) => _MediaTile(
+            key: ValueKey(all[start + i].id),
+            model: widget.model,
+            tab: widget.tab,
+            all: all,
+            index: start + i,
+            now: now,
+          ),
+        ),
+      );
 }
 
 /// 存到哪：图片进相册，相册不收的视频（webm）安卓存下载、iOS 分享。
@@ -267,14 +273,20 @@ class _MediaTile extends StatefulWidget {
     super.key,
     required this.model,
     required this.tab,
-    required this.item,
+    required this.all,
+    required this.index,
     required this.now,
   });
 
   final HiveAppModel model;
   final SessionTab tab;
-  final MediaItem item;
+
+  /// 这一页的全部项和这一格在其中的位置，点开后从这里左右翻。
+  final List<MediaItem> all;
+  final int index;
   final DateTime now;
+
+  MediaItem get item => all[index];
 
   @override
   State<_MediaTile> createState() => _MediaTileState();
@@ -329,8 +341,12 @@ class _MediaTileState extends State<_MediaTile> {
         behavior: HitTestBehavior.opaque,
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                MediaViewer(model: widget.model, tab: widget.tab, item: item),
+            builder: (_) => MediaViewer(
+              model: widget.model,
+              tab: widget.tab,
+              items: widget.all,
+              index: widget.index,
+            ),
           ),
         ),
         onLongPress: () {
@@ -467,41 +483,49 @@ Future<File> fetchMedia(
 }
 
 /// 看一项：图片取原图（agent 当时看到的样子），双指放大；视频下好后播放。取到手机上后顶栏可以存到手机。
+/// 从 [items] 的第 [index] 项打开，左右滑切到前一项、后一项（[MediaPager]），顶栏跟着换。
 class MediaViewer extends StatefulWidget {
   const MediaViewer({
     super.key,
     required this.model,
     required this.tab,
-    required this.item,
+    required this.items,
+    required this.index,
   });
 
   final HiveAppModel model;
   final SessionTab tab;
-  final MediaItem item;
+  final List<MediaItem> items;
+  final int index;
 
   @override
   State<MediaViewer> createState() => _MediaViewerState();
 }
 
 class _MediaViewerState extends State<MediaViewer> {
-  File? _file;
+  late var _index = widget.index;
 
-  void _ready(File file) {
-    if (mounted) setState(() => _file = file);
+  /// 已经取到手机上的项，按位置记：翻回来时顶栏的存到手机还能用。
+  final _files = <int, File>{};
+
+  void _ready(int i, File file) {
+    if (mounted) setState(() => _files[i] = file);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    final item = widget.item;
+    final items = widget.items;
+    final item = items[_index];
     final tab = widget.tab;
     final rpc = widget.model.rpc;
-    final file = _file;
+    final file = _files[_index];
     final to = _target(item);
     final time = historyTime(item.at, DateTime.now());
     final sub = [
       if (item.source != item.label) item.source,
       if (time.isNotEmpty) time,
+      if (items.length > 1) '${_index + 1}/${items.length}',
     ].join(' · ');
     return Scaffold(
       appBar: AppBar(
@@ -545,24 +569,41 @@ class _MediaViewerState extends State<MediaViewer> {
               text: '还没连上电脑',
               error: true,
             )
-          : item.video
-          ? VideoView(
-              onReady: _ready,
-              fetch: (cancelled, onProgress) => fetchMedia(
-                rpc,
-                tab,
-                item,
-                cancelled: cancelled,
-                onProgress: onProgress,
-              ),
-            )
-          : _ImageView(rpc: rpc, tab: tab, item: item, onReady: _ready),
+          : MediaPager(
+              count: items.length,
+              initialIndex: widget.index,
+              onChanged: (i) => setState(() => _index = i),
+              builder: (context, i) {
+                final item = items[i];
+                if (item.video) {
+                  return VideoView(
+                    key: ValueKey(item.id),
+                    onReady: (file) => _ready(i, file),
+                    fetch: (cancelled, onProgress) => fetchMedia(
+                      rpc,
+                      tab,
+                      item,
+                      cancelled: cancelled,
+                      onProgress: onProgress,
+                    ),
+                  );
+                }
+                return _ImageView(
+                  key: ValueKey(item.id),
+                  rpc: rpc,
+                  tab: tab,
+                  item: item,
+                  onReady: (file) => _ready(i, file),
+                );
+              },
+            ),
     );
   }
 }
 
 class _ImageView extends StatefulWidget {
   const _ImageView({
+    super.key,
     required this.rpc,
     required this.tab,
     required this.item,
@@ -632,9 +673,6 @@ class _ImageViewState extends State<_ImageView> {
     }
     final file = _file;
     if (file == null) return const Center(child: HiveLoader());
-    return InteractiveViewer(
-      maxScale: 6,
-      child: Center(child: Image.file(file)),
-    );
+    return ZoomImage(child: Image.file(file));
   }
 }
