@@ -224,7 +224,7 @@ class _HiveSplashState extends State<HiveSplash> with TickerProviderStateMixin {
   }
 }
 
-/// 满屏蜂巢格：暗格铺满，标志周围和底部 slogan 处留空；零星几格按 agent 状态色亮起（琥珀工作中、陶土待处理、绿色完成）。
+/// 满屏蜂巢格：暗格铺到底，只在标志周围和 slogan 那一行留空；零星几格按 agent 状态色亮起（琥珀工作中、陶土待处理、绿色完成）。
 class _CombField extends CustomPainter {
   _CombField(this.intro) : super(repaint: intro);
 
@@ -238,8 +238,15 @@ class _CombField extends CustomPainter {
     final t = intro.value;
     final center = size.center(Offset.zero);
     final clear = splashMarkSize * 0.95;
-    final bottom =
-        size.height - splashSloganBottom - splashSloganSize.height / 2 - 24;
+    // slogan 那行字的范围，格子和字叠在一起就看不清了
+    final slogan = Rect.fromCenter(
+      center: Offset(
+        center.dx,
+        size.height - splashSloganBottom - splashSloganSize.height / 2,
+      ),
+      width: splashSloganSize.width,
+      height: _r * 2,
+    );
     final dx = math.sqrt(3) * _r;
     final dy = 1.5 * _r;
     // 每次启动亮的格子一样：位置固定，看着是一张图而不是噪点
@@ -265,18 +272,15 @@ class _CombField extends CustomPainter {
         final pick = rand.nextInt(_lit.length);
         final delay = rand.nextDouble();
         final d = (c - center).distance;
-        if (d < clear) continue;
-        // 往底部渐隐，给 slogan 让出位置
-        final fadeOut = ((bottom - c.dy) / 80).clamp(0.0, 1.0);
-        if (fadeOut == 0) continue;
+        if (d < clear || slogan.contains(c)) continue;
         final cell = roundHex(c, _r - 1.5, 4);
         canvas.drawPath(
           cell,
-          dim..color = Colors.white.withValues(alpha: 0.07 * base * fadeOut),
+          dim..color = Colors.white.withValues(alpha: 0.07 * base),
         );
         // 离标志近的地方亮格密一点
-        final chance = 0.1 + 0.12 * (1 - (d / size.longestSide).clamp(0, 1));
-        if (roll > chance || fadeOut < 1) continue;
+        final chance = 0.15 + 0.13 * (1 - (d / size.longestSide).clamp(0, 1));
+        if (roll > chance) continue;
         final start = 0.15 + delay * 0.6;
         final on = Curves.easeOut.transform(((t - start) / 0.25).clamp(0, 1));
         if (on == 0) continue;
@@ -288,6 +292,23 @@ class _CombField extends CustomPainter {
         );
         canvas.drawPath(inner, line..color = color.withValues(alpha: 0.9 * on));
       }
+    }
+    // 上下两端各 20% 渐隐到底色，网格不在屏幕边上硬切
+    final edge = size.height * 0.2;
+    for (final (top, from, to) in [
+      (0.0, Alignment.topCenter, Alignment.bottomCenter),
+      (size.height - edge, Alignment.bottomCenter, Alignment.topCenter),
+    ]) {
+      final band = Rect.fromLTWH(0, top, size.width, edge);
+      canvas.drawRect(
+        band,
+        Paint()
+          ..shader = LinearGradient(
+            begin: from,
+            end: to,
+            colors: [splashBackground, splashBackground.withValues(alpha: 0)],
+          ).createShader(band),
+      );
     }
   }
 
