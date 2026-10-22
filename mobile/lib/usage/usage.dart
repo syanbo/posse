@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -278,6 +279,9 @@ class _UsageCardState extends State<UsageCard> {
   List<AgentUsage> _usages = const [];
   Timer? _timer;
   Object? _rpc;
+  String? _computer;
+  // 这台电脑这次连上后拿到过新读数：之后才读出来的缓存不能再盖掉它
+  bool _fresh = false;
 
   @override
   void initState() {
@@ -297,28 +301,56 @@ class _UsageCardState extends State<UsageCard> {
   }
 
   void _onModel() {
+    final id = widget.model.activeId;
+    if (id != _computer) {
+      _computer = id;
+      _fresh = false;
+      if (_usages.isNotEmpty) setState(() => _usages = const []);
+      if (id != null) unawaited(_loadCached(id));
+    }
     final rpc = widget.model.rpc;
     if (identical(rpc, _rpc)) return;
     _rpc = rpc;
-    if (rpc == null) {
-      if (_usages.isNotEmpty) setState(() => _usages = const []);
+    // 断线时留着上次的读数：卡片忽有忽无，下面的项目列表会跟着跳
+    if (rpc != null) _load();
+  }
+
+  /// 上次连这台电脑时的读数先显示出来，连上取到新的再原地换掉，项目列表不会被后出来的卡片顶下去。
+  Future<void> _loadCached(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cacheKey(id));
+    if (raw == null || !mounted || _computer != id || _fresh) {
       return;
     }
-    _load();
+    try {
+      final us = parseUsages((jsonDecode(raw) as Map).cast<String, Object?>());
+      setState(() => _usages = us);
+    } catch (_) {}
   }
 
   Future<void> _load() async {
     final rpc = widget.model.rpc;
-    if (rpc == null) return;
+    final id = _computer;
+    if (rpc == null || id == null) return;
     try {
       final res = await rpc.call('usage.get', {});
       if (!mounted || !identical(rpc, widget.model.rpc)) return;
+      _fresh = true;
       setState(() => _usages = parseUsages(res));
-    } catch (_) {
-      // 旧版电脑端没有这个接口：不显示卡片
-      if (mounted && _usages.isNotEmpty) setState(() => _usages = const []);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey(id), jsonEncode(res));
+    } catch (e) {
+      // 旧版电脑端没有这个接口：不显示卡片。超时、断线这类留着上次的读数
+      if (!e.toString().contains('method_not_found')) return;
+      if (mounted && identical(rpc, widget.model.rpc) && _usages.isNotEmpty) {
+        setState(() => _usages = const []);
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_cacheKey(id));
     }
   }
+
+  static String _cacheKey(String computer) => 'usage.cache.$computer';
 
   /// 详情里的刷新：电脑上各家马上取一次（Codex、Cursor 要联网，最长半分钟），首页卡片一起换上新读数。
   Future<List<AgentUsage>> _refresh() async {
@@ -331,7 +363,12 @@ class _UsageCardState extends State<UsageCard> {
     );
     final us = parseUsages(res);
     if (mounted && identical(rpc, widget.model.rpc)) {
+      _fresh = true;
       setState(() => _usages = us);
+      if (_computer case final id?) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKey(id), jsonEncode(res));
+      }
     }
     return us;
   }

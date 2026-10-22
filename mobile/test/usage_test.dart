@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/app_state.dart';
+import 'package:hive_mobile/protocol/pairing.dart';
 import 'package:hive_mobile/ui/theme.dart';
 import 'package:hive_mobile/usage/usage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test('parses usage.get', () {
@@ -217,5 +222,40 @@ void main() {
     await tester.tap(find.byTooltip('刷新'));
     await tester.pumpAndSettle();
     expect(find.text('电脑上的 Hive 太旧，更新后才能刷新'), findsOneWidget);
+  });
+
+  testWidgets('the card shows the last readings before the computer answers', (
+    tester,
+  ) async {
+    final code =
+        'orca://pair?code=${base64Url.encode(utf8.encode(jsonEncode({'deviceToken': 't', 'endpoint': 'ws://a:1', 'publicKeyB64': 'k1', 'v': 2})))}';
+    final offer = PairingOffer.parse(code);
+    SharedPreferences.setMockInitialValues({
+      'usage.cache.${computerId(offer)}': jsonEncode({
+        'usages': [
+          {
+            'agent': 'claude',
+            'windows': [
+              {'percent': 42, 'minutes': 300},
+            ],
+          },
+        ],
+      }),
+    });
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.offer = offer;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: hiveTheme(Brightness.dark),
+        home: Scaffold(body: UsageCard(model: model)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // 还没连上（rpc 为空）就显示上次的读数，连上后原地换数，下面的列表不跳
+    expect(model.rpc, isNull);
+    expect(find.text('42%'), findsOneWidget);
   });
 }
