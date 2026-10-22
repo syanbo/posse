@@ -270,6 +270,7 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	mode := fs.String("mode", "auto", "")
 	branch := fs.String("branch", "", "")
 	base := fs.String("base", "", "")
+	path := fs.String("path", "", "")
 	noSetup := fs.Bool("no-setup", false, "")
 	agentName := fs.String("agent", "", "")
 	model := fs.String("model", "", "")
@@ -282,13 +283,21 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	if err := need(pos, 2, "workspace create"); err != nil {
 		return err
 	}
+	if *path != "" {
+		if abs, err := filepath.Abs(*path); err == nil {
+			*path = abs
+		}
+	}
 	var w workspaceInfo
-	params := map[string]any{"project": absPath(pos[0]), "name": pos[1], "mode": *mode, "branch": *branch, "base": *base,
+	params := map[string]any{"project": absPath(pos[0]), "name": pos[1], "mode": *mode, "branch": *branch, "base": *base, "path": *path,
 		"noSetup": *noSetup, "agent": *agentName, "model": *model, "effort": *effort, "prompt": *prompt}
 	return e.do("workspace.create", params, &w, func() {
 		fmt.Fprintf(e.out, "created %s workspace %s (%s) at %s\n", w.Kind, w.Label, w.ID, w.Path)
-		if w.Branch != "" {
+		switch {
+		case w.Branch != "" && w.BaseRef != "":
 			fmt.Fprintf(e.out, "branch %s from %s\n", w.Branch, w.BaseRef)
+		case w.Branch != "":
+			fmt.Fprintf(e.out, "branch %s\n", w.Branch)
 		}
 		if w.Setup != nil {
 			state := "ok"

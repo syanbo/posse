@@ -57,7 +57,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
 - 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，并注入 `HIVE_HOME`、`HIVE_SOCKET`、`HIVE_TERMINAL_ID`、`HIVE_WORKSPACE_ID`，以及给 Git 操作记录用的 `GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`；PATH 最前面是 hive 所在目录。agent 给工具调用设的非交互变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，见 `term.Environ`）也去掉：agent 在终端里用 `open` 拉起 Hive.app 时，窗口和常驻进程会继承它们，Claude Code 看到 `NO_COLOR` 就整屏没颜色。
-- 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$HIVE_HOME/worktrees/<项目>/<名称>`）。
+- 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$HIVE_HOME/worktrees/<项目>/<名称>`）。别的工具建的 worktree 用 `attach` 模式加进来时记成 `folder`（路径是那个 worktree），删工作区不碰它的目录和分支。
 - agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $HIVE_HOME/cursor-plugin`，hooks 放在 hive 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
 - `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有三处：Cursor 要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出；Claude 的 UserPromptSubmit 在有待交的会话标题时写 `hookSpecificOutput.sessionTitle`。始终 exit 0，不拉起常驻进程。
 - 没有 hook 的情况靠终端标题兜底：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`。

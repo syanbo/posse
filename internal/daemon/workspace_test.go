@@ -1,6 +1,15 @@
 package daemon
 
-import "testing"
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"hive/internal/store"
+)
 
 func TestValidName(t *testing.T) {
 	for _, ok := range []string{"feat-a", "v1.2", "坠崖十年"} {
@@ -29,5 +38,46 @@ func TestWithin(t *testing.T) {
 		if got := within(c.path, c.dir); got != c.want {
 			t.Errorf("within(%q, %q) = %v", c.path, c.dir, got)
 		}
+	}
+}
+
+// 别的工具建的 worktree 加成工作区：记成 folder（删工作区不碰目录），不是本项目的、重复加的都拒绝。
+func TestAttachWorktree(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	repo := filepath.Join(d.cfg.Home, "repo")
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	os.MkdirAll(repo, 0o755)
+	git(repo, "init", "-q", "-b", "main")
+	git(repo, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "init")
+	wt := filepath.Join(d.cfg.Home, "other-wt")
+	git(repo, "worktree", "add", "-q", "-b", "feat", wt)
+	proj := store.Project{ID: store.NewID("p_"), Name: "repo", Path: repo, Kind: "git", CreatedAt: time.Now()}
+	if err := d.store.AddProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "other-wt", Mode: "attach", Path: wt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Kind != "folder" || !samePath(w.Path, wt) || w.Branch != "feat" {
+		t.Fatalf("attached %+v", w)
+	}
+	if _, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "again", Mode: "attach", Path: wt}); err == nil {
+		t.Fatal("attached the same worktree twice")
+	}
+	if _, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "home", Mode: "attach", Path: d.cfg.Home}); err == nil {
+		t.Fatal("attached a directory that is not a worktree of the project")
+	}
+	call(t, d.workspaceRm, map[string]any{"workspace": w.ID})
+	if _, err := os.Stat(wt); err != nil {
+		t.Fatalf("removing the workspace deleted the worktree: %v", err)
 	}
 }

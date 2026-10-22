@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -40,6 +41,24 @@ func TopLevel(ctx context.Context, dir string) string {
 		return ""
 	}
 	return out
+}
+
+// CommonDir 返回 dir 所在仓库的公共 .git 目录（绝对路径）：同一仓库的各个 worktree 返回同一个；不是 git 仓库时返回空串。
+func CommonDir(ctx context.Context, dir string) string {
+	out, err := run(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(out); err == nil {
+		return r
+	}
+	return out
+}
+
+// PruneWorktrees 清掉目录已经不在的 worktree 记录：不清的话分支还算检出在那里，检出、删除都被挡住。
+func PruneWorktrees(ctx context.Context, repo string) error {
+	_, err := runRaw(ctx, repo, nil, nil, "worktree", "prune")
+	return err
 }
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {

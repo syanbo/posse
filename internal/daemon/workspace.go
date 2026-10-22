@@ -175,7 +175,8 @@ func (d *Daemon) projectRm(ctx context.Context, raw json.RawMessage) (any, error
 type workspaceCreateParams struct {
 	Project string `json:"project"`
 	Name    string `json:"name"`
-	Mode    string `json:"mode"` // auto | folder | worktree
+	Mode    string `json:"mode"` // auto | folder | worktree | attach
+	Path    string `json:"path"` // attach：项目已有的、不是 hive 建的 worktree 目录
 	Branch  string `json:"branch"`
 	Base    string `json:"base"`
 	NoSetup bool   `json:"noSetup"`
@@ -244,6 +245,14 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 	switch mode {
 	case "folder":
 		w.Path = proj.Path
+	case "attach":
+		// 别的工具或命令行建的 worktree：记成 folder，删工作区时只删记录，不删别人的目录和分支
+		path, err := d.attachPath(ctx, proj, p.Path)
+		if err != nil {
+			return w, nil, err
+		}
+		w.Kind, w.Path = "folder", path
+		w.Branch, _ = gitx.CurrentBranch(ctx, path)
 	case "worktree":
 		if proj.Kind != "git" {
 			return w, nil, rpc.Errorf(rpc.CodeBadRequest, "project %s is not a git repository", proj.Name)
@@ -267,7 +276,7 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 			return w, nil, rpc.Errorf(rpc.CodeConflict, "%v", err)
 		}
 	default:
-		return w, nil, rpc.Errorf(rpc.CodeBadRequest, "unknown mode %q (auto, folder, worktree)", mode)
+		return w, nil, rpc.Errorf(rpc.CodeBadRequest, "unknown mode %q (auto, folder, worktree, attach)", mode)
 	}
 	if err := d.store.AddWorkspace(w); err != nil {
 		if mode == "worktree" {
@@ -283,6 +292,36 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 		setup = runSetup(ctx, w, proj.SetupScript)
 	}
 	return w, setup, nil
+}
+
+// attachPath 检查 dir 是项目仓库的另一个 worktree，且还没有工作区，返回解析过符号链接的路径。
+func (d *Daemon) attachPath(ctx context.Context, proj store.Project, dir string) (string, error) {
+	if proj.Kind != "git" {
+		return "", rpc.Errorf(rpc.CodeBadRequest, "project %s is not a git repository", proj.Name)
+	}
+	if dir == "" {
+		return "", rpc.Errorf(rpc.CodeBadRequest, "path required")
+	}
+	path, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", rpc.Errorf(rpc.CodeBadRequest, "%v", err)
+	}
+	if top := gitx.TopLevel(ctx, path); top == "" || !samePath(top, path) {
+		return "", rpc.Errorf(rpc.CodeBadRequest, "%s is not a git worktree root", dir)
+	}
+	if c := gitx.CommonDir(ctx, path); c == "" || c != gitx.CommonDir(ctx, proj.Path) {
+		return "", rpc.Errorf(rpc.CodeBadRequest, "%s is not a worktree of project %s", dir, proj.Name)
+	}
+	ws, err := d.store.Workspaces(proj.ID)
+	if err != nil {
+		return "", err
+	}
+	for _, w := range ws {
+		if samePath(w.Path, path) {
+			return "", rpc.Errorf(rpc.CodeConflict, "%s is already workspace %s", dir, w.Name)
+		}
+	}
+	return path, nil
 }
 
 // runSetup 在新 worktree 里用登录 shell 执行项目的 setup 脚本。

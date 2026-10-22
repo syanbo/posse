@@ -56,7 +56,7 @@ func init() {
 		{"project list", "List projects", "", cmdProjectList},
 		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT]", cmdProjectSet},
 		{"project rm", "Forget a project (files stay)", "<project> [--force]", cmdProjectRm},
-		{"workspace create", "Create a workspace", "<project> <name> [--mode auto|folder|worktree] [--branch B] [--base REF] [--no-setup] [--agent claude|codex|grok|cursor [--model M] [--effort E]] [--prompt P]", cmdWorkspaceCreate},
+		{"workspace create", "Create a workspace", "<project> <name> [--mode auto|folder|worktree|attach] [--path DIR] [--branch B] [--base REF] [--no-setup] [--agent claude|codex|grok|cursor [--model M] [--effort E]] [--prompt P]", cmdWorkspaceCreate},
 		{"workspace list", "List workspaces", "[--project P] [--dirty]", cmdWorkspaceList},
 		{"workspace show", "Show a workspace", "<workspace>", cmdWorkspaceShow},
 		{"workspace current", "Show the workspace of this terminal or directory", "", cmdWorkspaceCurrent},
