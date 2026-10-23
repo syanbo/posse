@@ -19,7 +19,9 @@ func TestLinkAt(t *testing.T) {
 		{`import { A } from '~/constants/scene-keys';`, 10, LinkWord, "A", 9, 10},
 		{`const x = require("./utils/common.js")`, 25, LinkPath, "./utils/common.js", 19, 36},
 		{`#include <sys/types.h>`, 14, LinkPath, "sys/types.h", 10, 21},
-		{`// see https://example.com/docs. ok`, 12, LinkURL, "https://example.com/docs", 7, 32},
+		{`// see https://example.com/docs. ok`, 12, LinkURL, "https://example.com/docs", 7, 31},
+		{`// 见 https://example.com/a，然后`, 12, LinkURL, "https://example.com/a", 7, 28}, // 全角逗号结束网址
+		{`// 见 https://example.com/a（说明）`, 12, LinkURL, "https://example.com/a", 7, 28},
 		{`s := 'react'`, 8, LinkNone, "", 0, 0},                                     // 包名不算路径，字符串里也不认标识符
 		{`s := "two words"`, 8, LinkNone, "", 0, 0},                                 // 带空格的不是路径
 		{`export const E = 'kLYRNEventQuickOrderSuccess';`, 25, LinkNone, "", 0, 0}, // 普通字符串

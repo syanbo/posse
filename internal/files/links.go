@@ -33,7 +33,8 @@ type Link struct {
 	Start, End int
 }
 
-var urlRe = regexp.MustCompile(`https?://[^\s'"<>()\[\]）]+`)
+// urlRe 遇到全角标点就停，和终端里认网址一样（中文句子里网址后面紧跟着"，"）。
+var urlRe = regexp.MustCompile(`https?://[^\s'"<>()\[\]。，、；：！？（）【】「」『』〈〉《》…“”‘’]+`)
 
 // LinkAt 返回 line 里 col（字节）处的东西：网址；引号里的路径（含有 / 或 . 的才算，'react' 这种包名和普通字符串不算，
 // 字符串里也不认标识符）；注释里不带引号的路径（`见 docs/x.md`，照 Zed 的 surrounding_filename 按空白分词、去掉两头的标点）；
@@ -41,8 +42,10 @@ var urlRe = regexp.MustCompile(`https?://[^\s'"<>()\[\]）]+`)
 func LinkAt(line string, col int) Link {
 	col = max(0, min(col, len(line)))
 	for _, m := range urlRe.FindAllStringIndex(line, -1) {
-		if col >= m[0] && col <= m[1] {
-			return Link{Kind: LinkURL, Text: strings.TrimRight(line[m[0]:m[1]], ".,;:!?。，；："), Start: m[0], End: m[1]}
+		// 句末的英文标点不写进网址，下划线画到它前面。点在标点这一列上仍算这个网址。
+		end := m[0] + len(strings.TrimRight(line[m[0]:m[1]], ".,;:!?"))
+		if col >= m[0] && col <= end {
+			return Link{Kind: LinkURL, Text: line[m[0]:end], Start: m[0], End: end}
 		}
 	}
 	if s, e, ok := quotedAt(line, col); ok {
