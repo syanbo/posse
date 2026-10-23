@@ -541,6 +541,9 @@ func TestPreview(t *testing.T) {
 			Events: previewUsageEvents(),
 		}}
 		savePNG(t, newPreviewTester(a, dark), "usage-"+suffix+".png")
+		// 筛选成只看技能和 MCP：命令行程序的分组和时间线里的命令都不列
+		a.state.UsageSkillsOnly = true
+		savePNG(t, newPreviewTester(a, dark), "usage-skills-only-"+suffix+".png")
 
 		// 右侧图片面板：agent 生成的在上、粘贴的在下，刚读过一次
 		a = previewApp(t)

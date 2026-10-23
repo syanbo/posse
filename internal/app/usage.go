@@ -93,11 +93,32 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0:
 					usageNote(c, "这个会话还没用到技能、MCP 和命令行工具。")
 				default:
-					a.usageSummary(c, u.data)
-					a.usageTimeline(c, u.data.Events)
+					a.usageFilter(c)
+					skillsOnly := a.state.UsageSkillsOnly
+					if skillsOnly && len(u.data.Skills) == 0 && len(u.data.MCP) == 0 {
+						usageNote(c, "这个会话还没用到技能和 MCP。")
+						return
+					}
+					a.usageSummary(c, u.data, skillsOnly)
+					a.usageTimeline(c, u.data.Events, skillsOnly)
 				}
 			})
 		})
+	})
+}
+
+// usageFilter 是面板顶上的筛选：全部，或只看技能和 MCP（命令行程序常是几十个 git、adb，把技能挤得看不见）。
+// 记在 ui.json 的 usageSkillsOnly，所有会话共用。
+func (a *app) usageFilter(c *ui.Context) {
+	sel := 0
+	if a.state.UsageSkillsOnly {
+		sel = 1
+	}
+	ui.Row(c).Padding(0, 4).Children(func() {
+		if segmented(c, &sel, "筛选", "全部", "技能和 MCP") {
+			a.state.UsageSkillsOnly = sel == 1
+			a.saveState()
+		}
 	})
 }
 
@@ -127,8 +148,9 @@ func cliSourceLabel(source string) string {
 	return ""
 }
 
-// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数；命令行程序按来源分组。点标签复制名字。
-func (a *app) usageSummary(c *ui.Context, u history.Usage) {
+// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数；命令行程序按来源分组（skillsOnly 时不列）。
+// 点标签复制名字。
+func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
 	if len(u.Skills) > 0 || len(u.MCP) > 0 {
 		ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
 			for _, sk := range u.Skills {
@@ -138,6 +160,9 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage) {
 				a.usageChip(c, "mcp-"+m.Server, iconExtensions, mcpColor(c), m.Server, m.Count)
 			}
 		})
+	}
+	if skillsOnly {
+		return
 	}
 	for _, g := range cliSources {
 		var items []history.CLIUsage
@@ -200,10 +225,13 @@ type usageStep struct {
 	n     int
 }
 
-// usageSteps 把逐次记录合并成时间线，新的在前。
-func usageSteps(events []history.UsageEvent) []usageStep {
+// usageSteps 把逐次记录合并成时间线，新的在前；skillsOnly 时跳过命令行程序。
+func usageSteps(events []history.UsageEvent, skillsOnly bool) []usageStep {
 	var steps []usageStep
 	for _, e := range events {
+		if skillsOnly && e.CLI != "" {
+			continue
+		}
 		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool && steps[k].ev.CLI == e.CLI {
 			steps[k].ev.At, steps[k].ev.Command = e.At, e.Command
 			steps[k].n++
@@ -217,10 +245,13 @@ func usageSteps(events []history.UsageEvent) []usageStep {
 
 // usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色、命令行程序是绿色；
 // 右边是名字、所属服务（命令行程序是来源）和时间。点名字复制，命令行程序悬停看最近一次的完整命令。
-func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent) {
+func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOnly bool) {
 	t := c.Theme()
 	p := colors(t)
-	steps := usageSteps(events)
+	steps := usageSteps(events, skillsOnly)
+	if len(steps) == 0 {
+		return
+	}
 	ui.Column(c).Gap(0).Padding(6, 4, 0, 4).Children(func() {
 		ui.Text(c, "时间线").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {

@@ -19,8 +19,8 @@ func TestUsageCopyName(t *testing.T) {
 	}
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() {
-			a.usageSummary(c, u)
-			a.usageTimeline(c, u.Events)
+			a.usageSummary(c, u, false)
+			a.usageTimeline(c, u.Events, false)
 		})
 	}, 360, 400)
 	tt.Frame()
