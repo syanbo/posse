@@ -50,7 +50,7 @@ func filesWorkspace(t *testing.T, a *app) string {
 		}
 	}
 	put("main.go", sampleGo)
-	put("README.md", "# Hive\n\n多 agent 终端管理器。\n\n## 构建\n\n```sh\ngo build ./cmd/hive\n```\n\n- 常驻进程托管终端\n- 界面可以随时关闭\n")
+	put("README.md", "# Hive\n\n多 agent 终端管理器。\n\n## 构建\n\n```sh\ngo build ./cmd/hive\n```\n\n- 常驻进程托管终端\n- 界面可以随时关闭\n\n## 入口\n\n| # | 入口 | 位置 | 写法 | 结果处理 |\n|---|---|---|---|---|\n| 1 | 私聊 拍照 | `IMChatBaseActivity:1506` | `openCamera(this, single().compress(true), REQUEST_CAMERA)` | 改为 `parse(data).getPath()`，裁剪优先，其次压缩图，最后原图 |\n| 2 | 私聊 相册 | `IMChatBaseActivity:1523` | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` | 循环取 `getPath()` |\n\n| 项目 | 数据 |\n|---|---|\n| 版本 | 1.4 |\n")
 	put("internal/files/tree.go", "package files\n\n// Tree 是工作区目录的树。\ntype Tree struct{}\n")
 	put("internal/files/search.go", "package files\n\nfunc Search() {}\n")
 	put("internal/app/view.go", "package app\n\nfunc (a *app) main() {}\n")

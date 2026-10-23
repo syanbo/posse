@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/yuin/goldmark"
@@ -54,6 +55,7 @@ type mdBlock struct {
 	start   int
 	rows    [][][]mdInline // 表格，第一行是表头
 	align   []ui.Align
+	size    *mdTableSize // 表格量好的列宽，块复制时共用
 }
 
 type mdItem struct {
@@ -107,7 +109,7 @@ func mdBlocks(n ast.Node, src []byte) []mdBlock {
 		case *ast.ThematicBreak:
 			out = append(out, mdBlock{kind: mdRule})
 		case *east.Table:
-			b := mdBlock{kind: mdTable}
+			b := mdBlock{kind: mdTable, size: &mdTableSize{}}
 			for _, a := range c.Alignments {
 				b.align = append(b.align, map[east.Alignment]ui.Align{east.AlignRight: ui.End, east.AlignCenter: ui.Center}[a])
 			}
@@ -270,45 +272,185 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	case mdRule:
 		ui.Box(c).Height(1).Background(t.Border).Margin(6, 0)
 	case mdTable:
-		cols := 0
-		for _, row := range b.rows {
-			cols = max(cols, len(row))
-		}
-		tracks := make([]ui.Track, cols)
+		r.table(c, b)
+	}
+}
+
+// 表格一个格子的内边距 20 加右边框 1，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
+const mdCellPad = 22
+
+// mdTableSize 是表格每列量好的宽度：最小宽是最长的拆不开的词，最大宽是不折行。
+// 第一次搭的时候量一次，存在块上。
+type mdTableSize struct {
+	min, max []float32
+}
+
+// table 搭表格。横向滚动容器给内容的宽度没有上限，表格会按最宽排、长句不再折行，
+// 所以列宽自己定：量出每列不折行的宽度和最长的拆不开的词，拿上一帧量到的容器宽度当基准，
+// 放得下就按内容宽排；长句折行能放下的，按各列能收缩的余地分掉差额，刚好铺满；
+// 连拆不开的词都放不下的，长句的列最宽 360、短的按内容，整张左右滚。
+func (r mdView) table(c *ui.Context, b mdBlock) {
+	t := c.Theme()
+	cols := 0
+	for _, row := range b.rows {
+		cols = max(cols, len(row))
+	}
+	size := b.size
+	if size.min == nil {
+		r.measure(c, b, cols)
+	}
+	var sumMin, sumMax float32 = 2, 2 // 外框
+	for i := range cols {
+		sumMin += size.min[i]
+		sumMax += size.max[i]
+	}
+	scroll := ui.ScrollHorizontal(c)
+	avail := scroll.LayoutBounds().W
+	tracks := make([]ui.Track, cols)
+	wide := false
+	switch {
+	case avail > 0 && sumMax <= avail:
 		for i := range tracks {
 			tracks[i] = ui.FitContent()
 		}
-		ui.Grid(c).ColumnTracks(tracks...).AlignSelf(ui.Start).Border(1, t.Border).Radius(6).Clip().Children(func() {
-			for ri, row := range b.rows {
-				for ci := range cols {
-					var cell []mdInline
-					if ci < len(row) {
-						cell = row[ci]
-					}
-					right, bottom := float32(1), float32(1)
-					if ci == cols-1 {
-						right = 0
-					}
-					if ri == len(b.rows)-1 {
-						bottom = 0
-					}
-					box := ui.Box(c).Padding(5, 10).BorderWidth(0, right, bottom, 0).BorderColor(t.Border)
-					if ri == 0 {
-						box.Background(t.Surface)
-					}
-					box.Children(func() {
-						e := r.inline(c, cell).FontSize(12.5).LineHeight(1.45)
-						if ri == 0 {
-							e.FontWeight(500)
+	case avail > 0 && sumMin <= avail:
+		for i := range tracks {
+			w := size.min[i] + (avail-sumMin)*(size.max[i]-size.min[i])/(sumMax-sumMin)
+			tracks[i] = ui.Fixed(w)
+		}
+	default:
+		// 第一帧还不知道容器宽，也先按这样排：放得下的表格和按内容排一样，宽的不会先按最宽闪一下
+		wide = avail > 0
+		for i := range tracks {
+			tracks[i] = ui.Fixed(max(size.min[i], min(size.max[i], 360)))
+		}
+	}
+	if wide {
+		scroll.Padding(0, 0, 10, 0) // 滚动条画在表格下面，不压着最后一行
+	}
+	scroll.Children(func() {
+		ui.Grid(c).ColumnTracks(tracks...).Border(1, t.Border).Radius(6).Children(func() { r.cells(c, b, cols) })
+	})
+}
+
+// measure 量表格每列的最小宽和最大宽。最小宽按空格和每个汉字拆开量，和文字排版的断行处一致；
+// 汉字都一样宽，每种样式只量一个。
+func (r mdView) measure(c *ui.Context, b mdBlock, cols int) {
+	size := b.size
+	size.min, size.max = make([]float32, cols), make([]float32, cols)
+	cjk := map[ui.Span]float32{}
+	for ri, row := range b.rows {
+		for ci, cell := range row {
+			spans := cellSpans(c, cell, ri == 0)
+			w, _ := c.MeasureText(0, spans...)
+			size.max[ci] = max(size.max[ci], w+mdCellPad)
+			for _, sp := range spans {
+				for _, word := range strings.Fields(sp.Text) {
+					var run []rune
+					flush := func() {
+						if len(run) > 0 {
+							sp.Text = string(run)
+							w, _ := c.MeasureText(0, sp)
+							size.min[ci] = max(size.min[ci], w+mdCellPad)
+							run = run[:0]
 						}
-						if ci < len(b.align) && b.align[ci] != 0 {
-							e.TextAlign(b.align[ci])
+					}
+					for _, ch := range word {
+						if !wideRune(ch) {
+							run = append(run, ch)
+							continue
 						}
-					})
+						flush()
+						key := sp
+						key.Text = ""
+						w, ok := cjk[key]
+						if !ok {
+							sp.Text = "中"
+							w, _ = c.MeasureText(0, sp)
+							cjk[key] = w
+						}
+						size.min[ci] = max(size.min[ci], w+mdCellPad)
+					}
+					flush()
 				}
 			}
-		})
+		}
 	}
+}
+
+// cellSpans 是格子里的文字按搭界面时的字号和字重摆出来的 spans，量宽度用；搜索词的底色不影响宽度，不带。
+func cellSpans(c *ui.Context, cell []mdInline, header bool) []ui.Span {
+	var spans []ui.Span
+	for _, in := range cell {
+		for _, sp := range (mdView{}).spans(c, in) {
+			if sp.Size == 0 {
+				sp.Size = 12.5
+			}
+			if header && sp.Weight == 0 {
+				sp.Weight = 500
+			}
+			spans = append(spans, sp)
+		}
+	}
+	return spans
+}
+
+// wideRune 是排版时前后都能断行的全角字：汉字、假名、谚文和全角标点。
+func wideRune(ch rune) bool {
+	return unicode.Is(unicode.Han, ch) || unicode.Is(unicode.Hiragana, ch) || unicode.Is(unicode.Katakana, ch) ||
+		unicode.Is(unicode.Hangul, ch) || ch >= 0x3000 && ch <= 0x303F || ch >= 0xFF00 && ch <= 0xFF60
+}
+
+// cells 搭表格的格子：第一行是表头，四角的格子跟着外框圆角。
+func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
+	t := c.Theme()
+	for ri, row := range b.rows {
+		for ci := range cols {
+			var cell []mdInline
+			if ci < len(row) {
+				cell = row[ci]
+			}
+			right, bottom := float32(1), float32(1)
+			if ci == cols-1 {
+				right = 0
+			}
+			if ri == len(b.rows)-1 {
+				bottom = 0
+			}
+			box := ui.Box(c).Padding(5, 10).BorderWidth(0, right, bottom, 0).BorderColor(t.Border)
+			if ri == 0 {
+				box.Background(t.Surface)
+			}
+			var rad [4]float32
+			first, last := ri == 0, ri == len(b.rows)-1
+			if ci == 0 {
+				rad[0], rad[3] = corner(first), corner(last)
+			}
+			if ci == cols-1 {
+				rad[1], rad[2] = corner(first), corner(last)
+			}
+			if rad != [4]float32{} {
+				box.Radius(rad[0], rad[1], rad[2], rad[3])
+			}
+			box.Children(func() {
+				e := r.inline(c, cell).FontSize(12.5).LineHeight(1.45)
+				if ri == 0 {
+					e.FontWeight(500)
+				}
+				if ci < len(b.align) && b.align[ci] != 0 {
+					e.TextAlign(b.align[ci])
+				}
+			})
+		}
+	}
+}
+
+// corner 是四角格子的圆角：外框圆角 6 减去 1 的边框。
+func corner(on bool) float32 {
+	if on {
+		return 5
+	}
+	return 0
 }
 
 // inline 把一段行内内容搭成一个段落；只有 http 链接能点，相对路径之类的只上色。

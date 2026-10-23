@@ -49,3 +49,39 @@ func TestMarkRanges(t *testing.T) {
 		t.Fatalf("markRanges = %v, want %v", got, want)
 	}
 }
+
+// 表格比正文宽时：长句折行能放下的铺满正文宽，拆不开的代码放不下的按内容宽左右滚，别的列不被压扁
+func TestMarkdownTableWidth(t *testing.T) {
+	long := "这一格的句子很长很长，要折行才放得下，再多写几个字让它比窗口宽得多，还要再长一些才够"
+	fit := parseMarkdown("| 项目 | 说明 |\n|---|---|\n| 内存 | " + long + " |\n")
+	wide := parseMarkdown("| 入口 | 写法 |\n|---|---|\n| 私聊 拍照 | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` |\n")
+	show := func(bs []mdBlock) *ui.Tester {
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+		}, 400, 400)
+		tt.Frame()
+		tt.Frame()
+		return tt
+	}
+	tt := show(fit)
+	if rl, ok := tt.Find(long); !ok || rl.X+rl.W > 400 || rl.H < 30 {
+		t.Fatalf("long cell %+v should wrap inside the window", rl)
+	}
+
+	tt = show(wide)
+	short, _ := tt.Find("私聊 拍照")
+	if short.H > 25 {
+		t.Fatalf("short cell squeezed: %+v", short)
+	}
+	code := "openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)"
+	before, _ := tt.Find(code)
+	if before.H > 60 {
+		t.Fatalf("code cell %+v should wrap only at spaces", before)
+	}
+	// 整张表比窗口宽，能往左滚
+	tt.Scroll(200, 50, 100, 0)
+	tt.Frame()
+	if after, _ := tt.Find(code); after.X >= before.X {
+		t.Fatalf("table did not scroll: %+v -> %+v", before, after)
+	}
+}

@@ -665,7 +665,7 @@ func markdownPreview(c *ui.Context, d *fileDoc) {
 	}
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Row(c).Padding(20, 28, 40, 28).Justify(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Children(func() { mdView{}.blocks(c, d.md) })
+			ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Selectable().Children(func() { mdView{}.blocks(c, d.md) })
 		})
 	})
 }
