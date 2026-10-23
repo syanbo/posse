@@ -331,6 +331,8 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		}
 		d.ed.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
+		d.ed.OnDefinition = func(off int) { a.goToDefinition(w, v, d, off) }
+		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
 		// 包一层：改动卡片按行的位置浮在编辑器上面
 		ui.Box(c).Grow(1).Children(func() {
 			el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Fill().AutoFocus()
@@ -339,6 +341,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 				d.focus = false
 			}
 			a.changePopup(c, w, v, d)
+			if v.def.running && v.def.doc == d {
+				fadeHint(c, "doc-hint", "正在查找 "+v.def.word+" 的定义…", time.Time{}, 12)
+			} else {
+				fadeHint(c, "doc-hint", d.hint, d.hintAt, 12)
+			}
 		})
 		d.shown++
 		if d.gotoLine > 0 {
@@ -369,6 +376,10 @@ func gotoLine(d *fileDoc) {
 		start := snap.LineStart(line)
 		end := min(start+s[1], snap.LineEnd(line))
 		d.ed.Select(min(start+s[0], end), end)
+	} else if s[0] > 0 {
+		// 只给了列（跳回定义跳转之前的位置）：光标放到那一列
+		off := min(snap.LineStart(line)+s[0], snap.LineEnd(line))
+		d.ed.Select(off, off)
 	}
 	d.gotoLine, d.gotoSpan = 0, [2]int{}
 }

@@ -79,6 +79,10 @@ type State struct {
 	// OnDefinition is called for Cmd+click (Ctrl+click elsewhere) and F12
 	// on a word, as to go to its definition.
 	OnDefinition func(offset int)
+	// LinkAt says what Cmd held over offset underlines, as a path in
+	// quotes: the word there when nil or when it returns an empty range
+	// (Hive).
+	LinkAt func(offset int) (start, end int)
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
 	OnGutterClick func(line int)
@@ -153,7 +157,7 @@ func (st *State) options() options {
 		wrapGuides: st.WrapGuides, indentGuides: !st.NoIndentGuides, scrollPastEnd: !st.NoScrollPastEnd && !st.FitContent,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, fitContent: st.FitContent,
 		placeholder: st.Placeholder, label: st.Label, theme: st.Theme, bindings: st.Bindings, gutterMarks: st.GutterMarks,
-		diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition,
+		diffBase: st.DiffBase, onCompletion: st.OnCompletion, onHover: st.OnHover, onDefinition: st.OnDefinition, linkAt: st.LinkAt,
 		onGutterClick: st.OnGutterClick, onChangeClick: st.OnChangeClick, contextMenu: st.ContextMenu, minDigits: 3,
 		renderFindBar: st.RenderFindBar, renderGoToLine: st.RenderGoToLine,
 		renderCompletions: st.RenderCompletions, renderHover: st.RenderHover,

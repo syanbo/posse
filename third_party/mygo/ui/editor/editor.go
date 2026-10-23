@@ -38,6 +38,7 @@ type options struct {
 	onCompletion  func(CompletionRequest)
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
+	linkAt        func(int) (int, int) // Hive
 	onGutterClick func(int)
 	onChangeClick func(int, float32) // Hive
 	contextMenu   func(m *ui.Menu)
@@ -149,6 +150,11 @@ type editor struct {
 	pointer    ui.Point
 	pointerIn  bool
 	hoverLine  int
+	// link is the word under the pointer, which Command held underlines
+	// as a link to its definition, the hand showing; linkOn says it shows
+	// now (Hive).
+	link   [2]int
+	linkOn bool
 	// region is the part of the editor under the pointer, which its
 	// cursor and the scroll bars' highlight show.
 	region     region

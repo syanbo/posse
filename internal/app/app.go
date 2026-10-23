@@ -176,6 +176,7 @@ type app struct {
 	emptyHeight float32               // 空工作区页滚动区上一帧的高度
 	files       map[string]*filesView // 工作区 ID → 文件标签
 	quick       quickOpen             // ⌘P 快速打开
+	defPick     defPick               // 几处同名定义的选择对话框（definition.go）
 	unsaved     *unsavedAsk           // 问要不要保存修改的对话框
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool

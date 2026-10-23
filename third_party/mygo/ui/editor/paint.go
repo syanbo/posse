@@ -381,6 +381,14 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				p.Fill(ui.Rect{X: x, Y: y, W: v.charWidth * 0.6, H: lh}, selColor, 0)
 			}
 		}
+		// Hive: the word Command is held over, underlined as a link.
+		if ed.linkOn && ed.link[1] > l.start && ed.link[0] < l.start+len(l.text) {
+			a, b := max(ed.link[0]-l.start, 0), min(ed.link[1]-l.start, len(l.text))
+			f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(b, false), f.rects[:0])
+			for _, rc := range f.rects {
+				p.Fill(ui.Rect{X: ox + rc.X, Y: y + lh - 2, W: rc.W, H: 1}, ct.Text, 0)
+			}
+		}
 		// Brackets around the caret.
 		if f.bracketsOK {
 			for _, b := range f.brackets {

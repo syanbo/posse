@@ -736,3 +736,94 @@ func TestMobileOnlineMark(t *testing.T) {
 		t.Fatal("no online mark")
 	}
 }
+
+// 跳到定义：⌘点击 `Helper.open` 跳到 Helper.java 里的声明并选中名字，⌃- 回到出发的位置；
+// 几处同名的声明弹出列表，回车跳到选中的那处
+func TestGoToDefinition(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	put := func(rel, text string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("app/Chat.java", "class Chat {\n  void init() {\n    Helper.open(this, 3);\n  }\n}\n")
+	put("lib/Helper.java", "public class Helper {\n  public static void open(Object a, int code) {\n  }\n}\n")
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := ui.NewTester(a.build, 1200, 760)
+	chat := filepath.Join(root, "app", "Chat.java")
+	a.openFile(w, chat, 0, [2]int{})
+	v := a.filesFor(w)
+	until(t, tt, "chat loaded", func() bool { return v.cur.kind == docText })
+	d := v.cur
+	off := strings.Index(d.ed.Buffer.String(), "open(") + 1
+	a.goToDefinition(w, v, d, off)
+	helper := filepath.Join(root, "lib", "Helper.java")
+	until(t, tt, "jump", func() bool { return v.cur.path == helper && v.cur.kind == docText && v.cur.ed.SelectedText() == "open" })
+	if v.cur.ed.CursorPos().Line != 1 {
+		t.Fatalf("line = %d", v.cur.ed.CursorPos().Line)
+	}
+	a.jumpBack(w)
+	until(t, tt, "back", func() bool { return v.cur == d && d.ed.Cursor() == off })
+	if len(v.jumps) != 0 {
+		t.Fatal("jump stack should be empty")
+	}
+
+	// 光标在 Other.java 自己的 open 上、别处还有两处同分的声明：排除自己，弹出列表，按下键再回车跳到第二处
+	put("lib/Other.java", "class Other {\n  void open() {}\n}\n")
+	put("lib/Another.java", "class Another {\n  void open() {}\n}\n")
+	a.refreshList(v, true, nil)
+	until(t, tt, "list", func() bool { return !v.listing })
+	other := filepath.Join(root, "lib", "Other.java")
+	a.openFile(w, other, 0, [2]int{})
+	until(t, tt, "other loaded", func() bool { return v.cur.path == other && v.cur.kind == docText })
+	od := v.cur
+	a.goToDefinition(w, v, od, strings.Index(od.ed.Buffer.String(), "open(")+1)
+	until(t, tt, "pick", func() bool { return a.defPick.open })
+	if n := len(a.defPick.defs); n != 2 || a.defPick.defs[0].Path != filepath.Join("lib", "Another.java") {
+		t.Fatalf("defs = %+v", a.defPick.defs)
+	}
+	if !tt.HasText("有 2 处定义") {
+		t.Fatal("dialog not shown")
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	until(t, tt, "jump to helper", func() bool { return !a.defPick.open && v.cur.path == helper && v.cur.ed.SelectedText() == "open" })
+
+	// 光标就在定义上、别处没有同名的：退化为在检索页按整词找用法
+	v.cur = d
+	a.goToDefinition(w, v, d, strings.Index(d.ed.Buffer.String(), "init(")+1)
+	until(t, tt, "usages", func() bool { return v.side == sideSearch && v.search.query.Regex })
+	if v.search.query.Text != `\binit\b` || !a.filesPanelOpen() || v.cur != d {
+		t.Fatalf("query = %+v", v.search.query)
+	}
+
+	// ⌘点在 import 的路径上：按 import 规则解析后打开那个文件；点 import 进来的名字优先去那个文件里找
+	put("web/app.js", "import { helper } from './lib/util';\nhelper();\n")
+	put("web/lib/util.js", "export const helper = 1;\n")
+	put("web/other.js", "const helper = 2;\n")
+	a.refreshList(v, true, nil)
+	until(t, tt, "list", func() bool { return !v.listing })
+	appJS := filepath.Join(root, "web", "app.js")
+	a.openFile(w, appJS, 0, [2]int{})
+	until(t, tt, "app.js", func() bool { return v.cur.path == appJS && v.cur.kind == docText })
+	js := v.cur
+	a.goToDefinition(w, v, js, strings.Index(js.ed.Buffer.String(), "lib/util")+1)
+	util := filepath.Join(root, "web", "lib", "util.js")
+	until(t, tt, "import path", func() bool { return v.cur.path == util })
+	v.cur = js
+	a.goToDefinition(w, v, js, strings.Index(js.ed.Buffer.String(), "helper")+1)
+	until(t, tt, "imported name", func() bool { return v.cur.path == util && v.cur.ed.SelectedText() == "helper" })
+
+	// 找不到：提示一句，不跳
+	v.cur = d
+	a.goToDefinition(w, v, d, strings.Index(d.ed.Buffer.String(), "this")+1)
+	until(t, tt, "no definition", func() bool { return d.hint != "" })
+	if d.hint != "没找到 this 的定义" || v.cur != d {
+		t.Fatalf("hint = %q", d.hint)
+	}
+}

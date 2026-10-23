@@ -360,6 +360,27 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		// Off the text, nothing rests.
 		h.pending, h.restOff = false, -1
 	}
+	// Hive: the word (or what linkAt says) under the pointer, for Command
+	// to underline.
+	var link [2]int
+	if off >= 0 && ed.o.onDefinition != nil {
+		if ed.o.linkAt != nil {
+			if a, z := ed.o.linkAt(off); z > a {
+				link = [2]int{a, z}
+			}
+		}
+		if link[1] <= link[0] {
+			if wa, wz := wordAt(ed.view.text, off, ed.wordChars()); wz > wa {
+				if c, _ := ed.view.text.RuneAt(wa); classOf(c, ed.wordChars()) == classWord {
+					link = [2]int{wa, wz}
+				}
+			}
+		}
+	}
+	if link != ed.link {
+		ed.link = link
+		changed = true
+	}
 	// Off the text hovered, the hover goes after a grace, so that the
 	// pointer can go into it, as the build sees (hideAt).
 	if h.shown {

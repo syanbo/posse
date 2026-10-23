@@ -17,6 +17,10 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/editor` 的编辑器（`gitdiff.go`、`input.go`、`paint.go`、`state.go`）：加 `State.OnChangeClick`，点行号栏里相对 DiffBase 的改动色条时回调（改动序号和这一行底边的位置），色条的位置抽成 `changeBarX` 和绘制共用；加 `State.Changes`（改动列表和改之前的内容）、`State.RevertChange`（回滚一处，可以撤销）、`State.LineBottom`（某一行底边相对编辑器顶的位置）。Hive 用它们做 WebStorm 那样的改动卡片。
 
+`ui/editor` 的跳到定义（`state.go`、`editor.go`、`input.go`、`build.go`、`paint.go`）：加 `State.LinkAt`，按住 Command 时指针下要画下划线的范围（Hive 用它认引号里的路径和网址），没设或返回空范围时是指针下的词；`pointerMove` 记下这段（`link`），`build` 在 Command 按住、指针在文字上、设了 `OnDefinition` 时把指针换成手形（`linkOn`），`paint` 在这段下面画一条 1 DIP 的线，照 Zed 按住 Command 时的链接样式。
+
+`ui/headless.go`：加 `Tester.MoveWith`，带修饰键移动指针（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
+
 `ui/widgets.go`：对话框（`coreModal`）打开时遮罩淡入、对话框淡入并从 96% 放大，弹出面板（`stylePanel`：Popover、Select、ComboBox、日期、取色）淡入并下落 4 DIP，都用 `Keyframes` 播 160 ms，只在出现时播一次。
 
 `ui/input.go`、`ui/context.go`、`ui/runtime.go`、`ui/api_gen.go`：加 `Element.MiddleClicked`（中键点击，Hive 用来关标签），`ui/headless.go` 加 `Tester.MiddleClickAt`。

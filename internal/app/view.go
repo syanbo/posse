@@ -114,6 +114,7 @@ func (a *app) build(c *ui.Context) {
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
 	a.quickDialog(c)
+	a.defDialog(c)
 	a.pushDialog(c)
 	a.promptDialog(c)
 	a.unsavedDialog(c)
@@ -181,6 +182,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyW) {
 		a.closeTab()
+	}
+	// ⌃-：回到跳到定义之前的位置（和 VS Code 一样；⌘[ 是编辑器的减少缩进）
+	if w != nil && c.Shortcut(ui.Ctrl, ui.KeyMinus) {
+		a.jumpBack(w)
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
 		a.openNewWorkspace()

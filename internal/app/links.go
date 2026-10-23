@@ -182,6 +182,17 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 			ui.Image(c, card.preview).Width(width-12).Radius(8).Margin(2, 0, 4, 0)
 		}
 		ui.Box(c).Height(1).Margin(2, 6).Background(p.line)
+		// 最常用的在最上面：在 Hive 里打开
+		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
+			w := a.workspaceOf(card.path)
+			if w == nil {
+				w = a.workspace(a.selected)
+			}
+			if w != nil {
+				a.openFile(w, card.path, 0, [2]int{})
+			}
+			a.linkCard = nil
+		}
 		// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
 		if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示") {
 			a.revealInFiles(w, card.path)
@@ -197,16 +208,6 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 		if linkCardItem(c, openIcon, openLabel) {
 			if err := mygo.Shell.OpenPath(card.path); err != nil {
 				a.err = err.Error()
-			}
-			a.linkCard = nil
-		}
-		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
-			w := a.workspaceOf(card.path)
-			if w == nil {
-				w = a.workspace(a.selected)
-			}
-			if w != nil {
-				a.openFile(w, card.path, 0, [2]int{})
 			}
 			a.linkCard = nil
 		}

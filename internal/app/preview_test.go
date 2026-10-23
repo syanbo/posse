@@ -16,6 +16,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
+	"hive/internal/files"
 	"hive/internal/gitx"
 	"hive/internal/history"
 	"hive/internal/media"
@@ -649,6 +650,11 @@ func TestPreview(t *testing.T) {
 		v := previewFiles(t, a, "internal/app/view.go", "README.md", "main.go")
 		v.doc(filepath.Join(v.root, "README.md")).ed.Insert("<!-- draft -->\n")
 		savePNG(t, newPreviewTester(a, dark), "files-"+suffix+".png")
+		// 按住 ⌘ 指到 loadConfig 上：词下面一条线，指针变手形，点一下跳到定义
+		tt = newPreviewTester(a, dark)
+		tt.MoveWith(ui.Cmd, 471, 255)
+		tt.Frame()
+		savePNG(t, tt, "files-cmd-hover-"+suffix+".png")
 
 		// 编辑器的右键菜单：mygo 交来的菜单也是 Hive 自绘，英文换成中文
 		a = previewApp(t)
@@ -679,6 +685,16 @@ func TestPreview(t *testing.T) {
 		a.openQuick(&a.workspaces[0])
 		a.quick.query = "view"
 		savePNG(t, newPreviewTester(a, dark), "quick-open-"+suffix+".png")
+
+		// 跳到定义时几处同名的声明：选择列表
+		a = previewApp(t)
+		previewFiles(t, a, "main.go")
+		a.defPick = defPick{open: true, ws: "w1", word: "openAlbum", defs: []files.Definition{
+			{Path: "lib/MediaPickerHelper.java", Line: 41, Text: "    public static void openAlbum(Activity activity, PickOptions options, int requestCode) {", Span: [2]int{23, 32}, Kind: "method", Decl: true},
+			{Path: "lib/legacy/MediaPickerHelper.java", Line: 17, Text: "    public static void openAlbum(Activity activity, int requestCode) {", Span: [2]int{23, 32}, Kind: "method", Decl: true},
+			{Path: "app/ChatActivity.java", Line: 88, Text: "    private void openAlbum(int code) {", Span: [2]int{17, 26}, Kind: "method", Decl: true},
+		}}
+		savePNG(t, newPreviewTester(a, dark), "definition-pick-"+suffix+".png")
 
 		// 左栏"改动"和 main.go 的 diff
 		a = previewApp(t)

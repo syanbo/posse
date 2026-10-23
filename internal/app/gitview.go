@@ -566,26 +566,37 @@ const (
 )
 
 // diffHint 把 F7 到头的提示画在 diff 栏正下方、diff 区域居中：上下箭头在左上角，视线还在那里，
-// 比 mygo 的 toast（只能在窗口底部）近。配色和 toast 一样反过来。连按时重新计时，不叠起来。
+// 比 mygo 的 toast（只能在窗口底部）近。连按时重新计时，不叠起来。
 func diffHint(c *ui.Context, df *diffDoc) {
-	age := time.Since(df.hintAt)
-	if df.hint == "" || age >= diffHintFor {
+	fadeHint(c, "diff-hint", df.hint, df.hintAt, 44)
+}
+
+// fadeHint 在所在容器顶部 top 处居中画一句提示，从 at 起显示 diffHintFor、头尾淡入淡出；
+// at 为零值时一直显示（正在进行的操作）。配色和 toast 一样反过来。
+func fadeHint(c *ui.Context, key, hint string, at time.Time, top float32) {
+	if hint == "" {
 		return
 	}
 	opacity := float32(1)
-	switch left := diffHintFor - age; {
-	case age < diffHintFade:
-		opacity = float32(age) / float32(diffHintFade)
-		c.AnimationFrame()
-	case left < diffHintFade:
-		opacity = float32(left) / float32(diffHintFade)
-		c.AnimationFrame()
-	default:
-		c.After(left - diffHintFade)
+	if !at.IsZero() {
+		age := time.Since(at)
+		if age >= diffHintFor {
+			return
+		}
+		switch left := diffHintFor - age; {
+		case age < diffHintFade:
+			opacity = float32(age) / float32(diffHintFade)
+			c.AnimationFrame()
+		case left < diffHintFade:
+			opacity = float32(left) / float32(diffHintFade)
+			c.AnimationFrame()
+		default:
+			c.After(left - diffHintFade)
+		}
 	}
 	t := c.Theme()
-	ui.Row(c.Key("diff-hint")).Absolute().Top(44).Left(0).Right(0).Justify(ui.Center).Children(func() {
-		ui.Text(c, df.hint).FontSize(12.5).TextColor(t.Background).Background(t.Text).Padding(7, 14).Radius(8).
+	ui.Row(c.Key(key)).Absolute().Top(top).Left(0).Right(0).Justify(ui.Center).Children(func() {
+		ui.Text(c, hint).FontSize(12.5).TextColor(t.Background).Background(t.Text).Padding(7, 14).Radius(8).
 			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.25)).Opacity(opacity)
 	})
 }

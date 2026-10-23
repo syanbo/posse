@@ -90,6 +90,9 @@ type fileDoc struct {
 	// headBuf 是文件在 HEAD 里的内容，编辑器行号旁的改动标记以它为基准；headFor 是读它时的 HEAD
 	headBuf *editor.Buffer
 	headFor string
+	// hint 是编辑器顶上一闪而过的提示（没找到定义），hintAt 是开始显示的时间
+	hint   string
+	hintAt time.Time
 }
 
 func (d *fileDoc) name() string {
@@ -185,6 +188,8 @@ type filesView struct {
 	consoleLast int64
 	consoleDone bool
 	git         gitState
+	def         defSearch // 跳到定义的查找（definition.go）
+	jumps       []jumpLoc // 跳到定义之前的位置，⌃- 依次回去
 }
 
 // filesFor 返回工作区的文件标签，没有就新建，并恢复上次打开的文件和展开的目录。
@@ -791,14 +796,7 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 					return
 				}
 				// 有未保存改动的文件搜编辑器里的内容
-				overlay := map[string]string{}
-				for _, d := range v.docs {
-					if d.isModified() {
-						if rel, err := filepath.Rel(v.root, d.path); err == nil {
-							overlay[rel] = d.ed.Buffer.String()
-						}
-					}
-				}
+				overlay := editorOverlay(v)
 				s.hits, s.rows, s.truncated = nil, nil, false
 				l := v.list
 				go func() {

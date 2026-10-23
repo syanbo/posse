@@ -57,8 +57,14 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		e.HandleTextInput(ed)
 	}
 	e.HandleInput(ed.input)
-	switch ed.region {
-	case regionText:
+	// Hive: Command held over a word, the hand and an underline say a
+	// click goes to its definition.
+	ed.linkOn = ed.o.onDefinition != nil && ed.pointerIn && !ed.gesture.active && ed.region == regionText &&
+		c.Modifiers() == ui.Cmd && ed.link[1] > ed.link[0]
+	switch {
+	case ed.linkOn:
+		e.Cursor(ui.CursorPointer)
+	case ed.region == regionText:
 		e.Cursor(ui.CursorText)
 	default:
 		e.Cursor(ui.CursorDefault)

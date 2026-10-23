@@ -432,6 +432,12 @@ func (t *Tester) Move(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y)})
 }
 
+// MoveWith moves the pointer to (x, y) with modifier keys held, as the
+// platform reports them with every pointer event. (Hive)
+func (t *Tester) MoveWith(mods Modifiers, x, y float32) {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y), Mods: platform.Modifiers(mods)})
+}
+
 // Scroll scrolls by dx, dy DIPs with the pointer at (x, y).
 func (t *Tester) Scroll(x, y, dx, dy float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy)})
