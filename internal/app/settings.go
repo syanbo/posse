@@ -65,7 +65,7 @@ func settingsRow(c *ui.Context, label string, right func()) {
 
 func (a *app) awakeSettings(c *ui.Context) {
 	st := a.daemon.Awake
-	settingsCard(c, "防休眠", "Agent 工作时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「工作时亮屏」给操作桌面界面的 agent 用：屏幕熄了会跟着锁屏。", func() {
+	settingsCard(c, "防休眠", "Hive 运行时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「运行时亮屏」让屏幕也不熄：屏幕熄了会跟着锁屏。", func() {
 		if st == nil {
 			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
 			return

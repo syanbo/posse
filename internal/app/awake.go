@@ -1,14 +1,13 @@
 package app
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 )
 
 // awakeStatus 是常驻进程的防休眠状态（internal/daemon/awake.go）：档位 off、auto、display、on，
-// 此刻是否托着不让睡，以及算进 auto 的工作中 agent 数。
+// 此刻是否托着不让睡，以及正在工作的 agent 数（不决定托不托住）。
 type awakeStatus struct {
 	Mode    string `json:"mode"`
 	Active  bool   `json:"active"`
@@ -18,9 +17,8 @@ type awakeStatus struct {
 // short 是底栏按钮上的字，item 是菜单项，seg 是设置页分段按钮上的字（菜单项太长放不下）。
 var awakeModes = []struct{ mode, short, item, seg string }{
 	{"off", "关闭", "关闭", "关闭"},
-	{"auto", "自动", "Agent 工作时", "Agent 工作时"},
-	{"display", "亮屏", "Agent 工作时，屏幕也亮", "工作时亮屏"},
-	{"on", "始终", "始终", "始终"},
+	{"auto", "运行", "Hive 运行时", "Hive 运行时"},
+	{"display", "亮屏", "Hive 运行时，屏幕也亮", "运行时亮屏"},
 }
 
 // awakeTip 是按钮的悬停说明。
@@ -30,16 +28,14 @@ func awakeTip(st *awakeStatus) string {
 		return "防休眠：重启常驻进程后可用"
 	case st.Mode == "off":
 		return "防休眠已关闭，电脑按系统设置休眠"
-	case st.Mode == "on":
-		return "防休眠：电脑一直不休眠，屏幕照常熄灭"
 	case st.Mode == "display" && st.Active:
-		return fmt.Sprintf("防休眠：%d 个 agent 在工作，电脑不休眠，屏幕也不熄", st.Working)
+		return "防休眠：Hive 运行中，电脑不休眠，屏幕也不熄"
 	case st.Mode == "display":
-		return "防休眠：agent 工作时电脑不休眠、屏幕不熄，现在没有 agent 在工作"
+		return "防休眠：Hive 运行时电脑不休眠、屏幕不熄"
 	case st.Active:
-		return fmt.Sprintf("防休眠：%d 个 agent 在工作，电脑不会休眠，屏幕照常熄灭", st.Working)
+		return "防休眠：Hive 运行中，电脑不会休眠，屏幕照常熄灭"
 	}
-	return "防休眠：agent 工作时电脑不休眠，现在没有 agent 在工作"
+	return "防休眠：Hive 运行时电脑不休眠"
 }
 
 // awakeButton 在主区域状态栏最右边：咖啡杯图标加档位，托着不让睡时图标是强调色。点开选档位。

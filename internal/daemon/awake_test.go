@@ -28,23 +28,16 @@ func TestAwakeModes(t *testing.T) {
 		t.Fatalf("default %+v", st)
 	}
 	a.apply(0)
-	if a.status().Active {
-		t.Fatal("auto holds with no agent working")
+	if !a.status().Active {
+		t.Fatal("auto does not hold while hive runs")
 	}
 	a.apply(2)
 	if st := a.status(); !st.Active || st.Working != 2 {
 		t.Fatalf("auto with working agents %+v", st)
 	}
 	a.apply(0)
-	if a.status().Active {
-		t.Fatal("auto still holds after agents went idle")
-	}
-	if err := a.setMode(awakeOn); err != nil {
-		t.Fatal(err)
-	}
-	a.apply(0)
 	if !a.status().Active {
-		t.Fatal("on does not hold")
+		t.Fatal("auto released while hive still runs")
 	}
 	// caffeinate 意外退出：下次重算时重新起
 	a.mu.Lock()
@@ -58,7 +51,7 @@ func TestAwakeModes(t *testing.T) {
 	if !a.status().Active {
 		t.Fatal("not restarted")
 	}
-	// 屏幕也亮：和 auto 一样看 agent，换档时按新参数重起
+	// 屏幕也亮：和 auto 一样只要常驻进程在就托住，换档时按新参数重起
 	var displays []bool
 	spawn := a.spawn
 	a.spawn = func(display bool) (*exec.Cmd, error) {
@@ -73,8 +66,8 @@ func TestAwakeModes(t *testing.T) {
 		t.Fatalf("display mode active %v spawns %v", a.status().Active, displays)
 	}
 	a.apply(0)
-	if a.status().Active {
-		t.Fatal("display mode holds with no agent working")
+	if !a.status().Active {
+		t.Fatal("display mode released while hive still runs")
 	}
 	if err := a.setMode(awakeOff); err != nil {
 		t.Fatal(err)
@@ -93,7 +86,7 @@ func TestAwakeModes(t *testing.T) {
 	}
 }
 
-// 只有状态新鲜的工作中 agent 才算：卡在工作中两小时以上的不再托住。
+// 工作中的 agent 只是计数，卡住很久的也算在里面；托不托住不看这个数。
 func TestWorkingAgents(t *testing.T) {
 	d, ws := newTestDaemon(t)
 	s, err := d.startTerminal(ws, []string{"/bin/cat"}, "claude", 80, 24)
@@ -110,8 +103,16 @@ func TestWorkingAgents(t *testing.T) {
 	if n := d.workingAgents(); n != 1 {
 		t.Fatalf("working counted %d", n)
 	}
-	s.SetAgent(term.AgentState{Status: agent.StatusWorking, At: time.Now().Add(-awakeStale - time.Minute)})
-	if n := d.workingAgents(); n != 0 {
-		t.Fatalf("stale counted %d", n)
+}
+
+// 去掉的"始终"（on）：旧的 awake.json 读成 auto，awake.set 给 on 也按 auto。
+func TestAwakeOldOnMode(t *testing.T) {
+	home := t.TempDir()
+	os.WriteFile(filepath.Join(home, "awake.json"), []byte(`{"mode":"on"}`), 0o600)
+	if m := newAwake(home).mode; m != awakeAuto {
+		t.Fatalf("old on read as %q", m)
+	}
+	if validAwakeMode("on") || normalAwakeMode("on") != awakeAuto {
+		t.Fatal("on still a mode of its own")
 	}
 }

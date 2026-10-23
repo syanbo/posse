@@ -842,7 +842,7 @@ func TestPreview(t *testing.T) {
 		savePNG(t, tt, "menu-tab-"+suffix+".png")
 		a = previewApp(t)
 		tt = newPreviewTester(a, dark)
-		if err := tt.Click("防休眠：自动"); err != nil {
+		if err := tt.Click("防休眠：运行"); err != nil {
 			t.Fatal(err)
 		}
 		settleMenu(tt)
