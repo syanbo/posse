@@ -422,12 +422,10 @@ func (ed *editor) wheel(ev ui.InputEvent) bool {
 		moved = ed.scrollY != before
 	}
 	if ev.DX != 0 && !ed.view.wrap {
-		before := ed.scrollX
-		ed.scrollX = max(0, min(ed.scrollX+ev.DX, ed.maxScrollX()))
-		if s := ed.o.sharedScroll; s != nil {
-			s.setX(ed.scrollX)
-		}
-		moved = moved || ed.scrollX != before
+		before, _ := ed.sideways()
+		ed.setScrollX(before + ev.DX)
+		after, _ := ed.sideways()
+		moved = moved || after != before
 	}
 	if moved && ed.gesture.active {
 		cx, cy := ed.toContent(ed.pointer.X, ed.pointer.Y)
@@ -456,11 +454,34 @@ func (ed *editor) scrollbars() (vertical, horizontal bool) {
 	if ed.o.noScrollbar || ed.o.fitContent {
 		return false, false
 	}
-	return ed.scrollMax() > 0, !ed.view.wrap && ed.view.maxLine > ed.r.W-ed.textX-scrollbarWidth
+	horizontal = !ed.view.wrap && ed.view.maxLine > ed.r.W-ed.textX-scrollbarWidth
+	if s := ed.o.sharedScroll; s != nil && !ed.view.wrap && s.maxX() > 0 {
+		// Hive: the other side's lines run under its numbers.
+		horizontal = true
+	}
+	return ed.scrollMax() > 0, horizontal
 }
 
 func (ed *editor) maxScrollX() float32 {
 	return max(0, ed.view.maxLine+ed.view.charWidth*4-(ed.r.W-ed.textX-ed.rightGutter()))
+}
+
+// sideways returns the sideways scroll and how far it goes: those the
+// editors of a split diff share, else the editor's own (Hive).
+func (ed *editor) sideways() (x, end float32) {
+	if s := ed.o.sharedScroll; s != nil {
+		return s.x, s.maxX()
+	}
+	return ed.scrollX, ed.maxScrollX()
+}
+
+// setScrollX scrolls sideways, all the editors sharing the scroll.
+func (ed *editor) setScrollX(x float32) {
+	if s := ed.o.sharedScroll; s != nil {
+		s.setX(x)
+		return
+	}
+	ed.scrollX = max(0, min(x, ed.maxScrollX()))
 }
 
 // scrollbarPress grabs a thumb, or jumps to where the track was pressed.
@@ -486,10 +507,8 @@ func (ed *editor) dragScrollbar(ev ui.InputEvent) {
 	if ed.scrollbar.horizontal {
 		track := ed.r.W - ed.textX - scrollbarWidth
 		f := (ev.X - ed.textX - ed.scrollbar.grab) / max(1, track-size)
-		ed.scrollX = max(0, min(f*ed.maxScrollX(), ed.maxScrollX()))
-		if s := ed.o.sharedScroll; s != nil {
-			s.setX(ed.scrollX)
-		}
+		_, end := ed.sideways()
+		ed.setScrollX(f * end)
 		return
 	}
 	track := ed.viewH
@@ -512,10 +531,14 @@ func (ed *editor) thumb(horizontal bool) (float32, float32) {
 	if horizontal {
 		track := ed.r.W - ed.textX - scrollbarWidth
 		content := ed.view.maxLine + ed.view.charWidth*4
+		x, end := ed.sideways()
+		if ed.o.sharedScroll != nil {
+			content = max(content, track+end)
+		}
 		size := max(24, track*track/max(content, track))
 		f := float32(0)
-		if m := ed.maxScrollX(); m > 0 {
-			f = ed.scrollX / m
+		if end > 0 {
+			f = x / end
 		}
 		return f * (track - size), f*(track-size) + size
 	}

@@ -79,15 +79,30 @@ type options struct {
 	signs bool
 }
 
-// sharedScroll is the vertical scroll several editors share.
+// sharedScroll is the scroll several editors share.
 type sharedScroll struct {
-	y   float64
+	y float64
+	// x is the sideways scroll of them all (Hive): their lines run to
+	// different widths, the old side's numbers at its right edge leave it
+	// less room, so each stops at its own end, and x goes on to the
+	// farthest one, which the one scroll bar reaches.
+	x   float32
 	eds []*editor
 }
 
-func (s *sharedScroll) setX(x float32) {
+// maxX is the farthest any of the editors scrolls sideways.
+func (s *sharedScroll) maxX() float32 {
+	m := float32(0)
 	for _, ed := range s.eds {
-		ed.scrollX = max(0, min(x, ed.maxScrollX()))
+		m = max(m, ed.maxScrollX())
+	}
+	return m
+}
+
+func (s *sharedScroll) setX(x float32) {
+	s.x = max(0, min(x, s.maxX()))
+	for _, ed := range s.eds {
+		ed.scrollX = min(s.x, ed.maxScrollX())
 	}
 }
 
@@ -602,6 +617,9 @@ func (ed *editor) doReveal() {
 			ed.scrollX = max(0, x-em)
 		} else if x+em > ed.scrollX+w {
 			ed.scrollX = x + em - w
+		}
+		if s := ed.o.sharedScroll; s != nil {
+			s.setX(ed.scrollX)
 		}
 	}
 }

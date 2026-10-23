@@ -58,6 +58,9 @@ func (ed *editor) layout(w, h, scale float32) {
 	if wrap {
 		// Wrapped lines fit: nothing is sideways.
 		ed.scrollX = 0
+		if s := ed.o.sharedScroll; s != nil {
+			s.x = 0
+		}
 	}
 	v.heights.setLines(v.text.LineCount())
 	hidden := ed.hiddenSpans()

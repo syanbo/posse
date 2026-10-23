@@ -12,6 +12,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `diffmodel.go`：开着它时比较前去掉每行的空白（`cmpLines`），只差空白的行算没改；两边没改的段行数仍然相等，左右对照照常对齐。显示、行内高亮和回滚用的仍是原文。没有做"忽略空行"：把只增删空行的段去掉会让两边对不齐。
 
 - `diffview.go`、`diffside.go`：加 `DiffState.RenderHunkMark`，左右对照时在旧版一侧的右边缘（挨着分隔线）给每处改动放一个按钮（`hunkTop` 找这处改动在旧版一侧的位置，没有行时是占位块），Hive 画成 WebStorm 的 `>>`；加 `DiffState.OldNumbersRight`，左右对照时旧版一侧的行号栏放到右边缘，两列行号挨着分隔线，`>>` 在行号左边（编辑器选项 `gutterRight`、`gutterExtra`，`editor.go` 的 `textLeft`、`rightGutter`、`inGutter`，`paint.go`、`input.go` 里原来按行号栏在左边算的地方改用它们）。
+- `editor.go`、`input.go`、`paint.go`：左右对照的横向滚动加一个两边共用的位置（`sharedScroll.x`），上限取两边里最远的（`maxX`），每边按自己的上限截；唯一的横向滚动条（新版一侧）、滚轮和光标跟随都改它（`sideways`、`setScrollX`）。旧版行号在右边时文字区更窄，原来新版滚到头时旧版行尾还压在行号栏下面；只有旧版超宽时新版也显示横向滚动条。
 - `diffview.go`：加 `DiffState.Split`、`SplitDragging`，左右对照时旧版一侧占的宽度比例（0 是一半），分隔线上盖一条 5 DIP 宽的拖动条（`split-grip`，按上一帧的宽度摆），拖动改比例、限制在 0.15 到 0.85，拖动中 `SplitDragging` 为真，应用在松手后保存。
 - `diffview.go`、`diffside.go`：加 `DiffState.Current`（改动的序号加一，0 表示没有），这一处的底色和行号栏比别的改动深、竖条总是显示，F7 上下切换时看得出走到了哪。
 
@@ -41,7 +42,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Hive 用来预览图片）；加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Hive 自己画菜单。
 - `view.go`：
   - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Hive 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
-  - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。
+  - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。程序开着鼠标跟踪时，链接上的这次按下也不交给程序，而是开始选区，之后的移动和松开跟着选区走，拖动照样能选中文字。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
 - `hive.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Hive 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
