@@ -42,9 +42,11 @@ Run ` + "`hive session guide`" + ` and follow it: draft the title from the argum
 `
 )
 
-// SkillFrontmatter 是技能文件开头的元数据。
+// SkillFrontmatter 是技能文件开头的元数据。description 里有 ": "，不加引号不是合法 YAML：
+// Claude 照样认，Cursor 解析失败会整个丢掉这个技能。JSON 字符串同时是 YAML 的双引号字符串。
 func SkillFrontmatter() string {
-	return "---\nname: " + SkillName + "\ndescription: " + SkillDescription + "\n---\n\n"
+	desc, _ := json.Marshal(SkillDescription)
+	return "---\nname: " + SkillName + "\ndescription: " + string(desc) + "\n---\n\n"
 }
 
 // claudePlugin 写出 hive 的 Claude 插件目录（编排、会话命名两个技能），经 --plugin-dir 按会话加载；内容没变时不重写。

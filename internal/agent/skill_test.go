@@ -29,6 +29,12 @@ func TestClaudePlugin(t *testing.T) {
 	if err != nil || !strings.HasPrefix(string(b), "---\nname: hive-tasks\ndescription: ") || !strings.Contains(string(b), "`hive task guide`") {
 		t.Fatalf("skill %q %v", b, err)
 	}
+	// description 里有 ": "，要加引号才是合法 YAML，Cursor 才认这个技能
+	line := strings.SplitN(strings.TrimPrefix(string(b), "---\nname: hive-tasks\ndescription: "), "\n", 2)[0]
+	var desc string
+	if err := json.Unmarshal([]byte(line), &desc); err != nil || desc != SkillDescription {
+		t.Fatalf("description not a quoted string: %q %v", line, err)
+	}
 	// 内容没变时不重写，已经打开的 Claude 读到的文件不会被换掉
 	old := time.Now().Add(-time.Hour)
 	os.Chtimes(skill, old, old)
