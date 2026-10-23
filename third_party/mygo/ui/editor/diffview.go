@@ -40,6 +40,11 @@ type DiffState struct {
 	// IgnoreWhitespace compares lines without their whitespace, so that
 	// lines differing only in it are not changes (Hive).
 	IgnoreWhitespace bool
+	// Split is the share of the width the old side of a side-by-side
+	// view takes, half when 0; dragging the divider changes it, within
+	// 0.15 to 0.85, and SplitDragging reports while it is dragged (Hive).
+	Split         float32
+	SplitDragging bool
 	// FitContent makes the viewer as high as its lines, as a file of a
 	// list of them, rather than scrolling them itself.
 	FitContent bool
@@ -316,6 +321,14 @@ func (d *DiffState) GoToHunk(i int) {
 
 func (d *DiffState) newEditor() *editor { return &d.eds[1] }
 
+// splitShare is the old side's share of a side-by-side view's width (Hive).
+func (d *DiffState) splitShare() float32 {
+	if d.Split <= 0 || d.Split >= 1 {
+		return 0.5
+	}
+	return d.Split
+}
+
 // DiffView builds the diff viewer.
 func DiffView(c *ui.Context, d *DiffState) ui.Element {
 	d.ensure()
@@ -375,15 +388,16 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 	}
 	// Side by side: two editors sharing their scroll.
 	d.scroll.eds = []*editor{&d.eds[0], &d.eds[1]}
+	split := d.splitShare()
 	row := ui.Row(c).Clip()
 	row.Draw(func(p *ui.Painter, r ui.Rect) {
-		w := (r.W - 1) / 2
+		ws := [2]float32{(r.W - 1) * split, (r.W - 1) * (1 - split)}
 		for i := range d.eds {
-			d.eds[i].layout(w, r.H, p.Scale())
+			d.eds[i].layout(ws[i], r.H, p.Scale())
 		}
 		d.prepare()
 		for i := range d.eds {
-			d.eds[i].layout(w, r.H, p.Scale())
+			d.eds[i].layout(ws[i], r.H, p.Scale())
 		}
 		if !d.FitContent {
 			d.scroll.set(d.scroll.y)
@@ -419,12 +433,28 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 				o.signs = true
 			}
 			ed := d.eds[i].build(c, b, o)
-			ed.Grow(1).Basis(0).FillHeight()
+			share := split
+			if i == 1 {
+				share = 1 - split
+			}
+			ed.Grow(share).Basis(0).FillHeight()
 			if i == 0 {
 				ui.Box(c).Width(1).FillHeight().Background(ct.Background.Mix(t.Border, 0.6))
 			}
 		}
 		d.buildSeparators(c, ct)
+		// The divider drags to move the split (Hive): a grip over it,
+		// placed from the last frame's width.
+		if rw := row.LayoutBounds().W; rw > 1 {
+			x := (rw - 1) * split
+			grip := ui.Box(c).Key("split-grip").Absolute().Top(0).Bottom(0).Left(x - 2).Width(5).Cursor(ui.CursorResizeEW)
+			if dx, _, held := grip.Dragged(); held {
+				d.Split = min(max((x+dx)/(rw-1), 0.15), 0.85)
+				d.SplitDragging = true
+			} else {
+				d.SplitDragging = false
+			}
+		}
 	})
 	if d.FitContent {
 		row.Height(float32(max(d.eds[0].view.heights.total(), d.eds[1].view.heights.total())))

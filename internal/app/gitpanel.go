@@ -577,7 +577,15 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df.state.RenderSeparator = diffSeparator
 	// 切换忽略空白也会让改动数变
 	clampHunk(df)
+	// 左右对照的分界线位置所有 diff 共用，拖完松手才写 ui.json
+	if df.state.Split == 0 {
+		df.state.Split = a.state.DiffSplit
+	}
 	editor.DiffView(c.Key(d.path), &df.state).Grow(1)
+	if s := df.state.Split; !df.state.SplitDragging && s != 0 && s != a.state.DiffSplit {
+		a.state.DiffSplit = s
+		a.saveState()
+	}
 	d.shown++
 	if !df.jumped {
 		// 第一帧还没有尺寸，跳到改动要等排过版

@@ -25,6 +25,7 @@ type uiState struct {
 	LogPanelHeight       float32  `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
 	BranchPopWidth       float32  `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认
 	CompareSplit         float32  `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
+	DiffSplit            float32  `json:"diffSplit,omitempty"`            // diff 左右对照时旧版一侧占的比例，0 表示各一半
 	LogRefsWidth         float32  `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
 	LogDetailWidth       float32  `json:"logDetailWidth,omitempty"`       // 日志、逐行追溯右边提交详情的宽度，0 表示默认
 	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
