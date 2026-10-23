@@ -247,8 +247,9 @@ func (a *app) memoryPanel(c *ui.Context) {
 				ui.Text(c, "没有运行中的终端。").FontSize(12).TextColor(t.TextMuted).Padding(6, 0)
 				return
 			}
-			ui.Scroll(c).MaxHeight(380).Children(func() {
-				ui.Column(c).Gap(10).Children(func() {
+			// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
+			ui.Scroll(c).MaxHeight(380).Margin(0, -8).Children(func() {
+				ui.Column(c).Gap(10).Padding(0, 8).Children(func() {
 					for _, r := range m.rows {
 						ui.Column(c.Key(r.id)).Children(func() {
 							memLine(c, "ws", func() {

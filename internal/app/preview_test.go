@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -804,6 +805,15 @@ func TestPreview(t *testing.T) {
 				{id: "w3", label: "react-native-syan-image-picker", kb: 250 << 10, terms: []memTerminal{{a.workspaces[2].Terminals[0], 250 << 10, nil}}},
 			}}
 		savePNG(t, newPreviewTester(a, dark), "memory-"+suffix+".png")
+		// 列表放不下、指针停在上面：滚动条在右边的留白上，不压着数字
+		for i := range 4 {
+			a.mem.rows = append(a.mem.rows, memWorkspace{id: fmt.Sprint("wx", i), label: fmt.Sprint("Project", i), kb: 40 << 10,
+				terms: []memTerminal{{a.workspaces[2].Terminals[0], 40 << 10, nil}}})
+		}
+		tt = newPreviewTester(a, dark)
+		tt.Move(960, 480)
+		tt.Frame()
+		savePNG(t, tt, "memory-scroll-"+suffix+".png")
 
 		// 标签栏"+"的新建菜单，指针停在 Cursor 上（标签栏里也有 Codex，按快捷键提示找行）
 		a = previewApp(t)
