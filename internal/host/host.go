@@ -101,11 +101,13 @@ type Terminal interface {
 	Resume()
 }
 
-// Subscription 是一路输出。Output 关闭表示程序结束或接入方跟不上被断开。
+// Subscription 是一路输出。Output 关闭表示程序结束、接入方跟不上被断开，或内核重建（Kicked）。
 type Subscription interface {
 	Output() <-chan []byte
 	// Received 在从 Output 取出 p 之后调用，释放排队额度
 	Received(p []byte)
+	// Kicked 报告 Output 是因为内核重建而关闭的，程序仍在运行，接入方要马上重新接入
+	Kicked() bool
 	Close()
 }
 
@@ -203,4 +205,5 @@ type localSub struct {
 
 func (s *localSub) Output() <-chan []byte { return s.sub.C }
 func (s *localSub) Received(p []byte)     { s.sub.Received(p) }
+func (s *localSub) Kicked() bool          { return s.sub.Kicked() }
 func (s *localSub) Close()                { s.t.Detach(s.sub) }

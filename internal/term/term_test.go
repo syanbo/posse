@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"hive/internal/vt"
 )
 
 func TestEchoAndQueries(t *testing.T) {
@@ -253,5 +255,129 @@ func TestMouseReportsDroppedWhenTrackingEnds(t *testing.T) {
 				t.Fatalf("want %s, screen:\n%s", c.want, strings.Join(tm.Lines(), "\n"))
 			}
 		})
+	}
+}
+
+// 行数变多时把回滚区拉回屏幕：光标不在最后一行（TUI 的输入框下面还有状态行）时 libghostty 只会在底部加空行。
+// 尺寸稳定后重建内核，内容贴着底部、光标和内容的相对位置不变；接入者被断开，重新接入拿到的快照重放出来和内核一样
+func TestResizePullsBackScrollback(t *testing.T) {
+	for _, cols := range []int{100, 200} {
+		script := `seq 1 60; printf 'status\033[8A'; sleep 5`
+		tm, err := Start(Options{ID: "t_pull", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 100, Rows: 30})
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "output", func() bool { return tm.ContainsText("status") })
+		_, sub := tm.Attach(0, 0)
+		tm.Resize(cols, 40)
+		if c, r := tm.Size(); c != cols || r != 40 {
+			t.Fatalf("size %dx%d", c, r)
+		}
+		select {
+		case got, ok := <-sub.C:
+			if ok {
+				t.Fatalf("unexpected output %q", got[:min(len(got), 20)])
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("subscriber was not kicked")
+		}
+		if !sub.Kicked() {
+			t.Fatal("subscriber not marked kicked")
+		}
+		tm.smu.Lock()
+		_, cy := tm.emu.Cursor()
+		last, _ := tm.emu.RowText(39)
+		tm.smu.Unlock()
+		if cy != 31 || !strings.HasPrefix(string(last), "status") {
+			t.Fatalf("cols %d: cursor row %d, last row %q", cols, cy, string(last))
+		}
+		// 重新接入：快照重放出来和内核一样
+		snap, sub2 := tm.Attach(cols, 40)
+		peer, err := vt.NewTerminal(cols, 40, vt.Effects{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		peer.Write(snap)
+		if px, py := peer.Cursor(); py != 31 || px != 6 {
+			t.Fatalf("peer cursor (%d,%d)", px, py)
+		}
+		if got, want := peer.Text(), tm.Lines(); strings.Join(want, "\n") != strings.TrimRight(got, " \n") {
+			t.Fatalf("peer differs:\n%s\n---\n%s", got, strings.Join(want, "\n"))
+		}
+		peer.Free()
+		tm.Detach(sub2)
+		tm.Close(time.Second)
+	}
+}
+
+// 光标已经在最后一行时 libghostty 自己会拉回回滚区，不重建、不断开接入者
+func TestResizeAtBottomNoResync(t *testing.T) {
+	tm, err := Start(Options{ID: "t_pull2", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", "seq 1 60; sleep 5"}, Cols: 100, Rows: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	waitFor(t, "output", func() bool { return tm.ContainsText("60") })
+	_, sub := tm.Attach(0, 0)
+	defer tm.Detach(sub)
+	tm.Resize(100, 40)
+	select {
+	case got := <-sub.C:
+		t.Fatalf("unexpected output or close %q", got)
+	case <-time.After(400 * time.Millisecond):
+	}
+	tm.smu.Lock()
+	_, cy := tm.emu.Cursor()
+	tm.smu.Unlock()
+	if cy != 39 {
+		t.Fatalf("cursor row %d", cy)
+	}
+}
+
+// 程序设了滚动区域（自己管着整屏）时不重建
+func TestResizeKeepsScrollRegion(t *testing.T) {
+	script := `printf '\033[5;25r'; seq 1 60; printf 'status\033[8A'; sleep 5`
+	tm, err := Start(Options{ID: "t_pull3", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 100, Rows: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	waitFor(t, "output", func() bool { return tm.ContainsText("status") })
+	_, sub := tm.Attach(0, 0)
+	defer tm.Detach(sub)
+	tm.Resize(100, 40)
+	select {
+	case got, ok := <-sub.C:
+		t.Fatalf("unexpected output or close %q ok=%v", got, ok)
+	case <-time.After(400 * time.Millisecond):
+	}
+}
+
+// 手机看完离开、改回更高的电脑尺寸时也拉回来
+func TestReleaseSizePullsBack(t *testing.T) {
+	script := `seq 1 60; printf 'status\033[8A'; sleep 5`
+	tm, err := Start(Options{ID: "t_pull4", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 100, Rows: 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	waitFor(t, "output", func() bool { return tm.ContainsText("status") })
+	tm.HoldSize("phone", 100, 20)
+	_, sub := tm.Attach(0, 0)
+	tm.ReleaseSize("phone")
+	select {
+	case _, ok := <-sub.C:
+		if ok {
+			t.Fatal("unexpected output")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscriber was not kicked")
+	}
+	tm.smu.Lock()
+	_, cy := tm.emu.Cursor()
+	last, _ := tm.emu.RowText(29)
+	tm.smu.Unlock()
+	if cy != 21 || !strings.HasPrefix(string(last), "status") {
+		t.Fatalf("cursor row %d, last row %q", cy, string(last))
 	}
 }

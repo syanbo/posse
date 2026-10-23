@@ -3,6 +3,7 @@
 package term
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -115,6 +117,9 @@ type Terminal struct {
 	// 接入时的快照与之后的输出流因此恰好衔接
 	smu        sync.Mutex
 	emu        *vt.Terminal
+	scrollback int         // 内核的回滚区大小，重建内核时沿用
+	grew       int         // 行数变多时 libghostty 留在底部的空行数，尺寸稳定后 pullBack 收掉
+	settle     *time.Timer // 尺寸稳定的计时
 	subs       map[*Subscriber]struct{}
 	ended      bool   // PTY 已读到结尾
 	tail       []byte // 读到的输出末尾没写完的转义序列或 UTF-8 字符，交接时带过去
@@ -147,7 +152,12 @@ type Subscriber struct {
 	queued atomic.Int64
 	// quiet 的接入者（手机）不应答终端查询，仍由常驻进程里的内核应答
 	quiet bool
+	// kicked 是内核重建后被断开：程序还在跑，接入者要马上重新接入拿新快照
+	kicked atomic.Bool
 }
+
+// Kicked 报告 C 是因为内核重建而关闭的，程序仍在运行。
+func (s *Subscriber) Kicked() bool { return s.kicked.Load() }
 
 type sizeHold struct {
 	key        any
@@ -217,6 +227,7 @@ func newTerminal(o Options) *Terminal {
 		changed:     make(chan struct{}),
 		subs:        map[*Subscriber]struct{}{},
 		onTitle:     o.OnTitle,
+		scrollback:  o.Scrollback,
 	}
 	t.answer.Store(true)
 	t.lastOutput.Store(time.Now().UnixNano())
@@ -392,6 +403,10 @@ func (t *Terminal) setTitle(title string) {
 func (t *Terminal) Attach(cols, rows int) ([]byte, *Subscriber) {
 	if cols > 0 && rows > 0 {
 		t.Resize(cols, rows)
+		// 刚改成的就是接入者的尺寸，不用等它稳定：先把底部的空行收掉，快照里就是拉回来的样子
+		t.smu.Lock()
+		t.pullBack()
+		t.smu.Unlock()
 	}
 	return t.subscribe(&Subscriber{C: make(chan []byte, 1024)})
 }
@@ -669,11 +684,108 @@ func (t *Terminal) ReclaimSize() {
 
 func (t *Terminal) resize(cols, rows int) {
 	t.smu.Lock()
-	if t.emu != nil && t.emu.Resize(cols, rows, 8, 16) == nil {
-		t.storeSize(cols, rows)
+	if t.emu != nil {
+		_, oldRows := t.emu.Size()
+		_, cy := t.emu.Cursor()
+		bar := t.emu.Scrollbar()
+		if t.emu.Resize(cols, rows, 8, 16) == nil {
+			t.storeSize(cols, rows)
+			switch {
+			case rows < oldRows:
+				// 变少时 libghostty 先去掉底部的空行
+				t.grew = max(0, t.grew-(oldRows-rows))
+			case rows > oldRows && !t.emu.AltScreen() && bar.Total > bar.Len && cy < oldRows-1:
+				t.grew += rows - oldRows
+				if t.settle == nil {
+					t.settle = time.AfterFunc(settleAfter, t.settleRows)
+				} else {
+					t.settle.Reset(settleAfter)
+				}
+			}
+		}
 	}
 	t.smu.Unlock()
 	t.setPTYSize(cols, rows)
+}
+
+// settleAfter 是改尺寸后多久没再改算稳定：拖窗口时每帧都来一次，不能每次都重建内核。
+const settleAfter = 150 * time.Millisecond
+
+func (t *Terminal) settleRows() {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	t.pullBack()
+}
+
+// 快照后一段里恢复光标的序列，和程序设过的滚动区域
+var (
+	cupRe    = regexp.MustCompile(`\x1b\[(\d+);(\d+)H`)
+	regionRe = regexp.MustCompile(`\x1b\[\d+;\d+r`)
+)
+
+// pullBack 把行数变多时留在底部的空行收掉、回滚区的内容拉回屏幕，像 Terminal.app 那样内容贴着底部，
+// 光标和内容的相对位置不变。libghostty 只在光标在最后一行时这么做；光标在上面时（Claude Code 的光标在
+// 输入框里，下面还有状态行）新加的行空在底部，程序收到 SIGWINCH 又只在原地重画，底部就一直空着。
+// 窗口变高、手机看完离开改回电脑尺寸都会这样。做法是按同样的尺寸重建内核、重放去掉底部空行的快照，
+// 再断开所有接入者：它们按自己当下的尺寸重新接入拿新快照（窗口经 OnExit 重新接入，手机的流重发快照），
+// 比在输出流里广播快照稳妥：窗口拖动时发出去的快照到达时尺寸可能已经变了。
+// 持有 smu 时调用。程序在备用屏幕、开了原点模式或设了滚动区域（自己管着整屏的 TUI）时不动。
+func (t *Terminal) pullBack() {
+	grew := t.grew
+	t.grew = 0
+	if grew == 0 || t.emu == nil || t.ended || t.emu.AltScreen() {
+		return
+	}
+	cols, rows := t.emu.Size()
+	_, cy := t.emu.Cursor()
+	// 只收掉底部连续的空行，最多 grew 行，也不动光标所在的行
+	k := 0
+	for k < min(grew, rows-1-cy) && t.emu.RowBlank(rows-1-k) {
+		k++
+	}
+	if k == 0 {
+		return
+	}
+	body, suffix := t.emu.SnapshotParts(k)
+	if suffix == nil || bytes.Contains(body, []byte("\x1b[?6h")) || regionRe.Match(suffix) {
+		return
+	}
+	cups := cupRe.FindAllSubmatchIndex(suffix, -1)
+	if len(cups) == 0 {
+		return
+	}
+	emu, err := t.newEmu(cols, rows, t.scrollback)
+	if err != nil {
+		return
+	}
+	// 重放时内核不应答：快照里没有查询，尾巴是没写完的序列、凑不成查询
+	t.answer.Store(false)
+	emu.Write(body)
+	_, endY := emu.Cursor() // 保留下来的最后一行现在的位置
+	shift := endY - (rows - 1 - k)
+	// 光标跟着内容挪：改写恢复光标那一句的行号，后面重打的字（待换行状态）照旧
+	cup := cups[len(cups)-1]
+	row, _ := strconv.Atoi(string(suffix[cup[2]:cup[3]]))
+	fixed := append([]byte(nil), suffix[:cup[2]]...)
+	fixed = strconv.AppendInt(fixed, int64(row+shift), 10)
+	fixed = append(fixed, suffix[cup[3]:]...)
+	emu.Write(fixed)
+	if title := t.emu.Title(); title != "" {
+		emu.Write([]byte("\x1b]2;" + title + "\x07"))
+	}
+	emu.Write(t.tail)
+	t.titleDirty = false
+	t.emu.Free()
+	t.emu = emu
+	if t.idle != nil {
+		t.idle.Reset(compressAfter) // 新内核的回滚区还没压缩
+	}
+	for s := range t.subs {
+		s.kicked.Store(true)
+		delete(t.subs, s)
+		close(s.C)
+	}
+	t.updateAnswer()
 }
 
 // setPTYSize 只改 PTY 的尺寸。不用 pty.Setsize：它经 Fd() 把 PTY 改回阻塞模式。

@@ -62,7 +62,7 @@ third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）�
 - agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $HIVE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $HIVE_HOME/cursor-plugin`，hooks 放在 hive 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
 - `hive hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有三处：Cursor 要从 stdout 读一个 JSON 回应，hive 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出；Claude 的 UserPromptSubmit 在有待交的会话标题时写 `hookSpecificOutput.sessionTitle`。始终 exit 0，不拉起常驻进程。
 - 没有 hook 的情况靠终端标题兜底：Claude 按 Esc 中断后标题回到 `✳` 前缀；Codex 等待操作时标题含 `Action Required`。
-- 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重；快照后面接上内核已经读进、还没写完的转义序列或 UTF-8 字符（`tail`，和交接带过去的是同一份），PTY 读到一半时接入，接入方的解析器也和内核停在同一处。界面接入期间由界面应答终端查询。
+- 界面接入终端：`terminal.attach` 流式连接，常驻进程先发快照再推实时输出。`vt.Snapshot` 的格子内容由 hive 逐格生成（libghostty 格式化输出会省略末尾空行、并让被跳过的格子沿用前一格样式），模式和光标等状态仍取自格式化输出；快照与输出流在 `smu` 下衔接，不丢不重；快照后面接上内核已经读进、还没写完的转义序列或 UTF-8 字符（`tail`，和交接带过去的是同一份），PTY 读到一半时接入，接入方的解析器也和内核停在同一处。界面接入期间由界面应答终端查询。行数变多而光标不在最后一行时（libghostty 只会在底部加空行），常驻进程等尺寸稳定 150ms 后重建内核、去掉底部多出来的空行让内容贴着底部（`term.pullBack`），然后断开所有接入者（`Subscriber.Kicked`）：它们按自己当下的尺寸重新接入拿新快照，不在输出流里广播快照（拖窗口时送达时尺寸可能已经变了）。
 - 所有子命令都认 `-h` / `--help`（在 `--` 之前），打印这条命令的用法：agent 常先这样试。
 - `workspace merge` 在项目目录以 `--no-ff` 合入 worktree 分支：要求两边已跟踪文件干净、分支有新提交、项目目录在基准分支上；失败时 `merge --abort`。未跟踪文件不挡合并，但 `workspace rm` 仍会因它拒绝删除。
 - Hive.app 里的可执行文件叫 `Hive`，agent 在终端里调用 `hive` 能找到它，依赖 APFS 默认的大小写不敏感。

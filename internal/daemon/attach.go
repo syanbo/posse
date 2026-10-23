@@ -76,7 +76,10 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 		select {
 		case chunk, ok := <-sub.Output():
 			if !ok {
-				// 程序结束时通知界面退出码；被判定跟不上而断开时直接关连接，界面会重新接入
+				// 内核重建后断开的直接关连接，界面马上重新接入拿新快照；程序结束时通知界面退出码
+				if sub.Kicked() {
+					return nil
+				}
 				select {
 				case <-s.Exited():
 					write(rpc.FrameExit, []byte(strconv.Itoa(s.ExitCode())))

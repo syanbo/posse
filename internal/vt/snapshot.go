@@ -13,6 +13,15 @@ import (
 // 格式化输出的内容部分有两处缺陷：省略末尾空行（光标按绝对坐标恢复，回滚区非空时内容整体错位），
 // 以及用空格填补被跳过的格子时沿用前一格的样式（例如 Claude Code 图标旁出现黑块）。
 func (t *Terminal) Snapshot() []byte {
+	body, suffix := t.SnapshotParts(0)
+	return append(body, suffix...)
+}
+
+// SnapshotParts 把快照分成两段：内容（连同前面的状态）和后面的状态，后一段里有按绝对坐标恢复光标的序列
+// （`ESC[行;列H`，光标在行尾待换行时后面还重打了最后一个字）。skip 是屏幕底部不写进内容的行数，
+// 把行数变多时留在底部的空行去掉，回滚区的内容就顶上来了；调用方据此改写后一段里光标的行号。
+// 分不开时后一段为空。
+func (t *Terminal) SnapshotParts(skip int) (body, suffix []byte) {
 	full := t.VT()
 	// 完整输出是"状态 + 内容 + 状态"，各项状态在内容前后的位置不固定，所以直接定位内容段替换；
 	// 内容很短又出现多次时无法确定位置，退回原输出。内容段只用来定位，直接在库的缓冲里比较，不复制
@@ -25,14 +34,32 @@ func (t *Terminal) Snapshot() []byte {
 		}
 	})
 	if i < 0 {
-		return full
+		return full, nil
 	}
 	var out bytes.Buffer
 	out.Grow(len(full) + len(full)/4)
 	out.Write(full[:i])
-	t.writeCells(&out)
-	out.Write(full[i+n:])
-	return out.Bytes()
+	t.writeCells(&out, skip)
+	return out.Bytes(), full[i+n:]
+}
+
+// RowBlank 报告活动屏幕第 y 行没有任何会写进快照的格子：没有文字、背景色、样式和链接。
+func (t *Terminal) RowBlank(y int) bool {
+	cols, rows := t.Size()
+	row, found := t.refAt(0, int(t.Scrollbar().Total)-rows+y)
+	if !found {
+		return true
+	}
+	for x := 0; x < cols; x++ {
+		c, ok := t.cellAt(row, x)
+		if !ok {
+			break
+		}
+		if c.writable {
+			return false
+		}
+	}
+	return true
 }
 
 const pointTagScreen = 2
@@ -145,11 +172,14 @@ func (t *Terminal) cellLink(c *snapCell) string {
 	return string(buf[:n])
 }
 
-// writeCells 逐行写出回滚区和屏幕的全部行（含末尾空行），使还原后回滚行数与屏幕布局一致。
+// writeCells 逐行写出回滚区和屏幕的全部行（含末尾空行，屏幕最底下 skip 行除外），使还原后回滚行数与屏幕布局一致。
 // 行内被跳过的空格子用光标右移越过而不写入，只有背景色的格子用带背景色的擦除还原。
-func (t *Terminal) writeCells(b *bytes.Buffer) {
+func (t *Terminal) writeCells(b *bytes.Buffer, skip int) {
 	cols, _ := t.Size()
-	total := int(t.Scrollbar().Total)
+	total := int(t.Scrollbar().Total) - max(skip, 0)
+	if total <= 0 {
+		return
+	}
 	var cur style // 当前已输出的样式（零值为默认）
 	curSet := false
 	link := ""
