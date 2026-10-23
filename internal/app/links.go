@@ -30,16 +30,32 @@ func (a *app) openLink(v *termView, link string) bool {
 
 // linkPath 是链接指向的本地文件：file:// 链接取路径，网址返回 ok=false，路径按终端目录解析，不存在返回空。
 func (a *app) linkPath(v *termView, link string) (path string, local bool) {
-	if u, err := url.Parse(link); err == nil && u.Scheme == "file" {
-		if _, err := os.Stat(u.Path); err != nil {
-			return "", true
-		}
-		return u.Path, true
+	if len(link) >= len("file://") && strings.EqualFold(link[:len("file://")], "file://") {
+		return fileURLPath(link), true
 	}
 	if strings.Contains(link, "://") || strings.HasPrefix(link, "mailto:") {
 		return "", false
 	}
 	return resolveLinkPath(link, a.linkBase(v)), true
+}
+
+// fileURLPath 是 file:// 链接指向的、存在的文件，不存在返回空。程序在 OSC 8 里常直接拼绝对路径、不做百分号编码：
+// 文件名里的 # 和 ? 会被 url.Parse 当成 fragment、query 截掉，单独的 % 让它直接报错。
+// 先按解码后的路径找，找不到（或解析失败）再按原文取一次。
+func fileURLPath(link string) string {
+	if u, err := url.Parse(link); err == nil {
+		if _, err := os.Stat(u.Path); err == nil {
+			return u.Path
+		}
+	}
+	raw := link[len("file://"):]
+	if i := strings.IndexByte(raw, '/'); i >= 0 {
+		raw = raw[i:] // 去掉主机名（file://localhost/…）
+		if _, err := os.Stat(raw); err == nil {
+			return raw
+		}
+	}
+	return ""
 }
 
 // linkUsable 告诉终端一个链接能不能打开：网址都能，文件链接和路径要文件还在。

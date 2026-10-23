@@ -1038,10 +1038,10 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 	}
 	if v.hoverLink != "" && ev.Kind == ui.InputPointerDown && ev.Button == 0 && ev.Mods&(ui.Shift|ui.Alt|ui.Ctrl) == 0 {
 		v.linkDown, v.pressAt = &hiveLink{v.hoverLink, v.hoverPath}, [2]float32{ev.X, ev.Y}
-		// The program that takes the mouse does not get a click on a link.
-		if tracking && !v.selecting {
-			return true
-		}
+		// The program that takes the mouse does not get a press on a link:
+		// it starts a selection here, so a drag selects even then; its
+		// moves and release follow the selection, not the program.
+		tracking = false
 	}
 	if tracking && !v.selecting || v.reporting {
 		return v.report(ev)

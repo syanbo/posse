@@ -4,6 +4,8 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/egoist/mygo/plugins/terminal"
@@ -34,6 +36,31 @@ func TestResolveLinkPath(t *testing.T) {
 	}
 	if got := resolveLinkPath("internal/app/view.go", ""); got != "" {
 		t.Errorf("relative path without base = %q", got)
+	}
+}
+
+// file:// 后面直接拼的路径里有 #、? 或单独的 %：url.Parse 截掉或报错时按原文找到文件；百分号编码的照常解码。
+func TestFileLinkPath(t *testing.T) {
+	dir := t.TempDir()
+	a := &app{}
+	for _, name := range []string{"a#b.png", "a?b.png", "a b.png", "100%.png", "a%zz#b.png"} {
+		file := filepath.Join(dir, name)
+		os.WriteFile(file, nil, 0o644)
+		links := []string{"file://" + file, "file://localhost" + file}
+		if name == "a#b.png" {
+			links = append(links, "file://"+dir+"/a%23b.png")
+		}
+		if name == "a b.png" {
+			links = append(links, "file://"+dir+"/a%20b.png")
+		}
+		for _, link := range links {
+			if got, local := a.linkPath(nil, link); got != file || !local {
+				t.Errorf("linkPath(%q) = %q %v, want %q", link, got, local, file)
+			}
+		}
+	}
+	if got, local := a.linkPath(nil, "file://"+dir+"/gone#x.png"); got != "" || !local {
+		t.Errorf("missing file = %q %v", got, local)
 	}
 }
 
@@ -138,6 +165,84 @@ func TestClickOpensLinkCard(t *testing.T) {
 	if a.linkCard != nil || len(calls) != 0 || a.err != "" {
 		t.Fatalf("missing files opened: card %+v calls %q err %q", a.linkCard, calls, a.err)
 	}
+}
+
+// 程序开着鼠标跟踪（Claude、Codex 都开）时，从链接上拖开照样选文字，程序收不到这次按下、移动和松开；原地单击仍打开链接。
+func TestDragFromLinkWithMouseTracking(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "notes.txt")
+	os.WriteFile(file, nil, 0o644)
+
+	a := previewApp(t)
+	v := &termView{id: "t1"}
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	conn := &recordConn{nopConn: nopConn{done}}
+	var opened []string
+	term, err := terminal.New(terminal.Options{Conn: conn, Font: a.termFont(),
+		OpenLink:   func(link string) bool { opened = append(opened, link); return true },
+		LinkUsable: func(link string) bool { return a.linkUsable(v, link) }})
+	if err != nil {
+		t.Skip("terminal unavailable:", err)
+	}
+	t.Cleanup(func() { term.Close() })
+	v.term = term
+	a.view = v
+	feed := "\x1b[?1000h\x1b[?1006h"
+	for range 4 {
+		feed += "\x1b]8;;file://" + file + "\x1b\\[Image #1]\x1b]8;;\x1b\\\r\n"
+	}
+	term.Feed([]byte(feed))
+	tt := newPreviewTester(a, true)
+
+	tt.Move(290, 80)
+	tt.Frame()
+	tt.Press(290, 80)
+	tt.Frame()
+	tt.Move(340, 120)
+	tt.Frame()
+	tt.Release(340, 120)
+	tt.Frame()
+	if len(opened) != 0 {
+		t.Fatalf("drag from a link opened it: %q", opened)
+	}
+	if sel := term.Selection(); !strings.Contains(sel, "Image #1") {
+		t.Fatalf("drag from a link selected %q", sel)
+	}
+	if w := conn.written(); strings.Contains(w, "\x1b[<") {
+		t.Fatalf("program got mouse reports %q", w)
+	}
+
+	tt.Move(290, 80)
+	tt.Frame()
+	tt.ClickAt(290, 80)
+	tt.Frame()
+	if len(opened) != 1 || term.Selection() != "" {
+		t.Fatalf("click on a link: opened %q selection %q", opened, term.Selection())
+	}
+	if w := conn.written(); strings.Contains(w, "\x1b[<") {
+		t.Fatalf("program got mouse reports %q", w)
+	}
+}
+
+// recordConn 记下终端写给程序的输入。
+type recordConn struct {
+	nopConn
+	mu  sync.Mutex
+	out []byte
+}
+
+func (c *recordConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.out = append(c.out, p...)
+	return len(p), nil
+}
+
+func (c *recordConn) written() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return string(c.out)
 }
 
 // cmdClick 按住 Cmd 移到 (x, y) 再点，像用户那样：终端按指针下的格子和修饰键判断是不是在点链接。
