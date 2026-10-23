@@ -183,9 +183,12 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if c.Shortcut(ui.Cmd, ui.KeyW) {
 		a.closeTab()
 	}
-	// ⌃-：回到跳到定义之前的位置（和 VS Code 一样；⌘[ 是编辑器的减少缩进）
+	// ⌃- 回到跳走之前的位置、⌃⇧- 再往前（和 VS Code 一样；⌘[ 是编辑器的减少缩进）
 	if w != nil && c.Shortcut(ui.Ctrl, ui.KeyMinus) {
 		a.jumpBack(w)
+	}
+	if w != nil && c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyMinus) {
+		a.jumpForward(w)
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyN) {
 		a.openNewWorkspace()

@@ -555,9 +555,9 @@ func isTestPath(slash string) bool {
 		strings.Contains(slash, "/test/") || strings.Contains(slash, "/tests/") || strings.Contains(slash, "/__tests__/")
 }
 
-// decisiveLead 是第一名比第二名至少高出多少分就直接跳：限定符指向的文件（+6）和这一行 import 的文件（+8）够，
-// 只是同一个文件（+4）或同目录（+2）不够。
-const decisiveLead = 5
+// decisiveLead 是第一名比第二名至少高出多少分就直接跳：import 的文件（+8）、限定符指向的文件（+6）和光标所在的文件（+4）够，
+// 只是同目录（+2）不够。
+const decisiveLead = 4
 
 // Unique 报告定义列表（已按分数排好）里有没有一个明确该跳过去的：只有一处；带声明的只有一处；
 // 或者第一名带声明、比第二名高出 decisiveLead 以上。

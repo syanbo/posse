@@ -768,9 +768,30 @@ func TestGoToDefinition(t *testing.T) {
 	}
 	a.jumpBack(w)
 	until(t, tt, "back", func() bool { return v.cur == d && d.ed.Cursor() == off })
-	if len(v.jumps) != 0 {
-		t.Fatal("jump stack should be empty")
+	if len(v.jumps) != 0 || len(v.forward) != 1 {
+		t.Fatalf("jumps = %d forward = %d", len(v.jumps), len(v.forward))
 	}
+	a.jumpForward(w)
+	until(t, tt, "forward", func() bool { return v.cur.path == helper && v.cur.ed.CursorPos().Line == 1 })
+	a.jumpBack(w)
+	until(t, tt, "back again", func() bool { return v.cur == d })
+
+	// ⌘P 这类打开也记历史：从 Chat.java 打开 Helper.java，⌃- 回到 Chat.java
+	a.openFile(w, helper, 0, [2]int{})
+	until(t, tt, "opened", func() bool { return v.cur.path == helper })
+	a.jumpBack(w)
+	until(t, tt, "back from open", func() bool { return v.cur == d })
+
+	// 变量的类型推断：p 是 Helper 的实例，p.open 去 Helper.java 找
+	put("lib/Use.java", "class Use {\n  void f() {\n    Helper p = new Helper();\n    p.open(this, 1);\n  }\n}\n")
+	a.refreshList(v, true, nil)
+	until(t, tt, "list", func() bool { return !v.listing })
+	use := filepath.Join(root, "lib", "Use.java")
+	a.openFile(w, use, 0, [2]int{})
+	until(t, tt, "use loaded", func() bool { return v.cur.path == use && v.cur.kind == docText })
+	ud := v.cur
+	a.goToDefinition(w, v, ud, strings.Index(ud.ed.Buffer.String(), "p.open(")+3)
+	until(t, tt, "typed receiver", func() bool { return v.cur.path == helper && v.cur.ed.SelectedText() == "open" })
 
 	// 光标在 Other.java 自己的 open 上、别处还有两处同分的声明：排除自己，弹出列表，按下键再回车跳到第二处
 	put("lib/Other.java", "class Other {\n  void open() {}\n}\n")

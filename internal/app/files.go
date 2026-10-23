@@ -189,7 +189,10 @@ type filesView struct {
 	consoleDone bool
 	git         gitState
 	def         defSearch // 跳到定义的查找（definition.go）
-	jumps       []jumpLoc // 跳到定义之前的位置，⌃- 依次回去
+	jumps       []jumpLoc // 跳走之前的位置，⌃- 依次回去（definition.go）
+	forward     []jumpLoc // ⌃- 回去之前的位置，⌃⇧- 再往前
+	navigating  bool      // 正在 ⌃- 或 ⌃⇧-，openDoc 不记历史
+	jumpFrom    *jumpLoc  // 跳到定义的出发点，openDoc 记它而不是当前光标
 }
 
 // filesFor 返回工作区的文件标签，没有就新建，并恢复上次打开的文件和展开的目录。
@@ -347,6 +350,19 @@ func (a *app) previewFile(w *workspace, path string) {
 func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview bool) {
 	v := a.showFiles(w)
 	path = filepath.Clean(path)
+	// 从哪来的都是跳转（⌘P、检索、链接卡片、改动列表、跳到定义）：记下出发的位置，⌃- 回去。
+	// 跳到定义给了出发点（jumpFrom，⌘点击的位置）就记它：查找是异步的，这时光标可能已经不在那了
+	if !v.navigating {
+		loc, ok := v.here()
+		if v.jumpFrom != nil {
+			loc, ok = *v.jumpFrom, true
+			v.jumpFrom = nil
+		}
+		if ok && (loc.path != path || line > 0 && loc.line != line) {
+			v.pushJump(loc)
+			v.forward = nil
+		}
+	}
 	var d *fileDoc
 	for _, x := range v.docs {
 		if x.path == path {

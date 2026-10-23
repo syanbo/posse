@@ -24,6 +24,31 @@ import (
 
 const maxJumps = 50
 
+// here 是当前文件和光标的位置，给跳转历史记的。
+func (v *filesView) here() (jumpLoc, bool) {
+	d := v.cur
+	if d == nil || d.virtual() {
+		return jumpLoc{}, false
+	}
+	loc := jumpLoc{path: d.path}
+	if d.kind == docText && d.ed.Buffer != nil {
+		pos := d.ed.CursorPos()
+		loc.line, loc.col = pos.Line+1, pos.Col
+	}
+	return loc, true
+}
+
+// pushJump 记下跳走之前的位置，⌃- 回去；和栈顶相同的不重复记。
+func (v *filesView) pushJump(loc jumpLoc) {
+	if n := len(v.jumps); n > 0 && v.jumps[n-1] == loc {
+		return
+	}
+	v.jumps = append(v.jumps, loc)
+	if len(v.jumps) > maxJumps {
+		v.jumps = v.jumps[len(v.jumps)-maxJumps:]
+	}
+}
+
 // defSearch 是正在进行的一次查找，每次加一的 gen 让旧查找的结果作废。
 type defSearch struct {
 	gen     int
@@ -75,11 +100,17 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 			d.hint, d.hintAt = fmt.Sprintf("找不到 %s", lk.Text), time.Now()
 			return
 		}
-		a.pushJump(v, origin)
+		v.jumpFrom = &origin
 		a.openFile(w, p, line, [2]int{})
 		return
 	}
 	word, qual := lk.Text, lk.Qual
+	// picker.openAlbum() 里 picker 是变量：在这个文件里往上找它的类型，按类型去找方法
+	if qual != "" {
+		if t := files.TypeOf(d.path, snap.String(), qual, ln); t != "" {
+			qual = t
+		}
+	}
 	from := ""
 	if rel, err := filepath.Rel(v.root, d.path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		from = rel
@@ -161,18 +192,10 @@ func editorOverlay(v *filesView) map[string]string {
 	return overlay
 }
 
-// jumpTo 记下出发的位置，打开定义所在的文件并选中名字。
+// jumpTo 打开定义所在的文件并选中名字，出发点（⌘点击的位置）由 openDoc 记进历史。
 func (a *app) jumpTo(w *workspace, v *filesView, origin jumpLoc, d files.Definition) {
-	a.pushJump(v, origin)
+	v.jumpFrom = &origin
 	a.openFile(w, filepath.Join(v.root, d.Path), d.Line+1, d.Span)
-}
-
-// pushJump 记下跳走之前的位置，⌃- 回去。
-func (a *app) pushJump(v *filesView, origin jumpLoc) {
-	v.jumps = append(v.jumps, origin)
-	if len(v.jumps) > maxJumps {
-		v.jumps = v.jumps[len(v.jumps)-maxJumps:]
-	}
 }
 
 // linkRange 是按住 ⌘ 时编辑器要在 off 处画下划线的范围：网址、引号里的路径或标识符。
@@ -187,7 +210,7 @@ func linkRange(d *fileDoc, off int) (int, int) {
 	return start + lk.Start, start + lk.End
 }
 
-// jumpBack 回到上一次跳走之前的位置（⌃-）。
+// jumpBack 回到上一次跳走之前的位置（⌃-），当前位置记到前进栈。
 func (a *app) jumpBack(w *workspace) {
 	v := a.files[w.ID]
 	if v == nil || len(v.jumps) == 0 {
@@ -195,7 +218,31 @@ func (a *app) jumpBack(w *workspace) {
 	}
 	loc := v.jumps[len(v.jumps)-1]
 	v.jumps = v.jumps[:len(v.jumps)-1]
+	if cur, ok := v.here(); ok {
+		v.forward = append(v.forward, cur)
+	}
+	a.goTo(w, v, loc)
+}
+
+// jumpForward 是 ⌃- 的反向（⌃⇧-）。
+func (a *app) jumpForward(w *workspace) {
+	v := a.files[w.ID]
+	if v == nil || len(v.forward) == 0 {
+		return
+	}
+	loc := v.forward[len(v.forward)-1]
+	v.forward = v.forward[:len(v.forward)-1]
+	if cur, ok := v.here(); ok {
+		v.pushJump(cur)
+	}
+	a.goTo(w, v, loc)
+}
+
+// goTo 打开历史里的位置，不再记历史。
+func (a *app) goTo(w *workspace, v *filesView, loc jumpLoc) {
+	v.navigating = true
 	a.openFile(w, loc.path, loc.line, [2]int{loc.col, loc.col})
+	v.navigating = false
 }
 
 // defDialog 是几处同名定义的选择列表：↑↓ 选、回车或点击跳过去。

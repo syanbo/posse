@@ -4,10 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -196,7 +199,195 @@ func ResolveImport(root, from, spec string) (string, int, bool) {
 			return p, line, true
 		}
 	}
+	// 第三方包：node_modules 里的包按 package.json 的入口，Go 的按 go.mod 的 require、replace 到模块缓存，标准库到 GOROOT
+	if !strings.HasPrefix(spec, ".") && !filepath.IsAbs(spec) {
+		if p, ok := nodeModule(dir, root, spec); ok {
+			return p, line, true
+		}
+		if p, ok := goPackage(root, spec); ok {
+			return p, line, true
+		}
+	}
 	return "", 0, false
+}
+
+// nodeModule 从 dir 往上找 node_modules/<包>（带作用域的是两段），带子路径的按子路径，不带的按 package.json 的
+// types、typings、module、main，都没有用 index.*。
+func nodeModule(dir, root, spec string) (string, bool) {
+	segs := strings.SplitN(spec, "/", 3)
+	pkg, sub := segs[0], ""
+	switch {
+	case strings.HasPrefix(spec, "@") && len(segs) >= 2:
+		pkg = segs[0] + "/" + segs[1]
+		if len(segs) == 3 {
+			sub = segs[2]
+		}
+	case len(segs) >= 2:
+		sub = strings.Join(segs[1:], "/")
+	}
+	for d := dir; ; d = filepath.Dir(d) {
+		base := filepath.Join(d, "node_modules", pkg)
+		if fi, err := os.Stat(base); err == nil && fi.IsDir() {
+			if sub != "" {
+				return fileAt(filepath.Join(base, sub))
+			}
+			if entry := packageEntry(base); entry != "" {
+				if p, ok := fileAt(filepath.Join(base, entry)); ok {
+					return p, true
+				}
+			}
+			return fileAt(base)
+		}
+		if d == root || d == filepath.Dir(d) || !strings.HasPrefix(d, root) {
+			break
+		}
+	}
+	return "", false
+}
+
+// packageEntry 读 package.json 的入口：先类型声明，再 ES 模块，再 main。
+func packageEntry(pkgDir string) string {
+	b, err := os.ReadFile(filepath.Join(pkgDir, "package.json"))
+	if err != nil {
+		return ""
+	}
+	var pj struct {
+		Types, Typings, Module, Main string
+	}
+	if json.Unmarshal(b, &pj) != nil {
+		return ""
+	}
+	for _, e := range []string{pj.Types, pj.Typings, pj.Module, pj.Main} {
+		if e != "" {
+			return e
+		}
+	}
+	return ""
+}
+
+// goPackage 把 Go 的 import 路径解析成文件：go.mod 里 replace 的按替换路径，require 的按 GOMODCACHE/模块@版本，
+// 都不是的当标准库找 GOROOT/src。
+func goPackage(root, spec string) (string, bool) {
+	gm := readGoMod(root)
+	if gm == nil {
+		return "", false
+	}
+	for mod, target := range gm.replace {
+		if spec == mod || strings.HasPrefix(spec, mod+"/") {
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(root, target)
+			}
+			return fileAt(filepath.Join(target, strings.TrimPrefix(spec, mod)))
+		}
+	}
+	best := ""
+	for mod := range gm.require {
+		if (spec == mod || strings.HasPrefix(spec, mod+"/")) && len(mod) > len(best) {
+			best = mod
+		}
+	}
+	if best != "" {
+		if cache := goEnv("GOMODCACHE"); cache != "" {
+			return fileAt(filepath.Join(cache, escapeModPath(best)+"@"+gm.require[best], strings.TrimPrefix(spec, best)))
+		}
+		return "", false
+	}
+	if !strings.Contains(strings.SplitN(spec, "/", 2)[0], ".") {
+		if goroot := goEnv("GOROOT"); goroot != "" {
+			return fileAt(filepath.Join(goroot, "src", spec))
+		}
+	}
+	return "", false
+}
+
+// escapeModPath 是模块缓存里的目录名写法：大写字母变成 ! 加小写。
+func escapeModPath(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte('!')
+			b.WriteRune(r + 'a' - 'A')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+type goMod struct {
+	module  string
+	require map[string]string // 模块 → 版本
+	replace map[string]string // 模块 → 路径（只认本地路径的 replace）
+}
+
+// readGoMod 解析 root 下的 go.mod：module、require（单条和块）、replace 到本地路径的。
+func readGoMod(root string) *goMod {
+	b, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return nil
+	}
+	gm := &goMod{require: map[string]string{}, replace: map[string]string{}}
+	block := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		if line == "" {
+			continue
+		}
+		f := strings.Fields(line)
+		switch {
+		case block != "" && f[0] == ")":
+			block = ""
+			continue
+		case len(f) == 2 && f[1] == "(":
+			block = f[0]
+			continue
+		}
+		kind := block
+		if kind == "" {
+			kind = f[0]
+			f = f[1:]
+		}
+		switch kind {
+		case "module":
+			if len(f) == 1 {
+				gm.module = f[0]
+			}
+		case "require":
+			if len(f) >= 2 {
+				gm.require[f[0]] = f[1]
+			}
+		case "replace":
+			// a => ../b 或 a v1 => ../b；替换成别的模块（带版本）的不认
+			if i := slices.Index(f, "=>"); i >= 1 && i == len(f)-2 {
+				gm.replace[f[0]] = f[i+1]
+			}
+		}
+	}
+	return gm
+}
+
+var (
+	goEnvMu    sync.Mutex
+	goEnvCache map[string]string
+)
+
+// goEnv 读 go env 的一项，结果缓存；没有 go 命令时为空。
+func goEnv(key string) string {
+	goEnvMu.Lock()
+	defer goEnvMu.Unlock()
+	if goEnvCache == nil {
+		goEnvCache = map[string]string{}
+		if out, err := exec.Command("go", "env", "GOMODCACHE", "GOROOT").Output(); err == nil {
+			vals := strings.Split(strings.TrimSpace(string(out)), "\n")
+			if len(vals) == 2 {
+				goEnvCache["GOMODCACHE"], goEnvCache["GOROOT"] = vals[0], vals[1]
+			}
+		}
+	}
+	return goEnvCache[key]
 }
 
 // fileAt 返回 base 对应的文件：本身是文件，补扩展名，或目录里的 index.*、第一个 .go 文件。

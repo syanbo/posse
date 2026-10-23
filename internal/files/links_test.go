@@ -3,6 +3,7 @@ package files
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -99,6 +100,53 @@ func TestImportPathOn(t *testing.T) {
 	for line, want := range tests {
 		if got := ImportPathOn(line); got != want {
 			t.Errorf("ImportPathOn(%q) = %q, want %q", line, got, want)
+		}
+	}
+}
+
+// 第三方包：node_modules 按 package.json 的入口，Go 的 replace、require 和标准库
+func TestResolveThirdParty(t *testing.T) {
+	root := t.TempDir()
+	put := func(rel, text string) {
+		p := filepath.Join(root, rel)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("node_modules/lodash/package.json", `{"main": "lodash.js"}`)
+	put("node_modules/lodash/lodash.js", "")
+	put("node_modules/lodash/fp.js", "")
+	put("node_modules/@scope/pkg/package.json", `{"types": "dist/index.d.ts", "main": "dist/index.js"}`)
+	put("node_modules/@scope/pkg/dist/index.d.ts", "")
+	put("node_modules/plain/index.js", "")
+	put("src/app.js", "")
+	put("third_party/mygo/ui/ui.go", "package ui")
+	put("go.mod", "module example.com/m\n\ngo 1.22\n\nrequire (\n\tgithub.com/egoist/mygo v0.4.8\n)\n\nreplace github.com/egoist/mygo => ./third_party/mygo\n")
+	from := filepath.Join(root, "src", "app.js")
+	tests := []struct{ spec, want string }{
+		{"lodash", "node_modules/lodash/lodash.js"},
+		{"lodash/fp", "node_modules/lodash/fp.js"},
+		{"@scope/pkg", "node_modules/@scope/pkg/dist/index.d.ts"},
+		{"plain", "node_modules/plain/index.js"},
+		{"github.com/egoist/mygo/ui", "third_party/mygo/ui/ui.go"},
+		{"nope", ""},
+	}
+	for _, tt := range tests {
+		got, _, ok := ResolveImport(root, from, tt.spec)
+		if tt.want == "" {
+			if ok {
+				t.Errorf("ResolveImport(%q) = %q, want none", tt.spec, got)
+			}
+			continue
+		}
+		if !ok || got != filepath.Join(root, tt.want) {
+			t.Errorf("ResolveImport(%q) = %q %v, want %q", tt.spec, got, ok, tt.want)
+		}
+	}
+	if goEnv("GOROOT") != "" {
+		if got, _, ok := ResolveImport(root, from, "fmt"); !ok || !strings.HasSuffix(got, filepath.Join("src", "fmt", "doc.go")) && !strings.HasSuffix(filepath.Dir(got), "fmt") {
+			t.Errorf("fmt = %q %v", got, ok)
 		}
 	}
 }
