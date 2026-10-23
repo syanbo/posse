@@ -1692,7 +1692,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			tabText(c, label, "待处理", active)
 			label.TextColor(colors(t).honey)
 		} else if detail != "" {
-			title := ui.Text(c, detail).FontSize(12).Shrink(1).MaxLines(1)
+			title := ui.Text(c, detail).FontSize(12).Shrink(1).SingleLine()
 			if term.Agent != "" {
 				tabText(c, title, detail, active)
 			} else {
@@ -1788,9 +1788,10 @@ func (a *app) revealTab(row ui.Element, id string, active bool) {
 
 // tabText 是标签上的主文字：选中时加粗，否则用次要色。中文字形在行框里偏下，提半个像素才看着居中。
 // 不管选没选中都按加粗的宽度占位，切换标签时文字变粗不会把后面的标签往右挤。
+// 占位用 flex basis 而不是固定宽度：固定宽度也是最小宽度，长标题就缩不了，关闭按钮会被挤出标签。
 func tabText(c *ui.Context, e ui.Element, text string, active bool) {
 	w, _ := c.MeasureText(0, ui.Span{Text: text, Size: 12, Weight: 500})
-	e.Width(w+1).Margin(0, 0, cjkLift, 0)
+	e.Basis(w+1).Margin(0, 0, cjkLift, 0)
 	if active {
 		e.FontWeight(500)
 	} else {
