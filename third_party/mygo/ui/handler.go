@@ -1,5 +1,7 @@
 package ui
 
+import time "time"
+
 // InputKind is the kind of an InputEvent.
 type InputKind uint8
 
@@ -9,7 +11,7 @@ const (
 	// Repeat marks the auto-repeat of a key held down. A key that types
 	// text comes before the text, an InputText event, on macOS and
 	// Windows; on Linux, only the text comes while the element takes text
-	// (TextCaret).
+	// (TextCaret) with input methods on (InputMethod).
 	InputKeyDown InputKind = iota + 1
 	InputKeyUp
 	// InputText is text typed, or committed by an input method.
@@ -18,8 +20,11 @@ const (
 	// at rune Caret; an empty Text ends it.
 	InputCompose
 	// InputCommand is an edit command of the menus, such as Copy of the
-	// Edit menu: "copy", "cut", "paste", "selectAll", "undo", "redo" or
-	// "delete".
+	// Edit menu: "copy", "cut", "paste", "pasteAndMatchStyle" (which
+	// comes again as "paste" when the element doesn't take it),
+	// "selectAll", "undo", "redo" or "delete", or one of the Format menu,
+	// as Bold: "bold", "italic", "underline", "strikethrough",
+	// "alignLeft", "alignCenter" or "alignRight".
 	InputCommand
 	// InputPointerDown and InputPointerUp report Button pressed or
 	// released at X, Y, with Clicks the count of quick successive presses
@@ -32,8 +37,20 @@ const (
 	// -1 when none is.
 	InputPointerMove
 	// InputScroll scrolls by DX, DY DIPs at X, Y; Precise marks
-	// touchpads, which scroll by pixels rather than by lines.
+	// touchpads, which scroll by pixels rather than by lines. One the
+	// element leaves scrolls the scroll containers around it.
 	InputScroll
+	// InputSelect selects runes Start to End of the text an element
+	// describes to assistive technology (Element.Access), as a screen
+	// reader moves the selection of a text field of the app's own.
+	InputSelect
+	// InputZoom zooms by Scale at X, Y, as pinching a touchpad does: 2
+	// shows the content twice as large as it was, 0.5 half as large.
+	// macOS, Linux on Wayland and browsers report pinches; Windows reports
+	// them as scrolling with Ctrl held, so there a touchpad's scrolling
+	// with Ctrl held comes as InputZoom too, and a mouse wheel's notches
+	// as InputScroll with Ctrl in Mods.
+	InputZoom
 )
 
 // InputEvent is input an element takes as it comes (HandleInput).
@@ -60,20 +77,28 @@ type InputEvent struct {
 	// down the content.
 	DX, DY  float32
 	Precise bool
+	// Scale is what InputZoom zooms by.
+	Scale float32
+	// Start and End are the runes InputSelect selects.
+	Start, End int
+	// Time is when the event came, by the clock of the window's frames
+	// (Context.Now), which a Tester's clock is in tests.
+	Time time.Time
 }
 
 // HandleInput has fn take the element's input as it comes, on the main
 // thread, before the next frame is built: keys, text and edit commands
 // while the element has the keyboard focus, the pointer pressed on it,
-// moving over it or scrolling over it. fn reports whether it took the
+// moving over it, scrolling or pinching over it. fn reports whether it took the
 // event; one it leaves goes on as it would without fn, to shortcuts, Tab,
 // context menus and scroll containers. Keys that the window or an element
 // around the focus handles as a Shortcut go to the shortcut first. A frame
 // follows the events fn takes.
 //
 // It is for widgets that need every key as it is pressed, such as a
-// terminal; most widgets ask about their input as they are built instead
-// (Clicked, Shortcut, Dragged).
+// terminal, or the scrolling and pinching over them, such as a chart that
+// zooms and pans; most widgets ask about their input as they are built
+// instead (Clicked, Shortcut, Dragged).
 func (e *node) HandleInput(fn func(ev InputEvent) bool) *node {
 	e.inputFn = fn
 	return e
@@ -85,6 +110,19 @@ func (e *node) HandleInput(fn func(ev InputEvent) bool) *node {
 // InputText and Compose events (HandleInput) bring the text.
 func (e *node) TextCaret(r Rect) *node {
 	e.caret, e.takesText = r, true
+	return e
+}
+
+// InputMethod sets whether the system's input methods compose text for the
+// element while it has the keyboard focus, as they do by default for one
+// that takes text (HandleTextInput, TextCaret). Turned off, keys type the
+// characters of the keyboard's layout, which come as InputText, and
+// nothing is composed: a mode that reads letters as commands, as Vim's
+// normal mode, gets j as j with a Chinese input method on, as Neovide and
+// winit's set_ime_allowed(false) have it. Browsers cannot turn input
+// methods off, and compose still.
+func (e *node) InputMethod(on bool) *node {
+	e.noIME = !on
 	return e
 }
 
@@ -106,6 +144,7 @@ func (rt *engine) deliver(s *state, ev InputEvent) bool {
 		return false
 	}
 	ev.X, ev.Y = s.local(rt.pointerX, rt.pointerY)
+	ev.Time = rt.now()
 	if ev.Kind == InputScroll {
 		ev.DX, ev.DY = s.vector(rt.pointerX, rt.pointerY, ev.DX, ev.DY)
 	}

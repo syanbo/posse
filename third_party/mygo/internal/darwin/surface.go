@@ -117,13 +117,16 @@ type surface struct {
 	// the view changed size or scale since.
 	linkRunning bool
 	due         bool
-	timing      bool
-	resized     bool
-	lastFrame   time.Time
-	framePass   uint64
-	cursor      platform.Cursor
-	inside      bool
-	ctrlClick   bool // the primary button is down for a Control-click
+	// deferred tells that the content left the last paced frame to draw
+	// later (FrameNow): the link keeps running meanwhile.
+	deferred  bool
+	timing    bool
+	resized   bool
+	lastFrame time.Time
+	framePass uint64
+	cursor    platform.Cursor
+	inside    bool
+	ctrlClick bool // the primary button is down for a Control-click
 
 	// input is the state of the text input with the keyboard; marked is
 	// the input method's composition and markedSel its selection in it.
@@ -251,6 +254,32 @@ func (s *surface) RequestFrame() {
 		t := msgTimer(class("NSTimer"), sel("timerWithTimeInterval:target:selector:userInfo:repeats:"), delay.Seconds(), s.view, sel("mygoTimer:"), 0, false)
 		send(send(class("NSRunLoop"), "mainRunLoop"), "addTimer:forMode:", uintptr(t), kCFRunLoopCommonModes)
 	})
+}
+
+// FrameNow draws a frame at once, for one the display link's tick left to
+// draw until the renderer had a drawable.
+func (s *surface) FrameNow() {
+	if !s.w.closed {
+		s.frameNow(false)
+	}
+}
+
+// frameNow draws a frame now, rather than when AppKit displays the view
+// (or as it does), which would cost a pass of its display cycle and a
+// commit of Core Animation's transaction for each frame: the renderer
+// presents frames that change nothing else as soon as drawn. The display
+// link's frames are paced by it.
+//
+// The content draws a paced frame it leaves to draw later once the
+// display can take it (FrameNow), and the link keeps running meanwhile
+// (deferred). Any frame it draws instead, paced or not, as a resize's,
+// draws what the one left would have, and the content draws that one no
+// more: deferred holds only while the last frame sent was left.
+func (s *surface) frameNow(paced bool) {
+	s.resized = false
+	s.framePass = caPass
+	s.lastFrame = time.Now()
+	s.deferred = s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: paced}) && paced
 }
 
 // presentsWithTransaction reports whether the GPU renderer's CAMetalLayer
@@ -432,6 +461,11 @@ func (s *surface) SetCursor(c platform.Cursor) {
 
 func (s *surface) SetTextInput(t platform.TextInputState) {
 	if s.input.Client != t.Client && s.input.Active {
+		s.marked = ""
+		send(send(s.view, "inputContext"), "discardMarkedText")
+	}
+	if s.input.Active && t.Active && t.NoInputMethod && !s.input.NoInputMethod {
+		// Input methods turned off give up what they composed.
 		s.marked = ""
 		send(send(s.view, "inputContext"), "discardMarkedText")
 	}
@@ -743,15 +777,13 @@ func registerSurfaceClass() {
 				s.RequestFrame()
 				return
 			}
-			s.resized = false
-			s.framePass = caPass
-			s.lastFrame = time.Now()
-			s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+			s.frameNow(false)
 		}),
 		method("mygoTick:", func(self id, _ objc.SEL, link id) {
 			s := b().surfaceOf(self)
-			if s == nil || !s.due {
-				// No frame was asked for since the last refresh.
+			if s == nil || !s.due && !s.deferred {
+				// No frame was asked for since the last refresh, nor
+				// does the content wait to draw the last one.
 				send(link, "setPaused:", 1)
 				if s != nil {
 					s.linkRunning = false
@@ -765,15 +797,7 @@ func registerSurfaceClass() {
 				// frame shows with the window's changes then.
 				return
 			}
-			// The frame draws now, rather than when AppKit displays the
-			// view, which would cost a pass of its display cycle and a
-			// commit of Core Animation's transaction for each frame: the
-			// renderer presents frames that change nothing else as soon
-			// as drawn.
-			s.resized = false
-			s.framePass = caPass
-			s.lastFrame = time.Now()
-			s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+			s.frameNow(true)
 		}),
 		method("mygoTimer:", func(self id, _ objc.SEL, timer id) {
 			// A closed window's view lives until its timer fires.
@@ -850,13 +874,24 @@ func registerSurfaceClass() {
 			}
 			s.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: x, Y: y, DX: -dx, DY: -dy, Precise: precise, Mods: eventMods(ev)})
 		}),
+		method("magnifyWithEvent:", func(self id, _ objc.SEL, ev id) {
+			s := b().surfaceOf(self)
+			if s == nil {
+				return
+			}
+			// magnification is how much the pinch grew the content since
+			// its last event, as a fraction of its size then.
+			x, y := s.location(ev)
+			s.send(platform.SurfaceEvent{Kind: platform.PointerZoom, X: x, Y: y, Scale: 1 + msgFloat(ev, sel("magnification")), Mods: eventMods(ev)})
+		}),
 		method("keyDown:", func(self id, _ objc.SEL, ev id) {
 			s := b().surfaceOf(self)
 			if s == nil {
 				return
 			}
 			mods := eventMods(ev)
-			ime := s.input.Active && mods&(platform.ModSuper|platform.ModCtrl) == 0
+			text := s.input.Active && mods&(platform.ModSuper|platform.ModCtrl) == 0
+			ime := text && !s.input.NoInputMethod
 			// A key typed while the input method composes is the input
 			// method's alone, as Enter choosing a candidate or Escape
 			// giving the composition up, as GTK's and IMM32's filtering
@@ -870,6 +905,12 @@ func registerSurfaceClass() {
 				s.keyDown = true
 				send(self, "interpretKeyEvents:", uintptr(nsArray(ev)))
 				s.keyDown = false
+			} else if text {
+				// Input methods off: the key types the characters of the
+				// layout, as winit's keys do without them.
+				if t := typedChars(stringOf(send(ev, "characters"))); t != "" {
+					s.insertText(t, nsRange{Location: nsNotFound})
+				}
 			}
 		}),
 		method("keyUp:", func(self id, _ objc.SEL, ev id) {
@@ -885,7 +926,7 @@ func registerSurfaceClass() {
 		command("copy"), command("cut"), command("paste"), command("selectAll"), command("undo"), command("redo"), command("delete"),
 		method("pasteAsPlainText:", func(self id, _ objc.SEL, sender id) {
 			if s := b().surfaceOf(self); s != nil {
-				s.send(platform.SurfaceEvent{Kind: platform.SurfaceCommand, Text: "paste"})
+				s.send(platform.SurfaceEvent{Kind: platform.SurfaceCommand, Text: "pasteAndMatchStyle"})
 			}
 		}),
 		method("validateMenuItem:", func(self id, _ objc.SEL, item id) bool { return true }),

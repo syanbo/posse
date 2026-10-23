@@ -237,6 +237,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	a.openBranches(w)
 	v := a.files[w.ID]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("本地") })
+	settle(tt)
 	for _, want := range []string{"更新项目", "Push…", "新建分支…", "feat", "agent", "worktree · agent-wt", "远端 origin", "origin/main", "1 个传出提交（本地有、还没推送）"} {
 		if !tt.HasText(want) {
 			t.Fatalf("popup lacks %q: %v", want, tt.Texts())
@@ -1160,6 +1161,7 @@ func TestRollbackDetail(t *testing.T) {
 		t.Fatalf("current hunk after revert: %d", d.diff.hunk)
 	}
 	// 左右对照时每处改动在分隔线旁有 >>
+	settle(tt)
 	if _, ok := tt.Find("回滚这处改动"); !ok {
 		t.Fatal("no >> by the divider")
 	}

@@ -93,7 +93,8 @@ const (
 	OpPopClip
 	// OpEffect paints the rounded rectangle Rect with Radii with an effect,
 	// Scene.Effects[Start]: shaders of a package outside the renderers (see
-	// Effect), with Opacity.
+	// Effect), with Opacity; or, for a shader's effect, mask glyphs, which
+	// Rect then holds (EffectOp.Glyphs).
 	OpEffect
 	// OpHole makes the rounded rectangle Rect with Radii transparent,
 	// within the clip: what the ops before it painted there is gone, and
@@ -140,15 +141,27 @@ type Op struct {
 	Border      [4]float32
 	BorderColor Color
 	Dashed      bool
+	// BorderPaint paints an OpFill's border with Paint, its gradient of
+	// stops (Paint.HasStops), times BorderColor (opaque white for the
+	// gradient as it is), and its inside with plain Color.
+	BorderPaint bool
 
 	// Inset makes an OpShadow an inner shadow.
 	Inset bool
-	Blur  float32
+	// Blur is an OpShadow's blur, and an OpImage's: the standard deviation
+	// of a Gaussian blur of the image's Src, in its pixels, before it is
+	// drawn, transparent beyond Src, as CSS's filter: blur() is. Large
+	// blurs are computed at a fraction of the size, as backdrops' are
+	// (BackdropOf).
+	Blur float32
 	// Cast is the box casting an OpShadow, with CastRadii.
 	Cast      Rect
 	CastRadii [4]float32
 
 	Start, End int32
+	// Stops are a gradient's colors with stops (PaintLinearStops and the
+	// others), Scene.Stops[Stops[0]:Stops[1]].
+	Stops [2]int32
 
 	Image     *Image
 	Src       Rect
@@ -176,7 +189,34 @@ const (
 	// unit vector across the stripes, their width and their period, from
 	// the top-left corner of Rect.
 	PaintStripes
+	// PaintLinearStops is a linear gradient of the op's Stops, from
+	// (Gradient[0], Gradient[1]) at 0 to (Gradient[2], Gradient[3]) at 1,
+	// mixed in sRGB; PaintLinearStopsOklab mixes them in Oklab.
+	PaintLinearStops
+	PaintLinearStopsOklab
+	// PaintConic is a conic gradient of the op's Stops around
+	// (Gradient[0], Gradient[1]), from 0 at the angle Gradient[2], in
+	// radians clockwise from upwards, to 1 a turn later, mixed in sRGB, as
+	// CSS's conic-gradient() is; PaintConicOklab mixes them in Oklab.
+	PaintConic
+	PaintConicOklab
 )
+
+// Stop is a color of a gradient with stops (Op.Stops), at a place along
+// it from 0 to 1. A gradient shows its first color before its first stop
+// and its last after its last, and mixes premultiplied colors between, as
+// CSS does; stops in order, at most MaxStops of them.
+type Stop struct {
+	Color Color
+	At    float32
+}
+
+// MaxStops is how many stops a gradient has at most, which the shaders
+// loop through.
+const MaxStops = 32
+
+// HasStops reports whether paint takes its colors from the op's Stops.
+func (p Paint) HasStops() bool { return p >= PaintLinearStops && p <= PaintConicOklab }
 
 // Uniform returns the widths of a border as wide on every side.
 func Uniform(w float32) [4]float32 { return [4]float32{w, w, w, w} }
@@ -298,8 +338,14 @@ type Scene struct {
 	Clear  Color
 	Ops    []Op
 	Glyphs []Glyph
+	// Stops holds the stops of gradients (Op.Stops).
+	Stops []Stop
 	// Effects holds the effects of OpEffect operations.
 	Effects []EffectOp
+	// Words holds the words of the effects' uniforms (EffectOp.Uniforms
+	// and WideUniforms), which the frame's painter allocates from
+	// (Painter.EffectWords), kept from frame to frame.
+	Words []uint32
 	// Wide holds the colors outside the sRGB gamut of ops and glyphs (see
 	// Op.Wide), and those of the parameters of effects, which no op points
 	// at. Without any, the scene draws the same on every renderer.
@@ -314,6 +360,20 @@ type Scene struct {
 	// which renderers draw before it, whether it shows them or not, while
 	// the atlases their glyphs point at hold them.
 	Canvases []*Image
+	// Drawn, unless zero, is the part of a canvas's frame its content
+	// takes, from the top left corner, as an effect's layer made larger
+	// than its content: backdrops end at its edge (BackdropOf), as at the
+	// edge of a canvas of its size, and nothing is drawn beyond it.
+	Drawn image.Point
+}
+
+// BackdropOf is BackdropOf in s, a frame of w×h pixels, ending at the edge
+// of the part Drawn says.
+func (s *Scene) BackdropOf(r Rect, blur float32, w, h int) Backdrop {
+	if s.Drawn != (image.Point{}) {
+		w, h = min(w, s.Drawn.X), min(h, s.Drawn.Y)
+	}
+	return BackdropOf(r, blur, w, h)
 }
 
 // EachCanvas calls fn with the canvases the scene draws anew or shows,
@@ -335,11 +395,19 @@ func (s *Scene) EachCanvas(fn func(*Image)) {
 	s.eachShown(visit)
 }
 
-// eachShown calls fn with the canvases the scene's images show.
+// eachShown calls fn with the canvases the scene's images show, and its
+// shaders read.
 func (s *Scene) eachShown(fn func(*Image)) {
 	for i := range s.Ops {
 		if op := &s.Ops[i]; op.Kind == OpImage && op.Image != nil && op.Image.Scene != nil {
 			fn(op.Image)
+		}
+	}
+	for i := range s.Effects {
+		for _, img := range s.Effects[i].Images {
+			if img != nil && img.Scene != nil {
+				fn(img)
+			}
 		}
 	}
 }
@@ -347,14 +415,17 @@ func (s *Scene) eachShown(fn func(*Image)) {
 // Reset empties the scene for another frame, keeping its storage.
 func (s *Scene) Reset(width, height int, color Color) {
 	s.Width, s.Height, s.Clear = width, height, color
+	s.Drawn = image.Point{}
 	// Ops and effects can keep images and effect resources alive beyond
 	// the end of the shorter list the next frame paints.
 	clear(s.Ops)
 	s.Ops = s.Ops[:0]
 	s.Glyphs = s.Glyphs[:0]
+	s.Stops = s.Stops[:0]
 	clear(s.Effects)
 	s.Effects = s.Effects[:0]
 	s.Wide = s.Wide[:0]
+	s.Words = s.Words[:0]
 	clear(s.Canvases)
 	s.Canvases = s.Canvases[:0]
 }
@@ -376,6 +447,11 @@ type Image struct {
 	// PixVersion is the version Pix holds.
 	Scene      *Scene
 	PixVersion uint64
+	// Transient marks a canvas drawn anew in every frame that shows it,
+	// as an element's effect layer: renderers free its texture once
+	// frames stop drawing it, rather than once it is collected, which
+	// the little memory it takes of Go's heap may put off for minutes.
+	Transient bool
 }
 
 // NewCanvas returns a w×h image that renderers draw from a scene of its
@@ -414,9 +490,13 @@ func (m *Image) Changed() { m.version++ }
 // clip does not leave a new texture in the cache on every frame.
 func (m *Image) Resize(w, h int) {
 	m.W, m.H = w, h
-	if cap(m.Pix) >= 4*w*h {
+	switch {
+	case m.Scene != nil && m.Pix == nil:
+		// A canvas no renderer drew in memory: its pixels are made when
+		// one does.
+	case cap(m.Pix) >= 4*w*h:
 		m.Pix = m.Pix[:4*w*h]
-	} else {
+	default:
 		m.Pix = make([]byte, 4*w*h)
 	}
 	m.Changed()

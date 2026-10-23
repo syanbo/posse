@@ -5,6 +5,7 @@ package linux
 import (
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 )
@@ -124,12 +125,17 @@ func TestDefaultURLHandler(scheme string) string {
 }
 
 // xtest holds the functions of the XTEST extension, which fake input like
-// a keyboard or mouse would.
+// a keyboard or mouse would, and XSync, which waits for the X server to
+// make the events.
 var xtest struct {
 	key    func(dpy ptr, keycode uint32, press bool, delay uint64) int32
 	button func(dpy ptr, button uint32, press bool, delay uint64) int32
 	motion func(dpy ptr, screen int32, x, y int32, delay uint64) int32
+	sync   func(dpy ptr, discard bool) int32
 }
+
+// gdkEventsPending reports whether GDK has events it has yet to handle.
+var gdkEventsPending func() bool
 
 // loadXTest binds the XTEST extension and returns the X display, or 0
 // without an X server.
@@ -139,13 +145,29 @@ func loadXTest() ptr {
 	}
 	if xtest.key == nil {
 		lib, err := open("libXtst.so.6")
-		if err != nil || !bind(lib, &xtest.button, "XTestFakeButtonEvent") ||
-			!bind(lib, &xtest.motion, "XTestFakeMotionEvent") || !bind(lib, &xtest.key, "XTestFakeKeyEvent") {
+		x, xerr := open("libX11.so.6")
+		if err != nil || xerr != nil || !bind(lib, &xtest.button, "XTestFakeButtonEvent") ||
+			!bind(lib, &xtest.motion, "XTestFakeMotionEvent") || !bind(x, &xtest.sync, "XSync") ||
+			!bind(libGDK, &gdkEventsPending, "gdk_events_pending") || !bind(lib, &xtest.key, "XTestFakeKeyEvent") {
 			return 0
 		}
 	}
 	return x11.xdisplay(gdkDisplayGetDefault())
 }
+
+// sent waits for the X server to have made the events of the input faked
+// on dpy. The server makes them as it handles the requests, before it
+// replies to XSync's, and Xlib reads them into the app's queue, ahead of
+// the reply: GDK handles them next, on the main thread, after the hook
+// returns. TestInputPending tells when it did.
+func sent(dpy ptr) { xtest.sync(dpy, false) }
+
+// TestInputPending reports whether the app has events it has yet to
+// handle: once it reports false after a hook faked input through XTEST,
+// the app handled that input, as a window's content does on the main
+// thread when GDK hands it an event. GDK leaves out a last motion, which
+// it holds until the window's next frame to merge it with the next ones.
+func TestInputPending() bool { return gdkEventsPending != nil && gdkEventsPending() }
 
 // TestPressKeys presses keys, X keysym names such as "Control_L", together
 // and releases them, through the XTEST extension like a keyboard would. It
@@ -165,7 +187,7 @@ func TestPressKeys(names ...string) bool {
 	for i := len(codes) - 1; i >= 0; i-- {
 		xtest.key(dpy, codes[i], false, 0)
 	}
-	x11.flush(dpy)
+	sent(dpy)
 	return true
 }
 
@@ -177,7 +199,7 @@ func TestMovePointer(x, y int) bool {
 		return false
 	}
 	xtest.motion(dpy, -1, int32(x), int32(y), 0) // -1: the pointer's screen
-	x11.flush(dpy)
+	sent(dpy)
 	return true
 }
 
@@ -192,7 +214,7 @@ func pressButton(button uint32, press bool) bool {
 		return false
 	}
 	xtest.button(dpy, button, press, 0)
-	x11.flush(dpy)
+	sent(dpy)
 	return true
 }
 
@@ -383,4 +405,56 @@ func TestDragSurface(handle uintptr, points [][2]float64) bool {
 // TestClickSurface does with the primary.
 func TestRightClickSurface(handle uintptr, x, y float64) bool {
 	return clickSurface(handle, x, y, 3)
+}
+
+// TestHasRecentItem reports whether the shared recent files list holds the
+// file at path, as App.AddRecentDocument put it there.
+func TestHasRecentItem(path string) bool {
+	return gtkRecentManagerHasItem(gtkRecentManagerGetDefault(), cs(fileURI(path)))
+}
+
+// TestWindowTitle returns the title GTK gives a window.
+func TestWindowTitle(handle uintptr) string { return goStr(gtkWindowGetTitle(handle)) }
+
+// TestPinchSurface pinches a touchpad at (x, y), in DIPs, in a window
+// showing native UI, from 1 to scale: the begin, update and end events of
+// GDK's pinch, which only Wayland makes, go through GTK as its own do.
+func TestPinchSurface(handle uintptr, x, y, scale float64) bool {
+	w := windowByHandle(handle)
+	if w == nil || w.surface == nil {
+		return false
+	}
+	var eventNew func(typ int32) ptr
+	var doEvent func(event ptr)
+	var setDevice func(event, device ptr)
+	var display func() ptr
+	var seat func(display ptr) ptr
+	var pointer func(seat ptr) ptr
+	if !bind(libGDK, &eventNew, "gdk_event_new") || !bind(libGTK, &doEvent, "gtk_main_do_event") ||
+		!bind(libGDK, &setDevice, "gdk_event_set_device") || !bind(libGDK, &display, "gdk_display_get_default") ||
+		!bind(libGDK, &seat, "gdk_display_get_default_seat") || !bind(libGDK, &pointer, "gdk_seat_get_pointer") {
+		return false
+	}
+	device := pointer(seat(display()))
+	win := w.surface.eventWindow()
+	if win == 0 {
+		return false
+	}
+	// GdkEventTouchpadPinch: window 8, send_event 16, phase 17, n_fingers
+	// 18, x 24, y 32, scale 64.
+	for phase, at := range []float64{1, scale, scale} {
+		ev := eventNew(42) // GDK_TOUCHPAD_PINCH
+		base := *(*unsafe.Pointer)(unsafe.Pointer(&ev))
+		*(*ptr)(unsafe.Add(base, 8)) = gObjectRef(win)
+		*(*int8)(unsafe.Add(base, 16)) = 1
+		*(*int8)(unsafe.Add(base, 17)) = int8(phase) // begin, update, end
+		*(*int8)(unsafe.Add(base, 18)) = 2
+		*(*float64)(unsafe.Add(base, 24)) = x
+		*(*float64)(unsafe.Add(base, 32)) = y
+		*(*float64)(unsafe.Add(base, 64)) = at
+		setDevice(ev, device)
+		doEvent(ev)
+		gdkEventFree(ev)
+	}
+	return true
 }

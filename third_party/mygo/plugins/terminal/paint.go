@@ -9,8 +9,17 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// Padding around the grid, in DIPs.
+// The padding around the grid when Options.Padding leaves it zero, in
+// DIPs.
 const padX, padY = 6, 4
+
+// padding returns the padding around the grid, in DIPs.
+func (o *Options) padding() (x, y float32) {
+	if o.Padding == (Padding{}) {
+		return padX, padY
+	}
+	return max(o.Padding.X, 0), max(o.Padding.Y, 0)
+}
 
 // rowCache is what a row of the screen draws, made when it changes:
 // backgrounds, runs of glyphs, lines and drawn characters, in cells.
@@ -24,11 +33,18 @@ type rowCache struct {
 	selB  int
 	sel   bool
 	wide  []int16 // the columns of wide characters
+	// filled tells that every cell has a background of its own, other
+	// than the default, from which PaddingExtend extends.
+	filled bool
 }
 
 type bgSpan struct {
 	x0, x1 int
 	c      ui.Color
+	// cursor tells that the span is one character in inverse video, as
+	// a program draws its own cursor: its background does not extend
+	// into the padding.
+	cursor bool
 }
 
 // glyphRun is the glyphs of a run of cells of one style, placed in their
@@ -62,7 +78,8 @@ type boxCell struct {
 func (v *view) layout(r ui.Rect, scale float32) {
 	t := v.t
 	t.mu.Lock()
-	fk := t.opts.Font.key(scale)
+	f := t.font()
+	fk := f.key(scale)
 	t.mu.Unlock()
 	if fk != v.font {
 		v.font, v.scale = fk, scale
@@ -80,7 +97,8 @@ func (v *view) layout(r ui.Rect, scale float32) {
 		v.shaped.clear()
 		v.lines = v.lines[:0]
 	}
-	v.ox, v.oy = int(math.Round(padX*float64(scale))), int(math.Round(padY*float64(scale)))
+	px, py := t.opts.padding()
+	v.ox, v.oy = int(math.Round(float64(px*scale))), int(math.Round(float64(py*scale)))
 	w, h := int(math.Round(float64(r.W*scale)))-2*v.ox, int(math.Round(float64(r.H*scale)))-2*v.oy
 	v.cols, v.rows = max(w/v.cellW, 1), max(h/v.cellH, 1)
 }
@@ -100,7 +118,7 @@ func (v *view) paint(p *ui.Painter, r ui.Rect) {
 		}
 		return
 	}
-	t.resize(gridSize{v.cols, v.rows, v.cellW, v.cellH})
+	t.viewResize(gridSize{v.cols, v.rows, v.cellW, v.cellH})
 	if v.ticking && v.gesture != nil {
 		v.autoscroll()
 	}
@@ -116,14 +134,20 @@ func (v *view) paint(p *ui.Painter, r ui.Rect) {
 		t.rs.BeginUpdate(t.term)
 	}
 	v.scrollbar = t.term.Scrollbar()
+	contrast := t.opts.MinimumContrast
+	tc, tr := t.term.Size()
+	v.matches, v.matchBuf = t.viewportMatches(v.matches, v.matchBuf, tc, tr)
+	if !held {
+		v.readImages(t.term)
+	}
 	t.mu.Unlock()
 	rs := t.rs
 	if !held {
 		rs.EndUpdate()
 	}
 	colors := rs.Colors()
-	full := rs.Dirty() == vt.Full || colors != v.colors
-	v.colors, v.cursor = colors, rs.Cursor()
+	full := rs.Dirty() == vt.Full || colors != v.colors || contrast != v.contrast
+	v.colors, v.contrast, v.cursor = colors, contrast, rs.Cursor()
 	cols, rows := rs.Size()
 	if len(v.lines) != rows {
 		v.lines = append(v.lines[:0], make([]rowCache, rows)...)
@@ -143,8 +167,10 @@ func (v *view) paint(p *ui.Painter, r ui.Rect) {
 // resolved is a cell's style with its colors resolved.
 type resolved struct {
 	fg, bg, ul       ui.Color
+	shapeFg          ui.Color // fg without the minimum contrast (noMinContrast)
 	hasBg, hasUl     bool
 	variant          int // 1 bold, 2 italic
+	inverse          bool
 	invisible        bool
 	underline        int
 	strike, overline bool
@@ -166,10 +192,14 @@ func (v *view) resolve(s vt.Style) resolved {
 	r.bg, r.hasBg = col(s.BG, v.colors.Background)
 	r.ul, r.hasUl = col(s.UnderlineColor, v.colors.Foreground)
 	if s.Inverse {
-		r.fg, r.bg, r.hasBg = r.bg, r.fg, true
+		r.fg, r.bg, r.hasBg, r.inverse = r.bg, r.fg, true, true
+	}
+	r.shapeFg = r.fg
+	if v.contrast > 1 {
+		r.fg = contrasted(r.fg, r.bg, v.contrast)
 	}
 	if s.Faint {
-		r.fg = r.fg.Alpha(0.5)
+		r.fg, r.shapeFg = r.fg.Alpha(0.5), r.shapeFg.Alpha(0.5)
 	}
 	if s.Bold {
 		r.variant |= 1
@@ -181,12 +211,58 @@ func (v *view) resolve(s vt.Style) resolved {
 	return r
 }
 
+// contrasted returns fg with at least the given contrast ratio with bg, as
+// WCAG reckons it: fg itself when it has it, else fg mixed toward black
+// or white, whichever contrasts more with bg, as little as reaches it.
+func contrasted(fg, bg ui.Color, ratio float32) ui.Color {
+	lb := luminance(bg)
+	if contrast(luminance(fg), lb) >= ratio {
+		return fg
+	}
+	to := ui.RGB(0, 0, 0)
+	if contrast(1, lb) > contrast(0, lb) {
+		to = ui.RGB(255, 255, 255)
+	}
+	lo, hi := float32(0), float32(1)
+	for range 8 {
+		mid := (lo + hi) / 2
+		if contrast(luminance(fg.Mix(to, mid)), lb) >= ratio {
+			hi = mid
+		} else {
+			lo = mid
+		}
+	}
+	return fg.Mix(to, hi)
+}
+
+// luminance returns the relative luminance of an sRGB color, from 0 for
+// black to 1 for white.
+func luminance(c ui.Color) float32 {
+	lin := func(v uint8) float64 {
+		f := float64(v) / 255
+		if f <= 0.04045 {
+			return f / 12.92
+		}
+		return math.Pow((f+0.055)/1.055, 2.4)
+	}
+	return float32(0.2126*lin(c.R) + 0.7152*lin(c.G) + 0.0722*lin(c.B))
+}
+
+// contrast returns the contrast ratio of two luminances, from 1 to 21.
+func contrast(a, b float32) float32 {
+	if a < b {
+		a, b = b, a
+	}
+	return (a + 0.05) / (b + 0.05)
+}
+
 // buildRow makes the cache of the render state's current row.
 func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
-	*line = rowCache{ok: true, bgs: line.bgs[:0], runs: line.runs[:0], decos: line.decos[:0], boxes: line.boxes[:0], wide: line.wide[:0]}
+	*line = rowCache{ok: true, bgs: line.bgs[:0], runs: line.runs[:0], decos: line.decos[:0], boxes: line.boxes[:0], wide: line.wide[:0], filled: true}
 	cells := rs.RowCells()
 	line.selA, line.selB, line.sel = rs.RowSelection()
 	def := resolved{fg: color(v.colors.Foreground), bg: color(v.colors.Background)}
+	def.shapeFg = def.fg
 	var styles []struct {
 		id uint16
 		r  resolved
@@ -237,11 +313,14 @@ func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
 			}
 			st.bg, st.hasBg = color(bg), true
 		}
+		if !st.hasBg || st.bg == def.bg {
+			line.filled = false
+		}
 		if st.hasBg && st.bg != def.bg {
 			if n := len(line.bgs); n > 0 && line.bgs[n-1].x1 == x && line.bgs[n-1].c == st.bg {
-				line.bgs[n-1].x1 = x + w
+				line.bgs[n-1].x1, line.bgs[n-1].cursor = x+w, false
 			} else {
-				line.bgs = append(line.bgs, bgSpan{x, x + w, st.bg})
+				line.bgs = append(line.bgs, bgSpan{x, x + w, st.bg, st.inverse})
 			}
 		}
 		if st.underline != 0 {
@@ -256,6 +335,9 @@ func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
 		cp := c.Codepoint
 		if cp == 0 || st.invisible {
 			cp = ' '
+		}
+		if noMinContrast(cp) {
+			st.fg = st.shapeFg
 		}
 		if drawn(cp) {
 			line.boxes = append(line.boxes, boxCell{x, cp, st.fg})
@@ -395,13 +477,19 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 	ox := (float32(math.Round(float64(r.X*s))) + float32(v.ox)) / s
 	oy := (float32(math.Round(float64(r.Y*s))) + float32(v.oy)) / s
 	base := float32(v.baseline) / s
-	if !v.t.opts.Transparent {
+	// A transparent terminal still draws a background a program set (OSC
+	// 11), as Ghostty shows it.
+	if !v.t.opts.Transparent || v.colors.Background != rgb(v.theme.Background) {
 		p.Fill(r, color(v.colors.Background), 0)
+	}
+	if v.t.opts.PaddingColor != PaddingBackground {
+		v.extendPadding(p, r, ox, oy, cw, ch)
 	}
 	selection := v.theme.Selection
 	if selection.A == 0 {
 		selection = color(v.colors.Foreground).Alpha(0.3)
 	}
+	v.drawImages(p, belowBackground, ox, oy)
 	for y := range v.lines {
 		line := &v.lines[y]
 		ry := oy + float32(y)*ch
@@ -412,14 +500,50 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 			p.Fill(ui.Rect{X: ox + float32(line.selA)*cw, Y: ry, W: float32(line.selB-line.selA+1) * cw, H: ch}, selection, 0)
 		}
 	}
+	match, matchText, selMatch, selMatchText := v.searchColors()
+	for _, m := range v.matches {
+		if m.y < len(v.lines) {
+			c := match
+			if m.selected {
+				c = selMatch
+			}
+			p.Fill(ui.Rect{X: ox + float32(m.x0)*cw, Y: oy + float32(m.y)*ch, W: float32(m.x1-m.x0+1) * cw, H: ch}, c, 0)
+		}
+	}
+	v.drawImages(p, belowText, ox, oy)
 	cur, curColor, curText, block := v.cursorRect(ox, oy, cw, ch)
 	if block {
 		p.Fill(cur, curColor, 0)
 	}
+	var spans []matchSpan
 	for y := range v.lines {
 		line := &v.lines[y]
 		ry := oy + float32(y)*ch
 		text := func(over ui.Color) { v.drawText(p, line, ox, ry, cw, ch, base, over) }
+		spans = spans[:0]
+		for _, m := range v.matches {
+			if m.y == y {
+				spans = append(spans, m)
+			}
+		}
+		if len(spans) > 0 {
+			// The text of matches takes their text's color in their cells,
+			// the rest its own.
+			slices.SortFunc(spans, func(a, b matchSpan) int { return a.x0 - b.x0 })
+			left := r.X
+			for _, m := range spans {
+				a, b := ox+float32(m.x0)*cw, ox+float32(m.x1+1)*cw
+				c := matchText
+				if m.selected {
+					c = selMatchText
+				}
+				p.Clip(ui.Rect{X: left, Y: r.Y, W: a - left, H: r.H}, 0, func() { text(ui.Color{}) })
+				p.Clip(ui.Rect{X: a, Y: r.Y, W: b - a, H: r.H}, 0, func() { text(c) })
+				left = b
+			}
+			p.Clip(ui.Rect{X: left, Y: r.Y, W: r.X + r.W - left, H: r.H}, 0, func() { text(ui.Color{}) })
+			continue
+		}
 		if !line.sel || v.theme.SelectionText.A == 0 {
 			text(ui.Color{})
 			continue
@@ -430,6 +554,10 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 		p.Clip(ui.Rect{X: r.X, Y: r.Y, W: a - r.X, H: r.H}, 0, func() { text(ui.Color{}) })
 		p.Clip(ui.Rect{X: a, Y: r.Y, W: b - a, H: r.H}, 0, func() { text(v.theme.SelectionText) })
 		p.Clip(ui.Rect{X: b, Y: r.Y, W: r.X + r.W - b, H: r.H}, 0, func() { text(ui.Color{}) })
+	}
+	v.drawImages(p, aboveText, ox, oy)
+	if h := v.hover; h.on() && h.row < len(v.lines) {
+		v.drawDeco(p, deco{h.x0, h.x1, vt.UnderlineSingle, v.linkColor(&v.lines[h.row], h)}, ox, oy+float32(h.row)*ch, cw, ch, base)
 	}
 	if cur.W > 0 && !block {
 		if v.focused || v.cursor.Style != vt.CursorBlock {
@@ -457,29 +585,77 @@ func (v *view) draw(p *ui.Painter, r ui.Rect) {
 			}
 		})
 	}
-	// Hive: the link under the pointer, underlined in the color of its
-	// first character, as a colored path gets a line of its own color.
-	if h := v.hover; h.link != "" && h.row >= 0 && h.row < len(v.lines) {
-		ry := oy + float32(h.row)*ch
-		v.drawDeco(p, deco{h.x0, h.x1, vt.UnderlineSingle, v.textColorAt(&v.lines[h.row], h.x0)}, ox, ry, cw, ch, base)
-	}
 	if v.preedit != "" && v.focused {
 		v.drawPreedit(p, ox, oy, cw, ch, base)
 	}
 	v.drawScrollbar(p, r)
 }
 
-// textColorAt is the color of the glyph at column x of a row, or the
-// default text color where there is none. (Hive)
-func (v *view) textColorAt(line *rowCache, x int) ui.Color {
-	for _, run := range line.runs {
-		for _, col := range run.cols {
-			if int(col) == x {
-				return run.c
-			}
+// searchColors returns the colors of the search's matches and their text,
+// then the selected match's: the theme's, else Ghostty's.
+func (v *view) searchColors() (match, matchText, sel, selText ui.Color) {
+	th := v.theme
+	or := func(c ui.Color, def string) ui.Color {
+		if c.A == 0 {
+			return ui.Hex(def)
+		}
+		return c
+	}
+	return or(th.Search, "#ffe082"), or(th.SearchText, "#000000"), or(th.SearchSelected, "#f2a57e"), or(th.SearchSelectedText, "#000000")
+}
+
+// extendPadding paints the padding around the grid with the backgrounds
+// of the cells nearest to it (Options.PaddingColor): a row's beside it,
+// and the top and the bottom rows' above and below the grid, out to the
+// corners.
+func (v *view) extendPadding(p *ui.Painter, r ui.Rect, ox, oy, cw, ch float32) {
+	if len(v.lines) == 0 {
+		return
+	}
+	always := v.t.opts.PaddingColor == PaddingExtendAlways
+	extends := func(line *rowCache) bool { return always || line.filled }
+	cols := v.cols
+	left, right := r.X, r.X+r.W
+	gx1 := ox + float32(cols)*cw
+	// The span's left and right in the view: the edges' spans reach the
+	// view's edges.
+	span := func(b bgSpan) (x0, x1 float32) {
+		x0, x1 = ox+float32(b.x0)*cw, ox+float32(b.x1)*cw
+		if b.x0 == 0 {
+			x0 = left
+		}
+		if b.x1 >= cols {
+			x1 = right
+		}
+		return x0, x1
+	}
+	for y := range v.lines {
+		line := &v.lines[y]
+		if !extends(line) || len(line.bgs) == 0 {
+			continue
+		}
+		ry := oy + float32(y)*ch
+		if first := line.bgs[0]; first.x0 == 0 && !first.cursor && ox > left {
+			p.Fill(ui.Rect{X: left, Y: ry, W: ox - left, H: ch}, first.c, 0)
+		}
+		if last := line.bgs[len(line.bgs)-1]; last.x1 >= cols && !last.cursor && right > gx1 {
+			p.Fill(ui.Rect{X: gx1, Y: ry, W: right - gx1, H: ch}, last.c, 0)
 		}
 	}
-	return color(v.colors.Foreground)
+	vertical := func(line *rowCache, y0, y1 float32) {
+		if y1 <= y0 || !extends(line) {
+			return
+		}
+		for _, b := range line.bgs {
+			if b.cursor {
+				continue
+			}
+			x0, x1 := span(b)
+			p.Fill(ui.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, b.c, 0)
+		}
+	}
+	vertical(&v.lines[0], r.Y, oy)
+	vertical(&v.lines[len(v.lines)-1], oy+float32(len(v.lines))*ch, r.Y+r.H)
 }
 
 // drawText draws the glyphs, drawn characters and lines of a row, in their
@@ -501,6 +677,19 @@ func (v *view) drawText(p *ui.Painter, line *rowCache, ox, ry, cw, ch, base floa
 		d.c = pick(d.c)
 		v.drawDeco(p, d, ox, ry, cw, ch, base)
 	}
+}
+
+// linkColor is the color of the hovered link's underline: its text's, or
+// the foreground's.
+func (v *view) linkColor(line *rowCache, h linkSpan) ui.Color {
+	for _, run := range line.runs {
+		for _, col := range run.cols {
+			if int(col) >= h.x0 && int(col) < h.x1 {
+				return run.c
+			}
+		}
+	}
+	return color(v.colors.Foreground)
 }
 
 // cursorRect returns the cursor's rectangle and colors, and whether it is

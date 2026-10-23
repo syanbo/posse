@@ -72,7 +72,7 @@ var (
 	cbSurfaceMotion, cbSurfaceLeave, cbSurfaceScroll, cbSurfaceKey  ptr
 	cbSurfaceFocusIn, cbSurfaceFocusOut, cbSurfaceScale, cbIMCommit ptr
 	cbIMPreedit, cbIMPreeditEnd, cbSurfaceRender, cbAreaContext     ptr
-	cbSurfaceUnrealize, cbSurfaceTick                               ptr
+	cbSurfaceUnrealize, cbSurfaceTick, cbSurfacePinch               ptr
 	surfaceCursors                                                  = map[platform.Cursor]ptr{}
 )
 
@@ -145,6 +145,10 @@ type surface struct {
 		stride, width, height int
 	}
 
+	// pinch is the scale of the touchpad's pinch in progress at its last
+	// event, from 1 as it began.
+	pinch float64
+
 	textInput bool
 	caret     platform.RectF
 	input     platform.TextInputState
@@ -155,10 +159,12 @@ type surface struct {
 	// focus to a web view passes on to it (TabInto).
 	pressing     ptr
 	lastPointer  ptr
+	clicks       platform.ClickCounter
 	dragContext  ptr
 	dragRequest  *platform.DragRequest
 	dragError    error
 	dragCanceled bool
+	dragEscaped  bool
 	dataDrop     *gtkDataDrop
 	// layers is the overlay of the area over web, the layout of the web
 	// views under it, and placed where the content shows them
@@ -168,7 +174,7 @@ type surface struct {
 }
 
 // GDK event masks of the drawing area.
-const surfaceEvents = 1<<2 | 1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13 | 1<<14 | 1<<21 | 1<<23
+const surfaceEvents = 1<<2 | 1<<8 | 1<<9 | 1<<10 | 1<<11 | 1<<12 | 1<<13 | 1<<14 | 1<<21 | 1<<23 | 1<<24
 
 func (w *window) createSurface() {
 	loadSurface()
@@ -216,6 +222,7 @@ func (s *surface) newArea(gl bool) {
 	connect(s.area, "motion-notify-event", cbSurfaceMotion, data)
 	connect(s.area, "leave-notify-event", cbSurfaceLeave, data)
 	connect(s.area, "scroll-event", cbSurfaceScroll, data)
+	connect(s.area, "event", cbSurfacePinch, data)
 	connect(s.area, "key-press-event", cbSurfaceKey, data)
 	connect(s.area, "key-release-event", cbSurfaceKey, data)
 	connect(s.area, "focus-in-event", cbSurfaceFocusIn, data)
@@ -464,15 +471,54 @@ func (s *surface) SetCursor(c platform.Cursor) {
 
 func (s *surface) SetTextInput(t platform.TextInputState) {
 	active, caret := t.Active, t.Caret
-	if s.textInput && (!active || s.input.Client != t.Client) {
+	if s.textInput && (!active || s.input.Client != t.Client || t.NoInputMethod) {
 		s.clientComposition.Reset()
 		gtkIMContextReset(s.im)
+	}
+	// Without input methods, the input context loses the focus, as a
+	// Wayland compositor's input method grabs the keys while it has it,
+	// and keys type the layout's characters (typed), as winit's do.
+	if was, raw := s.rawInput(), active && t.NoInputMethod; raw != was {
+		if raw {
+			gtkIMContextFocusOut(s.im)
+		} else if gtkWidgetHasFocus(s.area) {
+			gtkIMContextFocusIn(s.im)
+		}
 	}
 	s.input = t
 	s.textInput, s.caret = active, caret
 	if active {
 		r := gdkRectangle{X: int32(caret.X), Y: int32(caret.Y), Width: max(int32(caret.W), 1), Height: int32(caret.H + 0.5)}
 		gtkIMContextSetCursorLoc(s.im, &r)
+	}
+}
+
+// rawInput reports whether the focused element takes text with input
+// methods off (NoInputMethod).
+func (s *surface) rawInput() bool { return s.textInput && s.input.NoInputMethod }
+
+// typed sends the text a key press types with input methods off: the
+// character of its keyval, unless a modifier makes it a shortcut, as
+// GtkIMContextSimple has it.
+func (s *surface) typed(event ptr) {
+	if gdkMods(field[uint32](event, 24))&(platform.ModCtrl|platform.ModAlt|platform.ModSuper) != 0 {
+		return
+	}
+	r := rune(gdkKeyvalToUnicode(field[uint32](event, 28)))
+	if r < 0x20 || r == 0x7F {
+		return
+	}
+	s.commit(string(r))
+}
+
+// commit sends text typed or committed by an input method.
+func (s *surface) commit(text string) {
+	if c := s.input.Client; c != nil {
+		s.clientComposition.Replace(c, nil, text)
+		return
+	}
+	if text != "" {
+		s.send(platform.SurfaceEvent{Kind: platform.TextInput, Text: text})
 	}
 }
 
@@ -694,7 +740,12 @@ func initSurfaceCallbacks() {
 			}
 			s.lastPointer = gdkEventCopy(event)
 		}
-		s.send(platform.SurfaceEvent{Kind: kind, X: field[float64](event, 24), Y: field[float64](event, 32), Button: button, Mods: mods})
+		x, y := field[float64](event, 24), field[float64](event, 32)
+		clicks := 0
+		if kind == platform.PointerDown {
+			clicks = s.clicks.Press(button, x, y, field[uint32](event, 20), doubleClick())
+		}
+		s.send(platform.SurfaceEvent{Kind: kind, X: x, Y: y, Button: button, Clicks: clicks, Mods: mods})
 		if kind == platform.PointerUp && button == 0 && s.dragRequest == nil && s.lastPointer != 0 {
 			gdkEventFree(s.lastPointer)
 			s.lastPointer = 0
@@ -746,6 +797,31 @@ func initSurfaceCallbacks() {
 		s.send(ev)
 		return true
 	})
+	// GdkEventTouchpadPinch (GDK_TOUCHPAD_PINCH, 42): type 0, phase 17,
+	// x 24, y 32, scale 64 (from 1 as the pinch began), state 88. GDK
+	// reports pinches on Wayland; X11 has none.
+	cbSurfacePinch = purego.NewCallback(func(widget, event, data ptr) bool {
+		if field[int32](event, 0) != 42 {
+			return false
+		}
+		s := b().surfaceOf(data)
+		if s == nil {
+			return false
+		}
+		scale := field[float64](event, 64)
+		switch field[int8](event, 17) {
+		case 0: // begin
+			s.pinch = 1
+		case 1: // update
+			if s.pinch > 0 && scale > 0 {
+				s.send(platform.SurfaceEvent{Kind: platform.PointerZoom, X: field[float64](event, 24), Y: field[float64](event, 32), Scale: scale / s.pinch, Mods: gdkMods(field[uint32](event, 88))})
+			}
+			s.pinch = scale
+		default: // end, cancel
+			s.pinch = 0
+		}
+		return true
+	})
 	// GdkEventKey: type 0, state 24, keyval 28, hardware_keycode 48.
 	cbSurfaceKey = purego.NewCallback(func(widget, event, data ptr) bool {
 		s := b().surfaceOf(data)
@@ -762,7 +838,11 @@ func initSurfaceCallbacks() {
 			}
 			s.lastKey = gdkEventCopy(event)
 		}
-		if s.textInput && gtkIMContextFilterKeypress(s.im, event) {
+		if s.rawInput() {
+			if kind == platform.KeyPressed {
+				defer s.typed(event)
+			}
+		} else if s.textInput && gtkIMContextFilterKeypress(s.im, event) {
 			return true
 		}
 		// A modifier key on its own: the state is the one before the
@@ -802,7 +882,9 @@ func initSurfaceCallbacks() {
 	})
 	cbSurfaceFocusIn = purego.NewCallback(func(widget, event, data ptr) bool {
 		if s := b().surfaceOf(data); s != nil {
-			gtkIMContextFocusIn(s.im)
+			if !s.rawInput() {
+				gtkIMContextFocusIn(s.im)
+			}
 			s.send(platform.SurfaceEvent{Kind: platform.SurfaceFocus})
 		}
 		return false
@@ -816,13 +898,7 @@ func initSurfaceCallbacks() {
 	})
 	cbIMCommit = purego.NewCallback(func(im, str, data ptr) {
 		if s := b().surfaceOf(data); s != nil {
-			if c := s.input.Client; c != nil {
-				s.clientComposition.Replace(c, nil, goStr(str))
-				return
-			}
-			if text := goStr(str); text != "" {
-				s.send(platform.SurfaceEvent{Kind: platform.TextInput, Text: text})
-			}
+			s.commit(goStr(str))
 		}
 	})
 	cbIMPreedit = purego.NewCallback(func(im, data ptr) {

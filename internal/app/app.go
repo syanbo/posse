@@ -23,6 +23,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"hive/internal/agent"
@@ -805,8 +806,8 @@ func (a *app) ensureView(id string) {
 		ContextMenu: func(x, y float32) {
 			a.termCtx, a.termCtxID = menuState{open: true, x: x, y: y}, id
 		},
-		OnPaste: func(text string) bool {
-			if text != "" || v.term == nil {
+		OnPaste: func(d transfer.Data) bool {
+			if text, _ := d.Read(transfer.Text); len(text) > 0 || v.term == nil {
 				return false
 			}
 			if _, t := a.findTerminal(id); t == nil || t.Agent == "" {

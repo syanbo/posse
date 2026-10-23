@@ -21,24 +21,17 @@ const fullWidthPunct = "。，、；：！？（）【】「」『』〈〉《�
 var pathPattern = regexp.MustCompile(`(?:(?:~|\.{1,2})?/[^\s"'<>` + "`" + `\x00-\x1f:` + fullWidthPunct + `]+|[\w.@+-]+(?:/[\w.@+-]+)+/?)(?::\d+(?::\d+)?)?|[\w@+-][\w.@+-]*\.\w+:\d+(?::\d+)?`)
 
 // urlAt returns the URL of text, a row whose runes are in columns cols, at
-// column col, or "".
-func urlAt(text []rune, cols []int, col int) string {
+// column col, and the columns it spans, x0 up to x1, or "".
+func urlAt(text []rune, cols []int, col int) (url string, x0, x1 int) {
 	return matchAt(urlPattern, text, cols, col)
 }
 
 // pathAt returns the file path of text at column col, as urlAt, or "".
-func pathAt(text []rune, cols []int, col int) string {
+func pathAt(text []rune, cols []int, col int) (path string, x0, x1 int) {
 	return matchAt(pathPattern, text, cols, col)
 }
 
-func matchAt(re *regexp.Regexp, text []rune, cols []int, col int) string {
-	u, _, _ := spanAt(re, text, cols, col)
-	return u
-}
-
-// spanAt is matchAt with the columns the match covers, from c0 up to c1.
-// (Hive: the hover underline needs them.)
-func spanAt(re *regexp.Regexp, text []rune, cols []int, col int) (u string, c0, c1 int) {
+func matchAt(re *regexp.Regexp, text []rune, cols []int, col int) (string, int, int) {
 	s := string(text)
 	for _, m := range re.FindAllStringIndex(s, -1) {
 		u := trimURL(s[m[0]:m[1]])

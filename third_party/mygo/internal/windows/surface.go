@@ -3,6 +3,8 @@
 package windows
 
 import (
+	"math"
+	"time"
 	"unicode/utf16"
 	"unsafe"
 
@@ -25,6 +27,9 @@ var (
 	procEndPaint              = user32.NewProc("EndPaint")
 	procRedrawWindow          = user32.NewProc("RedrawWindow")
 	procSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
+	procGetDoubleClickTime    = user32.NewProc("GetDoubleClickTime")
+	procGetMessageTime        = user32.NewProc("GetMessageTime")
+	procGetSystemMetrics      = user32.NewProc("GetSystemMetrics")
 	procSetDIBitsToDevice     = gdi32.NewProc("SetDIBitsToDevice")
 	procImmGetContext         = imm32.NewProc("ImmGetContext")
 	procImmReleaseContext     = imm32.NewProc("ImmReleaseContext")
@@ -116,9 +121,13 @@ type surface struct {
 	w                 *window
 	hwnd              uintptr
 
-	paintDC  uintptr
+	paintDC uintptr
+	// now tells that a frame draws at once: one a resize draws, or one
+	// FrameNow draws for a frame left to draw (platform.PacedSurface).
+	now      bool
 	tracking bool
 	buttons  int
+	clicks   platform.ClickCounter
 	cursor   platform.Cursor
 	high     uint16 // a high surrogate of WM_CHAR waiting for its pair
 	ime      bool
@@ -128,6 +137,9 @@ type surface struct {
 	// keyTaken tells that the content took the key down, whose
 	// WM_SYSCHAR then opens no menu.
 	keyTaken bool
+	// menuRan tells that the key down ran a menu item (menuShortcut): its
+	// character goes nowhere.
+	menuRan bool
 
 	reconvert  *[2]int // the runes a reconversion replaces
 	dropTarget uintptr // IDropTarget
@@ -222,6 +234,22 @@ func (s *surface) Size() (float64, float64, float64) {
 
 func (s *surface) RequestFrame() { procInvalidateRectW.Call(s.hwnd, 0, 0) }
 
+// FrameNow draws a frame at once, for one the content left to draw until
+// the swap chain had room for it.
+func (s *surface) FrameNow() {
+	if !s.w.closed {
+		s.drawNow()
+	}
+}
+
+// drawNow draws a frame at once, in WM_PAINT.
+func (s *surface) drawNow() {
+	now := s.now
+	s.now = true
+	procRedrawWindow.Call(s.hwnd, 0, 0, rdwInvalidate|rdwUpdateNow)
+	s.now = now
+}
+
 // RefreshRate returns the refresh rate of the monitor showing the window,
 // in its current display mode.
 func (s *surface) RefreshRate() float64 {
@@ -307,7 +335,9 @@ func cursorHandle(c platform.Cursor) uintptr {
 }
 
 func (s *surface) SetTextInput(t platform.TextInputState) {
-	active, caret := t.Active, t.Caret
+	// Without input methods, the window has no input context: keys type
+	// the layout's characters, as WM_CHAR, as winit's do.
+	active, caret := t.Active && !t.NoInputMethod, t.Caret
 	if s.input.Active && s.input.Client != t.Client {
 		s.clientComposition.Reset()
 		if himc, _, _ := procImmGetContext.Call(s.hwnd); himc != 0 {
@@ -393,9 +423,30 @@ func mods() platform.Modifiers {
 	return m
 }
 
+// systemMetric is GetSystemMetrics' metric for the DPI of the window hwnd.
+func systemMetric(metric, hwnd uintptr) uintptr {
+	if has(procGetSystemMetricsForDpi) {
+		if n, _, _ := procGetSystemMetricsForDpi.Call(metric, uintptr(dpiOf(hwnd))); n != 0 {
+			return n
+		}
+	}
+	n, _, _ := procGetSystemMetrics.Call(metric)
+	return n
+}
+
 func (s *surface) pointer(kind platform.SurfaceEventKind, lp uintptr, button int) {
 	x, y := int16(loword(lp)), int16(hiword(lp))
-	s.send(platform.SurfaceEvent{Kind: kind, X: s.toDIP(int32(x)), Y: s.toDIP(int32(y)), Button: button, Mods: mods()})
+	clicks := 0
+	if kind == platform.PointerDown {
+		// A press carries no count: it follows the double-click time and
+		// the rectangle centered on the last press, in the window's pixels,
+		// as set.
+		ms, _, _ := procGetDoubleClickTime.Call()
+		at, _, _ := procGetMessageTime.Call()
+		w, h := systemMetric(smCxDoubleClk, s.hwnd), systemMetric(smCyDoubleClk, s.hwnd)
+		clicks = s.clicks.Press(button, float64(x), float64(y), uint32(at), platform.DoubleClick{Time: time.Duration(ms) * time.Millisecond, DX: float64(w) / 2, DY: float64(h) / 2})
+	}
+	s.send(platform.SurfaceEvent{Kind: kind, X: s.toDIP(int32(x)), Y: s.toDIP(int32(y)), Button: button, Clicks: clicks, Mods: mods()})
 }
 
 func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool) {
@@ -421,7 +472,9 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		var ps paintStruct
 		dc, _, _ := procBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		s.paintDC = dc
-		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+		// Frames that follow each other as the content asks for them may
+		// wait until the swap chain has room for one.
+		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: !s.now})
 		s.paintDC = 0
 		procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0, true
@@ -439,7 +492,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceResize})
 		// Draw at once, so the content follows the window while it is
 		// resized.
-		procRedrawWindow.Call(hwnd, 0, 0, rdwInvalidate|rdwUpdateNow)
+		s.drawNow()
 		return 0, true
 	case wmMouseMove:
 		if !s.tracking {
@@ -452,6 +505,11 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		return 0, true
 	case wmMouseLeave:
 		s.tracking = false
+		if c := s.w.caption; c != nil && c.snap != 0 && cursorOver(c.snap) {
+			// Over the maximize button the content draws, whose window
+			// gives the content the pointer's moves.
+			return 0, true
+		}
 		s.mouseLeft()
 		s.send(platform.SurfaceEvent{Kind: platform.PointerLeave})
 		return 0, true
@@ -525,8 +583,16 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		pt := point{int32(int16(loword(lp))), int32(int16(hiword(lp)))}
 		procScreenToClient.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
 		delta := float64(int16(hiword(wp)))
+		precise := int(delta)%120 != 0
+		if m == wmMouseWheel && precise && loword(wp)&0x0008 != 0 { // MK_CONTROL
+			// A touchpad's pinch, which Windows sends as scrolling with
+			// Ctrl held, as it does Ctrl and two fingers: three notches'
+			// worth zoom twice as large.
+			s.send(platform.SurfaceEvent{Kind: platform.PointerZoom, X: s.toDIP(pt.X), Y: s.toDIP(pt.Y), Scale: math.Exp(delta / 120 * math.Ln2 / 3), Mods: mods()})
+			return 0, true
+		}
 		dist := delta / 120 * float64(wheelLines()) * 33
-		ev := platform.SurfaceEvent{Kind: platform.PointerScroll, X: s.toDIP(pt.X), Y: s.toDIP(pt.Y), Mods: mods(), Precise: int(delta)%120 != 0}
+		ev := platform.SurfaceEvent{Kind: platform.PointerScroll, X: s.toDIP(pt.X), Y: s.toDIP(pt.Y), Mods: mods(), Precise: precise}
 		if m == wmMouseWheel {
 			ev.DY = -dist
 		} else {
@@ -552,13 +618,19 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		return 0, true
 	case wmKeyDown, wmSysKeyDown:
 		s.clientComposition.Reset()
-		s.keyTaken = false
+		s.keyTaken, s.menuRan = false, false
 		modifiers := mods()
 		if modifierKey(wp) {
 			s.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: modifiers})
 		}
+		if s.menuShortcut(wp, false) {
+			return 0, true
+		}
 		if k, physical, ok := keyAndPosition(wp, lp, false, modifiers); ok {
 			s.keyTaken = s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: k, PhysicalKey: physical, Mods: modifiers, Repeat: lp&(1<<30) != 0})
+		}
+		if !s.keyTaken && s.menuShortcut(wp, true) {
+			return 0, true
 		}
 		// Alt+F4, Alt+Space and F10 keep working.
 		return 0, m == wmKeyDown
@@ -572,6 +644,9 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		}
 		return 0, m == wmKeyUp
 	case wmSysChar:
+		if s.menuRan {
+			return 0, true
+		}
 		if s.keyTaken {
 			// The content took Alt and the key, as a terminal does.
 			return 0, true
@@ -583,6 +658,9 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			return 0, true
 		}
 	case wmChar:
+		if s.menuRan {
+			return 0, true
+		}
 		c := uint16(wp)
 		switch {
 		case utf16.IsSurrogate(rune(c)) && c < 0xDC00:
@@ -779,4 +857,28 @@ func (w *window) Surface() platform.Surface {
 		return nil
 	}
 	return w.surface
+}
+
+// menuShortcut runs the window's menu item whose shortcut the key down vk
+// is, as macOS's menus take their key equivalents, and reports whether it
+// ran one. The app's own items take their keys before the content, which
+// gets only what they leave; items with a role (roles), only those the
+// content leaves: their keys are the content's own too, as Ctrl+C, which
+// copies in a field, interrupts in a terminal and is Edit › Copy's.
+func (s *surface) menuShortcut(vk uintptr, roles bool) bool {
+	w := s.w.top()
+	cmd, ok := w.accels[accelKey{vk: uint32(vk), mods: currentModifiers()}]
+	if !ok {
+		return false
+	}
+	e := w.b.menus.entries[cmd]
+	if e == nil || (e.role != "") != roles {
+		return false
+	}
+	if st, _, _ := procGetMenuState.Call(e.menu, uintptr(cmd), mfByCommand); uint32(st) != 0xFFFFFFFF && st&mfGrayed != 0 {
+		return false
+	}
+	s.keyTaken, s.menuRan = true, true
+	w.b.menuCommand(cmd, w)
+	return true
 }

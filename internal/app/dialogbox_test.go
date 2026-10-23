@@ -3,7 +3,6 @@ package app
 import (
 	"math"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -15,9 +14,7 @@ func TestDialogMoveResize(t *testing.T) {
 	tt := ui.NewTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openRollback(v)
-	for range 20 {
-		tt.Frame()
-	}
+	settle(tt)
 	title, ok := tt.Find("回滚改动")
 	if !ok {
 		t.Fatal("no title")
@@ -70,10 +67,8 @@ func TestDialogMoveResize(t *testing.T) {
 	a.rollback.open = false
 	tt.Frame()
 	a.openRollback(v)
-	time.Sleep(200 * time.Millisecond)
-	for range 20 {
-		tt.Frame()
-	}
+	until(t, tt, "reopened", func() bool { return tt.HasText("回滚改动") })
+	settle(tt)
 	// 拉宽后再居中，标题左移半个增量
 	if again, _ := tt.Find("回滚改动"); math.Abs(float64(again.X-(title.X-30))) > 0.5 || box.last.W < w0+59 {
 		t.Fatalf("reopen: title %v want x %v, width %v", again, title.X, box.last.W)

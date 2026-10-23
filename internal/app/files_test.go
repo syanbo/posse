@@ -79,8 +79,14 @@ func until(t *testing.T, tt *ui.Tester, what string, cond func() bool) {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)
 		}
-		time.Sleep(5 * time.Millisecond)
+		pass(tt, 5*time.Millisecond)
 	}
+}
+
+// pass 让真实时间和 Tester 的时钟一起走 d：动画和 c.After 只认 Tester 的时钟，后台协程按真实时间。
+func pass(tt *ui.Tester, d time.Duration) {
+	time.Sleep(d)
+	tt.Advance(d)
 }
 
 func (v *filesView) doc(path string) *fileDoc {
@@ -104,7 +110,7 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	if !a.filesPanelOpen() || v.side != sideFiles {
 		t.Fatal("⇧⌘E should open the files panel on the tree")
 	}
-	until(t, tt, "tree", func() bool { return v.tree.Loaded(root) && tt.HasText("main.go") })
+	until(t, tt, "tree", func() bool { return v.tree.Loaded(root) && tt.HasText("main.go") && a.filesPanelShown == 1 })
 	// 选中文件标签：不被换回第一个终端，终端断开接入
 	if a.activeTerm[w.ID] != filesTabID || a.view != nil {
 		t.Fatalf("activeTerm=%q view=%v", a.activeTerm[w.ID], a.view)
@@ -235,7 +241,7 @@ func TestFilesTabWithoutTerminals(t *testing.T) {
 		t.Fatal("expected the empty workspace page first")
 	}
 	tt.Key(ui.Cmd, ui.KeyL)
-	until(t, tt, "tree", func() bool { return a.filesPanelOpen() && tt.HasText("main.go") })
+	until(t, tt, "tree", func() bool { return a.filesPanelOpen() && tt.HasText("main.go") && a.filesPanelShown == 1 })
 	if err := tt.Click("main.go"); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +378,7 @@ func TestPreviewTabs(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFilesPanel(w, sideFiles)
-	until(t, tt, "tree", func() bool { return tt.HasText("main.go") })
+	until(t, tt, "tree", func() bool { return tt.HasText("main.go") && a.filesPanelShown == 1 })
 	if err := tt.Click("main.go"); err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +466,7 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 	// 等文件栏滑进来
 	for range 20 {
 		tt.Frame()
-		time.Sleep(20 * time.Millisecond)
+		pass(tt, 20*time.Millisecond)
 	}
 	if !tt.HasText("检索") {
 		t.Fatal("files tabs missing")
@@ -597,7 +603,7 @@ func TestRevealInFiles(t *testing.T) {
 	path := filepath.Join(root, "internal", "files", "tree.go")
 	a.revealInFiles(w, path)
 	v := a.filesFor(w)
-	until(t, tt, "revealed", func() bool { return tt.HasText("tree.go") && !v.revealScroll })
+	until(t, tt, "revealed", func() bool { return tt.HasText("tree.go") && !v.revealScroll && a.filesPanelShown == 1 })
 	if !a.filesPanelOpen() || v.side != sideFiles || !v.tree.Expanded(filepath.Join(root, "internal", "files")) {
 		t.Fatal("files panel not opened to the revealed path")
 	}

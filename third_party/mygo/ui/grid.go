@@ -118,6 +118,10 @@ type gridItem struct {
 	e                *node
 	col, row         int // from 0
 	colSpan, rowSpan int
+	// baseline is how far below the top of its margin box the baseline of
+	// an item aligned by its baseline is, which laid it out.
+	baseline float32
+	laidOut  bool
 }
 
 // contrib is the size an item asks of the tracks it spans.
@@ -246,6 +250,26 @@ func track(tracks []Track, i int) Track {
 		return tracks[i]
 	}
 	return Track{}
+}
+
+// contributes reports whether sizing the tracks along an axis reads what
+// an item spanning span of them from start asks (sizeTracks): of those
+// spanning a FitContent track, and, where the room is not known, of those
+// spanning an Fr track, as large as the content asks. The others take no
+// part, as CSS's minmax(0, 1fr) tracks with room known measure no items,
+// and are not measured.
+func contributes(tracks []Track, start, span int, avail float32, minContent bool) bool {
+	for i := start; i < start+span; i++ {
+		switch track(tracks, i).kind {
+		case trackFit:
+			return true
+		case trackFr:
+			if !minContent && !finite(avail) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sizeTracks sizes n tracks along an axis, of which tracks are explicit,
@@ -411,7 +435,7 @@ func gridColumns(e *node, s *gridScratch, items []gridItem, nc int, avail, cw fl
 		if v, ok := c.width.resolve(base(cw)); ok {
 			w := c.clampW(v, cw) + c.marginX()
 			cs[i].min, cs[i].max = w, w
-		} else {
+		} else if contributes(e.cols, it.col, it.colSpan, avail, minContent) || e.c.rt.noLayoutCache {
 			cs[i].min = intrinsic(c, false) + c.marginX()
 			cs[i].max = intrinsic(c, true) + c.marginX()
 		}
@@ -426,7 +450,11 @@ func gridColumns(e *node, s *gridScratch, items []gridItem, nc int, avail, cw fl
 func gridIntrinsic(e *node, maxContent bool) float32 {
 	s := &e.c.rt.grid
 	firstItem, firstF := len(s.items), len(s.f)
-	defer func() { s.items, s.f = s.items[:firstItem], s.f[:firstF] }()
+	defer func() {
+		// Laid out again only when it changed, it lets go of its elements.
+		clear(s.items[firstItem:])
+		s.items, s.f = s.items[:firstItem], s.f[:firstF]
+	}()
 	items, nc, _ := gridPlace(e, s)
 	sizes := gridColumns(e, s, items, nc, inf, inf, !maxContent)
 	w := e.gapX * float32(max(nc-1, 0))
@@ -443,14 +471,17 @@ func gridIntrinsic(e *node, maxContent bool) float32 {
 func gridLayout(e *node, cw, ch float32, commit bool) (usedW, usedH float32) {
 	s := &e.c.rt.grid
 	firstItem, firstF, firstC := len(s.items), len(s.f), len(s.cs)
-	defer func() { s.items, s.f, s.cs = s.items[:firstItem], s.f[:firstF], s.cs[:firstC] }()
+	defer func() {
+		clear(s.items[firstItem:])
+		s.items, s.f, s.cs = s.items[:firstItem], s.f[:firstF], s.cs[:firstC]
+	}()
 	items, nc, nr := gridPlace(e, s)
 	cols := gridColumns(e, s, items, nc, cw, cw, false)
 
 	// The rows, from the heights of the items at the widths their columns
 	// give them.
 	at := len(s.f)
-	for range 2*nr + 2*len(items) {
+	for range 3*nr + 2*len(items) {
 		s.f = append(s.f, 0)
 	}
 	for range items {
@@ -458,10 +489,20 @@ func gridLayout(e *node, cw, ch float32, commit bool) (usedW, usedH float32) {
 	}
 	rows, limits := s.f[at:at+nr], s.f[at+nr:at+2*nr]
 	widths, offs := s.f[at+2*nr:at+2*nr+len(items)], s.f[at+2*nr+len(items):at+2*nr+2*len(items)]
+	// How far below the top of each row the baseline of its items aligned
+	// by their baselines is.
+	rowBase := s.f[at+2*nr+2*len(items) : at+3*nr+2*len(items)]
 	cs := s.cs[firstC:]
 	align := e.align
 	if align == alignAuto {
 		align = Stretch
+	}
+	// Right to left, the columns go from the right, and items start at
+	// the right of their cells.
+	rtl := e.rtl()
+	ms, me := 3, 1
+	if rtl {
+		ms, me = 1, 3
 	}
 	for i := range items {
 		it := &items[i]
@@ -470,10 +511,29 @@ func gridLayout(e *node, cw, ch float32, commit bool) (usedW, usedH float32) {
 		for k := it.col; k < it.col+it.colSpan; k++ {
 			area += cols[k]
 		}
-		w, off := gridPlaceIn(c, area, c.width, c.marginX(), 3, 1, gridJustify(e, c), cw, func(avail float32) float32 { return fitWidth(c, avail, cw) }, c.clampW)
+		w, off := gridPlaceIn(c, area, c.width, c.marginX(), ms, me, gridJustify(e, c), cw, func(avail float32) float32 { return fitWidth(c, avail, cw) }, c.clampW)
 		widths[i], offs[i] = w, off
-		h := heightAt(c, w, ch) + c.marginY()
+		h := heightAt(c, w, ch)
+		if it.rowSpan == 1 && byBaseline(c, align, e) {
+			layoutBox(c, w, h)
+			it.laidOut = true
+			b, ok := boxBaseline(c)
+			if !ok {
+				b = h
+			}
+			it.baseline = c.m(0) + b
+			rowBase[it.row] = max(rowBase[it.row], it.baseline)
+		}
+		h += c.marginY()
 		cs[i] = contrib{start: it.row, span: it.rowSpan, min: h, max: h}
+	}
+	// An item aligned by its baseline asks for the room above it that
+	// lines its baseline up with its row's.
+	for i := range items {
+		if it := &items[i]; it.laidOut {
+			cs[i].min += rowBase[it.row] - it.baseline
+			cs[i].max = cs[i].min
+		}
 	}
 	sizeTracks(e.rows, nr, ch, e.gapY, cs, false, e.alignContent == alignAuto, rows, limits)
 
@@ -526,9 +586,23 @@ func gridLayout(e *node, cw, ch float32, commit bool) (usedW, usedH float32) {
 			}
 			return heightAt(c, w, ch)
 		}, c.clampH)
+		if it.laidOut {
+			offY = rowBase[it.row] - it.baseline + c.m(0)
+		}
 		y := rowAt[it.row] + offY
+		if rtl {
+			// x is from the right of the content, which is as wide as the
+			// columns where its width is not known.
+			right := cw
+			if !finite(right) {
+				right = usedW
+			}
+			x = right - x - w
+		}
 		c.x, c.y = e.contentX()+x, e.contentY()+y
-		layoutBox(c, w, h)
+		if !it.laidOut || h != c.h {
+			layoutBox(c, w, h)
+		}
 		dx, dy := c.relative(cw, ch)
 		c.x += dx
 		c.y += dy
@@ -557,7 +631,7 @@ func gridPlaceIn(c *node, area float32, size length, margins float32, ms, me int
 	var v float32
 	if l, ok := size.resolve(base(cb)); ok {
 		v = clamp(l, cb)
-	} else if a == Stretch && !autoS && !autoE && c.kind != kindIcon && (c.aspect == 0 || ms == 3) {
+	} else if a == Stretch && !autoS && !autoE && c.kind != kindIcon && (c.aspect == 0 || ms%2 == 1) {
 		v = clamp(area-margins, cb)
 	} else {
 		v = natural(area - margins)

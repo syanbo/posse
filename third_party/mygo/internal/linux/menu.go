@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/ebitengine/purego"
@@ -28,11 +29,15 @@ var (
 	menuOwners int
 	itemsByID  = map[int][]nativeItem{}
 	itemRoles  = map[int]string{}
+	// roleKeys are the shortcuts of items with a role, by accel group: the
+	// keyval, lower case, and the modifiers.
+	roleKeys = map[ptr]map[[2]uint32]bool{}
 
 	cbMenuActivate   ptr
 	cbMenuDeactivate ptr
 
-	// Menu bars that hide (window.menuHides).
+	// Menu bars that hide (window.menuHides), and the keys of items with a
+	// role.
 	cbMenuKey, cbCanActivateAccel, cbMenuBarDeactivate ptr
 )
 
@@ -44,6 +49,9 @@ const modifierMask = 1<<0 | 1<<2 | 1<<3 | 1<<26 | 1<<27 | 1<<28
 var editCommands = map[string]string{
 	"undo": "Undo", "redo": "Redo", "cut": "Cut", "copy": "Copy", "paste": "Paste",
 	"pasteAndMatchStyle": "PasteAsPlainText", "delete": "Delete", "selectAll": "SelectAll",
+	// The Format menu's.
+	"bold": "Bold", "italic": "Italic", "underline": "Underline", "strikethrough": "Strikethrough",
+	"alignLeft": "JustifyLeft", "alignCenter": "JustifyCenter", "alignRight": "JustifyRight",
 }
 
 func initMenuCallbacks() {
@@ -84,9 +92,6 @@ func initMenuCallbacks() {
 			} else if w != nil {
 				if w.surface != nil {
 					role := itemRoles[id]
-					if role == "pasteAndMatchStyle" {
-						role = "paste"
-					}
 					w.h.SurfaceEvent(platform.SurfaceEvent{Kind: platform.SurfaceCommand, Text: role})
 				} else {
 					webkitWebViewExecuteEditingCommand(w.web, cs(cmd))
@@ -108,6 +113,16 @@ func initMenuCallbacks() {
 		w := theBackend.window(data)
 		if w == nil {
 			return false
+		}
+		// The shortcuts of items with a role are the content's keys too, as
+		// Ctrl+C, Edit › Copy's, which interrupts in a terminal: GTK would
+		// run its accelerators first, so the content gets them first, and
+		// GTK runs those it leaves. The app's own items go first, as on macOS.
+		if field[int32](event, 0) == 8 && w.surface != nil { // GDK_KEY_PRESS
+			k := [2]uint32{gdkKeyvalToLower(field[uint32](event, 28)), field[uint32](event, 24) & modifierMask}
+			if roleKeys[w.accel][k] && gtkWindowPropagateKeyEvent(w.win, event) {
+				return true
+			}
 		}
 		if !w.menuHides() || w.menubar == 0 || gtkWidgetGetVisible(w.menubar) {
 			w.altAlone = false
@@ -198,6 +213,12 @@ func buildItem(it *platform.MenuItem, accel ptr, owner, windowID int) ptr {
 		if accel != 0 && it.Accelerator != "" {
 			if key, mods, ok := gtkAccelerator(it.Accelerator); ok {
 				gtkWidgetAddAccelerator(item, cs("activate"), accel, key, mods, 1) // GTK_ACCEL_VISIBLE
+				if it.Role != "" {
+					if roleKeys[accel] == nil {
+						roleKeys[accel] = map[[2]uint32]bool{}
+					}
+					roleKeys[accel][[2]uint32{gdkKeyvalToLower(key), mods}] = true
+				}
 			}
 		}
 	}
@@ -265,6 +286,9 @@ func gtkAccelerator(acc string) (uint32, uint32, bool) {
 	default:
 		r, _ := utf8.DecodeRuneInString(a.Key)
 		key = gdkUnicodeToKeyval(uint32(r))
+		if mods&1 != 0 && !unicode.IsLetter(r) {
+			key = shifted(key)
+		}
 	}
 	return key, mods, key != 0
 }
@@ -272,15 +296,19 @@ func gtkAccelerator(acc string) (uint32, uint32, bool) {
 func (b *Backend) SetApplicationMenu(m *platform.Menu) {
 	b.appMenu = m
 	for _, w := range b.windows {
-		if !w.ownMenu {
+		if !w.ownMenu && w.hasAppMenu() {
 			w.installMenu(m)
 		}
 	}
 }
 
+// hasAppMenu tells whether the window shows the application menu in its
+// menu bar: flyouts and panels show none.
+func (w *window) hasAppMenu() bool { return w.opts.Flyout == nil && !w.opts.Panel }
+
 func (w *window) SetMenu(m *platform.Menu) {
 	w.ownMenu = m != nil
-	if m == nil {
+	if m == nil && w.hasAppMenu() {
 		m = w.b.appMenu
 	}
 	w.installMenu(m)
@@ -295,6 +323,7 @@ func (w *window) installMenu(m *platform.Menu) {
 		// Accelerators live in the group; start with a fresh one.
 		gtkWindowRemoveAccelGroup(w.win, w.accel)
 		gObjectUnref(w.accel)
+		delete(roleKeys, w.accel)
 		w.accel = gtkAccelGroupNew()
 		gtkWindowAddAccelGroup(w.win, w.accel)
 	}
@@ -387,9 +416,17 @@ func (b *Backend) PopupMenu(m *platform.Menu, pw platform.Window, pos *platform.
 	gtkWidgetShowAll(menu)
 	event, anchor := w.popupTrigger(), w.contentWindow()
 	const northWest = 1 // GDK_GRAVITY_NORTH_WEST
+	corner := int32(northWest)
+	if m.RightToLeft {
+		// GTK_TEXT_DIR_RTL lays the menu out from the right (its items
+		// take the default direction, which GTK takes from the locale),
+		// and GDK_GRAVITY_NORTH_EAST opens it to the left of the point.
+		gtkWidgetSetDirection(menu, 2)
+		corner = 3
+	}
 	switch {
 	case pos != nil && anchor != 0:
-		gtkMenuPopupAtRect(menu, anchor, &gdkRectangle{X: int32(pos.X), Y: int32(pos.Y), Width: 1, Height: 1}, northWest, northWest, event)
+		gtkMenuPopupAtRect(menu, anchor, &gdkRectangle{X: int32(pos.X), Y: int32(pos.Y), Width: 1, Height: 1}, northWest, corner, event)
 	case event != 0:
 		gtkMenuPopupAtPointer(menu, event)
 	case anchor != 0:
@@ -461,6 +498,14 @@ func (t *tray) SetImage(png []byte, template bool) error {
 	return nil
 }
 
+// Dark reports false: AppIndicator tells nothing of the panel, whose
+// icon theme draws the icon in its own colors.
+func (t *tray) Dark() bool { return false }
+
+// SetID does nothing: the indicator's ID is given as it is made, and
+// panels place indicators themselves.
+func (t *tray) SetID(string) {}
+
 func (t *tray) SetTitle(title string) { appIndicatorSetLabel(t.ind, cs(title), cs(title)) }
 
 func (t *tray) SetToolTip(tip string) {
@@ -496,4 +541,31 @@ func (t *tray) Destroy() {
 	if t.iconDir != "" {
 		_ = os.RemoveAll(t.iconDir)
 	}
+}
+
+// shifted returns the keyval that the key typing keyval types with Shift,
+// in the keyboard's layout: plus for equal on a US keyboard. GTK matches a
+// shortcut with Shift by what the key types, Shift consumed, so Alt+Shift+=
+// is Alt+Shift+plus to it. It returns keyval when no key types it.
+func shifted(keyval uint32) uint32 {
+	km := gdkKeymapGetForDisplay(gdkDisplayGetDefault())
+	var keys ptr
+	var n int32
+	if km == 0 || !gdkKeymapGetEntriesForKeyval(km, keyval, &keys, &n) || n == 0 {
+		return keyval
+	}
+	defer gFree(keys)
+	// GdkKeymapKey: keycode, group, level, each 4 bytes.
+	for i := range uintptr(n) {
+		code, group, level := field[uint32](keys, i*12), field[int32](keys, i*12+4), field[int32](keys, i*12+8)
+		if level != 0 {
+			continue
+		}
+		var sym, consumed uint32
+		var effGroup, outLevel int32
+		if gdkKeymapTranslateKeyboardState(km, code, 1, group, &sym, &effGroup, &outLevel, &consumed) && sym != 0 {
+			return sym
+		}
+	}
+	return keyval
 }

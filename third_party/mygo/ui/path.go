@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"hash/maphash"
 	"math"
+	"slices"
 
 	"github.com/egoist/mygo/internal/scene"
 	"github.com/egoist/mygo/internal/vec"
@@ -21,6 +22,13 @@ type Path struct {
 type pathCmd struct {
 	op  uint8 // 0 move, 1 line, 2 quad, 3 cubic, 4 close
 	pts [3][2]float32
+}
+
+// Reset empties the path and removes Trim, retaining its command storage.
+func (p *Path) Reset() *Path {
+	p.cmds = p.cmds[:0]
+	p.trim, p.trimmed = [2]float32{}, false
+	return p
 }
 
 // MoveTo starts a new subpath at (x, y).
@@ -66,6 +74,26 @@ func (p *Path) Trim(from, to float32) *Path {
 	finiteMotion("trim", float64(from), float64(to))
 	p.trim, p.trimmed = [2]float32{max(0, min(from, 1)), max(0, min(to, 1))}, true
 	return p
+}
+
+// Bounds returns the smallest box holding the path's points and the
+// control points of its curves, in DIPs: the box of a circle (Circle), of
+// lines, and of curves whose control points lie on it; others may fit in
+// less. Empty paths have an empty box.
+func (p *Path) Bounds() Rect {
+	first := true
+	var x0, y0, x1, y1 float32
+	for _, c := range p.cmds {
+		n := [5]int{1, 1, 2, 3, 0}[c.op]
+		for _, pt := range c.pts[:n] {
+			if first {
+				x0, y0, x1, y1, first = pt[0], pt[1], pt[0], pt[1], false
+				continue
+			}
+			x0, y0, x1, y1 = min(x0, pt[0]), min(y0, pt[1]), max(x1, pt[0]), max(y1, pt[1])
+		}
+	}
+	return Rect{x0, y0, x1 - x0, y1 - y0}
 }
 
 // Circle adds a circle as a subpath.
@@ -234,22 +262,57 @@ type paths struct {
 	raster vec.Rasterizer
 	pix    []byte
 	loop   [][2]float32 // a polyline there and back, as strokeInto outlines it
+	// What pathTiles finds of a path drawn in tiles: the tiles its edges
+	// reach, and where its edges cross a row of tiles.
+	reached []bool
+	cross   []pathCrossing
 }
 
 // pathJob is the mask drawPath asks the text system for, which draws it
 // with the engine's rasterizer and buffer when it is not cached.
 type pathJob struct {
-	f         *flatPath
-	w, h      int
-	hw        float32 // half the stroke's width; 0 fills
-	x0, y0    float32
+	f      *flatPath
+	w, h   int
+	hw     float32 // half the stroke's width; 0 fills
+	x0, y0 float32
+	// full draws a mask covered whole, as a tile inside a filled path.
+	full      bool
 	rasterize func() (w, h int, pix []byte)
+}
+
+// A path's mask is a bitmap in the mask atlas, which is at most
+// scene.MaxAtlasSize pixels a side, keeps a pixel of padding beside each
+// bitmap and holds the glyphs of text too. A path whose mask would be
+// wider or taller than pathMaskMax device pixels, the largest the atlas
+// holds, draws as tiles of its mask, pathTile pixels a side (pathTiles):
+// 512 with the padding, eight to a row of the largest atlas. They are
+// variables so that tests can tile small paths.
+var (
+	pathMaskMax = scene.MaxAtlasSize - 1
+	pathTile    = 511
+)
+
+// pathSpanMax is the largest width and height of a path's mask, in device
+// pixels: beyond it, float32 no longer holds the quarters of a pixel that
+// its points move to.
+const pathSpanMax = 1 << 22
+
+// pathCrossing is where an edge of a filled path crosses a line across a
+// row of tiles, and which way it goes: +1 down, -1 up.
+type pathCrossing struct {
+	x   float32
+	dir int
 }
 
 // drawPath paints a flattened path with c, from a mask cached by the shape:
 // filled (non-zero winding), or with width > 0 stroked that many pixels
 // wide with round joins and caps.
 func (p *Painter) drawPath(f *flatPath, width float32, c Color, g *LinearGradient) {
+	p.drawPathPaint(f, width, c, g, nil)
+}
+
+// drawPathPaint is drawPath in a linear gradient (g) or a conic one (cg).
+func (p *Painter) drawPathPaint(f *flatPath, width float32, c Color, g *LinearGradient, cg *ConicGradient) {
 	if f.polys() == 0 {
 		return
 	}
@@ -261,10 +324,11 @@ func (p *Painter) drawPath(f *flatPath, width float32, c Color, g *LinearGradien
 		minY, maxY = min(minY, pt[1]), max(maxY, pt[1])
 	}
 	x0, y0 := float32(math.Floor(float64(minX-hw))), float32(math.Floor(float64(minY-hw)))
-	w, h := int(math.Ceil(float64(maxX+hw-x0)))+1, int(math.Ceil(float64(maxY+hw-y0)))+1
-	if w <= 0 || h <= 0 || w > 4096 || h > 4096 {
+	wf, hf := math.Ceil(float64(maxX+hw-x0))+1, math.Ceil(float64(maxY+hw-y0))+1
+	if !(wf > 0 && hf > 0 && wf <= pathSpanMax && hf <= pathSpanMax) {
 		return
 	}
+	w, h := int(wf), int(hf)
 	// The key covers the shape relative to the pixel grid, in quarters of
 	// a pixel; a stroke's is its center line's, and its width. The points
 	// move to those quarters, so that the mask of a key is the same
@@ -294,28 +358,187 @@ func (p *Painter) drawPath(f *flatPath, width float32, c Color, g *LinearGradien
 		}
 		hs.WriteByte(end)
 	}
+	start := int32(len(p.s.Glyphs))
+	c = c.Alpha(p.opacity)
+	tint := scene.Glyph{Color: c.scene(), Wide: p.glyphWide(c)}
+	if w <= pathMaskMax && h <= pathMaskMax {
+		p.pathMask(hs.Sum64(), f, hw, x0, y0, w, h, false, tint)
+	} else {
+		p.pathTiles(hs.Sum64(), f, hw, x0, y0, w, h, tint)
+	}
+	if int32(len(p.s.Glyphs)) == start {
+		return
+	}
+	op := scene.Op{Kind: scene.OpGlyphs, Start: start, End: int32(len(p.s.Glyphs))}
+	if g != nil || cg != nil {
+		// The gradient spans the path's bounds.
+		op.Rect = scene.Rect{X: minX - hw, Y: minY - hw, W: maxX - minX + 2*hw, H: maxY - minY + 2*hw}
+		op.Opacity = p.opacity
+		if g != nil {
+			p.gradient(&op, *g)
+			op.Wide = p.wide(g.From, g.To, Color{})
+		} else {
+			p.conic(&op, *cg)
+		}
+	}
+	p.add(op)
+}
+
+// pathMask adds the glyph of the w×h mask of the path f at (x0, y0), in
+// device pixels, cached under key, with tint's color: of all of the path,
+// or of a tile, the whole path clipped to it, or, if full, covered whole.
+func (p *Painter) pathMask(key uint64, f *flatPath, hw, x0, y0 float32, w, h int, full bool, tint scene.Glyph) {
 	j := &p.rt.paths.job
 	if j.rasterize == nil {
 		j.rasterize = p.rt.rasterizePath
 	}
-	j.f, j.w, j.h, j.hw, j.x0, j.y0 = f, w, h, hw, x0, y0
-	gi := p.rt.text.Mask(hs.Sum64(), j.rasterize)
+	j.f, j.w, j.h, j.hw, j.x0, j.y0, j.full = f, w, h, hw, x0, y0, full
+	gi := p.rt.text.Mask(key, j.rasterize)
 	j.f = nil
 	if !gi.OK {
 		return
 	}
-	start := int32(len(p.s.Glyphs))
-	c = c.Alpha(p.opacity)
-	p.s.Glyphs = append(p.s.Glyphs, scene.Glyph{X: x0, Y: y0, W: float32(gi.W), H: float32(gi.H), U: gi.X, V: gi.Y, UW: gi.W, VH: gi.H, Color: c.scene(), Wide: p.glyphWide(c)})
-	op := scene.Op{Kind: scene.OpGlyphs, Start: start, End: start + 1}
-	if g != nil {
-		// The gradient spans the path's bounds.
-		op.Rect = scene.Rect{X: minX - hw, Y: minY - hw, W: maxX - minX + 2*hw, H: maxY - minY + 2*hw}
-		op.Opacity = p.opacity
-		p.gradient(&op, *g)
-		op.Wide = p.wide(g.From, g.To, Color{})
+	g := tint
+	g.X, g.Y, g.W, g.H, g.U, g.V, g.UW, g.VH = x0, y0, float32(gi.W), float32(gi.H), gi.X, gi.Y, gi.W, gi.H
+	p.s.Glyphs = append(p.s.Glyphs, g)
+}
+
+// pathTiles draws the w×h mask of the path f at (x0, y0), too large for
+// one, as tiles of pathTile pixels a side from its corner: each a mask of
+// its own, cached under the path's key and its place, of the whole path
+// clipped to it, so that tiles meet as the pixels of one mask do. It draws
+// the tiles that show, within a pixel, and that the path reaches: those
+// within a pixel of its edges, and those inside a filled path, covered
+// whole, which share one mask of their size. Under a transform off the
+// pixel grid, renderers smooth each mask's edges, so a faint line shows
+// where tiles meet.
+func (p *Painter) pathTiles(key uint64, f *flatPath, hw, x0, y0 float32, w, h int, tint scene.Glyph) {
+	t := pathTile
+	// The columns and rows of tiles that show.
+	v, s := p.Visible(), float64(p.scale)
+	span := func(from, to float32, origin float32, n int) (int, int) {
+		a := math.Floor((float64(from)*s - float64(origin) - 1) / float64(t))
+		b := math.Ceil((float64(to)*s - float64(origin) + 1) / float64(t))
+		return int(max(a, 0)), int(min(b, float64(n)))
 	}
-	p.add(op)
+	c0, c1 := span(v.X, v.X+v.W, x0, (w+t-1)/t)
+	r0, r1 := span(v.Y, v.Y+v.H, y0, (h+t-1)/t)
+	cols, rows := c1-c0, r1-r0
+	if cols <= 0 || rows <= 0 || cols*rows > pathTilesMax {
+		return
+	}
+	reached := p.rt.paths.reached
+	if cap(reached) < cols*rows {
+		reached = make([]bool, cols*rows)
+	}
+	reached = reached[:cols*rows]
+	clear(reached)
+	p.rt.paths.reached = reached
+	// segments calls fn with each edge of the path, from the mask's
+	// corner: a filled polyline's, back to its start too.
+	segments := func(fn func(ax, ay, bx, by float32)) {
+		for i := range f.polys() {
+			poly := f.poly(i)
+			for k := 1; k < len(poly); k++ {
+				fn(poly[k-1][0]-x0, poly[k-1][1]-y0, poly[k][0]-x0, poly[k][1]-y0)
+			}
+			if hw == 0 || f.closed[i] {
+				last := poly[len(poly)-1]
+				fn(last[0]-x0, last[1]-y0, poly[0][0]-x0, poly[0][1]-y0)
+			}
+		}
+	}
+	// Each edge reaches the tiles within m of it: a stroke's half width,
+	// and a pixel of antialiasing and one of rounding.
+	m, size := hw+2, float32(t)
+	segments(func(ax, ay, bx, by float32) {
+		lo := max(int(math.Floor(float64((min(ay, by)-m)/size))), r0)
+		hi := min(int(math.Floor(float64((max(ay, by)+m)/size))), r1-1)
+		for r := lo; r <= hi; r++ {
+			// The part of the edge within m of the row.
+			xl, xh := min(ax, bx), max(ax, bx)
+			if ay != by {
+				k0 := (float32(r*t) - m - ay) / (by - ay)
+				k1 := (float32((r+1)*t) + m - ay) / (by - ay)
+				k0, k1 = max(min(k0, k1), 0), min(max(k0, k1), 1)
+				xa, xb := ax+(bx-ax)*k0, ax+(bx-ax)*k1
+				xl, xh = min(xa, xb), max(xa, xb)
+			}
+			cl := max(int(math.Floor(float64((xl-m)/size))), c0)
+			ch := min(int(math.Floor(float64((xh+m)/size))), c1-1)
+			for c := cl; c <= ch; c++ {
+				reached[(r-r0)*cols+c-c0] = true
+			}
+		}
+	})
+	// The tiles the path reaches are masks of their own: more than half
+	// the largest atlas of them would not fit beside the frame's glyphs.
+	// Such a path, as one of which more than pathTilesMax tiles show, is
+	// not drawn, as paths too large for a mask were not before tiles.
+	room := 0
+	for i, ok := range reached {
+		if ok {
+			tw, th := min(t, w-(c0+i%cols)*t), min(t, h-(r0+i/cols)*t)
+			room += (tw + 1) * (th + 1)
+		}
+	}
+	if room > scene.MaxAtlasSize*scene.MaxAtlasSize/2 {
+		return
+	}
+	for r := r0; r < r1; r++ {
+		ty, th := r*t, min(t, h-r*t)
+		// Inside a filled path, a tile no edge reaches is covered whole,
+		// where its edges wind around a point of it (non-zero): count
+		// those crossing a line across the row, left of the point.
+		cross := p.rt.paths.cross[:0]
+		if hw == 0 && slices.Contains(reached[(r-r0)*cols:(r-r0+1)*cols], false) {
+			y := float32(ty) + 0.5
+			segments(func(ax, ay, bx, by float32) {
+				if (ay <= y) != (by <= y) {
+					dir := 1
+					if by < ay {
+						dir = -1
+					}
+					cross = append(cross, pathCrossing{ax + (y-ay)*(bx-ax)/(by-ay), dir})
+				}
+			})
+			p.rt.paths.cross = cross
+		}
+		for c := c0; c < c1; c++ {
+			tx, tw := c*t, min(t, w-c*t)
+			if reached[(r-r0)*cols+c-c0] {
+				p.pathMask(tileKey(key, tx, ty, tw, th), f, hw, x0+float32(tx), y0+float32(ty), tw, th, false, tint)
+				continue
+			}
+			winding, x := 0, float32(tx)+0.5
+			for _, k := range cross {
+				if k.x < x {
+					winding += k.dir
+				}
+			}
+			if winding != 0 {
+				// A mask covered whole, which tiles of its size share: the
+				// key of no path, at no place.
+				p.pathMask(tileKey(0, -1, -1, tw, th), f, 0, x0+float32(tx), y0+float32(ty), tw, th, true, tint)
+			}
+		}
+	}
+}
+
+// pathTilesMax is how many tiles that show pathTiles looks at, at most:
+// 64 by 64, 32704 pixels a side, more than a window shows of a path unless
+// a transform shrinks it several times over.
+const pathTilesMax = 64 * 64
+
+// tileKey returns the key of the w×h tile at (x, y) of the mask of key.
+func tileKey(key uint64, x, y, w, h int) uint64 {
+	var buf [24]byte
+	binary.LittleEndian.PutUint64(buf[:], key)
+	binary.LittleEndian.PutUint32(buf[8:], uint32(x))
+	binary.LittleEndian.PutUint32(buf[12:], uint32(y))
+	binary.LittleEndian.PutUint32(buf[16:], uint32(w))
+	binary.LittleEndian.PutUint32(buf[20:], uint32(h))
+	return maphash.Bytes(pathSeed, buf[:])
 }
 
 // rasterizePath draws the mask of the path job, into memory the engine
@@ -328,6 +551,12 @@ func (rt *engine) rasterizePath() (int, int, []byte) {
 		rt.paths.pix = make([]byte, n)
 	}
 	pix := rt.paths.pix[:n]
+	if j.full {
+		for i := range pix {
+			pix[i] = 255
+		}
+		return j.w, j.h, pix
+	}
 	z.Reset(j.w, j.h)
 	if j.hw > 0 {
 		strokeInto(z, &rt.paths.loop, j.f, j.hw, j.x0, j.y0)
@@ -369,6 +598,26 @@ func (f *flatPath) capFade(width float32) float32 {
 		return 1
 	}
 	return f.kept / width
+}
+
+// FillPathConicGradient fills a path with a conic gradient around its
+// bounds.
+func (p *Painter) FillPathConicGradient(path *Path, g ConicGradient) {
+	f := &p.rt.paths.flat
+	path.flatten(f, p.scale)
+	p.drawPathPaint(f, 0, Color{R: 255, G: 255, B: 255, A: 255}, nil, &g)
+}
+
+// StrokePathConicGradient draws the outline of a path as StrokePath does,
+// in a conic gradient around its bounds.
+func (p *Painter) StrokePathConicGradient(path *Path, width float32, g ConicGradient) {
+	f := &p.rt.paths.flat
+	path.flatten(f, p.scale)
+	// Trimmed short, it fades as its caps would (capFade).
+	saved := p.opacity
+	p.opacity *= f.capFade(width * p.scale)
+	p.drawPathPaint(f, width*p.scale, Color{R: 255, G: 255, B: 255, A: 255}, nil, &g)
+	p.opacity = saved
 }
 
 // StrokePathGradient draws the outline of a path as StrokePath does, in a
@@ -477,7 +726,8 @@ func offsetLoop(z *vec.Rasterizer, pts [][2]float32, hw float32) {
 			steps := int(math.Ceil(math.Abs(turn) / (2 * math.Acos(max(1-0.02/float64(hw), -1)))))
 			for s := 1; s <= steps; s++ {
 				a := from + turn*float64(s)/float64(steps)
-				z.LineTo(b[0]+hw*float32(math.Cos(a)), b[1]+hw*float32(math.Sin(a)))
+				sin, cos := math.Sincos(a)
+				z.LineTo(b[0]+hw*float32(cos), b[1]+hw*float32(sin))
 			}
 		}
 		dx, dy, nx, ny = ex, ey, mx, my

@@ -7,7 +7,11 @@ import (
 	"bytes"
 	"cmp"
 	"errors"
+	"image"
+	"image/png"
+	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -30,7 +34,11 @@ type Backend struct {
 
 	mu               sync.Mutex
 	windows          []*Window
+	trayIDs          []string
+	trays            []*tray
+	trayDark         bool
 	appMenu          *platform.Menu
+	popups           []Popup
 	updates          []*platform.MenuItem
 	hotkeys          map[int]string
 	clipboard        transfer.Data
@@ -42,28 +50,91 @@ type Backend struct {
 	ClipboardDuringFlush func()
 	theme                string
 	prefs                platform.Preferences
+	prefsReads           int
+	// languages and region are the user's (SetSystemLanguages,
+	// SetSystemRegion); en-US without them.
+	languages []string
+	region    *platform.Region
+	// KeepsLocale makes the backend keep the app's language, as macOS
+	// does, in SavedLocale; without it the core keeps it in a file.
+	KeepsLocale bool
+	savedLocale string
+	// UILanguages are the languages SetLanguages told last, and
+	// UIRightToLeft its direction.
+	UILanguages   []string
+	UIRightToLeft bool
 	// Watching reports whether power events were asked for, Awake counts the
 	// KeepAwake calls not released yet.
 	Watching bool
 	Awake    int
+	// Online and Metered are what Network.Status answers with, and
+	// WatchingNetwork whether Network.Watch was called.
+	Online, Metered bool
+	WatchingNetwork bool
+	// FileWatches are the file watches made, FileWatchError what making
+	// one fails with, FileWatchSubtree whether they take Subtree targets
+	// and FileWatchNoFiles whether they refuse files.
+	FileWatches      []*FileWatch
+	FileWatchError   error
+	FileWatchSubtree bool
+	FileWatchNoFiles bool
+	// FileWatchAddHook is the AddHook of the file watches made.
+	FileWatchAddHook func(platform.FileWatchTarget) error
+	// ReplaceFileHook, when set, replaces files in place of ReplaceFile,
+	// as a system that fails halfway would.
+	ReplaceFileHook func(target, replacement string) error
 	// URLSchemes are the registered URL schemes, by scheme: "id name".
 	URLSchemes map[string]string
 	// LoginItem is the command that starts the app at login: "id name arg".
 	LoginItem string
 	// DockMenu is the menu of the Dock icon.
 	DockMenu *platform.Menu
+	// ForegroundAllowed counts AllowForeground calls.
+	ForegroundAllowed int
+	// ActivationToken is the token of WithActivationToken while its
+	// function runs.
+	ActivationToken string
 	// Cleared counts ClearBrowsingData calls.
 	Cleared int
+	// cookies holds the cookies of the pages, by name, domain and path.
+	cookies map[platform.CookieKey]platform.Cookie
+	// contentLists are the content rule lists compiled, by identifier;
+	// ContentRuleCompiles counts the compiles.
+	contentLists        map[string]*ContentRuleList
+	ContentRuleCompiles int
+	// CookiesCleared counts ClearCookies calls.
+	CookiesCleared int
+	// RecentDocuments are the paths AddRecentDocument recorded, in order,
+	// without the ones ClearRecentDocuments removed.
+	RecentDocuments []string
+	// RecentCleared counts ClearRecentDocuments calls.
+	RecentCleared int
+	// JumpList is the list of the last SetJumpList call, JumpListCommits
+	// the number of calls.
+	JumpList        platform.JumpList
+	JumpListCommits int
 	// Dialog results returned by the next dialog.
 	OpenResult    []string
 	SaveResult    string
 	MessageResult platform.MessageBoxResult
+	// OnOpenDialog, OnSaveDialog and OnMessageBox, when set, answer the
+	// dialogs instead of the results above. They run on the main thread.
+	OnOpenDialog func(opts *platform.OpenDialogOptions) []string
+	OnSaveDialog func(opts *platform.SaveDialogOptions) string
+	OnMessageBox func(opts *platform.MessageBoxOptions) platform.MessageBoxResult
 	// NotificationError, when set, is what showing a notification fails
 	// with.
 	NotificationError error
+	// NoWebView makes WebViewAvailable report no system webview, as a
+	// machine without one does.
+	NoWebView bool
 	// notifications are the notifications shown and not yet removed, by
 	// id.
 	notifications map[string]*platform.Notification
+	// secretError, when set, is what every Secrets call fails with.
+	secretError error
+	// secrets holds the stored secrets by service and account.
+	secrets map[[2]string][]byte
 }
 
 // New creates a fake backend.
@@ -160,7 +231,7 @@ func (b *Backend) NewWindow(o *platform.WindowOptions, h platform.WindowHandler)
 	if o.Surface {
 		w.surface = &Surface{w: w, Scale: 1}
 	}
-	if !o.Frameless && (o.TitleBarStyle == "hidden" || o.TitleBarStyle == "hiddenInset") {
+	if !o.Frameless && (o.TitleBarStyle == "hidden" || o.TitleBarStyle == "hiddenInset") && !o.HideWindowButtons {
 		// Three buttons 46 wide at the top right, as on Windows.
 		w.TitleBarRoom = platform.TitleBar{Height: cmp.Or(o.TitleBarHeight, 32), Right: 138}
 	}
@@ -224,7 +295,25 @@ func (b *Backend) SetApplicationMenu(m *platform.Menu) {
 	b.mu.Unlock()
 }
 
-func (b *Backend) PopupMenu(*platform.Menu, platform.Window, *platform.Point) {}
+// PopupMenu notes the context menu shown, which Popups returns.
+func (b *Backend) PopupMenu(m *platform.Menu, _ platform.Window, pos *platform.Point) {
+	b.mu.Lock()
+	b.popups = append(b.popups, Popup{Menu: m, Pos: pos})
+	b.mu.Unlock()
+}
+
+// Popup is a context menu shown at Pos.
+type Popup struct {
+	Menu *platform.Menu
+	Pos  *platform.Point
+}
+
+// Popups returns the context menus shown, in order.
+func (b *Backend) Popups() []Popup {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.popups)
+}
 
 func (b *Backend) UpdateMenuItem(it *platform.MenuItem) {
 	b.mu.Lock()
@@ -237,12 +326,49 @@ func (b *Backend) Dialogs() platform.Dialogs   { return dialogs{b} }
 func (b *Backend) Clipboard() platform.Clipboard {
 	return clipboard{b}
 }
-func (b *Backend) Shell() platform.Shell   { return shell{} }
-func (b *Backend) Screen() platform.Screen { return screen{} }
-func (b *Backend) Theme() platform.Theme   { return theme{b} }
-func (b *Backend) Power() platform.Power   { return power{b} }
+func (b *Backend) Shell() platform.Shell     { return shell{} }
+func (b *Backend) Screen() platform.Screen   { return screen{} }
+func (b *Backend) Theme() platform.Theme     { return theme{b} }
+func (b *Backend) Power() platform.Power     { return power{b} }
+func (b *Backend) Network() platform.Network { return network{b} }
+func (b *Backend) Secrets() platform.Secrets { return secrets{b} }
 
-func (b *Backend) NewTray(platform.TrayHandler) (platform.Tray, error) { return &tray{}, nil }
+// Apps are the applications Applications lists, which tests set.
+var Apps []platform.Application
+
+func (b *Backend) Applications() ([]platform.Application, error) {
+	return append([]platform.Application(nil), Apps...), nil
+}
+
+func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
+	t := &tray{b: b, h: h}
+	b.mu.Lock()
+	b.trays = append(b.trays, t)
+	b.mu.Unlock()
+	return t, nil
+}
+
+// SetTrayDark turns the menu bar the icons show on dark or light, as the
+// system's appearance or the wallpaper does, and tells the icons.
+func (b *Backend) SetTrayDark(dark bool) {
+	b.mu.Lock()
+	changed := b.trayDark != dark
+	b.trayDark = dark
+	trays := append([]*tray(nil), b.trays...)
+	b.mu.Unlock()
+	if changed {
+		for _, t := range trays {
+			t.h.AppearanceChanged()
+		}
+	}
+}
+
+// TrayIDs returns the IDs the tray icons were given, in order.
+func (b *Backend) TrayIDs() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.trayIDs...)
+}
 
 func (b *Backend) RegisterHotkey(id int, acc string) error {
 	b.mu.Lock()
@@ -275,6 +401,10 @@ func (b *Backend) PressHotkey(acc string) {
 // Notifications are recorded rather than shown, so that a test can see
 // what the app asked for and report a click as a platform does.
 func (b *Backend) NotificationsSupported() bool { return true }
+
+// WebViewAvailable reports whether the fake system webview is there:
+// windows showing web pages work, unless NoWebView says otherwise.
+func (b *Backend) WebViewAvailable() bool { return !b.NoWebView }
 
 func (b *Backend) ShowNotification(n *platform.Notification, done func(error)) {
 	b.mu.Lock()
@@ -343,6 +473,7 @@ type Window struct {
 
 	mu        sync.Mutex
 	scripts   []string
+	menu      *platform.Menu
 	title     string
 	url       string
 	bounds    platform.Rect
@@ -360,6 +491,12 @@ type Window struct {
 	PDF platform.PDFOptions
 	// HTML holds the documents LoadHTML loaded, in order.
 	HTML []string
+	// UserScriptUpdates counts the calls of SetUserScripts.
+	UserScriptUpdates int
+	// contentRules are the lists SetContentRules set, whose calls
+	// ContentRuleUpdates counts.
+	contentRules       []*ContentRuleList
+	ContentRuleUpdates int
 	// What the window extras were last set to.
 	Background      platform.Color
 	Progress        string
@@ -369,9 +506,16 @@ type Window struct {
 	OnAllWorkspaces bool
 	AutoHidesMenu   bool
 	Icon            []byte
+	// RepresentedFile and DocumentEdited are what SetRepresentedFile and
+	// SetDocumentEdited set.
+	RepresentedFile string
+	DocumentEdited  bool
 	// TitleBarRoom is what TitleBar returns: set for windows with a hidden
 	// title bar, and changed by tests before they call H.TitleBarChanged.
 	TitleBarRoom platform.TitleBar
+	// MaximizeButton is where the content last said it shows the maximize
+	// button.
+	MaximizeButton platform.RectF
 	// AsyncFunction answers CallAsyncFunction.
 	AsyncFunction func(body string) (string, error)
 	// AsyncCallback, when set, receives CallAsyncFunction calls to answer
@@ -403,6 +547,20 @@ func (w *Window) Scripts() []string {
 	return append([]string(nil), w.scripts...)
 }
 
+// ClearScripts forgets the scripts passed to Eval so far.
+func (w *Window) ClearScripts() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.scripts = nil
+}
+
+// Menu returns the menu SetMenu set last.
+func (w *Window) Menu() *platform.Menu {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.menu
+}
+
 func (w *Window) SetProgressBar(state string, value float64) {
 	w.mu.Lock()
 	w.Progress, w.ProgressValue = state, value
@@ -412,6 +570,15 @@ func (w *Window) FlashFrame(v bool)                { w.mu.Lock(); w.Flashing = v
 func (w *Window) SetSkipTaskbar(v bool)            { w.mu.Lock(); w.SkipsTaskbar = v; w.mu.Unlock() }
 func (w *Window) SetVisibleOnAllWorkspaces(v bool) { w.mu.Lock(); w.OnAllWorkspaces = v; w.mu.Unlock() }
 func (w *Window) SetAutoHideMenu(v bool)           { w.mu.Lock(); w.AutoHidesMenu = v; w.mu.Unlock() }
+func (w *Window) SetRepresentedFile(p string)      { w.mu.Lock(); w.RepresentedFile = p; w.mu.Unlock() }
+func (w *Window) SetDocumentEdited(v bool)         { w.mu.Lock(); w.DocumentEdited = v; w.mu.Unlock() }
+
+// Document returns what SetRepresentedFile and SetDocumentEdited set.
+func (w *Window) Document() (path string, edited bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.RepresentedFile, w.DocumentEdited
+}
 func (w *Window) SetIcon(png []byte) error {
 	if png != nil && !bytes.HasPrefix(png, []byte("\x89PNG")) {
 		return errors.New("fake: not a PNG image")
@@ -511,7 +678,7 @@ func (w *Window) HasShadow() bool                    { return true }
 func (w *Window) SetIgnoreMouseEvents(bool)          {}
 func (w *Window) SetContentProtection(bool)          {}
 func (w *Window) SetVibrancy(string)                 {}
-func (w *Window) SetMenu(*platform.Menu)             {}
+func (w *Window) SetMenu(m *platform.Menu)           { w.mu.Lock(); w.menu = m; w.mu.Unlock() }
 func (w *Window) StartDrag()                         {}
 func (w *Window) TitleBarDoubleClicked()             {}
 func (w *Window) LoadURL(url string)                 { w.mu.Lock(); w.url = url; w.mu.Unlock() }
@@ -543,6 +710,14 @@ func (w *Window) addHTML(html string) {
 	w.url = "about:blank"
 }
 
+// UserScripts returns the scripts a page loaded now gets: those of the
+// options, or the ones SetUserScripts set since.
+func (w *Window) UserScripts() []platform.UserScript {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]platform.UserScript(nil), w.Opts.UserScripts...)
+}
+
 func (w *Window) Eval(js string) {
 	if w.OnEval != nil {
 		w.OnEval(js)
@@ -551,6 +726,15 @@ func (w *Window) Eval(js string) {
 	w.mu.Lock()
 	w.scripts = append(w.scripts, js)
 	w.mu.Unlock()
+}
+
+// SetUserScripts replaces Opts.UserScripts, which tests read and
+// UserScripts returns.
+func (w *Window) SetUserScripts(scripts []platform.UserScript) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Opts.UserScripts = scripts
+	w.UserScriptUpdates++
 }
 
 func (w *Window) CallAsyncFunction(body string, cb func(string, error)) {
@@ -592,8 +776,15 @@ func (w *Window) UserClose() bool {
 
 type app struct{ b *Backend }
 
-func (app) SetActivationPolicy(string)                {}
-func (app) Activate()                                 {}
+func (app) SetActivationPolicy(string) {}
+func (app) Activate()                  {}
+func (a app) AllowForeground()         { a.b.ForegroundAllowed++ }
+func (a app) WithActivationToken(token string, fn func()) {
+	prev := a.b.ActivationToken
+	a.b.ActivationToken = token
+	defer func() { a.b.ActivationToken = prev }()
+	fn()
+}
 func (app) Hide()                                     {}
 func (app) Unhide()                                   {}
 func (app) IsHidden() bool                            { return false }
@@ -603,8 +794,48 @@ func (app) Bounce(bool) int                           { return 0 }
 func (app) CancelBounce(int)                          {}
 func (app) SetDockIcon([]byte) error                  { return nil }
 func (app) ShowAboutPanel(platform.AboutPanelOptions) {}
-func (app) Locale() string                            { return "en-US" }
 func (app) Package() (platform.PackageInfo, bool)     { return platform.PackageInfo{}, false }
+
+func (a app) PreferredLanguages() []string {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	if a.b.languages == nil {
+		return []string{"en-US"}
+	}
+	return append([]string(nil), a.b.languages...)
+}
+
+func (a app) Region() platform.Region {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	if a.b.region == nil {
+		return platform.Region{Locale: "en-US", FirstWeekday: 0, HourCycle: 12}
+	}
+	return *a.b.region
+}
+
+func (a app) SavedLocale() (string, bool) {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	return a.b.savedLocale, a.b.KeepsLocale
+}
+
+func (a app) SaveLocale(tag string) bool {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	if !a.b.KeepsLocale {
+		return false
+	}
+	a.b.savedLocale = tag
+	return true
+}
+
+func (a app) SetLanguages(tags []string, rtl bool) {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	a.b.UILanguages = append([]string(nil), tags...)
+	a.b.UIRightToLeft = rtl
+}
 
 func (a app) RegisterURLScheme(scheme, id, name string) error {
 	a.b.mu.Lock()
@@ -646,6 +877,7 @@ func (a app) SetDockMenu(m *platform.Menu) { a.b.mu.Lock(); a.b.DockMenu = m; a.
 func (a app) ClearBrowsingData(done func(error)) {
 	a.b.mu.Lock()
 	a.b.Cleared++
+	clear(a.b.cookies)
 	a.b.mu.Unlock()
 	done(nil)
 }
@@ -656,15 +888,50 @@ func (a app) IsURLSchemeRegistered(scheme, id, name string) bool {
 	return a.b.URLSchemes[scheme] == id+" "+name
 }
 
+func (a app) AddRecentDocument(path string) error {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	a.b.RecentDocuments = append(a.b.RecentDocuments, path)
+	return nil
+}
+
+func (a app) ClearRecentDocuments() error {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	a.b.RecentDocuments = nil
+	a.b.RecentCleared++
+	return nil
+}
+
+func (a app) SetJumpList(list platform.JumpList) error {
+	a.b.mu.Lock()
+	defer a.b.mu.Unlock()
+	a.b.JumpList = list
+	a.b.JumpListCommits++
+	return nil
+}
+
 type dialogs struct{ b *Backend }
 
-func (d dialogs) ShowOpenDialog(_ platform.Window, _ *platform.OpenDialogOptions, cb func([]string, error)) {
+func (d dialogs) ShowOpenDialog(_ platform.Window, o *platform.OpenDialogOptions, cb func([]string, error)) {
+	if f := d.b.OnOpenDialog; f != nil {
+		cb(f(o), nil)
+		return
+	}
 	cb(d.b.OpenResult, nil)
 }
-func (d dialogs) ShowSaveDialog(_ platform.Window, _ *platform.SaveDialogOptions, cb func(string, error)) {
+func (d dialogs) ShowSaveDialog(_ platform.Window, o *platform.SaveDialogOptions, cb func(string, error)) {
+	if f := d.b.OnSaveDialog; f != nil {
+		cb(f(o), nil)
+		return
+	}
 	cb(d.b.SaveResult, nil)
 }
-func (d dialogs) ShowMessageBox(_ platform.Window, _ *platform.MessageBoxOptions, cb func(platform.MessageBoxResult, error)) {
+func (d dialogs) ShowMessageBox(_ platform.Window, o *platform.MessageBoxOptions, cb func(platform.MessageBoxResult, error)) {
+	if f := d.b.OnMessageBox; f != nil {
+		cb(f(o), nil)
+		return
+	}
 	cb(d.b.MessageResult, nil)
 }
 
@@ -745,8 +1012,34 @@ type shell struct{}
 func (shell) OpenExternal(string) error { return nil }
 func (shell) OpenPath(string) error     { return nil }
 func (shell) ShowItemInFolder(string)   {}
-func (shell) TrashItem(string) error    { return nil }
 func (shell) Beep()                     {}
+
+// Trashed are the paths TrashItem was given.
+var Trashed []string
+
+func (shell) TrashItem(path string) error {
+	Trashed = append(Trashed, path)
+	return nil
+}
+
+// Opened are the paths OpenApplication was given.
+var Opened []string
+
+func (shell) OpenApplication(path string) error {
+	Opened = append(Opened, path)
+	return nil
+}
+
+// FileIcon returns a transparent PNG of the size asked for, or the error of
+// a path that does not exist.
+func (shell) FileIcon(path string, size int) ([]byte, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, size, size)))
+	return buf.Bytes(), err
+}
 
 type power struct{ b *Backend }
 
@@ -762,6 +1055,24 @@ func (power) IdleTime() time.Duration { return 42 * time.Second }
 
 // EmitPower simulates a power or session event.
 func (b *Backend) EmitPower(event string) { b.h.PowerEvent(event) }
+
+type network struct{ b *Backend }
+
+func (n network) Status() platform.NetworkStatus {
+	n.b.mu.Lock()
+	defer n.b.mu.Unlock()
+	return platform.NetworkStatus{Online: n.b.Online, Metered: n.b.Metered}
+}
+
+func (n network) Watch() {
+	n.b.mu.Lock()
+	defer n.b.mu.Unlock()
+	n.b.WatchingNetwork = true
+}
+
+// EmitNetwork reports a network status to the app, as a backend does when
+// it may have changed.
+func (b *Backend) EmitNetwork(status platform.NetworkStatus) { b.h.NetworkChanged(status) }
 
 type screen struct{}
 
@@ -795,6 +1106,7 @@ func (t theme) SetSource(s string) {
 func (t theme) Preferences() platform.Preferences {
 	t.b.mu.Lock()
 	defer t.b.mu.Unlock()
+	t.b.prefsReads++
 	return t.b.prefs
 }
 
@@ -807,8 +1119,60 @@ func (b *Backend) SetPreferences(p platform.Preferences) {
 	b.h.ThemeChanged()
 }
 
-type tray struct{}
+// SetSystemLanguages changes the languages the user prefers, as the user
+// does in the system's settings, and reports it; none goes back to en-US.
+func (b *Backend) SetSystemLanguages(tags ...string) {
+	b.mu.Lock()
+	b.languages = append([]string(nil), tags...)
+	if len(tags) == 0 {
+		b.languages = nil
+	}
+	b.mu.Unlock()
+	b.h.LocaleChanged()
+}
 
+// SetSystemRegion changes the user's regional formats, as the user does
+// in the system's settings, and reports it.
+func (b *Backend) SetSystemRegion(r platform.Region) {
+	b.mu.Lock()
+	b.region = &r
+	b.mu.Unlock()
+	b.h.LocaleChanged()
+}
+
+// SetSavedLocale sets what the system keeps of the app's language, as the
+// user does choosing it in macOS's System Settings while the app is not
+// running.
+func (b *Backend) SetSavedLocale(tag string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.savedLocale = tag
+}
+
+// PreferenceReads returns how many times Preferences() read the backend,
+// for tests.
+func (b *Backend) PreferenceReads() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.prefsReads
+}
+
+type tray struct {
+	b *Backend
+	h platform.TrayHandler
+}
+
+func (t *tray) Dark() bool {
+	t.b.mu.Lock()
+	defer t.b.mu.Unlock()
+	return t.b.trayDark
+}
+
+func (t *tray) SetID(id string) {
+	t.b.mu.Lock()
+	t.b.trayIDs = append(t.b.trayIDs, id)
+	t.b.mu.Unlock()
+}
 func (*tray) SetImage([]byte, bool) error { return nil }
 func (*tray) SetTitle(string)             {}
 func (*tray) SetToolTip(string)           {}
@@ -817,7 +1181,11 @@ func (*tray) PopUpMenu(*platform.Menu)    {}
 
 // Bounds puts the icon in the menu bar above the fake display's work area.
 func (*tray) Bounds() platform.Rect { return platform.Rect{X: 1300, Width: 30, Height: 25} }
-func (*tray) Destroy()              {}
+func (t *tray) Destroy() {
+	t.b.mu.Lock()
+	t.b.trays = slices.DeleteFunc(t.b.trays, func(x *tray) bool { return x == t })
+	t.b.mu.Unlock()
+}
 
 // Surface is a fake window surface: it records what the content asks of
 // it, and tests deliver events through Send.
@@ -848,7 +1216,10 @@ type Surface struct {
 }
 
 func (s *Surface) StartDataDrag(r platform.DragRequest) { s.dataDrag = &r }
-func (s *Surface) CancelDataDrag()                      { s.FinishDataDrag(transfer.Result{Canceled: true}) }
+func (s *Surface) CancelDataDrag() {
+	p := screen{}.CursorPoint()
+	s.FinishDataDrag(transfer.Result{Canceled: true, Escaped: true, Point: image.Point{X: p.X, Y: p.Y}})
+}
 func (s *Surface) SetDropFormats(f []transfer.Format) {
 	s.dropFormats = append([]transfer.Format(nil), f...)
 }
@@ -865,6 +1236,10 @@ func (s *Surface) FinishDataDrag(r transfer.Result) {
 }
 
 func (s *Surface) Native() platform.SurfaceNative { return platform.SurfaceNative{} }
+
+// SetMaximizeButton records the button in the window's MaximizeButton
+// (platform.MaximizeButtonSurface).
+func (s *Surface) SetMaximizeButton(r platform.RectF) { s.w.MaximizeButton = r }
 
 func (s *Surface) Size() (float64, float64, float64) {
 	s.w.mu.Lock()
@@ -989,4 +1364,61 @@ func (s *Surface) Accessibility() (*platform.AccessTree, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.access, s.accessN
+}
+
+// secrets keeps secrets in memory. Like the real stores it may be called
+// from any goroutine.
+type secrets struct{ b *Backend }
+
+func (s secrets) SetSecret(service, account string, secret []byte) error {
+	s.b.mu.Lock()
+	defer s.b.mu.Unlock()
+	if s.b.secretError != nil {
+		return s.b.secretError
+	}
+	if s.b.secrets == nil {
+		s.b.secrets = map[[2]string][]byte{}
+	}
+	s.b.secrets[[2]string{service, account}] = bytes.Clone(secret)
+	return nil
+}
+
+func (s secrets) Secret(service, account string) ([]byte, error) {
+	s.b.mu.Lock()
+	defer s.b.mu.Unlock()
+	if s.b.secretError != nil {
+		return nil, s.b.secretError
+	}
+	v, ok := s.b.secrets[[2]string{service, account}]
+	if !ok {
+		return nil, platform.ErrSecretNotFound
+	}
+	return bytes.Clone(v), nil
+}
+
+func (s secrets) DeleteSecret(service, account string) error {
+	s.b.mu.Lock()
+	defer s.b.mu.Unlock()
+	if s.b.secretError != nil {
+		return s.b.secretError
+	}
+	delete(s.b.secrets, [2]string{service, account})
+	return nil
+}
+
+// StoredSecret returns the secret stored for service and account, as the
+// system's store would show it.
+func (b *Backend) StoredSecret(service, account string) ([]byte, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	v, ok := b.secrets[[2]string{service, account}]
+	return bytes.Clone(v), ok
+}
+
+// SetSecretError makes every Secrets call fail with err, or work again
+// when err is nil. It may be called from any goroutine.
+func (b *Backend) SetSecretError(err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.secretError = err
 }

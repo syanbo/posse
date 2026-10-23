@@ -436,7 +436,7 @@ func newPreviewTester(a *app, dark bool) *ui.Tester {
 	// 背景色有 120ms 的过渡，等它走完再取图
 	for range 3 {
 		tt.Frame()
-		time.Sleep(80 * time.Millisecond)
+		pass(tt, 80*time.Millisecond)
 	}
 	tt.Frame()
 	return tt
@@ -560,7 +560,7 @@ func TestPreview(t *testing.T) {
 		tt = newPreviewTester(a, dark)
 		if r, ok := tt.Find("phone_screenshot"); ok {
 			tt.Move(r.X+r.W/2, r.Y-60)
-			tt.Frame()
+			settleMenu(tt)
 			savePNG(t, tt, "images-hover-"+suffix+".png")
 			tt.RightClickAt(r.X+r.W/2, r.Y-60)
 			settleMenu(tt)
@@ -827,7 +827,7 @@ func TestPreview(t *testing.T) {
 		}
 		for range 3 {
 			tt.Frame()
-			time.Sleep(80 * time.Millisecond)
+			pass(tt, 80*time.Millisecond)
 		}
 		tt.Frame()
 		savePNG(t, tt, "new-menu-"+suffix+".png")
@@ -930,7 +930,7 @@ func previewImages() imagesView {
 func settleMenu(tt *ui.Tester) {
 	for range 3 {
 		tt.Frame()
-		time.Sleep(80 * time.Millisecond)
+		pass(tt, 80*time.Millisecond)
 	}
 	tt.Frame()
 }

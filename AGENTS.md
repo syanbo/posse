@@ -44,7 +44,7 @@ internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和�
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索
 internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
 mobile              Hive 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 HIVE.md）
-third_party/mygo    带改动的 mygo v0.4.8（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
+third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
 ```
 
 ## 关键约定

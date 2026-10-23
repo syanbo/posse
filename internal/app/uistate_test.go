@@ -228,7 +228,7 @@ func TestSidebarToggleAndResize(t *testing.T) {
 func settle(tt *ui.Tester) {
 	for range 4 {
 		tt.Frame()
-		time.Sleep(80 * time.Millisecond)
+		pass(tt, 80*time.Millisecond)
 	}
 	tt.Frame()
 }

@@ -130,6 +130,7 @@ var (
 	gObjectRefSink                 func(obj ptr) ptr
 	gObjectUnref                   func(obj ptr)
 	gObjectSetBool                 func(obj ptr, name *byte, v bool, end ptr)
+	gObjectSetStr                  func(obj ptr, name *byte, v *byte, end ptr)
 	gObjectGetPtr                  func(obj ptr, name *byte, out unsafe.Pointer, end ptr)
 	gSlistFree                     func(list ptr)
 	gListFree                      func(list ptr)
@@ -171,42 +172,53 @@ var (
 	gDBusConnectionGetUniqueName   func(conn ptr) ptr
 )
 
+// GIO's network monitor (network.go).
+var (
+	gNetworkMonitorGetDefault          func() ptr
+	gNetworkMonitorGetNetworkAvailable func(monitor ptr) bool
+	gNetworkMonitorGetNetworkMetered   func(monitor ptr) bool
+)
+
 // GDK and GdkPixbuf.
 var (
-	gdkScreenGetRGBAVisual      func(screen ptr) ptr
-	gdkDisplayGetDefault        func() ptr
-	gdkDisplayGetNMonitors      func(d ptr) int32
-	gdkDisplayGetMonitor        func(d ptr, i int32) ptr
-	gdkDisplayGetPrimaryMonitor func(d ptr) ptr
-	gdkMonitorGetGeometry       func(m ptr, r *gdkRectangle)
-	gdkMonitorGetWorkarea       func(m ptr, r *gdkRectangle)
-	gdkMonitorGetScaleFactor    func(m ptr) int32
-	gdkMonitorGetRefreshRate    func(m ptr) int32
-	gdkDisplayGetMonitorAtWin   func(d, w ptr) ptr
-	gdkMonitorGetModel          func(m ptr) ptr
-	gdkDisplayGetDefaultSeat    func(d ptr) ptr
-	gdkSeatGetPointer           func(s ptr) ptr
-	gdkDeviceGetPosition        func(dev ptr, screen *ptr, x, y *int32)
-	gdkWindowGetDevicePosition  func(w, dev ptr, x, y *int32, mask *uint32) ptr
-	gdkWindowGetDisplay         func(w ptr) ptr
-	gdkWindowGetFrameExtents    func(w ptr, r *gdkRectangle)
-	gdkWindowGetOrigin          func(w ptr, x, y *int32) int32
-	gdkWindowGetGeometry        func(w ptr, x, y, width, height *int32)
-	gdkWindowGetCursor          func(w ptr) ptr
-	gdkWindowSetCursor          func(w, cursor ptr)
-	gdkCursorNewFromName        func(d ptr, name *byte) ptr
-	gdkDisplayBeep              func(d ptr)
-	gdkEventCopy                func(e ptr) ptr
-	gdkEventFree                func(e ptr)
-	gdkAtomIntern               func(name *byte, onlyIfExists bool) ptr
-	gdkAtomName                 func(atom ptr) ptr
-	gdkKeyvalFromName           func(name *byte) uint32
-	gdkUnicodeToKeyval          func(r uint32) uint32
-	gdkPixbufLoaderNew          func() ptr
-	gdkPixbufLoaderWrite        func(l ptr, buf unsafe.Pointer, n uintptr, err *ptr) bool
-	gdkPixbufLoaderClose        func(l ptr, err *ptr) bool
-	gdkPixbufLoaderGetPixbuf    func(l ptr) ptr
-	gdkPixbufSaveToBufferv      func(p ptr, buf *ptr, size *uintptr, typ *byte, keys, values ptr, err *ptr) bool
+	gdkScreenGetRGBAVisual          func(screen ptr) ptr
+	gdkDisplayGetDefault            func() ptr
+	gdkDisplayGetNMonitors          func(d ptr) int32
+	gdkDisplayGetMonitor            func(d ptr, i int32) ptr
+	gdkDisplayGetPrimaryMonitor     func(d ptr) ptr
+	gdkMonitorGetGeometry           func(m ptr, r *gdkRectangle)
+	gdkMonitorGetWorkarea           func(m ptr, r *gdkRectangle)
+	gdkMonitorGetScaleFactor        func(m ptr) int32
+	gdkMonitorGetRefreshRate        func(m ptr) int32
+	gdkDisplayGetMonitorAtWin       func(d, w ptr) ptr
+	gdkMonitorGetModel              func(m ptr) ptr
+	gdkDisplayGetDefaultSeat        func(d ptr) ptr
+	gdkSeatGetPointer               func(s ptr) ptr
+	gdkDeviceGetPosition            func(dev ptr, screen *ptr, x, y *int32)
+	gdkWindowGetDevicePosition      func(w, dev ptr, x, y *int32, mask *uint32) ptr
+	gdkWindowGetDisplay             func(w ptr) ptr
+	gdkWindowGetFrameExtents        func(w ptr, r *gdkRectangle)
+	gdkWindowGetOrigin              func(w ptr, x, y *int32) int32
+	gdkWindowGetGeometry            func(w ptr, x, y, width, height *int32)
+	gdkWindowGetCursor              func(w ptr) ptr
+	gdkWindowSetCursor              func(w, cursor ptr)
+	gdkCursorNewFromName            func(d ptr, name *byte) ptr
+	gdkDisplayBeep                  func(d ptr)
+	gdkEventCopy                    func(e ptr) ptr
+	gdkEventFree                    func(e ptr)
+	gdkAtomIntern                   func(name *byte, onlyIfExists bool) ptr
+	gdkAtomName                     func(atom ptr) ptr
+	gdkKeyvalFromName               func(name *byte) uint32
+	gdkKeyvalToLower                func(keyval uint32) uint32
+	gdkUnicodeToKeyval              func(r uint32) uint32
+	gdkKeymapGetForDisplay          func(d ptr) ptr
+	gdkKeymapGetEntriesForKeyval    func(km ptr, keyval uint32, keys *ptr, n *int32) bool
+	gdkKeymapTranslateKeyboardState func(km ptr, keycode, state uint32, group int32, keyval *uint32, effGroup, level *int32, consumed *uint32) bool
+	gdkPixbufLoaderNew              func() ptr
+	gdkPixbufLoaderWrite            func(l ptr, buf unsafe.Pointer, n uintptr, err *ptr) bool
+	gdkPixbufLoaderClose            func(l ptr, err *ptr) bool
+	gdkPixbufLoaderGetPixbuf        func(l ptr) ptr
+	gdkPixbufSaveToBufferv          func(p ptr, buf *ptr, size *uintptr, typ *byte, keys, values ptr, err *ptr) bool
 )
 
 type gdkRectangle struct{ X, Y, Width, Height int32 }
@@ -258,6 +270,7 @@ var (
 	gtkWindowBeginMoveDrag              func(w ptr, button int32, rootX, rootY int32, timestamp uint32)
 	gtkWindowBeginResizeDrag            func(w ptr, edge, button int32, rootX, rootY int32, timestamp uint32)
 	gtkWindowAddAccelGroup              func(w, group ptr)
+	gtkWindowPropagateKeyEvent          func(w, event ptr) bool
 	gtkWindowRemoveAccelGroup           func(w, group ptr)
 	gtkWindowSetUrgencyHint             func(w ptr, v bool)
 	gtkWindowStick                      func(w ptr)
@@ -265,6 +278,8 @@ var (
 	gtkWindowSetIcon                    func(w, pixbuf ptr)
 	gtkWindowSetDefaultIcon             func(pixbuf ptr)
 	gtkWidgetShowAll                    func(w ptr)
+	gtkWidgetSetDirection               func(w ptr, dir int32)
+	gtkWidgetSetDefaultDirection        func(dir int32)
 	gtkWidgetShow                       func(w ptr)
 	gtkWidgetHide                       func(w ptr)
 	gtkWidgetDestroy                    func(w ptr)
@@ -346,6 +361,7 @@ var (
 	gtkSelectionDataFree                func(sd ptr)
 	gtkSelectionDataGetUris             func(sd ptr) ptr
 	gtkSettingsGetDefault               func() ptr
+	gtkSettingsResetProperty            func(settings ptr, name *byte)
 	gtkOverlayNew                       func() ptr
 	gtkOverlayAddOverlay                func(o, w ptr)
 	gtkHeaderBarNew                     func() ptr
@@ -375,6 +391,7 @@ var (
 	webkitWebContextRegisterURIScheme                 func(ctx ptr, scheme *byte, cb ptr, data ptr, destroy ptr)
 	webkitWebContextGetSecurityManager                func(ctx ptr) ptr
 	webkitWebContextGetWebsiteDataManager             func(ctx ptr) ptr
+	webkitWebContextSetPreferredLanguages             func(ctx ptr, languages **byte)
 	webkitWebsiteDataManagerClear                     func(m ptr, types uint32, timespan int64, cancellable ptr, cb ptr, data ptr)
 	webkitWebsiteDataManagerClearFinish               func(m, res ptr, err *ptr) bool
 	webkitDownloadGetWebView                          func(d ptr) ptr
@@ -455,6 +472,15 @@ var (
 	gtkPageSetupSetRightMargin                        func(setup ptr, margin float64, unit int32)
 	gtkPaperSizeNewCustom                             func(name, displayName *byte, width, height float64, unit int32) ptr
 	gtkPaperSizeFree                                  func(size ptr)
+	gtkRecentManagerGetDefault                        func() ptr
+	gtkRecentManagerAddItem                           func(manager ptr, uri *byte) bool
+	gtkRecentManagerGetItems                          func(manager ptr) ptr
+	gtkRecentInfoGetURI                               func(info ptr) ptr
+	gtkRecentInfoHasApplication                       func(info, app ptr) bool
+	gtkRecentInfoUnref                                func(info ptr)
+	gGetApplicationName                               func() ptr
+	gtkRecentManagerRemoveItem                        func(manager ptr, uri *byte, gerr ptr) bool
+	gtkRecentManagerHasItem                           func(manager ptr, uri *byte) bool
 	webkitJavascriptResultGetJSValue                  func(r ptr) ptr
 	webkitNavigationPolicyDecisionGetNavigationAction func(d ptr) ptr
 	webkitNavigationPolicyDecisionGetFrameName        func(d ptr) ptr
@@ -540,6 +566,7 @@ func load() error {
 	mustBind(g, &gMainLoopUnref, "g_main_loop_unref")
 	mustBind(g, &gSlistFree, "g_slist_free")
 	mustBind(g, &gListFree, "g_list_free")
+	mustBind(g, &gGetApplicationName, "g_get_application_name")
 	mustBind(g, &gVariantNewString, "g_variant_new_string")
 	mustBind(g, &gVariantNewUint32, "g_variant_new_uint32")
 	mustBind(g, &gVariantNewInt32, "g_variant_new_int32")
@@ -571,6 +598,7 @@ func load() error {
 	mustBind(o, &gObjectRefSink, "g_object_ref_sink")
 	mustBind(o, &gObjectUnref, "g_object_unref")
 	mustBind(o, &gObjectSetBool, "g_object_set")
+	mustBind(o, &gObjectSetStr, "g_object_set")
 	mustBind(o, &gObjectGetPtr, "g_object_get")
 
 	i := libGIO
@@ -587,6 +615,9 @@ func load() error {
 	mustBind(i, &gDBusConnectionCallSync, "g_dbus_connection_call_sync")
 	mustBind(i, &gDBusConnectionSignalSubscribe, "g_dbus_connection_signal_subscribe")
 	mustBind(i, &gDBusConnectionGetUniqueName, "g_dbus_connection_get_unique_name")
+	mustBind(i, &gNetworkMonitorGetDefault, "g_network_monitor_get_default")
+	mustBind(i, &gNetworkMonitorGetNetworkAvailable, "g_network_monitor_get_network_available")
+	mustBind(i, &gNetworkMonitorGetNetworkMetered, "g_network_monitor_get_network_metered")
 
 	d := libGDK
 	mustBind(d, &gdkScreenGetRGBAVisual, "gdk_screen_get_rgba_visual")
@@ -617,7 +648,11 @@ func load() error {
 	mustBind(d, &gdkAtomIntern, "gdk_atom_intern")
 	mustBind(d, &gdkAtomName, "gdk_atom_name")
 	mustBind(d, &gdkKeyvalFromName, "gdk_keyval_from_name")
+	mustBind(d, &gdkKeyvalToLower, "gdk_keyval_to_lower")
 	mustBind(d, &gdkUnicodeToKeyval, "gdk_unicode_to_keyval")
+	mustBind(d, &gdkKeymapGetForDisplay, "gdk_keymap_get_for_display")
+	mustBind(d, &gdkKeymapGetEntriesForKeyval, "gdk_keymap_get_entries_for_keyval")
+	mustBind(d, &gdkKeymapTranslateKeyboardState, "gdk_keymap_translate_keyboard_state")
 
 	p := libPixbuf
 	mustBind(p, &gdkPixbufLoaderNew, "gdk_pixbuf_loader_new")
@@ -662,6 +697,7 @@ func load() error {
 	mustBind(t, &gtkWindowBeginMoveDrag, "gtk_window_begin_move_drag")
 	mustBind(t, &gtkWindowBeginResizeDrag, "gtk_window_begin_resize_drag")
 	mustBind(t, &gtkWindowAddAccelGroup, "gtk_window_add_accel_group")
+	mustBind(t, &gtkWindowPropagateKeyEvent, "gtk_window_propagate_key_event")
 	mustBind(t, &gtkWindowRemoveAccelGroup, "gtk_window_remove_accel_group")
 	mustBind(t, &gtkWindowSetUrgencyHint, "gtk_window_set_urgency_hint")
 	mustBind(t, &gtkWindowStick, "gtk_window_stick")
@@ -669,6 +705,8 @@ func load() error {
 	mustBind(t, &gtkWindowSetIcon, "gtk_window_set_icon")
 	mustBind(t, &gtkWindowSetDefaultIcon, "gtk_window_set_default_icon")
 	mustBind(t, &gtkWidgetShowAll, "gtk_widget_show_all")
+	mustBind(t, &gtkWidgetSetDirection, "gtk_widget_set_direction")
+	mustBind(t, &gtkWidgetSetDefaultDirection, "gtk_widget_set_default_direction")
 	mustBind(t, &gtkWidgetShow, "gtk_widget_show")
 	mustBind(t, &gtkWidgetHide, "gtk_widget_hide")
 	mustBind(t, &gtkWidgetDestroy, "gtk_widget_destroy")
@@ -750,6 +788,7 @@ func load() error {
 	mustBind(t, &gtkSelectionDataGetLength, "gtk_selection_data_get_length")
 	mustBind(t, &gtkSelectionDataFree, "gtk_selection_data_free")
 	mustBind(t, &gtkSettingsGetDefault, "gtk_settings_get_default")
+	mustBind(t, &gtkSettingsResetProperty, "gtk_settings_reset_property")
 	mustBind(t, &gtkOverlayNew, "gtk_overlay_new")
 	mustBind(t, &gtkOverlayAddOverlay, "gtk_overlay_add_overlay")
 	mustBind(t, &gtkHeaderBarNew, "gtk_header_bar_new")
@@ -783,6 +822,14 @@ func load() error {
 	mustBind(t, &gtkPageSetupSetRightMargin, "gtk_page_setup_set_right_margin")
 	mustBind(t, &gtkPaperSizeNewCustom, "gtk_paper_size_new_custom")
 	mustBind(t, &gtkPaperSizeFree, "gtk_paper_size_free")
+	mustBind(t, &gtkRecentManagerGetDefault, "gtk_recent_manager_get_default")
+	mustBind(t, &gtkRecentManagerAddItem, "gtk_recent_manager_add_item")
+	mustBind(t, &gtkRecentManagerGetItems, "gtk_recent_manager_get_items")
+	mustBind(t, &gtkRecentInfoGetURI, "gtk_recent_info_get_uri")
+	mustBind(t, &gtkRecentInfoHasApplication, "gtk_recent_info_has_application")
+	mustBind(t, &gtkRecentInfoUnref, "gtk_recent_info_unref")
+	mustBind(t, &gtkRecentManagerRemoveItem, "gtk_recent_manager_remove_item")
+	mustBind(t, &gtkRecentManagerHasItem, "gtk_recent_manager_has_item")
 	mustBind(libCairo, &cairoSurfaceWriteToPNGStream, "cairo_surface_write_to_png_stream")
 	mustBind(libCairo, &cairoSurfaceDestroy, "cairo_surface_destroy")
 
@@ -810,6 +857,9 @@ var (
 // and 20 ms of startup.
 func webKit() error {
 	webKitOnce.Do(func() { errWebKit = loadWebKit() })
+	if errWebKit == nil && theBackend != nil {
+		cookiesOnce.Do(persistCookies)
+	}
 	return errWebKit
 }
 
@@ -818,18 +868,29 @@ func loadWebKit() error {
 	if libWebKit, err = open("libwebkit2gtk-4.1.so.0", "libwebkit2gtk-4.0.so.37"); err != nil {
 		return fmt.Errorf("%w (install WebKitGTK: libwebkit2gtk-4.1-0 on Debian/Ubuntu, webkit2gtk4.1 on Fedora)", err)
 	}
-	if libJSC, err = open("libjavascriptcoregtk-4.1.so.0", "libjavascriptcoregtk-4.0.so.18"); err != nil {
+	// 4.1 links libsoup 3 and 4.0 libsoup 2.4. Opening the loaded library
+	// again returns the same handle, which tells the two apart.
+	h41, _ := open("libwebkit2gtk-4.1.so.0")
+	soup3 = h41 != 0 && h41 == libWebKit
+	jsc, soup := "libjavascriptcoregtk-4.1.so.0", "libsoup-3.0.so.0"
+	if !soup3 {
+		jsc, soup = "libjavascriptcoregtk-4.0.so.18", "libsoup-2.4.so.1"
+	}
+	// SoupCookie pointers must never cross Soup ABI generations.
+	if libJSC, err = open(jsc); err != nil {
 		return err
 	}
-	if libSoup, err = open("libsoup-3.0.so.0", "libsoup-2.4.so.1"); err != nil {
+	if libSoup, err = open(soup); err != nil {
 		return err
 	}
+	bindCookies()
 
 	w := libWebKit
 	mustBind(w, &webkitWebContextGetDefault, "webkit_web_context_get_default")
 	mustBind(w, &webkitWebContextRegisterURIScheme, "webkit_web_context_register_uri_scheme")
 	mustBind(w, &webkitWebContextGetSecurityManager, "webkit_web_context_get_security_manager")
 	mustBind(w, &webkitWebContextGetWebsiteDataManager, "webkit_web_context_get_website_data_manager")
+	bind(w, &webkitWebContextSetPreferredLanguages, "webkit_web_context_set_preferred_languages")
 	mustBind(w, &webkitWebsiteDataManagerClear, "webkit_website_data_manager_clear")
 	mustBind(w, &webkitWebsiteDataManagerClearFinish, "webkit_website_data_manager_clear_finish")
 	mustBind(w, &webkitDownloadGetWebView, "webkit_download_get_web_view")

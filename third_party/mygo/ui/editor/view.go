@@ -312,6 +312,9 @@ func (v *view) sync(moved func(cs []change)) bool {
 	old := v.text
 	v.text, v.version = text, version
 	v.lines.m = nil
+	// The highlighter hears of the edits before a line of the text is
+	// laid out, as moving the caret into view does between frames.
+	v.followHighlighter()
 	if !ok {
 		// Too far behind the buffer's log to follow its edits: the
 		// changes of the lines between the text it had and the text.
@@ -352,6 +355,15 @@ func (v *view) advanceSyntax(upTo int, budget time.Duration) bool {
 	if v.buf == nil {
 		return true
 	}
+	if hl := v.followHighlighter(); hl != nil {
+		return hl.Highlight(upTo, budget)
+	}
+	return true
+}
+
+// followHighlighter has the buffer's highlighter follow its edits, and
+// returns it, nil for plain text.
+func (v *view) followHighlighter() Highlighter {
 	hl := v.buf.highlighter()
 	if hl != v.hl {
 		// Another language: the lines laid out with the old one's tokens
@@ -360,10 +372,7 @@ func (v *view) advanceSyntax(upTo int, budget time.Duration) bool {
 		v.lines.m = nil
 		v.hlGen++
 	}
-	if hl == nil {
-		return true
-	}
-	return hl.Highlight(upTo, budget)
+	return hl
 }
 
 // line returns line n laid out.
@@ -719,13 +728,21 @@ func (v *view) measureWraps(near int, budget time.Duration) bool {
 		return true
 	}
 	// Those around near first, so what shows is right at once.
-	v.text.EachLine(near-200, near+200, measure)
-	count := 0
+	a := v.text.LineStart(near)
+	lo := max(near-200, v.text.LineOf(a-64<<10))
+	hi := min(near+200, v.text.LineOf(a+64<<10)+1)
+	v.text.EachLine(lo, hi, measure)
+	count, bytes := 0, 0
 	v.text.EachLine(v.wrapAt, n, func(i, at int, s string) bool {
 		measure(i, at, s)
 		v.wrapAt = i + 1
 		count++
-		return count&255 != 0 || time.Since(start) <= budget
+		bytes += len(s)
+		if count&255 != 0 && bytes < 64<<10 {
+			return true
+		}
+		bytes = 0
+		return time.Since(start) <= budget
 	})
 	return w.known >= n
 }

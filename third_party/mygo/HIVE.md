@@ -1,6 +1,6 @@
 # Hive 带的 mygo
 
-github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去掉了 website、examples、docs 和测试文件，其余原样。
+github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去掉了 website、examples、docs、测试文件和 testdata 目录，其余原样。
 
 ## 改动
 
@@ -33,21 +33,27 @@ github.com/egoist/mygo v0.4.8 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/frame.go`：加 `Context.ModalOpen`，报告上一帧有没有对话框在最上层；Hive 的菜单项（⌘W 关闭标签）在帧外触发，用它和快捷键一样在对话框打开时不动作。
 
-`internal/text/coretext_darwin.go`（`line`、`widenTo`）：Core Text 在中文和紧挨着的英文之间（如"狗粮icon"）自动加的间距只在字形位置里、不在 advance 里，mygo 按 advance 量宽度，单行文字按量出的宽度排版时放不下、末尾被省略。从左到右的段里把这段间距补进前一个字形的 advance；advance 为 0 的附加符号（重音、泰文标记）不补。
+`internal/gpu/metal/metal.go`：窗口的 drawable 最多 2 个（上游是 3 个）。上游在窗口 2 秒没画东西后才还掉多的那个，Hive 的窗口一直在画（终端光标闪烁、状态栏每秒刷新），第三个一直占着，约 30 MB。
 
-终端插件 `plugins/terminal`：
+终端插件 `plugins/terminal`（新加的方法放在 `hive.go`，升级时少冲突）：
 
-- `links.go`：加 `spanAt`，返回链接在一行里覆盖的列；`trimURL` 也去掉结尾的中文标点（"。，）"等）；网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出。
-- `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Hive 用来预览图片）。
+- `links.go`：网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出；`trimURL` 也去掉结尾的中文标点（"。，）"等）。
+- `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Hive 用来预览图片）；加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Hive 自己画菜单。
 - `view.go`：
-  - 指针在链接上时（不必按 Command）显示手形指针，并记下链接的范围（`hover`）。
+  - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Hive 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
-- `paint.go`：在悬停的链接下面画一条单下划线，颜色取链接第一个字的颜色（`textColorAt`）。
-- `terminal.go`、`view.go`：加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Hive 自己画菜单。
-- `terminal.go`：加 `Options.Menu`（换掉插件自带的英文右键菜单）和给它用的 `Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）。
-- `terminal.go`：加 `Terminal.ScrollToEdge`、`AltScreen`，给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
+- `hive.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Hive 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
 ## 升级 mygo
 
-换新版本时重新复制并去掉同样的目录，再把上面的改动合进去（搜 `Hive`），然后跑 `go test ./internal/app -run TestClickOpensLinkCard` 和 `go test ./internal/gitx`。
+用三方合并，不要手工对着改：
+
+1. `go mod download -json github.com/egoist/mygo@<旧版本>` 和 `@<新版本>`，拿到模块缓存里的两份源码。
+2. 在临时目录建一个 git 仓库：旧版本按上面的规则去掉目录后提交成 `base`；从它分出 `hive` 分支，换成这里的内容；再从 `base` 分出 `up` 分支，换成新版本（同样去掉目录）。
+3. 在 `hive` 分支上 `git merge up`（`merge.conflictstyle diff3` 看得到 base），解决冲突。上游自己做了同样的事时，用上游的、删掉这里的改动。
+4. 合并结果拷回这里，改 go.mod 的版本，`go mod tidy`。逐个文件确认 `git diff base hive` 里加的行都还在（除了有意去掉的）。
+
+然后跑 `go vet ./... && go test ./... && go tool mygo vet`，生成离屏预览和升级前的逐张比对（`HIVE_PREVIEW_DIR`），打包后用 `footprint` 比较窗口的内存。
+
+v0.5.5 起 `ui.Tester` 有自己的时钟，只有 `Advance` 才走：动画、`c.After` 不再随真实时间推进。界面测试里等待用 `until`、`settle`、`pass`，它们让真实时间和 Tester 的时钟一起走。
