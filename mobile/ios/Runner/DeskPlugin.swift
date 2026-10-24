@@ -109,6 +109,8 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       result(nil)
     case "input":
       sendInput(call.arguments, result: result)
+    case "punch":
+      punch(call.arguments, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -204,6 +206,19 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     let current = session
     sessionLock.unlock()
     current?.sendInput(plain)
+    result(nil)
+  }
+
+  /// Mac 出口的公网地址（"ip:port"），由 desk.punch 换来。
+  private func punch(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let text = arguments as? String, let peer = deskResolveHostPort(text) else {
+      result(FlutterError(code: "bad_address", message: "地址不对", details: nil))
+      return
+    }
+    sessionLock.lock()
+    let current = session
+    sessionLock.unlock()
+    current?.punch(peer)
     result(nil)
   }
 

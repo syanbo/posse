@@ -2,6 +2,7 @@ package desk
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -68,5 +69,71 @@ func TestRoutesThroughRelay(t *testing.T) {
 	n, err := phone.Read(buf)
 	if err != nil || !bytes.Equal(buf[:n], []byte{PacketVideo, 9}) {
 		t.Fatalf("phone got %v %v", buf[:n], err)
+	}
+}
+
+func TestRoutesPunch(t *testing.T) {
+	old := listenOut
+	listenOut = func() (*net.UDPConn, error) { return net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)}) }
+	t.Cleanup(func() { listenOut = old })
+
+	srvConn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srvConn.Close()
+	go deskrelay.NewServer(srvConn).Serve()
+
+	r, err := ListenRoutes(srvConn.LocalAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	pub, err := r.Public(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 中转看到的就是出口 socket
+	if pub.String() != r.out.LocalAddr().String() {
+		t.Fatalf("public %s, out %s", pub, r.out.LocalAddr())
+	}
+
+	phone, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	go r.PunchTo(phone.LocalAddr().(*net.UDPAddr), 300*time.Millisecond)
+	buf := make([]byte, 2048)
+	phone.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, from, err := phone.ReadFromUDP(buf)
+	if err != nil || !bytes.Equal(buf[:n], deskrelay.Punch()) || from.String() != pub.String() {
+		t.Fatalf("phone got %v from %v: %v", buf[:n], from, err)
+	}
+
+	// 手机的打洞包不交上来，打通后的数据包照常交上来、回包走出口 socket
+	phone.WriteToUDP(deskrelay.Punch(), from)
+	phone.WriteToUDP([]byte{PacketHello, 7}, from)
+	r.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, a, err := r.ReadFrom(buf)
+	if err != nil || !bytes.Equal(buf[:n], []byte{PacketHello, 7}) || r.IsRelay(a) {
+		t.Fatalf("mac got %v from %v: %v", buf[:n], a, err)
+	}
+	r.WriteTo([]byte{PacketVideo, 1}, a)
+	for {
+		phone.SetReadDeadline(time.Now().Add(2 * time.Second))
+		n, src, err := phone.ReadFromUDP(buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if deskrelay.IsControl(buf[:n]) {
+			continue // 还在打洞
+		}
+		if !bytes.Equal(buf[:n], []byte{PacketVideo, 1}) || src.String() != pub.String() {
+			t.Fatalf("phone got %v from %v", buf[:n], src)
+		}
+		break
 	}
 }

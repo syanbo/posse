@@ -103,6 +103,9 @@ class _DeskPageState extends State<DeskPage>
   final _frame = ValueNotifier<int>(0);
   final _statsTick = ValueNotifier<DeskStats>(const DeskStats());
   DeskStats _stats = const DeskStats();
+
+  /// 这次接收已经请 Mac 打过洞了：每次开接收只打一次，打不通就一直走中转。
+  bool _punchAsked = false;
   int? _texture;
   String? _fail;
   String? _endNote;
@@ -551,6 +554,27 @@ class _DeskPageState extends State<DeskPage>
     _stats = stats;
     _statsTick.value = stats;
     if (relayout) setState(() {});
+    final public = stats.public;
+    if (public != null && _relay != null && !_punchAsked) {
+      _punchAsked = true;
+      unawaited(_punch(public));
+    }
+  }
+
+  /// 画面经中转到了之后打洞：把手机接收 socket 的公网地址经 desk.punch 交给 Mac，换回 Mac 出口的公网地址，
+  /// 两边互发打洞包。打通了 Mac 改发直连，打不通照旧走中转。
+  Future<void> _punch(String phone) async {
+    final rpc = _rpcNow;
+    final gen = _gen;
+    if (rpc == null) return;
+    try {
+      final result = await rpc.call('desk.punch', {'addr': phone});
+      final mac = result['addr'];
+      if (!mounted || gen != _gen || mac is! String) return;
+      await _receiver.punch(mac);
+    } on Object {
+      // 旧版电脑没有 desk.punch、中转没回探测，都照旧走中转。
+    }
   }
 
   /// 订阅、退订和改 UDP 地址串行，避免停接收和开接收叠在一起。
@@ -880,6 +904,7 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Future<void> _stopReceiver() async {
+    _punchAsked = false;
     // 接收停了不会再来统计：留着最后一份 video 为真，页面会以为还在播，黑屏不出提示
     if (mounted) {
       _stats = const DeskStats();
@@ -1476,6 +1501,7 @@ class _DeskPageState extends State<DeskPage>
               children: [
                 Text(headline),
                 Text('丢包 ${stats.loss}'),
+                Text('线路 ${deskPathLabel(stats.path)}'),
                 ValueListenableBuilder<(int, int)>(
                   valueListenable: _inputLine,
                   builder: (context, line, _) =>

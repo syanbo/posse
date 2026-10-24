@@ -1,12 +1,16 @@
 package desk
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"hive/internal/deskrelay"
@@ -26,7 +30,7 @@ type routedPacket struct {
 
 // Routes 是 Serve 用的 UDP 连接，底下两个 socket：
 // lan 照系统路由走，给局域网和 Tailscale；out 绑在物理网卡上，绕开 Surge 这类接管全部流量的代理，
-// 给中转（和以后的打洞）用。回包走收到那个地址时用的 socket。
+// 给中转和打洞用。回包走收到那个地址时用的 socket。
 type Routes struct {
 	lan, out *net.UDPConn
 	relay    *net.UDPAddr
@@ -40,6 +44,9 @@ type Routes struct {
 	via      map[string]*net.UDPConn
 	deadline time.Time
 	acked    bool
+
+	public    atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
+	lastPunch atomic.Int64
 }
 
 // ListenRoutes 开好两个 socket。relay 为空时只有 lan，和以前一样。
@@ -124,7 +131,17 @@ func (r *Routes) read(sock *net.UDPConn) {
 			}
 			continue
 		}
-		if r.IsRelay(addr) && deskrelay.IsControl(buf[:n]) {
+		if deskrelay.IsControl(buf[:n]) {
+			if !r.IsRelay(addr) {
+				// 手机的打洞包：一次连发几十个，只记第一个
+				if now := time.Now().UnixNano(); now-r.lastPunch.Swap(now) > int64(10*time.Second) {
+					log.Printf("desk: punch: packet from phone %s reached the mac", addr)
+				}
+				continue
+			}
+			if a, ok := deskrelay.ParseProbeReply(buf[:n]); ok {
+				r.public.Store(&a)
+			}
 			if deskrelay.IsAck(buf[:n], deskrelay.RoleMac) {
 				r.mu.Lock()
 				first := !r.acked
@@ -143,6 +160,48 @@ func (r *Routes) read(sock *net.UDPConn) {
 			return
 		default:
 			// Serve 跟不上时丢新包，和内核缓冲满了一样
+		}
+	}
+}
+
+// Public 经中转问出出口 socket 在公网上的地址，手机向它打洞。
+func (r *Routes) Public(ctx context.Context) (netip.AddrPort, error) {
+	if r.relay == nil {
+		return netip.AddrPort{}, errors.New("desk: no relay")
+	}
+	r.public.Store(nil)
+	probe := deskrelay.Probe()
+	tick := time.NewTicker(300 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := r.relaySock().WriteToUDP(probe, r.relay); err != nil {
+			return netip.AddrPort{}, err
+		}
+		select {
+		case <-ctx.Done():
+			return netip.AddrPort{}, fmt.Errorf("desk: relay %s did not answer the probe", r.relay)
+		case <-r.done:
+			return netip.AddrPort{}, net.ErrClosed
+		case <-tick.C:
+		}
+		if a := r.public.Load(); a != nil {
+			return *a, nil
+		}
+	}
+}
+
+// PunchTo 在 d 之内每 50ms 从出口 socket 向 peer 发一个打洞包，让这边的 NAT 放进手机的包。
+func (r *Routes) PunchTo(peer *net.UDPAddr, d time.Duration) {
+	punch := deskrelay.Punch()
+	end := time.Now().Add(d)
+	for time.Now().Before(end) {
+		if _, err := r.relaySock().WriteToUDP(punch, peer); errors.Is(err, net.ErrClosed) {
+			return
+		}
+		select {
+		case <-r.done:
+			return
+		case <-time.After(50 * time.Millisecond):
 		}
 	}
 }

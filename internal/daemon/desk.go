@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -196,7 +197,33 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		log.Printf("desk: %s stopped: %s (%v)", req.Device, reason, serveErr)
 		notify(mobile.DeskEvent{Type: "end", Reason: reason})
 	}()
-	return mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken}, nil
+	ready := mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken}
+	if relay != "" {
+		ready.Punch = func(ctx context.Context, phone string) (string, error) {
+			return deskPunch(ctx, conn, phone)
+		}
+	}
+	return ready, nil
+}
+
+// deskPunchFor 是两端互发打洞包的时长，和手机 QUIC 打洞一样。
+const deskPunchFor = 4 * time.Second
+
+// deskPunch 是看桌面打洞的 Mac 一侧：问出出口 socket 的公网地址回给手机，同时从它向手机连发打洞包。
+// 手机打通后从公网地址发来的 hello、report 解得开，Serve 就改发直连（notePeer）。
+func deskPunch(ctx context.Context, conn *desk.Routes, phone string) (string, error) {
+	peer, err := net.ResolveUDPAddr("udp4", phone)
+	if err != nil || peer.IP == nil || peer.Port == 0 {
+		return "", mobile.DeskError("bad_params", fmt.Sprintf("phone address %q", phone))
+	}
+	pub, err := conn.Public(ctx)
+	if err != nil {
+		log.Printf("desk: punch: %v", err)
+		return "", mobile.DeskError("unavailable", err.Error())
+	}
+	log.Printf("desk: punch: phone at %s, mac at %s", peer, pub)
+	go conn.PunchTo(peer, deskPunchFor)
+	return pub.String(), nil
 }
 
 // deskCodec 在手机能解的编码里选一个。手机不报时按 HEVC：iPhone 都能硬解。

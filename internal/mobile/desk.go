@@ -1,9 +1,11 @@
 package mobile
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"time"
 )
 
 // 手机看 Mac 桌面（Hive 扩展 hive.desk.v1，方案见 docs/plans/phone-desktop.md）。
@@ -27,6 +29,9 @@ type DeskReady struct {
 	// Relay 是 UDP 中转的地址，RelayToken 是这次观看在中转上的令牌；没配中转时为空
 	Relay      string `json:"-"`
 	RelayToken []byte `json:"-"`
+	// Punch 是打洞的 Mac 一侧（desk.punch）：手机报来它接收 socket 的公网地址，
+	// 返回 Mac 出口 socket 的公网地址并开始向手机发打洞包。没配中转时为空
+	Punch func(ctx context.Context, phone string) (string, error) `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
@@ -95,11 +100,43 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			frame["relay"] = ready.Relay
 			frame["relayTokenB64"] = base64.StdEncoding.EncodeToString(ready.RelayToken)
 		}
+		c.smu.Lock()
+		c.deskPunch, c.deskPunchGen = ready.Punch, gen
+		c.smu.Unlock()
+		defer func() {
+			c.smu.Lock()
+			if c.deskPunchGen == gen {
+				c.deskPunch = nil
+			}
+			c.smu.Unlock()
+		}()
 		c.stream(id, frame)
 		select {
 		case <-ended:
 		case <-c.ctx.Done():
 		}
+	}()
+	return nil
+}
+
+// deskPunchRPC 是 desk.punch：这条连接正在看桌面、经中转收画面时，打洞改成直连。
+func (c *conn) deskPunchRPC(id string, raw json.RawMessage) error {
+	var p struct {
+		Addr string `json:"addr"`
+	}
+	json.Unmarshal(raw, &p)
+	c.smu.Lock()
+	punch := c.deskPunch
+	c.smu.Unlock()
+	if punch == nil {
+		return c.fail(id, "unavailable", "not watching the desktop through a relay")
+	}
+	// 探测要等中转回一趟，不占住这条连接的请求队列
+	go func() {
+		ctx, cancel := context.WithTimeout(c.ctx, 2*time.Second)
+		defer cancel()
+		addr, err := punch(ctx, p.Addr)
+		c.replyOrFail(id, map[string]string{"addr": addr}, err)
 	}()
 	return nil
 }

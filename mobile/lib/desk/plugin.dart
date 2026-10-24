@@ -16,6 +16,8 @@ class DeskStats {
     this.height = 0,
     this.video = false,
     this.ack = 0,
+    this.public,
+    this.path,
   });
 
   final double fps;
@@ -29,6 +31,12 @@ class DeskStats {
 
   /// beat 里已经执行到的必达事件序号。
   final int ack;
+
+  /// 画面经中转到达后，中转看到的接收 socket 的公网地址（ip:port），拿去和 Mac 交换、打洞。
+  final String? public;
+
+  /// 画面走哪条路：lan、relay、punched（打洞直连），还没有画面时为空。
+  final String? path;
 
   static DeskStats parse(Object? raw) {
     final map = raw is Map ? raw : const {};
@@ -44,6 +52,8 @@ class DeskStats {
       height: i(map['height']),
       video: map['video'] == true,
       ack: i(map['ack']),
+      public: map['public'] is String ? map['public'] as String : null,
+      path: map['path'] is String ? map['path'] as String : null,
     );
   }
 }
@@ -102,6 +112,9 @@ class DeskReceiver {
   /// 一条已经编好的 input 明文。插件加密后发给 Mac。
   Future<void> sendInput(Uint8List plain) =>
       _channel.invokeMethod<void>('input', plain);
+
+  /// 向 Mac 出口的公网地址（ip:port）打洞，见 desk.punch。
+  Future<void> punch(String addr) => _channel.invokeMethod<void>('punch', addr);
 
   Future<void> stop() => _channel.invokeMethod<void>('stop');
 

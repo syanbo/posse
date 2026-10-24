@@ -13,6 +13,7 @@ func TestDeskSubscribe(t *testing.T) {
 	reqs := make(chan DeskRequest, 2)
 	h := &fakeHost{terms: map[string]*term.Terminal{}}
 	busy := false
+	punched := make(chan string, 1)
 	h.desk = func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
 		if busy {
 			return DeskReady{}, DeskError("busy", "someone else")
@@ -22,7 +23,11 @@ func TestDeskSubscribe(t *testing.T) {
 			<-ctx.Done()
 			notify(DeskEvent{Type: "end", Reason: "unsubscribed"})
 		}()
-		return DeskReady{Port: 4321, Codec: "hevc"}, nil
+		return DeskReady{Port: 4321, Codec: "hevc", Relay: "203.0.113.1:443", RelayToken: make([]byte, 16),
+			Punch: func(ctx context.Context, phone string) (string, error) {
+				punched <- phone
+				return "198.51.100.2:5000", nil
+			}}, nil
 	}
 	srv, err := New(t.TempDir(), h, -1)
 	if err != nil {
@@ -43,6 +48,11 @@ func TestDeskSubscribe(t *testing.T) {
 		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.desk.v1"},
 	})))
 
+	// 没在看桌面时不能打洞
+	if m := p.next(p.call("desk.punch", map[string]any{"addr": "192.0.2.7:1234"})); m["ok"] != false {
+		t.Fatalf("punched without watching: %v", m)
+	}
+
 	id := p.call("desk.subscribe", sub)
 	ready := result(t, p.next(id))
 	if ready["type"] != "ready" || ready["port"] != float64(4321) || ready["codec"] != "hevc" {
@@ -60,6 +70,15 @@ func TestDeskSubscribe(t *testing.T) {
 	}
 	if req.LongEdge != 2556 {
 		t.Fatalf("long edge %d", req.LongEdge)
+	}
+	if ready["relay"] != "203.0.113.1:443" {
+		t.Fatalf("relay %v", ready["relay"])
+	}
+	if r := result(t, p.next(p.call("desk.punch", map[string]any{"addr": "192.0.2.7:1234"}))); r["addr"] != "198.51.100.2:5000" {
+		t.Fatalf("punch %v", r)
+	}
+	if got := <-punched; got != "192.0.2.7:1234" {
+		t.Fatalf("phone address %q", got)
 	}
 
 	result(t, p.next(p.call("desk.unsubscribe", map[string]any{})))

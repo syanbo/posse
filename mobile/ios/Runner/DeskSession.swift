@@ -527,8 +527,14 @@ final class DeskSession {
   private var pictureWidth = 0
   private var pictureHeight = 0
   private var inputAck = 0
+  /// 经中转探测到的这个 socket 的公网地址，报给 Dart 去和 Mac 交换、打洞。只在收包线程上读写
+  private var publicAddr: String?
+  private var probes = 0
   private let ioLock = NSLock()
   private var socketFd: Int32 = -1
+  /// 打洞的目标（Mac 出口的公网地址），ioLock 保护。punchUntil 之前 hello、report 也抄送一份过去
+  private var punchPeer: sockaddr_in?
+  private var punchUntil: CFAbsoluteTime = 0
 
   /// 两把密钥由 Dart 用会话密钥派生好。这里不再做 HKDF。
   init(
@@ -560,6 +566,15 @@ final class DeskSession {
   /// 明文已经是 EncodeInput 的布局。和 hello 共用发送计数器，可以从任意线程调用。
   func sendInput(_ plain: Data) {
     send(deskKindInput, plain)
+  }
+
+  /// 向 Mac 出口的公网地址打洞：几秒内连发打洞包，同时把 hello、report 也发过去。
+  /// Mac 从这个地址解开手机的包就改发直连，手机收到后跟着走（noteActive）。可以从任意线程调用。
+  func punch(_ peer: sockaddr_in) {
+    ioLock.lock()
+    punchPeer = peer
+    punchUntil = CFAbsoluteTimeGetCurrent() + 4
+    ioLock.unlock()
   }
 
   func start() {
@@ -611,7 +626,11 @@ final class DeskSession {
   private func prepareForPeer() {
     ioLock.lock()
     active = nil
+    punchPeer = nil
+    punchUntil = 0
     ioLock.unlock()
+    publicAddr = nil
+    probes = 0
     gotVideo = false
     replay.reset()
     depacketizer.reset()
@@ -646,6 +665,8 @@ final class DeskSession {
     var nextReport: CFAbsoluteTime = 0
     var nextKey: CFAbsoluteTime = 0
     var nextStats: CFAbsoluteTime = 0
+    var nextProbe: CFAbsoluteTime = 0
+    var nextPunch: CFAbsoluteTime = 0
     var buf = [UInt8](repeating: 0, count: 2048)
     while true {
       let state = takeFlags()
@@ -679,6 +700,16 @@ final class DeskSession {
         registerRelay()
         nextRegister = now + 5
       }
+      // 画面经中转到了才探测：局域网通着不用打洞。探测几次没回就算了
+      if relay != nil, publicAddr == nil, probes < 6, now >= nextProbe, gotVideo, path() == "relay" {
+        sendControl(deskRelayProbe(), toRelay: true)
+        probes += 1
+        nextProbe = now + 0.5
+      }
+      if now >= nextPunch, let peer = punchTarget(now) {
+        sendControl(Data([0x48, 0x52, 0x59, 0x31, 0x05]), to: peer)
+        nextPunch = now + 0.05
+      }
       if !gotVideo, now >= nextHello {
         send(deskKindHello, Data())
         nextHello = now + 0.1
@@ -704,8 +735,15 @@ final class DeskSession {
         }
       }
       if n <= 0 { continue }
-      // 中转的登记回执不是 desk 包
-      if n >= 4, buf[0] == 0x48, buf[1] == 0x52, buf[2] == 0x59, buf[3] == 0x31 { continue }
+      // 中转的回执、探测回包和 Mac 的打洞包都不是 desk 包
+      if n >= 4, buf[0] == 0x48, buf[1] == 0x52, buf[2] == 0x59, buf[3] == 0x31 {
+        if n == 11, buf[4] == 0x83, let relay, deskSameAddr(from, relay) {
+          let port = UInt16(buf[9]) << 8 | UInt16(buf[10])
+          publicAddr = "\(buf[5]).\(buf[6]).\(buf[7]).\(buf[8]):\(port)"
+          emitStats(CFAbsoluteTimeGetCurrent())
+        }
+        continue
+      }
       let opened = buf.withUnsafeBytes { raw -> (UInt8, UInt64, Data)? in
         let slice = UnsafeRawBufferPointer(start: raw.baseAddress, count: n)
         return deskOpen(keys.toMobile, deskDirToMobile, slice)
@@ -845,6 +883,35 @@ final class DeskSession {
     } else {
       for dest in candidates { sendRaw(packet, to: dest) }
     }
+    if let peer = punchPeer, now < punchUntil, active.map({ !deskSameAddr($0, peer) }) ?? true {
+      sendRaw(packet, to: peer)
+    }
+  }
+
+  /// 还在打洞期间返回目标。
+  private func punchTarget(_ now: CFAbsoluteTime) -> sockaddr_in? {
+    ioLock.lock()
+    defer { ioLock.unlock() }
+    guard let peer = punchPeer, now < punchUntil else { return nil }
+    return peer
+  }
+
+  /// 画面现在走哪条路：lan（局域网、Tailscale 等直连地址）、relay、punched（打洞直连），还没收到为空。
+  private func path() -> String? {
+    ioLock.lock()
+    defer { ioLock.unlock() }
+    guard let active, CFAbsoluteTimeGetCurrent() - activeAt < 2 else { return nil }
+    if let relay, deskSameAddr(active, relay) { return "relay" }
+    if let peer = punchPeer, deskSameAddr(active, peer) { return "punched" }
+    return "lan"
+  }
+
+  /// 不加密的控制包（探测、打洞）。
+  private func sendControl(_ packet: Data, toRelay: Bool = false, to dest: sockaddr_in? = nil) {
+    ioLock.lock()
+    defer { ioLock.unlock() }
+    guard socketFd >= 0, let dest = toRelay ? relay : dest else { return }
+    sendRaw(packet, to: dest)
   }
 
   /// 调用方持有 ioLock。
@@ -872,11 +939,12 @@ final class DeskSession {
   }
 
   private func noteActive(_ from: sockaddr_in) {
-    guard candidates.contains(where: { deskSameAddr($0, from) }) else { return }
     ioLock.lock()
+    defer { ioLock.unlock() }
+    let punched = punchPeer.map { deskSameAddr($0, from) } ?? false
+    guard punched || candidates.contains(where: { deskSameAddr($0, from) }) else { return }
     active = from
     activeAt = CFAbsoluteTimeGetCurrent()
-    ioLock.unlock()
   }
 
   private func adoptSocket(_ fd: Int32) {
@@ -931,7 +999,7 @@ final class DeskSession {
     let width = pictureWidth
     let height = pictureHeight
     statsLock.unlock()
-    onStats?([
+    var stats: [String: Any] = [
       "fps": Double(frames),
       "bitrate": Double(bytes) * 8,
       "loss": Int(lossTotal),
@@ -941,7 +1009,10 @@ final class DeskSession {
       "height": height,
       "video": gotVideo,
       "ack": inputAck,
-    ])
+    ]
+    if let publicAddr { stats["public"] = publicAddr }
+    if let path = path() { stats["path"] = path }
+    onStats?(stats)
   }
 
   private func openSocket() -> Int32 {
@@ -973,6 +1044,13 @@ final class DeskSession {
 }
 
 let deskRelayTokenLen = 16
+
+/// 中转的探测包：'HRY1'、0x03，补零到 24 字节，和 internal/deskrelay 一致。
+func deskRelayProbe() -> Data {
+  var packet = Data([0x48, 0x52, 0x59, 0x31, 0x03])
+  packet.append(Data(count: 19))
+  return packet
+}
 
 func deskSameAddr(_ a: sockaddr_in, _ b: sockaddr_in) -> Bool {
   a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port

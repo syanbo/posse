@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_mobile/desk/chrome.dart';
 import 'package:hive_mobile/desk/events.dart';
 import 'package:hive_mobile/desk/keys.dart';
 import 'package:hive_mobile/desk/plugin.dart';
@@ -99,8 +100,13 @@ void main() {
       'width': 1920,
       'height': 1080,
       'video': true,
+      'public': '203.0.113.5:4100',
+      'path': 'punched',
     });
     expect(stats.fps, 59.5);
+    expect(stats.public, '203.0.113.5:4100');
+    expect(deskPathLabel(stats.path), '打洞直连');
+    expect(deskPathLabel(DeskStats.parse(null).path), '—');
     expect(stats.loss, 3);
     expect(stats.recoveries, 2);
     expect(stats.video, isTrue);
