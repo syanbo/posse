@@ -111,7 +111,7 @@ func TestDeskWatchAndStop(t *testing.T) {
 	if ready.Codec != "hevc" || ready.Port == 0 {
 		t.Fatalf("ready %+v", ready)
 	}
-	if strings.Join(gotArgs, " ") != "--long-edge 1920" {
+	if strings.Join(gotArgs, " ") != "--quiet --long-edge 1920" {
 		t.Fatalf("helper args %q", gotArgs)
 	}
 	if viewer, _ := d.deskStatus(); viewer != "iPhone" {

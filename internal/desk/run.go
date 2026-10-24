@@ -27,6 +27,8 @@ type Options struct {
 	Exclude []string
 	// LongEdge 是输出长边的像素上限，0 用 1920。
 	LongEdge int
+	// Quiet 不每秒记编码统计，结束时仍记一行汇总。常驻进程拉起时用：日志进 daemon.log
+	Quiet bool
 }
 
 // Run 跑桌面子进程。非 macOS 直接报错。

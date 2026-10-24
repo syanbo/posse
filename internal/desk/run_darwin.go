@@ -589,7 +589,9 @@ func (e *engine) ticker() {
 			return
 		case <-t.C:
 			elapsed++
-			e.logStats(false)
+			if !e.opt.Quiet {
+				e.logStats(false)
+			}
 			e.write(Frame{Kind: KindHeartbeat, CaptureUnixNano: time.Now().UnixNano()})
 			if e.opt.Probe {
 				switch elapsed {

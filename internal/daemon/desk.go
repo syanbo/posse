@@ -87,7 +87,7 @@ func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify f
 }
 
 func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec string, notify func(mobile.DeskEvent)) (mobile.DeskReady, error) {
-	args := []string{"--long-edge", strconv.Itoa(min(max(req.LongEdge, 2), 1920))}
+	args := []string{"--quiet", "--long-edge", strconv.Itoa(min(max(req.LongEdge, 2), 1920))}
 	if codec == "h264" {
 		args = append(args, "--codec", "h264")
 	}

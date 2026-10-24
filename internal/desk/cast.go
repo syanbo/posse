@@ -40,7 +40,7 @@ func Cast(frames io.Reader, control io.Writer, addr string) error {
 	}
 	log.Printf("desk: listening %s", conn.LocalAddr())
 	toMobile, toMac := TestKeys()
-	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac})
+	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac, Verbose: true})
 }
 
 // LockWriter 让几处同时写控制管道时每条消息完整写完：改码率、要关键帧、转发输入在不同的协程里，
@@ -67,6 +67,8 @@ type CastConfig struct {
 	OnStatus func(code byte)
 	// OnInput 收手机发来的 input 包明文，返回已经执行到的必达事件序号，随即用 beat 回给手机
 	OnInput func(plain []byte) (ack uint64)
+	// Verbose 每次评估码率都记日志，命令行试跑看曲线用；常驻进程里只记变化，免得 daemon.log 每秒一行
+	Verbose bool
 }
 
 // Serve 一直发到子进程的管道结束、手机超时不报或 Conn 被关掉。
@@ -85,7 +87,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	start := PictureBitrate(1920, 1080)
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
-		onStatus: cfg.OnStatus, onInput: cfg.OnInput,
+		onStatus: cfg.OnStatus, onInput: cfg.OnInput, verbose: cfg.Verbose,
 		bitrate: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
@@ -143,6 +145,7 @@ type caster struct {
 	control            io.Writer
 	onStatus           func(byte)
 	onInput            func([]byte) uint64
+	verbose            bool
 	inputAck           uint64
 	peer               net.Addr
 	peerMu             sync.Mutex
@@ -492,6 +495,9 @@ func (c *caster) onReport(plain []byte) {
 		action = "down"
 	} else if d.changed && d.bitrate > d.from {
 		action = "up"
+	}
+	if !d.changed && !c.verbose {
+		return
 	}
 	log.Printf("desk: rate %s loss=%.3f packets=%d late=%v gap=%s bitrate=%d congested=%v", action, d.loss, d.packets, d.late, d.gap, d.bitrate, d.congested)
 	if !d.changed {
