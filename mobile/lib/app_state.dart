@@ -22,7 +22,9 @@ String friendlyError(Object error) {
     return '连不上电脑：确认电脑上的 Hive 开着、手机和电脑在同一个网络，'
         '并在手机设置里允许 Hive 使用无线数据和本地网络';
   }
-  if (error is RpcException) return error.message;
+  if (error is RpcException) {
+    return error.code == 'closed' ? '和电脑的连接断开了，正在重连' : error.message;
+  }
   final text = '$error';
   if (error is StateError && text.contains('closed') ||
       text.contains('socket closed')) {
@@ -742,6 +744,8 @@ class HiveAppModel extends ChangeNotifier {
       tabs = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
       error = null;
     } catch (caught) {
+      // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次
+      if (!identical(current, rpc)) return;
       error = friendlyError(caught);
     }
     notifyListeners();

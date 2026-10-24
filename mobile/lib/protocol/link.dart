@@ -192,8 +192,12 @@ class HiveLink {
         },
       );
 
-  /// 换上新连接，关掉原来的。
-  Future<void> _adopt(RaceResult<PhoneRpc> won, int epoch) async {
+  /// 换上新连接，关掉原来的。[drain] 时原来的连接还好好的，等它上面的请求回完再关。
+  Future<void> _adopt(
+    RaceResult<PhoneRpc> won,
+    int epoch, {
+    bool drain = false,
+  }) async {
     // 套接字自己断了再握手。主动 close 不会进这里。先把死掉的连接放掉，界面才知道断了。
     won.value.watchClose(() {
       if (epoch != _epoch || !identical(rpc, won.value)) return;
@@ -219,14 +223,24 @@ class HiveLink {
     lastError = null;
     if (!_ready.isClosed) _ready.add(won.value);
     onActivity?.call();
-    await previous?.close();
+    if (drain) {
+      unawaited(previous?.closeWhenIdle());
+    } else {
+      await previous?.close();
+    }
   }
 
   /// 走 WebSocket 连上之后问电脑要 QUIC 地址，连得上就换过去。连不上什么都不变。
   Future<void> _upgrade(PhoneRpc via, int epoch) async {
     final List<String> urls;
     try {
-      urls = quicUrlsOf(await via.call('hive.quic', const {}, timeout: const Duration(seconds: 5)));
+      urls = quicUrlsOf(
+        await via.call(
+          'hive.quic',
+          const {},
+          timeout: const Duration(seconds: 5),
+        ),
+      );
     } catch (_) {
       // Orca 和旧版 Hive 没有这个方法
       return;
@@ -247,7 +261,7 @@ class HiveLink {
       await won.value.close();
       return;
     }
-    await _adopt(won, ++_epoch);
+    await _adopt(won, ++_epoch, drain: true);
   }
 
   Future<PhoneRpc> _attempt(String url, CancelToken cancel) async {

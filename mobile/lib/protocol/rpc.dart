@@ -168,6 +168,17 @@ class PhoneRpc {
     return result;
   }
 
+  /// 等还没回复的请求都回完（最多 [max]）再关。换到更好的连接时用：旧连接上进行中的请求不因换路失败。
+  Future<void> closeWhenIdle({
+    Duration max = const Duration(seconds: 10),
+  }) async {
+    final deadline = DateTime.now().add(max);
+    while (_wait.isNotEmpty && !_ended && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    await close();
+  }
+
   Future<void> close() async {
     if (_closed) return;
     _closed = true;

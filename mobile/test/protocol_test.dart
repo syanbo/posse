@@ -629,6 +629,25 @@ void main() {
       await link.close();
     });
 
+    test('a call in flight on the websocket survives the move to quic', () async {
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (url.contains('203.0.113.9')) throw StateError('relay down');
+          final (client, host) = pipePair();
+          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+          return client;
+        },
+      );
+      final first = await link.start();
+      final moved = link.connections.first;
+      final slow = first.call('test.slow', const {});
+      await moved.timeout(const Duration(seconds: 2));
+      expect(link.url, lanUrl);
+      await expectLater(slow, completes);
+      await link.close();
+    });
+
     test('a failed upgrade keeps the websocket and its reconnects', () async {
       var quicTries = 0;
       final wsHosts = <ByteSocket>[];
@@ -788,6 +807,9 @@ Future<void> _serve(
     var ok = true;
     Object? error;
     if (method == 'status.get') result = {'protocolVersion': 3};
+    if (method == 'test.slow') {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
     if (method == 'hive.quic') {
       if (quic != null) {
         result = quic;
