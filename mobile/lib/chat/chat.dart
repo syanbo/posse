@@ -257,7 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _anchor(before);
         setState(() {});
         _loadEarlierIfAtTop();
-      });
+      }, onError: (Object _) {});
       tabs.frames.listen((frame) {
         if (!mounted || gen != _openGen) return;
         final nextTabs = tabsFromFrame(tab.worktreeId, frame);
@@ -278,7 +278,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!changed) return;
         _anchor(before);
         setState(() {});
-      });
+      }, onError: (Object _) {});
     } catch (error) {
       if (gen != _openGen || _gone) return;
       _bound = null;

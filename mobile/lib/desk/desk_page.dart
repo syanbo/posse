@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,9 +7,11 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../app_state.dart';
+import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import 'chrome.dart';
+import 'direct.dart';
 import 'events.dart';
 import 'gestures.dart';
 import 'hint.dart';
@@ -16,8 +19,10 @@ import 'key_bar.dart';
 import 'keys.dart';
 import 'mods.dart';
 import 'plugin.dart';
+import 'status.dart';
 import 'toolbar.dart';
 import 'viewport.dart';
+import 'wire.dart';
 
 /// 留空和画面要能分开：画面是黑的，留空用很深的暖灰。
 const deskLetterbox = Color(0xFF2A2926);
@@ -36,7 +41,7 @@ class DeskRoute extends MaterialPageRoute<void> {
   bool get popGestureEnabled => false;
 }
 
-/// 看 Mac 桌面。订阅协议第 4 步再接，这一步用固定密钥直接收 UDP。
+/// 看 Mac 桌面。进页面订阅，UDP 用这条连接派生的密钥。
 class DeskPage extends StatefulWidget {
   const DeskPage({super.key, required this.model, this.receiver});
 
@@ -74,17 +79,33 @@ class _DeskPageState extends State<DeskPage>
   final _zoomed = ValueNotifier<bool>(false);
 
   StreamSubscription<DeskStats>? _statsSub;
+  StreamSubscription<Map<String, Object?>>? _deskFrames;
+  RpcStream? _deskSub;
+  PhoneRpc? _rpcNow;
   Timer? _barTimer;
+  Timer? _retry;
+  Timer? _lockRetry;
+  late final DeskInputLink _link;
+  final _packets = <Uint8List>[];
+  var _sendTail = Future<void>.value();
+  final _inputLine = ValueNotifier<(int, int)>((0, 0));
+  Set<DeskMod> _dragMods = {};
+  var _moveScheduled = false;
   late final Ticker _ticker;
   final _frame = ValueNotifier<int>(0);
   final _statsTick = ValueNotifier<DeskStats>(const DeskStats());
   DeskStats _stats = const DeskStats();
   int? _texture;
   String? _fail;
+  String? _endNote;
+  String? _accessNote;
+  var _indirect = false;
   String? _customHost;
   int? _customPort;
+  int? _readyPort;
+  DeskTrafficKeys? _keys;
   String? _hostNow;
-  int? _portNow;
+  var _watchTail = Future<void>.value();
   var _up = false;
   var _background = false;
   var _debugOpen = false;
@@ -117,6 +138,13 @@ class _DeskPageState extends State<DeskPage>
       _frame.value++;
       _syncTicker();
     });
+    _link = DeskInputLink(
+      onPacket: (packet) {
+        _packets.add(packet);
+        _kickSend();
+        _syncInputLine();
+      },
+    );
     _keyboard.addListener(_keyboardChanged);
     _input.addListener(_onTyped);
     if (Platform.isIOS) {
@@ -140,6 +168,20 @@ class _DeskPageState extends State<DeskPage>
     _anchorTop.dispose();
     _anchorSide.dispose();
     _zoomed.dispose();
+    _retry?.cancel();
+    _lockRetry?.cancel();
+    // 让还在跑的订阅停在下一次检查，松开先于退订发出。
+    _gen++;
+    _link.release();
+    _retry?.cancel();
+    final tail = _sendTail;
+    _inputLine.dispose();
+    unawaited(() async {
+      await tail;
+      await _drainPackets();
+      await _dropDesk(unsubscribe: true);
+      await _stopReceiver();
+    }());
     unawaited(_statsSub?.cancel());
     _keyboard.removeListener(_keyboardChanged);
     _input.removeListener(_onTyped);
@@ -153,7 +195,6 @@ class _DeskPageState extends State<DeskPage>
       unawaited(restoreDeskOrientation());
       unawaited(_edges.set(false));
     }
-    if (Platform.isIOS) unawaited(_receiver.stop());
     super.dispose();
   }
 
@@ -175,31 +216,137 @@ class _DeskPageState extends State<DeskPage>
 
   String? get _autoHost => deskHostOf(widget.model.connectedUrl);
 
-  String? get _host {
+  String? get _udpHost {
     final custom = _customHost;
     if (custom != null && custom.isNotEmpty) return custom;
     return _autoHost;
   }
 
-  int get _port => _customPort ?? deskDefaultPort;
-
-  bool get _custom {
-    if (_customPort != null && _customPort != deskDefaultPort) return true;
-    final custom = _customHost;
-    return custom != null && custom.isNotEmpty && custom != _autoHost;
-  }
-
-  String? get _where {
-    final host = _host;
-    if (host == null || host.isEmpty) return null;
-    return deskEndpoint(host, _port);
-  }
+  bool get _custom => _customHost != null || _customPort != null;
 
   bool get _immersive => _stats.video && !_background;
 
   void _onGesture(DeskEvent event) {
     if (deskHapticFor(event)) unawaited(HapticFeedback.lightImpact());
     _log.add(event);
+    switch (event) {
+      case DeskTapEvent(:final at, :final clicks):
+        _click(at, deskButtonLeft, clicks);
+      case DeskRightClickEvent(:final at):
+        _click(at, deskButtonRight, 1);
+      case DeskDragEvent(:final phase, :final at):
+        _drag(phase, at);
+      case DeskScrollEvent(:final dx, :final dy):
+        final units = deskScrollUnits(dx, dy);
+        if (units.$1 != 0 || units.$2 != 0) _link.scroll(units.$1, units.$2);
+      case DeskKeyEvent():
+      case DeskTextEvent():
+        break;
+    }
+    _noteInput();
+  }
+
+  Set<DeskMod> _lockedMods() => {
+    for (final mod in DeskMod.values)
+      if (_mods.mode(mod) == DeskModMode.locked) mod,
+  };
+
+  void _click(DeskPoint at, int button, int clicks) {
+    final x = deskAxis(at.x);
+    final y = deskAxis(at.y);
+    final locked = _lockedMods();
+    final bits = deskModBits(locked);
+    _link.batch(() {
+      _modsDown(locked, bits);
+      _link.buttonDown(button, clicks, x, y);
+      _link.buttonUp(button, clicks, x, y);
+      _modsUp(locked, bits);
+    });
+  }
+
+  void _drag(DeskDragPhase phase, DeskPoint at) {
+    final x = deskAxis(at.x);
+    final y = deskAxis(at.y);
+    switch (phase) {
+      case DeskDragPhase.down:
+        _dragMods = _lockedMods();
+        final bits = deskModBits(_dragMods);
+        _link.batch(() {
+          _modsDown(_dragMods, bits);
+          _link.buttonDown(deskButtonLeft, 1, x, y);
+        });
+      case DeskDragPhase.move:
+        _link.move(x, y);
+        _scheduleMove();
+      case DeskDragPhase.up:
+        final mods = _dragMods;
+        _dragMods = {};
+        _link.batch(() {
+          _link.buttonUp(deskButtonLeft, 1, x, y);
+          _modsUp(mods, deskModBits(mods));
+        });
+    }
+  }
+
+  void _modsDown(Set<DeskMod> mods, int bits) {
+    for (final mod in deskModPressOrder) {
+      if (!mods.contains(mod)) continue;
+      _link.keyDown(deskModHid(mod), bits);
+    }
+  }
+
+  void _modsUp(Set<DeskMod> mods, int bits) {
+    for (final mod in deskModPressOrder.reversed) {
+      if (!mods.contains(mod)) continue;
+      _link.keyUp(deskModHid(mod), bits);
+    }
+  }
+
+  void _scheduleMove() {
+    if (_moveScheduled) return;
+    _moveScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _moveScheduled = false;
+      if (!mounted) return;
+      _link.flushMove();
+    });
+  }
+
+  void _syncInputLine() {
+    _inputLine.value = (_link.sent, _link.confirmed);
+  }
+
+  void _noteInput() {
+    _syncInputLine();
+    if (_debugOpen && mounted) setState(() {});
+  }
+
+  void _kickSend() {
+    _sendTail = _sendTail.then((_) => _drainPackets());
+    // 测试里没有确认号，周期重发会让 pumpAndSettle 停不下来。
+    if (_link.needsRetry && Platform.isIOS) _armRetry();
+  }
+
+  void _armRetry() {
+    if (_retry != null) return;
+    _retry = Timer(const Duration(milliseconds: 100), () {
+      _retry = null;
+      if (!mounted) return;
+      if (!_link.needsRetry && !_link.hasFreshMove) return;
+      _link.retransmit();
+    });
+  }
+
+  Future<void> _drainPackets() async {
+    while (_packets.isNotEmpty) {
+      final packet = _packets.removeAt(0);
+      if (!Platform.isIOS) continue;
+      try {
+        await _receiver.sendInput(packet);
+      } on PlatformException {
+        // 接收还没起来。必达事件留在未确认列表里，下一次重发。
+      }
+    }
   }
 
   void _holdFeedback() {
@@ -268,35 +415,43 @@ class _DeskPageState extends State<DeskPage>
     setState(() {});
   }
 
-  Future<void> _disconnect() async {
+  Future<void> _disconnect() {
     _pokeBar();
-    if (_stopped) {
-      unawaited(_ensure(force: true));
-      return;
-    }
+    if (_stopped) return _enqueue(() => _ensureBody(force: true));
     _stopped = true;
-    final gen = ++_gen;
+    _lockRetry?.cancel();
+    _lockRetry = null;
+    return _enqueue(_disconnectBody);
+  }
+
+  Future<void> _disconnectBody() async {
+    _gen++;
     _stats = const DeskStats();
     _statsTick.value = const DeskStats();
-    setState(() {
-      _fail = null;
-      _up = false;
-      _texture = null;
-    });
-    if (!Platform.isIOS) return;
-    try {
-      await _receiver.stop();
-    } on PlatformException {
-      // 已经停过。
+    if (mounted) {
+      setState(() {
+        _fail = null;
+        _endNote = null;
+        _accessNote = null;
+        _indirect = false;
+        _up = false;
+        _texture = null;
+      });
     }
-    if (!mounted || gen != _gen) return;
+    await _releaseHeld();
+    await _dropDesk(unsubscribe: true);
+    await _stopReceiver();
+    _keys = null;
+    _readyPort = null;
   }
 
   void _followComputer() {
-    if (!mounted || _custom) return;
+    if (!mounted || _stopped || _background) return;
+    final rpc = widget.model.rpc;
     final host = _autoHost;
-    if (host == null || host.isEmpty || host == _hostNow) return;
-    unawaited(_ensure());
+    if (identical(rpc, _rpcNow) && host == _hostNow) return;
+    if (rpc == null && _rpcNow == null) return;
+    unawaited(_enqueue(() => _ensureBody(force: false)));
   }
 
   void _keyboardChanged() {
@@ -306,20 +461,35 @@ class _DeskPageState extends State<DeskPage>
   }
 
   void _setBackground(bool background) {
+    if (_background == background) return;
     _background = background;
-    if (Platform.isIOS && _up) {
-      if (background) {
-        unawaited(_receiver.pause());
-      } else {
-        unawaited(_receiver.resume());
-      }
+    if (background) {
+      _lockRetry?.cancel();
+      _lockRetry = null;
+      unawaited(_enqueue(_pauseBody));
+    } else if (!_stopped) {
+      unawaited(_enqueue(() => _ensureBody(force: true)));
     }
     if (mounted) setState(() {});
+  }
+
+  Future<void> _pauseBody() async {
+    _gen++;
+    await _releaseHeld();
+    await _dropDesk(unsubscribe: true);
+    await _stopReceiver();
+    _keys = null;
+    if (!mounted) return;
+    setState(() {
+      _up = false;
+      _texture = null;
+    });
   }
 
   /// 帧率和码率只刷新胶囊。出画面、画面尺寸变了才重建整页（顶栏和比例）。
   void _onStats(DeskStats stats) {
     if (!mounted) return;
+    if (_link.noteAck(stats.ack)) _syncInputLine();
     final relayout =
         stats.video != _stats.video ||
         stats.width != _stats.width ||
@@ -329,71 +499,369 @@ class _DeskPageState extends State<DeskPage>
     if (relayout) setState(() {});
   }
 
-  /// 页面开着就一直收。hello 由原生层发到第一帧视频为止，Mac 那边何时开始推流都行。
-  Future<void> _ensure({bool force = false}) async {
+  /// 订阅、退订和改 UDP 地址串行，避免停接收和开接收叠在一起。
+  Future<void> _enqueue(Future<void> Function() body) {
+    final run = _watchTail.then((_) async {
+      if (!mounted) return;
+      await body();
+    });
+    _watchTail = run.then((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<void> _ensure({bool force = false}) {
+    return _enqueue(() => _ensureBody(force: force));
+  }
+
+  Future<void> _ensureBody({required bool force}) async {
     if (_stopped && !force) return;
-    if (force) _stopped = false;
-    final host = _host;
-    final port = _port;
-    if (host == null || host.isEmpty) {
+    if (force) {
+      _stopped = false;
+      _lockRetry?.cancel();
+      _lockRetry = null;
+    }
+    // 桌面插件只在 iPhone 上。先返回，测试里不会去解析域名。
+    if (!Platform.isIOS) {
+      setState(() => _fail = '看桌面只在 iPhone 上');
+      return;
+    }
+    final rpc = widget.model.rpc;
+    final host = _autoHost;
+    if (rpc == null || host == null || host.isEmpty) {
+      _gen++;
+      await _releaseHeld();
+      await _dropDesk(unsubscribe: false);
+      await _stopReceiver();
+      _keys = null;
+      _readyPort = null;
+      _rpcNow = null;
+      _hostNow = null;
       if (!mounted) return;
       setState(() {
         _fail = null;
+        _endNote = null;
+        _accessNote = null;
+        _indirect = false;
         _up = false;
         _texture = null;
       });
       return;
     }
     if (!force &&
-        _up &&
-        _fail == null &&
+        identical(rpc, _rpcNow) &&
         host == _hostNow &&
-        port == _portNow) {
+        _deskSub != null &&
+        _fail == null &&
+        _endNote == null &&
+        !_indirect) {
       return;
     }
     final gen = ++_gen;
+    _rpcNow = rpc;
     _hostNow = host;
-    _portNow = port;
     _stats = const DeskStats();
     _statsTick.value = const DeskStats();
     setState(() {
       _fail = null;
+      _endNote = null;
+      _accessNote = null;
+      _indirect = false;
       _up = false;
       _texture = null;
     });
-    if (!Platform.isIOS) {
-      setState(() => _fail = '看桌面只在 iPhone 上');
+    await _releaseHeld();
+    if (!mounted || gen != _gen) return;
+    await _dropDesk(unsubscribe: false);
+    await _stopReceiver();
+    _keys = null;
+    _readyPort = null;
+    if (!mounted || gen != _gen) return;
+    final direct = await deskHostDirect(host);
+    if (!mounted || gen != _gen) return;
+    if (!direct) {
+      setState(() => _indirect = true);
       return;
     }
+    final pixels = _screenPixels();
+    final RpcStream stream;
     try {
-      await _receiver.stop();
-      if (!mounted || gen != _gen) return;
-      final id = await _receiver.start(host: host, port: port);
-      if (!mounted || gen != _gen) {
-        await _receiver.stop();
-        return;
-      }
-      setState(() {
-        _texture = id;
-        _up = true;
+      stream = await rpc.subscribe('desk.subscribe', {
+        'width': pixels.$1,
+        'height': pixels.$2,
+        // 插件只会解 HEVC。
+        'codecs': ['hevc'],
       });
-      if (_background) unawaited(_receiver.pause());
-    } on PlatformException catch (error) {
+    } on Object {
       if (!mounted || gen != _gen) return;
-      setState(() => _fail = error.message ?? '连接失败');
+      setState(() => _fail = deskFailText('rpc'));
+      return;
+    }
+    if (!mounted || gen != _gen) {
+      await stream.cancel();
+      return;
+    }
+    _deskSub = stream;
+    _deskFrames = stream.frames.listen(
+      (frame) {
+        unawaited(_enqueue(() => _onDeskFrame(frame, gen, rpc)));
+      },
+      onError: (Object error) {
+        unawaited(_enqueue(() => _onDeskError(error, gen)));
+      },
+    );
+  }
+
+  Future<void> _onDeskFrame(
+    Map<String, Object?> frame,
+    int gen,
+    PhoneRpc rpc,
+  ) async {
+    if (!mounted || gen != _gen) return;
+    switch (frame['type']) {
+      case 'ready':
+        await _onReady(frame, gen, rpc);
+      case 'state':
+        if (frame['state'] == 'no_accessibility' && mounted) {
+          setState(() => _accessNote = deskAccessText);
+        }
+      case 'end':
+        final reason = frame['reason'];
+        await _finishWatch(gen, reason is String ? reason : '');
     }
   }
 
-  void _useAddress(String host, int port) {
+  Future<void> _onReady(
+    Map<String, Object?> frame,
+    int gen,
+    PhoneRpc rpc,
+  ) async {
+    final port = _jsonInt(frame['port']);
+    final codec = frame['codec'];
+    final nonceB64 = frame['nonceB64'];
+    if (port == null || port < 1 || port > 65535 || nonceB64 is! String) {
+      await _applyFail('capture_failed', gen);
+      return;
+    }
+    if (codec != 'hevc') {
+      await _applyFail('unsupported_codec', gen);
+      return;
+    }
+    final Uint8List nonce;
+    try {
+      nonce = base64.decode(nonceB64);
+    } on Object {
+      await _applyFail('capture_failed', gen);
+      return;
+    }
+    final DeskTrafficKeys keys;
+    try {
+      keys = deriveDeskKeys(
+        recvKey: rpc.session.recvKey,
+        sendKey: rpc.session.sendKey,
+        nonce: nonce,
+      );
+    } on Object {
+      await _applyFail('capture_failed', gen);
+      return;
+    }
+    final host = _udpHost;
+    final udpPort = _customPort ?? port;
+    if (host == null || host.isEmpty) {
+      await _applyFail('capture_failed', gen);
+      return;
+    }
+    _keys = keys;
+    _readyPort = port;
+    try {
+      await _stopReceiver();
+      if (!mounted || gen != _gen) return;
+      final id = await _receiver.start(
+        host: host,
+        port: udpPort,
+        keyToPhone: keys.toPhone,
+        keyToMac: keys.toMac,
+        codec: DeskCodec.hevc,
+      );
+      if (!mounted || gen != _gen) {
+        await _stopReceiver();
+        return;
+      }
+      _link.reset();
+      _syncInputLine();
+      setState(() {
+        _texture = id;
+        _up = true;
+        _fail = null;
+        _endNote = null;
+      });
+    } on PlatformException catch (error) {
+      if (!mounted || gen != _gen) return;
+      await _applyFail(
+        error.code == 'unsupported_codec'
+            ? 'unsupported_codec'
+            : 'capture_failed',
+        gen,
+      );
+    }
+  }
+
+  Future<void> _onDeskError(Object error, int gen) async {
+    if (!mounted || gen != _gen) return;
+    final code = error is RpcException ? error.code : 'rpc';
+    if (code == 'closed') {
+      _gen++;
+      await _releaseHeld();
+      await _dropDesk(unsubscribe: false);
+      await _stopReceiver();
+      _keys = null;
+      if (!mounted) return;
+      setState(() {
+        _up = false;
+        _texture = null;
+        _fail = '连接已断开';
+      });
+      return;
+    }
+    await _releaseHeld();
+    await _applyFail(code, gen);
+  }
+
+  Future<void> _finishWatch(int gen, String reason) async {
+    if (!mounted || gen != _gen) return;
+    _gen++;
+    _lockRetry?.cancel();
+    _lockRetry = null;
+    await _releaseHeld();
+    await _dropDesk(unsubscribe: false);
+    await _stopReceiver();
+    _keys = null;
+    _readyPort = null;
+    if (!mounted) return;
+    setState(() {
+      _up = false;
+      _texture = null;
+      _fail = null;
+      _endNote = deskEndText(reason);
+      if (reason == 'stopped') _stopped = true;
+    });
+    if (reason == 'locked' && !_stopped && !_background) _armLockRetry();
+  }
+
+  Future<void> _applyFail(String code, int gen) async {
+    if (!mounted || gen != _gen) return;
+    _gen++;
+    _lockRetry?.cancel();
+    _lockRetry = null;
+    // ready 之后失败时采集已经在跑，要退订才会停。
+    await _dropDesk(unsubscribe: true);
+    await _stopReceiver();
+    _keys = null;
+    if (!mounted) return;
+    setState(() {
+      _fail = deskFailText(code);
+      _endNote = null;
+      _up = false;
+      _texture = null;
+    });
+    if (code == 'locked' && !_stopped && !_background) _armLockRetry();
+  }
+
+  void _armLockRetry() {
+    if (_lockRetry != null) return;
+    _lockRetry = Timer(const Duration(seconds: 2), () {
+      _lockRetry = null;
+      if (!mounted || _stopped || _background) return;
+      unawaited(_ensure(force: true));
+    });
+  }
+
+  Future<void> _releaseHeld() async {
+    _link.release();
+    await _sendTail;
+    await _drainPackets();
+  }
+
+  Future<void> _dropDesk({required bool unsubscribe}) async {
+    final frames = _deskFrames;
+    final sub = _deskSub;
+    _deskFrames = null;
+    _deskSub = null;
+    await frames?.cancel();
+    await sub?.cancel();
+    if (!unsubscribe) return;
+    final rpc = _rpcNow;
+    if (rpc == null) return;
+    try {
+      await rpc.call('desk.unsubscribe', const {});
+    } on Object {
+      // 连接已经没了。
+    }
+  }
+
+  Future<void> _stopReceiver() async {
+    if (!Platform.isIOS) return;
+    try {
+      await _receiver.stop();
+    } on PlatformException {
+      // 已经停过。
+    }
+  }
+
+  (int, int) _screenPixels() {
+    final size = MediaQuery.sizeOf(context);
+    final ratio = MediaQuery.devicePixelRatioOf(context);
+    var width = (size.width * ratio).round();
+    var height = (size.height * ratio).round();
+    if (width < 1) width = 1;
+    if (height < 1) height = 1;
+    return (width, height);
+  }
+
+  void _useAddress(String host, int? port) {
     final auto = _autoHost;
-    if (auto != null && host == auto && port == deskDefaultPort) {
+    final sameHost = auto != null && host == auto;
+    if (sameHost && port == null) {
       _customHost = null;
       _customPort = null;
     } else {
-      _customHost = host;
+      _customHost = sameHost ? null : host;
       _customPort = port;
     }
-    unawaited(_ensure(force: true));
+    unawaited(_enqueue(_retargetBody));
+  }
+
+  Future<void> _retargetBody() async {
+    final keys = _keys;
+    final host = _udpHost;
+    final port = _customPort ?? _readyPort;
+    if (!_up || keys == null || host == null || host.isEmpty || port == null) {
+      return;
+    }
+    final gen = _gen;
+    try {
+      await _stopReceiver();
+      if (!mounted || gen != _gen) return;
+      final id = await _receiver.start(
+        host: host,
+        port: port,
+        keyToPhone: keys.toPhone,
+        keyToMac: keys.toMac,
+        codec: DeskCodec.hevc,
+      );
+      if (!mounted || gen != _gen) {
+        await _stopReceiver();
+        return;
+      }
+      if (mounted) setState(() => _texture = id);
+    } on PlatformException catch (error) {
+      if (!mounted || gen != _gen) return;
+      await _applyFail(
+        error.code == 'unsupported_codec'
+            ? 'unsupported_codec'
+            : 'capture_failed',
+        gen,
+      );
+    }
   }
 
   Duration get _now => _watch.elapsed;
@@ -496,7 +964,16 @@ class _DeskPageState extends State<DeskPage>
   }
 
   void _press(String key) {
-    setState(() => _log.add(DeskKeyEvent(deskChord(_mods.consume(), key))));
+    final hid = deskKeyHid[key];
+    if (hid == null) return;
+    final mods = _mods.consume();
+    final bits = deskModBits(mods);
+    _link.batch(() {
+      _link.keyDown(hid, bits);
+      _link.keyUp(hid, bits);
+    });
+    setState(() => _log.add(DeskKeyEvent(deskChord(mods, key))));
+    _noteInput();
   }
 
   void _onTyped() {
@@ -506,19 +983,19 @@ class _DeskPageState extends State<DeskPage>
     final text = value.text;
     if (text.isEmpty) return;
     _input.value = const TextEditingValue();
-    setState(() {
-      if (_mods.any) {
-        for (final rune in text.runes) {
-          _log.add(
-            DeskKeyEvent(
-              deskChord(_mods.consume(), String.fromCharCodes([rune])),
-            ),
-          );
-        }
-      } else {
-        _log.add(DeskTextEvent(text));
+    if (_mods.any) {
+      for (final rune in text.runes) {
+        final mods = _mods.consume();
+        final piece = String.fromCharCodes([rune]);
+        _link.text(piece, deskModBits(mods));
+        _log.add(DeskKeyEvent(deskChord(mods, piece)));
       }
-    });
+    } else {
+      _link.text(text, 0);
+      _log.add(DeskTextEvent(text));
+    }
+    _noteInput();
+    if (mounted) setState(() {});
   }
 
   void _toggleKeyboard() {
@@ -730,20 +1207,23 @@ class _DeskPageState extends State<DeskPage>
   }
 
   (bool waiting, String text)? _banner() {
-    if (_background && _up) return (false, '已暂停（后台）');
-    if (_stats.video) return null;
-    if (_stopped) return (false, '已断开');
-    if (_fail != null) return (false, '连不上：$_fail');
-    final where = _where;
-    if (!_up) {
-      if (where == null) return (false, '连不上：没有连着的电脑');
-      return (true, '正在连接 $where');
+    if (_background) return (false, '已暂停（后台）');
+    if (_accessNote != null && (_stats.video || _up)) {
+      return (false, _accessNote!);
     }
-    return (true, '已连上，等电脑推流');
+    if (_stats.video) return null;
+    if (_indirect) return (false, deskIndirectText);
+    if (_fail != null) return (false, '连不上：$_fail');
+    if (_endNote != null) return (false, _endNote!);
+    if (_stopped) return (false, '已断开');
+    final host = _autoHost;
+    if (host == null || host.isEmpty) return (false, '连不上：没有连着的电脑');
+    if (!_up) return (true, '正在连接');
+    return (true, '已连上，等画面');
   }
 
   Widget _bannerView(HiveColors colors, (bool waiting, String text) banner) {
-    final failed = banner.$2.startsWith('连不上');
+    final failed = banner.$2.startsWith('连不上') || banner.$2 == deskIndirectText;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -814,6 +1294,11 @@ class _DeskPageState extends State<DeskPage>
               children: [
                 Text(headline),
                 Text('丢包 ${stats.loss}'),
+                ValueListenableBuilder<(int, int)>(
+                  valueListenable: _inputLine,
+                  builder: (context, line, _) =>
+                      Text('输入：已发 ${line.$1}、已确认 ${line.$2}'),
+                ),
                 Text('解码 ${stats.decodeMs.toStringAsFixed(1)} ms'),
                 Text('关键帧 ${stats.recoveries}'),
                 Text(
@@ -848,8 +1333,10 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Future<void> _connectSheet() async {
-    final host = TextEditingController(text: _host ?? '');
-    final port = TextEditingController(text: '$_port');
+    final host = TextEditingController(text: _udpHost ?? '');
+    final port = TextEditingController(
+      text: _customPort == null ? '' : '$_customPort',
+    );
     final auto = _autoHost;
     var error = '';
     try {
@@ -864,12 +1351,18 @@ class _DeskPageState extends State<DeskPage>
             builder: (context, setSheet) {
               void apply() {
                 final nextHost = host.text.trim();
-                final nextPort = parseDeskPort(port.text);
-                if (nextHost.isEmpty || nextPort == null) {
-                  setSheet(
-                    () => error = nextPort == null ? '端口要在 1 到 65535' : '先填地址',
-                  );
+                final portText = port.text.trim();
+                if (nextHost.isEmpty) {
+                  setSheet(() => error = '先填地址');
                   return;
+                }
+                int? nextPort;
+                if (portText.isNotEmpty) {
+                  nextPort = parseDeskPort(portText);
+                  if (nextPort == null) {
+                    setSheet(() => error = '端口要在 1 到 65535');
+                    return;
+                  }
                 }
                 Navigator.of(sheet).pop();
                 _useAddress(nextHost, nextPort);
@@ -894,8 +1387,8 @@ class _DeskPageState extends State<DeskPage>
                       const SizedBox(height: 6),
                       Text(
                         auto == null || auto.isEmpty
-                            ? '没有连着的电脑，填一个局域网地址'
-                            : '默认用现在连着的电脑 ${deskEndpoint(auto, deskDefaultPort)}',
+                            ? '没有连着的电脑'
+                            : '默认走订阅。画面发到现在连着的电脑，端口由电脑分配。这里改的是 UDP 地址，留着调试。',
                         style: TextStyle(fontSize: Fs.meta, color: c.muted),
                       ),
                       const SizedBox(height: 14),
@@ -930,11 +1423,10 @@ class _DeskPageState extends State<DeskPage>
                           child: TextButton(
                             onPressed: () {
                               Navigator.of(sheet).pop();
-                              setState(() {
-                                _customHost = null;
-                                _customPort = null;
-                              });
-                              unawaited(_ensure(force: true));
+                              _customHost = null;
+                              _customPort = null;
+                              unawaited(_enqueue(_retargetBody));
+                              setState(() {});
                             },
                             child: const Text('恢复默认'),
                           ),
@@ -983,6 +1475,12 @@ class _DeskPageState extends State<DeskPage>
       onSubmitted: (_) => onSubmitted(),
     );
   }
+}
+
+int? _jsonInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return null;
 }
 
 extension on DeskGestures {

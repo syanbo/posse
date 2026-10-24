@@ -16,6 +16,7 @@ const hiveCapabilities = [
   'hive.usage.v1',
   'hive.context.v1',
   'hive.media.v1',
+  'hive.desk.v1',
 ];
 
 class RpcException implements Exception {
@@ -49,6 +50,7 @@ class PhoneRpc {
 
   final _wait = <String, Completer<Map<String, Object?>>>{};
   final _subs = <String, void Function(Map<String, Object?> frame)>{};
+  final _subErr = <String, void Function(RpcException error)>{};
   final _binary = StreamController<Uint8List>.broadcast();
 
   /// 解开后的二进制帧（Orca 终端流，16 字节头还在）。先听再订阅，快照才不会丢。
@@ -135,9 +137,14 @@ class PhoneRpc {
     _subs[id] = (frame) {
       if (!controller.isClosed) controller.add(frame);
     };
+    // 订阅失败是一条普通错误回复，不是流里的一帧。
+    _subErr[id] = (error) {
+      if (!controller.isClosed) controller.addError(error);
+    };
     await _sendRequest(id, method, params);
     return RpcStream(id, controller.stream, () async {
       _subs.remove(id);
+      _subErr.remove(id);
       if (!controller.isClosed) await controller.close();
     });
   }
@@ -260,6 +267,10 @@ class PhoneRpc {
       }
       return;
     }
+    if (message['ok'] != true && _subErr.containsKey(id)) {
+      _subErr[id]?.call(_rpcError(message));
+      return;
+    }
     final waiter = _wait.remove(id);
     if (waiter == null || waiter.isCompleted) return;
     repliesReceived++;
@@ -272,15 +283,19 @@ class PhoneRpc {
             : <String, Object?>{'value': result},
       );
     } else {
-      final error = message['error'];
-      final code = error is Map && error['code'] is String
-          ? error['code'] as String
-          : 'rpc';
-      final text = error is Map && error['message'] is String
-          ? error['message'] as String
-          : 'rpc failed';
-      waiter.completeError(RpcException(code, text));
+      waiter.completeError(_rpcError(message));
     }
+  }
+
+  RpcException _rpcError(Map<String, Object?> message) {
+    final error = message['error'];
+    final code = error is Map && error['code'] is String
+        ? error['code'] as String
+        : 'rpc';
+    final text = error is Map && error['message'] is String
+        ? error['message'] as String
+        : 'rpc failed';
+    return RpcException(code, text);
   }
 
   void _closeBinary() {
@@ -292,6 +307,12 @@ class PhoneRpc {
     _wait.clear();
     for (final waiter in pending) {
       if (!waiter.isCompleted) waiter.completeError(error);
+    }
+    final rpcError = error is RpcException
+        ? error
+        : RpcException('closed', 'connection closed');
+    for (final fail in _subErr.values.toList()) {
+      fail(rpcError);
     }
   }
 }

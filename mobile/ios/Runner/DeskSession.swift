@@ -10,7 +10,9 @@ private let deskDirToMobile: UInt8 = 1
 private let deskKindHello: UInt8 = 1
 private let deskKindVideo: UInt8 = 2
 private let deskKindReport: UInt8 = 3
+private let deskKindInput: UInt8 = 4
 private let deskKindKeyframe: UInt8 = 5
+private let deskKindBeat: UInt8 = 6
 
 enum DeskCodec: String {
   case hevc
@@ -515,15 +517,28 @@ final class DeskSession {
   private var decodeMs: [(CFAbsoluteTime, Double)] = []
   private var pictureWidth = 0
   private var pictureHeight = 0
+  private var inputAck = 0
+  private let ioLock = NSLock()
+  private var socketFd: Int32 = -1
 
-  init(secret: Data, nonce: Data, peer: sockaddr_in, codec: DeskCodec) throws {
+  /// 两把密钥由 Dart 用会话密钥派生好。这里不再做 HKDF。
+  init(toMobile: Data, toMac: Data, peer: sockaddr_in, codec: DeskCodec) throws {
+    guard toMobile.count == 32, toMac.count == 32 else { throw DeskError.badAddress }
     guard let depacketizer = makeDepacketizer(codec) else { throw DeskError.unsupportedCodec }
-    keys = DeskKeys.derive(secret: secret, nonce: nonce)
+    keys = DeskKeys(
+      toMobile: SymmetricKey(data: toMobile),
+      toMac: SymmetricKey(data: toMac)
+    )
     self.peer = peer
     self.depacketizer = depacketizer
     decoder.onImage = { [weak self] image, ms in
       self?.noteDecoded(image, ms: ms)
     }
+  }
+
+  /// 明文已经是 EncodeInput 的布局。和 hello 共用发送计数器，可以从任意线程调用。
+  func sendInput(_ plain: Data) {
+    send(deskKindInput, plain)
   }
 
   func start() {
@@ -596,7 +611,8 @@ final class DeskSession {
     var fd: Int32 = -1
     defer {
       decoder.shutdown()
-      if fd >= 0 { close(fd) }
+      let open = takeSocket()
+      if open >= 0 { close(open) }
       joined.signal()
     }
     var nextHello: CFAbsoluteTime = 0
@@ -609,19 +625,20 @@ final class DeskSession {
       if state.stopped { break }
       if state.paused {
         if fd >= 0 {
-          close(fd)
+          closeSocket(fd)
           fd = -1
         }
         Thread.sleep(forTimeInterval: 0.05)
         continue
       }
       if fd < 0 || state.reset {
-        if fd >= 0 { close(fd) }
+        if fd >= 0 { closeSocket(fd) }
         fd = openSocket()
         if fd < 0 {
           Thread.sleep(forTimeInterval: 0.2)
           continue
         }
+        adoptSocket(fd)
         prepareForPeer()
         let now = CFAbsoluteTimeGetCurrent()
         nextHello = now
@@ -631,16 +648,16 @@ final class DeskSession {
       }
       let now = CFAbsoluteTimeGetCurrent()
       if !gotVideo, now >= nextHello {
-        try? send(fd, deskKindHello, Data())
+        send(deskKindHello, Data())
         nextHello = now + 0.1
       }
       if now >= nextReport {
-        sendReport(fd)
+        sendReport()
         nextReport = now + 0.1
       }
       // 进来时多半赶不上开头那个关键帧，参数集还没有，先要一张。丢包之后也走这里。
       if waitingKey, now >= nextKey {
-        try? send(fd, deskKindKeyframe, Data())
+        send(deskKindKeyframe, Data())
         nextKey = now + 0.2
       }
       if now >= nextStats {
@@ -655,6 +672,10 @@ final class DeskSession {
       }
       guard let opened else { continue }
       if !replay.accept(opened.1) { continue }
+      if opened.0 == deskKindBeat {
+        noteBeat(opened.2)
+        continue
+      }
       if opened.0 != deskKindVideo { continue }
       gotVideo = true
       noteVideo(bytes: n, now: CFAbsoluteTimeGetCurrent())
@@ -704,7 +725,7 @@ final class DeskSession {
     }
   }
 
-  private func sendReport(_ fd: Int32) {
+  private func sendReport() {
     let loss = lossInterval
     let packets = packetsInterval
     let highest = expect
@@ -727,7 +748,14 @@ final class DeskSession {
     put64(0)
     put64(0)
     put32(gap)
-    try? send(fd, deskKindReport, raw)
+    send(deskKindReport, raw)
+  }
+
+  /// beat 明文 16 字节、大端：前 8 字节是时刻，后 8 字节是已执行的必达序号。
+  private func noteBeat(_ plain: Data) {
+    guard plain.count >= 16 else { return }
+    inputAck = Int(beU64(plain, 8))
+    emitStats(CFAbsoluteTimeGetCurrent())
   }
 
   private func medianGap() -> UInt32 {
@@ -736,10 +764,14 @@ final class DeskSession {
     return sorted[sorted.count / 2]
   }
 
-  private func send(_ fd: Int32, _ kind: UInt8, _ plain: Data) throws {
+  private func send(_ kind: UInt8, _ plain: Data) {
+    ioLock.lock()
+    defer { ioLock.unlock() }
+    guard socketFd >= 0 else { return }
     sendN += 1
-    let packet = try deskSeal(keys.toMac, deskDirToMac, kind, sendN, plain)
+    guard let packet = try? deskSeal(keys.toMac, deskDirToMac, kind, sendN, plain) else { return }
     var dest = peer
+    let fd = socketFd
     packet.withUnsafeBytes { raw in
       _ = withUnsafePointer(to: &dest) { pointer in
         pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -747,6 +779,29 @@ final class DeskSession {
         }
       }
     }
+  }
+
+  private func adoptSocket(_ fd: Int32) {
+    ioLock.lock()
+    let old = socketFd
+    socketFd = fd
+    ioLock.unlock()
+    if old >= 0 && old != fd { close(old) }
+  }
+
+  /// 把描述符从发送路径摘掉。调用方负责 close。
+  private func takeSocket() -> Int32 {
+    ioLock.lock()
+    let current = socketFd
+    socketFd = -1
+    ioLock.unlock()
+    return current
+  }
+
+  private func closeSocket(_ fd: Int32) {
+    let current = takeSocket()
+    if current >= 0 { close(current) }
+    if fd >= 0 && fd != current { close(fd) }
   }
 
   private func noteVideo(bytes: Int, now: CFAbsoluteTime) {
@@ -787,6 +842,7 @@ final class DeskSession {
       "width": width,
       "height": height,
       "video": gotVideo,
+      "ack": inputAck,
     ])
   }
 

@@ -2,6 +2,7 @@ package desk
 
 import (
 	"bytes"
+	"encoding/hex"
 	"io"
 	"os"
 	"strings"
@@ -37,6 +38,11 @@ func TestInputRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventsEqual(t, got, in)
+	// 和手机端 mobile/test/desk_wire_test.dart 的同一组字节，两边改格式要一起改
+	want := "0108016400c800020100000001026400c80003020000000201010002000403000000fcff1e00050400000004000a0605000000e300080706000000000700e4bda0e5a5bd61070700000008010063"
+	if hex.EncodeToString(raw) != want {
+		t.Fatalf("bytes %x", raw)
+	}
 	empty, err := DecodeInput([]byte{inputVersion, 0})
 	if err != nil || len(empty) != 0 {
 		t.Fatalf("empty = %v %v", empty, err)

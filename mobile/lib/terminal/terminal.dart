@@ -326,7 +326,8 @@ class _TerminalScreenState extends State<TerminalScreen>
         if (frame['type'] == 'end') {
           setState(() => _notice = '终端已经退出');
         }
-      });
+        // 断线由重连接手，这里不提示。
+      }, onError: (Object _) {});
     } catch (error) {
       if (gen != _gen || !mounted) return;
       await _binary?.cancel();

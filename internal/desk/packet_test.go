@@ -2,6 +2,7 @@ package desk
 
 import (
 	"bytes"
+	"encoding/hex"
 	"testing"
 )
 
@@ -146,5 +147,27 @@ func TestAssemblerDropsGap(t *testing.T) {
 	got, err := asm.Push(Packetize(next, 100, CodecH264)[0])
 	if err != nil || got == nil || got.Number != 5 || !bytes.Equal(got.Payload[4:], []byte{0x65, 0x88}) {
 		t.Fatalf("next frame = %+v %v", got, err)
+	}
+}
+
+// 和手机端 mobile/test/desk_wire_test.dart 的同一组密钥：材料是 Mac 的 sendKey 再 recvKey，手机上是 recvKey 再 sendKey。
+func TestDeriveKeysMatchPhone(t *testing.T) {
+	secret := make([]byte, 64)
+	for i := range secret {
+		secret[i] = byte(i)
+	}
+	nonce := make([]byte, 16)
+	for i := range nonce {
+		nonce[i] = byte(0xA0 + i)
+	}
+	toMobile, toMac, err := DeriveKeys(secret, nonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := hex.EncodeToString(toMobile[:]) + hex.EncodeToString(toMac[:])
+	want := "44c64c40f6667577588a5e9336b32408da2e0c800be36edadeb6e469bb69016e" +
+		"48b417d3bba7d722539f4725a9cce8cdea27c7936944d8a4ced65bdebbf56762"
+	if got != want {
+		t.Fatalf("keys %s", got)
 	}
 }

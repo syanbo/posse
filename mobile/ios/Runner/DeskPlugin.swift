@@ -75,18 +75,6 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     }
     events.setStreamHandler(self)
     DeskEdges.install(messenger: messenger)
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(enteredBackground),
-      name: UIApplication.didEnterBackgroundNotification,
-      object: nil
-    )
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(enteredForeground),
-      name: UIApplication.willEnterForegroundNotification,
-      object: nil
-    )
   }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -97,14 +85,6 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
     sink = nil
     return nil
-  }
-
-  @objc private func enteredBackground() {
-    setSessionPaused(true)
-  }
-
-  @objc private func enteredForeground() {
-    setSessionPaused(false)
   }
 
   /// 先把引用拷出来再调，避免和 stop 置空抢同一份 session。
@@ -127,6 +107,8 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     case "resume":
       setSessionPaused(false)
       result(nil)
+    case "input":
+      sendInput(call.arguments, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -137,11 +119,15 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       let args = arguments as? [String: Any],
       let host = args["host"] as? String,
       let port = (args["port"] as? NSNumber)?.intValue ?? args["port"] as? Int,
-      let secret = bytes(args["secret"]),
-      let nonce = bytes(args["nonce"]),
+      let toPhone = bytes(args["keyToPhone"]),
+      let toMac = bytes(args["keyToMac"]),
       let codec = DeskCodec(rawValue: args["codec"] as? String ?? "")
     else {
       result(FlutterError(code: "bad_args", message: "主机、端口或密钥不对", details: nil))
+      return
+    }
+    guard toPhone.count == 32, toMac.count == 32 else {
+      result(FlutterError(code: "bad_args", message: "密钥长度不对", details: nil))
       return
     }
     guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
@@ -160,7 +146,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
           return
         }
         do {
-          let session = try DeskSession(secret: secret, nonce: nonce, peer: peer, codec: codec)
+          let session = try DeskSession(toMobile: toPhone, toMac: toMac, peer: peer, codec: codec)
           let texture = DeskTexture(registry: self.textures)
           session.onFrame = { [weak texture] image in
             texture?.present(image)
@@ -186,12 +172,24 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
           self.texture = texture
           result(texture.textureId)
         } catch DeskError.unsupportedCodec {
-          result(FlutterError(code: "unsupported_codec", message: "这一步只解 HEVC", details: nil))
+          result(FlutterError(code: "unsupported_codec", message: "还不能解这种编码", details: nil))
         } catch {
           result(FlutterError(code: "desk", message: "打不开接收", details: nil))
         }
       }
     }
+  }
+
+  private func sendInput(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let plain = bytes(arguments) else {
+      result(FlutterError(code: "bad_args", message: "没有输入", details: nil))
+      return
+    }
+    sessionLock.lock()
+    let current = session
+    sessionLock.unlock()
+    current?.sendInput(plain)
+    result(nil)
   }
 
   private func stop(result: @escaping FlutterResult) {

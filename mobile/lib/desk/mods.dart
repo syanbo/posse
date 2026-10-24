@@ -1,5 +1,36 @@
 enum DeskMod { command, shift, option, control }
 
+/// 和 Mac 端修饰键按下的顺序一致：左 Ctrl、Shift、Alt、⌘。
+const deskModPressOrder = [
+  DeskMod.control,
+  DeskMod.shift,
+  DeskMod.option,
+  DeskMod.command,
+];
+
+int deskModBit(DeskMod mod) => switch (mod) {
+  DeskMod.control => 1 << 0,
+  DeskMod.shift => 1 << 1,
+  DeskMod.option => 1 << 2,
+  DeskMod.command => 1 << 3,
+};
+
+int deskModBits(Iterable<DeskMod> mods) {
+  var bits = 0;
+  for (final mod in mods) {
+    bits |= deskModBit(mod);
+  }
+  return bits;
+}
+
+/// 左 Ctrl / Shift / Alt / ⌘ 的 USB HID 用法。
+int deskModHid(DeskMod mod) => switch (mod) {
+  DeskMod.control => 0xE0,
+  DeskMod.shift => 0xE1,
+  DeskMod.option => 0xE2,
+  DeskMod.command => 0xE3,
+};
+
 enum DeskModMode { off, once, locked }
 
 const deskModMark = {

@@ -15,6 +15,7 @@ class DeskStats {
     this.width = 0,
     this.height = 0,
     this.video = false,
+    this.ack = 0,
   });
 
   final double fps;
@@ -25,6 +26,9 @@ class DeskStats {
   final int width;
   final int height;
   final bool video;
+
+  /// beat 里已经执行到的必达事件序号。
+  final int ack;
 
   static DeskStats parse(Object? raw) {
     final map = raw is Map ? raw : const {};
@@ -39,6 +43,7 @@ class DeskStats {
       width: i(map['width']),
       height: i(map['height']),
       video: map['video'] == true,
+      ack: i(map['ack']),
     );
   }
 }
@@ -57,7 +62,7 @@ String? deskHostOf(String? url) {
   return uri.host;
 }
 
-/// 视频包不到 Dart。这里只把主机、端口和密钥交给插件。
+/// 视频包不到 Dart。这里把主机、端口和派生好的两把密钥交给插件，输入明文也从这里发出。
 class DeskReceiver {
   DeskReceiver({MethodChannel? channel, EventChannel? events})
     : _channel = channel ?? const MethodChannel('hive/desk'),
@@ -74,18 +79,24 @@ class DeskReceiver {
   Future<int> start({
     required String host,
     required int port,
+    required Uint8List keyToPhone,
+    required Uint8List keyToMac,
     DeskCodec codec = DeskCodec.hevc,
   }) async {
     final id = await _channel.invokeMethod<int>('start', {
       'host': host,
       'port': port,
-      'secret': deskTestSecretBytes(),
-      'nonce': deskTestNonceBytes(),
+      'keyToPhone': keyToPhone,
+      'keyToMac': keyToMac,
       'codec': codec.name,
     });
     if (id == null) throw StateError('desk start returned no texture');
     return id;
   }
+
+  /// 一条已经编好的 input 明文。插件加密后发给 Mac。
+  Future<void> sendInput(Uint8List plain) =>
+      _channel.invokeMethod<void>('input', plain);
 
   Future<void> stop() => _channel.invokeMethod<void>('stop');
 
