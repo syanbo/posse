@@ -9,8 +9,10 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,6 +90,12 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	args := []string{"--long-edge", strconv.Itoa(min(max(req.LongEdge, 2), 1920))}
 	if codec == "h264" {
 		args = append(args, "--codec", "h264")
+	}
+	// 测试用：在 iOS 模拟器上看时排除模拟器窗口，不然它被录进画面形成回环
+	for _, id := range strings.Split(os.Getenv("HIVE_DESK_EXCLUDE"), ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			args = append(args, "--exclude-app", id)
+		}
 	}
 	proc, err := deskSpawn(args)
 	if err != nil {
