@@ -110,6 +110,7 @@ func runDarwin(o Options) error {
 	if err != nil {
 		return err
 	}
+	mac.stayInBackground()
 	e := &engine{
 		mac: mac, opt: o, out: o.Frames,
 		pend: map[uint64]*stamp{}, stop: make(chan struct{}),

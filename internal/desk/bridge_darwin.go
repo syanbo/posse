@@ -358,6 +358,20 @@ func (m *macAPI) goString(o objc.ID) string {
 	return unsafe.String((*byte)(p), n)
 }
 
+// stayInBackground 让子进程不进程序坞。它是 Hive.app 里的可执行文件，一连上窗口服务器（ScreenCaptureKit 会连）
+// 就被当成前台 App，却从不完成启动，程序坞里的图标会一直跳。要在碰 ScreenCaptureKit 之前调。
+func (m *macAPI) stayInBackground() {
+	if _, err := purego.Dlopen("/System/Library/Frameworks/AppKit.framework/AppKit", purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {
+		return
+	}
+	cls := objc.ID(objc.GetClass("NSApplication"))
+	if cls == 0 {
+		return
+	}
+	const activationPolicyProhibited = 2
+	m.setInt(m.init(cls, m.sel("sharedApplication")), m.sel("setActivationPolicy:"), activationPolicyProhibited)
+}
+
 // 自动释放池按线程记：goroutine 在 push 和 pop 之间被挪到别的线程，pop 就会崩。
 func (m *macAPI) withPool(fn func()) {
 	runtime.LockOSThread()
