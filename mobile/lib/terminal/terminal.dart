@@ -756,16 +756,10 @@ class _TerminalScreenState extends State<TerminalScreen>
     } finally {
       if (mounted) setState(() => _upload = null);
     }
-    final outcome = await sendTerminal(
-      rpc,
-      terminal: widget.tab.terminalId,
-      text: path,
-      // 不回车：agent 里还能接着写说明，shell 里也不会把路径当命令执行
-      enter: false,
-    );
     if (!mounted) return;
-    final note = sendOutcomeText(outcome);
-    _flash(note.isEmpty ? null : note);
+    // 和桌面端一样当成一次粘贴发（程序开了括号粘贴就包上）：Claude Code、Codex 认出粘贴的是图片文件，
+    // 显示成 [Image #1] 当附件，而不是一长串路径。不回车：还能接着写说明，shell 里也不会把路径当命令执行
+    _controller.paste(path);
   }
 
   /// 专用键和自定义键按程序当前的光标键模式编码，见 [cursorKeysApp]。
