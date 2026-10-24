@@ -20,7 +20,8 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - `mygo.json` 用开发证书签名（`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
 - 应用图标的原图是 `design/icon-art.png`（满版、不带圆角）。桌面端用 Icon Composer 文档 `design/Hive.icon`（`mygo.json` 的 `macos.icon`，里面一层就是这张图，关了玻璃、高光和阴影），由 Xcode 的 actool 编成 Assets.car，圆角由系统画、和别的 App 一样大：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 是同一张图，只在编不了 .icon 时用。手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 直接由原图缩放。旧版图标留在 `design/old-icon/`。不要放进 `resources/`：那里的文件会原样打进 app。
 - 测试 Hive.app 时用 `open -n --env HIVE_HOME=/tmp/hive-e2e/home build/darwin-arm64/Hive.app` 启动。直接运行包内二进制时，Computer Use 按 bundle id 连接会经 LaunchServices 另起一个不带 `HIVE_HOME` 的实例，误用 `~/.hive`；同时开着两份包时按 .app 路径连接也一样，测试包比常驻进程新时它还会把日常的常驻进程交接到测试包上（用 build 里的包 `hive daemon handoff` 换回来）。
-- `build/darwin-arm64/Hive.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写里面的文件：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。要按签名认授权（屏幕录制、辅助功能）测试新代码时，用 `scripts/dev-app.sh` 装出 `build/dev/HiveDev.app`（包 ID `com.dengbo.hive.dev`，同一张证书，授权一次一直有效；装好再整个换上，可以反复跑），程序从包里调用（`build/dev/HiveDev.app/Contents/MacOS/Hive …`），配 `HIVE_HOME=/tmp/hive-e2e/home`、`HIVE_MOBILE_PORT=6790`。直接在终端里跑一个不在包里的二进制，系统会把授权记在终端所属的日常 Hive 上。
+- `build/darwin-arm64/Hive.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。按签名认授权（屏幕录制、辅助功能）的新代码用 `scripts/dev-app.sh` 装出 `build/dev/HiveDev.app` 来测（包 ID `com.dengbo.hive.dev`、同一张证书，授权一次一直有效，可反复重装），从包里调用 `build/dev/HiveDev.app/Contents/MacOS/Hive …`，配 `HIVE_HOME=/tmp/hive-e2e/home`、`HIVE_MOBILE_PORT=6790`。
+- 在 Hive 的终端里跑测试时，环境里带着日常常驻进程的 `GIT_TRACE2_EVENT`，`internal/daemon` 的 `TestGitTrace` 会失败：用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
@@ -41,10 +42,13 @@ internal/namer      会话标题（hive session title）：规整 `MMDD｜类型
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，状态栏用量和内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与工具"面板，files.go、filesview.go 是文件标签，filespanel.go 是右边的文件栏，gitview.go、gitpanel.go、changepop.go、rollback.go、branchpop.go、compare.go、logview.go、logrefs.go、filehistory.go、gitconsole.go 是 Git 界面，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
-internal/spawn      拉起常驻进程：新开会话，让它自己对系统授权负责
+internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责
+internal/desk       手机看 Mac 桌面的采集侧：子进程（`hive desk helper`）用 ScreenCaptureKit 采主屏、VideoToolbox 硬编码，帧经管道交给父进程；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`hive desk cast` 是还没接进常驻进程时的推流入口）
 internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $HIVE_HOME/usage.json
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索
 internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
+tools               desk 的验收工具：`deskrecv`（Swift 收包解码，和 iOS 插件同一套逻辑）、`deskshape`（本机 UDP 限速、延迟、丢包）
+scripts             `dev-app.sh`：装开发用的 HiveDev.app
 mobile              Hive 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 HIVE.md）
 third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）：终端链接悬停下划线、单击打开，改动和升级方法见其中的 HIVE.md
 ```
@@ -55,8 +59,7 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - 升级交接（`daemon.handoff`，`hive daemon handoff` 手动触发，`internal/daemon/handoff.go`）：旧进程用调用方给的 hive 拉起 `daemon run`（环境 `HIVE_HANDOFF_FD` 指向 socketpair 的一端），停接新连接、停读所有 PTY，经 SCM_RIGHTS 交出 hived.sock 的监听描述符和每个 PTY 主端（前面的交接记录对方没读完时 macOS 的 sendmsg 报 EMSGSIZE 而不是等，`sendFile` 隔 5ms 重发，最多 10 秒），连同交接记录（`term.State`：快照、标题、读到一半的转义序列或 UTF-8 字符 `tail`、agent 状态、hooks 标记）。新进程按同尺寸重建内核、接着读 PTY，用 kqueue（`EVFILT_PROC` `NOTE_EXITSTATUS`）盯不是自己子进程的 pid 拿退出码，再把 PTY 行数改一下又改回来让程序整屏重画；接过来的终端回话成功后才开始读 PTY（`Resume`），失败时输出还留在内核里给旧进程。回话之后新进程马上开始服务（hook 只等 2 秒，不能等旧进程退出），旧进程退出，不关终端、不删 socket 和 pid 文件；新进程在后台一直等锁，拿到才开手机服务（端口在旧进程手里），等不到也不退出。普通启动拿到锁后 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket。交接的终端和以它们为 worker 的任务不记为 lost。旧进程只把 PTY 已交出去的终端的退出留给新进程（交接窗口里退出的，新进程收不到退出码，记 -1），还没交出去就退出的照常处理；新建终端和交接开始经 `handoffState.startMu` 互斥；交接期间 `terminal wait --for idle` 不算空闲。交接拉起新进程时和 `client.EnsureDaemon` 一样经 `daemon.OpenLog` 重新打开日志、太大先轮转。新进程没回话或报错时旧进程杀掉它、恢复读 PTY 照常运行。协议版本是 `handoffVersion`，改了记录或帧格式要加一。手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
 - 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），被打断的长等待回 `restarting`（`rpc.Retryable` 也认回复前就断开的连接）。CLI 的 `terminal wait`、`task wait`、`task ask` 走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 的 restarting 带回问题 ID（`Error.Data` 的 `resume`），重发时改成 `--resume`，不会再问一遍。Claude 的权限挂起（`hook.permission.hold`）被打断时 hook 到新进程上再挂，总时间仍是 35 秒。
 - PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
-- 常驻进程（`client.EnsureDaemon`、交接时的旧进程）都经 `internal/spawn` 拉起：新开会话，并用私有接口 `responsibility_spawnattrs_setdisclaim` 让它自己对系统授权负责。否则授权记在拉起方身上：终端里的 CLI 拉起时是那个终端 App，一路交接下去是最初拉起它的那份 Hive.app，那份包被换掉后每次访问桌面都弹授权。
-- `daemon.log` 由拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程，都经 `daemon.OpenLog`）打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
+- 拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程）都经 `internal/spawn`：新开会话，并用私有接口 `responsibility_spawnattrs_setdisclaim` 让它自己对系统授权负责（否则授权记在拉起方身上：终端里的 CLI 拉起时是那个终端 App，一路交接下去是最初那份 Hive.app，包被换掉后每次访问桌面都弹授权）。`daemon.log` 也由拉起方经 `daemon.OpenLog` 打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
 - 程序关掉鼠标跟踪（9、1000、1002、1003 都关）时，如果最后写进 PTY 的是鼠标报告，常驻进程清掉 PTY 里还没读的输入（`dropStaleMouse`，主端 `TIOCFLUSH`）：Codex 退出时先不读输入、最后才关鼠标跟踪，这期间鼠标移动的报告会被接着运行的 shell 读成一串 `35;12;8M`。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
@@ -78,5 +81,6 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - 会话历史只读各 agent 的会话目录，不写回（例外：会话标题、用户在历史页移到废纸篓）。只改了某一家的解析规则改 `parserVersions`（index.go），只重读这一家；改表结构或分词才改 `schemaVersion`（旧索引重建，跨版本的旧常驻进程报 ErrStale，要重启）。改粗筛规则（`wants`）要跑 `TestLineFilterSameResult`。索引只有一个连接，结果集没关之前不能再查。
 - 文件栏不用 fsnotify（macOS 上基于 kqueue，监听一个目录要为其中每个文件开一个描述符），看得见时每秒 stat 一次。保存前磁盘戳变了先问，不默默覆盖 agent 的修改。
 - Git 界面全部在窗口进程里调系统 git，常驻进程不参与：路径都相对仓库根目录，仓库根目录换成工作区路径的写法（`repoRoot`，git 给的是解析过符号链接的）；界面调用的 gitx 函数用 `runRaw`；gitx 自己调 git 时设 `GIT_TRACE2_EVENT=0`。强制推送一律 `--force-with-lease --force-if-includes`。
+- `internal/desk` 经 purego 调 Objective-C：自动释放池按线程记，在 goroutine 上 push/pop 之间要 `runtime.LockOSThread`（`withPool`），否则 goroutine 换线程后 pop 会崩。用 iOS 模拟器测手机看桌面时推流加 `--exclude-app com.apple.iphonesimulator`，否则模拟器窗口被录进画面形成回环。
 - 手机遥控的端到端测试用 `HIVE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突；主机密钥在 `$HIVE_HOME/mobile.json`，换密钥等于所有手机重新配对。
 - 菜单都是 Hive 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 NSMenu，悬停高亮改不了）。build 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Hive（`presentMenu`、`sysMenuView`），菜单项的英文在 `menuLabels` 里换成中文，mygo 加了新的菜单项要补上。能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。

@@ -40,7 +40,7 @@ iPhone 看这台 Mac 的主显示器，并发送指针、滚轮和键盘。终�
 | 窗口 | 不采集。手机页显示「正在看桌面」、哪台手机和缺哪一项授权。用户点了以后再让常驻进程拉起子进程，系统授权框跟着出来 |
 | 手机 | Swift 原生插件收 UDP、解密、拆 RTP、硬解，画到 Flutter 纹理上；Flutter 负责手势、视口和快捷键栏。订阅和退订走现有的 RPC WebSocket |
 
-子进程经 `posix_spawn` 加 `responsibility_spawnattrs_setdisclaim` 拉起（purego 调 libSystem），系统按它自己的签名（Hive.app 的包 ID 加证书）认授权，不管常驻进程当初是窗口拉起的还是 iTerm 里的 `hive` CLI 拉起的、交接过几次。这是私有接口，第 1 步先验证；不行就在订阅时检查常驻进程的发起方，不是 Hive.app 返回 `wrong_host`，手机上说明要从 Hive.app 重启常驻进程。
+子进程经 `internal/spawn`（`posix_spawn` 加私有的 `responsibility_spawnattrs_setdisclaim`）拉起，系统按它自己的签名（Hive.app 的包 ID 加证书）认授权。常驻进程本身也是这样拉起的，不管是窗口、终端里的 CLI 还是交接拉起，都记在 Hive 上。
 
 授权要重启进程才生效：授权之后重新拉起子进程就行，常驻进程不用重启。
 
@@ -86,7 +86,6 @@ WebSocket 只跑订阅、退订和状态。它上面的请求是一条连接串�
 - `locked`：屏幕已经锁着
 - `indirect`：这条 WebSocket 不是直连
 - `busy`：已经有一台手机在看
-- `wrong_host`：授权归属验证不过时才有（见「进程」）
 
 缺辅助功能不挡订阅：返回成功并带 `input: false`，手机上能看、点了提示去 Mac 上允许辅助功能。
 
@@ -221,6 +220,13 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 3. iPhone 上的画面和输入。Swift 插件加 Flutter 纹理，120 Hz；按手势表逐项点中、双击、右键、拖动、滚动；放大后坐标仍落在手指下的图标上；人为丢掉 input 包时按下和松开仍然送到。用慢动作拍两块屏测手指到画面变化的延迟，对照延迟目标。这一步可以先不接现有会话、用固定密钥。
 4. 接上现有会话。HKDF 派生密钥、hello 认地址、`indirect` 和 `busy`、两项授权的文案、锁屏和解锁、改分辨率、观看时不熄屏且不改防休眠档位、退后台停掉、回到前台恢复、杀掉手机 App 后 Mac 3 秒内停、切网络后接着看、交接后重新订阅、停止后 footprint 回到观看前。
 5. 写入 `docs/features/mobile.md`：入口、手势、授权、直连、同一时间一台、观看时不熄屏、调试开关里的延迟读数。
+
+## 进度
+
+- 第 1–3 步已完成（`internal/desk`、`tools/deskrecv`、`tools/deskshape`、`mobile/lib/desk`）。手机端藏在设置的「实验：看桌面」后面，Mac 上手动 `hive desk cast` 推流，用固定测试密钥，输入只进调试浮层。
+- 与上面的差别：编码验收线改为 p95 ≤ 9 ms；限速和丢包用 `tools/deskshape` 本机转发模拟（`dnctl` 要 sudo）；5 Mbps 限速加 2% 丢包时码率在 5.1–7.2 Mbps 之间，没压到 3–5 Mbps，2% 随机丢包下每秒要补几次关键帧。
+- 还没验证：锁屏、改分辨率、定期确认框、双击、双指手势和 120 Hz 手感、真实 Wi-Fi、慢动作测端到端延迟。
+- 下一步是第 4 步。
 
 ## 之后
 
