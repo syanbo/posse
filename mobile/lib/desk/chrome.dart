@@ -26,9 +26,6 @@ const deskBarIdle = Duration(seconds: 4);
 /// 横屏快捷键栏的键高。竖屏仍是 [deskKeyBarBody]。
 const deskKeyBarDense = 32.0;
 
-/// 顶上胶囊占的高度，调试读数从它下面开始，免得盖住按钮。
-const deskToolbarRow = 40.0;
-
 /// 看桌面那条的开关。位置不在这里：竖屏和横屏各用一个值，页面自己记，不写入设置。
 class DeskChrome {
   var expanded = false;
