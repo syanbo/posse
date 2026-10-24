@@ -144,6 +144,72 @@ class TerminalControllerImpl extends TerminalController
   bool get hasSelection => terminal.selection != null;
 
   @override
+  SelectionAnchor? get selectionAnchor {
+    final selection = terminal.selection;
+    if (selection == null) return null;
+    final a = selection.start.positionIn(.viewport);
+    final b = selection.end.positionIn(.viewport);
+    if (a == null && b == null) return null;
+    final p = a ?? b!;
+    final q = b ?? a!;
+    final topIsP = p.row <= q.row;
+    final top = topIsP ? p : q;
+    final other = topIsP ? q : p;
+    final last = _lastCols > 0 ? _lastCols - 1 : top.col;
+    final int left;
+    final int right;
+    if (selection.rectangle || top.row == other.row) {
+      left = top.col <= other.col ? top.col : other.col;
+      right = top.col <= other.col ? other.col : top.col;
+    } else {
+      // 选区往下铺时，第一行从起点铺到行尾。
+      left = top.col;
+      right = last;
+    }
+    return SelectionAnchor(topRow: top.row, leftCol: left, rightCol: right);
+  }
+
+  @override
+  SelectionEnds? get selectionEnds {
+    final selection = terminal.selection;
+    if (selection == null) return null;
+    final a = selection.start.positionIn(.viewport);
+    final b = selection.end.positionIn(.viewport);
+    final aScreen = selection.start.positionIn(.screen);
+    final bScreen = selection.end.positionIn(.screen);
+    if (a == null || b == null || aScreen == null || bScreen == null) {
+      return null;
+    }
+    final aFirst = a.row < b.row || (a.row == b.row && a.col <= b.col);
+    return SelectionEnds(
+      startRow: aFirst ? a.row : b.row,
+      startCol: aFirst ? a.col : b.col,
+      endRow: aFirst ? b.row : a.row,
+      endCol: aFirst ? b.col : a.col,
+      screenStart: aFirst ? aScreen : bScreen,
+      screenEnd: aFirst ? bScreen : aScreen,
+    );
+  }
+
+  @override
+  void moveSelectionEnd({
+    required Position fixed,
+    required Position viewportCell,
+  }) {
+    final moving = _viewportRef(viewportCell)?.positionIn(.screen);
+    if (moving == null) return;
+    selectRange(start: fixed, end: moving, pointTag: .screen);
+  }
+
+  @override
+  void nudgeViewport(int delta) {
+    if (delta == 0 || terminal.activeScreen == .alternate) return;
+    terminal.scrollViewport(delta);
+    _syncScrollControllerToTerminal();
+    notifyListeners();
+  }
+
+  @override
   KeyboardState get keyboardState => _keyboardState;
 
   @override
@@ -542,6 +608,37 @@ class TerminalControllerImpl extends TerminalController
 
   @override
   void selectAll() => _setSelection(terminal.selectAll());
+
+  @override
+  void selectParagraph() {
+    final selection = terminal.selection;
+    if (selection == null) return;
+    final a = selection.start.positionIn(.screen);
+    final b = selection.end.positionIn(.screen);
+    if (a == null || b == null) return;
+    _ensureGridSize();
+    if (_lastCols <= 0 || terminal.totalRows <= 0) return;
+    final first = a.row <= b.row ? a.row : b.row;
+    final last = a.row <= b.row ? b.row : a.row;
+    var top = first;
+    if (!_rowBlank(top)) {
+      while (top > 0 && !_rowBlank(top - 1)) {
+        top--;
+      }
+    }
+    var bottom = last;
+    final limit = terminal.totalRows - 1;
+    if (!_rowBlank(bottom)) {
+      while (bottom < limit && !_rowBlank(bottom + 1)) {
+        bottom++;
+      }
+    }
+    selectRange(
+      start: Position(row: top, col: 0),
+      end: Position(row: bottom, col: _lastTextCol(bottom)),
+      pointTag: .screen,
+    );
+  }
 
   @override
   String selectedText({FormatterFormat format = .plain}) {
@@ -992,10 +1089,91 @@ class TerminalControllerImpl extends TerminalController
       return;
     }
 
+    // 中文占两格。端点落在后半格，或只盖住前半格时，高亮会从字中间切开。
+    final covered = value.rectangle ? null : _coverWholeCharacters(value);
+    if (covered != null) value = covered;
+
     final current = terminal.selection;
     if (current != null && current.equal(value)) return;
     _mutateSelection(() => terminal.selection = value);
     notifyListeners();
+  }
+
+  /// 把选区两端扩到完整的宽字符上。没变就返回 null。
+  Selection? _coverWholeCharacters(Selection value) {
+    final a = value.start.positionIn(.screen);
+    final b = value.end.positionIn(.screen);
+    if (a == null || b == null) return null;
+    final aFirst = a.row < b.row || (a.row == b.row && a.col <= b.col);
+    final start = aFirst ? a : b;
+    final end = aFirst ? b : a;
+    final snappedStart = _snapWideStart(start);
+    final snappedEnd = _snapWideEnd(end);
+    if (snappedStart == start && snappedEnd == end) return null;
+    return .fromRefs(
+      start: .at(terminal, snappedStart, pointTag: .screen),
+      end: .at(terminal, snappedEnd, pointTag: .screen),
+    );
+  }
+
+  Position _snapWideStart(Position screen) {
+    if (screen.col <= 0 || _wideAt(screen) != .spacerTail) return screen;
+    return Position(row: screen.row, col: screen.col - 1);
+  }
+
+  Position _snapWideEnd(Position screen) {
+    if (_wideAt(screen) != .wide) return screen;
+    final tail = Position(row: screen.row, col: screen.col + 1);
+    if (_wideAt(tail) != .spacerTail) return screen;
+    return tail;
+  }
+
+  CellWidth? _wideAt(Position screen) {
+    try {
+      return GridRef.at(terminal, screen, pointTag: .screen).wide;
+    } on InvalidValueException {
+      return null;
+    }
+  }
+
+  /// 这一行没有可见文字。空行用来切开段落。
+  bool _rowBlank(int row) {
+    for (var col = 0; col < _lastCols; col++) {
+      final ref = _screenRef(row, col);
+      if (ref == null) return true;
+      if (ref.wide == .spacerTail) continue;
+      if (ref.content.trim().isNotEmpty) return false;
+    }
+    return true;
+  }
+
+  /// 这一行最后一个有字的格子。宽字符算上后半格。
+  int _lastTextCol(int row) {
+    var last = 0;
+    for (var col = 0; col < _lastCols; col++) {
+      final ref = _screenRef(row, col);
+      if (ref == null) break;
+      if (ref.wide == .spacerTail) {
+        if (last == col - 1) last = col;
+        continue;
+      }
+      if (ref.content.trim().isEmpty) continue;
+      final tail = ref.isWide ? col + 1 : col;
+      last = tail < _lastCols ? tail : _lastCols - 1;
+    }
+    return last;
+  }
+
+  GridRef? _screenRef(int row, int col) {
+    try {
+      return GridRef.at(
+        terminal,
+        Position(row: row, col: col),
+        pointTag: .screen,
+      );
+    } on InvalidValueException {
+      return null;
+    }
   }
 
   bool _shouldRouteKeyThroughTextInput({

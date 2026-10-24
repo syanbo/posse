@@ -19,5 +19,7 @@ pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_ove
 - `lib/src/widgets/terminal_view.dart`、`terminal_gesture_detector.dart`：加 `TerminalView.onTap`。手指点击成立（不是链接）时调用，设了就不再自己聚焦，弹不弹键盘交给外层：手机终端页点终端时键盘收着就弹出，弹着不动。
 - `lib/src/widgets/terminal_view.dart`、`terminal_view_binding.dart`、`terminal_controller_impl.dart`：全屏程序跟踪鼠标时，手指滑动换成的滚轮报在手指所在的格子（`TerminalView` 记下最近一次按下、移动的位置，`handleScroll` 带上它；还没有时报在屏幕中间）。原版报在左上角，Codex 按位置分区处理滚轮，第一行是钉住的问题，滚轮落在那里不滚，手机上 Codex 滑不动。
 - `lib/src/widgets/terminal_controller_impl.dart`：全屏程序不跟踪鼠标时，滑动只在开着 alternate scroll（1007）时换成方向键。原版不看这个模式，Codex 关掉 1007 也照发，方向键在它的输入框里是翻历史。
+- `lib/src/widgets/terminal_controller.dart`、`terminal_controller_impl.dart`：加 `selectionAnchor` 和 `selectionEnds`，报告选区在可见屏幕上的位置；`moveSelectionEnd` 拖一端时另一端用屏幕坐标钉住，`nudgeViewport` 让拖到边缘时回滚跟着走。选区端点落在宽字符（中文占两格）中间时扩成整字，高亮不会切半个字。`selectParagraph` 把选区扩到上下空行之间的这一段。手机在选区两端画把手，「复制」贴在选区上沿，全选走这一段而不是整屏回滚。
+- `lib/src/widgets/terminal_gesture_detector.dart`：长按选中词时不震动。
 
 升级 flterm 时从 pub 缓存重新复制，再把上面的改动补回来。

@@ -59,7 +59,8 @@ export 'src/links/link_settings.dart'
         LinkSettings,
         LinkType,
         LinkedFile;
-export 'src/widgets/terminal_controller.dart' show TerminalController;
+export 'src/widgets/terminal_controller.dart'
+    show SelectionAnchor, SelectionEnds, TerminalController;
 export 'src/widgets/terminal_scope.dart' show TerminalScope;
 export 'src/widgets/terminal_scroll_controller.dart'
     show TerminalScrollController, TerminalScrollPosition;

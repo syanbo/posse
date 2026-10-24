@@ -345,7 +345,6 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
     _handleSelectionPress(position);
     _pressCell = null;
     _holdSelect = true;
-    HapticFeedback.selectionClick();
   }
 
   double? _pinnedPixels;

@@ -23,6 +23,7 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
 import 'desk_fit.dart';
+import 'selection_chrome.dart';
 import 'frames.dart';
 import 'keyboard_lift.dart';
 import 'link_target.dart';
@@ -81,11 +82,12 @@ class _TerminalScreenState extends State<TerminalScreen>
   var _panY = 0.0;
   var _pinch = 1.0;
 
-  /// 平移和捏合中只重画这一层，不重建整个终端页。
+  /// 平移和捏合中只重画这一层，不重建整个终端页。选区的复制按钮和把手也听它。
   final _pose = ValueNotifier<int>(0);
 
   /// 终端画面里到第几行为止有内容，弹键盘时按它算往上挪多少。
   final _contentRows = ValueNotifier<int>(0);
+  late final Listenable _moving = Listenable.merge([_pose, _contentRows]);
   var _pinching = false;
   var _pinchScale0 = 1.0;
   Offset _focalContent = Offset.zero;
@@ -112,7 +114,6 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   final _focus = FocusNode();
   var _busy = false;
-  var _showCopy = false;
 
   /// 点终端、点快捷键栏的键盘键都走这里：键盘弹着就放下，收着就弹出来。
   void _toggleKeyboard() {
@@ -131,27 +132,13 @@ class _TerminalScreenState extends State<TerminalScreen>
     SystemChannels.textInput.invokeMethod<void>('TextInput.show');
   }
 
-  void _onController() {
-    final selected = _controller.hasSelection;
-    if (selected == _showCopy || !mounted) return;
-    setState(() => _showCopy = selected);
-  }
-
-  Future<void> _copySelection() async {
-    final text = _controller.selectedText();
-    _controller.clearSelection();
-    if (text.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: text));
-  }
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = TerminalController()
       ..onOutput = _onOutput
-      ..onResize = _onResize
-      ..addListener(_onController);
+      ..onResize = _onResize;
     widget.model.addListener(_onModel);
   }
 
@@ -180,7 +167,6 @@ class _TerminalScreenState extends State<TerminalScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.model.removeListener(_onModel);
     unawaited(_detach());
-    _controller.removeListener(_onController);
     _controller.dispose();
     _deskScroll.dispose();
     _pose.dispose();
@@ -913,8 +899,8 @@ class _TerminalScreenState extends State<TerminalScreen>
                   ),
                 ),
               ),
-              // 提示、复制按钮和上传进度浮在看得见的那块终端上面，不跟着终端挪：
-              // 占布局的话终端会变矮，agent 跟着重排
+              // 提示和上传进度浮在看得见的那块终端上面，不跟着终端挪：
+              // 占布局的话终端会变矮，agent 跟着重排。复制按钮贴着选区，跟着画面挪。
               if (_upload case final done?)
                 Positioned(
                   left: 0,
@@ -922,27 +908,24 @@ class _TerminalScreenState extends State<TerminalScreen>
                   bottom: body.maxHeight - height + covered + 12,
                   child: UploadBar(index: 0, count: 1, done: done),
                 ),
-              if (_notice != null || _showCopy)
+              if (_notice != null)
                 Positioned(
                   top: 12,
                   left: 4,
                   right: 4,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_notice != null)
-                        NoticeBar(
-                          _notice!,
-                          floating: true,
-                          onClose: () => _flash(null),
-                        ),
-                      if (_notice != null && _showCopy)
-                        const SizedBox(height: 8),
-                      if (_showCopy)
-                        _CopyChip(onCopy: () => unawaited(_copySelection())),
-                    ],
+                  child: NoticeBar(
+                    _notice!,
+                    floating: true,
+                    onClose: () => _flash(null),
                   ),
                 ),
+              Positioned.fill(
+                child: ListenableBuilder(
+                  listenable: _moving,
+                  builder: (context, _) =>
+                      _selectionChrome(body.maxWidth, height, covered),
+                ),
+              ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -968,6 +951,33 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
   }
 
+  Widget _selectionChrome(double width, double height, double covered) {
+    final cell = _cellMetrics(
+      _desk && _deskCols > 0
+          ? _deskFont(width - _termPadding.horizontal)
+          : widget.model.settings.terminalFontSize,
+    );
+    return SelectionChrome(
+      controller: _controller,
+      width: width,
+      height: height,
+      covered: covered,
+      cellWidth: cell.cellWidth,
+      cellHeight: cell.cellHeight,
+      padLeft: _cropGrok ? 0 : _termPadding.left,
+      padTop: _cropGrok ? 0 : _termPadding.top,
+      lift: keyboardLift(
+        contentBottom: _contentBottom(width),
+        visible: height - covered,
+        covered: covered,
+      ),
+      pinch: _desk ? _pinch : 1,
+      panX: _desk ? _panX : 0,
+      panY: _desk ? _panY : 0,
+      cropX: _cropGrok ? cell.cellWidth * _grokMargin : 0,
+    );
+  }
+
   Widget _terminalArea(HiveColors c) {
     return Padding(
       padding: _cropGrok ? EdgeInsets.zero : _termPadding,
@@ -976,37 +986,6 @@ class _TerminalScreenState extends State<TerminalScreen>
           _notePhoneBox(constraints);
           return _deskView(c, constraints);
         },
-      ),
-    );
-  }
-}
-
-/// 长按选出的字留在这里。点一下写入剪贴板，点终端别处会先清掉选区。
-class _CopyChip extends StatelessWidget {
-  const _CopyChip({required this.onCopy});
-
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
-    return Material(
-      color: c.raised,
-      borderRadius: BorderRadius.circular(Rd.button),
-      child: InkWell(
-        onTap: onCopy,
-        borderRadius: BorderRadius.circular(Rd.button),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          child: Text(
-            '复制',
-            style: TextStyle(
-              color: c.accent,
-              fontSize: Fs.meta,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
       ),
     );
   }

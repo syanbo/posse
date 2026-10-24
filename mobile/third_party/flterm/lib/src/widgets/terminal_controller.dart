@@ -4,6 +4,66 @@ import 'package:libghostty/libghostty.dart';
 import '../foundation.dart';
 import 'terminal_controller_impl.dart';
 
+/// Both ends of a selection, in reading order. Rows are viewport rows. (Hive)
+@immutable
+final class SelectionEnds {
+  final int startRow;
+  final int startCol;
+  final int endRow;
+  final int endCol;
+
+  /// Screen coordinates of the two ends, stable while the viewport scrolls.
+  final Position screenStart;
+  final Position screenEnd;
+
+  const SelectionEnds({
+    required this.startRow,
+    required this.startCol,
+    required this.endRow,
+    required this.endCol,
+    required this.screenStart,
+    required this.screenEnd,
+  });
+
+  @override
+  int get hashCode =>
+      Object.hash(startRow, startCol, endRow, endCol, screenStart, screenEnd);
+
+  @override
+  bool operator ==(Object other) =>
+      other is SelectionEnds &&
+      other.startRow == startRow &&
+      other.startCol == startCol &&
+      other.endRow == endRow &&
+      other.endCol == endCol &&
+      other.screenStart == screenStart &&
+      other.screenEnd == screenEnd;
+}
+
+/// The selection's top row and the columns selected on that row. (Hive)
+@immutable
+final class SelectionAnchor {
+  final int topRow;
+  final int leftCol;
+  final int rightCol;
+
+  const SelectionAnchor({
+    required this.topRow,
+    required this.leftCol,
+    required this.rightCol,
+  });
+
+  @override
+  int get hashCode => Object.hash(topRow, leftCol, rightCol);
+
+  @override
+  bool operator ==(Object other) =>
+      other is SelectionAnchor &&
+      other.topRow == topRow &&
+      other.leftCol == leftCol &&
+      other.rightCol == rightCol;
+}
+
 /// Manages a terminal instance and bridges it with [TerminalView].
 ///
 /// Create a controller, wire up [onOutput] to your backend, pass the
@@ -70,6 +130,26 @@ abstract class TerminalController extends ChangeNotifier
 
   /// Whether the terminal currently has an active text selection.
   bool get hasSelection;
+
+  /// Where the selection sits in the visible screen, or null when nothing
+  /// is selected. Rows count from the top of the viewport and may be
+  /// negative when the selection starts above it. (Hive)
+  SelectionAnchor? get selectionAnchor;
+
+  /// Both ends of the selection, or null. (Hive)
+  SelectionEnds? get selectionEnds;
+
+  /// Moves one end of the selection to [viewportCell]. [fixed] is the other
+  /// end in screen coordinates, taken from [SelectionEnds] when the drag
+  /// started, so scrolling does not drag it along. (Hive)
+  void moveSelectionEnd({
+    required Position fixed,
+    required Position viewportCell,
+  });
+
+  /// Scrolls the primary screen by [delta] rows and keeps the scroll view
+  /// in step. Negative moves toward the scrollback. (Hive)
+  void nudgeViewport(int delta);
 
   /// Current soft keyboard state.
   KeyboardState get keyboardState;
@@ -182,6 +262,10 @@ abstract class TerminalController extends ChangeNotifier
 
   /// Selects all terminal content including scrollback.
   void selectAll();
+
+  /// Grows the selection to the paragraph around it. A paragraph is the run
+  /// of non-blank rows bounded by empty rows. (Hive)
+  void selectParagraph();
 
   /// Returns the text within the current selection, or empty string when
   /// there is no selection.
