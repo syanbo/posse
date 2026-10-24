@@ -20,6 +20,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - `mygo.json` 用开发证书签名（`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
 - 应用图标的原图是 `design/icon-art.png`（满版、不带圆角）。桌面端用 Icon Composer 文档 `design/Hive.icon`（`mygo.json` 的 `macos.icon`，里面一层就是这张图，关了玻璃、高光和阴影），由 Xcode 的 actool 编成 Assets.car，圆角由系统画、和别的 App 一样大：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 是同一张图，只在编不了 .icon 时用。手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 直接由原图缩放。旧版图标留在 `design/old-icon/`。不要放进 `resources/`：那里的文件会原样打进 app。
 - 测试 Hive.app 时用 `open -n --env HIVE_HOME=/tmp/hive-e2e/home build/darwin-arm64/Hive.app` 启动。直接运行包内二进制时，Computer Use 按 bundle id 连接会经 LaunchServices 另起一个不带 `HIVE_HOME` 的实例，误用 `~/.hive`；同时开着两份包时按 .app 路径连接也一样，测试包比常驻进程新时它还会把日常的常驻进程交接到测试包上（用 build 里的包 `hive daemon handoff` 换回来）。
+- `build/darwin-arm64/Hive.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写里面的文件：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。要按签名认授权（屏幕录制、辅助功能）测试新代码时，用 `scripts/dev-app.sh` 装出 `build/dev/HiveDev.app`（包 ID `com.dengbo.hive.dev`，同一张证书，授权一次一直有效；装好再整个换上，可以反复跑），程序从包里调用（`build/dev/HiveDev.app/Contents/MacOS/Hive …`），配 `HIVE_HOME=/tmp/hive-e2e/home`、`HIVE_MOBILE_PORT=6790`。直接在终端里跑一个不在包里的二进制，系统会把授权记在终端所属的日常 Hive 上。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
