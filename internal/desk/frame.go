@@ -21,8 +21,10 @@ const (
 	flagKeyframe byte = 1
 
 	// 状态帧负载的第一个字节。
-	StatusLocked   byte = 1
-	StatusUnlocked byte = 2
+	StatusLocked          byte = 1
+	StatusUnlocked        byte = 2
+	StatusNoScreen        byte = 3 // 没有屏幕录制权限，子进程随后退出
+	StatusNoAccessibility byte = 4 // 没有辅助功能权限，能看不能操作
 
 	CodecHEVC byte = 1
 	CodecH264 byte = 2

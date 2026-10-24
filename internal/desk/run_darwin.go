@@ -127,6 +127,7 @@ func runDarwin(o Options) error {
 	if !mac.preflight() {
 		// 子进程只在用户要看桌面时才被拉起，这时弹系统授权框：它把 App 加进录屏列表，不弹就得用户自己去找
 		mac.request()
+		_ = WriteFrame(o.Frames, Frame{Kind: KindStatus, CaptureUnixNano: time.Now().UnixNano(), Payload: []byte{StatusNoScreen}})
 		return fmt.Errorf("desk: screen recording is not allowed; turn on %s in System Settings > Privacy & Security > Screen & System Audio Recording", recordingAppName())
 	}
 	if err := registerDelegate(mac); err != nil {

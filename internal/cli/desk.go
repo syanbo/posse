@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -14,76 +15,112 @@ import (
 
 func init() {
 	commands = append(commands,
-		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest]", cmdDeskHelper},
-		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID]", cmdDeskSpawn},
-		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--exclude-app BUNDLE_ID]", cmdDeskCast},
+		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest]", cmdDeskHelper},
+		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID]", cmdDeskSpawn},
+		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--long-edge N] [--exclude-app BUNDLE_ID]", cmdDeskCast},
 	)
 }
 
-func deskFlags(args []string) (seconds int, codec string, bench, probe bool, mov string, selfTest bool, addr string, exclude []string, err error) {
+// deskOpts 是 desk helper、spawn、cast 共用的参数。
+type deskOpts struct {
+	seconds  int
+	codec    string
+	bench    bool
+	probe    bool
+	mov      string
+	selfTest bool
+	addr     string
+	longEdge int
+	exclude  []string
+}
+
+func deskFlags(args []string) (deskOpts, error) {
+	var o deskOpts
 	fs := flag.NewFlagSet("desk", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	sec := fs.Int("seconds", 0, "")
-	c := fs.String("codec", "hevc", "")
-	b := fs.Bool("bench", false, "")
-	p := fs.Bool("probe", false, "")
-	m := fs.String("mov", "", "")
-	st := fs.Bool("selftest", false, "")
-	ad := fs.String("addr", "127.0.0.1:47991", "")
+	fs.IntVar(&o.seconds, "seconds", 0, "")
+	fs.StringVar(&o.codec, "codec", "hevc", "")
+	fs.BoolVar(&o.bench, "bench", false, "")
+	fs.BoolVar(&o.probe, "probe", false, "")
+	fs.StringVar(&o.mov, "mov", "", "")
+	fs.BoolVar(&o.selfTest, "selftest", false, "")
+	fs.StringVar(&o.addr, "addr", "127.0.0.1:47991", "")
+	fs.IntVar(&o.longEdge, "long-edge", 0, "")
 	var ex multiFlag
 	fs.Var(&ex, "exclude-app", "")
-	if _, err = parse(fs, args); err != nil {
-		return 0, "", false, false, "", false, "", nil, err
+	if _, err := parse(fs, args); err != nil {
+		return o, err
 	}
-	if *c != "hevc" && *c != "h264" {
-		return 0, "", false, false, "", false, "", nil, fmt.Errorf("--codec is hevc or h264")
+	if o.codec != "hevc" && o.codec != "h264" {
+		return o, fmt.Errorf("--codec is hevc or h264")
+	}
+	if o.longEdge < 0 {
+		return o, fmt.Errorf("--long-edge must be positive")
 	}
 	for _, id := range ex {
 		if id == "" {
-			return 0, "", false, false, "", false, "", nil, fmt.Errorf("--exclude-app needs a bundle id")
+			return o, fmt.Errorf("--exclude-app needs a bundle id")
 		}
 	}
-	return *sec, *c, *b, *p, *m, *st, *ad, []string(ex), nil
+	o.exclude = ex
+	return o, nil
+}
+
+// helperArgs 是交给子进程 desk helper 的参数。
+func (o deskOpts) helperArgs() []string {
+	var args []string
+	if o.codec != "hevc" {
+		args = append(args, "--codec", o.codec)
+	}
+	if o.bench {
+		args = append(args, "--bench")
+	}
+	if o.probe {
+		args = append(args, "--probe")
+	}
+	if o.mov != "" {
+		args = append(args, "--mov", o.mov)
+	}
+	if o.longEdge > 0 {
+		args = append(args, "--long-edge", strconv.Itoa(o.longEdge))
+	}
+	for _, id := range o.exclude {
+		args = append(args, "--exclude-app", id)
+	}
+	return args
 }
 
 func cmdDeskHelper(_ *env, args []string) error {
-	seconds, codec, bench, probe, mov, selfTest, _, exclude, err := deskFlags(args)
+	o, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	return desk.Run(desk.Options{Seconds: seconds, Codec: codec, Bench: bench, Probe: probe, Mov: mov, SelfTest: selfTest, Exclude: exclude})
+	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, LongEdge: o.longEdge, Exclude: o.exclude})
 }
 
 func cmdDeskSpawn(_ *env, args []string) error {
-	seconds, codec, bench, probe, mov, _, _, exclude, err := deskFlags(args)
+	o, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	return runSpawn(seconds, codec, bench, probe, mov, exclude)
+	return runSpawn(o)
 }
 
 func cmdDeskCast(_ *env, args []string) error {
-	seconds, codec, _, _, _, _, addr, exclude, err := deskFlags(args)
+	o, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	var child []string
-	if codec != "hevc" {
-		child = append(child, "--codec", codec)
-	}
-	for _, id := range exclude {
-		child = append(child, "--exclude-app", id)
-	}
-	proc, err := desk.Spawn(child)
+	proc, err := desk.Spawn(o.helperArgs())
 	if err != nil {
 		return err
 	}
 	defer proc.Control.Close()
 	defer proc.Frames.Close()
 	done := make(chan error, 1)
-	go func() { done <- desk.Cast(proc.Frames, proc.Control, addr) }()
-	if seconds > 0 {
-		time.AfterFunc(time.Duration(seconds)*time.Second, func() { proc.Control.Close() })
+	go func() { done <- desk.Cast(proc.Frames, proc.Control, o.addr) }()
+	if o.seconds > 0 {
+		time.AfterFunc(time.Duration(o.seconds)*time.Second, func() { proc.Control.Close() })
 	}
 	err = <-done
 	proc.Control.Close()
@@ -94,38 +131,22 @@ func cmdDeskCast(_ *env, args []string) error {
 	return waitErr
 }
 
-func runSpawn(seconds int, codec string, bench, probe bool, mov string, exclude []string) error {
-	var childArgs []string
-	if codec != "hevc" {
-		childArgs = append(childArgs, "--codec", codec)
-	}
-	if bench {
-		childArgs = append(childArgs, "--bench")
-	}
-	if probe {
-		childArgs = append(childArgs, "--probe")
-	}
-	if mov != "" {
-		childArgs = append(childArgs, "--mov", mov)
-	}
-	for _, id := range exclude {
-		childArgs = append(childArgs, "--exclude-app", id)
-	}
-	proc, err := desk.Spawn(childArgs)
+func runSpawn(o deskOpts) error {
+	proc, err := desk.Spawn(o.helperArgs())
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "desk: spawned helper pid %d\n", proc.Pid)
 	frames := make(chan error, 1)
 	go func() { frames <- countFrames(proc.Frames) }()
-	if bench || probe {
+	if o.bench || o.probe {
 		err = proc.Wait()
 		proc.Control.Close()
 		<-frames
 		return err
 	}
-	if seconds > 0 {
-		time.Sleep(time.Duration(seconds) * time.Second)
+	if o.seconds > 0 {
+		time.Sleep(time.Duration(o.seconds) * time.Second)
 	} else {
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
