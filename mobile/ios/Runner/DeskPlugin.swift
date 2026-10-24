@@ -117,8 +117,6 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   private func start(_ arguments: Any?, result: @escaping FlutterResult) {
     guard
       let args = arguments as? [String: Any],
-      let host = args["host"] as? String,
-      let port = (args["port"] as? NSNumber)?.intValue ?? args["port"] as? Int,
       let toPhone = bytes(args["keyToPhone"]),
       let toMac = bytes(args["keyToMac"]),
       let codec = DeskCodec(rawValue: args["codec"] as? String ?? "")
@@ -130,8 +128,23 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       result(FlutterError(code: "bad_args", message: "密钥长度不对", details: nil))
       return
     }
-    guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
-      result(FlutterError(code: "bad_address", message: "解析不了 \(host)", details: nil))
+    // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
+    var peers: [sockaddr_in] = []
+    if let host = args["host"] as? String, !host.isEmpty {
+      let port = (args["port"] as? NSNumber)?.intValue ?? 0
+      guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
+        result(FlutterError(code: "bad_address", message: "解析不了 \(host)", details: nil))
+        return
+      }
+      peers.append(peer)
+    }
+    var relay: sockaddr_in?
+    if let text = args["relay"] as? String, !text.isEmpty {
+      relay = deskResolveHostPort(text)
+    }
+    let relayToken = bytes(args["relayToken"])
+    guard !peers.isEmpty || relay != nil else {
+      result(FlutterError(code: "bad_address", message: "没有能连的地址", details: nil))
       return
     }
     control.async { [weak self] in
@@ -146,7 +159,9 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
           return
         }
         do {
-          let session = try DeskSession(toMobile: toPhone, toMac: toMac, peer: peer, codec: codec)
+          let session = try DeskSession(
+            toMobile: toPhone, toMac: toMac, peers: peers, relay: relay, relayToken: relayToken,
+            codec: codec)
           let texture = DeskTexture(registry: self.textures)
           session.onFrame = { [weak texture] image in
             texture?.present(image)

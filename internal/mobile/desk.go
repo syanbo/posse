@@ -24,6 +24,9 @@ type DeskRequest struct {
 type DeskReady struct {
 	Port  int    `json:"port"`
 	Codec string `json:"codec"`
+	// Relay 是 UDP 中转的地址，RelayToken 是这次观看在中转上的令牌；没配中转时为空
+	Relay      string `json:"-"`
+	RelayToken []byte `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
@@ -84,10 +87,15 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			c.replyOrFail(id, nil, err)
 			return
 		}
-		c.stream(id, map[string]any{
+		frame := map[string]any{
 			"type": "ready", "port": ready.Port, "codec": ready.Codec,
 			"nonceB64": base64.StdEncoding.EncodeToString(nonce),
-		})
+		}
+		if ready.Relay != "" {
+			frame["relay"] = ready.Relay
+			frame["relayTokenB64"] = base64.StdEncoding.EncodeToString(ready.RelayToken)
+		}
+		c.stream(id, frame)
 		select {
 		case <-ended:
 		case <-c.ctx.Done():

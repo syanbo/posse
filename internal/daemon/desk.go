@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -122,7 +122,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
 	}
 	d.deskClearMissing("screen")
-	conn, err := net.ListenPacket("udp", ":0")
+	conn, err := desk.ListenRoutes(d.deskRelay())
 	if err != nil {
 		abort()
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
@@ -138,7 +138,8 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	d.desk.cancel = cancel
 	d.desk.mu.Unlock()
 	d.deskAwake(true)
-	port := conn.LocalAddr().(*net.UDPAddr).Port
+	port := conn.Port()
+	relay, relayToken := conn.Relay()
 	log.Printf("desk: %s watching, udp %d, %s", req.Device, port, codec)
 
 	var locked bool
@@ -147,7 +148,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	control := desk.LockWriter(proc.Control())
 	go func() {
 		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), control, desk.CastConfig{
-			Conn: conn, ToMobile: toMobile, ToMac: toMac,
+			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
 			OnInput: desk.NewInputForwarder(control),
 			OnStatus: func(code byte) {
 				d.deskNoteStatus(code)
@@ -195,7 +196,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		log.Printf("desk: %s stopped: %s (%v)", req.Device, reason, serveErr)
 		notify(mobile.DeskEvent{Type: "end", Reason: reason})
 	}()
-	return mobile.DeskReady{Port: port, Codec: codec}, nil
+	return mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken}, nil
 }
 
 // deskCodec 在手机能解的编码里选一个。手机不报时按 HEVC：iPhone 都能硬解。
@@ -319,4 +320,21 @@ func (d *Daemon) deskStop(ctx context.Context, _ json.RawMessage) (any, error) {
 	}
 	cancel()
 	return map[string]bool{"stopped": true}, nil
+}
+
+// deskRelay 读 $HIVE_HOME/desk.json 里的中转地址（UDP，host:port）。没有就是不用中转：
+// 只有手机经隧道连着、又打不通洞时才用得上，得用户自己有一台公网服务器跑 tools/deskrelay。
+func (d *Daemon) deskRelay() string {
+	data, err := os.ReadFile(filepath.Join(d.cfg.Home, "desk.json"))
+	if err != nil {
+		return ""
+	}
+	var cfg struct {
+		Relay string `json:"relay"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		log.Printf("desk: desk.json: %v", err)
+		return ""
+	}
+	return strings.TrimSpace(cfg.Relay)
 }

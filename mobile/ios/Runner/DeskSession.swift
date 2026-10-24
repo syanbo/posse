@@ -487,7 +487,13 @@ final class DeskSession {
   var onStats: (([String: Any]) -> Void)?
 
   private let keys: DeskKeys
-  private let peer: sockaddr_in
+  /// 直连候选（局域网等）和中转，hello 发给全部；收到 Mac 的包后只回给那条路。
+  private let candidates: [sockaddr_in]
+  private let relay: sockaddr_in?
+  private let relayToken: Data
+  /// Mac 最近一次发包来的地址，ioLock 保护。Mac 优先直连，手机跟着它走
+  private var active: sockaddr_in?
+  private var activeAt: CFAbsoluteTime = 0
   private let depacketizer: DeskDepacketizer
   private let decoder = DeskDecoder()
   private let replay = DeskReplay()
@@ -525,14 +531,26 @@ final class DeskSession {
   private var socketFd: Int32 = -1
 
   /// 两把密钥由 Dart 用会话密钥派生好。这里不再做 HKDF。
-  init(toMobile: Data, toMac: Data, peer: sockaddr_in, codec: DeskCodec) throws {
+  init(
+    toMobile: Data, toMac: Data, peers: [sockaddr_in], relay: sockaddr_in?, relayToken: Data?,
+    codec: DeskCodec
+  ) throws {
     guard toMobile.count == 32, toMac.count == 32 else { throw DeskError.badAddress }
+    guard !peers.isEmpty || relay != nil else { throw DeskError.badAddress }
     guard let depacketizer = makeDepacketizer(codec) else { throw DeskError.unsupportedCodec }
     keys = DeskKeys(
       toMobile: SymmetricKey(data: toMobile),
       toMac: SymmetricKey(data: toMac)
     )
-    self.peer = peer
+    if let relay, let relayToken, relayToken.count == deskRelayTokenLen {
+      self.relay = relay
+      self.relayToken = relayToken
+      candidates = peers + [relay]
+    } else {
+      self.relay = nil
+      self.relayToken = Data()
+      candidates = peers
+    }
     self.depacketizer = depacketizer
     decoder.onImage = { [weak self] image, ms in
       self?.noteDecoded(image, ms: ms)
@@ -591,6 +609,9 @@ final class DeskSession {
 
   /// 重新 hello。接收窗口清掉：Mac 可能已经把发送计数从头计。
   private func prepareForPeer() {
+    ioLock.lock()
+    active = nil
+    ioLock.unlock()
     gotVideo = false
     replay.reset()
     depacketizer.reset()
@@ -621,6 +642,7 @@ final class DeskSession {
       joined.signal()
     }
     var nextHello: CFAbsoluteTime = 0
+    var nextRegister: CFAbsoluteTime = 0
     var nextReport: CFAbsoluteTime = 0
     var nextKey: CFAbsoluteTime = 0
     var nextStats: CFAbsoluteTime = 0
@@ -647,11 +669,16 @@ final class DeskSession {
         prepareForPeer()
         let now = CFAbsoluteTimeGetCurrent()
         nextHello = now
+        nextRegister = now
         nextReport = now
         nextKey = now
         nextStats = now
       }
       let now = CFAbsoluteTimeGetCurrent()
+      if relay != nil, now >= nextRegister {
+        registerRelay()
+        nextRegister = now + 5
+      }
       if !gotVideo, now >= nextHello {
         send(deskKindHello, Data())
         nextHello = now + 0.1
@@ -669,14 +696,23 @@ final class DeskSession {
         emitStats(now)
         nextStats = now + 0.2
       }
-      let n = recv(fd, &buf, buf.count, 0)
+      var from = sockaddr_in()
+      var fromLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+      let n = withUnsafeMutablePointer(to: &from) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+          recvfrom(fd, &buf, buf.count, 0, $0, &fromLen)
+        }
+      }
       if n <= 0 { continue }
+      // 中转的登记回执不是 desk 包
+      if n >= 4, buf[0] == 0x48, buf[1] == 0x52, buf[2] == 0x59, buf[3] == 0x31 { continue }
       let opened = buf.withUnsafeBytes { raw -> (UInt8, UInt64, Data)? in
         let slice = UnsafeRawBufferPointer(start: raw.baseAddress, count: n)
         return deskOpen(keys.toMobile, deskDirToMobile, slice)
       }
       guard let opened else { continue }
       if !replay.accept(opened.1) { continue }
+      noteActive(from)
       if opened.0 == deskKindBeat {
         noteBeat(opened.2)
         continue
@@ -802,7 +838,18 @@ final class DeskSession {
     guard socketFd >= 0 else { return }
     sendN += 1
     guard let packet = try? deskSeal(keys.toMac, deskDirToMac, kind, sendN, plain) else { return }
-    var dest = peer
+    // 2 秒没收到 Mac 的包就当路断了，重新发给全部候选，Mac 从哪条收到就从哪条回
+    let now = CFAbsoluteTimeGetCurrent()
+    if let active, now - activeAt < 2 {
+      sendRaw(packet, to: active)
+    } else {
+      for dest in candidates { sendRaw(packet, to: dest) }
+    }
+  }
+
+  /// 调用方持有 ioLock。
+  private func sendRaw(_ packet: Data, to dest: sockaddr_in) {
+    var dest = dest
     let fd = socketFd
     packet.withUnsafeBytes { raw in
       _ = withUnsafePointer(to: &dest) { pointer in
@@ -811,6 +858,25 @@ final class DeskSession {
         }
       }
     }
+  }
+
+  /// 向中转登记：明文，'HRY1'、身份 2、16 字节令牌。兼当保活，换网络后中转靠它更新地址。
+  private func registerRelay() {
+    guard let relay else { return }
+    var packet = Data([0x48, 0x52, 0x59, 0x31, 2])
+    packet.append(relayToken)
+    ioLock.lock()
+    defer { ioLock.unlock() }
+    guard socketFd >= 0 else { return }
+    sendRaw(packet, to: relay)
+  }
+
+  private func noteActive(_ from: sockaddr_in) {
+    guard candidates.contains(where: { deskSameAddr($0, from) }) else { return }
+    ioLock.lock()
+    active = from
+    activeAt = CFAbsoluteTimeGetCurrent()
+    ioLock.unlock()
   }
 
   private func adoptSocket(_ fd: Int32) {
@@ -904,6 +970,19 @@ final class DeskSession {
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
     return fd
   }
+}
+
+let deskRelayTokenLen = 16
+
+func deskSameAddr(_ a: sockaddr_in, _ b: sockaddr_in) -> Bool {
+  a.sin_addr.s_addr == b.sin_addr.s_addr && a.sin_port == b.sin_port
+}
+
+/// "host:port" 形式的地址（中转）。
+func deskResolveHostPort(_ text: String) -> sockaddr_in? {
+  guard let colon = text.lastIndex(of: ":"), let port = UInt16(text[text.index(after: colon)...])
+  else { return nil }
+  return deskResolve(host: String(text[..<colon]), port: port)
 }
 
 func deskResolve(host: String, port: UInt16) -> sockaddr_in? {

@@ -115,6 +115,13 @@ class _DeskPageState extends State<DeskPage>
   /// 当前连接走隧道、画面改走同一台电脑的局域网地址时是那个地址。
   String? _lanHost;
   Timer? _lanCheck;
+
+  /// 当前连接走隧道，同一台电脑也没存局域网地址。Mac 配了中转还能看。
+  var _noDirect = false;
+
+  /// Mac 给的 UDP 中转（host:port）和这次观看的令牌。
+  String? _relay;
+  Uint8List? _relayToken;
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
@@ -229,9 +236,11 @@ class _DeskPageState extends State<DeskPage>
 
   String? get _autoHost => deskHostOf(widget.model.connectedUrl);
 
+  /// 直连发到哪。经隧道连着又没有同一台电脑的局域网地址时为空，只能靠中转。
   String? get _udpHost {
     final custom = _customHost;
     if (custom != null && custom.isNotEmpty) return custom;
+    if (_noDirect) return null;
     return _lanHost ?? _autoHost;
   }
 
@@ -623,11 +632,9 @@ class _DeskPageState extends State<DeskPage>
     if (!mounted || gen != _gen) return;
     final udp = await deskUdpHost(host, _sameComputerHosts());
     if (!mounted || gen != _gen) return;
-    if (udp == null) {
-      setState(() => _indirect = true);
-      return;
-    }
-    _lanHost = udp == host ? null : udp;
+    // 没有直连地址也先订阅：Mac 配了中转时 ready 里会带上，没有再提示
+    _noDirect = udp == null;
+    _lanHost = udp == null || udp == host ? null : udp;
     final pixels = _screenPixels();
     final RpcStream stream;
     try {
@@ -716,8 +723,20 @@ class _DeskPageState extends State<DeskPage>
     }
     final host = _udpHost;
     final udpPort = _customPort ?? port;
-    if (host == null || host.isEmpty) {
-      await _applyFail('capture_failed', gen);
+    final relay = frame['relay'];
+    final relayTokenB64 = frame['relayTokenB64'];
+    _relay = relay is String && relay.isNotEmpty ? relay : null;
+    _relayToken = null;
+    if (_relay != null && relayTokenB64 is String) {
+      try {
+        _relayToken = base64.decode(relayTokenB64);
+      } on Object {
+        _relay = null;
+      }
+    }
+    if ((host == null || host.isEmpty) && _relay == null) {
+      await _dropDesk(unsubscribe: true);
+      if (mounted && gen == _gen) setState(() => _indirect = true);
       return;
     }
     _keys = keys;
@@ -727,7 +746,9 @@ class _DeskPageState extends State<DeskPage>
       if (!mounted || gen != _gen) return;
       final id = await _receiver.start(
         host: host,
-        port: udpPort,
+        port: host == null ? null : udpPort,
+        relay: _relay,
+        relayToken: _relayToken,
         keyToPhone: keys.toPhone,
         keyToMac: keys.toMac,
         codec: DeskCodec.hevc,
@@ -744,12 +765,14 @@ class _DeskPageState extends State<DeskPage>
         _fail = null;
         _endNote = null;
       });
-      // 局域网地址是猜的：手机不在同一个 Wi-Fi 时 hello 到不了，Mac 要等 60 秒才放弃
+      // 局域网地址是猜的、中转也可能不通：hello 到不了时 Mac 要等 60 秒才放弃，这里早点说
       _lanCheck?.cancel();
-      if (_lanHost != null && _customHost == null) {
-        _lanCheck = Timer(const Duration(seconds: 5), () {
+      final guessed = _lanHost != null && _customHost == null;
+      if (guessed || _relay != null) {
+        _lanCheck = Timer(Duration(seconds: _relay != null ? 10 : 5), () {
           if (!mounted || gen != _gen || _stats.video) return;
-          unawaited(_enqueue(() => _applyFail('lan_unreachable', gen)));
+          final code = _relay != null ? 'route_unreachable' : 'lan_unreachable';
+          unawaited(_enqueue(() => _applyFail(code, gen)));
         });
       }
     } on PlatformException catch (error) {
@@ -897,16 +920,17 @@ class _DeskPageState extends State<DeskPage>
     final keys = _keys;
     final host = _udpHost;
     final port = _customPort ?? _readyPort;
-    if (!_up || keys == null || host == null || host.isEmpty || port == null) {
-      return;
-    }
+    if (!_up || keys == null || port == null) return;
+    if ((host == null || host.isEmpty) && _relay == null) return;
     final gen = _gen;
     try {
       await _stopReceiver();
       if (!mounted || gen != _gen) return;
       final id = await _receiver.start(
         host: host,
-        port: port,
+        port: host == null ? null : port,
+        relay: _relay,
+        relayToken: _relayToken,
         keyToPhone: keys.toPhone,
         keyToMac: keys.toMac,
         codec: DeskCodec.hevc,

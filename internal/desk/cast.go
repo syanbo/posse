@@ -25,6 +25,9 @@ var reportQuiet = 3 * time.Second
 // helloWait 是还没有对端时最多等多久。
 var helloWait = 60 * time.Second
 
+// directHold 内直连地址还有包来，就不理会经中转来的 hello、report
+const directHold = 3 * time.Second
+
 // ErrNoReport 是已经有 hello 之后，超过 reportQuiet 没有收到 report。
 var ErrNoReport = errors.New("desk: no report for 3s")
 
@@ -69,6 +72,8 @@ type CastConfig struct {
 	OnInput func(plain []byte) (ack uint64)
 	// Verbose 每次评估码率都记日志，命令行试跑看曲线用；常驻进程里只记变化，免得 daemon.log 每秒一行
 	Verbose bool
+	// IsRelay 认出中转服务器的地址。手机同时向直连地址和中转发包时，直连还通就不换到中转
+	IsRelay func(net.Addr) bool
 }
 
 // Serve 一直发到子进程的管道结束、手机超时不报或 Conn 被关掉。
@@ -87,7 +92,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	start := PictureBitrate(1920, 1080)
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
-		onStatus: cfg.OnStatus, onInput: cfg.OnInput, verbose: cfg.Verbose,
+		onStatus: cfg.OnStatus, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
 		bitrate: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
@@ -149,6 +154,8 @@ type caster struct {
 	inputAck           uint64
 	peer               net.Addr
 	peerMu             sync.Mutex
+	isRelay            func(net.Addr) bool
+	directAt           time.Time // 最近一次从直连地址收到包，peerMu 保护
 	replay             Replay
 	sendN              uint64
 	seq                uint16
@@ -446,7 +453,14 @@ func (c *caster) notePeer(addr net.Addr) {
 	}
 	c.peerMu.Lock()
 	defer c.peerMu.Unlock()
+	relay := c.isRelay != nil && c.isRelay(addr)
+	if !relay {
+		c.directAt = time.Now()
+	}
 	if c.peer != nil && sameAddr(c.peer, addr) {
+		return
+	}
+	if relay && c.peer != nil && !c.isRelay(c.peer) && time.Since(c.directAt) < directHold {
 		return
 	}
 	next := cloneAddr(addr)

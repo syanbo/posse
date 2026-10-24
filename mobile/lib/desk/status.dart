@@ -7,6 +7,7 @@ String deskFailText(String code) => switch (code) {
   'unsupported_codec' => '这台电脑不支持手机的视频编码',
   'capture_failed' => '采集失败',
   'lan_unreachable' => '手机和这台 Mac 不在同一个局域网',
+  'route_unreachable' => '直连和中转都不通',
   _ => '连接失败',
 };
 

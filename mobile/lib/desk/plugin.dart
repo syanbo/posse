@@ -76,16 +76,21 @@ class DeskReceiver {
   Stream<DeskStats> stats() =>
       _stats ??= _events.receiveBroadcastStream().map(DeskStats.parse);
 
+  /// host 是直连地址，经隧道连着又找不到局域网地址时为空，只走中转（relay 是 host:port）。
   Future<int> start({
-    required String host,
-    required int port,
+    String? host,
+    int? port,
+    String? relay,
+    Uint8List? relayToken,
     required Uint8List keyToPhone,
     required Uint8List keyToMac,
     DeskCodec codec = DeskCodec.hevc,
   }) async {
     final id = await _channel.invokeMethod<int>('start', {
-      'host': host,
-      'port': port,
+      'host': ?host,
+      'port': ?port,
+      'relay': ?relay,
+      'relayToken': ?relayToken,
       'keyToPhone': keyToPhone,
       'keyToMac': keyToMac,
       'codec': codec.name,
