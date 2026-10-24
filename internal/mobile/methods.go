@@ -418,7 +418,7 @@ func (c *conn) dispatch(req request) error {
 	case "status.get":
 		return c.reply(req.ID, s.status())
 	case "hive.quic":
-		info, err := s.quicInfo()
+		info, err := s.quicInfo(c.device.ID)
 		c.replyOrFail(req.ID, info, err)
 		return nil
 	case "runtime.ping":

@@ -9,7 +9,6 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -30,18 +29,28 @@ type QUICOptions struct {
 }
 
 // quicState 是手机服务的 QUIC 这一侧：局域网上和 WebSocket 同一个端口号的 UDP，
-// 加上登记在中转上的出口 socket。两个各一个 quic.Transport，收进来的连接走同一套处理。
+// 加上每台手机一个登记在中转上的出口 socket。各一个 quic.Transport，收进来的连接走同一套处理。
 type quicState struct {
 	mu   sync.Mutex
 	opts QUICOptions
 	tls  *tls.Config
 	lan  *quic.Transport
 
+	// 中转按令牌配对两端、一个令牌只记一台手机的地址，所以每台手机（设备 ID）各用一个令牌和 socket，
+	// 共用一个时两台手机会互相抢走对方的包。第一次调 hive.quic 时开，解除配对、换了中转地址时关
 	relayAt string
-	relay   *mquic.RelayConn
-	relayTr *quic.Transport
-	// 这次启动的中转令牌，手机经 hive.quic 拿到后用它登记。换了中转地址也不变
+	relays  map[string]*relayPath
+}
+
+type relayPath struct {
 	token []byte
+	rc    *mquic.RelayConn
+	tr    *quic.Transport
+}
+
+func (p *relayPath) close() {
+	p.tr.Close()
+	p.rc.Close()
 }
 
 // SetQUIC 在 Start 之前调用。不调用时只有局域网 QUIC。
@@ -65,8 +74,6 @@ func (s *Server) startQUIC(port int) {
 		return
 	}
 	q.tls = cfg
-	q.token = make([]byte, deskrelay.TokenLen)
-	rand.Read(q.token)
 	pc, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
 	if err != nil {
 		log.Printf("mobile: quic: listen on udp %d: %v", port, err)
@@ -82,35 +89,32 @@ func (s *Server) startQUIC(port int) {
 	q.lan = tr
 	go s.acceptQUIC(ln)
 	log.Printf("mobile: quic listening on %s", pc.LocalAddr())
-	s.ensureRelayLocked()
 }
 
-// ensureRelayLocked 按当前配置开、换或关中转那一路。调用时持有 q.mu。
-func (s *Server) ensureRelayLocked() {
+// relayLocked 返回这台手机的中转出口，没有就开一个。没配中转或开不了时为 nil，开不了的下次再试。
+// 调用时持有 q.mu。
+func (s *Server) relayLocked(device string) *relayPath {
 	q := &s.q
-	if q.tls == nil {
-		return
-	}
 	addr := ""
 	if q.opts.Relay != nil {
 		addr = q.opts.Relay()
 	}
-	if addr == q.relayAt {
-		return
+	if addr != q.relayAt {
+		for _, p := range q.relays {
+			p.close()
+		}
+		q.relays, q.relayAt = nil, addr
 	}
-	if q.relayTr != nil {
-		q.relayTr.Close()
-		q.relay.Close()
-		q.relayTr, q.relay = nil, nil
+	if addr == "" || q.tls == nil {
+		return nil
 	}
-	q.relayAt = addr
-	if addr == "" {
-		return
+	if p := q.relays[device]; p != nil {
+		return p
 	}
 	raddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		log.Printf("mobile: quic relay %s: %v", addr, err)
-		return
+		return nil
 	}
 	var out *net.UDPConn
 	if q.opts.ListenOut != nil {
@@ -121,20 +125,40 @@ func (s *Server) ensureRelayLocked() {
 	if out == nil {
 		if out, err = net.ListenUDP("udp4", nil); err != nil {
 			log.Printf("mobile: quic relay: %v", err)
-			return
+			return nil
 		}
 	}
-	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, q.token, relayKeepalive)
+	token := make([]byte, deskrelay.TokenLen)
+	rand.Read(token)
+	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, token, relayKeepalive)
 	tr := &quic.Transport{Conn: rc}
 	ln, err := tr.Listen(q.tls, mquic.Config())
 	if err != nil {
 		rc.Close()
 		log.Printf("mobile: quic relay: %v", err)
-		return
+		return nil
 	}
-	q.relay, q.relayTr = rc, tr
+	p := &relayPath{token: token, rc: rc, tr: tr}
+	if q.relays == nil {
+		q.relays = map[string]*relayPath{}
+	}
+	q.relays[device] = p
 	go s.acceptQUIC(ln)
-	log.Printf("mobile: quic registered at relay %s", addr)
+	log.Printf("mobile: quic registered at relay %s (%d phones)", addr, len(q.relays))
+	return p
+}
+
+// dropRelays 关掉这些设备的中转出口（解除配对、并进同一台手机的旧 token）。
+func (s *Server) dropRelays(ids []string) {
+	q := &s.q
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, id := range ids {
+		if p := q.relays[id]; p != nil {
+			p.close()
+			delete(q.relays, id)
+		}
+	}
 }
 
 func (s *Server) closeQUIC() {
@@ -146,12 +170,10 @@ func (s *Server) closeQUIC() {
 		q.lan.Conn.Close()
 		q.lan = nil
 	}
-	if q.relayTr != nil {
-		q.relayTr.Close()
-		q.relay.Close()
-		q.relayTr, q.relay = nil, nil
+	for _, p := range q.relays {
+		p.close()
 	}
-	q.relayAt = ""
+	q.relays, q.relayAt = nil, ""
 }
 
 func (s *Server) acceptQUIC(ln *quic.Listener) {
@@ -172,9 +194,11 @@ func (s *Server) serveQUIC(qc *quic.Conn) {
 		qc.CloseWithError(0, "")
 		return
 	}
+	// 和 WebSocket 的读上限一致：手机发来的只有请求和分块上传的图片
+	c.ReadLimit = 4 << 20
 	w := &quicWire{c: c}
 	s.serveWire(qc.Context(), w)
-	if !w.closing.Load() {
+	if !c.Closing() {
 		c.CloseNow()
 	}
 }
@@ -184,31 +208,27 @@ type QUICInfo struct {
 	Port  int      `json:"port"`
 	Hosts []string `json:"hosts"` // 本机的 Tailscale 和局域网地址
 	Relay string   `json:"relay,omitempty"`
-	// 和 relay 一起给：手机向中转登记用，同一台 Mac 这次启动内不变
+	// 和 relay 一起给：这台手机向中转登记用，常驻进程这次启动内不变
 	RelayToken []byte `json:"relayToken,omitempty"`
 }
 
-func (s *Server) quicInfo() (QUICInfo, error) {
+func (s *Server) quicInfo(device string) (QUICInfo, error) {
 	q := &s.q
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.lan == nil {
 		return QUICInfo{}, errorf("unavailable", "quic is not running")
 	}
-	s.ensureRelayLocked()
 	info := QUICInfo{Port: q.lan.Conn.LocalAddr().(*net.UDPAddr).Port, Hosts: LocalEndpoints()}
-	if q.relay != nil {
+	if p := s.relayLocked(device); p != nil {
 		info.Relay = q.relayAt
-		info.RelayToken = q.token
+		info.RelayToken = p.token
 	}
 	return info, nil
 }
 
 // quicWire 让 QUIC 的流满足 wire：ctx 换成读写期限。
-type quicWire struct {
-	c       *mquic.Conn
-	closing atomic.Bool
-}
+type quicWire struct{ c *mquic.Conn }
 
 func deadlineOf(ctx context.Context) time.Time {
 	d, _ := ctx.Deadline()
@@ -241,15 +261,15 @@ func (w *quicWire) Write(ctx context.Context, typ websocket.MessageType, p []byt
 	stop := context.AfterFunc(ctx, func() { w.c.SetWriteDeadline(time.Now()) })
 	defer stop()
 	err := w.c.Write(t, p)
-	if err != nil {
-		// 和 WebSocket 一样，写失败（超时）整条连接作废，免得后面的帧和加密计数器错开
+	if err != nil && !w.c.Closing() {
+		// 和 WebSocket 一样，写失败（超时）整条连接作废，免得后面的帧和加密计数器错开。
+		// 已经在关的不动：关闭帧还排着，直接断开会把它和前面那条报错一起丢掉
 		w.c.CloseNow()
 	}
 	return err
 }
 
 func (w *quicWire) Close(code websocket.StatusCode, reason string) error {
-	w.closing.Store(true)
 	w.c.Close(uint16(code), reason)
 	return nil
 }

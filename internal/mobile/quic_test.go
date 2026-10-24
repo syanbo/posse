@@ -180,3 +180,73 @@ func TestQUICRelayUnreachableFailsFast(t *testing.T) {
 		t.Fatalf("err %v after %v", err, time.Since(start))
 	}
 }
+
+// 两台手机同时经中转连着，各自的请求都有回复：每台手机一个令牌，中转不会把一台的包转给另一台。
+func TestQUICRelayTwoPhones(t *testing.T) {
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go deskrelay.NewServer(pc).Serve()
+	relay := pc.LocalAddr().String()
+
+	srv := newQUICServer(t)
+	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	var phones []*phone
+	var tokens [][]byte
+	for range 2 {
+		info, err := srv.Pair(false, "127.0.0.1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ws := dialPhone(t, srv, info)
+		defer ws.ws.CloseNow()
+		q := quicInfoOf(t, ws)
+		if again := quicInfoOf(t, ws); string(again.RelayToken) != string(q.RelayToken) {
+			t.Fatal("token changed for the same phone")
+		}
+		tokens = append(tokens, q.RelayToken)
+		p := handshakePhone(t, dialQUIC(t, relay, q.RelayToken), parseTestOffer(t, info))
+		defer p.ws.CloseNow()
+		phones = append(phones, p)
+	}
+	if string(tokens[0]) == string(tokens[1]) {
+		t.Fatal("two phones share a relay token")
+	}
+	for range 4 {
+		for i, p := range phones {
+			m, ok := p.nextWithin(p.call("runtime.ping", map[string]any{}), 3*time.Second)
+			if !ok {
+				t.Fatalf("phone %d got no reply via relay", i)
+			}
+			result(t, m)
+		}
+	}
+}
+
+// 中转第一次开不了（地址解析失败）不记下来，下次 hive.quic 再试。
+func TestQUICRelayRetriesAfterFailure(t *testing.T) {
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go deskrelay.NewServer(pc).Serve()
+	relay := "bad host:1"
+	srv := newQUICServer(t)
+	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	defer ws.ws.CloseNow()
+	if q := quicInfoOf(t, ws); q.Relay != "" {
+		t.Fatalf("relay %q from a bad address", q.Relay)
+	}
+	relay = pc.LocalAddr().String()
+	if q := quicInfoOf(t, ws); q.Relay != relay {
+		t.Fatalf("relay %q after fixing the address", q.Relay)
+	}
+}

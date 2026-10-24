@@ -34,7 +34,8 @@ const (
 	Close  byte = 3
 )
 
-// MaxMessage 和 WebSocket 那边的读上限一致，再留点余量给加密和 base64 的膨胀。
+// MaxMessage 是一条消息最长多少。电脑发给手机的（一段视频、一张大图）可能接近它；
+// 电脑这边读手机的消息另用 Conn.ReadLimit 限得更小，和 WebSocket 一致。
 const MaxMessage = 8 << 20
 
 // WriteMessage 把一条消息一次写进流里。
@@ -50,14 +51,14 @@ func WriteMessage(w io.Writer, typ byte, p []byte) error {
 	return err
 }
 
-// ReadMessage 读一条消息。
-func ReadMessage(r *bufio.Reader) (byte, []byte, error) {
+// ReadMessage 读一条消息，长于 limit 的报错（按头里声称的长度分配，不能让对方随便要内存）。
+func ReadMessage(r *bufio.Reader, limit int) (byte, []byte, error) {
 	var head [5]byte
 	if _, err := io.ReadFull(r, head[:]); err != nil {
 		return 0, nil, err
 	}
 	n := binary.BigEndian.Uint32(head[1:])
-	if n > MaxMessage {
+	if int64(n) > int64(limit) {
 		return 0, nil, fmt.Errorf("mquic: message too large (%d bytes)", n)
 	}
 	p := make([]byte, n)

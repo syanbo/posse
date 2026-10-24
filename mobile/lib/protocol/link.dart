@@ -188,7 +188,8 @@ class HiveLink {
         attemptTimeout,
         onTimeout: () {
           cancel.cancel();
-          throw TimeoutException('connect $url');
+          // 不带整个地址：中转的地址里有令牌，报错可能显示出来
+          throw TimeoutException('connect ${Uri.tryParse(url)?.host ?? url}');
         },
       );
 

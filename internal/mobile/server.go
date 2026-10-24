@@ -112,10 +112,10 @@ func (s *Server) Close() {
 	if srv != nil {
 		srv.Close()
 	}
-	s.closeQUIC()
 	for _, c := range conns {
 		c.ws.Close(websocket.StatusGoingAway, "host shutting down")
 	}
+	s.closeQUIC()
 }
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
@@ -206,6 +206,7 @@ func (s *Server) dropDevices(ids []string) {
 	for _, c := range drop {
 		c.ws.Close(4001, "Unauthorized")
 	}
+	s.dropRelays(ids)
 }
 
 func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {

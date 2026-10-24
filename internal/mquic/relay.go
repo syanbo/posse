@@ -19,7 +19,6 @@ type RelayConn struct {
 
 	done  chan struct{}
 	once  sync.Once
-	kick  chan struct{}
 	acked atomic.Bool
 }
 
@@ -30,7 +29,6 @@ func NewRelayConn(conn *net.UDPConn, relay *net.UDPAddr, role byte, token []byte
 		relay: relay,
 		reg:   deskrelay.Register(role, token),
 		done:  make(chan struct{}),
-		kick:  make(chan struct{}, 1),
 	}
 	go r.keepalive(every)
 	return r
@@ -47,16 +45,7 @@ func (r *RelayConn) keepalive(every time.Duration) {
 		case <-r.done:
 			return
 		case <-t.C:
-		case <-r.kick:
 		}
-	}
-}
-
-// Kick 马上重发一次登记：换了网络后中转要尽快知道新地址。
-func (r *RelayConn) Kick() {
-	select {
-	case r.kick <- struct{}{}:
-	default:
 	}
 }
 

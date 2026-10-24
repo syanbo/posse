@@ -3,9 +3,11 @@ package mquic
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -26,22 +28,27 @@ func (e *CloseError) Error() string {
 	return fmt.Sprintf("mquic: closed by peer (%d %s)", e.Code, e.Reason)
 }
 
-// Conn 是一条连接上的那条流，按消息读写。读、写各自只能有一个调用方。
+// Conn 是一条连接上的那条流，按消息读写。读只能有一个调用方；写可以并发，按到达顺序整条写出。
 type Conn struct {
 	qc *quic.Conn
 	st *quic.Stream
 	r  *bufio.Reader
 
+	// ReadLimit 是读一条消息的上限，默认 MaxMessage
+	ReadLimit int
+
+	wmu     sync.Mutex
+	closing atomic.Bool
+
 	// 拨号的一方自己开的 socket，连接结束时关掉
-	tr    *quic.Transport
-	pc    net.PacketConn
-	relay *RelayConn
+	tr *quic.Transport
+	pc net.PacketConn
 
 	once sync.Once
 }
 
 func newConn(qc *quic.Conn, st *quic.Stream) *Conn {
-	return &Conn{qc: qc, st: st, r: bufio.NewReaderSize(st, 64<<10)}
+	return &Conn{qc: qc, st: st, r: bufio.NewReaderSize(st, 64<<10), ReadLimit: MaxMessage}
 }
 
 // Accept 等手机开流。
@@ -90,7 +97,7 @@ func Dial(ctx context.Context, addr string, relayToken []byte) (*Conn, error) {
 		return fail(err)
 	}
 	c := newConn(qc, st)
-	c.tr, c.pc, c.relay = tr, pc, relay
+	c.tr, c.pc = tr, pc
 	go func() {
 		<-qc.Context().Done()
 		c.release()
@@ -121,7 +128,7 @@ func waitAck(ctx context.Context, r *RelayConn) error {
 
 // Read 读一条消息。对方发来关闭帧时关掉连接，返回 *CloseError。
 func (c *Conn) Read() (byte, []byte, error) {
-	typ, p, err := ReadMessage(c.r)
+	typ, p, err := ReadMessage(c.r, c.ReadLimit)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -133,7 +140,20 @@ func (c *Conn) Read() (byte, []byte, error) {
 	return typ, p, nil
 }
 
-func (c *Conn) Write(typ byte, p []byte) error { return WriteMessage(c.st, typ, p) }
+// ErrClosing 是 Close 之后再写。
+var ErrClosing = errors.New("mquic: closing")
+
+func (c *Conn) Write(typ byte, p []byte) error {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	if c.closing.Load() {
+		return ErrClosing
+	}
+	return WriteMessage(c.st, typ, p)
+}
+
+// Closing 是已经调过 Close。
+func (c *Conn) Closing() bool { return c.closing.Load() }
 
 func (c *Conn) SetReadDeadline(t time.Time) error  { return c.st.SetReadDeadline(t) }
 func (c *Conn) SetWriteDeadline(t time.Time) error { return c.st.SetWriteDeadline(t) }
@@ -143,12 +163,18 @@ func (c *Conn) Context() context.Context { return c.qc.Context() }
 
 func (c *Conn) RemoteAddr() net.Addr { return c.qc.RemoteAddr() }
 
-// Close 发关闭帧、关流，等对方关连接（最多 2 秒）再自己关。不阻塞。
+// Close 排在正在写的那条后面发关闭帧、关流，等对方关连接（最多 2 秒）再自己关。不阻塞；
+// 之后的 Write 返回 ErrClosing。
 func (c *Conn) Close(code uint16, reason string) {
-	c.st.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	c.Write(Close, CloseFrame(code, reason))
-	c.st.Close()
+	if c.closing.Swap(true) {
+		return
+	}
 	go func() {
+		c.wmu.Lock()
+		c.st.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		WriteMessage(c.st, Close, CloseFrame(code, reason))
+		c.st.Close()
+		c.wmu.Unlock()
 		select {
 		case <-c.qc.Context().Done():
 		case <-time.After(2 * time.Second):
@@ -169,11 +195,4 @@ func (c *Conn) release() {
 			c.pc.Close()
 		}
 	})
-}
-
-// Rebind 换网络后马上重发中转登记，不等下一次定时。
-func (c *Conn) Rebind() {
-	if c.relay != nil {
-		c.relay.Kick()
-	}
 }

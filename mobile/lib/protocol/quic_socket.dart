@@ -15,7 +15,8 @@ bool isQuicUrl(String url) => url.startsWith('$quicScheme://');
 
 /// 经中转的 QUIC 地址。
 bool isRelayQuicUrl(String url) =>
-    isQuicUrl(url) && (Uri.tryParse(url)?.queryParameters.containsKey('relay') ?? false);
+    isQuicUrl(url) &&
+    (Uri.tryParse(url)?.queryParameters.containsKey('relay') ?? false);
 
 /// 把 hive.quic 的回复换成地址：先局域网、Tailscale 各地址，最后中转。
 List<String> quicUrlsOf(Map<String, Object?> info) {
@@ -33,7 +34,10 @@ List<String> quicUrlsOf(Map<String, Object?> info) {
   }
   final relay = info['relay'];
   final token = info['relayToken'];
-  if (relay is String && relay.isNotEmpty && token is String && token.isNotEmpty) {
+  if (relay is String &&
+      relay.isNotEmpty &&
+      token is String &&
+      token.isNotEmpty) {
     final raw = base64.decode(token);
     out.add('$quicScheme://$relay?relay=${base64Url.encode(raw)}');
   }
@@ -71,13 +75,11 @@ class QuicByteSocket implements ByteSocket {
       _conn.send(quicText, Uint8List.fromList(utf8.encode(text)));
 
   @override
-  Future<void> sendBinary(Uint8List bytes) async => _conn.send(quicBinary, bytes);
+  Future<void> sendBinary(Uint8List bytes) async =>
+      _conn.send(quicBinary, bytes);
 
   @override
   Future<void> close() async => _conn.close();
-
-  /// 手机换了网络，经中转的连接马上报新地址。
-  void rebind() => _conn.rebind();
 }
 
 /// 按地址的写法挑传输。

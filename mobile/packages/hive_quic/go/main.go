@@ -202,22 +202,6 @@ func hq_close(id C.int64_t, code C.int32_t, reason *C.char) {
 	}
 }
 
-// hq_rebind 在手机换了网络后调用，马上向中转报新地址。
-//
-//export hq_rebind
-func hq_rebind(id C.int64_t) {
-	e := lookup(id)
-	if e == nil {
-		return
-	}
-	e.mu.Lock()
-	c := e.c
-	e.mu.Unlock()
-	if c != nil {
-		c.Rebind()
-	}
-}
-
 //export hq_free
 func hq_free(p *C.uint8_t) {
 	C.free(unsafe.Pointer(p))

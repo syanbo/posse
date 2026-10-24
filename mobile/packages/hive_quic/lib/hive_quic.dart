@@ -10,9 +10,15 @@ import 'package:ffi/ffi.dart';
 
 typedef _EventFn = Void Function(Int64, Int32, Pointer<Uint8>, Int32);
 
-@Native<Int64 Function(Pointer<Utf8>, Pointer<Uint8>, Int32, Int32, Pointer<NativeFunction<_EventFn>>)>(
-  symbol: 'hq_dial',
-)
+@Native<
+  Int64 Function(
+    Pointer<Utf8>,
+    Pointer<Uint8>,
+    Int32,
+    Int32,
+    Pointer<NativeFunction<_EventFn>>,
+  )
+>(symbol: 'hq_dial')
 external int _dial(
   Pointer<Utf8> addr,
   Pointer<Uint8> token,
@@ -26,9 +32,6 @@ external int _send(int id, int type, Pointer<Uint8> data, int len);
 
 @Native<Void Function(Int64, Int32, Pointer<Utf8>)>(symbol: 'hq_close')
 external void _close(int id, int code, Pointer<Utf8> reason);
-
-@Native<Void Function(Int64)>(symbol: 'hq_rebind')
-external void _rebind(int id);
 
 @Native<Void Function(Pointer<Uint8>)>(symbol: 'hq_free')
 external void _free(Pointer<Uint8> p);
@@ -87,12 +90,19 @@ class QuicConnection {
     Uint8List? relayToken,
     Duration timeout = const Duration(seconds: 8),
   }) async {
-    final addr = (host.contains(':') ? '[$host]:$port' : '$host:$port').toNativeUtf8();
+    final addr = (host.contains(':') ? '[$host]:$port' : '$host:$port')
+        .toNativeUtf8();
     final token = relayToken ?? Uint8List(0);
     final tok = malloc<Uint8>(token.isEmpty ? 1 : token.length);
     tok.asTypedList(token.length).setAll(0, token);
     try {
-      final id = _dial(addr, tok, token.length, timeout.inMilliseconds, _callback.nativeFunction);
+      final id = _dial(
+        addr,
+        tok,
+        token.length,
+        timeout.inMilliseconds,
+        _callback.nativeFunction,
+      );
       final conn = QuicConnection._(id);
       _live[id] = conn;
       await conn._opened.future;
@@ -112,7 +122,9 @@ class QuicConnection {
         _opened.complete();
       case _evText:
       case _evBinary:
-        _messages.add(QuicMessage(kind == _evText ? quicText : quicBinary, data));
+        _messages.add(
+          QuicMessage(kind == _evText ? quicText : quicBinary, data),
+        );
       case _evFailed:
       case _evClosed:
         _done = true;
@@ -144,10 +156,5 @@ class QuicConnection {
     } finally {
       malloc.free(r);
     }
-  }
-
-  /// 手机换了网络，马上向中转报新地址。
-  void rebind() {
-    if (!_done) _rebind(_id);
   }
 }

@@ -648,6 +648,31 @@ void main() {
       await link.close();
     });
 
+    test('the old connection stays until its subscriptions move', () async {
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (url.contains('203.0.113.9')) throw StateError('relay down');
+          final (client, host) = pipePair();
+          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+          return client;
+        },
+      );
+      final first = await link.start();
+      final sub = await first.subscribe('terminal.subscribe', const {});
+      var closed = false;
+      sub.frames.listen((_) {}, onDone: () => closed = true);
+      await link.connections.first.timeout(const Duration(seconds: 2));
+      // 页面还没退掉旧订阅：旧连接不关，电脑那边终端不会先退回电脑尺寸
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      expect(closed, isFalse);
+      await expectLater(first.call('runtime.ping', const {}), completes);
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await expectLater(first.call('runtime.ping', const {}), throwsA(anything));
+      await link.close();
+    });
+
     test('a failed upgrade keeps the websocket and its reconnects', () async {
       var quicTries = 0;
       final wsHosts = <ByteSocket>[];

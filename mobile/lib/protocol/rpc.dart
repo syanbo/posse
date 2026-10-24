@@ -168,12 +168,18 @@ class PhoneRpc {
     return result;
   }
 
-  /// 等还没回复的请求都回完（最多 [max]）再关。换到更好的连接时用：旧连接上进行中的请求不因换路失败。
+  /// 换到更好的连接时关旧的：等页面在新连接上订阅好、退掉这里的订阅，进行中的请求也回完，再关（最多 [max]）。
+  /// 至少等 [min]：页面换连接要等到下一帧，一开始这里看着是空闲的。直接关的话，电脑先收到断开、
+  /// 把终端改回电脑上的尺寸，再被新订阅改回手机尺寸，agent 白白重画两次。
   Future<void> closeWhenIdle({
+    Duration min = const Duration(milliseconds: 500),
     Duration max = const Duration(seconds: 10),
   }) async {
     final deadline = DateTime.now().add(max);
-    while (_wait.isNotEmpty && !_ended && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(min);
+    while ((_wait.isNotEmpty || _subs.isNotEmpty) &&
+        !_ended &&
+        DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
     await close();
