@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 
@@ -74,8 +75,13 @@ class _DeskPageState extends State<DeskPage>
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
-  final _anchorTop = ValueNotifier<double>(0.5);
-  final _anchorSide = ValueNotifier<double>(0.5);
+  // 竖屏默认右上角，横屏默认没有刘海那一侧的中间（第一次横屏时按刘海定左右）
+  final _anchorTop = ValueNotifier<Offset>(const Offset(1, 0));
+  final _anchorSide = ValueNotifier<Offset>(const Offset(1, 0.5));
+  var _sidePlaced = false;
+
+  /// 最后一次单击在舞台里的纵坐标。键盘弹出时画面上移，让它不被盖住。
+  double? _typeY;
   final _zoomed = ValueNotifier<bool>(false);
 
   StreamSubscription<DeskStats>? _statsSub;
@@ -232,6 +238,8 @@ class _DeskPageState extends State<DeskPage>
     switch (event) {
       case DeskTapEvent(:final at, :final clicks):
         _click(at, deskButtonLeft, clicks);
+        _typeY = _gestures.lastTap?.dy;
+        if (_keyboardUp) setState(() {});
       case DeskRightClickEvent(:final at):
         _click(at, deskButtonRight, 1);
       case DeskDragEvent(:final phase, :final at):
@@ -373,10 +381,17 @@ class _DeskPageState extends State<DeskPage>
     });
   }
 
-  void _dragBar(double delta) {
-    final side = MediaQuery.orientationOf(context) == Orientation.landscape;
-    final anchor = side ? _anchorSide : _anchorTop;
-    anchor.value = (anchor.value + delta).clamp(0.0, 1.0);
+  /// 横屏第一次出现时按刘海定左右，之后由用户拖。
+  ValueNotifier<Offset> _sideAnchor(EdgeInsets pad) {
+    if (!_sidePlaced) {
+      _sidePlaced = true;
+      final right = deskBarOnRight(left: pad.left, right: pad.right);
+      _anchorSide.value = Offset(right ? 1 : 0, _anchorSide.value.dy);
+    }
+    return _anchorSide;
+  }
+
+  void _dragBar() {
     _chrome.noteActivity(_now);
     _armBarTimer();
   }
@@ -1037,35 +1052,59 @@ class _DeskPageState extends State<DeskPage>
     final landscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
     final keys = _chrome.keysVisible(_keyboardUp);
-    // 快捷键栏贴在系统键盘上方，页面跟着键盘缩短，不把键盖住。
+    // 键盘和快捷键栏盖在画面上，画面不跟着缩：缩了整张桌面变小，字更难看清
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final screen = MediaQuery.sizeOf(context);
+    final covered =
+        keyboard +
+        (keys
+            ? (landscape ? deskKeyBarDense : deskKeyBarBody) +
+                  1 +
+                  MediaQuery.paddingOf(context).bottom
+            : 0);
+    final lift = deskLift(
+      tapY: keyboard > 0 ? _typeY : null,
+      screenHeight: screen.height,
+      covered: covered,
+    );
     return Scaffold(
       backgroundColor: deskLetterbox,
-      resizeToAvoidBottomInset: true,
-      body: Column(
+      resizeToAvoidBottomInset: false,
+      body: Stack(
         children: [
-          Expanded(child: _stage(colors, landscape)),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.bottomCenter,
-            child: keys
-                ? DeskKeyBar(
-                    mods: _mods,
-                    keyboardUp: _keyboardUp,
-                    dense: landscape,
-                    onKeyboard: _toggleKeyboard,
-                    onKey: _press,
-                    onModTap: (mod) => setState(() => _mods.tap(mod)),
-                    onModLock: (mod) => setState(() => _mods.lock(mod)),
-                  )
-                : const SizedBox.shrink(),
+          Positioned.fill(child: _stage(colors, landscape, lift, covered)),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: keyboard,
+            child: AnimatedSize(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.bottomCenter,
+              child: keys
+                  ? DeskKeyBar(
+                      mods: _mods,
+                      keyboardUp: _keyboardUp,
+                      dense: landscape,
+                      onKeyboard: _toggleKeyboard,
+                      onKey: _press,
+                      onModTap: (mod) => setState(() => _mods.tap(mod)),
+                      onModLock: (mod) => setState(() => _mods.lock(mod)),
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _stage(HiveColors colors, bool landscape) {
+  Widget _stage(
+    HiveColors colors,
+    bool landscape,
+    double lift,
+    double covered,
+  ) {
     final banner = _banner();
     // 状态栏藏起来之后 padding 会变 0，刘海还在，用 viewPadding 把胶囊让开。
     final pad = MediaQuery.viewPaddingOf(context);
@@ -1079,40 +1118,48 @@ class _DeskPageState extends State<DeskPage>
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: deskLetterbox),
-          Padding(
-            padding: picturePad,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                _fitStage(constraints.maxWidth, constraints.maxHeight);
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _frame,
-                      builder: (context, _) =>
-                          _pictureLayer(colors, constraints.biggest),
-                    ),
-                    Listener(
-                      behavior: HitTestBehavior.opaque,
-                      onPointerDown: _down,
-                      onPointerMove: _move,
-                      onPointerUp: _pointerUp,
-                      onPointerCancel: _cancel,
-                      child: const SizedBox.expand(),
-                    ),
-                    // 只有卡片本身接点击，旁边的手势照常到画面
-                    if (banner != null)
-                      Center(child: _bannerView(colors, banner)),
-                  ],
-                );
-              },
+          TweenAnimationBuilder<double>(
+            tween: Tween(end: lift),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            builder: (context, dy, child) =>
+                Transform.translate(offset: Offset(0, -dy), child: child),
+            child: Padding(
+              padding: picturePad,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _fitStage(constraints.maxWidth, constraints.maxHeight);
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedBuilder(
+                        animation: _frame,
+                        builder: (context, _) =>
+                            _pictureLayer(colors, constraints.biggest),
+                      ),
+                      Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: _down,
+                        onPointerMove: _move,
+                        onPointerUp: _pointerUp,
+                        onPointerCancel: _cancel,
+                        child: const SizedBox.expand(),
+                      ),
+                      // 只有卡片本身接点击，旁边的手势照常到画面
+                      if (banner != null)
+                        Center(child: _bannerView(colors, banner)),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           if (_debugOpen)
             Positioned(
-              top: landscape ? top : top + deskToolbarRow + 8,
-              left: 16 + pad.left,
-              right: 16 + pad.right,
+              top: top,
+              // 两边让出悬浮球的宽度，它吸在哪边都不压着面板
+              left: 64 + pad.left,
+              right: 64 + pad.right,
               child: ValueListenableBuilder<DeskStats>(
                 valueListenable: _statsTick,
                 builder: (context, stats, _) => Align(
@@ -1123,18 +1170,17 @@ class _DeskPageState extends State<DeskPage>
             ),
           Positioned(
             top: top,
-            left: pad.left,
-            right: pad.right,
-            bottom: landscape ? (pad.bottom < 8 ? 8.0 : pad.bottom) : null,
+            left: pad.left + 4,
+            right: pad.right + 4,
+            // 键盘和快捷键栏弹出时球留在它们上面
+            bottom: math.max(pad.bottom < 8 ? 8.0 : pad.bottom, covered + 8),
             child: ListenableBuilder(
               listenable: widget.model,
               builder: (context, _) {
                 return ValueListenableBuilder<DeskStats>(
                   valueListenable: _statsTick,
                   builder: (context, stats, _) => DeskBarSlot(
-                    anchor: landscape ? _anchorSide : _anchorTop,
-                    vertical: landscape,
-                    onRight: deskBarOnRight(left: pad.left, right: pad.right),
+                    anchor: landscape ? _sideAnchor(pad) : _anchorTop,
                     onDrag: _dragBar,
                     child: DeskToolbar(
                       expanded: _chrome.expanded,

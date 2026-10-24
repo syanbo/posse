@@ -102,6 +102,9 @@ class DeskGestures {
 
   int _clicks = 0;
   Offset? _lastTapScreen;
+
+  /// 最后一次单击在视图里的位置。
+  Offset? get lastTap => _lastTapScreen;
   Duration _lastTapTime = Duration.zero;
 
   bool get needsTick => _fingers.isNotEmpty || _flick != null;

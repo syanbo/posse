@@ -248,8 +248,8 @@ void main() {
                 left: 0,
                 right: 0,
                 child: DeskBarSlot(
-                  anchor: ValueNotifier<double>(0.5),
-                  onDrag: _ignoreDrag,
+                  anchor: ValueNotifier<Offset>(const Offset(0.5, 0)),
+                  onDrag: () {},
                   child: const SizedBox(
                     key: Key('desk-pill'),
                     width: 80,
@@ -362,10 +362,9 @@ void main() {
   testWidgets('a drag after the bar finishes opening uses the opened width', (
     tester,
   ) async {
-    final anchor = ValueNotifier<double>(0.5);
+    final anchor = ValueNotifier<Offset>(const Offset(0.5, 0));
     addTearDown(anchor.dispose);
     var expanded = false;
-    final deltas = <double>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -376,17 +375,19 @@ void main() {
               builder: (context, setState) {
                 return Column(
                   children: [
-                    DeskBarSlot(
-                      anchor: anchor,
-                      onDrag: deltas.add,
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 160),
-                        child: ColoredBox(
-                          key: const Key('desk-pill'),
-                          color: const Color(0xFFFFFFFF),
-                          child: SizedBox(
-                            width: expanded ? 200 : 40,
-                            height: 28,
+                    Expanded(
+                      child: DeskBarSlot(
+                        anchor: anchor,
+                        onDrag: () {},
+                        child: AnimatedSize(
+                          duration: const Duration(milliseconds: 160),
+                          child: ColoredBox(
+                            key: const Key('desk-pill'),
+                            color: const Color(0xFFFFFFFF),
+                            child: SizedBox(
+                              width: expanded ? 200 : 40,
+                              height: 28,
+                            ),
                           ),
                         ),
                       ),
@@ -407,14 +408,20 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.drag(
-      find.byKey(const Key('desk-pill')),
-      const Offset(24, 0),
-      touchSlopX: 0,
-      touchSlopY: 0,
-    );
-    final sum = deltas.fold<double>(0, (a, b) => a + b);
-    expect(sum, closeTo(24 / (300 - 200), 0.05));
+    final pill = tester.getCenter(find.byKey(const Key('desk-pill')));
+    final finger = await tester.startGesture(pill);
+    await tester.pump();
+    // 先过拖动的起步距离，再量这一段移动
+    await finger.moveBy(const Offset(30, 0));
+    await tester.pump();
+    final start = anchor.value.dx;
+    await finger.moveBy(const Offset(24, 0));
+    await tester.pump();
+    expect(anchor.value.dx - start, closeTo(24 / (300 - 200), 0.05));
+    await finger.up();
+    await tester.pump();
+    // 松手吸边
+    expect(anchor.value.dx, 1);
   });
 
   testWidgets(
@@ -456,7 +463,7 @@ void main() {
     },
   );
 
-  testWidgets('landscape puts the bar on the side opposite the notch', (
+  testWidgets('the ball drags anywhere and snaps to the nearer side', (
     tester,
   ) async {
     addTearDown(tester.view.reset);
@@ -479,87 +486,58 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    Rect ball() => tester.getRect(find.byKey(const Key('desk-toolbar')));
 
-    final shut = tester.getRect(find.byKey(const Key('desk-toolbar')));
-    expect(shut.width, greaterThan(shut.height));
-    expect(shut.top, lessThan(80));
-    final before = tester.getCenter(find.byKey(const Key('desk-toolbar')));
-    // 默认分段：工具条上的点击手势会和拖动抢，一次移动会被当成起步，onDrag 不来。
+    // 竖屏默认在右上角，按钮竖着排
+    final first = ball();
+    expect(first.right, greaterThan(390));
+    expect(first.top, lessThan(80));
+    expect(first.height, greaterThan(first.width));
+
+    // 拖到左下偏中，松手吸到左边，高度留在放手的地方
     await tester.drag(
       find.byKey(const Key('desk-toolbar')),
-      const Offset(90, 0),
+      const Offset(-250, 300),
     );
-    await tester.pump();
-    final portraitX = tester
-        .getCenter(find.byKey(const Key('desk-toolbar')))
-        .dx;
-    expect(portraitX, greaterThan(before.dx + 40));
+    await tester.pumpAndSettle();
+    final moved = ball();
+    expect(moved.left, lessThan(10));
+    expect(moved.top, greaterThan(first.top + 200));
 
+    // 横屏：刘海在左，球在右边
     _surface(
       tester,
       const Size(800, 400),
       const FakeViewPadding(left: 59, bottom: 21),
     );
-    // 没画面时工具条是展开的，横竖换向要等尺寸动画走完
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    final side = tester.getRect(find.byKey(const Key('desk-toolbar')));
+    await tester.pumpAndSettle();
+    final side = ball();
     expect(side.right, greaterThan(790));
-    expect(side.width, lessThan(160));
-    expect(side.center.dy, greaterThan(80));
-    final sideBefore = side.center.dy;
-    await tester.drag(
-      find.byKey(const Key('desk-toolbar')),
-      const Offset(0, -70),
-    );
-    await tester.pump();
-    expect(
-      tester.getCenter(find.byKey(const Key('desk-toolbar'))).dy,
-      lessThan(sideBefore - 30),
-    );
+    expect(side.height, greaterThan(side.width));
 
-    _surface(
-      tester,
-      const Size(800, 400),
-      const FakeViewPadding(right: 59, bottom: 21),
-    );
-    await tester.pump();
-    expect(
-      tester.getRect(find.byKey(const Key('desk-toolbar'))).left,
-      lessThan(8),
-    );
-
+    // 回竖屏，回到竖屏时放的位置
     _surface(
       tester,
       const Size(400, 800),
       const FakeViewPadding(top: 47, bottom: 34),
     );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    final restored = tester.getCenter(find.byKey(const Key('desk-toolbar')));
-    expect(restored.dx, closeTo(portraitX, 2));
-    expect(restored.dy, lessThan(120));
-
-    _surface(
-      tester,
-      const Size(800, 400),
-      const FakeViewPadding(left: 59, bottom: 21),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('desk-toolbar')));
-    await tester.pump(const Duration(milliseconds: 200));
-    final back = tester.getRect(find.byKey(const Key('desk-toolbar-back')));
-    final orient = tester.getRect(
-      find.byKey(const Key('desk-toolbar-orientation')),
-    );
-    expect(back.center.dy, lessThan(orient.center.dy - 8));
-    expect((back.center.dx - orient.center.dx).abs(), lessThan(4));
-    final opened = tester.getRect(find.byKey(const Key('desk-toolbar')));
-    expect(opened.height, greaterThan(opened.width));
-    expect(opened.right, greaterThan(790));
+    await tester.pumpAndSettle();
+    expect(ball().left, closeTo(moved.left, 2));
+    expect(ball().top, closeTo(moved.top, 2));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
+  });
+
+  test('the picture rises just enough to show the last tap', () {
+    // 没点过不动
+    expect(deskLift(tapY: null, screenHeight: 800, covered: 300), 0);
+    // 点在露着的地方不动
+    expect(deskLift(tapY: 200, screenHeight: 800, covered: 300), 0);
+    // 点在会被盖住的地方：露到盖住的边上面 48
+    expect(deskLift(tapY: 600, screenHeight: 800, covered: 300), 148);
+    // 最多移盖住的那么高
+    expect(deskLift(tapY: 790, screenHeight: 800, covered: 300), 300);
   });
 }
 
@@ -606,5 +584,3 @@ void _mockDeskChannels(
     );
   });
 }
-
-void _ignoreDrag(double _) {}

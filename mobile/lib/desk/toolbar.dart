@@ -7,27 +7,21 @@ import 'chrome.dart';
 
 const _fade = Duration(milliseconds: 160);
 
-/// 竖屏沿顶边横着放，横屏贴着没有刘海的那一侧竖着放。空的地方不吃点击。
+/// 悬浮球：在父组件给的范围里上下左右都能拖，松手吸到最近的左边或右边。空的地方不吃点击。
 class DeskBarSlot extends StatefulWidget {
   const DeskBarSlot({
     super.key,
     required this.anchor,
     required this.onDrag,
     required this.child,
-    this.vertical = false,
-    this.onRight = true,
   });
 
-  /// 0 靠起点，1 靠终点，0.5 居中。父组件已经把它限制在安全区里。
-  final ValueListenable<double> anchor;
-  final ValueChanged<double> onDrag;
+  /// 两个方向各自 0 靠起点、1 靠终点。x 松手后只会是 0 或 1。
+  final ValueNotifier<Offset> anchor;
+
+  /// 拖动时报一次，按住时 x 也跟手；松手吸边由这里做，父组件只管记活动时间。
+  final VoidCallback onDrag;
   final Widget child;
-
-  /// 横屏沿侧边上下拖。竖屏沿顶边左右拖。
-  final bool vertical;
-
-  /// 横屏贴右还是贴左。竖屏不用。
-  final bool onRight;
 
   @override
   State<DeskBarSlot> createState() => _DeskBarSlotState();
@@ -35,55 +29,67 @@ class DeskBarSlot extends StatefulWidget {
 
 class _DeskBarSlotState extends State<DeskBarSlot> {
   final _key = GlobalKey();
+  var _dragging = false;
 
   /// 拖动当时量。展开动画的第一帧量过就会把轨道算窄，接着拖不跟手。
-  double _span(bool vertical) {
+  Size _size() {
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return 0;
-    return vertical ? box.size.height : box.size.width;
+    if (box == null || !box.hasSize) return Size.zero;
+    return box.size;
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        return ValueListenableBuilder<double>(
+        return ValueListenableBuilder<Offset>(
           valueListenable: widget.anchor,
           builder: (context, anchor, child) {
-            return Align(
-              alignment: widget.vertical
-                  ? Alignment(widget.onRight ? 1 : -1, deskBarAlignment(anchor))
-                  : Alignment(deskBarAlignment(anchor), -1),
+            return AnimatedAlign(
+              duration: _dragging ? Duration.zero : _snap,
+              curve: Curves.easeOutCubic,
+              alignment: Alignment(
+                deskBarAlignment(anchor.dx),
+                deskBarAlignment(anchor.dy),
+              ),
               child: child,
             );
           },
           child: GestureDetector(
             key: _key,
-            onHorizontalDragUpdate: widget.vertical
-                ? null
-                : (details) {
-                    final track = deskBarTrack(
-                      constraints.maxWidth,
-                      _span(false),
-                    );
-                    widget.onDrag(details.delta.dx / track);
-                  },
-            onVerticalDragUpdate: widget.vertical
-                ? (details) {
-                    final track = deskBarTrack(
-                      constraints.maxHeight,
-                      _span(true),
-                    );
-                    widget.onDrag(details.delta.dy / track);
-                  }
-                : null,
+            onPanStart: (_) => setState(() => _dragging = true),
+            onPanUpdate: (details) {
+              final size = _size();
+              final a = widget.anchor.value;
+              widget.anchor.value = Offset(
+                (a.dx +
+                        details.delta.dx /
+                            deskBarTrack(constraints.maxWidth, size.width))
+                    .clamp(0.0, 1.0),
+                (a.dy +
+                        details.delta.dy /
+                            deskBarTrack(constraints.maxHeight, size.height))
+                    .clamp(0.0, 1.0),
+              );
+              widget.onDrag();
+            },
+            onPanEnd: (_) => _settle(),
+            onPanCancel: _settle,
             child: widget.child,
           ),
         );
       },
     );
   }
+
+  void _settle() {
+    final a = widget.anchor.value;
+    setState(() => _dragging = false);
+    widget.anchor.value = Offset(a.dx < 0.5 ? 0 : 1, a.dy);
+  }
 }
+
+const _snap = Duration(milliseconds: 220);
 
 class DeskToolbar extends StatelessWidget {
   const DeskToolbar({
@@ -158,18 +164,11 @@ class DeskToolbar extends StatelessWidget {
     return InkWell(
       onTap: onToggle,
       child: Padding(
-        padding: landscape
-            ? const EdgeInsets.symmetric(horizontal: 6, vertical: 8)
-            : const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: landscape
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [icon, const SizedBox(height: 4), label],
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [icon, const SizedBox(width: 6), label],
-              ),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [icon, const SizedBox(height: 4), label],
+        ),
       ),
     );
   }
@@ -239,13 +238,8 @@ class DeskToolbar extends StatelessWidget {
       ),
     ];
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: landscape ? 2 : 4,
-        vertical: landscape ? 4 : 2,
-      ),
-      child: landscape
-          ? Column(mainAxisSize: MainAxisSize.min, children: icons)
-          : Row(mainAxisSize: MainAxisSize.min, children: icons),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+      child: Column(mainAxisSize: MainAxisSize.min, children: icons),
     );
   }
 
