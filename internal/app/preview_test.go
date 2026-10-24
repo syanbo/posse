@@ -628,6 +628,15 @@ func TestPreview(t *testing.T) {
 		a.setHistoryGrouping()
 		savePNG(t, newPreviewTester(a, dark), "history-by-folder-"+suffix+".png")
 
+		// 窗口窄、侧栏宽：顶栏放不下时搜索框让出宽度，标题不折行
+		a = previewApp(t)
+		previewHistory(a, "")
+		a.state.SidebarWidth = 240
+		tt = newPreviewTester(a, dark)
+		tt.SetSize(1000, 720)
+		tt.Frame()
+		savePNG(t, tt, "history-narrow-"+suffix+".png")
+
 		a = previewApp(t)
 		previewHistory(a, "磁盘")
 		savePNG(t, newPreviewTester(a, dark), "history-search-"+suffix+".png")

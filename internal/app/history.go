@@ -495,9 +495,9 @@ func (a *app) historySidebarItem(c *ui.Context) {
 func (a *app) historyBoard(c *ui.Context) {
 	h := &a.history
 	a.band(c, func() {
-		titleText(c, "历史", fsCardTitle).Margin(0, 6, 0, 0)
+		titleText(c, "历史", fsCardTitle).Margin(0, 6, 0, 0).Shrink(0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
-		search := fieldInputWidth(c, &h.query, "搜索会话内容  ⌘F", 340).Label("搜索会话")
+		search := fieldInputSized(c, &h.query, "搜索会话内容  ⌘F", 340, 160).Label("搜索会话")
 		if c.Shortcut(ui.Cmd, ui.KeyF) {
 			search.Focus()
 		}

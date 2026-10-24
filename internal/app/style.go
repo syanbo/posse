@@ -168,10 +168,20 @@ func fieldInput(c *ui.Context, value *string, placeholder string) ui.Element {
 // 所有输入框都是这一种样子（填充底、不画框，聚焦时一圈强调色），和标签改名的输入框一致，
 // 不用 mygo 自带的 TextInput、TextArea（白底灰框、聚焦时整条强调色框）。
 func fieldInputWidth(c *ui.Context, value *string, placeholder string, width float32) ui.Element {
+	return fieldInputSized(c, value, placeholder, width, width)
+}
+
+// fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
+func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
 	t := c.Theme()
 	box := ui.Row(c).Height(30).Padding(0, 10).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
 	if width > 0 {
-		box.Width(width).Shrink(0)
+		box.Width(width)
+		if minWidth < width {
+			box.Shrink(1).MinWidth(minWidth)
+		} else {
+			box.Shrink(0)
+		}
 	}
 	var in ui.Element
 	box.Children(func() {
