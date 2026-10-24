@@ -7,6 +7,39 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// 派发对话框里点进另一个输入框，焦点框换色，对话框自己不动。
+func TestDispatchFocusKeepsPlace(t *testing.T) {
+	a := previewApp(t)
+	a.openDispatch()
+	tt := ui.NewTester(a.build, 1200, 760)
+	settle(tt)
+	title, ok := tt.Find("派发任务")
+	if !ok {
+		t.Fatal("no dialog")
+	}
+	spec := "要做什么、范围在哪、不能动什么、怎样算完成。worker 看不到你和其他 agent 的对话，这里要写全。"
+	if err := tt.Click(spec); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	again, _ := tt.Find("派发任务")
+	if math.Abs(float64(again.X-title.X)) > 0.5 || math.Abs(float64(again.Y-title.Y)) > 0.5 {
+		t.Fatalf("dialog jumped %v → %v", title, again)
+	}
+	hint, ok := tt.Find("worker 在这个工作区的目录里工作。")
+	if !ok {
+		t.Fatal("no hint")
+	}
+	if err := tt.Click("标题，比如 修复登录页闪退"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	hint2, _ := tt.Find("worker 在这个工作区的目录里工作。")
+	if math.Abs(float64(hint2.Y-hint.Y)) > 0.5 {
+		t.Fatalf("hint jumped %v → %v", hint, hint2)
+	}
+}
+
 // 回滚对话框拖标题移动、拖右下角拉伸；再打开时尺寸沿用、位置回到居中。
 func TestDialogMoveResize(t *testing.T) {
 	a := previewApp(t)

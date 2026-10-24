@@ -177,9 +177,8 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 	box.Children(func() {
 		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Grow(1)
 	})
-	if in.Focused() {
-		box.Border(1, t.Focus)
-	}
+	// 边框算在高度里。聚焦才加上时框会高 2px，包着它的对话框跟着居中，整块跳一下。
+	fieldBorder(box, in.Focused(), colors(t).fill, t.Focus)
 	return in
 }
 
@@ -191,9 +190,7 @@ func fieldArea(c *ui.Context, value *string, placeholder string, height float32)
 	box.Children(func() {
 		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Height(height)
 	})
-	if in.Focused() {
-		box.Border(1, t.Focus)
-	}
+	fieldBorder(box, in.Focused(), colors(t).fill, t.Focus)
 	return in
 }
 
@@ -248,8 +245,21 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 		box.Border(1, t.Focus)
 	} else {
 		edge(c, box)
+		if t.Dark {
+			// 深色平时只有内高光、不占尺寸；补一圈同色边，和聚焦时一样高。
+			box.Border(1, colors(t).card)
+		}
 	}
 	return sent && strings.TrimSpace(*value) != ""
+}
+
+// fieldBorder 画 1px 边。没聚焦时用和底一样的颜色，看着没有框，尺寸却和聚焦时相同。
+func fieldBorder(box ui.Element, focused bool, fill, focus ui.Color) {
+	color := fill
+	if focused {
+		color = focus
+	}
+	box.Border(1, color)
 }
 
 // pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
