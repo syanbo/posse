@@ -606,47 +606,55 @@ void main() {
       expect(hostOf('ws://10.0.0.2:6788'), '10.0.0.2:6788');
     });
 
-    test('a websocket connection moves to quic once the host offers it', () async {
-      final hosts = <String, ByteSocket>{};
-      final link = HiveLink(
-        offer: offer,
-        connect: (url, cancel) async {
-          if (url.contains('203.0.113.9')) throw StateError('relay down');
-          final (client, host) = pipePair();
-          hosts[url] = host;
-          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
-          return client;
-        },
-      );
-      final first = await link.start();
-      expect(link.url, 'ws://mac');
-      final next = await link.connections.first.timeout(const Duration(seconds: 2));
-      expect(identical(next, first), isFalse);
-      expect(link.url, lanUrl);
-      expect(link.quicUrls.first, lanUrl);
-      final status = await next.call('status.get', {});
-      expect(status['protocolVersion'], 3);
-      await link.close();
-    });
+    test(
+      'a websocket connection moves to quic once the host offers it',
+      () async {
+        final hosts = <String, ByteSocket>{};
+        final link = HiveLink(
+          offer: offer,
+          connect: (url, cancel) async {
+            if (url.contains('203.0.113.9')) throw StateError('relay down');
+            final (client, host) = pipePair();
+            hosts[url] = host;
+            unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+            return client;
+          },
+        );
+        final first = await link.start();
+        expect(link.url, 'ws://mac');
+        final next = await link.connections.first.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(identical(next, first), isFalse);
+        expect(link.url, lanUrl);
+        expect(link.quicUrls.first, lanUrl);
+        final status = await next.call('status.get', {});
+        expect(status['protocolVersion'], 3);
+        await link.close();
+      },
+    );
 
-    test('a call in flight on the websocket survives the move to quic', () async {
-      final link = HiveLink(
-        offer: offer,
-        connect: (url, cancel) async {
-          if (url.contains('203.0.113.9')) throw StateError('relay down');
-          final (client, host) = pipePair();
-          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
-          return client;
-        },
-      );
-      final first = await link.start();
-      final moved = link.connections.first;
-      final slow = first.call('test.slow', const {});
-      await moved.timeout(const Duration(seconds: 2));
-      expect(link.url, lanUrl);
-      await expectLater(slow, completes);
-      await link.close();
-    });
+    test(
+      'a call in flight on the websocket survives the move to quic',
+      () async {
+        final link = HiveLink(
+          offer: offer,
+          connect: (url, cancel) async {
+            if (url.contains('203.0.113.9')) throw StateError('relay down');
+            final (client, host) = pipePair();
+            unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+            return client;
+          },
+        );
+        final first = await link.start();
+        final moved = link.connections.first;
+        final slow = first.call('test.slow', const {});
+        await moved.timeout(const Duration(seconds: 2));
+        expect(link.url, lanUrl);
+        await expectLater(slow, completes);
+        await link.close();
+      },
+    );
 
     test('the old connection stays until its subscriptions move', () async {
       final link = HiveLink(
@@ -669,9 +677,89 @@ void main() {
       await expectLater(first.call('runtime.ping', const {}), completes);
       await sub.cancel();
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      await expectLater(first.call('runtime.ping', const {}), throwsA(anything));
+      await expectLater(
+        first.call('runtime.ping', const {}),
+        throwsA(anything),
+      );
       await link.close();
     });
+
+    test('saved quic urls connect straight away and get refreshed', () async {
+      final tried = <String>[];
+      final learned = <List<String>>[];
+      final link =
+          HiveLink(
+              offer: offer,
+              connect: (url, cancel) async {
+                tried.add(url);
+                if (url.contains('203.0.113.9')) throw StateError('relay down');
+                final (client, host) = pipePair();
+                unawaited(
+                  _host(host, hostKeys, offer.deviceToken, quic: quicInfo),
+                );
+                return client;
+              },
+            )
+            ..quicUrls = const [lanUrl]
+            ..onQuicUrls = learned.add;
+      await link.start();
+      expect(link.url, lanUrl);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // WebSocket 晚 2 秒才起跑，QUIC 先连上就不用它
+      expect(tried, [lanUrl]);
+      expect(learned.single, quicUrlsOf(quicInfo));
+      await link.close();
+    });
+
+    test(
+      'quic urls are saved with the computer for the next cold start',
+      () async {
+        final code = base64Url.encode(
+          utf8.encode(
+            jsonEncode({
+              'v': 2,
+              'endpoint': 'ws://mac',
+              'deviceToken': 'tok',
+              'publicKeyB64': b64(hostKeys.publicKey),
+            }),
+          ),
+        );
+        final store = MemoryPairingStore();
+        final tried = <String>[];
+        HiveAppModel model() => HiveAppModel(
+          store: store,
+          settingsStore: MemorySettingsStore(),
+          networkSignatures: const Stream.empty(),
+          connect: (url, cancel) async {
+            tried.add(url);
+            if (url.contains('203.0.113.9')) throw StateError('relay down');
+            final (client, host) = pipePair();
+            unawaited(_host(host, hostKeys, 'tok', quic: quicInfo));
+            return client;
+          },
+        );
+        final first = model();
+        expect(await first.connectCode(code), isTrue);
+        for (var i = 0; i < 40 && first.connectedUrl != lanUrl; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+        expect(first.connectedUrl, lanUrl);
+        await first.link?.close();
+        expect(
+          SavedComputers.decode(await store.read()).current?.quic,
+          quicUrlsOf(quicInfo),
+        );
+
+        tried.clear();
+        final second = model();
+        await second.restore();
+        expect(tried.first, lanUrl);
+        expect(second.connectedUrl, lanUrl);
+        await second.link?.close();
+      },
+      // 测试用的电脑回完 status.get 就不再应答，首页的轮询每次连上都要等满 20 秒才超时
+      timeout: const Timeout(Duration(seconds: 90)),
+    );
 
     test('a failed upgrade keeps the websocket and its reconnects', () async {
       var quicTries = 0;
@@ -700,7 +788,10 @@ void main() {
       await wsHosts.single.close();
       final sw = Stopwatch()..start();
       await reconnected.timeout(const Duration(seconds: 3));
-      expect(sw.elapsed, greaterThanOrEqualTo(const Duration(milliseconds: 100)));
+      expect(
+        sw.elapsed,
+        greaterThanOrEqualTo(const Duration(milliseconds: 100)),
+      );
       expect(link.url, 'ws://mac');
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(quicTries, 6);

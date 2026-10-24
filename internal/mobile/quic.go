@@ -2,7 +2,6 @@ package mobile
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"errors"
 	"log"
@@ -111,6 +110,10 @@ func (s *Server) relayLocked(device string) *relayPath {
 	if p := q.relays[device]; p != nil {
 		return p
 	}
+	token := s.pair.relayToken(device)
+	if token == nil {
+		return nil
+	}
 	raddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		log.Printf("mobile: quic relay %s: %v", addr, err)
@@ -128,8 +131,6 @@ func (s *Server) relayLocked(device string) *relayPath {
 			return nil
 		}
 	}
-	token := make([]byte, deskrelay.TokenLen)
-	rand.Read(token)
 	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, token, relayKeepalive)
 	tr := &quic.Transport{Conn: rc}
 	ln, err := tr.Listen(q.tls, mquic.Config())
@@ -208,7 +209,7 @@ type QUICInfo struct {
 	Port  int      `json:"port"`
 	Hosts []string `json:"hosts"` // 本机的 Tailscale 和局域网地址
 	Relay string   `json:"relay,omitempty"`
-	// 和 relay 一起给：这台手机向中转登记用，常驻进程这次启动内不变
+	// 和 relay 一起给：这台手机向中转登记用，存在 mobile.json 里，重启、交接都不变
 	RelayToken []byte `json:"relayToken,omitempty"`
 }
 

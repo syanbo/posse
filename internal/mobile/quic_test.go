@@ -250,3 +250,45 @@ func TestQUICRelayRetriesAfterFailure(t *testing.T) {
 		t.Fatalf("relay %q after fixing the address", q.Relay)
 	}
 }
+
+// 中转令牌存在 mobile.json 里：常驻进程重启后同一台手机拿到的还是它，手机记着的地址照样能用。
+func TestQUICRelayTokenSurvivesRestart(t *testing.T) {
+	home := t.TempDir()
+	relay := "127.0.0.1:9"
+	port := 0
+	start := func() *Server {
+		srv, err := New(home, &fakeHost{terms: map[string]*term.Terminal{}}, -1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv.port = port // 重启后用同一个端口，配对码里的地址才对得上
+		srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+		return srv
+	}
+	srv := start()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	first := quicInfoOf(t, ws).RelayToken
+	port = srv.Port()
+	ws.ws.CloseNow()
+	for _, d := range srv.Devices() {
+		if d.RelayToken != "" {
+			t.Fatal("device list leaks the relay token")
+		}
+	}
+	srv.Close()
+
+	srv = start()
+	defer srv.Close()
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	ws = dialPhone(t, srv, info)
+	defer ws.ws.CloseNow()
+	if again := quicInfoOf(t, ws).RelayToken; len(first) != deskrelay.TokenLen || string(again) != string(first) {
+		t.Fatalf("relay token %x after restart, was %x", again, first)
+	}
+}

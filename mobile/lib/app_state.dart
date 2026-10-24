@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -235,8 +236,10 @@ class SavedComputer {
     this.customName = '',
     List<String>? projectOrder,
     List<String>? collapsed,
+    List<String>? quic,
   }) : projectOrder = projectOrder ?? [],
-       collapsed = collapsed ?? [];
+       collapsed = collapsed ?? [],
+       quic = quic ?? [];
 
   final String id;
   String code;
@@ -252,6 +255,10 @@ class SavedComputer {
 
   /// 首页收起的项目（项目名）。
   List<String> collapsed;
+
+  /// 电脑上次给的 QUIC 地址（[HiveLink.quicUrls]，经中转的带着这台手机的令牌）。冷启动直接拨，
+  /// 在外面不用先经隧道连上 WebSocket。
+  List<String> quic;
 
   String get label {
     if (customName.isNotEmpty) return customName;
@@ -270,6 +277,7 @@ class SavedComputer {
     'customName': customName,
     'projectOrder': projectOrder,
     'collapsed': collapsed,
+    'quic': quic,
   };
 
   static SavedComputer? fromJson(Object? raw) {
@@ -286,6 +294,9 @@ class SavedComputer {
       projectOrder: order is List ? order.whereType<String>().toList() : null,
       collapsed: collapsed is List
           ? collapsed.whereType<String>().toList()
+          : null,
+      quic: raw['quic'] is List
+          ? (raw['quic'] as List).whereType<String>().toList()
           : null,
     );
   }
@@ -484,6 +495,16 @@ class HiveAppModel extends ChangeNotifier {
         phone: () => _phoneInfo(parsed),
       );
       next = created;
+      final id = computerId(parsed);
+      created.quicUrls = List.of(
+        saved.computers.where((c) => c.id == id).firstOrNull?.quic ?? const [],
+      );
+      created.onQuicUrls = (urls) {
+        final computer = saved.computers.where((c) => c.id == id).firstOrNull;
+        if (computer == null || listEquals(computer.quic, urls)) return;
+        computer.quic = List.of(urls);
+        unawaited(store.write(saved.encode()));
+      };
       created.onActivity = () {
         if (gen != _connectGen || !identical(link, created)) return;
         if (created.rpc == null) {

@@ -145,8 +145,11 @@ class HiveLink {
     return rpc;
   }
 
-  /// 电脑经 hive.quic 给的 QUIC 地址。连上 WebSocket 之后才知道，之后的重连先试它们。
+  /// 电脑经 hive.quic 给的 QUIC 地址，重连先试它们。调用方可以先填上次存的，冷启动不用先连 WebSocket。
   List<String> quicUrls = const [];
+
+  /// 电脑给了新的 QUIC 地址（每次连上都问一次），调用方存下来。
+  void Function(List<String> urls)? onQuicUrls;
 
   /// 知道 QUIC 地址时 WebSocket 晚这么久才开始连：两条都通时留下 QUIC，QUIC 不通时最多慢这么多。
   Duration quicHeadStart = const Duration(seconds: 2);
@@ -171,7 +174,7 @@ class HiveLink {
         throw const RaceCancelled();
       }
       await _adopt(won, epoch);
-      if (!isQuicUrl(won.url)) unawaited(_upgrade(won.value, epoch));
+      unawaited(_learnQuic(won.value, epoch, upgrade: !isQuicUrl(won.url)));
       return won.value;
     } catch (error) {
       if (epoch == _epoch) {
@@ -231,8 +234,13 @@ class HiveLink {
     }
   }
 
-  /// 走 WebSocket 连上之后问电脑要 QUIC 地址，连得上就换过去。连不上什么都不变。
-  Future<void> _upgrade(PhoneRpc via, int epoch) async {
+  /// 连上之后问电脑要 QUIC 地址，记下来（[onQuicUrls] 存盘，冷启动直接拨）。[upgrade]（这次走的是
+  /// WebSocket）时连得上 QUIC 就换过去，连不上什么都不变。
+  Future<void> _learnQuic(
+    PhoneRpc via,
+    int epoch, {
+    required bool upgrade,
+  }) async {
     final List<String> urls;
     try {
       urls = quicUrlsOf(
@@ -246,8 +254,10 @@ class HiveLink {
       // Orca 和旧版 Hive 没有这个方法
       return;
     }
+    if (_closed || epoch != _epoch) return;
     quicUrls = urls;
-    if (urls.isEmpty || _closed || epoch != _epoch) return;
+    onQuicUrls?.call(urls);
+    if (!upgrade || urls.isEmpty) return;
     final RaceResult<PhoneRpc> won;
     try {
       won = await raceEndpoints<PhoneRpc>(

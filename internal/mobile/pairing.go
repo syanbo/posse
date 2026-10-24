@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -19,6 +20,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/nacl/box"
+
+	"hive/internal/deskrelay"
 )
 
 // Device 是一个配对码换来的设备 token。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
@@ -31,6 +34,9 @@ type Device struct {
 	Phone    string    `json:"phone,omitempty"`
 	PairedAt time.Time `json:"pairedAt"`
 	LastSeen time.Time `json:"lastSeen,omitzero"`
+	// RelayToken 是这台手机经 UDP 中转连 QUIC 用的令牌（hex），第一次用到时生成。存盘是为了常驻进程
+	// 重启、交接后不变：手机记着它，冷启动直接经中转拨号，不用先连 WebSocket
+	RelayToken string `json:"relayToken,omitempty"`
 	// 以下只在列表里给出，不存盘：合进来的 token 个数，和是否有连接开着
 	Links  int  `json:"links,omitempty"`
 	Online bool `json:"online,omitempty"`
@@ -215,7 +221,7 @@ func (p *pairing) devices() []Device {
 		if d.LastSeen.IsZero() {
 			continue
 		}
-		d.Token = ""
+		d.Token, d.RelayToken = "", ""
 		d.Links = 1
 		i, ok := at[d.Phone]
 		if d.Phone == "" || !ok {
@@ -238,6 +244,28 @@ func (p *pairing) devices() []Device {
 }
 
 func (p *pairing) paired() bool { return len(p.devices()) > 0 }
+
+// relayToken 返回这个设备的中转令牌，还没有就生成并存盘。设备不在了返回 nil。
+func (p *pairing) relayToken(id string) []byte {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i := range p.st.Devices {
+		d := &p.st.Devices[i]
+		if d.ID != id {
+			continue
+		}
+		if b, err := hex.DecodeString(d.RelayToken); err == nil && len(b) == deskrelay.TokenLen {
+			return b
+		}
+		d.RelayToken = randHex(deskrelay.TokenLen)
+		if err := p.save(); err != nil {
+			log.Printf("mobile: save relay token: %v", err)
+		}
+		b, _ := hex.DecodeString(d.RelayToken)
+		return b
+	}
+	return nil
+}
 
 // remove 移除一台手机：报过安装 ID 的连同它的其他 token 一起移除。返回移除的设备 ID。
 func (p *pairing) remove(id string) []string {
