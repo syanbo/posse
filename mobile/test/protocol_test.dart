@@ -8,8 +8,10 @@ import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/protocol/e2ee.dart';
 import 'package:hive_mobile/protocol/link.dart';
 import 'package:hive_mobile/protocol/pairing.dart';
+import 'package:hive_mobile/protocol/quic_socket.dart';
 import 'package:hive_mobile/protocol/race.dart';
 import 'package:hive_mobile/protocol/socket.dart';
+import 'package:hive_mobile/workspace/workspace.dart';
 
 void main() {
   test('pairing offer keeps endpoint first and parses the code', () {
@@ -575,15 +577,120 @@ void main() {
     expect((await back.call('status.get', {}))['protocolVersion'], 3);
     await link.close();
   });
+  group('quic', () {
+    final hostKeys = generateKeyPair();
+    final offer = PairingOffer(
+      endpoint: 'ws://mac',
+      endpoints: const [],
+      deviceToken: 'tok',
+      publicKeyB64: b64(hostKeys.publicKey),
+    );
+    const quicInfo = {
+      'port': 6788,
+      'hosts': ['10.0.0.2'],
+      'relay': '203.0.113.9:443',
+      'relayToken': 'AAECAwQFBgcICQoLDA0ODw==',
+    };
+    const lanUrl = 'hquic://10.0.0.2:6788';
+
+    test('quic urls list the lan hosts first and the relay last', () {
+      expect(quicUrlsOf(quicInfo), [
+        lanUrl,
+        'hquic://203.0.113.9:443?relay=AAECAwQFBgcICQoLDA0ODw==',
+      ]);
+      expect(isRelayQuicUrl(quicUrlsOf(quicInfo).last), isTrue);
+      expect(isRelayQuicUrl(lanUrl), isFalse);
+      expect(quicUrlsOf(const {}), isEmpty);
+      expect(hostOf(lanUrl), '10.0.0.2:6788 · QUIC');
+      expect(hostOf(quicUrlsOf(quicInfo).last), '经中转 · QUIC');
+      expect(hostOf('ws://10.0.0.2:6788'), '10.0.0.2:6788');
+    });
+
+    test('a websocket connection moves to quic once the host offers it', () async {
+      final hosts = <String, ByteSocket>{};
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (url.contains('203.0.113.9')) throw StateError('relay down');
+          final (client, host) = pipePair();
+          hosts[url] = host;
+          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+          return client;
+        },
+      );
+      final first = await link.start();
+      expect(link.url, 'ws://mac');
+      final next = await link.connections.first.timeout(const Duration(seconds: 2));
+      expect(identical(next, first), isFalse);
+      expect(link.url, lanUrl);
+      expect(link.quicUrls.first, lanUrl);
+      final status = await next.call('status.get', {});
+      expect(status['protocolVersion'], 3);
+      await link.close();
+    });
+
+    test('a failed upgrade keeps the websocket and its reconnects', () async {
+      var quicTries = 0;
+      final wsHosts = <ByteSocket>[];
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (url.startsWith('hquic')) {
+            quicTries++;
+            throw StateError('udp blocked');
+          }
+          final (client, host) = pipePair();
+          wsHosts.add(host);
+          unawaited(_host(host, hostKeys, offer.deviceToken, quic: quicInfo));
+          return client;
+        },
+      )..quicHeadStart = const Duration(milliseconds: 100);
+      final first = await link.start();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(quicTries, 2);
+      expect(identical(link.rpc, first), isTrue);
+      expect(link.url, 'ws://mac');
+
+      // 电脑那头断开：先试 QUIC，晚 0.1 秒再连 WebSocket，连上后又问一次 QUIC
+      final reconnected = link.connections.first;
+      await wsHosts.single.close();
+      final sw = Stopwatch()..start();
+      await reconnected.timeout(const Duration(seconds: 3));
+      expect(sw.elapsed, greaterThanOrEqualTo(const Duration(milliseconds: 100)));
+      expect(link.url, 'ws://mac');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(quicTries, 6);
+      await link.close();
+    });
+
+    test('a host without hive.quic stays on websocket', () async {
+      var quicTries = 0;
+      final link = HiveLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          if (url.startsWith('hquic')) quicTries++;
+          final (client, host) = pipePair();
+          unawaited(_host(host, hostKeys, offer.deviceToken));
+          return client;
+        },
+      );
+      await link.start();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(quicTries, 0);
+      expect(link.quicUrls, isEmpty);
+      expect(link.url, 'ws://mac');
+      await link.close();
+    });
+  });
 }
 
-/// 假电脑。手机挂断时读者报 socket closed，对它来说就是正常结束。
 Future<void> _host(
   ByteSocket socket,
   KeyPair hostKeys,
   String token, {
   bool rejectCapabilities = false,
   bool silent = false,
+  Map<String, Object?>? quic,
 }) async {
   try {
     await _serve(
@@ -592,6 +699,7 @@ Future<void> _host(
       token,
       rejectCapabilities: rejectCapabilities,
       silent: silent,
+      quic: quic,
     );
   } on E2eeException {
     // 对端挂断
@@ -599,12 +707,14 @@ Future<void> _host(
 }
 
 /// [silent]：握手之后不回 runtime.ping，模拟手机切网络后系统还没发现的半开连接。
+/// [quic]：hive.quic 的回复，为空时和 Orca 一样不认这个方法。
 Future<void> _serve(
   ByteSocket socket,
   KeyPair hostKeys,
   String token, {
   bool rejectCapabilities = false,
   bool silent = false,
+  Map<String, Object?>? quic,
 }) async {
   final reader = SocketReader(socket.events);
   final helloEvent = await reader.next(CancelToken());
@@ -678,6 +788,14 @@ Future<void> _serve(
     var ok = true;
     Object? error;
     if (method == 'status.get') result = {'protocolVersion': 3};
+    if (method == 'hive.quic') {
+      if (quic != null) {
+        result = quic;
+      } else {
+        ok = false;
+        error = {'code': 'method_not_found', 'message': 'Unknown method'};
+      }
+    }
     if (method == 'runtime.clientCapabilities.update' && rejectCapabilities) {
       ok = false;
       error = {'code': 'method_not_found', 'message': 'Unknown method'};

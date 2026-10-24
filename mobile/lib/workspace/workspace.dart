@@ -15,6 +15,7 @@ import '../files/files.dart';
 import '../git/git.dart';
 import '../pair/scan.dart';
 import '../protocol/pairing.dart';
+import '../protocol/quic_socket.dart';
 import '../protocol/rpc.dart';
 import '../settings/settings.dart';
 import '../terminal/terminal.dart';
@@ -252,12 +253,14 @@ String? scanNote(ScanEnd end) => switch (end) {
   _ => null,
 };
 
-/// 地址里给人看的部分：主机加端口，路径不写。
+/// 地址里给人看的部分：主机加端口，路径不写。QUIC 标出来，经中转的不写中转的地址（令牌也不露）。
 String? hostOf(String? url) {
   if (url == null) return null;
   final uri = Uri.tryParse(url);
   if (uri == null || uri.host.isEmpty) return null;
-  return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+  if (isRelayQuicUrl(url)) return '经中转 · QUIC';
+  final host = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+  return isQuicUrl(url) ? '$host · QUIC' : host;
 }
 
 /// 工作区在列表里的名字：主工作区和项目同名时只写项目名。

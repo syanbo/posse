@@ -417,6 +417,10 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
+	case "hive.quic":
+		info, err := s.quicInfo()
+		c.replyOrFail(req.ID, info, err)
+		return nil
 	case "runtime.ping":
 		// Hive 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
 		return c.reply(req.ID, map[string]any{})

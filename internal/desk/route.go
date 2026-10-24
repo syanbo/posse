@@ -16,7 +16,7 @@ import (
 const relayKeepalive = 10 * time.Second
 
 // listenOut 开中转用的 socket。测试里换成普通 socket：绑在物理网卡上发不到 127.0.0.1
-var listenOut = listenPhysical
+var listenOut = ListenPhysical
 
 type routedPacket struct {
 	data []byte

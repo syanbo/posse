@@ -13,8 +13,8 @@ import (
 // IP_BOUND_IF：把 socket 钉在一块网卡上，发包不再查路由表，Surge 等代理的 utun 默认路由就管不到它
 const ipBoundIf = 25
 
-// listenPhysical 开一个绑在物理网卡上的 UDP socket。
-func listenPhysical() (*net.UDPConn, error) {
+// ListenPhysical 开一个绑在物理网卡上的 UDP socket。
+func ListenPhysical() (*net.UDPConn, error) {
 	ifc, err := physicalInterface()
 	if err != nil {
 		return nil, err

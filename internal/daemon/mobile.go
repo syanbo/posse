@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"hive/internal/agent"
+	"hive/internal/desk"
 	"hive/internal/gitx"
 	"hive/internal/host"
 	"hive/internal/mobile"
@@ -31,6 +32,7 @@ func (d *Daemon) newMobile() {
 		log.Printf("mobile: %v", err)
 		return
 	}
+	m.SetQUIC(mobile.QUICOptions{Relay: d.deskRelay, ListenOut: desk.ListenPhysical})
 	d.mobile = m
 }
 

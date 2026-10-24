@@ -99,10 +99,17 @@ func (h *fakeHost) History(_ context.Context, method string, params json.RawMess
 	return nil, &rpc.Error{Code: rpc.CodeNotFound, Message: "no workspace contains /x; pass a workspace"}
 }
 
+// phoneWire 是测试手机用的传输：WebSocket 或 QUIC。
+type phoneWire interface {
+	Read(ctx context.Context) (websocket.MessageType, []byte, error)
+	Write(ctx context.Context, typ websocket.MessageType, p []byte) error
+	CloseNow() error
+}
+
 // phone 扮演 Orca 手机 App 的连接。
 type phone struct {
 	t      *testing.T
-	ws     *websocket.Conn
+	ws     phoneWire
 	sess   *session
 	token  string
 	n      int
@@ -111,23 +118,35 @@ type phone struct {
 	held   []map[string]any
 }
 
-func dialPhone(t *testing.T, srv *Server, info PairInfo) *phone {
+type testOffer struct {
+	V            int    `json:"v"`
+	Endpoint     string `json:"endpoint"`
+	DeviceToken  string `json:"deviceToken"`
+	PublicKeyB64 string `json:"publicKeyB64"`
+}
+
+func parseTestOffer(t *testing.T, info PairInfo) testOffer {
 	raw, _ := base64.RawURLEncoding.DecodeString(info.Code)
-	var offer struct {
-		V            int    `json:"v"`
-		Endpoint     string `json:"endpoint"`
-		DeviceToken  string `json:"deviceToken"`
-		PublicKeyB64 string `json:"publicKeyB64"`
-	}
+	var offer testOffer
 	if err := json.Unmarshal(raw, &offer); err != nil || offer.V != 2 {
 		t.Fatalf("bad offer %s", raw)
 	}
-	ctx := context.Background()
-	ws, _, err := websocket.Dial(ctx, offer.Endpoint, nil)
+	return offer
+}
+
+func dialPhone(t *testing.T, srv *Server, info PairInfo) *phone {
+	offer := parseTestOffer(t, info)
+	ws, _, err := websocket.Dial(context.Background(), offer.Endpoint, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws.SetReadLimit(8 << 20)
+	return handshakePhone(t, ws, offer)
+}
+
+// handshakePhone 在连好的传输上走 hello、ready、auth。
+func handshakePhone(t *testing.T, ws phoneWire, offer testOffer) *phone {
+	ctx := context.Background()
 	cpub, cpriv, _ := box.GenerateKey(rand.Reader)
 	var cn [32]byte
 	rand.Read(cn[:])

@@ -7,9 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'protocol/e2ee.dart';
 import 'protocol/link.dart';
 import 'protocol/pairing.dart';
+import 'protocol/quic_socket.dart';
 import 'protocol/race.dart';
 import 'protocol/rpc.dart';
-import 'protocol/socket.dart';
 import 'settings/custom_keys.dart';
 import 'settings/phone_model.dart';
 import 'terminal/frames.dart';
@@ -369,7 +369,7 @@ class HiveAppModel extends ChangeNotifier {
     this.networkSignatures,
   }) : store = store ?? PrefsPairingStore(),
        settingsStore = settingsStore ?? PrefsSettingsStore(),
-       connect = connect ?? WebSocketByteSocket.connect;
+       connect = connect ?? connectAny;
 
   final PairingStore store;
   final SettingsStore settingsStore;

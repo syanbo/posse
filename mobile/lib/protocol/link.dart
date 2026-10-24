@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'e2ee.dart';
 import 'latency.dart';
 import 'pairing.dart';
+import 'quic_socket.dart';
 import 'race.dart';
 import 'rpc.dart';
 import 'socket.dart';
@@ -144,51 +145,33 @@ class HiveLink {
     return rpc;
   }
 
+  /// 电脑经 hive.quic 给的 QUIC 地址。连上 WebSocket 之后才知道，之后的重连先试它们。
+  List<String> quicUrls = const [];
+
+  /// 知道 QUIC 地址时 WebSocket 晚这么久才开始连：两条都通时留下 QUIC，QUIC 不通时最多慢这么多。
+  Duration quicHeadStart = const Duration(seconds: 2);
+
   Future<PhoneRpc> open() async {
     final epoch = ++_epoch;
+    final quic = quicUrls;
     try {
       final won = await raceEndpoints<PhoneRpc>(
-        urls: offer.dialUrls,
-        // 每次尝试有时限，超时就算失败；不然某个地址一直挂着，断线重连会停在这一轮
-        attempt: (url, cancel) => _attempt(url, cancel).timeout(
-          attemptTimeout,
-          onTimeout: () {
-            cancel.cancel();
-            throw TimeoutException('connect $url');
-          },
-        ),
+        urls: [...quic, ...offer.dialUrls],
+        attempt: (url, cancel) async {
+          if (quic.isNotEmpty && !isQuicUrl(url)) {
+            await Future<void>.delayed(quicHeadStart);
+            if (cancel.cancelled) throw const RaceCancelled();
+          }
+          return _timedAttempt(url, cancel);
+        },
         abandon: (value) => value.close(),
       );
       if (epoch != _epoch) {
         await won.value.close();
         throw const RaceCancelled();
       }
-      // 套接字自己断了再握手。主动 close 不会进这里。先把死掉的连接放掉，界面才知道断了。
-      won.value.watchClose(() {
-        if (epoch != _epoch || !identical(rpc, won.value)) return;
-        rpc = null;
-        meter?.stop();
-        meter = null;
-        onActivity?.call();
-        unawaited(_reopen());
-      });
-      final previous = rpc;
-      rpc = won.value;
-      url = won.url;
-      meter?.stop();
-      final latest = LatencyMeter(
-        won.value,
-        interval: latencyInterval,
-        timeout: latencyTimeout,
-        onChange: () {
-          if (identical(rpc, won.value)) onLatency?.call();
-        },
-      );
-      meter = latest..start();
-      lastError = null;
-      if (!_ready.isClosed) _ready.add(won.value);
-      onActivity?.call();
-      await previous?.close();
+      await _adopt(won, epoch);
+      if (!isQuicUrl(won.url)) unawaited(_upgrade(won.value, epoch));
       return won.value;
     } catch (error) {
       if (epoch == _epoch) {
@@ -197,6 +180,74 @@ class HiveLink {
       }
       rethrow;
     }
+  }
+
+  // 每次尝试有时限，超时就算失败；不然某个地址一直挂着，断线重连会停在这一轮
+  Future<PhoneRpc> _timedAttempt(String url, CancelToken cancel) =>
+      _attempt(url, cancel).timeout(
+        attemptTimeout,
+        onTimeout: () {
+          cancel.cancel();
+          throw TimeoutException('connect $url');
+        },
+      );
+
+  /// 换上新连接，关掉原来的。
+  Future<void> _adopt(RaceResult<PhoneRpc> won, int epoch) async {
+    // 套接字自己断了再握手。主动 close 不会进这里。先把死掉的连接放掉，界面才知道断了。
+    won.value.watchClose(() {
+      if (epoch != _epoch || !identical(rpc, won.value)) return;
+      rpc = null;
+      meter?.stop();
+      meter = null;
+      onActivity?.call();
+      unawaited(_reopen());
+    });
+    final previous = rpc;
+    rpc = won.value;
+    url = won.url;
+    meter?.stop();
+    final latest = LatencyMeter(
+      won.value,
+      interval: latencyInterval,
+      timeout: latencyTimeout,
+      onChange: () {
+        if (identical(rpc, won.value)) onLatency?.call();
+      },
+    );
+    meter = latest..start();
+    lastError = null;
+    if (!_ready.isClosed) _ready.add(won.value);
+    onActivity?.call();
+    await previous?.close();
+  }
+
+  /// 走 WebSocket 连上之后问电脑要 QUIC 地址，连得上就换过去。连不上什么都不变。
+  Future<void> _upgrade(PhoneRpc via, int epoch) async {
+    final List<String> urls;
+    try {
+      urls = quicUrlsOf(await via.call('hive.quic', const {}, timeout: const Duration(seconds: 5)));
+    } catch (_) {
+      // Orca 和旧版 Hive 没有这个方法
+      return;
+    }
+    quicUrls = urls;
+    if (urls.isEmpty || _closed || epoch != _epoch) return;
+    final RaceResult<PhoneRpc> won;
+    try {
+      won = await raceEndpoints<PhoneRpc>(
+        urls: urls,
+        attempt: _timedAttempt,
+        abandon: (value) => value.close(),
+      );
+    } catch (_) {
+      return;
+    }
+    if (_closed || epoch != _epoch || !identical(rpc, via)) {
+      await won.value.close();
+      return;
+    }
+    await _adopt(won, ++_epoch);
   }
 
   Future<PhoneRpc> _attempt(String url, CancelToken cancel) async {

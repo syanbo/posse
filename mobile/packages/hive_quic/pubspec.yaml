@@ -1,0 +1,15 @@
+name: hive_quic
+description: "Hive 手机端的 QUIC 客户端：构建时把 Go 写的库（go/）编进 App，Dart 经 FFI 调用。"
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  code_assets: ^1.2.1
+  ffi: ^2.2.0
+  hooks: ^2.0.2
+
+dev_dependencies:
+  test: ^1.25.0

@@ -40,6 +40,8 @@ type Server struct {
 	permMu sync.Mutex
 	perms  map[string]*permWait
 
+	q quicState
+
 	media mediaCache
 }
 
@@ -85,6 +87,7 @@ func (s *Server) listen() error {
 	s.srv = &http.Server{Handler: http.HandlerFunc(s.serveWS), ReadHeaderTimeout: 10 * time.Second}
 	go s.srv.Serve(ln)
 	log.Printf("mobile: listening on %s", ln.Addr())
+	s.startQUIC(ln.Addr().(*net.TCPAddr).Port)
 	return nil
 }
 
@@ -109,6 +112,7 @@ func (s *Server) Close() {
 	if srv != nil {
 		srv.Close()
 	}
+	s.closeQUIC()
 	for _, c := range conns {
 		c.ws.Close(websocket.StatusGoingAway, "host shutting down")
 	}
@@ -216,9 +220,14 @@ func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	defer ws.CloseNow()
 	// 图片上传按块发，每块不超过几百 KB
 	ws.SetReadLimit(4 << 20)
-	ctx, cancel := context.WithCancel(r.Context())
+	s.serveWire(r.Context(), ws)
+}
+
+// serveWire 在一条已经连上的传输上握手，然后处理请求直到断开。
+func (s *Server) serveWire(parent context.Context, w wire) {
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	c := &conn{srv: s, ws: ws, ctx: ctx, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
+	c := &conn{srv: s, ws: w, ctx: ctx, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
 	if err := c.handshake(); err != nil {
 		return
 	}
@@ -243,10 +252,17 @@ func (s *Server) streamID() uint32 {
 	return s.nextSID
 }
 
+// wire 是手机连接底下的传输：WebSocket，或 QUIC 上的一条流（quic.go）。
+type wire interface {
+	Read(ctx context.Context) (websocket.MessageType, []byte, error)
+	Write(ctx context.Context, typ websocket.MessageType, p []byte) error
+	Close(code websocket.StatusCode, reason string) error
+}
+
 // conn 是一条已认证的手机连接。
 type conn struct {
 	srv    *Server
-	ws     *websocket.Conn
+	ws     wire
 	ctx    context.Context
 	sess   *session
 	device Device
