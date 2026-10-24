@@ -8,11 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"hive/internal/daemon"
 	"hive/internal/rpc"
+	"hive/internal/spawn"
 )
 
 type Client struct {
@@ -54,13 +54,14 @@ func (c *Client) EnsureDaemon() error {
 	cmd.Dir = c.Home
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.Env = append(os.Environ(), "HIVE_HOME="+c.Home)
-	// 脱离调用方的会话，调用方的终端或界面关闭时常驻进程不受影响
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
+	// 脱离调用方的会话，调用方的终端或界面关闭时常驻进程不受影响；
+	// 授权按常驻进程自己的签名认，不记在拉起它的终端 App 上
+	proc, err := spawn.Start(cmd)
+	if err != nil {
 		return fmt.Errorf("start daemon: %w", err)
 	}
 	// 窗口一直开着，常驻进程交接或重启退出后要由这里收走，否则留下僵尸进程
-	go cmd.Wait()
+	go proc.Wait()
 	// 旧进程若还在退出，新进程要等它释放锁，所以多给些时间
 	for i := 0; i < 300; i++ {
 		if c.Up() {

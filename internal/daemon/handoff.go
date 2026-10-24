@@ -13,13 +13,13 @@ import (
 	"os/exec"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
 
 	"hive/internal/host"
 	"hive/internal/rpc"
+	"hive/internal/spawn"
 )
 
 // 升级时把整个常驻进程交给新包启动的进程（方案见 docs/plans/terminal-host.md）。
@@ -258,8 +258,8 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	} else {
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	err = cmd.Start()
+	// 新进程自己对系统授权负责：一路交接下去，最初拉起常驻进程的旧 Hive.app 可能早已被换掉
+	proc, err := spawn.Start(cmd)
 	theirs.Close()
 	if err != nil {
 		return 0, 0, fmt.Errorf("start %s: %w", exe, err)
@@ -267,10 +267,10 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	ok := false
 	defer func() {
 		if !ok {
-			cmd.Process.Kill()
+			proc.Kill()
 		}
 		// 收走子进程：失败时是刚杀掉的，成功时它在旧进程退出前不会结束
-		go cmd.Wait()
+		go proc.Wait()
 	}()
 	conn.SetDeadline(time.Now().Add(handoffTimeout))
 
@@ -299,7 +299,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 		}
 		if !ok {
 			// 先杀掉新进程再恢复，免得两边同时读同一个 PTY
-			cmd.Process.Kill()
+			proc.Kill()
 			for _, s := range paused {
 				s.Resume()
 			}
@@ -341,7 +341,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	}
 	ok = true
 	d.ln.release(true)
-	return len(batch.Terms), cmd.Process.Pid, nil
+	return len(batch.Terms), proc.Pid, nil
 }
 
 // incoming 是新进程这边收到的交接：PTY 描述符和 batch.Terms 一一对应，已结束的为 nil。

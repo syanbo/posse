@@ -40,6 +40,7 @@ internal/namer      会话标题（hive session title）：规整 `MMDD｜类型
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，状态栏用量和内存；只接入当前可见的终端；tasks.go 是任务总览和派发对话框，history.go 是历史页，markdown.go 用 goldmark 解析 agent 回复并搭成界面，usage.go 是终端右侧的"技能与工具"面板，files.go、filesview.go 是文件标签，filespanel.go 是右边的文件栏，gitview.go、gitpanel.go、changepop.go、rollback.go、branchpop.go、compare.go、logview.go、logrefs.go、filehistory.go、gitconsole.go 是 Git 界面，uistate.go 是只有界面关心的状态（ui.json），style.go 是配色和公共控件
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
+internal/spawn      拉起常驻进程：新开会话，让它自己对系统授权负责
 internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $HIVE_HOME/usage.json
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索
 internal/mobile     让 Orca 手机 App 连到 hive：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流
@@ -53,6 +54,7 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - 升级交接（`daemon.handoff`，`hive daemon handoff` 手动触发，`internal/daemon/handoff.go`）：旧进程用调用方给的 hive 拉起 `daemon run`（环境 `HIVE_HANDOFF_FD` 指向 socketpair 的一端），停接新连接、停读所有 PTY，经 SCM_RIGHTS 交出 hived.sock 的监听描述符和每个 PTY 主端（前面的交接记录对方没读完时 macOS 的 sendmsg 报 EMSGSIZE 而不是等，`sendFile` 隔 5ms 重发，最多 10 秒），连同交接记录（`term.State`：快照、标题、读到一半的转义序列或 UTF-8 字符 `tail`、agent 状态、hooks 标记）。新进程按同尺寸重建内核、接着读 PTY，用 kqueue（`EVFILT_PROC` `NOTE_EXITSTATUS`）盯不是自己子进程的 pid 拿退出码，再把 PTY 行数改一下又改回来让程序整屏重画；接过来的终端回话成功后才开始读 PTY（`Resume`），失败时输出还留在内核里给旧进程。回话之后新进程马上开始服务（hook 只等 2 秒，不能等旧进程退出），旧进程退出，不关终端、不删 socket 和 pid 文件；新进程在后台一直等锁，拿到才开手机服务（端口在旧进程手里），等不到也不退出。普通启动拿到锁后 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket。交接的终端和以它们为 worker 的任务不记为 lost。旧进程只把 PTY 已交出去的终端的退出留给新进程（交接窗口里退出的，新进程收不到退出码，记 -1），还没交出去就退出的照常处理；新建终端和交接开始经 `handoffState.startMu` 互斥；交接期间 `terminal wait --for idle` 不算空闲。交接拉起新进程时和 `client.EnsureDaemon` 一样经 `daemon.OpenLog` 重新打开日志、太大先轮转。新进程没回话或报错时旧进程杀掉它、恢复读 PTY 照常运行。协议版本是 `handoffVersion`，改了记录或帧格式要加一。手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
 - 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），被打断的长等待回 `restarting`（`rpc.Retryable` 也认回复前就断开的连接）。CLI 的 `terminal wait`、`task wait`、`task ask` 走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 的 restarting 带回问题 ID（`Error.Data` 的 `resume`），重发时改成 `--resume`，不会再问一遍。Claude 的权限挂起（`hook.permission.hold`）被打断时 hook 到新进程上再挂，总时间仍是 35 秒。
 - PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
+- 常驻进程（`client.EnsureDaemon`、交接时的旧进程）都经 `internal/spawn` 拉起：新开会话，并用私有接口 `responsibility_spawnattrs_setdisclaim` 让它自己对系统授权负责。否则授权记在拉起方身上：终端里的 CLI 拉起时是那个终端 App，一路交接下去是最初拉起它的那份 Hive.app，那份包被换掉后每次访问桌面都弹授权。
 - `daemon.log` 由拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程，都经 `daemon.OpenLog`）打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
 - 程序关掉鼠标跟踪（9、1000、1002、1003 都关）时，如果最后写进 PTY 的是鼠标报告，常驻进程清掉 PTY 里还没读的输入（`dropStaleMouse`，主端 `TIOCFLUSH`）：Codex 退出时先不读输入、最后才关鼠标跟踪，这期间鼠标移动的报告会被接着运行的 shell 读成一串 `35;12;8M`。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
