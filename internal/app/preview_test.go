@@ -122,10 +122,13 @@ func previewApp(t *testing.T) *app {
 func previewHistory(a *app, query string) {
 	now := time.Now()
 	home := os.Getenv("HOME")
+	// 分组按日历日算：凌晨跑的时候"几小时前"会落到昨天，所以今天的两条不早于今天零点，昨天那条放在昨天中午
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	sinceMidnight := now.Sub(today)
 	sessions := []history.Session{
-		{Agent: "claude", ID: "s1", Title: "Orca 到 mygo 迁移方案", Cwd: home + "/Desktop/AI/Apps", UpdatedAt: now.Add(-20 * time.Minute), Messages: 412, Model: "claude-opus-5-5"},
-		{Agent: "grok", ID: "s2", Title: "清理磁盘", Cwd: home + "/Desktop/AI/Grok", Branch: "main", UpdatedAt: now.Add(-3 * time.Hour), Messages: 630, Model: "grok-4.7-build"},
-		{Agent: "codex", ID: "s3", Title: "0927｜文档｜统一去除章节标题序号", Cwd: home + "/Desktop/AI/Claude", UpdatedAt: now.Add(-26 * time.Hour), Messages: 15, Model: "gpt-6-astra"},
+		{Agent: "claude", ID: "s1", Title: "Orca 到 mygo 迁移方案", Cwd: home + "/Desktop/AI/Apps", UpdatedAt: now.Add(-min(20*time.Minute, sinceMidnight/4)), Messages: 412, Model: "claude-opus-5-5"},
+		{Agent: "grok", ID: "s2", Title: "清理磁盘", Cwd: home + "/Desktop/AI/Grok", Branch: "main", UpdatedAt: now.Add(-min(3*time.Hour, sinceMidnight/2)), Messages: 630, Model: "grok-4.7-build"},
+		{Agent: "codex", ID: "s3", Title: "0927｜文档｜统一去除章节标题序号", Cwd: home + "/Desktop/AI/Claude", UpdatedAt: today.AddDate(0, 0, -1).Add(12 * time.Hour), Messages: 15, Model: "gpt-6-astra"},
 		{Agent: "cursor", ID: "s4", Title: "TikTok Ark Video", Cwd: home + "/Desktop/AI/Video/Halloween-3", UpdatedAt: now.Add(-50 * time.Hour), Messages: 58},
 		{Agent: "claude", ID: "s5", Title: "0918｜修复｜im_sdk 拉黑后消息页空转鉴权问题", Cwd: home + "/Desktop/AI/Works", UpdatedAt: now.Add(-12 * 24 * time.Hour), Messages: 96},
 		{Agent: "grok", ID: "s6", Title: "Ghostty 快捷键与浅色主题轮播", Cwd: home + "/Desktop/AI/Grok", UpdatedAt: now.Add(-46 * 24 * time.Hour), Messages: 72},
