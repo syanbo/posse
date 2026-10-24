@@ -799,6 +799,11 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Future<void> _stopReceiver() async {
+    // 接收停了不会再来统计：留着最后一份 video 为真，页面会以为还在播，黑屏不出提示
+    if (mounted) {
+      _stats = const DeskStats();
+      _statsTick.value = const DeskStats();
+    }
     if (!Platform.isIOS) return;
     try {
       await _receiver.stop();
@@ -1091,10 +1096,9 @@ class _DeskPageState extends State<DeskPage>
                       onPointerCancel: _cancel,
                       child: const SizedBox.expand(),
                     ),
+                    // 只有卡片本身接点击，旁边的手势照常到画面
                     if (banner != null)
-                      IgnorePointer(
-                        child: Center(child: _bannerView(colors, banner)),
-                      ),
+                      Center(child: _bannerView(colors, banner)),
                   ],
                 );
               },
@@ -1223,25 +1227,90 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Widget _bannerView(HiveColors colors, (bool waiting, String text) banner) {
-    final failed = banner.$2.startsWith('连不上') || banner.$2 == deskIndirectText;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (banner.$1) ...[
+    final (waiting, text) = banner;
+    if (waiting) {
+      return IgnorePointer(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             HiveLoader(size: 36, color: colors.accent),
             const SizedBox(height: 14),
-          ],
-          Text(
-            banner.$2,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: Fs.body,
-              color: failed ? colors.danger : _onPicture,
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: Fs.body, color: _onPicture),
             ),
+          ],
+        ),
+      );
+    }
+    final failed = text.startsWith('连不上') || text == deskIndirectText;
+    // 有画面时的提示（缺辅助功能）只是一行字，不挡操作
+    if (_stats.video) {
+      return IgnorePointer(
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: Fs.body, color: _onPicture),
+        ),
+      );
+    }
+    final retry =
+        !_background && (_fail != null || _endNote != null || _stopped);
+    final hint = _fail == deskFailText('permission_screen')
+        ? 'Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」里的 Hive，再重试'
+        : null;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 340),
+      child: Material(
+        key: const Key('desk-banner'),
+        color: colors.card.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(Rd.card),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                failed
+                    ? Icons.error_outline_rounded
+                    : Icons.desktop_access_disabled_outlined,
+                size: 28,
+                color: failed ? colors.danger : colors.muted,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                text.replaceFirst('连不上：', ''),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: Fs.body,
+                  fontWeight: FontWeight.w500,
+                  color: colors.text,
+                ),
+              ),
+              if (hint != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  hint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: Fs.meta, color: colors.muted),
+                ),
+              ],
+              if (retry) ...[
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  key: const Key('desk-retry'),
+                  onPressed: () {
+                    _pokeBar();
+                    unawaited(_ensure(force: true));
+                  },
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(_stopped ? '重新连接' : '重试'),
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1314,14 +1383,17 @@ class _DeskPageState extends State<DeskPage>
                   ),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: TextButton(
+                  child: TextButton.icon(
                     style: TextButton.styleFrom(
                       foregroundColor: colors.accent,
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
+                      backgroundColor: Colors.transparent,
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      textStyle: statusLineStyle(colors.accent),
                     ),
                     onPressed: () => unawaited(_connectSheet()),
-                    child: const Text('连接'),
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: const Text('UDP 地址'),
                   ),
                 ),
               ],

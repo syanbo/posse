@@ -176,7 +176,7 @@ void main() {
 
   testWidgets('the toolbar shows fps until it is opened', (tester) async {
     var backs = 0;
-    Future<void> pump(bool expanded) {
+    Future<void> pump(bool expanded, {bool video = true}) {
       return tester.pumpWidget(
         MaterialApp(
           theme: hiveTheme(Brightness.dark),
@@ -187,7 +187,7 @@ void main() {
                 latency: const Duration(milliseconds: 40),
                 unresponsive: false,
                 fps: 60,
-                video: true,
+                video: video,
                 landscape: false,
                 keyboardUp: false,
                 shortcuts: false,
@@ -220,6 +220,12 @@ void main() {
     expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
     await tester.tap(find.byKey(const Key('desk-toolbar-back')));
     expect(backs, 1);
+
+    // 还没画面（连接中、连不上）：不用点开就有返回和横屏
+    await pump(false, video: false);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const Key('desk-toolbar-back')), findsOneWidget);
+    expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
   });
 
   testWidgets('taps beside the toolbar still reach the picture', (
@@ -494,7 +500,9 @@ void main() {
       const Size(800, 400),
       const FakeViewPadding(left: 59, bottom: 21),
     );
+    // 没画面时工具条是展开的，横竖换向要等尺寸动画走完
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     final side = tester.getRect(find.byKey(const Key('desk-toolbar')));
     expect(side.right, greaterThan(790));
     expect(side.width, lessThan(160));
@@ -527,6 +535,7 @@ void main() {
       const FakeViewPadding(top: 47, bottom: 34),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     final restored = tester.getCenter(find.byKey(const Key('desk-toolbar')));
     expect(restored.dx, closeTo(portraitX, 2));
     expect(restored.dy, lessThan(120));

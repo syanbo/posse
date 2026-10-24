@@ -141,7 +141,8 @@ class DeskToolbar extends StatelessWidget {
         duration: _fade,
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
-        child: expanded ? _open(c) : _shut(c),
+        // 没画面时没什么可挡的，按钮一直摆出来，返回和横屏不用先找胶囊点开
+        child: expanded || !video ? _open(c) : _shut(c),
       ),
     );
   }
