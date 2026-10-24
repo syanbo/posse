@@ -88,6 +88,7 @@ class AppSettings {
     this.expandTools = false,
     this.deskLayout = false,
     this.deskZoom = 1,
+    this.deskWatch = false,
     this.phoneId = '',
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys();
@@ -107,6 +108,9 @@ class AppSettings {
   /// 电脑布局在「刚好缩进屏幕宽度」之上的倍数，吸在 0.5–2 的固定档。1 是一整行落在屏幕里。
   double deskZoom;
 
+  /// 实验：电脑菜单里显示「看桌面」。只在 iPhone 上露出开关。
+  bool deskWatch;
+
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
@@ -123,6 +127,7 @@ class AppSettings {
     'expandTools': expandTools,
     'deskLayout': deskLayout,
     'deskZoom': deskZoom,
+    'deskWatch': deskWatch,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
@@ -155,6 +160,7 @@ class AppSettings {
       }
       final zoom = map['deskZoom'];
       if (zoom is num) out.deskZoom = zoom.toDouble().clamp(0.5, 2);
+      if (map['deskWatch'] is bool) out.deskWatch = map['deskWatch'] as bool;
       final phoneId = map['phoneId'];
       if (phoneId is String) out.phoneId = phoneId;
       final bar = map['barKeys'];

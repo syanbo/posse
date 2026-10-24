@@ -1,0 +1,838 @@
+import CoreMedia
+import CryptoKit
+import Darwin
+import Foundation
+import VideoToolbox
+
+private let deskPacketLimit = 1200
+private let deskDirToMac: UInt8 = 0
+private let deskDirToMobile: UInt8 = 1
+private let deskKindHello: UInt8 = 1
+private let deskKindVideo: UInt8 = 2
+private let deskKindReport: UInt8 = 3
+private let deskKindKeyframe: UInt8 = 5
+
+enum DeskCodec: String {
+  case hevc
+  case h264
+}
+
+enum DeskError: Error {
+  case badAddress
+  case socket
+  case unsupportedCodec
+}
+
+struct DeskKeys {
+  let toMobile: SymmetricKey
+  let toMac: SymmetricKey
+
+  /// 和 tools/deskrecv、internal/desk 的 HKDF 一致：info 是 hive-desk/v1，前 32 字节给手机收，后 32 字节给手机发。
+  static func derive(secret: Data, nonce: Data) -> DeskKeys {
+    let out = HKDF<SHA256>.deriveKey(
+      inputKeyMaterial: SymmetricKey(data: secret),
+      salt: nonce,
+      info: Data("hive-desk/v1".utf8),
+      outputByteCount: 64
+    )
+    let raw = out.withUnsafeBytes { Data($0) }
+    return DeskKeys(
+      toMobile: SymmetricKey(data: raw.prefix(32)),
+      toMac: SymmetricKey(data: raw.suffix(32))
+    )
+  }
+}
+
+private func deskNonce(_ dir: UInt8, _ counter: UInt64) -> AES.GCM.Nonce {
+  var raw = Data(count: 12)
+  raw[0] = dir
+  var n = counter.bigEndian
+  withUnsafeBytes(of: &n) { raw.replaceSubrange(4 ..< 12, with: $0) }
+  return try! AES.GCM.Nonce(data: raw)
+}
+
+private func deskSeal(
+  _ key: SymmetricKey, _ dir: UInt8, _ kind: UInt8, _ counter: UInt64, _ plain: Data
+) throws -> Data {
+  var packet = Data([kind])
+  var n = counter.bigEndian
+  withUnsafeBytes(of: &n) { packet.append(contentsOf: $0) }
+  let box = try AES.GCM.seal(
+    plain, using: key, nonce: deskNonce(dir, counter), authenticating: Data([kind])
+  )
+  packet.append(box.ciphertext)
+  packet.append(box.tag)
+  return packet
+}
+
+/// 直接切接收缓冲。密文和 tag 不拷贝；明文是 open 新分配的，调用返回后缓冲可以复用。
+private func deskOpen(
+  _ key: SymmetricKey, _ dir: UInt8, _ packet: UnsafeRawBufferPointer
+) -> (UInt8, UInt64, Data)? {
+  let count = packet.count
+  guard count >= 1 + 8 + 16, count <= deskPacketLimit, let base = packet.baseAddress else {
+    return nil
+  }
+  let kind = base.load(as: UInt8.self)
+  var counterBits: UInt64 = 0
+  withUnsafeMutableBytes(of: &counterBits) { dst in
+    dst.copyMemory(from: UnsafeRawBufferPointer(start: base.advanced(by: 1), count: 8))
+  }
+  let counter = UInt64(bigEndian: counterBits)
+  let cipherCount = count - 9 - 16
+  let cipher = cipherCount == 0
+    ? Data()
+    : Data(
+      bytesNoCopy: UnsafeMutableRawPointer(mutating: base.advanced(by: 9)),
+      count: cipherCount,
+      deallocator: .none
+    )
+  let tag = Data(
+    bytesNoCopy: UnsafeMutableRawPointer(mutating: base.advanced(by: count - 16)),
+    count: 16,
+    deallocator: .none
+  )
+  guard
+    let box = try? AES.GCM.SealedBox(nonce: deskNonce(dir, counter), ciphertext: cipher, tag: tag),
+    let plain = try? AES.GCM.open(box, using: key, authenticating: Data([kind]))
+  else { return nil }
+  return (kind, counter, plain)
+}
+
+private func beU16(_ data: Data, _ offset: Int) -> UInt16 {
+  var value: UInt16 = 0
+  _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: offset ..< offset + 2) }
+  return UInt16(bigEndian: value)
+}
+
+private func beU64(_ data: Data, _ offset: Int) -> UInt64 {
+  var value: UInt64 = 0
+  _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: offset ..< offset + 8) }
+  return UInt64(bigEndian: value)
+}
+
+/// 1024 位滑动窗口，和 WireGuard、deskrecv 一样：乱序照收，重复的和落在窗口前的丢掉。
+private final class DeskReplay {
+  private var last: UInt64 = 0
+  private var bits = [UInt64](repeating: 0, count: 16)
+
+  func reset() {
+    last = 0
+    bits = [UInt64](repeating: 0, count: 16)
+  }
+
+  func accept(_ n: UInt64) -> Bool {
+    if n == 0 { return false }
+    if last == 0 {
+      last = n
+      bits[0] = 1
+      return true
+    }
+    if n > last {
+      let shift = n - last
+      if shift >= 1024 {
+        bits = [UInt64](repeating: 0, count: 16)
+      } else {
+        self.shift(shift)
+      }
+      last = n
+      bits[0] |= 1
+      return true
+    }
+    let back = last - n
+    if back >= 1024 { return false }
+    let index = Int(back / 64)
+    let bit = back % 64
+    if bits[index] & (UInt64(1) << bit) != 0 { return false }
+    bits[index] |= UInt64(1) << bit
+    return true
+  }
+
+  private func shift(_ n: UInt64) {
+    let words = Int(n / 64)
+    let bitsn = n % 64
+    var next = [UInt64](repeating: 0, count: 16)
+    for i in 0 ..< 16 {
+      let from = words + i
+      if from >= 16 { break }
+      next[i] = bits[from] << bitsn
+      if bitsn != 0, from + 1 < 16 {
+        next[i] |= bits[from + 1] >> (64 - bitsn)
+      }
+    }
+    bits = next
+  }
+}
+
+struct DeskAccessUnit {
+  let nals: [Data]
+  let frame: UInt64
+  let capture: Int64
+  let key: Bool
+}
+
+protocol DeskDepacketizer: AnyObject {
+  func push(_ plain: Data) -> DeskAccessUnit?
+  func reset()
+}
+
+/// H.264（RFC 6184）留到能开低延迟码率控制再做。现在工厂对它返回空。
+func makeDepacketizer(_ codec: DeskCodec) -> DeskDepacketizer? {
+  switch codec {
+  case .hevc:
+    return HevcDepacketizer()
+  case .h264:
+    return nil
+  }
+}
+
+private final class HevcDepacketizer: DeskDepacketizer {
+  private var frame: UInt64 = 0
+  private var capture: Int64 = 0
+  private var key = false
+  private var expect: UInt16 = 0
+  private var have = false
+  private var broken = false
+  private var nals: [Data] = []
+  private var fu = Data()
+
+  func reset() {
+    have = false
+    broken = false
+    nals = []
+    fu = Data()
+  }
+
+  func push(_ plain: Data) -> DeskAccessUnit? {
+    guard plain.count >= 17 + 12 else { return nil }
+    let key = plain[0] & 1 != 0
+    let number = beU64(plain, 1)
+    let capture = Int64(bitPattern: beU64(plain, 9))
+    let seq = beU16(plain, 19)
+    let marker = plain[18] & 0x80 != 0
+    let payload = plain.subdata(in: 29 ..< plain.count)
+    if !have || number != frame {
+      frame = number
+      self.capture = capture
+      self.key = key
+      expect = seq
+      have = true
+      broken = false
+      nals = []
+      fu = Data()
+    } else if seq != expect {
+      broken = true
+      fu = Data()
+      nals = []
+      expect = seq
+      return nil
+    }
+    expect = expect &+ 1
+    take(payload)
+    guard marker else { return nil }
+    have = false
+    if broken || !fu.isEmpty { return nil }
+    return DeskAccessUnit(
+      nals: nals.filter { !$0.isEmpty },
+      frame: frame,
+      capture: self.capture,
+      key: self.key
+    )
+  }
+
+  private func take(_ payload: Data) {
+    if payload.count >= 3, ((payload[0] >> 1) & 0x3f) == 49 {
+      let start = payload[2] & 0x80 != 0
+      let end = payload[2] & 0x40 != 0
+      let piece = payload.subdata(in: 3 ..< payload.count)
+      if start {
+        fu = piece
+      } else if fu.isEmpty {
+        // 这一帧的开头已经丢了，拼出来也是花的。
+        broken = true
+        return
+      } else {
+        fu.append(piece)
+      }
+      if end, !broken {
+        var nal = Data([payload[0], payload[1]])
+        nal.append(fu)
+        nal[0] = (payload[0] & 0x81) | ((payload[2] & 0x3f) << 1)
+        nals.append(nal)
+        fu = Data()
+      }
+      return
+    }
+    if !payload.isEmpty {
+      nals.append(payload)
+    }
+  }
+}
+
+private func nalType(_ nal: Data) -> UInt8 {
+  nal.isEmpty ? 0 : (nal[0] >> 1) & 0x3f
+}
+
+private final class DecodeStamp {
+  let started: CFAbsoluteTime
+  init(_ started: CFAbsoluteTime) { self.started = started }
+}
+
+private final class DeskDecoder {
+  var onImage: ((CVPixelBuffer, Double) -> Void)?
+  private var session: VTDecompressionSession?
+  private var format: CMVideoFormatDescription?
+  private var formatKey = Data()
+
+  func shutdown() {
+    guard let session else { return }
+    VTDecompressionSessionWaitForAsynchronousFrames(session)
+    VTDecompressionSessionInvalidate(session)
+    self.session = nil
+    format = nil
+    formatKey = Data()
+  }
+
+  func push(_ unit: DeskAccessUnit) {
+    let sets = parameterSets(unit.nals)
+    if let sets {
+      let key = sets.reduce(into: Data()) { $0.append($1) }
+      if key != formatKey {
+        shutdown()
+        formatKey = key
+        format = makeFormat(sets)
+        if let format {
+          var callback = VTDecompressionOutputCallbackRecord(
+            decompressionOutputCallback: deskOutputCallback,
+            decompressionOutputRefCon: Unmanaged.passUnretained(self).toOpaque()
+          )
+          let attrs = deskImageAttributes()
+          var created: VTDecompressionSession?
+          var status = VTDecompressionSessionCreate(
+            allocator: nil,
+            formatDescription: format,
+            decoderSpecification: nil,
+            imageBufferAttributes: attrs,
+            outputCallback: &callback,
+            decompressionSessionOut: &created
+          )
+          if status != noErr {
+            status = VTDecompressionSessionCreate(
+              allocator: nil,
+              formatDescription: format,
+              decoderSpecification: nil,
+              imageBufferAttributes: nil,
+              outputCallback: &callback,
+              decompressionSessionOut: &created
+            )
+          }
+          if status == noErr {
+            session = created
+            if let created {
+              VTSessionSetProperty(
+                created,
+                key: kVTDecompressionPropertyKey_RealTime,
+                value: kCFBooleanTrue
+              )
+            }
+          }
+        }
+      }
+    }
+    guard let session else { return }
+    let slices = unit.nals.filter {
+      let kind = nalType($0)
+      return kind != 32 && kind != 33 && kind != 34 && kind != 35
+    }
+    guard !slices.isEmpty, let sample = sampleBuffer(slices, format: format) else { return }
+    let stamp = DecodeStamp(CFAbsoluteTimeGetCurrent())
+    let ref = Unmanaged.passRetained(stamp).toOpaque()
+    var flags = VTDecodeInfoFlags()
+    let status = VTDecompressionSessionDecodeFrame(
+      session,
+      sampleBuffer: sample,
+      flags: ._EnableAsynchronousDecompression,
+      frameRefcon: ref,
+      infoFlagsOut: &flags
+    )
+    if status != noErr {
+      Unmanaged<DecodeStamp>.fromOpaque(ref).release()
+    }
+  }
+}
+
+private func deskOutputCallback(
+  _ refcon: UnsafeMutableRawPointer?,
+  _ source: UnsafeMutableRawPointer?,
+  _ status: OSStatus,
+  _ flags: VTDecodeInfoFlags,
+  _ image: CVImageBuffer?,
+  _ pts: CMTime,
+  _ duration: CMTime
+) {
+  let stamp = source.map { Unmanaged<DecodeStamp>.fromOpaque($0).takeRetainedValue() }
+  guard let refcon else { return }
+  let decoder = Unmanaged<DeskDecoder>.fromOpaque(refcon).takeUnretainedValue()
+  let ms = stamp.map { (CFAbsoluteTimeGetCurrent() - $0.started) * 1000 } ?? 0
+  guard status == noErr, let image else { return }
+  decoder.onImage?(image, ms)
+}
+
+/// Flutter 的纹理直接吃 420v，和编码器交出来的一样，解码器不必再转成 BGRA。
+private func deskImageAttributes() -> CFDictionary {
+  [
+    kCVPixelBufferPixelFormatTypeKey: NSNumber(value: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+    kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+    kCVPixelBufferMetalCompatibilityKey: true,
+  ] as CFDictionary
+}
+
+private func parameterSets(_ nals: [Data]) -> [Data]? {
+  var vps: Data?
+  var sps: Data?
+  var pps: Data?
+  for nal in nals {
+    switch nalType(nal) {
+    case 32 where vps == nil: vps = nal
+    case 33 where sps == nil: sps = nal
+    case 34 where pps == nil: pps = nal
+    default: break
+    }
+  }
+  guard let vps, let sps, let pps else { return nil }
+  return [vps, sps, pps]
+}
+
+private func makeFormat(_ sets: [Data]) -> CMVideoFormatDescription? {
+  let copies: [(UnsafeMutablePointer<UInt8>, Int)] = sets.map { data in
+    let pointer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+    data.copyBytes(to: pointer, count: data.count)
+    return (pointer, data.count)
+  }
+  defer { copies.forEach { $0.0.deallocate() } }
+  var pointers = copies.map { UnsafePointer($0.0) }
+  var sizes = copies.map { $0.1 }
+  var format: CMVideoFormatDescription?
+  let status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(
+    allocator: nil,
+    parameterSetCount: pointers.count,
+    parameterSetPointers: &pointers,
+    parameterSetSizes: &sizes,
+    nalUnitHeaderLength: 4,
+    extensions: nil,
+    formatDescriptionOut: &format
+  )
+  return status == noErr ? format : nil
+}
+
+private func sampleBuffer(_ nals: [Data], format: CMVideoFormatDescription?) -> CMSampleBuffer? {
+  guard let format else { return nil }
+  var avcc = Data()
+  for nal in nals {
+    var len = UInt32(nal.count).bigEndian
+    withUnsafeBytes(of: &len) { avcc.append(contentsOf: $0) }
+    avcc.append(nal)
+  }
+  var block: CMBlockBuffer?
+  guard
+    CMBlockBufferCreateWithMemoryBlock(
+      allocator: nil,
+      memoryBlock: nil,
+      blockLength: avcc.count,
+      blockAllocator: nil,
+      customBlockSource: nil,
+      offsetToData: 0,
+      dataLength: avcc.count,
+      flags: 0,
+      blockBufferOut: &block
+    ) == noErr,
+    let block
+  else { return nil }
+  avcc.withUnsafeBytes { raw in
+    _ = CMBlockBufferReplaceDataBytes(
+      with: raw.baseAddress!,
+      blockBuffer: block,
+      offsetIntoDestination: 0,
+      dataLength: avcc.count
+    )
+  }
+  var sample: CMSampleBuffer?
+  var sizes = [avcc.count]
+  var timing = CMSampleTimingInfo(
+    duration: .invalid,
+    presentationTimeStamp: .zero,
+    decodeTimeStamp: .invalid
+  )
+  guard
+    CMSampleBufferCreateReady(
+      allocator: nil,
+      dataBuffer: block,
+      formatDescription: format,
+      sampleCount: 1,
+      sampleTimingEntryCount: 1,
+      sampleTimingArray: &timing,
+      sampleSizeEntryCount: 1,
+      sampleSizeArray: &sizes,
+      sampleBufferOut: &sample
+    ) == noErr
+  else { return nil }
+  return sample
+}
+
+/// 专门的线程收 UDP。视频包在这里解密、拆 RTP、交给硬解，不经 Dart。
+final class DeskSession {
+  var onFrame: ((CVPixelBuffer) -> Void)?
+  var onStats: (([String: Any]) -> Void)?
+
+  private let keys: DeskKeys
+  private let peer: sockaddr_in
+  private let depacketizer: DeskDepacketizer
+  private let decoder = DeskDecoder()
+  private let replay = DeskReplay()
+  private let flag = NSLock()
+  private let statsLock = NSLock()
+  private let joined = DispatchSemaphore(value: 0)
+
+  private var thread: Thread?
+  private var stopped = false
+  private var paused = false
+  private var needReset = false
+  private var didJoin = false
+  private var sendN: UInt64 = 0
+  private var expect: UInt16 = 0
+  private var haveSeq = false
+  private var lossInterval: UInt32 = 0
+  private var lossTotal: UInt32 = 0
+  private var packetsInterval: UInt32 = 0
+  private var gapsUs: [UInt32] = []
+  private var lastFrameAt: CFAbsoluteTime = 0
+  private var waitingKey = true
+  private var primed = false
+  private var recoveries = 0
+  private var gotVideo = false
+  private var videoBytes: [(CFAbsoluteTime, Int)] = []
+  private var decodedAt: [CFAbsoluteTime] = []
+  private var decodeMs: [(CFAbsoluteTime, Double)] = []
+  private var pictureWidth = 0
+  private var pictureHeight = 0
+
+  init(secret: Data, nonce: Data, peer: sockaddr_in, codec: DeskCodec) throws {
+    guard let depacketizer = makeDepacketizer(codec) else { throw DeskError.unsupportedCodec }
+    keys = DeskKeys.derive(secret: secret, nonce: nonce)
+    self.peer = peer
+    self.depacketizer = depacketizer
+    decoder.onImage = { [weak self] image, ms in
+      self?.noteDecoded(image, ms: ms)
+    }
+  }
+
+  func start() {
+    let thread = Thread { [weak self] in self?.loop() }
+    thread.name = "hive.desk"
+    self.thread = thread
+    thread.start()
+  }
+
+  func requestStop() {
+    flag.lock()
+    stopped = true
+    flag.unlock()
+  }
+
+  func setPaused(_ value: Bool) {
+    flag.lock()
+    if value {
+      paused = true
+    } else if paused {
+      paused = false
+      needReset = true
+    }
+    flag.unlock()
+  }
+
+  func waitUntilStopped() {
+    flag.lock()
+    if didJoin || thread == nil {
+      flag.unlock()
+      return
+    }
+    flag.unlock()
+    joined.wait()
+    flag.lock()
+    didJoin = true
+    flag.unlock()
+  }
+
+  private func takeFlags() -> (stopped: Bool, paused: Bool, reset: Bool) {
+    flag.lock()
+    defer { flag.unlock() }
+    let reset = needReset
+    needReset = false
+    return (stopped, paused, reset)
+  }
+
+  /// 重新 hello。接收窗口清掉：Mac 可能已经把发送计数从头计。
+  private func prepareForPeer() {
+    gotVideo = false
+    replay.reset()
+    depacketizer.reset()
+    waitingKey = true
+    primed = false
+    haveSeq = false
+    expect = 0
+    lastFrameAt = 0
+    lossInterval = 0
+    lossTotal = 0
+    packetsInterval = 0
+    gapsUs.removeAll(keepingCapacity: true)
+    statsLock.lock()
+    videoBytes.removeAll(keepingCapacity: true)
+    decodedAt.removeAll(keepingCapacity: true)
+    decodeMs.removeAll(keepingCapacity: true)
+    statsLock.unlock()
+  }
+
+  private func loop() {
+    var fd: Int32 = -1
+    defer {
+      decoder.shutdown()
+      if fd >= 0 { close(fd) }
+      joined.signal()
+    }
+    var nextHello: CFAbsoluteTime = 0
+    var nextReport: CFAbsoluteTime = 0
+    var nextKey: CFAbsoluteTime = 0
+    var nextStats: CFAbsoluteTime = 0
+    var buf = [UInt8](repeating: 0, count: 2048)
+    while true {
+      let state = takeFlags()
+      if state.stopped { break }
+      if state.paused {
+        if fd >= 0 {
+          close(fd)
+          fd = -1
+        }
+        Thread.sleep(forTimeInterval: 0.05)
+        continue
+      }
+      if fd < 0 || state.reset {
+        if fd >= 0 { close(fd) }
+        fd = openSocket()
+        if fd < 0 {
+          Thread.sleep(forTimeInterval: 0.2)
+          continue
+        }
+        prepareForPeer()
+        let now = CFAbsoluteTimeGetCurrent()
+        nextHello = now
+        nextReport = now
+        nextKey = now
+        nextStats = now
+      }
+      let now = CFAbsoluteTimeGetCurrent()
+      if !gotVideo, now >= nextHello {
+        try? send(fd, deskKindHello, Data())
+        nextHello = now + 0.1
+      }
+      if now >= nextReport {
+        sendReport(fd)
+        nextReport = now + 0.1
+      }
+      // 进来时多半赶不上开头那个关键帧，参数集还没有，先要一张。丢包之后也走这里。
+      if waitingKey, now >= nextKey {
+        try? send(fd, deskKindKeyframe, Data())
+        nextKey = now + 0.2
+      }
+      if now >= nextStats {
+        emitStats(now)
+        nextStats = now + 0.2
+      }
+      let n = recv(fd, &buf, buf.count, 0)
+      if n <= 0 { continue }
+      let opened = buf.withUnsafeBytes { raw -> (UInt8, UInt64, Data)? in
+        let slice = UnsafeRawBufferPointer(start: raw.baseAddress, count: n)
+        return deskOpen(keys.toMobile, deskDirToMobile, slice)
+      }
+      guard let opened else { continue }
+      if !replay.accept(opened.1) { continue }
+      if opened.0 != deskKindVideo { continue }
+      gotVideo = true
+      noteVideo(bytes: n, now: CFAbsoluteTimeGetCurrent())
+      guard opened.2.count >= 21 else { continue }
+      let seq = beU16(opened.2, 19)
+      let arrival = CFAbsoluteTimeGetCurrent()
+      var late = false
+      if !haveSeq {
+        expect = seq &+ 1
+        haveSeq = true
+      } else if seq != expect {
+        let ahead = seq &- expect
+        // 延迟整形会让后发的包先到。回绕过来的旧包不算成几万个丢包。
+        if ahead > 0 && ahead < 32768 {
+          lossInterval += UInt32(ahead)
+          lossTotal += UInt32(ahead)
+          if !waitingKey {
+            waitingKey = true
+            // 下一圈马上要关键帧，不等上一个 200 ms 间隔走完。
+            nextKey = 0
+          }
+          expect = seq &+ 1
+        } else {
+          late = true
+        }
+      } else {
+        expect = expect &+ 1
+      }
+      packetsInterval += 1
+      if late { continue }
+      guard let unit = depacketizer.push(opened.2) else { continue }
+      let idr = unit.nals.contains { (16 ... 21).contains(nalType($0)) }
+      if waitingKey {
+        if unit.key || idr {
+          if primed { recoveries += 1 }
+          waitingKey = false
+          primed = true
+        } else {
+          continue
+        }
+      }
+      if lastFrameAt != 0 {
+        gapsUs.append(UInt32(min((arrival - lastFrameAt) * 1_000_000, Double(UInt32.max))))
+      }
+      lastFrameAt = arrival
+      decoder.push(unit)
+    }
+  }
+
+  private func sendReport(_ fd: Int32) {
+    let loss = lossInterval
+    let packets = packetsInterval
+    let highest = expect
+    let gap = medianGap()
+    lossInterval = 0
+    packetsInterval = 0
+    gapsUs.removeAll(keepingCapacity: true)
+    var raw = Data()
+    func put64(_ value: UInt64) {
+      var x = value.bigEndian
+      withUnsafeBytes(of: &x) { raw.append(contentsOf: $0) }
+    }
+    func put32(_ value: UInt32) {
+      var x = value.bigEndian
+      withUnsafeBytes(of: &x) { raw.append(contentsOf: $0) }
+    }
+    put64(UInt64(highest))
+    put32(loss)
+    put32(packets)
+    put64(0)
+    put64(0)
+    put32(gap)
+    try? send(fd, deskKindReport, raw)
+  }
+
+  private func medianGap() -> UInt32 {
+    guard !gapsUs.isEmpty else { return 0 }
+    let sorted = gapsUs.sorted()
+    return sorted[sorted.count / 2]
+  }
+
+  private func send(_ fd: Int32, _ kind: UInt8, _ plain: Data) throws {
+    sendN += 1
+    let packet = try deskSeal(keys.toMac, deskDirToMac, kind, sendN, plain)
+    var dest = peer
+    packet.withUnsafeBytes { raw in
+      _ = withUnsafePointer(to: &dest) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+          sendto(fd, raw.baseAddress, raw.count, 0, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+        }
+      }
+    }
+  }
+
+  private func noteVideo(bytes: Int, now: CFAbsoluteTime) {
+    statsLock.lock()
+    videoBytes.append((now, bytes))
+    videoBytes.removeAll { now - $0.0 > 2 }
+    statsLock.unlock()
+  }
+
+  private func noteDecoded(_ image: CVPixelBuffer, ms: Double) {
+    let now = CFAbsoluteTimeGetCurrent()
+    statsLock.lock()
+    decodedAt.append(now)
+    decodeMs.append((now, ms))
+    decodedAt.removeAll { now - $0 > 2 }
+    decodeMs.removeAll { now - $0.0 > 2 }
+    pictureWidth = CVPixelBufferGetWidth(image)
+    pictureHeight = CVPixelBufferGetHeight(image)
+    statsLock.unlock()
+    onFrame?(image)
+  }
+
+  private func emitStats(_ now: CFAbsoluteTime) {
+    statsLock.lock()
+    let bytes = videoBytes.filter { now - $0.0 <= 1 }.reduce(0) { $0 + $1.1 }
+    let frames = decodedAt.filter { now - $0 <= 1 }.count
+    let samples = decodeMs.filter { now - $0.0 <= 1 }.map(\.1).sorted()
+    let p50 = samples.isEmpty ? 0 : samples[samples.count / 2]
+    let width = pictureWidth
+    let height = pictureHeight
+    statsLock.unlock()
+    onStats?([
+      "fps": Double(frames),
+      "bitrate": Double(bytes) * 8,
+      "loss": Int(lossTotal),
+      "decodeMs": p50,
+      "recoveries": recoveries,
+      "width": width,
+      "height": height,
+      "video": gotVideo,
+    ])
+  }
+
+  private func openSocket() -> Int32 {
+    let fd = socket(AF_INET, SOCK_DGRAM, 0)
+    if fd < 0 { return -1 }
+    var addr = sockaddr_in()
+    addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    addr.sin_family = sa_family_t(AF_INET)
+    addr.sin_port = 0
+    addr.sin_addr.s_addr = INADDR_ANY
+    let bound = withUnsafePointer(to: &addr) { pointer in
+      pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    if bound != 0 {
+      close(fd)
+      return -1
+    }
+    var timeout = timeval(tv_sec: 0, tv_usec: 100_000)
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    // 默认接收缓冲很小，关键帧连续十几个包会在套接字里被丢掉。
+    var buffer: Int32 = 1 << 20
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &buffer, socklen_t(MemoryLayout<Int32>.size))
+    var one: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
+    return fd
+  }
+}
+
+func deskResolve(host: String, port: UInt16) -> sockaddr_in? {
+  var addr = sockaddr_in()
+  addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+  addr.sin_family = sa_family_t(AF_INET)
+  addr.sin_port = port.bigEndian
+  if host.withCString({ inet_pton(AF_INET, $0, &addr.sin_addr) }) == 1 {
+    return addr
+  }
+  var hints = addrinfo()
+  hints.ai_family = AF_INET
+  hints.ai_socktype = SOCK_DGRAM
+  var info: UnsafeMutablePointer<addrinfo>?
+  let rc = getaddrinfo(host, String(port), &hints, &info)
+  guard rc == 0, let info else { return nil }
+  defer { freeaddrinfo(info) }
+  guard let sa = info.pointee.ai_addr else { return nil }
+  return sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+}

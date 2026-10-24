@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
@@ -174,6 +176,19 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              if (Platform.isIOS)
+                Section(
+                  title: '实验',
+                  children: [
+                    _Toggle(
+                      title: '实验：看桌面',
+                      value: s.deskWatch,
+                      onChanged: (v) =>
+                          model.updateSettings((s) => s.deskWatch = v),
+                    ),
+                    const _Note('打开后，点首页的电脑名，菜单里有「看桌面」。画面走局域网，输入先显示在画面上。'),
+                  ],
+                ),
               Section(
                 title: '关于',
                 children: [

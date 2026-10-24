@@ -4,6 +4,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var qrChannel: FlutterMethodChannel?
+  private var desk: DeskPlugin?
 
   override func application(
     _ application: UIApplication,
@@ -24,6 +25,9 @@ import UIKit
       binaryMessenger: registrar.messenger()
     )
     qrChannel = channel
+    let desk = DeskPlugin(textures: registrar.textures(), messenger: registrar.messenger())
+    desk.install()
+    self.desk = desk
     channel.setMethodCallHandler { call, result in
       if call.method == "authorize" {
         QrCamera.authorize(result)

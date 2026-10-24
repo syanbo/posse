@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../chat/chat.dart';
+import '../desk/desk_page.dart';
 import '../files/files.dart';
 import '../git/git.dart';
 import '../pair/scan.dart';
@@ -355,6 +356,12 @@ class WorkspaceScreen extends StatelessWidget {
         onAdd: () {
           Navigator.of(context).pop();
           _addComputer(context);
+        },
+        onDesk: () {
+          Navigator.of(context).pop();
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => DeskPage(model: model)),
+          );
         },
       ),
     );
@@ -1077,10 +1084,15 @@ class _ConnectionLine extends StatelessWidget {
 
 /// 配对过的电脑：点一台切过去，长按改名或忘掉它，底下扫码再加一台。同一时间只连一台。
 class _ComputerSheet extends StatelessWidget {
-  const _ComputerSheet({required this.model, required this.onAdd});
+  const _ComputerSheet({
+    required this.model,
+    required this.onAdd,
+    required this.onDesk,
+  });
 
   final HiveAppModel model;
   final VoidCallback onAdd;
+  final VoidCallback onDesk;
 
   /// 长按一台电脑：改名或者忘掉它。
   Future<void> _actions(BuildContext context, SavedComputer computer) async {
@@ -1183,6 +1195,16 @@ class _ComputerSheet extends StatelessWidget {
                   child: Section(
                     inset: 50,
                     children: [
+                      if (Platform.isIOS && model.settings.deskWatch)
+                        RowTile(
+                          leading: Icon(
+                            Icons.desktop_mac_outlined,
+                            size: 24,
+                            color: c.accent,
+                          ),
+                          title: const Text('看桌面'),
+                          onTap: onDesk,
+                        ),
                       for (final computer in model.computers)
                         RowTile(
                           chevron: false,

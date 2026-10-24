@@ -34,4 +34,20 @@ void main() {
     expect(back.openMode, 'chat');
     expect(back.showReasoning, isFalse);
   });
+
+  test('desk watch stays off until the experiment switch is set', () async {
+    expect(AppSettings().deskWatch, isFalse);
+    expect(
+      AppSettings.decode(jsonEncode({'deskWatch': 'yes'})).deskWatch,
+      isFalse,
+    );
+    final store = MemorySettingsStore();
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: store,
+    );
+    model.updateSettings((s) => s.deskWatch = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(AppSettings.decode(store.data).deskWatch, isTrue);
+  });
 }
