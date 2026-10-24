@@ -50,6 +50,7 @@ final class DeskTexture: NSObject, FlutterTexture {
 
 final class DeskPlugin: NSObject, FlutterStreamHandler {
   private let textures: FlutterTextureRegistry
+  private let messenger: FlutterBinaryMessenger
   private let method: FlutterMethodChannel
   private let events: FlutterEventChannel
   private let control = DispatchQueue(label: "hive.desk.control")
@@ -62,6 +63,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
 
   init(textures: FlutterTextureRegistry, messenger: FlutterBinaryMessenger) {
     self.textures = textures
+    self.messenger = messenger
     method = FlutterMethodChannel(name: "hive/desk", binaryMessenger: messenger)
     events = FlutterEventChannel(name: "hive/desk/stats", binaryMessenger: messenger)
     super.init()
@@ -72,6 +74,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       self?.handle(call, result: result)
     }
     events.setStreamHandler(self)
+    DeskEdges.install(messenger: messenger)
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(enteredBackground),

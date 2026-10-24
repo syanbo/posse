@@ -93,3 +93,21 @@ class DeskReceiver {
 
   Future<void> resume() => _channel.invokeMethod<void>('resume');
 }
+
+/// 顶边和底边的系统手势延后。只在 iOS 插件里有实现。
+class DeskEdges {
+  DeskEdges({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('hive/desk/edges');
+
+  final MethodChannel _channel;
+
+  Future<void> set(bool defer) async {
+    try {
+      await _channel.invokeMethod<void>('set', defer);
+    } on MissingPluginException {
+      // 桌面插件只编进 iOS。
+    } on PlatformException {
+      // 根控制器还没接上时不挡离开页面。
+    }
+  }
+}

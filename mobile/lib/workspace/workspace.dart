@@ -359,9 +359,8 @@ class WorkspaceScreen extends StatelessWidget {
         },
         onDesk: () {
           Navigator.of(context).pop();
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => DeskPage(model: model)),
-          );
+          Navigator.of(context)
+              .push(DeskRoute(builder: (_) => DeskPage(model: model)));
         },
       ),
     );

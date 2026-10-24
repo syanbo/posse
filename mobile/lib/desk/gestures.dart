@@ -75,12 +75,16 @@ class DeskGestures {
     required this.height,
     required this.aspect,
     required this.onEvent,
+    this.onArm,
   });
 
   double width;
   double height;
   double aspect;
   final void Function(DeskEvent event) onEvent;
+
+  /// 长按满 300 ms、这一下即将变成拖动时调用一次。界面用来给轻触感。
+  final void Function()? onArm;
   final viewport = DeskViewport();
 
   final Map<int, _Finger> _fingers = {};
@@ -151,6 +155,7 @@ class DeskGestures {
     if (_one == _One.pending) {
       if (finger.distanceFromOrigin() <= deskSlop) return;
       if (_armed || time - finger.downAt >= deskLongPress) {
+        _armHold();
         _startDrag(finger, time);
       } else {
         _one = _One.panning;
@@ -202,7 +207,7 @@ class DeskGestures {
     if (_one == _One.pending && !_armed) {
       final finger = _fingers[_oneId];
       if (finger != null && time - finger.downAt >= deskLongPress) {
-        _armed = true;
+        _armHold();
       }
     }
     if (_one == _One.dragging) {
@@ -361,6 +366,12 @@ class DeskGestures {
     _lastTapScreen = screen;
     _lastTapTime = time;
     onEvent(DeskTapEvent(point, _clicks));
+  }
+
+  void _armHold() {
+    if (_armed) return;
+    _armed = true;
+    onArm?.call();
   }
 
   void _startDrag(_Finger finger, Duration time) {

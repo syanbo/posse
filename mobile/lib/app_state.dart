@@ -89,6 +89,8 @@ class AppSettings {
     this.deskLayout = false,
     this.deskZoom = 1,
     this.deskWatch = false,
+    this.deskLandscape = false,
+    this.deskGesturesSeen = false,
     this.phoneId = '',
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys();
@@ -111,6 +113,12 @@ class AppSettings {
   /// 实验：电脑菜单里显示「看桌面」。只在 iPhone 上露出开关。
   bool deskWatch;
 
+  /// 看桌面时锁横屏。离开页面恢复原来的方向，下次进来按这个锁。
+  bool deskLandscape;
+
+  /// 看桌面的手势提示已经关过。只出现一次。
+  bool deskGesturesSeen;
+
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
@@ -128,6 +136,8 @@ class AppSettings {
     'deskLayout': deskLayout,
     'deskZoom': deskZoom,
     'deskWatch': deskWatch,
+    'deskLandscape': deskLandscape,
+    'deskGesturesSeen': deskGesturesSeen,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
@@ -161,6 +171,12 @@ class AppSettings {
       final zoom = map['deskZoom'];
       if (zoom is num) out.deskZoom = zoom.toDouble().clamp(0.5, 2);
       if (map['deskWatch'] is bool) out.deskWatch = map['deskWatch'] as bool;
+      if (map['deskLandscape'] is bool) {
+        out.deskLandscape = map['deskLandscape'] as bool;
+      }
+      if (map['deskGesturesSeen'] is bool) {
+        out.deskGesturesSeen = map['deskGesturesSeen'] as bool;
+      }
       final phoneId = map['phoneId'];
       if (phoneId is String) out.phoneId = phoneId;
       final bar = map['barKeys'];

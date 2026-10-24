@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../ui/theme.dart';
+import 'chrome.dart';
 import 'mods.dart';
 
 /// 和终端快捷键栏同一排的高度：40 的按键加 1 的上边线。安全区由外面补。
@@ -20,6 +21,7 @@ class DeskKeyBar extends StatelessWidget {
     required this.onKey,
     required this.onModTap,
     required this.onModLock,
+    this.dense = false,
   });
 
   final DeskMods mods;
@@ -29,21 +31,26 @@ class DeskKeyBar extends StatelessWidget {
   final void Function(DeskMod mod) onModTap;
   final void Function(DeskMod mod) onModLock;
 
+  /// 横屏高度紧：更矮，底色半透明，让画面从键下面透出来。
+  final bool dense;
+
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
     const keys = ['Esc', 'Tab', '↑', '↓', '←', '→'];
+    final color = dense ? c.band.withValues(alpha: 0.86) : c.band;
     return Container(
       decoration: BoxDecoration(
-        color: c.band,
+        color: color,
         border: Border(top: BorderSide(color: c.line)),
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: deskKeyBarBody,
+          height: dense ? deskKeyBarDense : deskKeyBarBody,
           child: _DeskKeyStrip(
-            color: c.band,
+            color: color,
+            dense: dense,
             children: [
               _keyboard(c),
               for (final label in keys) _textKey(c, label, () => onKey(label)),
@@ -108,9 +115,14 @@ class DeskKeyBar extends StatelessWidget {
 
 /// 竖屏一屏放不下时，右侧渐隐表示还能往左滑。滑到头就去掉，最后一颗键要看全。
 class _DeskKeyStrip extends StatefulWidget {
-  const _DeskKeyStrip({required this.color, required this.children});
+  const _DeskKeyStrip({
+    required this.color,
+    required this.dense,
+    required this.children,
+  });
 
   final Color color;
+  final bool dense;
   final List<Widget> children;
 
   @override
@@ -143,7 +155,10 @@ class _DeskKeyStripState extends State<_DeskKeyStrip> {
         children: [
           ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            padding: EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: widget.dense ? 2 : 5,
+            ),
             itemCount: widget.children.length,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, i) => widget.children[i],

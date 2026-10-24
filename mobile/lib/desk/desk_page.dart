@@ -8,13 +8,15 @@ import 'package:flutter/services.dart';
 import '../app_state.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
-import '../ui/widgets.dart';
+import 'chrome.dart';
 import 'events.dart';
 import 'gestures.dart';
+import 'hint.dart';
 import 'key_bar.dart';
 import 'keys.dart';
 import 'mods.dart';
 import 'plugin.dart';
+import 'toolbar.dart';
 import 'viewport.dart';
 
 /// 留空和画面要能分开：画面是黑的，留空用很深的暖灰。
@@ -24,6 +26,15 @@ const _onPicture = Color(0xFFC8C6C1);
 
 const _markSize = 22.0;
 const _markFade = Duration(milliseconds: 280);
+
+/// 左缘拖动是画面平移，Listener 不参与手势竞争，和页面返回会一起发生。
+/// 返回放在工具条上。
+class DeskRoute extends MaterialPageRoute<void> {
+  DeskRoute({required super.builder});
+
+  @override
+  bool get popGestureEnabled => false;
+}
 
 /// 看 Mac 桌面。订阅协议第 4 步再接，这一步用固定密钥直接收 UDP。
 class DeskPage extends StatefulWidget {
@@ -55,8 +66,15 @@ class _DeskPageState extends State<DeskPage>
   final _marks = <_Mark>[];
   final _keyboard = FocusNode();
   final _input = TextEditingController();
+  final _chrome = DeskChrome();
+  final _edges = DeskEdges();
+  final _lease = Object();
+  final _anchorTop = ValueNotifier<double>(0.5);
+  final _anchorSide = ValueNotifier<double>(0.5);
+  final _zoomed = ValueNotifier<bool>(false);
 
   StreamSubscription<DeskStats>? _statsSub;
+  Timer? _barTimer;
   late final Ticker _ticker;
   final _frame = ValueNotifier<int>(0);
   final _statsTick = ValueNotifier<DeskStats>(const DeskStats());
@@ -69,10 +87,9 @@ class _DeskPageState extends State<DeskPage>
   int? _portNow;
   var _up = false;
   var _background = false;
-  var _revealed = false;
-  var _debug = true;
   var _debugOpen = false;
   var _keyboardUp = false;
+  var _stopped = false;
   var _gen = 0;
   SystemUiMode? _ui;
 
@@ -85,7 +102,8 @@ class _DeskPageState extends State<DeskPage>
       width: 1,
       height: 1,
       aspect: 16 / 9,
-      onEvent: _log.add,
+      onEvent: _onGesture,
+      onArm: _holdFeedback,
     );
     _watch.start();
     // 跟指针事件共用这块表。Ticker 自己的时间在停掉再开时会从零开始。
@@ -104,6 +122,9 @@ class _DeskPageState extends State<DeskPage>
     if (Platform.isIOS) {
       _statsSub = _receiver.stats().listen(_onStats);
     }
+    deskChromeLease.acquire(_lease);
+    unawaited(lockDeskOrientation(widget.model.settings.deskLandscape));
+    unawaited(_edges.set(true));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_ensure());
     });
@@ -116,13 +137,21 @@ class _DeskPageState extends State<DeskPage>
     _ticker.dispose();
     _frame.dispose();
     _statsTick.dispose();
+    _anchorTop.dispose();
+    _anchorSide.dispose();
+    _zoomed.dispose();
     unawaited(_statsSub?.cancel());
     _keyboard.removeListener(_keyboardChanged);
     _input.removeListener(_onTyped);
     _keyboard.dispose();
     _input.dispose();
+    _barTimer?.cancel();
     if (_ui != null) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    if (deskChromeLease.release(_lease)) {
+      unawaited(restoreDeskOrientation());
+      unawaited(_edges.set(false));
     }
     if (Platform.isIOS) unawaited(_receiver.stop());
     super.dispose();
@@ -166,7 +195,102 @@ class _DeskPageState extends State<DeskPage>
     return deskEndpoint(host, _port);
   }
 
-  bool get _immersive => _stats.video && !_background && !_revealed;
+  bool get _immersive => _stats.video && !_background;
+
+  void _onGesture(DeskEvent event) {
+    if (deskHapticFor(event)) unawaited(HapticFeedback.lightImpact());
+    _log.add(event);
+  }
+
+  void _holdFeedback() {
+    unawaited(HapticFeedback.lightImpact());
+  }
+
+  void _toggleBar() {
+    setState(() => _chrome.toggleExpanded(_now));
+    _armBarTimer();
+  }
+
+  void _pokeBar() {
+    _chrome.noteActivity(_now);
+    _armBarTimer();
+  }
+
+  void _armBarTimer() {
+    _barTimer?.cancel();
+    final from = _chrome.idleFrom;
+    if (!_chrome.expanded || from == null) return;
+    _barTimer = Timer(deskBarIdle, () {
+      if (!mounted || from != _chrome.idleFrom) return;
+      if (_chrome.collapseIfIdle(from + deskBarIdle)) setState(() {});
+    });
+  }
+
+  void _dragBar(double delta) {
+    final side = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final anchor = side ? _anchorSide : _anchorTop;
+    anchor.value = (anchor.value + delta).clamp(0.0, 1.0);
+    _chrome.noteActivity(_now);
+    _armBarTimer();
+  }
+
+  void _toggleOrientation() {
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final next = !landscape;
+    widget.model.updateSettings((s) => s.deskLandscape = next);
+    unawaited(lockDeskOrientation(next));
+    _pokeBar();
+    setState(() {});
+  }
+
+  void _toggleShortcuts() {
+    setState(() => _chrome.toggleShortcuts());
+    _pokeBar();
+  }
+
+  void _resetZoom() {
+    _pointer(() {
+      _gestures.viewport.zoom = deskMinZoom;
+      _gestures.viewport.panX = 0;
+      _gestures.viewport.panY = 0;
+    });
+    _pokeBar();
+  }
+
+  void _toggleDebug() {
+    setState(() => _debugOpen = !_debugOpen);
+    _pokeBar();
+  }
+
+  void _dismissHint() {
+    widget.model.updateSettings((s) => s.deskGesturesSeen = true);
+    setState(() {});
+  }
+
+  Future<void> _disconnect() async {
+    _pokeBar();
+    if (_stopped) {
+      unawaited(_ensure(force: true));
+      return;
+    }
+    _stopped = true;
+    final gen = ++_gen;
+    _stats = const DeskStats();
+    _statsTick.value = const DeskStats();
+    setState(() {
+      _fail = null;
+      _up = false;
+      _texture = null;
+    });
+    if (!Platform.isIOS) return;
+    try {
+      await _receiver.stop();
+    } on PlatformException {
+      // 已经停过。
+    }
+    if (!mounted || gen != _gen) return;
+  }
 
   void _followComputer() {
     if (!mounted || _custom) return;
@@ -207,6 +331,8 @@ class _DeskPageState extends State<DeskPage>
 
   /// 页面开着就一直收。hello 由原生层发到第一帧视频为止，Mac 那边何时开始推流都行。
   Future<void> _ensure({bool force = false}) async {
+    if (_stopped && !force) return;
+    if (force) _stopped = false;
     final host = _host;
     final port = _port;
     if (host == null || host.isEmpty) {
@@ -309,6 +435,8 @@ class _DeskPageState extends State<DeskPage>
 
   void _pointer(void Function() body) {
     body();
+    final zoomed = _gestures.viewport.zoom > deskMinZoom + 0.01;
+    if (_zoomed.value != zoomed) _zoomed.value = zoomed;
     _frame.value++;
     _syncTicker();
   }
@@ -399,6 +527,7 @@ class _DeskPageState extends State<DeskPage>
     } else {
       _keyboard.requestFocus();
     }
+    _pokeBar();
   }
 
   void _syncSystemUi() {
@@ -419,85 +548,135 @@ class _DeskPageState extends State<DeskPage>
         if (mounted) _syncSystemUi();
       });
     }
+    final landscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final keys = _chrome.keysVisible(_keyboardUp);
+    // 快捷键栏贴在系统键盘上方，页面跟着键盘缩短，不把键盖住。
     return Scaffold(
-      backgroundColor: colors.canvas,
-      appBar: _immersive
-          ? null
-          : AppBar(
-              title: const Text('桌面'),
-              actions: [
-                IconButton(
-                  tooltip: '更多',
-                  onPressed: _more,
-                  icon: const Icon(Icons.more_horiz_rounded),
-                ),
-              ],
-            ),
+      backgroundColor: deskLetterbox,
+      resizeToAvoidBottomInset: true,
       body: Column(
         children: [
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                _fitStage(constraints.maxWidth, constraints.maxHeight);
-                return _stage(colors, constraints.biggest);
-              },
-            ),
-          ),
-          DeskKeyBar(
-            mods: _mods,
-            keyboardUp: _keyboardUp,
-            onKeyboard: _toggleKeyboard,
-            onKey: _press,
-            onModTap: (mod) => setState(() => _mods.tap(mod)),
-            onModLock: (mod) => setState(() => _mods.lock(mod)),
+          Expanded(child: _stage(colors, landscape)),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.bottomCenter,
+            child: keys
+                ? DeskKeyBar(
+                    mods: _mods,
+                    keyboardUp: _keyboardUp,
+                    dense: landscape,
+                    onKeyboard: _toggleKeyboard,
+                    onKey: _press,
+                    onModTap: (mod) => setState(() => _mods.tap(mod)),
+                    onModLock: (mod) => setState(() => _mods.lock(mod)),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
     );
   }
 
-  Widget _stage(HiveColors colors, Size size) {
+  Widget _stage(HiveColors colors, bool landscape) {
     final banner = _banner();
-    // 状态栏藏起来之后 padding 会变 0，刘海还在，用 viewPadding 把返回键和胶囊让开。
+    // 状态栏藏起来之后 padding 会变 0，刘海还在，用 viewPadding 把胶囊让开。
     final pad = MediaQuery.viewPaddingOf(context);
+    final picturePad = deskPicturePadding(
+      landscape: landscape,
+      viewPadding: pad,
+    );
+    final top = pad.top < 8 ? 8.0 : pad.top;
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
         children: [
-          AnimatedBuilder(
-            animation: _frame,
-            builder: (context, _) => _pictureLayer(colors, size),
-          ),
-          Listener(
-            behavior: HitTestBehavior.opaque,
-            onPointerDown: _down,
-            onPointerMove: _move,
-            onPointerUp: _pointerUp,
-            onPointerCancel: _cancel,
-            child: const SizedBox.expand(),
-          ),
-          if (banner != null)
-            IgnorePointer(child: Center(child: _bannerView(colors, banner))),
-          if (_immersive)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: pad.top + 28,
-              child: _edge(pad.top),
+          const ColoredBox(color: deskLetterbox),
+          Padding(
+            padding: picturePad,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _fitStage(constraints.maxWidth, constraints.maxHeight);
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _frame,
+                      builder: (context, _) =>
+                          _pictureLayer(colors, constraints.biggest),
+                    ),
+                    Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _down,
+                      onPointerMove: _move,
+                      onPointerUp: _pointerUp,
+                      onPointerCancel: _cancel,
+                      child: const SizedBox.expand(),
+                    ),
+                    if (banner != null)
+                      IgnorePointer(
+                        child: Center(child: _bannerView(colors, banner)),
+                      ),
+                  ],
+                );
+              },
             ),
-          if (_immersive)
-            Positioned(left: 8 + pad.left, top: 4 + pad.top, child: _back()),
-          if (_debug)
+          ),
+          if (_debugOpen)
             Positioned(
-              top: (_immersive ? pad.top : 0) + 8,
-              right: 8 + pad.right,
+              top: landscape ? top : top + deskToolbarRow + 8,
+              left: 16 + pad.left,
+              right: 16 + pad.right,
               child: ValueListenableBuilder<DeskStats>(
                 valueListenable: _statsTick,
-                builder: (context, stats, _) =>
-                    _debugPanel(colors, size.height, stats),
+                builder: (context, stats, _) => Align(
+                  alignment: Alignment.topCenter,
+                  child: _debugPanel(colors, stats),
+                ),
               ),
             ),
+          Positioned(
+            top: top,
+            left: pad.left,
+            right: pad.right,
+            bottom: landscape ? (pad.bottom < 8 ? 8.0 : pad.bottom) : null,
+            child: ListenableBuilder(
+              listenable: widget.model,
+              builder: (context, _) {
+                return ValueListenableBuilder<DeskStats>(
+                  valueListenable: _statsTick,
+                  builder: (context, stats, _) => DeskBarSlot(
+                    anchor: landscape ? _anchorSide : _anchorTop,
+                    vertical: landscape,
+                    onRight: deskBarOnRight(left: pad.left, right: pad.right),
+                    onDrag: _dragBar,
+                    child: DeskToolbar(
+                      expanded: _chrome.expanded,
+                      latency: widget.model.latency,
+                      unresponsive: widget.model.unresponsive,
+                      fps: stats.fps,
+                      video: stats.video,
+                      landscape: landscape,
+                      keyboardUp: _keyboardUp,
+                      shortcuts: _chrome.shortcuts,
+                      zoomed: _zoomed,
+                      debugOpen: _debugOpen,
+                      stopped: _stopped,
+                      onToggle: _toggleBar,
+                      onBack: () => Navigator.maybePop(context),
+                      onOrientation: _toggleOrientation,
+                      onKeyboard: _toggleKeyboard,
+                      onShortcuts: _toggleShortcuts,
+                      onZoom: _resetZoom,
+                      onDebug: _toggleDebug,
+                      onDisconnect: () => unawaited(_disconnect()),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
           Positioned(
             left: -200,
             top: 0,
@@ -515,6 +694,8 @@ class _DeskPageState extends State<DeskPage>
               },
             ),
           ),
+          if (!widget.model.settings.deskGesturesSeen)
+            Positioned.fill(child: DeskGestureHint(onDismiss: _dismissHint)),
         ],
       ),
     );
@@ -551,6 +732,7 @@ class _DeskPageState extends State<DeskPage>
   (bool waiting, String text)? _banner() {
     if (_background && _up) return (false, '已暂停（后台）');
     if (_stats.video) return null;
+    if (_stopped) return (false, '已断开');
     if (_fail != null) return (false, '连不上：$_fail');
     final where = _where;
     if (!_up) {
@@ -610,143 +792,58 @@ class _DeskPageState extends State<DeskPage>
     );
   }
 
-  /// 只吃屏幕顶上这一条：从这里下滑是把顶栏叫出来，不该同时平移画面。
-  Widget _edge(double top) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerMove: (event) {
-        if (event.delta.dy > 8 && event.localPosition.dy < top + 36) {
-          setState(() => _revealed = true);
-        }
-      },
-      child: const SizedBox.expand(),
-    );
-  }
-
-  Widget _back() {
-    return Material(
-      color: const Color(0x59000000),
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: IconButton(
-        tooltip: '返回',
-        onPressed: () => Navigator.maybePop(context),
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-        color: const Color(0xE6FFFFFF),
-      ),
-    );
-  }
-
-  Widget _debugPanel(HiveColors colors, double height, DeskStats stats) {
+  Widget _debugPanel(HiveColors colors, DeskStats stats) {
     final view = _gestures.viewport;
     final headline =
         '${stats.fps.toStringAsFixed(0)} fps  ${deskBitrate(stats.bitrate)}';
+    final cap = MediaQuery.sizeOf(context).height * 0.45;
     return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: 260, maxHeight: height * 0.55),
+      constraints: BoxConstraints(maxWidth: 260, maxHeight: cap),
       child: Material(
+        key: const Key('desk-debug-panel'),
         color: colors.card.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(_debugOpen ? Rd.card : 999),
+        borderRadius: BorderRadius.circular(Rd.card),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => setState(() => _debugOpen = !_debugOpen),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: DefaultTextStyle(
-              style: statusLineStyle(colors.text),
-              child: _debugOpen
-                  ? SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(headline),
-                          Text('丢包 ${stats.loss}'),
-                          Text('解码 ${stats.decodeMs.toStringAsFixed(1)} ms'),
-                          Text('关键帧 ${stats.recoveries}'),
-                          Text(
-                            '缩放 ${view.zoom.toStringAsFixed(2)}'
-                            '  平移 ${view.panX.toStringAsFixed(2)},'
-                            ' ${view.panY.toStringAsFixed(2)}',
-                          ),
-                          for (final event in _log.events)
-                            Text(
-                              deskEventLine(event),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    )
-                  : Text(headline),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: DefaultTextStyle(
+            style: statusLineStyle(colors.text),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(headline),
+                Text('丢包 ${stats.loss}'),
+                Text('解码 ${stats.decodeMs.toStringAsFixed(1)} ms'),
+                Text('关键帧 ${stats.recoveries}'),
+                Text(
+                  '缩放 ${view.zoom.toStringAsFixed(2)}'
+                  '  平移 ${view.panX.toStringAsFixed(2)},'
+                  ' ${view.panY.toStringAsFixed(2)}',
+                ),
+                for (final event in _log.events)
+                  Text(
+                    deskEventLine(event),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.accent,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                    ),
+                    onPressed: () => unawaited(_connectSheet()),
+                    child: const Text('连接'),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Future<void> _more() async {
-    var debug = _debug;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) {
-        return StatefulBuilder(
-          builder: (context, setSheet) {
-            final c = HiveColors.of(sheet);
-            final where = _custom ? _where : null;
-            return SafeArea(
-              top: false,
-              child: Section(
-                inset: 16,
-                children: [
-                  RowTile(
-                    leading: Icon(
-                      Icons.tune_rounded,
-                      size: 22,
-                      color: c.accent,
-                    ),
-                    title: const Text('连接设置'),
-                    subtitle: where == null ? null : Text(where),
-                    onTap: () {
-                      Navigator.of(sheet).pop();
-                      unawaited(_connectSheet());
-                    },
-                  ),
-                  RowTile(
-                    chevron: false,
-                    leading: Icon(
-                      Icons.speed_rounded,
-                      size: 22,
-                      color: c.accent,
-                    ),
-                    title: const Text('调试'),
-                    subtitle: const Text('帧率、码率和输入事件'),
-                    trailing: HiveSwitch(
-                      value: debug,
-                      onChanged: (value) {
-                        setSheet(() => debug = value);
-                        setState(() {
-                          _debug = value;
-                          if (!value) _debugOpen = false;
-                        });
-                      },
-                    ),
-                    onTap: () {
-                      final value = !debug;
-                      setSheet(() => debug = value);
-                      setState(() {
-                        _debug = value;
-                        if (!value) _debugOpen = false;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
