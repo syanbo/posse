@@ -292,3 +292,54 @@ func TestQUICRelayTokenSurvivesRestart(t *testing.T) {
 		t.Fatalf("relay token %x after restart, was %x", again, first)
 	}
 }
+
+// 打洞：手机经中转连着，新开一个 socket 问出公网地址交给 Mac，Mac 回它中转出口的公网地址，
+// 手机向那里拨 QUIC，不经中转直接连上 Mac。本机没有 NAT，走的是同一套流程。
+func TestQUICPunch(t *testing.T) {
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	go deskrelay.NewServer(pc).Serve()
+	relay := pc.LocalAddr().String()
+
+	srv := newQUICServer(t)
+	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	defer ws.ws.CloseNow()
+	q := quicInfoOf(t, ws)
+	viaRelay := handshakePhone(t, dialQUIC(t, relay, q.RelayToken), parseTestOffer(t, info))
+	defer viaRelay.ws.CloseNow()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	prep, err := mquic.Prepare(ctx, relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := viaRelay.next(viaRelay.call("hive.punch", map[string]any{"addr": prep.Public.String()}))
+	mac, _ := result(t, m)["addr"].(string)
+	if mac == "" || mac == relay {
+		t.Fatalf("mac address %q", mac)
+	}
+	c, err := prep.Dial(ctx, mac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	direct := handshakePhone(t, &testQUICWire{quicWire{c: c}}, parseTestOffer(t, info))
+	defer direct.ws.CloseNow()
+	if c.RemoteAddr().String() != mac {
+		t.Fatalf("connected to %v, want %s", c.RemoteAddr(), mac)
+	}
+	result(t, direct.next(direct.call("runtime.ping", map[string]any{})))
+	// 地址不对时报错，不去打洞
+	bad := viaRelay.next(viaRelay.call("hive.punch", map[string]any{"addr": "nope"}))
+	if bad["ok"] == true {
+		t.Fatal("punch accepted a bad address")
+	}
+}

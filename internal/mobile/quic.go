@@ -204,6 +204,35 @@ func (s *Server) serveQUIC(qc *quic.Conn) {
 	}
 }
 
+// PunchInfo 是 hive.punch 的回复：这台手机的中转出口在公网上的地址，手机向它打洞并拨号。
+type PunchInfo struct {
+	Addr string `json:"addr"`
+}
+
+// punch 是打洞的 Mac 一侧：手机经中转连着时，新开一个 socket 问出自己的公网地址 phone 发来；
+// 这边问出这台手机中转出口的公网地址回给它，同时从这个出口向 phone 连发打洞包。出口上本来就有
+// QUIC 在听，手机打通后直接拨进来，常驻进程照常接受。
+func (s *Server) punch(device, phone string) (PunchInfo, error) {
+	peer, err := net.ResolveUDPAddr("udp4", phone)
+	if err != nil || peer.IP == nil || peer.Port == 0 {
+		return PunchInfo{}, errorf("bad_params", "phone address %q", phone)
+	}
+	s.q.mu.Lock()
+	p := s.relayLocked(device)
+	s.q.mu.Unlock()
+	if p == nil {
+		return PunchInfo{}, errorf("unavailable", "no relay configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	pub, err := p.rc.Public(ctx, true)
+	if err != nil {
+		return PunchInfo{}, errorf("unavailable", "%v", err)
+	}
+	go p.rc.PunchTo(peer, mquic.PunchFor)
+	return PunchInfo{Addr: pub.String()}, nil
+}
+
 // QUICInfo 是 hive.quic 的回复：手机按它拨 QUIC。
 type QUICInfo struct {
 	Port  int      `json:"port"`

@@ -761,6 +761,75 @@ void main() {
       timeout: const Timeout(Duration(seconds: 90)),
     );
 
+    test('a relay connection punches through to a direct one', () async {
+      final relayUrl = quicUrlsOf(quicInfo).last;
+      String? told;
+      final link =
+          HiveLink(
+              offer: offer,
+              connect: (url, cancel) async {
+                if (url == lanUrl) throw StateError('not home');
+                final (client, host) = pipePair();
+                unawaited(
+                  _host(host, hostKeys, offer.deviceToken, quic: quicInfo),
+                );
+                return client;
+              },
+            )
+            ..quicUrls = quicUrlsOf(quicInfo)
+            ..punch = (relay, exchange) async {
+              expect(relay, relayUrl);
+              // 电脑那边经 hive.punch 换回它的地址；测试用的电脑把这个方法当成未知方法回空结果
+              told = 'asked';
+              await exchange('198.51.100.7:5000').catchError((Object _) => '');
+              final (client, host) = pipePair();
+              unawaited(
+                _host(host, hostKeys, offer.deviceToken, quic: quicInfo),
+              );
+              return (client as ByteSocket, '203.0.113.20:61000');
+            };
+      final relayed = await link.start();
+      expect(link.url, relayUrl);
+      final moved = await link.connections.first.timeout(
+        const Duration(seconds: 3),
+      );
+      expect(told, 'asked');
+      expect(identical(moved, relayed), isFalse);
+      expect(link.url, punchedUrl('203.0.113.20:61000'));
+      expect(hostOf(link.url), '直连 · QUIC');
+      expect(isRelayQuicUrl(link.url!), isFalse);
+      await expectLater(moved.call('runtime.ping', const {}), completes);
+      await link.close();
+    });
+
+    test('a failed punch stays on the relay', () async {
+      final relayUrl = quicUrlsOf(quicInfo).last;
+      var punches = 0;
+      final link =
+          HiveLink(
+              offer: offer,
+              connect: (url, cancel) async {
+                if (url == lanUrl) throw StateError('not home');
+                final (client, host) = pipePair();
+                unawaited(
+                  _host(host, hostKeys, offer.deviceToken, quic: quicInfo),
+                );
+                return client;
+              },
+            )
+            ..quicUrls = quicUrlsOf(quicInfo)
+            ..punch = (relay, exchange) async {
+              punches++;
+              throw StateError('symmetric nat');
+            };
+      final relayed = await link.start();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(punches, 1);
+      expect(identical(link.rpc, relayed), isTrue);
+      expect(link.url, relayUrl);
+      await link.close();
+    });
+
     test('a failed upgrade keeps the websocket and its reconnects', () async {
       var quicTries = 0;
       final wsHosts = <ByteSocket>[];

@@ -259,6 +259,7 @@ String? hostOf(String? url) {
   final uri = Uri.tryParse(url);
   if (uri == null || uri.host.isEmpty) return null;
   if (isRelayQuicUrl(url)) return '经中转 · QUIC';
+  if (isPunchedQuicUrl(url)) return '直连 · QUIC';
   final host = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
   return isQuicUrl(url) ? '$host · QUIC' : host;
 }

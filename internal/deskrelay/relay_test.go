@@ -74,3 +74,28 @@ func TestDataBytesNeverLookLikeControl(t *testing.T) {
 		}
 	}
 }
+
+// 探测回的是服务器看到的来源地址，回包不比请求大；打洞包不登记、不转发。
+func TestProbeReportsSourceAddress(t *testing.T) {
+	srvConn := listen(t)
+	go NewServer(srvConn).Serve()
+	srv := srvConn.LocalAddr().(*net.UDPAddr)
+	c := listen(t)
+	c.WriteToUDP(Probe(), srv)
+	reply := read(t, c)
+	if len(reply) > ProbeLen {
+		t.Fatalf("reply %d bytes, larger than the probe", len(reply))
+	}
+	got, ok := ParseProbeReply(reply)
+	if want := c.LocalAddr().(*net.UDPAddr).AddrPort(); !ok || got != want {
+		t.Fatalf("probe says %v (%v), want %v", got, ok, want)
+	}
+	if !IsControl(Punch()) {
+		t.Fatal("punch is not a control packet")
+	}
+	c.WriteToUDP(Punch(), srv)
+	c.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, err := c.Read(make([]byte, 64)); err == nil {
+		t.Fatal("server answered a punch packet")
+	}
+}

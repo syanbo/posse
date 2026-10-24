@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -71,21 +72,24 @@ func Dial(ctx context.Context, addr string, relayToken []byte) (*Conn, error) {
 		return nil, err
 	}
 	var pc net.PacketConn = udp
-	var relay *RelayConn
 	if len(relayToken) > 0 {
-		relay = NewRelayConn(udp, raddr, deskrelay.RolePhone, relayToken, relayEvery)
+		relay := NewRelayConn(udp, raddr, deskrelay.RolePhone, relayToken, relayEvery)
 		pc = relay
+		if err := waitAck(ctx, relay); err != nil {
+			pc.Close()
+			return nil, err
+		}
 	}
+	return dialOver(ctx, pc, raddr)
+}
+
+// dialOver 在 pc 上拨 QUIC、开流。连接结束时关掉 pc，失败时也关。
+func dialOver(ctx context.Context, pc net.PacketConn, raddr *net.UDPAddr) (*Conn, error) {
 	tr := &quic.Transport{Conn: pc}
 	fail := func(err error) (*Conn, error) {
 		tr.Close()
 		pc.Close()
 		return nil, err
-	}
-	if relay != nil {
-		if err := waitAck(ctx, relay); err != nil {
-			return fail(err)
-		}
 	}
 	qc, err := tr.Dial(ctx, raddr, ClientTLS(), Config())
 	if err != nil {
@@ -104,6 +108,50 @@ func Dial(ctx context.Context, addr string, relayToken []byte) (*Conn, error) {
 	}()
 	return c, nil
 }
+
+// Prepared 是手机打洞用的新 socket，已经向中转问出了它在公网上的地址（Public），
+// 交给 Mac 后由 Dial 向 Mac 的公网地址打洞并拨号。
+type Prepared struct {
+	rc     *RelayConn
+	Public netip.AddrPort
+}
+
+// Prepare 开一个 socket，经 relay 探测它的公网地址。
+func Prepare(ctx context.Context, relay string) (*Prepared, error) {
+	raddr, err := net.ResolveUDPAddr("udp4", relay)
+	if err != nil {
+		return nil, err
+	}
+	udp, err := net.ListenUDP("udp4", nil)
+	if err != nil {
+		return nil, err
+	}
+	rc := NewProbeConn(udp, raddr)
+	pub, err := rc.Public(ctx, false)
+	if err != nil {
+		rc.Close()
+		return nil, err
+	}
+	return &Prepared{rc: rc, Public: pub}, nil
+}
+
+// Dial 向 peer（Mac 中转出口的公网地址）连发打洞包，同时拨 QUIC。Mac 那边同时在向 Public 打洞，
+// 两边的 NAT 都开了口子后握手才过得去；打不通时 ctx 到期失败。之后 socket 归返回的连接。
+func (p *Prepared) Dial(ctx context.Context, peer string) (*Conn, error) {
+	paddr, err := net.ResolveUDPAddr("udp4", peer)
+	if err != nil {
+		p.rc.Close()
+		return nil, err
+	}
+	go p.rc.PunchTo(paddr, PunchFor)
+	return dialOver(ctx, p.rc, paddr)
+}
+
+// Close 放弃这个 socket（没调 Dial 时）。
+func (p *Prepared) Close() { p.rc.Close() }
+
+// PunchFor 是两边打洞包连发多久：比手机打洞拨号的时限长一点。
+const PunchFor = 4 * time.Second
 
 // waitAck 等中转回执。Transport 还没开始读 socket，自己读。
 func waitAck(ctx context.Context, r *RelayConn) error {

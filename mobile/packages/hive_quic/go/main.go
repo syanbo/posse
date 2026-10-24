@@ -26,11 +26,12 @@ import (
 
 // 回调的 kind。数据由 Go 用 malloc 分配，Dart 拷走后调 hq_free。
 const (
-	evOpen   = 1
-	evText   = 2
-	evBinary = 3
-	evClosed = 4 // 数据是原因
-	evFailed = 5 // 拨号失败，数据是错误
+	evOpen     = 1
+	evText     = 2
+	evBinary   = 3
+	evClosed   = 4 // 数据是原因
+	evFailed   = 5 // 拨号失败，数据是错误
+	evPrepared = 6 // hq_prepare 问出了公网地址，数据是 "ip:端口"
 )
 
 // sendQueue 是还没写出去的消息上限。超过说明连接早就堵死了，断开让上层重连。
@@ -49,6 +50,7 @@ type entry struct {
 
 	mu     sync.Mutex
 	c      *mquic.Conn
+	prep   *mquic.Prepared // hq_prepare 之后、hq_dial_prepared 之前
 	closed bool
 
 	out  chan outMsg
@@ -89,23 +91,85 @@ func (e *entry) finish(kind int, msg string) {
 
 //export hq_dial
 func hq_dial(addr *C.char, token *C.uint8_t, tokenLen C.int32_t, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
-	e := &entry{id: nextID.Add(1), cb: cb, out: make(chan outMsg, sendQueue), done: make(chan struct{})}
 	a := C.GoString(addr)
 	var tok []byte
 	if tokenLen > 0 {
 		tok = C.GoBytes(unsafe.Pointer(token), C.int(tokenLen))
 	}
+	e, ctx := newEntry(cb, timeoutMs)
+	go e.run(ctx, a, tok)
+	return C.int64_t(e.id)
+}
+
+func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
+	e := &entry{id: nextID.Add(1), cb: cb, out: make(chan outMsg, sendQueue), done: make(chan struct{})}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	e.cancel = cancel
 	connMu.Lock()
 	conns[e.id] = e
 	connMu.Unlock()
-	go e.run(ctx, a, tok)
+	return e, ctx
+}
+
+// hq_prepare 是打洞的第一步：开一个 socket，经中转 relay 问出它的公网地址，用 evPrepared 报回。
+// Dart 把地址交给 Mac（hive.punch），拿到 Mac 的地址后调 hq_dial_prepared；不用了调 hq_close。
+//
+//export hq_prepare
+func hq_prepare(relay *C.char, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {
+	e, ctx := newEntry(cb, timeoutMs)
+	r := C.GoString(relay)
+	go func() {
+		p, err := mquic.Prepare(ctx, r)
+		e.cancel()
+		if err != nil {
+			e.finish(evFailed, err.Error())
+			return
+		}
+		e.mu.Lock()
+		if e.closed {
+			e.mu.Unlock()
+			p.Close()
+			e.finish(evClosed, "closed")
+			return
+		}
+		e.prep = p
+		e.mu.Unlock()
+		e.emit(evPrepared, []byte(p.Public.String()))
+	}()
 	return C.int64_t(e.id)
 }
 
+// hq_dial_prepared 在 hq_prepare 开的 socket 上向 peer 打洞并拨号，之后和 hq_dial 的连接一样用。
+//
+//export hq_dial_prepared
+func hq_dial_prepared(id C.int64_t, peer *C.char, timeoutMs C.int32_t) {
+	e := lookup(id)
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	p := e.prep
+	e.prep = nil
+	e.mu.Unlock()
+	if p == nil {
+		e.finish(evFailed, "not prepared")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
+	e.mu.Lock()
+	e.cancel = cancel
+	e.mu.Unlock()
+	a := C.GoString(peer)
+	go e.serve(ctx, func(ctx context.Context) (*mquic.Conn, error) { return p.Dial(ctx, a) })
+}
+
 func (e *entry) run(ctx context.Context, addr string, token []byte) {
-	c, err := mquic.Dial(ctx, addr, token)
+	e.serve(ctx, func(ctx context.Context) (*mquic.Conn, error) { return mquic.Dial(ctx, addr, token) })
+}
+
+// serve 拨号，连上后报 evOpen、开始收发，直到连接结束。
+func (e *entry) serve(ctx context.Context, dial func(context.Context) (*mquic.Conn, error)) {
+	c, err := dial(ctx)
 	e.cancel()
 	if err != nil {
 		e.finish(evFailed, err.Error())
@@ -185,10 +249,16 @@ func hq_close(id C.int64_t, code C.int32_t, reason *C.char) {
 	}
 	e.mu.Lock()
 	e.closed = true
-	c := e.c
+	c, p, cancel := e.c, e.prep, e.cancel
+	e.prep = nil
 	e.mu.Unlock()
+	if p != nil {
+		p.Close()
+		e.finish(evClosed, "closed")
+		return
+	}
 	if c == nil {
-		e.cancel()
+		cancel()
 		return
 	}
 	msg := ""

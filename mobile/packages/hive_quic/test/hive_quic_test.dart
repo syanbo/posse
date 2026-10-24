@@ -9,13 +9,23 @@ import 'package:test/test.dart';
 void main() {
   late Process echo;
   late int port;
+  late int relayPort;
+  late StreamIterator<String> lines;
 
   setUpAll(() async {
     final repo = Directory.current.uri.resolve('../../../').toFilePath();
-    echo = await Process.start('go', ['run', './mobile/packages/hive_quic/test/echo'], workingDirectory: repo);
+    echo = await Process.start('go', [
+      'run',
+      './mobile/packages/hive_quic/test/echo',
+    ], workingDirectory: repo);
     unawaited(stderr.addStream(echo.stderr));
-    final line = await echo.stdout.transform(utf8.decoder).transform(const LineSplitter()).first;
-    port = int.parse(line.trim());
+    lines = StreamIterator(
+      echo.stdout.transform(utf8.decoder).transform(const LineSplitter()),
+    );
+    await lines.moveNext();
+    final ports = lines.current.trim().split(' ');
+    port = int.parse(ports[0]);
+    relayPort = int.parse(ports[1]);
   });
 
   tearDownAll(() => echo.kill());
@@ -36,7 +46,10 @@ void main() {
     await done.future.timeout(const Duration(seconds: 10));
     expect(got.first.binary, isTrue);
     expect(got.first.data.length, big.length);
-    expect([for (final m in got.skip(1)) utf8.decode(m.data)], [for (var i = 0; i < 100; i++) 'm$i']);
+    expect(
+      [for (final m in got.skip(1)) utf8.decode(m.data)],
+      [for (var i = 0; i < 100; i++) 'm$i'],
+    );
     conn.close();
   });
 
@@ -44,11 +57,39 @@ void main() {
     final conn = await QuicConnection.dial('127.0.0.1', port);
     final msgs = <String>[];
     final ended = Completer<void>();
-    conn.messages.listen((m) => msgs.add(utf8.decode(m.data)), onDone: ended.complete);
+    conn.messages.listen(
+      (m) => msgs.add(utf8.decode(m.data)),
+      onDone: ended.complete,
+    );
     conn.send(quicText, Uint8List.fromList(utf8.encode('close')));
     await ended.future.timeout(const Duration(seconds: 5));
     expect(msgs, ['bye']);
-    expect(() => conn.send(quicText, Uint8List(1)), throwsA(isA<QuicException>()));
+    expect(
+      () => conn.send(quicText, Uint8List(1)),
+      throwsA(isA<QuicException>()),
+    );
+  });
+
+  test('punches through to the peer the relay saw', () async {
+    final punch = await QuicConnection.prepare('127.0.0.1', relayPort);
+    expect(punch.public, startsWith('127.0.0.1:'));
+    echo.stdin.writeln('punch ${punch.public}');
+    await lines.moveNext();
+    final peer = lines.current.trim();
+    expect(peer, isNot('127.0.0.1:$port'));
+    final conn = await punch.dial(peer);
+    final got = conn.messages.first;
+    conn.send(quicText, Uint8List.fromList(utf8.encode('hi')));
+    expect(
+      utf8.decode((await got.timeout(const Duration(seconds: 5))).data),
+      'hi',
+    );
+    conn.close();
+  });
+
+  test('a prepared socket can be dropped without dialing', () async {
+    final punch = await QuicConnection.prepare('127.0.0.1', relayPort);
+    punch.close();
   });
 
   test('unanswered relay fails fast', () async {

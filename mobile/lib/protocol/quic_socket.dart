@@ -13,6 +13,13 @@ const quicScheme = 'hquic';
 
 bool isQuicUrl(String url) => url.startsWith('$quicScheme://');
 
+/// 打洞直连上的地址：电脑中转出口的公网地址。只用来显示，不存、不重连（每次要先经中转重新打洞）。
+String punchedUrl(String peer) => '$quicScheme://$peer?punched=1';
+
+bool isPunchedQuicUrl(String url) =>
+    isQuicUrl(url) &&
+    (Uri.tryParse(url)?.queryParameters.containsKey('punched') ?? false);
+
 /// 经中转的 QUIC 地址。
 bool isRelayQuicUrl(String url) =>
     isQuicUrl(url) &&
@@ -80,6 +87,22 @@ class QuicByteSocket implements ByteSocket {
 
   @override
   Future<void> close() async => _conn.close();
+}
+
+/// [QuicPuncher] 的实现，见 [QuicConnection.prepare]。
+Future<(ByteSocket, String)> punchQuic(
+  String relayUrl,
+  Future<String> Function(String mine) exchange,
+) async {
+  final relay = Uri.parse(relayUrl);
+  final punch = await QuicConnection.prepare(relay.host, relay.port);
+  try {
+    final peer = await exchange(punch.public);
+    return (QuicByteSocket(await punch.dial(peer)), peer);
+  } catch (_) {
+    punch.close();
+    rethrow;
+  }
 }
 
 /// 按地址的写法挑传输。

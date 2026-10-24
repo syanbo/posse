@@ -17,6 +17,13 @@ typedef SocketConnector = Future<ByteSocket> Function(
   CancelToken cancel,
 );
 
+/// 打洞：经 [relayUrl] 的中转问出手机这边的公网地址，交给 [exchange]（经现有连接问电脑）换回电脑的
+/// 公网地址，向它打洞拨号。返回连上的套接字和电脑的地址。
+typedef QuicPuncher = Future<(ByteSocket, String)> Function(
+  String relayUrl,
+  Future<String> Function(String mine) exchange,
+);
+
 /// 和一台桌面握手：hello、ready、auth，然后声明 Hive 能力。
 Future<PhoneRpc> handshake({
   required ByteSocket socket,
@@ -151,6 +158,9 @@ class HiveLink {
   /// 电脑给了新的 QUIC 地址（每次连上都问一次），调用方存下来。
   void Function(List<String> urls)? onQuicUrls;
 
+  /// 经中转连上之后打洞直连，见 [QuicPuncher]。为空时不打洞（测试、没有原生库的平台）。
+  QuicPuncher? punch;
+
   /// 知道 QUIC 地址时 WebSocket 晚这么久才开始连：两条都通时留下 QUIC，QUIC 不通时最多慢这么多。
   Duration quicHeadStart = const Duration(seconds: 2);
 
@@ -227,11 +237,54 @@ class HiveLink {
     lastError = null;
     if (!_ready.isClosed) _ready.add(won.value);
     onActivity?.call();
+    if (isRelayQuicUrl(won.url)) unawaited(_punch(won.value, won.url, epoch));
     if (drain) {
       unawaited(previous?.closeWhenIdle());
     } else {
       await previous?.close();
     }
+  }
+
+  /// 经中转连着时打洞：手机新开一个 socket 问出公网地址，经 hive.punch 交给电脑、换回电脑的地址，
+  /// 两边同时打洞后直接拨 QUIC。打通就换过去，旧的中转连接等订阅迁走再关；打不通什么都不变。
+  Future<void> _punch(PhoneRpc via, String relayUrl, int epoch) async {
+    final puncher = punch;
+    if (puncher == null) return;
+    final ByteSocket socket;
+    final String peer;
+    try {
+      (socket, peer) = await puncher(relayUrl, (mine) async {
+        final result = await via.call('hive.punch', {
+          'addr': mine,
+        }, timeout: const Duration(seconds: 5));
+        final addr = result['addr'];
+        if (addr is! String || addr.isEmpty) throw StateError('no address');
+        return addr;
+      });
+    } catch (_) {
+      return;
+    }
+    if (_closed || epoch != _epoch || !identical(rpc, via)) {
+      unawaited(socket.close());
+      return;
+    }
+    final PhoneRpc direct;
+    try {
+      direct = await handshake(
+        socket: socket,
+        offer: offer,
+        cancel: CancelToken(),
+        phone: phone?.call(),
+      ).timeout(attemptTimeout);
+    } catch (_) {
+      unawaited(socket.close().catchError((Object _) {}));
+      return;
+    }
+    if (_closed || epoch != _epoch || !identical(rpc, via)) {
+      await direct.close();
+      return;
+    }
+    await _adopt(RaceResult(punchedUrl(peer), direct), ++_epoch, drain: true);
   }
 
   /// 连上之后问电脑要 QUIC 地址，记下来（[onQuicUrls] 存盘，冷启动直接拨）。[upgrade]（这次走的是

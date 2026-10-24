@@ -379,15 +379,19 @@ class HiveAppModel extends ChangeNotifier {
     PairingStore? store,
     SettingsStore? settingsStore,
     SocketConnector? connect,
+    QuicPuncher? punch,
     this.networkSignatures,
   }) : store = store ?? PrefsPairingStore(),
        settingsStore = settingsStore ?? PrefsSettingsStore(),
-       connect = connect ?? connectAny;
+       connect = connect ?? connectAny,
+       // 换了连接器（测试）时默认不打洞：打洞要真的 UDP
+       punch = punch ?? (connect == null ? punchQuic : null);
 
   final PairingStore store;
   final SettingsStore settingsStore;
   var settings = AppSettings();
   final SocketConnector connect;
+  final QuicPuncher? punch;
   final Stream<String>? networkSignatures;
 
   /// 第一次配对时连不上，每隔 [firstConnectRetry] 重试，App 在前台累计 [firstConnectWindow] 为止，见 [_start]。
@@ -499,6 +503,7 @@ class HiveAppModel extends ChangeNotifier {
       created.quicUrls = List.of(
         saved.computers.where((c) => c.id == id).firstOrNull?.quic ?? const [],
       );
+      created.punch = punch;
       created.onQuicUrls = (urls) {
         final computer = saved.computers.where((c) => c.id == id).firstOrNull;
         if (computer == null || listEquals(computer.quic, urls)) return;

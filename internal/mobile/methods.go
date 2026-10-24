@@ -417,6 +417,17 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
+	case "hive.punch":
+		var a struct {
+			Addr string `json:"addr"`
+		}
+		json.Unmarshal(p, &a)
+		// 探测要等中转回一趟，不占住这条连接的请求队列
+		go func() {
+			info, err := s.punch(c.device.ID, a.Addr)
+			c.replyOrFail(req.ID, info, err)
+		}()
+		return nil
 	case "hive.quic":
 		info, err := s.quicInfo(c.device.ID)
 		c.replyOrFail(req.ID, info, err)

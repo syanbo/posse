@@ -1,8 +1,11 @@
 package mquic
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,16 +13,18 @@ import (
 	"hive/internal/deskrelay"
 )
 
-// RelayConn 是交给 quic-go 的 UDP socket：定时向中转登记，收包时滤掉中转的回执。
+// RelayConn 是交给 quic-go 的 UDP socket：定时向中转登记（不登记的只用来探测和打洞），
+// 收包时滤掉所有控制包：中转的回执、探测的回包、对方的打洞包。
 // 不嵌入 *net.UDPConn：quic-go 见到 ReadMsgUDP 会绕过 ReadFrom 直接读，回执就漏给它了。
 type RelayConn struct {
 	conn  *net.UDPConn
 	relay *net.UDPAddr
 	reg   []byte
 
-	done  chan struct{}
-	once  sync.Once
-	acked atomic.Bool
+	done   chan struct{}
+	once   sync.Once
+	acked  atomic.Bool
+	public atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
 }
 
 // NewRelayConn 开始向 relay 登记，每隔 every 重发一次。
@@ -32,6 +37,11 @@ func NewRelayConn(conn *net.UDPConn, relay *net.UDPAddr, role byte, token []byte
 	}
 	go r.keepalive(every)
 	return r
+}
+
+// NewProbeConn 不登记，只用来向 relay 探测公网地址、向对方打洞。
+func NewProbeConn(conn *net.UDPConn, relay *net.UDPAddr) *RelayConn {
+	return &RelayConn{conn: conn, relay: relay, done: make(chan struct{})}
 }
 
 func (r *RelayConn) keepalive(every time.Duration) {
@@ -61,13 +71,72 @@ func (r *RelayConn) ReadFrom(b []byte) (int, net.Addr, error) {
 		if err != nil {
 			return n, addr, err
 		}
-		if deskrelay.IsControl(b[:n]) && addr.Port == r.relay.Port && addr.IP.Equal(r.relay.IP) {
-			if deskrelay.IsAck(b[:n], r.reg[4]) {
-				r.acked.Store(true)
-			}
+		if deskrelay.IsControl(b[:n]) {
+			r.control(b[:n], addr)
 			continue
 		}
 		return n, addr, nil
+	}
+}
+
+func (r *RelayConn) control(b []byte, from *net.UDPAddr) {
+	if from.Port != r.relay.Port || !from.IP.Equal(r.relay.IP) {
+		return // 对方的打洞包
+	}
+	if r.reg != nil && deskrelay.IsAck(b, r.reg[4]) {
+		r.acked.Store(true)
+	}
+	if a, ok := deskrelay.ParseProbeReply(b); ok {
+		r.public.Store(&a)
+	}
+}
+
+// Public 向中转探测这个 socket 在公网上的地址。socket 要有人在读（交给了 quic-go，或者 reading 为 false
+// 时这里自己读）。
+func (r *RelayConn) Public(ctx context.Context, reading bool) (netip.AddrPort, error) {
+	r.public.Store(nil)
+	probe := deskrelay.Probe()
+	buf := make([]byte, 64)
+	tick := time.NewTicker(300 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		if _, err := r.conn.WriteToUDP(probe, r.relay); err != nil {
+			return netip.AddrPort{}, err
+		}
+		next := time.Now().Add(300 * time.Millisecond)
+		for time.Now().Before(next) {
+			if a := r.public.Load(); a != nil {
+				return *a, nil
+			}
+			if ctx.Err() != nil {
+				return netip.AddrPort{}, fmt.Errorf("mquic: relay %s did not answer the probe", r.relay)
+			}
+			if reading {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			r.conn.SetReadDeadline(next)
+			if n, from, err := r.conn.ReadFromUDP(buf); err == nil && deskrelay.IsControl(buf[:n]) {
+				r.control(buf[:n], from)
+			}
+			r.conn.SetReadDeadline(time.Time{})
+		}
+	}
+}
+
+// PunchTo 在 d 之内每 50ms 向 peer 发一个打洞包，让这边的 NAT 放进对方的包。
+func (r *RelayConn) PunchTo(peer *net.UDPAddr, d time.Duration) {
+	punch := deskrelay.Punch()
+	end := time.Now().Add(d)
+	for time.Now().Before(end) {
+		if _, err := r.conn.WriteToUDP(punch, peer); errors.Is(err, net.ErrClosed) {
+			return
+		}
+		select {
+		case <-r.done:
+			return
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 

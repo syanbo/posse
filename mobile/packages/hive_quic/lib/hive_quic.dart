@@ -27,6 +27,18 @@ external int _dial(
   Pointer<NativeFunction<_EventFn>> cb,
 );
 
+@Native<
+  Int64 Function(Pointer<Utf8>, Int32, Pointer<NativeFunction<_EventFn>>)
+>(symbol: 'hq_prepare')
+external int _prepare(
+  Pointer<Utf8> relay,
+  int timeoutMs,
+  Pointer<NativeFunction<_EventFn>> cb,
+);
+
+@Native<Void Function(Int64, Pointer<Utf8>, Int32)>(symbol: 'hq_dial_prepared')
+external void _dialPrepared(int id, Pointer<Utf8> peer, int timeoutMs);
+
 @Native<Int32 Function(Int64, Int32, Pointer<Uint8>, Int32)>(symbol: 'hq_send')
 external int _send(int id, int type, Pointer<Uint8> data, int len);
 
@@ -41,6 +53,7 @@ const _evText = 2;
 const _evBinary = 3;
 const _evClosed = 4;
 const _evFailed = 5;
+const _evPrepared = 6;
 
 /// 消息类型，和 Go 那边一致。
 const quicText = 1;
@@ -76,9 +89,14 @@ void _onEvent(int id, int kind, Pointer<Uint8> data, int len) {
 }
 
 class QuicConnection {
-  QuicConnection._(this._id);
+  QuicConnection._(this._id) {
+    // 结束时两个都会带上错误，没人等的那个（普通拨号不经 prepare）不能变成未处理的错误
+    _prepared.future.ignore();
+    _opened.future.ignore();
+  }
 
   final int _id;
+  final _prepared = Completer<String>();
   final _opened = Completer<void>();
   final _messages = StreamController<QuicMessage>();
   var _done = false;
@@ -113,11 +131,35 @@ class QuicConnection {
     }
   }
 
+  /// 打洞的第一步：开一个 socket，经中转（[relayHost]:[relayPort]）问出它在公网上的地址。
+  /// 把 [QuicPunch.public] 交给电脑（hive.punch），拿到电脑的地址后 [QuicPunch.dial]。
+  static Future<QuicPunch> prepare(
+    String relayHost,
+    int relayPort, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final relay = '$relayHost:$relayPort'.toNativeUtf8();
+    try {
+      final id = _prepare(
+        relay,
+        timeout.inMilliseconds,
+        _callback.nativeFunction,
+      );
+      final conn = QuicConnection._(id);
+      _live[id] = conn;
+      return QuicPunch._(conn, await conn._prepared.future);
+    } finally {
+      malloc.free(relay);
+    }
+  }
+
   /// 收到的消息。连接断开时结束。
   Stream<QuicMessage> get messages => _messages.stream;
 
   void _event(int kind, Uint8List data) {
     switch (kind) {
+      case _evPrepared:
+        _prepared.complete(String.fromCharCodes(data));
       case _evOpen:
         _opened.complete();
       case _evText:
@@ -130,6 +172,9 @@ class QuicConnection {
         _done = true;
         _live.remove(_id);
         final reason = String.fromCharCodes(data);
+        if (!_prepared.isCompleted) {
+          _prepared.completeError(QuicException(reason));
+        }
         if (!_opened.isCompleted) _opened.completeError(QuicException(reason));
         unawaited(_messages.close());
     }
@@ -157,4 +202,32 @@ class QuicConnection {
       malloc.free(r);
     }
   }
+}
+
+/// 已经问出公网地址、等着打洞的 socket，见 [QuicConnection.prepare]。
+class QuicPunch {
+  QuicPunch._(this._conn, this.public);
+
+  final QuicConnection _conn;
+
+  /// 这个 socket 在公网上的地址，"ip:端口"。
+  final String public;
+
+  /// 向电脑的公网地址 [peer]（"ip:端口"）打洞并拨号。打不通时 [timeout] 到期抛 [QuicException]。
+  Future<QuicConnection> dial(
+    String peer, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final p = peer.toNativeUtf8();
+    try {
+      _dialPrepared(_conn._id, p, timeout.inMilliseconds);
+    } finally {
+      malloc.free(p);
+    }
+    await _conn._opened.future;
+    return _conn;
+  }
+
+  /// 不打洞了，关掉这个 socket。
+  void close() => _conn.close();
 }

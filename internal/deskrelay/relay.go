@@ -1,16 +1,21 @@
 // Package deskrelay 是手机看桌面的 UDP 中转：手机和 Mac 打不通洞时，两边都连到一台有公网地址的服务器，
 // 服务器按同一个令牌把两边的包原样互转。包本身已经端到端加密，服务器只看到密文。
 //
-// 协议只有一种控制包，其余一律当数据转发：
+// 控制包都以 'H' 'R' 'Y' '1' 开头，其余一律当数据转发：
 //
 //	登记：'H' 'R' 'Y' '1'、u8 身份（1 Mac、2 手机）、16 字节令牌，共 21 字节。
 //	      服务器回 'H' 'R' 'Y' '1'、0x80|身份，表示收到。两边每隔几秒重发一次当保活，换了网络也靠它更新地址。
+//	探测：'H' 'R' 'Y' '1'、0x03，补零到 24 字节（回包不比请求大，不能被拿来放大流量）。
+//	      服务器回 'H' 'R' 'Y' '1'、0x83、它看到的来源地址（IPv4 4 字节或 IPv6 16 字节）、u16 端口。
+//	      打洞前两端各自用它问出自己在公网上的地址，和会话无关。
+//	打洞：'H' 'R' 'Y' '1'、0x05。两端直接互发、不经服务器，只为在各自的 NAT 上开口子，收到就丢。
 //
 // 数据包的第一个字节是 desk 包的类型（1–6），不会和登记包的 'H' 撞上。
 package deskrelay
 
 import (
 	"bytes"
+	"encoding/binary"
 	"log"
 	"net"
 	"net/netip"
@@ -24,6 +29,11 @@ const (
 
 	TokenLen    = 16
 	RegisterLen = 4 + 1 + TokenLen
+	ProbeLen    = 24
+
+	kindProbe      byte = 0x03
+	kindProbeReply byte = 0x83
+	kindPunch      byte = 0x05
 
 	// 两边都超过这么久没登记、没发包，会话作废
 	sessionIdle = 2 * time.Minute
@@ -40,6 +50,33 @@ func Register(role byte, token []byte) []byte {
 	out = append(out, role)
 	return append(out, token...)
 }
+
+// Probe 是一个探测包。
+func Probe() []byte {
+	out := make([]byte, ProbeLen)
+	copy(out, magic)
+	out[4] = kindProbe
+	return out
+}
+
+// ParseProbeReply 解开探测的回包，得到自己在公网上的地址。
+func ParseProbeReply(b []byte) (netip.AddrPort, bool) {
+	if len(b) != 5+4+2 && len(b) != 5+16+2 || !bytes.Equal(b[:4], magic) || b[4] != kindProbeReply {
+		return netip.AddrPort{}, false
+	}
+	ip, _ := netip.AddrFromSlice(b[5 : len(b)-2])
+	return netip.AddrPortFrom(ip, binary.BigEndian.Uint16(b[len(b)-2:])), true
+}
+
+func probeReply(from netip.AddrPort) []byte {
+	ip := from.Addr().AsSlice()
+	out := append(append([]byte{}, magic...), kindProbeReply)
+	out = append(out, ip...)
+	return binary.BigEndian.AppendUint16(out, from.Port())
+}
+
+// Punch 是一个打洞包。
+func Punch() []byte { return append(append([]byte{}, magic...), kindPunch) }
 
 // IsControl 判断是不是中转的控制包（登记或回执），这种包不交给 desk 解密。
 func IsControl(b []byte) bool {
@@ -100,6 +137,10 @@ func (s *Server) Serve() error {
 // handle 处理一个包：登记就记下地址并回执，数据就返回该转给谁。
 func (s *Server) handle(b []byte, from netip.AddrPort) (to netip.AddrPort, forward bool) {
 	if IsControl(b) {
+		if len(b) == ProbeLen && b[4] == kindProbe {
+			_, _ = s.conn.WriteToUDPAddrPort(probeReply(from), from)
+			return to, false
+		}
 		if len(b) != RegisterLen || (b[4] != RoleMac && b[4] != RolePhone) {
 			return to, false
 		}
