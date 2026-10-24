@@ -25,6 +25,10 @@ type RelayConn struct {
 	once   sync.Once
 	acked  atomic.Bool
 	public atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
+
+	// OnPeerPunch 在收到对方的打洞包时调用（排查用：收得到说明这边的 NAT 放进了对方的包）。
+	// 在开始收包前设好
+	OnPeerPunch func(from *net.UDPAddr)
 }
 
 // NewRelayConn 开始向 relay 登记，每隔 every 重发一次。
@@ -81,7 +85,10 @@ func (r *RelayConn) ReadFrom(b []byte) (int, net.Addr, error) {
 
 func (r *RelayConn) control(b []byte, from *net.UDPAddr) {
 	if from.Port != r.relay.Port || !from.IP.Equal(r.relay.IP) {
-		return // 对方的打洞包
+		if r.OnPeerPunch != nil {
+			r.OnPeerPunch(from)
+		}
+		return
 	}
 	if r.reg != nil && deskrelay.IsAck(b, r.reg[4]) {
 		r.acked.Store(true)

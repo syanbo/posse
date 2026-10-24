@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -86,7 +87,7 @@ func (s *Server) startQUIC(port int) {
 		return
 	}
 	q.lan = tr
-	go s.acceptQUIC(ln)
+	go s.acceptQUIC(ln, nil)
 	log.Printf("mobile: quic listening on %s", pc.LocalAddr())
 }
 
@@ -132,6 +133,13 @@ func (s *Server) relayLocked(device string) *relayPath {
 		}
 	}
 	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, token, relayKeepalive)
+	var lastPunch atomic.Int64
+	rc.OnPeerPunch = func(from *net.UDPAddr) {
+		// 手机连发几十个，只记每次打洞的第一个
+		if now := time.Now().UnixNano(); now-lastPunch.Swap(now) > int64(10*time.Second) {
+			log.Printf("mobile: punch: packet from phone %s reached the mac", from)
+		}
+	}
 	tr := &quic.Transport{Conn: rc}
 	ln, err := tr.Listen(q.tls, mquic.Config())
 	if err != nil {
@@ -144,7 +152,7 @@ func (s *Server) relayLocked(device string) *relayPath {
 		q.relays = map[string]*relayPath{}
 	}
 	q.relays[device] = p
-	go s.acceptQUIC(ln)
+	go s.acceptQUIC(ln, raddr)
 	log.Printf("mobile: quic registered at relay %s (%d phones)", addr, len(q.relays))
 	return p
 }
@@ -177,12 +185,21 @@ func (s *Server) closeQUIC() {
 	q.relays, q.relayAt = nil, ""
 }
 
-func (s *Server) acceptQUIC(ln *quic.Listener) {
+// acceptQUIC 接受连接。relay 不为空时这是中转出口：从中转来的是经中转，别的地址是打洞直连。
+func (s *Server) acceptQUIC(ln *quic.Listener, relay *net.UDPAddr) {
 	for {
 		qc, err := ln.Accept(context.Background())
 		if err != nil {
 			return
 		}
+		via := "lan"
+		if relay != nil {
+			via = "direct (punched)"
+			if a, ok := qc.RemoteAddr().(*net.UDPAddr); ok && a.IP.Equal(relay.IP) && a.Port == relay.Port {
+				via = "relay"
+			}
+		}
+		log.Printf("mobile: quic connection from %s via %s", qc.RemoteAddr(), via)
 		go s.serveQUIC(qc)
 	}
 }
@@ -227,8 +244,10 @@ func (s *Server) punch(device, phone string) (PunchInfo, error) {
 	defer cancel()
 	pub, err := p.rc.Public(ctx, true)
 	if err != nil {
+		log.Printf("mobile: punch: %v", err)
 		return PunchInfo{}, errorf("unavailable", "%v", err)
 	}
+	log.Printf("mobile: punch: phone at %s, mac at %s", peer, pub)
 	go p.rc.PunchTo(peer, mquic.PunchFor)
 	return PunchInfo{Addr: pub.String()}, nil
 }
