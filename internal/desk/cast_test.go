@@ -23,7 +23,7 @@ func TestCastStopsWithoutHello(t *testing.T) {
 	addr := freeUDP(t)
 	start := time.Now()
 	err := Cast(pr, io.Discard, addr)
-	if !errors.Is(err, errNoHello) {
+	if !errors.Is(err, ErrNoHello) {
 		t.Fatalf("err = %v", err)
 	}
 	if elapsed := time.Since(start); elapsed < 300*time.Millisecond || elapsed > 2*time.Second {
@@ -72,7 +72,7 @@ func TestCastQuietStartsAfterHello(t *testing.T) {
 	helloAt := time.Now()
 	select {
 	case err := <-done:
-		if !errors.Is(err, errNoReport) {
+		if !errors.Is(err, ErrNoReport) {
 			t.Fatalf("err = %v", err)
 		}
 		sinceHello := time.Since(helloAt)
@@ -139,7 +139,7 @@ func TestCastReportResetsQuiet(t *testing.T) {
 	}
 	select {
 	case err := <-done:
-		if !errors.Is(err, errNoReport) {
+		if !errors.Is(err, ErrNoReport) {
 			t.Fatalf("err = %v", err)
 		}
 		if time.Since(start) < 1500*time.Millisecond {

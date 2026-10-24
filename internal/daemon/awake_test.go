@@ -116,3 +116,35 @@ func TestAwakeOldOnMode(t *testing.T) {
 		t.Fatal("on still a mode of its own")
 	}
 }
+
+// 有手机在看桌面：关着防休眠也托住，并且屏幕不熄；看完回到用户选的档，不写 awake.json。
+func TestAwakeWhileViewing(t *testing.T) {
+	a := fakeAwake(t)
+	var displays []bool
+	spawn := a.spawn
+	a.spawn = func(display bool) (*exec.Cmd, error) {
+		displays = append(displays, display)
+		return spawn(display)
+	}
+	if err := a.setMode(awakeOff); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(a.path)
+	a.apply(0)
+	if a.status().Active {
+		t.Fatal("off holds")
+	}
+	a.setViewing(true)
+	a.apply(0)
+	if !a.status().Active || len(displays) != 1 || !displays[0] {
+		t.Fatalf("viewing: active=%v displays=%v", a.status().Active, displays)
+	}
+	a.setViewing(false)
+	a.apply(0)
+	if a.status().Active {
+		t.Fatal("still holding after viewing ended with mode off")
+	}
+	if after, _ := os.ReadFile(a.path); string(after) != string(before) {
+		t.Fatalf("awake.json changed: %s -> %s", before, after)
+	}
+}

@@ -181,6 +181,7 @@ type Daemon struct {
 	mobile   *mobile.Server
 	host     host.Host // 托管终端，测试里为空时用进程内的
 	awake    *awake    // 防休眠，测试里为空
+	desk     deskState // 手机看桌面，同一时间一台
 	usage    usageState
 	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
 	ln       *gateListener
@@ -403,6 +404,7 @@ func (d *Daemon) closeAll() {
 
 func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("daemon.status", d.status)
+	srv.Handle("desk.stop", d.deskStop)
 	srv.Handle("daemon.handoff", func(ctx context.Context, raw json.RawMessage) (any, error) {
 		return d.daemonHandoff(ctx, raw, stop)
 	})
@@ -481,6 +483,10 @@ type statusResult struct {
 	GitTraceSeq int64 `json:"gitTraceSeq,omitempty"`
 	// MobileOnline 是现在连着的手机的名字，界面在侧栏「手机」上标出来
 	MobileOnline []string `json:"mobileOnline,omitempty"`
+	// DeskViewer 是正在看桌面的手机，界面在手机页写出来并给「停止」（desk.stop）
+	DeskViewer string `json:"deskViewer,omitempty"`
+	// DeskMissing 是看桌面缺的系统授权：screen、accessibility。看过一次才知道
+	DeskMissing []string `json:"deskMissing,omitempty"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -510,6 +516,7 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 			}
 		}
 	}
+	r.DeskViewer, r.DeskMissing = d.deskStatus()
 	return r, nil
 }
 

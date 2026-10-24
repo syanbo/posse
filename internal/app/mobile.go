@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -272,9 +273,54 @@ func (a *app) mobileBoard(c *ui.Context) {
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Width(720).Gap(16).Children(func() {
+				a.mobileDeskCard(c)
 				a.mobilePairCard(c)
 				a.mobileDevices(c)
 			})
+		})
+	})
+}
+
+// deskPrivacy 是看桌面要的两项系统授权在系统设置里的页面。
+var deskPrivacy = []struct{ key, label, pane string }{
+	{"screen", "屏幕录制", "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"},
+	{"accessibility", "辅助功能", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"},
+}
+
+// mobileDeskCard 是手机看桌面的情况：谁在看（可以停掉），以及缺哪项系统授权。都没有时不显示。
+func (a *app) mobileDeskCard(c *ui.Context) {
+	viewer, missing := a.daemon.DeskViewer, a.daemon.DeskMissing
+	if viewer == "" && len(missing) == 0 {
+		return
+	}
+	t := c.Theme()
+	card(c).Padding(20).Children(func() {
+		ui.Column(c).Gap(12).Children(func() {
+			cardTitle(c, "看桌面")
+			if viewer != "" {
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Box(c).Size(7, 7).Radius(3.5).Background(colors(t).sage)
+					ui.Text(c, viewer+" 正在看这台电脑的桌面").FontSize(13).Grow(1)
+					if pressable(textButton(c, "停止")).Tooltip("断开这台手机的画面和操作").Clicked() {
+						go a.call("desk.stop", nil, nil, 10*time.Second)
+					}
+				})
+			}
+			for _, p := range deskPrivacy {
+				if !slices.Contains(missing, p.key) {
+					continue
+				}
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					note := "还没允许 Hive 使用" + p.label
+					if p.key == "accessibility" {
+						note += "：手机能看，不能操作"
+					}
+					ui.Text(c, note).FontSize(12.5).TextColor(t.TextMuted).Grow(1)
+					if pressable(textButton(c, "打开系统设置")).Tooltip("在「隐私与安全性」里打开 Hive").Clicked() {
+						go exec.Command("open", p.pane).Run()
+					}
+				})
+			}
 		})
 	})
 }

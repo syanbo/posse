@@ -43,6 +43,7 @@ type awake struct {
 	path    string // $HIVE_HOME/awake.json，记用户选的档
 	mode    string
 	working int
+	viewing bool // 有手机在看桌面：屏幕不能熄，不写 awake.json
 	cmd     *exec.Cmd
 	display bool          // 正在运行的 cmd 带不带 -d
 	done    chan struct{} // cmd 退出时关闭
@@ -95,8 +96,8 @@ func (a *awake) apply(working int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.working = working
-	want := a.mode != awakeOff
-	display := a.mode == awakeDisplay
+	want := a.mode != awakeOff || a.viewing
+	display := a.mode == awakeDisplay || a.viewing
 	// 换档时屏幕那一项变了：先放掉旧的再按新的起
 	if want && a.holding() && a.display != display {
 		a.release()
@@ -143,6 +144,13 @@ func (a *awake) release() {
 	a.cmd.Process.Kill()
 	<-a.done
 	a.cmd, a.done = nil, nil
+}
+
+// setViewing 记下有没有手机在看桌面，调用方随后 apply。
+func (a *awake) setViewing(on bool) {
+	a.mu.Lock()
+	a.viewing = on
+	a.mu.Unlock()
 }
 
 func (a *awake) setMode(m string) error {

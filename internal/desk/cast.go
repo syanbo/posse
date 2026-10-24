@@ -25,39 +25,60 @@ var reportQuiet = 3 * time.Second
 // helloWait 是还没有对端时最多等多久。
 var helloWait = 60 * time.Second
 
-// errNoReport 是已经有 hello 之后，超过 reportQuiet 没有收到 report。
-var errNoReport = errors.New("desk: no report for 3s")
+// ErrNoReport 是已经有 hello 之后，超过 reportQuiet 没有收到 report。
+var ErrNoReport = errors.New("desk: no report for 3s")
 
-// errNoHello 是 helloWait 内没有收到 hello。
-var errNoHello = errors.New("desk: no hello for 60s")
+// ErrNoHello 是 helloWait 内没有收到 hello。
+var ErrNoHello = errors.New("desk: no hello for 60s")
 
 // Cast 从采集管道读帧，加密后发到 addr。对端先发 hello。control 写给采集子进程。
+// 用固定测试密钥，给还没接进常驻进程的命令行试跑用。
 func Cast(frames io.Reader, control io.Writer, addr string) error {
-	toMobile, toMac := TestKeys()
-	sealAEAD, err := NewAEAD(toMobile)
-	if err != nil {
-		return err
-	}
-	openAEAD, err := NewAEAD(toMac)
-	if err != nil {
-		return err
-	}
 	conn, err := net.ListenPacket("udp", addr)
 	if err != nil {
+		return err
+	}
+	log.Printf("desk: listening %s", conn.LocalAddr())
+	toMobile, toMac := TestKeys()
+	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac})
+}
+
+// CastConfig 是一次观看的发送参数。
+type CastConfig struct {
+	// Conn 由调用方绑好，Serve 结束时关掉
+	Conn            net.PacketConn
+	ToMobile, ToMac [32]byte
+	// OnStatus 收子进程报来的状态（StatusLocked 等），在读管道的协程里调
+	OnStatus func(code byte)
+	// OnInput 收手机发来的 input 包明文，返回已经执行到的必达事件序号，随即用 beat 回给手机
+	OnInput func(plain []byte) (ack uint64)
+}
+
+// Serve 一直发到子进程的管道结束、手机超时不报或 Conn 被关掉。
+func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
+	sealAEAD, err := NewAEAD(cfg.ToMobile)
+	if err != nil {
+		cfg.Conn.Close()
+		return err
+	}
+	openAEAD, err := NewAEAD(cfg.ToMac)
+	if err != nil {
+		cfg.Conn.Close()
 		return err
 	}
 	now := time.Now()
 	start := PictureBitrate(1920, 1080)
 	c := &caster{
-		conn: conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
+		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
+		onStatus: cfg.OnStatus, onInput: cfg.OnInput,
 		bitrate: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
 	c.rate.reset(now, start, rateCeil)
-	log.Printf("desk: listening %s", conn.LocalAddr())
 	readDone := make(chan error, 1)
 	go func() { readDone <- c.readFrames(frames) }()
 	go c.recv()
+	go c.beat()
 	var errRun error
 	select {
 	case errRun = <-readDone:
@@ -72,10 +93,42 @@ func Cast(frames io.Reader, control io.Writer, addr string) error {
 	return errRun
 }
 
+// beatEvery 内画面没变时手机收不到视频，靠 beat 知道 Mac 还在。
+// 负载 16 字节：发出时刻（Unix 纳秒，手机用来校时钟）、已执行到的必达输入序号（手机据此停止重发），都是大端。
+const beatEvery = time.Second
+
+func (c *caster) sendBeat() {
+	c.mu.Lock()
+	ack := c.inputAck
+	c.mu.Unlock()
+	var b [16]byte
+	binary.BigEndian.PutUint64(b[:8], uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint64(b[8:], ack)
+	_ = c.send(PacketBeat, b[:])
+}
+
+func (c *caster) beat() {
+	t := time.NewTicker(beatEvery)
+	defer t.Stop()
+	for {
+		select {
+		case <-c.stopped:
+			return
+		case <-t.C:
+			if c.currentPeer() != nil {
+				c.sendBeat()
+			}
+		}
+	}
+}
+
 type caster struct {
 	conn               net.PacketConn
 	sealAEAD, openAEAD cipher.AEAD
 	control            io.Writer
+	onStatus           func(byte)
+	onInput            func([]byte) uint64
+	inputAck           uint64
 	peer               net.Addr
 	peerMu             sync.Mutex
 	replay             Replay
@@ -138,6 +191,9 @@ func (c *caster) readFrames(frames io.Reader) error {
 		case KindStatus:
 			if len(f.Payload) > 0 {
 				log.Printf("desk: status %d", f.Payload[0])
+				if c.onStatus != nil {
+					c.onStatus(f.Payload[0])
+				}
 			}
 		case KindVideo:
 			c.submit(f)
@@ -309,10 +365,10 @@ func (c *caster) recv() {
 		if wait <= 0 {
 			if c.seenHello {
 				log.Printf("desk: no report for %.0fs", reportQuiet.Seconds())
-				c.stop(errNoReport)
+				c.stop(ErrNoReport)
 			} else {
 				log.Printf("desk: no hello for %.0fs", helloWait.Seconds())
-				c.stop(errNoHello)
+				c.stop(ErrNoHello)
 			}
 			return
 		}
@@ -347,6 +403,14 @@ func (c *caster) recv() {
 			c.onReport(plain)
 		case PacketKeyframe:
 			c.askKey()
+		case PacketInput:
+			if c.onInput != nil {
+				ack := c.onInput(plain)
+				c.mu.Lock()
+				c.inputAck = ack
+				c.mu.Unlock()
+				c.sendBeat()
+			}
 		}
 	}
 }

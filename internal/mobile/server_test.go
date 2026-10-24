@@ -30,6 +30,14 @@ type fakeHost struct {
 	terms map[string]*term.Terminal
 	order []string
 	dir   string // 工作区目录，空是 /tmp
+	desk  func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
+}
+
+func (h *fakeHost) Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
+	if h.desk == nil {
+		return DeskReady{}, DeskError("capture_failed", "no desk in tests")
+	}
+	return h.desk(ctx, req, notify)
 }
 
 func (h *fakeHost) State() State {

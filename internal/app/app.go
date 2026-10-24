@@ -99,6 +99,8 @@ type daemonStatus struct {
 	StartedAt    time.Time    `json:"startedAt"`
 	GitTraceSeq  int64        `json:"gitTraceSeq"`  // 终端 git 命令记录的最新序号，旧常驻进程没有时为 0
 	MobileOnline []string     `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
+	DeskViewer   string       `json:"deskViewer"`   // 正在看桌面的手机
+	DeskMissing  []string     `json:"deskMissing"`  // 看桌面缺的授权：screen、accessibility
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -472,7 +474,7 @@ func (a *app) refresh() {
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
-		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline}
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 		a.autoUpgrade(r.daemonInfo)
 	}

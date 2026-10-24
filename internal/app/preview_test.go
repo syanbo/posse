@@ -785,7 +785,10 @@ func TestPreview(t *testing.T) {
 				{ID: "d3", Name: "手机 10-17 20:40", PairedAt: now.Add(-60 * time.Hour), LastSeen: now.Add(-60 * time.Hour), Links: 1},
 				{ID: "d4", Name: "手机 10-17 21:50", PairedAt: now.Add(-59 * time.Hour), LastSeen: now.Add(-40 * time.Hour), Links: 1},
 			}}
+		// 有手机在看桌面、还没开辅助功能：手机页最上面的看桌面卡片
+		a.daemon.DeskViewer, a.daemon.DeskMissing = "iPhone 16 Pro", []string{"accessibility"}
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
+		a.daemon.DeskViewer, a.daemon.DeskMissing = "", nil
 
 		// 设置页：常驻进程还在跑旧的包
 		a.selected = settingsBoardID

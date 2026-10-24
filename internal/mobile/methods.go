@@ -32,6 +32,10 @@ type Host interface {
 	Usage() any
 	// RefreshUsage 让各家马上取一次用量（同窗口的刷新），做完返回新的读数；Codex、Cursor 要联网，最长半分钟
 	RefreshUsage(ctx context.Context) (any, error)
+	// Desk 开始一次看桌面：采集起来、UDP 听上之后返回。之后一直运行到 ctx 结束或出错，
+	// 期间经 notify 推状态，结束时恰好推一次 Type 为 end 的事件（ctx 结束也推）。
+	// 错误用 DeskError 带上错误码。
+	Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
 }
 
 // ResumeResult 是在电脑上继续一个历史会话的结果：会话所在的终端和工作区（手机上的 ID）。
@@ -506,6 +510,10 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{"terminals": out, "totalCount": len(out), "truncated": false})
 	case "terminal.subscribe":
 		return c.subscribeTerminal(req.ID, p)
+	case "desk.subscribe":
+		return c.deskSubscribe(req.ID, p)
+	case "desk.unsubscribe":
+		return c.deskUnsubscribe(req.ID)
 	case "terminal.unsubscribe":
 		var a struct {
 			SubscriptionID string `json:"subscriptionId"`

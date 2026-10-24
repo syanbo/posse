@@ -29,7 +29,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 ```
 cmd/hive            单一二进制：窗口（hive app，或从 Hive.app 无参数启动）、常驻进程（hive daemon run）和 CLI 共用
 internal/rpc        unix socket 协议：每连接一次请求，请求/响应各一行 JSON
-internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排
+internal/daemon     常驻进程：项目、工作区、终端的 RPC 处理；task.go 是多 agent 编排；desk.go 是手机看桌面的会话（同一时间一台，拉起采集子进程、收发 UDP）
 internal/host       常驻进程和手机操作终端的边界（Host、Terminal 接口），包着 internal/term 的进程内实现；升级交接（Pause 导出、Adopt 重建）也在这层，方案见 docs/plans/terminal-host.md
 internal/term       PTY + libghostty-vt 维护屏幕状态；接入时给界面快照和输出流
 internal/vt         libghostty-vt 绑定，复制自 MyGo 后只留常驻进程用得到的部分（键鼠编码、选区已删，RenderState 只在测试里）；snapshot.go 逐格生成快照内容
