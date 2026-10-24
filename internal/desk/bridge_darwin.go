@@ -4,6 +4,7 @@ package desk
 
 import (
 	"fmt"
+	"runtime"
 	"structs"
 	"unsafe"
 
@@ -27,45 +28,46 @@ func cmMake(value int64, scale int32) cmTime {
 type macAPI struct {
 	clsShareable, clsFilter, clsConfig, clsStream, clsArray, clsString, clsNumber, clsDict, clsURL, clsWriter, clsInput objc.ID
 
-	getContent    func(objc.ID, objc.SEL, uintptr)
-	initFilter    func(objc.ID, objc.SEL, objc.ID, objc.ID) objc.ID
-	initStream    func(objc.ID, objc.SEL, objc.ID, objc.ID, objc.ID) objc.ID
-	alloc         func(objc.ID, objc.SEL) objc.ID
-	init          func(objc.ID, objc.SEL) objc.ID
-	release       func(objc.ID, objc.SEL)
-	retain        func(objc.ID, objc.SEL) objc.ID
-	count         func(objc.ID, objc.SEL) int
-	at            func(objc.ID, objc.SEL, int) objc.ID
-	integer       func(objc.ID, objc.SEL) int
-	utf8          func(objc.ID, objc.SEL) unsafe.Pointer
-	nsString      func(objc.ID, objc.SEL, unsafe.Pointer) objc.ID
-	setInt        func(objc.ID, objc.SEL, int)
-	setU32        func(objc.ID, objc.SEL, uint32)
-	setTime       func(objc.ID, objc.SEL, cmTime)
-	setPtr        func(objc.ID, objc.SEL, uintptr)
-	responds      func(objc.ID, objc.SEL, objc.SEL) bool
-	emptyArray    func(objc.ID, objc.SEL) objc.ID
-	numLong       func(objc.ID, objc.SEL, int64) objc.ID
-	numDouble     func(objc.ID, objc.SEL, float64) objc.ID
-	numBool       func(objc.ID, objc.SEL, int) objc.ID
-	dictOne       func(objc.ID, objc.SEL, uintptr, uintptr) objc.ID
-	dictN         func(objc.ID, objc.SEL, unsafe.Pointer, unsafe.Pointer, int) objc.ID
-	arrayCount    func(objc.ID, objc.SEL, unsafe.Pointer, int) objc.ID
-	fileURL       func(objc.ID, objc.SEL, objc.ID) objc.ID
-	initWriter    func(objc.ID, objc.SEL, objc.ID, objc.ID, *objc.ID) objc.ID
-	addInput      func(objc.ID, objc.SEL, objc.ID)
-	startWriting  func(objc.ID, objc.SEL) bool
-	startSession  func(objc.ID, objc.SEL, cmTime)
-	writerInput   func(objc.ID, objc.SEL, objc.ID, uintptr, uintptr) objc.ID
-	setBool       func(objc.ID, objc.SEL, int)
-	appendSample  func(objc.ID, objc.SEL, uintptr) bool
-	markFinished  func(objc.ID, objc.SEL)
-	finishWriting func(objc.ID, objc.SEL, uintptr)
-	addOutput     func(objc.ID, objc.SEL, objc.ID, int, uintptr, *objc.ID) bool
-	startCapture  func(objc.ID, objc.SEL, uintptr)
-	stopCapture   func(objc.ID, objc.SEL, uintptr)
-	assetDuration func(objc.ID, objc.SEL) cmTime
-	urlAsset      func(objc.ID, objc.SEL, objc.ID) objc.ID
+	getContent     func(objc.ID, objc.SEL, uintptr)
+	initFilter     func(objc.ID, objc.SEL, objc.ID, objc.ID) objc.ID
+	initFilterApps func(objc.ID, objc.SEL, objc.ID, objc.ID, objc.ID) objc.ID
+	initStream     func(objc.ID, objc.SEL, objc.ID, objc.ID, objc.ID) objc.ID
+	alloc          func(objc.ID, objc.SEL) objc.ID
+	init           func(objc.ID, objc.SEL) objc.ID
+	release        func(objc.ID, objc.SEL)
+	retain         func(objc.ID, objc.SEL) objc.ID
+	count          func(objc.ID, objc.SEL) int
+	at             func(objc.ID, objc.SEL, int) objc.ID
+	integer        func(objc.ID, objc.SEL) int
+	utf8           func(objc.ID, objc.SEL) unsafe.Pointer
+	nsString       func(objc.ID, objc.SEL, unsafe.Pointer) objc.ID
+	setInt         func(objc.ID, objc.SEL, int)
+	setU32         func(objc.ID, objc.SEL, uint32)
+	setTime        func(objc.ID, objc.SEL, cmTime)
+	setPtr         func(objc.ID, objc.SEL, uintptr)
+	responds       func(objc.ID, objc.SEL, objc.SEL) bool
+	emptyArray     func(objc.ID, objc.SEL) objc.ID
+	numLong        func(objc.ID, objc.SEL, int64) objc.ID
+	numDouble      func(objc.ID, objc.SEL, float64) objc.ID
+	numBool        func(objc.ID, objc.SEL, int) objc.ID
+	dictOne        func(objc.ID, objc.SEL, uintptr, uintptr) objc.ID
+	dictN          func(objc.ID, objc.SEL, unsafe.Pointer, unsafe.Pointer, int) objc.ID
+	arrayCount     func(objc.ID, objc.SEL, unsafe.Pointer, int) objc.ID
+	fileURL        func(objc.ID, objc.SEL, objc.ID) objc.ID
+	initWriter     func(objc.ID, objc.SEL, objc.ID, objc.ID, *objc.ID) objc.ID
+	addInput       func(objc.ID, objc.SEL, objc.ID)
+	startWriting   func(objc.ID, objc.SEL) bool
+	startSession   func(objc.ID, objc.SEL, cmTime)
+	writerInput    func(objc.ID, objc.SEL, objc.ID, uintptr, uintptr) objc.ID
+	setBool        func(objc.ID, objc.SEL, int)
+	appendSample   func(objc.ID, objc.SEL, uintptr) bool
+	markFinished   func(objc.ID, objc.SEL)
+	finishWriting  func(objc.ID, objc.SEL, uintptr)
+	addOutput      func(objc.ID, objc.SEL, objc.ID, int, uintptr, *objc.ID) bool
+	startCapture   func(objc.ID, objc.SEL, uintptr)
+	stopCapture    func(objc.ID, objc.SEL, uintptr)
+	assetDuration  func(objc.ID, objc.SEL) cmTime
+	urlAsset       func(objc.ID, objc.SEL, objc.ID) objc.ID
 
 	poolPush func() unsafe.Pointer
 	poolPop  func(unsafe.Pointer)
@@ -84,7 +86,6 @@ type macAPI struct {
 	vtCreate     func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32
 	vtEncode     func(uintptr, uintptr, cmTime, cmTime, uintptr, uintptr, *uint32) int32
 	vtSet        func(uintptr, uintptr, uintptr) int32
-	vtCopy       func(uintptr, uintptr, uintptr, *uintptr) int32
 	vtComplete   func(uintptr, cmTime) int32
 	vtInvalidate func(uintptr)
 
@@ -115,7 +116,7 @@ type macAPI struct {
 
 	keyRealTime, keyReorder, keyDelay, keySpeed, keyFPS, keyBitrate, keyLimits, keyForce uintptr
 	keyLowLatency, keyNotSync, cfTrue, cfFalse                                           uintptr
-	keyRequireHW, keyUsingHW, keyPower                                                   uintptr
+	keyRequireHW, keyPower                                                               uintptr
 	keyMatrix709                                                                         uintptr
 	keyPrimaries, keyTransfer, keyYCbCr, primaries709, transfer709, matrix709            uintptr
 }
@@ -149,6 +150,7 @@ func loadMac() (*macAPI, error) {
 	msg := mustSym(objcLib, "objc_msgSend")
 	bind(&m.getContent, msg)
 	bind(&m.initFilter, msg)
+	bind(&m.initFilterApps, msg)
 	bind(&m.initStream, msg)
 	bind(&m.alloc, msg)
 	bind(&m.init, msg)
@@ -206,7 +208,6 @@ func loadMac() (*macAPI, error) {
 	m.vtCreate = mustFn[func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32](vt, "VTCompressionSessionCreate")
 	m.vtEncode = mustFn[func(uintptr, uintptr, cmTime, cmTime, uintptr, uintptr, *uint32) int32](vt, "VTCompressionSessionEncodeFrame")
 	m.vtSet = mustFn[func(uintptr, uintptr, uintptr) int32](vt, "VTSessionSetProperty")
-	m.vtCopy = mustFn[func(uintptr, uintptr, uintptr, *uintptr) int32](vt, "VTSessionCopyProperty")
 	m.vtComplete = mustFn[func(uintptr, cmTime) int32](vt, "VTCompressionSessionCompleteFrames")
 	m.vtInvalidate = mustFn[func(uintptr)](vt, "VTCompressionSessionInvalidate")
 	m.keyRealTime = cfSym(vt, "kVTCompressionPropertyKey_RealTime")
@@ -219,7 +220,6 @@ func loadMac() (*macAPI, error) {
 	m.keyForce = cfSym(vt, "kVTEncodeFrameOptionKey_ForceKeyFrame")
 	m.keyLowLatency = cfSym(vt, "kVTVideoEncoderSpecification_EnableLowLatencyRateControl")
 	m.keyRequireHW = cfSym(vt, "kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder")
-	m.keyUsingHW = cfSym(vt, "kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder")
 	m.keyPower = cfSym(vt, "kVTCompressionPropertyKey_MaximizePowerEfficiency")
 	m.keyPrimaries = cfSym(vt, "kVTCompressionPropertyKey_ColorPrimaries")
 	m.keyTransfer = cfSym(vt, "kVTCompressionPropertyKey_TransferFunction")
@@ -358,7 +358,10 @@ func (m *macAPI) goString(o objc.ID) string {
 	return unsafe.String((*byte)(p), n)
 }
 
+// 自动释放池按线程记：goroutine 在 push 和 pop 之间被挪到别的线程，pop 就会崩。
 func (m *macAPI) withPool(fn func()) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	p := m.poolPush()
 	defer m.poolPop(p)
 	fn()

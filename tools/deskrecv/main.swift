@@ -93,15 +93,26 @@ final class Replay {
     }
 }
 
+struct Assembled {
+    var nals: [Data]
+    var frame: UInt64
+    var capture: Int64
+    var key: Bool
+    var pt: UInt8
+}
+
 final class Assembler {
     var frame: UInt64 = 0
     var capture: Int64 = 0
     var key = false
+    var pt: UInt8 = 96
     var expect: UInt16 = 0
     var have = false
+    var broken = false
+    var abandonedIncomplete = false
     var nals: [Data] = []
     var fu = Data()
-    func push(_ plain: Data) -> ([Data], UInt64, Int64, Bool)? {
+    func push(_ plain: Data) -> Assembled? {
         guard plain.count >= 17 + 12 else { return nil }
         let key = plain[0] & 1 != 0
         let number = plain.subdata(in: 1..<9).withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
@@ -109,21 +120,34 @@ final class Assembler {
         let rtp = plain.subdata(in: 17..<plain.count)
         let seq = rtp.subdata(in: 2..<4).withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
         let marker = rtp[1] & 0x80 != 0
+        let pt = rtp[1] & 0x7f
         let payload = rtp.subdata(in: 12..<rtp.count)
+        abandonedIncomplete = false
         if !have || number != frame {
+            // 上一帧还没收到 marker 就来了下一帧：发送端把没发完的丢掉了，序号是连续的。
+            if have && number != frame {
+                abandonedIncomplete = true
+            }
             self.frame = number
             self.capture = capture
             self.key = key
+            self.pt = pt
             expect = seq
             have = true
+            broken = false
             nals = []
             fu = Data()
         } else if seq != expect {
+            // 序号缺了这一帧就不要了，后面的片也不拼成残帧。
+            broken = true
             fu = Data(); nals = []; expect = seq
             return nil
         }
         expect = expect &+ 1
-        if payload.count >= 3, ((payload[0] >> 1) & 0x3f) == 49 {
+        self.pt = pt
+        if pt == 97 {
+            takeH264(payload)
+        } else if payload.count >= 3, ((payload[0] >> 1) & 0x3f) == 49 {
             let piece = payload.subdata(in: 3..<payload.count)
             if payload[2] & 0x80 != 0 { fu = piece } else { fu.append(piece) }
             if payload[2] & 0x40 != 0 {
@@ -137,9 +161,32 @@ final class Assembler {
             nals.append(payload)
         }
         guard marker else { return nil }
-        let done = (nals.filter { !$0.isEmpty }, frame, capture, key)
         have = false
-        return done
+        if broken || !fu.isEmpty {
+            broken = false
+            fu = Data()
+            nals = []
+            return nil
+        }
+        return Assembled(nals: nals.filter { !$0.isEmpty }, frame: frame, capture: capture, key: self.key, pt: pt)
+    }
+
+    func takeH264(_ payload: Data) {
+        if payload.count >= 2, payload[0] & 0x1f == 28 {
+            let piece = payload.subdata(in: 2..<payload.count)
+            if payload[1] & 0x80 != 0 {
+                fu = Data([(payload[0] & 0xe0) | (payload[1] & 0x1f)])
+                fu.append(piece)
+            } else if !fu.isEmpty {
+                fu.append(piece)
+            }
+            if payload[1] & 0x40 != 0, !fu.isEmpty {
+                nals.append(fu)
+                fu = Data()
+            }
+        } else if !payload.isEmpty {
+            nals.append(payload)
+        }
     }
 }
 
@@ -150,12 +197,23 @@ final class Decoder {
     var decoded = 0
     var shown = 0
     var decodeErr: OSStatus = 0
-    func push(nals: [Data], started: CFAbsoluteTime) {
-        let sets = nals.filter { nalType($0) == 32 || nalType($0) == 33 || nalType($0) == 34 }
-        let slices = nals.filter { let t = nalType($0); return t != 32 && t != 33 && t != 34 && t != 35 }
-        if format == nil, sets.count >= 3 {
-            format = makeFormat(sets)
+    func push(nals: [Data], pt: UInt8, started: CFAbsoluteTime) {
+        let h264 = pt == 97
+        let sets: [Data]
+        let slices: [Data]
+        if h264 {
+            let sps = nals.filter { h264Type($0) == 7 }
+            let pps = nals.filter { h264Type($0) == 8 }
+            sets = sps + pps
+            slices = nals.filter { let t = h264Type($0); return t != 7 && t != 8 && t != 6 && t != 9 }
+        } else {
+            sets = nals.filter { nalType($0) == 32 || nalType($0) == 33 || nalType($0) == 34 }
+            slices = nals.filter { let t = nalType($0); return t != 32 && t != 33 && t != 34 && t != 35 }
+        }
+        if format == nil, h264 ? (sets.contains { h264Type($0) == 7 } && sets.contains { h264Type($0) == 8 }) : sets.count >= 3 {
+            format = h264 ? makeFormatH264(sets) : makeFormat(sets)
             if let format {
+                print(h264 ? "deskrecv: format h264" : "deskrecv: format hevc")
                 var callback = VTDecompressionOutputCallbackRecord(decompressionOutputCallback: decodeCallback, decompressionOutputRefCon: Unmanaged.passUnretained(self).toOpaque())
                 VTDecompressionSessionCreate(allocator: nil, formatDescription: format, decoderSpecification: nil, imageBufferAttributes: nil, outputCallback: &callback, decompressionSessionOut: &session)
             }
@@ -178,6 +236,7 @@ final class Decoder {
 }
 
 func nalType(_ nal: Data) -> UInt8 { nal.isEmpty ? 0 : (nal[0] >> 1) & 0x3f }
+func h264Type(_ nal: Data) -> UInt8 { nal.isEmpty ? 0 : nal[0] & 0x1f }
 
 func makeFormat(_ sets: [Data]) -> CMVideoFormatDescription? {
     let copies: [(UnsafeMutablePointer<UInt8>, Int)] = sets.map { data in
@@ -190,6 +249,21 @@ func makeFormat(_ sets: [Data]) -> CMVideoFormatDescription? {
     var sizes = copies.map { $0.1 }
     var format: CMVideoFormatDescription?
     let status = CMVideoFormatDescriptionCreateFromHEVCParameterSets(allocator: nil, parameterSetCount: pointers.count, parameterSetPointers: &pointers, parameterSetSizes: &sizes, nalUnitHeaderLength: 4, extensions: nil, formatDescriptionOut: &format)
+    return status == noErr ? format : nil
+}
+
+func makeFormatH264(_ sets: [Data]) -> CMVideoFormatDescription? {
+    let copies: [(UnsafeMutablePointer<UInt8>, Int)] = sets.map { data in
+        let p = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+        data.copyBytes(to: p, count: data.count)
+        return (p, data.count)
+    }
+    defer { copies.forEach { $0.0.deallocate() } }
+    var pointers = copies.map { UnsafePointer($0.0) }
+    var sizes = copies.map { $0.1 }
+    var format: CMVideoFormatDescription?
+    let status = CMVideoFormatDescriptionCreateFromH264ParameterSets(allocator: nil, parameterSetCount: pointers.count, parameterSetPointers: &pointers, parameterSetSizes: &sizes, nalUnitHeaderLength: 4, formatDescriptionOut: &format)
+    if status != noErr { print("deskrecv: h264 format \(status)") }
     return status == noErr ? format : nil
 }
 
@@ -238,6 +312,8 @@ final class Receiver {
     var lastKeyReq: CFAbsoluteTime = 0
     var recoveries: [Double] = []
     var shownAfterLoss = 0
+    var reportsOn = true
+    var payloadType: UInt8 = 96
 
     func run() throws {
         sock = socket(AF_INET, SOCK_DGRAM, 0)
@@ -250,6 +326,8 @@ final class Receiver {
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
         if bindRC != 0 { throw NSError(domain: "deskrecv", code: Int(errno)) }
+        var rcv = Int32(4 << 20)
+        _ = setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &rcv, socklen_t(MemoryLayout<Int32>.size))
         mac.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         mac.sin_family = sa_family_t(AF_INET)
         mac.sin_port = macPort.bigEndian
@@ -267,6 +345,15 @@ final class Receiver {
         report.schedule(deadline: .now() + 0.1, repeating: 0.1)
         report.setEventHandler { [weak self] in self?.sendReport() }
         report.resume()
+        if stopAfter > 0 {
+            DispatchQueue.global().asyncAfter(deadline: .now() + stopAfter) { [weak self] in
+                guard let self else { return }
+                self.statsLock.lock()
+                self.reportsOn = false
+                self.statsLock.unlock()
+                print(String(format: "deskrecv: stopped reports after %.1fs", stopAfter))
+            }
+        }
         var buf = [UInt8](repeating: 0, count: packetLimit)
         while true {
             let n = recv(sock, &buf, buf.count, 0)
@@ -300,22 +387,31 @@ final class Receiver {
                 expect &+= 1
             }
             statsLock.unlock()
+            if latePacket { continue }
+            let frame = asm.push(opened.2)
+            if asm.abandonedIncomplete && !waitingKey {
+                waitingKey = true
+                lossAt = now
+            }
             if waitingKey && now - lastKeyReq > 0.2 {
                 lastKeyReq = now
                 try? send(kindKeyframe, Data())
             }
-            if latePacket { continue }
-            if let frame = asm.push(opened.2) {
+            if let frame {
                 statsLock.lock()
                 if lastFrameAt != 0 {
                     gapsUs.append(UInt32((now - lastFrameAt) * 1_000_000))
                 }
                 lastFrameAt = now
                 statsLock.unlock()
-                let nals = frame.0
-                let idr = nals.contains { let t = nalType($0); return (16...21).contains(t) }
+                let nals = frame.nals
+                let pt = frame.pt
+                payloadType = pt
+                let idr = pt == 97
+                    ? nals.contains { h264Type($0) == 5 }
+                    : nals.contains { let t = nalType($0); return (16...21).contains(t) }
                 if waitingKey {
-                    if frame.3 || idr {
+                    if frame.key || idr {
                         recoveries.append((now - lossAt) * 1000)
                         waitingKey = false
                     } else {
@@ -323,13 +419,17 @@ final class Receiver {
                         continue
                     }
                 }
-                decoder.push(nals: nals, started: now)
+                decoder.push(nals: nals, pt: pt, started: now)
             }
         }
     }
 
     func sendReport() {
         statsLock.lock()
+        if !reportsOn {
+            statsLock.unlock()
+            return
+        }
         let loss = self.loss
         let packets = self.packets
         let highest = self.expect
@@ -369,18 +469,34 @@ final class Receiver {
     }
 
     func finish() {
+        if let session = decoder.session {
+            VTDecompressionSessionWaitForAsynchronousFrames(session)
+        }
         let rec = recoveries.sorted()
         let p50 = rec.isEmpty ? 0 : rec[rec.count / 2]
         print(decoder.summary())
-        print(String(format: "recoveries=%d recovery-p50=%.1fms nonkey-after-loss=%d", recoveries.count, p50, shownAfterLoss))
+        print(String(format: "recoveries=%d recovery-p50=%.1fms nonkey-after-loss=%d pt=%d", recoveries.count, p50, shownAfterLoss, payloadType))
     }
 }
 
 let receiver = Receiver()
+var stopAfter: Double = 0
 var nums: [UInt16] = []
-for arg in CommandLine.arguments.dropFirst() {
-    if arg == "--no-hello" { sayHello = false }
-    else if let p = UInt16(arg) { nums.append(p) }
+var args = Array(CommandLine.arguments.dropFirst())
+var ai = 0
+while ai < args.count {
+    let arg = args[ai]
+    if arg == "--no-hello" {
+        sayHello = false
+    } else if arg == "--stop-after", ai + 1 < args.count {
+        ai += 1
+        stopAfter = Double(args[ai]) ?? 0
+    } else if arg.hasPrefix("--stop-after=") {
+        stopAfter = Double(arg.dropFirst("--stop-after=".count)) ?? 0
+    } else if let p = UInt16(arg) {
+        nums.append(p)
+    }
+    ai += 1
 }
 if nums.count >= 1 { listenPort = nums[0] }
 if nums.count >= 2 { macPort = nums[1] }

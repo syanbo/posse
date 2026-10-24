@@ -213,11 +213,11 @@ func Fit(w, h, longEdge int) (int, int) {
 
 func PictureBitrate(w, h int) uint32 {
 	bits := float64(w*h) * 60 * 0.06
-	if bits < 1_500_000 {
-		bits = 1_500_000
+	if bits < rateFloor {
+		bits = rateFloor
 	}
-	if bits > 20_000_000 {
-		bits = 20_000_000
+	if bits > rateCeil {
+		bits = rateCeil
 	}
 	return uint32(bits)
 }

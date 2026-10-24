@@ -52,19 +52,20 @@ func TestKeys() (toMobile, toMac [32]byte) {
 	return toMobile, toMac
 }
 
-// Seal 把明文打成一个数据报。counter 从 1 起。
-func Seal(key [32]byte, dir, kind byte, counter uint64, plain []byte) ([]byte, error) {
-	payload := packetHead + len(plain) + packetTag
-	if payload > PacketLimit {
-		return nil, fmt.Errorf("desk: packet is %d bytes", payload)
-	}
+// NewAEAD 按一把已派生的密钥建好 GCM。热路径复用这一个，不再每个包新建。
+func NewAEAD(key [32]byte) (cipher.AEAD, error) {
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return nil, err
 	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
+	return cipher.NewGCM(block)
+}
+
+// Seal 把明文打成一个数据报。counter 从 1 起。aead 可以反复用。
+func Seal(aead cipher.AEAD, dir, kind byte, counter uint64, plain []byte) ([]byte, error) {
+	payload := packetHead + len(plain) + packetTag
+	if payload > PacketLimit {
+		return nil, fmt.Errorf("desk: packet is %d bytes", payload)
 	}
 	out := make([]byte, packetHead, payload)
 	out[0] = kind
@@ -72,18 +73,10 @@ func Seal(key [32]byte, dir, kind byte, counter uint64, plain []byte) ([]byte, e
 	return aead.Seal(out, packetNonce(dir, counter), plain, out[:1]), nil
 }
 
-// Open 解开一个数据报，返回类型、计数器和明文。
-func Open(key [32]byte, dir byte, packet []byte) (kind byte, counter uint64, plain []byte, err error) {
+// Open 解开一个数据报，返回类型、计数器和明文。aead 可以反复用。
+func Open(aead cipher.AEAD, dir byte, packet []byte) (kind byte, counter uint64, plain []byte, err error) {
 	if len(packet) < packetHead+packetTag || len(packet) > PacketLimit {
 		return 0, 0, nil, errPacket
-	}
-	block, err := aes.NewCipher(key[:])
-	if err != nil {
-		return 0, 0, nil, err
-	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return 0, 0, nil, err
 	}
 	plain, err = aead.Open(nil, packetNonce(dir, binary.BigEndian.Uint64(packet[1:9])), packet[packetHead:], packet[:1])
 	if err != nil {

@@ -14,13 +14,13 @@ import (
 
 func init() {
 	commands = append(commands,
-		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE] [--selftest]", cmdDeskHelper},
-		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE]", cmdDeskSpawn},
-		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N]", cmdDeskCast},
+		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest]", cmdDeskHelper},
+		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID]", cmdDeskSpawn},
+		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--exclude-app BUNDLE_ID]", cmdDeskCast},
 	)
 }
 
-func deskFlags(args []string) (seconds int, codec string, bench, probe bool, mov string, selfTest bool, addr string, err error) {
+func deskFlags(args []string) (seconds int, codec string, bench, probe bool, mov string, selfTest bool, addr string, exclude []string, err error) {
 	fs := flag.NewFlagSet("desk", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	sec := fs.Int("seconds", 0, "")
@@ -30,37 +30,51 @@ func deskFlags(args []string) (seconds int, codec string, bench, probe bool, mov
 	m := fs.String("mov", "", "")
 	st := fs.Bool("selftest", false, "")
 	ad := fs.String("addr", "127.0.0.1:47991", "")
+	var ex multiFlag
+	fs.Var(&ex, "exclude-app", "")
 	if _, err = parse(fs, args); err != nil {
-		return 0, "", false, false, "", false, "", err
+		return 0, "", false, false, "", false, "", nil, err
 	}
 	if *c != "hevc" && *c != "h264" {
-		return 0, "", false, false, "", false, "", fmt.Errorf("--codec is hevc or h264")
+		return 0, "", false, false, "", false, "", nil, fmt.Errorf("--codec is hevc or h264")
 	}
-	return *sec, *c, *b, *p, *m, *st, *ad, nil
+	for _, id := range ex {
+		if id == "" {
+			return 0, "", false, false, "", false, "", nil, fmt.Errorf("--exclude-app needs a bundle id")
+		}
+	}
+	return *sec, *c, *b, *p, *m, *st, *ad, []string(ex), nil
 }
 
 func cmdDeskHelper(_ *env, args []string) error {
-	seconds, codec, bench, probe, mov, selfTest, _, err := deskFlags(args)
+	seconds, codec, bench, probe, mov, selfTest, _, exclude, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	return desk.Run(desk.Options{Seconds: seconds, Codec: codec, Bench: bench, Probe: probe, Mov: mov, SelfTest: selfTest})
+	return desk.Run(desk.Options{Seconds: seconds, Codec: codec, Bench: bench, Probe: probe, Mov: mov, SelfTest: selfTest, Exclude: exclude})
 }
 
 func cmdDeskSpawn(_ *env, args []string) error {
-	seconds, codec, bench, probe, mov, _, _, err := deskFlags(args)
+	seconds, codec, bench, probe, mov, _, _, exclude, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	return runSpawn(seconds, codec, bench, probe, mov)
+	return runSpawn(seconds, codec, bench, probe, mov, exclude)
 }
 
 func cmdDeskCast(_ *env, args []string) error {
-	seconds, _, _, _, _, _, addr, err := deskFlags(args)
+	seconds, codec, _, _, _, _, addr, exclude, err := deskFlags(args)
 	if err != nil {
 		return err
 	}
-	proc, err := desk.Spawn(nil)
+	var child []string
+	if codec != "hevc" {
+		child = append(child, "--codec", codec)
+	}
+	for _, id := range exclude {
+		child = append(child, "--exclude-app", id)
+	}
+	proc, err := desk.Spawn(child)
 	if err != nil {
 		return err
 	}
@@ -69,10 +83,10 @@ func cmdDeskCast(_ *env, args []string) error {
 	done := make(chan error, 1)
 	go func() { done <- desk.Cast(proc.Frames, proc.Control, addr) }()
 	if seconds > 0 {
-		time.Sleep(time.Duration(seconds) * time.Second)
-		proc.Control.Close()
+		time.AfterFunc(time.Duration(seconds)*time.Second, func() { proc.Control.Close() })
 	}
 	err = <-done
+	proc.Control.Close()
 	waitErr := proc.Wait()
 	if err != nil && err != io.EOF {
 		return err
@@ -80,7 +94,7 @@ func cmdDeskCast(_ *env, args []string) error {
 	return waitErr
 }
 
-func runSpawn(seconds int, codec string, bench, probe bool, mov string) error {
+func runSpawn(seconds int, codec string, bench, probe bool, mov string, exclude []string) error {
 	var childArgs []string
 	if codec != "hevc" {
 		childArgs = append(childArgs, "--codec", codec)
@@ -93,6 +107,9 @@ func runSpawn(seconds int, codec string, bench, probe bool, mov string) error {
 	}
 	if mov != "" {
 		childArgs = append(childArgs, "--mov", mov)
+	}
+	for _, id := range exclude {
+		childArgs = append(childArgs, "--exclude-app", id)
 	}
 	proc, err := desk.Spawn(childArgs)
 	if err != nil {

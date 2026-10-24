@@ -21,6 +21,8 @@ type Options struct {
 	Probe    bool
 	SelfTest bool
 	Mov      string
+	// Exclude 是采集时排除窗口的 App bundle id，可重复。
+	Exclude []string
 	// LongEdge 是输出长边的像素上限，0 用 1920。
 	LongEdge int
 }

@@ -115,6 +115,8 @@ func runDarwin(o Options) error {
 		pend: map[uint64]*stamp{}, stop: make(chan struct{}),
 		nalLen: 4, born: time.Now(),
 	}
+	// 低延迟码率控制默认开着。UsingHardwareAcceleratedVideoEncoder 读回来经常是 false，
+	// 并不能说明这一路是软件编码，不用它决定开不开。
 	e.wantLow = true
 	active = e
 	logResponsible(o.Log)
@@ -215,7 +217,7 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 		return
 	}
 	e.streamMu.Lock()
-	err := e.openStream(display)
+	err := e.openStream(display, content)
 	e.streamMu.Unlock()
 	if err != nil {
 		e.halt(err)
@@ -224,10 +226,21 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 	e.logf("capturing %dx%d -> %dx%d %s low-latency=%v, started after %s", pw, ph, tw, th, codecName(e.codec), e.lowLatency, time.Since(e.born).Round(time.Millisecond))
 }
 
-func (e *engine) openStream(display objc.ID) error {
+func (e *engine) openStream(display, content objc.ID) error {
 	m := e.mac
-	empty := m.emptyArray(m.clsArray, m.sel("array"))
-	filter := m.initFilter(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingWindows:"), display, empty)
+	var filter objc.ID
+	if len(e.opt.Exclude) == 0 {
+		empty := m.emptyArray(m.clsArray, m.sel("array"))
+		filter = m.initFilter(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingWindows:"), display, empty)
+	} else {
+		// exceptingWindows 留空：被排除的 App 不把单个窗口再捞回来。
+		apps := e.excludedApplications(content)
+		windows := m.emptyArray(m.clsArray, m.sel("array"))
+		filter = m.initFilterApps(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingApplications:exceptingWindows:"), display, apps, windows)
+	}
+	if filter == 0 {
+		return fmt.Errorf("desk: content filter failed")
+	}
 	cfg := m.init(m.alloc(m.clsConfig, m.sel("alloc")), m.sel("init"))
 	m.setInt(cfg, m.sel("setWidth:"), e.width)
 	m.setInt(cfg, m.sel("setHeight:"), e.height)
@@ -346,21 +359,27 @@ func (e *engine) initialBitrate() uint32 {
 }
 
 func (e *engine) applyBitrate(session uintptr, bits uint32) {
-	if bits < 1_500_000 {
-		bits = 1_500_000
+	if bits < rateFloor {
+		bits = rateFloor
 	}
-	if bits > 20_000_000 {
-		bits = 20_000_000
+	if bits > rateCeil {
+		bits = rateCeil
 	}
 	m := e.mac
 	m.withPool(func() {
 		num := m.numLong(m.clsNumber, m.sel("numberWithLongLong:"), int64(bits))
-		m.vtSet(session, m.keyBitrate, uintptr(num))
+		if st := m.vtSet(session, m.keyBitrate, uintptr(num)); st != 0 {
+			e.logf("average bitrate rejected (%d)", st)
+		}
+		// 100ms 窗口的字节数 = 码率 / 80。硬件低延迟编码器对关键帧不一定守这个上限，设失败要看得见。
 		bytes := m.numLong(m.clsNumber, m.sel("numberWithLongLong:"), int64(bits)/80)
 		secs := m.numDouble(m.clsNumber, m.sel("numberWithDouble:"), 0.1)
 		ids := [2]uintptr{uintptr(bytes), uintptr(secs)}
 		arr := m.arrayCount(m.clsArray, m.sel("arrayWithObjects:count:"), unsafe.Pointer(&ids[0]), 2)
-		m.vtSet(session, m.keyLimits, uintptr(arr))
+		st := m.vtSet(session, m.keyLimits, uintptr(arr))
+		if st != 0 {
+			e.logf("data rate limits rejected (%d)", st)
+		}
 	})
 }
 
@@ -393,7 +412,8 @@ func (e *engine) onSample(sample uintptr) {
 	}
 	pts := cmMake(int64(st.number), 60)
 	var flags uint32
-	status := e.mac.vtEncode(session, img, pts, cmTime{}, props, uintptr(st.number), &flags)
+	// 时长无效时 DataRateLimits 不生效，第一帧关键帧会远超 100ms 窗口。
+	status := e.mac.vtEncode(session, img, pts, cmMake(1, 60), props, uintptr(st.number), &flags)
 	st.returned.Store(true)
 	e.mac.cfRelease(img)
 	if status != 0 {
@@ -605,7 +625,7 @@ func (e *engine) setProbe(name string, low, hw, powerOff bool) {
 		return
 	}
 	e.force.Store(true)
-	e.logf("probe %s lowlat=%v require-hw=%v poweroff=%v hardware=%v", name, low, hw, powerOff, e.hardware())
+	e.logf("probe %s lowlat=%v require-hw=%v poweroff=%v", name, low, hw, powerOff)
 }
 
 func (e *engine) phaseLabel() string {
@@ -613,21 +633,6 @@ func (e *engine) phaseLabel() string {
 		return e.phase
 	}
 	return codecName(e.codec)
-}
-
-func (e *engine) hardware() bool {
-	e.encMu.Lock()
-	session := e.enc
-	e.encMu.Unlock()
-	if session == 0 || e.mac.vtCopy == nil || e.mac.keyUsingHW == 0 {
-		return false
-	}
-	var value uintptr
-	if e.mac.vtCopy(session, e.mac.keyUsingHW, 0, &value) != 0 || value == 0 {
-		return false
-	}
-	defer e.mac.cfRelease(value)
-	return value == e.mac.cfTrue
 }
 
 func (e *engine) switchCodec(codec byte) {
@@ -670,7 +675,7 @@ func (e *engine) logStats(final bool) {
 	if final {
 		tag = "done"
 	}
-	e.logf("%s %s low-latency=%v hw=%v async=%d%% n=%d fps=%d p50=%s p95=%s", e.phaseLabel(), tag, e.wantLow, e.hardware(), async, len(samples), fps, samples[len(samples)*50/100], samples[min(len(samples)*95/100, len(samples)-1)])
+	e.logf("%s %s low-latency=%v async=%d%% n=%d fps=%d p50=%s p95=%s", e.phaseLabel(), tag, e.wantLow, async, len(samples), fps, samples[len(samples)*50/100], samples[min(len(samples)*95/100, len(samples)-1)])
 }
 
 func (e *engine) summary() {
@@ -840,7 +845,7 @@ func (e *engine) selfTest() error {
 		e.pend[st.number] = st
 		e.pendMu.Unlock()
 		var flags uint32
-		status := e.mac.vtEncode(e.enc, buf, cmMake(1, 60), cmTime{}, e.forceDict, uintptr(st.number), &flags)
+		status := e.mac.vtEncode(e.enc, buf, cmMake(1, 60), cmMake(1, 60), e.forceDict, uintptr(st.number), &flags)
 		if status != 0 {
 			e.mac.cfRelease(buf)
 			return fmt.Errorf("desk: selftest encode %s: %d", codecName(codec), status)
@@ -960,11 +965,14 @@ func (e *engine) rebuildDisplay() error {
 		return nil
 	}
 	e.logf("display changed %dx%d -> %dx%d", e.width, e.height, tw, th)
-	display, err := e.fetchDisplay(id)
+	display, content, err := e.fetchDisplay(id)
 	if err != nil {
 		return err
 	}
 	defer e.mac.release(display, e.mac.sel("release"))
+	if content != 0 {
+		defer e.mac.release(content, e.mac.sel("release"))
+	}
 	e.stopStream()
 	if tw != e.width || th != e.height {
 		e.width, e.height = tw, th
@@ -984,12 +992,13 @@ func (e *engine) rebuildDisplay() error {
 	e.displayID = id
 	e.writeConfig()
 	e.force.Store(true)
-	return e.openStream(display)
+	return e.openStream(display, content)
 }
 
-func (e *engine) fetchDisplay(id uint32) (objc.ID, error) {
+func (e *engine) fetchDisplay(id uint32) (objc.ID, objc.ID, error) {
 	type result struct {
 		display objc.ID
+		content objc.ID
 		err     error
 	}
 	ch := make(chan result, 1)
@@ -1016,15 +1025,55 @@ func (e *engine) fetchDisplay(id uint32) (objc.ID, error) {
 			ch <- result{err: fmt.Errorf("display %d is gone", id)}
 			return
 		}
-		ch <- result{display: found}
+		ch <- result{display: found, content: e.mac.retain(content, e.mac.sel("retain"))}
 	})
 	e.mac.getContent(e.mac.clsShareable, e.mac.sel("getShareableContentWithCompletionHandler:"), uintptr(block))
 	select {
 	case r := <-ch:
-		return r.display, r.err
+		return r.display, r.content, r.err
 	case <-time.After(3 * time.Second):
-		return 0, fmt.Errorf("display list timed out")
+		return 0, 0, fmt.Errorf("display list timed out")
 	}
+}
+
+// excludedApplications 从这次分享内容里按 bundle id 找出要排除的 App。
+func (e *engine) excludedApplications(content objc.ID) objc.ID {
+	m := e.mac
+	empty := m.emptyArray(m.clsArray, m.sel("array"))
+	if content == 0 {
+		for _, id := range e.opt.Exclude {
+			e.logf("exclude app %s is not running", id)
+		}
+		return empty
+	}
+	list := m.init(content, m.sel("applications"))
+	n := m.count(list, m.sel("count"))
+	ids := make([]string, n)
+	objs := make([]objc.ID, n)
+	for i := range n {
+		app := m.at(list, m.sel("objectAtIndex:"), i)
+		objs[i] = app
+		ids[i] = m.goString(m.init(app, m.sel("bundleIdentifier")))
+	}
+	hit, missing := pickExcluded(ids, e.opt.Exclude)
+	for _, id := range missing {
+		e.logf("exclude app %s is not running", id)
+	}
+	if len(hit) == 0 {
+		return empty
+	}
+	ptrs := make([]uintptr, len(hit))
+	var names []string
+	seen := map[string]bool{}
+	for i, idx := range hit {
+		ptrs[i] = uintptr(objs[idx])
+		if id := ids[idx]; !seen[id] {
+			seen[id] = true
+			names = append(names, id)
+		}
+	}
+	e.logf("excluding %s", strings.Join(names, ", "))
+	return m.arrayCount(m.clsArray, m.sel("arrayWithObjects:count:"), unsafe.Pointer(&ptrs[0]), len(ptrs))
 }
 
 func (e *engine) stopStream() {
