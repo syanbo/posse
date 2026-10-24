@@ -284,6 +284,9 @@ type Options struct {
 	// to Font's size on a reset. Returning true from every zoom turns
 	// zooming off.
 	OnZoom func(z Zoom) bool
+	// NoWheelZoom (Hive) turns off the wheel's zoom: with Command (Control)
+	// held the wheel scrolls as without it. The font size keys still zoom.
+	NoWheelZoom bool
 	// OnClear sees the user's clear on the main thread, before the
 	// terminal clears: ClearScreen for ActionClearScreen's keys and the
 	// context menu's Clear. It reports

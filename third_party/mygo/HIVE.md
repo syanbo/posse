@@ -20,7 +20,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/editor` 的跳到定义（`state.go`、`editor.go`、`input.go`、`build.go`、`paint.go`）：加 `State.LinkAt`，按住 Command 时指针下要画下划线的范围（Hive 用它认引号里的路径和网址），没设或返回空范围时是指针下的词；`pointerMove` 记下这段（`link`），`build` 在 Command 按住、指针在文字上、设了 `OnDefinition` 时把指针换成手形（`linkOn`），`paint` 在这段下面画一条 1 DIP 的线，照 Zed 按住 Command 时的链接样式。
 
-`ui/headless.go`：加 `Tester.MoveWith`，带修饰键移动指针（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
+`ui/headless.go`：加 `Tester.MoveWith`、`Tester.ScrollWith`，带修饰键移动指针、滚动（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
 
 `ui/widgets.go`：对话框（`coreModal`）打开时遮罩淡入、对话框淡入并从 96% 放大，弹出面板（`stylePanel`：Popover、Select、ComboBox、日期、取色）淡入并下落 4 DIP，都用 `Keyframes` 播 160 ms，只在出现时播一次。
 
@@ -44,6 +44,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
   - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Hive 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。程序开着鼠标跟踪时，链接上的这次按下也不交给程序，而是开始选区，之后的移动和松开跟着选区走，拖动照样能选中文字。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
+- `terminal.go`、`view.go`：加 `Options.NoWheelZoom`，开着时按住 Command 滚动滚轮或在触控板上滑动照常滚动，不缩放字号；调字号的快捷键（⌘=、⌘-、⌘0）不受影响。
 - `hive.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Hive 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Hive 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
 ## 升级 mygo

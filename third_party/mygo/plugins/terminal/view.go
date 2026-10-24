@@ -1278,7 +1278,7 @@ func (v *view) scroll(ev ui.InputEvent) bool {
 	if v.cellH == 0 {
 		return false
 	}
-	if ev.Mods&ui.Cmd != 0 {
+	if ev.Mods&ui.Cmd != 0 && !t.opts.NoWheelZoom { // Hive: NoWheelZoom
 		// Rolling up is a step up. DY is the scroll offset's change, so up
 		// comes negative; a wheel's event is a notch, a trackpad's many
 		// small moves, which add up to a step by 40.

@@ -797,6 +797,8 @@ func (a *app) ensureView(id string) {
 		DarkTheme: dark,
 		// 回滚区与常驻进程一致，接入时的快照不会超出
 		Scrollback: 4 << 20,
+		// 按着 ⌘ 滑触控板（⌘ 点链接、⌘ 选区时常碰到）不缩放字号，照常滚动；⌘=、⌘- 仍可调
+		NoWheelZoom: true,
 		// Cmd+点击：网址交给系统用默认浏览器打开，路径在访达里打开
 		OpenLink:    func(link string) bool { return a.openLink(v, link) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },

@@ -665,6 +665,11 @@ func (t *Tester) Scroll(x, y, dx, dy float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true})
 }
 
+// ScrollWith scrolls as Scroll does with modifier keys held. (Hive)
+func (t *Tester) ScrollWith(mods Modifiers, x, y, dx, dy float32) {
+	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true, Mods: platform.Modifiers(mods)})
+}
+
 // DropFiles drops files dragged from another app at (x, y), as from
 // Finder, and reports whether an element took them (DroppedFiles).
 func (t *Tester) DropFiles(x, y float32, paths ...string) bool {
