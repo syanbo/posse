@@ -281,6 +281,10 @@ class _DeskPageState extends State<DeskPage>
         _click(at, deskButtonRight, 1);
       case DeskDragEvent(:final phase, :final at):
         _drag(phase, at);
+      case DeskPointEvent(:final at):
+        // 不单独成包：紧接着的滚动和它进同一个包，Mac 先移指针再滚
+        _link.move(deskAxis(at.x), deskAxis(at.y));
+        _scheduleMove();
       case DeskScrollEvent(:final dx, :final dy):
         final (ux, uy) = deskScrollUnits(
           dx,

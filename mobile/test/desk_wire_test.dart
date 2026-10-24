@@ -175,6 +175,19 @@ void main() {
     );
   });
 
+  test('a move before a scroll rides in the same packet, ahead of it', () {
+    final packets = <Uint8List>[];
+    final link = DeskInputLink(onPacket: packets.add);
+    link.move(100, 200);
+    link.scroll(0, -30);
+    final events = decodeDeskInput(packets.single)!;
+    expect(events.map((event) => event.kind).toList(), [
+      deskEventMove,
+      deskEventScroll,
+    ]);
+    expect(events.first.x, 100);
+  });
+
   test('scroll follows the finger', () {
     // 手指划过整张画面的高，Mac 滚一整屏
     expect(deskScrollUnits(0, 200, 200), (0, -4096.0));

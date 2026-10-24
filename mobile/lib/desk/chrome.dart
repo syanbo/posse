@@ -98,7 +98,6 @@ Future<void> restoreDeskOrientation() {
 /// 右键没有指针，靠这一下知道点中了。长按进入拖动另走手势的 onArm，不在事件里。
 bool deskHapticFor(DeskEvent event) => event is DeskRightClickEvent;
 
-/// 还没收到视频时不写 0。
 /// 调试面板里画面走的路，取值见 [DeskStats.path]。
 String deskPathLabel(String? path) => switch (path) {
   'lan' => '直连',
@@ -107,6 +106,7 @@ String deskPathLabel(String? path) => switch (path) {
   _ => '—',
 };
 
+/// 还没收到视频时不写 0。
 String deskFpsLabel(double fps, {required bool video}) {
   if (!video) return '— fps';
   return '${fps.toStringAsFixed(0)} fps';

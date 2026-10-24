@@ -40,6 +40,13 @@ class DeskTextEvent extends DeskEvent {
   final String text;
 }
 
+/// 只把 Mac 的指针移过去，不按键。双指滚动开始时先发一个：滚动交给指针下面的窗口。
+class DeskPointEvent extends DeskEvent {
+  const DeskPointEvent(this.at);
+
+  final DeskPoint at;
+}
+
 class DeskScrollEvent extends DeskEvent {
   const DeskScrollEvent(this.dx, this.dy, {required this.inertia});
 
@@ -88,6 +95,7 @@ String deskEventLine(DeskEvent event) {
       DeskDragPhase.move => '拖动 ${fmt(at)}',
       DeskDragPhase.up => '松开 ${fmt(at)}',
     },
+    DeskPointEvent(:final at) => '指向 ${fmt(at)}',
     DeskScrollEvent(:final dx, :final dy, :final inertia) =>
       '滚动 ${dx.toStringAsFixed(0)}, ${dy.toStringAsFixed(0)}'
           '${inertia ? ' 惯性' : ''}',

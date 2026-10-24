@@ -279,6 +279,8 @@ class DeskGestures {
     if (_samples.length < 2) return;
     final a = _samples.first.centroid;
     final b = _samples.last.centroid;
+    final at = _map(a.dx, a.dy);
+    if (at != null) onEvent(DeskPointEvent(at));
     _scrollFrom = b;
     final d = b - a;
     if (d.distance == 0) return;

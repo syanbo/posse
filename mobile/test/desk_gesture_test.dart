@@ -241,6 +241,18 @@ void main() {
         g.move(2, 140 + x, 100, t);
       }
       expect(g.viewport.zoom, 1);
+      // 滚动之前先把指针移到两指按下时的中点，滚动落在手指下面的窗口
+      final point = g.events.first as DeskPointEvent;
+      final expected = mapDesktop(
+        x: 120,
+        y: 100,
+        fit: g.fit,
+        viewport: g.viewport,
+      )!;
+      expect(point.at.x, closeTo(expected.x, 1e-9));
+      expect(point.at.y, closeTo(expected.y, 1e-9));
+      expect(g.events[1], isA<DeskScrollEvent>());
+      expect(g.events.whereType<DeskPointEvent>(), hasLength(1));
       final scrolls = g.events.whereType<DeskScrollEvent>().toList();
       expect(scrolls, isNotEmpty);
       expect(scrolls.every((event) => !event.inertia), isTrue);
