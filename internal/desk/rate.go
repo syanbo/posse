@@ -17,6 +17,8 @@ const (
 // rateState 按大约 1 秒的接收报告调码率。
 // 单个 100ms 报告里丢一个包就会超过 2%，不能按它降；降完至少隔 rateHold 再降。
 // 连续 rateStable 没有拥塞之后，每个窗口加 5%，不超过上限。
+// 加码率还要这一窗口真的跑了码率的四分之一以上：画面静止时几乎没有包，没丢包不说明链路扛得住，
+// 一直往上加，画面一动就按虚高的码率发。
 type rateState struct {
 	bitrate uint32
 	maxBit  uint32
@@ -86,7 +88,8 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 			r.stable = now
 			r.lastUp = time.Time{}
 		}
-	} else if now.Sub(r.stable) >= rateStable && r.bitrate < r.maxBit && (r.lastUp.IsZero() || now.Sub(r.lastUp) >= time.Second) {
+	} else if now.Sub(r.stable) >= rateStable && r.bitrate < r.maxBit && (r.lastUp.IsZero() || now.Sub(r.lastUp) >= time.Second) &&
+		carried(r.packets, now.Sub(r.winAt))*4 >= uint64(r.bitrate) {
 		next = r.bitrate + r.bitrate/20
 		if next > r.maxBit {
 			next = r.maxBit
@@ -148,4 +151,12 @@ func medianGap(gaps []time.Duration) time.Duration {
 	s := append([]time.Duration(nil), gaps...)
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
 	return s[len(s)/2]
+}
+
+// carried 是这一窗口收到的包折成的每秒比特数，按每个包都满 PacketLimit 算，偏高。
+func carried(packets uint32, window time.Duration) uint64 {
+	if window <= 0 {
+		return 0
+	}
+	return uint64(packets) * PacketLimit * 8 * uint64(time.Second) / uint64(window)
 }

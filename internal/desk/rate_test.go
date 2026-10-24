@@ -14,7 +14,7 @@ func TestRateRisesFivePercentPerSecond(t *testing.T) {
 	var got []uint32
 	for range 6 {
 		now = now.Add(time.Second)
-		d := r.add(now, 0, 100, 16*time.Millisecond, 16*time.Millisecond)
+		d := r.add(now, 0, 500, 16*time.Millisecond, 16*time.Millisecond)
 		got = append(got, d.bitrate)
 	}
 	want := []uint32{4_000_000, 4_200_000, 4_410_000, 4_630_500, 4_862_025, 5_105_126}
@@ -146,5 +146,24 @@ func TestRateSettlesBelowAFiveMegabitCap(t *testing.T) {
 	}
 	if back == 0 || back > 20*time.Second {
 		t.Fatalf("returned to start %d in %s, now %d", startBit, back, r.bitrate)
+	}
+}
+
+func TestIdleScreenDoesNotRaiseRate(t *testing.T) {
+	var r rateState
+	t0 := time.Unix(1_700_000_000, 0)
+	r.reset(t0, 8_000_000, rateCeil)
+	now := t0
+	// 画面静止：每秒只有十几个包，没丢包也不加
+	for range 10 {
+		now = now.Add(time.Second)
+		if d := r.add(now, 0, 12, 0, 16*time.Millisecond); d.changed {
+			t.Fatalf("raised on an idle window: %+v", d)
+		}
+	}
+	// 画面动起来、链路扛得住，照常加
+	now = now.Add(time.Second)
+	if d := r.add(now, 0, 800, 16*time.Millisecond, 16*time.Millisecond); !d.changed || d.bitrate != 8_400_000 {
+		t.Fatalf("busy window: %+v", d)
 	}
 }
