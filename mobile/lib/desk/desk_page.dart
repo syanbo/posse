@@ -621,8 +621,12 @@ class _DeskPageState extends State<DeskPage>
       case 'ready':
         await _onReady(frame, gen, rpc);
       case 'state':
-        if (frame['state'] == 'no_accessibility' && mounted) {
-          setState(() => _accessNote = deskAccessText);
+        if (!mounted) return;
+        switch (frame['state']) {
+          case 'no_accessibility':
+            setState(() => _accessNote = deskAccessText);
+          case 'accessibility':
+            setState(() => _accessNote = null);
         }
       case 'end':
         final reason = frame['reason'];

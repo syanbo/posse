@@ -219,3 +219,35 @@ func TestDeskRefusals(t *testing.T) {
 		t.Fatal("accepted a codec the Mac cannot send")
 	}
 }
+
+// 看的过程中打开辅助功能：先推 no_accessibility，再推 accessibility，缺失授权里去掉它
+func TestDeskAccessibilityGranted(t *testing.T) {
+	status := func(code byte) desk.Frame {
+		return desk.Frame{Kind: desk.KindStatus, Payload: []byte{code}}
+	}
+	withDeskSpawn(t, func([]string) (deskProc, error) {
+		return newFakeDeskProc(t, []desk.Frame{configFrame(), status(desk.StatusNoAccessibility), status(desk.StatusAccessibility)}, true), nil
+	})
+	d := &Daemon{}
+	events := make(chan mobile.DeskEvent, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, err := d.deskStart(ctx, deskRequest(), func(e mobile.DeskEvent) { events <- e }); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for len(got) < 2 {
+		select {
+		case e := <-events:
+			got = append(got, e.State)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("states %v", got)
+		}
+	}
+	if got[0] != "no_accessibility" || got[1] != "accessibility" {
+		t.Fatalf("states %v", got)
+	}
+	if _, missing := d.deskStatus(); len(missing) != 0 {
+		t.Fatalf("missing %v", missing)
+	}
+}

@@ -36,6 +36,9 @@ type engine struct {
 	block    objc.Block
 	observer objc.ID
 
+	// 开始时没有辅助功能权限：ticker 每秒复查，打开了报一次 StatusAccessibility，只由 ticker 读写
+	axWait bool
+
 	streamMu  sync.Mutex
 	displayID uint32
 	locked    atomic.Bool
@@ -143,6 +146,7 @@ func runDarwin(o Options) error {
 		// 缺辅助功能不挡画面。提示是异步的，这次仍报未授权，用户打开后再拉起才生效。
 		_ = WriteFrame(o.Frames, Frame{Kind: KindStatus, CaptureUnixNano: time.Now().UnixNano(), Payload: []byte{StatusNoAccessibility}})
 		e.logf("accessibility is not allowed; turn on %s in System Settings > Privacy & Security > Accessibility", recordingAppName())
+		e.axWait = true
 	}
 	e.force.Store(true)
 	// 控制管道和采集都等跑圈起来再开始。提前 CFRunLoopStop 停不住还没开始的跑圈。
@@ -593,6 +597,11 @@ func (e *engine) ticker() {
 				e.logStats(false)
 			}
 			e.write(Frame{Kind: KindHeartbeat, CaptureUnixNano: time.Now().UnixNano()})
+			if e.axWait && e.axGranted() {
+				e.axWait = false
+				e.logf("accessibility allowed")
+				e.report(StatusAccessibility)
+			}
 			if e.opt.Probe {
 				switch elapsed {
 				case 2:

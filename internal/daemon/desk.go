@@ -160,6 +160,8 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 					cancel()
 				case desk.StatusNoAccessibility:
 					notify(mobile.DeskEvent{Type: "state", State: "no_accessibility"})
+				case desk.StatusAccessibility:
+					notify(mobile.DeskEvent{Type: "state", State: "accessibility"})
 				}
 			},
 		})
@@ -270,6 +272,8 @@ func (d *Daemon) deskNoteStatus(code byte) {
 		d.deskAddMissing("screen")
 	case desk.StatusNoAccessibility:
 		d.deskAddMissing("accessibility")
+	case desk.StatusAccessibility:
+		d.deskClearMissing("accessibility")
 	}
 }
 

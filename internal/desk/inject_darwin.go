@@ -140,6 +140,16 @@ func (e *engine) inputTest() error {
 	return nil
 }
 
+// axGranted 只查不弹框。授权在系统设置里打开后立即生效，不用重新拉起子进程。
+func (e *engine) axGranted() bool {
+	if e.mac.axTrusted == nil {
+		return false
+	}
+	ok := false
+	e.mac.withPool(func() { ok = e.mac.axTrusted() })
+	return ok
+}
+
 // 提示是异步的，这次调用的返回值不会因为弹了框就变成已授权。
 func (e *engine) accessibilityTrusted() bool {
 	if e.mac.axTrusted == nil {

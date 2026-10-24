@@ -227,7 +227,7 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 - 与上面的差别：编码验收线改为 p95 ≤ 9 ms；限速和丢包用 `tools/deskshape` 本机转发模拟（`dnctl` 要 sudo）；5 Mbps 限速加 2% 丢包时码率在 5.1–7.2 Mbps 之间，没压到 3–5 Mbps，2% 随机丢包下每秒要补几次关键帧。
 - 还没验证：锁屏、改分辨率、定期确认框、双击、双指手势和 120 Hz 手感、真实 Wi-Fi、慢动作测端到端延迟。
 - 第 4 步两端已接上（`internal/daemon/desk.go`、`internal/mobile/desk.go`、`mobile/lib/desk`）：模拟器上经订阅出画面；输入编码和密钥派生两端用同一组字节对过（`input_test.go`、`packet_test.go`、`desk_wire_test.dart`），手机经 UDP 发输入在真机上还没测。定下来的协议：
-  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 3 秒没报告，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `hive.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
+  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`，看的过程中打开了辅助功能再推 `{type: "state", state: "accessibility"}`（子进程每秒复查，不用重新拉起）；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 3 秒没报告，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `hive.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
   - 密钥：材料是这条连接两个方向的会话密钥，主机发出的在前（手机上是 recvKey 在前、sendKey 在后），HKDF-SHA256（salt 是订阅的 nonce，info `hive-desk/v1`）出 64 字节，前 32 给发往手机，后 32 给发往 Mac。会话 ID 明文写在每帧头里，不能用。
   - beat 负载 16 字节：发出时刻（Unix 纳秒）和已执行到的必达输入序号，都是大端；每秒一次，收到 input 后马上再发一次。
   - 直连只在手机端判断：常驻进程看到的回环分不清隧道和模拟器，隧道下 UDP 到不了，最多空等到 `no_report`。

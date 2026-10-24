@@ -25,6 +25,7 @@ const (
 	StatusUnlocked        byte = 2
 	StatusNoScreen        byte = 3 // 没有屏幕录制权限，子进程随后退出
 	StatusNoAccessibility byte = 4 // 没有辅助功能权限，能看不能操作
+	StatusAccessibility   byte = 5 // 看的过程中用户打开了辅助功能，可以操作了
 
 	CodecHEVC byte = 1
 	CodecH264 byte = 2
