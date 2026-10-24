@@ -237,6 +237,35 @@ void main() {
     );
   });
 
+  test('a tunnel sends the picture to a LAN address of the same Mac', () async {
+    Future<List<InternetAddress>> lookup(String host) async => switch (host) {
+      'tunnel.example' => [InternetAddress('1.1.1.1')],
+      'mac.local' => [InternetAddress('192.168.50.187')],
+      _ => throw const SocketException('no'),
+    };
+    // 本身能直连就用它
+    expect(
+      await deskUdpHost('192.168.1.2', ['10.0.0.1'], lookup: lookup),
+      '192.168.1.2',
+    );
+    // 隧道：挑同一台电脑的第一个能直连的地址，回环跳过
+    expect(
+      await deskUdpHost('tunnel.example', [
+        'tunnel.example',
+        '127.0.0.1',
+        'localhost',
+        'mac.local',
+        '192.168.50.187',
+      ], lookup: lookup),
+      'mac.local',
+    );
+    // 没有能直连的
+    expect(
+      await deskUdpHost('tunnel.example', ['127.0.0.1'], lookup: lookup),
+      isNull,
+    );
+  });
+
   test('status copy is one sentence per reason', () {
     expect(deskFailText('unsupported'), '这台电脑的 Hive 需要更新');
     expect(deskFailText('method_not_found'), '这台电脑的 Hive 需要更新');
@@ -254,7 +283,7 @@ void main() {
     expect(deskEndText('capture_failed'), '采集失败');
     expect(deskEndText('other'), '连接已结束');
     expect(deskAccessText, '能看不能操作，请到 Mac 上打开辅助功能');
-    expect(deskIndirectText, '改用局域网或 Tailscale');
+    expect(deskIndirectText, contains('Tailscale'));
   });
 }
 

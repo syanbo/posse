@@ -61,3 +61,21 @@ bool _ipv6Direct(InternetAddress address) {
   if (raw[0] == 0xfe && raw[1] & 0xc0 == 0x80) return true;
   return false;
 }
+
+/// 画面的 UDP 发到哪。当前连接本身能直连就用它；走隧道时从同一台电脑的其他地址
+/// （配对码里的地址、另外扫过的局域网码）里挑第一个能直连的：订阅仍走当前连接，
+/// 只有画面和输入换路。回环地址跳过，手机上的 127.0.0.1 不是那台 Mac。
+Future<String?> deskUdpHost(
+  String host,
+  Iterable<String> others, {
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) async {
+  if (await deskHostDirect(host, lookup: lookup)) return host;
+  final seen = {host};
+  for (final other in others) {
+    if (other.isEmpty || other == 'localhost' || !seen.add(other)) continue;
+    if (InternetAddress.tryParse(other)?.isLoopback ?? false) continue;
+    if (await deskHostDirect(other, lookup: lookup)) return other;
+  }
+  return null;
+}

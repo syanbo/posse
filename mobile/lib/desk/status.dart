@@ -6,6 +6,7 @@ String deskFailText(String code) => switch (code) {
   'permission_screen' => '请到 Mac 上允许屏幕录制',
   'unsupported_codec' => '这台电脑不支持手机的视频编码',
   'capture_failed' => '采集失败',
+  'lan_unreachable' => '手机和这台 Mac 不在同一个局域网',
   _ => '连接失败',
 };
 
@@ -21,4 +22,4 @@ String deskEndText(String reason) => switch (reason) {
 
 const deskAccessText = '能看不能操作，请到 Mac 上打开辅助功能';
 
-const deskIndirectText = '改用局域网或 Tailscale';
+const deskIndirectText = '画面过不了隧道，请在同一个 Wi-Fi 下扫这台 Mac 的局域网码，或改用 Tailscale';

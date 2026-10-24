@@ -1,13 +1,14 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../app_state.dart';
+import '../protocol/pairing.dart';
 import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
@@ -109,6 +110,10 @@ class _DeskPageState extends State<DeskPage>
   String? _customHost;
   int? _customPort;
   int? _readyPort;
+
+  /// 当前连接走隧道、画面改走同一台电脑的局域网地址时是那个地址。
+  String? _lanHost;
+  Timer? _lanCheck;
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
@@ -176,6 +181,7 @@ class _DeskPageState extends State<DeskPage>
     _zoomed.dispose();
     _retry?.cancel();
     _lockRetry?.cancel();
+    _lanCheck?.cancel();
     // 让还在跑的订阅停在下一次检查，松开先于退订发出。
     _gen++;
     _link.release();
@@ -225,7 +231,25 @@ class _DeskPageState extends State<DeskPage>
   String? get _udpHost {
     final custom = _customHost;
     if (custom != null && custom.isNotEmpty) return custom;
-    return _autoHost;
+    return _lanHost ?? _autoHost;
+  }
+
+  /// 同一台电脑（主机公钥相同）存着的所有地址的主机名，当前连接的排前面。
+  List<String> _sameComputerHosts() {
+    final offer = widget.model.offer;
+    if (offer == null) return const [];
+    final urls = [...offer.dialUrls];
+    for (final c in widget.model.computers) {
+      try {
+        final other = PairingOffer.parse(c.code);
+        if (other.publicKeyB64 == offer.publicKeyB64) {
+          urls.addAll(other.dialUrls);
+        }
+      } on Object {
+        // 存坏的配对码跳过。
+      }
+    }
+    return [for (final url in urls) ?deskHostOf(url)];
   }
 
   bool get _custom => _customHost != null || _customPort != null;
@@ -591,12 +615,13 @@ class _DeskPageState extends State<DeskPage>
     _keys = null;
     _readyPort = null;
     if (!mounted || gen != _gen) return;
-    final direct = await deskHostDirect(host);
+    final udp = await deskUdpHost(host, _sameComputerHosts());
     if (!mounted || gen != _gen) return;
-    if (!direct) {
+    if (udp == null) {
       setState(() => _indirect = true);
       return;
     }
+    _lanHost = udp == host ? null : udp;
     final pixels = _screenPixels();
     final RpcStream stream;
     try {
@@ -713,6 +738,14 @@ class _DeskPageState extends State<DeskPage>
         _fail = null;
         _endNote = null;
       });
+      // 局域网地址是猜的：手机不在同一个 Wi-Fi 时 hello 到不了，Mac 要等 60 秒才放弃
+      _lanCheck?.cancel();
+      if (_lanHost != null && _customHost == null) {
+        _lanCheck = Timer(const Duration(seconds: 5), () {
+          if (!mounted || gen != _gen || _stats.video) return;
+          unawaited(_enqueue(() => _applyFail('lan_unreachable', gen)));
+        });
+      }
     } on PlatformException catch (error) {
       if (!mounted || gen != _gen) return;
       await _applyFail(
