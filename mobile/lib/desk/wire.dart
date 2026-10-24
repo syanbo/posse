@@ -28,12 +28,36 @@ const deskKeyHid = {
 /// 整屏 0–1 换成绝对坐标 0–65535。
 int deskAxis(double unit) => (unit.clamp(0.0, 1.0) * 65535).round();
 
-/// 手指位移（右、下为正，逻辑像素）换成 CGEvent 滚轮像素。
-/// CG 的正方向是上、右。纵向取反，内容才跟着手指走。Mac 不再翻一次。
-(int dx, int dy) deskScrollUnits(double dx, double dy) {
-  final x = dx.round().clamp(-32768, 32767).toInt();
-  final y = (-dy).round().clamp(-32768, 32767).toInt();
-  return (x, y);
+/// 滚动事件里一个主屏高度对应的单位数，和 ScrollPerScreen 一致。
+const deskScrollPerScreen = 4096;
+
+/// 手指位移（右、下为正，逻辑像素）换成主屏高度的 1/4096。pictureHeight 是画面
+/// 此刻在手机上的高度（含缩放），Mac 再乘上主屏的高，内容就贴着手指走。
+/// CG 的正方向是上、右。纵向取反。Mac 不再翻一次。
+(double dx, double dy) deskScrollUnits(
+  double dx,
+  double dy,
+  double pictureHeight,
+) {
+  if (pictureHeight <= 0) return (0, 0);
+  final k = deskScrollPerScreen / pictureHeight;
+  return (dx * k, -dy * k);
+}
+
+/// 滚动换成整数单位，不足 1 的留着下次加上。
+class DeskScrollCarry {
+  double _x = 0;
+  double _y = 0;
+
+  (int, int) take(double dx, double dy) {
+    _x += dx;
+    _y += dy;
+    final x = _x.truncate().clamp(-32768, 32767).toInt();
+    final y = _y.truncate().clamp(-32768, 32767).toInt();
+    _x -= x;
+    _y -= y;
+    return (x, y);
+  }
 }
 
 class DeskWireException implements Exception {

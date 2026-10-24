@@ -93,6 +93,7 @@ class _DeskPageState extends State<DeskPage>
   Timer? _retry;
   Timer? _lockRetry;
   late final DeskInputLink _link;
+  final _scrollCarry = DeskScrollCarry();
   final _packets = <Uint8List>[];
   var _sendTail = Future<void>.value();
   final _inputLine = ValueNotifier<(int, int)>((0, 0));
@@ -269,8 +270,13 @@ class _DeskPageState extends State<DeskPage>
       case DeskDragEvent(:final phase, :final at):
         _drag(phase, at);
       case DeskScrollEvent(:final dx, :final dy):
-        final units = deskScrollUnits(dx, dy);
-        if (units.$1 != 0 || units.$2 != 0) _link.scroll(units.$1, units.$2);
+        final (ux, uy) = deskScrollUnits(
+          dx,
+          dy,
+          _gestures.fit.height * _gestures.viewport.zoom,
+        );
+        final (sx, sy) = _scrollCarry.take(ux, uy);
+        if (sx != 0 || sy != 0) _link.scroll(sx, sy);
       case DeskKeyEvent():
       case DeskTextEvent():
         break;

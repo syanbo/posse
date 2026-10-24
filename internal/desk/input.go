@@ -25,6 +25,9 @@ const (
 	EventKeyUp   byte = 6
 	EventText    byte = 7
 
+	// ScrollPerScreen 是滚动事件里一个主屏高度对应的单位数。
+	ScrollPerScreen = 4096
+
 	ButtonLeft  byte = 1
 	ButtonRight byte = 2
 
@@ -88,8 +91,9 @@ type Event struct {
 //	2 按下、3 松开：u32 序号、u8 键（1 左、2 右）、u8 点击次数、u16 x、u16 y。
 //	  点击次数交给 kCGMouseEventClickState，双击是 2、三击是 3；0 按 1。
 //	  位置跟这次点击走，不依赖前面的移动包。
-//	4 滚动：u32 序号、i16 dx、i16 dy，像素。dy 原样进滚轮 1，dx 原样进滚轮 2，
-//	  正方向就是 CGEvent 的正方向。自然滚动由手机决定，Mac 不翻转。
+//	4 滚动：u32 序号、i16 dx、i16 dy，单位是主屏高度的 1/ScrollPerScreen（两个方向都按高度算）。
+//	  Mac 乘上主屏的高（点）换成滚轮像素：手机上的画面缩得很小，按手机像素滚，内容只跟着手指走几分之一。
+//	  dy 进滚轮 1，dx 进滚轮 2，正方向就是 CGEvent 的正方向。自然滚动由手机决定，Mac 不翻转。
 //	5 键按下、6 键松开：u32 序号、u16 USB HID 用法（键盘页 0x07）、u8 修饰键。
 //	7 文字：u32 序号、u8 修饰键、u16 字节数、这么多 UTF-8。
 //	  修饰键为 0 时按 Unicode 注入；不为 0 时按当前键盘布局把每个字符反查成键码，

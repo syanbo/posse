@@ -176,8 +176,14 @@ void main() {
   });
 
   test('scroll follows the finger', () {
-    expect(deskScrollUnits(1.2, 3.4), (1, -3));
-    expect(deskScrollUnits(0, 0), (0, 0));
+    // 手指划过整张画面的高，Mac 滚一整屏
+    expect(deskScrollUnits(0, 200, 200), (0, -4096.0));
+    expect(deskScrollUnits(100, 0, 400), (1024.0, 0));
+    expect(deskScrollUnits(5, 5, 0), (0, 0));
+    // 不足 1 的留到下一次
+    final carry = DeskScrollCarry();
+    expect(carry.take(0.6, -0.6), (0, 0));
+    expect(carry.take(0.6, -0.6), (1, -1));
     expect(deskAxis(0), 0);
     expect(deskAxis(1), 65535);
   });

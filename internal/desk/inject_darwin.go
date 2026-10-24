@@ -4,6 +4,7 @@ package desk
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -73,6 +74,8 @@ type injector struct {
 	source      uintptr
 	lastX       float64
 	lastY       float64
+	// 滚动换成点之后不足 1 的部分，留给下一次，慢慢拖不会被取整吃掉
+	scrollX, scrollY float64
 }
 
 func (e *engine) injector() *injector {
@@ -296,7 +299,16 @@ func (in *injector) scroll(ev Event) {
 	if in.mac.cgScroll == nil || in.mac.cgPost == nil {
 		return
 	}
-	gev := in.mac.cgScroll(in.source, cgScrollPixel, 2, int32(ev.DY), int32(ev.DX), 0)
+	perUnit := in.bounds.H / ScrollPerScreen
+	in.scrollX += float64(ev.DX) * perUnit
+	in.scrollY += float64(ev.DY) * perUnit
+	dx, dy := math.Trunc(in.scrollX), math.Trunc(in.scrollY)
+	in.scrollX -= dx
+	in.scrollY -= dy
+	if dx == 0 && dy == 0 {
+		return
+	}
+	gev := in.mac.cgScroll(in.source, cgScrollPixel, 2, int32(dy), int32(dx), 0)
 	if gev == 0 {
 		return
 	}

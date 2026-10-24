@@ -481,6 +481,9 @@ func (c *caster) onReport(plain []byte) {
 	packets := binary.BigEndian.Uint32(plain[12:16])
 	gap := time.Duration(binary.BigEndian.Uint32(plain[32:36])) * time.Microsecond
 	c.mu.Lock()
+	if binary.BigEndian.Uint64(plain[24:32]) == 1 {
+		c.rate.addQueue(time.Duration(binary.BigEndian.Uint64(plain[16:24])) * time.Microsecond)
+	}
 	base := c.sendGap
 	d := c.rate.add(time.Now(), loss, packets, gap, base)
 	if d.changed {
@@ -499,7 +502,7 @@ func (c *caster) onReport(plain []byte) {
 	if !d.changed && !c.verbose {
 		return
 	}
-	log.Printf("desk: rate %s loss=%.3f packets=%d late=%v gap=%s bitrate=%d congested=%v", action, d.loss, d.packets, d.late, d.gap, d.bitrate, d.congested)
+	log.Printf("desk: rate %s loss=%.3f packets=%d late=%v gap=%s queue=%s bitrate=%d congested=%v", action, d.loss, d.packets, d.late, d.gap, d.queue, d.bitrate, d.congested)
 	if !d.changed {
 		return
 	}

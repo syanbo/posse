@@ -508,6 +508,9 @@ final class DeskSession {
   private var packetsInterval: UInt32 = 0
   private var gapsUs: [UInt32] = []
   private var lastFrameAt: CFAbsoluteTime = 0
+  /// 每帧「到达减采集」的秒数，含两台设备的时钟差。这一圈报告里的，和每秒的最小值。
+  private var delays: [Double] = []
+  private var delayFloor: [(Int, Double)] = []
   private var waitingKey = true
   private var primed = false
   private var recoveries = 0
@@ -600,6 +603,8 @@ final class DeskSession {
     lossTotal = 0
     packetsInterval = 0
     gapsUs.removeAll(keepingCapacity: true)
+    delays.removeAll(keepingCapacity: true)
+    delayFloor.removeAll(keepingCapacity: true)
     statsLock.lock()
     videoBytes.removeAll(keepingCapacity: true)
     decodedAt.removeAll(keepingCapacity: true)
@@ -721,6 +726,7 @@ final class DeskSession {
         gapsUs.append(UInt32(min((arrival - lastFrameAt) * 1_000_000, Double(UInt32.max))))
       }
       lastFrameAt = arrival
+      noteDelay(capture: beU64(opened.2, 9))
       decoder.push(unit)
     }
   }
@@ -730,9 +736,11 @@ final class DeskSession {
     let packets = packetsInterval
     let highest = expect
     let gap = medianGap()
+    let queue = queueDelayUs()
     lossInterval = 0
     packetsInterval = 0
     gapsUs.removeAll(keepingCapacity: true)
+    delays.removeAll(keepingCapacity: true)
     var raw = Data()
     func put64(_ value: UInt64) {
       var x = value.bigEndian
@@ -745,10 +753,34 @@ final class DeskSession {
     put64(UInt64(highest))
     put32(loss)
     put32(packets)
-    put64(0)
-    put64(0)
+    // 排队延迟（微秒），后面的 1 表示这个字段有效：旧版手机这两格是 0
+    put64(queue ?? 0)
+    put64(queue == nil ? 0 : 1)
     put32(gap)
     send(deskKindReport, raw)
+  }
+
+  /// 时钟差是常数，减掉最近 10 秒里最小的那次，剩下的就是这一帧比最顺的时候多排的队。
+  /// 不用帧间隔：Mac 只在画面变了才出帧，帧率忽高忽低，间隔变大不等于排队。
+  private func noteDelay(capture: UInt64) {
+    guard capture > 0 else { return }
+    let now = Date().timeIntervalSince1970
+    let delay = now - Double(capture) / 1e9
+    delays.append(delay)
+    let second = Int(now)
+    if let last = delayFloor.last, last.0 == second {
+      delayFloor[delayFloor.count - 1].1 = min(last.1, delay)
+    } else {
+      delayFloor.append((second, delay))
+    }
+    delayFloor.removeAll { $0.0 < second - 10 }
+  }
+
+  private func queueDelayUs() -> UInt64? {
+    guard !delays.isEmpty, let floor = delayFloor.map({ $0.1 }).min() else { return nil }
+    let sorted = delays.sorted()
+    let queue = max(0, sorted[sorted.count / 2] - floor)
+    return UInt64(min(queue * 1_000_000, Double(UInt32.max)))
   }
 
   /// beat 明文 16 字节、大端：前 8 字节是时刻，后 8 字节是已执行的必达序号。

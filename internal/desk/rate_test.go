@@ -167,3 +167,32 @@ func TestIdleScreenDoesNotRaiseRate(t *testing.T) {
 		t.Fatalf("busy window: %+v", d)
 	}
 }
+
+// 帧率忽高忽低（看终端时一秒十几帧）不是排队：手机报了排队延迟就只看它
+func TestQueueDelayOverridesFrameGaps(t *testing.T) {
+	var r rateState
+	t0 := time.Unix(1_700_000_000, 0)
+	r.reset(t0, 8_000_000, rateCeil)
+	now := t0
+	for range 10 {
+		for range 10 {
+			now = now.Add(100 * time.Millisecond)
+			r.addQueue(5 * time.Millisecond)
+			if d := r.add(now, 0, 30, 68*time.Millisecond, 17*time.Millisecond); d.evaluated && d.congested {
+				t.Fatalf("variable frame rate taken for congestion: %+v", d)
+			}
+		}
+	}
+	// 真排队：每帧多排 80 毫秒
+	for range 10 {
+		now = now.Add(100 * time.Millisecond)
+		r.addQueue(80 * time.Millisecond)
+		if d := r.add(now, 0, 600, 17*time.Millisecond, 17*time.Millisecond); d.evaluated {
+			if !d.late || !d.changed || d.bitrate >= d.from {
+				t.Fatalf("queue not cut: %+v", d)
+			}
+			return
+		}
+	}
+	t.Fatal("no decision")
+}

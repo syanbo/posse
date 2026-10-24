@@ -12,6 +12,8 @@ const (
 	rateWindow = time.Second
 	rateHold   = 500 * time.Millisecond
 	rateStable = 2 * time.Second
+	// 排队超过它算堵。Wi-Fi 平时抖十几毫秒，远程桌面多排 40 毫秒手上就能感觉到
+	rateQueueLate = 40 * time.Millisecond
 )
 
 // rateState 按大约 1 秒的接收报告调码率。
@@ -29,6 +31,8 @@ type rateState struct {
 	loss    uint32
 	packets uint32
 	gaps    []time.Duration
+	// 手机报的排队延迟。有它就按它判断排队，不再看帧间隔
+	queues []time.Duration
 }
 
 type rateDecision struct {
@@ -41,6 +45,12 @@ type rateDecision struct {
 	packets   uint32
 	late      bool
 	gap       time.Duration
+	queue     time.Duration
+}
+
+// addQueue 收进一条报告里的排队延迟：每帧到达减采集，比最近 10 秒最顺的时候多出来的部分。
+func (r *rateState) addQueue(q time.Duration) {
+	r.queues = append(r.queues, q)
 }
 
 func (r *rateState) reset(now time.Time, bitrate, maxBit uint32) {
@@ -77,7 +87,12 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 		d.loss = float64(r.loss) / float64(total)
 	}
 	d.gap = medianGap(r.gaps)
-	d.late = queueLate(r.gaps, sendGap)
+	if len(r.queues) > 0 {
+		d.queue = medianGap(r.queues)
+		d.late = d.queue > rateQueueLate
+	} else {
+		d.late = queueLate(r.gaps, sendGap)
+	}
 	over := lossClearlyOver(r.loss, r.packets)
 	d.congested = over || d.late
 	next := r.bitrate
@@ -109,6 +124,7 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 	r.loss = 0
 	r.packets = 0
 	r.gaps = r.gaps[:0]
+	r.queues = r.queues[:0]
 	r.winAt = now
 	return d
 }
