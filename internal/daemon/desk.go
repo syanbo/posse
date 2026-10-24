@@ -136,9 +136,11 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	var locked bool
 	var lmu sync.Mutex
 	done := make(chan error, 1)
+	control := desk.LockWriter(proc.Control())
 	go func() {
-		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), proc.Control(), desk.CastConfig{
+		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac,
+			OnInput: desk.NewInputForwarder(control),
 			OnStatus: func(code byte) {
 				d.deskNoteStatus(code)
 				switch code {

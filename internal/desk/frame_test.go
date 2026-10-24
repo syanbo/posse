@@ -70,7 +70,7 @@ func TestControlRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != want {
+		if got.Kind != want.Kind || got.Bitrate != want.Bitrate || len(got.Events) != len(want.Events) {
 			t.Fatalf("control = %+v, want %+v", got, want)
 		}
 	}

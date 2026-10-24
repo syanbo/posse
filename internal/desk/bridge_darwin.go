@@ -25,6 +25,11 @@ func cmMake(value int64, scale int32) cmTime {
 	return cmTime{Value: value, Timescale: scale, Flags: 1}
 }
 
+// cgPoint、cgRect 是 2 个和 4 个 float64。purego 在 arm64 上按浮点寄存器传这种纯浮点结构，不要再插别的字段。
+type cgPoint struct{ X, Y float64 }
+
+type cgRect struct{ X, Y, W, H float64 }
+
 type macAPI struct {
 	clsShareable, clsFilter, clsConfig, clsStream, clsArray, clsString, clsNumber, clsDict, clsURL, clsWriter, clsInput objc.ID
 
@@ -119,6 +124,27 @@ type macAPI struct {
 	keyRequireHW, keyPower                                                               uintptr
 	keyMatrix709                                                                         uintptr
 	keyPrimaries, keyTransfer, keyYCbCr, primaries709, transfer709, matrix709            uintptr
+
+	displayBounds func(uint32) cgRect
+	cgMouse       func(uintptr, uint32, cgPoint, uint32) uintptr
+	cgScroll      func(uintptr, uint32, uint32, int32, int32, int32) uintptr
+	cgKey         func(uintptr, uint16, bool) uintptr
+	cgSetInt      func(uintptr, uint32, int64)
+	cgGetInt      func(uintptr, uint32) int64
+	cgSetFlags    func(uintptr, uint64)
+	cgUnicode     func(uintptr, uintptr, *uint16)
+	cgPost        func(uint32, uintptr)
+	cgGetLoc      func(uintptr) cgPoint
+	cgSource      func(int32) uintptr
+	axTrusted     func() bool
+	axTrustedOpts func(uintptr) bool
+	axPromptKey   uintptr
+	ucTranslate   func(uintptr, uint16, uint16, uint32, uint32, uint32, *uint32, uintptr, *uintptr, *uint16) int32
+	cfDataPtr     func(uintptr) unsafe.Pointer
+	tisASCII      func() uintptr
+	tisProp       func(uintptr, uintptr) uintptr
+	tisLayoutKey  uintptr
+	lmKbdType     func() uint8
 }
 
 func loadMac() (*macAPI, error) {
@@ -276,6 +302,7 @@ func loadMac() (*macAPI, error) {
 	if m.clsShareable == 0 || m.clsStream == 0 || m.clsWriter == 0 {
 		return nil, fmt.Errorf("desk: ScreenCaptureKit or AVFoundation did not register its classes")
 	}
+	m.loadInput()
 	return m, nil
 }
 
@@ -299,6 +326,79 @@ func mustFn[T any](lib uintptr, name string) T {
 	var fn T
 	purego.RegisterFunc(&fn, mustSym(lib, name))
 	return fn
+}
+
+func softDl(path string) uintptr {
+	h, err := purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW)
+	if err != nil {
+		return 0
+	}
+	return h
+}
+
+func softSym(lib uintptr, name string) uintptr {
+	if lib == 0 {
+		return 0
+	}
+	p, err := purego.Dlsym(lib, name)
+	if err != nil {
+		return 0
+	}
+	return p
+}
+
+func softFn[T any](lib uintptr, name string) (fn T) {
+	if p := softSym(lib, name); p != 0 {
+		purego.RegisterFunc(&fn, p)
+	}
+	return fn
+}
+
+func softCF(lib uintptr, name string) uintptr {
+	p := softSym(lib, name)
+	if p == 0 {
+		return 0
+	}
+	return readWord(p)
+}
+
+// loadInput 只软绑定。缺符号时采集照旧，注入自己停。
+func (m *macAPI) loadInput() {
+	cg := softDl("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+	m.displayBounds = softFn[func(uint32) cgRect](cg, "CGDisplayBounds")
+	m.cgMouse = softFn[func(uintptr, uint32, cgPoint, uint32) uintptr](cg, "CGEventCreateMouseEvent")
+	m.cgScroll = softFn[func(uintptr, uint32, uint32, int32, int32, int32) uintptr](cg, "CGEventCreateScrollWheelEvent2")
+	m.cgKey = softFn[func(uintptr, uint16, bool) uintptr](cg, "CGEventCreateKeyboardEvent")
+	m.cgSetInt = softFn[func(uintptr, uint32, int64)](cg, "CGEventSetIntegerValueField")
+	m.cgGetInt = softFn[func(uintptr, uint32) int64](cg, "CGEventGetIntegerValueField")
+	m.cgSetFlags = softFn[func(uintptr, uint64)](cg, "CGEventSetFlags")
+	m.cgUnicode = softFn[func(uintptr, uintptr, *uint16)](cg, "CGEventKeyboardSetUnicodeString")
+	m.cgPost = softFn[func(uint32, uintptr)](cg, "CGEventPost")
+	m.cgGetLoc = softFn[func(uintptr) cgPoint](cg, "CGEventGetLocation")
+	m.cgSource = softFn[func(int32) uintptr](cg, "CGEventSourceCreate")
+
+	hi := softDl("/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/HIServices")
+	if hi == 0 {
+		hi = softDl("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+	}
+	m.axTrusted = softFn[func() bool](hi, "AXIsProcessTrusted")
+	m.axTrustedOpts = softFn[func(uintptr) bool](hi, "AXIsProcessTrustedWithOptions")
+	m.axPromptKey = softCF(hi, "kAXTrustedCheckOptionPrompt")
+
+	carbon := softDl("/System/Library/Frameworks/CoreServices.framework/Frameworks/CarbonCore.framework/CarbonCore")
+	if carbon == 0 {
+		carbon = softDl("/System/Library/Frameworks/CoreServices.framework/CoreServices")
+	}
+	m.ucTranslate = softFn[func(uintptr, uint16, uint16, uint32, uint32, uint32, *uint32, uintptr, *uintptr, *uint16) int32](carbon, "UCKeyTranslate")
+
+	cf := softDl("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+	m.cfDataPtr = softFn[func(uintptr) unsafe.Pointer](cf, "CFDataGetBytePtr")
+
+	hit := softDl("/System/Library/Frameworks/Carbon.framework/Frameworks/HIToolbox.framework/HIToolbox")
+	m.tisASCII = softFn[func() uintptr](hit, "TISCopyCurrentASCIICapableKeyboardLayoutInputSource")
+	m.tisProp = softFn[func(uintptr, uintptr) uintptr](hit, "TISGetInputSourceProperty")
+	m.tisLayoutKey = softCF(hit, "kTISPropertyUnicodeKeyLayoutData")
+	m.lmKbdType = softFn[func() uint8](hit, "LMGetKbdType")
 }
 
 // cfSym 取出导出的 CFStringRef / CFBooleanRef。符号地址上存的是指针。

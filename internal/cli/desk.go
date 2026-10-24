@@ -15,23 +15,24 @@ import (
 
 func init() {
 	commands = append(commands,
-		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest]", cmdDeskHelper},
-		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID]", cmdDeskSpawn},
+		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest] [--input-test]", cmdDeskHelper},
+		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--input-test]", cmdDeskSpawn},
 		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--long-edge N] [--exclude-app BUNDLE_ID]", cmdDeskCast},
 	)
 }
 
 // deskOpts 是 desk helper、spawn、cast 共用的参数。
 type deskOpts struct {
-	seconds  int
-	codec    string
-	bench    bool
-	probe    bool
-	mov      string
-	selfTest bool
-	addr     string
-	longEdge int
-	exclude  []string
+	seconds   int
+	codec     string
+	bench     bool
+	probe     bool
+	mov       string
+	selfTest  bool
+	inputTest bool
+	addr      string
+	longEdge  int
+	exclude   []string
 }
 
 func deskFlags(args []string) (deskOpts, error) {
@@ -44,6 +45,7 @@ func deskFlags(args []string) (deskOpts, error) {
 	fs.BoolVar(&o.probe, "probe", false, "")
 	fs.StringVar(&o.mov, "mov", "", "")
 	fs.BoolVar(&o.selfTest, "selftest", false, "")
+	fs.BoolVar(&o.inputTest, "input-test", false, "")
 	fs.StringVar(&o.addr, "addr", "127.0.0.1:47991", "")
 	fs.IntVar(&o.longEdge, "long-edge", 0, "")
 	var ex multiFlag
@@ -81,6 +83,9 @@ func (o deskOpts) helperArgs() []string {
 	if o.mov != "" {
 		args = append(args, "--mov", o.mov)
 	}
+	if o.inputTest {
+		args = append(args, "--input-test")
+	}
 	if o.longEdge > 0 {
 		args = append(args, "--long-edge", strconv.Itoa(o.longEdge))
 	}
@@ -95,7 +100,7 @@ func cmdDeskHelper(_ *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, LongEdge: o.longEdge, Exclude: o.exclude})
+	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, InputTest: o.inputTest, LongEdge: o.longEdge, Exclude: o.exclude})
 }
 
 func cmdDeskSpawn(_ *env, args []string) error {
@@ -139,7 +144,7 @@ func runSpawn(o deskOpts) error {
 	fmt.Fprintf(os.Stderr, "desk: spawned helper pid %d\n", proc.Pid)
 	frames := make(chan error, 1)
 	go func() { frames <- countFrames(proc.Frames) }()
-	if o.bench || o.probe {
+	if o.bench || o.probe || o.inputTest {
 		err = proc.Wait()
 		proc.Control.Close()
 		<-frames

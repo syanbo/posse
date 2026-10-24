@@ -74,6 +74,9 @@ type engine struct {
 	stop     chan struct{}
 	got      chan Frame
 	err      error
+
+	inMu sync.Mutex
+	in   *injector
 }
 
 type stamp struct {
@@ -124,6 +127,9 @@ func runDarwin(o Options) error {
 	if o.SelfTest {
 		return e.selfTest()
 	}
+	if o.InputTest {
+		return e.inputTest()
+	}
 	if !mac.preflight() {
 		// 子进程只在用户要看桌面时才被拉起，这时弹系统授权框：它把 App 加进录屏列表，不弹就得用户自己去找
 		mac.request()
@@ -132,6 +138,11 @@ func runDarwin(o Options) error {
 	}
 	if err := registerDelegate(mac); err != nil {
 		return err
+	}
+	if !e.accessibilityTrusted() {
+		// 缺辅助功能不挡画面。提示是异步的，这次仍报未授权，用户打开后再拉起才生效。
+		_ = WriteFrame(o.Frames, Frame{Kind: KindStatus, CaptureUnixNano: time.Now().UnixNano(), Payload: []byte{StatusNoAccessibility}})
+		e.logf("accessibility is not allowed; turn on %s in System Settings > Privacy & Security > Accessibility", recordingAppName())
 	}
 	e.force.Store(true)
 	// 控制管道和采集都等跑圈起来再开始。提前 CFRunLoopStop 停不住还没开始的跑圈。
@@ -708,6 +719,8 @@ func (e *engine) control() {
 		case CtrlBitrate:
 			e.bitrate.Store(c.Bitrate)
 			e.bitrateSet.Store(true)
+		case CtrlInput:
+			e.applyInput(c.Events)
 		}
 	}
 }
@@ -716,6 +729,7 @@ func (e *engine) halt(err error) {
 	if !e.stopping.CompareAndSwap(false, true) {
 		return
 	}
+	e.releaseInput()
 	e.err = err
 	if err != nil {
 		e.logf("%s", err.Error())

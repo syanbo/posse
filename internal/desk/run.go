@@ -20,7 +20,9 @@ type Options struct {
 	Bench    bool
 	Probe    bool
 	SelfTest bool
-	Mov      string
+	// InputTest 不采集，把指针移到屏幕中心、单击、打一个字母，用来手动验收。
+	InputTest bool
+	Mov       string
 	// Exclude 是采集时排除窗口的 App bundle id，可重复。
 	Exclude []string
 	// LongEdge 是输出长边的像素上限，0 用 1920。

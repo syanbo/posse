@@ -43,6 +43,21 @@ func Cast(frames io.Reader, control io.Writer, addr string) error {
 	return Serve(frames, control, CastConfig{Conn: conn, ToMobile: toMobile, ToMac: toMac})
 }
 
+// LockWriter 让几处同时写控制管道时每条消息完整写完：改码率、要关键帧、转发输入在不同的协程里，
+// 超过 PIPE_BUF 的输入会和别的消息交错，子进程读到乱的长度就退出。
+func LockWriter(w io.Writer) io.Writer { return &lockedWriter{w: w} }
+
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
+}
+
 // CastConfig 是一次观看的发送参数。
 type CastConfig struct {
 	// Conn 由调用方绑好，Serve 结束时关掉
