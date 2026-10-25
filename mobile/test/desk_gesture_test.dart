@@ -350,6 +350,59 @@ void main() {
     expect(wobble.events, isEmpty);
     expect(wobble.viewport.zoom, 1);
   });
+
+  test('a three-finger swipe switches spaces once, like the trackpad', () {
+    final g = _gestures();
+    g.down(1, 100, 100, Duration.zero);
+    g.down(2, 140, 100, Duration.zero);
+    g.down(3, 180, 100, const Duration(milliseconds: 5));
+    for (var i = 1; i <= 20; i++) {
+      final t = Duration(milliseconds: 10 + 8 * i);
+      for (final id in [1, 2, 3]) {
+        g.move(id, 60.0 + id * 40 - i * 8, 100 + i * 0.5, t);
+      }
+    }
+    // 手指往左划：右边那个空间，一下手势只发一次，不当成滚动、缩放、右键
+    expect(g.events.whereType<DeskSpaceEvent>().map((e) => e.next), [true]);
+    expect(g.events.whereType<DeskScrollEvent>(), isEmpty);
+    expect(g.events.whereType<DeskRightClickEvent>(), isEmpty);
+    expect(g.viewport.zoom, 1);
+    for (final id in [1, 2, 3]) {
+      g.up(id, 0, 100, const Duration(milliseconds: 300));
+    }
+
+    // 往右划是左边的空间；竖着滑不算
+    final right = _gestures();
+    final vertical = _gestures();
+    for (final h in [right, vertical]) {
+      h.down(1, 100, 100, Duration.zero);
+      h.down(2, 140, 100, Duration.zero);
+      h.down(3, 180, 100, Duration.zero);
+    }
+    for (final id in [1, 2, 3]) {
+      right.move(
+        id,
+        60.0 + id * 40 + 80,
+        100,
+        const Duration(milliseconds: 50),
+      );
+      vertical.move(id, 60.0 + id * 40, 200, const Duration(milliseconds: 50));
+    }
+    expect(right.events.whereType<DeskSpaceEvent>().map((e) => e.next), [
+      false,
+    ]);
+    expect(vertical.events.whereType<DeskSpaceEvent>(), isEmpty);
+
+    // 四指不认
+    final four = _gestures();
+    for (final id in [1, 2, 3, 4]) {
+      four.down(id, 100.0 + id * 30, 100, Duration.zero);
+    }
+    for (final id in [1, 2, 3, 4]) {
+      four.move(id, id * 30.0, 100, const Duration(milliseconds: 50));
+    }
+    expect(four.events, isEmpty);
+  });
 }
 
 class _Harness {

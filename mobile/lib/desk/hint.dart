@@ -14,6 +14,7 @@ class DeskGestureHint extends StatelessWidget {
     ('长按拖动', '按住左键'),
     ('双指拖动', '滚动'),
     ('捏合', '缩放'),
+    ('三指横滑', '切换空间'),
   ];
 
   @override

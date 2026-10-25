@@ -37,7 +37,7 @@ class DeskKeyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HiveColors.of(context);
-    const keys = ['Esc', 'Tab', '↑', '↓', '←', '→'];
+    const keys = ['Esc', 'Tab', '↑', '↓', '←', '→', '◀ 空间', '空间 ▶', '调度中心'];
     final color = dense ? c.band.withValues(alpha: 0.86) : c.band;
     return Container(
       decoration: BoxDecoration(

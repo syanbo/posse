@@ -47,6 +47,13 @@ class DeskPointEvent extends DeskEvent {
   final DeskPoint at;
 }
 
+/// 三指横滑：Mac 切到右边（next）或左边的空间（⌃→、⌃←）。
+class DeskSpaceEvent extends DeskEvent {
+  const DeskSpaceEvent({required this.next});
+
+  final bool next;
+}
+
 class DeskScrollEvent extends DeskEvent {
   const DeskScrollEvent(this.dx, this.dy, {required this.inertia});
 
@@ -96,6 +103,7 @@ String deskEventLine(DeskEvent event) {
       DeskDragPhase.up => '松开 ${fmt(at)}',
     },
     DeskPointEvent(:final at) => '指向 ${fmt(at)}',
+    DeskSpaceEvent(:final next) => next ? '右边的空间' : '左边的空间',
     DeskScrollEvent(:final dx, :final dy, :final inertia) =>
       '滚动 ${dx.toStringAsFixed(0)}, ${dy.toStringAsFixed(0)}'
           '${inertia ? ' 惯性' : ''}',

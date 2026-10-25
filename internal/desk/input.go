@@ -56,6 +56,9 @@ const (
 	flagLAlt      uint64 = 0x00000020
 	flagRAlt      uint64 = 0x00000040
 	flagRCtl      uint64 = 0x00002000
+
+	flagNumericPad  uint64 = 0x00200000
+	flagSecondaryFn uint64 = 0x00800000
 )
 
 var errInput = errors.New("desk: bad input")
@@ -541,6 +544,19 @@ func modifierFlags(mods byte) uint64 {
 		f |= flagCommand | flagRCmd
 	}
 	return f
+}
+
+// keyFlags 是真键盘按这个键时系统自带的标志：方向键带数字小键盘和 Fn，Home、End、翻页、向前删除带 Fn。
+// 系统快捷键按这些标志匹配，调度中心的 ⌃←、⌃→、⌃↑ 登记的就是 Control 加 Fn（0x840000），
+// 只设 Control 对不上。
+func keyFlags(code uint16) uint64 {
+	switch code {
+	case 0x7B, 0x7C, 0x7D, 0x7E: // ← → ↓ ↑
+		return flagNumericPad | flagSecondaryFn
+	case 0x73, 0x77, 0x74, 0x79, 0x75: // Home End PageUp PageDown ForwardDelete
+		return flagSecondaryFn
+	}
+	return 0
 }
 
 // 指针移动每秒最多 240 次，限的是相邻两次的间隔。第一次放行。必达事件不经过这里。

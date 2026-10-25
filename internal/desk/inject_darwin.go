@@ -335,7 +335,7 @@ func (in *injector) key(ev Event) {
 		return
 	}
 	down := ev.Kind == EventKeyDown
-	in.postKey(code, down, modifierFlags(ev.Mods))
+	in.postKey(code, down, modifierFlags(ev.Mods)|keyFlags(code))
 	if down {
 		in.keys[code] = true
 	} else {

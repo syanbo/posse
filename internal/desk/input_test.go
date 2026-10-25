@@ -241,6 +241,20 @@ func TestHIDToVirtualKey(t *testing.T) {
 	}
 }
 
+// ⌃← 要和真键盘一样带上 Fn 和数字小键盘标志，调度中心的切空间快捷键（Control+Fn）才认
+func TestArrowKeysCarryFnFlags(t *testing.T) {
+	left, ok := HIDToVirtualKey(0x50)
+	if !ok {
+		t.Fatal("no virtual key for left arrow")
+	}
+	if got := (modifierFlags(ModLCtrl) | keyFlags(left)) & 0x00ff0000; got != flagControl|flagNumericPad|flagSecondaryFn {
+		t.Fatalf("ctrl+left flags %#x", got)
+	}
+	if a, _ := HIDToVirtualKey(0x04); keyFlags(a) != 0 {
+		t.Fatal("letters must not carry fn")
+	}
+}
+
 func TestModifierFlags(t *testing.T) {
 	got := modifierFlags(ModLGUI | ModRShift)
 	want := flagCommand | flagLCmd | flagShift | flagRShift

@@ -18,6 +18,9 @@ const deskEdgePx = 36.0;
 /// 手指贴着边缘时，视口每秒移动的整屏比例。
 const deskEdgeSpeed = 0.5;
 
+/// 三指横滑这么远（逻辑像素）算一次切空间。
+const deskSpaceSwipePx = 60.0;
+
 /// 松手后滚轮速度的时间常数，约 0.7 秒收完。
 const deskFlickTau = 0.18;
 const deskFlickStop = 20.0;
@@ -100,6 +103,10 @@ class DeskGestures {
   Duration? _edgeAt;
   var _ignore = false;
 
+  /// 三指按下时三指的中点；横滑过 [deskSpaceSwipePx] 发一次切空间，之后这一下手势不再发。
+  Offset? _three;
+  var _threeDone = false;
+
   int _clicks = 0;
   Offset? _lastTapScreen;
 
@@ -127,7 +134,15 @@ class DeskGestures {
     _flick = null;
     if (_fingers.length > 2) {
       _endTwo(time, still: false, abandon: true);
-      _ignore = true;
+      _cancelOne();
+      // 三指横滑切空间，四指以上不认
+      if (_fingers.length == 3) {
+        _three = _centroid();
+        _threeDone = false;
+      } else {
+        _three = null;
+        _ignore = true;
+      }
       return;
     }
     if (_fingers.length == 1) {
@@ -150,6 +165,17 @@ class DeskGestures {
     final dy = y - finger.y;
     finger.x = x;
     finger.y = y;
+    if (_three case final from?) {
+      final d = _centroid() - from;
+      if (!_threeDone &&
+          d.dx.abs() >= deskSpaceSwipePx &&
+          d.dx.abs() > 2 * d.dy.abs()) {
+        _threeDone = true;
+        // 和 Mac 触控板一样：手指往左划，换到右边那个空间
+        onEvent(DeskSpaceEvent(next: d.dx < 0));
+      }
+      return;
+    }
     if (_two != null) {
       _pushSample(time);
       return;
@@ -179,6 +205,11 @@ class DeskGestures {
     if (finger == null) return;
     finger.x = x;
     finger.y = y;
+    if (_three != null) {
+      _fingers.remove(id);
+      if (_fingers.isEmpty) _three = null;
+      return;
+    }
     if (_two != null) {
       // 抬手的位置也算进这段移动，不然最后一下过了 10 像素还按轻点处理。
       _pushSample(time);
@@ -194,6 +225,10 @@ class DeskGestures {
 
   void cancel(int id, Duration time) {
     final finger = _fingers.remove(id);
+    if (_three != null) {
+      if (_fingers.isEmpty) _three = null;
+      return;
+    }
     if (_two != null) {
       _endTwo(time, still: false, abandon: true);
     } else if (finger != null && _oneId == id && _one == _One.dragging) {
@@ -389,6 +424,16 @@ class DeskGestures {
         _pointAt(finger.originX, finger.originY),
       ),
     );
+  }
+
+  Offset _centroid() {
+    var x = 0.0, y = 0.0;
+    for (final f in _fingers.values) {
+      x += f.x;
+      y += f.y;
+    }
+    final n = _fingers.isEmpty ? 1 : _fingers.length;
+    return Offset(x / n, y / n);
   }
 
   void _cancelOne() {

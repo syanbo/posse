@@ -290,6 +290,8 @@ class _DeskPageState extends State<DeskPage>
         // 不单独成包：紧接着的滚动和它进同一个包，Mac 先移指针再滚
         _link.move(deskAxis(at.x), deskAxis(at.y));
         _scheduleMove();
+      case DeskSpaceEvent(:final next):
+        _control(next ? '→' : '←');
       case DeskScrollEvent(:final dx, :final dy):
         final (ux, uy) = deskScrollUnits(
           dx,
@@ -1114,7 +1116,21 @@ class _DeskPageState extends State<DeskPage>
     });
   }
 
+  /// ⌃ 加一个键，切空间、开调度中心用。只带 ⌃，不动快捷键栏上点过、锁着的修饰键。
+  void _control(String key) {
+    final hid = deskKeyHid[key];
+    if (hid == null) return;
+    final bits = deskModBits({DeskMod.control});
+    _link.batch(() {
+      _link.keyDown(hid, bits);
+      _link.keyUp(hid, bits);
+    });
+    setState(() => _log.add(DeskKeyEvent(deskChord({DeskMod.control}, key))));
+    _noteInput();
+  }
+
   void _press(String key) {
+    if (deskSpaceKeys[key] case final arrow?) return _control(arrow);
     final hid = deskKeyHid[key];
     if (hid == null) return;
     final mods = _mods.consume();
