@@ -48,13 +48,16 @@ type engine struct {
 	// fpsCap 是每秒最多采几帧，父进程按码率改（CtrlFPS），0 是 60
 	fpsCap atomic.Uint32
 	// scale 是画面长边除以几（CtrlScale），0 和 1 都是原样
-	scale    atomic.Uint32
+	scale atomic.Uint32
+	// locked 是 Mac 锁着屏：照常采集，打字按键码注入
 	locked   atomic.Bool
 	dropping atomic.Bool
 
 	// win 是只看的那个窗口（ID 为 0 看整块屏），和 displayID 一起在 streamMu 下改，读用 winMu
 	winMu sync.Mutex
 	win   watched
+	// lockWin 是锁屏时只看着的窗口：锁屏界面不在窗口里，锁屏期间看主屏，解锁后换回它。在 streamMu 下读写
+	lockWin uint32
 	// gone 是正在看的窗口没了、退回了整块屏，下一次报屏列表时告诉手机
 	gone atomic.Bool
 	// checking 是每秒的窗口检查还没做完，不叠着做
@@ -505,7 +508,7 @@ func (e *engine) applyBitrate(session uintptr, bits uint32) {
 }
 
 func (e *engine) onSample(sample uintptr) {
-	if e.locked.Load() || e.stopping.Load() || e.dropping.Load() {
+	if e.stopping.Load() || e.dropping.Load() {
 		return
 	}
 	img := e.mac.sampleImage(sample)
@@ -1096,17 +1099,19 @@ func fill(base unsafe.Pointer, stride, rows, cols int, value byte) {
 }
 
 func (e *engine) watchScreen() bool {
-	if e.mac.screenLocked() {
-		e.report(StatusLocked)
-		e.halt(fmt.Errorf("desk: locked"))
-		return false
-	}
 	obs := e.mac.init(e.mac.alloc(delegateClass, e.mac.sel("alloc")), e.mac.sel("init"))
 	center := e.mac.init(objc.ID(objc.GetClass("NSDistributedNotificationCenter")), e.mac.sel("defaultCenter"))
 	add := e.mac.sel("addObserver:selector:name:object:")
 	e.mac.addObserver(center, add, uintptr(obs), uintptr(e.mac.sel("screenLocked:")), uintptr(e.mac.string("com.apple.screenIsLocked")), 0)
 	e.mac.addObserver(center, add, uintptr(obs), uintptr(e.mac.sel("screenUnlocked:")), uintptr(e.mac.string("com.apple.screenIsUnlocked")), 0)
 	e.observer = obs
+	// 先订通知再查：这里在主线程上，通知要等返回后才投递，查完就解锁也不会漏
+	if e.mac.screenLocked() {
+		e.locked.Store(true)
+		e.report(StatusLocked)
+		e.logf("screen is locked")
+		go e.wakeLocked()
+	}
 	if rc := e.mac.registerDisplay(displayCallback, 0); rc != 0 {
 		e.logf("display reconfiguration callback: %d", rc)
 	}
@@ -1121,12 +1126,27 @@ func (e *engine) onLocked() {
 	if e.stopping.Load() || !e.locked.CompareAndSwap(false, true) {
 		return
 	}
+	e.report(StatusLocked)
+	e.logf("screen locked")
 	go func() {
 		e.streamMu.Lock()
-		e.stopStream()
+		var err error
+		// 锁了马上又解开时解锁的回调可能先跑完，这时不用离开窗口
+		w := e.watching()
+		left := w.ID != 0 && e.locked.Load() && !e.stopping.Load() && e.stream != 0
+		if left {
+			e.lockWin = w.ID
+			e.logf("leaving window %d while locked", w.ID)
+			err = e.displayLocked(e.mac.mainDisplay(), true)
+		}
 		e.streamMu.Unlock()
-		e.report(StatusLocked)
-		e.logf("screen locked")
+		if err != nil {
+			e.halt(err)
+			return
+		}
+		if left {
+			e.writeDisplays()
+		}
 	}()
 }
 
@@ -1136,6 +1156,23 @@ func (e *engine) onUnlocked() {
 	}
 	e.report(StatusUnlocked)
 	e.logf("screen unlocked")
+	go func() {
+		e.streamMu.Lock()
+		id := e.lockWin
+		e.lockWin = 0
+		var err error
+		if id != 0 && !e.locked.Load() && !e.stopping.Load() && e.stream != 0 {
+			err = e.rebuildWindowLocked(id, true)
+		}
+		e.streamMu.Unlock()
+		if err != nil {
+			e.halt(err)
+			return
+		}
+		if id != 0 {
+			e.writeDisplays()
+		}
+	}()
 }
 
 // onDisplaysChanged 是拔插屏、改分辨率、改排布：正在看的屏还在就留在它上面，不在了回主屏。
@@ -1176,8 +1213,12 @@ func (e *engine) writeDisplays() {
 func (e *engine) rebuildDisplay(want uint32) error {
 	e.streamMu.Lock()
 	defer e.streamMu.Unlock()
-	if e.stopping.Load() || e.locked.Load() || e.stream == 0 {
+	if e.stopping.Load() || e.stream == 0 {
 		return nil
+	}
+	if want != 0 {
+		// 锁屏期间手机自己选了屏，解锁后不再换回原来的窗口
+		e.lockWin = 0
 	}
 	if w := e.watching(); want == 0 && w.ID != 0 {
 		return e.rebuildWindowLocked(w.ID, false)

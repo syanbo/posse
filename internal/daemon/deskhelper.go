@@ -41,7 +41,6 @@ type deskHelper struct {
 	mu       sync.Mutex
 	proc     deskProc
 	closing  bool
-	locked   bool   // 子进程报了锁屏：不再重建，由观看那边结束
 	display  uint32 // 正在看的屏，重建时接着看它
 	restarts []time.Time
 }
@@ -72,10 +71,10 @@ func (h *deskHelper) run() {
 		err := h.pump(proc)
 		exitErr := stopDeskProc(proc)
 		h.mu.Lock()
-		closing, locked := h.closing, h.locked
+		closing := h.closing
 		h.mu.Unlock()
 		// 子进程正常退出（用户在菜单栏停了录屏这类）照旧结束这次观看，只在出错退出或卡死时重建
-		if closing || locked || (err == nil && exitErr == nil) {
+		if closing || (err == nil && exitErr == nil) {
 			h.out.Close()
 			return
 		}
@@ -135,22 +134,16 @@ func (h *deskHelper) pump(proc deskProc) error {
 	}
 }
 
-// note 记下重建时要用的：正在看哪块屏，锁没锁屏。
+// note 记下重建时要用的：正在看哪块屏。
 func (h *deskHelper) note(f desk.Frame) {
-	switch f.Kind {
-	case desk.KindDisplays:
-		var ds desk.Displays
-		if json.Unmarshal(f.Payload, &ds) == nil && ds.Current != 0 {
-			h.mu.Lock()
-			h.display = ds.Current
-			h.mu.Unlock()
-		}
-	case desk.KindStatus:
-		if len(f.Payload) > 0 && f.Payload[0] == desk.StatusLocked {
-			h.mu.Lock()
-			h.locked = true
-			h.mu.Unlock()
-		}
+	if f.Kind != desk.KindDisplays {
+		return
+	}
+	var ds desk.Displays
+	if json.Unmarshal(f.Payload, &ds) == nil && ds.Current != 0 {
+		h.mu.Lock()
+		h.display = ds.Current
+		h.mu.Unlock()
 	}
 }
 
@@ -181,15 +174,8 @@ func (h *deskHelper) restart(cause error) error {
 			return io.EOF
 		}
 		proc, head, status, err := h.spawn(display)
-		// 报了锁屏、没授权的子进程随即退出，err 也不为空：先看状态
+		// 报了没授权的子进程随即退出，err 也不为空：先看状态
 		switch {
-		case status == desk.StatusLocked:
-			h.mu.Lock()
-			h.locked = true
-			h.mu.Unlock()
-			// 交给 Serve 的锁屏回调，这次观看照锁屏结束
-			desk.WriteFrame(h.out, desk.Frame{Kind: desk.KindStatus, CaptureUnixNano: time.Now().UnixNano(), Payload: []byte{desk.StatusLocked}})
-			return errors.New("desk: locked")
 		case status == desk.StatusNoScreen:
 			return errors.New("desk: screen recording is no longer allowed")
 		case err != nil:
@@ -263,7 +249,7 @@ func deskSpawnFirst(args []string) (deskProc, []byte, byte, error) {
 		return nil, nil, 0, err
 	}
 	head, status, err := deskFirstFrames(proc.Frames())
-	if err != nil || status == desk.StatusNoScreen || status == desk.StatusLocked {
+	if err != nil || status == desk.StatusNoScreen {
 		stopDeskProc(proc)
 	}
 	return proc, head, status, err

@@ -197,7 +197,6 @@ func TestDeskRefusals(t *testing.T) {
 		code  string
 	}{
 		{[]desk.Frame{status(desk.StatusNoScreen)}, "permission_screen:"},
-		{[]desk.Frame{status(desk.StatusLocked)}, "locked:"},
 		{nil, "capture_failed:"},
 	} {
 		withDeskSpawn(t, func([]string) (deskProc, error) {

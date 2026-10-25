@@ -103,8 +103,9 @@
 实验功能，只有 iOS。取舍记录见 `docs/plans/phone-desktop.md`，界面调研见 `docs/plans/phone-desktop-ui.md`。
 
 - 入口：设置里打开「实验：看桌面」后，首页电脑胶囊打开的菜单第一行是「看桌面」。
-- 订阅：`desk.subscribe`（能力 `posse.desk.v1`，带屏幕像素、能解的编码（现在只有 hevc）和上次看的屏 `display`）是一个流：先回 `ready`（端口、编码、nonce；配了中转时带中转地址和令牌；支持补发时带 `nack: true`），之后推 `state`（辅助功能有无）、`displays`，结束时推一条 `end`（`locked`、`stopped`、`unsubscribed`、`no_report`、`capture_failed`）。UDP 的密钥用这条连接的会话密钥做 HKDF（`posse-desk/v1`）。`desk.unsubscribe` 或连接断开都会停掉采集。
-- 同一时间只有一台手机能看，第二台订阅得到 `busy`（「另一台手机正在看」）。Mac 锁着屏时订阅得到 `locked`，看到一半锁屏这次观看以 `locked` 结束；两种情况手机都写「Mac 已锁屏」，每 2 秒重新订阅一次，解锁后自动接上。
+- 订阅：`desk.subscribe`（能力 `posse.desk.v1`，带屏幕像素、能解的编码（现在只有 hevc）和上次看的屏 `display`）是一个流：先回 `ready`（端口、编码、nonce；配了中转时带中转地址和令牌；支持补发时带 `nack: true`），之后推 `state`（辅助功能有无、锁屏与否）、`displays`，结束时推一条 `end`（`stopped`、`unsubscribed`、`no_report`、`capture_failed`）。UDP 的密钥用这条连接的会话密钥做 HKDF（`posse-desk/v1`）。`desk.unsubscribe` 或连接断开都会停掉采集。
+- 同一时间只有一台手机能看，第二台订阅得到 `busy`（「另一台手机正在看」）。
+- 锁屏：锁着屏照常看（ScreenCaptureKit 采得到锁屏界面），采集子进程报状态，常驻进程推 `state` 事件 `locked`、`unlocked`，观看不断。开始看时 Mac 已锁屏，子进程声明一次用户活动（屏幕熄了会点亮）并原地挪一下指针，唤出密码框。锁屏期间手机打的字按当前键盘布局逐个按键注入（密码框认按键），距上次唤出超过 5 秒先再唤一次。只看一个窗口时锁屏期间改看主屏，解锁后换回那个窗口（锁屏期间手机选了别的屏就不换回）。手机在画面上方显示「Mac 已锁屏」和「输入密码」，密码在底部弹层里输入，发过去后自动回车，不保存。旧常驻进程锁屏时仍回 `locked` 错误或以 `locked` 结束，手机写「Mac 已锁屏」，每 2 秒重新订阅。
 - 授权：没允许屏幕录制时订阅得到 `permission_screen`；没开辅助功能时能看不能操作，画面上有提示，在 Mac 上打开后提示自动消失。Mac 的手机页在有人看或缺授权时多一张「看桌面」卡片（`daemon.status` 的 `deskViewer`、`deskMissing`）：写哪台手机正在看，「停止」（`desk.stop`）断开它的画面和操作；缺哪项授权各一行说明和「打开系统设置」。
 - 线路：
   - 连接的主机是局域网、Tailscale 或本机回环时，UDP 直接发到它。走隧道时从同一台电脑存着的其他地址里挑第一个能直连的，订阅仍走当前连接；5 秒没出画面提示手机和 Mac 不在同一个局域网。

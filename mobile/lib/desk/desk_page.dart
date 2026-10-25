@@ -25,6 +25,7 @@ import 'mods.dart';
 import 'plugin.dart';
 import 'status.dart';
 import 'toolbar.dart';
+import 'unlock.dart';
 import 'viewport.dart';
 import 'wire.dart';
 
@@ -122,6 +123,8 @@ class _DeskPageState extends State<DeskPage>
   String? _fail;
   String? _endNote;
   String? _accessNote;
+  // Mac 锁着屏：画面照常，上方给一个输密码解锁的入口。旧电脑锁屏时结束观看，不报这个
+  var _macLocked = false;
   // 切画面的结果（窗口没了回到整块屏），几秒后消失
   String? _viewNote;
   Timer? _noteTimer;
@@ -514,6 +517,7 @@ class _DeskPageState extends State<DeskPage>
         _fail = null;
         _endNote = null;
         _accessNote = null;
+        _macLocked = false;
         _indirect = false;
         _up = false;
         _texture = null;
@@ -643,6 +647,7 @@ class _DeskPageState extends State<DeskPage>
         _fail = null;
         _endNote = null;
         _accessNote = null;
+        _macLocked = false;
         _indirect = false;
         _up = false;
         _texture = null;
@@ -669,6 +674,7 @@ class _DeskPageState extends State<DeskPage>
       _fail = null;
       _endNote = null;
       _accessNote = null;
+      _macLocked = false;
       _indirect = false;
       _up = false;
       _texture = null;
@@ -731,6 +737,10 @@ class _DeskPageState extends State<DeskPage>
             setState(() => _accessNote = deskAccessText);
           case 'accessibility':
             setState(() => _accessNote = null);
+          case 'locked':
+            setState(() => _macLocked = true);
+          case 'unlocked':
+            setState(() => _macLocked = false);
         }
       case 'displays':
         if (!mounted) return;
@@ -923,6 +933,7 @@ class _DeskPageState extends State<DeskPage>
       _up = false;
       _texture = null;
       _fail = null;
+      _macLocked = false;
       _endNote = deskEndText(reason);
       if (reason == 'stopped') _stopped = true;
     });
@@ -1217,6 +1228,53 @@ class _DeskPageState extends State<DeskPage>
     if (mounted) setState(() {});
   }
 
+  /// 锁屏时输密码：整段按键发过去再回车。密码不进事件记录（调试面板会显示）。
+  Future<void> _unlock() async {
+    _pokeBar();
+    final password = await askMacPassword(context);
+    if (!mounted || password == null || password.isEmpty) return;
+    // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
+    if (!_macLocked) {
+      _note('Mac 已经解锁，密码没有发送');
+      return;
+    }
+    final enter = deskKeyHid['Enter']!;
+    _link.batch(() {
+      _link.text(password, 0);
+      _link.keyDown(enter, 0);
+      _link.keyUp(enter, 0);
+    });
+    _noteInput();
+  }
+
+  Widget _lockPill(PosseColors colors) {
+    return Material(
+      key: const Key('desk-locked'),
+      color: colors.card.withValues(alpha: 0.94),
+      borderRadius: BorderRadius.circular(Rd.card),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 18, color: colors.muted),
+            const SizedBox(width: 8),
+            Text(
+              'Mac 已锁屏',
+              style: TextStyle(fontSize: Fs.body, color: colors.text),
+            ),
+            const SizedBox(width: 10),
+            FilledButton(
+              key: const Key('desk-unlock'),
+              onPressed: () => unawaited(_unlock()),
+              child: const Text('输入密码'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _toggleKeyboard() {
     if (_keyboard.hasFocus) {
       _keyboard.unfocus();
@@ -1343,6 +1401,13 @@ class _DeskPageState extends State<DeskPage>
                       // 只有卡片本身接点击，旁边的手势照常到画面
                       if (banner != null)
                         Center(child: _bannerView(colors, banner)),
+                      if (_macLocked && _stats.video && !_background)
+                        Positioned(
+                          top: 12,
+                          left: 0,
+                          right: 0,
+                          child: Center(child: _lockPill(colors)),
+                        ),
                     ],
                   );
                 },

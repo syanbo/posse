@@ -208,7 +208,12 @@ func (e *engine) writeWindows() {
 func (e *engine) switchWindow(id uint32) {
 	e.streamMu.Lock()
 	var err error
-	if !e.stopping.Load() && !e.locked.Load() && e.stream != 0 {
+	switch {
+	case e.locked.Load():
+		// 锁屏界面不在窗口里，解锁后再换过去
+		e.lockWin = id
+		e.logf("window %d after unlock", id)
+	case !e.stopping.Load() && e.stream != 0:
 		err = e.rebuildWindowLocked(id, true)
 	}
 	e.streamMu.Unlock()
@@ -313,7 +318,7 @@ func (e *engine) rebuildWindowLocked(id uint32, pick bool) error {
 func (e *engine) windowStreamStopped() {
 	e.streamMu.Lock()
 	var err error
-	if w := e.watching(); w.ID != 0 && !e.stopping.Load() && !e.locked.Load() {
+	if w := e.watching(); w.ID != 0 && !e.stopping.Load() {
 		if e.stream != 0 {
 			e.mac.release(e.stream, e.mac.sel("release"))
 			e.stream = 0

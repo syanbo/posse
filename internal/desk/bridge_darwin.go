@@ -144,6 +144,7 @@ type macAPI struct {
 	cgUnicode     func(uintptr, uintptr, *uint16)
 	cgPost        func(uint32, uintptr)
 	cgGetLoc      func(uintptr) cgPoint
+	cgCreate      func(uintptr) uintptr
 	cgSource      func(int32) uintptr
 	axTrusted     func() bool
 	axTrustedOpts func(uintptr) bool
@@ -154,6 +155,8 @@ type macAPI struct {
 	tisProp       func(uintptr, uintptr) uintptr
 	tisLayoutKey  uintptr
 	lmKbdType     func() uint8
+	// pmUserActive 是 IOPMAssertionDeclareUserActivity：屏幕熄了时点亮它
+	pmUserActive func(uintptr, uint32, *uint32) int32
 
 	// 只看一个窗口：窗口列表，和把窗口提到最前用的辅助功能接口
 	cgWindowList func(uint32, uint32) uintptr
@@ -397,6 +400,7 @@ func (m *macAPI) loadInput() {
 	m.cgUnicode = softFn[func(uintptr, uintptr, *uint16)](cg, "CGEventKeyboardSetUnicodeString")
 	m.cgPost = softFn[func(uint32, uintptr)](cg, "CGEventPost")
 	m.cgGetLoc = softFn[func(uintptr) cgPoint](cg, "CGEventGetLocation")
+	m.cgCreate = softFn[func(uintptr) uintptr](cg, "CGEventCreate")
 	m.cgSource = softFn[func(int32) uintptr](cg, "CGEventSourceCreate")
 	m.cgWindowList = softFn[func(uint32, uint32) uintptr](cg, "CGWindowListCopyWindowInfo")
 
@@ -428,6 +432,9 @@ func (m *macAPI) loadInput() {
 	m.tisProp = softFn[func(uintptr, uintptr) uintptr](hit, "TISGetInputSourceProperty")
 	m.tisLayoutKey = softCF(hit, "kTISPropertyUnicodeKeyLayoutData")
 	m.lmKbdType = softFn[func() uint8](hit, "LMGetKbdType")
+
+	iokit := softDl("/System/Library/Frameworks/IOKit.framework/IOKit")
+	m.pmUserActive = softFn[func(uintptr, uint32, *uint32) int32](iokit, "IOPMAssertionDeclareUserActivity")
 }
 
 // cfSym 取出导出的 CFStringRef / CFBooleanRef。符号地址上存的是指针。

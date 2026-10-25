@@ -299,31 +299,43 @@ func TestDeskHelperCleanExitEnds(t *testing.T) {
 	}
 }
 
-// 重建时已经锁屏：新子进程报了锁屏就退出，这次观看照锁屏结束，不当成采集失败
-func TestDeskHelperRestartFindsLocked(t *testing.T) {
-	withDeskRestart(t, 3, 10*time.Second)
-	var mu sync.Mutex
-	n := 0
+// 锁屏不结束观看：开始前就锁着、看的过程中解锁，都只转成 state 事件告诉手机
+func TestDeskLockedKeepsWatching(t *testing.T) {
+	status := func(code byte) desk.Frame {
+		return desk.Frame{Kind: desk.KindStatus, Payload: []byte{code}}
+	}
 	withDeskSpawn(t, func([]string) (deskProc, error) {
-		mu.Lock()
-		defer mu.Unlock()
-		n++
-		if n == 1 {
-			return newScriptDeskProc(t, []desk.Frame{configFrame()}, true, 50*time.Millisecond, false), nil
-		}
-		return newScriptDeskProc(t, []desk.Frame{{Kind: desk.KindStatus, Payload: []byte{desk.StatusLocked}}}, false, time.Millisecond, true), nil
+		return newFakeDeskProc(t, []desk.Frame{status(desk.StatusLocked), configFrame(), status(desk.StatusUnlocked)}, true), nil
 	})
 	d := &Daemon{}
 	events := make(chan mobile.DeskEvent, 8)
 	if _, err := d.deskStart(context.Background(), deskRequest(), func(e mobile.DeskEvent) { events <- e }); err != nil {
 		t.Fatal(err)
 	}
-	if r := endReason(t, events); r != "locked" {
-		t.Fatalf("end %q", r)
+	var states []string
+	for len(states) < 2 {
+		select {
+		case e := <-events:
+			if e.Type == "end" {
+				t.Fatalf("ended (%s) after %v", e.Reason, states)
+			}
+			if e.Type == "state" {
+				states = append(states, e.State)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatalf("states %v", states)
+		}
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if n != 2 {
-		t.Fatalf("spawned %d times", n)
+	if states[0] != "locked" || states[1] != "unlocked" {
+		t.Fatalf("states %v", states)
+	}
+	if viewer, _ := d.deskStatus(); viewer != "iPhone" {
+		t.Fatalf("viewer %q", viewer)
+	}
+	if _, err := d.deskStop(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if r := endReason(t, events); r != "stopped" {
+		t.Fatalf("end %q", r)
 	}
 }

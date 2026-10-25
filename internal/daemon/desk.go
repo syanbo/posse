@@ -25,7 +25,7 @@ import (
 // 手机看 Mac 桌面（方案见 docs/plans/phone-desktop.md）：同一时间只有一台手机在看。
 // 采集在子进程里（desk.Spawn），常驻进程只转发、加密、收发 UDP，不碰 ScreenCaptureKit。
 
-// deskStartTimeout 内子进程要交出第一帧的配置，或者说明为什么不行（没授权、已锁屏）。
+// deskStartTimeout 内子进程要交出第一帧的配置，或者说明为什么不行（没授权）。
 const deskStartTimeout = 5 * time.Second
 
 // deskProc 是采集子进程。测试里换成假的。
@@ -111,8 +111,6 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	switch {
 	case status == desk.StatusNoScreen:
 		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "还没允许 Posse 录制屏幕")
-	case status == desk.StatusLocked:
-		return mobile.DeskReady{}, mobile.DeskError("locked", "Mac 已锁屏")
 	case err != nil:
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
 	}
@@ -138,8 +136,6 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	relay, relayToken := conn.Relay()
 	log.Printf("desk: %s watching, udp %d, %s", req.Device, port, codec)
 
-	var locked bool
-	var lmu sync.Mutex
 	done := make(chan error, 1)
 	frames, out := io.Pipe()
 	helper := newDeskHelper(spawn, proc, req.Display, out)
@@ -165,11 +161,10 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 				d.deskNoteStatus(code)
 				switch code {
 				case desk.StatusLocked:
-					// 子进程锁屏时停了采集，解锁也不会自己接着采：结束这次，手机解锁后重新订阅
-					lmu.Lock()
-					locked = true
-					lmu.Unlock()
-					cancel()
+					// 锁屏时照常采集，手机在锁屏界面上输密码解锁
+					notify(mobile.DeskEvent{Type: "state", State: "locked"})
+				case desk.StatusUnlocked:
+					notify(mobile.DeskEvent{Type: "state", State: "unlocked"})
 				case desk.StatusNoAccessibility:
 					notify(mobile.DeskEvent{Type: "state", State: "no_accessibility"})
 				case desk.StatusAccessibility:
@@ -200,10 +195,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		byUser := d.desk.stopped
 		d.desk.viewer, d.desk.cancel, d.desk.stopped = "", nil, false
 		d.desk.mu.Unlock()
-		lmu.Lock()
-		wasLocked := locked
-		lmu.Unlock()
-		reason := deskEndReason(serveErr, wasLocked, byUser, ctx.Err() != nil)
+		reason := deskEndReason(serveErr, byUser, ctx.Err() != nil)
 		log.Printf("desk: %s stopped: %s (%v)", req.Device, reason, serveErr)
 		notify(mobile.DeskEvent{Type: "end", Reason: reason})
 	}()
@@ -275,7 +267,7 @@ func deskCodec(codecs []string) (string, error) {
 }
 
 // deskFirstFrames 读到子进程的第一帧配置为止，返回读过的帧（原样交给 Serve 接着处理）。
-// 配置之前出现的状态（没授权、已锁屏）作为 status 返回。
+// 配置之前出现的没授权作为 status 返回；锁屏、缺辅助功能不挡开始，留在 head 里由 Serve 照常处理。
 func deskFirstFrames(r io.Reader) (head []byte, status byte, err error) {
 	type result struct {
 		head   []byte
@@ -298,7 +290,7 @@ func deskFirstFrames(r io.Reader) (head []byte, status byte, err error) {
 			desk.WriteFrame(&buf, f)
 			switch f.Kind {
 			case desk.KindStatus:
-				if len(f.Payload) > 0 && f.Payload[0] != desk.StatusNoAccessibility {
+				if len(f.Payload) > 0 && f.Payload[0] == desk.StatusNoScreen {
 					st = f.Payload[0]
 				}
 			case desk.KindConfig:
@@ -316,10 +308,8 @@ func deskFirstFrames(r io.Reader) (head []byte, status byte, err error) {
 }
 
 // deskEndReason 是推给手机的结束理由，固定的几个词。
-func deskEndReason(err error, locked, byUser, unsubscribed bool) string {
+func deskEndReason(err error, byUser, unsubscribed bool) string {
 	switch {
-	case locked:
-		return "locked"
 	case byUser:
 		return "stopped"
 	case unsubscribed:

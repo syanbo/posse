@@ -36,6 +36,9 @@ const (
 	ucShiftState = 0x02
 
 	unicodeChunk = 20
+
+	// lockWakeIdle 内唤出过锁屏密码框就不再唤，直接打字
+	lockWakeIdle = 5 * time.Second
 )
 
 // 带修饰键的文字要真正按下这些键。键码从 HID 表取，避免和虚拟键码写两遍。
@@ -66,6 +69,10 @@ type injector struct {
 	display func() uint32
 	// window 是只看的窗口和它的进程（ID 为 0 看整块屏），这时按窗口的位置换算
 	window func() (uint32, int32)
+	// locked 是 Mac 锁着屏
+	locked func() bool
+	// woke 是上一次唤出锁屏密码框的时刻
+	woke time.Time
 
 	bounds     cgRect
 	layout     map[rune]keyStroke
@@ -88,7 +95,7 @@ func (e *engine) injector() *injector {
 	if e.in != nil {
 		return e.in
 	}
-	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf, display: e.shown.Load, window: e.windowTarget}
+	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf, display: e.shown.Load, window: e.windowTarget, locked: e.locked.Load}
 	e.mac.withPool(func() { in.prepare() })
 	e.in = in
 	return in
@@ -113,6 +120,19 @@ func (e *engine) applyInput(events []Event) {
 		for _, ev := range events {
 			in.one(ev, now)
 		}
+	})
+}
+
+// wakeLocked 是开始看时 Mac 锁着屏：把锁屏界面的密码框叫出来。
+func (e *engine) wakeLocked() {
+	in := e.injector()
+	e.mac.withPool(func() {
+		in.mu.Lock()
+		defer in.mu.Unlock()
+		if in.missing {
+			return
+		}
+		in.wake()
 	})
 }
 
@@ -267,9 +287,17 @@ func (in *injector) one(ev Event, now time.Time) {
 	case EventKeyDown, EventKeyUp:
 		in.key(ev)
 	case EventText:
-		if ev.Mods == 0 {
+		switch {
+		case ev.Mods == 0 && in.locked != nil && in.locked():
+			// 密码框没人动一会儿就收起来，收起时打的头几个字不进框
+			if now.Sub(in.woke) > lockWakeIdle {
+				in.wake()
+				time.Sleep(300 * time.Millisecond)
+			}
+			in.typeKeys(ev.Text)
+		case ev.Mods == 0:
 			in.typeUnicode(ev.Text)
-		} else {
+		default:
 			in.typeChord(ev.Text, ev.Mods)
 		}
 	}
@@ -414,6 +442,56 @@ func (in *injector) postUnicode(chars []uint16) {
 		in.mac.cfRelease(ev)
 	}
 	runtime.KeepAlive(chars)
+}
+
+// typeKeys 按当前键盘布局逐字按键，要 Shift 的字单独按着 Shift。锁屏的密码框认按键，
+// Unicode 注入没验证过能不能进去；布局里没有的字仍按 Unicode。
+func (in *injector) typeKeys(s string) {
+	if !in.haveLayout {
+		in.typeUnicode(s)
+		return
+	}
+	shift, _ := HIDToVirtualKey(0xE1)
+	for _, r := range s {
+		st, ok := in.layout[r]
+		if !ok {
+			in.typeUnicode(string(r))
+			continue
+		}
+		var flags uint64
+		if st.shift && !in.keys[shift] {
+			flags = modifierFlags(ModLShift)
+			in.postKey(shift, true, flags)
+		}
+		in.postKey(st.code, true, flags|in.heldFlags())
+		in.postKey(st.code, false, flags|in.heldFlags())
+		if flags != 0 {
+			in.postKey(shift, false, 0)
+		}
+	}
+}
+
+// wake 在锁屏时唤出密码框：声明一次用户活动（屏幕熄了会点亮），再原地挪一下指针。
+func (in *injector) wake() {
+	in.woke = time.Now()
+	m := in.mac
+	if m.pmUserActive != nil {
+		var id uint32
+		if rc := m.pmUserActive(uintptr(m.string("Posse desk")), 0, &id); rc != 0 {
+			in.logf("declare user activity: %d", rc)
+		}
+	}
+	if m.cgCreate == nil || m.cgGetLoc == nil {
+		return
+	}
+	cur := m.cgCreate(0)
+	if cur == 0 {
+		return
+	}
+	p := m.cgGetLoc(cur)
+	m.cfRelease(cur)
+	in.postMouse(cgMouseMoved, cgPoint{X: p.X + 1, Y: p.Y}, cgButtonLeft, 0)
+	in.postMouse(cgMouseMoved, p, cgButtonLeft, 0)
 }
 
 // 带修饰键时不退回 Unicode。临时按下的修饰键结束时松开，原来就按着的不动。
