@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_mobile/app_state.dart';
 import 'package:hive_mobile/chat/context_meter.dart';
+import 'package:hive_mobile/chat/send.dart';
+import 'package:hive_mobile/terminal/frames.dart';
 import 'package:hive_mobile/workspace/models.dart';
 
 SessionTab _tab(String agent, String state) => SessionTab(
@@ -72,5 +74,46 @@ void main() {
     await tester.pump();
     expect(reads, 0);
     expect(find.textContaining('%'), findsNothing);
+  });
+
+  // 点用量问要不要压缩：取消什么也不发；确认后先清空输入框，再发 /compact 加回车
+  testWidgets('tapping the meter asks, then clears the input and compacts', (
+    tester,
+  ) async {
+    final sent = <(List<int>, bool)>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ContextMeter(
+            tab: _tab('claude', 'idle'),
+            model: model,
+            read: (_) async => 83,
+            send: (tab, raw, enter) async {
+              expect(tab.terminalId, 't1');
+              sent.add((raw, enter));
+              return SendOutcome.accepted;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('context-meter')));
+    await tester.pumpAndSettle();
+    expect(find.text('压缩上下文？'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(sent, isEmpty);
+
+    await tester.tap(find.byKey(const Key('context-meter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('压缩'));
+    await tester.pumpAndSettle();
+    expect(sent.map((s) => s.$1), [
+      clearLines(),
+      clearLines(),
+      '/compact'.codeUnits,
+    ]);
+    expect(sent.map((s) => s.$2), [false, false, true]);
   });
 }

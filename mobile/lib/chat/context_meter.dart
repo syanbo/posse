@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
+import '../terminal/frames.dart';
 import '../ui/theme.dart';
+import '../ui/widgets.dart';
 import '../workspace/models.dart';
+import 'send.dart';
+import 'transcript.dart' show chatWho;
 
 /// 读 [ContextMeter] 的数：会话最后一次请求占了多少上下文（`session.context`），没有用量记录时为空。
 typedef ContextReader = Future<int?> Function(SessionTab tab);
@@ -20,14 +24,23 @@ Future<int?> readSessionContext(PhoneRpc rpc, SessionTab tab) async {
   return (res['percent'] as num?)?.toInt();
 }
 
+/// 往终端里写一串按键，[enter] 时另外补一个回车。测试里替换成记下来。
+typedef ContextSender = Future<SendOutcome> Function(
+  SessionTab tab,
+  List<int> raw,
+  bool enter,
+);
+
 /// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
 /// 只有 Claude、Codex 记了用量；每 15 秒和每次状态变化时重读，电脑上的 hive 太旧（没有这个接口）就不再问。
+/// 点它问要不要压缩，确认后清空输入框、发 /compact（两家都认）。
 class ContextMeter extends StatefulWidget {
   const ContextMeter({
     super.key,
     required this.tab,
     required this.model,
     this.read,
+    this.send,
   });
 
   final SessionTab tab;
@@ -35,6 +48,9 @@ class ContextMeter extends StatefulWidget {
 
   /// 测试里替换读数的来源。
   final ContextReader? read;
+
+  /// 测试里替换写终端。
+  final ContextSender? send;
 
   @override
   State<ContextMeter> createState() => _ContextMeterState();
@@ -91,6 +107,51 @@ class _ContextMeterState extends State<ContextMeter> {
     }
   }
 
+  Future<void> _compact() async {
+    final percent = _percent;
+    if (percent == null) return;
+    final who = chatWho('assistant', widget.tab.agent);
+    final ok = await showHiveDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('压缩上下文？'),
+        content: Text('上下文已用 $percent%。$who 会把之前的对话压成一份摘要（/compact），腾出空间接着聊。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('压缩'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final rpc = widget.model.rpc;
+    final send =
+        widget.send ??
+        (rpc == null
+            ? null
+            : (SessionTab tab, List<int> raw, bool enter) => sendTerminal(
+                rpc,
+                terminal: tab.terminalId,
+                raw: raw,
+                enter: enter,
+              ));
+    if (send == null) return;
+    final tab = widget.tab;
+    // 输入框里还有没发的字时，/compact 会接在后面变成一句话发出去
+    await send(tab, clearLines(), false);
+    await send(tab, clearLines(), false);
+    final outcome = await send(tab, '/compact'.codeUnits, true);
+    final note = sendOutcomeText(outcome);
+    if (!mounted || note.isEmpty) return;
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(note)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final percent = _percent;
@@ -105,23 +166,29 @@ class _ContextMeterState extends State<ContextMeter> {
     // 前面的间距放在这里：没有读数时整个不占位置，后面的延迟不会多空一截
     return Semantics(
       label: '上下文已用 $percent%',
+      button: true,
       excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(width: 10),
-          SizedBox.square(
-            dimension: 10,
-            child: CircularProgressIndicator(
-              value: percent / 100,
-              strokeWidth: 1.8,
-              color: color,
-              backgroundColor: c.fill,
+      child: GestureDetector(
+        key: const Key('context-meter'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => unawaited(_compact()),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 10),
+            SizedBox.square(
+              dimension: 10,
+              child: CircularProgressIndicator(
+                value: percent / 100,
+                strokeWidth: 1.8,
+                color: color,
+                backgroundColor: c.fill,
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          Text('$percent%', style: statusLineStyle(color)),
-        ],
+            const SizedBox(width: 4),
+            Text('$percent%', style: statusLineStyle(color)),
+          ],
+        ),
       ),
     );
   }

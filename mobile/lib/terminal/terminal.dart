@@ -15,7 +15,6 @@ import '../chat/clipboard_paste.dart';
 import '../chat/image_pick.dart';
 import '../chat/image_upload.dart';
 import '../chat/send.dart';
-import '../chat/transcript.dart' show chatWho;
 import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
