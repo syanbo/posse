@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"slices"
@@ -230,6 +231,7 @@ func (s *Server) serveWire(parent context.Context, w wire) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	c := &conn{srv: s, ws: w, ctx: ctx, streams: map[string]context.CancelFunc{}, streamGen: map[string]uint64{}, uploads: map[string]*upload{}}
+	c.lastRead.Store(time.Now().UnixNano())
 	if err := c.handshake(); err != nil {
 		return
 	}
@@ -290,6 +292,7 @@ type conn struct {
 	deskPunchGen uint64
 
 	nextBlob atomic.Uint32 // 大块字段的编号（bulk.go）
+	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着
 }
 
 func (c *conn) setClientCaps(client string, version int, names []string) {
@@ -384,7 +387,20 @@ func (c *conn) write(typ websocket.MessageType, seal func() []byte) error {
 	frame := seal()
 	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
 	defer cancel()
+	// 先建好再启动：回调里要用 watch
+	var watch *time.Timer
+	watch = time.AfterFunc(time.Duration(math.MaxInt64), func() {
+		if quiet := time.Since(time.Unix(0, c.lastRead.Load())); quiet >= stallQuiet {
+			log.Printf("mobile: write blocked for %v and nothing from the phone for %v, dropping the connection",
+				time.Since(got).Round(time.Millisecond), quiet.Round(time.Second))
+			cancel()
+			return
+		}
+		watch.Reset(time.Second)
+	})
+	watch.Reset(stallWrite)
 	err := c.ws.Write(ctx, typ, frame)
+	watch.Stop()
 	wait, took := got.Sub(asked), time.Since(got)
 	if wait > time.Second || took > time.Second {
 		log.Printf("mobile: send %d bytes waited %v for the lock, wrote in %v", len(frame), wait.Round(time.Millisecond), took.Round(time.Millisecond))
@@ -398,6 +414,15 @@ func (c *conn) write(typ websocket.MessageType, seal func() []byte) error {
 func writeTimeout(n int) time.Duration {
 	return 15*time.Second + time.Duration(n/(64<<10))*time.Second
 }
+
+// 一条消息写了 stallWrite 还没写完、手机也有 stallQuiet 没发任何东西来，就当连接已经死了（手机被挂起、
+// 换了网络），马上断开让它重连，不等到 writeTimeout：发送是串行的，卡住的这条后面所有消息都在等。
+// 只看写得久会误伤慢线路：经隧道的 TCP 积着大块数据时，小消息也要写几秒。活着的手机不会安静这么久：
+// Hive 手机每 5 秒 ping 一次，Orca App 在前台每 3 秒轮询
+var (
+	stallWrite = 3 * time.Second
+	stallQuiet = 10 * time.Second
+)
 
 type request struct {
 	ID          string          `json:"id"`
@@ -456,6 +481,7 @@ func (c *conn) serve() {
 		if err != nil {
 			return
 		}
+		c.lastRead.Store(time.Now().UnixNano())
 		if typ != websocket.MessageText {
 			// 手机的二进制帧只有上传的分段（bulk.go），别的解开只为让计数器前进
 			p, err := c.sess.open(raw, kindBinary)
