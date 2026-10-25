@@ -72,4 +72,36 @@ void main() {
     expect(find.text('连接断开，正在重连…'), findsNothing);
     expect(find.textContaining('可以连接的电脑 0 台'), findsOneWidget);
   });
+
+  // 横屏只有四百高：电脑菜单要整张能滚，不能把上面的列表压没、底部溢出
+  testWidgets('the computer sheet fits a phone held sideways', (tester) async {
+    tester.view.physicalSize = const Size(2622, 1206);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final model = HiveAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: hiveTheme(Brightness.dark),
+        home: WorkspaceScreen(model: model),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('连接断开，正在重连…'));
+    // 正在连时多出「断开连接」，再加一条报错：固定的几行就占满了横屏的面板高度
+    model.connecting = true;
+    model.error = '和电脑的连接断开了，正在重连';
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.takeException(), isNull);
+    expect(find.text('电脑'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('长按一台电脑可以改名或忘掉它'),
+      100,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

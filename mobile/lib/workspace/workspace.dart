@@ -1176,103 +1176,99 @@ class _ComputerSheet extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final active = model.activeId;
+        // 整张一起滚：横屏只有三百多高，只让中间的列表滚的话，下面几个按钮占满高度、列表被压成 0
         return SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text(
-                  '电脑',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: c.text,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    '电脑',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: c.text,
+                    ),
                   ),
                 ),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Section(
-                    inset: 50,
-                    children: [
-                      if (Platform.isIOS && model.settings.deskWatch)
-                        RowTile(
-                          leading: Icon(
-                            Icons.desktop_mac_outlined,
-                            size: 24,
-                            color: c.accent,
-                          ),
-                          title: const Text('看桌面'),
-                          onTap: onDesk,
+                Section(
+                  inset: 50,
+                  children: [
+                    if (Platform.isIOS && model.settings.deskWatch)
+                      RowTile(
+                        leading: Icon(
+                          Icons.desktop_mac_outlined,
+                          size: 24,
+                          color: c.accent,
                         ),
-                      for (final computer in model.computers)
-                        RowTile(
-                          chevron: false,
-                          leading: Icon(
-                            Icons.laptop_mac_rounded,
-                            size: 24,
-                            color: c.accent,
-                          ),
-                          title: Text(model.labelOf(computer)),
-                          // 连着的那台写实际连上的地址，其余写配对码里的主地址
-                          subtitle: Text(
-                            computer.id == active && model.connectedUrl != null
-                                ? hostOf(model.connectedUrl) ?? ''
-                                : computerEndpoint(computer),
-                            style: mono(12, color: c.muted),
-                          ),
-                          trailing: computer.id == active
-                              ? (model.connecting
-                                    ? const HexSpinner(size: 18)
-                                    : Icon(
-                                        Icons.check_rounded,
-                                        color: c.accent,
-                                      ))
-                              : null,
-                          onTap: () {
-                            Navigator.of(context).pop();
-                            model.switchTo(computer.id);
-                          },
-                          onLongPress: () => _actions(context, computer),
+                        title: const Text('看桌面'),
+                        onTap: onDesk,
+                      ),
+                    for (final computer in model.computers)
+                      RowTile(
+                        chevron: false,
+                        leading: Icon(
+                          Icons.laptop_mac_rounded,
+                          size: 24,
+                          color: c.accent,
                         ),
-                    ],
-                  ),
+                        title: Text(model.labelOf(computer)),
+                        // 连着的那台写实际连上的地址，其余写配对码里的主地址
+                        subtitle: Text(
+                          computer.id == active && model.connectedUrl != null
+                              ? hostOf(model.connectedUrl) ?? ''
+                              : computerEndpoint(computer),
+                          style: mono(12, color: c.muted),
+                        ),
+                        trailing: computer.id == active
+                            ? (model.connecting
+                                  ? const HexSpinner(size: 18)
+                                  : Icon(Icons.check_rounded, color: c.accent))
+                            : null,
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          model.switchTo(computer.id);
+                        },
+                        onLongPress: () => _actions(context, computer),
+                      ),
+                  ],
                 ),
-              ),
-              if (model.error != null) NoticeBar(model.error!),
-              // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
-              if (model.rpc != null || model.connecting)
+                if (model.error != null) NoticeBar(model.error!),
+                // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
+                if (model.rpc != null || model.connecting)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        unawaited(model.disconnect());
+                      },
+                      icon: const Icon(Icons.link_off_rounded, size: 20),
+                      label: const Text('断开连接'),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      unawaited(model.disconnect());
-                    },
-                    icon: const Icon(Icons.link_off_rounded, size: 20),
-                    label: const Text('断开连接'),
+                  child: FilledButton.icon(
+                    onPressed: onAdd,
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                    label: const Text('扫码添加电脑'),
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: FilledButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                  label: const Text('扫码添加电脑'),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '长按一台电脑可以改名或忘掉它',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: c.faint),
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  '长按一台电脑可以改名或忘掉它',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: c.faint),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
