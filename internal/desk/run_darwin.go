@@ -277,6 +277,7 @@ func (e *engine) openStream(display, content objc.ID) error {
 	cfg := e.streamConfig()
 	del := m.init(m.alloc(delegateClass, m.sel("alloc")), m.sel("init"))
 	stream := m.initStream(m.alloc(m.clsStream, m.sel("alloc")), m.sel("initWithFilter:configuration:delegate:"), filter, cfg, del)
+	m.release(cfg, m.sel("release"))
 	name := append([]byte("hive.desk.capture"), 0)
 	queue := m.queueCreate(unsafe.Pointer(&name[0]), 0)
 	var nserr objc.ID
@@ -320,25 +321,54 @@ func (e *engine) streamConfig() objc.ID {
 	return cfg
 }
 
-// setFPS 改采集的帧率上限。ScreenCaptureKit 按间隔丢帧，画面停住时最后一帧照样交出来。
+// setFPS 改采集的帧率上限，编码器的预期帧率跟着改（它按这个分配每帧的比特）。
+// ScreenCaptureKit 按间隔丢帧，画面停住时最后一帧照样交出来。父进程只在变了时才发，这里不去重：
+// 上一次没改成功，同样的值再来还要再试。
 func (e *engine) setFPS(fps uint32) {
-	if fps == 0 || fps > 60 || e.fpsCap.Swap(fps) == fps {
+	if fps == 0 || fps > 60 {
 		return
 	}
 	e.streamMu.Lock()
 	defer e.streamMu.Unlock()
 	if e.stream == 0 || e.stopping.Load() {
+		e.fpsCap.Store(fps)
 		return
 	}
+	e.fpsCap.Store(fps)
+	done := make(chan string, 1)
+	block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
+		msg := ""
+		if err != 0 {
+			msg = e.mac.goString(e.mac.init(err, e.mac.sel("localizedDescription")))
+		}
+		done <- msg
+	})
 	e.mac.withPool(func() {
 		cfg := e.streamConfig()
-		block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
-			if err != 0 {
-				e.logf("frame rate %d: %s", fps, e.mac.goString(e.mac.init(err, e.mac.sel("localizedDescription"))))
-			}
-		})
 		e.mac.updateConfig(e.stream, e.mac.sel("updateConfiguration:completionHandler:"), cfg, uintptr(block))
+		// 流自己留一份，这里的引用放掉
+		e.mac.release(cfg, e.mac.sel("release"))
 	})
+	select {
+	case msg := <-done:
+		block.Release()
+		if msg != "" {
+			e.logf("frame rate %d: %s", fps, msg)
+			return
+		}
+	case <-time.After(2 * time.Second):
+		// 回调还可能来，block 不能放
+		e.logf("frame rate %d: no answer from ScreenCaptureKit", fps)
+		return
+	}
+	e.encMu.Lock()
+	if e.enc != 0 {
+		e.mac.withPool(func() {
+			n := e.mac.numLong(e.mac.clsNumber, e.mac.sel("numberWithLongLong:"), int64(fps))
+			e.mac.vtSet(e.enc, e.mac.keyFPS, uintptr(n))
+		})
+	}
+	e.encMu.Unlock()
 	e.logf("frame rate cap %d", fps)
 }
 
@@ -402,7 +432,11 @@ func (e *engine) configure(session uintptr) {
 		m.vtSet(session, m.keyReorder, m.cfFalse)
 		m.vtSet(session, m.keySpeed, m.cfTrue)
 		zero := m.numLong(m.clsNumber, m.sel("numberWithLongLong:"), 0)
-		fps := m.numLong(m.clsNumber, m.sel("numberWithLongLong:"), 60)
+		rate := int64(e.fpsCap.Load())
+		if rate == 0 {
+			rate = 60
+		}
+		fps := m.numLong(m.clsNumber, m.sel("numberWithLongLong:"), rate)
 		m.vtSet(session, m.keyDelay, uintptr(zero))
 		m.vtSet(session, m.keyFPS, uintptr(fps))
 		m.vtSet(session, m.keyPrimaries, m.primaries709)

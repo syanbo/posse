@@ -3,6 +3,7 @@ package desk
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -95,5 +96,29 @@ func TestFit(t *testing.T) {
 		if w != c.ew || h != c.eh || w%2 != 0 || h%2 != 0 {
 			t.Errorf("Fit(%d,%d,%d) = %d,%d, want %d,%d", c.w, c.h, c.long, w, h, c.ew, c.eh)
 		}
+	}
+}
+
+// 小画面在好网络上也从 1.5 Mbps、60 帧起步，差网络再往 400 kbps、10 帧降
+func TestSmallPictureStartsAtFullFrameRate(t *testing.T) {
+	for _, size := range [][2]int{{640, 400}, {960, 600}, {1920, 1246}} {
+		start := PictureBitrate(size[0], size[1])
+		if start < startFloor {
+			t.Fatalf("%v starts at %d", size, start)
+		}
+		if got := fpsFor(start, start, 60); got != 60 {
+			t.Fatalf("%v starts at %d fps", size, got)
+		}
+		if got := fpsFor(rateFloor, start, 60); size[0] == 1920 && got != 10 {
+			t.Fatalf("%v at the floor runs %d fps", size, got)
+		}
+	}
+}
+
+func TestBadControlNamesItsKind(t *testing.T) {
+	var buf bytes.Buffer
+	buf.Write([]byte{2, 0, 0, 0, CtrlFPS, 9})
+	if _, err := ReadControl(&buf); err == nil || !strings.Contains(err.Error(), "control 6") {
+		t.Fatalf("err = %v", err)
 	}
 }

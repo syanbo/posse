@@ -5,6 +5,7 @@ package desk
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 )
@@ -181,17 +182,12 @@ type Control struct {
 func WriteControl(w io.Writer, c Control) error {
 	var body []byte
 	switch c.Kind {
-	case CtrlBitrate, CtrlDisplay, CtrlFPS:
-		body = make([]byte, 5)
-		body[0] = c.Kind
-		v := c.Bitrate
-		switch c.Kind {
-		case CtrlDisplay:
-			v = c.Display
-		case CtrlFPS:
-			v = c.FPS
-		}
-		binary.LittleEndian.PutUint32(body[1:], v)
+	case CtrlBitrate:
+		body = controlU32(c.Kind, c.Bitrate)
+	case CtrlDisplay:
+		body = controlU32(c.Kind, c.Display)
+	case CtrlFPS:
+		body = controlU32(c.Kind, c.FPS)
 	case CtrlInput:
 		ev, err := EncodeInput(c.Events)
 		if err != nil {
@@ -208,6 +204,14 @@ func WriteControl(w io.Writer, c Control) error {
 	copy(buf[4:], body)
 	_, err := w.Write(buf)
 	return err
+}
+
+// controlU32 是只带一个 u32 的控制：类型字节加小端的值。
+func controlU32(kind byte, v uint32) []byte {
+	body := make([]byte, 5)
+	body[0] = kind
+	binary.LittleEndian.PutUint32(body[1:], v)
+	return body
 }
 
 // ReadControl 读一条控制。不认识的类型把负载跳过，Kind 原样返回。
@@ -232,19 +236,18 @@ func ReadControl(r io.Reader) (Control, error) {
 	}
 	c := Control{Kind: buf[0]}
 	switch c.Kind {
-	case CtrlBitrate:
+	case CtrlBitrate, CtrlDisplay, CtrlFPS:
 		if len(buf) != 5 {
-			return Control{}, errors.New("desk: bad bitrate control")
+			return Control{}, fmt.Errorf("desk: control %d has %d bytes, want 5", c.Kind, len(buf))
 		}
-		c.Bitrate = binary.LittleEndian.Uint32(buf[1:5])
-	case CtrlDisplay, CtrlFPS:
-		if len(buf) != 5 {
-			return Control{}, errors.New("desk: bad display control")
-		}
-		if c.Kind == CtrlDisplay {
-			c.Display = binary.LittleEndian.Uint32(buf[1:5])
-		} else {
-			c.FPS = binary.LittleEndian.Uint32(buf[1:5])
+		v := binary.LittleEndian.Uint32(buf[1:5])
+		switch c.Kind {
+		case CtrlBitrate:
+			c.Bitrate = v
+		case CtrlDisplay:
+			c.Display = v
+		default:
+			c.FPS = v
 		}
 	case CtrlInput:
 		ev, err := DecodeInput(buf[1:])
@@ -276,10 +279,13 @@ func Fit(w, h, longEdge int) (int, int) {
 	return evenDim(w, scale), evenDim(h, scale)
 }
 
+// startFloor 是起始码率的下限：小画面在好网络上也从它起步、按 60 帧采，差网络再往 rateFloor 降。
+const startFloor = 1_500_000
+
 func PictureBitrate(w, h int) uint32 {
 	bits := float64(w*h) * 60 * 0.06
-	if bits < rateFloor {
-		bits = rateFloor
+	if bits < startFloor {
+		bits = startFloor
 	}
 	if bits > rateCeil {
 		bits = rateCeil

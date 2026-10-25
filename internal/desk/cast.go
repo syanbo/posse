@@ -101,7 +101,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
 		onStatus: cfg.OnStatus, onDisplays: cfg.OnDisplays, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
-		bitrate: start, fps: 60, codec: CodecHEVC,
+		bitrate: start, fps: 60, fullBit: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
 	c.rate.reset(now, start, rateCeil)
@@ -177,7 +177,9 @@ type caster struct {
 	queued             int
 	mu                 sync.Mutex
 	bitrate            uint32
-	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）
+	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）；mu 保护
+	fullBit            uint32 // 这个画面的满码率（PictureBitrate），帧率档位按它的比例算；mu 保护
+	fpsMu              sync.Mutex
 	rate               rateState
 	sendGap            time.Duration
 	lastCap            time.Time
@@ -218,6 +220,7 @@ func (c *caster) readFrames(frames io.Reader) error {
 				c.codec = cfg.Codec
 				c.bitrate = start
 				c.rate.reset(time.Now(), start, rateCeil)
+				c.fullBit = start
 				c.mu.Unlock()
 				c.applyFPS(start)
 				name := "hevc"
@@ -560,7 +563,8 @@ func (c *caster) onReport(plain []byte) {
 	if binary.BigEndian.Uint64(plain[24:32]) == 1 {
 		c.rate.addQueue(time.Duration(binary.BigEndian.Uint64(plain[16:24])) * time.Microsecond)
 	}
-	base := c.sendGap
+	// 帧率上限降下来以后帧间隔本来就长，和采集节奏的估计比要按上限算，不然把降帧当成排队
+	base := max(c.sendGap, time.Second/time.Duration(max(c.fps, 1)))
 	d := c.rate.add(time.Now(), loss, packets, gap, base)
 	if d.changed {
 		c.bitrate = d.bitrate
@@ -587,9 +591,12 @@ func (c *caster) onReport(plain []byte) {
 }
 
 // applyFPS 按码率定采集的帧率上限，变了才告诉子进程。
+// 读管道、收报告两个协程都会调：fpsMu 盖住决定和写控制，子进程收到的顺序和决定的顺序一致。
 func (c *caster) applyFPS(bitrate uint32) {
+	c.fpsMu.Lock()
+	defer c.fpsMu.Unlock()
 	c.mu.Lock()
-	next := fpsFor(bitrate, c.fps)
+	next := fpsFor(bitrate, c.fullBit, c.fps)
 	changed := next != c.fps
 	c.fps = next
 	c.mu.Unlock()

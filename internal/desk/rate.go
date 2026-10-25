@@ -18,22 +18,23 @@ const (
 	rateQueueLate = 40 * time.Millisecond
 )
 
-// 码率降到这些档位以下时把采集帧率降到对应值（RustDesk 也是先降码率、再降帧率）：同样的码率，
-// 每秒帧数少，每帧就清楚。往回升要高出档位 30%，免得在边界上来回切。
+// 码率降到这个画面满码率（PictureBitrate）的这些比例以下时，把采集帧率降到对应值（RustDesk 也是
+// 先降码率、再降帧率）：同样的码率，每秒帧数少，每帧就清楚。按比例而不是按绝对码率：小画面 1.5 Mbps
+// 跑 60 帧绰绰有余。1920 宽的画面大约是 3、1.5、0.8 Mbps。往回升要高出档位 30%，免得在边界上来回切。
 var fpsLadder = []struct {
-	bitrate uint32
+	percent uint64
 	fps     uint32
 }{
-	{3_000_000, 60},
-	{1_500_000, 30},
-	{800_000, 15},
+	{35, 60},
+	{17, 30},
+	{9, 15},
 	{0, 10},
 }
 
-// fpsFor 是码率 bitrate 下该用的帧率上限，cur 是现在的上限。
-func fpsFor(bitrate, cur uint32) uint32 {
+// fpsFor 是码率 bitrate 下该用的帧率上限，full 是这个画面的满码率，cur 是现在的上限。
+func fpsFor(bitrate, full, cur uint32) uint32 {
 	for _, step := range fpsLadder {
-		need := uint64(step.bitrate)
+		need := uint64(full) * step.percent / 100
 		if step.fps > cur {
 			need = need * 13 / 10
 		}

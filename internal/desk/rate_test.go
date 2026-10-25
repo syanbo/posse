@@ -197,8 +197,9 @@ func TestQueueDelayOverridesFrameGaps(t *testing.T) {
 	t.Fatal("no decision")
 }
 
-// 码率低到档位以下就降帧率，往回升要高出档位 30%
+// 码率低到满码率的档位比例以下就降帧率，往回升要高出档位 30%
 func TestFPSFollowsBitrate(t *testing.T) {
+	const full = 8_600_000 // 1920x1246
 	for _, c := range []struct {
 		bitrate, cur, want uint32
 	}{
@@ -210,11 +211,11 @@ func TestFPSFollowsBitrate(t *testing.T) {
 		// 回升：刚过档位不升，高出 30% 才升；先升到够得着的那一档
 		{1_600_000, 15, 15},
 		{2_000_000, 15, 30},
-		{1_600_000, 10, 15},
+		{1_100_000, 10, 15},
 		{3_100_000, 30, 30},
 		{4_000_000, 30, 60},
 	} {
-		if got := fpsFor(c.bitrate, c.cur); got != c.want {
+		if got := fpsFor(c.bitrate, full, c.cur); got != c.want {
 			t.Errorf("fpsFor(%d, %d) = %d, want %d", c.bitrate, c.cur, got, c.want)
 		}
 	}
