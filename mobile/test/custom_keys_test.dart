@@ -68,7 +68,7 @@ void main() {
       '⇧Tab',
       '^C',
       '清空',
-      '退出',
+      exitAgentLabel,
       '↑',
       '↓',
       '←',
@@ -132,7 +132,7 @@ void main() {
       '⇧Tab',
       '^C',
       '清空',
-      '退出',
+      exitAgentLabel,
       '↑',
       '↓',
       '←',
@@ -174,5 +174,16 @@ void main() {
     final moved = load(barKeysVersion);
     expect(moved.last, sendNowLabel);
     expect(AppSettings().toJson()['barKeysVersion'], barKeysVersion);
+  });
+
+  // 「退出」改叫 Exit：旧设置里存的「退出」留在用户排好的位置上
+  test('exit key saved under its old label keeps its place', () {
+    final keys = [
+      for (final name in ['退出', 'Esc', 'image'])
+        ?BarKey.fromJson({'builtin': name}),
+    ];
+    final names = [for (final k in normalizeBarKeys(keys)) k.builtin];
+    expect(names.first, exitAgentLabel);
+    expect(names.where((n) => n == exitAgentLabel).length, 1);
   });
 }

@@ -165,7 +165,7 @@ List<int> clearLines([int lines = 20]) => [
 ];
 
 /// 退出 agent 的键帽。按下后不直接发这个键的字节，先确认再按 agent 发（终端页的 `_exitAgent`）。
-const exitAgentLabel = '退出';
+const exitAgentLabel = 'Exit';
 
 /// 软键盘上方的专用键。方向键是 VT 的 A/B/C/D，不带回车。
 const termKeys = <TermKey>[

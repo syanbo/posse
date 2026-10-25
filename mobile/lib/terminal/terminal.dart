@@ -779,9 +779,8 @@ class _TerminalScreenState extends State<TerminalScreen>
     await _send(clearLines());
   }
 
-  /// 快捷键栏的「退出」：确认后先清空输入框，再按 agent 发退出的按键。Claude Code 的 Ctrl+D
-  /// 只在输入框空着时算退出，要 800ms 内按两次；Codex 发 /exit；别的 agent 发一次 Ctrl+D。不发第二次 Ctrl+D 给它们：
-  /// agent 退出后它会落到 shell 上，把整个终端也关掉。
+  /// 快捷键栏的「Exit」：确认后先清空输入框，再执行 /exit。Claude Code、Codex、Grok、Cursor 都认这条命令；
+  /// 不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，把整个终端也关掉。
   Future<void> _exitAgent() async {
     final agent = _liveTab.agent;
     if (agent == null) {
@@ -812,17 +811,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     if (ok != true || !mounted) return;
     await _send(clearLines());
     await _send(clearLines());
-    switch (agent) {
-      case 'claude':
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-        await _send(const [0x04]);
-        await Future<void>.delayed(const Duration(milliseconds: 150));
-        await _send(const [0x04]);
-      case 'codex':
-        await _send('/exit'.codeUnits, enter: true);
-      default:
-        await _send(const [0x04]);
-    }
+    await _send('/exit'.codeUnits, enter: true);
   }
 
   Future<void> _send(List<int> bytes, {bool enter = false}) async {

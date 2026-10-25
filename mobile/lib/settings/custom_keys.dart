@@ -126,6 +126,7 @@ class BarKey {
       final name = json['builtin'] as String;
       // 改过名的是改名前存的，位置是当时自动补上的，丢掉让 normalizeBarKeys 放回默认位置
       if (renamedBuiltins.containsKey(name)) return null;
+      if (relabeledBuiltins[name] case final now?) return BarKey.builtin(now);
       return builtinBarKeys.contains(name) ? BarKey.builtin(name) : null;
     }
     final key = CustomKey.fromJson(json);
@@ -138,6 +139,9 @@ const barKeysVersion = 2;
 
 /// 改过名的内置键：旧名字 → 新名字。旧名字存的顺序读进来不认，新名字回到默认位置。
 const renamedBuiltins = {'立即发送': sendNowLabel};
+
+/// 只改了键帽文字的内置键：旧名字 → 新名字，留在用户排好的位置上。
+const relabeledBuiltins = {'退出': exitAgentLabel};
 
 /// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
 final builtinBarKeys = [
