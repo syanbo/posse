@@ -101,7 +101,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
 		onStatus: cfg.OnStatus, onDisplays: cfg.OnDisplays, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
-		bitrate: start, codec: CodecHEVC,
+		bitrate: start, fps: 60, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
 	c.rate.reset(now, start, rateCeil)
@@ -177,6 +177,7 @@ type caster struct {
 	queued             int
 	mu                 sync.Mutex
 	bitrate            uint32
+	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）
 	rate               rateState
 	sendGap            time.Duration
 	lastCap            time.Time
@@ -218,6 +219,7 @@ func (c *caster) readFrames(frames io.Reader) error {
 				c.bitrate = start
 				c.rate.reset(time.Now(), start, rateCeil)
 				c.mu.Unlock()
+				c.applyFPS(start)
 				name := "hevc"
 				if cfg.Codec == CodecH264 {
 					name = "h264"
@@ -276,6 +278,7 @@ func (c *caster) resume() {
 	c.mu.Unlock()
 	log.Printf("desk: reports back after %s, resuming at %d", away.Round(100*time.Millisecond), bitrate)
 	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+	c.applyFPS(bitrate)
 	c.askKey()
 }
 
@@ -580,6 +583,21 @@ func (c *caster) onReport(plain []byte) {
 		return
 	}
 	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: d.bitrate})
+	c.applyFPS(d.bitrate)
+}
+
+// applyFPS 按码率定采集的帧率上限，变了才告诉子进程。
+func (c *caster) applyFPS(bitrate uint32) {
+	c.mu.Lock()
+	next := fpsFor(bitrate, c.fps)
+	changed := next != c.fps
+	c.fps = next
+	c.mu.Unlock()
+	if !changed {
+		return
+	}
+	log.Printf("desk: frame rate cap %d at bitrate %d", next, bitrate)
+	_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: next})
 }
 
 func (c *caster) askKey() {

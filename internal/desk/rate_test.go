@@ -196,3 +196,26 @@ func TestQueueDelayOverridesFrameGaps(t *testing.T) {
 	}
 	t.Fatal("no decision")
 }
+
+// 码率低到档位以下就降帧率，往回升要高出档位 30%
+func TestFPSFollowsBitrate(t *testing.T) {
+	for _, c := range []struct {
+		bitrate, cur, want uint32
+	}{
+		{8_000_000, 60, 60},
+		{2_000_000, 60, 30},
+		{1_000_000, 30, 15},
+		{500_000, 15, 10},
+		{400_000, 10, 10},
+		// 回升：刚过档位不升，高出 30% 才升；先升到够得着的那一档
+		{1_600_000, 15, 15},
+		{2_000_000, 15, 30},
+		{1_600_000, 10, 15},
+		{3_100_000, 30, 30},
+		{4_000_000, 30, 60},
+	} {
+		if got := fpsFor(c.bitrate, c.cur); got != c.want {
+			t.Errorf("fpsFor(%d, %d) = %d, want %d", c.bitrate, c.cur, got, c.want)
+		}
+	}
+}

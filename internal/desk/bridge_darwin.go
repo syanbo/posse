@@ -91,6 +91,8 @@ type macAPI struct {
 	// activeDisplays 是 CGGetActiveDisplayList；sendObj 是带一个对象参数的 objc_msgSend（objectForKey: 之类）
 	activeDisplays func(uint32, *uint32, *uint32) int32
 	sendObj        func(objc.ID, objc.SEL, objc.ID) objc.ID
+	// updateConfig 是 -[SCStream updateConfiguration:completionHandler:]，运行中改帧率
+	updateConfig func(objc.ID, objc.SEL, objc.ID, uintptr)
 
 	vtCreate     func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32
 	vtEncode     func(uintptr, uintptr, cmTime, cmTime, uintptr, uintptr, *uint32) int32
@@ -219,6 +221,7 @@ func loadMac() (*macAPI, error) {
 	bind(&m.assetDuration, msg)
 	bind(&m.urlAsset, msg)
 	bind(&m.sendObj, msg)
+	bind(&m.updateConfig, msg)
 
 	cg := dl("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
 	m.mainDisplay = mustFn[func() uint32](cg, "CGMainDisplayID")

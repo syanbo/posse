@@ -44,7 +44,9 @@ type engine struct {
 	streamMu  sync.Mutex
 	displayID uint32
 	// shown 是正在看的屏，注入和滚动按它换算；和 displayID 一起改，不用拿 streamMu 就能读
-	shown    atomic.Uint32
+	shown atomic.Uint32
+	// fpsCap 是每秒最多采几帧，父进程按码率改（CtrlFPS），0 是 60
+	fpsCap   atomic.Uint32
 	locked   atomic.Bool
 	dropping atomic.Bool
 
@@ -272,16 +274,7 @@ func (e *engine) openStream(display, content objc.ID) error {
 	if filter == 0 {
 		return fmt.Errorf("desk: content filter failed")
 	}
-	cfg := m.init(m.alloc(m.clsConfig, m.sel("alloc")), m.sel("init"))
-	m.setInt(cfg, m.sel("setWidth:"), e.width)
-	m.setInt(cfg, m.sel("setHeight:"), e.height)
-	m.setInt(cfg, m.sel("setQueueDepth:"), 3)
-	m.setU32(cfg, m.sel("setPixelFormat:"), pixel420v)
-	m.setInt(cfg, m.sel("setShowsCursor:"), 1)
-	m.setTime(cfg, m.sel("setMinimumFrameInterval:"), cmMake(1, 60))
-	if m.keyMatrix709 != 0 {
-		m.setPtr(cfg, m.sel("setColorMatrix:"), m.keyMatrix709)
-	}
+	cfg := e.streamConfig()
 	del := m.init(m.alloc(delegateClass, m.sel("alloc")), m.sel("init"))
 	stream := m.initStream(m.alloc(m.clsStream, m.sel("alloc")), m.sel("initWithFilter:configuration:delegate:"), filter, cfg, del)
 	name := append([]byte("hive.desk.capture"), 0)
@@ -305,6 +298,48 @@ func (e *engine) openStream(display, content objc.ID) error {
 	})
 	m.startCapture(stream, m.sel("startCaptureWithCompletionHandler:"), uintptr(block))
 	return <-started
+}
+
+// streamConfig 是采集设置：输出尺寸、像素格式、帧率上限。开采集和运行中改帧率共用。
+func (e *engine) streamConfig() objc.ID {
+	m := e.mac
+	fps := e.fpsCap.Load()
+	if fps == 0 {
+		fps = 60
+	}
+	cfg := m.init(m.alloc(m.clsConfig, m.sel("alloc")), m.sel("init"))
+	m.setInt(cfg, m.sel("setWidth:"), e.width)
+	m.setInt(cfg, m.sel("setHeight:"), e.height)
+	m.setInt(cfg, m.sel("setQueueDepth:"), 3)
+	m.setU32(cfg, m.sel("setPixelFormat:"), pixel420v)
+	m.setInt(cfg, m.sel("setShowsCursor:"), 1)
+	m.setTime(cfg, m.sel("setMinimumFrameInterval:"), cmMake(1, int32(fps)))
+	if m.keyMatrix709 != 0 {
+		m.setPtr(cfg, m.sel("setColorMatrix:"), m.keyMatrix709)
+	}
+	return cfg
+}
+
+// setFPS 改采集的帧率上限。ScreenCaptureKit 按间隔丢帧，画面停住时最后一帧照样交出来。
+func (e *engine) setFPS(fps uint32) {
+	if fps == 0 || fps > 60 || e.fpsCap.Swap(fps) == fps {
+		return
+	}
+	e.streamMu.Lock()
+	defer e.streamMu.Unlock()
+	if e.stream == 0 || e.stopping.Load() {
+		return
+	}
+	e.mac.withPool(func() {
+		cfg := e.streamConfig()
+		block := objc.NewBlock(func(_ objc.Block, err objc.ID) {
+			if err != 0 {
+				e.logf("frame rate %d: %s", fps, e.mac.goString(e.mac.init(err, e.mac.sel("localizedDescription"))))
+			}
+		})
+		e.mac.updateConfig(e.stream, e.mac.sel("updateConfiguration:completionHandler:"), cfg, uintptr(block))
+	})
+	e.logf("frame rate cap %d", fps)
 }
 
 func (e *engine) openEncoder(codec byte) error {
@@ -749,6 +784,8 @@ func (e *engine) control() {
 		case CtrlDisplay:
 			// 重开采集要等 ScreenCaptureKit 回调，不挡后面的输入
 			go e.switchDisplay(c.Display)
+		case CtrlFPS:
+			go e.setFPS(c.FPS)
 		}
 	}
 }

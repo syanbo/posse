@@ -7,7 +7,9 @@ import (
 )
 
 const (
-	rateFloor  = 1_500_000
+	// 差网络（4G、跨洋中转）也要撑住：RustDesk 能把码率压到好画质的十分之一上下。码率低到这一档时
+	// 帧率跟着降（fpsFor），每帧分到的比特数不至于太少
+	rateFloor  = 400_000
 	rateCeil   = 20_000_000
 	rateWindow = time.Second
 	rateHold   = 500 * time.Millisecond
@@ -15,6 +17,32 @@ const (
 	// 排队超过它算堵。Wi-Fi 平时抖十几毫秒，远程桌面多排 40 毫秒手上就能感觉到
 	rateQueueLate = 40 * time.Millisecond
 )
+
+// 码率降到这些档位以下时把采集帧率降到对应值（RustDesk 也是先降码率、再降帧率）：同样的码率，
+// 每秒帧数少，每帧就清楚。往回升要高出档位 30%，免得在边界上来回切。
+var fpsLadder = []struct {
+	bitrate uint32
+	fps     uint32
+}{
+	{3_000_000, 60},
+	{1_500_000, 30},
+	{800_000, 15},
+	{0, 10},
+}
+
+// fpsFor 是码率 bitrate 下该用的帧率上限，cur 是现在的上限。
+func fpsFor(bitrate, cur uint32) uint32 {
+	for _, step := range fpsLadder {
+		need := uint64(step.bitrate)
+		if step.fps > cur {
+			need = need * 13 / 10
+		}
+		if uint64(bitrate) >= need {
+			return step.fps
+		}
+	}
+	return fpsLadder[len(fpsLadder)-1].fps
+}
 
 // rateState 按大约 1 秒的接收报告调码率。
 // 单个 100ms 报告里丢一个包就会超过 2%，不能按它降；降完至少隔 rateHold 再降。

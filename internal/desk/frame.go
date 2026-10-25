@@ -163,27 +163,33 @@ const (
 	CtrlStop     byte = 3
 	CtrlInput    byte = 4
 	CtrlDisplay  byte = 5
+	CtrlFPS      byte = 6
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。
 // Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。Display 只在 CtrlDisplay 时有意义，是要切到的屏。
+// FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。
 type Control struct {
 	Kind    byte
 	Bitrate uint32
 	Events  []Event
 	Display uint32
+	FPS     uint32
 }
 
 // WriteControl 写成 4 字节长度加内容。长度包含类型字节。
 func WriteControl(w io.Writer, c Control) error {
 	var body []byte
 	switch c.Kind {
-	case CtrlBitrate, CtrlDisplay:
+	case CtrlBitrate, CtrlDisplay, CtrlFPS:
 		body = make([]byte, 5)
 		body[0] = c.Kind
 		v := c.Bitrate
-		if c.Kind == CtrlDisplay {
+		switch c.Kind {
+		case CtrlDisplay:
 			v = c.Display
+		case CtrlFPS:
+			v = c.FPS
 		}
 		binary.LittleEndian.PutUint32(body[1:], v)
 	case CtrlInput:
@@ -231,11 +237,15 @@ func ReadControl(r io.Reader) (Control, error) {
 			return Control{}, errors.New("desk: bad bitrate control")
 		}
 		c.Bitrate = binary.LittleEndian.Uint32(buf[1:5])
-	case CtrlDisplay:
+	case CtrlDisplay, CtrlFPS:
 		if len(buf) != 5 {
 			return Control{}, errors.New("desk: bad display control")
 		}
-		c.Display = binary.LittleEndian.Uint32(buf[1:5])
+		if c.Kind == CtrlDisplay {
+			c.Display = binary.LittleEndian.Uint32(buf[1:5])
+		} else {
+			c.FPS = binary.LittleEndian.Uint32(buf[1:5])
+		}
 	case CtrlInput:
 		ev, err := DecodeInput(buf[1:])
 		if err != nil {
