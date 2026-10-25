@@ -583,6 +583,12 @@ class HiveAppModel extends ChangeNotifier {
     }
   }
 
+  /// 从后台回到前台，见 [HiveLink.wake]。
+  Future<void> wake() async {
+    if (disconnected) return;
+    await link?.wake();
+  }
+
   /// iOS 在 App 第一次连局域网地址时才弹「本地网络」权限，弹窗开着时连接直接失败。
   /// 所以第一次配对连不上时接着重试，等用户点完允许自然连上。
   /// 弹窗开着时 App 不在前台，这段时间不算进时限，用户看多久都行；点允许前后网络状态不变，

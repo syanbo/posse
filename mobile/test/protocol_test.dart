@@ -165,6 +165,46 @@ void main() {
     await link.close();
   });
 
+  test('waking up checks the link at once and reconnects a dead one', () async {
+    final hostKeys = generateKeyPair();
+    final offer = PairingOffer(
+      endpoint: 'only',
+      endpoints: const [],
+      deviceToken: 'tok',
+      publicKeyB64: b64(hostKeys.publicKey),
+    );
+    var connects = 0;
+    final link =
+        HiveLink(
+            offer: offer,
+            connect: (url, cancel) async {
+              connects++;
+              final (client, host) = pipePair();
+              // 第一条像后台冻过的连接：握手后不再回话
+              unawaited(_host(host, hostKeys, 'tok', silent: connects == 1));
+              return client;
+            },
+          )
+          // 测延迟要很久才发现，只靠 wake
+          ..latencyInterval = const Duration(seconds: 30)
+          ..latencyTimeout = const Duration(seconds: 30)
+          ..wakeProbe = const Duration(milliseconds: 100);
+    final first = await link.start();
+    // 等连上之后的 hive.quic 回完：别的回复也算电脑还在
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final next = link.connections.first;
+    final watch = Stopwatch()..start();
+    await link.wake();
+    final second = await next.timeout(const Duration(seconds: 2));
+    expect(identical(second, first), isFalse);
+    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+    // 回话的连接 wake 不动它
+    await link.wake();
+    expect(identical(link.rpc, second), isTrue);
+    expect(connects, 2);
+    await link.close();
+  });
+
   test('a signature during the first handshake does not cancel it', () async {
     final hostKeys = generateKeyPair();
     final offer = PairingOffer(

@@ -347,6 +347,35 @@ class HiveLink {
     }
   }
 
+  /// 回到前台时等电脑回话最多这么久。往返平时几十到几百毫秒，经中转也不过半秒。
+  Duration wakeProbe = const Duration(seconds: 2);
+
+  /// 从后台回到前台：iOS 在后台冻住 App，连接多半已经死了（NAT 映射过期、电脑那边超时），
+  /// 等测延迟连着超时三次要十几秒，这期间界面没反应。马上测一次，[wakeProbe] 内没回话就断开重连；
+  /// 本来就断着的不等退避，马上连。
+  Future<void> wake() async {
+    if (_closed) return;
+    final current = rpc;
+    if (current == null) {
+      if (!_reopening || _waiting) unawaited(_wakeOpen ??= _openOnWake());
+      return;
+    }
+    final alive = await (meter?.probe(wakeProbe) ?? Future.value(true));
+    if (!alive && !_closed && identical(rpc, current)) current.drop();
+  }
+
+  /// [wake] 发起、还没结束的那次连接。[_reopen] 等完它再决定要不要自己连，不另开一轮把它顶掉。
+  Future<void>? _wakeOpen;
+
+  Future<void> _openOnWake() async {
+    try {
+      await open();
+    } catch (_) {
+    } finally {
+      _wakeOpen = null;
+    }
+  }
+
   Future<void> _reopenNow() async {
     try {
       await open();
@@ -356,6 +385,9 @@ class HiveLink {
   var _closed = false;
   var _reopening = false;
 
+  /// [_reopen] 正在两次重试之间等。
+  var _waiting = false;
+
   /// 断线后一直重连，间隔从 0.3 秒翻倍到 5 秒，连上或者 [close] 为止。电脑重启常驻进程时手机自己接上。
   Future<void> _reopen() async {
     if (_reopening) return;
@@ -363,7 +395,11 @@ class HiveLink {
     var delay = const Duration(milliseconds: 300);
     try {
       while (!_closed && rpc == null) {
+        _waiting = true;
         await Future<void>.delayed(delay);
+        _waiting = false;
+        final woken = _wakeOpen;
+        if (woken != null) await woken;
         if (_closed || rpc != null) return;
         try {
           await open();

@@ -59,6 +59,21 @@ class LatencyMeter {
     _timer?.cancel();
   }
 
+  /// 马上问一次电脑在不在，[within] 内有回话（这次的或别的请求的）就算在。不计入延迟读数。
+  Future<bool> probe(Duration within) async {
+    final replies = rpc.repliesReceived;
+    try {
+      await rpc.call(_method, const {}, timeout: within);
+      return true;
+    } on RpcException catch (e) {
+      return e.code != 'closed';
+    } on TimeoutException {
+      return rpc.repliesReceived != replies;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 测一次。上一次还没回来就跳过，不在慢线路上越堆越多。
   Future<void> tick() async {
     if (_inFlight || _stopped) return;

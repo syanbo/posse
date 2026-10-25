@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
@@ -19,19 +21,39 @@ class HiveApp extends StatefulWidget {
   State<HiveApp> createState() => _HiveAppState();
 }
 
-class _HiveAppState extends State<HiveApp> {
+class _HiveAppState extends State<HiveApp> with WidgetsBindingObserver {
   final _keyboard = KeyboardDismisser();
   bool _splash = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.model.addListener(_rebuild);
     widget.model.restore();
   }
 
+  var _away = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 拉下控制中心、弹权限框只到 inactive，连接没被冻住，不用查
+    switch (state) {
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _away = true;
+      case AppLifecycleState.resumed:
+        if (_away) unawaited(widget.model.wake());
+        _away = false;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.model.removeListener(_rebuild);
     widget.model.dispose();
     super.dispose();
