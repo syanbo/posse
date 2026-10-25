@@ -15,7 +15,7 @@ import (
 
 func init() {
 	commands = append(commands,
-		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--selftest] [--input-test] [--quiet]", cmdDeskHelper},
+		command{"desk helper", "Capture the main display and write encoded frames to stdout", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--display ID] [--selftest] [--input-test] [--quiet]", cmdDeskHelper},
 		command{"desk spawn", "Run the desktop helper as its own responsible process", "[--seconds N] [--codec hevc|h264] [--long-edge N] [--bench] [--probe] [--mov FILE] [--exclude-app BUNDLE_ID] [--input-test]", cmdDeskSpawn},
 		command{"desk cast", "Send the desktop helper to a UDP receiver", "[--addr HOST:PORT] [--seconds N] [--codec hevc|h264] [--long-edge N] [--exclude-app BUNDLE_ID]", cmdDeskCast},
 	)
@@ -34,6 +34,7 @@ type deskOpts struct {
 	addr      string
 	longEdge  int
 	exclude   []string
+	display   uint
 }
 
 func deskFlags(args []string) (deskOpts, error) {
@@ -50,6 +51,7 @@ func deskFlags(args []string) (deskOpts, error) {
 	fs.BoolVar(&o.quiet, "quiet", false, "")
 	fs.StringVar(&o.addr, "addr", "127.0.0.1:47991", "")
 	fs.IntVar(&o.longEdge, "long-edge", 0, "")
+	fs.UintVar(&o.display, "display", 0, "")
 	var ex multiFlag
 	fs.Var(&ex, "exclude-app", "")
 	if _, err := parse(fs, args); err != nil {
@@ -97,6 +99,9 @@ func (o deskOpts) helperArgs() []string {
 	for _, id := range o.exclude {
 		args = append(args, "--exclude-app", id)
 	}
+	if o.display > 0 {
+		args = append(args, "--display", strconv.FormatUint(uint64(o.display), 10))
+	}
 	return args
 }
 
@@ -105,7 +110,7 @@ func cmdDeskHelper(_ *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, InputTest: o.inputTest, Quiet: o.quiet, LongEdge: o.longEdge, Exclude: o.exclude})
+	return desk.Run(desk.Options{Seconds: o.seconds, Codec: o.codec, Bench: o.bench, Probe: o.probe, Mov: o.mov, SelfTest: o.selfTest, InputTest: o.inputTest, Quiet: o.quiet, LongEdge: o.longEdge, Exclude: o.exclude, Display: uint32(o.display)})
 }
 
 func cmdDeskSpawn(_ *env, args []string) error {

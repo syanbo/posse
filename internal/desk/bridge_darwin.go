@@ -88,6 +88,10 @@ type macAPI struct {
 	colorRelease func(uintptr)
 	queueCreate  func(unsafe.Pointer, uintptr) uintptr
 
+	// activeDisplays 是 CGGetActiveDisplayList；sendObj 是带一个对象参数的 objc_msgSend（objectForKey: 之类）
+	activeDisplays func(uint32, *uint32, *uint32) int32
+	sendObj        func(objc.ID, objc.SEL, objc.ID) objc.ID
+
 	vtCreate     func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32
 	vtEncode     func(uintptr, uintptr, cmTime, cmTime, uintptr, uintptr, *uint32) int32
 	vtSet        func(uintptr, uintptr, uintptr) int32
@@ -214,9 +218,11 @@ func loadMac() (*macAPI, error) {
 	bind(&m.stopCapture, msg)
 	bind(&m.assetDuration, msg)
 	bind(&m.urlAsset, msg)
+	bind(&m.sendObj, msg)
 
 	cg := dl("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
 	m.mainDisplay = mustFn[func() uint32](cg, "CGMainDisplayID")
+	m.activeDisplays = mustFn[func(uint32, *uint32, *uint32) int32](cg, "CGGetActiveDisplayList")
 	m.pixelsWide = mustFn[func(uint32) uintptr](cg, "CGDisplayPixelsWide")
 	m.pixelsHigh = mustFn[func(uint32) uintptr](cg, "CGDisplayPixelsHigh")
 	m.copyMode = mustFn[func(uint32) uintptr](cg, "CGDisplayCopyDisplayMode")
@@ -434,6 +440,40 @@ func (m *macAPI) displayPixels(id uint32) (int, int) {
 		}
 	}
 	return int(m.pixelsWide(id)), int(m.pixelsHigh(id))
+}
+
+// displayIDs 是现在接着的所有屏。
+func (m *macAPI) displayIDs() []uint32 {
+	var ids [32]uint32
+	var n uint32
+	if m.activeDisplays(uint32(len(ids)), &ids[0], &n) != 0 {
+		return nil
+	}
+	return append([]uint32(nil), ids[:n]...)
+}
+
+// screenNames 是各块屏在系统设置里显示的名字（NSScreen.localizedName），按 CGDirectDisplayID 取。
+// 调用方要在自动释放池里。
+func (m *macAPI) screenNames() map[uint32]string {
+	out := map[uint32]string{}
+	cls := objc.ID(objc.GetClass("NSScreen"))
+	if cls == 0 {
+		return out
+	}
+	screens := m.init(cls, m.sel("screens"))
+	if screens == 0 {
+		return out
+	}
+	key := m.string("NSScreenNumber")
+	for i := range m.count(screens, m.sel("count")) {
+		s := m.at(screens, m.sel("objectAtIndex:"), i)
+		num := m.sendObj(m.init(s, m.sel("deviceDescription")), m.sel("objectForKey:"), key)
+		if num == 0 || !m.responds(s, m.sel("respondsToSelector:"), m.sel("localizedName")) {
+			continue
+		}
+		out[uint32(m.integer(num, m.sel("unsignedIntValue")))] = m.goString(m.init(s, m.sel("localizedName")))
+	}
+	return out
 }
 
 func (m *macAPI) sel(name string) objc.SEL { return objc.RegisterName(name) }

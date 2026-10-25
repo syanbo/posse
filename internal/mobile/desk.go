@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type DeskRequest struct {
 	Nonce    []byte
 	LongEdge int      // 手机屏幕长边的像素，画面不比它大
 	Codecs   []string // 手机能硬解的编码，按偏好排
+	Display  uint32   // 手机记着的上次看的屏（CGDirectDisplayID），0 或已经不在了看主屏
 }
 
 // DeskReady 是采集已经开始、UDP 已经在听。
@@ -32,13 +34,18 @@ type DeskReady struct {
 	// Punch 是打洞的 Mac 一侧（desk.punch）：手机报来它接收 socket 的公网地址，
 	// 返回 Mac 出口 socket 的公网地址并开始向手机发打洞包。没配中转时为空
 	Punch func(ctx context.Context, phone string) (string, error) `json:"-"`
+	// Display 切到另一块屏（desk.display），切好后经 notify 推新的 displays 事件
+	Display func(id uint32) error `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
+// Type 为 displays 时带 Mac 上所有的屏（desk.Display 的列表）和正在看的那块。
 type DeskEvent struct {
-	Type   string `json:"type"`
-	State  string `json:"state,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	Type     string `json:"type"`
+	State    string `json:"state,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	Current  uint32 `json:"current,omitempty"`
+	Displays any    `json:"displays,omitempty"`
 }
 
 // DeskError 是订阅失败的理由，原样作为错误码交给手机（busy、locked、permission_screen 等）。
@@ -57,9 +64,10 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		return c.fail(id, "unsupported", "client did not declare hive.desk.v1")
 	}
 	var p struct {
-		Width  int      `json:"width"`
-		Height int      `json:"height"`
-		Codecs []string `json:"codecs"`
+		Width   int      `json:"width"`
+		Height  int      `json:"height"`
+		Codecs  []string `json:"codecs"`
+		Display uint32   `json:"display"`
 	}
 	if json.Unmarshal(raw, &p) != nil || p.Width <= 0 || p.Height <= 0 {
 		return c.fail(id, "bad_params", "width and height are required")
@@ -72,6 +80,7 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		Nonce:    nonce,
 		LongEdge: max(p.Width, p.Height),
 		Codecs:   p.Codecs,
+		Display:  p.Display,
 	}
 	// 一条连接同时只看一次，新的订阅换掉旧的
 	ctx, gen := c.startKeyedStream("desk")
@@ -79,7 +88,17 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 	go func() {
 		defer c.endStreamGen("desk", gen)
 		ended := make(chan struct{})
+		// 采集一开始就报屏列表，可能比下面的 ready 还早：ready 发出去之前的事件先攒着，手机总是先收到 ready
+		var nmu sync.Mutex
+		var held []DeskEvent
+		readySent := false
 		notify := func(e DeskEvent) {
+			nmu.Lock()
+			defer nmu.Unlock()
+			if !readySent && e.Type != "end" {
+				held = append(held, e)
+				return
+			}
 			if ctx.Err() == nil || e.Type == "end" {
 				c.stream(id, e)
 			}
@@ -101,16 +120,26 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			frame["relayTokenB64"] = base64.StdEncoding.EncodeToString(ready.RelayToken)
 		}
 		c.smu.Lock()
-		c.deskPunch, c.deskPunchGen = ready.Punch, gen
+		c.desk, c.deskGen = &ready, gen
 		c.smu.Unlock()
 		defer func() {
 			c.smu.Lock()
-			if c.deskPunchGen == gen {
-				c.deskPunch = nil
+			if c.deskGen == gen {
+				c.desk = nil
 			}
 			c.smu.Unlock()
 		}()
 		c.stream(id, frame)
+		// 在锁里补发，之后到的事件排在它们后面
+		nmu.Lock()
+		readySent = true
+		for _, e := range held {
+			if ctx.Err() == nil {
+				c.stream(id, e)
+			}
+		}
+		held = nil
+		nmu.Unlock()
 		select {
 		case <-ended:
 		case <-c.ctx.Done():
@@ -126,7 +155,10 @@ func (c *conn) deskPunchRPC(id string, raw json.RawMessage) error {
 	}
 	json.Unmarshal(raw, &p)
 	c.smu.Lock()
-	punch := c.deskPunch
+	var punch func(context.Context, string) (string, error)
+	if c.desk != nil {
+		punch = c.desk.Punch
+	}
 	c.smu.Unlock()
 	if punch == nil {
 		return c.fail(id, "unavailable", "not watching the desktop through a relay")
@@ -139,6 +171,30 @@ func (c *conn) deskPunchRPC(id string, raw json.RawMessage) error {
 		c.replyOrFail(id, map[string]string{"addr": addr}, err)
 	}()
 	return nil
+}
+
+// deskDisplayRPC 是 desk.display：这条连接正在看桌面时切到另一块屏。只把要求交给采集子进程就回，
+// 切好了（或者那块屏已经不在、没切）由流里新的 displays 事件告诉手机。
+func (c *conn) deskDisplayRPC(id string, raw json.RawMessage) error {
+	var p struct {
+		ID uint32 `json:"id"`
+	}
+	if json.Unmarshal(raw, &p) != nil || p.ID == 0 {
+		return c.fail(id, "bad_params", "id is required")
+	}
+	c.smu.Lock()
+	var display func(uint32) error
+	if c.desk != nil {
+		display = c.desk.Display
+	}
+	c.smu.Unlock()
+	if display == nil {
+		return c.fail(id, "unavailable", "not watching the desktop")
+	}
+	if err := display(p.ID); err != nil {
+		return c.fail(id, "unavailable", err.Error())
+	}
+	return c.reply(id, map[string]any{"requested": p.ID})
 }
 
 func (c *conn) deskUnsubscribe(id string) error {

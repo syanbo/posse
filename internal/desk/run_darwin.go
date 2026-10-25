@@ -3,9 +3,11 @@
 package desk
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -41,8 +43,10 @@ type engine struct {
 
 	streamMu  sync.Mutex
 	displayID uint32
-	locked    atomic.Bool
-	dropping  atomic.Bool
+	// shown 是正在看的屏，注入和滚动按它换算；和 displayID 一起改，不用拿 streamMu 就能读
+	shown    atomic.Uint32
+	locked   atomic.Bool
+	dropping atomic.Bool
 
 	encMu       sync.Mutex
 	enc         uintptr
@@ -202,22 +206,31 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 	e.logf("shareable content after %s", time.Since(e.born).Round(time.Millisecond))
 	displays := e.mac.init(content, e.mac.sel("displays"))
 	n := e.mac.count(displays, e.mac.sel("count"))
+	// 手机记着的那块屏还在就看它，不然看主屏（主屏不在列表里时看第一块）
 	main := e.mac.mainDisplay()
-	var display objc.ID
-	var pw, ph int
+	var want, fallback objc.ID
+	var wantID, fallbackID uint32
 	for i := range n {
 		d := e.mac.at(displays, e.mac.sel("objectAtIndex:"), i)
 		id := uint32(e.mac.integer(d, e.mac.sel("displayID")))
-		if display == 0 || id == main {
-			display = d
-			pw, ph = e.mac.displayPixels(id)
+		if id != 0 && id == e.opt.Display {
+			want, wantID = d, id
+		}
+		if fallback == 0 || id == main {
+			fallback, fallbackID = d, id
 		}
 	}
+	display, chosen := want, wantID
+	if display == 0 {
+		display, chosen = fallback, fallbackID
+	}
+	pw, ph := e.mac.displayPixels(chosen)
 	if display == 0 || pw < 2 || ph < 2 {
 		e.halt(fmt.Errorf("desk: no main display"))
 		return
 	}
-	e.displayID = main
+	e.displayID = chosen
+	e.shown.Store(chosen)
 	tw, th := Fit(pw, ph, e.opt.LongEdge)
 	e.width, e.height = tw, th
 	codec := CodecHEVC
@@ -240,7 +253,8 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 		e.halt(err)
 		return
 	}
-	e.logf("capturing %dx%d -> %dx%d %s low-latency=%v, started after %s", pw, ph, tw, th, codecName(e.codec), e.lowLatency, time.Since(e.born).Round(time.Millisecond))
+	e.logf("capturing display %d %dx%d -> %dx%d %s low-latency=%v, started after %s", chosen, pw, ph, tw, th, codecName(e.codec), e.lowLatency, time.Since(e.born).Round(time.Millisecond))
+	e.writeDisplays()
 }
 
 func (e *engine) openStream(display, content objc.ID) error {
@@ -732,6 +746,9 @@ func (e *engine) control() {
 			e.bitrateSet.Store(true)
 		case CtrlInput:
 			e.applyInput(c.Events)
+		case CtrlDisplay:
+			// 重开采集要等 ScreenCaptureKit 回调，不挡后面的输入
+			go e.switchDisplay(c.Display)
 		}
 	}
 }
@@ -973,27 +990,80 @@ func (e *engine) onUnlocked() {
 	e.logf("screen unlocked")
 }
 
+// onDisplaysChanged 是拔插屏、改分辨率、改排布：正在看的屏还在就留在它上面，不在了回主屏。
 func (e *engine) onDisplaysChanged() {
-	if err := e.rebuildDisplay(); err != nil {
+	if err := e.rebuildDisplay(0); err != nil {
 		e.halt(err)
+		return
 	}
+	e.writeDisplays()
 }
 
-func (e *engine) rebuildDisplay() error {
+// switchDisplay 是手机选了另一块屏。那块屏不在了（刚拔掉）就留在现在这块。
+func (e *engine) switchDisplay(id uint32) {
+	if err := e.rebuildDisplay(id); err != nil {
+		e.halt(err)
+		return
+	}
+	e.writeDisplays()
+}
+
+// writeDisplays 把所有的屏和正在看的那块报给父进程。
+func (e *engine) writeDisplays() {
+	var list []Display
+	e.mac.withPool(func() {
+		names := e.mac.screenNames()
+		main := e.mac.mainDisplay()
+		for _, id := range e.mac.displayIDs() {
+			d := Display{ID: id, Name: names[id], Main: id == main}
+			if e.mac.displayBounds != nil {
+				b := e.mac.displayBounds(id)
+				d.X, d.Y, d.Width, d.Height = b.X, b.Y, b.W, b.H
+			}
+			d.PixelWidth, d.PixelHeight = e.mac.displayPixels(id)
+			list = append(list, d)
+		}
+	})
+	b, err := json.Marshal(Displays{Current: e.shown.Load(), List: list})
+	if err != nil {
+		return
+	}
+	e.write(Frame{Kind: KindDisplays, CaptureUnixNano: time.Now().UnixNano(), Payload: b})
+}
+
+// rebuildDisplay 换到 want 这块屏重新采，want 为 0 是留在现在这块。要换的屏不在了：
+// 手机点选的（want 不为 0）不动，正在看的没了回主屏。屏和分辨率都没变时什么也不做。
+func (e *engine) rebuildDisplay(want uint32) error {
 	e.streamMu.Lock()
 	defer e.streamMu.Unlock()
 	if e.stopping.Load() || e.locked.Load() || e.stream == 0 {
 		return nil
 	}
-	id := e.mac.mainDisplay()
+	online := e.mac.displayIDs()
+	id := want
+	if id == 0 {
+		id = e.displayID
+	}
+	if !slices.Contains(online, id) {
+		if want != 0 {
+			e.logf("display %d is gone, staying on %d", want, e.displayID)
+			return nil
+		}
+		id = e.mac.mainDisplay()
+	}
 	pw, ph := e.mac.displayPixels(id)
 	tw, th := Fit(pw, ph, e.opt.LongEdge)
 	if id == e.displayID && tw == e.width && th == e.height {
 		return nil
 	}
-	e.logf("display changed %dx%d -> %dx%d", e.width, e.height, tw, th)
+	e.logf("display %d %dx%d -> %d %dx%d", e.displayID, e.width, e.height, id, tw, th)
 	display, content, err := e.fetchDisplay(id)
 	if err != nil {
+		if want != 0 {
+			// 旧的采集还没停，接着看现在这块
+			e.logf("switch to display %d: %v", id, err)
+			return nil
+		}
 		return err
 	}
 	defer e.mac.release(display, e.mac.sel("release"))
@@ -1017,6 +1087,7 @@ func (e *engine) rebuildDisplay() error {
 		}
 	}
 	e.displayID = id
+	e.shown.Store(id)
 	e.writeConfig()
 	e.force.Store(true)
 	return e.openStream(display, content)

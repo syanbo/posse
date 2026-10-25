@@ -89,6 +89,9 @@ func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify f
 
 func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec string, notify func(mobile.DeskEvent)) (mobile.DeskReady, error) {
 	args := []string{"--quiet", "--long-edge", strconv.Itoa(min(max(req.LongEdge, 2), 1920))}
+	if req.Display != 0 {
+		args = append(args, "--display", strconv.FormatUint(uint64(req.Display), 10))
+	}
 	if codec == "h264" {
 		args = append(args, "--codec", "h264")
 	}
@@ -151,6 +154,9 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
 			OnInput: desk.NewInputForwarder(control),
+			OnDisplays: func(ds desk.Displays) {
+				notify(mobile.DeskEvent{Type: "displays", Current: ds.Current, Displays: ds.List})
+			},
 			OnStatus: func(code byte) {
 				d.deskNoteStatus(code)
 				switch code {
@@ -197,7 +203,11 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		log.Printf("desk: %s stopped: %s (%v)", req.Device, reason, serveErr)
 		notify(mobile.DeskEvent{Type: "end", Reason: reason})
 	}()
-	ready := mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken}
+	ready := mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken,
+		Display: func(id uint32) error {
+			return desk.WriteControl(control, desk.Control{Kind: desk.CtrlDisplay, Display: id})
+		},
+	}
 	if relay != "" {
 		ready.Punch = func(ctx context.Context, phone string) (string, error) {
 			return deskPunch(ctx, conn, phone)

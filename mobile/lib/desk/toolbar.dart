@@ -113,6 +113,7 @@ class DeskToolbar extends StatelessWidget {
     required this.onZoom,
     required this.onDebug,
     required this.onDisconnect,
+    this.onDisplays,
   });
 
   final bool expanded;
@@ -134,6 +135,9 @@ class DeskToolbar extends StatelessWidget {
   final VoidCallback onZoom;
   final VoidCallback onDebug;
   final VoidCallback onDisconnect;
+
+  /// 选看哪块屏。Mac 只有一块屏（或电脑太旧不报屏）时为空，按钮不出现。
+  final VoidCallback? onDisplays;
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +196,14 @@ class DeskToolbar extends StatelessWidget {
         on: landscape,
         onTap: onOrientation,
       ),
+      if (onDisplays case final pick?)
+        _icon(
+          c,
+          key: const Key('desk-toolbar-displays'),
+          icon: Icons.desktop_windows_outlined,
+          tooltip: '屏幕',
+          onTap: pick,
+        ),
       _icon(
         c,
         key: const Key('desk-toolbar-keyboard'),

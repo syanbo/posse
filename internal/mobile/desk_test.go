@@ -14,12 +14,15 @@ func TestDeskSubscribe(t *testing.T) {
 	h := &fakeHost{terms: map[string]*term.Terminal{}}
 	busy := false
 	punched := make(chan string, 1)
+	switched := make(chan uint32, 1)
 	h.desk = func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
 		if busy {
 			return DeskReady{}, DeskError("busy", "someone else")
 		}
 		reqs <- req
 		go func() {
+			// 屏列表可能比 ready 先到，手机要照收
+			notify(DeskEvent{Type: "displays", Current: 1, Displays: []map[string]any{{"id": 1, "main": true}, {"id": 2}}})
 			<-ctx.Done()
 			notify(DeskEvent{Type: "end", Reason: "unsubscribed"})
 		}()
@@ -27,6 +30,10 @@ func TestDeskSubscribe(t *testing.T) {
 			Punch: func(ctx context.Context, phone string) (string, error) {
 				punched <- phone
 				return "198.51.100.2:5000", nil
+			},
+			Display: func(id uint32) error {
+				switched <- id
+				return nil
 			}}, nil
 	}
 	srv, err := New(t.TempDir(), h, -1)
@@ -53,6 +60,11 @@ func TestDeskSubscribe(t *testing.T) {
 		t.Fatalf("punched without watching: %v", m)
 	}
 
+	if m := p.next(p.call("desk.display", map[string]any{"id": 2})); m["ok"] != false {
+		t.Fatalf("switched without watching: %v", m)
+	}
+
+	sub["display"] = 2
 	id := p.call("desk.subscribe", sub)
 	ready := result(t, p.next(id))
 	if ready["type"] != "ready" || ready["port"] != float64(4321) || ready["codec"] != "hevc" {
@@ -68,8 +80,25 @@ func TestDeskSubscribe(t *testing.T) {
 	if len(req.Secret) != 64 || string(req.Secret[:32]) != string(c.sess.sendKey[:]) || string(req.Secret[32:]) != string(c.sess.recvKey[:]) {
 		t.Fatal("secret is not sendKey||recvKey")
 	}
-	if req.LongEdge != 2556 {
-		t.Fatalf("long edge %d", req.LongEdge)
+	if req.LongEdge != 2556 || req.Display != 2 {
+		t.Fatalf("long edge %d, display %d", req.LongEdge, req.Display)
+	}
+	// 订阅流里有屏列表
+	for {
+		m, ok := p.nextWithin(id, 5*time.Second)
+		if !ok {
+			t.Fatal("no displays event")
+		}
+		if r := result(t, m); r["type"] == "displays" {
+			if r["current"] != float64(1) || len(r["displays"].([]any)) != 2 {
+				t.Fatalf("displays %v", r)
+			}
+			break
+		}
+	}
+	result(t, p.next(p.call("desk.display", map[string]any{"id": 2})))
+	if got := <-switched; got != 2 {
+		t.Fatalf("switched to %d", got)
 	}
 	if ready["relay"] != "203.0.113.1:443" {
 		t.Fatalf("relay %v", ready["relay"])

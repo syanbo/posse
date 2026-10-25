@@ -13,6 +13,8 @@ import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import 'chrome.dart';
+import 'display_picker.dart';
+import 'displays.dart';
 import 'direct.dart';
 import 'events.dart';
 import 'gestures.dart';
@@ -106,6 +108,9 @@ class _DeskPageState extends State<DeskPage>
 
   /// 这次接收已经请 Mac 打过洞了：每次开接收只打一次，打不通就一直走中转。
   bool _punchAsked = false;
+
+  /// Mac 上的屏和正在看的那块，订阅流里的 displays 事件给。旧电脑不给，一直是空的。
+  DeskDisplays _displays = DeskDisplays.none;
   int? _texture;
   String? _fail;
   String? _endNote;
@@ -644,6 +649,8 @@ class _DeskPageState extends State<DeskPage>
     _stats = const DeskStats();
     _statsTick.value = const DeskStats();
     setState(() {
+      // 可能换了一台电脑，等这次订阅报来的屏
+      _displays = DeskDisplays.none;
       _fail = null;
       _endNote = null;
       _accessNote = null;
@@ -671,6 +678,7 @@ class _DeskPageState extends State<DeskPage>
         'height': pixels.$2,
         // 插件只会解 HEVC。
         'codecs': ['hevc'],
+        'display': ?widget.model.settings.deskDisplays[_computerKey],
       });
     } on Object {
       if (!mounted || gen != _gen) return;
@@ -709,9 +717,36 @@ class _DeskPageState extends State<DeskPage>
           case 'accessibility':
             setState(() => _accessNote = null);
         }
+      case 'displays':
+        if (!mounted) return;
+        setState(() => _displays = DeskDisplays.parse(frame));
       case 'end':
         final reason = frame['reason'];
         await _finishWatch(gen, reason is String ? reason : '');
+    }
+  }
+
+  /// 这台电脑的公钥：按它记上次看的屏，换地址、重新扫码都不变。
+  String? get _computerKey => widget.model.offer?.publicKeyB64;
+
+  /// 悬浮球的「屏幕」：选一块屏，记下来，让 Mac 切过去。切好了 Mac 推新的 displays，画面也换过来；
+  /// 新屏的大小、比例和原来的不一样，缩放回到 1 倍。
+  Future<void> _pickDisplay() async {
+    _pokeBar();
+    final id = await pickDeskDisplay(context, _displays);
+    final rpc = _rpcNow;
+    if (!mounted || id == null || id == _displays.current || rpc == null) {
+      return;
+    }
+    final key = _computerKey;
+    if (key != null) {
+      widget.model.updateSettings((s) => s.deskDisplays[key] = id);
+    }
+    _resetZoom();
+    try {
+      await rpc.call('desk.display', {'id': id});
+    } on Object {
+      // 没在看了、连接断了：下次订阅照记下的屏开始
     }
   }
 
@@ -1294,6 +1329,9 @@ class _DeskPageState extends State<DeskPage>
                       onZoom: _resetZoom,
                       onDebug: _toggleDebug,
                       onDisconnect: () => unawaited(_disconnect()),
+                      onDisplays: _displays.several
+                          ? () => unawaited(_pickDisplay())
+                          : null,
                     ),
                   ),
                 );

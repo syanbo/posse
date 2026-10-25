@@ -531,6 +531,8 @@ func (c *conn) dispatch(req request) error {
 		return c.deskUnsubscribe(req.ID)
 	case "desk.punch":
 		return c.deskPunchRPC(req.ID, p)
+	case "desk.display":
+		return c.deskDisplayRPC(req.ID, p)
 	case "terminal.unsubscribe":
 		var a struct {
 			SubscriptionID string `json:"subscriptionId"`

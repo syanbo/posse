@@ -287,9 +287,9 @@ type conn struct {
 	// 这条连接上还开着的对话订阅。键是流的 key，值是它看着的终端。
 	chatWatch map[string]chatWatch
 
-	// 正在看的桌面的打洞入口（DeskReady.Punch），这次观看结束时清掉；gen 认出是哪次订阅设的
-	deskPunch    func(ctx context.Context, phone string) (string, error)
-	deskPunchGen uint64
+	// 正在看的桌面（打洞、切屏的入口），这次观看结束时清掉；gen 认出是哪次订阅设的
+	desk    *DeskReady
+	deskGen uint64
 
 	nextBlob atomic.Uint32 // 大块字段的编号（bulk.go）
 	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着

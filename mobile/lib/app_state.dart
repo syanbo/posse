@@ -95,8 +95,10 @@ class AppSettings {
     this.deskLandscape = false,
     this.deskGesturesSeen = false,
     this.phoneId = '',
+    Map<String, int>? deskDisplays,
     List<BarKey>? barKeys,
-  }) : barKeys = barKeys ?? defaultBarKeys();
+  }) : barKeys = barKeys ?? defaultBarKeys(),
+       deskDisplays = deskDisplays ?? {};
 
   /// dark、light 或 system。默认深色。
   String theme;
@@ -122,6 +124,10 @@ class AppSettings {
   /// 看桌面的手势提示已经关过。只出现一次。
   bool deskGesturesSeen;
 
+  /// 每台电脑上次在看桌面里选的屏，键是电脑的公钥，值是屏的 ID（CGDirectDisplayID，同一台显示器重启后不变）。
+  /// 下次看时订阅带上，那块屏不在了电脑看主屏。
+  Map<String, int> deskDisplays;
+
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
@@ -141,6 +147,7 @@ class AppSettings {
     'deskWatch': deskWatch,
     'deskLandscape': deskLandscape,
     'deskGesturesSeen': deskGesturesSeen,
+    'deskDisplays': deskDisplays,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
@@ -179,6 +186,13 @@ class AppSettings {
       }
       if (map['deskGesturesSeen'] is bool) {
         out.deskGesturesSeen = map['deskGesturesSeen'] as bool;
+      }
+      final displays = map['deskDisplays'];
+      if (displays is Map) {
+        out.deskDisplays = {
+          for (final MapEntry(:key, :value) in displays.entries)
+            if (key is String && value is int) key: value,
+        };
       }
       final phoneId = map['phoneId'];
       if (phoneId is String) out.phoneId = phoneId;

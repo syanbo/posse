@@ -3,6 +3,7 @@ package desk
 import (
 	"crypto/cipher"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -68,6 +69,8 @@ type CastConfig struct {
 	ToMobile, ToMac [32]byte
 	// OnStatus 收子进程报来的状态（StatusLocked 等），在读管道的协程里调
 	OnStatus func(code byte)
+	// OnDisplays 收子进程报来的屏列表（开始时、切屏后、拔插或改分辨率后），在读管道的协程里调
+	OnDisplays func(Displays)
 	// OnInput 收手机发来的 input 包明文，返回已经执行到的必达事件序号，随即用 beat 回给手机
 	OnInput func(plain []byte) (ack uint64)
 	// Verbose 每次评估码率都记日志，命令行试跑看曲线用；常驻进程里只记变化，免得 daemon.log 每秒一行
@@ -92,7 +95,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	start := PictureBitrate(1920, 1080)
 	c := &caster{
 		conn: cfg.Conn, sealAEAD: sealAEAD, openAEAD: openAEAD, control: control,
-		onStatus: cfg.OnStatus, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
+		onStatus: cfg.OnStatus, onDisplays: cfg.OnDisplays, onInput: cfg.OnInput, verbose: cfg.Verbose, isRelay: cfg.IsRelay,
 		bitrate: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
@@ -149,6 +152,7 @@ type caster struct {
 	sealAEAD, openAEAD cipher.AEAD
 	control            io.Writer
 	onStatus           func(byte)
+	onDisplays         func(Displays)
 	onInput            func([]byte) uint64
 	verbose            bool
 	inputAck           uint64
@@ -219,6 +223,11 @@ func (c *caster) readFrames(frames io.Reader) error {
 				if c.onStatus != nil {
 					c.onStatus(f.Payload[0])
 				}
+			}
+		case KindDisplays:
+			var d Displays
+			if json.Unmarshal(f.Payload, &d) == nil && c.onDisplays != nil {
+				c.onDisplays(d)
 			}
 		case KindVideo:
 			c.submit(f)

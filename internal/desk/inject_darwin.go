@@ -62,6 +62,8 @@ type injector struct {
 	mu  sync.Mutex
 	mac *macAPI
 	log func(string, ...any)
+	// display 是正在看的屏，点击、滚动都按它换算；还没开始采集时为 0，用主屏
+	display func() uint32
 
 	bounds     cgRect
 	layout     map[rune]keyStroke
@@ -84,7 +86,7 @@ func (e *engine) injector() *injector {
 	if e.in != nil {
 		return e.in
 	}
-	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf}
+	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf, display: e.shown.Load}
 	e.mac.withPool(func() { in.prepare() })
 	e.in = in
 	return in
@@ -211,7 +213,13 @@ func (in *injector) refreshBounds() {
 	if in.mac.displayBounds == nil || in.mac.mainDisplay == nil {
 		return
 	}
-	b := in.mac.displayBounds(in.mac.mainDisplay())
+	id := in.mac.mainDisplay()
+	if in.display != nil {
+		if d := in.display(); d != 0 {
+			id = d
+		}
+	}
+	b := in.mac.displayBounds(id)
 	if b.W >= 1 && b.H >= 1 {
 		in.bounds = b
 	}

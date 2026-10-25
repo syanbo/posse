@@ -17,6 +17,7 @@ const (
 	KindHeartbeat byte = 2
 	KindConfig    byte = 3
 	KindStatus    byte = 4
+	KindDisplays  byte = 5 // 负载是 Displays 的 JSON：开始时、切屏后、拔插或改分辨率后各发一次
 
 	flagKeyframe byte = 1
 
@@ -93,7 +94,7 @@ func ReadFrame(r io.Reader) (Frame, error) {
 		CaptureUnixNano: int64(binary.LittleEndian.Uint64(hdr[16:24])),
 	}
 	switch f.Kind {
-	case KindVideo, KindHeartbeat, KindConfig, KindStatus:
+	case KindVideo, KindHeartbeat, KindConfig, KindStatus, KindDisplays:
 	default:
 		return Frame{}, errKind
 	}
@@ -111,6 +112,26 @@ func ReadFrame(r io.Reader) (Frame, error) {
 		}
 	}
 	return f, nil
+}
+
+// Display 是 Mac 上的一块屏。位置和大小是全局坐标里的点（主屏左上角是原点），排布图照它画；
+// 像素是这块屏现在的分辨率。
+type Display struct {
+	ID          uint32  `json:"id"`
+	Name        string  `json:"name"`
+	X           float64 `json:"x"`
+	Y           float64 `json:"y"`
+	Width       float64 `json:"w"`
+	Height      float64 `json:"h"`
+	PixelWidth  int     `json:"pw"`
+	PixelHeight int     `json:"ph"`
+	Main        bool    `json:"main,omitempty"`
+}
+
+// Displays 是 KindDisplays 负载：所有的屏和正在看的那块。
+type Displays struct {
+	Current uint32    `json:"current"`
+	List    []Display `json:"displays"`
 }
 
 // MarshalConfig 编码配置负载。
@@ -141,24 +162,30 @@ const (
 	CtrlBitrate  byte = 2
 	CtrlStop     byte = 3
 	CtrlInput    byte = 4
+	CtrlDisplay  byte = 5
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。
-// Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。
+// Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。Display 只在 CtrlDisplay 时有意义，是要切到的屏。
 type Control struct {
 	Kind    byte
 	Bitrate uint32
 	Events  []Event
+	Display uint32
 }
 
 // WriteControl 写成 4 字节长度加内容。长度包含类型字节。
 func WriteControl(w io.Writer, c Control) error {
 	var body []byte
 	switch c.Kind {
-	case CtrlBitrate:
+	case CtrlBitrate, CtrlDisplay:
 		body = make([]byte, 5)
 		body[0] = c.Kind
-		binary.LittleEndian.PutUint32(body[1:], c.Bitrate)
+		v := c.Bitrate
+		if c.Kind == CtrlDisplay {
+			v = c.Display
+		}
+		binary.LittleEndian.PutUint32(body[1:], v)
 	case CtrlInput:
 		ev, err := EncodeInput(c.Events)
 		if err != nil {
@@ -204,6 +231,11 @@ func ReadControl(r io.Reader) (Control, error) {
 			return Control{}, errors.New("desk: bad bitrate control")
 		}
 		c.Bitrate = binary.LittleEndian.Uint32(buf[1:5])
+	case CtrlDisplay:
+		if len(buf) != 5 {
+			return Control{}, errors.New("desk: bad display control")
+		}
+		c.Display = binary.LittleEndian.Uint32(buf[1:5])
 	case CtrlInput:
 		ev, err := DecodeInput(buf[1:])
 		if err != nil {

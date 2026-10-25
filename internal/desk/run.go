@@ -29,6 +29,8 @@ type Options struct {
 	LongEdge int
 	// Quiet 不每秒记编码统计，结束时仍记一行汇总。常驻进程拉起时用：日志进 daemon.log
 	Quiet bool
+	// Display 是开始时看哪块屏（CGDirectDisplayID），0 或已经不在了用主屏
+	Display uint32
 }
 
 // Run 跑桌面子进程。非 macOS 直接报错。
