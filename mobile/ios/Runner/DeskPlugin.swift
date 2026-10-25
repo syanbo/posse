@@ -76,6 +76,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     events.setStreamHandler(self)
     DeskEdges.install(messenger: messenger)
     DeskOrientation.install(messenger: messenger)
+    DeskPassword.install(messenger: messenger)
   }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {

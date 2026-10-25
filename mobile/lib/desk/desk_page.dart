@@ -124,6 +124,11 @@ class _DeskPageState extends State<DeskPage>
   String? _accessNote;
   // Mac 锁着屏：画面照常，上方给一个输密码解锁的入口。旧电脑锁屏时结束观看，不报这个
   var _macLocked = false;
+  // 这台电脑在手机钥匙串里记着登录密码：锁屏时一点就解
+  var _passwordSaved = false;
+  final _passwords = const DeskPasswordStore();
+  // 勾了记住、刚发出去的密码：Mac 随后解开了才存，输错的不记
+  ({String key, String password, DateTime at})? _pendingSave;
   // 切画面的结果（窗口没了回到整块屏），几秒后消失
   String? _viewNote;
   Timer? _noteTimer;
@@ -737,8 +742,10 @@ class _DeskPageState extends State<DeskPage>
             setState(() => _accessNote = null);
           case 'locked':
             setState(() => _macLocked = true);
+            unawaited(_checkSaved());
           case 'unlocked':
             setState(() => _macLocked = false);
+            unawaited(_savePending());
         }
       case 'displays':
         if (!mounted) return;
@@ -1224,11 +1231,73 @@ class _DeskPageState extends State<DeskPage>
     if (mounted) setState(() {});
   }
 
-  /// 锁屏时输密码：整段按键发过去再回车。密码不进事件记录（调试面板会显示）。
+  /// 这台电脑有没有在钥匙串里记着密码，决定胶囊上是「解锁」还是「输入密码」。
+  Future<void> _checkSaved() async {
+    final key = _computerKey;
+    final saved = key != null && await _passwords.has(key);
+    if (mounted && saved != _passwordSaved) {
+      setState(() => _passwordSaved = saved);
+    }
+  }
+
+  /// 锁屏时输密码：弹层里输入，可以记住或忘掉。
   Future<void> _unlock() async {
     _pokeBar();
-    final password = await askMacPassword(context);
-    if (!mounted || password == null || password.isEmpty) return;
+    final key = _computerKey;
+    final answer = await askMacPassword(
+      context,
+      canRemember: key != null,
+      saved: _passwordSaved,
+    );
+    if (!mounted || answer == null) return;
+    final password = answer.password;
+    if (password == null) {
+      // 只有记着密码时才有「忘掉」，这时 key 一定有
+      await _passwords.forget(key!);
+      if (!mounted) return;
+      setState(() => _passwordSaved = false);
+      _note('已忘掉记住的密码');
+      return;
+    }
+    _sendPassword(password);
+    if (key == null) return;
+    if (answer.remember) {
+      _pendingSave = (key: key, password: password, at: DateTime.now());
+    } else if (_passwordSaved) {
+      await _passwords.forget(key);
+      if (mounted) setState(() => _passwordSaved = false);
+    }
+  }
+
+  Future<void> _savePending() async {
+    final pending = _pendingSave;
+    _pendingSave = null;
+    if (pending == null ||
+        DateTime.now().difference(pending.at) > const Duration(seconds: 15)) {
+      return;
+    }
+    final ok = await _passwords.save(pending.key, pending.password);
+    if (!mounted) return;
+    setState(() => _passwordSaved = ok);
+    _note(ok ? '已记住密码，下次锁屏点「解锁」即可' : '没能记住密码');
+  }
+
+  /// 用记住的密码解锁。
+  Future<void> _unlockSaved() async {
+    _pokeBar();
+    final key = _computerKey;
+    if (key == null) return;
+    final password = await _passwords.read(key);
+    if (!mounted) return;
+    if (password == null) {
+      await _checkSaved();
+      return;
+    }
+    _sendPassword(password);
+  }
+
+  /// 整段按键发过去再回车。密码不进事件记录（调试面板会显示）。
+  void _sendPassword(String password) {
     // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
     if (!_macLocked) {
       _note('Mac 已经解锁，密码没有发送');
@@ -1243,28 +1312,57 @@ class _DeskPageState extends State<DeskPage>
     _noteInput();
   }
 
+  /// 锁屏胶囊：和悬浮球一样的圆角和底色，按钮压到胶囊里面。
   Widget _lockPill(PosseColors colors) {
+    final button = FilledButton.styleFrom(
+      minimumSize: const Size(0, 36),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: const StadiumBorder(),
+    );
     return Material(
       key: const Key('desk-locked'),
       color: colors.card.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(Rd.card),
+      borderRadius: BorderRadius.circular(999),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_outline_rounded, size: 18, color: colors.muted),
-            const SizedBox(width: 8),
+            Icon(Icons.lock_outline_rounded, size: 16, color: colors.muted),
+            const SizedBox(width: 6),
             Text(
               'Mac 已锁屏',
-              style: TextStyle(fontSize: Fs.body, color: colors.text),
+              style: TextStyle(fontSize: Fs.meta, color: colors.text),
             ),
-            const SizedBox(width: 10),
-            FilledButton(
-              key: const Key('desk-unlock'),
-              onPressed: () => unawaited(_unlock()),
-              child: const Text('输入密码'),
-            ),
+            const SizedBox(width: 8),
+            if (_passwordSaved) ...[
+              IconButton(
+                key: const Key('desk-unlock-edit'),
+                tooltip: '换密码或忘掉',
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () => unawaited(_unlock()),
+                icon: Icon(Icons.key_rounded, size: 18, color: colors.muted),
+              ),
+              const SizedBox(width: 2),
+              FilledButton(
+                key: const Key('desk-unlock'),
+                style: button,
+                onPressed: () => unawaited(_unlockSaved()),
+                child: const Text('解锁'),
+              ),
+            ] else
+              FilledButton(
+                key: const Key('desk-unlock'),
+                style: button,
+                onPressed: () => unawaited(_unlock()),
+                child: const Text('输入密码'),
+              ),
           ],
         ),
       ),
@@ -1397,19 +1495,23 @@ class _DeskPageState extends State<DeskPage>
                       // 只有卡片本身接点击，旁边的手势照常到画面
                       if (banner != null)
                         Center(child: _bannerView(colors, banner)),
-                      if (_macLocked && _stats.video && !_background)
-                        Positioned(
-                          top: 12,
-                          left: 0,
-                          right: 0,
-                          child: Center(child: _lockPill(colors)),
-                        ),
                     ],
                   );
                 },
               ),
             ),
           ),
+          // 和悬浮球同一高度，左右让出球的宽度，球吸在哪边都不压着
+          if (_macLocked && _stats.video && !_background)
+            Positioned(
+              top: top,
+              left: 64 + pad.left,
+              right: 64 + pad.right,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: _lockPill(colors),
+              ),
+            ),
           if (_debugOpen)
             Positioned(
               top: top,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../desk/unlock.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'custom_keys_screen.dart';
@@ -187,6 +188,7 @@ class SettingsScreen extends StatelessWidget {
                           model.updateSettings((s) => s.deskWatch = v),
                     ),
                     const _Note('打开后，点首页的电脑名，菜单里有「看桌面」。画面走局域网，输入先显示在画面上。'),
+                    if (s.deskWatch) const _DeskPasswords(),
                   ],
                 ),
               Section(
@@ -203,6 +205,52 @@ class SettingsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 看桌面在锁屏时记住的 Mac 登录密码：记着几台，全部忘掉。
+class _DeskPasswords extends StatefulWidget {
+  const _DeskPasswords();
+
+  @override
+  State<_DeskPasswords> createState() => _DeskPasswordsState();
+}
+
+class _DeskPasswordsState extends State<_DeskPasswords> {
+  final _store = const DeskPasswordStore();
+  int? _count;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final n = await _store.count();
+    if (mounted) setState(() => _count = n);
+  }
+
+  Future<void> _forget() async {
+    await _store.forgetAll();
+    await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final n = _count ?? 0;
+    return RowTile(
+      key: const Key('settings-desk-passwords'),
+      chevron: false,
+      title: const Text('记住的 Mac 密码'),
+      subtitle: Text(n > 0 ? '记着 $n 台电脑的登录密码' : '没有记住的密码'),
+      trailing: TextButton(
+        key: const Key('settings-desk-passwords-forget'),
+        onPressed: n > 0 ? _forget : null,
+        child: Text('全部忘掉', style: TextStyle(color: n > 0 ? c.danger : null)),
+      ),
     );
   }
 }
