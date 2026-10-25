@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"slices"
 	"sync"
 	"time"
 )
@@ -17,6 +18,10 @@ const (
 	castPeer   = "127.0.0.1:47990"
 	keyGap     = 250 * time.Millisecond
 	paceWindow = 16 * time.Millisecond
+	// 发送节奏的下限：码率压到最低时也不要慢于它，免得一个关键帧要发好几秒
+	paceFloor = 600_000
+	// 排着的画面按发送节奏最多积压这么久，再多就丢普通帧、等关键帧
+	queueBudget = time.Second
 )
 
 // reportQuiet 内没有接收报告就暂停发画面（心跳也停，什么都不往外发），reportGone 内报告回来就接着发，
@@ -173,12 +178,15 @@ type caster struct {
 	sendingKey         bool
 	sendGen            uint64
 	waitKey            bool
-	held               *Frame
-	queued             int
+	queue              []Frame // 等着发的帧，按采集顺序；mu 保护
+	queueBits          int
+	keySend            time.Duration // 上一个关键帧发了多久，关键帧请求的间隔按它拉长
 	mu                 sync.Mutex
 	bitrate            uint32
 	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）；mu 保护
 	fullBit            uint32 // 这个画面的满码率（PictureBitrate），帧率档位按它的比例算；mu 保护
+	haveConfig         bool
+	scale              uint32 // 告诉子进程的长边除数，最低一档帧率时为 2；fpsMu 保护
 	fpsMu              sync.Mutex
 	rate               rateState
 	sendGap            time.Duration
@@ -215,19 +223,30 @@ func (c *caster) readFrames(frames io.Reader) error {
 		case KindConfig:
 			cfg, err := UnmarshalConfig(f.Payload)
 			if err == nil {
-				start := PictureBitrate(cfg.Width, cfg.Height)
+				// 满尺寸没变是我们自己降、升了分辨率（CtrlScale）：码率照旧，编码器重开后按它自己的起始码率跑，
+				// 再告诉它一遍。满尺寸变了是新画面（开始、切屏、改分辨率），从这个画面的满码率起步
+				full := PictureBitrate(cfg.FullWidth, cfg.FullHeight)
 				c.mu.Lock()
 				c.codec = cfg.Codec
-				c.bitrate = start
-				c.rate.reset(time.Now(), start, rateCeil)
-				c.fullBit = start
+				rescaled := c.haveConfig && full == c.fullBit
+				c.haveConfig = true
+				if !rescaled {
+					c.bitrate = full
+					c.rate.reset(time.Now(), full, rateCeil)
+					c.fullBit = full
+				}
+				bitrate := c.bitrate
 				c.mu.Unlock()
-				c.applyFPS(start)
+				if rescaled {
+					_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+				} else {
+					c.applyFPS(bitrate)
+				}
 				name := "hevc"
 				if cfg.Codec == CodecH264 {
 					name = "h264"
 				}
-				log.Printf("desk: picture %dx%d %s bitrate %d", cfg.Width, cfg.Height, name, start)
+				log.Printf("desk: picture %dx%d %s bitrate %d", cfg.Width, cfg.Height, name, bitrate)
 			}
 		case KindStatus:
 			if len(f.Payload) > 0 {
@@ -274,9 +293,12 @@ func (c *caster) resume() {
 	}
 	away := time.Since(c.pausedAt)
 	c.pausedAt = time.Time{}
+	before := c.bitrate
 	bitrate := max(c.bitrate/2, rateFloor)
 	c.bitrate = bitrate
 	c.rate.reset(time.Now(), bitrate, c.rate.maxBit)
+	// 断之前的码率是快速回去的目标
+	c.rate.peak = before
 	c.waitKey = true
 	c.mu.Unlock()
 	log.Printf("desk: reports back after %s, resuming at %d", away.Round(100*time.Millisecond), bitrate)
@@ -291,82 +313,98 @@ func (c *caster) submit(f Frame) {
 	}
 	c.observeCapture()
 	c.mu.Lock()
-	codec := c.codec
 	if f.Keyframe {
 		c.waitKey = false
-		// 正在发的普通帧已经过时。正在发的关键帧不打断，否则 16ms 匀速发出期间
-		// 下一帧采集到来，关键帧永远发不完。
+		// 排着的普通帧都在它之前，过时了。正在发的普通帧也打断；正在发的关键帧不打断，
+		// 否则慢链路上一个关键帧要发几百毫秒，下一个到来时它永远发不完
+		c.dropQueued(false)
 		if c.busy && !c.sendingKey {
 			c.sendGen++
 		}
-		c.held = nil
 	}
 	if c.waitKey {
 		c.dropped++
 		c.mu.Unlock()
 		return
 	}
-	if c.busy {
-		if c.held != nil {
-			if f.Keyframe {
-				cp := f
-				c.held = &cp
-				c.queued = 1
-				if !c.sendingKey {
-					c.sendGen++
-				}
-				c.mu.Unlock()
-				return
-			}
-			if c.held.Keyframe {
-				// 排队的关键帧还没发。再丢掉它就会在参考链上留一个洞。
-				c.dropped++
-				c.mu.Unlock()
-				return
-			}
-			// 普通帧被丢掉之后，后面的普通帧仍引用它。停掉没发完的普通帧，等下一张关键帧。
-			c.held = nil
-			c.queued = 0
-			c.waitKey = true
-			c.dropped++
-			if !c.sendingKey {
-				c.sendGen++
-			}
-			c.mu.Unlock()
-			c.askKey()
-			return
-		}
-		cp := f
-		c.held = &cp
-		c.queued = 1
-		if c.queued > c.maxQueued {
-			c.maxQueued = c.queued
-		}
+	c.queue = append(c.queue, f)
+	c.queueBits += len(f.Payload) * 8
+	c.maxQueued = max(c.maxQueued, len(c.queue))
+	// 积压的比按现在的节奏 queueBudget 发得完的还多：链路扛不住。普通帧引用前一帧，丢一帧后面全花，
+	// 只能丢掉排着的普通帧、等下一个关键帧
+	if !f.Keyframe && c.queueBits > int(c.paceRate()*uint64(queueBudget)/uint64(time.Second)) {
+		c.dropQueued(true)
+		c.waitKey = true
 		c.mu.Unlock()
-		return
+		c.askKey()
+		c.mu.Lock()
 	}
-	c.busy = true
-	c.sendingKey = f.Keyframe
+	next, ok := c.nextLocked()
 	c.mu.Unlock()
-	c.startSend(f, codec)
+	if ok {
+		c.startSend(next)
+	}
 }
 
-func (c *caster) startSend(f Frame, codec byte) {
-	c.mu.Lock()
+// dropQueued 丢掉排着的帧，keepKey 时留下排着的关键帧。调用方持有 mu。
+func (c *caster) dropQueued(keepKey bool) {
+	kept := c.queue[:0]
+	bits := 0
+	for _, f := range c.queue {
+		if keepKey && f.Keyframe {
+			kept = append(kept, f)
+			bits += len(f.Payload) * 8
+			continue
+		}
+		c.dropped++
+	}
+	c.queue, c.queueBits = kept, bits
+}
+
+// nextLocked 在没有正在发的帧时取出排头，标成正在发。调用方持有 mu。
+func (c *caster) nextLocked() (Frame, bool) {
+	if c.busy || len(c.queue) == 0 {
+		return Frame{}, false
+	}
+	f := c.queue[0]
+	c.queue = c.queue[1:]
+	c.queueBits -= len(f.Payload) * 8
 	c.busy = true
 	c.sendingKey = f.Keyframe
+	return f, true
+}
+
+// paceRate 是发画面的节奏（比特每秒）：码率的 1.5 倍。一帧一口气发出去会冲爆慢链路的缓冲，
+// 关键帧比 100ms 的码率预算大好几倍（硬件编码器不守），尤其如此。调用方持有 mu。
+func (c *caster) paceRate() uint64 {
+	return max(uint64(c.bitrate)*3/2, paceFloor)
+}
+
+func (c *caster) startSend(f Frame) {
+	c.mu.Lock()
 	gen := c.sendGen
 	seq := c.seq
+	codec := c.codec
+	rate := c.paceRate()
 	c.mu.Unlock()
 	pkts := Packetize(f, seq, codec)
 	if f.Keyframe {
 		log.Printf("desk: send keyframe %d (%d packets)", f.Number, len(pkts))
 	}
-	go c.sendFrame(pkts, f.Keyframe, codec, gen, seq)
+	go c.sendFrame(pkts, f.Keyframe, gen, seq, rate)
 }
 
-func (c *caster) sendFrame(pkts [][]byte, key bool, codec byte, gen uint64, seq0 uint16) {
-	// 按包 Sleep 时，间隔短于调度粒度会被拉长到约 1ms，几百个包的关键帧要发半秒以上。
+func (c *caster) sendFrame(pkts [][]byte, key bool, gen uint64, seq0 uint16, rate uint64) {
+	// 按节奏摊开：第 i 个包在 start + span*(i+1)/n 之前不发。按包 Sleep 时，间隔短于调度粒度会被拉长到约 1ms，
+	// 所以按累计时刻算，落后了就连着发
+	bits := 0
+	for _, p := range pkts {
+		bits += len(p) * 8
+	}
+	span := time.Duration(uint64(bits) * uint64(time.Second) / rate)
+	if key {
+		span = max(span, paceWindow)
+	}
 	sent := 0
 	start := time.Now()
 	for i, p := range pkts {
@@ -381,9 +419,9 @@ func (c *caster) sendFrame(pkts [][]byte, key bool, codec byte, gen uint64, seq0
 			break
 		}
 		sent++
-		if key && i+1 < len(pkts) {
-			span := int64(paceWindow) * int64(i+1) / int64(len(pkts))
-			if d := time.Until(start.Add(time.Duration(span))); d > time.Millisecond {
+		if i+1 < len(pkts) && span > 2*time.Millisecond {
+			at := start.Add(span * time.Duration(i+1) / time.Duration(len(pkts)))
+			if d := time.Until(at); d > time.Millisecond {
 				time.Sleep(d)
 			}
 		}
@@ -391,20 +429,15 @@ func (c *caster) sendFrame(pkts [][]byte, key bool, codec byte, gen uint64, seq0
 	c.mu.Lock()
 	// 没发出去的包不占序号。空号会被接收端记成丢包，码率跟着自己丢掉的帧一路降到下限。
 	c.seq = seq0 + uint16(sent)
-	var next *Frame
-	codec = c.codec
-	if c.held != nil && !c.waitKey {
-		next = c.held
-		c.held = nil
-		c.queued = 0
-	} else {
-		c.held = nil
-		c.queued = 0
-		c.busy = false
+	if key {
+		c.keySend = time.Since(start)
 	}
+	c.busy = false
+	c.sendingKey = false
+	next, ok := c.nextLocked()
 	c.mu.Unlock()
-	if next != nil {
-		c.startSend(*next, codec)
+	if ok {
+		c.startSend(next)
 	}
 }
 
@@ -600,17 +633,43 @@ func (c *caster) applyFPS(bitrate uint32) {
 	changed := next != c.fps
 	c.fps = next
 	c.mu.Unlock()
-	if !changed {
-		return
+	if changed {
+		log.Printf("desk: frame rate cap %d at bitrate %d", next, bitrate)
+		_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: next})
 	}
-	log.Printf("desk: frame rate cap %d at bitrate %d", next, bitrate)
-	_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: next})
+	// 降到 15 帧及以下时画面长边减半：关键帧的大小大致跟像素数走，小到三分之一上下，慢链路上才发得完整。
+	// 在手机上看，整屏缩在手机宽度里，减半看着差别不大。硬件编码器出关键帧不看码率，满尺寸的关键帧
+	// 实测有 200 KB，所以要回到 30 帧（码率约 1.9 Mbps 以上）才升回满尺寸，那时半秒左右能发完
+	scale := uint32(1)
+	if next <= 15 {
+		scale = 2
+	}
+	if c.scale == 0 {
+		c.scale = 1
+	}
+	if scale != c.scale {
+		c.scale = scale
+		log.Printf("desk: picture scale 1/%d at bitrate %d", scale, bitrate)
+		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: scale})
+	}
 }
 
+// askKey 让子进程出一个关键帧。两次请求至少隔 keyGap，慢链路上还要隔上一个关键帧发送时长的两倍；
+// 关键帧正在发或排着时先不要：手机丢包后每 200ms 要一次，不拦着的话关键帧一个接一个，把链路堵死。
 func (c *caster) askKey() {
 	c.mu.Lock()
+	gap := max(keyGap, 2*c.keySend)
+	pending := c.sendingKey || slices.ContainsFunc(c.queue, func(f Frame) bool { return f.Keyframe })
+	if pending && !c.keyArmed {
+		c.keyArmed = true
+		time.AfterFunc(gap, c.fireKey)
+	}
+	if pending {
+		c.mu.Unlock()
+		return
+	}
 	if !c.lastKey.IsZero() {
-		if wait := keyGap - time.Since(c.lastKey); wait > 0 {
+		if wait := gap - time.Since(c.lastKey); wait > 0 {
 			// 间隔没到就先记着，到点再要。丢掉这次请求要等手机 200ms 后重试，补帧会晚一截。
 			if !c.keyArmed {
 				c.keyArmed = true

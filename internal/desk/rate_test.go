@@ -220,3 +220,56 @@ func TestFPSFollowsBitrate(t *testing.T) {
 		}
 	}
 }
+
+// 堵到下限后链路恢复：先快快回到原来一半，一分钟内回到 30 帧那一档；链路真的只剩 1 Mbps 时，
+// 快加撞上拥堵就收手，不会每隔几秒冲一次
+func TestRateRecoversFastAfterADeepCut(t *testing.T) {
+	full := PictureBitrate(1920, 1246)
+	run := func(link uint32) []uint32 {
+		var r rateState
+		t0 := time.Unix(1_700_000_000, 0)
+		r.reset(t0, full, rateCeil)
+		now := t0
+		// 先堵 20 秒，降到下限
+		for range 20 {
+			now = now.Add(time.Second)
+			r.add(now, 300, 300, 16*time.Millisecond, 16*time.Millisecond)
+		}
+		if r.bitrate != rateFloor {
+			t.Fatalf("not at the floor: %d", r.bitrate)
+		}
+		var trace []uint32
+		for range 60 {
+			now = now.Add(time.Second)
+			var loss uint32
+			if r.bitrate > link {
+				loss = 100
+			}
+			// 包数够多，说明这一窗口真的跑了码率
+			d := r.add(now, loss, uint32(r.bitrate/8/PacketLimit)+1, 16*time.Millisecond, 16*time.Millisecond)
+			trace = append(trace, d.bitrate)
+		}
+		return trace
+	}
+	open := run(rateCeil)
+	at30 := -1
+	for i, b := range open {
+		if fpsFor(b, full, 15) == 30 {
+			at30 = i
+			break
+		}
+	}
+	if at30 < 0 || at30 > 60 {
+		t.Fatalf("did not get back to 30 fps within a minute: %v", open)
+	}
+	slow := run(1_000_000)
+	over := 0
+	for _, b := range slow[20:] {
+		if b > 1_300_000 {
+			over++
+		}
+	}
+	if over > 3 {
+		t.Fatalf("kept overshooting a 1 Mbps link: %v", slow)
+	}
+}

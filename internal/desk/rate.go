@@ -62,7 +62,13 @@ type rateState struct {
 	gaps    []time.Duration
 	// 手机报的排队延迟。有它就按它判断排队，不再看帧间隔
 	queues []time.Duration
+	// peak 是这一轮降码率之前的水平。好转后不到它的一半就每次加 25%、加到一半为止，快快回去（RustDesk 也是
+	// 先回到拥堵前的水平）；快速加上去 5 秒内又堵了，说明链路真变差了，目标降到当时的码率。fastAt 是最近一次快速加的时刻
+	peak   uint32
+	fastAt time.Time
 }
+
+const rateFastGuard = 5 * time.Second
 
 type rateDecision struct {
 	bitrate   uint32
@@ -127,6 +133,13 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 	next := r.bitrate
 	if d.congested {
 		if r.lastCut.IsZero() || now.Sub(r.lastCut) >= rateHold {
+			if r.bitrate > r.peak {
+				r.peak = r.bitrate
+			}
+			if !r.fastAt.IsZero() && now.Sub(r.fastAt) < rateFastGuard {
+				r.peak = r.bitrate
+			}
+			r.fastAt = time.Time{}
 			next = r.bitrate * 3 / 4
 			r.lastCut = now
 			r.stable = now
@@ -135,6 +148,11 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 	} else if now.Sub(r.stable) >= rateStable && r.bitrate < r.maxBit && (r.lastUp.IsZero() || now.Sub(r.lastUp) >= time.Second) &&
 		carried(r.packets, now.Sub(r.winAt))*4 >= uint64(r.bitrate) {
 		next = r.bitrate + r.bitrate/20
+		// 只在不到目标一半时快加、最多加到一半：普通的一次砍四分之一不触发，剩下的照常 5% 一步步试
+		if half := r.peak / 2; r.bitrate < half {
+			next = min(r.bitrate+r.bitrate/4, half)
+			r.fastAt = now
+		}
 		if next > r.maxBit {
 			next = r.maxBit
 		}

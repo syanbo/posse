@@ -46,7 +46,9 @@ type engine struct {
 	// shown 是正在看的屏，注入和滚动按它换算；和 displayID 一起改，不用拿 streamMu 就能读
 	shown atomic.Uint32
 	// fpsCap 是每秒最多采几帧，父进程按码率改（CtrlFPS），0 是 60
-	fpsCap   atomic.Uint32
+	fpsCap atomic.Uint32
+	// scale 是画面长边除以几（CtrlScale），0 和 1 都是原样
+	scale    atomic.Uint32
 	locked   atomic.Bool
 	dropping atomic.Bool
 
@@ -233,7 +235,7 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 	}
 	e.displayID = chosen
 	e.shown.Store(chosen)
-	tw, th := Fit(pw, ph, e.opt.LongEdge)
+	tw, th := Fit(pw, ph, e.longEdge())
 	e.width, e.height = tw, th
 	codec := CodecHEVC
 	if e.opt.Codec == "h264" {
@@ -454,7 +456,12 @@ func (e *engine) configure(session uintptr) {
 	})
 }
 
+// initialBitrate 是新开编码器的码率：父进程设过就沿用它。降、升分辨率和切屏都会重开编码器，
+// 按新画面的起始码率开的话，慢链路上第一个关键帧就大得发不完。
 func (e *engine) initialBitrate() uint32 {
+	if e.bitrateSet.Load() {
+		return e.bitrate.Load()
+	}
 	return PictureBitrate(e.width, e.height)
 }
 
@@ -641,10 +648,31 @@ func (e *engine) parameterSets(format uintptr) []byte {
 }
 
 func (e *engine) writeConfig() {
+	pw, ph := e.mac.displayPixels(e.displayID)
+	fw, fh := Fit(pw, ph, e.opt.LongEdge)
 	e.write(Frame{
 		Kind: KindConfig, CaptureUnixNano: time.Now().UnixNano(),
-		Payload: MarshalConfig(Config{Codec: e.codec, Width: e.width, Height: e.height}),
+		Payload: MarshalConfig(Config{Codec: e.codec, Width: e.width, Height: e.height, FullWidth: fw, FullHeight: fh}),
 	})
+}
+
+// longEdge 是现在的输出长边：手机给的上限，码率压到最低一档时减半（CtrlScale）。
+func (e *engine) longEdge() int {
+	if s := int(e.scale.Load()); s > 1 {
+		return max(e.opt.LongEdge/s, 2)
+	}
+	return e.opt.LongEdge
+}
+
+// setScale 改画面长边的除数，按新尺寸重开编码器和采集（和改分辨率走同一条路）。
+func (e *engine) setScale(scale uint32) {
+	if scale == 0 || scale > 4 || e.scale.Swap(scale) == scale {
+		return
+	}
+	e.logf("picture scale 1/%d", scale)
+	if err := e.rebuildDisplay(0); err != nil {
+		e.halt(err)
+	}
 }
 
 func (e *engine) write(f Frame) {
@@ -820,6 +848,8 @@ func (e *engine) control() {
 			go e.switchDisplay(c.Display)
 		case CtrlFPS:
 			go e.setFPS(c.FPS)
+		case CtrlScale:
+			go e.setScale(c.Scale)
 		}
 	}
 }
@@ -1123,7 +1153,7 @@ func (e *engine) rebuildDisplay(want uint32) error {
 		id = e.mac.mainDisplay()
 	}
 	pw, ph := e.mac.displayPixels(id)
-	tw, th := Fit(pw, ph, e.opt.LongEdge)
+	tw, th := Fit(pw, ph, e.longEdge())
 	if id == e.displayID && tw == e.width && th == e.height {
 		return nil
 	}

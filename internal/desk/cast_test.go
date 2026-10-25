@@ -250,7 +250,7 @@ func TestAbortedSendDoesNotSkipSequence(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
-		c.sendFrame(pkts, true, CodecHEVC, 0, 0)
+		c.sendFrame(pkts, true, 0, 0, 6_000_000)
 		close(done)
 	}()
 	time.Sleep(4 * time.Millisecond)
@@ -393,4 +393,135 @@ func waitPeer(c *caster, want string) bool {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return false
+}
+
+// 慢链路上一帧按码率的 1.5 倍摊开发，不一口气冲进去
+func TestFramesArePacedToTheBitrate(t *testing.T) {
+	toMobile, _ := TestKeys()
+	seal, _ := NewAEAD(toMobile)
+	conn, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	t.Cleanup(func() { conn.Close() })
+	sink, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	t.Cleanup(func() { sink.Close() })
+	c := &caster{conn: conn, sealAEAD: seal, peer: sink.LocalAddr()}
+	frame := Frame{Kind: KindVideo, Number: 1, Keyframe: true, Payload: append([]byte{0, 0, 0, 1}, bytes.Repeat([]byte{0x22}, 12000)...)}
+	pkts := Packetize(frame, 0, CodecHEVC)
+	start := time.Now()
+	c.sendFrame(pkts, true, 0, 0, 600_000)
+	// 12 KB 多一点按 600 kbps 要 160ms 以上
+	if d := time.Since(start); d < 120*time.Millisecond || d > time.Second {
+		t.Fatalf("sent in %s", d)
+	}
+}
+
+// 正在发的时候来的帧排队，不丢；积压超过一秒的量才丢普通帧、要关键帧；关键帧在路上时不再要
+func TestQueueKeepsFramesUntilTheBudget(t *testing.T) {
+	ctrlR, ctrlW := io.Pipe()
+	controls := make(chan Control, 16)
+	go func() {
+		for {
+			c, err := ReadControl(ctrlR)
+			if err != nil {
+				return
+			}
+			controls <- c
+		}
+	}()
+	c := &caster{control: ctrlW, peer: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9}, bitrate: rateFloor}
+	c.busy, c.sendingKey = true, true // 一个关键帧正在发
+	small := Frame{Kind: KindVideo, Payload: make([]byte, 2000)}
+	for range 5 {
+		c.submit(small)
+	}
+	c.mu.Lock()
+	queued, dropped, wait := len(c.queue), c.dropped, c.waitKey
+	c.mu.Unlock()
+	if queued != 5 || dropped != 0 || wait {
+		t.Fatalf("queued %d dropped %d waitKey %v", queued, dropped, wait)
+	}
+	// 600 kbps 一秒是 75 KB：再来一个 80 KB 的普通帧就超了
+	c.submit(Frame{Kind: KindVideo, Payload: make([]byte, 80_000)})
+	c.mu.Lock()
+	queued, wait = len(c.queue), c.waitKey
+	c.mu.Unlock()
+	if queued != 0 || !wait {
+		t.Fatalf("over budget: queued %d waitKey %v", queued, wait)
+	}
+	// 关键帧还在发：这次不要，排到之后再要
+	select {
+	case got := <-controls:
+		t.Fatalf("asked for a keyframe while one was sending: %+v", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+	c.mu.Lock()
+	armed := c.keyArmed
+	c.busy, c.sendingKey = false, false
+	c.mu.Unlock()
+	if !armed {
+		t.Fatal("the request was not kept for later")
+	}
+	select {
+	case got := <-controls:
+		if got.Kind != CtrlKeyframe {
+			t.Fatalf("control %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no keyframe after the one in flight finished")
+	}
+}
+
+// 码率压到最低一档：帧率降到 10、长边减半（15 帧起就减半）；子进程按半尺寸重报配置时码率照旧，不按新画面重新起步
+func TestLowestStepHalvesThePicture(t *testing.T) {
+	ctrlR, ctrlW := io.Pipe()
+	controls := make(chan Control, 16)
+	go func() {
+		for {
+			c, err := ReadControl(ctrlR)
+			if err != nil {
+				return
+			}
+			controls <- c
+		}
+	}()
+	framesR, framesW := io.Pipe()
+	c := &caster{control: ctrlW, fps: 60, stopped: make(chan struct{})}
+	go c.readFrames(framesR)
+	WriteFrame(framesW, Frame{Kind: KindConfig, Payload: MarshalConfig(Config{Codec: CodecHEVC, Width: 1920, Height: 1246})})
+	full := PictureBitrate(1920, 1246)
+	waitFor := func(want func(Control) bool, what string) Control {
+		t.Helper()
+		deadline := time.After(2 * time.Second)
+		for {
+			select {
+			case got := <-controls:
+				if want(got) {
+					return got
+				}
+			case <-deadline:
+				t.Fatalf("no %s", what)
+			}
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	c.mu.Lock()
+	if c.bitrate != full || c.fullBit != full {
+		t.Fatalf("start bitrate %d full %d", c.bitrate, c.fullBit)
+	}
+	c.bitrate = rateFloor
+	c.mu.Unlock()
+	c.applyFPS(rateFloor)
+	waitFor(func(x Control) bool { return x.Kind == CtrlFPS && x.FPS == 10 }, "fps 10")
+	waitFor(func(x Control) bool { return x.Kind == CtrlScale && x.Scale == 2 }, "scale 1/2")
+
+	WriteFrame(framesW, Frame{Kind: KindConfig, Payload: MarshalConfig(Config{Codec: CodecHEVC, Width: 960, Height: 622, FullWidth: 1920, FullHeight: 1246})})
+	got := waitFor(func(x Control) bool { return x.Kind == CtrlBitrate }, "bitrate after rescale")
+	if got.Bitrate != rateFloor {
+		t.Fatalf("bitrate after rescale %d", got.Bitrate)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.bitrate != rateFloor || c.fullBit != full {
+		t.Fatalf("rescale reset the rate: bitrate %d full %d", c.bitrate, c.fullBit)
+	}
+	framesW.Close()
 }

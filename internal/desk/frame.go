@@ -42,10 +42,12 @@ type Frame struct {
 	Payload         []byte
 }
 
-// Config 是 KindConfig 负载：编码和输出像素尺寸。
+// Config 是 KindConfig 负载：编码和输出像素尺寸。FullWidth、FullHeight 是不降分辨率时的尺寸
+// （CtrlScale 降了一半时 Width、Height 是它的一半），旧子进程不报，读出来和 Width、Height 一样。
 type Config struct {
-	Codec         byte
-	Width, Height int
+	Codec                 byte
+	Width, Height         int
+	FullWidth, FullHeight int
 }
 
 var (
@@ -137,23 +139,34 @@ type Displays struct {
 
 // MarshalConfig 编码配置负载。
 func MarshalConfig(c Config) []byte {
-	var b [9]byte
+	if c.FullWidth == 0 || c.FullHeight == 0 {
+		c.FullWidth, c.FullHeight = c.Width, c.Height
+	}
+	var b [17]byte
 	b[0] = c.Codec
 	binary.LittleEndian.PutUint32(b[1:5], uint32(c.Width))
 	binary.LittleEndian.PutUint32(b[5:9], uint32(c.Height))
+	binary.LittleEndian.PutUint32(b[9:13], uint32(c.FullWidth))
+	binary.LittleEndian.PutUint32(b[13:17], uint32(c.FullHeight))
 	return b[:]
 }
 
 // UnmarshalConfig 解开配置负载。
 func UnmarshalConfig(b []byte) (Config, error) {
-	if len(b) != 9 || (b[0] != CodecHEVC && b[0] != CodecH264) {
+	if (len(b) != 9 && len(b) != 17) || (b[0] != CodecHEVC && b[0] != CodecH264) {
 		return Config{}, errPayload
 	}
-	return Config{
+	c := Config{
 		Codec:  b[0],
 		Width:  int(binary.LittleEndian.Uint32(b[1:5])),
 		Height: int(binary.LittleEndian.Uint32(b[5:9])),
-	}, nil
+	}
+	c.FullWidth, c.FullHeight = c.Width, c.Height
+	if len(b) == 17 {
+		c.FullWidth = int(binary.LittleEndian.Uint32(b[9:13]))
+		c.FullHeight = int(binary.LittleEndian.Uint32(b[13:17]))
+	}
+	return c, nil
 }
 
 const (
@@ -165,17 +178,19 @@ const (
 	CtrlInput    byte = 4
 	CtrlDisplay  byte = 5
 	CtrlFPS      byte = 6
+	CtrlScale    byte = 7 // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。
 // Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。Display 只在 CtrlDisplay 时有意义，是要切到的屏。
-// FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。
+// FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。Scale 只在 CtrlScale 时有意义，是长边除以几。
 type Control struct {
 	Kind    byte
 	Bitrate uint32
 	Events  []Event
 	Display uint32
 	FPS     uint32
+	Scale   uint32
 }
 
 // WriteControl 写成 4 字节长度加内容。长度包含类型字节。
@@ -188,6 +203,8 @@ func WriteControl(w io.Writer, c Control) error {
 		body = controlU32(c.Kind, c.Display)
 	case CtrlFPS:
 		body = controlU32(c.Kind, c.FPS)
+	case CtrlScale:
+		body = controlU32(c.Kind, c.Scale)
 	case CtrlInput:
 		ev, err := EncodeInput(c.Events)
 		if err != nil {
@@ -236,7 +253,7 @@ func ReadControl(r io.Reader) (Control, error) {
 	}
 	c := Control{Kind: buf[0]}
 	switch c.Kind {
-	case CtrlBitrate, CtrlDisplay, CtrlFPS:
+	case CtrlBitrate, CtrlDisplay, CtrlFPS, CtrlScale:
 		if len(buf) != 5 {
 			return Control{}, fmt.Errorf("desk: control %d has %d bytes, want 5", c.Kind, len(buf))
 		}
@@ -246,8 +263,10 @@ func ReadControl(r io.Reader) (Control, error) {
 			c.Bitrate = v
 		case CtrlDisplay:
 			c.Display = v
-		default:
+		case CtrlFPS:
 			c.FPS = v
+		default:
+			c.Scale = v
 		}
 	case CtrlInput:
 		ev, err := DecodeInput(buf[1:])

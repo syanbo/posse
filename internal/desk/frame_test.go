@@ -53,10 +53,15 @@ func TestFrameRoundTrip(t *testing.T) {
 }
 
 func TestConfigRoundTrip(t *testing.T) {
-	c := Config{Codec: CodecHEVC, Width: 1920, Height: 1080}
+	c := Config{Codec: CodecHEVC, Width: 960, Height: 540, FullWidth: 1920, FullHeight: 1080}
 	got, err := UnmarshalConfig(MarshalConfig(c))
 	if err != nil || got != c {
 		t.Fatalf("config = %+v %v", got, err)
+	}
+	// 不报满尺寸的（旧子进程只有 9 字节）读出来满尺寸就是输出尺寸
+	old := MarshalConfig(Config{Codec: CodecHEVC, Width: 1920, Height: 1080})[:9]
+	if got, err := UnmarshalConfig(old); err != nil || got.FullWidth != 1920 || got.FullHeight != 1080 {
+		t.Fatalf("old config = %+v %v", got, err)
 	}
 	if _, err := UnmarshalConfig([]byte{9}); err == nil {
 		t.Fatal("short config accepted")
