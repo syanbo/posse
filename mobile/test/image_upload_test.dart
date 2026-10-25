@@ -236,4 +236,19 @@ void main() {
     );
     expect(() => imagePath({}), throwsStateError);
   });
+
+  test('uploadName 去掉 image_picker 加在相册视频原名前的前缀', () {
+    expect(
+      uploadName(
+        'image_picker_70EECD0F-FA4D-4B15-A7E2-10D8CD57F919-25622-000008DA710DD69B'
+        'ScreenRecording_10-25-2026 21-00-12_1.mp4',
+      ),
+      'ScreenRecording_10-25-2026 21-00-12_1.mp4',
+    );
+    // 照片没有原名，去掉就只剩扩展名
+    const photo =
+        'image_picker_70EECD0F-FA4D-4B15-A7E2-10D8CD57F919-25622-000008DA710DD69B.jpg';
+    expect(uploadName(photo), photo);
+    expect(uploadName('报告.pdf'), '报告.pdf');
+  });
 }

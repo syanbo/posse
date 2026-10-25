@@ -112,7 +112,7 @@ Future<String> uploadFile(
   final start = await rpc.call('clipboard.startImageUpload', {
     'expectedBase64Length': (size + 2) ~/ 3 * 4,
     'expectedBytes': size,
-    'name': file.name,
+    'name': uploadName(file.name),
   });
   final id = start['uploadId'];
   if (id is! String || id.isEmpty) throw StateError('电脑没有接受这个文件');
@@ -155,6 +155,21 @@ Future<String> uploadFile(
   );
   onProgress?.call(1);
   return path;
+}
+
+/// image_picker 把相册里的视频拷到临时目录时，在原名前面加 `image_picker_` 和 globallyUniqueString
+/// （UUID-进程号-16 位十六进制）；照片没有原名，只剩扩展名，保持不动。
+final _pickerPrefix = RegExp(
+  r'^image_picker_[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}-\d+-[0-9A-F]{16}',
+);
+
+/// 电脑上保存用的文件名：去掉 image_picker 加的前缀，还原相册里的原名。
+String uploadName(String name) {
+  final m = _pickerPrefix.firstMatch(name);
+  if (m == null) return name;
+  final rest = name.substring(m.end);
+  if (rest.isEmpty || rest.startsWith('.')) return name;
+  return rest;
 }
 
 /// 把路径打进终端时，空格、括号这类 shell 会拆开或特殊处理的字符前面加反斜杠，和把文件拖进 macOS 终端一样；
