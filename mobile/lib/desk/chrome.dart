@@ -85,14 +85,26 @@ List<DeviceOrientation> deskLockedOrientations(bool landscape) => landscape
 /// 取交集：iPhone 是竖屏加两个横屏，iPad 还留着倒置竖屏。写死三项会把 iPad 的倒置拿掉。
 const deskAppOrientations = <DeviceOrientation>[];
 
-Future<void> lockDeskOrientation(bool landscape) {
-  return SystemChrome.setPreferredOrientations(
-    deskLockedOrientations(landscape),
-  );
+/// iOS 上方向由插件锁（`DeskOrientation`）：SystemChrome 放开时让系统重新挑方向，回到首页先闪一下横屏。
+/// 没有插件（安卓、测试）时用 SystemChrome。
+const _orientation = MethodChannel('hive/desk/orientation');
+
+Future<void> lockDeskOrientation(bool landscape) async {
+  try {
+    await _orientation.invokeMethod<void>('lock', landscape);
+  } on MissingPluginException {
+    await SystemChrome.setPreferredOrientations(
+      deskLockedOrientations(landscape),
+    );
+  }
 }
 
-Future<void> restoreDeskOrientation() {
-  return SystemChrome.setPreferredOrientations(deskAppOrientations);
+Future<void> restoreDeskOrientation() async {
+  try {
+    await _orientation.invokeMethod<void>('release');
+  } on MissingPluginException {
+    await SystemChrome.setPreferredOrientations(deskAppOrientations);
+  }
 }
 
 /// 右键没有指针，靠这一下知道点中了。长按进入拖动另走手势的 onArm，不在事件里。

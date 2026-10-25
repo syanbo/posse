@@ -565,6 +565,22 @@ void _mockDeskChannels(
       return null;
     },
   );
+  // iOS 上方向走插件：锁记成要锁的方向，放开记成空列表，和 SystemChrome 的记法一样
+  const orientation = MethodChannel('hive/desk/orientation');
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(orientation, (
+    call,
+  ) async {
+    if (orientations == null) return null;
+    if (call.method == 'lock') {
+      orientations.add([
+        for (final item in deskLockedOrientations(call.arguments == true))
+          '$item',
+      ]);
+    } else if (call.method == 'release') {
+      orientations.add([]);
+    }
+    return null;
+  });
   const channel = MethodChannel('hive/desk/edges');
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
     call,
@@ -581,6 +597,10 @@ void _mockDeskChannels(
     );
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
+      null,
+    );
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      orientation,
       null,
     );
   });
