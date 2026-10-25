@@ -726,7 +726,7 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 		}
 		payload = b
 	} else {
-		payload = []byte(a.Text)
+		payload = pasteText(a.Text, t.BracketedPaste())
 	}
 	n := 0
 	accepted, outcome := true, "accepted"
@@ -758,6 +758,17 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 		"accepted": accepted, "handle": a.Terminal, "bytesWritten": n,
 		"writeSettlement": map[string]any{"outcome": outcome},
 	}})
+}
+
+// pasteText 是输入框发来的一段文字。带换行时按一次粘贴送进去：直接写的话，Claude Code 这类程序
+// 把第一个换行当成回车，前半段先提交了，后半段留在输入框。文字里的 ESC[201~ 去掉，免得提前结束粘贴、
+// 后面的内容被当成按键执行。程序没开括号粘贴（不认它）时原样写。
+func pasteText(text string, bracketed bool) []byte {
+	if !bracketed || !strings.ContainsAny(text, "\r\n") {
+		return []byte(text)
+	}
+	text = strings.ReplaceAll(text, "\x1b[201~", "")
+	return []byte("\x1b[200~" + text + "\x1b[201~")
 }
 
 func (c *conn) createTerminal(id string, p json.RawMessage) error {

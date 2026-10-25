@@ -382,6 +382,14 @@ func (t *Terminal) CursorKeysApp() bool {
 	return t.emu != nil && t.emu.Mode(vt.ModeCursorKeys)
 }
 
+// BracketedPaste 报告程序是否开着括号粘贴模式（DECSET 2004）：开着时整段文字包在 ESC[200~ 和 ESC[201~ 之间送进去，
+// 程序当成一次粘贴，里面的换行不会被当成回车提交。
+func (t *Terminal) BracketedPaste() bool {
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	return t.emu != nil && t.emu.Mode(vt.ModeBracketedPaste)
+}
+
 // compress 在终端空闲时压缩回滚区，降低常驻内存。
 func (t *Terminal) compress() {
 	t.smu.Lock()

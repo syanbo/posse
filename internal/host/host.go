@@ -82,6 +82,8 @@ type Terminal interface {
 	SizeHeld() bool
 	// CursorKeysApp 报告程序是否开着光标键应用模式，见 term.Terminal.CursorKeysApp
 	CursorKeysApp() bool
+	// BracketedPaste 报告程序是否开着括号粘贴模式，见 term.Terminal.BracketedPaste
+	BracketedPaste() bool
 	ReclaimSize()
 	Clear(redraw bool) error
 
@@ -178,6 +180,7 @@ func (l *local) HoldSize(key string, c, r int) { l.t.HoldSize(key, c, r) }
 func (l *local) ReleaseSize(key string)        { l.t.ReleaseSize(key) }
 func (l *local) SizeHeld() bool                { return l.t.SizeHeld() }
 func (l *local) CursorKeysApp() bool           { return l.t.CursorKeysApp() }
+func (l *local) BracketedPaste() bool          { return l.t.BracketedPaste() }
 func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
 func (l *local) Clear(redraw bool) error       { return l.t.Clear(redraw) }
 func (l *local) Lines() []string               { return l.t.Lines() }

@@ -381,3 +381,19 @@ func TestReleaseSizePullsBack(t *testing.T) {
 		t.Fatalf("cursor row %d, last row %q", cy, string(last))
 	}
 }
+
+// 程序打开括号粘贴（Claude Code、zsh 都会）后 BracketedPaste 报告为真，关掉后为假
+func TestBracketedPasteMode(t *testing.T) {
+	script := `printf 'off\n'; sleep 0.3; printf '\033[?2004hon\n'; sleep 0.3; printf '\033[?2004lagain\n'; sleep 5`
+	tm, err := Start(Options{ID: "t_paste", Dir: t.TempDir(), Command: []string{"/bin/sh", "-c", script}, Cols: 40, Rows: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	waitFor(t, "off", func() bool { return tm.ContainsText("off") })
+	if tm.BracketedPaste() {
+		t.Fatal("bracketed paste on before the program asked")
+	}
+	waitFor(t, "on", func() bool { return tm.BracketedPaste() })
+	waitFor(t, "again", func() bool { return tm.ContainsText("again") && !tm.BracketedPaste() })
+}
