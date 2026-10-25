@@ -218,7 +218,7 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 1. 桌面子进程。管道里的基本流能用系统播放器连续解开；日志有 HEVC、H.264 各自开低延迟码率控制后的单帧编码耗时，据此定编码顺序；静止画面心跳仍在；关掉控制管道后子进程退出、录屏指示消失。授权归属：分别从 Hive.app 窗口和 iTerm 里的 `hive` CLI 拉起常驻进程，系统设置里记的都是 Hive。实测定期确认框、锁屏通知、改分辨率。
 2. 本机 UDP。写一个 Swift 命令行收包程序（解密、拆包、解码的代码之后原样进 iOS 插件），统计各段耗时。用 `dnctl` 和 `pfctl` 模拟 2% 丢包、30 ms 延迟、5 Mbps 限速：丢包后不花屏、200 ms 内由关键帧补上，码率降得下来、恢复得上去，常驻进程的发送队列不变长。
 3. iPhone 上的画面和输入。Swift 插件加 Flutter 纹理，120 Hz；按手势表逐项点中、双击、右键、拖动、滚动；放大后坐标仍落在手指下的图标上；人为丢掉 input 包时按下和松开仍然送到。用慢动作拍两块屏测手指到画面变化的延迟，对照延迟目标。这一步可以先不接现有会话、用固定密钥。
-4. 接上现有会话。HKDF 派生密钥、hello 认地址、`indirect` 和 `busy`、两项授权的文案、锁屏和解锁、改分辨率、观看时不熄屏且不改防休眠档位、退后台停掉、回到前台恢复、杀掉手机 App 后 Mac 3 秒内停、切网络后接着看、交接后重新订阅、停止后 footprint 回到观看前。
+4. 接上现有会话。HKDF 派生密钥、hello 认地址、`indirect` 和 `busy`、两项授权的文案、锁屏和解锁、改分辨率、观看时不熄屏且不改防休眠档位、退后台停掉、回到前台恢复、杀掉手机 App 后 Mac 3 秒内停发画面、20 秒内停采集（2026-10 改：断几秒先暂停不结束）、切网络后接着看、交接后重新订阅、停止后 footprint 回到观看前。
 5. 写入 `docs/features/mobile.md`：入口、手势、授权、直连、同一时间一台、观看时不熄屏、调试开关里的延迟读数。
 
 ## 进度
@@ -227,7 +227,7 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 - 与上面的差别：编码验收线改为 p95 ≤ 9 ms；限速和丢包用 `tools/deskshape` 本机转发模拟（`dnctl` 要 sudo）；5 Mbps 限速加 2% 丢包时码率在 5.1–7.2 Mbps 之间，没压到 3–5 Mbps，2% 随机丢包下每秒要补几次关键帧。
 - 还没验证：锁屏、改分辨率、定期确认框、双击、双指手势和 120 Hz 手感、真实 Wi-Fi、慢动作测端到端延迟。
 - 第 4 步两端已接上（`internal/daemon/desk.go`、`internal/mobile/desk.go`、`mobile/lib/desk`）：模拟器上经订阅出画面；输入编码和密钥派生两端用同一组字节对过（`input_test.go`、`packet_test.go`、`desk_wire_test.dart`），手机经 UDP 发输入在真机上还没测。定下来的协议：
-  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`，看的过程中打开了辅助功能再推 `{type: "state", state: "accessibility"}`（子进程每秒复查，不用重新拉起）；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 3 秒没报告，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `hive.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
+  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`，看的过程中打开了辅助功能再推 `{type: "state", state: "accessibility"}`（子进程每秒复查，不用重新拉起）；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 20 秒没报告；3 秒没报告先暂停发画面，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `hive.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
   - 密钥：材料是这条连接两个方向的会话密钥，主机发出的在前（手机上是 recvKey 在前、sendKey 在后），HKDF-SHA256（salt 是订阅的 nonce，info `hive-desk/v1`）出 64 字节，前 32 给发往手机，后 32 给发往 Mac。会话 ID 明文写在每帧头里，不能用。
   - beat 负载 16 字节：发出时刻（Unix 纳秒）和已执行到的必达输入序号，都是大端；每秒一次，收到 input 后马上再发一次。
   - 直连只在手机端判断：常驻进程看到的回环分不清隧道和模拟器，隧道下 UDP 到不了，最多空等到 `no_report`。

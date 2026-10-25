@@ -11,11 +11,11 @@ import (
 )
 
 func TestCastStopsWithoutHello(t *testing.T) {
-	oldQuiet, oldHello := reportQuiet, helloWait
-	reportQuiet = 200 * time.Millisecond
+	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait
+	reportQuiet, reportGone = 200*time.Millisecond, 300*time.Millisecond
 	helloWait = 400 * time.Millisecond
 	t.Cleanup(func() {
-		reportQuiet, helloWait = oldQuiet, oldHello
+		reportQuiet, reportGone, helloWait = oldQuiet, oldGone, oldHello
 	})
 
 	pr, pw := io.Pipe()
@@ -32,11 +32,11 @@ func TestCastStopsWithoutHello(t *testing.T) {
 }
 
 func TestCastQuietStartsAfterHello(t *testing.T) {
-	oldQuiet, oldHello := reportQuiet, helloWait
-	reportQuiet = 300 * time.Millisecond
+	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait
+	reportQuiet, reportGone = 300*time.Millisecond, 600*time.Millisecond
 	helloWait = 5 * time.Second
 	t.Cleanup(func() {
-		reportQuiet, helloWait = oldQuiet, oldHello
+		reportQuiet, reportGone, helloWait = oldQuiet, oldGone, oldHello
 	})
 
 	pr, pw := io.Pipe()
@@ -75,8 +75,9 @@ func TestCastQuietStartsAfterHello(t *testing.T) {
 		if !errors.Is(err, ErrNoReport) {
 			t.Fatalf("err = %v", err)
 		}
+		// 先暂停，到 reportGone 才结束
 		sinceHello := time.Since(helloAt)
-		if sinceHello < 200*time.Millisecond || sinceHello > 2*time.Second {
+		if sinceHello < 500*time.Millisecond || sinceHello > 2*time.Second {
 			t.Fatalf("report timer %s after hello, total %s", sinceHello, time.Since(start))
 		}
 	case <-time.After(3 * time.Second):
@@ -85,11 +86,11 @@ func TestCastQuietStartsAfterHello(t *testing.T) {
 }
 
 func TestCastReportResetsQuiet(t *testing.T) {
-	oldQuiet, oldHello := reportQuiet, helloWait
-	reportQuiet = 500 * time.Millisecond
+	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait
+	reportQuiet, reportGone = 300*time.Millisecond, 500*time.Millisecond
 	helloWait = 3 * time.Second
 	t.Cleanup(func() {
-		reportQuiet, helloWait = oldQuiet, oldHello
+		reportQuiet, reportGone, helloWait = oldQuiet, oldGone, oldHello
 	})
 
 	pr, pw := io.Pipe()
@@ -147,6 +148,80 @@ func TestCastReportResetsQuiet(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not stop after reports ended")
+	}
+}
+
+// 断流超过 reportQuiet 先暂停：不结束，报告回来就接着发，请一个关键帧、码率减半
+func TestCastPausesAndResumes(t *testing.T) {
+	oldQuiet, oldGone, oldHello := reportQuiet, reportGone, helloWait
+	reportQuiet, reportGone = 200*time.Millisecond, 3*time.Second
+	helloWait = 3 * time.Second
+	t.Cleanup(func() {
+		reportQuiet, reportGone, helloWait = oldQuiet, oldGone, oldHello
+	})
+
+	pr, pw := io.Pipe()
+	t.Cleanup(func() { pw.Close() })
+	ctrlR, ctrlW := io.Pipe()
+	controls := make(chan Control, 16)
+	go func() {
+		for {
+			c, err := ReadControl(ctrlR)
+			if err != nil {
+				return
+			}
+			controls <- c
+		}
+	}()
+	addr := freeUDP(t)
+	done := make(chan error, 1)
+	go func() { done <- Cast(pr, ctrlW, addr) }()
+	time.Sleep(30 * time.Millisecond)
+	conn, err := net.Dial("udp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	_, toMac := TestKeys()
+	aead, err := NewAEAD(toMac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n uint64
+	send := func(kind byte, body []byte) {
+		n++
+		pkt, err := Seal(aead, DirToMac, kind, n, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn.Write(pkt)
+	}
+	send(PacketHello, nil)
+	// 断 1 秒：超过 reportQuiet，没到 reportGone
+	time.Sleep(time.Second)
+	select {
+	case err := <-done:
+		t.Fatalf("stopped during a short outage: %v", err)
+	default:
+	}
+	body := make([]byte, 36)
+	binary.BigEndian.PutUint32(body[12:16], 100)
+	send(PacketReport, body)
+	var key, bitrate bool
+	deadline := time.After(2 * time.Second)
+	for !key || !bitrate {
+		select {
+		case c := <-controls:
+			key = key || c.Kind == CtrlKeyframe
+			bitrate = bitrate || (c.Kind == CtrlBitrate && c.Bitrate < PictureBitrate(1920, 1080))
+		case <-deadline:
+			t.Fatalf("after resuming: keyframe %v, lower bitrate %v", key, bitrate)
+		}
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("stopped after resuming: %v", err)
+	default:
 	}
 }
 

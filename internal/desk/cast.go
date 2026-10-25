@@ -19,9 +19,14 @@ const (
 	paceWindow = 16 * time.Millisecond
 )
 
-// reportQuiet 内没有接收报告就结束这次发送。手机退到后台时 WebSocket 往往还挂着。
-// 从第一个 hello 起算：开播时手机往往还没发 hello，一开始就计 3 秒会把订阅掐掉。
-var reportQuiet = 3 * time.Second
+// reportQuiet 内没有接收报告就暂停发画面（心跳也停，什么都不往外发），reportGone 内报告回来就接着发，
+// 还没回来才结束这次发送。切网络、进电梯常常断几秒，以前 3 秒就结束，手机上要手动重连（RustDesk 也是
+// 延迟探测超过 2 秒没回只降帧率、不断开）。暂停期间画面不离开 Mac；手机被强退时不会发断开，
+// 采集和防休眠最多多留 reportGone。从第一个 hello 起算：开播时手机往往还没发 hello，一开始就计会把订阅掐掉。
+var (
+	reportQuiet = 3 * time.Second
+	reportGone  = 20 * time.Second
+)
 
 // helloWait 是还没有对端时最多等多久。
 var helloWait = 60 * time.Second
@@ -29,8 +34,8 @@ var helloWait = 60 * time.Second
 // directHold 内直连地址还有包来，就不理会经中转来的 hello、report
 const directHold = 3 * time.Second
 
-// ErrNoReport 是已经有 hello 之后，超过 reportQuiet 没有收到 report。
-var ErrNoReport = errors.New("desk: no report for 3s")
+// ErrNoReport 是已经有 hello 之后，超过 reportGone 没有收到 report。
+var ErrNoReport = errors.New("desk: no report for 20s")
 
 // ErrNoHello 是 helloWait 内没有收到 hello。
 var ErrNoHello = errors.New("desk: no hello for 60s")
@@ -140,7 +145,7 @@ func (c *caster) beat() {
 		case <-c.stopped:
 			return
 		case <-t.C:
-			if c.currentPeer() != nil {
+			if c.currentPeer() != nil && !c.paused() {
 				c.sendBeat()
 			}
 		}
@@ -182,9 +187,11 @@ type caster struct {
 
 	quietDeadline time.Time
 	seenHello     bool
-	stopped       chan struct{}
-	stopOnce      sync.Once
-	stopErr       error
+	// pausedAt 是 reportQuiet 没有报告、停发画面的时刻，没暂停时为零；mu 保护
+	pausedAt time.Time
+	stopped  chan struct{}
+	stopOnce sync.Once
+	stopErr  error
 }
 
 func (c *caster) stop(err error) {
@@ -235,8 +242,45 @@ func (c *caster) readFrames(frames io.Reader) error {
 	}
 }
 
+func (c *caster) paused() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return !c.pausedAt.IsZero()
+}
+
+// pause 在 reportQuiet 没有报告时停发画面，返回是不是刚停的。
+func (c *caster) pause() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.pausedAt.IsZero() {
+		return false
+	}
+	c.pausedAt = time.Now()
+	return true
+}
+
+// resume 在暂停后又收到手机的包时接着发：路刚恢复，码率从一半起步，先丢掉普通帧、要一个关键帧，
+// 手机解码器在断流后等的就是它。
+func (c *caster) resume() {
+	c.mu.Lock()
+	if c.pausedAt.IsZero() {
+		c.mu.Unlock()
+		return
+	}
+	away := time.Since(c.pausedAt)
+	c.pausedAt = time.Time{}
+	bitrate := max(c.bitrate/2, rateFloor)
+	c.bitrate = bitrate
+	c.rate.reset(time.Now(), bitrate, c.rate.maxBit)
+	c.waitKey = true
+	c.mu.Unlock()
+	log.Printf("desk: reports back after %s, resuming at %d", away.Round(100*time.Millisecond), bitrate)
+	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+	c.askKey()
+}
+
 func (c *caster) submit(f Frame) {
-	if c.currentPeer() == nil {
+	if c.currentPeer() == nil || c.paused() {
 		return
 	}
 	c.observeCapture()
@@ -397,8 +441,13 @@ func (c *caster) recv() {
 	for {
 		wait := time.Until(c.quietDeadline)
 		if wait <= 0 {
+			if c.seenHello && c.pause() {
+				log.Printf("desk: no report for %.0fs, pausing the picture", reportQuiet.Seconds())
+				c.quietDeadline = time.Now().Add(reportGone - reportQuiet)
+				continue
+			}
 			if c.seenHello {
-				log.Printf("desk: no report for %.0fs", reportQuiet.Seconds())
+				log.Printf("desk: no report for %.0fs", reportGone.Seconds())
 				c.stop(ErrNoReport)
 			} else {
 				log.Printf("desk: no hello for %.0fs", helloWait.Seconds())
@@ -434,6 +483,7 @@ func (c *caster) recv() {
 				c.quietDeadline = time.Now().Add(reportQuiet)
 			}
 			c.notePeer(addr)
+			c.resume()
 			c.onReport(plain)
 		case PacketKeyframe:
 			c.askKey()
