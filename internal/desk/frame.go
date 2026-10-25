@@ -29,6 +29,7 @@ const (
 	StatusNoScreen        byte = 3 // 没有屏幕录制权限，子进程随后退出
 	StatusNoAccessibility byte = 4 // 没有辅助功能权限，能看不能操作
 	StatusAccessibility   byte = 5 // 看的过程中用户打开了辅助功能，可以操作了
+	StatusRestarted       byte = 6 // 常驻进程重新拉起了子进程，后面是新子进程的帧。由常驻进程插进来，子进程不发
 
 	CodecHEVC byte = 1
 	CodecH264 byte = 2

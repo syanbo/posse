@@ -76,6 +76,7 @@ func (p *fakeDeskProc) Wait() error {
 	<-p.done
 	return nil
 }
+func (p *fakeDeskProc) Kill() error { return p.cw.Close() }
 
 func configFrame() desk.Frame {
 	return desk.Frame{Kind: desk.KindConfig, Payload: desk.MarshalConfig(desk.Config{Codec: desk.CodecHEVC, Width: 1920, Height: 1246})}

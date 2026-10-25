@@ -33,6 +33,7 @@ type deskProc interface {
 	Frames() io.ReadCloser
 	Control() io.WriteCloser
 	Wait() error
+	Kill() error
 }
 
 type realDeskProc struct{ p *desk.Proc }
@@ -40,6 +41,7 @@ type realDeskProc struct{ p *desk.Proc }
 func (r realDeskProc) Frames() io.ReadCloser   { return r.p.Frames }
 func (r realDeskProc) Control() io.WriteCloser { return r.p.Control }
 func (r realDeskProc) Wait() error             { return r.p.Wait() }
+func (r realDeskProc) Kill() error             { return r.p.Kill() }
 
 var deskSpawn = func(args []string) (deskProc, error) {
 	p, err := desk.Spawn(args)
@@ -89,9 +91,6 @@ func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify f
 
 func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec string, notify func(mobile.DeskEvent)) (mobile.DeskReady, error) {
 	args := []string{"--quiet", "--long-edge", strconv.Itoa(min(max(req.LongEdge, 2), 1920))}
-	if req.Display != 0 {
-		args = append(args, "--display", strconv.FormatUint(uint64(req.Display), 10))
-	}
 	if codec == "h264" {
 		args = append(args, "--codec", "h264")
 	}
@@ -101,30 +100,23 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 			args = append(args, "--exclude-app", id)
 		}
 	}
-	proc, err := deskSpawn(args)
-	if err != nil {
-		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
+	spawn := func(display uint32) (deskProc, []byte, byte, error) {
+		proc, head, status, err := deskSpawnFirst(deskSpawnArgs(args, display))
+		if status != 0 {
+			d.deskNoteStatus(status)
+		}
+		return proc, head, status, err
 	}
-	abort := func() {
-		proc.Control().Close()
-		proc.Frames().Close()
-		proc.Wait()
-	}
-	head, status, err := deskFirstFrames(proc.Frames())
-	if status != 0 {
-		d.deskNoteStatus(status)
-	}
+	proc, head, status, err := spawn(req.Display)
 	switch {
 	case status == desk.StatusNoScreen:
-		abort()
 		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "还没允许 Posse 录制屏幕")
 	case status == desk.StatusLocked:
-		abort()
 		return mobile.DeskReady{}, mobile.DeskError("locked", "Mac 已锁屏")
 	case err != nil:
-		abort()
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
 	}
+	abort := func() { stopDeskProc(proc) }
 	d.deskClearMissing("screen")
 	conn, err := desk.ListenRoutes(d.deskRelay())
 	if err != nil {
@@ -149,12 +141,15 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	var locked bool
 	var lmu sync.Mutex
 	done := make(chan error, 1)
-	control := desk.LockWriter(proc.Control())
+	frames, out := io.Pipe()
+	helper := newDeskHelper(spawn, proc, req.Display, out)
+	go helper.run()
+	control := desk.LockWriter(helper)
 	// 子进程回的窗口列表；一次只问一个，问的人等不到就不要了
 	windows := make(chan []byte, 1)
 	var wmu sync.Mutex
 	go func() {
-		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), control, desk.CastConfig{
+		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), frames), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
 			OnInput: desk.NewInputForwarder(control),
 			OnDisplays: func(ds desk.Displays) {
@@ -192,13 +187,13 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		case <-runCtx.Done():
 		}
 		// 关控制管道子进程就退出、松开按着的键；关 UDP 让 Serve 返回
-		proc.Control().Close()
+		helper.close()
 		conn.Close()
 		if !served {
 			serveErr = <-done
 		}
-		proc.Frames().Close()
-		proc.Wait()
+		frames.Close()
+		<-helper.done
 		cancel()
 		d.deskAwake(false)
 		d.desk.mu.Lock()

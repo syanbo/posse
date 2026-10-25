@@ -59,6 +59,9 @@ func Spawn(args []string) (*Proc, error) {
 	return p, nil
 }
 
+// Kill 杀掉子进程，给卡住、关控制管道也不退出的时候用。
+func (p *Proc) Kill() error { return p.proc.Kill() }
+
 // Wait 等子进程结束。
 func (p *Proc) Wait() error {
 	<-p.done

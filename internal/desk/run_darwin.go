@@ -68,6 +68,7 @@ type engine struct {
 	height      int
 	nalLen      int
 	force       atomic.Bool
+	encodeFails atomic.Int32 // 连着失败的编码次数，出一帧清零
 	bitrate     atomic.Uint32
 	bitrateSet  atomic.Bool
 	forceDict   uintptr
@@ -99,6 +100,7 @@ type engine struct {
 }
 
 type stamp struct {
+	session  uintptr // 交给哪个编码器的，换了编码器以后旧的报错不算
 	capture  int64
 	start    time.Time
 	number   uint64
@@ -411,6 +413,7 @@ func (e *engine) openEncoder(codec byte) error {
 	e.codec = codec
 	e.lowLatency = low
 	e.encMu.Unlock()
+	e.encodeFails.Store(0)
 	e.force.Store(true)
 	e.logf("%s encoder low-latency rate control %s", name, onOff(low))
 	return nil
@@ -520,7 +523,7 @@ func (e *engine) onSample(sample uintptr) {
 	if e.bitrateSet.CompareAndSwap(true, false) {
 		e.applyBitrate(session, e.bitrate.Load())
 	}
-	st := &stamp{capture: time.Now().UnixNano(), start: time.Now(), number: atomic.AddUint64(&e.frameNumber, 1)}
+	st := &stamp{session: session, capture: time.Now().UnixNano(), start: time.Now(), number: atomic.AddUint64(&e.frameNumber, 1)}
 	e.pendMu.Lock()
 	e.pend[st.number] = st
 	e.pendMu.Unlock()
@@ -539,6 +542,16 @@ func (e *engine) onSample(sample uintptr) {
 		delete(e.pend, st.number)
 		e.pendMu.Unlock()
 		e.logf("encode frame: %d", status)
+		e.encodeFailed(status)
+	}
+}
+
+// encodeFailLimit 次编码连着失败就退出，由常驻进程重新拉起子进程、重开编码器（RustDesk 硬件编码连续失败 3 次也是重建）。
+const encodeFailLimit = 3
+
+func (e *engine) encodeFailed(status int32) {
+	if e.encodeFails.Add(1) == encodeFailLimit {
+		go e.halt(fmt.Errorf("desk: encoding failed %d times in a row (%d)", encodeFailLimit, status))
 	}
 }
 
@@ -551,9 +564,19 @@ func vtOut(_, source uintptr, status int32, _ uint32, sample uintptr) {
 	st := e.pend[uint64(source)]
 	delete(e.pend, uint64(source))
 	e.pendMu.Unlock()
+	if st != nil && status != 0 {
+		e.encMu.Lock()
+		current := e.enc == st.session
+		e.encMu.Unlock()
+		if current {
+			e.logf("encoded frame: %d", status)
+			e.encodeFailed(status)
+		}
+	}
 	if status != 0 || sample == 0 || st == nil {
 		return
 	}
+	e.encodeFails.Store(0)
 	if st.number == 1 {
 		e.logf("first frame after %s", time.Since(e.born).Round(time.Millisecond))
 	}
@@ -1366,16 +1389,29 @@ func streamDidStop(_ objc.ID, _ objc.SEL, _ objc.ID, nserr objc.ID) {
 	if active.stopping.Load() || active.dropping.Load() {
 		return
 	}
+	msg := "capture stopped"
+	userStopped := false
 	if nserr != 0 {
-		active.logf("capture stopped: %s", active.mac.goString(active.mac.init(nserr, active.mac.sel("localizedDescription"))))
+		msg += ": " + active.mac.goString(active.mac.init(nserr, active.mac.sel("localizedDescription")))
+		userStopped = active.mac.integer(nserr, active.mac.sel("code")) == scStreamErrorUserStopped
 	}
 	// 只看的窗口关掉时，系统不等每秒的检查就先停掉采集（找不到要捕获的窗口）：回到整块屏，不结束
 	if active.watching().ID != 0 {
+		active.logf("%s", msg)
 		go active.windowStreamStopped()
 		return
 	}
-	active.halt(nil)
+	// 用户在菜单栏停了录屏：正常退出，这次观看结束。别的原因带着错误退出，常驻进程重新拉起子进程
+	if userStopped {
+		active.logf("%s", msg)
+		active.halt(nil)
+		return
+	}
+	active.halt(fmt.Errorf("desk: %s", msg))
 }
+
+// scStreamErrorUserStopped 是 SCStreamErrorUserStopped：用户从系统的录屏指示里停了采集。
+const scStreamErrorUserStopped = -3817
 
 func logResponsible(w io.Writer) {
 	lib, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_NOW)

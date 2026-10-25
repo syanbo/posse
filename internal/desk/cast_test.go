@@ -625,3 +625,37 @@ func TestFramesBeforeHelloWaitForThePeer(t *testing.T) {
 		t.Fatalf("after hello queued %v", got)
 	}
 }
+
+// 常驻进程重新拉起子进程后，码率、帧率上限和长边除数按这边记着的补发给新子进程
+func TestRestartedHelperGetsTheCurrentSettings(t *testing.T) {
+	ctrlR, ctrlW := io.Pipe()
+	got := make(chan Control, 8)
+	go func() {
+		for {
+			c, err := ReadControl(ctrlR)
+			if err != nil {
+				return
+			}
+			got <- c
+		}
+	}()
+	c := &caster{control: ctrlW, bitrate: 900_000, fps: 15, scale: 2, stopped: make(chan struct{})}
+	pr, pw := io.Pipe()
+	go c.readFrames(pr)
+	if err := WriteFrame(pw, Frame{Kind: KindStatus, Payload: []byte{StatusRestarted}}); err != nil {
+		t.Fatal(err)
+	}
+	want := []Control{{Kind: CtrlBitrate, Bitrate: 900_000}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlScale, Scale: 2}}
+	for _, w := range want {
+		select {
+		case x := <-got:
+			if x.Kind != w.Kind || x.Bitrate != w.Bitrate || x.FPS != w.FPS || x.Scale != w.Scale {
+				t.Fatalf("got %+v, want %+v", x, w)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no %+v", w)
+		}
+	}
+	pw.Close()
+	ctrlW.Close()
+}

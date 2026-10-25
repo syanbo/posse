@@ -352,6 +352,10 @@ func (c *caster) readFrames(frames io.Reader) error {
 				log.Printf("desk: picture %dx%d %s bitrate %d", cfg.Width, cfg.Height, name, bitrate)
 			}
 		case KindStatus:
+			if len(f.Payload) > 0 && f.Payload[0] == StatusRestarted {
+				c.resync()
+				continue
+			}
 			if len(f.Payload) > 0 {
 				log.Printf("desk: status %d", f.Payload[0])
 				if c.onStatus != nil {
@@ -823,6 +827,23 @@ func (c *caster) applyFPS(bitrate uint32) {
 		c.scale = scale
 		log.Printf("desk: picture scale 1/%d at bitrate %d", scale, bitrate)
 		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: scale})
+	}
+}
+
+// resync 把码率、帧率上限和长边除数告诉新拉起的子进程：它按默认值起步，这边记着的是告诉旧子进程的。
+func (c *caster) resync() {
+	c.fpsMu.Lock()
+	defer c.fpsMu.Unlock()
+	c.mu.Lock()
+	bitrate, fps := c.bitrate, c.fps
+	c.mu.Unlock()
+	log.Printf("desk: helper restarted, bitrate %d, frame rate cap %d, picture scale 1/%d", bitrate, fps, max(c.scale, 1))
+	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+	if fps > 0 && fps < 60 {
+		_ = WriteControl(c.control, Control{Kind: CtrlFPS, FPS: fps})
+	}
+	if c.scale > 1 {
+		_ = WriteControl(c.control, Control{Kind: CtrlScale, Scale: c.scale})
 	}
 }
 
