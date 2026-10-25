@@ -50,9 +50,12 @@ enum DeskEdges {
 }
 
 /// 看桌面锁方向、离开时放开。不用 SystemChrome：放开时它把「全部方向」交给 requestGeometryUpdate，
-/// 系统会先转到横屏再按传感器转回竖屏，回到首页闪一下横屏。这里放开只让系统重新问支持的方向，按手机实际朝向转。
+/// 系统先转到横屏再按传感器转回竖屏，回到首页闪一下横屏。只让系统重新问支持的方向也不行：手机朝向没变化时
+/// 系统不转，竖着拿手机从横屏返回，首页留在横屏。所以放开时看手机实际朝向，不是横着拿就转回竖屏。
 enum DeskOrientation {
   static func install(messenger: FlutterBinaryMessenger) {
+    // 锁着横屏时 UIDevice 的朝向也要跟着传感器走，放开时才知道手机是怎么拿的
+    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
     let channel = FlutterMethodChannel(
       name: "hive/desk/orientation",
       binaryMessenger: messenger
@@ -79,6 +82,8 @@ enum DeskOrientation {
           }
           if let mask {
             rotate(windowScene, to: mask)
+          } else if !UIDevice.current.orientation.isLandscape {
+            rotate(windowScene, to: .portrait)
           }
         }
         if mask == nil, #unavailable(iOS 16.0) {
