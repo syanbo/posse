@@ -140,6 +140,8 @@ class _DeskPageState extends State<DeskPage>
   /// Mac 给的 UDP 中转（host:port）和这次观看的令牌。
   String? _relay;
   Uint8List? _relayToken;
+  // 电脑认缺包点名补发（ready 里带 nack）
+  bool _nack = false;
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
@@ -823,6 +825,7 @@ class _DeskPageState extends State<DeskPage>
     final relay = frame['relay'];
     final relayTokenB64 = frame['relayTokenB64'];
     _relay = relay is String && relay.isNotEmpty ? relay : null;
+    _nack = frame['nack'] == true;
     _relayToken = null;
     if (_relay != null && relayTokenB64 is String) {
       try {
@@ -849,6 +852,7 @@ class _DeskPageState extends State<DeskPage>
         keyToPhone: keys.toPhone,
         keyToMac: keys.toMac,
         codec: DeskCodec.hevc,
+        nack: _nack,
       );
       if (!mounted || gen != _gen) {
         await _stopReceiver();
@@ -1032,6 +1036,7 @@ class _DeskPageState extends State<DeskPage>
         keyToPhone: keys.toPhone,
         keyToMac: keys.toMac,
         codec: DeskCodec.hevc,
+        nack: _nack,
       );
       if (!mounted || gen != _gen) {
         await _stopReceiver();

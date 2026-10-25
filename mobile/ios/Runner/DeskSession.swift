@@ -13,6 +13,11 @@ private let deskKindReport: UInt8 = 3
 private let deskKindInput: UInt8 = 4
 private let deskKindKeyframe: UInt8 = 5
 private let deskKindBeat: UInt8 = 6
+private let deskKindNack: UInt8 = 7
+/// 一个补发请求最多点这么多个序号（u16），远小于包长上限
+private let deskNackMax = 64
+/// 一次缺这么多以上不点名补发，当成断档直接要关键帧
+private let deskNackWindow = 512
 
 enum DeskCodec: String {
   case hevc
@@ -481,6 +486,16 @@ private func sampleBuffer(_ nals: [Data], format: CMVideoFormatDescription?) -> 
   return sample
 }
 
+/// 一个缺的视频包。found 是发现缺它的时刻，firstAsk、lastAsk 是第一次和最近一次点名补发的时刻。
+struct DeskMiss {
+  let found: CFAbsoluteTime
+  var firstAsk: CFAbsoluteTime = 0
+  var lastAsk: CFAbsoluteTime = 0
+  var asked = 0
+
+  init(found: CFAbsoluteTime) { self.found = found }
+}
+
 /// 专门的线程收 UDP。视频包在这里解密、拆 RTP、交给硬解，不经 Dart。
 final class DeskSession {
   var onFrame: ((CVPixelBuffer) -> Void)?
@@ -509,6 +524,20 @@ final class DeskSession {
   private var sendN: UInt64 = 0
   private var expect: UInt16 = 0
   private var haveSeq = false
+  /// Mac 认补发请求（ready 里的 nack）。不认时缺包照旧直接要关键帧
+  private let nack: Bool
+  /// 比 expect 先到的包，等前面缺的补上再按序交给拆包；值是明文和到达时刻
+  private var held: [UInt16: (Data, CFAbsoluteTime)] = [:]
+  /// 收到过的最大序号（以 expect 为起点比远近），新来的包比它还远，中间的就是新缺的
+  private var highest: UInt16 = 0
+  /// 缺的包：第一次发现、上次点名的时刻和点了几次
+  private var missing: [UInt16: DeskMiss] = [:]
+  /// 往返时间的估计，按点名到补上来的时间算，决定多久再点一次、等多久放弃
+  private var rtt: Double = 0.15
+  /// 这一帧里有补上来的包：它到得晚是因为丢过，不是排队，不拿来算排队延迟和帧间隔
+  private var fillFrame: UInt64?
+  /// 刚发现丢包、不能补：下一圈马上要关键帧
+  private var nextKeyNow = false
   private var lossInterval: UInt32 = 0
   private var lossTotal: UInt32 = 0
   private var packetsInterval: UInt32 = 0
@@ -539,8 +568,9 @@ final class DeskSession {
   /// 两把密钥由 Dart 用会话密钥派生好。这里不再做 HKDF。
   init(
     toMobile: Data, toMac: Data, peers: [sockaddr_in], relay: sockaddr_in?, relayToken: Data?,
-    codec: DeskCodec
+    codec: DeskCodec, nack: Bool
   ) throws {
+    self.nack = nack
     guard toMobile.count == 32, toMac.count == 32 else { throw DeskError.badAddress }
     guard !peers.isEmpty || relay != nil else { throw DeskError.badAddress }
     guard let depacketizer = makeDepacketizer(codec) else { throw DeskError.unsupportedCodec }
@@ -638,6 +668,10 @@ final class DeskSession {
     primed = false
     haveSeq = false
     expect = 0
+    highest = 0
+    held.removeAll()
+    missing.removeAll()
+    fillFrame = nil
     lastFrameAt = 0
     lossInterval = 0
     lossTotal = 0
@@ -719,7 +753,8 @@ final class DeskSession {
         nextReport = now + 0.1
       }
       // 进来时多半赶不上开头那个关键帧，参数集还没有，先要一张。丢包之后也走这里。
-      if waitingKey, now >= nextKey {
+      if waitingKey, now >= nextKey || nextKeyNow {
+        nextKeyNow = false
         send(deskKindKeyframe, Data())
         nextKey = now + 0.2
       }
@@ -727,6 +762,7 @@ final class DeskSession {
         emitStats(now)
         nextStats = now + 0.2
       }
+      serviceMissing(now)
       var from = sockaddr_in()
       var fromLen = socklen_t(MemoryLayout<sockaddr_in>.size)
       let n = withUnsafeMutablePointer(to: &from) { pointer in
@@ -758,51 +794,148 @@ final class DeskSession {
       if opened.0 != deskKindVideo { continue }
       gotVideo = true
       noteVideo(bytes: n, now: CFAbsoluteTimeGetCurrent())
-      guard opened.2.count >= 21 else { continue }
-      let seq = beU16(opened.2, 19)
-      let arrival = CFAbsoluteTimeGetCurrent()
-      var late = false
-      if !haveSeq {
-        expect = seq &+ 1
-        haveSeq = true
-      } else if seq != expect {
-        let ahead = seq &- expect
-        // 延迟整形会让后发的包先到。回绕过来的旧包不算成几万个丢包。
-        if ahead > 0 && ahead < 32768 {
-          lossInterval += UInt32(ahead)
-          lossTotal += UInt32(ahead)
-          if !waitingKey {
-            waitingKey = true
-            // 下一圈马上要关键帧，不等上一个 200 ms 间隔走完。
-            nextKey = 0
-          }
-          expect = seq &+ 1
-        } else {
-          late = true
-        }
-      } else {
-        expect = expect &+ 1
-      }
-      packetsInterval += 1
-      if late { continue }
-      guard let unit = depacketizer.push(opened.2) else { continue }
-      let idr = unit.nals.contains { (16 ... 21).contains(nalType($0)) }
-      if waitingKey {
-        if unit.key || idr {
-          if primed { recoveries += 1 }
-          waitingKey = false
-          primed = true
-        } else {
-          continue
-        }
-      }
-      if lastFrameAt != 0 {
-        gapsUs.append(UInt32(min((arrival - lastFrameAt) * 1_000_000, Double(UInt32.max))))
-      }
-      lastFrameAt = arrival
-      noteDelay(capture: beU64(opened.2, 9))
-      decoder.push(unit)
+      guard opened.2.count >= 29 else { continue }
+      receive(opened.2, at: CFAbsoluteTimeGetCurrent())
     }
+  }
+
+  /// 一个视频包按 RTP 序号排进来。正好是下一个就交给拆包，再把排在后面已经到了的接着交；
+  /// 跳过了几个就记成丢包：Mac 认补发时先存着、点名要缺的，不认时照旧跳过去、要关键帧。
+  private func receive(_ plain: Data, at arrival: CFAbsoluteTime) {
+    let seq = beU16(plain, 19)
+    packetsInterval += 1
+    if !haveSeq {
+      expect = seq
+      highest = seq
+      haveSeq = true
+    }
+    let ahead = seq &- expect
+    // 回绕过来的旧包、重复的补发
+    if ahead >= 32768 { return }
+    var filled = false
+    if let miss = missing.removeValue(forKey: seq) {
+      filled = true
+      if miss.asked > 0 {
+        // 点过不止一次的分不清是哪次补上的，按最早那次算，估计只会偏大
+        rtt = rtt * 0.8 + max(arrival - miss.firstAsk, 0.005) * 0.2
+      }
+    } else if ahead > 0, held[seq] != nil {
+      return
+    }
+    // highest 比 expect 还小一个（前面的都交了）时 far 是 -1
+    let far = Int(Int16(bitPattern: highest &- expect))
+    if Int(ahead) > far {
+      let gap = Int(ahead) - far - 1
+      if gap > 0 {
+        lossInterval += UInt32(gap)
+        lossTotal += UInt32(gap)
+      }
+      if nack, gap > 0, gap <= deskNackWindow {
+        var s = highest &+ 1
+        while s != seq {
+          missing[s] = DeskMiss(found: arrival)
+          s = s &+ 1
+        }
+      } else if gap > 0 {
+        // 不能补，或者一下断了太多（补也来不及）：跳过缺的，拆包看到序号断了会丢掉这一帧，接着等关键帧
+        held.removeAll()
+        missing.removeAll()
+        expect = seq
+        highest = seq
+        markLost()
+        deliver(plain, at: arrival, filled: false)
+        return
+      }
+      highest = seq
+    }
+    if seq == expect {
+      deliver(plain, at: arrival, filled: filled)
+      drain()
+    } else {
+      held[seq] = (plain, arrival)
+    }
+  }
+
+  /// 把从 expect 起已经到了的包按序交出去，碰到还缺的停下。
+  private func drain() {
+    while let (plain, at) = held.removeValue(forKey: expect) {
+      deliver(plain, at: at, filled: false)
+    }
+  }
+
+  /// 点名要缺的包：新缺的马上要，没补上的隔一会儿再要，最多三次。最前面缺的那个等太久（或者攒的包太多）
+  /// 就不等了：跳到下一个到了的包，拆包丢掉缺了的帧，要关键帧。
+  private func serviceMissing(_ now: CFAbsoluteTime) {
+    guard nack, !missing.isEmpty else { return }
+    let retry = max(rtt * 1.5, 0.04)
+    var ask: [UInt16] = []
+    for (seq, miss) in missing where miss.asked < 3 && now - miss.lastAsk >= retry {
+      ask.append(seq)
+      missing[seq]!.lastAsk = now
+      if miss.asked == 0 { missing[seq]!.firstAsk = now }
+      missing[seq]!.asked += 1
+    }
+    var start = 0
+    while start < ask.count {
+      var raw = Data()
+      for seq in ask[start ..< min(start + deskNackMax, ask.count)] {
+        raw.append(UInt8(seq >> 8))
+        raw.append(UInt8(seq & 0xff))
+      }
+      send(deskKindNack, raw)
+      start += deskNackMax
+    }
+    let giveUp = min(max(rtt * 3 + 0.1, 0.25), 1.0)
+    guard let first = missing[expect], now - first.found > giveUp || held.count > 2048 else { return }
+    // 下一个已经到了的包
+    guard let resume = held.keys.min(by: { ($0 &- expect) < ($1 &- expect) }) else {
+      missing.removeAll()
+      return
+    }
+    var s = expect
+    while s != resume {
+      missing.removeValue(forKey: s)
+      s = s &+ 1
+    }
+    expect = resume
+    markLost()
+    drain()
+  }
+
+  private func markLost() {
+    if !waitingKey {
+      waitingKey = true
+      // 下一圈马上要关键帧，不等上一个 200 ms 间隔走完。
+      nextKeyNow = true
+    }
+  }
+
+  private func deliver(_ plain: Data, at arrival: CFAbsoluteTime, filled: Bool) {
+    expect = plain.count >= 21 ? beU16(plain, 19) &+ 1 : expect &+ 1
+    let number = beU64(plain, 1)
+    if filled { fillFrame = number }
+    guard let unit = depacketizer.push(plain) else { return }
+    let idr = unit.nals.contains { (16 ... 21).contains(nalType($0)) }
+    if waitingKey {
+      if unit.key || idr {
+        if primed { recoveries += 1 }
+        waitingKey = false
+        primed = true
+      } else {
+        return
+      }
+    }
+    if fillFrame == unit.frame {
+      lastFrameAt = 0
+    } else {
+      if lastFrameAt != 0 {
+        // 排在缺口后面的包按当初的到达时刻交出来，可能比上一帧还早
+        gapsUs.append(UInt32(min(max(arrival - lastFrameAt, 0) * 1_000_000, Double(UInt32.max))))
+      }
+      lastFrameAt = max(arrival, lastFrameAt)
+      noteDelay(capture: beU64(plain, 9))
+    }
+    decoder.push(unit)
   }
 
   private func sendReport() {
@@ -1032,7 +1165,8 @@ final class DeskSession {
       close(fd)
       return -1
     }
-    var timeout = timeval(tv_sec: 0, tv_usec: 100_000)
+    // 没包来时也要醒得勤一点：缺的包隔几十毫秒要再点名一次
+    var timeout = timeval(tv_sec: 0, tv_usec: 20_000)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     // 默认接收缓冲很小，关键帧连续十几个包会在套接字里被丢掉。
     var buffer: Int32 = 1 << 20

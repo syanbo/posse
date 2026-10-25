@@ -26,7 +26,7 @@ import (
 func main() {
 	listen := flag.String("listen", "127.0.0.1:45991", "address deskrecv sends to")
 	forward := flag.String("forward", "127.0.0.1:47991", "address hive listens on")
-	rate := flag.String("rate", "0", "rate limit in bits/s (0 = unlimited, 5Mbps accepted)")
+	rate := flag.String("rate", "0", "rate limit in bits/s (0 = unlimited, 5Mbps and 500kbps accepted)")
 	loss := flag.Float64("loss", 0, "independent drop probability on each packet")
 	delay := flag.Duration("delay", 0, "fixed delay added to every packet")
 	queue := flag.Duration("queue", 100*time.Millisecond, "drop a packet that would wait longer than this")
@@ -218,6 +218,12 @@ func parseRate(s string) (int, error) {
 	case strings.HasSuffix(s, "m"):
 		mult = 1_000_000
 		s = strings.TrimSuffix(s, "m")
+	case strings.HasSuffix(s, "kbps"):
+		mult = 1_000
+		s = strings.TrimSuffix(s, "kbps")
+	case strings.HasSuffix(s, "k"):
+		mult = 1_000
+		s = strings.TrimSuffix(s, "k")
 	}
 	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil {

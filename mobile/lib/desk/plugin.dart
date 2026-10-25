@@ -87,6 +87,7 @@ class DeskReceiver {
       _stats ??= _events.receiveBroadcastStream().map(DeskStats.parse);
 
   /// host 是直连地址，经隧道连着又找不到局域网地址时为空，只走中转（relay 是 host:port）。
+  /// nack 是电脑认缺包点名补发（ready 里的 nack），旧电脑不认，缺包直接要关键帧。
   Future<int> start({
     String? host,
     int? port,
@@ -95,6 +96,7 @@ class DeskReceiver {
     required Uint8List keyToPhone,
     required Uint8List keyToMac,
     DeskCodec codec = DeskCodec.hevc,
+    bool nack = false,
   }) async {
     final id = await _channel.invokeMethod<int>('start', {
       'host': ?host,
@@ -104,6 +106,7 @@ class DeskReceiver {
       'keyToPhone': keyToPhone,
       'keyToMac': keyToMac,
       'codec': codec.name,
+      'nack': nack,
     });
     if (id == null) throw StateError('desk start returned no texture');
     return id;

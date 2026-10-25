@@ -250,7 +250,7 @@ func TestAbortedSendDoesNotSkipSequence(t *testing.T) {
 	}
 	done := make(chan struct{})
 	go func() {
-		c.sendFrame(pkts, true, 0, 0, 6_000_000)
+		c.sendFrame(pkts, true, 0, 0, 6_000_000, time.Time{})
 		close(done)
 	}()
 	time.Sleep(4 * time.Millisecond)
@@ -407,7 +407,7 @@ func TestFramesArePacedToTheBitrate(t *testing.T) {
 	frame := Frame{Kind: KindVideo, Number: 1, Keyframe: true, Payload: append([]byte{0, 0, 0, 1}, bytes.Repeat([]byte{0x22}, 12000)...)}
 	pkts := Packetize(frame, 0, CodecHEVC)
 	start := time.Now()
-	c.sendFrame(pkts, true, 0, 0, 600_000)
+	c.sendFrame(pkts, true, 0, 0, 600_000, time.Time{})
 	// 12 KB 多一点按 600 kbps 要 160ms 以上
 	if d := time.Since(start); d < 120*time.Millisecond || d > time.Second {
 		t.Fatalf("sent in %s", d)
@@ -524,4 +524,76 @@ func TestLowestStepHalvesThePicture(t *testing.T) {
 		t.Fatalf("rescale reset the rate: bitrate %d full %d", c.bitrate, c.fullBit)
 	}
 	framesW.Close()
+}
+
+// 手机点名的包用新计数器原样补发；不在缓存里的不补；超过这一秒的额度不补
+func TestNackResendsRememberedPackets(t *testing.T) {
+	toMobile, _ := TestKeys()
+	seal, _ := NewAEAD(toMobile)
+	conn, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	t.Cleanup(func() { conn.Close() })
+	sink, _ := net.ListenPacket("udp", "127.0.0.1:0")
+	t.Cleanup(func() { sink.Close() })
+	c := &caster{conn: conn, sealAEAD: seal, peer: sink.LocalAddr(), bitrate: 4_000_000}
+	frame := Frame{Kind: KindVideo, Number: 1, Payload: append([]byte{0, 0, 0, 1}, bytes.Repeat([]byte{0x33}, 6000)...)}
+	pkts := Packetize(frame, 100, CodecHEVC)
+	c.sendFrame(pkts, false, 0, 100, 50_000_000, time.Time{})
+	read := func() (counters []uint64, seqs []uint16) {
+		_ = sink.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		buf := make([]byte, 2048)
+		for {
+			n, _, err := sink.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			kind, counter, plain, err := Open(seal, DirToMobile, buf[:n])
+			if err != nil || kind != PacketVideo {
+				t.Fatalf("kind %d err %v", kind, err)
+			}
+			counters = append(counters, counter)
+			seqs = append(seqs, binary.BigEndian.Uint16(plain[19:21]))
+		}
+	}
+	first, _ := read()
+	nack := []byte{0, 102, 0, 101, 0x30, 0x39} // 102、101，和一个没发过的 12345
+	c.resend(nack)
+	counters, seqs := read()
+	if len(seqs) != 2 || seqs[0] != 102 || seqs[1] != 101 {
+		t.Fatalf("resent %v", seqs)
+	}
+	if counters[0] <= first[len(first)-1] {
+		t.Fatalf("resend reused counter %d", counters[0])
+	}
+	// 额度是发送节奏的四分之一：4 Mbps 时 1.5 Mbit，一个包 9.6 kbit，最多再补 150 个左右
+	for range 200 {
+		c.resend([]byte{0, 101})
+	}
+	_, more := read()
+	if len(more) < 100 || len(more) > 160 {
+		t.Fatalf("resent %d past the budget", len(more))
+	}
+}
+
+// 关键帧按节奏摊开时，后面的帧在 Mac 这边多等的那份不算网络排队
+func TestOwnDelayIsTheExcessOverTheFloor(t *testing.T) {
+	c := &caster{}
+	now := time.Unix(1_700_000_000, 0)
+	for i := range 20 {
+		c.noteOwn(now.Add(time.Duration(i)*100*time.Millisecond), 10*time.Millisecond)
+	}
+	at := now.Add(2 * time.Second)
+	for i := range 5 {
+		c.noteOwn(at.Add(time.Duration(i)*20*time.Millisecond), 310*time.Millisecond)
+	}
+	if d := c.ownDelay(at.Add(100 * time.Millisecond)); d != 300*time.Millisecond {
+		t.Fatalf("own delay %s", d)
+	}
+	if d := c.ownDelay(at.Add(2 * time.Second)); d != 0 {
+		t.Fatalf("stale samples still count: %s", d)
+	}
+	// 10 秒前的样本不再算基线
+	c.noteOwn(at.Add(20*time.Second), 50*time.Millisecond)
+	if len(c.own) != 1 {
+		t.Fatalf("kept %d old samples", len(c.own))
+	}
 }

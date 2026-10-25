@@ -18,10 +18,15 @@ const (
 	castPeer   = "127.0.0.1:47990"
 	keyGap     = 250 * time.Millisecond
 	paceWindow = 16 * time.Millisecond
-	// 发送节奏的下限：码率压到最低时也不要慢于它，免得一个关键帧要发好几秒
-	paceFloor = 600_000
+	// 发送节奏的下限：码率压到最低时也不要慢于它，免得一个关键帧要发好几秒。只比码率下限高一点：
+	// 高太多时链路只有码率下限那么宽的话，关键帧每次都冲爆它
+	paceFloor = rateFloor * 6 / 5
 	// 排着的画面按发送节奏最多积压这么久，再多就丢普通帧、等关键帧
 	queueBudget = time.Second
+	// 留着最近发过的这么多个视频包给手机点名补发，按 RTP 序号取模放；8 Mbps 时约 1 秒
+	resendSlots = 1024
+	// 一秒内补发的量不超过发送节奏的这一份：链路真堵了时补发只会更堵，补不上就等关键帧
+	resendShare = 4
 )
 
 // reportQuiet 内没有接收报告就暂停发画面（心跳也停，什么都不往外发），reportGone 内报告回来就接着发，
@@ -126,7 +131,10 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 	c.mu.Lock()
 	drops, queued, rate := c.dropped, c.maxQueued, c.bitrate
 	c.mu.Unlock()
-	log.Printf("desk: cast done queue-drops=%d max-queue=%d bitrate=%d", drops, queued, rate)
+	c.histMu.Lock()
+	resent, refused := c.resent, c.refused
+	c.histMu.Unlock()
+	log.Printf("desk: cast done queue-drops=%d max-queue=%d bitrate=%d resent=%d resend-refused=%d", drops, queued, rate, resent, refused)
 	return errRun
 }
 
@@ -199,6 +207,17 @@ type caster struct {
 	maxQueued          int
 	dropped            int
 
+	// 发过的视频包明文，给补发用；histMu 保护
+	histMu     sync.Mutex
+	hist       [resendSlots]sentPacket
+	resendAt   time.Time // 这一秒补发额度的起点
+	resendBits int
+	resent     int
+	refused    int
+
+	// 每帧在 Mac 这边耽搁的时间（采集到最后一个包发出），mu 保护，见 ownDelay
+	own []ownSample
+
 	quietDeadline time.Time
 	seenHello     bool
 	// pausedAt 是 reportQuiet 没有报告、停发画面的时刻，没暂停时为零；mu 保护
@@ -206,6 +225,85 @@ type caster struct {
 	stopped  chan struct{}
 	stopOnce sync.Once
 	stopErr  error
+}
+
+type ownSample struct {
+	at time.Time
+	d  time.Duration
+}
+
+// 手机报的排队延迟里扣掉的那份按最近这么久里发完的帧算：报告每 100ms 一份，再加上路上的时间
+const ownRecent = 300 * time.Millisecond
+
+// noteOwn 记下一帧在 Mac 这边耽搁了多久，留最近 10 秒（和手机算排队延迟的基线一样长）。调用方持有 mu。
+func (c *caster) noteOwn(now time.Time, d time.Duration) {
+	c.own = append(c.own, ownSample{now, d})
+	drop := 0
+	for drop < len(c.own) && now.Sub(c.own[drop].at) > 10*time.Second {
+		drop++
+	}
+	c.own = c.own[drop:]
+}
+
+// ownDelay 是最近发完的帧在 Mac 这边比最顺的时候多耽搁的时间（中位数减 10 秒内的最小值）。
+// 慢链路上一个关键帧按节奏要摊开几百毫秒，排在它后面的帧到手机时都晚了，手机量到的排队延迟里
+// 有这一份是我们自己摊开的，不是网络在排队，不能拿来降码率。调用方持有 mu。
+func (c *caster) ownDelay(now time.Time) time.Duration {
+	if len(c.own) == 0 {
+		return 0
+	}
+	floor := c.own[0].d
+	var recent []time.Duration
+	for _, s := range c.own {
+		floor = min(floor, s.d)
+		if now.Sub(s.at) <= ownRecent {
+			recent = append(recent, s.d)
+		}
+	}
+	if len(recent) == 0 {
+		return 0
+	}
+	return medianGap(recent) - floor
+}
+
+type sentPacket struct {
+	seq   uint16
+	ok    bool
+	plain []byte
+}
+
+func (c *caster) remember(seq uint16, plain []byte) {
+	c.histMu.Lock()
+	c.hist[int(seq)%resendSlots] = sentPacket{seq: seq, ok: true, plain: plain}
+	c.histMu.Unlock()
+}
+
+// resend 补发手机点名要的视频包，用新的计数器重新加密（同一个计数器的 nonce 不能用两次）。
+// 已经不在缓存里的、超出这一秒额度的不补，手机等不到就要关键帧。
+func (c *caster) resend(plain []byte) {
+	c.mu.Lock()
+	budget := int(c.paceRate() / resendShare)
+	c.mu.Unlock()
+	now := time.Now()
+	for i := 0; i+2 <= len(plain); i += 2 {
+		seq := binary.BigEndian.Uint16(plain[i:])
+		c.histMu.Lock()
+		h := c.hist[int(seq)%resendSlots]
+		if now.Sub(c.resendAt) >= time.Second {
+			c.resendAt, c.resendBits = now, 0
+		}
+		ok := h.ok && h.seq == seq && c.resendBits+len(h.plain)*8 <= budget
+		if ok {
+			c.resendBits += len(h.plain) * 8
+			c.resent++
+		} else {
+			c.refused++
+		}
+		c.histMu.Unlock()
+		if ok {
+			_ = c.send(PacketVideo, h.plain)
+		}
+	}
 }
 
 func (c *caster) stop(err error) {
@@ -398,10 +496,10 @@ func (c *caster) startSend(f Frame) {
 	if f.Keyframe {
 		log.Printf("desk: send keyframe %d (%d packets)", f.Number, len(pkts))
 	}
-	go c.sendFrame(pkts, f.Keyframe, gen, seq, rate)
+	go c.sendFrame(pkts, f.Keyframe, gen, seq, rate, time.Unix(0, f.CaptureUnixNano))
 }
 
-func (c *caster) sendFrame(pkts [][]byte, key bool, gen uint64, seq0 uint16, rate uint64) {
+func (c *caster) sendFrame(pkts [][]byte, key bool, gen uint64, seq0 uint16, rate uint64, captured time.Time) {
 	// 按节奏摊开：第 i 个包在 start + span*(i+1)/n 之前不发。按包 Sleep 时，间隔短于调度粒度会被拉长到约 1ms，
 	// 所以按累计时刻算，落后了就连着发
 	bits := 0
@@ -425,6 +523,7 @@ func (c *caster) sendFrame(pkts [][]byte, key bool, gen uint64, seq0 uint16, rat
 			log.Printf("desk: send: %v", err)
 			break
 		}
+		c.remember(seq0+uint16(i), p)
 		sent++
 		if i+1 < len(pkts) && span > 2*time.Millisecond {
 			at := start.Add(span * time.Duration(i+1) / time.Duration(len(pkts)))
@@ -438,6 +537,10 @@ func (c *caster) sendFrame(pkts [][]byte, key bool, gen uint64, seq0 uint16, rat
 	c.seq = seq0 + uint16(sent)
 	if key {
 		c.keySend = time.Since(start)
+	}
+	if sent == len(pkts) && captured.Unix() > 0 {
+		now := time.Now()
+		c.noteOwn(now, now.Sub(captured))
 	}
 	c.busy = false
 	c.sendingKey = false
@@ -533,6 +636,8 @@ func (c *caster) recv() {
 			c.onReport(plain)
 		case PacketKeyframe:
 			c.askKey()
+		case PacketNack:
+			c.resend(plain)
 		case PacketInput:
 			if c.onInput != nil {
 				ack := c.onInput(plain)
@@ -601,7 +706,8 @@ func (c *caster) onReport(plain []byte) {
 	gap := time.Duration(binary.BigEndian.Uint32(plain[32:36])) * time.Microsecond
 	c.mu.Lock()
 	if binary.BigEndian.Uint64(plain[24:32]) == 1 {
-		c.rate.addQueue(time.Duration(binary.BigEndian.Uint64(plain[16:24])) * time.Microsecond)
+		q := time.Duration(binary.BigEndian.Uint64(plain[16:24])) * time.Microsecond
+		c.rate.addQueue(max(q-c.ownDelay(time.Now()), 0))
 	}
 	// 帧率上限降下来以后帧间隔本来就长，和采集节奏的估计比要按上限算，不然把降帧当成排队
 	base := max(c.sendGap, time.Second/time.Duration(max(c.fps, 1)))

@@ -121,6 +121,8 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 		frame := map[string]any{
 			"type": "ready", "port": ready.Port, "codec": ready.Codec,
 			"nonceB64": base64.StdEncoding.EncodeToString(nonce),
+			// 手机缺包时可以点名补发（desk.PacketNack）；旧电脑不认，手机照旧直接要关键帧
+			"nack": true,
 		}
 		if ready.Relay != "" {
 			frame["relay"] = ready.Relay

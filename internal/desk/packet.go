@@ -17,6 +17,8 @@ const (
 	PacketInput    byte = 4
 	PacketKeyframe byte = 5
 	PacketBeat     byte = 6
+	// PacketNack 是手机点名要补发的视频包：明文是一串大端 u16 的 RTP 序号
+	PacketNack byte = 7
 
 	DirToMac    byte = 0
 	DirToMobile byte = 1

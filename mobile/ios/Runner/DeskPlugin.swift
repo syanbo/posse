@@ -145,6 +145,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       relay = deskResolveHostPort(text)
     }
     let relayToken = bytes(args["relayToken"])
+    let nack = args["nack"] as? Bool ?? false
     guard !peers.isEmpty || relay != nil else {
       result(FlutterError(code: "bad_address", message: "没有能连的地址", details: nil))
       return
@@ -163,7 +164,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
         do {
           let session = try DeskSession(
             toMobile: toPhone, toMac: toMac, peers: peers, relay: relay, relayToken: relayToken,
-            codec: codec)
+            codec: codec, nack: nack)
           let texture = DeskTexture(registry: self.textures)
           session.onFrame = { [weak texture] image in
             texture?.present(image)
