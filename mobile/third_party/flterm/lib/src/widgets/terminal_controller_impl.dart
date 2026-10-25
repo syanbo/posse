@@ -95,7 +95,8 @@ class TerminalControllerImpl extends TerminalController
       ..onTextCommitted = _handleTextCommitted
       ..onDelete = _handleDelete
       ..onPreeditChanged = _handlePreeditChanged
-      ..onNewline = _handleNewline;
+      ..onNewline = _handleNewline
+      ..onPasted = paste;
     _wireTerminalCallbacks();
     _applyModes();
     _applyTerminalOptions();
@@ -574,6 +575,8 @@ class TerminalControllerImpl extends TerminalController
 
   @override
   void paste(String text) {
+    // Hive：去掉末尾的换行，粘贴完留在输入框里，不直接回车发出去
+    text = trimPastedNewlines(text);
     if (text.isEmpty) return;
     final bracketed = terminal.modeGet(const .bracketedPaste());
     _emitOutput(pasteEncode(text, bracketed: bracketed));

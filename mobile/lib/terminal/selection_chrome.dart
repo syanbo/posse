@@ -183,7 +183,8 @@ class _SelectionChromeState extends State<SelectionChrome> {
   }
 
   Future<void> _copySelection() async {
-    final text = widget.controller.selectedText();
+    // 选到行尾或整段时末尾带着换行，粘贴到哪都会多一个回车
+    final text = trimPastedNewlines(widget.controller.selectedText());
     widget.controller.clearSelection();
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));

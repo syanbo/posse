@@ -60,7 +60,7 @@ export 'src/links/link_settings.dart'
         LinkType,
         LinkedFile;
 export 'src/widgets/terminal_controller.dart'
-    show SelectionAnchor, SelectionEnds, TerminalController;
+    show SelectionAnchor, SelectionEnds, TerminalController, trimPastedNewlines;
 export 'src/widgets/terminal_scope.dart' show TerminalScope;
 export 'src/widgets/terminal_scroll_controller.dart'
     show TerminalScrollController, TerminalScrollPosition;

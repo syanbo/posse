@@ -323,3 +323,7 @@ abstract class TerminalController extends ChangeNotifier
   /// response data (e.g. for device attribute queries).
   void write(Uint8List data);
 }
+
+/// Hive：粘贴末尾的换行（从终端、网页复制常带着）去掉，中间的照留。
+String trimPastedNewlines(String text) =>
+    text.replaceFirst(RegExp(r'[\r\n]+$'), '');

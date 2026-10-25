@@ -33,6 +33,7 @@ final class TerminalInputClient with DeltaTextInputClient {
   ValueChanged<int>? _onDelete;
   ValueChanged<String>? _onTextCommitted;
   ValueChanged<String>? _onPreeditChanged;
+  ValueChanged<String>? _onPasted;
 
   @override
   AutofillScope? get currentAutofillScope => null;
@@ -63,6 +64,9 @@ final class TerminalInputClient with DeltaTextInputClient {
   set onTextCommitted(ValueChanged<String>? callback) {
     _onTextCommitted = callback;
   }
+
+  /// Hive：一次插进来好几个字又带换行的（系统菜单粘贴、听写）交给它当粘贴，不拆成字和回车。
+  set onPasted(ValueChanged<String>? callback) => _onPasted = callback;
 
   /// Replaces an active connection because platform text input is view-bound.
   set viewId(int value) {
@@ -265,6 +269,13 @@ final class TerminalInputClient with DeltaTextInputClient {
     final singleNewline = _singleNewlinePattern.hasMatch(text);
     if (singleNewline && _suppressNextNewlineDelta) {
       _clearNewlineActionSuppression();
+      return;
+    }
+
+    // Hive：拆开时每个换行都是回车，粘贴的最后一个换行把整段直接发出去
+    final pasted = _onPasted;
+    if (pasted != null && !singleNewline && _newlinePattern.hasMatch(text)) {
+      pasted(text);
       return;
     }
 
