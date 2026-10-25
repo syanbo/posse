@@ -779,7 +779,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     await _send(clearLines());
   }
 
-  /// 快捷键栏的「Exit」：确认后先清空输入框，再执行 /exit。Claude Code、Codex、Grok、Cursor 都认这条命令；
+  /// 快捷键栏的「Exit」：先清空输入框，再执行 /exit。Claude Code、Codex、Grok、Cursor 都认这条命令；
   /// 不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，把整个终端也关掉。
   Future<void> _exitAgent() async {
     final agent = _liveTab.agent;
@@ -787,28 +787,6 @@ class _TerminalScreenState extends State<TerminalScreen>
       _flash('这个终端里没有在运行的 agent');
       return;
     }
-    final who = chatWho('assistant', agent);
-    final ok = await showHiveDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text('退出 $who？'),
-        content: const Text('还没做完的事会中断。对话记录留在会话历史里，之后可以接着聊。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: HiveColors.of(dialog).danger,
-            ),
-            onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('退出'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
     await _send(clearLines());
     await _send(clearLines());
     await _send('/exit'.codeUnits, enter: true);

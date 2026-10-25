@@ -164,7 +164,7 @@ List<int> clearLines([int lines = 20]) => [
   for (var i = 1; i < lines; i++) ...const [0x7f, 0x05, 0x15],
 ];
 
-/// 退出 agent 的键帽。按下后不直接发这个键的字节，先确认再按 agent 发（终端页的 `_exitAgent`）。
+/// 退出 agent 的键帽。按下后不直接发这个键的字节，清空输入框再执行 /exit（终端页的 `_exitAgent`）。
 const exitAgentLabel = 'Exit';
 
 /// 软键盘上方的专用键。方向键是 VT 的 A/B/C/D，不带回车。
