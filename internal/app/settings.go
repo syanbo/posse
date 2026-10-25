@@ -20,8 +20,8 @@ func (a *app) openSettings() {
 	a.selected = settingsBoardID
 }
 
-// settingsBoard 是设置页：防休眠、agent 权限、套餐用量、图标大小、终端字号、关于（版本、重启常驻进程、日志和数据目录）。
-// 手机配对仍在「手机」页。
+// settingsBoard 是设置页：防休眠、Agent 权限、套餐用量、界面、终端、关于（版本、更新和重启常驻进程、日志和数据目录）。
+// 手机配对在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
 	a.band(c, func() {
 		titleText(c, "设置", fsCardTitle)

@@ -19,8 +19,8 @@ import (
 	"posse/internal/media"
 )
 
-// 文件标签里的 Git：左栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。
-// 交互照 WebStorm（见 docs/plans/git-ops.html）：改动列表自动刷新，diff 默认左右对照、忽略空白，
+// 文件标签里的 Git：文件栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。
+// 交互照 WebStorm（见 docs/features/git.md）：改动列表自动刷新，diff 默认左右对照、忽略空白，
 // F7 / ⇧F7 跨文件跳到下一处 / 上一处改动。
 
 const (
@@ -118,7 +118,7 @@ func (g *gitState) groupOpen(gr changeGroup) *bool {
 	return open
 }
 
-// changeCount 是左栏"改动"上显示的数：有改动的文件数，不含储藏。
+// changeCount 是文件栏"改动"上显示的数：有改动的文件数，不含储藏。
 func (g *gitState) changeCount() int {
 	if g.status == nil {
 		return 0

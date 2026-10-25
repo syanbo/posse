@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Posse 界面质感计划：借鉴 open-claude-ui</title>
+<title>Posse 界面质感：借鉴 open-claude-ui</title>
 <style>
   :root {
     --bg: #faf9f7; --surface: #ffffff; --text: #1f1e1c; --muted: #6b6862;
@@ -39,161 +39,33 @@
     font: 13px/1.5 "JetBrains Mono", ui-monospace, Menlo, monospace;
     background: var(--code); padding: 1px 5px; border-radius: 4px;
   }
-  pre {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
-    padding: 14px 16px; overflow-x: auto;
-  }
-  pre code { background: none; padding: 0; }
-  table {
-    width: 100%; border-collapse: collapse; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 14px;
-  }
-  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-  th { background: var(--accent-soft); font-weight: 600; white-space: nowrap; }
-  tr:last-child td { border-bottom: none; }
-  td:first-child { font-weight: 500; }
-  ol > li { margin-bottom: 14px; }
-  ol ul { margin-top: 4px; }
-  .phase { font-weight: 600; }
-  .todo { list-style: none; padding-left: 0; }
-  .todo li {
-    background: var(--accent-soft); border-left: 3px solid var(--accent);
-    border-radius: 6px; padding: 8px 12px; margin-bottom: 8px;
-  }
-  .todo li::before { content: "☐ "; color: var(--accent); }
+  ul > li { margin-bottom: 8px; }
 </style>
 <body>
 <nav>
-  <a href="#scope">目标与范围</a>
-  <a href="#source">读到了什么</a>
-  <a href="#gap">现状差距</a>
-  <a href="#decisions">关键决策</a>
-  <a href="#tokens">令牌草案</a>
-  <a href="#phases">分阶段步骤与验收</a>
-  <a href="#result">实现结果</a>
-  <a href="#risks">风险</a>
+  <a href="#source">来源</a>
+  <a href="#principles">借鉴的原则</a>
 </nav>
 <main>
-<h1>Posse 界面质感计划：借鉴 open-claude-ui</h1>
-<div class="byline">2026-10-16 · 参考 <a href="https://github.com/Caho1/open-claude-ui">Caho1/open-claude-ui</a>（提交 2834bc1），本计划不含代码改动</div>
+<h1>Posse 界面质感：借鉴 open-claude-ui</h1>
+<div class="byline">参考 <a href="https://github.com/Caho1/open-claude-ui">Caho1/open-claude-ui</a>（提交 2834bc1）；落到代码里的约定以 <code>internal/app/style.go</code> 开头的注释为准</div>
 
-<h2 id="scope">目标与范围</h2>
-<p class="lead">以 Claude 桌面端的克制为准重整界面：暖灰底色、发丝描边、中性选中、少用粗体、只在一个地方用强调色。目标是让界面“安静、有层次”，而不是更花哨。</p>
-<p>要做：底色和文字色阶、描边和投影、选中和悬停、分段选择、按钮、字号阶梯、历史 transcript 排版、代码块和 diff、浮层、焦点环、滚动边缘渐隐。</p>
-<p>不做：流式文字晕染、合成提示音、拖拽重排、灯箱、iframe 沙箱、模型切换器这类和 Posse 功能无关的模块；不引入商业字体；不改常驻进程和协议。</p>
+<h2 id="source">来源</h2>
+<p class="lead">以 Claude 桌面端的克制为准：暖灰底色、细线分层、少用粗体、强调色只做强调。目标是让界面“安静、有层次”，而不是更花哨。</p>
+<p>参考仓库是 9 篇中文手册、30 个 React/Tailwind 示例组件和一份主题 CSS，自称来自对 Claude.app 的逆向分析。能用的是其中的<b>原则</b>；具体数值前后矛盾（同一组深色表面色、弹簧参数、字号阶梯在不同篇里各不相同），示例组件自己也违反单闭合边框，所以数值不照搬，以离屏预览的观感和对比度为准。</p>
 
-<h2 id="source">读到了什么</h2>
-<p>仓库是 9 篇中文手册、30 个 React/Tailwind 示例组件和一份主题 CSS，自称来自对 Claude.app 的逆向分析。能用的是其中的<b>原则</b>；具体数值要打折扣：</p>
-<table>
-  <tr><th>可信度</th><th>内容</th></tr>
-  <tr><td>值得借鉴的原则</td><td>
-    <ul>
-      <li><b>单闭合边框</b>：从画布向里看，任何一条视线最多穿过一层闭合边框；有框容器里的按钮、输入、标签一律不再加框，改用填充或幽灵样式；容器内部分区用单向细线</li>
-      <li><b>低对比表面阶梯</b>：4 层底色只差 1%–3% 明度，靠明度差和 8%–10% 透明度的细线分层，不靠粗线</li>
-      <li><b>深色模式倒角</b>：深色下不画白色外框，改为 1px 内阴影 <code>rgba(255,255,255,.08–.10)</code>，像边缘接到顶光，再配一层深而散的投影</li>
-      <li><b>强调色只做强调</b>：陶土色用于主按钮、焦点环、思考中的点；选中和悬停用中性透明填充</li>
-      <li><b>助理正文不装框</b>：回答直接铺在画布上，版心 672–768px；用户消息是淡底圆角气泡，不加边线</li>
-      <li><b>同心圆角</b>：外圆角 = 内圆角 + 内边距；圆角按角色分级（按钮 6–8、面板 10、卡片 12、弹窗 16、气泡 18）</li>
-      <li>数字等宽、超长路径 <code>anywhere</code> 折行、标题均衡折行、悬停 ≤150ms 缓出、按下缩放 0.98</li>
-    </ul>
-  </td></tr>
-  <tr><td>需要打折扣的数值</td><td>
-    <ul>
-      <li>同一组令牌前后矛盾：第 1 篇深色表面是 <code>#0b0b0a/#151515/#1a1a19/#20201e</code>，第 8 篇是 <code>#1b1b19/#21211e/#282824/#32322d</code></li>
-      <li>弹簧参数文档写 400/25、220/24，代码里是 320/28、380/18；字号阶梯三张表各不相同</li>
-      <li>示例组件自己违反单闭合边框（MCP 卡片、Cowork 看板里有框的按钮放在有框的卡片里），还用 emoji 当图标</li>
-      <li>本机没装 Claude.app，无法核对原始 CSS。下文的数值都标为“草案”，以离屏预览的观感为准</li>
-    </ul>
-  </td></tr>
-</table>
-
-<h2 id="gap">现状差距（对照当前离屏预览）</h2>
-<table>
-  <tr><th>位置</th><th>现在</th><th>问题</th></tr>
-  <tr><td>底色</td><td>苹果系统冷灰 <code>#1C1C1E / #262628 / #2E2E30</code>，强调色已是陶土橙</td><td>冷灰配暖橙，色温打架；陶土色在冷灰上发脏</td></tr>
-  <tr><td>选中</td><td>陶土色 20% 实底 + 3px 竖条（侧栏、历史列表、任务列表）</td><td>选中成了一大块棕色，和琥珀色“待处理”抢眼，违背“待处理是唯一醒目的东西”</td></tr>
-  <tr><td>分段选择</td><td>历史筛选“全部”填满陶土色，无轨道</td><td>页面最亮的东西是一个筛选器</td></tr>
-  <tr><td>按钮</td><td>任务详情卡片里的“打开 worker 终端”“查看改动”“关闭 worker”是描边按钮</td><td>框里套框</td></tr>
-  <tr><td>输入框</td><td>“回答 worker 的提问”是卡片里的描边文本框，回复按钮在框外</td><td>框里套框；输入和发送分离，缺少 Claude 那种输入区一体感</td></tr>
-  <tr><td>历史 transcript</td><td>整段对话装在一个卡片里，满宽；用户消息是陶土淡底 + 左竖条</td><td>行长过长（一行 50+ 个汉字）；用户消息像引用/警告，不像气泡</td></tr>
-  <tr><td>字重</td><td>600 用了 30 处，500 用了 7 处</td><td>列表标题、卡片标题、按钮全是半粗，层级被拉平；深色下粗体显得发胀</td></tr>
-  <tr><td>侧栏</td><td>每个工作区两行（名称 + 路径），行高约 70pt</td><td>密度偏低，9 个工作区就要滚动</td></tr>
-  <tr><td>卡片</td><td>无描边，只靠底色差</td><td>深色下卡片边缘发虚；浅色下白卡片在浅灰画布上缺一点立体感</td></tr>
-  <tr><td>代码块</td><td>6px 圆角浅底框，无语言栏和复制</td><td>和正文区分不够，无法一键复制</td></tr>
-</table>
-
-<h2 id="decisions">关键决策</h2>
-<ol>
-  <li><b>底色换暖灰</b>，色温和陶土色一致；终端底色仍跟着卡片色（<code>terminalThemes</code> 不变，只是取到的颜色变了）。</li>
-  <li><b>选中改中性</b>：选中底用 8%–9% 白（深）/ 6% 黑（浅）；去掉左侧竖条，选中只靠底色和文字从次要色变为主色，不再用陶土色。陶土色只留给主按钮、焦点环、工作中的星号、链接。这样琥珀色“待处理”重新成为唯一醒目的颜色。</li>
-  <li><b>执行单闭合边框</b>：卡片里的次级按钮改为填充式（透明度 9% 的底，无边框），工具栏按钮改为幽灵式；任务回复区做成独立的“输入区”（20 圆角的框、双层投影，发送按钮放在框内右下），它外面不再套卡片。</li>
-  <li><b>卡片描边分深浅</b>：深色用 1px 内阴影 <code>rgba(255,255,255,.07)</code>（mygo 有 <code>InsetShadow</code>）；浅色用 1px <code>rgba(0,0,0,.06)</code> 外环加很淡的 <code>shadow-sm</code>。浮层（<code>floating</code>）深色去掉外框，用 10% 内高光加深投影。</li>
-  <li><b>历史 transcript 去掉外层卡片</b>：消息直接铺在画布上，版心限宽 720pt 居中；用户消息是中性淡底、14 圆角的气泡，去掉左竖条；助理消息无底；命中消息保留琥珀淡底（这是搜索结果，属于“需要注意”）。</li>
-  <li><b>分段选择改为轨道 + 浮起滑块</b>：轨道 6%/8% 透明底、全圆角或 8 圆角；选中段是抬起一层的表面色加 1px 内细线和小投影，文字从 400 变 500，不填陶土色；滑块位置用 120ms 缓出动画。</li>
-  <li><b>字重收敛到三档</b>：400 正文、500 列表标题和按钮、600 只留给页面标题和卡片标题。深色模式下试 590→560、500→470（SF 是可变字体，要先验证 mygo 是否传递任意字重，不行就跳过）。</li>
-  <li><b>侧栏变紧凑</b>：工作区行改为单行 32pt（图标 + 名称 + 状态），路径只在选中行和悬停提示里出现；worktree 子行同样单行，分支名用等宽次要色接在名称后。分组标题 11pt 次要色。</li>
-  <li><b>动效</b>：维持现有“悬停 120ms 缓出、只有工作中星号自动播放”；按下缩放由 0.96 改为 0.98；分组展开/收起、tool 调用展开用 mygo 的 <code>Smooth</code> 弹簧（无回弹）。</li>
-</ol>
-
-<h2 id="tokens">令牌草案（以预览观感为准再调）</h2>
-<table>
-  <tr><th>角色</th><th>深色</th><th>浅色</th><th>对应 palette / Theme 字段</th></tr>
-  <tr><td>侧栏、窗口底</td><td><code>#171716</code></td><td><code>#F3F2EF</code></td><td>新增 <code>side</code>（现由 Theme 默认给出）</td></tr>
-  <tr><td>顶栏</td><td><code>#1C1C1B</code></td><td><code>#F8F7F5</code></td><td><code>band</code></td></tr>
-  <tr><td>画布</td><td><code>#1A1A19</code></td><td><code>#F8F8F6</code></td><td><code>canvas</code></td></tr>
-  <tr><td>卡片、终端</td><td><code>#20201E</code></td><td><code>#FFFFFF</code></td><td><code>card</code> = <code>Theme.Background</code></td></tr>
-  <tr><td>浮层、分段滑块</td><td><code>#2A2A27</code></td><td><code>#FFFFFF</code></td><td>新增 <code>raised</code></td></tr>
-  <tr><td>细线</td><td><code>rgba(255,255,255,.08)</code></td><td><code>rgba(0,0,0,.08)</code></td><td><code>line</code></td></tr>
-  <tr><td>悬停 / 选中 / 次级按钮底</td><td>白 5% / 9% / 9%</td><td>黑 4% / 6% / 6%</td><td><code>wash</code> / <code>tint</code>（改中性）/ 新增 <code>fill</code></td></tr>
-  <tr><td>文字 主 / 次 / 弱</td><td><code>#ECEBE8 / #B4B2AC / #7D7B76</code></td><td><code>#1F1E1D / #6B6966 / #999793</code></td><td><code>Theme.Text</code> / <code>TextMuted</code> / 新增 <code>faint</code></td></tr>
-  <tr><td>强调</td><td colspan="2">保持 <code>#D97757</code>（深）/ <code>#C15F3C</code>（浅），不再用于选中</td><td><code>Theme.Accent</code></td></tr>
-  <tr><td>代码块底</td><td><code>#141413</code></td><td><code>#F5F4F1</code></td><td><code>codeBackground</code></td></tr>
-  <tr><td>字号</td><td colspan="2">说明 11、元信息 12、正文 13.5、阅读（Markdown）14.5 行高 1.6、卡片标题 15、页面标题 18</td><td>写进 style.go 常量，替换散落的数字</td></tr>
-  <tr><td>圆角</td><td colspan="2">按钮 7、输入 8、代码块 10、卡片 12、输入区 16、气泡 14、浮层 12</td><td><code>Theme.Radius</code> 保持 8</td></tr>
-</table>
-
-<h2 id="phases">分阶段步骤与验收</h2>
-<p>每阶段结束都跑 <code>gofmt</code>、<code>go vet ./...</code>、<code>go test ./...</code>、<code>go tool mygo vet</code>，并生成深浅两套离屏预览逐张对比；能用真实窗口时再在 <code>POSSE_HOME=/tmp/posse-e2e/home</code> 下看一遍。</p>
-<ol>
-  <li><span class="phase">令牌</span>：改 <code>style.go</code> 的 <code>colors</code>、<code>posseTheme</code>，新增字号和圆角常量，重写文件头的设计约定：去掉参照 AndroidMirror 和竖条的说法，加入“单闭合边框”“强调色只做强调”两条；同步改掉 AGENTS.md 界面约定一段，以及 <code>style.go</code>、<code>view.go</code>（底栏、<code>launchTile</code>）注释里以 AndroidMirror 作比的地方。<br>验收：38 张预览整体色温统一；终端底色与卡片一致；对比度 正文 ≥ 7:1、次要文字 ≥ 4.5:1（用脚本从预览取色计算）。</li>
-  <li><span class="phase">选中、按钮、分段</span>：<code>selectable</code> 改中性；<code>segmented</code> 改轨道 + 滑块；新增 <code>fillButton</code>、<code>ghostButton</code>，替换卡片里的描边按钮；按下缩放 0.98。<br>验收：任务、历史、主界面三页上，除“待处理”、主按钮、工作中星号外看不到陶土色和琥珀色；任一路径上不超过一层闭合边框（逐页人工核对）。</li>
-  <li><span class="phase">卡片、浮层、输入区</span>：<code>card</code> 加深浅两套描边；<code>floating</code> 换双环；任务回复区改为一体输入区（发送按钮在框内，⌘↩ 发送，中文输入法合成时回车不发送沿用 mygo 现有行为并加测试）。<br>验收：预览中卡片边缘在深色下清晰但看不到“白框”；输入区聚焦时出现焦点环。</li>
-  <li><span class="phase">历史 transcript 与 Markdown</span>：去掉外层卡片、版心 720 居中、用户气泡、元信息行 12pt；代码块加语言栏和复制按钮；行内代码 4 圆角加细线；工具调用默认折叠成一行“工具调用 N 次”，点开展开（全局复选框保留）。<br>验收：<code>history-markdown</code> 预览一行不超过约 40 个汉字；<code>TestParseMarkdown</code> 等现有测试通过；新增代码块复制的界面测试。</li>
-  <li><span class="phase">侧栏与字重</span>：工作区行改单行 32pt；分组标题样式；字重收敛三档；验证深色模式减薄字重是否生效。<br>验收：主界面预览中 9 个工作区不滚动可见；<code>TestRevealOpensSection</code>、方向键导航测试通过；字重统计 600 的使用降到 10 处以内。</li>
-  <li><span class="phase">滚动渐隐与收尾</span>：历史列表、侧栏、transcript 顶底各加 24pt 渐隐（<code>Absolute</code> 叠一层底色到透明的 <code>Gradient</code>，只在可滚动方向显示）；更新 AGENTS.md 的界面约定；记忆里补充参照来源。<br>验收：滚到顶部时上边不出现渐隐；离屏预览和真实窗口各看一次。</li>
-</ol>
-
-<h2 id="result">实现结果（2026-10-16）</h2>
-<p class="lead">六个阶段都已实现，在 <code>调研</code> 分支，每个阶段一个提交（82633bf、89f804a、f34b2f4、47fd2e4、efc021c 和最后一个），方向不对可以按阶段回退。计划里"第 2 阶段后先给你看预览"这一步，因为你说直接做，没有停下来等。</p>
-<p>合入 main 时按你的取舍改回了几处（2026-10-16）：选中项保留强调色淡底加左侧竖条；侧栏工作区保留两行；图标保留陶土色；分段选择选中段保留陶土色填充；历史里自己的消息是靠右的淡底块，竖条在右边；深色侧栏比画布浅一档（#2A2A27）；历史会话列表行间留 4pt。</p>
-<table>
-  <tr><th>和计划的出入</th><th>原因</th></tr>
-  <tr><td>深色模式减薄字重（500→470）没做</td><td>实测 mygo 把字重取整到固定档位，470 和 500 渲染出的像素完全一样</td></tr>
-  <tr><td>侧栏没有滚动渐隐</td><td>侧栏是普通的 Scroll，mygo 不提供它的滚动位置；历史会话列表、搜索结果和对话都加了</td></tr>
-  <tr><td>行内代码没有加细线</td><td>行内代码是 RichText 里的一段，只能铺底色，画不了边框</td></tr>
-  <tr><td>分段滑块的位置没有做 120ms 的滑动动画</td><td>滑块是选中那一段自己的底色，换段时底色有 120ms 的过渡，没有单独的滑块元素可以移动</td></tr>
-  <tr><td>侧栏的两行改单行没有做"设置里恢复两行"</td><td>posse 还没有设置页；选中行仍显示路径，其余行悬停可见</td></tr>
-</table>
-<table>
-  <tr><th>验证</th><th>结果</th></tr>
-  <tr><td><code>go vet ./...</code>、<code>go test ./...</code>、<code>go tool mygo vet</code></td><td>通过</td></tr>
-  <tr><td>对比度（用色值计算）</td><td>正文在各层底色上 12.1–16.6:1；次要文字最低 4.89:1（浅色侧栏），都达标</td></tr>
-  <tr><td>新增测试</td><td>一体输入区（⌘↩ 发送、拼字时不发送、空的不发送）、工具调用折叠、代码块复制、滚动渐隐（像素级：顶部不画上边、底部不画下边）</td></tr>
-  <tr><td>字重</td><td><code>FontWeight(600)</code> 从 48 处降到 3 处（<code>titleText</code>、"待处理"、Markdown 标题）</td></tr>
-  <tr><td>离屏预览</td><td>深浅两套逐张看过；改前的一套在 /tmp/posse-preview-before</td></tr>
-  <tr><td>真实窗口、ANSI 颜色观感、窗口内存和帧时间</td><td>未验证：屏幕锁着</td></tr>
-</table>
-
-<h2 id="risks">风险</h2>
-<table>
-  <tr><th>风险</th><th>应对</th></tr>
-  <tr><td>参考仓库的数值互相矛盾，且无法与 Claude.app 核对</td><td>只取原则；数值按本计划草案起步，以预览观感和对比度测量为准</td></tr>
-  <tr><td>改动面广，观感好坏难以只凭描述判断</td><td>第 2 阶段后先给你看深浅两套预览，确认方向再继续</td></tr>
-  <tr><td>mygo 不支持任意可变字重、0.5pt 发丝线</td><td>第 1 阶段先写最小预览验证；不支持就退回 1pt 低透明度线和固定字重</td></tr>
-  <tr><td>暖灰底让终端里的 ANSI 颜色观感变化</td><td>用 Claude Code、Codex 真实输出各截一次对比，必要时只调终端前景色</td></tr>
-  <tr><td>侧栏改单行后路径信息不再常驻</td><td>选中行仍显示路径；悬停有完整路径提示；若日常用着不便，可在设置里恢复两行</td></tr>
-  <tr><td>渐隐叠层每帧多画两个渐变</td><td>只在可滚动时绘制；第 6 阶段量一次窗口内存和帧时间，和改前对比</td></tr>
-</table>
+<h2 id="principles">借鉴的原则</h2>
+<ul>
+  <li><b>暖灰底色</b>：底色和陶土色同一色温，冷灰配暖橙会让陶土色发脏。</li>
+  <li><b>低对比的底色层级</b>：侧栏、顶栏、画布、卡片、浮层只差一点明度，靠明度差和 8% 透明的细线分层，不靠粗线。深色下卡片用 1px 内高光代替白色外框，浮层再配一层深而散的投影。</li>
+  <li><b>单闭合边框</b>：从画布往里看，任何一条视线最多穿过一层闭合的框；有框的容器里，按钮和输入不再加框，用填充或幽灵样式；容器内部分区用单向细线。</li>
+  <li><b>强调色只做强调</b>：陶土色用在主按钮、焦点、工作中的星号、链接、图标，以及选中项的淡底（不画竖条）；悬停是中性的透明底。只有“待处理”用琥珀色并配文字，是界面上唯一醒目的东西。</li>
+  <li><b>状态靠形状区分</b>，颜色只是辅助。</li>
+  <li><b>助理正文不装框</b>：回答直接铺在画布上，版心限宽居中；用户消息是淡底圆角块，不加边线。</li>
+  <li><b>同心圆角</b>：外圆角 = 内圆角 + 内边距；圆角按角色分级（按钮、输入、代码块、卡片各一档）。</li>
+  <li><b>字重收敛</b>：400 正文、500 列表标题和按钮、600 只给标题和少数要你看一眼的状态文字。</li>
+  <li>数字等宽、超长路径随处折行、悬停 ≤120ms 缓出、按下缩放 0.98；可滚动列表在还有内容的一边渐隐。</li>
+</ul>
 </main>
 </body>
 </html>

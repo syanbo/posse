@@ -14,7 +14,7 @@ import (
 	"posse/internal/gitx"
 )
 
-// changesView 是文件标签左栏的"改动"：分支和同步状态、改动列表（含储藏），底部是提交框。
+// changesView 是文件栏的"改动"：分支和同步状态、改动列表（含储藏），底部是提交框。
 func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	g := &v.git

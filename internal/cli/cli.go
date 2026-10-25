@@ -78,7 +78,7 @@ func init() {
 		{"task inbox", "Read new messages from your workers without waiting", "", cmdTaskInbox},
 		{"task reply", "Answer a worker's question", "<message> <answer>", cmdTaskReply},
 		{"task send", "Send a worker an extra instruction", "<task> <message>", cmdTaskSend},
-		{"task retry", "Start a failed, exited or lost task again in a new worker", "<task> [--model M] [--effort E] [--spec S | --spec-file F|-]", cmdTaskRetry},
+		{"task retry", "Start a failed, exited, lost or stopped task again in a new worker", "<task> [--model M] [--effort E] [--spec S | --spec-file F|-]", cmdTaskRetry},
 		{"task close", "Close a worker terminal (stops the task if still running)", "<task>", cmdTaskClose},
 		{"task clear", "Forget finished tasks", "", cmdTaskClear},
 		{"task ask", "Worker: ask the coordinator and wait for the answer", "<task> <question> [--resume MSG]", cmdTaskAsk},

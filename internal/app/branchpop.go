@@ -17,7 +17,7 @@ import (
 	"posse/internal/gitx"
 )
 
-// 分支弹窗：点标签栏的分支名打开，结构照 WebStorm 的 Git 分支弹窗（见 docs/plans/git-ops.html）。
+// 分支弹窗：点标签栏的分支名打开，结构照 WebStorm 的 Git 分支弹窗（见 docs/features/git.md）。
 
 type branchPopup struct {
 	ws    string

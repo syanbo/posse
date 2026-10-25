@@ -1,6 +1,5 @@
-// Package host 是控制进程和终端宿主之间的边界（方案见 docs/plans/terminal-host.md）：
-// 常驻进程和手机只经这里的接口操作终端。现在只有进程内实现，直接包着 internal/term；
-// 之后终端宿主独立成进程时，换成走 RPC 的实现，接口不变。
+// Package host 是常驻进程和手机操作终端的边界：它们只经这里的 Host、Terminal 接口操作终端，
+// 实现是进程内的，包着 internal/term。升级交接（Pause 导出、Adopt 重建）也在这层，方案见 docs/plans/terminal-host.md。
 package host
 
 import (
@@ -10,7 +9,7 @@ import (
 	"posse/internal/term"
 )
 
-// AgentState 是宿主替控制进程存着的 agent 状态，控制进程重启后从这里读回。
+// AgentState 是终端的 agent 状态，交接时随终端带给新常驻进程。
 type AgentState = term.AgentState
 
 // Record 是升级时交给新常驻进程的一个终端，和 PTY 描述符一起经交接 socket 传过去。
