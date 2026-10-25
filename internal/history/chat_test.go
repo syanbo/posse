@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -479,4 +480,36 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b[i:])
+}
+
+func TestReadChatTailCursor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	lines := []string{
+		`{"role":"user","message":{"content":[{"type":"text","text":"<timestamp>Saturday, Oct 24, 2026, 4:24 PM (UTC+8)</timestamp>\n<user_query>\n看一下这个仓库\n</user_query>"}]}}`,
+		`{"role":"assistant","message":{"content":[{"type":"text","text":"先读 README。"},{"type":"tool_use","name":"Read","input":{"path":"README.md"}}]}}`,
+		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Shell","input":{"command":"ls"}}]}}`,
+		`{"type":"turn_ended","status":"success"}`,
+	}
+	os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
+	page, err := ReadChatTail("cursor", "s", path, 40, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Messages) != 3 {
+		t.Fatalf("%d messages: %+v", len(page.Messages), page.Messages)
+	}
+	user := page.Messages[0]
+	if user.Role != "user" || user.Blocks[0].Text != "看一下这个仓库" || user.Timestamp == nil {
+		t.Fatalf("user %+v", user)
+	}
+	if got := time.UnixMilli(*user.Timestamp).UTC(); got != time.Date(2026, 10, 24, 8, 24, 0, 0, time.UTC) {
+		t.Fatalf("time %v", got)
+	}
+	a := page.Messages[1]
+	if a.Role != "assistant" || len(a.Blocks) != 2 || a.Blocks[1].Type != "tool-call" || a.Blocks[1].Name != "Read" || string(a.Blocks[1].Input) != `{"path":"README.md"}` {
+		t.Fatalf("assistant %+v", a)
+	}
+	if page.Messages[2].Blocks[0].Name != "Shell" {
+		t.Fatalf("tool %+v", page.Messages[2])
+	}
 }

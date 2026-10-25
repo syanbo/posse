@@ -759,22 +759,8 @@ func (cursorParser) line(raw []byte, st *fileState) []Message {
 	for _, b := range blocks {
 		switch {
 		case b.Type == "text" && r.Role == "user":
-			// cursor 记录里没有时间字段，用户消息开头的 <timestamp> 是唯一的时间来源
-			var at int64
-			if m := cursorTimestamp.FindStringSubmatch(b.Text); m != nil {
-				at = cursorTime(m[1])
-				touch(st, at)
-			}
-			text := b.Text
-			if qs := cursorQuery.FindAllStringSubmatch(text, -1); qs != nil {
-				var parts []string
-				for _, q := range qs {
-					parts = append(parts, q[1])
-				}
-				text = strings.Join(parts, "\n")
-			} else {
-				text = cursorTimestamp.ReplaceAllString(text, "")
-			}
+			text, at := cursorUserText(b.Text)
+			touch(st, at)
 			if t := userText(st, text); t != "" {
 				out = append(out, msg("user", t, at))
 			}
@@ -787,6 +773,22 @@ func (cursorParser) line(raw []byte, st *fileState) []Message {
 		}
 	}
 	return out
+}
+
+// cursorUserText 取出用户消息里真正说的话（<user_query> 里的，没有就去掉 <timestamp>）和时间。
+// cursor 记录里没有时间字段，用户消息开头的 <timestamp> 是唯一的时间来源，没有时 at 为 0。
+func cursorUserText(raw string) (text string, at int64) {
+	if m := cursorTimestamp.FindStringSubmatch(raw); m != nil {
+		at = cursorTime(m[1])
+	}
+	if qs := cursorQuery.FindAllStringSubmatch(raw, -1); qs != nil {
+		var parts []string
+		for _, q := range qs {
+			parts = append(parts, q[1])
+		}
+		return strings.Join(parts, "\n"), at
+	}
+	return cursorTimestamp.ReplaceAllString(raw, ""), at
 }
 
 // cursorTime 解析 "Friday, Sep 25, 2026, 12:17 PM (UTC+8)"。

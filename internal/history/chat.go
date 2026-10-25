@@ -351,6 +351,8 @@ func decodeChatLine(agent string, raw []byte, off int64, paged bool, gt *grokTim
 	case "grok":
 		var last int64
 		m = decodeGrokLine(raw, off, gt, &last)
+	case "cursor":
+		m = decodeCursorLine(raw, off)
 	default:
 		return nil
 	}
@@ -412,6 +414,43 @@ type claudePiece struct {
 		URL  string `json:"url"`
 		File string `json:"file"`
 	} `json:"source"`
+}
+
+// decodeCursorLine 解一行 cursor 记录：用户的话、助手的话和工具调用。cursor 不记工具结果，
+// 时间只有用户消息开头的 <timestamp>。
+func decodeCursorLine(raw []byte, off int64) *ChatMessage {
+	var r cursorRecord
+	if json.Unmarshal(raw, &r) != nil || (r.Role != "user" && r.Role != "assistant") {
+		return nil
+	}
+	pieces, ok := claudePieces(r.Message.Content)
+	if !ok {
+		return nil
+	}
+	var blocks []ChatBlock
+	var at int64
+	for _, p := range pieces {
+		switch {
+		case p.Type == "text" && r.Role == "user":
+			text, t := cursorUserText(p.Text)
+			if t != 0 {
+				at = t
+			}
+			if text = strings.TrimSpace(text); text != "" {
+				blocks = append(blocks, ChatBlock{Type: "text", Text: text})
+			}
+		case p.Type == "text":
+			if strings.TrimSpace(p.Text) != "" {
+				blocks = append(blocks, ChatBlock{Type: "text", Text: p.Text})
+			}
+		case p.Type == "tool_use" && r.Role == "assistant":
+			blocks = append(blocks, ChatBlock{Type: "tool-call", Name: p.Name, Input: p.Input})
+		}
+	}
+	if len(blocks) == 0 {
+		return nil
+	}
+	return &ChatMessage{ID: chatID("", "", off), Role: r.Role, Blocks: blocks, Timestamp: stamp(at), Source: "transcript", Offset: off}
 }
 
 func decodeClaudeLine(raw []byte, off int64) *ChatMessage {
