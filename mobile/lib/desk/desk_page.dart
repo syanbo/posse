@@ -115,6 +115,9 @@ class _DeskPageState extends State<DeskPage>
   String? _fail;
   String? _endNote;
   String? _accessNote;
+  // 切画面的结果（窗口没了回到整块屏），几秒后消失
+  String? _viewNote;
+  Timer? _noteTimer;
   var _indirect = false;
   String? _customHost;
   int? _customPort;
@@ -189,6 +192,7 @@ class _DeskPageState extends State<DeskPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.model.removeListener(_followComputer);
+    _noteTimer?.cancel();
     _ticker.dispose();
     _frame.dispose();
     _statsTick.dispose();
@@ -721,7 +725,9 @@ class _DeskPageState extends State<DeskPage>
         }
       case 'displays':
         if (!mounted) return;
-        setState(() => _displays = DeskDisplays.parse(frame));
+        final displays = DeskDisplays.parse(frame);
+        setState(() => _displays = displays);
+        if (displays.gone) _note('窗口关掉了或不在这个空间，回到整块屏');
       case 'end':
         final reason = frame['reason'];
         await _finishWatch(gen, reason is String ? reason : '');
@@ -731,25 +737,44 @@ class _DeskPageState extends State<DeskPage>
   /// 这台电脑的公钥：按它记上次看的屏，换地址、重新扫码都不变。
   String? get _computerKey => widget.model.offer?.publicKeyB64;
 
-  /// 悬浮球的「屏幕」：选一块屏，记下来，让 Mac 切过去。切好了 Mac 推新的 displays，画面也换过来；
-  /// 新屏的大小、比例和原来的不一样，缩放回到 1 倍。
-  Future<void> _pickDisplay() async {
+  /// 悬浮球的「画面」：选一块屏或一个窗口。选的屏记下来，窗口不记（关掉就没了）。让 Mac 切过去，
+  /// 切好了 Mac 推新的 displays，画面也换过来；新画面的大小、比例和原来的不一样，缩放回到 1 倍。
+  Future<void> _pickView() async {
     _pokeBar();
-    final id = await pickDeskDisplay(context, _displays);
     final rpc = _rpcNow;
-    if (!mounted || id == null || id == _displays.current || rpc == null) {
-      return;
-    }
-    final key = _computerKey;
-    if (key != null) {
-      widget.model.updateSettings((s) => s.deskDisplays[key] = id);
+    if (rpc == null) return;
+    final pick = await pickDeskView(
+      context,
+      _displays,
+      windows: rpc.call('desk.windows', const {}).then(DeskWindow.parseList),
+    );
+    if (!mounted || pick == null || !identical(rpc, _rpcNow)) return;
+    if (pick.window) {
+      if (pick.id == _displays.window?.id) return;
+    } else {
+      if (pick.id == _displays.current && _displays.window == null) return;
+      final key = _computerKey;
+      if (key != null) {
+        widget.model.updateSettings((s) => s.deskDisplays[key] = pick.id);
+      }
     }
     _resetZoom();
     try {
-      await rpc.call('desk.display', {'id': id});
+      await rpc.call(pick.window ? 'desk.window' : 'desk.display', {
+        'id': pick.id,
+      });
     } on Object {
       // 没在看了、连接断了：下次订阅照记下的屏开始
     }
+  }
+
+  /// 画面上方一句几秒后自己消失的提示。
+  void _note(String text) {
+    _noteTimer?.cancel();
+    setState(() => _viewNote = text);
+    _noteTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => _viewNote = null);
+    });
   }
 
   Future<void> _onReady(
@@ -1345,8 +1370,8 @@ class _DeskPageState extends State<DeskPage>
                       onZoom: _resetZoom,
                       onDebug: _toggleDebug,
                       onDisconnect: () => unawaited(_disconnect()),
-                      onDisplays: _displays.several
-                          ? () => unawaited(_pickDisplay())
+                      onView: _displays.list.isNotEmpty
+                          ? () => unawaited(_pickView())
                           : null,
                     ),
                   ),
@@ -1408,6 +1433,7 @@ class _DeskPageState extends State<DeskPage>
 
   (bool waiting, String text)? _banner() {
     if (_background) return (false, '已暂停（后台）');
+    if (_viewNote != null) return (false, _viewNote!);
     if (_accessNote != null && (_stats.video || _up)) {
       return (false, _accessNote!);
     }

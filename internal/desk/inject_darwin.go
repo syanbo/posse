@@ -64,6 +64,8 @@ type injector struct {
 	log func(string, ...any)
 	// display 是正在看的屏，点击、滚动都按它换算；还没开始采集时为 0，用主屏
 	display func() uint32
+	// window 是只看的窗口和它的进程（ID 为 0 看整块屏），这时按窗口的位置换算
+	window func() (uint32, int32)
 
 	bounds     cgRect
 	layout     map[rune]keyStroke
@@ -86,7 +88,7 @@ func (e *engine) injector() *injector {
 	if e.in != nil {
 		return e.in
 	}
-	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf, display: e.shown.Load}
+	in := &injector{mac: e.mac, keys: map[uint16]bool{}, log: e.logf, display: e.shown.Load, window: e.windowTarget}
 	e.mac.withPool(func() { in.prepare() })
 	e.in = in
 	return in
@@ -213,6 +215,18 @@ func (in *injector) refreshBounds() {
 	if in.mac.displayBounds == nil || in.mac.mainDisplay == nil {
 		return
 	}
+	if in.window != nil {
+		if id, _ := in.window(); id != 0 {
+			// 按着键时不换：拖标题栏时窗口跟着指针走，换了坐标窗口会越跑越远
+			if in.left || in.right {
+				return
+			}
+			if w, ok := in.mac.windowInfo(id); ok && w.W >= 1 && w.H >= 1 {
+				in.bounds = cgRect{X: w.X, Y: w.Y, W: w.W, H: w.H}
+				return
+			}
+		}
+	}
 	id := in.mac.mainDisplay()
 	if in.display != nil {
 		if d := in.display(); d != 0 {
@@ -284,6 +298,7 @@ func (in *injector) button(ev Event) {
 		clicks = 1
 	}
 	if ev.Kind == EventDown {
+		in.front()
 		in.postMouse(downType, p, button, clicks)
 		if ev.Button == ButtonLeft {
 			in.left = true
@@ -298,6 +313,38 @@ func (in *injector) button(ev Event) {
 	} else {
 		in.right = false
 	}
+}
+
+// front 在只看窗口、它不在最前（App 不在最前，或被别的窗口盖着）时先把窗口提上来：
+// 点击落在屏幕上那个位置，被盖住时会点到上面的窗口；键盘发给最前的 App。
+func (in *injector) front() {
+	if in.window == nil {
+		return
+	}
+	id, pid := in.window()
+	if id == 0 || pid <= 0 || (in.mac.frontPID() == pid && !in.covered(id)) {
+		return
+	}
+	if err := in.mac.raiseWindow(pid, id); err != nil {
+		in.logf("raise window %d: %v", id, err)
+		return
+	}
+	// 窗口服务器换完前后顺序之前发的点击还会落到原来最前的窗口上
+	time.Sleep(50 * time.Millisecond)
+}
+
+// covered 是有别的普通窗口盖在窗口 id 上。
+func (in *injector) covered(id uint32) bool {
+	for _, w := range in.mac.windowInfos(cgListAbove, id) {
+		if w.ID != id && w.Layer == 0 && w.Alpha > 0 && overlaps(w, in.bounds) {
+			return true
+		}
+	}
+	return false
+}
+
+func overlaps(w rawWindow, b cgRect) bool {
+	return w.X < b.X+b.W && b.X < w.X+w.W && w.Y < b.Y+b.H && b.Y < w.Y+w.H
 }
 
 func (in *injector) scroll(ev Event) {

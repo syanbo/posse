@@ -93,6 +93,9 @@ type macAPI struct {
 	sendObj        func(objc.ID, objc.SEL, objc.ID) objc.ID
 	// updateConfig 是 -[SCStream updateConfiguration:completionHandler:]，运行中改帧率
 	updateConfig func(objc.ID, objc.SEL, objc.ID, uintptr)
+	// doubleVal 是返回 double 的无参消息（doubleValue），sendInt 是带一个整数参数、返回对象的消息
+	doubleVal func(objc.ID, objc.SEL) float64
+	sendInt   func(objc.ID, objc.SEL, int) objc.ID
 
 	vtCreate     func(uintptr, int32, int32, uint32, uintptr, uintptr, uintptr, uintptr, uintptr, *uintptr) int32
 	vtEncode     func(uintptr, uintptr, cmTime, cmTime, uintptr, uintptr, *uint32) int32
@@ -151,6 +154,14 @@ type macAPI struct {
 	tisProp       func(uintptr, uintptr) uintptr
 	tisLayoutKey  uintptr
 	lmKbdType     func() uint8
+
+	// 只看一个窗口：窗口列表，和把窗口提到最前用的辅助功能接口
+	cgWindowList func(uint32, uint32) uintptr
+	axApp        func(int32) uintptr
+	axCopy       func(uintptr, uintptr, *uintptr) int32
+	axSet        func(uintptr, uintptr, uintptr) int32
+	axAction     func(uintptr, uintptr) int32
+	axWindowID   func(uintptr, *uint32) int32
 }
 
 func loadMac() (*macAPI, error) {
@@ -222,6 +233,8 @@ func loadMac() (*macAPI, error) {
 	bind(&m.urlAsset, msg)
 	bind(&m.sendObj, msg)
 	bind(&m.updateConfig, msg)
+	bind(&m.doubleVal, msg)
+	bind(&m.sendInt, msg)
 
 	cg := dl("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
 	m.mainDisplay = mustFn[func() uint32](cg, "CGMainDisplayID")
@@ -385,6 +398,7 @@ func (m *macAPI) loadInput() {
 	m.cgPost = softFn[func(uint32, uintptr)](cg, "CGEventPost")
 	m.cgGetLoc = softFn[func(uintptr) cgPoint](cg, "CGEventGetLocation")
 	m.cgSource = softFn[func(int32) uintptr](cg, "CGEventSourceCreate")
+	m.cgWindowList = softFn[func(uint32, uint32) uintptr](cg, "CGWindowListCopyWindowInfo")
 
 	hi := softDl("/System/Library/Frameworks/ApplicationServices.framework/Frameworks/HIServices.framework/HIServices")
 	if hi == 0 {
@@ -393,6 +407,12 @@ func (m *macAPI) loadInput() {
 	m.axTrusted = softFn[func() bool](hi, "AXIsProcessTrusted")
 	m.axTrustedOpts = softFn[func(uintptr) bool](hi, "AXIsProcessTrustedWithOptions")
 	m.axPromptKey = softCF(hi, "kAXTrustedCheckOptionPrompt")
+	m.axApp = softFn[func(int32) uintptr](hi, "AXUIElementCreateApplication")
+	m.axCopy = softFn[func(uintptr, uintptr, *uintptr) int32](hi, "AXUIElementCopyAttributeValue")
+	m.axSet = softFn[func(uintptr, uintptr, uintptr) int32](hi, "AXUIElementSetAttributeValue")
+	m.axAction = softFn[func(uintptr, uintptr) int32](hi, "AXUIElementPerformAction")
+	// 私有接口，没有公开的办法从辅助功能的窗口对象拿到 CGWindowID
+	m.axWindowID = softFn[func(uintptr, *uint32) int32](hi, "_AXUIElementGetWindow")
 
 	carbon := softDl("/System/Library/Frameworks/CoreServices.framework/Frameworks/CarbonCore.framework/CarbonCore")
 	if carbon == 0 {

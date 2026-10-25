@@ -3,6 +3,7 @@ package mobile
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ func TestDeskSubscribe(t *testing.T) {
 	busy := false
 	punched := make(chan string, 1)
 	switched := make(chan uint32, 1)
+	windowed := make(chan uint32, 1)
 	h.desk = func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
 		if busy {
 			return DeskReady{}, DeskError("busy", "someone else")
@@ -34,6 +36,13 @@ func TestDeskSubscribe(t *testing.T) {
 			Display: func(id uint32) error {
 				switched <- id
 				return nil
+			},
+			Window: func(id uint32) error {
+				windowed <- id
+				return nil
+			},
+			Windows: func(ctx context.Context) (json.RawMessage, error) {
+				return json.RawMessage(`{"windows":[{"id":77,"app":"Safari","title":"Hive"}]}`), nil
 			}}, nil
 	}
 	srv, err := New(t.TempDir(), h, -1)
@@ -62,6 +71,9 @@ func TestDeskSubscribe(t *testing.T) {
 
 	if m := p.next(p.call("desk.display", map[string]any{"id": 2})); m["ok"] != false {
 		t.Fatalf("switched without watching: %v", m)
+	}
+	if m := p.next(p.call("desk.windows", map[string]any{})); m["ok"] != false {
+		t.Fatalf("listed windows without watching: %v", m)
 	}
 
 	sub["display"] = 2
@@ -99,6 +111,17 @@ func TestDeskSubscribe(t *testing.T) {
 	result(t, p.next(p.call("desk.display", map[string]any{"id": 2})))
 	if got := <-switched; got != 2 {
 		t.Fatalf("switched to %d", got)
+	}
+	ws := result(t, p.next(p.call("desk.windows", map[string]any{})))
+	if list, _ := ws["windows"].([]any); len(list) != 1 || list[0].(map[string]any)["app"] != "Safari" {
+		t.Fatalf("windows %v", ws)
+	}
+	if m := p.next(p.call("desk.window", map[string]any{})); m["ok"] != false {
+		t.Fatalf("window without id: %v", m)
+	}
+	result(t, p.next(p.call("desk.window", map[string]any{"id": 77})))
+	if got := <-windowed; got != 77 {
+		t.Fatalf("window %d", got)
 	}
 	if ready["relay"] != "203.0.113.1:443" {
 		t.Fatalf("relay %v", ready["relay"])

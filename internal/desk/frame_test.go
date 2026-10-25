@@ -70,20 +70,20 @@ func TestConfigRoundTrip(t *testing.T) {
 
 func TestControlRoundTrip(t *testing.T) {
 	var buf bytes.Buffer
-	for _, c := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}} {
+	for _, c := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}} {
 		if err := WriteControl(&buf, c); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := WriteControl(&buf, Control{Kind: 9}); err != nil {
+	if err := WriteControl(&buf, Control{Kind: 99}); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: 9}} {
+	for _, want := range []Control{{Kind: CtrlKeyframe}, {Kind: CtrlBitrate, Bitrate: 7_500_000}, {Kind: CtrlStop}, {Kind: CtrlDisplay, Display: 69734662}, {Kind: CtrlFPS, FPS: 15}, {Kind: CtrlWindows}, {Kind: CtrlWindow, Window: 4242}, {Kind: 99}} {
 		got, err := ReadControl(&buf)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Kind != want.Kind || got.Bitrate != want.Bitrate || got.Display != want.Display || got.FPS != want.FPS || len(got.Events) != len(want.Events) {
+		if got.Kind != want.Kind || got.Bitrate != want.Bitrate || got.Display != want.Display || got.FPS != want.FPS || got.Window != want.Window || len(got.Events) != len(want.Events) {
 			t.Fatalf("control = %+v, want %+v", got, want)
 		}
 	}

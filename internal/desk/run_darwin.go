@@ -52,6 +52,14 @@ type engine struct {
 	locked   atomic.Bool
 	dropping atomic.Bool
 
+	// win 是只看的那个窗口（ID 为 0 看整块屏），和 displayID 一起在 streamMu 下改，读用 winMu
+	winMu sync.Mutex
+	win   watched
+	// gone 是正在看的窗口没了、退回了整块屏，下一次报屏列表时告诉手机
+	gone atomic.Bool
+	// checking 是每秒的窗口检查还没做完，不叠着做
+	checking atomic.Bool
+
 	encMu       sync.Mutex
 	enc         uintptr
 	codec       byte
@@ -251,7 +259,7 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 		return
 	}
 	e.streamMu.Lock()
-	err := e.openStream(display, content)
+	err := e.openStream(e.displayFilter(display, content))
 	e.streamMu.Unlock()
 	if err != nil {
 		e.halt(err)
@@ -261,18 +269,21 @@ func (e *engine) gotContent(content objc.ID, msg string) {
 	e.writeDisplays()
 }
 
-func (e *engine) openStream(display, content objc.ID) error {
+// displayFilter 是采整块屏的过滤器，去掉被排除的 App。
+func (e *engine) displayFilter(display, content objc.ID) objc.ID {
 	m := e.mac
-	var filter objc.ID
 	if len(e.opt.Exclude) == 0 {
 		empty := m.emptyArray(m.clsArray, m.sel("array"))
-		filter = m.initFilter(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingWindows:"), display, empty)
-	} else {
-		// exceptingWindows 留空：被排除的 App 不把单个窗口再捞回来。
-		apps := e.excludedApplications(content)
-		windows := m.emptyArray(m.clsArray, m.sel("array"))
-		filter = m.initFilterApps(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingApplications:exceptingWindows:"), display, apps, windows)
+		return m.initFilter(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingWindows:"), display, empty)
 	}
+	// exceptingWindows 留空：被排除的 App 不把单个窗口再捞回来。
+	apps := e.excludedApplications(content)
+	windows := m.emptyArray(m.clsArray, m.sel("array"))
+	return m.initFilterApps(m.alloc(m.clsFilter, m.sel("alloc")), m.sel("initWithDisplay:excludingApplications:exceptingWindows:"), display, apps, windows)
+}
+
+func (e *engine) openStream(filter objc.ID) error {
+	m := e.mac
 	if filter == 0 {
 		return fmt.Errorf("desk: content filter failed")
 	}
@@ -649,6 +660,9 @@ func (e *engine) parameterSets(format uintptr) []byte {
 
 func (e *engine) writeConfig() {
 	pw, ph := e.mac.displayPixels(e.displayID)
+	if w := e.watching(); w.ID != 0 {
+		pw, ph = w.pw, w.ph
+	}
 	fw, fh := Fit(pw, ph, e.opt.LongEdge)
 	e.write(Frame{
 		Kind: KindConfig, CaptureUnixNano: time.Now().UnixNano(),
@@ -708,6 +722,12 @@ func (e *engine) ticker() {
 				e.logStats(false)
 			}
 			e.write(Frame{Kind: KindHeartbeat, CaptureUnixNano: time.Now().UnixNano()})
+			if e.watching().ID != 0 && e.checking.CompareAndSwap(false, true) {
+				go func() {
+					defer e.checking.Store(false)
+					e.checkWindow()
+				}()
+			}
 			if e.axWait && e.axGranted() {
 				e.axWait = false
 				e.logf("accessibility allowed")
@@ -850,6 +870,10 @@ func (e *engine) control() {
 			go e.setFPS(c.FPS)
 		case CtrlScale:
 			go e.setScale(c.Scale)
+		case CtrlWindows:
+			go e.writeWindows()
+		case CtrlWindow:
+			go e.switchWindow(c.Window)
 		}
 	}
 }
@@ -1109,44 +1133,45 @@ func (e *engine) switchDisplay(id uint32) {
 	e.writeDisplays()
 }
 
-// writeDisplays 把所有的屏和正在看的那块报给父进程。
+// writeDisplays 把所有的屏、正在看的那块和只看的窗口报给父进程。
 func (e *engine) writeDisplays() {
 	var list []Display
-	e.mac.withPool(func() {
-		names := e.mac.screenNames()
-		main := e.mac.mainDisplay()
-		for _, id := range e.mac.displayIDs() {
-			d := Display{ID: id, Name: names[id], Main: id == main}
-			if e.mac.displayBounds != nil {
-				b := e.mac.displayBounds(id)
-				d.X, d.Y, d.Width, d.Height = b.X, b.Y, b.W, b.H
-			}
-			d.PixelWidth, d.PixelHeight = e.mac.displayPixels(id)
-			list = append(list, d)
-		}
-	})
-	b, err := json.Marshal(Displays{Current: e.shown.Load(), List: list})
+	e.mac.withPool(func() { list = e.displayList() })
+	ds := Displays{Current: e.shown.Load(), List: list, Gone: e.gone.Swap(false)}
+	if w := e.watching(); w.ID != 0 {
+		ds.Window = &w.Window
+	}
+	b, err := json.Marshal(ds)
 	if err != nil {
 		return
 	}
 	e.write(Frame{Kind: KindDisplays, CaptureUnixNano: time.Now().UnixNano(), Payload: b})
 }
 
-// rebuildDisplay 换到 want 这块屏重新采，want 为 0 是留在现在这块。要换的屏不在了：
-// 手机点选的（want 不为 0）不动，正在看的没了回主屏。屏和分辨率都没变时什么也不做。
+// rebuildDisplay 换到 want 这块屏重新采，want 为 0 是留在现在看的画面上（只看窗口时按窗口现在的大小重开）。
+// 要换的屏不在了：手机点选的（want 不为 0）不动，正在看的没了回主屏。屏和分辨率都没变时什么也不做。
 func (e *engine) rebuildDisplay(want uint32) error {
 	e.streamMu.Lock()
 	defer e.streamMu.Unlock()
 	if e.stopping.Load() || e.locked.Load() || e.stream == 0 {
 		return nil
 	}
+	if w := e.watching(); want == 0 && w.ID != 0 {
+		return e.rebuildWindowLocked(w.ID, false)
+	}
+	return e.displayLocked(want, false)
+}
+
+// displayLocked 是 rebuildDisplay 换整块屏的部分，force 是看的屏和尺寸没变也重开。只看窗口时总是重开。
+// 要拿着 streamMu。
+func (e *engine) displayLocked(want uint32, force bool) error {
 	online := e.mac.displayIDs()
 	id := want
 	if id == 0 {
 		id = e.displayID
 	}
 	if !slices.Contains(online, id) {
-		if want != 0 {
+		if want != 0 && !force {
 			e.logf("display %d is gone, staying on %d", want, e.displayID)
 			return nil
 		}
@@ -1154,14 +1179,15 @@ func (e *engine) rebuildDisplay(want uint32) error {
 	}
 	pw, ph := e.mac.displayPixels(id)
 	tw, th := Fit(pw, ph, e.longEdge())
-	if id == e.displayID && tw == e.width && th == e.height {
+	windowed := e.watching().ID != 0
+	if !force && !windowed && id == e.displayID && tw == e.width && th == e.height {
 		return nil
 	}
 	e.logf("display %d %dx%d -> %d %dx%d", e.displayID, e.width, e.height, id, tw, th)
 	display, content, err := e.fetchDisplay(id)
 	if err != nil {
-		if want != 0 {
-			// 旧的采集还没停，接着看现在这块
+		if want != 0 && !force {
+			// 旧的采集还没停，接着看现在的画面
 			e.logf("switch to display %d: %v", id, err)
 			return nil
 		}
@@ -1172,66 +1198,78 @@ func (e *engine) rebuildDisplay(want uint32) error {
 		defer e.mac.release(content, e.mac.sel("release"))
 	}
 	e.stopStream()
-	if tw != e.width || th != e.height {
-		e.width, e.height = tw, th
-		e.encMu.Lock()
-		old := e.enc
-		e.enc = 0
-		e.encMu.Unlock()
-		if old != 0 {
-			e.mac.vtComplete(old, cmTime{})
-			e.mac.vtInvalidate(old)
-			e.mac.cfRelease(old)
-		}
-		if err := e.openEncoder(e.codec); err != nil {
-			return err
-		}
+	if err := e.resizeLocked(tw, th); err != nil {
+		return err
 	}
+	e.setWatched(watched{})
 	e.displayID = id
 	e.shown.Store(id)
 	e.writeConfig()
 	e.force.Store(true)
-	return e.openStream(display, content)
+	return e.openStream(e.displayFilter(display, content))
+}
+
+// resizeLocked 在输出尺寸变了时按新尺寸重开编码器。采集要先停。
+func (e *engine) resizeLocked(tw, th int) error {
+	if tw == e.width && th == e.height {
+		return nil
+	}
+	e.width, e.height = tw, th
+	e.encMu.Lock()
+	old := e.enc
+	e.enc = 0
+	e.encMu.Unlock()
+	if old != 0 {
+		e.mac.vtComplete(old, cmTime{})
+		e.mac.vtInvalidate(old)
+		e.mac.cfRelease(old)
+	}
+	return e.openEncoder(e.codec)
 }
 
 func (e *engine) fetchDisplay(id uint32) (objc.ID, objc.ID, error) {
+	return e.fetchShareable(fmt.Sprintf("display %d", id), func(content objc.ID) objc.ID {
+		displays := e.mac.init(content, e.mac.sel("displays"))
+		for i := range e.mac.count(displays, e.mac.sel("count")) {
+			d := e.mac.at(displays, e.mac.sel("objectAtIndex:"), i)
+			if uint32(e.mac.integer(d, e.mac.sel("displayID"))) == id {
+				return d
+			}
+		}
+		return 0
+	})
+}
+
+// fetchShareable 取一次分享内容，用 pick 从里面挑出要采的屏或窗口。返回的两个对象都已 retain，用完要 release。
+func (e *engine) fetchShareable(what string, pick func(content objc.ID) objc.ID) (objc.ID, objc.ID, error) {
 	type result struct {
-		display objc.ID
+		found   objc.ID
 		content objc.ID
 		err     error
 	}
 	ch := make(chan result, 1)
 	block := objc.NewBlock(func(_ objc.Block, content, nserr objc.ID) {
 		if content == 0 {
-			msg := "no displays"
+			msg := "no shareable content"
 			if nserr != 0 {
 				msg = e.mac.goString(e.mac.init(nserr, e.mac.sel("localizedDescription")))
 			}
 			ch <- result{err: fmt.Errorf("%s", msg)}
 			return
 		}
-		displays := e.mac.init(content, e.mac.sel("displays"))
-		n := e.mac.count(displays, e.mac.sel("count"))
-		var found objc.ID
-		for i := range n {
-			d := e.mac.at(displays, e.mac.sel("objectAtIndex:"), i)
-			if uint32(e.mac.integer(d, e.mac.sel("displayID"))) == id {
-				found = e.mac.retain(d, e.mac.sel("retain"))
-				break
-			}
-		}
+		found := pick(content)
 		if found == 0 {
-			ch <- result{err: fmt.Errorf("display %d is gone", id)}
+			ch <- result{err: fmt.Errorf("%s is gone", what)}
 			return
 		}
-		ch <- result{display: found, content: e.mac.retain(content, e.mac.sel("retain"))}
+		ch <- result{found: e.mac.retain(found, e.mac.sel("retain")), content: e.mac.retain(content, e.mac.sel("retain"))}
 	})
 	e.mac.getContent(e.mac.clsShareable, e.mac.sel("getShareableContentWithCompletionHandler:"), uintptr(block))
 	select {
 	case r := <-ch:
-		return r.display, r.content, r.err
+		return r.found, r.content, r.err
 	case <-time.After(3 * time.Second):
-		return 0, 0, fmt.Errorf("display list timed out")
+		return 0, 0, fmt.Errorf("shareable content timed out")
 	}
 }
 

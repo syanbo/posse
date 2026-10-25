@@ -36,14 +36,62 @@ class DeskDisplay {
   }
 }
 
-/// desk.subscribe 流里的 displays 事件：所有的屏和正在看的那块。
+/// Mac 上一个可以单独看的窗口（电脑的 desk.Window）。宽高是点数。
+class DeskWindow {
+  const DeskWindow({
+    required this.id,
+    required this.app,
+    this.title = '',
+    this.width = 0,
+    this.height = 0,
+  });
+
+  final int id;
+  final String app;
+  final String title;
+  final double width;
+  final double height;
+
+  /// 列表里的名字：有窗口标题用标题，没有用 App 名。
+  String get label => title.isNotEmpty ? title : app;
+
+  static DeskWindow? parse(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    final app = raw['app'];
+    if (id is! num || id <= 0 || app is! String) return null;
+    final title = raw['title'];
+    double n(Object? v) => v is num ? v.toDouble() : 0;
+    return DeskWindow(
+      id: id.toInt(),
+      app: app,
+      title: title is String ? title : '',
+      width: n(raw['w']),
+      height: n(raw['h']),
+    );
+  }
+
+  /// desk.windows 的回复：当前空间里看得见的窗口，最前的在前面。
+  static List<DeskWindow> parseList(Map<String, Object?> reply) {
+    final raw = reply['windows'];
+    return [
+      if (raw is List)
+        for (final w in raw) ?DeskWindow.parse(w),
+    ];
+  }
+}
+
+/// desk.subscribe 流里的 displays 事件：所有的屏和正在看的那块。只看一个窗口时 [window] 是它，
+/// [current] 是它所在的屏；[gone] 是正在看的窗口关掉了（或最小化、切走了），回到了整块屏。
 class DeskDisplays {
-  const DeskDisplays(this.list, this.current);
+  const DeskDisplays(this.list, this.current, {this.window, this.gone = false});
 
   static const none = DeskDisplays([], 0);
 
   final List<DeskDisplay> list;
   final int current;
+  final DeskWindow? window;
+  final bool gone;
 
   bool get several => list.length > 1;
 
@@ -54,7 +102,12 @@ class DeskDisplays {
         for (final d in raw) ?DeskDisplay.parse(d),
     ];
     final current = frame['current'];
-    return DeskDisplays(list, current is num ? current.toInt() : 0);
+    return DeskDisplays(
+      list,
+      current is num ? current.toInt() : 0,
+      window: DeskWindow.parse(frame['window']),
+      gone: frame['gone'] == true,
+    );
   }
 }
 

@@ -4,59 +4,144 @@ import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'displays.dart';
 
-/// 选看哪块屏：上面按真实排布画出各块屏（点哪块切哪块），下面是名字和分辨率。返回选中的屏，取消为 null。
-Future<int?> pickDeskDisplay(BuildContext context, DeskDisplays displays) {
-  return showModalBottomSheet<int>(
+/// 选好的画面：整块屏或一个窗口，[id] 是屏的 ID 或窗口的 ID。
+typedef DeskPick = ({bool window, int id});
+
+/// 选看什么：上面是屏（多块时按真实排布画出各块，点哪块切哪块），下面是当前空间里的窗口，
+/// [windows] 打开时现要。返回选中的，取消为 null。
+Future<DeskPick?> pickDeskView(
+  BuildContext context,
+  DeskDisplays displays, {
+  required Future<List<DeskWindow>> windows,
+}) {
+  return showModalBottomSheet<DeskPick>(
     context: context,
     showDragHandle: true,
     // 看桌面常是横屏，高度放不下排布图加列表时能滚
     isScrollControlled: true,
     builder: (sheet) {
       final c = HiveColors.of(sheet);
-      void pick(int id) => Navigator.of(sheet).pop(id);
+      void pick(DeskPick p) => Navigator.of(sheet).pop(p);
+      // 只看窗口时屏上不打勾，排布图照样标出窗口所在的那块
+      final watching = displays.window;
       return SafeArea(
         top: false,
         child: SingleChildScrollView(
-          child: Section(
-            inset: 48,
+          child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: SizedBox(
-                  height: 120,
-                  child: DeskDisplayMap(displays: displays, onPick: pick),
-                ),
-              ),
-              for (final (i, d) in displays.list.indexed)
-                RowTile(
-                  key: Key('desk-display-${d.id}'),
-                  leading: SizedBox(
-                    width: 22,
-                    child: Text(
-                      '${i + 1}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: d.id == displays.current ? c.accent : c.muted,
-                        fontWeight: FontWeight.w600,
+              Section(
+                title: '整块屏',
+                inset: 48,
+                children: [
+                  if (displays.several)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      child: SizedBox(
+                        height: 120,
+                        child: DeskDisplayMap(
+                          displays: displays,
+                          onPick: (id) => pick((window: false, id: id)),
+                        ),
                       ),
                     ),
-                  ),
-                  title: Text(deskDisplayName(displays, d)),
-                  subtitle: Text(
-                    '${d.pixelWidth} × ${d.pixelHeight}${d.main ? ' · 主屏' : ''}',
-                  ),
-                  trailing: d.id == displays.current
-                      ? Icon(Icons.check_rounded, size: 20, color: c.accent)
-                      : null,
-                  chevron: false,
-                  onTap: () => pick(d.id),
-                ),
+                  for (final (i, d) in displays.list.indexed)
+                    RowTile(
+                      key: Key('desk-display-${d.id}'),
+                      leading: SizedBox(
+                        width: 22,
+                        child: Text(
+                          '${i + 1}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: d.id == displays.current
+                                ? c.accent
+                                : c.muted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      title: Text(deskDisplayName(displays, d)),
+                      subtitle: Text(
+                        '${d.pixelWidth} × ${d.pixelHeight}${d.main ? ' · 主屏' : ''}',
+                      ),
+                      trailing: watching == null && d.id == displays.current
+                          ? Icon(Icons.check_rounded, size: 20, color: c.accent)
+                          : null,
+                      chevron: false,
+                      onTap: () => pick((window: false, id: d.id)),
+                    ),
+                ],
+              ),
+              FutureBuilder<List<DeskWindow>>(
+                future: windows,
+                builder: (context, snap) {
+                  final list = snap.data;
+                  return Section(
+                    title: '窗口',
+                    inset: 48,
+                    children: [
+                      if (snap.connectionState != ConnectionState.done)
+                        const _Note(key: Key('desk-windows-loading'), '正在列出窗口…')
+                      else if (snap.hasError)
+                        const _Note('列不出窗口，稍后再试')
+                      else if (list == null || list.isEmpty)
+                        const _Note('这个空间里没有可以单独看的窗口')
+                      else
+                        for (final w in list)
+                          RowTile(
+                            key: Key('desk-window-${w.id}'),
+                            leading: Icon(
+                              Icons.web_asset_rounded,
+                              size: 22,
+                              color: w.id == watching?.id ? c.accent : c.muted,
+                            ),
+                            title: Text(
+                              w.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              w.title.isNotEmpty
+                                  ? w.app
+                                  : '${w.width.round()} × ${w.height.round()}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: w.id == watching?.id
+                                ? Icon(
+                                    Icons.check_rounded,
+                                    size: 20,
+                                    color: c.accent,
+                                  )
+                                : null,
+                            chevron: false,
+                            onTap: () => pick((window: true, id: w.id)),
+                          ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
       );
     },
   );
+}
+
+/// 窗口列表还没来、来不了或是空的时占的那一行。
+class _Note extends StatelessWidget {
+  const _Note(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      child: Text(text, style: TextStyle(color: HiveColors.of(context).muted)),
+    );
+  }
 }
 
 /// 排布图：每块屏按相对位置和大小画成一块，正在看的那块高亮，块上写序号（和下面列表的顺序一样）。

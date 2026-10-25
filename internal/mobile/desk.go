@@ -36,16 +36,23 @@ type DeskReady struct {
 	Punch func(ctx context.Context, phone string) (string, error) `json:"-"`
 	// Display 切到另一块屏（desk.display），切好后经 notify 推新的 displays 事件
 	Display func(id uint32) error `json:"-"`
+	// Window 只看一个窗口（desk.window），切好后同样推 displays 事件，带上 window
+	Window func(id uint32) error `json:"-"`
+	// Windows 是当前能单独看的窗口（desk.windows），返回 {"windows":[...]} 的 JSON
+	Windows func(ctx context.Context) (json.RawMessage, error) `json:"-"`
 }
 
 // DeskEvent 是订阅期间推给手机的事件。Type 是 state 或 end；State、Reason 是固定的词，见 docs/features/mobile.md。
-// Type 为 displays 时带 Mac 上所有的屏（desk.Display 的列表）和正在看的那块。
+// Type 为 displays 时带 Mac 上所有的屏（desk.Display 的列表）和正在看的那块；只看一个窗口时 Window 是它，
+// Gone 是正在看的窗口没了、回到了整块屏。
 type DeskEvent struct {
 	Type     string `json:"type"`
 	State    string `json:"state,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 	Current  uint32 `json:"current,omitempty"`
 	Displays any    `json:"displays,omitempty"`
+	Window   any    `json:"window,omitempty"`
+	Gone     bool   `json:"gone,omitempty"`
 }
 
 // DeskError 是订阅失败的理由，原样作为错误码交给手机（busy、locked、permission_screen 等）。
@@ -192,6 +199,48 @@ func (c *conn) deskDisplayRPC(id string, raw json.RawMessage) error {
 		return c.fail(id, "unavailable", "not watching the desktop")
 	}
 	if err := display(p.ID); err != nil {
+		return c.fail(id, "unavailable", err.Error())
+	}
+	return c.reply(id, map[string]any{"requested": p.ID})
+}
+
+// deskWindowsRPC 是 desk.windows：正在看桌面时列出能单独看的窗口。要等采集子进程回，不占住请求队列。
+func (c *conn) deskWindowsRPC(id string) error {
+	c.smu.Lock()
+	var list func(context.Context) (json.RawMessage, error)
+	if c.desk != nil {
+		list = c.desk.Windows
+	}
+	c.smu.Unlock()
+	if list == nil {
+		return c.fail(id, "unavailable", "not watching the desktop")
+	}
+	go func() {
+		b, err := list(c.ctx)
+		c.replyOrFail(id, b, err)
+	}()
+	return nil
+}
+
+// deskWindowRPC 是 desk.window：正在看桌面时只看一个窗口。和 desk.display 一样只交给子进程就回，
+// 切好了由 displays 事件告诉手机。
+func (c *conn) deskWindowRPC(id string, raw json.RawMessage) error {
+	var p struct {
+		ID uint32 `json:"id"`
+	}
+	if json.Unmarshal(raw, &p) != nil || p.ID == 0 {
+		return c.fail(id, "bad_params", "id is required")
+	}
+	c.smu.Lock()
+	var window func(uint32) error
+	if c.desk != nil {
+		window = c.desk.Window
+	}
+	c.smu.Unlock()
+	if window == nil {
+		return c.fail(id, "unavailable", "not watching the desktop")
+	}
+	if err := window(p.ID); err != nil {
 		return c.fail(id, "unavailable", err.Error())
 	}
 	return c.reply(id, map[string]any{"requested": p.ID})

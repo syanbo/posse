@@ -19,6 +19,7 @@ const (
 	KindConfig    byte = 3
 	KindStatus    byte = 4
 	KindDisplays  byte = 5 // 负载是 Displays 的 JSON：开始时、切屏后、拔插或改分辨率后各发一次
+	KindWindows   byte = 6 // 负载是 Windows 的 JSON：回 CtrlWindows
 
 	flagKeyframe byte = 1
 
@@ -97,7 +98,7 @@ func ReadFrame(r io.Reader) (Frame, error) {
 		CaptureUnixNano: int64(binary.LittleEndian.Uint64(hdr[16:24])),
 	}
 	switch f.Kind {
-	case KindVideo, KindHeartbeat, KindConfig, KindStatus, KindDisplays:
+	case KindVideo, KindHeartbeat, KindConfig, KindStatus, KindDisplays, KindWindows:
 	default:
 		return Frame{}, errKind
 	}
@@ -131,10 +132,28 @@ type Display struct {
 	Main        bool    `json:"main,omitempty"`
 }
 
-// Displays 是 KindDisplays 负载：所有的屏和正在看的那块。
+// Displays 是 KindDisplays 负载：所有的屏和正在看的那块。只看一个窗口时 Window 是那个窗口，
+// Current 是它所在的屏；Gone 是正在看的窗口关掉或最小化了，退回了整块屏。
 type Displays struct {
 	Current uint32    `json:"current"`
 	List    []Display `json:"displays"`
+	Window  *Window   `json:"window,omitempty"`
+	Gone    bool      `json:"gone,omitempty"`
+}
+
+// Window 是 Mac 上一个可以单独看的窗口。宽高是点数，Display 是它中心所在的屏。
+type Window struct {
+	ID      uint32  `json:"id"`
+	App     string  `json:"app"`
+	Title   string  `json:"title,omitempty"`
+	Width   float64 `json:"w,omitempty"`
+	Height  float64 `json:"h,omitempty"`
+	Display uint32  `json:"display,omitempty"`
+}
+
+// Windows 是 KindWindows 负载：当前空间里看得见的窗口，最前的在前面。
+type Windows struct {
+	List []Window `json:"windows"`
 }
 
 // MarshalConfig 编码配置负载。
@@ -179,11 +198,14 @@ const (
 	CtrlDisplay  byte = 5
 	CtrlFPS      byte = 6
 	CtrlScale    byte = 7 // 画面长边除以几：1 原样，2 减半（码率低到 15 帧及以下时，关键帧小得多）
+	CtrlWindows  byte = 8 // 要窗口列表，子进程回一帧 KindWindows
+	CtrlWindow   byte = 9 // 只看这个窗口（CGWindowID）；CtrlDisplay 回到整块屏
 )
 
 // Control 是父进程写给子进程的一条控制。码率只在 CtrlBitrate 时有意义，单位是比特每秒。
 // Events 只在 CtrlInput 时有意义，是去重之后要执行的事件。Display 只在 CtrlDisplay 时有意义，是要切到的屏。
 // FPS 只在 CtrlFPS 时有意义，是每秒最多采几帧。Scale 只在 CtrlScale 时有意义，是长边除以几。
+// Window 只在 CtrlWindow 时有意义，是要看的窗口。
 type Control struct {
 	Kind    byte
 	Bitrate uint32
@@ -191,6 +213,7 @@ type Control struct {
 	Display uint32
 	FPS     uint32
 	Scale   uint32
+	Window  uint32
 }
 
 // WriteControl 写成 4 字节长度加内容。长度包含类型字节。
@@ -205,6 +228,8 @@ func WriteControl(w io.Writer, c Control) error {
 		body = controlU32(c.Kind, c.FPS)
 	case CtrlScale:
 		body = controlU32(c.Kind, c.Scale)
+	case CtrlWindow:
+		body = controlU32(c.Kind, c.Window)
 	case CtrlInput:
 		ev, err := EncodeInput(c.Events)
 		if err != nil {
@@ -253,7 +278,7 @@ func ReadControl(r io.Reader) (Control, error) {
 	}
 	c := Control{Kind: buf[0]}
 	switch c.Kind {
-	case CtrlBitrate, CtrlDisplay, CtrlFPS, CtrlScale:
+	case CtrlBitrate, CtrlDisplay, CtrlFPS, CtrlScale, CtrlWindow:
 		if len(buf) != 5 {
 			return Control{}, fmt.Errorf("desk: control %d has %d bytes, want 5", c.Kind, len(buf))
 		}
@@ -265,6 +290,8 @@ func ReadControl(r io.Reader) (Control, error) {
 			c.Display = v
 		case CtrlFPS:
 			c.FPS = v
+		case CtrlWindow:
+			c.Window = v
 		default:
 			c.Scale = v
 		}

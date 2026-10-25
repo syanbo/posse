@@ -150,12 +150,21 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	var lmu sync.Mutex
 	done := make(chan error, 1)
 	control := desk.LockWriter(proc.Control())
+	// 子进程回的窗口列表；一次只问一个，问的人等不到就不要了
+	windows := make(chan []byte, 1)
+	var wmu sync.Mutex
 	go func() {
 		done <- desk.Serve(io.MultiReader(bytes.NewReader(head), proc.Frames()), control, desk.CastConfig{
 			Conn: conn, ToMobile: toMobile, ToMac: toMac, IsRelay: conn.IsRelay,
 			OnInput: desk.NewInputForwarder(control),
 			OnDisplays: func(ds desk.Displays) {
-				notify(mobile.DeskEvent{Type: "displays", Current: ds.Current, Displays: ds.List})
+				notify(mobile.DeskEvent{Type: "displays", Current: ds.Current, Displays: ds.List, Window: ds.Window, Gone: ds.Gone})
+			},
+			OnWindows: func(b []byte) {
+				select {
+				case windows <- bytes.Clone(b):
+				default:
+				}
 			},
 			OnStatus: func(code byte) {
 				d.deskNoteStatus(code)
@@ -206,6 +215,29 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	ready := mobile.DeskReady{Port: port, Codec: codec, Relay: relay, RelayToken: relayToken,
 		Display: func(id uint32) error {
 			return desk.WriteControl(control, desk.Control{Kind: desk.CtrlDisplay, Display: id})
+		},
+		Window: func(id uint32) error {
+			return desk.WriteControl(control, desk.Control{Kind: desk.CtrlWindow, Window: id})
+		},
+		Windows: func(ctx context.Context) (json.RawMessage, error) {
+			wmu.Lock()
+			defer wmu.Unlock()
+			// 上一次问了没等到的回答可能这时才到，先清掉
+			select {
+			case <-windows:
+			default:
+			}
+			if err := desk.WriteControl(control, desk.Control{Kind: desk.CtrlWindows}); err != nil {
+				return nil, err
+			}
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			defer cancel()
+			select {
+			case b := <-windows:
+				return b, nil
+			case <-ctx.Done():
+				return nil, mobile.DeskError("timeout", "the capture helper did not list windows")
+			}
 		},
 	}
 	if relay != "" {
