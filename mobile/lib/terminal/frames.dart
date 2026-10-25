@@ -151,6 +151,9 @@ List<int> cursorKeysApp(List<int> bytes) {
 /// 立即发送的键帽 ⌃↩。U+FE0E 让 ↩ 按文字画：手机字体里没有它时会退到 emoji 字体，画成彩色图标。
 const sendNowLabel = '⌃↩\uFE0E';
 
+/// 退出 agent 的键帽。按下后不直接发这个键的字节，先确认再按 agent 发（终端页的 `_exitAgent`）。
+const exitAgentLabel = '退出';
+
 /// 软键盘上方的专用键。方向键是 VT 的 A/B/C/D，不带回车。
 const termKeys = <TermKey>[
   TermKey('Esc', [0x1b]),
@@ -161,6 +164,10 @@ const termKeys = <TermKey>[
   TermKey(sendNowLabel, [0x18, 0x13]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
+  // 清空输入框：Ctrl+E 到行尾再 Ctrl+U 删到行首。Claude Code 的 Ctrl+U 直接清空整个输入框，
+  // Codex 和 shell 删掉当前这一行。不用 ^C：agent 干活时它是打断
+  TermKey('清空', [0x05, 0x15]),
+  TermKey(exitAgentLabel, [0x04]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
   TermKey('↓', [0x1b, 0x5b, 0x42]),
   TermKey('←', [0x1b, 0x5b, 0x44]),

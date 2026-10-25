@@ -15,6 +15,7 @@ import '../chat/clipboard_paste.dart';
 import '../chat/image_pick.dart';
 import '../chat/image_upload.dart';
 import '../chat/send.dart';
+import '../chat/transcript.dart' show chatWho;
 import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
@@ -770,6 +771,51 @@ class _TerminalScreenState extends State<TerminalScreen>
     enter: enter,
   );
 
+  /// 快捷键栏的「退出」：确认后按 agent 发退出的按键。Claude Code 的 Ctrl+D 要 800ms 内按两次；
+  /// Codex 先清空输入框再 /exit；别的 agent 清空后发一次 Ctrl+D。不发第二次 Ctrl+D 给它们：
+  /// agent 退出后它会落到 shell 上，把整个终端也关掉。
+  Future<void> _exitAgent() async {
+    final agent = _liveTab.agent;
+    if (agent == null) {
+      _flash('这个终端里没有在运行的 agent');
+      return;
+    }
+    final who = chatWho('assistant', agent);
+    final ok = await showHiveDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text('退出 $who？'),
+        content: const Text('还没做完的事会中断。对话记录留在会话历史里，之后可以接着聊。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: HiveColors.of(dialog).danger,
+            ),
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    switch (agent) {
+      case 'claude':
+        await _send(const [0x04]);
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        await _send(const [0x04]);
+      case 'codex':
+        await _send(const [0x05, 0x15]);
+        await _send('/exit'.codeUnits, enter: true);
+      default:
+        await _send(const [0x05, 0x15]);
+        await _send(const [0x04]);
+    }
+  }
+
   Future<void> _send(List<int> bytes, {bool enter = false}) async {
     final rpc = widget.model.rpc;
     if (rpc == null || bytes.isEmpty) return;
@@ -927,6 +973,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                 bottom: keyboard,
                 child: _KeyBar(
                   onKey: _sendKey,
+                  onExit: () => unawaited(_exitAgent()),
                   keys: widget.model.settings.barKeys,
                   onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
                   onImage: widget.model.rpc == null || _busy
@@ -1020,9 +1067,11 @@ class _KeyBar extends StatelessWidget {
     required this.onPaste,
     required this.keyboardUp,
     required this.onKeyboard,
+    required this.onExit,
   });
 
   final Future<void> Function(List<int> bytes) onKey;
+  final VoidCallback onExit;
 
   /// 键盘开关后面的键，按设置里排的顺序。
   final List<BarKey> keys;
@@ -1144,6 +1193,9 @@ class _KeyBar extends StatelessWidget {
                   label: '立即发送',
                   onTap: () => onKey(term.bytes),
                 );
+              }
+              if (term != null && term.label == exitAgentLabel) {
+                return _textKey(c, term.label, onExit);
               }
               if (term != null) {
                 return _textKey(c, term.label, () => onKey(term.bytes));
