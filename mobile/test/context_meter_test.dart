@@ -80,7 +80,7 @@ void main() {
   testWidgets('tapping the meter asks, then clears the input and compacts', (
     tester,
   ) async {
-    final sent = <(List<int>, bool)>[];
+    final sent = <List<int>>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -88,9 +88,9 @@ void main() {
             tab: _tab('claude', 'idle'),
             model: model,
             read: (_) async => 83,
-            send: (tab, raw, enter) async {
+            send: (tab, raw) async {
               expect(tab.terminalId, 't1');
-              sent.add((raw, enter));
+              sent.add(raw);
               return SendOutcome.accepted;
             },
           ),
@@ -109,11 +109,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('压缩'));
     await tester.pumpAndSettle();
-    expect(sent.map((s) => s.$1), [
+    await tester.pump(const Duration(seconds: 1));
+    // 清空两次、命令、回车分开写，回车不跟着命令一起进去
+    expect(sent, [
       clearLines(),
       clearLines(),
       '/compact'.codeUnits,
+      [0x0d],
     ]);
-    expect(sent.map((s) => s.$2), [false, false, true]);
   });
 }

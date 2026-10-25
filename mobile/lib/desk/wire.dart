@@ -610,3 +610,22 @@ int _runeBytes(int rune) {
   if (rune < 0x10000) return 3;
   return 4;
 }
+
+/// 退格键的 HID 码，系统键盘删字时发它。
+const deskBackspaceHid = 0x2A;
+
+/// 隐藏输入框里垫着的几个零宽空格：框里有字，系统键盘按退格才有反应。
+const deskTypingPad = '​​​​';
+
+/// 隐藏输入框从 [before] 变成 [after]：按字符（不拆代理对）比出共同的开头，后面删掉了几个字（每个是一次退格）、
+/// 新打了什么。不在每次打字后清空输入框：打得快时系统输入法还没收到清空，下一次又把前面的字带回来，
+/// Mac 上就重复打出前缀。
+(int deleted, String added) deskTypedDiff(String before, String after) {
+  final a = before.runes.toList();
+  final b = after.runes.toList();
+  var same = 0;
+  while (same < a.length && same < b.length && a[same] == b[same]) {
+    same++;
+  }
+  return (a.length - same, String.fromCharCodes(b.sublist(same)));
+}

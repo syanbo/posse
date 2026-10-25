@@ -518,7 +518,8 @@ func (m *macAPI) goString(o objc.ID) string {
 	for *(*byte)(unsafe.Add(p, n)) != 0 {
 		n++
 	}
-	return unsafe.String((*byte)(p), n)
+	// 要拷贝：非 ASCII 的字符串，UTF8String 给的是自动释放的临时缓冲，池一回收就被清掉
+	return string(unsafe.Slice((*byte)(p), n))
 }
 
 // stayInBackground 让子进程不进程序坞。它是 Hive.app 里的可执行文件，一连上窗口服务器（ScreenCaptureKit 会连）

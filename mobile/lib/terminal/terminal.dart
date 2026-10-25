@@ -786,9 +786,19 @@ class _TerminalScreenState extends State<TerminalScreen>
       _flash('这个终端里没有在运行的 agent');
       return;
     }
-    await _send(clearLines());
-    await _send(clearLines());
-    await _send('/exit'.codeUnits, enter: true);
+    final rpc = widget.model.rpc;
+    if (rpc == null) return;
+    final outcome = await sendAgentCommand(
+      (raw) => sendTerminal(
+        rpc,
+        terminal: widget.tab.terminalId,
+        raw: raw,
+        enter: false,
+      ),
+      '/exit',
+    );
+    final note = sendOutcomeText(outcome);
+    if (mounted && note.isNotEmpty) _flash(note);
   }
 
   Future<void> _send(List<int> bytes, {bool enter = false}) async {

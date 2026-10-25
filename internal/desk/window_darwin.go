@@ -309,6 +309,25 @@ func (e *engine) rebuildWindowLocked(id uint32, pick bool) error {
 	return e.openStream(filter)
 }
 
+// windowStreamStopped 是只看窗口时系统停掉了采集（多半是窗口关了）：这个流已经停了，不用再停，放掉后回到整块屏。
+func (e *engine) windowStreamStopped() {
+	e.streamMu.Lock()
+	var err error
+	if w := e.watching(); w.ID != 0 && !e.stopping.Load() && !e.locked.Load() {
+		if e.stream != 0 {
+			e.mac.release(e.stream, e.mac.sel("release"))
+			e.stream = 0
+		}
+		err = e.windowGoneLocked(w.ID)
+	}
+	e.streamMu.Unlock()
+	if err != nil {
+		e.halt(err)
+		return
+	}
+	e.writeDisplays()
+}
+
 // windowGoneLocked 是正在看的窗口没了：回到它所在的整块屏，手机下一次 displays 里带 gone。
 func (e *engine) windowGoneLocked(id uint32) error {
 	e.logf("window %d is gone, back to display %d", id, e.displayID)

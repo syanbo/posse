@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
-import '../terminal/frames.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -24,11 +23,10 @@ Future<int?> readSessionContext(PhoneRpc rpc, SessionTab tab) async {
   return (res['percent'] as num?)?.toInt();
 }
 
-/// 往终端里写一串按键，[enter] 时另外补一个回车。测试里替换成记下来。
+/// 往终端里写一串按键。测试里替换成记下来。
 typedef ContextSender = Future<SendOutcome> Function(
   SessionTab tab,
   List<int> raw,
-  bool enter,
 );
 
 /// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
@@ -134,18 +132,15 @@ class _ContextMeterState extends State<ContextMeter> {
         widget.send ??
         (rpc == null
             ? null
-            : (SessionTab tab, List<int> raw, bool enter) => sendTerminal(
+            : (SessionTab tab, List<int> raw) => sendTerminal(
                 rpc,
                 terminal: tab.terminalId,
                 raw: raw,
-                enter: enter,
+                enter: false,
               ));
     if (send == null) return;
     final tab = widget.tab;
-    // 输入框里还有没发的字时，/compact 会接在后面变成一句话发出去
-    await send(tab, clearLines(), false);
-    await send(tab, clearLines(), false);
-    final outcome = await send(tab, '/compact'.codeUnits, true);
+    final outcome = await sendAgentCommand((raw) => send(tab, raw), '/compact');
     final note = sendOutcomeText(outcome);
     if (!mounted || note.isEmpty) return;
     ScaffoldMessenger.maybeOf(context)

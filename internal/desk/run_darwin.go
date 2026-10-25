@@ -1369,6 +1369,11 @@ func streamDidStop(_ objc.ID, _ objc.SEL, _ objc.ID, nserr objc.ID) {
 	if nserr != 0 {
 		active.logf("capture stopped: %s", active.mac.goString(active.mac.init(nserr, active.mac.sel("localizedDescription"))))
 	}
+	// 只看的窗口关掉时，系统不等每秒的检查就先停掉采集（找不到要捕获的窗口）：回到整块屏，不结束
+	if active.watching().ID != 0 {
+		go active.windowStreamStopped()
+		return
+	}
 	active.halt(nil)
 }
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../protocol/rpc.dart';
+import '../terminal/frames.dart';
 
 enum SendOutcome { accepted, refused, unknown }
 
@@ -45,3 +46,20 @@ String sendOutcomeText(SendOutcome outcome) => switch (outcome) {
   SendOutcome.refused => '没写进去',
   SendOutcome.unknown => '未确认，先看聊天再重试',
 };
+
+/// 清空 agent 的输入框，再执行一条斜杠命令（/exit、/compact）。[write] 往终端里写一串按键。
+/// 三步之间各隔 [gap]：挨得太近时 Claude Code 把回车和前面的字当成同一次粘贴，命令留在输入框里不执行
+/// （实测清空后马上写命令、120ms 后回车，斜杠菜单开着、没提交）。
+Future<SendOutcome> sendAgentCommand(
+  Future<SendOutcome> Function(List<int> raw) write,
+  String command, {
+  Duration gap = const Duration(milliseconds: 300),
+}) async {
+  await write(clearLines());
+  await write(clearLines());
+  await Future<void>.delayed(gap);
+  final typed = await write(utf8.encode(command));
+  if (typed == SendOutcome.refused) return typed;
+  await Future<void>.delayed(gap);
+  return write(const [0x0d]);
+}

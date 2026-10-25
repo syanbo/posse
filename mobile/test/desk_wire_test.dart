@@ -304,6 +304,22 @@ void main() {
     expect(deskAccessText, '能看不能操作，请到 Mac 上打开辅助功能');
     expect(deskIndirectText, contains('Tailscale'));
   });
+
+  // 隐藏输入框不再每次清空：比前后文本，只发新打的；删掉的每个字是一次退格
+  test('typed text is diffed, not cleared', () {
+    const pad = deskTypingPad;
+    expect(deskTypedDiff(pad, '${pad}V'), (0, 'V'));
+    // 打得快时系统一次交来好几个字
+    expect(deskTypedDiff('${pad}V', '${pad}VQ4ok'), (0, 'Q4ok'));
+    expect(deskTypedDiff('${pad}VQ4ok', '${pad}VQ4o'), (1, ''));
+    // 删进垫着的零宽空格也是退格
+    expect(deskTypedDiff(pad, pad.substring(1)), (1, ''));
+    // 智能标点把 -- 换成 —：删两个再打一个
+    expect(deskTypedDiff('${pad}a--', '${pad}a—'), (2, '—'));
+    // 表情是代理对，不拆开
+    expect(deskTypedDiff('$pad😀', '$pad😀😀'), (0, '😀'));
+    expect(deskTypedDiff('$pad😀', pad), (1, ''));
+  });
 }
 
 String _hex(Uint8List bytes) =>

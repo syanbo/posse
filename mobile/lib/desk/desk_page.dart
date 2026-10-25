@@ -65,6 +65,11 @@ class _Mark {
   var solid = false;
 }
 
+const _padded = TextEditingValue(
+  text: deskTypingPad,
+  selection: TextSelection.collapsed(offset: deskTypingPad.length),
+);
+
 class _DeskPageState extends State<DeskPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final DeskReceiver _receiver = widget.receiver ?? DeskReceiver();
@@ -74,7 +79,9 @@ class _DeskPageState extends State<DeskPage>
   final _watch = Stopwatch();
   final _marks = <_Mark>[];
   final _keyboard = FocusNode();
-  final _input = TextEditingController();
+  final _input = TextEditingController.fromValue(_padded);
+  // 隐藏输入框上一次的内容，和这一次比出打了什么、删了几个
+  String _shadow = deskTypingPad;
   final _chrome = DeskChrome();
   final _edges = DeskEdges();
   final _lease = Object();
@@ -1170,19 +1177,34 @@ class _DeskPageState extends State<DeskPage>
 
   void _onTyped() {
     final value = _input.value;
-    // 组字还没上屏时先留着，清掉的话中文输入法会被打断。
+    // 组字还没上屏时先留着，动了输入框的话中文输入法会被打断。
     if (value.composing.isValid && !value.composing.isCollapsed) return;
-    final text = value.text;
-    if (text.isEmpty) return;
-    _input.value = const TextEditingValue();
-    if (_mods.any) {
+    final (deleted, text) = deskTypedDiff(_shadow, value.text);
+    _shadow = value.text;
+    // 攒得多了、垫着的零宽空格快删完了才重置：每次都清空会和系统输入法抢，打快了重复前缀
+    if (value.text.length > 64 ||
+        !value.text.startsWith(deskTypingPad.substring(2))) {
+      _input.value = _padded;
+      _shadow = deskTypingPad;
+    }
+    if (deleted == 0 && text.isEmpty) return;
+    if (deleted > 0) {
+      _link.batch(() {
+        for (var i = 0; i < deleted; i++) {
+          _link.keyDown(deskBackspaceHid, 0);
+          _link.keyUp(deskBackspaceHid, 0);
+        }
+      });
+      _log.add(DeskKeyEvent(deleted == 1 ? '⌫' : '⌫×$deleted'));
+    }
+    if (text.isNotEmpty && _mods.any) {
       for (final rune in text.runes) {
         final mods = _mods.consume();
         final piece = String.fromCharCodes([rune]);
         _link.text(piece, deskModBits(mods));
         _log.add(DeskKeyEvent(deskChord(mods, piece)));
       }
-    } else {
+    } else if (text.isNotEmpty) {
       _link.text(text, 0);
       _log.add(DeskTextEvent(text));
     }
