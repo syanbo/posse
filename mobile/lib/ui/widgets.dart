@@ -773,7 +773,7 @@ class NoticeBar extends StatelessWidget {
   }
 }
 
-/// 发图片的进度：第几张、传了多少。浮在内容上面（放进 Stack 用），出现和消失都不挪动列表或终端，
+/// 发图片、文件的进度：第几张、传了多少。浮在内容上面（放进 Stack 用），出现和消失都不挪动列表或终端，
 /// 终端也就不会因此改尺寸、让 agent 重排。
 class UploadBar extends StatelessWidget {
   const UploadBar({
@@ -781,7 +781,11 @@ class UploadBar extends StatelessWidget {
     required this.index,
     required this.count,
     required this.done,
+    this.what = '图片',
   });
+
+  /// 传的是什么，写在「正在发送」后面。
+  final String what;
 
   /// 正在传第几张（从 0 数）。
   final int index;
@@ -821,7 +825,7 @@ class UploadBar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '正在发送图片$which',
+                      '正在发送$what$which',
                       style: TextStyle(fontSize: Fs.caption, color: c.text),
                     ),
                   ),

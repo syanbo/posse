@@ -175,7 +175,7 @@ class _KeyRow extends StatelessWidget {
         RowTile(
           chevron: false,
           leading: switch (item.builtin) {
-            'image' => const _KeyCap(icon: Icons.image_outlined),
+            'image' => const _KeyCap(icon: Icons.attach_file_rounded),
             'paste' => const _KeyCap(
               icon: Icons.content_paste_rounded,
               iconSize: 19,
@@ -213,7 +213,7 @@ String describeKey(CustomKey key) => switch (key.kind) {
 
 /// 内置键是做什么的。
 String describeBuiltin(String name) => switch (name) {
-  'image' => '发送图片',
+  'image' => '发送文件（照片、视频、文件）',
   'paste' => '粘贴剪贴板',
   'Esc' => 'Esc：中断、退出',
   'Tab' => 'Tab：补全',

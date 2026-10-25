@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/coder/websocket"
@@ -99,5 +100,39 @@ func TestBulkFrames(t *testing.T) {
 	p.sendBin(bulkFrame(opUploadChunk, uint32(start["blob"].(float64)), img[:bulkChunk]))
 	if m := p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]})); m["ok"] != false {
 		t.Fatalf("short upload committed: %v", m)
+	}
+
+	// 带文件名的（视频、文件）放进新的临时目录、用原名；名字里的目录去掉
+	video := append([]byte("\x00\x00\x00\x14ftypqt  "), data...)
+	start = result(t, p.next(p.call("clipboard.startImageUpload", map[string]any{"expectedBytes": len(video), "name": "../录屏 1.mov"})))
+	up = uint32(start["blob"].(float64))
+	for off := 0; off < len(video); off += bulkChunk {
+		p.sendBin(bulkFrame(opUploadChunk, up, video[off:min(off+bulkChunk, len(video))]))
+	}
+	m = p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]}))
+	path, _ = m["result"].(string)
+	if filepath.Base(path) != "录屏 1.mov" || !strings.HasPrefix(filepath.Base(filepath.Dir(path)), "hive-mobile-") {
+		t.Fatalf("named upload %v", m)
+	}
+	defer os.RemoveAll(filepath.Dir(path))
+	if saved, _ := os.ReadFile(path); !bytes.Equal(saved, video) {
+		t.Fatal("saved video differs")
+	}
+}
+
+func TestUploadNamesAndSniffing(t *testing.T) {
+	for in, want := range map[string]string{
+		"a.mp4": "a.mp4", "../../etc/passwd": "passwd", "dir\\x.pdf": "x.pdf", "..": "", "": "", " b\x01.txt ": "b.txt",
+	} {
+		if got := uploadName(in); got != want {
+			t.Errorf("uploadName(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for head, want := range map[string]string{
+		"\x00\x00\x00\x14ftypqt  x": ".mov", "\x00\x00\x00\x18ftypmp42x": ".mp4", "\x00\x00\x00\x18ftypheicx": ".heic", "\xff\xd8\xffx": ".jpg", "zz": ".png",
+	} {
+		if got := sniffExt([]byte(head)); got != want {
+			t.Errorf("sniffExt(%q) = %q, want %q", head, got, want)
+		}
 	}
 }

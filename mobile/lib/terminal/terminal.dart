@@ -98,6 +98,8 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 正在上传的图片传了多少，0 到 1；没在传时为空。
   double? _upload;
+  // 正在传的是图片（剪贴板）还是文件（快捷键栏的发送文件）
+  String _uploadWhat = '图片';
 
   Timer? _noticeTimer;
 
@@ -699,18 +701,37 @@ class _TerminalScreenState extends State<TerminalScreen>
     unawaited(_send(bytes));
   }
 
-  Future<void> _sendImage() async {
+  /// 快捷键栏的「发送文件」：相册里的照片或视频、拍照、「文件」App 里的，传到电脑上后把路径打进终端。
+  Future<void> _sendFile() async {
     final rpc = widget.model.rpc;
     if (rpc == null || _busy) return;
-    // 选图的面板和相册都不需要键盘，挡着反而看不见
+    // 选文件的面板和相册都不需要键盘，挡着反而看不见
     _focus.unfocus();
     setState(() => _busy = true);
     try {
-      final ask = await askImageSource(context);
+      final ask = await askFileSource(context);
       if (ask == null || !mounted) return;
-      final bytes = await pickAskedImage(ask);
-      if (bytes == null || !mounted) return;
-      await _typeImagePath(rpc, bytes);
+      final file = await pickAskedFile(ask);
+      if (file == null || !mounted) return;
+      setState(() {
+        _upload = 0;
+        _uploadWhat = '文件';
+      });
+      final String path;
+      try {
+        path = await uploadFile(
+          rpc,
+          file,
+          onProgress: (done) {
+            if (mounted) setState(() => _upload = done);
+          },
+        );
+      } finally {
+        if (mounted) setState(() => _upload = null);
+      }
+      if (!mounted) return;
+      // 和图片一样当成一次粘贴、不回车；路径里的空格这些转义掉，shell 和 agent 都当成一个文件
+      _controller.paste(shellPath(path));
     } catch (error) {
       if (mounted) _flash(friendlyError(error));
     } finally {
@@ -743,7 +764,10 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   Future<void> _typeImagePath(PhoneRpc rpc, Uint8List bytes) async {
-    setState(() => _upload = 0);
+    setState(() {
+      _upload = 0;
+      _uploadWhat = '图片';
+    });
     final String path;
     try {
       path = await uploadImage(
@@ -932,7 +956,12 @@ class _TerminalScreenState extends State<TerminalScreen>
                   left: 0,
                   right: 0,
                   bottom: body.maxHeight - height + covered + 12,
-                  child: UploadBar(index: 0, count: 1, done: done),
+                  child: UploadBar(
+                    index: 0,
+                    count: 1,
+                    done: done,
+                    what: _uploadWhat,
+                  ),
                 ),
               if (_notice != null)
                 Positioned(
@@ -962,9 +991,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                   onClear: () => unawaited(_clearInput()),
                   keys: widget.model.settings.barKeys,
                   onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
-                  onImage: widget.model.rpc == null || _busy
-                      ? null
-                      : _sendImage,
+                  onImage: widget.model.rpc == null || _busy ? null : _sendFile,
                   onPaste: widget.model.rpc == null || _busy
                       ? null
                       : _pasteClipboard,
@@ -1194,8 +1221,8 @@ class _KeyBar extends StatelessWidget {
               return key.builtin == 'image'
                   ? _iconKey(
                       c,
-                      icon: Icons.image_outlined,
-                      label: '发送图片',
+                      icon: Icons.attach_file_rounded,
+                      label: '发送文件',
                       onTap: onImage,
                     )
                   : _iconKey(

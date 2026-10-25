@@ -24,7 +24,7 @@ void main() {
 
     // 内置键都在表里，默认顺序时没有"恢复默认顺序"
     expect(find.text('Esc：中断、退出'), findsOneWidget);
-    expect(find.text('发送图片'), findsOneWidget);
+    expect(find.text('发送文件（照片、视频、文件）'), findsOneWidget);
     expect(find.text('恢复默认顺序'), findsNothing);
     // 内置键点了不打开编辑面板
     await tester.tap(find.text('Esc：中断、退出'));

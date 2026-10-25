@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:image_picker/image_picker.dart' show XFile;
+
 import '../protocol/rpc.dart';
 
 /// 单块 base64 的字符数。整段 JSON 要低于服务端 WebSocket 的 4MB 读取上限；
@@ -93,4 +95,77 @@ String imagePath(Map<String, Object?> result) {
   final value = result['value'];
   if (value is String && value.isNotEmpty) return value;
   throw StateError('电脑没有保存这张图片');
+}
+
+/// base64 上传整段攒在电脑内存里，只能这么大；视频、大文件要电脑认二进制帧上传（hive.bulk.v1）
+const _maxBase64Upload = 32 << 20;
+
+/// 把手机上的一个文件（照片、视频、「文件」里的）存到电脑上，返回路径。带上文件名，电脑用原名保存；
+/// 从文件流式读、按二进制帧发，几百 MB 的视频也不整个读进内存。
+Future<String> uploadFile(
+  PhoneRpc rpc,
+  XFile file, {
+  UploadProgress? onProgress,
+}) async {
+  final size = await file.length();
+  if (size == 0) throw StateError('文件是空的');
+  final start = await rpc.call('clipboard.startImageUpload', {
+    'expectedBase64Length': (size + 2) ~/ 3 * 4,
+    'expectedBytes': size,
+    'name': file.name,
+  });
+  final id = start['uploadId'];
+  if (id is! String || id.isEmpty) throw StateError('电脑没有接受这个文件');
+  final blob = start['blob'];
+  if (blob is num) {
+    var sent = 0;
+    var buf = <int>[];
+    Future<void> flush() async {
+      await rpc.sendUploadChunk(blob.toInt(), buf);
+      sent += buf.length;
+      buf = <int>[];
+      onProgress?.call(min(sent / size, 0.99));
+    }
+
+    await for (final piece in file.openRead()) {
+      var off = 0;
+      while (off < piece.length) {
+        final take = min(bulkChunk - buf.length, piece.length - off);
+        buf.addAll(piece.sublist(off, off + take));
+        off += take;
+        if (buf.length == bulkChunk) await flush();
+      }
+    }
+    if (buf.isNotEmpty) await flush();
+  } else {
+    // 旧电脑：只能整段 base64，也不认文件名
+    if (size > _maxBase64Upload) {
+      await rpc.call('clipboard.abortImageUpload', {'uploadId': id});
+      throw StateError('电脑上的 Hive 太旧，传不了这么大的文件，先更新电脑上的 Hive');
+    }
+    await _uploadBase64(
+      rpc,
+      id,
+      base64.encode(await file.readAsBytes()),
+      onProgress,
+    );
+  }
+  final path = imagePath(
+    await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
+  );
+  onProgress?.call(1);
+  return path;
+}
+
+/// 把路径打进终端时，空格、括号这类 shell 会拆开或特殊处理的字符前面加反斜杠，和把文件拖进 macOS 终端一样；
+/// Claude Code、Codex 照样认出是文件。中文这些非 ASCII 字符不用转义。
+String shellPath(String path) {
+  final out = StringBuffer();
+  for (final rune in path.runes) {
+    final ch = String.fromCharCode(rune);
+    final safe = rune > 0x7f || RegExp(r'[A-Za-z0-9_./+\-@%:,=]').hasMatch(ch);
+    if (!safe) out.write('\\');
+    out.write(ch);
+  }
+  return out.toString();
 }

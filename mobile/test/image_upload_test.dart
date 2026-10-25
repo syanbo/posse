@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:hive_mobile/chat/image_pick.dart';
 import 'package:hive_mobile/chat/image_upload.dart';
 import 'package:hive_mobile/chat/paste_choice.dart';
@@ -58,6 +59,43 @@ class _BulkRpc extends _UploadRpc {
 }
 
 void main() {
+  // 视频、文件：带上文件名，从文件流式读、按 64 KB 一块发
+  test('a file streams in whole chunks with its name', () async {
+    final rpc = _BulkRpc();
+    final seen = <double>[];
+    final bytes = Uint8List.fromList(
+      List.generate(bulkChunk * 3 + 11, (i) => i % 251),
+    );
+    final file = XFile.fromData(
+      bytes,
+      path: '/picked/录屏 1.mov',
+      length: bytes.length,
+    );
+    final path = await uploadFile(rpc, file, onProgress: seen.add);
+    expect(path, '/tmp/hive-mobile-1.png');
+    expect(rpc.startParams?['name'], '录屏 1.mov');
+    expect(rpc.startParams?['expectedBytes'], bytes.length);
+    expect(rpc.chunks.map((c) => c.length), [
+      bulkChunk,
+      bulkChunk,
+      bulkChunk,
+      11,
+    ]);
+    expect(rpc.chunks.expand((c) => c).toList(), bytes);
+    expect(seen.last, 1);
+  });
+
+  test('an old computer cannot take a big file', () async {
+    final rpc = _UploadRpc();
+    final big = XFile.fromData(
+      Uint8List(0),
+      path: '/picked/big.mp4',
+      length: 40 << 20,
+    );
+    await expectLater(uploadFile(rpc, big), throwsA(isA<StateError>()));
+    expect(rpc.methods, contains('clipboard.abortImageUpload'));
+  });
+
   test('a new computer takes raw chunks as binary frames', () async {
     final rpc = _BulkRpc();
     final seen = <double>[];
@@ -136,29 +174,45 @@ void main() {
     expect(empty.isImage, isFalse);
   });
 
-  testWidgets('gallery sheet offers several photos only in chat', (
-    tester,
-  ) async {
+  testWidgets('the chat sheet offers media, camera, clipboard and files; '
+      'the key bar sheet media, camera and files', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: SizedBox())),
     );
     final context = tester.element(find.byType(Scaffold));
 
-    final chat = askImageSource(context, clipboard: true);
+    final chat = askImageSource(context);
     await tester.pumpAndSettle();
-    expect(find.text('从相册选择，可以多张'), findsOneWidget);
+    expect(find.text('从相册选择照片或视频，可以多选'), findsOneWidget);
     expect(find.text('从剪贴板粘贴'), findsOneWidget);
     expect(find.text('拍照'), findsOneWidget);
+    expect(find.text('从「文件」选择'), findsOneWidget);
     Navigator.of(context).pop();
     await chat;
 
-    final term = askImageSource(context);
+    final term = askFileSource(context);
     await tester.pumpAndSettle();
-    expect(find.text('从相册选择'), findsOneWidget);
-    expect(find.text('从相册选择，可以多张'), findsNothing);
+    expect(find.text('从相册选择照片或视频'), findsOneWidget);
+    expect(find.text('拍照'), findsOneWidget);
+    expect(find.text('从「文件」选择'), findsOneWidget);
     expect(find.text('从剪贴板粘贴'), findsNothing);
-    Navigator.of(context).pop();
-    await term;
+    await tester.tap(find.byKey(const Key('file-ask-files')));
+    await tester.pumpAndSettle();
+    expect(await term, FileAsk.files);
+  });
+
+  test('only pictures wait for preview; paths are escaped like a drag into Terminal', () {
+    expect(isImageFile('IMG_0001.HEIC'), isTrue);
+    expect(isImageFile('a.jpeg'), isTrue);
+    expect(isImageFile('录屏 1.mov'), isFalse);
+    expect(isImageFile('report.pdf'), isFalse);
+    expect(isImageFile('noext'), isFalse);
+    expect(
+      shellPath('/var/folders/x/hive-mobile-1/录屏 1 (2).mov'),
+      r'/var/folders/x/hive-mobile-1/录屏\ 1\ \(2\).mov',
+    );
+    expect(shellPath('/tmp/hive-mobile-9.jpg'), '/tmp/hive-mobile-9.jpg');
+    expect(shellPath("/tmp/it's&\$x"), r"/tmp/it\'s\&\$x");
   });
 
   test('chunks cover the base64 text without overlap', () {

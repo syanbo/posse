@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart' show openFile;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scrollview_observer/scrollview_observer.dart';
@@ -373,6 +374,38 @@ class _ChatScreenState extends State<ChatScreen> {
     if (images.length > room) _flash('一次最多 $maxChatImages 张');
   }
 
+  /// 视频和「文件」里的选了就传到电脑上，路径一个一行接在输入框后面，和图片的路径一样交给 agent 去读。
+  /// 照片不走这里：先在输入框上面预览，发送时才传。
+  Future<void> _attachFiles(List<XFile> files) async {
+    final rpc = _rpc;
+    if (files.isEmpty || rpc == null) return;
+    final paths = <String>[];
+    try {
+      for (final (i, file) in files.indexed) {
+        if (mounted) setState(() => _upload = (i, files.length, 0));
+        paths.add(
+          await uploadFile(
+            rpc,
+            file,
+            onProgress: (done) {
+              if (mounted) setState(() => _upload = (i, files.length, done));
+            },
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _upload = null);
+    }
+    if (!mounted) return;
+    final text = _input.text;
+    final lines = paths.map(shellPath).join('\n');
+    _input.text = text.isEmpty || text.endsWith('\n')
+        ? '$text$lines'
+        : '$text\n$lines';
+    _input.selection = TextSelection.collapsed(offset: _input.text.length);
+    setState(() {});
+  }
+
   void _insertText(String text) {
     final value = _input.value;
     final selection = value.selection;
@@ -419,21 +452,30 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _pickImage() async {
     if (_rpc == null || _sending) return;
     try {
-      final ask = await askImageSource(context, clipboard: true);
+      final ask = await askImageSource(context);
       if (ask == null || !mounted) return;
       switch (ask) {
         case ImageAsk.gallery:
-          final room = maxChatImages - _pending.length;
-          if (room < 1) {
-            _flash('一次最多 $maxChatImages 张');
-            return;
+          final picked = await pickGalleryMedia();
+          final images = <Uint8List>[];
+          final others = <XFile>[];
+          for (final file in picked) {
+            if (isImageFile(file.name)) {
+              images.add(await file.readAsBytes());
+            } else {
+              others.add(file);
+            }
           }
-          _addImages(await pickGalleryImages(limit: room));
+          _addImages(images);
+          await _attachFiles(others);
         case ImageAsk.camera:
           final one = await pickOneImage(ImageSource.camera);
           if (one != null) _addImages([one]);
         case ImageAsk.clipboard:
           await _pasteClipboard();
+        case ImageAsk.files:
+          final file = await openFile();
+          if (file != null) await _attachFiles([file]);
       }
     } catch (error) {
       if (mounted) _flash(friendlyError(error));

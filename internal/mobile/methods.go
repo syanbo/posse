@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -820,10 +821,23 @@ func (c *conn) createTerminal(id string, p json.RawMessage) error {
 type upload struct {
 	data   []byte
 	expect int
-	// raw 的上传（hive.bulk.v1）：data 是原始字节，由编号为 blob 的二进制帧送来；否则是 base64 文本
+	// raw 的上传（hive.bulk.v1）：原始字节由编号为 blob 的二进制帧送来，边收边写进 file（视频动辄几百 MB，
+	// 不攒在常驻进程的内存里）；否则 data 是 base64 文本
 	raw  bool
 	blob uint32
-	bad  bool // 送来的超过了说好的大小
+	file *os.File
+	got  int
+	name string // 手机上的文件名，存的时候用它，agent 看得到原名
+	bad  bool   // 送来的超过了说好的大小，或者写盘失败
+}
+
+// discard 丢掉没传完的上传留下的临时文件。
+func (u *upload) discard() {
+	if u.file != nil {
+		u.file.Close()
+		os.Remove(u.file.Name())
+		u.file = nil
+	}
 }
 
 // uploadChunk 收下手机经二进制帧发来的一段上传。在读循环里调用，和 append、commit 同一个协程。
@@ -832,11 +846,15 @@ func (c *conn) uploadChunk(blob uint32, p []byte) {
 	defer c.smu.Unlock()
 	for _, u := range c.uploads {
 		if u.raw && u.blob == blob {
-			if len(u.data)+len(p) > u.expect {
+			if u.bad || u.got+len(p) > u.expect {
 				u.bad = true
 				return
 			}
-			u.data = append(u.data, p...)
+			if _, err := u.file.Write(p); err != nil {
+				u.bad = true
+				return
+			}
+			u.got += len(p)
 			return
 		}
 	}
@@ -844,6 +862,9 @@ func (c *conn) uploadChunk(blob uint32, p []byte) {
 
 func (c *conn) dropUploads() {
 	c.smu.Lock()
+	for _, u := range c.uploads {
+		u.discard()
+	}
 	c.uploads = map[string]*upload{}
 	c.smu.Unlock()
 }
@@ -861,18 +882,7 @@ func saveImage(b64data string) (string, error) {
 }
 
 func saveImageBytes(data []byte) (string, error) {
-	ext := ".png"
-	switch {
-	case bytes.HasPrefix(data, []byte{0xff, 0xd8, 0xff}):
-		ext = ".jpg"
-	case bytes.HasPrefix(data, []byte("GIF8")):
-		ext = ".gif"
-	case len(data) > 12 && string(data[8:12]) == "WEBP":
-		ext = ".webp"
-	case len(data) > 12 && string(data[4:12]) == "ftypheic":
-		ext = ".heic"
-	}
-	f, err := os.CreateTemp("", "hive-mobile-*"+ext)
+	f, err := os.CreateTemp("", "hive-mobile-*"+sniffExt(data))
 	if err != nil {
 		return "", err
 	}
@@ -883,7 +893,83 @@ func saveImageBytes(data []byte) (string, error) {
 	return filepath.Clean(f.Name()), nil
 }
 
-const maxImage = 32 << 20
+// sniffExt 按开头的字节认出图片和视频的扩展名，认不出当 png（剪贴板里的图片）。
+func sniffExt(data []byte) string {
+	ext := ".png"
+	switch {
+	case bytes.HasPrefix(data, []byte{0xff, 0xd8, 0xff}):
+		ext = ".jpg"
+	case bytes.HasPrefix(data, []byte("GIF8")):
+		ext = ".gif"
+	case len(data) > 12 && string(data[8:12]) == "WEBP":
+		ext = ".webp"
+	case len(data) > 12 && string(data[4:12]) == "ftypheic":
+		ext = ".heic"
+	case len(data) > 12 && string(data[4:12]) == "ftypqt  ":
+		ext = ".mov"
+	case len(data) > 12 && string(data[4:8]) == "ftyp":
+		ext = ".mp4"
+	}
+	return ext
+}
+
+// saveUpload 把收完的 raw 上传落成最终的文件：带了文件名的放进一个新的临时目录、用原名，
+// 没带的（剪贴板里的图片）按内容认扩展名。
+func saveUpload(u *upload) (string, error) {
+	tmp := u.file.Name()
+	if err := u.file.Close(); err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	u.file = nil
+	var dest string
+	if name := uploadName(u.name); name != "" {
+		dir, err := os.MkdirTemp("", "hive-mobile-*")
+		if err != nil {
+			os.Remove(tmp)
+			return "", err
+		}
+		dest = filepath.Join(dir, name)
+	} else {
+		head := make([]byte, 16)
+		if f, err := os.Open(tmp); err == nil {
+			n, _ := io.ReadFull(f, head)
+			head = head[:n]
+			f.Close()
+		}
+		dest = tmp + sniffExt(head)
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+	return filepath.Clean(dest), nil
+}
+
+// uploadName 只留文件名本身：去掉目录、控制字符，. 和 .. 不要。
+func uploadName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || r == '/' || r == '\\' {
+			return -1
+		}
+		return r
+	}, filepath.Base(strings.ReplaceAll(name, "\\", "/")))
+	name = strings.TrimSpace(name)
+	if name == "." || name == ".." || name == "/" {
+		return ""
+	}
+	// 太长的留后面一截（扩展名在后面），按字符截，不切坏 UTF-8
+	if r := []rune(name); len(r) > 120 {
+		name = string(r[len(r)-120:])
+	}
+	return name
+}
+
+// base64 上传整段攒在内存里，只给图片用；raw 上传边收边写盘，视频、文件也走它
+const (
+	maxImage  = 32 << 20
+	maxUpload = 1 << 30
+)
 
 func (c *conn) image(id, method string, p json.RawMessage) error {
 	var a struct {
@@ -892,6 +978,7 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 		ExpectedBytes     int    `json:"expectedBytes"` // 有它就是 raw 上传，分段走二进制帧
 		Offset            int    `json:"offset"`
 		ContentBase64     string `json:"contentBase64"`
+		Name              string `json:"name"` // 手机上的文件名，raw 上传才用
 	}
 	if err := json.Unmarshal(p, &a); err != nil {
 		return errorf("invalid_params", "%v", err)
@@ -905,13 +992,17 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 		return c.reply(id, path)
 	case "clipboard.startImageUpload":
 		if a.ExpectedBytes > 0 && c.hasCapability("hive.bulk.v1") {
-			if a.ExpectedBytes > maxImage {
+			if a.ExpectedBytes > maxUpload {
 				return errorf("invalid_params", "bad upload size")
+			}
+			f, err := os.CreateTemp("", "hive-mobile-*.part")
+			if err != nil {
+				return err
 			}
 			uid := "u-" + randHex(8)
 			bid := c.nextBlob.Add(1)
 			c.smu.Lock()
-			c.uploads[uid] = &upload{expect: a.ExpectedBytes, raw: true, blob: bid}
+			c.uploads[uid] = &upload{expect: a.ExpectedBytes, raw: true, blob: bid, file: f, name: a.Name}
 			c.smu.Unlock()
 			return c.reply(id, map[string]any{"uploadId": uid, "blob": bid})
 		}
@@ -933,6 +1024,9 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 	if u == nil {
 		return errorf("not_found", "upload %s not found", a.UploadID)
 	}
+	if method != "clipboard.appendImageUploadChunk" && method != "clipboard.commitImageUpload" {
+		u.discard()
+	}
 	switch method {
 	case "clipboard.appendImageUploadChunk":
 		if u.raw {
@@ -945,10 +1039,11 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 		return c.reply(id, map[string]any{"received": len(u.data)})
 	case "clipboard.commitImageUpload":
 		if u.raw {
-			if u.bad || len(u.data) != u.expect {
-				return errorf("invalid_params", "got %d of %d bytes", len(u.data), u.expect)
+			if u.bad || u.got != u.expect {
+				u.discard()
+				return errorf("invalid_params", "got %d of %d bytes", u.got, u.expect)
 			}
-			path, err := saveImageBytes(u.data)
+			path, err := saveUpload(u)
 			if err != nil {
 				return err
 			}
