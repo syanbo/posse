@@ -390,6 +390,10 @@ func (c *conn) write(typ websocket.MessageType, seal func() []byte) error {
 	// 先建好再启动：回调里要用 watch
 	var watch *time.Timer
 	watch = time.AfterFunc(time.Duration(math.MaxInt64), func() {
+		// 写完了（ctx 随函数返回取消）就不再看：Stop 和这里同时进行时，下面的 Reset 会让它一直醒下去
+		if ctx.Err() != nil {
+			return
+		}
 		if quiet := time.Since(time.Unix(0, c.lastRead.Load())); quiet >= stallQuiet {
 			log.Printf("mobile: write blocked for %v and nothing from the phone for %v, dropping the connection",
 				time.Since(got).Round(time.Millisecond), quiet.Round(time.Second))
@@ -435,7 +439,6 @@ func (c *conn) reply(id string, result any) error {
 	return c.sendJSON(map[string]any{"id": id, "ok": true, "result": result})
 }
 
-// replyOrFail 回结果或错误：rpcError 带上它的错误码，文件不存在报 not_found。
 // async 在自己的 goroutine 里处理一个请求，返回的错误照 serve 的规矩回给手机。
 func (c *conn) async(id string, run func() error) error {
 	go func() {
@@ -450,6 +453,7 @@ func (c *conn) async(id string, run func() error) error {
 	return nil
 }
 
+// replyOrFail 回结果或错误：rpcError 带上它的错误码，文件不存在报 not_found。
 func (c *conn) replyOrFail(id string, res any, err error) {
 	if err == nil {
 		c.reply(id, res)
