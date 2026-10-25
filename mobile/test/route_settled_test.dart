@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/widgets.dart';
+import 'package:posse_mobile/ui/widgets.dart';
 
 void main() {
   testWidgets('推入动画结束才完成，不在动画里马上完成', (tester) async {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/files/files.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/files/files.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 
 class _FakeRpc implements PhoneRpc {
   _FakeRpc(this.content);
@@ -21,7 +21,7 @@ class _FakeRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _FakeModel extends HiveAppModel {
+class _FakeModel extends PosseAppModel {
   _FakeModel(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
 

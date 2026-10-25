@@ -87,7 +87,7 @@ const deskAppOrientations = <DeviceOrientation>[];
 
 /// iOS 上方向由插件锁（`DeskOrientation`）：SystemChrome 放开时让系统重新挑方向，回到首页先闪一下横屏。
 /// 没有插件（安卓、测试）时用 SystemChrome。
-const _orientation = MethodChannel('hive/desk/orientation');
+const _orientation = MethodChannel('posse/desk/orientation');
 
 Future<void> lockDeskOrientation(bool landscape) async {
   try {

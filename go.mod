@@ -1,4 +1,4 @@
-module hive
+module posse
 
 go 1.27.1
 

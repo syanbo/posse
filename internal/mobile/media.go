@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/media"
+	"posse/internal/media"
 )
 
-// 手机的"图片与视频"页（Hive 扩展，声明了 hive.media.v1 的连接才有），和桌面的图片面板列的一样：
+// 手机的"图片与视频"页（Posse 扩展，声明了 posse.media.v1 的连接才有），和桌面的图片面板列的一样：
 //   - session.media 列出会话里 agent 生成的（最多 mediaMadeMax 项）和粘贴的，新的在前；
 //   - session.mediaThumb 给一张缩略图（JPEG），视频是第一帧；
 //   - session.mediaRead 按段读原图或视频，手机下到本地再看。
@@ -116,7 +116,7 @@ func (c *conn) mediaMethod(req request, p json.RawMessage) bool {
 	default:
 		return false
 	}
-	if !c.hasCapability("hive.media.v1") {
+	if !c.hasCapability("posse.media.v1") {
 		c.fail(req.ID, "method_not_found", "Unknown method: "+req.Method)
 		return true
 	}

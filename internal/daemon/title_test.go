@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"hive/internal/agent"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/term"
 )
 
 // Claude：起名后先记成待交，下一次 UserPromptSubmit 的 hook 回应里带上标题，只交一次；换了会话标题就不再算它的

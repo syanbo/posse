@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:hive_quic/hive_quic.dart';
+import 'package:posse_quic/posse_quic.dart';
 
 import 'race.dart';
 import 'socket.dart';
 
 /// QUIC 地址的写法：`hquic://主机:端口`，经中转时带 `?relay=令牌`（base64url）。
-/// 只在手机里用：电脑经 hive.quic 告诉手机，不进配对码。
+/// 只在手机里用：电脑经 posse.quic 告诉手机，不进配对码。
 const quicScheme = 'hquic';
 
 bool isQuicUrl(String url) => url.startsWith('$quicScheme://');
@@ -25,7 +25,7 @@ bool isRelayQuicUrl(String url) =>
     isQuicUrl(url) &&
     (Uri.tryParse(url)?.queryParameters.containsKey('relay') ?? false);
 
-/// 把 hive.quic 的回复换成地址：先局域网、Tailscale 各地址，最后中转。
+/// 把 posse.quic 的回复换成地址：先局域网、Tailscale 各地址，最后中转。
 List<String> quicUrlsOf(Map<String, Object?> info) {
   final port = info['port'];
   final out = <String>[];

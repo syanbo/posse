@@ -72,10 +72,10 @@ func TestCodexImageScanner(t *testing.T) {
 	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("pasted"))
 	lines := []string{
 		`{"timestamp":"2026-10-20T06:00:36.562Z","type":"response_item","payload":{"type":"message","role":"user","content":[` +
-			`{"type":"input_text","text":"<image name=[Image #2] path=\"/tmp/hive-paste-1.png\">"},{"type":"input_image","image_url":"` + url + `"},` +
+			`{"type":"input_text","text":"<image name=[Image #2] path=\"/tmp/posse-paste-1.png\">"},{"type":"input_image","image_url":"` + url + `"},` +
 			`{"type":"input_text","text":"</image>"},{"type":"input_text","text":"[Image #2] 核实"}]}}`,
 		// 新格式里同一条消息的完成事件只带路径，不重复算
-		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"local_image","path":"/tmp/hive-paste-1.png"}]}}}`,
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"local_image","path":"/tmp/posse-paste-1.png"}]}}}`,
 		// 工具输出里的图片另有 generated_images，不算粘贴的
 		`{"type":"response_item","payload":{"type":"function_call_output","output":[{"type":"input_image","image_url":"` + url + `"}]}}`,
 	}
@@ -86,7 +86,7 @@ func TestCodexImageScanner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].N != 2 || got[0].Path != "/tmp/hive-paste-1.png" || got[0].Media != "image/png" || got[0].At.IsZero() {
+	if len(got) != 1 || got[0].N != 2 || got[0].Path != "/tmp/posse-paste-1.png" || got[0].Media != "image/png" || got[0].At.IsZero() {
 		t.Fatalf("got %+v", got)
 	}
 	b, err := ReadToolImage(path, got[0])

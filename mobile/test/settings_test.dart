@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
+import 'package:posse_mobile/app_state.dart';
 
 void main() {
   test('settings default to dark and terminal, and ignore bad values', () {
@@ -19,7 +19,7 @@ void main() {
 
   test('updating a setting saves it', () async {
     final store = MemorySettingsStore();
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: store,
     );
@@ -42,7 +42,7 @@ void main() {
       isFalse,
     );
     final store = MemorySettingsStore();
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: store,
     );

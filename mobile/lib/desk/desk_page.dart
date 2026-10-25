@@ -49,7 +49,7 @@ class DeskRoute extends MaterialPageRoute<void> {
 class DeskPage extends StatefulWidget {
   const DeskPage({super.key, required this.model, this.receiver});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final DeskReceiver? receiver;
 
   @override
@@ -1237,7 +1237,7 @@ class _DeskPageState extends State<DeskPage>
 
   @override
   Widget build(BuildContext context) {
-    final colors = HiveColors.of(context);
+    final colors = PosseColors.of(context);
     if (_ui !=
         (_immersive ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1295,7 +1295,7 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Widget _stage(
-    HiveColors colors,
+    PosseColors colors,
     bool landscape,
     double lift,
     double covered,
@@ -1431,7 +1431,7 @@ class _DeskPageState extends State<DeskPage>
   }
 
   /// 手指移动和惯性只重建这一层。顶栏、快捷键栏、调试浮层不在这里。
-  Widget _pictureLayer(HiveColors colors, Size size) {
+  Widget _pictureLayer(PosseColors colors, Size size) {
     final frame = fitContain(size.width, size.height, _aspect);
     final image = deskImageRect(frame, _gestures.viewport);
     return Stack(
@@ -1475,14 +1475,14 @@ class _DeskPageState extends State<DeskPage>
     return (true, '已连上，等画面');
   }
 
-  Widget _bannerView(HiveColors colors, (bool waiting, String text) banner) {
+  Widget _bannerView(PosseColors colors, (bool waiting, String text) banner) {
     final (waiting, text) = banner;
     if (waiting) {
       return IgnorePointer(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            HiveLoader(size: 36, color: colors.accent),
+            PosseLoader(size: 36, color: colors.accent),
             const SizedBox(height: 14),
             Text(
               text,
@@ -1507,7 +1507,7 @@ class _DeskPageState extends State<DeskPage>
     final retry =
         !_background && (_fail != null || _endNote != null || _stopped);
     final hint = _fail == deskFailText('permission_screen')
-        ? 'Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」里的 Hive，再重试'
+        ? 'Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」里的 Posse，再重试'
         : null;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 340),
@@ -1564,7 +1564,7 @@ class _DeskPageState extends State<DeskPage>
     );
   }
 
-  Widget _dot(HiveColors colors, _Mark mark) {
+  Widget _dot(PosseColors colors, _Mark mark) {
     final age = mark.fadeAt == null ? Duration.zero : _now - mark.fadeAt!;
     final opacity = mark.fadeAt == null
         ? 1.0
@@ -1590,7 +1590,7 @@ class _DeskPageState extends State<DeskPage>
     );
   }
 
-  Widget _debugPanel(HiveColors colors, DeskStats stats) {
+  Widget _debugPanel(PosseColors colors, DeskStats stats) {
     final view = _gestures.viewport;
     final headline =
         '${stats.fps.toStringAsFixed(0)} fps  ${deskBitrate(stats.bitrate)}';
@@ -1667,7 +1667,7 @@ class _DeskPageState extends State<DeskPage>
         showDragHandle: true,
         isScrollControlled: true,
         builder: (sheet) {
-          final c = HiveColors.of(sheet);
+          final c = PosseColors.of(sheet);
           final bottom = MediaQuery.viewInsetsOf(sheet).bottom;
           return StatefulBuilder(
             builder: (context, setSheet) {
@@ -1771,7 +1771,7 @@ class _DeskPageState extends State<DeskPage>
   }
 
   Widget _field(
-    HiveColors colors,
+    PosseColors colors,
     TextEditingController controller,
     String hint,
     VoidCallback onSubmitted,

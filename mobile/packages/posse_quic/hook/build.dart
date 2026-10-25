@@ -44,7 +44,7 @@ void main(List<String> args) async {
         'CGO_CFLAGS': flags,
         'CGO_LDFLAGS': flags,
       });
-      libName = 'libhive_quic.dylib';
+      libName = 'libposse_quic.dylib';
       file = out.resolve(libName).toFilePath();
       if (os == OS.macOS) {
         await _go(go, repo, env, [
@@ -53,17 +53,17 @@ void main(List<String> args) async {
           '-ldflags=${ldflags.join(' ')} -extldflags=-Wl,-install_name,@rpath/$libName,-headerpad_max_install_names',
           '-o',
           file,
-          './mobile/packages/hive_quic/go',
+          './mobile/packages/posse_quic/go',
         ]);
       } else {
-        final archive = out.resolve('libhive_quic.a').toFilePath();
+        final archive = out.resolve('libposse_quic.a').toFilePath();
         await _go(go, repo, env, [
           'build',
           '-buildmode=c-archive',
           '-ldflags=${ldflags.join(' ')}',
           '-o',
           archive,
-          './mobile/packages/hive_quic/go',
+          './mobile/packages/posse_quic/go',
         ]);
         await _exec(clang, [
           '-isysroot', sysroot, '-target', target,
@@ -77,14 +77,14 @@ void main(List<String> args) async {
     } else if (os == OS.android) {
       final cc = code.cCompiler?.compiler.toFilePath();
       if (cc == null) {
-        throw StateError('hive_quic: no Android NDK compiler configured');
+        throw StateError('posse_quic: no Android NDK compiler configured');
       }
       final triple = switch (arch) {
         Architecture.arm64 => 'aarch64-linux-android',
         Architecture.arm => 'armv7a-linux-androideabi',
         Architecture.x64 => 'x86_64-linux-android',
         Architecture.ia32 => 'i686-linux-android',
-        _ => throw UnsupportedError('hive_quic: android $arch'),
+        _ => throw UnsupportedError('posse_quic: android $arch'),
       };
       final api = code.android.targetNdkApi;
       env.addAll({
@@ -95,7 +95,7 @@ void main(List<String> args) async {
         'CGO_CFLAGS': '--target=$triple$api',
         'CGO_LDFLAGS': '--target=$triple$api',
       });
-      libName = 'libhive_quic.so';
+      libName = 'libposse_quic.so';
       file = out.resolve(libName).toFilePath();
       // 16 KB 页对齐：Android 15 起的设备要求
       await _go(go, repo, env, [
@@ -104,7 +104,7 @@ void main(List<String> args) async {
         '-ldflags=${ldflags.join(' ')} -extldflags=-Wl,-soname,$libName,-z,max-page-size=16384',
         '-o',
         file,
-        './mobile/packages/hive_quic/go',
+        './mobile/packages/posse_quic/go',
       ]);
     } else {
       return;
@@ -113,12 +113,12 @@ void main(List<String> args) async {
     output.assets.code.add(
       CodeAsset(
         package: input.packageName,
-        name: 'hive_quic.dart',
+        name: 'posse_quic.dart',
         linkMode: DynamicLoadingBundled(),
         file: Uri.file(file),
       ),
     );
-    for (final dir in ['mobile/packages/hive_quic/go', 'internal/mquic', 'internal/deskrelay']) {
+    for (final dir in ['mobile/packages/posse_quic/go', 'internal/mquic', 'internal/deskrelay']) {
       for (final f in Directory('$repo/$dir').listSync()) {
         if (f is File && f.path.endsWith('.go') && !f.path.endsWith('_test.go')) {
           output.dependencies.add(f.uri);
@@ -135,7 +135,7 @@ String _goArch(Architecture arch) => switch (arch) {
   Architecture.x64 => 'amd64',
   Architecture.arm => 'arm',
   Architecture.ia32 => '386',
-  _ => throw UnsupportedError('hive_quic: $arch'),
+  _ => throw UnsupportedError('posse_quic: $arch'),
 };
 
 String _appleTarget(OS os, Architecture arch, String sdk, CodeConfig code) {

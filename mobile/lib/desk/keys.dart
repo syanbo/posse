@@ -4,10 +4,10 @@ import 'dart:typed_data';
 import '../protocol/e2ee.dart';
 
 /// 第 3 步和 `tools/deskrecv`、`desk cast` 共用的材料。正式观看不用它。
-const deskTestSecret = 'hive-desk-test-secret-32bytes!!';
-const deskTestNonce = 'hive-desk-nonce!';
+const deskTestSecret = 'posse-desk-test-secret-32bytes!';
+const deskTestNonce = 'posse-desk-nonce';
 
-/// Mac 侧 `hive desk cast` 的默认端口。
+/// Mac 侧 `posse desk cast` 的默认端口。
 const deskDefaultPort = 47991;
 
 enum DeskCodec { hevc, h264 }
@@ -39,7 +39,7 @@ class DeskTrafficKeys {
 }
 
 /// 材料是这条连接的会话密钥，Mac 发出的在前：手机上 recvKey 再 sendKey。
-/// HKDF-SHA256，salt 是订阅的 nonce，info 是 hive-desk/v1。前 32 字节解密，后 32 字节加密。
+/// HKDF-SHA256，salt 是订阅的 nonce，info 是 posse-desk/v1。前 32 字节解密，后 32 字节加密。
 DeskTrafficKeys deriveDeskKeys({
   required Uint8List recvKey,
   required Uint8List sendKey,
@@ -55,7 +55,7 @@ DeskTrafficKeys deriveDeskKeys({
   final out = hkdfSha256(
     ikm,
     Uint8List.fromList(nonce),
-    Uint8List.fromList(utf8.encode('hive-desk/v1')),
+    Uint8List.fromList(utf8.encode('posse-desk/v1')),
     64,
   );
   return DeskTrafficKeys(

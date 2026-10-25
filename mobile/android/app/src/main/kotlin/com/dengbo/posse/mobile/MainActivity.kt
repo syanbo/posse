@@ -1,4 +1,4 @@
-package com.dengbo.hive.hive_mobile
+package com.dengbo.posse.mobile
 
 import android.Manifest
 import android.content.ContentValues
@@ -20,7 +20,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "hive/downloads")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "posse/downloads")
             .setMethodCallHandler { call, result ->
                 if (call.method != "save") {
                     result.notImplemented()
@@ -68,7 +68,7 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
-    // 存进"下载/Hive"，返回实际的文件名（重名时系统或这里会改成 "x (1).md"）。
+    // 存进"下载/Posse"，返回实际的文件名（重名时系统或这里会改成 "x (1).md"）。
     private fun save(src: File, name: String): String {
         val ext = name.substringAfterLast('.', "").lowercase()
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
@@ -76,7 +76,7 @@ class MainActivity : FlutterActivity() {
             val values = ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, name)
                 put(MediaStore.Downloads.MIME_TYPE, mime)
-                put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Hive")
+                put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/Posse")
                 put(MediaStore.Downloads.IS_PENDING, 1)
             }
             val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
@@ -94,7 +94,7 @@ class MainActivity : FlutterActivity() {
             return name
         }
         @Suppress("DEPRECATION")
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Hive")
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Posse")
         dir.mkdirs()
         val base = name.substringBeforeLast('.')
         val dot = if (ext.isEmpty()) "" else ".$ext"

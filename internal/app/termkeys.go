@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
 // 终端里的常用快捷键，照 macOS 上 Ghostty、iTerm 和 Orca 的默认：
@@ -28,7 +28,7 @@ var termEditKeys = map[keyCombo]string{
 	{ui.Alt, ui.KeyBackspace}: "\x1b\x7f", // 删前一个词（Meta+退格）
 }
 
-// termKey 是终端的 OnKey：报告这个键是不是 Hive 处理掉了。
+// termKey 是终端的 OnKey：报告这个键是不是 Posse 处理掉了。
 func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) bool {
 	t := v.term
 	if t == nil {

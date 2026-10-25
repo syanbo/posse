@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 func TestAgentStatus(t *testing.T) {
@@ -27,7 +27,7 @@ func TestAgentStatus(t *testing.T) {
 	}
 }
 
-// 声明了 hive.status.v1 的手机在对话流里收到状态行，状态行消失时收到空的；没声明的收不到。
+// 声明了 posse.status.v1 的手机在对话流里收到状态行，状态行消失时收到空的；没声明的收不到。
 func TestChatStatusFrames(t *testing.T) {
 	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"/bin/sh"}, Cols: 80, Rows: 24})
 	if err != nil {
@@ -58,7 +58,7 @@ func TestChatStatusFrames(t *testing.T) {
 	}
 	p := dialPhone(t, srv, info)
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.status.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.status.v1"},
 	})))
 	sub := p.call("nativeChat.subscribe", map[string]any{"agent": "claude", "sessionId": "sid", "subscriptionId": "h", "limit": 5})
 	if result(t, p.next(sub))["type"] != "snapshot" {

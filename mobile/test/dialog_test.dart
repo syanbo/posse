@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/widgets.dart';
+import 'package:posse_mobile/ui/widgets.dart';
 
 Widget host(ValueChanged<bool?> onResult, {bool reduceMotion = false}) {
   return MaterialApp(
@@ -12,7 +12,7 @@ Widget host(ValueChanged<bool?> onResult, {bool reduceMotion = false}) {
     home: Builder(
       builder: (context) => TextButton(
         onPressed: () async {
-          final ok = await showHiveDialog<bool>(
+          final ok = await showPosseDialog<bool>(
             context: context,
             builder: (dialog) => AlertDialog(
               title: const Text('关闭这个会话？'),

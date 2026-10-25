@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/desk"
+	"posse/internal/desk"
 )
 
 func init() {

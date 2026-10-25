@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // recentView 是右侧历史面板的状态：当前项目的最近会话。
@@ -198,7 +198,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 						// 固定行高，悬停时时间换成按钮也不跳
 						ui.Row(c).Height(20).Gap(8).AlignItems(ui.Center).Children(func() {
 							ui.Text(c, oneLine(s.Title)).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).Shrink(1)
-							// 悬停时时间换成"继续"按钮：已在 Hive 里运行的会话切过去，否则开终端接着聊
+							// 悬停时时间换成"继续"按钮：已在 Posse 里运行的会话切过去，否则开终端接着聊
 							if row.Hovered() {
 								if pressable(playButton(c)).Clicked() {
 									a.resumeSession(s)
@@ -235,10 +235,10 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 	})
 }
 
-// playButton 是卡片上"在 Hive 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。
+// playButton 是卡片上"在 Posse 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。
 func playButton(c *ui.Context) ui.Element {
 	t := c.Theme()
-	b := ui.Box(c).Size(22, 20).Radius(6).Center().Shrink(0).Label("在 Hive 里继续").Tooltip("在 Hive 里继续").Role(ui.RoleButton)
+	b := ui.Box(c).Size(22, 20).Radius(6).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
 	bg := t.Accent
 	if b.Hovered() {
 		bg = t.AccentHover

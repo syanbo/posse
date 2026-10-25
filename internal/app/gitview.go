@@ -14,9 +14,9 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/files"
-	"hive/internal/gitx"
-	"hive/internal/media"
+	"posse/internal/files"
+	"posse/internal/gitx"
+	"posse/internal/media"
 )
 
 // 文件标签里的 Git：左栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。

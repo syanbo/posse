@@ -15,14 +15,14 @@ let kindVideo: UInt8 = 2
 let kindReport: UInt8 = 3
 let kindKeyframe: UInt8 = 5
 
-let secret = Data("hive-desk-test-secret-32bytes!!".utf8)
-let sessionNonce = Data("hive-desk-nonce!".utf8)
+let secret = Data("posse-desk-test-secret-32bytes!".utf8)
+let sessionNonce = Data("posse-desk-nonce".utf8)
 
 struct Keys {
     let toMobile: SymmetricKey
     let toMac: SymmetricKey
     static func test() -> Keys {
-        let out = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), salt: sessionNonce, info: Data("hive-desk/v1".utf8), outputByteCount: 64)
+        let out = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), salt: sessionNonce, info: Data("posse-desk/v1".utf8), outputByteCount: 64)
         let raw = out.withUnsafeBytes { Data($0) }
         return Keys(toMobile: SymmetricKey(data: raw.prefix(32)), toMac: SymmetricKey(data: raw.suffix(32)))
     }

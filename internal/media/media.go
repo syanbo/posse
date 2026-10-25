@@ -29,7 +29,7 @@ import (
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // Item 是会话里的一张图片或一个视频。
@@ -372,7 +372,7 @@ const videoThumbWidth = 1120
 
 // VideoThumb 用 Quick Look 取视频的缩略图（第一帧），存在临时目录里，同一个 Key 只取一次。
 func VideoThumb(it Item) (string, error) {
-	dir := filepath.Join(os.TempDir(), "hive-video-thumbs")
+	dir := filepath.Join(os.TempDir(), "posse-video-thumbs")
 	sum := sha1.Sum([]byte(it.Key))
 	out := filepath.Join(dir, fmt.Sprintf("%x.png", sum[:8]))
 	if _, err := os.Stat(out); err == nil {
@@ -413,7 +413,7 @@ func WriteToolImage(it Item) (string, error) {
 	case "image/webp":
 		ext = ".webp"
 	}
-	dir := filepath.Join(os.TempDir(), "hive-images")
+	dir := filepath.Join(os.TempDir(), "posse-images")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}

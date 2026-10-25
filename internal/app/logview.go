@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // Git 日志标签页，照 WebStorm 的 Log：左边是分支树（logrefs.go），中间是提交图和筛选栏（文字或哈希、分支、作者，文件历史时是路径），

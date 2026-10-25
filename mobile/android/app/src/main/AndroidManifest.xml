@@ -1,12 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 连电脑的 WebSocket 要它；模板只在 debug、profile 的清单里加了，release 包连不上 -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 存到相册（安卓 10 及以下）和"下载/Hive"（安卓 9 及以下）要它，之后的版本经 MediaStore 存不用权限 -->
+    <!-- 存到相册（安卓 10 及以下）和"下载/Posse"（安卓 9 及以下）要它，之后的版本经 MediaStore 存不用权限 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
     <application
-        android:label="Hive"
+        android:label="Posse"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">

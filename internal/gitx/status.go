@@ -389,7 +389,7 @@ func CommitChange(ctx context.Context, dir, path string, content []byte, message
 		return err
 	}
 	blob := strings.TrimSpace(string(out))
-	tmp, err := os.MkdirTemp("", "hive-index-")
+	tmp, err := os.MkdirTemp("", "posse-index-")
 	if err != nil {
 		return err
 	}

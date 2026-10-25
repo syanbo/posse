@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/desk_fit.dart';
+import 'package:posse_mobile/terminal/desk_fit.dart';
 
 void main() {
   test('适配比例缩到视口宽度，接近铺满或更宽都当 1', () {

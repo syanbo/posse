@@ -22,7 +22,7 @@ func TestQuoteRoundTrip(t *testing.T) {
 }
 
 func TestClaudePermissionTimeout(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	if _, err := l.claudeSettings(); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestClaudePermissionTimeout(t *testing.T) {
 }
 
 func TestLaunchUnknown(t *testing.T) {
-	if _, err := (Launcher{Exe: "/bin/hive", Home: t.TempDir()}).Launch("nope", Model{}, ""); err == nil {
+	if _, err := (Launcher{Exe: "/bin/posse", Home: t.TempDir()}).Launch("nope", Model{}, ""); err == nil {
 		t.Fatal("unknown agent accepted")
 	}
 }
@@ -61,8 +61,8 @@ func TestCodexHookHash(t *testing.T) {
 		timeout  int
 		want     string
 	}{
-		{"stop", `'/bin/hive' hook codex Stop`, 5, "sha256:86dc4d2d195e9dd08c0a07b358c18502cd70869d3dc47d9d12821234a4faf552"},
-		{"session_end", `'/a b/hive' hook codex SessionEnd`, 3, "sha256:9f963f855d8b5f90017bac2b01db9553480d1157851453d8e82161bb7abbd6cb"},
+		{"stop", `'/bin/posse' hook codex Stop`, 5, "sha256:4d22164ceb95d089a544a2f443783c043da43b7c56e2e7c78b647e8958325730"},
+		{"session_end", `'/a b/posse' hook codex SessionEnd`, 3, "sha256:5a4bf0b5be1231d3cac40835b755fb7b15375fdee1d494c58d6113fdc0293f2a"},
 	}
 	for _, c := range cases {
 		if got := codexHookHash(c.key, c.cmd, c.timeout); got != c.want {
@@ -72,7 +72,7 @@ func TestCodexHookHash(t *testing.T) {
 }
 
 func TestResume(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	for agent, want := range map[string]string{
 		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --plugin-dir '" + l.Home + "/claude-plugin' --resume 'sid'",
@@ -104,7 +104,7 @@ func TestClaudeStatusLineKeepsUsers(t *testing.T) {
 	old := claudeUserSettings
 	claudeUserSettings = func() string { return user }
 	defer func() { claudeUserSettings = old }()
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	var refresh float64
 	statusLine := func() string {
 		if _, err := l.claudeSettings(); err != nil {
@@ -122,16 +122,16 @@ func TestClaudeStatusLineKeepsUsers(t *testing.T) {
 		return doc.StatusLine.Command
 	}
 	// 没有用户设置、用户设置里没有 statusLine：注入
-	if got := statusLine(); got != "'/bin/hive' statusline" {
+	if got := statusLine(); got != "'/bin/posse' statusline" {
 		t.Fatalf("no user settings: %q", got)
 	}
 	os.WriteFile(user, []byte(`{"model":"opus","statusLine":null}`), 0o600)
 	if got := statusLine(); got == "" {
 		t.Fatal("null statusLine: not injected")
 	}
-	// 用户自己配了：照样注入，沿用其余字段，命令由 hive statusline 替它跑
+	// 用户自己配了：照样注入，沿用其余字段，命令由 posse statusline 替它跑
 	os.WriteFile(user, []byte(`{"statusLine":{"type":"command","command":"node sl.js","refreshInterval":10}}`), 0o600)
-	if got := statusLine(); got != "'/bin/hive' statusline" || refresh != 10 {
+	if got := statusLine(); got != "'/bin/posse' statusline" || refresh != 10 {
 		t.Fatalf("user statusLine: %q refresh %v", got, refresh)
 	}
 	// 设置文件坏了：不注入，免得把用户的状态行弄没

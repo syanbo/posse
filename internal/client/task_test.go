@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
 type testTask struct {
@@ -61,7 +61,7 @@ func TestTaskLifecycle(t *testing.T) {
 	c := startDaemon(t)
 	ctx := context.Background()
 	ws := addFolderProject(t, c)
-	sleeper := []string{"/bin/sh", "-c", "echo task=$HIVE_TASK_ID; sleep 30"}
+	sleeper := []string{"/bin/sh", "-c", "echo task=$POSSE_TASK_ID; sleep 30"}
 	task := startTask(t, c, map[string]any{"workspace": ws, "command": sleeper, "spec": "count the files\nmore detail"})
 	if task.Status != "running" || task.Worker == "" {
 		t.Fatalf("start = %+v", task)
@@ -141,7 +141,7 @@ func TestTaskLifecycle(t *testing.T) {
 		}
 	}
 	if !strings.Contains(strings.Join(shown.Screen, "\n"), "task="+task.ID) {
-		t.Fatalf("worker did not get HIVE_TASK_ID; screen %q", shown.Screen)
+		t.Fatalf("worker did not get POSSE_TASK_ID; screen %q", shown.Screen)
 	}
 
 	// worker 没汇报就退出：派发方收到 exit
@@ -215,10 +215,10 @@ func git(t *testing.T, dir string, args ...string) string {
 
 func TestTaskWorktreeMerge(t *testing.T) {
 	for _, k := range []string{"GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"} {
-		t.Setenv(k, "hive test")
+		t.Setenv(k, "posse test")
 	}
 	for _, k := range []string{"GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"} {
-		t.Setenv(k, "hive@example.com")
+		t.Setenv(k, "posse@example.com")
 	}
 	c := startDaemon(t)
 	ctx := context.Background()

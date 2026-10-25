@@ -11,11 +11,11 @@ func TestPickWindowsKeepsOrderAndFilters(t *testing.T) {
 		{ID: 2, X: 1512, Y: 0, Width: 1920, Height: 1080, PixelWidth: 1920},
 	}
 	raw := []rawWindow{
-		{ID: 10, PID: 100, Alpha: 1, App: "Safari", Title: "Hive", X: 100, Y: 100, W: 800, H: 600},
+		{ID: 10, PID: 100, Alpha: 1, App: "Safari", Title: "Posse", X: 100, Y: 100, W: 800, H: 600},
 		{ID: 11, PID: 101, Layer: 25, Alpha: 1, App: "Control Center", W: 400, H: 300}, // 不是普通层
 		{ID: 12, PID: 102, Alpha: 0, App: "Ghost", W: 400, H: 300},                     // 透明
 		{ID: 13, PID: 103, Alpha: 1, App: "Tool", W: 100, H: 300},                      // 太窄
-		{ID: 14, PID: 7, Alpha: 1, App: "Hive", W: 400, H: 300},                        // 自己
+		{ID: 14, PID: 7, Alpha: 1, App: "Posse", W: 400, H: 300},                       // 自己
 		{ID: 15, PID: 104, Alpha: 1, App: "Simulator", Bundle: "com.apple.iphonesimulator", W: 400, H: 300},
 		{ID: 16, PID: 105, Alpha: 1, App: "Terminal", X: 2000, Y: 200, W: 600, H: 400},
 		{ID: 18, PID: 107, Alpha: 1, App: "\x00\x00\x00", Title: "\x00\x00", W: 1512, H: 865}, // 名字全是 NUL
@@ -23,7 +23,7 @@ func TestPickWindowsKeepsOrderAndFilters(t *testing.T) {
 	}
 	got := pickWindows(raw, 7, []string{"com.apple.iphonesimulator"}, displays)
 	want := []Window{
-		{ID: 10, App: "Safari", Title: "Hive", Width: 800, Height: 600, Display: 1},
+		{ID: 10, App: "Safari", Title: "Posse", Width: 800, Height: 600, Display: 1},
 		{ID: 16, App: "Terminal", Width: 600, Height: 400, Display: 2},
 		{ID: 17, App: "Notes", Width: 600, Height: 400, Display: 1},
 	}

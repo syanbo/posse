@@ -53,7 +53,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   private let messenger: FlutterBinaryMessenger
   private let method: FlutterMethodChannel
   private let events: FlutterEventChannel
-  private let control = DispatchQueue(label: "hive.desk.control")
+  private let control = DispatchQueue(label: "posse.desk.control")
   /// 主线程的暂停和 control 队列的 stop 都会碰到 session。只在这把锁里换引用。
   private let sessionLock = NSLock()
   private var texture: DeskTexture?
@@ -64,8 +64,8 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   init(textures: FlutterTextureRegistry, messenger: FlutterBinaryMessenger) {
     self.textures = textures
     self.messenger = messenger
-    method = FlutterMethodChannel(name: "hive/desk", binaryMessenger: messenger)
-    events = FlutterEventChannel(name: "hive/desk/stats", binaryMessenger: messenger)
+    method = FlutterMethodChannel(name: "posse/desk", binaryMessenger: messenger)
+    events = FlutterEventChannel(name: "posse/desk/stats", binaryMessenger: messenger)
     super.init()
   }
 

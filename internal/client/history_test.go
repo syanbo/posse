@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/daemon"
-	"hive/internal/history"
+	"posse/internal/daemon"
+	"posse/internal/history"
 )
 
 func startHistoryDaemon(t *testing.T, roots string) *Client {

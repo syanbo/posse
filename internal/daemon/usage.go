@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/rpc"
-	"hive/internal/usage"
+	"posse/internal/rpc"
+	"posse/internal/usage"
 )
 
 // 套餐用量：agent 运行时顺带更新，不轮询。
-//   - Claude：hive statusline 经 usage.report 报上 statusLine 的输入；Stop 时看一眼 Claude 自己的缓存（~/.claude.json）
+//   - Claude：posse statusline 经 usage.report 报上 statusLine 的输入；Stop 时看一眼 Claude 自己的缓存（~/.claude.json）
 //   - Codex：Stop、PostToolUse 时读会话文件末尾的 rate_limits；重置卡只有 Codex 自己知道，
 //     Stop 之后拉起 codex app-server 问一次，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
@@ -231,7 +231,7 @@ type usageReportParams struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
-// usageReport 收 hive statusline 转来的 Claude statusLine 输入。
+// usageReport 收 posse statusline 转来的 Claude statusLine 输入。
 func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p usageReportParams
 	if err := rpc.Decode(raw, &p); err != nil {

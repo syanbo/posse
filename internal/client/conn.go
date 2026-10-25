@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
 // Conn 把常驻进程托管的终端接到 MyGo 终端插件（作为 terminal.Options.Conn）。

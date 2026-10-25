@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'rpc.dart';
 
-/// 和电脑之间的往返延迟：每 [interval] 发一次 `runtime.ping`（电脑上的 hive 太旧没有这个方法时改用
+/// 和电脑之间的往返延迟：每 [interval] 发一次 `runtime.ping`（电脑上的 posse 太旧没有这个方法时改用
 /// `status.get`），取最近 3 次的中位数，一次抖动不会让数字乱跳。
 ///
 /// 同一条连接上的回复是一条条发的，图片、视频分段、终端快照这类大块数据在路上时，ping 要排在它们后面，

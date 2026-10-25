@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/models.dart';
-import 'package:hive_mobile/chat/transcript.dart';
+import 'package:posse_mobile/chat/models.dart';
+import 'package:posse_mobile/chat/transcript.dart';
 
 ChatMessage message(
   String id,

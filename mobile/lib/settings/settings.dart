@@ -17,7 +17,7 @@ class SettingsScreen extends StatelessWidget {
     required this.onComputers,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   /// 打开首页那个电脑列表。
   final VoidCallback onComputers;
@@ -27,7 +27,7 @@ class SettingsScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) {
-        final c = HiveColors.of(context);
+        final c = PosseColors.of(context);
         final s = model.settings;
         return Scaffold(
           appBar: AppBar(title: const Text('设置')),
@@ -194,7 +194,7 @@ class SettingsScreen extends StatelessWidget {
                 children: [
                   RowTile(
                     chevron: false,
-                    title: const Text('Hive'),
+                    title: const Text('Posse'),
                     trailing: Text(appVersion, style: mono(13, color: c.muted)),
                   ),
                 ],
@@ -247,7 +247,7 @@ class _Toggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return InkWell(
       onTap: () => onChanged(!value),
       child: Padding(
@@ -260,7 +260,7 @@ class _Toggle extends StatelessWidget {
                 style: TextStyle(fontSize: Fs.body, color: c.text),
               ),
             ),
-            HiveSwitch(value: value, onChanged: onChanged),
+            PosseSwitch(value: value, onChanged: onChanged),
           ],
         ),
       ),
@@ -275,7 +275,7 @@ class _Note extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: Text(

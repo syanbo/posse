@@ -16,8 +16,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"hive/internal/daemon"
-	"hive/internal/rpc"
+	"posse/internal/daemon"
+	"posse/internal/rpc"
 )
 
 type projectInfo struct {
@@ -111,7 +111,7 @@ func termArg(pos []string) string {
 	if len(pos) > 0 {
 		return pos[0]
 	}
-	return os.Getenv("HIVE_TERMINAL_ID")
+	return os.Getenv("POSSE_TERMINAL_ID")
 }
 
 // --- daemon
@@ -148,7 +148,7 @@ func cmdDaemonStatus(e *env, args []string) error {
 		RSSKB, FootprintKB int64
 	}
 	return e.do("daemon.status", nil, &st, func() {
-		fmt.Fprintf(e.out, "hive daemon %s, pid %d, up %s\nhome %s\nterminals %d (%d running), memory %.1f MB (rss %.1f MB)\n",
+		fmt.Fprintf(e.out, "posse daemon %s, pid %d, up %s\nhome %s\nterminals %d (%d running), memory %.1f MB (rss %.1f MB)\n",
 			st.Version, st.Pid, time.Since(st.StartedAt).Round(time.Second), st.Home, st.Terminals, st.Running,
 			float64(st.FootprintKB)/1024, float64(st.RSSKB)/1024)
 	})
@@ -172,7 +172,7 @@ func cmdDaemonStop(e *env, args []string) error {
 	return e.emit(map[string]bool{"stopped": true}, func() { fmt.Fprintln(e.out, "daemon stopped") })
 }
 
-// cmdDaemonHandoff 让正在运行的常驻进程把终端交给用这个 hive 启动的新进程。
+// cmdDaemonHandoff 让正在运行的常驻进程把终端交给用这个 posse 启动的新进程。
 func cmdDaemonHandoff(e *env, args []string) error {
 	if _, err := parse(flag.NewFlagSet("daemon handoff", flag.ContinueOnError), args); err != nil {
 		return err
@@ -386,7 +386,7 @@ func cmdWorkspaceShow(e *env, args []string) error {
 func cmdWorkspaceCurrent(e *env, args []string) error {
 	cwd, _ := os.Getwd()
 	var w workspaceInfo
-	return e.do("workspace.current", map[string]any{"terminalId": os.Getenv("HIVE_TERMINAL_ID"), "cwd": cwd}, &w, func() {
+	return e.do("workspace.current", map[string]any{"terminalId": os.Getenv("POSSE_TERMINAL_ID"), "cwd": cwd}, &w, func() {
 		printWorkspaces(e.out, []workspaceInfo{w})
 	})
 }
@@ -509,7 +509,7 @@ func cmdTerminalSend(e *env, args []string) error {
 		return err
 	}
 	if *text == "" && !*enter && len(keys) == 0 {
-		return fmt.Errorf("usage: hive terminal send <terminal> [--text T] [--enter] [--key K]...")
+		return fmt.Errorf("usage: posse terminal send <terminal> [--text T] [--enter] [--key K]...")
 	}
 	return e.do("terminal.send", map[string]any{"terminal": termArg(pos), "text": *text, "enter": *enter, "keys": []string(keys)}, nil, func() {})
 }
@@ -565,9 +565,9 @@ func cmdTerminalClose(e *env, args []string) error {
 // cmdHook 由 agent 的 hooks 调用：不能拖慢或打断 agent，所以从不拉起常驻进程，出错也返回 0。
 func cmdHook(e *env, args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: hive hook <agent> <event>")
+		return fmt.Errorf("usage: posse hook <agent> <event>")
 	}
-	id := os.Getenv("HIVE_TERMINAL_ID")
+	id := os.Getenv("POSSE_TERMINAL_ID")
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
 	// Cursor 要从 stdout 读一个 JSON 回应，空对象表示不干预（不放行也不拦截）；
 	// 其他 agent 不能有随意的输出，Claude 会把它注入模型上下文，只写它认的 hookSpecificOutput
@@ -577,7 +577,7 @@ func cmdHook(e *env, args []string) error {
 	if id == "" {
 		return nil
 	}
-	socket := os.Getenv("HIVE_SOCKET")
+	socket := os.Getenv("POSSE_SOCKET")
 	if socket == "" {
 		socket = e.socket
 	}
@@ -606,7 +606,7 @@ func cmdHook(e *env, args []string) error {
 		}
 		var re *rpc.Error
 		if !errors.As(err, &re) || re.Code != rpc.CodeUnknown {
-			fmt.Fprintln(e.errOut, "hive hook:", err)
+			fmt.Fprintln(e.errOut, "posse hook:", err)
 			return nil
 		}
 	}
@@ -616,9 +616,9 @@ func cmdHook(e *env, args []string) error {
 		SessionTitle string `json:"sessionTitle"`
 	}
 	if err := rpc.Call(ctx, socket, "hook.event", params, &out); err != nil {
-		fmt.Fprintln(e.errOut, "hive hook:", err)
+		fmt.Fprintln(e.errOut, "posse hook:", err)
 	}
-	// hive session title 给 Claude 起的标题：它只从 UserPromptSubmit 的回应里接受改名
+	// posse session title 给 Claude 起的标题：它只从 UserPromptSubmit 的回应里接受改名
 	if args[0] == "claude" && args[1] == "UserPromptSubmit" && out.SessionTitle != "" {
 		b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]string{
 			"hookEventName": "UserPromptSubmit", "sessionTitle": out.SessionTitle,
@@ -643,7 +643,7 @@ func permissionDecision(behavior string) string {
 }
 
 func cmdVersion(e *env, args []string) error {
-	return e.emit(map[string]string{"version": daemon.Version}, func() { fmt.Fprintln(e.out, "hive", daemon.Version) })
+	return e.emit(map[string]string{"version": daemon.Version}, func() { fmt.Fprintln(e.out, "posse", daemon.Version) })
 }
 
 // absPath 把看起来像路径的参数转成绝对路径；常驻进程的工作目录与调用方不同。

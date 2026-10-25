@@ -24,7 +24,7 @@ typedef QuicPuncher = Future<(ByteSocket, String)> Function(
   Future<String> Function(String mine) exchange,
 );
 
-/// 和一台桌面握手：hello、ready、auth，然后声明 Hive 能力。
+/// 和一台桌面握手：hello、ready、auth，然后声明 Posse 能力。
 Future<PhoneRpc> handshake({
   required ByteSocket socket,
   required PairingOffer offer,
@@ -100,8 +100,8 @@ Future<PhoneRpc> handshake({
 }
 
 /// 多地址并发握手。网络签名变化时关掉当前连接再跑一遍。
-class HiveLink {
-  HiveLink({
+class PosseLink {
+  PosseLink({
     required this.offer,
     required this.connect,
     Stream<String>? networkSignatures,
@@ -152,7 +152,7 @@ class HiveLink {
     return rpc;
   }
 
-  /// 电脑经 hive.quic 给的 QUIC 地址，重连先试它们。调用方可以先填上次存的，冷启动不用先连 WebSocket。
+  /// 电脑经 posse.quic 给的 QUIC 地址，重连先试它们。调用方可以先填上次存的，冷启动不用先连 WebSocket。
   List<String> quicUrls = const [];
 
   /// 电脑给了新的 QUIC 地址（每次连上都问一次），调用方存下来。
@@ -245,7 +245,7 @@ class HiveLink {
     }
   }
 
-  /// 经中转连着时打洞：手机新开一个 socket 问出公网地址，经 hive.punch 交给电脑、换回电脑的地址，
+  /// 经中转连着时打洞：手机新开一个 socket 问出公网地址，经 posse.punch 交给电脑、换回电脑的地址，
   /// 两边同时打洞后直接拨 QUIC。打通就换过去，旧的中转连接等订阅迁走再关；打不通什么都不变。
   Future<void> _punch(PhoneRpc via, String relayUrl, int epoch) async {
     final puncher = punch;
@@ -254,7 +254,7 @@ class HiveLink {
     final String peer;
     try {
       (socket, peer) = await puncher(relayUrl, (mine) async {
-        final result = await via.call('hive.punch', {
+        final result = await via.call('posse.punch', {
           'addr': mine,
         }, timeout: const Duration(seconds: 5));
         final addr = result['addr'];
@@ -298,13 +298,13 @@ class HiveLink {
     try {
       urls = quicUrlsOf(
         await via.call(
-          'hive.quic',
+          'posse.quic',
           const {},
           timeout: const Duration(seconds: 5),
         ),
       );
     } catch (_) {
-      // Orca 和旧版 Hive 没有这个方法
+      // Orca 和旧版 Posse 没有这个方法
       return;
     }
     if (_closed || epoch != _epoch) return;

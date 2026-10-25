@@ -5,11 +5,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/files/save.dart';
-import 'package:hive_mobile/files/video.dart';
-import 'package:hive_mobile/git/git.dart';
-import 'package:hive_mobile/git/status.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/files/save.dart';
+import 'package:posse_mobile/files/video.dart';
+import 'package:posse_mobile/git/git.dart';
+import 'package:posse_mobile/git/status.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 
 /// 只认 files.stat 和 files.readRange，内容来自 [data]。
 class _FileRpc implements PhoneRpc {

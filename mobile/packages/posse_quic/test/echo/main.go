@@ -1,4 +1,4 @@
-// echo 是 hive_quic 的 Dart 测试用的服务：原样回发收到的消息，收到文本 "close" 时发关闭帧。
+// echo 是 posse_quic 的 Dart 测试用的服务：原样回发收到的消息，收到文本 "close" 时发关闭帧。
 // 启动后在标准输出打印一行：直连端口、本地中转的端口。打洞时测试往标准输入写 "punch 手机的地址"，
 // 它回一行出口在中转看来的地址，并从出口向手机打洞；出口上也跑着同一个回显服务。
 package main
@@ -15,8 +15,8 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	"hive/internal/deskrelay"
-	"hive/internal/mquic"
+	"posse/internal/deskrelay"
+	"posse/internal/mquic"
 )
 
 func must(err error) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 func TestPhoneFiles(t *testing.T) {

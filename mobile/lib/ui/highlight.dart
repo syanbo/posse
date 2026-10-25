@@ -383,13 +383,13 @@ TextStyle? tokStyle(Tok? tok, bool dark) {
 }
 
 /// 一行的片段换成 TextSpan。
-List<TextSpan> lineSpans(List<Seg> line, HiveColors c) => [
+List<TextSpan> lineSpans(List<Seg> line, PosseColors c) => [
   for (final (text, tok) in line)
     TextSpan(text: text, style: tokStyle(tok, c.dark)),
 ];
 
 /// 整段代码的 TextSpan：行之间补回换行。
-TextSpan codeSpan(HlLines lines, HiveColors c) => TextSpan(
+TextSpan codeSpan(HlLines lines, PosseColors c) => TextSpan(
   children: [
     for (var i = 0; i < lines.length; i++) ...[
       if (i > 0) const TextSpan(text: '\n'),

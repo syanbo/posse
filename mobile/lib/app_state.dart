@@ -20,8 +20,8 @@ import 'workspace/models.dart';
 String friendlyError(Object error) {
   if (error is TimeoutException) return '电脑没有回应，可能已经休眠或者网络断了';
   if (error is FirstConnectFailed) {
-    return '连不上电脑：确认电脑上的 Hive 开着、手机和电脑在同一个网络，'
-        '并在手机设置里允许 Hive 使用无线数据和本地网络';
+    return '连不上电脑：确认电脑上的 Posse 开着、手机和电脑在同一个网络，'
+        '并在手机设置里允许 Posse 使用无线数据和本地网络';
   }
   if (error is RpcException) {
     return error.code == 'closed' ? '和电脑的连接断开了，正在重连' : error.message;
@@ -34,13 +34,13 @@ String friendlyError(Object error) {
   if (text.contains('SocketException') ||
       text.contains('Connection refused') ||
       text.contains('WebSocketChannelException')) {
-    return '连不上电脑：确认电脑上的 Hive 开着，手机和电脑在同一个网络';
+    return '连不上电脑：确认电脑上的 Posse 开着，手机和电脑在同一个网络';
   }
   if (error is FormatException) return '配对码不对，重新扫一次或者重新复制';
   return text;
 }
 
-/// 第一次配对一直连不上：可能电脑没开，也可能没给网络权限，见 [HiveAppModel._start]。
+/// 第一次配对一直连不上：可能电脑没开，也可能没给网络权限，见 [PosseAppModel._start]。
 class FirstConnectFailed implements Exception {
   const FirstConnectFailed();
 }
@@ -60,8 +60,8 @@ class MemoryPairingStore implements PairingStore {
 }
 
 class PrefsPairingStore implements PairingStore {
-  static const _key = 'hive.computers';
-  static const _legacyKey = 'hive.pairCode';
+  static const _key = 'posse.computers';
+  static const _legacyKey = 'posse.pairCode';
 
   @override
   Future<String?> read() async {
@@ -81,7 +81,7 @@ class PrefsPairingStore implements PairingStore {
   }
 }
 
-/// 手机上的偏好。存在 SharedPreferences 的 hive.settings 里，和配对分开。
+/// 手机上的偏好。存在 SharedPreferences 的 posse.settings 里，和配对分开。
 class AppSettings {
   AppSettings({
     this.theme = 'dark',
@@ -230,7 +230,7 @@ class MemorySettingsStore implements SettingsStore {
 }
 
 class PrefsSettingsStore implements SettingsStore {
-  static const _key = 'hive.settings';
+  static const _key = 'posse.settings';
 
   @override
   Future<String?> read() async =>
@@ -270,7 +270,7 @@ class SavedComputer {
   /// 首页收起的项目（项目名）。
   List<String> collapsed;
 
-  /// 电脑上次给的 QUIC 地址（[HiveLink.quicUrls]，经中转的带着这台手机的令牌）。冷启动直接拨，
+  /// 电脑上次给的 QUIC 地址（[PosseLink.quicUrls]，经中转的带着这台手机的令牌）。冷启动直接拨，
   /// 在外面不用先经隧道连上 WebSocket。
   List<String> quic;
 
@@ -388,8 +388,8 @@ class SavedComputers {
   }
 }
 
-class HiveAppModel extends ChangeNotifier {
-  HiveAppModel({
+class PosseAppModel extends ChangeNotifier {
+  PosseAppModel({
     PairingStore? store,
     SettingsStore? settingsStore,
     SocketConnector? connect,
@@ -418,7 +418,7 @@ class HiveAppModel extends ChangeNotifier {
       WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused;
 
   PairingOffer? offer;
-  HiveLink? link;
+  PosseLink? link;
   List<WorktreeRow> worktrees = const [];
 
   /// 有运行中终端的工作区的标签，首页照桌面侧栏把会话直接列在工作区下面。
@@ -503,10 +503,10 @@ class HiveAppModel extends ChangeNotifier {
     disconnected = false;
     error = null;
     notifyListeners();
-    HiveLink? next;
+    PosseLink? next;
     try {
       final parsed = PairingOffer.parse(raw);
-      final created = HiveLink(
+      final created = PosseLink(
         offer: parsed,
         connect: connect,
         networkSignatures: networkSignatures ?? connectivitySignatures(),
@@ -583,7 +583,7 @@ class HiveAppModel extends ChangeNotifier {
     }
   }
 
-  /// 从后台回到前台，见 [HiveLink.wake]。
+  /// 从后台回到前台，见 [PosseLink.wake]。
   Future<void> wake() async {
     if (disconnected) return;
     await link?.wake();
@@ -593,7 +593,7 @@ class HiveAppModel extends ChangeNotifier {
   /// 所以第一次配对连不上时接着重试，等用户点完允许自然连上。
   /// 弹窗开着时 App 不在前台，这段时间不算进时限，用户看多久都行；点允许前后网络状态不变，
   /// 等不到网络变化的通知。配对过的电脑权限早就点过了，只连一次。
-  Future<void> _start(HiveLink link, int gen, {required bool first}) async {
+  Future<void> _start(PosseLink link, int gen, {required bool first}) async {
     if (!first) {
       await link.start();
       return;
@@ -651,14 +651,14 @@ class HiveAppModel extends ChangeNotifier {
     unawaited(store.write(saved.encode()));
   }
 
-  /// 电脑名取自 status.get，桌面端报的是 "Hive 主机名"。
-  Future<void> _fetchName(HiveLink link, String id) async {
+  /// 电脑名取自 status.get，桌面端报的是 "Posse 主机名"。
+  Future<void> _fetchName(PosseLink link, String id) async {
     try {
       final rpc = link.rpc;
       if (rpc == null) return;
       final status = await rpc.call('status.get', const {});
       var name = status['machineName'] as String? ?? '';
-      name = name.replaceFirst(RegExp(r'^Hive\s+'), '').trim();
+      name = name.replaceFirst(RegExp(r'^Posse\s+'), '').trim();
       final computer = saved.computers.where((c) => c.id == id).firstOrNull;
       if (computer == null || name.isEmpty || computer.name == name) return;
       computer.name = name;

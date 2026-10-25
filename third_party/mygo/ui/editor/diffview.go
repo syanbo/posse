@@ -38,11 +38,11 @@ type DiffState struct {
 	// Wrap wraps long lines rather than scrolling them sideways.
 	Wrap bool
 	// IgnoreWhitespace compares lines without their whitespace, so that
-	// lines differing only in it are not changes (Hive).
+	// lines differing only in it are not changes (Posse).
 	IgnoreWhitespace bool
 	// Split is the share of the width the old side of a side-by-side
 	// view takes, half when 0; dragging the divider changes it, within
-	// 0.15 to 0.85, and SplitDragging reports while it is dragged (Hive).
+	// 0.15 to 0.85, and SplitDragging reports while it is dragged (Posse).
 	Split         float32
 	SplitDragging bool
 	// FitContent makes the viewer as high as its lines, as a file of a
@@ -57,7 +57,7 @@ type DiffState struct {
 	Bindings []Binding
 	// Current marks the change being looked at, its index in Hunks plus
 	// one (none when 0), stronger than the others, as stepping through
-	// them shows which one is current (Hive).
+	// them shows which one is current (Posse).
 	Current int
 	// HunkActions shows Revert and Keep on the change under the pointer,
 	// or the caret's, which put the old lines back in New, or make the
@@ -65,12 +65,12 @@ type DiffState struct {
 	HunkActions bool
 	// RenderHunkMark builds a button on every change at the right edge
 	// of the old side of a side-by-side view, by the divider, as
-	// WebStorm's >> that puts the old lines back (Hive).
+	// WebStorm's >> that puts the old lines back (Posse).
 	RenderHunkMark func(c *ui.Context, btn ui.Element, a *DiffHunkActions)
 	// OldNumbersRight puts the old side's gutter at its right edge in a
 	// side-by-side view, the two columns of numbers together by the
 	// divider, as WebStorm's; RenderHunkMark's buttons go left of the
-	// numbers (Hive).
+	// numbers (Posse).
 	OldNumbersRight bool
 	// LineSelection lets the numbers of lines be clicked and dragged to
 	// select lines, which OnLineSelection reports.
@@ -430,7 +430,7 @@ func (d *DiffState) sideOptions(old bool) options {
 	return o
 }
 
-// splitShare is the old side's share of a side-by-side view's width (Hive).
+// splitShare is the old side's share of a side-by-side view's width (Posse).
 func (d *DiffState) splitShare() float32 {
 	if d.Split <= 0 || d.Split >= 1 {
 		return 0.5
@@ -540,7 +540,7 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 			}
 		}
 		d.buildSeparators(c, ct)
-		// The divider drags to move the split (Hive): a grip over it,
+		// The divider drags to move the split (Posse): a grip over it,
 		// placed from the last frame's width.
 		if rw := row.LayoutBounds().W; rw > 1 {
 			x := (rw - 1) * split

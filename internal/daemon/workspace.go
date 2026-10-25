@@ -12,11 +12,11 @@ import (
 	"time"
 	"unicode"
 
-	"hive/internal/agent"
-	"hive/internal/gitx"
-	"hive/internal/rpc"
-	"hive/internal/store"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/gitx"
+	"posse/internal/rpc"
+	"posse/internal/store"
+	"posse/internal/term"
 )
 
 // --- projects
@@ -176,7 +176,7 @@ type workspaceCreateParams struct {
 	Project string `json:"project"`
 	Name    string `json:"name"`
 	Mode    string `json:"mode"` // auto | folder | worktree | attach
-	Path    string `json:"path"` // attach：项目已有的、不是 hive 建的 worktree 目录
+	Path    string `json:"path"` // attach：项目已有的、不是 posse 建的 worktree 目录
 	Branch  string `json:"branch"`
 	Base    string `json:"base"`
 	NoSetup bool   `json:"noSetup"`
@@ -330,7 +330,7 @@ func runSetup(ctx context.Context, w store.Workspace, script string) *setupResul
 	defer cancel()
 	cmd := exec.CommandContext(ctx, agent.UserShell(), "-l", "-c", script)
 	cmd.Dir = w.Path
-	cmd.Env = term.Environ([]string{"HIVE_WORKSPACE_ID=" + w.ID, "HIVE_WORKSPACE_PATH=" + w.Path})
+	cmd.Env = term.Environ([]string{"POSSE_WORKSPACE_ID=" + w.ID, "POSSE_WORKSPACE_PATH=" + w.Path})
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()

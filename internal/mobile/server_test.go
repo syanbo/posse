@@ -19,9 +19,9 @@ import (
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
 
-	"hive/internal/host"
-	"hive/internal/rpc"
-	"hive/internal/term"
+	"posse/internal/host"
+	"posse/internal/rpc"
+	"posse/internal/term"
 )
 
 // fakeHost 是一个项目、一个工作区和一个 shell 终端。
@@ -533,7 +533,7 @@ func openFDs(t *testing.T) int {
 
 func TestOfferEndpoints(t *testing.T) {
 	code := offerCode("ws://127.0.0.1:6788", []string{
-		"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/hive", "",
+		"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/posse", "",
 	}, "tok", rep32(9), "dev")
 	raw, err := base64.RawURLEncoding.DecodeString(code)
 	if err != nil {
@@ -555,7 +555,7 @@ func TestOfferEndpoints(t *testing.T) {
 		offer.Scope != "mobile" || offer.PairedDevice != "dev" || offer.PublicKeyB64 != b64(rep32(9)) {
 		t.Fatalf("offer %+v", offer)
 	}
-	want := []string{"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/hive"}
+	want := []string{"ws://127.0.0.1:6788", "ws://100.1.2.3:6788", "wss://tun.example/posse"}
 	if !reflect.DeepEqual(offer.Endpoints, want) {
 		t.Fatalf("endpoints %v", offer.Endpoints)
 	}
@@ -617,22 +617,22 @@ func TestClientCapabilities(t *testing.T) {
 	p := dialPhone(t, srv, info)
 	defer p.ws.CloseNow()
 	id := p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1,
-		"capabilities": []string{"hive.permission.v1", "hive.git.v1"},
+		"client": "posse-flutter", "version": 1,
+		"capabilities": []string{"posse.permission.v1", "posse.git.v1"},
 	})
 	if result(t, p.next(id)) == nil {
 		t.Fatal("empty result")
 	}
 	c := onlyConn(t, srv)
-	if c.clientName != "hive-flutter" || c.clientVersion != 1 ||
-		!c.hasCapability("hive.permission.v1") || !c.hasCapability("hive.git.v1") || c.hasCapability("nope") {
+	if c.clientName != "posse-flutter" || c.clientVersion != 1 ||
+		!c.hasCapability("posse.permission.v1") || !c.hasCapability("posse.git.v1") || c.hasCapability("nope") {
 		t.Fatalf("caps %s %d %v", c.clientName, c.clientVersion, c.caps)
 	}
 	id = p.call("runtime.clientCapabilities.update", map[string]any{
 		"client": "other", "version": 2, "capabilities": []string{},
 	})
 	result(t, p.next(id))
-	if c.hasCapability("hive.permission.v1") || c.clientName != "other" || c.clientVersion != 2 {
+	if c.hasCapability("posse.permission.v1") || c.clientName != "other" || c.clientVersion != 2 {
 		t.Fatal("capabilities were not replaced")
 	}
 }
@@ -684,7 +684,7 @@ func TestPhoneIdentityMergesTokens(t *testing.T) {
 	}
 	identify := func(p *phone, tokens ...string) {
 		result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-			"client": "hive-flutter", "version": 1, "capabilities": []string{},
+			"client": "posse-flutter", "version": 1, "capabilities": []string{},
 			"phone": map[string]any{"id": "install-1", "name": "iPhone 16 Pro", "tokens": tokens},
 		})))
 	}

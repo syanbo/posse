@@ -1,7 +1,7 @@
 package app
 
 import (
-	"hive/internal/history"
+	"posse/internal/history"
 
 	"os"
 	"slices"
@@ -118,7 +118,7 @@ func TestSidebarTree(t *testing.T) {
 	offlineClient(t, a)
 	a.sectionsOpen = map[string]*bool{}
 	tt := newPreviewTester(a, true)
-	for _, label := range []string{"重写 hive 界面", "feat-login", "ios-crash"} {
+	for _, label := range []string{"重写 posse 界面", "feat-login", "ios-crash"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("%q not shown", label)
 		}

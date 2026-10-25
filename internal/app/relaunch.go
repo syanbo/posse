@@ -11,17 +11,17 @@ import (
 	"github.com/egoist/mygo"
 )
 
-// exeWatch 盯着窗口自己所在的 Hive.app 有没有被换掉（重新打包、覆盖安装）。
+// exeWatch 盯着窗口自己所在的 Posse.app 有没有被换掉（重新打包、覆盖安装）。
 // 换掉后系统核实不了这个进程的代码身份，TCC 直接拒绝它访问桌面、文稿等目录（EPERM），
-// 要重开窗口才恢复。不在 .app 里运行（go build 出来的 bin/hive）时不管：那时授权跟着启动它的终端走。
+// 要重开窗口才恢复。不在 .app 里运行（go build 出来的 bin/posse）时不管：那时授权跟着启动它的终端走。
 type exeWatch struct {
-	bundle string // Hive.app 的路径，空表示不在 .app 里
+	bundle string // Posse.app 的路径，空表示不在 .app 里
 	exe    string
 	dev    int32
 	ino    uint64
 }
 
-// bundleOf 从可执行文件路径取它所在的 .app：…/Hive.app/Contents/MacOS/Hive。
+// bundleOf 从可执行文件路径取它所在的 .app：…/Posse.app/Contents/MacOS/Posse。
 func bundleOf(exe string) string {
 	macos := filepath.Dir(exe)
 	contents := filepath.Dir(macos)
@@ -77,9 +77,9 @@ func (a *app) relaunch() {
 
 func (a *app) doRelaunch() {
 	args := []string{"-n"}
-	// 端到端测试靠 HIVE_HOME 等变量隔离，open 起的新实例要带上
+	// 端到端测试靠 POSSE_HOME 等变量隔离，open 起的新实例要带上
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HIVE_") {
+		if strings.HasPrefix(kv, "POSSE_") {
 			args = append(args, "--env", kv)
 		}
 	}

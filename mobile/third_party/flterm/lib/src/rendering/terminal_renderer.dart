@@ -90,11 +90,11 @@ class TerminalRenderer extends LeafRenderObjectWidget {
   /// visible scrollback eligible for compression.
   final VoidCallback? onViewportChanged;
 
-  /// Hive: 格子外面还有多宽的内边距要接着画底色（见 [RowEdgeColors]）。
+  /// Posse: 格子外面还有多宽的内边距要接着画底色（见 [RowEdgeColors]）。
   /// 格子铺不满的零头总是按两端的底色画；这里是再往外的那一圈。
   final EdgeInsets backgroundBleed;
 
-  /// Hive: 画面里到第几行为止有内容（最后一行有字或底色的行和光标所在行取靠下的，行数从 1 算），
+  /// Posse: 画面里到第几行为止有内容（最后一行有字或底色的行和光标所在行取靠下的，行数从 1 算），
   /// 变了在帧末报一次。手机弹键盘时按它决定终端往上挪多少。
   final ValueChanged<int>? onContentRows;
 
@@ -205,7 +205,7 @@ class TerminalRenderBox extends RenderBox {
   var _stickToBottom = true;
   var _lastScrollbackRows = 0;
 
-  /// Hive: 上次布局时的屏幕。切进备用屏幕时回滚行数常常不变（刚建的终端都是 0），
+  /// Posse: 上次布局时的屏幕。切进备用屏幕时回滚行数常常不变（刚建的终端都是 0），
   /// 只重画不重新布局的话，滚动范围停在主屏幕的 0..0，备用屏幕里滑不动，要等改尺寸才好。
   TerminalScreen? _lastScreen;
   var _preeditText = '';
@@ -263,7 +263,7 @@ class TerminalRenderBox extends RenderBox {
     markNeedsPaint();
   }
 
-  /// Hive: 画完这一帧后看内容底边变了没有，变了在帧末报（画的途中不能让外面 setState）。
+  /// Posse: 画完这一帧后看内容底边变了没有，变了在帧末报（画的途中不能让外面 setState）。
   void _reportContentRows() {
     final callback = _onContentRows;
     if (callback == null) return;
@@ -552,7 +552,7 @@ class TerminalRenderBox extends RenderBox {
     _performingLayout = false;
   }
 
-  /// Hive: 格子外面（铺不满的零头和 [_bleed] 那一圈）照 Ghostty 的 window-padding-color = extend，
+  /// Posse: 格子外面（铺不满的零头和 [_bleed] 那一圈）照 Ghostty 的 window-padding-color = extend，
   /// 按最近一格的底色画：左右按每一行两端，上下按第一行、最后一行（两端同色才延伸，免得半行的状态栏拉成一片）。
   /// 程序没设底色的格子还是主题色，普通 shell 看起来不变。画在自己的范围外面，外层没有裁剪。
   void _paintBleed(Canvas canvas) {

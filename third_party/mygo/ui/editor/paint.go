@@ -394,7 +394,7 @@ func (ed *editor) paintLine(p *ui.Painter, r ui.Rect, f *frame, line int, g line
 				p.Fill(ui.Rect{X: x, Y: y, W: v.charWidth * 0.6, H: lh}, selColor, 0)
 			}
 		}
-		// Hive: the word Command is held over, underlined as a link.
+		// Posse: the word Command is held over, underlined as a link.
 		if ed.linkOn && ed.link[1] > l.start && ed.link[0] < l.start+len(l.text) {
 			a, b := max(ed.link[0]-l.start, 0), min(ed.link[1]-l.start, len(l.text))
 			f.rects = v.rangeRects(l, row, l.toDisp(a, false), l.toDisp(b, false), f.rects[:0])
@@ -631,7 +631,7 @@ func (ed *editor) paintGutter(p *ui.Painter, r ui.Rect, f *frame) {
 	ct := ed.theme
 	h := &v.heights
 	lh := v.lineHeight
-	r.X += ed.gutterX // Hive: the gutter can be at the right edge
+	r.X += ed.gutterX // Posse: the gutter can be at the right edge
 	gutter := ui.Rect{X: r.X, Y: r.Y, W: ed.gutterW, H: r.H}
 	numbersOn := ed.numbersOn()
 	cur := v.text.LineOf(ed.primary().head)

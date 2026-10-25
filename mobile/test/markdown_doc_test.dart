@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/chat/markdown_view.dart';
-import 'package:hive_mobile/files/markdown_doc.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/chat/markdown_view.dart';
+import 'package:posse_mobile/files/markdown_doc.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 const _sample = '''
-# 一级标题 Hive
+# 一级标题 Posse
 
 正文段落，带 **粗体**、*斜体*、~~删除线~~、`inline code` 和 [相对链接](../README.md)、[网址](https://example.com)、[打开 https://example.com](https://example.com)。
 
@@ -57,7 +57,7 @@ func main() {
 
 Widget _app(Widget child, {bool dark = false}) => MaterialApp(
   debugShowCheckedModeBanner: false,
-  theme: hiveTheme(dark ? Brightness.dark : Brightness.light),
+  theme: posseTheme(dark ? Brightness.dark : Brightness.light),
   home: Scaffold(body: child),
 );
 
@@ -65,12 +65,12 @@ Widget _app(Widget child, {bool dark = false}) => MaterialApp(
 const _longTable = '''
 | 阶段 | 做什么 | 客户端 | 目的 |
 | :-- | :-- | :-- | :-- |
-| A | Hive 常驻进程实现 Orca 的 `nativeChat.*` 协议，补齐 agent 状态行里手机要的字段 | 现有 Orca App（iOS / Android） | 不写一行客户端代码就能验证"结构化对话 + 审批卡片"是否够用，协议顺带定稿 |
-| B | Flutter 客户端，复用阶段 A 的协议，再加 Hive 自己的扩展（hook 审批决策、多地址竞速、Git 速览） | 自研，iOS 先、Android 后期 | 摆脱 Orca App 的节奏和 UI 限制 |
+| A | Posse 常驻进程实现 Orca 的 `nativeChat.*` 协议，补齐 agent 状态行里手机要的字段 | 现有 Orca App（iOS / Android） | 不写一行客户端代码就能验证"结构化对话 + 审批卡片"是否够用，协议顺带定稿 |
+| B | Flutter 客户端，复用阶段 A 的协议，再加 Posse 自己的扩展（hook 审批决策、多地址竞速、Git 速览） | 自研，iOS 先、Android 后期 | 摆脱 Orca App 的节奏和 UI 限制 |
 ''';
 
 MarkdownDoc _doc(
-  HiveAppModel model,
+  PosseAppModel model,
   void Function(String) open, {
   String data = _sample,
 }) => MarkdownDoc(
@@ -85,7 +85,7 @@ void main() {
   testWidgets('tables, task lists, nested lists and rules are drawn', (
     tester,
   ) async {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     await tester.pumpWidget(_app(_doc(model, (_) {})));
     await tester.pump();
 
@@ -105,7 +105,7 @@ void main() {
   });
 
   testWidgets('relative links open beside the markdown file', (tester) async {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     final opened = <String>[];
     await tester.pumpWidget(_app(_doc(model, opened.add)));
     await tester.pump();
@@ -118,7 +118,7 @@ void main() {
 
   testWidgets('long table cells wrap inside a capped column', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 900));
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     await tester.pumpWidget(_app(_doc(model, (_) {}, data: _longTable)));
     await tester.pump();
     final cell = find.textContaining('补齐 agent 状态行', findRichText: true);
@@ -134,7 +134,7 @@ void main() {
   testWidgets('table scrollbar is not lifted by the bottom safe area', (
     tester,
   ) async {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(padding: EdgeInsets.only(bottom: 34)),
@@ -148,8 +148,8 @@ void main() {
   });
 
   // 离屏截图对比新旧渲染，给人看：
-  // HIVE_SHOTS_DIR=/tmp/shots fvm flutter test test/markdown_doc_test.dart
-  final dir = Platform.environment['HIVE_SHOTS_DIR'] ?? '';
+  // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/markdown_doc_test.dart
+  final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
   testWidgets('markdown screenshots', (tester) async {
     final root = Platform.environment['FLUTTER_ROOT']!;
     final fonts = {
@@ -166,7 +166,7 @@ void main() {
       }
     });
     await tester.binding.setSurfaceSize(const Size(390, 1500));
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     for (final dark in [false, true]) {
       final suffix = dark ? 'dark' : 'light';
       for (final (name, child) in [
@@ -180,7 +180,7 @@ void main() {
               style: TextStyle(
                 fontSize: Fs.read,
                 height: 1.6,
-                color: HiveColors.of(context).text,
+                color: PosseColors.of(context).text,
               ),
             ),
           ),

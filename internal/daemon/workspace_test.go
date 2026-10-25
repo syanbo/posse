@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/store"
+	"posse/internal/store"
 )
 
 func TestValidName(t *testing.T) {

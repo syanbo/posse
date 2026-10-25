@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // 单个文件的历史，照 WebStorm 的"历史记录"：左边是改过这个文件的提交（作者、时间、提交信息、标签），

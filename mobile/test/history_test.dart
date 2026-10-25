@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/history/models.dart';
+import 'package:posse_mobile/history/models.dart';
 
 void main() {
   test('parses list and search results', () {
@@ -9,7 +9,7 @@ void main() {
           'agent': 'claude',
           'id': 's1',
           'title': ' 修登录 ',
-          'cwd': '/Users/x/Apps/hive',
+          'cwd': '/Users/x/Apps/posse',
           'branch': 'main',
           'updatedAt': '2026-10-18T10:00:00Z',
           'messages': 12,
@@ -20,7 +20,7 @@ void main() {
     });
     expect(list, hasLength(1));
     expect(list.single.title, '修登录');
-    expect(list.single.folder, 'hive');
+    expect(list.single.folder, 'posse');
     expect(list.single.updatedAt!.isUtc, isFalse);
     final hits = parseHistory({
       'hits': [

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
 type terminalAttachParams struct {

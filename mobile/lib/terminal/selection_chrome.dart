@@ -300,7 +300,7 @@ class _CopyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final style = TextStyle(
       color: c.accent,
       fontSize: Fs.meta,
@@ -347,7 +347,7 @@ class _HandleKnob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = HiveColors.of(context).accent;
+    final color = PosseColors.of(context).accent;
     return Column(
       children: [
         Center(

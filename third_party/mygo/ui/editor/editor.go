@@ -50,9 +50,9 @@ type options struct {
 	onCompletion  func(CompletionRequest)
 	onHover       func(HoverRequest)
 	onDefinition  func(int)
-	linkAt        func(int) (int, int) // Hive
+	linkAt        func(int) (int, int) // Posse
 	onGutterClick func(int)
-	onChangeClick func(int, float32) // Hive
+	onChangeClick func(int, float32) // Posse
 	contextMenu   func(m *ui.Menu)
 	onInput       func(ui.InputEvent) bool
 	noInputMethod bool
@@ -68,7 +68,7 @@ type options struct {
 	noScrollbar bool
 	// gutterRight puts the gutter at the right edge, by the divider, as
 	// the old side of a split diff has it in WebStorm; gutterExtra widens
-	// it, for buttons left of the numbers (Hive).
+	// it, for buttons left of the numbers (Posse).
 	gutterRight bool
 	gutterExtra float32
 	// minDigits is how many digits the gutter has room for at least.
@@ -82,7 +82,7 @@ type options struct {
 // sharedScroll is the scroll several editors share.
 type sharedScroll struct {
 	y float64
-	// x is the sideways scroll of them all (Hive): their lines run to
+	// x is the sideways scroll of them all (Posse): their lines run to
 	// different widths, the old side's numbers at its right edge leave it
 	// less room, so each stops at its own end, and x goes on to the
 	// farthest one, which the one scroll bar reaches.
@@ -172,7 +172,7 @@ type editor struct {
 	reveal     reveal
 	r          ui.Rect // the element's box of the last frame, in the window
 	gutterW    float32
-	gutterX    float32 // where the gutter starts: 0, or the right edge less its width (Hive)
+	gutterX    float32 // where the gutter starts: 0, or the right edge less its width (Posse)
 	textX      float32
 	viewH      float32
 	shown      [2]int // the first and last lines the last frame showed
@@ -185,7 +185,7 @@ type editor struct {
 	hoverLine  int
 	// link is the word under the pointer, which Command held underlines
 	// as a link to its definition, the hand showing; linkOn says it shows
-	// now (Hive).
+	// now (Posse).
 	link   [2]int
 	linkOn bool
 	// region is the part of the editor under the pointer, which its
@@ -687,7 +687,7 @@ func (ed *editor) selectedText() string {
 }
 
 // rightGutter is the width the gutter takes at the right of the text,
-// when it is there (Hive).
+// when it is there (Posse).
 func (ed *editor) rightGutter() float32 {
 	if ed.o.gutterRight {
 		return ed.gutterW
@@ -696,7 +696,7 @@ func (ed *editor) rightGutter() float32 {
 }
 
 // textLeft is where the text's area starts, after a gutter at the left
-// (Hive).
+// (Posse).
 func (ed *editor) textLeft() float32 {
 	if ed.o.gutterRight {
 		return 0
@@ -704,7 +704,7 @@ func (ed *editor) textLeft() float32 {
 	return ed.gutterW
 }
 
-// inGutter reports whether x, in the editor, is over the gutter (Hive).
+// inGutter reports whether x, in the editor, is over the gutter (Posse).
 func (ed *editor) inGutter(x float32) bool {
 	return x >= ed.gutterX && x < ed.gutterX+ed.gutterW
 }

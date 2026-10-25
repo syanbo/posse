@@ -20,7 +20,7 @@ Future<DeskPick?> pickDeskView(
     // 看桌面常是横屏，高度放不下排布图加列表时能滚
     isScrollControlled: true,
     builder: (sheet) {
-      final c = HiveColors.of(sheet);
+      final c = PosseColors.of(sheet);
       void pick(DeskPick p) => Navigator.of(sheet).pop(p);
       // 只看窗口时屏上不打勾，排布图照样标出窗口所在的那块
       final watching = displays.window;
@@ -139,7 +139,7 @@ class _Note extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-      child: Text(text, style: TextStyle(color: HiveColors.of(context).muted)),
+      child: Text(text, style: TextStyle(color: PosseColors.of(context).muted)),
     );
   }
 }
@@ -157,7 +157,7 @@ class DeskDisplayMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return LayoutBuilder(
       builder: (context, box) {
         final rects = deskDisplayLayout(displays.list, box.biggest);

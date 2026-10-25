@@ -21,11 +21,11 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 // Device 是一个配对码换来的设备 token。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
-// 同一台手机每扫一次码就多一个 token（重新扫码、远程和局域网各存一份），Hive 客户端连上后报上
+// 同一台手机每扫一次码就多一个 token（重新扫码、远程和局域网各存一份），Posse 客户端连上后报上
 // 自己的安装 ID（Phone），列表按它合成一台手机；Orca App 不报，一个 token 算一台。
 type Device struct {
 	ID       string    `json:"id"`
@@ -42,7 +42,7 @@ type Device struct {
 	Online bool `json:"online,omitempty"`
 }
 
-// state 是 $HIVE_HOME/mobile.json：主机的长期密钥对和配对过的手机。手机把公钥记为这台主机的身份，
+// state 是 $POSSE_HOME/mobile.json：主机的长期密钥对和配对过的手机。手机把公钥记为这台主机的身份，
 // 换密钥等于所有手机都要重新配对。
 type state struct {
 	PublicKey string   `json:"publicKey"`
@@ -164,7 +164,7 @@ func (p *pairing) valid(token string) bool {
 	})
 }
 
-// identify 记下 token 属于哪台手机（Hive 客户端的安装 ID）。held 是这台手机还存着的、
+// identify 记下 token 属于哪台手机（Posse 客户端的安装 ID）。held 是这台手机还存着的、
 // 这台电脑发的全部 token：同一台手机不再存着的 token 是重新扫码换掉或在手机上删掉的，一并作废；
 // 还没认领的旧 token 在 held 里就归到这台手机。held 为空时不清理。
 func (p *pairing) identify(id, phone, name string, held []string) (removed []string) {
@@ -289,7 +289,7 @@ func (p *pairing) remove(id string) []string {
 }
 
 // offerCode 是二维码里 orca://pair?code= 后面的部分：Orca 手机 App 的配对信息，base64url 不补位。
-// endpoints 是给 Hive 自己的客户端并发握手用的地址列表，主 endpoint 放在第一位。
+// endpoints 是给 Posse 自己的客户端并发握手用的地址列表，主 endpoint 放在第一位。
 // Orca 的 PairingOfferSchema 不是 strict，多出来的字段会被忽略。
 func offerCode(endpoint string, endpoints []string, token string, pub [32]byte, deviceID string) string {
 	b, _ := json.Marshal(map[string]any{

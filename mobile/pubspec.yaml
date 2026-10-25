@@ -1,5 +1,5 @@
-name: hive_mobile
-description: "Hive mobile client"
+name: posse_mobile
+description: "Posse mobile client"
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -16,8 +16,8 @@ dependencies:
     sdk: flutter
   flutter_markdown_plus: ^1.0.12
   gal: ^2.3.3
-  hive_quic:
-    path: packages/hive_quic
+  posse_quic:
+    path: packages/posse_quic
   image_picker: ^1.2.4
   markdown: ^7.3.1
   pasteboard: ^0.5.0
@@ -50,7 +50,7 @@ flutter:
       fonts:
         - asset: assets/fonts/SymbolsNerdFontMono-Regular.ttf
 
-# 带改动的 flterm 0.0.5（改动见 third_party/flterm/HIVE.md）
+# 带改动的 flterm 0.0.5（改动见 third_party/flterm/POSSE.md）
 dependency_overrides:
   flterm:
     path: third_party/flterm

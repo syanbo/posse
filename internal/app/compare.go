@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // 分支比较的标签页，照 WebStorm：

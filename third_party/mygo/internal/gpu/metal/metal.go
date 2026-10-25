@@ -520,7 +520,7 @@ func New(layer uintptr) (r *Renderer, err error) {
 		// Animation makes while a window animates, also let both instance
 		// slots have a frame in flight while the display shows a third.
 		// They cost a frame of memory until the window idles (trim).
-		// Hive: two. Its window always draws something (a cursor blinks,
+		// Posse: two. Its window always draws something (a cursor blinks,
 		// the status bar ticks), so it never idles long enough to trim,
 		// and the third drawable stayed for good: some 30 MB.
 		if respondsTo(ml, "setMaximumDrawableCount:") {

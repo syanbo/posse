@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/history"
-	"hive/internal/host"
+	"posse/internal/history"
+	"posse/internal/host"
 )
 
 const (
@@ -100,7 +100,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	status, statusAt := "", time.Time{}
 	var recheck <-chan time.Time
 	sendStatus := func() bool {
-		if term == nil || !c.hasCapability("hive.status.v1") {
+		if term == nil || !c.hasCapability("posse.status.v1") {
 			return true
 		}
 		if wait := statusEvery - time.Since(statusAt); wait > 0 {
@@ -282,11 +282,11 @@ func fileInode(fi os.FileInfo) uint64 {
 	return 0
 }
 
-// sessionContext 是会话最后一次请求占用的上下文（Hive 扩展，声明了 hive.context.v1 才有）：
+// sessionContext 是会话最后一次请求占用的上下文（Posse 扩展，声明了 posse.context.v1 才有）：
 // 手机终端太窄，Claude 自己状态栏里的百分比常被截掉，手机把它写在标题下面。
 // 只有 claude 和 codex 的会话文件记了用量，别家和还没有回复的会话回 known=false。
 func (c *conn) sessionContext(id string, p json.RawMessage) error {
-	if !c.hasCapability("hive.context.v1") {
+	if !c.hasCapability("posse.context.v1") {
 		return errorf("method_not_found", "Unknown method: session.context")
 	}
 	var a chatSub

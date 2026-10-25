@@ -21,7 +21,7 @@ class SessionTitle extends StatelessWidget {
   final SessionTab tab;
 
   /// 给了就在 agent 图标右下角画连接状态的小圆点：绿色连着，琥珀色断开或正在重连。
-  final HiveAppModel? model;
+  final PosseAppModel? model;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +49,7 @@ class SessionTitle extends StatelessWidget {
     required bool connecting,
     required bool ended,
   }) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     // 断线时手上的状态已经过时，不显示；会话结束了也没有状态可言
     final state = offline || ended ? AgentState.none : agentStateOf(tab.state);
     final stateText = ended
@@ -122,7 +122,7 @@ class SessionTitle extends StatelessWidget {
 }
 
 extension on SessionTitle {
-  Widget _reconnecting(HiveColors c, bool connecting) {
+  Widget _reconnecting(PosseColors c, bool connecting) {
     return Row(
       key: const ValueKey('reconnecting'),
       children: [
@@ -139,7 +139,7 @@ extension on SessionTitle {
     );
   }
 
-  Widget _withLink(HiveColors c, Widget tile) {
+  Widget _withLink(PosseColors c, Widget tile) {
     final model = this.model;
     if (model == null) return tile;
     return ListenableBuilder(

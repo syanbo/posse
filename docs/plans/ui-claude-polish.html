@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hive 界面质感计划：借鉴 open-claude-ui</title>
+<title>Posse 界面质感计划：借鉴 open-claude-ui</title>
 <style>
   :root {
     --bg: #faf9f7; --surface: #ffffff; --text: #1f1e1c; --muted: #6b6862;
@@ -74,13 +74,13 @@
   <a href="#risks">风险</a>
 </nav>
 <main>
-<h1>Hive 界面质感计划：借鉴 open-claude-ui</h1>
+<h1>Posse 界面质感计划：借鉴 open-claude-ui</h1>
 <div class="byline">2026-10-16 · 参考 <a href="https://github.com/Caho1/open-claude-ui">Caho1/open-claude-ui</a>（提交 2834bc1），本计划不含代码改动</div>
 
 <h2 id="scope">目标与范围</h2>
 <p class="lead">以 Claude 桌面端的克制为准重整界面：暖灰底色、发丝描边、中性选中、少用粗体、只在一个地方用强调色。目标是让界面“安静、有层次”，而不是更花哨。</p>
 <p>要做：底色和文字色阶、描边和投影、选中和悬停、分段选择、按钮、字号阶梯、历史 transcript 排版、代码块和 diff、浮层、焦点环、滚动边缘渐隐。</p>
-<p>不做：流式文字晕染、合成提示音、拖拽重排、灯箱、iframe 沙箱、模型切换器这类和 Hive 功能无关的模块；不引入商业字体；不改常驻进程和协议。</p>
+<p>不做：流式文字晕染、合成提示音、拖拽重排、灯箱、iframe 沙箱、模型切换器这类和 Posse 功能无关的模块；不引入商业字体；不改常驻进程和协议。</p>
 
 <h2 id="source">读到了什么</h2>
 <p>仓库是 9 篇中文手册、30 个 React/Tailwind 示例组件和一份主题 CSS，自称来自对 Claude.app 的逆向分析。能用的是其中的<b>原则</b>；具体数值要打折扣：</p>
@@ -153,9 +153,9 @@
 </table>
 
 <h2 id="phases">分阶段步骤与验收</h2>
-<p>每阶段结束都跑 <code>gofmt</code>、<code>go vet ./...</code>、<code>go test ./...</code>、<code>go tool mygo vet</code>，并生成深浅两套离屏预览逐张对比；能用真实窗口时再在 <code>HIVE_HOME=/tmp/hive-e2e/home</code> 下看一遍。</p>
+<p>每阶段结束都跑 <code>gofmt</code>、<code>go vet ./...</code>、<code>go test ./...</code>、<code>go tool mygo vet</code>，并生成深浅两套离屏预览逐张对比；能用真实窗口时再在 <code>POSSE_HOME=/tmp/posse-e2e/home</code> 下看一遍。</p>
 <ol>
-  <li><span class="phase">令牌</span>：改 <code>style.go</code> 的 <code>colors</code>、<code>hiveTheme</code>，新增字号和圆角常量，重写文件头的设计约定：去掉参照 AndroidMirror 和竖条的说法，加入“单闭合边框”“强调色只做强调”两条；同步改掉 AGENTS.md 界面约定一段，以及 <code>style.go</code>、<code>view.go</code>（底栏、<code>launchTile</code>）注释里以 AndroidMirror 作比的地方。<br>验收：38 张预览整体色温统一；终端底色与卡片一致；对比度 正文 ≥ 7:1、次要文字 ≥ 4.5:1（用脚本从预览取色计算）。</li>
+  <li><span class="phase">令牌</span>：改 <code>style.go</code> 的 <code>colors</code>、<code>posseTheme</code>，新增字号和圆角常量，重写文件头的设计约定：去掉参照 AndroidMirror 和竖条的说法，加入“单闭合边框”“强调色只做强调”两条；同步改掉 AGENTS.md 界面约定一段，以及 <code>style.go</code>、<code>view.go</code>（底栏、<code>launchTile</code>）注释里以 AndroidMirror 作比的地方。<br>验收：38 张预览整体色温统一；终端底色与卡片一致；对比度 正文 ≥ 7:1、次要文字 ≥ 4.5:1（用脚本从预览取色计算）。</li>
   <li><span class="phase">选中、按钮、分段</span>：<code>selectable</code> 改中性；<code>segmented</code> 改轨道 + 滑块；新增 <code>fillButton</code>、<code>ghostButton</code>，替换卡片里的描边按钮；按下缩放 0.98。<br>验收：任务、历史、主界面三页上，除“待处理”、主按钮、工作中星号外看不到陶土色和琥珀色；任一路径上不超过一层闭合边框（逐页人工核对）。</li>
   <li><span class="phase">卡片、浮层、输入区</span>：<code>card</code> 加深浅两套描边；<code>floating</code> 换双环；任务回复区改为一体输入区（发送按钮在框内，⌘↩ 发送，中文输入法合成时回车不发送沿用 mygo 现有行为并加测试）。<br>验收：预览中卡片边缘在深色下清晰但看不到“白框”；输入区聚焦时出现焦点环。</li>
   <li><span class="phase">历史 transcript 与 Markdown</span>：去掉外层卡片、版心 720 居中、用户气泡、元信息行 12pt；代码块加语言栏和复制按钮；行内代码 4 圆角加细线；工具调用默认折叠成一行“工具调用 N 次”，点开展开（全局复选框保留）。<br>验收：<code>history-markdown</code> 预览一行不超过约 40 个汉字；<code>TestParseMarkdown</code> 等现有测试通过；新增代码块复制的界面测试。</li>
@@ -172,7 +172,7 @@
   <tr><td>侧栏没有滚动渐隐</td><td>侧栏是普通的 Scroll，mygo 不提供它的滚动位置；历史会话列表、搜索结果和对话都加了</td></tr>
   <tr><td>行内代码没有加细线</td><td>行内代码是 RichText 里的一段，只能铺底色，画不了边框</td></tr>
   <tr><td>分段滑块的位置没有做 120ms 的滑动动画</td><td>滑块是选中那一段自己的底色，换段时底色有 120ms 的过渡，没有单独的滑块元素可以移动</td></tr>
-  <tr><td>侧栏的两行改单行没有做"设置里恢复两行"</td><td>hive 还没有设置页；选中行仍显示路径，其余行悬停可见</td></tr>
+  <tr><td>侧栏的两行改单行没有做"设置里恢复两行"</td><td>posse 还没有设置页；选中行仍显示路径，其余行悬停可见</td></tr>
 </table>
 <table>
   <tr><th>验证</th><th>结果</th></tr>
@@ -180,7 +180,7 @@
   <tr><td>对比度（用色值计算）</td><td>正文在各层底色上 12.1–16.6:1；次要文字最低 4.89:1（浅色侧栏），都达标</td></tr>
   <tr><td>新增测试</td><td>一体输入区（⌘↩ 发送、拼字时不发送、空的不发送）、工具调用折叠、代码块复制、滚动渐隐（像素级：顶部不画上边、底部不画下边）</td></tr>
   <tr><td>字重</td><td><code>FontWeight(600)</code> 从 48 处降到 3 处（<code>titleText</code>、"待处理"、Markdown 标题）</td></tr>
-  <tr><td>离屏预览</td><td>深浅两套逐张看过；改前的一套在 /tmp/hive-preview-before</td></tr>
+  <tr><td>离屏预览</td><td>深浅两套逐张看过；改前的一套在 /tmp/posse-preview-before</td></tr>
   <tr><td>真实窗口、ANSI 颜色观感、窗口内存和帧时间</td><td>未验证：屏幕锁着</td></tr>
 </table>
 

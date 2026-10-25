@@ -532,7 +532,7 @@ type state struct {
 	webView NativeWebView
 
 	clicks, rightClicks, doubleClicks int
-	// middleClicks counts clicks with the middle button. Hive
+	// middleClicks counts clicks with the middle button. Posse
 	middleClicks int
 	// pressMods are the modifiers held as the pointer went down on the
 	// element, and clickMods those of its last click.

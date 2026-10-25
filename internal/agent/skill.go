@@ -9,36 +9,36 @@ import (
 	"regexp"
 )
 
-// 编排技能：hive 启动的 agent 要派发、并行、监督其他 agent 时，先读 `hive task guide`。
-// 正文由 hive 程序输出，和程序版本一致；这里只按会话注入一个入口，不写用户的全局配置：
-// Claude、Cursor 用 --plugin-dir 加载 hive 生成的插件，Codex 和 Grok 没有按会话加载技能的办法，
+// 编排技能：posse 启动的 agent 要派发、并行、监督其他 agent 时，先读 `posse task guide`。
+// 正文由 posse 程序输出，和程序版本一致；这里只按会话注入一个入口，不写用户的全局配置：
+// Claude、Cursor 用 --plugin-dir 加载 posse 生成的插件，Codex 和 Grok 没有按会话加载技能的办法，
 // 把一句指路放进附加指令（Codex 的 developer_instructions、Grok 的 --rules）。
 
 const (
-	SkillName        = "hive-tasks"
-	SkillDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Hive terminals and coordinate them with `hive task`: start workers with a chosen model and reasoning effort, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Hive (HIVE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
-	skillBody        = "Before running any `hive task` command, run `hive task guide` and follow it: it is the guide for this exact hive version.\n"
+	SkillName        = "posse-tasks"
+	SkillDescription = "Dispatch work to other agents (claude, codex, grok, cursor) in Posse terminals and coordinate them with `posse task`: start workers with a chosen model and reasoning effort, wait for results, answer their questions, retry failures, merge worktrees. Use when running inside Posse (POSSE_TERMINAL_ID is set) and the user asks to delegate, parallelize, hand off, supervise or fan out work to other agents."
+	skillBody        = "Before running any `posse task` command, run `posse task guide` and follow it: it is the guide for this exact posse version.\n"
 	// guideHint 是给 Codex、Grok 的附加指令
-	guideHint = "You are running in a Hive terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `hive task guide`, then coordinate them with `hive task` as it says. " +
-		"When the user asks to name or title this session (e.g. session-namer), run `hive session guide` and follow it."
+	guideHint = "You are running in a Posse terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `posse task guide`, then coordinate them with `posse task` as it says. " +
+		"When the user asks to name or title this session (e.g. session-namer), run `posse session guide` and follow it."
 )
 
-// 会话命名技能：只在用户主动调用时用（disable-model-invocation），规则由 `hive session guide` 输出。
-// Claude 里是插件技能，调用写 /hive:session-namer。
+// 会话命名技能：只在用户主动调用时用（disable-model-invocation），规则由 `posse session guide` 输出。
+// Claude 里是插件技能，调用写 /posse:session-namer。
 const (
 	NamerSkillName = "session-namer"
 	namerSkill     = `---
 name: session-namer
-description: Name the current session (MMDD｜类型｜摘要) with hive session title. Use only when the user invokes session-namer.
+description: Name the current session (MMDD｜类型｜摘要) with posse session title. Use only when the user invokes session-namer.
 disable-model-invocation: true
 argument-hint: "[摘要或完整标题，可省略]"
-allowed-tools: Bash(hive session guide), Bash(hive session title:*)
+allowed-tools: Bash(posse session guide), Bash(posse session title:*)
 ---
 
 User arguments: $ARGUMENTS
 (If the line above still shows the literal ` + "`$ARGUMENTS`" + `, the arguments are whatever the user typed after invoking this skill, possibly nothing.)
 
-Run ` + "`hive session guide`" + ` and follow it: draft the title from the arguments and this session, then set it with ` + "`hive session title`" + `.
+Run ` + "`posse session guide`" + ` and follow it: draft the title from the arguments and this session, then set it with ` + "`posse session title`" + `.
 `
 )
 
@@ -49,12 +49,12 @@ func SkillFrontmatter() string {
 	return "---\nname: " + SkillName + "\ndescription: " + string(desc) + "\n---\n\n"
 }
 
-// claudePlugin 写出 hive 的 Claude 插件目录（编排、会话命名两个技能），经 --plugin-dir 按会话加载；内容没变时不重写。
+// claudePlugin 写出 posse 的 Claude 插件目录（编排、会话命名两个技能），经 --plugin-dir 按会话加载；内容没变时不重写。
 func (l Launcher) claudePlugin() (string, error) {
 	dir := filepath.Join(l.Home, "claude-plugin")
 	manifest, err := json.MarshalIndent(map[string]string{
-		"name":        "hive",
-		"description": "Coordinate other agents from Hive terminals with hive task",
+		"name":        "posse",
+		"description": "Coordinate other agents from Posse terminals with posse task",
 		"version":     "1.0.0",
 	}, "", "  ")
 	if err != nil {

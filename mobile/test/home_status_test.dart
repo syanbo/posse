@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/workspace/models.dart';
-import 'package:hive_mobile/workspace/workspace.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/workspace/models.dart';
+import 'package:posse_mobile/workspace/workspace.dart';
 
 void main() {
   testWidgets('disconnect status lives in the computer pill, list stays put', (
     tester,
   ) async {
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
     model.worktrees = parseWorktrees([
       {
         'worktreeId': 'p1::w1',
-        'repo': 'hive',
+        'repo': 'posse',
         'displayName': 'main',
-        'path': '/Users/x/hive',
+        'path': '/Users/x/posse',
         'isMainWorktree': true,
       },
     ]);
@@ -26,13 +26,13 @@ void main() {
     Future<Offset> projectAt() async {
       await tester.pumpWidget(
         MaterialApp(
-          theme: hiveTheme(Brightness.dark),
+          theme: posseTheme(Brightness.dark),
           home: WorkspaceScreen(model: model),
         ),
       );
       // 转圈一直在动，按时间推进
       await tester.pump(const Duration(milliseconds: 400));
-      return tester.getTopLeft(find.text('hive').last);
+      return tester.getTopLeft(find.text('posse').last);
     }
 
     // 没连上：电脑胶囊写全状态，点不了的历史、新建收起来；重连失败的报错不另外浮一条
@@ -56,14 +56,14 @@ void main() {
   testWidgets('a disconnect by hand says so and offers to reconnect', (
     tester,
   ) async {
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
     model.disconnected = true;
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: WorkspaceScreen(model: model),
       ),
     );
@@ -78,13 +78,13 @@ void main() {
     tester.view.physicalSize = const Size(2622, 1206);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: WorkspaceScreen(model: model),
       ),
     );

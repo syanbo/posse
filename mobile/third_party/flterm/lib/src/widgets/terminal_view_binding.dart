@@ -70,7 +70,7 @@ abstract interface class TerminalViewBinding {
   });
 
   /// Reports scroll by line count. [at] is where the finger is, in
-  /// logical pixels relative to the terminal (Hive).
+  /// logical pixels relative to the terminal (Posse).
   void handleScroll(int lines, {Offset? at});
 
   /// Applies a press selection gesture.

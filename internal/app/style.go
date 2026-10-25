@@ -63,7 +63,7 @@ const (
 	rComposer = 16
 )
 
-// palette 是在系统主题之外 Hive 自己的颜色。
+// palette 是在系统主题之外 Posse 自己的颜色。
 type palette struct {
 	honey  ui.Color // 等你处理
 	sage   ui.Color // 本轮完成
@@ -97,16 +97,16 @@ func colors(t *ui.Theme) palette {
 	}
 }
 
-var hiveThemes [2]*ui.Theme
+var posseThemes [2]*ui.Theme
 
-// hiveTheme 在系统主题上换成暖灰、Claude 橙和 8px 圆角；卡片和终端一个颜色（Background）。
-func hiveTheme(dark bool) *ui.Theme {
+// posseTheme 在系统主题上换成暖灰、Claude 橙和 8px 圆角；卡片和终端一个颜色（Background）。
+func posseTheme(dark bool) *ui.Theme {
 	i := 0
 	if dark {
 		i = 1
 	}
-	if hiveThemes[i] != nil {
-		return hiveThemes[i]
+	if posseThemes[i] != nil {
+		return posseThemes[i]
 	}
 	var t *ui.Theme
 	if dark {
@@ -129,15 +129,15 @@ func hiveTheme(dark bool) *ui.Theme {
 	t.Radius = 8
 	// 照 Orca：能点的地方是手形指针，拖动中是抓握的手
 	t.PointerCursor = true
-	hiveThemes[i] = t
+	posseThemes[i] = t
 	return t
 }
 
-// terminalThemes 让终端底色跟着 Hive 的主题，而不是 mygo 默认的底色。
+// terminalThemes 让终端底色跟着 Posse 的主题，而不是 mygo 默认的底色。
 func terminalThemes() (light, dark *terminal.Theme) {
 	light, dark = terminal.LightTheme(), terminal.DarkTheme()
-	light.Background, light.Foreground = hiveTheme(false).Background, hiveTheme(false).Text
-	dark.Background, dark.Foreground = hiveTheme(true).Background, hiveTheme(true).Text
+	light.Background, light.Foreground = posseTheme(false).Background, posseTheme(false).Text
+	dark.Background, dark.Foreground = posseTheme(true).Background, posseTheme(true).Text
 	return light, dark
 }
 
@@ -282,7 +282,7 @@ func doneLabel(c *ui.Context) ui.Element {
 	return ui.Text(c, "已完成").FontSize(11).FontWeight(600).TextColor(c.Theme().Accent)
 }
 
-// isWorktree 报告工作区是不是 git worktree：hive 建的（worktree），或者从别处加进来的（attach 记成 folder，
+// isWorktree 报告工作区是不是 git worktree：posse 建的（worktree），或者从别处加进来的（attach 记成 folder，
 // 但目录不是项目目录）。
 func (a *app) isWorktree(w *workspace) bool {
 	if w.Kind == "worktree" {

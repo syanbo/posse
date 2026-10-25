@@ -98,7 +98,7 @@ const _thumbMax = 120;
 class MediaScreen extends StatefulWidget {
   const MediaScreen({super.key, required this.model, required this.tab});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final SessionTab tab;
 
   @override
@@ -141,7 +141,7 @@ class _MediaScreenState extends State<MediaScreen> {
       if (e.code == 'method_not_found') {
         _timer?.cancel();
         if (mounted) {
-          setState(() => _error = '电脑上的 hive 版本太旧，更新后才能在手机上看会话里的图片和视频');
+          setState(() => _error = '电脑上的 posse 版本太旧，更新后才能在手机上看会话里的图片和视频');
         }
       } else if (mounted && _list == null) {
         setState(() => _error = friendlyError(e));
@@ -163,7 +163,7 @@ class _MediaScreenState extends State<MediaScreen> {
   }
 
   Widget _body(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final list = _list;
     if (list == null) {
       if (_error != null) {
@@ -173,7 +173,7 @@ class _MediaScreenState extends State<MediaScreen> {
           error: true,
         );
       }
-      return const Center(child: HiveLoader());
+      return const Center(child: PosseLoader());
     }
     if (list.isEmpty) {
       return const EmptyState(
@@ -212,7 +212,7 @@ class _MediaScreenState extends State<MediaScreen> {
     );
   }
 
-  Widget _header(HiveColors c, String title, int n) => SliverToBoxAdapter(
+  Widget _header(PosseColors c, String title, int n) => SliverToBoxAdapter(
     child: Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
       child: Row(
@@ -277,7 +277,7 @@ class _MediaTile extends StatefulWidget {
     required this.now,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final SessionTab tab;
 
   /// 这一页的全部项和这一格在其中的位置，点开后从这里左右翻。
@@ -329,7 +329,7 @@ class _MediaTileState extends State<_MediaTile> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final item = widget.item;
     final thumb = _thumb;
     final time = historyTime(item.at, widget.now);
@@ -492,7 +492,7 @@ class MediaViewer extends StatefulWidget {
     required this.index,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final SessionTab tab;
   final List<MediaItem> items;
   final int index;
@@ -513,7 +513,7 @@ class _MediaViewerState extends State<MediaViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final items = widget.items;
     final item = items[_index];
     final tab = widget.tab;
@@ -671,7 +671,7 @@ class _ImageViewState extends State<_ImageView> {
       );
     }
     final file = _file;
-    if (file == null) return const Center(child: HiveLoader());
+    if (file == null) return const Center(child: PosseLoader());
     return ZoomImage(child: Image.file(file));
   }
 }

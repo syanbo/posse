@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 func TestPermissionHoldAndGit(t *testing.T) {
@@ -47,11 +47,11 @@ func TestPermissionHoldAndGit(t *testing.T) {
 		t.Fatal("missing snapshot")
 	}
 	if srv.HoldPermission(context.Background(), "t_1", json.RawMessage(`{"tool_name":"Bash"}`), tm.LastInput) != "" {
-		t.Fatal("held a phone that did not declare hive.permission.v1")
+		t.Fatal("held a phone that did not declare posse.permission.v1")
 	}
 
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.permission.v1", "hive.git.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.permission.v1", "posse.git.v1"},
 	})))
 	denied := p.next(p.call("git.status", map[string]any{}))
 	if denied["ok"] != false {
@@ -83,7 +83,7 @@ func TestPermissionDecide(t *testing.T) {
 	}
 	p := dialPhone(t, srv, info)
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.permission.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.permission.v1"},
 	})))
 	sub := p.call("nativeChat.subscribe", map[string]any{
 		"agent": "claude", "sessionId": "sid", "subscriptionId": "agent:sid:live", "limit": 5,
@@ -184,7 +184,7 @@ func TestGitStatusAndDiff(t *testing.T) {
 		t.Fatalf("orca connection saw git.status: %v", missing)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.git.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.git.v1"},
 	})))
 	st := result(t, p.next(p.call("git.status", map[string]any{"worktree": "id:p1::w1"})))
 	if st["branch"] != "main" {
@@ -215,7 +215,7 @@ func TestGitStatusAndDiff(t *testing.T) {
 	}
 }
 
-// 手机端历史：没声明 hive.history.v1 的连接（Orca App）看不到；声明后转给常驻进程，报错换成看得懂的话。
+// 手机端历史：没声明 posse.history.v1 的连接（Orca App）看不到；声明后转给常驻进程，报错换成看得懂的话。
 func TestHistoryMethods(t *testing.T) {
 	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
 	if err != nil {
@@ -232,7 +232,7 @@ func TestHistoryMethods(t *testing.T) {
 		t.Fatalf("orca connection saw history.list: %v", hidden)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.history.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.history.v1"},
 	})))
 	list := result(t, p.next(p.call("history.search", map[string]any{"query": "bug", "limit": 50})))
 	ss, _ := list["sessions"].([]any)
@@ -247,7 +247,7 @@ func TestHistoryMethods(t *testing.T) {
 	}
 }
 
-// 套餐用量：没声明 hive.usage.v1 的连接看不到；声明后原样拿到常驻进程的读数。
+// 套餐用量：没声明 posse.usage.v1 的连接看不到；声明后原样拿到常驻进程的读数。
 func TestUsageMethod(t *testing.T) {
 	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}}, -1)
 	if err != nil {
@@ -264,7 +264,7 @@ func TestUsageMethod(t *testing.T) {
 		t.Fatalf("orca connection saw usage.get: %v", hidden)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.usage.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.usage.v1"},
 	})))
 	got := result(t, p.next(p.call("usage.get", nil)))
 	us, _ := got["usages"].([]any)
@@ -277,7 +277,7 @@ func TestUsageMethod(t *testing.T) {
 	}
 }
 
-// 会话上下文：没声明 hive.context.v1 的连接看不到；声明后按会话文件最后一条回复的用量算。
+// 会话上下文：没声明 posse.context.v1 的连接看不到；声明后按会话文件最后一条回复的用量算。
 func TestSessionContext(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s1.jsonl")
 	line := `{"type":"assistant","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"cache_read_input_tokens":49990,"output_tokens":0}}}` + "\n"
@@ -300,7 +300,7 @@ func TestSessionContext(t *testing.T) {
 		t.Fatalf("orca connection saw session.context: %v", hidden)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.context.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.context.v1"},
 	})))
 	got := result(t, p.next(p.call("session.context", args)))
 	if got["known"] != true || got["percent"] != float64(25) || got["window"] != float64(200000) {
@@ -327,7 +327,7 @@ func TestSlowHistoryDoesNotBlockPing(t *testing.T) {
 	}
 	p := dialPhone(t, srv, info)
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.history.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.history.v1"},
 	})))
 	slow := p.call("history.list", map[string]any{})
 	if _, ok := p.nextWithin(p.call("runtime.ping", map[string]any{}), 2*time.Second); !ok {

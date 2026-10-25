@@ -89,15 +89,15 @@ func TestResolveImport(t *testing.T) {
 
 func TestImportPathOn(t *testing.T) {
 	tests := map[string]string{
-		`import x from "./x";`:         "./x",
-		`const y = require('../y')`:    "../y",
-		`	"hive/internal/files"`:       "hive/internal/files",
-		`import "hive/internal/files"`: "hive/internal/files",
-		`@import url("theme.css");`:    "theme.css",
-		`#include <stdio.h>`:           "stdio.h",
-		`export * from "./z"`:          "./z",
-		`const s = "not an import"`:    "",
-		`foo("./looks/like/path")`:     "",
+		`import x from "./x";`:          "./x",
+		`const y = require('../y')`:     "../y",
+		`	"posse/internal/files"`:       "posse/internal/files",
+		`import "posse/internal/files"`: "posse/internal/files",
+		`@import url("theme.css");`:     "theme.css",
+		`#include <stdio.h>`:            "stdio.h",
+		`export * from "./z"`:           "./z",
+		`const s = "not an import"`:     "",
+		`foo("./looks/like/path")`:      "",
 	}
 	for line, want := range tests {
 		if got := ImportPathOn(line); got != want {

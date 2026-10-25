@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-/// 二维码里的配对信息。Orca 只读 endpoint；endpoints 是 Hive 客户端要并发尝试的地址。
+/// 二维码里的配对信息。Orca 只读 endpoint；endpoints 是 Posse 客户端要并发尝试的地址。
 class PairingOffer {
   const PairingOffer({
     required this.endpoint,

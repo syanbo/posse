@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // worktreeWorkspace 把 w1 换成从项目目录分出去的 worktree，两边改了 main.go 的同一行：

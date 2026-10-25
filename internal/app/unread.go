@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
+	"posse/internal/agent"
 )
 
 // statusUnread 是界面自己的状态：本轮完成时你不在看这个会话，还没切过去看。照 Orca 的

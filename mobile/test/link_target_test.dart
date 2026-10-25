@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/link_target.dart';
+import 'package:posse_mobile/terminal/link_target.dart';
 
 const root = '/Users/me/code/app';
 

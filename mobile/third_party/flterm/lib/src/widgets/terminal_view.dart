@@ -79,10 +79,10 @@ class TerminalView extends StatefulWidget {
   /// the remaining space after padding. Defaults to 8px on all sides.
   final EdgeInsets padding;
 
-  /// Hive: 这个视图外面还有多宽的内边距，格子外面的底色要接着画过去，见 [TerminalRenderer.backgroundBleed]。
+  /// Posse: 这个视图外面还有多宽的内边距，格子外面的底色要接着画过去，见 [TerminalRenderer.backgroundBleed]。
   final EdgeInsets backgroundBleed;
 
-  /// Hive: 画面里到第几行为止有内容，见 [TerminalRenderer.onContentRows]。
+  /// Posse: 画面里到第几行为止有内容，见 [TerminalRenderer.onContentRows]。
   final ValueChanged<int>? onContentRows;
 
   /// Scroll physics for scrollback navigation.
@@ -114,7 +114,7 @@ class TerminalView extends StatefulWidget {
   /// fallbacks are used.
   final Uint8List? fontData;
 
-  /// Hive: 手指点击（不是链接）时调用，设了就不再自己聚焦，弹不弹键盘交给外层。
+  /// Posse: 手指点击（不是链接）时调用，设了就不再自己聚焦，弹不弹键盘交给外层。
   final VoidCallback? onTap;
 
   const TerminalView({
@@ -155,7 +155,7 @@ class _TerminalViewState extends State<TerminalView> {
   var _ownsScrollController = false;
   var _mouseCursorHidden = false;
   var _lastAlternatePixels = 0.0;
-  // Hive: 手指最近一次按下、移动的位置，全屏程序跟踪鼠标时滚轮报在这里。抬手后的惯性滚动沿用它。
+  // Posse: 手指最近一次按下、移动的位置，全屏程序跟踪鼠标时滚轮报在这里。抬手后的惯性滚动沿用它。
   Offset? _scrollAnchor;
   var _visibleCols = 0;
   var _visibleRows = 0;
@@ -299,7 +299,7 @@ class _TerminalViewState extends State<TerminalView> {
 
     _scrollController = widget.scrollController ?? TerminalScrollController();
     _ownsScrollController = widget.scrollController == null;
-    // Hive: 接上时控制器可能已经在备用屏幕（less 停着不输出），不同步的话滚动按主屏幕夹住，不会换成方向键。
+    // Posse: 接上时控制器可能已经在备用屏幕（less 停着不输出），不同步的话滚动按主屏幕夹住，不会换成方向键。
     _scrollController.activeScreen = _controller.activeScreen;
     _scrollController.addListener(_onScrollChanged);
 
@@ -467,7 +467,7 @@ class _TerminalViewState extends State<TerminalView> {
     _syncLinkInteraction();
     if (_scrollController.activeScreen != _controller.activeScreen &&
         _scrollController.hasClients) {
-      // Hive: 换屏时滚动换算的基准对齐当前位置，不然第一次滑动按主屏幕的偏移算出一大串滚轮
+      // Posse: 换屏时滚动换算的基准对齐当前位置，不然第一次滑动按主屏幕的偏移算出一大串滚轮
       _lastAlternatePixels = _scrollController.position.pixels;
     }
     _scrollController.activeScreen = _controller.activeScreen;

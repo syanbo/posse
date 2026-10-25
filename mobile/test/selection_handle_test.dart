@@ -5,8 +5,8 @@ import 'package:flterm/flterm.dart' hide Key;
 import 'package:flterm/src/rendering.dart' show measureCellMetrics;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/selection_chrome.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/terminal/selection_chrome.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 void main() {
   testWidgets('拖一端把手拉长选区，点空白取消', (tester) async {

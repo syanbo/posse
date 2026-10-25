@@ -41,7 +41,7 @@ class TerminalScreen extends StatefulWidget {
     this.onOpenChat,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final SessionTab tab;
 
   /// 设置里选了先开终端时，从这里切到对话页。
@@ -365,7 +365,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 快照和输出是远端画面。写进去时本地模拟器可能应答查询，那些字节不能再送回 PTY。
   Widget _terminalView(
-    HiveColors c, {
+    PosseColors c, {
     double? fontSize,
     ScrollPhysics? scrollPhysics,
     TerminalScrollController? scrollController,
@@ -435,7 +435,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 手机布局时把终端排宽 2×[_grokMargin] 列，左右各裁掉这么多，grok 的内容贴着屏幕边。
   bool get _cropGrok => widget.tab.agent == 'grok' && !_desk;
 
-  Widget _croppedView(HiveColors c, BoxConstraints box) {
+  Widget _croppedView(PosseColors c, BoxConstraints box) {
     final cell = _cellMetrics(widget.model.settings.terminalFontSize);
     final margin = cell.cellWidth * _grokMargin;
     final width = box.maxWidth + margin * 2;
@@ -454,7 +454,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 电脑布局：按快照的列和行排成桌面那一块，再缩进屏幕宽度。手势在这块表面上，
   /// 不另加横向滚动，免得和终端自己的纵向滚动抢。还没有快照时先铺满。
-  Widget _deskView(HiveColors c, BoxConstraints box) {
+  Widget _deskView(PosseColors c, BoxConstraints box) {
     // 程序自己铺了底色（比如 grok）时，外面的内边距接着画它的底色，不露出一圈主题色；
     // 电脑布局能缩放、平移，不往外延
     if (!_desk || _deskCols <= 0) {
@@ -558,7 +558,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     double gridH,
     BoxConstraints box,
   ) {
-    // Hive: 鼠标跟踪时这一指也不交给程序拖选，滑动仍平移和滚动。
+    // Posse: 鼠标跟踪时这一指也不交给程序拖选，滑动仍平移和滚动。
     final render = _deskBox;
     if (render == null) return;
     final local = render.globalToLocal(details.focalPoint);
@@ -857,7 +857,7 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Scaffold(
       backgroundColor: c.card,
       appBar: AppBar(
@@ -1033,7 +1033,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     );
   }
 
-  Widget _terminalArea(HiveColors c) {
+  Widget _terminalArea(PosseColors c) {
     return Padding(
       padding: _cropGrok ? EdgeInsets.zero : _termPadding,
       child: LayoutBuilder(
@@ -1046,8 +1046,8 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 }
 
-/// 终端底色和卡片一致，前景用 Hive 的文字色，等宽字体用 Menlo。
-TerminalTheme terminalTheme(HiveColors c, {double fontSize = 12.5}) {
+/// 终端底色和卡片一致，前景用 Posse 的文字色，等宽字体用 Menlo。
+TerminalTheme terminalTheme(PosseColors c, {double fontSize = 12.5}) {
   final base = c.dark ? TerminalTheme.dark() : TerminalTheme.light();
   return TerminalTheme(
     palette: ColorPalette(
@@ -1097,7 +1097,7 @@ class _KeyBar extends StatelessWidget {
   final VoidCallback onKeyboard;
 
   Widget _iconKey(
-    HiveColors c, {
+    PosseColors c, {
     IconData? icon,
     Widget? glyph,
     double size = 18,
@@ -1126,7 +1126,7 @@ class _KeyBar extends StatelessWidget {
     );
   }
 
-  Widget _textKey(HiveColors c, String label, VoidCallback onTap) {
+  Widget _textKey(PosseColors c, String label, VoidCallback onTap) {
     return Material(
       color: c.fill,
       borderRadius: BorderRadius.circular(Rd.button),
@@ -1157,7 +1157,7 @@ class _KeyBar extends StatelessWidget {
   static const _pasteIcon = 19.0;
 
   /// 键盘开关：弹着时放下来看输出，收着时点它弹出来打字。
-  Widget _hideKeyboard(HiveColors c) {
+  Widget _hideKeyboard(PosseColors c) {
     return Material(
       color: c.fill,
       borderRadius: BorderRadius.circular(Rd.button),
@@ -1178,7 +1178,7 @@ class _KeyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Container(
       decoration: BoxDecoration(
         color: c.band,

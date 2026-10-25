@@ -141,7 +141,7 @@ class DeskToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Material(
       key: const Key('desk-toolbar'),
       color: c.card.withValues(alpha: 0.94),
@@ -157,7 +157,7 @@ class DeskToolbar extends StatelessWidget {
     );
   }
 
-  Widget _shut(HiveColors c) {
+  Widget _shut(PosseColors c) {
     final signal = _signal(c);
     final icon = Icon(signal.$1, size: 14, color: signal.$2);
     final label = Text(
@@ -177,7 +177,7 @@ class DeskToolbar extends StatelessWidget {
     );
   }
 
-  Widget _open(HiveColors c) {
+  Widget _open(PosseColors c) {
     final icons = <Widget>[
       _icon(
         c,
@@ -256,7 +256,7 @@ class DeskToolbar extends StatelessWidget {
   }
 
   /// 还没测到时不画满格，不然像是连接很好。
-  (IconData, Color) _signal(HiveColors c) {
+  (IconData, Color) _signal(PosseColors c) {
     if (latency == null && !unresponsive) {
       return (Icons.signal_cellular_alt, c.faint);
     }
@@ -267,7 +267,7 @@ class DeskToolbar extends StatelessWidget {
   }
 
   Widget _icon(
-    HiveColors c, {
+    PosseColors c, {
     required Key key,
     required IconData icon,
     required String tooltip,

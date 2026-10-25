@@ -6,14 +6,14 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // 点汇总里的标签和时间线里的名字都复制名字
 func TestUsageCopyName(t *testing.T) {
 	a := &app{}
 	u := history.Usage{
-		Skills: []history.UsageItem{{Name: "hive-tasks", Count: 2}},
+		Skills: []history.UsageItem{{Name: "posse-tasks", Count: 2}},
 		MCP:    []history.MCPUsage{{Server: "androidmirror", Count: 1}},
 		Events: []history.UsageEvent{{Server: "androidmirror", Tool: "screen_observe", At: time.Now()}},
 	}
@@ -24,7 +24,7 @@ func TestUsageCopyName(t *testing.T) {
 		})
 	}, 360, 400)
 	tt.Frame()
-	for _, name := range []string{"hive-tasks", "androidmirror", "screen_observe"} {
+	for _, name := range []string{"posse-tasks", "androidmirror", "screen_observe"} {
 		if err := tt.Click("复制 " + name); err != nil {
 			t.Fatal(err)
 		}

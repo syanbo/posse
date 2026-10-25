@@ -22,7 +22,7 @@ func TestGitTrace(t *testing.T) {
 	}
 	repo := filepath.Join(t.TempDir(), "r")
 	env := append(os.Environ(), gitTraceEnv(d.cfg.Home)...)
-	env = append(env, "HIVE_TERMINAL_ID="+s.ID, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	env = append(env, "POSSE_TERMINAL_ID="+s.ID, "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 	git := func(dir string, args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir, cmd.Env = dir, env

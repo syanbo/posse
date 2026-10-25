@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 // 状态取值。exited 指 agent 本身退出，终端里的 shell 仍在。
@@ -17,7 +17,7 @@ const (
 	StatusExited   = "exited"
 )
 
-// hookPayload 是 Claude Code、Codex、Cursor hooks 输入里 hive 用到的字段。
+// hookPayload 是 Claude Code、Codex、Cursor hooks 输入里 posse 用到的字段。
 type hookPayload struct {
 	SessionID        string          `json:"session_id"`
 	TranscriptPath   string          `json:"transcript_path"`

@@ -17,11 +17,11 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/files"
-	"hive/internal/gitx"
-	"hive/internal/history"
-	"hive/internal/media"
-	"hive/internal/usage"
+	"posse/internal/files"
+	"posse/internal/gitx"
+	"posse/internal/history"
+	"posse/internal/media"
+	"posse/internal/usage"
 )
 
 // nopConn 让界面里的终端只显示喂进去的内容。
@@ -53,7 +53,7 @@ func previewApp(t *testing.T) *app {
 	a.workspaces = []workspace{
 		{ID: "w1", ProjectID: "p1", Name: "main", Kind: "main", Project: "Apps", Label: "Apps/main", Path: os.Getenv("HOME") + "/Desktop/AI/Apps",
 			Terminals: []terminalInfo{
-				{ID: "t1", Agent: "claude", Title: "✳ 重写 hive 界面", Running: true, AgentState: state("waiting")},
+				{ID: "t1", Agent: "claude", Title: "✳ 重写 posse 界面", Running: true, AgentState: state("waiting")},
 				{ID: "t2", Agent: "codex", Title: "codex", Running: true, AgentState: state("working")},
 				{ID: "t3", Title: "zsh", Running: true},
 			}},
@@ -62,9 +62,9 @@ func previewApp(t *testing.T) *app {
 			Terminals: []terminalInfo{{ID: "t4", Agent: "claude", Running: true, AgentState: state("idle")}}},
 		{ID: "w4", ProjectID: "p4", Name: "main", Kind: "main", Project: "Server", Label: "Server/main", Path: "/Users/x/Server"},
 		{ID: "w5", ProjectID: "p5", Name: "main", Kind: "main", Project: "Skill", Label: "Skill/main", Branch: "main", Path: "/Users/x/Skill"},
-		{ID: "w6", ProjectID: "p5", Name: "feat-login", Kind: "worktree", Project: "Skill", Label: "Skill/feat-login", Branch: "feat-login", Path: "/Users/x/.hive/worktrees/Skill/feat-login",
+		{ID: "w6", ProjectID: "p5", Name: "feat-login", Kind: "worktree", Project: "Skill", Label: "Skill/feat-login", Branch: "feat-login", Path: "/Users/x/.posse/worktrees/Skill/feat-login",
 			Terminals: []terminalInfo{{ID: "t5", Agent: "codex", Running: true, AgentState: state("working")}}},
-		{ID: "w9", ProjectID: "p5", Name: "ios-crash", Kind: "worktree", Project: "Skill", Label: "Skill/ios-crash", Branch: "hotfix/ios-crash-212", Path: "/Users/x/.hive/worktrees/Skill/ios-crash"},
+		{ID: "w9", ProjectID: "p5", Name: "ios-crash", Kind: "worktree", Project: "Skill", Label: "Skill/ios-crash", Branch: "hotfix/ios-crash-212", Path: "/Users/x/.posse/worktrees/Skill/ios-crash"},
 		{ID: "w7", ProjectID: "p6", Name: "app", Kind: "main", Project: "Works", Label: "Works/app", Path: "/Users/x/Works"},
 		{ID: "w8", ProjectID: "p6", Name: "web", Kind: "folder", Project: "Works", Label: "Works/web", Path: "/Users/x/Works"},
 	}
@@ -169,7 +169,7 @@ func previewMarkdown(a *app) {
 		{Seq: 1, Role: "assistant", At: now.Add(-39 * time.Minute), Text: "我按 [egoist/mygo](https://pkg.go.dev/github.com/egoist/mygo) 来理解\"mygo\"，先实测了 Orca。\n\n" +
 			"## 结论\n\n可以重写，但性能提升主要来自两点：**只做这三个功能**，后台换成 Go 常驻进程。\n\n" +
 			"## 实测现状（已核实）\n\n| 项目 | 数据 |\n|---|---|\n| Orca 版本 | 1.4.224，Electron 加一个 Node 后台进程 |\n| 自身内存 | 约 1.1 GB：主进程 235 MB，界面进程 442 MB |\n| 每个 agent 终端 | 540 到 700 MB，**重写后不会变** |\n\n" +
-			"下一步：\n\n1. 先做终端和 `hive daemon`\n2. 再做编排\n   - worktree 隔离\n   - 任务汇报\n\n- [x] 调研 Orca\n- [ ] 手机遥控\n\n" +
+			"下一步：\n\n1. 先做终端和 `posse daemon`\n2. 再做编排\n   - worktree 隔离\n   - 任务汇报\n\n- [x] 调研 Orca\n- [ ] 手机遥控\n\n" +
 			"> 换框架本身带来的收益有限。\n\n```go\nfunc main() {\n\tmygo.Run(app)\n}\n```"},
 	}}
 }
@@ -380,7 +380,7 @@ func previewConsole(t *testing.T, a *app) {
 	add("提交", 2, dir, 40, gitx.Run{Args: []string{"add", "-A", "--", ":(literal)internal/app/view.go"}})
 	add("提交", 2, dir, 40, gitx.Run{Args: []string{"commit", "-q", "--only", "-F", "-", "--", ":(literal)internal/app/view.go"}, Took: 310 * time.Millisecond})
 	add("Push", 3, dir, 80, gitx.Run{Args: []string{"push", "--force-with-lease", "--force-if-includes", "origin", "main:main"}, Took: 2100 * time.Millisecond,
-		Err: "To github.com:dengbo/hive.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:dengbo/hive.git'"})
+		Err: "To github.com:dengbo/posse.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'github.com:dengbo/posse.git'"})
 	add("更新项目", 4, dir, 120, gitx.Run{Args: []string{"pull", "--rebase", "--autostash"}, Took: 1800 * time.Millisecond, Out: "Successfully rebased and updated refs/heads/main."})
 	add("更新项目", 4, dir, 122, gitx.Run{Args: []string{"diff", "--name-only", "--diff-filter=U"}})
 	add("Push", 5, dir, 240, gitx.Run{Args: []string{"push", "origin", "main:main"}})
@@ -417,7 +417,7 @@ func previewUsageEvents() []history.UsageEvent {
 }
 
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
-	dir := os.Getenv("HIVE_PREVIEW_DIR")
+	dir := os.Getenv("POSSE_PREVIEW_DIR")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -445,10 +445,10 @@ func newPreviewTester(a *app, dark bool) *ui.Tester {
 	return tt
 }
 
-// TestPreview 把主要界面渲染成 PNG，供改界面时对照；设置 HIVE_PREVIEW_DIR 才运行。
+// TestPreview 把主要界面渲染成 PNG，供改界面时对照；设置 POSSE_PREVIEW_DIR 才运行。
 func TestPreview(t *testing.T) {
-	if os.Getenv("HIVE_PREVIEW_DIR") == "" {
-		t.Skip("set HIVE_PREVIEW_DIR to render previews")
+	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
+		t.Skip("set POSSE_PREVIEW_DIR to render previews")
 	}
 	for _, dark := range []bool{true, false} {
 		suffix := map[bool]string{true: "dark", false: "light"}[dark]
@@ -486,7 +486,7 @@ func TestPreview(t *testing.T) {
 		a.workspaces[0].Terminals[0].Name = "1009｜feat｜番茄女频长篇调研与连载写作，还要再长一点才超出标签"
 		savePNG(t, newPreviewTester(a, dark), "tab-long-title-"+suffix+".png")
 
-		// 协调者阻塞在 hive task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
+		// 协调者阻塞在 posse task wait 上：侧栏是"等待任务"的波形，worker 排在它下面
 		a = previewApp(t)
 		a.workspaces[0].Terminals[0].AgentState = &agentState{Status: "working"}
 		a.workspaces[0].Terminals[0].WaitingTasks = true
@@ -523,7 +523,7 @@ func TestPreview(t *testing.T) {
 		*a.sectionsOpen["p3"] = false
 		savePNG(t, newPreviewTester(a, dark), "unread-"+suffix+".png")
 
-		// 窗口的 Hive.app 被换掉：侧栏底部提示重开
+		// 窗口的 Posse.app 被换掉：侧栏底部提示重开
 		a = previewApp(t)
 		a.staleApp = true
 		savePNG(t, newPreviewTester(a, dark), "stale-app-"+suffix+".png")
@@ -672,7 +672,7 @@ func TestPreview(t *testing.T) {
 		tt.Frame()
 		savePNG(t, tt, "files-cmd-hover-"+suffix+".png")
 
-		// 编辑器的右键菜单：mygo 交来的菜单也是 Hive 自绘，英文换成中文
+		// 编辑器的右键菜单：mygo 交来的菜单也是 Posse 自绘，英文换成中文
 		a = previewApp(t)
 		previewFiles(t, a, "internal/app/view.go", "README.md", "main.go")
 		tt = newPreviewTester(a, dark)
@@ -774,7 +774,7 @@ func TestPreview(t *testing.T) {
 		previewLog(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-log-"+suffix+".png")
 
-		// 日志浮层的控制台：Hive 执行的 git 命令，失败的是红的
+		// 日志浮层的控制台：Posse 执行的 git 命令，失败的是红的
 		a = previewApp(t)
 		previewConsole(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-console-"+suffix+".png")
@@ -933,7 +933,7 @@ func previewImages() imagesView {
 	return imagesView{term: "t1", poll: panelPoll{at: now}, madeAll: 3,
 		made: []imageItem{
 			{Item: media.Item{Key: "s:3", Label: "phone_screenshot", At: now.Add(-2 * time.Minute), Tool: &history.ToolImage{Tool: "mcp__iphone-use__phone_screenshot"}}, thumb: block(236, 512, color.RGBA{40, 44, 52, 255}, color.RGBA{217, 119, 87, 255})},
-			{Item: media.Item{Key: "s:2", Label: "git-compare-dark.png", At: now.Add(-9 * time.Minute), Tool: &history.ToolImage{Tool: "Read", Path: "/tmp/hive-preview/git-compare-dark.png"}}, thumb: block(512, 324, color.RGBA{38, 38, 36, 255}, color.RGBA{91, 141, 239, 255})},
+			{Item: media.Item{Key: "s:2", Label: "git-compare-dark.png", At: now.Add(-9 * time.Minute), Tool: &history.ToolImage{Tool: "Read", Path: "/tmp/posse-preview/git-compare-dark.png"}}, thumb: block(512, 324, color.RGBA{38, 38, 36, 255}, color.RGBA{91, 141, 239, 255})},
 		},
 		pasted: []imageItem{
 			{Item: media.Item{Key: "p:1", N: 1, Label: "#1", Path: "/tmp/1.png"}, thumb: block(512, 300, color.RGBA{243, 242, 239, 255}, color.RGBA{141, 187, 146, 255})},

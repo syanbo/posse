@@ -109,7 +109,7 @@ Future<File> _fetchChunked({
   required void Function(int done, int total) onProgress,
 }) async {
   final name = sha1.convert(utf8.encode(key)).toString();
-  final dir = Directory('${Directory.systemTemp.path}/hive-video');
+  final dir = Directory('${Directory.systemTemp.path}/posse-video');
   await dir.create(recursive: true);
   final file = File('${dir.path}/$name$ext');
   // 下完才改名，所以有这个文件就是下完了的
@@ -258,7 +258,7 @@ class _VideoViewState extends State<VideoView> {
       _fail('视频超过 500 MB，手机上不下载');
     } on RpcException catch (e) {
       if (e.code == 'method_not_found') {
-        _fail('电脑上的 hive 版本太旧，更新后才能在手机上播放视频');
+        _fail('电脑上的 posse 版本太旧，更新后才能在手机上播放视频');
       } else if (e.code == 'closed') {
         _fail('和电脑的连接断了，下好的部分留着', resumable: true);
       } else {
@@ -297,7 +297,7 @@ class _VideoViewState extends State<VideoView> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     if (_error != null) {
       return EmptyState(
         icon: Icons.videocam_off_outlined,
@@ -398,7 +398,7 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     const tnum = [FontFeature.tabularFigures()];
     return SafeArea(
       top: false,

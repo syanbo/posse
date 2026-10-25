@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// popMenu 是 Hive 自己画的菜单，代替系统菜单（NSMenu）：系统菜单的悬停高亮是系统强调色、底板是毛玻璃，都改不了。
+// popMenu 是 Posse 自己画的菜单，代替系统菜单（NSMenu）：系统菜单的悬停高亮是系统强调色、底板是毛玻璃，都改不了。
 // 用法照 ui.Menu：build 里 Item(...).Shortcut().Disabled().Checked().Chosen()、Separator、Submenu。
 // build 每帧先跑一遍收集菜单项（Chosen 都是 false），画出来；点了某一项后同一帧再跑一遍，那一项的 Chosen 报告 true。
 // 所以 build 前后两遍加的项要一样，动作只写在 Chosen 里。
@@ -107,7 +107,7 @@ type menuState struct {
 }
 
 func menuStateOf(e ui.Element) *menuState {
-	return ui.Local(e, "hive-menu", func() menuState { return menuState{} })
+	return ui.Local(e, "posse-menu", func() menuState { return menuState{} })
 }
 
 // menuButton 让按钮点一下在下面弹出菜单（代替 Element.Menu）。
@@ -142,8 +142,8 @@ func contextMenuAt(c *ui.Context, st *menuState, build func(m *popMenu)) {
 	}
 	ui.Overlay(c, func() {
 		// 零大小的锚点放在指针处，菜单贴着它；放不下时 AttachTo 会翻到另一边
-		anchor := ui.Box(c.Key("hive-menu-at")).Absolute().Left(st.x).Top(st.y).Size(0, 0)
-		panel := ui.Box(c.Key("hive-menu")).Role(ui.RolePopup).AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorTopLeft)
+		anchor := ui.Box(c.Key("posse-menu-at")).Absolute().Left(st.x).Top(st.y).Size(0, 0)
+		panel := ui.Box(c.Key("posse-menu")).Role(ui.RolePopup).AttachTo(anchor, ui.AnchorTopLeft, ui.AnchorTopLeft)
 		// 弹出菜单的那一下右键也算"在菜单外面按下"，弹出的这一帧不能据此关掉它
 		fresh := !st.focused
 		showMenu(c, panel, st, build)
@@ -325,7 +325,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 		})
 		if it.sub != nil && st.sub == it.seq {
 			ui.Overlay(c, func() {
-				panel := ui.Column(c.Key("hive-submenu")).Role(ui.RoleMenu).AttachTo(row, ui.AnchorTopRight, ui.AnchorTopLeft).Margin(-4, 0, 0, 2)
+				panel := ui.Column(c.Key("posse-submenu")).Role(ui.RoleMenu).AttachTo(row, ui.AnchorTopRight, ui.AnchorTopLeft).Margin(-4, 0, 0, 2)
 				floating(c, panel).Padding(4).MinWidth(180).MaxWidth(360)
 				panel.Children(func() {
 					if p := drawMenuItems(c, it.sub, st, 1, pointed); p != 0 {
@@ -341,7 +341,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 	return picked
 }
 
-// sysMenu 是 mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）：经 PresentMenus 交给 Hive，照样自绘。
+// sysMenu 是 mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）：经 PresentMenus 交给 Posse，照样自绘。
 type sysMenu struct {
 	items  []ui.MenuEntry
 	choose func(id int)

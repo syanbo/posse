@@ -12,9 +12,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
-	"hive/internal/history"
-	"hive/internal/rpc"
+	"posse/internal/agent"
+	"posse/internal/history"
+	"posse/internal/rpc"
 )
 
 // historyLimit 是列表和搜索最多取的会话数。
@@ -354,7 +354,7 @@ func (a *app) selectSession(sess history.Session, seq int) {
 	}()
 }
 
-// resumeSession 在 hive 里继续会话；会话目录不在任何工作区时，问一句再把目录加成项目。
+// resumeSession 在 posse 里继续会话；会话目录不在任何工作区时，问一句再把目录加成项目。
 func (a *app) resumeSession(s history.Session) {
 	go func() {
 		var t struct {
@@ -366,7 +366,7 @@ func (a *app) resumeSession(s history.Session) {
 		if errors.As(err, &re) && re.Code == rpc.CodeNotFound && s.Cwd != "" && strings.Contains(re.Message, "no workspace contains") {
 			a.win.Update(func() {
 				a.confirm("把 "+shortPath(s.Cwd)+" 添加为项目？",
-					"Hive 里还没有包含这个目录的工作区。添加后会话在这个项目里继续。",
+					"Posse 里还没有包含这个目录的工作区。添加后会话在这个项目里继续。",
 					"添加并继续", func() {
 						go func() {
 							if a.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second) != nil {
@@ -462,7 +462,7 @@ func capitalize(w string) string {
 	return strings.ToUpper(w[:1]) + w[1:]
 }
 
-// resumeCommand 是在 hive 之外继续会话的命令，复制给用户自己用。
+// resumeCommand 是在 posse 之外继续会话的命令，复制给用户自己用。
 func resumeCommand(s history.Session) string {
 	id := agent.Quote(s.ID)
 	var cmd string
@@ -722,7 +722,7 @@ func (a *app) sessionList(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
 	if h.loaded && len(h.sessions) == 0 && !h.status.Indexing && !h.pending() {
-		a.historyEmpty(c, "还没有会话记录", "Hive 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
+		a.historyEmpty(c, "还没有会话记录", "Posse 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
 		return
 	}
 	// 按"今天、昨天、本周、更早"或文件夹分组；默认只展开第一组，其余只列组标题和会话数
@@ -876,7 +876,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
 					titleText(c, "会话历史", fsPageTitle)
-					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Hive 里接着聊。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Posse 里接着聊。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if n := h.status.Sessions; n > 0 {
 					ui.Text(c, fmt.Sprintf("已索引 %d 个会话", n)).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -912,7 +912,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 						a.openTerminal(w.ID, d.Terminal)
 					}
 				}
-			} else if pressable(accentButton(c, "在 Hive 里继续")).Tooltip(resumeCommand(s)).Clicked() {
+			} else if pressable(accentButton(c, "在 Posse 里继续")).Tooltip(resumeCommand(s)).Clicked() {
 				a.resumeSession(s)
 			}
 			if pressable(textButton(c, "复制恢复命令")).Tooltip(resumeCommand(s)).Clicked() {

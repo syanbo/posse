@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // sessionTrashPaths 是把一个会话移到废纸篓要移走的文件和目录。只认各家会话目录里、
@@ -68,7 +68,7 @@ func sessionTrashPaths(s history.Session) []string {
 func (a *app) askTrashSession(d *historyDetail) {
 	s := d.Session
 	if d.Terminal != "" {
-		a.err = "这个会话正在 Hive 的终端里运行，先关掉那个终端再移到废纸篓。"
+		a.err = "这个会话正在 Posse 的终端里运行，先关掉那个终端再移到废纸篓。"
 		return
 	}
 	paths := sessionTrashPaths(s)

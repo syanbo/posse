@@ -53,8 +53,8 @@ func TestTaskGuide(t *testing.T) {
 		t.Fatalf("guide is %d lines", n)
 	}
 	for _, sub := range []string{"start", "wait", "inbox", "reply", "send", "retry", "close", "list", "show"} {
-		if !strings.Contains(taskGuide, "hive task "+sub) {
-			t.Errorf("guide does not mention hive task %s", sub)
+		if !strings.Contains(taskGuide, "posse task "+sub) {
+			t.Errorf("guide does not mention posse task %s", sub)
 		}
 	}
 }

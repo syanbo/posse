@@ -12,7 +12,7 @@ var urlPattern = regexp.MustCompile(`(?:https?|ftp|file)://[^\s"'<>` + "`" + `\x
 
 // fullWidthPunct ends a URL or a path: Chinese and Japanese text puts its
 // punctuation right after one, with no space, as "见 ~/a.md)，然后" does.
-// (Hive)
+// (Posse)
 const fullWidthPunct = "。，、；：！？（）【】「」『』〈〉《》…“”‘’"
 
 // pathPattern finds the file paths programs print as text: absolute, from
@@ -51,7 +51,7 @@ func matchAt(re *regexp.Regexp, text []rune, cols []int, col int) (string, int, 
 // URL: punctuation, and closing brackets that the URL did not open.
 func trimURL(u string) string {
 	for len(u) > 0 {
-		// Hive: the full-width punctuation of Chinese and Japanese text
+		// Posse: the full-width punctuation of Chinese and Japanese text
 		// ends a sentence too, as "见 /tmp/a.png。" does.
 		if r, n := utf8.DecodeLastRuneInString(u); strings.ContainsRune("。，、；：！？）】」』〉》…”’", r) {
 			u = u[:len(u)-n]

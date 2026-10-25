@@ -23,12 +23,12 @@ type diffModel struct {
 	// show.
 	version uint64
 	words   map[wordKey]*hunkWords
-	// ignoreSpace compares lines without their whitespace (Hive).
+	// ignoreSpace compares lines without their whitespace (Posse).
 	ignoreSpace bool
 }
 
 // setIgnoreSpace turns whitespace-blind comparison on or off; a change
-// compares the texts anew (Hive).
+// compares the texts anew (Posse).
 func (d *diffModel) setIgnoreSpace(on bool) {
 	if d.ignoreSpace != on {
 		d.ignoreSpace = on
@@ -38,7 +38,7 @@ func (d *diffModel) setIgnoreSpace(on bool) {
 
 // cmpLines returns lines from to to of r as they are compared: without
 // their whitespace when ignoreSpace is on, so that lines differing only
-// in it pair up as unchanged, and both sides keep as many lines (Hive).
+// in it pair up as unchanged, and both sides keep as many lines (Posse).
 func (d *diffModel) cmpLines(r rope.Text, from, to int) []string {
 	lines := ropeLines(r, from, to)
 	if d.ignoreSpace {

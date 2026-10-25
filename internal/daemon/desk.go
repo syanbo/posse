@@ -17,9 +17,9 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/desk"
-	"hive/internal/mobile"
-	"hive/internal/rpc"
+	"posse/internal/desk"
+	"posse/internal/mobile"
+	"posse/internal/rpc"
 )
 
 // 手机看 Mac 桌面（方案见 docs/plans/phone-desktop.md）：同一时间只有一台手机在看。
@@ -96,7 +96,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 		args = append(args, "--codec", "h264")
 	}
 	// 测试用：在 iOS 模拟器上看时排除模拟器窗口，不然它被录进画面形成回环
-	for _, id := range strings.Split(os.Getenv("HIVE_DESK_EXCLUDE"), ",") {
+	for _, id := range strings.Split(os.Getenv("POSSE_DESK_EXCLUDE"), ",") {
 		if id = strings.TrimSpace(id); id != "" {
 			args = append(args, "--exclude-app", id)
 		}
@@ -117,7 +117,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	switch {
 	case status == desk.StatusNoScreen:
 		abort()
-		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "还没允许 Hive 录制屏幕")
+		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "还没允许 Posse 录制屏幕")
 	case status == desk.StatusLocked:
 		abort()
 		return mobile.DeskReady{}, mobile.DeskError("locked", "Mac 已锁屏")
@@ -391,7 +391,7 @@ func (d *Daemon) deskStop(ctx context.Context, _ json.RawMessage) (any, error) {
 	return map[string]bool{"stopped": true}, nil
 }
 
-// deskRelay 读 $HIVE_HOME/desk.json 里的中转地址（UDP，host:port）。没有就是不用中转：
+// deskRelay 读 $POSSE_HOME/desk.json 里的中转地址（UDP，host:port）。没有就是不用中转：
 // 只有手机经隧道连着、又打不通洞时才用得上，得用户自己有一台公网服务器跑 tools/deskrelay。
 func (d *Daemon) deskRelay() string {
 	data, err := os.ReadFile(filepath.Join(d.cfg.Home, "desk.json"))

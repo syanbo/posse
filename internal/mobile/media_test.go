@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
-// 图片与视频：没声明 hive.media.v1 的连接看不到；列出工具返回的截图和工具输出里的视频，
+// 图片与视频：没声明 posse.media.v1 的连接看不到；列出工具返回的截图和工具输出里的视频，
 // 缩略图解得出、按段读回的是原图，没列过的 ID 读不到。
 func TestSessionMedia(t *testing.T) {
 	dir := t.TempDir()
@@ -46,7 +46,7 @@ func TestSessionMedia(t *testing.T) {
 		t.Fatalf("orca connection saw session.media: %v", hidden)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.media.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.media.v1"},
 	})))
 	list := result(t, p.next(p.call("session.media", args)))
 	made, _ := list["made"].([]any)

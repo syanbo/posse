@@ -291,7 +291,7 @@ func (e *engine) openStream(filter objc.ID) error {
 	del := m.init(m.alloc(delegateClass, m.sel("alloc")), m.sel("init"))
 	stream := m.initStream(m.alloc(m.clsStream, m.sel("alloc")), m.sel("initWithFilter:configuration:delegate:"), filter, cfg, del)
 	m.release(cfg, m.sel("release"))
-	name := append([]byte("hive.desk.capture"), 0)
+	name := append([]byte("posse.desk.capture"), 0)
 	queue := m.queueCreate(unsafe.Pointer(&name[0]), 0)
 	var nserr objc.ID
 	if !m.addOutput(stream, m.sel("addStreamOutput:type:sampleHandlerQueue:error:"), del, 0, queue, &nserr) {
@@ -979,7 +979,7 @@ func registerDelegate(m *macAPI) error {
 				ps = append(ps, p)
 			}
 		}
-		cls, regErr := objc.RegisterClass("HiveDeskOutput", objc.GetClass("NSObject"), ps, nil, []objc.MethodDef{
+		cls, regErr := objc.RegisterClass("PosseDeskOutput", objc.GetClass("NSObject"), ps, nil, []objc.MethodDef{
 			{Cmd: m.sel("stream:didOutputSampleBuffer:ofType:"), Fn: streamDidOutput},
 			{Cmd: m.sel("stream:didStopWithError:"), Fn: streamDidStop},
 			{Cmd: m.sel("screenLocked:"), Fn: screenLocked},
@@ -1395,10 +1395,10 @@ func logResponsible(w io.Writer) {
 
 func recordingAppName() string {
 	exe, err := os.Executable()
-	if err == nil && strings.Contains(exe, "HiveDev.app") {
-		return "Hive Dev"
+	if err == nil && strings.Contains(exe, "PosseDev.app") {
+		return "Posse Dev"
 	}
-	return "Hive"
+	return "Posse"
 }
 
 func codecName(c byte) string {

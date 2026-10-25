@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/frames.dart';
+import 'package:posse_mobile/terminal/frames.dart';
 
 Uint8List frame(int op, List<int> payload, {int sid = 7, int seq = 3}) {
   final head = ByteData(16);

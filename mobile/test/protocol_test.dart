@@ -4,14 +4,14 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/protocol/e2ee.dart';
-import 'package:hive_mobile/protocol/link.dart';
-import 'package:hive_mobile/protocol/pairing.dart';
-import 'package:hive_mobile/protocol/quic_socket.dart';
-import 'package:hive_mobile/protocol/race.dart';
-import 'package:hive_mobile/protocol/socket.dart';
-import 'package:hive_mobile/workspace/workspace.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/protocol/e2ee.dart';
+import 'package:posse_mobile/protocol/link.dart';
+import 'package:posse_mobile/protocol/pairing.dart';
+import 'package:posse_mobile/protocol/quic_socket.dart';
+import 'package:posse_mobile/protocol/race.dart';
+import 'package:posse_mobile/protocol/socket.dart';
+import 'package:posse_mobile/workspace/workspace.dart';
 
 void main() {
   test('pairing offer keeps endpoint first and parses the code', () {
@@ -21,7 +21,7 @@ void main() {
       'endpoints': [
         'ws://127.0.0.1:6788',
         'ws://100.1.2.3:6788',
-        'wss://tun.example/hive',
+        'wss://tun.example/posse',
       ],
       'deviceToken': 'tok',
       'publicKeyB64': b64(repeated(9, 32)),
@@ -36,7 +36,7 @@ void main() {
     expect(offer.dialUrls, [
       'ws://127.0.0.1:6788',
       'ws://100.1.2.3:6788',
-      'wss://tun.example/hive',
+      'wss://tun.example/posse',
     ]);
     expect(offer.deviceToken, 'tok');
   });
@@ -99,7 +99,7 @@ void main() {
       );
       final networks = StreamController<String>();
       var connects = 0;
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         networkSignatures: networks.stream,
         connect: (url, cancel) async {
@@ -140,7 +140,7 @@ void main() {
     );
     var connects = 0;
     final link =
-        HiveLink(
+        PosseLink(
             offer: offer,
             connect: (url, cancel) async {
               connects++;
@@ -175,7 +175,7 @@ void main() {
     );
     var connects = 0;
     final link =
-        HiveLink(
+        PosseLink(
             offer: offer,
             connect: (url, cancel) async {
               connects++;
@@ -190,7 +190,7 @@ void main() {
           ..latencyTimeout = const Duration(seconds: 30)
           ..wakeProbe = const Duration(milliseconds: 100);
     final first = await link.start();
-    // 等连上之后的 hive.quic 回完：别的回复也算电脑还在
+    // 等连上之后的 posse.quic 回完：别的回复也算电脑还在
     await Future<void>.delayed(const Duration(milliseconds: 100));
     final next = link.connections.first;
     final watch = Stopwatch()..start();
@@ -218,7 +218,7 @@ void main() {
     networks.add('wifi');
     networks.add('cell');
     var connects = 0;
-    final link = HiveLink(
+    final link = PosseLink(
       offer: offer,
       networkSignatures: networks.stream,
       connect: (url, cancel) async {
@@ -246,7 +246,7 @@ void main() {
         deviceToken: 'tok',
         publicKeyB64: b64(hostKeys.publicKey),
       );
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         connect: (url, cancel) async {
           final (client, host) = pipePair();
@@ -274,7 +274,7 @@ void main() {
     final networks = StreamController<String>();
     var fail = false;
     var connects = 0;
-    final link = HiveLink(
+    final link = PosseLink(
       offer: offer,
       networkSignatures: networks.stream,
       connect: (url, cancel) async {
@@ -319,7 +319,7 @@ void main() {
       final hosts = <ByteSocket>[];
       var failures = 0;
       var changes = 0;
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         connect: (url, cancel) async {
           if (failures > 0) {
@@ -362,7 +362,7 @@ void main() {
       ),
     );
     var dials = 0;
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
       networkSignatures: const Stream.empty(),
@@ -406,7 +406,7 @@ void main() {
     );
     final hosts = <ByteSocket>[];
     var failures = 0;
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
       networkSignatures: const Stream.empty(),
@@ -465,7 +465,7 @@ void main() {
       final hostKeys = generateKeyPair();
       var attempts = 0;
       final model =
-          HiveAppModel(
+          PosseAppModel(
               store: MemoryPairingStore(),
               settingsStore: MemorySettingsStore(),
               networkSignatures: const Stream.empty(),
@@ -489,7 +489,7 @@ void main() {
     test('gives up after the window and mentions permissions', () async {
       final hostKeys = generateKeyPair();
       final model =
-          HiveAppModel(
+          PosseAppModel(
               store: MemoryPairingStore(),
               settingsStore: MemorySettingsStore(),
               networkSignatures: const Stream.empty(),
@@ -508,7 +508,7 @@ void main() {
       final hostKeys = generateKeyPair();
       var prompt = true;
       final model =
-          HiveAppModel(
+          PosseAppModel(
               store: MemoryPairingStore(),
               settingsStore: MemorySettingsStore(),
               networkSignatures: const Stream.empty(),
@@ -534,7 +534,7 @@ void main() {
       final hostKeys = generateKeyPair();
       var attempts = 0;
       final model =
-          HiveAppModel(
+          PosseAppModel(
               store: MemoryPairingStore(),
               settingsStore: MemorySettingsStore(),
               networkSignatures: const Stream.empty(),
@@ -558,7 +558,7 @@ void main() {
       var down = false;
       var attempts = 0;
       final model =
-          HiveAppModel(
+          PosseAppModel(
               store: store,
               settingsStore: MemorySettingsStore(),
               networkSignatures: const Stream.empty(),
@@ -591,7 +591,7 @@ void main() {
     );
     final hosts = <ByteSocket>[];
     var down = false;
-    final link = HiveLink(
+    final link = PosseLink(
       offer: offer,
       attemptTimeout: const Duration(milliseconds: 200),
       connect: (url, cancel) async {
@@ -650,7 +650,7 @@ void main() {
       'a websocket connection moves to quic once the host offers it',
       () async {
         final hosts = <String, ByteSocket>{};
-        final link = HiveLink(
+        final link = PosseLink(
           offer: offer,
           connect: (url, cancel) async {
             if (url.contains('203.0.113.9')) throw StateError('relay down');
@@ -677,7 +677,7 @@ void main() {
     test(
       'a call in flight on the websocket survives the move to quic',
       () async {
-        final link = HiveLink(
+        final link = PosseLink(
           offer: offer,
           connect: (url, cancel) async {
             if (url.contains('203.0.113.9')) throw StateError('relay down');
@@ -697,7 +697,7 @@ void main() {
     );
 
     test('the old connection stays until its subscriptions move', () async {
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         connect: (url, cancel) async {
           if (url.contains('203.0.113.9')) throw StateError('relay down');
@@ -728,7 +728,7 @@ void main() {
       final tried = <String>[];
       final learned = <List<String>>[];
       final link =
-          HiveLink(
+          PosseLink(
               offer: offer,
               connect: (url, cancel) async {
                 tried.add(url);
@@ -766,7 +766,7 @@ void main() {
         );
         final store = MemoryPairingStore();
         final tried = <String>[];
-        HiveAppModel model() => HiveAppModel(
+        PosseAppModel model() => PosseAppModel(
           store: store,
           settingsStore: MemorySettingsStore(),
           networkSignatures: const Stream.empty(),
@@ -805,7 +805,7 @@ void main() {
       final relayUrl = quicUrlsOf(quicInfo).last;
       String? told;
       final link =
-          HiveLink(
+          PosseLink(
               offer: offer,
               connect: (url, cancel) async {
                 if (url == lanUrl) throw StateError('not home');
@@ -819,7 +819,7 @@ void main() {
             ..quicUrls = quicUrlsOf(quicInfo)
             ..punch = (relay, exchange) async {
               expect(relay, relayUrl);
-              // 电脑那边经 hive.punch 换回它的地址；测试用的电脑把这个方法当成未知方法回空结果
+              // 电脑那边经 posse.punch 换回它的地址；测试用的电脑把这个方法当成未知方法回空结果
               told = 'asked';
               await exchange('198.51.100.7:5000').catchError((Object _) => '');
               final (client, host) = pipePair();
@@ -846,7 +846,7 @@ void main() {
       final relayUrl = quicUrlsOf(quicInfo).last;
       var punches = 0;
       final link =
-          HiveLink(
+          PosseLink(
               offer: offer,
               connect: (url, cancel) async {
                 if (url == lanUrl) throw StateError('not home');
@@ -873,7 +873,7 @@ void main() {
     test('a failed upgrade keeps the websocket and its reconnects', () async {
       var quicTries = 0;
       final wsHosts = <ByteSocket>[];
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         connect: (url, cancel) async {
           if (url.startsWith('hquic')) {
@@ -907,9 +907,9 @@ void main() {
       await link.close();
     });
 
-    test('a host without hive.quic stays on websocket', () async {
+    test('a host without posse.quic stays on websocket', () async {
       var quicTries = 0;
-      final link = HiveLink(
+      final link = PosseLink(
         offer: offer,
         connect: (url, cancel) async {
           if (url.startsWith('hquic')) quicTries++;
@@ -951,7 +951,7 @@ Future<void> _host(
 }
 
 /// [silent]：握手之后不回 runtime.ping，模拟手机切网络后系统还没发现的半开连接。
-/// [quic]：hive.quic 的回复，为空时和 Orca 一样不认这个方法。
+/// [quic]：posse.quic 的回复，为空时和 Orca 一样不认这个方法。
 Future<void> _serve(
   ByteSocket socket,
   KeyPair hostKeys,
@@ -1035,7 +1035,7 @@ Future<void> _serve(
     if (method == 'test.slow') {
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
-    if (method == 'hive.quic') {
+    if (method == 'posse.quic') {
       if (quic != null) {
         result = quic;
       } else {

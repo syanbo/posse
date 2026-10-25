@@ -14,8 +14,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/quic-go/quic-go"
 
-	"hive/internal/deskrelay"
-	"hive/internal/mquic"
+	"posse/internal/deskrelay"
+	"posse/internal/mquic"
 )
 
 // relayKeepalive 是向中转重发登记的间隔。家用路由器的 UDP 映射常见 30 秒就回收。
@@ -37,7 +37,7 @@ type quicState struct {
 	lan  *quic.Transport
 
 	// 中转按令牌配对两端、一个令牌只记一台手机的地址，所以每台手机（设备 ID）各用一个令牌和 socket，
-	// 共用一个时两台手机会互相抢走对方的包。第一次调 hive.quic 时开，解除配对、换了中转地址时关
+	// 共用一个时两台手机会互相抢走对方的包。第一次调 posse.quic 时开，解除配对、换了中转地址时关
 	relayAt string
 	relays  map[string]*relayPath
 }
@@ -221,7 +221,7 @@ func (s *Server) serveQUIC(qc *quic.Conn) {
 	}
 }
 
-// PunchInfo 是 hive.punch 的回复：这台手机的中转出口在公网上的地址，手机向它打洞并拨号。
+// PunchInfo 是 posse.punch 的回复：这台手机的中转出口在公网上的地址，手机向它打洞并拨号。
 type PunchInfo struct {
 	Addr string `json:"addr"`
 }
@@ -252,7 +252,7 @@ func (s *Server) punch(device, phone string) (PunchInfo, error) {
 	return PunchInfo{Addr: pub.String()}, nil
 }
 
-// QUICInfo 是 hive.quic 的回复：手机按它拨 QUIC。
+// QUICInfo 是 posse.quic 的回复：手机按它拨 QUIC。
 type QUICInfo struct {
 	Port  int      `json:"port"`
 	Hosts []string `json:"hosts"` // 本机的 Tailscale 和局域网地址

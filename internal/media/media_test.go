@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 func writePNG(t *testing.T, path string, w, h int) {

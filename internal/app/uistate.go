@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// uiState 是只有界面关心的状态，存在 $HIVE_HOME/ui.json：放进常驻进程要改协议，
+// uiState 是只有界面关心的状态，存在 $POSSE_HOME/ui.json：放进常驻进程要改协议，
 // 而重启常驻进程会断掉所有终端。
 type uiState struct {
 	Selected             string   `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来

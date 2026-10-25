@@ -10,10 +10,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/procmem"
+	"posse/internal/procmem"
 )
 
-// 底栏的内存浮窗：hive 自己（常驻进程、窗口）和各工作区终端里跑的程序（shell、agent 和它拉起的子进程）。
+// 底栏的内存浮窗：posse 自己（常驻进程、窗口）和各工作区终端里跑的程序（shell、agent 和它拉起的子进程）。
 // 终端的内存由窗口进程按 pid 统计整棵进程树的 phys_footprint，和活动监视器一致；只在浮窗开着时统计。
 
 type memView struct {
@@ -146,7 +146,7 @@ func (a *app) loadMemory() {
 	}()
 }
 
-// memoryButton 是底栏右边的终端数和总内存（hive 自己加上终端里的程序），点开看各工作区。
+// memoryButton 是底栏右边的终端数和总内存（posse 自己加上终端里的程序），点开看各工作区。
 func (a *app) memoryButton(c *ui.Context) {
 	t := c.Theme()
 	m := &a.mem
@@ -231,7 +231,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 			ui.Text(c, mb(a.daemon.FootprintKB+a.selfKB+terms)).FontSize(fsCardTitle).FontWeight(500).FontFeatures("tnum")
 		})
 		ui.Column(c).Children(func() {
-			memSection(c, "HIVE", mb(a.daemon.FootprintKB+a.selfKB))
+			memSection(c, "POSSE", mb(a.daemon.FootprintKB+a.selfKB))
 			memLine(c, "daemon", nil, "常驻进程（托管所有终端）", mb(a.daemon.FootprintKB), 1)
 			memLine(c, "window", nil, fmt.Sprintf("窗口（pid %d）", os.Getpid()), mb(a.selfKB), 1)
 		})

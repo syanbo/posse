@@ -15,13 +15,13 @@ func TestCLIPrograms(t *testing.T) {
 		{"git status --short && ls internal | head", []string{"git"}},
 		{"cd /x; GOPROXY=https://goproxy.cn go build ./... 2>&1 | tail -5", []string{"go"}},
 		{`rg -n "foo | jq" src; echo 'gh pr list'`, []string{"rg"}},
-		{"command -v hive; hive --help", []string{"hive"}},
-		{"env -u HIVE_TERMINAL_ID HIVE_HOME=/tmp/h hive project add . && /tmp/x/launch.sh && /usr/bin/codesign -v a", []string{"hive", "codesign"}},
+		{"command -v posse; posse --help", []string{"posse"}},
+		{"env -u POSSE_TERMINAL_ID POSSE_HOME=/tmp/h posse project add . && /tmp/x/launch.sh && /usr/bin/codesign -v a", []string{"posse", "codesign"}},
 		{"sudo -u root launchctl list && timeout 10 adb -s x install a.apk", []string{"launchctl", "adb"}},
 		{"time nohup xargs -n 1 gofmt -l < files >out.txt", []string{"gofmt"}},
 		{"x=$(git rev-parse HEAD) && echo `brew --prefix`", []string{"git", "brew"}},
 		{"for f in *.go; do gofmt -l $f; done; if [ -f a ]; then make; fi", []string{"gofmt", "make"}},
-		{"cat <<'EOF' > a.sh\nnpm install\ncurl x\nEOF\nchmod +x a.sh && ./a.sh && bin/hive x", nil},
+		{"cat <<'EOF' > a.sh\nnpm install\ncurl x\nEOF\nchmod +x a.sh && ./a.sh && bin/posse x", nil},
 		{"python3 - <<-END\n\tgit push\n\tEND\nfvm flutter test", []string{"python3", "fvm"}},
 		{`bash -lc 'jq . a.json' && zsh -c "gh run list"`, []string{"jq", "gh"}},
 		{"case $x in a) brew list;; b) uv run t;; esac; go vet", []string{"brew", "uv", "go"}},
@@ -30,7 +30,7 @@ func TestCLIPrograms(t *testing.T) {
 		{"(cd mobile && fvm flutter build apk) || adb devices", []string{"fvm", "adb"}},
 		{"go test ./... && go vet ./...", []string{"go"}},
 		// 命令里定义的函数
-		{"H() { env -u X \"$D/hive\" \"$@\"; }; H project show; mk(){ ffmpeg -i \"$1\"; }\nmk a.png; function e { npx sentry; }; e -q x", []string{"ffmpeg", "npx"}},
+		{"H() { env -u X \"$D/posse\" \"$@\"; }; H project show; mk(){ ffmpeg -i \"$1\"; }\nmk a.png; function e { npx sentry; }; e -q x", []string{"ffmpeg", "npx"}},
 		// 进程替换、双引号里套着引号的 $( )
 		{"diff <(git show HEAD:a) b", []string{"git"}},
 		{`curl -o a "https://x/$(S=$(cat f); bsk evaluate --session $S "r.querySelectorAll('a')[0]")" && gh run list`, []string{"curl", "bsk", "gh"}},
@@ -72,7 +72,7 @@ func TestCLISource(t *testing.T) {
 		{"bsk", "", SourceOther},
 		{"go", "/opt/homebrew/bin/go", SourceHomebrew},
 		{"git", filepath.Join(sys, "git"), SourceSystem},
-		{"hive", "/tmp/hive-hl/hive", SourceOther},
+		{"posse", "/tmp/posse-hl/posse", SourceOther},
 	} {
 		if got := cliSource(c.name, c.path); got != c.want {
 			t.Errorf("cliSource(%q, %q) = %q, want %q", c.name, c.path, got, c.want)

@@ -1,4 +1,4 @@
-// hive_quic 是编进手机 App 的 QUIC 客户端，Dart 经 FFI 调用。拨号、收发都不阻塞调用方：
+// posse_quic 是编进手机 App 的 QUIC 客户端，Dart 经 FFI 调用。拨号、收发都不阻塞调用方：
 // 结果由 Go 的 goroutine 调 Dart 给的回调（NativeCallable.listener）送回，按发生顺序到达。
 package main
 
@@ -21,7 +21,7 @@ import (
 	"time"
 	"unsafe"
 
-	"hive/internal/mquic"
+	"posse/internal/mquic"
 )
 
 // 回调的 kind。数据由 Go 用 malloc 分配，Dart 拷走后调 hq_free。
@@ -112,7 +112,7 @@ func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
 }
 
 // hq_prepare 是打洞的第一步：开一个 socket，经中转 relay 问出它的公网地址，用 evPrepared 报回。
-// Dart 把地址交给 Mac（hive.punch），拿到 Mac 的地址后调 hq_dial_prepared；不用了调 hq_close。
+// Dart 把地址交给 Mac（posse.punch），拿到 Mac 的地址后调 hq_dial_prepared；不用了调 hq_close。
 //
 //export hq_prepare
 func hq_prepare(relay *C.char, timeoutMs C.int32_t, cb C.hq_event_fn) C.int64_t {

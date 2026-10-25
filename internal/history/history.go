@@ -121,9 +121,9 @@ func Open(path string) (*Index, error) {
 	return x, nil
 }
 
-// ErrStale 表示索引是另一个版本的 hive 建的。常驻进程跨应用升级继续运行，
+// ErrStale 表示索引是另一个版本的 posse 建的。常驻进程跨应用升级继续运行，
 // 只读的一方不迁移，免得新旧两个版本轮流清空重建。
-var ErrStale = errors.New("the history index was built by a different hive version; restart the daemon (hive daemon stop)")
+var ErrStale = errors.New("the history index was built by a different posse version; restart the daemon (posse daemon stop)")
 
 // OpenReader 打开索引只做查询，不建表、不迁移；索引还不存在时查询返回空结果。
 // SQLite 的分配器不把内存还给系统，页缓存给小些，查询速度不受影响（页面在系统文件缓存里）。

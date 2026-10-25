@@ -15,9 +15,9 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/crypto/nacl/box"
 
-	"hive/internal/deskrelay"
-	"hive/internal/mquic"
-	"hive/internal/term"
+	"posse/internal/deskrelay"
+	"posse/internal/mquic"
+	"posse/internal/term"
 )
 
 type testQUICWire struct{ quicWire }
@@ -40,9 +40,9 @@ func dialQUIC(t *testing.T, addr string, token []byte) *testQUICWire {
 
 func quicInfoOf(t *testing.T, p *phone) QUICInfo {
 	t.Helper()
-	m := p.next(p.call("hive.quic", map[string]any{}))
+	m := p.next(p.call("posse.quic", map[string]any{}))
 	if m["ok"] != true {
-		t.Fatalf("hive.quic failed: %v", m)
+		t.Fatalf("posse.quic failed: %v", m)
 	}
 	b, _ := json.Marshal(m["result"])
 	var info QUICInfo
@@ -225,7 +225,7 @@ func TestQUICRelayTwoPhones(t *testing.T) {
 	}
 }
 
-// 中转第一次开不了（地址解析失败）不记下来，下次 hive.quic 再试。
+// 中转第一次开不了（地址解析失败）不记下来，下次 posse.quic 再试。
 func TestQUICRelayRetriesAfterFailure(t *testing.T) {
 	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
@@ -322,7 +322,7 @@ func TestQUICPunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := viaRelay.next(viaRelay.call("hive.punch", map[string]any{"addr": prep.Public.String()}))
+	m := viaRelay.next(viaRelay.call("posse.punch", map[string]any{"addr": prep.Public.String()}))
 	mac, _ := result(t, m)["addr"].(string)
 	if mac == "" || mac == relay {
 		t.Fatalf("mac address %q", mac)
@@ -338,7 +338,7 @@ func TestQUICPunch(t *testing.T) {
 	}
 	result(t, direct.next(direct.call("runtime.ping", map[string]any{})))
 	// 地址不对时报错，不去打洞
-	bad := viaRelay.next(viaRelay.call("hive.punch", map[string]any{"addr": "nope"}))
+	bad := viaRelay.next(viaRelay.call("posse.punch", map[string]any{"addr": "nope"}))
 	if bad["ok"] == true {
 		t.Fatal("punch accepted a bad address")
 	}

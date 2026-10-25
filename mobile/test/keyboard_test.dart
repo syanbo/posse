@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/keyboard.dart';
+import 'package:posse_mobile/ui/keyboard.dart';
 
 void main() {
   testWidgets('整页返回首页时收起键盘', (tester) async {

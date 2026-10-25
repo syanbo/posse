@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
+	"posse/internal/client"
 )
 
 const sampleGo = `package main
@@ -22,9 +22,9 @@ import (
 
 // main 读配置，启动常驻进程，再打开窗口。
 func main() {
-	cfg, err := loadConfig(os.Getenv("HIVE_HOME"))
+	cfg, err := loadConfig(os.Getenv("POSSE_HOME"))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "hive:", err)
+		fmt.Fprintln(os.Stderr, "posse:", err)
 		os.Exit(1)
 	}
 	run(cfg)
@@ -50,13 +50,13 @@ func filesWorkspace(t *testing.T, a *app) string {
 		}
 	}
 	put("main.go", sampleGo)
-	put("README.md", "# Hive\n\n多 agent 终端管理器。\n\n## 构建\n\n```sh\ngo build ./cmd/hive\n```\n\n- 常驻进程托管终端\n- 界面可以随时关闭\n\n## 入口\n\n| # | 入口 | 位置 | 写法 | 结果处理 |\n|---|---|---|---|---|\n| 1 | 私聊 拍照 | `IMChatBaseActivity:1506` | `openCamera(this, single().compress(true), REQUEST_CAMERA)` | 改为 `parse(data).getPath()`，裁剪优先，其次压缩图，最后原图 |\n| 2 | 私聊 相册 | `IMChatBaseActivity:1523` | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` | 循环取 `getPath()` |\n\n| 项目 | 数据 |\n|---|---|\n| 版本 | 1.4 |\n")
+	put("README.md", "# Posse\n\n多 agent 终端管理器。\n\n## 构建\n\n```sh\ngo build ./cmd/posse\n```\n\n- 常驻进程托管终端\n- 界面可以随时关闭\n\n## 入口\n\n| # | 入口 | 位置 | 写法 | 结果处理 |\n|---|---|---|---|---|\n| 1 | 私聊 拍照 | `IMChatBaseActivity:1506` | `openCamera(this, single().compress(true), REQUEST_CAMERA)` | 改为 `parse(data).getPath()`，裁剪优先，其次压缩图，最后原图 |\n| 2 | 私聊 相册 | `IMChatBaseActivity:1523` | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` | 循环取 `getPath()` |\n\n| 项目 | 数据 |\n|---|---|\n| 版本 | 1.4 |\n")
 	put("internal/files/tree.go", "package files\n\n// Tree 是工作区目录的树。\ntype Tree struct{}\n")
 	put("internal/files/search.go", "package files\n\nfunc Search() {}\n")
 	put("internal/app/view.go", "package app\n\nfunc (a *app) main() {}\n")
 	put("docs/plan.md", "# 计划\n")
 	put(".gitignore", "build/\n")
-	put("build/hive.bin", "\x00\x01")
+	put("build/posse.bin", "\x00\x01")
 	cmd := exec.Command("git", "init", "-q", root)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("git unavailable: %v %s", err, out)
@@ -214,7 +214,7 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 		t.Fatal("closing a modified doc should ask")
 	}
 	// 关掉最后一个文件会切回终端并接入它：给一个连不上的 socket，接入失败而不是空指针
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	if err := tt.Click("不保存"); err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestFilesStateSaved(t *testing.T) {
 func TestDocTabsInTabBar(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
@@ -426,7 +426,7 @@ func TestBranchPopupClosesPanel(t *testing.T) {
 	w := &a.workspaces[0]
 	w.Branch = "main"
 	tt := ui.NewTester(a.build, 1200, 760)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 面板会去查常驻进程，连不上就报错
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")} // 面板会去查常驻进程，连不上就报错
 	a.openFilesPanel(w, sideFiles)
 	a.state.RightPanel = panelUsage
 	tt.Frame()
@@ -458,7 +458,7 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")} // 历史会去查会话，连不上就报错
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")} // 历史会去查会话，连不上就报错
 	// 侧栏里也有"历史"，收起它，点到的才是文件栏的页签
 	a.state.SidebarHidden = true
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -489,7 +489,7 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 func TestCloseDocTabsByButton(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
@@ -520,7 +520,7 @@ func TestCloseDocTabsByButton(t *testing.T) {
 func TestMenuCloseTabBehindDialog(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
@@ -573,7 +573,7 @@ func TestFilesPanelToggleStays(t *testing.T) {
 // 图片、技能与工具跟着会话走：按钮常驻在 agent 终端右上角，普通终端没有。
 func TestSessionButtons(t *testing.T) {
 	a := previewApp(t)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("这个会话用到的技能与工具")

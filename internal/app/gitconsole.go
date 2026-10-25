@@ -13,12 +13,12 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // Git 操作记录：照 WebStorm Git 工具窗口的 Console，列出日志浮层所在项目里界面执行过的 Git 操作（提交、推送、储藏……），
 // 每个操作下面是它调用的 git 命令、输出和报错。界面的记录来自 gitx.Trace，命令完成后追加到
-// $HIVE_HOME/git-console.jsonl，窗口打开时读回；Hive 终端里改动仓库的 git 命令由常驻进程经 trace2 收集
+// $POSSE_HOME/git-console.jsonl，窗口打开时读回；Posse 终端里改动仓库的 git 命令由常驻进程经 trace2 收集
 // （internal/daemon/gittrace.go），轮询时按序号取新的，按时间排进同一个列表，只有命令和退出码、没有输出。
 // 所有项目的命令存在一起，显示时按命令所在目录归到项目（runWorkspace），每个项目各留 gitConsoleMax 条。
 
@@ -371,7 +371,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	runs := a.projectRuns(w.ProjectID)
 	ops := groupGitRuns(runs)
 	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, w.Project+" 各工作区里 Hive 执行的 Git 操作和它们调用的 git 命令，以及 Hive 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, w.Project+" 各工作区里 Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		// 只清这个项目的：记下时间，文件里的记录留给别的项目
 		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", 26, 15)).Clicked() {

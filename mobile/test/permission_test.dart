@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/permission.dart';
-import 'package:hive_mobile/chat/prompt.dart';
+import 'package:posse_mobile/chat/permission.dart';
+import 'package:posse_mobile/chat/prompt.dart';
 
 void main() {
   test('stale tab state keeps a permission that just arrived', () {

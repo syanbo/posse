@@ -36,7 +36,7 @@ class DeskKeyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     const keys = ['Esc', 'Tab', '↑', '↓', '←', '→', '◀ 空间', '空间 ▶', '调度中心'];
     final color = dense ? c.band.withValues(alpha: 0.86) : c.band;
     return Container(
@@ -68,7 +68,7 @@ class DeskKeyBar extends StatelessWidget {
     );
   }
 
-  Widget _keyboard(HiveColors c) {
+  Widget _keyboard(PosseColors c) {
     return Material(
       color: c.fill,
       borderRadius: BorderRadius.circular(Rd.button),
@@ -87,7 +87,7 @@ class DeskKeyBar extends StatelessWidget {
     );
   }
 
-  Widget _textKey(HiveColors c, String label, VoidCallback onTap) {
+  Widget _textKey(PosseColors c, String label, VoidCallback onTap) {
     return Material(
       color: c.fill,
       borderRadius: BorderRadius.circular(Rd.button),
@@ -234,7 +234,7 @@ class _ModKeyState extends State<_ModKey> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final locked = widget.mode == DeskModMode.locked;
     final on = widget.mode != DeskModMode.off;
     final fill = locked ? c.accent : (on ? c.tint : c.fill);

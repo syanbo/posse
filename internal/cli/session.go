@@ -30,11 +30,11 @@ func cmdSessionTitle(e *env, args []string) error {
 		return err
 	}
 	if len(pos) == 0 {
-		return fmt.Errorf("usage: hive session title '<MMDD｜类型｜摘要>' (rules: hive session guide)")
+		return fmt.Errorf("usage: posse session title '<MMDD｜类型｜摘要>' (rules: posse session guide)")
 	}
 	id := caller()
 	if id == "" {
-		return fmt.Errorf("not in a Hive terminal: run it inside the session to name")
+		return fmt.Errorf("not in a Posse terminal: run it inside the session to name")
 	}
 	params := map[string]any{"terminal": id, "title": strings.Join(pos, " ")}
 	// 嵌套时外层 agent 的变量也会继承下来，由常驻进程按终端里的 agent 挑对应的那个

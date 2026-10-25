@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../ui/theme.dart';
 
-/// 和电脑的往返时间（[HiveAppModel.latency]）：信号格加毫秒数，不写单位，省出胶囊里电脑名的位置。
+/// 和电脑的往返时间（[PosseAppModel.latency]）：信号格加毫秒数，不写单位，省出胶囊里电脑名的位置。
 /// 满格绿色，两格灰色，一格（300 ms 起，经跨境隧道连电脑时常见）琥珀色；ping 超时、期间也没收到数据
 /// 是红色空格加「无响应」。还没测到时不占位置。会话页状态行末尾和首页电脑胶囊里都用它。
 class LatencyLabel extends StatelessWidget {
@@ -15,7 +15,7 @@ class LatencyLabel extends StatelessWidget {
     this.size = 12,
   });
 
-  /// 读数，来自 [HiveAppModel.latency]、[HiveAppModel.unresponsive]。
+  /// 读数，来自 [PosseAppModel.latency]、[PosseAppModel.unresponsive]。
   final Duration? latency;
   final bool unresponsive;
 
@@ -25,7 +25,7 @@ class LatencyLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final latency = this.latency;
     if (latency == null && !unresponsive) return const SizedBox.shrink();
     final ms = latency?.inMilliseconds ?? 0;
@@ -52,7 +52,7 @@ class LatencyLabel extends StatelessWidget {
 
 /// 信号格的颜色：满格绿色，两格灰色，一格琥珀色，没响应红色。
 Color latencyColor(
-  HiveColors c,
+  PosseColors c,
   Duration? latency, {
   bool unresponsive = false,
 }) {

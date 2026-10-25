@@ -13,9 +13,9 @@ import '../ui/widgets.dart';
 import 'video.dart';
 
 /// 存进相册时放的相簿。
-const album = 'Hive';
+const album = 'Posse';
 
-/// 两边相册都收的格式；其余的（webm、bmp、文本等）安卓存进"下载/Hive"，iOS 走系统分享面板（里面有"存储到文件"）。
+/// 两边相册都收的格式；其余的（webm、bmp、文本等）安卓存进"下载/Posse"，iOS 走系统分享面板（里面有"存储到文件"）。
 const _albumImages = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'};
 const _albumVideos = {'mp4', 'mov', 'm4v'};
 
@@ -32,7 +32,7 @@ bool savesToAlbum(String name, {bool image = false}) {
       _albumVideos.contains(ext);
 }
 
-/// 存到哪：相册的 Hive 相簿、安卓的"下载/Hive"、系统分享面板。
+/// 存到哪：相册的 Posse 相簿、安卓的"下载/Posse"、系统分享面板。
 /// 安卓的分享面板里没有存到本机的去处（小米、华为的"文件管理"都是存到云空间），所以安卓直接存进下载目录。
 enum SaveTo { album, downloads, share }
 
@@ -51,8 +51,8 @@ String saveLabel(SaveTo to) => switch (to) {
   SaveTo.share => '分享',
 };
 
-/// 安卓存进"下载/Hive"（MainActivity.kt）。
-const _downloads = MethodChannel('hive/downloads');
+/// 安卓存进"下载/Posse"（MainActivity.kt）。
+const _downloads = MethodChannel('posse/downloads');
 
 /// 会话里粘贴的图片没有扩展名，按文件头认；认不出返回空串。
 String sniffImageExt(Uint8List head) {
@@ -82,12 +82,12 @@ Future<String> _fileName(String name, File file) async {
       .openRead(0, 16)
       .fold<List<int>>([], (all, part) => all..addAll(part));
   final ext = sniffImageExt(Uint8List.fromList(head));
-  if (ext.isEmpty) return base.isEmpty ? 'Hive' : base;
+  if (ext.isEmpty) return base.isEmpty ? 'Posse' : base;
   if (base.isEmpty || base.contains(' ') || base == '粘贴') {
     final t = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
     base =
-        'Hive-${t.year}${two(t.month)}${two(t.day)}-'
+        'Posse-${t.year}${two(t.month)}${two(t.day)}-'
         '${two(t.hour)}${two(t.minute)}${two(t.second)}';
   }
   return '$base.$ext';
@@ -121,7 +121,7 @@ Future<void> saveToPhone(
         } else {
           await Gal.putImage(named.path, album: album);
         }
-        messenger.showSnackBar(const SnackBar(content: Text('已存到相册的「Hive」相簿')));
+        messenger.showSnackBar(const SnackBar(content: Text('已存到相册的「Posse」相簿')));
         return;
       } on GalException catch (e) {
         if (e.type != GalExceptionType.notSupportedFormat) rethrow;
@@ -135,14 +135,14 @@ Future<void> saveToPhone(
           'name': named.uri.pathSegments.last,
         });
         messenger.showSnackBar(
-          SnackBar(content: Text('已存到「下载/Hive」：${saved ?? ''}')),
+          SnackBar(content: Text('已存到「下载/Posse」：${saved ?? ''}')),
         );
       } on PlatformException catch (e) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
               e.code == 'denied'
-                  ? '没有存储权限：在系统设置里允许 Hive 访问存储'
+                  ? '没有存储权限：在系统设置里允许 Posse 访问存储'
                   : '没存进下载目录：${e.message ?? e.code}',
             ),
           ),
@@ -168,7 +168,7 @@ Future<void> saveToPhone(
   }
 }
 
-const _denied = '没有相册权限：在系统设置里允许 Hive 访问照片';
+const _denied = '没有相册权限：在系统设置里允许 Posse 访问照片';
 
 /// 写成临时文件再存，用于已经在内存里的图片（文件页的图片预览）。
 Future<void> saveBytesToPhone(
@@ -185,13 +185,13 @@ Future<void> saveBytesToPhone(
 
 /// 每次存之前清掉上次的副本：上次的分享面板已经关了，用不着了。
 Future<Directory> _outDir() async {
-  final dir = Directory('${Directory.systemTemp.path}/hive-save');
+  final dir = Directory('${Directory.systemTemp.path}/posse-save');
   if (await dir.exists()) await dir.delete(recursive: true);
   return dir.create(recursive: true);
 }
 
 Future<File> _named(File file, String name) async {
-  if (file.parent.path.endsWith('/hive-save')) {
+  if (file.parent.path.endsWith('/posse-save')) {
     return file.rename('${file.parent.path}/$name');
   }
   return file.copy('${(await _outDir()).path}/$name');
@@ -204,7 +204,7 @@ Future<void> downloadAndSave(
   required VideoFetcher fetch,
   SaveTo? to,
 }) async {
-  final file = await showHiveDialog<File>(
+  final file = await showPosseDialog<File>(
     context: context,
     builder: (_) => _DownloadDialog(name: name, fetch: fetch),
   );
@@ -249,7 +249,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
         e.code == 'closed'
             ? '和电脑的连接断了，下好的部分留着'
             : e.code == 'method_not_found'
-            ? '电脑上的 hive 版本太旧，更新后才能下载'
+            ? '电脑上的 posse 版本太旧，更新后才能下载'
             : friendlyError(e),
       );
     } on TimeoutException {
@@ -271,7 +271,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final (done, total) = _progress ?? (0, 0);
     final error = _error;
     return AlertDialog(
@@ -324,7 +324,7 @@ Future<void> showSaveSheet(
     context: context,
     showDragHandle: true,
     builder: (sheet) {
-      final c = HiveColors.of(sheet);
+      final c = PosseColors.of(sheet);
       Widget row(SaveTo to, String subtitle) => RowTile(
         chevron: false,
         leading: Icon(saveIcon(to), size: 22, color: c.accent),
@@ -338,8 +338,8 @@ Future<void> showSaveSheet(
           inset: 48,
           children: [
             switch (to) {
-              SaveTo.album => row(to, '下载到手机，放进相册的「Hive」相簿'),
-              SaveTo.downloads => row(to, '下载到手机，放进「下载/Hive」，文件管理里能找到'),
+              SaveTo.album => row(to, '下载到手机，放进相册的「Posse」相簿'),
+              SaveTo.downloads => row(to, '下载到手机，放进「下载/Posse」，文件管理里能找到'),
               SaveTo.share => row(to, '下载到手机，用系统分享存到"文件"或发给别的 App'),
             },
             if (to != SaveTo.share) row(SaveTo.share, '下载到手机，发给别的 App'),

@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
+	"posse/internal/client"
 )
 
 func TestDropPieces(t *testing.T) {
@@ -80,7 +80,7 @@ func TestTerminalTabMouse(t *testing.T) {
 func TestDocTabMouse(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
@@ -110,13 +110,13 @@ func TestDocTabMouse(t *testing.T) {
 	}
 }
 
-// menuHas 报告 Hive 自绘的菜单里有没有 label 这一项。
+// menuHas 报告 Posse 自绘的菜单里有没有 label 这一项。
 func menuHas(tt *ui.Tester, label string) bool {
 	tt.Frame()
 	return tt.HasText(label)
 }
 
-// chooseMenu 点 Hive 自绘菜单里的 label 一项。
+// chooseMenu 点 Posse 自绘菜单里的 label 一项。
 func chooseMenu(t *testing.T, tt *ui.Tester, label string) {
 	t.Helper()
 	tt.Frame()
@@ -126,7 +126,7 @@ func chooseMenu(t *testing.T, tt *ui.Tester, label string) {
 	tt.Frame()
 }
 
-// 文字输入框的编辑菜单由 mygo 交给 Hive 自绘：中文的剪切、复制、粘贴、全选，选了照常生效
+// 文字输入框的编辑菜单由 mygo 交给 Posse 自绘：中文的剪切、复制、粘贴、全选，选了照常生效
 func TestTextInputMenuDrawn(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)

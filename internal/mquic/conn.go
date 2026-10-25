@@ -13,7 +13,7 @@ import (
 
 	"github.com/quic-go/quic-go"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 // relayEvery 是手机向中转重发登记的间隔：换网络后最多这么久中转就认得新地址。

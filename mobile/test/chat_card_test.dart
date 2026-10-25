@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/chat.dart';
-import 'package:hive_mobile/chat/echo.dart';
-import 'package:hive_mobile/chat/models.dart';
-import 'package:hive_mobile/chat/prompt.dart';
+import 'package:posse_mobile/chat/chat.dart';
+import 'package:posse_mobile/chat/echo.dart';
+import 'package:posse_mobile/chat/models.dart';
+import 'package:posse_mobile/chat/prompt.dart';
 
 ChatMessage line(String role, String text) {
   return ChatMessage(

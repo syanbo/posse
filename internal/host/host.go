@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 // AgentState 是宿主替控制进程存着的 agent 状态，控制进程重启后从这里读回。
@@ -71,7 +71,7 @@ type Terminal interface {
 	SetTitle(title, sessionID string, pending bool)
 	TakeTitle() string
 
-	// Send 是有人键入（会让"桌面有人在打字"的判断生效），Inject 是 hive 自己输入的提醒
+	// Send 是有人键入（会让"桌面有人在打字"的判断生效），Inject 是 posse 自己输入的提醒
 	Send(data []byte) error
 	Inject(data []byte) error
 	Resize(cols, rows int)

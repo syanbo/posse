@@ -40,7 +40,7 @@ class AgentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final (String? path, Color bg, Color fg) = switch (agent) {
       'claude' => (brandClaudePath, const Color(0xFFD97757), Colors.white),
       'codex' => (brandCodexPath, Colors.white, Colors.black),
@@ -112,7 +112,7 @@ class StatusHex extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state == AgentState.none) return SizedBox.square(dimension: size);
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     if (state == AgentState.working &&
         this.color == null &&
         !MediaQuery.disableAnimationsOf(context)) {
@@ -244,12 +244,12 @@ String agentStateText(AgentState state) => switch (state) {
 
 /// 弹框：从略小放大到原大、同时淡入，收起时缩回去、比出来快。Material 默认只淡入一下，看着生硬。
 /// 系统开了减少动态效果时只淡入淡出。
-Future<T?> showHiveDialog<T>({
+Future<T?> showPosseDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
 }) {
   return Navigator.of(context, rootNavigator: true).push<T>(
-    _HiveDialogRoute<T>(
+    _PosseDialogRoute<T>(
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       pageBuilder: (dialog, _, _) => SafeArea(child: Builder(builder: builder)),
       transitionBuilder: (dialog, animation, _, child) {
@@ -273,8 +273,8 @@ Future<T?> showHiveDialog<T>({
   );
 }
 
-class _HiveDialogRoute<T> extends RawDialogRoute<T> {
-  _HiveDialogRoute({
+class _PosseDialogRoute<T> extends RawDialogRoute<T> {
+  _PosseDialogRoute({
     required super.pageBuilder,
     required super.transitionBuilder,
     super.barrierLabel,
@@ -313,12 +313,12 @@ class Section extends StatelessWidget {
   /// 卡片外边距。放在已经有左右内边距的页面里时传 bottom-only。
   final EdgeInsets margin;
 
-  List<Widget> _rows(HiveColors c, List<Widget> rows, {required bool first}) =>
+  List<Widget> _rows(PosseColors c, List<Widget> rows, {required bool first}) =>
       _rowsImpl(c, rows, inset, first: first);
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Padding(
       padding: margin,
       child: Column(
@@ -359,7 +359,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
       child: Row(
@@ -401,7 +401,7 @@ class SliverSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     const radius = Radius.circular(Rd.card);
     return SliverPadding(
       padding: margin,
@@ -443,7 +443,7 @@ class SliverSection extends StatelessWidget {
 
 /// 行之间画分隔线；first 为假时第一行上面也画（接在常显的标题行后面）。
 List<Widget> _rowsImpl(
-  HiveColors c,
+  PosseColors c,
   List<Widget> rows,
   double inset, {
   required bool first,
@@ -540,7 +540,7 @@ class RowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -598,15 +598,15 @@ class RowTile extends StatelessWidget {
 }
 
 /// 设置页和会话面板共用的开关。系统开关在卡片里显得大，缩到八成，打开时轨道用强调色。
-class HiveSwitch extends StatelessWidget {
-  const HiveSwitch({super.key, required this.value, required this.onChanged});
+class PosseSwitch extends StatelessWidget {
+  const PosseSwitch({super.key, required this.value, required this.onChanged});
 
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Transform.scale(
       scale: 0.8,
       child: Switch.adaptive(
@@ -633,7 +633,7 @@ class Segmented extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Container(
       height: 36,
       padding: const EdgeInsets.all(3),
@@ -690,7 +690,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -730,7 +730,7 @@ class NoticeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final tint = c.danger.withValues(alpha: c.dark ? 0.16 : 0.08);
     final bar = Container(
       margin: floating
@@ -796,7 +796,7 @@ class UploadBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final which = count > 1 ? ' ${index + 1}/$count' : '';
     // 整体进度按张数摊开，多张时进度条一路走到底，不在每张开头跳回去
     final overall = count == 0 ? 0.0 : (index + done) / count;

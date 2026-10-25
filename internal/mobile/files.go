@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/files"
+	"posse/internal/files"
 )
 
 // 手机文件页的限制，照 Orca 的 file-preview-budget.ts 和 file-search.ts。
@@ -240,7 +240,7 @@ func statReply(root string, a fileParams) (any, error) {
 	return map[string]any{"size": fi.Size(), "isDirectory": fi.IsDir(), "mtime": fi.ModTime().UnixMilli()}, nil
 }
 
-// rangeReply 按段读文件（Hive 扩展，手机放视频时分段下载到本地再播），base64。
+// rangeReply 按段读文件（Posse 扩展，手机放视频时分段下载到本地再播），base64。
 // size 是文件现在的大小，手机按它判断读完没有。
 func rangeReply(root string, a fileParams) (any, error) {
 	name, err := joinRel(root, a.RelativePath, false)

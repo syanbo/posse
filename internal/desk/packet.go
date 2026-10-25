@@ -28,15 +28,15 @@ const (
 	PacketLimit = 1200
 
 	// 本机验收用的固定材料。接上配对之后换成握手密钥和订阅 nonce。
-	testSecret = "hive-desk-test-secret-32bytes!!" // 32
-	testNonce  = "hive-desk-nonce!"                // 16
+	testSecret = "posse-desk-test-secret-32bytes!" // 32
+	testNonce  = "posse-desk-nonce"                // 16
 )
 
 var errPacket = errors.New("desk: bad packet")
 
 // DeriveKeys 从共享密钥和会话 nonce 派生两个方向的 AES-256 密钥。
 func DeriveKeys(secret, sessionNonce []byte) (toMobile, toMac [32]byte, err error) {
-	out, err := hkdf.Key(sha256.New, secret, sessionNonce, "hive-desk/v1", 64)
+	out, err := hkdf.Key(sha256.New, secret, sessionNonce, "posse-desk/v1", 64)
 	if err != nil {
 		return toMobile, toMac, err
 	}

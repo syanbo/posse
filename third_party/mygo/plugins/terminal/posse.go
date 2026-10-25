@@ -1,7 +1,7 @@
 package terminal
 
-// What Hive adds to the terminal's API, kept in a file of its own so that
-// upgrading MyGo merges less. (Hive)
+// What Posse adds to the terminal's API, kept in a file of its own so that
+// upgrading MyGo merges less. (Posse)
 
 // Selection returns the selected text, "" when nothing is selected, for a
 // context menu of the app's own (Options.ContextMenu).

@@ -131,7 +131,7 @@ class _GitPaneState extends State<GitPane> {
   @override
   Widget build(BuildContext context) {
     final status = _status;
-    if (_loading) return const Center(child: HiveLoader());
+    if (_loading) return const Center(child: PosseLoader());
     if (_error != null && status == null) {
       return EmptyState(
         icon: Icons.cloud_off_rounded,
@@ -140,7 +140,7 @@ class _GitPaneState extends State<GitPane> {
         action: TextButton(onPressed: _reload, child: const Text('重试')),
       );
     }
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final files = status?.files ?? const <GitFileChange>[];
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
@@ -191,7 +191,7 @@ class _GitPaneState extends State<GitPane> {
     _ => ChangeKind.modified,
   };
 
-  Widget _listHeader(HiveColors c, int count) {
+  Widget _listHeader(PosseColors c, int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
       child: Row(
@@ -214,7 +214,7 @@ class _GitPaneState extends State<GitPane> {
     String label,
     List<GitFileChange> files,
   ) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final folded = _folded.contains('$kind');
     final rows = _tree
         ? changeTree(
@@ -291,7 +291,7 @@ class _GitPaneState extends State<GitPane> {
 
   /// 带展开箭头的一行：组标题和目录共用。
   Widget _foldRow(
-    HiveColors c, {
+    PosseColors c, {
     required bool open,
     required VoidCallback onTap,
     required int depth,
@@ -323,7 +323,7 @@ class _GitPaneState extends State<GitPane> {
     );
   }
 
-  Widget _dirRow(HiveColors c, ChangeKind kind, ChangeRow row) {
+  Widget _dirRow(PosseColors c, ChangeKind kind, ChangeRow row) {
     final key = '$kind:${row.key}';
     final open = !_folded.contains(key);
     return _foldRow(
@@ -355,7 +355,7 @@ class _GitPaneState extends State<GitPane> {
   }
 
   Widget _fileRow(
-    HiveColors c,
+    PosseColors c,
     GitFileChange file,
     int depth, {
     required bool flat,
@@ -452,7 +452,7 @@ class _ModeSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     Widget option(bool value, IconData icon, String label) {
       final on = tree == value;
       return Semantics(
@@ -514,7 +514,7 @@ String _letter(ChangeKind kind) => switch (kind) {
   ChangeKind.modified => 'M',
 };
 
-Color _letterColor(HiveColors c, ChangeKind kind) => switch (kind) {
+Color _letterColor(PosseColors c, ChangeKind kind) => switch (kind) {
   ChangeKind.conflict || ChangeKind.deleted => c.danger,
   ChangeKind.added || ChangeKind.untracked => c.sage,
   _ => c.accent,
@@ -530,7 +530,7 @@ class _Stats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     const tnum = [FontFeature.tabularFigures()];
     if (file.binary || (file.added == 0 && file.deleted == 0)) {
       final label = inList && file.stats == '新文件' ? '' : file.stats;
@@ -563,7 +563,7 @@ class _BranchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final chips = <(IconData, String, Color)>[
       if (status.ahead > 0)
         (Icons.arrow_upward_rounded, '领先 ${status.ahead}', c.muted),
@@ -700,7 +700,7 @@ class _DiffViewerState extends State<DiffViewer> {
         error: true,
       );
     }
-    if (diff == null) return const Center(child: HiveLoader());
+    if (diff == null) return const Center(child: PosseLoader());
     final images = diff.images;
     if (images != null) return _ImageDiff(old: images.old, now: images.now);
     if (widget.file.binary) {
@@ -805,7 +805,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final side = widget.side;
     final image = _image;
     final meta = [?_pixels, if (side != null) formatBytes(side.size)];
@@ -857,7 +857,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
     );
   }
 
-  Widget _placeholder(HiveColors c, String text) => Container(
+  Widget _placeholder(PosseColors c, String text) => Container(
     height: 120,
     alignment: Alignment.center,
     decoration: BoxDecoration(
@@ -875,7 +875,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
 class _Checkerboard extends CustomPainter {
   _Checkerboard(this.c);
 
-  final HiveColors c;
+  final PosseColors c;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -941,7 +941,7 @@ class _DiffLines extends StatelessWidget {
   }
 
   Widget _lines(BuildContext context, List<Seg>? Function(int i) segs) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final style = codeStyle(c);
     final faint = style.copyWith(color: c.faint);
     var widest = 1;

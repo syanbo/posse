@@ -11,7 +11,7 @@ import (
 
 // Claude 的读数有两处，都不用联网：
 //   - statusLine 命令的输入：Claude 收到回复后把 rate_limits（five_hour、seven_day，used_percentage 和秒级 resets_at）
-//     交给 statusLine，hive 在用户没配 statusLine 时注入一个不输出的 hive statusline 转过来；
+//     交给 statusLine，posse 在用户没配 statusLine 时注入一个不输出的 posse statusline 转过来；
 //   - ~/.claude.json 的 cachedUsageUtilization：Claude 自己取用量（用户看 /usage）时存的，带 fetchedAtMs。
 // 套餐名取 ~/.claude.json 的 oauthAccount（登录时存的账户信息），见 claudePlan。
 

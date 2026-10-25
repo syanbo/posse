@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/host"
-	"hive/internal/rpc"
-	"hive/internal/store"
+	"posse/internal/agent"
+	"posse/internal/host"
+	"posse/internal/rpc"
+	"posse/internal/store"
 )
 
 type terminalInfo struct {
@@ -32,7 +32,7 @@ type terminalInfo struct {
 	CreatedAt    time.Time        `json:"createdAt"`
 	LastOutputAt time.Time        `json:"lastOutputAt"`
 	IdleMs       int64            `json:"idleMs"`
-	WaitingTasks bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 hive task wait 上
+	WaitingTasks bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 posse task wait 上
 	PhoneSized   bool             `json:"phoneSized,omitempty"`   // 手机正看着，终端按手机的尺寸排版
 }
 
@@ -79,14 +79,14 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 	}
 	id := store.NewID("t_")
 	env := append([]string{
-		"HIVE_HOME=" + d.cfg.Home,
-		"HIVE_SOCKET=" + SocketPath(d.cfg.Home),
-		"HIVE_TERMINAL_ID=" + id,
-		"HIVE_WORKSPACE_ID=" + w.ID,
-		"HIVE_WORKSPACE_PATH=" + w.Path,
+		"POSSE_HOME=" + d.cfg.Home,
+		"POSSE_SOCKET=" + SocketPath(d.cfg.Home),
+		"POSSE_TERMINAL_ID=" + id,
+		"POSSE_WORKSPACE_ID=" + w.ID,
+		"POSSE_WORKSPACE_PATH=" + w.Path,
 	}, extraEnv...)
 	if agentName != "" {
-		env = append(env, "HIVE_AGENT="+agentName)
+		env = append(env, "POSSE_AGENT="+agentName)
 	}
 	env = append(env, gitTraceEnv(d.cfg.Home)...)
 	if err := d.shellFiles(); err == nil {
@@ -584,7 +584,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	st.At = time.Now()
 	d.setAgent(s, st)
-	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 hive hook 写到 stdout
+	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 posse hook 写到 stdout
 	if p.Agent == "claude" && p.Event == "UserPromptSubmit" {
 		if title := s.TakeTitle(); title != "" {
 			return hookEventResult{AgentState: st, SessionTitle: title}, nil
@@ -598,7 +598,7 @@ type hookEventResult struct {
 	SessionTitle string `json:"sessionTitle,omitempty"`
 }
 
-// hookPermission 先照常记下等待状态，再只在有 Hive 手机看着这个会话时挂起等决定。
+// hookPermission 先照常记下等待状态，再只在有 Posse 手机看着这个会话时挂起等决定。
 // 没有手机、桌面有人键入、或 30 秒到了，都返回空 behavior，hook 不往 stdout 写，TUI 自己弹框。
 func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p hookEventParams

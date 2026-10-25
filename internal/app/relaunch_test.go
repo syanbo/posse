@@ -9,9 +9,9 @@ import (
 
 func TestBundleOf(t *testing.T) {
 	for exe, want := range map[string]string{
-		"/x/Hive.app/Contents/MacOS/Hive": "/x/Hive.app",
-		"/x/bin/hive":                     "",
-		"/x/Hive/Contents/MacOS/Hive":     "",
+		"/x/Posse.app/Contents/MacOS/Posse": "/x/Posse.app",
+		"/x/bin/posse":                      "",
+		"/x/Posse/Contents/MacOS/Posse":     "",
 	} {
 		if got := bundleOf(exe); got != want {
 			t.Errorf("bundleOf(%q) = %q, want %q", exe, got, want)
@@ -23,7 +23,7 @@ func TestBundleOf(t *testing.T) {
 func TestExeWatchReplaced(t *testing.T) {
 	dir := t.TempDir()
 	build := func(root string) string {
-		exe := filepath.Join(root, "Hive.app", "Contents", "MacOS", "Hive")
+		exe := filepath.Join(root, "Posse.app", "Contents", "MacOS", "Posse")
 		if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -40,13 +40,13 @@ func TestExeWatchReplaced(t *testing.T) {
 	}
 	build(filepath.Join(dir, "new"))
 	old := filepath.Join(dir, ".old")
-	if err := os.Rename(filepath.Join(dir, "Hive.app"), old); err != nil {
+	if err := os.Rename(filepath.Join(dir, "Posse.app"), old); err != nil {
 		t.Fatal(err)
 	}
 	if !w.replaced() {
 		t.Fatal("missing bundle should count as replaced")
 	}
-	if err := os.Rename(filepath.Join(dir, "new", "Hive.app"), filepath.Join(dir, "Hive.app")); err != nil {
+	if err := os.Rename(filepath.Join(dir, "new", "Posse.app"), filepath.Join(dir, "Posse.app")); err != nil {
 		t.Fatal(err)
 	}
 	if !w.replaced() {

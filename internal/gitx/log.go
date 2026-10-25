@@ -111,7 +111,7 @@ func RemotesContaining(ctx context.Context, dir, hash string) []string {
 }
 
 // ErrRewriteMerges 表示要改写的历史里有合并提交：交互式 rebase 会把它们拉平，不做。
-var ErrRewriteMerges = errors.New("这段历史里有合并提交，改写会把它们拉平，hive 不做这种改写")
+var ErrRewriteMerges = errors.New("这段历史里有合并提交，改写会把它们拉平，posse 不做这种改写")
 
 // ErrNotOnBranch 表示提交不在当前分支上。
 var ErrNotOnBranch = errors.New("这个提交不在当前分支上")
@@ -140,13 +140,13 @@ func rewriteBase(ctx context.Context, dir, hash string) (base string, err error)
 }
 
 // rebaseTodo 用交互式 rebase 改写当前分支：actions 把提交（完整哈希）映射到 rebase 的动作（reword、squash、drop），
-// message 非空时作为 reword 和 squash 要写的提交信息。由 hive 生成的脚本改写待办列表和提交信息，不打开编辑器。
+// message 非空时作为 reword 和 squash 要写的提交信息。由 posse 生成的脚本改写待办列表和提交信息，不打开编辑器。
 func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string, message string) error {
 	base, err := rewriteBase(ctx, dir, from)
 	if err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "hive-rebase-")
+	tmp, err := os.MkdirTemp("", "posse-rebase-")
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 		rules.WriteString(`if ($1 == "pick" && index("` + h + `", $2) == 1) $1 = "` + act + `"` + "\n")
 	}
 	seq := filepath.Join(tmp, "seq.sh")
-	script := "#!/bin/sh\nawk '{\n" + rules.String() + "print }' \"$1\" > \"$1.hive\" && mv \"$1.hive\" \"$1\"\n"
+	script := "#!/bin/sh\nawk '{\n" + rules.String() + "print }' \"$1\" > \"$1.posse\" && mv \"$1.posse\" \"$1\"\n"
 	if err := os.WriteFile(seq, []byte(script), 0o755); err != nil {
 		return err
 	}

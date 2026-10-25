@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/rpc"
-	"hive/internal/usage"
+	"posse/internal/rpc"
+	"posse/internal/usage"
 )
 
 // planStatus 是常驻进程记下的各家套餐用量（internal/daemon/usage.go），随 daemon.status 来；

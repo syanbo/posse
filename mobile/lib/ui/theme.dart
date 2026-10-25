@@ -48,8 +48,8 @@ TextStyle mono(double size, {Color? color, double? height}) => TextStyle(
 );
 
 @immutable
-class HiveColors extends ThemeExtension<HiveColors> {
-  const HiveColors({
+class PosseColors extends ThemeExtension<PosseColors> {
+  const PosseColors({
     required this.dark,
     required this.accent,
     required this.text,
@@ -87,7 +87,7 @@ class HiveColors extends ThemeExtension<HiveColors> {
   final Color fill; // 卡片里次级按钮、输入的底
   final Color code; // 代码块的底
 
-  static const light = HiveColors(
+  static const light = PosseColors(
     dark: false,
     accent: Color(0xFFC15F3C),
     text: Color(0xFF1F1E1D),
@@ -107,7 +107,7 @@ class HiveColors extends ThemeExtension<HiveColors> {
     code: Color(0xFFF5F4F1),
   );
 
-  static const darkColors = HiveColors(
+  static const darkColors = PosseColors(
     dark: true,
     accent: Color(0xFFD97757),
     text: Color(0xFFECEBE8),
@@ -127,25 +127,25 @@ class HiveColors extends ThemeExtension<HiveColors> {
     code: Color(0xFF141413),
   );
 
-  /// 没装 Hive 主题（比如测试里的裸 MaterialApp）时按明暗取默认色板。
-  static HiveColors of(BuildContext context) {
+  /// 没装 Posse 主题（比如测试里的裸 MaterialApp）时按明暗取默认色板。
+  static PosseColors of(BuildContext context) {
     final theme = Theme.of(context);
-    return theme.extension<HiveColors>() ??
+    return theme.extension<PosseColors>() ??
         (theme.brightness == Brightness.dark ? darkColors : light);
   }
 
   @override
-  HiveColors copyWith() => this;
+  PosseColors copyWith() => this;
 
   @override
-  HiveColors lerp(HiveColors? other, double t) =>
+  PosseColors lerp(PosseColors? other, double t) =>
       other == null || t < 0.5 ? this : other;
 }
 
-ThemeData hiveTheme(Brightness brightness) {
+ThemeData posseTheme(Brightness brightness) {
   final c = brightness == Brightness.dark
-      ? HiveColors.darkColors
-      : HiveColors.light;
+      ? PosseColors.darkColors
+      : PosseColors.light;
   final scheme =
       ColorScheme.fromSeed(
         seedColor: c.accent,

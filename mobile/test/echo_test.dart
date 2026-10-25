@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/echo.dart';
-import 'package:hive_mobile/chat/models.dart';
+import 'package:posse_mobile/chat/echo.dart';
+import 'package:posse_mobile/chat/models.dart';
 
 ChatMessage user(String id, DateTime at) => ChatMessage(
   id: id,

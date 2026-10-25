@@ -4,10 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart' show XFile;
-import 'package:hive_mobile/chat/image_pick.dart';
-import 'package:hive_mobile/chat/image_upload.dart';
-import 'package:hive_mobile/chat/paste_choice.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/chat/image_pick.dart';
+import 'package:posse_mobile/chat/image_upload.dart';
+import 'package:posse_mobile/chat/paste_choice.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 
 /// 只认上传用的几条 RPC。
 class _UploadRpc implements PhoneRpc {
@@ -23,7 +23,7 @@ class _UploadRpc implements PhoneRpc {
     return switch (method) {
       'clipboard.startImageUpload' => {'uploadId': 'u1'},
       'clipboard.commitImageUpload' ||
-      'clipboard.saveImageAsTempFile' => {'value': '/tmp/hive-mobile-1.png'},
+      'clipboard.saveImageAsTempFile' => {'value': '/tmp/posse-mobile-1.png'},
       _ => {},
     };
   }
@@ -72,7 +72,7 @@ void main() {
       length: bytes.length,
     );
     final path = await uploadFile(rpc, file, onProgress: seen.add);
-    expect(path, '/tmp/hive-mobile-1.png');
+    expect(path, '/tmp/posse-mobile-1.png');
     expect(rpc.startParams?['name'], '录屏 1.mov');
     expect(rpc.startParams?['expectedBytes'], bytes.length);
     expect(rpc.chunks.map((c) => c.length), [
@@ -103,7 +103,7 @@ void main() {
       List.generate(bulkChunk * 4 + 7, (i) => i % 256),
     );
     final path = await uploadImage(rpc, bytes, onProgress: seen.add);
-    expect(path, '/tmp/hive-mobile-1.png');
+    expect(path, '/tmp/posse-mobile-1.png');
     expect(rpc.startParams?['expectedBytes'], bytes.length);
     expect(rpc.methods, contains('clipboard.commitImageUpload'));
     expect(rpc.methods, isNot(contains('clipboard.appendImageUploadChunk')));
@@ -121,7 +121,7 @@ void main() {
       // 三块多一点
       final bytes = Uint8List(imageChunkChars * 3 * 3 ~/ 4 + 100);
       final path = await uploadImage(rpc, bytes, onProgress: seen.add);
-      expect(path, '/tmp/hive-mobile-1.png');
+      expect(path, '/tmp/posse-mobile-1.png');
       expect(
         rpc.methods
             .where((m) => m == 'clipboard.appendImageUploadChunk')
@@ -143,12 +143,12 @@ void main() {
 
   test('caption sits above each path, and a bare image is just the paths', () {
     expect(
-      imageMessage('  看一下  ', ['/tmp/hive-mobile-a.png']),
-      '看一下\n/tmp/hive-mobile-a.png',
+      imageMessage('  看一下  ', ['/tmp/posse-mobile-a.png']),
+      '看一下\n/tmp/posse-mobile-a.png',
     );
     expect(
-      imageMessage('  ', ['/tmp/hive-mobile-a.png']),
-      '/tmp/hive-mobile-a.png',
+      imageMessage('  ', ['/tmp/posse-mobile-a.png']),
+      '/tmp/posse-mobile-a.png',
     );
     expect(imageMessage('看一下', ['/a.png', '/b.png']), '看一下\n/a.png\n/b.png');
     expect(imageMessage('', ['/a.png', '', '/b.png']), '/a.png\n/b.png');
@@ -208,10 +208,10 @@ void main() {
     expect(isImageFile('report.pdf'), isFalse);
     expect(isImageFile('noext'), isFalse);
     expect(
-      shellPath('/var/folders/x/hive-mobile-1/录屏 1 (2).mov'),
-      r'/var/folders/x/hive-mobile-1/录屏\ 1\ \(2\).mov',
+      shellPath('/var/folders/x/posse-mobile-1/录屏 1 (2).mov'),
+      r'/var/folders/x/posse-mobile-1/录屏\ 1\ \(2\).mov',
     );
-    expect(shellPath('/tmp/hive-mobile-9.jpg'), '/tmp/hive-mobile-9.jpg');
+    expect(shellPath('/tmp/posse-mobile-9.jpg'), '/tmp/posse-mobile-9.jpg');
     expect(shellPath("/tmp/it's&\$x"), r"/tmp/it\'s\&\$x");
   });
 
@@ -231,8 +231,8 @@ void main() {
 
   test('the saved path comes back in value', () {
     expect(
-      imagePath({'value': '/tmp/hive-mobile-a.png'}),
-      '/tmp/hive-mobile-a.png',
+      imagePath({'value': '/tmp/posse-mobile-a.png'}),
+      '/tmp/posse-mobile-a.png',
     );
     expect(() => imagePath({}), throwsStateError);
   });

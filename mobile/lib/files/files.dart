@@ -79,13 +79,13 @@ class FilesScreen extends StatelessWidget {
     required this.title,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
   final String title;
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -112,7 +112,7 @@ class FilesScreen extends StatelessWidget {
 /// 把工作区里的文件下到手机（带进度），存到 [to]（不给时按格式定）。
 Future<void> _download(
   BuildContext context,
-  HiveAppModel model,
+  PosseAppModel model,
   String worktree,
   String path, {
   SaveTo? to,
@@ -141,7 +141,7 @@ Future<void> _download(
 class FilesPane extends StatefulWidget {
   const FilesPane({super.key, required this.model, required this.worktree});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
 
   @override
@@ -246,7 +246,7 @@ class _FilesPaneState extends State<FilesPane> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final rows = _rows();
     final search = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -280,7 +280,7 @@ class _FilesPaneState extends State<FilesPane> {
     }
     if (rows.isEmpty) {
       return _loading.contains('')
-          ? const Center(child: HiveLoader())
+          ? const Center(child: PosseLoader())
           : const EmptyState(icon: Icons.folder_open_rounded, text: '目录是空的');
     }
     return ListView.builder(
@@ -294,7 +294,7 @@ class _FilesPaneState extends State<FilesPane> {
     );
   }
 
-  Widget _row(HiveColors c, FileEntry e, int depth) {
+  Widget _row(PosseColors c, FileEntry e, int depth) {
     final open = _open.contains(e.path);
     return InkWell(
       onTap: () => e.dir ? _toggle(e) : _openFile(e.path),
@@ -417,7 +417,7 @@ class _SearchSheetState extends State<_SearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * 0.8,
       child: Column(
@@ -476,7 +476,7 @@ class FileViewer extends StatefulWidget {
     this.siblings = const [],
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
   final String path;
 
@@ -550,7 +550,7 @@ class _FileViewerState extends State<FileViewer> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -595,7 +595,7 @@ class _FileViewerState extends State<FileViewer> {
     );
   }
 
-  Widget _body(HiveColors c) {
+  Widget _body(PosseColors c) {
     if (_error != null) {
       return EmptyState(
         icon: Icons.error_outline_rounded,
@@ -641,7 +641,7 @@ class _FileViewerState extends State<FileViewer> {
       );
     }
     final text = _text;
-    if (text == null) return const Center(child: HiveLoader());
+    if (text == null) return const Center(child: PosseLoader());
     final notice = _truncated ? const CodeNotice('文件太大，只显示前 512 KB') : null;
     if (_markdown && !_source) {
       return SelectionArea(
@@ -745,7 +745,7 @@ class _ImageFileState extends State<_ImageFile> {
       );
     }
     final image = _image;
-    if (image == null) return const Center(child: HiveLoader());
+    if (image == null) return const Center(child: PosseLoader());
     return ZoomImage(child: Image.memory(image));
   }
 }
@@ -788,7 +788,7 @@ class _CodeViewState extends State<_CodeView> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final style = codeStyle(c);
     final faint = style.copyWith(color: c.faint);
     final gutter = '${_lines.length}'.length;
@@ -848,7 +848,7 @@ class _CodeViewState extends State<_CodeView> {
 }
 
 /// 工作区路径（用户目录写成 ~），文件页的副标题用。
-String worktreePath(HiveAppModel model, String worktree) {
+String worktreePath(PosseAppModel model, String worktree) {
   for (final row in model.worktrees) {
     if (row.id == worktree) return tildePath(row.path);
   }
@@ -864,7 +864,7 @@ class FilesButton extends StatelessWidget {
     required this.title,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
   final String title;
 

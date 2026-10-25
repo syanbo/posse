@@ -3260,7 +3260,7 @@ func (_handle Element) ContextMenu(build func(m *Menu)) Element {
 // ContextMenuAsked gives the element a context menu the app draws
 // itself: right clicks, the menu key and Shift+F10 open it as they do
 // ContextMenu's, and in the frame after it reports where, in DIPs relative
-// to the window. (Hive)
+// to the window. (Posse)
 func (_handle Element) ContextMenuAsked() (x, y float32, ok bool) {
 	_node := _handle.node()
 	if _node == nil {
@@ -4942,7 +4942,7 @@ func (_handle Element) Right(v float32) Element {
 }
 
 // MiddleClicked reports a click with the middle button, as closing a
-// tab does. Hive
+// tab does. Posse
 func (_handle Element) MiddleClicked() bool {
 	_node := _handle.node()
 	if _node == nil {

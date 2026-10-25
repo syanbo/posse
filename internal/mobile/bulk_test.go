@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket"
 	"golang.org/x/crypto/nacl/secretbox"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 // sendBin 发一个二进制帧，和 sendRaw 共用手机的发送计数。
@@ -26,7 +26,7 @@ func (p *phone) sendBin(b []byte) {
 	p.ws.Write(context.Background(), websocket.MessageBinary, frame)
 }
 
-// 声明 hive.bulk.v1 后，大块内容先按块走二进制帧，回复里只剩编号；上传的分段也走二进制帧
+// 声明 posse.bulk.v1 后，大块内容先按块走二进制帧，回复里只剩编号；上传的分段也走二进制帧
 func TestBulkFrames(t *testing.T) {
 	dir := t.TempDir()
 	data := make([]byte, 3*bulkChunk+123)
@@ -54,7 +54,7 @@ func TestBulkFrames(t *testing.T) {
 	}
 
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.bulk.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.bulk.v1"},
 	})))
 	part := result(t, p.next(p.call("files.readRange", params)))
 	if _, ok := part["content"]; ok {
@@ -111,7 +111,7 @@ func TestBulkFrames(t *testing.T) {
 	}
 	m = p.next(p.call("clipboard.commitImageUpload", map[string]any{"uploadId": start["uploadId"]}))
 	path, _ = m["result"].(string)
-	if filepath.Base(path) != "录屏 1.mov" || !strings.HasPrefix(filepath.Base(filepath.Dir(path)), "hive-mobile-") {
+	if filepath.Base(path) != "录屏 1.mov" || !strings.HasPrefix(filepath.Base(filepath.Dir(path)), "posse-mobile-") {
 		t.Fatalf("named upload %v", m)
 	}
 	defer os.RemoveAll(filepath.Dir(path))

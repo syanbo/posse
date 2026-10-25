@@ -5,8 +5,8 @@ import UIKit
 /// 系统要等这一下没被界面吃掉才拉通知中心或回主屏幕。
 /// Flutter 没有这个开关，故事板里的根控制器用这一层，离开页面改回空。
 /// 看桌面的方向也锁在这一层（[DeskOrientation]）。
-@objc(HiveFlutterViewController)
-final class HiveFlutterViewController: FlutterViewController {
+@objc(PosseFlutterViewController)
+final class PosseFlutterViewController: FlutterViewController {
   static var deskDefersEdges = false
   static var deskOrientations: UIInterfaceOrientationMask?
 
@@ -25,7 +25,7 @@ final class HiveFlutterViewController: FlutterViewController {
 enum DeskEdges {
   static func install(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
-      name: "hive/desk/edges",
+      name: "posse/desk/edges",
       binaryMessenger: messenger
     )
     channel.setMethodCallHandler { call, result in
@@ -35,7 +35,7 @@ enum DeskEdges {
       }
       let on = call.arguments as? Bool ?? false
       DispatchQueue.main.async {
-        HiveFlutterViewController.deskDefersEdges = on
+        PosseFlutterViewController.deskDefersEdges = on
         for scene in UIApplication.shared.connectedScenes {
           guard let windowScene = scene as? UIWindowScene else { continue }
           for window in windowScene.windows {
@@ -57,7 +57,7 @@ enum DeskOrientation {
     // 锁着横屏时 UIDevice 的朝向也要跟着传感器走，放开时才知道手机是怎么拿的
     UIDevice.current.beginGeneratingDeviceOrientationNotifications()
     let channel = FlutterMethodChannel(
-      name: "hive/desk/orientation",
+      name: "posse/desk/orientation",
       binaryMessenger: messenger
     )
     channel.setMethodCallHandler { call, result in
@@ -72,7 +72,7 @@ enum DeskOrientation {
         return
       }
       DispatchQueue.main.async {
-        HiveFlutterViewController.deskOrientations = mask
+        PosseFlutterViewController.deskOrientations = mask
         for scene in UIApplication.shared.connectedScenes {
           guard let windowScene = scene as? UIWindowScene else { continue }
           for window in windowScene.windows {

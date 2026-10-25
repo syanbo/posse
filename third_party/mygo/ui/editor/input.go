@@ -375,7 +375,7 @@ func (ed *editor) pointerMove(ev ui.InputEvent) bool {
 		// Off the text, nothing rests.
 		h.pending, h.restOff = false, -1
 	}
-	// Hive: the word (or what linkAt says) under the pointer, for Command
+	// Posse: the word (or what linkAt says) under the pointer, for Command
 	// to underline.
 	var link [2]int
 	if off >= 0 && ed.o.onDefinition != nil {
@@ -456,7 +456,7 @@ func (ed *editor) scrollbars() (vertical, horizontal bool) {
 	}
 	horizontal = !ed.view.wrap && ed.view.maxLine > ed.r.W-ed.textX-scrollbarWidth
 	if s := ed.o.sharedScroll; s != nil && !ed.view.wrap && s.maxX() > 0 {
-		// Hive: the other side's lines run under its numbers.
+		// Posse: the other side's lines run under its numbers.
 		horizontal = true
 	}
 	return ed.scrollMax() > 0, horizontal
@@ -467,7 +467,7 @@ func (ed *editor) maxScrollX() float32 {
 }
 
 // sideways returns the sideways scroll and how far it goes: those the
-// editors of a split diff share, else the editor's own (Hive).
+// editors of a split diff share, else the editor's own (Posse).
 func (ed *editor) sideways() (x, end float32) {
 	if s := ed.o.sharedScroll; s != nil {
 		return s.x, s.maxX()
@@ -569,7 +569,7 @@ func (ed *editor) gutterPress(ev ui.InputEvent) bool {
 			return true
 		}
 	}
-	// Hive: a click on a change bar.
+	// Posse: a click on a change bar.
 	if ed.o.onChangeClick != nil && ed.gitDiff != nil && ed.gitDiff.status(line) != 0 {
 		barX := ed.changeBarX()
 		if ev.X >= barX-6 && ev.X <= barX+9 {

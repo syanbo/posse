@@ -165,8 +165,8 @@ func TestDeriveKeysMatchPhone(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := hex.EncodeToString(toMobile[:]) + hex.EncodeToString(toMac[:])
-	want := "44c64c40f6667577588a5e9336b32408da2e0c800be36edadeb6e469bb69016e" +
-		"48b417d3bba7d722539f4725a9cce8cdea27c7936944d8a4ced65bdebbf56762"
+	want := "8f04928271ef6e22b39f3a0528d25ebbfd86bd414efe1241624c2c3e3a6fadee" +
+		"7075d509bf5b1cabc9f7fbf8a4ae00fc5bc2875b076f791e8cbfa820a9dc5cdb"
 	if got != want {
 		t.Fatalf("keys %s", got)
 	}

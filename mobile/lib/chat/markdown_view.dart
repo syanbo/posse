@@ -223,7 +223,7 @@ Widget markdownCodeBlock(
               return hl == null
                   ? Text(code, softWrap: false, style: style)
                   : Text.rich(
-                      codeSpan(hl, HiveColors.of(context)),
+                      codeSpan(hl, PosseColors.of(context)),
                       softWrap: false,
                       style: style,
                     );
@@ -235,10 +235,10 @@ Widget markdownCodeBlock(
   );
 }
 
-Color _accent(BuildContext context) => HiveColors.of(context).accent;
+Color _accent(BuildContext context) => PosseColors.of(context).accent;
 
-Color _muted(BuildContext context) => HiveColors.of(context).muted;
+Color _muted(BuildContext context) => PosseColors.of(context).muted;
 
-Color _codeBg(BuildContext context) => HiveColors.of(context).code;
+Color _codeBg(BuildContext context) => PosseColors.of(context).code;
 
-Color _line(BuildContext context) => HiveColors.of(context).line;
+Color _line(BuildContext context) => PosseColors.of(context).line;

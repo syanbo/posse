@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。

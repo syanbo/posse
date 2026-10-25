@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
+import 'package:posse_mobile/app_state.dart';
 
 String pairCode(String key, String endpoint) {
   final json = jsonEncode({
@@ -29,7 +29,7 @@ void main() {
           id: 'k1',
           code: pairCode('k1', 'ws://a:1'),
           name: 'MacBook',
-          projectOrder: ['hive', 'Works'],
+          projectOrder: ['posse', 'Works'],
         ),
         SavedComputer(id: 'k2', code: pairCode('k2', 'ws://b:2')),
       ],
@@ -39,12 +39,12 @@ void main() {
     expect(back.computers.map((c) => c.label), ['MacBook', 'b']);
     // 旧版只按公钥存的 ID 读出来补上地址，当前选中的跟着换
     expect(back.current!.id, 'k2@ws://b:2');
-    expect(back.computers.first.projectOrder, ['hive', 'Works']);
+    expect(back.computers.first.projectOrder, ['posse', 'Works']);
     expect(SavedComputers.decode('not json').computers, isEmpty);
   });
 
   test('projects follow the phone order and new ones go last', () {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     model.saved = SavedComputers(
       computers: [
         SavedComputer(id: 'k', code: '', projectOrder: ['b', 'gone', 'a']),
@@ -57,7 +57,7 @@ void main() {
   });
 
   test('a name given on the phone wins and clearing it falls back', () {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     final computer = SavedComputer(
       id: 'k',
       code: pairCode('k', 'ws://10.0.0.2:6788'),
@@ -74,8 +74,8 @@ void main() {
 
   test('the same computer can be saved once per address', () async {
     final store = MemoryPairingStore();
-    final model = HiveAppModel(store: store);
-    final remote = pairCode('k', 'wss://tun.example/hive');
+    final model = PosseAppModel(store: store);
+    final remote = pairCode('k', 'wss://tun.example/posse');
     final lan = pairCode('k', 'ws://192.168.1.5:6788');
     model.saved = SavedComputers(
       computers: [SavedComputer(id: 'k', code: remote, name: 'MacBook')],
@@ -86,7 +86,7 @@ void main() {
       SavedComputer(id: 'k@ws://192.168.1.5:6788', code: lan, name: 'MacBook'),
     );
     expect(model.saved.computers.map((c) => c.id), [
-      'k@wss://tun.example/hive',
+      'k@wss://tun.example/posse',
       'k@ws://192.168.1.5:6788',
     ]);
     expect(model.computers.map(model.labelOf), [

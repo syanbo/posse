@@ -240,15 +240,15 @@ type Options struct {
 	// LinkUsable reports whether a link can open, as a file that still
 	// exists, on the main thread with the terminal locked: one that cannot
 	// shows no underline and a click on it does nothing. Nil takes every
-	// link. (Hive)
+	// link. (Posse)
 	LinkUsable func(link string) bool
 	// OnHoverLink sees the link the pointer goes over, as LinkUsable takes
 	// it, and "" as it leaves, on the main thread with the terminal locked:
-	// it must not call the Terminal. (Hive)
+	// it must not call the Terminal. (Posse)
 	OnHoverLink func(link string)
 	// ContextMenu, when set, is called in place of showing a menu, with
 	// where the view was right-clicked, in DIPs relative to the window, for
-	// the app to draw its own. (Hive)
+	// the app to draw its own. (Posse)
 	ContextMenu func(x, y float32)
 	// OnPaste sees a paste of the clipboard (ActionPaste's keys, a Paste
 	// menu item, a secondary click with RightClickPaste) before the
@@ -284,7 +284,7 @@ type Options struct {
 	// to Font's size on a reset. Returning true from every zoom turns
 	// zooming off.
 	OnZoom func(z Zoom) bool
-	// NoWheelZoom (Hive) turns off the wheel's zoom: with Command (Control)
+	// NoWheelZoom (Posse) turns off the wheel's zoom: with Command (Control)
 	// held the wheel scrolls as without it. The font size keys still zoom.
 	NoWheelZoom bool
 	// OnClear sees the user's clear on the main thread, before the

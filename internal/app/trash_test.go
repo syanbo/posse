@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 func TestSessionTrashPaths(t *testing.T) {

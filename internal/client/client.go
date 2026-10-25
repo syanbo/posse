@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"hive/internal/daemon"
-	"hive/internal/rpc"
-	"hive/internal/spawn"
+	"posse/internal/daemon"
+	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 type Client struct {
@@ -33,7 +33,7 @@ func (c *Client) Up() bool {
 	return true
 }
 
-// EnsureDaemon 在常驻进程没运行时拉起它（hive daemon run），并等它开始监听。
+// EnsureDaemon 在常驻进程没运行时拉起它（posse daemon run），并等它开始监听。
 func (c *Client) EnsureDaemon() error {
 	if c.Up() {
 		return nil
@@ -53,7 +53,7 @@ func (c *Client) EnsureDaemon() error {
 	cmd := exec.Command(exe, "daemon", "run")
 	cmd.Dir = c.Home
 	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.Env = append(os.Environ(), "HIVE_HOME="+c.Home)
+	cmd.Env = append(os.Environ(), "POSSE_HOME="+c.Home)
 	// 脱离调用方的会话，调用方的终端或界面关闭时常驻进程不受影响；
 	// 授权按常驻进程自己的签名认，不记在拉起它的终端 App 上
 	proc, err := spawn.Start(cmd)

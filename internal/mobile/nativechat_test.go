@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/term"
 )
 
 func TestNativeChat(t *testing.T) {
@@ -95,7 +95,7 @@ func TestNativeChat(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tm2.Close(time.Second)
-	absent := "hive-test-absent-7c1e0b9a-4d22-4b0e-9c11-000000000001"
+	absent := "posse-test-absent-7c1e0b9a-4d22-4b0e-9c11-000000000001"
 	tm2.SetAgent(term.AgentState{Status: "waiting", SessionID: absent, ToolName: "Read", Prompt: "x"})
 	host.mu.Lock()
 	host.terms["t_2"] = tm2

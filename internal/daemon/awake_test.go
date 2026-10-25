@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/term"
 )
 
 func fakeAwake(t *testing.T) *awake {
@@ -29,7 +29,7 @@ func TestAwakeModes(t *testing.T) {
 	}
 	a.apply(0)
 	if !a.status().Active {
-		t.Fatal("auto does not hold while hive runs")
+		t.Fatal("auto does not hold while posse runs")
 	}
 	a.apply(2)
 	if st := a.status(); !st.Active || st.Working != 2 {
@@ -37,7 +37,7 @@ func TestAwakeModes(t *testing.T) {
 	}
 	a.apply(0)
 	if !a.status().Active {
-		t.Fatal("auto released while hive still runs")
+		t.Fatal("auto released while posse still runs")
 	}
 	// caffeinate 意外退出：下次重算时重新起
 	a.mu.Lock()
@@ -67,7 +67,7 @@ func TestAwakeModes(t *testing.T) {
 	}
 	a.apply(0)
 	if !a.status().Active {
-		t.Fatal("display mode released while hive still runs")
+		t.Fatal("display mode released while posse still runs")
 	}
 	if err := a.setMode(awakeOff); err != nil {
 		t.Fatal(err)

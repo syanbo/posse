@@ -17,9 +17,9 @@ import (
 
 // 系统按"负责进程"认屏幕录制、桌面文件夹等授权，posix_spawn 默认让子进程继承拉起方的。
 // 常驻进程由窗口、终端里的 CLI 或交接时的旧进程拉起，继承下来的可能是终端 App，
-// 也可能是早已被换掉的旧 Hive.app（系统认不出它的签名，每次访问都弹授权）。
+// 也可能是早已被换掉的旧 Posse.app（系统认不出它的签名，每次访问都弹授权）。
 // responsibility_spawnattrs_setdisclaim（私有接口）让子进程按自己的签名认，
-// 常驻进程和它下面的终端就一直记在 Hive.app 上。
+// 常驻进程和它下面的终端就一直记在 Posse.app 上。
 
 const (
 	flagSetSigDef      = 0x0004

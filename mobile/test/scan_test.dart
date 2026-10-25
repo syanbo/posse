@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/pair/scan.dart';
+import 'package:posse_mobile/pair/scan.dart';
 
 void main() {
   test('a pairing url or raw code connects once; other codes do not', () {

@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/history"
-	"hive/internal/host"
-	"hive/internal/rpc"
-	"hive/internal/store"
+	"posse/internal/agent"
+	"posse/internal/history"
+	"posse/internal/host"
+	"posse/internal/rpc"
+	"posse/internal/store"
 )
 
 // historyFresh 内的索引视为最新；超过后下一次查询先做一次增量更新。
@@ -27,7 +27,7 @@ const historyFresh = 15 * time.Second
 // historyWait 是查询等增量更新的最长时间；首次建索引要更久，先用已有的结果返回。
 const historyWait = 3 * time.Second
 
-// historyState 管理会话历史索引。索引在子进程（hive history index）里更新：
+// historyState 管理会话历史索引。索引在子进程（posse history index）里更新：
 // 首次要读几 GB 的会话文件，放在子进程里，常驻进程的内存不受影响，读完就还给系统。
 type historyState struct {
 	mu       sync.Mutex
@@ -139,7 +139,7 @@ func (d *Daemon) updateHistory(ctx context.Context, progress func(history.Progre
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, d.launcher.Exe, "history", "index", "--progress")
-	cmd.Env = append(os.Environ(), "HIVE_HOME="+d.cfg.Home)
+	cmd.Env = append(os.Environ(), "POSSE_HOME="+d.cfg.Home)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -283,7 +283,7 @@ type historyShowParams struct {
 type historyShowResult struct {
 	Session  history.Session   `json:"session"`
 	Messages []history.Message `json:"messages"`
-	// Terminal 是正在 hive 里运行这个会话的终端
+	// Terminal 是正在 posse 里运行这个会话的终端
 	Terminal string `json:"terminal,omitempty"`
 }
 

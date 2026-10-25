@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/rpc"
+	"posse/internal/rpc"
 )
 
-// 手机端历史（Hive 扩展，声明了 hive.history.v1 的连接才有）：列表、搜索和"在电脑上继续"，
+// 手机端历史（Posse 扩展，声明了 posse.history.v1 的连接才有）：列表、搜索和"在电脑上继续"，
 // 转给常驻进程的 history.* 接口；看会话内容走 nativeChat.readSession（按会话文件读）。
 func (c *conn) history(id, method string, p json.RawMessage) error {
-	if !c.hasCapability("hive.history.v1") {
+	if !c.hasCapability("posse.history.v1") {
 		return errorf("method_not_found", "Unknown method: %s", method)
 	}
 	if len(p) == 0 {

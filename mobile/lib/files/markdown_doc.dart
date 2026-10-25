@@ -28,7 +28,7 @@ class MarkdownDoc extends StatelessWidget {
   });
 
   final String data;
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
 
   /// 这个 md 文件相对工作区根目录的路径。
@@ -37,7 +37,7 @@ class MarkdownDoc extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final base = TextStyle(fontSize: Fs.read, height: 1.6, color: c.text);
     // 表格的横向滚动条在 iOS 上是 CupertinoScrollbar，会按底部安全区抬高，压在表格最后一行上；
     // 去掉底部安全区，滚动条落回表格下面的空隙。正文自己有底边距，不靠安全区
@@ -66,7 +66,7 @@ class MarkdownDoc extends StatelessWidget {
     );
   }
 
-  Widget _bullet(MarkdownBulletParameters p, TextStyle base, HiveColors c) {
+  Widget _bullet(MarkdownBulletParameters p, TextStyle base, PosseColors c) {
     if (p.style == BulletStyle.orderedList) {
       return Text(
         '${p.index + 1}.',
@@ -83,7 +83,7 @@ class MarkdownDoc extends StatelessWidget {
     );
   }
 
-  Widget _image(Uri uri, String? alt, HiveColors c) {
+  Widget _image(Uri uri, String? alt, PosseColors c) {
     if (uri.scheme == 'http' || uri.scheme == 'https') {
       return Image.network(
         uri.toString(),
@@ -153,7 +153,7 @@ class MarkdownDoc extends StatelessWidget {
 }
 
 /// 文件预览的排版：标题拉开层级，块之间留足空隙，表格带边框、太宽时左右滑。
-MarkdownStyleSheet markdownDocStyle(HiveColors c, TextStyle base) {
+MarkdownStyleSheet markdownDocStyle(PosseColors c, TextStyle base) {
   TextStyle heading(double size) =>
       base.copyWith(fontSize: size, fontWeight: FontWeight.w600, height: 1.3);
   final rule = BorderSide(color: c.line);
@@ -255,7 +255,7 @@ class _ImageAlt extends StatelessWidget {
   const _ImageAlt(this.alt, this.c);
 
   final String? alt;
-  final HiveColors c;
+  final PosseColors c;
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +278,7 @@ class _ImageAlt extends StatelessWidget {
 final _images = <String, Future<Uint8List?>>{};
 
 Future<Uint8List?> _loadImage(
-  HiveAppModel model,
+  PosseAppModel model,
   String worktree,
   String path,
 ) {
@@ -317,7 +317,7 @@ class _WorkspaceImage extends StatefulWidget {
     this.alt,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final String worktree;
   final String path;
   final String? alt;
@@ -344,7 +344,7 @@ class _WorkspaceImageState extends State<_WorkspaceImage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final alt = widget.alt;
     final path = widget.path;
     return FutureBuilder<Uint8List?>(

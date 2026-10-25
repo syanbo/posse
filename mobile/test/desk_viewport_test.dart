@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/desk/chrome.dart';
-import 'package:hive_mobile/desk/events.dart';
-import 'package:hive_mobile/desk/keys.dart';
-import 'package:hive_mobile/desk/plugin.dart';
-import 'package:hive_mobile/desk/viewport.dart';
+import 'package:posse_mobile/desk/chrome.dart';
+import 'package:posse_mobile/desk/events.dart';
+import 'package:posse_mobile/desk/keys.dart';
+import 'package:posse_mobile/desk/plugin.dart';
+import 'package:posse_mobile/desk/viewport.dart';
 
 void main() {
   test('contain fit letterboxes the long axis', () {
@@ -84,8 +84,8 @@ void main() {
   });
 
   test('host comes from the websocket url without its port', () {
-    expect(deskHostOf('ws://192.168.1.8:6790/hive'), '192.168.1.8');
-    expect(deskHostOf('wss://mac.local/hive'), 'mac.local');
+    expect(deskHostOf('ws://192.168.1.8:6790/posse'), '192.168.1.8');
+    expect(deskHostOf('wss://mac.local/posse'), 'mac.local');
     expect(deskHostOf(null), isNull);
     expect(deskHostOf('not a url'), isNull);
   });

@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
+	"posse/internal/client"
 )
 
 func TestSortTerminals(t *testing.T) {
@@ -80,7 +80,7 @@ func TestReorderTerminals(t *testing.T) {
 	if !ok {
 		t.Fatal("codex session missing")
 	}
-	claude, ok := tt.Find("重写 hive 界面")
+	claude, ok := tt.Find("重写 posse 界面")
 	if !ok {
 		t.Fatal("claude session missing")
 	}
@@ -107,7 +107,7 @@ func TestReorderTerminals(t *testing.T) {
 func TestReorderDocTabs(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})

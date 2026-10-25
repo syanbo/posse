@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/history"
-	"hive/internal/host"
+	"posse/internal/history"
+	"posse/internal/host"
 )
 
 // Host 是常驻进程提供给手机的数据和操作。
@@ -106,7 +106,7 @@ func projectName(st State, id string) string {
 	return ""
 }
 
-// displayName 与 hive 侧栏一致：项目目录本身显示项目名，worktree 显示分支名。
+// displayName 与 posse 侧栏一致：项目目录本身显示项目名，worktree 显示分支名。
 func displayName(st State, w Workspace) string {
 	switch {
 	case w.Kind == "main":
@@ -117,7 +117,7 @@ func displayName(st State, w Workspace) string {
 	return w.Name
 }
 
-// agentState 把 hive 的 agent 状态换成 Orca 的；没在运行的 agent 不显示。
+// agentState 把 posse 的 agent 状态换成 Orca 的；没在运行的 agent 不显示。
 func agentState(t Terminal) string {
 	switch t.Status {
 	case "starting", "working":
@@ -132,7 +132,7 @@ func agentState(t Terminal) string {
 
 // leafID 由终端 ID 派生一个固定的 UUID：手机解析标签 ID 时只认 UUID 形状的 leaf。
 func leafID(termID string) string {
-	h := sha256.Sum256([]byte("hive-leaf:" + termID))
+	h := sha256.Sum256([]byte("posse-leaf:" + termID))
 	h[6] = h[6]&0x0f | 0x40
 	h[8] = h[8]&0x3f | 0x80
 	s := hex.EncodeToString(h[:16])
@@ -352,8 +352,8 @@ func (s *Server) status() map[string]any {
 	return map[string]any{
 		"runtimeId": s.epoch, "protocolVersion": 3, "minCompatibleMobileVersion": 2,
 		"runtimeProtocolVersion": 3, "minCompatibleRuntimeClientVersion": 2,
-		"appVersion": "hive", "capabilities": []string{}, "hostPlatform": "darwin",
-		"machineName": "Hive " + name, "graphStatus": "ready", "floatingWorkspaceEnabled": false,
+		"appVersion": "posse", "capabilities": []string{}, "hostPlatform": "darwin",
+		"machineName": "Posse " + name, "graphStatus": "ready", "floatingWorkspaceEnabled": false,
 	}
 }
 
@@ -378,7 +378,7 @@ func (c *conn) dispatch(req request) error {
 			Client       string   `json:"client"`
 			Version      int      `json:"version"`
 			Capabilities []string `json:"capabilities"`
-			// Hive 扩展：这台手机的安装 ID、型号和它存着的这台电脑的全部 token，见 pairing.identify
+			// Posse 扩展：这台手机的安装 ID、型号和它存着的这台电脑的全部 token，见 pairing.identify
 			Phone *struct {
 				ID     string   `json:"id"`
 				Name   string   `json:"name"`
@@ -418,7 +418,7 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
-	case "hive.punch":
+	case "posse.punch":
 		var a struct {
 			Addr string `json:"addr"`
 		}
@@ -429,12 +429,12 @@ func (c *conn) dispatch(req request) error {
 			c.replyOrFail(req.ID, info, err)
 		}()
 		return nil
-	case "hive.quic":
+	case "posse.quic":
 		info, err := s.quicInfo(c.device.ID)
 		c.replyOrFail(req.ID, info, err)
 		return nil
 	case "runtime.ping":
-		// Hive 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
+		// Posse 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
 		return c.reply(req.ID, map[string]any{})
 	case "repo.list":
 		repos := []map[string]any{}
@@ -499,7 +499,7 @@ func (c *conn) dispatch(req request) error {
 		go c.eventsStream(c.startStream(req.ID), req.ID)
 		return nil
 	case "notifications.subscribe":
-		// 只为让手机知道连接支持通知流；hive 不经推送网关发通知
+		// 只为让手机知道连接支持通知流；posse 不经推送网关发通知
 		c.startStream(req.ID)
 		return c.stream(req.ID, map[string]any{"type": "ready", "subscriptionId": req.ID, "epoch": s.epoch})
 	case "notifications.getMissedSince":
@@ -563,13 +563,13 @@ func (c *conn) dispatch(req request) error {
 	case "history.list", "history.search", "history.resume":
 		return c.async(req.ID, func() error { return c.history(req.ID, req.Method, p) })
 	case "usage.get":
-		// Hive 扩展：声明了 hive.usage.v1 的连接才有，手机首页的用量卡片用
-		if !c.hasCapability("hive.usage.v1") {
+		// Posse 扩展：声明了 posse.usage.v1 的连接才有，手机首页的用量卡片用
+		if !c.hasCapability("posse.usage.v1") {
 			return errorf("method_not_found", "Unknown method: %s", req.Method)
 		}
 		return c.reply(req.ID, c.srv.host.Usage())
 	case "usage.refresh":
-		if !c.hasCapability("hive.usage.v1") {
+		if !c.hasCapability("posse.usage.v1") {
 			return errorf("method_not_found", "Unknown method: %s", req.Method)
 		}
 		// 要等联网，放到一边做：同一连接的请求排队处理，不能挡住后面的
@@ -821,7 +821,7 @@ func (c *conn) createTerminal(id string, p json.RawMessage) error {
 type upload struct {
 	data   []byte
 	expect int
-	// raw 的上传（hive.bulk.v1）：原始字节由编号为 blob 的二进制帧送来，边收边写进 file（视频动辄几百 MB，
+	// raw 的上传（posse.bulk.v1）：原始字节由编号为 blob 的二进制帧送来，边收边写进 file（视频动辄几百 MB，
 	// 不攒在常驻进程的内存里）；否则 data 是 base64 文本
 	raw  bool
 	blob uint32
@@ -882,7 +882,7 @@ func saveImage(b64data string) (string, error) {
 }
 
 func saveImageBytes(data []byte) (string, error) {
-	f, err := os.CreateTemp("", "hive-mobile-*"+sniffExt(data))
+	f, err := os.CreateTemp("", "posse-mobile-*"+sniffExt(data))
 	if err != nil {
 		return "", err
 	}
@@ -924,7 +924,7 @@ func saveUpload(u *upload) (string, error) {
 	u.file = nil
 	var dest string
 	if name := uploadName(u.name); name != "" {
-		dir, err := os.MkdirTemp("", "hive-mobile-*")
+		dir, err := os.MkdirTemp("", "posse-mobile-*")
 		if err != nil {
 			os.Remove(tmp)
 			return "", err
@@ -991,11 +991,11 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 		}
 		return c.reply(id, path)
 	case "clipboard.startImageUpload":
-		if a.ExpectedBytes > 0 && c.hasCapability("hive.bulk.v1") {
+		if a.ExpectedBytes > 0 && c.hasCapability("posse.bulk.v1") {
 			if a.ExpectedBytes > maxUpload {
 				return errorf("invalid_params", "bad upload size")
 			}
-			f, err := os.CreateTemp("", "hive-mobile-*.part")
+			f, err := os.CreateTemp("", "posse-mobile-*.part")
 			if err != nil {
 				return err
 			}

@@ -6,9 +6,9 @@ import 'package:flutter/services.dart';
 
 import '../protocol/pairing.dart';
 
-const qrChannel = MethodChannel('hive/qr');
+const qrChannel = MethodChannel('posse/qr');
 
-String qrViewChannel(int id) => 'hive/qr/$id';
+String qrViewChannel(int id) => 'posse/qr/$id';
 
 /// 扫到的文字是不是配对码。解析失败就当没看见，相机继续开。
 bool isPairingCode(String raw) {
@@ -196,7 +196,7 @@ class _QrScanPageState extends State<QrScanPage> {
           Offstage(
             offstage: !_shown,
             child: UiKitView(
-              viewType: 'hive/qr',
+              viewType: 'posse/qr',
               onPlatformViewCreated: _attach,
             ),
           ),
@@ -220,7 +220,7 @@ class _QrScanPageState extends State<QrScanPage> {
                     right: 24,
                     bottom: box.maxHeight - frame.top + 20,
                     child: const Text(
-                      '对准电脑上 Hive 的配对码',
+                      '对准电脑上 Posse 的配对码',
                       textAlign: TextAlign.center,
                       style: hint,
                     ),

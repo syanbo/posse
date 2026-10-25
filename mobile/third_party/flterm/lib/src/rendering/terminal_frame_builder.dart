@@ -180,7 +180,7 @@ class TerminalFrameBuilder {
     _rowBuilder.edges.resize(rows);
   }
 
-  /// Hive: 每行最左、最右一格的底色，给格子外面的内边距接着画。
+  /// Posse: 每行最左、最右一格的底色，给格子外面的内边距接着画。
   RowEdgeColors get edges => _rowBuilder.edges;
 
   /// Releases the owned libghostty iterators.
@@ -586,7 +586,7 @@ final class _ForegroundEmitter {
               ..pop())
             .build()
           ..layout(const ParagraphConstraints(width: .infinity));
-    // Hive: 格子宽度向上取整到设备像素，字号小时比字形本身的步进宽出一成多，
+    // Posse: 格子宽度向上取整到设备像素，字号小时比字形本身的步进宽出一成多，
     // 一长串符号按原宽画会比格子短，后面按格子定位的字就和它隔开一截。
     final natural = paragraph.maxIntrinsicWidth;
     final target = _frame.cellWidth * text.length;
@@ -1286,7 +1286,7 @@ final class _TerminalRowBuilder {
       row.rowBottom,
       argb,
     );
-    // Hive: 记下贴着左右两边的底色
+    // Posse: 记下贴着左右两边的底色
     if (row.bgRunStart == 0) edges.setLeft(row.row, argb);
     if (endCol >= _frame.cols) edges.setRight(row.row, argb);
   }
@@ -1361,7 +1361,7 @@ final class _TerminalRowBuilder {
       );
     }
     _syncBackgroundRun(row);
-    // Hive: 有字或程序铺了底色的行算有内容
+    // Posse: 有字或程序铺了底色的行算有内容
     if (cell.hasText || row.bgRunExplicit) edges.setInk(row.row);
 
     if (!row.hidden) {
@@ -1382,7 +1382,7 @@ final class _TerminalRowBuilder {
   }
 }
 
-/// Hive: 可见区域每一行两端格子的底色，0 表示用的是终端默认底色。程序（比如 grok）自己铺了底色时，
+/// Posse: 可见区域每一行两端格子的底色，0 表示用的是终端默认底色。程序（比如 grok）自己铺了底色时，
 /// 格子外面的内边距和铺不满的零头按它接着画，不露出一圈主题色。
 final class RowEdgeColors {
   var _left = Int32List(0);
@@ -1409,7 +1409,7 @@ final class RowEdgeColors {
     if (row >= 0 && row < _ink.length) _ink[row] = 1;
   }
 
-  /// Hive: 最后一行有内容（有字或铺了底色）的行号，整屏空白时为 -1。
+  /// Posse: 最后一行有内容（有字或铺了底色）的行号，整屏空白时为 -1。
   int get lastInkRow {
     for (var row = _ink.length - 1; row >= 0; row--) {
       if (_ink[row] != 0) return row;

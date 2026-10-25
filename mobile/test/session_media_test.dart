@@ -4,11 +4,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/chat/media.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
-import 'package:hive_mobile/ui/media_pager.dart';
-import 'package:hive_mobile/workspace/models.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/chat/media.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/ui/media_pager.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 // 1×1 的 PNG
 final _png = base64Decode(
@@ -75,7 +75,7 @@ class _MediaRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _Model extends HiveAppModel {
+class _Model extends PosseAppModel {
   _Model(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
 
@@ -168,7 +168,7 @@ void main() {
     expect(rpc.reads, [0, 0]);
     // 清掉这次测试下到临时目录的文件
     for (final f in Directory(
-      '${Directory.systemTemp.path}/hive-video',
+      '${Directory.systemTemp.path}/posse-video',
     ).listSync()) {
       if (f is File && f.lengthSync() == _png.length) f.deleteSync();
     }
@@ -201,7 +201,7 @@ class _OldRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _OldModel extends HiveAppModel {
+class _OldModel extends PosseAppModel {
   _OldModel(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
 

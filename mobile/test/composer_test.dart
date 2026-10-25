@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/composer.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/chat/composer.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 void main() {
   testWidgets('single-line composer stays compact', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Scaffold(
           bottomNavigationBar: ChatComposer(
             controller: TextEditingController(),

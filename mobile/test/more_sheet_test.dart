@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/workspace/models.dart';
-import 'package:hive_mobile/workspace/session_actions.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/workspace/models.dart';
+import 'package:posse_mobile/workspace/session_actions.dart';
 
 void main() {
   testWidgets('更多从底部滑上来：切换、电脑布局开关、关闭会话', (tester) async {
@@ -45,7 +45,7 @@ void main() {
     expect(find.text('切换到对话'), findsOneWidget, reason: '拨开关面板不收');
 
     final sw = tester.widget<Switch>(find.byType(Switch));
-    expect(sw.activeTrackColor, HiveColors.light.accent);
+    expect(sw.activeTrackColor, PosseColors.light.accent);
     final scales = tester
         .widgetList<Transform>(
           find.ancestor(

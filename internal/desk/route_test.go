@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 func TestRoutesThroughRelay(t *testing.T) {

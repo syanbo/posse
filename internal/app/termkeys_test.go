@@ -12,8 +12,8 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
-	"hive/internal/rpc"
+	"posse/internal/client"
+	"posse/internal/rpc"
 )
 
 // recConn 记下终端发给程序的字节。
@@ -152,7 +152,7 @@ func TestStepTab(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	tt := ui.NewTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]

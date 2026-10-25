@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // Git 日志左边的分支树，照 WebStorm：HEAD（当前分支）、本地、远程（按远端分组）、标签。

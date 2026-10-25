@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // changesView 是文件标签左栏的"改动"：分支和同步状态、改动列表（含储藏），底部是提交框。

@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 // relayKeepalive 是向中转重发登记的间隔。家用路由器的 UDP 映射常见 30 秒就回收。

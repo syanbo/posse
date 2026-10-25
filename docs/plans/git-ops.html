@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hive 的 Git 操作计划</title>
+<title>Posse 的 Git 操作计划</title>
 <style>
   :root {
     --bg: #faf9f7; --surface: #ffffff; --text: #1f1e1c; --muted: #6b6862;
@@ -76,16 +76,16 @@
   <a href="#ask">需要你决定</a>
 </nav>
 <main>
-<h1>Hive 的 Git 操作计划（参照 WebStorm）</h1>
+<h1>Posse 的 Git 操作计划（参照 WebStorm）</h1>
 <div class="byline">2026-10-16</div>
 
 <h2 id="scope">目标与范围</h2>
-<p class="lead">按你在 WebStorm 里实际用得最多的操作，在 hive 里做一套 Git 界面：改动列表和 diff、分支弹窗、和分支比较、Push、Git 日志。每个工作区（包括 agent 的 worktree）各自一份。全部在窗口进程里调用系统 git，不改常驻进程。</p>
+<p class="lead">按你在 WebStorm 里实际用得最多的操作，在 posse 里做一套 Git 界面：改动列表和 diff、分支弹窗、和分支比较、Push、Git 日志。每个工作区（包括 agent 的 worktree）各自一份。全部在窗口进程里调用系统 git，不改常驻进程。</p>
 <p>依据：你的 <code>~/Library/Application Support/JetBrains/WebStorm2025.3/options/actionSummary.xml</code>（各操作的使用次数）、<code>vcs.xml</code>、<code>diff.xml</code>；界面细节取自 JetBrains 官方 WebStorm 帮助文档的截图（2026.2 版，你装的是 2025.3.3，都是新版界面，结构相同是推断，解锁后再对照你的 WebStorm 核实）。</p>
 <p>不做：GitHub/GitLab 的 PR 和代码审查、子模块、多仓库同步、本地历史（Local History）、三方合并工具的完整版本（第 5 阶段只做简化版）。</p>
 
 <h2 id="usage">你在 WebStorm 里的用法</h2>
-<p class="lead">提交只有 27 次，审查和整理分支的操作却有上千次：提交多半是 agent 做的，你主要在看改动、比较分支、同步和整理分支。hive 的 Git 界面也照这个重心来设计。</p>
+<p class="lead">提交只有 27 次，审查和整理分支的操作却有上千次：提交多半是 agent 做的，你主要在看改动、比较分支、同步和整理分支。posse 的 Git 界面也照这个重心来设计。</p>
 <table>
   <tr><th>次数</th><th>操作</th><th>说明</th></tr>
   <tr><td>2197 / 256</td><td>NextDiff / PreviousDiff</td><td>在 diff 里跳到下一处 / 上一处改动，到文件末尾跳到下一个文件</td></tr>
@@ -110,7 +110,7 @@
 <p>设置：diff 默认"忽略空白差异"（<code>IGNORE_WHITESPACES_CHUNKS</code>）；日志里选中分支时跳到它，不改筛选；显示标签名。</p>
 
 <h2 id="ui">WebStorm 界面要点</h2>
-<p class="lead">以下来自官方文档截图（<a href="https://www.jetbrains.com/help/webstorm/manage-branches.html">管理分支</a>、<a href="https://www.jetbrains.com/help/webstorm/commit-and-push-changes.html">提交和推送</a>、<a href="https://www.jetbrains.com/help/webstorm/investigate-changes.html">查看改动</a>），hive 照这个结构做。</p>
+<p class="lead">以下来自官方文档截图（<a href="https://www.jetbrains.com/help/webstorm/manage-branches.html">管理分支</a>、<a href="https://www.jetbrains.com/help/webstorm/commit-and-push-changes.html">提交和推送</a>、<a href="https://www.jetbrains.com/help/webstorm/investigate-changes.html">查看改动</a>），posse 照这个结构做。</p>
 <table>
   <tr><th>界面</th><th>结构</th></tr>
   <tr><td>分支弹窗</td><td>点顶栏的分支名打开。顶部是搜索框，右上角是 <b>Fetch 按钮</b>（你用得最多的 1956 次就是它）和设置。下面三组：Update Project ⌘T、Commit ⌘K、Push ⇧⌘K；New Branch ⌥⌘N、Checkout Tag or Revision；然后是 Recent、Local、Remote 三组分支。远端分支按前缀分成文件夹（feat、renovate），收藏的分支前面是星号，有待推送提交的分支后面有绿色箭头，右侧灰字是跟踪的远端分支</td></tr>
@@ -124,9 +124,9 @@
 </table>
 
 <h2 id="map">功能对照</h2>
-<p class="lead">WebStorm 的几个界面在 hive 里都有对应的位置。文件标签已经有左栏和文档区，Git 界面放进去，不另开窗口。</p>
+<p class="lead">WebStorm 的几个界面在 posse 里都有对应的位置。文件标签已经有左栏和文档区，Git 界面放进去，不另开窗口。</p>
 <table>
-  <tr><th>WebStorm</th><th>hive 里的位置</th><th>现成的基础</th></tr>
+  <tr><th>WebStorm</th><th>posse 里的位置</th><th>现成的基础</th></tr>
   <tr><td>Commit 工具窗口（改动列表）</td><td>文件标签左栏加第三段"改动"（带数量），和"文件""检索"并列</td><td>左栏的分段、文件树的行样式</td></tr>
   <tr><td>diff 查看器</td><td>文档区里的 diff 标签页，和打开的文件并列</td><td>mygo 的 <code>editor.DiffView</code>：左右对照或上下合并、行内改动、折叠、逐段回滚、跳到下一段</td></tr>
   <tr><td>编辑器行号旁的改动标记</td><td>文件标签里打开的文件，行号旁标出相对 HEAD 的改动，可回滚一段</td><td><code>editor.State.DiffBase</code> 和 <code>RevertHunk</code> 命令</td></tr>
@@ -141,14 +141,14 @@
 <table>
   <tr><th>事项</th><th>决定</th><th>理由</th></tr>
   <tr><td>进程</td><td>窗口进程直接调系统 git，扩展 <code>internal/gitx</code>（状态、diff、分支、日志、推送）；常驻进程不动</td><td>改常驻进程的协议要重启，会断开终端；git 本身就是事实来源</td></tr>
-  <tr><td>范围</td><td>每个工作区一份 Git 视图，操作作用在这个工作区的目录上；worktree 工作区就是 agent 的分支</td><td>hive 的工作区和 worktree 一一对应，审查 agent 的成果最直接</td></tr>
+  <tr><td>范围</td><td>每个工作区一份 Git 视图，操作作用在这个工作区的目录上；worktree 工作区就是 agent 的分支</td><td>posse 的工作区和 worktree 一一对应，审查 agent 的成果最直接</td></tr>
   <tr><td>刷新</td><td>改动列表随文件标签的轮询自动刷新（看得见时每秒检查一次 <code>git status</code> 的变化），不需要手动点</td><td>WebStorm 里点了 1230 次刷新，正是因为它不总是自动刷新</td></tr>
   <tr><td>和 agent 并行</td><td>agent 正在工作的工作区，切分支、rebase、reset 这类会改动工作目录的操作先提示"agent 正在这个工作区里工作"</td><td>agent 和人同时改一个目录，容易互相覆盖</td></tr>
-  <tr><td>被其他 worktree 占用的分支</td><td>分支弹窗里标出"在 xx 工作区里"，点切换时跳到那个工作区，而不是报错</td><td>git 不允许同一分支在两个 worktree 里检出；hive 正好知道每个 worktree 是哪个工作区</td></tr>
+  <tr><td>被其他 worktree 占用的分支</td><td>分支弹窗里标出"在 xx 工作区里"，点切换时跳到那个工作区，而不是报错</td><td>git 不允许同一分支在两个 worktree 里检出；posse 正好知道每个 worktree 是哪个工作区</td></tr>
   <tr><td>有破坏性的操作</td><td>强制推送用 <code>--force-with-lease</code>；删除未合并的分支、reset --hard、回滚文件都要确认，确认框里写清会丢什么</td><td>防止误删别人的提交和未保存的改动</td></tr>
-  <tr><td>忽略空白</td><td>diff 默认忽略空白差异（和你的 WebStorm 设置一致），可以切换。mygo 的 DiffView 没有这个选项，要改 <code>third_party/mygo</code>，改动记进它的 HIVE.md</td><td>你在 WebStorm 里就是这样设的</td></tr>
-  <tr><td>快捷键</td><td>沿用 WebStorm 的：F7 / ⇧F7 下一处 / 上一处改动，⌘K 提交，⇧⌘K Push，⌥⌘N 新建分支，⌥⌘Z 回滚；WebStorm 的"更新项目"是 ⌘T，和 hive 的新建终端冲突，不沿用，放进分支弹窗</td><td>保持肌肉记忆</td></tr>
-  <tr><td>Rebase 一类的交互操作</td><td>squash、reword、drop 用 <code>git rebase -i</code> 配一个由 hive 生成的 <code>GIT_SEQUENCE_EDITOR</code> 脚本，不打开编辑器</td><td>和 WebStorm 一样在界面里完成</td></tr>
+  <tr><td>忽略空白</td><td>diff 默认忽略空白差异（和你的 WebStorm 设置一致），可以切换。mygo 的 DiffView 没有这个选项，要改 <code>third_party/mygo</code>，改动记进它的 POSSE.md</td><td>你在 WebStorm 里就是这样设的</td></tr>
+  <tr><td>快捷键</td><td>沿用 WebStorm 的：F7 / ⇧F7 下一处 / 上一处改动，⌘K 提交，⇧⌘K Push，⌥⌘N 新建分支，⌥⌘Z 回滚；WebStorm 的"更新项目"是 ⌘T，和 posse 的新建终端冲突，不沿用，放进分支弹窗</td><td>保持肌肉记忆</td></tr>
+  <tr><td>Rebase 一类的交互操作</td><td>squash、reword、drop 用 <code>git rebase -i</code> 配一个由 posse 生成的 <code>GIT_SEQUENCE_EDITOR</code> 脚本，不打开编辑器</td><td>和 WebStorm 一样在界面里完成</td></tr>
 </table>
 
 <h2 id="phases">分阶段步骤与验收</h2>
@@ -166,7 +166,7 @@
   <li><span class="phase">分支弹窗和比较</span>
     <ul>
       <li>点标签栏的分支名打开，结构照 WebStorm：搜索框和右上角的 Fetch 按钮；更新、提交、Push；新建分支、检出标签或修订；最近、本地、远端三组，远端按前缀分文件夹；收藏、待推送 / 待拉取的箭头、跟踪的远端分支</li>
-      <li>每个分支的子菜单照 WebStorm 的顺序：检出、基于它新建分支、检出并 rebase 到当前分支、和当前分支比较、和工作区比较、把当前分支 rebase 到它上面、合并到当前分支、<b>基于它新建工作区</b>（调用 hive 的 worktree 工作区，代替 WebStorm 的 New Worktree）、更新、Push、重命名、删除</li>
+      <li>每个分支的子菜单照 WebStorm 的顺序：检出、基于它新建分支、检出并 rebase 到当前分支、和当前分支比较、和工作区比较、把当前分支 rebase 到它上面、合并到当前分支、<b>基于它新建工作区</b>（调用 posse 的 worktree 工作区，代替 WebStorm 的 New Worktree）、更新、Push、重命名、删除</li>
       <li>"和当前分支比较"：两边各自独有的提交两列，点提交看改动；"和工作区比较"：按目录分组的文件树，点文件看 diff</li>
       <li>验收：单测在本地建一个裸仓库当远端，覆盖 fetch、更新（快进和分叉两种）、删除未合并分支要确认、被其他 worktree 占用的分支；界面测试覆盖弹窗搜索和比较页</li>
     </ul>
@@ -198,7 +198,7 @@
 <h2 id="risks">风险</h2>
 <table>
   <tr><th>风险</th><th>应对</th></tr>
-  <tr><td>mygo 的 DiffView 没有忽略空白的选项</td><td>第 1 阶段先在 <code>third_party/mygo</code> 里加；加不上就先在 hive 这边比较时规范化空白，只用来决定显示哪些段</td></tr>
+  <tr><td>mygo 的 DiffView 没有忽略空白的选项</td><td>第 1 阶段先在 <code>third_party/mygo</code> 里加；加不上就先在 posse 这边比较时规范化空白，只用来决定显示哪些段</td></tr>
   <tr><td>大仓库的 status 和 log 慢</td><td>在后台执行，只在看得见时轮询；日志分页加载，每页 200 条</td></tr>
   <tr><td>人和 agent 同时操作同一个工作区</td><td>会改动工作目录的操作先检查 agent 状态并提示；所有写操作之前重读一次 status</td></tr>
   <tr><td>文档截图是 2026.2 版，你用的是 2025.3.3</td><td>解锁后打开你的 WebStorm 的分支弹窗和 Commit 窗口核对一次</td></tr>

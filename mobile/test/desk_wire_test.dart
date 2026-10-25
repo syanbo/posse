@@ -2,11 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/desk/direct.dart';
-import 'package:hive_mobile/desk/keys.dart';
-import 'package:hive_mobile/desk/mods.dart';
-import 'package:hive_mobile/desk/status.dart';
-import 'package:hive_mobile/desk/wire.dart';
+import 'package:posse_mobile/desk/direct.dart';
+import 'package:posse_mobile/desk/keys.dart';
+import 'package:posse_mobile/desk/mods.dart';
+import 'package:posse_mobile/desk/status.dart';
+import 'package:posse_mobile/desk/wire.dart';
 
 void main() {
   test('input bytes match EncodeInput', () {
@@ -209,8 +209,8 @@ void main() {
     );
     expect(
       _hex(Uint8List.fromList([...keys.toPhone, ...keys.toMac])),
-      '44c64c40f6667577588a5e9336b32408da2e0c800be36edadeb6e469bb69016e'
-      '48b417d3bba7d722539f4725a9cce8cdea27c7936944d8a4ced65bdebbf56762',
+      '8f04928271ef6e22b39f3a0528d25ebbfd86bd414efe1241624c2c3e3a6fadee'
+      '7075d509bf5b1cabc9f7fbf8a4ae00fc5bc2875b076f791e8cbfa820a9dc5cdb',
     );
     expect(keys.toPhone, hasLength(32));
     expect(keys.toMac, hasLength(32));
@@ -286,9 +286,9 @@ void main() {
   });
 
   test('status copy is one sentence per reason', () {
-    expect(deskFailText('unsupported'), '这台电脑的 Hive 需要更新');
-    expect(deskFailText('method_not_found'), '这台电脑的 Hive 需要更新');
-    expect(deskFailText('unknown_method'), '这台电脑的 Hive 需要更新');
+    expect(deskFailText('unsupported'), '这台电脑的 Posse 需要更新');
+    expect(deskFailText('method_not_found'), '这台电脑的 Posse 需要更新');
+    expect(deskFailText('unknown_method'), '这台电脑的 Posse 需要更新');
     expect(deskFailText('busy'), '另一台手机正在看');
     expect(deskFailText('locked'), 'Mac 已锁屏');
     expect(deskFailText('permission_screen'), '请到 Mac 上允许屏幕录制');

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/send.dart';
-import 'package:hive_mobile/terminal/frames.dart';
+import 'package:posse_mobile/chat/send.dart';
+import 'package:posse_mobile/terminal/frames.dart';
 
 void main() {
   // 清空、命令、回车之间各隔 300ms：挨着发时 Claude Code 把回车当成粘贴的一部分，/exit 留在输入框里

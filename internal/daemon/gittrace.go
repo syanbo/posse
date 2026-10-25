@@ -14,15 +14,15 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/gitx"
-	"hive/internal/rpc"
+	"posse/internal/gitx"
+	"posse/internal/rpc"
 )
 
-// Hive 终端里的 git 命令，给界面的 Git 操作记录用：终端环境带 GIT_TRACE2_EVENT=af_unix:<git-trace.sock>，
+// Posse 终端里的 git 命令，给界面的 Git 操作记录用：终端环境带 GIT_TRACE2_EVENT=af_unix:<git-trace.sock>，
 // git 的每个进程连一次 socket，把 trace2 事件逐行写过来（start 带参数、def_repo 带仓库、exit 带退出码），
-// 再用 GIT_TRACE2_ENV_VARS 让它报出 HIVE_TERMINAL_ID。没人监听时 git 静默跳过，终端里看不到任何东西。
+// 再用 GIT_TRACE2_ENV_VARS 让它报出 POSSE_TERMINAL_ID。没人监听时 git 静默跳过，终端里看不到任何东西。
 // 只记最外层、会改动仓库的命令（gitx.ChangesRepo）：git 自己拉起的子进程（pull 里的 fetch、maintenance）
-// 和查询不记。记录追加到 $HIVE_HOME/git-trace.jsonl，重启、交接之后接着用。
+// 和查询不记。记录追加到 $POSSE_HOME/git-trace.jsonl，重启、交接之后接着用。
 
 const (
 	// gitTraceMax 是每个项目留多少条，超过丢掉这个项目最早的：一个项目命令多不挤掉别的项目的
@@ -59,7 +59,7 @@ func gitTraceEnv(home string) []string {
 	if v := os.Getenv("GIT_TRACE2_EVENT"); v != "" && v != target {
 		return nil
 	}
-	vars := "HIVE_TERMINAL_ID"
+	vars := "POSSE_TERMINAL_ID"
 	if v := os.Getenv("GIT_TRACE2_ENV_VARS"); v != "" && v != vars {
 		vars = v + "," + vars
 	}
@@ -140,7 +140,7 @@ func (d *Daemon) readGitTrace(c net.Conn) {
 				r.Dir = e.Worktree
 			}
 		case "def_param":
-			if e.Param == "HIVE_TERMINAL_ID" {
+			if e.Param == "POSSE_TERMINAL_ID" {
 				r.Terminal = e.Value
 			}
 		case "exit":
@@ -184,7 +184,7 @@ func (g *gitTrace) load() {
 	g.recs = trimPerProject(g.recs)
 }
 
-// trimPerProject 每个项目只留最近 gitTraceMax 条；不在 Hive 终端里的（没有项目）按目录算。
+// trimPerProject 每个项目只留最近 gitTraceMax 条；不在 Posse 终端里的（没有项目）按目录算。
 func trimPerProject(recs []gitTraceRecord) []gitTraceRecord {
 	count := map[string]int{}
 	keep := make([]bool, len(recs))

@@ -65,7 +65,7 @@ final class TerminalRenderPipeline {
 
   void paint(Canvas canvas) => _painters.paint(canvas);
 
-  /// Hive: 每行两端格子的底色，见 [RowEdgeColors]。
+  /// Posse: 每行两端格子的底色，见 [RowEdgeColors]。
   RowEdgeColors get edges => _frameBuilder.edges;
 
   void refreshCursorGlyph() => _frameBuilder.refreshCursorGlyph();

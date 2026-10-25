@@ -122,7 +122,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 	tt.Move(290, 80)
 	tt.Frame()
 	tt.Frame()
-	if os.Getenv("HIVE_PREVIEW_DIR") != "" {
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
 		savePNG(t, tt, "link-hover.png")
 	}
 	// 原地单击打开
@@ -327,7 +327,7 @@ func TestPathBeforeFullWidthPunct(t *testing.T) {
 	if len(hovered) == 0 || hovered[0] != file {
 		t.Fatalf("hovered %q, want %q", hovered, file)
 	}
-	if os.Getenv("HIVE_PREVIEW_DIR") != "" {
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
 		tt.Move(400, 51)
 		tt.Frame()
 		tt.Frame()

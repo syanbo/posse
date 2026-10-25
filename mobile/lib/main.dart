@@ -9,19 +9,19 @@ import 'ui/theme.dart';
 import 'workspace/workspace.dart';
 
 void main() {
-  runApp(HiveApp(model: HiveAppModel()));
+  runApp(PosseApp(model: PosseAppModel()));
 }
 
-class HiveApp extends StatefulWidget {
-  const HiveApp({super.key, required this.model});
+class PosseApp extends StatefulWidget {
+  const PosseApp({super.key, required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   @override
-  State<HiveApp> createState() => _HiveAppState();
+  State<PosseApp> createState() => _PosseAppState();
 }
 
-class _HiveAppState extends State<HiveApp> with WidgetsBindingObserver {
+class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
   final _keyboard = KeyboardDismisser();
   bool _splash = true;
 
@@ -66,7 +66,7 @@ class _HiveAppState extends State<HiveApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Hive',
+      title: 'Posse',
       debugShowCheckedModeBanner: false,
       navigatorObservers: [_keyboard],
       // 闪屏盖在首页上面，首页在底下照常建好，淡出后直接露出来。
@@ -75,14 +75,14 @@ class _HiveAppState extends State<HiveApp> with WidgetsBindingObserver {
         children: [
           child!,
           if (_splash)
-            HiveSplash(
+            PosseSplash(
               ready: widget.model.restored,
               onDone: () => setState(() => _splash = false),
             ),
         ],
       ),
-      theme: hiveTheme(Brightness.light),
-      darkTheme: hiveTheme(Brightness.dark),
+      theme: posseTheme(Brightness.light),
+      darkTheme: posseTheme(Brightness.dark),
       // 默认深色，可在设置里换成浅色或跟随系统
       themeMode: switch (widget.model.settings.theme) {
         'light' => ThemeMode.light,

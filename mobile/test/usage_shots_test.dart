@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/ui/widgets.dart';
-import 'package:hive_mobile/usage/usage.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/ui/widgets.dart';
+import 'package:posse_mobile/usage/usage.dart';
 
 // 用量卡片和详情的离屏截图，给人看样子用：
-// HIVE_SHOTS_DIR=/tmp/shots fvm flutter test test/usage_shots_test.dart
+// POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/usage_shots_test.dart
 // 测试里没有真字体，字和图标都画成方块：正文借 macOS 的 Arial Unicode（中英文都有）顶替默认的 Roboto，
 // 图标用 Flutter SDK 自带的 MaterialIcons。
 
@@ -107,7 +107,7 @@ class _Home extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     Widget session(String agent, String title) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
@@ -126,7 +126,7 @@ class _Home extends StatelessWidget {
         toolbarHeight: 60,
         titleSpacing: 20,
         title: Text(
-          'Hive',
+          'Posse',
           style: TextStyle(
             fontFamily: 'Roboto',
             fontSize: 26,
@@ -158,7 +158,7 @@ class _Home extends StatelessWidget {
                     Icon(Icons.folder_outlined, size: 22, color: c.accent),
                     const SizedBox(width: 12),
                     Text(
-                      'hive',
+                      'posse',
                       style: TextStyle(
                         fontSize: Fs.body,
                         fontWeight: FontWeight.w500,
@@ -189,7 +189,7 @@ Future<void> _shot(WidgetTester tester, GlobalKey key, String path) async {
 }
 
 void main() {
-  final dir = Platform.environment['HIVE_SHOTS_DIR'] ?? '';
+  final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
   testWidgets('usage screenshots', (tester) async {
     final root = Platform.environment['FLUTTER_ROOT']!;
@@ -210,7 +210,7 @@ void main() {
     final now = DateTime.now();
     for (final dark in [false, true]) {
       final key = GlobalKey();
-      final theme = hiveTheme(dark ? Brightness.dark : Brightness.light);
+      final theme = posseTheme(dark ? Brightness.dark : Brightness.light);
       await tester.pumpWidget(
         RepaintBoundary(
           key: key,

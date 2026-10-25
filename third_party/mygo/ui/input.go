@@ -458,7 +458,7 @@ func (rt *engine) pointerUp(button, clicks int) {
 		case 1:
 			s.rightClicks++
 		case 2:
-			s.middleClicks++ // Hive
+			s.middleClicks++ // Posse
 		}
 	}
 	rt.setHover(rt.hitChain(rt.pointerX, rt.pointerY))
@@ -1107,7 +1107,7 @@ func (e *node) RightClicked() bool {
 }
 
 // MiddleClicked reports a click with the middle button, as closing a
-// tab does. Hive
+// tab does. Posse
 func (e *node) MiddleClicked() bool {
 	if !e.hasState() {
 		return false

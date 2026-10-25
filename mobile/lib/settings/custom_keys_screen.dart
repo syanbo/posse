@@ -13,7 +13,7 @@ import 'custom_keys.dart';
 class CustomKeysScreen extends StatelessWidget {
   const CustomKeysScreen({super.key, required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   void _save(List<BarKey> keys) =>
       model.updateSettings((s) => s.barKeys = keys);
@@ -55,7 +55,7 @@ class CustomKeysScreen extends StatelessWidget {
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) {
-        final c = HiveColors.of(context);
+        final c = PosseColors.of(context);
         final keys = model.settings.barKeys;
         final reset = defaultBarKeys(model.settings.customKeys);
         return Scaffold(
@@ -162,7 +162,7 @@ class _KeyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final custom = item.custom;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -241,7 +241,7 @@ class _KeyCap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Container(
       constraints: const BoxConstraints(minWidth: 44, maxWidth: 120),
       height: 34,
@@ -323,7 +323,7 @@ class _KeyEditorState extends State<_KeyEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final draft = _draft;
     final label = TextStyle(fontSize: Fs.meta, color: c.muted);
     return Padding(
@@ -382,7 +382,7 @@ class _KeyEditorState extends State<_KeyEditor> {
     );
   }
 
-  List<Widget> _valueFields(HiveColors c, TextStyle label) {
+  List<Widget> _valueFields(PosseColors c, TextStyle label) {
     switch (_kind) {
       case 'text':
         return [
@@ -410,7 +410,7 @@ class _KeyEditorState extends State<_KeyEditor> {
                       style: TextStyle(fontSize: Fs.body, color: c.text),
                     ),
                   ),
-                  HiveSwitch(
+                  PosseSwitch(
                     value: _enter,
                     onChanged: (v) => setState(() => _enter = v),
                   ),

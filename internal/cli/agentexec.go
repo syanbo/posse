@@ -6,17 +6,17 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"hive/internal/agent"
+	"posse/internal/agent"
 )
 
-// cmdAgentExec 是 $HIVE_HOME/bin 里同名脚本的入口：找到真正的程序，补上 hooks 参数后换成它。
-// 不在 hive 终端里、已经在经过脚本启动的 agent 里、或是非交互的用法时原样运行。
+// cmdAgentExec 是 $POSSE_HOME/bin 里同名脚本的入口：找到真正的程序，补上 hooks 参数后换成它。
+// 不在 posse 终端里、已经在经过脚本启动的 agent 里、或是非交互的用法时原样运行。
 func cmdAgentExec(e *env, args []string) error {
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]
 	}
 	if len(args) == 0 {
-		return fmt.Errorf("usage: hive agent exec <command> -- [args...]")
+		return fmt.Errorf("usage: posse agent exec <command> -- [args...]")
 	}
 	cmd, rest := args[0], args[1:]
 	if len(rest) > 0 && rest[0] == "--" {
@@ -27,7 +27,7 @@ func cmdAgentExec(e *env, args []string) error {
 		return fmt.Errorf("%s: command not found", cmd)
 	}
 	argv := rest
-	if _, ok := agent.Shimmed[cmd]; ok && os.Getenv("HIVE_TERMINAL_ID") != "" && os.Getenv(agent.ShimEnv) == "" {
+	if _, ok := agent.Shimmed[cmd]; ok && os.Getenv("POSSE_TERMINAL_ID") != "" && os.Getenv(agent.ShimEnv) == "" {
 		exe, err := os.Executable()
 		if err != nil {
 			return err
@@ -36,8 +36,8 @@ func cmdAgentExec(e *env, args []string) error {
 			exe = resolved
 		}
 		if argv, err = (agent.Launcher{Exe: exe, Home: e.home}).ManualArgs(cmd, rest); err != nil {
-			// 补不上 hooks 也照常启动，只是 hive 看不到它的状态
-			fmt.Fprintf(e.errOut, "hive: %v\n", err)
+			// 补不上 hooks 也照常启动，只是 posse 看不到它的状态
+			fmt.Fprintf(e.errOut, "posse: %v\n", err)
 			argv = rest
 		}
 	}

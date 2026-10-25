@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/host"
-	"hive/internal/store"
+	"posse/internal/agent"
+	"posse/internal/host"
+	"posse/internal/store"
 )
 
 // stripIdle 去掉随时间变化的 idleMs，便于比较两次生成的结果。

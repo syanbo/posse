@@ -75,8 +75,8 @@ String? deskHostOf(String? url) {
 /// 视频包不到 Dart。这里把主机、端口和派生好的两把密钥交给插件，输入明文也从这里发出。
 class DeskReceiver {
   DeskReceiver({MethodChannel? channel, EventChannel? events})
-    : _channel = channel ?? const MethodChannel('hive/desk'),
-      _events = events ?? const EventChannel('hive/desk/stats');
+    : _channel = channel ?? const MethodChannel('posse/desk'),
+      _events = events ?? const EventChannel('posse/desk/stats');
 
   final MethodChannel _channel;
   final EventChannel _events;
@@ -129,7 +129,7 @@ class DeskReceiver {
 /// 顶边和底边的系统手势延后。只在 iOS 插件里有实现。
 class DeskEdges {
   DeskEdges({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('hive/desk/edges');
+    : _channel = channel ?? const MethodChannel('posse/desk/edges');
 
   final MethodChannel _channel;
 

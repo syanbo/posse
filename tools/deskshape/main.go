@@ -1,7 +1,7 @@
 // Command deskshape forwards UDP and can drop, delay, and rate-limit it.
 // It stands in for dnctl/pfctl when those need root.
 //
-// hive listens on --forward. Point deskrecv's hello at --listen.
+// posse listens on --forward. Point deskrecv's hello at --listen.
 //
 //	go run ./tools/deskshape --listen 127.0.0.1:45991 --forward 127.0.0.1:47991 \
 //	    --rate 5Mbps --loss 0.02 --delay 30ms --queue 100ms --unlimit-after 25s --seed 1
@@ -25,7 +25,7 @@ import (
 
 func main() {
 	listen := flag.String("listen", "127.0.0.1:45991", "address deskrecv sends to")
-	forward := flag.String("forward", "127.0.0.1:47991", "address hive listens on")
+	forward := flag.String("forward", "127.0.0.1:47991", "address posse listens on")
 	rate := flag.String("rate", "0", "rate limit in bits/s (0 = unlimited, 5Mbps and 500kbps accepted)")
 	loss := flag.Float64("loss", 0, "independent drop probability on each packet")
 	delay := flag.Duration("delay", 0, "fixed delay added to every packet")
@@ -43,11 +43,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer down.Close()
-	hiveAddr, err := net.ResolveUDPAddr("udp", *forward)
+	posseAddr, err := net.ResolveUDPAddr("udp", *forward)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// DialUDP 连上 47991 之后收不到 Hive 的回包，视频方向字节数为 0。
+	// DialUDP 连上 47991 之后收不到 Posse 的回包，视频方向字节数为 0。
 	// 未连接、绑在固定端口上就能收到。
 	up, err := net.ListenPacket("udp", "127.0.0.1:45992")
 	if err != nil {
@@ -57,14 +57,14 @@ func main() {
 	enlarge(down)
 	enlarge(up)
 
-	toHive := newLane("to-hive", *loss, *delay, *queue, bits, *seed)
+	toPosse := newLane("to-posse", *loss, *delay, *queue, bits, *seed)
 	toPhone := newLane("to-phone", *loss, *delay, *queue, bits, *seed+1)
-	go toHive.loop()
+	go toPosse.loop()
 	go toPhone.loop()
 	var client atomic.Value
 	go readLoop(down, func(pkt []byte, addr net.Addr) {
 		client.Store(cloneUDP(addr))
-		toHive.forward(pkt, func(b []byte) { _, _ = up.WriteTo(b, hiveAddr) })
+		toPosse.forward(pkt, func(b []byte) { _, _ = up.WriteTo(b, posseAddr) })
 	})
 	go readLoop(up, func(pkt []byte, _ net.Addr) {
 		v := client.Load()
@@ -76,7 +76,7 @@ func main() {
 	log.Printf("deskshape listen %s -> %s rate=%d loss=%.3f delay=%s queue=%s", *listen, *forward, bits, *loss, *delay, *queue)
 	if *unlimit > 0 {
 		time.AfterFunc(*unlimit, func() {
-			toHive.setRate(0)
+			toPosse.setRate(0)
 			toPhone.setRate(0)
 			log.Printf("deskshape: rate limit off")
 		})
@@ -92,7 +92,7 @@ func main() {
 			return
 		case <-tick.C:
 			vs, vb, vl, vq := toPhone.take()
-			rs, _, rl, rq := toHive.take()
+			rs, _, rl, rq := toPosse.take()
 			log.Printf("deskshape: video sent=%d bytes=%d loss=%d queue=%d ctrl sent=%d loss=%d queue=%d", vs, vb, vl, vq, rs, rl, rq)
 		}
 	}

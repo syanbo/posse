@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"hive/internal/history"
-	"hive/internal/rpc"
+	"posse/internal/history"
+	"posse/internal/rpc"
 )
 
 // 手机端历史转给常驻进程的 history.* 接口：列表、搜索和原来一样；继续一个不存在的会话报 not_found。

@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/files/files.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
-import 'package:hive_mobile/ui/media_pager.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/files/files.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/ui/media_pager.dart';
 
 void main() {
   _mediaPagerTests();
@@ -68,7 +68,7 @@ class _FilesRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _Model extends HiveAppModel {
+class _Model extends PosseAppModel {
   _Model(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
 

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/copy_chip.dart';
+import 'package:posse_mobile/terminal/copy_chip.dart';
 
 void main() {
   CopyChipPlace place({

@@ -97,7 +97,7 @@ String imagePath(Map<String, Object?> result) {
   throw StateError('电脑没有保存这张图片');
 }
 
-/// base64 上传整段攒在电脑内存里，只能这么大；视频、大文件要电脑认二进制帧上传（hive.bulk.v1）
+/// base64 上传整段攒在电脑内存里，只能这么大；视频、大文件要电脑认二进制帧上传（posse.bulk.v1）
 const _maxBase64Upload = 32 << 20;
 
 /// 把手机上的一个文件（照片、视频、「文件」里的）存到电脑上，返回路径。带上文件名，电脑用原名保存；
@@ -141,7 +141,7 @@ Future<String> uploadFile(
     // 旧电脑：只能整段 base64，也不认文件名
     if (size > _maxBase64Upload) {
       await rpc.call('clipboard.abortImageUpload', {'uploadId': id});
-      throw StateError('电脑上的 Hive 太旧，传不了这么大的文件，先更新电脑上的 Hive');
+      throw StateError('电脑上的 Posse 太旧，传不了这么大的文件，先更新电脑上的 Posse');
     }
     await _uploadBase64(
       rpc,

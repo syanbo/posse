@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/daemon"
-	"hive/internal/history"
+	"posse/internal/daemon"
+	"posse/internal/history"
 )
 
 type historyStatus struct {
@@ -173,7 +173,7 @@ func cmdHistoryShow(e *env, args []string) error {
 		}
 		fmt.Fprintf(e.out, "%s, %d messages, updated %s ago\n", s.Path, s.Messages, age(s.UpdatedAt))
 		if res.Terminal != "" {
-			fmt.Fprintf(e.out, "running in hive terminal %s\n", res.Terminal)
+			fmt.Fprintf(e.out, "running in posse terminal %s\n", res.Terminal)
 		}
 		for _, m := range res.Messages {
 			fmt.Fprintf(e.out, "\n── %s", m.Role)

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// 手机看 Mac 桌面（Hive 扩展 hive.desk.v1，方案见 docs/plans/phone-desktop.md）。
+// 手机看 Mac 桌面（Posse 扩展 posse.desk.v1，方案见 docs/plans/phone-desktop.md）。
 // 画面和输入走 UDP，这里只管订阅：desk.subscribe 是一个流，第一条是 ready（端口、编码、nonce），
 // 之后推 state，结束时推 end。手机退订、连接断开都会停掉采集。
 
@@ -67,8 +67,8 @@ func (s *session) deskSecret() []byte {
 }
 
 func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
-	if !c.hasCapability("hive.desk.v1") {
-		return c.fail(id, "unsupported", "client did not declare hive.desk.v1")
+	if !c.hasCapability("posse.desk.v1") {
+		return c.fail(id, "unsupported", "client did not declare posse.desk.v1")
 	}
 	var p struct {
 		Width   int      `json:"width"`

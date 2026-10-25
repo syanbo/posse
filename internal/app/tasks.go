@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
+	"posse/internal/agent"
 )
 
 // --- 状态
@@ -48,7 +48,7 @@ func (a *app) applyTasks(ts []taskInfo) {
 		if a.win.IsFocused() && a.selected == taskBoardID && a.taskSel == t.ID {
 			continue
 		}
-		n := mygo.NewNotification(mygo.NotificationOptions{ID: "hive-task:" + t.ID, Title: title, Body: t.Title, Group: "tasks"})
+		n := mygo.NewNotification(mygo.NotificationOptions{ID: "posse-task:" + t.ID, Title: title, Body: t.Title, Group: "tasks"})
 		go func() {
 			if err := n.Show(); err != nil {
 				log.Printf("notification: %v", err)
@@ -537,7 +537,7 @@ func (a *app) emptyBoard(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, "hive task guide").FontSize(11).Font(monoFont).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
+				ui.Text(c, "posse task guide").FontSize(11).Font(monoFont).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
 				ui.Text(c, "Agent 的用法说明").FontSize(11).TextColor(t.TextMuted)
 			})
 		})

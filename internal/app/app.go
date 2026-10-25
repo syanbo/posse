@@ -1,4 +1,4 @@
-// Package app 是 hive 的原生窗口（MyGo 原生 UI）：侧栏列出项目和工作区，
+// Package app 是 posse 的原生窗口（MyGo 原生 UI）：侧栏列出项目和工作区，
 // 右侧以标签页显示工作区里的终端。终端由常驻进程托管，窗口只接入当前可见的那一个，
 // 关掉窗口或切换标签不会影响 agent。
 package app
@@ -26,10 +26,10 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
-	"hive/internal/client"
-	"hive/internal/gitx"
-	"hive/internal/procmem"
+	"posse/internal/agent"
+	"posse/internal/client"
+	"posse/internal/gitx"
+	"posse/internal/procmem"
 )
 
 type project struct {
@@ -39,7 +39,7 @@ type project struct {
 type agentState struct {
 	Status, Message           string
 	SessionID, TranscriptPath string
-	Title                     string // hive session title 起的会话名
+	Title                     string // posse session title 起的会话名
 }
 
 type terminalInfo struct {
@@ -49,7 +49,7 @@ type terminalInfo struct {
 	Running                       bool
 	ExitCode                      *int
 	Pid                           int    // 终端里 shell 的进程，底栏的内存浮窗按它的进程树统计
-	WaitingTasks                  bool   // 里面的 agent 正阻塞在 hive task wait 上（旧常驻进程没有这个字段）
+	WaitingTasks                  bool   // 里面的 agent 正阻塞在 posse task wait 上（旧常驻进程没有这个字段）
 	PhoneSized                    bool   // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
 	Name                          string // 用户改的标签名，常驻进程记着（terminal.rename），手机也用它
 }
@@ -153,8 +153,8 @@ type app struct {
 	pollForce  atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	view       *termView
 	fontSize   float32
-	permission string  // agent 的权限档位，存在 $HIVE_HOME/agents.json
-	home       string  // $HIVE_HOME，ui.json 所在目录；为空时不保存
+	permission string  // agent 的权限档位，存在 $POSSE_HOME/agents.json
+	home       string  // $POSSE_HOME，ui.json 所在目录；为空时不保存
 	state      uiState // 写进 ui.json 的界面状态
 
 	// 任务总览
@@ -276,7 +276,7 @@ type app struct {
 	// 常驻进程跑的是旧包时交给本窗口的包接着跑（upgrade.go）
 	upgrade upgradeState
 
-	// 窗口自己的 Hive.app 被换掉后提示重开（relaunch.go）
+	// 窗口自己的 Posse.app 被换掉后提示重开（relaunch.go）
 	exe         exeWatch
 	exeReplaced atomic.Bool // 轮询线程里只报一次
 	staleApp    bool
@@ -287,7 +287,7 @@ type app struct {
 	focused  atomic.Bool          // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
-// agentChoices 是可以在 hive 里启动、派发任务的 agent，菜单和选项都按这个顺序。
+// agentChoices 是可以在 posse 里启动、派发任务的 agent，菜单和选项都按这个顺序。
 var agentChoices = []string{"claude", "codex", "grok", "cursor"}
 
 // nAgents 是 agentChoices 的个数，派发对话框的勾选框按它定长。
@@ -344,7 +344,7 @@ func Run(c *client.Client) error {
 	}
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:         "Hive",
+			Title:         "Posse",
 			Width:         1200,
 			Height:        780,
 			MinWidth:      minWindowWidth,
@@ -359,12 +359,12 @@ func Run(c *client.Client) error {
 		a.installMenu()
 		a.watchFocus()
 		mygo.App.OnNotificationClick(func(id string) {
-			// 通知 ID 形如 hive:<工作区>:<终端> 或 hive-task:<任务>
+			// 通知 ID 形如 posse:<工作区>:<终端> 或 posse-task:<任务>
 			parts := strings.Split(id, ":")
 			switch {
-			case len(parts) == 3 && parts[0] == "hive":
+			case len(parts) == 3 && parts[0] == "posse":
 				a.win.Update(func() { a.openTerminal(parts[1], parts[2]) })
-			case len(parts) == 2 && parts[0] == "hive-task":
+			case len(parts) == 2 && parts[0] == "posse-task":
 				a.win.Update(func() { a.openTask(parts[1]) })
 			default:
 				return
@@ -659,7 +659,7 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	if t.AgentState != nil && t.AgentState.Message != "" {
 		body += "：" + truncate(t.AgentState.Message, 120)
 	}
-	n := mygo.NewNotification(mygo.NotificationOptions{ID: "hive:" + w.ID + ":" + t.ID, Title: title, Body: body, Group: w.ID})
+	n := mygo.NewNotification(mygo.NotificationOptions{ID: "posse:" + w.ID + ":" + t.ID, Title: title, Body: body, Group: w.ID})
 	go func() {
 		if err := n.Show(); err != nil {
 			log.Printf("notification: %v", err)
@@ -804,7 +804,7 @@ func (a *app) ensureView(id string) {
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
 		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },
-		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Hive 把图片存成临时文件、粘贴它的路径，
+		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Posse 把图片存成临时文件、粘贴它的路径，
 		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
 		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
 		ContextMenu: func(x, y float32) {
@@ -865,7 +865,7 @@ func (a *app) saveState() {
 
 // pasteImage 把剪贴板里的图片存成临时文件，再把路径粘贴进终端。
 func (a *app) pasteImage(v *termView, png []byte) {
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("hive-paste-%d.png", time.Now().UnixNano()))
+	path := filepath.Join(os.TempDir(), fmt.Sprintf("posse-paste-%d.png", time.Now().UnixNano()))
 	if err := os.WriteFile(path, png, 0o600); err != nil {
 		a.win.Update(func() { a.err = "粘贴图片失败：" + err.Error() })
 		return
@@ -964,7 +964,7 @@ func (a *app) askRemoveWorkspace(w workspace) {
 	})
 }
 
-// askRemoveProject 从 Hive 里移除 main 工作区 w 所在的项目：只删记录，不碰磁盘上的文件。
+// askRemoveProject 从 Posse 里移除 main 工作区 w 所在的项目：只删记录，不碰磁盘上的文件。
 // 常驻进程要求先删掉 worktree 工作区，这里先挡住并说明要删哪些。
 func (a *app) askRemoveProject(w workspace) {
 	var worktrees []string
@@ -977,7 +977,7 @@ func (a *app) askRemoveProject(w workspace) {
 		a.err = "先删除项目 " + w.Project + " 里的 worktree 工作区：" + strings.Join(worktrees, "、")
 		return
 	}
-	a.confirm("从 Hive 移除项目 "+w.Project+"？", "只从 Hive 里移除，磁盘上的文件不会删除。项目里运行中的终端会被关闭。", "移除", func() {
+	a.confirm("从 Posse 移除项目 "+w.Project+"？", "只从 Posse 里移除，磁盘上的文件不会删除。项目里运行中的终端会被关闭。", "移除", func() {
 		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
 		a.refresh()
 	})
@@ -1032,7 +1032,7 @@ func (a *app) createWorkspace(params map[string]any) {
 	a.refresh()
 }
 
-// dropGoneWorktrees 在每秒的轮询里找出目录已被删掉的 worktree 工作区（hive 建的和加进来的），
+// dropGoneWorktrees 在每秒的轮询里找出目录已被删掉的 worktree 工作区（posse 建的和加进来的），
 // 删掉它的记录、清掉 git 的 worktree 记录，返回剩下的。上一级目录也不在时不动：可能是外接盘没挂上。
 // 里面还有终端在跑的也不动，等终端退出：删了记录，终端就没有归属了。
 func (a *app) dropGoneWorktrees(ctx context.Context, ws []workspace) []workspace {

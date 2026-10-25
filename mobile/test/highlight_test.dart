@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/highlight.dart';
+import 'package:posse_mobile/ui/highlight.dart';
 
 Tok? tokOf(HlLines lines, int line, String text) {
   for (final (t, tok) in lines[line]) {

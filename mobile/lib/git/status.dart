@@ -181,7 +181,7 @@ class GitDiffView {
   final String diff;
   final bool truncated;
 
-  /// 图片的两边：改之前（HEAD）和现在（工作区）。不是图片或电脑上的 hive 太旧时为空。
+  /// 图片的两边：改之前（HEAD）和现在（工作区）。不是图片或电脑上的 posse 太旧时为空。
   final ({ImageSide? old, ImageSide? now})? images;
 }
 

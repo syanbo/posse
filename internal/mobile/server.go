@@ -1,5 +1,5 @@
-// Package mobile 让 Orca 的手机 App 连到 hive：实现它的配对、E2EE v2 和用到的那部分 RPC，
-// 手机上看到的"主机"就是这台电脑上的 hive 常驻进程。协议整理自 stablyai/orca 的 mobile/ 和 src/shared/。
+// Package mobile 让 Orca 的手机 App 连到 posse：实现它的配对、E2EE v2 和用到的那部分 RPC，
+// 手机上看到的"主机"就是这台电脑上的 posse 常驻进程。协议整理自 stablyai/orca 的 mobile/ 和 src/shared/。
 package mobile
 
 import (
@@ -63,7 +63,7 @@ func New(home string, host Host, port int) (*Server, error) {
 	if port == 0 {
 		port = DefaultPort
 	}
-	return &Server{host: host, pair: p, port: port, epoch: "hive:" + newUUID(),
+	return &Server{host: host, pair: p, port: port, epoch: "posse:" + newUUID(),
 		conns: map[*conn]struct{}{}, tabs: map[string]*tabState{}}, nil
 }
 
@@ -122,7 +122,7 @@ func (s *Server) Close() {
 
 // Pair 返回配对码（必要时开始监听）。rotate 时作废还没用过的旧码。
 // addr 为空时自动选 Tailscale 或局域网地址，写法见 ResolveEndpoint。
-// 主 endpoint 保持这一条（Orca App 只读它）；endpoints 再加上本机其余可达地址，给 Hive 客户端并发握手。
+// 主 endpoint 保持这一条（Orca App 只读它）；endpoints 再加上本机其余可达地址，给 Posse 客户端并发握手。
 func (s *Server) Pair(rotate bool, addr string) (PairInfo, error) {
 	if err := s.listen(); err != nil {
 		return PairInfo{}, err
@@ -422,7 +422,7 @@ func writeTimeout(n int) time.Duration {
 // 一条消息写了 stallWrite 还没写完、手机也有 stallQuiet 没发任何东西来，就当连接已经死了（手机被挂起、
 // 换了网络），马上断开让它重连，不等到 writeTimeout：发送是串行的，卡住的这条后面所有消息都在等。
 // 只看写得久会误伤慢线路：经隧道的 TCP 积着大块数据时，小消息也要写几秒。活着的手机不会安静这么久：
-// Hive 手机每 5 秒 ping 一次，Orca App 在前台每 3 秒轮询
+// Posse 手机每 5 秒 ping 一次，Orca App 在前台每 3 秒轮询
 var (
 	stallWrite = 3 * time.Second
 	stallQuiet = 10 * time.Second

@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/chat/chat.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
-import 'package:hive_mobile/workspace/models.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/chat/chat.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 /// 只实现对话页用到的那几条 RPC：订阅由测试往里推帧。
 class FakeRpc implements PhoneRpc {
@@ -48,7 +48,7 @@ class FakeRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class FakeModel extends HiveAppModel {
+class FakeModel extends PosseAppModel {
   FakeModel(this.fake)
     : super(store: MemoryPairingStore(), settingsStore: MemorySettingsStore());
 

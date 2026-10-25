@@ -27,7 +27,7 @@ func cmdMobilePair(e *env, args []string) error {
 		if err := printQR(e.out, info.URL); err != nil {
 			fmt.Fprintln(e.errOut, err)
 		}
-		fmt.Fprintf(e.out, "\nScan with Hive Mobile. If it will not scan, paste this into the app:\n%s\n\nPhone connects to %s; it must be able to reach this address.\n", info.Code, info.Endpoint)
+		fmt.Fprintf(e.out, "\nScan with Posse Mobile. If it will not scan, paste this into the app:\n%s\n\nPhone connects to %s; it must be able to reach this address.\n", info.Code, info.Endpoint)
 	})
 }
 
@@ -35,7 +35,7 @@ func cmdMobileDevices(e *env, args []string) error {
 	var ds []mobileDevice
 	return e.do("mobile.devices", nil, &ds, func() {
 		if len(ds) == 0 {
-			fmt.Fprintln(e.out, "no paired phones; run `hive mobile pair`")
+			fmt.Fprintln(e.out, "no paired phones; run `posse mobile pair`")
 			return
 		}
 		tw := e.table()

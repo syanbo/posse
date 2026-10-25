@@ -8,7 +8,7 @@ import (
 )
 
 // agent 的权限档位，照 Orca 的 Agent Permissions：默认跳过审批，启动时带上各家自己的跳过参数。
-// 档位存在 $HIVE_HOME/agents.json，每次启动 agent 时读，改了之后新开的 agent 就生效，不用重启常驻进程。
+// 档位存在 $POSSE_HOME/agents.json，每次启动 agent 时读，改了之后新开的 agent 就生效，不用重启常驻进程。
 const (
 	PermissionSkip = "skip" // 跳过审批
 	PermissionAsk  = "ask"  // 照各家默认逐项确认

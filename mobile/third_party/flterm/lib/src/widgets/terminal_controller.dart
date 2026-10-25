@@ -4,7 +4,7 @@ import 'package:libghostty/libghostty.dart';
 import '../foundation.dart';
 import 'terminal_controller_impl.dart';
 
-/// Both ends of a selection, in reading order. Rows are viewport rows. (Hive)
+/// Both ends of a selection, in reading order. Rows are viewport rows. (Posse)
 @immutable
 final class SelectionEnds {
   final int startRow;
@@ -40,7 +40,7 @@ final class SelectionEnds {
       other.screenEnd == screenEnd;
 }
 
-/// The selection's top row and the columns selected on that row. (Hive)
+/// The selection's top row and the columns selected on that row. (Posse)
 @immutable
 final class SelectionAnchor {
   final int topRow;
@@ -133,22 +133,22 @@ abstract class TerminalController extends ChangeNotifier
 
   /// Where the selection sits in the visible screen, or null when nothing
   /// is selected. Rows count from the top of the viewport and may be
-  /// negative when the selection starts above it. (Hive)
+  /// negative when the selection starts above it. (Posse)
   SelectionAnchor? get selectionAnchor;
 
-  /// Both ends of the selection, or null. (Hive)
+  /// Both ends of the selection, or null. (Posse)
   SelectionEnds? get selectionEnds;
 
   /// Moves one end of the selection to [viewportCell]. [fixed] is the other
   /// end in screen coordinates, taken from [SelectionEnds] when the drag
-  /// started, so scrolling does not drag it along. (Hive)
+  /// started, so scrolling does not drag it along. (Posse)
   void moveSelectionEnd({
     required Position fixed,
     required Position viewportCell,
   });
 
   /// Scrolls the primary screen by [delta] rows and keeps the scroll view
-  /// in step. Negative moves toward the scrollback. (Hive)
+  /// in step. Negative moves toward the scrollback. (Posse)
   void nudgeViewport(int delta);
 
   /// Current soft keyboard state.
@@ -264,7 +264,7 @@ abstract class TerminalController extends ChangeNotifier
   void selectAll();
 
   /// Grows the selection to the paragraph around it. A paragraph is the run
-  /// of non-blank rows bounded by empty rows. (Hive)
+  /// of non-blank rows bounded by empty rows. (Posse)
   void selectParagraph();
 
   /// Returns the text within the current selection, or empty string when
@@ -324,6 +324,6 @@ abstract class TerminalController extends ChangeNotifier
   void write(Uint8List data);
 }
 
-/// Hive：粘贴末尾的换行（从终端、网页复制常带着）去掉，中间的照留。
+/// Posse：粘贴末尾的换行（从终端、网页复制常带着）去掉，中间的照留。
 String trimPastedNewlines(String text) =>
     text.replaceFirst(RegExp(r'[\r\n]+$'), '');

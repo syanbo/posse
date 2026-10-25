@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"hive/internal/host"
+	"posse/internal/host"
 )
 
 // 终端输出流用 Orca 的二进制帧（src/shared/terminal-stream-protocol.ts）：16 字节头 + 负载，加密后走 WebSocket 二进制帧。

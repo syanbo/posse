@@ -85,7 +85,7 @@ type State struct {
 	OnDefinition func(offset int)
 	// LinkAt says what Cmd held over offset underlines, as a path in
 	// quotes: the word there when nil or when it returns an empty range
-	// (Hive).
+	// (Posse).
 	LinkAt func(offset int) (start, end int)
 	// OnGutterClick is called for a click on a line's number, as to set a
 	// breakpoint.
@@ -93,7 +93,7 @@ type State struct {
 	// OnChangeClick is called for a click on a change bar in the gutter
 	// (the marks against the DiffBase), with the index of the change in
 	// Changes and the bottom of the clicked line, relative to the
-	// editor's top (Hive: its popup to roll a change back).
+	// editor's top (Posse: its popup to roll a change back).
 	OnChangeClick func(change int, y float32)
 	// ContextMenu adds items to the editor's context menu, after its
 	// own.

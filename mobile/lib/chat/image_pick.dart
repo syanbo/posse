@@ -21,7 +21,7 @@ Future<ImageAsk?> askImageSource(BuildContext context) {
     context: context,
     showDragHandle: true,
     builder: (sheet) {
-      final c = HiveColors.of(sheet);
+      final c = PosseColors.of(sheet);
       return SafeArea(
         top: false,
         child: Section(
@@ -82,7 +82,7 @@ Future<T?> _pick<T>(Future<T?> Function() run) async {
   } on PlatformException catch (error) {
     final code = error.code;
     if (code.contains('denied') || code.contains('restricted')) {
-      throw StateError('没有照片权限，在系统设置里允许 Hive 访问照片或相机');
+      throw StateError('没有照片权限，在系统设置里允许 Posse 访问照片或相机');
     }
     rethrow;
   }
@@ -97,7 +97,7 @@ Future<FileAsk?> askFileSource(BuildContext context) {
     context: context,
     showDragHandle: true,
     builder: (sheet) {
-      final c = HiveColors.of(sheet);
+      final c = PosseColors.of(sheet);
       Widget row(FileAsk ask, IconData icon, String title) => RowTile(
         key: Key('file-ask-${ask.name}'),
         leading: Icon(icon, size: 22, color: c.accent),

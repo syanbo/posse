@@ -57,7 +57,7 @@ type Theme struct {
 	// PointerCursor shows the pointing hand over the elements that take
 	// clicks, unless disabled, and the closed hand while a value is dragged
 	// in the window, as web pages do, rather than the arrow of native
-	// controls. Hive
+	// controls. Posse
 	PointerCursor bool
 }
 

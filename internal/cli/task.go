@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/agent"
+	"posse/internal/agent"
 )
 
 //go:embed task_guide.md
@@ -39,8 +39,8 @@ type inboxItem struct {
 	Title, Status, Report, Worker string
 }
 
-// caller 是调用方所在的 hive 终端；在 agent 里运行时就是这个 agent 自己。
-func caller() string { return os.Getenv("HIVE_TERMINAL_ID") }
+// caller 是调用方所在的 posse 终端；在 agent 里运行时就是这个 agent 自己。
+func caller() string { return os.Getenv("POSSE_TERMINAL_ID") }
 
 func cmdTaskStart(e *env, args []string) error {
 	fs := flag.NewFlagSet("task start", flag.ContinueOnError)
@@ -95,7 +95,7 @@ func (e *env) printStarted(t taskInfo) {
 	if t.Branch != "" && t.WorkspaceKind == "worktree" {
 		fmt.Fprintf(e.out, "worktree branch %s from %s\n", t.Branch, t.BaseRef)
 	}
-	fmt.Fprintln(e.out, "wait for results with: hive task wait")
+	fmt.Fprintln(e.out, "wait for results with: posse task wait")
 }
 
 // retryable 是可以重试的任务状态：worker 已经确定不在做了。
@@ -147,7 +147,7 @@ func retryParams(old taskInfo, model, effort, spec, specFile string) (map[string
 		return nil, fmt.Errorf("task %s is %s; only %s tasks can be retried", old.ID, old.Status, strings.Join(retryable, ", "))
 	}
 	if old.Agent == "" {
-		return nil, fmt.Errorf("task %s ran a command, not an agent; start it again with hive task start", old.ID)
+		return nil, fmt.Errorf("task %s ran a command, not an agent; start it again with posse task start", old.ID)
 	}
 	text, err := readSpec(spec, specFile)
 	if err != nil {
@@ -308,7 +308,7 @@ func taskInbox(e *env, args []string, block bool) error {
 				}
 			case "question":
 				fmt.Fprintf(e.out, "%s question %s: %s\n%s\n", m.TaskID, m.ID, m.Title, indent(m.Body))
-				fmt.Fprintf(e.out, "  answer with: hive task reply %s \"<answer>\"\n", m.ID)
+				fmt.Fprintf(e.out, "  answer with: posse task reply %s \"<answer>\"\n", m.ID)
 			default:
 				fmt.Fprintf(e.out, "%s %s: %s\n%s\n", m.TaskID, m.Kind, m.Title, indent(m.Body))
 			}

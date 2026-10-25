@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/daemon"
-	"hive/internal/rpc"
+	"posse/internal/daemon"
+	"posse/internal/rpc"
 )
 
 // upgradeState 记着把常驻进程换成本窗口的包（daemon.handoff）的进度，按常驻进程的 pid 记：
@@ -62,7 +62,7 @@ func buildTime(build string) (time.Time, bool) {
 }
 
 // autoUpgrade 在轮询线程里调用：常驻进程的包比窗口的旧时自动交接。只在窗口的包更新时做，
-// 打开一个旧的 Hive.app 不会把常驻进程换回旧包。
+// 打开一个旧的 Posse.app 不会把常驻进程换回旧包。
 func (a *app) autoUpgrade(d daemonStatus) {
 	if d.Pid == 0 || d.Build == "" || d.Build == daemon.Build {
 		return

@@ -3,16 +3,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/desk/chrome.dart';
-import 'package:hive_mobile/desk/desk_page.dart';
-import 'package:hive_mobile/desk/events.dart';
-import 'package:hive_mobile/desk/gestures.dart';
-import 'package:hive_mobile/desk/hint.dart';
-import 'package:hive_mobile/desk/key_bar.dart';
-import 'package:hive_mobile/desk/mods.dart';
-import 'package:hive_mobile/desk/toolbar.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/desk/chrome.dart';
+import 'package:posse_mobile/desk/desk_page.dart';
+import 'package:posse_mobile/desk/events.dart';
+import 'package:posse_mobile/desk/gestures.dart';
+import 'package:posse_mobile/desk/hint.dart';
+import 'package:posse_mobile/desk/key_bar.dart';
+import 'package:posse_mobile/desk/mods.dart';
+import 'package:posse_mobile/desk/toolbar.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 void main() {
   test('landscape choice and the one-time hint round-trip', () async {
@@ -25,7 +25,7 @@ void main() {
       isFalse,
     );
     final store = MemorySettingsStore();
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: store,
     );
@@ -155,7 +155,7 @@ void main() {
     var seen = false;
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: StatefulBuilder(
           builder: (context, setState) {
             if (seen) return const Text('gone');
@@ -180,7 +180,7 @@ void main() {
     Future<void> pump(bool expanded, {bool video = true}) {
       return tester.pumpWidget(
         MaterialApp(
-          theme: hiveTheme(Brightness.dark),
+          theme: posseTheme(Brightness.dark),
           home: Scaffold(
             body: Center(
               child: DeskToolbar(
@@ -275,7 +275,7 @@ void main() {
   testWidgets('a landscape key bar is the short one', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Scaffold(
           body: DeskKeyBar(
             mods: DeskMods(),
@@ -314,7 +314,7 @@ void main() {
     addTearDown(zoomed.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Scaffold(
           body: Center(
             child: DeskToolbar(
@@ -431,7 +431,7 @@ void main() {
       final orientations = <List<String>>[];
       final edges = <bool>[];
       _mockDeskChannels(tester, orientations: orientations, edges: edges);
-      final model = HiveAppModel(
+      final model = PosseAppModel(
         store: MemoryPairingStore(),
         settingsStore: MemorySettingsStore(),
       );
@@ -440,7 +440,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          theme: hiveTheme(Brightness.dark),
+          theme: posseTheme(Brightness.dark),
           home: const SizedBox.shrink(),
         ),
       );
@@ -469,7 +469,7 @@ void main() {
   ) async {
     addTearDown(tester.view.reset);
     _mockDeskChannels(tester);
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
@@ -482,7 +482,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: DeskPage(model: model),
       ),
     );
@@ -566,7 +566,7 @@ void _mockDeskChannels(
     },
   );
   // iOS 上方向走插件：锁记成要锁的方向，放开记成空列表，和 SystemChrome 的记法一样
-  const orientation = MethodChannel('hive/desk/orientation');
+  const orientation = MethodChannel('posse/desk/orientation');
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(orientation, (
     call,
   ) async {
@@ -581,7 +581,7 @@ void _mockDeskChannels(
     }
     return null;
   });
-  const channel = MethodChannel('hive/desk/edges');
+  const channel = MethodChannel('posse/desk/edges');
   tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
     call,
   ) async {

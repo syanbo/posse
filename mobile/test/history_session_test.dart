@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/history/history.dart';
-import 'package:hive_mobile/history/models.dart';
+import 'package:posse_mobile/history/history.dart';
+import 'package:posse_mobile/history/models.dart';
 
 import 'chat_scroll_test.dart' show FakeRpc, FakeModel, text, para;
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/git/git.dart';
-import 'package:hive_mobile/git/status.dart';
+import 'package:posse_mobile/git/git.dart';
+import 'package:posse_mobile/git/status.dart';
 
 void main() {
   test('status and diff parse the phone payload', () {

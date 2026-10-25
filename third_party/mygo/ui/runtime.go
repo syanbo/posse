@@ -86,7 +86,7 @@ type host interface {
 // elements of the last frame. Main thread only, except where noted.
 type engine struct {
 	// present shows the window's menus in place of the native ones, when
-	// the app set it with PresentMenus. (Hive)
+	// the app set it with PresentMenus. (Posse)
 	present func(items []MenuEntry, x, y float32, choose func(id int))
 	// inlineRects is placeInline's scratch, kept from frame to frame.
 	inlineRects []text.Rect
@@ -1144,7 +1144,7 @@ func (rt *engine) updateCursor() {
 				break
 			}
 			if s.flags&flagClickable != 0 {
-				// Hive: the hand, with Theme.PointerCursor
+				// Posse: the hand, with Theme.PointerCursor
 				if pointer && s.flags&flagDisabled == 0 {
 					c = CursorPointer
 				}

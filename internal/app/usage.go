@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具和命令行程序。

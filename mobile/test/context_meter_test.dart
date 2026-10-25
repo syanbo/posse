@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/chat/context_meter.dart';
-import 'package:hive_mobile/chat/send.dart';
-import 'package:hive_mobile/terminal/frames.dart';
-import 'package:hive_mobile/workspace/models.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/chat/context_meter.dart';
+import 'package:posse_mobile/chat/send.dart';
+import 'package:posse_mobile/terminal/frames.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 SessionTab _tab(String agent, String state) => SessionTab(
   worktreeId: 'w',
@@ -16,7 +16,7 @@ SessionTab _tab(String agent, String state) => SessionTab(
 );
 
 void main() {
-  final model = HiveAppModel(
+  final model = PosseAppModel(
     store: MemoryPairingStore(),
     settingsStore: MemorySettingsStore(),
   );

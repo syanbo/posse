@@ -11,7 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/files"
+	"posse/internal/files"
 )
 
 func dot(c *ui.Context, color ui.Color) ui.Element {

@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/files"
+	"posse/internal/files"
 )
 
 // 跳到定义：编辑器里 ⌘点击、F12 或右键"跳到定义"。照 Zed 的 hover_links 先看指针下是什么（files.LinkAt）：

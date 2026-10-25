@@ -42,7 +42,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenTerminal,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final SessionTab tab;
 
   /// 打开终端视图。放在外面，避免对话页依赖原生终端插件。
@@ -610,7 +610,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .where((e) => settings.showReasoning || e.message?.role != 'reasoning')
         .toList();
     final entryKeys = transcriptKeys(entries);
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final echoes = _echoes.items;
     final working = _working;
     // 倒序列表底部一加行，所有下标都挪一格。按身份认行，展开着的工具组这类状态才不会错配到别的行上
@@ -776,7 +776,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _row(
-    HiveColors c,
+    PosseColors c,
     int index, {
     required bool working,
     required List<LocalEcho> echoes,
@@ -874,7 +874,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _newBelowButton(HiveColors c) {
+  Widget _newBelowButton(PosseColors c) {
     return TextButton(
       style: TextButton.styleFrom(
         minimumSize: const Size(0, 32),

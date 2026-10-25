@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/exec"
 
-	"hive/internal/spawn"
+	"posse/internal/spawn"
 )
 
 // Proc 是桌面子进程。Frames 是它写来的帧，关掉 Control 它就退出。

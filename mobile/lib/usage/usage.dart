@@ -9,7 +9,7 @@ import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 
-// 各 agent 的套餐用量（Hive 扩展 hive.usage.v1 的 usage.get）。电脑上的 Hive 只在 agent 运行时
+// 各 agent 的套餐用量（Posse 扩展 posse.usage.v1 的 usage.get）。电脑上的 Posse 只在 agent 运行时
 // 顺带更新读数，手机这边定时取一次就够了。
 
 DateTime? _ms(Object? v) {
@@ -265,11 +265,11 @@ double shownPercent(UsageWindow w, bool remaining) =>
     remaining ? 100 - w.percent : w.percent;
 
 /// 首页工作区列表上面的用量卡片：每家一行，各窗口一条细进度条。点开看重置时间。
-/// 电脑上没有读数、或者电脑上的 Hive 太旧没有这个接口时不显示。
+/// 电脑上没有读数、或者电脑上的 Posse 太旧没有这个接口时不显示。
 class UsageCard extends StatefulWidget {
   const UsageCard({super.key, required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   @override
   State<UsageCard> createState() => _UsageCardState();
@@ -389,7 +389,7 @@ class UsageCardView extends StatelessWidget {
   Widget build(BuildContext context) {
     final shown = usages.where((u) => u.windows.isNotEmpty).toList();
     if (shown.isEmpty) return const SizedBox.shrink();
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return ValueListenableBuilder(
       valueListenable: usageRemaining,
       builder: (context, remaining, _) => _card(context, c, shown, remaining),
@@ -398,7 +398,7 @@ class UsageCardView extends StatelessWidget {
 
   Widget _card(
     BuildContext context,
-    HiveColors c,
+    PosseColors c,
     List<AgentUsage> shown,
     bool remaining,
   ) {
@@ -453,7 +453,7 @@ class _UsageChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final w = usage.headWindow;
     final urgent = w.percent >= usageUrgent;
     return Row(
@@ -503,7 +503,7 @@ class UsageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final p = (percent / 100).clamp(0.0, 1.0);
     return ClipRRect(
       borderRadius: BorderRadius.circular(height / 2),
@@ -553,9 +553,9 @@ class _UsageSheetState extends State<UsageSheet> {
       setState(() => usages = us.where((u) => u.windows.isNotEmpty).toList());
     } catch (e) {
       if (!mounted) return;
-      // 电脑上的 Hive 太旧没有这个接口时说清楚，别的错误照常写
+      // 电脑上的 Posse 太旧没有这个接口时说清楚，别的错误照常写
       final old = e.toString().contains('method_not_found');
-      setState(() => _error = old ? '电脑上的 Hive 太旧，更新后才能刷新' : friendlyError(e));
+      setState(() => _error = old ? '电脑上的 Posse 太旧，更新后才能刷新' : friendlyError(e));
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -568,7 +568,7 @@ class _UsageSheetState extends State<UsageSheet> {
   );
 
   Widget _sheet(BuildContext context, bool remaining) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final now = DateTime.now();
     // 滚动区铺到屏幕底边，内容底下垫出安全区：滚到底时最后一行在 Home 条上方，滚动时内容从它后面经过
     final bottom = MediaQuery.paddingOf(context).bottom;

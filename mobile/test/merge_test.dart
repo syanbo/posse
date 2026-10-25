@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/chat/merge.dart';
-import 'package:hive_mobile/chat/models.dart';
-import 'package:hive_mobile/chat/prompt.dart';
+import 'package:posse_mobile/chat/merge.dart';
+import 'package:posse_mobile/chat/models.dart';
+import 'package:posse_mobile/chat/prompt.dart';
 
 ChatMessage message(
   String id, {

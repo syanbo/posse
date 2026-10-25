@@ -2,10 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/protocol/pairing.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/usage/usage.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/protocol/pairing.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/usage/usage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -57,7 +57,7 @@ void main() {
     final now = DateTime.now();
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.light),
+        theme: posseTheme(Brightness.light),
         home: Scaffold(
           body: UsageSheet(
             usages: [
@@ -123,7 +123,7 @@ void main() {
     ];
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.light),
+        theme: posseTheme(Brightness.light),
         home: Scaffold(body: UsageCardView(usages: usages)),
       ),
     );
@@ -198,7 +198,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.light),
+        theme: posseTheme(Brightness.light),
         home: Scaffold(
           body: UsageSheet(
             usages: [
@@ -221,7 +221,7 @@ void main() {
     fail = true;
     await tester.tap(find.byTooltip('刷新'));
     await tester.pumpAndSettle();
-    expect(find.text('电脑上的 Hive 太旧，更新后才能刷新'), findsOneWidget);
+    expect(find.text('电脑上的 Posse 太旧，更新后才能刷新'), findsOneWidget);
   });
 
   testWidgets('the card shows the last readings before the computer answers', (
@@ -242,14 +242,14 @@ void main() {
         ],
       }),
     });
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
     model.offer = offer;
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Scaffold(body: UsageCard(model: model)),
       ),
     );

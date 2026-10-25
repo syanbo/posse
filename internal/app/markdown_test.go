@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseMarkdown(t *testing.T) {
-	src := "## 结论\n\n可以**重写**，见 [文档](https://x.dev) 和 `hive daemon`\n第二行 ~~旧的~~\n\n" +
+	src := "## 结论\n\n可以**重写**，见 [文档](https://x.dev) 和 `posse daemon`\n第二行 ~~旧的~~\n\n" +
 		"| 项目 | 数据 |\n|---|--:|\n| 内存 | 1.1 GB |\n\n" +
 		"1. 终端\n2. 编排\n   - worktree\n\n- [x] 调研\n- [ ] 手机\n\n> 引用\n\n```go\nfunc main() {}\n```\n\n---\n\n<details>\nraw\n</details>"
 	bs := parseMarkdown(src)
@@ -24,7 +24,7 @@ func TestParseMarkdown(t *testing.T) {
 	}
 	want := []mdInline{
 		{text: "可以"}, {text: "重写", style: mdBold}, {text: "，见 "}, {text: "文档", url: "https://x.dev"},
-		{text: " 和 "}, {text: "hive daemon", style: mdMono}, {text: "\n第二行 "}, {text: "旧的", style: mdStrike},
+		{text: " 和 "}, {text: "posse daemon", style: mdMono}, {text: "\n第二行 "}, {text: "旧的", style: mdStrike},
 	}
 	if !reflect.DeepEqual(bs[1].inlines, want) {
 		t.Errorf("inlines = %+v", bs[1].inlines)
@@ -44,8 +44,8 @@ func TestParseMarkdown(t *testing.T) {
 }
 
 func TestMarkRanges(t *testing.T) {
-	got := markRanges("Hive 的 hive，hiveX", []string{"hive", "iv"})
-	if want := [][2]int{{0, 4}, {9, 13}, {16, 20}}; !reflect.DeepEqual(got, want) {
+	got := markRanges("Posse 的 posse，posseX", []string{"posse", "os"})
+	if want := [][2]int{{0, 5}, {10, 15}, {18, 23}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("markRanges = %v, want %v", got, want)
 	}
 }

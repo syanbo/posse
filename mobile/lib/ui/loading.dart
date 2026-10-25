@@ -5,17 +5,17 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 
 /// 整页加载：七格蜂巢，外圈六格顺时针逐格亮起，后面拖一段渐暗。
-class HiveLoader extends StatefulWidget {
-  const HiveLoader({super.key, this.size = 36, this.color});
+class PosseLoader extends StatefulWidget {
+  const PosseLoader({super.key, this.size = 36, this.color});
 
   final double size;
   final Color? color;
 
   @override
-  State<HiveLoader> createState() => _HiveLoaderState();
+  State<PosseLoader> createState() => _PosseLoaderState();
 }
 
-class _HiveLoaderState extends State<HiveLoader>
+class _PosseLoaderState extends State<PosseLoader>
     with SingleTickerProviderStateMixin {
   late final AnimationController _clock = AnimationController(
     vsync: this,
@@ -36,7 +36,7 @@ class _HiveLoaderState extends State<HiveLoader>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.color ?? HiveColors.of(context).accent;
+    final color = widget.color ?? PosseColors.of(context).accent;
     return Semantics(
       label: '正在加载',
       child: RepaintBoundary(
@@ -82,7 +82,7 @@ class _HexSpinnerState extends State<HexSpinner>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.color ?? HiveColors.of(context).accent;
+    final color = widget.color ?? PosseColors.of(context).accent;
     return Semantics(
       label: '正在加载',
       child: RepaintBoundary(

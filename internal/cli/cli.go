@@ -1,4 +1,4 @@
-// Package cli 是 hive 命令行：解析子命令，通过 RPC 调用常驻进程，按人类或 JSON 格式输出。
+// Package cli 是 posse 命令行：解析子命令，通过 RPC 调用常驻进程，按人类或 JSON 格式输出。
 package cli
 
 import (
@@ -13,10 +13,10 @@ import (
 	"strings"
 	"syscall"
 
-	"hive/internal/app"
-	"hive/internal/client"
-	"hive/internal/daemon"
-	"hive/internal/rpc"
+	"posse/internal/app"
+	"posse/internal/client"
+	"posse/internal/daemon"
+	"posse/internal/rpc"
 )
 
 type env struct {
@@ -46,11 +46,11 @@ var commands []command
 
 func init() {
 	commands = []command{
-		{"app", "Open the Hive window", "", cmdApp},
+		{"app", "Open the Posse window", "", cmdApp},
 		{"daemon run", "Run the daemon in the foreground", "", cmdDaemonRun},
 		{"daemon status", "Show daemon status", "", cmdDaemonStatus},
 		{"daemon stop", "Stop the daemon and every terminal it hosts", "", cmdDaemonStop},
-		{"daemon handoff", "Restart the daemon from this hive binary, keeping every terminal running", "", cmdDaemonHandoff},
+		{"daemon handoff", "Restart the daemon from this posse binary, keeping every terminal running", "", cmdDaemonHandoff},
 		{"project add", "Add a folder or git repository", "<path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
 		{"project list", "List projects", "", cmdProjectList},
 		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT]", cmdProjectSet},
@@ -70,7 +70,7 @@ func init() {
 		{"terminal wait", "Wait", "<terminal> --for exit|idle|text|status [--idle 3s] [--text S] [--status idle,waiting] [--timeout 10m]", cmdTerminalWait},
 		{"terminal resize", "Resize", "<terminal> --cols N --rows N", cmdTerminalResize},
 		{"terminal close", "Close a terminal", "<terminal> [--grace 2s]", cmdTerminalClose},
-		{"task guide", "How to coordinate worker agents with hive task (--skill for a SKILL.md)", "", cmdTaskGuide},
+		{"task guide", "How to coordinate worker agents with posse task (--skill for a SKILL.md)", "", cmdTaskGuide},
 		{"task start", "Dispatch a task to a new worker", "--agent claude|codex|grok|cursor [--model M] [--effort E] [--title T] (--spec S | --spec-file F|- | SPEC) [--workspace W] [--worktree NAME [--base REF]]", cmdTaskStart},
 		{"task list", "List the tasks you dispatched", "[--all]", cmdTaskList},
 		{"task show", "Show a task with its messages and the worker's screen", "<task>", cmdTaskShow},
@@ -89,23 +89,23 @@ func init() {
 		{"history search", "Search past claude/codex/cursor/grok sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
 		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
 		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},
-		{"history resume", "Continue a past session in a new hive terminal", "<session> [--workspace W]", cmdHistoryResume},
+		{"history resume", "Continue a past session in a new posse terminal", "<session> [--workspace W]", cmdHistoryResume},
 		{"history index", "Update the session history index now", "[--rebuild]", cmdHistoryIndex},
-		{"mobile pair", "Show a QR code to pair Hive Mobile with this computer", "[--new] [--address HOST[:PORT]|URL]", cmdMobilePair},
+		{"mobile pair", "Show a QR code to pair Posse Mobile with this computer", "[--new] [--address HOST[:PORT]|URL]", cmdMobilePair},
 		{"mobile devices", "List paired phones", "", cmdMobileDevices},
 		{"mobile rm", "Unpair a phone", "<device>", cmdMobileRm},
 		{"usage", "Show plan usage of Claude, Codex, Grok and Cursor (updated as they run)", "", cmdUsage},
-		{"usage report", "Forward a Claude statusLine input to Hive (for your own statusLine script)", "< statusline.json", cmdUsageReport},
+		{"usage report", "Forward a Claude statusLine input to Posse (for your own statusLine script)", "< statusline.json", cmdUsageReport},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
-		{"statusline", "Claude statusLine injected by Hive: forwards plan usage, prints nothing", "< statusline.json", cmdStatusline},
-		{"agent exec", "Run claude, codex or cursor-agent with Hive's hooks (used by the shims in $HIVE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
+		{"statusline", "Claude statusLine injected by Posse: forwards plan usage, prints nothing", "< statusline.json", cmdStatusline},
+		{"agent exec", "Run claude, codex or cursor-agent with Posse's hooks (used by the shims in $POSSE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
 		{"version", "Print the version", "", cmdVersion},
 	}
 }
 
 func Main(args []string) int {
 	e := &env{out: os.Stdout, errOut: os.Stderr}
-	e.home = daemon.ResolveHome(os.Getenv("HIVE_HOME"))
+	e.home = daemon.ResolveHome(os.Getenv("POSSE_HOME"))
 	e.socket = daemon.SocketPath(e.home)
 
 	var rest []string
@@ -116,7 +116,7 @@ func Main(args []string) int {
 		}
 		rest = append(rest, a)
 	}
-	// 从 Hive.app 启动时没有参数（旧版 macOS 会带 -psn_ 参数），直接打开窗口
+	// 从 Posse.app 启动时没有参数（旧版 macOS 会带 -psn_ 参数），直接打开窗口
 	if (len(rest) == 0 || strings.HasPrefix(rest[0], "-psn_")) && inAppBundle() {
 		rest = []string{"app"}
 	}
@@ -126,13 +126,13 @@ func Main(args []string) int {
 	}
 	cmd, cargs := lookup(rest)
 	if cmd == nil {
-		fmt.Fprintf(e.errOut, "hive: unknown command %q\n\n", strings.Join(rest, " "))
+		fmt.Fprintf(e.errOut, "posse: unknown command %q\n\n", strings.Join(rest, " "))
 		usage(e.errOut)
 		return 2
 	}
 	// agent 常先试 --help 看用法
 	if wantsHelp(cargs) {
-		fmt.Fprintf(e.out, "Usage: hive %s\n\n%s\n", cmd.usage(), cmd.summary)
+		fmt.Fprintf(e.out, "Usage: posse %s\n\n%s\n", cmd.usage(), cmd.summary)
 		return 0
 	}
 	if err := cmd.run(e, cargs); err != nil {
@@ -171,7 +171,7 @@ func lookup(args []string) (*command, []string) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: hive <command> [options] [--json]")
+	fmt.Fprintln(w, "Usage: posse <command> [options] [--json]")
 	fmt.Fprintln(w)
 	for _, c := range commands {
 		if c.args == "" {
@@ -180,8 +180,8 @@ func usage(w io.Writer) {
 			fmt.Fprintf(w, "  %-18s %s: %s\n", c.name, c.summary, c.usage())
 		}
 	}
-	fmt.Fprintln(w, "\nEnvironment: HIVE_HOME (default ~/.hive). Inside hive terminals HIVE_TERMINAL_ID and HIVE_WORKSPACE_ID are set.")
-	fmt.Fprintln(w, "Agents coordinating other agents: run `hive task guide` first.")
+	fmt.Fprintln(w, "\nEnvironment: POSSE_HOME (default ~/.posse). Inside posse terminals POSSE_TERMINAL_ID and POSSE_WORKSPACE_ID are set.")
+	fmt.Fprintln(w, "Agents coordinating other agents: run `posse task guide` first.")
 }
 
 func (e *env) fail(err error) int {
@@ -194,7 +194,7 @@ func (e *env) fail(err error) int {
 		fmt.Fprintln(e.out, string(b))
 		return 1
 	}
-	fmt.Fprintln(e.errOut, "hive:", err)
+	fmt.Fprintln(e.errOut, "posse:", err)
 	if errors.As(err, &re) && re.Code == rpc.CodeTimeout {
 		return 3
 	}
@@ -279,7 +279,7 @@ func need(pos []string, n int, name string) error {
 			break
 		}
 	}
-	return fmt.Errorf("usage: hive %s", usage)
+	return fmt.Errorf("usage: posse %s", usage)
 }
 
 type multiFlag []string

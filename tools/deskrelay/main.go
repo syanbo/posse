@@ -10,7 +10,7 @@ import (
 	"log"
 	"net"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 func main() {

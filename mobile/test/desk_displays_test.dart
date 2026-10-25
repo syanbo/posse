@@ -3,10 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/desk/display_picker.dart';
-import 'package:hive_mobile/desk/displays.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/desk/display_picker.dart';
+import 'package:posse_mobile/desk/displays.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 // 内建屏在左，一块 4K 外接屏在右边、顶端对齐，和电脑报来的一样
 final _frame = <String, Object?>{
@@ -42,7 +42,7 @@ final _rawWindows = [
   {
     'id': 42,
     'app': 'Visual Studio Code',
-    'title': 'hive — README.md',
+    'title': 'posse — README.md',
     'w': 1290,
     'h': 865,
   },
@@ -99,7 +99,7 @@ void main() {
     DeskPick? picked;
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Builder(
           builder: (context) => TextButton(
             onPressed: () async => picked = await pickDeskView(
@@ -130,7 +130,7 @@ void main() {
     // 窗口：有标题写标题、下面写 App；没标题写 App、下面写大小
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.text('hive — README.md'), findsOneWidget);
+    expect(find.text('posse — README.md'), findsOneWidget);
     expect(find.text('Visual Studio Code'), findsOneWidget);
     expect(find.text('Simulator'), findsOneWidget);
     expect(find.text('361 × 835'), findsOneWidget);
@@ -151,7 +151,7 @@ void main() {
     final windows = Completer<List<DeskWindow>>();
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Builder(
           builder: (context) => TextButton(
             onPressed: () =>
@@ -182,7 +182,7 @@ void main() {
       ],
     });
     expect(list.map((w) => w.id), [42, 9]);
-    expect(list.first.label, 'hive — README.md');
+    expect(list.first.label, 'posse — README.md');
     expect(list.last.label, 'Simulator');
     final back = DeskDisplays.parse({..._frame, 'gone': true});
     expect(back.gone, isTrue);
@@ -198,7 +198,7 @@ void main() {
     final d = DeskDisplays.parse(_frame);
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: Builder(
           builder: (context) => TextButton(
             onPressed: () =>

@@ -19,14 +19,14 @@ import (
 	"syscall"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/history"
-	"hive/internal/host"
-	"hive/internal/mobile"
-	"hive/internal/procmem"
-	"hive/internal/rpc"
-	"hive/internal/store"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/history"
+	"posse/internal/host"
+	"posse/internal/mobile"
+	"posse/internal/procmem"
+	"posse/internal/rpc"
+	"posse/internal/store"
+	"posse/internal/term"
 )
 
 const Version = "0.1.0"
@@ -38,9 +38,9 @@ type Config struct {
 	HistoryRoots *history.Roots
 }
 
-func SocketPath(home string) string { return filepath.Join(home, "hived.sock") }
+func SocketPath(home string) string { return filepath.Join(home, "possed.sock") }
 
-// session 是一个托管中的终端及其在 hive 里的元数据。
+// session 是一个托管中的终端及其在 posse 里的元数据。
 type session struct {
 	host.Terminal
 	// 建好后不变的信息，从 Terminal.Info 抄一份，免得到处调方法
@@ -52,7 +52,7 @@ type session struct {
 
 	mu      sync.Mutex
 	agent   string // 终端里的 agent：启动时指定的，或之后在前台认出来的
-	hooked  bool   // agent 是 hive 启动的那个，带着注入的 hooks
+	hooked  bool   // agent 是 posse 启动的那个，带着注入的 hooks
 	agentPg int    // agent 的进程组（组长就是 agent 进程），在前台认出它或收到 hook 时记下，0 是还不知道
 	fg      int    // 上次检查时的前台进程组
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
@@ -66,7 +66,7 @@ func (s *session) userName() string {
 	return s.name
 }
 
-// markHooked 在收到 hook 事件时调用：用户在 shell 里经 hive 的同名脚本手动启动的 agent 也带着 hooks，
+// markHooked 在收到 hook 事件时调用：用户在 shell 里经 posse 的同名脚本手动启动的 agent 也带着 hooks，
 // 状态以 hooks 为准，不再只看标题。
 func (s *session) markHooked(name string) {
 	pg := s.Foreground()
@@ -207,12 +207,12 @@ func (d *Daemon) shellFiles() error {
 	return nil
 }
 
-// userZdotdir 取用户原来的 ZDOTDIR。常驻进程可能是从 hive 终端里拉起的，
-// 那时 ZDOTDIR 已经指向 hive 的集成目录，原来的在 HIVE_USER_ZDOTDIR 里。
+// userZdotdir 取用户原来的 ZDOTDIR。常驻进程可能是从 posse 终端里拉起的，
+// 那时 ZDOTDIR 已经指向 posse 的集成目录，原来的在 POSSE_USER_ZDOTDIR 里。
 func userZdotdir(home string) string {
 	z := os.Getenv("ZDOTDIR")
 	if z == agent.ZshDir(home) {
-		return os.Getenv("HIVE_USER_ZDOTDIR")
+		return os.Getenv("POSSE_USER_ZDOTDIR")
 	}
 	return z
 }
@@ -232,7 +232,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 	sock := SocketPath(cfg.Home)
-	lockPath := filepath.Join(cfg.Home, "hived.lock")
+	lockPath := filepath.Join(cfg.Home, "possed.lock")
 	var lockMu sync.Mutex
 	var unlock func()
 	if in == nil {
@@ -249,7 +249,7 @@ func Run(ctx context.Context, cfg Config) error {
 		os.Remove(sock)
 	}
 
-	st, err := store.Open(filepath.Join(cfg.Home, "hive.db"))
+	st, err := store.Open(filepath.Join(cfg.Home, "posse.db"))
 	if err != nil {
 		if in != nil {
 			in.answer(err)
@@ -326,7 +326,7 @@ func Run(ctx context.Context, cfg Config) error {
 			os.Remove(sock)
 		}
 	}()
-	pidFile := filepath.Join(cfg.Home, "hived.pid")
+	pidFile := filepath.Join(cfg.Home, "possed.pid")
 	os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o600)
 	defer func() {
 		if !d.handoff.handedOff() {
@@ -362,7 +362,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
-	log.Printf("hive daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
+	log.Printf("posse daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
 	err = srv.Serve(ctx, d.ln)
 	if d.mobile != nil {
 		d.mobile.Close()

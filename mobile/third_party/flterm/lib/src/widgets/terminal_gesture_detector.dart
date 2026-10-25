@@ -29,7 +29,7 @@ class TerminalGestureDetector extends StatefulWidget {
   final ValueChanged<ActivatedLink>? onLinkActivate;
   final ScrollController? scrollController;
 
-  /// Hive: 设了就由外层决定点击后键盘怎么办，这里不再聚焦。
+  /// Posse: 设了就由外层决定点击后键盘怎么办，这里不再聚焦。
   final VoidCallback? onTap;
 
   const TerminalGestureDetector({
@@ -56,11 +56,11 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   var _linkPressActive = false;
   Timer? _autoScrollTimer;
 
-  /// Hive: 长按不参与竞技场。10px 用屏幕坐标，免得电脑布局缩放后局部坐标把阈值放大。
+  /// Posse: 长按不参与竞技场。10px 用屏幕坐标，免得电脑布局缩放后局部坐标把阈值放大。
   static const _longPressSlop = 10.0;
   static const _longPressDelay = Duration(milliseconds: 500);
 
-  /// Hive: 抬手仍算点击的范围和时限，照 Orca 的 TAP_SLOP / TAP_MAX_MS。
+  /// Posse: 抬手仍算点击的范围和时限，照 Orca 的 TAP_SLOP / TAP_MAX_MS。
   static const _tapSlop = 24.0;
   static const _tapMax = Duration(milliseconds: 700);
 
@@ -133,7 +133,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       return;
     }
 
-    // Hive: 拖到边缘的自动滚动是选区自己要的，钉住的位置跟着它走。
+    // Posse: 拖到边缘的自动滚动是选区自己要的，钉住的位置跟着它走。
     _autoScrolling = true;
     try {
       _binding.updateSelectionAutoscroll(
@@ -198,7 +198,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
-    // Hive: 只有真正的鼠标才按按下/移动/抬起发给程序。手指滑动不是拖选。
+    // Posse: 只有真正的鼠标才按按下/移动/抬起发给程序。手指滑动不是拖选。
     if (_isMouseKind(event.kind)) {
       if (_binding.mouseTracking != MouseTracking.none) {
         _handleTrackedDown(event);
@@ -227,14 +227,14 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
       kind: event.kind,
     );
     _primary = finger;
-    // Hive: 已有选区时这一指只清掉，滑动照常，不再长按选词。
+    // Posse: 已有选区时这一指只清掉，滑动照常，不再长按选词。
     if (_binding.terminal.selection != null) {
       _binding.clearSelection();
       finger.suppressSelect = true;
       _unpinScroll();
       return;
     }
-    // Hive: 程序在跟踪鼠标时也不挡住长按。点按仍然在抬手后发一键，长按留给复制。
+    // Posse: 程序在跟踪鼠标时也不挡住长按。点按仍然在抬手后发一键，长按留给复制。
     _armLongPress();
   }
 
@@ -251,7 +251,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
     if (delta.dx.abs() + delta.dy.abs() <= _longPressSlop) return;
     _cancelLongPress();
     if (!finger.selectedWord) return;
-    // Hive: 长按已经选中词，这一指接着移动是在扩大选区，不再当成滑动清掉。
+    // Posse: 长按已经选中词，这一指接着移动是在扩大选区，不再当成滑动清掉。
     final local = event.localPosition;
     if (_drag == null) {
       _startDrag(local, beginPress: false);
@@ -297,7 +297,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
     return event.timeStamp - finger.stamp <= _tapMax;
   }
 
-  /// Hive: 点击成立后才聚焦、开链接，或给正在跟踪鼠标的程序发一次点击。
+  /// Posse: 点击成立后才聚焦、开链接，或给正在跟踪鼠标的程序发一次点击。
   void _confirmTap(_Finger finger) {
     final onTap = widget.onTap;
     if (onTap == null) _binding.requestFocus();
@@ -339,7 +339,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
     _longPressTimer = null;
   }
 
-  /// Hive: 同一位置立刻再按一次，落在双击时限内，用已有的词选。接着拖是在扩大这块选区。
+  /// Posse: 同一位置立刻再按一次，落在双击时限内，用已有的词选。接着拖是在扩大这块选区。
   void _selectWord(Offset position) {
     _handleSelectionPress(position);
     _handleSelectionPress(position);
@@ -350,7 +350,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   double? _pinnedPixels;
   var _autoScrolling = false;
 
-  /// Hive: 扩大选区时按住滚动位置，免得这一指同时把画面滚走。
+  /// Posse: 扩大选区时按住滚动位置，免得这一指同时把画面滚走。
   void _pinScroll() {
     final scroll = widget.scrollController;
     if (scroll == null || !scroll.hasClients || _pinnedPixels != null) return;
@@ -383,7 +383,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   }
 
   void _handleTapDown(TapDownDetails details) {
-    // Hive: 不是鼠标时大约 100ms 就会到这里，这时往往还在滑动。不聚焦、不选字。
+    // Posse: 不是鼠标时大约 100ms 就会到这里，这时往往还在滑动。不聚焦、不选字。
     if (!_isMouseKind(details.kind)) return;
     _binding.requestFocus();
     if (_isMouseTracked(HardwareKeyboard.instance.isShiftPressed)) return;
@@ -402,7 +402,7 @@ class _TerminalGestureDetectorState extends State<TerminalGestureDetector> {
   }
 
   void _handleTapCancel() {
-    // Hive: 点击识别器输给滚动时也会到这里，手指可能还按着。
+    // Posse: 点击识别器输给滚动时也会到这里，手指可能还按着。
     // 长按计时只由这一指自己的移动和抬起取消。
     _holdSelect = false;
     if (_pressCell == null) return;

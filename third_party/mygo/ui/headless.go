@@ -544,7 +544,7 @@ func (t *Tester) RightClickAt(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: 1})
 }
 
-// MiddleClickAt clicks with the middle button at (x, y). Hive
+// MiddleClickAt clicks with the middle button at (x, y). Posse
 func (t *Tester) MiddleClickAt(x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerDown, X: float64(x), Y: float64(y), Button: 2})
 	t.send(platform.SurfaceEvent{Kind: platform.PointerUp, X: float64(x), Y: float64(y), Button: 2})
@@ -654,7 +654,7 @@ func (t *Tester) Move(x, y float32) {
 }
 
 // MoveWith moves the pointer to (x, y) with modifier keys held, as the
-// platform reports them with every pointer event. (Hive)
+// platform reports them with every pointer event. (Posse)
 func (t *Tester) MoveWith(mods Modifiers, x, y float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerMove, X: float64(x), Y: float64(y), Mods: platform.Modifiers(mods)})
 }
@@ -665,7 +665,7 @@ func (t *Tester) Scroll(x, y, dx, dy float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true})
 }
 
-// ScrollWith scrolls as Scroll does with modifier keys held. (Hive)
+// ScrollWith scrolls as Scroll does with modifier keys held. (Posse)
 func (t *Tester) ScrollWith(mods Modifiers, x, y, dx, dy float32) {
 	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Precise: true, Mods: platform.Modifiers(mods)})
 }

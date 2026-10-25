@@ -65,7 +65,7 @@ final class TerminalInputClient with DeltaTextInputClient {
     _onTextCommitted = callback;
   }
 
-  /// Hive：一次插进来好几个字又带换行的（系统菜单粘贴、听写）交给它当粘贴，不拆成字和回车。
+  /// Posse：一次插进来好几个字又带换行的（系统菜单粘贴、听写）交给它当粘贴，不拆成字和回车。
   set onPasted(ValueChanged<String>? callback) => _onPasted = callback;
 
   /// Replaces an active connection because platform text input is view-bound.
@@ -88,7 +88,7 @@ final class TerminalInputClient with DeltaTextInputClient {
       viewId: viewId,
       autocorrect: false,
       inputType: .multiline,
-      // Hive：键盘右下角写"发送"：终端里回车就是把这一行交给程序
+      // Posse：键盘右下角写"发送"：终端里回车就是把这一行交给程序
       inputAction: .send,
       smartDashesType: .disabled,
       smartQuotesType: .disabled,
@@ -146,7 +146,7 @@ final class TerminalInputClient with DeltaTextInputClient {
 
   @override
   void performAction(TextInputAction action) {
-    // Hive：右下角是"发送"时 iOS 不插入换行，只回调 send，同样当回车
+    // Posse：右下角是"发送"时 iOS 不插入换行，只回调 send，同样当回车
     if (action != .newline && action != .send) return;
     if (_suppressNextNewlineAction) {
       _clearNewlineActionSuppression();
@@ -272,7 +272,7 @@ final class TerminalInputClient with DeltaTextInputClient {
       return;
     }
 
-    // Hive：拆开时每个换行都是回车，粘贴的最后一个换行把整段直接发出去
+    // Posse：拆开时每个换行都是回车，粘贴的最后一个换行把整段直接发出去
     final pasted = _onPasted;
     if (pasted != null && !singleNewline && _newlinePattern.hasMatch(text)) {
       pasted(text);

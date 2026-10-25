@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/chat/latency_label.dart';
-import 'package:hive_mobile/protocol/latency.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/chat/latency_label.dart';
+import 'package:posse_mobile/protocol/latency.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
 
 /// 只认 ping 的连接：[reply] 决定每次怎么回。
 class _PingRpc implements PhoneRpc {
@@ -152,7 +152,7 @@ void main() {
       Future<Icon> show(Duration? latency, {bool unresponsive = false}) async {
         await tester.pumpWidget(
           MaterialApp(
-            theme: hiveTheme(Brightness.dark),
+            theme: posseTheme(Brightness.dark),
             home: Scaffold(
               appBar: AppBar(
                 title: LatencyLabel(
@@ -175,7 +175,7 @@ void main() {
       // 写数值不写单位，读屏念全
       expect(find.text('42'), findsOneWidget);
       expect(find.bySemanticsLabel('和电脑的延迟 42 毫秒'), findsOneWidget);
-      final c = HiveColors.of(tester.element(find.byType(LatencyLabel)));
+      final c = PosseColors.of(tester.element(find.byType(LatencyLabel)));
       expect(fast.color, c.sage);
       final mid = await show(const Duration(milliseconds: 200));
       expect(mid.color, c.muted);

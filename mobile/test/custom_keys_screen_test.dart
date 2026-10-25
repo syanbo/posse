@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/settings/custom_keys.dart';
-import 'package:hive_mobile/settings/custom_keys_screen.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/settings/custom_keys.dart';
+import 'package:posse_mobile/settings/custom_keys_screen.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 void main() {
   testWidgets('built-in keys are listed for sorting and the order resets', (
@@ -11,13 +11,13 @@ void main() {
   ) async {
     tester.view.physicalSize = const Size(1170, 4000);
     addTearDown(tester.view.reset);
-    final model = HiveAppModel(
+    final model = PosseAppModel(
       store: MemoryPairingStore(),
       settingsStore: MemorySettingsStore(),
     );
     await tester.pumpWidget(
       MaterialApp(
-        theme: hiveTheme(Brightness.dark),
+        theme: posseTheme(Brightness.dark),
         home: CustomKeysScreen(model: model),
       ),
     );

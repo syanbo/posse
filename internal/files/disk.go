@@ -130,7 +130,7 @@ func WriteFile(path string, write func(io.Writer) error) (Stamp, error) {
 		}
 		mode = fi.Mode().Perm()
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".hive-*")
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".posse-*")
 	if err != nil {
 		return Stamp{}, err
 	}

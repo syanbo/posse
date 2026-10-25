@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/protocol/e2ee.dart';
+import 'package:posse_mobile/protocol/e2ee.dart';
 
 void main() {
   test('transcript vector matches the Go fixture', () {

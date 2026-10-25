@@ -17,7 +17,7 @@ import (
 // Known 是支持一键启动的 agent。
 var Known = []string{"claude", "codex", "grok", "cursor"}
 
-// Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 hive 可执行文件。
+// Launcher 生成 agent 的启动命令；Exe 是 hooks 回调的 posse 可执行文件。
 type Launcher struct {
 	Exe  string
 	Home string
@@ -170,7 +170,7 @@ var claudeEvents = []string{
 	"Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "PostCompact", "SessionEnd",
 }
 
-// claudeSettings 写出只含 hive hooks 的 settings 文件，经 --settings 与用户配置合并。
+// claudeSettings 写出只含 posse hooks 的 settings 文件，经 --settings 与用户配置合并。
 // 不设 async：异步 hook 可能乱序到达。
 func (l Launcher) claudeSettings() (string, error) {
 	type handler struct {
@@ -197,9 +197,9 @@ func (l Launcher) claudeSettings() (string, error) {
 		hooks[ev] = []group{g}
 	}
 	doc := map[string]any{"hooks": hooks}
-	// 套餐用量只出现在 statusLine 的输入里，注入 hive statusline 转给常驻进程。--settings 里的
+	// 套餐用量只出现在 statusLine 的输入里，注入 posse statusline 转给常驻进程。--settings 里的
 	// statusLine 会盖掉用户自己的，所以沿用用户的其余字段（refreshInterval、padding），
-	// 由 hive statusline 替它跑原来的命令；用户设置读不出来时不注入，免得把它的状态行弄没
+	// 由 posse statusline 替它跑原来的命令；用户设置读不出来时不注入，免得把它的状态行弄没
 	if user, ok := UserStatusLine(); ok {
 		sl := map[string]any{}
 		for k, v := range user {
@@ -296,10 +296,10 @@ func ShellArgv(cmd string) []string {
 	if cmd == "" {
 		return []string{sh, "-l"}
 	}
-	// agent 退出后换回的 shell 也走 hive 的 zsh 集成（HIVE_ZDOTDIR 只在 zsh 终端里有），
+	// agent 退出后换回的 shell 也走 posse 的 zsh 集成（POSSE_ZDOTDIR 只在 zsh 终端里有），
 	// 在里面手动再敲 claude 照样带 hooks
 	back := "exec " + Quote(sh) + " -l"
-	return []string{sh, "-l", "-i", "-c", cmd + `; if [ -n "$HIVE_ZDOTDIR" ]; then ZDOTDIR=$HIVE_ZDOTDIR ` + back + "; else " + back + "; fi"}
+	return []string{sh, "-l", "-i", "-c", cmd + `; if [ -n "$POSSE_ZDOTDIR" ]; then ZDOTDIR=$POSSE_ZDOTDIR ` + back + "; else " + back + "; fi"}
 }
 
 func UserShell() string {

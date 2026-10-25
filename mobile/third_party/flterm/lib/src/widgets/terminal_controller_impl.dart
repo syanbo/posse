@@ -489,7 +489,7 @@ class TerminalControllerImpl extends TerminalController
 
       if (count > 0) _mouseEncoder.sync(terminal);
 
-      // Hive: 滚轮报在手指所在的格子，不知道时报在屏幕中间。原版报在左上角，
+      // Posse: 滚轮报在手指所在的格子，不知道时报在屏幕中间。原版报在左上角，
       // Codex 按位置分区处理滚轮，第一行是钉住的问题，落在那里不滚。
       final dpr = _lastDevicePixelRatio;
       final x = at != null
@@ -510,7 +510,7 @@ class TerminalControllerImpl extends TerminalController
       return;
     }
 
-    // Hive: 程序关了 alternate scroll（1007）就不把滑动换成方向键，和桌面一样。
+    // Posse: 程序关了 alternate scroll（1007）就不把滑动换成方向键，和桌面一样。
     // Codex 显式关掉它：方向键在它的输入框里是翻历史，不是滚动。
     if (!terminal.modeGet(const .alternateScroll())) return;
 
@@ -575,7 +575,7 @@ class TerminalControllerImpl extends TerminalController
 
   @override
   void paste(String text) {
-    // Hive：去掉末尾的换行，粘贴完留在输入框里，不直接回车发出去
+    // Posse：去掉末尾的换行，粘贴完留在输入框里，不直接回车发出去
     text = trimPastedNewlines(text);
     if (text.isEmpty) return;
     final bracketed = terminal.modeGet(const .bracketedPaste());
@@ -942,7 +942,7 @@ class TerminalControllerImpl extends TerminalController
   }
 
   TerminalSizeInfo _handleSizeQuery() {
-    // Hive: 布局时记下的行列数优先。RenderState.update 会清掉终端上的行脏标记，渲染器自己的
+    // Posse: 布局时记下的行列数优先。RenderState.update 会清掉终端上的行脏标记，渲染器自己的
     // RenderState 就看不到这一批输出改了哪些行：Claude Code 每次改尺寸重画都带一个 CSI 16t，
     // 重画里不再变的行（分隔线、状态栏）在画面上一直是旧的，内核里却是对的
     if (_lastRows > 0 && _lastCols > 0) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/vt"
+	"posse/internal/vt"
 )
 
 func TestEchoAndQueries(t *testing.T) {
@@ -34,14 +34,14 @@ func TestEchoAndQueries(t *testing.T) {
 func TestEnvironStripsHostAgentVars(t *testing.T) {
 	t.Setenv("ORCA_PANE_KEY", "x")
 	t.Setenv("CLAUDECODE", "1")
-	// 从 agent 的工具调用里拉起 Hive.app 时带进来的非交互环境
+	// 从 agent 的工具调用里拉起 Posse.app 时带进来的非交互环境
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("FORCE_COLOR", "0")
 	t.Setenv("GIT_EDITOR", "true")
 	t.Setenv("GROK_AGENT", "1")
 	t.Setenv("GRADLE_OPTS", "-Dorg.gradle.console=plain")
 	t.Setenv("MAVEN_OPTS", "-Xmx2g")
-	env := strings.Join(Environ([]string{"HIVE_TERMINAL_ID=t_1"}), "\n")
+	env := strings.Join(Environ([]string{"POSSE_TERMINAL_ID=t_1"}), "\n")
 	if !strings.Contains(env, "MAVEN_OPTS=-Xmx2g") {
 		t.Fatal("user's MAVEN_OPTS dropped")
 	}
@@ -50,7 +50,7 @@ func TestEnvironStripsHostAgentVars(t *testing.T) {
 			t.Fatalf("environment leaks %s", bad)
 		}
 	}
-	if !strings.Contains(env, "HIVE_TERMINAL_ID=t_1") || !strings.Contains(env, "TERM=xterm-256color") {
+	if !strings.Contains(env, "POSSE_TERMINAL_ID=t_1") || !strings.Contains(env, "TERM=xterm-256color") {
 		t.Fatal("missing expected variables")
 	}
 	// 程序据此把 [Image #N]、路径输出成超链接；外面设的值（比如 0）不能盖过它

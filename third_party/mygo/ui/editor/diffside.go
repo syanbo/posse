@@ -412,7 +412,7 @@ func (s *diffSide) buildBlocks(c *ui.Context, ed *editor) {
 			render(c, bar, &DiffHunkActions{Index: i, Hunk: DiffHunk{hk.A0, hk.A1, hk.B0, hk.B1}, d: d})
 		}
 	}
-	// Hive: a mark on every change by the divider, on the old side.
+	// Posse: a mark on every change by the divider, on the old side.
 	if d.RenderHunkMark != nil && s.old && !s.unified {
 		for i, hk := range d.model.hunks {
 			top, ok := s.hunkTop(h, v.text.LineCount(), hk.A0, hk.A1, i)
@@ -445,7 +445,7 @@ func (s *diffSide) buildBlocks(c *ui.Context, ed *editor) {
 }
 
 // hunkTop is where change i starts on this side: its first line, or the
-// filler standing for it when it has no lines here (Hive).
+// filler standing for it when it has no lines here (Posse).
 func (s *diffSide) hunkTop(h *heights, n, l0, l1, i int) (float64, bool) {
 	if n == 0 {
 		return 0, false

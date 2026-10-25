@@ -8,7 +8,7 @@ import (
 )
 
 // Task 是派给一个 worker agent 的任务。派发方（coordinator）是另一个 agent 的终端，
-// 为空表示由用户在界面或 hive 终端之外派发。
+// 为空表示由用户在界面或 posse 终端之外派发。
 type Task struct {
 	ID          string     `json:"id"`
 	Title       string     `json:"title"`

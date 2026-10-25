@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:hive_quic/hive_quic.dart';
+import 'package:posse_quic/posse_quic.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -16,7 +16,7 @@ void main() {
     final repo = Directory.current.uri.resolve('../../../').toFilePath();
     echo = await Process.start('go', [
       'run',
-      './mobile/packages/hive_quic/test/echo',
+      './mobile/packages/posse_quic/test/echo',
     ], workingDirectory: repo);
     unawaited(stderr.addStream(echo.stderr));
     lines = StreamIterator(

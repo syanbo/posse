@@ -10,7 +10,7 @@ import (
 )
 
 func TestClaudePlugin(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	r, err := l.Launch("claude", Model{}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -21,16 +21,16 @@ func TestClaudePlugin(t *testing.T) {
 	}
 	var manifest map[string]string
 	b, err := os.ReadFile(filepath.Join(dir, ".claude-plugin", "plugin.json"))
-	if err != nil || json.Unmarshal(b, &manifest) != nil || manifest["name"] != "hive" {
+	if err != nil || json.Unmarshal(b, &manifest) != nil || manifest["name"] != "posse" {
 		t.Fatalf("manifest %s %v", b, err)
 	}
 	skill := filepath.Join(dir, "skills", SkillName, "SKILL.md")
 	b, err = os.ReadFile(skill)
-	if err != nil || !strings.HasPrefix(string(b), "---\nname: hive-tasks\ndescription: ") || !strings.Contains(string(b), "`hive task guide`") {
+	if err != nil || !strings.HasPrefix(string(b), "---\nname: posse-tasks\ndescription: ") || !strings.Contains(string(b), "`posse task guide`") {
 		t.Fatalf("skill %q %v", b, err)
 	}
 	// description 里有 ": "，要加引号才是合法 YAML，Cursor 才认这个技能
-	line := strings.SplitN(strings.TrimPrefix(string(b), "---\nname: hive-tasks\ndescription: "), "\n", 2)[0]
+	line := strings.SplitN(strings.TrimPrefix(string(b), "---\nname: posse-tasks\ndescription: "), "\n", 2)[0]
 	var desc string
 	if err := json.Unmarshal([]byte(line), &desc); err != nil || desc != SkillDescription {
 		t.Fatalf("description not a quoted string: %q %v", line, err)
@@ -62,7 +62,7 @@ func TestCodexGuideArgs(t *testing.T) {
 	if args := codexGuideArgs(); args != nil {
 		t.Fatalf("overrode the user's developer_instructions: %q", args)
 	}
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	os.Remove(filepath.Join(home, "config.toml"))
 	r, _ := l.Launch("codex", Model{}, "")
 	if cmd := r.Argv[len(r.Argv)-1]; !strings.Contains(cmd, "developer_instructions=") {
@@ -71,7 +71,7 @@ func TestCodexGuideArgs(t *testing.T) {
 }
 
 func TestGrokRules(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	r, err := l.Launch("grok", Model{}, "do it")
 	if err != nil {

@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/rpc"
+	"posse/internal/agent"
+	"posse/internal/rpc"
 )
 
 // 防休眠照 Orca 的 agent-awake（Magpie 也是这样）：macOS 上起 /usr/bin/caffeinate -i -s 托住系统不睡，
@@ -40,7 +40,7 @@ type awakeStatus struct {
 
 type awake struct {
 	mu      sync.Mutex
-	path    string // $HIVE_HOME/awake.json，记用户选的档
+	path    string // $POSSE_HOME/awake.json，记用户选的档
 	mode    string
 	working int
 	viewing bool // 有手机在看桌面：屏幕不能熄，不写 awake.json

@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // worktree 工作区相对基准分支（建工作区时分出来的那个）的状态：改动页顶上一行，

@@ -7,7 +7,7 @@ import (
 )
 
 func TestPermissionArgs(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	if m := PermissionMode(l.Home); m != PermissionSkip {
 		t.Fatalf("default mode %q", m)
 	}

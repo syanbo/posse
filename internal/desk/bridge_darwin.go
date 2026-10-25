@@ -522,7 +522,7 @@ func (m *macAPI) goString(o objc.ID) string {
 	return string(unsafe.Slice((*byte)(p), n))
 }
 
-// stayInBackground 让子进程不进程序坞。它是 Hive.app 里的可执行文件，一连上窗口服务器（ScreenCaptureKit 会连）
+// stayInBackground 让子进程不进程序坞。它是 Posse.app 里的可执行文件，一连上窗口服务器（ScreenCaptureKit 会连）
 // 就被当成前台 App，却从不完成启动，程序坞里的图标会一直跳。要在碰 ScreenCaptureKit 之前调。
 func (m *macAPI) stayInBackground() {
 	if _, err := purego.Dlopen("/System/Library/Frameworks/AppKit.framework/AppKit", purego.RTLD_GLOBAL|purego.RTLD_NOW); err != nil {

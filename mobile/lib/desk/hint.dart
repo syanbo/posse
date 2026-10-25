@@ -19,7 +19,7 @@ class DeskGestureHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return GestureDetector(
       key: const Key('desk-gesture-hint'),
       behavior: HitTestBehavior.opaque,

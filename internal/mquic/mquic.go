@@ -1,5 +1,5 @@
 // Package mquic 是手机和 Mac 之间的 QUIC 传输，两端共用：Mac 的常驻进程用它收手机的连接，
-// 手机 App 里编进去的库（mobile/packages/hive_quic）用它拨号。
+// 手机 App 里编进去的库（mobile/packages/posse_quic）用它拨号。
 //
 // 一条连接只开一条双向流，上面跑和 WebSocket 一样的消息：文本、二进制两种，各带长度。
 // 端到端加密的计数器要求消息按发送顺序到达，所以不按终端拆流。
@@ -26,7 +26,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-const ALPN = "hive-mobile/1"
+const ALPN = "posse-mobile/1"
 
 const (
 	Text   byte = 1
@@ -107,7 +107,7 @@ func ServerTLS() (*tls.Config, error) {
 		SerialNumber: serial,
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(10 * 365 * 24 * time.Hour),
-		DNSNames:     []string{"hive"},
+		DNSNames:     []string{"posse"},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 	if err != nil {
@@ -121,5 +121,5 @@ func ServerTLS() (*tls.Config, error) {
 
 // ClientTLS 不验证书，见包说明。
 func ClientTLS() *tls.Config {
-	return &tls.Config{InsecureSkipVerify: true, NextProtos: []string{ALPN}, ServerName: "hive"}
+	return &tls.Config{InsecureSkipVerify: true, NextProtos: []string{ALPN}, ServerName: "posse"}
 }

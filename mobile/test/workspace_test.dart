@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/workspace/models.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 void main() {
   test('tab frames replace the list and end keeps the caller list', () {
@@ -40,9 +40,9 @@ void main() {
     final rows = parseWorktrees([
       {
         'worktreeId': 'p::w',
-        'repo': 'hive',
+        'repo': 'posse',
         'displayName': 'main',
-        'path': '/src/hive',
+        'path': '/src/posse',
         'branch': 'main',
         'status': 'permission',
         'liveTerminalCount': 1,

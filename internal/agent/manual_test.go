@@ -9,7 +9,7 @@ import (
 )
 
 func TestManualArgs(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	settings, plugin := filepath.Join(l.Home, "claude-hooks.json"), filepath.Join(l.Home, "claude-plugin")
 	for _, c := range []struct {
@@ -54,14 +54,14 @@ func TestManualArgs(t *testing.T) {
 
 func TestShellFiles(t *testing.T) {
 	home := t.TempDir()
-	if err := WriteShellFiles(home, "/Applications/Hive.app/Contents/MacOS/Hive"); err != nil {
+	if err := WriteShellFiles(home, "/Applications/Posse.app/Contents/MacOS/Posse"); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(ShimDir(home), "claude"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "exec '/Applications/Hive.app/Contents/MacOS/Hive' agent exec claude -- \"$@\""; !strings.Contains(string(b), want) {
+	if want := "exec '/Applications/Posse.app/Contents/MacOS/Posse' agent exec claude -- \"$@\""; !strings.Contains(string(b), want) {
 		t.Errorf("shim %q", b)
 	}
 	if _, err := os.Stat(filepath.Join(ShimDir(home), "grok")); !os.IsNotExist(err) {
@@ -73,7 +73,7 @@ func TestShellFiles(t *testing.T) {
 	if env := ShellEnv(home, "/bin/bash", ""); env != nil {
 		t.Errorf("bash env %q", env)
 	}
-	if env := ShellEnv(home, "/bin/zsh", "/u/z"); !slices.Contains(env, "ZDOTDIR="+ZshDir(home)) || !slices.Contains(env, "HIVE_USER_ZDOTDIR=/u/z") {
+	if env := ShellEnv(home, "/bin/zsh", "/u/z"); !slices.Contains(env, "ZDOTDIR="+ZshDir(home)) || !slices.Contains(env, "POSSE_USER_ZDOTDIR=/u/z") {
 		t.Errorf("zsh env %q", env)
 	}
 }

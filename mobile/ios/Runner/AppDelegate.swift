@@ -18,10 +18,10 @@ import UIKit
     let registrar = engineBridge.applicationRegistrar
     registrar.register(
       QrScanViewFactory(messenger: registrar.messenger()),
-      withId: "hive/qr"
+      withId: "posse/qr"
     )
     let channel = FlutterMethodChannel(
-      name: "hive/qr",
+      name: "posse/qr",
       binaryMessenger: registrar.messenger()
     )
     qrChannel = channel

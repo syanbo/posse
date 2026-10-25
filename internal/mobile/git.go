@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 func (c *conn) gitStatus(id string, p json.RawMessage) error {
-	if !c.hasCapability("hive.git.v1") {
+	if !c.hasCapability("posse.git.v1") {
 		return errorf("method_not_found", "Unknown method: git.status")
 	}
 	var a wtParams
@@ -49,7 +49,7 @@ func (c *conn) gitStatus(id string, p json.RawMessage) error {
 }
 
 func (c *conn) gitDiff(id string, p json.RawMessage) error {
-	if !c.hasCapability("hive.git.v1") {
+	if !c.hasCapability("posse.git.v1") {
 		return errorf("method_not_found", "Unknown method: git.diff")
 	}
 	var a struct {

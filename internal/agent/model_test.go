@@ -6,7 +6,7 @@ import (
 )
 
 func TestLaunchModel(t *testing.T) {
-	l := Launcher{Exe: "/bin/hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	cases := []struct {
 		agent string
 		m     Model

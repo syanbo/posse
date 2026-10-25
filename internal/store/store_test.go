@@ -71,7 +71,7 @@ func TestStore(t *testing.T) {
 
 // 旧库的 tasks 表没有 model、effort 列，打开时补上，旧任务读出来为空
 func TestMigrateTaskModel(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "hive.db")
+	path := filepath.Join(t.TempDir(), "posse.db")
 	db, err := sql.Open("sqlite", "file:"+path)
 	if err != nil {
 		t.Fatal(err)

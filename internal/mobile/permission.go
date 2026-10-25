@@ -57,7 +57,7 @@ func (s *Server) permissionTargets(terminalID string) []permTarget {
 	s.mu.Unlock()
 	var out []permTarget
 	for _, c := range conns {
-		if !c.hasCapability("hive.permission.v1") {
+		if !c.hasCapability("posse.permission.v1") {
 			continue
 		}
 		c.smu.Lock()
@@ -71,7 +71,7 @@ func (s *Server) permissionTargets(terminalID string) []permTarget {
 	return out
 }
 
-// HoldPermission 在有带 hive.permission.v1 的手机订阅着这个终端的对话时，
+// HoldPermission 在有带 posse.permission.v1 的手机订阅着这个终端的对话时，
 // 把请求推到那条对话流上，并等决定。lastInput 一变或 30 秒到了就返回空字符串。
 func (s *Server) HoldPermission(ctx context.Context, terminalID string, payload json.RawMessage, lastInput func() time.Time) string {
 	targets := s.permissionTargets(terminalID)
@@ -158,7 +158,7 @@ func (s *Server) decidePermission(requestID, behavior string) bool {
 }
 
 func (c *conn) decidePermission(id string, p json.RawMessage) error {
-	if !c.hasCapability("hive.permission.v1") {
+	if !c.hasCapability("posse.permission.v1") {
 		return errorf("method_not_found", "Unknown method: agent.permission.decide")
 	}
 	var body struct {

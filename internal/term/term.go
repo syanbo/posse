@@ -22,7 +22,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"golang.org/x/sys/unix"
 
-	"hive/internal/vt"
+	"posse/internal/vt"
 )
 
 const DefaultScrollback = 4 << 20
@@ -55,7 +55,7 @@ type AgentState struct {
 	ToolName       string `json:"toolName,omitempty"`
 	ToolInput      string `json:"toolInput,omitempty"` // 权限请求的一行摘要
 	Prompt         string `json:"prompt,omitempty"`    // 手机上的 interactivePrompt：答题卡原文或审批 JSON
-	// Title 是 hive session title 给这个会话起的标题，界面和手机用它当会话名；
+	// Title 是 posse session title 给这个会话起的标题，界面和手机用它当会话名；
 	// TitlePending 是 Claude 还没拿到它（下一次 UserPromptSubmit 时经 hook 交过去）
 	Title        string `json:"title,omitempty"`
 	TitlePending bool   `json:"titlePending,omitempty"`
@@ -816,7 +816,7 @@ func (t *Terminal) Send(data []byte) error {
 	return t.Inject(data)
 }
 
-// Inject 是 hive 自己往终端里打字（如提醒 agent 有新消息），不算作用户输入。
+// Inject 是 posse 自己往终端里打字（如提醒 agent 有新消息），不算作用户输入。
 func (t *Terminal) Inject(data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
@@ -962,9 +962,9 @@ func (t *Terminal) closePTY() {
 }
 
 // strippedEnv 是不应从启动常驻进程的环境泄漏进新终端的变量。
-var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "HIVE_", "TERM_PROGRAM", "GROK_"}
+var strippedPrefixes = []string{"ORCA_", "CLAUDE_CODE_", "POSSE_", "TERM_PROGRAM", "GROK_"}
 var strippedNames = map[string]bool{"CLAUDECODE": true, "CLAUDE_PID": true, "CLAUDE_EFFORT": true, "TERM": true, "COLORTERM": true, "FORCE_HYPERLINK": true,
-	// agent 给工具调用设的非交互环境（关颜色、关分页、git 不开编辑器不问密码）。agent 在终端里用 open 拉起 Hive.app 时，
+	// agent 给工具调用设的非交互环境（关颜色、关分页、git 不开编辑器不问密码）。agent 在终端里用 open 拉起 Posse.app 时，
 	// 窗口和常驻进程会继承它们，再漏进之后的每个终端：Claude Code 看到 NO_COLOR 就整屏没颜色。
 	// 交互 shell 会重新读用户的启动文件，用户自己设的照样生效。
 	"NO_COLOR": true, "FORCE_COLOR": true, "CLICOLOR": true, "CLICOLOR_FORCE": true,
@@ -992,9 +992,9 @@ func Environ(extra []string) []string {
 		}
 		env = append(env, kv)
 	}
-	// 终端支持超链接（OSC 8），但 TERM_PROGRAM=hive 不在常见的支持名单里：Claude Code 等按 supports-hyperlinks
+	// 终端支持超链接（OSC 8），但 TERM_PROGRAM=posse 不在常见的支持名单里：Claude Code 等按 supports-hyperlinks
 	// 判断，要 FORCE_HYPERLINK 才会把 [Image #N]、文件路径输出成可点的链接
-	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive", "FORCE_HYPERLINK=1")
+	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=posse", "FORCE_HYPERLINK=1")
 	if !hasLang {
 		env = append(env, "LANG=en_US.UTF-8")
 	}
@@ -1010,7 +1010,7 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 	return false
 }
 
-// buildPath 把 hive 自身所在目录放到最前，保证终端里的 agent 能调用 hive。
+// buildPath 把 posse 自身所在目录放到最前，保证终端里的 agent 能调用 posse。
 func buildPath(path string) string {
 	var parts []string
 	if exe, err := os.Executable(); err == nil {

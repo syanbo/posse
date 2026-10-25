@@ -16,7 +16,7 @@ import (
 )
 
 // 运行中的 Codex、Grok 不重读这些存储，也没有 hook 能返回标题：写进去之后 resume 列表、
-// Hive 的历史页马上变，它们自己界面上的名字要重开会话才变。写法照它们各自的 /rename。
+// Posse 的历史页马上变，它们自己界面上的名字要重开会话才变。写法照它们各自的 /rename。
 
 var stateDBRe = regexp.MustCompile(`^state_(\d+)\.sqlite$`)
 

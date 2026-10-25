@@ -1,8 +1,8 @@
 package daemon
 
 // 多 agent 编排：派发方（一个 agent，或在界面里操作的用户）把任务派给新开的 worker agent。
-// worker 用 hive task ask/check/done 和派发方通信；派发方用 hive task wait 阻塞等待，
-// 或者在它空闲时由 hive 往它的终端里输入一行提醒，让它去读收件箱。
+// worker 用 posse task ask/check/done 和派发方通信；派发方用 posse task wait 阻塞等待，
+// 或者在它空闲时由 posse 往它的终端里输入一行提醒，让它去读收件箱。
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/gitx"
-	"hive/internal/rpc"
-	"hive/internal/store"
+	"posse/internal/agent"
+	"posse/internal/gitx"
+	"posse/internal/rpc"
+	"posse/internal/store"
 )
 
 const (
@@ -107,7 +107,7 @@ func (d *Daemon) taskNotify() {
 // --- 派发
 
 type taskStartParams struct {
-	Caller    string `json:"caller"` // 调用方终端（HIVE_TERMINAL_ID），即派发方
+	Caller    string `json:"caller"` // 调用方终端（POSSE_TERMINAL_ID），即派发方
 	Cwd       string `json:"cwd"`
 	Workspace string `json:"workspace"`
 	Worktree  string `json:"worktree"` // 为 worker 新建这个名字的 git worktree
@@ -151,7 +151,7 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 	if t.Title == "" {
 		t.Title = firstLine(p.Spec, 60)
 	}
-	env := []string{"HIVE_TASK_ID=" + t.ID}
+	env := []string{"POSSE_TASK_ID=" + t.ID}
 	var s *session
 	if p.Agent != "" {
 		s, err = d.startAgent(w, p.Agent, p.Model, workerPrompt(t, w), p.Cols, p.Rows, env...)
@@ -213,19 +213,19 @@ func (d *Daemon) taskDepth(terminalID string) int {
 func workerPrompt(t store.Task, w store.Workspace) string {
 	who := "another agent"
 	if t.Coordinator == "" {
-		who = "the user, who follows this task in the Hive window"
+		who = "the user, who follows this task in the Posse window"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "You are a worker dispatched through Hive. Task ID: %s.\n", t.ID)
+	fmt.Fprintf(&b, "You are a worker dispatched through Posse. Task ID: %s.\n", t.ID)
 	fmt.Fprintf(&b, "Your coordinator is %s. It cannot see this terminal, so reach it only with these shell commands:\n\n", who)
-	fmt.Fprintf(&b, "hive task ask %s \"<question>\"\n", t.ID)
+	fmt.Fprintf(&b, "posse task ask %s \"<question>\"\n", t.ID)
 	b.WriteString("  Ask the coordinator and wait; the command prints the answer. Use it instead of asking here or with a question tool: nobody is watching this terminal. It waits up to 9 minutes, so give your shell tool a 10-minute timeout; if it times out, run the command it prints to keep waiting on the same question.\n\n")
-	fmt.Fprintf(&b, "hive task check %s\n", t.ID)
+	fmt.Fprintf(&b, "posse task check %s\n", t.ID)
 	b.WriteString("  Read follow-up notes from the coordinator. Run it at natural checkpoints and once more right before reporting.\n\n")
-	fmt.Fprintf(&b, "hive task done %s --summary \"<3 sentences: what you did, what you found, what is left>\" [--report <file>] [--failed]\n", t.ID)
+	fmt.Fprintf(&b, "posse task done %s --summary \"<3 sentences: what you did, what you found, what is left>\" [--report <file>] [--failed]\n", t.ID)
 	b.WriteString("  Report exactly once when you finish. Pass --failed when the task could not be completed; never hide a failure in prose. Add --report only for a file you actually wrote.\n\n")
 	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
-	b.WriteString("After `hive task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
+	b.WriteString("After `posse task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
 	if w.Kind == "worktree" {
 		fmt.Fprintf(&b, "\nYou work in your own git worktree on branch %s, created from %s. Commit your changes on this branch before reporting.\n", w.Branch, w.BaseRef)
 	}
@@ -462,11 +462,11 @@ func (d *Daemon) taskAsk(ctx context.Context, raw json.RawMessage) (any, error) 
 		case <-changed:
 		case <-ctx.Done():
 			// 常驻进程退出时问题已经记下了，调用方要改成 resume 接着等，不能再问一遍
-			e := rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; keep waiting with: hive task ask %s --resume %s", t.ID, q.ID)
+			e := rpc.Errorf(rpc.CodeRestarting, "daemon is shutting down; keep waiting with: posse task ask %s --resume %s", t.ID, q.ID)
 			e.Data, _ = json.Marshal(map[string]string{"resume": q.ID})
 			return nil, e
 		case <-deadline.C:
-			return nil, rpc.Errorf(rpc.CodeTimeout, "no answer yet to question %s; keep waiting with: hive task ask %s --resume %s", q.ID, t.ID, q.ID)
+			return nil, rpc.Errorf(rpc.CodeTimeout, "no answer yet to question %s; keep waiting with: posse task ask %s --resume %s", q.ID, t.ID, q.ID)
 		}
 	}
 }
@@ -618,7 +618,7 @@ type taskSendParams struct {
 	Body   string `json:"body"`
 }
 
-// taskSend 给 worker 补充说明；worker 在检查点用 hive task check 读取，空闲时 hive 会提醒它。
+// taskSend 给 worker 补充说明；worker 在检查点用 posse task check 读取，空闲时 posse 会提醒它。
 func (d *Daemon) taskSend(ctx context.Context, raw json.RawMessage) (any, error) {
 	var p taskSendParams
 	if err := rpc.Decode(raw, &p); err != nil {
@@ -747,7 +747,7 @@ func (d *Daemon) deliver(terminalID string) {
 		if len(notes) > 3 {
 			notes = append(notes[:3], fmt.Sprintf("%d more", len(notes)-3))
 		}
-		text = "Hive: " + strings.Join(notes, ", ") + ". Run `hive task inbox` to read."
+		text = "Posse: " + strings.Join(notes, ", ") + ". Run `posse task inbox` to read."
 	} else {
 		ts, _ := d.store.Tasks(store.TaskFilter{Worker: terminalID, Running: true})
 		for _, t := range ts {
@@ -756,7 +756,7 @@ func (d *Daemon) deliver(terminalID string) {
 				ids = append(ids, m.ID)
 			}
 			if len(msgs) > 0 {
-				text = fmt.Sprintf("Hive: your coordinator sent a message for task %s. Run `hive task check %s`.", t.ID, t.ID)
+				text = fmt.Sprintf("Posse: your coordinator sent a message for task %s. Run `posse task check %s`.", t.ID, t.ID)
 			}
 		}
 	}

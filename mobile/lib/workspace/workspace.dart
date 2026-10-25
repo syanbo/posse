@@ -35,7 +35,7 @@ class PairScreen extends StatefulWidget {
     this.manual = false,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   /// 已经连着一台电脑，再加一台：有返回按钮，连上新电脑后自动关掉。
   final bool adding;
@@ -116,7 +116,7 @@ class _PairScreenState extends State<PairScreen> {
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final busy = model.connecting;
     final note = _note ?? model.error;
     return Scaffold(
@@ -135,7 +135,7 @@ class _PairScreenState extends State<PairScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              widget.adding ? '添加电脑' : '连接 Hive',
+              widget.adding ? '添加电脑' : '连接 Posse',
               style: TextStyle(
                 fontSize: Fs.pageTitle,
                 fontWeight: FontWeight.w600,
@@ -154,7 +154,7 @@ class _PairScreenState extends State<PairScreen> {
               inset: 52,
               margin: const EdgeInsets.only(bottom: 20),
               children: [
-                _step(context, 1, '在电脑上打开 Hive', '点窗口左下角的手机图标'),
+                _step(context, 1, '在电脑上打开 Posse', '点窗口左下角的手机图标'),
                 _step(context, 2, '扫描二维码', '或者在电脑上复制配对码，回来粘贴'),
               ],
             ),
@@ -206,7 +206,7 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Widget _step(BuildContext context, int n, String title, String detail) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return RowTile(
       chevron: false,
       leading: Container(
@@ -232,7 +232,7 @@ class _PairScreenState extends State<PairScreen> {
 /// 连上了在底部提示连的是哪台电脑、走的哪个地址。连不上的原因在 model.error。
 Future<bool> connectAndAnnounce(
   BuildContext context,
-  HiveAppModel model,
+  PosseAppModel model,
   String code,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
@@ -248,7 +248,7 @@ Future<bool> connectAndAnnounce(
 }
 
 String? scanNote(ScanEnd end) => switch (end) {
-  ScanEnd.denied => '需要相机权限才能扫码：在系统设置里允许 Hive 使用相机，也可以把配对码贴进来。',
+  ScanEnd.denied => '需要相机权限才能扫码：在系统设置里允许 Posse 使用相机，也可以把配对码贴进来。',
   ScanEnd.failed => '打不开相机，可以把配对码贴进来。',
   _ => null,
 };
@@ -271,7 +271,7 @@ String worktreeLabel(WorktreeRow row) {
 }
 
 /// 打开一个会话：有原生存档的 agent 进对话页（右上角能切到终端），其余直接进终端。
-void openSession(BuildContext context, HiveAppModel model, SessionTab tab) {
+void openSession(BuildContext context, PosseAppModel model, SessionTab tab) {
   final nav = Navigator.of(context);
   if (!tab.eligible) {
     nav.push(
@@ -317,7 +317,7 @@ String sessionDetail(SessionTab tab) {
 class WorkspaceScreen extends StatelessWidget {
   const WorkspaceScreen({super.key, required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   /// 直接开相机，扫到就连；取消就回首页。没权限、开不了相机、选了手动输入或连不上时
   /// 才进「添加电脑」页，带上原因。没有原生扫码的平台直接进那一页。
@@ -380,7 +380,7 @@ class WorkspaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final projects = <String, List<WorktreeRow>>{};
     for (final row in model.worktrees) {
       projects
@@ -401,7 +401,7 @@ class WorkspaceScreen extends StatelessWidget {
         title: Row(
           children: [
             Text(
-              'Hive',
+              'Posse',
               style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w600,
@@ -498,7 +498,7 @@ class WorkspaceScreen extends StatelessWidget {
       ),
       body: model.worktrees.isEmpty
           ? (model.connecting
-                ? const Center(child: HiveLoader())
+                ? const Center(child: PosseLoader())
                 : model.disconnected
                 ? _DisconnectedList(
                     model: model,
@@ -508,7 +508,7 @@ class WorkspaceScreen extends StatelessWidget {
                     icon: model.error == null
                         ? Icons.folder_open_rounded
                         : Icons.cloud_off_rounded,
-                    text: model.error ?? '电脑上的 Hive 还没有工作区',
+                    text: model.error ?? '电脑上的 Posse 还没有工作区',
                     error: model.error != null,
                     action: TextButton(
                       onPressed: model.retry,
@@ -594,7 +594,7 @@ class WorkspaceScreen extends StatelessWidget {
     String name,
     List<WorktreeRow> rows,
   ) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final collapsed = model.isCollapsed(name);
     // 只有主工作区：项目这一行就是工作区，会话直接挂在下面
     if (rows.length == 1) {
@@ -672,7 +672,7 @@ class WorkspaceScreen extends StatelessWidget {
     return best;
   }
 
-  Widget _where(HiveColors c, WorktreeRow row) {
+  Widget _where(PosseColors c, WorktreeRow row) {
     if (row.branch.isEmpty) {
       return Text(tildePath(row.path), style: mono(12, color: c.muted));
     }
@@ -692,7 +692,7 @@ class WorkspaceScreen extends StatelessWidget {
   }
 
   /// 右边的终端数：桌面侧栏同样位置的数字，项目收起时也知道里面有几个。
-  Widget? _count(HiveColors c, WorktreeRow row) {
+  Widget? _count(PosseColors c, WorktreeRow row) {
     if (row.live == 0) return null;
     return Text(
       '${row.live}',
@@ -709,7 +709,7 @@ class WorkspaceScreen extends StatelessWidget {
     WorktreeRow row, {
     required double indent,
   }) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final all = model.tabs[row.id] ?? const <SessionTab>[];
     final tabs = all.where((t) => t.agent != null);
     final shells = all.where((t) => t.agent == null);
@@ -748,7 +748,7 @@ class WorkspaceScreen extends StatelessWidget {
     ];
   }
 
-  Widget _sessionState(HiveColors c, SessionTab tab) {
+  Widget _sessionState(PosseColors c, SessionTab tab) {
     // 断线时手上的状态已经过时，不显示
     final state = model.rpc == null ? AgentState.none : agentStateOf(tab.state);
     return Row(
@@ -797,7 +797,7 @@ class _ProjectHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return InkWell(
       onTap: expandable ? onToggle : onOpen,
       highlightColor: c.wash,
@@ -915,7 +915,7 @@ class _WaitingBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -946,11 +946,11 @@ class _WaitingBanner extends StatelessWidget {
 class _FloatingError extends StatelessWidget {
   const _FloatingError({required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final error = model.rpc == null || model.connecting ? null : model.error;
     return IgnorePointer(
       child: Center(
@@ -1024,11 +1024,11 @@ class _FloatingError extends StatelessWidget {
 class _ConnectionLine extends StatelessWidget {
   const _ConnectionLine({required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     // 主动断开的不算掉线：灰点加「已断开」，不转圈
     final off = model.disconnected && !model.connecting;
     final offline = !off && (model.rpc == null || model.connecting);
@@ -1093,7 +1093,7 @@ class _ComputerSheet extends StatelessWidget {
     required this.onDesk,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final VoidCallback onAdd;
   final VoidCallback onDesk;
 
@@ -1103,7 +1103,7 @@ class _ComputerSheet extends StatelessWidget {
       context: context,
       showDragHandle: true,
       builder: (sheet) {
-        final c = HiveColors.of(sheet);
+        final c = PosseColors.of(sheet);
         return SafeArea(
           top: false,
           child: Section(
@@ -1141,7 +1141,7 @@ class _ComputerSheet extends StatelessWidget {
   }
 
   Future<void> _rename(BuildContext context, SavedComputer computer) async {
-    final name = await showHiveDialog<String>(
+    final name = await showPosseDialog<String>(
       context: context,
       builder: (_) => _RenameDialog(computer: computer),
     );
@@ -1149,7 +1149,7 @@ class _ComputerSheet extends StatelessWidget {
   }
 
   Future<void> _remove(BuildContext context, SavedComputer computer) async {
-    final ok = await showHiveDialog<bool>(
+    final ok = await showPosseDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('忘掉 ${model.labelOf(computer)}'),
@@ -1171,7 +1171,7 @@ class _ComputerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) {
@@ -1290,12 +1290,12 @@ String computerEndpoint(SavedComputer computer) {
 class _DisconnectedList extends StatelessWidget {
   const _DisconnectedList({required this.model, required this.onAdd});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final computers = model.computers;
     return ListView(
       padding: EdgeInsets.only(
@@ -1344,7 +1344,7 @@ class TabScreen extends StatefulWidget {
     this.page = 0,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final WorktreeRow worktree;
 
   /// 打开时停在哪一页：0 改动，1 文件。
@@ -1376,7 +1376,7 @@ class _TabScreenState extends State<TabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final row = _row;
     return Scaffold(
       appBar: AppBar(

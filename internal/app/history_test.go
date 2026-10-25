@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
+	"posse/internal/client"
 )
 
 // 历史列表里上下键换选中：只走看得见的会话，折起来的分组跳过，到头不动。

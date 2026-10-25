@@ -30,7 +30,7 @@ typedef ContextSender = Future<SendOutcome> Function(
 );
 
 /// 标题下面状态行末尾的上下文用量：小圆环加「42%」，圆环已经说明是用量，不再写字。手机终端太窄，Claude 自己状态栏里的百分比常被截掉。
-/// 只有 Claude、Codex 记了用量；每 15 秒和每次状态变化时重读，电脑上的 hive 太旧（没有这个接口）就不再问。
+/// 只有 Claude、Codex 记了用量；每 15 秒和每次状态变化时重读，电脑上的 posse 太旧（没有这个接口）就不再问。
 /// 点它问要不要压缩，确认后清空输入框、发 /compact（两家都认）。
 class ContextMeter extends StatefulWidget {
   const ContextMeter({
@@ -42,7 +42,7 @@ class ContextMeter extends StatefulWidget {
   });
 
   final SessionTab tab;
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   /// 测试里替换读数的来源。
   final ContextReader? read;
@@ -109,7 +109,7 @@ class _ContextMeterState extends State<ContextMeter> {
     final percent = _percent;
     if (percent == null) return;
     final who = chatWho('assistant', widget.tab.agent);
-    final ok = await showHiveDialog<bool>(
+    final ok = await showPosseDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
         title: const Text('压缩上下文？'),
@@ -151,7 +151,7 @@ class _ContextMeterState extends State<ContextMeter> {
   Widget build(BuildContext context) {
     final percent = _percent;
     if (percent == null || !_applies) return const SizedBox.shrink();
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     // 快满时提醒：Claude 到 80% 左右会自动压缩
     final color = percent >= 90
         ? c.danger

@@ -20,7 +20,7 @@ import 'models.dart';
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.model});
 
-  final HiveAppModel model;
+  final PosseAppModel model;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -82,7 +82,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       setState(() {
         _loading = false;
         _error = e is Exception && '$e'.contains('method_not_found')
-            ? '电脑上的 Hive 太旧，更新后才能看历史'
+            ? '电脑上的 Posse 太旧，更新后才能看历史'
             : friendlyError(e);
       });
     }
@@ -95,7 +95,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final now = DateTime.now();
     final searching = _query.text.trim().isNotEmpty;
     final groups = groupHistory(_sessions, now);
@@ -134,7 +134,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
           Expanded(
             child: _loading && _sessions.isEmpty
-                ? const Center(child: HiveLoader())
+                ? const Center(child: PosseLoader())
                 : _sessions.isEmpty && _error == null
                 ? EmptyState(
                     icon: Icons.history_rounded,
@@ -173,7 +173,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _row(BuildContext context, HistorySession s, DateTime now) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final where = [
       if (s.folder.isNotEmpty) s.folder,
       if (s.branch.isNotEmpty) s.branch,
@@ -232,7 +232,7 @@ class HistorySessionScreen extends StatefulWidget {
     required this.session,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final HistorySession session;
 
   @override
@@ -354,7 +354,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final s = widget.session;
     final settings = widget.model.settings;
     final entries = foldTranscript(_window.messages)
@@ -408,7 +408,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
           if (_error != null) NoticeBar(_error!),
           Expanded(
             child: _loading && entries.isEmpty
-                ? const Center(child: HiveLoader())
+                ? const Center(child: PosseLoader())
                 : SelectionArea(
                     child: Scrollbar(
                       controller: _scroll,

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 
 /// 看源码和看 diff 共用的排版：等宽 12.5、行高 1.6，左边淡色行号，两页对得上。
-TextStyle codeStyle(HiveColors c) => mono(12.5, height: 1.6, color: c.text);
+TextStyle codeStyle(PosseColors c) => mono(12.5, height: 1.6, color: c.text);
 
 /// 代码块的边距：左边留给行号的空少一些。
 const codePadding = EdgeInsets.fromLTRB(8, 8, 16, 0);
@@ -56,7 +56,7 @@ class CodeLines extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cell = _cellWidth(
-      codeStyle(HiveColors.of(context)),
+      codeStyle(PosseColors.of(context)),
       MediaQuery.textScalerOf(context),
     );
     return Column(
@@ -107,7 +107,7 @@ class CodeNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Text(text, style: TextStyle(fontSize: 12, color: c.honey)),
@@ -123,7 +123,7 @@ class FilePathTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final slash = path.lastIndexOf('/');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

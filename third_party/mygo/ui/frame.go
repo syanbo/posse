@@ -34,7 +34,7 @@ func (c *Context) build() *context {
 	return &rt.c
 }
 
-// ModalOpen reports whether a dialog was on top in the last frame. Hive: work
+// ModalOpen reports whether a dialog was on top in the last frame. Posse: work
 // started outside the view (a menu item) checks it the way Shortcut does.
 func (c *Context) ModalOpen() bool {
 	rt := c.runtime()

@@ -6,18 +6,18 @@ import 'e2ee.dart';
 import 'race.dart';
 import 'socket.dart';
 
-const hiveClientName = 'hive-flutter';
-const hiveClientVersion = 1;
-const hiveCapabilities = [
-  'hive.permission.v1',
-  'hive.git.v1',
-  'hive.history.v1',
-  'hive.status.v1',
-  'hive.usage.v1',
-  'hive.context.v1',
-  'hive.media.v1',
-  'hive.desk.v1',
-  'hive.bulk.v1',
+const posseClientName = 'posse-flutter';
+const posseClientVersion = 1;
+const posseCapabilities = [
+  'posse.permission.v1',
+  'posse.git.v1',
+  'posse.history.v1',
+  'posse.status.v1',
+  'posse.usage.v1',
+  'posse.context.v1',
+  'posse.media.v1',
+  'posse.desk.v1',
+  'posse.bulk.v1',
 ];
 
 /// 大块数据的二进制帧（电脑的 internal/mobile/bulk.go）：u8 0x62、u8 版本 1、u8 操作、u8 0、
@@ -39,7 +39,7 @@ Uint8List bulkFrame(int op, int id, List<int> payload) {
   return out;
 }
 
-/// 回复里的二进制字段：声明了 hive.bulk.v1 的连接上是 [Uint8List]，旧电脑上是 base64 字符串。
+/// 回复里的二进制字段：声明了 posse.bulk.v1 的连接上是 [Uint8List]，旧电脑上是 base64 字符串。
 Uint8List rpcBytes(Object? value) {
   if (value is Uint8List) return value;
   if (value is String && value.isNotEmpty) return base64Decode(value);
@@ -115,14 +115,14 @@ class PhoneRpc {
     unawaited(_read());
   }
 
-  /// [phone] 是 Hive 扩展：这台手机的安装 ID、型号和存着的这台电脑的全部 token，
+  /// [phone] 是 Posse 扩展：这台手机的安装 ID、型号和存着的这台电脑的全部 token，
   /// 电脑按它把同一台手机的配对合成一项、作废换掉的 token。
   Future<void> declareCapabilities({Map<String, Object?>? phone}) async {
     try {
       await call('runtime.clientCapabilities.update', {
-        'client': hiveClientName,
-        'version': hiveClientVersion,
-        'capabilities': hiveCapabilities,
+        'client': posseClientName,
+        'version': posseClientVersion,
+        'capabilities': posseCapabilities,
         'phone': ?phone,
       });
     } on RpcException catch (error) {

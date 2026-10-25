@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/terminal/keyboard_lift.dart';
+import 'package:posse_mobile/terminal/keyboard_lift.dart';
 
 void main() {
   test('键盘收着时不挪', () {

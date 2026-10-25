@@ -44,7 +44,7 @@ func View(c *ui.Context, t *Terminal) ui.Element {
 	e.HandleInput(v.input)
 	e.TextCaret(v.caret())
 	e.Draw(v.paint)
-	// Hive: the app draws its own menu.
+	// Posse: the app draws its own menu.
 	if fn := v.t.opts.ContextMenu; fn != nil {
 		if x, y, ok := e.ContextMenuAsked(); ok {
 			fn(x, y)
@@ -202,9 +202,9 @@ type view struct {
 	hoverLink string
 	hoverPath bool
 	linkPress bool
-	// Hive: linkDown is the link a plain press went down on, opened at the
+	// Posse: linkDown is the link a plain press went down on, opened at the
 	// release unless the pointer dragged (a selection), and pressAt where.
-	linkDown *hiveLink
+	linkDown *posseLink
 	pressAt  [2]float32
 	// pointerAt is the pointer over the grid (pointerShape); tracking whether
 	// the program took the mouse as of the last frame, and modeShape the
@@ -284,7 +284,7 @@ func (v *view) build(c *ui.Context, e ui.Element) {
 		if focused != v.focused && t.term.Mode(vt.ModeFocusEvent) {
 			t.in.push(vt.EncodeFocus(focused))
 		}
-		// Hive: the hand and the underline show over a link whether or not
+		// Posse: the hand and the underline show over a link whether or not
 		// Command is held, and go with the pointer.
 		if e.Hovered() {
 			v.setHover(v.hoverUnder(v.pointer[0], v.pointer[1]))
@@ -1003,7 +1003,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		v.linkPress = ev.Kind != ui.InputPointerUp
 		return true
 	}
-	// Hive: over a link, Command held or not, a hand and an underline.
+	// Posse: over a link, Command held or not, a hand and an underline.
 	if link, path, hover := v.hoverUnder(ev.X, ev.Y); hover != v.hover {
 		v.setHover(link, path, hover)
 		v.services.Invalidate()
@@ -1016,7 +1016,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		return true
 	}
 	tracking := t.term.MouseTracking() && ev.Mods&ui.Shift == 0
-	// Hive: a plain click on a link opens it too, at the release; a press
+	// Posse: a plain click on a link opens it too, at the release; a press
 	// that drags further than a few DIPs selects as ever.
 	if p := v.linkDown; p != nil {
 		switch ev.Kind {
@@ -1037,7 +1037,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		}
 	}
 	if v.hoverLink != "" && ev.Kind == ui.InputPointerDown && ev.Button == 0 && ev.Mods&(ui.Shift|ui.Alt|ui.Ctrl) == 0 {
-		v.linkDown, v.pressAt = &hiveLink{v.hoverLink, v.hoverPath}, [2]float32{ev.X, ev.Y}
+		v.linkDown, v.pressAt = &posseLink{v.hoverLink, v.hoverPath}, [2]float32{ev.X, ev.Y}
 		// The program that takes the mouse does not get a press on a link:
 		// it starts a selection here, so a drag selects even then; its
 		// moves and release follow the selection, not the program.
@@ -1149,8 +1149,8 @@ func (v *view) linkUnder(mods ui.Modifiers, x, y float32) (link string, path boo
 	return v.hoverUnder(x, y)
 }
 
-// hiveLink is a link and whether it is a file path. (Hive)
-type hiveLink struct {
+// posseLink is a link and whether it is a file path. (Posse)
+type posseLink struct {
 	link string
 	path bool
 }
@@ -1158,7 +1158,7 @@ type hiveLink struct {
 // hoverUnder is the link under (x, y), Command held or not, as linkUnder
 // gives it: none while the primary button selects or the program has a
 // press, or when Options.LinkUsable says it cannot open; t.mu is held.
-// (Hive)
+// (Posse)
 func (v *view) hoverUnder(x, y float32) (link string, path bool, at linkSpan) {
 	if v.selecting || v.reporting || v.cellW == 0 || v.t.term == nil {
 		return "", false, linkSpan{}
@@ -1171,7 +1171,7 @@ func (v *view) hoverUnder(x, y float32) (link string, path bool, at linkSpan) {
 }
 
 // setHover sets the link under the pointer, and tells Options.OnHoverLink
-// when it changes. (Hive)
+// when it changes. (Posse)
 func (v *view) setHover(link string, path bool, at linkSpan) {
 	changed := link != v.hoverLink
 	v.hover, v.hoverLink, v.hoverPath = at, link, path
@@ -1278,7 +1278,7 @@ func (v *view) scroll(ev ui.InputEvent) bool {
 	if v.cellH == 0 {
 		return false
 	}
-	if ev.Mods&ui.Cmd != 0 && !t.opts.NoWheelZoom { // Hive: NoWheelZoom
+	if ev.Mods&ui.Cmd != 0 && !t.opts.NoWheelZoom { // Posse: NoWheelZoom
 		// Rolling up is a step up. DY is the scroll offset's change, so up
 		// comes negative; a wheel's event is a notch, a trackpad's many
 		// small moves, which add up to a step by 40.

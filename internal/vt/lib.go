@@ -32,7 +32,7 @@ var (
 
 	fnGridRefHyperlinkURI, fnGridRefGraphemes, fnGridRefCell, fnTypeJSON, fnFormatterFormatAlloc, fnFormatterFree uintptr
 
-	// hive 的快照序列化另外用到的（snapshot.go）
+	// posse 的快照序列化另外用到的（snapshot.go）
 	fnGridRefStyle, fnGridRefRow, fnRowDataGet uintptr
 
 	// Bound with registerFunc below: they take structs or floats.

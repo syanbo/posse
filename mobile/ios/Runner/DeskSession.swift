@@ -34,12 +34,12 @@ struct DeskKeys {
   let toMobile: SymmetricKey
   let toMac: SymmetricKey
 
-  /// 和 tools/deskrecv、internal/desk 的 HKDF 一致：info 是 hive-desk/v1，前 32 字节给手机收，后 32 字节给手机发。
+  /// 和 tools/deskrecv、internal/desk 的 HKDF 一致：info 是 posse-desk/v1，前 32 字节给手机收，后 32 字节给手机发。
   static func derive(secret: Data, nonce: Data) -> DeskKeys {
     let out = HKDF<SHA256>.deriveKey(
       inputKeyMaterial: SymmetricKey(data: secret),
       salt: nonce,
-      info: Data("hive-desk/v1".utf8),
+      info: Data("posse-desk/v1".utf8),
       outputByteCount: 64
     )
     let raw = out.withUnsafeBytes { Data($0) }
@@ -609,7 +609,7 @@ final class DeskSession {
 
   func start() {
     let thread = Thread { [weak self] in self?.loop() }
-    thread.name = "hive.desk"
+    thread.name = "posse.desk"
     self.thread = thread
     thread.start()
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/desk/key_bar.dart';
-import 'package:hive_mobile/desk/mods.dart';
-import 'package:hive_mobile/ui/theme.dart';
+import 'package:posse_mobile/desk/key_bar.dart';
+import 'package:posse_mobile/desk/mods.dart';
+import 'package:posse_mobile/ui/theme.dart';
 
 void main() {
   testWidgets('a narrow key bar fades the cut-off end until it is scrolled', (
@@ -28,7 +28,7 @@ void main() {
 Future<void> _pump(WidgetTester tester, double width) {
   return tester.pumpWidget(
     MaterialApp(
-      theme: hiveTheme(Brightness.dark),
+      theme: posseTheme(Brightness.dark),
       home: Scaffold(
         body: Align(
           alignment: Alignment.bottomCenter,

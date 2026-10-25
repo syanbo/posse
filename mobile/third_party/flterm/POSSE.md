@@ -1,10 +1,10 @@
-# Hive 带的 flterm
+# Posse 带的 flterm
 
 pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_overrides` 指向这里。只留了 lib、LICENSE、README、CHANGELOG 和 pubspec.yaml（去掉 `resolution: workspace`，它只在上游的 workspace 里成立）。
 
 ## 改动
 
-改动处的注释都带 `Hive`。
+改动处的注释都带 `Posse`。
 
 - `lib/src/widgets/terminal_input_client.dart`：键盘右下角从"换行"改成"发送"（`inputAction: .send`），`performAction` 收到 send 也当回车。终端里回车就是把这一行交给程序，用户要求写"发送"。
 - `lib/src/widgets/terminal_gesture_detector.dart`、`terminal_raw_gesture_detector.dart`、`terminal_view.dart`：不是鼠标的指针按下不选字、不聚焦，也不按鼠标拖选发给程序。移动用屏幕坐标量，超过 10px 取消还没成立的长按。停满 500ms 先选中一个词，同一指继续移动是在扩大选区，这段按住滚动位置（拖到边缘的自动滚动照常）。松手后选区留着，交给外层的「复制」。抬手时移动不超过 24px、按下不超过 700ms 才算点击：这时才聚焦，并给正在跟踪鼠标的程序发一次点击。鼠标拖选不动。外层不再用 `onTap` 抢先聚焦。

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/term"
+	"posse/internal/term"
 )
 
 func TestDeskSubscribe(t *testing.T) {
@@ -42,7 +42,7 @@ func TestDeskSubscribe(t *testing.T) {
 				return nil
 			},
 			Windows: func(ctx context.Context) (json.RawMessage, error) {
-				return json.RawMessage(`{"windows":[{"id":77,"app":"Safari","title":"Hive"}]}`), nil
+				return json.RawMessage(`{"windows":[{"id":77,"app":"Safari","title":"Posse"}]}`), nil
 			}}, nil
 	}
 	srv, err := New(t.TempDir(), h, -1)
@@ -58,10 +58,10 @@ func TestDeskSubscribe(t *testing.T) {
 	p := dialPhone(t, srv, info)
 	sub := map[string]any{"width": 2556, "height": 1179, "codecs": []string{"hevc", "h264"}}
 	if m := p.next(p.call("desk.subscribe", sub)); m["ok"] != false {
-		t.Fatalf("subscribed without hive.desk.v1: %v", m)
+		t.Fatalf("subscribed without posse.desk.v1: %v", m)
 	}
 	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
-		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.desk.v1"},
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.desk.v1"},
 	})))
 
 	// 没在看桌面时不能打洞

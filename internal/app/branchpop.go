@@ -13,8 +13,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
-	"hive/internal/gitx"
+	"posse/internal/agent"
+	"posse/internal/gitx"
 )
 
 // 分支弹窗：点标签栏的分支名打开，结构照 WebStorm 的 Git 分支弹窗（见 docs/plans/git-ops.html）。
@@ -532,7 +532,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		case inOther && otherWs != nil:
 			ui.Text(c, "在 "+displayName(otherWs)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		case inOther:
-			// 不是 hive 建的 worktree（别的工具或命令行建的）：报目录名，悬停看完整路径
+			// 不是 posse 建的 worktree（别的工具或命令行建的）：报目录名，悬停看完整路径
 			ui.Text(c, "worktree · "+filepath.Base(other)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(other)
 		case b.Gone:
 			ui.Text(c, "远端已删除").FontSize(11).TextColor(t.TextMuted).Shrink(0)
@@ -579,7 +579,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 				a.selected, a.revealSel = otherWs.ID, true
 			}
 		case inOther:
-			if m.Item("在 Hive 中打开").Chosen() {
+			if m.Item("在 Posse 中打开").Chosen() {
 				done()
 				a.attachWorktree(w, other)
 			}
@@ -752,14 +752,14 @@ func (a *app) askNewBranch(w *workspace, v *filesView, from string) {
 	}})
 }
 
-// askWorktreeFrom 是 WebStorm 的 New Worktree：在 hive 里新建一个 worktree 工作区，分支从 base 分出去。
+// askWorktreeFrom 是 WebStorm 的 New Worktree：在 posse 里新建一个 worktree 工作区，分支从 base 分出去。
 func (a *app) askWorktreeFrom(w *workspace, base string) {
 	a.prompt(promptReq{title: "基于 " + base + " 新建工作区", placeholder: "工作区名，也是新分支名", verb: "新建", do: func(name string, _ bool) {
 		go a.createWorkspace(map[string]any{"project": w.Project, "name": name, "mode": "worktree", "base": base})
 	}})
 }
 
-// attachWorktree 把不是 hive 建的 worktree 加成项目的工作区并切过去，名字取目录名。
+// attachWorktree 把不是 posse 建的 worktree 加成项目的工作区并切过去，名字取目录名。
 // 常驻进程把它记成 folder：删工作区只删记录，不碰别人建的目录和分支。
 func (a *app) attachWorktree(w *workspace, dir string) {
 	name := strings.Map(func(r rune) rune {

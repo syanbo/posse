@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/settings/custom_keys.dart';
-import 'package:hive_mobile/terminal/frames.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/settings/custom_keys.dart';
+import 'package:posse_mobile/terminal/frames.dart';
 
 CustomKey _key(
   String kind,

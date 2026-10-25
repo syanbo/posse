@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/splash.dart';
+import 'package:posse_mobile/ui/splash.dart';
 
 // 原生闪屏的标志图和整屏预览，都由 lib/ui/splash.dart 画出来：
-//   HIVE_SPLASH_EXPORT=1 fvm flutter test test/splash_assets_test.dart   写原生闪屏的标志、slogan 和 Flutter 用的 slogan 图
-//   HIVE_SHOTS_DIR=/tmp/shots fvm flutter test test/splash_assets_test.dart   出整屏预览
+//   POSSE_SPLASH_EXPORT=1 fvm flutter test test/splash_assets_test.dart   写原生闪屏的标志、slogan 和 Flutter 用的 slogan 图
+//   POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/splash_assets_test.dart   出整屏预览
 // 不设环境变量时只检查闪屏能建出来、按时退场。
 
 Future<void> _save(
@@ -28,8 +28,8 @@ Future<void> _save(
 });
 
 void main() {
-  final export = Platform.environment['HIVE_SPLASH_EXPORT'] == '1';
-  final shots = Platform.environment['HIVE_SHOTS_DIR'] ?? '';
+  final export = Platform.environment['POSSE_SPLASH_EXPORT'] == '1';
+  final shots = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
   const androidDensities = [
     ('mdpi', 1.0),
@@ -48,7 +48,7 @@ void main() {
           key: key,
           child: const CustomPaint(
             size: Size.square(splashCanvas),
-            painter: HiveMarkPainter(),
+            painter: PosseMarkPainter(),
           ),
         ),
       ),
@@ -105,7 +105,7 @@ void main() {
       MaterialApp(
         home: RepaintBoundary(
           key: key,
-          child: HiveSplash(ready: true, onDone: () => done = true),
+          child: PosseSplash(ready: true, onDone: () => done = true),
         ),
       ),
     );

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/app_state.dart';
-import 'package:hive_mobile/chat/session_bar.dart';
-import 'package:hive_mobile/ui/loading.dart';
-import 'package:hive_mobile/ui/theme.dart';
-import 'package:hive_mobile/workspace/models.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/chat/session_bar.dart';
+import 'package:posse_mobile/ui/loading.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/workspace/models.dart';
 
 const tab = SessionTab(
   worktreeId: 'r::w',
@@ -15,7 +15,7 @@ const tab = SessionTab(
 );
 
 Widget host(Widget title) => MaterialApp(
-  theme: hiveTheme(Brightness.dark),
+  theme: posseTheme(Brightness.dark),
   home: Scaffold(appBar: AppBar(title: title)),
 );
 
@@ -31,7 +31,7 @@ void main() {
   testWidgets('disconnected: reconnect progress takes the state line', (
     tester,
   ) async {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     await tester.pumpWidget(host(SessionTitle(tab: tab, model: model)));
     // 转圈一直在动，pumpAndSettle 等不到头
     await tester.pump(const Duration(milliseconds: 300));
@@ -48,7 +48,7 @@ void main() {
   testWidgets('an ended session says so even while reconnecting', (
     tester,
   ) async {
-    final model = HiveAppModel(store: MemoryPairingStore());
+    final model = PosseAppModel(store: MemoryPairingStore());
     await tester.pumpWidget(
       host(SessionTitle(tab: tab, model: model, ended: true)),
     );

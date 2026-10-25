@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/terminal"
 
-	"hive/internal/daemon"
+	"posse/internal/daemon"
 )
 
 // startDaemon 在进程内运行常驻进程。socket 路径有长度上限，所以不用 t.TempDir()。

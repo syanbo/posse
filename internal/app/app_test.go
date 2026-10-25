@@ -9,8 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/client"
-	"hive/internal/rpc"
+	"posse/internal/client"
+	"posse/internal/rpc"
 )
 
 func TestApplyKeepsSelection(t *testing.T) {
@@ -161,7 +161,7 @@ func setHome(t *testing.T, home string) {
 func TestIsDialError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	err := rpc.Call(ctx, filepath.Join(t.TempDir(), "hived.sock"), "project.list", nil, nil)
+	err := rpc.Call(ctx, filepath.Join(t.TempDir(), "possed.sock"), "project.list", nil, nil)
 	if !isDialError(err) {
 		t.Fatalf("missing socket: %v is not a dial error", err)
 	}
@@ -248,7 +248,7 @@ func TestSidebarTaskTree(t *testing.T) {
 	// 正在看 t1 时再单击它的行，收起它的 worker：t6 不再列出，行尾写 +1；t6 等你处理时 t1 这一行显示待处理
 	clickT1 := func() {
 		t.Helper()
-		r, ok := tt.Find("重写 hive 界面")
+		r, ok := tt.Find("重写 posse 界面")
 		if !ok || r.X > 300 {
 			t.Fatalf("t1 row not found in the sidebar: %v %v", r, ok)
 		}

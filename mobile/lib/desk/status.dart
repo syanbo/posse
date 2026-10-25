@@ -1,6 +1,6 @@
 /// 订阅失败的错误码，一句中文。旧常驻进程不认这个方法时也提示更新。
 String deskFailText(String code) => switch (code) {
-  'unsupported' || 'method_not_found' || 'unknown_method' => '这台电脑的 Hive 需要更新',
+  'unsupported' || 'method_not_found' || 'unknown_method' => '这台电脑的 Posse 需要更新',
   'busy' => '另一台手机正在看',
   'locked' => 'Mac 已锁屏',
   'permission_screen' => '请到 Mac 上允许屏幕录制',

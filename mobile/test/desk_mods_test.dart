@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/desk/mods.dart';
+import 'package:posse_mobile/desk/mods.dart';
 
 void main() {
   test('a tap arms the next key, another tap lets go', () {

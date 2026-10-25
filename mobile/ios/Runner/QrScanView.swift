@@ -40,7 +40,7 @@ final class QrScanPlatformView: NSObject, FlutterPlatformView,
   private let preview: PreviewView
   private let channel: FlutterMethodChannel
   private let session = AVCaptureSession()
-  private let queue = DispatchQueue(label: "hive.qr")
+  private let queue = DispatchQueue(label: "posse.qr")
   private var output: AVCaptureMetadataOutput?
   private var last: String?
   private var stopped = false
@@ -48,7 +48,7 @@ final class QrScanPlatformView: NSObject, FlutterPlatformView,
   init(frame: CGRect, viewId: Int64, messenger: FlutterBinaryMessenger) {
     preview = PreviewView(frame: frame)
     channel = FlutterMethodChannel(
-      name: "hive/qr/\(viewId)",
+      name: "posse/qr/\(viewId)",
       binaryMessenger: messenger
     )
     super.init()

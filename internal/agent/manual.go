@@ -8,41 +8,41 @@ import (
 	"strings"
 )
 
-// 用户在 hive 终端的 shell 里自己敲 claude、codex、cursor-agent 时，也带上和界面启动一样的 hooks：
-// $HIVE_HOME/bin 里放同名脚本，转给 `hive agent exec`，由它补上参数再换成真正的程序。
+// 用户在 posse 终端的 shell 里自己敲 claude、codex、cursor-agent 时，也带上和界面启动一样的 hooks：
+// $POSSE_HOME/bin 里放同名脚本，转给 `posse agent exec`，由它补上参数再换成真正的程序。
 // 用户的 .zshrc 常把 ~/.local/bin 等目录插到 PATH 最前面，所以照 Ghostty 的 shell 集成，
-// 用 ZDOTDIR 让 zsh 先读 hive 的 .zshenv，在每次出提示符前把 $HIVE_HOME/bin 挪回最前。
+// 用 ZDOTDIR 让 zsh 先读 posse 的 .zshenv，在每次出提示符前把 $POSSE_HOME/bin 挪回最前。
 // agent 自己跑工具时再调这些命令，环境里有 ShimEnv，原样放过。
 
-// ShimEnv 标记已经过 hive 的同名脚本启动：agent 的子进程再调同名命令时不再补 hooks，
+// ShimEnv 标记已经过 posse 的同名脚本启动：agent 的子进程再调同名命令时不再补 hooks，
 // 免得子进程的状态记到这个终端上。
-const ShimEnv = "HIVE_AGENT_SHIM"
+const ShimEnv = "POSSE_AGENT_SHIM"
 
 // Shimmed 是会放同名脚本的命令和它对应的 agent。grok 的 hooks 只能写进 ~/.grok，不放。
 var Shimmed = map[string]string{"claude": "claude", "codex": "codex", "cursor-agent": "cursor"}
 
-const zshenv = `# Hive 的 zsh 集成，由常驻进程生成，改了会被覆盖。
-# 先还原用户的 ZDOTDIR，照常读用户的启动文件；再在每次出提示符前把 $HIVE_HOME/bin 放回 PATH 最前，
-# 手动敲的 claude、codex、cursor-agent 也带上 Hive 的 hooks。
-if [[ -n "${HIVE_USER_ZDOTDIR-}" && "$HIVE_USER_ZDOTDIR" != "${HIVE_ZDOTDIR-}" ]]; then
-  ZDOTDIR=$HIVE_USER_ZDOTDIR
+const zshenv = `# Posse 的 zsh 集成，由常驻进程生成，改了会被覆盖。
+# 先还原用户的 ZDOTDIR，照常读用户的启动文件；再在每次出提示符前把 $POSSE_HOME/bin 放回 PATH 最前，
+# 手动敲的 claude、codex、cursor-agent 也带上 Posse 的 hooks。
+if [[ -n "${POSSE_USER_ZDOTDIR-}" && "$POSSE_USER_ZDOTDIR" != "${POSSE_ZDOTDIR-}" ]]; then
+  ZDOTDIR=$POSSE_USER_ZDOTDIR
 else
   unset ZDOTDIR
 fi
 [[ -f "${ZDOTDIR:-$HOME}/.zshenv" ]] && source "${ZDOTDIR:-$HOME}/.zshenv"
-if [[ -o interactive && -n "${HIVE_HOME-}" ]]; then
-  _hive_path() { path=("$HIVE_HOME/bin" ${path:#$HIVE_HOME/bin}) }
-  autoload -Uz add-zsh-hook && add-zsh-hook precmd _hive_path
+if [[ -o interactive && -n "${POSSE_HOME-}" ]]; then
+  _posse_path() { path=("$POSSE_HOME/bin" ${path:#$POSSE_HOME/bin}) }
+  autoload -Uz add-zsh-hook && add-zsh-hook precmd _posse_path
 fi
 `
 
-// ZshDir 是 hive 的 zsh 集成目录，终端的 ZDOTDIR 指向它。
+// ZshDir 是 posse 的 zsh 集成目录，终端的 ZDOTDIR 指向它。
 func ZshDir(home string) string { return filepath.Join(home, "shell", "zsh") }
 
 // ShimDir 是同名脚本所在的目录。
 func ShimDir(home string) string { return filepath.Join(home, "bin") }
 
-// WriteShellFiles 写出 zsh 集成和同名脚本，内容没变不重写。exe 是脚本要调用的 hive。
+// WriteShellFiles 写出 zsh 集成和同名脚本，内容没变不重写。exe 是脚本要调用的 posse。
 func WriteShellFiles(home, exe string) error {
 	files := map[string]string{filepath.Join(ZshDir(home), ".zshenv"): zshenv}
 	for cmd := range Shimmed {
@@ -68,7 +68,7 @@ func ShellEnv(home, shell, userZdotdir string) []string {
 		return nil
 	}
 	dir := ZshDir(home)
-	return []string{"ZDOTDIR=" + dir, "HIVE_ZDOTDIR=" + dir, "HIVE_USER_ZDOTDIR=" + userZdotdir}
+	return []string{"ZDOTDIR=" + dir, "POSSE_ZDOTDIR=" + dir, "POSSE_USER_ZDOTDIR=" + userZdotdir}
 }
 
 // passthrough 是不补 hooks、原样运行的子命令和选项：非交互、管理类的用法。

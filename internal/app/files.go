@@ -15,8 +15,8 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/files"
-	"hive/internal/media"
+	"posse/internal/files"
+	"posse/internal/media"
 )
 
 // 文件标签：每个工作区一个，和终端标签并列，浏览、查看、轻量编辑和检索工作区目录里的文件。

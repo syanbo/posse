@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/rpc"
-	plan "hive/internal/usage"
+	"posse/internal/agent"
+	"posse/internal/rpc"
+	plan "posse/internal/usage"
 )
 
 func cmdUsage(e *env, args []string) error {
@@ -23,7 +23,7 @@ func cmdUsage(e *env, args []string) error {
 	}
 	return e.do("usage.get", nil, &st, func() {
 		if len(st.Usages) == 0 {
-			fmt.Fprintln(e.out, "no usage yet: it updates as Claude, Codex, Grok or Cursor run in Hive")
+			fmt.Fprintln(e.out, "no usage yet: it updates as Claude, Codex, Grok or Cursor run in Posse")
 			return
 		}
 		now := time.Now()
@@ -77,7 +77,7 @@ func cmdUsageReport(e *env, args []string) error {
 	return nil
 }
 
-// cmdStatusline 是 hive 注入给 Claude 的 statusLine：把用量转给常驻进程，自己不输出。
+// cmdStatusline 是 posse 注入给 Claude 的 statusLine：把用量转给常驻进程，自己不输出。
 // --settings 会盖掉项目和用户配的 statusLine，这里按 Claude 的顺序（项目优先）替它跑一遍，输出原样交回。
 func cmdStatusline(e *env, args []string) error {
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
@@ -101,7 +101,7 @@ func reportUsage(e *env, payload []byte) {
 	if !bytes.Contains(payload, []byte(`"rate_limits"`)) || !json.Valid(payload) {
 		return
 	}
-	socket := os.Getenv("HIVE_SOCKET")
+	socket := os.Getenv("POSSE_SOCKET")
 	if socket == "" {
 		socket = e.socket
 	}
@@ -114,14 +114,14 @@ func reportUsage(e *env, payload []byte) {
 func userStatusLine() string {
 	sl, _ := agent.UserStatusLine()
 	cmd, _ := sl["command"].(string)
-	if isHiveStatusLine(cmd) {
+	if isPosseStatusLine(cmd) {
 		return ""
 	}
 	return cmd
 }
 
-// isHiveStatusLine 认出 hive 自己的 statusline，替用户跑命令时不再调回来。
-func isHiveStatusLine(cmd string) bool {
+// isPosseStatusLine 认出 posse 自己的 statusline，替用户跑命令时不再调回来。
+func isPosseStatusLine(cmd string) bool {
 	return strings.HasSuffix(strings.TrimSpace(cmd), " statusline")
 }
 
@@ -153,7 +153,7 @@ func projectStatusLine(payload []byte) (cmd, dir string) {
 			} `json:"statusLine"`
 		}
 		if json.Unmarshal(b, &s) == nil && s.StatusLine != nil && s.StatusLine.Command != "" &&
-			!isHiveStatusLine(s.StatusLine.Command) {
+			!isPosseStatusLine(s.StatusLine.Command) {
 			return s.StatusLine.Command, dir
 		}
 	}

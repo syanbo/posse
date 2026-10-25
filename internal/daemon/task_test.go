@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/agent"
-	"hive/internal/store"
-	"hive/internal/term"
+	"posse/internal/agent"
+	"posse/internal/store"
+	"posse/internal/term"
 )
 
 func newTestDaemon(t *testing.T) (*Daemon, store.Workspace) {
@@ -20,7 +20,7 @@ func newTestDaemon(t *testing.T) (*Daemon, store.Workspace) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(home, "hive.db"))
+	st, err := store.Open(filepath.Join(home, "posse.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,20 +75,20 @@ func TestDeliverNudgesIdleCoordinator(t *testing.T) {
 	info := call(t, d.taskStart, map[string]any{"caller": coord.ID, "command": []string{"/bin/sh", "-c", "sleep 30"}, "spec": "x"}).(taskInfo)
 	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "all good"})
 	time.Sleep(300 * time.Millisecond)
-	if strings.Contains(strings.Join(coord.Lines(), "\n"), "Hive:") {
+	if strings.Contains(strings.Join(coord.Lines(), "\n"), "Posse:") {
 		t.Fatal("nudged a working agent")
 	}
 	d.setAgent(coord, term.AgentState{Status: agent.StatusIdle})
-	waitScreen(t, coord, "Hive: "+info.ID+" finished. Run `hive task inbox` to read.")
+	waitScreen(t, coord, "Posse: "+info.ID+" finished. Run `posse task inbox` to read.")
 	time.Sleep(300 * time.Millisecond)
 	// PTY 回显一次、cat 再输出一次，所以一次提醒在屏幕上出现两遍
-	once := strings.Count(strings.Join(coord.Lines(), "\n"), "Hive:")
+	once := strings.Count(strings.Join(coord.Lines(), "\n"), "Posse:")
 
 	// 已提醒过的消息不再重复提醒
 	d.setAgent(coord, term.AgentState{Status: agent.StatusWorking})
 	d.setAgent(coord, term.AgentState{Status: agent.StatusIdle})
 	time.Sleep(300 * time.Millisecond)
-	if n := strings.Count(strings.Join(coord.Lines(), "\n"), "Hive:"); n != once {
+	if n := strings.Count(strings.Join(coord.Lines(), "\n"), "Posse:"); n != once {
 		t.Fatalf("nudged again: %d occurrences, %d after the first nudge", n, once)
 	}
 }
@@ -107,13 +107,13 @@ func TestDeliverNudgesParkedCoordinator(t *testing.T) {
 	if st := coord.Agent(); st.Status != agent.StatusWorking {
 		t.Fatalf("state %+v", st)
 	}
-	waitScreen(t, coord, "Hive: "+info.ID+" finished.")
+	waitScreen(t, coord, "Posse: "+info.ID+" finished.")
 }
 
 func TestWorkerPrompt(t *testing.T) {
 	task := store.Task{ID: "k_1", Spec: "do it"}
 	p := workerPrompt(task, store.Workspace{Kind: "worktree", Branch: "feat", BaseRef: "main"})
-	for _, want := range []string{"hive task ask k_1", "hive task done k_1 --summary", "the user", "branch feat, created from main", "edit only what it lets you change", "=== TASK ===\ndo it"} {
+	for _, want := range []string{"posse task ask k_1", "posse task done k_1 --summary", "the user", "branch feat, created from main", "edit only what it lets you change", "=== TASK ===\ndo it"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}

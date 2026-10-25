@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"hive/internal/agent"
+	"posse/internal/agent"
 )
 
 func TestUnreadStatus(t *testing.T) {

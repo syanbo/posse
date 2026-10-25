@@ -12,14 +12,14 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
-	"hive/internal/media"
+	"posse/internal/agent"
+	"posse/internal/media"
 )
 
 func (a *app) build(c *ui.Context) {
 	a.runPending()
-	c.SetTheme(hiveTheme(c.Theme().Dark))
-	// 文字输入框、编辑器这些 mygo 自己的菜单也由 Hive 自绘（sysMenuView）
+	c.SetTheme(posseTheme(c.Theme().Dark))
+	// 文字输入框、编辑器这些 mygo 自己的菜单也由 Posse 自绘（sysMenuView）
 	c.PresentMenus(a.presentMenu)
 	for _, t := range a.toasts {
 		c.AddToast(t)
@@ -102,7 +102,7 @@ func (a *app) build(c *ui.Context) {
 	// 应用名固定在红绿灯右边，不跟着侧栏滑动。侧栏开关展开时在侧栏顶栏最右边，
 	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
-		titleText(c, "Hive", 14).Width(appNameWidth).Shrink(0)
+		titleText(c, "Posse", 14).Width(appNameWidth).Shrink(0)
 		if !a.sidebarSlot() {
 			a.sidebarButton(c)
 		}
@@ -308,7 +308,7 @@ func (a *app) sidebarSlot() bool { return !a.state.SidebarHidden || a.sidebarSho
 // 红绿灯右边的应用名占的宽度，和应用名加侧栏开关一共占的宽度。
 const (
 	titleGap     = 18 // 红绿灯到应用名
-	appNameWidth = 38
+	appNameWidth = 46
 	appNameGap   = 12 // 应用名到侧栏开关
 	toggleBox    = 28 // iconButton 的方框
 	titleLead    = appNameWidth + appNameGap + toggleBox
@@ -587,7 +587,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 			}
 		}
 	}
-	// worktree 都在 $HIVE_HOME/worktrees 下，路径截断后看不出什么，改显示分支；
+	// worktree 都在 $POSSE_HOME/worktrees 下，路径截断后看不出什么，改显示分支；
 	// 分支默认和工作区同名，同名时只留一行
 	sub := shortPath(w.Path)
 	if nested {
@@ -761,7 +761,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	})
 }
 
-// statusTasks 是界面自己的状态：会话在等它派出去的任务（阻塞在 hive task wait 上，或者停下来等 Hive 提醒），
+// statusTasks 是界面自己的状态：会话在等它派出去的任务（阻塞在 posse task wait 上，或者停下来等 Posse 提醒），
 // 不是在干活，也不用用户处理。
 const statusTasks = "tasks"
 
@@ -944,14 +944,14 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 	return row
 }
 
-// staleBar 提示窗口的 Hive.app 已被换掉：不重开的话，桌面、文稿里的项目读不了文件、跑不了 git。
+// staleBar 提示窗口的 Posse.app 已被换掉：不重开的话，桌面、文稿里的项目读不了文件、跑不了 git。
 func (a *app) staleBar(c *ui.Context) {
 	if !a.staleApp || !a.loaded {
 		return
 	}
 	t := c.Theme()
 	ui.Column(c).Margin(0, 10, 8, 10).Padding(10, 10, 10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
-		ui.Text(c, "Hive 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(11).TextColor(t.TextMuted).LineHeight(1.45)
+		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(11).TextColor(t.TextMuted).LineHeight(1.45)
 		if pressable(accentButton(c, "重开窗口")).Clicked() {
 			a.relaunch()
 		}
@@ -1156,10 +1156,10 @@ func waitingPulse(c *ui.Context, size float32, color ui.Color, still bool) ui.El
 	})
 }
 
-// hiveLoader 是整块内容加载时的蜂巢动画，和手机端 HiveLoader（mobile/lib/ui/loading.dart）一样：
+// posseLoader 是整块内容加载时的蜂巢动画，和手机端 PosseLoader（mobile/lib/ui/loading.dart）一样：
 // 七格按真实蜂巢排，外圈六格从右上起顺时针逐格亮起、后面拖约两格的时间渐暗，1.2 秒一圈。
 // 亮度按时间连续算，按 pulseFrame（每秒 20 次）重绘就够平滑，只重绘不重建界面；still 时停在一帧上。
-func hiveLoader(c *ui.Context, size float32, color ui.Color, still bool) ui.Element {
+func posseLoader(c *ui.Context, size float32, color ui.Color, still bool) ui.Element {
 	const cycle = 1200 * time.Millisecond
 	return ui.Box(c).Size(size, size).Shrink(0).Role(ui.RoleProgress).Label("正在加载").Draw(func(p *ui.Painter, r ui.Rect) {
 		// 横向放得下 3√3 个外接圆半径加两道缝
@@ -1478,7 +1478,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 					a.focusTerm = false
 					tv.Focus()
 				}
-				// 右键菜单由终端插件交来位置，Hive 自己画（termMenu）
+				// 右键菜单由终端插件交来位置，Posse 自己画（termMenu）
 				if v := a.view; a.termCtxID == v.id {
 					contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 				}
@@ -1543,7 +1543,7 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 	label := "正在启动 " + name
 	ui.Box(c.Key("starting-hint")).Absolute().Fill().Center().Cursor(ui.CursorDefault).Children(func() {
 		ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			hiveLoader(c, 44, t.Accent, c.Preferences().ReduceMotion)
+			posseLoader(c, 44, t.Accent, c.Preferences().ReduceMotion)
 			ui.Text(c, label).FontSize(fsBody).TextColor(t.TextMuted)
 		})
 	})
@@ -1557,7 +1557,7 @@ func (a *app) firstRun(c *ui.Context) {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", 20)
-				ui.Text(c, "Hive 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+				ui.Text(c, "Posse 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
 				if pressable(accentButton(c, "添加项目…")).Clicked() {

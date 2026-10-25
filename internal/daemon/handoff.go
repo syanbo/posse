@@ -17,20 +17,20 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"hive/internal/host"
-	"hive/internal/rpc"
-	"hive/internal/spawn"
+	"posse/internal/host"
+	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 // 升级时把整个常驻进程交给新包启动的进程（方案见 docs/plans/terminal-host.md）。
-// 旧进程拉起新进程，经 socketpair 交过去：hived.sock 的监听描述符、每个终端的交接记录和 PTY 描述符；
+// 旧进程拉起新进程，经 socketpair 交过去：possed.sock 的监听描述符、每个终端的交接记录和 PTY 描述符；
 // 新进程接好后回话，旧进程退出时不关终端、不删 socket。
 
 // handoffVersion 是交接协议的版本，两边不一致时不交接，旧进程照常运行。
 const handoffVersion = 1
 
 // handoffEnv 告诉新进程交接 socket 是哪个描述符。
-const handoffEnv = "HIVE_HANDOFF_FD"
+const handoffEnv = "POSSE_HANDOFF_FD"
 
 const handoffTimeout = 20 * time.Second
 
@@ -174,7 +174,7 @@ func (l *gateListener) release(closed bool) {
 }
 
 type daemonHandoffParams struct {
-	// Exe 是新包里的 hive，为空时用自己的（测试交接本身）
+	// Exe 是新包里的 posse，为空时用自己的（测试交接本身）
 	Exe string `json:"exe"`
 }
 
@@ -249,7 +249,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 
 	cmd := exec.Command(exe, "daemon", "run", "--scrollback-mb", strconv.Itoa(d.cfg.Scrollback>>20))
 	cmd.Dir = d.cfg.Home
-	cmd.Env = append(os.Environ(), "HIVE_HOME="+d.cfg.Home, handoffEnv+"=3")
+	cmd.Env = append(os.Environ(), "POSSE_HOME="+d.cfg.Home, handoffEnv+"=3")
 	cmd.ExtraFiles = []*os.File{theirs}
 	// 和 EnsureDaemon 一样重新打开日志、太大先轮转：一直交接下去常驻进程不重启，不能一直沿用旧的
 	if logf, lerr := OpenLog(d.cfg.Home); lerr == nil {
@@ -258,7 +258,7 @@ func (d *Daemon) handOver(exe string) (n, pid int, err error) {
 	} else {
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	}
-	// 新进程自己对系统授权负责：一路交接下去，最初拉起常驻进程的旧 Hive.app 可能早已被换掉
+	// 新进程自己对系统授权负责：一路交接下去，最初拉起常驻进程的旧 Posse.app 可能早已被换掉
 	proc, err := spawn.Start(cmd)
 	theirs.Close()
 	if err != nil {
@@ -390,7 +390,7 @@ func (in *incoming) receive() error {
 	if in.batch.Version != handoffVersion {
 		return fmt.Errorf("handoff v%d, want v%d", in.batch.Version, handoffVersion)
 	}
-	lf, err := recvFile(c, "hived.sock")
+	lf, err := recvFile(c, "possed.sock")
 	if err != nil {
 		return err
 	}

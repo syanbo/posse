@@ -2,7 +2,7 @@
 // 用 desk cast 的固定测试密钥，配 deskshape 造差网络：
 //
 //	xcrun swiftc -O -o /tmp/desksession tools/desksession/main.swift mobile/ios/Runner/DeskSession.swift
-//	hive desk cast --addr 127.0.0.1:47991 &
+//	posse desk cast --addr 127.0.0.1:47991 &
 //	go run ./tools/deskshape --listen 127.0.0.1:45991 --forward 127.0.0.1:47991 --rate 500kbps --loss 0.05 --delay 150ms &
 //	/tmp/desksession --port 45991 --seconds 60 [--no-nack]
 import CryptoKit
@@ -26,8 +26,8 @@ while !args.isEmpty {
 }
 
 let material = HKDF<SHA256>.deriveKey(
-  inputKeyMaterial: SymmetricKey(data: Data("hive-desk-test-secret-32bytes!!".utf8)),
-  salt: Data("hive-desk-nonce!".utf8), info: Data("hive-desk/v1".utf8), outputByteCount: 64
+  inputKeyMaterial: SymmetricKey(data: Data("posse-desk-test-secret-32bytes!".utf8)),
+  salt: Data("posse-desk-nonce".utf8), info: Data("posse-desk/v1".utf8), outputByteCount: 64
 ).withUnsafeBytes { Data($0) }
 guard let peer = deskResolve(host: "127.0.0.1", port: port),
   let session = try? DeskSession(

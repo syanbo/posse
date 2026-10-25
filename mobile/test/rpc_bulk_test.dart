@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/protocol/e2ee.dart';
-import 'package:hive_mobile/protocol/rpc.dart';
-import 'package:hive_mobile/protocol/socket.dart';
+import 'package:posse_mobile/protocol/e2ee.dart';
+import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/protocol/socket.dart';
 
 class _Socket implements ByteSocket {
   final incoming = StreamController<SocketEvent>();

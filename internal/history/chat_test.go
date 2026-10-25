@@ -34,7 +34,7 @@ func TestChatTranscriptPath(t *testing.T) {
 	if got := TranscriptPath("claude", "a/b", filepath.Join(dir, "missing.jsonl")); got != "" {
 		t.Fatalf("rejected session id returned %q", got)
 	}
-	if got := TranscriptPath("claude", "hive-test-absent-7c1e0b9a-4d22-4b0e-9c11-000000000001", ""); got != "" {
+	if got := TranscriptPath("claude", "posse-test-absent-7c1e0b9a-4d22-4b0e-9c11-000000000001", ""); got != "" {
 		t.Fatalf("unknown session resolved to %s", got)
 	}
 }
@@ -384,7 +384,7 @@ func TestChatGrok(t *testing.T) {
 		`{"type":"assistant","model_id":"grok-4.7-build","content":"先读当前配置。","tool_calls":[{"id":"call-a-1","name":"read_file","arguments":"{\"target_file\":\"~/.config/ghostty/config\"}"}]}`,
 		`{"type":"tool_result","tool_call_id":"call-a-1","content":"theme = Mocha"}`,
 		`{"type":"user","content":[{"type":"text","text":"[Image extracted from tool result above]"},{"type":"image","url":"data:image/png;base64,AA=="}],"synthetic_reason":"system_reminder"}`,
-		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"hive"}}}`,
+		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"posse"}}}`,
 	)
 	writeFile(t, filepath.Join(dir, "updates.jsonl"),
 		`{"timestamp":1790000100,"params":{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"配置 Ghostty 主题"},"_meta":{"promptIndex":0}}}}`,
@@ -415,7 +415,7 @@ func TestChatGrok(t *testing.T) {
 		tool.Timestamp == nil || *tool.Timestamp != 1790000107000 {
 		t.Fatalf("tool %+v", tool)
 	}
-	if back.Role != "assistant" || back.Blocks[0].Name != "web_search" || string(back.Blocks[0].Input) != `{"text":"hive"}` ||
+	if back.Role != "assistant" || back.Blocks[0].Name != "web_search" || string(back.Blocks[0].Input) != `{"text":"posse"}` ||
 		back.Timestamp == nil || *back.Timestamp != 1790000107000 {
 		t.Fatalf("backend %+v input %s", back, back.Blocks[0].Input)
 	}

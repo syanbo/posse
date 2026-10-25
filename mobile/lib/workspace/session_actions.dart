@@ -9,11 +9,11 @@ import 'models.dart';
 /// 确认后关闭一个会话或终端，返回是否关掉了。对话记录还在电脑的会话历史里，关掉的只是终端和里面的程序。
 Future<bool> closeSession(
   BuildContext context,
-  HiveAppModel model,
+  PosseAppModel model,
   SessionTab tab,
 ) async {
   final who = tab.agent == null ? null : chatWho('assistant', tab.agent);
-  final ok = await showHiveDialog<bool>(
+  final ok = await showPosseDialog<bool>(
     context: context,
     builder: (dialog) => AlertDialog(
       title: Text(who == null ? '关闭这个终端？' : '关闭这个会话？'),
@@ -29,7 +29,7 @@ Future<bool> closeSession(
         ),
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: HiveColors.of(dialog).danger,
+            backgroundColor: PosseColors.of(dialog).danger,
           ),
           onPressed: () => Navigator.pop(dialog, true),
           child: const Text('关闭'),
@@ -71,7 +71,7 @@ Future<String?> showSessionMore(
     context: context,
     showDragHandle: true,
     builder: (sheet) {
-      final c = HiveColors.of(sheet);
+      final c = PosseColors.of(sheet);
       return SafeArea(
         top: false,
         child: Section(
@@ -113,7 +113,7 @@ Future<String?> showSessionMore(
                     ),
                     title: const Text('电脑布局'),
                     subtitle: const Text('缩到屏幕宽度，双指放大后可以滑动'),
-                    trailing: HiveSwitch(value: on, onChanged: flip),
+                    trailing: PosseSwitch(value: on, onChanged: flip),
                     onTap: () => flip(!on),
                   );
                 },

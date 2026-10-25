@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"hive/internal/deskrelay"
+	"posse/internal/deskrelay"
 )
 
 // RelayConn 是交给 quic-go 的 UDP socket：定时向中转登记（不登记的只用来探测和打洞），

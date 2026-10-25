@@ -3,7 +3,7 @@ package agent
 import (
 	"strings"
 
-	"hive/internal/procmem"
+	"posse/internal/procmem"
 )
 
 // FromProcess 按终端前台进程的 argv 认出是哪个 agent，认不出返回空。

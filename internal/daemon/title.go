@@ -7,16 +7,16 @@ import (
 	"path/filepath"
 	"time"
 
-	"hive/internal/namer"
-	"hive/internal/rpc"
+	"posse/internal/namer"
+	"posse/internal/rpc"
 )
 
-// 会话标题（hive session title）：常驻进程按终端里的 agent 写进它自己存标题的地方，
+// 会话标题（posse session title）：常驻进程按终端里的 agent 写进它自己存标题的地方，
 // 再记在终端的 agent 状态上，界面的标签、侧栏和手机都用它当会话名。
 //   - claude：只接受 UserPromptSubmit hook 返回的 sessionTitle，先记成待交，下一次提交时交过去
 //   - codex：state 库的 threads 和 session_index.jsonl
 //   - grok：会话目录的 summary.json
-//   - cursor：没有核实过能写的地方，只在 Hive 里显示
+//   - cursor：没有核实过能写的地方，只在 Posse 里显示
 
 type sessionTitleParams struct {
 	Terminal string `json:"terminal"`
@@ -61,15 +61,15 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	var applies string
 	switch name {
 	case "claude":
-		applies = "Hive 里马上显示；Claude Code 的会话名在下一次发消息时更新"
+		applies = "Posse 里马上显示；Claude Code 的会话名在下一次发消息时更新"
 	case "codex":
 		err = namer.WriteCodex(agentHome("CODEX_HOME", ".codex"), sid, title)
-		applies = "Hive 和 codex resume 列表已更新；Codex 界面上的名字要重开会话才变"
+		applies = "Posse 和 codex resume 列表已更新；Codex 界面上的名字要重开会话才变"
 	case "grok":
 		err = namer.WriteGrok(agentHome("GROK_HOME", ".grok"), sid, p.Cwd, title)
-		applies = "Hive 和 grok 的会话列表已更新；grok 界面上的名字要重开会话才变"
+		applies = "Posse 和 grok 的会话列表已更新；grok 界面上的名字要重开会话才变"
 	default:
-		applies = "只在 Hive 里显示，" + name + " 自己的会话名不变"
+		applies = "只在 Posse 里显示，" + name + " 自己的会话名不变"
 	}
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "写入标题失败：%v", err)

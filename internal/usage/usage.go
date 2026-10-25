@@ -172,7 +172,7 @@ func sameReading(a, b Usage) bool {
 // order 是列出的顺序，和 agent.Known 一致。
 var order = []string{"claude", "codex", "grok", "cursor"}
 
-// file 是 $HIVE_HOME/usage.json 的内容。
+// file 是 $POSSE_HOME/usage.json 的内容。
 type file struct {
 	Usages    []Usage `json:"usages"`
 	CursorOff bool    `json:"cursorOff,omitempty"` // 不向 Cursor 查询

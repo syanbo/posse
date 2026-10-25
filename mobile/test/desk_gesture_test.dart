@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/desk/events.dart';
-import 'package:hive_mobile/desk/gestures.dart';
-import 'package:hive_mobile/desk/viewport.dart';
+import 'package:posse_mobile/desk/events.dart';
+import 'package:posse_mobile/desk/gestures.dart';
+import 'package:posse_mobile/desk/viewport.dart';
 
 void main() {
   test('classify waits until the movement passes 10 px', () {

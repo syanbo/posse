@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
-	"hive/internal/mobile"
+	"posse/internal/mobile"
 )
 
 // mobileBoardID 是侧栏里「手机」一项的 ID。工作区 ID 都以 w_ 开头，不会冲突。
@@ -311,12 +311,12 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 					continue
 				}
 				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-					note := "还没允许 Hive 使用" + p.label
+					note := "还没允许 Posse 使用" + p.label
 					if p.key == "accessibility" {
 						note += "：手机能看，不能操作"
 					}
 					ui.Text(c, note).FontSize(12.5).TextColor(t.TextMuted).Grow(1)
-					if pressable(textButton(c, "打开系统设置")).Tooltip("在「隐私与安全性」里打开 Hive").Clicked() {
+					if pressable(textButton(c, "打开系统设置")).Tooltip("在「隐私与安全性」里打开 Posse").Clicked() {
 						go exec.Command("open", p.pane).Run()
 					}
 				})
@@ -343,7 +343,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 			ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() {
 				ui.Column(c).Gap(4).Children(func() {
 					cardTitle(c, "配对新手机")
-					ui.Text(c, "用 Hive Mobile 扫左边的码。扫不了就复制配对码，贴进 App 的配对页。").
+					ui.Text(c, "用 Posse Mobile 扫左边的码。扫不了就复制配对码，贴进 App 的配对页。").
 						FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if m.err != "" {
@@ -367,7 +367,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 	})
 }
 
-// mobileDevices 列出配对过的手机。Hive Mobile 报过身份的一台一行；没报过的（旧版 App、Orca App，
+// mobileDevices 列出配对过的手机。Posse Mobile 报过身份的一台一行；没报过的（旧版 App、Orca App，
 // 或重新扫码后手机已经不用的码）收成一行"其他配对"，展开才逐个列出。
 func (a *app) mobileDevices(c *ui.Context) {
 	t := c.Theme()
@@ -418,7 +418,7 @@ func (a *app) mobileDevices(c *ui.Context) {
 			tile(c, iconPhone, 32, colors(t).fill, t.TextMuted)
 			ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
 				ui.Text(c, "其他配对 "+strconv.Itoa(len(others))+" 个").FontSize(13)
-				note := "旧版 App 或 Orca App 连的，重新扫码后手机不再用的码也在这里。更新 Hive Mobile 后，还在用的会归到对应的手机。"
+				note := "旧版 App 或 Orca App 连的，重新扫码后手机不再用的码也在这里。更新 Posse Mobile 后，还在用的会归到对应的手机。"
 				if online > 0 {
 					note = "其中 " + strconv.Itoa(online) + " 个正连着。" + note
 				}
@@ -511,7 +511,7 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Box(c).Grow(1).Shrink(1).Children(func() {
-				in := fieldInput(c, &m.custom, "自定义，如 host:8443 或 https://example.com/hive")
+				in := fieldInput(c, &m.custom, "自定义，如 host:8443 或 https://example.com/posse")
 				if in.Submitted() && m.custom != "" {
 					a.useMobileAddress(m.custom)
 				}

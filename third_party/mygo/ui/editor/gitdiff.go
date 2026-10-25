@@ -127,7 +127,7 @@ func (ed *editor) revertHunks() bool {
 }
 
 // changeBarX is where the change bars are, from the editor's left
-// (Hive: shared by painting and OnChangeClick).
+// (Posse: shared by painting and OnChangeClick).
 func (ed *editor) changeBarX() float32 {
 	x := ed.gutterW - 4 - 3
 	if ed.o.folding && ed.o.decor == nil {
@@ -136,7 +136,7 @@ func (ed *editor) changeBarX() float32 {
 	return x
 }
 
-// BaseChange is a change against the DiffBase (Hive): lines OldStart up to
+// BaseChange is a change against the DiffBase (Posse): lines OldStart up to
 // OldEnd of the base became lines NewStart up to NewEnd of the buffer,
 // one of the ranges empty where lines were only added or deleted. Old is
 // the base's lines.
@@ -145,7 +145,7 @@ type BaseChange struct {
 	Old                                string
 }
 
-// Changes returns the changes against the DiffBase, in order (Hive).
+// Changes returns the changes against the DiffBase, in order (Posse).
 func (st *State) Changes() []BaseChange {
 	if st.ed.gitDiff == nil {
 		return nil
@@ -163,7 +163,7 @@ func (st *State) Changes() []BaseChange {
 }
 
 // RevertChange puts back the base's lines of change i of Changes, as an
-// edit Undo takes back (Hive).
+// edit Undo takes back (Posse).
 func (st *State) RevertChange(i int) bool {
 	if st.ed.gitDiff == nil || st.ed.o.readOnly {
 		return false
@@ -176,7 +176,7 @@ func (st *State) RevertChange(i int) bool {
 }
 
 // LineBottom returns the bottom of line, relative to the editor's top
-// as it scrolls now (Hive).
+// as it scrolls now (Posse).
 func (st *State) LineBottom(line int) float32 {
 	h := &st.ed.view.heights
 	n := st.ed.view.text.LineCount()

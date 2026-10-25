@@ -15,7 +15,7 @@ const newSessionAgents = <String?>['claude', 'codex', 'grok', 'cursor', null];
 /// 打开新建会话的面板。[worktree] 为空时先在面板里选工作区。
 Future<void> showNewSession(
   BuildContext context,
-  HiveAppModel model, {
+  PosseAppModel model, {
   WorktreeRow? worktree,
 }) {
   return showModalBottomSheet<void>(
@@ -35,7 +35,7 @@ class _NewSessionSheet extends StatefulWidget {
     required this.host,
   });
 
-  final HiveAppModel model;
+  final PosseAppModel model;
   final WorktreeRow? worktree;
 
   /// 面板外面的页面：建好以后从这里打开会话。
@@ -72,7 +72,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       showDragHandle: true,
       useSafeArea: true,
       builder: (sheet) {
-        final c = HiveColors.of(sheet);
+        final c = PosseColors.of(sheet);
         return SizedBox(
           height: MediaQuery.sizeOf(sheet).height * 0.7,
           child: ListView(
@@ -174,7 +174,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final row = _worktree;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -273,7 +273,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
     );
   }
 
-  Widget _agentChoice(HiveColors c, String? agent) {
+  Widget _agentChoice(PosseColors c, String? agent) {
     final selected = agent == _agent;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

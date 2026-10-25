@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"hive/internal/usage"
+	"posse/internal/usage"
 )
 
 func TestCursorPools(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/history"
+	"posse/internal/history"
 )
 
 // 一体输入区：拼字过程中、确认候选字都不发送，⌘↩ 发送，空的不发送。

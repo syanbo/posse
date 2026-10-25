@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/gitx"
+	"posse/internal/gitx"
 )
 
 // changePop 是编辑器行号旁改动标记（相对 HEAD）点开的卡片，照 WebStorm 的 gutter 弹窗排成一行：

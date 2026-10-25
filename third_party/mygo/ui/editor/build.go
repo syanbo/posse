@@ -71,7 +71,7 @@ func (ed *editor) build(c *ui.Context, buf *Buffer, o options) ui.Element {
 		}
 	}
 	e.HandleInput(ed.input)
-	// Hive: Command held over a word, the hand and an underline say a
+	// Posse: Command held over a word, the hand and an underline say a
 	// click goes to its definition.
 	ed.linkOn = ed.o.onDefinition != nil && ed.pointerIn && !ed.gesture.active && ed.region == regionText &&
 		c.Modifiers() == ui.Cmd && ed.link[1] > ed.link[0]

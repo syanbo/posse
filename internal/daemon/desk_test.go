@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"hive/internal/desk"
-	"hive/internal/mobile"
+	"posse/internal/desk"
+	"posse/internal/mobile"
 )
 
 // fakeDeskProc 照子进程的样子：先写 first 里的帧，再按 video 为真每 20ms 写一帧视频；控制管道读到 EOF 就退出。

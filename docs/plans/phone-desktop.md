@@ -12,7 +12,7 @@ iPhone 看这台 Mac 的主显示器，并发送指针、滚轮和键盘。终�
 - 点按、双击、右键、拖动、双指滚动、快捷键和文字。
 - 看着的这段时间屏幕不熄。Mac 的手机页能看见是哪一台在看，并能停掉。
 - 窗口可以关着。采集挂在常驻进程上。
-- 只有 iOS 客户端声明 `hive.desk.v1`，安卓版不显示入口。
+- 只有 iOS 客户端声明 `posse.desk.v1`，安卓版不显示入口。
 
 分辨率按手机屏幕像素定，长边不超过 1920，宽高取偶数，比例跟主屏一致，缩放由 ScreenCaptureKit 在 GPU 上做。光标画进画面里（直接点按模式下光标就在手指下）。
 
@@ -35,12 +35,12 @@ iPhone 看这台 Mac 的主显示器，并发送指针、滚轮和键盘。终�
 
 | 谁 | 做什么 |
 | --- | --- |
-| 桌面子进程 | 同一个已签名的 Hive 可执行文件（`hive desk helper`），由常驻进程拉起。跑 ScreenCaptureKit、编码器和 CGEvent 注入，屏幕录制和辅助功能两项授权都只用在这里。不听网络 |
+| 桌面子进程 | 同一个已签名的 Posse 可执行文件（`posse desk helper`），由常驻进程拉起。跑 ScreenCaptureKit、编码器和 CGEvent 注入，屏幕录制和辅助功能两项授权都只用在这里。不听网络 |
 | 常驻进程 | 决定订不订阅、加密、收发 UDP、码率调节，把手机的输入转给子进程。不调用 ScreenCaptureKit，避免 `replayd` 把录屏名额记在常驻进程上、停不掉 |
 | 窗口 | 不采集。手机页显示「正在看桌面」、哪台手机和缺哪一项授权。用户点了以后再让常驻进程拉起子进程，系统授权框跟着出来 |
 | 手机 | Swift 原生插件收 UDP、解密、拆 RTP、硬解，画到 Flutter 纹理上；Flutter 负责手势、视口和快捷键栏。订阅和退订走现有的 RPC WebSocket |
 
-子进程经 `internal/spawn`（`posix_spawn` 加私有的 `responsibility_spawnattrs_setdisclaim`）拉起，系统按它自己的签名（Hive.app 的包 ID 加证书）认授权。常驻进程本身也是这样拉起的，不管是窗口、终端里的 CLI 还是交接拉起，都记在 Hive 上。
+子进程经 `internal/spawn`（`posix_spawn` 加私有的 `responsibility_spawnattrs_setdisclaim`）拉起，系统按它自己的签名（Posse.app 的包 ID 加证书）认授权。常驻进程本身也是这样拉起的，不管是窗口、终端里的 CLI 还是交接拉起，都记在 Posse 上。
 
 授权要重启进程才生效：授权之后重新拉起子进程就行，常驻进程不用重启。
 
@@ -51,7 +51,7 @@ iPhone 看这台 Mac 的主显示器，并发送指针、滚轮和键盘。终�
 
 子进程读控制管道读到 EOF 就自己退出，不靠父进程发信号：常驻进程崩溃或交接退出时不留孤儿进程，菜单栏的录屏指示随之消失。15 秒没有心跳就重启子进程，一次观看最多重启 3 次，再失败就结束订阅，手机上写采集中断。
 
-验收用打好包的 Hive.app（`open -n --env HIVE_HOME=… build/darwin-arm64/Hive.app`），数据目录用独立的 `HIVE_HOME`。`bin/hive` 或临时签名会按每次构建重新要授权。
+验收用打好包的 Posse.app（`open -n --env POSSE_HOME=… build/darwin-arm64/Posse.app`），数据目录用独立的 `POSSE_HOME`。`bin/posse` 或临时签名会按每次构建重新要授权。
 
 交接不带走桌面。旧进程退出时子进程跟着结束，交接记录和 `handoffVersion` 不动。手机本来就会重连，重连后重新订阅。
 
@@ -78,7 +78,7 @@ WebSocket 只跑订阅、退订和状态。它上面的请求是一条连接串�
 
 ## 手机协议（WebSocket）
 
-新能力 `hive.desk.v1`，写进手机声明的能力列表。没声明的连接（Orca App、旧版 Hive、安卓）调不到这些方法。旧常驻进程不认这些方法时，手机上的入口说明要更新电脑端。
+新能力 `posse.desk.v1`，写进手机声明的能力列表。没声明的连接（Orca App、旧版 Posse、安卓）调不到这些方法。旧常驻进程不认这些方法时，手机上的入口说明要更新电脑端。
 
 `desk.subscribe` 带手机屏幕的像素宽高和能硬解的编码列表（`hevc`、`h264`）。成功时返回 UDP 端口、选定的编码、主屏像素宽高、会话 nonce。失败理由固定：
 
@@ -108,7 +108,7 @@ UDP 发到 WebSocket 的那个主机、订阅结果里的端口。没人订阅�
 | 类型 1B | 计数器 8B | AES-256-GCM 密文 | 标签 16B |
 ```
 
-- 密钥：用这条 WebSocket 握手得到的共享密钥，加订阅返回的会话 nonce，另做一次 HKDF（info `hive-desk/v1`），两个方向各一把。和 WebSocket 的收发密钥不同域；WebSocket 一断、退订或重新订阅，这组密钥作废。Dart 握手后把派生好的密钥交给 Swift 插件。选 AES-GCM 是因为两端都有硬件 AES（Go 的 `crypto/aes`、iOS 的 CryptoKit）。
+- 密钥：用这条 WebSocket 握手得到的共享密钥，加订阅返回的会话 nonce，另做一次 HKDF（info `posse-desk/v1`），两个方向各一把。和 WebSocket 的收发密钥不同域；WebSocket 一断、退订或重新订阅，这组密钥作废。Dart 握手后把派生好的密钥交给 Swift 插件。选 AES-GCM 是因为两端都有硬件 AES（Go 的 `crypto/aes`、iOS 的 CryptoKit）。
 - nonce 是方向常量加计数器，类型字节进附加数据。
 - 防重放用 1024 位滑动窗口（同 WireGuard 的做法）：乱序到达的包照收，重复的和落在窗口之前的丢掉。
 - 单个数据报不超过 1200 字节，Tailscale 常见的 1280 MTU 不再拆包。
@@ -195,7 +195,7 @@ VideoToolbox：
 
 ## 授权、锁屏、谁在看
 
-屏幕录制和辅助功能是两项分开的系统授权，都要用户自己允许，Hive 不代开。缺屏幕录制时没有画面；缺辅助功能时能看不能操作。授权框由用户在 Mac 上点了手机页的说明之后才触发，不在用户没准备时从后台突然弹出。
+屏幕录制和辅助功能是两项分开的系统授权，都要用户自己允许，Posse 不代开。缺屏幕录制时没有画面；缺辅助功能时能看不能操作。授权框由用户在 Mac 上点了手机页的说明之后才触发，不在用户没准备时从后台突然弹出。
 
 macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过系统私密窗口选择器」的确认。第 1 步在本机系统上实测：人不在 Mac 前时这个框会不会挡住采集，挡住就通过 `desk.state` 告诉手机「请到 Mac 上确认一次」。
 
@@ -215,7 +215,7 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 
 每一步达到验收线再做下一步。需要真屏幕的检查不放进 `go test`。
 
-1. 桌面子进程。管道里的基本流能用系统播放器连续解开；日志有 HEVC、H.264 各自开低延迟码率控制后的单帧编码耗时，据此定编码顺序；静止画面心跳仍在；关掉控制管道后子进程退出、录屏指示消失。授权归属：分别从 Hive.app 窗口和 iTerm 里的 `hive` CLI 拉起常驻进程，系统设置里记的都是 Hive。实测定期确认框、锁屏通知、改分辨率。
+1. 桌面子进程。管道里的基本流能用系统播放器连续解开；日志有 HEVC、H.264 各自开低延迟码率控制后的单帧编码耗时，据此定编码顺序；静止画面心跳仍在；关掉控制管道后子进程退出、录屏指示消失。授权归属：分别从 Posse.app 窗口和 iTerm 里的 `posse` CLI 拉起常驻进程，系统设置里记的都是 Posse。实测定期确认框、锁屏通知、改分辨率。
 2. 本机 UDP。写一个 Swift 命令行收包程序（解密、拆包、解码的代码之后原样进 iOS 插件），统计各段耗时。用 `dnctl` 和 `pfctl` 模拟 2% 丢包、30 ms 延迟、5 Mbps 限速：丢包后不花屏、200 ms 内由关键帧补上，码率降得下来、恢复得上去，常驻进程的发送队列不变长。
 3. iPhone 上的画面和输入。Swift 插件加 Flutter 纹理，120 Hz；按手势表逐项点中、双击、右键、拖动、滚动；放大后坐标仍落在手指下的图标上；人为丢掉 input 包时按下和松开仍然送到。用慢动作拍两块屏测手指到画面变化的延迟，对照延迟目标。这一步可以先不接现有会话、用固定密钥。
 4. 接上现有会话。HKDF 派生密钥、hello 认地址、`indirect` 和 `busy`、两项授权的文案、锁屏和解锁、改分辨率、观看时不熄屏且不改防休眠档位、退后台停掉、回到前台恢复、杀掉手机 App 后 Mac 3 秒内停发画面、20 秒内停采集（2026-10 改：断几秒先暂停不结束）、切网络后接着看、交接后重新订阅、停止后 footprint 回到观看前。
@@ -223,12 +223,12 @@ macOS 15 起，不经系统选取器直接采集的 App 会定期弹「要绕过
 
 ## 进度
 
-- 第 1–3 步已完成（`internal/desk`、`tools/deskrecv`、`tools/deskshape`、`mobile/lib/desk`）。手机端藏在设置的「实验：看桌面」后面，Mac 上手动 `hive desk cast` 推流，用固定测试密钥，输入只进调试浮层。
+- 第 1–3 步已完成（`internal/desk`、`tools/deskrecv`、`tools/deskshape`、`mobile/lib/desk`）。手机端藏在设置的「实验：看桌面」后面，Mac 上手动 `posse desk cast` 推流，用固定测试密钥，输入只进调试浮层。
 - 与上面的差别：编码验收线改为 p95 ≤ 9 ms；限速和丢包用 `tools/deskshape` 本机转发模拟（`dnctl` 要 sudo）；5 Mbps 限速加 2% 丢包时码率在 5.1–7.2 Mbps 之间，没压到 3–5 Mbps，2% 随机丢包下每秒要补几次关键帧。
 - 还没验证：锁屏、改分辨率、定期确认框、双击、双指手势和 120 Hz 手感、真实 Wi-Fi、慢动作测端到端延迟。
 - 第 4 步两端已接上（`internal/daemon/desk.go`、`internal/mobile/desk.go`、`mobile/lib/desk`）：模拟器上经订阅出画面；输入编码和密钥派生两端用同一组字节对过（`input_test.go`、`packet_test.go`、`desk_wire_test.dart`），手机经 UDP 发输入在真机上还没测。定下来的协议：
-  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`，看的过程中打开了辅助功能再推 `{type: "state", state: "accessibility"}`（子进程每秒复查，不用重新拉起）；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 20 秒没报告；3 秒没报告先暂停发画面，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `hive.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
-  - 密钥：材料是这条连接两个方向的会话密钥，主机发出的在前（手机上是 recvKey 在前、sendKey 在后），HKDF-SHA256（salt 是订阅的 nonce，info `hive-desk/v1`）出 64 字节，前 32 给发往手机，后 32 给发往 Mac。会话 ID 明文写在每帧头里，不能用。
+  - `desk.subscribe` 参数 `{width, height, codecs}`，是一个流：第一条 `{type: "ready", port, codec, nonceB64}`；之后 `{type: "state", state: "no_accessibility"}`，看的过程中打开了辅助功能再推 `{type: "state", state: "accessibility"}`（子进程每秒复查，不用重新拉起）；结束时恰好一条 `{type: "end", reason}`，reason 是 `locked`、`stopped`（桌面手机页点了停止）、`unsubscribed`、`no_report`（hello 后 20 秒没报告；3 秒没报告先暂停发画面，或 60 秒没 hello）、`capture_failed`。失败的错误码：`unsupported`（没声明 `posse.desk.v1`）、`busy`、`locked`、`permission_screen`、`unsupported_codec`、`capture_failed`。`desk.unsubscribe` 停掉这条连接上的观看，连接断开也一样。
+  - 密钥：材料是这条连接两个方向的会话密钥，主机发出的在前（手机上是 recvKey 在前、sendKey 在后），HKDF-SHA256（salt 是订阅的 nonce，info `posse-desk/v1`）出 64 字节，前 32 给发往手机，后 32 给发往 Mac。会话 ID 明文写在每帧头里，不能用。
   - beat 负载 16 字节：发出时刻（Unix 纳秒）和已执行到的必达输入序号，都是大端；每秒一次，收到 input 后马上再发一次。
   - 直连只在手机端判断：常驻进程看到的回环分不清隧道和模拟器，隧道下 UDP 到不了，最多空等到 `no_report`。
   - 锁屏时子进程停采集、不会自己恢复，这次观看以 `locked` 结束，手机解锁后重新订阅。

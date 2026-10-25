@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'loading.dart';
 
 // 闪屏分两段：系统闪屏（iOS LaunchScreen、安卓 launch_background 和 12 起的 SplashScreen）只有底色和居中的标志，
-// 接着由这里在同一位置画同一个标志，再铺满蜂巢格。原生那张标志图由 test/splash_assets_test.dart 用 [HiveMarkPainter] 导出，
+// 接着由这里在同一位置画同一个标志，再铺满蜂巢格。原生那张标志图由 test/splash_assets_test.dart 用 [PosseMarkPainter] 导出，
 // 所以底色、标志尺寸和画法改了要重新导出。颜色写死不跟主题：系统闪屏在 App 读到主题设置之前就显示了。
 
 const splashBackground = Color(0xFF1A1A19);
@@ -24,7 +24,7 @@ const splashSloganSize = Size(200, 80);
 const splashSloganBottom = 60.0;
 const splashSloganAsset = 'assets/splash_slogan.png';
 
-/// slogan 本身，导出成图片给原生闪屏和 [HiveSplash] 共用：系统字体各端不同，用图片才对得上。
+/// slogan 本身，导出成图片给原生闪屏和 [PosseSplash] 共用：系统字体各端不同，用图片才对得上。
 class SplashSlogan extends StatelessWidget {
   const SplashSlogan({super.key, this.fontFamily});
 
@@ -36,7 +36,7 @@ class SplashSlogan extends StatelessWidget {
       size: splashSloganSize,
       child: Center(
         child: Text(
-          'All your agents. One hive.',
+          'A posse of agents.',
           textDirection: TextDirection.ltr,
           style: TextStyle(
             fontFamily: fontFamily,
@@ -56,8 +56,8 @@ const _markFrom = Color(0xFFFFB02E);
 const _markTo = Color(0xFFE5674C);
 
 /// 应用图标里的那个标志：渐变描边的圆角六边形，里面一个 `>_`。画在 [size] 正中，高 [markSize]。
-class HiveMarkPainter extends CustomPainter {
-  const HiveMarkPainter({this.markSize = splashMarkSize});
+class PosseMarkPainter extends CustomPainter {
+  const PosseMarkPainter({this.markSize = splashMarkSize});
 
   final double markSize;
 
@@ -90,12 +90,12 @@ class HiveMarkPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(HiveMarkPainter old) => old.markSize != markSize;
+  bool shouldRepaint(PosseMarkPainter old) => old.markSize != markSize;
 }
 
 /// 启动时盖在首页上面的闪屏。[ready] 为真（本地状态读完）且至少显示了 [minimum] 后淡出，再调 [onDone]。
-class HiveSplash extends StatefulWidget {
-  const HiveSplash({
+class PosseSplash extends StatefulWidget {
+  const PosseSplash({
     super.key,
     required this.ready,
     required this.onDone,
@@ -107,10 +107,10 @@ class HiveSplash extends StatefulWidget {
   final Duration minimum;
 
   @override
-  State<HiveSplash> createState() => _HiveSplashState();
+  State<PosseSplash> createState() => _PosseSplashState();
 }
 
-class _HiveSplashState extends State<HiveSplash> with TickerProviderStateMixin {
+class _PosseSplashState extends State<PosseSplash> with TickerProviderStateMixin {
   // 亮格陆续点亮，放完就停，不一直重绘
   late final AnimationController _intro = AnimationController(
     vsync: this,
@@ -164,7 +164,7 @@ class _HiveSplashState extends State<HiveSplash> with TickerProviderStateMixin {
   }
 
   @override
-  void didUpdateWidget(HiveSplash old) {
+  void didUpdateWidget(PosseSplash old) {
     super.didUpdateWidget(old);
     _maybeLeave();
   }
@@ -201,7 +201,7 @@ class _HiveSplashState extends State<HiveSplash> with TickerProviderStateMixin {
               const Center(
                 child: CustomPaint(
                   size: Size.square(splashCanvas),
-                  painter: HiveMarkPainter(),
+                  painter: PosseMarkPainter(),
                 ),
               ),
               Positioned(

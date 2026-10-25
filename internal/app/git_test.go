@@ -18,8 +18,8 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
-	"hive/internal/client"
-	"hive/internal/gitx"
+	"posse/internal/client"
+	"posse/internal/gitx"
 )
 
 func gitRun(t *testing.T, dir string, args ...string) string {
@@ -46,7 +46,7 @@ func gitWorkspace(t *testing.T, a *app) string {
 		}
 	}
 	write("main.go", strings.Replace(sampleGo, "run(cfg)", "run(cfg)\n\tlog(cfg)", 1)+"\nfunc log(c *config) {}\n")
-	write("README.md", "# Hive\n\n多 agent 终端管理器，界面可以随时关闭。\n")
+	write("README.md", "# Posse\n\n多 agent 终端管理器，界面可以随时关闭。\n")
 	write("notes.txt", "todo\n")
 	return root
 }
@@ -243,12 +243,12 @@ func TestBranchPopupAndCompare(t *testing.T) {
 			t.Fatalf("popup lacks %q: %v", want, tt.Texts())
 		}
 	}
-	// 不是 hive 工作区的 worktree：菜单能在 Hive 中打开、在访达中显示、复制路径
+	// 不是 posse 工作区的 worktree：菜单能在 Posse 中打开、在访达中显示、复制路径
 	if err := tt.Click("agent"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !tt.HasText("在 Hive 中打开") || !tt.HasText("在访达中显示 worktree") || !tt.HasText("复制 worktree 路径") {
+	if !tt.HasText("在 Posse 中打开") || !tt.HasText("在访达中显示 worktree") || !tt.HasText("复制 worktree 路径") {
 		t.Fatalf("worktree menu: %v", tt.Texts())
 	}
 	tt.Key(0, ui.KeyEscape)
@@ -750,7 +750,7 @@ func TestAutoFetch(t *testing.T) {
 func TestCommitShortcut(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "hived.sock")}
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
@@ -1779,13 +1779,13 @@ func TestGitConsolePersist(t *testing.T) {
 func TestGitConsoleByProject(t *testing.T) {
 	a := &app{workspaces: []workspace{
 		{ID: "w1", ProjectID: "outer", Kind: "main", Path: "/x/Apps"},
-		{ID: "w2", ProjectID: "inner", Kind: "main", Path: "/x/Apps/hive"},
-		{ID: "w3", ProjectID: "inner", Kind: "worktree", Name: "feat", Path: "/h/worktrees/hive/feat"},
+		{ID: "w2", ProjectID: "inner", Kind: "main", Path: "/x/Apps/posse"},
+		{ID: "w3", ProjectID: "inner", Kind: "worktree", Name: "feat", Path: "/h/worktrees/posse/feat"},
 	}}
 	t0 := time.Now().Add(-time.Minute)
 	a.addGitRun(gitx.Run{ID: 1, Dir: "/x/Apps", Args: []string{"fetch"}, Start: t0, Done: true})
-	a.addGitRun(gitx.Run{ID: 2, Dir: "/x/Apps/hive/internal", Args: []string{"commit"}, Start: t0, Done: true, Err: "退出码 1"})
-	a.addGitRun(gitx.Run{ID: 3, Dir: "/h/worktrees/hive/feat", Args: []string{"push"}, Start: t0, Done: true})
+	a.addGitRun(gitx.Run{ID: 2, Dir: "/x/Apps/posse/internal", Args: []string{"commit"}, Start: t0, Done: true, Err: "退出码 1"})
+	a.addGitRun(gitx.Run{ID: 3, Dir: "/h/worktrees/posse/feat", Args: []string{"push"}, Start: t0, Done: true})
 	a.addGitRun(gitx.Run{ID: 4, Dir: "/x/Apps-old", Args: []string{"push"}, Start: t0, Done: true})
 	ids := func(p string) (out []int64) {
 		for _, r := range a.projectRuns(p) {
@@ -1799,7 +1799,7 @@ func TestGitConsoleByProject(t *testing.T) {
 	if got := ids("inner"); !slices.Equal(got, []int64{2, 3}) {
 		t.Fatalf("inner %v", got)
 	}
-	if a.runWhere("/h/worktrees/hive/feat") != "feat" || a.runWhere("/x/Apps/hive") != "" {
+	if a.runWhere("/h/worktrees/posse/feat") != "feat" || a.runWhere("/x/Apps/posse") != "" {
 		t.Fatal("runWhere")
 	}
 	if a.projectConsoleErr("outer", true) || !a.projectConsoleErr("inner", true) || a.projectConsoleErr("inner", false) {

@@ -10,7 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"hive/internal/media"
+	"posse/internal/media"
 )
 
 // openLink 处理终端里 Cmd+点击的链接。网址（http、mailto 等）返回 false，交给系统用默认浏览器打开；
@@ -198,7 +198,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 			ui.Image(c, card.preview).Width(width-12).Radius(8).Margin(2, 0, 4, 0)
 		}
 		ui.Box(c).Height(1).Margin(2, 6).Background(p.line)
-		// 最常用的在最上面：在 Hive 里打开
+		// 最常用的在最上面：在 Posse 里打开
 		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
 			w := a.workspaceOf(card.path)
 			if w == nil {

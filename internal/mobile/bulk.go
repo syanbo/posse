@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// 大块数据走二进制帧（Hive 扩展 hive.bulk.v1）。文本帧是 JSON 加密后再整帧 base64，
+// 大块数据走二进制帧（Posse 扩展 posse.bulk.v1）。文本帧是 JSON 加密后再整帧 base64，
 // 回复里的文件内容本身又是 base64，体积约为原始数据的 1.78 倍；整条消息还一直占着发送锁，
 // 按键回显和 ping 的回复只能排在后面。
 //
@@ -44,7 +44,7 @@ func parseBulk(p []byte) (op byte, id uint32, payload []byte, ok bool) {
 
 // replyBulk 回复一个可能带大块字段的结果。
 func (c *conn) replyBulk(id string, res any, err error) {
-	if err != nil || !c.hasCapability("hive.bulk.v1") {
+	if err != nil || !c.hasCapability("posse.bulk.v1") {
 		c.replyOrFail(id, res, err)
 		return
 	}

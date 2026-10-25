@@ -72,7 +72,7 @@ func (e *node) Menu(build func(m *Menu)) *node {
 // ContextMenuAsked gives the element a context menu the app draws
 // itself: right clicks, the menu key and Shift+F10 open it as they do
 // ContextMenu's, a text input's or selectable text's included, and in the
-// frame after it reports where, in DIPs relative to the window. (Hive: its
+// frame after it reports where, in DIPs relative to the window. (Posse: its
 // menus look like the rest of the app, which a native menu cannot.)
 func (e *node) ContextMenuAsked() (x, y float32, ok bool) {
 	e.flags |= flagContextMenu
@@ -477,7 +477,7 @@ func (rt *engine) showMenu() {
 }
 
 // MenuEntry is an item of a menu the app shows itself (PresentMenus): a
-// separator, or an item with its ID to choose it by. (Hive)
+// separator, or an item with its ID to choose it by. (Posse)
 type MenuEntry struct {
 	ID        int
 	Label     string
@@ -511,7 +511,7 @@ func menuEntries(m *platform.Menu) []MenuEntry {
 // event that opened the menu, with its items and where, in DIPs relative to
 // the window; the app draws them and calls choose with the ID of the item
 // chosen, outside the building of a frame. Call it in every frame, or
-// with nil to go back to native menus. (Hive)
+// with nil to go back to native menus. (Posse)
 func (c *Context) PresentMenus(show func(items []MenuEntry, x, y float32, choose func(id int))) {
 	if rt := c.runtime(); rt != nil {
 		rt.present = show

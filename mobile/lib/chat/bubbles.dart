@@ -47,7 +47,7 @@ class EarlierRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     return SizedBox(
       height: 44,
       child: Center(
@@ -129,7 +129,7 @@ class WorkingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = HiveColors.of(context);
+    final c = PosseColors.of(context);
     final status = this.status;
     final tool = this.tool;
     final text = status != null && status.isNotEmpty
@@ -267,7 +267,7 @@ class _ToolRunState extends State<ToolRun> {
             child: Container(
               padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
               decoration: BoxDecoration(
-                color: HiveColors.of(context).fill,
+                color: PosseColors.of(context).fill,
                 borderRadius: BorderRadius.circular(Rd.button),
               ),
               child: Row(
@@ -312,7 +312,7 @@ class _ToolRunState extends State<ToolRun> {
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
-        color: HiveColors.of(context).code,
+        color: PosseColors.of(context).code,
         borderRadius: BorderRadius.circular(Rd.button),
       ),
       child: Column(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_mobile/ui/media_pager.dart';
+import 'package:posse_mobile/ui/media_pager.dart';
 
 void main() {
   Widget pager(ValueChanged<int> onChanged) => MaterialApp(

@@ -11,7 +11,7 @@ import (
 )
 
 // 重置卡只有 Codex 自己知道：拉起一次 codex app-server，调 account/rateLimits/read。
-// 请求由 Codex 用它自己的登录发出，hive 不碰 auth.json；回应里顺带有最新的 5 小时和每周额度。
+// 请求由 Codex 用它自己的登录发出，posse 不碰 auth.json；回应里顺带有最新的 5 小时和每周额度。
 
 // CodexRemote 问 Codex 一次限额和重置卡。
 func CodexRemote(ctx context.Context, codex string, now time.Time) (Usage, error) {
@@ -63,7 +63,7 @@ func CodexRemote(ctx context.Context, codex string, now time.Time) (Usage, error
 		return nil, io.ErrUnexpectedEOF
 	}
 	if err := send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize",
-		"params": map[string]any{"clientInfo": map[string]string{"name": "hive", "version": "1"}}}); err != nil {
+		"params": map[string]any{"clientInfo": map[string]string{"name": "posse", "version": "1"}}}); err != nil {
 		return Usage{}, err
 	}
 	if _, err := recv(1); err != nil {

@@ -1,5 +1,5 @@
-/// Hive 手机端的 QUIC 连接。协议见仓库里的 internal/mquic：一条流上收发文本、二进制两种消息。
-@DefaultAsset('package:hive_quic/hive_quic.dart')
+/// Posse 手机端的 QUIC 连接。协议见仓库里的 internal/mquic：一条流上收发文本、二进制两种消息。
+@DefaultAsset('package:posse_quic/posse_quic.dart')
 library;
 
 import 'dart:async';
@@ -132,7 +132,7 @@ class QuicConnection {
   }
 
   /// 打洞的第一步：开一个 socket，经中转（[relayHost]:[relayPort]）问出它在公网上的地址。
-  /// 把 [QuicPunch.public] 交给电脑（hive.punch），拿到电脑的地址后 [QuicPunch.dial]。
+  /// 把 [QuicPunch.public] 交给电脑（posse.punch），拿到电脑的地址后 [QuicPunch.dial]。
   static Future<QuicPunch> prepare(
     String relayHost,
     int relayPort, {

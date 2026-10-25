@@ -10,7 +10,7 @@ import (
 )
 
 func TestCursorPlugin(t *testing.T) {
-	l := Launcher{Exe: "/Applications/Hive.app/Contents/MacOS/Hive", Home: t.TempDir()}
+	l := Launcher{Exe: "/Applications/Posse.app/Contents/MacOS/Posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	r, err := l.Launch("cursor", Model{}, "do it")
 	if err != nil {
@@ -34,7 +34,7 @@ func TestCursorPlugin(t *testing.T) {
 		t.Fatalf("hooks %s %v", b, err)
 	}
 	for _, ev := range cursorEvents {
-		if h := hooks.Hooks[ev]; len(h) != 1 || h[0].Command != "'/Applications/Hive.app/Contents/MacOS/Hive' hook cursor "+ev {
+		if h := hooks.Hooks[ev]; len(h) != 1 || h[0].Command != "'/Applications/Posse.app/Contents/MacOS/Posse' hook cursor "+ev {
 			t.Errorf("%s: %+v", ev, h)
 		}
 	}

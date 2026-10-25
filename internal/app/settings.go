@@ -9,8 +9,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"hive/internal/agent"
-	"hive/internal/daemon"
+	"posse/internal/agent"
+	"posse/internal/daemon"
 )
 
 // settingsBoardID 是设置页的 ID，不在侧栏里，从 ⌘, 和侧栏顶栏的齿轮进来。
@@ -65,7 +65,7 @@ func settingsRow(c *ui.Context, label string, right func()) {
 
 func (a *app) awakeSettings(c *ui.Context) {
 	st := a.daemon.Awake
-	settingsCard(c, "防休眠", "Hive 运行时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「运行时亮屏」让屏幕也不熄：屏幕熄了会跟着锁屏。", func() {
+	settingsCard(c, "防休眠", "Posse 运行时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「运行时亮屏」让屏幕也不熄：屏幕熄了会跟着锁屏。", func() {
 		if st == nil {
 			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
 			return
@@ -91,7 +91,7 @@ var permissionModes = []struct{ mode, seg, tip string }{
 }
 
 func (a *app) permissionSettings(c *ui.Context) {
-	settingsCard(c, "Agent 权限", "在 Hive 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
+	settingsCard(c, "Agent 权限", "在 Posse 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
 		sel := 0
 		var labels []string
 		for i, m := range permissionModes {
@@ -206,7 +206,7 @@ func (a *app) aboutSettings(c *ui.Context) {
 		}
 		updating, unsupported := a.upgrade.status(d.Pid)
 		canUpdate := d.Pid != 0 && stale && !unsupported && d.Build != ""
-		// 窗口比常驻进程旧（打开了旧的 Hive.app）时不催更新：更新会把常驻进程换成窗口的旧版本
+		// 窗口比常驻进程旧（打开了旧的 Posse.app）时不催更新：更新会把常驻进程换成窗口的旧版本
 		windowOlder := false
 		if mine, ok := buildTime(daemon.Build); ok {
 			if theirs, ok := buildTime(d.Build); ok {
@@ -221,7 +221,7 @@ func (a *app) aboutSettings(c *ui.Context) {
 			case !canUpdate:
 				note = "常驻进程的版本比窗口旧，而且不支持不断开终端的更新，需要重启一次。重启会关闭所有终端。"
 			case windowOlder:
-				note = "窗口的版本比常驻进程旧，可能打开的是旧的 Hive.app。更新会把常驻进程换成窗口的版本。"
+				note = "窗口的版本比常驻进程旧，可能打开的是旧的 Posse.app。更新会把常驻进程换成窗口的版本。"
 			}
 			ui.Text(c, note).FontSize(12.5).TextColor(t.Text).LineHeight(1.5)
 		}
