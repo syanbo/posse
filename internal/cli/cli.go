@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -106,11 +105,7 @@ func init() {
 
 func Main(args []string) int {
 	e := &env{out: os.Stdout, errOut: os.Stderr}
-	e.home = os.Getenv("HIVE_HOME")
-	if e.home == "" {
-		home, _ := os.UserHomeDir()
-		e.home = filepath.Join(home, ".hive")
-	}
+	e.home = daemon.ResolveHome(os.Getenv("HIVE_HOME"))
 	e.socket = daemon.SocketPath(e.home)
 
 	var rest []string
