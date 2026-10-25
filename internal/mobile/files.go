@@ -2,7 +2,6 @@ package mobile
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -75,7 +74,7 @@ func (c *conn) fileMethod(req request, p json.RawMessage) bool {
 		if ok {
 			res, err = run(w.Path, a)
 		}
-		c.replyOrFail(req.ID, res, err)
+		c.replyBulk(req.ID, res, err)
 	}()
 	return true
 }
@@ -222,7 +221,7 @@ func previewReply(root string, a fileParams) (any, error) {
 	}
 	switch {
 	case mime != "":
-		return map[string]any{"content": base64.StdEncoding.EncodeToString(b), "isBinary": true, "isImage": true, "mimeType": mime}, nil
+		return map[string]any{"content": b, "isBinary": true, "isImage": true, "mimeType": mime}, nil
 	case files.IsBinary(b):
 		return map[string]any{"content": "", "isBinary": true}, nil
 	}
@@ -272,5 +271,5 @@ func rangeReply(root string, a fileParams) (any, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
-	return map[string]any{"content": base64.StdEncoding.EncodeToString(b[:got]), "size": fi.Size()}, nil
+	return map[string]any{"content": b[:got], "size": fi.Size()}, nil
 }

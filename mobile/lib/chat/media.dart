@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -317,7 +316,7 @@ class _MediaTileState extends State<_MediaTile> {
         ..._sessionArgs(widget.tab),
         'id': widget.item.id,
       }, timeout: const Duration(seconds: 40));
-      final bytes = base64Decode(res['content'] as String? ?? '');
+      final bytes = rpcBytes(res['content']);
       _thumbs[_key] = bytes;
       while (_thumbs.length > _thumbMax) {
         _thumbs.remove(_thumbs.keys.first);

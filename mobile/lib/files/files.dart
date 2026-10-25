@@ -716,8 +716,9 @@ class _ImageFileState extends State<_ImageFile> {
       });
       final content = res['content'];
       if (!mounted) return;
-      if (res['isImage'] == true && content is String) {
-        final bytes = base64Decode(content);
+      if (res['isImage'] == true &&
+          (content is String || content is Uint8List)) {
+        final bytes = rpcBytes(content);
         setState(() => _image = bytes);
         widget.onReady(bytes);
       } else {

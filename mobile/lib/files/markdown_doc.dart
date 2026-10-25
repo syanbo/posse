@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -10,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../chat/markdown_view.dart';
 import '../app_state.dart';
+import '../protocol/rpc.dart' show rpcBytes;
 import '../terminal/link_target.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
@@ -296,8 +296,9 @@ Future<Uint8List?> _loadImage(
             })
             .then((res) {
               final content = res['content'];
-              return res['isImage'] == true && content is String
-                  ? base64Decode(content)
+              return res['isImage'] == true &&
+                      (content is String || content is Uint8List)
+                  ? rpcBytes(content)
                   : null;
             })
             .catchError((Object _) => null);

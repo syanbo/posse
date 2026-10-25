@@ -2,7 +2,6 @@ package mobile
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"image/jpeg"
@@ -132,7 +131,7 @@ func (c *conn) mediaMethod(req request, p json.RawMessage) bool {
 	}
 	go func() {
 		res, err := run(a)
-		c.replyOrFail(req.ID, res, err)
+		c.replyBulk(req.ID, res, err)
 	}()
 	return true
 }
@@ -179,7 +178,7 @@ func (s *Server) mediaThumb(a mediaParams) (any, error) {
 		return nil, err
 	}
 	b := img.Bounds()
-	return map[string]any{"content": base64.StdEncoding.EncodeToString(buf.Bytes()), "width": b.Dx(), "height": b.Dy()}, nil
+	return map[string]any{"content": buf.Bytes(), "width": b.Dx(), "height": b.Dy()}, nil
 }
 
 // mediaRead 按段读原图或视频，同 files.readRange：每段最多 rangeMax，size 是总大小。
@@ -221,5 +220,5 @@ func (s *Server) mediaRead(a mediaParams) (any, error) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
-	return map[string]any{"content": base64.StdEncoding.EncodeToString(b[:got]), "size": size, "mime": it.Mime()}, nil
+	return map[string]any{"content": b[:got], "size": size, "mime": it.Mime()}, nil
 }

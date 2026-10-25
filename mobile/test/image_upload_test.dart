@@ -31,7 +31,50 @@ class _UploadRpc implements PhoneRpc {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
+/// 新电脑：开始上传时回编号，分段走二进制帧。
+class _BulkRpc extends _UploadRpc {
+  final chunks = <List<int>>[];
+  Map<String, Object?>? startParams;
+
+  @override
+  Future<Map<String, Object?>> call(
+    String method,
+    Map<String, Object?> params, {
+    Duration? timeout,
+  }) async {
+    if (method == 'clipboard.startImageUpload') {
+      methods.add(method);
+      startParams = params;
+      return {'uploadId': 'u1', 'blob': 4};
+    }
+    return super.call(method, params, timeout: timeout);
+  }
+
+  @override
+  Future<void> sendUploadChunk(int blob, List<int> payload) async {
+    expect(blob, 4);
+    chunks.add(payload);
+  }
+}
+
 void main() {
+  test('a new computer takes raw chunks as binary frames', () async {
+    final rpc = _BulkRpc();
+    final seen = <double>[];
+    final bytes = Uint8List.fromList(
+      List.generate(bulkChunk * 4 + 7, (i) => i % 256),
+    );
+    final path = await uploadImage(rpc, bytes, onProgress: seen.add);
+    expect(path, '/tmp/hive-mobile-1.png');
+    expect(rpc.startParams?['expectedBytes'], bytes.length);
+    expect(rpc.methods, contains('clipboard.commitImageUpload'));
+    expect(rpc.methods, isNot(contains('clipboard.appendImageUploadChunk')));
+    expect(rpc.chunks.length, 5);
+    expect(rpc.chunks.expand((c) => c).toList(), bytes);
+    expect(seen.last, 1);
+    expect(seen[seen.length - 2], lessThan(1));
+  });
+
   test(
     'a large image reports progress chunk by chunk and ends at 100%',
     () async {

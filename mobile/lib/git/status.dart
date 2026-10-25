@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:typed_data';
+
+import '../protocol/rpc.dart' show rpcBytes;
 
 class GitFileChange {
   const GitFileChange({
@@ -197,7 +198,7 @@ ImageSide? _imageSide(Object? raw) {
   final content = raw['content'];
   return ImageSide(
     size: _count(raw['size']),
-    bytes: content is String ? base64Decode(content) : null,
+    bytes: content is String || content is Uint8List ? rpcBytes(content) : null,
   );
 }
 

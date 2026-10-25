@@ -17,7 +17,34 @@ const hiveCapabilities = [
   'hive.context.v1',
   'hive.media.v1',
   'hive.desk.v1',
+  'hive.bulk.v1',
 ];
+
+/// 大块数据的二进制帧（电脑的 internal/mobile/bulk.go）：u8 0x62、u8 版本 1、u8 操作、u8 0、
+/// u32 编号（小端）、内容。电脑先把回复里的大字段按块发来，回复里写 `blobs: {字段路径: 编号}`；
+/// 上传的分段由手机按同样的格式发给电脑。
+const bulkMagic = 0x62;
+const bulkHeader = 8;
+const opBlobChunk = 1;
+const opUploadChunk = 2;
+const bulkChunk = 64 * 1024;
+
+Uint8List bulkFrame(int op, int id, List<int> payload) {
+  final out = Uint8List(bulkHeader + payload.length);
+  out[0] = bulkMagic;
+  out[1] = 1;
+  out[2] = op;
+  ByteData.sublistView(out).setUint32(4, id, Endian.little);
+  out.setRange(bulkHeader, out.length, payload);
+  return out;
+}
+
+/// 回复里的二进制字段：声明了 hive.bulk.v1 的连接上是 [Uint8List]，旧电脑上是 base64 字符串。
+Uint8List rpcBytes(Object? value) {
+  if (value is Uint8List) return value;
+  if (value is String && value.isNotEmpty) return base64Decode(value);
+  return Uint8List(0);
+}
 
 class RpcException implements Exception {
   RpcException(this.code, this.message);
@@ -52,6 +79,9 @@ class PhoneRpc {
   final _subs = <String, void Function(Map<String, Object?> frame)>{};
   final _subErr = <String, void Function(RpcException error)>{};
   final _binary = StreamController<Uint8List>.broadcast();
+
+  /// 还没等到回复的大块字段，按编号攒着。
+  final _blobs = <int, BytesBuilder>{};
 
   /// 解开后的二进制帧（Orca 终端流，16 字节头还在）。先听再订阅，快照才不会丢。
   Stream<Uint8List> get binary => _binary.stream;
@@ -260,6 +290,18 @@ class PhoneRpc {
             : session.openText(event.bytes, direction: dirDesktopToMobile);
         _bad = 0;
         if (event.binary) {
+          if (plain.length >= bulkHeader &&
+              plain[0] == bulkMagic &&
+              plain[1] == 1) {
+            if (plain[2] == opBlobChunk) {
+              final id = ByteData.sublistView(plain)
+                  .getUint32(4, Endian.little);
+              (_blobs[id] ??= BytesBuilder(
+                copy: false,
+              )).add(Uint8List.sublistView(plain, bulkHeader));
+            }
+            continue;
+          }
           if (!_binary.isClosed) _binary.add(plain);
           continue;
         }
@@ -288,6 +330,8 @@ class PhoneRpc {
       _subErr[id]?.call(_rpcError(message));
       return;
     }
+    final result = message['result'];
+    if (result is Map) _fillBlobs(result.cast<String, Object?>());
     final waiter = _wait.remove(id);
     if (waiter == null || waiter.isCompleted) return;
     repliesReceived++;
@@ -304,6 +348,31 @@ class PhoneRpc {
     }
   }
 
+  /// 把 `blobs` 里点连起来的字段路径换回攒好的字节。调用方已经超时走掉的也要取走，免得一直攒着。
+  void _fillBlobs(Map<String, Object?> result) {
+    final blobs = result.remove('blobs');
+    if (blobs is! Map) return;
+    for (final MapEntry(:key, :value) in blobs.entries) {
+      if (key is! String || value is! num) continue;
+      final bytes = _blobs.remove(value.toInt())?.takeBytes() ?? Uint8List(0);
+      final path = key.split('.');
+      Map<Object?, Object?> at = result;
+      for (final part in path.take(path.length - 1)) {
+        final next = at[part];
+        if (next is! Map) break;
+        at = next;
+      }
+      at[path.last] = bytes;
+    }
+  }
+
+  /// 上传的一段（编号由 clipboard.startImageUpload 给），和请求共用发送顺序。
+  Future<void> sendUploadChunk(int blob, List<int> payload) => sendPlain(
+    bulkFrame(opUploadChunk, blob, payload),
+    direction: dirMobileToDesktop,
+    kind: kindBinary,
+  );
+
   RpcException _rpcError(Map<String, Object?> message) {
     final error = message['error'];
     final code = error is Map && error['code'] is String
@@ -316,6 +385,7 @@ class PhoneRpc {
   }
 
   void _closeBinary() {
+    _blobs.clear();
     if (!_binary.isClosed) unawaited(_binary.close());
   }
 

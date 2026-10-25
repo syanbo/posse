@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -287,6 +288,8 @@ type conn struct {
 	// 正在看的桌面的打洞入口（DeskReady.Punch），这次观看结束时清掉；gen 认出是哪次订阅设的
 	deskPunch    func(ctx context.Context, phone string) (string, error)
 	deskPunchGen uint64
+
+	nextBlob atomic.Uint32 // 大块字段的编号（bulk.go）
 }
 
 func (c *conn) setClientCaps(client string, version int, names []string) {
@@ -454,9 +457,13 @@ func (c *conn) serve() {
 			return
 		}
 		if typ != websocket.MessageText {
-			// 手机不发终端二进制帧；解开只为让计数器前进
-			if _, err := c.sess.open(raw, kindBinary); err != nil {
+			// 手机的二进制帧只有上传的分段（bulk.go），别的解开只为让计数器前进
+			p, err := c.sess.open(raw, kindBinary)
+			if err != nil {
 				return
+			}
+			if op, blob, payload, ok := parseBulk(p); ok && op == opUploadChunk {
+				c.uploadChunk(blob, payload)
 			}
 			continue
 		}

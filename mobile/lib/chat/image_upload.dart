@@ -46,11 +46,37 @@ Future<String> uploadImage(
     onProgress?.call(1);
     return path;
   }
+  // 新电脑认 expectedBytes 并回一个编号：分段走二进制帧，原始字节、不等每段的回复；
+  // 旧电脑只认 expectedBase64Length，照旧一段段传 base64
   final start = await rpc.call('clipboard.startImageUpload', {
     'expectedBase64Length': encoded.length,
+    'expectedBytes': bytes.length,
   });
   final id = start['uploadId'];
   if (id is! String || id.isEmpty) throw StateError('电脑没有接受这张图片');
+  final blob = start['blob'];
+  if (blob is num) {
+    for (var off = 0; off < bytes.length; off += bulkChunk) {
+      final end = min(off + bulkChunk, bytes.length);
+      await rpc.sendUploadChunk(blob.toInt(), bytes.sublist(off, end));
+      onProgress?.call(min(end / bytes.length, 0.99));
+    }
+  } else {
+    await _uploadBase64(rpc, id, encoded, onProgress);
+  }
+  final path = imagePath(
+    await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
+  );
+  onProgress?.call(1);
+  return path;
+}
+
+Future<void> _uploadBase64(
+  PhoneRpc rpc,
+  String id,
+  String encoded,
+  UploadProgress? onProgress,
+) async {
   for (final (off, chunk) in imageChunks(encoded)) {
     await rpc.call('clipboard.appendImageUploadChunk', {
       'uploadId': id,
@@ -60,11 +86,6 @@ Future<String> uploadImage(
     // 落盘还要一步，传完最后一块先停在 99%
     onProgress?.call(min((off + chunk.length) / encoded.length, 0.99));
   }
-  final path = imagePath(
-    await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
-  );
-  onProgress?.call(1);
-  return path;
 }
 
 /// save 和 commit 把路径放在 value 里（结果是字符串，不是对象）。

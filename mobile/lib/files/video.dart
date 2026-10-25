@@ -141,7 +141,7 @@ Future<File> _fetchChunked({
       var empty = false;
       for (final res in chunks) {
         total ??= (res['size'] as num?)?.toInt() ?? 0;
-        final bytes = base64Decode(res['content'] as String? ?? '');
+        final bytes = rpcBytes(res['content']);
         await out.writeFrom(bytes);
         done += bytes.length;
         empty |= bytes.isEmpty;

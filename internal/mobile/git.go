@@ -2,7 +2,6 @@ package mobile
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path"
@@ -83,7 +82,8 @@ func (c *conn) gitDiff(id string, p json.RawMessage) error {
 		}
 		reply["images"] = imageSides(ctx, w.Path, old, rel)
 	}
-	return c.reply(id, reply)
+	c.replyBulk(id, reply, nil)
+	return nil
 }
 
 // imageMime 是手机能画出来的图片：diff 时把改之前（HEAD）和现在（工作区）两张图都带上。
@@ -98,7 +98,7 @@ func imageSides(ctx context.Context, dir, old, rel string) map[string]any {
 		if len(b) > imageReadMax {
 			return map[string]any{"size": len(b), "tooLarge": true}
 		}
-		return map[string]any{"size": len(b), "content": base64.StdEncoding.EncodeToString(b)}
+		return map[string]any{"size": len(b), "content": b}
 	}
 	before, err := gitx.Show(ctx, dir, "HEAD", old)
 	out := map[string]any{"old": side(before, err)}

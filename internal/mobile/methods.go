@@ -803,6 +803,26 @@ func (c *conn) createTerminal(id string, p json.RawMessage) error {
 type upload struct {
 	data   []byte
 	expect int
+	// raw 的上传（hive.bulk.v1）：data 是原始字节，由编号为 blob 的二进制帧送来；否则是 base64 文本
+	raw  bool
+	blob uint32
+	bad  bool // 送来的超过了说好的大小
+}
+
+// uploadChunk 收下手机经二进制帧发来的一段上传。在读循环里调用，和 append、commit 同一个协程。
+func (c *conn) uploadChunk(blob uint32, p []byte) {
+	c.smu.Lock()
+	defer c.smu.Unlock()
+	for _, u := range c.uploads {
+		if u.raw && u.blob == blob {
+			if len(u.data)+len(p) > u.expect {
+				u.bad = true
+				return
+			}
+			u.data = append(u.data, p...)
+			return
+		}
+	}
 }
 
 func (c *conn) dropUploads() {
@@ -820,6 +840,10 @@ func saveImage(b64data string) (string, error) {
 	if err != nil {
 		return "", errorf("invalid_params", "bad image data")
 	}
+	return saveImageBytes(data)
+}
+
+func saveImageBytes(data []byte) (string, error) {
 	ext := ".png"
 	switch {
 	case bytes.HasPrefix(data, []byte{0xff, 0xd8, 0xff}):
@@ -848,6 +872,7 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 	var a struct {
 		UploadID          string `json:"uploadId"`
 		ExpectedBase64Len int    `json:"expectedBase64Length"`
+		ExpectedBytes     int    `json:"expectedBytes"` // 有它就是 raw 上传，分段走二进制帧
 		Offset            int    `json:"offset"`
 		ContentBase64     string `json:"contentBase64"`
 	}
@@ -862,6 +887,17 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 		}
 		return c.reply(id, path)
 	case "clipboard.startImageUpload":
+		if a.ExpectedBytes > 0 && c.hasCapability("hive.bulk.v1") {
+			if a.ExpectedBytes > maxImage {
+				return errorf("invalid_params", "bad upload size")
+			}
+			uid := "u-" + randHex(8)
+			bid := c.nextBlob.Add(1)
+			c.smu.Lock()
+			c.uploads[uid] = &upload{expect: a.ExpectedBytes, raw: true, blob: bid}
+			c.smu.Unlock()
+			return c.reply(id, map[string]any{"uploadId": uid, "blob": bid})
+		}
 		if a.ExpectedBase64Len <= 0 || a.ExpectedBase64Len > maxImage {
 			return errorf("invalid_params", "bad upload size")
 		}
@@ -882,12 +918,25 @@ func (c *conn) image(id, method string, p json.RawMessage) error {
 	}
 	switch method {
 	case "clipboard.appendImageUploadChunk":
+		if u.raw {
+			return errorf("invalid_params", "raw uploads send their chunks as binary frames")
+		}
 		if a.Offset != len(u.data) || len(u.data)+len(a.ContentBase64) > u.expect {
 			return errorf("invalid_params", "chunk offset %d does not match %d", a.Offset, len(u.data))
 		}
 		u.data = append(u.data, a.ContentBase64...)
 		return c.reply(id, map[string]any{"received": len(u.data)})
 	case "clipboard.commitImageUpload":
+		if u.raw {
+			if u.bad || len(u.data) != u.expect {
+				return errorf("invalid_params", "got %d of %d bytes", len(u.data), u.expect)
+			}
+			path, err := saveImageBytes(u.data)
+			if err != nil {
+				return err
+			}
+			return c.reply(id, path)
+		}
 		path, err := saveImage(string(u.data))
 		if err != nil {
 			return err
