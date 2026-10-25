@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../chat/latency_label.dart';
@@ -102,7 +101,6 @@ class DeskToolbar extends StatelessWidget {
     required this.landscape,
     required this.keyboardUp,
     required this.shortcuts,
-    required this.zoomed,
     required this.debugOpen,
     required this.stopped,
     required this.onToggle,
@@ -110,7 +108,6 @@ class DeskToolbar extends StatelessWidget {
     required this.onOrientation,
     required this.onKeyboard,
     required this.onShortcuts,
-    required this.onZoom,
     required this.onDebug,
     required this.onDisconnect,
     this.onView,
@@ -124,7 +121,6 @@ class DeskToolbar extends StatelessWidget {
   final bool landscape;
   final bool keyboardUp;
   final bool shortcuts;
-  final ValueListenable<bool> zoomed;
   final bool debugOpen;
   final bool stopped;
   final VoidCallback onToggle;
@@ -132,7 +128,6 @@ class DeskToolbar extends StatelessWidget {
   final VoidCallback onOrientation;
   final VoidCallback onKeyboard;
   final VoidCallback onShortcuts;
-  final VoidCallback onZoom;
   final VoidCallback onDebug;
   final VoidCallback onDisconnect;
 
@@ -186,14 +181,14 @@ class DeskToolbar extends StatelessWidget {
         tooltip: '返回',
         onTap: onBack,
       ),
+      // 图标画当前的方向，点一下切到另一个
       _icon(
         c,
         key: const Key('desk-toolbar-orientation'),
         icon: landscape
-            ? Icons.stay_current_portrait_rounded
-            : Icons.stay_current_landscape_rounded,
-        tooltip: landscape ? '竖屏' : '横屏',
-        on: landscape,
+            ? Icons.stay_current_landscape_rounded
+            : Icons.stay_current_portrait_rounded,
+        tooltip: landscape ? '切到竖屏' : '切到横屏',
         onTap: onOrientation,
       ),
       if (onView case final pick?)
@@ -221,17 +216,6 @@ class DeskToolbar extends StatelessWidget {
         tooltip: '快捷键',
         on: shortcuts,
         onTap: onShortcuts,
-      ),
-      ValueListenableBuilder<bool>(
-        valueListenable: zoomed,
-        builder: (context, on, _) => _icon(
-          c,
-          key: const Key('desk-toolbar-zoom'),
-          icon: Icons.fit_screen_rounded,
-          tooltip: '实际大小',
-          onTap: onZoom,
-          dim: !on,
-        ),
       ),
       _icon(
         c,
@@ -273,9 +257,8 @@ class DeskToolbar extends StatelessWidget {
     required String tooltip,
     required VoidCallback onTap,
     bool on = false,
-    bool dim = false,
   }) {
-    final color = dim ? c.faint : (on ? c.accent : c.text);
+    final color = on ? c.accent : c.text;
     return Tooltip(
       message: tooltip,
       child: Material(

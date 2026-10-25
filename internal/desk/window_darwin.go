@@ -193,11 +193,22 @@ func (e *engine) displayList() []Display {
 // writeWindows 回 CtrlWindows：当前空间里看得见、能单独看的窗口。
 func (e *engine) writeWindows() {
 	var list []Window
+	icons := map[string][]byte{}
 	e.mac.withPool(func() {
 		raw := e.mac.windowInfos(cgListOnScreen|cgListExcludeDesktop, 0)
 		list = pickWindows(raw, int32(os.Getpid()), e.opt.Exclude, e.displayList())
+		for k, pid := range windowIconPIDs(raw, list) {
+			if b := windowIcons.png(e.mac, pid); b != nil {
+				icons[k] = b
+			}
+		}
 	})
-	b, err := json.Marshal(Windows{List: list})
+	for i := range list {
+		if icons[list[i].Icon] == nil {
+			list[i].Icon = ""
+		}
+	}
+	b, err := json.Marshal(Windows{List: list, Icons: icons})
 	if err != nil {
 		return
 	}

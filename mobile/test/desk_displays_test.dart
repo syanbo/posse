@@ -134,6 +134,9 @@ void main() {
     expect(find.text('Visual Studio Code'), findsOneWidget);
     expect(find.text('Simulator'), findsOneWidget);
     expect(find.text('361 × 835'), findsOneWidget);
+    // 面板高度固定，窗口在下面要滚到才点得到
+    await tester.ensureVisible(find.byKey(const Key('desk-window-42')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('desk-window-42')));
     await tester.pumpAndSettle();
     expect(picked, (window: true, id: 42));
@@ -168,9 +171,12 @@ void main() {
     expect(find.byKey(const Key('desk-display-1')), findsOneWidget);
     expect(find.byKey(const Key('desk-windows-loading')), findsOneWidget);
     expect(find.byIcon(Icons.check_rounded), findsNothing);
+    final sheetHeight = tester.getSize(find.byType(BottomSheet)).height;
     windows.complete(_windows);
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    // 窗口列表到了面板也不长高，免得弹出途中跳一下
+    expect(tester.getSize(find.byType(BottomSheet)).height, sheetHeight);
   });
 
   test('windows parse and a lost window is flagged', () {
@@ -212,5 +218,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('desk-display-map-1')), findsOneWidget);
+  });
+
+  // App 图标按键共用一份：同一个 App 的窗口都画它，没给图标或给坏了的画默认图标
+  testWidgets('windows show their app icons', (tester) async {
+    // 1×1 的透明 PNG
+    const png =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    final list = DeskWindow.parseList({
+      'windows': [
+        {'id': 1, 'app': 'Code', 'icon': 'com.microsoft.VSCode'},
+        {'id': 2, 'app': 'Code', 'icon': 'com.microsoft.VSCode'},
+        {'id': 3, 'app': 'Notes', 'icon': 'bad'},
+        {'id': 4, 'app': 'Terminal'},
+      ],
+      'icons': {'com.microsoft.VSCode': png, 'bad': '!!not base64!!'},
+    });
+    expect(list.map((w) => w.icon != null), [true, true, false, false]);
+    expect(identical(list[0].icon, list[1].icon), isTrue);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => pickDeskView(
+              context,
+              DeskDisplays.parse(_frame),
+              windows: Future.value(list),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('desk-window-icon-1')), findsOneWidget);
+    expect(find.byKey(const Key('desk-window-icon-2')), findsOneWidget);
+    expect(find.byKey(const Key('desk-window-icon-3')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('desk-window-4')),
+        matching: find.byIcon(Icons.web_asset_rounded),
+      ),
+      findsOneWidget,
+    );
   });
 }

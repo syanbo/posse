@@ -23,12 +23,24 @@ func TestPickWindowsKeepsOrderAndFilters(t *testing.T) {
 	}
 	got := pickWindows(raw, 7, []string{"com.apple.iphonesimulator"}, displays)
 	want := []Window{
-		{ID: 10, App: "Safari", Title: "Posse", Width: 800, Height: 600, Display: 1},
-		{ID: 16, App: "Terminal", Width: 600, Height: 400, Display: 2},
-		{ID: 17, App: "Notes", Width: 600, Height: 400, Display: 1},
+		{ID: 10, App: "Safari", Title: "Posse", Width: 800, Height: 600, Display: 1, Icon: "pid:100"},
+		{ID: 16, App: "Terminal", Width: 600, Height: 400, Display: 2, Icon: "pid:105"},
+		{ID: 17, App: "Notes", Width: 600, Height: 400, Display: 1, Icon: "pid:106"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("pickWindows = %+v\nwant %+v", got, want)
+	}
+	// 同一个 App 有包 ID 时按包 ID 共用一张图标，取图标时用它第一个窗口的进程
+	raw = []rawWindow{
+		{ID: 20, PID: 200, Alpha: 1, App: "Code", Bundle: "com.microsoft.VSCode", W: 800, H: 600},
+		{ID: 21, PID: 201, Alpha: 1, App: "Code", Bundle: "com.microsoft.VSCode", W: 800, H: 600},
+	}
+	list := pickWindows(raw, 7, nil, displays)
+	if list[0].Icon != "com.microsoft.VSCode" || list[1].Icon != list[0].Icon {
+		t.Fatalf("icon keys %q %q", list[0].Icon, list[1].Icon)
+	}
+	if pids := windowIconPIDs(raw, list); !reflect.DeepEqual(pids, map[string]int32{"com.microsoft.VSCode": 200}) {
+		t.Fatalf("icon pids %v", pids)
 	}
 }
 

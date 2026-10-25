@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 
 /// Mac 上的一块屏（电脑的 desk.Display）。位置和大小是全局坐标里的点，主屏左上角是原点。
@@ -44,6 +46,7 @@ class DeskWindow {
     this.title = '',
     this.width = 0,
     this.height = 0,
+    this.icon,
   });
 
   final int id;
@@ -52,10 +55,16 @@ class DeskWindow {
   final double width;
   final double height;
 
+  /// App 图标（PNG），电脑没给时为 null。
+  final Uint8List? icon;
+
   /// 列表里的名字：有窗口标题用标题，没有用 App 名。
   String get label => title.isNotEmpty ? title : app;
 
-  static DeskWindow? parse(Object? raw) {
+  static DeskWindow? parse(
+    Object? raw, [
+    Map<String, Uint8List> icons = const {},
+  ]) {
     if (raw is! Map) return null;
     final id = raw['id'];
     final app = raw['app'];
@@ -68,15 +77,28 @@ class DeskWindow {
       title: title is String ? title : '',
       width: n(raw['w']),
       height: n(raw['h']),
+      icon: icons[raw['icon']],
     );
   }
 
-  /// desk.windows 的回复：当前空间里看得见的窗口，最前的在前面。
+  /// desk.windows 的回复：当前空间里看得见的窗口，最前的在前面。图标按 App 给一份（`icons`，键到 base64 的 PNG），
+  /// 每个窗口用 `icon` 指过去。
   static List<DeskWindow> parseList(Map<String, Object?> reply) {
+    final icons = <String, Uint8List>{};
+    if (reply['icons'] case final Map raw) {
+      for (final MapEntry(:key, :value) in raw.entries) {
+        if (key is! String || value is! String) continue;
+        try {
+          icons[key] = base64Decode(value);
+        } on FormatException {
+          // 坏的就不画，用默认图标
+        }
+      }
+    }
     final raw = reply['windows'];
     return [
       if (raw is List)
-        for (final w in raw) ?DeskWindow.parse(w),
+        for (final w in raw) ?DeskWindow.parse(w, icons),
     ];
   }
 }

@@ -2,6 +2,7 @@ package desk
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -39,10 +40,33 @@ func pickWindows(raw []rawWindow, self int32, exclude []string, displays []Displ
 		}
 		out = append(out, Window{
 			ID: w.ID, App: w.App, Title: w.Title, Width: w.W, Height: w.H,
-			Display: displayAt(displays, w.X+w.W/2, w.Y+w.H/2),
+			Display: displayAt(displays, w.X+w.W/2, w.Y+w.H/2), Icon: iconKey(w),
 		})
 	}
 	return out
+}
+
+// iconKey 是窗口所属 App 的图标键：有包 ID 用包 ID，没有用进程号。
+func iconKey(w rawWindow) string {
+	if w.Bundle != "" {
+		return w.Bundle
+	}
+	return "pid:" + strconv.Itoa(int(w.PID))
+}
+
+// windowIconPIDs 是 list 里各个图标键对应的进程，取图标用。
+func windowIconPIDs(raw []rawWindow, list []Window) map[string]int32 {
+	want := map[string]bool{}
+	for _, w := range list {
+		want[w.Icon] = true
+	}
+	pids := map[string]int32{}
+	for _, w := range raw {
+		if k := iconKey(w); want[k] && pids[k] == 0 {
+			pids[k] = w.PID
+		}
+	}
+	return pids
 }
 
 // displayAt 是点 (x, y) 所在的屏；不在任何一块屏上时是离得最近的那块。

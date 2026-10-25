@@ -192,7 +192,6 @@ void main() {
                 landscape: false,
                 keyboardUp: false,
                 shortcuts: false,
-                zoomed: ValueNotifier<bool>(false),
                 debugOpen: false,
                 stopped: false,
                 onToggle: () {},
@@ -200,7 +199,6 @@ void main() {
                 onOrientation: () {},
                 onKeyboard: () {},
                 onShortcuts: () {},
-                onZoom: () {},
                 onDebug: () {},
                 onDisconnect: () {},
               ),
@@ -307,57 +305,58 @@ void main() {
     );
   });
 
-  testWidgets('the actual-size button follows the zoom notifier', (
+  testWidgets('the orientation button shows the current orientation', (
     tester,
   ) async {
-    final zoomed = ValueNotifier<bool>(false);
-    addTearDown(zoomed.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: posseTheme(Brightness.dark),
-        home: Scaffold(
-          body: Center(
-            child: DeskToolbar(
-              expanded: true,
-              latency: null,
-              unresponsive: false,
-              fps: 60,
-              video: true,
-              landscape: false,
-              keyboardUp: false,
-              shortcuts: false,
-              zoomed: zoomed,
-              debugOpen: false,
-              stopped: false,
-              onToggle: () {},
-              onBack: () {},
-              onOrientation: () {},
-              onKeyboard: () {},
-              onShortcuts: () {},
-              onZoom: () {},
-              onDebug: () {},
-              onDisconnect: () {},
+    var turns = 0;
+    Future<void> pump(bool landscape) {
+      return tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: Scaffold(
+            body: Center(
+              child: DeskToolbar(
+                expanded: true,
+                latency: null,
+                unresponsive: false,
+                fps: 60,
+                video: true,
+                landscape: landscape,
+                keyboardUp: false,
+                shortcuts: false,
+                debugOpen: false,
+                stopped: false,
+                onToggle: () {},
+                onBack: () {},
+                onOrientation: () => turns++,
+                onKeyboard: () {},
+                onShortcuts: () {},
+                onDebug: () {},
+                onDisconnect: () {},
+              ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 200));
-    Color zoomColor() {
-      return tester
-          .widget<Icon>(
-            find.descendant(
-              of: find.byKey(const Key('desk-toolbar-zoom')),
-              matching: find.byType(Icon),
-            ),
-          )
-          .color!;
+      );
     }
 
-    final dim = zoomColor();
-    zoomed.value = true;
-    await tester.pump();
-    expect(zoomColor(), isNot(dim));
+    IconData icon() => tester
+        .widget<Icon>(
+          find.descendant(
+            of: find.byKey(const Key('desk-toolbar-orientation')),
+            matching: find.byType(Icon),
+          ),
+        )
+        .icon!;
+
+    await pump(false);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(icon(), Icons.stay_current_portrait_rounded);
+    await tester.tap(find.byKey(const Key('desk-toolbar-orientation')));
+    expect(turns, 1);
+    await pump(true);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(icon(), Icons.stay_current_landscape_rounded);
   });
 
   testWidgets('a drag after the bar finishes opening uses the opened width', (

@@ -150,11 +150,15 @@ type Window struct {
 	Width   float64 `json:"w,omitempty"`
 	Height  float64 `json:"h,omitempty"`
 	Display uint32  `json:"display,omitempty"`
+	// Icon 是 App 图标在 Windows.Icons 里的键，取不到图标时为空
+	Icon string `json:"icon,omitempty"`
 }
 
-// Windows 是 KindWindows 负载：当前空间里看得见的窗口，最前的在前面。
+// Windows 是 KindWindows 负载：当前空间里看得见的窗口，最前的在前面。Icons 是各 App 的图标（PNG），
+// 同一个 App 的几个窗口共用一张。
 type Windows struct {
-	List []Window `json:"windows"`
+	List  []Window          `json:"windows"`
+	Icons map[string][]byte `json:"icons,omitempty"`
 }
 
 // MarshalConfig 编码配置负载。

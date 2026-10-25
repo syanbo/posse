@@ -93,7 +93,6 @@ class _DeskPageState extends State<DeskPage>
 
   /// 最后一次单击在舞台里的纵坐标。键盘弹出时画面上移，让它不被盖住。
   double? _typeY;
-  final _zoomed = ValueNotifier<bool>(false);
 
   StreamSubscription<DeskStats>? _statsSub;
   StreamSubscription<Map<String, Object?>>? _deskFrames;
@@ -210,7 +209,6 @@ class _DeskPageState extends State<DeskPage>
     _statsTick.dispose();
     _anchorTop.dispose();
     _anchorSide.dispose();
-    _zoomed.dispose();
     _retry?.cancel();
     _lockRetry?.cancel();
     _lanCheck?.cancel();
@@ -1104,8 +1102,6 @@ class _DeskPageState extends State<DeskPage>
 
   void _pointer(void Function() body) {
     body();
-    final zoomed = _gestures.viewport.zoom > deskMinZoom + 0.01;
-    if (_zoomed.value != zoomed) _zoomed.value = zoomed;
     _frame.value++;
     _syncTicker();
   }
@@ -1451,7 +1447,6 @@ class _DeskPageState extends State<DeskPage>
                       landscape: landscape,
                       keyboardUp: _keyboardUp,
                       shortcuts: _chrome.shortcuts,
-                      zoomed: _zoomed,
                       debugOpen: _debugOpen,
                       stopped: _stopped,
                       onToggle: _toggleBar,
@@ -1459,7 +1454,6 @@ class _DeskPageState extends State<DeskPage>
                       onOrientation: _toggleOrientation,
                       onKeyboard: _toggleKeyboard,
                       onShortcuts: _toggleShortcuts,
-                      onZoom: _resetZoom,
                       onDebug: _toggleDebug,
                       onDisconnect: () => unawaited(_disconnect()),
                       onView: _displays.list.isNotEmpty
