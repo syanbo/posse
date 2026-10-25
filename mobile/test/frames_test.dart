@@ -145,4 +145,13 @@ void _overlapTest() {
     expect(gate.report(49, 22), isTrue);
     expect(gate.report(49, 22), isFalse);
   });
+
+  // Claude Code 一次收到超过 64 字节的控制字符会当成粘贴丢掉
+  test('clearing the input stays under the paste threshold', () {
+    final bytes = clearLines();
+    expect(bytes.length, lessThanOrEqualTo(64));
+    expect(bytes.take(2), [0x05, 0x15]);
+    expect(bytes.skip(2).take(3), [0x7f, 0x05, 0x15]);
+    expect(bytes.where((b) => b == 0x15).length, 20);
+  });
 }

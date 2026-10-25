@@ -771,8 +771,16 @@ class _TerminalScreenState extends State<TerminalScreen>
     enter: enter,
   );
 
-  /// 快捷键栏的「退出」：确认后按 agent 发退出的按键。Claude Code 的 Ctrl+D 要 800ms 内按两次；
-  /// Codex 先清空输入框再 /exit；别的 agent 清空后发一次 Ctrl+D。不发第二次 Ctrl+D 给它们：
+  /// 快捷键栏的「清空」：agent 的输入框可能有好几行，分两次发 [clearLines]，最多清 40 行；
+  /// shell 只删当前行，在空行上退格会响铃。
+  Future<void> _clearInput() async {
+    if (_liveTab.agent == null) return _send(const [0x05, 0x15]);
+    await _send(clearLines());
+    await _send(clearLines());
+  }
+
+  /// 快捷键栏的「退出」：确认后先清空输入框，再按 agent 发退出的按键。Claude Code 的 Ctrl+D
+  /// 只在输入框空着时算退出，要 800ms 内按两次；Codex 发 /exit；别的 agent 发一次 Ctrl+D。不发第二次 Ctrl+D 给它们：
   /// agent 退出后它会落到 shell 上，把整个终端也关掉。
   Future<void> _exitAgent() async {
     final agent = _liveTab.agent;
@@ -802,16 +810,17 @@ class _TerminalScreenState extends State<TerminalScreen>
       ),
     );
     if (ok != true || !mounted) return;
+    await _send(clearLines());
+    await _send(clearLines());
     switch (agent) {
       case 'claude':
+        await Future<void>.delayed(const Duration(milliseconds: 150));
         await _send(const [0x04]);
         await Future<void>.delayed(const Duration(milliseconds: 150));
         await _send(const [0x04]);
       case 'codex':
-        await _send(const [0x05, 0x15]);
         await _send('/exit'.codeUnits, enter: true);
       default:
-        await _send(const [0x05, 0x15]);
         await _send(const [0x04]);
     }
   }
@@ -974,6 +983,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                 child: _KeyBar(
                   onKey: _sendKey,
                   onExit: () => unawaited(_exitAgent()),
+                  onClear: () => unawaited(_clearInput()),
                   keys: widget.model.settings.barKeys,
                   onCustom: (key) => _sendKey(key.bytes, enter: key.enter),
                   onImage: widget.model.rpc == null || _busy
@@ -1068,10 +1078,12 @@ class _KeyBar extends StatelessWidget {
     required this.keyboardUp,
     required this.onKeyboard,
     required this.onExit,
+    required this.onClear,
   });
 
   final Future<void> Function(List<int> bytes) onKey;
   final VoidCallback onExit;
+  final VoidCallback onClear;
 
   /// 键盘开关后面的键，按设置里排的顺序。
   final List<BarKey> keys;
@@ -1196,6 +1208,9 @@ class _KeyBar extends StatelessWidget {
               }
               if (term != null && term.label == exitAgentLabel) {
                 return _textKey(c, term.label, onExit);
+              }
+              if (term != null && term.label == clearInputLabel) {
+                return _textKey(c, term.label, onClear);
               }
               if (term != null) {
                 return _textKey(c, term.label, () => onKey(term.bytes));

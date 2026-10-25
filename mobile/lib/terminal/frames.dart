@@ -151,6 +151,19 @@ List<int> cursorKeysApp(List<int> bytes) {
 /// 立即发送的键帽 ⌃↩。U+FE0E 让 ↩ 按文字画：手机字体里没有它时会退到 emoji 字体，画成彩色图标。
 const sendNowLabel = '⌃↩\uFE0E';
 
+/// 清空输入框的键帽。按下后由终端页按有没有 agent 发 [clearLines] 或只清当前行。
+const clearInputLabel = '清空';
+
+/// 清空 agent 的多行输入框：Ctrl+E 到行尾、Ctrl+U 删到行首，再退格并到上一行，重复下去。
+/// Claude Code 和 Codex 的 Ctrl+U 都只删当前这一行；光标一般在最后一行，往上删 [lines] 行就清空了，
+/// 输入框已经空了时多出来的退格不起作用。一次只能 20 行（59 字节）：Claude Code 2.1.310 实测一次收到
+/// 超过 64 字节就当成粘贴、整串丢掉，要清更多行就分几次发。不用连按两次 Esc：Claude 干活时那是打断。
+List<int> clearLines([int lines = 20]) => [
+  0x05,
+  0x15,
+  for (var i = 1; i < lines; i++) ...const [0x7f, 0x05, 0x15],
+];
+
 /// 退出 agent 的键帽。按下后不直接发这个键的字节，先确认再按 agent 发（终端页的 `_exitAgent`）。
 const exitAgentLabel = '退出';
 
@@ -164,9 +177,8 @@ const termKeys = <TermKey>[
   TermKey(sendNowLabel, [0x18, 0x13]),
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
-  // 清空输入框：Ctrl+E 到行尾再 Ctrl+U 删到行首。Claude Code 的 Ctrl+U 直接清空整个输入框，
-  // Codex 和 shell 删掉当前这一行。不用 ^C：agent 干活时它是打断
-  TermKey('清空', [0x05, 0x15]),
+  // 清空输入框，实际发的见 [clearLines]。不用 ^C：agent 干活时它是打断
+  TermKey(clearInputLabel, [0x05, 0x15]),
   TermKey(exitAgentLabel, [0x04]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
   TermKey('↓', [0x1b, 0x5b, 0x42]),
