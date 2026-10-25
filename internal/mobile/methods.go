@@ -551,8 +551,10 @@ func (c *conn) dispatch(req request) error {
 		return c.unsubscribeNativeChat(req.ID, p)
 	case "agent.permission.decide":
 		return c.decidePermission(req.ID, p)
+	// 下面几个要读盘、调 git 或等索引，放到自己的 goroutine 里：同一连接的请求排队处理，
+	// 不能让按键和 ping 等它们。都是各回各的，回复的先后不要紧
 	case "history.list", "history.search", "history.resume":
-		return c.history(req.ID, req.Method, p)
+		return c.async(req.ID, func() error { return c.history(req.ID, req.Method, p) })
 	case "usage.get":
 		// Hive 扩展：声明了 hive.usage.v1 的连接才有，手机首页的用量卡片用
 		if !c.hasCapability("hive.usage.v1") {
@@ -572,11 +574,11 @@ func (c *conn) dispatch(req request) error {
 		}()
 		return nil
 	case "session.context":
-		return c.sessionContext(req.ID, p)
+		return c.async(req.ID, func() error { return c.sessionContext(req.ID, p) })
 	case "git.status":
-		return c.gitStatus(req.ID, p)
+		return c.async(req.ID, func() error { return c.gitStatus(req.ID, p) })
 	case "git.diff":
-		return c.gitDiff(req.ID, p)
+		return c.async(req.ID, func() error { return c.gitDiff(req.ID, p) })
 	case "terminal.close", "session.tabs.close":
 		var a struct {
 			termParams

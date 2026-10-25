@@ -364,21 +364,29 @@ func (c *conn) sendJSON(v any) error {
 	if err != nil {
 		return err
 	}
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	frame := c.sess.sealText(b)
-	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
-	defer cancel()
-	return c.ws.Write(ctx, websocket.MessageText, frame)
+	return c.write(websocket.MessageText, func() []byte { return c.sess.sealText(b) })
 }
 
 func (c *conn) sendBinary(p []byte) error {
+	return c.write(websocket.MessageBinary, func() []byte { return c.sess.seal(p, kindBinary) })
+}
+
+// write 在发送锁里加密（计数器和发送顺序必须一致）并写出。等锁或写得久的记下来：
+// 分得清是排在别的大消息后面，还是线路本身慢。
+func (c *conn) write(typ websocket.MessageType, seal func() []byte) error {
+	asked := time.Now()
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	frame := c.sess.seal(p, kindBinary)
+	got := time.Now()
+	frame := seal()
 	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
 	defer cancel()
-	return c.ws.Write(ctx, websocket.MessageBinary, frame)
+	err := c.ws.Write(ctx, typ, frame)
+	wait, took := got.Sub(asked), time.Since(got)
+	if wait > time.Second || took > time.Second {
+		log.Printf("mobile: send %d bytes waited %v for the lock, wrote in %v", len(frame), wait.Round(time.Millisecond), took.Round(time.Millisecond))
+	}
+	return err
 }
 
 // writeTimeout 是发一条消息最多等多久：至少 15 秒，大消息再按每秒 64 KB 的最低速度加。
@@ -400,6 +408,20 @@ func (c *conn) reply(id string, result any) error {
 }
 
 // replyOrFail 回结果或错误：rpcError 带上它的错误码，文件不存在报 not_found。
+// async 在自己的 goroutine 里处理一个请求，返回的错误照 serve 的规矩回给手机。
+func (c *conn) async(id string, run func() error) error {
+	go func() {
+		start := time.Now()
+		if err := run(); err != nil {
+			c.replyOrFail(id, nil, err)
+		}
+		if d := time.Since(start); d > 2*time.Second {
+			log.Printf("mobile: request %s took %v (off the read loop)", id, d.Round(time.Millisecond))
+		}
+	}()
+	return nil
+}
+
 func (c *conn) replyOrFail(id string, res any, err error) {
 	if err == nil {
 		c.reply(id, res)

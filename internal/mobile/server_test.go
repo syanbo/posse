@@ -31,6 +31,8 @@ type fakeHost struct {
 	order []string
 	dir   string // 工作区目录，空是 /tmp
 	desk  func(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error)
+	// historyGate 不为空时历史查询等它关上才返回，模拟等索引
+	historyGate chan struct{}
 }
 
 func (h *fakeHost) Desk(ctx context.Context, req DeskRequest, notify func(DeskEvent)) (DeskReady, error) {
@@ -92,6 +94,9 @@ func (h *fakeHost) Usage() any {
 
 // History 假装常驻进程：list 回一个会话，resume 报找不到工作区。
 func (h *fakeHost) History(_ context.Context, method string, params json.RawMessage) (any, error) {
+	if h.historyGate != nil {
+		<-h.historyGate
+	}
 	switch method {
 	case "history.list", "history.search":
 		return map[string]any{"sessions": []map[string]any{{"agent": "claude", "id": "s1", "title": "修 bug", "path": "/tmp/s1.jsonl"}}, "params": json.RawMessage(params)}, nil

@@ -311,3 +311,28 @@ func TestSessionContext(t *testing.T) {
 		t.Fatalf("grok context %v", none)
 	}
 }
+
+// 慢的历史查询不占着读循环：它没回之前，ping 照样回
+func TestSlowHistoryDoesNotBlockPing(t *testing.T) {
+	gate := make(chan struct{})
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{}, historyGate: gate}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "hive-flutter", "version": 1, "capabilities": []string{"hive.history.v1"},
+	})))
+	slow := p.call("history.list", map[string]any{})
+	if _, ok := p.nextWithin(p.call("runtime.ping", map[string]any{}), 2*time.Second); !ok {
+		t.Fatal("ping waited for history.list")
+	}
+	close(gate)
+	result(t, p.next(slow))
+}
