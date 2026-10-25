@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"slices"
 	"testing"
 	"time"
 )
@@ -595,5 +596,32 @@ func TestOwnDelayIsTheExcessOverTheFloor(t *testing.T) {
 	c.noteOwn(at.Add(20*time.Second), 50*time.Millisecond)
 	if len(c.own) != 1 {
 		t.Fatalf("kept %d old samples", len(c.own))
+	}
+}
+
+// 手机的 hello 之前编出来的帧攒着，hello 一到就从关键帧起发出去：画面不动时不会再有新帧
+func TestFramesBeforeHelloWaitForThePeer(t *testing.T) {
+	c := &caster{control: io.Discard, bitrate: rateFloor}
+	c.busy, c.sendingKey = true, true // 不真发，只看排队
+	c.submit(Frame{Kind: KindVideo, Number: 1, Payload: make([]byte, 100)})
+	c.submit(Frame{Kind: KindVideo, Number: 2, Keyframe: true, Payload: make([]byte, 100)})
+	c.submit(Frame{Kind: KindVideo, Number: 3, Payload: make([]byte, 100)})
+	c.mu.Lock()
+	queued, early := len(c.queue), len(c.early)
+	c.mu.Unlock()
+	if queued != 0 || early != 2 {
+		t.Fatalf("before hello: queued %d early %d", queued, early)
+	}
+	c.notePeer(&net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 9})
+	c.sendEarly()
+	c.submit(Frame{Kind: KindVideo, Number: 4, Payload: make([]byte, 100)})
+	c.mu.Lock()
+	var got []uint64
+	for _, f := range c.queue {
+		got = append(got, f.Number)
+	}
+	c.mu.Unlock()
+	if !slices.Equal(got, []uint64{2, 3, 4}) {
+		t.Fatalf("after hello queued %v", got)
 	}
 }

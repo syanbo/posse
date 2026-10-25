@@ -191,6 +191,8 @@ type caster struct {
 	waitKey            bool
 	queue              []Frame // 等着发的帧，按采集顺序；mu 保护
 	queueBits          int
+	early              []Frame       // 手机的 hello 到之前编出来的帧，从最近的关键帧起；mu 保护
+	submitMu           sync.Mutex    // 攒下的帧和新来的帧按顺序交给 submitLocked
 	keySend            time.Duration // 上一个关键帧发了多久，关键帧请求的间隔按它拉长
 	mu                 sync.Mutex
 	bitrate            uint32
@@ -412,8 +414,22 @@ func (c *caster) resume() {
 	c.askKey()
 }
 
+// earlyCap 是 hello 之前最多攒几帧。画面在动时攒满了也不要紧，手机会要关键帧，接着来的帧照样能出一个。
+const earlyCap = 30
+
 func (c *caster) submit(f Frame) {
-	if c.currentPeer() == nil || c.paused() {
+	c.submitMu.Lock()
+	defer c.submitMu.Unlock()
+	if c.currentPeer() == nil && c.keepEarly(f) {
+		return
+	}
+	c.flushEarlyLocked()
+	c.submitLocked(f)
+}
+
+// submitLocked 把一帧排进发送队列。调用方持有 submitMu。
+func (c *caster) submitLocked(f Frame) {
+	if c.paused() {
 		return
 	}
 	c.observeCapture()
@@ -448,6 +464,44 @@ func (c *caster) submit(f Frame) {
 	c.mu.Unlock()
 	if ok {
 		c.startSend(next)
+	}
+}
+
+// keepEarly 在还不知道发给谁时把帧攒着，等 hello 到了补发，返回是不是攒下了。第一帧常比手机的 hello 先编出来，
+// 画面不动时 ScreenCaptureKit 不再出帧，手机要关键帧也换不来新帧，丢了它就一直等不到画面。
+// 在 mu 里再看一遍对端：notePeer 先设对端再在 mu 里取走，两边不会错过。
+func (c *caster) keepEarly(f Frame) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.currentPeer() != nil {
+		return false
+	}
+	switch {
+	case f.Keyframe:
+		c.early = append(c.early[:0], f)
+	case len(c.early) > 0 && len(c.early) < earlyCap:
+		c.early = append(c.early, f)
+	default:
+		c.early = nil
+	}
+	return true
+}
+
+// sendEarly 在第一次知道对端后发出 hello 之前攒下的帧，画面不动时没有新帧来带它们出去。
+func (c *caster) sendEarly() {
+	c.submitMu.Lock()
+	defer c.submitMu.Unlock()
+	c.flushEarlyLocked()
+}
+
+// flushEarlyLocked 调用方持有 submitMu。
+func (c *caster) flushEarlyLocked() {
+	c.mu.Lock()
+	early := c.early
+	c.early = nil
+	c.mu.Unlock()
+	for _, f := range early {
+		c.submitLocked(f)
 	}
 }
 
@@ -674,10 +728,15 @@ func (c *caster) notePeer(addr net.Addr) {
 		return
 	}
 	next := cloneAddr(addr)
-	if c.peer != nil {
+	first := c.peer == nil
+	if !first {
 		log.Printf("desk: peer %s -> %s", c.peer, next)
 	}
 	c.peer = next
+	if first {
+		// 不能在 peerMu 里发：submit 要再取它
+		go c.sendEarly()
+	}
 }
 
 // ReadFrom 交回来的地址只保证到下一次读，对端要留着用，得自己拷一份。
