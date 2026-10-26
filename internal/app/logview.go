@@ -927,7 +927,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					}
 				}
 				ui.Text(c, fmt.Sprint(i+1)).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Width(36).Shrink(0).TextAlign(ui.End)
-				ui.Text(c, strings.ReplaceAll(l.Text, "\t", "    ")).FontSize(a.fontSize - editorInset).Font(termFontFamily).SingleLine().Shrink(1)
+				ui.Text(c, strings.ReplaceAll(l.Text, "\t", "    ")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).SingleLine().Shrink(1)
 			})
 		}).Grow(1)
 		if bd.sel != nil {

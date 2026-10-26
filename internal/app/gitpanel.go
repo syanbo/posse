@@ -542,7 +542,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 
 func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df := d.diff
-	df.state.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
+	df.state.Font = a.editorFont()
 	// 左右对照时照 WebStorm 在中间分隔线旁给每处改动放 >>，上下合并时只有悬停的那处有"回滚"
 	split := df.state.Layout == editor.DiffSplit
 	df.state.HunkActions = df.worktree() && !split

@@ -92,7 +92,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			if len(lines) > changePopMax {
 				more, lines = len(lines)-changePopMax, lines[:changePopMax]
 			}
-			ui.Text(c, strings.Join(lines, "\n")).FontSize(a.fontSize - editorInset).Font(monoFont).LineHeight(1.45).Selectable()
+			ui.Text(c, strings.Join(lines, "\n")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).LineHeight(1.45).Selectable()
 			if more > 0 {
 				ui.Text(c, fmt.Sprintf("还有 %d 行", more)).FontSize(11).TextColor(t.TextMuted).Padding(4, 0, 0, 0)
 			}

@@ -20,23 +20,56 @@ func (a *app) openSettings() {
 	a.selected = settingsBoardID
 }
 
-// settingsBoard 是设置页：防休眠、Agent 权限、套餐用量、界面、终端、关于（版本、更新和重启常驻进程、日志和数据目录）。
-// 手机配对在「手机」页。
+// settingsTabs 是设置页左边的分类，右边只放选中的一类。
+var settingsTabs = []struct {
+	id, label string
+	icon      *ui.SVG
+}{
+	{"general", "通用", iconSettings},
+	{"agent", "Agent", iconSkill},
+	{"appearance", "外观", iconAppearance},
+	{"about", "关于", iconInfo},
+}
+
+// settingsBoard 是设置页：左边分类，右边是这一类的卡片。通用（防休眠）、Agent（权限、套餐用量）、
+// 外观（图标大小，终端和编辑器的字体、字号、预览）、关于（版本、更新和重启常驻进程、日志和数据目录）。手机配对在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
+	t := c.Theme()
 	a.band(c, func() {
 		titleText(c, "设置", fsCardTitle)
 		ui.Spacer(c)
 		a.closeBoardButton(c)
 	})
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Width(640).Gap(16).Children(func() {
-				a.awakeSettings(c)
-				a.permissionSettings(c)
-				a.planSettings(c)
-				a.interfaceSettings(c)
-				a.fontSettings(c)
-				a.aboutSettings(c)
+	tab := a.settingsTab
+	if tab == "" {
+		tab = settingsTabs[0].id
+	}
+	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Width(184).Shrink(0).Padding(16, 10).Gap(2).BorderWidth(0, 1, 0, 0).BorderColor(colors(t).line).Children(func() {
+			for _, s := range settingsTabs {
+				icon := func() { ui.Icon(c, s.icon).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
+				if a.navRowAt(c, "settings:"+s.id, s.id == tab, icon, s.label, "", "", nil).Clicked() {
+					a.settingsTab = s.id
+				}
+			}
+		})
+		ui.Scroll(c.Key("settings:" + tab)).Grow(1).Shrink(1).Basis(0).MinWidth(0).Children(func() {
+			ui.Column(c).Padding(24).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Width(640).MaxWidth(640).Gap(16).Children(func() {
+					switch tab {
+					case "general":
+						a.awakeSettings(c)
+					case "agent":
+						a.permissionSettings(c)
+						a.planSettings(c)
+					case "appearance":
+						a.interfaceSettings(c)
+						a.termFontSettings(c)
+						a.editorFontSettings(c)
+					case "about":
+						a.aboutSettings(c)
+					}
+				})
 			})
 		})
 	})
@@ -141,22 +174,27 @@ func (a *app) interfaceSettings(c *ui.Context) {
 	})
 }
 
-func (a *app) fontSettings(c *ui.Context) {
-	t := c.Theme()
-	settingsCard(c, "终端", "", func() {
-		settingsRow(c, "字号", func() {
-			if pressable(textButton(c, "−")).Label("缩小字号").Clicked() {
-				a.setFontSize(a.fontSize - 1)
-			}
-			ui.Text(c, fmt.Sprintf("%g", a.fontSize)).FontSize(13).FontFeatures("tnum").Width(32).Center()
-			if pressable(textButton(c, "+")).Label("放大字号").Clicked() {
-				a.setFontSize(a.fontSize + 1)
-			}
-			if pressable(textButton(c, "默认")).Clicked() {
-				a.setFontSize(defaultFontSize)
-			}
+func (a *app) termFontSettings(c *ui.Context) {
+	settingsCard(c, "终端", "终端里也可以用 ⌘= 放大、⌘- 缩小、⌘0 恢复默认。", func() {
+		settingsRow(c, "字体", func() {
+			a.fontPicker(c, &a.termPick, a.termFamily, "终端字体", a.setTermFamily)
 		})
-		ui.Text(c, "终端里也可以用 ⌘= 放大、⌘- 缩小、⌘0 恢复默认。").FontSize(12).TextColor(t.TextMuted)
+		settingsRow(c, "字号", func() {
+			fontSizeStepper(c, a.fontSize, defaultFontSize, a.setFontSize)
+		})
+		a.termPreview(c)
+	})
+}
+
+func (a *app) editorFontSettings(c *ui.Context) {
+	settingsCard(c, "编辑器", "文件、diff、逐行追溯和 Git 日志里的代码用这里的字体；文件标签在前台时 ⌘= ⌘- ⌘0 调编辑器的字号。", func() {
+		settingsRow(c, "字体", func() {
+			a.fontPicker(c, &a.editorPick, a.editorFamily, "编辑器字体", a.setEditorFamily)
+		})
+		settingsRow(c, "字号", func() {
+			fontSizeStepper(c, a.editorSize, defaultEditorFontSize, a.setEditorFontSize)
+		})
+		a.editorPreview(c)
 	})
 }
 

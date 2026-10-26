@@ -29,9 +29,8 @@ const filesTabID = "files"
 const (
 	filesPollEvery = time.Second
 	// listMaxAge 是文件清单的有效期：只监听展开的目录，没展开的目录里新增的文件靠重列清单才看得到
-	listMaxAge  = 10 * time.Second
-	imageMaxPx  = 2400 // 图片按这个宽度解码，2 倍屏下 1200pt
-	editorInset = 1    // 编辑器字号比终端小一号
+	listMaxAge = 10 * time.Second
+	imageMaxPx = 2400 // 图片按这个宽度解码，2 倍屏下 1200pt
 )
 
 type docKind uint8

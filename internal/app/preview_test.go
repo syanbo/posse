@@ -42,6 +42,7 @@ func previewApp(t *testing.T) *app {
 		lastTask:     map[string]string{},
 		diffs:        map[string]*worktreeDiff{},
 		fontSize:     defaultFontSize,
+		editorSize:   defaultEditorFontSize,
 		loaded:       true,
 		daemon:       daemonStatus{FootprintKB: 17 << 10, Running: 4, Awake: &awakeStatus{Mode: "auto", Active: true, Working: 2}},
 		selfKB:       150 << 10,
@@ -802,11 +803,48 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "mobile-"+suffix+".png")
 		a.daemon.DeskViewer, a.daemon.DeskMissing = "", nil
 
-		// 设置页：常驻进程还在跑旧的包
-		a.selected = settingsBoardID
-		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
+		// 设置页：通用分类；关于里常驻进程还在跑旧的包
+		a.selected, a.settingsTab = settingsBoardID, ""
 		savePNG(t, newPreviewTester(a, dark), "settings-"+suffix+".png")
+		a.settingsTab = "about"
+		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
+		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
 		a.daemon.Pid = 0
+
+		// 设置页的外观：点左边的分类进来，点开终端的字体列表
+		systemFonts.once.Do(func() {})
+		systemFonts.list, systemFonts.done = []ui.FontFamily{{Name: "Courier New", Monospaced: true}, {Name: "Helvetica"},
+			{Name: "Menlo", Monospaced: true}, {Name: "Monaco", Monospaced: true}, {Name: "PingFang SC"}, {Name: "Times New Roman"}}, true
+		a.settingsTab = ""
+		ft := newPreviewTester(a, dark)
+		if err := ft.Click("外观"); err != nil {
+			t.Fatal(err)
+		}
+		pass(ft, 300*time.Millisecond)
+		ft.Frame()
+		if a.settingsTab != "appearance" {
+			t.Fatalf("点了左边的外观，分类是 %q", a.settingsTab)
+		}
+		savePNG(t, ft, "settings-appearance-"+suffix+".png")
+		if err := ft.Click("终端字体"); err != nil {
+			t.Fatal(err)
+		}
+		pass(ft, 300*time.Millisecond)
+		ft.Frame()
+		if !a.termPick.open {
+			t.Fatal("点了字体按钮，列表没有打开")
+		}
+		savePNG(t, ft, "settings-fonts-"+suffix+".png")
+		a.termPick = fontPick{}
+
+		// 设置页的外观：编辑器换了字体和字号，滚到下面看预览跟着变
+		a.settingsTab, a.editorFamily, a.editorSize = "appearance", "Menlo", 15
+		et := newPreviewTester(a, dark)
+		et.Scroll(800, 500, 0, 2000)
+		pass(et, 300*time.Millisecond)
+		et.Frame()
+		savePNG(t, et, "settings-editor-"+suffix+".png")
+		a.editorFamily, a.editorSize, a.settingsTab = "", defaultEditorFontSize, ""
 
 		// 底栏的内存浮窗
 		a = previewApp(t)

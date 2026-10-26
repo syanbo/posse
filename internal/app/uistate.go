@@ -31,6 +31,9 @@ type uiState struct {
 	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
 	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
 	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
+	TermFont             string   `json:"termFont,omitempty"`             // 终端字体，空表示默认
+	EditorFont           string   `json:"editorFont,omitempty"`           // 编辑器字体，空表示默认
+	EditorFontSize       float32  `json:"editorFontSize,omitempty"`       // 编辑器字号，0 表示默认（旧版跟着终端小一号）
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
 	ImageCheckerOff      bool     `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
 	UsageSkillsOnly      bool     `json:"usageSkillsOnly,omitempty"`      // "技能与工具"面板只看技能和 MCP，不列命令行程序

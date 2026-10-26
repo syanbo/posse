@@ -25,6 +25,7 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/editor"
 
 	"posse/internal/agent"
 	"posse/internal/client"
@@ -146,16 +147,23 @@ type app struct {
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
-	lastPoll   *pollResult
-	diffAt     map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	termAt     time.Time            // 上次统计终端内存的时间（轮询协程里用）
-	lastTerm   int64
-	pollForce  atomic.Bool // 下一次轮询无论有没有变化都交给界面
-	view       *termView
-	fontSize   float32
-	permission string  // agent 的权限档位，存在 $POSSE_HOME/agents.json
-	home       string  // $POSSE_HOME，ui.json 所在目录；为空时不保存
-	state      uiState // 写进 ui.json 的界面状态
+	lastPoll     *pollResult
+	diffAt       map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	termAt       time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm     int64
+	pollForce    atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	view         *termView
+	fontSize     float32
+	editorSize   float32
+	termFamily   string // 终端字体，空是默认
+	editorFamily string // 编辑器字体，空是默认
+	settingsTab  string // 设置页左边选中的分类，空是第一个
+	termPick     fontPick
+	editorPick   fontPick
+	editorDemo   *editor.State // 设置页编辑器预览的只读编辑器，第一次打开时建
+	permission   string        // agent 的权限档位，存在 $POSSE_HOME/agents.json
+	home         string        // $POSSE_HOME，ui.json 所在目录；为空时不保存
+	state        uiState       // 写进 ui.json 的界面状态
 
 	// 任务总览
 	taskHome  bool                     // 只要总览：不自动打开上次看的任务
@@ -339,6 +347,8 @@ func Run(c *client.Client) error {
 	if a.state.FontSize > 0 {
 		a.fontSize = a.state.FontSize
 	}
+	a.termFamily, a.editorFamily = a.state.TermFont, a.state.EditorFont
+	a.editorSize = editorSizeOf(a.state)
 	if a.state.IconSize > 0 {
 		iconSize = a.state.IconSize
 	}
@@ -769,10 +779,6 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 	return &w.Terminals[0]
 }
 
-func (a *app) termFont() terminal.Font {
-	return terminal.Font{Family: termFontFamily, Size: a.fontSize}
-}
-
 // ensureView 让接入的终端与选中的一致：切换时断开旧的（释放界面侧内存），接入新的。
 func (a *app) ensureView(id string) {
 	if a.view != nil && a.view.id == id {
@@ -799,6 +805,9 @@ func (a *app) ensureView(id string) {
 		Scrollback: 4 << 20,
 		// 按着 ⌘ 滑触控板（⌘ 点链接、⌘ 选区时常碰到）不缩放字号，照常滚动；⌘=、⌘- 仍可调
 		NoWheelZoom: true,
+		// ⌘= ⌘- ⌘0 由界面的快捷键改设置里的字号（setFontSize），不让终端自己再临时缩放这一个：
+		// 两边各改各的，设置页的数字和终端实际的字号会对不上
+		OnZoom: func(terminal.Zoom) bool { return true },
 		// Cmd+点击：网址交给系统用默认浏览器打开，路径在访达里打开
 		OpenLink:    func(link string) bool { return a.openLink(v, link) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
@@ -884,6 +893,10 @@ func (a *app) setFontSize(size float32) {
 	}
 	if a.state.FontSize != a.fontSize {
 		a.state.FontSize = a.fontSize
+		// 旧版的 ui.json 没有编辑器字号，启动时由终端字号推算；先记下来，免得下次启动跟着新的终端字号变
+		if a.state.EditorFontSize == 0 {
+			a.state.EditorFontSize = a.editorSize
+		}
 		a.saveState()
 	}
 }

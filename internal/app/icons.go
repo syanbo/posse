@@ -56,6 +56,8 @@ var (
 	iconCoffee     = icon(`<path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/>`)
 	iconMemory     = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/>`)
 	iconSkill      = icon(`<path d="M12 4.5 13.8 9l4.7 1.8-4.7 1.8L12 17.2l-1.8-4.6-4.7-1.8L10.2 9z"/><path d="M18 15.5v4M16 17.5h4"/>`)
+	iconAppearance = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>`)
+	iconInfo       = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.75v.01"/>`)
 	iconMinus      = icon(`<path d="M6 12h12"/>`)
 	iconPanelLeft  = icon(`<rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M8.75 3.5v17"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)

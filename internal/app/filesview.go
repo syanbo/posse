@@ -329,7 +329,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			markdownPreview(c, d)
 			return
 		}
-		d.ed.Font = ui.Font{Family: termFontFamily, Size: a.fontSize - editorInset}
+		d.ed.Font = a.editorFont()
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
 		d.ed.OnDefinition = func(off int) { a.goToDefinition(w, v, d, off) }
 		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
