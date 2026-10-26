@@ -188,11 +188,11 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			panes.Children(func() {
 				// 两边各一种颜色（照 WebStorm 的分支颜色）：标题里的分支名和提交的圆点同色，一眼分得出是哪边
 				ui.Column(c).Height(0).Grow(split).Shrink(1).Children(func() {
-					a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther, laneColor(0))
+					a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther, laneColor(t, 0))
 				})
 				a.compareGrip(c, panes.Bounds().H)
 				ui.Column(c).Height(0).Grow(1 - split).Shrink(1).Children(func() {
-					a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur, laneColor(1))
+					a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur, laneColor(t, 1))
 				})
 			})
 		})
@@ -242,9 +242,9 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 12, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, "比较").FontSize(fsBody).TextColor(t.TextMuted)
 		// 颜色和下面两栏对应
-		ui.Text(c, cd.other).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(0)).SingleLine().Shrink(1)
+		ui.Text(c, cd.other).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(t, 0)).SingleLine().Shrink(1)
 		ui.Text(c, "和").FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, cd.cur).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(1)).SingleLine().Shrink(1)
+		ui.Text(c, cd.cur).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(t, 1)).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
@@ -565,7 +565,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						// 行之间不留缝，左边的竖线才连得起来
 						ui.Column(c).Children(func() {
 							for i, ci := range plan.Commits {
-								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(0)) {
+								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(t, 0)) {
 									a.selectCommit(v, &ps.commit, ci)
 									ps.detail = nil
 								}

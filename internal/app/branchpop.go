@@ -176,13 +176,8 @@ func trackTip(branch string, tr *trackInfo) string {
 	return tip
 }
 
-// incomingColor 是传入提交的蓝色，传出用 sage 绿，和 WebStorm 一样分开。
-func incomingColor(t *ui.Theme) ui.Color {
-	if t.Dark {
-		return ui.Hex("#7AA2F7")
-	}
-	return ui.Hex("#3B6FD9")
-}
+// incomingColor 是传入提交的蓝色（sky），传出用 sage 绿，和 WebStorm 一样分开。
+func incomingColor(t *ui.Theme) ui.Color { return colors(t).sky }
 
 // trackBadge 是传入（↙ 蓝）、传出（↗ 绿）的箭头和数字；showCount 为假时只画箭头（标签栏的分支按钮）。
 func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {

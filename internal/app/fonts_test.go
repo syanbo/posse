@@ -138,7 +138,7 @@ func TestNoLiteralType(t *testing.T) {
 			t.Fatal(err)
 		}
 		for i, line := range strings.Split(string(b), "\n") {
-			if text.MatchString(line) && !strings.Contains(line, "ui.Icon(") ||
+			if text.MatchString(line) && !strings.Contains(line, "ui.Icon(") || tupleType(line) ||
 				icon.MatchString(line) && !strings.Contains(line, "iconPlay") {
 				t.Errorf("%s:%d 写了数字的字号、字重、图标尺寸或圆角：%s", f, i+1, strings.TrimSpace(line))
 			}
@@ -179,6 +179,45 @@ func TestSpacingScale(t *testing.T) {
 						t.Errorf("%s:%d 间距 %s 不在阶梯上：%s", f, i+1, n[1], m[0])
 					}
 				}
+			}
+		}
+	}
+}
+
+// tupleType 认出 a.Font, a.Size = x, 12 这种一次给几个字段赋值、把数字赋给字号或字重的写法（常量声明不算）。
+func tupleType(line string) bool {
+	lhs, rhs, ok := strings.Cut(line, " = ")
+	if !ok || !strings.Contains(lhs, ",") {
+		return false
+	}
+	names, values := strings.Split(lhs, ","), strings.Split(rhs, ",")
+	for i, n := range names {
+		n = strings.TrimSpace(n)
+		if i < len(values) && strings.Contains(n, ".") && (strings.HasSuffix(n, "Size") || strings.HasSuffix(n, "Weight")) {
+			if v := strings.TrimSpace(values[i]); v != "" && v[0] >= '0' && v[0] <= '9' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// 颜色只在 style.go 里定义（主题、调色板、agent 品牌色），别处用名字；透明度变体只给动画调暗传进来的颜色用。
+func TestColorsInPalette(t *testing.T) {
+	literal := regexp.MustCompile(`ui\.(Hex|RGBA|RGB)\(`)
+	alpha := regexp.MustCompile(`\.Alpha\(`)
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "style.go" {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if literal.MatchString(line) || alpha.MatchString(line) && !strings.Contains(line, "color.Alpha(") {
+				t.Errorf("%s:%d 颜色要用 style.go 里的名字：%s", f, i+1, strings.TrimSpace(line))
 			}
 		}
 	}

@@ -301,8 +301,8 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 // playBadge 是盖在视频缩略图正中的播放标记，深色圆底让它在亮暗画面上都看得见。
 func playBadge(c *ui.Context) {
 	ui.Box(c).Absolute().Top(0).Right(0).Bottom(0).Left(0).Center().Children(func() {
-		ui.Box(c).Size(36, 36).Radius(full(36)).Center().Background(ui.RGBA(0, 0, 0, 0.55)).Children(func() {
-			ui.Icon(c, iconPlay).FontSize(sz(22)).TextColor(ui.RGBA(255, 255, 255, 1))
+		ui.Box(c).Size(36, 36).Radius(full(36)).Center().Background(colors(c.Theme()).scrim).Children(func() {
+			ui.Icon(c, iconPlay).FontSize(sz(22)).TextColor(white)
 		})
 	})
 }

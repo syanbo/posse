@@ -298,7 +298,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 		row.Background(row.AnimateColor("bg", bg, hover))
 		fg, muted := t.Text, p.faint
 		if it.disabled {
-			fg, muted = p.faint, p.faint.Alpha(0.6)
+			fg, muted = p.faint, p.faint
 		}
 		row.Children(func() {
 			if checks {

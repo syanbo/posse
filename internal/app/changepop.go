@@ -81,7 +81,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			}
 		})
 		// 改之前的内容：删掉或改掉的行，淡红底；只新增了行时说明一句
-		box := ui.Column(c).Radius(rControl).Background(t.Danger.Alpha(0.08)).Padding(6, 12)
+		box := ui.Column(c).Radius(rControl).Background(soft(t, t.Danger)).Padding(6, 12)
 		box.Children(func() {
 			if ch.Old == "" {
 				ui.Text(c, fmt.Sprintf("这里新增了 %d 行，上一次提交时没有", ch.NewEnd-ch.NewStart)).FontSize(fsSmall).TextColor(t.TextMuted)

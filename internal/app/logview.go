@@ -160,7 +160,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	p := colors(t)
 	h := a.logPanelHeight(body.Bounds().H)
 	panel := ui.Column(c.Key("log-panel")).Absolute().Left(0).Right(0).Bottom(-(1-shown)*h).Height(h).
-		Background(p.card).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
+		Background(p.card).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, p.shadow)
 	panel.Children(func() {
 		ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
@@ -361,9 +361,7 @@ func buildGraph(commits []gitx.CommitInfo) []graphRow {
 	return rows
 }
 
-var laneColors = []ui.Color{ui.Hex("#D97757"), ui.Hex("#5B8DEF"), ui.Hex("#3E9E6B"), ui.Hex("#B36AD9"), ui.Hex("#D9A441"), ui.Hex("#4BB3B3")}
-
-func laneColor(i int) ui.Color { return laneColors[i%len(laneColors)] }
+func laneColor(t *ui.Theme, i int) ui.Color { return dataColor(t, i) }
 
 // graphCell 画一行的提交图。
 func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
@@ -383,10 +381,10 @@ func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
 			switch {
 			case h == "":
 			case h == hash:
-				line(x(j), top, x(r.lane), mid, laneColor(j))
+				line(x(j), top, x(r.lane), mid, laneColor(t, j))
 			default:
 				if k := slices.Index(r.out, h); k >= 0 {
-					line(x(j), top, x(k), mid, laneColor(k))
+					line(x(j), top, x(k), mid, laneColor(t, k))
 				}
 			}
 		}
@@ -395,14 +393,14 @@ func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
 			if !slices.Contains(r.in, h) || h == hash {
 				continue
 			}
-			line(x(k), mid, x(k), bot, laneColor(k))
+			line(x(k), mid, x(k), bot, laneColor(t, k))
 		}
 		for _, k := range r.parents {
 			if k >= 0 {
-				line(x(r.lane), mid, x(k), bot, laneColor(k))
+				line(x(r.lane), mid, x(k), bot, laneColor(t, k))
 			}
 		}
-		p.Fill(ui.Rect{X: x(r.lane) - 4, Y: mid - 4, W: 8, H: 8}, laneColor(r.lane), 4)
+		p.Fill(ui.Rect{X: x(r.lane) - 4, Y: mid - 4, W: 8, H: 8}, laneColor(t, r.lane), 4)
 		p.Fill(ui.Rect{X: x(r.lane) - 2, Y: mid - 2, W: 4, H: 4}, t.Background, 2)
 	})
 }

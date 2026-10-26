@@ -1006,12 +1006,7 @@ func (a *app) footer(c *ui.Context) {
 const footHeight = 34
 
 // footShade 是底栏的底色，比侧栏深一层。
-func footShade(t *ui.Theme) ui.Color {
-	if t.Dark {
-		return ui.RGBA(0, 0, 0, 0.18)
-	}
-	return ui.RGBA(0, 0, 0, 0.03)
-}
+func footShade(t *ui.Theme) ui.Color { return colors(t).shade }
 
 // mb 把 KB 写成界面上的内存：1 GB 以上用 GB、一位小数，以下用整数 MB。
 func mb(kb int64) string {
@@ -1557,7 +1552,7 @@ func (a *app) firstRun(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
 		emptyCard(c).Width(440).Padding(24).Gap(16).Children(func() {
-			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
+			tile(c, iconHexOutline, 48, soft(t, colors(t).honey), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", fsPage)
 				ui.Text(c, "Posse 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)

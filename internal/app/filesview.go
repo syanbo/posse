@@ -206,7 +206,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		text, spans := trimHit(h)
 		row.Children(func() {
 			ui.Text(c, fmt.Sprint(h.Line+1)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(sz(30)).Shrink(0).TextAlign(ui.End)
-			ui.RichText(c, markSpans(text, spans, ui.Span{Font: monoFont, Size: fsSmall}, colors(t).honey.Alpha(0.28))...).SingleLine().Shrink(1)
+			ui.RichText(c, markSpans(text, spans, ui.Span{Font: monoFont, Size: fsSmall}, colors(t).mark)...).SingleLine().Shrink(1)
 		})
 		if row.Clicked() {
 			var span [2]int
@@ -770,7 +770,7 @@ func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 			dirMarks = append(dirMarks, [2]int{r[0], min(r[1], max(base-1, 0))})
 		}
 	}
-	mark := colors(t).honey.Alpha(0.28)
+	mark := colors(t).mark
 	row.Children(func() {
 		ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.RichText(c, markSpans(m.Path[base:], nameMarks, ui.Span{Size: fsBody}, mark)...).SingleLine().Shrink(0)

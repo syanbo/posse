@@ -301,7 +301,7 @@ func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	if selected && reveal {
 		row.ScrollIntoView()
 	}
-	mark := colors(t).honey.Alpha(0.28)
+	mark := colors(t).mark
 	row.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)

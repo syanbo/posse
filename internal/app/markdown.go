@@ -490,12 +490,12 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 		base.Strikethrough = true
 	}
 	if in.style&mdMono != 0 {
-		base.Font, base.Size, base.Background = monoFont, 12, codeBackground(t)
+		base.Font, base.Size, base.Background = monoFont, fsSmall, codeBackground(t)
 	}
 	if in.url != "" {
 		base.Color = t.Accent
 	}
-	return markSpans(in.text, markRanges(in.text, r.words), base, colors(t).honey.Alpha(0.28))
+	return markSpans(in.text, markRanges(in.text, r.words), base, colors(t).mark)
 }
 
 func webURL(u string) bool {

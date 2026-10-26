@@ -121,39 +121,92 @@ const (
 // full 是高（或宽）为 h 的圆点、胶囊、圆形按钮的圆角。
 func full(h float32) float32 { return h / 2 }
 
-// palette 是在系统主题之外 Posse 自己的颜色。
+// palette 是在系统主题之外 Posse 自己的颜色。颜色只在这里和 posseTheme、agentIcon 里定义，别处用名字（docs/design.md）。
 type palette struct {
-	honey  ui.Color // 等你处理
-	sage   ui.Color // 本轮完成
-	side   ui.Color // 侧栏、窗口底
-	canvas ui.Color // 主区域的底，卡片放在上面
-	card   ui.Color // 卡片，和主题的 Background、终端底色一致
-	band   ui.Color // 顶栏
-	raised ui.Color // 浮层：比卡片再高一层
-	line   ui.Color // 分隔线
-	tint   ui.Color // 选中项的底：强调色淡底
-	wash   ui.Color // 悬停的底
-	fill   ui.Color // 框里的次级按钮的底
-	faint  ui.Color // 最弱的文字：占位、不重要的计数
-	code   ui.Color // 代码块的底
+	honey  ui.Color   // 等你处理
+	sage   ui.Color   // 本轮完成、新增
+	sky    ui.Color   // 信息：传入的提交、MCP
+	side   ui.Color   // 侧栏、窗口底
+	canvas ui.Color   // 主区域的底，卡片放在上面
+	card   ui.Color   // 卡片，和主题的 Background、终端底色一致
+	band   ui.Color   // 顶栏
+	raised ui.Color   // 浮层：比卡片再高一层
+	shade  ui.Color   // 底栏：压暗一层
+	code   ui.Color   // 代码块的底
+	line   ui.Color   // 分隔线；深色下也是卡片、浮层的内高光
+	tint   ui.Color   // 选中项的底：强调色淡底（soft）
+	mark   ui.Color   // 搜索命中的底
+	wash   ui.Color   // 悬停的底
+	fill   ui.Color   // 框里的次级按钮的底
+	fillHi ui.Color   // 次级按钮悬停
+	faint  ui.Color   // 最弱的文字：占位、禁用、不重要的计数
+	shadow ui.Color   // 浮层、底部面板、提示的投影
+	lift   ui.Color   // 卡片的浅投影（只有浅色有）
+	scrim  ui.Color   // 压在图片、视频上的深色底
+	data   []ui.Color // 数据色：提交图的线、分支比较的两边、用量的分类；依次取
 }
 
 func colors(t *ui.Theme) palette {
 	if t.Dark {
-		return palette{
+		p := palette{
 			honey: ui.Hex("#F2AA2E"), sage: ui.Hex("#8DBB92"),
 			side: ui.Hex("#2A2A27"), canvas: ui.Hex("#1A1A19"), card: t.Background, band: ui.Hex("#1C1C1B"), raised: ui.Hex("#2A2A27"),
-			line: ui.RGBA(255, 255, 255, 0.08), tint: t.Accent.Alpha(0.2), wash: ui.RGBA(255, 255, 255, 0.05),
-			fill: ui.RGBA(255, 255, 255, 0.09), faint: ui.Hex("#7D7B76"), code: ui.Hex("#141413"),
+			shade: ui.RGBA(0, 0, 0, 0.18), code: ui.Hex("#141413"),
+			line: ui.RGBA(255, 255, 255, 0.08), wash: ui.RGBA(255, 255, 255, 0.05),
+			fill: ui.RGBA(255, 255, 255, 0.09), fillHi: ui.RGBA(255, 255, 255, 0.14), faint: ui.Hex("#7D7B76"),
+			shadow: ui.RGBA(0, 0, 0, 0.5), scrim: ui.RGBA(0, 0, 0, 0.55),
+			data: darkData,
 		}
+		return p.derive(t)
 	}
-	return palette{
+	p := palette{
 		honey: ui.Hex("#B5700E"), sage: ui.Hex("#3E8A4C"),
 		side: ui.Hex("#F3F2EF"), canvas: ui.Hex("#F8F8F6"), card: t.Background, band: ui.Hex("#F8F7F5"), raised: ui.Hex("#FFFFFF"),
-		line: ui.RGBA(0, 0, 0, 0.08), tint: t.Accent.Alpha(0.12), wash: ui.RGBA(0, 0, 0, 0.04),
-		fill: ui.RGBA(0, 0, 0, 0.06), faint: ui.Hex("#999793"), code: ui.Hex("#F5F4F1"),
+		shade: ui.RGBA(0, 0, 0, 0.03), code: ui.Hex("#F5F4F1"),
+		line: ui.RGBA(0, 0, 0, 0.08), wash: ui.RGBA(0, 0, 0, 0.04),
+		fill: ui.RGBA(0, 0, 0, 0.06), fillHi: ui.RGBA(0, 0, 0, 0.1), faint: ui.Hex("#999793"),
+		shadow: ui.RGBA(0, 0, 0, 0.12), lift: ui.RGBA(0, 0, 0, 0.04), scrim: ui.RGBA(0, 0, 0, 0.55),
+		data: lightData,
 	}
+	return p.derive(t)
 }
+
+// 数据色依次是橙、蓝、绿、紫、金、青；浅色底上要深一档才看得清。colors 每帧调用很多次，切片只建一次。
+var (
+	darkData  = []ui.Color{ui.Hex("#D97757"), ui.Hex("#7AA2F7"), ui.Hex("#5FBFA0"), ui.Hex("#B36AD9"), ui.Hex("#D9A441"), ui.Hex("#4BB3B3")}
+	lightData = []ui.Color{ui.Hex("#C15F3C"), ui.Hex("#3B6FD9"), ui.Hex("#21866A"), ui.Hex("#8E4BB8"), ui.Hex("#A9771A"), ui.Hex("#2B8A8A")}
+)
+
+// derive 补上由别的颜色推出来的几项。
+func (p palette) derive(t *ui.Theme) palette {
+	p.sky = p.data[1]
+	p.tint = soft(t, t.Accent)
+	p.mark = p.honey.Alpha(0.28)
+	return p
+}
+
+// soft 是某个语义色的淡底（选中、命中、提醒、出错的底），深色下浓一点才看得出。
+func soft(t *ui.Theme, c ui.Color) ui.Color {
+	if t.Dark {
+		return c.Alpha(0.2)
+	}
+	return c.Alpha(0.12)
+}
+
+// dataColor 是第 i 个数据色，超出时循环。
+func dataColor(t *ui.Theme, i int) ui.Color {
+	d := lightData
+	if t.Dark {
+		d = darkData
+	}
+	return d[i%len(d)]
+}
+
+// white 和 black 是不随主题变的颜色：品牌色块、勾选框里的对勾、二维码的白底这类本来就固定的地方。
+var (
+	white = ui.Hex("#FFFFFF")
+	black = ui.Hex("#000000")
+)
 
 var posseThemes [2]*ui.Theme
 
@@ -211,9 +264,9 @@ func floating(c *ui.Context, e ui.Element) ui.Element {
 	k := e.Keyframes("pop-in", popInFrames)
 	e.Radius(rCard).Background(p.raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
 	if t.Dark {
-		return e.InsetShadow(0, 0, 0, 1, ui.RGBA(255, 255, 255, 0.1)).Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.5))
+		return e.InsetShadow(0, 0, 0, 1, p.line).Shadow(0, 12, 32, 0, p.shadow)
 	}
-	return e.Border(1, p.line).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.12))
+	return e.Border(1, p.line).Shadow(0, 8, 24, 0, p.shadow)
 }
 
 var popInFrames = []ui.Keyframe{{At: 0, Value: 0}, {At: 160 * time.Millisecond, Value: 1, Ease: ui.EaseOut}}
@@ -280,10 +333,11 @@ func fadeEdges(list ui.Element, s *ui.ListState, bg ui.Color) ui.Element {
 
 // edge 给卡片一样的容器描边：深色是 1px 内高光，浅色是很淡的外环加一点投影；卡片本身是唯一的那层框。
 func edge(c *ui.Context, e ui.Element) ui.Element {
+	p := colors(c.Theme())
 	if c.Theme().Dark {
-		return e.InsetShadow(0, 0, 0, 1, ui.RGBA(255, 255, 255, 0.07))
+		return e.InsetShadow(0, 0, 0, 1, p.line)
 	}
-	return e.Border(1, ui.RGBA(0, 0, 0, 0.06)).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.04))
+	return e.Border(1, p.line).Shadow(0, 1, 2, 0, p.lift)
 }
 
 // composer 是一体的输入区：圆角框里是输入，右下角是发送按钮，⌘↩ 也能发送；聚焦时描边换成焦点色。
@@ -456,18 +510,18 @@ func agentIcon(c *ui.Context, agent string, size float32) ui.Element {
 	icon, bg, fg := iconTerminal, t.SurfacePressed, t.Text
 	switch agent {
 	case "claude":
-		icon, bg, fg = iconClaude, ui.Hex("#D97757"), ui.Hex("#FFFFFF")
+		icon, bg, fg = iconClaude, ui.Hex("#D97757"), white
 	case "codex":
-		icon, bg, fg = iconCodex, ui.Hex("#FFFFFF"), ui.Hex("#000000") // ChatGPT 应用图标的白底黑标
+		icon, bg, fg = iconCodex, white, black // ChatGPT 应用图标的白底黑标
 	case "grok":
 		icon, bg, fg = iconGrok, t.Text, t.Background
 	case "cursor":
-		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), ui.Hex("#FFFFFF")
+		icon, bg, fg = iconCursor, ui.Hex("#6E56CF"), white
 	}
 	e := tile(c, icon, size, bg, fg)
 	if agent == "codex" {
 		// 白底在浅色卡片上会融掉，描一圈细边
-		e.InsetShadow(0, 0, 0, 1, ui.RGBA(0, 0, 0, 0.12))
+		e.InsetShadow(0, 0, 0, 1, black.Alpha(0.12))
 	}
 	return e
 }
@@ -481,10 +535,7 @@ func textButton(c *ui.Context, label string) ui.Element {
 	b := ui.ButtonBase(c).Height(sz(28)).Padding(0, 12).Radius(rControl).Label(label).Shrink(0)
 	bg := colors(t).fill
 	if b.Hovered() {
-		bg = ui.RGBA(0, 0, 0, 0.1)
-		if t.Dark {
-			bg = ui.RGBA(255, 255, 255, 0.14)
-		}
+		bg = colors(t).fillHi
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
@@ -547,7 +598,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 					}
 					if n > 0 {
 						ui.Box(c).Height(16).MinWidth(16).Padding(0, 4).Margin(0, 0, 0, 4).Radius(full(16)).Center().Shrink(0).
-							Background(t.Accent.Alpha(0.18)).Children(func() {
+							Background(colors(t).tint).Children(func() {
 							ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontWeight(fwMedium).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
 						})
 					}

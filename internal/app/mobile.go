@@ -334,13 +334,13 @@ func (a *app) mobilePairCard(c *ui.Context) {
 	m := &a.mobile
 	card(c).Padding(20).Children(func() {
 		ui.Row(c).Gap(24).AlignItems(ui.Start).Children(func() {
-			box := ui.Box(c).Size(208, 208).Shrink(0).Radius(rCard).Background(ui.RGBA(255, 255, 255, 1)).Center()
+			box := ui.Box(c).Size(208, 208).Shrink(0).Radius(rCard).Background(white).Center()
 			box.Children(func() {
 				switch {
 				case m.qr != nil:
 					ui.Image(c, m.qr).Size(196, 196)
 				case m.loading:
-					ui.Text(c, "正在生成…").FontSize(fsSmall).TextColor(ui.RGBA(0, 0, 0, 0.5))
+					ui.Text(c, "正在生成…").FontSize(fsSmall).TextColor(posseTheme(false).TextMuted) // 二维码总是白底
 				}
 			})
 			ui.Column(c).Grow(1).Shrink(1).Gap(12).Children(func() {

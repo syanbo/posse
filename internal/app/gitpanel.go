@@ -555,7 +555,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			if btn.Hovered() {
 				btn.Background(colors(t).wash)
 			}
-			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(iconSize).TextColor(t.Text.Alpha(0.75)) })
+			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(iconSize).TextColor(t.TextMuted) })
 			if btn.Clicked() {
 				a.revertHunk(v, d, act.Index)
 			}
@@ -749,14 +749,13 @@ func pickBox(c *ui.Context, key, name string, state int) bool {
 	if state == pickSome {
 		box.Mixed()
 	}
-	accent, line := t.Accent, t.TextMuted.Alpha(0.6)
+	accent, line := t.Accent, colors(t).faint
 	box.Draw(func(p *ui.Painter, r ui.Rect) {
 		if state == pickNone {
 			p.Stroke(r, line, 4, 1.2)
 			return
 		}
 		p.Fill(r, accent, 4)
-		white := ui.RGBA(255, 255, 255, 1)
 		if state == pickSome {
 			p.Fill(ui.Rect{X: r.X + 3.5, Y: r.Y + r.H/2 - 0.8, W: r.W - 7, H: 1.6}, white, 1)
 			return
@@ -811,7 +810,7 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 					case side.img != nil:
 						// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
 						w, h := side.img.Size()
-						checker := ui.RGBA(128, 128, 128, 0.18)
+						checker := colors(t).fillHi
 						ui.Box(c).Shrink(1).Draw(func(p *ui.Painter, r ui.Rect) {
 							const sq = 8
 							p.Clip(r, 0, func() {

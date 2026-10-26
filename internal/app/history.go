@@ -1002,7 +1002,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 	box := ui.Column(c).Margin(0, 16).Padding(12, 16, 12, 16).Gap(6).Radius(rCard)
 	switch {
 	case hit:
-		box.Background(colors(t).honey.Alpha(0.1))
+		box.Background(soft(t, colors(t).honey))
 	case m.Role == "user":
 		// 自己说的话靠右、强调色淡底，一眼和 agent 的回复分开
 		box.Background(colors(t).tint).AlignSelf(ui.End).MaxWidth(transcriptWidth * 0.8)
@@ -1049,7 +1049,7 @@ func highlighted(c *ui.Context, text string, words []string) ui.Element {
 	if len(marks) == 0 {
 		return ui.Text(c, text)
 	}
-	return ui.RichText(c, markSpans(text, marks, ui.Span{}, colors(c.Theme()).honey.Alpha(0.28))...)
+	return ui.RichText(c, markSpans(text, marks, ui.Span{}, colors(c.Theme()).mark)...)
 }
 
 // markRanges 返回 text 里搜索词出现的字节区间，按位置排好、互不重叠。

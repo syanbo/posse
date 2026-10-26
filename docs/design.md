@@ -1,6 +1,6 @@
 # Posse 桌面端设计规范
 
-桌面端界面（`internal/app`）的字号、字重、图标、间距、尺寸和圆角规则。外观的取向参照 Claude 桌面端的克制（依据见 `docs/plans/ui-claude-polish.html`），配色和控件约定见 `internal/app/style.go` 开头，各界面的行为见 `docs/features/ui.md`。
+桌面端界面（`internal/app`）的字号、字重、图标、间距、尺寸、圆角和颜色规则。外观的取向参照 Claude 桌面端的克制（依据见 `docs/plans/ui-claude-polish.html`），分层、边框和状态的约定见 `internal/app/style.go` 开头，各界面的行为见 `docs/features/ui.md`。
 
 所有取值都在 `internal/app/style.go` 里定义。写界面时只用这些名字，不写数字。`fonts_test.go` 的 `TestNoLiteralType`、`TestSpacingScale` 会拦下写数字的字号、字重、图标尺寸和阶梯外的间距。
 
@@ -119,6 +119,26 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 - 圆点、胶囊写成 `full(尺寸)`，改了尺寸仍是圆的。按用途选档，不按数值：16 高的快捷键胶囊圆角 8 是 `full(16)`，不是 `rControl`。
 - agent 色块（边长 × 0.26）、图标按钮（框宽 ÷ 4）按比例算，跟着尺寸设置变。
 
+## 颜色
+
+颜色只在 `style.go` 里定义：mygo 主题（`posseTheme`）、Posse 调色板（`colors(t)`，深浅各一套）和 agent 品牌色（`agentIcon`）。别处只用名字，不写 `ui.Hex`、`ui.RGBA`，也不自己加透明度。
+
+| 类别 | 名字 | 用途 |
+|---|---|---|
+| 文字 | `Text`、`TextMuted`、`faint` | 只有三档：正文、次要、最弱（占位、禁用、不重要的计数）。不用透明度再分档 |
+| 强调 | `Accent`（及 `AccentHover`、`AccentPressed`） | 主按钮、焦点、链接、图标、选中 |
+| 语义 | `honey`、`sage`、`sky`、`Danger` | 待处理和提醒、完成和新增、信息（传入的提交、MCP）、错误和冲突 |
+| 底色 | `side`、`canvas`、`band`、`card`、`raised`、`shade`、`code` | 侧栏、主区域、顶栏、卡片（和终端同色）、浮层、底栏、代码块，只差一点明度 |
+| 叠加 | `line`、`wash`、`fill`、`fillHi` | 分隔线（深色下也是卡片、浮层的内高光）、悬停底、框里的次级按钮底和它的悬停 |
+| 淡底 | `soft(t, 色)`、`tint`、`mark` | 语义色的淡底（深色 20%、浅色 12%）；`tint` 是强调色的淡底，用于选中；`mark` 是搜索命中 |
+| 投影和遮罩 | `shadow`、`lift`、`scrim` | 浮层、底部面板、提示的投影；卡片的浅投影；压在图片、视频上的深色底 |
+| 数据色 | `dataColor(t, i)` | 提交图的线、分支比较的两边、用量的分类，依次取；浅色主题用深一档的版本保证对比 |
+| 固定色 | `white`、`black` | 不随主题变的地方：品牌色块、勾选框里的对勾、二维码的白底 |
+
+- 只有「待处理」用琥珀色并配文字，是界面上唯一醒目的东西；状态靠形状区分，颜色只是辅助（见 `style.go` 开头）。
+- 新的语义先找现有的名字；确实没有再加进调色板，深浅两套都要给。
+- 动画里调暗传进来的颜色（等待的波形、加载动画）和列表两端的渐隐可以用 `Alpha`。
+
 ## 设置和存储
 
 「设置 › 外观 › 界面」里的项目存在 `$POSSE_HOME/ui.json`，0 或缺省表示默认：
@@ -136,6 +156,6 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 ## 改这套规范
 
 1. 改 `style.go` 里的定义（阶梯、档位函数、常量），不要在调用处单独调。
-2. 跑 `go test ./internal/app`：`TestNoLiteralType`（字号、字重、图标尺寸、圆角不写数字）、`TestSpacingScale`（间距在阶梯上）、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
+2. 跑 `go test ./internal/app`：`TestNoLiteralType`（字号、字重、图标尺寸、圆角不写数字）、`TestSpacingScale`（间距在阶梯上）、`TestColorsInPalette`（颜色只在 `style.go` 定义）、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
 3. 用离屏预览比较改动前后：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`。`ui-small`、`ui-large`、`ui-heavy` 三组是字号调到最小、最大和字重调重时的样子，`icons-large` 是图标调大时的样子。
 4. 同步本文和 `docs/features/ui.md`。

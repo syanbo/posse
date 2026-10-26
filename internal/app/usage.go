@@ -204,19 +204,10 @@ func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color,
 	}
 }
 
-func mcpColor(c *ui.Context) ui.Color {
-	if c.Theme().Dark {
-		return ui.Hex("#7AA2F7")
-	}
-	return ui.Hex("#3B6FD9")
-}
+func mcpColor(c *ui.Context) ui.Color { return colors(c.Theme()).sky }
 
-func cliColor(c *ui.Context) ui.Color {
-	if c.Theme().Dark {
-		return ui.Hex("#5FBFA0")
-	}
-	return ui.Hex("#21866A")
-}
+// cliColor 是命令行程序的颜色：数据色里的绿。
+func cliColor(c *ui.Context) ui.Color { return dataColor(c.Theme(), 2) }
 
 // usageStep 是时间线上的一项：连着几次调用同一个工具（或同一个技能）合成一项。
 type usageStep struct {
