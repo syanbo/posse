@@ -51,7 +51,7 @@ func (a *app) awakeButton(c *ui.Context) {
 		}
 	}
 	tip := awakeTip(st)
-	b := ui.Row(c.Key("awake")).Height(sz(24)).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
+	b := ui.Row(c.Key("awake")).Height(sz(24)).Padding(0, 8).Gap(6).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label("防休眠：" + short).Tooltip(tip)
 	bg := ui.Transparent
 	if b.Hovered() && st != nil {

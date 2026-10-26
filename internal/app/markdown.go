@@ -221,7 +221,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		r.inline(c, b.inlines).FontSize(size).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
 		// 上面一条语言栏，右边是复制按钮
-		ui.Column(c).Radius(rCode).Background(codeBackground(t)).Clip().Children(func() {
+		ui.Column(c).Radius(rCard).Background(codeBackground(t)).Clip().Children(func() {
 			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
 				lang := b.lang
 				if lang == "" {
@@ -239,7 +239,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		})
 	case mdQuote:
 		ui.Row(c).AlignItems(ui.Stretch).Gap(8).Children(func() {
-			ui.Box(c).Width(3).Shrink(0).Radius(1.5).Background(t.Border)
+			ui.Box(c).Width(3).Shrink(0).Radius(full(3)).Background(t.Border)
 			ui.Column(c).Grow(1).Shrink(1).Gap(8).TextColor(t.TextMuted).Children(func() { r.blocks(c, b.blocks) })
 		})
 	case mdList:
@@ -331,7 +331,7 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		scroll.Padding(0, 0, 12, 0) // 滚动条画在表格下面，不压着最后一行
 	}
 	scroll.Children(func() {
-		ui.Grid(c).ColumnTracks(tracks...).Border(1, t.Border).Radius(6).Children(func() { r.cells(c, b, cols) })
+		ui.Grid(c).ColumnTracks(tracks...).Border(1, t.Border).Radius(rRow).Children(func() { r.cells(c, b, cols) })
 	})
 }
 

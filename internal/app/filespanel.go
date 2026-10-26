@@ -196,7 +196,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 // panelTab 是文件栏顶上的图标页签：选中的垫一层强调色淡底、图标用正文色。返回这一帧是否点了它。
 func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key("panel-tab-"+label)).Size(30, 28).Radius(7).Center().Shrink(0).
+	b := ui.Box(c.Key("panel-tab-"+label)).Size(30, 28).Radius(rRow).Center().Shrink(0).
 		Role(ui.RoleTab).Label(label).Tooltip(label).Checked(active)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {

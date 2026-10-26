@@ -296,7 +296,7 @@ func (a *app) defDialog(c *ui.Context) {
 func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	t := c.Theme()
 	key := d.Path + ":" + strconv.Itoa(d.Line)
-	row := ui.Column(c.Key(key)).Padding(6, 12).Gap(4).Radius(6).Role(ui.RoleButton).Label(key)
+	row := ui.Column(c.Key(key)).Padding(6, 12).Gap(4).Radius(rRow).Role(ui.RoleButton).Label(key)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()

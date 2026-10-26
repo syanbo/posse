@@ -331,7 +331,7 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				}
 			}
 		})
-		box := ui.Column(c).Radius(rInput).Background(colors(t).fill)
+		box := ui.Column(c).Radius(rControl).Background(colors(t).fill)
 		if !a.rollbackBox.sized() {
 			box.Height(min(max(float32(len(rows))*26+8, 300), 420)) // 文件少时也留出一块，不显得局促
 		} else {
@@ -451,7 +451,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 					}
 				}
 			})
-			ui.Column(c).Grow(1).Shrink(1).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).Radius(rControl).Background(colors(t).fill).Clip().Children(func() {
 				muted := func(msg string) {
 					ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted).Padding(16)
 				}

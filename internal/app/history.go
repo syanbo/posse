@@ -742,7 +742,7 @@ func (a *app) sessionList(c *ui.Context) {
 			return
 		}
 		open := h.isGroupOpen(r.group)
-		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(12, 12, 4, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(12, 12, 4, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(r.group)
 		head.Children(func() {
 			turn := float32(0)
@@ -822,7 +822,7 @@ func (a *app) historyEmpty(c *ui.Context, title, body string) {
 func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 	t := c.Theme()
 	h := &a.history
-	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(12, 12, 12, 16).Gap(12).Radius(8).AlignItems(ui.Center)
+	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(12, 12, 12, 16).Gap(12).Radius(rControl).AlignItems(ui.Center)
 	selectedBg(c, row, h.sel == sessionKey(s))
 	row.Children(func() {
 		agentTile(c, s.Agent, tileMedium())
@@ -968,7 +968,7 @@ const transcriptWidth = 680
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
-	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		turn := float32(0)
@@ -999,7 +999,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		whoColor = t.Accent
 	}
 	// agent 的回复不装框，直接铺开；命中搜索的那条铺一层琥珀淡底
-	box := ui.Column(c).Margin(0, 16).Padding(12, 16, 12, 16).Gap(6).Radius(10)
+	box := ui.Column(c).Margin(0, 16).Padding(12, 16, 12, 16).Gap(6).Radius(rCard)
 	switch {
 	case hit:
 		box.Background(colors(t).honey.Alpha(0.1))

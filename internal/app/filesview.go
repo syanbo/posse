@@ -15,7 +15,7 @@ import (
 )
 
 func dot(c *ui.Context, color ui.Color) ui.Element {
-	return ui.Box(c).Size(6, 6).Radius(3).Background(color).Shrink(0)
+	return ui.Box(c).Size(6, 6).Radius(full(6)).Background(color).Shrink(0)
 }
 
 // filesPage 是文件标签的内容：打开的文件。文件树、检索和改动在右边的文件栏里。
@@ -62,7 +62,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
 		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
-		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(6).
+		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(rRow).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectedBg(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -201,7 +201,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			a.pathMenu(c, row, w, v, abs, false)
 			return
 		}
-		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(4, 8, 4, 8).Gap(8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
+		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(4, 8, 4, 8).Gap(8).Radius(rRow).AlignItems(ui.Start).Role(ui.RoleButton)
 		selectedBg(c, row, false)
 		text, spans := trimHit(h)
 		row.Children(func() {
@@ -261,7 +261,7 @@ func searchStatus(s *fileSearch) string {
 // toggleChip 是检索选项的小开关，开着时垫强调色淡底；返回这一帧是否被点了。
 func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 8).Radius(5).Center().Shrink(0).
+	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 8).Radius(rSmall).Center().Shrink(0).
 		Role(ui.RoleButton).Label(tip).Tooltip(tip).Checked(on)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {
@@ -436,7 +436,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	t := c.Theme()
 	active := a.filesActive(w) && v.cur == d
 	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
-	row := ui.Row(c.Key("doc:"+d.path)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(0).
+	row := ui.Row(c.Key("doc:"+d.path)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(0).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(shortPath(d.path))
 	hovered := row.Hovered()
 	bg := ui.Transparent
@@ -463,7 +463,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			ui.Text(c, detail).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
-		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
+		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
 		if btn.Hovered() {
 			btn.Background(t.SurfacePressed)
 		}
@@ -569,7 +569,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
 		if d.readOnly {
-			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(4).Background(t.Surface).Shrink(0).
+			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0).
 				Tooltip(fmt.Sprintf("文件超过 %d MB，只读打开", files.ReadOnlySize>>20))
 		}
 		ui.Spacer(c)
@@ -640,7 +640,7 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 		return
 	}
 	t := c.Theme()
-	ui.Row(c).Shrink(0).Margin(0, 12, 8, 12).Padding(8, 8, 8, 12).Gap(8).Radius(8).Background(t.Surface).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Shrink(0).Margin(0, 12, 8, 12).Padding(8, 8, 8, 12).Gap(8).Radius(rControl).Background(t.Surface).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.4).Grow(1).Shrink(1)
 		if actions != nil {
 			actions()
@@ -756,7 +756,7 @@ func (a *app) quickDialog(c *ui.Context) {
 // quickRow 是快速打开的一条结果：文件名在前，目录在后，命中的字母铺底色。返回是否被点了。
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 12).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
+	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()

@@ -468,7 +468,7 @@ func (a *app) taskList(c *ui.Context) {
 
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
 	t := c.Theme()
-	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(12, 12, 12, 16).Gap(8).Radius(8).AlignItems(ui.Start)
+	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(12, 12, 12, 16).Gap(8).Radius(rControl).AlignItems(ui.Start)
 	selectedBg(c, row, a.taskSel == task.ID)
 	row.Children(func() {
 		ui.Box(c).Padding(2, 0, 0, 0).Children(func() { taskGlyphIcon(c, task, fsBody) })
@@ -537,7 +537,7 @@ func (a *app) emptyBoard(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(2, 6).Radius(4).Background(t.Surface)
+				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(2, 6).Radius(rSmall).Background(t.Surface)
 				ui.Text(c, "Agent 的用法说明").FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		})
@@ -665,7 +665,7 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 			text += "。有未提交的改动，合并前要先提交"
 		}
 	}
-	ui.Row(c).Gap(8).Padding(12, 12).Radius(8).Background(colors(t).wash).Children(func() {
+	ui.Row(c).Gap(8).Padding(12, 12).Radius(rControl).Background(colors(t).wash).Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted)
 		ui.Text(c, task.Branch+" 相对 "+task.BaseRef).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)

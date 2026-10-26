@@ -232,7 +232,7 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	t := c.Theme()
 	_, labels, _ := a.loadFonts()
 	name := fontLabel(current, labels)
-	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 12).Gap(6).Radius(rButton).Label(label).AlignItems(ui.Center)
+	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 12).Gap(6).Radius(rControl).Label(label).AlignItems(ui.Center)
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = colors(t).wash
@@ -327,7 +327,7 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 			return
 		}
 		label := r.label
-		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 12, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
+		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(label)
 		bg := ui.Transparent
 		if row.Hovered() || i == p.hl {

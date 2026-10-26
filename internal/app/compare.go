@@ -403,7 +403,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 	list.Key = func(i int) any { return rows[i].path }
 	ui.List(c, list, len(rows), func(i int) {
 		r := rows[i]
-		row := ui.Row(c.Key(r.path)).Height(sz(26)).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*treeIndent).Gap(6).Radius(6).AlignItems(ui.Center)
+		row := ui.Row(c.Key(r.path)).Height(sz(26)).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center)
 		if r.dir {
 			row.Role(ui.RoleButton).Label(r.path)
 			row.Children(func() {
@@ -688,7 +688,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 	case c.Shortcut(ui.Shift, ui.KeyF7):
 		a.pushStep(v, ps, -1)
 	}
-	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
+	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rControl).Background(colors(t).fill).Clip().Children(func() {
 		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
 			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
 				a.pushStep(v, ps, -1)

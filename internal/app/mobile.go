@@ -259,7 +259,7 @@ func mobileOnlineMark(c *ui.Context, names []string) {
 		if len(names) > 1 {
 			ui.Text(c, strconv.Itoa(len(names))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		}
-		ui.Box(c).Size(7, 7).Radius(3.5).Background(green)
+		ui.Box(c).Size(7, 7).Radius(full(7)).Background(green)
 	})
 }
 
@@ -302,7 +302,7 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 			cardTitle(c, "看桌面")
 			if viewer != "" {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Box(c).Size(7, 7).Radius(3.5).Background(colors(t).sage)
+					ui.Box(c).Size(7, 7).Radius(full(7)).Background(colors(t).sage)
 					ui.Text(c, viewer+" 正在看这台电脑的桌面").FontSize(fsBody).Grow(1)
 					if pressable(textButton(c, "停止")).Tooltip("断开这台手机的画面和操作").Clicked() {
 						go a.call("desk.stop", nil, nil, 10*time.Second)
@@ -334,7 +334,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 	m := &a.mobile
 	card(c).Padding(20).Children(func() {
 		ui.Row(c).Gap(24).AlignItems(ui.Start).Children(func() {
-			box := ui.Box(c).Size(208, 208).Shrink(0).Radius(12).Background(ui.RGBA(255, 255, 255, 1)).Center()
+			box := ui.Box(c).Size(208, 208).Shrink(0).Radius(rCard).Background(ui.RGBA(255, 255, 255, 1)).Center()
 			box.Children(func() {
 				switch {
 				case m.qr != nil:
@@ -412,7 +412,7 @@ func (a *app) mobileDevices(c *ui.Context) {
 				online++
 			}
 		}
-		row := ui.Row(c).Padding(8, 8).Gap(12).Radius(8).AlignItems(ui.Center)
+		row := ui.Row(c).Padding(8, 8).Gap(12).Radius(rControl).AlignItems(ui.Center)
 		selectedBg(c, row, false)
 		if row.Clicked() {
 			m.othersOpen = !m.othersOpen
@@ -447,7 +447,7 @@ func (a *app) mobileDevices(c *ui.Context) {
 // mobileDeviceRow 是一台手机：名字，下面是配对时间和存了几个配对码；右边在线或上次连接、移除。
 func (a *app) mobileDeviceRow(c *ui.Context, d mobileDevice) {
 	t := c.Theme()
-	row := ui.Row(c).Padding(8, 8).Gap(12).Radius(8).AlignItems(ui.Center)
+	row := ui.Row(c).Padding(8, 8).Gap(12).Radius(rControl).AlignItems(ui.Center)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		fg := t.TextMuted

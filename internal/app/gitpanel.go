@@ -134,7 +134,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
 	t := c.Theme()
 	active := *sel == i
-	row := ui.Row(c.Key(label)).Height(sz(26)).Padding(0, 12).Gap(4).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key(label)).Height(sz(26)).Padding(0, 12).Gap(4).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleTab).Label(label).Checked(active)
 	bg := ui.Transparent
 	switch {
@@ -276,7 +276,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
 	// 比组标题缩进一层：勾选框和组名的文字对齐
-	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(6).
+	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
@@ -370,7 +370,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
 		other = s.Branch
 	}
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(6).
+	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
@@ -460,7 +460,7 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 	if conflicts > 0 {
 		msg = fmt.Sprintf("正在%s，有 %d 个文件冲突。解决后点继续：右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决。", opNames[op], conflicts)
 	}
-	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
 		ui.Row(c).Gap(6).Children(func() {
 			cont := pressable(accentButton(c, "继续"))
@@ -551,7 +551,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	if df.worktree() && split {
 		df.state.RenderHunkMark = func(c *ui.Context, btn ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()
-			btn.Width(24).Radius(5).AlignItems(ui.Center).Justify(ui.Center).Label("回滚这处改动").Tooltip("回滚这处改动")
+			btn.Width(24).Radius(rSmall).AlignItems(ui.Center).Justify(ui.Center).Label("回滚这处改动").Tooltip("回滚这处改动")
 			if btn.Hovered() {
 				btn.Background(colors(t).wash)
 			}
@@ -566,7 +566,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			t := c.Theme()
 			bar.Row().Gap(4)
 			bar.Children(func() {
-				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(5).Background(t.Surface).Border(1, t.Border).Label("回滚这处改动")
+				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Border(1, t.Border).Label("回滚这处改动")
 				btn.Children(func() { ui.Text(c, "回滚").FontSize(fsSmall) })
 				if btn.Clicked() {
 					a.revertHunk(v, d, act.Index)
@@ -609,7 +609,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 	t := c.Theme()
 	sep.Padding(4)
 	sep.Children(func() {
-		ui.Row(c).Grow(1).AlignSelf(ui.Stretch).AlignItems(ui.Center).Gap(2).Padding(0, 6).Radius(6).Background(colors(t).wash).Children(func() {
+		ui.Row(c).Grow(1).AlignSelf(ui.Stretch).AlignItems(ui.Center).Gap(2).Padding(0, 6).Radius(rRow).Background(colors(t).wash).Children(func() {
 			if s.Lines == 0 {
 				ui.Text(c, s.Header).Font(monoFont).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				return
@@ -620,7 +620,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, "向上展开", miniBox(), fsSmall)).Clicked() {
 				s.ExpandUp()
 			}
-			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(4).Role(ui.RoleButton).Label("全部展开")
+			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(rSmall).Role(ui.RoleButton).Label("全部展开")
 			b.Children(func() { ui.Text(c, fmt.Sprintf("%d 行未改动", s.Lines)).FontSize(fsSmall).TextColor(t.TextMuted) })
 			if b.Clicked() {
 				s.ExpandAll()
@@ -643,7 +643,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		}
 		// 点路径弹出同一组的文件，在这个标签里换着看
 		group := diffGroup(v, df)
-		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(4).AlignItems(ui.Center).Shrink(1).
+		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(rSmall).AlignItems(ui.Center).Shrink(1).
 			Role(ui.RoleButton).Label("切换文件").Tooltip("切换文件 F7 / ⇧F7")
 		if path.Hovered() && len(group) > 1 {
 			path.Background(t.SurfaceHover)
@@ -668,7 +668,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			})
 		}
 		if label := df.tabLabel(); label != "改动" {
-			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(4).Background(t.Surface).Shrink(0)
+			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
@@ -745,7 +745,7 @@ const (
 func pickBox(c *ui.Context, key, name string, state int) bool {
 	t := c.Theme()
 	on := state == pickAll
-	box := ui.CheckboxBase(c.Key("pick:"+key), &on).Size(14, 14).Radius(4).Label("勾选 " + name)
+	box := ui.CheckboxBase(c.Key("pick:"+key), &on).Size(14, 14).Radius(rSmall).Label("勾选 " + name)
 	if state == pickSome {
 		box.Mixed()
 	}

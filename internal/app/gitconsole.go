@@ -349,14 +349,14 @@ func (a *app) runWhere(dir string) string {
 func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	label := "操作记录"
-	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, v.console)
 	row.Children(func() {
 		ui.Icon(c, iconOpLog).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), label, v.console)
 		if !v.console && a.projectConsoleErr(w.ProjectID, false) {
-			ui.Box(c).Size(6, 6).Radius(3).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
+			ui.Box(c).Size(6, 6).Radius(full(6)).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
 		}
 	})
 	if row.Clicked() {

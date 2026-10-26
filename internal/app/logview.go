@@ -216,7 +216,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	if f := d.log.filter; f.Path != "" {
 		label = "历史：" + path.Base(f.Path)
 	}
-	row := ui.Row(c.Key(d.path)).Height(sz(26)).Padding(0, 6, 0, 12).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key(d.path)).Height(sz(26)).Padding(0, 6, 0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, active)
 	row.Children(func() {
@@ -226,7 +226,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 			ui.Box(c).Width(4)
 			return
 		}
-		x := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(4).Center().Shrink(0).Label("关闭" + label)
+		x := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭" + label)
 		if x.Hovered() {
 			x.Background(t.SurfacePressed)
 		}
@@ -558,7 +558,7 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		case n > 1:
 			branch = fmt.Sprintf("%d 个分支", n)
 		}
-		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
+		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(t.Surface).
 			Role(ui.RoleButton).Label("按分支筛选").Children(func() {
 			ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(160)
@@ -581,7 +581,7 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 		})
 		if ld.filter.Path != "" {
-			ui.Row(c).Height(sz(26)).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
+			ui.Row(c).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
 				ui.Icon(c, iconFile).FontSize(fsSmall).TextColor(t.Accent)
 				ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(240)
 			})
@@ -678,7 +678,7 @@ func refChips(c *ui.Context, refs string) {
 			if ref.head {
 				bg, fg = colors(t).tint, t.Accent
 			}
-			ui.Text(c, ref.name).FontSize(fsSmall).Font(monoFont).TextColor(fg).Padding(2, refPadX).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(refChipMaxW)
+			ui.Text(c, ref.name).FontSize(fsSmall).Font(monoFont).TextColor(fg).Padding(2, refPadX).Radius(rSmall).Background(bg).SingleLine().Shrink(0).MaxWidth(refChipMaxW)
 		}
 		if shown < len(names) {
 			ui.Text(c, fmt.Sprintf("+%d", len(names)-shown)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)

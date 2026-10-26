@@ -254,7 +254,7 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 		if it.Video {
 			kind = "视频 "
 		}
-		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(10).Role(ui.RoleButton).Label(kind + it.Label)
+		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(rCard).Role(ui.RoleButton).Label(kind + it.Label)
 		selectedBg(c, card, false)
 		card.Children(func() {
 			if it.thumb != nil {
@@ -266,14 +266,14 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 				}
 				ui.Row(c).Justify(ui.Center).Children(func() {
 					ui.Box(c).Children(func() {
-						ui.Image(c, it.thumb).Width(dw).Radius(6)
+						ui.Image(c, it.thumb).Width(dw).Radius(rRow)
 						if it.Video {
 							playBadge(c)
 						}
 					})
 				})
 			} else {
-				ui.Box(c).Height(120).Radius(6).Background(t.Surface).Children(func() {
+				ui.Box(c).Height(120).Radius(rRow).Background(t.Surface).Children(func() {
 					if it.Video {
 						playBadge(c)
 					}
@@ -301,7 +301,7 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 // playBadge 是盖在视频缩略图正中的播放标记，深色圆底让它在亮暗画面上都看得见。
 func playBadge(c *ui.Context) {
 	ui.Box(c).Absolute().Top(0).Right(0).Bottom(0).Left(0).Center().Children(func() {
-		ui.Box(c).Size(36, 36).Radius(18).Center().Background(ui.RGBA(0, 0, 0, 0.55)).Children(func() {
+		ui.Box(c).Size(36, 36).Radius(full(36)).Center().Background(ui.RGBA(0, 0, 0, 0.55)).Children(func() {
 			ui.Icon(c, iconPlay).FontSize(sz(22)).TextColor(ui.RGBA(255, 255, 255, 1))
 		})
 	})
@@ -327,6 +327,6 @@ func (a *app) imagePreview(c *ui.Context, body ui.Element) {
 		}
 	}
 	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Padding(8)).Children(func() {
-		ui.Image(c, v.big).Width(dw).Radius(6)
+		ui.Image(c, v.big).Width(dw).Radius(rSmall) // 外框内边距 8：12 - 8
 	})
 }

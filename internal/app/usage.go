@@ -187,7 +187,7 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
 
 func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color, name string, n int) {
 	t := c.Theme()
-	b := ui.Row(c.Key(key)).Height(sz(22)).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).
+	b := ui.Row(c.Key(key)).Height(sz(22)).Padding(0, 8, 0, 6).Gap(4).Radius(full(sz(22))).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label("复制 " + name)
 	bg := colors(t).fill
 	if b.Hovered() {

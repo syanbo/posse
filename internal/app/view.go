@@ -520,7 +520,7 @@ func disclosure(c *ui.Context, open *bool, label string) {
 		label = "收起" + strings.TrimPrefix(label, "展开")
 	}
 	t := c.Theme()
-	b := ui.Box(c).Size(miniBox(), miniBox()).Radius(5).Center().Shrink(0).Label(label).Tooltip(label)
+	b := ui.Box(c).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(label).Tooltip(label)
 	bg, fg := ui.Transparent, t.TextMuted
 	if b.Hovered() {
 		bg, fg = t.SurfaceHover, t.Text
@@ -920,7 +920,7 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 	case sub != "" || branch != "":
 		height = sz(46)
 	}
-	row := ui.Row(c.Key(key)).Height(height).Padding(0, 12, 0, 12).Gap(8).Radius(8).Shrink(0).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(height).Padding(0, 12, 0, 12).Gap(8).Radius(rControl).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, selected)
 	row.Children(func() {
@@ -953,7 +953,7 @@ func (a *app) staleBar(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 12, 12, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 12, 12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 		if pressable(accentButton(c, "重开窗口")).Clicked() {
 			a.relaunch()
@@ -966,7 +966,7 @@ func (a *app) errorBar(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Row(c).Margin(0, 12, 8, 12).Padding(8, 6, 8, 12).Gap(6).Radius(8).Background(t.Surface).AlignItems(ui.Start).Children(func() {
+	ui.Row(c).Margin(0, 12, 8, 12).Padding(8, 6, 8, 12).Gap(6).Radius(rControl).Background(t.Surface).AlignItems(ui.Start).Children(func() {
 		ui.Text(c, a.err).FontSize(fsSmall).TextColor(t.Danger).Grow(1).Shrink(1)
 		if iconButtonSized(c, iconClose, "关闭提示", compactBox(), smallIcon()).Clicked() {
 			a.err = ""
@@ -1371,7 +1371,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	}
 	if a.state.SessionButtonsHidden {
 		label := "展开会话按钮"
-		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(6).Center().
+		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
 			Background(p.raised).BorderWidth(1).BorderColor(p.line).Label(label).Tooltip(label)
 		fg := t.TextMuted
 		if h.Hovered() {
@@ -1387,7 +1387,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(8).Background(p.raised).
+	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised).
 		BorderWidth(1).BorderColor(p.line)
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
@@ -1619,7 +1619,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	if agent == "" {
 		name = "终端"
 	}
-	b := ui.Column(c.Key("launch-"+name)).Padding(16, 8, 16, 8).Gap(8).Radius(10).AlignItems(ui.Center).Label("启动 " + name).Role(ui.RoleButton)
+	b := ui.Column(c.Key("launch-"+name)).Padding(16, 8, 16, 8).Gap(8).Radius(rCard).AlignItems(ui.Center).Label("启动 " + name).Role(ui.RoleButton)
 	bg := colors(t).wash
 	if b.Hovered() {
 		bg = t.SurfaceHover
@@ -1641,7 +1641,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 func shortcutHint(c *ui.Context, keys, label string) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).Children(func() {
-		ui.Text(c, keys).FontSize(fsSmall).TextColor(t.Text).Padding(2, 6).Radius(4).Background(t.Surface)
+		ui.Text(c, keys).FontSize(fsSmall).TextColor(t.Text).Padding(2, 6).Radius(rSmall).Background(t.Surface)
 		ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 }
@@ -1649,7 +1649,7 @@ func shortcutHint(c *ui.Context, keys, label string) {
 func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	t := c.Theme()
 	// 图标侧内边距比文字侧少 2px；圆角 8，内部 20px 的关闭按钮离边 4px，圆角取 8-4=4
-	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(1).MaxWidth(280)
+	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(280)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {
@@ -1710,7 +1710,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(4).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
+		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
 			closeBg = t.SurfacePressed

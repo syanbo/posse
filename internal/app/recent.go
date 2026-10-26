@@ -190,7 +190,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 				usageNote(c, "这个项目还没有会话记录。")
 			}
 			for _, s := range r.sessions {
-				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(8).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
+				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(8).Radius(rControl).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
 				selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
 				row.Children(func() {
 					agentTile(c, s.Agent, iconSize)
@@ -238,7 +238,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 // playButton 是卡片上"在 Posse 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。
 func playButton(c *ui.Context) ui.Element {
 	t := c.Theme()
-	b := ui.Box(c).Size(miniBox()+2, miniBox()).Radius(6).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
+	b := ui.Box(c).Size(miniBox()+2, miniBox()).Radius(rRow).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
 	bg := t.Accent
 	if b.Hovered() {
 		bg = t.AccentHover

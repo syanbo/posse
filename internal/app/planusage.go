@@ -119,7 +119,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
 		return
 	}
-	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
+	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, 8).Gap(12).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Role(ui.RoleButton).Label("套餐用量")
 	bg := ui.Transparent
 	if a.planOpen || b.Hovered() {
@@ -267,7 +267,7 @@ func (a *app) planBar(c *ui.Context, w usage.Window, width, height float32) {
 		fill = t.Danger
 	}
 	v := a.shown(w)
-	bar := ui.Box(c).Height(height).Radius(height / 2).Background(colors(t).fill).Shrink(0)
+	bar := ui.Box(c).Height(height).Radius(full(height)).Background(colors(t).fill).Shrink(0)
 	if width > 0 {
 		bar.Width(width)
 	} else {
@@ -275,7 +275,7 @@ func (a *app) planBar(c *ui.Context, w usage.Window, width, height float32) {
 	}
 	bar.Children(func() {
 		if v > 0 {
-			ui.Box(c).Height(height).Radius(height / 2).WidthPercent(float32(max(v, 3))).Background(fill)
+			ui.Box(c).Height(height).Radius(full(height)).WidthPercent(float32(max(v, 3))).Background(fill)
 		}
 	})
 }

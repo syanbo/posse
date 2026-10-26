@@ -122,10 +122,10 @@ func TestStepLineHeight(t *testing.T) {
 	}
 }
 
-// 界面文字的字号、字重和图标的尺寸只用 style.go 里跟着设置变的那几档，写数字的会漏掉设置。
+// 界面文字的字号、字重、图标的尺寸和圆角只用 style.go 里的那几档，写数字的会漏掉设置或对不上档。
 // 视频上的播放键是单独的大图标，不算。
 func TestNoLiteralType(t *testing.T) {
-	text := regexp.MustCompile(`FontSize\([0-9]|FontWeight\([0-9]|\b(Size|Weight)(: | = )[0-9]`)
+	text := regexp.MustCompile(`FontSize\([0-9]|FontWeight\([0-9]|\b(Size|Weight)(: | = )[0-9]|\.Radius\([0-9]`)
 	icon := regexp.MustCompile(`ui\.Icon\(.*FontSize\((sz\()?[0-9]|(iconButtonSized|quietIconButton)\(.*, [0-9]+, [0-9]+\)|` +
 		`(agentTile|agentIcon|statusGlyph|statusIcon|taskGlyphIcon|posseLoader)\(c, .*[ (][0-9]+[,)]`)
 	files, _ := filepath.Glob("*.go")
@@ -140,7 +140,7 @@ func TestNoLiteralType(t *testing.T) {
 		for i, line := range strings.Split(string(b), "\n") {
 			if text.MatchString(line) && !strings.Contains(line, "ui.Icon(") ||
 				icon.MatchString(line) && !strings.Contains(line, "iconPlay") {
-				t.Errorf("%s:%d 写了数字的字号、字重或图标尺寸：%s", f, i+1, strings.TrimSpace(line))
+				t.Errorf("%s:%d 写了数字的字号、字重、图标尺寸或圆角：%s", f, i+1, strings.TrimSpace(line))
 			}
 		}
 	}

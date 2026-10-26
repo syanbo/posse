@@ -195,7 +195,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 	el.Children(func() {
 		ui.Text(c, shortPath(card.path)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Padding(6, 8, 4, 8).Selectable()
 		if card.preview != nil {
-			ui.Image(c, card.preview).Width(width-12).Radius(8).Margin(2, 0, 4, 0)
+			ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
 		}
 		ui.Box(c).Height(1).Margin(2, 6).Background(p.line)
 		// 最常用的在最上面：在 Posse 里打开
@@ -244,7 +244,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 // linkCardItem 是链接卡片里的一行操作，返回这一帧是否点了它。
 func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(8).Radius(7).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
@@ -320,6 +320,6 @@ func (a *app) hoverPreviewView(c *ui.Context, area ui.Element) {
 		el.Top(y + 20)
 	}
 	el.Children(func() {
-		ui.Image(c, bm).Width(hoverPreviewWidth - 12).Radius(8)
+		ui.Image(c, bm).Width(hoverPreviewWidth - 12).Radius(rRow)
 	})
 }

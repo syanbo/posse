@@ -207,7 +207,7 @@ func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
-	b := ui.Row(c.Key("branch")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(1).
+	b := ui.Row(c.Key("branch")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).
 		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip(trackTip(w.Branch, tr) + baseTip(w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
@@ -340,7 +340,7 @@ func (a *app) branchPopGrip(c *ui.Context) {
 // popupItem 是弹窗里的一行操作，返回这一帧是否点了它。
 func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 12).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
@@ -420,7 +420,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		if !set {
 			open = !strings.HasPrefix(key, "remote:")
 		}
-		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 12, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 12, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(title)
 		if row.Hovered() {
 			row.Background(colors(t).wash)
@@ -501,7 +501,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	other, inOther := gitx.WorktreeOf(b, g.repo)
 	otherWs := a.workspaceAt(other)
 	// 左边多缩进一些，分支图标和组标题的文字对齐，一眼看出属于哪一组
-	row := ui.Row(c.Key(group+":"+b.Name)).Height(sz(28)).Padding(0, 12, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
+	row := ui.Row(c.Key(group+":"+b.Name)).Height(sz(28)).Padding(0, 12, 0, 24).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
 	bp := a.branchPop
 	keyed := bp != nil && bp.hl == len(bp.rows)
 	if bp != nil {

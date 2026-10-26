@@ -149,7 +149,7 @@ func (a *app) refGroup(c *ui.Context, ld *logDoc, key, label string, n int, open
 // refGroupAt 是可以展开的一组；n 是组里有几项，-1 不显示。返回是否展开。
 func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, open bool, indent int) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key("g:"+key)).Height(sz(26)).Padding(0, 8, 0, 4+float32(indent)*treeIndent).Gap(4).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key("g:"+key)).Height(sz(26)).Padding(0, 8, 0, 4+float32(indent)*treeIndent).Gap(4).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(label)
 	selectedBg(c, row, false)
 	row.Children(func() {
@@ -171,7 +171,7 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 
 // refRow 是一个分支或标签，返回这一帧是否点了它；name 是读屏念的名字，带上种类免得和别处同名。
 func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) (clicked, add bool) {
-	row := ui.Row(c.Key(key)).Height(sz(26)).Padding(0, 8, 0, 20+float32(indent)*treeIndent).Gap(6).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(sz(26)).Padding(0, 8, 0, 20+float32(indent)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(name).Tooltip(label)
 	selectedBg(c, row, selected)
 	row.Children(func() {

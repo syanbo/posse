@@ -109,16 +109,17 @@ const (
 	hairline   = 1 // 分隔线的粗细，对齐时要让出它
 )
 
-// 圆角按角色分级：外圆角 = 内圆角 + 内边距。
+// 圆角按角色分五档，嵌套时外圆角 = 内圆角 + 内边距（规则见 docs/design.md）。
 const (
-	rButton   = 7
-	rInput    = 8
-	rCode     = 10
-	rCard     = 12
-	rFloat    = 12
-	rBubble   = 14
-	rComposer = 16
+	rSmall    = 4  // 小标签、小芯片、勾选框、小按钮
+	rRow      = 6  // 列表行、菜单行，放在内边距 6 的容器里的行
+	rControl  = 8  // 按钮、输入框、文件标签、侧栏行、面板里的内嵌块
+	rCard     = 12 // 卡片、浮层、磁贴、代码块
+	rComposer = 16 // 发送输入区
 )
+
+// full 是高（或宽）为 h 的圆点、胶囊、圆形按钮的圆角。
+func full(h float32) float32 { return h / 2 }
 
 // palette 是在系统主题之外 Posse 自己的颜色。
 type palette struct {
@@ -184,7 +185,7 @@ func posseTheme(dark bool) *ui.Theme {
 		t.Accent, t.AccentHover, t.AccentPressed = ui.Hex("#C15F3C"), ui.Hex("#AD5333"), ui.Hex("#98482B")
 		t.Selection, t.Focus = ui.RGBA(193, 95, 60, 0.22), ui.RGBA(193, 95, 60, 0.5)
 	}
-	t.Radius = 8
+	t.Radius = rControl
 	// 照 Orca：能点的地方是手形指针，拖动中是抓握的手
 	t.PointerCursor = true
 	t.FlatText, t.FontSize, t.FontWeight = !uiSmooth, fsBody, fwBody
@@ -208,7 +209,7 @@ func floating(c *ui.Context, e ui.Element) ui.Element {
 	t := c.Theme()
 	p := colors(t)
 	k := e.Keyframes("pop-in", popInFrames)
-	e.Radius(rFloat).Background(p.raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
+	e.Radius(rCard).Background(p.raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
 	if t.Dark {
 		return e.InsetShadow(0, 0, 0, 1, ui.RGBA(255, 255, 255, 0.1)).Shadow(0, 12, 32, 0, ui.RGBA(0, 0, 0, 0.5))
 	}
@@ -233,7 +234,7 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 // fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
 func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
 	t := c.Theme()
-	box := ui.Row(c).Height(sz(30)).Padding(0, 12).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
+	box := ui.Row(c).Height(sz(30)).Padding(0, 12).Radius(rControl).Background(colors(t).fill).AlignItems(ui.Center)
 	if width > 0 {
 		box.Width(width)
 		if minWidth < width {
@@ -254,7 +255,7 @@ func fieldInputSized(c *ui.Context, value *string, placeholder string, width, mi
 // fieldArea 是多行的 fieldInput，height 是文字区的高度。
 func fieldArea(c *ui.Context, value *string, placeholder string, height float32) ui.Element {
 	t := c.Theme()
-	box := ui.Column(c).Padding(8, 12).Radius(rInput).Background(colors(t).fill)
+	box := ui.Column(c).Padding(8, 12).Radius(rControl).Background(colors(t).fill)
 	var in ui.Element
 	box.Children(func() {
 		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Height(height)
@@ -477,7 +478,7 @@ const cjkLift = 1
 // textButton 是次级按钮：无边框的填充底。它常放在卡片、对话框这些有框的容器里，再加框就是框里套框。
 func textButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Height(sz(28)).Padding(0, 12).Radius(rButton).Label(label).Shrink(0)
+	b := ui.ButtonBase(c).Height(sz(28)).Padding(0, 12).Radius(rControl).Label(label).Shrink(0)
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = ui.RGBA(0, 0, 0, 0.1)
@@ -494,7 +495,7 @@ func textButton(c *ui.Context, label string) ui.Element {
 
 // accentButton 是主按钮（mygo 的 PrimaryButton），上内边距少 cjkLift、下内边距多 cjkLift；一屏里只放一个。
 func accentButton(c *ui.Context, label string) ui.Element {
-	return liftButton(c, ui.PrimaryButton(c, label)).Radius(rButton)
+	return liftButton(c, ui.PrimaryButton(c, label)).Radius(rControl)
 }
 
 func liftButton(c *ui.Context, b ui.Element) ui.Element {
@@ -513,7 +514,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 	t := c.Theme()
 	p := colors(t)
 	changed := false
-	ui.Row(c).Padding(2).Gap(2).Radius(rInput).Background(p.fill).Shrink(0).Label(label).Role(ui.RoleRadioGroup).Children(func() {
+	ui.Row(c).Padding(2).Gap(2).Radius(rControl).Background(p.fill).Shrink(0).Label(label).Role(ui.RoleRadioGroup).Children(func() {
 		for i, o := range options {
 			// 被拉宽时（对话框里）各段平分多出来的宽度；Grow 会把起始宽度设成 0，
 			// 字长的一段（"只建工作区"）要按字宽给够，不然被截成省略号
@@ -528,7 +529,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 				tw += max(bw+10, 16) + 5
 				name = fmt.Sprintf("%s %d", o, n)
 			}
-			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(sz(24)).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
+			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(sz(24)).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(rRow).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
@@ -545,7 +546,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 						text.FontWeight(fwMedium)
 					}
 					if n > 0 {
-						ui.Box(c).Height(16).MinWidth(16).Padding(0, 4).Margin(0, 0, 0, 4).Radius(8).Center().Shrink(0).
+						ui.Box(c).Height(16).MinWidth(16).Padding(0, 4).Margin(0, 0, 0, 4).Radius(full(16)).Center().Shrink(0).
 							Background(t.Accent.Alpha(0.18)).Children(func() {
 							ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontWeight(fwMedium).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
 						})
