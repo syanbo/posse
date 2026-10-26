@@ -13,7 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 设计约定（参照 Claude 桌面端的克制，见 docs/plans/ui-claude-polish.html）：
+// 设计约定（参照 Claude 桌面端的克制，见 docs/plans/ui-claude-polish.html；字号、字重、图标、间距的完整规则见 docs/design.md）：
 //   - 暖灰底色，和陶土色同一色温。顶栏 band、画布 canvas、卡片 card 只差一点明度，浮层再高一层 raised；
 //     深色下侧栏 side 比画布明显浅一档。分层靠明度差和 8% 透明的细线，不靠粗线。
 //   - 单闭合边框：从画布往里看，任何一条视线最多穿过一层闭合的框。有框的容器里，按钮和输入不再加框，
