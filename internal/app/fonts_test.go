@@ -222,3 +222,24 @@ func TestColorsInPalette(t *testing.T) {
 		}
 	}
 }
+
+// 投影、描边只经 style.go 的 elevCard、elevFloat、elevSheet，分隔线用 hline、vline，线宽是 hairline，
+// 线的颜色是 line（主题的 Border 比它重，只给 mygo 自己的控件）。
+func TestElevationAndLines(t *testing.T) {
+	bad := regexp.MustCompile(`\.(Shadow|InsetShadow)\(|\b(Height|Width)\(1\)|\.Border(Width)?\((1|[^)]*, 1)[,)]|\bt\.Border\b`)
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "style.go" {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if bad.MatchString(line) {
+				t.Errorf("%s:%d 投影、描边和分隔线要用 style.go 里的函数：%s", f, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}

@@ -693,8 +693,8 @@ func fadeHint(c *ui.Context, key, hint string, at time.Time, top float32) {
 	}
 	t := c.Theme()
 	ui.Row(c.Key(key)).Absolute().Top(top).Left(0).Right(0).Justify(ui.Center).Children(func() {
-		ui.Text(c, hint).FontSize(fsBody).TextColor(t.Background).Background(t.Text).Padding(8, 16).Radius(rControl).
-			Shadow(0, 6, 20, 0, colors(t).shadow).Opacity(opacity)
+		elevFloat(c, ui.Text(c, hint).FontSize(fsBody).TextColor(t.Background).Background(t.Text).Padding(8, 16).Radius(rControl)).
+			Opacity(opacity)
 	})
 }
 

@@ -259,14 +259,9 @@ func terminalThemes() (light, dark *terminal.Theme) {
 // 出现时淡入并从 97% 放大到原大（160ms，只播一次，之后不再请求帧）；自己带动画的调用方（右侧面板）
 // 之后再设 Opacity、Transform 会盖掉这里的。
 func floating(c *ui.Context, e ui.Element) ui.Element {
-	t := c.Theme()
-	p := colors(t)
 	k := e.Keyframes("pop-in", popInFrames)
-	e.Radius(rCard).Background(p.raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
-	if t.Dark {
-		return e.InsetShadow(0, 0, 0, 1, p.line).Shadow(0, 12, 32, 0, p.shadow)
-	}
-	return e.Border(1, p.line).Shadow(0, 8, 24, 0, p.shadow)
+	e.Radius(rCard).Background(colors(c.Theme()).raised).Opacity(k).Scale(0.97+0.03*k, 0.97+0.03*k)
+	return elevFloat(c, e)
 }
 
 var popInFrames = []ui.Keyframe{{At: 0, Value: 0}, {At: 160 * time.Millisecond, Value: 1, Ease: ui.EaseOut}}
@@ -331,13 +326,41 @@ func fadeEdges(list ui.Element, s *ui.ListState, bg ui.Color) ui.Element {
 	})
 }
 
-// edge 给卡片一样的容器描边：深色是 1px 内高光，浅色是很淡的外环加一点投影；卡片本身是唯一的那层框。
-func edge(c *ui.Context, e ui.Element) ui.Element {
+// 层级只有三档（docs/design.md），投影和描边都经这几个函数，别处不写 Shadow、InsetShadow。
+// 深色下不画白框，用 1px 内高光（像边缘接到顶光）；浅色下是细外环加投影。
+
+// elevCard 是卡片一样的容器：深色只有内高光，浅色是很淡的外环加一点投影；卡片本身是唯一的那层框。
+func elevCard(c *ui.Context, e ui.Element) ui.Element {
 	p := colors(c.Theme())
 	if c.Theme().Dark {
-		return e.InsetShadow(0, 0, 0, 1, p.line)
+		return e.InsetShadow(0, 0, 0, hairline, p.line)
 	}
-	return e.Border(1, p.line).Shadow(0, 1, 2, 0, p.lift)
+	return e.Border(hairline, p.line).Shadow(0, 1, 2, 0, p.lift)
+}
+
+// elevFloat 是浮在内容上面的东西：浮层、提示、盖在终端上的按钮列。深色配深而散的投影。
+func elevFloat(c *ui.Context, e ui.Element) ui.Element {
+	p := colors(c.Theme())
+	if c.Theme().Dark {
+		return e.InsetShadow(0, 0, 0, hairline, p.line).Shadow(0, 12, 32, 0, p.shadow)
+	}
+	return e.Border(hairline, p.line).Shadow(0, 8, 24, 0, p.shadow)
+}
+
+// elevSheet 是从窗口底边升起的面板（Git 日志）：顶边一条线，投影朝上。
+func elevSheet(c *ui.Context, e ui.Element) ui.Element {
+	p := colors(c.Theme())
+	return e.BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, p.shadow)
+}
+
+// hline、vline 是兄弟元素之间的分隔线；容器自己的上下左右边界用 BorderWidth(hairline, …)。
+// 列表、菜单里两组之间的线左右缩 6、上下留 4（Margin(4, 6)），和列表行的外边距对齐。
+func hline(c *ui.Context) ui.Element {
+	return ui.Box(c).Height(hairline).Shrink(0).Background(colors(c.Theme()).line)
+}
+
+func vline(c *ui.Context) ui.Element {
+	return ui.Box(c).Width(hairline).Shrink(0).Background(colors(c.Theme()).line)
 }
 
 // composer 是一体的输入区：圆角框里是输入，右下角是发送按钮，⌘↩ 也能发送；聚焦时描边换成焦点色。
@@ -366,12 +389,12 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 		})
 	})
 	if in.Focused() {
-		box.Border(1, t.Focus)
+		box.Border(hairline, t.Focus)
 	} else {
-		edge(c, box)
+		elevCard(c, box)
 		if t.Dark {
 			// 深色平时只有内高光、不占尺寸；补一圈同色边，和聚焦时一样高。
-			box.Border(1, colors(t).card)
+			box.Border(hairline, colors(t).card)
 		}
 	}
 	return sent && strings.TrimSpace(*value) != ""
@@ -383,7 +406,7 @@ func fieldBorder(box ui.Element, focused bool, fill, focus ui.Color) {
 	if focused {
 		color = focus
 	}
-	box.Border(1, color)
+	box.Border(hairline, color)
 }
 
 // pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
@@ -454,7 +477,7 @@ func shortPath(p string) string {
 // card 是放在画布上的一块内容。
 func card(c *ui.Context) ui.Element {
 	p := colors(c.Theme())
-	return edge(c, ui.Column(c).Background(p.card).Radius(rCard))
+	return elevCard(c, ui.Column(c).Background(p.card).Radius(rCard))
 }
 
 // emptyCard 是页面没有内容时居中的说明卡片：只靠底色和画布分开，不描边。
@@ -521,7 +544,7 @@ func agentIcon(c *ui.Context, agent string, size float32) ui.Element {
 	e := tile(c, icon, size, bg, fg)
 	if agent == "codex" {
 		// 白底在浅色卡片上会融掉，描一圈细边
-		e.InsetShadow(0, 0, 0, 1, black.Alpha(0.12))
+		e.InsetShadow(0, 0, 0, hairline, black.Alpha(0.12))
 	}
 	return e
 }

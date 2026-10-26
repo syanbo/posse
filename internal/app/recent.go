@@ -215,7 +215,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 							}
 							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 							// 细线把聊天内容和下面的目录、消息数分开
-							ui.Box(c).Height(1).Margin(4, 0, 4, 0).Background(colors(t).line)
+							hline(c).Margin(4, 0, 4, 0)
 						}
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {

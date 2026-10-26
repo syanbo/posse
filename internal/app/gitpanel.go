@@ -497,8 +497,6 @@ func stashTitle(msg string) string {
 
 // commitBox 是左栏底部的提交框：提交信息、修改上一次提交、提交按钮。
 func (a *app) commitBox(c *ui.Context, v *filesView) {
-	t := c.Theme()
-	p := colors(t)
 	g := &v.git
 	_, _, picked := g.pickedPaths()
 	label := fmt.Sprintf("提交 %d 个文件", picked)
@@ -511,7 +509,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	case picked == 0 && g.amend:
 		label = "只改提交信息"
 	}
-	ui.Box(c).Height(1).Shrink(0).Background(p.line)
+	hline(c)
 	ui.Column(c).Shrink(0).Padding(12).Gap(8).Children(func() {
 		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(fsBody)
 		if g.focusMsg {
@@ -566,7 +564,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			t := c.Theme()
 			bar.Row().Gap(4)
 			bar.Children(func() {
-				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Border(1, t.Border).Label("回滚这处改动")
+				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Border(hairline, colors(t).line).Label("回滚这处改动")
 				btn.Children(func() { ui.Text(c, "回滚").FontSize(fsSmall) })
 				if btn.Clicked() {
 					a.revertHunk(v, d, act.Index)
@@ -784,7 +782,7 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		for i, side := range df.images {
 			if i == 1 {
-				ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
+				vline(c)
 			}
 			label := oldLabel
 			if i == 1 {

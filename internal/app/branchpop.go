@@ -242,8 +242,6 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	if bp == nil || bp.ws != w.ID {
 		return
 	}
-	t := c.Theme()
-	p := colors(t)
 	v := a.filesFor(w)
 	g := &v.git
 	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(a.branchPopWidth()).MaxHeight(600).Padding(6).Gap(2))
@@ -289,7 +287,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			ui.Column(c).Gap(2).Children(func() {
 				if query == "" {
 					a.branchActions(c, w, v)
-					ui.Box(c).Height(1).Margin(4, 8).Background(p.line)
+					hline(c).Margin(4, 6)
 				}
 				a.branchGroups(c, w, v, query)
 			})
@@ -376,7 +374,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 		a.branchPop = nil
 		a.openPush(w)
 	}
-	ui.Box(c).Height(1).Margin(4, 8).Background(colors(c.Theme()).line)
+	hline(c).Margin(4, 6)
 	if popupItem(c, iconPlus, "新建分支…", "⌥⌘N") {
 		a.branchPop = nil
 		a.askNewBranch(w, v, "")

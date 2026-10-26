@@ -169,7 +169,6 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 		return
 	}
 	t := c.Theme()
-	p := colors(t)
 	const width = 340
 	// 弹出卡片的那一下点击也算"在卡片外面按下"，弹出的这一帧不能据此关掉它
 	fresh := !card.placed
@@ -197,7 +196,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 		if card.preview != nil {
 			ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
 		}
-		ui.Box(c).Height(1).Margin(2, 6).Background(p.line)
+		hline(c).Margin(4, 6)
 		// 最常用的在最上面：在 Posse 里打开
 		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
 			w := a.workspaceOf(card.path)

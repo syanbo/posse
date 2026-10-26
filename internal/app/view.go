@@ -72,7 +72,7 @@ func (a *app) build(c *ui.Context) {
 			ui.Box(c).Width(width).Shrink(0).Clip().Background(p.side).Children(func() {
 				ui.Row(c).Absolute().Top(0).Bottom(0).Left(-(1 - a.sidebarShown) * width).Width(width).AlignItems(ui.Stretch).Children(func() {
 					ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Background(p.side).Children(func() { a.sidebar(c) })
-					ui.Box(c).Width(1).Shrink(0).Background(p.line)
+					vline(c)
 				})
 			})
 		}
@@ -375,7 +375,7 @@ func (a *app) sidebar(c *ui.Context) {
 			a.historySidebarItem(c)
 			a.mobileSidebarItem(c)
 			// 任务、历史、手机是全局页面，和下面的项目用一道细线隔开
-			ui.Box(c).Height(1).Shrink(0).Margin(6, 12, 6, 12).Background(colors(t).line)
+			hline(c).Margin(6, 12, 6, 12)
 			// 要定位的工作区所在的项目
 			reveal := ""
 			if w := a.workspace(a.selected); a.revealSel && w != nil {
@@ -979,7 +979,7 @@ func (a *app) footer(c *ui.Context) {
 	if !a.loaded {
 		return
 	}
-	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
 		menuButton(c, iconButton(c, iconPlus, "新建"), func(m *popMenu) {
 			if m.Item("添加项目…").Chosen() {
 				go a.addProject()
@@ -1270,7 +1270,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 			width := a.filesPanelWidth() + 1
 			ui.Box(c).Width(width).Shrink(0).Clip().Background(p.card).Children(func() {
 				ui.Row(c).Absolute().Top(0).Bottom(0).Left((1 - a.filesPanelShown) * width).Width(width).AlignItems(ui.Stretch).Children(func() {
-					ui.Box(c).Width(1).Shrink(0).Background(p.line)
+					vline(c)
 					a.filesPanel(c, w)
 				})
 				// 开关固定在右上角，和关着时标签栏里的同一个位置（右边留 16，底下让出 1 像素的分隔线），不跟着文件栏滑动
@@ -1366,8 +1366,8 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	}
 	if a.state.SessionButtonsHidden {
 		label := "展开会话按钮"
-		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
-			Background(p.raised).BorderWidth(1).BorderColor(p.line).Label(label).Tooltip(label)
+		h := elevFloat(c, ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
+			Background(p.raised).Label(label).Tooltip(label))
 		fg := t.TextMuted
 		if h.Hovered() {
 			h.Background(t.SurfaceHover)
@@ -1382,8 +1382,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised).
-		BorderWidth(1).BorderColor(p.line)
+	col := elevFloat(c, ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised))
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
 	opacity := float32(0.5)
@@ -1402,7 +1401,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		if cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
 		}
-		ui.Box(c).Height(1).Margin(2, 4).Background(p.line)
+		hline(c).Margin(2, 4)
 		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", buttonBox(), iconSize-4).Clicked() {
 			toggle()
 		}
@@ -1415,7 +1414,7 @@ func (a *app) phoneSizedBar(c *ui.Context, id string) {
 	t := c.Theme()
 	p := colors(t)
 	ui.Row(c.Key("phone-sized")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).
-		Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+		Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 		ui.Icon(c, iconPhone).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
@@ -1670,7 +1669,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		renaming = false
 	}
 	if renaming {
-		row.Border(1, t.Focus)
+		row.Border(hairline, t.Focus)
 	}
 	row.Children(func() {
 		if status != "" {

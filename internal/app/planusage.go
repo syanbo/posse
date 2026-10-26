@@ -91,7 +91,7 @@ func (a *app) statusBar(c *ui.Context) {
 	p := colors(t)
 	st := a.daemon.Usage
 	ui.Row(c).Height(footHeight).Padding(0, 8, 0, 6).Shrink(0).AlignItems(ui.Center).Clip().
-		Background(footShade(t)).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Children(func() {
+		Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Children(func() {
 		// 窗口窄时裁掉用量，右边的按钮不被挤出去
 		ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().AlignItems(ui.Center).Children(func() { a.planButton(c, st) })
 		if a.loaded {
@@ -308,7 +308,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 		})
 		for i, u := range us {
 			if i > 0 {
-				ui.Box(c).Height(1).Background(colors(t).line)
+				hline(c)
 			}
 			ui.Column(c.Key(u.Agent)).Gap(8).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

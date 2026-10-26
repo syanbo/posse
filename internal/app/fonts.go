@@ -370,7 +370,7 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 // 卡片和终端、编辑器同一个底色，看到的就是实际的样子。
 func previewBlock(c *ui.Context, body func()) {
 	t := c.Theme()
-	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
 		ui.Text(c, "预览").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		body()
 	})

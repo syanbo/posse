@@ -34,10 +34,9 @@ func (a *app) fileHistoryView(c *ui.Context, w *workspace, v *filesView, d *file
 	if len(ld.commits) > 0 && !containsCommit(ld.commits, h.sel) {
 		a.selectHistory(v, d, ld.commits[0])
 	}
-	p := colors(c.Theme())
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(460).Shrink(0).Children(func() { a.historyList(c, w, v, d) })
-		ui.Box(c).Width(1).Shrink(0).Background(p.line)
+		vline(c)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() { a.historyDiff(c, v, d) })
 	})
 }

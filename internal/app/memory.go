@@ -219,7 +219,6 @@ func memSection(c *ui.Context, title, value string) {
 
 func (a *app) memoryPanel(c *ui.Context) {
 	t := c.Theme()
-	p := colors(t)
 	m := &a.mem
 	ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
@@ -235,7 +234,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 			memLine(c, "daemon", nil, "常驻进程（托管所有终端）", mb(a.daemon.FootprintKB), 1)
 			memLine(c, "window", nil, fmt.Sprintf("窗口（pid %d）", os.Getpid()), mb(a.selfKB), 1)
 		})
-		ui.Box(c).Height(1).Background(p.line)
+		hline(c)
 		ui.Column(c).Children(func() {
 			if m.rows == nil {
 				memSection(c, "终端里的程序", "")

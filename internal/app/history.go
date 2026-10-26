@@ -637,7 +637,7 @@ func (a *app) historyTotals(c *ui.Context) {
 			}
 		})
 	})
-	ui.Box(c).Height(1).Margin(0, 20).Background(colors(t).line)
+	hline(c).Margin(0, 20)
 }
 
 // thousands 把整数写成带千分位的：12345 → 12,345。

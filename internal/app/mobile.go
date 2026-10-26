@@ -363,7 +363,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 						}
 					})
 				}
-				ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+				hline(c)
 				a.mobileAddressPicker(c)
 			})
 		})
@@ -404,7 +404,7 @@ func (a *app) mobileDevices(c *ui.Context) {
 			return
 		}
 		if len(phones) > 0 {
-			ui.Box(c).Height(1).Margin(6, 8).Shrink(0).Background(colors(t).line)
+			hline(c).Margin(4, 6)
 		}
 		online := 0
 		for _, d := range others {

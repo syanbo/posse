@@ -197,7 +197,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			})
 		})
 		if cd.commit != nil {
-			ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
+			vline(c)
 			ui.Column(c).Width(340).Shrink(0).Children(func() { a.commitDetail(c, w, v, cd.commit) })
 		}
 	})
@@ -216,7 +216,7 @@ func (a *app) compareGrip(c *ui.Context, total float32) {
 	t := c.Theme()
 	const gripH = 14
 	grip := ui.Box(c.Key("compare-grip")).Height(gripH).Shrink(0).Background(colors(t).side).
-		BorderWidth(1, 0, 1, 0).BorderColor(colors(t).line).Cursor(ui.CursorResizeNS)
+		BorderWidth(hairline, 0, hairline, 0).BorderColor(colors(t).line).Cursor(ui.CursorResizeNS)
 	if _, dy, held := grip.Dragged(); held && total > gripH {
 		room := total - gripH
 		// 每栏至少留出标题和一行提交
@@ -261,7 +261,7 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 			a.loadCompare(v, d)
 		}
 	})
-	ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+	hline(c)
 }
 
 // commitPane 是一边独有的提交：标题说明是哪边，in 这个分支名和下面提交的圆点都是 lane 色。
@@ -269,7 +269,7 @@ func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui
 	t := c.Theme()
 	p := colors(t)
 	// 琥珀色只给"待处理"，这里用顶栏的底
-	ui.Row(c).Height(sz(38)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+	ui.Row(c).Height(sz(38)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(lane).Shrink(0)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
 			ui.Text(c, "存在于").FontSize(fsBody)
@@ -573,7 +573,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						})
 					})
 				})
-				ui.Box(c).Width(1).Shrink(0).Background(colors(t).line)
+				vline(c)
 				files := ui.Column(c)
 				if ps.detail != nil {
 					files.Width(240).Shrink(0)
@@ -724,7 +724,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 		if ps.detail == nil {
 			return
 		}
-		ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+		hline(c)
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			muted := func(msg string) {
 				ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted).Padding(16)

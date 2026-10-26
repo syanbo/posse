@@ -1,6 +1,6 @@
 # Posse 桌面端设计规范
 
-桌面端界面（`internal/app`）的字号、字重、图标、间距、尺寸、圆角和颜色规则。外观的取向参照 Claude 桌面端的克制（依据见 `docs/plans/ui-claude-polish.html`），分层、边框和状态的约定见 `internal/app/style.go` 开头，各界面的行为见 `docs/features/ui.md`。
+桌面端界面（`internal/app`）的字号、字重、图标、间距、尺寸、圆角、颜色、层级和分隔线规则。外观的取向参照 Claude 桌面端的克制（依据见 `docs/plans/ui-claude-polish.html`），分层、边框和状态的约定见 `internal/app/style.go` 开头，各界面的行为见 `docs/features/ui.md`。
 
 所有取值都在 `internal/app/style.go` 里定义。写界面时只用这些名字，不写数字。`fonts_test.go` 的 `TestNoLiteralType`、`TestSpacingScale` 会拦下写数字的字号、字重、图标尺寸和阶梯外的间距。
 
@@ -139,6 +139,25 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 - 新的语义先找现有的名字；确实没有再加进调色板，深浅两套都要给。
 - 动画里调暗传进来的颜色（等待的波形、加载动画）和列表两端的渐隐可以用 `Alpha`。
 
+## 层级和分隔线
+
+分层靠底色的明度差和细线，投影只有三档，都经 `style.go` 的函数，别处不写 `Shadow`、`InsetShadow`：
+
+| 函数 | 用途 | 浅色 | 深色 |
+|---|---|---|---|
+| `elevCard` | 卡片 | `line` 外框 + 投影 0, 1, 2（`lift`） | 只有 1px 内高光 |
+| `elevFloat` | 浮层（菜单、弹窗、右侧面板、链接卡片，经 `floating`）、提示、盖在终端上的会话按钮列 | `line` 外框 + 投影 0, 8, 24（`shadow`） | 1px 内高光 + 投影 0, 12, 32 |
+| `elevSheet` | 从窗口底边升起的面板（Git 日志） | 顶边一条线 + 朝上的投影 0, −6, 18 | 同左 |
+
+- 单闭合边框：从画布往里看，一条视线最多穿过一层闭合的框（见 `style.go` 开头）。
+- 深色下不画白框，用不占尺寸的内高光；浅色的外框占 1px。
+
+分隔线：
+
+- 颜色一律 `line`，线宽 `hairline`（1）。主题的 `Border` 比它重，只留给 mygo 自己的控件；Markdown 的分隔线、表格线、引用竖条也用 `line`。
+- 兄弟元素之间用 `hline(c)`、`vline(c)`；容器自己的边界用 `BorderWidth(hairline, …)`，不多加一个元素。
+- 区域之间的线贴边；列表、菜单里两组之间的线 `Margin(4, 6)`，左右和列表行的外边距对齐；不在列表里的跟着容器的内边距缩进。
+
 ## 设置和存储
 
 「设置 › 外观 › 界面」里的项目存在 `$POSSE_HOME/ui.json`，0 或缺省表示默认：
@@ -156,6 +175,6 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 ## 改这套规范
 
 1. 改 `style.go` 里的定义（阶梯、档位函数、常量），不要在调用处单独调。
-2. 跑 `go test ./internal/app`：`TestNoLiteralType`（字号、字重、图标尺寸、圆角不写数字）、`TestSpacingScale`（间距在阶梯上）、`TestColorsInPalette`（颜色只在 `style.go` 定义）、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
+2. 跑 `go test ./internal/app`：`TestNoLiteralType`（字号、字重、图标尺寸、圆角不写数字）、`TestSpacingScale`（间距在阶梯上）、`TestColorsInPalette`（颜色只在 `style.go` 定义）、`TestElevationAndLines`（投影、描边和分隔线经函数）、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
 3. 用离屏预览比较改动前后：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`。`ui-small`、`ui-large`、`ui-heavy` 三组是字号调到最小、最大和字重调重时的样子，`icons-large` 是图标调大时的样子。
 4. 同步本文和 `docs/features/ui.md`。

@@ -269,7 +269,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 		if it.sep {
 			// 开头、结尾和连着的分隔线不画
 			if !prevSep && i < len(m.items)-1 {
-				ui.Box(c.Key(it.seq)).Height(1).Margin(4, 6).Background(p.line)
+				hline(c.Key(it.seq)).Margin(4, 6)
 				prevSep = true
 			}
 			continue

@@ -159,8 +159,8 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	t := c.Theme()
 	p := colors(t)
 	h := a.logPanelHeight(body.Bounds().H)
-	panel := ui.Column(c.Key("log-panel")).Absolute().Left(0).Right(0).Bottom(-(1-shown)*h).Height(h).
-		Background(p.card).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, p.shadow)
+	panel := elevSheet(c, ui.Column(c.Key("log-panel")).Absolute().Left(0).Right(0).Bottom(-(1-shown)*h).Height(h).
+		Background(p.card))
 	panel.Children(func() {
 		ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
@@ -425,8 +425,7 @@ func paneWidth(w float32, p pane) float32 {
 // paneDivider 是两栏之间的分栏线，左右拖调宽 width 那一栏，松手才写 ui.json。
 // dir 是那一栏在线的哪边：1 是左边（往右拖变宽），-1 是右边。
 func (a *app) paneDivider(c *ui.Context, key string, width *float32, p pane, dir float32) {
-	line := colors(c.Theme()).line
-	ui.Box(c).Width(1).Shrink(0).Background(line).Children(func() {
+	vline(c).Children(func() {
 		grip := ui.Box(c.Key(key)).Absolute().Top(0).Bottom(0).Left(-3).Width(7).Cursor(ui.CursorResizeEW)
 		if dx, _, held := grip.Dragged(); held {
 			*width = min(max(paneWidth(*width, p)+dir*dx, p.lo), p.hi)
@@ -456,7 +455,7 @@ func (a *app) logView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		a.paneDivider(c, "log-refs-grip", &a.state.LogRefsWidth, logRefsPane, 1)
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			a.logFilterBar(c, v, d)
-			ui.Box(c).Height(1).Shrink(0).Background(p.line)
+			hline(c)
 			a.logList(c, w, v, d)
 		})
 	})

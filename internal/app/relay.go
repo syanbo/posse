@@ -197,7 +197,7 @@ func (a *app) mobileRelayCard(c *ui.Context) {
 func (a *app) relayInviteRow(c *ui.Context) {
 	t := c.Theme()
 	r := &a.mobile.relay
-	ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
+	hline(c)
 	ui.Column(c).Gap(6).Children(func() {
 		ui.Text(c, "邀请别人").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
