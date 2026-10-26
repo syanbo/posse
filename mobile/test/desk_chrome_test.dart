@@ -32,11 +32,14 @@ void main() {
     model.updateSettings((s) {
       s.deskLandscape = true;
       s.deskGesturesSeen = true;
+      s.deskTrackpad = true;
     });
     await Future<void>.delayed(Duration.zero);
     final back = AppSettings.decode(store.data);
     expect(back.deskLandscape, isTrue);
     expect(back.deskGesturesSeen, isTrue);
+    expect(back.deskTrackpad, isTrue);
+    expect(AppSettings().deskTrackpad, isFalse);
     expect(deskLockedOrientations(false), [DeviceOrientation.portraitUp]);
     expect(deskLockedOrientations(true), [
       DeviceOrientation.landscapeLeft,

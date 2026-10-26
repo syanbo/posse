@@ -4,9 +4,24 @@ import '../ui/theme.dart';
 
 /// 第一次进看桌面时盖一层。手势和系统的相反，只说一次。
 class DeskGestureHint extends StatelessWidget {
-  const DeskGestureHint({super.key, required this.onDismiss});
+  const DeskGestureHint({
+    super.key,
+    required this.onDismiss,
+    this.trackpad = false,
+  });
 
   final VoidCallback onDismiss;
+  final bool trackpad;
+
+  static const trackpadLines = <(String, String)>[
+    ('单指滑动', '移动指针'),
+    ('单指点按', '在指针处单击'),
+    ('双指轻点', '右键'),
+    ('轻点后按住滑', '拖动'),
+    ('双指拖动', '滚动'),
+    ('捏合', '缩放'),
+    ('三指横滑', '切换空间'),
+  ];
 
   static const lines = <(String, String)>[
     ('单指点按', '单击'),
@@ -48,7 +63,7 @@ class DeskGestureHint extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      for (final line in lines)
+                      for (final line in trackpad ? trackpadLines : lines)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 3),
                           child: Row(

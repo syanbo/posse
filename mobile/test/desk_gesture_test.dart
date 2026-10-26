@@ -403,6 +403,79 @@ void main() {
     }
     expect(four.events, isEmpty);
   });
+
+  test(
+    'trackpad: a slow slide moves the cursor 1:1 and a tap clicks there',
+    () {
+      final g = _gestures()..gestures.trackpad = true;
+      g.down(1, 100, 100, Duration.zero);
+      g.move(1, 140, 100, const Duration(seconds: 1));
+      g.up(1, 140, 100, const Duration(milliseconds: 1020));
+      final point = g.events.single as DeskPointEvent;
+      expect(point.at.x, closeTo(0.6, 1e-9));
+      expect(point.at.y, closeTo(0.5, 1e-9));
+      // 点哪都按在指针上
+      _tap(g, 10, 10, 2000);
+      final tap = g.events.last as DeskTapEvent;
+      expect(tap.at.x, closeTo(0.6, 1e-9));
+      expect(tap.at.y, closeTo(0.5, 1e-9));
+      _tap(g, 300, 150, 2200);
+      expect((g.events.last as DeskTapEvent).clicks, 2);
+    },
+  );
+
+  test('trackpad: a fast slide is accelerated and clamped to the screen', () {
+    expect(deskPointerGain(10, const Duration(seconds: 1)), 1);
+    expect(deskPointerGain(40, const Duration(milliseconds: 20)), 2.5);
+    final g = _gestures()..gestures.trackpad = true;
+    g.down(1, 100, 100, Duration.zero);
+    g.move(1, 140, 100, const Duration(milliseconds: 20));
+    expect(g.gestures.cursor.x, closeTo(0.75, 1e-9));
+    g.move(1, 400, 100, const Duration(milliseconds: 40));
+    expect(g.gestures.cursor.x, 1);
+  });
+
+  test('trackpad: zoomed in, the viewport follows the cursor', () {
+    final g = _gestures()..gestures.trackpad = true;
+    g.viewport
+      ..zoom = 2
+      ..panX = 0.25
+      ..panY = 0.25;
+    g.down(1, 0, 100, Duration.zero);
+    g.move(1, 180, 100, const Duration(seconds: 2));
+    expect(g.gestures.cursor.x, closeTo(0.725, 1e-9));
+    expect(g.gestures.cursorView.dx, closeTo(400 - deskEdgePx, 1e-9));
+    expect(g.viewport.panY, 0.25);
+  });
+
+  test(
+    'trackpad: tap-then-slide drags and two-finger tap act at the cursor',
+    () {
+      final g = _gestures()..gestures.trackpad = true;
+      _tap(g, 50, 50, 0);
+      g.events.clear();
+      g.down(1, 50, 50, const Duration(milliseconds: 200));
+      g.move(1, 70, 50, const Duration(milliseconds: 600));
+      g.up(1, 70, 50, const Duration(milliseconds: 700));
+      final drag = [for (final e in g.events) e as DeskDragEvent];
+      expect(drag.map((e) => e.phase), [
+        DeskDragPhase.down,
+        DeskDragPhase.move,
+        DeskDragPhase.up,
+      ]);
+      expect(drag[0].at.x, closeTo(0.5, 1e-9));
+      expect(drag[2].at.x, closeTo(0.55, 1e-9));
+
+      g.events.clear();
+      g.down(1, 10, 10, const Duration(seconds: 1));
+      g.down(2, 300, 190, const Duration(seconds: 1));
+      g.up(2, 300, 190, const Duration(milliseconds: 1040));
+      g.up(1, 10, 10, const Duration(milliseconds: 1050));
+      final click = g.events.single as DeskRightClickEvent;
+      expect(click.at.x, closeTo(0.55, 1e-9));
+      expect(click.at.y, closeTo(0.5, 1e-9));
+    },
+  );
 }
 
 class _Harness {

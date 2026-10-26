@@ -21,6 +21,11 @@ const deskEdgeSpeed = 0.5;
 /// 三指横滑这么远（逻辑像素）算一次切空间。
 const deskSpaceSwipePx = 60.0;
 
+/// 触控板模式的指针加速：手指速度（逻辑像素/秒）在慢、快两档之间时，倍数从 1 线性升到最大。
+const deskPointerSlow = 150.0;
+const deskPointerFast = 1500.0;
+const deskPointerMaxGain = 2.5;
+
 /// 松手后滚轮速度的时间常数，约 0.7 秒收完。
 const deskFlickTau = 0.18;
 const deskFlickStop = 20.0;
@@ -47,7 +52,17 @@ DeskTwoFinger? classifyTwoFinger(List<DeskSample> samples) {
 
 enum DeskTwoFinger { scroll, zoom }
 
-enum _One { pending, panning, dragging }
+/// 手指在 [dt] 里走了 [distance] 逻辑像素时指针的倍数。
+double deskPointerGain(double distance, Duration dt) {
+  final seconds = dt.inMicroseconds / 1e6;
+  if (seconds <= 0) return deskPointerMaxGain;
+  final speed = distance / seconds;
+  final t = ((speed - deskPointerSlow) / (deskPointerFast - deskPointerSlow))
+      .clamp(0.0, 1.0);
+  return 1 + (deskPointerMaxGain - 1) * t;
+}
+
+enum _One { pending, panning, pointing, dragging }
 
 enum _Two { sampling, scroll, zoom }
 
@@ -71,7 +86,11 @@ class _Flick {
   Duration at;
 }
 
-/// 直接点按模式下的手势。不读时钟，时间由调用方传入。
+/// 看桌面的手势：直接点按，或把屏幕当触控板（[trackpad]）。不读时钟，时间由调用方传入。
+///
+/// 触控板模式下单指滑动按相对位移移动 [cursor]，点按、右键、拖动、滚动都落在指针上，
+/// 放大后视口跟着指针走，不再单指平移。拖动是轻点后 [deskMultiTap] 内再按住滑动，
+/// 不用长按：手指放上去停一下再滑是常见的移指针动作。
 class DeskGestures {
   DeskGestures({
     required this.width,
@@ -91,6 +110,12 @@ class DeskGestures {
   final viewport = DeskViewport();
 
   final Map<int, _Finger> _fingers = {};
+  var _trackpad = false;
+
+  /// 触控板模式下 Mac 指针在整屏上的位置。Mac 不报指针在哪，从画面中间开始。
+  DeskPoint cursor = const DeskPoint(0.5, 0.5);
+  Duration? _moveAt;
+  var _tapDrag = false;
   _One? _one;
   int? _oneId;
   bool _armed = false;
@@ -113,6 +138,22 @@ class DeskGestures {
   /// 最后一次单击在视图里的位置。
   Offset? get lastTap => _lastTapScreen;
   Duration _lastTapTime = Duration.zero;
+
+  bool get trackpad => _trackpad;
+
+  /// 手指按着时不换模式，免得一个手势前后两种算法。
+  set trackpad(bool on) {
+    if (_fingers.isEmpty) _trackpad = on;
+  }
+
+  /// 指针在视图里的位置。
+  Offset get cursorView {
+    final image = deskImageRect(fit, viewport);
+    return Offset(
+      image.left + cursor.x * image.width,
+      image.top + cursor.y * image.height,
+    );
+  }
 
   bool get needsTick => _fingers.isNotEmpty || _flick != null;
 
@@ -146,14 +187,20 @@ class DeskGestures {
       return;
     }
     if (_fingers.length == 1) {
-      if (_map(x, y) == null) return;
+      // 触控板模式整块视图都是触控板，留空的地方也认
+      if (!_trackpad && _map(x, y) == null) return;
       _one = _One.pending;
       _oneId = id;
       _armed = false;
       _edgeAt = null;
+      _moveAt = time;
+      _tapDrag =
+          _trackpad &&
+          _lastTapScreen != null &&
+          time - _lastTapTime <= deskMultiTap;
       return;
     }
-    if (!_anyOnPicture()) return;
+    if (!_trackpad && !_anyOnPicture()) return;
     _cancelOne();
     _beginTwo(time);
   }
@@ -183,7 +230,18 @@ class DeskGestures {
     if (_oneId != id || _one == null) return;
     if (_one == _One.pending) {
       if (finger.distanceFromOrigin() <= deskSlop) return;
-      if (_armed || time - finger.downAt >= deskLongPress) {
+      if (_trackpad && _tapDrag) {
+        _armHold();
+        _startDrag(finger, time);
+        _nudge(finger.x - finger.originX, finger.y - finger.originY, time);
+        onEvent(DeskDragEvent(DeskDragPhase.move, cursor));
+        return;
+      } else if (_trackpad) {
+        _one = _One.pointing;
+        _nudge(finger.x - finger.originX, finger.y - finger.originY, time);
+        onEvent(DeskPointEvent(cursor));
+        return;
+      } else if (_armed || time - finger.downAt >= deskLongPress) {
         _armHold();
         _startDrag(finger, time);
       } else {
@@ -195,6 +253,12 @@ class DeskGestures {
     }
     if (_one == _One.panning) {
       _panBy(dx, dy);
+    } else if (_one == _One.pointing) {
+      _nudge(dx, dy, time);
+      onEvent(DeskPointEvent(cursor));
+    } else if (_one == _One.dragging && _trackpad) {
+      _nudge(dx, dy, time);
+      onEvent(DeskDragEvent(DeskDragPhase.move, cursor));
     } else if (_one == _One.dragging) {
       onEvent(DeskDragEvent(DeskDragPhase.move, _dragPoint(finger)));
     }
@@ -242,13 +306,13 @@ class DeskGestures {
 
   /// 长按计时、边缘跟手、松手后的惯性。视图没有新的指针事件时也要调用。
   void advance(Duration time) {
-    if (_one == _One.pending && !_armed) {
+    if (_one == _One.pending && !_armed && !_trackpad) {
       final finger = _fingers[_oneId];
       if (finger != null && time - finger.downAt >= deskLongPress) {
         _armHold();
       }
     }
-    if (_one == _One.dragging) {
+    if (_one == _One.dragging && !_trackpad) {
       final finger = _fingers[_oneId];
       if (finger != null && _edgePan(finger, time)) {
         onEvent(DeskDragEvent(DeskDragPhase.move, _dragPoint(finger)));
@@ -314,7 +378,7 @@ class DeskGestures {
     if (_samples.length < 2) return;
     final a = _samples.first.centroid;
     final b = _samples.last.centroid;
-    final at = _map(a.dx, a.dy);
+    final at = _trackpad ? cursor : _map(a.dx, a.dy);
     if (at != null) onEvent(DeskPointEvent(at));
     _scrollFrom = b;
     final d = b - a;
@@ -348,7 +412,7 @@ class DeskGestures {
       x += finger.x;
       y += finger.y;
     }
-    final point = _map(x / pts.length, y / pts.length);
+    final point = _trackpad ? cursor : _map(x / pts.length, y / pts.length);
     if (point == null) return;
     onEvent(DeskRightClickEvent(point));
   }
@@ -394,9 +458,9 @@ class DeskGestures {
   }
 
   void _tap(double x, double y, Duration time) {
-    final point = _map(x, y);
+    final point = _trackpad ? cursor : _map(x, y);
     if (point == null) return;
-    final screen = Offset(x, y);
+    final screen = _trackpad ? cursorView : Offset(x, y);
     final last = _lastTapScreen;
     final near =
         last != null &&
@@ -421,7 +485,7 @@ class DeskGestures {
     onEvent(
       DeskDragEvent(
         DeskDragPhase.down,
-        _pointAt(finger.originX, finger.originY),
+        _trackpad ? cursor : _pointAt(finger.originX, finger.originY),
       ),
     );
   }
@@ -445,6 +509,7 @@ class DeskGestures {
   }
 
   void _clearOne() {
+    _tapDrag = false;
     _one = null;
     _oneId = null;
     _armed = false;
@@ -458,6 +523,40 @@ class DeskGestures {
     viewport.panX -= dx / (frame.width * zoom);
     viewport.panY -= dy / (frame.height * zoom);
     viewport.clamp();
+  }
+
+  /// 触控板模式：手指移动 (dx, dy) 逻辑像素，指针按速度加速后跟着走。
+  /// 放大时按看得见的画面换算，指针在屏幕上走的距离和缩放无关。
+  void _nudge(double dx, double dy, Duration time) {
+    final frame = fit;
+    if (frame.width <= 0 || frame.height <= 0) return;
+    final prev = _moveAt ?? time;
+    _moveAt = time;
+    final gain = deskPointerGain(Offset(dx, dy).distance, time - prev);
+    final scale = gain / viewport.zoom;
+    cursor = DeskPoint(
+      (cursor.x + dx * scale / frame.width).clamp(0.0, 1.0),
+      (cursor.y + dy * scale / frame.height).clamp(0.0, 1.0),
+    );
+    _followCursor();
+  }
+
+  /// 放大时指针离视图边缘不到 [deskEdgePx] 就挪视口，让指针一直看得见。
+  void _followCursor() {
+    final frame = fit;
+    final zoom = viewport.zoom;
+    if (zoom <= deskMinZoom || frame.width <= 0 || frame.height <= 0) return;
+    final at = cursorView;
+    viewport.panX += _overshoot(at.dx, width) / (frame.width * zoom);
+    viewport.panY += _overshoot(at.dy, height) / (frame.height * zoom);
+    viewport.clamp();
+  }
+
+  double _overshoot(double pos, double limit) {
+    if (limit <= deskEdgePx * 2) return 0;
+    if (pos < deskEdgePx) return pos - deskEdgePx;
+    if (pos > limit - deskEdgePx) return pos - (limit - deskEdgePx);
+    return 0;
   }
 
   bool _edgePan(_Finger finger, Duration time) {
@@ -486,7 +585,8 @@ class DeskGestures {
     return 0;
   }
 
-  DeskPoint _dragPoint(_Finger finger) => _pointAt(finger.x, finger.y);
+  DeskPoint _dragPoint(_Finger finger) =>
+      _trackpad ? cursor : _pointAt(finger.x, finger.y);
 
   DeskPoint _pointAt(double x, double y) {
     final mapped = _map(x, y);

@@ -188,7 +188,24 @@ class SettingsScreen extends StatelessWidget {
                           model.updateSettings((s) => s.deskWatch = v),
                     ),
                     const _Note('打开后，点首页的电脑名，菜单里有「看桌面」。画面走局域网，输入先显示在画面上。'),
-                    if (s.deskWatch) const _DeskPasswords(),
+                    if (s.deskWatch) ...[
+                      _Choice(
+                        labels: const ['直接点按', '触控板'],
+                        values: const ['direct', 'trackpad'],
+                        value: s.deskTrackpad ? 'trackpad' : 'direct',
+                        // 换了操作方式，下次进看桌面再提示一次手势
+                        onChanged: (v) => model.updateSettings((s) {
+                          s.deskTrackpad = v == 'trackpad';
+                          s.deskGesturesSeen = false;
+                        }),
+                      ),
+                      _Note(
+                        s.deskTrackpad
+                            ? '单指滑动移动 Mac 的指针，点按、右键、拖动都落在指针上；轻点一下再按住滑动是拖动。'
+                            : '点画面上哪里就按哪里，单指拖动平移放大后的画面。',
+                      ),
+                      const _DeskPasswords(),
+                    ],
                   ],
                 ),
               Section(

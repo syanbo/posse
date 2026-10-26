@@ -36,6 +36,7 @@ const _onPicture = Color(0xFFC8C6C1);
 
 const _markSize = 22.0;
 const _markFade = Duration(milliseconds: 280);
+const _cursorRingSize = 16.0;
 
 /// 左缘拖动是画面平移，Listener 不参与手势竞争，和页面返回会一起发生。
 /// 返回放在工具条上。
@@ -783,6 +784,7 @@ class _DeskPageState extends State<DeskPage>
       }
     }
     _resetZoom();
+    _gestures.cursor = const DeskPoint(0.5, 0.5);
     try {
       await rpc.call(pick.window ? 'desk.window' : 'desk.display', {
         'id': pick.id,
@@ -1123,7 +1125,10 @@ class _DeskPageState extends State<DeskPage>
   void _down(PointerDownEvent event) {
     _pointer(() {
       final local = event.localPosition;
-      final onPicture = _gestures.map(local.dx, local.dy) != null;
+      _gestures.trackpad = widget.model.settings.deskTrackpad;
+      // 触控板模式下点按落在指针上，不在手指下面画点
+      final onPicture =
+          !_gestures.trackpad && _gestures.map(local.dx, local.dy) != null;
       _gestures.down(event.pointer, local.dx, local.dy, _now);
       if (onPicture) _marks.add(_Mark(event.pointer, local));
     });
@@ -1585,7 +1590,12 @@ class _DeskPageState extends State<DeskPage>
             ),
           ),
           if (!widget.model.settings.deskGesturesSeen)
-            Positioned.fill(child: DeskGestureHint(onDismiss: _dismissHint)),
+            Positioned.fill(
+              child: DeskGestureHint(
+                onDismiss: _dismissHint,
+                trackpad: widget.model.settings.deskTrackpad,
+              ),
+            ),
         ],
       ),
     );
@@ -1615,6 +1625,8 @@ class _DeskPageState extends State<DeskPage>
             child: Texture(textureId: _texture!),
           ),
         for (final mark in _marks) _dot(colors, mark),
+        if (widget.model.settings.deskTrackpad && _texture != null)
+          _cursorRing(colors),
       ],
     );
   }
@@ -1719,6 +1731,30 @@ class _DeskPageState extends State<DeskPage>
                 ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 触控板模式下手机认为的指针位置，套在画面里 Mac 指针的尖上。
+  /// 画面里的指针要等一个来回才动，这个圈跟手。
+  Widget _cursorRing(PosseColors colors) {
+    final at = _gestures.cursorView;
+    return Positioned(
+      left: at.dx - _cursorRingSize / 2,
+      top: at.dy - _cursorRingSize / 2,
+      child: IgnorePointer(
+        child: Container(
+          key: const Key('desk-cursor-ring'),
+          width: _cursorRingSize,
+          height: _cursorRingSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: colors.accent.withValues(alpha: 0.85),
+              width: 1.5,
+            ),
           ),
         ),
       ),
