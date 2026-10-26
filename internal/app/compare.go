@@ -403,7 +403,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 	list.Key = func(i int) any { return rows[i].path }
 	ui.List(c, list, len(rows), func(i int) {
 		r := rows[i]
-		row := ui.Row(c.Key(r.path)).Height(sz(26)).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center)
+		row := ui.Row(c.Key(r.path)).Height(sz(26)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 4+float32(r.depth)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center)
 		if r.dir {
 			row.Role(ui.RoleButton).Label(r.path)
 			row.Children(func() {

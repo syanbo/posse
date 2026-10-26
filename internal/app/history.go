@@ -516,7 +516,7 @@ func (a *app) historyBoard(c *ui.Context) {
 		a.closeBoardButton(c)
 	})
 	searching := h.resQuery != ""
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(16).Gap(12).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
 		list.Children(func() {
@@ -528,7 +528,7 @@ func (a *app) historyBoard(c *ui.Context) {
 				a.sessionList(c)
 			}
 		})
-		ui.Column(c).Grow(1).Shrink(1).Gap(12).Children(func() { a.sessionDetail(c) })
+		ui.Column(c).Grow(1).Shrink(1).Gap(8).Children(func() { a.sessionDetail(c) })
 	})
 	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
 	switch {
@@ -614,7 +614,7 @@ func (a *app) historyTotals(c *ui.Context) {
 			count = fmt.Sprintf("前 %d 个匹配的会话", historyLimit)
 		}
 	}
-	ui.Column(c).Padding(16, 20, 12, 20).Gap(8).Children(func() {
+	ui.Column(c).Padding(12, 20, 8, 20).Gap(8).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, count).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum")
 			if h.resAgent == 0 || h.resQuery != "" {
@@ -822,11 +822,11 @@ func (a *app) historyEmpty(c *ui.Context, title, body string) {
 func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 	t := c.Theme()
 	h := &a.history
-	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(12, 12, 12, 16).Gap(12).Radius(rControl).AlignItems(ui.Center)
+	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(8, 12).Gap(12).Radius(rControl).AlignItems(ui.Center)
 	selectedBg(c, row, h.sel == sessionKey(s))
 	row.Children(func() {
 		agentTile(c, s.Agent, tileMedium())
-		ui.Column(c).Gap(4).Grow(1).Shrink(1).Children(func() {
+		ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, oneLine(s.Title)).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Grow(1).Shrink(1)
 				ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -999,7 +999,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		whoColor = t.Accent
 	}
 	// agent 的回复不装框，直接铺开；命中搜索的那条铺一层琥珀淡底
-	box := ui.Column(c).Margin(0, 16).Padding(12, 16, 12, 16).Gap(6).Radius(rCard)
+	box := ui.Column(c).Margin(0, 16).Padding(8, 12).Gap(6).Radius(rCard)
 	switch {
 	case hit:
 		box.Background(soft(t, colors(t).honey))

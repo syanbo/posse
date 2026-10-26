@@ -13,23 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 设计约定（参照 Claude 桌面端的克制，见 docs/plans/ui-claude-polish.html；字号、字重、图标、间距的完整规则见 docs/design.md）：
-//   - 暖灰底色，和陶土色同一色温。顶栏 band、画布 canvas、卡片 card 只差一点明度，浮层再高一层 raised；
-//     深色下侧栏 side 比画布明显浅一档。分层靠明度差和 8% 透明的细线，不靠粗线。
-//   - 单闭合边框：从画布往里看，任何一条视线最多穿过一层闭合的框。有框的容器里，按钮和输入不再加框，
-//     用填充（fill）或幽灵样式；容器内部分区用单向细线。
-//   - 陶土色用在主按钮、焦点、工作中的星号、链接、图标，以及选中项：强调色淡底，不画竖条。
-//     悬停是中性的透明底（wash）。
-//   - 只有"待处理"用琥珀色并配文字，是界面上唯一醒目的东西；本轮完成用绿色空心蜂巢格提示可以看结果。
-//     状态靠形状区分而不只靠颜色：工作中是星号（减少动态效果时是实心蜂巢格），停下来是空心蜂巢格。
-//   - 每个 agent 有自己的色块图标，扫一眼就知道是谁。
-//   - 路径、分支、命令用等宽字体和次要色。一行里的几项信息靠间距和图标分开，不用"A · B"中点串。
-//   - 字号只用四档（fsSmall、fsBody、fsTitle、fsPage，等宽字另有 fsCode），字重三档（fwBody 正文、fwMedium 列表标题和按钮、
-//     fwBold 标题、"待处理""已完成"和加重的文字），都跟着设置里的界面字号、字重变；不写数字。次要的信息先换次要色，
-//     不靠再小半号。圆角用下面的常量。
-//   - 悬停和按下即时反馈（≤120ms 缓出，按下缩放 0.98）。自动播放的动画只用来表示状态：工作中的星号、
-//     等待任务的波形（waitingPulse）、未读的铃铛（unread.go）、终端启动前的加载动画（posseLoader），
-//     系统设了减少动态效果时都停下。
+// 界面的取向和字号、字重、图标、间距、圆角、颜色、层级的规则见 docs/design.md；这里只定义取值，调用处只用名字。
 
 var hover = ui.Animation{Duration: 120 * time.Millisecond}
 
@@ -104,7 +88,7 @@ func sz(v float32) float32 { return float32(math.Round(float64(v * fsBody / rowB
 var spaceScale = []float32{0, 2, 4, 6, 8, 12, 16, 20, 24, 32}
 
 const (
-	cardPad    = 20
+	cardPad    = 16
 	treeIndent = 16
 	hairline   = 0.5 // 分隔线的粗细：2 倍屏上一个物理像素，1pt 显粗；对齐时要让出它
 	focusRing  = 1   // 聚焦框的粗细：要一眼看得见，不跟着分隔线变细
@@ -150,7 +134,7 @@ func colors(t *ui.Theme) palette {
 	if t.Dark {
 		p := palette{
 			honey: ui.Hex("#F2AA2E"), sage: ui.Hex("#8DBB92"),
-			side: ui.Hex("#2A2A27"), canvas: ui.Hex("#1A1A19"), card: t.Background, band: ui.Hex("#1C1C1B"), raised: ui.Hex("#2A2A27"),
+			side: ui.Hex("#2A2A27"), canvas: ui.Hex("#171716"), card: t.Background, band: ui.Hex("#1C1C1B"), raised: ui.Hex("#2A2A27"),
 			shade: ui.RGBA(0, 0, 0, 0.18), code: ui.Hex("#141413"),
 			line: ui.RGBA(255, 255, 255, 0.08), wash: ui.RGBA(255, 255, 255, 0.05),
 			fill: ui.RGBA(255, 255, 255, 0.09), fillHi: ui.RGBA(255, 255, 255, 0.14), faint: ui.Hex("#7D7B76"),
@@ -161,7 +145,7 @@ func colors(t *ui.Theme) palette {
 	}
 	p := palette{
 		honey: ui.Hex("#B5700E"), sage: ui.Hex("#3E8A4C"),
-		side: ui.Hex("#F3F2EF"), canvas: ui.Hex("#F8F8F6"), card: t.Background, band: ui.Hex("#F8F7F5"), raised: ui.Hex("#FFFFFF"),
+		side: ui.Hex("#F3F2EF"), canvas: ui.Hex("#F4F3F0"), card: t.Background, band: ui.Hex("#F8F7F5"), raised: ui.Hex("#FFFFFF"),
 		shade: ui.RGBA(0, 0, 0, 0.03), code: ui.Hex("#F5F4F1"),
 		line: ui.RGBA(0, 0, 0, 0.08), wash: ui.RGBA(0, 0, 0, 0.04),
 		fill: ui.RGBA(0, 0, 0, 0.06), fillHi: ui.RGBA(0, 0, 0, 0.1), faint: ui.Hex("#999793"),
@@ -329,14 +313,8 @@ func fadeEdges(list ui.Element, s *ui.ListState, bg ui.Color) ui.Element {
 // 层级只有三档（docs/design.md），投影和描边都经这几个函数，别处不写 Shadow、InsetShadow。
 // 深色下不画白框，用 1px 内高光（像边缘接到顶光）；浅色下是细外环加投影。
 
-// elevCard 是卡片一样的容器，和盖在终端上的按钮列：只描边不投影，深色是内高光、浅色是很淡的外环。
-func elevCard(c *ui.Context, e ui.Element) ui.Element {
-	p := colors(c.Theme())
-	if c.Theme().Dark {
-		return e.InsetShadow(0, 0, 0, hairline, p.line)
-	}
-	return e.Border(hairline, p.line)
-}
+// elevCard 是卡片：不描边、不投影，靠和画布（canvas）的明度差分开。留着这个函数，卡片的层级规则只在一处。
+func elevCard(c *ui.Context, e ui.Element) ui.Element { return e }
 
 // elevFloat 是弹出来、盖在内容上面的东西：浮层和提示。只有它带投影，小而淡，够把它从底下分开就行。
 func elevFloat(c *ui.Context, e ui.Element) ui.Element {
@@ -391,11 +369,8 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 		// 外框和平时一样宽（不挤动内容），再往里描一圈，合起来是 focusRing
 		box.Border(hairline, t.Focus).InsetShadow(0, 0, 0, focusRing-hairline, t.Focus)
 	} else {
-		elevCard(c, box)
-		if t.Dark {
-			// 深色平时只有内高光、不占尺寸；补一圈同色边，和聚焦时一样高。
-			box.Border(hairline, colors(t).card)
-		}
+		// 平时画一圈和底同色、看不见的框，和聚焦时一样大
+		elevCard(c, box).Border(hairline, colors(t).card)
 	}
 	return sent && strings.TrimSpace(*value) != ""
 }

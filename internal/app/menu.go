@@ -275,7 +275,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			continue
 		}
 		prevSep = false
-		row := ui.Row(c.Key(it.seq)).Height(sz(28)).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
+		row := ui.Row(c.Key(it.seq)).Height(sz(28)).Margin(2, 0, 0, 0).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(it.label)
 		if it.disabled {
 			row.Cursor(ui.CursorDefault)

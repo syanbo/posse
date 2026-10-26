@@ -62,7 +62,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
 		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
-		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(rRow).
+		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(rRow).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectedBg(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -201,7 +201,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			a.pathMenu(c, row, w, v, abs, false)
 			return
 		}
-		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(4, 8, 4, 8).Gap(8).Radius(rRow).AlignItems(ui.Start).Role(ui.RoleButton)
+		row := ui.Row(c.Key(i)).Margin(2, 6, 0, 6).Padding(4, 8, 4, 8).Gap(8).Radius(rRow).AlignItems(ui.Start).Role(ui.RoleButton)
 		selectedBg(c, row, false)
 		text, spans := trimHit(h)
 		row.Children(func() {
@@ -756,7 +756,7 @@ func (a *app) quickDialog(c *ui.Context) {
 // quickRow 是快速打开的一条结果：文件名在前，目录在后，命中的字母铺底色。返回是否被点了。
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
+	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Margin(2, 0, 0, 0).Padding(0, 12).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()

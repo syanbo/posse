@@ -1003,7 +1003,7 @@ func (a *app) footer(c *ui.Context) {
 }
 
 // footHeight 是侧栏底栏和主区域状态栏的高度：两条并排，看起来是贯穿窗口的一条。
-const footHeight = 34
+const footHeight = 30
 
 // footShade 是底栏的底色，比侧栏深一层。
 func footShade(t *ui.Theme) ui.Color { return colors(t).shade }
@@ -1359,15 +1359,14 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		return
 	}
 	t := c.Theme()
-	p := colors(t)
 	toggle := func() {
 		a.state.SessionButtonsHidden = !a.state.SessionButtonsHidden
 		a.saveState()
 	}
 	if a.state.SessionButtonsHidden {
 		label := "展开会话按钮"
-		h := elevCard(c, ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
-			Background(p.raised).Label(label).Tooltip(label))
+		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
+			Background(t.Surface).Label(label).Tooltip(label)
 		fg := t.TextMuted
 		if h.Hovered() {
 			h.Background(t.SurfaceHover)
@@ -1382,7 +1381,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := elevCard(c, ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised))
+	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
 	opacity := float32(0.5)

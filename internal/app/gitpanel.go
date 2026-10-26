@@ -276,7 +276,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
 	// 比组标题缩进一层：勾选框和组名的文字对齐
-	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(rRow).
+	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
@@ -370,7 +370,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
 		other = s.Branch
 	}
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(rRow).
+	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
@@ -564,7 +564,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			t := c.Theme()
 			bar.Row().Gap(4)
 			bar.Children(func() {
-				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Border(hairline, colors(t).line).Label("回滚这处改动")
+				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Label("回滚这处改动")
 				btn.Children(func() { ui.Text(c, "回滚").FontSize(fsSmall) })
 				if btn.Clicked() {
 					a.revertHunk(v, d, act.Index)

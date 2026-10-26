@@ -216,7 +216,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	if f := d.log.filter; f.Path != "" {
 		label = "历史：" + path.Base(f.Path)
 	}
-	row := ui.Row(c.Key(d.path)).Height(sz(26)).Padding(0, 6, 0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key(d.path)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 6, 0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, active)
 	row.Children(func() {

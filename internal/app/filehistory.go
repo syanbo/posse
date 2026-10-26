@@ -113,7 +113,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			return
 		}
 		ci := ld.commits[i]
-		row := ui.Row(c.Key(ci.Hash)).Height(sz(30)).Margin(0, 6).Padding(0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
+		row := ui.Row(c.Key(ci.Hash)).Height(sz(30)).Margin(2, 6, 0, 6).Padding(0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(ci.Subject)
 		selectedBg(c, row, h.sel == ci.Hash)
 		row.Children(func() {

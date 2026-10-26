@@ -327,7 +327,7 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 			return
 		}
 		label := r.label
-		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
+		row := ui.Row(c).Height(fontRowHeight()).Margin(2, 0, 0, 0).Padding(0, 12, 0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(label)
 		bg := ui.Transparent
 		if row.Hovered() || i == p.hl {
@@ -344,7 +344,7 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 		if row.Clicked() {
 			choose(r.family)
 		}
-	}).Height(min(float32(len(rows))*fontRowHeight(), 320)).Shrink(0)
+	}).Height(min(float32(len(rows))*(fontRowHeight()+2), 320)).Shrink(0) // 每行上方留 2
 }
 
 // fontSizeStepper 是字号的"− 13 + 默认"一组按钮。
@@ -370,7 +370,7 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 // 卡片和终端、编辑器同一个底色，看到的就是实际的样子。
 func previewBlock(c *ui.Context, body func()) {
 	t := c.Theme()
-	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).Children(func() {
 		ui.Text(c, "预览").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		body()
 	})

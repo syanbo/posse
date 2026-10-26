@@ -379,10 +379,11 @@ func (a *app) taskBoard(c *ui.Context) {
 	if !a.taskHome && a.task(a.taskSel) == nil {
 		a.selectTask(a.sorted[0].ID)
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(16).Gap(12).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
 		card(c).Width(360).Shrink(0).Clip().Children(func() {
 			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Padding(6, 0, 12, 0).Children(func() { a.taskList(c) })
+				// 项与项之间留 4：悬停和选中的底色不粘在一起（和历史列表一样）
+				ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.taskList(c) })
 			})
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
@@ -468,12 +469,12 @@ func (a *app) taskList(c *ui.Context) {
 
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
 	t := c.Theme()
-	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(12, 12, 12, 16).Gap(8).Radius(rControl).AlignItems(ui.Start)
+	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Start)
 	selectedBg(c, row, a.taskSel == task.ID)
 	row.Children(func() {
 		ui.Box(c).Padding(2, 0, 0, 0).Children(func() { taskGlyphIcon(c, task, fsBody) })
 		// MinWidth(0)：标题长时让它省略，不把右边的时间挤出卡片
-		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(4).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(2).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, task.Title).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Shrink(1).MinWidth(0)
 				// 结束但不是完成的任务，状态写成文字跟在标题后面，不只靠颜色
@@ -550,8 +551,8 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 	if a.detail != nil && a.detail.ID == task.ID {
 		msgs = a.detail.Messages
 	}
-	ui.Column(c).Gap(12).MaxWidth(860).Children(func() {
-		card(c).Padding(20).Gap(16).Children(func() {
+	ui.Column(c).Gap(8).MaxWidth(860).Children(func() {
+		card(c).Padding(cardPad).Gap(12).Children(func() {
 			ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 				agentTile(c, task.Agent, tileLarge())
 				ui.Column(c).Gap(8).Grow(1).Shrink(1).Children(func() {

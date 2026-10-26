@@ -222,7 +222,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	case mdCode:
 		// 上面一条语言栏，右边是复制按钮
 		ui.Column(c).Radius(rCard).Background(codeBackground(t)).Clip().Children(func() {
-			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).BorderWidth(0, 0, hairline, 0).BorderColor(colors(t).line).Children(func() {
+			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).Children(func() {
 				lang := b.lang
 				if lang == "" {
 					lang = "代码"
@@ -276,8 +276,8 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	}
 }
 
-// 表格一个格子的左右内边距 24 加右边框 1，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
-const mdCellPad = 26
+// 表格一个格子的左右内边距 24，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
+const mdCellPad = 25
 
 // mdTableSize 是表格每列量好的宽度：最小宽是最长的拆不开的词，最大宽是不折行。
 // 第一次搭的时候量一次，存在块上；设置里换了界面字号、字重（key）再重量。
@@ -291,7 +291,6 @@ type mdTableSize struct {
 // 放得下就按内容宽排；长句折行能放下的，按各列能收缩的余地分掉差额，刚好铺满；
 // 连拆不开的词都放不下的，长句的列最宽 360、短的按内容，整张左右滚。
 func (r mdView) table(c *ui.Context, b mdBlock) {
-	t := c.Theme()
 	cols := 0
 	for _, row := range b.rows {
 		cols = max(cols, len(row))
@@ -331,7 +330,7 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		scroll.Padding(0, 0, 12, 0) // 滚动条画在表格下面，不压着最后一行
 	}
 	scroll.Children(func() {
-		ui.Grid(c).ColumnTracks(tracks...).Border(hairline, colors(t).line).Radius(rRow).Children(func() { r.cells(c, b, cols) })
+		ui.Grid(c).ColumnTracks(tracks...).Radius(rRow).Children(func() { r.cells(c, b, cols) })
 	})
 }
 
@@ -412,14 +411,12 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 			if ci < len(row) {
 				cell = row[ci]
 			}
-			right, bottom := float32(1), float32(1)
-			if ci == cols-1 {
-				right = 0
-			}
+			// 只画行与行之间的横线，不画外框和竖线；表头靠填充底区分
+			bottom := float32(hairline)
 			if ri == len(b.rows)-1 {
 				bottom = 0
 			}
-			box := ui.Box(c).Padding(4, 12).BorderWidth(0, right, bottom, 0).BorderColor(colors(t).line)
+			box := ui.Box(c).Padding(4, 12).BorderWidth(0, 0, bottom, 0).BorderColor(colors(t).line)
 			if ri == 0 {
 				box.Background(t.Surface)
 			}
