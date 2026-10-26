@@ -352,7 +352,7 @@ func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 12, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
-		BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
+		BorderWidth(0, 0, hairline, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
 		ui.Box(c).Width(appNameWidth()).Shrink(0)
 		ui.Spacer(c)
@@ -1287,7 +1287,7 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
-		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
+		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示。
 		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
 		// 触控板和滚轮照常能滚
@@ -1366,7 +1366,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	}
 	if a.state.SessionButtonsHidden {
 		label := "展开会话按钮"
-		h := elevFloat(c, ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
+		h := elevCard(c, ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
 			Background(p.raised).Label(label).Tooltip(label))
 		fg := t.TextMuted
 		if h.Hovered() {
@@ -1382,7 +1382,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := elevFloat(c, ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised))
+	col := elevCard(c, ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(p.raised))
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
 	opacity := float32(0.5)
@@ -1669,7 +1669,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		renaming = false
 	}
 	if renaming {
-		row.Border(hairline, t.Focus)
+		row.Border(focusRing, t.Focus)
 	}
 	row.Children(func() {
 		if status != "" {

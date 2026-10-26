@@ -106,7 +106,8 @@ var spaceScale = []float32{0, 2, 4, 6, 8, 12, 16, 20, 24, 32}
 const (
 	cardPad    = 20
 	treeIndent = 16
-	hairline   = 1 // 分隔线的粗细，对齐时要让出它
+	hairline   = 0.5 // 分隔线的粗细：2 倍屏上一个物理像素，1pt 显粗；对齐时要让出它
+	focusRing  = 1   // 聚焦框的粗细：要一眼看得见，不跟着分隔线变细
 )
 
 // 圆角按角色分五档，嵌套时外圆角 = 内圆角 + 内边距（规则见 docs/design.md）。
@@ -140,8 +141,7 @@ type palette struct {
 	fill   ui.Color   // 框里的次级按钮的底
 	fillHi ui.Color   // 次级按钮悬停
 	faint  ui.Color   // 最弱的文字：占位、禁用、不重要的计数
-	shadow ui.Color   // 浮层、底部面板、提示的投影
-	lift   ui.Color   // 卡片的浅投影（只有浅色有）
+	shadow ui.Color   // 浮层、提示的投影
 	scrim  ui.Color   // 压在图片、视频上的深色底
 	data   []ui.Color // 数据色：提交图的线、分支比较的两边、用量的分类；依次取
 }
@@ -154,7 +154,7 @@ func colors(t *ui.Theme) palette {
 			shade: ui.RGBA(0, 0, 0, 0.18), code: ui.Hex("#141413"),
 			line: ui.RGBA(255, 255, 255, 0.08), wash: ui.RGBA(255, 255, 255, 0.05),
 			fill: ui.RGBA(255, 255, 255, 0.09), fillHi: ui.RGBA(255, 255, 255, 0.14), faint: ui.Hex("#7D7B76"),
-			shadow: ui.RGBA(0, 0, 0, 0.5), scrim: ui.RGBA(0, 0, 0, 0.55),
+			shadow: ui.RGBA(0, 0, 0, 0.35), scrim: ui.RGBA(0, 0, 0, 0.55),
 			data: darkData,
 		}
 		return p.derive(t)
@@ -165,7 +165,7 @@ func colors(t *ui.Theme) palette {
 		shade: ui.RGBA(0, 0, 0, 0.03), code: ui.Hex("#F5F4F1"),
 		line: ui.RGBA(0, 0, 0, 0.08), wash: ui.RGBA(0, 0, 0, 0.04),
 		fill: ui.RGBA(0, 0, 0, 0.06), fillHi: ui.RGBA(0, 0, 0, 0.1), faint: ui.Hex("#999793"),
-		shadow: ui.RGBA(0, 0, 0, 0.12), lift: ui.RGBA(0, 0, 0, 0.04), scrim: ui.RGBA(0, 0, 0, 0.55),
+		shadow: ui.RGBA(0, 0, 0, 0.08), scrim: ui.RGBA(0, 0, 0, 0.55),
 		data: lightData,
 	}
 	return p.derive(t)
@@ -329,28 +329,27 @@ func fadeEdges(list ui.Element, s *ui.ListState, bg ui.Color) ui.Element {
 // 层级只有三档（docs/design.md），投影和描边都经这几个函数，别处不写 Shadow、InsetShadow。
 // 深色下不画白框，用 1px 内高光（像边缘接到顶光）；浅色下是细外环加投影。
 
-// elevCard 是卡片一样的容器：深色只有内高光，浅色是很淡的外环加一点投影；卡片本身是唯一的那层框。
+// elevCard 是卡片一样的容器，和盖在终端上的按钮列：只描边不投影，深色是内高光、浅色是很淡的外环。
 func elevCard(c *ui.Context, e ui.Element) ui.Element {
 	p := colors(c.Theme())
 	if c.Theme().Dark {
 		return e.InsetShadow(0, 0, 0, hairline, p.line)
 	}
-	return e.Border(hairline, p.line).Shadow(0, 1, 2, 0, p.lift)
+	return e.Border(hairline, p.line)
 }
 
-// elevFloat 是浮在内容上面的东西：浮层、提示、盖在终端上的按钮列。深色配深而散的投影。
+// elevFloat 是弹出来、盖在内容上面的东西：浮层和提示。只有它带投影，小而淡，够把它从底下分开就行。
 func elevFloat(c *ui.Context, e ui.Element) ui.Element {
 	p := colors(c.Theme())
 	if c.Theme().Dark {
-		return e.InsetShadow(0, 0, 0, hairline, p.line).Shadow(0, 12, 32, 0, p.shadow)
+		return e.InsetShadow(0, 0, 0, hairline, p.line).Shadow(0, 6, 20, 0, p.shadow)
 	}
-	return e.Border(hairline, p.line).Shadow(0, 8, 24, 0, p.shadow)
+	return e.Border(hairline, p.line).Shadow(0, 4, 16, 0, p.shadow)
 }
 
-// elevSheet 是从窗口底边升起的面板（Git 日志）：顶边一条线，投影朝上。
+// elevSheet 是从窗口底边升起的面板（Git 日志）：顶边一条线，不投影。
 func elevSheet(c *ui.Context, e ui.Element) ui.Element {
-	p := colors(c.Theme())
-	return e.BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, p.shadow)
+	return e.BorderWidth(hairline, 0, 0, 0).BorderColor(colors(c.Theme()).line)
 }
 
 // hline、vline 是兄弟元素之间的分隔线；容器自己的上下左右边界用 BorderWidth(hairline, …)。
@@ -389,7 +388,8 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 		})
 	})
 	if in.Focused() {
-		box.Border(hairline, t.Focus)
+		// 外框和平时一样宽（不挤动内容），再往里描一圈，合起来是 focusRing
+		box.Border(hairline, t.Focus).InsetShadow(0, 0, 0, focusRing-hairline, t.Focus)
 	} else {
 		elevCard(c, box)
 		if t.Dark {
@@ -400,13 +400,13 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 	return sent && strings.TrimSpace(*value) != ""
 }
 
-// fieldBorder 画 1px 边。没聚焦时用和底一样的颜色，看着没有框，尺寸却和聚焦时相同。
+// fieldBorder 画聚焦框。没聚焦时用和底一样的颜色，看着没有框，尺寸却和聚焦时相同。
 func fieldBorder(box ui.Element, focused bool, fill, focus ui.Color) {
 	color := fill
 	if focused {
 		color = focus
 	}
-	box.Border(hairline, color)
+	box.Border(focusRing, color)
 }
 
 // pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
@@ -499,7 +499,7 @@ func cardTitle(c *ui.Context, title string) ui.Element {
 func (a *app) band(c *ui.Context, fn func()) {
 	p := colors(c.Theme())
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 20+a.barInset(c)).Gap(8).Background(p.band).
-		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(fn)
+		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Children(fn)
 }
 
 // selectedBg 给列表里的一行加选中和悬停的底：选中是强调色淡底，不画竖条。

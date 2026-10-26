@@ -163,7 +163,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		Background(p.card))
 	panel.Children(func() {
 		ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
-			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+			BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 			// 点 × 会在这次遍历里关掉文件历史：遍历副本
 			for i, d := range slices.Clone(v.logs) {
 				a.logTab(c, v, d)

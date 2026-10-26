@@ -173,7 +173,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	col.Children(func() {
 		// 右边距和标签栏一样，开关按钮打开前后不挪位置
 		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 12).Gap(4).AlignItems(ui.Center).
-			BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
+			BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Children(func() {
 			if panelTab(c, iconHistory, "历史", a.state.FilesPanelHistory) {
 				a.setFilesPanelHistory(true)
 			}
