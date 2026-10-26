@@ -137,6 +137,7 @@ func (c *context) reset(now time.Time, w, h float32) {
 	root.st = c.rt.stateFor(root.id)
 	root.bg = c.theme.Background
 	root.ts = textStyle{set: setColor | setSize | setFamily, color: c.theme.Text, size: c.theme.FontSize, family: c.theme.Font}
+	root.ts.weightFrom(c.theme)
 	if c.rt.lang != "" {
 		// Text is in the language the app shows unless told otherwise.
 		root.ts.lang, root.ts.set = c.rt.lang, root.ts.set|setLang
@@ -336,6 +337,16 @@ func (c *context) SetTheme(t *Theme) {
 	c.theme = t
 	c.root.bg = t.Background
 	c.root.ts.color, c.root.ts.size, c.root.ts.family = t.Text, t.FontSize, t.Font
+	c.root.ts.weightFrom(t)
+}
+
+// weightFrom gives the window's root the theme's FontWeight, for the text
+// below to inherit. Posse
+func (s *textStyle) weightFrom(t *Theme) {
+	s.weight, s.set = t.FontWeight, s.set&^setWeight
+	if t.FontWeight > 0 {
+		s.set |= setWeight
+	}
 }
 
 // Size returns the size of the window's content in DIPs.

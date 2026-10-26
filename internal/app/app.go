@@ -350,6 +350,7 @@ func Run(c *client.Client) error {
 	a.termFamily, a.editorFamily = a.state.TermFont, a.state.EditorFont
 	a.editorSize = editorSizeOf(a.state)
 	uiSmooth = a.state.UISmooth
+	setUIType(a.state.UIFontSize, a.state.UIWeight, a.state.UIBoldWeight)
 	if a.state.IconSize > 0 {
 		iconSize = a.state.IconSize
 	}

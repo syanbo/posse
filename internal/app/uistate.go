@@ -48,6 +48,9 @@ type uiState struct {
 	HistoryByFolder      bool     `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
 	IconSize             float32  `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
 	UISmooth             bool     `json:"uiSmooth,omitempty"`             // 界面文字用系统的字体平滑（更粗），默认不用
+	UIFontSize           float32  `json:"uiFontSize,omitempty"`           // 界面正文字号，0 表示默认
+	UIWeight             int      `json:"uiWeight,omitempty"`             // 界面正文字重，0 表示默认
+	UIBoldWeight         int      `json:"uiBoldWeight,omitempty"`         // 界面标题的字重，0 表示默认
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示

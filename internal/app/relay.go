@@ -169,7 +169,7 @@ func (a *app) mobileRelayCard(c *ui.Context) {
 			})
 			if !st.Configured {
 				ui.Text(c, "手机不在同一个 Wi-Fi 时，经中转连回这台电脑。贴上收到的中转邀请码。").
-					FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
+					FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Grow(1).Shrink(1).Children(func() {
 						if fieldInput(c, &r.code, "粘贴中转邀请码").Submitted() {
@@ -181,10 +181,10 @@ func (a *app) mobileRelayCard(c *ui.Context) {
 					}
 				})
 			} else if known {
-				ui.Text(c, state.note).FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
+				ui.Text(c, state.note).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			}
 			if r.err != "" {
-				ui.Text(c, r.err).FontSize(12).TextColor(t.Danger).LineHeight(1.45)
+				ui.Text(c, r.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45)
 			}
 			if st.Admin {
 				a.relayInviteRow(c)
@@ -199,7 +199,7 @@ func (a *app) relayInviteRow(c *ui.Context) {
 	r := &a.mobile.relay
 	ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
 	ui.Column(c).Gap(6).Children(func() {
-		ui.Text(c, "邀请别人").FontSize(11).FontWeight(500).TextColor(t.TextMuted)
+		ui.Text(c, "邀请别人").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Box(c).Grow(1).Shrink(1).Children(func() {
 				if fieldInput(c, &r.name, "对方的名字，如 lvxiaohai").Submitted() {
@@ -212,14 +212,14 @@ func (a *app) relayInviteRow(c *ui.Context) {
 		})
 		if r.invite != "" {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, r.invite).FontSize(12).Font(monoFont).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1)
+				ui.Text(c, r.invite).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Grow(1).Shrink(1)
 				if pressable(textButton(c, "复制")).Clicked() {
 					c.WriteClipboard(r.invite)
 				}
 			})
 		}
 		ui.Text(c, "对方在自己电脑的 Posse 手机页贴上邀请码。名字只能用小写字母、数字、点、横线，在服务器上停用某个人时用它。").
-			FontSize(11.5).TextColor(t.TextMuted).LineHeight(1.45)
+			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }
 

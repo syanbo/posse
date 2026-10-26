@@ -116,10 +116,10 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		}
 	}
 	if len(shown) == 0 {
-		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(11).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
+		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
 		return
 	}
-	b := ui.Row(c.Key("plan")).Height(26).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
+	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, 8).Gap(12).Radius(6).AlignItems(ui.Center).Shrink(0).
 		Role(ui.RoleButton).Label("套餐用量")
 	bg := ui.Transparent
 	if a.planOpen || b.Hovered() {
@@ -136,8 +136,8 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
 					agentIcon(c, u.Agent, 14)
-					ui.Text(c, windowShort(w.Minutes)).FontSize(11).TextColor(t.TextMuted).SingleLine()
-					ui.Text(c, percentText(a.shown(w))).FontSize(11).FontFeatures("tnum").TextColor(color).SingleLine()
+					ui.Text(c, windowShort(w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
 				})
 		}
 	})
@@ -289,7 +289,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	// 浮窗至少和底下整排一样宽，面板跟着撑满
 	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			titleText(c, "套餐用量", fsCardTitle).Grow(1)
+			titleText(c, "套餐用量", fsTitle).Grow(1)
 			// 查询进行中按钮换成转圈
 			if a.planBusy {
 				ui.Row(c.Key("plan-refreshing")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
@@ -313,12 +313,12 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 			ui.Column(c.Key(u.Agent)).Gap(8).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					agentTile(c, u.Agent, 16)
-					ui.Text(c, agentTitle(u.Agent)).FontSize(13).FontWeight(500).Shrink(0)
+					ui.Text(c, agentTitle(u.Agent)).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 					if u.Plan != "" {
-						ui.Text(c, u.Plan).FontSize(12).TextColor(t.TextMuted).SingleLine().Shrink(1)
+						ui.Text(c, u.Plan).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					ui.Spacer(c)
-					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(11).TextColor(t.TextMuted).Shrink(0).
+					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
 						Tooltip("读数来自 agent 最近一次运行：" + time.UnixMilli(u.UpdatedAt).Local().Format("1月2日 15:04"))
 				})
 				for j, w := range planWindows(u) {
@@ -328,26 +328,26 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					}
 					// 一个窗口一行：名称、进度条、百分比、重置时间
 					ui.Row(c.Key(fmt.Sprint(j))).Gap(10).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, windowName(w)).FontSize(12).Width(84).Shrink(0).SingleLine()
+						ui.Text(c, windowName(w)).FontSize(fsSmall).Width(sz(84)).Shrink(0).SingleLine()
 						a.planBar(c, w, 0, 5)
-						ui.Text(c, a.shownWord()+" "+percentText(a.shown(w))).FontSize(12).FontFeatures("tnum").TextColor(color).
+						ui.Text(c, a.shownWord()+" "+percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
 							Width(64).Shrink(0).TextAlign(ui.End)
-						ui.Text(c, resetText(w.ResetsAt, now)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).
+						ui.Text(c, resetText(w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 							Width(138).Shrink(0).TextAlign(ui.End).SingleLine()
 					})
 					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
 					if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
 						ui.Text(c.Key(fmt.Sprint(j, "-at")), ago(time.UnixMilli(w.At))+"的读数").
-							FontSize(11).TextColor(t.TextMuted).Margin(-4, 0, 0, 94)
+							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, 94)
 					}
 				}
 				for _, f := range planFacts(u) {
-					ui.Text(c, f).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted)
+					ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 				}
 			})
 		}
 		ui.Text(c, "Agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。").
-			FontSize(11).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }
 
@@ -379,7 +379,7 @@ func (a *app) planSettings(c *ui.Context) {
 	st := a.daemon.Usage
 	settingsCard(c, "套餐用量", "底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。", func() {
 		if st == nil {
-			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
+			ui.Text(c, "更新常驻进程后可用。").FontSize(fsBody).TextColor(c.Theme().TextMuted)
 			return
 		}
 		cursor, codex := !st.CursorOff, !st.CodexOff

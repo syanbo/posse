@@ -28,7 +28,7 @@ func (a *app) startRename(term terminalInfo) {
 
 // renameInput 是改名时标签里的输入框：回车或点别处保存，Esc 取消；清空等于恢复默认名称。
 func (a *app) renameInput(c *ui.Context, term terminalInfo) {
-	in := ui.TextInputBase(c, &a.renameText).Label("标签名").FontSize(12).MinWidth(120).Grow(1)
+	in := ui.TextInputBase(c, &a.renameText).Label("标签名").FontSize(fsSmall).MinWidth(120).Grow(1)
 	// 终端视图出现时会自动聚焦（切回这个标签、重新接入），没点别处就把焦点拿回来
 	if !in.Focused() {
 		in.Focus()

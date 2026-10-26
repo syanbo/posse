@@ -212,29 +212,29 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	switch b.kind {
 	case mdPara:
-		r.inline(c, b.inlines).FontSize(fsRead).LineHeight(1.6)
+		r.inline(c, b.inlines).FontSize(fsBody).LineHeight(1.6)
 	case mdHeading:
-		size := map[int]float32{1: 17, 2: 15.5, 3: 14}[b.level]
+		size := map[int]float32{1: fsPage, 2: fsTitle}[b.level]
 		if size == 0 {
-			size = 13
+			size = fsBody
 		}
-		r.inline(c, b.inlines).FontSize(size).FontWeight(600).LineHeight(1.35).Padding(4, 0, 0, 0)
+		r.inline(c, b.inlines).FontSize(size).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
 		// 上面一条语言栏，右边是复制按钮
 		ui.Column(c).Radius(rCode).Background(codeBackground(t)).Clip().Children(func() {
-			ui.Row(c).Height(28).Padding(0, 4, 0, 12).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
+			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
 				lang := b.lang
 				if lang == "" {
 					lang = "代码"
 				}
-				ui.Text(c, lang).FontSize(fsCaption).Font(monoFont).TextColor(t.TextMuted)
+				ui.Text(c, lang).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", 22, 12)).Clicked() {
 					c.WriteClipboard(b.code)
 				}
 			})
 			ui.Box(c).Padding(8, 12, 10, 12).Children(func() {
-				highlighted(c, b.code, r.words).Font(monoFont).FontSize(12).LineHeight(1.5)
+				highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
 			})
 		})
 	case mdQuote:
@@ -261,7 +261,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 					case b.ordered:
 						marker = fmt.Sprintf("%d.", b.start+i)
 					}
-					m := ui.Text(c, marker).FontSize(13).LineHeight(1.55).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
+					m := ui.Text(c, marker).FontSize(fsBody).LineHeight(1.55).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
 					if b.ordered {
 						m.FontFeatures("tnum").TextAlign(ui.End)
 					}
@@ -280,9 +280,10 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 const mdCellPad = 22
 
 // mdTableSize 是表格每列量好的宽度：最小宽是最长的拆不开的词，最大宽是不折行。
-// 第一次搭的时候量一次，存在块上。
+// 第一次搭的时候量一次，存在块上；设置里换了界面字号、字重（key）再重量。
 type mdTableSize struct {
 	min, max []float32
+	key      [3]float32
 }
 
 // table 搭表格。横向滚动容器给内容的宽度没有上限，表格会按最宽排、长句不再折行，
@@ -296,8 +297,9 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		cols = max(cols, len(row))
 	}
 	size := b.size
-	if size.min == nil {
+	if key := [3]float32{fsBody, float32(fwMedium), float32(fwBold)}; size.min == nil || size.key != key {
 		r.measure(c, b, cols)
+		size.key = key
 	}
 	var sumMin, sumMax float32 = 2, 2 // 外框
 	for i := range cols {
@@ -384,10 +386,10 @@ func cellSpans(c *ui.Context, cell []mdInline, header bool) []ui.Span {
 	for _, in := range cell {
 		for _, sp := range (mdView{}).spans(c, in) {
 			if sp.Size == 0 {
-				sp.Size = 12.5
+				sp.Size = fsBody
 			}
 			if header && sp.Weight == 0 {
-				sp.Weight = 500
+				sp.Weight = fwMedium
 			}
 			spans = append(spans, sp)
 		}
@@ -433,9 +435,9 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 				box.Radius(rad[0], rad[1], rad[2], rad[3])
 			}
 			box.Children(func() {
-				e := r.inline(c, cell).FontSize(12.5).LineHeight(1.45)
+				e := r.inline(c, cell).FontSize(fsBody).LineHeight(1.45)
 				if ri == 0 {
-					e.FontWeight(500)
+					e.FontWeight(fwMedium)
 				}
 				if ci < len(b.align) && b.align[ci] != 0 {
 					e.TextAlign(b.align[ci])
@@ -479,7 +481,7 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 	t := c.Theme()
 	base := ui.Span{}
 	if in.style&mdBold != 0 {
-		base.Weight = 600
+		base.Weight = fwBold
 	}
 	if in.style&mdItalic != 0 {
 		base.Italic = true

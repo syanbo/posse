@@ -189,9 +189,9 @@ func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 	t := c.Theme()
 	item := func(icon *ui.SVG, color ui.Color, n int, tip string) {
 		ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
-			ui.Icon(c, icon).FontSize(12).TextColor(color).Shrink(0)
+			ui.Icon(c, icon).FontSize(sz(12)).TextColor(color).Shrink(0)
 			if showCount {
-				ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(color)
+				ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color)
 			}
 		})
 	}
@@ -207,7 +207,7 @@ func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
-	b := ui.Row(c.Key("branch")).Height(26).Padding(0, 6, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(1).
+	b := ui.Row(c.Key("branch")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Shrink(1).
 		Role(ui.RoleButton).Label("分支 " + w.Branch).Tooltip(trackTip(w.Branch, tr) + baseTip(w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
@@ -222,10 +222,10 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 		a.overPanelButton = true
 	}
 	b.Children(func() {
-		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, w.Branch).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, w.Branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, tr.ahead, tr.behind, false)
-		ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconDown).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
 	})
 	if b.Clicked() {
 		if open {
@@ -340,7 +340,7 @@ func (a *app) branchPopGrip(c *ui.Context) {
 // popupItem 是弹窗里的一行操作，返回这一帧是否点了它。
 func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(28).Padding(0, 10).Gap(10).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 10).Gap(10).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
@@ -348,13 +348,13 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
 		if icon != nil {
-			ui.Icon(c, icon).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, icon).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
 		} else {
 			ui.Box(c).Width(14).Shrink(0)
 		}
-		ui.Text(c, label).FontSize(12.5).Grow(1)
+		ui.Text(c, label).FontSize(fsBody).Grow(1)
 		if keys != "" {
-			ui.Text(c, keys).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, keys).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		}
 	})
 	return row.Clicked()
@@ -410,7 +410,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 	g := &v.git
 	list := g.branches.list
 	if list == nil {
-		ui.Text(c, "正在读取分支…").FontSize(12).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "正在读取分支…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
 		return
 	}
 	match := func(b gitx.Branch) bool { return query == "" || strings.Contains(strings.ToLower(b.Name), query) }
@@ -420,7 +420,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		if !set {
 			open = !strings.HasPrefix(key, "remote:")
 		}
-		row := ui.Row(c.Key("fold:"+key)).Height(26).Padding(6, 10, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 10, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(title)
 		if row.Hovered() {
 			row.Background(colors(t).wash)
@@ -430,9 +430,9 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 			if open || query != "" {
 				chevron = iconDown
 			}
-			ui.Icon(c, chevron).FontSize(11).TextColor(t.TextMuted).Shrink(0)
-			ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-			ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+			ui.Icon(c, chevron).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+			ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
 		if row.Clicked() && query == "" {
 			if a.branchFolds == nil {
@@ -487,7 +487,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		}
 	}
 	if query != "" && len(local) == 0 && len(remoteNames) == 0 {
-		ui.Text(c, "没有名字里含“"+query+"”的分支").FontSize(12).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "没有名字里含“"+query+"”的分支").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
 	}
 }
 
@@ -501,7 +501,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	other, inOther := gitx.WorktreeOf(b, g.repo)
 	otherWs := a.workspaceAt(other)
 	// 左边多缩进一些，分支图标和组标题的文字对齐，一眼看出属于哪一组
-	row := ui.Row(c.Key(group+":"+b.Name)).Height(28).Padding(0, 10, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
+	row := ui.Row(c.Key(group+":"+b.Name)).Height(sz(28)).Padding(0, 10, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
 	bp := a.branchPop
 	keyed := bp != nil && bp.hl == len(bp.rows)
 	if bp != nil {
@@ -521,23 +521,23 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		if b.Current {
 			color = t.Accent
 		}
-		ui.Icon(c, iconBranch).FontSize(13).TextColor(color).Shrink(0)
-		name := ui.Text(c, b.Name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1)
+		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(color).Shrink(0)
+		name := ui.Text(c, b.Name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1)
 		if b.Current {
-			name.FontWeight(500)
+			name.FontWeight(fwMedium)
 		}
 		trackBadge(c, b.Ahead, b.Behind, true)
 		ui.Spacer(c)
 		switch {
 		case inOther && otherWs != nil:
-			ui.Text(c, "在 "+displayName(otherWs)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, "在 "+displayName(otherWs)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		case inOther:
 			// 不是 posse 建的 worktree（别的工具或命令行建的）：报目录名，悬停看完整路径
-			ui.Text(c, "worktree · "+filepath.Base(other)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(other)
+			ui.Text(c, "worktree · "+filepath.Base(other)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(other)
 		case b.Gone:
-			ui.Text(c, "远端已删除").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, "远端已删除").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		case b.Upstream != "":
-			ui.Text(c, b.Upstream).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, b.Upstream).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 	})
 	menuButton(c, row, func(m *popMenu) { a.branchMenu(c, m, w, v, b, cur, other, otherWs, inOther) })
@@ -844,13 +844,13 @@ func (a *app) promptDialog(c *ui.Context) {
 			return
 		}
 		ui.Column(c).Width(360).Gap(12).Children(func() {
-			titleText(c, p.title, fsCardTitle)
+			titleText(c, p.title, fsTitle)
 			if p.body != "" {
-				ui.Text(c, p.body).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
+				ui.Text(c, p.body).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			var submitted bool
 			if p.multiline {
-				fieldArea(c, &p.value, p.placeholder, 106).Label(p.title).AutoFocus().FontSize(12.5)
+				fieldArea(c, &p.value, p.placeholder, 106).Label(p.title).AutoFocus().FontSize(fsBody)
 			} else {
 				submitted = fieldInput(c, &p.value, p.placeholder).AutoFocus().Submitted()
 			}

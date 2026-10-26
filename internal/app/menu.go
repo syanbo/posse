@@ -275,7 +275,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			continue
 		}
 		prevSep = false
-		row := ui.Row(c.Key(it.seq)).Height(28).Padding(0, 10, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
+		row := ui.Row(c.Key(it.seq)).Height(sz(28)).Padding(0, 10, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(it.label)
 		if it.disabled {
 			row.Cursor(ui.CursorDefault)
@@ -304,23 +304,23 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			if checks {
 				box := ui.Box(c).Width(14).Shrink(0).Center()
 				if it.checked != nil && *it.checked {
-					box.Children(func() { ui.Icon(c, iconCheck).FontSize(14).TextColor(t.Accent) })
+					box.Children(func() { ui.Icon(c, iconCheck).FontSize(sz(14)).TextColor(t.Accent) })
 				}
 			}
 			switch {
 			case it.lead != nil:
 				it.lead()
 			case it.icon != nil:
-				ui.Icon(c, it.icon).FontSize(15).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, it.icon).FontSize(sz(15)).TextColor(t.TextMuted).Shrink(0)
 			case icons:
 				ui.Box(c).Width(15).Shrink(0)
 			}
-			ui.Text(c, it.label).FontSize(13).TextColor(fg).Grow(1).Shrink(1).SingleLine()
+			ui.Text(c, it.label).FontSize(fsBody).TextColor(fg).Grow(1).Shrink(1).SingleLine()
 			if it.keys != "" {
-				ui.Text(c, it.keys).FontSize(fsCaption).TextColor(muted).Shrink(0)
+				ui.Text(c, it.keys).FontSize(fsSmall).TextColor(muted).Shrink(0)
 			}
 			if it.sub != nil {
-				ui.Icon(c, iconChevron).FontSize(12).TextColor(muted).Shrink(0)
+				ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(muted).Shrink(0)
 			}
 		})
 		if it.sub != nil && st.sub == it.seq {

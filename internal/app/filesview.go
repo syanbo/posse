@@ -33,7 +33,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 		if !v.tree.Loaded(v.root) {
 			msg = "正在读取…"
 		}
-		ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	}
 	curPath := ""
@@ -62,7 +62,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
 		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
-		row := ui.Row(c.Key(r.Path)).Height(24).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*18).Gap(6).Radius(6).
+		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*18).Gap(6).Radius(6).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectedBg(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -72,13 +72,13 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				if v.tree.Expanded(r.Path) {
 					turn = 90
 				}
-				ui.Icon(c, iconChevron).FontSize(12).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				ui.Icon(c, iconFolder).FontSize(16).TextColor(t.Accent).Shrink(0)
+				ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
+				ui.Icon(c, iconFolder).FontSize(sz(16)).TextColor(t.Accent).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
-				ui.Icon(c, iconFile).FontSize(16).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconFile).FontSize(sz(16)).TextColor(t.TextMuted).Shrink(0)
 			}
-			name := ui.Text(c, r.Name).FontSize(13).SingleLine().Shrink(1).Grow(1)
+			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if ignored {
 				name.TextColor(t.TextMuted)
 			}
@@ -175,7 +175,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			if s.err != "" {
 				color = t.Danger
 			}
-			ui.Text(c, msg).FontSize(11).TextColor(color).LineHeight(1.4).Padding(2, 2, 0, 2)
+			ui.Text(c, msg).FontSize(fsSmall).TextColor(color).LineHeight(1.4).Padding(2, 2, 0, 2)
 		}
 	})
 	if len(s.rows) == 0 {
@@ -190,13 +190,13 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		if r.header {
 			row := ui.Row(c).Padding(8, 12, 3, 14).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
-				ui.Icon(c, iconFile).FontSize(16).TextColor(t.TextMuted).Shrink(0)
-				ui.Text(c, filepath.Base(h.Path)).FontSize(fsBody).FontWeight(500).SingleLine().Shrink(0)
+				ui.Icon(c, iconFile).FontSize(sz(16)).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, filepath.Base(h.Path)).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
-					ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
 				ui.Spacer(c)
-				ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			a.pathMenu(c, row, w, v, abs, false)
 			return
@@ -205,8 +205,8 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		selectedBg(c, row, false)
 		text, spans := trimHit(h)
 		row.Children(func() {
-			ui.Text(c, fmt.Sprint(h.Line+1)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Width(30).Shrink(0).TextAlign(ui.End)
-			ui.RichText(c, markSpans(text, spans, ui.Span{Font: monoFont, Size: 11.5}, colors(t).honey.Alpha(0.28))...).SingleLine().Shrink(1)
+			ui.Text(c, fmt.Sprint(h.Line+1)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(sz(30)).Shrink(0).TextAlign(ui.End)
+			ui.RichText(c, markSpans(text, spans, ui.Span{Font: monoFont, Size: fsSmall}, colors(t).honey.Alpha(0.28))...).SingleLine().Shrink(1)
 		})
 		if row.Clicked() {
 			var span [2]int
@@ -261,7 +261,7 @@ func searchStatus(s *fileSearch) string {
 // toggleChip 是检索选项的小开关，开着时垫强调色淡底；返回这一帧是否被点了。
 func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key("chip-"+label)).Height(22).Padding(0, 7).Radius(5).Center().Shrink(0).
+	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 7).Radius(5).Center().Shrink(0).
 		Role(ui.RoleButton).Label(tip).Tooltip(tip).Checked(on)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {
@@ -271,7 +271,7 @@ func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 		bg, fg = t.SurfaceHover, t.Text
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Text(c, label).FontSize(11.5).TextColor(fg) })
+	b.Children(func() { ui.Text(c, label).FontSize(fsSmall).TextColor(fg) })
 	return b.Clicked()
 }
 
@@ -286,7 +286,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 	d := v.cur
 	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
 	if d.kind == docLoading && d.diff == nil {
-		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
 	if d.comp != nil {
@@ -301,7 +301,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		a.diffBar(c, w, v, d)
 		switch d.kind {
 		case docLoading:
-			ui.Text(c, diffLoadingText(d.diff)).FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, diffLoadingText(d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
 		case docDiff:
 			a.diffView(c, v, d)
 		case docImageDiff:
@@ -388,7 +388,7 @@ func filesEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
-		titleText(c, "在右边的文件栏里选一个文件", fsCardTitle)
+		titleText(c, "在右边的文件栏里选一个文件", fsTitle)
 		ui.Row(c).Gap(14).Children(func() {
 			shortcutHint(c, "⌘P", "按名称打开")
 			shortcutHint(c, "⇧⌘F", "在文件里检索")
@@ -436,7 +436,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	t := c.Theme()
 	active := a.filesActive(w) && v.cur == d
 	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
-	row := ui.Row(c.Key("doc:"+d.path)).Height(28).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(0).
+	row := ui.Row(c.Key("doc:"+d.path)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(0).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(shortPath(d.path))
 	hovered := row.Hovered()
 	bg := ui.Transparent
@@ -451,7 +451,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	modified := d.isModified()
 	row.Children(func() {
 		ui.Icon(c, docIcon(d)).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
-		name := ui.Text(c, d.name()).FontSize(12).SingleLine().MaxWidth(180)
+		name := ui.Text(c, d.name()).FontSize(fsSmall).SingleLine().MaxWidth(180)
 		tabText(c, name, d.name(), active)
 		if d.isPreview() {
 			name.Italic()
@@ -460,7 +460,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			name.Strikethrough()
 		}
 		if detail != "" {
-			ui.Text(c, detail).FontSize(11).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
+			ui.Text(c, detail).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
 		btn := ui.Box(c.Key("close")).Size(20, 20).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
@@ -472,7 +472,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			case modified && !hovered:
 				dot(c, t.Accent)
 			case active || hovered:
-				ui.Icon(c, iconClose).FontSize(12).TextColor(t.TextMuted)
+				ui.Icon(c, iconClose).FontSize(sz(12)).TextColor(t.TextMuted)
 			}
 		})
 		if (active || hovered) && btn.Clicked() {
@@ -566,10 +566,10 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	if err != nil || strings.HasPrefix(rel, "..") {
 		rel = shortPath(d.path)
 	}
-	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 14).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
+	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 14).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
 		if d.readOnly {
-			ui.Text(c, "只读").FontSize(11).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0).
+			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0).
 				Tooltip(fmt.Sprintf("文件超过 %d MB，只读打开", files.ReadOnlySize>>20))
 		}
 		ui.Spacer(c)
@@ -641,7 +641,7 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 	}
 	t := c.Theme()
 	ui.Row(c).Shrink(0).Margin(0, 12, 8, 12).Padding(8, 8, 8, 12).Gap(8).Radius(8).Background(t.Surface).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, msg).FontSize(12).LineHeight(1.4).Grow(1).Shrink(1)
+		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.4).Grow(1).Shrink(1)
 		if actions != nil {
 			actions()
 		}
@@ -651,7 +651,7 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 func docMessage(c *ui.Context, d *fileDoc, msg string) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Children(func() {
-		ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted)
+		ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted)
 		// diff、日志这些不是磁盘上的文件（路径是 diff:…、log:…），没有可打开的
 		if filepath.IsAbs(d.path) && (d.kind != docError || !d.deleted) {
 			if pressable(textButton(c, "用默认应用打开")).Clicked() {
@@ -730,9 +730,9 @@ func (a *app) quickDialog(c *ui.Context) {
 			submitted := in.Submitted()
 			switch {
 			case v.list == nil:
-				ui.Text(c, "正在列出文件…").FontSize(12).TextColor(t.TextMuted).Padding(4, 2)
+				ui.Text(c, "正在列出文件…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			case n == 0:
-				ui.Text(c, "没有匹配的文件").FontSize(12).TextColor(t.TextMuted).Padding(4, 2)
+				ui.Text(c, "没有匹配的文件").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			default:
 				ui.Scroll(c).MaxHeight(380).Children(func() {
 					ui.Column(c).Gap(1).Children(func() {
@@ -756,7 +756,7 @@ func (a *app) quickDialog(c *ui.Context) {
 // quickRow 是快速打开的一条结果：文件名在前，目录在后，命中的字母铺底色。返回是否被点了。
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(m.Path)).Height(30).Padding(0, 10).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
+	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 10).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()
@@ -772,11 +772,11 @@ func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	}
 	mark := colors(t).honey.Alpha(0.28)
 	row.Children(func() {
-		ui.Icon(c, iconFile).FontSize(14).TextColor(t.TextMuted).Shrink(0)
-		ui.RichText(c, markSpans(m.Path[base:], nameMarks, ui.Span{Size: 13}, mark)...).SingleLine().Shrink(0)
+		ui.Icon(c, iconFile).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
+		ui.RichText(c, markSpans(m.Path[base:], nameMarks, ui.Span{Size: fsBody}, mark)...).SingleLine().Shrink(0)
 		if base > 0 {
 			dir := m.Path[:base-1]
-			ui.RichText(c, markSpans(dir, clampMarks(dirMarks, len(dir)), ui.Span{Size: 11.5, Font: monoFont, Color: t.TextMuted}, mark)...).SingleLine().Shrink(1)
+			ui.RichText(c, markSpans(dir, clampMarks(dirMarks, len(dir)), ui.Span{Size: fsSmall, Font: monoFont, Color: t.TextMuted}, mark)...).SingleLine().Shrink(1)
 		}
 	})
 	return row.Clicked()

@@ -398,9 +398,9 @@ func ago(t time.Time) string {
 func sessionMeta(c *ui.Context, s history.Session) {
 	t := c.Theme()
 	ui.Row(c).Gap(12).Children(func() {
-		ui.Text(c, fmt.Sprintf("%d 条消息", s.Messages)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, fmt.Sprintf("%d 条消息", s.Messages)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		if s.Model != "" {
-			ui.Text(c, shortModel(s.Model)).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(s.Model)
+			ui.Text(c, shortModel(s.Model)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(s.Model)
 		}
 	})
 }
@@ -495,7 +495,7 @@ func (a *app) historySidebarItem(c *ui.Context) {
 func (a *app) historyBoard(c *ui.Context) {
 	h := &a.history
 	a.band(c, func() {
-		titleText(c, "历史", fsCardTitle).Margin(0, 6, 0, 0).Shrink(0)
+		titleText(c, "历史", fsTitle).Margin(0, 6, 0, 0).Shrink(0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
 		search := fieldInputSized(c, &h.query, "搜索会话内容  ⌘F", 340, 160).Label("搜索会话")
 		if c.Shortcut(ui.Cmd, ui.KeyF) {
@@ -616,9 +616,9 @@ func (a *app) historyTotals(c *ui.Context) {
 	}
 	ui.Column(c).Padding(14, 20, 10, 20).Gap(8).Children(func() {
 		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, count).FontSize(13).FontWeight(500).FontFeatures("tnum")
+			ui.Text(c, count).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum")
 			if h.resAgent == 0 || h.resQuery != "" {
-				ui.Text(c, messages).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+				ui.Text(c, messages).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
 		})
 		if h.resAgent != 0 {
@@ -632,7 +632,7 @@ func (a *app) historyTotals(c *ui.Context) {
 				}
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					agentTile(c, ag, 16)
-					ui.Text(c, thousands(n)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(agentTitle(ag))
+					ui.Text(c, thousands(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(agentTitle(ag))
 				})
 			}
 		})
@@ -659,8 +659,8 @@ func (a *app) cwdLink(c *ui.Context, dir string) func() {
 			color = t.Accent
 		}
 		b.Children(func() {
-			ui.Icon(c, iconFolder).FontSize(13).TextColor(color)
-			ui.Text(c, shortPath(dir)).FontSize(11.5).Font(monoFont).TextColor(color).MaxLines(1).Shrink(1)
+			ui.Icon(c, iconFolder).FontSize(sz(13)).TextColor(color)
+			ui.Text(c, shortPath(dir)).FontSize(fsSmall).Font(monoFont).TextColor(color).MaxLines(1).Shrink(1)
 		})
 		if b.Clicked() {
 			if err := mygo.Shell.OpenPath(dir); err != nil {
@@ -677,7 +677,7 @@ func contextMeta(c *ui.Context, d *historyDetail) func() {
 	}
 	return func() {
 		ctx := d.context
-		ui.Text(c, fmt.Sprintf("上下文 %d%%", ctx.Percent())).FontSize(12).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
+		ui.Text(c, fmt.Sprintf("上下文 %d%%", ctx.Percent())).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
 			Tooltip(fmt.Sprintf("最后一次请求用了 %s / %s token", thousands(ctx.Used), thousands(ctx.Window)))
 	}
 }
@@ -715,7 +715,7 @@ func (a *app) historyNotice(c *ui.Context, searching bool) {
 	if msg == "" {
 		return
 	}
-	ui.Text(c, msg).FontSize(11).TextColor(t.TextMuted).LineHeight(1.4).Padding(12, 20, 2, 20)
+	ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).Padding(12, 20, 2, 20)
 }
 
 func (a *app) sessionList(c *ui.Context) {
@@ -749,10 +749,10 @@ func (a *app) sessionList(c *ui.Context) {
 			if open {
 				turn = 90
 			}
-			chev := ui.Icon(c, iconChevron).FontSize(11).TextColor(t.TextMuted)
+			chev := ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(t.TextMuted)
 			chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
-			ui.Text(c, r.group).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-			ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+			ui.Text(c, r.group).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
 		if head.Clicked() {
 			if h.groupOpen == nil {
@@ -813,8 +813,8 @@ func (a *app) hitList(c *ui.Context) {
 func (a *app) historyEmpty(c *ui.Context, title, body string) {
 	t := c.Theme()
 	ui.Column(c).Padding(28, 20).Gap(6).Children(func() {
-		ui.Text(c, title).FontSize(13).FontWeight(500)
-		ui.Text(c, body).FontSize(12).TextColor(t.TextMuted).LineHeight(1.45)
+		ui.Text(c, title).FontSize(fsBody).FontWeight(fwMedium)
+		ui.Text(c, body).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }
 
@@ -828,16 +828,16 @@ func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 		agentTile(c, s.Agent, 28)
 		ui.Column(c).Gap(3).Grow(1).Shrink(1).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
-				ui.Text(c, oneLine(s.Title)).FontSize(13).FontWeight(500).MaxLines(1).Grow(1).Shrink(1)
-				ui.Text(c, ago(s.UpdatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, oneLine(s.Title)).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Grow(1).Shrink(1)
+				ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			if s.Cwd != "" {
-				ui.Text(c, shortPath(s.Cwd)).FontSize(11).Font(monoFont).TextColor(t.TextMuted).MaxLines(1)
+				ui.Text(c, shortPath(s.Cwd)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1)
 			}
 			sessionMeta(c, s)
 			// 只有标题命中时，标题本身就是证据
 			if hit != nil && hit.Role != "title" {
-				snippetText(c, *hit).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.4).Padding(2, 0, 0, 0)
+				snippetText(c, *hit).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.4).Padding(2, 0, 0, 0)
 			}
 		})
 	})
@@ -860,7 +860,7 @@ func snippetText(c *ui.Context, hit history.Hit) ui.Element {
 		if sp.Start < last || sp.End > len(hit.Snippet) {
 			continue
 		}
-		spans = append(spans, ui.Span{Text: hit.Snippet[last:sp.Start]}, ui.Span{Text: hit.Snippet[sp.Start:sp.End], Color: t.Text, Weight: 600})
+		spans = append(spans, ui.Span{Text: hit.Snippet[last:sp.Start]}, ui.Span{Text: hit.Snippet[sp.Start:sp.End], Color: t.Text, Weight: fwBold})
 		last = sp.End
 	}
 	spans = append(spans, ui.Span{Text: hit.Snippet[last:]})
@@ -875,11 +875,11 @@ func (a *app) sessionDetail(c *ui.Context) {
 			emptyCard(c).Width(420).Padding(24).Gap(14).Children(func() {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
-					titleText(c, "会话历史", fsPageTitle)
-					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Posse 里接着聊。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+					titleText(c, "会话历史", fsPage)
+					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Posse 里接着聊。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if n := h.status.Sessions; n > 0 {
-					ui.Text(c, fmt.Sprintf("已索引 %d 个会话", n)).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+					ui.Text(c, fmt.Sprintf("已索引 %d 个会话", n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 				}
 			})
 		})
@@ -894,7 +894,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 		ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 			agentTile(c, s.Agent, 44)
 			ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
-				titleText(c, oneLine(s.Title), fsPageTitle).LineHeight(1.3).MaxLines(2).Selectable()
+				titleText(c, oneLine(s.Title), fsPage).LineHeight(1.3).MaxLines(2).Selectable()
 				var cwd, branch func()
 				if s.Cwd != "" {
 					cwd = a.cwdLink(c, s.Cwd)
@@ -968,15 +968,15 @@ const transcriptWidth = 680
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
-	row := ui.Row(c.Key("tools")).Height(26).Padding(0, 10).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 10).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		turn := float32(0)
 		if open {
 			turn = 90
 		}
-		ui.Icon(c, iconChevron).FontSize(11).TextColor(t.TextMuted).Rotate(turn)
-		ui.Text(c, fmt.Sprintf("工具调用 %d 次", len(run))).FontSize(fsMeta).TextColor(t.TextMuted)
+		ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(t.TextMuted).Rotate(turn)
+		ui.Text(c, fmt.Sprintf("工具调用 %d 次", len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 	if row.Clicked() {
 		if d.opened == nil {
@@ -1009,15 +1009,15 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 	}
 	box.Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
-			ui.Text(c, who).FontSize(fsMeta).FontWeight(500).TextColor(whoColor)
+			ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium).TextColor(whoColor)
 			if !m.At.IsZero() {
-				ui.Text(c, m.At.Local().Format("1月2日 15:04")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+				ui.Text(c, m.At.Local().Format("1月2日 15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
 		})
 		text := strings.TrimSpace(m.Text)
 		switch m.Role {
 		case "tool":
-			highlighted(c, text, ns).FontSize(12).Font(monoFont).TextColor(t.TextMuted).MaxLines(8).LineHeight(1.5).Selectable()
+			highlighted(c, text, ns).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(8).LineHeight(1.5).Selectable()
 		case "assistant":
 			// agent 的回复按 Markdown 显示；用户自己打的字原样显示
 			ui.Column(c).Gap(8).Selectable().Children(func() {

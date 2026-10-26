@@ -56,7 +56,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动", 26, 15)).Clicked() {
 				step(cp.index + 1)
 			}
-			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
+			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
 			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, "回滚这一处 ⌥⌘Z", 26, 15)).Clicked() {
 				d.ed.RevertChange(cp.index)
 				d.change = nil
@@ -84,7 +84,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		box := ui.Column(c).Radius(rInput).Background(t.Danger.Alpha(0.08)).Padding(6, 10)
 		box.Children(func() {
 			if ch.Old == "" {
-				ui.Text(c, fmt.Sprintf("这里新增了 %d 行，上一次提交时没有", ch.NewEnd-ch.NewStart)).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, fmt.Sprintf("这里新增了 %d 行，上一次提交时没有", ch.NewEnd-ch.NewStart)).FontSize(fsSmall).TextColor(t.TextMuted)
 				return
 			}
 			lines := strings.Split(ch.Old, "\n")
@@ -94,7 +94,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			}
 			ui.Text(c, strings.Join(lines, "\n")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).LineHeight(1.45).Selectable()
 			if more > 0 {
-				ui.Text(c, fmt.Sprintf("还有 %d 行", more)).FontSize(11).TextColor(t.TextMuted).Padding(4, 0, 0, 0)
+				ui.Text(c, fmt.Sprintf("还有 %d 行", more)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 0, 0, 0)
 			}
 		})
 	})

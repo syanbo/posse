@@ -102,7 +102,7 @@ func (a *app) build(c *ui.Context) {
 	// 应用名固定在红绿灯右边，不跟着侧栏滑动。侧栏开关展开时在侧栏顶栏最右边，
 	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
-		titleText(c, "Posse", 14).Width(appNameWidth).Shrink(0)
+		titleText(c, "Posse", fsBody).Width(appNameWidth()).Shrink(0)
 		if !a.sidebarSlot() {
 			a.sidebarButton(c)
 		}
@@ -275,19 +275,17 @@ func (a *app) closeBoardButton(c *ui.Context) {
 	}
 }
 
-// 侧栏的宽度，拖右边缘调整。
-const (
-	sidebarDefault = 248
-	sidebarMin     = 200
-	sidebarMax     = 420
-)
+// 侧栏的宽度，拖右边缘调整；默认宽度和上下限跟着界面字号缩放，拖过的照拖的宽度。
+func sidebarDefault() float32 { return sz(248) }
+func sidebarMin() float32     { return sz(200) }
+func sidebarMax() float32     { return sz(420) }
 
 func (a *app) sidebarWidth() float32 {
 	w := a.state.SidebarWidth
 	if w == 0 {
-		w = sidebarDefault
+		w = sidebarDefault()
 	}
-	return min(max(w, sidebarMin), sidebarMax)
+	return min(max(w, sidebarMin()), sidebarMax())
 }
 
 func (a *app) toggleSidebar() {
@@ -309,28 +307,29 @@ func (a *app) sidebarButton(c *ui.Context) {
 // sidebarSlot 报告侧栏占不占位置：展开着，或者收起动画还没走完。
 func (a *app) sidebarSlot() bool { return !a.state.SidebarHidden || a.sidebarShown > 0 }
 
-// 红绿灯右边的应用名占的宽度，和应用名加侧栏开关一共占的宽度。
+// 红绿灯右边的应用名占的宽度（跟着界面字号），和应用名加侧栏开关一共占的宽度。
 const (
-	titleGap     = 18 // 红绿灯到应用名
-	appNameWidth = 46
-	appNameGap   = 12 // 应用名到侧栏开关
-	toggleBox    = 28 // iconButton 的方框
-	titleLead    = appNameWidth + appNameGap + toggleBox
+	titleGap   = 18 // 红绿灯到应用名
+	appNameGap = 12 // 应用名到侧栏开关
+	toggleBox  = 28 // iconButton 的方框
 )
+
+func appNameWidth() float32 { return sz(46) }
+func titleLead() float32    { return appNameWidth() + appNameGap + toggleBox }
 
 // barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名、侧栏开关。
 func (a *app) barInset(c *ui.Context) float32 {
 	if a.sidebarSlot() {
 		return 0
 	}
-	return c.TitleBar().Left + titleGap + titleLead
+	return c.TitleBar().Left + titleGap + titleLead()
 }
 
 // sidebarGrip 是侧栏右边缘的拖动条，松手才写 ui.json。
 func (a *app) sidebarGrip(c *ui.Context) {
 	grip := ui.Box(c.Key("sidebar-grip")).Absolute().Top(0).Bottom(0).Left(a.sidebarWidth() - 2).Width(6).Cursor(ui.CursorResizeEW)
 	if dx, _, held := grip.Dragged(); held {
-		a.state.SidebarWidth = min(max(a.sidebarWidth()+dx, sidebarMin), sidebarMax)
+		a.state.SidebarWidth = min(max(a.sidebarWidth()+dx, sidebarMin()), sidebarMax())
 		a.resizingSide = true
 	} else if a.resizingSide {
 		a.resizingSide = false
@@ -355,7 +354,7 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
-		ui.Box(c).Width(appNameWidth).Shrink(0)
+		ui.Box(c).Width(appNameWidth()).Shrink(0)
 		ui.Spacer(c)
 		a.sidebarButton(c)
 	})
@@ -364,7 +363,7 @@ func (a *app) sidebar(c *ui.Context) {
 		if a.err != "" {
 			msg, color = "连不上常驻进程："+a.err, t.Danger
 		}
-		ui.Text(c, msg).FontSize(12).TextColor(color).Padding(6, 16)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(color).Padding(6, 16)
 	}
 	a.navOrder, a.navCur = a.navOrder[:0], -1
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
@@ -507,7 +506,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		}
 		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
 	}
-	icon := func() { ui.Icon(c, iconFolder).FontSize(16).TextColor(t.Accent).Shrink(0) }
+	icon := func() { ui.Icon(c, iconFolder).FontSize(sz(16)).TextColor(t.Accent).Shrink(0) }
 	row := a.navRowAt(c, "head", false, icon, p.Name, shortPath(ws[0].Path), "", trailing)
 	if row.Clicked() {
 		*open = !*open
@@ -532,7 +531,7 @@ func disclosure(c *ui.Context, open *bool, label string) {
 		if *open {
 			turn = 90
 		}
-		chev := ui.Icon(c, iconChevron).FontSize(12).TextColor(fg)
+		chev := ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(fg)
 		chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
 	})
 	if b.Clicked() {
@@ -545,7 +544,7 @@ func summaryTrailing(c *ui.Context, running int, status string) {
 	if status == agent.StatusWaiting {
 		pendingLabel(c)
 	} else if running > 0 {
-		ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
+		ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
 	}
 	if status != "" {
 		statusGlyph(c, status, smallIcon())
@@ -735,7 +734,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 				doneLabel(c)
 			}
 			if folded {
-				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(11).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
+				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
 					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
 			}
 			if status != "" {
@@ -914,12 +913,12 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 // navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
 func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), label, sub, branch string, trailing func()) ui.Element {
 	t := c.Theme()
-	height, gap := float32(32), float32(2)
+	height, gap := sz(32), float32(2)
 	switch {
 	case sub != "" && branch != "":
-		height, gap = 64, 3
+		height, gap = sz(64), 3
 	case sub != "" || branch != "":
-		height = 46
+		height = sz(46)
 	}
 	row := ui.Row(c.Key(key)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
@@ -928,16 +927,16 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 		icon()
 		ui.Column(c).Gap(gap).Grow(1).Shrink(1).Children(func() {
 			// 选中只靠底色区分，文字不加粗
-			ui.Text(c, label).FontSize(13).SingleLine()
+			ui.Text(c, label).FontSize(fsBody).SingleLine()
 			// 分支独占一行，路径在它下面
 			if branch != "" {
 				ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, iconBranch).FontSize(10).TextColor(t.TextMuted).Shrink(0)
-					ui.Text(c, branch).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					ui.Icon(c, iconBranch).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				})
 			}
 			if sub != "" {
-				ui.Text(c, sub).FontSize(10).Font(monoFont).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, sub).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 		// 行尾的数字、状态和箭头在整行里上下居中，两行的工作区也一样
@@ -955,7 +954,7 @@ func (a *app) staleBar(c *ui.Context) {
 	}
 	t := c.Theme()
 	ui.Column(c).Margin(0, 10, 8, 10).Padding(10, 10, 10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
-		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(11).TextColor(t.TextMuted).LineHeight(1.45)
+		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 		if pressable(accentButton(c, "重开窗口")).Clicked() {
 			a.relaunch()
 		}
@@ -968,7 +967,7 @@ func (a *app) errorBar(c *ui.Context) {
 	}
 	t := c.Theme()
 	ui.Row(c).Margin(0, 10, 8, 10).Padding(8, 6, 8, 10).Gap(6).Radius(8).Background(t.Surface).AlignItems(ui.Start).Children(func() {
-		ui.Text(c, a.err).FontSize(11).TextColor(t.Danger).Grow(1).Shrink(1)
+		ui.Text(c, a.err).FontSize(fsSmall).TextColor(t.Danger).Grow(1).Shrink(1)
 		if iconButtonSized(c, iconClose, "关闭提示", 20, 12).Clicked() {
 			a.err = ""
 		}
@@ -1381,7 +1380,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		h.Children(func() {
 			// 箭头朝左，指向要展开的方向；往左挪一点，避开伸到边外的那部分
-			ui.Icon(c, iconChevron).FontSize(11).TextColor(fg).Rotate(180).Margin(0, 4, 0, 0)
+			ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(fg).Rotate(180).Margin(0, 4, 0, 0)
 		})
 		if h.Clicked() {
 			toggle()
@@ -1420,10 +1419,10 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 func (a *app) phoneSizedBar(c *ui.Context, id string) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c.Key("phone-sized")).Height(32).Shrink(0).Padding(0, 8, 0, 14).Gap(8).AlignItems(ui.Center).
+	ui.Row(c.Key("phone-sized")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 14).Gap(8).AlignItems(ui.Center).
 		Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
-		ui.Icon(c, iconPhone).FontSize(14).TextColor(t.Accent).Shrink(0)
-		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(12).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Icon(c, iconPhone).FontSize(sz(14)).TextColor(t.Accent).Shrink(0)
+		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "改回电脑尺寸")).Clicked() {
 			a.reclaimSize(id)
@@ -1560,8 +1559,8 @@ func (a *app) firstRun(c *ui.Context) {
 		emptyCard(c).Width(440).Padding(24).Gap(18).Children(func() {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "把项目放进来", 20)
-				ui.Text(c, "Posse 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+				titleText(c, "把项目放进来", fsPage)
+				ui.Text(c, "Posse 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
 				if pressable(accentButton(c, "添加项目…")).Clicked() {
@@ -1588,7 +1587,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 				ui.Row(c).Gap(16).Padding(0, 4).AlignItems(ui.Center).Children(func() {
 					tile(c, a.wsIcon(w), 52, p.tint, t.Accent)
 					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
-						titleText(c, displayName(w), 20).MaxLines(1)
+						titleText(c, displayName(w), fsPage).MaxLines(1)
 						var branch func()
 						if w.Branch != "" {
 							branch = metaMono(c, iconBranch, w.Branch, "")
@@ -1630,8 +1629,8 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	b.Children(func() {
 		agentTile(c, agent, 40).Tooltip("")
 		ui.Column(c).Gap(2).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, name).FontSize(13).FontWeight(500)
-			ui.Text(c, note).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, name).FontSize(fsBody).FontWeight(fwMedium)
+			ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted)
 		})
 	})
 	if b.Clicked() {
@@ -1642,15 +1641,15 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 func shortcutHint(c *ui.Context, keys, label string) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).Children(func() {
-		ui.Text(c, keys).FontSize(11).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
-		ui.Text(c, label).FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, keys).FontSize(fsSmall).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
+		ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 }
 
 func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	t := c.Theme()
 	// 图标侧内边距比文字侧少 2px；圆角 8，内部 20px 的关闭按钮离边 4px，圆角取 8-4=4
-	row := ui.Row(c.Key(term.ID)).Height(28).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(1).MaxWidth(280)
+	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(8).Shrink(1).MaxWidth(280)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {
@@ -1695,16 +1694,16 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			return
 		}
 		if term.Agent == "" || detail == "" && !waiting {
-			tabText(c, ui.Text(c, name).FontSize(12).Shrink(1).SingleLine(), name, active)
+			tabText(c, ui.Text(c, name).FontSize(fsSmall).Shrink(1).SingleLine(), name, active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
 			// 字号、字重和别的标签标题一样，只用琥珀色区分
-			label := ui.Text(c, "待处理").FontSize(12).Shrink(0)
+			label := ui.Text(c, "待处理").FontSize(fsSmall).Shrink(0)
 			tabText(c, label, "待处理", active)
 			label.TextColor(colors(t).honey)
 		} else if detail != "" {
-			title := ui.Text(c, detail).FontSize(12).Shrink(1).SingleLine()
+			title := ui.Text(c, detail).FontSize(fsSmall).Shrink(1).SingleLine()
 			if term.Agent != "" {
 				tabText(c, title, detail, active)
 			} else {
@@ -1721,7 +1720,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		if !visible {
 			closeBtn.Opacity(0)
 		}
-		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(12).TextColor(t.TextMuted) })
+		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(sz(12)).TextColor(t.TextMuted) })
 		if visible && closeBtn.Clicked() {
 			a.askClose(term)
 		}
@@ -1802,10 +1801,10 @@ func (a *app) revealTab(row ui.Element, id string, active bool) {
 // 不管选没选中都按加粗的宽度占位，切换标签时文字变粗不会把后面的标签往右挤。
 // 占位用 flex basis 而不是固定宽度：固定宽度也是最小宽度，长标题就缩不了，关闭按钮会被挤出标签。
 func tabText(c *ui.Context, e ui.Element, text string, active bool) {
-	w, _ := c.MeasureText(0, ui.Span{Text: text, Size: 12, Weight: 500})
+	w, _ := c.MeasureText(0, ui.Span{Text: text, Size: fsSmall, Weight: fwMedium})
 	e.Basis(w+1).Margin(0, 0, cjkLift, 0)
 	if active {
-		e.FontWeight(500)
+		e.FontWeight(fwMedium)
 	} else {
 		e.TextColor(c.Theme().TextMuted)
 	}
@@ -1919,9 +1918,9 @@ func (a *app) confirmDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.confirming, func() {
 		ui.Column(c).Width(340).Gap(10).Children(func() {
-			titleText(c, a.confirmTitle, fsCardTitle)
+			titleText(c, a.confirmTitle, fsTitle)
 			if a.confirmBody != "" {
-				ui.Text(c, a.confirmBody).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
+				ui.Text(c, a.confirmBody).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
 				if a.confirmDo != nil && pressable(textButton(c, "取消")).Clicked() {
@@ -1942,7 +1941,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.creating, func() {
 		ui.Column(c).Width(380).Gap(12).Children(func() {
-			titleText(c, "新建工作区", fsCardTitle)
+			titleText(c, "新建工作区", fsTitle)
 			var names []string
 			kind := ""
 			for _, p := range a.projects {
@@ -1957,7 +1956,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 				if kind == "git" {
 					hint = "新建一个 git worktree 和同名分支，改动互不干扰。"
 				}
-				ui.Text(c, hint).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 			submitted := fieldInput(c, &a.newName, "名称，比如 feat-login").AutoFocus().Submitted()
 			segmented(c, &a.newAgent, "同时启动", newAgentLabels...)

@@ -232,15 +232,15 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	t := c.Theme()
 	_, labels, _ := a.loadFonts()
 	name := fontLabel(current, labels)
-	b := ui.ButtonBase(c).Height(28).Width(240).Padding(0, 8, 0, 10).Gap(6).Radius(rButton).Label(label).AlignItems(ui.Center)
+	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 10).Gap(6).Radius(rButton).Label(label).AlignItems(ui.Center)
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = colors(t).wash
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Text(c, name).FontSize(13).Font(fontStack(current)).SingleLine().Grow(1).Shrink(1)
-		ui.Icon(c, iconDown).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, name).FontSize(fsBody).Font(fontStack(current)).SingleLine().Grow(1).Shrink(1)
+		ui.Icon(c, iconDown).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
 	})
 	if pressable(b).Clicked() {
 		p.open = !p.open
@@ -255,7 +255,8 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	})
 }
 
-const fontRowHeight = 28
+// fontRowHeight 是字体列表一行的高度，跟着界面字号缩放。
+func fontRowHeight() float32 { return sz(28) }
 
 func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(family string)) {
 	t := c.Theme()
@@ -308,9 +309,9 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 	}
 	switch {
 	case !done:
-		ui.Text(c, "正在读取字体…").FontSize(12).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "正在读取字体…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
 	case len(rows) == 0:
-		ui.Text(c, "没有名字里含“"+strings.TrimSpace(p.query)+"”的字体").FontSize(12).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "没有名字里含“"+strings.TrimSpace(p.query)+"”的字体").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
 	}
 	if len(rows) == 0 {
 		return
@@ -320,13 +321,13 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 	ui.List(c, &p.list, len(rows), func(i int) {
 		r := rows[i]
 		if r.header != "" {
-			ui.Row(c).Height(fontRowHeight).Padding(6, 10, 0, 10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, r.header).FontSize(fsCaption).FontWeight(500).TextColor(t.TextMuted)
+			ui.Row(c).Height(fontRowHeight()).Padding(6, 10, 0, 10).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, r.header).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			})
 			return
 		}
 		label := r.label
-		row := ui.Row(c).Height(fontRowHeight).Padding(0, 10, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
+		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 10, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(label)
 		bg := ui.Transparent
 		if row.Hovered() || i == p.hl {
@@ -336,14 +337,14 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 		row.Children(func() {
 			box := ui.Box(c).Width(14).Shrink(0).Center()
 			if r.family == current {
-				box.Children(func() { ui.Icon(c, iconCheck).FontSize(14).TextColor(t.Accent) })
+				box.Children(func() { ui.Icon(c, iconCheck).FontSize(sz(14)).TextColor(t.Accent) })
 			}
-			ui.Text(c, label).FontSize(13).Font(fontStack(r.family)).SingleLine().Grow(1).Shrink(1)
+			ui.Text(c, label).FontSize(fsBody).Font(fontStack(r.family)).SingleLine().Grow(1).Shrink(1)
 		})
 		if row.Clicked() {
 			choose(r.family)
 		}
-	}).Height(min(float32(len(rows))*fontRowHeight, 320)).Shrink(0)
+	}).Height(min(float32(len(rows))*fontRowHeight(), 320)).Shrink(0)
 }
 
 // fontSizeStepper 是字号的"− 13 + 默认"一组按钮。
@@ -356,7 +357,7 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 	if pressable(textButton(c, "−")).Label("减小" + what).Clicked() {
 		step(-1)
 	}
-	ui.Text(c, value).FontSize(13).FontFeatures("tnum").Width(32).Center()
+	ui.Text(c, value).FontSize(fsBody).FontFeatures("tnum").Width(sz(32)).Center()
 	if pressable(textButton(c, "+")).Label("增大" + what).Clicked() {
 		step(1)
 	}
@@ -370,7 +371,7 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 func previewBlock(c *ui.Context, body func()) {
 	t := c.Theme()
 	ui.Column(c).Gap(10).Padding(14, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		ui.Text(c, "预览").FontSize(fsCaption).FontWeight(500).TextColor(t.TextMuted)
+		ui.Text(c, "预览").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		body()
 	})
 }

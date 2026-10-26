@@ -1,7 +1,11 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -114,5 +118,37 @@ func TestStepLineHeight(t *testing.T) {
 		if got := stepLineHeight(tc.h, tc.d, 2); got != tc.want {
 			t.Errorf("stepLineHeight(%g, %d) = %g, want %g", tc.h, tc.d, got, tc.want)
 		}
+	}
+}
+
+// 界面文字的字号、字重只用 style.go 里跟着设置变的那几档，写数字的会漏掉设置。图标的字号不在此列。
+func TestNoLiteralType(t *testing.T) {
+	bad := regexp.MustCompile(`FontSize\([0-9]|FontWeight\([0-9]|\b(Size|Weight)(: | = )[0-9]`)
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if bad.MatchString(line) && !strings.Contains(line, "ui.Icon(") {
+				t.Errorf("%s:%d 写了数字字号或字重：%s", f, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+func TestSetUIType(t *testing.T) {
+	defer setUIType(0, 0, 0)
+	setUIType(0, 0, 0)
+	if fsSmall != 12 || fsBody != 14 || fsTitle != 16 || fsPage != 18 || fwBody != 400 || fwMedium != 500 || fwBold != 600 {
+		t.Fatalf("默认 %v %v %v %v %d %d %d", fsSmall, fsBody, fsTitle, fsPage, fwBody, fwMedium, fwBold)
+	}
+	setUIType(30, 300, 700)
+	if fsBody != maxUIFontSize || fwMedium != 500 {
+		t.Fatalf("上限或中间字重不对：%v %d", fsBody, fwMedium)
 	}
 }

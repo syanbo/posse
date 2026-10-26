@@ -123,7 +123,7 @@ func (a *app) usageFilter(c *ui.Context) {
 }
 
 func usageNote(c *ui.Context, text string) {
-	ui.Text(c, text).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5).Padding(0, 4)
+	ui.Text(c, text).FontSize(fsSmall).TextColor(c.Theme().TextMuted).LineHeight(1.5).Padding(0, 4)
 }
 
 // copyName 把技能、MCP 服务或工具的名字复制到剪贴板：常要拿去搜配置、写进提示里。
@@ -175,7 +175,7 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
 			continue
 		}
 		ui.Column(c).Gap(6).Padding(0, 4).Children(func() {
-			ui.Text(c, g.label).FontSize(11).FontWeight(500).TextColor(c.Theme().TextMuted)
+			ui.Text(c, g.label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
 			ui.Row(c).Wrap().Gap(6).Children(func() {
 				for _, it := range items {
 					a.usageChip(c, "cli-"+it.Name, iconTerminal, cliColor(c), it.Name, it.Count)
@@ -187,7 +187,7 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
 
 func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color, name string, n int) {
 	t := c.Theme()
-	b := ui.Row(c.Key(key)).Height(22).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).
+	b := ui.Row(c.Key(key)).Height(sz(22)).Padding(0, 8, 0, 6).Gap(4).Radius(11).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label("复制 " + name)
 	bg := colors(t).fill
 	if b.Hovered() {
@@ -195,9 +195,9 @@ func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color,
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Icon(c, icon).FontSize(11).TextColor(color).Shrink(0)
-		ui.Text(c, name).FontSize(11).Font(monoFont).SingleLine().MaxWidth(150)
-		ui.Text(c, fmt.Sprintf("×%d", n)).FontSize(10.5).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Icon(c, icon).FontSize(sz(11)).TextColor(color).Shrink(0)
+		ui.Text(c, name).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(150)
+		ui.Text(c, fmt.Sprintf("×%d", n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	if b.Clicked() {
 		a.copyName(c, name)
@@ -253,7 +253,7 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 		return
 	}
 	ui.Column(c).Gap(0).Padding(6, 4, 0, 4).Children(func() {
-		ui.Text(c, "时间线").FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
+		ui.Text(c, "时间线").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {
 			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
 			switch {
@@ -276,7 +276,7 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 				})
 				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 14, 0).Children(func() {
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-						nt := ui.Text(c, name).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).
+						nt := ui.Text(c, name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).
 							Role(ui.RoleButton).Label("复制 " + name)
 						if nt.Hovered() {
 							nt.TextColor(t.Accent)
@@ -288,15 +288,15 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 							a.copyName(c, name)
 						}
 						if st.n > 1 {
-							ui.Text(c, fmt.Sprintf("×%d", st.n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+							ui.Text(c, fmt.Sprintf("×%d", st.n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 						}
 						ui.Spacer(c)
 						if !st.ev.At.IsZero() {
-							ui.Text(c, st.ev.At.Local().Format("15:04")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
+							ui.Text(c, st.ev.At.Local().Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
 								Tooltip(st.first.Local().Format("1月2日 15:04:05") + " 起")
 						}
 					})
-					ui.Text(c, kind).FontSize(11).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, kind).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 				})
 			})
 		}

@@ -271,8 +271,8 @@ func (a *app) defDialog(c *ui.Context) {
 		chosen = c.Shortcut(0, ui.KeyEnter)
 		ui.Column(c).Width(620).Gap(8).Children(func() {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(2, 2, 0, 2).Children(func() {
-				ui.Text(c, p.word).FontSize(14).FontWeight(600).Font(monoFont)
-				ui.Text(c, fmt.Sprintf("有 %d 处定义", n)).FontSize(12.5).TextColor(t.TextMuted)
+				ui.Text(c, p.word).FontSize(fsCode).FontWeight(fwBold).Font(monoFont)
+				ui.Text(c, fmt.Sprintf("有 %d 处定义", n)).FontSize(fsBody).TextColor(t.TextMuted)
 			})
 			ui.Scroll(c).MaxHeight(400).Children(func() {
 				ui.Column(c).Gap(1).Children(func() {
@@ -304,9 +304,9 @@ func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	mark := colors(t).honey.Alpha(0.28)
 	row.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconFile).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-			ui.Text(c, d.Path+":"+strconv.Itoa(d.Line+1)).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
-			ui.Text(c, d.Kind).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, iconFile).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, d.Path+":"+strconv.Itoa(d.Line+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, d.Kind).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		})
 		text := trimIndent(d.Text)
 		shift := len(d.Text) - len(text)
@@ -314,7 +314,7 @@ func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 		if d.Span[1] > d.Span[0] && d.Span[0] >= shift {
 			marks = [][2]int{{d.Span[0] - shift, d.Span[1] - shift}}
 		}
-		ui.RichText(c, markSpans(text, marks, ui.Span{Size: 12.5, Font: monoFont}, mark)...).SingleLine().Shrink(1)
+		ui.RichText(c, markSpans(text, marks, ui.Span{Size: fsCode, Font: monoFont}, mark)...).SingleLine().Shrink(1)
 	})
 	return row.Clicked()
 }

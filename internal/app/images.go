@@ -246,8 +246,8 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 	t := c.Theme()
 	v := &a.images
 	ui.Row(c.Key("group-"+title)).Gap(6).Padding(4, 4, 0, 4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).FontSize(12).FontWeight(500)
-		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium)
+		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	for _, it := range items {
 		kind := "图片 "
@@ -280,10 +280,10 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 				})
 			}
 			ui.Row(c).Gap(8).Padding(0, 2).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, it.Label).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
+				ui.Text(c, it.Label).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
 				if !it.At.IsZero() {
 					ui.Spacer(c)
-					ui.Text(c, commitTime(it.At)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, commitTime(it.At)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 				}
 			})
 		})
@@ -302,7 +302,7 @@ func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) 
 func playBadge(c *ui.Context) {
 	ui.Box(c).Absolute().Top(0).Right(0).Bottom(0).Left(0).Center().Children(func() {
 		ui.Box(c).Size(36, 36).Radius(18).Center().Background(ui.RGBA(0, 0, 0, 0.55)).Children(func() {
-			ui.Icon(c, iconPlay).FontSize(22).TextColor(ui.RGBA(255, 255, 255, 1))
+			ui.Icon(c, iconPlay).FontSize(sz(22)).TextColor(ui.RGBA(255, 255, 255, 1))
 		})
 	})
 }

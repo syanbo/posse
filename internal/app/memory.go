@@ -152,7 +152,7 @@ func (a *app) memoryButton(c *ui.Context) {
 	m := &a.mem
 	total := a.daemon.FootprintKB + a.selfKB + a.termKB
 	n := a.daemon.Running
-	b := ui.Row(c.Key("memory")).Height(24).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
+	b := ui.Row(c.Key("memory")).Height(sz(24)).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(fmt.Sprintf("内存 %s，%d 个终端在运行", mb(total), n)).Tooltip("内存和终端")
 	bg := ui.Transparent
 	if m.open || b.Hovered() {
@@ -160,11 +160,11 @@ func (a *app) memoryButton(c *ui.Context) {
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Icon(c, iconMemory).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, mb(total)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Icon(c, iconMemory).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, mb(total)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		ui.Box(c).Size(1, 12).Margin(0, 2).Background(colors(t).line)
-		ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Icon(c, iconTerminal).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	if b.Clicked() {
 		m.open = !m.open
@@ -181,12 +181,12 @@ func (a *app) memoryButton(c *ui.Context) {
 // memLine 是浮窗里的一行：名称和内存。level 0 是小节合计，1 是一项，2 是终端（缩进、次要色），3 是终端里的程序。
 func memLine(c *ui.Context, key string, lead func(), label, value string, level int) ui.Element {
 	t := c.Theme()
-	h, fs, pad := float32(28), float32(13), float32(0)
+	h, fs, pad := sz(28), fsBody, float32(0)
 	switch level {
 	case 2:
-		h, fs, pad = 26, 12, 8
+		h, fs, pad = sz(26), fsSmall, 8
 	case 3:
-		h, fs, pad = 22, 11.5, 50
+		h, fs, pad = sz(22), fsSmall, 50
 	}
 	return ui.Row(c.Key(key)).Height(h).Gap(8).Padding(0, 0, 0, pad).AlignItems(ui.Center).Children(func() {
 		if lead != nil {
@@ -196,8 +196,8 @@ func memLine(c *ui.Context, key string, lead func(), label, value string, level 
 		v := ui.Text(c, value).FontSize(fs).FontFeatures("tnum").Shrink(0)
 		switch level {
 		case 0:
-			l.FontWeight(500)
-			v.FontWeight(500)
+			l.FontWeight(fwMedium)
+			v.FontWeight(fwMedium)
 		case 2, 3:
 			l.TextColor(t.TextMuted)
 			v.TextColor(t.TextMuted)
@@ -212,8 +212,8 @@ func memLine(c *ui.Context, key string, lead func(), label, value string, level 
 func memSection(c *ui.Context, title, value string) {
 	t := c.Theme()
 	ui.Row(c).Gap(8).Padding(0, 0, 2, 0).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Grow(1)
-		ui.Text(c, value).FontSize(11).FontWeight(500).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Grow(1)
+		ui.Text(c, value).FontSize(fsSmall).FontWeight(fwMedium).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 }
 
@@ -223,12 +223,12 @@ func (a *app) memoryPanel(c *ui.Context) {
 	m := &a.mem
 	ui.Column(c).Width(320).Gap(14).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			titleText(c, "内存", fsCardTitle).Grow(1)
+			titleText(c, "内存", fsTitle).Grow(1)
 			terms := a.termKB
 			if m.rows != nil {
 				terms = m.terms
 			}
-			ui.Text(c, mb(a.daemon.FootprintKB+a.selfKB+terms)).FontSize(fsCardTitle).FontWeight(500).FontFeatures("tnum")
+			ui.Text(c, mb(a.daemon.FootprintKB+a.selfKB+terms)).FontSize(fsTitle).FontWeight(fwMedium).FontFeatures("tnum")
 		})
 		ui.Column(c).Children(func() {
 			memSection(c, "POSSE", mb(a.daemon.FootprintKB+a.selfKB))
@@ -239,12 +239,12 @@ func (a *app) memoryPanel(c *ui.Context) {
 		ui.Column(c).Children(func() {
 			if m.rows == nil {
 				memSection(c, "终端里的程序", "")
-				ui.Text(c, "正在统计…").FontSize(12).TextColor(t.TextMuted).Padding(6, 0)
+				ui.Text(c, "正在统计…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
 				return
 			}
 			memSection(c, "终端里的程序", mb(m.terms))
 			if len(m.rows) == 0 {
-				ui.Text(c, "没有运行中的终端。").FontSize(12).TextColor(t.TextMuted).Padding(6, 0)
+				ui.Text(c, "没有运行中的终端。").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
 				return
 			}
 			// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
@@ -253,7 +253,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 					for _, r := range m.rows {
 						ui.Column(c.Key(r.id)).Children(func() {
 							memLine(c, "ws", func() {
-								ui.Icon(c, iconFolder).FontSize(14).TextColor(t.Accent).Shrink(0)
+								ui.Icon(c, iconFolder).FontSize(sz(14)).TextColor(t.Accent).Shrink(0)
 							}, r.label, mb(r.kb), 0)
 							for _, x := range r.terms {
 								name, detail := tabLabel(x.term)
@@ -266,11 +266,11 @@ func (a *app) memoryPanel(c *ui.Context) {
 									if open {
 										chevron = iconDown
 									}
-									ui.Icon(c, chevron).FontSize(10).TextColor(t.TextMuted).Shrink(0)
+									ui.Icon(c, chevron).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
 									if x.term.Agent != "" {
 										agentTile(c, x.term.Agent, 13)
 									} else {
-										ui.Icon(c, iconTerminal).FontSize(13).TextColor(t.TextMuted).Shrink(0)
+										ui.Icon(c, iconTerminal).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
 									}
 								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(6)
 								if row.Hovered() {
@@ -304,6 +304,6 @@ func (a *app) memoryPanel(c *ui.Context) {
 			})
 		})
 		ui.Text(c, "终端按进程树统计：shell、agent 和它拉起的子进程（如 MCP 服务），和活动监视器的“内存”一致。").
-			FontSize(11).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
+			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }

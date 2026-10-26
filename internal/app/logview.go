@@ -20,7 +20,6 @@ import (
 
 const (
 	logPage   = 300
-	logRowH   = 32
 	laneWidth = 14
 	maxLanes  = 12 // 再多的线裁掉，不让提交图挤掉标题
 )
@@ -124,6 +123,9 @@ const (
 	logPanelRoom    = 120
 )
 
+// logRowH 是提交列表一行的高度，跟着界面字号缩放。
+func logRowH() float32 { return sz(32) }
+
 func (a *app) logPanelHeight(avail float32) float32 {
 	h := a.state.LogPanelHeight
 	if h == 0 {
@@ -160,7 +162,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	panel := ui.Column(c.Key("log-panel")).Absolute().Left(0).Right(0).Bottom(-(1-shown)*h).Height(h).
 		Background(p.card).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Shadow(0, -6, 18, 0, ui.RGBA(0, 0, 0, 0.12))
 	panel.Children(func() {
-		ui.Row(c).Height(34).Shrink(0).Padding(0, 10, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
+		ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 10, 0, 8).Gap(2).AlignItems(ui.Center).Background(p.band).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
 			// 点 × 会在这次遍历里关掉文件历史：遍历副本
 			for i, d := range slices.Clone(v.logs) {
@@ -185,7 +187,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		case d.kind == docError:
 			docMessage(c, d, d.err)
 		default:
-			ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
 		}
 		// 拖上边缘调高度，松手才写 ui.json
 		grip := ui.Box(c.Key("log-panel-grip")).Absolute().Left(0).Right(0).Top(-3).Height(6).Cursor(ui.CursorResizeNS)
@@ -214,12 +216,12 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	if f := d.log.filter; f.Path != "" {
 		label = "历史：" + path.Base(f.Path)
 	}
-	row := ui.Row(c.Key(d.path)).Height(26).Padding(0, 6, 0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key(d.path)).Height(sz(26)).Padding(0, 6, 0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, active)
 	row.Children(func() {
-		ui.Icon(c, iconGitLog).FontSize(13).TextColor(t.Accent).Shrink(0)
-		tabText(c, ui.Text(c, label).FontSize(12).Shrink(0), label, active)
+		ui.Icon(c, iconGitLog).FontSize(sz(13)).TextColor(t.Accent).Shrink(0)
+		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), label, active)
 		if d.log.filter.Path == "" {
 			ui.Box(c).Width(4)
 			return
@@ -228,7 +230,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 		if x.Hovered() {
 			x.Background(t.SurfacePressed)
 		}
-		x.Children(func() { ui.Icon(c, iconClose).FontSize(11).TextColor(t.TextMuted) })
+		x.Children(func() { ui.Icon(c, iconClose).FontSize(sz(11)).TextColor(t.TextMuted) })
 		if x.Clicked() {
 			a.closeLog(v, d)
 		}
@@ -368,7 +370,7 @@ func graphCell(c *ui.Context, r graphRow, hash string, lanes int) ui.Element {
 	// 超过上限的线裁掉，但提交自己那条线总要画得出来
 	n := max(lanes, r.lane+1, 1)
 	t := c.Theme()
-	return ui.Box(c).Width(float32(n*laneWidth + 6)).Height(logRowH).Shrink(0).Clip().Draw(func(p *ui.Painter, rect ui.Rect) {
+	return ui.Box(c).Width(float32(n*laneWidth + 6)).Height(logRowH()).Shrink(0).Clip().Draw(func(p *ui.Painter, rect ui.Rect) {
 		x := func(i int) float32 { return rect.X + 6 + float32(i*laneWidth) }
 		top, mid, bot := rect.Y, rect.Y+rect.H/2, rect.Y+rect.H
 		line := func(x0, y0, x1, y1 float32, col ui.Color) {
@@ -477,7 +479,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					msg, col = ld.err, t.Danger
 				}
 				ui.Column(c).Padding(12, 16).Gap(10).Children(func() {
-					ui.Text(c, msg).FontSize(12).TextColor(col).LineHeight(1.4)
+					ui.Text(c, msg).FontSize(fsSmall).TextColor(col).LineHeight(1.4)
 					if !ld.loading && ld.filtered() && pressable(textButton(c, "清除筛选")).Clicked() {
 						a.clearLogFilter(v, d)
 					}
@@ -497,8 +499,8 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 			ui.List(c, &ld.list, n, func(i int) {
 				if i == len(commits) {
-					more := ui.Row(c.Key("more")).Height(logRowH).Padding(0, 16).AlignItems(ui.Center).Role(ui.RoleButton)
-					more.Children(func() { ui.Text(c, "加载更早的提交").FontSize(12).TextColor(t.Accent) })
+					more := ui.Row(c.Key("more")).Height(logRowH()).Padding(0, 16).AlignItems(ui.Center).Role(ui.RoleButton)
+					more.Children(func() { ui.Text(c, "加载更早的提交").FontSize(fsSmall).TextColor(t.Accent) })
 					if more.Clicked() && !ld.loading {
 						a.loadLog(v, d, true)
 					}
@@ -540,7 +542,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	ld := d.log
-	ui.Row(c).Height(40).Shrink(0).Padding(0, 10, 0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 10, 0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 		text := fieldInputWidth(c, &ld.text, "提交信息或哈希", 220).Label("按提交信息或哈希筛选")
 		if text.Changed() || text.Submitted() {
 			a.applyLogFilter(v, d)
@@ -556,11 +558,11 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		case n > 1:
 			branch = fmt.Sprintf("%d 个分支", n)
 		}
-		filter := ui.Row(c.Key("branch-filter")).Height(26).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
+		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(t.Surface).
 			Role(ui.RoleButton).Label("按分支筛选").Children(func() {
-			ui.Icon(c, iconBranch).FontSize(12).TextColor(t.TextMuted)
-			ui.Text(c, branch).FontSize(11.5).Font(monoFont).SingleLine().MaxWidth(160)
-			ui.Icon(c, iconDown).FontSize(10).TextColor(t.TextMuted)
+			ui.Icon(c, iconBranch).FontSize(sz(12)).TextColor(t.TextMuted)
+			ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(160)
+			ui.Icon(c, iconDown).FontSize(sz(10)).TextColor(t.TextMuted)
 		})
 		menuButton(c, filter, func(m *popMenu) {
 			if m.Item("全部分支").Checked(len(ld.filter.Branches) == 0).Chosen() {
@@ -579,14 +581,14 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 		})
 		if ld.filter.Path != "" {
-			ui.Row(c).Height(26).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
-				ui.Icon(c, iconFile).FontSize(12).TextColor(t.Accent)
-				ui.Text(c, ld.filter.Path).FontSize(11.5).Font(monoFont).SingleLine().MaxWidth(240)
+			ui.Row(c).Height(sz(26)).Padding(0, 8).Gap(4).Radius(6).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
+				ui.Icon(c, iconFile).FontSize(sz(12)).TextColor(t.Accent)
+				ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(240)
 			})
 		}
 		ui.Spacer(c)
 		if ld.loading {
-			ui.Text(c, "读取中…").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, "读取中…").FontSize(fsSmall).TextColor(t.TextMuted)
 		}
 		if pressable(iconButtonSized(c, iconRefresh, "刷新日志", 24, 14)).Clicked() {
 			a.loadLog(v, d, false)
@@ -627,7 +629,7 @@ func (a *app) applyLogFilter(v *filesView, d *fileDoc) {
 func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo, gr graphRow) {
 	t := c.Theme()
 	ld := d.log
-	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
+	row := ui.Row(c.Key(ci.Hash)).Height(logRowH()).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
 	bg := ui.Transparent
 	switch {
 	case ld.commit != nil && ld.commit.info.Hash == ci.Hash:
@@ -640,11 +642,11 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 		graphCell(c, gr, ci.Hash, ld.lanes)
 		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉
 		// 窗口太窄时标题至少留 90；短标题不撑到 90，后面的分支标签紧挨着它
-		sw, _ := c.MeasureText(0, ui.Span{Text: ci.Subject, Size: 12.5})
-		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(90, sw))
+		sw, _ := c.MeasureText(0, ui.Span{Text: ci.Subject, Size: fsBody})
+		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(90, sw))
 		refChips(c, ci.Refs)
-		ui.Text(c, ci.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(ci.Time))
+		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
+		ui.Text(c, commitTime(ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(ci.Time))
 	})
 	if row.Clicked() {
 		a.selectCommit(v, &ld.commit, ci)
@@ -676,16 +678,15 @@ func refChips(c *ui.Context, refs string) {
 			if ref.head {
 				bg, fg = colors(t).tint, t.Accent
 			}
-			ui.Text(c, ref.name).FontSize(refFontSize).Font(monoFont).TextColor(fg).Padding(1, refPadX).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(refChipMaxW)
+			ui.Text(c, ref.name).FontSize(fsSmall).Font(monoFont).TextColor(fg).Padding(1, refPadX).Radius(4).Background(bg).SingleLine().Shrink(0).MaxWidth(refChipMaxW)
 		}
 		if shown < len(names) {
-			ui.Text(c, fmt.Sprintf("+%d", len(names)-shown)).FontSize(refFontSize).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)
+			ui.Text(c, fmt.Sprintf("+%d", len(names)-shown)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).Tooltip(refs)
 		}
 	})
 }
 
 const (
-	refFontSize = 10.5
 	refPadX     = 5
 	refChipMaxW = 160
 )
@@ -701,12 +702,12 @@ func refsFit(c *ui.Context, names []refName, room float32) int {
 		if k == len(names) {
 			return 0
 		}
-		w, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprintf("+%d", len(names)-k), Size: refFontSize})
+		w, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprintf("+%d", len(names)-k), Size: fsSmall})
 		return w + 6
 	}
 	used := float32(0)
 	for k := 0; k < most; k++ {
-		w, _ := c.MeasureText(0, ui.Span{Text: names[k].name, Font: monoFont, Size: refFontSize})
+		w, _ := c.MeasureText(0, ui.Span{Text: names[k].name, Font: monoFont, Size: fsSmall})
 		used += min(w+2*refPadX, refChipMaxW)
 		if k > 0 {
 			used += 6
@@ -894,7 +895,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		docMessage(c, d, bd.err)
 		return
 	case bd.loading:
-		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
 		return
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
@@ -903,22 +904,22 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			l := lines[i]
 			first := i == 0 || lines[i-1].Hash != l.Hash
 			uncommitted := strings.Trim(l.Hash, "0") == ""
-			row := ui.Row(c.Key(i)).Height(22).Gap(10).AlignItems(ui.Center)
+			row := ui.Row(c.Key(i)).Height(sz(22)).Gap(10).AlignItems(ui.Center)
 			if !uncommitted && bd.sel != nil && bd.sel.info.Hash == l.Hash {
 				row.Background(colors(t).tint)
 			}
 			row.Children(func() {
-				who := ui.Row(c.Key("who")).Width(190).Height(22).Padding(0, 8).Gap(6).AlignItems(ui.Center).Shrink(0).Background(colors(t).wash)
+				who := ui.Row(c.Key("who")).Width(190).Height(sz(22)).Padding(0, 8).Gap(6).AlignItems(ui.Center).Shrink(0).Background(colors(t).wash)
 				who.Children(func() {
 					if !first {
 						return
 					}
 					if uncommitted {
-						ui.Text(c, "没提交").FontSize(11).TextColor(t.Accent)
+						ui.Text(c, "没提交").FontSize(fsSmall).TextColor(t.Accent)
 						return
 					}
-					ui.Text(c, l.Time.Format("2006-01-02")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-					ui.Text(c, l.Author).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					ui.Text(c, l.Time.Format("2006-01-02")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, l.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				})
 				if !uncommitted {
 					who.Tooltip(l.Hash[:10] + "  " + l.Author + "\n" + l.Summary)
@@ -926,7 +927,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 						a.selectCommit(v, &bd.sel, gitx.CommitInfo{Hash: l.Hash, Author: l.Author, Time: l.Time, Subject: l.Summary})
 					}
 				}
-				ui.Text(c, fmt.Sprint(i+1)).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Width(36).Shrink(0).TextAlign(ui.End)
+				ui.Text(c, fmt.Sprint(i+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Width(sz(36)).Shrink(0).TextAlign(ui.End)
 				ui.Text(c, strings.ReplaceAll(l.Text, "\t", "    ")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).SingleLine().Shrink(1)
 			})
 		}).Grow(1)

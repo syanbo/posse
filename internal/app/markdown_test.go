@@ -75,7 +75,7 @@ func TestMarkdownTableWidth(t *testing.T) {
 	}
 	code := "openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)"
 	before, _ := tt.Find(code)
-	if before.H > 60 {
+	if before.H > 3*fsBody*1.45+1 { // 两个空格，最多三行
 		t.Fatalf("code cell %+v should wrap only at spaces", before)
 	}
 	// 整张表比窗口宽，能往左滚

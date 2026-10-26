@@ -668,7 +668,7 @@ func (a *app) unsavedDialog(c *ui.Context) {
 			if len(u.docs) > 1 {
 				title = "有 " + strconv.Itoa(len(u.docs)) + " 个文件的修改还没保存"
 			}
-			titleText(c, title, fsCardTitle)
+			titleText(c, title, fsTitle)
 			body := "不保存的话，这些修改会丢失。"
 			if len(u.docs) > 1 {
 				var names []string
@@ -677,7 +677,7 @@ func (a *app) unsavedDialog(c *ui.Context) {
 				}
 				body = strings.Join(names, "、") + "。不保存的话，这些修改会丢失。"
 			}
-			ui.Text(c, body).FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
+			ui.Text(c, body).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
 				if pressable(textButton(c, "不保存")).Clicked() {
 					a.unsaved = nil

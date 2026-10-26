@@ -301,18 +301,18 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 	}
 	col.Children(func() {
 		a.rollbackBox.title(c, "回滚改动")
-		ui.Text(c, "勾上的已跟踪文件会恢复成上一次提交时的样子，没提交的改动会丢失。点文件名看 diff，可以只回滚其中几处。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.45)
+		ui.Text(c, "勾上的已跟踪文件会恢复成上一次提交时的样子，没提交的改动会丢失。点文件名看 diff，可以只回滚其中几处。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 		all := make([]int, len(r.entries))
 		for i := range all {
 			all[i] = i
 		}
 		rows := rollbackTree(r.entries, r.folded)
-		ui.Row(c).Height(26).Padding(0, 4, 0, 8).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Height(sz(26)).Padding(0, 4, 0, 8).Gap(8).AlignItems(ui.Center).Children(func() {
 			state := r.pickState(all)
 			if pickBox(c, "all", "全部", state) {
 				r.setPicked(all, state != pickAll)
 			}
-			ui.Text(c, fmt.Sprintf("%d 个文件", len(r.entries))).FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, fmt.Sprintf("%d 个文件", len(r.entries))).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Spacer(c)
 			var dirs []string
 			for _, row := range rollbackTree(r.entries, nil) {
@@ -411,7 +411,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 		}
 		col.Children(func() {
 			box.title(c, df.rel)
-			ui.Row(c).Height(28).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Height(sz(28)).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
 				if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
 					a.rollbackStep(-1)
 				}
@@ -441,7 +441,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				if d.kind == docDiff && listed {
 					if n := len(df.state.Hunks()); n > 0 {
 						added, deleted := df.state.Stats()
-						ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+						ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 					}
 					// 每处旁边的 >> 要找到那一处才点得到，这里常驻一个，作用在 F7 走到的那一处
 					if df.hunk < len(df.state.Hunks()) {
@@ -453,7 +453,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 			})
 			ui.Column(c).Grow(1).Shrink(1).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
 				muted := func(msg string) {
-					ui.Text(c, msg).FontSize(12.5).TextColor(t.TextMuted).Padding(16)
+					ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted).Padding(16)
 				}
 				switch {
 				case !listed:
@@ -461,7 +461,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				case d.kind == docLoading:
 					muted(diffLoadingText(df))
 				case d.kind == docError:
-					ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
+					ui.Text(c, d.err).FontSize(fsBody).TextColor(t.Danger).Padding(16)
 				case d.kind == docImageDiff:
 					imageDiffView(c, d)
 				case d.kind == docBinary:
@@ -487,7 +487,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	t := c.Theme()
 	p := colors(t)
 	r := &a.rollback
-	line := ui.Row(c.Key(row.path)).Height(26).Padding(0, 10, 0, 4+float32(row.depth)*18).Gap(6).AlignItems(ui.Center)
+	line := ui.Row(c.Key(row.path)).Height(sz(26)).Padding(0, 10, 0, 4+float32(row.depth)*18).Gap(6).AlignItems(ui.Center)
 	if !row.dir {
 		// 文件行点了在 diff 浮窗里看；勾选框自己接住点击
 		line.Role(ui.RoleButton).Label("查看 " + row.path)
@@ -509,9 +509,9 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			if pickBox(c, "dir:"+row.path, row.path, state) {
 				r.setPicked(row.files, state != pickAll)
 			}
-			ui.Icon(c, iconFolder).FontSize(15).TextColor(t.Accent).Shrink(0)
-			ui.Text(c, row.name).FontSize(13).SingleLine().Shrink(1)
-			ui.Text(c, fmt.Sprint(len(row.files))).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, iconFolder).FontSize(sz(15)).TextColor(t.Accent).Shrink(0)
+			ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1)
+			ui.Text(c, fmt.Sprint(len(row.files))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			return
 		}
 		e := r.entries[row.entry]
@@ -524,18 +524,18 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			r.on[e.Path] = state != pickAll
 		}
 		letter := statusLetter(e)
-		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(letterColor(c, letter)).Width(10).Shrink(0)
-		name := ui.Text(c, row.name).FontSize(13).SingleLine().Shrink(1)
+		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(letterColor(c, letter)).Width(sz(10)).Shrink(0)
+		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
 		ui.Spacer(c)
 		if s, ok := g.head[e.Path]; ok && !s.Binary && !e.Untracked {
 			if s.Added > 0 {
-				ui.Text(c, fmt.Sprintf("+%d", s.Added)).FontSize(11).FontFeatures("tnum").TextColor(p.sage).Shrink(0)
+				ui.Text(c, fmt.Sprintf("+%d", s.Added)).FontSize(fsSmall).FontFeatures("tnum").TextColor(p.sage).Shrink(0)
 			}
 			if s.Deleted > 0 {
-				ui.Text(c, fmt.Sprintf("−%d", s.Deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.Danger).Shrink(0)
+				ui.Text(c, fmt.Sprintf("−%d", s.Deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.Danger).Shrink(0)
 			}
 		}
 	})

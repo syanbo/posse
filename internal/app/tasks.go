@@ -330,7 +330,7 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 				return
 			}
 			// 进行中只写个数，不再跟一个转动的图标：侧栏这一行是入口，不是哪个会话的状态
-			ui.Text(c, fmt.Sprint(running)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
+			ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
 		}
 	}
 	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", "", trailing)
@@ -355,7 +355,7 @@ func (a *app) taskBoard(c *ui.Context) {
 		}
 	}
 	a.band(c, func() {
-		titleText(c, "任务", fsCardTitle)
+		titleText(c, "任务", fsTitle)
 		ui.Spacer(c)
 		if ended > 0 {
 			if pressable(textButton(c, "清除已结束")).Clicked() {
@@ -411,15 +411,15 @@ func (a *app) taskEmptyCard(c *ui.Context) {
 		emptyCard(c).Width(420).Padding(24).Gap(14).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "任务", fsPageTitle)
+				titleText(c, "任务", fsPage)
 				ui.Text(c, "把活儿派给其他 agent，在这里看进度、回答它们的问题、合入结果。从左边选一个任务看详情。").
-					FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+					FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			if len(a.tasks) > 0 {
 				ui.Row(c).Gap(14).Children(func() {
 					for i, label := range []string{"待处理", "进行中", "已结束"} {
 						if counts[i] > 0 {
-							ui.Text(c, fmt.Sprintf("%s %d", label, counts[i])).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted)
+							ui.Text(c, fmt.Sprintf("%s %d", label, counts[i])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						}
 					}
 				})
@@ -460,7 +460,7 @@ func (a *app) taskList(c *ui.Context) {
 		if s := taskSection(task); s != section {
 			section = s
 			label := []string{"需要你回复", "进行中", "已结束"}[s]
-			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(11).FontWeight(500).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
+			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
 		}
 		a.taskRow(c, task)
 	}
@@ -475,22 +475,22 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 		// MinWidth(0)：标题长时让它省略，不把右边的时间挤出卡片
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(3).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, task.Title).FontSize(13).FontWeight(500).MaxLines(1).Shrink(1).MinWidth(0)
+				ui.Text(c, task.Title).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Shrink(1).MinWidth(0)
 				// 结束但不是完成的任务，状态写成文字跟在标题后面，不只靠颜色
 				if task.Status != "running" && task.Status != "done" {
 					color := t.TextMuted
 					if task.Status == "failed" {
 						color = t.Danger
 					}
-					ui.Text(c, taskStatusText(task)).FontSize(11).FontWeight(500).TextColor(color).Shrink(0)
+					ui.Text(c, taskStatusText(task)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
 				}
 				ui.Spacer(c)
-				ui.Text(c, elapsed(task.CreatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, elapsed(task.CreatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				// 图标代替 agent 名字，悬停提示是名字
 				agentTile(c, task.Agent, 13)
-				ui.Text(c, task.Workspace).FontSize(11).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+				ui.Text(c, task.Workspace).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			})
 			preview, color := taskStatusText(task), t.TextMuted
 			switch {
@@ -499,7 +499,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 			case task.Summary != "":
 				preview = task.Summary
 			}
-			ui.Text(c, preview).FontSize(12).TextColor(color).MaxLines(2).LineHeight(1.35)
+			ui.Text(c, preview).FontSize(fsSmall).TextColor(color).MaxLines(2).LineHeight(1.35)
 		})
 	})
 	if row.Clicked() {
@@ -528,8 +528,8 @@ func (a *app) emptyBoard(c *ui.Context) {
 		emptyCard(c).Width(460).Padding(24).Gap(18).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "还没有任务", 20)
-				ui.Text(c, "把一件事交给 Claude、Codex 或 Grok 去做，它们做完会在这里汇报，有问题也会在这里问你。也可以让一个 agent 当协调者，派活给其他 agent。").FontSize(13).TextColor(t.TextMuted).LineHeight(1.5)
+				titleText(c, "还没有任务", fsPage)
+				ui.Text(c, "把一件事交给 Claude、Codex 或 Grok 去做，它们做完会在这里汇报，有问题也会在这里问你。也可以让一个 agent 当协调者，派活给其他 agent。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
 				if pressable(accentButton(c, "派发任务…")).Clicked() {
@@ -537,8 +537,8 @@ func (a *app) emptyBoard(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, "posse task guide").FontSize(11).Font(monoFont).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
-				ui.Text(c, "Agent 的用法说明").FontSize(11).TextColor(t.TextMuted)
+				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
+				ui.Text(c, "Agent 的用法说明").FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		})
 	})
@@ -555,7 +555,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
 				agentTile(c, task.Agent, 44)
 				ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
-					titleText(c, task.Title, fsPageTitle).LineHeight(1.3).Selectable()
+					titleText(c, task.Title, fsPage).LineHeight(1.3).Selectable()
 					status := func() {
 						ui.Row(c).Gap(5).Children(func() {
 							taskGlyphIcon(c, task, 12)
@@ -563,7 +563,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 							if needsUser(task) {
 								color = colors(t).honey
 							}
-							ui.Text(c, taskStatusText(task)).FontSize(12).TextColor(color).MaxLines(1)
+							ui.Text(c, taskStatusText(task)).FontSize(fsSmall).TextColor(color).MaxLines(1)
 						})
 					}
 					metaRow(c, status, meta(c, agentTitle(task.Agent)), metaMono(c, workspaceIcon(task.WorkspaceKind), task.Workspace, ""),
@@ -577,9 +577,9 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 		})
 		if task.Summary != "" {
 			a.block(c, "汇报", func() {
-				ui.Text(c, task.Summary).FontSize(13).LineHeight(1.55).Selectable()
+				ui.Text(c, task.Summary).FontSize(fsBody).LineHeight(1.55).Selectable()
 				if task.Report != "" {
-					ui.Text(c, task.Report).FontSize(12).Font(monoFont).TextColor(t.TextMuted).Selectable()
+					ui.Text(c, task.Report).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Selectable()
 				}
 			})
 		}
@@ -599,7 +599,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 		}
 		if task.Spec != "" {
 			a.block(c, "任务说明", func() {
-				ui.Text(c, task.Spec).FontSize(13).LineHeight(1.55).TextColor(t.TextMuted).Selectable()
+				ui.Text(c, task.Spec).FontSize(fsBody).LineHeight(1.55).TextColor(t.TextMuted).Selectable()
 			})
 		}
 	})
@@ -666,9 +666,9 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 		}
 	}
 	ui.Row(c).Gap(8).Padding(10, 12).Radius(8).Background(colors(t).wash).Children(func() {
-		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted)
-		ui.Text(c, task.Branch+" 相对 "+task.BaseRef).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, text).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)
+		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted)
+		ui.Text(c, task.Branch+" 相对 "+task.BaseRef).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)
 	})
 }
 
@@ -717,18 +717,18 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 						if m.Kind == "answer" || m.Kind == "note" {
 							from = "派发方"
 						}
-						ui.Text(c, messageLabels[m.Kind]).FontSize(12).FontWeight(500)
-						ui.Text(c, from).FontSize(11).TextColor(t.TextMuted)
-						ui.Text(c, m.CreatedAt.Format("15:04")).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+						ui.Text(c, messageLabels[m.Kind]).FontSize(fsSmall).FontWeight(fwMedium)
+						ui.Text(c, from).FontSize(fsSmall).TextColor(t.TextMuted)
+						ui.Text(c, m.CreatedAt.Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						if m.Kind == "question" && !answered[m.ID] && task.Status == "running" {
 							label, color := "等派发方回复", t.TextMuted
 							if task.Coordinator == "" {
 								label, color = "待你回复", colors(t).honey
 							}
-							ui.Text(c, label).FontSize(11).FontWeight(500).TextColor(color)
+							ui.Text(c, label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color)
 						}
 					})
-					ui.Text(c, m.Body).FontSize(13).LineHeight(1.55).Selectable()
+					ui.Text(c, m.Body).FontSize(fsBody).LineHeight(1.55).Selectable()
 				})
 			}
 		})
@@ -742,7 +742,7 @@ func (a *app) dispatchDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.dispatching, func() {
 		ui.Column(c).Width(460).Gap(12).Children(func() {
-			titleText(c, "派发任务", fsCardTitle)
+			titleText(c, "派发任务", fsTitle)
 			var labels []string
 			for _, w := range a.workspaces {
 				labels = append(labels, w.Label)
@@ -760,12 +760,12 @@ func (a *app) dispatchDialog(c *ui.Context) {
 				if isGit && a.dMode == 1 {
 					hint = "每个 agent 各开一个 git worktree 和分支，改动互不干扰，做完可以对比后合并。"
 				}
-				ui.Text(c, hint).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 			fieldInput(c, &a.dTitle, "标题，比如 修复登录页闪退").AutoFocus()
 			fieldArea(c, &a.dSpec, "要做什么、范围在哪、不能动什么、怎样算完成。worker 看不到你和其他 agent 的对话，这里要写全。", 136)
 			ui.Row(c).Gap(16).Children(func() {
-				ui.Text(c, "交给").FontSize(13).TextColor(t.TextMuted)
+				ui.Text(c, "交给").FontSize(fsBody).TextColor(t.TextMuted)
 				for i, name := range agentChoices {
 					ui.Checkbox(c.Key(fmt.Sprint("agent-", i)), &a.dAgents[i], agentTitle(name))
 				}
@@ -775,7 +775,7 @@ func (a *app) dispatchDialog(c *ui.Context) {
 				if a.dMode == 1 {
 					ui.Column(c).Gap(6).Children(func() {
 						fieldInput(c, &a.dBranch, "分支名")
-						ui.Text(c, "选了多个 agent 时，分支名会加上 -claude 这样的后缀。").FontSize(12).TextColor(t.TextMuted)
+						ui.Text(c, "选了多个 agent 时，分支名会加上 -claude 这样的后缀。").FontSize(fsSmall).TextColor(t.TextMuted)
 					})
 				}
 			}

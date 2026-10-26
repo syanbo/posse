@@ -179,7 +179,7 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	a := previewApp(t)
 	a.home = home
 	tt := newPreviewTester(a, true)
-	x := float32(sidebarDefault)
+	x := sidebarDefault()
 	tt.Move(x, 400)
 	tt.Press(x, 400)
 	tt.Move(x+60, 400)
@@ -187,10 +187,10 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	tt.Frame()
 	tt.Release(x+80, 400)
 	tt.Frame()
-	if a.state.SidebarWidth != sidebarDefault+80 {
+	if a.state.SidebarWidth != sidebarDefault()+80 {
 		t.Fatalf("width after drag = %v", a.state.SidebarWidth)
 	}
-	waitState(t, home, func(s uiState) bool { return s.SidebarWidth == sidebarDefault+80 })
+	waitState(t, home, func(s uiState) bool { return s.SidebarWidth == sidebarDefault()+80 })
 	// 拖得太窄停在下限
 	x = a.sidebarWidth()
 	tt.Move(x, 400)
@@ -199,7 +199,7 @@ func TestSidebarToggleAndResize(t *testing.T) {
 	tt.Frame()
 	tt.Release(x-400, 400)
 	tt.Frame()
-	if a.sidebarWidth() != sidebarMin {
+	if a.sidebarWidth() != sidebarMin() {
 		t.Fatalf("width after narrow drag = %v", a.sidebarWidth())
 	}
 

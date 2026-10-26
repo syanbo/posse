@@ -54,6 +54,9 @@ type Theme struct {
 	// FontSize is the size of text, Font its family ("" is the system's).
 	FontSize float32
 	Font     string
+	// FontWeight is the weight of text that sets none of its own, 100 to
+	// 900; 0 leaves it to the font (regular). Posse
+	FontWeight int
 	// PointerCursor shows the pointing hand over the elements that take
 	// clicks, unless disabled, and the closed hand while a value is dragged
 	// in the window, as web pages do, rather than the arrow of native

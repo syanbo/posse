@@ -196,15 +196,15 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 					agentTile(c, s.Agent, 20)
 					ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
 						// 固定行高，悬停时时间换成按钮也不跳
-						ui.Row(c).Height(20).Gap(8).AlignItems(ui.Center).Children(func() {
-							ui.Text(c, oneLine(s.Title)).FontSize(12.5).FontWeight(500).SingleLine().Grow(1).Shrink(1)
+						ui.Row(c).Height(sz(20)).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, oneLine(s.Title)).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
 							// 悬停时时间换成"继续"按钮：已在 Posse 里运行的会话切过去，否则开终端接着聊
 							if row.Hovered() {
 								if pressable(playButton(c)).Clicked() {
 									a.resumeSession(s)
 								}
 							} else {
-								ui.Text(c, ago(s.UpdatedAt)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+								ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 							}
 						})
 						// 标题下面是最后一段聊天内容，再下面是目录和消息数
@@ -213,12 +213,12 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 							if p.user {
 								text = "你：" + text
 							}
-							ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
+							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 							// 细线把聊天内容和下面的目录、消息数分开
 							ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
 						}
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
-						ui.Row(c).Height(20).AlignItems(ui.Center).Children(func() {
+						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
 							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
 							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", 22, 13).Clicked() {
 								a.trashListedSession(s)
@@ -244,6 +244,6 @@ func playButton(c *ui.Context) ui.Element {
 		bg = t.AccentHover
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Icon(c, iconPlay).FontSize(12).TextColor(t.AccentText) })
+	b.Children(func() { ui.Icon(c, iconPlay).FontSize(sz(12)).TextColor(t.AccentText) })
 	return b
 }

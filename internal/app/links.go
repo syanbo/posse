@@ -193,7 +193,7 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 		el.Top(card.y + 14)
 	}
 	el.Children(func() {
-		ui.Text(c, shortPath(card.path)).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Padding(6, 8, 4, 8).Selectable()
+		ui.Text(c, shortPath(card.path)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Padding(6, 8, 4, 8).Selectable()
 		if card.preview != nil {
 			ui.Image(c, card.preview).Width(width-12).Radius(8).Margin(2, 0, 4, 0)
 		}
@@ -244,15 +244,15 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 // linkCardItem 是链接卡片里的一行操作，返回这一帧是否点了它。
 func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(30).Padding(0, 8).Gap(10).Radius(7).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(10).Radius(7).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		ui.Icon(c, icon).FontSize(14).TextColor(t.TextMuted)
-		ui.Text(c, label).FontSize(13)
+		ui.Icon(c, icon).FontSize(sz(14)).TextColor(t.TextMuted)
+		ui.Text(c, label).FontSize(fsBody)
 	})
 	return row.Clicked()
 }

@@ -206,7 +206,7 @@ func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
 		bg, fg = t.SurfaceHover, t.Text
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Icon(c, icon).FontSize(16).TextColor(fg) })
+	b.Children(func() { ui.Icon(c, icon).FontSize(sz(16)).TextColor(fg) })
 	return b.Clicked() && !active
 }
 

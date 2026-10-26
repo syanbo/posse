@@ -349,12 +349,12 @@ func (a *app) runWhere(dir string) string {
 func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	label := "操作记录"
-	row := ui.Row(c.Key("console-tab")).Height(26).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, v.console)
 	row.Children(func() {
-		ui.Icon(c, iconOpLog).FontSize(13).TextColor(t.Accent).Shrink(0)
-		tabText(c, ui.Text(c, label).FontSize(12).Shrink(0), label, v.console)
+		ui.Icon(c, iconOpLog).FontSize(sz(13)).TextColor(t.Accent).Shrink(0)
+		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), label, v.console)
 		if !v.console && a.projectConsoleErr(w.ProjectID, false) {
 			ui.Box(c).Size(6, 6).Radius(3).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
 		}
@@ -370,8 +370,8 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	a.projectConsoleErr(w.ProjectID, true)
 	runs := a.projectRuns(w.ProjectID)
 	ops := groupGitRuns(runs)
-	ui.Row(c).Height(30).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, w.Project+" 各工作区里 Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令").FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, w.Project+" 各工作区里 Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		// 只清这个项目的：记下时间，文件里的记录留给别的项目
 		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", 26, 15)).Clicked() {
@@ -384,7 +384,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		}
 	})
 	if len(ops) == 0 {
-		ui.Text(c, "还没有执行过 Git 操作").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "还没有执行过 Git 操作").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
@@ -401,24 +401,24 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 	first, last := op.runs[0], op.runs[len(op.runs)-1]
 	ui.Column(c.Key(first.ID)).Padding(6, 16, 8, 16).Gap(3).Shrink(0).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, first.Start.Format("15:04:05")).FontSize(11).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-			name := ui.Text(c, op.name).FontSize(12.5).FontWeight(500).Shrink(0)
+			ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			name := ui.Text(c, op.name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 			if op.failed() {
 				name.TextColor(t.Danger)
 			}
 			if where := a.runWhere(first.Dir); where != "" {
-				ui.Text(c, where).FontSize(11.5).TextColor(t.TextMuted).SingleLine().Shrink(1)
+				ui.Text(c, where).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			}
 			ui.Spacer(c)
 			switch {
 			case op.running():
-				ui.Text(c, "进行中…").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, "进行中…").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			case op.canceled():
-				ui.Text(c, "已取消").FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, "已取消").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			case op.failed():
-				ui.Text(c, "失败").FontSize(11).TextColor(t.Danger).Shrink(0)
+				ui.Text(c, "失败").FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
 			default:
-				ui.Text(c, took(last.Start.Add(last.Took).Sub(first.Start))).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, took(last.Start.Add(last.Took).Sub(first.Start))).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 			}
 		})
 		for _, r := range op.runs {
@@ -428,7 +428,7 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 			}
 			// 操作的结果：和某条命令的报错一样时不再写一遍
 			if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
-				ui.Text(c, r.Err).FontSize(11.5).LineHeight(1.4).TextColor(t.Danger).Selectable()
+				ui.Text(c, r.Err).FontSize(fsSmall).LineHeight(1.4).TextColor(t.Danger).Selectable()
 			}
 		}
 	})
@@ -442,13 +442,13 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 	col := ui.Column(c.Key(r.ID)).Gap(2).Shrink(0).Selectable()
 	col.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			line := ui.Text(c, cmd).FontSize(11.5).Font(monoFont).Shrink(1)
+			line := ui.Text(c, cmd).FontSize(fsSmall).Font(monoFont).Shrink(1)
 			if r.Err != "" {
 				line.TextColor(t.Danger)
 			}
 			ui.Spacer(c)
 			if r.Done && r.Took >= 100*time.Millisecond {
-				ui.Text(c, took(r.Took)).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, took(r.Took)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 			}
 		})
 		out := r.Out
@@ -456,7 +456,7 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 			out = strings.TrimLeft(out+"\n"+r.Err, "\n")
 		}
 		if out != "" {
-			text := ui.Text(c, out).FontSize(11).Font(monoFont).LineHeight(1.4).Padding(0, 0, 0, 12)
+			text := ui.Text(c, out).FontSize(fsSmall).Font(monoFont).LineHeight(1.4).Padding(0, 0, 0, 12)
 			if r.Err != "" {
 				text.TextColor(t.Danger)
 			} else {

@@ -167,11 +167,11 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		for i, f := range cd.changes {
 			specs[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → 工作区"}
 		}
-		ui.Row(c).Height(36).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("工作区和 %s 有 %d 个文件不同", cd.other, len(cd.changes))).FontSize(12.5).FontWeight(500)
+		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, fmt.Sprintf("工作区和 %s 有 %d 个文件不同", cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium)
 		})
 		if len(cd.changes) == 0 {
-			ui.Text(c, "没有差别").FontSize(12).TextColor(t.TextMuted).Padding(8, 16)
+			ui.Text(c, "没有差别").FontSize(fsSmall).TextColor(t.TextMuted).Padding(8, 16)
 			return
 		}
 		selected, open := a.tabDiffs(w, v, specs)
@@ -220,7 +220,7 @@ func (a *app) compareGrip(c *ui.Context, total float32) {
 	if _, dy, held := grip.Dragged(); held && total > gripH {
 		room := total - gripH
 		// 每栏至少留出标题和一行提交
-		least := min(float32(38+logRowH+8)/room, 0.5)
+		least := min((sz(38)+logRowH()+8)/room, 0.5)
 		a.state.CompareSplit = min(max(a.compareSplit()+dy/room, least), 1-least)
 		a.resizingCompare = true
 	} else if a.resizingCompare && !held {
@@ -239,12 +239,12 @@ func (a *app) compareGrip(c *ui.Context, total float32) {
 func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	cd := d.comp
-	ui.Row(c).Height(40).Shrink(0).Padding(0, 10, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "比较").FontSize(12.5).TextColor(t.TextMuted)
+	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 10, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "比较").FontSize(fsBody).TextColor(t.TextMuted)
 		// 颜色和下面两栏对应
-		ui.Text(c, cd.other).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(laneColor(0)).SingleLine().Shrink(1)
-		ui.Text(c, "和").FontSize(12.5).TextColor(t.TextMuted)
-		ui.Text(c, cd.cur).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(laneColor(1)).SingleLine().Shrink(1)
+		ui.Text(c, cd.other).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(0)).SingleLine().Shrink(1)
+		ui.Text(c, "和").FontSize(fsBody).TextColor(t.TextMuted)
+		ui.Text(c, cd.cur).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(1)).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
@@ -269,20 +269,20 @@ func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui
 	t := c.Theme()
 	p := colors(t)
 	// 琥珀色只给"待处理"，这里用顶栏的底
-	ui.Row(c).Height(38).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
-		ui.Icon(c, iconBranch).FontSize(14).TextColor(lane).Shrink(0)
+	ui.Row(c).Height(sz(38)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
+		ui.Icon(c, iconBranch).FontSize(sz(14)).TextColor(lane).Shrink(0)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
-			ui.Text(c, "存在于").FontSize(12.5)
-			ui.Text(c, in).FontSize(12.5).Font(monoFont).FontWeight(500).TextColor(lane).SingleLine().Shrink(1)
-			ui.Text(c, "中但不存在于").FontSize(12.5)
-			ui.Text(c, notIn).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
-			ui.Text(c, "中的提交").FontSize(12.5)
+			ui.Text(c, "存在于").FontSize(fsBody)
+			ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(1)
+			ui.Text(c, "中但不存在于").FontSize(fsBody)
+			ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1)
+			ui.Text(c, "中的提交").FontSize(fsBody)
 		})
 		ui.Spacer(c)
-		ui.Text(c, fmt.Sprintf("%d 个", len(commits))).FontSize(12).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, fmt.Sprintf("%d 个", len(commits))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 	})
 	if len(commits) == 0 {
-		ui.Text(c, fmt.Sprintf("没有，%s 已经包含 %s 的全部提交", notIn, in)).FontSize(12).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, fmt.Sprintf("没有，%s 已经包含 %s 的全部提交", notIn, in)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	list.Key = func(i int) any { return commits[i].Hash }
@@ -298,7 +298,7 @@ func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui
 // first、last 决定线从哪画到哪，lane 是线和圆点的颜色。返回是否点了它。
 func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, lane ui.Color) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(ci.Hash)).Height(logRowH).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
+	row := ui.Row(c.Key(ci.Hash)).Height(logRowH()).Padding(0, 14, 0, 14).Gap(10).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
 	bg := ui.Transparent
 	switch {
 	case selected:
@@ -308,7 +308,7 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		ui.Box(c).Width(12).Height(logRowH).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+		ui.Box(c).Width(12).Height(logRowH()).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy := r.X+r.W/2, r.Y+r.H/2
 			top, bot := r.Y, r.Y+r.H
 			if first {
@@ -322,11 +322,11 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 			}
 			p.Fill(ui.Rect{X: cx - 4, Y: cy - 4, W: 8, H: 8}, lane, 4)
 		})
-		ui.Text(c, ci.Subject).FontSize(12.5).SingleLine().Shrink(1)
+		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().Shrink(1)
 		refChips(c, ci.Refs)
 		// 作者按名字本身的宽度紧挨着时间，不占固定的一列，标题多显示一些；时间列靠右对齐，作者也就右对齐
-		ui.Text(c, ci.Author).FontSize(11.5).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(ci.Time))
+		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
+		ui.Text(c, commitTime(ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(ci.Time))
 	})
 	return row.Clicked()
 }
@@ -364,17 +364,17 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	t := c.Theme()
 	ci := cv.info
 	ui.Column(c).Padding(12, 14, 8, 14).Gap(4).Shrink(0).Children(func() {
-		ui.Text(c, ci.Subject).FontSize(13).FontWeight(500).LineHeight(1.35).Selectable()
-		ui.Text(c, ci.Hash[:10]+"  "+ci.Author+"  "+ci.Time.Format("2006-01-02 15:04")).FontSize(11).Font(monoFont).TextColor(t.TextMuted).Selectable()
+		ui.Text(c, ci.Subject).FontSize(fsBody).FontWeight(fwMedium).LineHeight(1.35).Selectable()
+		ui.Text(c, ci.Hash[:10]+"  "+ci.Author+"  "+ci.Time.Format("2006-01-02 15:04")).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Selectable()
 		if ci.Refs != "" {
-			ui.Text(c, ci.Refs).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			ui.Text(c, ci.Refs).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 		}
 	})
 	switch {
 	case cv.err != "":
-		ui.Text(c, cv.err).FontSize(12).TextColor(t.Danger).Padding(6, 14)
+		ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 14)
 	case cv.files == nil:
-		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 14)
 	default:
 		selected, open := a.tabDiffs(w, v, commitSpecs(ci, cv.files))
 		a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, open)
@@ -403,7 +403,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 	list.Key = func(i int) any { return rows[i].path }
 	ui.List(c, list, len(rows), func(i int) {
 		r := rows[i]
-		row := ui.Row(c.Key(r.path)).Height(26).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*18).Gap(6).Radius(6).AlignItems(ui.Center)
+		row := ui.Row(c.Key(r.path)).Height(sz(26)).Margin(0, 6).Padding(0, 8, 0, 4+float32(r.depth)*18).Gap(6).Radius(6).AlignItems(ui.Center)
 		if r.dir {
 			row.Role(ui.RoleButton).Label(r.path)
 			row.Children(func() {
@@ -413,12 +413,12 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 					turn = 0
 				}
 				ui.Box(c).Size(20, 20).Center().Shrink(0).Children(func() {
-					chev := ui.Icon(c, iconChevron).FontSize(12).TextColor(t.TextMuted)
+					chev := ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(t.TextMuted)
 					chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
 				})
-				ui.Icon(c, iconFolder).FontSize(15).TextColor(t.Accent).Shrink(0)
-				ui.Text(c, r.name).FontSize(12.5).SingleLine().Shrink(1).Tooltip(r.path)
-				ui.Text(c, fmt.Sprint(len(r.files))).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconFolder).FontSize(sz(15)).TextColor(t.Accent).Shrink(0)
+				ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(r.path)
+				ui.Text(c, fmt.Sprint(len(r.files))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			if row.Clicked() {
 				(*folded)[r.path] = !(*folded)[r.path]
@@ -438,8 +438,8 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 		row.Children(func() {
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
 			ui.Box(c).Width(20).Shrink(0)
-			ui.Text(c, string(f.Status)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
-			name := ui.Text(c, r.name).FontSize(12.5).SingleLine().Shrink(1).Tooltip(f.Path)
+			ui.Text(c, string(f.Status)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
+			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
 			}
@@ -542,23 +542,23 @@ func (a *app) pushDialog(c *ui.Context) {
 					plan := ps.plan
 					switch {
 					case !ps.loaded:
-						ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(4)
+						ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
 						return
 					case ps.err != "":
-						ui.Text(c, ps.err).FontSize(12).TextColor(t.Danger).Padding(4).LineHeight(1.4)
+						ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4).LineHeight(1.4)
 						return
 					}
 					ui.Row(c).Gap(6).Padding(2, 4, 8, 4).Children(func() {
-						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(12.5).Font(monoFont).FontWeight(500).SingleLine().Shrink(1)
+						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1)
 						if plan.NewBranch {
-							ui.Text(c, "新分支").FontSize(11).TextColor(colors(t).sage).Shrink(0)
+							ui.Text(c, "新分支").FontSize(fsSmall).TextColor(colors(t).sage).Shrink(0)
 						}
 					})
 					if plan.Gone {
-						ui.Text(c, "跟踪的远端分支已经被删了，推送会在 "+plan.Remote+" 上重新建出 "+plan.RemoteBranch+"").FontSize(11.5).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
+						ui.Text(c, "跟踪的远端分支已经被删了，推送会在 "+plan.Remote+" 上重新建出 "+plan.RemoteBranch+"").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
 					}
 					if len(plan.Commits) == 0 {
-						ui.Text(c, "没有要推送的提交").FontSize(12).TextColor(t.TextMuted).Padding(4)
+						ui.Text(c, "没有要推送的提交").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
 						return
 					}
 					ui.Scroll(c).Grow(1).Children(func() {
@@ -582,19 +582,19 @@ func (a *app) pushDialog(c *ui.Context) {
 				}
 				files.Children(func() {
 					if ps.commit == nil {
-						ui.Text(c, "选一个提交看它改的文件").FontSize(12).TextColor(t.TextMuted).Padding(12, 14)
+						ui.Text(c, "选一个提交看它改的文件").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 14)
 						return
 					}
 					cv := ps.commit
 					ui.Column(c).Padding(4, 14, 6, 14).Gap(4).Shrink(0).Children(func() {
-						ui.Text(c, cv.info.Subject).FontSize(13).FontWeight(500)
-						ui.Text(c, cv.info.Hash[:10]+"  "+cv.info.Author).FontSize(11).Font(monoFont).TextColor(t.TextMuted)
+						ui.Text(c, cv.info.Subject).FontSize(fsBody).FontWeight(fwMedium)
+						ui.Text(c, cv.info.Hash[:10]+"  "+cv.info.Author).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 					})
 					switch {
 					case cv.err != "":
-						ui.Text(c, cv.err).FontSize(12).TextColor(t.Danger).Padding(6, 14)
+						ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 14)
 					case cv.files == nil:
-						ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(6, 14)
+						ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 14)
 					default:
 						selected := func(i int) bool { return ps.detail != nil && ps.detail.diff.rel == cv.files[i].Path }
 						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) })
@@ -689,18 +689,18 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 		a.pushStep(v, ps, -1)
 	}
 	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rInput).Background(colors(t).fill).Clip().Children(func() {
-		ui.Row(c).Height(36).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
 			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
 				a.pushStep(v, ps, -1)
 			}
 			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 28, 17)).Clicked() {
 				a.pushStep(v, ps, 1)
 			}
-			ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)
+			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)
 			if d.kind == docDiff {
 				if n := len(df.state.Hunks()); n > 0 {
 					added, deleted := df.state.Stats()
-					ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 				}
 			}
 			ui.Spacer(c)
@@ -727,13 +727,13 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 		ui.Box(c).Height(1).Shrink(0).Background(colors(t).line)
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			muted := func(msg string) {
-				ui.Text(c, msg).FontSize(12.5).TextColor(t.TextMuted).Padding(16)
+				ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted).Padding(16)
 			}
 			switch d.kind {
 			case docLoading:
 				muted(diffLoadingText(df))
 			case docError:
-				ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
+				ui.Text(c, d.err).FontSize(fsBody).TextColor(t.Danger).Padding(16)
 			case docImageDiff:
 				imageDiffView(c, d)
 			case docBinary:

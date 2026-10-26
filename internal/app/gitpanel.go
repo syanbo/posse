@@ -20,17 +20,17 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	g := &v.git
 	switch {
 	case !g.checked:
-		ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	case g.repo == "":
-		ui.Text(c, "这个工作区不是 git 仓库").FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "这个工作区不是 git 仓库").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	case g.status == nil:
 		msg := "正在读取…"
 		if g.err != "" {
 			msg = g.err
 		}
-		ui.Text(c, msg).FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		return
 	}
 	a.changesHeader(c, w, v)
@@ -57,7 +57,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if len(rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
-			ui.Text(c, empty).FontSize(12).TextColor(t.TextMuted).Padding(12, 18)
+			ui.Text(c, empty).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
 		})
 	} else {
 		list.Key = func(i int) any {
@@ -134,7 +134,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
 	t := c.Theme()
 	active := *sel == i
-	row := ui.Row(c.Key(label)).Height(26).Padding(0, 10).Gap(5).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key(label)).Height(sz(26)).Padding(0, 10).Gap(5).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleTab).Label(label).Checked(active)
 	bg := ui.Transparent
 	switch {
@@ -145,14 +145,14 @@ func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		text := ui.Text(c, label).FontSize(12.5)
+		text := ui.Text(c, label).FontSize(fsBody)
 		if active {
-			text.FontWeight(500)
+			text.FontWeight(fwMedium)
 		} else {
 			text.TextColor(t.TextMuted)
 		}
 		if n > 0 {
-			ui.Text(c, strconv.Itoa(n)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted)
+			ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		}
 	})
 	if row.Clicked() {
@@ -165,13 +165,13 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	g := &v.git
 	st := g.status
-	ui.Row(c).Height(30).Shrink(0).Padding(0, 6, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		head := st.Head
 		if head == "" {
 			head = "分离的 HEAD"
 		}
-		ui.Icon(c, iconBranch).FontSize(13).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, head).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, head).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, st.Ahead, st.Behind, true)
 		ui.Spacer(c)
 		if g.busy != "" {
@@ -228,7 +228,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	g := &v.git
 	if r.header {
 		open := g.groupOpen(r.group)
-		head := ui.Row(c).Height(26).Padding(6, 16, 0, 10).Gap(6).AlignItems(ui.Center)
+		head := ui.Row(c).Height(sz(26)).Padding(6, 16, 0, 10).Gap(6).AlignItems(ui.Center)
 		head.Children(func() {
 			// 箭头在最左边，点它或组名展开收起
 			disclosure(c, open, "展开"+groupTitles[r.group])
@@ -259,8 +259,8 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group])
 			title.Children(func() {
-				ui.Text(c, groupTitles[r.group]).FontSize(11).FontWeight(500).TextColor(t.TextMuted)
-				ui.Text(c, fmt.Sprint(r.count)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+				ui.Text(c, groupTitles[r.group]).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+				ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			})
 			if title.Clicked() {
 				*open = !*open
@@ -276,7 +276,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
 	// 比组标题缩进一层：勾选框和组名的文字对齐
-	row := ui.Row(c.Key(key)).Height(28).Margin(0, 6).Padding(0, 8, 0, 50).Gap(6).Radius(6).
+	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 50).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
@@ -291,21 +291,21 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 				g.setPicked(e, state != pickAll)
 			}
 		}
-		ui.Text(c, string(letter)).FontSize(11).Font(monoFont).FontWeight(500).TextColor(color).Width(10).Shrink(0)
+		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
 		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
 		if dir := filepath.Dir(e.Path); dir != "." {
-			ui.Text(c, dir).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 		ui.Spacer(c)
 		if s, ok := g.head[e.Path]; ok && !s.Binary && r.group != groupUntracked {
 			if s.Added > 0 {
-				ui.Text(c, fmt.Sprintf("+%d", s.Added)).FontSize(11).FontFeatures("tnum").TextColor(p.sage).Shrink(0)
+				ui.Text(c, fmt.Sprintf("+%d", s.Added)).FontSize(fsSmall).FontFeatures("tnum").TextColor(p.sage).Shrink(0)
 			}
 			if s.Deleted > 0 {
-				ui.Text(c, fmt.Sprintf("−%d", s.Deleted)).FontSize(11).FontFeatures("tnum").TextColor(t.Danger).Shrink(0)
+				ui.Text(c, fmt.Sprintf("−%d", s.Deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.Danger).Shrink(0)
 			}
 		}
 	})
@@ -370,16 +370,16 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
 		other = s.Branch
 	}
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(28).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
+	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
-		ui.Icon(c, iconShelve).FontSize(14).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, stashTitle(s.Message)).FontSize(13).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
+		ui.Icon(c, iconShelve).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, stashTitle(s.Message)).FontSize(fsBody).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
 		if other != "" {
-			ui.Text(c, other).FontSize(11).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip("在分支 " + other + " 上存的")
+			ui.Text(c, other).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip("在分支 " + other + " 上存的")
 		}
-		ui.Text(c, ago(s.When)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, ago(s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	owner := a.stashOwner(v, other)
 	take := func(what string, fn func(ctx context.Context, root string) error) {
@@ -461,7 +461,7 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 		msg = fmt.Sprintf("正在%s，有 %d 个文件冲突。解决后点继续：右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决。", opNames[op], conflicts)
 	}
 	ui.Column(c).Shrink(0).Margin(2, 10, 8, 10).Padding(10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
-		ui.Text(c, msg).FontSize(12).LineHeight(1.45)
+		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
 		ui.Row(c).Gap(6).Children(func() {
 			cont := pressable(accentButton(c, "继续"))
 			if conflicts > 0 {
@@ -513,7 +513,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	}
 	ui.Box(c).Height(1).Shrink(0).Background(p.line)
 	ui.Column(c).Shrink(0).Padding(10).Gap(8).Children(func() {
-		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(12.5)
+		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(fsBody)
 		if g.focusMsg {
 			msg.Focus()
 			g.focusMsg = false
@@ -555,7 +555,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			if btn.Hovered() {
 				btn.Background(colors(t).wash)
 			}
-			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(17).TextColor(t.Text.Alpha(0.75)) })
+			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(sz(17)).TextColor(t.Text.Alpha(0.75)) })
 			if btn.Clicked() {
 				a.revertHunk(v, d, act.Index)
 			}
@@ -566,8 +566,8 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			t := c.Theme()
 			bar.Row().Gap(4)
 			bar.Children(func() {
-				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(20).Radius(5).Background(t.Surface).Border(1, t.Border).Label("回滚这处改动")
-				btn.Children(func() { ui.Text(c, "回滚").FontSize(11) })
+				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(5).Background(t.Surface).Border(1, t.Border).Label("回滚这处改动")
+				btn.Children(func() { ui.Text(c, "回滚").FontSize(fsSmall) })
 				if btn.Clicked() {
 					a.revertHunk(v, d, act.Index)
 				}
@@ -604,7 +604,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 	sep.Children(func() {
 		ui.Row(c).Grow(1).AlignSelf(ui.Stretch).AlignItems(ui.Center).Gap(2).Padding(0, 6).Radius(6).Background(colors(t).wash).Children(func() {
 			if s.Lines == 0 {
-				ui.Text(c, s.Header).Font(monoFont).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+				ui.Text(c, s.Header).Font(monoFont).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				return
 			}
 			if !s.First && pressable(iconButtonSized(c.Key("down"), iconDown, "向下展开", 20, 12)).Clicked() {
@@ -614,7 +614,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 				s.ExpandUp()
 			}
 			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(4).Role(ui.RoleButton).Label("全部展开")
-			b.Children(func() { ui.Text(c, fmt.Sprintf("%d 行未改动", s.Lines)).FontSize(11.5).TextColor(t.TextMuted) })
+			b.Children(func() { ui.Text(c, fmt.Sprintf("%d 行未改动", s.Lines)).FontSize(fsSmall).TextColor(t.TextMuted) })
 			if b.Clicked() {
 				s.ExpandAll()
 			}
@@ -626,7 +626,7 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	df := d.diff
-	ui.Row(c).Height(36).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 		// 上一处、下一处放在最左边（照 WebStorm 的 diff 工具栏），到头了换到同一组的上一个、下一个文件
 		if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 30, 19)).Clicked() {
 			a.stepDiff(w, v, d, -1)
@@ -642,9 +642,9 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			path.Background(t.SurfaceHover)
 		}
 		path.Children(func() {
-			ui.Text(c, df.rel).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			if len(group) > 1 {
-				ui.Icon(c, iconDown).FontSize(11).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconDown).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
 			}
 		})
 		if len(group) > 1 {
@@ -661,7 +661,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			})
 		}
 		if label := df.tabLabel(); label != "改动" {
-			ui.Text(c, label).FontSize(11).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
+			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
@@ -673,7 +673,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			if n > 0 {
 				msg = fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)
 			}
-			ui.Text(c, msg).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).Padding(0, 0, 0, 8)
+			ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).Padding(0, 0, 0, 8)
 		}
 		ui.Spacer(c)
 		// 排版和忽略空白只对文字的 diff 有用
@@ -786,21 +786,21 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 			}
 			ui.Column(c.Key(fmt.Sprint("img-", i))).Grow(1).Shrink(1).Basis(0).Padding(12, 16).Gap(10).Children(func() {
 				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, label).FontSize(12.5).FontWeight(500)
+					ui.Text(c, label).FontSize(fsBody).FontWeight(fwMedium)
 					switch {
 					case side.size < 0 && i == 0:
-						ui.Text(c, "新文件").FontSize(11.5).TextColor(colors(t).sage)
+						ui.Text(c, "新文件").FontSize(fsSmall).TextColor(colors(t).sage)
 					case side.size < 0:
-						ui.Text(c, "已删除").FontSize(11.5).TextColor(t.Danger)
+						ui.Text(c, "已删除").FontSize(fsSmall).TextColor(t.Danger)
 					case side.img != nil:
-						ui.Text(c, fmt.Sprintf("%d×%d", side.w, side.h)).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted)
-						ui.Text(c, byteSize(side.size)).FontSize(11.5).FontFeatures("tnum").TextColor(t.TextMuted)
+						ui.Text(c, fmt.Sprintf("%d×%d", side.w, side.h)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
+						ui.Text(c, byteSize(side.size)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 					}
 				})
 				ui.Box(c).Grow(1).Center().Children(func() {
 					switch {
 					case side.err != "":
-						ui.Text(c, side.err).FontSize(12).TextColor(t.TextMuted)
+						ui.Text(c, side.err).FontSize(fsSmall).TextColor(t.TextMuted)
 					case side.img != nil:
 						// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
 						w, h := side.img.Size()

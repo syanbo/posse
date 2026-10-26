@@ -1,7 +1,9 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +24,9 @@ import (
 //     状态靠形状区分而不只靠颜色：工作中是星号（减少动态效果时是实心蜂巢格），停下来是空心蜂巢格。
 //   - 每个 agent 有自己的色块图标，扫一眼就知道是谁。
 //   - 路径、分支、命令用等宽字体和次要色。一行里的几项信息靠间距和图标分开，不用"A · B"中点串。
-//   - 字号和圆角用下面的常量；字重三档：400 正文、500 列表标题和按钮、600 给标题、"待处理""已完成"和加重的文字。
+//   - 字号只用四档（fsSmall、fsBody、fsTitle、fsPage，等宽字另有 fsCode），字重三档（fwBody 正文、fwMedium 列表标题和按钮、
+//     fwBold 标题、"待处理""已完成"和加重的文字），都跟着设置里的界面字号、字重变；不写数字。次要的信息先换次要色，
+//     不靠再小半号。圆角用下面的常量。
 //   - 悬停和按下即时反馈（≤120ms 缓出，按下缩放 0.98）。自动播放的动画只用来表示状态：工作中的星号、
 //     等待任务的波形（waitingPulse）、未读的铃铛（unread.go）、终端启动前的加载动画（posseLoader），
 //     系统设了减少动态效果时都停下。
@@ -48,15 +52,39 @@ var iconSizes = []struct {
 func smallIcon() float32 { return iconSize - 2 }
 func buttonBox() float32 { return iconSize + 12 }
 
-// 字号阶梯（pt）。
-const (
-	fsCaption   = 11   // 说明、计数、快捷键
-	fsMeta      = 12   // 元信息：路径、时间、作者
-	fsBody      = 14   // 正文、列表
-	fsRead      = 14.5 // 阅读：Markdown 回复
-	fsCardTitle = 15
-	fsPageTitle = 18
+// 界面的字号和字重（设置 › 外观，ui.json 的 uiFontSize、uiWeight、uiBoldWeight），由 setUIType 从正文字号和
+// 正文、粗体字重推出：字号相邻两档差 2，差得太少看不出层级；fwMedium 取正文和粗体中间。
+// 和 iconSize 一样只在界面线程读写。
+var (
+	fsSmall float32 // 说明、计数、快捷键、路径、时间；正文里的等宽字也用它，等宽字自身显大
+	fsBody  float32 // 正文、列表、按钮、输入框
+	fsTitle float32 // 卡片、对话框标题
+	fsPage  float32 // 页面标题、空状态
+	fsCode  float32 // 作为一行主要内容的等宽字（分支名、版本号）：比正文小一号看起来才一样大
+
+	fwBody, fwMedium, fwBold int
 )
+
+const (
+	defaultUIFontSize = 14
+	minUIFontSize     = 12
+	maxUIFontSize     = 18
+	// rowBase 是行高、按钮高这些尺寸当初对着调的正文字号，sz 照它按比例放大缩小。
+	rowBase = 13
+)
+
+func init() { setUIType(defaultUIFontSize, 0, 0) }
+
+// setUIType 换界面的字号和字重；weight、bold 为 0 时用默认（同 weightsOf）。
+func setUIType(size float32, weight, bold int) {
+	fsBody = min(max(cmp.Or(size, defaultUIFontSize), minUIFontSize), maxUIFontSize)
+	fsSmall, fsCode, fsTitle, fsPage = fsBody-2, fsBody-1, fsBody+2, fsBody+4
+	fwBody, fwBold = weightsOf(weight, bold)
+	fwMedium = int(math.Round(float64(fwBody+fwBold)/200)) * 100
+}
+
+// sz 是跟着界面字号缩放的尺寸：行、按钮、输入框的高度和文字旁的小图标写成 sz(26)，默认字号下比原来大一点，配得上大一号的字。
+func sz(v float32) float32 { return float32(math.Round(float64(v * fsBody / rowBase))) }
 
 // 圆角按角色分级：外圆角 = 内圆角 + 内边距。
 const (
@@ -112,7 +140,7 @@ func posseTheme(dark bool) *ui.Theme {
 		i = 1
 	}
 	if t := posseThemes[i]; t != nil {
-		t.FlatText = !uiSmooth
+		t.FlatText, t.FontSize, t.FontWeight = !uiSmooth, fsBody, fwBody
 		return t
 	}
 	var t *ui.Theme
@@ -136,7 +164,7 @@ func posseTheme(dark bool) *ui.Theme {
 	t.Radius = 8
 	// 照 Orca：能点的地方是手形指针，拖动中是抓握的手
 	t.PointerCursor = true
-	t.FlatText = !uiSmooth
+	t.FlatText, t.FontSize, t.FontWeight = !uiSmooth, fsBody, fwBody
 	posseThemes[i] = t
 	return t
 }
@@ -182,7 +210,7 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 // fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
 func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
 	t := c.Theme()
-	box := ui.Row(c).Height(30).Padding(0, 10).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
+	box := ui.Row(c).Height(sz(30)).Padding(0, 10).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
 	if width > 0 {
 		box.Width(width)
 		if minWidth < width {
@@ -193,7 +221,7 @@ func fieldInputSized(c *ui.Context, value *string, placeholder string, width, mi
 	}
 	var in ui.Element
 	box.Children(func() {
-		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Grow(1)
+		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Grow(1)
 	})
 	// 边框算在高度里。聚焦才加上时框会高 2px，包着它的对话框跟着居中，整块跳一下。
 	fieldBorder(box, in.Focused(), colors(t).fill, t.Focus)
@@ -206,7 +234,7 @@ func fieldArea(c *ui.Context, value *string, placeholder string, height float32)
 	box := ui.Column(c).Padding(7, 10).Radius(rInput).Background(colors(t).fill)
 	var in ui.Element
 	box.Children(func() {
-		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(13).Height(height)
+		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Height(height)
 	})
 	fieldBorder(box, in.Focused(), colors(t).fill, t.Focus)
 	return in
@@ -243,7 +271,7 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 	var in ui.Element
 	box.Children(func() {
 		if multiline {
-			in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).Height(64).FontSize(fsBody)
+			in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).Height(sz(64)).FontSize(fsBody)
 		} else {
 			in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Padding(4, 0)
 			sent = in.Submitted()
@@ -282,12 +310,12 @@ func fieldBorder(box ui.Element, focused bool, fill, focus ui.Color) {
 
 // pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
 func pendingLabel(c *ui.Context) ui.Element {
-	return ui.Text(c, "待处理").FontSize(11).FontWeight(600).TextColor(colors(c.Theme()).honey)
+	return ui.Text(c, "待处理").FontSize(fsSmall).FontWeight(fwBold).TextColor(colors(c.Theme()).honey)
 }
 
 // doneLabel 是"已完成"三个字，和"待处理"一样是要你看一眼的状态，用强调色。
 func doneLabel(c *ui.Context) ui.Element {
-	return ui.Text(c, "已完成").FontSize(11).FontWeight(600).TextColor(c.Theme().Accent)
+	return ui.Text(c, "已完成").FontSize(fsSmall).FontWeight(fwBold).TextColor(c.Theme().Accent)
 }
 
 // isWorktree 报告工作区是不是 git worktree：posse 建的（worktree），或者从别处加进来的（attach 记成 folder，
@@ -358,12 +386,12 @@ func emptyCard(c *ui.Context) ui.Element {
 
 // titleText 是页面、对话框和卡片的标题，用 600 的字重。
 func titleText(c *ui.Context, text string, size float32) ui.Element {
-	return ui.Text(c, text).FontSize(size).FontWeight(600)
+	return ui.Text(c, text).FontSize(size).FontWeight(fwBold)
 }
 
 // cardTitle 是卡片里一节的标题。
 func cardTitle(c *ui.Context, title string) ui.Element {
-	return titleText(c, title, 13)
+	return titleText(c, title, fsBody)
 }
 
 // band 是主区域顶上的一条栏：页面标题和操作，可以拖动窗口。
@@ -426,7 +454,7 @@ const cjkLift = 1
 // textButton 是次级按钮：无边框的填充底。它常放在卡片、对话框这些有框的容器里，再加框就是框里套框。
 func textButton(c *ui.Context, label string) ui.Element {
 	t := c.Theme()
-	b := ui.ButtonBase(c).Height(28).Padding(0, 12).Radius(rButton).Label(label).Shrink(0)
+	b := ui.ButtonBase(c).Height(sz(28)).Padding(0, 12).Radius(rButton).Label(label).Shrink(0)
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = ui.RGBA(0, 0, 0, 0.1)
@@ -436,7 +464,7 @@ func textButton(c *ui.Context, label string) ui.Element {
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Text(c, label).FontSize(13).FontWeight(500).Margin(0, 0, 2*cjkLift, 0).SingleLine()
+		ui.Text(c, label).FontSize(fsBody).FontWeight(fwMedium).Margin(0, 0, 2*cjkLift, 0).SingleLine()
 	})
 	return b
 }
@@ -466,18 +494,18 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 		for i, o := range options {
 			// 被拉宽时（对话框里）各段平分多出来的宽度；Grow 会把起始宽度设成 0，
 			// 字长的一段（"只建工作区"）要按字宽给够，不然被截成省略号
-			tw, _ := c.MeasureText(0, ui.Span{Text: o, Size: 12})
+			tw, _ := c.MeasureText(0, ui.Span{Text: o, Size: fsSmall})
 			n := 0
 			if i < len(badges) {
 				n = badges[i]
 			}
 			name := o
 			if n > 0 {
-				bw, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprint(n), Size: 10.5})
+				bw, _ := c.MeasureText(0, ui.Span{Text: fmt.Sprint(n), Size: fsSmall})
 				tw += max(bw+10, 16) + 5
 				name = fmt.Sprintf("%s %d", o, n)
 			}
-			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(24).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
+			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(sz(24)).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(6).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
@@ -489,14 +517,14 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 			seg.Background(seg.AnimateColor("bg", bg, hover))
 			seg.Children(func() {
 				ui.Row(c).AlignItems(ui.Center).Children(func() {
-					text := ui.Text(c, o).FontSize(12).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0).SingleLine()
+					text := ui.Text(c, o).FontSize(fsSmall).TextColor(fg).Margin(0, 0, 2*cjkLift, 0).Shrink(0).SingleLine()
 					if i == *sel {
-						text.FontWeight(500)
+						text.FontWeight(fwMedium)
 					}
 					if n > 0 {
 						ui.Box(c).Height(16).MinWidth(16).Padding(0, 5).Margin(0, 0, 0, 5).Radius(8).Center().Shrink(0).
 							Background(t.Accent.Alpha(0.18)).Children(func() {
-							ui.Text(c, fmt.Sprint(n)).FontSize(10.5).FontWeight(500).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
+							ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontWeight(fwMedium).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
 						})
 					}
 				})
@@ -523,7 +551,7 @@ func metaRow(c *ui.Context, items ...func()) {
 // meta 是 metaRow 里的一段文字。
 func meta(c *ui.Context, text string) func() {
 	return func() {
-		ui.Text(c, text).FontSize(12).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0)
+		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0)
 	}
 }
 
@@ -533,9 +561,9 @@ func metaMono(c *ui.Context, icon *ui.SVG, text, tip string) func() {
 		t := c.Theme()
 		ui.Row(c).Gap(4).Shrink(1).Children(func() {
 			if icon != nil {
-				ui.Icon(c, icon).FontSize(13).TextColor(t.TextMuted)
+				ui.Icon(c, icon).FontSize(sz(13)).TextColor(t.TextMuted)
 			}
-			e := ui.Text(c, text).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
+			e := ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			if tip != "" {
 				e.Tooltip(tip)
 			}

@@ -448,8 +448,8 @@ func (a *app) tooLargeDiffView(c *ui.Context, v *filesView, d *fileDoc) {
 		return byteSize(df.sizes[i]) + " · " + thousands(df.lines[i]) + " 行"
 	}
 	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Padding(16).Children(func() {
-		ui.Text(c, fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)).FontSize(13).TextColor(t.TextMuted)
-		ui.Text(c, "改之前 "+side(0)+"，改之后 "+side(1)).FontSize(12).TextColor(t.TextMuted).FontFeatures("tnum")
+		ui.Text(c, fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)).FontSize(fsBody).TextColor(t.TextMuted)
+		ui.Text(c, "改之前 "+side(0)+"，改之后 "+side(1)).FontSize(fsSmall).TextColor(t.TextMuted).FontFeatures("tnum")
 		if pressable(textButton(c, "仍要比较")).Clicked() {
 			df.force = true
 			d.kind = docLoading
@@ -693,7 +693,7 @@ func fadeHint(c *ui.Context, key, hint string, at time.Time, top float32) {
 	}
 	t := c.Theme()
 	ui.Row(c.Key(key)).Absolute().Top(top).Left(0).Right(0).Justify(ui.Center).Children(func() {
-		ui.Text(c, hint).FontSize(12.5).TextColor(t.Background).Background(t.Text).Padding(7, 14).Radius(8).
+		ui.Text(c, hint).FontSize(fsBody).TextColor(t.Background).Background(t.Text).Padding(7, 14).Radius(8).
 			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.25)).Opacity(opacity)
 	})
 }
@@ -789,9 +789,9 @@ func (g *gitState) pending(what string) bool {
 func busyLine(c *ui.Context, g *gitState) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(1).Children(func() {
-		ui.Text(c, g.busyText()).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, g.busyText()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		if g.cancel != nil {
-			if ui.Text(c.Key("cancel-git"), "取消").FontSize(11).TextColor(t.Accent).Role(ui.RoleButton).Label("取消 " + g.busy).Clicked() {
+			if ui.Text(c.Key("cancel-git"), "取消").FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Label("取消 " + g.busy).Clicked() {
 				g.cancel()
 			}
 		}

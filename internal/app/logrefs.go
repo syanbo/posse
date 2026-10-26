@@ -22,7 +22,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	if ld.refsOpen == nil {
 		ld.refsOpen = map[string]bool{"local": true}
 	}
-	ui.Box(c).Height(40).Shrink(0).Padding(0, 8).Center().Children(func() {
+	ui.Box(c).Height(sz(40)).Shrink(0).Padding(0, 8).Center().Children(func() {
 		fieldInput(c, &ld.refQuery, "筛选分支和标签")
 	})
 	query := strings.ToLower(strings.TrimSpace(ld.refQuery))
@@ -138,7 +138,7 @@ func refMark(b gitx.Branch) func(c *ui.Context) {
 		return nil
 	}
 	return func(c *ui.Context) {
-		ui.Text(c, "当前").FontSize(10.5).TextColor(c.Theme().TextMuted).Shrink(0)
+		ui.Text(c, "当前").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
 	}
 }
 
@@ -149,7 +149,7 @@ func (a *app) refGroup(c *ui.Context, ld *logDoc, key, label string, n int, open
 // refGroupAt 是可以展开的一组；n 是组里有几项，-1 不显示。返回是否展开。
 func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, open bool, indent int) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key("g:"+key)).Height(26).Padding(0, 8, 0, 4+float32(indent)*14).Gap(4).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key("g:"+key)).Height(sz(26)).Padding(0, 8, 0, 4+float32(indent)*14).Gap(4).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(label)
 	selectedBg(c, row, false)
 	row.Children(func() {
@@ -157,10 +157,10 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 		if open {
 			chevron = iconDown
 		}
-		ui.Icon(c, chevron).FontSize(12).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, label).FontSize(12.5).SingleLine().Shrink(1)
+		ui.Icon(c, chevron).FontSize(sz(12)).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, label).FontSize(fsBody).SingleLine().Shrink(1)
 		if n >= 0 {
-			ui.Text(c, strconv.Itoa(n)).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		}
 	})
 	if row.Clicked() {
@@ -171,11 +171,11 @@ func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, op
 
 // refRow 是一个分支或标签，返回这一帧是否点了它；name 是读屏念的名字，带上种类免得和别处同名。
 func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) (clicked, add bool) {
-	row := ui.Row(c.Key(key)).Height(26).Padding(0, 8, 0, 20+float32(indent)*14).Gap(6).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(sz(26)).Padding(0, 8, 0, 20+float32(indent)*14).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(name).Tooltip(label)
 	selectedBg(c, row, selected)
 	row.Children(func() {
-		ui.Text(c, label).FontSize(12.5).Font(monoFont).SingleLine().Shrink(1).Grow(1)
+		ui.Text(c, label).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).Grow(1)
 		if trailing != nil {
 			trailing(c)
 		}

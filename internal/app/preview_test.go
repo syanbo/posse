@@ -464,6 +464,17 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "icons-large-"+suffix+".png")
 		iconSize = defaultIconSize
 
+		// 界面字号调到最小、最大，字重调重：各档跟着变，行不挤
+		for _, ty := range []struct {
+			name         string
+			size         float32
+			weight, bold int
+		}{{"ui-small", minUIFontSize, 0, 0}, {"ui-large", maxUIFontSize, 0, 0}, {"ui-heavy", 0, 500, 700}} {
+			setUIType(ty.size, ty.weight, ty.bold)
+			savePNG(t, newPreviewTester(previewApp(t), dark), ty.name+"-"+suffix+".png")
+		}
+		setUIType(0, 0, 0)
+
 		// 窗口缩到最小
 		a = previewApp(t)
 		tt := newPreviewTester(a, dark)

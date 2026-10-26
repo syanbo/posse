@@ -37,7 +37,7 @@ var settingsTabs = []struct {
 func (a *app) settingsBoard(c *ui.Context) {
 	t := c.Theme()
 	a.band(c, func() {
-		titleText(c, "设置", fsCardTitle)
+		titleText(c, "设置", fsTitle)
 		ui.Spacer(c)
 		a.closeBoardButton(c)
 	})
@@ -82,7 +82,7 @@ func settingsCard(c *ui.Context, title, note string, body func()) {
 		ui.Column(c).Gap(4).Children(func() {
 			cardTitle(c, title)
 			if note != "" {
-				ui.Text(c, note).FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
+				ui.Text(c, note).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			}
 		})
 		body()
@@ -92,7 +92,7 @@ func settingsCard(c *ui.Context, title, note string, body func()) {
 // settingsRow 是左边名称、右边控件的一行。
 func settingsRow(c *ui.Context, label string, right func()) {
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(13).Grow(1).Shrink(1)
+		ui.Text(c, label).FontSize(fsBody).Grow(1).Shrink(1)
 		right()
 	})
 }
@@ -101,7 +101,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 	st := a.daemon.Awake
 	settingsCard(c, "防休眠", "Posse 运行时不让电脑休眠，屏幕照常熄灭；底栏的咖啡杯也能切换。「运行时亮屏」让屏幕也不熄：屏幕熄了会跟着锁屏。", func() {
 		if st == nil {
-			ui.Text(c, "更新常驻进程后可用。").FontSize(13).TextColor(c.Theme().TextMuted)
+			ui.Text(c, "更新常驻进程后可用。").FontSize(fsBody).TextColor(c.Theme().TextMuted)
 			return
 		}
 		sel := 0
@@ -115,7 +115,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 		if segmented(c, &sel, "防休眠", labels...) {
 			a.setAwake(awakeModes[sel].mode)
 		}
-		ui.Text(c, awakeTip(st)).FontSize(12).TextColor(c.Theme().TextMuted)
+		ui.Text(c, awakeTip(st)).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
 	})
 }
 
@@ -137,7 +137,7 @@ func (a *app) permissionSettings(c *ui.Context) {
 		if segmented(c, &sel, "Agent 权限", labels...) {
 			a.setPermission(permissionModes[sel].mode)
 		}
-		ui.Text(c, permissionModes[sel].tip).FontSize(12).TextColor(c.Theme().TextMuted).LineHeight(1.5)
+		ui.Text(c, permissionModes[sel].tip).FontSize(fsSmall).TextColor(c.Theme().TextMuted).LineHeight(1.5)
 	})
 }
 
@@ -151,9 +151,34 @@ func (a *app) setPermission(mode string) {
 	a.permission = mode
 }
 
-// interfaceSettings 是界面的图标大小：图标按钮、侧栏和标签页里的图标一起换档。
+// interfaceSettings 是界面的字号、字重、字体平滑和图标大小。
 func (a *app) interfaceSettings(c *ui.Context) {
-	settingsCard(c, "界面", "", func() {
+	settingsCard(c, "界面", "字号是正文的大小：说明文字小 2 号，卡片标题大 2 号，页面标题大 4 号，行高跟着变。粗体字重用在标题上，列表标题和按钮取正文和粗体中间的字重。", func() {
+		setType := func(f func(s *uiState)) {
+			f(&a.state)
+			setUIType(a.state.UIFontSize, a.state.UIWeight, a.state.UIBoldWeight)
+			a.saveState()
+		}
+		settingsRow(c, "字号", func() {
+			fontSizeStepper(c, fsBody, defaultUIFontSize, func(size float32) {
+				setType(func(s *uiState) {
+					s.UIFontSize = 0
+					if size = min(max(size, minUIFontSize), maxUIFontSize); size != defaultUIFontSize {
+						s.UIFontSize = size
+					}
+				})
+			})
+		})
+		settingsRow(c, "字重", func() {
+			stepper(c, "字重", fmt.Sprint(fwBody),
+				func(d int) { setType(func(s *uiState) { s.UIWeight = stepWeight(fwBody, d) }) },
+				func() { setType(func(s *uiState) { s.UIWeight = 0 }) })
+		})
+		settingsRow(c, "粗体字重", func() {
+			stepper(c, "粗体字重", fmt.Sprint(fwBold),
+				func(d int) { setType(func(s *uiState) { s.UIBoldWeight = stepWeight(fwBold, d) }) },
+				func() { setType(func(s *uiState) { s.UIBoldWeight = 0 }) })
+		})
 		settingsRow(c, "图标大小", func() {
 			sel := 0
 			var labels []string
@@ -280,22 +305,22 @@ func (a *app) aboutSettings(c *ui.Context) {
 	stale := d.Build != daemon.Build
 	settingsCard(c, "关于", "", func() {
 		settingsRow(c, "窗口", func() {
-			ui.Text(c, versionLabel(daemon.Version, daemon.Build)).FontSize(12.5).Font(monoFont).TextColor(t.TextMuted)
+			ui.Text(c, versionLabel(daemon.Version, daemon.Build)).FontSize(fsCode).Font(monoFont).TextColor(t.TextMuted)
 		})
 		settingsRow(c, "常驻进程", func() {
 			switch {
 			case d.Pid == 0:
-				ui.Text(c, "没有连上").FontSize(12.5).TextColor(t.TextMuted)
+				ui.Text(c, "没有连上").FontSize(fsBody).TextColor(t.TextMuted)
 			case d.Build == "":
-				ui.Text(c, d.Version+"（旧版本）").FontSize(12.5).Font(monoFont).TextColor(t.TextMuted)
+				ui.Text(c, d.Version+"（旧版本）").FontSize(fsCode).Font(monoFont).TextColor(t.TextMuted)
 			default:
-				ui.Text(c, versionLabel(d.Version, d.Build)).FontSize(12.5).Font(monoFont).TextColor(t.TextMuted)
+				ui.Text(c, versionLabel(d.Version, d.Build)).FontSize(fsCode).Font(monoFont).TextColor(t.TextMuted)
 			}
 		})
 		if d.Pid != 0 {
 			c.After(time.Minute)
 			settingsRow(c, "", func() {
-				ui.Text(c, fmt.Sprintf("pid %d，%s启动", d.Pid, ago(d.StartedAt))).FontSize(12).TextColor(t.TextMuted)
+				ui.Text(c, fmt.Sprintf("pid %d，%s启动", d.Pid, ago(d.StartedAt))).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		}
 		updating, unsupported := a.upgrade.status(d.Pid)
@@ -317,7 +342,7 @@ func (a *app) aboutSettings(c *ui.Context) {
 			case windowOlder:
 				note = "窗口的版本比常驻进程旧，可能打开的是旧的 Posse.app。更新会把常驻进程换成窗口的版本。"
 			}
-			ui.Text(c, note).FontSize(12.5).TextColor(t.Text).LineHeight(1.5)
+			ui.Text(c, note).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
 		}
 		ui.Row(c).Gap(8).Padding(4, 0, 0, 0).Children(func() {
 			if canUpdate {

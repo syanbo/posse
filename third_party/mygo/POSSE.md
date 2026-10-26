@@ -33,6 +33,8 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/theme.go`、`ui/paint.go`（`textForeground`）：加 `Theme.FlatText`，开着时元素的文字不用字体平滑画（和 `Font.Antialiased` 一样）。
 
+`ui/theme.go`、`ui/context.go`（`weightFrom`）：加 `Theme.FontWeight`，大于 0 时设在窗口的根节点上，没设字重的文字都继承它；mygo 默认不设，字体自己的常规字重。
+
 `ui/menu.go`、`ui/runtime.go`：加 `Context.PresentMenus`，设了就不弹系统菜单，把菜单项（`MenuEntry`）、位置和选中回调交给应用自己画；右键菜单、菜单按钮、文字输入框和编辑器的编辑菜单都走它。
 
 `ui/menu.go`、`ui/api_gen.go`：加 `Element.ContextMenuAsked`，元素照 `ContextMenu` 接右键、菜单键和 Shift+F10（文字选区也一样），但不弹系统菜单，下一帧报告位置（窗口坐标），Posse 自己画菜单。

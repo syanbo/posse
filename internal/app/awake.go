@@ -51,7 +51,7 @@ func (a *app) awakeButton(c *ui.Context) {
 		}
 	}
 	tip := awakeTip(st)
-	b := ui.Row(c.Key("awake")).Height(24).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
+	b := ui.Row(c.Key("awake")).Height(sz(24)).Padding(0, 8).Gap(6).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label("防休眠：" + short).Tooltip(tip)
 	bg := ui.Transparent
 	if b.Hovered() && st != nil {
@@ -66,8 +66,8 @@ func (a *app) awakeButton(c *ui.Context) {
 		iconColor, textColor = colors(t).faint, colors(t).faint
 	}
 	b.Children(func() {
-		ui.Icon(c, iconCoffee).FontSize(13).TextColor(iconColor).Shrink(0)
-		ui.Text(c, short).FontSize(11).TextColor(textColor)
+		ui.Icon(c, iconCoffee).FontSize(sz(13)).TextColor(iconColor).Shrink(0)
+		ui.Text(c, short).FontSize(fsSmall).TextColor(textColor)
 	})
 	if st == nil {
 		return

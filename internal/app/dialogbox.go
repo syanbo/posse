@@ -29,7 +29,7 @@ func (b *dialogBox) sized() bool { return b.w[b.mode] > 0 }
 // title 是对话框的标题行，按住拖动整个对话框。
 func (b *dialogBox) title(c *ui.Context, text string) {
 	row := ui.Row(c.Key("dialog-title")).AlignItems(ui.Center).Children(func() {
-		titleText(c, text, fsCardTitle)
+		titleText(c, text, fsTitle)
 		ui.Spacer(c)
 	})
 	if dx, dy, held := row.Dragged(); held {

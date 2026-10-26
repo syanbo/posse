@@ -257,7 +257,7 @@ func mobileOnlineMark(c *ui.Context, names []string) {
 	tip := strings.Join(names, "、") + " 正连着"
 	ui.Row(c).Gap(5).AlignItems(ui.Center).Label(tip).Tooltip(tip).Children(func() {
 		if len(names) > 1 {
-			ui.Text(c, strconv.Itoa(len(names))).FontSize(11).FontFeatures("tnum").TextColor(t.TextMuted)
+			ui.Text(c, strconv.Itoa(len(names))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		}
 		ui.Box(c).Size(7, 7).Radius(3.5).Background(green)
 	})
@@ -268,7 +268,7 @@ func mobileOnlineMark(c *ui.Context, names []string) {
 func (a *app) mobileBoard(c *ui.Context) {
 	a.pollMobile(c)
 	a.band(c, func() {
-		titleText(c, "手机", fsCardTitle)
+		titleText(c, "手机", fsTitle)
 		ui.Spacer(c)
 		a.closeBoardButton(c)
 	})
@@ -303,7 +303,7 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 			if viewer != "" {
 				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Size(7, 7).Radius(3.5).Background(colors(t).sage)
-					ui.Text(c, viewer+" 正在看这台电脑的桌面").FontSize(13).Grow(1)
+					ui.Text(c, viewer+" 正在看这台电脑的桌面").FontSize(fsBody).Grow(1)
 					if pressable(textButton(c, "停止")).Tooltip("断开这台手机的画面和操作").Clicked() {
 						go a.call("desk.stop", nil, nil, 10*time.Second)
 					}
@@ -318,7 +318,7 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 					if p.key == "accessibility" {
 						note += "：手机能看，不能操作"
 					}
-					ui.Text(c, note).FontSize(12.5).TextColor(t.TextMuted).Grow(1)
+					ui.Text(c, note).FontSize(fsBody).TextColor(t.TextMuted).Grow(1)
 					if pressable(textButton(c, "打开系统设置")).Tooltip("在「隐私与安全性」里打开 Posse").Clicked() {
 						go exec.Command("open", p.pane).Run()
 					}
@@ -340,17 +340,17 @@ func (a *app) mobilePairCard(c *ui.Context) {
 				case m.qr != nil:
 					ui.Image(c, m.qr).Size(196, 196)
 				case m.loading:
-					ui.Text(c, "正在生成…").FontSize(12).TextColor(ui.RGBA(0, 0, 0, 0.5))
+					ui.Text(c, "正在生成…").FontSize(fsSmall).TextColor(ui.RGBA(0, 0, 0, 0.5))
 				}
 			})
 			ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() {
 				ui.Column(c).Gap(4).Children(func() {
 					cardTitle(c, "配对新手机")
 					ui.Text(c, "用 Posse Mobile 扫左边的码。扫不了就复制配对码，贴进 App 的配对页。").
-						FontSize(12.5).TextColor(t.TextMuted).LineHeight(1.5)
+						FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if m.err != "" {
-					ui.Text(c, m.err).FontSize(12).TextColor(t.Danger).LineHeight(1.45)
+					ui.Text(c, m.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45)
 				}
 				if m.endpoint != "" {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -390,11 +390,11 @@ func (a *app) mobileDevices(c *ui.Context) {
 		ui.Row(c).Padding(0, 8, 6, 8).AlignItems(ui.Center).Children(func() {
 			cardTitle(c, "已配对的手机").Grow(1)
 			if len(phones) > 0 {
-				ui.Text(c, strconv.Itoa(len(phones))).FontSize(fsCaption).FontFeatures("tnum").TextColor(colors(t).faint)
+				ui.Text(c, strconv.Itoa(len(phones))).FontSize(fsSmall).FontFeatures("tnum").TextColor(colors(t).faint)
 			}
 		})
 		if len(m.devices) == 0 {
-			ui.Text(c, "还没有配对过的手机").FontSize(13).TextColor(t.TextMuted).Padding(4, 8, 8, 8)
+			ui.Text(c, "还没有配对过的手机").FontSize(fsBody).TextColor(t.TextMuted).Padding(4, 8, 8, 8)
 			return
 		}
 		for _, d := range phones {
@@ -420,18 +420,18 @@ func (a *app) mobileDevices(c *ui.Context) {
 		row.Children(func() {
 			tile(c, iconPhone, 32, colors(t).fill, t.TextMuted)
 			ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
-				ui.Text(c, "其他配对 "+strconv.Itoa(len(others))+" 个").FontSize(13)
+				ui.Text(c, "其他配对 "+strconv.Itoa(len(others))+" 个").FontSize(fsBody)
 				note := "旧版 App 或 Orca App 连的，重新扫码后手机不再用的码也在这里。更新 Posse Mobile 后，还在用的会归到对应的手机。"
 				if online > 0 {
 					note = "其中 " + strconv.Itoa(online) + " 个正连着。" + note
 				}
-				ui.Text(c, note).FontSize(fsMeta).TextColor(t.TextMuted).LineHeight(1.45)
+				ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			})
 			label := "展开"
 			if m.othersOpen {
 				label = "收起"
 			}
-			ui.Text(c, label).FontSize(fsMeta).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			if pressable(textButton(c, "全部移除")).Clicked() {
 				a.removeDevices(others)
 			}
@@ -456,17 +456,17 @@ func (a *app) mobileDeviceRow(c *ui.Context, d mobileDevice) {
 		}
 		tile(c, iconPhone, 32, colors(t).fill, fg)
 		ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
-			ui.Text(c, d.Name).FontSize(13).SingleLine()
+			ui.Text(c, d.Name).FontSize(fsBody).SingleLine()
 			sub := d.PairedAt.Local().Format("1月2日") + "配对"
 			if d.Links > 1 {
 				sub += "，存了 " + strconv.Itoa(d.Links) + " 个配对码（不同地址或重新扫过）"
 			}
-			ui.Text(c, sub).FontSize(fsMeta).TextColor(t.TextMuted).SingleLine()
+			ui.Text(c, sub).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 		})
 		if d.Online {
-			ui.Text(c, "已连接").FontSize(fsMeta).TextColor(t.Accent).Shrink(0)
+			ui.Text(c, "已连接").FontSize(fsSmall).TextColor(t.Accent).Shrink(0)
 		} else {
-			ui.Text(c, ago(d.LastSeen)+"连过").FontSize(fsMeta).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, ago(d.LastSeen)+"连过").FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		}
 		if pressable(textButton(c, "移除")).Clicked() {
 			a.removeDevice(d)
@@ -481,7 +481,7 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 	m := &a.mobile
 	st := &a.state
 	ui.Column(c).Gap(6).Children(func() {
-		ui.Text(c, "此电脑的地址").FontSize(11).FontWeight(500).TextColor(t.TextMuted)
+		ui.Text(c, "此电脑的地址").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			// 下拉：自动、检测到的 Tailscale 和局域网地址、用过的自定义地址；选了具体地址，配对码里只有它
 			labels := []string{mobileAuto}
@@ -524,6 +524,6 @@ func (a *app) mobileAddressPicker(c *ui.Context) {
 			}
 		})
 		ui.Text(c, "手机要能连到它：同一 Wi-Fi、Tailscale，或转到本机的隧道。选了具体地址，手机就只连这一个。").
-			FontSize(11.5).TextColor(t.TextMuted).LineHeight(1.45)
+			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 	})
 }

@@ -58,18 +58,18 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 	}
 	t := c.Theme()
 	d, base := tr.base, w.BaseRef
-	ui.Row(c).Height(30).Shrink(0).Padding(0, 6, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "相对 "+base).FontSize(11.5).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(0)
+	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, "相对 "+base).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(0)
 		switch {
 		case d.Ahead == 0 && d.Behind == 0:
-			ui.Text(c, "没有差别").FontSize(11.5).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, "没有差别").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		default:
 			baseBadge(c, iconFetch, incomingColor(t), d.Behind, fmt.Sprintf("%s 上有 %d 个新提交，这个分支还没有", base, d.Behind))
 			baseBadge(c, iconPush, colors(t).sage, d.Ahead, fmt.Sprintf("%d 个提交待合回 %s", d.Ahead, base))
 		}
 		if len(d.Conflicts) > 0 {
 			tip := "现在合并会冲突的文件：\n" + strings.Join(d.Conflicts, "\n")
-			ui.Text(c, fmt.Sprintf("会冲突 %d", len(d.Conflicts))).FontSize(11.5).TextColor(t.Danger).Shrink(0).Tooltip(tip)
+			ui.Text(c, fmt.Sprintf("会冲突 %d", len(d.Conflicts))).FontSize(fsSmall).TextColor(t.Danger).Shrink(0).Tooltip(tip)
 		}
 		ui.Spacer(c)
 		if d.Behind > 0 {
@@ -91,7 +91,7 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 
 // smallButton 是放在 30 高的行里的 textButton。
 func smallButton(c *ui.Context, label string) ui.Element {
-	return textButton(c, label).Height(24).Padding(0, 8)
+	return textButton(c, label).Height(sz(24)).Padding(0, 8)
 }
 
 // baseBadge 是箭头加数字；数字为 0 不画。
@@ -100,8 +100,8 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 		return
 	}
 	ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
-		ui.Icon(c, icon).FontSize(12).TextColor(color).Shrink(0)
-		ui.Text(c, fmt.Sprint(n)).FontSize(11).FontFeatures("tnum").TextColor(color)
+		ui.Icon(c, icon).FontSize(sz(12)).TextColor(color).Shrink(0)
+		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color)
 	})
 }
 
