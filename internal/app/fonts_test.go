@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -121,9 +122,12 @@ func TestStepLineHeight(t *testing.T) {
 	}
 }
 
-// 界面文字的字号、字重只用 style.go 里跟着设置变的那几档，写数字的会漏掉设置。图标的字号不在此列。
+// 界面文字的字号、字重和图标的尺寸只用 style.go 里跟着设置变的那几档，写数字的会漏掉设置。
+// 视频上的播放键是单独的大图标，不算。
 func TestNoLiteralType(t *testing.T) {
-	bad := regexp.MustCompile(`FontSize\([0-9]|FontWeight\([0-9]|\b(Size|Weight)(: | = )[0-9]`)
+	text := regexp.MustCompile(`FontSize\([0-9]|FontWeight\([0-9]|\b(Size|Weight)(: | = )[0-9]`)
+	icon := regexp.MustCompile(`ui\.Icon\(.*FontSize\((sz\()?[0-9]|(iconButtonSized|quietIconButton)\(.*, [0-9]+, [0-9]+\)|` +
+		`(agentTile|agentIcon|statusGlyph|statusIcon|taskGlyphIcon|posseLoader)\(c, .*[ (][0-9]+[,)]`)
 	files, _ := filepath.Glob("*.go")
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
@@ -134,8 +138,9 @@ func TestNoLiteralType(t *testing.T) {
 			t.Fatal(err)
 		}
 		for i, line := range strings.Split(string(b), "\n") {
-			if bad.MatchString(line) && !strings.Contains(line, "ui.Icon(") {
-				t.Errorf("%s:%d 写了数字字号或字重：%s", f, i+1, strings.TrimSpace(line))
+			if text.MatchString(line) && !strings.Contains(line, "ui.Icon(") ||
+				icon.MatchString(line) && !strings.Contains(line, "iconPlay") {
+				t.Errorf("%s:%d 写了数字的字号、字重或图标尺寸：%s", f, i+1, strings.TrimSpace(line))
 			}
 		}
 	}
@@ -150,5 +155,31 @@ func TestSetUIType(t *testing.T) {
 	setUIType(30, 300, 700)
 	if fsBody != maxUIFontSize || fwMedium != 500 {
 		t.Fatalf("上限或中间字重不对：%v %d", fsBody, fwMedium)
+	}
+}
+
+// 间距只用 spaceScale 里的几档；对齐算出来的值写成常量或表达式（treeIndent、groupTextIndent），不写数字。
+func TestSpacingScale(t *testing.T) {
+	call := regexp.MustCompile(`\.(Gap|Padding|Margin)\(([^()]*(?:\([^()]*\)[^()]*)*)\)`)
+	num := regexp.MustCompile(`(?:^|[^\w.*])(\d+(?:\.\d+)?)\b`)
+	files, _ := filepath.Glob("*.go")
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			for _, m := range call.FindAllStringSubmatch(line, -1) {
+				for _, n := range num.FindAllStringSubmatch(m[2], -1) {
+					v, _ := strconv.ParseFloat(n[1], 32)
+					if !slices.Contains(spaceScale, float32(v)) {
+						t.Errorf("%s:%d 间距 %s 不在阶梯上：%s", f, i+1, n[1], m[0])
+					}
+				}
+			}
+		}
 	}
 }

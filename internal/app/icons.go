@@ -59,7 +59,7 @@ var (
 	iconAppearance = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>`)
 	iconInfo       = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.75v.01"/>`)
 	iconMinus      = icon(`<path d="M6 12h12"/>`)
-	iconPanelLeft  = icon(`<rect x="2.5" y="3.5" width="19" height="17" rx="2.5"/><path d="M8.75 3.5v17"/>`)
+	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话

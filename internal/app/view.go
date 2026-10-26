@@ -351,7 +351,7 @@ func titleHeight(c *ui.Context) float32 { return max(c.TitleBar().Height, 40) }
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 10, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 12, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, 1, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
 		ui.Box(c).Width(appNameWidth()).Shrink(0)
@@ -368,7 +368,7 @@ func (a *app) sidebar(c *ui.Context) {
 	a.navOrder, a.navCur = a.navOrder[:0], -1
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
 	nav.Children(func() {
-		ui.Column(c).Padding(4, 10, 12, 10).Gap(2).Children(func() {
+		ui.Column(c).Padding(4, 12, 12, 12).Gap(2).Children(func() {
 			if len(a.projects) > 0 {
 				a.taskSidebarItem(c)
 			}
@@ -487,7 +487,7 @@ func collapsible(c *ui.Context, shown float32, fn func()) {
 }
 
 // navIndent 是侧栏下一层相对上一层的缩进。
-const navIndent = 22
+const navIndent = 24
 
 // projectHeader 是有多个工作区的项目的标题行：只管展开收起，不选中工作区；收起时汇总所有工作区的终端。
 func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool) {
@@ -506,7 +506,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		}
 		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
 	}
-	icon := func() { ui.Icon(c, iconFolder).FontSize(sz(16)).TextColor(t.Accent).Shrink(0) }
+	icon := func() { ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
 	row := a.navRowAt(c, "head", false, icon, p.Name, shortPath(ws[0].Path), "", trailing)
 	if row.Clicked() {
 		*open = !*open
@@ -520,7 +520,7 @@ func disclosure(c *ui.Context, open *bool, label string) {
 		label = "收起" + strings.TrimPrefix(label, "展开")
 	}
 	t := c.Theme()
-	b := ui.Box(c).Size(20, 20).Radius(5).Center().Shrink(0).Label(label).Tooltip(label)
+	b := ui.Box(c).Size(miniBox(), miniBox()).Radius(5).Center().Shrink(0).Label(label).Tooltip(label)
 	bg, fg := ui.Transparent, t.TextMuted
 	if b.Hovered() {
 		bg, fg = t.SurfaceHover, t.Text
@@ -531,7 +531,7 @@ func disclosure(c *ui.Context, open *bool, label string) {
 		if *open {
 			turn = 90
 		}
-		chev := ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(fg)
+		chev := ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(fg)
 		chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
 	})
 	if b.Clicked() {
@@ -916,11 +916,11 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 	height, gap := sz(32), float32(2)
 	switch {
 	case sub != "" && branch != "":
-		height, gap = sz(64), 3
+		height, gap = sz(64), 2
 	case sub != "" || branch != "":
 		height = sz(46)
 	}
-	row := ui.Row(c.Key(key)).Height(height).Padding(0, 10, 0, 12).Gap(10).Radius(8).Shrink(0).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(height).Padding(0, 12, 0, 12).Gap(8).Radius(8).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, selected)
 	row.Children(func() {
@@ -931,7 +931,7 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 			// 分支独占一行，路径在它下面
 			if branch != "" {
 				ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, iconBranch).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
+					ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 					ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				})
 			}
@@ -941,7 +941,7 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 		})
 		// 行尾的数字、状态和箭头在整行里上下居中，两行的工作区也一样
 		if trailing != nil {
-			ui.Row(c).Gap(10).AlignItems(ui.Center).Shrink(0).Children(trailing)
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(trailing)
 		}
 	})
 	return row
@@ -953,7 +953,7 @@ func (a *app) staleBar(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Column(c).Margin(0, 10, 8, 10).Padding(10, 10, 10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 12, 12, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
 		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 		if pressable(accentButton(c, "重开窗口")).Clicked() {
 			a.relaunch()
@@ -966,9 +966,9 @@ func (a *app) errorBar(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Row(c).Margin(0, 10, 8, 10).Padding(8, 6, 8, 10).Gap(6).Radius(8).Background(t.Surface).AlignItems(ui.Start).Children(func() {
+	ui.Row(c).Margin(0, 12, 8, 12).Padding(8, 6, 8, 12).Gap(6).Radius(8).Background(t.Surface).AlignItems(ui.Start).Children(func() {
 		ui.Text(c, a.err).FontSize(fsSmall).TextColor(t.Danger).Grow(1).Shrink(1)
-		if iconButtonSized(c, iconClose, "关闭提示", 20, 12).Clicked() {
+		if iconButtonSized(c, iconClose, "关闭提示", compactBox(), smallIcon()).Clicked() {
 			a.err = ""
 		}
 	})
@@ -1278,8 +1278,8 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 					ui.Box(c).Width(1).Shrink(0).Background(p.line)
 					a.filesPanel(c, w)
 				})
-				// 开关固定在右上角，和关着时标签栏里的同一个位置，不跟着文件栏滑动
-				ui.Row(c).Absolute().Top(0).Right(14).Height(titleHeight(c)).Padding(0, 0, 1, 0).AlignItems(ui.Center).Children(func() {
+				// 开关固定在右上角，和关着时标签栏里的同一个位置（右边留 16，底下让出 1 像素的分隔线），不跟着文件栏滑动
+				ui.Row(c).Absolute().Top(0).Right(16).Height(titleHeight(c)).Padding(0, 0, hairline, 0).AlignItems(ui.Center).Children(func() {
 					a.filesPanelButton(c, w)
 				})
 			})
@@ -1291,7 +1291,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示。
 		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
@@ -1325,7 +1325,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 			if ag == "" {
 				name = "终端"
 			}
-			it := m.Item(name).Lead(func() { agentIcon(c, ag, 18) })
+			it := m.Item(name).Lead(func() { agentIcon(c, ag, iconSize) })
 			if ag == "" {
 				it.Shortcut(ui.Cmd, ui.KeyT)
 			}
@@ -1380,7 +1380,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		h.Children(func() {
 			// 箭头朝左，指向要展开的方向；往左挪一点，避开伸到边外的那部分
-			ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(fg).Rotate(180).Margin(0, 4, 0, 0)
+			ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(fg).Rotate(180).Margin(0, 4, 0, 0)
 		})
 		if h.Clicked() {
 			toggle()
@@ -1407,7 +1407,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		if cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
 		}
-		ui.Box(c).Height(1).Margin(1, 4).Background(p.line)
+		ui.Box(c).Height(1).Margin(2, 4).Background(p.line)
 		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", buttonBox(), iconSize-4).Clicked() {
 			toggle()
 		}
@@ -1419,9 +1419,9 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 func (a *app) phoneSizedBar(c *ui.Context, id string) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c.Key("phone-sized")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 14).Gap(8).AlignItems(ui.Center).
+	ui.Row(c.Key("phone-sized")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).
 		Background(p.band).BorderWidth(0, 0, 1, 0).BorderColor(p.line).Children(func() {
-		ui.Icon(c, iconPhone).FontSize(sz(14)).TextColor(t.Accent).Shrink(0)
+		ui.Icon(c, iconPhone).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		if pressable(textButton(c, "改回电脑尺寸")).Clicked() {
@@ -1473,7 +1473,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				a.phoneSizedBar(c, cur.ID)
 			}
 			// 留一点内边距，文字不贴边
-			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 10)
+			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 12)
 			a.view.dir = a.view.term.Dir()
 			area.Children(func() {
 				tv := terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
@@ -1545,8 +1545,8 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 	}
 	label := "正在启动 " + name
 	ui.Box(c.Key("starting-hint")).Absolute().Fill().Center().Cursor(ui.CursorDefault).Children(func() {
-		ui.Column(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			posseLoader(c, 44, t.Accent, c.Preferences().ReduceMotion)
+		ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
 			ui.Text(c, label).FontSize(fsBody).TextColor(t.TextMuted)
 		})
 	})
@@ -1556,7 +1556,7 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 func (a *app) firstRun(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(440).Padding(24).Gap(18).Children(func() {
+		emptyCard(c).Width(440).Padding(24).Gap(16).Children(func() {
 			tile(c, iconHexOutline, 48, colors(t).honey.Alpha(0.16), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", fsPage)
@@ -1583,7 +1583,7 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 	}
 	sc.Children(func() {
 		ui.Column(c).MinHeight(a.emptyHeight).Center().Padding(24).Children(func() {
-			ui.Column(c).Width(600).Gap(18).Children(func() {
+			ui.Column(c).Width(600).Gap(16).Children(func() {
 				ui.Row(c).Gap(16).Padding(0, 4).AlignItems(ui.Center).Children(func() {
 					tile(c, a.wsIcon(w), 52, p.tint, t.Accent)
 					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
@@ -1595,13 +1595,13 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 						metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
 					})
 				})
-				ui.Grid(c).Columns(len(agentChoices) + 1).Gap(10).Children(func() {
+				ui.Grid(c).Columns(len(agentChoices) + 1).Gap(8).Children(func() {
 					for _, ag := range agentChoices {
 						a.launchTile(c, w, ag, agentVendor(ag))
 					}
 					a.launchTile(c, w, "", "⌘T")
 				})
-				ui.Row(c).Gap(14).Padding(2, 4).Justify(ui.Center).Children(func() {
+				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Children(func() {
 					shortcutHint(c, "⌘T", "新建终端")
 					shortcutHint(c, "⌘N", "新建工作区")
 					shortcutHint(c, "⌘1…9", "切换终端")
@@ -1619,7 +1619,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	if agent == "" {
 		name = "终端"
 	}
-	b := ui.Column(c.Key("launch-"+name)).Padding(16, 8, 14, 8).Gap(10).Radius(10).AlignItems(ui.Center).Label("启动 " + name).Role(ui.RoleButton)
+	b := ui.Column(c.Key("launch-"+name)).Padding(16, 8, 16, 8).Gap(8).Radius(10).AlignItems(ui.Center).Label("启动 " + name).Role(ui.RoleButton)
 	bg := colors(t).wash
 	if b.Hovered() {
 		bg = t.SurfaceHover
@@ -1627,7 +1627,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	b.Background(b.AnimateColor("bg", bg, hover))
 	pressable(b)
 	b.Children(func() {
-		agentTile(c, agent, 40).Tooltip("")
+		agentTile(c, agent, tileLarge()).Tooltip("")
 		ui.Column(c).Gap(2).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, name).FontSize(fsBody).FontWeight(fwMedium)
 			ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted)
@@ -1641,7 +1641,7 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 func shortcutHint(c *ui.Context, keys, label string) {
 	t := c.Theme()
 	ui.Row(c).Gap(6).Children(func() {
-		ui.Text(c, keys).FontSize(fsSmall).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
+		ui.Text(c, keys).FontSize(fsSmall).TextColor(t.Text).Padding(2, 6).Radius(4).Background(t.Surface)
 		ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 }
@@ -1710,7 +1710,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		closeBtn := ui.Box(c.Key("close")).Size(20, 20).Radius(4).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
+		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(4).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
 			closeBg = t.SurfacePressed
@@ -1720,7 +1720,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 		if !visible {
 			closeBtn.Opacity(0)
 		}
-		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(sz(12)).TextColor(t.TextMuted) })
+		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(fsSmall).TextColor(t.TextMuted) })
 		if visible && closeBtn.Clicked() {
 			a.askClose(term)
 		}
@@ -1917,7 +1917,7 @@ func quietIconButton(c *ui.Context, icon *ui.SVG, label string, box, glyph float
 func (a *app) confirmDialog(c *ui.Context) {
 	t := c.Theme()
 	ui.Modal(c, &a.confirming, func() {
-		ui.Column(c).Width(340).Gap(10).Children(func() {
+		ui.Column(c).Width(340).Gap(8).Children(func() {
 			titleText(c, a.confirmTitle, fsTitle)
 			if a.confirmBody != "" {
 				ui.Text(c, a.confirmBody).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)

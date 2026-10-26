@@ -49,8 +49,20 @@ var iconSizes = []struct {
 	label string
 }{{14, "小"}, {16, "标准"}, {18, "大"}}
 
-func smallIcon() float32 { return iconSize - 2 }
-func buttonBox() float32 { return iconSize + 12 }
+// 图标只用这几档：文字旁的图标和那行字一样大（fsSmall、fsBody）；工具按钮、列表行首是 iconSize，
+// 按钮框 buttonBox；列表行内、卡片和浮层里的紧凑按钮是 smallIcon 配 compactBox，标签和文件行里的小按钮是 miniBox；
+// agent 色块另有多行列表用的 tileMedium 和大图 tileLarge。
+// 文字旁的跟着界面字号，其余跟着设置里的图标大小，不写数字（视频上的播放键这种单独的大图标除外）。
+func smallIcon() float32  { return iconSize - 2 }
+func buttonBox() float32  { return iconSize + 12 }
+func compactBox() float32 { return iconSize + 8 }
+
+// miniBox 是标签、文件行里的小按钮（关闭、继续），放 fsSmall 的图标。
+func miniBox() float32 { return iconSize + 4 }
+
+// tileMedium 是多行列表项（历史会话）行首的 agent 色块，tileLarge 是空状态、会话和任务详情页头上的大色块。
+func tileMedium() float32 { return iconSize + 12 }
+func tileLarge() float32  { return iconSize * 2.75 }
 
 // 界面的字号和字重（设置 › 外观，ui.json 的 uiFontSize、uiWeight、uiBoldWeight），由 setUIType 从正文字号和
 // 正文、粗体字重推出：字号相邻两档差 2，差得太少看不出层级；fwMedium 取正文和粗体中间。
@@ -85,6 +97,17 @@ func setUIType(size float32, weight, bold int) {
 
 // sz 是跟着界面字号缩放的尺寸：行、按钮、输入框的高度和文字旁的小图标写成 sz(26)，默认字号下比原来大一点，配得上大一号的字。
 func sz(v float32) float32 { return float32(math.Round(float64(v * fsBody / rowBase))) }
+
+// 间距只用 2、4、6、8、12、16、20、24、32 这几档（spaceScale），不跟着字号变。常用的组合：
+// 上下叠放的两行字隔 2，一行里几项隔 8；列表行外边距 6、左右内边距 8；卡片内边距 cardPad，浮层菜单 6；
+// 树每层缩进 treeIndent。
+var spaceScale = []float32{0, 2, 4, 6, 8, 12, 16, 20, 24, 32}
+
+const (
+	cardPad    = 20
+	treeIndent = 16
+	hairline   = 1 // 分隔线的粗细，对齐时要让出它
+)
 
 // 圆角按角色分级：外圆角 = 内圆角 + 内边距。
 const (
@@ -210,7 +233,7 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 // fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
 func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
 	t := c.Theme()
-	box := ui.Row(c).Height(sz(30)).Padding(0, 10).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
+	box := ui.Row(c).Height(sz(30)).Padding(0, 12).Radius(rInput).Background(colors(t).fill).AlignItems(ui.Center)
 	if width > 0 {
 		box.Width(width)
 		if minWidth < width {
@@ -231,7 +254,7 @@ func fieldInputSized(c *ui.Context, value *string, placeholder string, width, mi
 // fieldArea 是多行的 fieldInput，height 是文字区的高度。
 func fieldArea(c *ui.Context, value *string, placeholder string, height float32) ui.Element {
 	t := c.Theme()
-	box := ui.Column(c).Padding(7, 10).Radius(rInput).Background(colors(t).fill)
+	box := ui.Column(c).Padding(8, 12).Radius(rInput).Background(colors(t).fill)
 	var in ui.Element
 	box.Children(func() {
 		in = ui.TextAreaBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Height(height)
@@ -266,7 +289,7 @@ func edge(c *ui.Context, e ui.Element) ui.Element {
 // 它自己就是框，外面不再套卡片。返回这一帧是否要发送（内容不为空）。
 func composer(c *ui.Context, value *string, placeholder, verb string, multiline bool) bool {
 	t := c.Theme()
-	box := ui.Column(c).Radius(rComposer).Background(colors(t).card).Padding(10, 10, 10, 14).Gap(6)
+	box := ui.Column(c).Radius(rComposer).Background(colors(t).card).Padding(12, 12, 12, 16).Gap(6)
 	sent := false
 	var in ui.Element
 	box.Children(func() {
@@ -397,7 +420,7 @@ func cardTitle(c *ui.Context, title string) ui.Element {
 // band 是主区域顶上的一条栏：页面标题和操作，可以拖动窗口。
 func (a *app) band(c *ui.Context, fn func()) {
 	p := colors(c.Theme())
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 20+a.barInset(c)).Gap(10).Background(p.band).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 20+a.barInset(c)).Gap(8).Background(p.band).
 		BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(fn)
 }
 
@@ -522,7 +545,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 						text.FontWeight(fwMedium)
 					}
 					if n > 0 {
-						ui.Box(c).Height(16).MinWidth(16).Padding(0, 5).Margin(0, 0, 0, 5).Radius(8).Center().Shrink(0).
+						ui.Box(c).Height(16).MinWidth(16).Padding(0, 4).Margin(0, 0, 0, 4).Radius(8).Center().Shrink(0).
 							Background(t.Accent.Alpha(0.18)).Children(func() {
 							ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontWeight(fwMedium).FontFeatures("tnum").TextColor(t.Accent).SingleLine()
 						})
@@ -539,7 +562,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 
 // metaRow 是标题下面的次要信息，靠间距和图标分开，不用中点串起来；放不下时整项折到下一行。
 func metaRow(c *ui.Context, items ...func()) {
-	ui.Row(c).Gap(14).Wrap().Children(func() {
+	ui.Row(c).Gap(12).Wrap().Children(func() {
 		for _, it := range items {
 			if it != nil {
 				it()
@@ -561,7 +584,7 @@ func metaMono(c *ui.Context, icon *ui.SVG, text, tip string) func() {
 		t := c.Theme()
 		ui.Row(c).Gap(4).Shrink(1).Children(func() {
 			if icon != nil {
-				ui.Icon(c, icon).FontSize(sz(13)).TextColor(t.TextMuted)
+				ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted)
 			}
 			e := ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			if tip != "" {

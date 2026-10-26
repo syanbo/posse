@@ -50,23 +50,23 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				cp.index = i
 				d.ed.ScrollTo(chs[i].NewStart)
 			}
-			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动", 26, 15)).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动", compactBox(), smallIcon())).Clicked() {
 				step(cp.index - 1)
 			}
-			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动", 26, 15)).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动", compactBox(), smallIcon())).Clicked() {
 				step(cp.index + 1)
 			}
 			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
-			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, "回滚这一处 ⌥⌘Z", 26, 15)).Clicked() {
+			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, "回滚这一处 ⌥⌘Z", compactBox(), smallIcon())).Clicked() {
 				d.ed.RevertChange(cp.index)
 				d.change = nil
 			}
 			rel := v.git.relPath(d.path)
-			if rel != "" && pressable(iconButtonSized(c, iconDiff, "显示 diff", 26, 15)).Clicked() {
+			if rel != "" && pressable(iconButtonSized(c, iconDiff, "显示 diff", compactBox(), smallIcon())).Clicked() {
 				d.change = nil
 				a.openDiff(w, diffSpec{rel: rel, oldRev: "HEAD"}, nil, true)
 			}
-			copyOld := pressable(iconButtonSized(c, iconCopy, "复制改之前的内容", 26, 15))
+			copyOld := pressable(iconButtonSized(c, iconCopy, "复制改之前的内容", compactBox(), smallIcon()))
 			if ch.Old == "" {
 				copyOld.Disabled(true)
 			} else if copyOld.Clicked() {
@@ -76,12 +76,12 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			if rel != "" {
 				a.commitChangeInput(c, v, d, cp, rel, ch)
 			}
-			if pressable(iconButtonSized(c, iconClose, "关闭 Esc", 26, 14)).Clicked() {
+			if pressable(iconButtonSized(c, iconClose, "关闭 Esc", compactBox(), smallIcon())).Clicked() {
 				d.change = nil
 			}
 		})
 		// 改之前的内容：删掉或改掉的行，淡红底；只新增了行时说明一句
-		box := ui.Column(c).Radius(rInput).Background(t.Danger.Alpha(0.08)).Padding(6, 10)
+		box := ui.Column(c).Radius(rInput).Background(t.Danger.Alpha(0.08)).Padding(6, 12)
 		box.Children(func() {
 			if ch.Old == "" {
 				ui.Text(c, fmt.Sprintf("这里新增了 %d 行，上一次提交时没有", ch.NewEnd-ch.NewStart)).FontSize(fsSmall).TextColor(t.TextMuted)

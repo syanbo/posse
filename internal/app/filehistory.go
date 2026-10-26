@@ -74,7 +74,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	t := c.Theme()
 	ld := d.log
 	h := ld.hist
-	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 8, 0, 14).Gap(6).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 8, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(ld.filter.Path)
 		ui.Spacer(c)
 		n := fmt.Sprintf("%d 个提交", len(ld.commits))
@@ -82,7 +82,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			n = fmt.Sprintf("%d+ 个提交", len(ld.commits))
 		}
 		ui.Text(c, n).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, "刷新", compactBox(), smallIcon())).Clicked() {
 			a.loadLog(v, d, false)
 		}
 	})
@@ -91,7 +91,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		if ld.loading {
 			msg = "正在读取…"
 		}
-		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 14)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	rows := len(ld.commits)
@@ -106,7 +106,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	}
 	ui.List(c, &ld.list, rows, func(i int) {
 		if i == len(ld.commits) {
-			b := ui.Box(c.Key("more")).Height(sz(30)).Padding(0, 14).Role(ui.RoleButton).Label("加载更早的提交")
+			b := ui.Box(c.Key("more")).Height(sz(30)).Padding(0, 16).Role(ui.RoleButton).Label("加载更早的提交")
 			b.Children(func() { ui.Text(c, "加载更早的提交").FontSize(fsSmall).TextColor(t.Accent) })
 			if b.Clicked() && !ld.loading {
 				a.loadLog(v, d, true)
@@ -114,7 +114,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			return
 		}
 		ci := ld.commits[i]
-		row := ui.Row(c.Key(ci.Hash)).Height(sz(30)).Margin(0, 6).Padding(0, 8).Gap(10).Radius(6).AlignItems(ui.Center).
+		row := ui.Row(c.Key(ci.Hash)).Height(sz(30)).Margin(0, 6).Padding(0, 8).Gap(8).Radius(6).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(ci.Subject)
 		selectedBg(c, row, h.sel == ci.Hash)
 		row.Children(func() {
@@ -124,7 +124,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			for _, r := range refNames(ci.Refs) {
 				if strings.Contains(ci.Refs, "tag: "+r.name) {
 					ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Children(func() {
-						ui.Icon(c, iconTag).FontSize(sz(11)).TextColor(t.TextMuted)
+						ui.Icon(c, iconTag).FontSize(fsSmall).TextColor(t.TextMuted)
 						ui.Text(c, r.name).FontSize(fsSmall).TextColor(t.TextMuted)
 					})
 				}
@@ -145,11 +145,11 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 		return
 	}
 	df := hd.diff
-	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 10, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
-		if pressable(iconButtonSized(c, iconArrowUp, "上一处差异", 28, 17)).Clicked() {
+	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
+		if pressable(iconButtonSized(c, iconArrowUp, "上一处差异", buttonBox(), iconSize)).Clicked() {
 			stepHunk(df, -1)
 		}
-		if pressable(iconButtonSized(c, iconArrowDown, "下一处差异", 28, 17)).Clicked() {
+		if pressable(iconButtonSized(c, iconArrowDown, "下一处差异", buttonBox(), iconSize)).Clicked() {
 			stepHunk(df, 1)
 		}
 		if hd.kind == docDiff {
@@ -175,7 +175,7 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 	})
 	// 两个版本：父提交（没有就是"新增"）和这个提交，后面是路径
-	ui.Row(c).Shrink(0).Padding(0, 14, 6, 14).Gap(8).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Shrink(0).Padding(0, 16, 6, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 		old := "新增"
 		if df.oldRev != "" {
 			old = shortRev(df.oldRev)
@@ -196,7 +196,7 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 		case docTooLarge:
 			a.tooLargeDiffView(c, v, hd)
 		default:
-			ui.Text(c, diffLoadingText(df)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, diffLoadingText(df)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		}
 		diffHint(c, df)
 	})

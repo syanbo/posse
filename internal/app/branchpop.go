@@ -188,8 +188,8 @@ func incomingColor(t *ui.Theme) ui.Color {
 func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 	t := c.Theme()
 	item := func(icon *ui.SVG, color ui.Color, n int, tip string) {
-		ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
-			ui.Icon(c, icon).FontSize(sz(12)).TextColor(color).Shrink(0)
+		ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
+			ui.Icon(c, icon).FontSize(fsSmall).TextColor(color).Shrink(0)
 			if showCount {
 				ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color)
 			}
@@ -222,10 +222,10 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 		a.overPanelButton = true
 	}
 	b.Children(func() {
-		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, w.Branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, tr.ahead, tr.behind, false)
-		ui.Icon(c, iconDown).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	if b.Clicked() {
 		if open {
@@ -272,13 +272,13 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			})
 			// Fetch 进行中按钮换成转圈，不另起一行文字
 			if g.busy == "Fetch" {
-				spin := ui.Row(c.Key("fetching")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+				spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
 					Role(ui.RoleButton).Label("取消 Fetch").Tooltip("正在 Fetch，点一下取消")
 				spin.Children(func() { ui.Spinner(c).Label("正在 Fetch") })
 				if spin.Clicked() && g.cancel != nil {
 					g.cancel()
 				}
-			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", 28, 15)); g.busy == "" && fetch.Clicked() {
+			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", buttonBox(), iconSize)); g.busy == "" && fetch.Clicked() {
 				a.gitDoThen(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
 					func() { a.notify("Fetch 完成", "", nil) })
 			} else if g.busy != "" {
@@ -286,12 +286,12 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 			}
 		})
 		if g.busy != "" && (g.busy != "Fetch" || len(g.queue) > 0) {
-			ui.Row(c).Padding(0, 10, 4, 10).Children(func() { busyLine(c, g) })
+			ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
 		bp.rows = bp.rows[:0]
 		ui.Scroll(c).Grow(1).Shrink(1).Children(func() {
-			ui.Column(c).Gap(1).Children(func() {
+			ui.Column(c).Gap(2).Children(func() {
 				if query == "" {
 					a.branchActions(c, w, v)
 					ui.Box(c).Height(1).Margin(4, 8).Background(p.line)
@@ -340,7 +340,7 @@ func (a *app) branchPopGrip(c *ui.Context) {
 // popupItem 是弹窗里的一行操作，返回这一帧是否点了它。
 func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 10).Gap(10).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(28)).Padding(0, 12).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
@@ -348,7 +348,7 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
 		if icon != nil {
-			ui.Icon(c, icon).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		} else {
 			ui.Box(c).Width(14).Shrink(0)
 		}
@@ -410,7 +410,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 	g := &v.git
 	list := g.branches.list
 	if list == nil {
-		ui.Text(c, "正在读取分支…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "正在读取分支…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 		return
 	}
 	match := func(b gitx.Branch) bool { return query == "" || strings.Contains(strings.ToLower(b.Name), query) }
@@ -420,7 +420,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		if !set {
 			open = !strings.HasPrefix(key, "remote:")
 		}
-		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 10, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 12, 0, 8).Gap(4).Radius(6).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(title)
 		if row.Hovered() {
 			row.Background(colors(t).wash)
@@ -430,7 +430,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 			if open || query != "" {
 				chevron = iconDown
 			}
-			ui.Icon(c, chevron).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, chevron).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
@@ -487,7 +487,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		}
 	}
 	if query != "" && len(local) == 0 && len(remoteNames) == 0 {
-		ui.Text(c, "没有名字里含“"+query+"”的分支").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "没有名字里含“"+query+"”的分支").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 	}
 }
 
@@ -501,7 +501,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 	other, inOther := gitx.WorktreeOf(b, g.repo)
 	otherWs := a.workspaceAt(other)
 	// 左边多缩进一些，分支图标和组标题的文字对齐，一眼看出属于哪一组
-	row := ui.Row(c.Key(group+":"+b.Name)).Height(sz(28)).Padding(0, 10, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
+	row := ui.Row(c.Key(group+":"+b.Name)).Height(sz(28)).Padding(0, 12, 0, 24).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(b.Name)
 	bp := a.branchPop
 	keyed := bp != nil && bp.hl == len(bp.rows)
 	if bp != nil {
@@ -521,7 +521,7 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 		if b.Current {
 			color = t.Accent
 		}
-		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(color).Shrink(0)
+		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(color).Shrink(0)
 		name := ui.Text(c, b.Name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1)
 		if b.Current {
 			name.FontWeight(fwMedium)

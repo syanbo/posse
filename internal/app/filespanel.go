@@ -172,7 +172,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	col := ui.Column(c).Width(a.filesPanelWidth()).Shrink(0).Background(p.band).Ref(&a.filesPanelRef)
 	col.Children(func() {
 		// 右边距和标签栏一样，开关按钮打开前后不挪位置
-		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 14, 0, 10).Gap(4).AlignItems(ui.Center).
+		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 12).Gap(4).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(p.line).DragWindow().Children(func() {
 			if panelTab(c, iconHistory, "历史", a.state.FilesPanelHistory) {
 				a.setFilesPanelHistory(true)
@@ -206,13 +206,13 @@ func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
 		bg, fg = t.SurfaceHover, t.Text
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Icon(c, icon).FontSize(sz(16)).TextColor(fg) })
+	b.Children(func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(fg) })
 	return b.Clicked() && !active
 }
 
 // filesSide 是文件栏"文件"页：上面一行分段切换文件树、检索、改动。
 func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
-	ui.Row(c).Shrink(0).Padding(8, 10, 4, 10).Children(func() {
+	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Children(func() {
 		// 撑满栏宽：分段平分宽度，带计数的"改动"长一些的才放得下
 		ui.Column(c).Grow(1).Children(func() {
 			badges := []int{0, 0, v.git.changeCount()}

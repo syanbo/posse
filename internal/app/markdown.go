@@ -229,16 +229,16 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				}
 				ui.Text(c, lang).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 				ui.Spacer(c)
-				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", 22, 12)).Clicked() {
+				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", compactBox(), smallIcon())).Clicked() {
 					c.WriteClipboard(b.code)
 				}
 			})
-			ui.Box(c).Padding(8, 12, 10, 12).Children(func() {
+			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
 				highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
 			})
 		})
 	case mdQuote:
-		ui.Row(c).AlignItems(ui.Stretch).Gap(10).Children(func() {
+		ui.Row(c).AlignItems(ui.Stretch).Gap(8).Children(func() {
 			ui.Box(c).Width(3).Shrink(0).Radius(1.5).Background(t.Border)
 			ui.Column(c).Grow(1).Shrink(1).Gap(8).TextColor(t.TextMuted).Children(func() { r.blocks(c, b.blocks) })
 		})
@@ -276,8 +276,8 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	}
 }
 
-// 表格一个格子的内边距 20 加右边框 1，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
-const mdCellPad = 22
+// 表格一个格子的左右内边距 24 加右边框 1，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
+const mdCellPad = 26
 
 // mdTableSize 是表格每列量好的宽度：最小宽是最长的拆不开的词，最大宽是不折行。
 // 第一次搭的时候量一次，存在块上；设置里换了界面字号、字重（key）再重量。
@@ -328,7 +328,7 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		}
 	}
 	if wide {
-		scroll.Padding(0, 0, 10, 0) // 滚动条画在表格下面，不压着最后一行
+		scroll.Padding(0, 0, 12, 0) // 滚动条画在表格下面，不压着最后一行
 	}
 	scroll.Children(func() {
 		ui.Grid(c).ColumnTracks(tracks...).Border(1, t.Border).Radius(6).Children(func() { r.cells(c, b, cols) })
@@ -419,7 +419,7 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 			if ri == len(b.rows)-1 {
 				bottom = 0
 			}
-			box := ui.Box(c).Padding(5, 10).BorderWidth(0, right, bottom, 0).BorderColor(t.Border)
+			box := ui.Box(c).Padding(4, 12).BorderWidth(0, right, bottom, 0).BorderColor(t.Border)
 			if ri == 0 {
 				box.Background(t.Surface)
 			}

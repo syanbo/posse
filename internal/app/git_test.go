@@ -255,8 +255,8 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	tt.Frame()
 	// 左边缘往左拖变宽，松手写进 ui.json
 	if r, ok := tt.Find("搜索分支"); ok {
-		// 输入框文字左边是框的内边距 10、行 2、弹窗 6，再往里 3 是把手中间
-		x, y := r.X-18+3, r.Y+60
+		// 输入框文字左边是框的内边距 12、行 2、弹窗 6，再往里 3 是把手中间
+		x, y := r.X-20+3, r.Y+60
 		tt.Press(x, y)
 		tt.Move(x-50, y)
 		tt.Move(x-100, y)

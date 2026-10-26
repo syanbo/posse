@@ -190,10 +190,10 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 				usageNote(c, "这个项目还没有会话记录。")
 			}
 			for _, s := range r.sessions {
-				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(10).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
+				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(8).Radius(8).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
 				selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
 				row.Children(func() {
-					agentTile(c, s.Agent, 20)
+					agentTile(c, s.Agent, iconSize)
 					ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
 						// 固定行高，悬停时时间换成按钮也不跳
 						ui.Row(c).Height(sz(20)).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -215,12 +215,12 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 							}
 							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 							// 细线把聊天内容和下面的目录、消息数分开
-							ui.Box(c).Height(1).Margin(5, 0, 4, 0).Background(colors(t).line)
+							ui.Box(c).Height(1).Margin(4, 0, 4, 0).Background(colors(t).line)
 						}
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
 							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
-							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", 22, 13).Clicked() {
+							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", compactBox(), smallIcon()).Clicked() {
 								a.trashListedSession(s)
 							}
 						})
@@ -238,12 +238,12 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 // playButton 是卡片上"在 Posse 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。
 func playButton(c *ui.Context) ui.Element {
 	t := c.Theme()
-	b := ui.Box(c).Size(22, 20).Radius(6).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
+	b := ui.Box(c).Size(miniBox()+2, miniBox()).Radius(6).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
 	bg := t.Accent
 	if b.Hovered() {
 		bg = t.AccentHover
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Icon(c, iconPlay).FontSize(sz(12)).TextColor(t.AccentText) })
+	b.Children(func() { ui.Icon(c, iconPlay).FontSize(fsSmall).TextColor(t.AccentText) })
 	return b
 }

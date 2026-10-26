@@ -46,7 +46,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 		tab = settingsTabs[0].id
 	}
 	ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(184).Shrink(0).Padding(16, 10).Gap(2).BorderWidth(0, 1, 0, 0).BorderColor(colors(t).line).Children(func() {
+		ui.Column(c).Width(184).Shrink(0).Padding(16, 12).Gap(2).BorderWidth(0, 1, 0, 0).BorderColor(colors(t).line).Children(func() {
 			for _, s := range settingsTabs {
 				icon := func() { ui.Icon(c, s.icon).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
 				if a.navRowAt(c, "settings:"+s.id, s.id == tab, icon, s.label, "", "", nil).Clicked() {

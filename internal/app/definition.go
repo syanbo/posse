@@ -275,7 +275,7 @@ func (a *app) defDialog(c *ui.Context) {
 				ui.Text(c, fmt.Sprintf("有 %d 处定义", n)).FontSize(fsBody).TextColor(t.TextMuted)
 			})
 			ui.Scroll(c).MaxHeight(400).Children(func() {
-				ui.Column(c).Gap(1).Children(func() {
+				ui.Column(c).Gap(2).Children(func() {
 					for i, d := range p.defs {
 						if defRow(c, d, i == p.sel, p.moved) {
 							p.sel, chosen = i, true
@@ -296,7 +296,7 @@ func (a *app) defDialog(c *ui.Context) {
 func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	t := c.Theme()
 	key := d.Path + ":" + strconv.Itoa(d.Line)
-	row := ui.Column(c.Key(key)).Padding(6, 10).Gap(3).Radius(6).Role(ui.RoleButton).Label(key)
+	row := ui.Column(c.Key(key)).Padding(6, 12).Gap(4).Radius(6).Role(ui.RoleButton).Label(key)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()
@@ -304,7 +304,7 @@ func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	mark := colors(t).honey.Alpha(0.28)
 	row.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconFile).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+			ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 			ui.Text(c, d.Path+":"+strconv.Itoa(d.Line+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			ui.Text(c, d.Kind).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		})

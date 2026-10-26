@@ -663,7 +663,7 @@ func (a *app) unsavedDialog(c *ui.Context) {
 		if u == nil {
 			return
 		}
-		ui.Column(c).Width(360).Gap(10).Children(func() {
+		ui.Column(c).Width(360).Gap(8).Children(func() {
 			title := "保存对 " + u.docs[0].name() + " 的修改？"
 			if len(u.docs) > 1 {
 				title = "有 " + strconv.Itoa(len(u.docs)) + " 个文件的修改还没保存"

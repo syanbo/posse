@@ -232,7 +232,7 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	t := c.Theme()
 	_, labels, _ := a.loadFonts()
 	name := fontLabel(current, labels)
-	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 10).Gap(6).Radius(rButton).Label(label).AlignItems(ui.Center)
+	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 12).Gap(6).Radius(rButton).Label(label).AlignItems(ui.Center)
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = colors(t).wash
@@ -240,7 +240,7 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
 		ui.Text(c, name).FontSize(fsBody).Font(fontStack(current)).SingleLine().Grow(1).Shrink(1)
-		ui.Icon(c, iconDown).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	if pressable(b).Clicked() {
 		p.open = !p.open
@@ -309,9 +309,9 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 	}
 	switch {
 	case !done:
-		ui.Text(c, "正在读取字体…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "正在读取字体…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 	case len(rows) == 0:
-		ui.Text(c, "没有名字里含“"+strings.TrimSpace(p.query)+"”的字体").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 10)
+		ui.Text(c, "没有名字里含“"+strings.TrimSpace(p.query)+"”的字体").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 	}
 	if len(rows) == 0 {
 		return
@@ -321,13 +321,13 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 	ui.List(c, &p.list, len(rows), func(i int) {
 		r := rows[i]
 		if r.header != "" {
-			ui.Row(c).Height(fontRowHeight()).Padding(6, 10, 0, 10).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Height(fontRowHeight()).Padding(6, 12, 0, 12).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, r.header).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			})
 			return
 		}
 		label := r.label
-		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 10, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
+		row := ui.Row(c).Height(fontRowHeight()).Padding(0, 12, 0, 8).Gap(8).Radius(rButton).AlignItems(ui.Center).
 			Role(ui.RoleMenuItem).Label(label)
 		bg := ui.Transparent
 		if row.Hovered() || i == p.hl {
@@ -337,7 +337,7 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 		row.Children(func() {
 			box := ui.Box(c).Width(14).Shrink(0).Center()
 			if r.family == current {
-				box.Children(func() { ui.Icon(c, iconCheck).FontSize(sz(14)).TextColor(t.Accent) })
+				box.Children(func() { ui.Icon(c, iconCheck).FontSize(fsBody).TextColor(t.Accent) })
 			}
 			ui.Text(c, label).FontSize(fsBody).Font(fontStack(r.family)).SingleLine().Grow(1).Shrink(1)
 		})
@@ -370,7 +370,7 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 // 卡片和终端、编辑器同一个底色，看到的就是实际的样子。
 func previewBlock(c *ui.Context, body func()) {
 	t := c.Theme()
-	ui.Column(c).Gap(10).Padding(14, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
 		ui.Text(c, "预览").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		body()
 	})

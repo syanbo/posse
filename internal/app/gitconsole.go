@@ -349,11 +349,11 @@ func (a *app) runWhere(dir string) string {
 func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	label := "操作记录"
-	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 10).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
+	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(6).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, v.console)
 	row.Children(func() {
-		ui.Icon(c, iconOpLog).FontSize(sz(13)).TextColor(t.Accent).Shrink(0)
+		ui.Icon(c, iconOpLog).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), label, v.console)
 		if !v.console && a.projectConsoleErr(w.ProjectID, false) {
 			ui.Box(c).Size(6, 6).Radius(3).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
@@ -374,7 +374,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		ui.Text(c, w.Project+" 各工作区里 Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
 		// 只清这个项目的：记下时间，文件里的记录留给别的项目
-		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", 26, 15)).Clicked() {
+		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", compactBox(), smallIcon())).Clicked() {
 			runs, ops = nil, nil
 			if a.state.GitConsoleClearedAt == nil {
 				a.state.GitConsoleClearedAt = map[string]time.Time{}
@@ -384,7 +384,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		}
 	})
 	if len(ops) == 0 {
-		ui.Text(c, "还没有执行过 Git 操作").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "还没有执行过 Git 操作").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
@@ -399,7 +399,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
 	t := c.Theme()
 	first, last := op.runs[0], op.runs[len(op.runs)-1]
-	ui.Column(c.Key(first.ID)).Padding(6, 16, 8, 16).Gap(3).Shrink(0).Children(func() {
+	ui.Column(c.Key(first.ID)).Padding(6, 16, 8, 16).Gap(4).Shrink(0).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			name := ui.Text(c, op.name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)

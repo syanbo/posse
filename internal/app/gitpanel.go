@@ -20,17 +20,17 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	g := &v.git
 	switch {
 	case !g.checked:
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	case g.repo == "":
-		ui.Text(c, "这个工作区不是 git 仓库").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, "这个工作区不是 git 仓库").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	case g.status == nil:
 		msg := "正在读取…"
 		if g.err != "" {
 			msg = g.err
 		}
-		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	a.changesHeader(c, w, v)
@@ -47,7 +47,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 			stashes = append(stashes, r)
 		}
 	}
-	ui.Row(c).Gap(4).Padding(2, 10, 6, 10).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Gap(4).Padding(2, 12, 6, 12).AlignItems(ui.Center).Children(func() {
 		changesTab(c, &g.tab, 0, "提交", g.changeCount())
 		changesTab(c, &g.tab, 1, "储藏", len(stashes))
 	})
@@ -57,7 +57,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if len(rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
-			ui.Text(c, empty).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+			ui.Text(c, empty).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		})
 	} else {
 		list.Key = func(i int) any {
@@ -134,7 +134,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 func changesTab(c *ui.Context, sel *int, i int, label string, n int) {
 	t := c.Theme()
 	active := *sel == i
-	row := ui.Row(c.Key(label)).Height(sz(26)).Padding(0, 10).Gap(5).Radius(6).AlignItems(ui.Center).
+	row := ui.Row(c.Key(label)).Height(sz(26)).Padding(0, 12).Gap(4).Radius(6).AlignItems(ui.Center).
 		Role(ui.RoleTab).Label(label).Checked(active)
 	bg := ui.Transparent
 	switch {
@@ -170,23 +170,23 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if head == "" {
 			head = "分离的 HEAD"
 		}
-		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, head).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, st.Ahead, st.Behind, true)
 		ui.Spacer(c)
 		if g.busy != "" {
 			busyLine(c, g)
 		}
-		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", 28, 16)).Clicked() {
+		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", buttonBox(), iconSize)).Clicked() {
 			a.openLog(w, "", "")
 		}
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", 28, 16)).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, "刷新", buttonBox(), iconSize)).Clicked() {
 			a.refreshGit(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, "回滚… ⌥⌘Z", 28, 16)).Clicked() {
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, "回滚… ⌥⌘Z", buttonBox(), iconSize)).Clicked() {
 			a.openRollback(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "储藏更改…（git stash，含未跟踪文件）", 28, 16)).Clicked() {
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "储藏更改…（git stash，含未跟踪文件）", buttonBox(), iconSize)).Clicked() {
 			a.prompt(promptReq{title: "储藏更改", body: "把全部改动（含未跟踪文件）存进 git stash，工作区回到干净的状态。",
 				placeholder: "说明（可以留空）", verb: "储藏", optional: true, do: func(msg string, _ bool) {
 					a.gitDo(v, "储藏", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, msg) })
@@ -228,7 +228,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	g := &v.git
 	if r.header {
 		open := g.groupOpen(r.group)
-		head := ui.Row(c).Height(sz(26)).Padding(6, 16, 0, 10).Gap(6).AlignItems(ui.Center)
+		head := ui.Row(c).Height(sz(26)).Padding(6, 16, 0, groupHeadPad).Gap(6).AlignItems(ui.Center)
 		head.Children(func() {
 			// 箭头在最左边，点它或组名展开收起
 			disclosure(c, open, "展开"+groupTitles[r.group])
@@ -276,7 +276,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
 	// 比组标题缩进一层：勾选框和组名的文字对齐
-	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 50).Gap(6).Radius(6).
+	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
@@ -370,11 +370,11 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
 		other = s.Branch
 	}
-	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 10).Gap(6).Radius(6).
+	row := ui.Row(c.Key("stash:"+s.Ref)).Height(sz(28)).Margin(0, 6).Padding(0, 8, 0, 12).Gap(6).Radius(6).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(s.Message)
 	selectedBg(c, row, false)
 	row.Children(func() {
-		ui.Icon(c, iconShelve).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconShelve).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, stashTitle(s.Message)).FontSize(fsBody).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
 		if other != "" {
 			ui.Text(c, other).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip("在分支 " + other + " 上存的")
@@ -460,7 +460,7 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 	if conflicts > 0 {
 		msg = fmt.Sprintf("正在%s，有 %d 个文件冲突。解决后点继续：右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决。", opNames[op], conflicts)
 	}
-	ui.Column(c).Shrink(0).Margin(2, 10, 8, 10).Padding(10, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
+	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(8).Background(t.Surface).Children(func() {
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
 		ui.Row(c).Gap(6).Children(func() {
 			cont := pressable(accentButton(c, "继续"))
@@ -512,7 +512,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 		label = "只改提交信息"
 	}
 	ui.Box(c).Height(1).Shrink(0).Background(p.line)
-	ui.Column(c).Shrink(0).Padding(10).Gap(8).Children(func() {
+	ui.Column(c).Shrink(0).Padding(12).Gap(8).Children(func() {
 		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(fsBody)
 		if g.focusMsg {
 			msg.Focus()
@@ -555,7 +555,7 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			if btn.Hovered() {
 				btn.Background(colors(t).wash)
 			}
-			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(sz(17)).TextColor(t.Text.Alpha(0.75)) })
+			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(iconSize).TextColor(t.Text.Alpha(0.75)) })
 			if btn.Clicked() {
 				a.revertHunk(v, d, act.Index)
 			}
@@ -598,6 +598,13 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 }
 
 // diffSeparator 是 diff 里折叠的未改动行：展开按钮和"N 行未改动"，点文字全部展开。
+// 组标题左边留 groupHeadPad，依次是展开箭头（miniBox）、勾选框（14）和组名，间隔 6；
+// groupTextIndent 让文件行（外边距 6）的勾选框和组名的文字对齐。
+const groupHeadPad = 12
+
+func groupTextIndent() float32 { return groupHeadPad + miniBox() + 6 + 14 + 6 - 6 }
+
+// 折叠行高 32（mygo 的 diffSeparatorHeight），减去内边距只剩 24：展开按钮用 miniBox，图标调大也放得下。
 func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 	t := c.Theme()
 	sep.Padding(4)
@@ -607,10 +614,10 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 				ui.Text(c, s.Header).Font(monoFont).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				return
 			}
-			if !s.First && pressable(iconButtonSized(c.Key("down"), iconDown, "向下展开", 20, 12)).Clicked() {
+			if !s.First && pressable(iconButtonSized(c.Key("down"), iconDown, "向下展开", miniBox(), fsSmall)).Clicked() {
 				s.ExpandDown()
 			}
-			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, "向上展开", 20, 12)).Clicked() {
+			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, "向上展开", miniBox(), fsSmall)).Clicked() {
 				s.ExpandUp()
 			}
 			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(4).Role(ui.RoleButton).Label("全部展开")
@@ -628,10 +635,10 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
 	ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 		// 上一处、下一处放在最左边（照 WebStorm 的 diff 工具栏），到头了换到同一组的上一个、下一个文件
-		if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 30, 19)).Clicked() {
+		if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
 			a.stepDiff(w, v, d, -1)
 		}
-		if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 30, 19)).Clicked() {
+		if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", buttonBox(), iconSize)).Clicked() {
 			a.stepDiff(w, v, d, 1)
 		}
 		// 点路径弹出同一组的文件，在这个标签里换着看
@@ -644,7 +651,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		path.Children(func() {
 			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			if len(group) > 1 {
-				ui.Icon(c, iconDown).FontSize(sz(11)).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 			}
 		})
 		if len(group) > 1 {
@@ -661,7 +668,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			})
 		}
 		if label := df.tabLabel(); label != "改动" {
-			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0)
+			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(4).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
@@ -690,10 +697,10 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				a.toggleIgnoreSpace(d)
 			}
 		}
-		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", 24, 14)).Clicked() {
+		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
 			a.rollbackDiffFile(w, v, d)
 		}
-		if pressable(iconButtonSized(c, iconOpen, "在编辑器中打开 F4", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconOpen, "在编辑器中打开 F4", compactBox(), smallIcon())).Clicked() {
 			a.diffToEditor(w, v, d)
 		}
 	})
@@ -784,8 +791,8 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 			if i == 1 {
 				label = newLabel
 			}
-			ui.Column(c.Key(fmt.Sprint("img-", i))).Grow(1).Shrink(1).Basis(0).Padding(12, 16).Gap(10).Children(func() {
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Column(c.Key(fmt.Sprint("img-", i))).Grow(1).Shrink(1).Basis(0).Padding(12, 16).Gap(8).Children(func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, label).FontSize(fsBody).FontWeight(fwMedium)
 					switch {
 					case side.size < 0 && i == 0:

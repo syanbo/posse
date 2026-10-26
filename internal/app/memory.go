@@ -160,10 +160,10 @@ func (a *app) memoryButton(c *ui.Context) {
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Icon(c, iconMemory).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconMemory).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, mb(total)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		ui.Box(c).Size(1, 12).Margin(0, 2).Background(colors(t).line)
-		ui.Icon(c, iconTerminal).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconTerminal).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
 	if b.Clicked() {
@@ -221,7 +221,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 	t := c.Theme()
 	p := colors(t)
 	m := &a.mem
-	ui.Column(c).Width(320).Gap(14).Padding(8, 8, 6, 8).Children(func() {
+	ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
 			titleText(c, "内存", fsTitle).Grow(1)
 			terms := a.termKB
@@ -249,11 +249,11 @@ func (a *app) memoryPanel(c *ui.Context) {
 			}
 			// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
 			ui.Scroll(c).MaxHeight(380).Margin(0, -8).Children(func() {
-				ui.Column(c).Gap(10).Padding(0, 8).Children(func() {
+				ui.Column(c).Gap(8).Padding(0, 8).Children(func() {
 					for _, r := range m.rows {
 						ui.Column(c.Key(r.id)).Children(func() {
 							memLine(c, "ws", func() {
-								ui.Icon(c, iconFolder).FontSize(sz(14)).TextColor(t.Accent).Shrink(0)
+								ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 							}, r.label, mb(r.kb), 0)
 							for _, x := range r.terms {
 								name, detail := tabLabel(x.term)
@@ -266,11 +266,11 @@ func (a *app) memoryPanel(c *ui.Context) {
 									if open {
 										chevron = iconDown
 									}
-									ui.Icon(c, chevron).FontSize(sz(10)).TextColor(t.TextMuted).Shrink(0)
+									ui.Icon(c, chevron).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 									if x.term.Agent != "" {
-										agentTile(c, x.term.Agent, 13)
+										agentTile(c, x.term.Agent, smallIcon())
 									} else {
-										ui.Icon(c, iconTerminal).FontSize(sz(13)).TextColor(t.TextMuted).Shrink(0)
+										ui.Icon(c, iconTerminal).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 									}
 								}, name, mb(x.kb), 2).Role(ui.RoleButton).Radius(6)
 								if row.Hovered() {

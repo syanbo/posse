@@ -135,7 +135,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			}
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
-					agentIcon(c, u.Agent, 14)
+					agentIcon(c, u.Agent, smallIcon())
 					ui.Text(c, windowShort(w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 					ui.Text(c, percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
 				})
@@ -292,9 +292,9 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 			titleText(c, "套餐用量", fsTitle).Grow(1)
 			// 查询进行中按钮换成转圈
 			if a.planBusy {
-				ui.Row(c.Key("plan-refreshing")).Size(28, 28).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
+				ui.Row(c.Key("plan-refreshing")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
 					Tooltip("正在查询").Children(func() { ui.Spinner(c).Label("正在查询") })
-			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, "立即查询各家用量", 28, 15)).Clicked() {
+			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, "立即查询各家用量", buttonBox(), iconSize)).Clicked() {
 				a.refreshPlan()
 			}
 			sel := 0
@@ -312,7 +312,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 			}
 			ui.Column(c.Key(u.Agent)).Gap(8).Children(func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					agentTile(c, u.Agent, 16)
+					agentTile(c, u.Agent, smallIcon())
 					ui.Text(c, agentTitle(u.Agent)).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 					if u.Plan != "" {
 						ui.Text(c, u.Plan).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -327,18 +327,18 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 						color = t.Danger
 					}
 					// 一个窗口一行：名称、进度条、百分比、重置时间
-					ui.Row(c.Key(fmt.Sprint(j))).Gap(10).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, windowName(w)).FontSize(fsSmall).Width(sz(84)).Shrink(0).SingleLine()
+					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, windowName(w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
 						a.planBar(c, w, 0, 5)
 						ui.Text(c, a.shownWord()+" "+percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
-							Width(64).Shrink(0).TextAlign(ui.End)
+							Width(sz(64)).Shrink(0).TextAlign(ui.End)
 						ui.Text(c, resetText(w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
-							Width(138).Shrink(0).TextAlign(ui.End).SingleLine()
+							Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
 					})
 					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
 					if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
 						ui.Text(c.Key(fmt.Sprint(j, "-at")), ago(time.UnixMilli(w.At))+"的读数").
-							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, 94)
+							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, planNameWidth()+8) // 和上一行的名称列之后对齐
 					}
 				}
 				for _, f := range planFacts(u) {
@@ -403,3 +403,6 @@ func (a *app) setUsageQuery(key string, on bool) {
 		}
 	}()
 }
+
+// planNameWidth 是用量窗口一行里名称列的宽度。
+func planNameWidth() float32 { return sz(84) }

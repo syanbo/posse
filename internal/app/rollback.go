@@ -293,7 +293,7 @@ func (a *app) rollbackDialog(c *ui.Context) {
 
 func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 	r := &a.rollback
-	col := ui.Column(c).Gap(10)
+	col := ui.Column(c).Gap(8)
 	if !a.rollbackBox.sized() {
 		col.Width(560)
 	} else {
@@ -321,10 +321,10 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				}
 			}
 			if len(dirs) > 0 {
-				if pressable(iconButtonSized(c, iconDown, "全部展开", 24, 14)).Clicked() {
+				if pressable(iconButtonSized(c, iconDown, "全部展开", compactBox(), smallIcon())).Clicked() {
 					clear(r.folded)
 				}
-				if pressable(iconButtonSized(c, iconUp, "全部收起", 24, 14)).Clicked() {
+				if pressable(iconButtonSized(c, iconUp, "全部收起", compactBox(), smallIcon())).Clicked() {
 					for _, d := range dirs {
 						r.folded[d] = true
 					}
@@ -403,7 +403,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				a.revertHunk(r.v, d, df.hunk)
 			}
 		}
-		col := ui.Column(c).Gap(10)
+		col := ui.Column(c).Gap(8)
 		if box.sized() {
 			col.Grow(1).Shrink(1)
 		} else {
@@ -412,10 +412,10 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 		col.Children(func() {
 			box.title(c, df.rel)
 			ui.Row(c).Height(sz(28)).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
-				if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", 28, 17)).Clicked() {
+				if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
 					a.rollbackStep(-1)
 				}
-				if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", 28, 17)).Clicked() {
+				if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", buttonBox(), iconSize)).Clicked() {
 					a.rollbackStep(1)
 				}
 				if d.kind == docDiff {
@@ -487,7 +487,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	t := c.Theme()
 	p := colors(t)
 	r := &a.rollback
-	line := ui.Row(c.Key(row.path)).Height(sz(26)).Padding(0, 10, 0, 4+float32(row.depth)*18).Gap(6).AlignItems(ui.Center)
+	line := ui.Row(c.Key(row.path)).Height(sz(26)).Padding(0, 12, 0, 4+float32(row.depth)*treeIndent).Gap(6).AlignItems(ui.Center)
 	if !row.dir {
 		// 文件行点了在 diff 浮窗里看；勾选框自己接住点击
 		line.Role(ui.RoleButton).Label("查看 " + row.path)
@@ -509,7 +509,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			if pickBox(c, "dir:"+row.path, row.path, state) {
 				r.setPicked(row.files, state != pickAll)
 			}
-			ui.Icon(c, iconFolder).FontSize(sz(15)).TextColor(t.Accent).Shrink(0)
+			ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
 			ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1)
 			ui.Text(c, fmt.Sprint(len(row.files))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			return

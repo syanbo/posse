@@ -99,8 +99,8 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 	if n == 0 {
 		return
 	}
-	ui.Row(c).Gap(1).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
-		ui.Icon(c, icon).FontSize(sz(12)).TextColor(color).Shrink(0)
+	ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Tooltip(tip).Label(tip).Children(func() {
+		ui.Icon(c, icon).FontSize(fsSmall).TextColor(color).Shrink(0)
 		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(color)
 	})
 }

@@ -516,7 +516,7 @@ func (a *app) historyBoard(c *ui.Context) {
 		a.closeBoardButton(c)
 	})
 	searching := h.resQuery != ""
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(16).Gap(12).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
 		list.Children(func() {
@@ -528,7 +528,7 @@ func (a *app) historyBoard(c *ui.Context) {
 				a.sessionList(c)
 			}
 		})
-		ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() { a.sessionDetail(c) })
+		ui.Column(c).Grow(1).Shrink(1).Gap(12).Children(func() { a.sessionDetail(c) })
 	})
 	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
 	switch {
@@ -614,8 +614,8 @@ func (a *app) historyTotals(c *ui.Context) {
 			count = fmt.Sprintf("前 %d 个匹配的会话", historyLimit)
 		}
 	}
-	ui.Column(c).Padding(14, 20, 10, 20).Gap(8).Children(func() {
-		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
+	ui.Column(c).Padding(16, 20, 12, 20).Gap(8).Children(func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, count).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum")
 			if h.resAgent == 0 || h.resQuery != "" {
 				ui.Text(c, messages).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -624,14 +624,14 @@ func (a *app) historyTotals(c *ui.Context) {
 		if h.resAgent != 0 {
 			return
 		}
-		ui.Row(c).Gap(14).Wrap().Children(func() {
+		ui.Row(c).Gap(12).Wrap().Children(func() {
 			for _, ag := range history.Agents {
 				n := byAgent[ag]
 				if n == 0 {
 					continue
 				}
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					agentTile(c, ag, 16)
+					agentTile(c, ag, smallIcon())
 					ui.Text(c, thousands(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(agentTitle(ag))
 				})
 			}
@@ -659,7 +659,7 @@ func (a *app) cwdLink(c *ui.Context, dir string) func() {
 			color = t.Accent
 		}
 		b.Children(func() {
-			ui.Icon(c, iconFolder).FontSize(sz(13)).TextColor(color)
+			ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(color)
 			ui.Text(c, shortPath(dir)).FontSize(fsSmall).Font(monoFont).TextColor(color).MaxLines(1).Shrink(1)
 		})
 		if b.Clicked() {
@@ -742,14 +742,14 @@ func (a *app) sessionList(c *ui.Context) {
 			return
 		}
 		open := h.isGroupOpen(r.group)
-		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(10, 12, 4, 8).Gap(4).Radius(6).AlignItems(ui.Center).
+		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(12, 12, 4, 8).Gap(4).Radius(6).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(r.group)
 		head.Children(func() {
 			turn := float32(0)
 			if open {
 				turn = 90
 			}
-			chev := ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(t.TextMuted)
+			chev := ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
 			chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
 			ui.Text(c, r.group).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -812,7 +812,7 @@ func (a *app) hitList(c *ui.Context) {
 
 func (a *app) historyEmpty(c *ui.Context, title, body string) {
 	t := c.Theme()
-	ui.Column(c).Padding(28, 20).Gap(6).Children(func() {
+	ui.Column(c).Padding(24, 20).Gap(6).Children(func() {
 		ui.Text(c, title).FontSize(fsBody).FontWeight(fwMedium)
 		ui.Text(c, body).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 	})
@@ -822,11 +822,11 @@ func (a *app) historyEmpty(c *ui.Context, title, body string) {
 func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 	t := c.Theme()
 	h := &a.history
-	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(10, 12, 10, 14).Gap(12).Radius(8).AlignItems(ui.Center)
+	row := ui.Row(c.Key(sessionKey(s))).Margin(0, 8).Padding(12, 12, 12, 16).Gap(12).Radius(8).AlignItems(ui.Center)
 	selectedBg(c, row, h.sel == sessionKey(s))
 	row.Children(func() {
-		agentTile(c, s.Agent, 28)
-		ui.Column(c).Gap(3).Grow(1).Shrink(1).Children(func() {
+		agentTile(c, s.Agent, tileMedium())
+		ui.Column(c).Gap(4).Grow(1).Shrink(1).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, oneLine(s.Title)).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Grow(1).Shrink(1)
 				ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -872,7 +872,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 	h := &a.history
 	if h.sel == "" {
 		ui.Column(c).Grow(1).Center().Children(func() {
-			emptyCard(c).Width(420).Padding(24).Gap(14).Children(func() {
+			emptyCard(c).Width(420).Padding(24).Gap(12).Children(func() {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
 					titleText(c, "会话历史", fsPage)
@@ -890,10 +890,10 @@ func (a *app) sessionDetail(c *ui.Context) {
 		return
 	}
 	s := d.Session
-	card(c).Padding(18, 20).Gap(14).Shrink(0).Children(func() {
-		ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
-			agentTile(c, s.Agent, 44)
-			ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
+	card(c).Padding(cardPad).Gap(12).Shrink(0).Children(func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+			agentTile(c, s.Agent, tileLarge())
+			ui.Column(c).Gap(8).Grow(1).Shrink(1).Children(func() {
 				titleText(c, oneLine(s.Title), fsPage).LineHeight(1.3).MaxLines(2).Selectable()
 				var cwd, branch func()
 				if s.Cwd != "" {
@@ -968,14 +968,14 @@ const transcriptWidth = 680
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
-	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 10).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rButton).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		turn := float32(0)
 		if open {
 			turn = 90
 		}
-		ui.Icon(c, iconChevron).FontSize(sz(11)).TextColor(t.TextMuted).Rotate(turn)
+		ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn)
 		ui.Text(c, fmt.Sprintf("工具调用 %d 次", len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 	if row.Clicked() {
@@ -999,7 +999,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		whoColor = t.Accent
 	}
 	// agent 的回复不装框，直接铺开；命中搜索的那条铺一层琥珀淡底
-	box := ui.Column(c).Margin(0, 16).Padding(10, 16, 12, 16).Gap(6).Radius(10)
+	box := ui.Column(c).Margin(0, 16).Padding(12, 16, 12, 16).Gap(6).Radius(10)
 	switch {
 	case hit:
 		box.Background(colors(t).honey.Alpha(0.1))

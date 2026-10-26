@@ -244,14 +244,14 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 // linkCardItem 是链接卡片里的一行操作，返回这一帧是否点了它。
 func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(10).Radius(7).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
+	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(8).Radius(7).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
 	if row.Hovered() {
 		bg = colors(t).wash
 	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
-		ui.Icon(c, icon).FontSize(sz(14)).TextColor(t.TextMuted)
+		ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted)
 		ui.Text(c, label).FontSize(fsBody)
 	})
 	return row.Clicked()

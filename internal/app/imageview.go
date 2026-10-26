@@ -260,7 +260,7 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 		FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
 	if info.alpha {
 		on := !a.state.ImageCheckerOff
-		b := ui.Box(c.Key("img-checker")).Size(24, 24).Radius(6).Center().Shrink(0).
+		b := ui.Box(c.Key("img-checker")).Size(compactBox(), compactBox()).Radius(6).Center().Shrink(0).
 			Role(ui.RoleButton).Label("透明处显示棋盘格").Tooltip("透明处显示棋盘格").Checked(on)
 		bg, fg := ui.Transparent, t.TextMuted
 		switch {
@@ -270,13 +270,13 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 			bg, fg = t.SurfaceHover, t.Text
 		}
 		b.Background(b.AnimateColor("bg", bg, hover))
-		b.Children(func() { ui.Icon(c, iconChecker).FontSize(sz(14)).TextColor(fg) })
+		b.Children(func() { ui.Icon(c, iconChecker).FontSize(fsBody).TextColor(fg) })
 		if b.Clicked() {
 			a.state.ImageCheckerOff = on
 			a.saveState()
 		}
 	}
-	z := ui.Box(c.Key("img-zoom")).Height(sz(22)).MinWidth(48).Padding(0, 7).Radius(5).Center().Shrink(0).
+	z := ui.Box(c.Key("img-zoom")).Height(sz(22)).MinWidth(48).Padding(0, 8).Radius(5).Center().Shrink(0).
 		Role(ui.RoleButton).Label("缩放").Tooltip("缩放：⌘ 加滚动、⌘= ⌘-，双击切换适应窗口和原大")
 	bg := ui.Transparent
 	if z.Hovered() {

@@ -66,7 +66,7 @@ func (a *app) awakeButton(c *ui.Context) {
 		iconColor, textColor = colors(t).faint, colors(t).faint
 	}
 	b.Children(func() {
-		ui.Icon(c, iconCoffee).FontSize(sz(13)).TextColor(iconColor).Shrink(0)
+		ui.Icon(c, iconCoffee).FontSize(fsBody).TextColor(iconColor).Shrink(0)
 		ui.Text(c, short).FontSize(fsSmall).TextColor(textColor)
 	})
 	if st == nil {

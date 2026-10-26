@@ -78,7 +78,7 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	u := &a.usage
 	return a.rightPanel(c, "技能与工具", func() {
 		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(0, 12, 16, 12).Gap(14).Children(func() {
+			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
 				case cur.Agent == "":
 					usageNote(c, "普通终端没有会话记录。")
@@ -195,7 +195,7 @@ func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color,
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
 	b.Children(func() {
-		ui.Icon(c, icon).FontSize(sz(11)).TextColor(color).Shrink(0)
+		ui.Icon(c, icon).FontSize(fsSmall).TextColor(color).Shrink(0)
 		ui.Text(c, name).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(150)
 		ui.Text(c, fmt.Sprintf("×%d", n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 	})
@@ -263,7 +263,7 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 				color, kind, name = cliColor(c), cliSourceLabel(st.ev.Source), st.ev.CLI
 			}
 			last := i == len(steps)-1
-			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(10).AlignItems(ui.Stretch).Children(func() {
+			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(8).AlignItems(ui.Stretch).Children(func() {
 				// 圆点和连到下一项的线
 				rail := ui.Box(c).Width(12).Shrink(0)
 				line := p.line
@@ -274,7 +274,7 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 					}
 					pt.Fill(ui.Rect{X: cx - 4, Y: r.Y + 5, W: 8, H: 8}, color, 4)
 				})
-				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 14, 0).Children(func() {
+				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 16, 0).Children(func() {
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 						nt := ui.Text(c, name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).
 							Role(ui.RoleButton).Label("复制 " + name)

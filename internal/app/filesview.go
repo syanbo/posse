@@ -33,7 +33,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 		if !v.tree.Loaded(v.root) {
 			msg = "正在读取…"
 		}
-		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 18)
+		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	curPath := ""
@@ -62,7 +62,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
 		// 尺寸照 WebStorm 的项目树（界面字号 13、行高 24、每层缩进约 18）量出来的
-		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*18).Gap(6).Radius(6).
+		row := ui.Row(c.Key(r.Path)).Height(sz(24)).Margin(0, 6).Padding(0, 8, 0, 6+float32(r.Depth)*treeIndent).Gap(6).Radius(6).
 			AlignItems(ui.Center).Role(ui.RoleButton).Label(r.Name)
 		selectedBg(c, row, r.Path == curPath)
 		ignored := v.list.Ignored(r.Path, r.Dir)
@@ -72,11 +72,11 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				if v.tree.Expanded(r.Path) {
 					turn = 90
 				}
-				ui.Icon(c, iconChevron).FontSize(sz(12)).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				ui.Icon(c, iconFolder).FontSize(sz(16)).TextColor(t.Accent).Shrink(0)
+				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
+				ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
-				ui.Icon(c, iconFile).FontSize(sz(16)).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconFile).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
 			}
 			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if ignored {
@@ -134,7 +134,7 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	s := &v.search
-	ui.Column(c).Padding(0, 10, 8, 10).Gap(6).Shrink(0).Children(func() {
+	ui.Column(c).Padding(0, 12, 8, 12).Gap(6).Shrink(0).Children(func() {
 		in := fieldInput(c, &s.query.Text, "在文件里检索")
 		if s.focus {
 			in.Focus()
@@ -188,9 +188,9 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		h := hits[r.hit]
 		abs := filepath.Join(v.root, h.Path)
 		if r.header {
-			row := ui.Row(c).Padding(8, 12, 3, 14).Gap(6).AlignItems(ui.Center)
+			row := ui.Row(c).Padding(8, 12, 4, 16).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
-				ui.Icon(c, iconFile).FontSize(sz(16)).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, iconFile).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
 				ui.Text(c, filepath.Base(h.Path)).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
 					ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -201,7 +201,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			a.pathMenu(c, row, w, v, abs, false)
 			return
 		}
-		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(3, 8, 3, 8).Gap(8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
+		row := ui.Row(c.Key(i)).Margin(0, 6).Padding(4, 8, 4, 8).Gap(8).Radius(6).AlignItems(ui.Start).Role(ui.RoleButton)
 		selectedBg(c, row, false)
 		text, spans := trimHit(h)
 		row.Children(func() {
@@ -261,7 +261,7 @@ func searchStatus(s *fileSearch) string {
 // toggleChip 是检索选项的小开关，开着时垫强调色淡底；返回这一帧是否被点了。
 func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 7).Radius(5).Center().Shrink(0).
+	b := ui.Box(c.Key("chip-"+label)).Height(sz(22)).Padding(0, 8).Radius(5).Center().Shrink(0).
 		Role(ui.RoleButton).Label(tip).Tooltip(tip).Checked(on)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {
@@ -286,7 +286,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 	d := v.cur
 	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
 	if d.kind == docLoading && d.diff == nil {
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
+		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		return
 	}
 	if d.comp != nil {
@@ -301,7 +301,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		a.diffBar(c, w, v, d)
 		switch d.kind {
 		case docLoading:
-			ui.Text(c, diffLoadingText(d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, diffLoadingText(d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		case docDiff:
 			a.diffView(c, v, d)
 		case docImageDiff:
@@ -386,10 +386,10 @@ func gotoLine(d *fileDoc) {
 
 func filesEmpty(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Grow(1).Center().Gap(14).Children(func() {
+	ui.Column(c).Grow(1).Center().Gap(12).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
 		titleText(c, "在右边的文件栏里选一个文件", fsTitle)
-		ui.Row(c).Gap(14).Children(func() {
+		ui.Row(c).Gap(12).Children(func() {
 			shortcutHint(c, "⌘P", "按名称打开")
 			shortcutHint(c, "⇧⌘F", "在文件里检索")
 			shortcutHint(c, "⌘L", "文件栏")
@@ -463,7 +463,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			ui.Text(c, detail).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
-		btn := ui.Box(c.Key("close")).Size(20, 20).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
+		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(4).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
 		if btn.Hovered() {
 			btn.Background(t.SurfacePressed)
 		}
@@ -472,7 +472,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			case modified && !hovered:
 				dot(c, t.Accent)
 			case active || hovered:
-				ui.Icon(c, iconClose).FontSize(sz(12)).TextColor(t.TextMuted)
+				ui.Icon(c, iconClose).FontSize(fsSmall).TextColor(t.TextMuted)
 			}
 		})
 		if (active || hovered) && btn.Clicked() {
@@ -566,10 +566,10 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	if err != nil || strings.HasPrefix(rel, "..") {
 		rel = shortPath(d.path)
 	}
-	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 14).Gap(4).AlignItems(ui.Center).Children(func() {
+	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
 		if d.readOnly {
-			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(1, 6).Radius(4).Background(t.Surface).Shrink(0).
+			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(4).Background(t.Surface).Shrink(0).
 				Tooltip(fmt.Sprintf("文件超过 %d MB，只读打开", files.ReadOnlySize>>20))
 		}
 		ui.Spacer(c)
@@ -586,31 +586,31 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 		}
 		if d.kind == docText && !d.readOnly && d.isModified() {
-			if pressable(iconButtonSized(c, iconSave, "保存 ⌘S", 24, 14)).Clicked() {
+			if pressable(iconButtonSized(c, iconSave, "保存 ⌘S", compactBox(), smallIcon())).Clicked() {
 				a.saveDoc(d, false)
 			}
 		}
 		if d.kind == docText && v.git.relPath(d.path) != "" {
-			if pressable(iconButtonSized(c, iconHistory, "文件历史", 24, 14)).Clicked() {
+			if pressable(iconButtonSized(c, iconHistory, "文件历史", compactBox(), smallIcon())).Clicked() {
 				a.openLog(w, "", v.git.relPath(d.path))
 			}
 			if d.blame != nil {
 				if pressable(textButton(c, "关闭 Annotate")).Clicked() {
 					d.blame = nil
 				}
-			} else if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", 24, 14)).Clicked() {
+			} else if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", compactBox(), smallIcon())).Clicked() {
 				a.openBlame(w, v, d.path)
 			}
 			if e := v.git.entry(d.path); e != nil && !e.Conflict {
-				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", 24, 14)).Clicked() {
+				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
 					a.rollbackDoc(v, d)
 				}
 			}
 		}
-		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", compactBox(), smallIcon())).Clicked() {
 			mygo.Shell.ShowItemInFolder(d.path)
 		}
-		if pressable(iconButtonSized(c, iconCopy, "复制路径", 24, 14)).Clicked() {
+		if pressable(iconButtonSized(c, iconCopy, "复制路径", compactBox(), smallIcon())).Clicked() {
 			c.WriteClipboard(d.path)
 		}
 	})
@@ -675,7 +675,7 @@ func markdownPreview(c *ui.Context, d *fileDoc) {
 		d.md, d.mdVer = parseMarkdown(d.ed.Buffer.String()), v
 	}
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Row(c).Padding(20, 28, 40, 28).Justify(ui.Center).Children(func() {
+		ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Selectable().Children(func() { mdView{}.blocks(c, d.md) })
 		})
 	})
@@ -714,7 +714,7 @@ func (a *app) quickDialog(c *ui.Context) {
 	v := a.filesFor(w)
 	t := c.Theme()
 	ui.Modal(c, &q.open, func() {
-		ui.Column(c).Width(560).Gap(10).Children(func() {
+		ui.Column(c).Width(560).Gap(8).Children(func() {
 			in := fieldInput(c, &q.query, "按名称查找文件，加 :行号 跳到那一行").AutoFocus()
 			path, line := files.SplitLine(q.query)
 			if v.list != nil && (q.list != v.list || q.key != path) {
@@ -735,7 +735,7 @@ func (a *app) quickDialog(c *ui.Context) {
 				ui.Text(c, "没有匹配的文件").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			default:
 				ui.Scroll(c).MaxHeight(380).Children(func() {
-					ui.Column(c).Gap(1).Children(func() {
+					ui.Column(c).Gap(2).Children(func() {
 						for i, m := range q.matches {
 							if quickRow(c, m, i == q.sel, q.moved) {
 								q.sel, submitted = i, true
@@ -756,7 +756,7 @@ func (a *app) quickDialog(c *ui.Context) {
 // quickRow 是快速打开的一条结果：文件名在前，目录在后，命中的字母铺底色。返回是否被点了。
 func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 10).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
+	row := ui.Row(c.Key(m.Path)).Height(sz(30)).Padding(0, 12).Gap(8).Radius(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.Path)
 	selectedBg(c, row, selected)
 	if selected && reveal {
 		row.ScrollIntoView()
@@ -772,7 +772,7 @@ func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	}
 	mark := colors(t).honey.Alpha(0.28)
 	row.Children(func() {
-		ui.Icon(c, iconFile).FontSize(sz(14)).TextColor(t.TextMuted).Shrink(0)
+		ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.RichText(c, markSpans(m.Path[base:], nameMarks, ui.Span{Size: fsBody}, mark)...).SingleLine().Shrink(0)
 		if base > 0 {
 			dir := m.Path[:base-1]

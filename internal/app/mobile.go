@@ -255,7 +255,7 @@ func mobileOnlineMark(c *ui.Context, names []string) {
 	t := c.Theme()
 	green := colors(t).sage
 	tip := strings.Join(names, "、") + " 正连着"
-	ui.Row(c).Gap(5).AlignItems(ui.Center).Label(tip).Tooltip(tip).Children(func() {
+	ui.Row(c).Gap(4).AlignItems(ui.Center).Label(tip).Tooltip(tip).Children(func() {
 		if len(names) > 1 {
 			ui.Text(c, strconv.Itoa(len(names))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		}
@@ -301,7 +301,7 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 		ui.Column(c).Gap(12).Children(func() {
 			cardTitle(c, "看桌面")
 			if viewer != "" {
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Box(c).Size(7, 7).Radius(3.5).Background(colors(t).sage)
 					ui.Text(c, viewer+" 正在看这台电脑的桌面").FontSize(fsBody).Grow(1)
 					if pressable(textButton(c, "停止")).Tooltip("断开这台手机的画面和操作").Clicked() {
@@ -313,7 +313,7 @@ func (a *app) mobileDeskCard(c *ui.Context) {
 				if !slices.Contains(missing, p.key) {
 					continue
 				}
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					note := "还没允许 Posse 使用" + p.label
 					if p.key == "accessibility" {
 						note += "：手机能看，不能操作"
@@ -343,7 +343,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 					ui.Text(c, "正在生成…").FontSize(fsSmall).TextColor(ui.RGBA(0, 0, 0, 0.5))
 				}
 			})
-			ui.Column(c).Grow(1).Shrink(1).Gap(14).Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).Gap(12).Children(func() {
 				ui.Column(c).Gap(4).Children(func() {
 					cardTitle(c, "配对新手机")
 					ui.Text(c, "用 Posse Mobile 扫左边的码。扫不了就复制配对码，贴进 App 的配对页。").

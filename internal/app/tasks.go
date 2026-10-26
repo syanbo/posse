@@ -326,7 +326,7 @@ func (a *app) taskSidebarItem(c *ui.Context) {
 		trailing = func() {
 			if waiting > 0 {
 				pendingLabel(c)
-				statusGlyph(c, agent.StatusWaiting, 12)
+				statusGlyph(c, agent.StatusWaiting, smallIcon())
 				return
 			}
 			// 进行中只写个数，不再跟一个转动的图标：侧栏这一行是入口，不是哪个会话的状态
@@ -379,10 +379,10 @@ func (a *app) taskBoard(c *ui.Context) {
 	if !a.taskHome && a.task(a.taskSel) == nil {
 		a.selectTask(a.sorted[0].ID)
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(14).Gap(14).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(16).Gap(12).Children(func() {
 		card(c).Width(360).Shrink(0).Clip().Children(func() {
 			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Padding(6, 0, 10, 0).Children(func() { a.taskList(c) })
+				ui.Column(c).Padding(6, 0, 12, 0).Children(func() { a.taskList(c) })
 			})
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
@@ -408,7 +408,7 @@ func (a *app) taskEmptyCard(c *ui.Context) {
 		counts[taskSection(k)]++
 	}
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(420).Padding(24).Gap(14).Children(func() {
+		emptyCard(c).Width(420).Padding(24).Gap(12).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "任务", fsPage)
@@ -416,7 +416,7 @@ func (a *app) taskEmptyCard(c *ui.Context) {
 					FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			if len(a.tasks) > 0 {
-				ui.Row(c).Gap(14).Children(func() {
+				ui.Row(c).Gap(12).Children(func() {
 					for i, label := range []string{"待处理", "进行中", "已结束"} {
 						if counts[i] > 0 {
 							ui.Text(c, fmt.Sprintf("%s %d", label, counts[i])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
@@ -468,12 +468,12 @@ func (a *app) taskList(c *ui.Context) {
 
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
 	t := c.Theme()
-	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(10, 12, 10, 14).Gap(10).Radius(8).AlignItems(ui.Start)
+	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(12, 12, 12, 16).Gap(8).Radius(8).AlignItems(ui.Start)
 	selectedBg(c, row, a.taskSel == task.ID)
 	row.Children(func() {
-		ui.Box(c).Padding(2, 0, 0, 0).Children(func() { taskGlyphIcon(c, task, 13) })
+		ui.Box(c).Padding(2, 0, 0, 0).Children(func() { taskGlyphIcon(c, task, fsBody) })
 		// MinWidth(0)：标题长时让它省略，不把右边的时间挤出卡片
-		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(3).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(4).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, task.Title).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Shrink(1).MinWidth(0)
 				// 结束但不是完成的任务，状态写成文字跟在标题后面，不只靠颜色
@@ -489,7 +489,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				// 图标代替 agent 名字，悬停提示是名字
-				agentTile(c, task.Agent, 13)
+				agentTile(c, task.Agent, smallIcon())
 				ui.Text(c, task.Workspace).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			})
 			preview, color := taskStatusText(task), t.TextMuted
@@ -525,7 +525,7 @@ func taskGlyphIcon(c *ui.Context, task taskInfo, size float32) {
 func (a *app) emptyBoard(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(460).Padding(24).Gap(18).Children(func() {
+		emptyCard(c).Width(460).Padding(24).Gap(16).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "还没有任务", fsPage)
@@ -537,7 +537,7 @@ func (a *app) emptyBoard(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(1, 6).Radius(4).Background(t.Surface)
+				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(2, 6).Radius(4).Background(t.Surface)
 				ui.Text(c, "Agent 的用法说明").FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		})
@@ -550,15 +550,15 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 	if a.detail != nil && a.detail.ID == task.ID {
 		msgs = a.detail.Messages
 	}
-	ui.Column(c).Gap(14).MaxWidth(860).Children(func() {
+	ui.Column(c).Gap(12).MaxWidth(860).Children(func() {
 		card(c).Padding(20).Gap(16).Children(func() {
-			ui.Row(c).Gap(14).AlignItems(ui.Start).Children(func() {
-				agentTile(c, task.Agent, 44)
-				ui.Column(c).Gap(7).Grow(1).Shrink(1).Children(func() {
+			ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+				agentTile(c, task.Agent, tileLarge())
+				ui.Column(c).Gap(8).Grow(1).Shrink(1).Children(func() {
 					titleText(c, task.Title, fsPage).LineHeight(1.3).Selectable()
 					status := func() {
-						ui.Row(c).Gap(5).Children(func() {
-							taskGlyphIcon(c, task, 12)
+						ui.Row(c).Gap(4).Children(func() {
+							taskGlyphIcon(c, task, fsSmall)
 							color := t.TextMuted
 							if needsUser(task) {
 								color = colors(t).honey
@@ -665,8 +665,8 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 			text += "。有未提交的改动，合并前要先提交"
 		}
 	}
-	ui.Row(c).Gap(8).Padding(10, 12).Radius(8).Background(colors(t).wash).Children(func() {
-		ui.Icon(c, iconBranch).FontSize(sz(13)).TextColor(t.TextMuted)
+	ui.Row(c).Gap(8).Padding(12, 12).Radius(8).Background(colors(t).wash).Children(func() {
+		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted)
 		ui.Text(c, task.Branch+" 相对 "+task.BaseRef).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)
 	})
@@ -674,7 +674,7 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 
 // block 是详情里的一张卡片：标题加内容。
 func (a *app) block(c *ui.Context, label string, fn func()) {
-	card(c).Padding(16, 20, 18, 20).Gap(10).Children(func() {
+	card(c).Padding(cardPad).Gap(8).Children(func() {
 		cardTitle(c, label)
 		fn()
 	})
@@ -709,9 +709,9 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 		return open
 	}
 	a.block(c, "往来消息", func() {
-		ui.Column(c).Gap(14).Children(func() {
+		ui.Column(c).Gap(12).Children(func() {
 			for _, m := range shown {
-				ui.Column(c.Key(m.ID)).Gap(5).Children(func() {
+				ui.Column(c.Key(m.ID)).Gap(4).Children(func() {
 					ui.Row(c).Gap(8).Children(func() {
 						from := "worker"
 						if m.Kind == "answer" || m.Kind == "note" {
