@@ -1020,7 +1020,8 @@ class _FloatingError extends StatelessWidget {
   }
 }
 
-/// 标题旁的电脑胶囊：连着时是电脑名；断线时换成琥珀色的转圈和完整的状态，胶囊跟着放大，连上后缩回去。
+/// 标题旁的电脑胶囊：连着时是电脑名；断线重连时换成琥珀色的转圈和完整的状态，胶囊跟着放大，连上后缩回去；
+/// 连不上、停下等重试时是红点，和页面中间的报错一致。
 class _ConnectionLine extends StatelessWidget {
   const _ConnectionLine({required this.model});
 
@@ -1031,12 +1032,16 @@ class _ConnectionLine extends StatelessWidget {
     final c = PosseColors.of(context);
     // 主动断开的不算掉线：灰点加「已断开」，不转圈
     final off = model.disconnected && !model.connecting;
-    final offline = !off && (model.rpc == null || model.connecting);
+    final failed = model.failed;
+    final offline = !off && !failed && (model.rpc == null || model.connecting);
     final current = model.current;
+    final name = current == null ? '' : '${model.labelOf(current)} · ';
     final text = model.connecting
         ? '正在连接电脑…'
         : off
-        ? '${current == null ? '' : '${model.labelOf(current)} · '}已断开'
+        ? '$name已断开'
+        : failed
+        ? '$name连不上'
         : offline
         ? '连接断开，正在重连…'
         : model.labelOf(model.current);
@@ -1061,7 +1066,11 @@ class _ConnectionLine extends StatelessWidget {
                 width: 7,
                 height: 7,
                 decoration: BoxDecoration(
-                  color: off ? c.faint : c.sage,
+                  color: off
+                      ? c.faint
+                      : failed
+                      ? c.danger
+                      : c.sage,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -1073,7 +1082,11 @@ class _ConnectionLine extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 13,
-                  color: offline ? c.honey : c.muted,
+                  color: offline
+                      ? c.honey
+                      : failed
+                      ? c.danger
+                      : c.muted,
                 ),
               ),
             ),
@@ -1176,105 +1189,124 @@ class _ComputerSheet extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final active = model.activeId;
-        // 整张一起滚：横屏只有三百多高，只让中间的列表滚的话，下面几个按钮占满高度、列表被压成 0
+        final header = Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text(
+            '电脑',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: c.text,
+            ),
+          ),
+        );
+        final list = Section(
+          inset: 50,
+          children: [
+            if (Platform.isIOS && model.settings.deskWatch)
+              RowTile(
+                leading: Icon(
+                  Icons.desktop_mac_outlined,
+                  size: 24,
+                  color: c.accent,
+                ),
+                title: const Text('看桌面'),
+                onTap: onDesk,
+              ),
+            for (final computer in model.computers)
+              RowTile(
+                chevron: false,
+                leading: Icon(
+                  Icons.laptop_mac_rounded,
+                  size: 24,
+                  color: c.accent,
+                ),
+                title: Text(model.labelOf(computer)),
+                // 连着的那台写实际连上的地址，其余写配对码里的主地址
+                subtitle: Text(
+                  computer.id == active && model.connectedUrl != null
+                      ? hostOf(model.connectedUrl) ?? ''
+                      : computerEndpoint(computer),
+                  style: mono(12, color: c.muted),
+                ),
+                trailing: computer.id == active
+                    ? (model.connecting
+                          ? const HexSpinner(size: 18)
+                          : Icon(Icons.check_rounded, color: c.accent))
+                    : null,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  model.switchTo(computer.id);
+                },
+                onLongPress: () => _actions(context, computer),
+              ),
+          ],
+        );
+        final footer = [
+          if (model.error != null) NoticeBar(model.error!),
+          // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
+          if (model.rpc != null || model.connecting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  unawaited(model.disconnect());
+                },
+                icon: const Icon(Icons.link_off_rounded, size: 20),
+                label: const Text('断开连接'),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+              label: const Text('扫码添加电脑'),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '长按一台电脑可以改名或忘掉它',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: c.faint),
+            ),
+          ),
+        ];
         return SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Text(
-                    '电脑',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: c.text,
-                    ),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // 横屏只有三百多高，标题和按钮固定的话列表会被压成 0：高度不够时整张一起滚
+              if (!box.hasBoundedHeight || box.maxHeight < _sheetPinnedHeight) {
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [header, list, ...footer],
                   ),
-                ),
-                Section(
-                  inset: 50,
-                  children: [
-                    if (Platform.isIOS && model.settings.deskWatch)
-                      RowTile(
-                        leading: Icon(
-                          Icons.desktop_mac_outlined,
-                          size: 24,
-                          color: c.accent,
-                        ),
-                        title: const Text('看桌面'),
-                        onTap: onDesk,
-                      ),
-                    for (final computer in model.computers)
-                      RowTile(
-                        chevron: false,
-                        leading: Icon(
-                          Icons.laptop_mac_rounded,
-                          size: 24,
-                          color: c.accent,
-                        ),
-                        title: Text(model.labelOf(computer)),
-                        // 连着的那台写实际连上的地址，其余写配对码里的主地址
-                        subtitle: Text(
-                          computer.id == active && model.connectedUrl != null
-                              ? hostOf(model.connectedUrl) ?? ''
-                              : computerEndpoint(computer),
-                          style: mono(12, color: c.muted),
-                        ),
-                        trailing: computer.id == active
-                            ? (model.connecting
-                                  ? const HexSpinner(size: 18)
-                                  : Icon(Icons.check_rounded, color: c.accent))
-                            : null,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          model.switchTo(computer.id);
-                        },
-                        onLongPress: () => _actions(context, computer),
-                      ),
-                  ],
-                ),
-                if (model.error != null) NoticeBar(model.error!),
-                // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
-                if (model.rpc != null || model.connecting)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        unawaited(model.disconnect());
-                      },
-                      icon: const Icon(Icons.link_off_rounded, size: 20),
-                      label: const Text('断开连接'),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: FilledButton.icon(
-                    onPressed: onAdd,
-                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                    label: const Text('扫码添加电脑'),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    '长按一台电脑可以改名或忘掉它',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: c.faint),
-                  ),
-                ),
-              ],
-            ),
+                );
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  header,
+                  Flexible(child: SingleChildScrollView(child: list)),
+                  ...footer,
+                ],
+              );
+            },
           ),
         );
       },
     );
   }
 }
+
+/// 电脑列表弹窗至少这么高才固定标题和底下的按钮、只滚列表：按钮和提示约占 200，列表至少留两行。
+const _sheetPinnedHeight = 360.0;
 
 /// 配对码里的主地址（host:port），电脑列表的副标题。
 String computerEndpoint(SavedComputer computer) {

@@ -442,6 +442,10 @@ class PosseAppModel extends ChangeNotifier {
 
   PhoneRpc? get rpc => link?.rpc;
 
+  /// 连接停在失败上：没在连，也没有连接在后台重连（[PosseLink] 只在连上过之后断线时一直重连，
+  /// 一开始就没连上时没有它），等用户点重试。
+  bool get failed => !connecting && !disconnected && link == null;
+
   /// 和电脑之间的往返延迟，没连上或还没测到时为空。
   Duration? get latency => link?.rpc == null ? null : link?.meter?.latency;
 
