@@ -162,7 +162,7 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 				}
 			}
 			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-				df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+				a.toggleIgnoreSpace(hd)
 			}
 		}
 		ui.Spacer(c)
@@ -193,8 +193,10 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 			docMessage(c, hd, "二进制文件，不显示 diff")
 		case docError:
 			docMessage(c, hd, hd.err)
+		case docTooLarge:
+			a.tooLargeDiffView(c, v, hd)
 		default:
-			ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, diffLoadingText(df)).FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		}
 		diffHint(c, df)
 	})

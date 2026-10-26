@@ -1299,19 +1299,78 @@ func TestStepDiffAfterCommit(t *testing.T) {
 	until(t, tt, "moved to the list", func() bool { return d.diff.rel == "notes.txt" && d.kind == docDiff })
 }
 
-// 大文件不比较，提示一句；diff 不是磁盘上的文件，不给"用默认应用打开"。
+// 太大的文件先不比较，写两边多大、多少行，点"仍要比较"在后台比；diff 不是磁盘上的文件，不给"用默认应用打开"。
 func TestDiffLargeFile(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	os.WriteFile(filepath.Join(root, "big.lock"), []byte(strings.Repeat("x\n", diffMaxSize)), 0o644)
+	line := strings.Repeat("x", 1023) + "\n"
+	n := diffMaxSize/len(line) + 1
+	os.WriteFile(filepath.Join(root, "big.lock"), []byte(strings.Repeat(line, n)), 0o644)
 	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.lock", Untracked: true}), nil, true)
 	d := v.cur
-	until(t, tt, "too large", func() bool { return d.kind == docTooLarge && tt.HasText(tooLargeDiff) })
+	until(t, tt, "too large", func() bool {
+		return d.kind == docTooLarge && tt.HasText(fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)) &&
+			tt.HasText(fmt.Sprintf("改之前 0 B · 0 行，改之后 20.0 MB · %s 行", thousands(n)))
+	})
 	if tt.HasText("用默认应用打开") {
 		t.Fatal("virtual diff doc offers to open diff: path")
+	}
+	if err := tt.Click("仍要比较"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "compared anyway", func() bool { return d.kind == docDiff && len(d.diff.state.Hunks()) == 1 })
+	// 编辑器把末尾换行后面也算一行
+	if added, _ := d.diff.state.Stats(); added < n {
+		t.Fatalf("added %d, want %d", added, n)
+	}
+}
+
+// 大文件在后台比较，界面线程拿算好的结果；切换忽略空白也在后台重比，结果和在界面线程上算的一样。
+func TestDiffComparedAhead(t *testing.T) {
+	var old, nw strings.Builder
+	for i := range 40000 {
+		fmt.Fprintf(&old, "  line %d of a lock file %s\n", i, strings.Repeat("y", 20))
+		switch {
+		case i%500 == 0:
+			fmt.Fprintf(&nw, "  line %d changed %s\n", i, strings.Repeat("y", 20))
+		case i%700 == 0:
+			fmt.Fprintf(&nw, "\tline %d of a lock file %s\n", i, strings.Repeat("y", 20))
+		default:
+			fmt.Fprintf(&nw, "  line %d of a lock file %s\n", i, strings.Repeat("y", 20))
+		}
+	}
+	if old.Len()+nw.Len() <= diffAheadSize {
+		t.Fatal("texts too small to be compared ahead")
+	}
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	os.WriteFile(filepath.Join(root, "big.txt"), []byte(old.String()), 0o644)
+	gitRun(t, root, "add", "big.txt")
+	gitRun(t, root, "commit", "-q", "-m", "big")
+	os.WriteFile(filepath.Join(root, "big.txt"), []byte(nw.String()), 0o644)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := openChanges(t, a, tt)
+	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.txt", X: '.', Y: 'M'}), nil, true)
+	d := v.cur
+	want := func(ignore bool) []editor.DiffHunk {
+		s := editor.DiffState{Old: editor.NewBuffer(old.String()), New: editor.NewBuffer(nw.String()), IgnoreWhitespace: ignore}
+		return s.Hunks()
+	}
+	until(t, tt, "diff", func() bool { return d.kind == docDiff && !d.diff.comparing })
+	if got := d.diff.state.Hunks(); !slices.Equal(got, want(true)) {
+		t.Fatalf("hunks %d, want %d", len(got), len(want(true)))
+	}
+	a.toggleIgnoreSpace(d)
+	if !d.diff.state.IgnoreWhitespace || !d.diff.comparing {
+		t.Fatal("big file switched whitespace on the UI thread")
+	}
+	until(t, tt, "recompared", func() bool { return !d.diff.state.IgnoreWhitespace })
+	if got := d.diff.state.Hunks(); !slices.Equal(got, want(false)) {
+		t.Fatalf("hunks %d, want %d", len(got), len(want(false)))
 	}
 }
 

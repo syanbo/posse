@@ -714,7 +714,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 					}
 				}
 				if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-					df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+					a.toggleIgnoreSpace(d)
 				}
 			}
 			if pressable(iconButtonSized(c, iconClose, "收起 diff", 24, 14)).Clicked() {
@@ -731,7 +731,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 			}
 			switch d.kind {
 			case docLoading:
-				muted("正在读取…")
+				muted(diffLoadingText(df))
 			case docError:
 				ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
 			case docImageDiff:
@@ -739,7 +739,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 			case docBinary:
 				muted("二进制文件，不显示内容")
 			case docTooLarge:
-				muted(tooLargeDiff)
+				a.tooLargeDiffView(c, v, d)
 			default:
 				a.diffView(c, v, d)
 			}

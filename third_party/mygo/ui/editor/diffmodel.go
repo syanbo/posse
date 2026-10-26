@@ -25,6 +25,9 @@ type diffModel struct {
 	words   map[wordKey]*hunkWords
 	// ignoreSpace compares lines without their whitespace (Posse).
 	ignoreSpace bool
+	// ahead is a comparison made ahead, which the next full comparison
+	// takes when it is of the same texts (Posse).
+	ahead *DiffComparison
 }
 
 // setIgnoreSpace turns whitespace-blind comparison on or off; a change
@@ -157,7 +160,9 @@ func (d *diffModel) update() bool {
 // full compares the whole texts.
 func (d *diffModel) full(oldText, newText rope.Text, oldVer, newVer uint64) {
 	d.oldText, d.newText, d.oldVer, d.newVer = oldText, newText, oldVer, newVer
-	d.hunks = diff.Lines(d.cmpLines(oldText, 0, oldText.LineCount()), d.cmpLines(newText, 0, newText.LineCount()))
+	if !d.takeAhead(oldText, newText) {
+		d.hunks = diff.Lines(d.cmpLines(oldText, 0, oldText.LineCount()), d.cmpLines(newText, 0, newText.LineCount()))
+	}
 	d.version++
 	d.words = nil
 }

@@ -428,7 +428,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 						}
 					}
 					if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-						df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+						a.toggleIgnoreSpace(d)
 					}
 				}
 				if listed {
@@ -459,7 +459,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				case !listed:
 					muted("这个文件已经没有改动了")
 				case d.kind == docLoading:
-					muted("正在读取…")
+					muted(diffLoadingText(df))
 				case d.kind == docError:
 					ui.Text(c, d.err).FontSize(12.5).TextColor(t.Danger).Padding(16)
 				case d.kind == docImageDiff:
@@ -467,7 +467,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				case d.kind == docBinary:
 					muted("二进制文件，只能整个回滚")
 				case d.kind == docTooLarge:
-					muted(tooLargeDiff)
+					a.tooLargeDiffView(c, r.v, d)
 				default:
 					a.diffView(c, r.v, d)
 				}

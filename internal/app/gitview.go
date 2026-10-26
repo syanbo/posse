@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -307,16 +308,21 @@ func changeSpec(e gitx.Entry) diffSpec {
 // diffDoc 是 diff 标签页。
 type diffDoc struct {
 	diffSpec
-	siblings []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
-	state    editor.DiffState
-	hunk     int  // F7 走到的改动
-	first    bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
-	jumped   bool // 已经跳过
-	binary   bool
-	images   [2]diffImage // 图片文件的两边：改之前、改之后
-	stamp    files.Stamp  // 工作区文件的磁盘戳，变了才重读
-	hint     string       // F7 到头时 diff 栏下面的提示（diffHint）
-	hintAt   time.Time
+	siblings  []diffSpec // 同一组的文件（比较、提交里的），F7 在它们之间跳；为空时在改动列表里跳
+	state     editor.DiffState
+	hunk      int  // F7 走到的改动
+	first     bool // 读进来后跳到第一处改动；⇧F7 从后一个文件退回来时为假，跳到最后一处
+	jumped    bool // 已经跳过
+	binary    bool
+	images    [2]diffImage // 图片文件的两边：改之前、改之后
+	stamp     files.Stamp  // 工作区文件的磁盘戳，变了才重读
+	hint      string       // F7 到头时 diff 栏下面的提示（diffHint）
+	hintAt    time.Time
+	force     bool   // 超过 diffMaxSize 也比较：点过"仍要比较"
+	comparing bool   // 大文件正在后台比较（读进来之后，或切换了忽略空白）
+	sizes     [2]int // 超过 diffMaxSize 时两边的字节数和行数，给提示用
+	lines     [2]int
+	tracked   bool // 已经记进 trackBigDiff
 }
 
 // diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
@@ -419,10 +425,74 @@ func showRev(ctx context.Context, root, rev, rel string) ([]byte, error) {
 	return b, err
 }
 
-// diffMaxSize 以上的文件不比较。
-const diffMaxSize = 2 << 20
+// diffMaxSize 以上的文件默认不比较，点"仍要比较"才比。比较在后台做，这么大也只是要等几秒。
+const diffMaxSize = 20 << 20
 
-var tooLargeDiff = fmt.Sprintf("文件超过 %d MB，不在这里比较", diffMaxSize>>20)
+// diffAheadSize 以上的两边合起来在后台比较时显示"正在比较…"；切换忽略空白也在后台重比。
+// 比较本身在界面线程上做的话，几 MB 的 lock 文件就要卡零点几秒到一两秒。
+const diffAheadSize = 1 << 20
+
+// diffLoadingText 是 diff 还没出来时的提示。
+func diffLoadingText(df *diffDoc) string {
+	if df.comparing {
+		return "正在比较…"
+	}
+	return "正在读取…"
+}
+
+// tooLargeDiffView 是超过 diffMaxSize 的文件：两边多大、多少行，可以仍要比较。
+func (a *app) tooLargeDiffView(c *ui.Context, v *filesView, d *fileDoc) {
+	t := c.Theme()
+	df := d.diff
+	side := func(i int) string {
+		return byteSize(df.sizes[i]) + " · " + thousands(df.lines[i]) + " 行"
+	}
+	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Padding(16).Children(func() {
+		ui.Text(c, fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)).FontSize(13).TextColor(t.TextMuted)
+		ui.Text(c, "改之前 "+side(0)+"，改之后 "+side(1)).FontSize(12).TextColor(t.TextMuted).FontFeatures("tnum")
+		if pressable(textButton(c, "仍要比较")).Clicked() {
+			df.force = true
+			d.kind = docLoading
+			a.loadDiff(v, d)
+		}
+	})
+}
+
+// lineCount 是文字的行数，最后一行没有换行符也算。
+func lineCount(b []byte) int {
+	n := bytes.Count(b, []byte{'\n'})
+	if len(b) > 0 && b[len(b)-1] != '\n' {
+		n++
+	}
+	return n
+}
+
+// toggleIgnoreSpace 切换忽略空白。大文件在后台重新比较，算完再换上，期间界面照旧显示原来的结果。
+func (a *app) toggleIgnoreSpace(d *fileDoc) {
+	df := d.diff
+	on := !df.state.IgnoreWhitespace
+	if df.state.Old == nil || df.state.Old.Len()+df.state.New.Len() <= diffAheadSize {
+		df.state.IgnoreWhitespace = on
+		return
+	}
+	if df.comparing {
+		return
+	}
+	df.comparing = true
+	old, nw := df.state.Old.String(), df.state.New.String()
+	go func() {
+		cmp := editor.CompareTexts(old, nw, on)
+		a.update(func() {
+			df.comparing = false
+			if d.diff != df {
+				return
+			}
+			df.state.IgnoreWhitespace = on
+			df.state.UseComparison(cmp)
+			releaseMemorySoon()
+		})
+	}()
+}
 
 // clampHunk 在改动数变少（重读、切换忽略空白、回滚了一处）之后把当前位置收回到范围内。
 func clampHunk(df *diffDoc) {
@@ -441,6 +511,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 	g := &v.git
 	root, df := g.repo, d.diff
 	spec := df.diffSpec
+	ignore, force := df.state.IgnoreWhitespace, df.force
 	go func() {
 		ctx := context.Background()
 		oldPath := spec.rel
@@ -474,18 +545,36 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 		if isImage {
 			images = [2]diffImage{loadDiffImage(old, oldExists && len(old) > 0), loadDiffImage(nw, newExists)}
 		}
+		tooLarge := err == nil && !isImage && !force && max(len(old), len(nw)) > diffMaxSize
+		var lines [2]int
+		if tooLarge {
+			lines = [2]int{lineCount(old), lineCount(nw)}
+		}
+		// 比较在这里做完，界面线程只装结果
+		var cmp *editor.DiffComparison
+		if err == nil && !isImage && !tooLarge && !files.IsBinary(old) && !files.IsBinary(nw) {
+			if len(old)+len(nw) > diffAheadSize {
+				a.update(func() {
+					if d.diff == df {
+						df.comparing = true
+					}
+				})
+			}
+			cmp = editor.CompareTexts(string(old), string(nw), ignore)
+		}
 		a.update(func() {
 			// 读的时候标签已经换成别的文件
 			if d.diff != df {
 				return
 			}
+			df.comparing = false
 			if err != nil {
 				d.kind, d.err = docError, err.Error()
 				return
 			}
 			df.stamp = stamp
-			// 比较在界面线程上做，几 MB 的 lock 文件就要卡一两秒
-			if !isImage && max(len(old), len(nw)) > diffMaxSize {
+			if tooLarge {
+				df.sizes, df.lines = [2]int{len(old), len(nw)}, lines
 				d.kind = docTooLarge
 				return
 			}
@@ -505,6 +594,14 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 			} else {
 				df.state.Old.Reset(string(old))
 				df.state.New.Reset(string(nw))
+			}
+			if cmp != nil {
+				df.state.UseComparison(cmp)
+			}
+			if len(old)+len(nw) > diffAheadSize {
+				trackBigDiff(df)
+				// 比较时临时要的内存还给系统
+				releaseMemorySoon()
 			}
 			d.kind = docDiff
 			clampHunk(df)

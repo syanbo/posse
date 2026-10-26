@@ -301,7 +301,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		a.diffBar(c, w, v, d)
 		switch d.kind {
 		case docLoading:
-			ui.Text(c, "正在读取…").FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
+			ui.Text(c, diffLoadingText(d.diff)).FontSize(12).TextColor(t.TextMuted).Padding(16, 18)
 		case docDiff:
 			a.diffView(c, v, d)
 		case docImageDiff:
@@ -309,7 +309,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		case docBinary:
 			docMessage(c, d, "二进制文件，不显示 diff")
 		case docTooLarge:
-			docMessage(c, d, tooLargeDiff)
+			a.tooLargeDiffView(c, v, d)
 		default:
 			docMessage(c, d, d.err)
 		}

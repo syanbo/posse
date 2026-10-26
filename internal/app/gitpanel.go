@@ -687,7 +687,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				}
 			}
 			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
-				df.state.IgnoreWhitespace = !df.state.IgnoreWhitespace
+				a.toggleIgnoreSpace(d)
 			}
 		}
 		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", 24, 14)).Clicked() {
