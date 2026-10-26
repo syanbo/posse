@@ -95,6 +95,7 @@ class AppSettings {
     this.deskLandscape = false,
     this.deskGesturesSeen = false,
     this.deskTrackpad = false,
+    this.historyByFolder = false,
     this.phoneId = '',
     Map<String, int>? deskDisplays,
     List<BarKey>? barKeys,
@@ -128,6 +129,9 @@ class AppSettings {
   /// 看桌面把屏幕当触控板：单指滑动移指针，点按落在指针上。默认直接点哪按哪。
   bool deskTrackpad;
 
+  /// 历史页的会话按文件夹分组，而不是按时间。
+  bool historyByFolder;
+
   /// 每台电脑上次在看桌面里选的屏，键是电脑的公钥，值是屏的 ID（CGDirectDisplayID，同一台显示器重启后不变）。
   /// 下次看时订阅带上，那块屏不在了电脑看主屏。
   Map<String, int> deskDisplays;
@@ -152,6 +156,7 @@ class AppSettings {
     'deskLandscape': deskLandscape,
     'deskGesturesSeen': deskGesturesSeen,
     'deskTrackpad': deskTrackpad,
+    'historyByFolder': historyByFolder,
     'deskDisplays': deskDisplays,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
@@ -194,6 +199,9 @@ class AppSettings {
       }
       if (map['deskTrackpad'] is bool) {
         out.deskTrackpad = map['deskTrackpad'] as bool;
+      }
+      if (map['historyByFolder'] is bool) {
+        out.historyByFolder = map['historyByFolder'] as bool;
       }
       final displays = map['deskDisplays'];
       if (displays is Map) {

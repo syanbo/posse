@@ -95,6 +95,52 @@ List<(String, List<HistorySession>)> groupHistory(
   return out;
 }
 
+/// 历史页的 agent 筛选，和桌面的分段一一对应；空串是全部。
+const historyAgents = ['', 'claude', 'codex', 'cursor', 'grok'];
+
+/// 照桌面历史页按文件夹分组：会话归到目录所在的项目（项目和它的工作区、worktree 取最长匹配），
+/// 不在任何项目里的用目录名；组按其中最近的会话排先后，组内最近的在前。
+/// [roots] 是（目录, 项目名）。
+List<(String, List<HistorySession>)> groupHistoryByFolder(
+  List<HistorySession> sessions,
+  List<(String, String)> roots,
+) {
+  String label(String cwd) {
+    if (cwd.isEmpty) return '未知文件夹';
+    var name = '';
+    var best = -1;
+    for (final (root, project) in roots) {
+      if (root.isEmpty || root.length <= best) continue;
+      final base = root.endsWith('/')
+          ? root.substring(0, root.length - 1)
+          : root;
+      if (cwd == root || cwd.startsWith('$base/')) {
+        name = project;
+        best = root.length;
+      }
+    }
+    if (name.isNotEmpty) return name;
+    final parts = cwd.split('/').where((p) => p.isNotEmpty);
+    return parts.isEmpty ? cwd : parts.last;
+  }
+
+  final sorted = [...sessions];
+  // 没有时间的排最后；sort 不稳定，同一时刻的按原来的先后
+  final order = {for (var i = 0; i < sorted.length; i++) sorted[i]: i};
+  sorted.sort((a, b) {
+    final x = a.updatedAt, y = b.updatedAt;
+    final by = x == null || y == null
+        ? (x == null ? 1 : 0) - (y == null ? 1 : 0)
+        : y.compareTo(x);
+    return by != 0 ? by : order[a]! - order[b]!;
+  });
+  final groups = <String, List<HistorySession>>{};
+  for (final s in sorted) {
+    groups.putIfAbsent(label(s.cwd), () => []).add(s);
+  }
+  return [for (final e in groups.entries) (e.key, e.value)];
+}
+
 /// 列表右边的时间：一小时内写几分钟前，今天写时刻，今年写月日，更早带年份。
 String historyTime(DateTime? t, DateTime now) {
   if (t == null) return '';

@@ -15,7 +15,7 @@ import '../workspace/models.dart';
 import '../workspace/workspace.dart';
 import 'models.dart';
 
-/// 电脑上的会话历史：顶上搜索，下面按时间分组。照桌面的历史页，只读；点开看对话，
+/// 电脑上的会话历史：顶上搜索和按 agent 筛选，下面按时间或文件夹分组。照桌面的历史页，只读；点开看对话，
 /// 底部"在电脑上继续"让电脑在这个会话的目录里开终端接着聊。
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.model});
@@ -38,6 +38,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   /// 每次查询加一，只认最后一次的结果。
   var _seq = 0;
+
+  /// 选中的 agent 筛选，下标对应 [historyAgents]。不记住，和桌面一样每次从全部开始。
+  var _agent = 0;
 
   @override
   void initState() {
@@ -64,10 +67,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
     setState(() => _loading = true);
     final q = _query.text.trim();
+    final agent = historyAgents[_agent];
     try {
       final result = q.isEmpty
-          ? await rpc.call('history.list', {'limit': 300})
-          : await rpc.call('history.search', {'query': q, 'limit': 100});
+          ? await rpc.call('history.list', {'agent': agent, 'limit': 300})
+          : await rpc.call('history.search', {
+              'query': q,
+              'agent': agent,
+              'limit': 100,
+            });
       if (!mounted || seq != _seq) return;
       await routeSettled(context);
       if (!mounted || seq != _seq) return;
@@ -98,9 +106,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final c = PosseColors.of(context);
     final now = DateTime.now();
     final searching = _query.text.trim().isNotEmpty;
-    final groups = groupHistory(_sessions, now);
+    final byFolder = widget.model.settings.historyByFolder;
+    final groups = byFolder
+        ? groupHistoryByFolder(_sessions, [
+            for (final w in widget.model.worktrees) (w.path, w.repo),
+          ])
+        : groupHistory(_sessions, now);
+    final agent = historyAgents[_agent];
     return Scaffold(
-      appBar: AppBar(title: const Text('历史')),
+      appBar: AppBar(
+        title: const Text('历史'),
+        actions: [
+          // 和桌面的「按时间 / 按文件夹」一样，选择记住；图标画的是现在的分组方式
+          IconButton(
+            tooltip: byFolder ? '按文件夹分组，点一下改按时间' : '按时间分组，点一下改按文件夹',
+            onPressed: () {
+              widget.model.updateSettings(
+                (s) => s.historyByFolder = !s.historyByFolder,
+              );
+              setState(() {});
+            },
+            icon: Icon(
+              byFolder ? Icons.folder_outlined : Icons.schedule_rounded,
+              color: c.text,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -129,6 +162,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Segmented(
+              labels: [
+                for (final a in historyAgents) a.isEmpty ? '全部' : agentLabel(a),
+              ],
+              selected: _agent,
+              onChanged: (i) {
+                if (i == _agent) return;
+                _debounce?.cancel();
+                setState(() => _agent = i);
+                unawaited(_load());
+              },
+            ),
+          ),
           if (_error != null) NoticeBar(_error!),
           if (searching && _any && _sessions.isNotEmpty)
             const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
@@ -138,7 +186,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 : _sessions.isEmpty && _error == null
                 ? EmptyState(
                     icon: Icons.history_rounded,
-                    text: searching ? '没有找到' : '电脑上还没有会话历史',
+                    text: searching
+                        ? '没有找到'
+                        : agent.isEmpty
+                        ? '电脑上还没有会话历史'
+                        : '电脑上还没有 ${agentLabel(agent)} 的会话历史',
                   )
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(
