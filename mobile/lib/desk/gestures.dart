@@ -378,6 +378,7 @@ class DeskGestures {
     if (_samples.length < 2) return;
     final a = _samples.first.centroid;
     final b = _samples.last.centroid;
+    _revealCursor();
     final at = _trackpad ? cursor : _map(a.dx, a.dy);
     if (at != null) onEvent(DeskPointEvent(at));
     _scrollFrom = b;
@@ -412,6 +413,7 @@ class DeskGestures {
       x += finger.x;
       y += finger.y;
     }
+    _revealCursor();
     final point = _trackpad ? cursor : _map(x / pts.length, y / pts.length);
     if (point == null) return;
     onEvent(DeskRightClickEvent(point));
@@ -458,6 +460,7 @@ class DeskGestures {
   }
 
   void _tap(double x, double y, Duration time) {
+    _revealCursor();
     final point = _trackpad ? cursor : _map(x, y);
     if (point == null) return;
     final screen = _trackpad ? cursorView : Offset(x, y);
@@ -479,6 +482,7 @@ class DeskGestures {
   }
 
   void _startDrag(_Finger finger, Duration time) {
+    _revealCursor();
     _one = _One.dragging;
     _edgeAt = time;
     // 越过 slop 时手指已经离开原点。按下记落下的位置，这一下的移动另发。
@@ -539,6 +543,11 @@ class DeskGestures {
       (cursor.y + dy * scale / frame.height).clamp(0.0, 1.0),
     );
     _followCursor();
+  }
+
+  /// 触控板模式下按在指针上之前先让它看得见：捏合缩放后指针可能在视口外面。
+  void _revealCursor() {
+    if (_trackpad) _followCursor();
   }
 
   /// 放大时指针离视图边缘不到 [deskEdgePx] 就挪视口，让指针一直看得见。

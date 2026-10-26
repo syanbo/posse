@@ -751,6 +751,12 @@ class _DeskPageState extends State<DeskPage>
       case 'displays':
         if (!mounted) return;
         final displays = DeskDisplays.parse(frame);
+        // 换了在看的屏或窗口（手动切、窗口没了退回整块屏、锁屏改看主屏），
+        // 原来的指针位置在新画面里没有意义
+        if (displays.current != _displays.current ||
+            displays.window?.id != _displays.window?.id) {
+          _gestures.cursor = const DeskPoint(0.5, 0.5);
+        }
         setState(() => _displays = displays);
         if (displays.gone) _note('窗口关掉了或不在这个空间，回到整块屏');
       case 'end':
@@ -784,7 +790,6 @@ class _DeskPageState extends State<DeskPage>
       }
     }
     _resetZoom();
-    _gestures.cursor = const DeskPoint(0.5, 0.5);
     try {
       await rpc.call(pick.window ? 'desk.window' : 'desk.display', {
         'id': pick.id,

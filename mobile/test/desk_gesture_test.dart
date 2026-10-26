@@ -476,6 +476,16 @@ void main() {
       expect(click.at.y, closeTo(0.5, 1e-9));
     },
   );
+
+  test('trackpad: a tap first brings an off-screen cursor into view', () {
+    final g = _gestures()..gestures.trackpad = true;
+    g.viewport.zoom = 2;
+    g.gestures.cursor = const DeskPoint(0.9, 0.5);
+    _tap(g, 100, 100, 0);
+    expect(g.gestures.cursorView.dx, closeTo(400 - deskEdgePx, 1e-9));
+    final tap = g.events.single as DeskTapEvent;
+    expect(tap.at.x, closeTo(0.9, 1e-9));
+  });
 }
 
 class _Harness {
