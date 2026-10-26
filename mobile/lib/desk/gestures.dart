@@ -26,6 +26,9 @@ const deskPointerSlow = 150.0;
 const deskPointerFast = 1500.0;
 const deskPointerMaxGain = 2.5;
 
+/// 触控板模式拖动中松手后，左键再按住这么久：手指放回来接着拖，屏幕小也能拖得远。
+const deskDragGrace = Duration(milliseconds: 600);
+
 /// 松手后滚轮速度的时间常数，约 0.7 秒收完。
 const deskFlickTau = 0.18;
 const deskFlickStop = 20.0;
@@ -90,7 +93,8 @@ class _Flick {
 ///
 /// 触控板模式下单指滑动按相对位移移动 [cursor]，点按、右键、拖动、滚动都落在指针上，
 /// 放大后视口跟着指针走，不再单指平移。拖动是轻点后 [deskMultiTap] 内再按住滑动，
-/// 不用长按：手指放上去停一下再滑是常见的移指针动作。
+/// 不用长按：手指放上去停一下再滑是常见的移指针动作。拖动中松手，左键再按住
+/// [deskDragGrace]，期间放回手指滑动接着拖，轻点一下或等它过去才松开。
 class DeskGestures {
   DeskGestures({
     required this.width,
@@ -116,6 +120,12 @@ class DeskGestures {
   DeskPoint cursor = const DeskPoint(0.5, 0.5);
   Duration? _moveAt;
   var _tapDrag = false;
+
+  /// 拖动中松手的时刻，左键还按着。
+  Duration? _graceFrom;
+
+  /// 这一下是松手后放回来接着拖的，没滑就抬起是轻点，松开左键。
+  var _resumed = false;
   _One? _one;
   int? _oneId;
   bool _armed = false;
@@ -155,7 +165,11 @@ class DeskGestures {
     );
   }
 
-  bool get needsTick => _fingers.isNotEmpty || _flick != null;
+  bool get needsTick =>
+      _fingers.isNotEmpty || _flick != null || _graceFrom != null;
+
+  /// 触控板模式下左键按着：拖动中，或松手后还在等手指放回来。
+  bool get buttonHeld => _one == _One.dragging || _graceFrom != null;
 
   bool get dragging => _one == _One.dragging;
 
@@ -173,6 +187,8 @@ class DeskGestures {
     _fingers[id] = _Finger(x, y, time);
     if (_ignore) return;
     _flick = null;
+    // 第一根手指放回来是接着拖；再多手指就是别的手势，先松开左键
+    if (_fingers.length > 1) _releaseGrace();
     if (_fingers.length > 2) {
       _endTwo(time, still: false, abandon: true);
       _cancelOne();
@@ -198,6 +214,11 @@ class DeskGestures {
           _trackpad &&
           _lastTapScreen != null &&
           time - _lastTapTime <= deskMultiTap;
+      if (_graceFrom != null) {
+        _graceFrom = null;
+        _one = _One.dragging;
+        _resumed = true;
+      }
       return;
     }
     if (!_trackpad && !_anyOnPicture()) return;
@@ -318,7 +339,15 @@ class DeskGestures {
         onEvent(DeskDragEvent(DeskDragPhase.move, _dragPoint(finger)));
       }
     }
+    final grace = _graceFrom;
+    if (grace != null && time - grace > deskDragGrace) _releaseGrace();
     _tickFlick(time);
+  }
+
+  void _releaseGrace() {
+    if (_graceFrom == null) return;
+    _graceFrom = null;
+    onEvent(DeskDragEvent(DeskDragPhase.up, cursor));
   }
 
   void _beginTwo(Duration time) {
@@ -450,7 +479,11 @@ class DeskGestures {
   }
 
   void _endOne(_Finger finger, Duration time) {
-    if (_one == _One.dragging) {
+    if (_one == _One.dragging &&
+        _trackpad &&
+        !(_resumed && finger.distanceFromOrigin() <= deskSlop)) {
+      _graceFrom = time;
+    } else if (_one == _One.dragging) {
       onEvent(DeskDragEvent(DeskDragPhase.up, _dragPoint(finger)));
     } else if (_one == _One.pending &&
         finger.distanceFromOrigin() <= deskSlop) {
@@ -514,6 +547,7 @@ class DeskGestures {
 
   void _clearOne() {
     _tapDrag = false;
+    _resumed = false;
     _one = null;
     _oneId = null;
     _armed = false;

@@ -457,6 +457,7 @@ void main() {
       g.down(1, 50, 50, const Duration(milliseconds: 200));
       g.move(1, 70, 50, const Duration(milliseconds: 600));
       g.up(1, 70, 50, const Duration(milliseconds: 700));
+      g.advance(const Duration(milliseconds: 1400));
       final drag = [for (final e in g.events) e as DeskDragEvent];
       expect(drag.map((e) => e.phase), [
         DeskDragPhase.down,
@@ -485,6 +486,50 @@ void main() {
     expect(g.gestures.cursorView.dx, closeTo(400 - deskEdgePx, 1e-9));
     final tap = g.events.single as DeskTapEvent;
     expect(tap.at.x, closeTo(0.9, 1e-9));
+  });
+
+  test('trackpad: lifting mid-drag keeps the button for a moment', () {
+    List<DeskDragPhase> phases(_Harness g) => [
+      for (final e in g.events) (e as DeskDragEvent).phase,
+    ];
+    _Harness dragged() {
+      final g = _gestures()..gestures.trackpad = true;
+      _tap(g, 50, 50, 0);
+      g.events.clear();
+      g.down(1, 50, 50, const Duration(milliseconds: 200));
+      g.move(1, 90, 50, const Duration(milliseconds: 600));
+      g.up(1, 90, 50, const Duration(milliseconds: 700));
+      return g;
+    }
+
+    // 放回来接着拖
+    final resume = dragged();
+    expect(phases(resume), [DeskDragPhase.down, DeskDragPhase.move]);
+    expect(resume.gestures.buttonHeld, isTrue);
+    resume.down(1, 50, 50, const Duration(milliseconds: 1000));
+    resume.move(1, 90, 50, const Duration(milliseconds: 1400));
+    resume.up(1, 90, 50, const Duration(milliseconds: 1500));
+    expect(phases(resume), [
+      DeskDragPhase.down,
+      DeskDragPhase.move,
+      DeskDragPhase.move,
+    ]);
+    expect(resume.gestures.cursor.x, closeTo(0.7, 1e-9));
+
+    // 等过了才松开
+    final wait = dragged();
+    wait.advance(const Duration(milliseconds: 1300));
+    expect(wait.gestures.buttonHeld, isTrue);
+    wait.advance(const Duration(milliseconds: 1301));
+    expect(phases(wait).last, DeskDragPhase.up);
+    expect(wait.gestures.buttonHeld, isFalse);
+    expect(wait.needsTick, isFalse);
+
+    // 放回来轻点一下就松开，不再单击
+    final tap = dragged();
+    _tap(tap, 200, 100, 1000);
+    expect(phases(tap).last, DeskDragPhase.up);
+    expect(tap.gestures.buttonHeld, isFalse);
   });
 }
 

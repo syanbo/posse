@@ -1746,6 +1746,8 @@ class _DeskPageState extends State<DeskPage>
   /// 画面里的指针要等一个来回才动，这个圈跟手。
   Widget _cursorRing(PosseColors colors) {
     final at = _gestures.cursorView;
+    final color = colors.accent.withValues(alpha: 0.85);
+    // 实心是左键按着（拖动中、松手等续拖），空心是只移指针
     return Positioned(
       left: at.dx - _cursorRingSize / 2,
       top: at.dy - _cursorRingSize / 2,
@@ -1756,10 +1758,8 @@ class _DeskPageState extends State<DeskPage>
           height: _cursorRingSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(
-              color: colors.accent.withValues(alpha: 0.85),
-              width: 1.5,
-            ),
+            color: _gestures.buttonHeld ? color : null,
+            border: Border.all(color: color, width: 1.5),
           ),
         ),
       ),
