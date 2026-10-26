@@ -114,26 +114,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         : groupHistory(_sessions, now);
     final agent = historyAgents[_agent];
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('历史'),
-        actions: [
-          // 和桌面的「按时间 / 按文件夹」一样，选择记住；图标画的是现在的分组方式
-          IconButton(
-            tooltip: byFolder ? '按文件夹分组，点一下改按时间' : '按时间分组，点一下改按文件夹',
-            onPressed: () {
-              widget.model.updateSettings(
-                (s) => s.historyByFolder = !s.historyByFolder,
-              );
-              setState(() {});
-            },
-            icon: Icon(
-              byFolder ? Icons.folder_outlined : Icons.schedule_rounded,
-              color: c.text,
-            ),
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
+      appBar: AppBar(title: const Text('历史')),
       body: Column(
         children: [
           Padding(
@@ -160,6 +141,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       )
                     : null,
               ),
+            ),
+          ),
+          // 和桌面一样：分组方式记住，搜索结果按相关度排、不分组
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Segmented(
+              labels: const ['按时间', '按文件夹'],
+              selected: byFolder ? 1 : 0,
+              onChanged: (i) {
+                if ((i == 1) == byFolder) return;
+                widget.model.updateSettings((s) => s.historyByFolder = i == 1);
+                setState(() {});
+              },
             ),
           ),
           Padding(

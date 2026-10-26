@@ -129,7 +129,7 @@ void main() {
     expect(find.text('修登录'), findsNothing);
     expect(find.text('换图标'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.schedule_rounded));
+    await tester.tap(find.text('按文件夹'));
     await tester.pumpAndSettle();
     expect(model.settings.historyByFolder, isTrue);
     expect(find.text('posse'), findsOneWidget);
