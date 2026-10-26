@@ -116,7 +116,7 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 | `full(h)` | h / 2 | 圆点、胶囊、圆形按钮、细竖条 |
 
 - **嵌套时外圆角 = 内圆角 + 内边距**，内外两层才同心：卡片 12、行外边距 6 → 行 6；浮层 12、内边距 6 → 菜单行 6；分段控件 8、内边距 2 → 选项 6；图片悬停大图外框内边距 8 → 图 4。
-- 圆点、胶囊写成 `full(尺寸)`，改了尺寸仍是圆的。
+- 圆点、胶囊写成 `full(尺寸)`，改了尺寸仍是圆的。按用途选档，不按数值：16 高的快捷键胶囊圆角 8 是 `full(16)`，不是 `rControl`。
 - agent 色块（边长 × 0.26）、图标按钮（框宽 ÷ 4）按比例算，跟着尺寸设置变。
 
 ## 设置和存储
@@ -136,6 +136,6 @@ agent 色块（`agentTile`、`agentIcon`）分四档：
 ## 改这套规范
 
 1. 改 `style.go` 里的定义（阶梯、档位函数、常量），不要在调用处单独调。
-2. 跑 `go test ./internal/app`：`TestNoLiteralType`、`TestSpacingScale`、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
+2. 跑 `go test ./internal/app`：`TestNoLiteralType`（字号、字重、图标尺寸、圆角不写数字）、`TestSpacingScale`（间距在阶梯上）、`TestSetUIType` 守住规则；按尺寸断言的测试（表格、拖动把手、开关位置）会指出连带要改的地方。
 3. 用离屏预览比较改动前后：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`。`ui-small`、`ui-large`、`ui-heavy` 三组是字号调到最小、最大和字重调重时的样子，`icons-large` 是图标调大时的样子。
 4. 同步本文和 `docs/features/ui.md`。
