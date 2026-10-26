@@ -13,3 +13,6 @@ func Children() map[int][]int { return nil }
 
 // Args 在其他平台上不实现。
 func Args(pid int) []string { return nil }
+
+// ExeArgs 在其他平台上不实现。
+func ExeArgs(pid int) (string, []string) { return "", nil }

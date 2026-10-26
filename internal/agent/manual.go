@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-// 用户在 posse 终端的 shell 里自己敲 claude、codex、cursor-agent 时，也带上和界面启动一样的 hooks：
+// 用户在 posse 终端的 shell 里自己敲 claude、codex、cursor-agent 时，也带上和界面启动一样的 hooks
+// （grok 的 hooks 只能写进 ~/.grok，只补会话 ID 和规则）：
 // $POSSE_HOME/bin 里放同名脚本，转给 `posse agent exec`，由它补上参数再换成真正的程序。
 // 用户的 .zshrc 常把 ~/.local/bin 等目录插到 PATH 最前面，所以照 Ghostty 的 shell 集成，
 // 用 ZDOTDIR 让 zsh 先读 posse 的 .zshenv，在每次出提示符前把 $POSSE_HOME/bin 挪回最前。
@@ -18,8 +19,24 @@ import (
 // 免得子进程的状态记到这个终端上。
 const ShimEnv = "POSSE_AGENT_SHIM"
 
-// Shimmed 是会放同名脚本的命令和它对应的 agent。grok 的 hooks 只能写进 ~/.grok，不放。
-var Shimmed = map[string]string{"claude": "claude", "codex": "codex", "cursor-agent": "cursor"}
+// Shimmed 是会放同名脚本的命令和它对应的 agent。agent 这个命令 grok 和 Cursor 都装了，
+// 指向谁看用户的 PATH，由 ShimTarget 在启动时按实际找到的程序定。
+var Shimmed = map[string]string{"claude": "claude", "codex": "codex", "cursor-agent": "cursor", "grok": "grok", "agent": ""}
+
+// ShimTarget 是同名脚本 cmd 找到的程序 real 该按哪个命令补参数：agent 按它实际指向的是 grok 还是 Cursor，
+// 认不出时返回空，原样运行。
+func ShimTarget(cmd, real string) string {
+	if cmd != "agent" {
+		return cmd
+	}
+	switch agentEntry(real) {
+	case "grok":
+		return "grok"
+	case "cursor":
+		return "cursor-agent"
+	}
+	return ""
+}
 
 const zshenv = `# Posse 的 zsh 集成，由常驻进程生成，改了会被覆盖。
 # 先还原用户的 ZDOTDIR，照常读用户的启动文件；再在每次出提示符前把 $POSSE_HOME/bin 放回 PATH 最前，
@@ -79,7 +96,13 @@ var passthrough = map[string][]string{
 		"apply", "a", "cloud", "features", "help", "proto", "-V", "--version", "-h", "--help"},
 	"cursor-agent": {"login", "logout", "status", "whoami", "update", "upgrade", "mcp", "ls", "help",
 		"install-shell-integration", "uninstall-shell-integration", "-p", "--print", "-v", "--version", "-h", "--help"},
+	"grok": {"agent", "clone", "completions", "doctor", "du", "disk-usage", "export", "help", "inspect", "leader",
+		"login", "logout", "mcp", "memory", "models", "plugin", "sessions", "setup", "trace", "update", "usage",
+		"version", "v", "worker", "worktree", "wrap", "-p", "--single", "-v", "--version", "-h", "--help"},
 }
+
+// grokResumeFlags 说明用户自己指定了会话（继续哪个，或者新会话的 ID），不再补 --session-id。
+var grokResumeFlags = []string{"-c", "--continue", "-r", "--resume", "-s", "--session-id"}
 
 // ManualArgs 给用户手动敲的命令补上 hooks 参数，返回完整参数；不该补时原样返回。
 // 不给 Claude 指定 --session-id：用户可能带了 --resume、--continue，会话 ID 由 hooks 报上来。
@@ -110,11 +133,33 @@ func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 			return nil, err
 		}
 		extra = []string{"--plugin-dir", plugin}
+	case "grok":
+		// 常驻进程从 grok 进程的参数里读出会话 ID（SessionFromArgs），技能与工具面板凭它找会话文件
+		if !hasFlag(args, grokResumeFlags) {
+			extra = []string{"--session-id", newUUID()}
+		}
+		if !hasFlag(args, []string{"--rules"}) {
+			extra = append(extra, "--rules", guideHint)
+		}
 	default:
 		return args, nil
 	}
 	extra = append(extra, l.manualPermissionArgs(Shimmed[cmd], args)...)
 	return append(extra, args...), nil
+}
+
+// hasFlag 报告 args 里有 flags 中的某个选项（含 --x=v 的写法），-- 之后的不算。
+func hasFlag(args, flags []string) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		flag, _, _ := strings.Cut(a, "=")
+		if slices.Contains(flags, flag) {
+			return true
+		}
+	}
+	return false
 }
 
 func firstPositional(args []string) int {

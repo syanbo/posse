@@ -28,6 +28,7 @@ var permissionFlags = map[string][]string{
 	"claude": {"--dangerously-skip-permissions", "--permission-mode"},
 	"codex":  {"--dangerously-bypass-approvals-and-sandbox", "--approve-for-me", "--yolo", "--full-auto", "-a", "--ask-for-approval", "-s", "--sandbox"},
 	"cursor": {"--yolo", "-f", "--force"},
+	"grok":   {"--permission-mode"},
 }
 
 func settingsPath(home string) string { return filepath.Join(home, "agents.json") }

@@ -46,6 +46,24 @@ func TestManualArgs(t *testing.T) {
 	if _, err := os.Stat(settings); err != nil {
 		t.Error("claude settings not written")
 	}
+	// grok 没有 hooks：新会话补 --session-id，好让常驻进程从参数里认出会话；自己指定了会话就不补
+	got, _ = l.ManualArgs("grok", nil)
+	if len(got) != 4 || got[0] != "--session-id" || SessionFromArgs("grok", append([]string{"grok"}, got...)) != got[1] || got[2] != "--rules" {
+		t.Errorf("grok -> %q", got)
+	}
+	for _, args := range [][]string{{"-r", "a1b2"}, {"--resume"}, {"-c"}, {"--session-id=x"}} {
+		if got, _ := l.ManualArgs("grok", args); slices.Contains(got, "--session-id") && !slices.Contains(args, "--session-id") || got[0] != "--rules" {
+			t.Errorf("grok %q -> %q", args, got)
+		}
+	}
+	if got, _ := l.ManualArgs("grok", []string{"--rules", "mine"}); slices.Contains(got, guideHint) {
+		t.Errorf("grok --rules mine -> %q", got)
+	}
+	for _, args := range [][]string{{"sessions", "list"}, {"-p", "hi"}, {"models"}} {
+		if got, _ := l.ManualArgs("grok", args); !slices.Equal(got, args) {
+			t.Errorf("grok %q -> %q", args, got)
+		}
+	}
 	got, _ = l.ManualArgs("codex", nil)
 	if len(got) < 2 || got[0] != "-c" || !strings.HasPrefix(got[1], "hooks.") {
 		t.Errorf("codex -> %q", got)
@@ -64,8 +82,10 @@ func TestShellFiles(t *testing.T) {
 	if want := "exec '/Applications/Posse.app/Contents/MacOS/Posse' agent exec claude -- \"$@\""; !strings.Contains(string(b), want) {
 		t.Errorf("shim %q", b)
 	}
-	if _, err := os.Stat(filepath.Join(ShimDir(home), "grok")); !os.IsNotExist(err) {
-		t.Error("grok has no hooks to add, should not be shimmed")
+	for _, cmd := range []string{"grok", "agent"} {
+		if _, err := os.Stat(filepath.Join(ShimDir(home), cmd)); err != nil {
+			t.Errorf("%s shim missing", cmd)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(ZshDir(home), ".zshenv")); err != nil {
 		t.Error(".zshenv missing")

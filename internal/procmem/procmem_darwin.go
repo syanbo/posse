@@ -62,9 +62,16 @@ func Children() map[int][]int {
 
 // Args 返回进程的启动参数（argv）；取不到时返回 nil。
 func Args(pid int) []string {
+	_, args := ExeArgs(pid)
+	return args
+}
+
+// ExeArgs 返回进程执行的文件路径（exec 时给的路径，符号链接不解开）和启动参数；取不到时都是空的。
+// 经符号链接启动的程序 argv[0] 只是链接名，要靠路径认出是谁（grok 另装了一个叫 agent 的入口）。
+func ExeArgs(pid int) (string, []string) {
 	b, err := unix.SysctlRaw("kern.procargs2", pid)
 	if err != nil || len(b) < 4 {
-		return nil
+		return "", nil
 	}
 	argc := int(int32(uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24))
 	b = b[4:]
@@ -73,6 +80,7 @@ func Args(pid int) []string {
 	for i < len(b) && b[i] != 0 {
 		i++
 	}
+	exe := string(b[:i])
 	for i < len(b) && b[i] == 0 {
 		i++
 	}
@@ -85,5 +93,5 @@ func Args(pid int) []string {
 		args = append(args, string(b[i:j]))
 		i = j + 1
 	}
-	return args
+	return exe, args
 }

@@ -121,9 +121,9 @@ func (d *Daemon) onTitle(id, title string) {
 	}
 	d.checkAgentGone(s)
 	// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
-	name, hooked, changed := s.detectAgent()
+	name, hooked, changed, sid := s.detectAgent()
 	if changed {
-		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", At: time.Now()})
+		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", SessionID: sid, At: time.Now()})
 	}
 	if name == "" {
 		return

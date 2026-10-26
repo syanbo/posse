@@ -27,7 +27,8 @@ func cmdAgentExec(e *env, args []string) error {
 		return fmt.Errorf("%s: command not found", cmd)
 	}
 	argv := rest
-	if _, ok := agent.Shimmed[cmd]; ok && os.Getenv("POSSE_TERMINAL_ID") != "" && os.Getenv(agent.ShimEnv) == "" {
+	target := agent.ShimTarget(cmd, real)
+	if _, ok := agent.Shimmed[cmd]; ok && target != "" && os.Getenv("POSSE_TERMINAL_ID") != "" && os.Getenv(agent.ShimEnv) == "" {
 		exe, err := os.Executable()
 		if err != nil {
 			return err
@@ -35,7 +36,7 @@ func cmdAgentExec(e *env, args []string) error {
 		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 			exe = resolved
 		}
-		if argv, err = (agent.Launcher{Exe: exe, Home: e.home}).ManualArgs(cmd, rest); err != nil {
+		if argv, err = (agent.Launcher{Exe: exe, Home: e.home}).ManualArgs(target, rest); err != nil {
 			// 补不上 hooks 也照常启动，只是 posse 看不到它的状态
 			fmt.Fprintf(e.errOut, "posse: %v\n", err)
 			argv = rest

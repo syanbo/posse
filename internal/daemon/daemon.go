@@ -71,7 +71,11 @@ func (s *session) userName() string {
 func (s *session) markHooked(name string) {
 	pg := s.Foreground()
 	// hook 可能在 agent 让出前台（开着编辑器）时到达，这时的前台不是 agent，不能记成它的进程组
-	isAgent := pg > 0 && agent.FromProcess(procmem.Args(pg)) == name
+	isAgent := false
+	if pg > 0 {
+		found, _ := agent.OfProcess(pg)
+		isAgent = found == name
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if name != s.agent {
@@ -112,7 +116,7 @@ func (s *session) goneAgentPg() int {
 		return pg
 	}
 	// 进程还在但 exec 成了别的程序（如 agent 退出后 exec 回 shell）；读不到 argv 时当作还在
-	if args := procmem.Args(pg); args != nil && agent.FromProcess(args) != name {
+	if found, args := agent.OfProcess(pg); args != nil && found != name {
 		return pg
 	}
 	return 0
@@ -141,25 +145,27 @@ func (s *session) agentName() string {
 // detectAgent 看终端前台是哪个 agent。用户在 shell 里自己启动了另一个 agent（或者退出后
 // 再手动启动一次）时换成它，这时没有 hooks。前台回到 shell 或别的程序时不改：
 // agent 临时打开编辑器、跑 ! 命令也会让出前台，不能当成退出。
-func (s *session) detectAgent() (name string, hooked, changed bool) {
+// 换了 agent 时 sid 是从它的参数里读到的会话 ID（SessionFromArgs），读不到为空。
+func (s *session) detectAgent() (name string, hooked, changed bool, sid string) {
 	pg := s.Foreground()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if pg <= 0 || pg == s.fg {
-		return s.agent, s.hooked, false
+		return s.agent, s.hooked, false, ""
 	}
 	s.fg = pg
-	found := agent.FromProcess(procmem.Args(pg))
+	found, args := agent.OfProcess(pg)
 	switch {
 	case found == "":
 	case s.hooked && found == s.agent && (s.agentPg == 0 || s.agentPg == pg):
 		s.agentPg = pg
 	case found != s.agent || s.hooked:
 		s.agent, s.hooked, s.agentPg, changed = found, false, pg, true
+		sid = agent.SessionFromArgs(found, args)
 	default:
 		s.agentPg = pg
 	}
-	return s.agent, s.hooked, changed
+	return s.agent, s.hooked, changed, sid
 }
 
 type Daemon struct {
