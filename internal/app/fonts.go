@@ -1,7 +1,9 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -26,12 +28,67 @@ func fontStack(family string) string {
 	return family + ", " + termFontFamily
 }
 
+// 字重、行高的默认值和范围。终端的行高是字体自身行高的倍数（Ghostty 的 adjust-cell-height），
+// 编辑器的是字号的倍数，两者默认值不同。
+const (
+	defaultWeight           = 400
+	minWeight, maxWeight    = 100, 900
+	defaultTermLineHeight   = 1
+	maxTermLineHeight       = 2
+	defaultEditorLineHeight = 1.5
+	maxEditorLineHeight     = 2.5
+)
+
 func (a *app) termFont() terminal.Font {
-	return terminal.Font{Family: fontStack(a.termFamily), Size: a.fontSize}
+	s := a.state
+	weight, bold := weightsOf(s.TermWeight, s.TermBoldWeight)
+	return terminal.Font{Family: fontStack(a.termFamily), Size: a.fontSize, Weight: weight, BoldWeight: bold,
+		LineHeight: s.TermLineHeight, Antialiased: !s.TermSmooth}
 }
 
 func (a *app) editorFont() ui.Font {
-	return ui.Font{Family: fontStack(a.editorFamily), Size: a.editorSize}
+	weight, _ := weightsOf(a.state.EditorWeight, 0)
+	return ui.Font{Family: fontStack(a.editorFamily), Size: a.editorSize, Weight: weight, Antialiased: !a.state.EditorSmooth}
+}
+
+// editorBoldWeight 是编辑器里 Markdown 标题、加粗用的字重（editor.State.BoldWeight）。
+func (a *app) editorBoldWeight() int {
+	_, bold := weightsOf(a.state.EditorWeight, a.state.EditorBoldWeight)
+	return bold
+}
+
+// weightsOf 是 ui.json 里存的正文、粗体字重（0 是默认）实际用的值：没设时粗体比正文重 200、至少 600。
+// 终端插件和编辑器默认的 700 显得太重。
+func weightsOf(weight, bold int) (int, int) {
+	weight = cmp.Or(weight, defaultWeight)
+	return weight, cmp.Or(bold, min(max(weight+200, 600), maxWeight))
+}
+
+func termLineHeightOf(s uiState) float32 { return cmp.Or(s.TermLineHeight, defaultTermLineHeight) }
+func editorLineHeightOf(s uiState) float32 {
+	return cmp.Or(s.EditorLineHeight, defaultEditorLineHeight)
+}
+
+// stepWeight 把字重加减 100，限制在 100 到 900。
+func stepWeight(w, d int) int { return min(max(w+d*100, minWeight), maxWeight) }
+
+// stepLineHeight 把行高加减 0.1，取一位小数，限制在 [1, hi]。
+func stepLineHeight(h float32, d int, hi float32) float32 {
+	return min(max(float32(math.Round(float64(h)*10+float64(d))/10), 1), hi)
+}
+
+// setTermStyle 改终端的字重或行高（f 改 a.state），马上换到接入的终端上。
+func (a *app) setTermStyle(f func(s *uiState)) {
+	f(&a.state)
+	if a.view != nil {
+		a.view.term.SetFont(a.termFont())
+	}
+	a.saveState()
+}
+
+func (a *app) setEditorStyle(f func(s *uiState)) {
+	f(&a.state)
+	a.saveState()
 }
 
 // editorSizeOf 是 ui.json 里的编辑器字号；旧版没有这一项，编辑器跟着终端小一号，升级后字号不变。
@@ -291,15 +348,20 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 
 // fontSizeStepper 是字号的"− 13 + 默认"一组按钮。
 func fontSizeStepper(c *ui.Context, size, def float32, set func(float32)) {
-	if pressable(textButton(c, "−")).Label("缩小字号").Clicked() {
-		set(size - 1)
+	stepper(c, "字号", fmt.Sprintf("%g", size), func(d int) { set(size + float32(d)) }, func() { set(def) })
+}
+
+// stepper 是"− 值 + 默认"一组按钮：step 收到 -1 或 1，reset 恢复默认；what 是读屏念的名字。
+func stepper(c *ui.Context, what, value string, step func(d int), reset func()) {
+	if pressable(textButton(c, "−")).Label("减小" + what).Clicked() {
+		step(-1)
 	}
-	ui.Text(c, fmt.Sprintf("%g", size)).FontSize(13).FontFeatures("tnum").Width(32).Center()
-	if pressable(textButton(c, "+")).Label("放大字号").Clicked() {
-		set(size + 1)
+	ui.Text(c, value).FontSize(13).FontFeatures("tnum").Width(32).Center()
+	if pressable(textButton(c, "+")).Label("增大" + what).Clicked() {
+		step(1)
 	}
-	if pressable(textButton(c, "默认")).Clicked() {
-		set(def)
+	if pressable(textButton(c, "默认")).Label(what + "恢复默认").Clicked() {
+		reset()
 	}
 }
 
@@ -313,7 +375,23 @@ func previewBlock(c *ui.Context, body func()) {
 	})
 }
 
-// termPreview 照终端的配色画一段提示符、ls 和中英混排：分支图标来自 Nerd Font，看得出选的字体缺不缺图标。
+// termPreviewLines 是终端预览的内容：每段是颜色在调色板里的序号（-1 是前景色）、是否粗体和文字。
+// 分支图标来自 Nerd Font，看得出选的字体缺不缺图标。
+var termPreviewLines = [][]struct {
+	color int
+	bold  bool
+	text  string
+}{
+	{{6, true, "~/posse"}, {-1, false, " on "}, {5, false, "\ue0a0 main"}, {1, false, " [!]"}},
+	{{2, false, "❯ "}, {-1, false, "ls"}},
+	{{4, true, "cmd  docs  internal  "}, {-1, false, "go.mod  README.md"}},
+	{{2, false, "❯ "}, {-1, false, `echo "中文 English 123"`}},
+	{{-1, false, "中文 English 123"}},
+	{{-1, false, "0O 1lI {}[] => != ≥ █"}},
+}
+
+// termPreview 照终端的配色、用终端同样的字体（字重、粗体、行高、平滑）画一段提示符、ls 和中英混排。
+// 和终端一样自己排字画出来：普通文字的字体平滑关不掉，用 RichText 看不出平滑的区别。
 func (a *app) termPreview(c *ui.Context) {
 	t := c.Theme()
 	light, dark := terminalThemes()
@@ -321,20 +399,35 @@ func (a *app) termPreview(c *ui.Context) {
 	if t.Dark {
 		th = dark
 	}
-	font, size := fontStack(a.termFamily), a.fontSize
-	span := func(text string, color ui.Color) ui.Span {
-		return ui.Span{Text: text, Font: font, Size: size, Color: color}
-	}
-	fg, pal := th.Foreground, th.Palette
+	tf := a.termFont()
+	font := ui.Font{Family: tf.Family, Size: tf.Size, Weight: tf.Weight, Antialiased: tf.Antialiased}
+	boldFont := font
+	boldFont.Weight = tf.BoldWeight
+	m := font.Metrics()
+	lineH := (m.Ascent + m.Descent + m.LineGap) * termLineHeightOf(a.state)
+	base := (lineH-(m.Ascent+m.Descent))/2 + m.Ascent
 	previewBlock(c, func() {
-		ui.RichText(c,
-			span("~/posse", pal[6]), span(" on ", fg), span(" main", pal[5]), span(" [!]\n", pal[1]),
-			span("❯ ", pal[2]), span("ls\n", fg),
-			span("cmd  docs  internal  ", pal[4]), span("go.mod  README.md\n", fg),
-			span("❯ ", pal[2]), span("echo \"中文 English 123\"\n", fg),
-			span("中文 English 123\n", fg),
-			span("0O 1lI {}[] => != ≥ ", fg), span("█", fg),
-		).LineHeight(1.25).Selectable()
+		ui.Box(c).Height(lineH * float32(len(termPreviewLines))).Draw(func(p *ui.Painter, r ui.Rect) {
+			for i, line := range termPreviewLines {
+				x := r.X
+				for _, seg := range line {
+					f, col := font, th.Foreground
+					if seg.bold {
+						f = boldFont
+					}
+					if seg.color >= 0 {
+						col = th.Palette[seg.color]
+					}
+					g := ui.Shape(seg.text, f)
+					p.Glyphs(g, x, r.Y+float32(i)*lineH+base, col)
+					w := float32(0)
+					for _, gl := range g {
+						w = max(w, gl.X+gl.Advance)
+					}
+					x += w
+				}
+			}
+		})
 	})
 }
 
@@ -353,7 +446,7 @@ func (a *app) editorPreview(c *ui.Context) {
 			NoActiveLine: true, NoFolding: true, NoScrollPastEnd: true, Label: "编辑器预览"}
 		a.editorDemo.Buffer.SetLanguage(editor.LanguageFor("preview.go"))
 	}
-	a.editorDemo.Font = a.editorFont()
+	a.editorDemo.Font, a.editorDemo.LineHeight, a.editorDemo.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
 	previewBlock(c, func() {
 		editor.View(c.Key("editor-preview"), a.editorDemo)
 	})

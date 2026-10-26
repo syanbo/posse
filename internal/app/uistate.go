@@ -34,11 +34,20 @@ type uiState struct {
 	TermFont             string   `json:"termFont,omitempty"`             // 终端字体，空表示默认
 	EditorFont           string   `json:"editorFont,omitempty"`           // 编辑器字体，空表示默认
 	EditorFontSize       float32  `json:"editorFontSize,omitempty"`       // 编辑器字号，0 表示默认（旧版跟着终端小一号）
+	TermWeight           int      `json:"termWeight,omitempty"`           // 终端正文的字重，0 表示默认（400）
+	TermBoldWeight       int      `json:"termBoldWeight,omitempty"`       // 终端粗体的字重，0 表示比正文重 200、至少 600
+	TermLineHeight       float32  `json:"termLineHeight,omitempty"`       // 终端行高，字体自身行高的倍数，0 表示 1
+	TermSmooth           bool     `json:"termSmooth,omitempty"`           // 终端用系统的字体平滑画字（更粗），默认不用
+	EditorWeight         int      `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
+	EditorBoldWeight     int      `json:"editorBoldWeight,omitempty"`     // 编辑器粗体（Markdown 标题、加粗）的字重，规则同终端
+	EditorLineHeight     float32  `json:"editorLineHeight,omitempty"`     // 编辑器行高，字号的倍数，0 表示 1.5
+	EditorSmooth         bool     `json:"editorSmooth,omitempty"`         // 编辑器用系统的字体平滑画字（更粗），默认不用
 	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
 	ImageCheckerOff      bool     `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
 	UsageSkillsOnly      bool     `json:"usageSkillsOnly,omitempty"`      // "技能与工具"面板只看技能和 MCP，不列命令行程序
 	HistoryByFolder      bool     `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
 	IconSize             float32  `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
+	UISmooth             bool     `json:"uiSmooth,omitempty"`             // 界面文字用系统的字体平滑（更粗），默认不用
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示

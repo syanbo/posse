@@ -51,6 +51,8 @@ type DiffState struct {
 	// Font, LineHeight, TabSize and Theme are those of State.
 	Font       ui.Font
 	LineHeight float32
+	// BoldWeight is that of State. (Posse)
+	BoldWeight int
 	TabSize    int
 	Theme      *Theme
 	// Bindings add key bindings to the editors of the sides.
@@ -415,7 +417,7 @@ func (d *DiffState) sideOptions(old bool) options {
 	// Both gutters as wide, so that both sides wrap alike.
 	digits := max(3, len(strconv.Itoa(max(d.Old.LineCount(), d.New.LineCount()))))
 	o := options{
-		readOnly: old || !d.Editable, font: d.Font, lineHeight: d.LineHeight, tabSize: d.TabSize,
+		readOnly: old || !d.Editable, font: d.Font, lineHeight: d.LineHeight, boldWeight: d.BoldWeight, tabSize: d.TabSize,
 		wrap: d.Wrap, lineNumbers: LineNumbersOn, whitespace: WhitespaceNone, autoClose: true,
 		theme: d.Theme, bindings: d.Bindings, fitContent: d.FitContent, minDigits: digits,
 		renderFindBar: d.RenderFindBar, renderGoToLine: d.RenderGoToLine,
@@ -460,6 +462,7 @@ func DiffView(c *ui.Context, d *DiffState) ui.Element {
 			ed := &d.eds[1]
 			ed.layout(r.W, r.H, p.Scale())
 			d.oldView.setStyle(ed.view.font, ed.o.lineHeight, p.Scale(), ed.tabSize())
+			d.oldView.boldWeight = ed.o.boldWeight
 			d.oldView.setWrap(ed.view.wrap, ed.view.wrapWidth)
 			d.prepare()
 			ed.layout(r.W, r.H, p.Scale())
@@ -571,6 +574,7 @@ func (d *DiffState) fit() {
 		eds = d.eds[1:]
 		ed := &d.eds[1]
 		d.oldView.setStyle(ed.view.font, ed.o.lineHeight, max(1, ed.view.scale), ed.tabSize())
+		d.oldView.boldWeight = ed.o.boldWeight
 		d.oldView.setWrap(ed.view.wrap, ed.view.wrapWidth)
 	}
 	d.prepare()

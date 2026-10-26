@@ -35,6 +35,7 @@ type frame struct {
 func (ed *editor) layout(w, h, scale float32) {
 	v := &ed.view
 	v.setStyle(ed.o.font, ed.o.lineHeight, scale, ed.tabSize())
+	v.boldWeight = ed.o.boldWeight
 	ed.gutterW = ed.gutterWidth()
 	pad := float32(4)
 	if ed.gutterW == 0 {

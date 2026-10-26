@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -171,29 +172,84 @@ func (a *app) interfaceSettings(c *ui.Context) {
 				a.saveState()
 			}
 		})
+		settingsRow(c, "字体平滑", func() {
+			sel := 0
+			if uiSmooth {
+				sel = 1
+			}
+			if segmented(c, &sel, "界面字体平滑", "关", "开") {
+				uiSmooth = sel == 1
+				a.state.UISmooth = uiSmooth
+				a.saveState()
+			}
+		})
 	})
 }
 
 func (a *app) termFontSettings(c *ui.Context) {
-	settingsCard(c, "终端", "终端里也可以用 ⌘= 放大、⌘- 缩小、⌘0 恢复默认。", func() {
+	settingsCard(c, "终端", "终端里也可以用 ⌘= 放大、⌘- 缩小、⌘0 恢复默认。字体平滑是 macOS 原生 App 画字的方式，深色底上的浅色字会显得重一档；关掉时和 Ghostty 默认一样细。", func() {
 		settingsRow(c, "字体", func() {
 			a.fontPicker(c, &a.termPick, a.termFamily, "终端字体", a.setTermFamily)
 		})
 		settingsRow(c, "字号", func() {
 			fontSizeStepper(c, a.fontSize, defaultFontSize, a.setFontSize)
 		})
+		a.fontStyleRows(c, func(s *uiState) (*int, *int, *float32, *bool) {
+			return &s.TermWeight, &s.TermBoldWeight, &s.TermLineHeight, &s.TermSmooth
+		}, defaultTermLineHeight, maxTermLineHeight, a.setTermStyle)
 		a.termPreview(c)
 	})
 }
 
+// fontStyleRows 是终端、编辑器卡片里共用的字重、粗体字重、行高、字体平滑四行。fields 取出 ui.json 里
+// 对应的四项（0 和 false 是默认），set 改完后让它生效并保存。
+func (a *app) fontStyleRows(c *ui.Context, fields func(s *uiState) (weight, bold *int, lineHeight *float32, smooth *bool),
+	defLineHeight, maxLineHeight float32, set func(f func(s *uiState))) {
+	w, b, l, sm := fields(&a.state)
+	weight, bold := weightsOf(*w, *b)
+	lh := cmp.Or(*l, defLineHeight)
+	change := func(f func(w, b *int, l *float32, sm *bool)) {
+		set(func(s *uiState) { f(fields(s)) })
+	}
+	settingsRow(c, "字重", func() {
+		stepper(c, "字重", fmt.Sprint(weight),
+			func(d int) { change(func(w, _ *int, _ *float32, _ *bool) { *w = stepWeight(weight, d) }) },
+			func() { change(func(w, _ *int, _ *float32, _ *bool) { *w = 0 }) })
+	})
+	settingsRow(c, "粗体字重", func() {
+		stepper(c, "粗体字重", fmt.Sprint(bold),
+			func(d int) { change(func(_, b *int, _ *float32, _ *bool) { *b = stepWeight(bold, d) }) },
+			func() { change(func(_, b *int, _ *float32, _ *bool) { *b = 0 }) })
+	})
+	settingsRow(c, "行高", func() {
+		stepper(c, "行高", fmt.Sprintf("%.1f", lh),
+			func(d int) {
+				change(func(_, _ *int, l *float32, _ *bool) { *l = stepLineHeight(lh, d, maxLineHeight) })
+			},
+			func() { change(func(_, _ *int, l *float32, _ *bool) { *l = 0 }) })
+	})
+	settingsRow(c, "字体平滑", func() {
+		sel := 0
+		if *sm {
+			sel = 1
+		}
+		if segmented(c, &sel, "字体平滑", "关", "开") {
+			change(func(_, _ *int, _ *float32, sm *bool) { *sm = sel == 1 })
+		}
+	})
+}
+
 func (a *app) editorFontSettings(c *ui.Context) {
-	settingsCard(c, "编辑器", "文件、diff、逐行追溯和 Git 日志里的代码用这里的字体；文件标签在前台时 ⌘= ⌘- ⌘0 调编辑器的字号。", func() {
+	settingsCard(c, "编辑器", "文件、diff、逐行追溯和 Git 日志里的代码用这里的字体；文件标签在前台时 ⌘= ⌘- ⌘0 调编辑器的字号。粗体字重用在 Markdown 的标题和加粗上。", func() {
 		settingsRow(c, "字体", func() {
 			a.fontPicker(c, &a.editorPick, a.editorFamily, "编辑器字体", a.setEditorFamily)
 		})
 		settingsRow(c, "字号", func() {
 			fontSizeStepper(c, a.editorSize, defaultEditorFontSize, a.setEditorFontSize)
 		})
+		a.fontStyleRows(c, func(s *uiState) (*int, *int, *float32, *bool) {
+			return &s.EditorWeight, &s.EditorBoldWeight, &s.EditorLineHeight, &s.EditorSmooth
+		}, defaultEditorLineHeight, maxEditorLineHeight, a.setEditorStyle)
 		a.editorPreview(c)
 	})
 }

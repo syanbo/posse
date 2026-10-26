@@ -34,6 +34,10 @@ var hover = ui.Animation{Duration: 120 * time.Millisecond}
 // 只在界面线程读写：控件函数大多拿不到 app，所以是包级变量。
 var iconSize float32 = defaultIconSize
 
+// uiSmooth 是界面文字用不用系统的字体平滑（ui.json 的 uiSmooth）。默认不用：平滑让深色底上的浅色字重一档，
+// 参照的 Claude 桌面端是网页，也不平滑。
+var uiSmooth bool
+
 const defaultIconSize = 16
 
 var iconSizes = []struct {
@@ -107,8 +111,9 @@ func posseTheme(dark bool) *ui.Theme {
 	if dark {
 		i = 1
 	}
-	if posseThemes[i] != nil {
-		return posseThemes[i]
+	if t := posseThemes[i]; t != nil {
+		t.FlatText = !uiSmooth
+		return t
 	}
 	var t *ui.Theme
 	if dark {
@@ -131,6 +136,7 @@ func posseTheme(dark bool) *ui.Theme {
 	t.Radius = 8
 	// 照 Orca：能点的地方是手形指针，拖动中是抓握的手
 	t.PointerCursor = true
+	t.FlatText = !uiSmooth
 	posseThemes[i] = t
 	return t
 }

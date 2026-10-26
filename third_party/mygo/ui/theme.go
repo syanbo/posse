@@ -59,6 +59,10 @@ type Theme struct {
 	// in the window, as web pages do, rather than the arrow of native
 	// controls. Posse
 	PointerCursor bool
+	// FlatText draws the text of elements without font smoothing, as
+	// Font.Antialiased does: Core Text's smoothing makes light text on a
+	// dark background look a weight heavier. Posse
+	FlatText bool
 }
 
 // Space returns n units of the theme's Spacing, to size elements of your

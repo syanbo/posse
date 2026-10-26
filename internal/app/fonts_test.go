@@ -85,3 +85,34 @@ func TestFontPickerSearchEnter(t *testing.T) {
 		t.Fatalf("termFamily = %q, open = %v", a.termFamily, a.termPick.open)
 	}
 }
+
+func TestWeightsOf(t *testing.T) {
+	for _, tc := range []struct {
+		s          uiState
+		weight, bd int
+	}{
+		{uiState{}, 400, 600},
+		{uiState{TermWeight: 500}, 500, 700},
+		{uiState{TermWeight: 700}, 700, 900},
+		{uiState{TermWeight: 300}, 300, 600},
+		{uiState{TermWeight: 500, TermBoldWeight: 600}, 500, 600},
+	} {
+		if w, b := weightsOf(tc.s.TermWeight, tc.s.TermBoldWeight); w != tc.weight || b != tc.bd {
+			t.Errorf("weightsOf(%+v) = %d, %d; want %d, %d", tc.s, w, b, tc.weight, tc.bd)
+		}
+	}
+}
+
+func TestStepLineHeight(t *testing.T) {
+	for _, tc := range []struct {
+		h    float32
+		d    int
+		want float32
+	}{
+		{1, 1, 1.1}, {1.1, 1, 1.2}, {1, -1, 1}, {1.5, -1, 1.4}, {2, 1, 2}, {1.95, 1, 2},
+	} {
+		if got := stepLineHeight(tc.h, tc.d, 2); got != tc.want {
+			t.Errorf("stepLineHeight(%g, %d) = %g, want %g", tc.h, tc.d, got, tc.want)
+		}
+	}
+}

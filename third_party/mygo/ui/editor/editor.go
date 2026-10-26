@@ -25,6 +25,7 @@ type options struct {
 	diffSide      int8
 	readOnly      bool
 	font          ui.Font
+	boldWeight    int
 	lineHeight    float32
 	tabSize       int
 	indent        IndentStyle

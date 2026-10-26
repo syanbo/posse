@@ -21,6 +21,8 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/editor` 的跳到定义（`state.go`、`editor.go`、`input.go`、`build.go`、`paint.go`）：加 `State.LinkAt`，按住 Command 时指针下要画下划线的范围（Posse 用它认引号里的路径和网址），没设或返回空范围时是指针下的词；`pointerMove` 记下这段（`link`），`build` 在 Command 按住、指针在文字上、设了 `OnDefinition` 时把指针换成手形（`linkOn`），`paint` 在这段下面画一条 1 DIP 的线，照 Zed 按住 Command 时的链接样式。
 
+`ui/editor` 的粗体和字体平滑（`state.go`、`diffview.go`、`editor.go`、`paint.go`、`view.go`）：上游主题里给 Markdown 标题、加粗标了 `Bold` 却不画；加 `State.BoldWeight`、`DiffState.BoldWeight`（为 0 时 700），`paintRow` 把这些记号空出来，另用粗体字重排字（`boldShaped`）画在原位（等宽字体，宽度不变）；`Font.Antialiased` 开着时不用字体平滑画字（`setStyle` 记下它，它不进排版的 `text.Style`）。`ui/glyphs.go` 为此加 `Painter.TextLineWith`：可以不平滑，颜色透明的字不画。
+
 `ui/headless.go`：加 `Tester.MoveWith`、`Tester.ScrollWith`，带修饰键移动指针、滚动（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
 
 `ui/widgets.go`：对话框（`coreModal`）打开时遮罩淡入、对话框淡入并从 96% 放大，弹出面板（`stylePanel`：Popover、Select、ComboBox、日期、取色）淡入并下落 4 DIP，都用 `Keyframes` 播 160 ms，只在出现时播一次。
@@ -28,6 +30,8 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 `ui/input.go`、`ui/context.go`、`ui/runtime.go`、`ui/api_gen.go`：加 `Element.MiddleClicked`（中键点击，Posse 用来关标签），`ui/headless.go` 加 `Tester.MiddleClickAt`。
 
 `ui/theme.go`、`ui/runtime.go`（`updateCursor`）：加 `Theme.PointerCursor`，开着时能点的元素（没有禁用）显示手形指针、窗口内拖动值时显示抓握的手，照网页的习惯；mygo 默认照原生控件用箭头。只为挡住点击才标成可点的对话框遮罩和面板、弹出面板（`base.go`、`combobox.go`）明确设成箭头。
+
+`ui/theme.go`、`ui/paint.go`（`textForeground`）：加 `Theme.FlatText`，开着时元素的文字不用字体平滑画（和 `Font.Antialiased` 一样）。
 
 `ui/menu.go`、`ui/runtime.go`：加 `Context.PresentMenus`，设了就不弹系统菜单，把菜单项（`MenuEntry`）、位置和选中回调交给应用自己画；右键菜单、菜单按钮、文字输入框和编辑器的编辑菜单都走它。
 
@@ -45,6 +49,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
   - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Posse 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。程序开着鼠标跟踪时，链接上的这次按下也不交给程序，而是开始选区，之后的移动和松开跟着选区走，拖动照样能选中文字。
   - 程序接管鼠标时，点在链接上的这一下不交给程序。
+- `font.go`：加 `Font.BoldWeight`，粗体的字重可以单独设；为 0 时照上游比正文重 300、至少 700。加 `Font.Antialiased`，照 `ui.Font.Antialiased` 不用字体平滑画字：Core Text 的平滑让深色底上的浅色字看上去重一档。
 - `terminal.go`、`view.go`：加 `Options.NoWheelZoom`，开着时按住 Command 滚动滚轮或在触控板上滑动照常滚动，不缩放字号；调字号的快捷键（⌘=、⌘-、⌘0）不受影响。
 - `posse.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Posse 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Posse 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 

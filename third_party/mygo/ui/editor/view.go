@@ -53,6 +53,11 @@ type view struct {
 	// highlighter has not confirmed yet.
 	approx     bool
 	tokScratch []Token
+
+	// boldWeight and boldShaped are the weight and layouts of the tokens
+	// the theme makes bold. (Posse)
+	boldWeight int
+	boldShaped shapeCache
 }
 
 // inlay is text shown in a line at an offset, as an inlay hint or a
@@ -247,6 +252,8 @@ func (v *view) setStyle(f ui.Font, lineHeight, scale float32, tabSize int) {
 	}
 	lh := float32(math.Round(float64(f.Size*lineHeight*scale))) / scale
 	tabSize = max(1, min(tabSize, 16))
+	// Antialiased is not in the style: it changes the glyphs, not the layout. (Posse)
+	v.font.Antialiased = f.Antialiased
 	if v.style == style && v.lineHeight == lh && v.tabSize == tabSize && v.scale == scale {
 		return
 	}
@@ -413,6 +420,7 @@ func (v *view) endFrame() {
 		}
 	}
 	v.shaped.endFrame()
+	v.boldShaped.endFrame()
 }
 
 // tokens returns the tokens of line n, whose text is s, and whether they
@@ -890,6 +898,15 @@ func (v *view) paintRow(p *ui.Painter, l *lineLayout, r *rowLayout, x, y float32
 	clip := p.Visible()
 	baseline := y + (v.lineHeight-(v.ascent+v.descent))/2 + v.ascent
 	def := v.theme.Text
+	flat := v.font.Antialiased
+	bold := v.boldRanges(l)
+	colorAt := func(d int) ui.Color {
+		c := cc.at(d, def)
+		if override != nil {
+			c = override(d, c)
+		}
+		return c
+	}
 	for pi := range r.pieces {
 		pc := &r.pieces[pi]
 		px := x + r.indent + pc.x
@@ -901,18 +918,72 @@ func (v *view) paintRow(p *ui.Painter, l *lineLayout, r *rowLayout, x, y float32
 		if !pc.ascii {
 			bytesOf = runeBytes(l.disp[pc.from:pc.to])
 		}
-		p.TextLine(lay, px, baseline, func(cluster int) ui.Color {
+		p.TextLineWith(lay, px, baseline, func(cluster int) ui.Color {
 			d := pc.from + cluster
 			if bytesOf != nil && cluster < len(bytesOf) {
 				d = pc.from + bytesOf[cluster]
 			}
-			c := cc.at(d, def)
-			if override != nil {
-				c = override(d, c)
+			if inRanges(bold, d) {
+				return ui.Color{}
 			}
-			return c
-		})
+			return colorAt(d)
+		}, flat)
+		// Bold tokens are shaped on their own and drawn over the gaps left
+		// for them: the editor's fonts are monospaced, so they take the
+		// same room. (Posse)
+		for _, br := range bold {
+			a, b := max(br[0], pc.from), min(br[1], pc.to)
+			if a >= b {
+				continue
+			}
+			s := l.disp[a:b]
+			bl := v.boldShaped.get(s, v.boldStyle())
+			bx := px + v.widths.width(l.disp[pc.from:a])
+			var bb []int
+			if !isASCII(s) {
+				bb = runeBytes(s)
+			}
+			p.TextLineWith(bl, bx, baseline, func(cluster int) ui.Color {
+				d := a + cluster
+				if bb != nil && cluster < len(bb) {
+					d = a + bb[cluster]
+				}
+				return colorAt(d)
+			}, flat)
+		}
 	}
+}
+
+// boldRanges returns the displayed bytes of l's tokens the theme makes
+// bold, in order. (Posse)
+func (v *view) boldRanges(l *lineLayout) [][2]int {
+	var out [][2]int
+	prev := 0
+	for _, t := range l.toks {
+		if int(t.Kind) < len(v.theme.Tokens) && v.theme.Tokens[t.Kind].Bold {
+			out = append(out, [2]int{l.toDisp(prev, false), l.toDisp(t.End, false)})
+		}
+		prev = t.End
+	}
+	return out
+}
+
+func (v *view) boldStyle() text.Style {
+	s := v.style
+	s.Weight = v.boldWeight
+	if s.Weight <= 0 {
+		s.Weight = 700
+	}
+	return s
+}
+
+func inRanges(rs [][2]int, d int) bool {
+	for _, r := range rs {
+		if d >= r[0] && d < r[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // runeBytes returns the byte each rune of s starts at.

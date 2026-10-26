@@ -19,6 +19,9 @@ type Font struct {
 	// weights the family has: 400 when zero. Bold text is 300 heavier, and
 	// at least 700.
 	Weight int
+	// BoldWeight is how heavy bold text is, from 100 to 900: when zero,
+	// 300 heavier than Weight and at least 700. (Posse)
+	BoldWeight int
 	// Features turn OpenType features of the font on and off by tag, as
 	// Ghostty's font-feature: "ss01" or "+ss01" turns one on, "calt=0" or
 	// "-calt" off, and "cv05=2" picks an alternate. Coding fonts make
@@ -33,6 +36,10 @@ type Font struct {
 	// the text's color and the system's setting. It changes nothing on
 	// Linux and Windows.
 	Thicken bool
+	// Antialiased draws text without font smoothing, thinner, as
+	// ui.Font.Antialiased: Core Text's smoothing makes light text on a
+	// dark background look a weight heavier. (Posse)
+	Antialiased bool
 }
 
 // fontKey is a Font at a scale, with the defaults, comparable.
@@ -40,14 +47,16 @@ type fontKey struct {
 	family     string
 	size       float32
 	weight     int
+	boldWeight int
 	features   string
 	lineHeight float32
 	thicken    bool
+	flat       bool
 	scale      float32
 }
 
 func (f *Font) key(scale float32) fontKey {
-	k := fontKey{family: f.Family, size: f.Size, weight: f.Weight, features: featureList(f.Features), lineHeight: f.LineHeight, thicken: f.Thicken, scale: scale}
+	k := fontKey{family: f.Family, size: f.Size, weight: f.Weight, boldWeight: f.BoldWeight, features: featureList(f.Features), lineHeight: f.LineHeight, thicken: f.Thicken, flat: f.Antialiased, scale: scale}
 	if strings.TrimSpace(k.family) == "" {
 		k.family = "monospace"
 	}
@@ -58,6 +67,10 @@ func (f *Font) key(scale float32) fontKey {
 		k.weight = 400
 	}
 	k.weight = min(max(k.weight, 100), 900)
+	if k.boldWeight <= 0 {
+		k.boldWeight = min(max(k.weight+300, 700), 900)
+	}
+	k.boldWeight = min(max(k.boldWeight, 100), 900)
 	if k.lineHeight <= 0 {
 		k.lineHeight = 1
 	}
@@ -68,9 +81,9 @@ func (f *Font) key(scale float32) fontKey {
 func (k fontKey) variant(i int) ui.Font {
 	w := k.weight
 	if i&1 != 0 {
-		w = min(max(w+300, 700), 900)
+		w = k.boldWeight
 	}
-	return ui.Font{Family: k.family, Size: k.size, Weight: w, Italic: i&2 != 0, Features: k.features, Thicken: k.thicken}
+	return ui.Font{Family: k.family, Size: k.size, Weight: w, Italic: i&2 != 0, Features: k.features, Thicken: k.thicken, Antialiased: k.flat}
 }
 
 // featureList converts features as Font.Features has them into the list

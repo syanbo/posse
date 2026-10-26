@@ -735,6 +735,11 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 	s := p.scale
 	deco := decoration{underline: ts.underline, wavy: ts.wavy, strike: ts.strike, color: ts.decoColor, thick: ts.decoThick}
 	shade := text.ShadeOf(color.R, color.G, color.B)
+	// Posse: Theme.FlatText
+	flat := p.rt.c.theme != nil && p.rt.c.theme.FlatText
+	if flat {
+		shade = text.Flat
+	}
 	start := int32(len(p.s.Glyphs))
 	// Inline transforms do not change while the text paints; look for them once.
 	moves := p.inlineTransforms()
@@ -759,7 +764,7 @@ func (p *Painter) textForeground(l *text.Layout, x, y float32, color Color, ts t
 			ix := float32(math.Floor(float64(pen)))
 			glyphColor, glyphShade := color, shade
 			if sp != nil {
-				if glyphColor = sp.color(sp.at(g.Cluster), color); glyphColor != color {
+				if glyphColor = sp.color(sp.at(g.Cluster), color); glyphColor != color && !flat {
 					glyphShade = text.ShadeOf(glyphColor.R, glyphColor.G, glyphColor.B)
 				}
 			}

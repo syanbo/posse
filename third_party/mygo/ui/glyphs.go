@@ -142,6 +142,13 @@ func (p *Painter) Glyphs(glyphs []Glyph, x, y float32, c Color) {
 // the rune its cluster starts at. Glyphs outside the painter's clip are
 // left out.
 func (p *Painter) TextLine(l *text.Layout, x, y float32, color func(cluster int) Color) {
+	p.TextLineWith(l, x, y, color, false)
+}
+
+// TextLineWith is TextLine, drawing the glyphs without font smoothing
+// when flat, as Font.Antialiased does, and leaving out those color
+// returns a transparent color for. (Posse)
+func (p *Painter) TextLineWith(l *text.Layout, x, y float32, color func(cluster int) Color, flat bool) {
 	if l == nil || len(l.Lines) == 0 {
 		return
 	}
@@ -161,7 +168,13 @@ func (p *Painter) TextLine(l *text.Layout, x, y float32, color func(cluster int)
 			continue
 		}
 		c := color(g.Cluster)
+		if c.A == 0 {
+			continue
+		}
 		shade := text.ShadeOf(c.R, c.G, c.B)
+		if flat {
+			shade = text.Flat
+		}
 		gi := sys.Glyph(g.Font, g.ID, s, pen, shade, p.opaque)
 		if !gi.OK {
 			continue

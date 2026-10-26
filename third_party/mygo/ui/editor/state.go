@@ -19,6 +19,9 @@ type State struct {
 	// LineHeight is the height of lines as a multiple of the font's size,
 	// 1.5 when 0.
 	LineHeight float32
+	// BoldWeight is the weight of the tokens the theme makes bold, as
+	// Markdown's headings and strong text: 700 when 0. (Posse)
+	BoldWeight int
 	// TabSize is how many columns a tab and a level of indentation take:
 	// the language's, else 4, when 0.
 	TabSize int
@@ -200,7 +203,7 @@ type LineBackground struct {
 
 func (st *State) options() options {
 	return options{
-		readOnly: st.ReadOnly, font: st.Font, lineHeight: st.LineHeight, tabSize: st.TabSize, indent: st.Indent,
+		readOnly: st.ReadOnly, font: st.Font, lineHeight: st.LineHeight, boldWeight: st.BoldWeight, tabSize: st.TabSize, indent: st.Indent,
 		wrap: st.SoftWrap, wrapColumn: st.WrapColumn, lineNumbers: st.LineNumbers, whitespace: st.Whitespace,
 		wrapGuides: st.WrapGuides, indentGuides: !st.NoIndentGuides, scrollPastEnd: !st.NoScrollPastEnd && !st.FitContent,
 		autoClose: !st.NoAutoClose, folding: !st.NoFolding, activeLine: !st.NoActiveLine, cursorShape: st.CursorShape, fitContent: st.FitContent,
