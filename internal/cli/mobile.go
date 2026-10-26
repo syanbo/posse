@@ -56,6 +56,54 @@ func cmdMobileRm(e *env, args []string) error {
 	})
 }
 
+type relayStatus struct {
+	Configured, Admin bool
+	Name, State       string
+}
+
+// relayStates 是 relay.status 的 state 对应的说明。
+var relayStates = map[string]string{
+	"none":        "not configured; run `posse mobile relay set <code>`",
+	"ready":       "ready",
+	"denied":      "the relay rejected this key",
+	"revoked":     "this key has been revoked by the relay admin",
+	"clock":       "this computer's clock is off by more than 5 minutes",
+	"unreachable": "the relay did not answer (server down, or UDP blocked here)",
+}
+
+func printRelay(e *env, st *relayStatus) func() {
+	return func() {
+		who := ""
+		switch {
+		case st.Admin:
+			who = " (admin)"
+		case st.Name != "":
+			who = " (" + st.Name + ")"
+		}
+		fmt.Fprintf(e.out, "relay%s: %s\n", who, relayStates[st.State])
+	}
+}
+
+func cmdMobileRelay(e *env, args []string) error {
+	var st relayStatus
+	if len(args) == 0 {
+		return e.do("relay.status", nil, &st, printRelay(e, &st))
+	}
+	switch {
+	case args[0] == "set" && len(args) == 2:
+		return e.do("relay.set", map[string]any{"code": args[1]}, &st, printRelay(e, &st))
+	case args[0] == "clear" && len(args) == 1:
+		return e.do("relay.clear", nil, &st, func() { fmt.Fprintln(e.out, "relay cleared") })
+	case args[0] == "invite" && len(args) == 2:
+	default:
+		return need(nil, 1, "mobile relay")
+	}
+	var out struct{ Code string }
+	return e.do("relay.invite", map[string]any{"name": args[1]}, &out, func() {
+		fmt.Fprintf(e.out, "%s\n\nOn the other computer: Posse > 手机 > 外网中转, paste this code (or `posse mobile relay set <code>`).\n", out.Code)
+	})
+}
+
 // printQR 用半格字符画二维码，两行模块合成一行字符；显式指定黑底白块，浅色主题的终端里也扫得出。
 func printQR(w io.Writer, text string) error {
 	code, err := qr.Encode(text, qr.L)

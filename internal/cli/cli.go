@@ -94,6 +94,7 @@ func init() {
 		{"mobile pair", "Show a QR code to pair Posse Mobile with this computer", "[--new] [--address HOST[:PORT]|URL]", cmdMobilePair},
 		{"mobile devices", "List paired phones", "", cmdMobileDevices},
 		{"mobile rm", "Unpair a phone", "<device>", cmdMobileRm},
+		{"mobile relay", "Relay for phones outside the LAN: check it, use an invite code, stop using it, or (admin) invite someone", "[set <code> | clear | invite <name>]", cmdMobileRelay},
 		{"usage", "Show plan usage of Claude, Codex, Grok and Cursor (updated as they run)", "", cmdUsage},
 		{"usage report", "Forward a Claude statusLine input to Posse (for your own statusLine script)", "< statusline.json", cmdUsageReport},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},

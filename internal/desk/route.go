@@ -35,6 +35,7 @@ type Routes struct {
 	lan, out *net.UDPConn
 	relay    *net.UDPAddr
 	token    []byte
+	cred     *deskrelay.Credential
 
 	in   chan routedPacket
 	done chan struct{}
@@ -44,13 +45,14 @@ type Routes struct {
 	via      map[string]*net.UDPConn
 	deadline time.Time
 	acked    bool
+	denied   bool
 
 	public    atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
 	lastPunch atomic.Int64
 }
 
-// ListenRoutes 开好两个 socket。relay 为空时只有 lan，和以前一样。
-func ListenRoutes(relay string) (*Routes, error) {
+// ListenRoutes 开好两个 socket。relay 为空时只有 lan，和以前一样。cred 是向中转登记用的密钥，可以为空。
+func ListenRoutes(relay string, cred *deskrelay.Credential) (*Routes, error) {
 	lan, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
 		return nil, err
@@ -62,7 +64,7 @@ func ListenRoutes(relay string) (*Routes, error) {
 			lan.Close()
 			return nil, err
 		}
-		r.relay = addr
+		r.relay, r.cred = addr, cred
 		r.token = make([]byte, deskrelay.TokenLen)
 		rand.Read(r.token)
 		if out, err := listenOut(); err == nil {
@@ -106,10 +108,10 @@ func (r *Routes) relaySock() *net.UDPConn {
 }
 
 func (r *Routes) keepalive() {
-	reg := deskrelay.Register(deskrelay.RoleMac, r.token)
 	t := time.NewTicker(relayKeepalive)
 	defer t.Stop()
 	for {
+		reg := deskrelay.MacRegister(r.token, r.cred, time.Now())
 		if _, err := r.relaySock().WriteToUDP(reg, r.relay); err != nil && errors.Is(err, net.ErrClosed) {
 			return
 		}
@@ -149,6 +151,15 @@ func (r *Routes) read(sock *net.UDPConn) {
 				r.mu.Unlock()
 				if first {
 					log.Printf("desk: relay %s ready", addr)
+				}
+			}
+			if deskrelay.IsDenied(buf[:n], deskrelay.RoleMac) {
+				r.mu.Lock()
+				first := !r.denied
+				r.denied = true
+				r.mu.Unlock()
+				if first {
+					log.Printf("desk: relay %s denied the registration: key invalid or revoked", addr)
 				}
 			}
 			continue

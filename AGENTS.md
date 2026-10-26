@@ -49,7 +49,7 @@ internal/files      文件标签的纯逻辑：读写文件（原子保存、磁
 internal/media      会话里的图片和视频（粘贴的、agent 生成的），桌面的图片面板和手机共用
 internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流；quic.go 给 Posse 手机客户端在同一端口号的 UDP 上开 QUIC（局域网和中转）
 internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
-internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用），`tools/deskrelay` 是服务器程序，改了协议要重新部署
+internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
 scripts             `dev-app.sh`：装开发用的 PosseDev.app
 mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go QUIC 客户端，构建钩子调 `go build`，Dart 经 FFI 调用）
@@ -85,6 +85,6 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - 文件栏不用 fsnotify（macOS 上基于 kqueue，监听一个目录要为其中每个文件开一个描述符），看得见时每秒 stat 一次。保存前磁盘戳变了先问，不默默覆盖 agent 的修改。
 - Git 界面全部在窗口进程里调系统 git，常驻进程不参与：路径都相对仓库根目录，仓库根目录换成工作区路径的写法（`repoRoot`，git 给的是解析过符号链接的）；界面调用的 gitx 函数用 `runRaw`；gitx 自己调 git 时设 `GIT_TRACE2_EVENT=0`。强制推送一律 `--force-with-lease --force-if-includes`。
 - `internal/desk` 经 purego 调 Objective-C：自动释放池按线程记，在 goroutine 上 push/pop 之间要 `runtime.LockOSThread`（`withPool`），否则 goroutine 换线程后 pop 会崩。用 iOS 模拟器测手机看桌面时推流加 `--exclude-app com.apple.iphonesimulator`（经常驻进程订阅时给常驻进程设 `POSSE_DESK_EXCLUDE=com.apple.iphonesimulator`），否则模拟器窗口被录进画面形成回环。
-- 看桌面和手机 QUIC 的 UDP 中转地址写在 `$POSSE_HOME/desk.json`（`{"relay": "host:port"}`），每次观看、每次手机调 `posse.quic` 时读，不用重启。中转用的 socket 经 `IP_BOUND_IF` 绑在物理网卡（en*）上，绕开 Surge 这类接管默认路由的代理（走代理时 UDP 出不去）；直连局域网和 Tailscale 的 socket 不绑，照系统路由走。
+- 看桌面和手机 QUIC 的 UDP 中转写在 `$POSSE_HOME/desk.json`（`{"relay": "host:port"}`，被邀请的再带 `name`、`key`，管理员带 `master`），由手机页「外网中转」或 `posse mobile relay set <码>` 写入，每次观看、每次手机调 `posse.quic` 时读，不用重启。中转用的 socket 经 `IP_BOUND_IF` 绑在物理网卡（en*）上，绕开 Surge 这类接管默认路由的代理（走代理时 UDP 出不去）；直连局域网和 Tailscale 的 socket 不绑，照系统路由走。
 - 手机遥控的端到端测试用 `POSSE_MOBILE_PORT` 换端口，免得和日常的常驻进程冲突；主机密钥在 `$POSSE_HOME/mobile.json`，换密钥等于所有手机重新配对。
 - 菜单都是 Posse 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 NSMenu，悬停高亮改不了）。build 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Posse（`presentMenu`、`sysMenuView`），菜单项的英文在 `menuLabels` 里换成中文，mygo 加了新的菜单项要补上。能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。

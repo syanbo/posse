@@ -23,7 +23,7 @@ func TestRoutesThroughRelay(t *testing.T) {
 	go deskrelay.NewServer(srvConn).Serve()
 	srv := srvConn.LocalAddr().(*net.UDPAddr)
 
-	r, err := ListenRoutes(srv.String())
+	r, err := ListenRoutes(srv.String(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestRoutesPunch(t *testing.T) {
 	defer srvConn.Close()
 	go deskrelay.NewServer(srvConn).Serve()
 
-	r, err := ListenRoutes(srvConn.LocalAddr().String())
+	r, err := ListenRoutes(srvConn.LocalAddr().String(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

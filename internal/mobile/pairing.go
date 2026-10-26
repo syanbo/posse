@@ -245,6 +245,19 @@ func (p *pairing) devices() []Device {
 
 func (p *pairing) paired() bool { return len(p.devices()) > 0 }
 
+// relayDevices 是已经拿过中转令牌的设备。
+func (p *pairing) relayDevices() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []string
+	for _, d := range p.st.Devices {
+		if d.RelayToken != "" {
+			out = append(out, d.ID)
+		}
+	}
+	return out
+}
+
 // relayToken 返回这个设备的中转令牌，还没有就生成并存盘。设备不在了返回 nil。
 func (p *pairing) relayToken(id string) []byte {
 	p.mu.Lock()

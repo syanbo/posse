@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -144,7 +145,7 @@ func TestQUICViaRelay(t *testing.T) {
 	relay := pc.LocalAddr().String()
 
 	srv := newQUICServer(t)
-	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: relay} }})
 	info, err := srv.Pair(false, "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
@@ -160,6 +161,84 @@ func TestQUICViaRelay(t *testing.T) {
 	}
 
 	// Mac 的登记每 10 秒一次，第一次在开中转时就发了；手机登记后等回执再握手
+	p := handshakePhone(t, dialQUIC(t, relay, q.RelayToken), parseTestOffer(t, info))
+	defer p.ws.CloseNow()
+	if r := result(t, p.next(p.call("runtime.ping", map[string]any{}))); len(r) != 0 {
+		t.Fatalf("ping result %v", r)
+	}
+}
+
+// 中转开了鉴权：Mac 用邀请码里的密钥登记开会话，手机不带密钥照常加入。
+func TestQUICViaAuthRelay(t *testing.T) {
+	pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	master := deskrelay.NewMaster()
+	rs := deskrelay.NewServer(pc)
+	rs.SetMaster(master)
+	go rs.Serve()
+	admin, err := deskrelay.ParseCode(deskrelay.AdminCode(pc.LocalAddr().String(), master))
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := admin.Invite("friend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := deskrelay.ParseCode(code)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := newQUICServer(t)
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return cfg }})
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	defer ws.ws.CloseNow()
+	q := quicInfoOf(t, ws)
+	p := handshakePhone(t, dialQUIC(t, q.Relay, q.RelayToken), parseTestOffer(t, info))
+	defer p.ws.CloseNow()
+	if r := result(t, p.next(p.call("runtime.ping", map[string]any{}))); len(r) != 0 {
+		t.Fatalf("ping result %v", r)
+	}
+}
+
+// 改了中转设置后 Mac 立刻用新设置给拿过令牌的手机登记：手机不在局域网，等不到它先调 posse.quic。
+func TestQUICRelayReopensOnChange(t *testing.T) {
+	listenRelay := func() string {
+		pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { pc.Close() })
+		go deskrelay.NewServer(pc).Serve()
+		return pc.LocalAddr().String()
+	}
+	var mu sync.Mutex
+	relay := listenRelay()
+	srv := newQUICServer(t)
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config {
+		mu.Lock()
+		defer mu.Unlock()
+		return deskrelay.Config{Relay: relay}
+	}})
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	q := quicInfoOf(t, ws)
+	ws.ws.CloseNow()
+
+	mu.Lock()
+	relay = listenRelay()
+	mu.Unlock()
+	srv.RelayChanged()
 	p := handshakePhone(t, dialQUIC(t, relay, q.RelayToken), parseTestOffer(t, info))
 	defer p.ws.CloseNow()
 	if r := result(t, p.next(p.call("runtime.ping", map[string]any{}))); len(r) != 0 {
@@ -192,7 +271,7 @@ func TestQUICRelayTwoPhones(t *testing.T) {
 	relay := pc.LocalAddr().String()
 
 	srv := newQUICServer(t)
-	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: relay} }})
 	var phones []*phone
 	var tokens [][]byte
 	for range 2 {
@@ -235,7 +314,7 @@ func TestQUICRelayRetriesAfterFailure(t *testing.T) {
 	go deskrelay.NewServer(pc).Serve()
 	relay := "bad host:1"
 	srv := newQUICServer(t)
-	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: relay} }})
 	info, err := srv.Pair(false, "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
@@ -262,7 +341,7 @@ func TestQUICRelayTokenSurvivesRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 		srv.port = port // 重启后用同一个端口，配对码里的地址才对得上
-		srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+		srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: relay} }})
 		return srv
 	}
 	srv := start()
@@ -305,7 +384,7 @@ func TestQUICPunch(t *testing.T) {
 	relay := pc.LocalAddr().String()
 
 	srv := newQUICServer(t)
-	srv.SetQUIC(QUICOptions{Relay: func() string { return relay }})
+	srv.SetQUIC(QUICOptions{Relay: func() deskrelay.Config { return deskrelay.Config{Relay: relay} }})
 	info, err := srv.Pair(false, "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)

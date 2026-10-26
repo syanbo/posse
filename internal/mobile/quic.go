@@ -21,10 +21,10 @@ import (
 // relayKeepalive 是向中转重发登记的间隔。家用路由器的 UDP 映射常见 30 秒就回收。
 const relayKeepalive = 10 * time.Second
 
-// QUICOptions 由常驻进程给。Relay 每次用到时调用（读 desk.json，改了不用重启）；
+// QUICOptions 由常驻进程给。Relay 每次用到时调用（读 desk.json，改了不用重启），返回中转地址和登记用的密钥；
 // ListenOut 开绑在物理网卡上的 socket，绕开接管默认路由的代理，为空或失败时照系统路由走。
 type QUICOptions struct {
-	Relay     func() string
+	Relay     func() deskrelay.Config
 	ListenOut func() (*net.UDPConn, error)
 }
 
@@ -37,8 +37,8 @@ type quicState struct {
 	lan  *quic.Transport
 
 	// 中转按令牌配对两端、一个令牌只记一台手机的地址，所以每台手机（设备 ID）各用一个令牌和 socket，
-	// 共用一个时两台手机会互相抢走对方的包。第一次调 posse.quic 时开，解除配对、换了中转地址时关
-	relayAt string
+	// 共用一个时两台手机会互相抢走对方的包。第一次调 posse.quic 时开，解除配对、换了中转地址或密钥时关
+	relayAt deskrelay.Config
 	relays  map[string]*relayPath
 }
 
@@ -89,22 +89,49 @@ func (s *Server) startQUIC(port int) {
 	q.lan = tr
 	go s.acceptQUIC(ln, nil)
 	log.Printf("mobile: quic listening on %s", pc.LocalAddr())
+	s.openRelaysLocked()
+}
+
+// openRelaysLocked 给拿过令牌的手机都开好中转出口：常驻进程重启、交接后，或改了中转设置，
+// 不在局域网的手机要靠它们连回来，等不到手机先调 posse.quic。调用时持有 q.mu。
+func (s *Server) openRelaysLocked() {
+	s.syncRelayLocked()
+	for _, id := range s.pair.relayDevices() {
+		s.relayLocked(id)
+	}
+}
+
+// RelayChanged 在改了 desk.json 的中转设置后调用，按新设置重开中转出口。
+func (s *Server) RelayChanged() {
+	s.q.mu.Lock()
+	defer s.q.mu.Unlock()
+	if s.q.tls != nil {
+		s.openRelaysLocked()
+	}
+}
+
+// syncRelayLocked 重读中转设置，变了就关掉所有中转出口。调用时持有 q.mu。
+func (s *Server) syncRelayLocked() deskrelay.Config {
+	q := &s.q
+	var cfg deskrelay.Config
+	if q.opts.Relay != nil {
+		cfg = q.opts.Relay()
+	}
+	if cfg != q.relayAt {
+		for _, p := range q.relays {
+			p.close()
+		}
+		q.relays, q.relayAt = nil, cfg
+	}
+	return cfg
 }
 
 // relayLocked 返回这台手机的中转出口，没有就开一个。没配中转或开不了时为 nil，开不了的下次再试。
 // 调用时持有 q.mu。
 func (s *Server) relayLocked(device string) *relayPath {
 	q := &s.q
-	addr := ""
-	if q.opts.Relay != nil {
-		addr = q.opts.Relay()
-	}
-	if addr != q.relayAt {
-		for _, p := range q.relays {
-			p.close()
-		}
-		q.relays, q.relayAt = nil, addr
-	}
+	cfg := s.syncRelayLocked()
+	addr := cfg.Relay
 	if addr == "" || q.tls == nil {
 		return nil
 	}
@@ -132,7 +159,7 @@ func (s *Server) relayLocked(device string) *relayPath {
 			return nil
 		}
 	}
-	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, token, relayKeepalive)
+	rc := mquic.NewRelayConn(out, raddr, deskrelay.RoleMac, token, cfg.Credential(), relayKeepalive)
 	var lastPunch atomic.Int64
 	rc.OnPeerPunch = func(from *net.UDPAddr) {
 		// 手机连发几十个，只记每次打洞的第一个
@@ -182,7 +209,7 @@ func (s *Server) closeQUIC() {
 	for _, p := range q.relays {
 		p.close()
 	}
-	q.relays, q.relayAt = nil, ""
+	q.relays, q.relayAt = nil, deskrelay.Config{}
 }
 
 // acceptQUIC 接受连接。relay 不为空时这是中转出口：从中转来的是经中转，别的地址是打洞直连。
@@ -270,7 +297,7 @@ func (s *Server) quicInfo(device string) (QUICInfo, error) {
 	}
 	info := QUICInfo{Port: q.lan.Conn.LocalAddr().(*net.UDPAddr).Port, Hosts: LocalEndpoints()}
 	if p := s.relayLocked(device); p != nil {
-		info.Relay = q.relayAt
+		info.Relay = q.relayAt.Relay
 		info.RelayToken = p.token
 	}
 	return info, nil

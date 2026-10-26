@@ -469,6 +469,10 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("mobile.pair", d.mobilePair)
 	srv.Handle("mobile.devices", d.mobileDevices)
 	srv.Handle("mobile.rm", d.mobileRm)
+	srv.Handle("relay.status", d.relayStatus)
+	srv.Handle("relay.set", d.relaySet)
+	srv.Handle("relay.clear", d.relayClear)
+	srv.Handle("relay.invite", d.relayInvite)
 	srv.HandleStream("terminal.attach", d.terminalAttach)
 }
 

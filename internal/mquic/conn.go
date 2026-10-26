@@ -73,7 +73,7 @@ func Dial(ctx context.Context, addr string, relayToken []byte) (*Conn, error) {
 	}
 	var pc net.PacketConn = udp
 	if len(relayToken) > 0 {
-		relay := NewRelayConn(udp, raddr, deskrelay.RolePhone, relayToken, relayEvery)
+		relay := NewRelayConn(udp, raddr, deskrelay.RolePhone, relayToken, nil, relayEvery)
 		pc = relay
 		if err := waitAck(ctx, relay); err != nil {
 			pc.Close()

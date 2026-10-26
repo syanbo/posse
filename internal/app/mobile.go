@@ -36,6 +36,7 @@ type mobileView struct {
 	errAddr    string   // err 是用哪个地址取码时出的错
 	custom     string   // 正在输入的自定义地址
 	locals     []string // 本机检测到的 Tailscale、局域网地址，取码时顺便刷新
+	relay      relayView
 }
 
 // mobilePoll 是手机页开着时重取配对码和设备列表的间隔：手机扫码连上后旧码就作废了，
@@ -77,6 +78,7 @@ func (a *app) setMobileVisible(on bool) {
 		}
 	}
 	a.startMobile(false, a.state.MobileAddress, false)
+	a.loadRelay()
 }
 
 // startMobile 在界面线程里发起一次取码。poll 是手机页的定时刷新：出错不显示，也不改选中的地址。
@@ -275,6 +277,7 @@ func (a *app) mobileBoard(c *ui.Context) {
 			ui.Column(c).Width(720).Gap(16).Children(func() {
 				a.mobileDeskCard(c)
 				a.mobilePairCard(c)
+				a.mobileRelayCard(c)
 				a.mobileDevices(c)
 			})
 		})

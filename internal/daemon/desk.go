@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"posse/internal/desk"
+	"posse/internal/deskrelay"
 	"posse/internal/mobile"
 	"posse/internal/rpc"
 )
@@ -116,7 +116,8 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	}
 	abort := func() { stopDeskProc(proc) }
 	d.deskClearMissing("screen")
-	conn, err := desk.ListenRoutes(d.deskRelay())
+	relayCfg := d.deskRelay()
+	conn, err := desk.ListenRoutes(relayCfg.Relay, relayCfg.Credential())
 	if err != nil {
 		abort()
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
@@ -376,19 +377,12 @@ func (d *Daemon) deskStop(ctx context.Context, _ json.RawMessage) (any, error) {
 	return map[string]bool{"stopped": true}, nil
 }
 
-// deskRelay 读 $POSSE_HOME/desk.json 里的中转地址（UDP，host:port）。没有就是不用中转：
-// 只有手机经隧道连着、又打不通洞时才用得上，得用户自己有一台公网服务器跑 tools/deskrelay。
-func (d *Daemon) deskRelay() string {
-	data, err := os.ReadFile(filepath.Join(d.cfg.Home, "desk.json"))
+// deskRelay 读 $POSSE_HOME/desk.json 里的中转设置（地址和登记用的密钥）。没有就是不用中转：
+// 只有手机经隧道连着、又打不通洞时才用得上，得有一台公网服务器跑 tools/deskrelay。
+func (d *Daemon) deskRelay() deskrelay.Config {
+	cfg, err := deskrelay.LoadConfig(d.cfg.Home)
 	if err != nil {
-		return ""
+		log.Printf("desk: %v", err)
 	}
-	var cfg struct {
-		Relay string `json:"relay"`
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		log.Printf("desk: desk.json: %v", err)
-		return ""
-	}
-	return strings.TrimSpace(cfg.Relay)
+	return cfg
 }

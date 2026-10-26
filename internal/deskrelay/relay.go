@@ -10,6 +10,8 @@
 //	      打洞前两端各自用它问出自己在公网上的地址，和会话无关。
 //	打洞：'H' 'R' 'Y' '1'、0x05。两端直接互发、不经服务器，只为在各自的 NAT 上开口子，收到就丢。
 //
+// 服务器配了主密钥时 Mac 的登记要带签名，见 auth.go。
+//
 // 数据包是看桌面的 desk 包或手机连接的 QUIC 包。desk 包的第一个字节是类型（internal/desk 的 Packet*，都小于 'H'），
 // 撞不上控制包；QUIC 的短包头第一个字节可能是 'H'，但要连着后面的连接 ID 凑出 "RY1" 才会被误认，概率可以忽略。
 package deskrelay
@@ -39,6 +41,9 @@ const (
 	// 两边都超过这么久没登记、没发包，会话作废
 	sessionIdle = 2 * time.Minute
 	maxSessions = 64
+	// maxPerOwner 是开了鉴权时一个名字最多开几个会话，免得一个人占满名额。
+	// 一台 Mac 每台手机一个，看桌面时再多一个
+	maxPerOwner = 16
 	packetLimit = 1500
 )
 
@@ -90,8 +95,9 @@ func IsAck(b []byte, role byte) bool {
 }
 
 type session struct {
-	addr [3]netip.AddrPort // 下标是身份
-	seen time.Time
+	addr  [3]netip.AddrPort // 下标是身份
+	seen  time.Time
+	owner string // 开会话的 Mac 登记用的名字，没开鉴权时为空
 }
 
 // Server 是中转服务器。所有状态都在内存里，重启后两边几秒内重新登记。
@@ -101,6 +107,9 @@ type Server struct {
 	sessions map[[TokenLen]byte]*session
 	byAddr   map[netip.AddrPort][TokenLen]byte
 	now      func() time.Time
+
+	master  []byte          // 主密钥，空的就是不鉴权
+	revoked map[string]bool // 停用的名字
 }
 
 func NewServer(conn *net.UDPConn) *Server {
@@ -110,6 +119,31 @@ func NewServer(conn *net.UDPConn) *Server {
 		byAddr:   map[netip.AddrPort][TokenLen]byte{},
 		now:      time.Now,
 	}
+}
+
+// SetMaster 开启鉴权，在 Serve 之前调用。
+func (s *Server) SetMaster(master []byte) { s.master = master }
+
+// SetRevoked 换掉停用名单，并关掉这些人开的会话（会话里一直有包也不留）。
+func (s *Server) SetRevoked(names []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.revoked = map[string]bool{}
+	for _, n := range names {
+		s.revoked[n] = true
+	}
+	for token, sess := range s.sessions {
+		if sess.owner != "" && s.revoked[sess.owner] {
+			s.dropLocked(token, sess)
+			log.Printf("deskrelay: session of %s closed: revoked (%d open)", sess.owner, len(s.sessions))
+		}
+	}
+}
+
+func (s *Server) isRevoked(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.revoked[name]
 }
 
 // Serve 一直收包，直到连接被关掉。
@@ -138,18 +172,7 @@ func (s *Server) Serve() error {
 // handle 处理一个包：登记就记下地址并回执，数据就返回该转给谁。
 func (s *Server) handle(b []byte, from netip.AddrPort) (to netip.AddrPort, forward bool) {
 	if IsControl(b) {
-		if len(b) == ProbeLen && b[4] == kindProbe {
-			_, _ = s.conn.WriteToUDPAddrPort(probeReply(from), from)
-			return to, false
-		}
-		if len(b) != RegisterLen || (b[4] != RoleMac && b[4] != RolePhone) {
-			return to, false
-		}
-		var token [TokenLen]byte
-		copy(token[:], b[5:])
-		if s.register(token, b[4], from) {
-			_, _ = s.conn.WriteToUDPAddrPort([]byte{magic[0], magic[1], magic[2], magic[3], 0x80 | b[4]}, from)
-		}
+		s.control(b, from)
 		return to, false
 	}
 	s.mu.Lock()
@@ -172,17 +195,79 @@ func (s *Server) handle(b []byte, from netip.AddrPort) (to netip.AddrPort, forwa
 	return to, false
 }
 
-func (s *Server) register(token [TokenLen]byte, role byte, from netip.AddrPort) bool {
+func (s *Server) control(b []byte, from netip.AddrPort) {
+	reply := func(p ...byte) { _, _ = s.conn.WriteToUDPAddrPort(append(append([]byte{}, magic...), p...), from) }
+	switch {
+	case len(b) == ProbeLen && b[4] == kindProbe:
+		_, _ = s.conn.WriteToUDPAddrPort(probeReply(from), from)
+		return
+	case b[4] == kindCheck:
+		sg, ok := parseSigned(b, 5)
+		if !ok {
+			return
+		}
+		result := CheckOK
+		if s.master != nil {
+			result = verify(s.master, sg, s.isRevoked, s.now())
+		}
+		reply(kindCheckReply, result)
+		return
+	case len(b) < RegisterLen || (b[4] != RoleMac && b[4] != RolePhone):
+		return
+	}
+	role := b[4]
+	var token [TokenLen]byte
+	copy(token[:], b[5:RegisterLen])
+	owner, open := "", true
+	switch {
+	case len(b) == RegisterLen:
+		// 开了鉴权时，不带签名的只有手机能登记，而且只能加入 Mac 开好的会话
+		if s.master != nil {
+			if role == RoleMac {
+				reply(deniedBit | role)
+				return
+			}
+			open = false
+		}
+	case role == RoleMac:
+		sg, ok := parseSigned(b, RegisterLen)
+		if !ok {
+			return
+		}
+		if s.master != nil {
+			if r := verify(s.master, sg, s.isRevoked, s.now()); r != CheckOK {
+				reply(deniedBit | role)
+				return
+			}
+			owner = sg.name
+		}
+	default:
+		return
+	}
+	if s.register(token, role, from, owner, open) {
+		reply(0x80 | role)
+	}
+}
+
+// register 记下 from 是这个会话的这个身份。open 为 false 时只加入已有的会话。
+func (s *Server) register(token [TokenLen]byte, role byte, from netip.AddrPort, owner string, open bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess := s.sessions[token]
 	if sess == nil {
-		if len(s.sessions) >= maxSessions {
+		if !open || len(s.sessions) >= maxSessions {
 			return false
 		}
-		sess = &session{}
+		if owner != "" && s.ownedLocked(owner) >= maxPerOwner {
+			log.Printf("deskrelay: %s already has %d sessions, refused another", owner, maxPerOwner)
+			return false
+		}
+		sess = &session{owner: owner}
 		s.sessions[token] = sess
-		log.Printf("deskrelay: session opened (%d open)", len(s.sessions))
+		log.Printf("deskrelay: session opened by %q (%d open)", owner, len(s.sessions))
+	}
+	if owner != "" {
+		sess.owner = owner
 	}
 	// 同一个地址只能属于一个会话、一个身份：换了令牌或身份就从旧的里摘掉
 	if old, ok := s.byAddr[from]; ok && old != token {
@@ -203,6 +288,16 @@ func (s *Server) register(token [TokenLen]byte, role byte, from netip.AddrPort) 
 	return true
 }
 
+func (s *Server) ownedLocked(owner string) int {
+	n := 0
+	for _, sess := range s.sessions {
+		if sess.owner == owner {
+			n++
+		}
+	}
+	return n
+}
+
 func (s *Server) sweep(now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -210,12 +305,16 @@ func (s *Server) sweep(now time.Time) {
 		if now.Sub(sess.seen) < sessionIdle {
 			continue
 		}
-		for _, a := range sess.addr {
-			if a.IsValid() && s.byAddr[a] == token {
-				delete(s.byAddr, a)
-			}
-		}
-		delete(s.sessions, token)
+		s.dropLocked(token, sess)
 		log.Printf("deskrelay: session closed (%d open)", len(s.sessions))
 	}
+}
+
+func (s *Server) dropLocked(token [TokenLen]byte, sess *session) {
+	for _, a := range sess.addr {
+		if a.IsValid() && s.byAddr[a] == token {
+			delete(s.byAddr, a)
+		}
+	}
+	delete(s.sessions, token)
 }

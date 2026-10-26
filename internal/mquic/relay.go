@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/netip"
 	"sync"
@@ -19,11 +20,13 @@ import (
 type RelayConn struct {
 	conn  *net.UDPConn
 	relay *net.UDPAddr
-	reg   []byte
+	role  byte
+	reg   func() []byte // 登记包，Mac 的带签名，每次重新生成
 
 	done   chan struct{}
 	once   sync.Once
 	acked  atomic.Bool
+	denied atomic.Bool
 	public atomic.Pointer[netip.AddrPort] // 最近一次探测回来的公网地址
 
 	// OnPeerPunch 在收到对方的打洞包时调用（排查用：收得到说明这边的 NAT 放进了对方的包）。
@@ -31,12 +34,17 @@ type RelayConn struct {
 	OnPeerPunch func(from *net.UDPAddr)
 }
 
-// NewRelayConn 开始向 relay 登记，每隔 every 重发一次。
-func NewRelayConn(conn *net.UDPConn, relay *net.UDPAddr, role byte, token []byte, every time.Duration) *RelayConn {
+// NewRelayConn 开始向 relay 登记，每隔 every 重发一次。cred 只有 Mac 用：服务器开了鉴权时登记要带签名。
+func NewRelayConn(conn *net.UDPConn, relay *net.UDPAddr, role byte, token []byte, cred *deskrelay.Credential, every time.Duration) *RelayConn {
+	reg := func() []byte { return deskrelay.Register(role, token) }
+	if role == deskrelay.RoleMac {
+		reg = func() []byte { return deskrelay.MacRegister(token, cred, time.Now()) }
+	}
 	r := &RelayConn{
 		conn:  conn,
 		relay: relay,
-		reg:   deskrelay.Register(role, token),
+		role:  role,
+		reg:   reg,
 		done:  make(chan struct{}),
 	}
 	go r.keepalive(every)
@@ -52,7 +60,7 @@ func (r *RelayConn) keepalive(every time.Duration) {
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
-		if _, err := r.conn.WriteToUDP(r.reg, r.relay); errors.Is(err, net.ErrClosed) {
+		if _, err := r.conn.WriteToUDP(r.reg(), r.relay); errors.Is(err, net.ErrClosed) {
 			return
 		}
 		select {
@@ -90,8 +98,12 @@ func (r *RelayConn) control(b []byte, from *net.UDPAddr) {
 		}
 		return
 	}
-	if r.reg != nil && deskrelay.IsAck(b, r.reg[4]) {
+	if r.reg != nil && deskrelay.IsAck(b, r.role) {
 		r.acked.Store(true)
+		r.denied.Store(false)
+	}
+	if r.reg != nil && deskrelay.IsDenied(b, r.role) && !r.denied.Swap(true) {
+		log.Printf("mquic: relay %s denied the registration: key invalid or revoked", r.relay)
 	}
 	if a, ok := deskrelay.ParseProbeReply(b); ok {
 		r.public.Store(&a)
