@@ -422,3 +422,34 @@ func TestQUICPunch(t *testing.T) {
 		t.Fatal("punch accepted a bad address")
 	}
 }
+
+// 常驻进程退出（重启、交接）时手机要马上知道断了：新进程紧接着听同一个端口，手机收不到端口不可达，
+// 没人通知的话要等测延迟连续超时才发现。
+func TestQUICCloseTellsPhone(t *testing.T) {
+	srv := newQUICServer(t)
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := dialPhone(t, srv, info)
+	defer ws.ws.CloseNow()
+	q := quicInfoOf(t, ws)
+	p := handshakePhone(t, dialQUIC(t, "127.0.0.1:"+strconv.Itoa(q.Port), nil), parseTestOffer(t, info))
+	defer p.ws.CloseNow()
+	result(t, p.next(p.call("runtime.ping", map[string]any{})))
+
+	start := time.Now()
+	srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for {
+		_, _, err := p.ws.Read(ctx)
+		if err == nil {
+			continue
+		}
+		if d := time.Since(start); d > time.Second {
+			t.Fatalf("phone told after %v: %v", d, err)
+		}
+		return
+	}
+}

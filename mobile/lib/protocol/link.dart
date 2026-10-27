@@ -213,8 +213,10 @@ class PosseLink {
     bool drain = false,
   }) async {
     // 套接字自己断了再握手。主动 close 不会进这里。先把死掉的连接放掉，界面才知道断了。
+    // 只看它还是不是当前连接，不看 epoch：切网络后另开的一轮会加 epoch，那一轮没连上时
+    // 这条还在用，它断了也要放掉，不然界面一直拿着死连接、不再重连。
     won.value.watchClose(() {
-      if (epoch != _epoch || !identical(rpc, won.value)) return;
+      if (_closed || !identical(rpc, won.value)) return;
       rpc = null;
       meter?.stop();
       meter = null;

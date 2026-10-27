@@ -115,6 +115,12 @@ func (s *Server) Close() {
 		srv.Close()
 	}
 	for _, c := range conns {
+		// QUIC 连接当场关：后面关 Transport 只在本地销毁连接、不通知手机；交接、重启时新进程紧接着
+		// 听同一个端口，手机也收不到端口不可达，要等测延迟连续超时（十几秒）才发现断了
+		if q, ok := c.ws.(*quicWire); ok {
+			q.c.CloseNow()
+			continue
+		}
 		c.ws.Close(websocket.StatusGoingAway, "host shutting down")
 	}
 	s.closeQUIC()

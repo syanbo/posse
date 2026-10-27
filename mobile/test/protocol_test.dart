@@ -307,6 +307,50 @@ void main() {
   });
 
   test(
+    'a connection lost after a failed reconnect is still reopened',
+    () async {
+      final hostKeys = generateKeyPair();
+      final offer = PairingOffer(
+        endpoint: 'only',
+        endpoints: const [],
+        deviceToken: 'tok',
+        publicKeyB64: b64(hostKeys.publicKey),
+      );
+      final networks = StreamController<String>();
+      final hosts = <ByteSocket>[];
+      var fail = false;
+      final link = PosseLink(
+        offer: offer,
+        networkSignatures: networks.stream,
+        connect: (url, cancel) async {
+          if (fail) throw StateError('down');
+          final (client, host) = pipePair();
+          hosts.add(host);
+          unawaited(_host(host, hostKeys, offer.deviceToken));
+          return client;
+        },
+      );
+      final first = await link.start();
+      // 切网络时重连没成功，原来的连接随后也断了
+      fail = true;
+      networks.add('wifi');
+      networks.add('cell');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(identical(link.rpc, first), isTrue);
+      fail = false;
+      await hosts.single.close();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(link.rpc, isNot(same(first)));
+      final back = await link.connections.first.timeout(
+        const Duration(seconds: 3),
+      );
+      expect((await back.call('status.get', {}))['protocolVersion'], 3);
+      await link.close();
+      await networks.close();
+    },
+  );
+
+  test(
     'a dropped connection is cleared and retried until it comes back',
     () async {
       final hostKeys = generateKeyPair();
@@ -445,6 +489,53 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(stale, isFalse);
     expect(model.error, isNull);
+    await model.link?.close();
+  });
+
+  test('a new connection refreshes the list at once', () async {
+    final hostKeys = generateKeyPair();
+    final code = base64Url.encode(
+      utf8.encode(
+        jsonEncode({
+          'v': 2,
+          'endpoint': 'only',
+          'deviceToken': 'tok',
+          'publicKeyB64': b64(hostKeys.publicKey),
+        }),
+      ),
+    );
+    final hosts = <ByteSocket>[];
+    var lists = 0;
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+      networkSignatures: const Stream.empty(),
+      connect: (url, cancel) async {
+        final (client, host) = pipePair();
+        hosts.add(host);
+        unawaited(
+          _host(
+            host,
+            hostKeys,
+            'tok',
+            stay: true,
+            onRequest: (method) {
+              if (method == 'worktree.ps') lists++;
+            },
+          ),
+        );
+        return client;
+      },
+    );
+    expect(await model.connectCode(code), isTrue);
+    expect(lists, 1);
+    // 断开后一次就重连上，没留下报错：也要马上拉列表，不等 3 秒一轮的轮询
+    await hosts.last.close();
+    for (var i = 0; i < 40 && lists < 2; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(model.rpc, isNotNull);
+    expect(lists, 2);
     await model.link?.close();
   });
 
@@ -935,6 +1026,8 @@ Future<void> _host(
   bool rejectCapabilities = false,
   bool silent = false,
   Map<String, Object?>? quic,
+  void Function(String method)? onRequest,
+  bool stay = false,
 }) async {
   try {
     await _serve(
@@ -944,6 +1037,8 @@ Future<void> _host(
       rejectCapabilities: rejectCapabilities,
       silent: silent,
       quic: quic,
+      onRequest: onRequest,
+      stay: stay,
     );
   } on E2eeException {
     // 对端挂断
@@ -951,6 +1046,7 @@ Future<void> _host(
 }
 
 /// [silent]：握手之后不回 runtime.ping，模拟手机切网络后系统还没发现的半开连接。
+/// [onRequest]：每收到一个请求报一次方法名。[stay]：回完 status.get 不挂断。
 /// [quic]：posse.quic 的回复，为空时和 Orca 一样不认这个方法。
 Future<void> _serve(
   ByteSocket socket,
@@ -959,6 +1055,8 @@ Future<void> _serve(
   bool rejectCapabilities = false,
   bool silent = false,
   Map<String, Object?>? quic,
+  void Function(String method)? onRequest,
+  bool stay = false,
 }) async {
   final reader = SocketReader(socket.events);
   final helloEvent = await reader.next(CancelToken());
@@ -1027,6 +1125,7 @@ Future<void> _serve(
     }
     final id = request['id'];
     final method = request['method'];
+    if (method is String) onRequest?.call(method);
     if (silent && method == 'runtime.ping') continue;
     Object result = <String, Object?>{};
     var ok = true;
@@ -1062,6 +1161,6 @@ Future<void> _serve(
         ),
       ),
     );
-    if (method == 'status.get') return;
+    if (method == 'status.get' && !stay) return;
   }
 }

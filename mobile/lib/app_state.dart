@@ -544,18 +544,21 @@ class PosseAppModel extends ChangeNotifier {
         computer.quic = List.of(urls);
         unawaited(store.write(saved.encode()));
       };
+      PhoneRpc? seen;
       created.onActivity = () {
         if (gen != _connectGen || !identical(link, created)) return;
-        if (created.rpc == null) {
+        final now = created.rpc;
+        if (now == null) {
           if (created.lastError != null) {
             error = friendlyError(created.lastError!);
           }
-        } else if (error != null) {
-          // 重连上了：断线期间重试失败留下的报错不再作数，不等下一次轮询才清，
-          // 不然首页会先闪一下红色的「连不上电脑」
+        } else if (!identical(now, seen)) {
+          // 换上了新连接（重连、升级到 QUIC）：断线期间的会话状态可能已经变了，马上拉一次，
+          // 不等下一轮轮询。重试失败留下的报错也不再作数，不然首页会先闪一下红色的「连不上电脑」
           error = null;
           unawaited(refreshWorktrees());
         }
+        seen = now;
         notifyListeners();
       };
       created.onLatency = () {
@@ -607,6 +610,8 @@ class PosseAppModel extends ChangeNotifier {
   Future<void> wake() async {
     if (disconnected) return;
     await link?.wake();
+    // 在后台时轮询停着，列表停在离开时的样子：回来马上拉一次。连接死了的话重连上之后会拉
+    await refreshWorktrees();
   }
 
   /// iOS 在 App 第一次连局域网地址时才弹「本地网络」权限，弹窗开着时连接直接失败。

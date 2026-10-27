@@ -390,9 +390,7 @@ class WorkspaceScreen extends StatelessWidget {
     final names = model.orderProjects(projects.keys.toList());
     var waiting = 0;
     for (final list in model.tabs.values) {
-      waiting += list
-          .where((t) => agentStateOf(t.state) == AgentState.waiting)
-          .length;
+      waiting += list.where((t) => _stateOf(t) == AgentState.waiting).length;
     }
     return Scaffold(
       appBar: AppBar(
@@ -497,7 +495,8 @@ class WorkspaceScreen extends StatelessWidget {
         ],
       ),
       body: model.worktrees.isEmpty
-          ? (model.connecting
+          // 断线重连时还不知道电脑上有没有工作区，不说「还没有工作区」
+          ? (model.connecting || (model.rpc == null && model.link != null)
                 ? const Center(child: PosseLoader())
                 : model.disconnected
                 ? _DisconnectedList(
@@ -665,7 +664,7 @@ class WorkspaceScreen extends StatelessWidget {
     };
     for (final row in rows) {
       for (final tab in model.tabs[row.id] ?? const <SessionTab>[]) {
-        final state = agentStateOf(tab.state);
+        final state = _stateOf(tab);
         if (rank(state) > rank(best)) best = state;
       }
     }
@@ -723,9 +722,7 @@ class WorkspaceScreen extends StatelessWidget {
             subtitle: Text(
               model.rpc == null ? '等连上电脑' : sessionDetail(tab),
               style: TextStyle(
-                color: agentStateOf(tab.state) == AgentState.waiting
-                    ? c.honey
-                    : null,
+                color: _stateOf(tab) == AgentState.waiting ? c.honey : null,
               ),
             ),
             trailing: _sessionState(c, tab),
@@ -748,9 +745,12 @@ class WorkspaceScreen extends StatelessWidget {
     ];
   }
 
+  /// 首页显示的会话状态。断线时手上的状态已经过时，一律不显示，等你处理的横幅、项目行和会话行一致。
+  AgentState _stateOf(SessionTab tab) =>
+      model.rpc == null ? AgentState.none : agentStateOf(tab.state);
+
   Widget _sessionState(PosseColors c, SessionTab tab) {
-    // 断线时手上的状态已经过时，不显示
-    final state = model.rpc == null ? AgentState.none : agentStateOf(tab.state);
+    final state = _stateOf(tab);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
