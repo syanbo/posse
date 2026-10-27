@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"reflect"
 	"strconv"
 	"strings"
@@ -453,6 +454,55 @@ func TestTerminalSendRawKeepsUTF8(t *testing.T) {
 	bad := p.next(p.call("terminal.send", map[string]any{"terminal": "t_1", "raw": "!!!!"}))
 	if bad["ok"] != false {
 		t.Fatalf("bad raw accepted %v", bad)
+	}
+}
+
+// rawKeys 一个一个写：Cursor Agent 这类程序一次读到几个按键就当成一段输入。读的一方每读一次打一行。
+func TestTerminalSendRawKeysSeparately(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("needs python3")
+	}
+	script := `import os, sys, tty
+tty.setraw(0)
+while True:
+    b = os.read(0, 64)
+    sys.stdout.write("read:" + b.hex() + "\r\n")
+    sys.stdout.flush()
+`
+	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"python3", "-c", script}, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	host := &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}, order: []string{"t_1"}}
+	srv, err := New(t.TempDir(), host, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := dialPhone(t, srv, info)
+	// 等 python 进了 raw 模式再发，不然按键被行规程吃掉
+	time.Sleep(500 * time.Millisecond)
+	enc := base64.StdEncoding.EncodeToString
+	send := result(t, p.next(p.call("terminal.send", map[string]any{
+		"terminal": "t_1",
+		"rawKeys":  []string{enc([]byte{0x05}), enc([]byte{0x15}), enc([]byte{0x7f})},
+		"raw":      enc([]byte{0x05, 0x15, 0x7f}),
+	})))
+	if s := send["send"].(map[string]any); s["accepted"] != true || s["bytesWritten"] != float64(3) {
+		t.Fatalf("rawKeys send %v", send)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !(tm.ContainsText("read:05") && tm.ContainsText("read:15") && tm.ContainsText("read:7f")) {
+		if time.Now().After(deadline) {
+			t.Fatalf("keys not read one by one\n%s", strings.Join(tm.Lines(), "\n"))
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

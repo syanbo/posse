@@ -164,7 +164,11 @@ List<int> clearLines([int lines = 20]) => [
   for (var i = 1; i < lines; i++) ...const [0x7f, 0x05, 0x15],
 ];
 
-/// 退出 agent 的键帽。按下后不直接发这个键的字节，清空输入框再执行 /exit（终端页的 `_exitAgent`）。
+/// Cursor Agent 把一次读到的几个按键当成一段输入，[clearLines] 一起发时 Ctrl+U、退格原样插进输入框，
+/// 要一个键一个键地送（电脑那边隔 20ms 写一个，见 `terminal.send` 的 `rawKeys`）。别的 agent 一次发完。
+bool sendsKeysOneByOne(String? agent) => agent == 'cursor';
+
+/// 退出 agent 的键帽。按下后不直接发这个键的字节，清空输入框再写上 /exit、不回车（终端页的 `_exitAgent`）。
 const exitAgentLabel = 'Exit';
 
 /// 软键盘上方的专用键。方向键是 VT 的 A/B/C/D，不带回车。

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flterm/flterm.dart' hide TerminalScreen;
 // ignore: implementation_imports
@@ -797,41 +798,49 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 快捷键栏的「清空」：agent 的输入框可能有好几行，分两次发 [clearLines]，最多清 40 行；
   /// shell 只删当前行，在空行上退格会响铃。
   Future<void> _clearInput() async {
-    if (_liveTab.agent == null) return _send(const [0x05, 0x15]);
+    final agent = _liveTab.agent;
+    if (agent == null) return _send(const [0x05, 0x15]);
+    // 一个键一个键地送，20 行就要 1 秒多，只送一次
+    if (sendsKeysOneByOne(agent)) {
+      return _send(
+        [],
+        keys: [
+          for (final b in clearLines()) [b],
+        ],
+      );
+    }
     await _send(clearLines());
     await _send(clearLines());
   }
 
-  /// 快捷键栏的「Exit」：先清空输入框，再执行 /exit。Claude Code、Codex、Grok、Cursor 都认这条命令；
-  /// 不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，把整个终端也关掉。
+  /// 快捷键栏的「Exit」：清空输入框，写上 /exit，不回车，由用户自己发送（agent 正在干活时不会被误退）。
+  /// Claude Code、Codex、Grok、Cursor 都认这条命令；不发 Ctrl+D：agent 退出后多出来的一次会落到 shell 上，
+  /// 把整个终端也关掉。
   Future<void> _exitAgent() async {
-    final agent = _liveTab.agent;
-    if (agent == null) {
+    if (_liveTab.agent == null) {
       _flash('这个终端里没有在运行的 agent');
       return;
     }
-    final rpc = widget.model.rpc;
-    if (rpc == null) return;
-    final outcome = await sendAgentCommand(
-      (raw) => sendTerminal(
-        rpc,
-        terminal: widget.tab.terminalId,
-        raw: raw,
-        enter: false,
-      ),
-      '/exit',
-    );
-    final note = sendOutcomeText(outcome);
-    if (mounted && note.isNotEmpty) _flash(note);
+    if (widget.model.rpc == null) return;
+    await _clearInput();
+    // 和清空的按键挨得太近时，Claude Code 把它们当成同一次粘贴
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (mounted) await _send(utf8.encode('/exit'));
   }
 
-  Future<void> _send(List<int> bytes, {bool enter = false}) async {
+  /// [keys] 不为空时代替 [bytes]，见 [sendTerminal]。
+  Future<void> _send(
+    List<int> bytes, {
+    bool enter = false,
+    List<List<int>>? keys,
+  }) async {
     final rpc = widget.model.rpc;
-    if (rpc == null || bytes.isEmpty) return;
+    if (rpc == null || (bytes.isEmpty && keys == null)) return;
     final outcome = await sendTerminal(
       rpc,
       terminal: widget.tab.terminalId,
-      raw: bytes,
+      raw: keys == null ? bytes : null,
+      keys: keys,
       enter: enter,
     );
     final note = sendOutcomeText(outcome);

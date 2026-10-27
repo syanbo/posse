@@ -710,11 +710,14 @@ type contextDone interface{ Done() <-chan struct{} }
 func (c *conn) sendInput(id string, p json.RawMessage) error {
 	var a struct {
 		termParams
-		Text      string `json:"text"`
-		Raw       string `json:"raw"` // 终端按键的原始字节，标准 base64。有它就按字节写
-		Enter     bool   `json:"enter"`
-		Interrupt bool   `json:"interrupt"`
-		InputKind string `json:"inputKind"`
+		Text string `json:"text"`
+		Raw  string `json:"raw"` // 终端按键的原始字节，标准 base64。有它就按字节写
+		// Posse 扩展：一串按键，每个是标准 base64，一个一个写、中间隔 [keyGap]。有它就不看 raw。
+		// Cursor Agent 把一次读到的几个按键当成一段输入，Ctrl+U、退格原样插进输入框，只能分开送
+		RawKeys   []string `json:"rawKeys"`
+		Enter     bool     `json:"enter"`
+		Interrupt bool     `json:"interrupt"`
+		InputKind string   `json:"inputKind"`
 	}
 	if err := json.Unmarshal(p, &a); err != nil {
 		return errorf("invalid_params", "%v", err)
@@ -726,13 +729,23 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 	// text 是 Unicode，按 UTF-8 写入。终端模拟器的按键是原始字节，若先按 Latin-1
 	// 塞进 text，这里再编成 UTF-8，0x80–0x9F 会变成 C1 控制符，中文就被拆碎。
 	var payload []byte
-	if a.Raw != "" {
+	var keys [][]byte
+	for _, k := range a.RawKeys {
+		b, err := base64.StdEncoding.DecodeString(k)
+		if err != nil {
+			return errorf("invalid_params", "bad rawKeys")
+		}
+		keys = append(keys, b)
+	}
+	switch {
+	case len(keys) > 0:
+	case a.Raw != "":
 		b, err := base64.StdEncoding.DecodeString(a.Raw)
 		if err != nil {
 			return errorf("invalid_params", "bad raw")
 		}
 		payload = b
-	} else {
+	default:
 		payload = pasteText(a.Text, t.BracketedPaste())
 	}
 	n := 0
@@ -747,12 +760,20 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 	}
 	// 终端查询由常驻进程里的内核应答，手机 xterm 的应答丢掉，免得程序收到两份
 	if a.InputKind != "query-reply" {
+		for i, k := range keys {
+			if i > 0 {
+				time.Sleep(keyGap)
+			}
+			if !write(k) {
+				break
+			}
+		}
 		if len(payload) > 0 {
 			write(payload)
 		}
 		if accepted && a.Enter {
 			// TUI 会把与文本同批到达的回车当成粘贴内容，分开发送才算提交
-			if len(payload) > 0 {
+			if len(payload) > 0 || len(keys) > 0 {
 				time.Sleep(120 * time.Millisecond)
 			}
 			write([]byte("\r"))
@@ -766,6 +787,9 @@ func (c *conn) sendInput(id string, p json.RawMessage) error {
 		"writeSettlement": map[string]any{"outcome": outcome},
 	}})
 }
+
+// keyGap 是 rawKeys 里相邻两个按键的间隔：Cursor Agent 实测隔 15ms 左右就分得开，紧挨着写会被并成一次读。
+const keyGap = 20 * time.Millisecond
 
 // pasteText 是输入框发来的一段文字。带换行时按一次粘贴送进去：直接写的话，Claude Code 这类程序
 // 把第一个换行当成回车，前半段先提交了，后半段留在输入框。文字里的 ESC[201~ 去掉，免得提前结束粘贴、
