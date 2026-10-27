@@ -398,15 +398,6 @@ class WorkspaceScreen extends StatelessWidget {
         titleSpacing: 20,
         title: Row(
           children: [
-            Text(
-              'Posse',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w600,
-                color: c.text,
-              ),
-            ),
-            const SizedBox(width: 12),
             // 胶囊用掉按钮以外的全部宽度、靠左，电脑名写得下就写全
             Expanded(
               child: Align(
