@@ -659,3 +659,33 @@ func TestRestartedHelperGetsTheCurrentSettings(t *testing.T) {
 	pw.Close()
 	ctrlW.Close()
 }
+
+// 画面配置比手机的 hello 先到：先按中转起步，第一次认出直连换成直连的起始码率；
+// 之后换线路只改上限，降下来的码率不跳回去
+func TestPathSetsStartBitrate(t *testing.T) {
+	var control bytes.Buffer
+	c := &caster{control: &control, fps: 60, codec: CodecHEVC}
+	c.fullW, c.fullH = 1920, 1246
+	c.haveConfig = true
+	c.fullBit = PictureBitrate(1920, 1246)
+	c.bitrate = c.fullBit
+	c.rate.reset(time.Now(), c.bitrate, relayCeil)
+
+	c.setPath(true, true)
+	if want := DirectBitrate(1920, 1246); c.bitrate != want || c.rate.maxBit != rateCeil {
+		t.Fatalf("direct: bitrate %d ceiling %d, want %d %d", c.bitrate, c.rate.maxBit, want, rateCeil)
+	}
+	if ctl, err := ReadControl(&control); err != nil || ctl.Kind != CtrlBitrate || ctl.Bitrate != c.bitrate {
+		t.Fatalf("control %+v %v", ctl, err)
+	}
+	c.setPath(false, false)
+	if c.bitrate != relayCeil || c.rate.maxBit != relayCeil || c.rate.bitrate != relayCeil {
+		t.Fatalf("relay: bitrate %d ceiling %d", c.bitrate, c.rate.maxBit)
+	}
+	// 拥堵降到 2 Mbps 后打洞成直连：只放开上限
+	c.bitrate, c.rate.bitrate = 2_000_000, 2_000_000
+	c.setPath(true, false)
+	if c.bitrate != 2_000_000 || c.rate.maxBit != rateCeil {
+		t.Fatalf("punched: bitrate %d ceiling %d", c.bitrate, c.rate.maxBit)
+	}
+}

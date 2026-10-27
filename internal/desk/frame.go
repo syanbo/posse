@@ -330,6 +330,30 @@ func Fit(w, h, longEdge int) (int, int) {
 	return evenDim(w, scale), evenDim(h, scale)
 }
 
+// DirectBitrate 是直连时的起始码率，照 Moonlight 的默认值（getDefaultBitrate）：按像素数在
+// 360p、480p、720p、1080p、1440p、4K 对应 1、2、5、10、20、40 Mbps（30 帧）之间插值，60 帧翻倍。
+// PictureBitrate 那档在直连下太省：1920×1246 只给 8.6 Mbps，实测文字一滚动就糊（亮度 PSNR 37 dB），
+// 20 Mbps 时 48 dB，编码器实际只用了一半左右。
+func DirectBitrate(w, h int) uint32 {
+	table := []struct{ pixels, mbps float64 }{
+		{640 * 360, 1}, {854 * 480, 2}, {1280 * 720, 5}, {1920 * 1080, 10}, {2560 * 1440, 20}, {3840 * 2160, 40},
+	}
+	p := float64(w * h)
+	factor := table[len(table)-1].mbps
+	for i, row := range table {
+		if p <= row.pixels {
+			factor = row.mbps
+			if i > 0 {
+				prev := table[i-1]
+				factor = prev.mbps + (p-prev.pixels)/(row.pixels-prev.pixels)*(row.mbps-prev.mbps)
+			}
+			break
+		}
+	}
+	bits := factor * 2 * 1_000_000
+	return uint32(min(max(bits, float64(PictureBitrate(w, h))), rateCeil))
+}
+
 // startFloor 是起始码率的下限：小画面在好网络上也从它起步、按 60 帧采，差网络再往 rateFloor 降。
 const startFloor = 1_500_000
 
@@ -338,8 +362,8 @@ func PictureBitrate(w, h int) uint32 {
 	if bits < startFloor {
 		bits = startFloor
 	}
-	if bits > rateCeil {
-		bits = rateCeil
+	if bits > relayCeil {
+		bits = relayCeil
 	}
 	return uint32(bits)
 }

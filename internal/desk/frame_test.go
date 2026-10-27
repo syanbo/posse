@@ -127,3 +127,22 @@ func TestBadControlNamesItsKind(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestDirectBitrate(t *testing.T) {
+	for _, c := range []struct {
+		w, h int
+		want uint32
+	}{
+		{1920, 1080, 20_000_000},
+		{2560, 1440, 40_000_000},
+		{3840, 2160, rateCeil},
+		{640, 360, 2_000_000},
+	} {
+		if got := DirectBitrate(c.w, c.h); got != c.want {
+			t.Errorf("DirectBitrate(%d, %d) = %d, want %d", c.w, c.h, got, c.want)
+		}
+	}
+	if got := DirectBitrate(1920, 1246); got < 23_000_000 || got > 25_000_000 {
+		t.Errorf("1920x1246 = %d", got)
+	}
+}

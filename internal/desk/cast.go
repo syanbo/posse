@@ -116,7 +116,7 @@ func Serve(frames io.Reader, control io.Writer, cfg CastConfig) error {
 		bitrate: start, fps: 60, fullBit: start, codec: CodecHEVC,
 		stopped: make(chan struct{}), quietDeadline: now.Add(helloWait),
 	}
-	c.rate.reset(now, start, rateCeil)
+	c.rate.reset(now, start, relayCeil)
 	readDone := make(chan error, 1)
 	go func() { readDone <- c.readFrames(frames) }()
 	go c.recv()
@@ -198,7 +198,9 @@ type caster struct {
 	bitrate            uint32
 	fps                uint32 // 告诉采集子进程的帧率上限，跟着码率走（fpsFor）；mu 保护
 	fullBit            uint32 // 这个画面的满码率（PictureBitrate），帧率档位按它的比例算；mu 保护
+	fullW, fullH       int    // 这个画面不降分辨率时的尺寸，直连的起始码率按它算；mu 保护
 	haveConfig         bool
+	direct             bool   // 手机直连（不经中转）：起始码率和上限放开到 DirectBitrate、rateCeil；mu 保护
 	scale              uint32 // 告诉子进程的长边除数，最低一档帧率时为 2；fpsMu 保护
 	fpsMu              sync.Mutex
 	rate               rateState
@@ -334,15 +336,17 @@ func (c *caster) readFrames(frames io.Reader) error {
 				rescaled := c.haveConfig && full == c.fullBit
 				c.haveConfig = true
 				if !rescaled {
-					c.bitrate = full
-					c.rate.reset(time.Now(), full, rateCeil)
+					c.fullW, c.fullH = cfg.FullWidth, cfg.FullHeight
+					start, ceil := c.startLocked()
+					c.bitrate = start
+					c.rate.reset(time.Now(), start, ceil)
 					c.fullBit = full
 				}
 				bitrate := c.bitrate
 				c.mu.Unlock()
-				if rescaled {
-					_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
-				} else {
+				// 新画面也要告诉子进程：它重开编码器时按自己记着的码率起步，和这里的起始码率不一定一样
+				_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+				if !rescaled {
 					c.applyFPS(bitrate)
 				}
 				name := "hevc"
@@ -714,13 +718,62 @@ func (c *caster) currentPeer() net.Addr {
 	return c.peer
 }
 
+// startLocked 是新画面的起始码率和上限：直连照 Moonlight 给足，中转照旧从 PictureBitrate 起步。调用方持有 mu。
+func (c *caster) startLocked() (uint32, uint32) {
+	if c.direct {
+		return DirectBitrate(c.fullW, c.fullH), rateCeil
+	}
+	return PictureBitrate(c.fullW, c.fullH), relayCeil
+}
+
+// setPath 在画面改走直连或中转时换上限。手机的 hello 常比第一个画面配置晚到，开头按中转起步，
+// 第一次认出直连（first）再换成直连的起始码率。之后换线路（中转打洞成直连、直连断了走中转）只改上限，
+// 码率和调码率的记录照旧：刚因为拥堵降下来的码率不该一换线路就跳回去。
+func (c *caster) setPath(direct, first bool) {
+	c.mu.Lock()
+	if c.direct == direct {
+		c.mu.Unlock()
+		return
+	}
+	c.direct = direct
+	if !c.haveConfig {
+		c.mu.Unlock()
+		return
+	}
+	start, ceil := c.startLocked()
+	bitrate := min(c.bitrate, ceil)
+	if first {
+		bitrate = start
+		c.rate.reset(time.Now(), bitrate, ceil)
+	} else {
+		c.rate.setCeiling(ceil)
+	}
+	unchanged := bitrate == c.bitrate
+	c.bitrate = bitrate
+	c.mu.Unlock()
+	if unchanged {
+		log.Printf("desk: path direct=%v, ceiling %d", direct, ceil)
+		return
+	}
+	log.Printf("desk: path direct=%v, bitrate %d, ceiling %d", direct, bitrate, ceil)
+	_ = WriteControl(c.control, Control{Kind: CtrlBitrate, Bitrate: bitrate})
+	c.applyFPS(bitrate)
+}
+
 // notePeer 在 hello 或 report 解得开时记下源地址。地址变了（切网络）就改发往新地址。
 func (c *caster) notePeer(addr net.Addr) {
 	if addr == nil {
 		return
 	}
 	c.peerMu.Lock()
-	defer c.peerMu.Unlock()
+	changed, first := false, false
+	defer func() {
+		direct := c.peer != nil && (c.isRelay == nil || !c.isRelay(c.peer))
+		c.peerMu.Unlock()
+		if changed {
+			c.setPath(direct, first)
+		}
+	}()
 	relay := c.isRelay != nil && c.isRelay(addr)
 	if !relay {
 		c.directAt = time.Now()
@@ -732,11 +785,12 @@ func (c *caster) notePeer(addr net.Addr) {
 		return
 	}
 	next := cloneAddr(addr)
-	first := c.peer == nil
+	first = c.peer == nil
 	if !first {
 		log.Printf("desk: peer %s -> %s", c.peer, next)
 	}
 	c.peer = next
+	changed = true
 	if first {
 		// 不能在 peerMu 里发：submit 要再取它
 		go c.sendEarly()

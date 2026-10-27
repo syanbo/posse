@@ -2,6 +2,7 @@ package desk
 
 import (
 	"math"
+	"slices"
 	"sort"
 	"time"
 )
@@ -9,13 +10,20 @@ import (
 const (
 	// 差网络（4G、跨洋中转）也要撑住：RustDesk 能把码率压到好画质的十分之一上下。码率低到这一档时
 	// 帧率跟着降（fpsFor），每帧分到的比特数不至于太少
-	rateFloor  = 400_000
-	rateCeil   = 20_000_000
+	rateFloor = 400_000
+	// rateCeil 是直连的上限，relayCeil 是经中转的：中转服务器的带宽大家共用，上限照旧
+	rateCeil   = 40_000_000
+	relayCeil  = 20_000_000
 	rateWindow = time.Second
 	rateHold   = 500 * time.Millisecond
 	rateStable = 2 * time.Second
 	// 排队超过它算堵。Wi-Fi 平时抖十几毫秒，远程桌面多排 40 毫秒手上就能感觉到
 	rateQueueLate = 40 * time.Millisecond
+	// 一秒里至少这么多条报告带着排队延迟才判断排队：画面静止时一秒只有一两帧，画面一变的那个大帧
+	// 本来就要发好一会儿，只凭它会把没丢包的直连一路降下去（日志里 packets=2 late=true 那种）
+	rateQueueSamples = 3
+	// 样本不够时每一条都排了这么久才算堵：慢链路上一秒只挤得过一两帧，不能因此不判断
+	rateQueueStuck = 200 * time.Millisecond
 )
 
 // 码率降到这个画面满码率（PictureBitrate）的这些比例以下时，把采集帧率降到对应值（RustDesk 也是
@@ -88,6 +96,16 @@ func (r *rateState) addQueue(q time.Duration) {
 	r.queues = append(r.queues, q)
 }
 
+// setCeiling 换上限（换了线路），码率超过新上限就压下来，其余记录不动。
+func (r *rateState) setCeiling(maxBit uint32) {
+	if maxBit > rateCeil || maxBit == 0 {
+		maxBit = rateCeil
+	}
+	r.maxBit = maxBit
+	r.bitrate = min(r.bitrate, maxBit)
+	r.peak = min(r.peak, maxBit)
+}
+
 func (r *rateState) reset(now time.Time, bitrate, maxBit uint32) {
 	if maxBit > rateCeil || maxBit == 0 {
 		maxBit = rateCeil
@@ -124,7 +142,11 @@ func (r *rateState) add(now time.Time, loss, packets uint32, gap, sendGap time.D
 	d.gap = medianGap(r.gaps)
 	if len(r.queues) > 0 {
 		d.queue = medianGap(r.queues)
-		d.late = d.queue > rateQueueLate
+		if len(r.queues) >= rateQueueSamples {
+			d.late = d.queue > rateQueueLate
+		} else {
+			d.late = slices.Min(r.queues) > rateQueueStuck
+		}
 	} else {
 		d.late = queueLate(r.gaps, sendGap)
 	}

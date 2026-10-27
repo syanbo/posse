@@ -273,3 +273,43 @@ func TestRateRecoversFastAfterADeepCut(t *testing.T) {
 		t.Fatalf("kept overshooting a 1 Mbps link: %v", slow)
 	}
 }
+
+// 画面静止时一秒只来一个大帧，它自己发得久不算排队，不降码率
+func TestSingleBigFrameNotCongestion(t *testing.T) {
+	var r rateState
+	t0 := time.Unix(1_700_000_000, 0)
+	r.reset(t0, 8_000_000, rateCeil)
+	now := t0
+	for i := range 10 {
+		now = now.Add(100 * time.Millisecond)
+		var packets uint32
+		if i == 3 {
+			r.addQueue(60 * time.Millisecond)
+			packets = 4
+		}
+		if d := r.add(now, 0, packets, 0, 17*time.Millisecond); d.evaluated && (d.late || d.changed) {
+			t.Fatalf("one big frame taken for congestion: %+v", d)
+		}
+	}
+}
+
+// 慢链路上一秒只挤过两帧、每帧都排了好几百毫秒，样本少也算堵
+func TestFewStuckFramesAreCongestion(t *testing.T) {
+	var r rateState
+	t0 := time.Unix(1_700_000_000, 0)
+	r.reset(t0, 8_000_000, rateCeil)
+	now := t0
+	for i := range 10 {
+		now = now.Add(100 * time.Millisecond)
+		if i == 2 || i == 7 {
+			r.addQueue(400 * time.Millisecond)
+		}
+		if d := r.add(now, 0, 3, 0, 17*time.Millisecond); d.evaluated {
+			if !d.late || !d.changed {
+				t.Fatalf("stuck frames not cut: %+v", d)
+			}
+			return
+		}
+	}
+	t.Fatal("no decision")
+}
