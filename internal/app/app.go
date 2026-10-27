@@ -102,6 +102,7 @@ type daemonStatus struct {
 	MobileOnline []string     `json:"mobileOnline"` // 现在连着的手机，旧常驻进程没有这个字段
 	DeskViewer   string       `json:"deskViewer"`   // 正在看桌面的手机
 	DeskMissing  []string     `json:"deskMissing"`  // 看桌面缺的授权：screen、accessibility
+	Agents       []string     `json:"agents"`       // 本机装了的 agent，旧常驻进程没有、或还没检测完时为 nil
 }
 
 // termView 是当前接入的终端：界面侧的终端内核，它持有到常驻进程的连接。
@@ -262,15 +263,15 @@ type app struct {
 	dWorkspace  string // 工作区显示名
 	dTitle      string
 	dSpec       string
-	dAgents     [nAgents]bool // 与 agentChoices 对应
-	dMode       int           // 0 当前目录，1 各自新建 worktree
+	dAgents     map[string]bool // 勾选了的 agent
+	dMode       int             // 0 当前目录，1 各自新建 worktree
 	dBranch     string
 
 	// 新建工作区对话框
 	creating   bool
 	newProject string
 	newName    string
-	newAgent   int // agentNames 的序号，0 是不启动 agent
+	newAgent   int // newAgentChoices 的序号，0 是不启动 agent
 	newPrompt  string
 
 	confirming   bool
@@ -295,17 +296,19 @@ type app struct {
 	focused  atomic.Bool          // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
-// agentChoices 是可以在 posse 里启动、派发任务的 agent，菜单和选项都按这个顺序。
-var agentChoices = []string{"claude", "codex", "grok", "cursor"}
+// agentChoices 是本机装了的 agent（常驻进程检测），菜单和选项只列这些，按 agent.Known 的顺序。
+// 旧常驻进程不报、或还没检测完时全列。
+func (a *app) agentChoices() []string {
+	if a.daemon.Agents == nil {
+		return agent.Known
+	}
+	return a.daemon.Agents
+}
 
-// nAgents 是 agentChoices 的个数，派发对话框的勾选框按它定长。
-const nAgents = 4
-
-// agentNames 与新建工作区对话框的"同时启动"分段一一对应，0 是只建工作区。
-var (
-	agentNames     = append([]string{""}, agentChoices...)
-	newAgentLabels = append([]string{"只建工作区"}, agentTitles(agentChoices)...)
-)
+// newAgentChoices 与新建工作区对话框的"同时启动"分段一一对应，0 是只建工作区。
+func (a *app) newAgentChoices() []string {
+	return append([]string{""}, a.agentChoices()...)
+}
 
 func agentTitles(agents []string) []string {
 	out := make([]string, len(agents))
@@ -486,7 +489,7 @@ func (a *app) refresh() {
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
-		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing}
+		r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt, MobileOnline: st.MobileOnline, DeskViewer: st.DeskViewer, DeskMissing: st.DeskMissing, Agents: st.Agents}
 		r.daemonMB, r.selfMB, r.totalMB = mb(st.FootprintKB), mb(self), mb(st.FootprintKB+self+a.lastTerm)
 		a.autoUpgrade(r.daemonInfo)
 	}

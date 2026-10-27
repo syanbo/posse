@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -138,6 +139,12 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
 	case p.Model != (agent.Model{}) && p.Agent == "":
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
+	case p.Agent != "" && slices.Contains(agent.Known, p.Agent) && !d.agentInstalled(p.Agent):
+		have := "none of " + strings.Join(agent.Known, ", ")
+		if got := d.installedAgents(); len(got) > 0 {
+			have = strings.Join(got, ", ")
+		}
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not installed on this Mac (installed: %s)", p.Agent, have)
 	}
 	if depth := d.taskDepth(p.Caller); depth >= maxTaskDepth {
 		return nil, rpc.Errorf(rpc.CodeConflict, "workers are already nested %d deep; do this task yourself", depth)

@@ -140,7 +140,12 @@ func (h mobileHost) CloseTerminal(id string) error {
 	return nil
 }
 
-func (h mobileHost) Agents() []string { return agent.Known }
+func (h mobileHost) Agents() []string {
+	if got := h.d.installedAgents(); got != nil {
+		return got
+	}
+	return agent.Known
+}
 
 func (h mobileHost) Usage() any {
 	if st := h.d.usageStatus(); st != nil {

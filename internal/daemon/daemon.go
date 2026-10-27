@@ -192,6 +192,7 @@ type Daemon struct {
 	gitTrace *gitTrace // 终端里的 git 命令，测试里为空
 	ln       *gateListener
 	handoff  handoffState
+	agents   agentScan // 本机装了哪些 agent（agents.go）
 
 	// zsh 集成和同名脚本（agent.WriteShellFiles）：写成功一次就不再写
 	shellMu     sync.Mutex
@@ -345,6 +346,7 @@ func Run(ctx context.Context, cfg Config) error {
 	d.openUsage()
 	d.openGitTrace(ctx)
 	go d.agentLoop(ctx)
+	go d.detectLoop(ctx)
 	d.newMobile()
 	if in == nil {
 		d.startMobile()
@@ -497,6 +499,8 @@ type statusResult struct {
 	DeskViewer string `json:"deskViewer,omitempty"`
 	// DeskMissing 是看桌面缺的系统授权：screen、accessibility。看过一次才知道
 	DeskMissing []string `json:"deskMissing,omitempty"`
+	// Agents 是本机装了的 agent，界面和手机只列这些；还没检测完时为 null
+	Agents []string `json:"agents"`
 }
 
 func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
@@ -527,6 +531,7 @@ func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
 		}
 	}
 	r.DeskViewer, r.DeskMissing = d.deskStatus()
+	r.Agents = d.installedAgents()
 	return r, nil
 }
 

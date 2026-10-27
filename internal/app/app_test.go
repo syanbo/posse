@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/agent"
 	"posse/internal/client"
 	"posse/internal/rpc"
 )
@@ -170,9 +171,19 @@ func TestIsDialError(t *testing.T) {
 	}
 }
 
-func TestAgentChoicesCount(t *testing.T) {
-	if len(agentChoices) != nAgents {
-		t.Fatalf("nAgents = %d, agentChoices has %d", nAgents, len(agentChoices))
+// 常驻进程没报装了哪些时全列；报了就只列这些，一个都没装时为空。
+func TestAgentChoices(t *testing.T) {
+	a := &app{}
+	if got := a.agentChoices(); !slices.Equal(got, agent.Known) {
+		t.Fatalf("unknown: %v", got)
+	}
+	a.daemon.Agents = []string{"codex"}
+	if got := a.newAgentChoices(); !slices.Equal(got, []string{"", "codex"}) {
+		t.Fatalf("codex only: %v", got)
+	}
+	a.daemon.Agents = []string{}
+	if got := a.agentChoices(); len(got) != 0 {
+		t.Fatalf("none: %v", got)
 	}
 }
 

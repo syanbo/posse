@@ -669,7 +669,7 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.openDispatch()
 		a.dWorkspace, a.dMode = "Skill/main", 1
-		a.dAgents = [nAgents]bool{true, true}
+		a.dAgents = map[string]bool{"claude": true, "codex": true}
 		a.dTitle, a.dSpec = "给登录页加上记住密码", "在登录页加一个“记住密码”开关，密码存进系统钥匙串。"
 		savePNG(t, newPreviewTester(a, dark), "dispatch-"+suffix+".png")
 

@@ -211,8 +211,9 @@ func (a *app) openDispatch() {
 	a.dispatching = true
 	a.dTitle, a.dSpec, a.dMode = "", "", 0
 	a.dBranch = "task-" + randomSuffix()
-	if a.dAgents == [nAgents]bool{} {
-		a.dAgents[0] = true
+	choices := a.agentChoices()
+	if !slices.ContainsFunc(choices, func(ag string) bool { return a.dAgents[ag] }) && len(choices) > 0 {
+		a.dAgents = map[string]bool{choices[0]: true}
 	}
 	if w := a.workspace(a.selected); w != nil {
 		a.dWorkspace = w.Label
@@ -767,8 +768,16 @@ func (a *app) dispatchDialog(c *ui.Context) {
 			fieldArea(c, &a.dSpec, "要做什么、范围在哪、不能动什么、怎样算完成。worker 看不到你和其他 agent 的对话，这里要写全。", 136)
 			ui.Row(c).Gap(16).Children(func() {
 				ui.Text(c, "交给").FontSize(fsBody).TextColor(t.TextMuted)
-				for i, name := range agentChoices {
-					ui.Checkbox(c.Key(fmt.Sprint("agent-", i)), &a.dAgents[i], agentTitle(name))
+				if a.dAgents == nil {
+					a.dAgents = map[string]bool{}
+				}
+				for _, name := range a.agentChoices() {
+					on := a.dAgents[name]
+					ui.Checkbox(c.Key("agent-"+name), &on, agentTitle(name))
+					a.dAgents[name] = on
+				}
+				if len(a.agentChoices()) == 0 {
+					ui.Text(c, "这台 Mac 上没找到 Claude、Codex、grok 或 Cursor").FontSize(fsBody).TextColor(t.TextMuted)
 				}
 			})
 			if isGit {
@@ -781,9 +790,9 @@ func (a *app) dispatchDialog(c *ui.Context) {
 				}
 			}
 			var agents []string
-			for i, on := range a.dAgents {
-				if on {
-					agents = append(agents, agentChoices[i])
+			for _, name := range a.agentChoices() {
+				if a.dAgents[name] {
+					agents = append(agents, name)
 				}
 			}
 			ready := w != nil && len(agents) > 0 && strings.TrimSpace(a.dSpec) != "" && (!isGit || a.dMode == 0 || strings.TrimSpace(a.dBranch) != "")

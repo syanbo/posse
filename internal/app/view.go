@@ -782,7 +782,7 @@ func (a *app) sessionStatus(term terminalInfo) string {
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
 func (a *app) workspaceMenu(m *popMenu, w workspace) {
-	for _, ag := range agentChoices {
+	for _, ag := range a.agentChoices() {
 		if m.Item("启动 " + agentTitle(ag)).Chosen() {
 			a.startTerminal(w.ID, ag)
 		}
@@ -1315,7 +1315,7 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 // newTerminalButton 是标签后面的"+"，选 agent 或普通终端。
 func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
-		for _, ag := range slices.Concat(agentChoices, []string{""}) {
+		for _, ag := range slices.Concat(a.agentChoices(), []string{""}) {
 			name := agentTitle(ag)
 			if ag == "" {
 				name = "终端"
@@ -1588,8 +1588,8 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 						metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
 					})
 				})
-				ui.Grid(c).Columns(len(agentChoices) + 1).Gap(8).Children(func() {
-					for _, ag := range agentChoices {
+				ui.Grid(c).Columns(len(a.agentChoices()) + 1).Gap(8).Children(func() {
+					for _, ag := range a.agentChoices() {
 						a.launchTile(c, w, ag, agentVendor(ag))
 					}
 					a.launchTile(c, w, "", "⌘T")
@@ -1952,7 +1952,13 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 			submitted := fieldInput(c, &a.newName, "名称，比如 feat-login").AutoFocus().Submitted()
-			segmented(c, &a.newAgent, "同时启动", newAgentLabels...)
+			choices := a.newAgentChoices()
+			if a.newAgent >= len(choices) {
+				a.newAgent = 0
+			}
+			labels := agentTitles(choices)
+			labels[0] = "只建工作区"
+			segmented(c, &a.newAgent, "同时启动", labels...)
 			if a.newAgent != 0 {
 				if fieldInput(c.Key("prompt"), &a.newPrompt, "交给 agent 的任务（可留空）").Submitted() {
 					submitted = true
@@ -1968,7 +1974,7 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 			})
 			if submitted && strings.TrimSpace(a.newName) != "" {
 				a.creating = false
-				params := map[string]any{"project": a.newProject, "name": strings.TrimSpace(a.newName), "agent": agentNames[a.newAgent], "prompt": a.newPrompt}
+				params := map[string]any{"project": a.newProject, "name": strings.TrimSpace(a.newName), "agent": choices[a.newAgent], "prompt": a.newPrompt}
 				go a.createWorkspace(params)
 			}
 		})
