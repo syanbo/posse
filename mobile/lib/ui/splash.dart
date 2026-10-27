@@ -110,7 +110,8 @@ class PosseSplash extends StatefulWidget {
   State<PosseSplash> createState() => _PosseSplashState();
 }
 
-class _PosseSplashState extends State<PosseSplash> with TickerProviderStateMixin {
+class _PosseSplashState extends State<PosseSplash>
+    with TickerProviderStateMixin {
   // 亮格陆续点亮，放完就停，不一直重绘
   late final AnimationController _intro = AnimationController(
     vsync: this,

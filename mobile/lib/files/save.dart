@@ -121,7 +121,9 @@ Future<void> saveToPhone(
         } else {
           await Gal.putImage(named.path, album: album);
         }
-        messenger.showSnackBar(const SnackBar(content: Text('已存到相册的「Posse」相簿')));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('已存到相册的「Posse」相簿')),
+        );
         return;
       } on GalException catch (e) {
         if (e.type != GalExceptionType.notSupportedFormat) rethrow;
