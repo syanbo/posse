@@ -52,7 +52,7 @@ published=$(curl -fsS "$url/update-darwin-arm64.json" 2>/dev/null | plutil -extr
 if [ -n "$published" ]; then
 	newest=$(printf '%s\n%s\n' "$published" "$version" | sort -V | tail -1)
 	if [ "$published" = "$version" ] || [ "$newest" != "$version" ]; then
-		echo "线上已经是 $published，$version 要比它新" >&2
+		echo "线上已经是 ${published}，$version 要比它新" >&2
 		exit 1
 	fi
 fi
@@ -97,5 +97,5 @@ put "Posse-$version-arm64.dmg" "$dmg" application/x-apple-diskimage
 put Posse.dmg "$dmg" application/x-apple-diskimage no-cache
 put update-darwin-arm64.json "$dir/update-darwin-arm64.json" application/json no-cache
 
-echo "已发布 $version：$url/Posse.dmg"
+echo "已发布 ${version}：$url/Posse.dmg"
 echo "推送提交和标签：git push && git push origin v$version"
