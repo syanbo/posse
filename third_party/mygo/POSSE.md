@@ -54,6 +54,8 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `terminal.go`、`view.go`：加 `Options.NoWheelZoom`，开着时按住 Command 滚动滚轮或在触控板上滑动照常滚动，不缩放字号；调字号的快捷键（⌘=、⌘-、⌘0）不受影响。
 - `posse.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Posse 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Posse 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
+`updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步。拆出 `stageUpdate`、`swapUpdate`（`Install` 照旧用它们），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。
+
 ## 升级 mygo
 
 用三方合并，不手工对着改：

@@ -177,53 +177,77 @@ func installTarget() (string, error) {
 // version current: from its delta for current when there is one, else, or
 // when the delta fails, from its archive.
 func installUpdate(ctx context.Context, m update.Manifest, key, current, target string, progress func(downloaded, total int64)) error {
-	pub, err := update.ParsePublicKey(key)
+	work, err := updateWorkDir(target)
 	if err != nil {
 		return err
 	}
-	// Next to the app, so that it can be renamed into place.
+	defer os.RemoveAll(work)
+	unpacked, err := stageUpdate(ctx, m, key, current, target, work, progress)
+	if err != nil {
+		return err
+	}
+	return swapUpdate(unpacked, target)
+}
+
+// updateWorkDir makes the directory an update is unpacked in: next to the
+// app, so that it can be renamed into place.
+func updateWorkDir(target string) (string, error) {
 	work, err := os.MkdirTemp(filepath.Dir(target), "."+filepath.Base(target)+".update-")
 	if err != nil {
-		return fmt.Errorf("cannot write next to the app: %w", err)
+		return "", fmt.Errorf("cannot write next to the app: %w", err)
 	}
-	defer os.RemoveAll(work)
-	unpacked := filepath.Join(work, "app")
-	swap := swapFiles
+	return work, nil
+}
+
+// swapUpdate replaces target with the version unpacked by stageUpdate.
+func swapUpdate(unpacked, target string) error {
 	if runtime.GOOS == "darwin" {
-		swap = swapBundle
+		return swapBundle(unpacked, target)
 	}
+	return swapFiles(unpacked, target)
+}
+
+// stageUpdate downloads the version of m into work and unpacks it there,
+// returning the directory that swapUpdate puts in place of target.
+func stageUpdate(ctx context.Context, m update.Manifest, key, current, target, work string, progress func(downloaded, total int64)) (string, error) {
+	pub, err := update.ParsePublicKey(key)
+	if err != nil {
+		return "", err
+	}
+	unpacked := filepath.Join(work, "app")
 
 	if d := m.Delta(current); d != nil {
 		err := applyDelta(ctx, *d, pub, m.Version, target, work, unpacked, progress)
 		if err == nil {
-			return swap(unpacked, target)
+			return unpacked, nil
 		}
 		if ctx.Err() != nil {
-			return err
+			return "", err
 		}
 		log.Printf("mygo: downloading the whole update, as its delta update failed: %v", err)
 		if err := os.RemoveAll(unpacked); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if m.Size <= 0 || m.Size > update.MaxArchiveSize {
-		return fmt.Errorf("invalid size %d", m.Size)
+		return "", fmt.Errorf("invalid size %d", m.Size)
 	}
 	archive := filepath.Join(work, "update.tar.gz")
 	if err := download(ctx, m.URL, m.Size, m.Signature, pub, archive, progress); err != nil {
-		return err
+		return "", err
 	}
 	f, err := os.Open(archive)
 	if err != nil {
-		return err
+		return "", err
 	}
 	err = update.ExtractArchive(f, unpacked)
 	f.Close()
+	os.Remove(archive)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return swap(unpacked, target)
+	return unpacked, nil
 }
 
 // applyDelta downloads the delta d into work and makes the new version of
