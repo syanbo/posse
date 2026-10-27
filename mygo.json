@@ -5,9 +5,17 @@
   "main": "./cmd/posse",
   "icon": "design/icon.png",
   "out": "build",
+  "updates": {
+    "publicKey": "XyNlKbJMuyckf118edk00zLSKEVR3mJWJAXEHNa34p8=",
+    "url": "https://posse.shaoyan.uk",
+    "privateKey": "~/Library/Application Support/mygo/update-keys/mygo-update.key"
+  },
   "macos": {
     "minimumSystemVersion": "13.0",
-    "signingIdentity": "EE5067D60707FF9D6DA346401A64E3911EA0006D",
-    "icon": "design/Posse.icon"
+    "signingIdentity": "AA5D5665F2707C1752F4B05DD20A1AA59CE17125",
+    "icon": "design/Posse.icon",
+    "notarize": {
+      "keychainProfile": "posse"
+    }
   }
 }

@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -102,7 +103,7 @@ func (a *app) build(c *ui.Context) {
 	// 应用名固定在红绿灯右边，不跟着侧栏滑动。侧栏开关展开时在侧栏顶栏最右边，
 	// 侧栏不占位置时跟在应用名后面，好再点开
 	ui.Row(c).Absolute().Top(0).Left(c.TitleBar().Left + titleGap).Height(titleHeight(c)).Gap(appNameGap).AlignItems(ui.Center).Children(func() {
-		titleText(c, "Posse", fsBody).Width(appNameWidth()).Shrink(0)
+		titleText(c, appName(), fsBody).Width(appNameWidth(c)).Shrink(0)
 		if !a.sidebarSlot() {
 			a.sidebarButton(c)
 		}
@@ -314,15 +315,36 @@ const (
 	toggleBox  = 28 // iconButton 的方框
 )
 
-func appNameWidth() float32 { return sz(46) }
-func titleLead() float32    { return appNameWidth() + appNameGap + toggleBox }
+// appName 是包的显示名：PosseDev 是"Posse Dev"，和日常的窗口分得清。不在 .app 里运行时是 Posse。
+var appName = sync.OnceValue(func() string {
+	if n := mygo.App.Name(); strings.HasPrefix(n, "Posse") {
+		return n
+	}
+	return "Posse"
+})
+
+// appNameWidth 至少照"Posse"留 46，名字更长（Posse Dev）时按实际宽度。名字不变，按字号记下量过的宽度。
+func appNameWidth(c *ui.Context) float32 {
+	key := [2]float32{fsBody, float32(fwBold)}
+	w, ok := appNameWidths[key]
+	if !ok {
+		w, _ = c.MeasureText(0, ui.Span{Text: appName(), Size: fsBody, Weight: fwBold})
+		appNameWidths[key] = w
+	}
+	return max(sz(46), w)
+}
+
+// appNameWidths 只在界面线程读写。
+var appNameWidths = map[[2]float32]float32{}
+
+func titleLead(c *ui.Context) float32 { return appNameWidth(c) + appNameGap + toggleBox }
 
 // barInset 是侧栏不占位置时主区域顶栏左边要让出的宽度：红绿灯和浮在旁边的应用名、侧栏开关。
 func (a *app) barInset(c *ui.Context) float32 {
 	if a.sidebarSlot() {
 		return 0
 	}
-	return c.TitleBar().Left + titleGap + titleLead()
+	return c.TitleBar().Left + titleGap + titleLead(c)
 }
 
 // sidebarGrip 是侧栏右边缘的拖动条，松手才写 ui.json。
@@ -354,7 +376,7 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 12, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, hairline, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
-		ui.Box(c).Width(appNameWidth()).Shrink(0)
+		ui.Box(c).Width(appNameWidth(c)).Shrink(0)
 		ui.Spacer(c)
 		a.sidebarButton(c)
 	})
@@ -410,6 +432,7 @@ func (a *app) sidebar(c *ui.Context) {
 		}
 	}
 	a.staleBar(c)
+	a.updateBar(c)
 	a.errorBar(c)
 	a.footer(c)
 }

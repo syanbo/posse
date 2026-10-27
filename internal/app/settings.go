@@ -68,6 +68,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.termFontSettings(c)
 						a.editorFontSettings(c)
 					case "about":
+						a.updateSettings(c)
 						a.aboutSettings(c)
 					}
 				})

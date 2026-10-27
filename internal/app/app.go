@@ -289,6 +289,8 @@ type app struct {
 	exe         exeWatch
 	exeReplaced atomic.Bool // 轮询线程里只报一次
 	staleApp    bool
+	upd         selfUpdate // 自动更新的检查和下载（appupdate.go）
+	updating    bool       // 正在换包、交接常驻进程，接着重开窗口
 
 	// unread 是本轮完成时你不在看的会话（终端 ID），看过或再开始干活就清掉；只在窗口进程内存里（unread.go）
 	unread   map[string]bool
@@ -359,7 +361,7 @@ func Run(c *client.Client) error {
 	}
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:         "Posse",
+			Title:         appName(),
 			Width:         1200,
 			Height:        780,
 			MinWidth:      minWindowWidth,
@@ -373,6 +375,7 @@ func Run(c *client.Client) error {
 		a.watchClose()
 		a.installMenu()
 		a.watchFocus()
+		a.startUpdates()
 		mygo.App.OnNotificationClick(func(id string) {
 			// 通知 ID 形如 posse:<工作区>:<终端> 或 posse-task:<任务>
 			parts := strings.Split(id, ":")
@@ -716,6 +719,10 @@ func (a *app) installMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleAbout},
+			{Label: "检查更新…", Hidden: !mygo.Updater.Configured(), Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(a.openAbout)
+				go a.checkUpdate(true)
+			}},
 			mygo.Separator(),
 			{Label: "设置…", Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(a.openSettings)

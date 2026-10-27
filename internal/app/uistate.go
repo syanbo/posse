@@ -12,45 +12,47 @@ import (
 // uiState 是只有界面关心的状态，存在 $POSSE_HOME/ui.json：放进常驻进程要改协议，
 // 而重启常驻进程会断掉所有终端。
 type uiState struct {
-	Selected             string   `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来
-	ProjectOrder         []string `json:"projectOrder,omitempty"`         // 侧栏里项目的顺序，拖动调整
-	RightPanel           string   `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelImages 或空
-	FilesPanel           bool     `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
-	FilesPanelWidth      float32  `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
-	FilesPanelHistory    bool     `json:"filesPanelHistory,omitempty"`    // 文件栏顶上选的是"历史"（当前项目的会话），不是文件
-	SidebarHidden        bool     `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
-	SessionButtonsHidden bool     `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
-	SidebarWidth         float32  `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
-	LogPanel             bool     `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
-	LogPanelHeight       float32  `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
-	BranchPopWidth       float32  `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认
-	CompareSplit         float32  `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
-	DiffSplit            float32  `json:"diffSplit,omitempty"`            // diff 左右对照时旧版一侧占的比例，0 表示各一半
-	LogRefsWidth         float32  `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
-	LogDetailWidth       float32  `json:"logDetailWidth,omitempty"`       // 日志、逐行追溯右边提交详情的宽度，0 表示默认
-	MobileAddress        string   `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
-	MobileAddresses      []string `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
-	FontSize             float32  `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
-	TermFont             string   `json:"termFont,omitempty"`             // 终端字体，空表示默认
-	EditorFont           string   `json:"editorFont,omitempty"`           // 编辑器字体，空表示默认
-	EditorFontSize       float32  `json:"editorFontSize,omitempty"`       // 编辑器字号，0 表示默认（旧版跟着终端小一号）
-	TermWeight           int      `json:"termWeight,omitempty"`           // 终端正文的字重，0 表示默认（400）
-	TermBoldWeight       int      `json:"termBoldWeight,omitempty"`       // 终端粗体的字重，0 表示比正文重 200、至少 600
-	TermLineHeight       float32  `json:"termLineHeight,omitempty"`       // 终端行高，字体自身行高的倍数，0 表示 1
-	TermSmooth           bool     `json:"termSmooth,omitempty"`           // 终端用系统的字体平滑画字（更粗），默认不用
-	EditorWeight         int      `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
-	EditorBoldWeight     int      `json:"editorBoldWeight,omitempty"`     // 编辑器粗体（Markdown 标题、加粗）的字重，规则同终端
-	EditorLineHeight     float32  `json:"editorLineHeight,omitempty"`     // 编辑器行高，字号的倍数，0 表示 1.5
-	EditorSmooth         bool     `json:"editorSmooth,omitempty"`         // 编辑器用系统的字体平滑画字（更粗），默认不用
-	UsageRemaining       bool     `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
-	ImageCheckerOff      bool     `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
-	UsageSkillsOnly      bool     `json:"usageSkillsOnly,omitempty"`      // "技能与工具"面板只看技能和 MCP，不列命令行程序
-	HistoryByFolder      bool     `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
-	IconSize             float32  `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
-	UISmooth             bool     `json:"uiSmooth,omitempty"`             // 界面文字用系统的字体平滑（更粗），默认不用
-	UIFontSize           float32  `json:"uiFontSize,omitempty"`           // 界面正文字号，0 表示默认
-	UIWeight             int      `json:"uiWeight,omitempty"`             // 界面正文字重，0 表示默认
-	UIBoldWeight         int      `json:"uiBoldWeight,omitempty"`         // 界面标题的字重，0 表示默认
+	Selected             string    `json:"selected,omitempty"`             // 侧栏上次选中的一项，下次打开时选回来
+	ProjectOrder         []string  `json:"projectOrder,omitempty"`         // 侧栏里项目的顺序，拖动调整
+	RightPanel           string    `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelImages 或空
+	FilesPanel           bool      `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
+	FilesPanelWidth      float32   `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
+	FilesPanelHistory    bool      `json:"filesPanelHistory,omitempty"`    // 文件栏顶上选的是"历史"（当前项目的会话），不是文件
+	SidebarHidden        bool      `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
+	SessionButtonsHidden bool      `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
+	SidebarWidth         float32   `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
+	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
+	LogPanelHeight       float32   `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
+	BranchPopWidth       float32   `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认
+	CompareSplit         float32   `json:"compareSplit,omitempty"`         // 分支比较上一栏占的比例，0 表示各一半
+	DiffSplit            float32   `json:"diffSplit,omitempty"`            // diff 左右对照时旧版一侧占的比例，0 表示各一半
+	LogRefsWidth         float32   `json:"logRefsWidth,omitempty"`         // 日志左边分支树的宽度，0 表示默认
+	LogDetailWidth       float32   `json:"logDetailWidth,omitempty"`       // 日志、逐行追溯右边提交详情的宽度，0 表示默认
+	MobileAddress        string    `json:"mobileAddress,omitempty"`        // 配对手机时写进配对码的地址，空是自动（Tailscale 或局域网）
+	MobileAddresses      []string  `json:"mobileAddresses,omitempty"`      // 用过的自定义地址，配对对话框里可选
+	FontSize             float32   `json:"fontSize,omitempty"`             // 终端字号，0 表示默认
+	TermFont             string    `json:"termFont,omitempty"`             // 终端字体，空表示默认
+	EditorFont           string    `json:"editorFont,omitempty"`           // 编辑器字体，空表示默认
+	EditorFontSize       float32   `json:"editorFontSize,omitempty"`       // 编辑器字号，0 表示默认（旧版跟着终端小一号）
+	TermWeight           int       `json:"termWeight,omitempty"`           // 终端正文的字重，0 表示默认（400）
+	TermBoldWeight       int       `json:"termBoldWeight,omitempty"`       // 终端粗体的字重，0 表示比正文重 200、至少 600
+	TermLineHeight       float32   `json:"termLineHeight,omitempty"`       // 终端行高，字体自身行高的倍数，0 表示 1
+	TermSmooth           bool      `json:"termSmooth,omitempty"`           // 终端用系统的字体平滑画字（更粗），默认不用
+	EditorWeight         int       `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
+	EditorBoldWeight     int       `json:"editorBoldWeight,omitempty"`     // 编辑器粗体（Markdown 标题、加粗）的字重，规则同终端
+	EditorLineHeight     float32   `json:"editorLineHeight,omitempty"`     // 编辑器行高，字号的倍数，0 表示 1.5
+	EditorSmooth         bool      `json:"editorSmooth,omitempty"`         // 编辑器用系统的字体平滑画字（更粗），默认不用
+	UsageRemaining       bool      `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
+	ImageCheckerOff      bool      `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
+	UsageSkillsOnly      bool      `json:"usageSkillsOnly,omitempty"`      // "技能与工具"面板只看技能和 MCP，不列命令行程序
+	HistoryByFolder      bool      `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
+	IconSize             float32   `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
+	UISmooth             bool      `json:"uiSmooth,omitempty"`             // 界面文字用系统的字体平滑（更粗），默认不用
+	UIFontSize           float32   `json:"uiFontSize,omitempty"`           // 界面正文字号，0 表示默认
+	UIWeight             int       `json:"uiWeight,omitempty"`             // 界面正文字重，0 表示默认
+	UIBoldWeight         int       `json:"uiBoldWeight,omitempty"`         // 界面标题的字重，0 表示默认
+	UpdateCheckedAt      time.Time `json:"updateCheckedAt,omitzero"`       // 上次成功检查更新的时间，距今满 6 小时才自动再查
+	UpdateDismissed      string    `json:"updateDismissed,omitempty"`      // 在侧栏关掉了这个版本的"已就绪"卡片
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示

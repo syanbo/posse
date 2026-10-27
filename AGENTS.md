@@ -17,11 +17,12 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - 改界面后用离屏预览自查（屏幕锁定时也能用）：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`，生成主要界面深浅两套的 PNG（清单见 `preview_test.go`）。
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 写界面前读 `docs/design.md`（取向和字号、颜色、间距等规则，只用 `style.go` 里的名字，不写数字），各界面的行为见 `docs/features/ui.md`。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。mygo 会把字重取整到固定档位，别指望细调字重。
-- `mygo.json` 用开发证书签名（`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
+- `mygo.json` 用 Developer ID Application 证书签名（团队 QKSM9Z4U85；`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
 - 应用图标的原图是 `design/icon-art.png`（满版、不带圆角），改图标改它和下面几处。桌面端用 Icon Composer 文档 `design/Posse.icon`（`mygo.json` 的 `macos.icon`，里面一层就是这张图，关了玻璃、高光和阴影），由 actool 编成 Assets.car、圆角由系统画：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 是同一张图，只在编不了 .icon 时用；手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 由原图缩放。旧版图标留在 `design/old-icon/`。不要放进 `resources/`：那里的文件会原样打进 app。
 - 要把 App 跑起来的测试（窗口、Computer Use、看桌面、屏幕录制和辅助功能这类按签名认的授权、访问文稿和桌面目录）一律用 `scripts/dev-app.sh` 装出的 `build/dev/PosseDev.app`：包 ID `com.dengbo.posse.dev`、同一张证书，授权一次一直有效，可反复重装。它没设 `POSSE_HOME` 时用 `~/.posse-dev`、没设 `POSSE_MOBILE_PORT` 时手机端口用 6790，`POSSE_HOME` 指向 `~/.posse` 也换成 `~/.posse-dev`（`daemon.ResolveHome`）：双击、系统重新拉起、Computer Use 按包 ID 激活都不带环境变量，在 Posse 的终端里直接运行又会继承日常的 `POSSE_HOME`，连上日常的常驻进程后窗口会把它自动交接到更新的开发包上。命令行调用 `build/dev/PosseDev.app/Contents/MacOS/Posse …`，窗口用 `open -n build/dev/PosseDev.app`。手机配对一次长期有效，用完 `daemon stop` 停掉它的常驻进程（先 `daemon status` 看 home 是 `~/.posse-dev`）。
 - `build/darwin-arm64/Posse.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。不拿它做测试，用上一条的 PosseDev.app；测试用的包如果和日常的包 ID 相同，按包 ID 激活起来的实例会用 `~/.posse`，还会把日常的常驻进程交接过去（发生了就用 build 里的包 `posse daemon handoff` 换回来）。
 - 在 Posse 的终端里跑测试时，环境里带着日常常驻进程的 `GIT_TRACE2_EVENT`，`internal/daemon` 的 `TestGitTrace` 会失败：用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
+- 发布 Mac 版：先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，用 wrangler（本机登录的 Cloudflare 账号，过期了 `npx wrangler login`）把更新包、增量包、dmg 和清单传到 R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载（`Posse.dmg` 是最新版）。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新。装在「应用程序」里的 Posse 会自己更新，`build/` 里的不会；方案和换包时机见 `docs/plans/mac-update.md`。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
@@ -51,7 +52,7 @@ internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用
 internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
 internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
-scripts             `dev-app.sh`：装开发用的 PosseDev.app
+scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版
 mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go QUIC 客户端，构建钩子调 `go build`，Dart 经 FFI 调用）
 third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
 ```
