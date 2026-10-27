@@ -171,6 +171,47 @@ private final class DeskReplay {
   }
 }
 
+/// 码率照 Moonlight 的做法：按 250 ms 分桶记字节，平均只取最近 2 秒里已经满了的桶，峰值看 10 秒。
+/// 只看 1 秒的话，一个关键帧或一阵补发就让读数跳一下。
+struct DeskRate {
+  static let bucket = 0.25
+  private static let count = 40
+  private var slots = [(index: Int, bytes: Int)](repeating: (-1, 0), count: count)
+
+  mutating func add(_ bytes: Int, at now: CFAbsoluteTime) {
+    let index = Int(now / Self.bucket)
+    let slot = index % Self.count
+    if slots[slot].index != index { slots[slot] = (index, 0) }
+    slots[slot].bytes += bytes
+  }
+
+  /// 最近 2 秒的平均，比特每秒。没包来的桶按 0 算。
+  func average(at now: CFAbsoluteTime) -> Double {
+    let current = Int(now / Self.bucket)
+    let span = Int(2 / Self.bucket)
+    var bytes = 0
+    for index in (current - span)..<current {
+      let slot = slots[index % Self.count]
+      if slot.index == index { bytes += slot.bytes }
+    }
+    return Double(bytes) * 8 / 2
+  }
+
+  /// 10 秒里最满的一个桶，比特每秒。
+  func peak(at now: CFAbsoluteTime) -> Double {
+    let current = Int(now / Self.bucket)
+    var most = 0
+    for slot in slots where slot.index < current && current - slot.index <= Self.count {
+      most = max(most, slot.bytes)
+    }
+    return Double(most) * 8 / Self.bucket
+  }
+
+  mutating func reset() {
+    slots = [(index: Int, bytes: Int)](repeating: (-1, 0), count: Self.count)
+  }
+}
+
 struct DeskAccessUnit {
   let nals: [Data]
   let frame: UInt64
@@ -547,10 +588,14 @@ final class DeskSession {
   private var delays: [Double] = []
   private var delayFloor: [(Int, Double)] = []
   private var waitingKey = true
+  /// 最近一次解开 Mac 的包（画面或每秒一次的 beat）的时刻，只在收包线程读写
+  private var heardAt: CFAbsoluteTime = 0
   private var primed = false
   private var recoveries = 0
   private var gotVideo = false
-  private var videoBytes: [(CFAbsoluteTime, Int)] = []
+  private var videoRate = DeskRate()
+  /// 拼成整帧交给解码器的时刻和解码出来的时刻：两个帧率差得多说明解码跟不上
+  private var receivedAt: [CFAbsoluteTime] = []
   private var decodedAt: [CFAbsoluteTime] = []
   private var decodeMs: [(CFAbsoluteTime, Double)] = []
   private var pictureWidth = 0
@@ -680,7 +725,8 @@ final class DeskSession {
     delays.removeAll(keepingCapacity: true)
     delayFloor.removeAll(keepingCapacity: true)
     statsLock.lock()
-    videoBytes.removeAll(keepingCapacity: true)
+    videoRate.reset()
+    receivedAt.removeAll(keepingCapacity: true)
     decodedAt.removeAll(keepingCapacity: true)
     decodeMs.removeAll(keepingCapacity: true)
     statsLock.unlock()
@@ -786,6 +832,7 @@ final class DeskSession {
       }
       guard let opened else { continue }
       if !replay.accept(opened.1) { continue }
+      heardAt = CFAbsoluteTimeGetCurrent()
       noteActive(from)
       if opened.0 == deskKindBeat {
         noteBeat(opened.2)
@@ -793,7 +840,6 @@ final class DeskSession {
       }
       if opened.0 != deskKindVideo { continue }
       gotVideo = true
-      noteVideo(bytes: n, now: CFAbsoluteTimeGetCurrent())
       guard opened.2.count >= 29 else { continue }
       receive(opened.2, at: CFAbsoluteTimeGetCurrent())
     }
@@ -935,6 +981,7 @@ final class DeskSession {
       lastFrameAt = max(arrival, lastFrameAt)
       noteDelay(capture: beU64(plain, 9))
     }
+    noteVideo(unit, now: CFAbsoluteTimeGetCurrent())
     decoder.push(unit)
   }
 
@@ -1103,10 +1150,13 @@ final class DeskSession {
     if fd >= 0 && fd != current { close(fd) }
   }
 
-  private func noteVideo(bytes: Int, now: CFAbsoluteTime) {
+  /// 码率只算视频本身：RTP 头、加密开销、重复的补发都不算，和 Moonlight 一样按帧的长度记。
+  private func noteVideo(_ unit: DeskAccessUnit, now: CFAbsoluteTime) {
+    let bytes = unit.nals.reduce(0) { $0 + $1.count }
     statsLock.lock()
-    videoBytes.append((now, bytes))
-    videoBytes.removeAll { now - $0.0 > 2 }
+    videoRate.add(bytes, at: now)
+    receivedAt.append(now)
+    receivedAt.removeAll { now - $0 > 2 }
     statsLock.unlock()
   }
 
@@ -1125,8 +1175,13 @@ final class DeskSession {
 
   private func emitStats(_ now: CFAbsoluteTime) {
     statsLock.lock()
-    let bytes = videoBytes.filter { now - $0.0 <= 1 }.reduce(0) { $0 + $1.1 }
+    let bitrate = videoRate.average(at: now)
+    let peak = videoRate.peak(at: now)
+    let received = receivedAt.filter { now - $0 <= 1 }.count
     let frames = decodedAt.filter { now - $0 <= 1 }.count
+    // Mac 只在画面变了时出帧，1 秒没新帧是画面没动，不是卡了。前提是 Mac 的包（至少每秒一次的 beat）
+    // 还在来、也不在等关键帧：断网或丢包等关键帧时画面也不动，那是卡住
+    let still = (decodedAt.last.map { now - $0 > 1 } ?? false) && !waitingKey && now - heardAt < 2.5
     let samples = decodeMs.filter { now - $0.0 <= 1 }.map(\.1).sorted()
     let p50 = samples.isEmpty ? 0 : samples[samples.count / 2]
     let width = pictureWidth
@@ -1134,7 +1189,10 @@ final class DeskSession {
     statsLock.unlock()
     var stats: [String: Any] = [
       "fps": Double(frames),
-      "bitrate": Double(bytes) * 8,
+      "received": Double(received),
+      "bitrate": bitrate,
+      "peak": peak,
+      "still": still,
       "loss": Int(lossTotal),
       "decodeMs": p50,
       "recoveries": recoveries,

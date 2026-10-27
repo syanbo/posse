@@ -97,6 +97,7 @@ class DeskToolbar extends StatelessWidget {
     required this.latency,
     required this.unresponsive,
     required this.fps,
+    this.still = false,
     required this.video,
     required this.landscape,
     required this.keyboardUp,
@@ -117,6 +118,7 @@ class DeskToolbar extends StatelessWidget {
   final Duration? latency;
   final bool unresponsive;
   final double fps;
+  final bool still;
   final bool video;
   final bool landscape;
   final bool keyboardUp;
@@ -156,7 +158,7 @@ class DeskToolbar extends StatelessWidget {
     final signal = _signal(c);
     final icon = Icon(signal.$1, size: 14, color: signal.$2);
     final label = Text(
-      deskFpsLabel(fps, video: video),
+      deskFpsLabel(fps, video: video, still: still),
       key: const Key('desk-fps'),
       style: statusLineStyle(c.text),
     );

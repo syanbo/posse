@@ -1555,6 +1555,7 @@ class _DeskPageState extends State<DeskPage>
                       latency: widget.model.latency,
                       unresponsive: widget.model.unresponsive,
                       fps: stats.fps,
+                      still: stats.still,
                       video: stats.video,
                       landscape: landscape,
                       keyboardUp: _keyboardUp,
@@ -1795,7 +1796,11 @@ class _DeskPageState extends State<DeskPage>
   Widget _debugPanel(PosseColors colors, DeskStats stats) {
     final view = _gestures.viewport;
     final headline =
-        '${stats.fps.toStringAsFixed(0)} fps  ${deskBitrate(stats.bitrate)}';
+        '${deskFpsLabel(stats.fps, video: stats.video, still: stats.still)}'
+        '  收到 ${stats.received.toStringAsFixed(0)} fps';
+    final rate =
+        '码率 ${deskBitrate(stats.bitrate)}（${deskByteRate(stats.bitrate)}）'
+        '  峰值 ${deskBitrate(stats.peak)}';
     final cap = MediaQuery.sizeOf(context).height * 0.45;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: 260, maxHeight: cap),
@@ -1813,6 +1818,7 @@ class _DeskPageState extends State<DeskPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(headline),
+                Text(rate),
                 Text('丢包 ${stats.loss}'),
                 Text('线路 ${deskPathLabel(stats.path)}'),
                 ValueListenableBuilder<(int, int)>(

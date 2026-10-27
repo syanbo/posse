@@ -115,6 +115,8 @@ void main() {
     expect(deskBitrate(2.5e6), '2.5 Mbps');
     expect(deskBitrate(2000), '2 kbps');
     expect(deskBitrate(400), '400 bps');
+    expect(deskByteRate(2.5e6), '313 KB/s');
+    expect(deskByteRate(16e6), '2.0 MB/s');
   });
 
   test('event log keeps the latest drag move and six lines', () {

@@ -4,11 +4,15 @@ import 'package:flutter/services.dart';
 
 import 'keys.dart';
 
-/// 原生层每 200 ms 推一次。码率是比特每秒，丢包和解码耗时是从开看以来的累计和最近一秒的中位数。
+/// 原生层每 200 ms 推一次。帧率是最近一秒的帧数；码率是比特每秒、只算视频本身，平均取最近 2 秒，
+/// 峰值是 10 秒里最满的 250 ms；丢包和解码耗时是从开看以来的累计和最近一秒的中位数。
 class DeskStats {
   const DeskStats({
     this.fps = 0,
+    this.received = 0,
+    this.still = false,
     this.bitrate = 0,
+    this.peak = 0,
     this.loss = 0,
     this.decodeMs = 0,
     this.recoveries = 0,
@@ -20,8 +24,17 @@ class DeskStats {
     this.path,
   });
 
+  /// 解码出来的帧率。
   final double fps;
+
+  /// 收到、拼成整帧的帧率，比 fps 高得多说明解码跟不上。
+  final double received;
+
+  /// 1 秒以上没有新帧：Mac 只在画面变了时出帧，这是画面没动。
+  final bool still;
+
   final double bitrate;
+  final double peak;
   final int loss;
   final double decodeMs;
   final int recoveries;
@@ -44,7 +57,10 @@ class DeskStats {
     int i(Object? value) => value is num ? value.toInt() : 0;
     return DeskStats(
       fps: n(map['fps']),
+      received: n(map['received']),
+      still: map['still'] == true,
       bitrate: n(map['bitrate']),
+      peak: n(map['peak']),
       loss: i(map['loss']),
       decodeMs: n(map['decodeMs']),
       recoveries: i(map['recoveries']),
@@ -62,6 +78,13 @@ String deskBitrate(double bps) {
   if (bps >= 1000000) return '${(bps / 1000000).toStringAsFixed(1)} Mbps';
   if (bps >= 1000) return '${(bps / 1000).toStringAsFixed(0)} kbps';
   return '${bps.toStringAsFixed(0)} bps';
+}
+
+/// 换成字节每秒，好和测速软件的 MB/s 对上。
+String deskByteRate(double bps) {
+  final bytes = bps / 8;
+  if (bytes >= 1000000) return '${(bytes / 1000000).toStringAsFixed(1)} MB/s';
+  return '${(bytes / 1000).toStringAsFixed(0)} KB/s';
 }
 
 /// 现在连着的地址里的主机。桌面 UDP 不走 WebSocket 那个端口。
