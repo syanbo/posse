@@ -205,10 +205,11 @@ func Update(ctx context.Context, dir string, b Branch) error {
 		return ErrNoUpstream
 	}
 	if b.Current {
+		before, _ := stashTop(ctx, dir)
 		if _, err := runRaw(ctx, dir, nil, nil, "pull", "--rebase", "--autostash"); err != nil {
 			return err
 		}
-		return autostashConflict(ctx, dir)
+		return autostashLeft(ctx, dir, before)
 	}
 	remote, branch, ok := strings.Cut(b.Upstream, "/")
 	if !ok {
@@ -240,20 +241,43 @@ func Incoming(ctx context.Context, dir, from, to string) int {
 	return n
 }
 
-// ErrStashConflict 表示操作本身成功了，但取回临时储藏的本地改动时冲突：git 照样返回成功，
-// 冲突标记已经写进文件，原来的改动留在储藏列表里。
-var ErrStashConflict = errors.New("已经完成，但取回本地改动时有冲突：冲突的文件已标出来，原来的改动还留在储藏里，解决完可以删掉那条储藏")
+// AutostashLeft 表示带 --autostash 的操作本身成功了，但临时储藏的本地改动没有干净地取回，git 把它留在
+// 储藏列表里（储藏的说明是 autostash）。Conflicts 为真是取回了、有冲突，冲突标记已经写进文件；
+// 为假是根本没取回（比如会覆盖新拉下来的文件）。界面不当失败报，引去改动页处理。
+type AutostashLeft struct {
+	Stash     string // 留下的储藏的提交
+	Conflicts bool
+}
 
-// autostashConflict 在带 --autostash 的操作成功后检查有没有冲突文件。
-func autostashConflict(ctx context.Context, dir string) error {
+func (e *AutostashLeft) Error() string {
+	if e.Conflicts {
+		return "已经完成，但取回本地改动时有冲突"
+	}
+	return "已经完成，但本地改动没能取回，还在储藏里"
+}
+
+// stashTop 是最新一条储藏的提交和说明，没有储藏时为空。
+func stashTop(ctx context.Context, dir string) (hash, msg string) {
+	out, err := run(ctx, dir, "stash", "list", "-1", "--format=%H%x1f%gs")
+	if err != nil {
+		return "", ""
+	}
+	hash, msg, _ = strings.Cut(out, "\x1f")
+	return hash, msg
+}
+
+// autostashLeft 在带 --autostash 的操作成功后检查这次有没有留下储藏。before 是操作前最新一条储藏的提交：
+// 储藏列表是所有 worktree 共用的，只认这次新出现的那条。
+func autostashLeft(ctx context.Context, dir, before string) error {
+	hash, msg := stashTop(ctx, dir)
+	if hash == "" || hash == before || msg != "autostash" {
+		return nil
+	}
 	out, err := runRaw(ctx, dir, nil, nil, "diff", "--name-only", "--diff-filter=U")
 	if err != nil {
 		return err
 	}
-	if len(bytes.TrimSpace(out)) > 0 {
-		return ErrStashConflict
-	}
-	return nil
+	return &AutostashLeft{Stash: hash, Conflicts: len(bytes.TrimSpace(out)) > 0}
 }
 
 // Rebase 把当前分支 rebase 到 onto 上。

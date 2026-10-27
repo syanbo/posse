@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	a.changesHeader(c, w, v)
 	a.baseRow(c, w, v)
 	a.operationBanner(c, w, v)
+	a.autostashBanner(c, v)
 	// 分页：提交看文件改动和提交框，储藏看 stash（照 WebStorm 的"储藏"标签）
 	var files, stashes []changeRow
 	// 收起的组只留标题；F7 等仍按全部的 g.rows 走
@@ -332,7 +334,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 				a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		case e.Conflict:
-			ours, theirs := sideNames(g.status.Operation)
+			ours, theirs := sideNames(g.status.Operation, g.autostash != "" && g.autostashConflicts)
 			if m.Item("采用" + ours).Chosen() {
 				a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, true) })
 			}
@@ -435,7 +437,11 @@ func (a *app) stashOwner(v *filesView, branch string) *workspace {
 var opNames = map[string]string{"rebase": "rebase", "merge": "合并", "cherry-pick": "cherry-pick", "revert": "revert"}
 
 // sideNames 是冲突两边在这个操作里各是什么：rebase 时 ours 是要 rebase 到的分支，theirs 是你正在重放的提交。
-func sideNames(op string) (ours, theirs string) {
+func sideNames(op string, autostash bool) (ours, theirs string) {
+	// 这个工作区的更新取回本地改动时冲突：ours 是更新后的 HEAD，theirs 是储藏里的本地改动
+	if op == "" && autostash {
+		return "更新后的版本", "我的本地改动"
+	}
 	if op == "rebase" {
 		return "目标分支的（ours）", "你的提交的（theirs）"
 	}
@@ -478,6 +484,66 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 						a.gitDo(v, "中止", func(ctx context.Context, root string) error { return gitx.Abort(ctx, root, op) })
 					})
 				})
+			}
+		})
+	})
+}
+
+// autostashBanner 照 WebStorm 的 "Local changes were restored with conflicts"：这个工作区的更新、改写提交前
+// 自动储藏的本地改动没干净地取回，git 把它们留在储藏里。有冲突时引去解决；解决完了 WebStorm 让你自己去删
+// 那条储藏，这里给一个按钮；根本没取回时引去储藏页手动应用。
+func (a *app) autostashBanner(c *ui.Context, v *filesView) {
+	g := &v.git
+	hash := g.autostash
+	if hash == "" || g.status.Operation != "" {
+		return
+	}
+	// 储藏在别处被删、被弹出了。刚结束时列表还是操作前读的，读到过一次才算数
+	if slices.ContainsFunc(g.stashes, func(s gitx.Stash) bool { return s.Hash == hash }) {
+		g.autostashSeen = true
+	} else if g.autostashSeen {
+		g.autostash = ""
+		return
+	}
+	t := c.Theme()
+	conflicts := 0
+	for _, e := range g.status.Entries {
+		if e.Conflict {
+			conflicts++
+		}
+	}
+	var msg string
+	switch {
+	case !g.autostashConflicts:
+		msg = "更新前的本地改动没能取回（会覆盖拉下来的文件），还在储藏里：在储藏里手动应用。"
+	case conflicts > 0:
+		msg = fmt.Sprintf("更新前的本地改动和拉下来的提交有冲突（%d 个文件）。右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决；原来的改动还在储藏里。", conflicts)
+	default:
+		msg = "冲突都解决了。更新前的本地改动还在储藏里，确认没问题可以删掉。"
+	}
+	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 6, 12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
+			ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+			if iconButtonSized(c, iconClose, "不再提示", compactBox(), smallIcon()).Clicked() {
+				g.autostash = ""
+			}
+		})
+		ui.Row(c).Gap(6).Children(func() {
+			if g.autostashConflicts && conflicts == 0 {
+				drop := pressable(accentButton(c, "删除储藏…"))
+				if g.busy != "" {
+					drop.Disabled(true)
+				}
+				if drop.Clicked() {
+					a.confirm("删除这条储藏？", "里面是更新前的本地改动，删掉后找不回来。", "删除", func() {
+						a.update(func() {
+							a.gitDo(v, "删除储藏", func(ctx context.Context, root string) error { return gitx.StashDropHash(ctx, root, hash) })
+						})
+					})
+				}
+			}
+			if pressable(textButton(c, "查看储藏")).Clicked() {
+				g.tab = 1
 			}
 		})
 	})

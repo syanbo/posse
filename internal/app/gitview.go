@@ -54,6 +54,11 @@ type gitState struct {
 	err      string
 	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
 	branches branchInfo
+	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
+	// 储藏列表是所有 worktree 共用的，只记自己操作留下的。关掉横幅或储藏没了就清空
+	autostash          string
+	autostashConflicts bool // 取回了、有冲突；为假是根本没取回
+	autostashSeen      bool // 储藏列表里已经读到过它：之后不在了就是在别处删掉、弹出了
 }
 
 type changeGroup uint8
@@ -763,6 +768,31 @@ func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, 
 	a.gitRun(v, op)
 }
 
+// autostashLeft 在操作留下 autostash 后：记到这个工作区，打开改动页；操作自己的成功提示（拉到几个提交）
+// 和这条合成一条警告，免得一绿一黄同时说两样。shown 是操作结束前已有的提示数。
+func (a *app) autostashLeft(v *filesView, left *gitx.AutostashLeft, shown int) {
+	g := &v.git
+	g.autostash, g.autostashConflicts, g.autostashSeen = left.Stash, left.Conflicts, false
+	title, desc := "取回本地改动时有冲突", "在改动页解决，原来的改动还在储藏里"
+	if !left.Conflicts {
+		title, desc = "本地改动没能取回", "还在储藏里，可以在改动页的储藏里手动应用"
+	}
+	if len(a.toasts) > shown {
+		title = a.toasts[shown].Title + "，但" + title
+		a.toasts = a.toasts[:shown]
+	}
+	a.warn(title, desc)
+	if w := a.workspace(v.wsID); w != nil {
+		a.openFilesPanel(w, sideChanges)
+	}
+	v.side, g.tab = sideChanges, 0
+}
+
+// warn 在窗口底部提示一句要留意的事，停留久一点。
+func (a *app) warn(title, desc string) {
+	a.toasts = append(a.toasts, ui.Toast{Title: title, Description: desc, Type: "warning", Timeout: 8 * time.Second})
+}
+
 // notify 在窗口底部提示一句（操作成功之类），带 action 时提示上有一个按钮。
 func (a *app) notify(title, action string, onAction func()) {
 	t := ui.Toast{Title: title, Type: "success", Action: action, OnAction: onAction}
@@ -825,6 +855,11 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 	}
 	go func() {
 		err := op.fn(ctx, root)
+		// 照 WebStorm：操作本身成功了，只是本地改动没干净地取回，不当失败报，引去改动页（autostashBanner）
+		var left *gitx.AutostashLeft
+		if errors.As(err, &left) {
+			err = nil
+		}
 		canceled := ctx.Err() != nil
 		switch {
 		case canceled:
@@ -839,8 +874,14 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 				a.err = op.what + "已取消"
 			} else if err != nil {
 				a.err = op.what + "失败：" + err.Error()
-			} else if op.done != nil {
-				op.done()
+			} else {
+				shown := len(a.toasts)
+				if op.done != nil {
+					op.done()
+				}
+				if left != nil {
+					a.autostashLeft(v, left, shown)
+				}
 			}
 			a.refreshGit(v)
 			// Fetch、更新、推送之后传入传出马上重算，分支弹窗、比较、diff、日志也重读

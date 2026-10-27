@@ -437,6 +437,7 @@ func LastMessage(ctx context.Context, dir string) string {
 // Stash 是一次储藏（git stash）。
 type Stash struct {
 	Ref     string // stash@{n}
+	Hash    string // 储藏的提交：前面再储藏一条 Ref 就变了，它不变
 	Message string
 	Branch  string // 储藏时所在的分支，取自 git 写的 "On <分支>:"；分离的 HEAD 为空
 	When    time.Time
@@ -466,18 +467,18 @@ func StashPush(ctx context.Context, dir, message string) error {
 }
 
 func Stashes(ctx context.Context, dir string) ([]Stash, error) {
-	out, err := runRaw(ctx, dir, nil, nil, "stash", "list", "-z", "--format=%gd%x1f%ct%x1f%gs")
+	out, err := runRaw(ctx, dir, nil, nil, "stash", "list", "-z", "--format=%gd%x1f%ct%x1f%H%x1f%gs")
 	if err != nil {
 		return nil, err
 	}
 	var list []Stash
 	for _, rec := range strings.Split(string(out), "\x00") {
-		p := strings.SplitN(rec, "\x1f", 3)
-		if len(p) != 3 {
+		p := strings.SplitN(rec, "\x1f", 4)
+		if len(p) != 4 {
 			continue
 		}
 		sec, _ := strconv.ParseInt(p[1], 10, 64)
-		list = append(list, Stash{Ref: p[0], Message: p[2], Branch: stashBranch(p[2]), When: time.Unix(sec, 0)})
+		list = append(list, Stash{Ref: p[0], Hash: p[2], Message: p[3], Branch: stashBranch(p[3]), When: time.Unix(sec, 0)})
 	}
 	return list, nil
 }
@@ -497,4 +498,18 @@ func StashPop(ctx context.Context, dir, ref string) error {
 func StashDrop(ctx context.Context, dir, ref string) error {
 	_, err := runRaw(ctx, dir, nil, nil, "stash", "drop", ref)
 	return err
+}
+
+// StashDropHash 按提交删储藏：先找到它现在的位置，免得期间有人储藏了新的、删错一条。
+func StashDropHash(ctx context.Context, dir, hash string) error {
+	list, err := Stashes(ctx, dir)
+	if err != nil {
+		return err
+	}
+	for _, s := range list {
+		if s.Hash == hash {
+			return StashDrop(ctx, dir, s.Ref)
+		}
+	}
+	return errors.New("这条储藏已经不在了")
 }

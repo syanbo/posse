@@ -142,6 +142,7 @@ func rewriteBase(ctx context.Context, dir, hash string) (base string, err error)
 // rebaseTodo 用交互式 rebase 改写当前分支：actions 把提交（完整哈希）映射到 rebase 的动作（reword、squash、drop），
 // message 非空时作为 reword 和 squash 要写的提交信息。由 posse 生成的脚本改写待办列表和提交信息，不打开编辑器。
 func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string, message string) error {
+	before, _ := stashTop(ctx, dir)
 	base, err := rewriteBase(ctx, dir, from)
 	if err != nil {
 		return err
@@ -182,7 +183,7 @@ func rebaseTodo(ctx context.Context, dir, from string, actions map[string]string
 	if _, err := runRaw(ctx, dir, nil, env, args...); err != nil {
 		return err
 	}
-	return autostashConflict(ctx, dir)
+	return autostashLeft(ctx, dir, before)
 }
 
 // Reword 改提交信息；是 HEAD 时直接 amend。

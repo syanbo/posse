@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -674,7 +675,8 @@ func (a *app) updateBranch(v *filesView, what string, b gitx.Branch) {
 	a.gitDoThen(v, what, func(ctx context.Context, root string) error {
 		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.Update(ctx, root, b)
-		if err == nil {
+		var left *gitx.AutostashLeft
+		if err == nil || errors.As(err, &left) {
 			n = gitx.Incoming(ctx, root, before, "refs/remotes/"+b.Upstream)
 		}
 		return err

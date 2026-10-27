@@ -469,6 +469,71 @@ func TestLogBlameAndReword(t *testing.T) {
 	}
 }
 
+// 照 WebStorm：更新前自动储藏的本地改动取回时冲突，不报失败；切到改动页，横幅引去解决，解决完可以删掉储藏
+func TestAutostashBanner(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	gitRun(t, root, "switch", "-q", "feat")
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// feat edit\n"), 0o644)
+	gitRun(t, root, "commit", "-q", "-am", "feat: 改了 main.go")
+	gitRun(t, root, "switch", "-q", "main")
+	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// 没提交的改动\n"), 0o644)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v := a.openFilesPanel(w, sideFiles)
+	until(t, tt, "status", func() bool { return v.git.status != nil })
+	v.side = sideFiles
+	// 照 git 的 --autostash：先储藏、更新到 feat，取回时冲突，再把储藏以 "autostash" 存进列表，命令照样成功
+	a.gitDo(v, "更新", func(ctx context.Context, root string) error {
+		git := func(args ...string) (string, error) {
+			cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+			cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+			out, err := cmd.CombinedOutput()
+			return strings.TrimSpace(string(out)), err
+		}
+		sha, err := git("stash", "create")
+		if err != nil {
+			return err
+		}
+		for _, args := range [][]string{{"reset", "-q", "--hard"}, {"reset", "-q", "--hard", "feat"}} {
+			if out, err := git(args...); err != nil {
+				return fmt.Errorf("%v: %s", err, out)
+			}
+		}
+		if _, err := git("stash", "apply", sha); err == nil {
+			return errors.New("stash applied without conflict")
+		}
+		if out, err := git("stash", "store", "-m", "autostash", sha); err != nil {
+			return fmt.Errorf("%v: %s", err, out)
+		}
+		return &gitx.AutostashLeft{Stash: sha, Conflicts: true}
+	})
+	until(t, tt, "banner", func() bool {
+		return v.side == sideChanges && tt.HasText("更新前的本地改动和拉下来的提交有冲突（1 个文件）")
+	})
+	if a.err != "" {
+		t.Fatalf("stash conflict reported as failure: %q", a.err)
+	}
+	ours, theirs := sideNames(v.git.status.Operation, v.git.autostash != "" && v.git.autostashConflicts)
+	if ours != "更新后的版本" || theirs != "我的本地改动" {
+		t.Fatal(ours, theirs)
+	}
+	a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
+	until(t, tt, "resolved", func() bool { return tt.HasText("冲突都解决了") })
+	if err := tt.Click("删除储藏…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("删除"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "dropped", func() bool { return v.git.autostash == "" && !tt.HasText("冲突都解决了") })
+	if got := gitRun(t, root, "stash", "list"); got != "" {
+		t.Fatalf("stash left: %s", got)
+	}
+}
+
 // 合并停在冲突上：自动切到改动，横幅说明冲突，采用一方后继续
 func TestConflictBanner(t *testing.T) {
 	a := previewApp(t)
@@ -488,7 +553,7 @@ func TestConflictBanner(t *testing.T) {
 	if !strings.Contains(a.err, "合并失败") {
 		t.Fatalf("merge error not shown: %q", a.err)
 	}
-	ours, theirs := sideNames("merge")
+	ours, theirs := sideNames("merge", false)
 	if ours != "当前分支的（ours）" || !strings.Contains(theirs, "合入") {
 		t.Fatal(ours, theirs)
 	}

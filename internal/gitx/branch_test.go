@@ -201,7 +201,7 @@ func TestAheadBehind(t *testing.T) {
 	}
 }
 
-// 更新当前分支时取回本地改动冲突：git 返回成功，Update 要报出来。
+// 更新当前分支时取回本地改动冲突：git 返回成功，Update 要报出这次留下的那条储藏；按提交删，不会删错。
 func TestUpdateAutostashConflict(t *testing.T) {
 	ctx := context.Background()
 	dir, bare := withRemote(t)
@@ -209,13 +209,32 @@ func TestUpdateAutostashConflict(t *testing.T) {
 	write(t, filepath.Join(other, "a.txt"), "theirs\n")
 	gitIn(t, other, "commit", "-q", "-am", "theirs")
 	gitIn(t, other, "push", "-q", "origin", "main")
+	// 之前就有的储藏（别的 worktree 存的也在同一个列表里）不算
+	write(t, filepath.Join(dir, "old.txt"), "old\n")
+	gitIn(t, dir, "stash", "push", "-q", "-u", "-m", "autostash")
 	write(t, filepath.Join(dir, "a.txt"), "mine\n")
 	list, _ := Branches(ctx, dir)
 	b, _ := find(list, "main", false)
-	if err := Update(ctx, dir, b); !errors.Is(err, ErrStashConflict) {
-		t.Fatalf("want ErrStashConflict, got %v", err)
+	var left *AutostashLeft
+	if err := Update(ctx, dir, b); !errors.As(err, &left) || !left.Conflicts {
+		t.Fatalf("want AutostashLeft with conflicts, got %v", err)
 	}
-	if got := gitIn(t, dir, "stash", "list"); got == "" {
-		t.Fatal("local changes should stay in the stash")
+	if got := gitIn(t, dir, "rev-parse", "stash@{0}"); got != left.Stash {
+		t.Fatalf("left %s, stash@{0} is %s", left.Stash, got)
+	}
+	// 期间又储藏了一条：按提交删的还是 autostash 那条
+	gitIn(t, dir, "checkout", "--theirs", "--", "a.txt")
+	gitIn(t, dir, "add", "a.txt")
+	write(t, filepath.Join(dir, "b.txt"), "b\n")
+	gitIn(t, dir, "stash", "push", "-q", "-u", "-m", "mine")
+	if err := StashDropHash(ctx, dir, left.Stash); err != nil {
+		t.Fatal(err)
+	}
+	stashes, _ := Stashes(ctx, dir)
+	if len(stashes) != 2 || stashes[0].Message != "On main: mine" || stashes[0].Hash == left.Stash {
+		t.Fatalf("stashes after drop: %+v", stashes)
+	}
+	if err := StashDropHash(ctx, dir, left.Stash); err == nil {
+		t.Fatal("dropping a gone stash should fail")
 	}
 }
