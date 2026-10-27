@@ -31,6 +31,10 @@ plutil -replace CFBundleIdentifier -string com.dengbo.posse.dev "$plist"
 plutil -replace CFBundleName -string PosseDev "$plist"
 plutil -replace CFBundleDisplayName -string "Posse Dev" "$plist"
 
+# 复制来的 dylib 是日常包打包时签的，证书换过团队后强化运行时不让加载，要一起重签
+for lib in "$new"/Contents/Resources/*.dylib; do
+	codesign --force --sign "$identity" --options runtime --timestamp=none "$lib"
+done
 codesign --force --sign "$identity" --options runtime --timestamp=none "$new"
 codesign --verify --strict "$new"
 
