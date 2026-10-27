@@ -23,6 +23,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - `build/darwin-arm64/Posse.app` 是日常在用的包（窗口、常驻进程、hooks 都从它运行），只由正式打包写入，不往里复制、不原地改写：正在运行的程序文件被改写，系统按签名失效直接杀掉所有用它的进程，终端全部丢失。不拿它做测试，用上一条的 PosseDev.app；测试用的包如果和日常的包 ID 相同，按包 ID 激活起来的实例会用 `~/.posse`，还会把日常的常驻进程交接过去（发生了就用 build 里的包 `posse daemon handoff` 换回来）。
 - 在 Posse 的终端里跑测试时，环境里带着日常常驻进程的 `GIT_TRACE2_EVENT`，`internal/daemon` 的 `TestGitTrace` 会失败：用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
 - 发布 Mac 版：先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，用 wrangler（本机登录的 Cloudflare 账号，过期了 `npx wrangler login`）把更新包、增量包、dmg 和清单传到 R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载（`Posse.dmg` 是最新版）。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新。装在「应用程序」里的 Posse 会自己更新，`build/` 里的不会；方案和换包时机见 `docs/plans/mac-update.md`。
+- 发布 iOS 的 Ad Hoc 安装包：`scripts/ios-adhoc.sh`，用 Apple Distribution 证书打 ipa（导出设置 `mobile/ios/ExportOptions-adhoc.plist`），连同 itms-services 清单和安装页传到 R2 的 `ios/`，iPhone 用 Safari 打开 `https://posse.shaoyan.uk/ios/index.html` 安装。只有开发者账号里登记过 UDID 的设备装得上，登记新设备后要重新运行；构建号是提交数，覆盖安装不清配对。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
@@ -52,7 +53,7 @@ internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用
 internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
 internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
-scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版
+scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包
 mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go QUIC 客户端，构建钩子调 `go build`，Dart 经 FFI 调用）
 third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
 ```
