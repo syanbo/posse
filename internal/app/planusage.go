@@ -83,6 +83,9 @@ func (a *app) shownWord() string {
 	return "已用"
 }
 
+// chipPad 是状态栏里文字按钮（用量、内存、防休眠）的左右内边距。
+const chipPad = 8
+
 // statusBar 是主区域最下面的状态栏，和侧栏的底栏同高同色，并排看是贯穿窗口的一条。
 // 左边是套餐用量，每家只占一小段：图标和一个窗口（有 5 小时就是它，否则是第一个）的百分比，合起来是一个按钮，
 // 点开的浮窗里是各家所有窗口、重置时间这些详情和"已用 / 剩余"切换；最右边是终端和内存、防休眠。
@@ -90,7 +93,8 @@ func (a *app) statusBar(c *ui.Context) {
 	t := c.Theme()
 	p := colors(t)
 	st := a.daemon.Usage
-	ui.Row(c).Height(footHeight).Padding(0, 8, 0, 6).Shrink(0).AlignItems(ui.Center).Clip().
+	// 两头的按钮自带 chipPad 的左右内边距，文字离边 trafficLightX，和上面顶栏的图标对齐
+	ui.Row(c).Height(footHeight).Padding(0, trafficLightX-chipPad).Shrink(0).AlignItems(ui.Center).Clip().
 		Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(p.line).Children(func() {
 		// 窗口窄时裁掉用量，右边的按钮不被挤出去
 		ui.Row(c).Grow(1).Shrink(1).MinWidth(0).Clip().AlignItems(ui.Center).Children(func() { a.planButton(c, st) })
@@ -116,10 +120,10 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		}
 	}
 	if len(shown) == 0 {
-		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4).SingleLine()
+		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, chipPad).SingleLine()
 		return
 	}
-	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, 8).Gap(12).Radius(rRow).AlignItems(ui.Center).Shrink(0).
+	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, chipPad).Gap(12).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Role(ui.RoleButton).Label("套餐用量")
 	bg := ui.Transparent
 	if a.planOpen || b.Hovered() {

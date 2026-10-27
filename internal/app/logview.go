@@ -221,7 +221,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	selectedBg(c, row, active)
 	row.Children(func() {
 		ui.Icon(c, iconGitLog).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
-		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), label, active)
+		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), active)
 		if d.log.filter.Path == "" {
 			ui.Box(c).Width(4)
 			return

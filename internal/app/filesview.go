@@ -452,7 +452,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	row.Children(func() {
 		ui.Icon(c, docIcon(d)).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
 		name := ui.Text(c, d.name()).FontSize(fsSmall).SingleLine().MaxWidth(180)
-		tabText(c, name, d.name(), active)
+		tabText(c, name, active)
 		if d.isPreview() {
 			name.Italic()
 		}

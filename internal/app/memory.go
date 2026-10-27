@@ -152,7 +152,7 @@ func (a *app) memoryButton(c *ui.Context) {
 	m := &a.mem
 	total := a.daemon.FootprintKB + a.selfKB + a.termKB
 	n := a.daemon.Running
-	b := ui.Row(c.Key("memory")).Height(sz(24)).Padding(0, 8).Gap(6).Radius(rRow).AlignItems(ui.Center).
+	b := ui.Row(c.Key("memory")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).
 		Role(ui.RoleButton).Label(fmt.Sprintf("内存 %s，%d 个终端在运行", mb(total), n)).Tooltip("内存和终端")
 	bg := ui.Transparent
 	if m.open || b.Hovered() {

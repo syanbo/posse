@@ -373,7 +373,7 @@ func titleHeight(c *ui.Context) float32 { return max(c.TitleBar().Height, 40) }
 func (a *app) sidebar(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 12, 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, bar.Left+titleGap).DragWindow().AlignItems(ui.Center).
 		BorderWidth(0, 0, hairline, 0).BorderColor(colors(t).line).Children(func() {
 		// 应用名浮在这里（见 build），留出它的位置
 		ui.Box(c).Width(appNameWidth(c)).Shrink(0)
@@ -390,14 +390,14 @@ func (a *app) sidebar(c *ui.Context) {
 	a.navOrder, a.navCur = a.navOrder[:0], -1
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
 	nav.Children(func() {
-		ui.Column(c).Padding(4, 12, 12, 12).Gap(2).Children(func() {
+		ui.Column(c).Padding(4, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
 			if len(a.projects) > 0 {
 				a.taskSidebarItem(c)
 			}
 			a.historySidebarItem(c)
 			a.mobileSidebarItem(c)
 			// 任务、历史、手机是全局页面，和下面的项目用一道细线隔开
-			hline(c).Margin(6, 12, 6, 12)
+			hline(c).Margin(6, navPad, 6, navPad)
 			// 要定位的工作区所在的项目
 			reveal := ""
 			if w := a.workspace(a.selected); a.revealSel && w != nil {
@@ -511,6 +511,19 @@ func collapsible(c *ui.Context, shown float32, fn func()) {
 
 // navIndent 是侧栏下一层相对上一层的缩进。
 const navIndent = 24
+
+// trafficLightX 是红绿灯红点的左边缘。
+const trafficLightX = 16
+
+// iconBarPad 是顶栏、底栏两头放图标按钮时的内边距：按钮自带 (buttonBox-iconSize)/2 的留白，
+// 加起来图标离窗口和侧栏的边 trafficLightX，和红点、侧栏行首图标一样。
+func iconBarPad() float32 { return trafficLightX - (buttonBox()-iconSize)/2 }
+
+// navPad 是侧栏行左右的内边距，两边一样；列表左边留 trafficLightX-navPad，顶层行首图标的左边缘和红点对齐。
+const navPad = 10
+
+// navEnd 是侧栏列表右边的内边距，比左边宽：选中行的底色离滚动条远一点。
+const navEnd = 12
 
 // projectHeader 是有多个工作区的项目的标题行：只管展开收起，不选中工作区；收起时汇总所有工作区的终端。
 func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool) {
@@ -730,7 +743,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		a.navCur = len(a.navOrder) - 1
 	}
 	// 和标签一样：任务 worker 用任务标题
-	name, detail := tabLabel(term)
+	name, detail := fullLabel(term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
 		detail = title
 	}
@@ -748,7 +761,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		}
 	}
 	var trailing func()
-	if status != "" || open != nil {
+	if status == agent.StatusWaiting || status == statusUnread || folded {
 		trailing = func() {
 			switch status {
 			case agent.StatusWaiting:
@@ -760,13 +773,21 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
 					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
 			}
-			if status != "" {
-				a.statusIcon(c, statusID, status, smallIcon())
-			}
 		}
 	}
-	icon := func() { agentTile(c, term.Agent, iconSize).Tooltip(name) }
-	row := a.navRowAt(c, term.ID, selected, icon, detail, "", "", trailing)
+	// 和终端标签一样：最左是状态，接着 agent 图标和名字，字和图标都小一档
+	icon := func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+			if status != "" {
+				a.statusIcon(c, statusID, status, smallIcon())
+			} else {
+				// 还没有状态时占住位置，图标和名字不往左跳
+				ui.Box(c).Size(smallIcon(), smallIcon()).Shrink(0)
+			}
+			agentTile(c, term.Agent, smallIcon()).Tooltip(name)
+		})
+	}
+	row := a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, "", "", trailing)
 	a.reorderableTerm(c, row, w.ID, term.ID, false)
 	if row.Clicked() {
 		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
@@ -935,6 +956,11 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 
 // navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
 func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), label, sub, branch string, trailing func()) ui.Element {
+	return a.navRowSized(c, key, selected, icon, label, fsBody, sub, branch, trailing)
+}
+
+// navRowSized 同 navRowAt，名称用 size 字号：agent 会话行照 Orca 用小一号的字。
+func (a *app) navRowSized(c *ui.Context, key string, selected bool, icon func(), label string, size float32, sub, branch string, trailing func()) ui.Element {
 	t := c.Theme()
 	height, gap := sz(32), float32(2)
 	switch {
@@ -943,14 +969,14 @@ func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), la
 	case sub != "" || branch != "":
 		height = sz(46)
 	}
-	row := ui.Row(c.Key(key)).Height(height).Padding(0, 12, 0, 12).Gap(8).Radius(rControl).Shrink(0).AlignItems(ui.Center).
+	row := ui.Row(c.Key(key)).Height(height).Padding(0, navPad).Gap(8).Radius(rControl).Shrink(0).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, selected)
 	row.Children(func() {
 		icon()
 		ui.Column(c).Gap(gap).Grow(1).Shrink(1).Children(func() {
 			// 选中只靠底色区分，文字不加粗
-			ui.Text(c, label).FontSize(fsBody).SingleLine()
+			ui.Text(c, label).FontSize(size).SingleLine()
 			// 分支独占一行，路径在它下面
 			if branch != "" {
 				ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
@@ -1002,7 +1028,7 @@ func (a *app) footer(c *ui.Context) {
 	if !a.loaded {
 		return
 	}
-	ui.Row(c).Height(footHeight).Padding(0, 8).Shrink(0).Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
+	ui.Row(c).Height(footHeight).Padding(0, iconBarPad()).Shrink(0).Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
 		menuButton(c, iconButton(c, iconPlus, "新建"), func(m *popMenu) {
 			if m.Item("添加项目…").Chosen() {
 				go a.addProject()
@@ -1296,8 +1322,8 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 					vline(c)
 					a.filesPanel(c, w)
 				})
-				// 开关固定在右上角，和关着时标签栏里的同一个位置（右边留 16，底下让出 1 像素的分隔线），不跟着文件栏滑动
-				ui.Row(c).Absolute().Top(0).Right(16).Height(titleHeight(c)).Padding(0, 0, hairline, 0).AlignItems(ui.Center).Children(func() {
+				// 开关固定在右上角，和关着时标签栏里的同一个位置（底下让出 1 像素的分隔线），不跟着文件栏滑动
+				ui.Row(c).Absolute().Top(0).Right(iconBarPad()).Height(titleHeight(c)).Padding(0, 0, hairline, 0).AlignItems(ui.Center).Children(func() {
 					a.filesPanelButton(c, w)
 				})
 			})
@@ -1309,7 +1335,7 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 8+a.barInset(c)).Gap(2).Background(p.band).
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, 8+a.barInset(c)).Gap(2).Background(p.band).
 		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
 		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示。
 		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
@@ -1682,7 +1708,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	}
 	name, detail := tabLabel(term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Running && term.Name == "" {
-		detail = title
+		detail = truncate(title, 22)
 	}
 	renaming := a.renaming == term.ID
 	if renaming && !active {
@@ -1710,18 +1736,18 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 			return
 		}
 		if term.Agent == "" || detail == "" && !waiting {
-			tabText(c, ui.Text(c, name).FontSize(fsSmall).Shrink(1).SingleLine(), name, active)
+			tabText(c, ui.Text(c, name).FontSize(fsSmall).Shrink(1).SingleLine(), active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
 			// 字号、字重和别的标签标题一样，只用琥珀色区分
 			label := ui.Text(c, "待处理").FontSize(fsSmall).Shrink(0)
-			tabText(c, label, "待处理", active)
+			tabText(c, label, active)
 			label.TextColor(colors(t).honey)
 		} else if detail != "" {
 			title := ui.Text(c, detail).FontSize(fsSmall).Shrink(1).SingleLine()
 			if term.Agent != "" {
-				tabText(c, title, detail, active)
+				tabText(c, title, active)
 			} else {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
@@ -1813,21 +1839,24 @@ func (a *app) revealTab(row ui.Element, id string, active bool) {
 	}
 }
 
-// tabText 是标签上的主文字：选中时加粗，否则用次要色。中文字形在行框里偏下，提半个像素才看着居中。
-// 不管选没选中都按加粗的宽度占位，切换标签时文字变粗不会把后面的标签往右挤。
-// 占位用 flex basis 而不是固定宽度：固定宽度也是最小宽度，长标题就缩不了，关闭按钮会被挤出标签。
-func tabText(c *ui.Context, e ui.Element, text string, active bool) {
-	w, _ := c.MeasureText(0, ui.Span{Text: text, Size: fsSmall, Weight: fwMedium})
-	e.Basis(w+1).Margin(0, 0, cjkLift, 0)
-	if active {
-		e.FontWeight(fwMedium)
-	} else {
+// tabText 是标签上的主文字：没选中时用次要色。中文字形在行框里偏下，提半个像素才看着居中。
+// 选中不加粗：长标题缩到标签最大宽度时，加粗的字截断的位置不同，切换时文字会跳。
+func tabText(c *ui.Context, e ui.Element, active bool) {
+	e.Margin(0, 0, cjkLift, 0)
+	if !active {
 		e.TextColor(c.Theme().TextMuted)
 	}
 }
 
 // tabLabel 返回标签的名字和补充说明（会话名，没有时是终端标题），分开显示而不是用分隔符拼接。
+// 标签宽度跟着文字走，所以截短；侧栏行宽是定的，用不截短的 fullLabel，放不下才由排版截。
 func tabLabel(t terminalInfo) (string, string) {
+	name, detail := fullLabel(t)
+	return truncate(name, 24), truncate(detail, 22)
+}
+
+// fullLabel 同 tabLabel，不截短。
+func fullLabel(t terminalInfo) (string, string) {
 	name := agentTitle(t.Agent)
 	title := bareTitle(t)
 	if t.AgentState != nil && t.AgentState.Title != "" {
@@ -1848,7 +1877,7 @@ func tabLabel(t terminalInfo) (string, string) {
 	if !t.Running {
 		detail = "已退出"
 	}
-	return truncate(name, 24), truncate(detail, 22)
+	return name, detail
 }
 
 // bareTitle 是去掉 agent 状态前缀（✳、转圈符）的终端标题。

@@ -133,7 +133,7 @@ type app struct {
 	// 由 apply、applyTasks 算好的派生数据，免得每帧重算
 	byProject   map[string][]workspace // 项目 ID → 它的工作区，主工作区在前
 	sorted      []taskInfo             // 任务总览的顺序，见 sortTasks
-	workerTitle map[string]string      // worker 终端 ID → 任务标题（已截短），标签页上显示
+	workerTitle map[string]string      // worker 终端 ID → 任务标题，标签页和侧栏上显示
 	coordOf     map[string]string      // worker 终端 ID → 派发它的终端（用户派发的没有），侧栏把 worker 排在它下面
 	runningFor  map[string]int         // 派发方终端 ID → 它还在进行中的任务数
 	navProjects []project              // 侧栏这一帧遍历的项目，复用底层数组
@@ -369,7 +369,7 @@ func Run(c *client.Client) error {
 			StateKey:      "main",
 			TitleBarStyle: mygo.TitleBarHidden,
 			// 红绿灯在 40 高的顶栏里上下居中，和右边的应用名、侧栏开关、标签对齐（照 Orca）
-			TrafficLightPosition: &mygo.Point{X: 16, Y: 13},
+			TrafficLightPosition: &mygo.Point{X: trafficLightX, Y: 13},
 			Content:              ui.View(a.build),
 		})
 		a.watchClose()
