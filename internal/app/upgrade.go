@@ -104,3 +104,20 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 		a.refresh()
 	}()
 }
+
+// staleDaemonError 是连上了常驻进程、却读不到数据时的提示：多半是窗口换了新版本，常驻进程还是旧的，
+// 接口对不上。版本一样时照原样报错。
+func (a *app) staleDaemonError(d daemonStatus, err error) string {
+	if d.Build == daemon.Build {
+		return err.Error()
+	}
+	running, unsupported := a.upgrade.status(d.Pid)
+	switch {
+	case running:
+		return "常驻进程的版本和窗口不一致，正在更新常驻进程，终端不会断开…"
+	case unsupported || d.Build == "":
+		return "常驻进程的版本太旧，读不到项目，也不支持不断开终端的更新：到设置 › 关于 重启常驻进程。（" + err.Error() + "）"
+	default:
+		return "常驻进程的版本和窗口不一致，读不到项目：到设置 › 关于 更新常驻进程，终端不会断开。（" + err.Error() + "）"
+	}
+}

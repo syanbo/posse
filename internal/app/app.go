@@ -441,6 +441,12 @@ func (a *app) refresh() {
 			err = a.c.Call(ctx, "project.list", nil, &r.projects)
 		}
 	}
+	// 状态先取：后面的列表在版本对不上的旧常驻进程上可能失败，有了状态照样能发现版本差、自动交接
+	statusOK := false
+	if err == nil {
+		err = a.c.Call(ctx, "daemon.status", nil, &st)
+		statusOK = err == nil
+	}
 	if err == nil {
 		err = a.c.Call(ctx, "workspace.list", nil, &r.workspaces)
 		// 常驻进程只在建工作区时记分支，main 工作区切分支后就过时了；以 HEAD 为准
@@ -453,9 +459,6 @@ func (a *app) refresh() {
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
-	}
-	if err == nil {
-		err = a.c.Call(ctx, "daemon.status", nil, &st)
 	}
 	if err == nil {
 		a.pollGitTrace(ctx, st.GitTraceSeq)
@@ -479,6 +482,11 @@ func (a *app) refresh() {
 	}
 	if err != nil {
 		r = pollResult{err: err.Error()}
+		if statusOK {
+			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
+			a.autoUpgrade(r.daemonInfo)
+			r.err = a.staleDaemonError(r.daemonInfo, err)
+		}
 	} else {
 		for id := range a.diffAt {
 			if !slices.ContainsFunc(r.workspaces, func(w workspace) bool { return w.ID == id }) {
@@ -509,6 +517,10 @@ func (a *app) refresh() {
 	a.win.Update(func() {
 		if r.err != "" {
 			a.err = r.err
+			// 设置「关于」靠它显示版本和更新、重启常驻进程的按钮
+			if r.daemonInfo.Pid != 0 {
+				a.daemon = r.daemonInfo
+			}
 			return
 		}
 		// 只清掉轮询自己报的连接错误，动作的报错留着等用户关掉
