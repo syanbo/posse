@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
@@ -61,13 +61,20 @@ class GitScreen extends StatelessWidget {
   }
 }
 
+/// 改动多久自己刷新一次，和首页的工作区列表一样。
+const gitPoll = Duration(seconds: 3);
+
 class GitPane extends StatefulWidget {
   const GitPane({
     super.key,
     required this.loadStatus,
     required this.loadDiff,
     this.onOpenFile,
+    this.active = true,
   });
+
+  /// 这一页看得见：和文件页放在同一个 IndexedStack 里，切走时不刷新。
+  final bool active;
 
   final Future<GitStatusView> Function() loadStatus;
   final Future<GitDiffView> Function(GitFileChange file) loadDiff;
@@ -88,11 +95,46 @@ class _GitPaneState extends State<GitPane> {
   GitStatusView? _status;
   String? _error;
   var _loading = true;
+  Timer? _poll;
+  var _busy = false;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    // 不下拉刷新：看得见时定时读，agent 改了文件过一会儿就出来
+    _poll = Timer.periodic(gitPoll, (_) => _tick());
+  }
+
+  @override
+  void didUpdateWidget(GitPane old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) _tick();
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  /// 定时刷新：上面盖着 diff 页、切到文件页、上一次还没回来时跳过；出错留着上次的列表，只挂提示。
+  Future<void> _tick() async {
+    if (_busy || _loading || !mounted || !widget.active) return;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    _busy = true;
+    try {
+      final status = await widget.loadStatus();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _error = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      _busy = false;
+    }
   }
 
   Future<void> _reload() async {
@@ -143,11 +185,7 @@ class _GitPaneState extends State<GitPane> {
     final c = PosseColors.of(context);
     final files = status?.files ?? const <GitFileChange>[];
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
       slivers: [
-        CupertinoSliverRefreshControl(onRefresh: _reload),
         SliverList.list(
           children: [
             if (_error != null) NoticeBar(_error!),

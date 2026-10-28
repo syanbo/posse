@@ -187,6 +187,45 @@ void main() {
     );
   });
 
+  testWidgets('changes refresh on their own while the page is shown', (
+    tester,
+  ) async {
+    var loads = 0;
+    Widget pane(bool active) => MaterialApp(
+      home: Scaffold(
+        body: GitPane(
+          active: active,
+          loadStatus: () async {
+            loads++;
+            return parseGitStatus({
+              'branch': 'main',
+              'files': [
+                {'path': 'v$loads.txt', 'x': '.', 'y': 'M'},
+              ],
+            });
+          },
+          loadDiff: (file) async => parseGitDiff({'path': file.path}),
+        ),
+      ),
+    );
+    await tester.pumpWidget(pane(true));
+    await tester.pump();
+    expect(find.text('v1.txt'), findsOneWidget);
+    expect(find.byType(RefreshIndicator), findsNothing);
+    await tester.pump(gitPoll);
+    await tester.pump();
+    expect(find.text('v2.txt'), findsOneWidget);
+    // 切到文件页时不读
+    await tester.pumpWidget(pane(false));
+    await tester.pump(gitPoll * 2);
+    expect(loads, 2);
+    // 切回来马上读一次
+    await tester.pumpWidget(pane(true));
+    await tester.pump();
+    expect(loads, 3);
+    expect(find.text('v3.txt'), findsOneWidget);
+  });
+
   testWidgets('changes list groups by kind and folds directories', (
     tester,
   ) async {

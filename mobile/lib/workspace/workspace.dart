@@ -1448,6 +1448,7 @@ class _TabScreenState extends State<TabScreen> {
                   const SizedBox.shrink()
                 else
                   GitPane(
+                    active: _page == 0,
                     loadStatus: () => _git((rpc) => loadGitStatus(rpc, row.id)),
                     loadDiff: (file) =>
                         _git((rpc) => loadGitDiff(rpc, row.id, file)),
