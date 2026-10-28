@@ -206,3 +206,43 @@ func TestChatDraftFrames(t *testing.T) {
 		}
 	}
 }
+
+// 手机照帧拼出来的草稿要和电脑算出的一样；接着长的那些帧只带新加的部分。
+func TestDraftFrameAppend(t *testing.T) {
+	files, _ := filepath.Glob("testdata/draft/*.json.gz")
+	for _, path := range files {
+		t.Run(strings.TrimSuffix(filepath.Base(path), ".json.gz"), func(t *testing.T) {
+			rec := loadDraftRecording(t, path)
+			d := newDrafter(rec.Agent)
+			d.note(assistantText(rec.Before))
+			next, phone, appends, full, sent := 0, "", 0, 0, 0
+			for _, fr := range rec.Frames {
+				for next < len(rec.Messages) && rec.Messages[next].T <= fr.T {
+					d.note(assistantText(rec.Messages[next].Text))
+					next++
+				}
+				text, changed := d.next(fr.Lines, rec.Cols, true)
+				if !changed {
+					continue
+				}
+				f := d.frame(text)
+				if s, ok := f["append"].(string); ok {
+					appends++
+					sent += len(s)
+					phone += s
+				} else {
+					full += len(text)
+					sent += len(text)
+					phone = f["text"].(string)
+				}
+				if phone != text {
+					t.Fatalf("%.2fs: phone has\n%q\nwant\n%q", fr.T, phone, text)
+				}
+			}
+			if appends == 0 {
+				t.Error("no append frames")
+			}
+			t.Logf("appends=%d bytes=%d (full text frames %d bytes)", appends, sent, full)
+		})
+	}
+}

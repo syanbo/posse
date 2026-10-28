@@ -260,6 +260,35 @@ void main() {
     expect(find.text('正在输出'), findsNothing);
   });
 
+  testWidgets('草稿按 append 接着长，正式回复到了之后的 append 不再画', (tester) async {
+    final messages = <Map<String, Object?>>[
+      for (var i = 0; i < 4; i++)
+        text('m$i', i.isEven ? 'user' : 'assistant', para(i), i * 10),
+    ];
+    final fake = await pumpChat(tester, messages);
+    fake.tabs.add(tabsFrame('working'));
+    fake.chat.add({'type': 'draft', 'text': '第一句'});
+    fake.chat.add({'type': 'draft', 'append': '，第二句'});
+    fake.chat.add({'type': 'draft', 'append': '，第三句'});
+    await tester.pumpAndSettle();
+    expect(find.text('第一句，第二句，第三句'), findsOneWidget);
+
+    // 正式回复先到，电脑还在往同一块后面加：草稿不再出现
+    fake.chat.add({
+      'type': 'appended',
+      'messages': [text('a1', 'assistant', '第一句，第二句，第三句。', 500)],
+    });
+    fake.chat.add({'type': 'draft', 'append': '。'});
+    await tester.pumpAndSettle();
+    expect(find.text('正在输出'), findsNothing);
+
+    // 下一块整段推来，照常画，后面的 append 接在它后面
+    fake.chat.add({'type': 'draft', 'text': '下一块'});
+    fake.chat.add({'type': 'draft', 'append': '接着写'});
+    await tester.pumpAndSettle();
+    expect(find.text('下一块接着写'), findsOneWidget);
+  });
+
   test('草稿按段拆开，代码和框线表格单独成等宽段', () {
     final parts = draftParts('第一段\n接着\n\n第二段\n\n  if x {\n\n  }\n│ a │\n尾巴');
     expect(parts.map((p) => (p.mono, p.text)).toList(), [

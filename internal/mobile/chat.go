@@ -15,7 +15,7 @@ import (
 const (
 	chatPoll    = 500 * time.Millisecond
 	chatPollMax = 5 * time.Second
-	statusEvery = 250 * time.Millisecond
+	statusEvery = 500 * time.Millisecond
 )
 
 type chatSub struct {
@@ -109,7 +109,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		if term == nil {
 			// 终端不在了，草稿撤掉
 			if text, changed := draft.next(nil, 0, false); wantDraft && changed {
-				return c.stream(reqID, map[string]any{"type": "draft", "text": text}) == nil
+				return c.stream(reqID, draft.frame(text)) == nil
 			}
 			return true
 		}
@@ -136,7 +136,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 			cols, _ := term.Size()
 			working := term.Agent().Status == "working" || next != ""
 			if text, changed := draft.next(screen, cols, working); changed {
-				return c.stream(reqID, map[string]any{"type": "draft", "text": text}) == nil
+				return c.stream(reqID, draft.frame(text)) == nil
 			}
 		}
 		return true

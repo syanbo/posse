@@ -42,8 +42,10 @@ type drafter struct {
 	head string
 	// known 是会话文件里最近一条助手正文，规范成只剩字母和数字
 	known string
-	sent  string
-	held  int
+	// sent 是最近推出去的草稿，last 是再上一次的（frame 据此只推新加的部分）
+	sent string
+	last string
+	held int
 }
 
 func newDrafter(agent string) *drafter {
@@ -120,8 +122,18 @@ func (d *drafter) emit(text string) (string, bool) {
 	if text == d.sent {
 		return text, false
 	}
-	d.sent = text
+	d.last, d.sent = d.sent, text
 	return text, true
+}
+
+// frame 是刚算出的草稿要推的帧。草稿多是在上次推的后面接着长，这时只推新加的那段：
+// 每次推全文，流量随回复长度平方增长（Codex 几乎每次读屏都变，长回复每 250ms 推一次时约 10 KB/s）。
+// 换了一块、缩回去、撤掉时推全文。
+func (d *drafter) frame(text string) map[string]any {
+	if d.last != "" && len(text) > len(d.last) && strings.HasPrefix(text, d.last) {
+		return map[string]any{"type": "draft", "append": text[len(d.last):]}
+	}
+	return map[string]any{"type": "draft", "text": text}
 }
 
 // replyBlock 找出屏幕上最后一块，是回复正文时返回它去掉缩进的各行。start 表示块的开头

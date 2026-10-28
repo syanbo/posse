@@ -100,6 +100,10 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 电脑推来的、agent 正在写的那段回复（posse.draft.v1），没有时为空。
   String? _draft;
 
+  /// 电脑那边草稿的全文：后续帧多半只带新加的一段（append），要接在它后面。
+  /// 正式回复到了只藏起 [_draft]，这份留着，电脑接着往同一块后面加时才接得上。
+  String _draftBase = '';
+
   /// 这个会话的终端已经不在了：输入框停用，顶上说一声。
   var _ended = false;
   var _gone = false;
@@ -202,6 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatSubId = subId;
     _status = null;
     _draft = null;
+    _draftBase = '';
     try {
       final chat = await rpc.subscribe('nativeChat.subscribe', {
         'agent': tab.agent,
@@ -259,11 +264,20 @@ class _ChatScreenState extends State<ChatScreen> {
           return;
         }
         if (frame['type'] == 'draft') {
+          final more = frame['append'];
+          if (more is String) {
+            _draftBase += more;
+            // 这一块已经换成正式回复、草稿藏着时，接着长也不再画
+            if (_draft != null) _setDraft(_draftBase);
+            return;
+          }
           final text = frame['text'];
-          _setDraft(text is String && text.isNotEmpty ? text : null);
+          _draftBase = text is String ? text : '';
+          _setDraft(_draftBase.isNotEmpty ? _draftBase : null);
           return;
         }
         if (frame['type'] == 'end') {
+          _draftBase = '';
           _setDraft(null);
           return;
         }
