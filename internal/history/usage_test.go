@@ -216,3 +216,23 @@ func TestUsageCLI(t *testing.T) {
 		t.Fatalf("codex mcp after function_call: %+v", counts(u))
 	}
 }
+
+// 命令行刷了几百条之后，前面的 MCP 调用仍在时间线里，顺序照旧：两类各留最近 maxUsageEvents 条。
+func TestUsageEventsKeepToolsPastCommands(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	mcp := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__codex-cu__js","input":{}}]}}` + "\n"
+	bash := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}` + "\n"
+	lines := []string{mcp}
+	for range maxUsageEvents*2 + 100 {
+		lines = append(lines, bash)
+	}
+	lines = append(lines, mcp)
+	writeLines(t, path, lines...)
+	u, err := NewUsageScanner("claude", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(u.Events) != maxUsageEvents+2 || u.Events[0].Tool != "js" || u.Events[1].CLI != "git" || u.Events[len(u.Events)-1].Tool != "js" {
+		t.Fatalf("%d events, first %+v last %+v", len(u.Events), u.Events[0], u.Events[len(u.Events)-1])
+	}
+}

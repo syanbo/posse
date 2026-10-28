@@ -35,7 +35,7 @@ type Usage struct {
 	Skills []UsageItem `json:"skills"`
 	MCP    []MCPUsage  `json:"mcp"`
 	CLI    []CLIUsage  `json:"cli,omitempty"`
-	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），只留最近 maxUsageEvents 条
+	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），技能和 MCP、命令行程序各留最近 maxUsageEvents 条
 	Events []UsageEvent `json:"events,omitempty"`
 }
 
@@ -80,7 +80,8 @@ type UsageScanner struct {
 	cli         map[string]int
 	sources     map[string]string // 程序名 → 来源，第一次见到时查
 	seen        map[string]bool   // codex 条目的 id
-	events      []UsageEvent
+	tools, cmds []seqEvent        // 技能和 MCP、命令行程序的调用，n 是先后
+	seq         int
 	at          time.Time // 正在解析的那一行的时间
 }
 
@@ -92,7 +93,7 @@ func NewUsageScanner(agent, path string) *UsageScanner {
 
 func (s *UsageScanner) reset() {
 	s.offset = 0
-	s.skills, s.mcp, s.seen, s.events = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil
+	s.skills, s.mcp, s.seen, s.tools, s.cmds = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil, nil
 	s.cli, s.sources = map[string]int{}, map[string]string{}
 }
 
@@ -228,12 +229,24 @@ func (s *UsageScanner) addSkill(name string) {
 	s.event(UsageEvent{Skill: name})
 }
 
+// event 记一次调用。技能和 MCP、命令行程序各留最近 maxUsageEvents 次：命令行一刷就是几百条，
+// 合在一起留会把技能挤出时间线，只看技能和 MCP 时整段是空的。
 func (s *UsageScanner) event(e UsageEvent) {
 	e.At = s.at
-	s.events = append(s.events, e)
-	if len(s.events) > maxUsageEvents*2 {
-		s.events = slices.Clone(s.events[len(s.events)-maxUsageEvents:])
+	s.seq++
+	list := &s.tools
+	if e.CLI != "" {
+		list = &s.cmds
 	}
+	*list = append(*list, seqEvent{s.seq, e})
+	if len(*list) > maxUsageEvents*2 {
+		*list = slices.Clone((*list)[len(*list)-maxUsageEvents:])
+	}
+}
+
+type seqEvent struct {
+	n int
+	e UsageEvent
 }
 
 // skillRead 认出读文件的工具读的是 <名字>/SKILL.md。
@@ -416,7 +429,14 @@ func (s *UsageScanner) grokLine(b []byte) {
 
 func (s *UsageScanner) result() Usage {
 	var u Usage
-	u.Events = slices.Clone(s.events[max(0, len(s.events)-maxUsageEvents):])
+	tools, cmds := s.tools[max(0, len(s.tools)-maxUsageEvents):], s.cmds[max(0, len(s.cmds)-maxUsageEvents):]
+	for len(tools) > 0 || len(cmds) > 0 {
+		if len(cmds) == 0 || len(tools) > 0 && tools[0].n < cmds[0].n {
+			u.Events, tools = append(u.Events, tools[0].e), tools[1:]
+		} else {
+			u.Events, cmds = append(u.Events, cmds[0].e), cmds[1:]
+		}
+	}
 	for name, n := range s.skills {
 		u.Skills = append(u.Skills, UsageItem{name, n})
 	}
