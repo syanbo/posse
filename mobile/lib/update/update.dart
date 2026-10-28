@@ -327,7 +327,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            '确认安装后 App 会关闭，回到主屏幕看进度，配对不会丢。',
+            '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: Fs.caption, color: c.faint),
           ),
