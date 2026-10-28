@@ -244,6 +244,15 @@ func (a *app) interfaceSettings(c *ui.Context) {
 				a.saveState()
 			}
 		})
+		settingsRow(c, "右侧文件栏开关", func() {
+			sel := 0
+			if a.state.FilesPanelShared {
+				sel = 1
+			}
+			if segmented(c, &sel, "右侧文件栏开关", "跟着项目", "所有项目共用") {
+				a.setFilesPanelShared(sel == 1)
+			}
+		})
 		settingsRow(c, "字体平滑", func() {
 			sel := 0
 			if uiSmooth {

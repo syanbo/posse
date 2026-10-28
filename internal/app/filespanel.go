@@ -8,7 +8,7 @@ import (
 
 // 文件栏：主区域最右边的一栏，顶上分"历史"（当前项目的会话）和"文件"，文件下面再分文件树、检索、改动，照 Orca 的右侧栏。它停靠在那里、挤窄终端和编辑器，
 // 不像"图片 / 技能与工具"那样浮在上面、点别处就收起：边看文件边编辑时要一直开着。
-// 开关按项目记在 ui.json（在 A 项目打开，切到 B 项目不跟着打开），宽度所有项目共用。
+// 开关默认按项目记在 ui.json（在 A 项目打开，切到 B 项目不跟着打开），设置里可改成所有项目共用；宽度所有项目共用。
 const (
 	filesPanelDefault = 300
 	filesPanelMin     = 220
@@ -23,8 +23,50 @@ func (a *app) filesPanelWidth() float32 {
 	return min(max(w, filesPanelMin), filesPanelMax)
 }
 
-// filesPanelOpen 报告选中的工作区所在项目开着文件栏。
-func (a *app) filesPanelOpen() bool { return a.state.FilesPanels[a.panelProject()] }
+// filesPanelOpen 报告文件栏开着：共用时看共用的开关，否则看选中的工作区所在的项目。
+func (a *app) filesPanelOpen() bool {
+	if a.state.FilesPanelShared {
+		return a.state.FilesPanelOn && a.panelProject() != ""
+	}
+	return a.state.FilesPanels[a.panelProject()]
+}
+
+// setFilesPanel 开关文件栏，变了才写 ui.json。
+func (a *app) setFilesPanel(project string, open bool) {
+	if !a.state.FilesPanelShared {
+		a.setProjectPanel(&a.state.FilesPanels, project, open)
+		return
+	}
+	if a.state.FilesPanelOn != open {
+		a.state.FilesPanelOn = open
+		a.saveState()
+	}
+}
+
+// setFilesPanelShared 切换文件栏开关是否所有项目共用：当前项目的开关原样带过去，切换时界面不变。
+func (a *app) setFilesPanelShared(shared bool) {
+	if a.state.FilesPanelShared == shared {
+		return
+	}
+	open := a.filesPanelOpen()
+	a.state.FilesPanelShared = shared
+	if shared {
+		a.state.FilesPanelOn = open
+	} else {
+		a.state.FilesPanelOn = false
+		if p := a.panelProject(); p != "" {
+			if a.state.FilesPanels == nil {
+				a.state.FilesPanels = map[string]bool{}
+			}
+			if open {
+				a.state.FilesPanels[p] = true
+			} else {
+				delete(a.state.FilesPanels, p)
+			}
+		}
+	}
+	a.saveState()
+}
 
 // panelProject 是选中的工作区所在的项目：文件栏和日志浮层的开关按项目记。
 func (a *app) panelProject() string {
@@ -96,7 +138,7 @@ func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 	v := a.filesFor(w)
 	v.side = side
 	a.setFilesPanelHistory(false)
-	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
+	a.setFilesPanel(w.ProjectID, true)
 	return v
 }
 
@@ -117,7 +159,7 @@ func (a *app) toggleFilesPanel(w *workspace, side int) {
 }
 
 func (a *app) closeFilesPanel() {
-	a.setProjectPanel(&a.state.FilesPanels, a.panelProject(), false)
+	a.setFilesPanel(a.panelProject(), false)
 }
 
 // filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，或者选中了文件标签。
@@ -151,7 +193,7 @@ func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 		if a.filesPanelOpen() {
 			a.closeFilesPanel()
 		} else {
-			a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
+			a.setFilesPanel(w.ProjectID, true)
 		}
 	}
 }

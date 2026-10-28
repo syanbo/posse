@@ -18,6 +18,8 @@ type uiState struct {
 	FilesPanel           bool      `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
 	FilesPanelWidth      float32   `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
 	FilesPanelHistory    bool      `json:"filesPanelHistory,omitempty"`    // 文件栏顶上选的是"历史"（当前项目的会话），不是文件
+	FilesPanelShared     bool      `json:"filesPanelShared,omitempty"`     // 文件栏开关所有项目共用（记在 FilesPanelOn），不按项目记
+	FilesPanelOn         bool      `json:"filesPanelOn,omitempty"`         // 共用时文件栏开着
 	SidebarHidden        bool      `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
 	SessionButtonsHidden bool      `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
 	SidebarWidth         float32   `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认

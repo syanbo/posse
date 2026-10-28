@@ -854,3 +854,32 @@ func TestGoToDefinition(t *testing.T) {
 		t.Fatalf("hint = %q", d.hint)
 	}
 }
+
+// 设置里改成所有项目共用后，切项目时文件栏开关不变；改回按项目时当前项目接着开着。
+func TestFilesPanelShared(t *testing.T) {
+	a := previewApp(t)
+	a.selected = "w2"
+	a.openFilesPanel(a.workspace("w2"), sideFiles)
+	a.setFilesPanelShared(true)
+	if !a.filesPanelOpen() {
+		t.Fatal("switching to shared should keep the panel open")
+	}
+	a.selected = "w4"
+	if !a.filesPanelOpen() {
+		t.Fatal("shared panel should stay open on another project")
+	}
+	a.closeFilesPanel()
+	a.selected = "w2"
+	if a.filesPanelOpen() {
+		t.Fatal("closing in one project should close it everywhere")
+	}
+	a.openFilesPanel(a.workspace("w2"), sideFiles)
+	a.setFilesPanelShared(false)
+	if !a.filesPanelOpen() || !a.state.FilesPanels[a.panelProject()] {
+		t.Fatal("back to per project should keep the current project open")
+	}
+	a.selected = "w4"
+	if a.filesPanelOpen() {
+		t.Fatal("per project: another project's panel should follow its own state")
+	}
+}
