@@ -437,6 +437,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("workspace.show", d.workspaceShow)
 	srv.Handle("workspace.current", d.workspaceCurrent)
 	srv.Handle("workspace.rm", d.workspaceRm)
+	srv.Handle("workspace.relocate", d.workspaceRelocate)
 	srv.Handle("terminal.create", d.terminalCreate)
 	srv.Handle("terminal.list", d.terminalList)
 	srv.Handle("terminal.show", d.terminalShow)

@@ -2,9 +2,11 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,5 +81,52 @@ func TestAttachWorktree(t *testing.T) {
 	call(t, d.workspaceRm, map[string]any{"workspace": w.ID})
 	if _, err := os.Stat(wt); err != nil {
 		t.Fatalf("removing the workspace deleted the worktree: %v", err)
+	}
+}
+
+// 加进来的 worktree 在外面被挪走后重新指定目录：只认这个仓库的 worktree，改完 git 的记录也指向新目录。
+func TestRelocateWorkspace(t *testing.T) {
+	d, _ := newTestDaemon(t)
+	repo := filepath.Join(d.cfg.Home, "repo")
+	git := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	os.MkdirAll(repo, 0o755)
+	git(repo, "init", "-q", "-b", "main")
+	git(repo, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "init")
+	wt := filepath.Join(d.cfg.Home, "old", "wt")
+	git(repo, "worktree", "add", "-q", "-b", "feat", wt)
+	proj := store.Project{ID: store.NewID("p_"), Name: "repo", Path: repo, Kind: "git", CreatedAt: time.Now()}
+	if err := d.store.AddProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	w, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: "wt", Mode: "attach", Path: wt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(d.cfg.Home, "new-wt")
+	if err := os.Rename(wt, moved); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]any{"workspace": w.ID, "path": d.cfg.Home})
+	if _, err := d.workspaceRelocate(ctx, raw); err == nil {
+		t.Fatal("relocated to a directory that is not a worktree of the project")
+	}
+	call(t, d.workspaceRelocate, map[string]any{"workspace": w.ID, "path": moved})
+	got, err := d.store.Workspace(w.ID)
+	if err != nil || !samePath(got.Path, moved) || got.Branch != "feat" {
+		t.Fatalf("relocated %+v %v", got, err)
+	}
+	real, _ := filepath.EvalSymlinks(moved)
+	if out := git(repo, "worktree", "list", "--porcelain"); !strings.Contains(out, "worktree "+real+"\n") {
+		t.Fatalf("git still points elsewhere:\n%s", out)
 	}
 }

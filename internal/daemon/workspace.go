@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -513,6 +514,87 @@ func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, err
 		return nil, err
 	}
 	return map[string]string{"removed": w.ID}, nil
+}
+
+type workspaceRelocateParams struct {
+	Workspace string `json:"workspace"`
+	Path      string `json:"path"`
+}
+
+// workspaceRelocate 给目录在外面挪了地方的工作区重新指定目录。main 工作区就是项目目录，
+// 连项目和同一目录上的工作区一起改。git 项目要求新目录是仓库根目录，worktree 还要是这个仓库的。
+func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (any, error) {
+	var p workspaceRelocateParams
+	if err := rpc.Decode(raw, &p); err != nil {
+		return nil, err
+	}
+	w, err := d.workspace(p.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	proj, err := d.store.FindProject(w.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Path == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "path required")
+	}
+	path, err := filepath.EvalSymlinks(p.Path)
+	if err != nil {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
+	}
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a directory", p.Path)
+	}
+	// 旧目录已经不在，比较不了符号链接，按字面比
+	onProject := w.Kind == "main" || filepath.Clean(w.Path) == filepath.Clean(proj.Path)
+	if proj.Kind == "git" {
+		if top := gitx.TopLevel(ctx, path); top == "" || !samePath(top, path) {
+			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a git repository root", p.Path)
+		}
+		if _, err := os.Stat(proj.Path); err == nil && !onProject {
+			if c := gitx.CommonDir(ctx, path); c == "" || c != gitx.CommonDir(ctx, proj.Path) {
+				return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a worktree of project %s", p.Path, proj.Name)
+			}
+		}
+	}
+	ws, err := d.store.Workspaces("")
+	if err != nil {
+		return nil, err
+	}
+	moving := func(o store.Workspace) bool {
+		return o.ID == w.ID || onProject && o.ProjectID == proj.ID && filepath.Clean(o.Path) == filepath.Clean(proj.Path)
+	}
+	for _, o := range ws {
+		if !moving(o) && samePath(o.Path, path) {
+			return nil, rpc.Errorf(rpc.CodeConflict, "%s is already workspace %s", p.Path, o.Name)
+		}
+	}
+	branch := gitx.Head(path)
+	if onProject {
+		if err := d.store.SetProjectPath(proj.ID, path); err != nil {
+			return nil, err
+		}
+	}
+	for _, o := range ws {
+		if moving(o) {
+			if err := d.store.SetWorkspacePath(o.ID, path, cmp.Or(branch, o.Branch)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if proj.Kind == "git" {
+		// 修不好不挡：worktree 自己的 .git 还指着仓库，照样能用
+		if onProject {
+			gitx.RepairWorktree(ctx, path)
+		} else {
+			gitx.RepairWorktree(ctx, proj.Path, path)
+		}
+	}
+	if w, err = d.store.Workspace(w.ID); err != nil {
+		return nil, err
+	}
+	return d.workspaceInfo(ctx, w, false), nil
 }
 
 func (d *Daemon) runningIn(workspaceID string) int {

@@ -61,6 +61,13 @@ func PruneWorktrees(ctx context.Context, repo string) error {
 	return err
 }
 
+// RepairWorktree 修好挪过地方的 worktree 和仓库之间的互相指向：dirs 是挪了的 worktree；
+// 不给时是仓库本身挪了，修所有 worktree 指回来的链接。不修的话 git 以为 worktree 没了，prune 会清掉它的记录。
+func RepairWorktree(ctx context.Context, repo string, dirs ...string) error {
+	_, err := run(ctx, repo, append([]string{"worktree", "repair"}, dirs...)...)
+	return err
+}
+
 func CurrentBranch(ctx context.Context, dir string) (string, error) {
 	return run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 }

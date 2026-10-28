@@ -139,6 +139,12 @@ func (s *Store) UpdateProject(p Project) error {
 	return err
 }
 
+// SetProjectPath 改项目目录（目录在外面挪了地方，重新指定）。
+func (s *Store) SetProjectPath(id, path string) error {
+	_, err := s.db.Exec(`UPDATE projects SET path=? WHERE id=?`, path, id)
+	return err
+}
+
 func (s *Store) DeleteProject(id string) error {
 	_, err := s.db.Exec(`DELETE FROM projects WHERE id=?`, id)
 	return err
@@ -184,6 +190,12 @@ func (s *Store) FindProject(sel string) (Project, error) {
 func (s *Store) AddWorkspace(w Workspace) error {
 	_, err := s.db.Exec(`INSERT INTO workspaces(id,project_id,name,path,kind,branch,base_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`,
 		w.ID, w.ProjectID, w.Name, w.Path, w.Kind, w.Branch, w.BaseRef, ms(w.CreatedAt))
+	return err
+}
+
+// SetWorkspacePath 改工作区的目录和分支（目录在外面挪了地方，重新指定）。
+func (s *Store) SetWorkspacePath(id, path, branch string) error {
+	_, err := s.db.Exec(`UPDATE workspaces SET path=?, branch=? WHERE id=?`, path, branch, id)
 	return err
 }
 
