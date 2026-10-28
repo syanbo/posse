@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -881,5 +882,30 @@ func TestFilesPanelShared(t *testing.T) {
 	a.selected = "w4"
 	if a.filesPanelOpen() {
 		t.Fatal("per project: another project's panel should follow its own state")
+	}
+}
+
+// 目录不在了的工作区：侧栏写明，空工作区页换成重新指定目录、移除，文件栏不再去读。
+func TestMissingWorkspace(t *testing.T) {
+	a := previewApp(t)
+	i := slices.IndexFunc(a.workspaces, func(w workspace) bool { return w.ID == "w9" })
+	a.workspaces[i].Missing, a.workspaces[i].Branch = true, ""
+	a.indexWorkspaces()
+	a.selected = "w9"
+	a.state.FilesPanels = map[string]bool{"p5": true}
+	tt := newPreviewTester(a, true)
+	for _, want := range []string{"目录不存在", "目录已经不在了", "重新指定目录…", "从 Posse 移除…", "工作区的目录已经不在了"} {
+		if !tt.HasText(want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if tt.HasText("切换终端") {
+		t.Error("launch buttons still shown")
+	}
+	if v := a.files["w9"]; v != nil && (v.listing || v.list != nil) {
+		t.Error("listed files of a missing directory")
+	}
+	if dir := os.Getenv("POSSE_PREVIEW_DIR"); dir != "" {
+		savePNG(t, tt, "missing-workspace.png")
 	}
 }

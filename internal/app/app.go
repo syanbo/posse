@@ -61,6 +61,8 @@ type navTarget struct{ ws, term string }
 type workspace struct {
 	ID, ProjectID, Name, Path, Kind, Branch, BaseRef, Project, Label string
 	Terminals                                                        []terminalInfo
+	// Missing 是目录已经不在了（在外面删掉或挪走，又没被 dropGoneWorktrees 自动移除），窗口每秒查一次
+	Missing bool `json:"-"`
 }
 
 type taskInfo struct {
@@ -463,6 +465,12 @@ func (a *app) refresh() {
 			}
 		}
 		r.workspaces = a.dropGoneWorktrees(ctx, r.workspaces)
+		for i := range r.workspaces {
+			if _, err := os.Stat(r.workspaces[i].Path); errors.Is(err, fs.ErrNotExist) {
+				// 记着的分支是旧的，不再显示；分支按钮和日志浮层也跟着收起
+				r.workspaces[i].Missing, r.workspaces[i].Branch = true, ""
+			}
+		}
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
@@ -1025,6 +1033,59 @@ func (a *app) askRemoveProject(w workspace) {
 		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
 		a.refresh()
 	})
+}
+
+// askRemoveMissing 移除目录已经不在的工作区：只删记录，不碰分支；项目目录不在时移除的是整个项目。
+func (a *app) askRemoveMissing(w workspace) {
+	if w.Kind == "main" {
+		a.askRemoveProject(w)
+		return
+	}
+	repo := ""
+	for _, x := range a.byProject[w.ProjectID] {
+		if x.Kind == "main" && !x.Missing {
+			repo = x.Path
+		}
+	}
+	a.confirm("从 Posse 移除工作区 "+displayName(&w)+"？", "它的目录已经不在了，只从 Posse 里移除记录，分支不会删除。工作区里运行中的终端会被关闭。", "移除", func() {
+		go func() {
+			if a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil, 30*time.Second) != nil {
+				return
+			}
+			// 清掉 git 的 worktree 记录，分支才不算还检出在那里
+			if repo != "" {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				gitx.PruneWorktrees(ctx, repo)
+				cancel()
+			}
+			a.refresh()
+		}()
+	})
+}
+
+// relocateWorkspace 给目录已经不在的工作区重新选目录（目录在外面挪了地方）。
+func (a *app) relocateWorkspace(w workspace) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "重新指定 " + displayName(&w) + " 的目录", ButtonLabel: "选择",
+		DefaultPath: nearestDir(w.Path), Directory: true})
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	if a.call("workspace.relocate", map[string]any{"workspace": w.ID, "path": paths[0]}, nil, 30*time.Second) != nil {
+		return
+	}
+	a.refresh()
+}
+
+// nearestDir 是 path 往上第一个还在的目录，选目录的对话框从这里开始。
+func nearestDir(path string) string {
+	for d := filepath.Dir(path); ; d = filepath.Dir(d) {
+		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
+			return d
+		}
+		if d == filepath.Dir(d) {
+			return ""
+		}
+	}
 }
 
 func (a *app) confirm(title, body, verb string, do func()) {

@@ -226,9 +226,12 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 			// 开关按钮浮在这里（见 main），留出它的位置
 			ui.Box(c).Width(28).Shrink(0)
 		})
-		if a.state.FilesPanelHistory {
+		switch {
+		case a.state.FilesPanelHistory:
 			a.recentList(c, w)
-		} else {
+		case w.Missing:
+			ui.Text(c, "工作区的目录已经不在了").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(12, 16)
+		default:
 			a.filesSide(c, w, v)
 		}
 		a.filesPanelGrip(c)

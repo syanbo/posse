@@ -652,6 +652,16 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 	if (!nested && a.state.ProjectMetaHidden) || (nested && a.state.WorkspaceMetaHidden) {
 		sub, branch = "", ""
 	}
+	if w.Missing {
+		sub, branch = "", ""
+		more := trailing
+		trailing = func() {
+			ui.Text(c, "目录不存在").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
+			if more != nil {
+				more()
+			}
+		}
+	}
 	selected := a.selected == w.ID && (collapsed || a.selectedSession(a.workspace(w.ID)) == "")
 	if selected || collapsed || len(agentSessions(w.Terminals)) == 0 {
 		a.navOrder = append(a.navOrder, navTarget{ws: w.ID})
@@ -1355,7 +1365,8 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	a.overPanelButton = false
 	a.markRead(cur)
-	if a.filesShown(w) {
+	// 目录不在了就不读：每一下都失败
+	if a.filesShown(w) && !w.Missing {
 		a.filesTick(c, w)
 	}
 	// 文件栏停靠在最右边，挤窄左边的标签栏和终端（编辑器）
@@ -1527,6 +1538,53 @@ func (a *app) phoneSizedBar(c *ui.Context, id string) {
 	})
 }
 
+// missingBar 是目录不在了、但还开着终端或文件时，标签栏下面的一条提示。
+func (a *app) missingBar(c *ui.Context, w *workspace) {
+	t := c.Theme()
+	p := colors(t)
+	ui.Row(c.Key("missing")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).
+		Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
+		ui.Icon(c, iconInfo).FontSize(fsBody).TextColor(t.Danger).Shrink(0)
+		ui.Text(c, "工作区的目录 "+shortPath(w.Path)+" 已经不在了").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(w.Path)
+		ui.Spacer(c)
+		if pressable(textButton(c, "重新指定目录…")).Clicked() {
+			go a.relocateWorkspace(*w)
+		}
+		if pressable(textButton(c, missingRemoveLabel(w))).Clicked() {
+			a.askRemoveMissing(*w)
+		}
+	})
+}
+
+// missingActions 是空工作区页在目录不在了时代替启动按钮的说明和操作。
+func (a *app) missingActions(c *ui.Context, w *workspace) {
+	t := c.Theme()
+	ui.Column(c).Gap(12).Padding(16).Radius(rCard).Background(soft(t, t.Danger)).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, iconInfo).FontSize(smallIcon()).TextColor(t.Danger).Shrink(0)
+			ui.Text(c, "目录已经不在了").FontSize(fsBody).FontWeight(fwMedium)
+		})
+		ui.Text(c, "它可能被删掉、挪走，或者在没挂上的外接盘上。挪了地方的话重新指定目录；不要了就从 Posse 移除，磁盘上的文件和分支都不动。").
+			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
+		ui.Row(c).Gap(8).Children(func() {
+			if pressable(accentButton(c, "重新指定目录…")).Clicked() {
+				go a.relocateWorkspace(*w)
+			}
+			if pressable(textButton(c, missingRemoveLabel(w))).Clicked() {
+				a.askRemoveMissing(*w)
+			}
+		})
+	})
+}
+
+// missingRemoveLabel：项目目录不在时移除的是整个项目。
+func missingRemoveLabel(w *workspace) string {
+	if w.Kind == "main" {
+		return "移除项目…"
+	}
+	return "从 Posse 移除…"
+}
+
 // reclaimSize 让常驻进程放掉手机对终端尺寸的占用，按窗口的尺寸重排。
 func (a *app) reclaimSize(id string) {
 	for i := range a.workspaces {
@@ -1560,6 +1618,9 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	body.Children(func() {
+		if w.Missing && (a.filesActive(w) || cur != nil && a.view != nil) {
+			a.missingBar(c, w)
+		}
 		switch {
 		case a.filesActive(w):
 			a.filesPage(c, w)
@@ -1692,6 +1753,10 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 						metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
 					})
 				})
+				if w.Missing {
+					a.missingActions(c, w)
+					return
+				}
 				ui.Grid(c).Columns(len(a.agentChoices()) + 1).Gap(8).Children(func() {
 					for _, ag := range a.agentChoices() {
 						a.launchTile(c, w, ag, agentVendor(ag))
