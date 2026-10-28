@@ -22,6 +22,10 @@ import (
 type Host interface {
 	State() State
 	Terminal(id string) host.Terminal // 没有时为 nil
+	// Restore 拉起上一个常驻进程留下、还没恢复的终端（Terminal.Lost），拉不起来或没有时为 nil
+	Restore(id string) host.Terminal
+	// View 记下手机开始看这个会话（终端页或会话页），算看过；返回的函数在不看时调用
+	View(id string) func()
 	// CreateTerminal 开一个终端：agent 非空时启动 agent（可带首条提示），否则运行 command，都为空是 shell
 	CreateTerminal(workspaceID, agent, prompt, command string) (string, error)
 	CloseTerminal(id string) error
@@ -75,6 +79,8 @@ type Terminal struct {
 	Prompt                string // interactivePrompt
 	Running               bool
 	CreatedAt, LastOutput time.Time
+	// 下面三个照桌面侧栏：等它派出去的任务、本轮完成了还没看、上一个常驻进程留下还没恢复（Running 为假）
+	Tasks, Unread, Lost bool
 }
 
 func ms(t time.Time) int64 {
@@ -135,6 +141,25 @@ func agentState(t Terminal) string {
 	return ""
 }
 
+// posseStatus 是桌面侧栏上的状态，Posse 手机照它画。Orca 的 App 只认 state，不认这些值，所以单独一个字段。
+func posseStatus(t Terminal) string {
+	switch {
+	case t.Lost:
+		return "lost"
+	case !t.Running:
+		return ""
+	case t.Tasks:
+		return "tasks"
+	case t.Unread:
+		return "unread"
+	}
+	switch t.Status {
+	case "starting", "working", "waiting", "idle":
+		return t.Status
+	}
+	return ""
+}
+
 // leafID 由终端 ID 派生一个固定的 UUID：手机解析标签 ID 时只认 UUID 形状的 leaf。
 func leafID(termID string) string {
 	h := sha256.Sum256([]byte("posse-leaf:" + termID))
@@ -173,6 +198,9 @@ func agentRow(t Terminal, now time.Time) map[string]any {
 		"interactivePrompt": nilIfEmpty(t.Prompt),
 		"interrupted":       false, "stateStartedAt": ms(t.StatusAt), "updatedAt": updated, "stateHistory": []any{},
 	}
+	if ps := posseStatus(t); ps != "" {
+		row["posseStatus"] = ps
+	}
 	if t.SessionID != "" {
 		ps := map[string]any{"key": "session_id", "id": t.SessionID}
 		path := t.TranscriptPath
@@ -195,6 +223,8 @@ func nilIfEmpty(s string) any {
 }
 
 func worktreeRow(st State, w Workspace, now time.Time) map[string]any {
+	// liveTerminalCount 只数在跑的（Orca 的 App 据此当作有终端）；posseTerminalCount 连还没恢复的也算，
+	// Posse 手机据此决定拉不拉这个工作区的会话列表，全是未恢复的终端时也能列出来
 	var agents []map[string]any
 	live, waiting, working, done := 0, false, false, false
 	var last time.Time
@@ -241,7 +271,7 @@ func worktreeRow(st State, w Workspace, now time.Time) map[string]any {
 	return map[string]any{
 		"worktreeId": worktreeID(w), "repoId": w.ProjectID, "repo": projectName(st, w.ProjectID),
 		"path": w.Path, "branch": w.Branch, "displayName": displayName(st, w),
-		"liveTerminalCount": live, "hasAttachedPty": live > 0, "unread": false, "isPinned": false,
+		"liveTerminalCount": live, "posseTerminalCount": len(w.Terminals), "hasAttachedPty": live > 0, "unread": false, "isPinned": false,
 		"linkedPR": nil, "linkedIssue": nil, "linkedLinearIssue": nil, "linkedGitLabMR": nil, "linkedGitLabIssue": nil,
 		"status": status, "agents": agents, "isActive": false, "workspaceKind": kind,
 		"isMainWorktree": w.Kind == "main", "isWorktree": w.Kind == "worktree" || w.Attached, "isArchived": false, "hasHostSidebarActivity": live > 0,
@@ -293,6 +323,9 @@ func (s *Server) sessionTabs(st State, w Workspace) map[string]any {
 			"parentTabId": parentTab(t.ID), "leafId": leafID(t.ID), "status": "ready",
 			"terminal": t.ID, "isActive": t.ID == active,
 		}
+		if ps := posseStatus(t); ps != "" {
+			tab["posseStatus"] = ps
+		}
 		if t.Agent != "" {
 			tab["launchAgent"] = t.Agent
 			if agentState(t) != "" && t.Running {
@@ -339,7 +372,7 @@ func tabsKey(w Workspace) []string {
 		if t.Running {
 			state = agentState(t)
 		}
-		out = append(out, t.ID+"\x00"+tabTitle(t)+"\x00"+state+"\x00"+t.SessionID+"\x00"+t.ToolName+"\x00"+t.Prompt)
+		out = append(out, t.ID+"\x00"+tabTitle(t)+"\x00"+state+"\x00"+posseStatus(t)+"\x00"+t.SessionID+"\x00"+t.ToolName+"\x00"+t.Prompt)
 	}
 	return out
 }

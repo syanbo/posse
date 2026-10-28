@@ -16,7 +16,7 @@ func TestUnreadStatus(t *testing.T) {
 	if _, s := a.terminalSummary(ts); s != agent.StatusWorking {
 		t.Fatalf("summary = %q, want working", s)
 	}
-	a.markUnread("b")
+	ts[1].Unread = true
 	if s := a.sessionStatus(ts[1]); s != statusUnread {
 		t.Fatalf("session = %q, want unread", s)
 	}
@@ -30,12 +30,19 @@ func TestUnreadStatus(t *testing.T) {
 	}
 	// 窗口在后台时看着也不算看过
 	a.markRead(&ts[1])
-	if !a.unread["b"] {
+	if a.viewing != "" || a.sessionStatus(ts[1]) != statusUnread {
 		t.Fatal("read while unfocused")
 	}
+	// 有焦点看着时不画铃铛，等常驻进程收到看过
 	a.focused.Store(true)
+	a.seenFor = ts[1].ID // 不真发 terminal.seen
 	a.markRead(&ts[1])
-	if a.unread["b"] {
-		t.Fatal("still unread after viewing")
+	if s := a.sessionStatus(ts[1]); s != agent.StatusIdle {
+		t.Fatalf("viewed session = %q, want idle", s)
+	}
+	ts[1].Unread = false
+	a.markRead(&ts[1])
+	if a.seenFor != "" {
+		t.Fatal("seenFor kept after the daemon cleared unread")
 	}
 }

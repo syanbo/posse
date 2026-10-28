@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -450,6 +451,17 @@ func newPreviewTester(a *app, dark bool) *ui.Tester {
 	return tt
 }
 
+// setUnread 把这些会话记成本轮完成了还没看（常驻进程报来的）。
+func setUnread(a *app, ids ...string) {
+	for i := range a.workspaces {
+		for j := range a.workspaces[i].Terminals {
+			if slices.Contains(ids, a.workspaces[i].Terminals[j].ID) {
+				a.workspaces[i].Terminals[j].Unread = true
+			}
+		}
+	}
+}
+
 // TestPreview 把主要界面渲染成 PNG，供改界面时对照；设置 POSSE_PREVIEW_DIR 才运行。
 func TestPreview(t *testing.T) {
 	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
@@ -458,7 +470,7 @@ func TestPreview(t *testing.T) {
 	for _, dark := range []bool{true, false} {
 		suffix := map[bool]string{true: "dark", false: "light"}[dark]
 		a := previewApp(t)
-		a.unread = map[string]bool{"t4": true}            // 完成了还没看：已完成、铃铛
+		setUnread(a, "t4")                                // 完成了还没看：已完成、铃铛
 		a.daemon.MobileOnline = []string{"iPhone 12 Pro"} // 侧栏「手机」行尾的绿点
 		savePNG(t, newPreviewTester(a, dark), "main-"+suffix+".png")
 
@@ -538,7 +550,7 @@ func TestPreview(t *testing.T) {
 		// 不在看的会话本轮完成：标签和侧栏是铃铛，收起的项目也汇总成铃铛
 		a = previewApp(t)
 		a.workspaces[0].Terminals[1].AgentState = &agentState{Status: "idle"}
-		a.unread = map[string]bool{"t2": true, "t4": true}
+		setUnread(a, "t2", "t4")
 		*a.sectionsOpen["p3"] = false
 		savePNG(t, newPreviewTester(a, dark), "unread-"+suffix+".png")
 

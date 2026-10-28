@@ -304,11 +304,15 @@ void openSession(BuildContext context, PosseAppModel model, SessionTab tab) {
 
 /// 会话这一刻在做什么，一行话。
 String sessionDetail(SessionTab tab) {
-  return switch (agentStateOf(tab.state)) {
+  return switch (tab.shown) {
     AgentState.waiting =>
       tab.toolName == null ? '等你处理' : '等你批准 ${tab.toolName}',
     AgentState.working => tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
     AgentState.done => '本轮完成',
+    AgentState.unread => '本轮完成，还没看',
+    AgentState.tasks => '等待任务',
+    AgentState.starting => '启动中',
+    AgentState.lost => '未恢复，点开时拉起',
     _ => tab.agent == null ? '终端' : (tab.eligible ? '空闲' : '只能看终端'),
   };
 }
@@ -662,10 +666,13 @@ class WorkspaceScreen extends StatelessWidget {
   /// 项目里最需要注意的会话状态。收起时显示在项目行上，待处理不会被藏起来。
   AgentState _projectState(List<WorktreeRow> rows) {
     var best = AgentState.none;
+    // 照桌面 statusRank：待处理最要紧，其次是完成了还没看
     int rank(AgentState s) => switch (s) {
-      AgentState.waiting => 3,
-      AgentState.working => 2,
-      AgentState.done => 1,
+      AgentState.waiting => 5,
+      AgentState.unread => 4,
+      AgentState.working || AgentState.tasks => 3,
+      AgentState.done => 2,
+      AgentState.starting => 1,
       _ => 0,
     };
     for (final row in rows) {
@@ -743,7 +750,13 @@ class WorkspaceScreen extends StatelessWidget {
           child: RowTile(
             leading: const AgentTile(agent: null, size: 28),
             title: Text(cleanTitle(tab.title)),
-            subtitle: Text(model.rpc == null ? '等连上电脑' : '终端'),
+            subtitle: Text(
+              model.rpc == null
+                  ? '等连上电脑'
+                  : tab.posse == 'lost'
+                  ? '未恢复，点开时拉起'
+                  : '终端',
+            ),
             onTap: () => openSession(context, model, tab),
             onLongPress: () => closeSession(context, model, tab),
           ),
@@ -753,7 +766,7 @@ class WorkspaceScreen extends StatelessWidget {
 
   /// 首页显示的会话状态。断线时手上的状态已经过时，一律不显示，等你处理的横幅、项目行和会话行一致。
   AgentState _stateOf(SessionTab tab) =>
-      model.rpc == null ? AgentState.none : agentStateOf(tab.state);
+      model.rpc == null ? AgentState.none : tab.shown;
 
   Widget _sessionState(PosseColors c, SessionTab tab) {
     final state = _stateOf(tab);

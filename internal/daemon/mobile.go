@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"posse/internal/host"
 	"posse/internal/mobile"
 	"posse/internal/rpc"
+	"posse/internal/store"
 	"posse/internal/usage"
 )
 
@@ -67,6 +70,16 @@ func (h mobileHost) State() mobile.State {
 		return st
 	}
 	byWS := d.sessionsByWorkspace()
+	lost := d.lostByWorkspace()
+	// 和桌面侧栏一样：有进行中的任务、又阻塞在 posse task wait 上或停着，是在等派出去的任务
+	coordinating := map[string]bool{}
+	if ts, err := d.store.Tasks(store.TaskFilter{Running: true}); err == nil {
+		for _, t := range ts {
+			if t.Coordinator != "" {
+				coordinating[t.Coordinator] = true
+			}
+		}
+	}
 	for _, w := range ws {
 		// 数据库里的分支只在建工作区时记一次，main 工作区切分支后就过时了；和界面一样以 HEAD 为准
 		head, detached := gitx.HeadRef(w.Path)
@@ -109,7 +122,23 @@ func (h mobileHost) State() mobile.State {
 				SessionID: a.SessionID, TranscriptPath: a.TranscriptPath,
 				ToolName: a.ToolName, ToolInput: a.ToolInput, Prompt: a.Prompt,
 				Running: true, CreatedAt: s.CreatedAt, LastOutput: s.LastOutput(),
+				Tasks:  coordinating[s.ID] && (d.waitingTasks(s.ID) || a.Status == agent.StatusIdle),
+				Unread: a.Status == agent.StatusIdle && s.agentName() != "" && s.isUnread(),
 			})
+		}
+		// 还没恢复的终端也列出来，手机点开时才拉起（mobileHost.Restore）
+		for _, t := range lost[w.ID] {
+			title := t.Title
+			if title == "" {
+				title = t.Label
+			}
+			if title == "" {
+				title = cmp.Or(t.Agent, "shell")
+			}
+			mw.Terminals = append(mw.Terminals, mobile.Terminal{ID: t.ID, Title: title, Agent: t.Agent, CreatedAt: t.CreatedAt, Lost: true})
+		}
+		if len(lost[w.ID]) > 0 {
+			slices.SortStableFunc(mw.Terminals, func(a, b mobile.Terminal) int { return a.CreatedAt.Compare(b.CreatedAt) })
 		}
 		st.Workspaces = append(st.Workspaces, mw)
 	}
@@ -123,6 +152,22 @@ func (h mobileHost) Terminal(id string) host.Terminal {
 		return nil
 	}
 	return s.Terminal
+}
+
+func (h mobileHost) Restore(id string) host.Terminal {
+	s, err := h.d.session(id)
+	if err != nil {
+		log.Printf("mobile: restore %s: %v", id, err)
+		return nil
+	}
+	return s.Terminal
+}
+
+func (h mobileHost) View(id string) func() {
+	if s := h.d.liveSession(id); s != nil {
+		return s.view()
+	}
+	return func() {}
 }
 
 func (h mobileHost) CreateTerminal(workspaceID, agentName, prompt, command string) (string, error) {

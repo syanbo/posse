@@ -1,6 +1,9 @@
 package mobile
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // 输入框发来的多行文字按一次粘贴送进去，不让第一个换行把前半段提交掉
 func TestPasteText(t *testing.T) {
@@ -38,5 +41,42 @@ func TestDisplayName(t *testing.T) {
 		if got := displayName(st, c.w); got != c.want {
 			t.Errorf("displayName(%+v) = %q, want %q", c.w, got, c.want)
 		}
+	}
+}
+
+func TestPosseStatus(t *testing.T) {
+	cases := []struct {
+		t    Terminal
+		want string
+	}{
+		{Terminal{Running: true, Status: "starting"}, "starting"},
+		{Terminal{Running: true, Status: "working"}, "working"},
+		{Terminal{Running: true, Status: "idle"}, "idle"},
+		{Terminal{Running: true, Status: "idle", Unread: true}, "unread"},
+		// 等任务比没看要紧，和桌面一样
+		{Terminal{Running: true, Status: "idle", Unread: true, Tasks: true}, "tasks"},
+		{Terminal{Running: true, Status: "working", Tasks: true}, "tasks"},
+		{Terminal{Lost: true}, "lost"},
+		{Terminal{Status: "idle"}, ""},
+		{Terminal{Running: true}, ""},
+	}
+	for _, c := range cases {
+		if got := posseStatus(c.t); got != c.want {
+			t.Errorf("posseStatus(%+v) = %q, want %q", c.t, got, c.want)
+		}
+	}
+	// Orca 的 App 只看 state：等任务时照旧是 working
+	row := agentRow(Terminal{Running: true, Status: "working", Tasks: true}, time.Now())
+	if row["state"] != "working" || row["posseStatus"] != "tasks" {
+		t.Fatalf("row = %v / %v", row["state"], row["posseStatus"])
+	}
+}
+
+// 工作区全是还没恢复的终端时，手机也要知道去拉会话列表；在跑的个数照旧只数在跑的
+func TestWorktreeRowCountsLost(t *testing.T) {
+	w := Workspace{ID: "w", ProjectID: "p", Terminals: []Terminal{{ID: "a", Lost: true}, {ID: "b", Lost: true}}}
+	row := worktreeRow(State{}, w, time.Now())
+	if row["liveTerminalCount"] != 0 || row["posseTerminalCount"] != 2 {
+		t.Fatalf("live = %v, posse = %v", row["liveTerminalCount"], row["posseTerminalCount"])
 	}
 }

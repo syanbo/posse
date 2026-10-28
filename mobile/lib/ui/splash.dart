@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'loading.dart';
+import 'theme.dart';
 
 // 闪屏分两段：系统闪屏（iOS LaunchScreen、安卓 launch_background 和 12 起的 SplashScreen）只有底色和居中的标志，
 // 接着由这里在同一位置画同一个标志，再铺满蜂巢格。原生那张标志图由 test/splash_assets_test.dart 用 [PosseMarkPainter] 导出，
@@ -157,7 +158,7 @@ class _PosseSplashState extends State<PosseSplash>
         context,
       ).whenComplete(_release);
     }
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (reduceMotionOf(context)) {
       _intro.value = 1;
     } else if (_intro.value == 0 && !_intro.isAnimating) {
       _intro.forward();

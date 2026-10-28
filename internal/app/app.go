@@ -54,6 +54,7 @@ type terminalInfo struct {
 	PhoneSized                    bool   // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
 	Name                          string // 用户改的标签名，常驻进程记着（terminal.rename），手机也用它
 	Lost                          bool   // 上一个常驻进程留下、还没恢复：接入时常驻进程才拉起它
+	Unread                        bool   // 本轮完成了还没看，常驻进程记着（旧常驻进程没有这个字段）
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
@@ -301,9 +302,10 @@ type app struct {
 	upd         selfUpdate // 自动更新的检查和下载（appupdate.go）
 	updating    bool       // 正在换包、交接常驻进程，接着重开窗口
 
-	// unread 是本轮完成时你不在看的会话（终端 ID），看过或再开始干活就清掉；只在窗口进程内存里（unread.go）
-	unread   map[string]bool
-	unreadAt map[string]time.Time // 记成未读的时刻，铃铛每轮摇动从这时起算
+	// 本轮完成了还没看由常驻进程记（terminalInfo.Unread），桌面和手机共用；这里只管怎么画、什么时候报看过（unread.go）
+	unreadAt map[string]time.Time // 第一次见到它没看的时刻，铃铛每轮摇动从这时起算
+	viewing  string               // 窗口有焦点时正看着的会话，常驻进程还没收到看过之前它不画铃铛
+	seenFor  string               // 已经为它报过看过的会话，同一次看只报一次
 	focused  atomic.Bool          // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
@@ -640,16 +642,19 @@ func (a *app) apply(ps []project, ws []workspace) {
 		for _, t := range w.Terminals {
 			a.noticeStatus(w, t)
 			seen[t.ID] = true
+			if !t.Unread {
+				delete(a.unreadAt, t.ID)
+			} else if _, ok := a.unreadAt[t.ID]; !ok {
+				if a.unreadAt == nil {
+					a.unreadAt = map[string]time.Time{}
+				}
+				a.unreadAt[t.ID] = time.Now()
+			}
 		}
 	}
 	for id := range a.lastStatus {
 		if !seen[id] {
 			delete(a.lastStatus, id)
-		}
-	}
-	for id := range a.unread {
-		if !seen[id] {
-			delete(a.unread, id)
 		}
 	}
 	for id := range a.unreadAt {
@@ -688,9 +693,6 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	if !seen || prev == status || t.Agent == "" {
 		return
 	}
-	if status != agent.StatusIdle {
-		delete(a.unread, t.ID)
-	}
 	var title string
 	switch {
 	case status == agent.StatusWaiting:
@@ -703,9 +705,6 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	// 正在看的终端不打扰
 	if a.win.IsFocused() && a.selected == w.ID && a.view != nil && a.view.id == t.ID {
 		return
-	}
-	if status == agent.StatusIdle {
-		a.markUnread(t.ID)
 	}
 	body := w.Label
 	if t.AgentState != nil && t.AgentState.Message != "" {

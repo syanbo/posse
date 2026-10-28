@@ -101,7 +101,7 @@ class _HexSpinnerState extends State<HexSpinner>
 
 /// 系统开了减弱动态效果时停在一帧上，不转。
 void _run(AnimationController clock, BuildContext context) {
-  if (MediaQuery.disableAnimationsOf(context)) {
+  if (reduceMotionOf(context)) {
     clock.stop();
     clock.value = 0.2;
   } else if (!clock.isAnimating) {

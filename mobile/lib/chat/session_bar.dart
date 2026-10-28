@@ -51,14 +51,16 @@ class SessionTitle extends StatelessWidget {
   }) {
     final c = PosseColors.of(context);
     // 断线时手上的状态已经过时，不显示；会话结束了也没有状态可言
-    final state = offline || ended ? AgentState.none : agentStateOf(tab.state);
+    final state = offline || ended ? AgentState.none : tab.shown;
     final stateText = ended
         ? '会话已经结束'
         : switch (state) {
             AgentState.working =>
               tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
             AgentState.waiting => '等你处理',
-            AgentState.done => '本轮完成',
+            AgentState.done || AgentState.unread => '本轮完成',
+            AgentState.tasks => '等待任务',
+            AgentState.starting => '启动中',
             _ => tab.agent == null ? '终端' : chatWho('assistant', tab.agent),
           };
     return Row(

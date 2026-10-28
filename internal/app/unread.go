@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"log"
 	"math"
 	"time"
 
@@ -9,27 +11,32 @@ import (
 	"posse/internal/agent"
 )
 
-// statusUnread 是界面自己的状态：本轮完成时你不在看这个会话，还没切过去看。照 Orca 的
-// "Unread agent completion"，标签和侧栏用铃铛代替完成的蜂巢格。
+// statusUnread 是本轮完成时你不在看这个会话，还没切过去看。照 Orca 的 "Unread agent completion"，
+// 标签和侧栏用铃铛代替完成的蜂巢格。记在常驻进程里，手机上看过也算。
 const statusUnread = "unread"
 
-func (a *app) markUnread(id string) {
-	if a.unread == nil {
-		a.unread = map[string]bool{}
-	}
-	a.unread[id] = true
-	if a.unreadAt == nil {
-		a.unreadAt = map[string]time.Time{}
-	}
-	a.unreadAt[id] = time.Now()
-}
-
-// markRead 在每帧画主区域时调用：窗口有焦点、当前看着的会话就算看过了。
+// markRead 在每帧画主区域时调用：窗口有焦点、当前看着的会话就算看过，常驻进程记着它没看的就报一次。
 func (a *app) markRead(cur *terminalInfo) {
-	if cur != nil && a.unread[cur.ID] && a.focused.Load() {
-		delete(a.unread, cur.ID)
-		delete(a.unreadAt, cur.ID)
+	a.viewing = ""
+	if cur != nil && a.focused.Load() {
+		a.viewing = cur.ID
 	}
+	if a.viewing == "" || !cur.Unread {
+		a.seenFor = ""
+		return
+	}
+	if a.seenFor == cur.ID {
+		return
+	}
+	a.seenFor = cur.ID
+	id := cur.ID
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := a.c.Call(ctx, "terminal.seen", map[string]any{"terminal": id}, nil); err != nil {
+			log.Printf("terminal.seen %s: %v", id, err)
+		}
+	}()
 }
 
 // watchFocus 记下窗口焦点；切回窗口时重画一帧，看着的会话马上算看过。
@@ -42,9 +49,9 @@ func (a *app) watchFocus() {
 	a.win.OnBlur(func() { a.focused.Store(false) })
 }
 
-// shownStatus 把还没看过的完成换成 statusUnread。
-func (a *app) shownStatus(id, status string) string {
-	if status == agent.StatusIdle && a.unread[id] {
+// shownStatus 把还没看过的完成换成 statusUnread；正看着的不换，常驻进程马上会收到看过。
+func (a *app) shownStatus(t terminalInfo, status string) string {
+	if status == agent.StatusIdle && t.Unread && t.ID != a.viewing {
 		return statusUnread
 	}
 	return status

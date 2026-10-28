@@ -36,6 +36,8 @@ type terminalInfo struct {
 	PhoneSized   bool             `json:"phoneSized,omitempty"`   // 手机正看着，终端按手机的尺寸排版
 	// Lost 是上一个常驻进程留下、还没恢复的终端（restore.go）：没有进程，接入或操作它时才拉起
 	Lost bool `json:"lost,omitempty"`
+	// Unread 是本轮完成了还没看（unread.go）
+	Unread bool `json:"unread,omitempty"`
 }
 
 func (d *Daemon) terminalInfo(s *session) terminalInfo {
@@ -49,6 +51,7 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示
 	if st := s.Agent(); st.Status != "" && info.Agent != "" {
 		info.AgentState = &st
+		info.Unread = st.Status == agent.StatusIdle && s.isUnread()
 	}
 	if !info.Running {
 		code := s.ExitCode()
@@ -146,6 +149,7 @@ func (d *Daemon) onTitle(id, title string) {
 	name, hooked, changed, sid := s.detectAgent()
 	if changed {
 		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", SessionID: sid, At: time.Now()})
+		s.markRead()
 	}
 	if name == "" {
 		return
@@ -682,7 +686,9 @@ func (d *Daemon) setAgent(s *session, st host.AgentState) {
 			st.Status = agent.StatusWorking
 		}
 	}
+	prev := s.Agent().Status
 	s.SetAgent(st)
+	s.noteStatus(prev, st.Status)
 	d.refreshAwake()
 	if agent.Parked(s.Agent()) {
 		go d.deliver(s.ID)
@@ -731,6 +737,7 @@ func (d *Daemon) checkAgentGone(s *session) {
 		return
 	}
 	s.SetAgent(host.AgentState{Status: agent.StatusExited, Event: "process", At: time.Now()})
+	s.markRead()
 	d.refreshAwake()
 	go d.workerGone(s.ID, "worker agent exited before reporting")
 }

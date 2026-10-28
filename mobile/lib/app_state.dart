@@ -836,7 +836,8 @@ class PosseAppModel extends ChangeNotifier {
     try {
       final result = await current.call('worktree.ps', {'limit': 10000});
       final rows = parseWorktrees(result['worktrees']);
-      final live = rows.where((r) => r.live > 0).toList();
+      // 全是还没恢复的终端时也要拉，首页才列得出它们
+      final live = rows.where((r) => r.terminals > 0).toList();
       final lists = await Future.wait([
         for (final row in live)
           current

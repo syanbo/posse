@@ -1,3 +1,5 @@
+import '../ui/widgets.dart';
+
 const chatAgents = {'claude', 'codex', 'grok'};
 
 /// worktree.ps 里一个 agent 的摘要：首页据此显示谁在做什么，不用逐个订阅标签。
@@ -26,6 +28,7 @@ class WorktreeRow {
     required this.branch,
     required this.status,
     required this.live,
+    this.terminals = 0,
     this.isMain = false,
     this.isWorktree = false,
     this.agents = const [],
@@ -39,6 +42,9 @@ class WorktreeRow {
   final String branch;
   final String status;
   final int live;
+
+  /// 列得出来的终端数：在跑的加上一个常驻进程留下还没恢复的。旧常驻进程不给，和 [live] 一样。
+  final int terminals;
   final bool isMain;
 
   /// git worktree：posse 建的，或从别处加进来的。和桌面一样用分支图标。
@@ -63,6 +69,7 @@ class SessionTab {
     this.transcriptPath,
     this.toolName,
     this.prompt,
+    this.posse,
   });
 
   final String worktreeId;
@@ -74,6 +81,12 @@ class SessionTab {
   final String? transcriptPath;
   final String? toolName;
   final String? prompt;
+
+  /// 和桌面侧栏一样的状态（starting、tasks、unread、lost 等），旧常驻进程不给。只用来显示，见 [shownStateOf]。
+  final String? posse;
+
+  /// 首页和会话顶栏画的状态。
+  AgentState get shown => shownStateOf(state, posse);
 
   bool get eligible =>
       agent != null &&
@@ -96,6 +109,7 @@ class SessionTab {
       transcriptPath: transcriptPath,
       toolName: clearPrompt ? null : toolName ?? this.toolName,
       prompt: clearPrompt ? null : prompt ?? this.prompt,
+      posse: posse,
     );
   }
 }
@@ -118,6 +132,11 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
         live: item['liveTerminalCount'] is num
             ? (item['liveTerminalCount'] as num).toInt()
             : 0,
+        terminals: switch (item['posseTerminalCount'] ??
+            item['liveTerminalCount']) {
+          final num n => n.toInt(),
+          _ => 0,
+        },
         isMain: item['isMainWorktree'] == true,
         // 旧常驻进程不报，按有没有分支猜
         isWorktree: item['isWorktree'] is bool
@@ -193,6 +212,7 @@ List<SessionTab> parseTabs(String worktreeId, Object? raw) {
         transcriptPath: transcriptPath,
         toolName: toolName,
         prompt: prompt,
+        posse: item['posseStatus'] as String?,
       ),
     );
   }

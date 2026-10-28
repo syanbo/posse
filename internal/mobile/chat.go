@@ -95,6 +95,9 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	defer timer.Stop()
 	var wake <-chan struct{}
 	var term host.Terminal
+	// 会话页开着也算在看这个会话；它所在的终端每轮重找，换了就换着记
+	viewing, unview := "", func() {}
+	defer func() { unview() }()
 	// 状态行每次终端有输出都可能变，转圈符号一秒好几帧；最多这么久看一次屏幕，
 	// 跳过的那次约好稍后再看，停下来的最后一帧不会漏
 	status, statusAt := "", time.Time{}
@@ -124,6 +127,10 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		term = c.sessionTerminal(a.Agent, a.SessionID)
 		if term != nil {
 			wake = term.Changed()
+			if id := term.Info().ID; id != viewing {
+				unview()
+				viewing, unview = id, c.srv.host.View(id)
+			}
 		}
 		timer.Reset(wait)
 	}

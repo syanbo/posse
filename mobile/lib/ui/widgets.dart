@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -88,7 +89,18 @@ class _PathPainter extends CustomPainter {
 }
 
 /// agent 的状态。工作区的 permission 和标签的 waiting 都是待处理。
-enum AgentState { working, waiting, done, idle, none }
+/// 后四个只用来显示（[shownStateOf]）：启动中、等派出去的任务、本轮完成了还没看、上一个常驻进程留下还没恢复。
+enum AgentState {
+  working,
+  waiting,
+  done,
+  idle,
+  none,
+  starting,
+  tasks,
+  unread,
+  lost,
+}
 
 AgentState agentStateOf(String? state) => switch (state) {
   'working' || 'starting' => AgentState.working,
@@ -98,10 +110,24 @@ AgentState agentStateOf(String? state) => switch (state) {
   _ => AgentState.none,
 };
 
+/// 首页和会话顶栏显示的状态：常驻进程给了 posseStatus（和桌面侧栏一样的状态）就照它，
+/// 旧常驻进程没有时按 state。在不在干活这类判断仍用 [agentStateOf]：等任务时 state 照旧是工作中。
+AgentState shownStateOf(String? state, String? posse) => switch (posse) {
+  'starting' => AgentState.starting,
+  'working' => AgentState.working,
+  'waiting' => AgentState.waiting,
+  'idle' => AgentState.done,
+  'tasks' => AgentState.tasks,
+  'unread' => AgentState.unread,
+  'lost' => AgentState.lost,
+  _ => agentStateOf(state),
+};
+
 final _hex = parseSvgPath('M12 2.75 20 7.375v9.25L12 21.25 4 16.625v-9.25z');
 
 /// 状态图标，和桌面端 statusGlyph 一致：工作中是 Claude Code 那样来回变换的陶土色星号（减少动态效果时
-/// 退回静止的实心蜂巢格，用中性色），空心带圆点的琥珀色是待处理，空心的绿色是本轮完成。
+/// 退回静止的实心蜂巢格，用中性色），空心带圆点的琥珀色是待处理，空心的绿色是本轮完成，空心灰色是启动中，
+/// 中间一道横线的灰色是未恢复。等任务是陶土色波形、没看是陶土色铃铛，减少动态效果时不动。
 class StatusHex extends StatelessWidget {
   const StatusHex({super.key, required this.state, this.size = 16, this.color});
 
@@ -113,19 +139,34 @@ class StatusHex extends StatelessWidget {
   Widget build(BuildContext context) {
     if (state == AgentState.none) return SizedBox.square(dimension: size);
     final c = PosseColors.of(context);
-    if (state == AgentState.working &&
-        this.color == null &&
-        !MediaQuery.disableAnimationsOf(context)) {
+    final still = reduceMotionOf(context);
+    if (state == AgentState.working && this.color == null && !still) {
       return WorkingStar(size: size, color: c.accent);
     }
     final color =
         this.color ??
         switch (state) {
-          AgentState.working => c.muted,
+          AgentState.working ||
+          AgentState.starting ||
+          AgentState.lost => c.muted,
           AgentState.waiting => c.honey,
           AgentState.done => c.sage,
+          AgentState.tasks || AgentState.unread => c.accent,
           _ => c.faint,
         };
+    final animate = !still && this.color == null;
+    if (state == AgentState.tasks) {
+      return CustomPaint(
+        size: Size.square(size),
+        painter: _PulsePainter(color, animate: animate),
+      );
+    }
+    if (state == AgentState.unread) {
+      return CustomPaint(
+        size: Size.square(size),
+        painter: _BellPainter(color, animate: animate),
+      );
+    }
     return CustomPaint(
       size: Size.square(size),
       painter: _HexPainter(state, color),
@@ -137,16 +178,17 @@ class StatusHex extends StatelessWidget {
 const _starFrames = ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'];
 const _starFrame = Duration(milliseconds: 160);
 
-/// 所有工作中的星号共用一个时钟，一起变；没有星号在屏幕上时停掉计时器。
-class _StarClock extends ValueNotifier<int> {
-  _StarClock() : super(0);
+/// 按固定周期加一的时钟：用它的图标一起变，屏幕上没有它们时停掉计时器。
+class _Clock extends ValueNotifier<int> {
+  _Clock(this.period) : super(0);
 
+  final Duration period;
   Timer? _timer;
 
   @override
   void addListener(VoidCallback listener) {
     super.addListener(listener);
-    _timer ??= Timer.periodic(_starFrame, (_) => value++);
+    _timer ??= Timer.periodic(period, (_) => value++);
   }
 
   @override
@@ -159,7 +201,7 @@ class _StarClock extends ValueNotifier<int> {
   }
 }
 
-final _starClock = _StarClock();
+final _starClock = _Clock(_starFrame);
 
 class WorkingStar extends StatelessWidget {
   const WorkingStar({super.key, required this.size, required this.color});
@@ -206,6 +248,109 @@ class WorkingStar extends StatelessWidget {
   }
 }
 
+/// 等任务的波形和没看的铃铛共用一个时钟，按时间算这一帧，几个图标一起动。
+/// 只让画笔重画、不重建控件；屏幕上没有它们时停掉计时器。
+final _frameClock = _Clock(const Duration(milliseconds: 50));
+
+/// 等任务的波形照桌面端 waitingPulse：一段亮的像心电图一样从左进、右出（1 秒，两头加减速），停 0.3 秒再来。
+const _pulseSweep = 1000;
+const _pulseRest = 300;
+const _pulseLen = 0.4;
+
+final _pulse = () {
+  const pts = [
+    (2.0, 12.0),
+    (6.5, 12.0),
+    (9.5, 5.0),
+    (14.5, 19.0),
+    (17.5, 12.0),
+    (22.0, 12.0),
+  ];
+  final path = Path()..moveTo(pts.first.$1, pts.first.$2);
+  for (final p in pts.skip(1)) {
+    path.lineTo(p.$1, p.$2);
+  }
+  return path;
+}();
+
+class _PulsePainter extends CustomPainter {
+  _PulsePainter(this.color, {required this.animate})
+    : super(repaint: animate ? _frameClock : null);
+
+  final Color color;
+  final bool animate;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final k = size.width / 24;
+    canvas.scale(k);
+    Paint stroke(Color c) => Paint()
+      ..color = c
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.3, size.width / 9) / k
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    if (!animate) {
+      canvas.drawPath(_pulse, stroke(color));
+      return;
+    }
+    canvas.drawPath(_pulse, stroke(color.withValues(alpha: 0.3)));
+    final at =
+        DateTime.now().millisecondsSinceEpoch % (_pulseSweep + _pulseRest);
+    if (at >= _pulseSweep) return;
+    final x = at / _pulseSweep;
+    final head = x * x * (3 - 2 * x) * (1 + _pulseLen);
+    final metric = _pulse.computeMetrics().first;
+    final from = math.max(0.0, head - _pulseLen) * metric.length;
+    final to = math.min(1.0, head) * metric.length;
+    if (to > from) {
+      canvas.drawPath(metric.extractPath(from, to), stroke(color));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PulsePainter old) =>
+      old.color != color || old.animate != animate;
+}
+
+/// 没看的铃铛照桌面端：每 2.4 秒里前 0.8 秒绕顶上的挂钩来回摆三次、越摆越小，其余时间静止。
+final _bell = parseSvgPath(
+  'M5.25 9A6.75 6.75 0 0 1 12 2.25 6.75 6.75 0 0 1 18.75 9v3.75c0 .526.214 1.03.594 1.407l.53.532a.75.75 0 0 1-.53 1.28H4.656a.75.75 0 0 1-.53-1.28l.53-.532A1.989 1.989 0 0 0 5.25 12.75V9Zm6.75 12a3 3 0 0 0 2.996-2.825.75.75 0 0 0-.748-.8h-4.5a.75.75 0 0 0-.748.8A3 3 0 0 0 12 21Z',
+);
+const _bellRing = 800;
+const _bellRest = 1600;
+const _bellSwing = 16.0;
+
+class _BellPainter extends CustomPainter {
+  _BellPainter(this.color, {required this.animate})
+    : super(repaint: animate ? _frameClock : null);
+
+  final Color color;
+  final bool animate;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (animate) {
+      final d = DateTime.now().millisecondsSinceEpoch % (_bellRing + _bellRest);
+      if (d < _bellRing) {
+        final x = d / _bellRing;
+        final angle = _bellSwing * (1 - x) * math.sin(x * 3 * 2 * math.pi);
+        final pivot = Offset(size.width / 2, size.height * 0.1);
+        canvas
+          ..translate(pivot.dx, pivot.dy)
+          ..rotate(angle * math.pi / 180)
+          ..translate(-pivot.dx, -pivot.dy);
+      }
+    }
+    canvas.scale(size.width / 24);
+    canvas.drawPath(_bell, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_BellPainter old) =>
+      old.color != color || old.animate != animate;
+}
+
 class _HexPainter extends CustomPainter {
   _HexPainter(this.state, this.color);
 
@@ -226,6 +371,9 @@ class _HexPainter extends CustomPainter {
     if (state == AgentState.waiting) {
       canvas.drawCircle(const Offset(12, 12), 3, Paint()..color = color);
     }
+    if (state == AgentState.lost) {
+      canvas.drawLine(const Offset(8.5, 12), const Offset(15.5, 12), paint);
+    }
   }
 
   @override
@@ -240,6 +388,10 @@ String agentStateText(AgentState state) => switch (state) {
   AgentState.done => '完成',
   AgentState.idle => '空闲',
   AgentState.none => '',
+  AgentState.starting => '启动中',
+  AgentState.tasks => '等待任务',
+  AgentState.unread => '本轮完成，还没看',
+  AgentState.lost => '未恢复',
 };
 
 /// 弹框：从略小放大到原大、同时淡入，收起时缩回去、比出来快。Material 默认只淡入一下，看着生硬。
@@ -258,7 +410,7 @@ Future<T?> showPosseDialog<T>({
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
-        if (MediaQuery.disableAnimationsOf(dialog)) {
+        if (reduceMotionOf(dialog)) {
           return FadeTransition(opacity: curved, child: child);
         }
         return FadeTransition(
@@ -485,7 +637,7 @@ class _FoldState extends State<Fold> with SingleTickerProviderStateMixin {
   void didUpdateWidget(Fold old) {
     super.didUpdateWidget(old);
     if (old.open == widget.open) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (reduceMotionOf(context)) {
       _ctrl.value = widget.open ? 1 : 0;
     } else if (widget.open) {
       _ctrl.forward();

@@ -60,6 +60,8 @@ type session struct {
 	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
 	saved    resumeRec // 库里记着的恢复信息（saveResume）
 	settling bool      // agent 不在了，已经约好 resumeSettle 之后复查
+	unread   bool      // 本轮完成了还没看（unread.go）
+	viewers  int       // 正看着它的手机页面数
 }
 
 func (s *session) userName() string {
@@ -461,6 +463,7 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("terminal.resize", d.terminalResize)
 	srv.Handle("terminal.clear", d.terminalClear)
 	srv.Handle("terminal.rename", d.terminalRename)
+	srv.Handle("terminal.seen", d.terminalSeen)
 	srv.Handle("terminal.reclaimSize", d.terminalReclaimSize)
 	srv.Handle("terminal.close", d.terminalClose)
 	srv.Handle("workspace.diff", d.workspaceDiff)

@@ -271,3 +271,9 @@ ThemeData posseTheme(Brightness brightness) {
     ),
   );
 }
+
+/// 系统要求少用动画。安卓的「移除动画」在 [MediaQueryData.disableAnimations]；iOS 的「减弱动态效果」
+/// 不设那一项，只在 accessibilityFeatures.reduceMotion，两个都要看。
+bool reduceMotionOf(BuildContext context) =>
+    MediaQuery.disableAnimationsOf(context) ||
+    View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;

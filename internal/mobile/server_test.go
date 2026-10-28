@@ -87,6 +87,8 @@ func (h *fakeHost) CreateTerminal(wid, agent, prompt, command string) (string, e
 }
 
 func (h *fakeHost) CloseTerminal(id string) error             { return nil }
+func (h *fakeHost) Restore(id string) host.Terminal           { return nil }
+func (h *fakeHost) View(id string) func()                     { return func() {} }
 func (h *fakeHost) Agents() []string                          { return []string{"claude"} }
 func (h *fakeHost) RefreshUsage(context.Context) (any, error) { return h.Usage(), nil }
 func (h *fakeHost) Usage() any {

@@ -61,6 +61,10 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 	}
 	t := c.srv.host.Terminal(a.Terminal)
 	if t == nil {
+		// 首页列着还没恢复的终端，点开时才拉起
+		t = c.srv.host.Restore(a.Terminal)
+	}
+	if t == nil {
 		return errorf("not_found", "terminal %s not found", a.Terminal)
 	}
 	// HoldSize 的 key 要能区分同时看着的几路流；之后宿主独立成进程时它会跨进程传，所以用字符串
@@ -76,6 +80,7 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 // terminalStream 先发快照再推实时输出。尺寸变了（另一台手机或界面）就重发一份快照，手机据此重排。
 func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, key string) {
 	defer t.ReleaseSize(key)
+	defer c.srv.host.View(t.Info().ID)()
 	sid := c.srv.streamID()
 	var seq uint64
 	kind := "scrollback"

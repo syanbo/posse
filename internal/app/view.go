@@ -851,7 +851,7 @@ func (a *app) sessionStatus(term terminalInfo) string {
 	if a.runningFor[term.ID] > 0 && (term.WaitingTasks || status == agent.StatusIdle) {
 		return statusTasks
 	}
-	return a.shownStatus(term.ID, status)
+	return a.shownStatus(term, status)
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
@@ -1152,7 +1152,7 @@ func (a *app) terminalSummary(ts []terminalInfo) (running int, status string) {
 		}
 		running++
 		if t.AgentState != nil {
-			if s := a.shownStatus(t.ID, t.AgentState.Status); statusRank(s) > statusRank(status) {
+			if s := a.shownStatus(t, t.AgentState.Status); statusRank(s) > statusRank(status) {
 				status = s
 			}
 		}
