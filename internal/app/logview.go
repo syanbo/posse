@@ -634,7 +634,11 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 	case row.Hovered():
 		bg = colors(t).wash
 	}
-	row.Background(row.AnimateColor("bg", bg, hover))
+	// 底色和左边分支列表的行一样内缩、圆角、上下留缝；行本身不缩，提交图的线才连得上
+	bg = row.AnimateColor("bg", bg, hover)
+	row.Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(ui.Rect{X: r.X + 6, Y: r.Y + 1, W: r.W - 12, H: r.H - 2}, bg, rRow)
+	})
 	row.Children(func() {
 		graphCell(c, gr, ci.Hash, ld.lanes)
 		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉

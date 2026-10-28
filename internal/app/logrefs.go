@@ -64,7 +64,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 	}
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(0, 6, 12, 6).Gap(2).Children(func() {
+		ui.Column(c).Padding(0, 6, 12, 6).Children(func() {
 			if query == "" {
 				label := "HEAD（当前分支）"
 				if cur, ok := currentBranch(g.branches.list); ok {
