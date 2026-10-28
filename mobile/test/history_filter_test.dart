@@ -129,11 +129,43 @@ void main() {
     expect(find.text('修登录'), findsNothing);
     expect(find.text('换图标'), findsOneWidget);
 
-    await tester.tap(find.text('按文件夹'));
+    await tester.tap(find.byTooltip('按时间分组，点按文件夹'));
     await tester.pumpAndSettle();
     expect(model.settings.historyByFolder, isTrue);
     expect(find.text('posse'), findsOneWidget);
+    // 只展开第一组：scratch 组收着，只有组名
+    expect(find.text('scratch'), findsOneWidget);
+    await tester.tap(find.text('scratch'));
+    await tester.pumpAndSettle();
     // 组标题加上那一行的目录名
     expect(find.text('scratch'), findsNWidgets(2));
+    await tester.tap(find.text('scratch').first);
+    await tester.pumpAndSettle();
+    expect(find.text('scratch'), findsOneWidget);
+  });
+
+  // 写不下时标签行横着滑，不溢出也不截
+  testWidgets('agent chips scroll sideways on a narrow screen', (tester) async {
+    tester.view.physicalSize = const Size(300 * 3, 700 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final rpc = _Rpc();
+    final model = _Model(rpc);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: HistoryScreen(model: model),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final grok = find.text('Grok');
+    expect(tester.getRect(grok).right, greaterThan(300));
+    await tester.drag(find.text('Codex'), const Offset(-1000, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(grok).right, lessThanOrEqualTo(300));
+    await tester.tap(grok);
+    await tester.pumpAndSettle();
+    expect(rpc.asked.last.$2['agent'], 'grok');
   });
 }

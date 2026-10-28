@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../chat/anchor.dart';
@@ -41,6 +41,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   /// 选中的 agent 筛选，下标对应 [historyAgents]。不记住，和桌面一样每次从全部开始。
   var _agent = 0;
+
+  /// 用户点过的分组展开状态，按组名记；没点过的只展开第一组。换筛选或分组方式时清空。
+  final _open = <String, bool>{};
 
   @override
   void initState() {
@@ -114,61 +117,111 @@ class _HistoryScreenState extends State<HistoryScreen> {
         : groupHistory(_sessions, now);
     final agent = historyAgents[_agent];
     return Scaffold(
-      appBar: AppBar(title: const Text('历史')),
+      // 顶栏：返回、搜索框、分组方式。筛选只留一行 agent 小标签，不用两条整宽的分段
+      appBar: AppBar(
+        titleSpacing: 0,
+        // 高度钉死 38：清除按钮、转圈出现时框不变高
+        title: SizedBox(
+          height: 38,
+          child: TextField(
+            controller: _query,
+            onChanged: _onQuery,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => _load(),
+            // expands 要求多行，粘贴进来的换行去掉，框里始终一行
+            expands: true,
+            maxLines: null,
+            inputFormatters: [FilteringTextInputFormatter.deny('\n')],
+            textAlignVertical: TextAlignVertical.center,
+            style: TextStyle(fontSize: Fs.body, color: c.text),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              hintText: '搜索提问、回复和工具输出',
+              prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.muted),
+              prefixIconConstraints: const BoxConstraints.tightFor(
+                width: 38,
+                height: 38,
+              ),
+              suffixIconConstraints: const BoxConstraints.tightFor(
+                width: 38,
+                height: 38,
+              ),
+              // 已有结果时重读，转圈放在搜索框里，不挤动下面的列表
+              suffixIcon: _loading && _sessions.isNotEmpty
+                  ? const Center(widthFactor: 1, child: HexSpinner())
+                  : searching
+                  ? IconButton(
+                      tooltip: '清除',
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        Icons.cancel_rounded,
+                        size: 18,
+                        color: c.faint,
+                      ),
+                      onPressed: () {
+                        _query.clear();
+                        unawaited(_load());
+                      },
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        actions: [
+          // 和桌面一样：分组方式记住；图标是现在的分组，点一下换另一种。搜索结果按相关度排、不分组
+          IconButton(
+            tooltip: byFolder ? '按文件夹分组，点按时间' : '按时间分组，点按文件夹',
+            onPressed: searching
+                ? null
+                : () {
+                    widget.model.updateSettings(
+                      (s) => s.historyByFolder = !byFolder,
+                    );
+                    setState(_open.clear);
+                  },
+            icon: Icon(
+              byFolder ? Icons.folder_outlined : Icons.schedule_rounded,
+              size: 22,
+              color: searching ? c.faint : c.text,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
       body: Column(
         children: [
+          // 写得下时铺满一行、两端对齐，窄屏写不下再横着滑
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: TextField(
-              controller: _query,
-              onChanged: _onQuery,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _load(),
-              decoration: InputDecoration(
-                hintText: '搜索提问、回复和工具输出',
-                prefixIcon: Icon(Icons.search_rounded, color: c.muted),
-                // 已有结果时重读，转圈放在搜索框里，不挤动下面的列表
-                suffixIcon: _loading && _sessions.isNotEmpty
-                    ? const Center(widthFactor: 1, child: HexSpinner())
-                    : searching
-                    ? IconButton(
-                        tooltip: '清除',
-                        icon: Icon(Icons.close_rounded, color: c.muted),
-                        onPressed: () {
-                          _query.clear();
-                          unawaited(_load());
-                        },
-                      )
-                    : null,
+            padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+            child: LayoutBuilder(
+              builder: (context, box) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                // 和下面的卡片同宽：「全部」的底色左边贴卡片左边
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: box.maxWidth - 32),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (var i = 0; i < historyAgents.length; i++)
+                        _AgentChip(
+                          agent: historyAgents[i],
+                          selected: i == _agent,
+                          onTap: () {
+                            if (i == _agent) return;
+                            _debounce?.cancel();
+                            setState(() {
+                              _agent = i;
+                              _open.clear();
+                            });
+                            unawaited(_load());
+                          },
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          // 和桌面一样：分组方式记住，搜索结果按相关度排、不分组
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Segmented(
-              labels: const ['按时间', '按文件夹'],
-              selected: byFolder ? 1 : 0,
-              onChanged: (i) {
-                if ((i == 1) == byFolder) return;
-                widget.model.updateSettings((s) => s.historyByFolder = i == 1);
-                setState(() {});
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Segmented(
-              labels: [
-                for (final a in historyAgents) a.isEmpty ? '全部' : agentLabel(a),
-              ],
-              selected: _agent,
-              onChanged: (i) {
-                if (i == _agent) return;
-                _debounce?.cancel();
-                setState(() => _agent = i);
-                unawaited(_load());
-              },
             ),
           ),
           if (_error != null) NoticeBar(_error!),
@@ -191,7 +244,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       parent: AlwaysScrollableScrollPhysics(),
                     ),
                     slivers: [
-                      CupertinoSliverRefreshControl(onRefresh: _load),
                       // 搜索结果按相关度排，不分组
                       if (searching)
                         SliverSection(
@@ -201,14 +253,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               _row(context, _sessions[i], now),
                         )
                       else
-                        for (final (label, list) in groups)
-                          SliverSection(
-                            title: label,
-                            inset: 52,
-                            itemCount: list.length,
-                            itemBuilder: (context, i) =>
-                                _row(context, list[i], now),
-                          ),
+                        for (final (i, (label, list)) in groups.indexed)
+                          ..._group(context, label, list, i == 0, now),
                       const SliverToBoxAdapter(child: SizedBox(height: 24)),
                     ],
                   ),
@@ -218,13 +264,80 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  /// 一组：可点的组名（条数和箭头），展开时下面是卡片。
+  List<Widget> _group(
+    BuildContext context,
+    String label,
+    List<HistorySession> list,
+    bool first,
+    DateTime now,
+  ) {
+    final c = PosseColors.of(context);
+    final open = _open[label] ?? first;
+    return [
+      SliverPadding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, open ? 0 : 12),
+        sliver: SliverToBoxAdapter(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Rd.button),
+            onTap: () => setState(() => _open[label] = !open),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 6, 2, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: Fs.meta,
+                        fontWeight: FontWeight.w500,
+                        color: c.muted,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${list.length}',
+                    style: TextStyle(
+                      fontSize: Fs.caption,
+                      color: c.faint,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  AnimatedRotation(
+                    turns: open ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 150),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: c.faint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      if (open)
+        SliverSection(
+          inset: 52,
+          itemCount: list.length,
+          itemBuilder: (context, i) => _row(context, list[i], now),
+        ),
+    ];
+  }
+
   Widget _row(BuildContext context, HistorySession s, DateTime now) {
     final c = PosseColors.of(context);
     final where = [
       if (s.folder.isNotEmpty) s.folder,
       if (s.branch.isNotEmpty) s.branch,
-    ].join('  ');
+    ].join(' · ');
     return RowTile(
+      chevron: false,
       leading: AgentTile(agent: s.agent, size: 28),
       title: Text(
         s.title.isEmpty ? '（没有标题）' : s.title,
@@ -511,6 +624,55 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       message: entry.message!,
       blocks: entry.blocks,
       agent: agent,
+    );
+  }
+}
+
+/// 历史页的 agent 筛选：一行小标签，选中的是填充底加正文色，没选的只是灰字，不用整条的陶土色分段。
+class _AgentChip extends StatelessWidget {
+  const _AgentChip({
+    required this.agent,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String agent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    return Material(
+      color: selected ? c.fill : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(agent.isEmpty ? 10 : 7, 7, 10, 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (agent.isNotEmpty) ...[
+                Opacity(
+                  opacity: selected ? 1 : 0.6,
+                  child: AgentTile(agent: agent, size: 16),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                agent.isEmpty ? '全部' : agentLabel(agent),
+                style: TextStyle(
+                  fontSize: Fs.meta,
+                  fontWeight: FontWeight.w500,
+                  color: selected ? c.text : c.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
