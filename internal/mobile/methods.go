@@ -614,6 +614,9 @@ func (c *conn) dispatch(req request) error {
 	if c.mediaMethod(req, p) {
 		return nil
 	}
+	if c.toolsMethod(req, p) {
+		return nil
+	}
 	if c.fileMethod(req, p) {
 		return nil
 	}

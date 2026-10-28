@@ -45,6 +45,7 @@ type Server struct {
 	q quicState
 
 	media mediaCache
+	tools toolsCache
 }
 
 // PairInfo 是给界面和 CLI 显示的配对信息。
