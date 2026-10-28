@@ -110,7 +110,13 @@ class SessionTitle extends StatelessWidget {
                             LatencyLabel(
                               latency: model!.latency,
                               unresponsive: model!.unresponsive,
+                              gap: 12,
                             ),
+                            if (routeLabel(model!.connectedUrl)
+                                case final route?) ...[
+                              const SizedBox(width: 4),
+                              Text(route, style: statusLineStyle(c.muted)),
+                            ],
                           ],
                         ],
                       ),

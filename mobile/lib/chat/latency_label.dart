@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../protocol/quic_socket.dart';
 import '../ui/theme.dart';
+
+/// 当前连接是经中转还是直连（局域网、Tailscale、打洞都算直连），没连上时为空。
+/// 会话页状态行在延迟读数后面写它：中转的延迟高，一眼能看出是不是线路的缘故。
+String? routeLabel(String? url) {
+  if (url == null) return null;
+  return isRelayQuicUrl(url) ? '中转' : '直连';
+}
 
 /// 和电脑的往返时间（[PosseAppModel.latency]）：信号格加毫秒数，不写单位，省出胶囊里电脑名的位置。
 /// 满格绿色，两格灰色，一格（300 ms 起，经跨境隧道连电脑时常见）琥珀色；ping 超时、期间也没收到数据

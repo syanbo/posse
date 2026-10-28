@@ -170,7 +170,7 @@ class _ContextMeterState extends State<ContextMeter> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             SizedBox.square(
               dimension: 10,
               // 粗细同后面的信号格：12 号图标里一格宽 1.5
