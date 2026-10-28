@@ -2024,3 +2024,25 @@ func TestGitConsolePerProject(t *testing.T) {
 		t.Fatalf("reloaded busy %d quiet %d", len(b.projectRuns("busy")), len(b.projectRuns("quiet")))
 	}
 }
+
+// 连着几次相同、成功又没有输出的操作合成一条；有输出、失败或中间隔着别的操作时不合。
+func TestFoldGitOps(t *testing.T) {
+	at := time.Date(2026, 10, 18, 14, 0, 0, 0, time.Local)
+	fetch := func(id int64, min int, out, err string) gitx.Run {
+		return gitx.Run{ID: id, OpID: id, Op: "自动 Fetch", Dir: "/r", Args: []string{"fetch", "--all"}, Start: at.Add(time.Duration(min) * time.Minute), Done: true, Out: out, Err: err}
+	}
+	runs := []gitx.Run{
+		fetch(1, 0, "", ""), fetch(2, 5, "", ""), fetch(3, 10, "", ""),
+		fetch(4, 15, "From x\n   a..b  main -> origin/main", ""),
+		fetch(5, 20, "", ""), fetch(6, 25, "", "network down"), fetch(7, 30, "", ""),
+	}
+	ops := foldGitOps(groupGitRuns(runs))
+	var got []string
+	for _, o := range ops {
+		got = append(got, fmt.Sprintf("%d×%d@%s", o.runs[0].ID, o.repeat, o.since.Format("15:04")))
+	}
+	want := []string{"3×3@14:00", "4×1@14:15", "5×1@14:20", "6×1@14:25", "7×1@14:30"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("folded %v, want %v", got, want)
+	}
+}

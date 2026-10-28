@@ -219,9 +219,12 @@ func (a *app) addGitRun(r gitx.Run) {
 }
 
 // gitOpRecord 是记录里的一个操作和它的命令；不属于任何操作的命令（后台读取失败等）各自算一个。
+// 连着的几次相同操作折成一条时，runs 是最后一次的，repeat 是次数，since 是第一次开始的时间。
 type gitOpRecord struct {
-	name string
-	runs []gitx.Run
+	name   string
+	runs   []gitx.Run
+	repeat int
+	since  time.Time
 }
 
 func (o gitOpRecord) failed() bool {
@@ -264,6 +267,53 @@ func groupGitRuns(runs []gitx.Run) []gitOpRecord {
 		ops = append(ops, gitOpRecord{name: name, runs: []gitx.Run{r}})
 	}
 	return ops
+}
+
+// foldGitOps 把连着的几次相同操作折成一条（自动 Fetch 隔几分钟就有一次）：同名、同目录、命令一样，
+// 而且都成功、没有输出。有输出或失败的照常各占一条，看得到拉到了什么、错在哪。
+func foldGitOps(ops []gitOpRecord) []gitOpRecord {
+	quiet := func(o gitOpRecord) string {
+		if o.running() || o.failed() {
+			return ""
+		}
+		key := o.name + "\x00" + o.runs[0].Dir
+		for _, r := range o.runs {
+			if strings.TrimSpace(r.Out) != "" || len(r.Args) == 0 {
+				return ""
+			}
+			key += "\x00" + quoteArgs(r.Args)
+		}
+		return key
+	}
+	var out []gitOpRecord
+	prev := ""
+	for _, o := range ops {
+		key := quiet(o)
+		if key != "" && key == prev {
+			last := &out[len(out)-1]
+			last.runs, last.repeat = o.runs, last.repeat+1
+			continue
+		}
+		o.repeat, o.since = 1, o.runs[0].Start
+		out = append(out, o)
+		prev = key
+	}
+	return out
+}
+
+// consoleDay 是操作记录里按天分隔的标题。
+func consoleDay(t time.Time) string {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	switch {
+	case !t.Before(today):
+		return "今天"
+	case !t.Before(today.AddDate(0, 0, -1)):
+		return "昨天"
+	case t.Year() == now.Year():
+		return fmt.Sprintf("%d月%d日", t.Month(), t.Day())
+	}
+	return fmt.Sprintf("%d年%d月%d日", t.Year(), t.Month(), t.Day())
 }
 
 // runWorkspace 是命令所在的工作区：目录在它下面的里面最深的那个（项目目录里可能套着别的项目）；对不上时是 nil。
@@ -369,9 +419,11 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	a.projectConsoleErr(w.ProjectID, true)
 	runs := a.projectRuns(w.ProjectID)
-	ops := groupGitRuns(runs)
+	ops := foldGitOps(groupGitRuns(runs))
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, w.Project+" 各工作区里 Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, w.Project+" 的所有工作区").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Icon(c, iconInfo).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0).
+			Tooltip("Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令。连着几次相同、没有输出的操作合成一条")
 		ui.Spacer(c)
 		// 只清这个项目的：记下时间，文件里的记录留给别的项目
 		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", compactBox(), smallIcon())).Clicked() {
@@ -388,58 +440,94 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
-	ui.List(c, &v.consoleList, len(ops), func(i int) { a.gitOpRow(c, ops[i]) }).Grow(1).Padding(0, 0, 8, 0)
+	ui.List(c, &v.consoleList, len(ops), func(i int) {
+		day := consoleDay(ops[i].since)
+		if i > 0 && consoleDay(ops[i-1].since) == day {
+			day = ""
+		}
+		a.gitOpRow(c, ops[i], day)
+	}).Grow(1).Padding(0, 0, 8, 0)
 	if last := runs[len(runs)-1]; last.ID != v.consoleLast || last.Done != v.consoleDone {
 		v.consoleLast, v.consoleDone = last.ID, last.Done
 		v.consoleList.ScrollIntoView(len(ops) - 1)
 	}
 }
 
-// gitOpRow 是一个操作：时间、操作名、项目，右边是结果；下面靠左列出它的 git 命令。
-func (a *app) gitOpRow(c *ui.Context, op gitOpRecord) {
+// gitOpRow 是一个操作：左边是结果图标，然后是操作名、工作区，右边是时间；下面和操作名对齐列出它的 git 命令。
+// day 非空时先画一行日期，隔开不同的天。
+func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 	t := c.Theme()
+	p := colors(t)
 	first, last := op.runs[0], op.runs[len(op.runs)-1]
-	ui.Column(c.Key(first.ID)).Padding(6, 16, 8, 16).Gap(4).Shrink(0).Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-			name := ui.Text(c, op.name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
-			if op.failed() {
-				name.TextColor(t.Danger)
-			}
-			if where := a.runWhere(first.Dir); where != "" {
-				ui.Text(c, where).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
-			}
-			ui.Spacer(c)
-			switch {
-			case op.running():
-				ui.Text(c, "进行中…").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-			case op.canceled():
-				ui.Text(c, "已取消").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-			case op.failed():
-				ui.Text(c, "失败").FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
-			default:
-				ui.Text(c, took(last.Start.Add(last.Took).Sub(first.Start))).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
-			}
-		})
-		for _, r := range op.runs {
-			if len(r.Args) > 0 {
-				gitRunRow(c, r)
-				continue
-			}
-			// 操作的结果：和某条命令的报错一样时不再写一遍
-			if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
-				ui.Text(c, r.Err).FontSize(fsSmall).LineHeight(1.4).TextColor(t.Danger).Selectable()
-			}
+	ui.Column(c.Key(first.ID)).Shrink(0).Children(func() {
+		if day != "" {
+			ui.Text(c, day).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 16, 4, 16)
 		}
+		row := ui.Column(c).Margin(2, 6, 0, 6).Padding(6, 8, 8, 8).Gap(4).Radius(rRow)
+		failed := op.failed()
+		selectedBg(c, row, false)
+		row.Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				icon, tone, label := iconCheck, p.sage, "成功"
+				switch {
+				case op.running():
+					icon, tone, label = iconRefresh, t.TextMuted, "进行中"
+				case op.canceled():
+					icon, tone, label = iconMinus, t.TextMuted, "已取消"
+				case failed:
+					icon, tone, label = iconClose, t.Danger, "失败"
+				}
+				ui.Box(c).Width(consoleIconW()).Shrink(0).Center().Children(func() {
+					ui.Icon(c, icon).FontSize(smallIcon()).TextColor(tone).Label(label).Tooltip(label)
+				})
+				ui.Text(c, op.name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
+				if op.repeat > 1 {
+					ui.Text(c, fmt.Sprintf("×%d", op.repeat)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
+						Padding(0, 6).Radius(rSmall).Background(p.wash).Shrink(0).
+						Tooltip(fmt.Sprintf("%s 到 %s 之间 %d 次", op.since.Format("15:04:05"), first.Start.Format("15:04:05"), op.repeat))
+				}
+				if where := a.runWhere(first.Dir); where != "" {
+					ui.Text(c, where).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+				}
+				ui.Spacer(c)
+				switch {
+				case op.running():
+					ui.Text(c, "进行中…").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+				case op.canceled():
+					ui.Text(c, "已取消").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+				case failed:
+					ui.Text(c, "失败").FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
+				}
+				// 耗时写在各条命令后面，和这里的时间上下对齐；整个操作的耗时悬停看
+				ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
+					Tooltip("共 " + took(last.Start.Add(last.Took).Sub(first.Start)))
+			})
+			ui.Column(c).Gap(4).Padding(0, 0, 0, consoleIconW()+8).Children(func() {
+				for _, r := range op.runs {
+					if len(r.Args) > 0 {
+						gitRunRow(c, r)
+						continue
+					}
+					// 操作的结果：和某条命令的报错一样时不再写一遍
+					if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
+						ui.Text(c, r.Err).FontSize(fsSmall).LineHeight(1.4).TextColor(t.Danger).Selectable()
+					}
+				}
+			})
+		})
 	})
 }
 
-// gitRunRow 是一条 git 命令和它的输出，失败时是红的；右键复制命令或输出。
+// consoleIconW 是操作记录里结果图标占的宽度，命令和操作名对齐要用它。
+func consoleIconW() float32 { return miniBox() }
+
+// gitRunRow 是一条 git 命令和它的输出，失败时是红的；输出前面一道竖线，和命令分开。右键复制命令或输出。
 func gitRunRow(c *ui.Context, r gitx.Run) {
 	t := c.Theme()
+	p := colors(t)
 	cmd := "git " + quoteArgs(r.Args)
 	// 可选的是整列：文字自己可选时右键弹的是它的编辑菜单，盖掉下面的"复制命令"
-	col := ui.Column(c.Key(r.ID)).Gap(2).Shrink(0).Selectable()
+	col := ui.Column(c.Key(r.ID)).Gap(4).Shrink(0).Selectable()
 	col.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			line := ui.Text(c, cmd).FontSize(fsSmall).Font(monoFont).Shrink(1)
@@ -455,17 +543,19 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 		if r.Err != "" && !strings.Contains(out, r.Err) {
 			out = strings.TrimLeft(out+"\n"+r.Err, "\n")
 		}
-		if out != "" {
-			text := ui.Text(c, out).FontSize(fsSmall).Font(monoFont).LineHeight(1.4).Padding(0, 0, 0, 12)
+		if out = strings.TrimRight(out, "\n"); out != "" {
+			tone, bar := t.TextMuted, p.line
 			if r.Err != "" {
-				text.TextColor(t.Danger)
-			} else {
-				text.TextColor(t.TextMuted)
+				tone, bar = t.Danger, t.Danger
 			}
+			ui.Row(c).Gap(8).AlignItems(ui.Stretch).Children(func() {
+				ui.Box(c).Width(2).Shrink(0).Radius(full(2)).Background(bar)
+				ui.Text(c, out).FontSize(fsSmall).Font(monoFont).LineHeight(1.4).TextColor(tone).Grow(1).Shrink(1)
+			})
 		}
 	})
 	contextMenu(c, col, func(m *popMenu) {
-		if m.Item("复制命令").Chosen() {
+		if m.Item("复制命令").Icon(iconCopy).Chosen() {
 			c.WriteClipboard(cmd)
 		}
 		if out := strings.TrimSpace(r.Out + "\n" + r.Err); out != "" && m.Item("复制输出").Chosen() {

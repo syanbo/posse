@@ -376,6 +376,10 @@ func previewConsole(t *testing.T, a *app) {
 		r.ID, r.Op, r.OpID, r.Dir, r.Start, r.Done = id, op, opID, dir, at.Add(time.Duration(sec)*time.Second), true
 		a.gitRuns = append(a.gitRuns, r)
 	}
+	// 连着几次没拉到东西的自动 Fetch 合成一条
+	for i := range 3 {
+		add("自动 Fetch", int64(100+i), dir, -900+i*300, gitx.Run{Args: []string{"fetch", "--all"}, Took: 900 * time.Millisecond})
+	}
 	add("自动 Fetch", 1, "/Users/x/Skill", 0, gitx.Run{Args: []string{"fetch", "--all"}, Took: 1240 * time.Millisecond,
 		Out: "From github.com:dengbo/skill\n   7117cfb..acc6bc5  main       -> origin/main"})
 	add("提交", 2, dir, 40, gitx.Run{Args: []string{"add", "-A", "--", ":(literal)internal/app/view.go"}})
