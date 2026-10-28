@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/chat/chat.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
 
 /// 只实现对话页用到的那几条 RPC：订阅由测试往里推帧。
@@ -201,6 +202,107 @@ void main() {
     await tester.pumpAndSettle();
     expect(position.pixels, 0, reason: '回复到了仍然贴底');
     expect(find.text('新消息'), findsNothing);
+  });
+
+  testWidgets('停在底部时草稿跟着长，正式消息到了撤掉', (tester) async {
+    final messages = <Map<String, Object?>>[
+      for (var i = 0; i < 12; i++)
+        text('m$i', i.isEven ? 'user' : 'assistant', para(i), i * 10),
+    ];
+    final fake = await pumpChat(tester, messages);
+    final position = listPosition(tester);
+    fake.tabs.add(tabsFrame('working'));
+    fake.chat.add({'type': 'draft', 'text': '草稿开头'});
+    await tester.pumpAndSettle();
+    expect(find.text('正在输出'), findsOneWidget);
+    expect(find.text('草稿开头'), findsOneWidget);
+
+    // 越写越长，一直贴着底部，最后一行看得见
+    final body = StringBuffer('草稿开头');
+    for (var i = 0; i < 6; i++) {
+      body.write('\n\n${para(100 + i)}');
+      fake.chat.add({'type': 'draft', 'text': body.toString()});
+      await tester.pumpAndSettle();
+      expect(position.pixels, 0);
+    }
+    final listBottom = tester.getBottomLeft(find.byType(ListView)).dy;
+    final last = find.textContaining('第 105 段的第 5 行');
+    expect(last, findsOneWidget);
+    expect(tester.getBottomLeft(last).dy, lessThanOrEqualTo(listBottom));
+    expect(find.text('新消息'), findsNothing);
+
+    // 代码和框线表格用等宽字体
+    fake.chat.add({
+      'type': 'draft',
+      'text': '${body.toString()}\n\n  if err != nil {\n│ a │ b │',
+    });
+    await tester.pumpAndSettle();
+    final code = tester.widget<Text>(find.textContaining('if err != nil'));
+    expect(code.style?.fontFamily, monoFamily);
+
+    // 会话文件里的正式回复到了，草稿撤掉
+    fake.chat.add({
+      'type': 'appended',
+      'messages': [text('a1', 'assistant', '正式的回复。', 500)],
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('正在输出'), findsNothing);
+    expect(find.text('正式的回复。'), findsOneWidget);
+    expect(position.pixels, 0);
+
+    // 电脑推空串也撤掉
+    fake.chat.add({'type': 'draft', 'text': '下一段'});
+    await tester.pumpAndSettle();
+    expect(find.text('正在输出'), findsOneWidget);
+    fake.chat.add({'type': 'draft', 'text': ''});
+    await tester.pumpAndSettle();
+    expect(find.text('正在输出'), findsNothing);
+  });
+
+  testWidgets('往上翻着看时草稿变长画面不跳', (tester) async {
+    final messages = <Map<String, Object?>>[
+      for (var i = 0; i < 30; i++)
+        text('m$i', i.isEven ? 'user' : 'assistant', para(i), i * 10),
+    ];
+    final fake = await pumpChat(tester, messages);
+    fake.tabs.add(tabsFrame('working'));
+    fake.chat.add({'type': 'draft', 'text': para(200)});
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, 1500));
+    await tester.pumpAndSettle();
+    final position = listPosition(tester);
+    expect(position.pixels, greaterThan(500));
+
+    // 记下正在看的那一行
+    var seen = find.byKey(const Key('none'));
+    for (var i = 29; i >= 0; i--) {
+      final f = find
+          .textContaining('第 $i 段的第 3 行', findRichText: true)
+          .hitTestable();
+      if (f.evaluate().isNotEmpty) {
+        // 之后不再要求点得到：「新消息」浮在列表上，可能盖住它
+        seen = find.textContaining('第 $i 段的第 3 行', findRichText: true).first;
+        break;
+      }
+    }
+    expect(seen, findsOneWidget);
+    final top = tester.getTopLeft(seen).dy;
+    final body = StringBuffer(para(200));
+    for (var i = 0; i < 4; i++) {
+      body.write('\n\n${para(300 + i)}');
+      fake.chat.add({'type': 'draft', 'text': body.toString()});
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(seen).dy, closeTo(top, 1));
+    }
+    expect(find.text('新消息'), findsOneWidget);
+
+    // 正式消息换掉草稿时也不跳
+    fake.chat.add({
+      'type': 'appended',
+      'messages': [text('a1', 'assistant', body.toString(), 500)],
+    });
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(seen).dy, closeTo(top, 1));
   });
 
   testWidgets('一直往上翻能看到最早那条消息的开头', (tester) async {

@@ -25,6 +25,7 @@ import '../ui/widgets.dart';
 import 'bubbles.dart';
 import 'cards.dart';
 import 'composer.dart';
+import 'draft.dart';
 import 'echo.dart';
 import 'session_bar.dart';
 import 'media.dart';
@@ -96,6 +97,9 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 电脑推来的 agent 状态行（终端底部转圈那一行），没有时为空。
   String? _status;
 
+  /// 电脑推来的、agent 正在写的那段回复（posse.draft.v1），没有时为空。
+  String? _draft;
+
   /// 这个会话的终端已经不在了：输入框停用，顶上说一声。
   var _ended = false;
   var _gone = false;
@@ -140,6 +144,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onModel() {
     if (!mounted) return;
+    // 断线时草稿不再更新，撤掉；连上后电脑会重新推
+    if (widget.model.rpc == null) _setDraft(null);
     if (widget.model.rpc != _bound) _scheduleOpen();
   }
 
@@ -195,6 +201,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final subId = '${tab.agent}:${tab.sessionId}:live';
     _chatSubId = subId;
     _status = null;
+    _draft = null;
     try {
       final chat = await rpc.subscribe('nativeChat.subscribe', {
         'agent': tab.agent,
@@ -251,7 +258,18 @@ class _ChatScreenState extends State<ChatScreen> {
           }
           return;
         }
+        if (frame['type'] == 'draft') {
+          final text = frame['text'];
+          _setDraft(text is String && text.isNotEmpty ? text : null);
+          return;
+        }
+        if (frame['type'] == 'end') {
+          _setDraft(null);
+          return;
+        }
         final before = _tail();
+        // 正式的回复到了，草稿让位；电脑那边也会跟着推空草稿，这里不等它
+        if (frameHasReply(frame)) _draft = null;
         // 人往上翻着看时不裁窗口：裁掉的正是在看的那段，展开的工具组也会跟着收起。回到底部的下一帧再裁
         final atBottom = !_scroll.hasClients || _scroll.position.pixels <= 80;
         _window.applyFrame(frame, limit: atBottom ? 40 : 0);
@@ -615,8 +633,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final echoes = _echoes.items;
     final working = _working;
     // 倒序列表底部一加行，所有下标都挪一格。按身份认行，展开着的工具组这类状态才不会错配到别的行上
+    final draft = _draft;
     final rowKeys = <String>[
       if (working) 'working',
+      if (draft != null) 'draft',
       for (var i = echoes.length - 1; i >= 0; i--)
         'echo:${identityHashCode(echoes[i])}',
       for (var i = entries.length - 1; i >= 0; i--) entryKeys[i],
@@ -717,6 +737,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   c,
                                   index,
                                   working: working,
+                                  draft: draft,
                                   echoes: echoes,
                                   entries: entries,
                                   settings: settings,
@@ -788,6 +809,7 @@ class _ChatScreenState extends State<ChatScreen> {
     PosseColors c,
     int index, {
     required bool working,
+    required String? draft,
     required List<LocalEcho> echoes,
     required List<TranscriptEntry> entries,
     required AppSettings settings,
@@ -797,6 +819,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (at == 0) {
         return WorkingRow(status: _status, tool: tab.toolName);
       }
+      at--;
+    }
+    if (draft != null) {
+      if (at == 0) return DraftBubble(text: draft, agent: tab.agent);
       at--;
     }
     if (at < echoes.length) {
@@ -836,6 +862,15 @@ class _ChatScreenState extends State<ChatScreen> {
             (_status?.isNotEmpty ?? false));
   }
 
+  /// 草稿变了：断线、撤掉都传 null。
+  void _setDraft(String? next) {
+    if (!mounted || next == _draft) return;
+    final before = _tail();
+    _draft = next;
+    _anchor(before);
+    setState(() {});
+  }
+
   /// 倒序列表的下标顺序：下标 0 是视觉底部。不含「更早的消息」那一行，它只加在尾部。
   ChatTail _tail() {
     final settings = widget.model.settings;
@@ -848,6 +883,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_working) {
       keys.add('working');
       sizes.add(_status?.length ?? 0);
+    }
+    if (_draft case final draft?) {
+      keys.add('draft');
+      sizes.add(draft.length);
     }
     for (var i = echoes.length - 1; i >= 0; i--) {
       final echo = echoes[i];
