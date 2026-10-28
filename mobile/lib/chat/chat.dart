@@ -28,6 +28,7 @@ import 'composer.dart';
 import 'echo.dart';
 import 'session_bar.dart';
 import 'media.dart';
+import 'tools.dart';
 
 export 'bubbles.dart';
 export 'cards.dart';
@@ -645,12 +646,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 switchLabel: widget.onOpenTerminal == null ? null : '切换到终端',
                 switchIcon: Icons.terminal_rounded,
                 media: hasMedia(tab),
+                tools: hasTools(tab),
               );
               if (!mounted) return;
               if (action == 'media') {
                 nav.push(
                   MaterialPageRoute<void>(
                     builder: (_) => MediaScreen(model: widget.model, tab: tab),
+                  ),
+                );
+              }
+              if (action == 'tools') {
+                nav.push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => ToolsScreen(model: widget.model, tab: tab),
                   ),
                 );
               }

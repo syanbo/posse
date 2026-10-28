@@ -16,6 +16,7 @@ const posseCapabilities = [
   'posse.usage.v1',
   'posse.context.v1',
   'posse.media.v1',
+  'posse.tools.v1',
   'posse.desk.v1',
   'posse.bulk.v1',
 ];

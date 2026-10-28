@@ -42,7 +42,7 @@
 - `posse.context.v1`：`session.context`（参数同 `nativeChat.readSession`），读会话最后一次请求的上下文，claude、codex 才有。
 - `posse.status.v1`：对话流里另收 `type:status`。终端一有输出，就从屏幕最后一行有字的往上 16 行里认出 agent 的状态行（Claude 的 `✻ Puzzling… (1m 54s · ↓ 9.5k tokens)`、Codex 的 `• Working (12s • esc to interrupt)`），去掉转圈符号、按键提示和"thought for"，变了才推，最多每 250ms 一次；状态行消失时推空串。
 - `posse.bulk.v1`：大块数据走二进制帧。`files.readRange`、`files.readPreview` 的图片、`session.mediaThumb`、`session.mediaRead`、`git.diff` 的图片，这些结果里的字节字段拆成 64 KB 的二进制帧先发，JSON 回复里只写 `blobs: {字段路径: 编号}`，手机按编号拼回。帧头 8 字节：`0x62`、版本 1、操作、0、u32 编号（小端），和 Orca 终端流的 `0x74` 区分。上传时 `clipboard.startImageUpload` 带 `expectedBytes`，电脑回一个编号，手机把原始字节按 64 KB 的二进制帧连续发完再 `commitImageUpload`；电脑边收边写临时文件，最大 1 GB，视频、文件也走它。带 `name`（手机上的文件名）的放进新建的临时目录 `posse-mobile-*/原名`，没带的按开头的字节认扩展名（jpg、gif、webp、heic、mov、mp4，认不出当 png）。不回编号的旧电脑照旧一段段传 base64（最大 32 MB）。
-- `posse.media.v1`、`posse.desk.v1`：见下面「图片与视频」「看 Mac 桌面」。
+- `posse.media.v1`、`posse.tools.v1`、`posse.desk.v1`：见下面「图片与视频」「技能与工具」「看 Mac 桌面」。
 - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生；标签名依次取桌面改的名字、会话标题、终端标题）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
 - 电脑按顺序处理同一条连接的请求；要读盘、调 git、等索引或联网的（`files.*`、`git.*`、`history.*`、`session.context`、看图看视频、`usage.refresh`、打洞）各自并发，不挡按键和 ping。一条消息写了 3 秒还没写完、手机也有 10 秒没发任何东西来，就当连接已死马上断开，手机随即重连。
 - 输入框发来的文字（`terminal.send` 的 `text`）带换行、程序又开着括号粘贴（DECSET 2004）时，包在 `ESC[200~`、`ESC[201~` 之间当成一次粘贴送进去，Claude Code 显示成「[Pasted text #1 +N lines]」；回车隔 120ms 单独发。
@@ -96,6 +96,11 @@
 
 - 带 `posse.media.v1` 才有：会话页、终端页的"更多"里"图片与视频"，内容和桌面的图片面板一样。`session.media`（参数同 `nativeChat.readSession`）列出 agent 生成的（最近 40 项）和粘贴的；`session.mediaThumb` 给 480 像素宽的 JPEG 缩略图（视频取第一帧），一次只做一张；`session.mediaRead` 按段读原图或视频（同 `files.readRange`，每段 1 MB）。手机只能按列表给过的 ID 读。会话文件被重写后按旧偏移读不到时回「会话文件里没有这张图片了」。
 - 手机上两列网格，开着时每 3 秒重列；点开图片是原图（agent 当时看到的样子），双指放大，视频和文件页走同一套分段下载和播放。左右滑切到前一项、后一项（顺序同网格：先生成的、再粘贴的，副标题末尾写第几项），翻走的页释放（视频停下、缩放不留）。原大时单指翻页，放大后单指平移。
+
+### 技能与工具
+
+- 带 `posse.tools.v1` 才有：会话页、终端页的"更多"里"技能与工具"，内容和桌面的技能与工具面板一样（识别规则见 `ui.md`）。`session.tools`（参数同 `nativeChat.readSession`）由常驻进程读会话文件（`history.UsageScanner`，每个会话记住读到哪，最多记 8 个，再列只读新增的部分），回 `found`（会话文件找到没有）和 `skills`、`mcp`、`cli`、`events`（技能和 MCP、命令行程序各留最近 300 次调用）。窗口关着也能看。
+- 手机上开着时每 3 秒重读。顶上是筛选（全部 / 技能和 MCP，存在手机上，所有会话共用，和桌面各记各的），然后是技能、MCP 服务的次数，命令行程序按 Homebrew、其他命令行、系统自带分组，下面是时间线（连着调同一个工具合成一项）。点名字复制，时间线里的命令行程序长按看最近一次的完整命令。
 
 ### 存到手机
 
