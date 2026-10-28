@@ -21,3 +21,22 @@ func TestPasteText(t *testing.T) {
 		}
 	}
 }
+
+// 工作区名和桌面侧栏一样：项目目录是项目名，posse 建的 worktree 是工作区名，加进来的 worktree 是当前分支
+func TestDisplayName(t *testing.T) {
+	st := State{Projects: []Project{{ID: "p1", Name: "demo"}}}
+	for _, c := range []struct {
+		w    Workspace
+		want string
+	}{
+		{Workspace{ProjectID: "p1", Kind: "main", Name: "main", Branch: "dev"}, "demo"},
+		{Workspace{ProjectID: "p1", Kind: "worktree", Name: "login", Branch: "feat/login"}, "login"},
+		{Workspace{ProjectID: "p1", Kind: "folder", Name: "实验", Branch: "dev"}, "实验"},
+		{Workspace{ProjectID: "p1", Kind: "folder", Name: "demo", Branch: "fix", Attached: true, Shown: "fix"}, "fix"},
+		{Workspace{ProjectID: "p1", Kind: "folder", Name: "demo", Branch: "1a2b3c4d", Attached: true}, "demo"},
+	} {
+		if got := displayName(st, c.w); got != c.want {
+			t.Errorf("displayName(%+v) = %q, want %q", c.w, got, c.want)
+		}
+	}
+}

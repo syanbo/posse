@@ -596,7 +596,7 @@ class WorkspaceScreen extends StatelessWidget {
       return [
         _ProjectHeader(
           name: name,
-          subtitle: _where(c, row),
+          subtitle: model.settings.projectMetaHidden ? null : _where(c, row),
           count: row.live,
           expandable: sessions.isNotEmpty,
           collapsed: collapsed,
@@ -611,7 +611,9 @@ class WorkspaceScreen extends StatelessWidget {
     return [
       _ProjectHeader(
         name: name,
-        subtitle: Text(tildePath(main.path), style: mono(12, color: c.muted)),
+        subtitle: model.settings.projectMetaHidden
+            ? null
+            : Text(tildePath(main.path), style: mono(12, color: c.muted)),
         count: rows.fold(0, (n, r) => n + r.live),
         expandable: true,
         collapsed: collapsed,
@@ -620,31 +622,41 @@ class WorkspaceScreen extends StatelessWidget {
         onOpen: () => _openWorkspace(context, main),
       ),
       for (final row in rows) ...[
-        _Indented(
-          indent: 34,
-          child: RowTile(
-            // 主工作区、同一目录上的文件夹工作区、git worktree 各用各的图标
-            leading: Icon(
-              row.isMain
-                  ? Icons.home_outlined
-                  : row.branch.isEmpty
-                  ? Icons.folder_copy_outlined
-                  : Icons.call_split_rounded,
-              // folder_copy 的墨迹比另外两个满，同样字号看着大一圈
-              size: row.isMain || row.branch.isNotEmpty ? 20 : 17,
-              color: c.accent,
-            ),
-            title: Text(row.isMain ? '主工作区' : row.name),
-            subtitle: row.branch.isEmpty
-                ? null
-                : Text(row.branch, style: mono(12, color: c.muted)),
-            trailing: _count(c, row),
-            onTap: () => _openWorkspace(context, row),
-          ),
-        ),
+        _workspaceRow(context, row),
         ..._sessions(context, row, indent: 82),
       ],
     ];
+  }
+
+  /// 项目下面的一个工作区，名字和分支照桌面侧栏：分支和名字一样时不再写一遍。
+  Widget _workspaceRow(BuildContext context, WorktreeRow row) {
+    final c = PosseColors.of(context);
+    final title = row.isMain ? '主工作区' : row.name;
+    final branch = model.settings.workspaceMetaHidden || row.branch == title
+        ? ''
+        : row.branch;
+    return _Indented(
+      indent: 34,
+      child: RowTile(
+        // 主工作区、同一目录上的文件夹工作区、git worktree 各用各的图标
+        leading: Icon(
+          row.isMain
+              ? Icons.home_outlined
+              : row.isWorktree
+              ? Icons.call_split_rounded
+              : Icons.folder_copy_outlined,
+          // folder_copy 的墨迹比另外两个满，同样字号看着大一圈
+          size: row.isMain || row.isWorktree ? 20 : 17,
+          color: c.accent,
+        ),
+        title: Text(title),
+        subtitle: branch.isEmpty
+            ? null
+            : Text(branch, style: mono(12, color: c.muted)),
+        trailing: _count(c, row),
+        onTap: () => _openWorkspace(context, row),
+      ),
+    );
   }
 
   /// 项目里最需要注意的会话状态。收起时显示在项目行上，待处理不会被藏起来。
@@ -771,7 +783,7 @@ class WorkspaceScreen extends StatelessWidget {
 class _ProjectHeader extends StatelessWidget {
   const _ProjectHeader({
     required this.name,
-    required this.subtitle,
+    this.subtitle,
     required this.count,
     required this.expandable,
     required this.collapsed,
@@ -781,7 +793,9 @@ class _ProjectHeader extends StatelessWidget {
   });
 
   final String name;
-  final Widget subtitle;
+
+  /// 分支或路径；设置里隐藏了时为空，只留名字。
+  final Widget? subtitle;
   final int count;
   final bool expandable;
   final bool collapsed;
@@ -834,13 +848,15 @@ class _ProjectHeader extends StatelessWidget {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 3),
-                    DefaultTextStyle.merge(
-                      style: TextStyle(fontSize: Fs.meta, color: c.muted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      child: subtitle,
-                    ),
+                    if (subtitle case final sub?) ...[
+                      const SizedBox(height: 3),
+                      DefaultTextStyle.merge(
+                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        child: sub,
+                      ),
+                    ],
                   ],
                 ),
               ),

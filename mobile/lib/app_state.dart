@@ -99,6 +99,8 @@ class AppSettings {
     this.deskGesturesSeen = false,
     this.deskTrackpad = true,
     this.historyByFolder = false,
+    this.projectMetaHidden = false,
+    this.workspaceMetaHidden = false,
     this.skippedUpdateBuild = 0,
     this.phoneId = '',
     Map<String, int>? deskDisplays,
@@ -136,6 +138,12 @@ class AppSettings {
   /// 历史页的会话按文件夹分组，而不是按时间。
   bool historyByFolder;
 
+  /// 首页的项目行不显示分支和路径，只留名字。和桌面设置里的同名开关一样。
+  bool projectMetaHidden;
+
+  /// 首页项目下面的工作区行不显示分支，只留名字。
+  bool workspaceMetaHidden;
+
   /// 首页更新提示点了 × 的构建号：这个构建不再提示，更新的构建照常提示。
   int skippedUpdateBuild;
 
@@ -165,6 +173,8 @@ class AppSettings {
     'deskTrackpad': deskTrackpad,
     'deskVersion': deskVersion,
     'historyByFolder': historyByFolder,
+    'projectMetaHidden': projectMetaHidden,
+    'workspaceMetaHidden': workspaceMetaHidden,
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
     'phoneId': phoneId,
@@ -218,6 +228,12 @@ class AppSettings {
       }
       if (map['historyByFolder'] is bool) {
         out.historyByFolder = map['historyByFolder'] as bool;
+      }
+      if (map['projectMetaHidden'] is bool) {
+        out.projectMetaHidden = map['projectMetaHidden'] as bool;
+      }
+      if (map['workspaceMetaHidden'] is bool) {
+        out.workspaceMetaHidden = map['workspaceMetaHidden'] as bool;
       }
       if (map['skippedUpdateBuild'] is int) {
         out.skippedUpdateBuild = map['skippedUpdateBuild'] as int;

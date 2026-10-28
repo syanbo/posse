@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -56,8 +57,10 @@ func (h mobileHost) State() mobile.State {
 	if err != nil {
 		return st
 	}
+	projectPath := map[string]string{}
 	for _, p := range ps {
 		st.Projects = append(st.Projects, mobile.Project{ID: p.ID, Name: p.Name, Path: p.Path})
+		projectPath[p.ID] = filepath.Clean(p.Path)
 	}
 	ws, err := d.store.Workspaces("")
 	if err != nil {
@@ -66,10 +69,17 @@ func (h mobileHost) State() mobile.State {
 	byWS := d.sessionsByWorkspace()
 	for _, w := range ws {
 		// 数据库里的分支只在建工作区时记一次，main 工作区切分支后就过时了；和界面一样以 HEAD 为准
-		if b := gitx.Head(w.Path); b != "" {
-			w.Branch = b
+		head, detached := gitx.HeadRef(w.Path)
+		if head != "" {
+			w.Branch = head
 		}
 		mw := mobile.Workspace{ID: w.ID, ProjectID: w.ProjectID, Name: w.Name, Path: w.Path, Kind: w.Kind, Branch: w.Branch, CreatedAt: w.CreatedAt}
+		if p, ok := projectPath[w.ProjectID]; ok && w.Kind == "folder" && filepath.Clean(w.Path) != p {
+			mw.Attached = true
+			if !detached {
+				mw.Shown = head
+			}
+		}
 		for _, s := range byWS[w.ID] {
 			// 手机上只显示还在运行的终端：退出的终端没有输出可看，订阅会立刻结束
 			if !s.Running() {

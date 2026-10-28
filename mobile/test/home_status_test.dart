@@ -57,6 +57,72 @@ void main() {
     );
   });
 
+  testWidgets(
+    'workspace rows follow the desktop sidebar and the meta switches',
+    (tester) async {
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: MemorySettingsStore(),
+      );
+      model.worktrees = parseWorktrees([
+        {
+          'worktreeId': 'p1::w1',
+          'repo': 'posse',
+          'displayName': 'posse',
+          'path': '/Users/x/posse',
+          'branch': 'main',
+          'isMainWorktree': true,
+        },
+        {
+          'worktreeId': 'p1::w2',
+          'repo': 'posse',
+          'displayName': 'login',
+          'path': '/Users/x/.posse/worktrees/posse/login',
+          'branch': 'feat/login',
+          'isWorktree': true,
+        },
+        {
+          'worktreeId': 'p1::w3',
+          'repo': 'posse',
+          'displayName': 'fix-crash',
+          'path': '/Users/x/elsewhere',
+          'branch': 'fix-crash',
+          'isWorktree': true,
+        },
+      ]);
+      model.link = _droppedLink();
+      Future<void> pump() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: posseTheme(Brightness.dark),
+            home: WorkspaceScreen(model: model),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      await pump();
+      expect(find.text('主工作区'), findsOneWidget);
+      expect(find.text('login'), findsOneWidget);
+      // 分支和名字不同才写；加进来的 worktree 名字就是分支，不再写一遍
+      expect(find.text('feat/login'), findsOneWidget);
+      expect(find.text('fix-crash'), findsOneWidget);
+      expect(find.text('main'), findsOneWidget);
+      expect(find.text('~/posse'), findsOneWidget);
+      expect(find.byIcon(Icons.call_split_rounded), findsNWidgets(2));
+
+      model.updateSettings((s) {
+        s.projectMetaHidden = true;
+        s.workspaceMetaHidden = true;
+      });
+      await pump();
+      expect(find.text('~/posse'), findsNothing);
+      expect(find.text('feat/login'), findsNothing);
+      expect(find.text('main'), findsNothing);
+      expect(find.text('login'), findsOneWidget);
+    },
+  );
+
   testWidgets('a connect that failed and stopped says so, not reconnecting', (
     tester,
   ) async {

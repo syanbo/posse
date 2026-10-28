@@ -46,6 +46,23 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
+                title: '首页',
+                children: [
+                  _Toggle(
+                    title: '项目显示分支和路径',
+                    value: !s.projectMetaHidden,
+                    onChanged: (v) =>
+                        model.updateSettings((s) => s.projectMetaHidden = !v),
+                  ),
+                  _Toggle(
+                    title: '工作区显示分支',
+                    value: !s.workspaceMetaHidden,
+                    onChanged: (v) =>
+                        model.updateSettings((s) => s.workspaceMetaHidden = !v),
+                  ),
+                ],
+              ),
+              Section(
                 title: '点开会话时先看',
                 children: [
                   _Choice(

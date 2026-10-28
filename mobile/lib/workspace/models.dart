@@ -27,6 +27,7 @@ class WorktreeRow {
     required this.status,
     required this.live,
     this.isMain = false,
+    this.isWorktree = false,
     this.agents = const [],
     this.lastActivityAt = 0,
   });
@@ -39,6 +40,9 @@ class WorktreeRow {
   final String status;
   final int live;
   final bool isMain;
+
+  /// git worktree：posse 建的，或从别处加进来的。和桌面一样用分支图标。
+  final bool isWorktree;
   final List<AgentPeek> agents;
   final int lastActivityAt;
 
@@ -115,6 +119,11 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
             ? (item['liveTerminalCount'] as num).toInt()
             : 0,
         isMain: item['isMainWorktree'] == true,
+        // 旧常驻进程不报，按有没有分支猜
+        isWorktree: item['isWorktree'] is bool
+            ? item['isWorktree'] as bool
+            : item['isMainWorktree'] != true &&
+                  (item['branch'] as String? ?? '').isNotEmpty,
         agents: _agents(item['agents']),
         lastActivityAt: item['lastActivityAt'] is num
             ? (item['lastActivityAt'] as num).toInt()

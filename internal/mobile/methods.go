@@ -55,8 +55,12 @@ type Project struct{ ID, Name, Path string }
 
 type Workspace struct {
 	ID, ProjectID, Name, Path, Kind, Branch string
-	CreatedAt                               time.Time
-	Terminals                               []Terminal // 按创建时间排序
+	// Attached 是从别处加进来的 worktree（记成 folder，目录不是项目目录）；
+	// Shown 是它显示的名字：当前分支，游离时为空。和桌面侧栏的 isWorktree、showBranches 一样
+	Attached  bool
+	Shown     string
+	CreatedAt time.Time
+	Terminals []Terminal // 按创建时间排序
 }
 
 type Terminal struct {
@@ -106,13 +110,14 @@ func projectName(st State, id string) string {
 	return ""
 }
 
-// displayName 与 posse 侧栏一致：项目目录本身显示项目名，worktree 显示分支名。
+// displayName 与 posse 侧栏一致：项目目录本身显示项目名，posse 建的 worktree 和同目录的工作区显示工作区名，
+// 加进来的 worktree 显示当前分支（目录名常和仓库同名，看不出是哪个）。
 func displayName(st State, w Workspace) string {
 	switch {
 	case w.Kind == "main":
 		return projectName(st, w.ProjectID)
-	case w.Kind == "worktree" && w.Branch != "":
-		return w.Branch
+	case w.Shown != "":
+		return w.Shown
 	}
 	return w.Name
 }
@@ -239,7 +244,7 @@ func worktreeRow(st State, w Workspace, now time.Time) map[string]any {
 		"liveTerminalCount": live, "hasAttachedPty": live > 0, "unread": false, "isPinned": false,
 		"linkedPR": nil, "linkedIssue": nil, "linkedLinearIssue": nil, "linkedGitLabMR": nil, "linkedGitLabIssue": nil,
 		"status": status, "agents": agents, "isActive": false, "workspaceKind": kind,
-		"isMainWorktree": w.Kind == "main", "isArchived": false, "hasHostSidebarActivity": live > 0,
+		"isMainWorktree": w.Kind == "main", "isWorktree": w.Kind == "worktree" || w.Attached, "isArchived": false, "hasHostSidebarActivity": live > 0,
 		"parentWorktreeId": nil, "childWorktreeIds": []string{}, "workspaceStatus": "in-progress",
 		"sortOrder": 0, "lastActivityAt": ms(last), "createdAt": ms(w.CreatedAt), "lastOutputAt": ms(last),
 		"comment": "", "preview": "",
