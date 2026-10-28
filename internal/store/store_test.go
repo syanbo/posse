@@ -69,14 +69,14 @@ func TestStore(t *testing.T) {
 	if !slices.Equal(left, []string{"t_1", "t_2"}) {
 		t.Fatalf("terminals after prune = %v, want [t_1 t_2]", left)
 	}
-	if err := s.SetTerminalResume("t_1", "claude", "sid-1", "/r/sub"); err != nil {
+	if err := s.SetTerminalResume("t_1", "claude", "sid-1", "/r/sub", "修登录页"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetTerminalTitle("t_1", "登录页"); err != nil {
 		t.Fatal(err)
 	}
 	lost, err := s.LostTerminals(ws[0].ID)
-	if err != nil || len(lost) != 1 || lost[0].ID != "t_1" || lost[0].Agent != "claude" || lost[0].SessionID != "sid-1" || lost[0].Cwd != "/r/sub" || lost[0].Title != "登录页" {
+	if err != nil || len(lost) != 1 || lost[0].ID != "t_1" || lost[0].Agent != "claude" || lost[0].SessionID != "sid-1" || lost[0].Cwd != "/r/sub" || lost[0].Title != "登录页" || lost[0].Label != "修登录页" {
 		t.Fatalf("LostTerminals = %+v, %v", lost, err)
 	}
 	if err := s.ReviveTerminal("t_1", []string{"zsh"}, "claude", "sid-1"); err != nil {
@@ -85,7 +85,7 @@ func TestStore(t *testing.T) {
 	if _, err := s.LostTerminal("t_1"); err != ErrNotFound {
 		t.Fatalf("LostTerminal after revive = %v, want ErrNotFound", err)
 	}
-	if r, err := s.TerminalResume("t_1"); err != nil || r.Title != "登录页" || r.SessionID != "sid-1" {
+	if r, err := s.TerminalResume("t_1"); err != nil || r.Title != "登录页" || r.SessionID != "sid-1" || r.Label != "修登录页" {
 		t.Fatalf("TerminalResume = %+v, %v", r, err)
 	}
 	counts, err := s.WorkspaceCounts()

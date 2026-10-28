@@ -252,6 +252,11 @@ func GrokName(title string) (string, bool) {
 	return strings.TrimSpace(strings.TrimSuffix(t, " -")), true
 }
 
+// BareTitle 是去掉 agent 状态前缀（✳、转圈符）的终端标题。
+func BareTitle(title string) string {
+	return strings.TrimSpace(strings.TrimLeft(title, "✳⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏◐◓◑◒ "))
+}
+
 // TitleStatus 用终端标题补 hooks 的盲区：Claude 被 Esc 中断时不发 hook，
 // Codex 本轮出错时不发 hook，grok 没有注入 hooks。只在标题给出明确信号时返回。
 func TitleStatus(agentName, title, current string) (string, bool) {

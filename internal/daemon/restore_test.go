@@ -52,10 +52,15 @@ func TestRestoreAfterRestart(t *testing.T) {
 	waitCwd(t, s, sub)
 	hook(t, d, s.ID, "UserPromptSubmit", map[string]any{"session_id": "sid-1"})
 	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": "登录页"})
-	plain, err := d.startTerminal(w, []string{"/bin/sh", "-c", "sleep 30"}, "", 80, 24)
+	plain, err := d.startTerminal(w, []string{"/bin/sh", "-c", `printf '\033]0;✳ 构建\007'; exec sleep 30`}, "", 80, 24)
 	if err != nil {
 		t.Fatal(err)
 	}
+	for deadline := time.Now().Add(3 * time.Second); plain.Title() == "" && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+	}
+	// 标题由 agentLoop 定时记下，这里直接记一次
+	d.saveResume(plain, false)
 
 	// 常驻进程退出：关掉的终端不记成退出
 	d.exiting.Store(true)
@@ -70,7 +75,7 @@ func TestRestoreAfterRestart(t *testing.T) {
 	d2 := &Daemon{cfg: d.cfg, store: d.store, terms: map[string]*session{}, tchanged: make(chan struct{}), launcher: d.launcher}
 	t.Cleanup(d2.closeAll)
 	list := call(t, d2.terminalList, map[string]any{"workspace": w.ID}).([]terminalInfo)
-	if len(list) != 2 || list[0].ID != s.ID || !list[0].Lost || list[0].Agent != "claude" || list[0].Name != "登录页" || list[1].ID != plain.ID || !list[1].Lost {
+	if len(list) != 2 || list[0].ID != s.ID || !list[0].Lost || list[0].Agent != "claude" || list[0].Name != "登录页" || list[1].ID != plain.ID || !list[1].Lost || list[1].Title != "构建" {
 		t.Fatalf("list after restart = %+v", list)
 	}
 

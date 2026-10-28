@@ -19,7 +19,8 @@ import (
 // "重启后恢复全部终端"（agent.RestoreAll）时常驻进程一启动就全部拉起。
 
 // resumeRec 是恢复一个终端要用的信息，存在 terminals 的 agent、session_id、cwd。
-type resumeRec struct{ agent, sid, cwd string }
+// label 是这时显示的名字（会话标题，没有时是终端标题），重启后还没恢复时照它显示。
+type resumeRec struct{ agent, sid, cwd, label string }
 
 // resumeSettle 是 agent 退出后等多久才把它从记录上摘掉：关机时 agent 和常驻进程差不多同时收到
 // SIGTERM，agent 先退出的话不能把要续接的会话清掉，等这一会儿常驻进程已经在退出了（exiting）。
@@ -33,7 +34,11 @@ func (d *Daemon) saveResume(s *session, settled bool) {
 	}
 	rec := resumeRec{agent: s.agentName()}
 	if rec.agent != "" {
-		rec.sid = s.Agent().SessionID
+		st := s.Agent()
+		rec.sid, rec.label = st.SessionID, st.Title
+	}
+	if rec.label == "" {
+		rec.label = agent.BareTitle(s.Title())
 	}
 	pid := s.Foreground()
 	if pid <= 0 {
@@ -43,6 +48,10 @@ func (d *Daemon) saveResume(s *session, settled bool) {
 	s.mu.Lock()
 	if rec.cwd == "" {
 		rec.cwd = s.saved.cwd
+	}
+	if rec.label == "" {
+		// 刚恢复、agent 还没设标题时先沿用之前的名字
+		rec.label = s.saved.label
 	}
 	if rec.sid == "" && rec.agent == s.saved.agent {
 		// 会话 ID 要等第一个 hook 才有，中间被标题、进程检查重置成空时不丢掉已经记下的
@@ -65,7 +74,7 @@ func (d *Daemon) saveResume(s *session, settled bool) {
 	}
 	s.saved = rec
 	s.mu.Unlock()
-	if err := d.store.SetTerminalResume(s.ID, rec.agent, rec.sid, rec.cwd); err != nil {
+	if err := d.store.SetTerminalResume(s.ID, rec.agent, rec.sid, rec.cwd, rec.label); err != nil {
 		log.Printf("terminal %s: record resume: %v", s.ID, err)
 	}
 }
@@ -117,7 +126,7 @@ func (d *Daemon) terminalInfos(sessions []*session, lost []store.Terminal) []ter
 }
 
 func (d *Daemon) lostInfo(t store.Terminal) terminalInfo {
-	return terminalInfo{ID: t.ID, WorkspaceID: t.WorkspaceID, Name: t.Title, Command: t.Command, Dir: t.Cwd,
+	return terminalInfo{ID: t.ID, WorkspaceID: t.WorkspaceID, Title: t.Label, Name: t.Title, Command: t.Command, Dir: t.Cwd,
 		Agent: t.Agent, CreatedAt: t.CreatedAt, Lost: true}
 }
 

@@ -56,6 +56,7 @@ func previewApp(t *testing.T) *app {
 			Terminals: []terminalInfo{
 				{ID: "t1", Agent: "claude", Title: "✳ 重写 posse 界面", Running: true, AgentState: state("waiting")},
 				{ID: "t2", Agent: "codex", Title: "codex", Running: true, AgentState: state("working")},
+				{ID: "t3l", Agent: "claude", Title: "1027｜修复｜标签名被未恢复顶掉", Lost: true},
 				{ID: "t3", Title: "zsh", Running: true},
 			}},
 		{ID: "w2", ProjectID: "p2", Name: "main", Kind: "main", Project: "Chat", Label: "Chat/main", Path: "/Users/x/Chat"},

@@ -11,6 +11,10 @@ func TestTabLabelCustomName(t *testing.T) {
 		{terminalInfo{Agent: "claude", AgentState: &agentState{Title: "1020｜修复｜x"}, Name: "修登录", Running: true}, "Claude", "修登录"},
 		{terminalInfo{Title: "zsh", Name: "构建", Running: true}, "构建", ""},
 		{terminalInfo{Title: "zsh", Running: true}, "zsh", ""},
+		// 还没恢复的照旧写常驻进程记下的名字，退出了的才标出来
+		{terminalInfo{Agent: "claude", Title: "1020｜修复｜x", Lost: true}, "Claude", "1020｜修复｜x"},
+		{terminalInfo{Title: "~/r", Lost: true}, "~/r", ""},
+		{terminalInfo{Title: "zsh"}, "zsh", "已退出"},
 	}
 	for _, tc := range cases {
 		if name, detail := tabLabel(tc.term); name != tc.name || detail != tc.detail {

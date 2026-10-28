@@ -47,6 +47,7 @@ type Terminal struct {
 	Agent       string     `json:"agent,omitempty"`
 	SessionID   string     `json:"sessionId,omitempty"` // agent 的会话，重启后按它续接
 	Cwd         string     `json:"cwd,omitempty"`       // 前台程序最后所在的目录，重启后在这里恢复
+	Label       string     `json:"label,omitempty"`     // 最后显示的会话名或终端标题，重启后还没恢复时照它显示
 	State       string     `json:"state"`               // running | exited | lost（上一个常驻进程留下、等着恢复）
 	ExitCode    *int       `json:"exitCode,omitempty"`
 	CreatedAt   time.Time  `json:"createdAt"`
@@ -98,7 +99,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}} {
+	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}} {
 		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
@@ -294,9 +295,9 @@ func (s *Store) AddTerminal(t Terminal) error {
 	return err
 }
 
-// SetTerminalResume 记下重启后恢复要用的 agent、会话和目录。
-func (s *Store) SetTerminalResume(id, agent, sessionID, cwd string) error {
-	_, err := s.db.Exec(`UPDATE terminals SET agent=?, session_id=?, cwd=? WHERE id=?`, agent, sessionID, cwd, id)
+// SetTerminalResume 记下重启后恢复要用的 agent、会话和目录，以及恢复前显示的名字。
+func (s *Store) SetTerminalResume(id, agent, sessionID, cwd, label string) error {
+	_, err := s.db.Exec(`UPDATE terminals SET agent=?, session_id=?, cwd=?, label=? WHERE id=?`, agent, sessionID, cwd, label, id)
 	return err
 }
 
@@ -328,7 +329,7 @@ func (s *Store) LostTerminal(id string) (Terminal, error) {
 }
 
 func (s *Store) lostTerminals(cond string, args ...any) ([]Terminal, error) {
-	rows, err := s.db.Query(`SELECT t.id,t.workspace_id,t.title,t.command,t.agent,t.session_id,t.cwd,t.created_at FROM terminals t
+	rows, err := s.db.Query(`SELECT t.id,t.workspace_id,t.title,t.command,t.agent,t.session_id,t.cwd,t.label,t.created_at FROM terminals t
 		JOIN workspaces w ON w.id=t.workspace_id WHERE t.state='lost'`+cond+` ORDER BY t.created_at`, args...)
 	if err != nil {
 		return nil, err
@@ -339,7 +340,7 @@ func (s *Store) lostTerminals(cond string, args ...any) ([]Terminal, error) {
 		var t Terminal
 		var cmd string
 		var at int64
-		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Title, &cmd, &t.Agent, &t.SessionID, &t.Cwd, &at); err != nil {
+		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Title, &cmd, &t.Agent, &t.SessionID, &t.Cwd, &t.Label, &at); err != nil {
 			return nil, err
 		}
 		json.Unmarshal([]byte(cmd), &t.Command)
@@ -362,7 +363,7 @@ func (s *Store) SetTerminalTitle(id, title string) error {
 // TerminalResume 读终端的名字和恢复信息（交接过来的终端用，两边共用一个数据库）。
 func (s *Store) TerminalResume(id string) (Terminal, error) {
 	t := Terminal{ID: id}
-	err := s.db.QueryRow(`SELECT title,agent,session_id,cwd FROM terminals WHERE id=?`, id).Scan(&t.Title, &t.Agent, &t.SessionID, &t.Cwd)
+	err := s.db.QueryRow(`SELECT title,agent,session_id,cwd,label FROM terminals WHERE id=?`, id).Scan(&t.Title, &t.Agent, &t.SessionID, &t.Cwd, &t.Label)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, ErrNotFound
 	}

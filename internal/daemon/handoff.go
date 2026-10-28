@@ -449,7 +449,7 @@ func (d *Daemon) adopt(in *incoming) error {
 			agent: ht.Agent, hooked: ht.Hooked, agentPg: ht.HookedPg, fg: ht.Fg}
 		// 标签名和恢复信息不在交接记录里：两边共用一个数据库
 		if r, err := d.store.TerminalResume(s.ID); err == nil {
-			s.name, s.saved = r.Title, resumeRec{agent: r.Agent, sid: r.SessionID, cwd: r.Cwd}
+			s.name, s.saved = r.Title, resumeRec{agent: r.Agent, sid: r.SessionID, cwd: r.Cwd, label: r.Label}
 		}
 		d.mu.Lock()
 		d.terms[s.ID] = s

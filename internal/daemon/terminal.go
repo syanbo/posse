@@ -119,7 +119,7 @@ func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName stri
 	}
 	info := t.Info()
 	s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-		agent: agentName, hooked: agentName != "", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir}}
+		agent: agentName, hooked: agentName != "", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir, label: revive.Label}}
 	d.mu.Lock()
 	d.terms[id] = s
 	d.mu.Unlock()

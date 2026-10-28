@@ -836,8 +836,14 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 // 不是在干活，也不用用户处理。
 const statusTasks = "tasks"
 
+// statusLost 是界面自己的状态：上一个常驻进程留下、还没恢复的终端，切到它时才拉起。
+const statusLost = "lost"
+
 // sessionStatus 是会话显示的状态：有进行中的任务、自己又没在干别的时是"等待任务"。
 func (a *app) sessionStatus(term terminalInfo) string {
+	if term.Lost {
+		return statusLost
+	}
 	status := ""
 	if term.AgentState != nil {
 		status = term.AgentState.Status
@@ -1186,6 +1192,8 @@ func statusGlyph(c *ui.Context, status string, size float32) {
 		icon, color = iconHexOutline, p.sage
 	case agent.StatusStarting:
 		icon, color = iconHexOutline, t.TextMuted
+	case statusLost:
+		icon, color = iconHexLost, t.TextMuted
 	}
 	if status == agent.StatusWorking && !c.Preferences().ReduceMotion {
 		workingStar(c, size, t.Accent).Tooltip(statusText(status))
@@ -1352,6 +1360,8 @@ func statusText(status string) string {
 		return "等待任务：在等它派出去的 agent"
 	case statusUnread:
 		return "本轮完成，你还没看"
+	case statusLost:
+		return "未恢复：切到它时再拉起，agent 续接原来的会话"
 	}
 	return status
 }
@@ -1829,7 +1839,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	a.revealTab(row, term.ID, active)
 	row.Background(row.AnimateColor("bg", bg, hover))
 	status := ""
-	if term.AgentState != nil && term.Running {
+	if term.AgentState != nil && term.Running || term.Lost {
 		status = a.sessionStatus(term)
 	}
 	name, detail := tabLabel(term)
@@ -2000,10 +2010,8 @@ func fullLabel(t terminalInfo) (string, string) {
 	case title != "" && !strings.EqualFold(title, name) && title != "Claude Code":
 		detail = title
 	}
-	switch {
-	case t.Lost:
-		detail = "未恢复"
-	case !t.Running:
+	// 还没恢复的照旧写原来的名字，「未恢复」是状态图标
+	if !t.Running && !t.Lost {
 		detail = "已退出"
 	}
 	return name, detail
@@ -2011,7 +2019,7 @@ func fullLabel(t terminalInfo) (string, string) {
 
 // bareTitle 是去掉 agent 状态前缀（✳、转圈符）的终端标题。
 func bareTitle(t terminalInfo) string {
-	return strings.TrimSpace(strings.TrimLeft(t.Title, "✳⠀⠁⠂⠃⠄⠅⠆⠇⠈⠉⠊⠋⠌⠍⠎⠏◐◓◑◒ "))
+	return agent.BareTitle(t.Title)
 }
 
 // displayName 是工作区的显示名：主工作区就是项目本身。
