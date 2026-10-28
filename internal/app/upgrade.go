@@ -11,6 +11,7 @@ import (
 
 	"posse/internal/daemon"
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 // upgradeState 记着把常驻进程换成本窗口的包（daemon.handoff）的进度，按常驻进程的 pid 记：
@@ -86,6 +87,10 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 		if err == nil {
 			if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
 				exe = resolved
+			}
+			// 常驻进程从新包的副本运行，旧版本的常驻进程不会自己做副本；准备不了就用原包，交接照常
+			if rt, rerr := spawn.Runtime(exe, a.c.Home); rerr == nil {
+				exe = rt
 			}
 			// 交接最多等 20 秒（handoffTimeout），多留一点
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

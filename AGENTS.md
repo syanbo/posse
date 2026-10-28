@@ -44,7 +44,7 @@ internal/namer      会话标题（posse session title）：规整 `MMDD｜类�
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，任务、历史、文件、Git 等界面，状态栏用量和内存；只接入当前可见的终端；各界面见 docs/features/
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
-internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责
+internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责；runtime.go 管常驻进程运行用的包副本（创建、登记、回收）
 internal/desk       手机看 Mac 桌面的采集侧：子进程（`posse desk helper`）用 ScreenCaptureKit 采屏（可选屏，也可只看一个窗口，window_darwin.go）、VideoToolbox 硬编码，帧经管道交给父进程，手机的键鼠输入由父进程排序去重（input.go）、子进程发 CGEvent 注入（inject_darwin.go）；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`posse desk cast` 是还没接进常驻进程时的推流入口）
 internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $POSSE_HOME/usage.json
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索、跳到定义、识别行内链接和路径
@@ -61,14 +61,15 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 ## 关键约定
 
 - 常驻进程持有 `$POSSE_HOME/possed.lock` 的文件锁直到完全退出；socket 和 pid 文件只在持锁时创建和删除。例外是交接接过来的新进程：先写 pid 文件、接着用旧进程交来的 socket 服务，锁在后台等（见下一条）。
-- 升级交接（`daemon.handoff`，`internal/daemon/handoff.go`；流程、描述符怎么交、带不过去的终端状态见 `docs/plans/terminal-host.md` 和代码注释）：窗口的包比常驻进程新时自动触发（`internal/app/upgrade.go` 的 `autoUpgrade`，每个旧进程只自动试一次），设置页的"更新常驻进程"和 `posse daemon handoff` 手动触发。改代码时要守的：协议版本是 `handoffVersion`，改了交接记录或帧格式要加一；新建终端和交接开始经 `handoffState.startMu` 互斥；交接的终端和以它们为 worker 的任务不记为 lost；旧进程只把 PTY 已交出去的终端的退出留给新进程，交接窗口里退出的新进程收不到退出码，记 -1；新进程回话后马上开始服务（hook 只等 2 秒，不能等旧进程退出），在后台一直等锁，拿到才开手机服务（端口在旧进程手里），等不到也不退出；普通启动拿到锁后 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket；交接期间 `terminal wait --for idle` 不算空闲；手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
+- 升级交接（`daemon.handoff`，`internal/daemon/handoff.go`；流程、描述符怎么交、带不过去的终端状态见 `docs/plans/terminal-host.md` 和代码注释）：窗口的包比常驻进程新时自动触发（`internal/app/upgrade.go` 的 `autoUpgrade`，每个旧进程只自动试一次），设置页的"更新常驻进程"和 `posse daemon handoff` 手动触发。改代码时要守的：协议版本是 `handoffVersion`，改了交接记录或帧格式、新旧两边解析不了时要加一（旧进程只认版本号相等的新进程，加了就要重启一次才能升上来），新旧双向都能解析的可选字段（如 `handoffTerm.Runtime`）不加；新建终端和交接开始经 `handoffState.startMu` 互斥；交接的终端和以它们为 worker 的任务不记为 lost；旧进程只把 PTY 已交出去的终端的退出留给新进程，交接窗口里退出的新进程收不到退出码，记 -1；新进程回话后马上开始服务（hook 只等 2 秒，不能等旧进程退出），在后台一直等锁，拿到才开手机服务（端口在旧进程手里），等不到也不退出；普通启动拿到锁后 socket 还有人应答就退出，免得交接空档里被拉起的进程删掉新进程的 socket；交接期间 `terminal wait --for idle` 不算空闲；手机看着时终端是手机的尺寸，记录里带上界面的尺寸（`DeskCols`、`DeskRows`），新进程换回去。
 - 常驻进程退出（交接或重启）时 `rpc.Server` 先等正在处理的请求写完回复（最多 3 秒），处理函数因请求的 ctx 结束返回 `context.Canceled` 的回成 `restarting`。新增长等待的 RPC 要跟着 ctx 结束，CLI 侧走 `doWait`，到新进程上按剩下的时间接着等；`task ask` 带回问题 ID 改成 `--resume`、Claude 权限挂起到新进程上再挂，见 `doWait` 和 `hook.permission.hold` 调用处的注释。
 - PTY 主端是非阻塞、交给 Go 轮询器的描述符（`term.pollable`），交接时靠读期限停下读协程。不要对它调 `Fd()` 或 `pty.Setsize`（经 `Fd()` 改回阻塞模式，读期限就失效了，而且阻塞标志和交出去的描述符共用），改尺寸用 `setPTYSize`、取描述符用 `SyscallConn`。
 - 拉起常驻进程的一方（`client.EnsureDaemon`、交接时的旧进程）都经 `internal/spawn`：新开会话，并用私有接口 `responsibility_spawnattrs_setdisclaim` 让它自己对系统授权负责（否则授权记在拉起方身上：终端里的 CLI 拉起时是那个终端 App，一路交接下去是最初那份 Posse.app，包被换掉后每次访问桌面都弹授权）。`daemon.log` 也由拉起方经 `daemon.OpenLog` 打开后交给它当 stdout/stderr；拉起前超过 5 MB 就改名成 `daemon.log.1`（只留一份），运行期间不轮转。`EnsureDaemon` 拉起后在后台 `Wait`，窗口开着时常驻进程退出不留僵尸进程。
+- 常驻进程不从 Posse.app 运行，从它的 APFS 克隆副本运行（`spawn.Runtime`，`~/Library/Application Support/Posse/runtime/<包ID>/<版本>-<构建>/`，同一构建复用；`go build` 的 bin/posse 不复制）：终端里的进程对授权的负责进程是拉起它们的常驻进程，tccd 按它的程序路径核实；常驻进程还活着时包被换掉（重新打包、自动更新），这期间终端访问桌面就被拒，交接后也一直拒；路径上的文件没了同样 EPERM。拉起常驻进程的各方都先准备副本：`EnsureDaemon`、交接时的旧进程，以及调 `daemon.handoff` 的窗口和 `posse daemon handoff`（旧版本的常驻进程不会自己做副本）；准备不了就从原包运行，不挡启动和交接。每个终端记着拉起它的副本（`session.runtime`，交接记录里带过去），副本按 home 登记（`refs/`，放在 .app 外面，不破坏签名），常驻进程启动时和终端退出后回收：自己的副本和还有活终端的副本留着，刚登记不到一分钟的、还有进程从里面运行的也留着，其余去掉本 home 的登记，没人登记的删掉。终端里脱离出去、比终端活得久的后台进程不算，副本删掉后它们访问桌面会 EPERM。
 - 程序关掉鼠标跟踪（9、1000、1002、1003 都关）时，如果最后写进 PTY 的是鼠标报告，常驻进程清掉 PTY 里还没读的输入（`dropStaleMouse`，主端 `TIOCFLUSH`）：Codex 退出时先不读输入、最后才关鼠标跟踪，这期间鼠标移动的报告会被接着运行的 shell 读成一串 `35;12;8M`。
 - 终端内核对程序的终端查询（DA/DSR 等）的应答写回 PTY，由 `Terminal.answer` 控制；界面连接后改由界面应答，避免重复回复。
 - `terminal send` 直接写 PTY，不经过终端内核；带 `--enter` 时回车与文本分开发送，否则 TUI 会把回车当成粘贴内容。
-- 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，以及 agent 给工具调用设的非交互变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，会经 `open` 拉起的 Posse.app 漏进终端，见 `term.Environ`）；注入 `POSSE_HOME`、`POSSE_SOCKET`、`POSSE_TERMINAL_ID`、`POSSE_WORKSPACE_ID`，以及给 Git 操作记录用的 `GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`；PATH 最前面是 posse 所在目录。
+- 新终端的环境会去掉 `ORCA_*`、`CLAUDE_CODE_*`、`CLAUDECODE` 等变量，以及 agent 给工具调用设的非交互变量（`NO_COLOR`、`FORCE_COLOR`、`PAGER`、`GIT_EDITOR`、`GROK_*` 等，会经 `open` 拉起的 Posse.app 漏进终端，见 `term.Environ`）；注入 `POSSE_HOME`、`POSSE_SOCKET`、`POSSE_TERMINAL_ID`、`POSSE_WORKSPACE_ID`，以及给 Git 操作记录用的 `GIT_TRACE2_EVENT`、`GIT_TRACE2_ENV_VARS`；PATH 最前面是 posse 所在目录（常驻进程所在的副本，终端活着就不会被回收）。
 - 工作区三种：`main`（项目目录本身）、`folder`（同一目录上的额外工作区）、`worktree`（git worktree，放在 `$POSSE_HOME/worktrees/<项目>/<名称>`）。别的工具建的 worktree 用 `attach` 模式加进来时记成 `folder`（路径是那个 worktree），删工作区不碰它的目录和分支。
 - agent 状态靠启动参数注入的 hooks，不改用户的全局配置：Claude 用 `--settings $POSSE_HOME/claude-hooks.json` 和 `--session-id`；Codex 用 `-c hooks.<事件>=…` 加 `-c hooks.state=…` 预置信任 hash（算法见 `codexHookHash`，Codex 升级后用 `codex app-server` 的 `hooks/list` 核对是否仍为 trusted）；Cursor 用 `--plugin-dir $POSSE_HOME/cursor-plugin`，hooks 放在 posse 生成的插件里（`internal/agent/cursor.go`），不写 `~/.cursor/hooks.json`。
 - `posse hook` 被 agent 同步调用：不得向 stdout 输出（Claude 会把它注入模型上下文）。例外有三处：Cursor 要从 stdout 读一个 JSON 回应，posse 输出 `{}` 表示不干预；Claude 的 PermissionRequest 在手机给出 allow 或 deny 时向 stdout 写决策 JSON，没有决定就不输出；Claude 的 UserPromptSubmit 在有待交的会话标题时写 `hookSpecificOutput.sessionTitle`。始终 exit 0，不拉起常驻进程。
@@ -79,9 +80,10 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - Posse.app 里的可执行文件叫 `Posse`，agent 在终端里调用 `posse` 能找到它，依赖 APFS 默认的大小写不敏感。
 - 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
 - 只有界面关心的状态（`internal/app/uistate.go`）存在 `$POSSE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉常驻进程。
-- 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。
+- 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。常驻进程和终端不受影响：它们从包的副本运行（见上面拉起常驻进程的副本一条）。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。
 - 功能说明按模块放在 `docs/features/`：`agents.md`（agent 识别、手动启动、编排、会话标题、权限）、`history.md`、`files.md`、`git.md`、`mobile.md`、`usage.md`（套餐用量、防休眠）、`ui.md`（界面各部分）。改了功能同步更新对应的文档。
+- 终端里会长期留着的 posse 路径（hooks 命令、Claude 的 statusLine、`$POSSE_HOME/bin` 的转发脚本、`posse agent exec` 补的 hooks）一律写 `$POSSE_HOME/bin/posse`（`daemon.PosseLink`），不写副本的路径：每个常驻进程启动时把这个符号链接原子地指向自己（bin/posse 时指向它自己）。旧终端里后来手动启动的 agent 用的是当时常驻进程的副本，那份副本可能先被回收；Codex 的信任 hash 按命令算，路径固定后升级也不变。
 - `$POSSE_HOME/bin` 的转发脚本和 shell 集成文件每个常驻进程只写一次，注入 agent 的参数（hooks、技能插件、`developer_instructions`、`--rules`）在常驻进程的代码里：改了这些要交接（`posse daemon handoff`，不断终端）或重启常驻进程，之后新开的终端才生效。Codex 的 `-c developer_instructions` 会整个替换用户 `config.toml` 里的同名设置，所以用户设了它时不注入。
 - 会话历史只读各 agent 的会话目录，不写回（例外：会话标题、用户在历史页移到废纸篓）。只改了某一家的解析规则改 `parserVersions`（index.go），只重读这一家；改表结构或分词才改 `schemaVersion`（旧索引重建，跨版本的旧常驻进程报 ErrStale，要重启）。改粗筛规则（`wants`）要跑 `TestLineFilterSameResult`。索引只有一个连接，结果集没关之前不能再查。
 - 文件栏不用 fsnotify（macOS 上基于 kqueue，监听一个目录要为其中每个文件开一个描述符），看得见时每秒 stat 一次。保存前磁盘戳变了先问，不默默覆盖 agent 的修改。

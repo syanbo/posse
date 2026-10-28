@@ -25,6 +25,7 @@ import (
 	"posse/internal/mobile"
 	"posse/internal/procmem"
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 	"posse/internal/store"
 	"posse/internal/term"
 )
@@ -62,6 +63,7 @@ type session struct {
 	settling bool      // agent 不在了，已经约好 resumeSettle 之后复查
 	unread   bool      // 本轮完成了还没看（unread.go）
 	viewers  int       // 正看着它的手机页面数
+	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
 }
 
 func (s *session) userName() string {
@@ -177,6 +179,7 @@ type Daemon struct {
 	store    *store.Store
 	started  time.Time
 	launcher agent.Launcher
+	runtime  string // 自己所在的副本目录（spawn.RuntimeDir），不在副本里运行时为空
 
 	mu    sync.Mutex
 	terms map[string]*session
@@ -282,8 +285,17 @@ func Run(ctx context.Context, cfg Config) error {
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
+	if err := spawn.Retain(exe, cfg.Home); err != nil {
+		log.Printf("runtime copy: %v", err)
+	}
+	hookExe, err := linkPosse(cfg.Home, exe)
+	if err != nil {
+		log.Printf("link %s: %v", PosseLink(cfg.Home), err)
+		hookExe = exe
+	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
-		launcher: agent.Launcher{Exe: exe, Home: cfg.Home}, awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
+		launcher: agent.Launcher{Exe: hookExe, Home: cfg.Home}, runtime: spawn.RuntimeDir(exe),
+		awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -327,6 +339,8 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := st.MarkRunningTasksLost(time.Now(), keep); err != nil {
 		return err
 	}
+	// 交接过来的终端还用着旧进程的副本，上一个常驻进程崩溃时留下的登记在这里去掉
+	go d.collectRuntimes("")
 
 	if ln == nil {
 		l, err := net.Listen("unix", sock)

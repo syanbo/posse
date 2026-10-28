@@ -12,6 +12,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/spawn"
 )
 
 // Posse 的自动更新（方案见 docs/plans/mac-update.md）：后台只把新版本下载、解压到 app 旁边，
@@ -252,7 +254,7 @@ func (a *app) takeStaged() *mygo.Staged {
 	return s
 }
 
-// installUpdate 换上下好的版本，再把常驻进程交接到新包上：换包后旧常驻进程还没用过的授权会失效。
+// installUpdate 换上下好的版本，再把常驻进程交接到新包（的副本）上，终端不断。
 // 换包失败时暂存已经没了，回到可以重新检查、下载的状态。
 func (a *app) installUpdate(s *mygo.Staged, wait time.Duration) error {
 	if err := s.Apply(); err != nil {
@@ -266,6 +268,9 @@ func (a *app) installUpdate(s *mygo.Staged, wait time.Duration) error {
 	exe := a.exe.exe
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
+	}
+	if rt, err := spawn.Runtime(exe, a.c.Home); err == nil {
+		exe = rt
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()

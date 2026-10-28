@@ -50,6 +50,13 @@ func (c *Client) EnsureDaemon() error {
 		return err
 	}
 	defer logf.Close()
+	// 从包的副本运行，包被换掉时它和它拉起的终端都不受影响（见 internal/spawn 的 Runtime）；
+	// 准备不了就从原包运行
+	if rt, err := spawn.Runtime(exe, c.Home); err != nil {
+		fmt.Fprintf(logf, "runtime copy of %s: %v\n", exe, err)
+	} else {
+		exe = rt
+	}
 	cmd := exec.Command(exe, "daemon", "run")
 	cmd.Dir = c.Home
 	cmd.Stdout, cmd.Stderr = logf, logf

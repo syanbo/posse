@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"posse/internal/agent"
+	"posse/internal/daemon"
 )
 
 // cmdAgentExec 是 $POSSE_HOME/bin 里同名脚本的入口：找到真正的程序，补上 hooks 参数后换成它。
@@ -36,6 +37,10 @@ func cmdAgentExec(e *env, args []string) error {
 		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 			exe = resolved
 		}
+		// hooks 写常驻进程维护的稳定路径，不写这份 posse 所在的副本：副本可能先于这个 agent 被回收
+		if link := daemon.PosseLink(e.home); exists(link) {
+			exe = link
+		}
 		if argv, err = (agent.Launcher{Exe: exe, Home: e.home}).ManualArgs(target, rest); err != nil {
 			// 补不上 hooks 也照常启动，只是 posse 看不到它的状态
 			fmt.Fprintf(e.errOut, "posse: %v\n", err)
@@ -44,4 +49,9 @@ func cmdAgentExec(e *env, args []string) error {
 	}
 	env := append(os.Environ(), agent.ShimEnv+"=1")
 	return syscall.Exec(real, append([]string{cmd}, argv...), env)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

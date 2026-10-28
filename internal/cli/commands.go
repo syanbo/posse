@@ -18,6 +18,7 @@ import (
 
 	"posse/internal/daemon"
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 type projectInfo struct {
@@ -187,6 +188,10 @@ func cmdDaemonHandoff(e *env, args []string) error {
 	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
+	}
+	// 先准备好副本再交过去：旧版本的常驻进程不会自己做副本。准备不了就用原包，交接照常
+	if rt, err := spawn.Runtime(exe, e.home); err == nil {
+		exe = rt
 	}
 	var r struct{ Pid, Terminals int }
 	return e.do("daemon.handoff", map[string]string{"exe": exe}, &r, func() {
