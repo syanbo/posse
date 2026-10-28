@@ -22,5 +22,6 @@ pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_ove
 - `lib/src/widgets/terminal_controller.dart`、`terminal_controller_impl.dart`：加 `selectionAnchor` 和 `selectionEnds`，报告选区在可见屏幕上的位置；`moveSelectionEnd` 拖一端时另一端用屏幕坐标钉住，`nudgeViewport` 让拖到边缘时回滚跟着走。选区端点落在宽字符（中文占两格）中间时扩成整字，高亮不会切半个字。`selectParagraph` 把选区扩到上下空行之间的这一段。手机在选区两端画把手，「复制」贴在选区上沿，全选走这一段而不是整屏回滚。
 - `lib/src/widgets/terminal_gesture_detector.dart`：长按选中词时不震动。
 - `lib/src/widgets/terminal_input_client.dart`、`terminal_controller_impl.dart`、`terminal_controller.dart`：一次插进好几个字又带换行的（系统菜单粘贴、听写）交给 `onPasted` 当粘贴，不拆成字和回车；`paste` 去掉末尾的换行（`trimPastedNewlines`，导出给外层复制用），粘贴完不直接回车发出去。
+- `lib/src/rendering/terminal_frame_builder.dart`：实现 `TerminalTheme.minimumContrast`（原版只声明没用到），照 Ghostty 的 minimum-contrast：字色和底色的对比度不够时往黑或白里调到刚够，保留色相；淡色字按叠到底色上的颜色算。手机和电脑深浅色相反时，程序按电脑配的暗灰、黄色字在手机的底色上看不清。
 
 升级 flterm 时从 pub 缓存重新复制，再把上面的改动补回来。

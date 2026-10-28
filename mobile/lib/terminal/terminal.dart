@@ -1055,7 +1055,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 }
 
-/// 终端底色和卡片一致，前景用 Posse 的文字色，等宽字体用 Menlo。
+/// 终端底色和卡片一致，前景用 Posse 的文字色，等宽字体用 Menlo；字色和底色至少差 3 倍对比度。
 TerminalTheme terminalTheme(PosseColors c, {double fontSize = 12.5}) {
   final base = c.dark ? TerminalTheme.dark() : TerminalTheme.light();
   return TerminalTheme(
@@ -1067,6 +1067,8 @@ TerminalTheme terminalTheme(PosseColors c, {double fontSize = 12.5}) {
     fontFamily: monoFamily,
     fontFamilyFallback: monoFallback,
     fontSize: fontSize,
+    // 程序的配色跟着电脑的深浅色，手机换成另一种时暗灰、黄色这类字会糊进底色
+    minimumContrast: 3,
   );
 }
 

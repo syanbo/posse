@@ -82,9 +82,85 @@ int _resolveColorArgb(
   if (style.faint) {
     foreground = (state.faintAlpha << 24) | (foreground & 0x00FFFFFF);
   }
+  // Posse: 实现 minimumContrast（照 Ghostty 的 minimum-contrast）。程序按电脑的深浅色配的字色
+  // （深色主题的暗灰、黄色）画在手机另一种底色上看不清，压到最低对比度。
+  // 淡色字按叠到底色上的实际颜色算，不够时换成不透明的颜色。
+  final minimum = state.theme.minimumContrast;
+  if (minimum > 1) {
+    foreground = _ensureContrast(foreground, background, minimum);
+  }
 
   return (foreground, background);
 }
+
+final _contrastCache = <int, int>{};
+var _contrastCacheMinimum = 0.0;
+
+int _ensureContrast(int foreground, int background, double minimum) {
+  // 字色和底色相同是程序有意藏字（占位、进度条的空格），不调
+  if ((foreground ^ background) & 0x00FFFFFF == 0) return foreground;
+  if (minimum != _contrastCacheMinimum) {
+    _contrastCache.clear();
+    _contrastCacheMinimum = minimum;
+  }
+  final key = (foreground << 32) ^ (background & 0xFFFFFFFF);
+  final cached = _contrastCache[key];
+  if (cached != null) return cached;
+  if (_contrastCache.length > 4096) _contrastCache.clear();
+  final bg = background | 0xFF000000;
+  final fg = _blendOver(foreground, bg);
+  final bgLum = _luminance(bg);
+  var result = foreground;
+  if (_contrast(_luminance(fg), bgLum) < minimum) {
+    // 底色亮往黑里调，底色暗往白里调，保留色相；二分找刚够的那一点
+    final target = bgLum > 0.18 ? 0xFF000000 : 0xFFFFFFFF;
+    if (_contrast(_luminance(target), bgLum) <= minimum) {
+      result = target;
+    } else {
+      var lo = 0.0, hi = 1.0;
+      for (var i = 0; i < 10; i++) {
+        final mid = (lo + hi) / 2;
+        if (_contrast(_luminance(_mix(fg, target, mid)), bgLum) < minimum) {
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      result = _mix(fg, target, hi);
+    }
+  }
+  _contrastCache[key] = result;
+  return result;
+}
+
+int _blendOver(int argb, int opaque) {
+  final a = (argb >>> 24) / 255;
+  if (a >= 1) return argb;
+  int ch(int shift) =>
+      (((argb >> shift) & 0xFF) * a + ((opaque >> shift) & 0xFF) * (1 - a))
+          .round();
+  return 0xFF000000 | (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+int _mix(int a, int b, double t) {
+  int ch(int shift) =>
+      (((a >> shift) & 0xFF) * (1 - t) + ((b >> shift) & 0xFF) * t).round();
+  return 0xFF000000 | (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+double _luminance(int argb) {
+  double ch(int shift) {
+    final v = ((argb >> shift) & 0xFF) / 255;
+    return v <= 0.04045
+        ? v / 12.92
+        : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  }
+
+  return 0.2126 * ch(16) + 0.7152 * ch(8) + 0.0722 * ch(0);
+}
+
+double _contrast(double a, double b) =>
+    (math.max(a, b) + 0.05) / (math.min(a, b) + 0.05);
 
 /// Tracks per-row dirtiness from sources outside libghostty's own row-dirty
 /// flag, such as selection, blink, layout, or atlas changes.
