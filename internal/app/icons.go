@@ -48,6 +48,8 @@ var (
 	iconPush       = icon(`<path d="M6.5 17.5 17 7M9.5 7H17v7.5"/>`)
 	iconCommit     = icon(`<circle cx="12" cy="12" r="3.25"/><path d="M3.5 12h5.25M15.25 12h5.25"/>`)
 	iconBlame      = icon(`<path d="M4.5 6h4M4.5 10h4M4.5 14h4M4.5 18h4M11.5 6h8M11.5 10h6M11.5 14h8M11.5 18h5"/>`)
+	// 樱桃：两颗果子挂在一根分叉的梗上，WebStorm 的 cherry-pick 也用它
+	iconCherryPick = icon(`<circle cx="7.5" cy="16.75" r="3.25"/><circle cx="16.75" cy="15.25" r="3.25"/><path d="M7.5 13.5c.6-4 2.6-7.2 5.75-9.25M16.75 12c-1.4-2.6-2.6-5.2-3.5-7.75"/><path d="M13.25 4.25c1.6-1.4 4.1-1.6 6-.6-1.6 1.5-4.1 1.7-6 .6z"/>`)
 	iconDiff       = icon(`<path d="M4 8h13M13.5 4.5 17 8l-3.5 3.5"/><path d="M20 16H7M10.5 12.5 7 16l3.5 3.5"/>`)
 	iconTrash      = icon(`<path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.1a2 2 0 0 0 2 1.9h7a2 2 0 0 0 2-1.9l1-12.1M9 7V4.5h6V7"/>`)
 	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // 提交时间线，和分支、"历史会话"的时钟区分开

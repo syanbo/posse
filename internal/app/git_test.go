@@ -2046,3 +2046,48 @@ func TestFoldGitOps(t *testing.T) {
 		t.Fatalf("folded %v, want %v", got, want)
 	}
 }
+
+// 比较页的 Cherry-pick 把另一边独有的提交 cherry-pick 到检出的分支上；选中检出分支自己的提交时不可点。
+func TestComparePick(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.loadBranches(v)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
+	cd := v.cur.comp
+
+	a.selectCommit(v, &cd.commit, cd.onlyCur[0])
+	tt.Frame()
+	if err := tt.Click("Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.confirming || v.git.busy != "" {
+		t.Fatal("picked a commit already on the checked-out branch")
+	}
+
+	a.selectCommit(v, &cd.commit, cd.onlyOther[0])
+	tt.Frame()
+	if err := tt.Click("Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	// 预览数据里有 agent 在这个工作区工作，先确认
+	until(t, tt, "agent guard", func() bool { return a.confirming && tt.HasText("仍然Cherry-pick") })
+	if err := tt.Click("仍然Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "cherry-pick", func() bool {
+		_, err := os.Stat(filepath.Join(root, "feat.txt"))
+		return err == nil && v.git.busy == ""
+	})
+	if a.err != "" {
+		t.Fatal(a.err)
+	}
+	if got := strings.TrimSpace(gitRun(t, root, "log", "-1", "--format=%s", "main")); got != "feat: 新功能" {
+		t.Fatalf("main head %q", got)
+	}
+}

@@ -762,7 +762,7 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		a.askNewBranch(w, v, ci.Hash)
 	}
 	m.Separator()
-	if m.Item("Cherry-pick").Chosen() {
+	if m.Item("Cherry-pick").Icon(iconCherryPick).Chosen() {
 		do("Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
 	}
 	m.Submenu("把当前分支重置到这里", func(sm *popMenu) {

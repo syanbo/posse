@@ -571,6 +571,9 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	switch {
 	case whole != "":
 		label = "提交" + whole + "结果"
+		if whole == "Cherry-pick" {
+			label = "提交 Cherry-pick 结果"
+		}
 		tip = whole + "进行中只能整体提交：勾选的文件先加入 Git，再连同已加入的一起提交 ⌘K"
 	case picked == 0 && g.amend:
 		label = "只改提交信息"

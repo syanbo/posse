@@ -1013,7 +1013,7 @@ func (g *gitState) pickedPaths() (paths, add []string, n int) {
 	return paths, add, n
 }
 
-// wholeCommit 返回进行中、只能整体提交的操作的名字（合并、拣选、还原），没有时为空。
+// wholeCommit 返回进行中、只能整体提交的操作的名字（合并、Cherry-pick、还原），没有时为空。
 func (g *gitState) wholeCommit() string {
 	if g.status == nil {
 		return ""
@@ -1022,7 +1022,7 @@ func (g *gitState) wholeCommit() string {
 	case "merge":
 		return "合并"
 	case "cherry-pick":
-		return "拣选"
+		return "Cherry-pick"
 	case "revert":
 		return "还原"
 	}
@@ -1045,7 +1045,7 @@ func (a *app) commit(v *filesView) {
 	a.gitDoThen(v, "提交", func(ctx context.Context, root string) error {
 		var err error
 		if whole {
-			// 合并、拣选、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
+			// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
 			if len(paths) > 0 {
 				err = gitx.Stage(ctx, root, paths...)
 			}

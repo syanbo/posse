@@ -246,6 +246,7 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 		ui.Text(c, "和").FontSize(fsBody).TextColor(t.TextMuted)
 		ui.Text(c, cd.cur).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(t, 1)).SingleLine().Shrink(1)
 		ui.Spacer(c)
+		a.comparePick(c, w, v, cd)
 		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
 			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.cur, cd.other, false) }); i >= 0 {
@@ -262,6 +263,41 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 		}
 	})
 	hline(c)
+}
+
+// comparePick 是顶栏的 Cherry-pick：把选中的提交应用到当前分支。
+// cherry-pick 只能落在检出的分支上，所以选中的提交要来自另一边、另一边又正好是工作区检出的分支才可点。
+func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compareDoc) {
+	target, tip := "", "先选一个提交"
+	if sel := cd.commit; sel != nil {
+		in := func(cs []gitx.CommitInfo) bool {
+			return slices.ContainsFunc(cs, func(x gitx.CommitInfo) bool { return x.Hash == sel.info.Hash })
+		}
+		switch {
+		case in(cd.onlyOther):
+			target = cd.cur
+		case in(cd.onlyCur):
+			target = cd.other
+		}
+		if target != "" && target != w.Branch {
+			tip = "只能 Cherry-pick 到检出的分支，现在检出的是 " + w.Branch
+			target = ""
+		}
+	}
+	if target != "" {
+		tip = "把 " + cd.commit.info.Hash[:7] + " 应用到 " + target
+	}
+	b := quietIconButton(c, iconCherryPick, "Cherry-pick", compactBox(), smallIcon()).Tooltip("Cherry-pick：" + tip)
+	if target == "" {
+		b.Disabled(true)
+		return
+	}
+	if b.Clicked() {
+		hash := cd.commit.info.Hash
+		a.guardAgent(w, "Cherry-pick", func() {
+			a.gitDo(v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hash) })
+		})
+	}
 }
 
 // commitPane 是一边独有的提交：标题说明是哪边，in 这个分支名和下面提交的圆点都是 lane 色。
