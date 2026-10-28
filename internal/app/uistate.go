@@ -21,6 +21,8 @@ type uiState struct {
 	SidebarHidden        bool      `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
 	SessionButtonsHidden bool      `json:"sessionButtonsHidden,omitempty"` // 终端右上角的会话按钮收成了右边缘的把手
 	SidebarWidth         float32   `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
+	ProjectMetaHidden    bool      `json:"projectMetaHidden,omitempty"`    // 侧栏的项目行不显示分支和路径，只留名字
+	WorkspaceMetaHidden  bool      `json:"workspaceMetaHidden,omitempty"`  // 侧栏项目下面的工作区行不显示分支，只留名字
 	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32   `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认
 	BranchPopWidth       float32   `json:"branchPopWidth,omitempty"`       // 分支弹窗的宽度，0 表示默认

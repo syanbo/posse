@@ -198,6 +198,26 @@ func (a *app) interfaceSettings(c *ui.Context) {
 				a.saveState()
 			}
 		})
+		settingsRow(c, "侧栏项目显示分支和路径", func() {
+			sel := 1
+			if a.state.ProjectMetaHidden {
+				sel = 0
+			}
+			if segmented(c, &sel, "侧栏项目显示分支和路径", "关", "开") {
+				a.state.ProjectMetaHidden = sel == 0
+				a.saveState()
+			}
+		})
+		settingsRow(c, "侧栏工作区显示分支", func() {
+			sel := 1
+			if a.state.WorkspaceMetaHidden {
+				sel = 0
+			}
+			if segmented(c, &sel, "侧栏工作区显示分支", "关", "开") {
+				a.state.WorkspaceMetaHidden = sel == 0
+				a.saveState()
+			}
+		})
 		settingsRow(c, "字体平滑", func() {
 			sel := 0
 			if uiSmooth {

@@ -527,6 +527,9 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.state.SidebarWidth = 340
 		savePNG(t, newPreviewTester(a, dark), "sidebar-wide-"+suffix+".png")
+		a = previewApp(t)
+		a.state.ProjectMetaHidden, a.state.WorkspaceMetaHidden = true, true
+		savePNG(t, newPreviewTester(a, dark), "sidebar-no-meta-"+suffix+".png")
 
 		// 不在看的会话本轮完成：标签和侧栏是铃铛，收起的项目也汇总成铃铛
 		a = previewApp(t)

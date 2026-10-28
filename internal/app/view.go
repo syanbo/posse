@@ -543,7 +543,11 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
 	}
 	icon := func() { ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
-	row := a.navRowAt(c, "head", false, icon, p.Name, shortPath(ws[0].Path), "", trailing)
+	sub := shortPath(ws[0].Path)
+	if a.state.ProjectMetaHidden {
+		sub = ""
+	}
+	row := a.navRowAt(c, "head", false, icon, p.Name, sub, "", trailing)
 	if row.Clicked() {
 		*open = !*open
 	}
@@ -642,6 +646,9 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 	branch := ""
 	if w.Kind != "worktree" {
 		branch = w.Branch
+	}
+	if (!nested && a.state.ProjectMetaHidden) || (nested && a.state.WorkspaceMetaHidden) {
+		sub, branch = "", ""
 	}
 	selected := a.selected == w.ID && (collapsed || a.selectedSession(a.workspace(w.ID)) == "")
 	if selected || collapsed || len(agentSessions(w.Terminals)) == 0 {
