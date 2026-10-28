@@ -60,7 +60,7 @@ func (d *Daemon) taskInfo(t store.Task, questions map[string]int, idx *workspace
 	} else {
 		info.Workspace = "(removed workspace)"
 	}
-	if s, err := d.session(t.Worker); err == nil {
+	if s := d.liveSession(t.Worker); s != nil {
 		ti := d.terminalInfo(s)
 		info.Terminal = &ti
 	}
@@ -306,7 +306,7 @@ func (d *Daemon) taskShow(ctx context.Context, raw json.RawMessage) (any, error)
 	if info.Messages, err = d.store.Messages(t.ID); err != nil {
 		return nil, err
 	}
-	if s, err := d.session(t.Worker); err == nil {
+	if s := d.liveSession(t.Worker); s != nil {
 		info.Screen = trimEmpty(s.Screen())
 	}
 	return info, nil
@@ -671,9 +671,7 @@ func (d *Daemon) taskClose(ctx context.Context, raw json.RawMessage) (any, error
 			return nil, err
 		}
 	}
-	if s, err := d.session(t.Worker); err == nil {
-		d.closeSession(s, 2*time.Second)
-	}
+	d.closeTerminal(t.Worker, 2*time.Second)
 	d.taskNotify()
 	t, _ = d.store.Task(t.ID)
 	return d.taskInfo(t, nil, nil), nil
@@ -726,8 +724,8 @@ func (d *Daemon) deliver(terminalID string) {
 	}
 	d.nudgeMu.Lock()
 	defer d.nudgeMu.Unlock()
-	s, err := d.session(terminalID)
-	if err != nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) {
+	s := d.liveSession(terminalID)
+	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) {
 		return
 	}
 	if wait := nudgeQuiet - time.Since(s.LastInput()); wait > 0 {

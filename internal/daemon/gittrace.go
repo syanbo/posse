@@ -155,7 +155,7 @@ func (d *Daemon) readGitTrace(c net.Conn) {
 		r.Code = -1
 		r.TookMs = time.Since(r.Start).Milliseconds()
 	}
-	if s, err := d.session(r.Terminal); err == nil {
+	if s := d.liveSession(r.Terminal); s != nil {
 		r.Agent = s.agentName()
 		if r.Dir == "" {
 			r.Dir = s.Dir

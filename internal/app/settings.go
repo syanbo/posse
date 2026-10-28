@@ -61,6 +61,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 					switch tab {
 					case "general":
 						a.awakeSettings(c)
+						a.restoreSettings(c)
 					case "agent":
 						a.agentSettings(c)
 						a.permissionSettings(c)
@@ -120,6 +121,28 @@ func (a *app) awakeSettings(c *ui.Context) {
 		}
 		ui.Text(c, awakeTip(st)).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
 	})
+}
+
+// restoreSettings 是重启电脑或常驻进程之后怎么恢复上次的终端，见 internal/daemon/restore.go。
+func (a *app) restoreSettings(c *ui.Context) {
+	settingsCard(c, "恢复终端", "重启电脑或常驻进程后，上次的终端照常列在侧栏和标签栏（手机上不列），标着「未恢复」，切到它时才拉起：agent 续接原来的会话，普通终端在原来的目录重开，之前的输出不保留。打开下面的开关，常驻进程一启动就全部恢复（agent 多时会一起占内存和用量）。", func() {
+		on := a.restoreAll
+		settingsRow(c, "启动时恢复全部终端", func() {
+			if ui.Switch(c.Key("restoreAll"), &on).Label("启动时恢复全部终端").Changed() {
+				a.setRestoreAll(on)
+			}
+		})
+	})
+}
+
+func (a *app) setRestoreAll(on bool) {
+	if a.home != "" {
+		if err := agent.SetRestoreAll(a.home, on); err != nil {
+			a.err = err.Error()
+			return
+		}
+	}
+	a.restoreAll = on
 }
 
 var permissionModes = []struct{ mode, seg, tip string }{
@@ -433,9 +456,9 @@ func (a *app) aboutSettings(c *ui.Context) {
 
 // askRestartDaemon 先确认再停掉常驻进程；下一次轮询连不上 socket 时，窗口用自己的包把它拉起来。
 func (a *app) askRestartDaemon() {
-	body := "所有终端都会断开，里面的 agent 要从「历史」里接着聊。"
+	body := "所有终端都会断开，重启后标为「未恢复」，切到时 agent 续接原来的会话，之前的输出不保留。"
 	if n := a.daemon.Running; n > 0 {
-		body = fmt.Sprintf("正在运行的 %d 个终端都会断开，里面的 agent 要从「历史」里接着聊。", n)
+		body = fmt.Sprintf("正在运行的 %d 个终端都会断开，重启后标为「未恢复」，切到时 agent 续接原来的会话，之前的输出不保留。", n)
 	}
 	a.confirm("重启常驻进程？", body, "重启", func() {
 		go func() {

@@ -65,15 +65,15 @@ func TestTerminalRenameShowsOnMobile(t *testing.T) {
 	if info.Name != "登录页重构" || title() != "登录页重构" {
 		t.Fatalf("renamed: info %q, mobile %q", info.Name, title())
 	}
-	if got, _ := d.store.TerminalTitle(s.ID); got != "登录页重构" {
-		t.Fatalf("stored %q", got)
+	if r, _ := d.store.TerminalResume(s.ID); r.Title != "登录页重构" {
+		t.Fatalf("stored %q", r.Title)
 	}
 	call(t, d.terminalRename, map[string]any{"terminal": s.ID, "name": ""})
 	if got := title(); got == "登录页重构" {
 		t.Fatalf("cleared name still shown: %q", got)
 	}
-	if got, _ := d.store.TerminalTitle(s.ID); got != "" {
-		t.Fatalf("stored after clear %q", got)
+	if r, _ := d.store.TerminalResume(s.ID); r.Title != "" {
+		t.Fatalf("stored after clear %q", r.Title)
 	}
 }
 

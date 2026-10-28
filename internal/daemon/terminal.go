@@ -34,6 +34,8 @@ type terminalInfo struct {
 	IdleMs       int64            `json:"idleMs"`
 	WaitingTasks bool             `json:"waitingTasks,omitempty"` // 里面的 agent 正阻塞在 posse task wait 上
 	PhoneSized   bool             `json:"phoneSized,omitempty"`   // 手机正看着，终端按手机的尺寸排版
+	// Lost 是上一个常驻进程留下、还没恢复的终端（restore.go）：没有进程，接入或操作它时才拉起
+	Lost bool `json:"lost,omitempty"`
 }
 
 func (d *Daemon) terminalInfo(s *session) terminalInfo {
@@ -70,17 +72,29 @@ func (d *Daemon) startAgent(w store.Workspace, name string, model agent.Model, p
 	}
 	if l.SessionID != "" {
 		s.SetAgent(host.AgentState{Status: agent.StatusStarting, SessionID: l.SessionID, At: time.Now()})
+		d.saveResume(s, false)
 	}
 	return s, nil
 }
 
 func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName string, cols, rows int, extraEnv ...string) (*session, error) {
+	return d.launchTerminal(w, argv, agentName, cols, rows, store.Terminal{}, extraEnv...)
+}
+
+// launchTerminal 拉起终端；revive.ID 不为空时是恢复上一个常驻进程留下的终端，沿用它的 ID、目录、名字和创建时间。
+func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName string, cols, rows int, revive store.Terminal, extraEnv ...string) (*session, error) {
 	d.handoff.startMu.RLock()
 	defer d.handoff.startMu.RUnlock()
 	if d.handoff.active() {
 		return nil, rpc.Errorf(rpc.CodeConflict, "daemon is handing off to a new version, try again")
 	}
-	id := store.NewID("t_")
+	id, dir := store.NewID("t_"), w.Path
+	if revive.ID != "" {
+		id = revive.ID
+		if revive.Cwd != "" {
+			dir = revive.Cwd
+		}
+	}
 	env := append([]string{
 		"POSSE_HOME=" + d.cfg.Home,
 		"POSSE_SOCKET=" + SocketPath(d.cfg.Home),
@@ -96,8 +110,8 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 		env = append(env, agent.ShellEnv(d.cfg.Home, argv[0], d.userZdotdir)...)
 	}
 	t, err := d.terminalHost().Start(host.StartOptions{
-		ID: id, WorkspaceID: w.ID, Dir: w.Path, Command: argv, Env: env,
-		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback,
+		ID: id, WorkspaceID: w.ID, Dir: dir, Command: argv, Env: env,
+		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback, CreatedAt: revive.CreatedAt,
 		OnTitle: d.onTitle, OnExit: d.onExit,
 	})
 	if err != nil {
@@ -105,11 +119,16 @@ func (d *Daemon) startTerminal(w store.Workspace, argv []string, agentName strin
 	}
 	info := t.Info()
 	s := &session{Terminal: t, ID: info.ID, WorkspaceID: info.WorkspaceID, Dir: info.Dir, Command: info.Command, CreatedAt: info.CreatedAt,
-		agent: agentName, hooked: agentName != ""}
+		agent: agentName, hooked: agentName != "", name: revive.Title, saved: resumeRec{agent: agentName, sid: revive.SessionID, cwd: dir}}
 	d.mu.Lock()
 	d.terms[id] = s
 	d.mu.Unlock()
-	if err := d.store.AddTerminal(store.Terminal{ID: id, WorkspaceID: w.ID, Command: argv, Agent: agentName, State: "running", CreatedAt: info.CreatedAt}); err != nil {
+	if revive.ID != "" {
+		err = d.store.ReviveTerminal(id, argv, agentName, revive.SessionID)
+	} else {
+		err = d.store.AddTerminal(store.Terminal{ID: id, WorkspaceID: w.ID, Command: argv, Agent: agentName, Cwd: dir, State: "running", CreatedAt: info.CreatedAt})
+	}
+	if err != nil {
 		log.Printf("terminal %s: record: %v", id, err)
 	}
 	return s, nil
@@ -153,9 +172,16 @@ func (d *Daemon) onExit(id string, code int) {
 	if d.handoff.deferExit(id, code) {
 		return
 	}
-	if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
-		log.Printf("terminal %s: record exit: %v", id, err)
-	}
+	// 常驻进程退出时关掉的终端留着记录，下次启动后恢复。关机时直接跑命令（不在交互式 shell 里）的终端
+	// 可能比常驻进程先收到 SIGTERM 退出，等 resumeSettle 再记，这期间常驻进程开始退出就留着
+	time.AfterFunc(resumeSettle, func() {
+		if d.exiting.Load() {
+			return
+		}
+		if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
+			log.Printf("terminal %s: record exit: %v", id, err)
+		}
+	})
 	d.workerGone(id, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
 	d.refreshAwake()
 }
@@ -215,11 +241,7 @@ func (d *Daemon) terminalList(ctx context.Context, raw json.RawMessage) (any, er
 		}
 		wid = w.ID
 	}
-	out := []terminalInfo{}
-	for _, s := range d.sessionsIn(wid) {
-		out = append(out, d.terminalInfo(s))
-	}
-	return out, nil
+	return d.terminalInfos(d.sessionsIn(wid), d.lostIn(wid)), nil
 }
 
 type terminalSel struct {
@@ -505,11 +527,24 @@ func (d *Daemon) terminalRename(ctx context.Context, raw json.RawMessage) (any, 
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
-	if err != nil {
-		return nil, err
-	}
 	name := strings.TrimSpace(p.Name)
+	// 和恢复互斥：恢复中的终端按库里的名字建会话，名字不能在中间改
+	d.restoreMu.Lock()
+	s := d.liveSession(p.Terminal)
+	if s == nil {
+		defer d.restoreMu.Unlock()
+		// 还没恢复的终端只改记录，不为改名拉起它
+		t, err := d.store.LostTerminal(p.Terminal)
+		if err != nil {
+			return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", p.Terminal)
+		}
+		if err := d.store.SetTerminalTitle(t.ID, name); err != nil {
+			return nil, err
+		}
+		t.Title = name
+		return d.lostInfo(t), nil
+	}
+	d.restoreMu.Unlock()
 	if err := d.store.SetTerminalTitle(s.ID, name); err != nil {
 		return nil, err
 	}
@@ -545,16 +580,22 @@ func (d *Daemon) terminalClose(ctx context.Context, raw json.RawMessage) (any, e
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.Terminal)
-	if err != nil {
-		return nil, err
-	}
 	grace := 2 * time.Second
 	if p.GraceMs > 0 {
 		grace = time.Duration(p.GraceMs) * time.Millisecond
 	}
-	d.closeSession(s, grace)
-	return map[string]any{"closed": s.ID, "exitCode": s.ExitCode()}, nil
+	// 还没恢复的终端直接删掉记录，不拉起
+	if s := d.liveSession(p.Terminal); s != nil {
+		d.closeSession(s, grace)
+		return map[string]any{"closed": s.ID, "exitCode": s.ExitCode()}, nil
+	}
+	if p.Terminal == "" {
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "terminal id required")
+	}
+	if !d.closeTerminal(p.Terminal, grace) {
+		return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", p.Terminal)
+	}
+	return map[string]any{"closed": p.Terminal}, nil
 }
 
 type hookEventParams struct {
@@ -569,9 +610,9 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	s, err := d.session(p.TerminalID)
-	if err != nil {
-		return nil, err
+	s := d.liveSession(p.TerminalID)
+	if s == nil {
+		return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", p.TerminalID)
 	}
 	if s.agentName() != p.Agent || !s.isHooked() {
 		s.markHooked(p.Agent)
@@ -587,6 +628,8 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	st.At = time.Now()
 	d.setAgent(s, st)
+	// 会话 ID 和 agent 退出都从 hook 来；标题、进程检查发现的变化由 agentLoop 记（不在 PTY 读协程里写库）
+	d.saveResume(s, false)
 	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 posse hook 写到 stdout
 	if p.Agent == "claude" && p.Event == "UserPromptSubmit" {
 		if title := s.TakeTitle(); title != "" {
@@ -609,8 +652,8 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 		return nil, err
 	}
 	behavior := ""
-	s, err := d.session(p.TerminalID)
-	if err != nil {
+	s := d.liveSession(p.TerminalID)
+	if s == nil {
 		return map[string]any{"behavior": behavior}, nil
 	}
 	if st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload); ok {
@@ -692,7 +735,7 @@ func (d *Daemon) checkAgentGone(s *session) {
 	go d.workerGone(s.ID, "worker agent exited before reporting")
 }
 
-// agentLoop 定期检查各终端的 agent 还在不在：退出后 shell 不一定改标题，等不到 onTitle。
+// agentLoop 定期检查各终端的 agent 还在不在：退出后 shell 不一定改标题，等不到 onTitle。顺便记下恢复用的目录。
 func (d *Daemon) agentLoop(ctx context.Context) {
 	tick := time.NewTicker(agentTick)
 	defer tick.Stop()
@@ -710,6 +753,8 @@ func (d *Daemon) agentLoop(ctx context.Context) {
 		d.mu.Unlock()
 		for _, s := range ss {
 			d.checkAgentGone(s)
+			// 标题和进程检查发现的 agent 变化、shell 里换的目录在这里记下
+			d.saveResume(s, false)
 		}
 	}
 }

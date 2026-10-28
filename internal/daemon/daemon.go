@@ -57,7 +57,9 @@ type session struct {
 	fg      int    // 上次检查时的前台进程组
 	// grok 上次空闲时标题里的会话名：工作中的标题只是状态，手机的标签名用它
 	grokName string
-	name     string // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
+	name     string    // 用户给标签起的名字（terminal.rename），桌面和手机共用，存在 terminals.title
+	saved    resumeRec // 库里记着的恢复信息（saveResume）
+	settling bool      // agent 不在了，已经约好 resumeSettle 之后复查
 }
 
 func (s *session) userName() string {
@@ -182,6 +184,11 @@ type Daemon struct {
 	tchanged chan struct{}  // 任务或消息变化时关闭并替换
 	nudgeMu  sync.Mutex
 	stopping atomic.Bool
+	// exiting 在常驻进程开始退出（收到信号、daemon.stop）时置上：这之后终端和 agent 的退出都不记，
+	// 留着等下次启动恢复
+	exiting   atomic.Bool
+	restoreMu sync.Mutex  // 恢复终端一个一个来，同一个终端不会拉起两次
+	noLost    atomic.Bool // 已经没有等着恢复的终端了（lostIn）
 
 	history  historyState
 	mobile   *mobile.Server
@@ -278,6 +285,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	context.AfterFunc(ctx, func() { d.exiting.Store(true) })
 	var keep []string
 	var ln *net.UnixListener
 	if in != nil {
@@ -309,7 +317,7 @@ func Run(ctx context.Context, cfg Config) error {
 	if n, err := st.MarkRunningLost(time.Now(), keep); err != nil {
 		return err
 	} else if n > 0 {
-		log.Printf("marked %d terminals from the previous daemon as lost", n)
+		log.Printf("%d terminals from the previous daemon are waiting to be restored", n)
 	}
 	if err := st.PruneTerminals(); err != nil {
 		return err
@@ -368,6 +376,10 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 		}()
 	}
+	// 交接过来的进程不自动恢复：留下的终端在旧进程启动时就该恢复了，没恢复的是用户还没点开的
+	if in == nil && agent.RestoreAll(cfg.Home) {
+		go d.restoreAll()
+	}
 	srv := rpc.NewServer()
 	d.register(srv, cancel)
 	log.Printf("posse daemon %s (%s) listening on %s (pid %d)", Version, Build, sock, os.Getpid())
@@ -401,6 +413,8 @@ func lock(path string, wait time.Duration) (func(), error) {
 }
 
 func (d *Daemon) closeAll() {
+	// Serve 出错返回时 ctx 还没取消，这里也要置上，关掉的终端留着恢复
+	d.exiting.Store(true)
 	// 交接出去的终端由新进程接着跑
 	if d.handoff.handedOff() {
 		return
@@ -542,12 +556,18 @@ func (d *Daemon) session(id string) (*session, error) {
 	if id == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "terminal id required")
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if s, ok := d.terms[id]; ok {
+	if s := d.liveSession(id); s != nil {
 		return s, nil
 	}
-	return nil, rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", id)
+	// 上一个常驻进程留下的终端在第一次用到时恢复
+	return d.restoreTerminal(id, 0, 0)
+}
+
+// liveSession 只找正托管着的终端，不恢复留下的。
+func (d *Daemon) liveSession(id string) *session {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.terms[id]
 }
 
 func (d *Daemon) project(sel string) (store.Project, error) {
@@ -632,6 +652,13 @@ func (d *Daemon) closeSession(s *session, grace time.Duration) {
 	d.mu.Lock()
 	delete(d.terms, s.ID)
 	d.mu.Unlock()
+	// 用户关的马上记成退出（onExit 要等 resumeSettle 才记）；常驻进程退出时关的留着恢复
+	if !d.exiting.Load() {
+		code := s.ExitCode()
+		if err := d.store.EndTerminal(s.ID, "exited", &code, time.Now()); err != nil {
+			log.Printf("terminal %s: record exit: %v", s.ID, err)
+		}
+	}
 }
 
 // closeSessions 并行关闭多个终端，等全部结束后返回。

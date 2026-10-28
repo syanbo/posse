@@ -594,11 +594,11 @@ func summaryTrailing(c *ui.Context, running int, status string) {
 	}
 }
 
-// agentSessions 是侧栏列出的会话：运行中的 agent 终端，普通 shell 只在标签栏。
+// agentSessions 是侧栏列出的会话：运行中和等着恢复的 agent 终端，普通 shell 只在标签栏。
 func agentSessions(ts []terminalInfo) []terminalInfo {
 	var out []terminalInfo
 	for _, t := range ts {
-		if t.Agent != "" && t.Running {
+		if t.Agent != "" && (t.Running || t.Lost) {
 			out = append(out, t)
 		}
 	}
@@ -610,7 +610,7 @@ func (a *app) selectedSession(w *workspace) string {
 	if w == nil || a.filesActive(w) {
 		return ""
 	}
-	if cur := a.currentTerminal(w); cur != nil && cur.Agent != "" && cur.Running {
+	if cur := a.currentTerminal(w); cur != nil && cur.Agent != "" && (cur.Running || cur.Lost) {
 		return cur.ID
 	}
 	return ""
@@ -2000,7 +2000,10 @@ func fullLabel(t terminalInfo) (string, string) {
 	case title != "" && !strings.EqualFold(title, name) && title != "Claude Code":
 		detail = title
 	}
-	if !t.Running {
+	switch {
+	case t.Lost:
+		detail = "未恢复"
+	case !t.Running:
 		detail = "已退出"
 	}
 	return name, detail

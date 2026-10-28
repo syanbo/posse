@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	once   sync.Once
-	rusage func(pid int32, flavor int32, buf unsafe.Pointer) int32
+	once    sync.Once
+	rusage  func(pid int32, flavor int32, buf unsafe.Pointer) int32
+	pidinfo func(pid, flavor int32, arg uint64, buf unsafe.Pointer, size int32) int32
 )
 
 // rusage_info_v4（flavor 4）：16 字节 uuid 之后依次是 user_time、system_time、pkg_idle_wkups、
@@ -21,13 +22,18 @@ const (
 	idxFootprint = 2 + 7
 )
 
-func read(pid, idx int) uint64 {
+func load() {
 	once.Do(func() {
 		h, err := purego.Dlopen("/usr/lib/libSystem.B.dylib", purego.RTLD_LAZY|purego.RTLD_GLOBAL)
 		if err == nil {
 			purego.RegisterLibFunc(&rusage, h, "proc_pid_rusage")
+			purego.RegisterLibFunc(&pidinfo, h, "proc_pidinfo")
 		}
 	})
+}
+
+func read(pid, idx int) uint64 {
+	load()
 	if rusage == nil {
 		return 0
 	}
@@ -36,6 +42,32 @@ func read(pid, idx int) uint64 {
 		return 0
 	}
 	return buf[idx]
+}
+
+// proc_vnodepathinfo（PROC_PIDVNODEPATHINFO）：当前目录在前，每项是 152 字节的 vnode_info 加 MAXPATHLEN 的路径
+const (
+	pidVnodePathInfo = 9
+	vnodeInfoSize    = 152
+	maxPathLen       = 1024
+)
+
+// Cwd 返回进程的当前目录；取不到时（进程不在、没有权限）返回空。
+func Cwd(pid int) string {
+	load()
+	if pidinfo == nil || pid <= 0 {
+		return ""
+	}
+	var buf [2 * (vnodeInfoSize + maxPathLen)]byte
+	if pidinfo(int32(pid), pidVnodePathInfo, 0, unsafe.Pointer(&buf[0]), int32(len(buf))) <= 0 {
+		return ""
+	}
+	path := buf[vnodeInfoSize : vnodeInfoSize+maxPathLen]
+	for i, c := range path {
+		if c == 0 {
+			return string(path[:i])
+		}
+	}
+	return ""
 }
 
 // Footprint 返回进程的 phys_footprint（字节），与活动监视器的"内存"一致；取不到时返回 0。

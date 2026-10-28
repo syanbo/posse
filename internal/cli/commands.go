@@ -34,6 +34,7 @@ type terminalInfo struct {
 	Command                            []string
 	AgentState                         *agentState
 	Running                            bool
+	Lost                               bool // 上一个常驻进程留下、还没恢复，第一次操作它时恢复
 	ExitCode                           *int
 	Pid, Cols, Rows                    int
 	IdleMs                             int64
@@ -337,6 +338,9 @@ func terminalSummary(ts []terminalInfo) string {
 }
 
 func terminalState(t terminalInfo) string {
+	if t.Lost {
+		return "lost"
+	}
 	if !t.Running {
 		if t.ExitCode != nil {
 			return fmt.Sprintf("exited(%d)", *t.ExitCode)

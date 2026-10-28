@@ -45,7 +45,9 @@ type Terminal struct {
 	Title       string     `json:"title,omitempty"` // 用户给标签起的名字，空是默认（会话标题或终端标题）
 	Command     []string   `json:"command"`
 	Agent       string     `json:"agent,omitempty"`
-	State       string     `json:"state"` // running | exited | lost
+	SessionID   string     `json:"sessionId,omitempty"` // agent 的会话，重启后按它续接
+	Cwd         string     `json:"cwd,omitempty"`       // 前台程序最后所在的目录，重启后在这里恢复
+	State       string     `json:"state"`               // running | exited | lost（上一个常驻进程留下、等着恢复）
 	ExitCode    *int       `json:"exitCode,omitempty"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	EndedAt     *time.Time `json:"endedAt,omitempty"`
@@ -96,8 +98,8 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, col := range []string{"model", "effort"} {
-		if err := addColumn(db, "tasks", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}} {
+		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)
 		}
@@ -287,8 +289,68 @@ func (s *Store) FindWorkspaces(sel string) ([]Workspace, error) {
 
 func (s *Store) AddTerminal(t Terminal) error {
 	cmd, _ := json.Marshal(t.Command)
-	_, err := s.db.Exec(`INSERT INTO terminals(id,workspace_id,title,command,agent,state,created_at) VALUES(?,?,?,?,?,?,?)`,
-		t.ID, t.WorkspaceID, t.Title, string(cmd), t.Agent, t.State, ms(t.CreatedAt))
+	_, err := s.db.Exec(`INSERT INTO terminals(id,workspace_id,title,command,agent,session_id,cwd,state,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.WorkspaceID, t.Title, string(cmd), t.Agent, t.SessionID, t.Cwd, t.State, ms(t.CreatedAt))
+	return err
+}
+
+// SetTerminalResume 记下重启后恢复要用的 agent、会话和目录。
+func (s *Store) SetTerminalResume(id, agent, sessionID, cwd string) error {
+	_, err := s.db.Exec(`UPDATE terminals SET agent=?, session_id=?, cwd=? WHERE id=?`, agent, sessionID, cwd, id)
+	return err
+}
+
+// ReviveTerminal 把恢复了的终端改回运行中，名字和创建时间不变。
+func (s *Store) ReviveTerminal(id string, command []string, agent, sessionID string) error {
+	cmd, _ := json.Marshal(command)
+	_, err := s.db.Exec(`UPDATE terminals SET command=?, agent=?, session_id=?, state='running', exit_code=NULL, ended_at=NULL WHERE id=? AND state='lost'`,
+		string(cmd), agent, sessionID, id)
+	return err
+}
+
+// LostTerminals 是等着恢复的终端（工作区还在的），按创建时间排序；workspaceID 为空时是全部。
+func (s *Store) LostTerminals(workspaceID string) ([]Terminal, error) {
+	if workspaceID == "" {
+		return s.lostTerminals("")
+	}
+	return s.lostTerminals(` AND t.workspace_id=?`, workspaceID)
+}
+
+func (s *Store) LostTerminal(id string) (Terminal, error) {
+	ts, err := s.lostTerminals(` AND t.id=?`, id)
+	if err != nil {
+		return Terminal{}, err
+	}
+	if len(ts) == 0 {
+		return Terminal{}, ErrNotFound
+	}
+	return ts[0], nil
+}
+
+func (s *Store) lostTerminals(cond string, args ...any) ([]Terminal, error) {
+	rows, err := s.db.Query(`SELECT t.id,t.workspace_id,t.title,t.command,t.agent,t.session_id,t.cwd,t.created_at FROM terminals t
+		JOIN workspaces w ON w.id=t.workspace_id WHERE t.state='lost'`+cond+` ORDER BY t.created_at`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Terminal
+	for rows.Next() {
+		var t Terminal
+		var cmd string
+		var at int64
+		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Title, &cmd, &t.Agent, &t.SessionID, &t.Cwd, &at); err != nil {
+			return nil, err
+		}
+		json.Unmarshal([]byte(cmd), &t.Command)
+		t.State, t.CreatedAt = "lost", fromMS(at)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) DeleteTerminal(id string) error {
+	_, err := s.db.Exec(`DELETE FROM terminals WHERE id=?`, id)
 	return err
 }
 
@@ -297,13 +359,14 @@ func (s *Store) SetTerminalTitle(id, title string) error {
 	return err
 }
 
-func (s *Store) TerminalTitle(id string) (string, error) {
-	var title string
-	err := s.db.QueryRow(`SELECT title FROM terminals WHERE id=?`, id).Scan(&title)
+// TerminalResume 读终端的名字和恢复信息（交接过来的终端用，两边共用一个数据库）。
+func (s *Store) TerminalResume(id string) (Terminal, error) {
+	t := Terminal{ID: id}
+	err := s.db.QueryRow(`SELECT title,agent,session_id,cwd FROM terminals WHERE id=?`, id).Scan(&t.Title, &t.Agent, &t.SessionID, &t.Cwd)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
+		return t, ErrNotFound
 	}
-	return title, err
+	return t, err
 }
 
 func (s *Store) EndTerminal(id, state string, code *int, at time.Time) error {
@@ -321,9 +384,10 @@ func (s *Store) MarkRunningLost(at time.Time, keep []string) (int64, error) {
 	return res.RowsAffected()
 }
 
-// PruneTerminals 删除所有已结束的终端记录；没有地方读历史记录，不清理表会一直增长。
+// PruneTerminals 删除已结束的终端记录和工作区已经不在的记录；没有地方读历史记录，不清理表会一直增长。
+// 等着恢复的（lost）留着。
 func (s *Store) PruneTerminals() error {
-	_, err := s.db.Exec(`DELETE FROM terminals WHERE state!='running'`)
+	_, err := s.db.Exec(`DELETE FROM terminals WHERE state='exited' OR workspace_id NOT IN (SELECT id FROM workspaces)`)
 	return err
 }
 

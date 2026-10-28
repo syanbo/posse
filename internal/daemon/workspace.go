@@ -378,23 +378,21 @@ func (d *Daemon) workspaceList(ctx context.Context, raw json.RawMessage) (any, e
 		return nil, err
 	}
 	sessions := d.sessionsByWorkspace()
+	lost := d.lostByWorkspace()
 	out := []workspaceInfo{}
 	for _, w := range ws {
-		out = append(out, d.buildWorkspaceInfo(ctx, w, p.Dirty, idx.label(w), sessions[w.ID]))
+		out = append(out, d.buildWorkspaceInfo(ctx, w, p.Dirty, idx.label(w), sessions[w.ID], lost[w.ID]))
 	}
 	return out, nil
 }
 
 func (d *Daemon) workspaceInfo(ctx context.Context, w store.Workspace, dirty bool) workspaceInfo {
-	return d.buildWorkspaceInfo(ctx, w, dirty, d.workspaceLabel(w), d.sessionsIn(w.ID))
+	return d.buildWorkspaceInfo(ctx, w, dirty, d.workspaceLabel(w), d.sessionsIn(w.ID), d.lostIn(w.ID))
 }
 
-func (d *Daemon) buildWorkspaceInfo(ctx context.Context, w store.Workspace, dirty bool, label string, sessions []*session) workspaceInfo {
-	info := workspaceInfo{Workspace: w, Label: label, Terminals: []terminalInfo{}}
+func (d *Daemon) buildWorkspaceInfo(ctx context.Context, w store.Workspace, dirty bool, label string, sessions []*session, lost []store.Terminal) workspaceInfo {
+	info := workspaceInfo{Workspace: w, Label: label, Terminals: d.terminalInfos(sessions, lost)}
 	info.Project, _, _ = strings.Cut(info.Label, "/")
-	for _, s := range sessions {
-		info.Terminals = append(info.Terminals, d.terminalInfo(s))
-	}
 	if dirty && w.Kind != "folder" {
 		if out, err := gitx.Dirty(ctx, w.Path); err == nil {
 			v := out != ""
@@ -440,7 +438,7 @@ func (d *Daemon) workspaceCurrent(ctx context.Context, raw json.RawMessage) (any
 
 func (d *Daemon) currentWorkspace(terminalID, cwd string) (store.Workspace, error) {
 	if terminalID != "" {
-		if s, err := d.session(terminalID); err == nil {
+		if s := d.liveSession(terminalID); s != nil {
 			if w, err := d.store.Workspace(s.WorkspaceID); err == nil {
 				return w, nil
 			}

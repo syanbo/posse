@@ -41,6 +41,7 @@ type Options struct {
 	Env         []string
 	Cols, Rows  int
 	Scrollback  int
+	CreatedAt   time.Time // 空是现在；重启后恢复的终端沿用原来的，标签顺序不变
 	OnExit      func(t *Terminal, code int)
 	OnTitle     func(t *Terminal, title string)
 }
@@ -215,12 +216,15 @@ func Start(o Options) (*Terminal, error) {
 }
 
 func newTerminal(o Options) *Terminal {
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = time.Now()
+	}
 	t := &Terminal{
 		ID:          o.ID,
 		WorkspaceID: o.WorkspaceID,
 		Command:     o.Command,
 		Dir:         o.Dir,
-		CreatedAt:   time.Now(),
+		CreatedAt:   o.CreatedAt,
 		replies:     make(chan []byte, 256),
 		exited:      make(chan struct{}),
 		readDone:    make(chan struct{}),

@@ -106,9 +106,10 @@ func (h mobileHost) State() mobile.State {
 	return st
 }
 
+// Terminal 只给托管着的终端：手机的会话流每 500ms 按会话 ID 找一次终端，经 d.session 会把还没恢复的拉起来。
 func (h mobileHost) Terminal(id string) host.Terminal {
-	s, err := h.d.session(id)
-	if err != nil {
+	s := h.d.liveSession(id)
+	if s == nil {
 		return nil
 	}
 	return s.Terminal
@@ -132,11 +133,9 @@ func (h mobileHost) CreateTerminal(workspaceID, agentName, prompt, command strin
 }
 
 func (h mobileHost) CloseTerminal(id string) error {
-	s, err := h.d.session(id)
-	if err != nil {
-		return err
+	if !h.d.closeTerminal(id, 2*time.Second) {
+		return rpc.Errorf(rpc.CodeNotFound, "terminal %s not found", id)
 	}
-	h.d.closeSession(s, 2*time.Second)
 	return nil
 }
 

@@ -29,9 +29,13 @@ func (d *Daemon) terminalAttach(ctx context.Context, raw json.RawMessage, conn n
 	if err := rpc.Decode(raw, &p); err != nil {
 		return err
 	}
-	s, err := d.session(p.Terminal)
-	if err != nil {
-		return err
+	s := d.liveSession(p.Terminal)
+	if s == nil {
+		// 还没恢复的终端按接入方的尺寸拉起，agent 不用先按默认尺寸画一遍
+		var err error
+		if s, err = d.restoreTerminal(p.Terminal, p.Cols, p.Rows); err != nil {
+			return err
+		}
 	}
 	snap, sub := s.Attach(p.Cols, p.Rows)
 	defer sub.Close()

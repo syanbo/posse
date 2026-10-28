@@ -33,6 +33,7 @@ type StartOptions struct {
 	Env         []string
 	Cols, Rows  int
 	Scrollback  int
+	CreatedAt   time.Time // 空是现在
 	OnTitle     func(id, title string)
 	OnExit      func(id string, code int)
 }
@@ -134,7 +135,7 @@ func (Local) Adopt(o StartOptions, r Record, f *os.File) (Terminal, error) {
 func termOptions(o StartOptions) term.Options {
 	opts := term.Options{
 		ID: o.ID, WorkspaceID: o.WorkspaceID, Dir: o.Dir, Command: o.Command, Env: o.Env,
-		Cols: o.Cols, Rows: o.Rows, Scrollback: o.Scrollback,
+		Cols: o.Cols, Rows: o.Rows, Scrollback: o.Scrollback, CreatedAt: o.CreatedAt,
 	}
 	if o.OnTitle != nil {
 		opts.OnTitle = func(t *term.Terminal, title string) { o.OnTitle(t.ID, title) }

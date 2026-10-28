@@ -37,6 +37,8 @@ func settingsPath(home string) string { return filepath.Join(home, "agents.json"
 type agentSettings struct {
 	Permissions string   `json:"permissions,omitempty"`
 	Disabled    []string `json:"disabled,omitempty"` // 设置里关掉的 agent：菜单不列，常驻进程不启动
+	// RestoreAll 是常驻进程启动时把上次留下的终端全部恢复；默认只列出来，接入时才恢复
+	RestoreAll bool `json:"restoreAll,omitempty"`
 }
 
 func loadSettings(home string) agentSettings {
@@ -88,6 +90,15 @@ func SetEnabled(home, name string, on bool) error {
 	if len(s.Disabled) == 0 {
 		s.Disabled = nil
 	}
+	return saveSettings(home, s)
+}
+
+// RestoreAll 是重启后是否一启动就恢复上次的全部终端，常驻进程启动时读。
+func RestoreAll(home string) bool { return loadSettings(home).RestoreAll }
+
+func SetRestoreAll(home string, on bool) error {
+	s := loadSettings(home)
+	s.RestoreAll = on
 	return saveSettings(home, s)
 }
 

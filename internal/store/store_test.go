@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,16 @@ func TestStore(t *testing.T) {
 	if err := s.AddTerminal(Terminal{ID: "t_2", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.AddTerminal(Terminal{ID: "t_3", WorkspaceID: ws[0].ID, Command: []string{"sh"}, State: "running", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EndTerminal("t_3", "exited", nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTerminal(Terminal{ID: "t_4", WorkspaceID: "w_gone", Command: []string{"sh"}, State: "lost", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	// 退出了的和工作区不在了的删掉，等着恢复的 t_1 留着
 	if err := s.PruneTerminals(); err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +65,28 @@ func TestStore(t *testing.T) {
 		left = append(left, id)
 	}
 	rows.Close()
-	if len(left) != 1 || left[0] != "t_2" {
-		t.Fatalf("terminals after prune = %v, want [t_2]", left)
+	slices.Sort(left)
+	if !slices.Equal(left, []string{"t_1", "t_2"}) {
+		t.Fatalf("terminals after prune = %v, want [t_1 t_2]", left)
+	}
+	if err := s.SetTerminalResume("t_1", "claude", "sid-1", "/r/sub"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetTerminalTitle("t_1", "登录页"); err != nil {
+		t.Fatal(err)
+	}
+	lost, err := s.LostTerminals(ws[0].ID)
+	if err != nil || len(lost) != 1 || lost[0].ID != "t_1" || lost[0].Agent != "claude" || lost[0].SessionID != "sid-1" || lost[0].Cwd != "/r/sub" || lost[0].Title != "登录页" {
+		t.Fatalf("LostTerminals = %+v, %v", lost, err)
+	}
+	if err := s.ReviveTerminal("t_1", []string{"zsh"}, "claude", "sid-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.LostTerminal("t_1"); err != ErrNotFound {
+		t.Fatalf("LostTerminal after revive = %v, want ErrNotFound", err)
+	}
+	if r, err := s.TerminalResume("t_1"); err != nil || r.Title != "登录页" || r.SessionID != "sid-1" {
+		t.Fatalf("TerminalResume = %+v, %v", r, err)
 	}
 	counts, err := s.WorkspaceCounts()
 	if err != nil || counts[p.ID] != 2 || len(counts) != 1 {

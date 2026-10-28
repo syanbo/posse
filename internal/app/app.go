@@ -53,6 +53,7 @@ type terminalInfo struct {
 	WaitingTasks                  bool   // 里面的 agent 正阻塞在 posse task wait 上（旧常驻进程没有这个字段）
 	PhoneSized                    bool   // 手机正看着，终端按手机的尺寸排版（旧常驻进程没有这个字段）
 	Name                          string // 用户改的标签名，常驻进程记着（terminal.rename），手机也用它
+	Lost                          bool   // 上一个常驻进程留下、还没恢复：接入时常驻进程才拉起它
 }
 
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
@@ -169,6 +170,7 @@ type app struct {
 	editorDemo   *editor.State // 设置页编辑器预览的只读编辑器，第一次打开时建
 	permission   string        // agent 的权限档位，存在 $POSSE_HOME/agents.json
 	disabled     []string      // 设置里关掉的 agent，也在 agents.json
+	restoreAll   bool          // 常驻进程启动时恢复全部终端，也在 agents.json
 	home         string        // $POSSE_HOME，ui.json 所在目录；为空时不保存
 	state        uiState       // 写进 ui.json 的界面状态
 
@@ -357,6 +359,7 @@ func Run(c *client.Client) error {
 		state:        loadUIState(c.Home),
 		permission:   agent.PermissionMode(c.Home),
 		disabled:     agent.Disabled(c.Home),
+		restoreAll:   agent.RestoreAll(c.Home),
 		exe:          newExeWatch(),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
