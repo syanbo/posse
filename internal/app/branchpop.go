@@ -414,7 +414,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 		if !set {
 			open = !strings.HasPrefix(key, "remote:")
 		}
-		row := ui.Row(c.Key("fold:"+key)).Height(sz(26)).Padding(6, 12, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
+		row := ui.Row(c.Key("fold:"+key)).Height(sz(24)).Margin(2, 0, 0, 0).Padding(0, 12, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(title)
 		if row.Hovered() {
 			row.Background(colors(t).wash)
@@ -577,7 +577,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 				done()
 				a.attachWorktree(w, other)
 			}
-			if m.Item("在访达中显示 worktree").Chosen() {
+			if m.Item("在访达中显示 worktree").Icon(iconFolder).Chosen() {
 				done()
 				mygo.Shell.ShowItemInFolder(other)
 			}
@@ -591,7 +591,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			}
 		}
 	}
-	if m.Item("基于 " + q + " 新建分支…").Chosen() {
+	if m.Item("基于 " + q + " 新建分支…").Icon(iconPlus).Chosen() {
 		done()
 		a.askNewBranch(w, v, b.Name)
 	}
@@ -605,7 +605,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	}
 	if !b.Current {
 		m.Separator()
-		if m.Item("和 " + cq + " 比较").Chosen() {
+		if m.Item("和 " + cq + " 比较").Icon(iconDiff).Chosen() {
 			done()
 			a.openCompare(w, v, b.Name, curName, false)
 		}
@@ -633,11 +633,11 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		a.askWorktreeFrom(w, b.Name)
 	}
 	m.Separator()
-	if m.Item("在日志里显示").Chosen() {
+	if m.Item("在日志里显示").Icon(iconGitLog).Chosen() {
 		done()
 		a.openLog(w, branchRef(b), "")
 	}
-	if !b.Remote && b.Upstream != "" && m.Item("更新").Chosen() {
+	if !b.Remote && b.Upstream != "" && m.Item("更新").Icon(iconFetch).Chosen() {
 		done()
 		if b.Current {
 			a.guardAgent(w, "更新", func() {
@@ -647,7 +647,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 			a.updateBranch(v, "更新 "+b.Name, b)
 		}
 	}
-	if !b.Remote && m.Item("Push…").Chosen() {
+	if !b.Remote && m.Item("Push…").Icon(iconPush).Chosen() {
 		done()
 		a.openPushBranch(w, b.Name)
 	}
