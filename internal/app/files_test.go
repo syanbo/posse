@@ -909,3 +909,28 @@ func TestMissingWorkspace(t *testing.T) {
 		savePNG(t, tt, "missing-workspace.png")
 	}
 }
+
+// 从别处加进来的 worktree 显示当前分支，游离时用原名；侧栏和标题都跟着换。
+func TestAttachedShowsBranch(t *testing.T) {
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "godfrey")
+	os.MkdirAll(repo, 0o755)
+	gitRun(t, repo, "init", "-q", "-b", "main")
+	gitRun(t, repo, "-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "init")
+	wt := filepath.Join(dir, "tz-wt", "godfrey")
+	gitRun(t, repo, "worktree", "add", "-q", "-b", "feat_tz", wt)
+	ws := []workspace{
+		{ID: "m", ProjectID: "p", Name: "main", Kind: "main", Project: "godfrey", Label: "godfrey/main", Path: repo},
+		{ID: "a", ProjectID: "p", Name: "godfrey", Kind: "folder", Project: "godfrey", Label: "godfrey/godfrey", Path: wt},
+	}
+	showBranches(ws)
+	if ws[0].Shown != "" || ws[1].Shown != "feat_tz" || displayName(&ws[1]) != "godfrey/feat_tz" {
+		t.Fatalf("shown %q %q, title %q", ws[0].Shown, ws[1].Shown, displayName(&ws[1]))
+	}
+	gitRun(t, wt, "checkout", "-q", "--detach")
+	ws[1].Shown = ""
+	showBranches(ws)
+	if ws[1].Shown != "" || displayName(&ws[1]) != "godfrey/godfrey" {
+		t.Fatalf("detached shown %q", ws[1].Shown)
+	}
+}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -481,7 +482,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 		collapsible(c, shown, func() {
 			ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
 				for _, w := range ws {
-					label := w.Name
+					label := cmp.Or(w.Shown, w.Name)
 					if w.Kind == "main" {
 						label = "主工作区"
 					}
@@ -651,6 +652,10 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 	}
 	if (!nested && a.state.ProjectMetaHidden) || (nested && a.state.WorkspaceMetaHidden) {
 		sub, branch = "", ""
+	}
+	// 加进来的 worktree 名字已经是分支，不再写一遍
+	if w.Shown != "" && branch == label {
+		branch = ""
 	}
 	if w.Missing {
 		sub, branch = "", ""
@@ -1747,7 +1752,8 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
 						titleText(c, displayName(w), fsPage).MaxLines(1)
 						var branch func()
-						if w.Branch != "" {
+						// 加进来的 worktree 标题已经是分支
+						if w.Branch != "" && w.Branch != w.Shown {
 							branch = metaMono(c, iconBranch, w.Branch, "")
 						}
 						metaRow(c, metaMono(c, iconFolder, shortPath(w.Path), w.Path), branch)
@@ -2009,6 +2015,9 @@ func bareTitle(t terminalInfo) string {
 func displayName(w *workspace) string {
 	if w.Kind == "main" {
 		return w.Project
+	}
+	if w.Shown != "" {
+		return w.Project + "/" + w.Shown
 	}
 	return w.Label
 }

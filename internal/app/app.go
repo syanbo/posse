@@ -63,6 +63,9 @@ type workspace struct {
 	Terminals                                                        []terminalInfo
 	// Missing 是目录已经不在了（在外面删掉或挪走，又没被 dropGoneWorktrees 自动移除），窗口每秒查一次
 	Missing bool `json:"-"`
+	// Shown 是从别处加进来的 worktree 显示的名字：它当前的分支（目录名常和仓库同名，看不出是哪个）；
+	// 空时用 Name。只用来显示，CLI 和常驻进程照旧认 Name
+	Shown string `json:"-"`
 }
 
 type taskInfo struct {
@@ -471,6 +474,7 @@ func (a *app) refresh() {
 				r.workspaces[i].Missing, r.workspaces[i].Branch = true, ""
 			}
 		}
+		showBranches(r.workspaces)
 	}
 	if err == nil {
 		err = a.c.Call(ctx, "task.list", nil, &r.tasks)
@@ -1033,6 +1037,24 @@ func (a *app) askRemoveProject(w workspace) {
 		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
 		a.refresh()
 	})
+}
+
+// showBranches 给从别处加进来的 worktree 填上显示名 Shown：当前分支，游离时不填。
+func showBranches(ws []workspace) {
+	mainPath := map[string]string{}
+	for _, w := range ws {
+		if w.Kind == "main" {
+			mainPath[w.ProjectID] = w.Path
+		}
+	}
+	for i := range ws {
+		w := &ws[i]
+		if m := mainPath[w.ProjectID]; w.Kind == "folder" && !w.Missing && m != "" && filepath.Clean(w.Path) != filepath.Clean(m) {
+			if head, detached := gitx.HeadRef(w.Path); head != "" && !detached {
+				w.Shown = head
+			}
+		}
+	}
 }
 
 // askRemoveMissing 移除目录已经不在的工作区：只删记录，不碰分支；项目目录不在时移除的是整个项目。
