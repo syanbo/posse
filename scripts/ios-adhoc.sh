@@ -4,7 +4,8 @@
 #
 #   scripts/ios-adhoc.sh 0.1.1   先在 mobile/CHANGELOG.md 写好 "## 0.1.1" 一节（可以不提交），脚本把版本号写进
 #                                mobile/pubspec.yaml，连同 CHANGELOG 提交成 chore(release): 发布 iOS 0.1.1，再打包上传
-#   scripts/ios-adhoc.sh         不改版本，按 pubspec.yaml 里现在的版本重新打包上传（登记了新设备、上传失败后重跑）
+#   scripts/ios-adhoc.sh         CHANGELOG 最上面一节的版本和 pubspec.yaml 不同时发这一版（同上，提交后打包上传）；
+#                                相同时不改版本，按现在的版本重新打包上传（登记了新设备、上传失败后重跑）
 #
 # 只有在开发者账号里登记过 UDID 的设备装得上：Ad Hoc 描述文件打包时列进这些设备，
 # 新设备登记后要重新运行。构建号取提交数，iOS 按构建号覆盖安装、不清数据，App 也按构建号判断有没有新版本。
@@ -23,6 +24,13 @@ if ! wrangler whoami >/dev/null 2>&1; then
 	exit 1
 fi
 
+# 写了新一节的 CHANGELOG 就是要发新版，不带版本号也照这一节升，免得只换了构建号、版本号没动
+if [ $# -eq 0 ]; then
+	latest=$(sed -n 's/^## \([0-9][0-9.]*\)$/\1/p' "$changelog" | head -n 1)
+	if [ -n "$latest" ] && ! grep -q "^version: $latest+" mobile/pubspec.yaml; then
+		set -- "$latest"
+	fi
+fi
 if [ $# -gt 0 ]; then
 	version=$1
 	# 只允许 CHANGELOG 没提交：它和版本号放在同一个提交里；包外的改动（电脑端）不管
