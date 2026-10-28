@@ -207,6 +207,12 @@ func (d *Daemon) workspaceCreate(ctx context.Context, raw json.RawMessage) (any,
 	if p.Agent == "" && p.Model != (agent.Model{}) {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	}
+	if p.Agent != "" {
+		// 先挡关掉的 agent，免得工作区建好了 agent 却起不来
+		if err := d.checkEnabled(p.Agent); err != nil {
+			return nil, err
+		}
+	}
 	proj, err := d.project(p.Project)
 	if err != nil {
 		return nil, err

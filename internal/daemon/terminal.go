@@ -57,6 +57,9 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 
 // startAgent 启动 agent；Claude 的会话 ID 在启动前就确定了。
 func (d *Daemon) startAgent(w store.Workspace, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
+	if err := d.checkEnabled(name); err != nil {
+		return nil, err
+	}
 	l, err := d.launcher.Launch(name, model, prompt)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)

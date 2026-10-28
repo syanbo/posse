@@ -70,3 +70,30 @@ func TestPermissionArgs(t *testing.T) {
 		t.Errorf("ask mode still skips: %q", cmd)
 	}
 }
+
+// 开关和权限档位存在同一个文件里，改一项不能冲掉另一项。
+func TestSetEnabled(t *testing.T) {
+	home := t.TempDir()
+	if err := SetPermissionMode(home, PermissionAsk); err != nil {
+		t.Fatal(err)
+	}
+	SetEnabled(home, "grok", false)
+	SetEnabled(home, "claude", false)
+	if got := Disabled(home); !slices.Equal(got, []string{"claude", "grok"}) {
+		t.Fatalf("disabled = %v", got)
+	}
+	if PermissionMode(home) != PermissionAsk {
+		t.Fatal("SetEnabled dropped permission mode")
+	}
+	SetPermissionMode(home, PermissionSkip)
+	if got := WithoutDisabled(home, []string{"claude", "codex", "grok"}); !slices.Equal(got, []string{"codex"}) {
+		t.Fatalf("WithoutDisabled = %v", got)
+	}
+	SetEnabled(home, "claude", true)
+	if got := Disabled(home); !slices.Equal(got, []string{"grok"}) {
+		t.Fatalf("after enabling claude: %v", got)
+	}
+	if WithoutDisabled(home, nil) != nil {
+		t.Fatal("nil (still detecting) must stay nil")
+	}
+}

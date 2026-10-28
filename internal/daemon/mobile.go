@@ -141,7 +141,7 @@ func (h mobileHost) CloseTerminal(id string) error {
 }
 
 func (h mobileHost) Agents() []string {
-	if got := h.d.installedAgents(); got != nil {
+	if got := h.d.enabledAgents(); got != nil {
 		return got
 	}
 	return agent.Known

@@ -163,6 +163,7 @@ type app struct {
 	editorPick   fontPick
 	editorDemo   *editor.State // 设置页编辑器预览的只读编辑器，第一次打开时建
 	permission   string        // agent 的权限档位，存在 $POSSE_HOME/agents.json
+	disabled     []string      // 设置里关掉的 agent，也在 agents.json
 	home         string        // $POSSE_HOME，ui.json 所在目录；为空时不保存
 	state        uiState       // 写进 ui.json 的界面状态
 
@@ -299,9 +300,13 @@ type app struct {
 	focused  atomic.Bool          // 窗口有焦点：在后台时看着的会话也不算看过
 }
 
-// agentChoices 是本机装了的 agent（常驻进程检测），菜单和选项只列这些，按 agent.Known 的顺序。
-// 旧常驻进程不报、或还没检测完时全列。
+// agentChoices 是本机装了、又没在设置里关掉的 agent，菜单和选项只列这些，按 agent.Known 的顺序。
 func (a *app) agentChoices() []string {
+	return slices.DeleteFunc(slices.Clone(a.installedAgents()), func(n string) bool { return slices.Contains(a.disabled, n) })
+}
+
+// installedAgents 是常驻进程检测到装了的 agent；旧常驻进程不报、或还没检测完时全列。
+func (a *app) installedAgents() []string {
 	if a.daemon.Agents == nil {
 		return agent.Known
 	}
@@ -346,6 +351,7 @@ func Run(c *client.Client) error {
 		home:         c.Home,
 		state:        loadUIState(c.Home),
 		permission:   agent.PermissionMode(c.Home),
+		disabled:     agent.Disabled(c.Home),
 		exe:          newExeWatch(),
 	}
 	a.selected, a.revealSel = a.state.Selected, true

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 					case "general":
 						a.awakeSettings(c)
 					case "agent":
+						a.agentSettings(c)
 						a.permissionSettings(c)
 						a.planSettings(c)
 					case "appearance":
@@ -140,6 +142,30 @@ func (a *app) permissionSettings(c *ui.Context) {
 		}
 		ui.Text(c, permissionModes[sel].tip).FontSize(fsSmall).TextColor(c.Theme().TextMuted).LineHeight(1.5)
 	})
+}
+
+// agentSettings 是各家 agent 的开关：关掉的不出现在新建会话、派发任务、新建工作区和手机里，常驻进程也拒绝启动它。
+func (a *app) agentSettings(c *ui.Context) {
+	settingsCard(c, "Agent", "关掉的 agent 不出现在新建会话、派发任务、新建工作区和手机里，常驻进程也不再启动它；已经在运行的不受影响，在终端里自己敲命令照样能用。只列本机装了的。", func() {
+		for _, name := range a.installedAgents() {
+			on := !slices.Contains(a.disabled, name)
+			settingsRow(c, agentTitle(name), func() {
+				if ui.Switch(c.Key("agent:"+name), &on).Label(agentTitle(name)).Changed() {
+					a.setAgentEnabled(name, on)
+				}
+			})
+		}
+	})
+}
+
+func (a *app) setAgentEnabled(name string, on bool) {
+	if a.home != "" {
+		if err := agent.SetEnabled(a.home, name, on); err != nil {
+			a.err = err.Error()
+			return
+		}
+		a.disabled = agent.Disabled(a.home)
+	}
 }
 
 func (a *app) setPermission(mode string) {

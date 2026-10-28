@@ -408,6 +408,9 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkEnabled(s.Agent); err != nil {
+		return nil, err
+	}
 	l, err := d.launcher.Resume(s.Agent, s.ID, dir)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)

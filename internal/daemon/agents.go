@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/rpc"
 	"posse/internal/term"
 )
 
@@ -31,6 +32,20 @@ func (d *Daemon) installedAgents() []string {
 	d.agents.mu.Lock()
 	defer d.agents.mu.Unlock()
 	return d.agents.installed
+}
+
+// enabledAgents 是装了、又没在设置里关掉的 agent：手机的 agent 列表、任务派发的提示用它。
+func (d *Daemon) enabledAgents() []string {
+	return agent.WithoutDisabled(d.cfg.Home, d.installedAgents())
+}
+
+// checkEnabled 挡住设置里关掉的 agent：桌面、手机、CLI 和任务派发新开 agent 都经 startAgent，恢复历史会话经 historyResume。
+// 用户在终端里自己敲的命令不经这里，不挡。
+func (d *Daemon) checkEnabled(name string) error {
+	if slices.Contains(agent.Disabled(d.cfg.Home), name) {
+		return rpc.Errorf(rpc.CodeBadRequest, "%s is turned off in Posse settings", name)
+	}
+	return nil
 }
 
 // agentInstalled 报告 name 有没有装；还没检测完时当作装了，不挡用户。

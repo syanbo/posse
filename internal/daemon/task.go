@@ -139,9 +139,11 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "agent and command are exclusive")
 	case p.Model != (agent.Model{}) && p.Agent == "":
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
+	case p.Agent != "" && d.checkEnabled(p.Agent) != nil:
+		return nil, d.checkEnabled(p.Agent)
 	case p.Agent != "" && slices.Contains(agent.Known, p.Agent) && !d.agentInstalled(p.Agent):
 		have := "none of " + strings.Join(agent.Known, ", ")
-		if got := d.installedAgents(); len(got) > 0 {
+		if got := d.enabledAgents(); len(got) > 0 {
 			have = strings.Join(got, ", ")
 		}
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not installed on this Mac (installed: %s)", p.Agent, have)
