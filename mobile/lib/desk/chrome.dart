@@ -107,9 +107,8 @@ Future<void> restoreDeskOrientation() async {
   }
 }
 
-/// 右键没有指针，靠这一下知道点中了。长按进入拖动另走手势的 onArm，不在事件里。
-bool deskHapticFor(DeskEvent event) =>
-    event is DeskRightClickEvent || event is DeskSpaceEvent;
+/// 右键没有指针，靠这一下知道点中了。开始拖动另走手势的 onArm，不在事件里。
+bool deskHapticFor(DeskEvent event) => event is DeskRightClickEvent;
 
 /// 调试面板里画面走的路，取值见 [DeskStats.path]。
 String deskPathLabel(String? path) => switch (path) {

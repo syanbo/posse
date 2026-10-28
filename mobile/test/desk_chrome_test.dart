@@ -173,7 +173,7 @@ void main() {
     );
     expect(find.text('右键'), findsOneWidget);
     expect(find.text('捏合'), findsOneWidget);
-    expect(find.text('三指横滑'), findsOneWidget);
+    expect(find.text('长按拖动'), findsOneWidget);
     await tester.tap(find.byKey(const Key('desk-gesture-hint')));
     await tester.pump();
     expect(find.text('gone'), findsOneWidget);

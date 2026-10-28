@@ -310,8 +310,6 @@ class _DeskPageState extends State<DeskPage>
         // 不单独成包：紧接着的滚动和它进同一个包，Mac 先移指针再滚
         _link.move(deskAxis(at.x), deskAxis(at.y));
         _scheduleMove();
-      case DeskSpaceEvent(:final next):
-        _control(next ? '→' : '←');
       case DeskScrollEvent(:final dx, :final dy):
         final (ux, uy) = deskScrollUnits(
           dx,
@@ -1748,7 +1746,8 @@ class _DeskPageState extends State<DeskPage>
   Widget _cursorRing(PosseColors colors) {
     final at = _gestures.cursorView;
     final color = colors.accent.withValues(alpha: 0.85);
-    // 实心是左键按着（拖动中、松手等续拖），空心是只移指针
+    // 实心是左键按着，空心是只移指针；松手等续拖时实心慢慢变淡，淡完松开
+    final left = _gestures.graceLeft(_now);
     return Positioned(
       left: at.dx - _cursorRingSize / 2,
       top: at.dy - _cursorRingSize / 2,
@@ -1759,7 +1758,11 @@ class _DeskPageState extends State<DeskPage>
           height: _cursorRingSize,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _gestures.buttonHeld ? color : null,
+            color: !_gestures.buttonHeld
+                ? null
+                : left == null
+                ? color
+                : color.withValues(alpha: 0.85 * left),
             border: Border.all(color: color, width: 1.5),
           ),
         ),

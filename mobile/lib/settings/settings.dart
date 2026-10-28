@@ -200,7 +200,7 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       _Note(
                         s.deskTrackpad
-                            ? '单指滑动移动 Mac 的指针，点按、右键、拖动都落在指针上；轻点一下再按住滑动是拖动。'
+                            ? '单指滑动移动 Mac 的指针，点按、右键、拖动都落在指针上；三指滑动是拖动（轻点一下再按住滑动也行）。'
                             : '点画面上哪里就按哪里，单指拖动平移放大后的画面。',
                       ),
                       const _DeskPasswords(),

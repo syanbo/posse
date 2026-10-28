@@ -17,10 +17,10 @@ class DeskGestureHint extends StatelessWidget {
     ('单指滑动', '移动指针'),
     ('单指点按', '在指针处单击'),
     ('双指轻点', '右键'),
+    ('三指滑动', '拖动'),
     ('轻点后按住滑', '拖动'),
     ('双指拖动', '滚动'),
     ('捏合', '缩放'),
-    ('三指横滑', '切换空间'),
   ];
 
   static const lines = <(String, String)>[
@@ -29,7 +29,6 @@ class DeskGestureHint extends StatelessWidget {
     ('长按拖动', '按住左键'),
     ('双指拖动', '滚动'),
     ('捏合', '缩放'),
-    ('三指横滑', '切换空间'),
   ];
 
   @override
