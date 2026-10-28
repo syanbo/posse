@@ -171,9 +171,10 @@ void main() {
         ),
       ),
     );
+    expect(find.text('直接点按模式'), findsOneWidget);
     expect(find.text('右键'), findsOneWidget);
-    expect(find.text('捏合'), findsOneWidget);
-    expect(find.text('长按拖动'), findsOneWidget);
+    expect(find.text('双指捏合'), findsOneWidget);
+    expect(find.text('长按到震一下，再拖'), findsOneWidget);
     await tester.tap(find.byKey(const Key('desk-gesture-hint')));
     await tester.pump();
     expect(find.text('gone'), findsOneWidget);
@@ -182,6 +183,7 @@ void main() {
 
   testWidgets('the toolbar shows fps until it is opened', (tester) async {
     var backs = 0;
+    var helps = 0;
     Future<void> pump(bool expanded, {bool video = true}) {
       return tester.pumpWidget(
         MaterialApp(
@@ -205,6 +207,7 @@ void main() {
                 onKeyboard: () {},
                 onShortcuts: () {},
                 onDebug: () {},
+                onHelp: () => helps++,
                 onDisconnect: () {},
               ),
             ),
@@ -224,6 +227,8 @@ void main() {
     expect(find.byKey(const Key('desk-toolbar-orientation')), findsOneWidget);
     await tester.tap(find.byKey(const Key('desk-toolbar-back')));
     expect(backs, 1);
+    await tester.tap(find.byKey(const Key('desk-toolbar-help')));
+    expect(helps, 1);
 
     // 还没画面（连接中、连不上）：不用点开就有返回和横屏
     await pump(false, video: false);
@@ -337,6 +342,7 @@ void main() {
                 onKeyboard: () {},
                 onShortcuts: () {},
                 onDebug: () {},
+                onHelp: () {},
                 onDisconnect: () {},
               ),
             ),

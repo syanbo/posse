@@ -156,6 +156,9 @@ class _DeskPageState extends State<DeskPage>
   var _up = false;
   var _background = false;
   var _debugOpen = false;
+
+  /// 悬浮球里点「手势」重新打开的提示，和第一次进页面的是同一层。
+  var _hintOpen = false;
   var _keyboardUp = false;
   var _stopped = false;
   var _gen = 0;
@@ -496,9 +499,16 @@ class _DeskPageState extends State<DeskPage>
     _pokeBar();
   }
 
+  void _showHint() {
+    setState(() => _hintOpen = true);
+    _pokeBar();
+  }
+
   void _dismissHint() {
-    widget.model.updateSettings((s) => s.deskGesturesSeen = true);
-    setState(() {});
+    if (!widget.model.settings.deskGesturesSeen) {
+      widget.model.updateSettings((s) => s.deskGesturesSeen = true);
+    }
+    setState(() => _hintOpen = false);
   }
 
   Future<void> _disconnect() {
@@ -1566,6 +1576,7 @@ class _DeskPageState extends State<DeskPage>
                       onKeyboard: _toggleKeyboard,
                       onShortcuts: _toggleShortcuts,
                       onDebug: _toggleDebug,
+                      onHelp: _showHint,
                       onDisconnect: () => unawaited(_disconnect()),
                       onView: _displays.list.isNotEmpty
                           ? () => unawaited(_pickView())
@@ -1593,7 +1604,7 @@ class _DeskPageState extends State<DeskPage>
               },
             ),
           ),
-          if (!widget.model.settings.deskGesturesSeen)
+          if (_hintOpen || !widget.model.settings.deskGesturesSeen)
             Positioned.fill(
               child: DeskGestureHint(
                 onDismiss: _dismissHint,

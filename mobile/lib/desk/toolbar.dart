@@ -110,6 +110,7 @@ class DeskToolbar extends StatelessWidget {
     required this.onKeyboard,
     required this.onShortcuts,
     required this.onDebug,
+    required this.onHelp,
     required this.onDisconnect,
     this.onView,
   });
@@ -131,6 +132,7 @@ class DeskToolbar extends StatelessWidget {
   final VoidCallback onKeyboard;
   final VoidCallback onShortcuts;
   final VoidCallback onDebug;
+  final VoidCallback onHelp;
   final VoidCallback onDisconnect;
 
   /// 选看哪块屏或哪个窗口。电脑还没报屏（或太旧不报）时为空，按钮不出现。
@@ -226,6 +228,13 @@ class DeskToolbar extends StatelessWidget {
         tooltip: '调试',
         on: debugOpen,
         onTap: onDebug,
+      ),
+      _icon(
+        c,
+        key: const Key('desk-toolbar-help'),
+        icon: Icons.help_outline_rounded,
+        tooltip: '手势',
+        onTap: onHelp,
       ),
       _icon(
         c,
