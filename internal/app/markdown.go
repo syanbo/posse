@@ -252,7 +252,12 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		ui.Column(c).Gap(4).Children(func() {
 			for i, it := range b.items {
 				ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
-					marker := []string{"•", "◦", "▪"}[min(r.depth, 2)]
+					if !b.ordered && it.check == 0 {
+						listDot(c, width, r.depth)
+						ui.Column(c).Grow(1).Shrink(1).Gap(4).Children(func() { inner.blocks(c, it.blocks) })
+						return
+					}
+					var marker string
 					switch {
 					case it.check == 1:
 						marker = "☐"
@@ -274,6 +279,23 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	case mdTable:
 		r.table(c, b)
 	}
+}
+
+// listDot 画无序列表的点，按层级是实心圆、空心圆、小方块；字体里的 • 太小，自己画，竖直对齐第一行的中线。
+func listDot(c *ui.Context, width float32, depth int) {
+	t := c.Theme()
+	d := fsBody * 0.36
+	ui.Box(c).Width(width).Height(fsBody * 1.55).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
+		dot := ui.Rect{X: rect.X + (rect.W-d)/2, Y: rect.Y + (rect.H-d)/2, W: d, H: d}
+		switch min(depth, 2) {
+		case 0:
+			p.Fill(dot, t.TextMuted, d/2)
+		case 1:
+			p.Stroke(dot, t.TextMuted, d/2, 1.2)
+		default:
+			p.Fill(dot, t.TextMuted, 1)
+		}
+	})
 }
 
 // 表格一个格子的左右内边距 24，再留 1 的余量：列宽取整后比量到的文字窄一点，文字就折行了
