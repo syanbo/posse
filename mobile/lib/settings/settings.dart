@@ -6,9 +6,8 @@ import '../app_state.dart';
 import '../desk/unlock.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
+import '../update/update.dart';
 import 'custom_keys_screen.dart';
-
-const appVersion = '0.1.0';
 
 /// 设置：外观、打开会话的方式、终端字号和快捷键、对话里显示什么，以及配对的电脑。改了立即生效并存在手机上。
 class SettingsScreen extends StatelessWidget {
@@ -26,7 +25,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: model,
+      listenable: Listenable.merge([model, updates]),
       builder: (context, _) {
         final c = PosseColors.of(context);
         final s = model.settings;
@@ -214,8 +213,31 @@ class SettingsScreen extends StatelessWidget {
                   RowTile(
                     chevron: false,
                     title: const Text('Posse'),
-                    trailing: Text(appVersion, style: mono(13, color: c.muted)),
+                    trailing: Text(
+                      appBuild > 0 ? '$appVersion（$appBuild）' : appVersion,
+                      style: mono(13, color: c.muted),
+                    ),
                   ),
+                  // 首页的更新提示关掉了也能在这里更新
+                  if (updates.latest case final release?)
+                    RowTile(
+                      leading: Icon(
+                        Icons.system_update_rounded,
+                        size: 22,
+                        color: c.accent,
+                      ),
+                      title: Text('更新到 ${release.version}（${release.build}）'),
+                      trailing: release.size.isEmpty
+                          ? null
+                          : Text(
+                              release.size,
+                              style: TextStyle(
+                                fontSize: Fs.caption,
+                                color: c.faint,
+                              ),
+                            ),
+                      onTap: () => showUpdateSheet(context, release),
+                    ),
                 ],
               ),
             ],

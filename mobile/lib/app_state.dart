@@ -96,6 +96,7 @@ class AppSettings {
     this.deskGesturesSeen = false,
     this.deskTrackpad = false,
     this.historyByFolder = false,
+    this.skippedUpdateBuild = 0,
     this.phoneId = '',
     Map<String, int>? deskDisplays,
     List<BarKey>? barKeys,
@@ -132,6 +133,9 @@ class AppSettings {
   /// 历史页的会话按文件夹分组，而不是按时间。
   bool historyByFolder;
 
+  /// 首页更新提示点了 × 的构建号：这个构建不再提示，更新的构建照常提示。
+  int skippedUpdateBuild;
+
   /// 每台电脑上次在看桌面里选的屏，键是电脑的公钥，值是屏的 ID（CGDirectDisplayID，同一台显示器重启后不变）。
   /// 下次看时订阅带上，那块屏不在了电脑看主屏。
   Map<String, int> deskDisplays;
@@ -157,6 +161,7 @@ class AppSettings {
     'deskGesturesSeen': deskGesturesSeen,
     'deskTrackpad': deskTrackpad,
     'historyByFolder': historyByFolder,
+    'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
     'phoneId': phoneId,
     'barKeys': [for (final k in barKeys) k.toJson()],
@@ -202,6 +207,9 @@ class AppSettings {
       }
       if (map['historyByFolder'] is bool) {
         out.historyByFolder = map['historyByFolder'] as bool;
+      }
+      if (map['skippedUpdateBuild'] is int) {
+        out.skippedUpdateBuild = map['skippedUpdateBuild'] as int;
       }
       final displays = map['deskDisplays'];
       if (displays is Map) {

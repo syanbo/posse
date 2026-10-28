@@ -21,6 +21,7 @@ import '../settings/settings.dart';
 import '../terminal/terminal.dart';
 import '../chat/latency_label.dart';
 import '../ui/theme.dart';
+import '../update/update.dart';
 import '../ui/widgets.dart';
 import 'models.dart';
 import 'new_session.dart';
@@ -520,6 +521,7 @@ class WorkspaceScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(top: 8),
                         child: Column(
                           children: [
+                            UpdateBanner(model: model),
                             if (waiting > 0) _WaitingBanner(count: waiting),
                             UsageCard(model: model),
                           ],

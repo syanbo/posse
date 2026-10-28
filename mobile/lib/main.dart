@@ -6,6 +6,7 @@ import 'app_state.dart';
 import 'ui/keyboard.dart';
 import 'ui/splash.dart';
 import 'ui/theme.dart';
+import 'update/update.dart';
 import 'workspace/workspace.dart';
 
 void main() {
@@ -31,6 +32,7 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     widget.model.addListener(_rebuild);
     widget.model.restore();
+    startUpdateChecks();
   }
 
   var _away = false;
@@ -43,7 +45,10 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
       case AppLifecycleState.paused:
         _away = true;
       case AppLifecycleState.resumed:
-        if (_away) unawaited(widget.model.wake());
+        if (_away) {
+          unawaited(widget.model.wake());
+          startUpdateChecks();
+        }
         _away = false;
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
