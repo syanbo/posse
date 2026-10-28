@@ -173,9 +173,10 @@ class _ContextMeterState extends State<ContextMeter> {
             const SizedBox(width: 10),
             SizedBox.square(
               dimension: 10,
+              // 粗细同后面的信号格：12 号图标里一格宽 1.5
               child: CircularProgressIndicator(
                 value: percent / 100,
-                strokeWidth: 1.8,
+                strokeWidth: 1.5,
                 color: color,
                 backgroundColor: c.fill,
               ),

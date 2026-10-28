@@ -395,7 +395,8 @@ class WorkspaceScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 60,
-        titleSpacing: 20,
+        // 胶囊左边和下面的用量条、项目卡片对齐
+        titleSpacing: 10,
         title: Row(
           children: [
             // 胶囊用掉按钮以外的全部宽度、靠左，电脑名写得下就写全
@@ -1180,17 +1181,6 @@ class _ComputerSheet extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final active = model.activeId;
-        final header = Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Text(
-            '电脑',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: c.text,
-            ),
-          ),
-        );
         final list = Section(
           inset: 50,
           children: [
@@ -1269,13 +1259,13 @@ class _ComputerSheet extends StatelessWidget {
           top: false,
           child: LayoutBuilder(
             builder: (context, box) {
-              // 横屏只有三百多高，标题和按钮固定的话列表会被压成 0：高度不够时整张一起滚
+              // 横屏只有三百多高，按钮固定的话列表会被压成 0：高度不够时整张一起滚
               if (!box.hasBoundedHeight || box.maxHeight < _sheetPinnedHeight) {
                 return SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [header, list, ...footer],
+                    children: [list, ...footer],
                   ),
                 );
               }
@@ -1283,7 +1273,6 @@ class _ComputerSheet extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  header,
                   Flexible(child: SingleChildScrollView(child: list)),
                   ...footer,
                 ],
@@ -1296,7 +1285,7 @@ class _ComputerSheet extends StatelessWidget {
   }
 }
 
-/// 电脑列表弹窗至少这么高才固定标题和底下的按钮、只滚列表：按钮和提示约占 200，列表至少留两行。
+/// 电脑列表弹窗至少这么高才固定底下的按钮、只滚列表：按钮和提示约占 200，列表至少留两行。
 const _sheetPinnedHeight = 360.0;
 
 /// 配对码里的主地址（host:port），电脑列表的副标题。

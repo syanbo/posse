@@ -115,11 +115,12 @@ void main() {
     final add = tester.getRect(find.text('扫码添加电脑'));
     final hint = tester.getRect(find.text('长按一台电脑可以改名或忘掉它'));
     expect(hint.bottom, lessThanOrEqualTo(screen));
-    final title = tester.getTopLeft(find.text('电脑'));
+    final first = tester.getTopLeft(find.text('电脑0'));
     await tester.drag(find.text('电脑3'), const Offset(0, -300));
     await tester.pump(const Duration(milliseconds: 400));
     expect(tester.getRect(find.text('扫码添加电脑')), add);
-    expect(tester.getTopLeft(find.text('电脑')), title);
+    // 列表滚了，按钮不动
+    expect(tester.getTopLeft(find.text('电脑0')).dy, lessThan(first.dy));
     expect(tester.getRect(find.text('电脑7')).bottom, lessThan(add.top));
   });
 
@@ -166,7 +167,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
     expect(tester.takeException(), isNull);
-    expect(find.text('电脑'), findsOneWidget);
+    expect(find.text('断开连接'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('长按一台电脑可以改名或忘掉它'),
       100,

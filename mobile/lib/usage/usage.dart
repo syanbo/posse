@@ -606,12 +606,6 @@ class _UsageSheetState extends State<UsageSheet> {
                   onChanged: (i) => setUsageRemaining(i == 1),
                 ),
               ),
-              IconButton(
-                tooltip: '关闭',
-                visualDensity: VisualDensity.compact,
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.close_rounded, size: 20, color: c.muted),
-              ),
             ],
           ),
           if (_error.isNotEmpty)

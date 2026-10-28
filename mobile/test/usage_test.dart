@@ -133,12 +133,7 @@ void main() {
       expect(find.text('套餐用量'), findsOneWidget);
     }
 
-    await open();
-    await tester.tap(find.byTooltip('关闭'));
-    await tester.pumpAndSettle();
-    expect(find.text('套餐用量'), findsNothing);
-
-    // 上面留着遮罩，点一下也关
+    // 上面留着遮罩，点一下就关
     await open();
     await tester.tapAt(const Offset(195, 40));
     await tester.pumpAndSettle();
