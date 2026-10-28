@@ -22,6 +22,7 @@ import (
 //   - Grok：标题变化时增量读它的日志
 //   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
 //   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
+//   - 设置页整个关掉（usage.json 的 off）后以上都不做，读数也不给界面和手机
 const (
 	cursorEvery   = 5 * time.Minute
 	codexAskEvery = 5 * time.Minute
@@ -48,6 +49,7 @@ type usageState struct {
 // usageStatus 随 daemon.status 给界面。
 type usageStatus struct {
 	Usages    []usage.Usage `json:"usages"`
+	Off       bool          `json:"off"`
 	CursorOff bool          `json:"cursorOff"`
 	CodexOff  bool          `json:"codexOff"`
 }
@@ -57,28 +59,41 @@ func (d *Daemon) openUsage() {
 	d.usage.grok = usage.NewGrokLog(usage.GrokLogPath())
 	d.usage.http = &http.Client{Timeout: 15 * time.Second}
 	d.usage.codexAt = map[string]time.Time{}
-	// 启动时从各家本地留下的记录里取最近的一份；都只读本地文件
-	go func() {
-		d.claudeCacheUsage()
-		if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
-			d.usage.store.Update(u)
-		}
-		d.grokUsage(true)
-		// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
-		d.cursorUsage(false)
-	}()
+	go d.usageStart()
+}
+
+// usageStart 从各家本地留下的记录里取最近的一份（都只读本地文件），常驻进程启动和设置里重新打开时各做一次。
+func (d *Daemon) usageStart() {
+	if !d.usageOn() {
+		return
+	}
+	d.claudeCacheUsage()
+	if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
+		d.usage.store.Update(u)
+	}
+	d.grokUsage(true)
+	// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
+	d.cursorUsage(false)
+}
+
+// usageOn 是要不要读取套餐用量：测试里没有 store，用户也可以在设置里整个关掉。
+func (d *Daemon) usageOn() bool {
+	return d.usage.store != nil && !d.usage.store.Off()
 }
 
 func (d *Daemon) usageStatus() *usageStatus {
 	if d.usage.store == nil {
 		return nil
 	}
+	if d.usage.store.Off() {
+		return &usageStatus{Usages: []usage.Usage{}, Off: true, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
+	}
 	return &usageStatus{Usages: d.usage.store.List(time.Now()), CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
 }
 
 // usageHook 在 hook 事件之后看要不要更新用量；都在后台做，不拖慢 hook。
 func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
-	if d.usage.store == nil {
+	if !d.usageOn() {
 		return
 	}
 	switch {
@@ -117,6 +132,9 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 
 // claudeCacheUsage 读 Claude 自己缓存的用量，文件没改过就不读（它有几百 KB）。
 func (d *Daemon) claudeCacheUsage() {
+	if !d.usageOn() {
+		return
+	}
 	path := usage.ClaudeConfigPath()
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -136,7 +154,7 @@ func (d *Daemon) claudeCacheUsage() {
 
 // grokUsage 在 grok 终端标题变化时读日志新增的部分。
 func (d *Daemon) grokUsage(force bool) {
-	if d.usage.store == nil {
+	if !d.usageOn() {
 		return
 	}
 	d.usage.mu.Lock()
@@ -156,7 +174,7 @@ func (d *Daemon) grokUsage(force bool) {
 // cursorUsage 向 Cursor 查一次用量。force 是用户点了刷新：不管间隔，钥匙串上次超时也再试。
 func (d *Daemon) cursorUsage(force bool) {
 	s := &d.usage
-	if s.store.CursorOff() {
+	if !d.usageOn() || s.store.CursorOff() {
 		return
 	}
 	s.mu.Lock()
@@ -197,7 +215,7 @@ func (d *Daemon) cursorUsage(force bool) {
 // codexAsk 让 Codex 自己查一次限额和重置卡。force 是用户点了刷新，不管间隔。
 func (d *Daemon) codexAsk(force bool) {
 	s := &d.usage
-	if s.store.CodexOff() {
+	if !d.usageOn() || s.store.CodexOff() {
 		return
 	}
 	s.mu.Lock()
@@ -237,7 +255,7 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	if d.usage.store == nil || p.Agent != "claude" {
+	if !d.usageOn() || p.Agent != "claude" {
 		return map[string]bool{"updated": false}, nil
 	}
 	u, ok := usage.ClaudeStatusLine(p.Payload, time.Now())
@@ -249,6 +267,9 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, error) {
 	if d.usage.store == nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "usage is not available")
+	}
+	if d.usage.store.Off() {
+		return d.usageStatus(), nil
 	}
 	d.usage.mu.Lock()
 	d.usage.claudeMod = time.Time{}
@@ -283,6 +304,7 @@ func (d *Daemon) usageGet(ctx context.Context, raw json.RawMessage) (any, error)
 }
 
 type usageSetParams struct {
+	Off       *bool `json:"off"`
 	CursorOff *bool `json:"cursorOff"`
 	CodexOff  *bool `json:"codexOff"`
 }
@@ -294,6 +316,17 @@ func (d *Daemon) usageSet(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if d.usage.store == nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "usage is not available")
+	}
+	if p.Off != nil {
+		was := d.usage.store.Off()
+		d.usage.store.SetOff(*p.Off)
+		if was && !*p.Off {
+			// 关着的时候什么都没读，重新打开时像启动时一样取一次；Claude 缓存的修改时间也要重新比
+			d.usage.mu.Lock()
+			d.usage.claudeMod = time.Time{}
+			d.usage.mu.Unlock()
+			go d.usageStart()
+		}
 	}
 	if p.CursorOff != nil {
 		d.usage.store.SetCursorOff(*p.CursorOff)

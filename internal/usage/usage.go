@@ -175,6 +175,7 @@ var order = []string{"claude", "codex", "grok", "cursor"}
 // file 是 $POSSE_HOME/usage.json 的内容。
 type file struct {
 	Usages    []Usage `json:"usages"`
+	Off       bool    `json:"off,omitempty"`       // 整个关掉：不读、不查、不显示
 	CursorOff bool    `json:"cursorOff,omitempty"` // 不向 Cursor 查询
 	CodexOff  bool    `json:"codexOff,omitempty"`  // 不让 Codex 查重置卡
 }
@@ -249,6 +250,21 @@ func (s *Store) List(now time.Time) []Usage {
 		out = append(out, u)
 	}
 	return out
+}
+
+func (s *Store) Off() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.f.Off
+}
+
+func (s *Store) SetOff(off bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.f.Off != off {
+		s.f.Off = off
+		s.saveLocked()
+	}
 }
 
 func (s *Store) CursorOff() bool {

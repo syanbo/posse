@@ -17,6 +17,7 @@ import (
 // 旧常驻进程没有这个字段时为空。
 type planStatus struct {
 	Usages    []usage.Usage `json:"usages"`
+	Off       bool          `json:"off"` // 设置里整个关掉了：状态栏不显示，常驻进程也不读
 	CursorOff bool          `json:"cursorOff"`
 	CodexOff  bool          `json:"codexOff"`
 }
@@ -110,7 +111,8 @@ func (a *app) statusBar(c *ui.Context) {
 func (a *app) planButton(c *ui.Context, st *planStatus) {
 	t := c.Theme()
 	p := colors(t)
-	if st == nil {
+	if st == nil || st.Off {
+		a.planOpen = false
 		return
 	}
 	var shown []usage.Usage
@@ -381,9 +383,18 @@ func (a *app) refreshPlan() {
 // planSettings 是设置页里两项查询的开关：Cursor 用量和 Codex 重置卡本地没有，要在它们用过之后查一次。
 func (a *app) planSettings(c *ui.Context) {
 	st := a.daemon.Usage
-	settingsCard(c, "套餐用量", "底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。", func() {
+	settingsCard(c, "套餐用量", "关掉后底栏和手机都不显示，常驻进程也不再读取和查询。打开时底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。", func() {
 		if st == nil {
 			ui.Text(c, "更新常驻进程后可用。").FontSize(fsBody).TextColor(c.Theme().TextMuted)
+			return
+		}
+		on := !st.Off
+		settingsRow(c, "显示套餐用量", func() {
+			if ui.Switch(c, &on).Label("显示套餐用量").Changed() {
+				a.setUsageQuery("off", on)
+			}
+		})
+		if st.Off {
 			return
 		}
 		cursor, codex := !st.CursorOff, !st.CodexOff

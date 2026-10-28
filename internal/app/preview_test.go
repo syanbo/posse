@@ -820,6 +820,12 @@ func TestPreview(t *testing.T) {
 		// 设置页：通用分类；关于里常驻进程还在跑旧的包
 		a.selected, a.settingsTab = settingsBoardID, ""
 		savePNG(t, newPreviewTester(a, dark), "settings-"+suffix+".png")
+		// Agent 分类里套餐用量整个关掉：底栏不显示用量，卡片只剩总开关
+		a.settingsTab = "agent"
+		usageOn := a.daemon.Usage
+		a.daemon.Usage = &planStatus{Off: true}
+		savePNG(t, newPreviewTester(a, dark), "settings-usage-off-"+suffix+".png")
+		a.daemon.Usage = usageOn
 		a.settingsTab = "about"
 		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
 		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
