@@ -35,19 +35,49 @@ void main() {
     expect(back.showReasoning, isFalse);
   });
 
-  test('desk watch stays off until the experiment switch is set', () async {
-    expect(AppSettings().deskWatch, isFalse);
-    expect(
-      AppSettings.decode(jsonEncode({'deskWatch': 'yes'})).deskWatch,
-      isFalse,
-    );
-    final store = MemorySettingsStore();
-    final model = PosseAppModel(
-      store: MemoryPairingStore(),
-      settingsStore: store,
-    );
-    model.updateSettings((s) => s.deskWatch = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(AppSettings.decode(store.data).deskWatch, isTrue);
-  });
+  test(
+    'desk watch and the trackpad are on by default, once for old settings',
+    () async {
+      expect(AppSettings().deskWatch, isTrue);
+      expect(AppSettings().deskTrackpad, isTrue);
+      expect(
+        AppSettings.decode(
+          jsonEncode({'deskVersion': deskVersion, 'deskWatch': 'yes'}),
+        ).deskWatch,
+        isTrue,
+      );
+      // 实验时存下的是旧默认值：换成新的，换了操作方式再提示一次手势
+      final old = AppSettings.decode(
+        jsonEncode({
+          'deskWatch': false,
+          'deskTrackpad': false,
+          'deskGesturesSeen': true,
+        }),
+      );
+      expect(old.deskWatch, isTrue);
+      expect(old.deskTrackpad, isTrue);
+      expect(old.deskGesturesSeen, isFalse);
+      // 新版之后自己关掉的照旧
+      final chosen = AppSettings.decode(
+        jsonEncode({
+          'deskVersion': deskVersion,
+          'deskWatch': false,
+          'deskTrackpad': false,
+          'deskGesturesSeen': true,
+        }),
+      );
+      expect(chosen.deskWatch, isFalse);
+      expect(chosen.deskTrackpad, isFalse);
+      expect(chosen.deskGesturesSeen, isTrue);
+
+      final store = MemorySettingsStore();
+      final model = PosseAppModel(
+        store: MemoryPairingStore(),
+        settingsStore: store,
+      );
+      model.updateSettings((s) => s.deskWatch = false);
+      await Future<void>.delayed(Duration.zero);
+      expect(AppSettings.decode(store.data).deskWatch, isFalse);
+    },
+  );
 }

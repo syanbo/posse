@@ -178,19 +178,19 @@ class SettingsScreen extends StatelessWidget {
               ),
               if (Platform.isIOS)
                 Section(
-                  title: '实验',
+                  title: '看桌面',
                   children: [
                     _Toggle(
-                      title: '实验：看桌面',
+                      title: '看桌面',
                       value: s.deskWatch,
                       onChanged: (v) =>
                           model.updateSettings((s) => s.deskWatch = v),
                     ),
-                    const _Note('打开后，点首页的电脑名，菜单里有「看桌面」。画面走局域网，输入先显示在画面上。'),
+                    const _Note('点首页的电脑名，菜单里的「看桌面」能看 Mac 的屏幕，用手指操作它。'),
                     if (s.deskWatch) ...[
                       _Choice(
-                        labels: const ['直接点按', '触控板'],
-                        values: const ['direct', 'trackpad'],
+                        labels: const ['触控板', '直接点按'],
+                        values: const ['trackpad', 'direct'],
                         value: s.deskTrackpad ? 'trackpad' : 'direct',
                         // 换了操作方式，下次进看桌面再提示一次手势
                         onChanged: (v) => model.updateSettings((s) {
@@ -200,8 +200,8 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       _Note(
                         s.deskTrackpad
-                            ? '单指滑动移动 Mac 的指针，点按、右键、拖动都落在指针上；三指滑动是拖动（轻点一下再按住滑动也行）。'
-                            : '点画面上哪里就按哪里，单指拖动平移放大后的画面。',
+                            ? '把手机屏幕当触控板：单指滑动移动指针，点按、右键都落在指针上，三指滑动拖动。'
+                            : '点画面上哪里就按哪里，长按后拖动，单指拖动平移放大后的画面。',
                       ),
                       const _DeskPasswords(),
                     ],

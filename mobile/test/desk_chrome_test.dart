@@ -39,7 +39,7 @@ void main() {
     expect(back.deskLandscape, isTrue);
     expect(back.deskGesturesSeen, isTrue);
     expect(back.deskTrackpad, isTrue);
-    expect(AppSettings().deskTrackpad, isFalse);
+    expect(AppSettings().deskTrackpad, isTrue);
     expect(deskLockedOrientations(false), [DeviceOrientation.portraitUp]);
     expect(deskLockedOrientations(true), [
       DeviceOrientation.landscapeLeft,

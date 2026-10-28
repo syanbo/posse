@@ -81,6 +81,9 @@ class PrefsPairingStore implements PairingStore {
   }
 }
 
+/// 看桌面设置的版本。1 起看桌面不再是实验，默认打开、用触控板。
+const deskVersion = 1;
+
 /// 手机上的偏好。存在 SharedPreferences 的 posse.settings 里，和配对分开。
 class AppSettings {
   AppSettings({
@@ -91,10 +94,10 @@ class AppSettings {
     this.expandTools = false,
     this.deskLayout = false,
     this.deskZoom = 1,
-    this.deskWatch = false,
+    this.deskWatch = true,
     this.deskLandscape = false,
     this.deskGesturesSeen = false,
-    this.deskTrackpad = false,
+    this.deskTrackpad = true,
     this.historyByFolder = false,
     this.skippedUpdateBuild = 0,
     this.phoneId = '',
@@ -118,7 +121,7 @@ class AppSettings {
   /// 电脑布局在「刚好缩进屏幕宽度」之上的倍数，吸在 0.5–2 的固定档。1 是一整行落在屏幕里。
   double deskZoom;
 
-  /// 实验：电脑菜单里显示「看桌面」。只在 iPhone 上露出开关。
+  /// 电脑菜单里显示「看桌面」，默认开。只在 iPhone 上露出开关。
   bool deskWatch;
 
   /// 看桌面时锁横屏。离开页面恢复原来的方向，下次进来按这个锁。
@@ -127,7 +130,7 @@ class AppSettings {
   /// 看桌面的手势提示已经关过。只出现一次。
   bool deskGesturesSeen;
 
-  /// 看桌面把屏幕当触控板：单指滑动移指针，点按落在指针上。默认直接点哪按哪。
+  /// 看桌面把屏幕当触控板：单指滑动移指针，点按落在指针上。默认开，关了是直接点哪按哪。
   bool deskTrackpad;
 
   /// 历史页的会话按文件夹分组，而不是按时间。
@@ -160,6 +163,7 @@ class AppSettings {
     'deskLandscape': deskLandscape,
     'deskGesturesSeen': deskGesturesSeen,
     'deskTrackpad': deskTrackpad,
+    'deskVersion': deskVersion,
     'historyByFolder': historyByFolder,
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
@@ -195,15 +199,22 @@ class AppSettings {
       }
       final zoom = map['deskZoom'];
       if (zoom is num) out.deskZoom = zoom.toDouble().clamp(0.5, 2);
-      if (map['deskWatch'] is bool) out.deskWatch = map['deskWatch'] as bool;
+      // 看桌面还是实验时存下的开关是旧默认值（关、直接点按），不算用户选的：换成新的默认一次
+      final deskChosen = map['deskVersion'] == deskVersion;
+      if (deskChosen && map['deskWatch'] is bool) {
+        out.deskWatch = map['deskWatch'] as bool;
+      }
       if (map['deskLandscape'] is bool) {
         out.deskLandscape = map['deskLandscape'] as bool;
       }
       if (map['deskGesturesSeen'] is bool) {
         out.deskGesturesSeen = map['deskGesturesSeen'] as bool;
       }
-      if (map['deskTrackpad'] is bool) {
+      if (deskChosen && map['deskTrackpad'] is bool) {
         out.deskTrackpad = map['deskTrackpad'] as bool;
+      } else if (map['deskTrackpad'] == false) {
+        // 从直接点按换成了触控板，下次进看桌面再提示一次手势
+        out.deskGesturesSeen = false;
       }
       if (map['historyByFolder'] is bool) {
         out.historyByFolder = map['historyByFolder'] as bool;
