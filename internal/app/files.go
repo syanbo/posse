@@ -172,6 +172,7 @@ type filesView struct {
 	revealScroll bool        // 它的行出现后滚到中间（上级目录可能还在后台读）
 	list         *files.List // 文件清单：快速打开、检索、判断忽略；文件标签不可见时放掉
 	listAt       time.Time
+	listFailAt   time.Time // 上次列文件失败的时间：每帧都会来要清单，失败后等一个周期再试
 	listing      bool
 	docs         []*fileDoc
 	cur          *fileDoc
@@ -313,7 +314,8 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 		}
 		return
 	}
-	if v.listing && done == nil {
+	// 后台每帧来要的，失败后等一个周期再试；用户操作要的（带 done）照常重试
+	if v.listing && done == nil || !force && done == nil && time.Since(v.listFailAt) < listMaxAge {
 		return
 	}
 	v.listing = true
@@ -325,10 +327,11 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 		a.update(func() {
 			v.listing = false
 			if err != nil {
+				v.listFailAt = time.Now()
 				a.err = "列出文件失败：" + err.Error()
 				return
 			}
-			v.list, v.listAt = l, time.Now()
+			v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
 			if done != nil {
 				done()
 			}
