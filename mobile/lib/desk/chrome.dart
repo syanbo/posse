@@ -119,9 +119,9 @@ String deskPathLabel(String? path) => switch (path) {
   _ => '—',
 };
 
-/// 还没收到视频时不写 0；画面没动、没有新帧时写「静止」，免得看成卡住了。
+/// 还没收到视频、还没满 1 秒的读数（fps 为负）时不写 0；画面没动、没有新帧时写「静止」，免得看成卡住了。
 String deskFpsLabel(double fps, {required bool video, bool still = false}) {
-  if (!video) return '— fps';
+  if (!video || fps < 0) return '— fps';
   if (still) return '静止';
   return '${fps.toStringAsFixed(0)} fps';
 }

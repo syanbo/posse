@@ -96,6 +96,7 @@ void main() {
     expect(deskBarTrack(390, 280), 110);
     expect(deskFpsLabel(59.6, video: true), '60 fps');
     expect(deskFpsLabel(0, video: false), '— fps');
+    expect(deskFpsLabel(-1, video: true), '— fps');
     expect(deskFpsLabel(0, video: true, still: true), '静止');
     expect(
       deskHapticFor(const DeskRightClickEvent(DeskPoint(0.2, 0.3))),

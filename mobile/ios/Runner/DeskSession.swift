@@ -212,6 +212,15 @@ struct DeskRate {
   }
 }
 
+struct DeskShown {
+  var fps = -1.0
+  var received = 0.0
+  var bitrate = 0.0
+  var peak = 0.0
+  var still = false
+  var decodeMs = 0.0
+}
+
 struct DeskAccessUnit {
   let nals: [Data]
   let frame: UInt64
@@ -598,6 +607,10 @@ final class DeskSession {
   private var receivedAt: [CFAbsoluteTime] = []
   private var decodedAt: [CFAbsoluteTime] = []
   private var decodeMs: [(CFAbsoluteTime, Double)] = []
+  /// 显示的读数照 Moonlight 每满 1 秒换一次，统计还是按 0.2 秒推（输入确认号、路径要及时）。
+  /// shownAt 从第一帧解出来算起，为零时还没有一整秒的数，帧率给 -1
+  private var shownAt: CFAbsoluteTime = 0
+  private var shown = DeskShown()
   private var pictureWidth = 0
   private var pictureHeight = 0
   private var inputAck = 0
@@ -729,6 +742,8 @@ final class DeskSession {
     receivedAt.removeAll(keepingCapacity: true)
     decodedAt.removeAll(keepingCapacity: true)
     decodeMs.removeAll(keepingCapacity: true)
+    shownAt = 0
+    shown = DeskShown()
     statsLock.unlock()
   }
 
@@ -1163,6 +1178,7 @@ final class DeskSession {
   private func noteDecoded(_ image: CVPixelBuffer, ms: Double) {
     let now = CFAbsoluteTimeGetCurrent()
     statsLock.lock()
+    if shownAt == 0 { shownAt = now }
     decodedAt.append(now)
     decodeMs.append((now, ms))
     decodedAt.removeAll { now - $0 > 2 }
@@ -1175,26 +1191,31 @@ final class DeskSession {
 
   private func emitStats(_ now: CFAbsoluteTime) {
     statsLock.lock()
-    let bitrate = videoRate.average(at: now)
-    let peak = videoRate.peak(at: now)
-    let received = receivedAt.filter { now - $0 <= 1 }.count
-    let frames = decodedAt.filter { now - $0 <= 1 }.count
-    // Mac 只在画面变了时出帧，1 秒没新帧是画面没动，不是卡了。前提是 Mac 的包（至少每秒一次的 beat）
-    // 还在来、也不在等关键帧：断网或丢包等关键帧时画面也不动，那是卡住
-    let still = (decodedAt.last.map { now - $0 > 1 } ?? false) && !waitingKey && now - heardAt < 2.5
-    let samples = decodeMs.filter { now - $0.0 <= 1 }.map(\.1).sorted()
-    let p50 = samples.isEmpty ? 0 : samples[samples.count / 2]
+    if shownAt > 0, now - shownAt >= 1 {
+      shownAt = now
+      let samples = decodeMs.filter { now - $0.0 <= 1 }.map(\.1).sorted()
+      shown = DeskShown(
+        fps: Double(decodedAt.filter { now - $0 <= 1 }.count),
+        received: Double(receivedAt.filter { now - $0 <= 1 }.count),
+        bitrate: videoRate.average(at: now),
+        peak: videoRate.peak(at: now),
+        // Mac 只在画面变了时出帧，1 秒没新帧是画面没动，不是卡了。前提是 Mac 的包（至少每秒一次的 beat）
+        // 还在来、也不在等关键帧：断网或丢包等关键帧时画面也不动，那是卡住
+        still: (decodedAt.last.map { now - $0 > 1 } ?? false) && !waitingKey && now - heardAt < 2.5,
+        decodeMs: samples.isEmpty ? 0 : samples[samples.count / 2])
+    }
+    let show = shown
     let width = pictureWidth
     let height = pictureHeight
     statsLock.unlock()
     var stats: [String: Any] = [
-      "fps": Double(frames),
-      "received": Double(received),
-      "bitrate": bitrate,
-      "peak": peak,
-      "still": still,
+      "fps": show.fps,
+      "received": show.received,
+      "bitrate": show.bitrate,
+      "peak": show.peak,
+      "still": show.still,
       "loss": Int(lossTotal),
-      "decodeMs": p50,
+      "decodeMs": show.decodeMs,
       "recoveries": recoveries,
       "width": width,
       "height": height,
