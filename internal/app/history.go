@@ -872,7 +872,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 	h := &a.history
 	if h.sel == "" {
 		ui.Column(c).Grow(1).Center().Children(func() {
-			emptyCard(c).Width(420).Padding(24).Gap(12).Children(func() {
+			emptyCard(c).MaxWidth(420).Padding(24).Gap(12).Children(func() {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
 					titleText(c, "会话历史", fsPage)

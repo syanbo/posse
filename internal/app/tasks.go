@@ -410,7 +410,7 @@ func (a *app) taskEmptyCard(c *ui.Context) {
 		counts[taskSection(k)]++
 	}
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(420).Padding(24).Gap(12).Children(func() {
+		emptyCard(c).MaxWidth(420).Padding(24).Gap(12).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "任务", fsPage)
@@ -527,7 +527,7 @@ func taskGlyphIcon(c *ui.Context, task taskInfo, size float32) {
 func (a *app) emptyBoard(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(460).Padding(24).Gap(16).Children(func() {
+		emptyCard(c).MaxWidth(460).Padding(24).Gap(16).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "还没有任务", fsPage)

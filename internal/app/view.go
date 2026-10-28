@@ -1653,7 +1653,7 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 func (a *app) firstRun(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Children(func() {
-		emptyCard(c).Width(440).Padding(24).Gap(16).Children(func() {
+		emptyCard(c).MaxWidth(440).Padding(24).Gap(16).Children(func() {
 			tile(c, iconHexOutline, 48, soft(t, colors(t).honey), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
 				titleText(c, "把项目放进来", fsPage)
