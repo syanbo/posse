@@ -388,16 +388,18 @@ func (a *app) sidebar(c *ui.Context) {
 		ui.Text(c, msg).FontSize(fsSmall).TextColor(color).Padding(6, 16)
 	}
 	a.navOrder, a.navCur = a.navOrder[:0], -1
+	// 任务、历史、手机是全局页面，固定在顶上不跟着项目列表滚动，和下面的项目用一道细线隔开
+	ui.Column(c).Padding(4, navEnd, 0, trafficLightX-navPad).Gap(2).Shrink(0).Children(func() {
+		if len(a.projects) > 0 {
+			a.taskSidebarItem(c)
+		}
+		a.historySidebarItem(c)
+		a.mobileSidebarItem(c)
+		hline(c).Margin(6, navPad, 0, navPad)
+	})
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
 	nav.Children(func() {
-		ui.Column(c).Padding(4, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
-			if len(a.projects) > 0 {
-				a.taskSidebarItem(c)
-			}
-			a.historySidebarItem(c)
-			a.mobileSidebarItem(c)
-			// 任务、历史、手机是全局页面，和下面的项目用一道细线隔开
-			hline(c).Margin(6, navPad, 6, navPad)
+		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
 			// 要定位的工作区所在的项目
 			reveal := ""
 			if w := a.workspace(a.selected); a.revealSel && w != nil {
