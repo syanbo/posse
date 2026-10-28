@@ -50,9 +50,13 @@ class DraftBubble extends StatelessWidget {
                 ),
               )
             else
-              Text(
-                part.text,
-                style: const TextStyle(fontSize: 15, height: 1.55),
+              // 段距同 MarkdownView 的段落，换成正式消息时高度差得少
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  part.text,
+                  style: const TextStyle(fontSize: 15, height: 1.55),
+                ),
               ),
         ],
       ),
@@ -63,6 +67,7 @@ class DraftBubble extends StatelessWidget {
 final _boxChars = RegExp('[│┌┐└┘├┤┬┴┼━─]');
 
 /// 把草稿按行分成正文段和等宽段：以空白开头（代码的缩进、Codex 表格的行）或带框线的行用等宽字体。
+/// 正文按空行再拆成一段一段。
 List<({bool mono, String text})> draftParts(String text) {
   final parts = <({bool mono, String text})>[];
   final lines = <String>[];
@@ -77,7 +82,11 @@ List<({bool mono, String text})> draftParts(String text) {
 
   for (final line in text.split('\n')) {
     if (line.trim().isEmpty) {
-      if (lines.isNotEmpty) lines.add('');
+      if (mono == false) {
+        flush();
+      } else if (lines.isNotEmpty) {
+        lines.add('');
+      }
       continue;
     }
     final m = line.startsWith(' ') || _boxChars.hasMatch(line);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/chat/chat.dart';
+import 'package:posse_mobile/chat/draft.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
@@ -257,6 +258,16 @@ void main() {
     fake.chat.add({'type': 'draft', 'text': ''});
     await tester.pumpAndSettle();
     expect(find.text('正在输出'), findsNothing);
+  });
+
+  test('草稿按段拆开，代码和框线表格单独成等宽段', () {
+    final parts = draftParts('第一段\n接着\n\n第二段\n\n  if x {\n\n  }\n│ a │\n尾巴');
+    expect(parts.map((p) => (p.mono, p.text)).toList(), [
+      (false, '第一段\n接着'),
+      (false, '第二段'),
+      (true, '  if x {\n\n  }\n│ a │'),
+      (false, '尾巴'),
+    ]);
   });
 
   testWidgets('往上翻着看时草稿变长画面不跳', (tester) async {
