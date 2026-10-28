@@ -538,10 +538,14 @@ func TestPreview(t *testing.T) {
 		*a.sectionsOpen["p3"] = false
 		savePNG(t, newPreviewTester(a, dark), "unread-"+suffix+".png")
 
-		// 窗口的 Posse.app 被换掉：侧栏底部提示重开
+		// 窗口的 Posse.app 被换掉：侧栏底部提示重开，下面还有一条操作报错
 		a = previewApp(t)
 		a.staleApp = true
+		a.err = "当前分支没有跟踪的远端分支，没法更新"
 		savePNG(t, newPreviewTester(a, dark), "stale-app-"+suffix+".png")
+		// 收起了重开提示：底栏齿轮旁留圆点
+		a.staleHidden, a.err = true, ""
+		savePNG(t, newPreviewTester(a, dark), "stale-app-hidden-"+suffix+".png")
 
 		// 右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)

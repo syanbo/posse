@@ -323,15 +323,11 @@ func (a *app) updateBar(c *ui.Context) {
 	if v.phase != updateReady || v.version == a.state.UpdateDismissed {
 		return
 	}
-	t := c.Theme()
-	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 6, 12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
-			ui.Text(c, fmt.Sprintf("Posse %s 已就绪，更新时终端不会断开。", v.version)).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45).Grow(1).Shrink(1)
-			if iconButtonSized(c, iconClose, "不再提示这个版本", compactBox(), smallIcon()).Clicked() {
-				a.state.UpdateDismissed = v.version
-				a.saveState()
-			}
-		})
+	dismiss := func() {
+		a.state.UpdateDismissed = v.version
+		a.saveState()
+	}
+	sideNotice(c, false, fmt.Sprintf("Posse %s 已就绪", v.version), "更新时终端不会断开。", dismiss, func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			b := pressable(accentButton(c, "重启更新"))
 			if a.updating {

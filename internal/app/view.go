@@ -1007,14 +1007,46 @@ func (a *app) navRowSized(c *ui.Context, key string, selected bool, icon func(),
 
 // staleBar 提示窗口的 Posse.app 已被换掉：不重开的话，桌面、文稿里的项目读不了文件、跑不了 git。
 func (a *app) staleBar(c *ui.Context) {
-	if !a.staleApp || !a.loaded {
+	if !a.staleApp || !a.loaded || a.staleHidden {
 		return
 	}
-	t := c.Theme()
-	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 12, 12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
-		ui.Text(c, "Posse 已更新，重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+	// 收起只在这次窗口里有效：不重开，桌面、文稿里的项目一直读不了文件，底栏留圆点提醒
+	hide := func() { a.staleHidden = true }
+	sideNotice(c, false, "Posse 已更新", "重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。", hide, func() {
 		if pressable(accentButton(c, "重开窗口")).Clicked() {
 			a.relaunch()
+		}
+	})
+}
+
+// sideNotice 是侧栏底部的提示卡（重开窗口、新版本已就绪、操作报错）：淡底加图标，和上面的项目列表分得开，
+// 一眼看出不是列表里的一项。danger 是报错：红色淡底、警示图标。title 为空时正文接在图标后面；
+// onClose、actions 为空时不画。
+func sideNotice(c *ui.Context, danger bool, title, body string, onClose func(), actions func()) {
+	t := c.Theme()
+	bg, icon, tone := colors(t).tint, iconRefresh, t.Accent
+	if danger {
+		bg, icon, tone = soft(t, t.Danger), iconInfo, t.Danger
+	}
+	ui.Column(c).Margin(0, 12, 8, 12).Padding(12, 8, 12, 12).Gap(8).Radius(rCard).Background(bg).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
+			ui.Icon(c, icon).FontSize(smallIcon()).TextColor(tone).Shrink(0)
+			if title != "" {
+				ui.Text(c, title).FontSize(fsBody).FontWeight(fwMedium).Grow(1).Shrink(1).SingleLine()
+			} else {
+				ui.Text(c, body).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+			}
+			if onClose != nil {
+				if iconButtonSized(c, iconClose, "关闭提示", compactBox(), smallIcon()).Clicked() {
+					onClose()
+				}
+			}
+		})
+		if title != "" {
+			ui.Text(c, body).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+		}
+		if actions != nil {
+			actions()
 		}
 	})
 }
@@ -1023,13 +1055,7 @@ func (a *app) errorBar(c *ui.Context) {
 	if a.err == "" || !a.loaded {
 		return
 	}
-	t := c.Theme()
-	ui.Row(c).Margin(0, 12, 8, 12).Padding(8, 6, 8, 12).Gap(6).Radius(rControl).Background(t.Surface).AlignItems(ui.Start).Children(func() {
-		ui.Text(c, a.err).FontSize(fsSmall).TextColor(t.Danger).Grow(1).Shrink(1)
-		if iconButtonSized(c, iconClose, "关闭提示", compactBox(), smallIcon()).Clicked() {
-			a.err = ""
-		}
-	})
+	sideNotice(c, true, "", a.err, func() { a.err = "" }, nil)
 }
 
 func (a *app) footer(c *ui.Context) {
@@ -1054,10 +1080,30 @@ func (a *app) footer(c *ui.Context) {
 			}
 		})
 		ui.Spacer(c)
+		if a.staleApp && a.staleHidden {
+			a.staleDot(c)
+		}
 		if iconButton(c, iconSettings, "设置 ⌘,").Clicked() {
 			a.openSettings()
 		}
 	})
+}
+
+// staleDot 是收起重开提示后留在齿轮旁的圆点，点了把提示卡放回来。
+func (a *app) staleDot(c *ui.Context) {
+	t := c.Theme()
+	label := "Posse 已更新，重开窗口后生效"
+	b := ui.Box(c).Size(buttonBox(), buttonBox()).Radius(buttonBox() / 4).Center().Shrink(0).Label(label).Tooltip(label)
+	bg := ui.Transparent
+	if b.Hovered() {
+		bg = t.SurfaceHover
+	}
+	b.Background(bg).Children(func() {
+		ui.Box(c).Size(sz(7), sz(7)).Radius(sz(7) / 2).Background(t.Accent)
+	})
+	if b.Clicked() {
+		a.staleHidden = false
+	}
 }
 
 // footHeight 是侧栏底栏和主区域状态栏的高度：两条并排，看起来是贯穿窗口的一条。
