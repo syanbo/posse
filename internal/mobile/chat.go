@@ -98,12 +98,22 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 	// 会话页开着也算在看这个会话；它所在的终端每轮重找，换了就换着记
 	viewing, unview := "", func() {}
 	defer func() { unview() }()
-	// 状态行每次终端有输出都可能变，转圈符号一秒好几帧；最多这么久看一次屏幕，
+	// 状态行和草稿每次终端有输出都可能变，转圈符号一秒好几帧；最多这么久看一次屏幕，
 	// 跳过的那次约好稍后再看，停下来的最后一帧不会漏
 	status, statusAt := "", time.Time{}
+	draft := newDrafter(a.Agent)
 	var recheck <-chan time.Time
 	sendStatus := func() bool {
-		if term == nil || !c.hasCapability("posse.status.v1") {
+		wantStatus := c.hasCapability("posse.status.v1")
+		wantDraft := draft != nil && c.hasCapability("posse.draft.v1")
+		if term == nil {
+			// 终端不在了，草稿撤掉
+			if text, changed := draft.next(nil, 0, false); wantDraft && changed {
+				return c.stream(reqID, map[string]any{"type": "draft", "text": text}) == nil
+			}
+			return true
+		}
+		if !wantStatus && !wantDraft {
 			return true
 		}
 		if wait := statusEvery - time.Since(statusAt); wait > 0 {
@@ -114,12 +124,22 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		}
 		recheck = nil
 		statusAt = time.Now()
-		next := agentStatus(term.Screen())
-		if next == status {
-			return true
+		screen := term.Screen()
+		next := agentStatus(screen)
+		if wantStatus && next != status {
+			status = next
+			if c.stream(reqID, map[string]any{"type": "status", "text": next}) != nil {
+				return false
+			}
 		}
-		status = next
-		return c.stream(reqID, map[string]any{"type": "status", "text": next}) == nil
+		if wantDraft {
+			cols, _ := term.Size()
+			working := term.Agent().Status == "working" || next != ""
+			if text, changed := draft.next(screen, cols, working); changed {
+				return c.stream(reqID, map[string]any{"type": "draft", "text": text}) == nil
+			}
+		}
+		return true
 	}
 	arm := func(wait time.Duration) {
 		c.noteChat(key, gen, reqID, a)
@@ -135,7 +155,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 		timer.Reset(wait)
 	}
 	// 先发一帧，再进入轮询。文件还没出现时只有声明了 transcriptPending 才带 pending。
-	ok, wait := c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay)
+	ok, wait := c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay, draft.note)
 	if !ok {
 		return
 	}
@@ -156,7 +176,7 @@ func (c *conn) chatStream(ctx contextDone, key string, gen uint64, reqID string,
 			}
 			continue
 		}
-		ok, wait = c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay)
+		ok, wait = c.chatTick(reqID, &a, &path, &pos, &inode, &announced, &ready, &delay, draft.note)
 		if !ok {
 			return
 		}
@@ -183,8 +203,8 @@ func (c *conn) sessionTerminal(agentName, sessionID string) host.Terminal {
 }
 
 // chatTick 看一眼文件。ok 为 false 表示流该停（发送失败）。wait 是这一轮之后再等多久：
-// 文件还没有时从 500ms 翻倍到 5s，已经有文件就保持 500ms。
-func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inode *uint64, announced, ready *bool, delay *time.Duration) (bool, time.Duration) {
+// 文件还没有时从 500ms 翻倍到 5s，已经有文件就保持 500ms。读到的消息另交给 seen。
+func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inode *uint64, announced, ready *bool, delay *time.Duration, seen func([]history.ChatMessage)) (bool, time.Duration) {
 	if *path == "" {
 		*path = history.TranscriptPath(a.Agent, a.SessionID, "")
 	}
@@ -223,6 +243,7 @@ func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inod
 		if page.Messages == nil {
 			page.Messages = []history.ChatMessage{}
 		}
+		seen(page.Messages)
 		typ := "snapshot"
 		if *ready {
 			typ = "replacement"
@@ -251,6 +272,7 @@ func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inod
 	if len(msgs) == 0 {
 		return true, chatPoll
 	}
+	seen(msgs)
 	return c.stream(reqID, map[string]any{"type": "appended", "messages": msgs}) == nil, chatPoll
 }
 
