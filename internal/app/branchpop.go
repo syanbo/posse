@@ -357,8 +357,8 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 	g := &v.git
 	cur, _ := currentBranch(g.branches.list)
+	// 更新、删除的结果就在弹窗里看得到（忙碌行、传入数、分支消失），不关弹窗
 	if popupItem(c, iconFetch, "更新项目", "") {
-		a.branchPop = nil
 		if cur.Upstream == "" {
 			a.err = "当前分支没有跟踪的远端分支，没法更新"
 		} else {
@@ -556,7 +556,7 @@ func (a *app) checkoutBranch(w *workspace, v *filesView, b gitx.Branch) {
 	})
 }
 
-// branchMenu 是一个分支的操作，顺序照 WebStorm。
+// branchMenu 是一个分支的操作，顺序照 WebStorm。更新、删除的结果在弹窗里看得到，不关弹窗。
 func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, other string, otherWs *workspace, inOther bool) {
 	done := func() { a.branchPop = nil }
 	q := "‘" + b.Name + "’"
@@ -638,7 +638,6 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		a.openLog(w, branchRef(b), "")
 	}
 	if !b.Remote && b.Upstream != "" && m.Item("更新").Icon(iconFetch).Chosen() {
-		done()
 		if b.Current {
 			a.guardAgent(w, "更新", func() {
 				a.updateBranch(v, "更新", b)
@@ -664,7 +663,6 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		del = "删除…"
 	}
 	if !b.Current && !inOther && m.Item(del).Chosen() {
-		done()
 		a.askDeleteBranch(v, b)
 	}
 }
