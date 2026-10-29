@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../desk/plugin.dart';
 import '../desk/unlock.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -193,7 +192,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              if (Platform.isIOS)
+              if (deskSupported)
                 Section(
                   title: '看桌面',
                   children: [

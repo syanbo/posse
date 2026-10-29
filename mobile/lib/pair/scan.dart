@@ -10,6 +10,8 @@ const qrChannel = MethodChannel('posse/qr');
 
 String qrViewChannel(int id) => 'posse/qr/$id';
 
+bool get canScan => Platform.isIOS || Platform.isAndroid;
+
 /// 扫到的文字是不是配对码。解析失败就当没看见，相机继续开。
 bool isPairingCode(String raw) {
   try {
@@ -63,9 +65,9 @@ class ScanPick {
   final ScanEnd end;
 }
 
-/// 要权限、开相机、等扫到配对码，几个入口共用。只有 iOS 有原生扫码。
+/// 要权限、开相机、等扫到配对码，几个入口共用。iOS、安卓各有原生扫码。
 Future<ScanPick> scanPairingCode(BuildContext context) async {
-  if (!Platform.isIOS) return const ScanPick.end(ScanEnd.unsupported);
+  if (!canScan) return const ScanPick.end(ScanEnd.unsupported);
   bool granted;
   try {
     granted = await qrChannel.invokeMethod<bool>('authorize') ?? false;
@@ -195,10 +197,15 @@ class _QrScanPageState extends State<QrScanPage> {
         children: [
           Offstage(
             offstage: !_shown,
-            child: UiKitView(
-              viewType: 'posse/qr',
-              onPlatformViewCreated: _attach,
-            ),
+            child: Platform.isAndroid
+                ? AndroidView(
+                    viewType: 'posse/qr',
+                    onPlatformViewCreated: _attach,
+                  )
+                : UiKitView(
+                    viewType: 'posse/qr',
+                    onPlatformViewCreated: _attach,
+                  ),
           ),
           LayoutBuilder(
             builder: (context, box) {

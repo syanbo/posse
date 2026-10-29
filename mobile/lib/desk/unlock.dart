@@ -79,7 +79,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                       ),
                       child: Text(
                         widget.canRemember
-                            ? '输入 Mac 的登录密码，发到锁屏界面后自动回车。勾「记住」只存在这台手机的钥匙串里'
+                            ? '输入 Mac 的登录密码，发到锁屏界面后自动回车。勾「记住」只存在这台手机上'
                             : '输入 Mac 的登录密码，发到锁屏界面后自动回车',
                         style: TextStyle(fontSize: Fs.meta, color: c.muted),
                       ),
@@ -140,7 +140,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
   }
 }
 
-/// 记住的 Mac 登录密码，存在 iOS 钥匙串里（DeskPassword.swift），按电脑的主机公钥分开。
+/// 记住的 Mac 登录密码，iOS 存在钥匙串里（DeskPassword.swift），安卓用 Keystore 的密钥加密后存在不进备份的目录（DeskPlugin.kt），按电脑的主机公钥分开。
 class DeskPasswordStore {
   const DeskPasswordStore([
     this._channel = const MethodChannel('posse/desk/password'),

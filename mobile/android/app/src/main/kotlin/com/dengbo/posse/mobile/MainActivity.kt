@@ -17,9 +17,29 @@ class MainActivity : FlutterActivity() {
     // 安卓 9 及以下等写存储权限的那次调用
     private var pending: (() -> Unit)? = null
     private var pendingResult: MethodChannel.Result? = null
+    // 等相机权限的那次 authorize
+    private var cameraResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        flutterEngine.platformViewsController.registry
+            .registerViewFactory("posse/qr", QrScanViewFactory(messenger, this))
+        val desk = DeskPlugin(this, flutterEngine.renderer, messenger)
+        flutterEngine.platformViewsController.registry.registerViewFactory("posse/desk/view", desk.viewFactory)
+        MethodChannel(messenger, "posse/qr").setMethodCallHandler { call, result ->
+            if (call.method != "authorize") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                result.success(true)
+                return@setMethodCallHandler
+            }
+            cameraResult?.success(false)
+            cameraResult = result
+            requestPermissions(arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA)
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "posse/downloads")
             .setMethodCallHandler { call, result ->
                 if (call.method != "save") {
@@ -44,6 +64,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CAMERA) {
+            cameraResult?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+            cameraResult = null
+            return
+        }
         if (requestCode != REQUEST_WRITE) return
         val run = pending
         val result = pendingResult
@@ -108,5 +133,6 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val REQUEST_WRITE = 7301
+        private const val REQUEST_CAMERA = 7302
     }
 }

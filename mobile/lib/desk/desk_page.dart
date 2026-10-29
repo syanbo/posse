@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -197,7 +197,7 @@ class _DeskPageState extends State<DeskPage>
     );
     _keyboard.addListener(_keyboardChanged);
     _input.addListener(_onTyped);
-    if (Platform.isIOS) {
+    if (deskSupported) {
       _statsSub = _receiver.stats().listen(_onStats);
     }
     deskChromeLease.acquire(_lease);
@@ -406,7 +406,7 @@ class _DeskPageState extends State<DeskPage>
   void _kickSend() {
     _sendTail = _sendTail.then((_) => _drainPackets());
     // 测试里没有确认号，周期重发会让 pumpAndSettle 停不下来。
-    if (_link.needsRetry && Platform.isIOS) _armRetry();
+    if (_link.needsRetry && deskSupported) _armRetry();
   }
 
   void _armRetry() {
@@ -422,7 +422,7 @@ class _DeskPageState extends State<DeskPage>
   Future<void> _drainPackets() async {
     while (_packets.isNotEmpty) {
       final packet = _packets.removeAt(0);
-      if (!Platform.isIOS) continue;
+      if (!deskSupported) continue;
       try {
         await _receiver.sendInput(packet);
       } on PlatformException {
@@ -590,7 +590,8 @@ class _DeskPageState extends State<DeskPage>
     final relayout =
         stats.video != _stats.video ||
         stats.width != _stats.width ||
-        stats.height != _stats.height;
+        stats.height != _stats.height ||
+        stats.view != _stats.view;
     _stats = stats;
     _statsTick.value = stats;
     if (relayout) setState(() {});
@@ -638,9 +639,9 @@ class _DeskPageState extends State<DeskPage>
       _lockRetry?.cancel();
       _lockRetry = null;
     }
-    // 桌面插件只在 iPhone 上。先返回，测试里不会去解析域名。
-    if (!Platform.isIOS) {
-      setState(() => _fail = '看桌面只在 iPhone 上');
+    // 没有桌面插件（测试）时先返回，不会去解析域名。
+    if (!deskSupported) {
+      setState(() => _fail = '这台设备不能看桌面');
       return;
     }
     final rpc = widget.model.rpc;
@@ -1018,7 +1019,7 @@ class _DeskPageState extends State<DeskPage>
       _stats = const DeskStats();
       _statsTick.value = const DeskStats();
     }
-    if (!Platform.isIOS) return;
+    if (!deskSupported) return;
     try {
       await _receiver.stop();
     } on PlatformException {
@@ -1637,7 +1638,9 @@ class _DeskPageState extends State<DeskPage>
             top: image.top,
             width: image.width,
             height: image.height,
-            child: Texture(textureId: _texture!),
+            child: _stats.view
+                ? const DeskSurfaceView()
+                : Texture(textureId: _texture!),
           ),
         for (final mark in _marks) _dot(colors, mark),
         if (widget.model.settings.deskTrackpad && _texture != null)
@@ -2030,4 +2033,34 @@ int? _jsonInt(Object? value) {
 extension on DeskGestures {
   DeskPoint? map(double x, double y) =>
       mapDesktop(x: x, y: y, fit: fit, viewport: viewport);
+}
+
+/// 安卓的平台视图画面（[DeskStats.view]）。只显示，手势照旧由外层收。
+class DeskSurfaceView extends StatelessWidget {
+  const DeskSurfaceView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: PlatformViewLink(
+        viewType: 'posse/desk/view',
+        surfaceFactory: (context, controller) => AndroidViewSurface(
+          controller: controller as AndroidViewController,
+          gestureRecognizers: const {},
+          hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+        ),
+        onCreatePlatformView: (params) {
+          // SurfaceView 要混合合成，initSurfaceAndroidView 会在需要时退到它
+          return PlatformViewsService.initSurfaceAndroidView(
+              id: params.id,
+              viewType: 'posse/desk/view',
+              layoutDirection: TextDirection.ltr,
+              creationParamsCodec: const StandardMessageCodec(),
+            )
+            ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+            ..create();
+        },
+      ),
+    );
+  }
 }

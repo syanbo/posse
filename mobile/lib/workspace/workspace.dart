@@ -3,7 +3,6 @@ import '../ui/loading.dart';
 import '../usage/usage.dart';
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../app_state.dart';
 import '../chat/chat.dart';
 import '../desk/desk_page.dart';
+import '../desk/plugin.dart';
 import '../files/files.dart';
 import '../git/git.dart';
 import '../pair/scan.dart';
@@ -159,7 +159,7 @@ class _PairScreenState extends State<PairScreen> {
                 _step(context, 2, '扫描二维码', '或者在电脑上复制配对码，回来粘贴'),
               ],
             ),
-            if (Platform.isIOS) ...[
+            if (canScan) ...[
               FilledButton.icon(
                 onPressed: busy ? null : _scan,
                 icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
@@ -1215,7 +1215,7 @@ class _ComputerSheet extends StatelessWidget {
         final list = Section(
           inset: 50,
           children: [
-            if (Platform.isIOS && model.settings.deskWatch)
+            if (deskSupported && model.settings.deskWatch)
               RowTile(
                 leading: Icon(
                   Icons.desktop_mac_outlined,

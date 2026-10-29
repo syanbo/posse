@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -22,6 +23,7 @@ class DeskStats {
     this.ack = 0,
     this.public,
     this.path,
+    this.view = false,
   });
 
   /// 解码出来的帧率。
@@ -51,6 +53,9 @@ class DeskStats {
   /// 画面走哪条路：lan、relay、punched（打洞直连），还没有画面时为空。
   final String? path;
 
+  /// 安卓上画面画在平台视图（`posse/desk/view`）而不是纹理上：有的解码器不认纹理的 Surface。
+  final bool view;
+
   static DeskStats parse(Object? raw) {
     final map = raw is Map ? raw : const {};
     double n(Object? value) => value is num ? value.toDouble() : 0;
@@ -70,6 +75,7 @@ class DeskStats {
       ack: i(map['ack']),
       public: map['public'] is String ? map['public'] as String : null,
       path: map['path'] is String ? map['path'] as String : null,
+      view: map['view'] == true,
     );
   }
 }
@@ -94,6 +100,9 @@ String? deskHostOf(String? url) {
   if (uri == null || uri.host.isEmpty) return null;
   return uri.host;
 }
+
+/// 有原生的桌面插件：iOS 和安卓。测试里是 false，页面不去解析域名、不调插件。
+bool get deskSupported => Platform.isIOS || Platform.isAndroid;
 
 /// 视频包不到 Dart。这里把主机、端口和派生好的两把密钥交给插件，输入明文也从这里发出。
 class DeskReceiver {
@@ -149,7 +158,7 @@ class DeskReceiver {
   Future<void> resume() => _channel.invokeMethod<void>('resume');
 }
 
-/// 顶边和底边的系统手势延后。只在 iOS 插件里有实现。
+/// 顶边和底边的系统手势延后。只在 iOS 插件里有实现，安卓靠沉浸模式：边缘第一下只唤出系统栏。
 class DeskEdges {
   DeskEdges({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel('posse/desk/edges');
@@ -160,7 +169,7 @@ class DeskEdges {
     try {
       await _channel.invokeMethod<void>('set', defer);
     } on MissingPluginException {
-      // 桌面插件只编进 iOS。
+      // 安卓没有这个开关。
     } on PlatformException {
       // 根控制器还没接上时不挡离开页面。
     }
