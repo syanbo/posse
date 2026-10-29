@@ -84,6 +84,7 @@ var posseKeys = []keyAction{
 
 	{id: "historySearch", group: "历史", label: "搜索会话", scope: scopeHistory, def: []keyCombo{k(ui.Cmd, ui.KeyF)}},
 
+	{id: "termFind", group: "终端", label: "在终端里查找", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyF)}, note: "查找栏开着时，下一个、上一个跟着编辑器的查找"},
 	{id: "termClear", group: "终端", label: "清屏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyK)}},
 	{id: "termTop", group: "终端", label: "滚到顶", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyUp)}},
 	{id: "termBottom", group: "终端", label: "滚到底", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyDown)}},

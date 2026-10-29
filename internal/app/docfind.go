@@ -79,42 +79,81 @@ func (f *docFind) bar(c *ui.Context, a *app) {
 	if !f.open {
 		return
 	}
+	a.findBar(c, findBarSpec{
+		key: "doc-find", label: "查找", right: findBarRight,
+		query: &f.query, focus: &f.focus,
+		changed: func() { f.cur, f.scroll = 0, true },
+		submit:  func() { f.step(1) }, submitBack: func() { f.step(-1) },
+		up: func() { f.step(-1) }, down: func() { f.step(1) },
+		upTip: a.withKey("上一个", "editor.findPrevious"), downTip: a.withKey("下一个", "editor.findNext"),
+		close: func() { f.open = false },
+		status: func() string {
+			switch {
+			case f.query == "":
+				return ""
+			case f.n == 0:
+				return "无结果"
+			}
+			return fmt.Sprintf("%d/%d", f.cur+1, f.n)
+		},
+	})
+}
+
+// findBarRight 是查找栏离视图右边的距离。
+const findBarRight = 20
+
+// findBarSpec 是一个查找栏：搜什么、按键和按钮各做什么。预览、Annotate 和终端的查找栏样子、按键都一样。
+type findBarSpec struct {
+	key, label string
+	right      float32
+	query      *string
+	focus      *bool // 为真时这一帧把焦点给输入框
+	// changed 在输入框改了之后调用；submit、submitBack 是回车、⇧回车；up、down 是两个箭头按钮
+	changed, submit, submitBack, up, down, close func()
+	upTip, downTip                               string
+	status                                       func() string // 输入框处理完再取：第几个 / 共几个
+	extra                                        func()        // 关闭按钮前面多放的按钮
+	below                                        func()        // 输入框那一行下面
+}
+
+// findBar 画浮在视图右上角的查找栏。
+func (a *app) findBar(c *ui.Context, s findBarSpec) {
 	t := c.Theme()
-	panel := floating(c, ui.Row(c.Key("doc-find")).Absolute().Top(8).Right(20).Padding(4).Gap(2).AlignItems(ui.Center)).
-		Role(ui.RoleToolbar).Label("查找").Cursor(ui.CursorDefault)
+	panel := floating(c, ui.Column(c.Key(s.key)).Absolute().Top(8).Right(s.right).Padding(4).Gap(2)).
+		Role(ui.RoleToolbar).Label(s.label).Cursor(ui.CursorDefault)
 	panel.Children(func() {
-		in := fieldInputWidth(c, &f.query, "查找", 220)
-		if f.focus {
-			in.Focus()
-			f.focus = false
-		}
-		switch {
-		case in.Changed():
-			f.cur, f.scroll = 0, true
-		case in.Shortcut(ui.Shift, ui.KeyEnter):
-			f.step(-1)
-		case in.Submitted():
-			f.step(1)
-		case in.Shortcut(0, ui.KeyEscape):
-			f.open = false
-		}
-		status := ""
-		switch {
-		case f.query == "":
-		case f.n == 0:
-			status = "无结果"
-		default:
-			status = fmt.Sprintf("%d/%d", f.cur+1, f.n)
-		}
-		ui.Text(c, status).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).MinWidth(sz(56)).TextAlign(ui.Center).Role(ui.RoleStatus)
-		if iconButtonSized(c, iconArrowUp, a.withKey("上一个", "editor.findPrevious"), compactBox(), smallIcon()).Clicked() {
-			f.step(-1)
-		}
-		if iconButtonSized(c, iconArrowDown, a.withKey("下一个", "editor.findNext"), compactBox(), smallIcon()).Clicked() {
-			f.step(1)
-		}
-		if iconButtonSized(c, iconClose, "关闭 Esc", compactBox(), smallIcon()).Clicked() {
-			f.open = false
+		ui.Row(c).Gap(2).AlignItems(ui.Center).Children(func() {
+			in := fieldInputWidth(c, s.query, s.label, 220)
+			if *s.focus {
+				in.Focus()
+				*s.focus = false
+			}
+			switch {
+			case in.Changed():
+				s.changed()
+			case in.Shortcut(ui.Shift, ui.KeyEnter):
+				s.submitBack()
+			case in.Submitted():
+				s.submit()
+			case in.Shortcut(0, ui.KeyEscape):
+				s.close()
+			}
+			ui.Text(c, s.status()).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).MinWidth(sz(56)).TextAlign(ui.Center).Role(ui.RoleStatus)
+			if iconButtonSized(c, iconArrowUp, s.upTip, compactBox(), smallIcon()).Clicked() {
+				s.up()
+			}
+			if iconButtonSized(c, iconArrowDown, s.downTip, compactBox(), smallIcon()).Clicked() {
+				s.down()
+			}
+			if s.extra != nil {
+				s.extra()
+			}
+			if iconButtonSized(c, iconClose, "关闭 Esc", compactBox(), smallIcon()).Clicked() {
+				s.close()
+			}
+		})
+		if s.below != nil {
+			s.below()
 		}
 	})
 }

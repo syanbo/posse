@@ -122,6 +122,13 @@ type termView struct {
 	// attached 是接入的时间，painted 是屏幕上出现过内容；两者给 startingHint 用
 	attached time.Time
 	painted  bool
+	find     termFind
+}
+
+// carriedFind 是被常驻进程断开、等着重新接入的终端的查找栏。
+type carriedFind struct {
+	id   string
+	find termFind
 }
 
 type app struct {
@@ -162,6 +169,7 @@ type app struct {
 	lastTerm     int64
 	pollForce    atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	view         *termView
+	carryFind    *carriedFind // 断开后等着重新接入的终端的查找栏
 	fontSize     float32
 	editorSize   float32
 	termFamily   string // 终端字体，空是默认
@@ -224,6 +232,7 @@ type app struct {
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
 	traceLoaded   bool
 	filesPanelRef ui.Ref
+	termAreaRef   ui.Ref // 终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
 	promptDlg       *promptState
@@ -862,6 +871,10 @@ func (a *app) ensureView(id string) {
 	}
 	conn := a.c.Attach(id)
 	v := &termView{id: id, attached: time.Now()}
+	if f := a.carryFind; f != nil && f.id == id {
+		v.find = f.find
+	}
+	a.carryFind = nil
 	light, dark := terminalThemes()
 	t, err := terminal.New(terminal.Options{
 		Conn:      conn,
@@ -879,6 +892,7 @@ func (a *app) ensureView(id string) {
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
 		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },
+		OnText:      func(text string) bool { return a.termFindText(v, text) },
 		// 剪贴板里只有图片时 Cmd+V 拿不到文本：和 Orca 一样，由 Posse 把图片存成临时文件、粘贴它的路径，
 		// 所有 agent 终端都这样。Claude 和 Codex 会把粘贴的图片路径当成附件，其他 agent 能按路径读图。
 		// 让它们收 Ctrl+V 自己读剪贴板也行，但读剪贴板要调系统命令，粘贴时界面会闪一下
@@ -906,6 +920,10 @@ func (a *app) ensureView(id string) {
 			a.win.Update(func() {
 				if a.view == v {
 					if exited, _ := conn.Exited(); !exited {
+						// 重新接入的是同一个终端：查找栏照旧（开着的由 termFindBar 按原来的词再搜，关着的留着上次的词）
+						if v.find.open || v.find.query != "" {
+							a.carryFind = &carriedFind{id: v.id, find: v.find}
+						}
 						a.view.term.Close()
 						a.view = nil
 					}

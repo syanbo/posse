@@ -34,6 +34,14 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 	if a.keyRec != nil {
 		return false
 	}
+	if a.termFindKey(v, mods, key) {
+		return true
+	}
+	// 全屏程序里也能查：查的是它这一屏
+	if a.keyIs("termFind", mods, key) && a.view == v {
+		a.openTermFind(v)
+		return true
+	}
 	if a.keyIs("termClear", mods, key) {
 		a.clearTerminal(v, id)
 		return true

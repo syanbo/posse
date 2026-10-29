@@ -250,6 +250,13 @@ type Options struct {
 	// it, and "" as it leaves, on the main thread with the terminal locked:
 	// it must not call the Terminal. (Posse)
 	OnHoverLink func(link string)
+	// OnText sees text typed into the view (not that of keys OnKey or a
+	// keybind took, nor an input method's preedit) before the program gets
+	// it, on the main thread, as OnKey does. It reports whether it took the
+	// text: taken text, and the release of the key that typed it, send
+	// nothing. An app opening a find bar takes what is typed before the
+	// bar has focus this way. (Posse)
+	OnText func(text string) bool
 	// ContextMenu, when set, is called in place of showing a menu, with
 	// where the view was right-clicked, in DIPs relative to the window, for
 	// the app to draw its own. (Posse)

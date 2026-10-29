@@ -174,3 +174,106 @@ func TestStepTab(t *testing.T) {
 		t.Fatal("back from the first terminal is the last tab")
 	}
 }
+
+// ⌘F 打开终端的查找栏：数命中、⌘G 往上跳、Esc 关掉清高亮；Claude 终端里搜不到时给出"在历史里搜"，点了带着词去历史页。
+func TestTermFind(t *testing.T) {
+	a := previewApp(t)
+	v := a.view
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v.term.Feed([]byte("build ok\r\nBUILD failed\r\nrebuild\r\n"))
+	if !a.termKey(v, "t1", ui.Cmd, ui.KeyF) || !v.find.open {
+		t.Fatal("⌘F should open the find bar")
+	}
+	tt.Frame()
+	tt.Type("build")
+	until(t, tt, "matches", func() bool { st := v.term.SearchStatus(); return st.Total == 3 && !st.Searching })
+	if st := v.term.SearchStatus(); st.Selected != 1 || !tt.HasText("1/3") {
+		t.Fatalf("status %+v, texts %q", st, tt.Texts())
+	}
+	tt.Key(ui.Cmd, ui.KeyG)
+	tt.Frame()
+	if st := v.term.SearchStatus(); st.Selected != 2 {
+		t.Fatalf("⌘G: selected %d", st.Selected)
+	}
+	// 查找栏开着时 ⇧⌘G 是往下，不去开关改动页
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyG)
+	tt.Frame()
+	if st := v.term.SearchStatus(); st.Selected != 1 || a.filesPanelOpen() {
+		t.Fatalf("⇧⌘G: selected %d, files panel %v", st.Selected, a.filesPanelOpen())
+	}
+
+	// Esc 关掉、清高亮；再按 ⌘F 接着搜上次的词
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if v.find.open || v.term.SearchStatus().Text != "" {
+		t.Fatal("Esc should close the find bar and end the search")
+	}
+	a.termKey(v, "t1", ui.Cmd, ui.KeyF)
+	tt.Frame()
+	if st := v.term.SearchStatus(); st.Text != "build" {
+		t.Fatalf("reopened search %q", st.Text)
+	}
+
+	tt.Key(ui.Cmd, ui.KeyA)
+	tt.Type("zzz-nowhere")
+	until(t, tt, "no match", func() bool {
+		st := v.term.SearchStatus()
+		return st.Total == 0 && !st.Searching && tt.HasText("无结果")
+	})
+	if err := tt.Click("在历史里搜"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selected != historyBoardID || a.history.query != "zzz-nowhere" || historyAgents[a.history.agent] != "claude" {
+		t.Fatalf("history: selected %q query %q agent %d", a.selected, a.history.query, a.history.agent)
+	}
+}
+
+// 带着开着的查找栏的新终端（重新接入后 ensureView 从 carryFind 恢复的就是这样）：画过一帧后按原来的词搜，并选中最新的命中。
+func TestTermFindCarried(t *testing.T) {
+	a := previewApp(t)
+	a.view.find = termFind{open: true, query: "view"}
+	tt := ui.NewTester(a.build, 1200, 760)
+	until(t, tt, "searched", func() bool {
+		st := a.view.term.SearchStatus()
+		return st.Text == "view" && st.Total == 2 && st.Selected == 1
+	})
+}
+
+// ⌘F 之后、查找栏还没搭出来（输入框没拿到焦点）时打进终端的字接进搜索词，不发给程序；输入框拿到焦点后不再截。
+func TestTermFindEarlyText(t *testing.T) {
+	a := previewApp(t)
+	v, conn := recTerminal(t, a)
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	v.find = termFind{query: "old"}
+	a.termKey(v, "t1", ui.Cmd, ui.KeyF)
+	if !a.termFindText(v, "1") || !a.termFindText(v, "9") || v.find.query != "old19" {
+		t.Fatalf("early text: query %q", v.find.query)
+	}
+	// 同一段时间里的回车、退格、⌃C、方向键也不发给程序：退格删搜索词的最后一个字
+	for _, k := range []struct {
+		mods ui.Modifiers
+		key  ui.Key
+	}{{0, ui.KeyEnter}, {0, ui.KeyBackspace}, {ui.Ctrl, ui.KeyC}, {0, ui.KeyUp}} {
+		if !a.termKey(v, "t1", k.mods, k.key) {
+			t.Fatalf("%v %v went on to the program", k.mods, k.key)
+		}
+	}
+	if v.find.query != "old1" {
+		t.Fatalf("backspace: query %q", v.find.query)
+	}
+	// 出字的键和带 Command 的键不在这里拿
+	if a.termKey(v, "t1", 0, ui.KeyA) || a.termKey(v, "t1", ui.Cmd, ui.KeyG) {
+		t.Fatal("text and Command keys should not be taken here")
+	}
+	tt.Frame()
+	if v.find.focus || a.termFindText(v, "x") {
+		t.Fatal("text after the field has focus should go on to the terminal")
+	}
+	select {
+	case b := <-conn.in:
+		t.Fatalf("sent %q to the program", b)
+	default:
+	}
+}

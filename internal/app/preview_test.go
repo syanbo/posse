@@ -530,6 +530,14 @@ func TestPreview(t *testing.T) {
 		a.state.SessionButtonsHidden = true
 		savePNG(t, newPreviewTester(a, dark), "session-buttons-folded-"+suffix+".png")
 
+		// 终端的查找栏：命中铺蜂蜜色淡底，当前那个深一点；Claude 终端里搜不到时提示去历史里搜
+		a = previewApp(t)
+		a.view.find = termFind{open: true, query: "view"}
+		savePNG(t, newPreviewTester(a, dark), "terminal-find-"+suffix+".png")
+		a = previewApp(t)
+		a.view.find = termFind{open: true, query: "release"}
+		savePNG(t, newPreviewTester(a, dark), "terminal-find-none-"+suffix+".png")
+
 		// 刚开的 Claude 还没画第一屏：终端区居中是蜂巢加载动画和"正在启动"
 		a = previewApp(t)
 		blank, err := terminal.New(terminal.Options{Conn: nopConn{make(chan struct{})}, Font: terminal.Font{Family: termFontFamily, Size: defaultFontSize}})

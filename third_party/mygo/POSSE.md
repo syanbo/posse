@@ -46,7 +46,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 终端插件 `plugins/terminal`（新加的方法放在 `posse.go`，升级时少冲突）：
 
 - `links.go`：网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出；`trimURL` 也去掉结尾的中文标点（"。，）"等）。
-- `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Posse 用来预览图片）；加 `Options.LinkClick`，设了就代替 `OpenLink`，多告诉点击时按着的修饰键（Posse 单击网址弹卡片、Command+点击在 Posse 里打开、Shift+Command+点击交给浏览器）；加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Posse 自己画菜单。
+- `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Posse 用来预览图片）；加 `Options.LinkClick`，设了就代替 `OpenLink`，多告诉点击时按着的修饰键（Posse 单击网址弹卡片、Command+点击在 Posse 里打开、Shift+Command+点击交给浏览器）；加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Posse 自己画菜单；加 `Options.OnText`（`view.go` 的 `typed`），打进来的文字先给它看，它拿走的不发给程序，那个键的松开也一起吞掉（Posse 用来把 ⌘F 之后、查找框还没拿到焦点时打的字接进搜索词）。
 - `view.go`：
   - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Posse 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。程序接管鼠标（鼠标跟踪）时，链接上的这次按下不交给程序，而是开始选区，之后的移动和松开跟着选区走，拖动照样能选中文字。

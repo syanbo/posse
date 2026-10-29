@@ -237,6 +237,13 @@ func terminalThemes() (light, dark *terminal.Theme) {
 	light, dark = terminal.LightTheme(), terminal.DarkTheme()
 	light.Background, light.Foreground = posseTheme(false).Background, posseTheme(false).Text
 	dark.Background, dark.Foreground = posseTheme(true).Background, posseTheme(true).Text
+	// 查找的命中和预览里的查找同一种蜂蜜色淡底，文字用正文色（插件默认是黄底黑字）
+	for _, th := range []*terminal.Theme{light, dark} {
+		pt := posseTheme(th == dark)
+		p := colors(pt)
+		th.Search, th.SearchSelected = p.mark, p.markOn
+		th.SearchText, th.SearchSelectedText = pt.Text, pt.Text
+	}
 	return light, dark
 }
 

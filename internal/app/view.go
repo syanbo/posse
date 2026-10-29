@@ -142,15 +142,19 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.openFilesPanel(w, sideSearch).search.focus = true
 		}
 		// 窗口的快捷键先于焦点拿到按键。⌘L 照旧开关文件栏（编辑器的"选中整行"让出），
-		// ⇧⌘G 在编辑器有焦点、Markdown 预览或 Annotate 开着查找栏时让给它们的"查找上一个"
+		// ⇧⌘G 在编辑器有焦点、Markdown 预览、Annotate 或终端开着查找栏时让给它们的"查找上一个"
 		doc := a.filesFor(w).cur
-		editing := a.filesActive(w) && doc != nil && (c.FocusWithin(doc.edRef) || doc.finding())
+		editing := a.filesActive(w) && doc != nil && (c.FocusWithin(doc.edRef) || doc.finding()) ||
+			!a.filesActive(w) && a.termFinding(c)
 		if a.pressed(c, "filesPanel") {
 			if a.filesPanelOpen() {
 				a.closeFilesPanel()
 			} else {
 				a.openFilesPanel(w, a.filesFor(w).side)
 			}
+		}
+		if !a.filesActive(w) {
+			a.termFindKeys(c)
 		}
 		if !editing && a.pressed(c, "changes") {
 			a.toggleFilesPanel(w, sideChanges)
@@ -1500,6 +1504,16 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 }
 
+// 会话按钮那一列离右边 findBarRight-sessionColGap：盖在右上角的终端查找栏右移 sessionColWidth 就让开了它，
+// 两者之间留 sessionColGap
+const (
+	sessionColPad = 2
+	sessionColGap = 12
+)
+
+// sessionColWidth 是会话按钮那一列的宽度。
+func sessionColWidth() float32 { return buttonBox() + 2*sessionColPad }
+
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
 // 这个会话粘贴过的图片、用到的技能与工具。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
@@ -1531,7 +1545,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(8).Gap(2).Padding(2).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
+	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(findBarRight - sessionColGap).Gap(2).Padding(sessionColPad).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
 	opacity := float32(0.5)
@@ -1666,7 +1680,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				a.phoneSizedBar(c, cur.ID)
 			}
 			// 留一点内边距，文字不贴边
-			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 12)
+			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 12).Ref(&a.termAreaRef)
 			a.view.dir = a.view.term.Dir()
 			area.Children(func() {
 				tv := terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
@@ -1680,6 +1694,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 				}
 				a.startingHint(c, a.view, cur)
 				a.sessionButtons(c, cur)
+				a.termFindBar(c, a.view, cur)
 			})
 			a.termDrop(c, area, cur.Agent)
 			a.linkCardView(c, area)
