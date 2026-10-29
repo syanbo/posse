@@ -874,9 +874,8 @@ func (a *app) ensureView(id string) {
 		NoWheelZoom: true,
 		// ⌘= ⌘- ⌘0 由界面的快捷键改设置里的字号（setFontSize），不让终端自己再临时缩放这一个：
 		// 两边各改各的，设置页的数字和终端实际的字号会对不上
-		OnZoom: func(terminal.Zoom) bool { return true },
-		// Cmd+点击：网址交给系统用默认浏览器打开，路径在访达里打开
-		OpenLink:    func(link string) bool { return a.openLink(v, link) },
+		OnZoom:      func(terminal.Zoom) bool { return true },
+		LinkClick:   func(link string, mods ui.Modifiers) bool { return a.openLink(v, link, mods) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { a.onHoverLink(v, link) },
 		OnKey:       func(mods ui.Modifiers, key ui.Key) bool { return a.termKey(v, id, mods, key) },

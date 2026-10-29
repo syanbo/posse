@@ -84,6 +84,7 @@ type fileDoc struct {
 	diff *diffDoc
 	comp *compareDoc
 	log  *logDoc
+	web  *webDoc
 	// change 是编辑器行号旁改动标记弹出的卡片（changepop.go），nil 是没开
 	change *changePop
 	blame  *blameDoc
@@ -96,6 +97,9 @@ type fileDoc struct {
 }
 
 func (d *fileDoc) name() string {
+	if d.web != nil {
+		return d.web.name()
+	}
 	if ld := d.log; ld != nil {
 		if ld.filter.Path != "" {
 			return filepath.Base(ld.filter.Path)
@@ -114,9 +118,9 @@ func (d *fileDoc) name() string {
 	return filepath.Base(d.path)
 }
 
-// virtual 报告这个标签页不对应磁盘上的文件（diff、比较）：不轮询磁盘，不记进 ui.json。
+// virtual 报告这个标签页不对应磁盘上的文件（diff、比较、网页）：不轮询磁盘，不记进 ui.json。
 func (d *fileDoc) virtual() bool {
-	return d.diff != nil || d.comp != nil || d.log != nil
+	return d.diff != nil || d.comp != nil || d.log != nil || d.web != nil
 }
 
 // isPreview 报告文档还是预览标签。改过内容就转为常驻，保存或撤销回原样之后也不会被下一次单击换掉。
@@ -198,8 +202,15 @@ type filesView struct {
 
 // filesFor 返回工作区的文件标签，没有就新建，并恢复上次打开的文件和展开的目录。
 func (a *app) filesFor(w *workspace) *filesView {
-	if v := a.files[w.ID]; v != nil && v.root == filepath.Clean(w.Path) {
-		return v
+	old := a.files[w.ID]
+	if old != nil && old.root == filepath.Clean(w.Path) {
+		return old
+	}
+	// 目录换了要重建：旧的网页标签不会再显示，页面要销毁，不然 WebContent 进程一直在后台
+	if old != nil {
+		for _, d := range old.docs {
+			closeWeb(d)
+		}
 	}
 	v := &filesView{wsID: w.ID, root: filepath.Clean(w.Path), tree: files.NewTree(w.Path)}
 	if a.files == nil {
@@ -382,12 +393,7 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 		v.docs[i] = d
 	default:
 		d = &fileDoc{path: path, transient: preview, preview: isMarkdown(path)}
-		// 插在当前文件后面，和编辑器一样
-		i := len(v.docs)
-		if j := slices.Index(v.docs, v.cur); j >= 0 {
-			i = j + 1
-		}
-		v.docs = slices.Insert(v.docs, i, d)
+		v.insertDoc(d)
 	}
 	v.cur = d
 	d.focus = true
@@ -615,12 +621,23 @@ func (a *app) closeDocs(v *filesView, docs []*fileDoc) {
 	drop()
 }
 
+// insertDoc 把新开的文档插在当前文档后面（和编辑器一样）并选中它。
+func (v *filesView) insertDoc(d *fileDoc) {
+	i := len(v.docs)
+	if j := slices.Index(v.docs, v.cur); j >= 0 {
+		i = j + 1
+	}
+	v.docs = slices.Insert(v.docs, i, d)
+	v.cur = d
+}
+
 func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	i := slices.Index(v.docs, d)
 	if i < 0 {
 		return
 	}
 	v.docs = slices.Delete(v.docs, i, i+1)
+	closeWeb(d)
 	if v.cur == d {
 		v.cur = nil
 		if len(v.docs) > 0 {
@@ -864,6 +881,9 @@ func (a *app) pruneFiles() {
 			continue
 		}
 		if !slices.ContainsFunc(v.docs, (*fileDoc).isModified) {
+			for _, d := range v.docs {
+				closeWeb(d)
+			}
 			delete(a.files, id)
 		}
 	}

@@ -13,11 +13,22 @@ import (
 	"posse/internal/media"
 )
 
-// openLink 处理终端里 Cmd+点击的链接。网址（http、mailto 等）返回 false，交给系统用默认浏览器打开；
-// 文件链接（如 Claude 的 [Image #N] 指向的 file://）和路径弹出链接卡片：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
-func (a *app) openLink(v *termView, link string) bool {
+// openLink 处理终端里点击的链接。网址单击弹出链接卡片；Cmd+点击在网页标签里打开（不是 http、https 的
+// 交给系统）；Shift+Cmd+点击返回 false，交给系统用默认浏览器打开。文件链接（如 Claude 的 [Image #N]
+// 指向的 file://）和路径弹出链接卡片：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
+func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 	path, local := a.linkPath(v, link)
 	if !local {
+		switch {
+		case mods&ui.Cmd == 0:
+			a.linkCard = &linkCard{url: link, ws: a.termWorkspace(v)}
+			return true
+		case mods&ui.Shift == 0 && isWebURL(link):
+			if w := a.termWorkspace(v); w != nil {
+				a.openWeb(w, link)
+				return true
+			}
+		}
 		return false
 	}
 	// 悬停时已经挡掉了不存在的文件；这里是点下去前刚好被删的情况
@@ -26,6 +37,14 @@ func (a *app) openLink(v *termView, link string) bool {
 	}
 	a.showLinkCard(path)
 	return true
+}
+
+// termWorkspace 是终端所在的工作区，找不到时是选中的工作区。
+func (a *app) termWorkspace(v *termView) *workspace {
+	if w, t := a.findTerminal(v.id); t != nil && w != nil {
+		return w
+	}
+	return a.workspace(a.selected)
 }
 
 // linkPath 是链接指向的本地文件：file:// 链接取路径，网址返回 ok=false，路径按终端目录解析，不存在返回空。
@@ -124,8 +143,10 @@ func resolveLinkPath(link, base string) string {
 	return p
 }
 
-// linkCard 是 Cmd+点击文件链接或路径后弹出的卡片，出现在点击的位置。
+// linkCard 是点击网址、文件链接或路径后弹出的卡片，出现在点击的位置。
 type linkCard struct {
+	url     string     // 网址的卡片只有它，path 为空
+	ws      *workspace // 网址在哪个工作区的网页标签里打开
 	path    string
 	isDir   bool
 	x, y    float32 // 相对终端区域；placed 前还没取
@@ -168,7 +189,6 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 	if card == nil {
 		return
 	}
-	t := c.Theme()
 	const width = 340
 	// 弹出卡片的那一下点击也算"在卡片外面按下"，弹出的这一帧不能据此关掉它
 	fresh := !card.placed
@@ -191,57 +211,92 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 	} else {
 		el.Top(card.y + 14)
 	}
-	el.Children(func() {
-		ui.Text(c, shortPath(card.path)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Padding(6, 8, 4, 8).Selectable()
-		if card.preview != nil {
-			ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
-		}
-		hline(c).Margin(4, 6)
-		// 最常用的在最上面：在 Posse 里打开
-		if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开") {
-			w := a.workspaceOf(card.path)
-			if w == nil {
-				w = a.workspace(a.selected)
-			}
-			if w != nil {
-				a.openFile(w, card.path, 0, [2]int{})
-			}
-			a.linkCard = nil
-		}
-		// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
-		if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示") {
-			a.revealInFiles(w, card.path)
-			a.linkCard = nil
-		}
-		openIcon, openLabel := iconOpen, "打开"
-		if card.isDir {
-			// 在访达里的动作都用文件夹图标
-			openIcon, openLabel = iconFolder, "在访达中打开"
-		} else if isImagePath(card.path) {
-			openLabel = "用预览打开"
-		}
-		if linkCardItem(c, openIcon, openLabel) {
-			if err := mygo.Shell.OpenPath(card.path); err != nil {
-				a.err = err.Error()
-			}
-			a.linkCard = nil
-		}
-		if !card.isDir && linkCardItem(c, iconFolder, "在访达中显示") {
-			mygo.Shell.ShowItemInFolder(card.path)
-			a.linkCard = nil
-		}
-		if linkCardItem(c, iconCopy, "复制路径") {
-			c.WriteClipboard(card.path)
-			a.linkCard = nil
-		}
-	})
+	if card.url != "" {
+		el.Children(func() { a.urlCardItems(c, card) })
+	} else {
+		el.Children(func() { a.pathCardItems(c, card, width) })
+	}
 	if !fresh && (el.PressedOutside() || el.Shortcut(0, ui.KeyEscape)) {
 		a.linkCard = nil
 	}
 }
 
-// linkCardItem 是链接卡片里的一行操作，返回这一帧是否点了它。
-func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
+// urlCardItems 是网址卡片的内容：网址和复制按钮，在网页标签里打开（Cmd+点击直接做这一步）、
+// 用浏览器打开（Shift+Cmd+点击）。
+func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
+	a.linkCardHead(c, card.url, card.url, "复制链接")
+	hline(c).Margin(4, 6)
+	web := isWebURL(card.url) && card.ws != nil
+	if web && linkCardItem(c, iconGlobe, "在 Posse 中打开", "⌘ 点击") {
+		a.openWeb(card.ws, card.url)
+		a.linkCard = nil
+	}
+	label, keys := "打开", "⌘ 点击"
+	if web {
+		label, keys = "在浏览器中打开", "⇧⌘ 点击"
+	}
+	if linkCardItem(c, iconOpen, label, keys) {
+		c.OpenURL(card.url)
+		a.linkCard = nil
+	}
+}
+
+// linkCardHead 是链接卡片顶上的一行：显示 text（最多两行），后面的复制按钮复制 value。
+func (a *app) linkCardHead(c *ui.Context, text, value, label string) {
+	t := c.Theme()
+	ui.Row(c).Padding(2, 2, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Grow(1).Shrink(1).Selectable()
+		if iconButton(c.Key("copy"), iconCopy, label).Clicked() {
+			c.WriteClipboard(value)
+			a.linkCard = nil
+		}
+	})
+}
+
+// pathCardItems 是文件链接和路径卡片的内容。
+func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
+	a.linkCardHead(c, shortPath(card.path), card.path, "复制路径")
+	if card.preview != nil {
+		ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
+	}
+	hline(c).Margin(4, 6)
+	// 最常用的在最上面：在 Posse 里打开
+	if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开", "") {
+		w := a.workspaceOf(card.path)
+		if w == nil {
+			w = a.workspace(a.selected)
+		}
+		if w != nil {
+			a.openFile(w, card.path, 0, [2]int{})
+		}
+		a.linkCard = nil
+	}
+	// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
+	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示", "") {
+		a.revealInFiles(w, card.path)
+		a.linkCard = nil
+	}
+	openIcon, openLabel := iconOpen, "打开"
+	if card.isDir {
+		// 在访达里的动作都用文件夹图标
+		openIcon, openLabel = iconFolder, "在访达中打开"
+	} else if isImagePath(card.path) {
+		openLabel = "用预览打开"
+	}
+	if linkCardItem(c, openIcon, openLabel, "") {
+		if err := mygo.Shell.OpenPath(card.path); err != nil {
+			a.err = err.Error()
+		}
+		a.linkCard = nil
+	}
+	if !card.isDir && linkCardItem(c, iconFolder, "在访达中显示", "") {
+		mygo.Shell.ShowItemInFolder(card.path)
+		a.linkCard = nil
+	}
+}
+
+// linkCardItem 是链接卡片里的一行操作，keys 写在右边，返回这一帧是否点了它。
+func linkCardItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 	t := c.Theme()
 	row := ui.Row(c.Key(label)).Height(sz(30)).Padding(0, 8).Gap(8).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(label)
 	bg := ui.Transparent
@@ -251,7 +306,10 @@ func linkCardItem(c *ui.Context, icon *ui.SVG, label string) bool {
 	row.Background(row.AnimateColor("bg", bg, hover))
 	row.Children(func() {
 		ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, label).FontSize(fsBody)
+		ui.Text(c, label).FontSize(fsBody).Grow(1)
+		if keys != "" {
+			ui.Text(c, keys).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+		}
 	})
 	return row.Clicked()
 }

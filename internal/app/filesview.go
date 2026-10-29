@@ -302,6 +302,14 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	d := v.cur
+	if d.web != nil {
+		if d.web.view == nil {
+			docMessage(c, d, d.err)
+		} else {
+			a.webView(c, d)
+		}
+		return
+	}
 	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
 	if d.kind == docLoading && d.diff == nil {
 		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
@@ -441,11 +449,13 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
-// docIcon 是文件标签的图标：分支比较用分支图标，其余是文件。
+// docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余是文件。
 func docIcon(d *fileDoc) *ui.SVG {
 	switch {
 	case d.comp != nil:
 		return iconBranch
+	case d.web != nil:
+		return iconGlobe
 	}
 	return iconFile
 }
@@ -454,9 +464,13 @@ func docIcon(d *fileDoc) *ui.SVG {
 func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string) {
 	t := c.Theme()
 	active := a.filesActive(w) && v.cur == d
+	tip := shortPath(d.path)
+	if d.web != nil {
+		tip = d.web.url
+	}
 	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
 	row := ui.Row(c.Key("doc:"+d.path)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(0).
-		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(shortPath(d.path))
+		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(tip)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {

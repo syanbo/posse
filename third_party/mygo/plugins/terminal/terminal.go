@@ -237,6 +237,10 @@ type Options struct {
 	// opens with the system (Context.OpenURL), and a path it leaves does
 	// nothing.
 	OpenLink func(link string) bool
+	// LinkClick, when set, takes the place of OpenLink, told the modifiers
+	// the click held: none for a plain click, Command (Control elsewhere)
+	// and maybe Shift for a Command+click. (Posse)
+	LinkClick func(link string, mods ui.Modifiers) bool
 	// LinkUsable reports whether a link can open, as a file that still
 	// exists, on the main thread with the terminal locked: one that cannot
 	// shows no underline and a click on it does nothing. Nil takes every

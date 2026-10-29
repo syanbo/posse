@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
@@ -65,7 +66,7 @@ func TestFileLinkPath(t *testing.T) {
 }
 
 // 在真的终端里点链接：OSC 8 超链接（Claude 的 [Image #N] 就是这样指向 file:// 的）和打印出来的路径都弹出链接卡片。
-// 原地单击和 Cmd+点击都打开；从链接上拖动是选文字，不打开。
+// 原地单击和 Cmd+点击都打开；从链接上拖动是选文字，不打开。网址单击弹出卡片，Cmd+点击在网页标签里打开，Shift+Cmd+点击交给浏览器。
 func TestClickOpensLinkCard(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "notes.txt")
@@ -79,7 +80,10 @@ func TestClickOpensLinkCard(t *testing.T) {
 	done := make(chan struct{})
 	t.Cleanup(func() { close(done) })
 	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: a.termFont(),
-		OpenLink:   func(link string) bool { calls = append(calls, link); return a.openLink(v, link) },
+		LinkClick: func(link string, mods ui.Modifiers) bool {
+			calls = append(calls, link)
+			return a.openLink(v, link, mods)
+		},
 		LinkUsable: func(link string) bool { return a.linkUsable(v, link) }})
 	if err != nil {
 		t.Skip("terminal unavailable:", err)
@@ -101,6 +105,11 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 	for range 2 {
 		feed += dir + "/gone.txt\r\n"
+	}
+	// 第 12–13 行：网址
+	const site = "https://play.google.com/store/apps/details?id=com.ironhidegames.android.kingdomrush"
+	for range 2 {
+		feed += site + "\r\n"
 	}
 	term.Feed([]byte(feed))
 	tt := newPreviewTester(a, true)
@@ -139,6 +148,10 @@ func TestClickOpensLinkCard(t *testing.T) {
 		t.Fatalf("Cmd+click on hyperlink: %+v err=%q calls=%q", a.linkCard, a.err, calls)
 	}
 	tt.Frame()
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
+		tt.Advance(time.Second)
+		savePNG(t, tt, "link-path-card.png")
+	}
 	if !a.linkCard.placed {
 		t.Fatal("card not placed")
 	}
@@ -164,6 +177,38 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 	if a.linkCard != nil || len(calls) != 0 || a.err != "" {
 		t.Fatalf("missing files opened: card %+v calls %q err %q", a.linkCard, calls, a.err)
+	}
+
+	// 网址：单击弹出卡片、不打开，Cmd+点击直接打开、不弹卡片
+	urlY := float32(51 + 12.5*18.5)
+	tt.ClickAt(290, urlY)
+	tt.Frame()
+	tt.Frame()
+	if a.linkCard == nil || a.linkCard.url != site || len(tt.OpenedURLs()) != 0 {
+		t.Fatalf("plain click on URL: %+v opened %q calls %q", a.linkCard, tt.OpenedURLs(), calls)
+	}
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
+		tt.Advance(time.Second)
+		savePNG(t, tt, "link-url-card.png")
+	}
+	a.linkCard = nil
+	tt.Frame()
+	// Shift+Cmd+点击：交给浏览器，不开网页标签
+	tt.HoldModifiers(ui.Cmd | ui.Shift)
+	tt.Move(290, urlY)
+	tt.Frame()
+	tt.ClickAtWith(ui.Cmd|ui.Shift, 290, urlY)
+	tt.Frame()
+	tt.HoldModifiers(0)
+	tt.Frame()
+	if a.linkCard != nil || len(tt.OpenedURLs()) != 1 || tt.OpenedURLs()[0] != site || a.files[a.selected] != nil && len(a.files[a.selected].docs) != 0 {
+		t.Fatalf("Shift+Cmd+click on URL: card %+v opened %q", a.linkCard, tt.OpenedURLs())
+	}
+	// Cmd+点击：在网页标签里打开
+	cmdClick(tt, 290, urlY)
+	fv := a.files[a.selected]
+	if a.linkCard != nil || len(tt.OpenedURLs()) != 1 || fv == nil || fv.cur == nil || fv.cur.web == nil || fv.cur.web.url != site {
+		t.Fatalf("Cmd+click on URL: card %+v opened %q files %+v", a.linkCard, tt.OpenedURLs(), fv)
 	}
 }
 
@@ -276,7 +321,12 @@ func TestLinkCardPlacement(t *testing.T) {
 		a.linkCard = card
 		tt := newPreviewTester(a, true)
 		tt.Frame()
-		r, ok := tt.Find("复制路径")
+		// 最后一行：文件夹是"在访达中打开"，文件是"在访达中显示"
+		last := "在访达中打开"
+		if !card.isDir {
+			last = "在访达中显示"
+		}
+		r, ok := tt.Find(last)
 		if !ok {
 			t.Fatalf("%s: card missing", tc.name)
 		}
@@ -308,7 +358,7 @@ func TestPathBeforeFullWidthPunct(t *testing.T) {
 	t.Cleanup(func() { close(done) })
 	var hovered []string
 	term, err := terminal.New(terminal.Options{Conn: nopConn{done}, Font: a.termFont(),
-		OpenLink:    func(link string) bool { return a.openLink(v, link) },
+		LinkClick:   func(link string, mods ui.Modifiers) bool { return a.openLink(v, link, mods) },
 		LinkUsable:  func(link string) bool { return a.linkUsable(v, link) },
 		OnHoverLink: func(link string) { hovered = append(hovered, link) }})
 	if err != nil {
@@ -332,5 +382,28 @@ func TestPathBeforeFullWidthPunct(t *testing.T) {
 		tt.Frame()
 		tt.Frame()
 		savePNG(t, tt, "link-hover-color.png")
+	}
+}
+
+func TestWebAddress(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://example.com/a": "https://example.com/a",
+		"example.com/a?b=1":     "https://example.com/a?b=1",
+		"localhost:3000":        "http://localhost:3000",
+		"127.0.0.1:8080/x":      "http://127.0.0.1:8080/x",
+		"192.168.1.5:3000":      "http://192.168.1.5:3000",
+		"0.0.0.0:8080":          "http://0.0.0.0:8080",
+		"myhost.local:5173":     "http://myhost.local:5173",
+		"[::1]:3000":            "http://[::1]:3000",
+		"localhost.evil.com":    "https://localhost.evil.com",
+		"  go.dev  ":            "https://go.dev",
+		"hello":                 "",
+		"two words.com":         "",
+		"ftp://example.com":     "",
+		"":                      "",
+	} {
+		if got := webAddress(in); got != want {
+			t.Errorf("webAddress(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

@@ -219,6 +219,7 @@ type view struct {
 	// does not open.
 	opening     string
 	openingPath bool
+	openingMods ui.Modifiers
 	// copying is the selection a release ended with Options.CopyOnSelect,
 	// and rightClick what a secondary click does, done once t.mu is
 	// released, as opening is.
@@ -591,7 +592,12 @@ func (v *view) input(ev ui.InputEvent) bool {
 		took := v.pointerEvent(ev)
 		if link := v.opening; link != "" {
 			v.opening = ""
-			if open := v.t.opts.OpenLink; (open == nil || !open(link)) && !v.openingPath {
+			open := v.t.opts.OpenLink
+			if click := v.t.opts.LinkClick; click != nil {
+				mods := v.openingMods
+				open = func(link string) bool { return click(link, mods) }
+			}
+			if (open == nil || !open(link)) && !v.openingPath {
 				v.services.OpenURL(link)
 			}
 		}
@@ -1012,7 +1018,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 	// the mouse sees it.
 	link, path, _ := v.linkUnder(ev.Mods, ev.X, ev.Y)
 	if link != "" && ev.Kind == ui.InputPointerDown && ev.Button == 0 {
-		v.opening, v.openingPath, v.linkPress = link, path, true
+		v.opening, v.openingPath, v.openingMods, v.linkPress = link, path, ev.Mods, true
 		return true
 	}
 	tracking := t.term.MouseTracking() && ev.Mods&ui.Shift == 0
@@ -1027,7 +1033,7 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		case ui.InputPointerUp:
 			v.linkDown = nil
 			if ev.Button == 0 {
-				v.opening, v.openingPath = p.link, p.path
+				v.opening, v.openingPath, v.openingMods = p.link, p.path, 0
 				if v.selecting {
 					v.selecting, v.ticking = false, false
 					t.term.SetSelection(nil)
@@ -1199,7 +1205,7 @@ func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 	if url, x0, x1 := urlAt(text, cols, col); url != "" {
 		return url, false, linkSpan{row, x0, x1}
 	}
-	if t.opts.OpenLink != nil {
+	if t.opts.OpenLink != nil || t.opts.LinkClick != nil {
 		if p, x0, x1 := pathAt(text, cols, col); p != "" {
 			return p, true, linkSpan{row, x0, x1}
 		}

@@ -399,12 +399,7 @@ func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool
 		return
 	}
 	d := &fileDoc{path: key, diff: df}
-	i := len(v.docs)
-	if j := slices.Index(v.docs, v.cur); j >= 0 {
-		i = j + 1
-	}
-	v.docs = slices.Insert(v.docs, i, d)
-	v.cur = d
+	v.insertDoc(d)
 	d.started = true
 	a.loadDiff(v, d)
 }
