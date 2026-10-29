@@ -30,7 +30,7 @@ import (
 	"posse/internal/term"
 )
 
-const Version = "0.1.9"
+const Version = "0.1.10"
 
 type Config struct {
 	Home       string
