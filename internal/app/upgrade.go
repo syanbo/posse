@@ -99,9 +99,11 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 		}
 		var re *rpc.Error
 		unsupported := errors.As(err, &re) && re.Code == rpc.CodeUnknown
+		// 别处（另一个窗口、posse daemon handoff）已经在交接：结果一样，不算失败
+		busy := errors.As(err, &re) && re.Code == rpc.CodeConflict
 		a.upgrade.end(pid, unsupported)
 		a.win.Update(func() {
-			if err != nil && !unsupported {
+			if err != nil && !unsupported && !busy {
 				a.err = "更新常驻进程失败，终端没受影响：" + err.Error()
 			}
 		})
