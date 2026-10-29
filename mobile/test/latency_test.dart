@@ -112,6 +112,27 @@ void main() {
     });
   });
 
+  test('a send that fails at once after a timeout waits for the next tick', () {
+    fakeAsync((async) {
+      // 后台久了回来：ping 先超时一次，之后连接已断、发送立即失败，断线通知还在事件队列里
+      var first = true;
+      final rpc = _PingRpc((_, method) async {
+        if (first) {
+          first = false;
+          await Future<void>.delayed(const Duration(seconds: 5));
+          throw TimeoutException(method);
+        }
+        throw StateError('closed');
+      });
+      LatencyMeter(rpc, onChange: () {}).start();
+      async.elapse(const Duration(seconds: 5));
+      // 5 秒时超时补测一次、定时器也到点测一次；立即失败的不再接着补测，不然只走微任务、永远停不下来
+      expect(rpc.methods.length, 3);
+      async.elapse(const Duration(seconds: 5));
+      expect(rpc.methods.length, 4);
+    });
+  });
+
   test(
     'timeouts while other replies keep arriving are not a dead link',
     () async {

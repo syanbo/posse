@@ -82,6 +82,7 @@ class LatencyMeter {
     final rx = rpc.receivedBytes, tx = rpc.sentBytes;
     final replies = rpc.repliesReceived;
     final watch = Stopwatch()..start();
+    var timedOut = false;
     try {
       await rpc.call(_method, const {}, timeout: timeout);
       watch.stop();
@@ -97,6 +98,7 @@ class LatencyMeter {
       }
       // closed：连接已经断了，重连那边会处理
     } on TimeoutException {
+      timedOut = true;
       // 这段时间还有别的回复回来：电脑在处理请求，只是 ping 排在大回复后面
       if (rpc.repliesReceived == replies) _missed++;
     } catch (_) {
@@ -111,7 +113,9 @@ class LatencyMeter {
     }
     if ((latency, unresponsive) != before) onChange();
     // 超时那一刻定时器多半也刚到，当时这一次还算在路上被跳过，要再等一整个间隔：
-    // 没响应时马上补测，3 次超时大约 3×[timeout] 就能断开重连
-    if (_missed > 0 && !_stopped) unawaited(tick());
+    // 没响应时马上补测，3 次超时大约 3×[timeout] 就能断开重连。
+    // 只在等满了超时后补测：连接已经断了时发送立即失败，接着补测就成了只走微任务的死循环，
+    // 断线通知在事件队列里永远轮不到，界面卡死
+    if (timedOut && _missed > 0 && !_stopped) unawaited(tick());
   }
 }
