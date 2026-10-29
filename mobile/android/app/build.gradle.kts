@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -29,11 +31,27 @@ android {
         versionName = flutter.versionName
     }
 
+    // 发布用的证书不进仓库（scripts/android-release.sh 第一次运行时生成）。没有时用调试证书签，
+    // 这样的包和发布的包证书不同，不能互相覆盖安装
+    val releaseKey = file(
+        System.getenv("POSSE_ANDROID_KEY")
+            ?: "${System.getProperty("user.home")}/Library/Application Support/Posse/android/key.properties",
+    )
+    signingConfigs {
+        if (releaseKey.isFile) {
+            val props = Properties().apply { releaseKey.inputStream().use { load(it) } }
+            create("release") {
+                storeFile = releaseKey.resolveSibling(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }
@@ -54,4 +72,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.4.2")
     implementation("androidx.camera:camera-view:1.4.2")
     implementation("com.google.zxing:core:3.5.3")
+    // 应用内更新把下载的 APK 经 FileProvider 交给安装器
+    implementation("androidx.core:core:1.13.1")
 }

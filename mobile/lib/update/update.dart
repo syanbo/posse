@@ -3,14 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 
-/// 版本号和构建号由 scripts/ios-adhoc.sh 打包时用 --dart-define 写进来；
-/// 构建号是 0 说明不是 Ad Hoc 包（调试、安卓），不查更新。
+/// 版本号和构建号由 scripts/ios-adhoc.sh、scripts/android-release.sh 打包时用 --dart-define 写进来；
+/// 构建号是 0 说明不是发布的包（调试、自己编的），不查更新。
 const appVersion = String.fromEnvironment(
   'POSSE_VERSION',
   defaultValue: '0.1.0',
@@ -18,12 +19,13 @@ const appVersion = String.fromEnvironment(
 const appBuild = int.fromEnvironment('POSSE_BUILD');
 
 // 测试时可以用 --dart-define=POSSE_UPDATE_URL 指到本机
-const _latestUrl = String.fromEnvironment(
-  'POSSE_UPDATE_URL',
-  defaultValue: 'https://posse.shaoyan.uk/ios/latest.json',
-);
+const _updateUrl = String.fromEnvironment('POSSE_UPDATE_URL');
 
-/// 线上最新的 iOS 安装包，来自发布脚本传到 R2 的 latest.json。
+String get _latestUrl => _updateUrl.isNotEmpty
+    ? _updateUrl
+    : 'https://posse.shaoyan.uk/${Platform.isAndroid ? 'android' : 'ios'}/latest.json';
+
+/// 线上最新的安装包，来自发布脚本传到 R2 的 latest.json。
 class AppRelease {
   const AppRelease({
     required this.version,
@@ -42,7 +44,7 @@ class AppRelease {
   /// mobile/CHANGELOG.md 里这个版本的条目，一行一条。
   final List<String> notes;
 
-  /// itms-services 链接：打开后系统弹安装确认，和安装页的按钮一样。
+  /// iOS 是 itms-services 链接：打开后系统弹安装确认，和安装页的按钮一样；安卓是 APK 的地址。
   final String install;
 
   static AppRelease? parse(Object? json) {
@@ -66,7 +68,7 @@ class AppRelease {
   }
 }
 
-/// 查有没有新的 iOS 安装包：启动时查一次，回到前台时隔 6 小时以上再查。
+/// 查有没有新的安装包：启动时查一次，回到前台时隔 6 小时以上再查。
 /// 比自己的构建号新就记在 [latest]，首页和设置页据此显示更新。
 class UpdateChecker extends ChangeNotifier {
   UpdateChecker({this.build = appBuild, this.fetch = _fetchLatest});
@@ -236,6 +238,10 @@ class _UpdateSheetState extends State<_UpdateSheet> {
   var _busy = false;
   Timer? _reset;
 
+  /// 安卓下载 APK 的进度，0 到 1；不知道总大小时为 null。
+  double? _progress;
+  String? _error;
+
   @override
   void dispose() {
     _reset?.cancel();
@@ -245,6 +251,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
   // 系统要过好几秒才弹安装确认，期间按钮转圈、点不动，免得连点弹出好几次；
   // 在系统弹框里取消的话 App 收不到消息，过一会儿恢复成能再点
   Future<void> _install() async {
+    if (Platform.isAndroid) return _installApk();
     setState(() => _busy = true);
     _reset = Timer(const Duration(seconds: 15), () {
       if (mounted) setState(() => _busy = false);
@@ -254,6 +261,50 @@ class _UpdateSheetState extends State<_UpdateSheet> {
       mode: LaunchMode.externalApplication,
     );
     if (!ok && mounted) setState(() => _busy = false);
+  }
+
+  // 下完交给系统安装器，确认后覆盖安装、App 被换掉；在安装器里取消会回到这里，按钮恢复。
+  // 弹窗关了下载照样接着下，但不弹安装器：重新打开点「更新」接上同一次下载或直接用下好的包
+  Future<void> _installApk() async {
+    setState(() {
+      _busy = true;
+      _progress = _apkProgress.value;
+      _error = null;
+    });
+    void follow() {
+      if (mounted) setState(() => _progress = _apkProgress.value);
+    }
+
+    _apkProgress.addListener(follow);
+    try {
+      final path = await _fetchApk(widget.release);
+      if (!mounted) return;
+      setState(() => _progress = 1);
+      final how = await _updateChannel.invokeMethod<String>('install', path);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        if (how == 'denied') _error = '要在系统设置里允许 Posse 安装应用，才能更新';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e is PlatformException
+            ? '打不开安装：${e.message ?? e.code}'
+            : '下载失败，稍后再试';
+      });
+    } finally {
+      _apkProgress.removeListener(follow);
+    }
+  }
+
+  String get _busyLabel {
+    if (!Platform.isAndroid) return '正在请求安装…';
+    final p = _progress;
+    if (p == null) return '正在下载…';
+    if (p >= 1) return '正在打开安装…';
+    return '正在下载 ${(p * 100).floor()}%';
   }
 
   @override
@@ -323,11 +374,21 @@ class _UpdateSheetState extends State<_UpdateSheet> {
             icon: _busy
                 ? const HexSpinner(size: 16, color: Colors.white)
                 : const Icon(Icons.system_update_rounded, size: 20),
-            label: Text(_busy ? '正在请求安装…' : '更新'),
+            label: Text(_busy ? _busyLabel : '更新'),
           ),
+          if (_error case final error?) ...[
+            const SizedBox(height: 8),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: Fs.caption, color: c.danger),
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
-            '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。',
+            Platform.isAndroid
+                ? '下载完系统会弹出安装确认，覆盖安装，配对不会丢。第一次更新要在系统设置里允许 Posse 安装应用。'
+                : '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: Fs.caption, color: c.faint),
           ),
@@ -337,7 +398,82 @@ class _UpdateSheetState extends State<_UpdateSheet> {
   }
 }
 
-/// iOS 才查：只有 Ad Hoc 包有 itms-services 安装页。
+const _updateChannel = MethodChannel('posse/update');
+
+/// 正在下的安装包，同一个构建只下一份：弹窗关了再开、连点都接上它，不会两份同时写一个文件。
+Future<String>? _apkTask;
+int _apkTaskBuild = 0;
+final _apkProgress = ValueNotifier<double?>(0);
+
+Future<String> _fetchApk(AppRelease release) {
+  if (_apkTask case final task? when _apkTaskBuild == release.build) {
+    return task;
+  }
+  _apkProgress.value = 0;
+  final task = downloadApk(release, onProgress: (p) => _apkProgress.value = p);
+  _apkTask = task;
+  _apkTaskBuild = release.build;
+  task.whenComplete(() {
+    if (identical(_apkTask, task)) _apkTask = null;
+  }).ignore();
+  return task;
+}
+
+/// 把安卓的安装包下载到原生层给的更新目录（文件名带构建号，原生层据此清理装过的旧包），返回路径。
+/// 先写 .part，下完、大小对上再改名，半截的包不交给安装器。
+Future<String> downloadApk(
+  AppRelease release, {
+  void Function(double? progress)? onProgress,
+}) async {
+  final dir = await _updateChannel.invokeMethod<String>('dir');
+  if (dir == null) throw StateError('no update dir');
+  final file = File('$dir/Posse-${release.build}.apk');
+  // 只有下完、大小对上才改成这个名字，上次下好没装的直接用
+  if (await file.exists()) return file.path;
+  final part = File('${file.path}.part');
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+  try {
+    final req = await client.getUrl(Uri.parse(release.install));
+    final res = await req.close();
+    if (res.statusCode != 200) {
+      throw HttpException('HTTP ${res.statusCode}', uri: req.uri);
+    }
+    final total = res.contentLength;
+    final sink = part.openWrite();
+    var got = 0;
+    var shown = -1;
+    try {
+      // 一段时间收不到数据就算断了，免得按钮一直转
+      await for (final chunk in res.timeout(const Duration(seconds: 30))) {
+        sink.add(chunk);
+        got += chunk.length;
+        if (total > 0) {
+          final pct = got * 100 ~/ total;
+          if (pct != shown) {
+            shown = pct;
+            onProgress?.call(got / total);
+          }
+        } else if (shown < 0) {
+          shown = 0;
+          onProgress?.call(null);
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+    if (total > 0 && got != total) {
+      throw HttpException('short download $got/$total', uri: req.uri);
+    }
+    return (await part.rename(file.path)).path;
+  } catch (_) {
+    if (await part.exists()) await part.delete();
+    rethrow;
+  } finally {
+    client.close();
+  }
+}
+
+/// iOS 的 Ad Hoc 包和安卓的发布包查更新，构建号是 0 的不查（见 [UpdateChecker.enabled]）。
 void startUpdateChecks() {
-  if (Platform.isIOS) unawaited(updates.check());
+  if (Platform.isIOS || Platform.isAndroid) unawaited(updates.check());
 }

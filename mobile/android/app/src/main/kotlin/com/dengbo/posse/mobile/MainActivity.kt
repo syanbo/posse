@@ -19,6 +19,7 @@ class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     // 等相机权限的那次 authorize
     private var cameraResult: MethodChannel.Result? = null
+    private var update: AppUpdate? = null
     private var desk: DeskPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -29,6 +30,7 @@ class MainActivity : FlutterActivity() {
         val desk = DeskPlugin(this, flutterEngine.renderer, messenger)
         this.desk = desk
         flutterEngine.platformViewsController.registry.registerViewFactory("posse/desk/view", desk.viewFactory)
+        update = AppUpdate(this, messenger)
         MethodChannel(messenger, "posse/qr").setMethodCallHandler { call, result ->
             if (call.method != "authorize") {
                 result.notImplemented()
@@ -77,6 +79,11 @@ class MainActivity : FlutterActivity() {
         quicReset()
         desk?.dispose()
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        update?.resumed()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

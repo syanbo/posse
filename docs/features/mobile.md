@@ -148,10 +148,12 @@ iOS 和安卓。两端原生层各一份、包格式和统计口径一致（`mob
 
 ## 更新
 
-- 只有 iOS 的 Ad Hoc 包查更新：`scripts/ios-adhoc.sh` 打包时用 `--dart-define` 写进版本号和构建号（`POSSE_VERSION`、`POSSE_BUILD`），构建号是 0（调试包、安卓）不查。
-- App 启动时读 `https://posse.shaoyan.uk/ios/latest.json`（版本、构建号、大小、`mobile/CHANGELOG.md` 里这个版本的条目、itms-services 链接），回到前台时距上次超过 6 小时再读；网络不通不提示，下次再查。线上构建号比自己的大就算有新版本。
+- iOS 的 Ad Hoc 包和安卓的发布包查更新：`scripts/ios-adhoc.sh`、`scripts/android-release.sh` 打包时用 `--dart-define` 写进版本号和构建号（`POSSE_VERSION`、`POSSE_BUILD`），构建号是 0（调试包、自己编的包）不查。两端共用版本号和 `mobile/CHANGELOG.md`，构建号都是提交数（安卓写成 versionCode）。
+- App 启动时读 `https://posse.shaoyan.uk/ios/latest.json`（安卓读 `android/latest.json`；版本、构建号、大小、`mobile/CHANGELOG.md` 里这个版本的条目、安装链接：iOS 是 itms-services 链接，安卓是 APK 的地址），回到前台时距上次超过 6 小时再读；网络不通不提示，下次再查。线上构建号比自己的大就算有新版本。
 - 首页列表最上面一条提示「新版本 x（构建号）· 大小」：点开是更新内容和「更新」按钮，× 之后这个构建不再提示（记在手机设置里），更新的构建照常提示。设置「关于」写当前版本和构建号，有新版本时多一行「更新到 …」，提示关了也能在这里更新。
 - 「更新」打开 itms-services 链接，系统弹安装确认，确认后 App 关闭、覆盖安装，配对不丢。系统要过好几秒才弹框，期间按钮转圈、点不动；在系统弹框里取消的话 App 收不到消息，15 秒后按钮恢复。安装页的按钮同样处理，页面上写着版本、大小和更新内容。
+- 安卓的「更新」在 App 里下载 APK（按钮显示进度，先写 `.part`、大小对上再改名，断流 30 秒算失败），下完经 FileProvider 交给系统安装器，确认后覆盖安装，配对不丢；在安装器里取消回到弹窗，按钮恢复。Posse 还没有「安装未知应用」权限时先跳到系统设置的这个开关页，允许后回到 App 自动弹安装器，没允许就在弹窗里提示。下载的包放在缓存目录 `update/`，文件名带构建号，App 启动时删掉不比自己新的。第一次安装从 `https://posse.shaoyan.uk/android/index.html` 下载。
+- 安卓发布包用自己的证书签（`~/Library/Application Support/Posse/android/`，不进仓库，`scripts/android-release.sh` 第一次运行时生成），找不到时 gradle 退回调试证书，发布脚本拒绝上传这样的包。调试证书签的包和发布包不能互相覆盖安装，换着装要先卸载、重新配对。
 
 ## 外观
 

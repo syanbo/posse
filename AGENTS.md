@@ -24,6 +24,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - 在 Posse 的终端里跑测试时，环境里带着日常常驻进程的 `GIT_TRACE2_EVENT`，`internal/daemon` 的 `TestGitTrace` 会失败：用 `env -u GIT_TRACE2_EVENT -u GIT_TRACE2_ENV_VARS go test ./...`。
 - 发布 Mac 版：先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，用 wrangler（本机登录的 Cloudflare 账号，过期了 `npx wrangler login`）把更新包、增量包、dmg 和清单传到 R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载（`Posse.dmg` 是最新版）。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新。装在「应用程序」里的 Posse 会自己更新，`build/` 里的不会；方案和换包时机见 `docs/plans/mac-update.md`。
 - 发布 iOS 的 Ad Hoc 安装包：先在 `mobile/CHANGELOG.md` 加 `## <版本>` 一节（App 提示更新时显示的更新内容，可以不提交），再跑 `scripts/ios-adhoc.sh <版本>`：它把版本号写进 `mobile/pubspec.yaml`，连同 CHANGELOG 提交成 `chore(release): 发布 iOS <版本>`（不推送；`mobile`、`internal/mquic` 有别的未提交改动时拒绝），用 Apple Distribution 证书打 ipa（导出设置 `mobile/ios/ExportOptions-adhoc.plist`，`--dart-define` 写进版本号和构建号），连同 itms-services 清单、安装页和 `latest.json` 传到 R2 的 `ios/`，iPhone 用 Safari 打开 `https://posse.shaoyan.uk/ios/index.html` 安装，装过的 App 读 `latest.json` 在首页提示更新。不带参数时，CHANGELOG 最上面一节的版本和 `pubspec.yaml` 不同就照它发新版，相同就按现在的版本重新打包上传（登记新设备、上传失败后）。只有开发者账号里登记过 UDID 的设备装得上；构建号是提交数，覆盖安装不清配对。
+- 发布安卓安装包：同样先在 `mobile/CHANGELOG.md` 加一节（和 iOS 共用版本号，iOS 刚发过同一版就不用改），再跑 `scripts/android-release.sh <版本>`：版本号逻辑和 iOS 脚本一样（提交成 `chore(release): 发布安卓 <版本>`），打 arm64 的 APK（构建号是提交数，写成 versionCode），连同下载页和 `latest.json` 传到 R2 的 `android/`，手机浏览器打开 `https://posse.shaoyan.uk/android/index.html` 下载安装，装过的 App 在首页提示更新、应用内下载后交给系统安装器。发布证书在 `~/Library/Application Support/Posse/android/`（第一次运行时生成），丢了已装的 App 不能覆盖更新，只能卸载重装、重新配对。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
 
 ## 结构
@@ -53,7 +54,7 @@ internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用
 internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
 internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
-scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包
+scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包；`android-release.sh`：发布安卓安装包
 mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go QUIC 客户端，构建钩子调 `go build`，Dart 经 FFI 调用）
 third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
 ```
@@ -78,6 +79,7 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - 所有子命令都认 `-h` / `--help`（在 `--` 之前），打印这条命令的用法：agent 常先这样试。
 - `workspace merge` 在项目目录以 `--no-ff` 合入 worktree 分支：要求两边已跟踪文件干净、分支有新提交、项目目录在基准分支上；失败时 `merge --abort`。未跟踪文件不挡合并，但 `workspace rm` 仍会因它拒绝删除。
 - Posse.app 里的可执行文件叫 `Posse`，agent 在终端里调用 `posse` 能找到它，依赖 APFS 默认的大小写不敏感。
+- 快捷键都登记在 `internal/app/keymap.go` 的表里（设置页「快捷键」能看能改，改过的存 ui.json 的 `keys`）：新加快捷键往表里加一项，用 `a.pressed(c, id)` / `a.pressedIn`（终端 OnKey 用 `a.keyIs`）判断，提示文字用 `a.keyText`、`a.withKey`、菜单的 `.Keys(...)`，不写死 `c.Shortcut(ui.Cmd, …)` 和"⌘X"。编辑器的键在表里是 `editor.<命令名>`，经 `editorBindings` 交给编辑器。
 - 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
 - 只有界面关心的状态（`internal/app/uistate.go`）存在 `$POSSE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉常驻进程。
 - 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。常驻进程和终端不受影响：它们从包的副本运行（见上面拉起常驻进程的副本一条）。
