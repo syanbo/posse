@@ -620,6 +620,61 @@ func TestRevealInFiles(t *testing.T) {
 	}
 }
 
+// 文件栏顶栏的"全部折叠"收起所有目录，⌥F1 再把当前文件定位出来
+func TestCollapseAndRevealCurrent(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	a.selected = w.ID
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	path := filepath.Join(root, "internal", "files", "tree.go")
+	a.openFile(w, path, 0, [2]int{})
+	a.openFilesPanel(w, sideFiles)
+	v := a.filesFor(w)
+	dir := filepath.Join(root, "internal", "files")
+	until(t, tt, "opened", func() bool { return v.tree.Expanded(dir) && tt.HasText("tree.go") && a.filesPanelShown == 1 })
+	if err := tt.Click("全部折叠"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.tree.Expanded(dir) || v.tree.Expanded(filepath.Join(root, "internal")) || slices.Contains(a.state.Files[w.ID].Expanded, dir) {
+		t.Fatal("collapse all left directories open")
+	}
+	tt.Key(ui.Alt, ui.KeyF1)
+	until(t, tt, "revealed", func() bool { return v.tree.Expanded(dir) && !v.revealScroll && tt.HasText("tree.go") })
+	if v.reveal != path {
+		t.Fatalf("reveal = %q", v.reveal)
+	}
+
+	// 文件顶栏的准星同样定位
+	v.tree.CollapseAll()
+	tt.Frame()
+	if err := tt.Click("在文件树中定位 " + a.keyText("revealFile")); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "revealed from doc bar", func() bool { return v.tree.Expanded(dir) })
+
+	// Markdown 的预览、源码切换是图标按钮
+	readme := filepath.Join(root, "README.md")
+	a.openFile(w, readme, 0, [2]int{})
+	tt.Frame()
+	if err := tt.Click("查看源码"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.doc(readme).preview {
+		t.Fatal("source button left the preview on")
+	}
+	if err := tt.Click("预览"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !v.doc(readme).preview {
+		t.Fatal("preview button did not switch back")
+	}
+}
+
 // Markdown 默认打开成预览，跳到某一行时切回源码
 func TestMarkdownOpensInPreview(t *testing.T) {
 	a := previewApp(t)

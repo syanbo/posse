@@ -610,11 +610,12 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			a.imageBar(c, d)
 		}
 		if d.kind == docText && isMarkdown(d.path) {
-			label := "预览"
+			// 图标是点了之后去的那一边：预览时显示源码，源码时显示预览
+			icon, label := iconEye, "预览"
 			if d.preview {
-				label = "源码"
+				icon, label = iconCode, "查看源码"
 			}
-			if toggleChip(c, label, "切换 Markdown 预览", d.preview) {
+			if pressable(iconButtonSized(c, icon, label, compactBox(), smallIcon())).Clicked() {
 				d.preview = !d.preview
 			}
 		}
@@ -643,6 +644,11 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
 					a.rollbackDoc(v, d)
 				}
+			}
+		}
+		if revealable(v, d) {
+			if pressable(iconButtonSized(c, iconLocate, a.withKey("在文件树中定位", "revealFile"), compactBox(), smallIcon())).Clicked() {
+				a.revealCurrent(w)
 			}
 		}
 		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", compactBox(), smallIcon())).Clicked() {

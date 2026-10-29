@@ -173,6 +173,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if a.pressed(c, "fileTree") {
 			a.toggleFilesPanel(w, sideFiles)
 		}
+		if a.pressed(c, "revealFile") {
+			a.revealCurrent(w)
+		}
 	}
 	if a.filesActive(w) {
 		v := a.filesFor(w)

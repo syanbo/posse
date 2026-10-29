@@ -139,6 +139,12 @@ func (t *Tree) SetExpanded(dir string, open bool) []string {
 	return t.missing()
 }
 
+// CollapseAll 收起所有目录，读过的内容留着，再展开时不用重读。
+func (t *Tree) CollapseAll() {
+	clear(t.expanded)
+	t.stale = true
+}
+
 // Reveal 展开 path 的各级上级目录，返回需要读的目录。
 func (t *Tree) Reveal(path string) []string {
 	for d := filepath.Dir(path); within(d, t.Root); d = filepath.Dir(d) {

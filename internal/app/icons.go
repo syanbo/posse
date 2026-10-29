@@ -69,6 +69,10 @@ var (
 	iconAppearance = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>`)
 	iconKeyboard   = icon(`<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M10.33 10h.01M13.67 10h.01M17 10h.01M7 14h.01M17 14h.01M10 14h4"/>`)
 	iconInfo       = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.75v.01"/>`)
+	iconLocate     = icon(`<circle cx="12" cy="12" r="6.75"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M12 2.75v3.5M12 17.75v3.5M2.75 12h3.5M17.75 12h3.5"/>`) // 定位当前文件，照 WebStorm 的准星
+	iconCollapse   = icon(`<path d="m7.5 4.5 4.5 4.5 4.5-4.5M7.5 19.5l4.5-4.5 4.5 4.5"/>`)
+	iconCode       = icon(`<path d="m8.5 7.5-4.5 4.5 4.5 4.5M15.5 7.5l4.5 4.5-4.5 4.5M13.25 5.5l-2.5 13"/>`)
+	iconEye        = icon(`<path d="M2.75 12S6 5.75 12 5.75 21.25 12 21.25 12 18 18.25 12 18.25 2.75 12 2.75 12z"/><circle cx="12" cy="12" r="2.75"/>`)
 	iconMinus      = icon(`<path d="M6 12h12"/>`)
 	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)

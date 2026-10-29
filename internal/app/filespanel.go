@@ -1,7 +1,9 @@
 package app
 
 import (
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -149,6 +151,20 @@ func (a *app) revealInFiles(w *workspace, path string) {
 	v.reveal, v.revealCur, v.revealScroll = path, v.cur, true
 }
 
+// revealable 报告文件树能不能定位到 d：diff、日志这类不是文件，工作区外的文件不在树上。
+func revealable(v *filesView, d *fileDoc) bool {
+	return d != nil && !d.virtual() && strings.HasPrefix(d.path, v.root+string(filepath.Separator))
+}
+
+// revealCurrent 在文件树里定位当前文件（⌥F1、文件栏顶栏和文件顶栏的准星）。
+func (a *app) revealCurrent(w *workspace) {
+	v := a.filesFor(w)
+	if revealable(v, v.cur) {
+		a.revealInFiles(w, v.cur.path)
+		a.saveFilesState(v)
+	}
+}
+
 // toggleFilesPanel 开着且就在 side 上时关掉，否则打开到 side（⇧⌘E、⇧⌘G）。
 func (a *app) toggleFilesPanel(w *workspace, side int) {
 	if a.filesPanelOpen() && !a.state.FilesPanelHistory && a.filesFor(w).side == side {
@@ -223,6 +239,23 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 				a.setFilesPanelHistory(false)
 			}
 			ui.Spacer(c)
+			if !a.state.FilesPanelHistory && !w.Missing && v.side == sideFiles {
+				// 没有能定位的文件时置灰：外面包一层先禁用，按钮里的悬停才不亮
+				wrap := ui.Box(c).Shrink(0)
+				if !revealable(v, v.cur) {
+					wrap.Disabled(true).Opacity(0.5)
+				}
+				wrap.Children(func() {
+					if iconButton(c.Key("tree-locate"), iconLocate, a.withKey("定位当前文件", "revealFile")).Clicked() {
+						a.revealCurrent(w)
+					}
+				})
+				if iconButton(c.Key("tree-collapse"), iconCollapse, "全部折叠").Clicked() {
+					v.tree.CollapseAll()
+					v.reveal = ""
+					a.saveFilesState(v)
+				}
+			}
 			// 开关按钮浮在这里（见 main），留出它的位置
 			ui.Box(c).Width(28).Shrink(0)
 		})

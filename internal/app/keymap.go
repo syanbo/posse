@@ -68,6 +68,7 @@ var posseKeys = []keyAction{
 	{id: "searchFiles", group: "文件", label: "在文件里检索", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyF)}},
 	{id: "filesPanel", group: "文件", label: "开关文件栏", def: []keyCombo{k(ui.Cmd, ui.KeyL)}},
 	{id: "fileTree", group: "文件", label: "文件树", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyE)}},
+	{id: "revealFile", group: "文件", label: "在文件树中定位当前文件", def: []keyCombo{k(ui.Alt, ui.KeyF1)}},
 	{id: "save", group: "文件", label: "保存", scope: scopeFiles, def: []keyCombo{k(ui.Cmd, ui.KeyS)}},
 	{id: "formatJSON", group: "文件", label: "格式化 JSON", scope: scopeFiles, def: []keyCombo{k(ui.Alt|ui.Shift, ui.KeyF)}},
 
