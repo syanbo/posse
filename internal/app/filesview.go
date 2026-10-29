@@ -73,10 +73,18 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 					turn = 90
 				}
 				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+				icon := iconFolder
+				if r.Link != "" {
+					icon = iconFolderLink
+				}
+				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
-				ui.Icon(c, iconFile).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+				icon := iconFile
+				if r.Link != "" {
+					icon = iconFileLink
+				}
+				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
 			}
 			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if ignored {
@@ -88,6 +96,9 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 		})
 		if ignored {
 			row.Opacity(0.7)
+		}
+		if r.Link != "" {
+			row.Tooltip("符号链接 → " + r.Link)
 		}
 		if row.Clicked() {
 			v.reveal = ""

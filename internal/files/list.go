@@ -105,9 +105,10 @@ func (l *List) Ignored(abs string, dir bool) bool {
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return false
 	}
-	if dir {
-		return !l.dirs[rel]
+	if dir && l.dirs[rel] {
+		return false
 	}
+	// 指向目录的符号链接在 git 里是一个文件，按文件找
 	_, found := slices.BinarySearch(l.Files, rel)
 	return !found
 }

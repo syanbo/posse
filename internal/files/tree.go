@@ -11,6 +11,7 @@ import (
 type Entry struct {
 	Name string
 	Dir  bool
+	Link string // 符号链接指向的路径（照链接里写的），不是链接时为空
 }
 
 // hidden 是树里不显示的名字：git 的内部目录和访达的元数据。
@@ -29,13 +30,17 @@ func ReadDir(dir string) ([]Entry, Stamp, error) {
 		if hidden(de.Name()) {
 			continue
 		}
-		isDir := de.IsDir()
+		isDir, link := de.IsDir(), ""
 		if de.Type()&os.ModeSymlink != 0 {
-			if fi, err := os.Stat(filepath.Join(dir, de.Name())); err == nil {
+			p := filepath.Join(dir, de.Name())
+			if fi, err := os.Stat(p); err == nil {
 				isDir = fi.IsDir()
 			}
+			if link, _ = os.Readlink(p); link == "" {
+				link = "（读不出指向）"
+			}
 		}
-		out = append(out, Entry{Name: de.Name(), Dir: isDir})
+		out = append(out, Entry{Name: de.Name(), Dir: isDir, Link: link})
 	}
 	SortEntries(out)
 	return out, stamp, nil
@@ -62,6 +67,7 @@ type Row struct {
 	Path  string
 	Name  string
 	Dir   bool
+	Link  string // 同 Entry.Link
 	Depth int
 }
 
@@ -215,7 +221,7 @@ func (t *Tree) walk(dir string, depth int) {
 	}
 	for _, e := range d.entries {
 		p := filepath.Join(dir, e.Name)
-		t.rows = append(t.rows, Row{Path: p, Name: e.Name, Dir: e.Dir, Depth: depth})
+		t.rows = append(t.rows, Row{Path: p, Name: e.Name, Dir: e.Dir, Link: e.Link, Depth: depth})
 		if e.Dir && t.expanded[p] {
 			t.walk(p, depth+1)
 		}

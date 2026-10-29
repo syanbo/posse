@@ -178,12 +178,14 @@ func TestListFilesGitIgnore(t *testing.T) {
 	write(t, filepath.Join(root, "build", "out.bin"), "x")
 	write(t, filepath.Join(root, "app.log"), "x")
 	write(t, filepath.Join(root, "pkg", "util.go"), "package pkg")
+	// 指向目录的符号链接：git 当一个文件记，树里是目录，不算忽略
+	os.Symlink(t.TempDir(), filepath.Join(root, "shared"))
 	git(t, root, "add", "main.go")
 	l, err := ListFiles(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !l.Git || !slices.Equal(l.Files, []string{".gitignore", "main.go", filepath.Join("pkg", "util.go")}) {
+	if !l.Git || !slices.Equal(l.Files, []string{".gitignore", "main.go", filepath.Join("pkg", "util.go"), "shared"}) {
 		t.Fatalf("files %q git=%v", l.Files, l.Git)
 	}
 	cases := []struct {
@@ -192,7 +194,7 @@ func TestListFilesGitIgnore(t *testing.T) {
 		want bool
 	}{
 		{"main.go", false, false}, {"app.log", false, true}, {"build", true, true},
-		{"pkg", true, false}, {filepath.Join("build", "out.bin"), false, true},
+		{"pkg", true, false}, {filepath.Join("build", "out.bin"), false, true}, {"shared", true, false},
 	}
 	for _, c := range cases {
 		if got := l.Ignored(filepath.Join(root, c.rel), c.dir); got != c.want {
@@ -342,5 +344,33 @@ func TestMatchGlob(t *testing.T) {
 		if got := matchGlob(c.g, c.rel); got != c.want {
 			t.Errorf("matchGlob(%q, %q) = %v", c.g, c.rel, got)
 		}
+	}
+}
+
+// 符号链接带上它指向的路径：指向目录的照样算目录、排在前面，指向文件的算文件。
+func TestReadDirSymlinks(t *testing.T) {
+	root, other := t.TempDir(), t.TempDir()
+	write(t, filepath.Join(other, "lib", "x.go"), "")
+	write(t, filepath.Join(other, "notes.md"), "")
+	write(t, filepath.Join(root, "plain.txt"), "")
+	os.Mkdir(filepath.Join(root, "src"), 0o755)
+	if err := os.Symlink(filepath.Join(other, "lib"), filepath.Join(root, "lib")); err != nil {
+		t.Skip("symlink unavailable:", err)
+	}
+	os.Symlink("../notes.md", filepath.Join(root, "notes.md"))
+	es, _, err := ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Entry{{Name: "lib", Dir: true, Link: filepath.Join(other, "lib")}, {Name: "src", Dir: true},
+		{Name: "notes.md", Link: "../notes.md"}, {Name: "plain.txt"}}
+	if !slices.Equal(es, want) {
+		t.Fatalf("entries %+v", es)
+	}
+	tr := NewTree(root)
+	tr.Set(root, es, Stamp{}, nil)
+	tr.SetExpanded(root, true)
+	if r := tr.Rows()[0]; r.Name != "lib" || r.Link == "" {
+		t.Fatalf("row %+v should carry the link", r)
 	}
 }

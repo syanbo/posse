@@ -179,6 +179,11 @@ func previewMarkdown(a *app) {
 // previewFiles 在 w1 的文件标签里依次打开 rels（最后一个是当前文件），等它们读进来；之后不再轮询磁盘。
 func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	root := filesWorkspace(t, a)
+	// 文件树里的符号链接（链到别处的目录、文件）换带箭头的图标
+	shared := t.TempDir()
+	os.WriteFile(filepath.Join(shared, "util.go"), []byte("package shared\n"), 0o644)
+	os.Symlink(shared, filepath.Join(root, "shared"))
+	os.Symlink("README.md", filepath.Join(root, "CLAUDE.md"))
 	w := &a.workspaces[0]
 	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 	tt := ui.NewTester(a.build, 1200, 760)

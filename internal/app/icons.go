@@ -36,6 +36,9 @@ var (
 	iconArrowDown  = icon(`<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>`)
 	iconCheck      = icon(`<path d="m5 12.5 4.5 4.5L19 7.5"/>`)
 	iconChevron    = icon(`<path d="m9.5 6.5 5.5 5.5-5.5 5.5"/>`)
+	// 文件夹、文件里一个拐弯的箭头：符号链接（访达替身的样子）
+	iconFolderLink = icon(folderShape + `<path d="M9.5 16.25v-1a2.25 2.25 0 0 1 2.25-2.25h3.75"/><path d="m13.75 11 2 2-2 2"/>`)
+	iconFileLink   = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/><path d="M9 17v-.75A2.25 2.25 0 0 1 11.25 14h3"/><path d="m12.75 12 2 2-2 2"/>`)
 	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
 	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)
 	iconRevertHunk = icon(`<path d="m6 7 5 5-5 5M13 7l5 5-5 5"/>`) // diff 里每处改动旁的 >>，照 WebStorm
