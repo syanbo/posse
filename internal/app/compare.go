@@ -719,17 +719,17 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 	d := ps.detail
 	df := d.diff
 	switch {
-	case c.Shortcut(0, ui.KeyF7):
+	case a.pressed(c, "nextChange"):
 		a.pushStep(v, ps, 1)
-	case c.Shortcut(ui.Shift, ui.KeyF7):
+	case a.pressed(c, "prevChange"):
 		a.pushStep(v, ps, -1)
 	}
 	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rControl).Background(colors(t).fill).Clip().Children(func() {
 		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
-			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
 				a.pushStep(v, ps, -1)
 			}
-			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", buttonBox(), iconSize)).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
 				a.pushStep(v, ps, 1)
 			}
 			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)

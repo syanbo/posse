@@ -13,19 +13,15 @@ import (
 // 终端里的常用快捷键，照 macOS 上 Ghostty、iTerm 和 Orca 的默认：
 // 终端视图把带 Command 的键都交给 app，Option 也不当 Meta，所以这些键要在 OnKey 里自己处理。
 
-type keyCombo struct {
-	mods ui.Modifiers
-	key  ui.Key
-}
-
 // termEditKeys 是按行、按词移动和删除，发 readline 认的控制字符：zsh、bash 和 Claude、Codex 的输入框都认。
-var termEditKeys = map[keyCombo]string{
-	{ui.Cmd, ui.KeyLeft}:      "\x01",     // 行首（Ctrl+A）
-	{ui.Cmd, ui.KeyRight}:     "\x05",     // 行尾（Ctrl+E）
-	{ui.Cmd, ui.KeyBackspace}: "\x15",     // 删到行首（Ctrl+U）
-	{ui.Alt, ui.KeyLeft}:      "\x1bb",    // 上一个词（Meta+B）
-	{ui.Alt, ui.KeyRight}:     "\x1bf",    // 下一个词（Meta+F）
-	{ui.Alt, ui.KeyBackspace}: "\x1b\x7f", // 删前一个词（Meta+退格）
+// 键在快捷键表里（keymap.go）。
+var termEditKeys = []struct{ id, seq string }{
+	{"termLineStart", "\x01"},    // 行首（Ctrl+A）
+	{"termLineEnd", "\x05"},      // 行尾（Ctrl+E）
+	{"termKillLine", "\x15"},     // 删到行首（Ctrl+U）
+	{"termWordLeft", "\x1bb"},    // 上一个词（Meta+B）
+	{"termWordRight", "\x1bf"},   // 下一个词（Meta+F）
+	{"termKillWord", "\x1b\x7f"}, // 删前一个词（Meta+退格）
 }
 
 // termKey 是终端的 OnKey：报告这个键是不是 Posse 处理掉了。
@@ -35,7 +31,10 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		return false
 	}
 	// ⌘A 不在这里：Edit 菜单的"全选"已经交给终端视图
-	if mods == ui.Cmd && key == ui.KeyK {
+	if a.keyRec != nil {
+		return false
+	}
+	if a.keyIs("termClear", mods, key) {
 		a.clearTerminal(v, id)
 		return true
 	}
@@ -44,10 +43,13 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		return false
 	}
 	switch {
-	case mods == ui.Cmd && (key == ui.KeyUp || key == ui.KeyDown):
-		t.ScrollToEdge(key == ui.KeyUp)
+	case a.keyIs("termTop", mods, key):
+		t.ScrollToEdge(true)
 		return true
-	case mods == ui.Shift && key == ui.KeyEnter:
+	case a.keyIs("termBottom", mods, key):
+		t.ScrollToEdge(false)
+		return true
+	case a.keyIs("termNewline", mods, key):
 		// Claude、Codex 的输入框里 Ctrl+J 是换行不发送；Shift+Enter 默认编出来和回车一样，会直接发送
 		if _, ti := a.findTerminal(id); ti != nil && (ti.Agent == "claude" || ti.Agent == "codex") {
 			t.Send([]byte{'\n'})
@@ -55,9 +57,11 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		}
 		return false
 	}
-	if seq, ok := termEditKeys[keyCombo{mods, key}]; ok {
-		t.Send([]byte(seq))
-		return true
+	for _, e := range termEditKeys {
+		if a.keyIs(e.id, mods, key) {
+			t.Send([]byte(e.seq))
+			return true
+		}
 	}
 	return false
 }

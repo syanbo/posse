@@ -30,11 +30,12 @@ var settingsTabs = []struct {
 	{"general", "通用", iconSettings},
 	{"agent", "Agent", iconSkill},
 	{"appearance", "外观", iconAppearance},
+	{"keys", "快捷键", iconKeyboard},
 	{"about", "关于", iconInfo},
 }
 
 // settingsBoard 是设置页：左边分类，右边是这一类的卡片。通用（防休眠）、Agent（权限、套餐用量）、
-// 外观（图标大小，终端和编辑器的字体、字号、预览）、关于（版本、更新和重启常驻进程、日志和数据目录）。手机配对在「手机」页。
+// 外观（图标大小，终端和编辑器的字体、字号、预览）、快捷键（keysettings.go）、关于（版本、更新和重启常驻进程、日志和数据目录）。手机配对在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
 	t := c.Theme()
 	a.band(c, func() {
@@ -70,6 +71,8 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.interfaceSettings(c)
 						a.termFontSettings(c)
 						a.editorFontSettings(c)
+					case "keys":
+						a.keySettings(c)
 					case "about":
 						a.updateSettings(c)
 						a.aboutSettings(c)

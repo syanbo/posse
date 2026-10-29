@@ -29,7 +29,7 @@ func (a *app) termMenu(m *popMenu, v *termView, id string) {
 		v.term.SelectAll()
 	}
 	m.Separator()
-	if m.Item("清屏").Shortcut(ui.Cmd, ui.KeyK).Chosen() {
+	if m.Item("清屏").Keys(a.keyText("termClear")).Chosen() {
 		a.clearTerminal(v, id)
 	}
 	_, t := a.findTerminal(id)
@@ -41,7 +41,7 @@ func (a *app) termMenu(m *popMenu, v *termView, id string) {
 	}
 	if t != nil {
 		m.Separator()
-		if m.Item("关闭终端").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+		if m.Item("关闭终端").Keys(a.keyText("closeTab")).Chosen() {
 			a.askClose(*t)
 		}
 	}

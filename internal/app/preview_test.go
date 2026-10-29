@@ -728,6 +728,9 @@ func TestPreview(t *testing.T) {
 		v = previewFiles(t, a, "README.md")
 		v.cur.preview = true
 		savePNG(t, newPreviewTester(a, dark), "files-markdown-"+suffix+".png")
+		// Markdown 预览的查找栏：当前命中的底色深一点
+		v.cur.find = docFind{open: true, query: "posse", cur: 1, scroll: true}
+		savePNG(t, newPreviewTester(a, dark), "files-markdown-find-"+suffix+".png")
 
 		a = previewApp(t)
 		v = previewFiles(t, a, "main.go")
@@ -855,6 +858,13 @@ func TestPreview(t *testing.T) {
 		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
 		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
 		a.daemon.Pid = 0
+
+		// 设置页的快捷键：改过一项（有"恢复默认"），正在录另一项
+		a.settingsTab = "keys"
+		a.state.Keys = map[string][]string{"toggleSidebar": {"Super+j"}}
+		a.keyRec = &keyRecording{id: "newWorkspace", idx: 0}
+		savePNG(t, newPreviewTester(a, dark), "settings-keys-"+suffix+".png")
+		a.state.Keys, a.keyRec = nil, nil
 
 		// 设置页的外观：点左边的分类进来，点开终端的字体列表
 		systemFonts.once.Do(func() {})

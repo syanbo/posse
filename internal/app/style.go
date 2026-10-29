@@ -121,6 +121,7 @@ type palette struct {
 	line   ui.Color   // 分隔线；深色下也是卡片、浮层的内高光
 	tint   ui.Color   // 选中项的底：强调色淡底（soft）
 	mark   ui.Color   // 搜索命中的底
+	markOn ui.Color   // 查找栏当前所在的那个命中
 	wash   ui.Color   // 悬停的底
 	fill   ui.Color   // 框里的次级按钮的底
 	fillHi ui.Color   // 次级按钮悬停
@@ -166,6 +167,7 @@ func (p palette) derive(t *ui.Theme) palette {
 	p.sky = p.data[1]
 	p.tint = soft(t, t.Accent)
 	p.mark = p.honey.Alpha(0.28)
+	p.markOn = p.honey.Alpha(0.65)
 	return p
 }
 

@@ -934,3 +934,44 @@ func TestAttachedShowsBranch(t *testing.T) {
 		t.Fatalf("detached shown %q", ws[1].Shown)
 	}
 }
+
+// Markdown 预览里 ⌘F 打开查找栏，⌘G、⇧⌘G 在命中间跳（⇧⌘G 不去开关改动页），Esc 关闭。
+func TestMarkdownPreviewFind(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	readme := filepath.Join(root, "README.md")
+	a.openFile(w, readme, 0, [2]int{})
+	v := a.files[w.ID]
+	d := v.doc(readme)
+	until(t, tt, "loaded", func() bool { return d.kind == docText && d.md != nil })
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Frame()
+	if !d.find.open {
+		t.Fatal("⌘F should open the find bar in the markdown preview")
+	}
+	tt.Type("posse")
+	tt.Frame()
+	tt.Frame()
+	// 标题里的 Posse 和代码块里的 posse
+	if d.find.n != 2 || !tt.HasText("1/2") {
+		t.Fatalf("matches = %d", d.find.n)
+	}
+	tt.Key(ui.Cmd, ui.KeyG)
+	tt.Frame()
+	if d.find.cur != 1 {
+		t.Fatalf("⌘G: cur = %d", d.find.cur)
+	}
+	side, open := v.side, a.filesPanelOpen()
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyG)
+	tt.Frame()
+	if d.find.cur != 0 || v.side != side || a.filesPanelOpen() != open {
+		t.Fatalf("⇧⌘G should step back in the find bar: cur = %d", d.find.cur)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if d.find.open {
+		t.Fatal("Esc should close the find bar")
+	}
+}

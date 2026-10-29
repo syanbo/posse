@@ -185,7 +185,7 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 
 // filesPanelButton 是开关文件栏的按钮：关着时在标签栏最右边，开着时在文件栏顶栏最右边，垫一层强调色淡底。
 func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
-	b := iconButton(c.Key("files-panel"), iconPanelRight, "文件栏 ⌘L")
+	b := iconButton(c.Key("files-panel"), iconPanelRight, a.withKey("文件栏", "filesPanel"))
 	if a.filesPanelOpen() {
 		b.Background(colors(c.Theme()).tint)
 	}

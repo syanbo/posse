@@ -291,7 +291,7 @@ func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	if v.cur == nil {
-		filesEmpty(c)
+		a.filesEmpty(c)
 		return
 	}
 	d := v.cur
@@ -337,10 +337,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			return
 		}
 		if d.preview && isMarkdown(d.path) {
-			markdownPreview(c, d)
+			a.markdownPreview(c, d)
 			return
 		}
 		d.ed.Font, d.ed.LineHeight, d.ed.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
+		d.ed.Bindings = a.editorBindings()
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
 		d.ed.OnDefinition = func(off int) { a.goToDefinition(w, v, d, off) }
 		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
@@ -395,15 +396,15 @@ func gotoLine(d *fileDoc) {
 	d.gotoLine, d.gotoSpan = 0, [2]int{}
 }
 
-func filesEmpty(c *ui.Context) {
+func (a *app) filesEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Gap(12).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
 		titleText(c, "在右边的文件栏里选一个文件", fsTitle)
 		ui.Row(c).Gap(12).Children(func() {
-			shortcutHint(c, "⌘P", "按名称打开")
-			shortcutHint(c, "⇧⌘F", "在文件里检索")
-			shortcutHint(c, "⌘L", "文件栏")
+			shortcutHint(c, a.keyText("quickOpen"), "按名称打开")
+			shortcutHint(c, a.keyText("searchFiles"), "在文件里检索")
+			shortcutHint(c, a.keyText("filesPanel"), "文件栏")
 		})
 	})
 }
@@ -474,7 +475,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			ui.Text(c, detail).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
-		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip("关闭 ⌘W")
+		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip(a.withKey("关闭", "closeTab"))
 		if btn.Hovered() {
 			btn.Background(t.SurfacePressed)
 		}
@@ -541,7 +542,7 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	if i < 0 {
 		return
 	}
-	if m.Item("关闭").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
 		a.closeDoc(v, d)
 	}
 	others := slices.Concat(v.docs[:i], v.docs[i+1:])
@@ -596,8 +597,13 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				d.preview = !d.preview
 			}
 		}
+		if d.kind == docText && !d.readOnly && d.blame == nil && isJSON(d.path) {
+			if pressable(textButton(c, "格式化")).Tooltip(a.withKey("格式化 JSON", "formatJSON")).Clicked() {
+				a.formatJSON(d)
+			}
+		}
 		if d.kind == docText && !d.readOnly && d.isModified() {
-			if pressable(iconButtonSized(c, iconSave, "保存 ⌘S", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconSave, a.withKey("保存", "save"), compactBox(), smallIcon())).Clicked() {
 				a.saveDoc(d, false)
 			}
 		}
@@ -672,6 +678,11 @@ func docMessage(c *ui.Context, d *fileDoc, msg string) {
 	})
 }
 
+// finding 报告 docFind 的查找栏开着、正显示在 Markdown 预览或 Annotate 上。
+func (d *fileDoc) finding() bool {
+	return d.find.open && d.diff == nil && d.comp == nil && d.kind == docText && (d.blame != nil || d.preview && isMarkdown(d.path))
+}
+
 func isMarkdown(path string) bool {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".md", ".markdown", ".mdx":
@@ -681,14 +692,21 @@ func isMarkdown(path string) bool {
 }
 
 // markdownPreview 用历史页的 Markdown 渲染显示文档，只在内容变了之后重新解析。
-func markdownPreview(c *ui.Context, d *fileDoc) {
+func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
 	if v := d.ed.Buffer.Version(); d.md == nil || v != d.mdVer {
 		d.md, d.mdVer = parseMarkdown(d.ed.Buffer.String()), v
 	}
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Selectable().Children(func() { mdView{}.blocks(c, d.md) })
+	f := &d.find
+	f.shortcuts(c, a)
+	ui.Box(c).Grow(1).Children(func() {
+		f.begin()
+		ui.Scroll(c).Fill().Children(func() {
+			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Selectable().Children(func() { mdView{find: f}.blocks(c, d.md) })
+			})
 		})
+		f.end()
+		f.bar(c, a)
 	})
 }
 

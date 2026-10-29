@@ -185,7 +185,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if pressable(iconButtonSized(c, iconRefresh, "刷新", buttonBox(), iconSize)).Clicked() {
 			a.refreshGit(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, "回滚… ⌥⌘Z", buttonBox(), iconSize)).Clicked() {
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey("回滚…", "rollback"), buttonBox(), iconSize)).Clicked() {
 			a.openRollback(v)
 		}
 		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "储藏更改…（git stash，含未跟踪文件）", buttonBox(), iconSize)).Clicked() {
@@ -350,7 +350,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			if e.Untracked {
 				label = "删除…"
 			}
-			if m.Item(label).Shortcut(ui.Cmd|ui.Alt, ui.KeyZ).Chosen() {
+			if m.Item(label).Keys(a.keyText("rollback")).Chosen() {
 				a.openRollbackFor(v, []string{e.Path}, nil)
 			}
 		}
@@ -566,7 +566,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 	g := &v.git
 	_, _, picked := g.pickedPaths()
 	label := fmt.Sprintf("提交 %d 个文件", picked)
-	tip := "提交勾选的文件，没勾的改动留在工作区 ⌘K"
+	tip := a.withKey("提交勾选的文件，没勾的改动留在工作区", "commit")
 	whole := g.wholeCommit()
 	switch {
 	case whole != "":
@@ -574,7 +574,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 		if whole == "Cherry-pick" {
 			label = "提交 Cherry-pick 结果"
 		}
-		tip = whole + "进行中只能整体提交：勾选的文件先加入 Git，再连同已加入的一起提交 ⌘K"
+		tip = whole + a.withKey("进行中只能整体提交：勾选的文件先加入 Git，再连同已加入的一起提交", "commit")
 	case picked == 0 && g.amend:
 		label = "只改提交信息"
 	}
@@ -610,6 +610,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	df := d.diff
 	df.state.Font, df.state.LineHeight, df.state.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
+	df.state.Bindings = a.editorBindings()
 	// 左右对照时照 WebStorm 在中间分隔线旁给每处改动放 >>，上下合并时只有悬停的那处有"回滚"
 	split := df.state.Layout == editor.DiffSplit
 	df.state.HunkActions = df.worktree() && !split
@@ -702,16 +703,16 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
 	ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 		// 上一处、下一处放在最左边（照 WebStorm 的 diff 工具栏），到头了换到同一组的上一个、下一个文件
-		if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
+		if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
 			a.stepDiff(w, v, d, -1)
 		}
-		if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", buttonBox(), iconSize)).Clicked() {
+		if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
 			a.stepDiff(w, v, d, 1)
 		}
 		// 点路径弹出同一组的文件，在这个标签里换着看
 		group := diffGroup(v, df)
 		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(rSmall).AlignItems(ui.Center).Shrink(1).
-			Role(ui.RoleButton).Label("切换文件").Tooltip("切换文件 F7 / ⇧F7")
+			Role(ui.RoleButton).Label("切换文件").Tooltip("切换文件 " + a.keyText("nextChange") + " / " + a.keyText("prevChange"))
 		if path.Hovered() && len(group) > 1 {
 			path.Background(t.SurfaceHover)
 		}
@@ -767,7 +768,7 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
 			a.rollbackDiffFile(w, v, d)
 		}
-		if pressable(iconButtonSized(c, iconOpen, "在编辑器中打开 F4", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconOpen, a.withKey("在编辑器中打开", "diffOpenFile"), compactBox(), smallIcon())).Clicked() {
 			a.diffToEditor(w, v, d)
 		}
 	})
@@ -788,13 +789,13 @@ func (a *app) gitShortcuts(c *ui.Context, w *workspace, v *filesView) {
 	d := v.cur
 	if d != nil && d.diff != nil {
 		switch {
-		case c.Shortcut(0, ui.KeyF7):
+		case a.pressed(c, "nextChange"):
 			a.stepDiff(w, v, d, 1)
-		case c.Shortcut(ui.Shift, ui.KeyF7):
+		case a.pressed(c, "prevChange"):
 			a.stepDiff(w, v, d, -1)
-		case c.Shortcut(0, ui.KeyF4):
+		case a.pressed(c, "diffOpenFile"):
 			a.diffToEditor(w, v, d)
-		case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && d.diff.worktree() && d.kind == docDiff:
+		case a.pressed(c, "rollback") && d.diff.worktree() && d.kind == docDiff:
 			if hunks := d.diff.state.Hunks(); d.diff.hunk < len(hunks) {
 				a.revertHunk(v, d, d.diff.hunk)
 			}

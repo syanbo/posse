@@ -199,7 +199,8 @@ func mdInlines(n ast.Node, src []byte) []mdInline {
 // mdView 把解析好的 Markdown 搭成界面，words 是要标出来的搜索词。
 type mdView struct {
 	words []string
-	depth int // 列表嵌套层数
+	depth int      // 列表嵌套层数
+	find  *docFind // 文件预览的查找栏：命中按搭界面的顺序编号，当前那个换深底色、滚进视野
 }
 
 func (r mdView) blocks(c *ui.Context, bs []mdBlock) {
@@ -234,7 +235,12 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				}
 			})
 			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
-				highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
+				if r.find == nil {
+					highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
+					return
+				}
+				from := r.find.total
+				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(fsSmall).LineHeight(1.5), from)
 			})
 		})
 	case mdQuote:
@@ -476,6 +482,14 @@ func corner(on bool) float32 {
 
 // inline 把一段行内内容搭成一个段落；只有 http 链接能点，相对路径之类的只上色。
 func (r mdView) inline(c *ui.Context, ins []mdInline) ui.Element {
+	if r.find != nil {
+		from := r.find.total
+		return r.find.reveal(r.inlineEl(c, ins), from)
+	}
+	return r.inlineEl(c, ins)
+}
+
+func (r mdView) inlineEl(c *ui.Context, ins []mdInline) ui.Element {
 	for _, in := range ins {
 		if webURL(in.url) {
 			return ui.RichText(c).Children(func() {
@@ -514,7 +528,25 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 	if in.url != "" {
 		base.Color = t.Accent
 	}
-	return markSpans(in.text, markRanges(in.text, r.words), base, colors(t).mark)
+	return r.marked(c, in.text, base)
+}
+
+// marked 把 text 里的命中铺上底色；有查找栏时顺带给命中编号，当前那个用深一点的底。
+func (r mdView) marked(c *ui.Context, text string, base ui.Span) []ui.Span {
+	p := colors(c.Theme())
+	if r.find == nil {
+		return markSpans(text, markRanges(text, r.words), base, p.mark)
+	}
+	marks := markRanges(text, r.find.words())
+	out := markSpans(text, marks, base, p.mark)
+	for i := range marks {
+		// markSpans 的结果里命中的段在奇数位置
+		if r.find.total == r.find.cur {
+			out[2*i+1].Background = p.markOn
+		}
+		r.find.total++
+	}
+	return out
 }
 
 func webURL(u string) bool {

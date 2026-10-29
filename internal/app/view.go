@@ -126,53 +126,61 @@ func (a *app) build(c *ui.Context) {
 }
 
 func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
-	if w != nil && c.Shortcut(ui.Cmd, ui.KeyT) {
+	// 离开设置页的快捷键分类就不再录了，免得快捷键一直不认
+	if a.keyRec != nil && (a.selected != settingsBoardID || a.settingsTab != "keys") {
+		a.keyRec = nil
+	}
+	if w != nil && a.pressed(c, "newTerminal") {
 		a.startTerminal(w.ID, "")
 	}
 	if w != nil {
-		if c.Shortcut(ui.Cmd, ui.KeyP) {
+		if a.pressed(c, "quickOpen") {
 			a.openQuick(w)
 		}
-		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF) {
+		if a.pressed(c, "searchFiles") {
 			a.openFilesPanel(w, sideSearch).search.focus = true
 		}
 		// 窗口的快捷键先于焦点拿到按键。⌘L 照旧开关文件栏（编辑器的"选中整行"让出），
-		// ⇧⌘G 在编辑器有焦点时让给它的"查找上一个"
-		editing := a.filesActive(w) && a.filesFor(w).cur != nil && c.FocusWithin(a.filesFor(w).cur.edRef)
-		if c.Shortcut(ui.Cmd, ui.KeyL) {
+		// ⇧⌘G 在编辑器有焦点、Markdown 预览或 Annotate 开着查找栏时让给它们的"查找上一个"
+		doc := a.filesFor(w).cur
+		editing := a.filesActive(w) && doc != nil && (c.FocusWithin(doc.edRef) || doc.finding())
+		if a.pressed(c, "filesPanel") {
 			if a.filesPanelOpen() {
 				a.closeFilesPanel()
 			} else {
 				a.openFilesPanel(w, a.filesFor(w).side)
 			}
 		}
-		if !editing && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyG) {
+		if !editing && a.pressed(c, "changes") {
 			a.toggleFilesPanel(w, sideChanges)
 		}
 		// ⌘K 在终端里是清屏（termKey），焦点在文件、文件栏上时才是提交；不注册快捷键，终端才收得到这个键
 		commitKey := a.filesShown(w) && a.filesFor(w).git.repo != "" && (a.filesActive(w) || c.FocusWithin(a.filesPanelRef))
-		if commitKey && c.Shortcut(ui.Cmd, ui.KeyK) {
+		if commitKey && a.pressed(c, "commit") {
 			a.openFilesPanel(w, sideChanges).git.focusMsg = true
 		}
 		// ⌥⌘Z：焦点在改动页时批量回滚（编辑器、diff 里是回滚当前这一处，见 gitShortcuts）
-		if a.filesPanelOpen() && a.filesFor(w).side == sideChanges && c.FocusWithin(a.filesPanelRef) && c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) {
+		if a.filesPanelOpen() && a.filesFor(w).side == sideChanges && c.FocusWithin(a.filesPanelRef) && a.pressed(c, "rollback") {
 			a.openRollback(a.filesFor(w))
 		}
-		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Shift, ui.KeyK) {
+		if w.Branch != "" && a.pressed(c, "push") {
 			a.openPush(w)
 		}
-		if w.Branch != "" && c.Shortcut(ui.Cmd|ui.Alt, ui.KeyN) {
+		if w.Branch != "" && a.pressed(c, "newBranch") {
 			a.askNewBranch(w, a.filesFor(w), "")
 		}
-		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyE) {
+		if a.pressed(c, "fileTree") {
 			a.toggleFilesPanel(w, sideFiles)
 		}
 	}
 	if a.filesActive(w) {
 		v := a.filesFor(w)
 		a.gitShortcuts(c, w, v)
-		if c.Shortcut(ui.Cmd, ui.KeyS) && v.cur != nil {
+		if a.pressed(c, "save") && v.cur != nil {
 			a.saveDoc(v.cur, false)
+		}
+		if v.cur != nil && isJSON(v.cur.path) && a.pressed(c, "formatJSON") {
+			a.formatJSON(v.cur)
 		}
 	}
 	// 打包的 app 里 ⌘W 先被菜单拿走（installMenu），菜单只记下来，到这里和快捷键一样在有对话框时不动
@@ -182,23 +190,23 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.closeTab()
 		}
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyW) {
+	if a.pressed(c, "closeTab") {
 		a.closeTab()
 	}
 	// ⌃- 回到跳走之前的位置、⌃⇧- 再往前（和 VS Code 一样；⌘[ 是编辑器的减少缩进）
-	if w != nil && c.Shortcut(ui.Ctrl, ui.KeyMinus) {
+	if w != nil && a.pressed(c, "jumpBack") {
 		a.jumpBack(w)
 	}
-	if w != nil && c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyMinus) {
+	if w != nil && a.pressed(c, "jumpForward") {
 		a.jumpForward(w)
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyN) {
+	if a.pressed(c, "newWorkspace") {
 		a.openNewWorkspace()
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyB) {
+	if a.pressed(c, "toggleSidebar") {
 		a.toggleSidebar()
 	}
-	if w != nil && w.Branch != "" && c.Shortcut(ui.Cmd, ui.Key9) {
+	if w != nil && w.Branch != "" && a.pressed(c, "gitLog") {
 		a.toggleLogPanel(w)
 	}
 	// 图片标签在前台时 ⌘= ⌘- ⌘0 缩放图片，其余文件标签调编辑器的字号，终端调终端的
@@ -207,21 +215,21 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.filesActive(w) {
 		size, def, setSize = a.editorSize, defaultEditorFontSize, a.setEditorFontSize
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyEqual) {
+	if a.pressed(c, "zoomIn") {
 		if img != nil {
 			img.zoomStep(true)
 		} else {
 			setSize(size + 1)
 		}
 	}
-	if c.Shortcut(ui.Cmd, ui.KeyMinus) {
+	if a.pressed(c, "zoomOut") {
 		if img != nil {
 			img.zoomStep(false)
 		} else {
 			setSize(size - 1)
 		}
 	}
-	if c.Shortcut(ui.Cmd, ui.Key0) {
+	if a.pressed(c, "zoomReset") {
 		if img != nil {
 			img.setZoom(0, 0, 0)
 		} else {
@@ -229,15 +237,15 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		}
 	}
 	if w != nil {
-		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketRight) || c.Shortcut(ui.Ctrl, ui.KeyTab) {
+		if a.pressed(c, "nextTab") {
 			a.stepTab(w, 1)
 		}
-		if c.Shortcut(ui.Cmd|ui.Shift, ui.KeyBracketLeft) || c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab) {
+		if a.pressed(c, "prevTab") {
 			a.stepTab(w, -1)
 		}
 		keys := []ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9}
 		for i, k := range keys {
-			if i < len(w.Terminals) && c.Shortcut(ui.Cmd, k) {
+			if i < len(w.Terminals) && a.keyRec == nil && c.Shortcut(ui.Cmd, k) {
 				a.activeTerm[w.ID] = w.Terminals[i].ID
 			}
 		}
@@ -272,7 +280,7 @@ func (a *app) closeBoard() {
 
 // closeBoardButton 是页面顶栏最右边的关闭按钮。
 func (a *app) closeBoardButton(c *ui.Context) {
-	if iconButton(c.Key("close-board"), iconClose, "关闭 ⌘W").Clicked() {
+	if iconButton(c.Key("close-board"), iconClose, a.withKey("关闭", "closeTab")).Clicked() {
 		a.closeBoard()
 	}
 }
@@ -297,9 +305,9 @@ func (a *app) toggleSidebar() {
 
 // sidebarButton 是收起、展开侧栏的开关。
 func (a *app) sidebarButton(c *ui.Context) {
-	label := "收起侧栏 ⌘B"
+	label := a.withKey("收起侧栏", "toggleSidebar")
 	if a.state.SidebarHidden {
-		label = "展开侧栏 ⌘B"
+		label = a.withKey("展开侧栏", "toggleSidebar")
 	}
 	if iconButton(c.Key("sidebar-toggle"), iconPanelLeft, label).Clicked() {
 		a.toggleSidebar()
@@ -1089,7 +1097,7 @@ func (a *app) footer(c *ui.Context) {
 			if m.Item("添加项目…").Chosen() {
 				go a.addProject()
 			}
-			if m.Item("新建工作区…").Shortcut(ui.Cmd, ui.KeyN).Chosen() {
+			if m.Item("新建工作区…").Keys(a.keyText("newWorkspace")).Chosen() {
 				a.openNewWorkspace()
 			}
 			if m.Item("派发任务…").Chosen() {
@@ -1104,7 +1112,7 @@ func (a *app) footer(c *ui.Context) {
 		if a.staleApp && a.staleHidden {
 			a.staleDot(c)
 		}
-		if iconButton(c, iconSettings, "设置 ⌘,").Clicked() {
+		if iconButton(c, iconSettings, a.withKey("设置", "settings")).Clicked() {
 			a.openSettings()
 		}
 	})
@@ -1452,7 +1460,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 			}
 			it := m.Item(name).Lead(func() { agentIcon(c, ag, iconSize) })
 			if ag == "" {
-				it.Shortcut(ui.Cmd, ui.KeyT)
+				it.Keys(a.keyText("newTerminal"))
 			}
 			if it.Chosen() {
 				a.startTerminal(w.ID, ag)
@@ -1465,7 +1473,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w.Branch != "" {
 		a.branchButton(c, w)
-		b := iconButton(c.Key("git-log"), iconGitLog, "Git 日志 ⌘9")
+		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey("Git 日志", "gitLog"))
 		if a.logPanelOpen() {
 			b.Background(colors(c.Theme()).tint)
 		}
@@ -1777,13 +1785,13 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					for _, ag := range a.agentChoices() {
 						a.launchTile(c, w, ag, agentVendor(ag))
 					}
-					a.launchTile(c, w, "", "⌘T")
+					a.launchTile(c, w, "", a.keyText("newTerminal"))
 				})
 				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Children(func() {
-					shortcutHint(c, "⌘T", "新建终端")
-					shortcutHint(c, "⌘N", "新建工作区")
+					shortcutHint(c, a.keyText("newTerminal"), "新建终端")
+					shortcutHint(c, a.keyText("newWorkspace"), "新建工作区")
 					shortcutHint(c, "⌘1…9", "切换终端")
-					shortcutHint(c, "⌘P", "打开文件")
+					shortcutHint(c, a.keyText("quickOpen"), "打开文件")
 				})
 			})
 		})
@@ -1888,7 +1896,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip("关闭终端 ⌘W")
+		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip(a.withKey("关闭终端", "closeTab"))
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
 			closeBg = t.SurfacePressed
@@ -1949,7 +1957,7 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 		a.renameTerminal(term.ID, "")
 	}
 	m.Separator()
-	if m.Item("关闭").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
 		a.askClose(term)
 	}
 	i := slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == term.ID })

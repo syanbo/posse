@@ -277,7 +277,7 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 		}
 	}
 	z := ui.Box(c.Key("img-zoom")).Height(sz(22)).MinWidth(48).Padding(0, 8).Radius(rSmall).Center().Shrink(0).
-		Role(ui.RoleButton).Label("缩放").Tooltip("缩放：⌘ 加滚动、⌘= ⌘-，双击切换适应窗口和原大")
+		Role(ui.RoleButton).Label("缩放").Tooltip("缩放：⌘ 加滚动、" + a.keyText("zoomIn") + " " + a.keyText("zoomOut") + "，双击切换适应窗口和原大")
 	bg := ui.Transparent
 	if z.Hovered() {
 		bg = t.SurfaceHover
@@ -288,7 +288,7 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 			FontFeatures("tnum")
 	})
 	menuButton(c, z, func(m *popMenu) {
-		if m.Item("适应窗口").Shortcut(ui.Cmd, ui.Key0).Checked(d.iv.zoom == 0).Chosen() {
+		if m.Item("适应窗口").Keys(a.keyText("zoomReset")).Checked(d.iv.zoom == 0).Chosen() {
 			d.setZoom(0, 0, 0)
 		}
 		for _, p := range []float32{1, 2} {
@@ -297,10 +297,10 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 			}
 		}
 		m.Separator()
-		if m.Item("放大").Shortcut(ui.Cmd, ui.KeyEqual).Chosen() {
+		if m.Item("放大").Keys(a.keyText("zoomIn")).Chosen() {
 			d.zoomStep(true)
 		}
-		if m.Item("缩小").Shortcut(ui.Cmd, ui.KeyMinus).Chosen() {
+		if m.Item("缩小").Keys(a.keyText("zoomOut")).Chosen() {
 			d.zoomStep(false)
 		}
 	})

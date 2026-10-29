@@ -367,16 +367,16 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 			})
 		}
 	}
-	if popupItem(c, iconCommit, "提交…", "⌘K") {
+	if popupItem(c, iconCommit, "提交…", a.keyText("commit")) {
 		a.branchPop = nil
 		a.openFilesPanel(w, sideChanges).git.focusMsg = true
 	}
-	if popupItem(c, iconPush, "Push…", "⇧⌘K") {
+	if popupItem(c, iconPush, "Push…", a.keyText("push")) {
 		a.branchPop = nil
 		a.openPush(w)
 	}
 	hline(c).Margin(4, 6)
-	if popupItem(c, iconPlus, "新建分支…", "⌥⌘N") {
+	if popupItem(c, iconPlus, "新建分支…", a.keyText("newBranch")) {
 		a.branchPop = nil
 		a.askNewBranch(w, v, "")
 	}

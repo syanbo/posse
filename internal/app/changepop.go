@@ -57,7 +57,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				step(cp.index + 1)
 			}
 			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
-			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, "回滚这一处 ⌥⌘Z", compactBox(), smallIcon())).Clicked() {
+			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, a.withKey("回滚这一处", "editor.revertHunk"), compactBox(), smallIcon())).Clicked() {
 				d.ed.RevertChange(cp.index)
 				d.change = nil
 			}

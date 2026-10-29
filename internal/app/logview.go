@@ -173,7 +173,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 				}
 			}
 			ui.Spacer(c)
-			if iconButton(c.Key("log-hide"), iconMinus, "隐藏 ⌘9").Clicked() {
+			if iconButton(c.Key("log-hide"), iconMinus, a.withKey("隐藏", "gitLog")).Clicked() {
 				a.setLogPanel(false)
 			}
 		})
@@ -856,6 +856,37 @@ type blameDoc struct {
 	err     string
 	list    ui.ListState
 	sel     *commitView
+	// 查找栏的命中：每个命中所在的行，按行排；hitQ 是算它们用的搜索词
+	hits []int
+	hitQ string
+}
+
+// blameText 是 Annotate 里一行显示的文字，查找也按它算。
+func blameText(l gitx.BlameLine) string { return strings.ReplaceAll(l.Text, "\t", "    ") }
+
+// findHits 按查找栏的词重算命中（行是按需搭的，不能边搭边数），要滚动时把当前命中的行滚进视野。
+func (bd *blameDoc) findHits(f *docFind) {
+	q := ""
+	if w := f.words(); w != nil {
+		q = w[0]
+	}
+	if q != bd.hitQ {
+		bd.hitQ, bd.hits = q, nil
+		if q != "" {
+			for i, l := range bd.lines {
+				for range markRanges(blameText(l), []string{q}) {
+					bd.hits = append(bd.hits, i)
+				}
+			}
+		}
+	}
+	f.begin()
+	f.total = len(bd.hits)
+	f.end()
+	if f.scroll && f.n > 0 {
+		bd.list.ScrollIntoView(bd.hits[f.cur])
+		f.scroll = false
+	}
 }
 
 // openBlame 在这个文件的标签里打开 Annotate（文件没开着就先打开）。
@@ -899,44 +930,66 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		return
 	}
+	f := &d.find
+	f.shortcuts(c, a)
+	bd.findHits(f)
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		bd.list.Key = func(i int) any { return i }
-		ui.List(c, &bd.list, len(lines), func(i int) {
-			l := lines[i]
-			first := i == 0 || lines[i-1].Hash != l.Hash
-			uncommitted := strings.Trim(l.Hash, "0") == ""
-			row := ui.Row(c.Key(i)).Height(sz(22)).Gap(8).AlignItems(ui.Center)
-			if !uncommitted && bd.sel != nil && bd.sel.info.Hash == l.Hash {
-				row.Background(colors(t).tint)
-			}
-			row.Children(func() {
-				who := ui.Row(c.Key("who")).Width(190).Height(sz(22)).Padding(0, 8).Gap(6).AlignItems(ui.Center).Shrink(0).Background(colors(t).wash)
-				who.Children(func() {
-					if !first {
-						return
-					}
-					if uncommitted {
-						ui.Text(c, "没提交").FontSize(fsSmall).TextColor(t.Accent)
-						return
-					}
-					ui.Text(c, l.Time.Format("2006-01-02")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-					ui.Text(c, l.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
-				})
-				if !uncommitted {
-					who.Tooltip(l.Hash[:10] + "  " + l.Author + "\n" + l.Summary)
-					if who.Clicked() {
-						a.selectCommit(v, &bd.sel, gitx.CommitInfo{Hash: l.Hash, Author: l.Author, Time: l.Time, Subject: l.Summary})
-					}
+		ui.Box(c).Grow(1).Children(func() {
+			ui.List(c, &bd.list, len(lines), func(i int) {
+				l := lines[i]
+				first := i == 0 || lines[i-1].Hash != l.Hash
+				uncommitted := strings.Trim(l.Hash, "0") == ""
+				row := ui.Row(c.Key(i)).Height(sz(22)).Gap(8).AlignItems(ui.Center)
+				if !uncommitted && bd.sel != nil && bd.sel.info.Hash == l.Hash {
+					row.Background(colors(t).tint)
 				}
-				ui.Text(c, fmt.Sprint(i+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Width(sz(36)).Shrink(0).TextAlign(ui.End)
-				ui.Text(c, strings.ReplaceAll(l.Text, "\t", "    ")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).SingleLine().Shrink(1)
-			})
-		}).Grow(1)
+				row.Children(func() {
+					who := ui.Row(c.Key("who")).Width(190).Height(sz(22)).Padding(0, 8).Gap(6).AlignItems(ui.Center).Shrink(0).Background(colors(t).wash)
+					who.Children(func() {
+						if !first {
+							return
+						}
+						if uncommitted {
+							ui.Text(c, "没提交").FontSize(fsSmall).TextColor(t.Accent)
+							return
+						}
+						ui.Text(c, l.Time.Format("2006-01-02")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+						ui.Text(c, l.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					})
+					if !uncommitted {
+						who.Tooltip(l.Hash[:10] + "  " + l.Author + "\n" + l.Summary)
+						if who.Clicked() {
+							a.selectCommit(v, &bd.sel, gitx.CommitInfo{Hash: l.Hash, Author: l.Author, Time: l.Time, Subject: l.Summary})
+						}
+					}
+					ui.Text(c, fmt.Sprint(i+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Width(sz(36)).Shrink(0).TextAlign(ui.End)
+					blameLine(c, bd, f, i).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).SingleLine().Shrink(1)
+				})
+			}).Fill()
+			f.bar(c, a)
+		})
 		if bd.sel != nil {
 			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
 			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, bd.sel) })
 		}
 	})
+}
+
+// blameLine 是第 i 行的文字，查找的命中铺底色，当前那个深一点。
+func blameLine(c *ui.Context, bd *blameDoc, f *docFind, i int) ui.Element {
+	text := blameText(bd.lines[i])
+	marks := markRanges(text, f.words())
+	if len(marks) == 0 {
+		return ui.Text(c, text)
+	}
+	p := colors(c.Theme())
+	spans := markSpans(text, marks, ui.Span{}, p.mark)
+	// 这一行第一个命中的编号；markSpans 的结果里命中的段在奇数位置
+	if k := f.cur - slices.Index(bd.hits, i); k >= 0 && k < len(marks) {
+		spans[2*k+1].Background = p.markOn
+	}
+	return ui.RichText(c, spans...)
 }
 
 // gitFileMenu 是文件在 Git 下的操作：文件历史、Annotate。用在文件树和打开的文件上。

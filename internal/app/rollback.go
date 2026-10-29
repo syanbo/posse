@@ -394,11 +394,11 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 	panel := ui.Modal(c, &open, func() {
 		defer box.grips(c)
 		switch {
-		case c.Shortcut(0, ui.KeyF7):
+		case a.pressed(c, "nextChange"):
 			a.rollbackStep(1)
-		case c.Shortcut(ui.Shift, ui.KeyF7):
+		case a.pressed(c, "prevChange"):
 			a.rollbackStep(-1)
-		case c.Shortcut(ui.Cmd|ui.Alt, ui.KeyZ) && d.kind == docDiff && listed:
+		case a.pressed(c, "rollback") && d.kind == docDiff && listed:
 			if hunks := df.state.Hunks(); df.hunk < len(hunks) {
 				a.revertHunk(r.v, d, df.hunk)
 			}
@@ -412,10 +412,10 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 		col.Children(func() {
 			box.title(c, df.rel)
 			ui.Row(c).Height(sz(28)).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
-				if pressable(iconButtonSized(c, iconArrowUp, "上一处改动 ⇧F7", buttonBox(), iconSize)).Clicked() {
+				if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
 					a.rollbackStep(-1)
 				}
-				if pressable(iconButtonSized(c, iconArrowDown, "下一处改动 F7", buttonBox(), iconSize)).Clicked() {
+				if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
 					a.rollbackStep(1)
 				}
 				if d.kind == docDiff {
@@ -445,7 +445,7 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 					}
 					// 每处旁边的 >> 要找到那一处才点得到，这里常驻一个，作用在 F7 走到的那一处
 					if df.hunk < len(df.state.Hunks()) {
-						if pressable(textButton(c, "回滚这一处")).Tooltip("回滚当前这处改动，立刻写回磁盘 ⌥⌘Z").Clicked() {
+						if pressable(textButton(c, "回滚这一处")).Tooltip(a.withKey("回滚当前这处改动，立刻写回磁盘", "rollback")).Clicked() {
 							a.revertHunk(r.v, d, df.hunk)
 						}
 					}

@@ -201,6 +201,12 @@ type app struct {
 	unsaved     *unsavedAsk           // 问要不要保存修改的对话框
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool
+	// 快捷键（keymap.go）：keyRec 是设置页里正在录的一项，keysVer 在改了快捷键后加一，edBind 是按它缓存的编辑器按键
+	keyRec     *keyRecording
+	keyQuery   string // 设置页快捷键的搜索词
+	keysVer    int
+	edBind     []editor.Binding
+	edBindKeys int
 	// Git：分支弹窗、输入框对话框、Push 对话框
 	branchPop     *branchPopup
 	branchFolds   map[string]bool       // 分支弹窗里各组的展开状态，键是 recent、local、remote:<远端>，没有记过的用默认
@@ -757,7 +763,7 @@ func (a *app) installMenu() {
 				go a.checkUpdate(true)
 			}},
 			mygo.Separator(),
-			{Label: "设置…", Accelerator: "Cmd+,", Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: "设置…", Accelerator: a.accel("settings"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(a.openSettings)
 			}},
 			mygo.Separator(),
@@ -770,10 +776,10 @@ func (a *app) installMenu() {
 			{Role: mygo.RoleQuit},
 		}},
 		{Label: "File", Submenu: []*mygo.MenuItem{
-			{Label: "关闭标签", Accelerator: "Cmd+W", Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: "关闭标签", Accelerator: a.accel("closeTab"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuCloseTab = true })
 			}},
-			{Role: mygo.RoleClose, Accelerator: "Cmd+Shift+W"},
+			{Role: mygo.RoleClose, Accelerator: a.accel("closeWindow")},
 		}},
 		{Role: mygo.RoleEditMenu},
 		{Label: "Window", Submenu: []*mygo.MenuItem{
@@ -784,6 +790,16 @@ func (a *app) installMenu() {
 			{Role: mygo.RoleFront},
 		}},
 	}))
+}
+
+// accel 是快捷键表里 id 的第一组键在菜单上的写法，没有键时为空（菜单项不带快捷键）。
+func (a *app) accel(id string) string {
+	for _, kc := range a.keysFor(id) {
+		if s := kc.accelerator(); s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // closeTab 是 ⌘W：文件标签里关当前文件（没有文件时回到终端），否则关当前终端（先问）。
@@ -914,6 +930,7 @@ func (a *app) saveState() {
 	s.FilesPanels, s.LogPanels = maps.Clone(s.FilesPanels), maps.Clone(s.LogPanels)
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
+	s.Keys = maps.Clone(s.Keys)
 	go saveUIState(a.home, s)
 }
 

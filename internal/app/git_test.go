@@ -454,6 +454,16 @@ func TestLogBlameAndReword(t *testing.T) {
 		t.Fatalf("annotate opened another tab: %d -> %d", tabs, len(v.docs))
 	}
 	until(t, tt, "blame again", func() bool { return !d.blame.loading })
+	// Annotate 里 ⌘F 查找，命中所在的行按需搭出来时铺底色
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Frame()
+	tt.Type("local edit")
+	tt.Frame()
+	if !d.find.open || d.find.n != 1 || !tt.HasText("1/1") {
+		t.Fatalf("annotate find: open=%v n=%d", d.find.open, d.find.n)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
 	if err := tt.Click("关闭 Annotate"); err != nil {
 		t.Fatal(err)
 	}

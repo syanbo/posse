@@ -64,6 +64,12 @@ func (it *menuItem) Shortcut(mods ui.Modifiers, key ui.Key) *menuItem {
 	return it
 }
 
+// Keys 在右边写出快捷键表里一项的键（keyText），没有键时不写。
+func (it *menuItem) Keys(text string) *menuItem {
+	it.keys = text
+	return it
+}
+
 // Chosen 报告用户选了这一项（在点下去的那一帧的第二遍）。
 func (it *menuItem) Chosen() bool { return it.seq == it.m.chosen && !it.disabled }
 
@@ -88,8 +94,10 @@ func shortcutText(mods ui.Modifiers, key ui.Key) string {
 	default:
 		b.WriteString(map[ui.Key]string{
 			ui.KeyEnter: "↩", ui.KeyEscape: "⎋", ui.KeyBackspace: "⌫", ui.KeyDelete: "⌦", ui.KeyTab: "⇥",
-			ui.KeyEqual: "=", ui.KeyMinus: "-",
+			ui.KeyEqual: "=", ui.KeyMinus: "-", ui.KeySpace: "空格", ui.KeyHome: "↖", ui.KeyEnd: "↘", ui.KeyPageUp: "⇞", ui.KeyPageDown: "⇟",
 			ui.KeyUp: "↑", ui.KeyDown: "↓", ui.KeyLeft: "←", ui.KeyRight: "→",
+			ui.KeyComma: ",", ui.KeyPeriod: ".", ui.KeySlash: "/", ui.KeySemicolon: ";", ui.KeyQuote: "'",
+			ui.KeyBracketLeft: "[", ui.KeyBracketRight: "]", ui.KeyBackslash: "\\", ui.KeyBackquote: "`",
 		}[key])
 	}
 	return b.String()

@@ -497,8 +497,8 @@ func (a *app) historyBoard(c *ui.Context) {
 	a.band(c, func() {
 		titleText(c, "历史", fsTitle).Margin(0, 6, 0, 0).Shrink(0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
-		search := fieldInputSized(c, &h.query, "搜索会话内容  ⌘F", 340, 160).Label("搜索会话")
-		if c.Shortcut(ui.Cmd, ui.KeyF) {
+		search := fieldInputSized(c, &h.query, "搜索会话内容  "+a.keyText("historySearch"), 340, 160).Label("搜索会话")
+		if a.pressed(c, "historySearch") {
 			search.Focus()
 		}
 		changed := search.Changed()

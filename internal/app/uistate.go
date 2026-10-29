@@ -72,6 +72,8 @@ type uiState struct {
 	TermNames map[string]string `json:"termNames,omitempty"`
 	// Files 是各工作区文件标签打开的文件和展开的目录，键是工作区 ID
 	Files map[string]filesState `json:"files,omitempty"`
+	// Keys 是改过的快捷键（keymap.go），键是操作 ID，值是按键写法（Super+Shift+k）；空列表表示不用快捷键
+	Keys map[string][]string `json:"keys,omitempty"`
 }
 
 // filesState 是一个工作区的文件标签，路径都是绝对路径。
