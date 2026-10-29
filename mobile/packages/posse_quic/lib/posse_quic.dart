@@ -45,6 +45,9 @@ external int _send(int id, int type, Pointer<Uint8> data, int len);
 @Native<Void Function(Int64, Int32, Pointer<Utf8>)>(symbol: 'hq_close')
 external void _close(int id, int code, Pointer<Utf8> reason);
 
+@Native<Void Function()>(symbol: 'hq_reset')
+external void _reset();
+
 @Native<Void Function(Pointer<Uint8>)>(symbol: 'hq_free')
 external void _free(Pointer<Uint8> p);
 
@@ -74,7 +77,12 @@ class QuicException implements Exception {
 }
 
 /// 所有连接共用一个回调。Go 从任意线程调它，事件按发生顺序进 Dart 的事件循环。
-final _callback = NativeCallable<_EventFn>.listener(_onEvent);
+/// 第一次用时先断掉进程里上一个 Flutter 引擎留下的连接：它们的回调已经失效（见 hq_reset），
+/// 安卓原生层在引擎销毁前已经断过一次，这里兜底。
+final _callback = () {
+  _reset();
+  return NativeCallable<_EventFn>.listener(_onEvent);
+}();
 final _live = <int, QuicConnection>{};
 
 void _onEvent(int id, int kind, Pointer<Uint8> data, int len) {

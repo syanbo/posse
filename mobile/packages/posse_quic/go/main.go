@@ -45,7 +45,7 @@ type outMsg struct {
 
 type entry struct {
 	id     int64
-	cb     C.hq_event_fn
+	cb     atomic.Pointer[[0]byte] // C.hq_event_fn；hq_reset 后为 nil，不再回调
 	cancel context.CancelFunc
 
 	mu     sync.Mutex
@@ -62,6 +62,9 @@ var (
 	nextID atomic.Int64
 	connMu sync.Mutex
 	conns  = map[int64]*entry{}
+
+	// emit 调回调期间持读锁，hq_reset 拿写锁等它们调完：之后回调可以失效
+	emitMu sync.RWMutex
 )
 
 func lookup(id C.int64_t) *entry {
@@ -71,21 +74,28 @@ func lookup(id C.int64_t) *entry {
 }
 
 func (e *entry) emit(kind int, data []byte) {
+	emitMu.RLock()
+	defer emitMu.RUnlock()
+	f := e.cb.Load()
+	if f == nil {
+		return
+	}
 	var p *C.uint8_t
 	if len(data) > 0 {
 		p = (*C.uint8_t)(C.CBytes(data))
 	}
-	C.hq_emit(e.cb, C.int64_t(e.id), C.int32_t(kind), p, C.int32_t(len(data)))
+	C.hq_emit(f, C.int64_t(e.id), C.int32_t(kind), p, C.int32_t(len(data)))
 }
 
-// finish 只发一次结束事件并摘掉这条连接。
+// finish 只发一次结束事件并摘掉这条连接。先回调后摘：hq_reset 只清还在表里的连接的回调，
+// 先摘的话夹在中间的这次回调它清不到、也等不到
 func (e *entry) finish(kind int, msg string) {
 	e.once.Do(func() {
 		close(e.done)
+		e.emit(kind, []byte(msg))
 		connMu.Lock()
 		delete(conns, e.id)
 		connMu.Unlock()
-		e.emit(kind, []byte(msg))
 	})
 }
 
@@ -102,7 +112,8 @@ func hq_dial(addr *C.char, token *C.uint8_t, tokenLen C.int32_t, timeoutMs C.int
 }
 
 func newEntry(cb C.hq_event_fn, timeoutMs C.int32_t) (*entry, context.Context) {
-	e := &entry{id: nextID.Add(1), cb: cb, out: make(chan outMsg, sendQueue), done: make(chan struct{})}
+	e := &entry{id: nextID.Add(1), out: make(chan outMsg, sendQueue), done: make(chan struct{})}
+	e.cb.Store(cb)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
 	e.cancel = cancel
 	connMu.Lock()
@@ -269,6 +280,43 @@ func hq_close(id C.int64_t, code C.int32_t, reason *C.char) {
 	case e.out <- outMsg{typ: mquic.Close, code: uint16(code), data: []byte(msg)}:
 	default:
 		c.CloseNow()
+	}
+}
+
+// hq_reset 不再回调、直接断开现有的所有连接，返回时已经没有正在进行的回调。安卓上 Flutter 引擎可能先于进程销毁
+// （Activity 被关掉），之后旧连接的事件调到失效的回调上会崩溃：原生层在引擎销毁前调它（jni_android.go），
+// 新引擎第一次用之前也调一次兜底。
+//
+//export hq_reset
+func hq_reset() {
+	connMu.Lock()
+	old := make([]*entry, 0, len(conns))
+	for id, e := range conns {
+		old = append(old, e)
+		delete(conns, id)
+	}
+	connMu.Unlock()
+	for _, e := range old {
+		e.cb.Store(nil)
+	}
+	// 只为等正在进行的回调调完
+	emitMu.Lock()
+	emitMu.Unlock()
+	for _, e := range old {
+		e.mu.Lock()
+		e.closed = true
+		c, p, cancel := e.c, e.prep, e.cancel
+		e.prep = nil
+		e.mu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+		if p != nil {
+			p.Close()
+		}
+		if c != nil {
+			c.CloseNow()
+		}
 	}
 }
 

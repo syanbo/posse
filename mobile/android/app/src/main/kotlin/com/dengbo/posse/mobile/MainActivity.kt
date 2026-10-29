@@ -19,6 +19,7 @@ class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     // 等相机权限的那次 authorize
     private var cameraResult: MethodChannel.Result? = null
+    private var desk: DeskPlugin? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -26,6 +27,7 @@ class MainActivity : FlutterActivity() {
         flutterEngine.platformViewsController.registry
             .registerViewFactory("posse/qr", QrScanViewFactory(messenger, this))
         val desk = DeskPlugin(this, flutterEngine.renderer, messenger)
+        this.desk = desk
         flutterEngine.platformViewsController.registry.registerViewFactory("posse/desk/view", desk.viewFactory)
         MethodChannel(messenger, "posse/qr").setMethodCallHandler { call, result ->
             if (call.method != "authorize") {
@@ -60,6 +62,21 @@ class MainActivity : FlutterActivity() {
                     requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_WRITE)
                 }
             }
+    }
+
+    // 首页按返回只退到后台、不关 Activity，和 iOS 一样连接留着。安卓 16 的预测性返回不经过这里，
+    // Activity 照样被关掉，靠下面 onDestroy 断开连接
+    override fun popSystemNavigator(): Boolean {
+        moveTaskToBack(true)
+        return true
+    }
+
+    // Activity 关掉时 Flutter 引擎跟着销毁、进程还在：先让 Go 断开 QUIC 连接、不再回调，
+    // 否则之后的连接事件调到失效的 Dart 回调上，进程崩溃（小米上进程被冻住，回到前台解冻时必现）
+    override fun onDestroy() {
+        quicReset()
+        desk?.dispose()
+        super.onDestroy()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -132,6 +149,14 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        init {
+            System.loadLibrary("posse_quic")
+        }
+
+        // 在 packages/posse_quic/go/jni_android.go
+        @JvmStatic
+        private external fun quicReset()
+
         private const val REQUEST_WRITE = 7301
         private const val REQUEST_CAMERA = 7302
     }
