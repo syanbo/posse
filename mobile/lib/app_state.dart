@@ -472,6 +472,39 @@ class PosseAppModel extends ChangeNotifier {
   PosseLink? link;
   List<WorktreeRow> worktrees = const [];
 
+  /// 项目图标的图片，键是文件名：桌面每次导入都换一个名字，取过的不会过期。正在取的值是 null。
+  final Map<String, Uint8List?> _projectIcons = {};
+
+  /// 取失败的图标和失败的时间：首页每 3 秒重建一次，隔一会儿再取，不每次重建都去要。
+  final Map<String, DateTime> _iconFailed = {};
+
+  /// 项目图标的图片；还没取过就向电脑要，取到后刷新界面。
+  Uint8List? projectIcon(String name) {
+    if (_projectIcons.containsKey(name)) return _projectIcons[name];
+    final failed = _iconFailed[name];
+    if (failed != null &&
+        DateTime.now().difference(failed) < const Duration(seconds: 30)) {
+      return null;
+    }
+    final current = rpc;
+    if (current == null) return null;
+    _projectIcons[name] = null;
+    current
+        .call('posse.projectIcon', {'name': name})
+        .then((res) {
+          final data = res['data'];
+          if (data is! String) throw const FormatException('no data');
+          _projectIcons[name] = base64Decode(data);
+          _iconFailed.remove(name);
+          notifyListeners();
+        })
+        .catchError((Object _) {
+          _projectIcons.remove(name);
+          _iconFailed[name] = DateTime.now();
+        });
+    return null;
+  }
+
   /// 有运行中终端的工作区的标签，首页照桌面侧栏把会话直接列在工作区下面。
   Map<String, List<SessionTab>> tabs = const {};
   var connecting = false;

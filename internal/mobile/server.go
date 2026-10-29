@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"posse/internal/projicon"
 )
 
 // DefaultPort 避开 Orca 的 6768：两边可以同时开着。
@@ -28,6 +30,7 @@ const DefaultPort = 6788
 // Server 是给手机的 WebSocket 服务，挂在常驻进程里。
 type Server struct {
 	host  Host
+	home  string
 	pair  *pairing
 	port  int
 	epoch string // 本次启动的发布纪元：手机按它判断标签快照的新旧
@@ -46,6 +49,7 @@ type Server struct {
 
 	media mediaCache
 	tools toolsCache
+	icons projicon.Cache
 }
 
 // PairInfo 是给界面和 CLI 显示的配对信息。
@@ -64,7 +68,7 @@ func New(home string, host Host, port int) (*Server, error) {
 	if port == 0 {
 		port = DefaultPort
 	}
-	return &Server{host: host, pair: p, port: port, epoch: "posse:" + newUUID(),
+	return &Server{host: host, home: home, pair: p, port: port, epoch: "posse:" + newUUID(),
 		conns: map[*conn]struct{}{}, tabs: map[string]*tabState{}}, nil
 }
 

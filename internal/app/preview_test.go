@@ -552,6 +552,23 @@ func TestPreview(t *testing.T) {
 		a.state.ProjectMetaHidden, a.state.WorkspaceMetaHidden = true, true
 		savePNG(t, newPreviewTester(a, dark), "sidebar-no-meta-"+suffix+".png")
 
+		// 项目自定义图标：emoji、一两个字、位图、SVG（多工作区的标题行）；再打开更换图标的对话框
+		a = previewApp(t)
+		a.home = t.TempDir()
+		a.projIcons = map[string]projectIcon{
+			"p1": {Text: "🚀"}, "p4": {Text: "后"}, "p6": {Text: "AB"},
+			"p2": {Image: previewIconFile(t, a.home, "p2", ".png")}, "p5": {Image: previewIconFile(t, a.home, "p5", ".svg")},
+		}
+		tt = newPreviewTester(a, dark)
+		savePNG(t, tt, "project-icons-"+suffix+".png")
+		a.editProjectIcon(a.projects[1])
+		for range 4 {
+			tt.Frame()
+			pass(tt, 80*time.Millisecond)
+		}
+		tt.Frame()
+		savePNG(t, tt, "project-icon-dialog-"+suffix+".png")
+
 		// 不在看的会话本轮完成：标签和侧栏是铃铛，收起的项目也汇总成铃铛
 		a = previewApp(t)
 		a.workspaces[0].Terminals[1].AgentState = &agentState{Status: "idle"}

@@ -31,6 +31,7 @@ import (
 	"posse/internal/client"
 	"posse/internal/gitx"
 	"posse/internal/procmem"
+	"posse/internal/projicon"
 )
 
 type project struct {
@@ -244,6 +245,9 @@ type app struct {
 	// focusTerm 让下一帧把焦点交给终端：从文件栏拖文件进来后接着就能打字
 	focusTerm      bool
 	previews       map[string]*ui.Bitmap
+	iconEdit       iconEditor                // 更换项目图标的对话框
+	projIcons      map[string]projectIcon    // 项目自定义的图标，键是项目 ID
+	projIconCache  map[string]ui.ImageSource // 项目图标的图片，键是文件名
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
@@ -371,6 +375,7 @@ func Run(c *client.Client) error {
 		exe:          newExeWatch(),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
+	a.projIcons = projicon.Load(a.home)
 	a.traceGit()
 	if a.state.FontSize > 0 {
 		a.fontSize = a.state.FontSize
@@ -602,6 +607,7 @@ func (a *app) setWantedTask(id string) {
 // apply 在主线程更新状态，并为状态变化发通知。
 func (a *app) apply(ps []project, ws []workspace) {
 	sortProjects(ps, a.state.ProjectOrder)
+	a.pruneProjectIcons(ps)
 	for i := range ws {
 		// ws 是浅拷贝，终端列表还和上次轮询的结果共用，排序前先复制
 		ws[i].Terminals = slices.Clone(ws[i].Terminals)

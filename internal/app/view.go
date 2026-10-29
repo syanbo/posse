@@ -122,6 +122,7 @@ func (a *app) build(c *ui.Context) {
 	a.unsavedDialog(c)
 	a.rollbackDialog(c)
 	a.confirmDialog(c)
+	a.projectIconDialog(c)
 	a.sysMenuView(c)
 }
 
@@ -538,7 +539,6 @@ const navEnd = 12
 
 // projectHeader 是有多个工作区的项目的标题行：只管展开收起，不选中工作区；收起时汇总所有工作区的终端。
 func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool) {
-	t := c.Theme()
 	running, status := 0, ""
 	for i := range ws {
 		r, s := a.terminalSummary(ws[i].Terminals)
@@ -553,7 +553,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		}
 		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
 	}
-	icon := func() { ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
+	icon := func() { a.projectGlyph(c, a.projIcons[p.ID], iconFolder) }
 	sub := shortPath(ws[0].Path)
 	if a.state.ProjectMetaHidden {
 		sub = ""
@@ -684,6 +684,10 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 	}
 	t := c.Theme()
 	icon := func() { ui.Icon(c, a.wsIcon(&w)).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
+	if !nested {
+		// 没有其他工作区时这一行就是项目行，用项目的图标
+		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], a.wsIcon(&w)) }
+	}
 	item := a.navRowAt(c, w.ID, selected, icon, label, sub, branch, trailing)
 	if item.Clicked() {
 		a.selected = w.ID
@@ -885,6 +889,11 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 		}
 	}
 	m.Separator()
+	if w.Kind == "main" && m.Item("更换图标…").Chosen() {
+		if p := a.projectByID(w.ProjectID); p != nil {
+			a.editProjectIcon(*p)
+		}
+	}
 	if m.Item("在此项目新建工作区…").Chosen() {
 		a.openNewWorkspace()
 		a.newProject = w.Project

@@ -600,6 +600,7 @@ class WorkspaceScreen extends StatelessWidget {
       return [
         _ProjectHeader(
           name: name,
+          icon: _projectIcon(c, row),
           subtitle: model.settings.projectMetaHidden ? null : _where(c, row),
           count: row.live,
           expandable: sessions.isNotEmpty,
@@ -615,6 +616,7 @@ class WorkspaceScreen extends StatelessWidget {
     return [
       _ProjectHeader(
         name: name,
+        icon: _projectIcon(c, main),
         subtitle: model.settings.projectMetaHidden
             ? null
             : Text(tildePath(main.path), style: mono(12, color: c.muted)),
@@ -630,6 +632,38 @@ class WorkspaceScreen extends StatelessWidget {
         ..._sessions(context, row, indent: 82),
       ],
     ];
+  }
+
+  /// 项目行首的图标，照桌面侧栏：设了文字或图片就用它，否则是文件夹。
+  Widget _projectIcon(PosseColors c, WorktreeRow row) {
+    if (row.iconText.isNotEmpty) {
+      return SizedBox.square(
+        dimension: 22,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            row.iconText,
+            maxLines: 1,
+            style: TextStyle(fontSize: 19, color: c.accent, height: 1),
+          ),
+        ),
+      );
+    }
+    if (row.iconImage.isNotEmpty) {
+      if (model.projectIcon(row.iconImage) case final bytes?) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Image.memory(
+            bytes,
+            width: 22,
+            height: 22,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+          ),
+        );
+      }
+    }
+    return Icon(Icons.folder_outlined, size: 22, color: c.accent);
   }
 
   /// 项目下面的一个工作区，名字和分支照桌面侧栏：分支和名字一样时不再写一遍。
@@ -796,6 +830,7 @@ class WorkspaceScreen extends StatelessWidget {
 class _ProjectHeader extends StatelessWidget {
   const _ProjectHeader({
     required this.name,
+    required this.icon,
     this.subtitle,
     required this.count,
     required this.expandable,
@@ -806,6 +841,7 @@ class _ProjectHeader extends StatelessWidget {
   });
 
   final String name;
+  final Widget icon;
 
   /// 分支或路径；设置里隐藏了时为空，只留名字。
   final Widget? subtitle;
@@ -828,7 +864,7 @@ class _ProjectHeader extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
           child: Row(
             children: [
-              Icon(Icons.folder_outlined, size: 22, color: c.accent),
+              icon,
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

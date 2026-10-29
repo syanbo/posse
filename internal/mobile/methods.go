@@ -16,6 +16,7 @@ import (
 
 	"posse/internal/history"
 	"posse/internal/host"
+	"posse/internal/projicon"
 )
 
 // Host 是常驻进程提供给手机的数据和操作。
@@ -471,21 +472,43 @@ func (c *conn) dispatch(req request) error {
 		info, err := s.quicInfo(c.device.ID)
 		c.replyOrFail(req.ID, info, err)
 		return nil
+	case "posse.projectIcon":
+		// Posse 扩展：项目图标的图片（PNG），文件名每次导入都不同，手机按名字缓存
+		var a struct {
+			Name string `json:"name"`
+		}
+		json.Unmarshal(p, &a)
+		data, err := projicon.ReadImage(s.home, a.Name)
+		if err != nil {
+			return c.fail(req.ID, "not_found", "icon not found")
+		}
+		return c.reply(req.ID, map[string]any{"data": base64.StdEncoding.EncodeToString(data)})
 	case "runtime.ping":
 		// Posse 扩展：手机按往返时间显示延迟，连着几次不回就当连接死了重连。不做任何事，回得越快越准
 		return c.reply(req.ID, map[string]any{})
 	case "repo.list":
+		icons := s.icons.Load(s.home)
 		repos := []map[string]any{}
 		for _, pr := range s.host.State().Projects {
-			repos = append(repos, map[string]any{"id": pr.ID, "displayName": pr.Name, "path": pr.Path})
+			repo := map[string]any{"id": pr.ID, "displayName": pr.Name, "path": pr.Path}
+			if icon, ok := icons[pr.ID]; ok {
+				repo["icon"] = icon
+			}
+			repos = append(repos, repo)
 		}
 		return c.reply(req.ID, map[string]any{"repos": repos})
 	case "worktree.ps":
 		st := s.host.State()
 		now := time.Now()
+		// Posse 扩展：桌面侧栏给项目设的图标（repoIcon，没设不给），图片另经 posse.projectIcon 按文件名取
+		icons := s.icons.Load(s.home)
 		rows := []map[string]any{}
 		for _, w := range st.Workspaces {
-			rows = append(rows, worktreeRow(st, w, now))
+			row := worktreeRow(st, w, now)
+			if icon, ok := icons[w.ProjectID]; ok {
+				row["repoIcon"] = icon
+			}
+			rows = append(rows, row)
 		}
 		return c.reply(req.ID, map[string]any{"worktrees": rows, "totalCount": len(rows), "truncated": false})
 	case "ui.get":

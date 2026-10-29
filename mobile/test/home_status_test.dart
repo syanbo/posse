@@ -8,6 +8,44 @@ import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
 
 void main() {
+  testWidgets('project rows show the icon set on the desktop sidebar', (
+    tester,
+  ) async {
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.worktrees = parseWorktrees([
+      {
+        'worktreeId': 'p1::w1',
+        'repo': 'posse',
+        'displayName': 'posse',
+        'path': '/Users/x/posse',
+        'isMainWorktree': true,
+        'repoIcon': {'text': '🚀'},
+      },
+      {
+        'worktreeId': 'p2::w2',
+        'repo': 'chat',
+        'displayName': 'chat',
+        'path': '/Users/x/chat',
+        'isMainWorktree': true,
+        // 还没连上取不了图片：先显示文件夹
+        'repoIcon': {'image': 'p2-1.png'},
+      },
+    ]);
+    expect(model.worktrees[1].iconImage, 'p2-1.png');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: WorkspaceScreen(model: model),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('🚀'), findsOneWidget);
+    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+  });
+
   testWidgets('disconnect status lives in the computer pill, list stays put', (
     tester,
   ) async {

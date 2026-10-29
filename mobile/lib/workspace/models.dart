@@ -33,6 +33,8 @@ class WorktreeRow {
     this.isWorktree = false,
     this.agents = const [],
     this.lastActivityAt = 0,
+    this.iconText = '',
+    this.iconImage = '',
   });
 
   final String id;
@@ -51,6 +53,10 @@ class WorktreeRow {
   final bool isWorktree;
   final List<AgentPeek> agents;
   final int lastActivityAt;
+
+  /// 桌面侧栏给项目设的图标：文字或 emoji，或者一张图片的文件名（经 posse.projectIcon 取）。都空是默认的文件夹。
+  final String iconText;
+  final String iconImage;
 
   String get subtitle {
     if (branch.isNotEmpty) return branch;
@@ -147,6 +153,14 @@ List<WorktreeRow> parseWorktrees(Object? raw) {
         lastActivityAt: item['lastActivityAt'] is num
             ? (item['lastActivityAt'] as num).toInt()
             : 0,
+        iconText: switch (item['repoIcon']) {
+          {'text': final String text} => text,
+          _ => '',
+        },
+        iconImage: switch (item['repoIcon']) {
+          {'image': final String image} => image,
+          _ => '',
+        },
       ),
     );
   }

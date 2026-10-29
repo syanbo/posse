@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -21,6 +23,7 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 
 	"posse/internal/host"
+	"posse/internal/projicon"
 	"posse/internal/rpc"
 	"posse/internal/term"
 )
@@ -316,7 +319,8 @@ func TestPhoneSession(t *testing.T) {
 	}
 	defer tm.Close(time.Second)
 	host := &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}, order: []string{"t_1"}}
-	srv, err := New(t.TempDir(), host, -1)
+	home := t.TempDir()
+	srv, err := New(home, host, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,8 +345,23 @@ func TestPhoneSession(t *testing.T) {
 	ps := result(t, p.next(p.call("worktree.ps", map[string]any{"limit": 10000})))
 	rows := ps["worktrees"].([]any)
 	row := rows[0].(map[string]any)
-	if row["worktreeId"] != "p1::w1" || row["status"] != "permission" || row["displayName"] != "demo" {
+	if row["worktreeId"] != "p1::w1" || row["status"] != "permission" || row["displayName"] != "demo" || row["repoIcon"] != nil {
 		t.Fatalf("row %v", row)
+	}
+	// 桌面设了项目图标：每次列工作区时读，不用重启；图片按文件名取，只认图标目录里的 PNG
+	if err := projicon.Save(home, map[string]projicon.Icon{"p1": {Image: "p1-1.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(projicon.Dir(home), "p1-1.png"), []byte("png"), 0o644)
+	ps = result(t, p.next(p.call("worktree.ps", map[string]any{"limit": 10000})))
+	if icon := ps["worktrees"].([]any)[0].(map[string]any)["repoIcon"]; fmt.Sprint(icon) != "map[image:p1-1.png]" {
+		t.Fatalf("repoIcon %v", icon)
+	}
+	if got := result(t, p.next(p.call("posse.projectIcon", map[string]any{"name": "p1-1.png"}))); got["data"] != "cG5n" {
+		t.Fatalf("icon data %v", got)
+	}
+	if m := p.next(p.call("posse.projectIcon", map[string]any{"name": "../mobile.json"})); m["ok"] == true {
+		t.Fatalf("read outside icon dir: %v", m)
 	}
 
 	sid := p.call("session.tabs.subscribe", map[string]any{"worktree": "id:p1::w1"})
