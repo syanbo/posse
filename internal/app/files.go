@@ -495,9 +495,12 @@ func (a *app) pollFiles(v *filesView) {
 	}
 	dirs := map[string]files.Stamp{}
 	for _, d := range v.tree.Visible() {
-		if st, ok := v.tree.Stamp(d); ok {
-			dirs[d] = st
+		st, ok := v.tree.Stamp(d)
+		if !ok {
+			// 没读成的（工作区目录当时不在）当作不存在：出现了戳就变了，下面会重读
+			st = files.Stamp{Missing: true}
 		}
+		dirs[d] = st
 	}
 	type docReq struct {
 		d     *fileDoc

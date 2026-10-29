@@ -1030,3 +1030,26 @@ func TestMarkdownPreviewFind(t *testing.T) {
 		t.Fatal("Esc should close the find bar")
 	}
 }
+
+// 工作区目录当时不在、后来又出现时，轮询重读根目录，文件树不会一直停在"正在读取…"。
+func TestTreeRootReappears(t *testing.T) {
+	a := previewApp(t)
+	root := filepath.Join(t.TempDir(), "later")
+	a.workspaces[0].Path = root
+	a.indexWorkspaces()
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := a.filesFor(w)
+	a.pollFiles(v)
+	pass(tt, 200*time.Millisecond)
+	tt.Frame()
+	if v.tree.Loaded(root) {
+		t.Fatal("a missing root loaded")
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(root, "a.txt"), nil, 0o644)
+	a.pollFiles(v)
+	until(t, tt, "root read", func() bool { return v.tree.Loaded(root) && len(v.tree.Rows()) == 1 })
+}
