@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -23,7 +24,11 @@ type compareDoc struct {
 	onlyOther  []gitx.CommitInfo
 	onlyCur    []gitx.CommitInfo
 	changes    []gitx.FileChange
-	commit     *commitView // 选中的提交
+	commit     *commitView // 右边看着的提交
+	picked     []string    // ⌘、⇧ 点选的多个提交，都在同一边；空时选中的就是 commit
+	anchor     string      // ⇧ 点选范围的起点
+	queryOther string      // 两栏各自的搜索词，只筛这一栏显示的提交
+	queryCur   string
 	list       ui.ListState
 	folded     map[string]bool // 文件树里收起的目录
 	listOther  ui.ListState    // 只在 other 里的提交
@@ -121,6 +126,11 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 				return
 			}
 			cd.onlyOther, cd.onlyCur, cd.changes = onlyOther, onlyCur, changes
+			// 刷新后已经不在两边的提交（比如 cherry-pick 过去了）不再算选中
+			cd.picked = slices.DeleteFunc(cd.picked, func(h string) bool {
+				has := func(x gitx.CommitInfo) bool { return x.Hash == h }
+				return !slices.ContainsFunc(onlyOther, has) && !slices.ContainsFunc(onlyCur, has)
+			})
 			d.kind = docCompare
 		})
 	}()
@@ -181,18 +191,17 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		// 照 WebStorm：上下两栏，各是一边独有的提交
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
-			a.compareBar(c, w, v, d)
 			// 照 WebStorm 上下两栏默认各一半，拖中间的分隔条调比例，所有比较共用
 			split := a.compareSplit()
 			panes := ui.Column(c.Key("compare-panes")).Grow(1).Shrink(1)
 			panes.Children(func() {
 				// 两边各一种颜色（照 WebStorm 的分支颜色）：标题里的分支名和提交的圆点同色，一眼分得出是哪边
 				ui.Column(c).Height(0).Grow(split).Shrink(1).Children(func() {
-					a.commitPane(c, v, &cd.commit, &cd.listOther, cd.other, cd.cur, cd.onlyOther, laneColor(t, 0))
+					a.commitPane(c, v, cd, &cd.listOther, &cd.queryOther, cd.other, cd.cur, cd.onlyOther, laneColor(t, 0), func() { a.compareActions(c, w, v, d) })
 				})
 				a.compareGrip(c, panes.Bounds().H)
 				ui.Column(c).Height(0).Grow(1 - split).Shrink(1).Children(func() {
-					a.commitPane(c, v, &cd.commit, &cd.listCur, cd.cur, cd.other, cd.onlyCur, laneColor(t, 1))
+					a.commitPane(c, v, cd, &cd.listCur, &cd.queryCur, cd.cur, cd.other, cd.onlyCur, laneColor(t, 1), nil)
 				})
 			})
 		})
@@ -211,43 +220,37 @@ func (a *app) compareSplit() float32 {
 	return 0.5
 }
 
-// compareGrip 是两栏之间的分隔条：隔开两栏，上下拖调比例，松手才写 ui.json。total 是两栏连同它的高度。
+// compareGrip 是两栏之间的分隔条：看上去是一条细线，上下拖调比例，松手才写 ui.json。total 是两栏连同它的高度。
 func (a *app) compareGrip(c *ui.Context, total float32) {
 	t := c.Theme()
-	const gripH = 14
-	grip := ui.Box(c.Key("compare-grip")).Height(gripH).Shrink(0).Background(colors(t).side).
-		BorderWidth(hairline, 0, hairline, 0).BorderColor(colors(t).line).Cursor(ui.CursorResizeNS)
+	// 线只有一个物理像素，拖的地方留宽一些
+	const gripH = 5
+	grip := ui.Box(c.Key("compare-grip")).Height(gripH).Shrink(0).Cursor(ui.CursorResizeNS)
 	if _, dy, held := grip.Dragged(); held && total > gripH {
 		room := total - gripH
 		// 每栏至少留出标题和一行提交
-		least := min((sz(38)+logRowH()+8)/room, 0.5)
+		least := min((sz(42)+logRowH()+8)/room, 0.5)
 		a.state.CompareSplit = min(max(a.compareSplit()+dy/room, least), 1-least)
 		a.resizingCompare = true
 	} else if a.resizingCompare && !held {
 		a.resizingCompare = false
 		a.saveState()
 	}
+	line, h := colors(t).line, float32(hairline)
 	if grip.Hovered() || a.resizingCompare {
-		accent := t.Accent
-		grip.Draw(func(pt *ui.Painter, r ui.Rect) {
-			pt.Fill(ui.Rect{X: r.X, Y: r.Y + r.H/2 - 1, W: r.W, H: 2}, accent, 0)
-		})
+		line, h = t.Accent, 2
 	}
+	grip.Draw(func(pt *ui.Painter, r ui.Rect) {
+		pt.Fill(ui.Rect{X: r.X, Y: r.Y + (r.H-h)/2, W: r.W, H: h}, line, 0)
+	})
 }
 
-// compareBar 是比较页顶上一行：比较的两个分支，交换两边，刷新。
-func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
-	t := c.Theme()
+// compareActions 是上一栏标题行右边的操作：Cherry-pick、交换两边、刷新。
+func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	cd := d.comp
-	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 12, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "比较").FontSize(fsBody).TextColor(t.TextMuted)
-		// 颜色和下面两栏对应
-		ui.Text(c, cd.other).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(t, 0)).SingleLine().Shrink(1)
-		ui.Text(c, "和").FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, cd.cur).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(laneColor(t, 1)).SingleLine().Shrink(1)
-		ui.Spacer(c)
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 		a.comparePick(c, w, v, cd)
-		if pressable(textButton(c, "交换")).Tooltip("对调两边的分支").Clicked() {
+		if pressable(iconButtonSized(c, iconSwap, "对调两边的分支", compactBox(), smallIcon())).Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
 			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.cur, cd.other, false) }); i >= 0 {
 				v.cur = v.docs[i]
@@ -256,36 +259,48 @@ func (a *app) compareBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) 
 			cd.other, cd.cur = cd.cur, cd.other
 			cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
 			cd.listOther, cd.listCur = cd.listCur, cd.listOther
+			cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
 			d.path = compareKey(cd.other, cd.cur, false)
 		}
 		if pressable(iconButtonSized(c, iconRefresh, "刷新", compactBox(), smallIcon())).Clicked() {
 			a.loadCompare(v, d)
 		}
 	})
-	hline(c)
 }
 
-// comparePick 是顶栏的 Cherry-pick：把选中的提交应用到当前分支。
-// cherry-pick 只能落在检出的分支上，所以选中的提交要来自另一边、另一边又正好是工作区检出的分支才可点。
+// comparePick 是 Cherry-pick 按钮：把选中的提交按提交先后应用到当前分支。
+// cherry-pick 只能落在检出的分支上，所以选中的提交要都来自另一边、另一边又正好是工作区检出的分支才可点。
 func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compareDoc) {
-	target, tip := "", "先选一个提交"
-	if sel := cd.commit; sel != nil {
-		in := func(cs []gitx.CommitInfo) bool {
-			return slices.ContainsFunc(cs, func(x gitx.CommitInfo) bool { return x.Hash == sel.info.Hash })
+	target, tip := "", "先选提交，⌘ 或 ⇧ 点可以多选"
+	var hashes []string
+	if sel := cd.selected(); len(sel) > 0 {
+		// 列表从新到旧，倒过来才是 cherry-pick 的先后
+		inOrder := func(cs []gitx.CommitInfo) []string {
+			var out []string
+			for _, ci := range slices.Backward(cs) {
+				if slices.Contains(sel, ci.Hash) {
+					out = append(out, ci.Hash)
+				}
+			}
+			return out
 		}
 		switch {
-		case in(cd.onlyOther):
-			target = cd.cur
-		case in(cd.onlyCur):
-			target = cd.other
+		case len(inOrder(cd.onlyOther)) == len(sel):
+			target, hashes = cd.cur, inOrder(cd.onlyOther)
+		case len(inOrder(cd.onlyCur)) == len(sel):
+			target, hashes = cd.other, inOrder(cd.onlyCur)
 		}
 		if target != "" && target != w.Branch {
 			tip = "只能 Cherry-pick 到检出的分支，现在检出的是 " + w.Branch
 			target = ""
 		}
 	}
-	if target != "" {
-		tip = "把 " + cd.commit.info.Hash[:7] + " 应用到 " + target
+	switch {
+	case target == "":
+	case len(hashes) == 1:
+		tip = "把 " + hashes[0][:7] + " 应用到 " + target
+	default:
+		tip = fmt.Sprintf("把 %d 个提交按先后应用到 %s", len(hashes), target)
 	}
 	b := quietIconButton(c, iconCherryPick, "Cherry-pick", compactBox(), smallIcon()).Tooltip("Cherry-pick：" + tip)
 	if target == "" {
@@ -293,46 +308,123 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 		return
 	}
 	if b.Clicked() {
-		hash := cd.commit.info.Hash
 		a.guardAgent(w, "Cherry-pick", func() {
-			a.gitDo(v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hash) })
+			a.gitDo(v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
 		})
 	}
 }
 
+// selected 是选中的提交：多选时是点选的那些，否则是右边看着的那个。
+func (cd *compareDoc) selected() []string {
+	if len(cd.picked) > 0 {
+		return cd.picked
+	}
+	if cd.commit != nil {
+		return []string{cd.commit.info.Hash}
+	}
+	return nil
+}
+
+// clickCommit 照 WebStorm 处理点选：单击只选这一个，⌘ 点加上或去掉，⇧ 点选上从起点到这里的一段。
+// 多选只在同一边里，点另一边的提交从头选。all 是这一边全部的提交，shown 是筛选后显示的。
+func (a *app) clickCommit(v *filesView, cd *compareDoc, all, shown []gitx.CommitInfo, ci gitx.CommitInfo, mods ui.Modifiers) {
+	sel := cd.selected()
+	// 按全部提交判断：选中的被搜索藏起来时也还是同一边
+	samePane := len(sel) > 0 && slices.ContainsFunc(all, func(x gitx.CommitInfo) bool { return x.Hash == sel[0] })
+	switch {
+	case mods&ui.Cmd != 0 && samePane:
+		if i := slices.Index(sel, ci.Hash); i >= 0 {
+			cd.picked = slices.Delete(slices.Clone(sel), i, i+1)
+			if cd.commit != nil && cd.commit.info.Hash == ci.Hash {
+				cd.commit = nil
+			}
+			if len(cd.picked) == 0 {
+				cd.picked = nil
+			} else if cd.commit == nil {
+				// 右边换成还选着的一个，不然只剩一个时就当没选
+				i := slices.IndexFunc(shown, func(x gitx.CommitInfo) bool { return slices.Contains(cd.picked, x.Hash) })
+				if i >= 0 {
+					a.selectCommit(v, &cd.commit, shown[i])
+				}
+			}
+			return
+		}
+		cd.picked = append(slices.Clone(sel), ci.Hash)
+		cd.anchor = ci.Hash
+	case mods&ui.Shift != 0 && samePane:
+		from := slices.IndexFunc(shown, func(x gitx.CommitInfo) bool { return x.Hash == cd.anchor })
+		to := slices.IndexFunc(shown, func(x gitx.CommitInfo) bool { return x.Hash == ci.Hash })
+		if from < 0 {
+			from = to
+		}
+		cd.picked = nil
+		for _, x := range shown[min(from, to) : max(from, to)+1] {
+			cd.picked = append(cd.picked, x.Hash)
+		}
+	default:
+		cd.picked, cd.anchor = nil, ci.Hash
+	}
+	a.selectCommit(v, &cd.commit, ci)
+}
+
+// matchCommit 报告提交的信息、作者里有没有 q（不分大小写），或者哈希以 q 开头。q 已经是小写。
+func matchCommit(ci gitx.CommitInfo, q string) bool {
+	return strings.Contains(strings.ToLower(ci.Subject), q) || strings.HasPrefix(ci.Hash, q) || strings.Contains(strings.ToLower(ci.Author), q)
+}
+
 // commitPane 是一边独有的提交：标题说明是哪边，in 这个分支名和下面提交的圆点都是 lane 色。
-func (a *app) commitPane(c *ui.Context, v *filesView, sel **commitView, list *ui.ListState, in, notIn string, commits []gitx.CommitInfo, lane ui.Color) {
+func (a *app) commitPane(c *ui.Context, v *filesView, cd *compareDoc, list *ui.ListState, query *string, in, notIn string, all []gitx.CommitInfo, lane ui.Color, actions func()) {
 	t := c.Theme()
 	p := colors(t)
+	commits := all
+	q := strings.ToLower(strings.TrimSpace(*query))
+	if q != "" {
+		commits = slices.DeleteFunc(slices.Clone(all), func(ci gitx.CommitInfo) bool { return !matchCommit(ci, q) })
+	}
+	count := fmt.Sprintf("%d 个", len(all))
+	if q != "" {
+		count = fmt.Sprintf("%d / %d 个", len(commits), len(all))
+	}
 	// 琥珀色只给"待处理"，这里用顶栏的底
-	ui.Row(c).Height(sz(38)).Shrink(0).Padding(0, 16).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
+	ui.Row(c).Height(sz(42)).Shrink(0).Padding(0, 16, 0, 8).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
+		// 照 WebStorm 每栏一个搜索框，放在最左边，两栏各搜各的
+		fieldInputSized(c.Key("search-"+in), query, "搜索提交", 220, 100).Label("在 " + in + " 独有的提交里按信息、哈希或作者筛选")
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(lane).Shrink(0)
-		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(1).Children(func() {
-			ui.Text(c, "存在于").FontSize(fsBody)
-			ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(1)
-			ui.Text(c, "中但不存在于").FontSize(fsBody)
-			ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1)
-			ui.Text(c, "中的提交").FontSize(fsBody)
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
+			ui.Text(c, "存在于").FontSize(fsBody).SingleLine().Shrink(0)
+			// 分支名不缩，地方不够时让搜索框缩；太长的才截断
+			ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(0).MaxWidth(200)
+			ui.Text(c, "中但不存在于").FontSize(fsBody).SingleLine().Shrink(0)
+			ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(0).MaxWidth(200)
+			ui.Text(c, "中的提交").FontSize(fsBody).SingleLine().Shrink(0)
 		})
 		ui.Spacer(c)
-		ui.Text(c, fmt.Sprintf("%d 个", len(commits))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, count).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		if actions != nil {
+			actions()
+		}
 	})
-	if len(commits) == 0 {
+	if len(all) == 0 {
 		ui.Text(c, fmt.Sprintf("没有，%s 已经包含 %s 的全部提交", notIn, in)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
+	if len(commits) == 0 {
+		ui.Text(c, "没有匹配的提交").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		return
+	}
+	sel := cd.selected()
 	list.Key = func(i int) any { return commits[i].Hash }
 	ui.List(c, list, len(commits), func(i int) {
 		ci := commits[i]
-		if commitRow(c, ci, *sel != nil && (*sel).info.Hash == ci.Hash, i == 0, i == len(commits)-1, lane) {
-			a.selectCommit(v, sel, ci)
+		if row := commitRow(c, ci, slices.Contains(sel, ci.Hash), i == 0, i == len(commits)-1, lane); row.Clicked() {
+			a.clickCommit(v, cd, all, commits, ci, row.ClickModifiers())
 		}
 	}).Grow(1).Padding(4, 0, 8, 0)
 }
 
 // commitRow 是比较页的一个提交，和 Git 日志一个样子：左边一条线串起圆点，标题、分支和标签、作者、时间。
-// first、last 决定线从哪画到哪，lane 是线和圆点的颜色。返回是否点了它。
-func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, lane ui.Color) bool {
+// first、last 决定线从哪画到哪，lane 是线和圆点的颜色。返回这一行，调用方看它点没点。
+func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, lane ui.Color) ui.Element {
 	t := c.Theme()
 	row := ui.Row(c.Key(ci.Hash)).Height(logRowH()).Padding(0, 16, 0, 16).Gap(8).AlignItems(ui.Center).Role(ui.RoleButton).Label(ci.Subject)
 	bg := ui.Transparent
@@ -342,7 +434,11 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 	case row.Hovered():
 		bg = colors(t).wash
 	}
-	row.Background(row.AnimateColor("bg", bg, hover))
+	// 和日志的行一样内缩、圆角、上下留缝；行本身不缩，左边的线才连得上
+	bg = row.AnimateColor("bg", bg, hover)
+	row.Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(ui.Rect{X: r.X + 6, Y: r.Y + 1, W: r.W - 12, H: r.H - 2}, bg, rRow)
+	})
 	row.Children(func() {
 		ui.Box(c).Width(12).Height(logRowH()).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy := r.X+r.W/2, r.Y+r.H/2
@@ -364,7 +460,7 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
 		ui.Text(c, commitTime(ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(ci.Time))
 	})
-	return row.Clicked()
+	return row
 }
 
 // commitTime 写成"今天 14:26""昨天 17:04""10月3日 09:12"，跨年的只写日期，和 WebStorm 一样看得出先后。
@@ -427,7 +523,6 @@ func (a *app) tabDiffs(w *workspace, v *filesView, specs []diffSpec) (selected f
 // fileChangeList 是一组改了的文件，照 WebStorm 按目录排成树，点文件交给 open 打开它的 diff（参数是 files 的下标）。
 func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, selected func(int) bool, open func(int)) {
 	t := c.Theme()
-	p := colors(t)
 	if *folded == nil {
 		*folded = map[string]bool{}
 	}
@@ -464,18 +559,12 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 		f := files[r.entry]
 		row.Role(ui.RoleButton).Label(f.Path)
 		selectedBg(c, row, selected(r.entry))
-		color := t.Accent
-		switch f.Status {
-		case 'A':
-			color = p.sage
-		case 'D':
-			color = t.TextMuted
-		}
+		color := letterColor(c, f.Status)
 		row.Children(func() {
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
 			ui.Box(c).Width(20).Shrink(0)
 			ui.Text(c, string(f.Status)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
-			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path)
+			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path).TextColor(color)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
 			}
@@ -601,7 +690,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						// 行之间不留缝，左边的竖线才连得起来
 						ui.Column(c).Children(func() {
 							for i, ci := range plan.Commits {
-								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(t, 0)) {
+								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(t, 0)).Clicked() {
 									a.selectCommit(v, &ps.commit, ci)
 									ps.detail = nil
 								}

@@ -57,8 +57,10 @@ type gitState struct {
 	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
 	// 储藏列表是所有 worktree 共用的，只记自己操作留下的。关掉横幅或储藏没了就清空
 	autostash          string
-	autostashConflicts bool // 取回了、有冲突；为假是根本没取回
-	autostashSeen      bool // 储藏列表里已经读到过它：之后不在了就是在别处删掉、弹出了
+	autostashConflicts bool            // 取回了、有冲突；为假是根本没取回
+	autostashSeen      bool            // 储藏列表里已经读到过它：之后不在了就是在别处删掉、弹出了
+	marks              map[string]byte // 文件树的状态标记，按绝对路径；跟着 marksOf 这份状态算
+	marksOf            *gitx.Status
 }
 
 type changeGroup uint8
@@ -937,6 +939,39 @@ func (g *gitState) entry(abs string) *gitx.Entry {
 	}
 	return nil
 }
+
+// treeMarks 是文件树上的 git 状态，照 WebStorm：文件记 statusLetter（新增 A、未跟踪 ?、冲突 U，其余记 M），
+// 含改动的目录记 M（删掉的文件不在树里，它的目录照样标出来）。状态换了才重算。
+func (g *gitState) treeMarks() map[string]byte {
+	if g.status == g.marksOf {
+		return g.marks
+	}
+	g.marksOf, g.marks = g.status, nil
+	if g.status == nil {
+		return nil
+	}
+	g.marks = map[string]byte{}
+	for _, e := range g.status.Entries {
+		mark := statusLetter(e)
+		switch mark {
+		case 'A', '?', 'U':
+		default:
+			mark = 'M'
+		}
+		abs := g.absPath(e.Path)
+		g.marks[abs] = mark
+		for dir := filepath.Dir(abs); len(dir) > len(g.repo); dir = filepath.Dir(dir) {
+			if _, ok := g.marks[dir]; ok {
+				break
+			}
+			g.marks[dir] = 'M'
+		}
+	}
+	return g.marks
+}
+
+// treeMarkText 是悬停文件名时的说明。
+var treeMarkText = map[byte]string{'M': "已修改", 'A': "新增", '?': "未加入 Git", 'U': "有冲突"}
 
 // rollbackDiffFile 是 diff 栏的"回滚这个文件"：在回滚对话框里回滚了这个文件后接着看同一组的下一个文件（没有就看上一个），
 // 都没有了就关掉 diff 标签。

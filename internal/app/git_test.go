@@ -1836,7 +1836,12 @@ func TestCompareSplit(t *testing.T) {
 		t.Fatalf("panes not split evenly: first commit at %v, second at %v (title %v)", heads[0], heads[1], top)
 	}
 	// 分隔条在下一栏标题上方
-	y := heads[1] - 48 // 隔着下一栏的标题（38）和列表上内边距，落在分隔条中间
+	// 下一栏标题行和其中搜索框的文字同一条中线，标题行再往上半个分隔条（5 高）是分隔条的中间
+	field, ok := tt.Find("在 main 独有的提交里按信息、哈希或作者筛选")
+	if !ok {
+		t.Fatal("no search field in the lower pane")
+	}
+	y := field.Y + field.H/2 - sz(42)/2 - 2.5
 	tt.Move(600, y)
 	tt.Frame()
 	if tt.Cursor() != ui.CursorResizeNS {
@@ -2099,5 +2104,119 @@ func TestComparePick(t *testing.T) {
 	}
 	if got := strings.TrimSpace(gitRun(t, root, "log", "-1", "--format=%s", "main")); got != "feat: 新功能" {
 		t.Fatalf("main head %q", got)
+	}
+}
+
+// 比较页每栏的搜索只筛这一栏显示的提交；⌘ 点多选、⇧ 点选一段，Cherry-pick 按提交先后应用选中的几个。
+func TestComparePickMany(t *testing.T) {
+	a := previewApp(t)
+	root := branchWorkspace(t, a)
+	gitRun(t, root, "switch", "-q", "feat")
+	for _, n := range []string{"a", "b", "c"} {
+		os.WriteFile(filepath.Join(root, n+".txt"), []byte(n+"\n"), 0o644)
+		gitRun(t, root, "add", n+".txt")
+		gitRun(t, root, "commit", "-q", "-m", "feat: 加 "+n)
+	}
+	gitRun(t, root, "switch", "-q", "main")
+	w := &a.workspaces[0]
+	v := a.filesFor(w)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.loadBranches(v)
+	until(t, tt, "repo", func() bool { return v.git.repo != "" })
+	a.openCompare(w, v, "feat", "main", false)
+	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && len(v.cur.comp.onlyOther) == 4 })
+	cd := v.cur.comp
+
+	// 两栏各搜各的：上一栏的搜索词不筛下一栏
+	cd.queryOther = "加 B"
+	tt.Frame()
+	if !tt.HasText("1 / 4 个") || tt.HasText("feat: 加 a") || !tt.HasText("feat: 加 b") || !tt.HasText("fix: 本地修复") {
+		t.Fatalf("search: %v", tt.Texts())
+	}
+	cd.queryOther = ""
+	tt.Frame()
+
+	// 选中的 a 被搜索藏起来后 ⌘ 点 c，仍是同一栏的多选
+	if err := tt.Click("feat: 加 a"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	cd.queryOther = "加 c"
+	tt.Frame()
+	if err := tt.ClickWith(ui.Cmd, "feat: 加 c"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(cd.selected()) != 2 {
+		t.Fatalf("cmd-click with the first pick hidden left %d", len(cd.selected()))
+	}
+	cd.queryOther = ""
+	tt.Frame()
+
+	// 选 a，⇧ 点 c 选上 a..c，再 ⌘ 点去掉 b
+	if err := tt.Click("feat: 加 a"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.ClickWith(ui.Shift, "feat: 加 c"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(cd.selected()) != 3 {
+		t.Fatalf("shift range picked %d", len(cd.selected()))
+	}
+	if err := tt.ClickWith(ui.Cmd, "feat: 加 b"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(cd.selected()) != 2 {
+		t.Fatalf("cmd toggle left %d", len(cd.selected()))
+	}
+	if err := tt.Click("Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "agent guard", func() bool { return a.confirming && tt.HasText("仍然Cherry-pick") })
+	if err := tt.Click("仍然Cherry-pick"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "cherry-pick", func() bool {
+		return v.git.busy == "" && strings.Contains(gitRun(t, root, "log", "-1", "--format=%s", "main"), "加")
+	})
+	if a.err != "" {
+		t.Fatal(a.err)
+	}
+	if got := strings.TrimSpace(gitRun(t, root, "log", "-2", "--format=%s", "main")); got != "feat: 加 c\nfeat: 加 a" {
+		t.Fatalf("main log %q", got)
+	}
+}
+
+// 文件树照 WebStorm 给有改动的文件和含改动的目录上色，悬停文件名说明状态。
+func TestFileTreeGitMarks(t *testing.T) {
+	a := previewApp(t)
+	root := gitWorkspace(t, a)
+	os.MkdirAll(filepath.Join(root, "pkg", "sub"), 0o755)
+	os.WriteFile(filepath.Join(root, "pkg", "sub", "new.go"), []byte("package sub\n"), 0o644)
+	gitRun(t, root, "add", "pkg")
+	tt := ui.NewTester(a.build, 1200, 760)
+	v := a.openFilesPanel(&a.workspaces[0], sideFiles)
+	until(t, tt, "git status", func() bool { return v.git.status != nil && tt.HasText("main.go") })
+	m := v.git.treeMarks()
+	want := map[string]byte{"main.go": 'M', "notes.txt": '?', "pkg": 'M', "pkg/sub": 'M', "pkg/sub/new.go": 'A'}
+	for rel, mark := range want {
+		if got := m[filepath.Join(root, rel)]; got != mark {
+			t.Errorf("%s marked %q, want %q", rel, got, mark)
+		}
+	}
+	if _, ok := m[root]; ok {
+		t.Error("workspace root should not be marked")
+	}
+	tt.Move(0, 0)
+	if r, ok := tt.Find("main.go"); ok {
+		tt.Move(r.X+r.W/2, r.Y+r.H/2)
+		pass(tt, time.Second)
+		tt.Frame()
+	}
+	if !tt.HasText("已修改") {
+		t.Fatalf("no status tooltip: %v", tt.Texts())
 	}
 }

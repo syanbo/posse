@@ -25,6 +25,8 @@ type imagesView struct {
 	madeAll int         // agent 生成的一共几张
 	poll    panelPoll
 	failed  map[string]bool // 解码失败的图片，不再重试
+	tab     int             // 顶部的分段：0 是 agent 生成的，1 是粘贴的
+	tabSet  bool            // 用户点过分段；没点过时按有没有图片自动选
 
 	hover   string // 悬停的图片的 key
 	big     *ui.Bitmap
@@ -109,6 +111,13 @@ func (a *app) pollImages(c *ui.Context, cur *terminalInfo) {
 				v.markFailed(k)
 			}
 			v.scanner, v.pasted, v.made, v.madeAll = scanner, pasted, made, all
+			// 没点过分段时，生成的为空、粘贴的有就看粘贴的
+			if !v.tabSet {
+				v.tab = 0
+				if len(made) == 0 && len(pasted) > 0 {
+					v.tab = 1
+				}
+			}
 			v.poll.done()
 		})
 	}()
@@ -207,14 +216,24 @@ func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
 	})
 }
 
-// imagesPanel 是右侧的图片面板：agent 生成的在上，粘贴的（标上 #N）在下；悬停在左边放大，点击在文件标签里预览，右键在访达中显示或用系统预览打开。
+// imagesPanel 是右侧的图片面板：顶部分段切换 agent 生成的和粘贴的（标上 #N）；悬停在左边放大，点击在文件标签里预览，右键在访达中显示或用系统预览打开。
 func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollImages(c, cur)
 	v := &a.images
 	v.hover = ""
 	a.imagesDrawn = true
 	return a.rightPanel(c, "图片", func() {
-		ui.Scroll(c).Grow(1).Children(func() {
+		if media.Supported(cur.Agent) && !v.poll.at.IsZero() && (len(v.made) > 0 || len(v.pasted) > 0) {
+			ui.Row(c).Padding(0, 12, 12, 12).Shrink(0).Children(func() {
+				// 和文件栏的分段一样撑满栏宽
+				ui.Column(c).Grow(1).Children(func() {
+					if segmentedBadges(c, &v.tab, "图片来源", []int{v.madeAll, len(v.pasted)}, "生成", "粘贴") {
+						v.tabSet = true
+					}
+				})
+			})
+		}
+		ui.Scroll(c.Key(fmt.Sprint("images-", v.tab))).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
 				case !media.Supported(cur.Agent):
@@ -227,28 +246,31 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, "这个会话还没有图片或视频。")
 					return
 				}
-				if len(v.made) > 0 {
-					a.imageGroup(c, "Agent 生成", v.madeAll, v.made)
+				if v.tab == 0 {
+					if len(v.made) == 0 {
+						usageNote(c, "agent 还没有生成图片或视频。")
+						return
+					}
+					a.imageGroup(c, v.made)
 					if v.madeAll > len(v.made) {
 						usageNote(c, fmt.Sprintf("只列出最近 %d 项。", len(v.made)))
 					}
+					return
 				}
-				if len(v.pasted) > 0 {
-					a.imageGroup(c, "粘贴的", len(v.pasted), v.pasted)
+				if len(v.pasted) == 0 {
+					usageNote(c, "这个会话还没有粘贴过图片。")
+					return
 				}
+				a.imageGroup(c, v.pasted)
 			})
 		})
 	})
 }
 
-// imageGroup 是图片面板的一组：标题和张数，下面是缩略图卡片。
-func (a *app) imageGroup(c *ui.Context, title string, n int, items []imageItem) {
+// imageGroup 是图片面板当前分段的缩略图卡片，数目在分段上。
+func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 	t := c.Theme()
 	v := &a.images
-	ui.Row(c.Key("group-"+title)).Gap(6).Padding(4, 4, 0, 4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium)
-		ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-	})
 	for _, it := range items {
 		kind := "图片 "
 		if it.Video {

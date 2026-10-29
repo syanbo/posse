@@ -170,7 +170,7 @@ func TestFormatJSONDoc(t *testing.T) {
 	a.openFile(w, path, 0, [2]int{})
 	d := a.files[w.ID].doc(path)
 	until(t, tt, "loaded", func() bool { return d.kind == docText && tt.HasText("格式化") })
-	if err := tt.Click("格式化"); err != nil {
+	if err := tt.Click(a.withKey("格式化 JSON", "formatJSON")); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()

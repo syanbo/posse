@@ -54,6 +54,8 @@ var (
 	// 樱桃：两颗果子挂在一根分叉的梗上，WebStorm 的 cherry-pick 也用它
 	iconCherryPick = icon(`<circle cx="7.5" cy="16.75" r="3.25"/><circle cx="16.75" cy="15.25" r="3.25"/><path d="M7.5 13.5c.6-4 2.6-7.2 5.75-9.25M16.75 12c-1.4-2.6-2.6-5.2-3.5-7.75"/><path d="M13.25 4.25c1.6-1.4 4.1-1.6 6-.6-1.6 1.5-4.1 1.7-6 .6z"/>`)
 	iconDiff       = icon(`<path d="M4 8h13M13.5 4.5 17 8l-3.5 3.5"/><path d="M20 16H7M10.5 12.5 7 16l3.5 3.5"/>`)
+	// 一上一下两个箭头：对调上下两栏
+	iconSwap       = icon(`<path d="M8 19.5v-15M4.5 8 8 4.5 11.5 8"/><path d="M16 4.5v15M12.5 16 16 19.5 19.5 16"/>`)
 	iconTrash      = icon(`<path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.1a2 2 0 0 0 2 1.9h7a2 2 0 0 0 2-1.9l1-12.1M9 7V4.5h6V7"/>`)
 	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // 提交时间线，和分支、"历史会话"的时钟区分开
 	iconOpLog      = icon(`<rect x="8.5" y="2.75" width="7" height="3.5" rx="1"/><path d="M15.5 4.5h1.75A1.75 1.75 0 0 1 19 6.25v13A1.75 1.75 0 0 1 17.25 21H6.75A1.75 1.75 0 0 1 5 19.25v-13A1.75 1.75 0 0 1 6.75 4.5H8.5"/><path d="m8.25 11.5 1.25 1.25 2-2M8.25 16.5l1.25 1.25 2-2M13.75 12h2.5M13.75 17h2.5"/>`)                                                                                                                                                                                                                                                                                                                                                                                                                                // 操作记录：一张做过的操作清单
@@ -67,6 +69,7 @@ var (
 	iconMinus      = icon(`<path d="M6 12h12"/>`)
 	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
+	iconBraces     = icon(`<path d="M8.5 4H8a2 2 0 0 0-2 2v3.5a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 1 6 14.5V18a2 2 0 0 0 2 2h.5"/><path d="M15.5 4h.5a2 2 0 0 1 2 2v3.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0-2.5 2.5V18a2 2 0 0 1-2 2h-.5"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 时钟加一圈回溯的箭头：以前的会话
 	iconHistory = icon(`<path d="M3.75 12a8.25 8.25 0 1 0 2.4-5.8"/><path d="M3.5 4v3.25h3.25"/><path d="M12 7.75V12l2.75 1.75"/>`)

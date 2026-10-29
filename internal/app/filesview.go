@@ -58,6 +58,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			modified[d.path] = true
 		}
 	}
+	marks := v.git.treeMarks()
 	v.treeList.Key = func(i int) any { return rows[i].Path }
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
@@ -87,6 +88,12 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
 			}
 			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
+			if mark, ok := marks[r.Path]; ok && !ignored {
+				name.TextColor(letterColor(c, mark))
+				if !r.Dir {
+					name.Tooltip(treeMarkText[mark])
+				}
+			}
 			if ignored {
 				name.TextColor(t.TextMuted)
 			}
@@ -598,7 +605,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 		}
 		if d.kind == docText && !d.readOnly && d.blame == nil && isJSON(d.path) {
-			if pressable(textButton(c, "格式化")).Tooltip(a.withKey("格式化 JSON", "formatJSON")).Clicked() {
+			if pressable(iconButtonSized(c, iconBraces, a.withKey("格式化 JSON", "formatJSON"), compactBox(), smallIcon())).Clicked() {
 				a.formatJSON(d)
 			}
 		}

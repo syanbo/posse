@@ -71,9 +71,9 @@ func looksLikeHashPrefix(s string) bool {
 	return true
 }
 
-// CherryPick 把提交应用到当前分支；冲突时停在进行中的状态。
-func CherryPick(ctx context.Context, dir, hash string) error {
-	_, err := runRaw(ctx, dir, nil, nil, "cherry-pick", hash)
+// CherryPick 按给出的顺序把提交应用到当前分支；冲突时停在进行中的状态，继续后接着应用剩下的。
+func CherryPick(ctx context.Context, dir string, hashes ...string) error {
+	_, err := runRaw(ctx, dir, nil, nil, append([]string{"cherry-pick"}, hashes...)...)
 	return err
 }
 

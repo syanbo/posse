@@ -60,3 +60,29 @@ func TestImageClamp(t *testing.T) {
 		t.Fatalf("narrow image cx = %v", d.iv.cx)
 	}
 }
+
+// 图片面板顶部的分段切换生成的和粘贴的，各自只列自己的；分段上带数目。
+func TestImagesPanelTabs(t *testing.T) {
+	a := previewApp(t)
+	a.state.RightPanel = panelImages
+	a.images = previewImages()
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if !tt.HasText("phone_screenshot") || tt.HasText("#1") {
+		t.Fatalf("made tab: %v", tt.Texts())
+	}
+	if err := tt.Click("粘贴 1"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.images.tab != 1 || !a.images.tabSet || !tt.HasText("#1") || tt.HasText("phone_screenshot") {
+		t.Fatalf("pasted tab: %v", tt.Texts())
+	}
+	if err := tt.Click("生成 3"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("phone_screenshot") {
+		t.Fatalf("back to made: %v", tt.Texts())
+	}
+}

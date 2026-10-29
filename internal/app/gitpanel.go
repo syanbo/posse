@@ -197,18 +197,19 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	})
 }
 
-// letterColor 是状态字母的颜色：新增绿、删除灰、冲突红，其余强调色。
+// letterColor 是状态字母和文件名的颜色，照 WebStorm：修改（含重命名）蓝、新增绿、删除灰，未跟踪和冲突红
+// （WebStorm 两者也是相近的红，靠字母和悬停说明区分；琥珀色只给待处理）。文件树、改动、提交里的文件都用它。
 func letterColor(c *ui.Context, letter byte) ui.Color {
 	t := c.Theme()
 	switch letter {
-	case 'A', '?':
+	case 'A':
 		return colors(t).sage
 	case 'D':
 		return t.TextMuted
-	case 'U':
+	case '?', 'U':
 		return t.Danger
 	}
-	return t.Accent
+	return colors(t).sky
 }
 
 func statusLetter(e gitx.Entry) byte {
@@ -294,7 +295,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 		}
 		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
-		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0)
+		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0).TextColor(color)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}

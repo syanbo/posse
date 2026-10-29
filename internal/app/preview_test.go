@@ -589,7 +589,7 @@ func TestPreview(t *testing.T) {
 		a.state.UsageSkillsOnly = true
 		savePNG(t, newPreviewTester(a, dark), "usage-skills-only-"+suffix+".png")
 
-		// 右侧图片面板：agent 生成的在上、粘贴的在下，刚读过一次
+		// 右侧图片面板：顶部分段切换生成的和粘贴的，刚读过一次
 		a = previewApp(t)
 		a.state.RightPanel = panelImages
 		a.images = previewImages()
