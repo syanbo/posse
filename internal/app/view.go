@@ -1193,8 +1193,6 @@ func statusRank(s string) int {
 		return 4
 	case agent.StatusWorking:
 		return 3
-	case agent.StatusIdle:
-		return 2
 	case agent.StatusStarting:
 		return 1
 	}
@@ -1893,7 +1891,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	row.Children(func() {
 		if status != "" {
 			a.statusIcon(c, term.ID, status, smallIcon())
-		} else {
+		} else if term.Agent == "" {
 			ui.Icon(c, iconTerminal).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
 		}
 		// agent 终端用图标代替名字（悬停提示是名字）；还没有标题时照旧写名字，标签不至于只剩图标。

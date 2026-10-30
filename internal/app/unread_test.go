@@ -37,8 +37,8 @@ func TestUnreadStatus(t *testing.T) {
 	a.focused.Store(true)
 	a.seenFor = ts[1].ID // 不真发 terminal.seen
 	a.markRead(&ts[1])
-	if s := a.sessionStatus(ts[1]); s != agent.StatusIdle {
-		t.Fatalf("viewed session = %q, want idle", s)
+	if s := a.sessionStatus(ts[1]); s != "" {
+		t.Fatalf("viewed session = %q, want none", s)
 	}
 	ts[1].Unread = false
 	a.markRead(&ts[1])

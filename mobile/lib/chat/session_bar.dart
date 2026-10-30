@@ -91,8 +91,8 @@ class SessionTitle extends StatelessWidget {
                     : Row(
                         key: const ValueKey('state'),
                         children: [
-                          // 没有状态（普通终端）时不留空位，文字和标题左边对齐
-                          if (state != AgentState.none) ...[
+                          // 没有图标（普通终端、看过的完成）时不留空位，文字和标题左边对齐
+                          if (hasGlyph(state)) ...[
                             StatusHex(state: state, size: 11),
                             const SizedBox(width: 4),
                           ],
