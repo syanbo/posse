@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 
@@ -134,10 +135,25 @@ func (s *diffSide) paintBlock(p *ui.Painter, ed *editor, b *block, r ui.Rect) {
 		}
 		// A filler: hatched at -45°, every 8 DIPs, as Pierre's.
 		text := ui.Rect{X: r.X + ed.textLeft(), Y: r.Y, W: r.W - ed.gutterW, H: r.H}
+		// Posse：只画看得见的那一段。新文件的占位块和文件一样高，整块画要几十万条线，
+		// 绘制指令的缓冲按这一帧扩容后一直留着，关掉 diff 也不还。
+		vis := p.Visible()
+		top, bottom := max(r.Y, vis.Y), min(r.Y+r.H, vis.Y+vis.H)
+		if top >= bottom {
+			return
+		}
+		h := bottom - top
+		// 斜线满足 x+y 是 8 的倍数加上 text.X+r.Y，和整块画时同一组，滚动时纹路不跳
+		x0 := text.X - h
+		phase := float32(math.Mod(float64(text.X+r.Y-(x0+bottom)), 8))
+		if phase < 0 {
+			phase += 8
+		}
+		text.Y, text.H = top, h
 		p.Clip(text, 0, func() {
 			c := ct.Text.Alpha(0.07)
-			for x := text.X - r.H; x < text.X+text.W; x += 8 {
-				p.Line(x, r.Y+r.H, x+r.H, r.Y, 1, c)
+			for x := x0 + phase; x < text.X+text.W; x += 8 {
+				p.Line(x, bottom, x+h, top, 1, c)
 			}
 		})
 	case blockDeleted:

@@ -15,6 +15,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `editor.go`、`input.go`、`paint.go`：左右对照的横向滚动加一个两边共用的位置（`sharedScroll.x`），上限取两边里最远的（`maxX`），每边按自己的上限截；唯一的横向滚动条（新版一侧）、滚轮和光标跟随都改它（`sideways`、`setScrollX`）。旧版行号在右边时文字区更窄，原来新版滚到头时旧版行尾还压在行号栏下面；只有旧版超宽时新版也显示横向滚动条。
 - `diffview.go`：加 `DiffState.Split`、`SplitDragging`，左右对照时旧版一侧占的宽度比例（0 是一半），分隔线上盖一条 5 DIP 宽的拖动条（`split-grip`，按上一帧的宽度摆），拖动改比例、限制在 0.15 到 0.85，拖动中 `SplitDragging` 为真，应用在松手后保存。
 - `diffahead.go`、`diffmodel.go`：加 `CompareTexts`（任何协程都能调，和 `DiffState` 一样比较两段文字）和 `DiffState.UseComparison`：下一次整体比较时两边文字和忽略空白的设置都和算过的一样，就直接用结果（`diffModel.takeAhead`），否则照常比较。Posse 在读文件的协程里先比好，几 MB 的文件不卡界面线程。
+- `diffside.go`：左右对照里一边缺行的占位块（斜纹）只画看得见的那一段（`paintBlock`），斜线位置和整块画时相同。上游按整块高度画：新文件的占位块和文件一样高，12 万行的文件一帧画约 39 万条线，绘制指令的缓冲按这一帧扩容到几百 MB 后不再缩小。
 - `diffview.go`、`diffside.go`：加 `DiffState.Current`（改动的序号加一，0 表示没有），这一处的底色和行号栏比别的改动深、竖条总是显示，F7 上下切换时看得出走到了哪。
 
 `ui/editor` 的编辑器（`gitdiff.go`、`input.go`、`paint.go`、`state.go`）：加 `State.OnChangeClick`，点行号栏里相对 DiffBase 的改动色条时回调（改动序号和这一行底边的位置），色条的位置抽成 `changeBarX` 和绘制共用；加 `State.Changes`（改动列表和改之前的内容）、`State.RevertChange`（回滚一处，可以撤销）、`State.LineBottom`（某一行底边相对编辑器顶的位置）。Posse 用它们做 WebStorm 那样的改动卡片。
