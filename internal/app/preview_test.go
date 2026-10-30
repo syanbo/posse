@@ -222,6 +222,10 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	os.WriteFile(filepath.Join(shared, "util.go"), []byte("package shared\n"), 0o644)
 	os.Symlink(shared, filepath.Join(root, "shared"))
 	os.Symlink("README.md", filepath.Join(root, "CLAUDE.md"))
+	// 各类文件按类型换图标和颜色
+	for _, name := range []string{"package.json", "app.ts", "index.js", "logo.png", "build.sh", "go.sum", "styles.css", "index.html", "Dockerfile", "data.csv", "demo.mp4", "notes.txt", "docs.pdf", "dist.zip", "schema.sql"} {
+		os.WriteFile(filepath.Join(root, name), nil, 0o644)
+	}
 	w := &a.workspaces[0]
 	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
 	tt := ui.NewTester(a.build, 1200, 760)

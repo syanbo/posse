@@ -304,7 +304,7 @@ func defRow(c *ui.Context, d files.Definition, selected, reveal bool) bool {
 	mark := colors(t).mark
 	row.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
+			fileGlyph(c, d.Path, fsBody)
 			ui.Text(c, d.Path+":"+strconv.Itoa(d.Line+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 			ui.Text(c, d.Kind).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		})

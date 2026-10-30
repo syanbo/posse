@@ -56,6 +56,8 @@
 | 标签和文件行里的小按钮（关闭、继续、折叠箭头） | `fsSmall` | `miniBox()` |
 | 侧栏行尾、标签页上的状态图形 | `smallIcon()`；挨着小字时 `fsSmall` | — |
 
+文件图标一律经 `fileGlyph`（文件标签用 `docIcon`，符号链接仍是 `iconFileLink`）：图形和颜色按文件类型定，颜色只取 `palette.data` 的数据色或 `TextMuted`，加新类型往 `fileicons.go` 的表里加。
+
 agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSize`，三行的列表项（历史会话）用 `tileMedium()`，空状态和详情页头用 `tileLarge()`。
 
 - 除了文字旁的图标，其余都跟着设置里的「图标大小」变。单独的大图标（视频播放键）写成 `sz(...)`。

@@ -579,7 +579,7 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		})
 		if ld.filter.Path != "" {
 			ui.Row(c).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(colors(t).tint).Children(func() {
-				ui.Icon(c, iconFile).FontSize(fsSmall).TextColor(t.Accent)
+				fileGlyph(c, ld.filter.Path, fsSmall)
 				ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(240)
 			})
 		}

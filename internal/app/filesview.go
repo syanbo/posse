@@ -82,11 +82,11 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
-				icon := iconFile
 				if r.Link != "" {
-					icon = iconFileLink
+					ui.Icon(c, iconFileLink).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+				} else {
+					fileGlyph(c, r.Name, iconSize)
 				}
-				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
 			}
 			name := ui.Text(c, r.Name).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			if mark, ok := marks[r.Path]; ok && !ignored {
@@ -209,7 +209,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 		if r.header {
 			row := ui.Row(c).Padding(8, 12, 4, 16).Gap(6).AlignItems(ui.Center)
 			row.Children(func() {
-				ui.Icon(c, iconFile).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+				fileGlyph(c, h.Path, iconSize)
 				ui.Text(c, filepath.Base(h.Path)).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
 				if dir := filepath.Dir(h.Path); dir != "." {
 					ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -450,15 +450,15 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
-// docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余是文件。
-func docIcon(d *fileDoc) *ui.SVG {
+// docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余按文件类型。
+func docIcon(t *ui.Theme, d *fileDoc) (*ui.SVG, ui.Color) {
 	switch {
 	case d.comp != nil:
-		return iconBranch
+		return iconBranch, t.TextMuted
 	case d.web != nil:
-		return iconGlobe
+		return iconGlobe, t.TextMuted
 	}
-	return iconFile
+	return fileIcon(t, d.path)
 }
 
 // docTab 是标签栏里的一个文件，样子和终端标签一样。
@@ -484,7 +484,8 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {
-		ui.Icon(c, docIcon(d)).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0)
+		svg, color := docIcon(t, d)
+		ui.Icon(c, svg).FontSize(smallIcon()).TextColor(color).Shrink(0)
 		name := ui.Text(c, d.name()).FontSize(fsSmall).SingleLine().MaxWidth(180)
 		tabText(c, name, active)
 		if d.isPreview() {
@@ -863,7 +864,7 @@ func quickRow(c *ui.Context, m files.Match, selected, reveal bool) bool {
 	}
 	mark := colors(t).mark
 	row.Children(func() {
-		ui.Icon(c, iconFile).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
+		fileGlyph(c, m.Path, fsBody)
 		ui.RichText(c, markSpans(m.Path[base:], nameMarks, ui.Span{Size: fsBody}, mark)...).SingleLine().Shrink(0)
 		if base > 0 {
 			dir := m.Path[:base-1]
