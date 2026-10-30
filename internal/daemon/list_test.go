@@ -247,3 +247,23 @@ func TestStoppedSubagentEndsTurn(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// 续接的 codex 在第一轮对话前只有会话 ID、没有状态：列表也要带上会话 ID，技能与工具面板凭它找会话文件。
+func TestTerminalInfoKeepsSessionWithoutStatus(t *testing.T) {
+	d, w := newTestDaemon(t)
+	s, err := d.startTerminal(w, []string{"/bin/sh", "-c", "sleep 30"}, "codex", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info := d.terminalInfo(s); info.AgentState != nil {
+		t.Fatalf("agent state before any session = %+v, want nil", info.AgentState)
+	}
+	s.SetAgent(host.AgentState{SessionID: "sid-1", At: time.Now()})
+	info := d.terminalInfo(s)
+	if info.AgentState == nil || info.AgentState.SessionID != "sid-1" {
+		t.Fatalf("agent state = %+v, want session sid-1", info.AgentState)
+	}
+	if info.Unread {
+		t.Fatal("unread without status")
+	}
+}

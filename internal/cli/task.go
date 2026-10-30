@@ -208,7 +208,7 @@ func cmdTaskList(e *env, args []string) error {
 // taskState 是任务状态加上 worker 里 agent 的状态和待回复的问题数。
 func taskState(t taskInfo) string {
 	s := t.Status
-	if t.Status == "running" && t.Terminal != nil && t.Terminal.AgentState != nil {
+	if t.Status == "running" && t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status != "" {
 		s += "/" + t.Terminal.AgentState.Status
 	}
 	if t.Questions > 0 {

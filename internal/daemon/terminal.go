@@ -48,8 +48,9 @@ func (d *Daemon) terminalInfo(s *session) terminalInfo {
 		CreatedAt: s.CreatedAt, LastOutputAt: s.LastOutput(), IdleMs: time.Since(s.LastOutput()).Milliseconds(),
 		WaitingTasks: d.waitingTasks(s.ID), PhoneSized: s.SizeHeld(),
 	}
-	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示
-	if st := s.Agent(); st.Status != "" && info.Agent != "" {
+	// agent 退出后终端退回普通 shell，最后的状态和会话信息不再给出去，界面、手机都按 shell 显示。
+	// 续接的 codex、cursor 第一轮对话前只有会话 ID、没有状态，也要给出去：技能与工具等面板凭它找会话文件
+	if st := s.Agent(); (st.Status != "" || st.SessionID != "") && info.Agent != "" {
 		info.AgentState = &st
 		info.Unread = st.Status == agent.StatusIdle && s.isUnread()
 	}

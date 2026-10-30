@@ -155,7 +155,7 @@ func taskGlyph(t taskInfo) string {
 	case needsUser(t):
 		return agent.StatusWaiting
 	case t.Status == "running":
-		if t.Terminal != nil && t.Terminal.AgentState != nil {
+		if t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status != "" {
 			return t.Terminal.AgentState.Status
 		}
 		return agent.StatusWorking

@@ -352,7 +352,7 @@ func terminalState(t terminalInfo) string {
 		}
 		return "exited"
 	}
-	if t.AgentState != nil {
+	if t.AgentState != nil && t.AgentState.Status != "" {
 		return t.Agent + "/" + t.AgentState.Status
 	}
 	if t.Agent != "" {
