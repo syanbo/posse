@@ -450,7 +450,7 @@ func (a *app) docTabs(c *ui.Context, w *workspace) {
 	}
 }
 
-// docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余按文件类型。
+// docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余（包括 diff）按文件类型。
 func docIcon(t *ui.Theme, d *fileDoc) (*ui.SVG, ui.Color) {
 	switch {
 	case d.comp != nil:

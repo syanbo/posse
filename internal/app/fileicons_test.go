@@ -18,6 +18,9 @@ func TestKindOf(t *testing.T) {
 		"Makefile":                            kindShell,
 		"Dockerfile":                          kindDocker,
 		"Dockerfile.dev":                      kindDocker,
+		"compose.yaml":                        kindDocker,
+		"docker-compose.yml":                  kindDocker,
+		".env":                                kindData,
 		"app.Dockerfile":                      kindDocker,
 		"docker-compose.override.yml":         kindDocker,
 		"compose.dev.yaml":                    kindDocker,
@@ -89,6 +92,7 @@ func TestDirIcon(t *testing.T) {
 		"Flutter.xcframework":  iconDirBundle,
 		"lib":                  iconFolder,
 		"node_modules":         iconFolder,
+		".bundle":              iconFolder,
 	} {
 		if got, _ := dirIcon(th, name); got != want {
 			t.Errorf("dirIcon(%q) 图标不对", name)

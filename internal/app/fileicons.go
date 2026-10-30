@@ -10,7 +10,6 @@ import (
 // 文件按类型的图标，照 WebStorm 新界面的项目树：每类一个线条图形，配这一类的颜色。
 // mygo 的 SVG 不画 <text>，TS、JS、GO 的字母用路径画。
 const (
-	pageShape   = `<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`
 	letterS     = `M20.25 8.5c-.55-.95-1.6-1.5-2.9-1.5-1.8 0-3.1.95-3.1 2.4 0 3.35 6.25 1.75 6.25 5.05 0 1.5-1.35 2.55-3.2 2.55-1.4 0-2.55-.6-3.1-1.6`
 	strokeBold  = `stroke-width="1.75"`
 	letterGroup = `<g ` + strokeBold + `>`
@@ -23,17 +22,16 @@ var (
 	iconFileMark = icon(`<path d="m9 6.5-5.5 5.5L9 17.5M15 6.5l5.5 5.5-5.5 5.5"/>`)
 	iconFileCSS  = icon(`<path d="M10.5 4.5 8.5 19.5M16 4.5l-2 15M5 9.25h14.5M4.5 14.75H19"/>`)
 	iconFileMD   = icon(`<path d="M3.25 17V7l4.5 5.5L12.25 7v10M17.25 7v10M14 13.75l3.25 3.25 3.25-3.25"/>`)
-	iconFileText = icon(pageShape + `<path d="M9 12h6M9 15h6M9 18h3.5"/>`)
+	iconFileText = icon(fileShape + `<path d="M9 12h6M9 15h6M9 18h3.5"/>`)
 	iconFileVid  = icon(`<rect x="3.75" y="5" width="16.5" height="14" rx="2.5"/><path d="M10.25 9.25v5.5l4.5-2.75z"/>`)
 	iconFileAud  = icon(`<path d="M9.5 17.25V6.25l9-2v11"/><circle cx="7.25" cy="17.25" r="2.25"/><circle cx="16.25" cy="15.25" r="2.25"/>`)
 	iconFileGrid = icon(`<rect x="4" y="4.5" width="16" height="15" rx="2"/><path d="M4 9.5h16M4 14.5h16M10 9.5v10"/>`)
 	iconFileDB   = icon(`<ellipse cx="12" cy="6.5" rx="7" ry="2.75"/><path d="M5 6.5v11c0 1.5 3.1 2.75 7 2.75s7-1.25 7-2.75v-11M5 12c0 1.5 3.1 2.75 7 2.75S19 13.5 19 12"/>`)
 	iconFileZip  = icon(`<rect x="5" y="3.75" width="14" height="16.5" rx="2"/><path d="M12 3.75v1.5M12 7v1.5M12 10.25v1.5"/><rect x="10.25" y="13.5" width="3.5" height="3.75" rx="1"/>`)
-	iconFilePDF  = icon(pageShape + `<path d="M9.5 18v-6h2.25a1.75 1.75 0 0 1 0 3.5H9.5"/>`)
+	iconFilePDF  = icon(fileShape + `<path d="M9.5 18v-6h2.25a1.75 1.75 0 0 1 0 3.5H9.5"/>`)
 	iconFileLock = icon(`<rect x="5" y="10.5" width="14" height="9.75" rx="2"/><path d="M8.25 10.5V8a3.75 3.75 0 0 1 7.5 0v2.5M12 14.25v2.25"/>`)
-	// 语言和平台的标志照原样简化成线条
-	// Dart 用 Android Studio（Dart 插件 expui/dart.svg）的实心标志：深浅两块蓝改成同一颜色的两档透明度
-	iconFileDart    = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" fill-opacity="0.55" fill-rule="evenodd" d="M3.37928 10.2715L3.37328 3.37354L1.19128 7.92554C0.936284 8.46854 0.828284 9.13254 1.57328 9.87654L3.71128 12.0145C3.33228 11.6355 3.38428 11.0175 3.37928 10.2715ZM12.5258 4.22274L12.0148 3.71074C11.6358 3.33174 11.0178 3.38374 10.2718 3.37874L3.37328 3.37354L12 12H15L15.0008 6.69674L12.5258 4.22274Z"/><path fill="currentColor" d="M3.37402 3.37297L10.271 3.37897C10.3587 3.37956 10.4445 3.37936 10.5285 3.37916C11.1591 3.3777 11.6805 3.37649 12.015 3.71097L9.87702 1.57297C9.13302 0.82897 8.46902 0.935969 7.92502 1.19097L3.37402 3.37297Z"/><path fill="currentColor" d="M12 12L3.37402 3.37297L3.38002 10.271C3.38061 10.3587 3.38041 10.4446 3.38022 10.5285C3.37875 11.1591 3.37754 11.6805 3.71202 12.014L4.22168 12.5259L6.69568 14.9999L12 15V12Z"/></svg>`))
+	// Dart 用 Android Studio（Dart 插件 expui/dart.svg）的实心标志：深浅两块蓝改成同一颜色的两档透明度；原图几乎占满 16 格，四周各留 2 才和别的图标一样大
+	iconFileDart    = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 20 20"><path fill="currentColor" fill-opacity="0.55" fill-rule="evenodd" d="M3.37928 10.2715L3.37328 3.37354L1.19128 7.92554C0.936284 8.46854 0.828284 9.13254 1.57328 9.87654L3.71128 12.0145C3.33228 11.6355 3.38428 11.0175 3.37928 10.2715ZM12.5258 4.22274L12.0148 3.71074C11.6358 3.33174 11.0178 3.38374 10.2718 3.37874L3.37328 3.37354L12 12H15L15.0008 6.69674L12.5258 4.22274Z"/><path fill="currentColor" d="M3.37402 3.37297L10.271 3.37897C10.3587 3.37956 10.4445 3.37936 10.5285 3.37916C11.1591 3.3777 11.6805 3.37649 12.015 3.71097L9.87702 1.57297C9.13302 0.82897 8.46902 0.935969 7.92502 1.19097L3.37402 3.37297Z"/><path fill="currentColor" d="M12 12L3.37402 3.37297L3.38002 10.271C3.38061 10.3587 3.38041 10.4446 3.38022 10.5285C3.37875 11.1591 3.37754 11.6805 3.71202 12.014L4.22168 12.5259L6.69568 14.9999L12 15V12Z"/></svg>`))
 	iconFileFlutter = icon(`<path d="M14.25 3.25h5.5L8.5 14.5 5.75 11.75z"/><path d="M14.25 11.25h5.5l-5 5 5 5h-5.5l-5-5z"/>`)
 	iconFileSwift   = icon(`<path d="M19.25 15.5c1.1-3.6-.6-7.8-5.25-11 2.4 3.4 2.6 6.4 1.65 8.4C12.6 10.8 8.4 7.6 5 4.75c2.6 3.3 5 5.75 7.1 7.4-2.75-1.25-5.1-2.6-7.6-4.4 2.9 4.8 7.6 9.5 13.75 9 .8.55 1.4 1.3 1.75 2.25.35-1.35.15-2.5-.75-3.5z"/>`)
 	iconFileKotlin  = icon(`<path d="M5 5h14l-7 7 7 7H5z"/>`)
@@ -43,8 +41,8 @@ var (
 	iconFileLayout  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M3.75 9h16.5M9.5 9v10.5"/>`)
 	iconFileKey     = icon(`<circle cx="8" cy="15.5" r="3.75"/><path d="m10.75 12.75 8.5-8.5M15.75 7.75l2.5 2.5M13.5 10l2 2"/>`)
 	// C 头文件、Objective-C 照 Xcode：纸上一个小写字母
-	iconFileH = icon(pageShape + `<path d="M10 10.5v7.5M10 14.75a2.25 2.25 0 0 1 4.5 0V18"/>`)
-	iconFileM = icon(pageShape + `<path d="M8.25 13v5M8.25 14.5a1.75 1.75 0 0 1 3.5 0V18M11.75 14.5a1.75 1.75 0 0 1 3.5 0V18"/>`)
+	iconFileH = icon(fileShape + `<path d="M10 10.5v7.5M10 14.75a2.25 2.25 0 0 1 4.5 0V18"/>`)
+	iconFileM = icon(fileShape + `<path d="M8.25 13v5M8.25 14.5a1.75 1.75 0 0 1 3.5 0V18M11.75 14.5a1.75 1.75 0 0 1 3.5 0V18"/>`)
 	// Xcode 的包目录：工程、工作区、资源目录、图标集、本地化
 	iconDirXcode     = icon(`<rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4"/><path d="m8 16.5 6-6"/><path d="m12.25 8.75 1.75-1.75 3 3-1.75 1.75z"/>`)
 	iconDirWorkspace = icon(`<rect x="7.75" y="3.75" width="12.5" height="12.5" rx="3"/><path d="M16.25 20.25h-9.5a3 3 0 0 1-3-3v-9.5"/>`)
@@ -149,11 +147,10 @@ var kindByName = map[string]fileKind{
 	"makefile": kindShell, "gnumakefile": kindShell, "justfile": kindShell,
 	".bashrc": kindShell, ".zshrc": kindShell, ".profile": kindShell, ".zprofile": kindShell,
 	"dockerfile": kindDocker, "containerfile": kindDocker, ".dockerignore": kindDocker,
-	"compose.yaml": kindDocker, "compose.yml": kindDocker, "docker-compose.yaml": kindDocker, "docker-compose.yml": kindDocker,
 	"go.sum": kindLock, "package-lock.json": kindLock, "pnpm-lock.yaml": kindLock, "bun.lockb": kindLock,
 	"license": kindText, "licence": kindText, "copying": kindText, "notice": kindText,
 	".gitignore": kindGit, ".gitattributes": kindGit, ".gitmodules": kindGit, ".gitkeep": kindGit,
-	".env": kindData, ".editorconfig": kindData, ".npmrc": kindData,
+	".editorconfig": kindData, ".npmrc": kindData,
 	// Flutter、Android、iOS 工程里的固定文件
 	"pubspec.yaml": kindFlutter, "analysis_options.yaml": kindFlutter, ".metadata": kindFlutter,
 	"androidmanifest.xml": kindAndroid, "gradlew": kindGradle, "gradlew.bat": kindGradle, "gradle.properties": kindGradle, "gradle-wrapper.properties": kindGradle,
@@ -225,8 +222,10 @@ var kindByDirExt = map[string]fileKind{
 
 // dirIcon 是目录 name 的图标和颜色：Xcode 的包目录有自己的图标，其余是强调色的文件夹。
 func dirIcon(t *ui.Theme, name string) (*ui.SVG, ui.Color) {
-	k, ok := kindByDirExt[strings.ToLower(filepath.Ext(name))]
-	if !ok {
+	ext := filepath.Ext(name)
+	k, ok := kindByDirExt[strings.ToLower(ext)]
+	// 点开头的目录（Ruby 的 .bundle 配置目录）只是名字像，不是包
+	if !ok || ext == name {
 		return iconFolder, t.Accent
 	}
 	return fileKinds[k].icon, colors(t).data[fileKinds[k].color]

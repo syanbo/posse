@@ -14,6 +14,7 @@ func icon(shapes string) *ui.SVG {
 
 const (
 	folderShape = `<path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>`
+	fileShape   = `<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`
 	branchShape = `<circle cx="7" cy="6" r="2.25"/><circle cx="7" cy="18" r="2.25"/><circle cx="17" cy="7.5" r="2.25"/><path d="M7 8.25v7.5M17 9.75c0 3.75-3.25 5.25-7.5 6"/>`
 )
 
@@ -42,8 +43,8 @@ var (
 	iconGlobe      = icon(`<circle cx="12" cy="12" r="8.25"/><path d="M3.75 12h16.5M12 3.75c2.2 2.3 3.25 5.05 3.25 8.25S14.2 17.95 12 20.25C9.8 17.95 8.75 15.2 8.75 12S9.8 6.05 12 3.75z"/>`)
 	// 文件夹、文件里一个拐弯的箭头：符号链接（访达替身的样子）
 	iconFolderLink = icon(folderShape + `<path d="M9.5 16.25v-1a2.25 2.25 0 0 1 2.25-2.25h3.75"/><path d="m13.75 11 2 2-2 2"/>`)
-	iconFileLink   = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/><path d="M9 17v-.75A2.25 2.25 0 0 1 11.25 14h3"/><path d="m12.75 12 2 2-2 2"/>`)
-	iconFile       = icon(`<path d="M6.75 3.75h6.5l4 4v11.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1V4.75c0-.55.45-1 1-1z"/><path d="M13.25 3.75v4h4"/>`)
+	iconFileLink   = icon(fileShape + `<path d="M9 17v-.75A2.25 2.25 0 0 1 11.25 14h3"/><path d="m12.75 12 2 2-2 2"/>`)
+	iconFile       = icon(fileShape)
 	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)
 	iconRevertHunk = icon(`<path d="m6 7 5 5-5 5M13 7l5 5-5 5"/>`) // diff 里每处改动旁的 >>，照 WebStorm
 	iconRollback   = icon(`<path d="M9 14 4.5 9.5 9 5"/><path d="M4.75 9.5h9.5a5.25 5.25 0 0 1 0 10.5H11"/>`)
