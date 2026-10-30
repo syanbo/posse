@@ -432,12 +432,12 @@ func Run(c *client.Client) error {
 	return mygo.App.Run()
 }
 
-// poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
 // windowShown 报告窗口在屏幕上：没隐藏、没最小化。
 func (a *app) windowShown() bool {
 	return a.win != nil && a.win.IsVisible() && !a.win.IsMinimized()
 }
 
+// poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
 func (a *app) poll() {
 	for {
 		a.refresh()
@@ -543,10 +543,13 @@ func (a *app) refresh() {
 			}
 		}
 		self := int64(procmem.Footprint(os.Getpid()) >> 10)
-		// 终端的进程树每 5 秒统计一次：几十个进程，几毫秒。窗口隐藏或最小化时底栏看不见，不统计，
-		// 再出现时 termAt 已经过期，马上补上
-		if time.Since(a.termAt) > 5*time.Second && a.windowShown() {
-			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
+		// 终端的进程树每 5 秒统计一次：几十个进程，几毫秒。窗口隐藏或最小化时底栏看不见，不统计；
+		// 问窗口状态要切到主线程等它，所以也是 5 秒才问一次
+		if time.Since(a.termAt) > 5*time.Second {
+			a.termAt = time.Now()
+			if a.windowShown() {
+				a.lastTerm = terminalsFootprint(r.workspaces)
+			}
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake
 		r.usage = st.Usage
