@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -10,7 +12,7 @@ import (
 	"posse/internal/history"
 )
 
-// usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具和命令行程序。
+// usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具、命令行程序和网址。
 // 会话文件在窗口进程里增量只读解析，不经过常驻进程。
 type usageView struct {
 	term    string // 统计的是哪个终端
@@ -90,33 +92,54 @@ func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 					usageNote(c, "正在读取…")
 				case !u.found:
 					usageNote(c, "还没找到会话文件，agent 开始对话后会出现。")
-				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0:
-					usageNote(c, "这个会话还没用到技能、MCP 和命令行工具。")
+				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0 && len(u.data.Web) == 0 && u.data.Searches == 0:
+					usageNote(c, "这个会话还没用到技能、MCP、命令行工具和网址。")
 				default:
 					a.usageFilter(c)
-					skillsOnly := a.state.UsageSkillsOnly
-					if skillsOnly && len(u.data.Skills) == 0 && len(u.data.MCP) == 0 {
+					mode := a.usageMode()
+					switch {
+					case mode == usageSkills && len(u.data.Skills) == 0 && len(u.data.MCP) == 0:
 						usageNote(c, "这个会话还没用到技能和 MCP。")
 						return
+					case mode == usageWeb && len(u.data.Web) == 0 && u.data.Searches == 0:
+						usageNote(c, "这个会话还没访问网址。")
+						return
 					}
-					a.usageSummary(c, u.data, skillsOnly)
-					a.usageTimeline(c, u.data.Events, skillsOnly)
+					a.usageSummary(c, u.data, mode)
+					a.usageTimeline(c, cur, u.data.Events, mode)
 				}
 			})
 		})
 	})
 }
 
-// usageFilter 是面板顶上的筛选：全部，或只看技能和 MCP（命令行程序常是几十个 git、adb，把技能挤得看不见）。
-// 记在 ui.json 的 usageSkillsOnly，所有会话共用。
-func (a *app) usageFilter(c *ui.Context) {
-	sel := 0
-	if a.state.UsageSkillsOnly {
-		sel = 1
+// usageMode 是面板的筛选：全部、只看技能和 MCP、只看网址。
+type usageMode int
+
+const (
+	usageAll usageMode = iota
+	usageSkills
+	usageWeb
+)
+
+// usageMode 读 ui.json 里的筛选：usageSkillsOnly、usageWebOnly 最多一个为真。
+func (a *app) usageMode() usageMode {
+	switch {
+	case a.state.UsageSkillsOnly:
+		return usageSkills
+	case a.state.UsageWebOnly:
+		return usageWeb
 	}
+	return usageAll
+}
+
+// usageFilter 是面板顶上的筛选：全部、只看技能和 MCP（命令行程序常是几十个 git、adb，把技能挤得看不见）、
+// 只看网址。记在 ui.json 的 usageSkillsOnly、usageWebOnly，所有会话共用。
+func (a *app) usageFilter(c *ui.Context) {
+	sel := int(a.usageMode())
 	ui.Row(c).Padding(0, 4).Children(func() {
-		if segmented(c, &sel, "筛选", "全部", "技能和 MCP") {
-			a.state.UsageSkillsOnly = sel == 1
+		if segmented(c, &sel, "筛选", "全部", "技能和 MCP", "网址") {
+			a.state.UsageSkillsOnly, a.state.UsageWebOnly = sel == int(usageSkills), sel == int(usageWeb)
 			a.saveState()
 		}
 	})
@@ -148,10 +171,10 @@ func cliSourceLabel(source string) string {
 	return ""
 }
 
-// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数；命令行程序按来源分组（skillsOnly 时不列）。
-// 点标签复制名字。
-func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
-	if len(u.Skills) > 0 || len(u.MCP) > 0 {
+// usageSummary 是面板顶上的汇总：每个技能、每个 MCP 服务一个小标签，带次数；命令行程序按来源分组，
+// 网址按域名一组（各自按筛选列）。点标签复制名字。
+func (a *app) usageSummary(c *ui.Context, u history.Usage, mode usageMode) {
+	if mode != usageWeb && (len(u.Skills) > 0 || len(u.MCP) > 0) {
 		ui.Row(c).Wrap().Gap(6).Padding(0, 4).Children(func() {
 			for _, sk := range u.Skills {
 				a.usageChip(c, "skill-"+sk.Name, iconSkill, colors(c.Theme()).honey, sk.Name, sk.Count)
@@ -161,9 +184,31 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, skillsOnly bool) {
 			}
 		})
 	}
-	if skillsOnly {
+	if mode == usageSkills {
 		return
 	}
+	if mode == usageAll {
+		a.usageCLI(c, u)
+	}
+	if len(u.Web) > 0 || u.Searches > 0 {
+		ui.Column(c).Gap(6).Padding(0, 4).Children(func() {
+			ui.Row(c).Gap(6).Children(func() {
+				ui.Text(c, "网址").FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
+				if u.Searches > 0 {
+					ui.Text(c, fmt.Sprintf("搜索 %d 次", u.Searches)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted)
+				}
+			})
+			ui.Row(c).Wrap().Gap(6).Children(func() {
+				for _, it := range u.Web {
+					a.usageChip(c, "web-"+it.Host, iconGlobe, webColor(c), it.Host, it.Count)
+				}
+			})
+		})
+	}
+}
+
+// usageCLI 是命令行程序的汇总，按来源分组。
+func (a *app) usageCLI(c *ui.Context, u history.Usage) {
 	for _, g := range cliSources {
 		var items []history.CLIUsage
 		for _, it := range u.CLI {
@@ -209,6 +254,34 @@ func mcpColor(c *ui.Context) ui.Color { return colors(c.Theme()).sky }
 // cliColor 是命令行程序的颜色：数据色里的绿。
 func cliColor(c *ui.Context) ui.Color { return dataColor(c.Theme(), 2) }
 
+// webColor 是网址的颜色：数据色里的紫。
+func webColor(c *ui.Context) ui.Color { return dataColor(c.Theme(), 3) }
+
+// webSite 把网址拆成显示用的域名（去掉 www.）和其余部分。
+func webSite(raw string) (host, rest string) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw, ""
+	}
+	host = strings.TrimPrefix(u.Hostname(), "www.")
+	rest = u.EscapedPath()
+	if u.RawQuery != "" {
+		rest += "?" + u.RawQuery
+	}
+	if rest == "/" {
+		rest = ""
+	}
+	return host, rest
+}
+
+// webVia 是网址的来源说明：用户发的写"你发的"，其余是工具名或程序名。
+func webVia(via string) string {
+	if via == history.ViaUser {
+		return "你发的"
+	}
+	return via
+}
+
 // usageStep 是时间线上的一项：连着几次调用同一个工具（或同一个技能）合成一项。
 type usageStep struct {
 	ev    history.UsageEvent
@@ -216,14 +289,16 @@ type usageStep struct {
 	n     int
 }
 
-// usageSteps 把逐次记录合并成时间线，新的在前；skillsOnly 时跳过命令行程序。
-func usageSteps(events []history.UsageEvent, skillsOnly bool) []usageStep {
+// usageSteps 把逐次记录合并成时间线，新的在前；按筛选跳过别的类别。
+func usageSteps(events []history.UsageEvent, mode usageMode) []usageStep {
 	var steps []usageStep
 	for _, e := range events {
-		if skillsOnly && e.CLI != "" {
+		web := e.URL != "" || e.Query != ""
+		if mode == usageSkills && (e.CLI != "" || web) || mode == usageWeb && !web {
 			continue
 		}
-		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool && steps[k].ev.CLI == e.CLI {
+		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool && steps[k].ev.CLI == e.CLI &&
+			steps[k].ev.URL == e.URL && steps[k].ev.Query == e.Query && steps[k].ev.Via == e.Via {
 			steps[k].ev.At, steps[k].ev.Command = e.At, e.Command
 			steps[k].n++
 			continue
@@ -234,12 +309,13 @@ func usageSteps(events []history.UsageEvent, skillsOnly bool) []usageStep {
 	return steps
 }
 
-// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色、命令行程序是绿色；
-// 右边是名字、所属服务（命令行程序是来源）和时间。点名字复制，命令行程序悬停看最近一次的完整命令。
-func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOnly bool) {
+// usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色、命令行程序是绿色、网址是紫色；
+// 右边是名字、所属服务（命令行程序是来源，网址是来源和路径）和时间。点名字复制，命令行程序悬停看最近一次的完整命令；
+// 网址复制完整网址，悬停看完整网址，⌘ 点击在网页标签里打开、⇧⌘ 点击用浏览器打开（设置里互换了就反过来）。
+func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.UsageEvent, mode usageMode) {
 	t := c.Theme()
 	p := colors(t)
-	steps := usageSteps(events, skillsOnly)
+	steps := usageSteps(events, mode)
 	if len(steps) == 0 {
 		return
 	}
@@ -247,11 +323,27 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 		ui.Text(c, "时间线").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {
 			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
+			copied, tip := "", st.ev.Command
 			switch {
 			case st.ev.Skill != "":
 				color, kind, name = p.honey, "技能", st.ev.Skill
 			case st.ev.CLI != "":
 				color, kind, name = cliColor(c), cliSourceLabel(st.ev.Source), st.ev.CLI
+			case st.ev.URL != "":
+				host, rest := webSite(st.ev.URL)
+				color, kind, name, copied = webColor(c), webVia(st.ev.Via), host, st.ev.URL
+				if rest != "" {
+					kind += " · " + rest
+				}
+				tip = st.ev.URL + "\n⌘ 点击在 Posse 中打开，⇧⌘ 点击用浏览器打开"
+				if a.state.LinkSwapSystem {
+					tip = st.ev.URL + "\n⌘ 点击用浏览器打开，⇧⌘ 点击在 Posse 中打开"
+				}
+			case st.ev.Query != "":
+				color, kind, name = webColor(c), "搜索 · "+webVia(st.ev.Via), st.ev.Query
+			}
+			if copied == "" {
+				copied = name
 			}
 			last := i == len(steps)-1
 			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(8).AlignItems(ui.Stretch).Children(func() {
@@ -268,15 +360,17 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 16, 0).Children(func() {
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 						nt := ui.Text(c, name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).
-							Role(ui.RoleButton).Label("复制 " + name)
+							Role(ui.RoleButton).Label("复制 " + copied)
 						if nt.Hovered() {
 							nt.TextColor(t.Accent)
 						}
-						if st.ev.Command != "" {
-							nt.Tooltip(st.ev.Command)
+						if tip != "" {
+							nt.Tooltip(tip)
 						}
 						if nt.Clicked() {
-							a.copyName(c, name)
+							if st.ev.URL == "" || !a.openUsageURL(c, cur, st.ev.URL, nt.ClickModifiers()) {
+								a.copyName(c, copied)
+							}
 						}
 						if st.n > 1 {
 							ui.Text(c, fmt.Sprintf("×%d", st.n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -292,4 +386,23 @@ func (a *app) usageTimeline(c *ui.Context, events []history.UsageEvent, skillsOn
 			})
 		}
 	})
+}
+
+// openUsageURL 按点击的修饰键打开时间线里的网址：⌘ 在终端所在工作区的网页标签里打开，⇧⌘ 用浏览器打开
+// （设置里互换了直接打开和交给系统的按法就反过来）。没按修饰键返回 false，照常复制。
+func (a *app) openUsageURL(c *ui.Context, cur *terminalInfo, link string, mods ui.Modifiers) bool {
+	if mods&ui.Cmd == 0 {
+		return false
+	}
+	system := mods&ui.Shift != 0
+	if a.state.LinkSwapSystem {
+		system = !system
+	}
+	w := a.workspace(cur.WorkspaceID)
+	if system || w == nil {
+		c.OpenURL(link)
+	} else {
+		a.openWeb(w, link)
+	}
+	return true
 }

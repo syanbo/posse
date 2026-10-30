@@ -469,6 +469,10 @@ func previewUsageEvents() []history.UsageEvent {
 	add(16, history.UsageEvent{CLI: "go", Source: history.SourceHomebrew, Command: "go vet ./... && go test ./internal/history"})
 	add(17, history.UsageEvent{CLI: "bsk", Command: "bsk snapshot --session abcd"})
 	add(18, history.UsageEvent{CLI: "git", Source: history.SourceSystem, Command: "git status --short"})
+	add(19, history.UsageEvent{URL: "https://github.com/egoist/mygo/issues/12", Via: history.ViaUser})
+	add(20, history.UsageEvent{Query: "ghostty vt scrollback compression", Via: "WebSearch"})
+	add(21, history.UsageEvent{URL: "https://docs.rs/merman/0.6.2", Via: "WebFetch"})
+	add(22, history.UsageEvent{URL: "https://posse.shaoyan.uk/android/latest.json", Via: "curl"})
 	return evs
 }
 
@@ -658,12 +662,17 @@ func TestPreview(t *testing.T) {
 				{Name: "rg", Source: history.SourceHomebrew, Count: 6}, {Name: "bsk", Count: 4}, {Name: "adb", Count: 2},
 				{Name: "fvm", Source: history.SourceHomebrew, Count: 1}, {Name: "xcrun", Source: history.SourceSystem, Count: 1},
 			},
-			Events: previewUsageEvents(),
+			Web:      []history.WebUsage{{Host: "github.com", Count: 3}, {Host: "posse.shaoyan.uk", Count: 2}, {Host: "docs.rs", Count: 1}},
+			Searches: 1,
+			Events:   previewUsageEvents(),
 		}}
 		savePNG(t, newPreviewTester(a, dark), "usage-"+suffix+".png")
 		// 筛选成只看技能和 MCP：命令行程序的分组和时间线里的命令都不列
 		a.state.UsageSkillsOnly = true
 		savePNG(t, newPreviewTester(a, dark), "usage-skills-only-"+suffix+".png")
+		// 筛选成只看网址：只有网址一组，时间线里是访问的网址和搜索
+		a.state.UsageSkillsOnly, a.state.UsageWebOnly = false, true
+		savePNG(t, newPreviewTester(a, dark), "usage-web-"+suffix+".png")
 
 		// 右侧图片面板：顶部分段切换生成的和粘贴的，刚读过一次
 		a = previewApp(t)

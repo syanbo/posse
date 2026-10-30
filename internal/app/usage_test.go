@@ -19,8 +19,8 @@ func TestUsageCopyName(t *testing.T) {
 	}
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() {
-			a.usageSummary(c, u, false)
-			a.usageTimeline(c, u.Events, false)
+			a.usageSummary(c, u, usageAll)
+			a.usageTimeline(c, &terminalInfo{}, u.Events, usageAll)
 		})
 	}, 360, 400)
 	tt.Frame()
@@ -35,6 +35,36 @@ func TestUsageCopyName(t *testing.T) {
 	}
 	if len(a.toasts) != 3 || a.toasts[2].Title != "已复制 screen_observe" {
 		t.Fatalf("toasts %+v", a.toasts)
+	}
+}
+
+// 时间线按筛选只列对应的类别；网址的名字是域名，点一下复制完整网址
+func TestUsageWebTimeline(t *testing.T) {
+	evs := []history.UsageEvent{
+		{Skill: "posse-tasks"},
+		{CLI: "git", Command: "git status"},
+		{URL: "https://www.github.com/a/b?x=1", Via: history.ViaUser},
+		{URL: "https://www.github.com/a/b?x=1", Via: history.ViaUser},
+		{Query: "posse", Via: "WebSearch"},
+	}
+	count := func(m usageMode) int { return len(usageSteps(evs, m)) }
+	if count(usageAll) != 4 || count(usageSkills) != 1 || count(usageWeb) != 2 {
+		t.Fatalf("steps all %d skills %d web %d", count(usageAll), count(usageSkills), count(usageWeb))
+	}
+	if host, rest := webSite(evs[2].URL); host != "github.com" || rest != "/a/b?x=1" {
+		t.Fatalf("site %q %q", host, rest)
+	}
+	a := &app{}
+	tt := ui.NewTester(func(c *ui.Context) {
+		a.usageTimeline(c, &terminalInfo{}, evs, usageWeb)
+	}, 360, 400)
+	tt.Frame()
+	if err := tt.Click("复制 https://www.github.com/a/b?x=1"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := tt.Clipboard(); got != evs[2].URL {
+		t.Fatalf("copied %q", got)
 	}
 }
 
