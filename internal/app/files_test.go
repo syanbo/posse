@@ -372,6 +372,25 @@ func TestDocTabsInTabBar(t *testing.T) {
 	}
 }
 
+// Markdown 预览里的 [[名字]] 是链接：点了打开同一目录下的 名字.md（工作区外的文件也行）。
+func TestWikiLinkOpens(t *testing.T) {
+	a := previewApp(t)
+	filesWorkspace(t, a)
+	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
+	w := &a.workspaces[0]
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "status.md"), []byte("---\nname: status\n---\n\n偏好见 [[ui-taste]]。\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ui-taste.md"), []byte("# 偏好\n"), 0o644)
+	tt := ui.NewTester(a.build, 1200, 760)
+	a.openFile(w, filepath.Join(dir, "status.md"), 0, [2]int{})
+	v := a.files[w.ID]
+	until(t, tt, "preview", func() bool { return v.cur != nil && v.cur.mdPreview() && tt.HasText("ui-taste") })
+	if err := tt.Click("ui-taste"); err != nil {
+		t.Fatal(err)
+	}
+	until(t, tt, "opened", func() bool { return v.cur != nil && v.cur.path == filepath.Join(dir, "ui-taste.md") })
+}
+
 // 预览标签（照 Orca）：树里单击打开的文件被下一次单击换掉；双击、跳转或改了内容就常驻。
 func TestPreviewTabs(t *testing.T) {
 	a := previewApp(t)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -352,7 +353,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			return
 		}
 		if d.mdPreview() {
-			a.markdownPreview(c, d)
+			a.markdownPreview(c, w, d)
 			return
 		}
 		d.ed.Font, d.ed.LineHeight, d.ed.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
@@ -734,7 +735,7 @@ func isMarkdown(path string) bool {
 
 // markdownPreview 用历史页的 Markdown 渲染显示文档，只在内容变了之后重新解析。
 // 版心随字号等比放宽，放大后一行的字数不变。
-func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
+func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 	if v := d.ed.Buffer.Version(); d.md == nil || v != d.mdVer {
 		d.md, d.mdVer = parseMarkdown(d.ed.Buffer.String()), v
 	}
@@ -745,12 +746,30 @@ func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
 		ui.Scroll(c.Key("md:" + d.path)).Fill().TrackScroll(&d.mdScroll).Children(func() {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
-				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Gap(12).Selectable().Children(func() { mdView{find: f, size: size}.blocks(c, d.md) })
+				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Selectable().Children(func() {
+					mdView{find: f, size: size, doc: true, wiki: func(target string) { a.openWiki(w, d.path, target) }}.page(c, d.md)
+				})
 			})
 		})
 		f.end()
 		f.bar(c, a)
 	})
+}
+
+// openWiki 打开 Markdown 里 [[名字]] 指向的文件：相对当前文件所在的目录，没写扩展名的补 .md，#后面的标题不管。
+func (a *app) openWiki(w *workspace, from, target string) {
+	name, _, _ := strings.Cut(target, "#")
+	p := filepath.Join(filepath.Dir(from), name)
+	if filepath.Ext(name) != ".md" {
+		if _, err := os.Stat(p); err != nil {
+			p += ".md"
+		}
+	}
+	if _, err := os.Stat(p); err != nil {
+		a.err = "找不到 [[" + target + "]] 指向的文件：" + p
+		return
+	}
+	a.openFile(w, p, 0, [2]int{})
 }
 
 // --- 快速打开

@@ -10,6 +10,44 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestWikiLinks(t *testing.T) {
+	bs := parseMarkdown("界面偏好见 [[feedback-posse-ui-taste]]，打包见 [[feedback-repackage|重新打包]]，`[[不算]]`。")
+	want := []mdInline{
+		{text: "界面偏好见 "}, {text: "feedback-posse-ui-taste", url: "wiki:feedback-posse-ui-taste"}, {text: "，打包见 "},
+		{text: "重新打包", url: "wiki:feedback-repackage"}, {text: "，"}, {text: "[[不算]]", style: mdMono}, {text: "。"},
+	}
+	if !reflect.DeepEqual(bs[0].inlines, want) {
+		t.Errorf("inlines = %+v", bs[0].inlines)
+	}
+}
+
+func TestFrontMatter(t *testing.T) {
+	src := "---\nname: project-posse-status\ndescription: \"重新打包\"指正式包\nmetadata:\n  type: project\ntags:\n  - a\n  - b\n---\n\n正文\n"
+	bs := parseMarkdown(src)
+	if len(bs) != 2 || bs[0].kind != mdMeta || bs[1].kind != mdPara {
+		t.Fatalf("blocks = %+v", bs)
+	}
+	want := []mdField{{0, "name", "project-posse-status"}, {0, "description", "\"重新打包\"指正式包"}, {0, "metadata", ""}, {1, "type", "project"}, {0, "tags", "a, b"}}
+	if !reflect.DeepEqual(bs[0].meta, want) {
+		t.Errorf("meta = %+v", bs[0].meta)
+	}
+	// 记下源文件里块前面有没有空行：文件预览只在空了行的地方空开
+	bs = parseMarkdown("测试约束：\n- 一\n- 二\n\n下一段\n")
+	if len(bs) != 3 || bs[1].kind != mdList || bs[1].blank || !bs[2].blank {
+		t.Errorf("blank = %+v", bs)
+	}
+	bs = parseMarkdown("1. 一\n   - 二\n\n| 项目 | 数据 |\n|---|---|\n| 内存 | 21 MB |\n```sh\nls\n```\n")
+	if len(bs) != 3 || bs[1].kind != mdTable || !bs[1].blank || bs[2].blank {
+		t.Errorf("表格前的空行 = %+v", bs)
+	}
+	// 没有收尾的 ---、或者中间不是键值的，照原文交给 goldmark
+	for _, src := range []string{"---\nname: x\n\n正文", "---\n\n就是一条分割线\n---\n"} {
+		if bs := parseMarkdown(src); len(bs) > 0 && bs[0].kind == mdMeta {
+			t.Errorf("%q 不该当头部：%+v", src, bs)
+		}
+	}
+}
+
 func TestParseMarkdown(t *testing.T) {
 	src := "## 结论\n\n可以**重写**，见 [文档](https://x.dev) 和 `posse daemon`\n第二行 ~~旧的~~\n\n" +
 		"| 项目 | 数据 |\n|---|--:|\n| 内存 | 1.1 GB |\n\n" +

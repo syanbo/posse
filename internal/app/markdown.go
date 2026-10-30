@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"cmp"
 	"fmt"
 	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -30,6 +33,7 @@ const (
 	mdList
 	mdRule
 	mdTable
+	mdMeta
 )
 
 type mdStyle uint8
@@ -60,6 +64,14 @@ type mdBlock struct {
 	rows    [][][]mdInline // 表格，第一行是表头
 	align   []ui.Align
 	size    *mdTableSize // 表格量好的列宽，块复制时共用
+	meta    []mdField    // 文件开头的 YAML 头部
+	blank   bool         // 源文件里它前面有空行：文件预览只在有空行的地方空开
+}
+
+// mdField 是 YAML 头部的一项，depth 是缩进层数（嵌套的键）。
+type mdField struct {
+	depth      int
+	key, value string
 }
 
 type mdItem struct {
@@ -68,13 +80,75 @@ type mdItem struct {
 }
 
 func parseMarkdown(src string) []mdBlock {
-	b := []byte(src)
-	return mdBlocks(mdParser.Parse(text.NewReader(b)), b)
+	meta, body := frontMatter(src)
+	b := []byte(body)
+	out := mdBlocks(mdParser.Parse(text.NewReader(b)), b)
+	if len(meta) > 0 {
+		out = append([]mdBlock{{kind: mdMeta, meta: meta}}, out...)
+	}
+	return out
+}
+
+// frontMatter 摘出开头 --- 围起来的 YAML 头部（agent 的记忆、技能和静态网站的文章都这样写），返回各项和剩下的正文。
+// goldmark 不认它：第一个 --- 成了分割线，中间几行连同第二个 --- 成了二级标题。
+// 只认简单的写法：键: 值、嵌套的键、列表项和折行的值接在上一项后面；认不出来的照原文交给 goldmark。
+func frontMatter(src string) ([]mdField, string) {
+	rest, ok := strings.CutPrefix(strings.TrimPrefix(src, "\ufeff"), "---\n")
+	if !ok {
+		rest, ok = strings.CutPrefix(src, "---\r\n")
+	}
+	if !ok {
+		return nil, src
+	}
+	var meta []mdField
+	for rest != "" {
+		var line string
+		line, rest, _ = strings.Cut(rest, "\n")
+		line = strings.TrimRight(line, "\r")
+		if line == "---" || line == "..." {
+			return meta, rest
+		}
+		item := strings.TrimLeft(line, " ")
+		if item == "" || strings.HasPrefix(item, "#") {
+			continue
+		}
+		key, value, kv := strings.Cut(item, ":")
+		if kv && (value == "" || value[0] == ' ') && key != "" && !strings.ContainsAny(key, " \t\"'") {
+			meta = append(meta, mdField{depth: (len(line) - len(item)) / 2, key: key, value: yamlScalar(value)})
+			continue
+		}
+		if len(meta) == 0 {
+			return nil, src
+		}
+		last := &meta[len(meta)-1]
+		item = yamlScalar(strings.TrimPrefix(item, "- "))
+		if last.value == "" {
+			last.value = item
+		} else {
+			last.value += ", " + item
+		}
+	}
+	return nil, src
+}
+
+// yamlScalar 去掉 YAML 值的引号；双引号里的转义照 Go 的规则解开，解不开的原样留着。
+func yamlScalar(v string) string {
+	v = strings.TrimSpace(v)
+	if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
+		if s, err := strconv.Unquote(v); err == nil {
+			return s
+		}
+	}
+	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
+		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	}
+	return v
 }
 
 func mdBlocks(n ast.Node, src []byte) []mdBlock {
 	var out []mdBlock
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		from := len(out)
 		switch c := c.(type) {
 		case *ast.Paragraph, *ast.TextBlock:
 			if ins := mdInlines(c, src); len(ins) > 0 {
@@ -128,8 +202,43 @@ func mdBlocks(n ast.Node, src []byte) []mdBlock {
 		default:
 			out = append(out, mdBlocks(c, src)...)
 		}
+		if from < len(out) {
+			out[from].blank = blankBefore(c, src)
+		}
 	}
 	return out
+}
+
+// blankBefore 看源文件里块的第一行上面是不是空行。goldmark 的 HasBlankPreviousLines 对表格不准
+// （列表后面空一行再接表格，表格上记的是没有空行），所以按块在源文件里的位置自己看。
+func blankBefore(n ast.Node, src []byte) bool {
+	at := -1
+	ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		if t, ok := n.(*ast.Text); ok {
+			at = t.Segment.Start
+			return ast.WalkStop, nil
+		}
+		if n.Type() == ast.TypeBlock && n.Lines().Len() > 0 {
+			at = n.Lines().At(0).Start
+			return ast.WalkStop, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	if at < 0 {
+		return n.HasBlankPreviousLines()
+	}
+	// 退到这一行的开头，再看上一行
+	for at > 0 && src[at-1] != '\n' {
+		at--
+	}
+	if at == 0 {
+		return false
+	}
+	prev := bytes.TrimRight(src[:at-1], " \t\r")
+	return len(prev) == 0 || prev[len(prev)-1] == '\n'
 }
 
 func mdLines(lines *text.Segments, src []byte) string {
@@ -197,15 +306,126 @@ func mdInlines(n ast.Node, src []byte) []mdInline {
 	if k := len(out) - 1; k >= 0 {
 		out[k].text = strings.TrimRight(out[k].text, "\n")
 	}
+	return wikiLinks(out)
+}
+
+// wikiRe 认 [[名字]]、[[名字|显示的字]]（Obsidian 和 agent 记忆里互相引用的写法）。
+var wikiRe = regexp.MustCompile(`\[\[([^\[\]|\n]+)(?:\|([^\[\]\n]+))?\]\]`)
+
+// wikiLinks 把普通文字里的 [[名字]] 拆成链接，url 记成 "wiki:名字"；goldmark 把它当没定义的引用，原样留在文字里。
+func wikiLinks(ins []mdInline) []mdInline {
+	var out []mdInline
+	for _, in := range ins {
+		if in.url != "" || in.style&mdMono != 0 || !strings.Contains(in.text, "[[") {
+			out = append(out, in)
+			continue
+		}
+		last := 0
+		for _, m := range wikiRe.FindAllStringSubmatchIndex(in.text, -1) {
+			if m[0] > last {
+				out = append(out, mdInline{in.text[last:m[0]], in.style, ""})
+			}
+			target := strings.TrimSpace(in.text[m[2]:m[3]])
+			label := target
+			if m[4] >= 0 {
+				label = strings.TrimSpace(in.text[m[4]:m[5]])
+			}
+			out = append(out, mdInline{label, in.style, "wiki:" + target})
+			last = m[1]
+		}
+		if last < len(in.text) {
+			out = append(out, mdInline{in.text[last:], in.style, ""})
+		}
+	}
 	return out
 }
 
 // mdView 把解析好的 Markdown 搭成界面，words 是要标出来的搜索词。
 type mdView struct {
 	words []string
-	depth int      // 列表嵌套层数
-	find  *docFind // 文件预览的查找栏：命中按搭界面的顺序编号，当前那个换深底色、滚进视野
-	size  float32  // 正文字号（设置里的 Markdown 字号），0 跟界面字号；标题、代码和它的差值同界面
+	depth int                 // 列表嵌套层数
+	find  *docFind            // 文件预览的查找栏：命中按搭界面的顺序编号，当前那个换深底色、滚进视野
+	size  float32             // 正文字号（设置里的 Markdown 字号），0 跟界面字号；标题、代码和它的差值同界面
+	doc   bool                // 文件预览：照长文排版，行距和段距比历史页的回复松
+	wiki  func(target string) // 点 [[名字]] 时打开它；为空时只上色、点不了
+}
+
+// lead 是正文的行高，列表的点、序号按它对齐第一行。
+func (r mdView) lead() float32 {
+	if r.doc {
+		return 1.8
+	}
+	return 1.6
+}
+
+// markLead 是列表标记的行高；历史页沿用原来的 1.55。
+func (r mdView) markLead() float32 {
+	if r.doc {
+		return r.lead()
+	}
+	return 1.55
+}
+
+// dot 是列表圆点占字号的比例：文件预览照 Writer 小一些，行距松了点大了显得重。
+func (r mdView) dot() float32 {
+	if r.doc {
+		return 0.28
+	}
+	return 0.36
+}
+
+// mono 是行内代码和代码块的字号：文件预览用等宽字那一档，和旁边的正文看着一样大。
+func (r mdView) mono() float32 {
+	if r.doc {
+		_, code, _, _ := typeScale(r.body())
+		return code
+	}
+	return r.small()
+}
+
+// boxed 是自带底色或边框的块：代码块、表格、引用、分割线。
+func boxed(k mdKind) bool { return k == mdCode || k == mdTable || k == mdQuote || k == mdRule }
+
+// endsBoxed 看一串块是不是以 boxed 的块结尾，列表看它最后一项的最后一块。
+func endsBoxed(bs []mdBlock) bool {
+	if len(bs) == 0 {
+		return false
+	}
+	last := bs[len(bs)-1]
+	if last.kind == mdList && len(last.items) > 0 {
+		return endsBoxed(last.items[len(last.items)-1].blocks)
+	}
+	return boxed(last.kind)
+}
+
+// blankLine 是文件预览里一个空行的高度：正文字号乘行高。
+func (r mdView) blankLine() float32 { return float32(math.Round(float64(r.body() * r.lead()))) }
+
+// page 搭文件预览的整篇，块与块之间照 Writer 的节奏：源文件里空了行的地方空出一整行的高度
+// （标题上面再多一点），没空行的（"测试约束："下面直接接列表）紧挨着排，和折行一样；代码块、表格、引用前后总是空一行。
+func (r mdView) page(c *ui.Context, bs []mdBlock) {
+	blankLine := r.blankLine()
+	for i, b := range bs {
+		if i > 0 {
+			prev := bs[i-1]
+			var gap float32
+			switch {
+			case prev.kind == mdMeta:
+				gap = blankLine + 8
+			case b.blank && b.kind == mdHeading:
+				gap = blankLine + 8
+			case b.blank || boxed(b.kind) || endsBoxed([]mdBlock{prev}):
+				// 代码块、表格、引用自带底色或边框，源文件没空行也照空了一行排，不贴着上下的文字
+				gap = blankLine
+			case b.kind == mdHeading || prev.kind == mdHeading:
+				gap = 12
+			}
+			if gap > 0 {
+				ui.Box(c).Height(gap).Shrink(0)
+			}
+		}
+		r.block(c, b)
+	}
 }
 
 func (r mdView) body() float32  { return cmp.Or(r.size, fsBody) }
@@ -241,7 +461,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	switch b.kind {
 	case mdPara:
-		r.inline(c, b.inlines).FontSize(r.body()).LineHeight(1.6)
+		r.inline(c, b.inlines).FontSize(r.body()).LineHeight(r.lead())
 	case mdHeading:
 		r.inline(c, b.inlines).FontSize(r.heading(b.level)).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
@@ -282,31 +502,49 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			}
 			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
 				if r.find == nil {
-					highlighted(c, b.code, r.words).Font(monoFont).FontSize(r.small()).LineHeight(1.5)
+					highlighted(c, b.code, r.words).Font(monoFont).FontSize(r.mono()).LineHeight(1.5)
 					return
 				}
 				from := r.find.total
-				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(r.small()).LineHeight(1.5), from)
+				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(r.mono()).LineHeight(1.5), from)
 			})
 		})
 	case mdQuote:
 		ui.Row(c).AlignItems(ui.Stretch).Gap(8).Children(func() {
 			ui.Box(c).Width(3).Shrink(0).Radius(full(3)).Background(colors(t).line)
-			ui.Column(c).Grow(1).Shrink(1).Gap(8).TextColor(t.TextMuted).Children(func() { r.blocks(c, b.blocks) })
+			quote := ui.Column(c).Grow(1).Shrink(1).TextColor(t.TextMuted)
+			if r.doc {
+				quote.Children(func() { r.page(c, b.blocks) })
+			} else {
+				quote.Gap(8).Children(func() { r.blocks(c, b.blocks) })
+			}
 		})
 	case mdList:
-		width := r.scaled(14)
+		width, gap6 := r.scaled(14), float32(6)
 		if b.ordered {
 			width = r.scaled(float32(len(fmt.Sprint(b.start+len(b.items)-1))*8 + 8))
 		}
+		if r.doc {
+			// 照 Writer：标记占一栏、点在栏中间，正文从约两个字宽处开始，下一层再缩进一栏
+			width, gap6 = max(width+gap6, float32(math.Round(float64(r.body()*1.9)))), 0
+		}
 		inner := r
 		inner.depth++
-		ui.Column(c).Gap(4).Children(func() {
+		// 文件预览里一项接一项和折行一样紧，靠行高留白
+		gap := float32(4)
+		if r.doc {
+			gap = 0
+		}
+		ui.Column(c).Gap(gap).Children(func() {
 			for i, it := range b.items {
-				ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
+				// 上一项以代码块、表格、引用结尾时空一行，和整篇里的规则一样
+				if r.doc && i > 0 && endsBoxed(b.items[i-1].blocks) {
+					ui.Box(c).Height(r.blankLine()).Shrink(0)
+				}
+				ui.Row(c).Gap(gap6).AlignItems(ui.Start).Children(func() {
 					if !b.ordered && it.check == 0 {
-						listDot(c, width, r.body(), r.depth)
-						ui.Column(c).Grow(1).Shrink(1).Gap(4).Children(func() { inner.blocks(c, it.blocks) })
+						listDot(c, width, r.body(), r.markLead(), r.dot(), r.depth)
+						inner.item(c, it.blocks)
 						return
 					}
 					var marker string
@@ -318,11 +556,26 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 					case b.ordered:
 						marker = fmt.Sprintf("%d.", b.start+i)
 					}
-					m := ui.Text(c, marker).FontSize(r.body()).LineHeight(1.55).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
+					m := ui.Text(c, marker).FontSize(r.body()).LineHeight(r.markLead()).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
 					if b.ordered {
 						m.FontFeatures("tnum").TextAlign(ui.End)
+						if r.doc {
+							// 文件预览的标记栏和正文之间不留间隔，序号靠右时自己让开
+							m.Padding(0, 6, 0, 0)
+						}
 					}
-					ui.Column(c).Grow(1).Shrink(1).Gap(4).Children(func() { inner.blocks(c, it.blocks) })
+					inner.item(c, it.blocks)
+				})
+			}
+		})
+	case mdMeta:
+		// 照 Writer 的属性面板：左边一列键用次要色，右边是值，都比正文小一号
+		ui.Column(c).Gap(6).Children(func() {
+			for _, f := range b.meta {
+				ui.Row(c).Gap(16).AlignItems(ui.Start).Children(func() {
+					r.inline(c, []mdInline{{text: f.key}}).FontSize(r.small()).LineHeight(1.5).TextColor(t.TextMuted).
+						Width(r.scaled(128)).Shrink(0).Padding(0, 0, 0, float32(f.depth)*treeIndent)
+					r.inline(c, []mdInline{{text: f.value}}).FontSize(r.small()).LineHeight(1.5).Grow(1).Shrink(1)
 				})
 			}
 		})
@@ -334,10 +587,10 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 }
 
 // listDot 画无序列表的点，按层级是实心圆、空心圆、小方块；字体里的 • 太小，自己画，竖直对齐第一行的中线。
-func listDot(c *ui.Context, width, size float32, depth int) {
+func listDot(c *ui.Context, width, size, lead, scale float32, depth int) {
 	t := c.Theme()
-	d := size * 0.36
-	ui.Box(c).Width(width).Height(size * 1.55).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
+	d := size * scale
+	ui.Box(c).Width(width).Height(size * lead).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
 		dot := ui.Rect{X: rect.X + (rect.W-d)/2, Y: rect.Y + (rect.H-d)/2, W: d, H: d}
 		switch min(depth, 2) {
 		case 0:
@@ -370,7 +623,7 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		cols = max(cols, len(row))
 	}
 	size := b.size
-	if key := [3]float32{r.body(), float32(fwMedium), float32(fwBold)}; size.min == nil || size.key != key {
+	if key := [3]float32{r.body(), float32(r.headWeight()), float32(fwBold)}; size.min == nil || size.key != key {
 		r.measure(c, b, cols)
 		size.key = key
 	}
@@ -404,7 +657,12 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		scroll.Padding(0, 0, 12, 0) // 滚动条画在表格下面，不压着最后一行
 	}
 	scroll.Children(func() {
-		ui.Grid(c).ColumnTracks(tracks...).Radius(rRow).Children(func() { r.cells(c, b, cols) })
+		g := ui.Grid(c).ColumnTracks(tracks...).Radius(rRow)
+		if r.doc {
+			// 文件预览照 Writer 画外框和竖线，格子更高：长文里的表格要一眼看清行列
+			g.BorderWidth(hairline).BorderColor(colors(c.Theme()).line)
+		}
+		g.Children(func() { r.cells(c, b, cols) })
 	})
 }
 
@@ -463,7 +721,7 @@ func (r mdView) cellSpans(c *ui.Context, cell []mdInline, header bool) []ui.Span
 				sp.Size = r.body()
 			}
 			if header && sp.Weight == 0 {
-				sp.Weight = fwMedium
+				sp.Weight = r.headWeight()
 			}
 			spans = append(spans, sp)
 		}
@@ -486,12 +744,18 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 			if ci < len(row) {
 				cell = row[ci]
 			}
-			// 只画行与行之间的横线，不画外框和竖线；表头靠填充底区分
-			bottom := float32(hairline)
+			// 历史页只画行与行之间的横线，表头靠填充底区分；文件预览另有竖线（外框在表格上）
+			bottom, right := float32(hairline), float32(0)
 			if ri == len(b.rows)-1 {
 				bottom = 0
 			}
-			box := ui.Box(c).Padding(4, 12).BorderWidth(0, 0, bottom, 0).BorderColor(colors(t).line)
+			if r.doc && ci < cols-1 {
+				right = hairline
+			}
+			box := ui.Box(c).Padding(4, 12).BorderWidth(0, right, bottom, 0).BorderColor(colors(t).line)
+			if r.doc {
+				box.Padding(8, 12)
+			}
 			if ri == 0 {
 				box.Background(t.Surface)
 			}
@@ -507,9 +771,9 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 				box.Radius(rad[0], rad[1], rad[2], rad[3])
 			}
 			box.Children(func() {
-				e := r.inline(c, cell).FontSize(r.body()).LineHeight(1.45)
+				e := r.inline(c, cell).FontSize(r.body()).LineHeight(r.cellLead())
 				if ri == 0 {
-					e.FontWeight(fwMedium)
+					e.FontWeight(r.headWeight())
 				}
 				if ci < len(b.align) && b.align[ci] != 0 {
 					e.TextAlign(b.align[ci])
@@ -517,6 +781,31 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 			})
 		}
 	}
+}
+
+// item 搭列表项的内容；文件预览里和整篇一样按源文件的空行排，项里的代码块、表格不贴着上一行。
+func (r mdView) item(c *ui.Context, bs []mdBlock) {
+	if r.doc {
+		ui.Column(c).Grow(1).Shrink(1).Children(func() { r.page(c, bs) })
+		return
+	}
+	ui.Column(c).Grow(1).Shrink(1).Gap(4).Children(func() { r.blocks(c, bs) })
+}
+
+// cellLead 是表格格子的行高：文件预览和代码块同一档 1.5。
+func (r mdView) cellLead() float32 {
+	if r.doc {
+		return 1.5
+	}
+	return 1.45
+}
+
+// headWeight 是表头的字重：文件预览照 Writer 加粗，历史页的回复用中等。
+func (r mdView) headWeight() int {
+	if r.doc {
+		return fwBold
+	}
+	return fwMedium
 }
 
 // corner 是四角格子的圆角：外框圆角 6 减去 1 的边框。
@@ -538,10 +827,18 @@ func (r mdView) inline(c *ui.Context, ins []mdInline) ui.Element {
 
 func (r mdView) inlineEl(c *ui.Context, ins []mdInline) ui.Element {
 	for _, in := range ins {
-		if webURL(in.url) {
+		if webURL(in.url) || r.wiki != nil && strings.HasPrefix(in.url, "wiki:") {
 			return ui.RichText(c).Children(func() {
 				for _, in := range ins {
-					if webURL(in.url) {
+					if target, ok := strings.CutPrefix(in.url, "wiki:"); ok && r.wiki != nil {
+						l := ui.Text(c, in.text).TextColor(c.Theme().Accent)
+						if l.Hovered() {
+							l.Underline()
+						}
+						if l.Clicked() {
+							r.wiki(target)
+						}
+					} else if webURL(in.url) {
 						ui.Link(c, in.text, in.url)
 					} else {
 						ui.RichText(c, r.spans(c, in)...)
@@ -570,7 +867,9 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 		base.Strikethrough = true
 	}
 	if in.style&mdMono != 0 {
-		base.Font, base.Size, base.Background = monoFont, r.small(), codeBackground(t)
+		// 圆角让底色只包住字、比字略宽，不铺满行高：几段代码挨着时不连成竖条
+		// 行内代码用比底色亮一档的填充（浅色主题暗一档），不用代码块那种深底：夹在正文里像挖了个洞
+		base.Font, base.Size, base.Background, base.Radius = monoFont, r.mono(), colors(t).fill, rSmall
 	}
 	if in.url != "" {
 		base.Color = t.Accent

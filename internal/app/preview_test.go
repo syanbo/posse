@@ -836,6 +836,18 @@ func TestPreview(t *testing.T) {
 		v.cur.find = docFind{open: true, query: "posse", cur: 1, scroll: true}
 		savePNG(t, newPreviewTester(a, dark), "files-markdown-find-"+suffix+".png")
 
+		// 记忆、技能这类带 YAML 头部的文档：头部画成属性列表，行内代码是包住字的圆角底
+		a = previewApp(t)
+		v = previewFiles(t, a, "README.md")
+		v.cur.preview = true
+		v.cur.ed.Insert("---\nname: project-posse-status\ndescription: Posse 的背景、测试约束、真机测试分工、待办\nmetadata:\n  type: project\n  modified: 2026-10-30T16:10:39.494Z\n---\n\n" +
+			"背景：用户嫌 Orca（Electron）内存高，用 Go + MyGo 重写为 Posse，降内存是首要目标。\n\n测试约束：\n" +
+			"- 常驻进程能交接（升级不断终端），但重启会断开所有终端，必须用户明确同意。\n" +
+			"- 凡是 `daemon stop`、`terminal close` 这类有破坏性的命令，必须在同一条命令里写 `POSSE_HOME=/tmp/...`，不靠后面的 export。\n" +
+			"- e2e 测“用户”身份的 task 命令要 `env -u POSSE_TERMINAL_ID`（还有 `POSSE_WORKSPACE_ID`、`POSSE_SOCKET`、`POSSE_TASK_ID`）。\n\n" +
+			"**Why:** 用户问进度或接着做时要能直接接上。\n**How to apply:** 界面偏好见 [[feedback-posse-ui-taste]]，打包见 [[feedback-repackage]]。\n\n1. 先做终端\n2. 再做编排\n   - worktree 隔离\n- 命令（都支持 `--json`）：\n  ```\n  posse web open <url>\n  posse web list\n  ```\n- 实现：注入一段 JS\n- console：页面载入时注入\n\n| 项目 | 数据 |\n|---|---|\n| 内存 | 21 MB |\n\n")
+		savePNG(t, newPreviewTester(a, dark), "files-markdown-meta-"+suffix+".png")
+
 		a = previewApp(t)
 		v = previewFiles(t, a, "main.go")
 		v.side, v.search.query.Text = 1, "config"
