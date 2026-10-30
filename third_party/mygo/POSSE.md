@@ -36,7 +36,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/theme.go`、`ui/context.go`（`weightFrom`）：加 `Theme.FontWeight`，大于 0 时设在窗口的根节点上，没设字重的文字都继承它；mygo 默认不设，字体自己的常规字重。
 
-`internal/darwin/access.go`、`internal/platform/surface.go`、`ui/input.go`：辅助功能停用。上游在辅助功能客户端第一次问窗口后，每帧都生成整棵无障碍树，从此不停；Raycast、窗口管理器、自动化工具问过一次，窗口就一直付这笔开销。现在 30 秒没人问窗口或它的元素（`accessRequested`，元素的方法都经 `accessElementOf` 记下；更新元素期间 AppKit 的回调不算），并且旁白和切换控制都没开时，发 `AccessibilityOff`，ui 停止生成；下次再问照常打开、马上给出当前的树。
+`internal/darwin/access.go`、`internal/platform/surface.go`、`ui/input.go`：辅助功能停用。上游在辅助功能客户端第一次问窗口后，每帧都生成整棵无障碍树，从此不停；Raycast、窗口管理器、自动化工具问过一次，窗口就一直付这笔开销。现在 30 秒没人问窗口或它的元素（`accessRequested`，元素的方法都经 `accessElementOf` 记下；更新元素期间 AppKit 的回调不算），并且旁白、切换控制和缩放（`UAZoomEnabled`，跟随焦点要靠通知）都没开时，发 `AccessibilityOff`，ui 停止生成；下次再问窗口时照常同步打开、马上给出当前的树。问的是元素（`elementAsked`）时等当前事件处理完再打开：同步更新会释放已经不在树里的元素，正在执行方法的那个也在其中。
 
 `ui/menu.go`、`ui/runtime.go`：加 `Context.PresentMenus`，设了就不弹系统菜单，把菜单项（`MenuEntry`）、位置和选中回调交给应用自己画；右键菜单、菜单按钮、文字输入框和编辑器的编辑菜单都走它。
 
