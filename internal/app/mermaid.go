@@ -7,7 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"posse/internal/mermaid"
+	"posse/internal/mermaid/diagram"
 )
 
 // Mermaid 图在后台协程里画，按源码和样式缓存；画好之前照代码块显示，画好了请求一帧换成图。
@@ -19,11 +19,11 @@ var diagrams struct {
 
 type diagramKey struct {
 	src string
-	st  mermaid.Style
+	st  diagram.Style
 }
 
 type diagramEntry struct {
-	d    *mermaid.Diagram // nil 表示还在画
+	d    *diagram.Diagram // nil 表示还在画
 	used time.Time
 }
 
@@ -38,7 +38,7 @@ const (
 var mermaidSource = map[string]bool{}
 
 // diagramOf 返回 src 画好的图，还没画好是 nil（这时开始画）。
-func diagramOf(c *ui.Context, src string) *mermaid.Diagram {
+func diagramOf(c *ui.Context, src string) *diagram.Diagram {
 	k := diagramKey{src, mermaidStyle(c.Theme())}
 	now := time.Now()
 	diagrams.Lock()
@@ -66,7 +66,7 @@ func diagramOf(c *ui.Context, src string) *mermaid.Diagram {
 	diagrams.pending++
 	svc := c.Services()
 	go func() {
-		d := mermaid.Render(k.src, k.st)
+		d := diagram.Render(k.src, k.st)
 		diagrams.Lock()
 		if e, ok := diagrams.m[k]; ok {
 			e.d = d
@@ -86,7 +86,7 @@ func diagramsPending() bool {
 }
 
 // diagramView 把图按原始大小居中画出来，比栏宽就等比缩小。
-func diagramView(c *ui.Context, d *mermaid.Diagram) {
+func diagramView(c *ui.Context, d *diagram.Diagram) {
 	w, h := d.Size()
 	ui.Column(c).AlignItems(ui.Center).Padding(8, 12, 12, 12).Children(func() {
 		ui.Box(c).WidthPercent(100).MaxWidth(w).AspectRatio(w / h).Draw(d.Draw).Label("Mermaid 图").Unselectable()

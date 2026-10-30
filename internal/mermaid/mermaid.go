@@ -1,5 +1,6 @@
-// Package mermaid 把 Mermaid 源码画成 mygo 能画的图：Pele 在 QuickJS 里排版、出 SVG，
-// 形状交给 mygo 的 SVG，文字抽出来由 mygo 自己排字画（mygo 的 SVG 不画 <text>）。
+// Package mermaid 把 Mermaid 源码排成图：Pele（Obsidian 开源的 Mermaid 渲染器）在 QuickJS 里排版、出 SVG，
+// 这里把 SVG 的颜色换成主题色，再把文字抽出来，交给调用方用自己的字体画：桌面的 mygo 不画 SVG 里的文字，
+// 手机端也要用手机的字体。量文字宽度的函数由调用方给，排出来的标签和它画的字一致。不依赖 mygo，手机的 Go 库也用它。
 //
 // 移植自 Mayoi（https://github.com/sorrycc/Mayoi，cmd/mayoi/mermaid.go），
 // MIT 许可，Copyright (c) 2026 chencheng。
@@ -20,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/egoist/mygo/ui"
 	"modernc.org/quickjs"
 )
 
@@ -29,107 +29,83 @@ import (
 //go:embed pele.js.gz
 var peleJS []byte
 
-// Style 是画图用的颜色（Pele 的 CSS 变量取这些值）和文字的字体。
-// 颜色都要不透明：Pele 拿它们混色。
+// Color 是 sRGB 颜色，A 是不透明度。
+type Color struct{ R, G, B, A uint8 }
+
+func rgba(r, g, b uint8, alpha float32) Color { return Color{r, g, b, alphaByte(alpha)} }
+
+func alphaByte(a float32) uint8 { return uint8(max(0, min(a, 1))*255 + 0.5) }
+
+// ParseHex 解析 #rgb、#rgba、#rrggbb、#rrggbbaa，认不出时是透明黑和 false。
+func ParseHex(s string) (Color, bool) { return cssHex(s) }
+
+func hex(s string) Color {
+	c, ok := cssHex(s)
+	if !ok {
+		panic("mermaid: bad color " + s)
+	}
+	return c
+}
+
+// Alpha 把不透明度乘上 a。
+func (c Color) Alpha(a float32) Color {
+	c.A = alphaByte(float32(c.A) / 255 * a)
+	return c
+}
+
+// Mix 是 c 和 o 按 t 混合（0 是 c，1 是 o）。
+func (c Color) Mix(o Color, t float32) Color {
+	t = max(0, min(t, 1))
+	m := func(a, b uint8) uint8 { return uint8(float32(a)*(1-t) + float32(b)*t + 0.5) }
+	return Color{m(c.R, o.R), m(c.G, o.G), m(c.B, o.B), m(c.A, o.A)}
+}
+
+// Over 是 c 叠在不透明的 base 上的颜色。
+func (c Color) Over(base Color) Color {
+	o := c.Mix(base, 1-float32(c.A)/255)
+	o.A = base.A
+	return o
+}
+
+// Style 是画图用的颜色，Pele 的 CSS 变量取这些值。都要不透明：Pele 拿它们混色。
 type Style struct {
-	Bg, Fg, Muted, Line, Surface, SurfaceAlt, Border, Accent, Danger ui.Color
-	// Sans 为空是窗口的字体；Mono 是标签里代码的字体。
-	Sans, Mono                     string
-	Weight, BoldWeight, MonoWeight int
+	Bg, Fg, Muted, Line, Surface, SurfaceAlt, Border, Accent, Danger Color
 }
 
-// font 是 Pele 量文字时给的样式位对应的字体。
-func (st Style) font(size float32, style int) ui.Font {
-	f := ui.Font{Family: st.Sans, Size: size, Weight: st.Weight}
-	if style&peleBold != 0 {
-		f.Weight = st.BoldWeight
-	}
-	f.Italic = style&peleItalic != 0
-	if style&peleMono != 0 {
-		f.Family, f.Weight = st.Mono, st.MonoWeight
-	}
-	if style&(peleSub|peleSup) != 0 {
-		f.Size *= smaller
-	}
-	return f
-}
-
-// Pele 量文字时传来的样式位。
+// 标签文字的样式位：Pele 量文字时给的，也是 Label.Style。
 const (
-	peleBold   = 1
-	peleItalic = 2
-	peleMono   = 4
-	peleSub    = 8
-	peleSup    = 16
+	Bold   = 1
+	Italic = 2
+	Mono   = 4
+	Sub    = 8
+	Sup    = 16
 )
 
-// smaller 是上下标相对正文的字号。
-const smaller = 0.8
+// Smaller 是上下标相对正文的字号：Sub、Sup 的文字按 size*Smaller 量和画。
+const Smaller = 0.8
 
-// Diagram 是画好的图：形状是 SVG，文字是一串标签。
-type Diagram struct {
-	// tiles 是切开的形状：mygo 画不了超过 4096 像素的 SVG。
-	svg    *ui.SVG
-	tiles  []tile
-	w, h   float32
-	labels []label
-	// Err 是画不出来的原因，为空表示画好了。
-	Err string
-	// shaped 是按上次绘制的缩放排好的标签，只在界面线程上用；gen 是排的时候文本系统的代数，
-	// 变了说明字体被整批释放过，这些排版不能再画。
-	shaped []*ui.TextLayout
-	scale  float32
-	gen    uint64
+// Measurer 量一段文字的宽度（size 是 Pele 给的字号，style 是样式位）。Key 标识量法（字体、字重），
+// 变了 Pele 要忘掉量过的宽度。
+type Measurer struct {
+	Key   string
+	Width func(text string, size float32, style int) float32
 }
 
-// label 是标签里一段同样式的文字，左上角在图的 x, y，绕它转 angle 度。
-type label struct {
-	text  string
-	font  ui.Font
-	x, y  float32
-	angle float32
-	color ui.Color
+// Layout 是排好的图：Shapes 是不带文字的 SVG（颜色已换成 Style 的），W×H 是它的尺寸，Labels 是要另画的文字。
+type Layout struct {
+	Shapes []byte
+	W, H   float32
+	Labels []Label
 }
 
-// tile 是形状里 x, y, w×h 的那一块。
-type tile struct {
-	svg        *ui.SVG
-	x, y, w, h float32
-}
-
-// tileSide 是一块的最长边（DIP）：2 倍屏上放大到 2 倍是 4 倍，仍在 4096 像素以内。
-const tileSide = 1024
-
-// Size 是图的原始尺寸（DIP）。
-func (d *Diagram) Size() (float32, float32) { return d.w, d.h }
-
-// Draw 把图画进 r，按 r 的宽度等比缩放；标签按显示的大小重新排字，放大了也清楚。
-func (d *Diagram) Draw(pt *ui.Painter, r ui.Rect) {
-	if d.svg == nil || d.w <= 0 || r.W <= 0 {
-		return
-	}
-	s := r.W / d.w
-	for _, t := range d.tiles {
-		// 每块画到下一块的起点，接缝处不留缝
-		x0, y0 := r.X+t.x*s, r.Y+t.y*s
-		pt.Image(t.svg, ui.Rect{X: x0, Y: y0, W: r.X + (t.x+t.w)*s - x0, H: r.Y + (t.y+t.h)*s - y0}, ui.FillBox)
-	}
-	if size, gen := float32(math.Round(float64(s)*100)/100), ui.TextGeneration(); size != d.scale || gen != d.gen || len(d.shaped) != len(d.labels) {
-		d.scale, d.gen, d.shaped = size, gen, make([]*ui.TextLayout, len(d.labels))
-		for i, l := range d.labels {
-			f := l.font
-			f.Size *= max(size, 0.01)
-			d.shaped[i] = ui.ShapeText(l.text, f, 0)
-		}
-	}
-	for i, l := range d.labels {
-		x, y := r.X+l.x*s, r.Y+l.y*s
-		if l.angle == 0 {
-			pt.TextLayout(d.shaped[i], x, y, l.color)
-			continue
-		}
-		pt.Transform(ui.Rotation(l.angle), x, y, func() { pt.TextLayout(d.shaped[i], x, y, l.color) })
-	}
+// Label 是标签里一段同样式的文字：基线的起点在图的 X, Y，绕这一点转 Angle 度。
+type Label struct {
+	Text  string
+	Size  float32
+	Style int
+	X, Y  float32
+	Angle float32
+	Color Color
 }
 
 // timeout 是一张图最多画多久。
@@ -141,11 +117,12 @@ var pele struct {
 	sync.Mutex
 	vm  *quickjs.VM
 	err error
-	// style 是正在画的图的样式，量文字用它的字体；measured 是 Pele 记着的那些宽度量的时候用的样式。
-	style, measured Style
+	// measure 是正在画的图的量法；measured 是 Pele 记着的那些宽度用的量法。
+	measure  Measurer
+	measured string
 }
 
-// renderJS 是 posseRender(source, fresh)：用窗口的字体量文字画出 SVG，fresh 时先忘掉量过的宽度；
+// renderJS 是 posseRender(source, fresh)：用调用方的量法排出 SVG，fresh 时先忘掉量过的宽度；
 // 出错时去掉 Pele 附在错误信息里的那段源码，只留一行。
 const renderJS = `var posseMeasurer = {width: function (text, size, style) { return posseMeasure(text, size, style) }};
 function posseRender(source, fresh) {
@@ -175,8 +152,7 @@ func start() error {
 	}
 	// JS 的整数到这里是 int，带小数的是 float64
 	err = vm.RegisterFunc("posseMeasure", func(text string, size, style any) float64 {
-		w, _ := ui.ShapeText(text, pele.style.font(float32(number(size)), int(number(style))), 0).Size()
-		return float64(w)
+		return float64(pele.measure.Width(text, float32(number(size)), int(number(style))))
 	}, false)
 	if err == nil {
 		_, err = vm.Eval(string(script), quickjs.EvalGlobal)
@@ -189,7 +165,7 @@ func start() error {
 		return err
 	}
 	vm.SetEvalTimeout(timeout)
-	pele.vm, pele.measured = vm, Style{}
+	pele.vm, pele.measured = vm, ""
 	return nil
 }
 
@@ -203,8 +179,8 @@ func number(v any) float64 {
 	return 0
 }
 
-// peleRender 用 st 的字体量文字，把 source 画成 SVG，或者说出哪里写错了。
-func peleRender(source string, st Style) (string, error) {
+// peleRender 用 m 量文字，把 source 画成 SVG，或者说出哪里写错了。
+func peleRender(source string, m Measurer) (string, error) {
 	pele.Lock()
 	defer pele.Unlock()
 	if pele.vm == nil && pele.err == nil {
@@ -213,10 +189,11 @@ func peleRender(source string, st Style) (string, error) {
 	if pele.err != nil {
 		return "", pele.err
 	}
-	pele.style = st
-	fresh := st.Sans != pele.measured.Sans || st.Mono != pele.measured.Mono ||
-		st.Weight != pele.measured.Weight || st.BoldWeight != pele.measured.BoldWeight || st.MonoWeight != pele.measured.MonoWeight
-	pele.measured = st
+	pele.measure = m
+	fresh := m.Key != pele.measured
+	pele.measured = m.Key
+	// 画完放掉量法：它可能带着整张字宽表（手机），不该跟着常驻的运行时留到下一张
+	defer func() { pele.measure = Measurer{} }()
 	began := time.Now()
 	v, err := pele.vm.Call("posseRender", source, fresh)
 	if err != nil {
@@ -238,90 +215,67 @@ func peleRender(source string, st Style) (string, error) {
 
 var errTimeout = errors.New("画图超时")
 
-// Render 按 st 画出 source 的图。任何协程都能调，同一时间只画一张。
-func Render(source string, st Style) *Diagram {
-	svg, err := peleRender(source, st)
+// Render 按 st 的颜色、m 的量法排出 source 的图，或者说出哪里写错了。任何协程都能调，同一时间只画一张。
+func Render(source string, st Style, m Measurer) (*Layout, error) {
+	svg, err := peleRender(source, m)
 	if err != nil {
-		return &Diagram{Err: err.Error()}
+		return nil, err
 	}
-	shapes, texts, err := toSVG(svg, st)
+	shapes, chunks, err := toSVG(svg, st)
 	if err != nil {
-		return &Diagram{Err: err.Error()}
+		return nil, err
 	}
-	s, err := ui.ParseSVG(shapes)
-	if err != nil {
-		return &Diagram{Err: err.Error()}
+	l := &Layout{Shapes: shapes}
+	if l.W, l.H = svgSize(shapes); l.W <= 0 || l.H <= 0 {
+		return nil, errors.New("图的尺寸为空")
 	}
-	d := &Diagram{svg: s}
-	if d.w, d.h = s.Size(); d.w <= 0 || d.h <= 0 {
-		return &Diagram{Err: "图的尺寸为空"}
+	for _, c := range chunks {
+		l.Labels = append(l.Labels, c.shape(m)...)
 	}
-	if d.tiles, err = tiles(shapes, s, d.w, d.h); err != nil {
-		return &Diagram{Err: err.Error()}
-	}
-	for _, t := range texts {
-		d.labels = append(d.labels, t.shape(st)...)
-	}
-	return d
-}
-
-// tiles 把 w×h 的形状（s 是整张）切成边长不超过 tileSide 的块。
-func tiles(shapes []byte, s *ui.SVG, w, h float32) ([]tile, error) {
-	if w <= tileSide && h <= tileSide {
-		return []tile{{svg: s, w: w, h: h}}, nil
-	}
-	open := bytes.Index(shapes, []byte("<svg"))
-	end := bytes.IndexByte(shapes[max(open, 0):], '>')
-	if open < 0 || end < 0 {
-		return []tile{{svg: s, w: w, h: h}}, nil
-	}
-	end += open
-	root := string(shapes[open:end])
-	vx, vy, vw, vh := float32(0), float32(0), w, h
-	if m := svgViewBox.FindStringSubmatch(root); m != nil {
-		if f := strings.FieldsFunc(m[1], func(r rune) bool { return r == ',' || r == ' ' }); len(f) == 4 {
-			var n [4]float32
-			ok := true
-			for i, v := range f {
-				x, err := strconv.ParseFloat(v, 32)
-				n[i], ok = float32(x), ok && err == nil
-			}
-			if ok && n[2] > 0 && n[3] > 0 {
-				vx, vy, vw, vh = n[0], n[1], n[2], n[3]
-			}
-		}
-	}
-	root = svgSizeAttr.ReplaceAllString(root, "")
-	var out []tile
-	for y := float32(0); y < h; y += tileSide {
-		for x := float32(0); x < w; x += tileSide {
-			tw, th := min(tileSide, w-x), min(tileSide, h-y)
-			var b bytes.Buffer
-			b.Write(shapes[:open])
-			fmt.Fprintf(&b, `%s viewBox="%g %g %g %g" width="%g" height="%g"`, root,
-				vx+x*vw/w, vy+y*vh/h, tw*vw/w, th*vh/h, tw, th)
-			b.Write(shapes[end:])
-			t, err := ui.ParseSVG(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, tile{svg: t, x: x, y: y, w: tw, h: th})
-		}
-	}
-	return out, nil
+	return l, nil
 }
 
 var (
-	svgViewBox  = regexp.MustCompile(`\sviewBox="([^"]*)"`)
-	svgSizeAttr = regexp.MustCompile(`\s(viewBox|width|height|preserveAspectRatio)="[^"]*"`)
+	svgRoot   = regexp.MustCompile(`<svg[^>]*>`)
+	svgWidth  = regexp.MustCompile(`\swidth="([^"]*)"`)
+	svgHeight = regexp.MustCompile(`\sheight="([^"]*)"`)
+	svgView   = regexp.MustCompile(`\sviewBox="([^"]*)"`)
 )
+
+// svgSize 是根元素的 width、height，没有时取 viewBox 的宽高。
+func svgSize(shapes []byte) (float32, float32) {
+	root := svgRoot.Find(shapes)
+	w, okW := attrLength(svgWidth, root)
+	h, okH := attrLength(svgHeight, root)
+	if okW && okH {
+		return w, h
+	}
+	if m := svgView.FindSubmatch(root); m != nil {
+		if f := strings.FieldsFunc(string(m[1]), func(r rune) bool { return r == ',' || r == ' ' }); len(f) == 4 {
+			w, errW := strconv.ParseFloat(f[2], 32)
+			h, errH := strconv.ParseFloat(f[3], 32)
+			if errW == nil && errH == nil {
+				return float32(w), float32(h)
+			}
+		}
+	}
+	return 0, 0
+}
+
+func attrLength(re *regexp.Regexp, root []byte) (float32, bool) {
+	m := re.FindSubmatch(root)
+	if m == nil {
+		return 0, false
+	}
+	return cssLength(string(m[1]))
+}
 
 // run 是标签里一段同样式的文字。
 type run struct {
 	text  string
 	size  float32
 	style int
-	color ui.Color
+	color Color
 }
 
 // chunk 是标签里从 x, y（基线）起接连排的几段文字，按 anchor（start、middle、end）对齐，m 把它放进图里。
@@ -332,13 +286,11 @@ type chunk struct {
 	runs   []run
 }
 
-// shape 排好这一块的文字，放到图里。
-func (t chunk) shape(st Style) []label {
+// shape 用 m 量出每段的宽度，按对齐方式排好，放到图里。
+func (t chunk) shape(m Measurer) []Label {
 	type piece struct {
-		text   string
-		font   ui.Font
-		x, top float32
-		color  ui.Color
+		run
+		x, shift float32
 	}
 	var pieces []piece
 	pen := float32(0)
@@ -346,21 +298,15 @@ func (t chunk) shape(st Style) []label {
 		if r.text == "" {
 			continue
 		}
-		f := st.font(r.size, r.style)
-		l := ui.ShapeText(r.text, f, 0)
-		w, h := l.Size()
-		m := f.Metrics()
-		// 行高里除去上下伸部，剩下的上下各一半，基线在上面那一半加上伸部处
-		base := (h-m.Ascent-m.Descent)/2 + m.Ascent
 		shift := float32(0)
 		switch {
-		case r.style&peleSub != 0:
+		case r.style&Sub != 0:
 			shift = r.size * 0.2
-		case r.style&peleSup != 0:
+		case r.style&Sup != 0:
 			shift = -r.size * 0.35
 		}
-		pieces = append(pieces, piece{r.text, f, pen, shift - base, r.color})
-		pen += w
+		pieces = append(pieces, piece{r, pen, shift})
+		pen += m.Width(r.text, r.size, r.style)
 	}
 	left := t.x
 	switch t.anchor {
@@ -373,10 +319,10 @@ func (t chunk) shape(st Style) []label {
 	if math.Abs(float64(angle)) < 0.01 {
 		angle = 0
 	}
-	labels := make([]label, 0, len(pieces))
+	labels := make([]Label, 0, len(pieces))
 	for _, p := range pieces {
-		x, y := t.m.apply(left+p.x, t.y+p.top)
-		labels = append(labels, label{text: p.text, font: p.font, x: x, y: y, angle: angle, color: p.color})
+		x, y := t.m.apply(left+p.x, t.y+p.shift)
+		labels = append(labels, Label{Text: p.text, Size: p.size, Style: p.style, X: x, Y: y, Angle: angle, Color: p.color})
 	}
 	return labels
 }
@@ -459,7 +405,7 @@ func (st Style) palette() map[string]string {
 	}
 }
 
-func hexColor(c ui.Color) string { return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B) }
+func hexColor(c Color) string { return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B) }
 
 // frame 是 SVG 元素传给里面元素的东西：位置、填充色和文字样式。
 type frame struct {
@@ -473,7 +419,7 @@ type frame struct {
 	preserve           bool
 	// under 是节点、子图的 style 给形状的填充色（标签画在它上面），没有是透明；
 	// ownFill 表示文字自己的 style 给了填充色。
-	under   ui.Color
+	under   Color
 	ownFill bool
 }
 
@@ -543,7 +489,7 @@ func toSVG(svg string, st Style) ([]byte, []chunk, error) {
 				case t.Name.Local == "text" || inText > 0:
 					f.ownFill = true
 				case len(stack) > 1:
-					u := cssParseColor(resolve(d[1]), ui.Color{})
+					u := cssParseColor(resolve(d[1]), Color{})
 					if v, ok := prop("fill-opacity"); ok {
 						if n, err := strconv.ParseFloat(v, 32); err == nil {
 							u = u.Alpha(float32(n))
@@ -572,7 +518,7 @@ func toSVG(svg string, st Style) ([]byte, []chunk, error) {
 				f.italic = v == "italic" || v == "oblique"
 			}
 			if v, ok := prop("font-family"); ok && inText > 0 {
-				f.mono = strings.Contains(v, "mono") || v == st.Mono
+				f.mono = strings.Contains(v, "mono")
 			}
 			if v, ok := prop("text-anchor"); ok {
 				f.anchor = v
@@ -580,9 +526,9 @@ func toSVG(svg string, st Style) ([]byte, []chunk, error) {
 			if v, ok := prop("baseline-shift"); ok {
 				switch v {
 				case "sub":
-					f.shift = peleSub
+					f.shift = Sub
 				case "super":
-					f.shift = peleSup
+					f.shift = Sup
 				}
 			}
 			if v, ok := prop("transform"); ok {
@@ -680,13 +626,13 @@ func toSVG(svg string, st Style) ([]byte, []chunk, error) {
 			}
 			style := f.shift
 			if f.bold {
-				style |= peleBold
+				style |= Bold
 			}
 			if f.italic {
-				style |= peleItalic
+				style |= Italic
 			}
 			if f.mono {
-				style |= peleMono
+				style |= Mono
 			}
 			text.runs = append(text.runs, run{text: s, size: f.size, style: style, color: f.color(st)})
 		}
@@ -698,7 +644,7 @@ func toSVG(svg string, st Style) ([]byte, []chunk, error) {
 const labelContrast = 3
 
 // color 是文字的颜色：它的填充色；形状被 style 填了一个和它对比不够的颜色时，取主题的文字色和底色里更清楚的那个。
-func (f frame) color(st Style) ui.Color {
+func (f frame) color(st Style) Color {
 	c := cssParseColor(f.fill, st.Fg)
 	if f.ownFill || f.under.A == 0 {
 		return c
@@ -714,8 +660,8 @@ func (f frame) color(st Style) ui.Color {
 }
 
 // contrast 是两个不透明颜色的 WCAG 对比度。
-func contrast(x, y ui.Color) float64 {
-	lum := func(c ui.Color) float64 {
+func contrast(x, y Color) float64 {
+	lum := func(c Color) float64 {
 		ch := func(v uint8) float64 {
 			f := float64(v) / 255
 			if f <= 0.03928 {
@@ -834,7 +780,7 @@ func cssMix(args []string, vars map[string]string, depth int) string {
 	if len(args) != 3 {
 		return ""
 	}
-	color := func(s string) (ui.Color, float32, bool) {
+	color := func(s string) (Color, float32, bool) {
 		s = cssResolveDepth(strings.TrimSpace(s), vars, depth+1)
 		pct := float32(-1)
 		if i := strings.LastIndexByte(s, ' '); i > 0 && strings.HasSuffix(s, "%") {
@@ -860,10 +806,10 @@ func cssMix(args []string, vars map[string]string, depth int) string {
 }
 
 // cssHex 解析 #rgb、#rgba、#rrggbb、#rrggbbaa。
-func cssHex(s string) (ui.Color, bool) {
+func cssHex(s string) (Color, bool) {
 	s = strings.TrimSpace(s)
 	if !strings.HasPrefix(s, "#") {
-		return ui.Color{}, false
+		return Color{}, false
 	}
 	h := s[1:]
 	if len(h) == 3 || len(h) == 4 {
@@ -875,20 +821,20 @@ func cssHex(s string) (ui.Color, bool) {
 		h = b.String()
 	}
 	if len(h) != 6 && len(h) != 8 {
-		return ui.Color{}, false
+		return Color{}, false
 	}
 	n, err := strconv.ParseUint(h, 16, 32)
 	if err != nil {
-		return ui.Color{}, false
+		return Color{}, false
 	}
 	if len(h) == 6 {
 		n = n<<8 | 0xff
 	}
-	return ui.Color{R: uint8(n >> 24), G: uint8(n >> 16), B: uint8(n >> 8), A: uint8(n)}, true
+	return Color{R: uint8(n >> 24), G: uint8(n >> 16), B: uint8(n >> 8), A: uint8(n)}, true
 }
 
 // cssParseColor 解析填充色，认不出时是 def。
-func cssParseColor(s string, def ui.Color) ui.Color {
+func cssParseColor(s string, def Color) Color {
 	if c, ok := cssHex(s); ok {
 		return c
 	}
@@ -910,7 +856,7 @@ func cssParseColor(s string, def ui.Color) ui.Color {
 				if len(n) > 3 {
 					alpha = float32(n[3])
 				}
-				return ui.RGBA(uint8(n[0]), uint8(n[1]), uint8(n[2]), alpha)
+				return rgba(uint8(n[0]), uint8(n[1]), uint8(n[2]), alpha)
 			}
 		}
 	}
@@ -918,11 +864,11 @@ func cssParseColor(s string, def ui.Color) ui.Color {
 }
 
 // cssNamed 是图的 style 里常写的颜色名。
-var cssNamed = map[string]ui.Color{
-	"black": ui.Hex("#000000"), "white": ui.Hex("#ffffff"), "red": ui.Hex("#ff0000"),
-	"green": ui.Hex("#008000"), "blue": ui.Hex("#0000ff"), "yellow": ui.Hex("#ffff00"),
-	"orange": ui.Hex("#ffa500"), "purple": ui.Hex("#800080"), "gray": ui.Hex("#808080"),
-	"grey": ui.Hex("#808080"), "pink": ui.Hex("#ffc0cb"), "brown": ui.Hex("#a52a2a"),
+var cssNamed = map[string]Color{
+	"black": hex("#000000"), "white": hex("#ffffff"), "red": hex("#ff0000"),
+	"green": hex("#008000"), "blue": hex("#0000ff"), "yellow": hex("#ffff00"),
+	"orange": hex("#ffa500"), "purple": hex("#800080"), "gray": hex("#808080"),
+	"grey": hex("#808080"), "pink": hex("#ffc0cb"), "brown": hex("#a52a2a"),
 }
 
 // cssLength 解析像素长度："12"、"12px"、"12.5"。

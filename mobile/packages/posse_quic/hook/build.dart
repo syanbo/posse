@@ -5,7 +5,7 @@ import 'package:hooks/hooks.dart';
 
 /// 用 go build 把 go/ 编成动态库。Go 不支持给 iOS 编动态库，iOS 先编静态库再用 clang 链成动态库。
 /// 苹果平台留出头部空间：打包时要改库的 install name。
-/// go/ 在仓库的 Go 模块里（引用 internal/mquic），所以在仓库根目录下编。
+/// go/ 在仓库的 Go 模块里（引用 internal/mquic、internal/mermaid），所以在仓库根目录下编。
 void main(List<String> args) async {
   await build(args, (input, output) async {
     if (!input.config.buildCodeAssets) return;
@@ -118,13 +118,15 @@ void main(List<String> args) async {
         file: Uri.file(file),
       ),
     );
-    for (final dir in ['mobile/packages/posse_quic/go', 'internal/mquic', 'internal/deskrelay']) {
+    for (final dir in ['mobile/packages/posse_quic/go', 'internal/mquic', 'internal/deskrelay', 'internal/mermaid']) {
       for (final f in Directory('$repo/$dir').listSync()) {
         if (f is File && f.path.endsWith('.go') && !f.path.endsWith('_test.go')) {
           output.dependencies.add(f.uri);
         }
       }
     }
+    // Pele 由 go:embed 编进去
+    output.dependencies.add(Uri.file('$repo/internal/mermaid/pele.js.gz'));
     output.dependencies.add(Uri.file('$repo/go.mod'));
     output.dependencies.add(Uri.file('$repo/go.sum'));
   });

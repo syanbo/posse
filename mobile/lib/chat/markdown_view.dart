@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import '../ui/highlight.dart';
+import '../ui/mermaid.dart';
 import '../ui/theme.dart';
 
 class MarkdownView extends StatelessWidget {
@@ -176,6 +177,7 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
 }
 
 /// 围栏代码块：顶上一行语言名，代码不折行、横向滚动，认得出语言时着色。文件预览也用它。
+/// 语言是 mermaid 的画成图（[MermaidBlock]），语言栏右边可以切回源码。
 Widget markdownCodeBlock(
   BuildContext context,
   md.Element node,
@@ -188,7 +190,24 @@ Widget markdownCodeBlock(
     const prefix = 'language-';
     if (cls.startsWith(prefix)) lang = cls.substring(prefix.length);
   }
-  final muted = _muted(context);
+  final code = node.textContent.trimRight();
+  final source = _codeBody(code, lang, base);
+  if (lang.toLowerCase() == 'mermaid') {
+    return MermaidBlock(
+      code: code,
+      source: source,
+      card: (trailing, body) => _codeCard(context, lang, trailing, body),
+    );
+  }
+  return _codeCard(context, lang, null, source);
+}
+
+Widget _codeCard(
+  BuildContext context,
+  String lang,
+  Widget? trailing,
+  Widget body,
+) {
   return Container(
     width: double.infinity,
     margin: const EdgeInsets.only(top: 2, bottom: 10),
@@ -205,35 +224,44 @@ Widget markdownCodeBlock(
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: _line(context))),
           ),
-          child: Text(
-            lang.isEmpty ? '代码' : lang,
-            style: mono(12, color: muted),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  lang.isEmpty ? '代码' : lang,
+                  style: mono(12, color: _muted(context)),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
         ),
-        // 代码不折行，横向滚动，缩进才对得齐
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-          child: Highlighted(
-            code: node.textContent.trimRight(),
-            language: languageForFence(lang),
-            builder: (context, hl) {
-              final style = mono(12.5, height: 1.55, color: base.color);
-              final code = node.textContent.trimRight();
-              return hl == null
-                  ? Text(code, softWrap: false, style: style)
-                  : Text.rich(
-                      codeSpan(hl, PosseColors.of(context)),
-                      softWrap: false,
-                      style: style,
-                    );
-            },
-          ),
-        ),
+        body,
       ],
     ),
   );
 }
+
+// 代码不折行，横向滚动，缩进才对得齐
+Widget _codeBody(String code, String lang, TextStyle base) =>
+    SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      child: Highlighted(
+        code: code,
+        language: languageForFence(lang),
+        builder: (context, hl) {
+          final style = mono(12.5, height: 1.55, color: base.color);
+          return hl == null
+              ? Text(code, softWrap: false, style: style)
+              : Text.rich(
+                  codeSpan(hl, PosseColors.of(context)),
+                  softWrap: false,
+                  style: style,
+                );
+        },
+      ),
+    );
 
 Color _accent(BuildContext context) => PosseColors.of(context).accent;
 

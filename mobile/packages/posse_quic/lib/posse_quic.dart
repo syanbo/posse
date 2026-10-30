@@ -1,9 +1,11 @@
-/// Posse 手机端的 QUIC 连接。协议见仓库里的 internal/mquic：一条流上收发文本、二进制两种消息。
+/// Posse 手机端编进 App 的 Go 库：QUIC 连接，和 Mermaid 图的排版（[renderMermaid]）。
+/// QUIC 的协议见仓库里的 internal/mquic：一条流上收发文本、二进制两种消息。
 @DefaultAsset('package:posse_quic/posse_quic.dart')
 library;
 
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -50,6 +52,46 @@ external void _reset();
 
 @Native<Void Function(Pointer<Uint8>)>(symbol: 'hq_free')
 external void _free(Pointer<Uint8> p);
+
+@Native<Pointer<Utf8> Function(Pointer<Utf8>, Int32)>(symbol: 'hq_mermaid')
+external Pointer<Utf8> _mermaid(Pointer<Utf8> request, int len);
+
+/// 画一张 Mermaid 图：[request] 和返回值都是 JSON，格式见 go/mermaid.go 的 mermaidRequest、mermaidResult。
+/// 在后台 isolate 里同步调 Go：第一次要启动 JS 运行时（约 100 ms），不能卡界面线程。
+/// Go 一次只画一张，这里也排队一张张来，不同时开一堆 isolate 卡在 Go 的锁上。
+Future<String> renderMermaid(String request) {
+  final done = Completer<String>();
+  _mermaidWaiting.add((request, done));
+  _nextMermaid();
+  return done.future;
+}
+
+final _mermaidWaiting = <(String, Completer<String>)>[];
+var _mermaidBusy = false;
+
+void _nextMermaid() {
+  if (_mermaidBusy || _mermaidWaiting.isEmpty) return;
+  _mermaidBusy = true;
+  final (request, done) = _mermaidWaiting.removeAt(0);
+  _renderMermaid(request)
+      .then(done.complete, onError: done.completeError)
+      .whenComplete(() {
+        _mermaidBusy = false;
+        _nextMermaid();
+      });
+}
+
+Future<String> _renderMermaid(String request) => Isolate.run(() {
+  final req = request.toNativeUtf8();
+  try {
+    final out = _mermaid(req, req.length);
+    final text = out.toDartString();
+    _free(out.cast());
+    return text;
+  } finally {
+    malloc.free(req);
+  }
+});
 
 const _evOpen = 1;
 const _evText = 2;

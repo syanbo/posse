@@ -1,36 +1,32 @@
 package mermaid
 
 import (
-	"fmt"
 	"math"
 	"strings"
 	"testing"
-
-	"github.com/egoist/mygo/ui"
+	"unicode"
 )
 
 func testStyle() Style {
 	return Style{
-		Bg: ui.Hex("#141413"), Fg: ui.Hex("#ECEAE4"), Muted: ui.Hex("#9A978F"), Line: ui.Hex("#9A978F"),
-		Surface: ui.Hex("#222220"), SurfaceAlt: ui.Hex("#2C2C29"), Border: ui.Hex("#5A5853"), Accent: ui.Hex("#D97757"),
-		Danger: ui.Hex("#EF4444"), Mono: "monospace", Weight: 400, BoldWeight: 600, MonoWeight: 400,
+		Bg: hex("#141413"), Fg: hex("#ECEAE4"), Muted: hex("#9A978F"), Line: hex("#9A978F"),
+		Surface: hex("#222220"), SurfaceAlt: hex("#2C2C29"), Border: hex("#5A5853"), Accent: hex("#D97757"),
+		Danger: hex("#EF4444"),
 	}
 }
 
-// 中文标签按窗口的字体量宽度，节点要比同样字数的英文宽
-func TestRenderChinese(t *testing.T) {
-	d := Render("flowchart LR\nA[常驻进程] --> B[终端]", testStyle())
-	if d.Err != "" {
-		t.Fatal(d.Err)
+// testMeasurer 按字数量：汉字一个字号宽，别的 0.6 个
+var testMeasurer = Measurer{Key: "test", Width: func(text string, size float32, style int) float32 {
+	w := float32(0)
+	for _, r := range text {
+		if unicode.Is(unicode.Han, r) {
+			w += size
+		} else {
+			w += size * 0.6
+		}
 	}
-	var got []string
-	for _, l := range d.labels {
-		got = append(got, l.text)
-	}
-	if s := strings.Join(got, "|"); !strings.Contains(s, "常驻进程") || !strings.Contains(s, "终端") {
-		t.Errorf("labels %q", s)
-	}
-}
+	return w
+}}
 
 func TestRender(t *testing.T) {
 	st := testStyle()
@@ -41,62 +37,58 @@ func TestRender(t *testing.T) {
 		"gantt":     "gantt\ntitle Plan\ndateFormat YYYY-MM-DD\nsection A\nTask :a1, 2024-01-01, 30d",
 		"pie":       "pie title Pets\n\"Dogs\" : 386\n\"Cats\" : 85",
 		"git":       "gitGraph\ncommit\nbranch dev\ncommit\ncheckout main\nmerge dev",
+		"chinese":   "flowchart LR\nA[常驻进程] --> B[终端]",
 	} {
-		d := Render(src, st)
-		if d.Err != "" {
-			t.Errorf("%s: %s", name, d.Err)
+		l, err := Render(src, st, testMeasurer)
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
 			continue
 		}
-		if d.svg == nil || d.w <= 0 || d.h <= 0 || len(d.labels) == 0 {
-			t.Errorf("%s: svg %v %vx%v, %d labels", name, d.svg != nil, d.w, d.h, len(d.labels))
+		if len(l.Shapes) == 0 || l.W <= 0 || l.H <= 0 || len(l.Labels) == 0 {
+			t.Errorf("%s: %d bytes %vx%v, %d labels", name, len(l.Shapes), l.W, l.H, len(l.Labels))
 		}
-		for _, l := range d.labels {
-			if l.x < -d.w || l.x > 2*d.w || l.y < -d.h || l.y > 2*d.h {
-				t.Errorf("%s: a label at %v,%v outside %vx%v", name, l.x, l.y, d.w, d.h)
+		for _, lb := range l.Labels {
+			if lb.X < -l.W || lb.X > 2*l.W || lb.Y < -l.H || lb.Y > 2*l.H {
+				t.Errorf("%s: a label at %v,%v outside %vx%v", name, lb.X, lb.Y, l.W, l.H)
+			}
+		}
+		if name == "chinese" {
+			var got []string
+			for _, lb := range l.Labels {
+				got = append(got, lb.Text)
+			}
+			if s := strings.Join(got, "|"); !strings.Contains(s, "常驻进程") || !strings.Contains(s, "终端") {
+				t.Errorf("labels %q", s)
 			}
 		}
 	}
 }
 
-func TestRenderTiles(t *testing.T) {
-	var b strings.Builder
-	b.WriteString("flowchart TD\n")
-	for i := range 30 {
-		fmt.Fprintf(&b, "N%d[Step %d<br/>more] --> N%d\n", i, i, i+1)
+func TestRenderError(t *testing.T) {
+	_, err := Render("sequenceDiagram\nA->>B hi", testStyle(), testMeasurer)
+	if err == nil || strings.Contains(err.Error(), "\n") || !strings.Contains(err.Error(), "line 2") {
+		t.Errorf("err = %v", err)
 	}
-	d := Render(b.String(), testStyle())
-	if d.Err != "" {
-		t.Fatal(d.Err)
-	}
-	if d.h <= tileSide || len(d.tiles) < 2 {
-		t.Fatalf("%vx%v in %d tiles", d.w, d.h, len(d.tiles))
-	}
-	area := float32(0)
-	for _, tile := range d.tiles {
-		w, h := tile.svg.Size()
-		if tile.w > tileSide || tile.h > tileSide || w != tile.w || h != tile.h {
-			t.Errorf("tile at %v,%v is %vx%v, its SVG %vx%v", tile.x, tile.y, tile.w, tile.h, w, h)
-		}
-		if tile.x+tile.w > d.w+0.01 || tile.y+tile.h > d.h+0.01 {
-			t.Errorf("tile at %v,%v %vx%v past %vx%v", tile.x, tile.y, tile.w, tile.h, d.w, d.h)
-		}
-		area += tile.w * tile.h
-	}
-	if math.Abs(float64(area-d.w*d.h)) > 1 {
-		t.Errorf("tiles cover %v of %v", area, d.w*d.h)
-	}
-	if small := Render("flowchart LR\nA --> B", testStyle()); len(small.tiles) != 1 || small.tiles[0].svg != small.svg {
-		t.Errorf("a small diagram in %d tiles", len(small.tiles))
+	if _, err := Render("not a diagram", testStyle(), testMeasurer); err == nil {
+		t.Error("no error for text that is no diagram")
 	}
 }
 
-func TestRenderError(t *testing.T) {
-	d := Render("sequenceDiagram\nA->>B hi", testStyle())
-	if d.Err == "" || strings.Contains(d.Err, "\n") || !strings.Contains(d.Err, "line 2") {
-		t.Errorf("err = %q", d.Err)
+// 标签按量出来的宽度对齐：居中的标签左边是基线起点减去一半宽度
+func TestLabelAnchor(t *testing.T) {
+	c := chunk{m: identity, x: 100, y: 50, anchor: "middle", runs: []run{{text: "ab", size: 10}, {text: "中", size: 10, style: Bold}}}
+	l := c.shape(testMeasurer)
+	if len(l) != 2 || l[0].X != 100-11 || l[1].X != 100-11+12 || l[0].Y != 50 || l[1].Style != Bold {
+		t.Errorf("labels %+v", l)
 	}
-	if d := Render("not a diagram", testStyle()); d.Err == "" {
-		t.Error("no error for text that is no diagram")
+}
+
+func TestSVGSize(t *testing.T) {
+	if w, h := svgSize([]byte(`<svg viewBox="0 0 160 64" width="160" height="64"><g/></svg>`)); w != 160 || h != 64 {
+		t.Errorf("size %vx%v", w, h)
+	}
+	if w, h := svgSize([]byte(`<svg viewBox="0 0 30 20"><rect width="5" height="5"/></svg>`)); w != 30 || h != 20 {
+		t.Errorf("viewBox size %vx%v", w, h)
 	}
 }
 
@@ -123,9 +115,6 @@ func TestToSVG(t *testing.T) {
 			t.Errorf("%s left in %s", gone, s)
 		}
 	}
-	if _, err := ui.ParseSVG(out); err != nil {
-		t.Fatal(err)
-	}
 	if len(texts) != 4 {
 		t.Fatalf("%d chunks: %+v", len(texts), texts)
 	}
@@ -135,13 +124,13 @@ func TestToSVG(t *testing.T) {
 	if x, y := texts[0].m.apply(texts[0].x, texts[0].y); x != 15 || y != 26 {
 		t.Errorf("first chunk at %v,%v", x, y)
 	}
-	if r := texts[1].runs; len(r) != 2 || r[0].style != peleBold || r[1].style != peleMono || r[1].text != " two" || texts[1].y != -4 {
+	if r := texts[1].runs; len(r) != 2 || r[0].style != Bold || r[1].style != Mono || r[1].text != " two" || texts[1].y != -4 {
 		t.Errorf("second chunk %+v", texts[1])
 	}
 	if r := texts[2].runs; len(r) != 1 || r[0].size != 12 || texts[2].y != 16 {
 		t.Errorf("third chunk %+v", texts[2])
 	}
-	if l := texts[3].shape(st); len(l) != 1 || l[0].angle != 90 {
+	if l := texts[3].shape(testMeasurer); len(l) != 1 || l[0].Angle != 90 {
 		t.Errorf("turned %+v", l)
 	}
 }
@@ -150,7 +139,7 @@ func TestStyledFillLabels(t *testing.T) {
 	st := testStyle()
 	source := "flowchart LR\n subgraph S[\"sub\"]\n A[aa]\n end\n A --> B[bb] --> C[cc] --> D[dd]\n" +
 		"style S fill:#ffe\n style B fill:#fdd,stroke:#c00\n style C fill:#fdd,color:#f00\n style D fill:#333\n"
-	svg, err := peleRender(source, st)
+	svg, err := peleRender(source, testMeasurer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,13 +147,13 @@ func TestStyledFillLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	colors := map[string]ui.Color{}
+	colors := map[string]Color{}
 	for _, x := range texts {
 		for _, r := range x.runs {
 			colors[r.text] = r.color
 		}
 	}
-	for text, want := range map[string]ui.Color{"sub": st.Bg, "aa": st.Fg, "bb": st.Bg, "cc": ui.Hex("#ff0000"), "dd": st.Fg} {
+	for text, want := range map[string]Color{"sub": st.Bg, "aa": st.Fg, "bb": st.Bg, "cc": hex("#ff0000"), "dd": st.Fg} {
 		if got := colors[text]; got != want {
 			t.Errorf("%s in %+v, want %+v", text, got, want)
 		}
@@ -195,25 +184,5 @@ func TestParseTransform(t *testing.T) {
 	m = parseTransform("rotate(90 10 10)")
 	if x, y := m.apply(20, 10); math.Abs(float64(x-10)) > 1e-4 || math.Abs(float64(y-20)) > 1e-4 {
 		t.Errorf("rotate: %v,%v", x, y)
-	}
-}
-
-// 字体超过上限被整批释放后，按同一缩放再画要重排标签：画已释放字体的排版会崩
-func TestDrawAfterFontsReleased(t *testing.T) {
-	d := Render("flowchart LR\nA[常驻进程] --> B[终端]", testStyle())
-	if d.Err != "" {
-		t.Fatal(d.Err)
-	}
-	w, h := d.Size()
-	tt := ui.NewTester(func(c *ui.Context) { ui.Box(c).Width(w).Height(h).Draw(d.Draw) }, 800, 600)
-	tt.Frame()
-	gen := ui.TextGeneration()
-	for i := range 600 {
-		ui.ShapeText("x", ui.Font{Size: 8 + float32(i)*0.1}, 0)
-	}
-	tt.Frame()
-	tt.Frame()
-	if ui.TextGeneration() == gen {
-		t.Fatal("字体没有被释放，测不到")
 	}
 }

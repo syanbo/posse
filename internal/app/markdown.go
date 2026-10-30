@@ -12,7 +12,7 @@ import (
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 
-	"posse/internal/mermaid"
+	"posse/internal/mermaid/diagram"
 )
 
 // 只用 goldmark 的解析器得到语法树，再转成下面这套简单结构缓存起来，每帧按它搭界面。
@@ -224,7 +224,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		r.inline(c, b.inlines).FontSize(size).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
 		// mermaid 代码块画成图；画好之前、画不出来、切到源码时照普通代码块显示
-		var d *mermaid.Diagram
+		var d *diagram.Diagram
 		if strings.EqualFold(b.lang, "mermaid") {
 			d = diagramOf(c, b.code)
 		}

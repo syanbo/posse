@@ -29,6 +29,7 @@ dependencies:
   url_launcher: ^6.3.3
   video_player: ^2.14.1
   web_socket_channel: ^3.0.3
+  flutter_svg: ^2.3.2
 
 dev_dependencies:
   flutter_test:

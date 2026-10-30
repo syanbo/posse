@@ -1,5 +1,5 @@
 name: posse_quic
-description: "Posse 手机端的 QUIC 客户端：构建时把 Go 写的库（go/）编进 App，Dart 经 FFI 调用。"
+description: "Posse 手机端编进 App 的 Go 库（go/）：QUIC 客户端和 Mermaid 排版，构建时编进 App，Dart 经 FFI 调用。"
 publish_to: 'none'
 version: 0.1.0
 
