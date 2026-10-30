@@ -110,7 +110,7 @@ cat >"$out/index.html" <<EOF
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>安装 Posse</title>
+<title>安装 Posse · iPhone 版</title>
 <style>
 body { font-family: -apple-system, sans-serif; margin: 0; padding: 48px 24px; text-align: center; color: #1d1d1f; }
 img { width: 96px; height: 96px; border-radius: 22px; }
@@ -122,14 +122,22 @@ a.install.busy::before { content: ""; width: 14px; height: 14px; border: 2px sol
 @keyframes spin { to { transform: rotate(360deg); } }
 ul.notes { text-align: left; max-width: 360px; margin: 0 auto 8px; padding-left: 20px; font-size: 15px; line-height: 1.6; }
 .note { color: #86868b; font-size: 13px; line-height: 1.6; text-align: left; max-width: 360px; margin: 0 auto; }
-@media (prefers-color-scheme: dark) { body { background: #000; color: #f5f5f7; } }
+.platform { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 12px; border-radius: 14px; font-size: 14px; font-weight: 600; }
+.platform svg { width: 16px; height: 16px; }
+.wrong { display: none; max-width: 360px; margin: 0 auto 24px; padding: 12px 16px; border-radius: 12px; background: #fff4e5; color: #8a4b00; font-size: 14px; line-height: 1.5; text-align: left; }
+.wrong a, .other a { color: inherit; font-weight: 600; }
+.other { margin-top: 24px; color: #86868b; font-size: 13px; }
+.platform.ios { background: #1d1d1f; color: #fff; }
+@media (prefers-color-scheme: dark) { body { background: #000; color: #f5f5f7; } .platform.ios { background: #f5f5f7; color: #1d1d1f; } .wrong { background: #3a2a12; color: #ffcf8a; } }
 </style>
 </head>
 <body>
+<div class="wrong" id="wrong">这是 iPhone 版的安装页，安卓手机装不了。<a href="../android/index.html">去安卓下载页</a></div>
 <img src="icon-512.png" alt="">
 <h1>Posse</h1>
+<div class="platform ios"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 1.43c0 1.14-.42 2.2-1.25 3.01-.83.82-1.84 1.3-2.93 1.21-.14-1.1.41-2.25 1.2-3.03.84-.82 2.04-1.33 2.98-1.19zM20.5 17.2c-.55 1.27-.81 1.84-1.52 2.96-.99 1.56-2.38 3.5-4.1 3.51-1.53.02-1.93-1-4.01-.98-2.08.01-2.52 1-4.05.98-1.72-.02-3.04-1.77-4.03-3.33C.02 15.97-.27 10.9 1.49 8.2c1.25-1.92 3.22-3.04 5.07-3.04 1.89 0 3.08 1.04 4.64 1.04 1.52 0 2.44-1.04 4.62-1.04 1.65 0 3.4.9 4.64 2.45-4.08 2.24-3.42 8.06.04 9.59z"/></svg>iPhone 版</div>
 <div class="meta">${version}（${build}） · ${size} · $(date -r "$out/Posse.ipa" '+%Y-%m-%d %H:%M')</div>
-<a class="install" href="itms-services://?action=download-manifest&amp;url=$base/manifest.plist">安装</a>
+<a class="install" href="itms-services://?action=download-manifest&amp;url=$base/manifest.plist">安装到 iPhone</a>
 <ul class="notes">
 $(printf '%s\n' "$notes" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's|.*|<li>&</li>|')
 </ul>
@@ -137,7 +145,10 @@ $(printf '%s\n' "$notes" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/
 请用 Safari 打开这个页面。点安装后回到主屏幕看进度。<br>
 只有登记过的 iPhone 能装，其他设备会提示无法安装。
 </div>
+<p class="other">安卓手机请到 <a href="../android/index.html">安卓下载页</a></p>
 <script>
+// 安卓手机打开了这一页：顶上提示去安卓下载页
+if (/Android/i.test(navigator.userAgent)) document.getElementById("wrong").style.display = "block";
 // 点了以后系统要过几秒才弹安装确认，期间按钮转圈、点不动，免得连点弹出好几次；
 // 用户在弹框里取消的话页面收不到消息，过一会儿恢复成能再点
 const a = document.querySelector("a.install");
@@ -145,7 +156,7 @@ a.addEventListener("click", (e) => {
 	if (a.classList.contains("busy")) { e.preventDefault(); return; }
 	a.classList.add("busy");
 	a.textContent = "正在请求安装…";
-	setTimeout(() => { a.classList.remove("busy"); a.textContent = "安装"; }, 15000);
+	setTimeout(() => { a.classList.remove("busy"); a.textContent = "安装到 iPhone"; }, 15000);
 });
 </script>
 </body>

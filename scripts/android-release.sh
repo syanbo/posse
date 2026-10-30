@@ -97,7 +97,7 @@ cat >"$out/index.html" <<EOF
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>安装 Posse</title>
+<title>安装 Posse · 安卓版</title>
 <style>
 body { font-family: sans-serif; margin: 0; padding: 48px 24px; text-align: center; color: #1d1d1f; }
 img { width: 96px; height: 96px; border-radius: 22px; }
@@ -106,20 +106,34 @@ h1 { font-size: 24px; margin: 16px 0 4px; }
 a.install { display: inline-block; margin: 28px 0; padding: 12px 40px; border-radius: 22px; background: #e8743b; color: #fff; font-size: 17px; text-decoration: none; }
 ul.notes { text-align: left; max-width: 360px; margin: 0 auto 8px; padding-left: 20px; font-size: 15px; line-height: 1.6; }
 .note { color: #86868b; font-size: 13px; line-height: 1.6; text-align: left; max-width: 360px; margin: 0 auto; }
-@media (prefers-color-scheme: dark) { body { background: #000; color: #f5f5f7; } }
+.platform { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 12px; border-radius: 14px; font-size: 14px; font-weight: 600; }
+.platform svg { width: 16px; height: 16px; }
+.wrong { display: none; max-width: 360px; margin: 0 auto 24px; padding: 12px 16px; border-radius: 12px; background: #fff4e5; color: #8a4b00; font-size: 14px; line-height: 1.5; text-align: left; }
+.wrong a, .other a { color: inherit; font-weight: 600; }
+.other { margin-top: 24px; color: #86868b; font-size: 13px; }
+.platform.android { background: #3ddc84; color: #073042; }
+@media (prefers-color-scheme: dark) { body { background: #000; color: #f5f5f7; } .wrong { background: #3a2a12; color: #ffcf8a; } }
 </style>
 </head>
 <body>
+<div class="wrong" id="wrong">这是安卓版的下载页，iPhone、iPad 装不了。<a href="../ios/index.html">去 iPhone 安装页</a></div>
 <img src="icon-512.png" alt="">
 <h1>Posse</h1>
+<div class="platform android"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18a.5.5 0 0 0-.87-.5l-1.86 3.22A11.4 11.4 0 0 0 12 8c-1.71 0-3.33.37-4.71 1.02L5.43 5.8a.5.5 0 0 0-.87.5L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52zM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5z"/></svg>安卓版</div>
 <div class="meta">${version}（${build}） · ${size} · $(date -r "$out/Posse.apk" '+%Y-%m-%d %H:%M')</div>
-<a class="install" href="$file">下载安装</a>
+<a class="install" href="$file">下载安卓安装包</a>
 <ul class="notes">
 $(printf '%s\n' "$notes" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's|.*|<li>&</li>|')
 </ul>
 <div class="note">
 下载后打开安装包，按提示允许浏览器安装应用。装好以后 App 里会提示新版本，不用再来这里。
 </div>
+<p class="other">iPhone 请到 <a href="../ios/index.html">iPhone 安装页</a></p>
+<script>
+// iPhone、iPad 打开了这一页（iPadOS 的 Safari 自称 Macintosh，靠触摸点数认出来）：顶上提示去 iPhone 安装页
+const ua = navigator.userAgent;
+if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) document.getElementById("wrong").style.display = "block";
+</script>
 </body>
 </html>
 EOF
