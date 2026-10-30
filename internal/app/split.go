@@ -293,9 +293,8 @@ func (a *app) splitPane(c *ui.Context, w *workspace, i int) {
 	if term.PhoneSized {
 		a.phoneSizedBar(c, term.ID)
 	}
-	a.termPane(c, i, term)
-	// 点进另一栏（终端或它的查找栏拿到焦点）：选中的终端跟着换
-	if i != a.pane && c.FocusWithin(a.termAreaRef[i]) {
+	// 点进另一栏（终端或它的查找栏刚拿到焦点）：选中的终端跟着换
+	if a.termPane(c, i, term) && i != a.pane {
 		a.focusPane(w.ID, i)
 	}
 }

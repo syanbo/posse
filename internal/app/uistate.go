@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -122,15 +124,38 @@ func loadUIState(home string) uiState {
 
 // saveUIState 先写临时文件再改名，窗口中途退出也不会留下半个文件。
 func saveUIState(home string, s uiState) error {
+	return saveUIStateSeq(home, s, uiSaveSeq.Add(1))
+}
+
+// 每次保存在后台协程里写，连着改几下就有几个协程同时写：共用的临时文件会被写成两份内容拼起来，
+// 晚开始的协程也可能先写完、被早的盖掉。按发起的顺序编号，一次只写一个，比已写的旧就不写。
+var (
+	uiSaveSeq atomic.Uint64
+	uiSave    struct {
+		sync.Mutex
+		written uint64
+	}
+)
+
+func saveUIStateSeq(home string, s uiState, seq uint64) error {
 	b, err := json.Marshal(s)
 	if err != nil {
 		return err
+	}
+	uiSave.Lock()
+	defer uiSave.Unlock()
+	if seq < uiSave.written {
+		return nil
 	}
 	tmp := uiStatePath(home) + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, uiStatePath(home))
+	if err := os.Rename(tmp, uiStatePath(home)); err != nil {
+		return err
+	}
+	uiSave.written = seq
+	return nil
 }
 
 // sortProjects 按 order 排列项目；不在 order 里的（新加的）按名称排在后面。

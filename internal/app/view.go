@@ -54,6 +54,9 @@ func (a *app) build(c *ui.Context) {
 	if !a.splitShown() && a.resizingSplit == "term-split" {
 		a.resizingSplit, a.splitDrag = "", 0
 	}
+	if !a.splitShown() {
+		a.paneHadFocus[1] = false
+	}
 	a.shortcuts(c, w, cur)
 	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
 	for id, v := range a.files {
@@ -1714,7 +1717,8 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 }
 
 // termPane 画主区域的一栏终端：终端视图，和浮在它上面的右键菜单、启动提示、会话按钮、查找栏、链接卡片。
-func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
+// 返回这一栏是不是刚拿到焦点（点进了这一栏）。
+func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (gained bool) {
 	t := c.Theme()
 	v := a.panes[i]
 	// 留一点内边距，文字不贴边
@@ -1741,6 +1745,11 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 	a.termDrop(c, area, v, cur.Agent)
 	a.linkCardView(c, area, v.id)
 	a.hoverPreviewView(c, area, v.id)
+	// 不分屏时也记：刚分屏的那一帧 termAreaRef 还是上一帧的区域，里面原来就有焦点，不能当成刚点进来
+	now := c.FocusWithin(a.termAreaRef[i])
+	gained = now && !a.paneHadFocus[i]
+	a.paneHadFocus[i] = now
+	return gained
 }
 
 // startingHint 在程序还没画出任何内容时居中画蜂巢加载动画和"正在启动"：新开的终端要先跑完用户的

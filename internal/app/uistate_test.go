@@ -304,3 +304,19 @@ func TestCloseBoard(t *testing.T) {
 		t.Fatalf("⌘W left selected = %q", a.selected)
 	}
 }
+
+// 后台保存的协程不按发起的顺序跑完：先发起的晚写到，不能盖掉后发起的。
+func TestSaveUIStateOrder(t *testing.T) {
+	home := t.TempDir()
+	older := uiSaveSeq.Add(1)
+	newer := uiSaveSeq.Add(1)
+	if err := saveUIStateSeq(home, uiState{Selected: "newer"}, newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveUIStateSeq(home, uiState{Selected: "older"}, older); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadUIState(home).Selected; got != "newer" {
+		t.Fatalf("selected = %q, want newer", got)
+	}
+}
