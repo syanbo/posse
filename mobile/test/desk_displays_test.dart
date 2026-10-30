@@ -92,7 +92,7 @@ void main() {
     );
   });
 
-  testWidgets('tapping a display on the map or in the list picks it', (
+  testWidgets('display names sit on the map and tapping a display picks it', (
     tester,
   ) async {
     final d = DeskDisplays.parse(_frame);
@@ -121,9 +121,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(picked, (window: false, id: 7));
 
+    // 多块屏只有排布图，没有一行行的列表
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('desk-display-1')));
+    expect(find.byKey(const Key('desk-display-1')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('desk-display-map-1')),
+        matching: find.text('Built-in Retina Display'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('desk-display-map-1')));
     await tester.pumpAndSettle();
     expect(picked, (window: false, id: 1));
 

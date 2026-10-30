@@ -7,7 +7,7 @@ import 'displays.dart';
 /// 选好的画面：整块屏或一个窗口，[id] 是屏的 ID 或窗口的 ID。
 typedef DeskPick = ({bool window, int id});
 
-/// 选看什么：上面是屏（多块时按真实排布画出各块，点哪块切哪块），下面是当前空间里的窗口，
+/// 选看什么：上面是屏（多块时按真实排布画出各块，块里写名字和分辨率，点哪块切哪块），下面是当前空间里的窗口，
 /// [windows] 打开时现要。返回选中的，取消为 null。
 Future<DeskPick?> pickDeskView(
   BuildContext context,
@@ -40,47 +40,41 @@ Future<DeskPick?> pickDeskView(
                   title: '整块屏',
                   inset: 48,
                   children: [
+                    // 多块屏只画排布图，名字和分辨率写在各块里
                     if (displays.several)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                         child: SizedBox(
-                          height: 120,
+                          height: 150,
                           child: DeskDisplayMap(
                             displays: displays,
                             onPick: (id) => pick((window: false, id: id)),
                           ),
                         ),
-                      ),
-                    for (final (i, d) in displays.list.indexed)
-                      RowTile(
-                        key: Key('desk-display-${d.id}'),
-                        leading: SizedBox(
-                          width: 22,
-                          child: Text(
-                            '${i + 1}',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: d.id == displays.current
-                                  ? c.accent
-                                  : c.muted,
-                              fontWeight: FontWeight.w600,
-                            ),
+                      )
+                    else
+                      for (final d in displays.list)
+                        RowTile(
+                          key: Key('desk-display-${d.id}'),
+                          leading: Icon(
+                            Icons.desktop_windows_outlined,
+                            size: 20,
+                            color: d.id == displays.current
+                                ? c.accent
+                                : c.muted,
                           ),
+                          title: Text(deskDisplayName(displays, d)),
+                          subtitle: Text(_resolution(d)),
+                          trailing: watching == null && d.id == displays.current
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 20,
+                                  color: c.accent,
+                                )
+                              : null,
+                          chevron: false,
+                          onTap: () => pick((window: false, id: d.id)),
                         ),
-                        title: Text(deskDisplayName(displays, d)),
-                        subtitle: Text(
-                          '${d.pixelWidth} × ${d.pixelHeight}${d.main ? ' · 主屏' : ''}',
-                        ),
-                        trailing: watching == null && d.id == displays.current
-                            ? Icon(
-                                Icons.check_rounded,
-                                size: 20,
-                                color: c.accent,
-                              )
-                            : null,
-                        chevron: false,
-                        onTap: () => pick((window: false, id: d.id)),
-                      ),
                   ],
                 ),
                 FutureBuilder<List<DeskWindow>>(
@@ -145,6 +139,9 @@ Future<DeskPick?> pickDeskView(
   );
 }
 
+String _resolution(DeskDisplay d) =>
+    '${d.pixelWidth} × ${d.pixelHeight}${d.main ? ' · 主屏' : ''}';
+
 /// 窗口所属 App 的图标；电脑没给图标时画一个通用的窗口图标。
 class _AppIcon extends StatelessWidget {
   const _AppIcon(this.window, {required this.color});
@@ -188,7 +185,7 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// 排布图：每块屏按相对位置和大小画成一块，正在看的那块高亮，块上写序号（和下面列表的顺序一样）。
+/// 排布图：每块屏按相对位置和大小画成一块，正在看的那块高亮，块里写名字和分辨率。
 class DeskDisplayMap extends StatelessWidget {
   const DeskDisplayMap({
     super.key,
@@ -207,7 +204,7 @@ class DeskDisplayMap extends StatelessWidget {
         final rects = deskDisplayLayout(displays.list, box.biggest);
         return Stack(
           children: [
-            for (final (i, d) in displays.list.indexed)
+            for (final d in displays.list)
               if (rects[d.id] case final r?)
                 Positioned.fromRect(
                   // 屏之间留一道缝，紧挨着的两块分得清
@@ -226,14 +223,35 @@ class DeskDisplayMap extends StatelessWidget {
                         ),
                         borderRadius: BorderRadius.circular(Rd.button / 2),
                       ),
-                      child: Center(
-                        child: Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            color: d.id == displays.current
-                                ? c.accent
-                                : c.muted,
-                            fontWeight: FontWeight.w600,
+                      // 小块放不下时整体缩小，不截断名字
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  deskDisplayName(displays, d),
+                                  style: TextStyle(
+                                    fontSize: Fs.meta,
+                                    color: d.id == displays.current
+                                        ? c.accent
+                                        : c.text,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _resolution(d),
+                                  style: TextStyle(
+                                    fontSize: Fs.caption,
+                                    color: c.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
