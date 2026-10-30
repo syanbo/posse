@@ -31,7 +31,17 @@ var (
 	iconFileZip  = icon(`<rect x="5" y="3.75" width="14" height="16.5" rx="2"/><path d="M12 3.75v1.5M12 7v1.5M12 10.25v1.5"/><rect x="10.25" y="13.5" width="3.5" height="3.75" rx="1"/>`)
 	iconFilePDF  = icon(pageShape + `<path d="M9.5 18v-6h2.25a1.75 1.75 0 0 1 0 3.5H9.5"/>`)
 	iconFileLock = icon(`<rect x="5" y="10.5" width="14" height="9.75" rx="2"/><path d="M8.25 10.5V8a3.75 3.75 0 0 1 7.5 0v2.5M12 14.25v2.25"/>`)
-	iconFileBox  = icon(`<path d="M3.5 12.5h17c-.5 4.25-3.9 7.25-8.5 7.25s-8-3-8.5-7.25z"/><path d="M6 12.5v-4h9v4M9 8.5v4M12 8.5v4M9 8.5v-4h3v4"/>`)
+	// 语言和平台的标志照原样简化成线条
+	iconFileDart    = icon(`<path d="M8.5 3.75h7.25l4.5 4.5v7.25l-4.75 4.75H8.25L3.75 15.75V8.5z"/><path d="M3.75 8.5 15.5 20.25M8.5 3.75v8.25h11.75"/>`)
+	iconFileFlutter = icon(`<path d="M14.25 3.25h5.5L8.5 14.5 5.75 11.75z"/><path d="M14.25 11.25h5.5l-5 5 5 5h-5.5l-5-5z"/>`)
+	iconFileSwift   = icon(`<path d="M19.25 15.5c1.1-3.6-.6-7.8-5.25-11 2.4 3.4 2.6 6.4 1.65 8.4C12.6 10.8 8.4 7.6 5 4.75c2.6 3.3 5 5.75 7.1 7.4-2.75-1.25-5.1-2.6-7.6-4.4 2.9 4.8 7.6 9.5 13.75 9 .8.55 1.4 1.3 1.75 2.25.35-1.35.15-2.5-.75-3.5z"/>`)
+	iconFileKotlin  = icon(`<path d="M5 5h14l-7 7 7 7H5z"/>`)
+	iconFileVue     = icon(`<path d="M2.75 4.5h5.5L12 11l3.75-6.5h5.5L12 20.25z"/><path d="M8.25 4.5h7.5"/>`)
+	iconFileDroid   = icon(`<path d="M4.5 17.5v-2.25a7.5 7.5 0 0 1 15 0v2.25z"/><path d="M7.5 9.25 5.75 6.5M16.5 9.25l1.75-2.75"/><circle cx="9.25" cy="13.75" r="1" fill="currentColor" stroke="none"/><circle cx="14.75" cy="13.75" r="1" fill="currentColor" stroke="none"/>`)
+	iconFileGradle  = icon(`<path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/>`)
+	iconFileLayout  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M3.75 9h16.5M9.5 9v10.5"/>`)
+	iconFileKey     = icon(`<circle cx="8" cy="15.5" r="3.75"/><path d="m10.75 12.75 8.5-8.5M15.75 7.75l2.5 2.5M13.5 10l2 2"/>`)
+	iconFileBox     = icon(`<path d="M3.5 12.5h17c-.5 4.25-3.9 7.25-8.5 7.25s-8-3-8.5-7.25z"/><path d="M6 12.5v-4h9v4M9 8.5v4M12 8.5v4M9 8.5v-4h3v4"/>`)
 )
 
 type fileKind int
@@ -58,6 +68,16 @@ const (
 	kindLock
 	kindGit
 	kindDocker
+	kindDart
+	kindFlutter
+	kindSwift
+	kindKotlin
+	kindJava
+	kindVue
+	kindAndroid
+	kindGradle
+	kindLayout
+	kindKey
 )
 
 // 颜色是 palette.data 的下标（橙、蓝、绿、紫、金、青），-1 是次要色。
@@ -86,6 +106,16 @@ var fileKinds = [...]struct {
 	kindLock:     {iconFileLock, -1},
 	kindGit:      {iconBranch, 0},
 	kindDocker:   {iconFileBox, 1},
+	kindDart:     {iconFileDart, 5},
+	kindFlutter:  {iconFileFlutter, 1},
+	kindSwift:    {iconFileSwift, 0},
+	kindKotlin:   {iconFileKotlin, 3},
+	kindJava:     {iconCoffee, 0},
+	kindVue:      {iconFileVue, 2},
+	kindAndroid:  {iconFileDroid, 2},
+	kindGradle:   {iconFileGradle, 5},
+	kindLayout:   {iconFileLayout, 1},
+	kindKey:      {iconFileKey, 4},
 }
 
 // 完整文件名先于扩展名：package-lock.json 是锁文件，不是 JSON。
@@ -98,19 +128,23 @@ var kindByName = map[string]fileKind{
 	"license": kindText, "licence": kindText, "copying": kindText, "notice": kindText,
 	".gitignore": kindGit, ".gitattributes": kindGit, ".gitmodules": kindGit, ".gitkeep": kindGit,
 	".env": kindData, ".editorconfig": kindData, ".npmrc": kindData,
+	// Flutter、Android、iOS 工程里的固定文件
+	"pubspec.yaml": kindFlutter, "analysis_options.yaml": kindFlutter, ".metadata": kindFlutter,
+	"androidmanifest.xml": kindAndroid, "gradlew": kindGradle, "gradlew.bat": kindGradle, "gradle.properties": kindGradle, "gradle-wrapper.properties": kindGradle,
+	"podfile": kindCode, "gemfile": kindCode, "fastfile": kindCode, "appfile": kindCode, "matchfile": kindCode,
 }
 
 var kindByExt = map[string]fileKind{
 	".ts": kindTS, ".tsx": kindTS, ".mts": kindTS, ".cts": kindTS,
 	".js": kindJS, ".jsx": kindJS, ".mjs": kindJS, ".cjs": kindJS,
 	".go": kindGo,
-	".py": kindCode, ".rs": kindCode, ".swift": kindCode, ".dart": kindCode, ".c": kindCode, ".h": kindCode,
-	".cc": kindCode, ".cpp": kindCode, ".hpp": kindCode, ".m": kindCode, ".mm": kindCode, ".java": kindCode,
-	".kt": kindCode, ".kts": kindCode, ".scala": kindCode, ".rb": kindCode, ".php": kindCode, ".lua": kindCode,
+	".py": kindCode, ".rs": kindCode, ".c": kindCode, ".h": kindCode,
+	".cc": kindCode, ".cpp": kindCode, ".hpp": kindCode, ".m": kindCode, ".mm": kindCode,
+	".scala": kindCode, ".rb": kindCode, ".php": kindCode, ".lua": kindCode,
 	".zig": kindCode, ".cs": kindCode, ".ex": kindCode, ".exs": kindCode, ".hs": kindCode, ".ml": kindCode,
-	".r": kindCode, ".proto": kindCode, ".graphql": kindCode, ".gql": kindCode, ".pl": kindCode, ".groovy": kindCode, ".gradle": kindCode,
+	".r": kindCode, ".proto": kindCode, ".graphql": kindCode, ".gql": kindCode, ".pl": kindCode, ".groovy": kindCode,
 	".sh": kindShell, ".bash": kindShell, ".zsh": kindShell, ".fish": kindShell, ".ps1": kindShell, ".mk": kindShell,
-	".html": kindMarkup, ".htm": kindMarkup, ".xml": kindMarkup, ".vue": kindMarkup, ".svelte": kindMarkup, ".astro": kindMarkup,
+	".html": kindMarkup, ".htm": kindMarkup, ".xml": kindMarkup, ".svelte": kindMarkup, ".astro": kindMarkup,
 	".css": kindStyle, ".scss": kindStyle, ".sass": kindStyle, ".less": kindStyle,
 	".json": kindData, ".jsonc": kindData, ".json5": kindData, ".yaml": kindData, ".yml": kindData, ".toml": kindData,
 	".ini": kindData, ".conf": kindData, ".cfg": kindData, ".plist": kindData, ".env": kindData, ".mod": kindData,
@@ -124,7 +158,13 @@ var kindByExt = map[string]fileKind{
 	".sql": kindDatabase, ".db": kindDatabase, ".sqlite": kindDatabase, ".sqlite3": kindDatabase,
 	".zip": kindArchive, ".tar": kindArchive, ".gz": kindArchive, ".tgz": kindArchive, ".bz2": kindArchive,
 	".xz": kindArchive, ".7z": kindArchive, ".rar": kindArchive, ".dmg": kindArchive, ".jar": kindArchive,
-	".pdf":  kindPDF,
+	".pdf": kindPDF, ".dart": kindDart, ".arb": kindData,
+	".swift": kindSwift, ".java": kindJava, ".kt": kindKotlin, ".kts": kindKotlin, ".vue": kindVue,
+	".apk": kindAndroid, ".aab": kindAndroid, ".gradle": kindGradle,
+	".storyboard": kindLayout, ".xib": kindLayout,
+	".xcconfig": kindData, ".entitlements": kindData, ".pbxproj": kindData, ".xcscheme": kindData, ".strings": kindData, ".xcstrings": kindData,
+	".ipa": kindArchive, ".aar": kindArchive,
+	".jks": kindKey, ".keystore": kindKey, ".p12": kindKey, ".pem": kindKey, ".cer": kindKey, ".mobileprovision": kindKey,
 	".lock": kindLock,
 }
 
@@ -140,6 +180,8 @@ func kindOf(name string) fileKind {
 	case (strings.HasPrefix(base, "compose.") || strings.HasPrefix(base, "docker-compose.")) &&
 		(strings.HasSuffix(base, ".yaml") || strings.HasSuffix(base, ".yml")):
 		return kindDocker
+	case strings.HasSuffix(base, ".gradle.kts"):
+		return kindGradle
 	case strings.HasPrefix(base, ".env."):
 		return kindData
 	}

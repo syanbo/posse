@@ -223,7 +223,7 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	os.Symlink(shared, filepath.Join(root, "shared"))
 	os.Symlink("README.md", filepath.Join(root, "CLAUDE.md"))
 	// 各类文件按类型换图标和颜色
-	for _, name := range []string{"package.json", "app.ts", "index.js", "logo.png", "build.sh", "go.sum", "styles.css", "index.html", "Dockerfile", "data.csv", "demo.mp4", "notes.txt", "docs.pdf", "dist.zip", "schema.sql"} {
+	for _, name := range []string{"package.json", "app.ts", "index.js", "logo.png", "build.sh", "go.sum", "styles.css", "index.html", "Dockerfile", "data.csv", "demo.mp4", "notes.txt", "docs.pdf", "dist.zip", "schema.sql", "main.dart", "pubspec.yaml", "AppDelegate.swift", "Main.storyboard", "MainActivity.kt", "build.gradle.kts", "AndroidManifest.xml", "App.java", "App.vue", "upload.jks"} {
 		os.WriteFile(filepath.Join(root, name), nil, 0o644)
 	}
 	w := &a.workspaces[0]
