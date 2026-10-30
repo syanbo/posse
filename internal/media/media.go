@@ -10,13 +10,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -273,18 +273,17 @@ func SessionItems(src string, imgs []history.ToolImage) (pasted, made []Item) {
 
 // ScaledImage 解码图片并缩到最宽 width 像素；本来就更小的不放大。
 func ScaledImage(path string, width int) (*image.RGBA, error) {
-	f, err := os.Open(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	img, _, err := decodeScaled(f, width)
+	img, _, err := decodeScaled(b, width)
 	return img, err
 }
 
 // ScaledImageBytes 是 ScaledImage 读内存里的图片，顺带返回原始尺寸。
 func ScaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
-	return decodeScaled(bytes.NewReader(b), width)
+	return decodeScaled(b, width)
 }
 
 // PreviewImage 是 DecodePreview 解出的图片。
@@ -296,12 +295,16 @@ type PreviewImage struct {
 
 // DecodePreview 解码文件标签里预览的图片：按原分辨率，超过 maxPixels 个像素才等比缩小，放大看细节时还是原来的像素。
 func DecodePreview(path string, maxPixels int) (PreviewImage, error) {
-	f, err := os.Open(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return PreviewImage{}, err
 	}
-	defer f.Close()
-	src, format, err := image.Decode(f)
+	return DecodePreviewBytes(b, maxPixels)
+}
+
+// DecodePreviewBytes 是 DecodePreview 解内存里的图片。
+func DecodePreviewBytes(data []byte, maxPixels int) (PreviewImage, error) {
+	src, format, err := decodeAny(data)
 	if err != nil {
 		return PreviewImage{}, err
 	}
@@ -320,8 +323,21 @@ func DecodePreview(path string, maxPixels int) (PreviewImage, error) {
 	return PreviewImage{Img: dst, Size: b.Size(), Format: format}, nil
 }
 
-func decodeScaled(r io.Reader, width int) (*image.RGBA, image.Point, error) {
-	src, _, err := image.Decode(r)
+// decodeAny 先用 Go 解码，解不开再交给系统的 ImageIO：浏览器、预览能显示的不合规图片 Go 会拒绝，
+// 比如带 tRNS 的 RGBA PNG（规范不允许，libpng 只警告后忽略）。两边都解不开报 Go 的错。
+func decodeAny(data []byte) (image.Image, string, error) {
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err == nil {
+		return img, format, nil
+	}
+	if img, format, err2 := decodeSystem(data); err2 == nil {
+		return img, format, nil
+	}
+	return nil, "", err
+}
+
+func decodeScaled(data []byte, width int) (*image.RGBA, image.Point, error) {
+	src, _, err := decodeAny(data)
 	if err != nil {
 		return nil, image.Point{}, err
 	}
@@ -424,4 +440,30 @@ func WriteToolImage(it Item) (string, error) {
 	sum := sha1.Sum([]byte(it.Key))
 	path := filepath.Join(dir, fmt.Sprintf("%s-%x%s", name, sum[:4], ext))
 	return path, os.WriteFile(path, b, 0o600)
+}
+
+// maybeAnimated 看文件头猜是不是动图，不是的不用交给 ImageIO 数帧：
+// PNG 要在 IDAT 之前有 acTL，WebP 要有 VP8X 的动画标志，GIF 一律算可能是。
+func maybeAnimated(b []byte) bool {
+	switch {
+	case bytes.HasPrefix(b, []byte("GIF8")):
+		return true
+	case len(b) > 20 && bytes.HasPrefix(b, []byte("RIFF")) && string(b[8:16]) == "WEBPVP8X":
+		return b[20]&0x02 != 0
+	case bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")):
+		for i := 8; i+8 <= len(b); {
+			n := int(binary.BigEndian.Uint32(b[i:]))
+			switch string(b[i+4 : i+8]) {
+			case "acTL":
+				return true
+			case "IDAT":
+				return false
+			}
+			if n < 0 || n > len(b) {
+				return false
+			}
+			i += 12 + n
+		}
+	}
+	return false
 }

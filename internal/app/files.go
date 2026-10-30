@@ -63,6 +63,7 @@ type fileDoc struct {
 	deleted    bool
 	err        string
 	img        *ui.Bitmap
+	anim       *animPlayer // 动图：img 是它的位图
 	imgInfo    imageInfo
 	iv         imageView
 	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
@@ -413,15 +414,21 @@ func (a *app) loadDoc(d *fileDoc) {
 	go func() {
 		if isImagePath(path) {
 			st := files.StatFile(path)
-			pi, err := media.DecodePreview(path, imageMaxPixels)
+			pi, anim, err := decodeDocImage(path)
 			a.update(func() {
 				d.base, d.seen = st, st
 				if err != nil {
 					d.kind, d.err = docError, err.Error()
 					return
 				}
+				d.kind, d.anim = docImage, anim
+				if anim != nil {
+					d.img = anim.bm
+				} else {
+					d.img = ui.NewBitmap(pi.Img)
+				}
 				// 放大到超过原大时按像素块画，看得清每个像素
-				d.kind, d.img = docImage, ui.NewBitmap(pi.Img).Pixelated()
+				d.img.Pixelated()
 				d.imgInfo = imageInfo{w: pi.Size.X, h: pi.Size.Y, format: pi.Format, bytes: st.Size, alpha: !pi.Img.Opaque()}
 			})
 			return
@@ -429,6 +436,19 @@ func (a *app) loadDoc(d *fileDoc) {
 		c, err := files.ReadFile(path)
 		a.update(func() { a.applyContent(d, c, err) })
 	}()
+}
+
+// decodeDocImage 解码文件标签里预览的图片；动图另外给出播放器，pi.Img 是它的第一帧。
+func decodeDocImage(path string) (media.PreviewImage, *animPlayer, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return media.PreviewImage{}, nil, err
+	}
+	if anim, a, err := newAnimPlayer(b, 0); anim != nil && err == nil {
+		return media.PreviewImage{Img: anim.cur, Size: a.Size, Format: a.Format}, anim, nil
+	}
+	pi, err := media.DecodePreviewBytes(b, imageMaxPixels)
+	return pi, nil, err
 }
 
 // applyContent 把读到的内容放进文档：第一次打开，或磁盘上变了、自己没有未保存的改动时重载。

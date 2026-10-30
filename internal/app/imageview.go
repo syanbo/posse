@@ -198,6 +198,7 @@ func (a *app) imageDocView(c *ui.Context, d *fileDoc) {
 	checker := d.imgInfo.alpha && !a.state.ImageCheckerOff
 	dark := c.Theme().Dark
 	box.Draw(func(p *ui.Painter, r ui.Rect) {
+		animate(p, d.anim)
 		resized := r.W != v.vw || r.H != v.vh
 		v.vw, v.vh, v.dpr = r.W, r.H, p.Scale()
 		if resized && v.zoom != 0 {
@@ -252,12 +253,47 @@ func checkerBitmap(cols, rows int, dark bool) *ui.Bitmap {
 	return ui.NewBitmap(img).Pixelated()
 }
 
+// checkerCache 是图片 diff 垫的棋盘格位图：一格一个像素，on 色和透明相间，格数、颜色变了才重做。
+// 每格单独填充的话，动图每次换帧重画都要填几千个格子。
+type checkerCache struct {
+	cols, rows int
+	on         ui.Color
+	bm         *ui.Bitmap
+}
+
+func (k *checkerCache) get(cols, rows int, on ui.Color) *ui.Bitmap {
+	if k.bm != nil && k.cols == cols && k.rows == rows && k.on == on {
+		return k.bm
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, cols, rows))
+	for y := range rows {
+		for x := range cols {
+			if (x+y)%2 == 0 {
+				img.SetNRGBA(x, y, color.NRGBA{on.R, on.G, on.B, on.A})
+			}
+		}
+	}
+	k.cols, k.rows, k.on, k.bm = cols, rows, on, ui.NewBitmap(img).Pixelated()
+	return k.bm
+}
+
 // imageBar 是图片在文档顶栏右边的部分：尺寸、格式、大小，棋盘格开关，缩放比例（点开选适应窗口、100%、200%）。
 func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 	t := c.Theme()
 	info := d.imgInfo
 	ui.Text(c, fmt.Sprintf("%d × %d  %s  %s", info.w, info.h, strings.ToUpper(info.format), byteSize(int(info.bytes)))).
 		FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
+	if an := d.anim; an != nil {
+		ui.Text(c, fmt.Sprintf("%d 帧  %.1f 秒", len(an.delays), an.duration().Seconds())).
+			FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(0)
+		ic, label := iconPause, "暂停"
+		if !an.playing() {
+			ic, label = iconPlay, "播放"
+		}
+		if pressable(iconButtonSized(c, ic, label, compactBox(), smallIcon())).Clicked() {
+			an.toggle()
+		}
+	}
 	if info.alpha {
 		on := !a.state.ImageCheckerOff
 		if toggleIconButton(c, "img-checker", iconChecker, "透明处显示棋盘格", on) {

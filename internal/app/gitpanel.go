@@ -950,6 +950,9 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 					case side.img != nil:
 						ui.Text(c, fmt.Sprintf("%d×%d", side.w, side.h)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 						ui.Text(c, byteSize(side.size)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+						if side.anim != nil {
+							ui.Text(c, fmt.Sprintf("%d 帧", len(side.anim.delays))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+						}
 					}
 				})
 				ui.Box(c).Grow(1).Center().Children(func() {
@@ -959,17 +962,14 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 					case side.img != nil:
 						// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
 						w, h := side.img.Size()
-						checker := colors(t).fillHi
+						on := colors(t).fillHi
+						anim, ck := side.anim, &df.checkers[i]
 						ui.Box(c).Shrink(1).Draw(func(p *ui.Painter, r ui.Rect) {
-							const sq = 8
+							// 先换帧，下面的图片元素画的就是这一帧
+							animate(p, anim)
+							cols, rows := int(r.W/checkerTile)+1, int(r.H/checkerTile)+1
 							p.Clip(r, 0, func() {
-								for y := float32(0); y < r.H; y += sq {
-									for x := float32(0); x < r.W; x += sq {
-										if (int(x/sq)+int(y/sq))%2 == 0 {
-											p.Fill(ui.Rect{X: r.X + x, Y: r.Y + y, W: sq, H: sq}, checker, 0)
-										}
-									}
-								}
+								p.ImageRegion(ck.get(cols, rows, on), ui.Rect{}, ui.Rect{X: r.X, Y: r.Y, W: float32(cols * checkerTile), H: float32(rows * checkerTile)}, ui.ImageOptions{})
 							})
 						}).Children(func() {
 							ui.Image(c, side.img).Fit(ui.Contain).MaxWidth(float32(w) / 2).MaxHeight(float32(h) / 2).Shrink(1)

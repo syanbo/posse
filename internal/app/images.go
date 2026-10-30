@@ -30,6 +30,7 @@ type imagesView struct {
 
 	hover   string // 悬停的图片的 key
 	big     *ui.Bitmap
+	bigAnim *animPlayer // 悬停的是动图：big 是它的位图
 	bigKey  string
 	bigBusy bool
 }
@@ -139,7 +140,7 @@ func (a *app) loadBig(it imageItem) {
 	v.bigBusy = true
 	id := v.term
 	go func() {
-		img, err := media.Decode(it.Item, bigWidth)
+		anim, img, err := decodeBig(it.Item)
 		a.update(func() {
 			v := &a.images
 			if v.term != id {
@@ -150,9 +151,25 @@ func (a *app) loadBig(it imageItem) {
 				v.markFailed(it.Key)
 				return
 			}
-			v.big, v.bigKey = ui.NewBitmap(img), it.Key
+			v.big, v.bigAnim, v.bigKey = ui.NewBitmap(img), anim, it.Key
+			if anim != nil {
+				v.big = anim.bm
+			}
 		})
 	}()
+}
+
+// decodeBig 解码悬停放大的那张图；动图给出播放器，img 是它的第一帧。
+func decodeBig(it media.Item) (*animPlayer, *image.RGBA, error) {
+	if !it.Video {
+		if b, err := media.ReadImage(it); err == nil {
+			if anim, _, err := newAnimPlayer(b, bigWidth); anim != nil && err == nil {
+				return anim, anim.cur, nil
+			}
+		}
+	}
+	img, err := media.Decode(it, bigWidth)
+	return nil, img, err
 }
 
 // withImagePath 拿到原图或视频的路径后在主线程调用 f。工具返回的图片只在会话文件里，先写到临时目录：
@@ -349,6 +366,10 @@ func (a *app) imagePreview(c *ui.Context, body ui.Element) {
 		}
 	}
 	floating(c, ui.Box(c).Absolute().Top(8).Right(8+280+8).Padding(8)).Children(func() {
-		ui.Image(c, v.big).Width(dw).Radius(rSmall) // 外框内边距 8：12 - 8
+		anim := v.bigAnim
+		// 动图在外层的 Draw 里换帧，里面的图片画的就是这一帧
+		ui.Box(c).Draw(func(p *ui.Painter, r ui.Rect) { animate(p, anim) }).Children(func() {
+			ui.Image(c, v.big).Width(dw).Radius(rSmall) // 外框内边距 8：12 - 8
+		})
 	})
 }

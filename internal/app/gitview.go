@@ -379,8 +379,9 @@ type diffDoc struct {
 	jumped    bool // 已经跳过
 	binary    bool
 	images    [2]diffImage // 图片文件的两边：改之前、改之后
-	stamp     files.Stamp  // 工作区文件的磁盘戳，变了才重读
-	hint      string       // F7 到头时 diff 栏下面的提示（diffHint）
+	checkers  [2]checkerCache
+	stamp     files.Stamp // 工作区文件的磁盘戳，变了才重读
+	hint      string      // F7 到头时 diff 栏下面的提示（diffHint）
 	hintAt    time.Time
 	force     bool   // 超过 diffMaxSize 也比较：点过"仍要比较"
 	comparing bool   // 大文件正在后台比较（读进来之后，或切换了忽略空白）
@@ -392,6 +393,7 @@ type diffDoc struct {
 // diffImage 是图片 diff 的一边：缩好的图、原始尺寸、文件大小；size 为 -1 表示这一边没有文件（新增或删除）。
 type diffImage struct {
 	img  *ui.Bitmap
+	anim *animPlayer // 动图：img 是它的位图
 	w, h int
 	size int
 	err  string
@@ -400,6 +402,9 @@ type diffImage struct {
 func loadDiffImage(b []byte, exists bool) diffImage {
 	if !exists {
 		return diffImage{size: -1}
+	}
+	if anim, a, err := newAnimPlayer(b, imageMaxPx); anim != nil && err == nil {
+		return diffImage{img: anim.bm, anim: anim, w: a.Size.X, h: a.Size.Y, size: len(b)}
 	}
 	img, dim, err := media.ScaledImageBytes(b, imageMaxPx)
 	if err != nil {
