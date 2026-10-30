@@ -222,8 +222,12 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	os.WriteFile(filepath.Join(shared, "util.go"), []byte("package shared\n"), 0o644)
 	os.Symlink(shared, filepath.Join(root, "shared"))
 	os.Symlink("README.md", filepath.Join(root, "CLAUDE.md"))
+	// Xcode 的包目录换成各自的图标
+	for _, dir := range []string{"ios/Runner.xcodeproj", "ios/Runner.xcworkspace", "ios/Runner/Assets.xcassets/AppIcon.appiconset", "ios/Runner/Assets.xcassets/LaunchImage.imageset", "ios/Runner/Base.lproj"} {
+		os.MkdirAll(filepath.Join(root, dir), 0o755)
+	}
 	// 各类文件按类型换图标和颜色
-	for _, name := range []string{"package.json", "app.ts", "index.js", "logo.png", "build.sh", "go.sum", "styles.css", "index.html", "Dockerfile", "data.csv", "demo.mp4", "notes.txt", "docs.pdf", "dist.zip", "schema.sql", "main.dart", "pubspec.yaml", "AppDelegate.swift", "Main.storyboard", "MainActivity.kt", "build.gradle.kts", "AndroidManifest.xml", "App.java", "App.vue", "upload.jks"} {
+	for _, name := range []string{"package.json", "app.ts", "index.js", "logo.png", "build.sh", "go.sum", "styles.css", "index.html", "Dockerfile", "data.csv", "demo.mp4", "notes.txt", "docs.pdf", "dist.zip", "schema.sql", "main.dart", "pubspec.yaml", "AppDelegate.swift", "Main.storyboard", "MainActivity.kt", "build.gradle.kts", "AndroidManifest.xml", "App.java", "App.vue", "upload.jks", "Bridging-Header.h", "AppDelegate.m"} {
 		os.WriteFile(filepath.Join(root, name), nil, 0o644)
 	}
 	w := &a.workspaces[0]

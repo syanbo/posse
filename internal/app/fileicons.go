@@ -32,7 +32,8 @@ var (
 	iconFilePDF  = icon(pageShape + `<path d="M9.5 18v-6h2.25a1.75 1.75 0 0 1 0 3.5H9.5"/>`)
 	iconFileLock = icon(`<rect x="5" y="10.5" width="14" height="9.75" rx="2"/><path d="M8.25 10.5V8a3.75 3.75 0 0 1 7.5 0v2.5M12 14.25v2.25"/>`)
 	// 语言和平台的标志照原样简化成线条
-	iconFileDart    = icon(`<path d="M8.5 3.75h7.25l4.5 4.5v7.25l-4.75 4.75H8.25L3.75 15.75V8.5z"/><path d="M3.75 8.5 15.5 20.25M8.5 3.75v8.25h11.75"/>`)
+	// Dart 用 Android Studio（Dart 插件 expui/dart.svg）的实心标志：深浅两块蓝改成同一颜色的两档透明度
+	iconFileDart    = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="currentColor" fill-opacity="0.55" fill-rule="evenodd" d="M3.37928 10.2715L3.37328 3.37354L1.19128 7.92554C0.936284 8.46854 0.828284 9.13254 1.57328 9.87654L3.71128 12.0145C3.33228 11.6355 3.38428 11.0175 3.37928 10.2715ZM12.5258 4.22274L12.0148 3.71074C11.6358 3.33174 11.0178 3.38374 10.2718 3.37874L3.37328 3.37354L12 12H15L15.0008 6.69674L12.5258 4.22274Z"/><path fill="currentColor" d="M3.37402 3.37297L10.271 3.37897C10.3587 3.37956 10.4445 3.37936 10.5285 3.37916C11.1591 3.3777 11.6805 3.37649 12.015 3.71097L9.87702 1.57297C9.13302 0.82897 8.46902 0.935969 7.92502 1.19097L3.37402 3.37297Z"/><path fill="currentColor" d="M12 12L3.37402 3.37297L3.38002 10.271C3.38061 10.3587 3.38041 10.4446 3.38022 10.5285C3.37875 11.1591 3.37754 11.6805 3.71202 12.014L4.22168 12.5259L6.69568 14.9999L12 15V12Z"/></svg>`))
 	iconFileFlutter = icon(`<path d="M14.25 3.25h5.5L8.5 14.5 5.75 11.75z"/><path d="M14.25 11.25h5.5l-5 5 5 5h-5.5l-5-5z"/>`)
 	iconFileSwift   = icon(`<path d="M19.25 15.5c1.1-3.6-.6-7.8-5.25-11 2.4 3.4 2.6 6.4 1.65 8.4C12.6 10.8 8.4 7.6 5 4.75c2.6 3.3 5 5.75 7.1 7.4-2.75-1.25-5.1-2.6-7.6-4.4 2.9 4.8 7.6 9.5 13.75 9 .8.55 1.4 1.3 1.75 2.25.35-1.35.15-2.5-.75-3.5z"/>`)
 	iconFileKotlin  = icon(`<path d="M5 5h14l-7 7 7 7H5z"/>`)
@@ -41,7 +42,16 @@ var (
 	iconFileGradle  = icon(`<path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/>`)
 	iconFileLayout  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M3.75 9h16.5M9.5 9v10.5"/>`)
 	iconFileKey     = icon(`<circle cx="8" cy="15.5" r="3.75"/><path d="m10.75 12.75 8.5-8.5M15.75 7.75l2.5 2.5M13.5 10l2 2"/>`)
-	iconFileBox     = icon(`<path d="M3.5 12.5h17c-.5 4.25-3.9 7.25-8.5 7.25s-8-3-8.5-7.25z"/><path d="M6 12.5v-4h9v4M9 8.5v4M12 8.5v4M9 8.5v-4h3v4"/>`)
+	// C 头文件、Objective-C 照 Xcode：纸上一个小写字母
+	iconFileH = icon(pageShape + `<path d="M10 10.5v7.5M10 14.75a2.25 2.25 0 0 1 4.5 0V18"/>`)
+	iconFileM = icon(pageShape + `<path d="M8.25 13v5M8.25 14.5a1.75 1.75 0 0 1 3.5 0V18M11.75 14.5a1.75 1.75 0 0 1 3.5 0V18"/>`)
+	// Xcode 的包目录：工程、工作区、资源目录、图标集、本地化
+	iconDirXcode     = icon(`<rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4"/><path d="m8 16.5 6-6"/><path d="m12.25 8.75 1.75-1.75 3 3-1.75 1.75z"/>`)
+	iconDirWorkspace = icon(`<rect x="7.75" y="3.75" width="12.5" height="12.5" rx="3"/><path d="M16.25 20.25h-9.5a3 3 0 0 1-3-3v-9.5"/>`)
+	iconDirAssets    = icon(`<rect x="4" y="4" width="7" height="7" rx="1.75"/><rect x="13" y="4" width="7" height="7" rx="1.75"/><rect x="4" y="13" width="7" height="7" rx="1.75"/><rect x="13" y="13" width="7" height="7" rx="1.75"/>`)
+	iconDirAppIcon   = icon(`<rect x="4.5" y="4.5" width="15" height="15" rx="4.25"/><path d="m12 8.5 1 2.25 2.5.25-1.9 1.65.6 2.45L12 13.8l-2.2 1.3.6-2.45L8.5 11l2.5-.25z"/>`)
+	iconDirBundle    = icon(`<path d="M12 3.5 19.5 7.75v8.5L12 20.5l-7.5-4.25v-8.5z"/><path d="M4.5 7.75 12 12l7.5-4.25M12 12v8.5"/>`)
+	iconFileBox      = icon(`<path d="M3.5 12.5h17c-.5 4.25-3.9 7.25-8.5 7.25s-8-3-8.5-7.25z"/><path d="M6 12.5v-4h9v4M9 8.5v4M12 8.5v4M9 8.5v-4h3v4"/>`)
 )
 
 type fileKind int
@@ -78,6 +88,14 @@ const (
 	kindGradle
 	kindLayout
 	kindKey
+	kindHeader
+	kindObjC
+	kindXcodeProj
+	kindXcodeWorkspace
+	kindAssets
+	kindAppIcon
+	kindLocale
+	kindBundle
 )
 
 // 颜色是 palette.data 的下标（橙、蓝、绿、紫、金、青），-1 是次要色。
@@ -85,37 +103,45 @@ var fileKinds = [...]struct {
 	icon  *ui.SVG
 	color int
 }{
-	kindOther:    {iconFile, -1},
-	kindTS:       {iconFileTS, 1},
-	kindJS:       {iconFileJS, 4},
-	kindGo:       {iconFileGo, 5},
-	kindCode:     {iconCode, 1},
-	kindShell:    {iconTerminal, 2},
-	kindMarkup:   {iconFileMark, 0},
-	kindStyle:    {iconFileCSS, 3},
-	kindData:     {iconBraces, 4},
-	kindMarkdown: {iconFileMD, 1},
-	kindText:     {iconFileText, -1},
-	kindImage:    {iconImage, 2},
-	kindVideo:    {iconFileVid, 3},
-	kindAudio:    {iconFileAud, 3},
-	kindTable:    {iconFileGrid, 2},
-	kindDatabase: {iconFileDB, 5},
-	kindArchive:  {iconFileZip, 4},
-	kindPDF:      {iconFilePDF, 0},
-	kindLock:     {iconFileLock, -1},
-	kindGit:      {iconBranch, 0},
-	kindDocker:   {iconFileBox, 1},
-	kindDart:     {iconFileDart, 5},
-	kindFlutter:  {iconFileFlutter, 1},
-	kindSwift:    {iconFileSwift, 0},
-	kindKotlin:   {iconFileKotlin, 3},
-	kindJava:     {iconCoffee, 0},
-	kindVue:      {iconFileVue, 2},
-	kindAndroid:  {iconFileDroid, 2},
-	kindGradle:   {iconFileGradle, 5},
-	kindLayout:   {iconFileLayout, 1},
-	kindKey:      {iconFileKey, 4},
+	kindOther:          {iconFile, -1},
+	kindTS:             {iconFileTS, 1},
+	kindJS:             {iconFileJS, 4},
+	kindGo:             {iconFileGo, 5},
+	kindCode:           {iconCode, 1},
+	kindShell:          {iconTerminal, 2},
+	kindMarkup:         {iconFileMark, 0},
+	kindStyle:          {iconFileCSS, 3},
+	kindData:           {iconBraces, 4},
+	kindMarkdown:       {iconFileMD, 1},
+	kindText:           {iconFileText, -1},
+	kindImage:          {iconImage, 2},
+	kindVideo:          {iconFileVid, 3},
+	kindAudio:          {iconFileAud, 3},
+	kindTable:          {iconFileGrid, 2},
+	kindDatabase:       {iconFileDB, 5},
+	kindArchive:        {iconFileZip, 4},
+	kindPDF:            {iconFilePDF, 0},
+	kindLock:           {iconFileLock, -1},
+	kindGit:            {iconBranch, 0},
+	kindDocker:         {iconFileBox, 1},
+	kindDart:           {iconFileDart, 1},
+	kindFlutter:        {iconFileFlutter, 1},
+	kindSwift:          {iconFileSwift, 0},
+	kindKotlin:         {iconFileKotlin, 3},
+	kindJava:           {iconCoffee, 0},
+	kindVue:            {iconFileVue, 2},
+	kindAndroid:        {iconFileDroid, 2},
+	kindGradle:         {iconFileGradle, 5},
+	kindLayout:         {iconFileLayout, 1},
+	kindKey:            {iconFileKey, 4},
+	kindHeader:         {iconFileH, 0},
+	kindObjC:           {iconFileM, 1},
+	kindXcodeProj:      {iconDirXcode, 1},
+	kindXcodeWorkspace: {iconDirWorkspace, 1},
+	kindAssets:         {iconDirAssets, 2},
+	kindAppIcon:        {iconDirAppIcon, 2},
+	kindLocale:         {iconGlobe, 1},
+	kindBundle:         {iconDirBundle, 4},
 }
 
 // 完整文件名先于扩展名：package-lock.json 是锁文件，不是 JSON。
@@ -138,8 +164,8 @@ var kindByExt = map[string]fileKind{
 	".ts": kindTS, ".tsx": kindTS, ".mts": kindTS, ".cts": kindTS,
 	".js": kindJS, ".jsx": kindJS, ".mjs": kindJS, ".cjs": kindJS,
 	".go": kindGo,
-	".py": kindCode, ".rs": kindCode, ".c": kindCode, ".h": kindCode,
-	".cc": kindCode, ".cpp": kindCode, ".hpp": kindCode, ".m": kindCode, ".mm": kindCode,
+	".py": kindCode, ".rs": kindCode, ".c": kindCode,
+	".cc": kindCode, ".cpp": kindCode,
 	".scala": kindCode, ".rb": kindCode, ".php": kindCode, ".lua": kindCode,
 	".zig": kindCode, ".cs": kindCode, ".ex": kindCode, ".exs": kindCode, ".hs": kindCode, ".ml": kindCode,
 	".r": kindCode, ".proto": kindCode, ".graphql": kindCode, ".gql": kindCode, ".pl": kindCode, ".groovy": kindCode,
@@ -159,10 +185,11 @@ var kindByExt = map[string]fileKind{
 	".zip": kindArchive, ".tar": kindArchive, ".gz": kindArchive, ".tgz": kindArchive, ".bz2": kindArchive,
 	".xz": kindArchive, ".7z": kindArchive, ".rar": kindArchive, ".dmg": kindArchive, ".jar": kindArchive,
 	".pdf": kindPDF, ".dart": kindDart, ".arb": kindData,
+	".h": kindHeader, ".hpp": kindHeader, ".m": kindObjC, ".mm": kindObjC,
 	".swift": kindSwift, ".java": kindJava, ".kt": kindKotlin, ".kts": kindKotlin, ".vue": kindVue,
 	".apk": kindAndroid, ".aab": kindAndroid, ".gradle": kindGradle,
 	".storyboard": kindLayout, ".xib": kindLayout,
-	".xcconfig": kindData, ".entitlements": kindData, ".pbxproj": kindData, ".xcscheme": kindData, ".strings": kindData, ".xcstrings": kindData,
+	".xcconfig": kindData, ".entitlements": kindData, ".pbxproj": kindData, ".xcscheme": kindData, ".xcworkspacedata": kindData, ".xcsettings": kindData, ".strings": kindData, ".xcstrings": kindData,
 	".ipa": kindArchive, ".aar": kindArchive,
 	".jks": kindKey, ".keystore": kindKey, ".p12": kindKey, ".pem": kindKey, ".cer": kindKey, ".mobileprovision": kindKey,
 	".lock": kindLock,
@@ -186,6 +213,23 @@ func kindOf(name string) fileKind {
 		return kindData
 	}
 	return kindByExt[filepath.Ext(base)]
+}
+
+// Xcode 把这些目录当成一个整体（包），按扩展名认；其余目录是普通文件夹。
+var kindByDirExt = map[string]fileKind{
+	".xcodeproj": kindXcodeProj, ".xcworkspace": kindXcodeWorkspace,
+	".xcassets": kindAssets, ".appiconset": kindAppIcon, ".imageset": kindImage, ".colorset": kindStyle,
+	".lproj":     kindLocale,
+	".framework": kindBundle, ".xcframework": kindBundle, ".bundle": kindBundle, ".app": kindBundle,
+}
+
+// dirIcon 是目录 name 的图标和颜色：Xcode 的包目录有自己的图标，其余是强调色的文件夹。
+func dirIcon(t *ui.Theme, name string) (*ui.SVG, ui.Color) {
+	k, ok := kindByDirExt[strings.ToLower(filepath.Ext(name))]
+	if !ok {
+		return iconFolder, t.Accent
+	}
+	return fileKinds[k].icon, colors(t).data[fileKinds[k].color]
 }
 
 // fileIcon 是 name 这类文件的图标和颜色。

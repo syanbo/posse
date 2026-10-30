@@ -75,11 +75,11 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 					turn = 90
 				}
 				ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn).Shrink(0)
-				icon := iconFolder
+				icon, color := dirIcon(t, r.Name)
 				if r.Link != "" {
-					icon = iconFolderLink
+					icon, color = iconFolderLink, t.Accent
 				}
-				ui.Icon(c, icon).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+				ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
 			} else {
 				ui.Box(c).Width(12).Shrink(0)
 				if r.Link != "" {
