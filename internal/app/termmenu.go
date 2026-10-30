@@ -33,10 +33,10 @@ func (a *app) termMenu(m *popMenu, v *termView, id string) {
 		a.clearTerminal(v, id)
 	}
 	_, t := a.findTerminal(id)
-	if t != nil && t.AgentState != nil && t.AgentState.SessionID != "" {
+	if t != nil && sessionID(*t) != "" {
 		m.Separator()
 		if m.Item("复制会话 ID").Chosen() {
-			writeClipboard(t.AgentState.SessionID)
+			writeClipboard(sessionID(*t))
 		}
 	}
 	if t != nil {

@@ -1984,6 +1984,20 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 		a.renameTerminal(term.ID, "")
 	}
 	m.Separator()
+	task := a.taskByWorker(term.ID)
+	if m.Item("复制引用").Chosen() {
+		writeClipboard(tabRef(term, task))
+	}
+	if m.Item("复制终端 ID").Chosen() {
+		writeClipboard(term.ID)
+	}
+	if task != nil && m.Item("复制任务 ID").Chosen() {
+		writeClipboard(task.ID)
+	}
+	if sid := sessionID(term); sid != "" && m.Item("复制会话 ID").Chosen() {
+		writeClipboard(sid)
+	}
+	m.Separator()
 	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
 		a.askClose(term)
 	}
@@ -1999,6 +2013,35 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	if m.Item("关闭右侧终端").Disabled(len(right) == 0).Chosen() {
 		a.askCloseAll(right)
 	}
+}
+
+// tabRef 是标签右键「复制引用」的一行字：贴给 agent 时带上每个 ID 是什么、用哪条命令看，不用它再去查。
+func tabRef(t terminalInfo, task *taskInfo) string {
+	// 不用 fullLabel：它对退出了的终端把标题换成「已退出」，引用里要的正是跑完的会话叫什么
+	name, title := agentTitle(t.Agent), termTitle(t)
+	switch {
+	case name == "" && title != "":
+		name = title
+	case name == "":
+		name = "终端"
+	case title != "" && !strings.EqualFold(title, name) && title != "Claude Code":
+		name += "「" + title + "」"
+	}
+	parts := []string{"终端 " + t.ID + "（posse terminal read " + t.ID + "）"}
+	if task != nil {
+		parts = append(parts, "任务 "+task.ID+"（posse task show "+task.ID+"）")
+	}
+	if sid := sessionID(t); sid != "" {
+		parts = append(parts, "会话 "+sid+"（posse history show "+sid+"）")
+	}
+	return name + "：" + strings.Join(parts, "，")
+}
+
+func sessionID(t terminalInfo) string {
+	if t.AgentState == nil {
+		return ""
+	}
+	return t.AgentState.SessionID
 }
 
 // revealTab 在标签刚变成当前的那一帧把它滚进可见范围：标签多了要左右滚动时，切过去的那个不会藏在外面。
@@ -2028,14 +2071,7 @@ func tabLabel(t terminalInfo) (string, string) {
 
 // fullLabel 同 tabLabel，不截短。
 func fullLabel(t terminalInfo) (string, string) {
-	name := agentTitle(t.Agent)
-	title := bareTitle(t)
-	if t.AgentState != nil && t.AgentState.Title != "" {
-		title = t.AgentState.Title
-	}
-	if t.Name != "" {
-		title = t.Name
-	}
+	name, title := agentTitle(t.Agent), termTitle(t)
 	detail := ""
 	switch {
 	case name == "" && title != "":
@@ -2050,6 +2086,17 @@ func fullLabel(t terminalInfo) (string, string) {
 		detail = "已退出"
 	}
 	return name, detail
+}
+
+// termTitle 是终端的标题：用户改的名字优先，其次会话标题，最后是终端标题。
+func termTitle(t terminalInfo) string {
+	if t.Name != "" {
+		return t.Name
+	}
+	if t.AgentState != nil && t.AgentState.Title != "" {
+		return t.AgentState.Title
+	}
+	return bareTitle(t)
 }
 
 // bareTitle 是去掉 agent 状态前缀（✳、转圈符）的终端标题。

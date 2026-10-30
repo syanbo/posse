@@ -50,3 +50,27 @@ func TestSyncTermName(t *testing.T) {
 		t.Fatalf("left %v", a.state.TermNames)
 	}
 }
+
+func TestTabRef(t *testing.T) {
+	cases := []struct {
+		term terminalInfo
+		task *taskInfo
+		want string
+	}{
+		{terminalInfo{ID: "t_1", Title: "zsh", Running: true}, nil, "zsh：终端 t_1（posse terminal read t_1）"},
+		{
+			terminalInfo{ID: "t_2", Agent: "cursor", Name: "修登录", AgentState: &agentState{SessionID: "s1"}, Running: true},
+			&taskInfo{ID: "k_3"},
+			"Cursor「修登录」：终端 t_2（posse terminal read t_2），任务 k_3（posse task show k_3），会话 s1（posse history show s1）",
+		},
+		// 退出了的不把「已退出」写进名字
+		{terminalInfo{ID: "t_4", Agent: "codex"}, nil, "Codex：终端 t_4（posse terminal read t_4）"},
+		{terminalInfo{ID: "t_5", Agent: "codex", Name: "修登录"}, nil, "Codex「修登录」：终端 t_5（posse terminal read t_5）"},
+		{terminalInfo{ID: "t_6", Name: "已退出", Running: true}, nil, "已退出：终端 t_6（posse terminal read t_6）"},
+	}
+	for _, tc := range cases {
+		if got := tabRef(tc.term, tc.task); got != tc.want {
+			t.Errorf("tabRef(%+v) = %q, want %q", tc.term, got, tc.want)
+		}
+	}
+}
