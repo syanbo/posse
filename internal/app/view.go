@@ -698,7 +698,11 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		}
 	}
 	t := c.Theme()
-	icon := func() { ui.Icon(c, a.wsIcon(&w)).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
+	glyph := a.wsIcon(&w)
+	if w.Kind == "main" {
+		glyph = iconHome
+	}
+	icon := func() { ui.Icon(c, glyph).FontSize(iconSize).TextColor(t.Accent).Shrink(0) }
 	if !nested {
 		// 没有其他工作区时这一行就是项目行，用项目的图标
 		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], a.wsIcon(&w)) }

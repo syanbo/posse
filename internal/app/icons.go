@@ -26,6 +26,7 @@ var (
 	iconTerminal   = icon(`<path d="m5 16 5-4-5-4M12 17h7"/>`)
 	iconFolder     = icon(folderShape)
 	iconBranch     = icon(branchShape)
+	iconHome       = icon(`<path d="M4 10.4a1.5 1.5 0 0 1 .55-1.16l6.5-5.3a1.5 1.5 0 0 1 1.9 0l6.5 5.3a1.5 1.5 0 0 1 .55 1.16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M9.75 19.5v-4.75a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1v4.75"/>`) // 项目下的主工作区，和项目行的文件夹区分开
 	iconExtensions = icon(`<rect x="4" y="4" width="7" height="7" rx="1.75"/><rect x="13" y="4" width="7" height="7" rx="1.75"/><rect x="4" y="13" width="7" height="7" rx="1.75"/><path d="M16.5 13.5v6M13.5 16.5h6"/>`)
 	iconPlay       = icon(`<path d="M8.5 6.2v11.6a.6.6 0 0 0 .92.5l9.1-5.8a.6.6 0 0 0 0-1L9.42 5.7a.6.6 0 0 0-.92.5z" fill="currentColor"/>`)
 	iconPause      = icon(`<rect x="7" y="5.5" width="3.5" height="13" rx="0.8" fill="currentColor"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="0.8" fill="currentColor"/>`)
