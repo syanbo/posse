@@ -164,6 +164,7 @@ var usageMarkers = [][]byte{
 	[]byte(`"Bash"`), []byte(`"Shell"`), []byte("run_terminal_command"), []byte("exec_command"),
 	[]byte(`"shell"`), []byte("CommandExecution"),
 	[]byte("WebFetch"), []byte("WebSearch"), []byte("web_search_call"), []byte("backend_tool_call"),
+	[]byte(`"web"`), []byte("web.search"), // codex 的 web.run（namespace 是 web）和 Extension 条目
 }
 
 var (
@@ -395,6 +396,7 @@ func (s *UsageScanner) codexLine(b []byte) {
 			Type      string `json:"type"`
 			Role      string `json:"role"`
 			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 			CallID    string `json:"call_id"`
 			Arguments string `json:"arguments"`
 			Content   []struct {
@@ -406,6 +408,7 @@ func (s *UsageScanner) codexLine(b []byte) {
 			} `json:"action"`
 			Item struct {
 				Type      string          `json:"type"`
+				Kind      string          `json:"kind"`
 				ID        string          `json:"id"`
 				Server    string          `json:"server"`
 				Tool      string          `json:"tool"`
@@ -431,6 +434,11 @@ func (s *UsageScanner) codexLine(b []byte) {
 				s.addSkill(strings.TrimSpace(m[1]))
 			}
 		}
+	// 新版的网页工具是 web 命名空间的 run，随后同一个 id 再记一条 Extension（kind 为 web.search）
+	case r.Type == "response_item" && p.Type == "function_call" && p.Namespace == "web" && p.Name == "run":
+		if s.once(webKey(p.CallID)) {
+			s.codexWebRun(p.Arguments)
+		}
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
 			s.addMCP(name)
@@ -452,8 +460,8 @@ func (s *UsageScanner) codexLine(b []byte) {
 		if p.Action.URL != "" {
 			s.addURL(p.Action.URL, "web_search")
 		}
-	case p.Item.Type == "WebSearch" && s.st.Mode == "paginated":
-		if s.once("web:" + p.Item.ID) {
+	case (p.Item.Type == "WebSearch" || p.Item.Type == "Extension" && p.Item.Kind == "web.search") && s.st.Mode == "paginated":
+		if s.once(webKey(p.Item.ID)) {
 			s.addSearch(p.Item.Query, "web_search")
 		}
 	// 新版 Codex 把命令包在 exec 的脚本里跑，每条实际执行的命令记一条 CommandExecution，
@@ -470,6 +478,42 @@ func (s *UsageScanner) codexLine(b []byte) {
 			}
 		}
 	}
+}
+
+// codexWebRun 记下 web.run 的一次调用：search_query 算一次搜索（几个搜索词合成一条），
+// open 里直接打开的网址算访问；结果里列出的链接不算。
+func (s *UsageScanner) codexWebRun(args string) {
+	var a struct {
+		SearchQuery []struct {
+			Q string `json:"q"`
+		} `json:"search_query"`
+		Open []struct {
+			RefID string `json:"ref_id"`
+		} `json:"open"`
+	}
+	if json.Unmarshal([]byte(args), &a) != nil {
+		return
+	}
+	var qs []string
+	for _, q := range a.SearchQuery {
+		if q.Q != "" {
+			qs = append(qs, q.Q)
+		}
+	}
+	s.addSearch(strings.Join(qs, " / "), "web_search")
+	for _, o := range a.Open {
+		if strings.HasPrefix(o.RefID, "http://") || strings.HasPrefix(o.RefID, "https://") {
+			s.addURL(o.RefID, "web_search")
+		}
+	}
+}
+
+// webKey 是网页工具调用在 seen 里的 key：web.run 的 call_id 就是随后 Extension 条目的 id。
+func webKey(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "web:" + id
 }
 
 // cmdKey 是命令在 seen 里的 key：McpToolCall 条目的 id 也是调用它的 function_call 的 call_id，

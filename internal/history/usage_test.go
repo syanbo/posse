@@ -296,6 +296,25 @@ func TestUsageWeb(t *testing.T) {
 		t.Fatalf("codex web %+v searches %d", u.Web, u.Searches)
 	}
 
+	// 新版 codex 的网页工具：web.run 和随后同 id 的 Extension 只算一次；open 里打开的网址算访问，结果里的链接不算
+	path = filepath.Join(dir, "codex-run.jsonl")
+	writeLines(t, path,
+		`{"type":"session_meta","payload":{"id":"s2","history_mode":"paginated"}}`+"\n",
+		`{"type":"response_item","payload":{"type":"function_call","name":"run","namespace":"web","call_id":"c1","arguments":"{\"search_query\":[{\"q\":\"a\"},{\"q\":\"b\"}]}"}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Extension","kind":"web.search","id":"c1","query":"a ...","results":[{"url":"https://result.example.com"}]}}}`+"\n",
+		`{"type":"response_item","payload":{"type":"function_call","name":"run","namespace":"web","call_id":"c2","arguments":"{\"search_query\":[{\"q\":\"c\"}],\"open\":[{\"ref_id\":\"https://www.reddit.com/r/x\"},{\"ref_id\":\"turn0search1\"}]}"}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Extension","kind":"web.search","id":"c2","query":"c"}}}`+"\n",
+		// 只有 Extension、没有 web.run 的也算
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"Extension","kind":"web.search","id":"c3","query":"d"}}}`+"\n",
+	)
+	u, _ = NewUsageScanner("codex", path).Scan()
+	if want := []WebUsage{{"reddit.com", 1}}; !reflect.DeepEqual(u.Web, want) || u.Searches != 3 {
+		t.Fatalf("codex web.run %+v searches %d", u.Web, u.Searches)
+	}
+	if e := u.Events[0]; e.Query != "a / b" || e.Via != "web_search" {
+		t.Fatalf("codex web.run event %+v", e)
+	}
+
 	// grok：用户的话在 <user_query> 里，注入的规则不算；服务端搜索记成搜索
 	path = filepath.Join(dir, "grok.jsonl")
 	writeLines(t, path,
