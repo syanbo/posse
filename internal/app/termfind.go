@@ -44,7 +44,7 @@ func (a *app) openTermFind(v *termView) {
 // termFindText 是终端的 OnText：查找栏刚打开、输入框还没拿到焦点时，打的字接到搜索词后面，不发给程序。
 func (a *app) termFindText(v *termView, text string) bool {
 	f := &v.find
-	if a.view != v || !f.open || !f.focus {
+	if !a.live(v) || !f.open || !f.focus {
 		return false
 	}
 	f.query += text
@@ -57,7 +57,7 @@ func (a *app) termFindText(v *termView, text string) bool {
 // 带 Command 的照常交给快捷键；出字的键返回假，字随后经 OnText 进来。
 func (a *app) termFindKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	f := &v.find
-	if a.view != v || !f.open || !f.focus || mods&ui.Super != 0 {
+	if !a.live(v) || !f.open || !f.focus || mods&ui.Super != 0 {
 		return false
 	}
 	switch key {
@@ -90,7 +90,8 @@ func (a *app) closeTermFind(v *termView) {
 
 // termFinding 报告终端的查找栏开着、焦点在终端区域里（终端或查找栏），这时 ⌘G、⇧⌘G 归它。
 func (a *app) termFinding(c *ui.Context) bool {
-	return a.view != nil && a.view.find.open && c.FocusWithin(a.termAreaRef)
+	v := a.focusView()
+	return v != nil && v.find.open && c.FocusWithin(a.termAreaRef[a.pane])
 }
 
 // termFindKeys 在查找栏开着时处理跳转：⌘G 往上（更早的输出），⇧⌘G 往下。按键跟着编辑器的查找下一个、上一个。
@@ -99,7 +100,7 @@ func (a *app) termFindKeys(c *ui.Context) {
 	if !a.termFinding(c) {
 		return
 	}
-	switch v := a.view; {
+	switch v := a.focusView(); {
 	case a.pressed(c, "editor.findNext"):
 		v.term.SearchNext()
 	case a.pressed(c, "editor.findPrevious"):

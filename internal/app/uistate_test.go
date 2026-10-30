@@ -131,7 +131,7 @@ func TestSidebarTree(t *testing.T) {
 	}
 	// 单击会话切到这个终端。测试里没有常驻进程，先让界面以为已经接入了它，免得去接入
 	// Apps 下面的第一个 Codex 是 t2（feat-login 里的 t5 排在后面）
-	a.view.id = "t2"
+	a.panes[0].id = "t2"
 	if err := tt.Click("Codex"); err != nil {
 		t.Fatal(err)
 	}

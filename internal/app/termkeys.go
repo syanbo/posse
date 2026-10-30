@@ -38,7 +38,7 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		return true
 	}
 	// 全屏程序里也能查：查的是它这一屏
-	if a.keyIs("termFind", mods, key) && a.view == v {
+	if a.keyIs("termFind", mods, key) && a.live(v) {
 		a.openTermFind(v)
 		return true
 	}
@@ -88,7 +88,7 @@ func (a *app) clearTerminal(v *termView, id string) {
 		case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
 			// 常驻进程还是没有这个接口的旧版本：只清界面这边，切走再接入时回滚区会回来
 			a.update(func() {
-				if a.view == v && v.term != nil {
+				if a.live(v) && v.term != nil {
 					v.term.Feed([]byte(termClearSeq))
 					v.term.Send([]byte{0x0c})
 				}

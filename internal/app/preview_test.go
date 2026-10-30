@@ -116,7 +116,7 @@ func previewApp(t *testing.T) *app {
 		"│ ❯ 1. Yes                                     │\r\n" +
 		"│   2. No, and tell Claude what to do          │\r\n" +
 		"╰──────────────────────────────────────────────╯\x1b[0m\r\n"))
-	a.view = &termView{id: "t1", term: term}
+	a.panes[0] = &termView{id: "t1", term: term}
 	return a
 }
 
@@ -561,10 +561,10 @@ func TestPreview(t *testing.T) {
 
 		// 终端的查找栏：命中铺蜂蜜色淡底，当前那个深一点；Claude 终端里搜不到时提示去历史里搜
 		a = previewApp(t)
-		a.view.find = termFind{open: true, query: "view"}
+		a.panes[0].find = termFind{open: true, query: "view"}
 		savePNG(t, newPreviewTester(a, dark), "terminal-find-"+suffix+".png")
 		a = previewApp(t)
-		a.view.find = termFind{open: true, query: "release"}
+		a.panes[0].find = termFind{open: true, query: "release"}
 		savePNG(t, newPreviewTester(a, dark), "terminal-find-none-"+suffix+".png")
 
 		// 刚开的 Claude 还没画第一屏：终端区居中是蜂巢加载动画和"正在启动"
@@ -574,8 +574,8 @@ func TestPreview(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { blank.Close() })
-		a.view.term.Close()
-		a.view = &termView{id: "t1", term: blank, attached: time.Now().Add(-time.Second)}
+		a.panes[0].term.Close()
+		a.panes[0] = &termView{id: "t1", term: blank, attached: time.Now().Add(-time.Second)}
 		savePNG(t, newPreviewTester(a, dark), "terminal-starting-"+suffix+".png")
 
 		// 侧栏收起；加宽的侧栏

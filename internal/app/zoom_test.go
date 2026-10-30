@@ -18,7 +18,7 @@ func TestCmdScrollDoesNotZoom(t *testing.T) {
 			t.Skip("terminal unavailable:", err)
 		}
 		t.Cleanup(func() { term.Close() })
-		a.view = &termView{id: "t1", term: term}
+		a.panes[0] = &termView{id: "t1", term: term}
 		tt := newPreviewTester(a, false)
 		tt.ClickAt(600, 300)
 		tt.Frame()

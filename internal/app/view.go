@@ -45,11 +45,11 @@ func (a *app) build(c *ui.Context) {
 		a.lastWS = w.ID
 	}
 	cur := a.currentTerminal(w)
+	var ids [2]string
 	if cur != nil {
-		a.ensureView(cur.ID)
-	} else {
-		a.ensureView("")
+		ids[0] = cur.ID
 	}
+	a.ensurePanes(ids)
 	a.shortcuts(c, w, cur)
 	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
 	for id, v := range a.files {
@@ -1652,7 +1652,6 @@ func (a *app) reclaimSize(id string) {
 
 // mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。
 func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
-	t := c.Theme()
 	// 右侧面板浮在上面，不挤压终端：终端宽度一变，程序就要按新列数重排输出
 	body := ui.Column(c).Grow(1)
 	if a.state.RightPanel != "" {
@@ -1665,38 +1664,19 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	body.Children(func() {
-		if w.Missing && (a.filesActive(w) || cur != nil && a.view != nil) {
+		if w.Missing && (a.filesActive(w) || cur != nil && a.panes[0] != nil) {
 			a.missingBar(c, w)
 		}
 		switch {
 		case a.filesActive(w):
 			a.filesPage(c, w)
-		case cur == nil || a.view == nil:
+		case cur == nil || a.panes[0] == nil:
 			a.emptyWorkspace(c, w)
 		default:
 			if cur.PhoneSized {
 				a.phoneSizedBar(c, cur.ID)
 			}
-			// 留一点内边距，文字不贴边
-			area := ui.Box(c).Grow(1).Background(t.Background).Padding(6, 4, 2, 12).Ref(&a.termAreaRef)
-			a.view.dir = a.view.term.Dir()
-			area.Children(func() {
-				tv := terminal.View(c.Key(a.view.id), a.view.term).Fill().AutoFocus()
-				if a.focusTerm {
-					a.focusTerm = false
-					tv.Focus()
-				}
-				// 右键菜单由终端插件交来位置，Posse 自己画（termMenu）
-				if v := a.view; a.termCtxID == v.id {
-					contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
-				}
-				a.startingHint(c, a.view, cur)
-				a.sessionButtons(c, cur)
-				a.termFindBar(c, a.view, cur)
-			})
-			a.termDrop(c, area, cur.Agent)
-			a.linkCardView(c, area)
-			a.hoverPreviewView(c, area)
+			a.termPane(c, 0, cur)
 		}
 		a.logPanel(c, w, body)
 		a.branchPopupView(c, w)
@@ -1725,6 +1705,32 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 			}
 		}
 	})
+}
+
+// termPane 画主区域的一栏终端：终端视图，和浮在它上面的右键菜单、启动提示、会话按钮、查找栏、链接卡片。
+func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
+	t := c.Theme()
+	v := a.panes[i]
+	// 留一点内边距，文字不贴边
+	area := ui.Box(c.Key(i)).Grow(1).Background(t.Background).Padding(6, 4, 2, 12).Ref(&a.termAreaRef[i])
+	v.dir = v.term.Dir()
+	area.Children(func() {
+		tv := terminal.View(c.Key(v.id), v.term).Fill().AutoFocus()
+		if a.focusTerm && i == a.pane {
+			a.focusTerm = false
+			tv.Focus()
+		}
+		// 右键菜单由终端插件交来位置，Posse 自己画（termMenu）
+		if a.termCtxID == v.id {
+			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
+		}
+		a.startingHint(c, v, cur)
+		a.sessionButtons(c, cur)
+		a.termFindBar(c, v, cur)
+	})
+	a.termDrop(c, area, v, cur.Agent)
+	a.linkCardView(c, area)
+	a.hoverPreviewView(c, area)
 }
 
 // startingHint 在程序还没画出任何内容时居中画蜂巢加载动画和"正在启动"：新开的终端要先跑完用户的

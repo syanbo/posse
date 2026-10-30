@@ -80,9 +80,7 @@ func stepLineHeight(h float32, d int, hi float32) float32 {
 // setTermStyle 改终端的字重或行高（f 改 a.state），马上换到接入的终端上。
 func (a *app) setTermStyle(f func(s *uiState)) {
 	f(&a.state)
-	if a.view != nil {
-		a.view.term.SetFont(a.termFont())
-	}
+	a.eachPane(func(v *termView) { v.term.SetFont(a.termFont()) })
 	a.saveState()
 }
 
@@ -95,9 +93,7 @@ func (a *app) copyOnSelect() terminal.CopyOnSelect {
 
 func (a *app) setCopyOnSelect(on bool) {
 	a.state.TermCopyOnSelect = on
-	if a.view != nil {
-		a.view.term.SetCopyOnSelect(a.copyOnSelect())
-	}
+	a.eachPane(func(v *termView) { v.term.SetCopyOnSelect(a.copyOnSelect()) })
 	a.saveState()
 }
 
@@ -119,9 +115,7 @@ func editorSizeOf(s uiState) float32 {
 
 func (a *app) setTermFamily(family string) {
 	a.termFamily = family
-	if a.view != nil {
-		a.view.term.SetFont(a.termFont())
-	}
+	a.eachPane(func(v *termView) { v.term.SetFont(a.termFont()) })
 	a.state.TermFont = family
 	a.saveState()
 }

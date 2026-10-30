@@ -853,12 +853,12 @@ func TestLogPanel(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	settle(tt)
-	cols, rows := a.view.term.Size()
+	cols, rows := a.panes[0].term.Size()
 	tt.Key(ui.Cmd, ui.Key9)
 	v := a.files[w.ID]
 	until(t, tt, "log", func() bool { return a.logPanelOpen() && v.logCur != nil && v.logCur.kind == docLog })
 	settle(tt)
-	if c2, r2 := a.view.term.Size(); c2 != cols || r2 != rows {
+	if c2, r2 := a.panes[0].term.Size(); c2 != cols || r2 != rows {
 		t.Fatalf("terminal resized under the panel: %dx%d -> %dx%d", cols, rows, c2, r2)
 	}
 	if a.filesActive(w) {

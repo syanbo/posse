@@ -90,7 +90,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 	t.Cleanup(func() { term.Close() })
 	v.term = term
-	a.view = v
+	a.panes[0] = v
 	var feed string
 	for range 4 {
 		feed += "\x1b]8;;file://" + file + "\x1b\\[Image #1]\x1b]8;;\x1b\\\r\n"
@@ -272,7 +272,7 @@ func TestDragFromLinkWithMouseTracking(t *testing.T) {
 	}
 	t.Cleanup(func() { term.Close() })
 	v.term = term
-	a.view = v
+	a.panes[0] = v
 	feed := "\x1b[?1000h\x1b[?1006h"
 	for range 4 {
 		feed += "\x1b]8;;file://" + file + "\x1b\\[Image #1]\x1b]8;;\x1b\\\r\n"
@@ -406,7 +406,7 @@ func TestPathBeforeFullWidthPunct(t *testing.T) {
 	}
 	t.Cleanup(func() { term.Close() })
 	v.term = term
-	a.view = v
+	a.panes[0] = v
 	// 路径照 Claude Code 的代码片段带颜色，悬停的下划线跟文字同色
 	term.Feed([]byte("见 (\x1b[38;2;177;185;249m" + file + ")\x1b[39m，去掉右括号后展开\r\n"))
 	tt := newPreviewTester(a, true)

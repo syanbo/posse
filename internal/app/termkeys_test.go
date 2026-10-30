@@ -39,7 +39,7 @@ func recTerminal(t *testing.T, a *app) (*termView, recConn) {
 	}
 	t.Cleanup(func() { term.Close() })
 	v := &termView{id: "t1", term: term}
-	a.view = v
+	a.panes[0] = v
 	return v, conn
 }
 
@@ -178,7 +178,7 @@ func TestStepTab(t *testing.T) {
 // ⌘F 打开终端的查找栏：数命中、⌘G 往上跳、Esc 关掉清高亮；Claude 终端里搜不到时给出"在历史里搜"，点了带着词去历史页。
 func TestTermFind(t *testing.T) {
 	a := previewApp(t)
-	v := a.view
+	v := a.panes[0]
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	v.term.Feed([]byte("build ok\r\nBUILD failed\r\nrebuild\r\n"))
@@ -232,10 +232,10 @@ func TestTermFind(t *testing.T) {
 // 带着开着的查找栏的新终端（重新接入后 ensureView 从 carryFind 恢复的就是这样）：画过一帧后按原来的词搜，并选中最新的命中。
 func TestTermFindCarried(t *testing.T) {
 	a := previewApp(t)
-	a.view.find = termFind{open: true, query: "view"}
+	a.panes[0].find = termFind{open: true, query: "view"}
 	tt := ui.NewTester(a.build, 1200, 760)
 	until(t, tt, "searched", func() bool {
-		st := a.view.term.SearchStatus()
+		st := a.panes[0].term.SearchStatus()
 		return st.Text == "view" && st.Total == 2 && st.Selected == 1
 	})
 }

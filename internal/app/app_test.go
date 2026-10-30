@@ -73,7 +73,7 @@ func TestWorkerReturnsToTask(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.activeTerm["w1"] = "t6"
-	a.view.id = "t6"
+	a.panes[0].id = "t6"
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	if _, ok := tt.Find("返回任务"); !ok {

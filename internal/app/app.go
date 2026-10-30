@@ -125,12 +125,6 @@ type termView struct {
 	find     termFind
 }
 
-// carriedFind 是被常驻进程断开、等着重新接入的终端的查找栏。
-type carriedFind struct {
-	id   string
-	find termFind
-}
-
 type app struct {
 	c   *client.Client
 	win *mygo.Window
@@ -166,13 +160,16 @@ type app struct {
 	badge        int               // Dock 角标现在显示的数
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
-	lastPoll     *pollResult
-	diffAt       map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	termAt       time.Time            // 上次统计终端内存的时间（轮询协程里用）
-	lastTerm     int64
-	pollForce    atomic.Bool // 下一次轮询无论有没有变化都交给界面
-	view         *termView
-	carryFind    *carriedFind // 断开后等着重新接入的终端的查找栏
+	lastPoll  *pollResult
+	diffAt    map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	termAt    time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm  int64
+	pollForce atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	// panes 是主区域接入的终端：0 是左栏（不分屏时只有这一栏），1 是右栏；pane 是焦点所在的栏
+	panes [2]*termView
+	pane  int
+	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID
+	carryFind    map[string]termFind
 	fontSize     float32
 	editorSize   float32
 	termFamily   string // 终端字体，空是默认
@@ -235,7 +232,7 @@ type app struct {
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
 	traceLoaded   bool
 	filesPanelRef ui.Ref
-	termAreaRef   ui.Ref // 终端内容区（终端和它上面的查找栏）
+	termAreaRef   [2]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
 	promptDlg       *promptState
@@ -738,7 +735,7 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 		return
 	}
 	// 正在看的终端不打扰
-	if a.win.IsFocused() && a.selected == w.ID && a.view != nil && a.view.id == t.ID {
+	if a.win.IsFocused() && a.selected == w.ID && a.showing(t.ID) {
 		return
 	}
 	body := w.Label
@@ -919,26 +916,13 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 	return &w.Terminals[0]
 }
 
-// ensureView 让接入的终端与选中的一致：切换时断开旧的（释放界面侧内存），接入新的。
-func (a *app) ensureView(id string) {
-	if a.view != nil && a.view.id == id {
-		return
-	}
-	if a.view != nil {
-		a.view.term.Close()
-		a.view = nil
-	}
-	// 悬停预览只对这个终端里的链接有用，换终端就放掉
-	a.linkCard, a.hoverImage, a.previews = nil, "", nil
-	if id == "" {
-		return
-	}
+// attachView 接入一个终端，失败时报错并返回 nil。
+func (a *app) attachView(id string) *termView {
 	conn := a.c.Attach(id)
 	v := &termView{id: id, attached: time.Now()}
-	if f := a.carryFind; f != nil && f.id == id {
-		v.find = f.find
+	if f, ok := a.carryFind[id]; ok {
+		v.find = f
 	}
-	a.carryFind = nil
 	light, dark := terminalThemes()
 	t, err := terminal.New(terminal.Options{
 		Conn:      conn,
@@ -983,15 +967,20 @@ func (a *app) ensureView(id string) {
 		// 连接结束：程序退出时刷新列表；程序仍在运行（被判定跟不上而断开）时重新接入
 		OnExit: func(int) {
 			a.win.Update(func() {
-				if a.view == v {
-					if exited, _ := conn.Exited(); !exited {
-						// 重新接入的是同一个终端：查找栏照旧（开着的由 termFindBar 按原来的词再搜，关着的留着上次的词）
-						if v.find.open || v.find.query != "" {
-							a.carryFind = &carriedFind{id: v.id, find: v.find}
+				i := slices.Index(a.panes[:], v)
+				if i < 0 {
+					return
+				}
+				if exited, _ := conn.Exited(); !exited {
+					// 重新接入的是同一个终端：查找栏照旧（开着的由 termFindBar 按原来的词再搜，关着的留着上次的词）
+					if v.find.open || v.find.query != "" {
+						if a.carryFind == nil {
+							a.carryFind = map[string]termFind{}
 						}
-						a.view.term.Close()
-						a.view = nil
+						a.carryFind[v.id] = v.find
 					}
+					v.term.Close()
+					a.panes[i] = nil
 				}
 			})
 			go a.refresh()
@@ -999,10 +988,10 @@ func (a *app) ensureView(id string) {
 	})
 	if err != nil {
 		a.err = err.Error()
-		return
+		return nil
 	}
 	v.term = t
-	a.view = v
+	return v
 }
 
 // saveState 在后台写 ui.json；界面状态丢了不影响使用，失败不提示。
@@ -1030,7 +1019,7 @@ func (a *app) pasteImage(v *termView, png []byte) {
 		return
 	}
 	a.win.Update(func() {
-		if a.view == v {
+		if a.live(v) {
 			v.term.Paste(path)
 		}
 	})
@@ -1038,9 +1027,7 @@ func (a *app) pasteImage(v *termView, png []byte) {
 
 func (a *app) setFontSize(size float32) {
 	a.fontSize = min(max(size, minFontSize), maxFontSize)
-	if a.view != nil {
-		a.view.term.SetFont(a.termFont())
-	}
+	a.eachPane(func(v *termView) { v.term.SetFont(a.termFont()) })
 	if a.state.FontSize != a.fontSize {
 		a.state.FontSize = a.fontSize
 		// 旧版的 ui.json 没有编辑器字号，启动时由终端字号推算；先记下来，免得下次启动跟着新的终端字号变

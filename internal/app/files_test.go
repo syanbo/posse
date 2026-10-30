@@ -113,8 +113,8 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	}
 	until(t, tt, "tree", func() bool { return v.tree.Loaded(root) && tt.HasText("main.go") && a.filesPanelShown == 1 })
 	// 选中文件标签：不被换回第一个终端，终端断开接入
-	if a.activeTerm[w.ID] != filesTabID || a.view != nil {
-		t.Fatalf("activeTerm=%q view=%v", a.activeTerm[w.ID], a.view)
+	if a.activeTerm[w.ID] != filesTabID || a.panes[0] != nil {
+		t.Fatalf("activeTerm=%q view=%v", a.activeTerm[w.ID], a.panes[0])
 	}
 	// build/ 被 .gitignore 忽略，照样列出（变暗）
 	until(t, tt, "list", func() bool { return v.list != nil })
