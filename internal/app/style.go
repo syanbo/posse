@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/mermaid/diagram"
+	"posse/internal/term"
 )
 
 // 界面的取向和字号、字重、图标、间距、圆角、颜色、层级的规则见 docs/design.md；这里只定义取值，调用处只用名字。
@@ -223,18 +224,18 @@ func posseTheme(dark bool) *ui.Theme {
 	var t *ui.Theme
 	if dark {
 		t = ui.DarkTheme()
-		t.Background = ui.Hex("#20201E")
+		t.Background = ui.Hex(term.DarkBackground)
 		t.Surface, t.SurfaceHover, t.SurfacePressed = ui.Hex("#2A2A27"), ui.Hex("#31312E"), ui.Hex("#383835")
 		t.Border = ui.Hex("#3A3936")
-		t.Text, t.TextMuted = ui.Hex("#ECEBE8"), ui.Hex("#B4B2AC")
+		t.Text, t.TextMuted = ui.Hex(term.DarkForeground), ui.Hex("#B4B2AC")
 		t.Accent, t.AccentHover, t.AccentPressed = ui.Hex("#D97757"), ui.Hex("#E38C70"), ui.Hex("#C4643F")
 		t.Selection, t.Focus = ui.RGBA(217, 119, 87, 0.35), ui.RGBA(217, 119, 87, 0.6)
 	} else {
 		t = ui.LightTheme()
-		t.Background = ui.Hex("#FFFFFF")
+		t.Background = ui.Hex(term.LightBackground)
 		t.Surface, t.SurfaceHover, t.SurfacePressed = ui.Hex("#F3F2EF"), ui.Hex("#ECEBE7"), ui.Hex("#E4E2DD")
 		t.Border = ui.Hex("#DCDAD5")
-		t.Text, t.TextMuted = ui.Hex("#1F1E1D"), ui.Hex("#6B6966")
+		t.Text, t.TextMuted = ui.Hex(term.LightForeground), ui.Hex("#6B6966")
 		t.Accent, t.AccentHover, t.AccentPressed = ui.Hex("#C15F3C"), ui.Hex("#AD5333"), ui.Hex("#98482B")
 		t.Selection, t.Focus = ui.RGBA(193, 95, 60, 0.22), ui.RGBA(193, 95, 60, 0.5)
 	}

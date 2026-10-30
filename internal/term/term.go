@@ -104,6 +104,8 @@ type Terminal struct {
 	// answer 为 true 时由常驻进程里的内核应答程序的终端查询；
 	// 界面接入后改由界面应答，避免程序收到两份回复。
 	answer atomic.Bool
+	// dark 是建终端时系统的外观，决定内核应答的默认颜色（见 colors.go）
+	dark bool
 
 	exited   chan struct{}
 	exitCode atomic.Int64
@@ -232,6 +234,7 @@ func newTerminal(o Options) *Terminal {
 		subs:        map[*Subscriber]struct{}{},
 		onTitle:     o.OnTitle,
 		scrollback:  o.Scrollback,
+		dark:        systemDark(),
 	}
 	t.answer.Store(true)
 	t.lastOutput.Store(time.Now().UnixNano())
@@ -254,11 +257,14 @@ func (t *Terminal) newEmu(cols, rows, scrollback int) (*vt.Terminal, error) {
 		},
 		TitleChanged: func() { t.titleDirty = true },
 		Size:         func() (int, int, int, int) { c, r := t.emu.Size(); return c, r, 8, 16 },
+		Dark:         func() bool { return t.dark },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("terminal emulator: %w", err)
 	}
 	emu.SetTerminfoName("xterm-256color")
+	fg, bg := defaultColors(t.dark)
+	emu.SetColors(fg, bg, nil, nil)
 	// 字素簇占其宽度的格数，与界面里的 MyGo 终端一致
 	emu.SetModeDefault(vt.ModeGraphemes, true)
 	emu.SetScrollback(scrollback)

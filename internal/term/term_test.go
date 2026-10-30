@@ -1,6 +1,7 @@
 package term
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,33 @@ func TestEchoAndQueries(t *testing.T) {
 	}
 	if tm.ExitCode() != 0 {
 		t.Fatalf("exit code %d", tm.ExitCode())
+	}
+}
+
+func TestAnswersColorQueries(t *testing.T) {
+	// 没有界面接入时，内核按系统外观的那套颜色应答背景色查询（Codex 启动时查）和深浅查询
+	if err := loadLib(); err != nil {
+		t.Skip(err)
+	}
+	tm := newTerminal(Options{})
+	emu, err := tm.newEmu(80, 24, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer emu.Free()
+	emu.Write([]byte("\x1b]11;?\x1b\\\x1b[?996n"))
+	var got string
+	for len(tm.replies) > 0 {
+		got += string(<-tm.replies)
+	}
+	_, bg := defaultColors(tm.dark)
+	want := fmt.Sprintf("\x1b]11;rgb:%02x%02x/%02x%02x/%02x%02x", bg.R, bg.R, bg.G, bg.G, bg.B, bg.B)
+	scheme := "\x1b[?997;2n"
+	if tm.dark {
+		scheme = "\x1b[?997;1n"
+	}
+	if !strings.Contains(got, want) || !strings.Contains(got, scheme) {
+		t.Fatalf("replies %q, want %q and %q", got, want, scheme)
 	}
 }
 
