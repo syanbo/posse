@@ -433,6 +433,11 @@ func Run(c *client.Client) error {
 }
 
 // poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
+// windowShown 报告窗口在屏幕上：没隐藏、没最小化。
+func (a *app) windowShown() bool {
+	return a.win != nil && a.win.IsVisible() && !a.win.IsMinimized()
+}
+
 func (a *app) poll() {
 	for {
 		a.refresh()
@@ -538,8 +543,9 @@ func (a *app) refresh() {
 			}
 		}
 		self := int64(procmem.Footprint(os.Getpid()) >> 10)
-		// 终端的进程树每 5 秒统计一次：几十个进程，几毫秒
-		if time.Since(a.termAt) > 5*time.Second {
+		// 终端的进程树每 5 秒统计一次：几十个进程，几毫秒。窗口隐藏或最小化时底栏看不见，不统计，
+		// 再出现时 termAt 已经过期，马上补上
+		if time.Since(a.termAt) > 5*time.Second && a.windowShown() {
 			a.termAt, a.lastTerm = time.Now(), terminalsFootprint(r.workspaces)
 		}
 		r.running, r.daemonKB, r.selfKB, r.termKB, r.awake = st.Running, st.FootprintKB, self, a.lastTerm, st.Awake

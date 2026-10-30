@@ -37,7 +37,7 @@ func TestTreeFootprint(t *testing.T) {
 	defer cmd.Process.Kill()
 	var kids []int
 	for range 50 {
-		if kids = Children()[cmd.Process.Pid]; len(kids) > 0 {
+		if kids = Children(cmd.Process.Pid); len(kids) > 0 {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -45,7 +45,7 @@ func TestTreeFootprint(t *testing.T) {
 	if len(kids) == 0 {
 		t.Fatal("child of sh not listed")
 	}
-	self, tree := Footprint(cmd.Process.Pid), TreeFootprint(cmd.Process.Pid, Children())
+	self, tree := Footprint(cmd.Process.Pid), TreeFootprint(cmd.Process.Pid)
 	if self == 0 || tree <= self {
 		t.Fatalf("tree %d should exceed sh alone %d", tree, self)
 	}

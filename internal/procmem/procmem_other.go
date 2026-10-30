@@ -9,7 +9,7 @@ func Footprint(pid int) uint64 { return 0 }
 func Resident(pid int) uint64 { return 0 }
 
 // Children 在其他平台上不实现。
-func Children() map[int][]int { return nil }
+func Children(pid int) []int { return nil }
 
 // Args 在其他平台上不实现。
 func Args(pid int) []string { return nil }

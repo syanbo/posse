@@ -45,9 +45,9 @@ type memProc struct {
 
 // memBreakdown 拆开一个终端的进程树。shell 下面只有一个程序时（agent），再拆一层它拉起的子进程，
 // 这样 MCP 服务一个个分开；每个子进程按整棵子树算。
-func memBreakdown(shell int, children map[int][]int) []memProc {
+func memBreakdown(shell int) []memProc {
 	kb := func(pid int) int64 { return int64(procmem.Footprint(pid) >> 10) }
-	tree := func(pid int) int64 { return int64(procmem.TreeFootprint(pid, children) >> 10) }
+	tree := func(pid int) int64 { return int64(procmem.TreeFootprint(pid) >> 10) }
 	name := func(pid int) string {
 		if n := procmem.Name(procmem.Args(pid)); n != "" {
 			return n
@@ -55,11 +55,11 @@ func memBreakdown(shell int, children map[int][]int) []memProc {
 		return fmt.Sprint("pid ", pid)
 	}
 	procs := []memProc{{name: name(shell), kb: kb(shell), n: 1}}
-	kids := children[shell]
+	kids := procmem.Children(shell)
 	if len(kids) == 1 {
 		main := kids[0]
 		procs = append(procs, memProc{name: name(main), kb: kb(main), n: 1})
-		kids = children[main]
+		kids = procmem.Children(main)
 	}
 	for _, k := range kids {
 		p := memProc{name: name(k), kb: tree(k), n: 1}
@@ -78,12 +78,11 @@ const memRefresh = 3 * time.Second
 
 // terminalsFootprint 是所有运行中终端的进程树内存之和（KB）。
 func terminalsFootprint(ws []workspace) int64 {
-	children := procmem.Children()
 	var kb int64
 	for _, w := range ws {
 		for _, t := range w.Terminals {
 			if t.Running && t.Pid > 0 {
-				kb += int64(procmem.TreeFootprint(t.Pid, children) >> 10)
+				kb += int64(procmem.TreeFootprint(t.Pid) >> 10)
 			}
 		}
 	}
@@ -111,17 +110,16 @@ func (a *app) loadMemory() {
 	// 进程明细要逐个读 argv，只给展开了的终端算
 	expanded := maps.Clone(a.mem.expanded)
 	go func() {
-		children := procmem.Children()
 		rows := []memWorkspace{} // 非 nil：nil 表示还没统计完
 		var total int64
 		for _, j := range jobs {
 			r := memWorkspace{id: j.ws.ID, label: displayName(&j.ws)}
 			for _, t := range j.terms {
-				kb := int64(procmem.TreeFootprint(t.Pid, children) >> 10)
+				kb := int64(procmem.TreeFootprint(t.Pid) >> 10)
 				r.kb += kb
 				var procs []memProc
 				if expanded[t.ID] {
-					procs = memBreakdown(t.Pid, children)
+					procs = memBreakdown(t.Pid)
 				}
 				r.terms = append(r.terms, memTerminal{t, kb, procs})
 			}

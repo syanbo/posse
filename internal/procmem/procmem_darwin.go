@@ -13,6 +13,8 @@ var (
 	once    sync.Once
 	rusage  func(pid int32, flavor int32, buf unsafe.Pointer) int32
 	pidinfo func(pid, flavor int32, arg uint64, buf unsafe.Pointer, size int32) int32
+	// listChildren 是 proc_listchildpids，返回写进 buf 的 pid 个数
+	listChildren func(pid int32, buf unsafe.Pointer, size int32) int32
 )
 
 // rusage_info_v4（flavor 4）：16 字节 uuid 之后依次是 user_time、system_time、pkg_idle_wkups、
@@ -28,6 +30,7 @@ func load() {
 		if err == nil {
 			purego.RegisterLibFunc(&rusage, h, "proc_pid_rusage")
 			purego.RegisterLibFunc(&pidinfo, h, "proc_pidinfo")
+			purego.RegisterLibFunc(&listChildren, h, "proc_listchildpids")
 		}
 	})
 }
@@ -76,20 +79,29 @@ func Footprint(pid int) uint64 { return read(pid, idxFootprint) }
 // Resident 返回进程的常驻内存（字节），与 ps 的 RSS 一致；取不到时返回 0。
 func Resident(pid int) uint64 { return read(pid, idxResident) }
 
-// Children 返回此刻所有进程的父子关系：父进程 pid → 子进程 pid。
-func Children() map[int][]int {
-	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
-	if err != nil {
+// Children 返回进程此刻的直接子进程。只问这一个进程，不读全系统的进程表：
+// 窗口每几秒统计一次终端的进程树，读整张表每次要分配几百 KB。
+func Children(pid int) []int {
+	load()
+	if listChildren == nil || pid <= 0 {
 		return nil
 	}
-	out := make(map[int][]int, len(procs))
-	for _, p := range procs {
-		pid, ppid := int(p.Proc.P_pid), int(p.Eproc.Ppid)
-		if pid != ppid {
-			out[ppid] = append(out[ppid], pid)
+	// 返回的是写进去的个数，缓冲满了就可能没列全，加大再取
+	buf := make([]int32, 16)
+	for {
+		n := int(listChildren(int32(pid), unsafe.Pointer(&buf[0]), int32(len(buf)*4)))
+		if n <= 0 {
+			return nil
 		}
+		if n < len(buf) {
+			out := make([]int, n)
+			for i, p := range buf[:n] {
+				out[i] = int(p)
+			}
+			return out
+		}
+		buf = make([]int32, len(buf)*4)
 	}
-	return out
 }
 
 // Args 返回进程的启动参数（argv）；取不到时返回 nil。
