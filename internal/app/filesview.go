@@ -351,7 +351,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
 			a.blameView(c, w, v, d)
 			return
 		}
-		if d.preview && isMarkdown(d.path) {
+		if d.mdPreview() {
 			a.markdownPreview(c, d)
 			return
 		}
@@ -707,7 +707,21 @@ func docMessage(c *ui.Context, d *fileDoc, msg string) {
 
 // finding 报告 docFind 的查找栏开着、正显示在 Markdown 预览或 Annotate 上。
 func (d *fileDoc) finding() bool {
-	return d.find.open && d.diff == nil && d.comp == nil && d.kind == docText && (d.blame != nil || d.preview && isMarkdown(d.path))
+	return d.find.open && (d.mdPreview() || d.diff == nil && d.comp == nil && d.kind == docText && d.blame != nil)
+}
+
+// mdPreview 报告这个文件显示成 Markdown 预览：搭界面和 ⌘= 调哪个字号都按它。
+func (d *fileDoc) mdPreview() bool {
+	return d.kind == docText && d.diff == nil && d.comp == nil && d.blame == nil && d.preview && isMarkdown(d.path)
+}
+
+// frontMarkdown 报告文件标签在前台、显示的是 Markdown 预览。
+func (a *app) frontMarkdown(w *workspace) bool {
+	if !a.filesActive(w) {
+		return false
+	}
+	d := a.filesFor(w).cur
+	return d != nil && d.mdPreview()
 }
 
 func isMarkdown(path string) bool {
@@ -719,6 +733,7 @@ func isMarkdown(path string) bool {
 }
 
 // markdownPreview 用历史页的 Markdown 渲染显示文档，只在内容变了之后重新解析。
+// 版心随字号等比放宽，放大后一行的字数不变。
 func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
 	if v := d.ed.Buffer.Version(); d.md == nil || v != d.mdVer {
 		d.md, d.mdVer = parseMarkdown(d.ed.Buffer.String()), v
@@ -729,7 +744,8 @@ func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
 		f.begin()
 		ui.Scroll(c).Fill().Children(func() {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820).Gap(12).Selectable().Children(func() { mdView{find: f}.blocks(c, d.md) })
+				size := a.mdSize()
+				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Gap(12).Selectable().Children(func() { mdView{find: f, size: size}.blocks(c, d.md) })
 			})
 		})
 		f.end()

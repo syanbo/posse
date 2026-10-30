@@ -769,6 +769,9 @@ func TestPreview(t *testing.T) {
 		previewHistory(a, "")
 		previewMarkdown(a)
 		savePNG(t, newPreviewTester(a, dark), "history-markdown-"+suffix+".png")
+		// 调大 Markdown 字号：标题、表格、列表、代码跟着放大，版心等比放宽
+		a.state.MarkdownFontSize = 18
+		savePNG(t, newPreviewTester(a, dark), "history-markdown-large-"+suffix+".png")
 
 		a = previewApp(t)
 		previewHistory(a, "")

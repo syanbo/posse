@@ -1,7 +1,9 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
+	"math"
 	"strings"
 	"unicode"
 
@@ -203,6 +205,30 @@ type mdView struct {
 	words []string
 	depth int      // 列表嵌套层数
 	find  *docFind // 文件预览的查找栏：命中按搭界面的顺序编号，当前那个换深底色、滚进视野
+	size  float32  // 正文字号（设置里的 Markdown 字号），0 跟界面字号；标题、代码和它的差值同界面
+}
+
+func (r mdView) body() float32  { return cmp.Or(r.size, fsBody) }
+func (r mdView) small() float32 { s, _, _, _ := typeScale(r.body()); return s }
+
+// heading 是标题字号：一级同页面标题、二级同卡片标题，再往下和正文一样大。
+func (r mdView) heading(level int) float32 {
+	_, _, title, page := typeScale(r.body())
+	switch level {
+	case 1:
+		return page
+	case 2:
+		return title
+	}
+	return r.body()
+}
+
+// sz 同界面的 sz，按 Markdown 的正文字号缩放。
+func (r mdView) sz(v float32) float32 { return float32(math.Round(float64(v * r.body() / rowBase))) }
+
+// scaled 是按正文字号缩放的尺寸，v 是默认界面字号下的值。
+func (r mdView) scaled(v float32) float32 {
+	return float32(math.Round(float64(v * r.body() / defaultUIFontSize)))
 }
 
 func (r mdView) blocks(c *ui.Context, bs []mdBlock) {
@@ -215,13 +241,9 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	switch b.kind {
 	case mdPara:
-		r.inline(c, b.inlines).FontSize(fsBody).LineHeight(1.6)
+		r.inline(c, b.inlines).FontSize(r.body()).LineHeight(1.6)
 	case mdHeading:
-		size := map[int]float32{1: fsPage, 2: fsTitle}[b.level]
-		if size == 0 {
-			size = fsBody
-		}
-		r.inline(c, b.inlines).FontSize(size).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
+		r.inline(c, b.inlines).FontSize(r.heading(b.level)).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
 		// mermaid 代码块画成图；画好之前、画不出来、切到源码时照普通代码块显示
 		var d *diagram.Diagram
@@ -229,14 +251,14 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			d = diagramOf(c, b.code)
 		}
 		drawn := d != nil && d.Err == ""
-		// 上面一条语言栏，右边是复制按钮（图多一个源码和图的切换）
+		// 上面一条语言栏，右边是复制按钮（图多一个源码和图的切换）；按钮按界面尺寸，栏高至少放得下它们
 		ui.Column(c).Radius(rCard).Background(codeBackground(t)).Clip().Children(func() {
-			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Height(max(sz(28), r.sz(28))).Padding(0, 4, 0, 12).AlignItems(ui.Center).Children(func() {
 				lang := b.lang
 				if lang == "" {
 					lang = "代码"
 				}
-				ui.Text(c, lang).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
+				ui.Text(c, lang).FontSize(r.small()).Font(monoFont).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				if drawn {
 					icon, label := iconCode, "查看源码"
@@ -256,15 +278,15 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				return
 			}
 			if d != nil && d.Err != "" {
-				ui.Text(c, "画不出图："+d.Err).FontSize(fsSmall).TextColor(t.Danger).Padding(0, 12)
+				ui.Text(c, "画不出图："+d.Err).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
 			}
 			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
 				if r.find == nil {
-					highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
+					highlighted(c, b.code, r.words).Font(monoFont).FontSize(r.small()).LineHeight(1.5)
 					return
 				}
 				from := r.find.total
-				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(fsSmall).LineHeight(1.5), from)
+				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(r.small()).LineHeight(1.5), from)
 			})
 		})
 	case mdQuote:
@@ -273,9 +295,9 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			ui.Column(c).Grow(1).Shrink(1).Gap(8).TextColor(t.TextMuted).Children(func() { r.blocks(c, b.blocks) })
 		})
 	case mdList:
-		width := float32(14)
+		width := r.scaled(14)
 		if b.ordered {
-			width = float32(len(fmt.Sprint(b.start+len(b.items)-1))*8 + 8)
+			width = r.scaled(float32(len(fmt.Sprint(b.start+len(b.items)-1))*8 + 8))
 		}
 		inner := r
 		inner.depth++
@@ -283,7 +305,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			for i, it := range b.items {
 				ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
 					if !b.ordered && it.check == 0 {
-						listDot(c, width, r.depth)
+						listDot(c, width, r.body(), r.depth)
 						ui.Column(c).Grow(1).Shrink(1).Gap(4).Children(func() { inner.blocks(c, it.blocks) })
 						return
 					}
@@ -296,7 +318,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 					case b.ordered:
 						marker = fmt.Sprintf("%d.", b.start+i)
 					}
-					m := ui.Text(c, marker).FontSize(fsBody).LineHeight(1.55).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
+					m := ui.Text(c, marker).FontSize(r.body()).LineHeight(1.55).TextColor(t.TextMuted).Width(width).Shrink(0).Unselectable()
 					if b.ordered {
 						m.FontFeatures("tnum").TextAlign(ui.End)
 					}
@@ -312,10 +334,10 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 }
 
 // listDot 画无序列表的点，按层级是实心圆、空心圆、小方块；字体里的 • 太小，自己画，竖直对齐第一行的中线。
-func listDot(c *ui.Context, width float32, depth int) {
+func listDot(c *ui.Context, width, size float32, depth int) {
 	t := c.Theme()
-	d := fsBody * 0.36
-	ui.Box(c).Width(width).Height(fsBody * 1.55).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
+	d := size * 0.36
+	ui.Box(c).Width(width).Height(size * 1.55).Shrink(0).Draw(func(p *ui.Painter, rect ui.Rect) {
 		dot := ui.Rect{X: rect.X + (rect.W-d)/2, Y: rect.Y + (rect.H-d)/2, W: d, H: d}
 		switch min(depth, 2) {
 		case 0:
@@ -332,7 +354,7 @@ func listDot(c *ui.Context, width float32, depth int) {
 const mdCellPad = 25
 
 // mdTableSize 是表格每列量好的宽度：最小宽是最长的拆不开的词，最大宽是不折行。
-// 第一次搭的时候量一次，存在块上；设置里换了界面字号、字重（key）再重量。
+// 第一次搭的时候量一次，存在块上；换了字号、字重（key）再重量。
 type mdTableSize struct {
 	min, max []float32
 	key      [3]float32
@@ -348,7 +370,7 @@ func (r mdView) table(c *ui.Context, b mdBlock) {
 		cols = max(cols, len(row))
 	}
 	size := b.size
-	if key := [3]float32{fsBody, float32(fwMedium), float32(fwBold)}; size.min == nil || size.key != key {
+	if key := [3]float32{r.body(), float32(fwMedium), float32(fwBold)}; size.min == nil || size.key != key {
 		r.measure(c, b, cols)
 		size.key = key
 	}
@@ -394,7 +416,7 @@ func (r mdView) measure(c *ui.Context, b mdBlock, cols int) {
 	cjk := map[ui.Span]float32{}
 	for ri, row := range b.rows {
 		for ci, cell := range row {
-			spans := cellSpans(c, cell, ri == 0)
+			spans := r.cellSpans(c, cell, ri == 0)
 			w, _ := c.MeasureText(0, spans...)
 			size.max[ci] = max(size.max[ci], w+mdCellPad)
 			for _, sp := range spans {
@@ -432,12 +454,13 @@ func (r mdView) measure(c *ui.Context, b mdBlock, cols int) {
 }
 
 // cellSpans 是格子里的文字按搭界面时的字号和字重摆出来的 spans，量宽度用；搜索词的底色不影响宽度，不带。
-func cellSpans(c *ui.Context, cell []mdInline, header bool) []ui.Span {
+func (r mdView) cellSpans(c *ui.Context, cell []mdInline, header bool) []ui.Span {
+	r.words, r.find = nil, nil
 	var spans []ui.Span
 	for _, in := range cell {
-		for _, sp := range (mdView{}).spans(c, in) {
+		for _, sp := range r.spans(c, in) {
 			if sp.Size == 0 {
-				sp.Size = fsBody
+				sp.Size = r.body()
 			}
 			if header && sp.Weight == 0 {
 				sp.Weight = fwMedium
@@ -484,7 +507,7 @@ func (r mdView) cells(c *ui.Context, b mdBlock, cols int) {
 				box.Radius(rad[0], rad[1], rad[2], rad[3])
 			}
 			box.Children(func() {
-				e := r.inline(c, cell).FontSize(fsBody).LineHeight(1.45)
+				e := r.inline(c, cell).FontSize(r.body()).LineHeight(1.45)
 				if ri == 0 {
 					e.FontWeight(fwMedium)
 				}
@@ -547,7 +570,7 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 		base.Strikethrough = true
 	}
 	if in.style&mdMono != 0 {
-		base.Font, base.Size, base.Background = monoFont, fsSmall, codeBackground(t)
+		base.Font, base.Size, base.Background = monoFont, r.small(), codeBackground(t)
 	}
 	if in.url != "" {
 		base.Color = t.Accent

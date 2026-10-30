@@ -222,10 +222,13 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w != nil && w.Branch != "" && a.pressed(c, "gitLog") {
 		a.toggleLogPanel(w)
 	}
-	// 图片标签在前台时 ⌘= ⌘- ⌘0 缩放图片，其余文件标签调编辑器的字号，终端调终端的
+	// 图片标签在前台时 ⌘= ⌘- ⌘0 缩放图片，Markdown 预览和历史页调 Markdown 字号，其余文件标签调编辑器的字号，终端调终端的
 	img := a.frontImage(w)
 	size, def, setSize := a.fontSize, float32(defaultFontSize), a.setFontSize
-	if a.filesActive(w) {
+	switch {
+	case a.selected == historyBoardID && a.history.detail != nil || a.frontMarkdown(w):
+		size, def, setSize = a.mdSize(), 0, a.setMarkdownFontSize
+	case a.filesActive(w):
 		size, def, setSize = a.editorSize, defaultEditorFontSize, a.setEditorFontSize
 	}
 	if a.pressed(c, "zoomIn") {

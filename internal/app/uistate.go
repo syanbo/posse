@@ -63,6 +63,7 @@ type uiState struct {
 	UIFontSize           float32   `json:"uiFontSize,omitempty"`           // 界面正文字号，0 表示默认
 	UIWeight             int       `json:"uiWeight,omitempty"`             // 界面正文字重，0 表示默认
 	UIBoldWeight         int       `json:"uiBoldWeight,omitempty"`         // 界面标题的字重，0 表示默认
+	MarkdownFontSize     float32   `json:"markdownFontSize,omitempty"`     // Markdown 预览和历史页对话的正文字号，0 表示跟界面字号
 	UpdateCheckedAt      time.Time `json:"updateCheckedAt,omitzero"`       // 上次成功检查更新的时间，距今满 6 小时才自动再查
 	UpdateDismissed      string    `json:"updateDismissed,omitempty"`      // 在侧栏关掉了这个版本的"已就绪"卡片
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示

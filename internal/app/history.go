@@ -948,7 +948,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 	// 对话直接铺在画布上，不装卡片；版心限宽居中，一行不至于太长
 	transcript := ui.List(c, &h.messages, len(msgs), func(i int) {
 		ui.Row(c).Justify(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Shrink(1).MaxWidth(transcriptWidth).Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).MaxWidth(a.transcriptWidth()).Children(func() {
 				it := msgs[i]
 				if it.tools != nil {
 					a.toolRun(c, d, it.tools)
@@ -961,8 +961,8 @@ func (a *app) sessionDetail(c *ui.Context) {
 	fadeEdges(transcript, &h.messages, colors(t).canvas)
 }
 
-// transcriptWidth 是对话的版心宽度：14.5pt 的正文一行四十几个汉字。
-const transcriptWidth = 680
+// transcriptWidth 是对话的版心宽度：默认字号下一行四十几个汉字，随 Markdown 字号等比放宽。
+func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultUIFontSize }
 
 // toolRun 是折起来的一串工具调用：点一下展开或收起。
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
@@ -1005,7 +1005,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		box.Background(soft(t, colors(t).honey))
 	case m.Role == "user":
 		// 自己说的话靠右、强调色淡底，一眼和 agent 的回复分开
-		box.Background(colors(t).tint).AlignSelf(ui.End).MaxWidth(transcriptWidth * 0.8)
+		box.Background(colors(t).tint).AlignSelf(ui.End).MaxWidth(a.transcriptWidth() * 0.8)
 	}
 	box.Children(func() {
 		ui.Row(c).Gap(8).Children(func() {
@@ -1021,10 +1021,10 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		case "assistant":
 			// agent 的回复按 Markdown 显示；用户自己打的字原样显示
 			ui.Column(c).Gap(8).Selectable().Children(func() {
-				mdView{words: ns}.blocks(c, a.markdown(m))
+				mdView{words: ns, size: a.mdSize()}.blocks(c, a.markdown(m))
 			})
 		default:
-			highlighted(c, text, ns).FontSize(fsBody).LineHeight(1.55).Selectable()
+			highlighted(c, text, ns).FontSize(a.mdSize()).LineHeight(1.55).Selectable()
 		}
 	})
 }

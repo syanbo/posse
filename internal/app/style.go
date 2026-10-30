@@ -77,9 +77,14 @@ func init() { setUIType(defaultUIFontSize, 0, 0) }
 // setUIType 换界面的字号和字重；weight、bold 为 0 时用默认（同 weightsOf）。
 func setUIType(size float32, weight, bold int) {
 	fsBody = min(max(cmp.Or(size, defaultUIFontSize), minUIFontSize), maxUIFontSize)
-	fsSmall, fsCode, fsTitle, fsPage = fsBody-2, fsBody-1, fsBody+2, fsBody+4
+	fsSmall, fsCode, fsTitle, fsPage = typeScale(fsBody)
 	fwBody, fwBold = weightsOf(weight, bold)
 	fwMedium = int(math.Round(float64(fwBody+fwBold)/200)) * 100
+}
+
+// typeScale 由正文字号推出说明文字、等宽字、卡片标题和页面标题的字号；界面和 Markdown 共用这套差值。
+func typeScale(body float32) (small, code, title, page float32) {
+	return body - 2, body - 1, body + 2, body + 4
 }
 
 // sz 是跟着界面字号缩放的尺寸：行、按钮、输入框的高度和文字旁的小图标写成 sz(26)，默认字号下比原来大一点，配得上大一号的字。

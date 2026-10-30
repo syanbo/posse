@@ -259,7 +259,8 @@ func (a *app) setPermission(mode string) {
 
 // interfaceSettings 是界面的字号、字重、字体平滑和图标大小。
 func (a *app) interfaceSettings(c *ui.Context) {
-	settingsCard(c, "界面", "字号是正文的大小：说明文字小 2 号，卡片标题大 2 号，页面标题大 4 号，行高跟着变。粗体字重用在标题上，列表标题和按钮取正文和粗体中间的字重。", func() {
+	zoom := a.keyText("zoomIn") + " " + a.keyText("zoomOut") + " " + a.keyText("zoomReset")
+	settingsCard(c, "界面", "字号是正文的大小：说明文字小 2 号，卡片标题大 2 号，页面标题大 4 号，行高跟着变。Markdown 字号管 Markdown 预览和历史页的对话，默认跟界面字号，预览或历史页的对话在前台时 "+zoom+" 调它。粗体字重用在标题上，列表标题和按钮取正文和粗体中间的字重。", func() {
 		setType := func(f func(s *uiState)) {
 			f(&a.state)
 			setUIType(a.state.UIFontSize, a.state.UIWeight, a.state.UIBoldWeight)
@@ -274,6 +275,9 @@ func (a *app) interfaceSettings(c *ui.Context) {
 					}
 				})
 			})
+		})
+		settingsRow(c, "Markdown 字号", func() {
+			fontSizeStepper(c, a.mdSize(), 0, a.setMarkdownFontSize)
 		})
 		settingsRow(c, "字重", func() {
 			stepper(c, "字重", fmt.Sprint(fwBody),
