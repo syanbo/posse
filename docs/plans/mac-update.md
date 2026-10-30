@@ -7,7 +7,7 @@
 ## 发布
 
 - 签名用 Developer ID Application（团队 QKSM9Z4U85），dmg 经公证并钉票据，票据也钉在 app 上（更新包里的 app 带着它）。
-- 更新包和清单放在 Cloudflare R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载。用 mygo 自带的更新格式：`posse-<版本>-darwin-arm64.tar.gz`、增量包、清单 `update-darwin-arm64.json`，都用 Ed25519 签名（私钥在 `~/Library/Application Support/mygo/update-keys/`，不进仓库）。
+- 更新包和清单放在 Cloudflare R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载。用 mygo 自带的更新格式：`posse-<版本>-darwin-arm64.tar.gz`、增量包、清单 `update-darwin-arm64.json`，都用 Ed25519 签名（私钥在 `~/Library/Application Support/mygo/update-keys/`，不进仓库，也不写进 `mygo.json`：只有 `scripts/release.sh` 经 `MYGO_UPDATER_PRIVATE_KEY` 交给 mygo，日常打包不做更新包和增量包）。
 - `scripts/release.sh <版本>`：除了 `CHANGELOG.md` 工作区干净、版本比现在和线上的都新、`CHANGELOG.md` 有这个版本的一节，才改版本号、提交、打标签、打包；不带版本号时发布现在的版本（失败后重试）。打包输出到 `build/release/`，不碰日常的 `build/darwin-arm64/`。上传顺序：更新包和增量包、dmg（另存一份 `Posse.dmg` 给下载链接用），最后清单（不缓存）：客户端看到清单时它指向的包一定已经在了。
 - 上传用 wrangler（本机已登录的 Cloudflare 账号），仓库和钥匙串里不放 R2 密钥。
 

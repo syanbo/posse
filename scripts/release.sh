@@ -12,6 +12,12 @@ cd "$(dirname "$0")/.."
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
 bucket=posse-updates
+# 更新包的签名私钥只在发布时交给 mygo：mygo.json 里不写它，日常打包就不做更新包和增量包（要下载旧版逐个比较，慢）
+key="$HOME/Library/Application Support/mygo/update-keys/mygo-update.key"
+if [ ! -f "$key" ]; then
+	echo "找不到更新包的签名私钥：$key" >&2
+	exit 1
+fi
 wrangler() { npx --yes wrangler@4 "$@"; }
 
 current=$(plutil -extract version raw mygo.json)
@@ -77,7 +83,7 @@ fi
 
 out=build/release/$version
 rm -rf "$out"
-go tool mygo build -platform darwin/arm64 -o "$out"
+MYGO_UPDATER_PRIVATE_KEY=$(cat "$key") go tool mygo build -platform darwin/arm64 -o "$out"
 dir=$out/darwin-arm64
 
 put() { # put <键> <文件> <类型> [缓存]

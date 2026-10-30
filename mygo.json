@@ -7,8 +7,7 @@
   "out": "build",
   "updates": {
     "publicKey": "XyNlKbJMuyckf118edk00zLSKEVR3mJWJAXEHNa34p8=",
-    "url": "https://posse.shaoyan.uk",
-    "privateKey": "~/Library/Application Support/mygo/update-keys/mygo-update.key"
+    "url": "https://posse.shaoyan.uk"
   },
   "macos": {
     "minimumSystemVersion": "13.0",
