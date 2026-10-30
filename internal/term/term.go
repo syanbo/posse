@@ -825,9 +825,68 @@ func (t *Terminal) Inject(data []byte) error {
 	if !t.Running() {
 		return errors.New("terminal has exited")
 	}
-	t.mouseLast.Store(mouseReport.Match(data))
+	mouse := mouseReport.Match(data)
+	if mouse && lossyMouse(data) {
+		// 程序忙着没读输入时（Codex 回合中、重画长会话），macOS 的 PTY 输入队列只放得下约 1 KB，
+		// 再写就在报告中间截断、等程序读走再写后半截；程序读到结尾孤零零的 ESC 当成按了 Esc，
+		// 后半截"[<64;53;8M"成了输入框里的字。滚轮、移动的报告丢几个无妨，不往堆着没读的队列里写；
+		// 按下、松开不丢，丢了松开程序会以为键一直按着。丢掉的也按写入成功返回。
+		if q := t.inputQueued(); q > mouseQueued || q+len(data) > ptyInputMax {
+			return nil
+		}
+	}
+	t.mouseLast.Store(mouse)
 	_, err := t.pty.Write(data)
 	return err
+}
+
+// mouseQueued 是 PTY 输入队列里没读的字节超过多少时不再写滚轮、移动的报告：程序已经跟不上了。
+// ptyInputMax 是写完后队列最多到多少字节，低于 macOS 约 1 KB 的上限，一次带着多条报告的写入也截不断。
+const (
+	mouseQueued = 256
+	ptyInputMax = 960
+)
+
+// lossyMouse 判断 data（整段都是鼠标报告）是否全是滚轮或移动的报告：按键码带 64（滚轮）或 32（移动）。
+func lossyMouse(data []byte) bool {
+	for len(data) > 0 {
+		var code, n int
+		if m := sgrReport.FindSubmatch(data); m != nil {
+			code, _ = strconv.Atoi(string(m[1]))
+			n = len(m[0])
+		} else if len(data) >= 6 {
+			// X10：\x1b[M 后三个字节，按键码加了 32
+			code, n = int(data[3])-32, 6
+		} else {
+			return false
+		}
+		if code&(32|64) == 0 {
+			return false
+		}
+		data = data[n:]
+	}
+	return true
+}
+
+var sgrReport = regexp.MustCompile(`^\x1b\[<(\d+);\d+;\d+[Mm]`)
+
+// fionread 是 macOS 的 FIONREAD（x/sys 没有导出）：对主端取的是从端还没读的输入字节数。
+const fionread = 0x4004667f
+
+// inputQueued 返回程序还没读的输入字节数，取不到时为 0。
+func (t *Terminal) inputQueued() int {
+	t.pmu.Lock()
+	defer t.pmu.Unlock()
+	if t.ptyClosed {
+		return 0
+	}
+	n := 0
+	if rc, err := t.pty.SyscallConn(); err == nil {
+		rc.Control(func(fd uintptr) {
+			n, _ = unix.IoctlGetInt(int(fd), fionread)
+		})
+	}
+	return n
 }
 
 // mouseReport 匹配整段都是鼠标报告的输入（SGR 和 X10 两种编码）。

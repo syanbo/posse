@@ -215,6 +215,62 @@ func TestWatchCarriesPartialSequence(t *testing.T) {
 	}
 }
 
+// 程序忙着不读输入时，滚轮报告不往快满的 PTY 输入队列里写：写满会在报告中间截断，
+// 程序读到结尾单独的 ESC，后半截成了键入的字。按下、松开和键盘输入照常写；
+// 队列空着时一次带着多条报告的写入也照常写。
+func TestMouseReportsNotCutWhenProgramBusy(t *testing.T) {
+	script := `stty raw -echo; printf 'ready\r\n'; sleep 1; perl -e 'use IO::Select; $s = IO::Select->new(\*STDIN); $b = ""; $cut = 0; while ($s->can_read(0.3)) { sysread(STDIN, $c, 4096) or last; $cut++ if $c !~ /[Mmx]$/; $b .= $c } $w = () = $b =~ /\e\[<65;54;9M/g; $b =~ s/\e\[<65;54;9M//g; $b =~ s/\e/^[/g; print "got=[$b] cut=$cut batch=" . ($w >= 30 ? 1 : 0) . "\r\n"'; stty sane`
+	tm, err := Start(Options{ID: "t_busy", Dir: t.TempDir(), Command: []string{"/bin/bash", "--norc", "-c", script}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	deadline := time.Now().Add(5 * time.Second)
+	for !tm.ContainsText("ready") {
+		if time.Now().After(deadline) {
+			t.Fatal("program never started")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	tm.Send([]byte(strings.Repeat("\x1b[<65;54;9M", 30)))
+	for range 300 {
+		tm.Send([]byte("\x1b[<65;54;9M"))
+	}
+	tm.Send([]byte("\x1b[<0;5;5M"))
+	tm.Send([]byte("\x1b[<0;5;5m"))
+	tm.Send([]byte("x"))
+	select {
+	case <-tm.Exited():
+	case <-time.After(10 * time.Second):
+		t.Fatal("program did not exit")
+	}
+	time.Sleep(100 * time.Millisecond)
+	// 每次读到的都在报告的边界上，一次写的 30 条都在，去掉滚轮报告后剩下按下、松开和键入的 x
+	if want := "got=[^[[<0;5;5M^[[<0;5;5mx] cut=0 batch=1"; !tm.ContainsText(want) {
+		t.Fatalf("want %s, screen:\n%s", want, strings.Join(tm.Lines(), "\n"))
+	}
+}
+
+func TestLossyMouse(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want bool
+	}{
+		{"\x1b[<64;53;8M", true},              // 滚轮
+		{"\x1b[<65;54;9M\x1b[<35;1;1M", true}, // 滚轮加移动
+		{"\x1b[<32;3;4M", true},               // 按着左键拖动
+		{"\x1b[<0;5;5M", false},               // 按下
+		{"\x1b[<0;5;5m", false},               // 松开
+		{"\x1b[<64;1;1M\x1b[<0;1;1m", false},  // 混着松开
+		{"\x1b[M`!!", true},                   // X10 滚轮（96-32=64）
+		{"\x1b[M !!", false},                  // X10 按下
+	} {
+		if got := lossyMouse([]byte(c.in)); got != c.want {
+			t.Errorf("lossyMouse(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // 程序退出前不再读输入、鼠标跟踪还开着时，鼠标移动的报告堆在 PTY 里；程序关掉鼠标跟踪时丢掉它们，
 // 后面的 shell 读不到一串"35;12;8M"。最后写进去的是键盘输入时不丢。
 func TestMouseReportsDroppedWhenTrackingEnds(t *testing.T) {
