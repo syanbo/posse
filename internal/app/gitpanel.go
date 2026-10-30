@@ -49,9 +49,19 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 			stashes = append(stashes, r)
 		}
 	}
+	if a.state.ChangesByDir {
+		files = byDirRows(files, g.dirFolds)
+	}
 	ui.Row(c).Gap(4).Padding(2, 12, 6, 12).AlignItems(ui.Center).Children(func() {
 		changesTab(c, &g.tab, 0, "提交", g.changeCount())
 		changesTab(c, &g.tab, 1, "储藏", len(stashes))
+		if g.tab == 0 {
+			ui.Spacer(c)
+			if toggleIconButton(c, "by-dir", iconFolder, "按目录分组", a.state.ChangesByDir) {
+				a.state.ChangesByDir = !a.state.ChangesByDir
+				a.saveState()
+			}
+		}
 	})
 	rows, list, empty := files, &g.list, "没有改动"
 	if g.tab == 1 {
@@ -64,7 +74,7 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	} else {
 		list.Key = func(i int) any {
 			r := rows[i]
-			return [3]any{r.group, r.header, r.entry.Path + r.stash.Ref}
+			return [4]any{r.group, r.header, r.dir, r.entry.Path + r.stash.Ref + r.path}
 		}
 		ui.List(c, list, len(rows), func(i int) { a.changeRow(c, w, v, rows[i]) }).Grow(1).Padding(0, 0, 8, 0)
 		if g.tab == 0 {
@@ -87,7 +97,7 @@ func (a *app) changesKeys(c *ui.Context, w *workspace, v *filesView, rows []chan
 	var files []int
 	cur := -1
 	for i, r := range rows {
-		if r.header || r.entry.Conflict {
+		if r.header || r.dir || r.entry.Conflict {
 			continue
 		}
 		if v.cur != nil && v.cur.path == diffKey(g.absPath(r.entry.Path), changeSpec(r.entry)) {
@@ -238,26 +248,14 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			// 改动和未跟踪的组标题能一键全选、全不选
 			if r.group == groupChanged || r.group == groupUntracked {
 				var in []gitx.Entry
-				on := 0
 				for _, e := range g.status.Entries {
 					if !e.Conflict && e.Untracked == (r.group == groupUntracked) {
 						in = append(in, e)
-						if g.picked(e) {
-							on++
-						}
 					}
 				}
-				state := pickNone
-				switch {
-				case on == len(in):
-					state = pickAll
-				case on > 0:
-					state = pickSome
-				}
+				state := g.pickState(in)
 				if pickBox(c, fmt.Sprint("group-", r.group), groupTitles[r.group], state) {
-					for _, e := range in {
-						g.setPicked(e, state != pickAll)
-					}
+					g.setPickedAll(in, state != pickAll)
 				}
 			}
 			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group])
@@ -275,16 +273,28 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		a.stashRow(c, v, r.stash)
 		return
 	}
+	if r.dir {
+		a.changeDirRow(c, v, r)
+		return
+	}
 	e := r.entry
 	spec := changeSpec(e)
 	key := diffKey(g.absPath(e.Path), spec)
-	// 比组标题缩进一层：勾选框和组名的文字对齐
-	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, groupTextIndent()).Gap(6).Radius(rRow).
+	// 比组标题缩进一层：勾选框和组名的文字对齐；按目录分组时再按层缩进
+	indent := groupTextIndent()
+	if r.tree {
+		indent += float32(r.depth) * treeIndent
+	}
+	row := ui.Row(c.Key(key)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, indent).Gap(6).Radius(rRow).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(e.Path)
 	selectedBg(c, row, v.cur != nil && v.cur.path == key)
 	letter := statusLetter(e)
 	color := letterColor(c, letter)
 	row.Children(func() {
+		if r.tree {
+			// 文件没有展开箭头，留出同样的宽度，勾选框和同一层的目录对齐
+			ui.Box(c).Width(miniBox()).Shrink(0)
+		}
 		if !e.Conflict {
 			state := pickNone
 			if g.picked(e) {
@@ -299,7 +309,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
-		if dir := filepath.Dir(e.Path); dir != "." {
+		if dir := filepath.Dir(e.Path); dir != "." && !r.tree {
 			ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 		ui.Spacer(c)
@@ -358,6 +368,57 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		m.Separator()
 		abs := g.absPath(e.Path)
 		if letter != 'D' && m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+			mygo.Shell.ShowItemInFolder(abs)
+		}
+		if m.Item("复制路径").Chosen() {
+			c.WriteClipboard(abs)
+		}
+	})
+}
+
+// changeDirRow 画按目录分组时的目录行：展开箭头、整个目录的勾选、目录名和文件数；点行展开收起。
+func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
+	g := &v.git
+	folds := g.dirFolds(r.group)
+	row := ui.Row(c.Key("dir:"+r.path)).Height(sz(28)).Margin(2, 6, 0, 6).Padding(0, 8, 0, groupTextIndent()+float32(r.depth)*treeIndent).
+		Gap(6).Radius(rRow).AlignItems(ui.Center).Role(ui.RoleButton).Label(r.path)
+	selectedBg(c, row, false)
+	row.Children(func() {
+		open := !folds[r.path]
+		disclosure(c, &open, "展开 "+r.path)
+		if open == folds[r.path] {
+			folds[r.path] = !open
+		}
+		if r.group != groupConflict {
+			state := g.pickState(r.files)
+			if pickBox(c, "dir:"+r.path, r.path, state) {
+				g.setPickedAll(r.files, state != pickAll)
+			}
+		}
+		treeDirLabel(c, r.name, len(r.files))
+	})
+	if row.Clicked() {
+		folds[r.path] = !folds[r.path]
+	}
+	contextMenu(c, row, func(m *popMenu) {
+		if r.group != groupConflict {
+			label := "回滚…"
+			if r.group == groupUntracked {
+				label = "删除…"
+			}
+			if m.Item(label).Chosen() {
+				paths := make([]string, len(r.files))
+				for i, e := range r.files {
+					paths[i] = e.Path
+				}
+				a.openRollbackFor(v, paths, nil)
+			}
+			m.Separator()
+		}
+		abs := g.absPath(r.path)
+		// 里面的文件全删了时目录可能已经不在
+		exists := slices.ContainsFunc(r.files, func(e gitx.Entry) bool { return statusLetter(e) != 'D' })
+		if exists && m.Item("在访达中显示").Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
 		if m.Item("复制路径").Chosen() {
@@ -809,6 +870,25 @@ const (
 	pickAll
 	pickSome
 )
+
+// pickStateOf 是 n 个文件里勾了 on 个时的勾选状态。
+func pickStateOf(on, n int) int {
+	switch on {
+	case 0:
+		return pickNone
+	case n:
+		return pickAll
+	}
+	return pickSome
+}
+
+// treeDirLabel 是改动文件树目录行的文件夹图标、目录名和文件数，回滚对话框和改动页共用。
+func treeDirLabel(c *ui.Context, name string, n int) {
+	t := c.Theme()
+	ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+	ui.Text(c, name).FontSize(fsBody).SingleLine().Shrink(1)
+	ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+}
 
 // pickBox 是改动列表里的勾选框：空框、勾上（强调色加对勾）、部分勾上（强调色加横线）。返回这一帧是否点了它。
 func pickBox(c *ui.Context, key, name string, state int) bool {

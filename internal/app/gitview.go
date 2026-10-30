@@ -54,6 +54,8 @@ type gitState struct {
 	err      string
 	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
 	branches branchInfo
+	// dirFolded 是按目录分组时各组里收起的目录
+	dirFolded map[changeGroup]map[string]bool
 	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
 	// 储藏列表是所有 worktree 共用的，只记自己操作留下的。关掉横幅或储藏没了就清空
 	autostash          string
@@ -74,13 +76,19 @@ const (
 
 var groupTitles = [...]string{"冲突", "改动", "未跟踪", "储藏"}
 
-// changeRow 是改动列表的一行：组标题、一个文件，或一条储藏。
+// changeRow 是改动列表的一行：组标题、一个文件，或一条储藏；按目录分组时还有目录行。
 type changeRow struct {
 	group  changeGroup
 	header bool
 	count  int
 	entry  gitx.Entry
 	stash  gitx.Stash
+	tree   bool   // 按目录分组时的行（目录和文件）：按 depth 缩进，文件不再写所在目录
+	dir    bool   // 目录行
+	path   string // 目录行相对仓库根目录的路径
+	name   string // 目录行显示的名字：只有一个子目录的中间层并成一行，如 internal/app
+	depth  int
+	files  []gitx.Entry // 目录行下面所有的文件
 }
 
 // changeRows 按组排好改动：冲突、改动、未跟踪、储藏。
@@ -110,6 +118,55 @@ func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
 		rows = append(rows, rs...)
 	}
 	return rows
+}
+
+// byDirRows 把每组的文件照回滚对话框的文件树按目录排（changeTree），收起的目录不列下面的行。
+// rows 里已经去掉了收起的组，组标题原样留着。
+func byDirRows(rows []changeRow, folded func(changeGroup) map[string]bool) []changeRow {
+	var out []changeRow
+	for i := 0; i < len(rows); {
+		if rows[i].header {
+			out = append(out, rows[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(rows) && !rows[j].header {
+			j++
+		}
+		grp := rows[i:j]
+		paths := make([]string, len(grp))
+		for k, r := range grp {
+			paths[k] = r.entry.Path
+		}
+		gr := grp[0].group
+		for _, t := range changeTree(paths, folded(gr)) {
+			r := changeRow{group: gr, tree: true, dir: t.dir, path: t.path, name: t.name, depth: t.depth}
+			if t.dir {
+				for _, k := range t.files {
+					r.files = append(r.files, grp[k].entry)
+				}
+			} else {
+				r.entry = grp[t.entry].entry
+			}
+			out = append(out, r)
+		}
+		i = j
+	}
+	return out
+}
+
+// dirFolds 是一组里收起的目录，按 changeRow.path；不记进 ui.json，和组的展开收起一样。
+func (g *gitState) dirFolds(gr changeGroup) map[string]bool {
+	if g.dirFolded == nil {
+		g.dirFolded = map[changeGroup]map[string]bool{}
+	}
+	m := g.dirFolded[gr]
+	if m == nil {
+		m = map[string]bool{}
+		g.dirFolded[gr] = m
+	}
+	return m
 }
 
 // groupOpen 返回组展开与否的开关，没有就新建一个展开的。
@@ -1013,6 +1070,23 @@ func (g *gitState) picked(e gitx.Entry) bool {
 		return on
 	}
 	return !e.Untracked
+}
+
+// pickState 是一组文件的勾选状态。
+func (g *gitState) pickState(es []gitx.Entry) int {
+	on := 0
+	for _, e := range es {
+		if g.picked(e) {
+			on++
+		}
+	}
+	return pickStateOf(on, len(es))
+}
+
+func (g *gitState) setPickedAll(es []gitx.Entry, on bool) {
+	for _, e := range es {
+		g.setPicked(e, on)
+	}
 }
 
 func (g *gitState) setPicked(e gitx.Entry, on bool) {

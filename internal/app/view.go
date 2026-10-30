@@ -2165,6 +2165,24 @@ func iconButtonSized(c *ui.Context, icon *ui.SVG, label string, box, glyph float
 	return quietIconButton(c, icon, label, box, glyph).Tooltip(label)
 }
 
+// toggleIconButton 是带开关状态的小图标按钮（图片的棋盘格、改动页的按目录分组），开着时垫强调色淡底；
+// 返回这一帧是否被点了。
+func toggleIconButton(c *ui.Context, key string, icon *ui.SVG, label string, on bool) bool {
+	t := c.Theme()
+	b := ui.Box(c.Key(key)).Size(compactBox(), compactBox()).Radius(rRow).Center().Shrink(0).
+		Role(ui.RoleButton).Label(label).Tooltip(label).Checked(on)
+	bg, fg := ui.Transparent, t.TextMuted
+	switch {
+	case on:
+		bg, fg = colors(t).tint, t.Accent
+	case b.Hovered():
+		bg, fg = t.SurfaceHover, t.Text
+	}
+	b.Background(b.AnimateColor("bg", bg, hover))
+	b.Children(func() { ui.Icon(c, icon).FontSize(fsBody).TextColor(fg) })
+	return b.Clicked()
+}
+
 // quietIconButton 是不带悬停提示的图标按钮，用在一眼认得出、提示反而挡视线的地方（终端右上角的会话按钮）。
 func quietIconButton(c *ui.Context, icon *ui.SVG, label string, box, glyph float32) ui.Element {
 	t := c.Theme()

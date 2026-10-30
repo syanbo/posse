@@ -260,18 +260,7 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 		FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
 	if info.alpha {
 		on := !a.state.ImageCheckerOff
-		b := ui.Box(c.Key("img-checker")).Size(compactBox(), compactBox()).Radius(rRow).Center().Shrink(0).
-			Role(ui.RoleButton).Label("透明处显示棋盘格").Tooltip("透明处显示棋盘格").Checked(on)
-		bg, fg := ui.Transparent, t.TextMuted
-		switch {
-		case on:
-			bg, fg = colors(t).tint, t.Accent
-		case b.Hovered():
-			bg, fg = t.SurfaceHover, t.Text
-		}
-		b.Background(b.AnimateColor("bg", bg, hover))
-		b.Children(func() { ui.Icon(c, iconChecker).FontSize(fsBody).TextColor(fg) })
-		if b.Clicked() {
+		if toggleIconButton(c, "img-checker", iconChecker, "透明处显示棋盘格", on) {
 			a.state.ImageCheckerOff = on
 			a.saveState()
 		}

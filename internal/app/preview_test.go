@@ -245,6 +245,13 @@ func previewRollback(t *testing.T, a *app) {
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
+// previewChangesByDir 用回滚对话框那组改动，把改动页切成按目录分组。
+func previewChangesByDir(t *testing.T, a *app) {
+	previewRollback(t, a)
+	a.rollback.open = false
+	a.state.ChangesByDir = true
+}
+
 func previewChangePop(t *testing.T, a *app) {
 	root := gitWorkspace(t, a)
 	tt := ui.NewTester(a.build, 1200, 760)
@@ -797,6 +804,11 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewRollback(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-rollback-"+suffix+".png")
+
+		// 改动页按目录分组
+		a = previewApp(t)
+		previewChangesByDir(t, a)
+		savePNG(t, newPreviewTester(a, dark), "git-changes-dir-"+suffix+".png")
 
 		// 编辑器行号旁的改动卡片
 		a = previewApp(t)

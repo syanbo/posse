@@ -121,13 +121,7 @@ func (r *rollbackDlg) pickState(files []int) int {
 			on++
 		}
 	}
-	switch on {
-	case 0:
-		return pickNone
-	case len(files):
-		return pickAll
-	}
-	return pickSome
+	return pickStateOf(on, len(files))
 }
 
 func (r *rollbackDlg) setPicked(files []int, on bool) {
@@ -509,9 +503,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			if pickBox(c, "dir:"+row.path, row.path, state) {
 				r.setPicked(row.files, state != pickAll)
 			}
-			ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
-			ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1)
-			ui.Text(c, fmt.Sprint(len(row.files))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			treeDirLabel(c, row.name, len(row.files))
 			return
 		}
 		e := r.entries[row.entry]
