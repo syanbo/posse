@@ -212,8 +212,9 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	if w == nil {
 		return false
 	}
-	// 刚点进另一栏、界面还没重建时，焦点栏还记着原来那栏：按键是哪栏收到的就以哪栏为准
-	if i := slices.Index(a.panes[:], v); i >= 0 && i != a.pane && a.splitShown() {
+	// 刚点进另一栏、界面还没重建时，焦点栏还记着原来那栏：按键是哪栏收到的就以哪栏为准。
+	// 界面正要把焦点移到焦点栏（刚切换栏）时不算：这时按键还落在原来那栏
+	if i := slices.Index(a.panes[:], v); i >= 0 && i != a.pane && a.splitShown() && !a.focusTerm {
 		a.focusPane(w.ID, i)
 	}
 	switch {
@@ -239,13 +240,15 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 // splitView 画左右两栏和中间的分栏线。拖分栏线时两栏先不变，只画一条跟着指针的线，
 // 松手才改比例：终端宽度一变，程序就要按新列数重排输出，跟着每一帧变会重排几十次。
 func (a *app) splitView(c *ui.Context, w *workspace) {
+	// 界面自己要移焦点（分屏、切换栏之后）时，这一帧焦点还在原来那栏，不能当成用户点了那栏
+	moving := a.focusTerm
 	sp, _ := a.splitOf(w.ID)
 	pct := sp.percent()
 	row := ui.Row(c.Key("split")).Grow(1).AlignItems(ui.Stretch)
 	width := row.Bounds().W
 	row.Children(func() {
 		left := ui.Column(c.Key("pane-0")).BasisPercent(pct).Grow(0).Shrink(1)
-		left.Children(func() { a.splitPane(c, w, 0) })
+		left.Children(func() { a.splitPane(c, w, 0, moving) })
 		vline(c).Children(func() {
 			grip := ui.Box(c.Key("split-grip")).Absolute().Top(0).Bottom(0).Left(-3).Width(7).Cursor(ui.CursorResizeEW)
 			if dx, _, held := grip.Dragged(); held {
@@ -266,7 +269,7 @@ func (a *app) splitView(c *ui.Context, w *workspace) {
 				})
 			}
 		})
-		ui.Column(c.Key("pane-1")).Grow(1).Shrink(1).Basis(0).Children(func() { a.splitPane(c, w, 1) })
+		ui.Column(c.Key("pane-1")).Grow(1).Shrink(1).Basis(0).Children(func() { a.splitPane(c, w, 1, moving) })
 	})
 	if a.resizingSplit == "term-split" && width > 1 {
 		// 松手后的位置：限在和松手时一样的范围里。左栏的比例按去掉 1 像素分栏线后的宽度算
@@ -279,7 +282,7 @@ func (a *app) splitView(c *ui.Context, w *workspace) {
 }
 
 // splitPane 画分屏的一栏：手机占着尺寸时的提示条和终端。
-func (a *app) splitPane(c *ui.Context, w *workspace, i int) {
+func (a *app) splitPane(c *ui.Context, w *workspace, i int, moving bool) {
 	v := a.panes[i]
 	if v == nil {
 		// 接入失败，下一帧再试；这一栏先空着，另一栏照常
@@ -293,8 +296,8 @@ func (a *app) splitPane(c *ui.Context, w *workspace, i int) {
 	if term.PhoneSized {
 		a.phoneSizedBar(c, term.ID)
 	}
-	// 点进另一栏（终端或它的查找栏刚拿到焦点）：选中的终端跟着换
-	if a.termPane(c, i, term) && i != a.pane {
+	// 点进另一栏（它的终端有了焦点）：选中的终端跟着换。终端换栏时视图的元素是新的，不带着原来的焦点
+	if a.termPane(c, i, term) && i != a.pane && !moving {
 		a.focusPane(w.ID, i)
 	}
 }

@@ -280,7 +280,6 @@ type app struct {
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	splitDrag       float32         // 拖终端分屏的分栏线时累计的横向距离，松手才改比例
 	split           bool            // 这一帧主区域是左右两栏（paneIDs 定）
-	paneHadFocus    [2]bool         // 上一帧每一栏里有没有焦点：刚拿到焦点才算点进了这一栏
 	splitPending    map[string]bool // 正在为「向右分屏」新开终端的工作区
 	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool            // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json

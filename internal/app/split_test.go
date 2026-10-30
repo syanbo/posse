@@ -125,3 +125,20 @@ func TestSplitKeyUsesPaneThatGotKey(t *testing.T) {
 		t.Fatalf("close kept %q, want t2", a.activeTerm["w1"])
 	}
 }
+
+// 连按 ⌘]：第一下之后焦点要到下一帧才移过去，第二下还落在原来那栏，不能据此把焦点栏改回去。
+func TestSwitchPaneTwiceBeforeFrame(t *testing.T) {
+	a, _ := splitApp()
+	a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t2", Focus: 1}}
+	a.panes = [2]*termView{{id: "t1"}, {id: "t2"}}
+	a.split, a.pane = true, 1
+	right := a.panes[1]
+	a.splitKey(right, ui.Cmd, ui.KeyBracketRight)
+	if a.pane != 0 {
+		t.Fatalf("first press: pane %d, want 0", a.pane)
+	}
+	a.splitKey(right, ui.Cmd, ui.KeyBracketRight)
+	if a.pane != 1 || a.state.Splits["w1"].Focus != 1 {
+		t.Fatalf("second press: pane %d, want 1", a.pane)
+	}
+}
