@@ -83,6 +83,11 @@ func (t *TextLayout) SelectionRanges(anchor, caret TextCaretPosition) []TextInpu
 // retain a copy of an editor document or install keyboard/editing behavior.
 func ShapeText(s string, font Font, width float32) *TextLayout { return shapeText(s, font, width, nil) }
 
+// TextGeneration changes when the text system lets go of its fonts, as it
+// does when they are many: TextLayouts shaped before must then be shaped
+// anew, as those of fonts it let go of must not be drawn. (Posse)
+func TextGeneration() uint64 { return textSystem().Generation() }
+
 // ShapeRichText shapes the existing display-only Span styles into retained
 // geometry, so an application-owned rich editor can render its own runs.
 func ShapeRichText(spans []Span, font Font, width float32) *TextLayout {

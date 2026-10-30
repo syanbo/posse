@@ -75,9 +75,11 @@ type Diagram struct {
 	labels []label
 	// Err 是画不出来的原因，为空表示画好了。
 	Err string
-	// shaped 是按上次绘制的缩放排好的标签，只在界面线程上用。
+	// shaped 是按上次绘制的缩放排好的标签，只在界面线程上用；gen 是排的时候文本系统的代数，
+	// 变了说明字体被整批释放过，这些排版不能再画。
 	shaped []*ui.TextLayout
 	scale  float32
+	gen    uint64
 }
 
 // label 是标签里一段同样式的文字，左上角在图的 x, y，绕它转 angle 度。
@@ -112,8 +114,8 @@ func (d *Diagram) Draw(pt *ui.Painter, r ui.Rect) {
 		x0, y0 := r.X+t.x*s, r.Y+t.y*s
 		pt.Image(t.svg, ui.Rect{X: x0, Y: y0, W: r.X + (t.x+t.w)*s - x0, H: r.Y + (t.y+t.h)*s - y0}, ui.FillBox)
 	}
-	if size := float32(math.Round(float64(s)*100) / 100); size != d.scale || len(d.shaped) != len(d.labels) {
-		d.scale, d.shaped = size, make([]*ui.TextLayout, len(d.labels))
+	if size, gen := float32(math.Round(float64(s)*100)/100), ui.TextGeneration(); size != d.scale || gen != d.gen || len(d.shaped) != len(d.labels) {
+		d.scale, d.gen, d.shaped = size, gen, make([]*ui.TextLayout, len(d.labels))
 		for i, l := range d.labels {
 			f := l.font
 			f.Size *= max(size, 0.01)

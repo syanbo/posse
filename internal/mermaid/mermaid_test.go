@@ -197,3 +197,23 @@ func TestParseTransform(t *testing.T) {
 		t.Errorf("rotate: %v,%v", x, y)
 	}
 }
+
+// 字体超过上限被整批释放后，按同一缩放再画要重排标签：画已释放字体的排版会崩
+func TestDrawAfterFontsReleased(t *testing.T) {
+	d := Render("flowchart LR\nA[常驻进程] --> B[终端]", testStyle())
+	if d.Err != "" {
+		t.Fatal(d.Err)
+	}
+	w, h := d.Size()
+	tt := ui.NewTester(func(c *ui.Context) { ui.Box(c).Width(w).Height(h).Draw(d.Draw) }, 800, 600)
+	tt.Frame()
+	gen := ui.TextGeneration()
+	for i := range 600 {
+		ui.ShapeText("x", ui.Font{Size: 8 + float32(i)*0.1}, 0)
+	}
+	tt.Frame()
+	tt.Frame()
+	if ui.TextGeneration() == gen {
+		t.Fatal("字体没有被释放，测不到")
+	}
+}

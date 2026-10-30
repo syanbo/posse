@@ -42,6 +42,8 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/menu.go`、`ui/api_gen.go`：加 `Element.ContextMenuAsked`，元素照 `ContextMenu` 接右键、菜单键和 Shift+F10（文字选区也一样），但不弹系统菜单，下一帧报告位置（窗口坐标），Posse 自己画菜单。
 
+`ui/text_layout.go`：加 `TextGeneration`，导出文本系统的代数：字体超过 512 个时整批释放、代数加一，之前 `ShapeText` 排好的 `TextLayout` 不能再画（Core Text 的字体已释放，画了会崩）。Posse 的 Mermaid 图按缩放缓存标签的排版，用它判断要不要重排。
+
 `ui/frame.go`：加 `Context.ModalOpen`，报告上一帧有没有对话框在最上层；Posse 的菜单项（⌘W 关闭标签）在帧外触发，用它和快捷键一样在对话框打开时不动作。
 
 `internal/gpu/metal/metal.go`：窗口的 drawable 最多 2 个（上游是 3 个）。上游在窗口 2 秒没画东西后才还掉多的那个，Posse 的窗口一直在画（终端光标闪烁、状态栏每秒刷新），第三个一直占着，约 30 MB。

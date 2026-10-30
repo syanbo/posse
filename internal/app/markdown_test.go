@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -116,5 +117,22 @@ func TestMermaidBlock(t *testing.T) {
 	tt.Frame()
 	if !shows(good) || !mermaidSource[good] {
 		t.Error("切不到源码")
+	}
+}
+
+// 一篇文档里的图比缓存上限多时，画完之后再搭界面全部命中，不会互相挤掉、每帧重画
+func TestMermaidManyBlocks(t *testing.T) {
+	var src strings.Builder
+	for i := range diagramCacheMax + 6 {
+		fmt.Fprintf(&src, "```mermaid\nflowchart LR\n  A%d --> B%d\n```\n\n", i, i)
+	}
+	bs := parseMarkdown(src.String())
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Scroll(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+	}, 800, 900)
+	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
+	tt.Frame()
+	if diagramsPending() {
+		t.Fatal("画好的图又被重画")
 	}
 }
