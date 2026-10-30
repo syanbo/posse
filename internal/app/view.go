@@ -1448,10 +1448,11 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	p := colors(t)
 	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, 8+a.barInset(c)).Gap(2).Background(p.band).
 		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
-		// 标签一段占剩下的宽度，放不下时左右滚动（切到哪个就滚到哪个）；右边的按钮组一直完整显示。
+		// 标签一段按内容宽度，放不下时收窄、左右滚动（切到哪个就滚到哪个）；"+"在滚动区外面，
+		// 没放满时跟在最后一个标签后面，放满了停在右边。右边的按钮组一直完整显示。
 		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
 		// 触控板和滚轮照常能滚
-		strip := ui.ScrollHorizontal(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).
+		strip := ui.ScrollHorizontal(c).Shrink(1).MinWidth(0).
 			Height(titleHeight(c) + 24).AlignSelf(ui.Start).AlignItems(ui.Start)
 		// 文件栏滑进来、窗口变窄之后，当前标签可能被挤到外面：宽度变了就再滚一次
 		if sw := strip.Bounds().W; sw != a.tabStripW {
@@ -1464,9 +1465,10 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 					a.tab(c, w, term, cur != nil && cur.ID == term.ID)
 				}
 				a.docTabs(c, w)
-				a.newTerminalButton(c, w)
 			})
 		})
+		ui.Row(c).Shrink(0).Height(titleHeight(c)).AlignItems(ui.Center).Children(func() { a.newTerminalButton(c, w) })
+		ui.Box(c).Grow(1)
 		ui.Row(c).Shrink(0).Gap(2).AlignItems(ui.Center).Children(func() { a.tabBarButtons(c, w, cur) })
 	})
 	a.mainBody(c, w, cur)
