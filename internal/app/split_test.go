@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/egoist/mygo/ui"
+)
 
 func splitApp() (*app, *workspace) {
 	a := &app{activeTerm: map[string]string{}}
@@ -26,13 +30,18 @@ func TestPaneIDs(t *testing.T) {
 	if sp := a.state.Splits["w1"]; sp.Right != "t3" || sp.Focus != 1 {
 		t.Fatalf("split = %+v", sp)
 	}
-	// 右栏的终端关掉了：分屏收起
+	// 右栏的终端不在列表里了：按一栏显示，记录留着（交接时可能有一次列表不全）
 	w.Terminals = w.Terminals[:2]
-	if got := a.paneIDs(w, &w.Terminals[0]); got != [2]string{"t1", ""} {
+	if got := a.paneIDs(w, &w.Terminals[0]); got != [2]string{"t1", ""} || a.splitShown() {
 		t.Fatalf("closed = %v", got)
 	}
+	if _, ok := a.state.Splits["w1"]; !ok {
+		t.Fatal("a missing terminal should not drop the saved split")
+	}
+	// 在窗口里关掉时删记录
+	a.dropSplitOf("t3")
 	if _, ok := a.state.Splits["w1"]; ok {
-		t.Fatal("split should be dropped")
+		t.Fatal("closing a split terminal should drop the split")
 	}
 	// 选中文件标签：一栏都不接
 	a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t2"}}
@@ -68,6 +77,7 @@ func TestSwitchAndClosePane(t *testing.T) {
 	a, _ := splitApp()
 	a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t2"}}
 	a.panes = [2]*termView{{id: "t1"}, {id: "t2"}}
+	a.split = true
 	a.switchPane("w1")
 	if a.pane != 1 || a.activeTerm["w1"] != "t2" || a.state.Splits["w1"].Focus != 1 {
 		t.Fatalf("switch: pane %d active %q", a.pane, a.activeTerm["w1"])
@@ -86,5 +96,32 @@ func TestEnsurePanesMoves(t *testing.T) {
 	a.ensurePanes([2]string{"t2", "t1"})
 	if a.panes[0] != v2 || a.panes[1] != v1 {
 		t.Fatalf("panes = %v", a.panes)
+	}
+}
+
+// 刚打开窗口时还没选过终端：选分屏的焦点栏，不选第一个终端、把它换进焦点栏冲掉记下的分屏。
+func TestSplitSurvivesRestart(t *testing.T) {
+	a, w := splitApp()
+	a.state.Splits = map[string]splitState{"w1": {Left: "t2", Right: "t3", Focus: 1}}
+	cur := a.currentTerminal(w)
+	if cur.ID != "t3" {
+		t.Fatalf("current = %s, want t3", cur.ID)
+	}
+	if got := a.paneIDs(w, cur); got != [2]string{"t2", "t3"} || a.pane != 1 {
+		t.Fatalf("panes = %v pane %d", got, a.pane)
+	}
+}
+
+// 刚点进另一栏、界面还没重建就按快捷键：以收到按键的那栏为准。
+func TestSplitKeyUsesPaneThatGotKey(t *testing.T) {
+	a, _ := splitApp()
+	a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t2"}}
+	a.panes = [2]*termView{{id: "t1"}, {id: "t2"}}
+	a.split = true
+	if !a.splitKey(a.panes[1], ui.Cmd|ui.Shift, ui.KeyD) {
+		t.Fatal("⇧⌘D not handled")
+	}
+	if _, ok := a.state.Splits["w1"]; ok || a.activeTerm["w1"] != "t2" {
+		t.Fatalf("close kept %q, want t2", a.activeTerm["w1"])
 	}
 }

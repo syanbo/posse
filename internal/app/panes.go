@@ -39,23 +39,28 @@ func (a *app) ensurePanes(ids [2]string) {
 			}
 		}
 	}
-	changed := false
 	for _, v := range old {
 		if v != nil {
 			v.term.Close()
-			changed = true
+			a.dropPaneState(v.id)
 		}
 	}
 	for i, id := range ids {
 		if id != "" && next[i] == nil {
-			next[i] = a.attachView(id)
-			changed = true
+			if next[i] = a.attachView(id); next[i] != nil {
+				delete(a.carryFind, id)
+			}
 		}
 	}
 	a.panes = next
-	if changed {
-		// 悬停预览只对原来那个终端里的链接有用，换终端就放掉；没接上的查找栏也不再带
-		a.linkCard, a.hoverImage, a.previews = nil, "", nil
-		a.carryFind = nil
+}
+
+// dropPaneState 放掉只对断开的那个终端有用的界面状态：它里面链接的卡片和图片预览。另一栏的不动。
+func (a *app) dropPaneState(id string) {
+	if a.linkCard != nil && (a.linkCard.term == id || a.linkCard.term == "") {
+		a.linkCard = nil
+	}
+	if a.hoverTerm == id {
+		a.hoverImage, a.hoverTerm, a.previews = "", "", nil
 	}
 }

@@ -263,6 +263,10 @@ func (a *app) leaveFiles(w *workspace) {
 		a.activeTerm[w.ID] = v.prevTerm
 		return
 	}
+	if f := a.splitFocusTerm(w); f != "" {
+		a.activeTerm[w.ID] = f
+		return
+	}
 	a.activeTerm[w.ID] = w.Terminals[0].ID
 }
 

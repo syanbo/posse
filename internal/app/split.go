@@ -51,22 +51,17 @@ func (a *app) dropSplit(wsID string) {
 	a.saveState()
 }
 
-// paneIDs 是主区域两栏该接入的终端，没分屏时右栏为空；顺带定下焦点栏（a.pane）。
-// 分屏里的终端关掉了就收起分屏；选中的终端不在分屏里时换掉焦点栏。
+// paneIDs 是主区域两栏该接入的终端，没分屏时右栏为空；顺带定下焦点栏（a.pane）和这一帧是不是分屏（a.split）。
+// 分屏里的终端不在列表里了就按一栏显示；选中的终端不在分屏里时换掉焦点栏。
+// 终端不在了不在这里删 ui.json 的记录：交接时可能有一次轮询的列表不全，删了就回不来；
+// 用户在窗口里关掉时由 closeTerminal 删，别处关掉的留着也不显示。
 func (a *app) paneIDs(w *workspace, cur *terminalInfo) [2]string {
-	a.pane = 0
+	a.pane, a.split = 0, false
 	if cur == nil {
 		return [2]string{}
 	}
 	sp, ok := a.splitOf(w.ID)
-	if !ok {
-		return [2]string{cur.ID, ""}
-	}
-	has := func(id string) bool {
-		return slices.ContainsFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == id })
-	}
-	if !has(sp.Left) || !has(sp.Right) || sp.Left == sp.Right {
-		a.dropSplit(w.ID)
+	if !ok || !splitValid(w, sp) {
 		return [2]string{cur.ID, ""}
 	}
 	next := sp
@@ -85,12 +80,42 @@ func (a *app) paneIDs(w *workspace, cur *terminalInfo) [2]string {
 	if next != sp {
 		a.setSplit(w.ID, next)
 	}
-	a.pane = next.Focus
+	a.pane, a.split = next.Focus, true
 	return [2]string{next.Left, next.Right}
 }
 
-// splitShown 报告主区域现在是左右两栏。
-func (a *app) splitShown() bool { return a.panes[1] != nil }
+// splitValid 报告分屏的两个终端都还在工作区里。
+func splitValid(w *workspace, sp splitState) bool {
+	has := func(id string) bool {
+		return slices.ContainsFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == id })
+	}
+	return sp.Left != sp.Right && has(sp.Left) && has(sp.Right)
+}
+
+// splitFocusTerm 是分屏焦点栏的终端：选中的终端还没定下来（刚打开窗口、第一次选这个工作区、
+// 从文件标签回来时原来的终端没了）时选它，免得选成第一个终端、把它换进焦点栏，冲掉记下的分屏。
+func (a *app) splitFocusTerm(w *workspace) string {
+	sp, ok := a.splitOf(w.ID)
+	if !ok || !splitValid(w, sp) {
+		return ""
+	}
+	if sp.Focus == 1 {
+		return sp.Right
+	}
+	return sp.Left
+}
+
+// splitShown 报告主区域这一帧是左右两栏。
+func (a *app) splitShown() bool { return a.split }
+
+// dropSplitOf 在用户关掉分屏里的终端时收起分屏。
+func (a *app) dropSplitOf(id string) {
+	for ws, sp := range a.state.Splits {
+		if sp.Left == id || sp.Right == id {
+			a.dropSplit(ws)
+		}
+	}
+}
 
 // openSplit 把 left、right 两个终端左右放，焦点给 focus 那栏。
 func (a *app) openSplit(wsID, left, right string, focus int) {
@@ -128,14 +153,25 @@ func (a *app) splitRight(w *workspace, cur *terminalInfo) {
 
 // splitNew 新开一个 shell，和 left 左右放。
 func (a *app) splitNew(wsID, left string) {
+	// 连按 ⌘D 时终端还没建好：只建一个
+	if a.splitPending[wsID] {
+		return
+	}
+	if a.splitPending == nil {
+		a.splitPending = map[string]bool{}
+	}
+	a.splitPending[wsID] = true
 	go func() {
 		var t terminalInfo
 		err := a.call("terminal.create", map[string]any{"workspace": wsID}, &t, 10*time.Second)
 		// 先刷新让新终端进列表：列表里还没有它时 paneIDs 会当成关掉了、把分屏收起
 		a.refresh()
-		if err == nil {
-			a.win.Update(func() { a.openSplit(wsID, left, t.ID, 1) })
-		}
+		a.win.Update(func() {
+			delete(a.splitPending, wsID)
+			if err == nil {
+				a.openSplit(wsID, left, t.ID, 1)
+			}
+		})
 	}()
 }
 
@@ -176,6 +212,10 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	if w == nil {
 		return false
 	}
+	// 刚点进另一栏、界面还没重建时，焦点栏还记着原来那栏：按键是哪栏收到的就以哪栏为准
+	if i := slices.Index(a.panes[:], v); i >= 0 && i != a.pane && a.splitShown() {
+		a.focusPane(w.ID, i)
+	}
 	switch {
 	case a.keyIs("splitRight", mods, key):
 		_, cur := a.findTerminal(v.id)
@@ -213,8 +253,8 @@ func (a *app) splitView(c *ui.Context, w *workspace) {
 				a.resizingSplit = "term-split"
 			} else if a.resizingSplit == "term-split" {
 				a.resizingSplit = ""
-				if width > 0 {
-					sp.Percent = min(max(pct+a.splitDrag/width*100, splitMinPercent), splitMaxPercent)
+				if width > 1 {
+					sp.Percent = min(max(pct+a.splitDrag/(width-1)*100, splitMinPercent), splitMaxPercent)
 					a.setSplit(w.ID, sp)
 				}
 				a.splitDrag = 0
@@ -228,9 +268,9 @@ func (a *app) splitView(c *ui.Context, w *workspace) {
 		})
 		ui.Column(c.Key("pane-1")).Grow(1).Shrink(1).Basis(0).Children(func() { a.splitPane(c, w, 1) })
 	})
-	if a.resizingSplit == "term-split" && width > 0 {
-		// 松手后的位置：限在和松手时一样的范围里
-		at := min(max(pct+a.splitDrag/width*100, splitMinPercent), splitMaxPercent) / 100 * width
+	if a.resizingSplit == "term-split" && width > 1 {
+		// 松手后的位置：限在和松手时一样的范围里。左栏的比例按去掉 1 像素分栏线后的宽度算
+		at := min(max(pct+a.splitDrag/(width-1)*100, splitMinPercent), splitMaxPercent) / 100 * (width - 1)
 		accent := c.Theme().Accent
 		row.DrawOver(func(pt *ui.Painter, r ui.Rect) {
 			pt.Fill(ui.Rect{X: r.X + at - 1, Y: r.Y, W: 2, H: r.H}, accent, 0)
@@ -241,12 +281,12 @@ func (a *app) splitView(c *ui.Context, w *workspace) {
 // splitPane 画分屏的一栏：手机占着尺寸时的提示条和终端。
 func (a *app) splitPane(c *ui.Context, w *workspace, i int) {
 	v := a.panes[i]
-	var term *terminalInfo
-	for j := range w.Terminals {
-		if w.Terminals[j].ID == v.id {
-			term = &w.Terminals[j]
-		}
+	if v == nil {
+		// 接入失败，下一帧再试；这一栏先空着，另一栏照常
+		ui.Box(c.Key("pane-empty")).Grow(1).Background(c.Theme().Background)
+		return
 	}
+	_, term := a.findTerminal(v.id)
 	if term == nil {
 		return
 	}

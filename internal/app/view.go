@@ -50,6 +50,10 @@ func (a *app) build(c *ui.Context) {
 		ids = a.paneIDs(w, cur)
 	}
 	a.ensurePanes(ids)
+	// 拖着分栏线时分屏没了（终端退出、切走）：松手的那一帧不会再搭分屏，拖的状态在这里放掉
+	if !a.splitShown() && a.resizingSplit == "term-split" {
+		a.resizingSplit, a.splitDrag = "", 0
+	}
 	a.shortcuts(c, w, cur)
 	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
 	for id, v := range a.files {
@@ -1670,13 +1674,11 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		switch {
 		case a.filesActive(w):
 			a.filesPage(c, w)
+		case a.splitShown():
+			a.splitView(c, w)
 		case cur == nil || a.panes[0] == nil:
 			a.emptyWorkspace(c, w)
 		default:
-			if a.splitShown() {
-				a.splitView(c, w)
-				break
-			}
 			if cur.PhoneSized {
 				a.phoneSizedBar(c, cur.ID)
 			}

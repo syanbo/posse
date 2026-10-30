@@ -274,14 +274,16 @@ type app struct {
 	tabStripW            float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
-	resizingPanel   bool    // 正在拖文件栏的左边缘，松手时写 ui.json
-	resizingBranch  bool    // 正在拖分支弹窗的左边缘，松手时写 ui.json
-	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
-	resizingSplit   string  // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
-	splitDrag       float32 // 拖终端分屏的分栏线时累计的横向距离，松手才改比例
-	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
-	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
-	resizingCompare bool    // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
+	resizingPanel   bool            // 正在拖文件栏的左边缘，松手时写 ui.json
+	resizingBranch  bool            // 正在拖分支弹窗的左边缘，松手时写 ui.json
+	resizingSide    bool            // 正在拖侧栏的右边缘，松手时写 ui.json
+	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
+	splitDrag       float32         // 拖终端分屏的分栏线时累计的横向距离，松手才改比例
+	split           bool            // 这一帧主区域是左右两栏（paneIDs 定）
+	splitPending    map[string]bool // 正在为「向右分屏」新开终端的工作区
+	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开
+	resizingLog     bool            // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
+	resizingCompare bool            // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
 	rollback        rollbackDlg
 	rollbackBox     dialogBox  // 回滚对话框拖到的位置、拉伸过的尺寸
 	rollbackDiffBox dialogBox  // 回滚对话框里点开的 diff 浮窗的
@@ -914,8 +916,13 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 			return &w.Terminals[i]
 		}
 	}
-	a.activeTerm[w.ID] = w.Terminals[0].ID
-	return &w.Terminals[0]
+	// 还没选过（刚打开窗口）或选的没了：有分屏时选它的焦点栏，否则第一个
+	pick := 0
+	if f := a.splitFocusTerm(w); f != "" {
+		pick = slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == f })
+	}
+	a.activeTerm[w.ID] = w.Terminals[pick].ID
+	return &w.Terminals[pick]
 }
 
 // attachView 接入一个终端，失败时报错并返回 nil。
@@ -1103,6 +1110,7 @@ func (a *app) askCloseAll(terms []terminalInfo) {
 
 func (a *app) closeTerminal(id string) {
 	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
+	a.update(func() { a.dropSplitOf(id) })
 	a.refresh()
 }
 
