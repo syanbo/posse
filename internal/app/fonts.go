@@ -86,6 +86,21 @@ func (a *app) setTermStyle(f func(s *uiState)) {
 	a.saveState()
 }
 
+func (a *app) copyOnSelect() terminal.CopyOnSelect {
+	if a.state.TermCopyOnSelect {
+		return terminal.CopyOnSelectClipboard
+	}
+	return terminal.CopyOnSelectNone
+}
+
+func (a *app) setCopyOnSelect(on bool) {
+	a.state.TermCopyOnSelect = on
+	if a.view != nil {
+		a.view.term.SetCopyOnSelect(a.copyOnSelect())
+	}
+	a.saveState()
+}
+
 func (a *app) setEditorStyle(f func(s *uiState)) {
 	f(&a.state)
 	a.saveState()

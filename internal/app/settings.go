@@ -63,6 +63,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 					case "general":
 						a.awakeSettings(c)
 						a.restoreSettings(c)
+						a.selectSettings(c)
 					case "agent":
 						a.agentSettings(c)
 						a.permissionSettings(c)
@@ -133,6 +134,17 @@ func (a *app) restoreSettings(c *ui.Context) {
 		settingsRow(c, "启动时恢复全部终端", func() {
 			if ui.Switch(c.Key("restoreAll"), &on).Label("启动时恢复全部终端").Changed() {
 				a.setRestoreAll(on)
+			}
+		})
+	})
+}
+
+func (a *app) selectSettings(c *ui.Context) {
+	settingsCard(c, "终端选区", "打开后，在终端里用鼠标选中文字、松手就复制到剪贴板，全选也会复制；关掉时照常用 ⌘C 或右键菜单复制。", func() {
+		on := a.state.TermCopyOnSelect
+		settingsRow(c, "选中即复制", func() {
+			if ui.Switch(c.Key("termCopyOnSelect"), &on).Label("选中即复制").Changed() {
+				a.setCopyOnSelect(on)
 			}
 		})
 	})

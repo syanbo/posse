@@ -893,7 +893,8 @@ func (a *app) ensureView(id string) {
 		// 回滚区与常驻进程一致，接入时的快照不会超出
 		Scrollback: 4 << 20,
 		// 按着 ⌘ 滑触控板（⌘ 点链接、⌘ 选区时常碰到）不缩放字号，照常滚动；⌘=、⌘- 仍可调
-		NoWheelZoom: true,
+		NoWheelZoom:  true,
+		CopyOnSelect: a.copyOnSelect(),
 		// ⌘= ⌘- ⌘0 由界面的快捷键改设置里的字号（setFontSize），不让终端自己再临时缩放这一个：
 		// 两边各改各的，设置页的数字和终端实际的字号会对不上
 		OnZoom:      func(terminal.Zoom) bool { return true },

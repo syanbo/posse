@@ -42,6 +42,7 @@ type uiState struct {
 	TermBoldWeight       int       `json:"termBoldWeight,omitempty"`       // 终端粗体的字重，0 表示比正文重 200、至少 600
 	TermLineHeight       float32   `json:"termLineHeight,omitempty"`       // 终端行高，字体自身行高的倍数，0 表示 1
 	TermSmooth           bool      `json:"termSmooth,omitempty"`           // 终端用系统的字体平滑画字（更粗），默认不用
+	TermCopyOnSelect     bool      `json:"termCopyOnSelect,omitempty"`     // 终端里选中文字松手就复制到剪贴板，默认不复制
 	EditorWeight         int       `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
 	EditorBoldWeight     int       `json:"editorBoldWeight,omitempty"`     // 编辑器粗体（Markdown 标题、加粗）的字重，规则同终端
 	EditorLineHeight     float32   `json:"editorLineHeight,omitempty"`     // 编辑器行高，字号的倍数，0 表示 1.5
