@@ -50,6 +50,8 @@ var (
 	// actionDescription is NSAccessibilityActionDescription.
 	actionDescription uintptr
 	msgPointToPoint   func(obj id, sel objc.SEL, p NSPoint) NSPoint
+	// zoomEnabled is UAZoomEnabled, nil where it does not load. (Posse)
+	zoomEnabled func() bool
 )
 
 func loadAccess() {
@@ -58,6 +60,9 @@ func loadAccess() {
 		postAccessInfo = mustDlsym(libAppKit, "NSAccessibilityPostNotificationWithUserInfo")
 		actionDescription = mustDlsym(libAppKit, "NSAccessibilityActionDescription")
 		purego.RegisterFunc(&msgPointToPoint, msgSendAddr)
+		if h, err := purego.Dlopen("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices", purego.RTLD_GLOBAL|purego.RTLD_NOW); err == nil {
+			purego.RegisterLibFunc(&zoomEnabled, h, "UAZoomEnabled")
+		}
 	})
 }
 
@@ -341,10 +346,27 @@ func (s *surface) accessRequested() {
 	}
 }
 
+// elementAsked is accessRequested for the methods of elements. Stopped,
+// the content starts again after the current event, not at once: the
+// update it makes at once would release the elements gone since, the one
+// whose method is running among them. (Posse)
+func (s *surface) elementAsked() {
+	s.accessAsked = time.Now()
+	if s.accessOn {
+		return
+	}
+	s.accessOn = true
+	s.w.b.post(func() {
+		if s.accessOn {
+			s.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
+		}
+	})
+}
+
 // accessIdle is how long the content describes its frames after assistive
 // technology last asked about the surface or its elements, unless
-// VoiceOver or Switch Control is on: those wait for the notifications of
-// changes rather than ask. Tools that read windows now and then (window
+// VoiceOver, Switch Control or Zoom is on: those wait for the
+// notifications of changes rather than ask, Zoom to follow the focus. Tools that read windows now and then (window
 // managers, launchers, automation) would otherwise keep every frame
 // building the whole tree for good. (Posse)
 const accessIdle = 30 * time.Second
@@ -352,11 +374,15 @@ const accessIdle = 30 * time.Second
 // accessStale stops the content describing its frames when no one asked
 // for accessIdle; the next question starts it again (accessRequested).
 func (s *surface) accessStale() bool {
+	if !s.accessOn {
+		// Stopped, and the content not told yet (the post below).
+		return true
+	}
 	if time.Since(s.accessAsked) < accessIdle {
 		return false
 	}
 	ws := send(class("NSWorkspace"), "sharedWorkspace")
-	if byte(send(ws, "isVoiceOverEnabled")) != 0 || byte(send(ws, "isSwitchControlEnabled")) != 0 {
+	if byte(send(ws, "isVoiceOverEnabled")) != 0 || byte(send(ws, "isSwitchControlEnabled")) != 0 || zoomEnabled != nil && zoomEnabled() {
 		s.accessAsked = time.Now()
 		return false
 	}
@@ -573,7 +599,7 @@ func (b *Backend) accessElementOf(obj id) *accessElement {
 	// an element asks it, not the view. AppKit asking while the update sets
 	// the elements is not a question. (Posse)
 	if !el.s.updating {
-		el.s.accessRequested()
+		el.s.elementAsked()
 	}
 	return el
 }

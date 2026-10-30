@@ -135,15 +135,17 @@ func (s *diffSide) paintBlock(p *ui.Painter, ed *editor, b *block, r ui.Rect) {
 		}
 		// A filler: hatched at -45°, every 8 DIPs, as Pierre's.
 		text := ui.Rect{X: r.X + ed.textLeft(), Y: r.Y, W: r.W - ed.gutterW, H: r.H}
-		// Posse：只画看得见的那一段。新文件的占位块和文件一样高，整块画要几十万条线，
-		// 绘制指令的缓冲按这一帧扩容后一直留着，关掉 diff 也不还。
+		// Only the part in view: the filler of a new file is as tall as the
+		// file, hundreds of thousands of lines drawn whole, and the buffers of
+		// the frame's drawing grow to them for good. (Posse)
 		vis := p.Visible()
 		top, bottom := max(r.Y, vis.Y), min(r.Y+r.H, vis.Y+vis.H)
 		if top >= bottom {
 			return
 		}
 		h := bottom - top
-		// 斜线满足 x+y 是 8 的倍数加上 text.X+r.Y，和整块画时同一组，滚动时纹路不跳
+		// The lines where x+y is text.X+r.Y plus a multiple of 8, those of the
+		// whole block: the hatching does not move as it scrolls.
 		x0 := text.X - h
 		phase := float32(math.Mod(float64(text.X+r.Y-(x0+bottom)), 8))
 		if phase < 0 {
