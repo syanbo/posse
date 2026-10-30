@@ -709,6 +709,17 @@ func TestPreview(t *testing.T) {
 		a.selected = "w2"
 		savePNG(t, newPreviewTester(a, dark), "empty-"+suffix+".png")
 
+		// 窄窗口里开着右侧文件栏：启动格放不下一行，分两行
+		a = previewApp(t)
+		a.selected = "w2"
+		a.state.FilesPanels = map[string]bool{"p2": true}
+		tt = newPreviewTester(a, dark)
+		tt.SetSize(1000, 760)
+		for range 3 {
+			tt.Frame()
+		}
+		savePNG(t, tt, "empty-narrow-"+suffix+".png")
+
 		a = previewApp(t)
 		a.projects, a.workspaces, a.selected = nil, nil, ""
 		a.indexWorkspaces()

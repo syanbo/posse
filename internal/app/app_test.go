@@ -360,3 +360,21 @@ func TestPhoneSizedBar(t *testing.T) {
 		t.Fatal("bar should go away after reclaiming")
 	}
 }
+
+func TestLaunchColumns(t *testing.T) {
+	for _, tc := range []struct {
+		n     int
+		width float32
+		want  int
+	}{
+		{5, 600, 5}, // 放得下就一行
+		{5, 400, 3}, // 一行最多 3 个：分成 3+2
+		{5, 300, 2}, // 一行最多 2 个：2+2+1
+		{5, 50, 1},  // 比一格还窄也至少一列
+		{4, 250, 2}, // 一行最多 2 个：2+2
+	} {
+		if got := launchColumns(tc.n, tc.width, 96); got != tc.want {
+			t.Errorf("launchColumns(%d, %v) = %d, want %d", tc.n, tc.width, got, tc.want)
+		}
+	}
+}

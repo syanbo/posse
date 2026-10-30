@@ -1806,13 +1806,19 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 	// 名称、启动按钮和快捷键是一整块，在主区域里上下左右居中，名称上面不再套卡片。
 	// 窗口矮时可以滚动：滚动区里不能靠 Grow 撑满，用它上一帧的高度当内容的最小高度，变了再画一帧。
 	sc := ui.Scroll(c.Key("empty-workspace")).Grow(1)
-	if h := sc.LayoutBounds().H; h != a.emptyHeight {
-		a.emptyHeight = h
+	// 宽度同理：主区域比 600 窄时（侧栏、右侧面板都开着）跟着收窄，启动格放不下一行就分两行
+	if b := sc.LayoutBounds(); b.H != a.emptyHeight || b.W != a.emptyWidth {
+		a.emptyHeight, a.emptyWidth = b.H, b.W
 		c.AnimationFrame()
 	}
+	width := float32(600)
+	if a.emptyWidth > 0 {
+		width = max(min(width, a.emptyWidth-2*emptyPad), launchTileMin())
+	}
+	agents := a.agentChoices()
 	sc.Children(func() {
-		ui.Column(c).MinHeight(a.emptyHeight).Center().Padding(24).Children(func() {
-			ui.Column(c).Width(600).Gap(16).Children(func() {
+		ui.Column(c).MinHeight(a.emptyHeight).Center().Padding(emptyPad).Children(func() {
+			ui.Column(c).Width(width).Gap(16).Children(func() {
 				ui.Row(c).Gap(16).Padding(0, 4).AlignItems(ui.Center).Children(func() {
 					tile(c, a.wsIcon(w), 52, p.tint, t.Accent)
 					ui.Column(c).Gap(6).Grow(1).Shrink(1).Children(func() {
@@ -1829,13 +1835,13 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					a.missingActions(c, w)
 					return
 				}
-				ui.Grid(c).Columns(len(a.agentChoices()) + 1).Gap(8).Children(func() {
-					for _, ag := range a.agentChoices() {
+				ui.Grid(c).Columns(launchColumns(len(agents)+1, width, launchTileMin())).Gap(launchGap).Children(func() {
+					for _, ag := range agents {
 						a.launchTile(c, w, ag, agentVendor(ag))
 					}
 					a.launchTile(c, w, "", a.keyText("newTerminal"))
 				})
-				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Children(func() {
+				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Wrap().Children(func() {
 					shortcutHint(c, a.keyText("newTerminal"), "新建终端")
 					shortcutHint(c, a.keyText("newWorkspace"), "新建工作区")
 					shortcutHint(c, "⌘1…9", "切换终端")
@@ -1844,6 +1850,25 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 			})
 		})
 	})
+}
+
+// 空工作区页的外边距和启动格间距：算宽度和列数也用它们
+const (
+	emptyPad  = 24
+	launchGap = 8
+)
+
+// launchTileMin 是启动格的最窄宽度：再窄图标两边贴边、"Anthropic" 放不下。跟着字号和图标大小放大。
+func launchTileMin() float32 { return max(sz(96), tileLarge()+32) }
+
+// launchColumns 是 n 个启动格在 width 里排几列（每格至少 minW）：一行放得下就一行，否则分成几行、每行个数尽量平均。
+func launchColumns(n int, width, minW float32) int {
+	fit := max(int((width+launchGap)/(minW+launchGap)), 1)
+	if n <= fit {
+		return n
+	}
+	rows := (n + fit - 1) / fit
+	return (n + rows - 1) / rows
 }
 
 // launchTile 是空工作区里启动 agent 的一格：agent 的色块图标和名字。

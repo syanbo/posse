@@ -205,6 +205,7 @@ type app struct {
 	mem         memView               // 底栏的内存浮窗
 	planOpen    bool                  // 状态栏的套餐用量详情
 	emptyHeight float32               // 空工作区页滚动区上一帧的高度
+	emptyWidth  float32               // 空工作区页滚动区上一帧的宽度
 	files       map[string]*filesView // 工作区 ID → 文件标签
 	quick       quickOpen             // ⌘P 快速打开
 	defPick     defPick               // 几处同名定义的选择对话框（definition.go）
