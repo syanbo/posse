@@ -86,6 +86,22 @@ func init() {
 		{"task done", "Worker: report the outcome once", "<task> --summary S [--report FILE] [--failed]", cmdTaskDone},
 		{"session title", "Name the agent session running in this terminal", "'<MMDD｜类型｜摘要>'", cmdSessionTitle},
 		{"session guide", "How to draft a session title (for agents)", "", cmdSessionGuide},
+		{"web", "Drive the web tabs of the Posse window: open, snapshot, click, fill, screenshot (posse web guide)", "<command>", cmdWeb},
+		{"web guide", "How agents drive web pages with posse web", "", cmdWebGuide},
+		{"web open", "Open a web tab in this workspace", "<url>", cmdWebOpen},
+		{"web list", "List this workspace's web tabs", "", cmdWebList},
+		{"web goto", "Load a URL in the web tab", "<url> [--tab N]", webNav("goto", true)},
+		{"web reload", "Reload the web tab", "[--tab N]", webNav("reload", false)},
+		{"web back", "Go back in the web tab", "[--tab N]", webNav("back", false)},
+		{"web forward", "Go forward in the web tab", "[--tab N]", webNav("forward", false)},
+		{"web wait", "Wait for the page", "[--for load|selector <css>|text <s>] [--timeout 30s] [--tab N]", cmdWebWait},
+		{"web snapshot", "List the page's visible interactive elements with refs", "[--tab N]", cmdWebSnapshot},
+		{"web click", "Click an element", "<ref|css> [--tab N]", webAct("click", 1)},
+		{"web fill", "Fill a text field or select", "<ref|css> <text> [--tab N]", webAct("fill", 2)},
+		{"web press", "Press a key on the focused element", "<key> [--on <ref|css>] [--tab N]", webAct("press", 1)},
+		{"web eval", "Run JavaScript in the page and print the JSON result", "<js>|- [--tab N]", cmdWebEval},
+		{"web screenshot", "Save a PNG of the page and print its path", "[-o path] [--tab N]", cmdWebScreenshot},
+		{"web console", "Print the page's recent console output and errors", "[--tab N]", cmdWebConsole},
 		{"history search", "Search past claude/codex/cursor/grok sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
 		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},
 		{"history show", "Print a session's messages", "<session> [--tail N] [--tools]", cmdHistoryShow},
@@ -182,7 +198,7 @@ func usage(w io.Writer) {
 		}
 	}
 	fmt.Fprintln(w, "\nEnvironment: POSSE_HOME (default ~/.posse). Inside posse terminals POSSE_TERMINAL_ID and POSSE_WORKSPACE_ID are set.")
-	fmt.Fprintln(w, "Agents coordinating other agents: run `posse task guide` first.")
+	fmt.Fprintln(w, "Agents coordinating other agents: run `posse task guide` first. Driving web pages: `posse web guide`.")
 }
 
 func (e *env) fail(err error) int {

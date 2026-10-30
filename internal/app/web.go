@@ -17,6 +17,7 @@ import (
 // webDoc 是网页标签的状态。跳转、载入、标题由页面事件更新；单页应用用 pushState 换地址不发事件，
 // 看得见时再每秒对一次（webPoll）。
 type webDoc struct {
+	id      int // posse web 里的标签编号，窗口进程内不重复
 	view    *mygo.WebView
 	url     string // 当前地址
 	title   string
@@ -26,6 +27,8 @@ type webDoc struct {
 	back    bool
 	forward bool
 	failed  string // 载入失败的原因，页面位置显示它；重新跳转时清掉
+	// used 是最近一次显示的时间，posse web 不带 --tab 时操作最近显示过的那个
+	used time.Time
 }
 
 var webSeq int
@@ -37,20 +40,24 @@ func isWebURL(link string) bool {
 }
 
 // openWeb 在工作区的文件标签里新开一个网页标签，键盘交给页面。
-func (a *app) openWeb(w *workspace, link string) {
+func (a *app) openWeb(w *workspace, link string) { a.openWebTab(w, link, true) }
+
+// openWebTab 新开网页标签并切过去；focus 为 false 时键盘留在原处（posse web open）。
+func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileDoc) {
 	v := a.showFiles(w)
 	webSeq++
-	wd := &webDoc{url: link, addr: link, loading: true}
-	d := &fileDoc{path: "web:" + strconv.Itoa(webSeq), web: wd, started: true, focus: true}
+	wd := &webDoc{id: webSeq, url: link, addr: link, loading: true}
+	d := &fileDoc{path: "web:" + strconv.Itoa(webSeq), web: wd, started: true, focus: focus}
 	v.insertDoc(d)
 	if a.win == nil {
 		d.kind, d.err = docError, "这里打不开网页"
-		return
+		return wd, d
 	}
-	wv, err := a.win.NewWebView(mygo.WebViewOptions{URL: link})
+	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记
+	wv, err := a.win.NewWebView(mygo.WebViewOptions{URL: link, Page: mygo.PageOptions{PreloadScript: webctlJS}})
 	if err != nil {
 		d.kind, d.err = docError, err.Error()
-		return
+		return wd, d
 	}
 	wd.view = wv
 	p := wv.Page()
@@ -98,6 +105,7 @@ func (a *app) openWeb(w *workspace, link string) {
 		}
 		return nil
 	})
+	return wd, d
 }
 
 // syncWeb 从 WebKit 读回地址和导航状态。只在主线程调。
@@ -114,6 +122,15 @@ func (a *app) syncWeb(wd *webDoc) {
 	if !wd.editing {
 		wd.addr = wd.url
 	}
+}
+
+// loadWeb 在网页标签里跳到新网址：地址栏回车和 posse web goto 共用。只在主线程调。
+func (a *app) loadWeb(wd *webDoc, link string) {
+	wd.failed, wd.loading = "", true
+	if !wd.editing {
+		wd.addr = link
+	}
+	wd.view.Page().LoadURL(link)
 }
 
 // reloadWeb 重新载入。载入失败的页面没有提交过，Reload 不知道载入什么，按原地址重新载入。
@@ -155,6 +172,7 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 	t := c.Theme()
 	p := wd.view.Page()
 	a.syncWeb(wd)
+	wd.used = time.Now()
 	c.After(webPoll)
 	ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 8).Gap(2).AlignItems(ui.Center).Children(func() {
 		navButton := func(key string, icon *ui.SVG, label string, on bool) bool {
@@ -185,8 +203,8 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 		wd.editing = in.Focused()
 		if in.Submitted() {
 			if link := webAddress(wd.addr); link != "" {
-				wd.addr, wd.editing, wd.failed = link, false, ""
-				p.LoadURL(link)
+				wd.editing = false
+				a.loadWeb(wd, link)
 				wd.view.Focus()
 			}
 		}

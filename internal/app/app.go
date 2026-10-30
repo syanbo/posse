@@ -134,6 +134,8 @@ type carriedFind struct {
 type app struct {
 	c   *client.Client
 	win *mygo.Window
+	// mainUpdate 把函数交给主线程跑，为 nil 时用 win.Update；测试里直接跑
+	mainUpdate func(func())
 
 	projects   []project
 	workspaces []workspace
@@ -385,6 +387,7 @@ func Run(c *client.Client) error {
 		exe:          newExeWatch(),
 	}
 	a.selected, a.revealSel = a.state.Selected, true
+	var stopCtl func()
 	a.projIcons = projicon.Load(a.home)
 	a.traceGit()
 	if a.state.FontSize > 0 {
@@ -429,8 +432,13 @@ func Run(c *client.Client) error {
 			a.win.Focus()
 		})
 		go a.poll()
+		stopCtl = a.serveCtl()
 	})
-	return mygo.App.Run()
+	err := mygo.App.Run()
+	if stopCtl != nil {
+		stopCtl()
+	}
+	return err
 }
 
 // windowShown 报告窗口在屏幕上：没隐藏、没最小化。
