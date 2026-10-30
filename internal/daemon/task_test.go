@@ -119,3 +119,50 @@ func TestWorkerPrompt(t *testing.T) {
 		}
 	}
 }
+
+// 汇报过的任务可以追加：同一个 worker 被提醒接着做、再汇报一次；worker 的 agent 不在了就只能重派。
+func TestSendReopensReportedTask(t *testing.T) {
+	d, w := newTestDaemon(t)
+	info := call(t, d.taskStart, map[string]any{"workspace": w.ID, "command": []string{"/bin/cat"}, "spec": "x"}).(taskInfo)
+	worker := d.liveSession(info.Worker)
+	worker.mu.Lock()
+	worker.agent = "claude"
+	worker.mu.Unlock()
+	d.setAgent(worker, term.AgentState{Status: agent.StatusWorking})
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "first", "failed": true})
+	res := call(t, d.taskSend, map[string]any{"task": info.ID, "body": "also do y"}).(map[string]string)
+	if got, _ := d.store.Task(info.ID); got.Status != store.TaskRunning || got.EndedAt != nil || res["reopened"] != store.TaskFailed {
+		t.Fatalf("after send: %+v %v", got, res)
+	}
+	// 重新打开前没读的汇报照旧按汇报时的结果给出
+	items := call(t, d.taskWait, map[string]any{}).([]inboxItem)
+	if len(items) != 1 || items[0].Kind != "done" || items[0].Status != store.TaskFailed {
+		t.Fatalf("inbox after reopen = %+v", items)
+	}
+	// 已经在运行中：只追加消息，不算重新打开
+	if res := call(t, d.taskSend, map[string]any{"task": info.ID, "body": "and z"}).(map[string]string); res["reopened"] != "" {
+		t.Fatalf("second send reopened: %v", res)
+	}
+	d.setAgent(worker, term.AgentState{Status: agent.StatusIdle})
+	waitScreen(t, worker, "Posse: your coordinator sent a message for task "+info.ID)
+	notes := call(t, d.taskCheck, map[string]any{"task": info.ID, "caller": info.Worker}).([]store.Message)
+	if len(notes) != 2 || notes[0].Body != "also do y" {
+		t.Fatalf("check = %+v", notes)
+	}
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "second"})
+	if got, _ := d.store.Task(info.ID); got.Status != store.TaskDone || got.Summary != "second" {
+		t.Fatalf("after second done: %+v", got)
+	}
+
+	// agent 退出、终端回到 shell 后不再接活
+	worker.mu.Lock()
+	worker.agent = ""
+	worker.mu.Unlock()
+	raw, _ := json.Marshal(map[string]any{"task": info.ID, "body": "more"})
+	if _, err := d.taskSend(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "task retry") {
+		t.Fatalf("send to a gone worker = %v", err)
+	}
+	if got, _ := d.store.Task(info.ID); got.Status != store.TaskDone {
+		t.Fatalf("status changed to %s", got.Status)
+	}
+}

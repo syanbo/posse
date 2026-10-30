@@ -95,7 +95,12 @@ func (e *env) printStarted(t taskInfo) {
 	if t.Branch != "" && t.WorkspaceKind == "worktree" {
 		fmt.Fprintf(e.out, "worktree branch %s from %s\n", t.Branch, t.BaseRef)
 	}
-	fmt.Fprintln(e.out, "wait for results with: posse task wait")
+	if caller() == "" {
+		fmt.Fprintln(e.out, "read results with: posse task inbox (or block with: posse task wait)")
+		return
+	}
+	// agent 在每一步的输出里看到下一步，技能没触发或说明被压缩掉也走得下去
+	fmt.Fprintln(e.out, "no need to wait: end your turn or keep working; while an agent runs in this terminal, Posse types a reminder here when a worker reports or asks, then run: posse task inbox (scripts: posse task wait)")
 }
 
 // retryable 是可以重试的任务状态：worker 已经确定不在做了。
@@ -246,11 +251,15 @@ func cmdTaskShow(e *env, args []string) error {
 			fmt.Fprint(e.out, " (closed)")
 		}
 		fmt.Fprintf(e.out, "\ntitle: %s\n", t.Title)
+		prev := "" // 重新打开后还没再汇报：显示的是上一轮的
+		if t.Status == "running" {
+			prev = "previous "
+		}
 		if t.Summary != "" {
-			fmt.Fprintf(e.out, "summary: %s\n", t.Summary)
+			fmt.Fprintf(e.out, "%ssummary: %s\n", prev, t.Summary)
 		}
 		if t.Report != "" {
-			fmt.Fprintf(e.out, "report: %s\n", t.Report)
+			fmt.Fprintf(e.out, "%sreport: %s\n", prev, t.Report)
 		}
 		fmt.Fprintf(e.out, "\nspec:\n%s\n", indent(t.Spec))
 		if len(t.Messages) > 0 {
@@ -306,11 +315,15 @@ func taskInbox(e *env, args []string, block bool) error {
 				if m.Report != "" {
 					fmt.Fprintf(e.out, "  report: %s\n", m.Report)
 				}
+				fmt.Fprintf(e.out, "  follow up or ask for fixes with: posse task send %s \"<message>\" (the same worker stays open and reports again)\n", m.TaskID)
 			case "question":
 				fmt.Fprintf(e.out, "%s question %s: %s\n%s\n", m.TaskID, m.ID, m.Title, indent(m.Body))
 				fmt.Fprintf(e.out, "  answer with: posse task reply %s \"<answer>\"\n", m.ID)
 			default:
 				fmt.Fprintf(e.out, "%s %s: %s\n%s\n", m.TaskID, m.Kind, m.Title, indent(m.Body))
+				if m.Kind == "exit" {
+					fmt.Fprintf(e.out, "  see its screen with: posse task show %s; start it again with: posse task retry %s\n", m.TaskID, m.TaskID)
+				}
 			}
 		}
 	})
@@ -339,7 +352,14 @@ func cmdTaskSend(e *env, args []string) error {
 		return err
 	}
 	params := map[string]any{"task": pos[0], "body": strings.Join(pos[1:], " "), "caller": caller()}
-	return e.do("task.send", params, nil, func() { fmt.Fprintf(e.out, "sent to %s\n", pos[0]) })
+	var r struct{ Task, Reopened string }
+	return e.do("task.send", params, &r, func() {
+		if r.Reopened != "" {
+			fmt.Fprintf(e.out, "sent to %s; it was %s and is running again, the worker will report with a new done message\n", pos[0], r.Reopened)
+			return
+		}
+		fmt.Fprintf(e.out, "sent to %s\n", pos[0])
+	})
 }
 
 func cmdTaskClose(e *env, args []string) error {
@@ -377,7 +397,10 @@ func cmdTaskDone(e *env, args []string) error {
 	}
 	params := map[string]any{"task": task, "caller": caller(), "summary": *summary, "report": *report, "failed": *failed}
 	var t taskInfo
-	return e.do("task.done", params, &t, func() { fmt.Fprintf(e.out, "reported %s as %s\n", t.ID, t.Status) })
+	return e.do("task.done", params, &t, func() {
+		fmt.Fprintf(e.out, "reported %s as %s\n", t.ID, t.Status)
+		fmt.Fprintf(e.out, "now stop and wait at the prompt; if follow-up work arrives, Posse types a reminder here: run posse task check %s, then report again\n", t.ID)
+	})
 }
 
 // splitTaskArg 拆出开头可省略的任务 ID（k_ 开头）；省略时常驻进程按调用方的终端找任务。
@@ -422,6 +445,7 @@ func cmdTaskCheck(e *env, args []string) error {
 			}
 			fmt.Fprintf(e.out, "%s:\n%s\n", label, indent(m.Body))
 		}
+		fmt.Fprintf(e.out, "when you finish, report with: posse task done %s --summary \"<what you did, found, left>\"\n", msgs[0].TaskID)
 	})
 }
 

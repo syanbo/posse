@@ -232,9 +232,10 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 	fmt.Fprintf(&b, "posse task check %s\n", t.ID)
 	b.WriteString("  Read follow-up notes from the coordinator. Run it at natural checkpoints and once more right before reporting.\n\n")
 	fmt.Fprintf(&b, "posse task done %s --summary \"<3 sentences: what you did, what you found, what is left>\" [--report <file>] [--failed]\n", t.ID)
-	b.WriteString("  Report exactly once when you finish. Pass --failed when the task could not be completed; never hide a failure in prose. Add --report only for a file you actually wrote.\n\n")
+	b.WriteString("  Report once when you finish, and once after each follow-up. Pass --failed when the task could not be completed; never hide a failure in prose. Add --report only for a file you actually wrote.\n\n")
 	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
 	b.WriteString("After `posse task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
+	fmt.Fprintf(&b, "The coordinator may send follow-up work for the same task later. Posse then types a reminder here: run `posse task check %s`, do the follow-up, and report it with `posse task done` again.\n", t.ID)
 	if w.Kind == "worktree" {
 		fmt.Fprintf(&b, "\nYou work in your own git worktree on branch %s, created from %s. Commit your changes on this branch before reporting.\n", w.Branch, w.BaseRef)
 	}
@@ -398,7 +399,8 @@ func (d *Daemon) taskDone(ctx context.Context, raw json.RawMessage) (any, error)
 	if !ok {
 		return nil, rpc.Errorf(rpc.CodeConflict, "task %s is already %s", t.ID, t.Status)
 	}
-	if err := d.addMessage(t, "done", p.Summary, ""); err != nil {
+	done := store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: "done", Body: p.Summary, Outcome: status, CreatedAt: time.Now()}
+	if err := d.postMessage(t, done); err != nil {
 		return nil, err
 	}
 	t, _ = d.store.Task(t.ID)
@@ -565,6 +567,9 @@ func (d *Daemon) taskWait(ctx context.Context, raw json.RawMessage) (any, error)
 				if t, err := d.store.Task(m.TaskID); err == nil {
 					item.Title, item.Status, item.Report, item.Worker = t.Title, t.Status, t.Report, t.Worker
 				}
+				if m.Outcome != "" {
+					item.Status = m.Outcome
+				}
 				out = append(out, item)
 			}
 			return out, nil
@@ -640,16 +645,65 @@ func (d *Daemon) taskSend(ctx context.Context, raw json.RawMessage) (any, error)
 	if err := authorizeCoordinator(t, p.Caller); err != nil {
 		return nil, err
 	}
-	if t.Status != store.TaskRunning {
-		return nil, rpc.Errorf(rpc.CodeConflict, "task %s is already %s; start a new task instead", t.ID, t.Status)
-	}
 	if p.Body = strings.TrimSpace(p.Body); p.Body == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "message text required")
 	}
+	res := map[string]string{"task": t.ID}
+	reopened := false
+	if t.Status != store.TaskRunning {
+		if reopened, err = d.reopenTask(t); err != nil {
+			return nil, err
+		}
+		if reopened {
+			res["reopened"] = t.Status // 重新打开前的状态，CLI 据此告诉派发方会再收到一次汇报
+		}
+	}
 	if err := d.addMessage(t, "note", p.Body, ""); err != nil {
+		if reopened {
+			// 消息没记下，worker 不会被提醒：退回原来的状态，免得任务一直挂在运行中
+			d.store.FinishTask(t.ID, t.Status, t.Summary, t.Report, time.Now())
+		}
 		return nil, err
 	}
-	return map[string]string{"task": t.ID}, nil
+	if reopened && !d.workerAlive(t) {
+		// 检查之后、重新打开之前 agent 退出了：那时任务不在运行中，workerGone 没管它
+		d.workerGone(t.Worker, "worker agent exited before reporting")
+	}
+	return res, nil
+}
+
+// reopenTask 让已汇报的任务回到运行中：worker 汇报后停在输入框，追加的活接着交给它，
+// 保留它已有的上下文。worker 的 agent 已经退出、换成了别的 agent 时只能重派。
+// 同时有别人刚把它重新打开时返回 false，消息照常追加。
+func (d *Daemon) reopenTask(t store.Task) (bool, error) {
+	if t.Status != store.TaskDone && t.Status != store.TaskFailed {
+		return false, rpc.Errorf(rpc.CodeConflict, "task %s is %s; its worker is gone, use `posse task retry %s`", t.ID, t.Status, t.ID)
+	}
+	s := d.liveSession(t.Worker)
+	if s == nil || !s.Running() {
+		return false, rpc.Errorf(rpc.CodeConflict, "the worker terminal of task %s is closed; use `posse task retry %s`", t.ID, t.ID)
+	}
+	if !d.workerAlive(t) {
+		return false, rpc.Errorf(rpc.CodeConflict, "the worker agent of task %s is no longer running in its terminal; use `posse task retry %s`", t.ID, t.ID)
+	}
+	ok, err := d.store.ReopenTask(t.ID)
+	if err != nil || ok {
+		return ok, err
+	}
+	if cur, err := d.store.Task(t.ID); err == nil && cur.Status == store.TaskRunning {
+		return false, nil
+	}
+	return false, rpc.Errorf(rpc.CodeConflict, "task %s changed state; run `posse task show %s`", t.ID, t.ID)
+}
+
+// workerAlive 是任务的 worker 终端里还在运行派它时的那家 agent。
+func (d *Daemon) workerAlive(t store.Task) bool {
+	s := d.liveSession(t.Worker)
+	if s == nil || !s.Running() {
+		return false
+	}
+	name := s.agentName()
+	return name != "" && (t.Agent == "" || name == t.Agent)
 }
 
 // taskClose 关掉 worker 终端；任务还没汇报就记为已停止。worktree 留着，由用户决定合并或删除。
@@ -687,12 +741,15 @@ func (d *Daemon) taskClear(ctx context.Context, raw json.RawMessage) (any, error
 }
 
 func (d *Daemon) addMessage(t store.Task, kind, body, replyTo string) error {
-	m := store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: kind, Body: body, ReplyTo: replyTo, CreatedAt: time.Now()}
+	return d.postMessage(t, store.Message{ID: store.NewID("m_"), TaskID: t.ID, Kind: kind, Body: body, ReplyTo: replyTo, CreatedAt: time.Now()})
+}
+
+func (d *Daemon) postMessage(t store.Task, m store.Message) error {
 	if err := d.store.AddMessage(m); err != nil {
 		return err
 	}
 	d.taskNotify()
-	if store.ToCoordinator(kind) {
+	if store.ToCoordinator(m.Kind) {
 		go d.deliver(t.Coordinator)
 	} else {
 		go d.deliver(t.Worker)
@@ -739,7 +796,9 @@ func (d *Daemon) deliver(terminalID string) {
 		switch m.Kind {
 		case "done":
 			status := "finished"
-			if t, err := d.store.Task(m.TaskID); err == nil && t.Status == store.TaskFailed {
+			if m.Outcome == store.TaskFailed {
+				status = "failed"
+			} else if t, err := d.store.Task(m.TaskID); m.Outcome == "" && err == nil && t.Status == store.TaskFailed {
 				status = "failed"
 			}
 			notes = append(notes, m.TaskID+" "+status)

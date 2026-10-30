@@ -578,7 +578,11 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			}
 		})
 		if task.Summary != "" {
-			a.block(c, "汇报", func() {
+			title := "汇报"
+			if task.Status == "running" {
+				title = "上一轮汇报" // 追加的活还在做
+			}
+			a.block(c, title, func() {
 				ui.Text(c, task.Summary).FontSize(fsBody).LineHeight(1.55).Selectable()
 				if task.Report != "" {
 					ui.Text(c, task.Report).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Selectable()
@@ -598,6 +602,10 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			if composer(c, &a.noteText, "补充说明：worker 会在下一个检查点读到", "发送", false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
+		} else if followable(task) {
+			if composer(c, &a.noteText, "追加任务：交给同一个 worker 接着做", "发送", false) {
+				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
+			}
 		}
 		if task.Spec != "" {
 			a.block(c, "任务说明", func() {
@@ -605,6 +613,13 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			})
 		}
 	})
+}
+
+// followable 是用户派发、已汇报、worker 里的 agent 还在的任务：追加的活由常驻进程重新打开任务交给它。
+// agent 派发的任务不在这里追加，免得派发方收到一次不知来由的汇报；要追加就对派发方说，或者直接在 worker 终端里说。
+func followable(task taskInfo) bool {
+	return task.Coordinator == "" && (task.Status == "done" || task.Status == "failed") &&
+		task.Terminal != nil && task.Terminal.Running && task.Terminal.Agent != "" && (task.Agent == "" || task.Terminal.Agent == task.Agent)
 }
 
 func (a *app) coordinatorLabel(task taskInfo) string {
@@ -693,12 +708,18 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 	answered := map[string]bool{}
 	var open *taskMessage
 	var shown []taskMessage
-	for _, m := range msgs {
+	last := -1
+	for i, m := range msgs {
+		if m.Kind == "done" {
+			last = i
+		}
+	}
+	for i, m := range msgs {
 		if m.Kind == "answer" {
 			answered[m.ReplyTo] = true
 		}
-		// 汇报的内容已在上面单独显示
-		if m.Kind != "done" {
+		// 最近一次汇报已在上面单独显示，追加过的任务前几轮的汇报留在往来消息里
+		if i != last {
 			shown = append(shown, m)
 		}
 	}

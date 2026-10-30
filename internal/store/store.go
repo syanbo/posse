@@ -99,7 +99,7 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
-	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}} {
+	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"messages", "outcome"}} {
 		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("migrate: %w", err)

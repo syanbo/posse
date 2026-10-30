@@ -34,6 +34,7 @@ type Message struct {
 	Kind      string     `json:"kind"`
 	Body      string     `json:"body"`
 	ReplyTo   string     `json:"replyTo,omitempty"`
+	Outcome   string     `json:"outcome,omitempty"` // done 消息汇报时的结果（done、failed）：任务重新打开后它的状态会变
 	CreatedAt time.Time  `json:"createdAt"`
 	ReadAt    *time.Time `json:"readAt,omitempty"`
 }
@@ -167,6 +168,16 @@ func (s *Store) FinishTask(id, status, summary, report string, at time.Time) (bo
 	return n > 0, err
 }
 
+// ReopenTask 让已汇报的任务回到运行中，接着在原来的 worker 上做追加的活；返回是否真的改了状态。
+func (s *Store) ReopenTask(id string) (bool, error) {
+	res, err := s.db.Exec(`UPDATE tasks SET status='running', ended_at=NULL WHERE id=? AND status IN ('done','failed')`, id)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 // MarkRunningTasksLost 在常驻进程启动时调用：worker 终端已随上一个进程结束，交接过来的 worker 除外。
 func (s *Store) MarkRunningTasksLost(at time.Time, keepWorkers []string) error {
 	q, args := notIn("worker", keepWorkers)
@@ -185,13 +196,13 @@ func (s *Store) DeleteEndedTasks() (int64, error) {
 
 // --- messages
 
-const messageCols = `id,task_id,kind,body,reply_to,created_at,read_at`
+const messageCols = `id,task_id,kind,body,reply_to,outcome,created_at,read_at`
 
 func scanMessage(row interface{ Scan(...any) error }) (Message, error) {
 	var m Message
 	var created int64
 	var read sql.NullInt64
-	err := row.Scan(&m.ID, &m.TaskID, &m.Kind, &m.Body, &m.ReplyTo, &created, &read)
+	err := row.Scan(&m.ID, &m.TaskID, &m.Kind, &m.Body, &m.ReplyTo, &m.Outcome, &created, &read)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, ErrNotFound
 	}
@@ -221,8 +232,8 @@ func (s *Store) queryMessages(q string, args ...any) ([]Message, error) {
 }
 
 func (s *Store) AddMessage(m Message) error {
-	_, err := s.db.Exec(`INSERT INTO messages(id,task_id,kind,body,reply_to,created_at) VALUES(?,?,?,?,?,?)`,
-		m.ID, m.TaskID, m.Kind, m.Body, m.ReplyTo, ms(m.CreatedAt))
+	_, err := s.db.Exec(`INSERT INTO messages(id,task_id,kind,body,reply_to,outcome,created_at) VALUES(?,?,?,?,?,?,?)`,
+		m.ID, m.TaskID, m.Kind, m.Body, m.ReplyTo, m.Outcome, ms(m.CreatedAt))
 	return err
 }
 
@@ -248,7 +259,7 @@ type Inbox struct {
 }
 
 func (s *Store) Inbox(in Inbox) ([]Message, error) {
-	q := `SELECT m.id,m.task_id,m.kind,m.body,m.reply_to,m.created_at,m.read_at FROM messages m JOIN tasks t ON t.id=m.task_id WHERE `
+	q := `SELECT m.id,m.task_id,m.kind,m.body,m.reply_to,m.outcome,m.created_at,m.read_at FROM messages m JOIN tasks t ON t.id=m.task_id WHERE `
 	var args []any
 	if in.Coordinator != nil {
 		q += `t.coordinator=? AND m.kind IN ('question','done','exit')`
