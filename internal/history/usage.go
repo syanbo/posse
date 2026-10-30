@@ -232,11 +232,13 @@ func (s *UsageScanner) cursorLine(b []byte) {
 
 func (s *UsageScanner) claudeLine(b []byte) {
 	var r struct {
+		Type    string `json:"type"`
 		Message struct {
 			Content json.RawMessage `json:"content"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(b, &r) != nil {
+	// api-request-blob 这类记录把发给模型的消息再存一遍（不带时间），只认 user、assistant
+	if json.Unmarshal(b, &r) != nil || r.Type != "user" && r.Type != "assistant" {
 		return
 	}
 	blocks, _ := contentBlocks(r.Message.Content)
@@ -329,8 +331,7 @@ func (s *UsageScanner) command(cmd string) {
 
 // cliCommand 记下一条命令运行的程序和访问的网址。
 func (s *UsageScanner) cliCommand(cmd string) {
-	programs := cliPrograms(cmd)
-	for _, p := range programs {
+	for _, p := range cliPrograms(cmd) {
 		src, ok := s.sources[p.Name]
 		if !ok {
 			src = cliSource(p.Name, p.Path)
@@ -339,7 +340,7 @@ func (s *UsageScanner) cliCommand(cmd string) {
 		s.cli[p.Name]++
 		s.event(UsageEvent{CLI: p.Name, Source: src, Command: clipRunes(cmd, maxEventCommand)})
 	}
-	s.webCommand(cmd, programs)
+	s.webCommand(cmd)
 }
 
 // webTool 认出 agent 自带的网页工具：WebFetch 记网址，WebSearch 记搜索。

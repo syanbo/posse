@@ -247,6 +247,8 @@ func TestUsageWeb(t *testing.T) {
 		`{"type":"assistant","timestamp":"2026-10-30T08:01:00.000Z","message":{"content":[{"type":"tool_use","name":"WebFetch","input":{"url":"https://github.com/c/d","prompt":"x"}},{"type":"tool_use","name":"WebSearch","input":{"query":"posse terminal"}}]}}`+"\n",
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"curl -s https://www.example.com/a.json | jq . && curl http://localhost:8080/x"}},{"type":"tool_use","name":"Bash","input":{"command":"echo https://not.counted.com"}}]}}`+"\n",
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__browser__navigate","input":{"url":"https://example.com/b"}},{"type":"tool_use","name":"Bash","input":{"command":"posse web open https://news.ycombinator.com"}}]}}`+"\n",
+		// 重复存的请求不再算一次
+		`{"type":"api-request-blob","message":{"role":"assistant","content":[{"type":"tool_use","name":"WebFetch","input":{"url":"https://github.com/c/d"}}]}}`+"\n",
 		// 工具结果里的网址不是用户发的
 		`{"type":"user","message":{"content":[{"type":"tool_result","content":"see https://tool.output.com"}]}}`+"\n",
 	)
@@ -311,5 +313,24 @@ func TestWebURLs(t *testing.T) {
 	want := []string{"https://a.com/x", "https://b.com/p?q=1", "https://en.wikipedia.org/wiki/Go_(lang)", "https://c.cn/"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%q", got)
+	}
+}
+
+// 命令里只取访问网页的程序自己参数里的网址。
+func TestWebCommandURLs(t *testing.T) {
+	cmd := "cat > /tmp/x <<'E'\nposse web open https://heredoc.example.com\nE\n" +
+		"GOPROXY=https://goproxy.cn,direct go build && echo https://echo.example.com; " +
+		"timeout 5 curl -sL https://a.example.com/x | jq; r=$(sudo -u me wget -qO- \"https://b.example.com\"); " +
+		"bash -lc 'posse web goto https://c.example.com' > /tmp/out https://redir.example.com"
+	var got []string
+	for _, w := range webCommandURLs(cmd, 0) {
+		got = append(got, w.via+" "+w.url)
+	}
+	want := []string{"curl https://a.example.com/x", "wget https://b.example.com", "posse web https://c.example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%q", got)
+	}
+	if webHost("https://goproxy.cn,direct") != "" {
+		t.Fatal("comma host counted")
 	}
 }

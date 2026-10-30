@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -22,9 +23,6 @@ var webURLRe = regexp.MustCompile(`https?://[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%
 
 // webPrograms 是访问网址的命令行程序：只从这些程序的命令里取网址，echo、git clone 里出现的不算。
 var webPrograms = setOf(`curl wget http https xh open bsk aria2c lynx w3m`)
-
-// posseWebRe 认出 posse web open/goto：posse 自己还有许多和网页无关的子命令。
-var posseWebRe = regexp.MustCompile(`\bposse\s+web\s+(?:open|goto)\b`)
 
 // webURLs 从一段文字里取出网址，去掉末尾粘上的标点，按出现顺序去重；本机地址不算。
 func webURLs(text string) []string {
@@ -57,6 +55,9 @@ func trimURL(u string) string {
 	return u
 }
 
+// hostRe 是能当域名的写法：GOPROXY=https://goproxy.cn,direct 这类逗号分隔的值不是网址。
+var hostRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$|^[0-9a-f:]+$`)
+
 // webHost 是网址的域名（去掉 www.），解析不了或是本机地址时返回 ""。
 func webHost(raw string) string {
 	u, err := url.Parse(raw)
@@ -64,7 +65,7 @@ func webHost(raw string) string {
 		return ""
 	}
 	h := strings.ToLower(u.Hostname())
-	if h == "" || h == "localhost" || strings.HasSuffix(h, ".localhost") {
+	if !hostRe.MatchString(h) || h == "localhost" || strings.HasSuffix(h, ".localhost") {
 		return ""
 	}
 	if ip := net.ParseIP(h); ip != nil && (ip.IsLoopback() || ip.IsUnspecified()) {
@@ -93,24 +94,84 @@ func (s *UsageScanner) addSearch(query, via string) {
 	s.event(UsageEvent{Query: clipRunes(query, maxEventCommand), Via: via})
 }
 
-// webCommand 从一条访问网页的命令里取网址，via 是第一个访问网页的程序。
-func (s *UsageScanner) webCommand(cmd string, programs []cliProgram) {
-	via := ""
-	for _, p := range programs {
-		if webPrograms[p.Name] {
-			via = p.Name
-			break
+// webCommand 记下一条命令里访问网页的程序（webPrograms，以及 posse web open/goto）参数里的网址。
+// 只看这些程序自己的参数：echo、写文件、heredoc 正文里出现的网址不算。
+func (s *UsageScanner) webCommand(cmd string) {
+	for _, w := range webCommandURLs(cmd, 0) {
+		s.addURL(w.url, w.via)
+	}
+}
+
+type viaURL struct{ url, via string }
+
+// webCommandURLs 按简单命令切开 cmd（复用 shLex），程序是访问网页的就取它参数里的网址；
+// $( ) 和 sh -c 的脚本里接着找。
+func webCommandURLs(cmd string, depth int) []viaURL {
+	var out []viaURL
+	var words []string
+	end := func() {
+		prog, args := webCommandProgram(words)
+		words = words[:0]
+		switch {
+		case prog == "":
+		case prog == "sh" || prog == "bash" || prog == "zsh" || prog == "dash":
+			for i, a := range args {
+				if i+1 < len(args) && strings.HasPrefix(a, "-") && strings.Contains(a, "c") && depth < 3 {
+					out = append(out, webCommandURLs(args[i+1], depth+1)...)
+					break
+				}
+			}
+		case webPrograms[prog], prog == "posse" && len(args) >= 2 && args[0] == "web" && (args[1] == "open" || args[1] == "goto"):
+			via := prog
+			if prog == "posse" {
+				via = "posse web"
+			}
+			for _, a := range args {
+				if strings.HasPrefix(a, "http://") || strings.HasPrefix(a, "https://") {
+					for _, u := range webURLs(a) {
+						out = append(out, viaURL{u, via})
+					}
+				}
+			}
 		}
 	}
-	if via == "" && posseWebRe.MatchString(cmd) {
-		via = "posse web"
+	for _, t := range shLex(cmd) {
+		switch {
+		case t.sub != "":
+			if depth < 3 {
+				out = append(out, webCommandURLs(t.sub, depth+1)...)
+			}
+		case t.op == "redir":
+		case t.op != "":
+			end()
+		default:
+			words = append(words, t.word)
+		}
 	}
-	if via == "" {
-		return
+	end()
+	return out
+}
+
+// webCommandProgram 跳过一条简单命令开头的环境变量赋值和 sudo、timeout 这类包装（连同它们的选项），
+// 返回程序名（不含目录）和参数。
+func webCommandProgram(words []string) (string, []string) {
+	wrapper := ""
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		switch {
+		case assignmentRe.MatchString(w):
+		case wrapper != "" && strings.HasPrefix(w, "-"):
+			if cliWrappers[wrapper][w] {
+				i++
+			}
+		case (wrapper == "timeout" || wrapper == "gtimeout") && durationRe.MatchString(w):
+		case cliWrappers[w] != nil:
+			wrapper = w
+		default:
+			return filepath.Base(w), words[i+1:]
+		}
 	}
-	for _, u := range webURLs(cmd) {
-		s.addURL(u, via)
-	}
+	return "", nil
 }
 
 // toolURL 记下工具参数里的 url（WebFetch、浏览器类 MCP 的打开网页）。
