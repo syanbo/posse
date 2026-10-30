@@ -256,6 +256,23 @@ func contrast(a, b float32) float32 {
 	return (a + 0.05) / (b + 0.05)
 }
 
+// rowBuild is what buildRow gathers a row in: the styles it resolved, and
+// the run of cells it shapes next. (Posse)
+type rowBuild struct {
+	styles  []rowStyle
+	text    []rune
+	cols    []int16 // the column of each rune
+	widths  []int8
+	buf     []rune // a cell's runes
+	fg      ui.Color
+	variant int
+}
+
+type rowStyle struct {
+	id uint16
+	r  resolved
+}
+
 // buildRow makes the cache of the render state's current row.
 func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
 	*line = rowCache{ok: true, bgs: line.bgs[:0], runs: line.runs[:0], decos: line.decos[:0], boxes: line.boxes[:0], wide: line.wide[:0], filled: true}
@@ -263,38 +280,25 @@ func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
 	line.selA, line.selB, line.sel = rs.RowSelection()
 	def := resolved{fg: color(v.colors.Foreground), bg: color(v.colors.Background)}
 	def.shapeFg = def.fg
-	var styles []struct {
-		id uint16
-		r  resolved
-	}
+	run := &v.rowBuf
+	run.styles, run.text, run.cols, run.widths, run.buf = run.styles[:0], run.text[:0], run.cols[:0], run.widths[:0], run.buf[:0]
 	styleOf := func(c vt.Cell, x int) resolved {
 		if c.Style == 0 {
 			return def
 		}
-		for _, s := range styles {
+		for _, s := range run.styles {
 			if s.id == c.Style {
 				return s.r
 			}
 		}
 		r := v.resolve(rs.CellStyle(x))
-		styles = append(styles, struct {
-			id uint16
-			r  resolved
-		}{c.Style, r})
+		run.styles = append(run.styles, rowStyle{c.Style, r})
 		return r
-	}
-	var run struct {
-		text    []rune
-		cols    []int16 // the column of each rune
-		widths  []int8
-		fg      ui.Color
-		variant int
 	}
 	flush := func() {
 		v.shapeRun(line, run.text, run.cols, run.widths, run.fg, run.variant)
 		run.text, run.cols, run.widths = run.text[:0], run.cols[:0], run.widths[:0]
 	}
-	var buf []rune
 	for x := 0; x < len(cells) && x < cols; x++ {
 		c := cells[x]
 		if c.Wide == vt.SpacerTail || c.Wide == vt.SpacerHead {
@@ -354,14 +358,14 @@ func (v *view) buildRow(line *rowCache, rs *vt.RenderState, cols int) {
 		if len(run.text) == 0 {
 			run.fg, run.variant = st.fg, st.variant
 		}
-		buf = buf[:0]
+		run.buf = run.buf[:0]
 		if c.Grapheme && cp != ' ' {
-			buf = rs.CellGraphemes(x, buf)
+			run.buf = rs.CellGraphemes(x, run.buf)
 		}
-		if len(buf) == 0 {
-			buf = append(buf, cp)
+		if len(run.buf) == 0 {
+			run.buf = append(run.buf, cp)
 		}
-		for i, r := range buf {
+		for i, r := range run.buf {
 			run.text = append(run.text, r)
 			run.cols = append(run.cols, int16(x))
 			ww := int8(0) // the runes after the first share its cell
@@ -403,7 +407,15 @@ func (v *view) shapeRun(line *rowCache, text []rune, cols []int16, widths []int8
 	}
 	shaped := v.shape(string(text), variant, 1)
 	cw := float32(v.cellW) / v.scale
-	out := glyphRun{glyphs: make([]ui.Glyph, 0, len(shaped)), cols: make([]int16, 0, len(shaped)), c: fg}
+	out := glyphRun{c: fg}
+	// The row's glyphs of last time are still in the capacity of its runs
+	// (buildRow only truncates them): reuse them. The painter copies the
+	// glyphs it draws. (Posse)
+	if n := len(line.runs); n < cap(line.runs) {
+		old := line.runs[:n+1][n]
+		out.glyphs, out.cols = old.glyphs[:0], old.cols[:0]
+	}
+	out.glyphs, out.cols = slices.Grow(out.glyphs, len(shaped)), slices.Grow(out.cols, len(shaped))
 	// The glyphs of a cell, or of the cells a ligature spans, keep their
 	// places relative to each other and are centered in the cells, as the
 	// glyphs of fallback fonts, wider or narrower than a cell, are. Those

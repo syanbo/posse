@@ -171,7 +171,10 @@ type view struct {
 	cursor    vt.Cursor
 	scrollbar vt.Scrollbar
 	lines     []rowCache
-	shaped    lru
+	// rowBuf is what buildRow gathers a row in, kept across rows and
+	// frames: while a program writes, every row is rebuilt. (Posse)
+	rowBuf rowBuild
+	shaped lru
 	// images are the placements of images that show, and bitmaps their
 	// images' (readImages).
 	images  []shownImage

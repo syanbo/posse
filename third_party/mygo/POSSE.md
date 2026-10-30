@@ -53,6 +53,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
   - 在链接上按下、没有拖动就松开，打开链接（`linkDown`）；拖动超过 4 DIP 照常选文字。Command+点击照旧。程序接管鼠标（鼠标跟踪）时，链接上的这次按下不交给程序，而是开始选区，之后的移动和松开跟着选区走，拖动照样能选中文字。
 - `font.go`：加 `Font.BoldWeight`，粗体的字重可以单独设；为 0 时照上游比正文重 300、至少 700。加 `Font.Antialiased`，照 `ui.Font.Antialiased` 不用字体平滑画字：Core Text 的平滑让深色底上的浅色字看上去重一档。
 - `terminal.go`、`view.go`：加 `Options.NoWheelZoom`，开着时按住 Command 滚动滚轮或在触控板上滑动照常滚动，不缩放字号；调字号的快捷键（⌘=、⌘-、⌘0）不受影响。
+- `paint.go`、`view.go`：重建一行时拼行用的缓冲（`rowBuild`）挂在视图上，跨行、跨帧复用；字形切片沿用这一行上次的容量（`shapeRun`）。上游每行每次重建都新分配，程序持续输出时每帧都要重建所有变了的行：整屏 20 帧/秒重画时窗口 30 秒 GC 25 次，改后 5 次。
 - `posse.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Posse 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Posse 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
 `updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步。拆出 `stageUpdate`、`swapUpdate`（`Install` 照旧用它们），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。
