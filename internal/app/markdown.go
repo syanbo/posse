@@ -500,13 +500,16 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			if d != nil && d.Err != "" {
 				ui.Text(c, "画不出图："+d.Err).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
 			}
-			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
-				if r.find == nil {
-					highlighted(c, b.code, r.words).Font(monoFont).FontSize(r.mono()).LineHeight(1.5)
-					return
-				}
-				from := r.find.total
-				r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(r.mono()).LineHeight(1.5), from)
+			// 代码不折行，放不下左右滚：目录树、对齐的注释折行后列就乱了
+			ui.ScrollHorizontal(c).Children(func() {
+				ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
+					if r.find == nil {
+						highlighted(c, b.code, r.words).Font(monoFont).FontSize(r.mono()).LineHeight(1.5).NoWrap()
+						return
+					}
+					from := r.find.total
+					r.find.reveal(ui.RichText(c, r.marked(c, b.code, ui.Span{})...).Font(monoFont).FontSize(r.mono()).LineHeight(1.5).NoWrap(), from)
+				})
 			})
 		})
 	case mdQuote:
