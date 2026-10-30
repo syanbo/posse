@@ -742,7 +742,7 @@ func (a *app) markdownPreview(c *ui.Context, d *fileDoc) {
 	f.shortcuts(c, a)
 	ui.Box(c).Grow(1).Children(func() {
 		f.begin()
-		ui.Scroll(c).Fill().Children(func() {
+		ui.Scroll(c.Key("md:" + d.path)).Fill().TrackScroll(&d.mdScroll).Children(func() {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
 				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Gap(12).Selectable().Children(func() { mdView{find: f, size: size}.blocks(c, d.md) })

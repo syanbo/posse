@@ -69,7 +69,8 @@ type fileDoc struct {
 	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
 	md         []mdBlock
 	mdVer      uint64
-	find       docFind // Markdown 预览和 Annotate 的查找栏（编辑器有自己的）
+	mdScroll   ui.ScrollState // 预览的滚动位置：切走后元素状态被回收，回来靠它接着看
+	find       docFind        // Markdown 预览和 Annotate 的查找栏（编辑器有自己的）
 	// 未保存判断按缓冲区版本缓存：Modified 在有改动时要整份比较文本
 	modVer   uint64
 	modStale bool
@@ -405,6 +406,7 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 	if line > 0 {
 		// 跳到某一行（检索结果、路径:行号）要看源码，Markdown 也切到编辑器
 		d.gotoLine, d.gotoSpan, d.preview = line, span, false
+		d.mdScroll.X, d.mdScroll.Y = 0, 0 // 再切回预览时从头看，不回到跳行之前读到的地方
 	}
 	if strings.HasPrefix(path, v.root+string(filepath.Separator)) {
 		a.loadDirs(v, v.tree.Reveal(path))

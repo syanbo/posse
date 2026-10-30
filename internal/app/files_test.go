@@ -990,6 +990,48 @@ func TestAttachedShowsBranch(t *testing.T) {
 	}
 }
 
+// Markdown 预览切到别的标签再切回来，接着上次滚到的位置；每个文档的位置各记各的。
+func TestMarkdownPreviewKeepsScroll(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := ui.NewTester(a.build, 1200, 360)
+	readme := filepath.Join(root, "README.md")
+	a.openFile(w, readme, 0, [2]int{})
+	d := a.files[w.ID].doc(readme)
+	until(t, tt, "loaded", func() bool { return d.kind == docText && d.md != nil })
+	tt.Frame()
+	if d.mdScroll.MaxY <= 0 {
+		t.Fatal("README should overflow the preview")
+	}
+	tt.Scroll(800, 250, 0, 120)
+	tt.Frame()
+	y := d.mdScroll.Y
+	if y <= 0 {
+		t.Fatalf("scroll did not move the preview: y = %v", y)
+	}
+	// 切到另一个 Markdown，它从头显示
+	plan := filepath.Join(root, "docs", "plan.md")
+	a.openFile(w, plan, 0, [2]int{})
+	p := a.files[w.ID].doc(plan)
+	until(t, tt, "plan loaded", func() bool { return p.kind == docText && p.md != nil })
+	tt.Frame()
+	if p.mdScroll.Y != 0 {
+		t.Fatalf("another document took the scroll: y = %v", p.mdScroll.Y)
+	}
+	// 再切到源码文件，隔几帧，预览的元素状态已被回收
+	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
+	for range 3 {
+		tt.Frame()
+	}
+	a.openFile(w, readme, 0, [2]int{})
+	tt.Frame()
+	tt.Frame()
+	if d.mdScroll.Y != y {
+		t.Fatalf("scroll after switching back = %v, want %v", d.mdScroll.Y, y)
+	}
+}
+
 // Markdown 预览里 ⌘F 打开查找栏，⌘G、⇧⌘G 在命中间跳（⇧⌘G 不去开关改动页），Esc 关闭。
 func TestMarkdownPreviewFind(t *testing.T) {
 	a := previewApp(t)
