@@ -45,7 +45,7 @@ func (a *app) applyTasks(ts []taskInfo) {
 		default:
 			continue
 		}
-		if a.win.IsFocused() && a.selected == taskBoardID && a.taskSel == t.ID {
+		if a.state.NotifyOff || a.win.IsFocused() && a.selected == taskBoardID && a.taskSel == t.ID {
 			continue
 		}
 		n := mygo.NewNotification(mygo.NotificationOptions{ID: "posse-task:" + t.ID, Title: title, Body: t.Title, Group: "tasks"})

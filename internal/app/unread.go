@@ -17,9 +17,13 @@ const statusUnread = "unread"
 
 // markRead 在每帧画主区域时调用：窗口有焦点、当前看着的会话就算看过，常驻进程记着它没看的就报一次。
 func (a *app) markRead(cur *terminalInfo) {
+	prev := a.viewing
 	a.viewing = ""
 	if cur != nil && a.focused.Load() {
 		a.viewing = cur.ID
+	}
+	if a.viewing != prev {
+		a.updateBadge()
 	}
 	if a.viewing == "" || !cur.Unread {
 		a.seenFor = ""

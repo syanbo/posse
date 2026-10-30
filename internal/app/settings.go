@@ -34,7 +34,7 @@ var settingsTabs = []struct {
 	{"about", "关于", iconInfo},
 }
 
-// settingsBoard 是设置页：左边分类，右边是这一类的卡片。通用（防休眠）、Agent（权限、套餐用量）、
+// settingsBoard 是设置页：左边分类，右边是这一类的卡片。通用（防休眠、恢复终端、终端选区、通知）、Agent（权限、套餐用量）、
 // 外观（图标大小，终端和编辑器的字体、字号、预览）、快捷键（keysettings.go）、关于（版本、更新和重启常驻进程、日志和数据目录）。手机配对在「手机」页。
 func (a *app) settingsBoard(c *ui.Context) {
 	t := c.Theme()
@@ -64,6 +64,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.awakeSettings(c)
 						a.restoreSettings(c)
 						a.selectSettings(c)
+						a.notifySettings(c)
 					case "agent":
 						a.agentSettings(c)
 						a.permissionSettings(c)
@@ -145,6 +146,26 @@ func (a *app) selectSettings(c *ui.Context) {
 		settingsRow(c, "选中即复制", func() {
 			if ui.Switch(c.Key("termCopyOnSelect"), &on).Label("选中即复制").Changed() {
 				a.setCopyOnSelect(on)
+			}
+		})
+	})
+}
+
+// notifySettings 是系统通知和 Dock 角标。通知由窗口发，关掉窗口后就不再有。
+func (a *app) notifySettings(c *ui.Context) {
+	settingsCard(c, "通知", "agent 等你处理、完成了而你没在看，以及任务有问题、完成或失败时发系统通知，点通知跳到那个会话或任务。窗口开着才会通知，正看着的会话不通知。Dock 角标是等你处理和完成了还没看的会话数。", func() {
+		notify, badge := !a.state.NotifyOff, !a.state.BadgeOff
+		settingsRow(c, "系统通知", func() {
+			if ui.Switch(c.Key("notify"), &notify).Label("系统通知").Changed() {
+				a.state.NotifyOff = !notify
+				a.saveState()
+			}
+		})
+		settingsRow(c, "Dock 角标", func() {
+			if ui.Switch(c.Key("badge"), &badge).Label("Dock 角标").Changed() {
+				a.state.BadgeOff = !badge
+				a.saveState()
+				a.updateBadge()
 			}
 		})
 	})

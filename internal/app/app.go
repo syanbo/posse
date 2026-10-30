@@ -161,6 +161,7 @@ type app struct {
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
+	badge        int               // Dock 角标现在显示的数
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
 	lastPoll     *pollResult
@@ -692,6 +693,7 @@ func (a *app) apply(ps []project, ws []workspace) {
 			delete(a.unreadAt, id)
 		}
 	}
+	a.updateBadge()
 	a.pruneFiles()
 }
 
@@ -720,16 +722,11 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	}
 	prev, seen := a.lastStatus[t.ID]
 	a.lastStatus[t.ID] = status
-	if !seen || prev == status || t.Agent == "" {
+	if !seen || a.state.NotifyOff {
 		return
 	}
-	var title string
-	switch {
-	case status == agent.StatusWaiting:
-		title = agentTitle(t.Agent) + " 等待你处理"
-	case status == agent.StatusIdle && prev == agent.StatusWorking:
-		title = agentTitle(t.Agent) + " 已完成"
-	default:
+	title := noticeTitle(prev, status, t)
+	if title == "" {
 		return
 	}
 	// 正在看的终端不打扰
@@ -746,6 +743,56 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 			log.Printf("notification: %v", err)
 		}
 	}()
+}
+
+// noticeTitle 是终端状态从 prev 变成 status 时系统通知的标题，不用通知时为空。
+// 已完成跟着常驻进程的未读：手机看着时完成的不算未读，也就不通知。
+func noticeTitle(prev, status string, t terminalInfo) string {
+	if prev == status || t.Agent == "" {
+		return ""
+	}
+	switch {
+	case status == agent.StatusWaiting:
+		return agentTitle(t.Agent) + " 等待你处理"
+	case status == agent.StatusIdle && prev == agent.StatusWorking && t.Unread:
+		return agentTitle(t.Agent) + " 已完成"
+	}
+	return ""
+}
+
+// badgeCount 是 Dock 角标的数：侧栏显示成待处理和铃铛的 agent 会话数，按 sessionStatus 算，和侧栏一致
+// （等待任务、还没恢复的不算；正看着的会话完成了不算未读，窗口下一帧就报看过）。
+func (a *app) badgeCount() int {
+	n := 0
+	for _, w := range a.workspaces {
+		for _, t := range w.Terminals {
+			if t.Agent == "" {
+				continue
+			}
+			if s := a.sessionStatus(t); s == agent.StatusWaiting || s == statusUnread {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// updateBadge 按当前的终端状态更新 Dock 角标，数没变时不调系统。轮询的数据变了、每帧看过的会话换了时都调。
+func (a *app) updateBadge() {
+	// 窗口失去焦点时不重画，viewing 要到下一帧才清掉：这里先清，切走后完成的会话马上算进角标
+	if !a.focused.Load() {
+		a.viewing = ""
+	}
+	n := 0
+	if !a.state.BadgeOff {
+		n = a.badgeCount()
+	}
+	// 没有窗口（测试、离屏预览）时 mygo 的应用没在运行，不能调
+	if n == a.badge || a.win == nil {
+		return
+	}
+	a.badge = n
+	mygo.App.SetBadgeCount(n)
 }
 
 func (a *app) workspace(id string) *workspace {
