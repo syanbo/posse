@@ -236,3 +236,80 @@ func TestUsageEventsKeepToolsPastCommands(t *testing.T) {
 		t.Fatalf("%d events, first %+v last %+v", len(u.Events), u.Events[0], u.Events[len(u.Events)-1])
 	}
 }
+
+// 网址：工具和 MCP 参数里的 url、访问网页的程序命令里的网址、用户自己发的网址按域名计次，
+// 本机地址、注入的提醒、echo 里提到的不算；搜索单独计次。
+func TestUsageWeb(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude.jsonl")
+	writeLines(t, path,
+		`{"type":"user","timestamp":"2026-10-30T08:00:00.000Z","message":{"content":"看下 https://github.com/a/b，还有 [文档](https://docs.rs/x)。<system-reminder>https://ignored.example.com</system-reminder>"}}`+"\n",
+		`{"type":"assistant","timestamp":"2026-10-30T08:01:00.000Z","message":{"content":[{"type":"tool_use","name":"WebFetch","input":{"url":"https://github.com/c/d","prompt":"x"}},{"type":"tool_use","name":"WebSearch","input":{"query":"posse terminal"}}]}}`+"\n",
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"curl -s https://www.example.com/a.json | jq . && curl http://localhost:8080/x"}},{"type":"tool_use","name":"Bash","input":{"command":"echo https://not.counted.com"}}]}}`+"\n",
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__browser__navigate","input":{"url":"https://example.com/b"}},{"type":"tool_use","name":"Bash","input":{"command":"posse web open https://news.ycombinator.com"}}]}}`+"\n",
+		// 工具结果里的网址不是用户发的
+		`{"type":"user","message":{"content":[{"type":"tool_result","content":"see https://tool.output.com"}]}}`+"\n",
+	)
+	u, err := NewUsageScanner("claude", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []WebUsage{{"example.com", 2}, {"github.com", 2}, {"docs.rs", 1}, {"news.ycombinator.com", 1}}
+	if !reflect.DeepEqual(u.Web, want) || u.Searches != 1 {
+		t.Fatalf("web %+v searches %d", u.Web, u.Searches)
+	}
+	var got []string
+	for _, e := range u.Events {
+		if e.URL != "" {
+			got = append(got, e.Via+" "+e.URL)
+		} else if e.Query != "" {
+			got = append(got, e.Via+" ?"+e.Query)
+		}
+	}
+	wantEv := []string{
+		"user https://github.com/a/b", "user https://docs.rs/x",
+		"WebFetch https://github.com/c/d", "WebSearch ?posse terminal",
+		"curl https://www.example.com/a.json", "browser.navigate https://example.com/b", "posse web https://news.ycombinator.com",
+	}
+	if !reflect.DeepEqual(got, wantEv) {
+		t.Fatalf("events\n%q\nwant\n%q", got, wantEv)
+	}
+	if !u.Events[0].At.Equal(time.Date(2026, 10, 30, 8, 0, 0, 0, time.UTC)) {
+		t.Fatalf("user url time %v", u.Events[0].At)
+	}
+
+	// codex：注入的 AGENTS.md 里的网址不算；新格式的用户消息只读 item_completed，搜索只读 WebSearch 条目
+	path = filepath.Join(dir, "codex.jsonl")
+	writeLines(t, path,
+		`{"type":"session_meta","payload":{"id":"s1","history_mode":"paginated"}}`+"\n",
+		`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions\nhttps://agents.example.com"}]}}`+"\n",
+		`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"打开 https://openai.com/x"}]}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"打开 https://openai.com/x"}]}}}`+"\n",
+		`{"type":"response_item","payload":{"type":"web_search_call","action":{"type":"search","query":"q1"}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"WebSearch","id":"ws1","query":"q1"}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x1","command":["/bin/zsh","-lc","wget https://go.dev/dl/x.tgz"]}}}`+"\n",
+	)
+	u, _ = NewUsageScanner("codex", path).Scan()
+	if want := []WebUsage{{"go.dev", 1}, {"openai.com", 1}}; !reflect.DeepEqual(u.Web, want) || u.Searches != 1 {
+		t.Fatalf("codex web %+v searches %d", u.Web, u.Searches)
+	}
+
+	// grok：用户的话在 <user_query> 里，注入的规则不算；服务端搜索记成搜索
+	path = filepath.Join(dir, "grok.jsonl")
+	writeLines(t, path,
+		`{"type":"user","content":"<rules>https://rules.example.com</rules><user_query>看 https://x.ai/news</user_query>"}`+"\n",
+		`{"type":"backend_tool_call","kind":{"tool_type":"web_search","action":{"query":"grok"}}}`+"\n",
+	)
+	u, _ = NewUsageScanner("grok", path).Scan()
+	if want := []WebUsage{{"x.ai", 1}}; !reflect.DeepEqual(u.Web, want) || u.Searches != 1 {
+		t.Fatalf("grok web %+v searches %d", u.Web, u.Searches)
+	}
+}
+
+func TestWebURLs(t *testing.T) {
+	got := webURLs(`a https://a.com/x). b "https://b.com/p?q=1", (https://en.wikipedia.org/wiki/Go_(lang)) http://127.0.0.1:3000 https://a.com/x 中文https://c.cn/路径`)
+	want := []string{"https://a.com/x", "https://b.com/p?q=1", "https://en.wikipedia.org/wiki/Go_(lang)", "https://c.cn/"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%q", got)
+	}
+}

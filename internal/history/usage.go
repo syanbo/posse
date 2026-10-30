@@ -1,6 +1,7 @@
 package history
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -30,17 +31,21 @@ type CLIUsage struct {
 	Count  int    `json:"count"`
 }
 
-// Usage 是一个会话用到的技能、MCP 工具和命令行程序，按次数从多到少。
+// Usage 是一个会话用到的技能、MCP 工具、命令行程序和网址，按次数从多到少。
 type Usage struct {
 	Skills []UsageItem `json:"skills"`
 	MCP    []MCPUsage  `json:"mcp"`
 	CLI    []CLIUsage  `json:"cli,omitempty"`
-	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），技能和 MCP、命令行程序各留最近 maxUsageEvents 条
+	Web    []WebUsage  `json:"web,omitempty"`
+	// Searches 是网页搜索的次数
+	Searches int `json:"searches,omitempty"`
+	// Events 是逐次的使用记录，按会话文件里的顺序（时间从早到晚），技能和 MCP、命令行程序、网址各留最近 maxUsageEvents 条
 	Events []UsageEvent `json:"events,omitempty"`
 }
 
-// UsageEvent 是一次使用：技能（Skill 非空）、MCP 工具（Server、Tool）或命令行程序（CLI、Source，
-// Command 是它所在的那条命令，截到 maxEventCommand 个字符）。At 取自那一行记录，
+// UsageEvent 是一次使用：技能（Skill 非空）、MCP 工具（Server、Tool）、命令行程序（CLI、Source，
+// Command 是它所在的那条命令，截到 maxEventCommand 个字符）、访问网址（URL）或网页搜索（Query），
+// 后两种的 Via 是经什么访问的（工具名、程序名，用户发的是 ViaUser）。At 取自那一行记录，
 // grok、cursor 的会话文件不带时间，为零值。
 type UsageEvent struct {
 	At      time.Time `json:"at,omitzero"`
@@ -50,7 +55,13 @@ type UsageEvent struct {
 	CLI     string    `json:"cli,omitempty"`
 	Source  string    `json:"source,omitempty"`
 	Command string    `json:"command,omitempty"`
+	URL     string    `json:"url,omitempty"`
+	Query   string    `json:"query,omitempty"`
+	Via     string    `json:"via,omitempty"`
 }
+
+// isWeb 报告这是不是访问网址或网页搜索。
+func (e UsageEvent) isWeb() bool { return e.URL != "" || e.Query != "" }
 
 const (
 	maxUsageEvents  = 300
@@ -70,6 +81,9 @@ const (
 //   - 执行的命令：claude 的 Bash、codex 的 exec_command/shell（新版另有 CommandExecution，和前者同一个 id）、
 //     grok 的 run_terminal_command、cursor 的 Shell。一条命令里的每个程序记一次（见 cliPrograms），
 //     来源（Homebrew、系统、其他）按本机的安装位置判断。
+//   - 网址：WebFetch 这类工具和 MCP 参数里的 url、curl 这类程序命令里的网址（见 webPrograms）、
+//     用户自己发的消息里的网址（复用历史索引的解析，去掉注入的内容），按域名计次，本机地址不算；
+//     WebSearch、codex 的网页搜索、grok 的 backend_tool_call 记成搜索。
 //   - 各家模型自己读 <名字>/SKILL.md（Read、read_file，或 cat、sed 这类读文件的命令）也算用了那个技能。
 //     只认读文件的调用：写文件、grep 的参数里提到 SKILL.md 不算，系统提示里的技能列表也不算。
 type UsageScanner struct {
@@ -80,13 +94,28 @@ type UsageScanner struct {
 	cli         map[string]int
 	sources     map[string]string // 程序名 → 来源，第一次见到时查
 	seen        map[string]bool   // codex 条目的 id
-	tools, cmds []seqEvent        // 技能和 MCP、命令行程序的调用，n 是先后
+	web         map[string]int    // 域名 → 次数
+	searches    int
+	tools, cmds []seqEvent // 技能和 MCP、命令行程序的调用，n 是先后
+	webs        []seqEvent // 访问网址和搜索
 	seq         int
 	at          time.Time // 正在解析的那一行的时间
+	parser      parser    // 认出用户自己发的消息
+	st          fileState
 }
 
 func NewUsageScanner(agent, path string) *UsageScanner {
 	s := &UsageScanner{agent: agent, path: path}
+	switch agent {
+	case "claude":
+		s.parser = claudeParser{}
+	case "codex":
+		s.parser = codexParser{}
+	case "grok":
+		s.parser = grokParser{}
+	case "cursor":
+		s.parser = cursorParser{}
+	}
 	s.reset()
 	return s
 }
@@ -95,6 +124,7 @@ func (s *UsageScanner) reset() {
 	s.offset = 0
 	s.skills, s.mcp, s.seen, s.tools, s.cmds = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil, nil
 	s.cli, s.sources = map[string]int{}, map[string]string{}
+	s.web, s.searches, s.webs, s.st = map[string]int{}, 0, nil, fileState{}
 }
 
 // Scan 读文件新增的完整行（末尾没写完的一行留到下次），返回到目前为止的统计；文件变短说明被重写，从头再读。
@@ -118,6 +148,10 @@ func (s *UsageScanner) Scan() (Usage, error) {
 		if hasUsageMarker(line) {
 			s.line(line)
 		}
+		// codex 的会话格式写在 session_meta 里，用户消息按格式从不同的记录读
+		if bytes.Contains(line, httpMarker) || bytes.Contains(line, codexMetaMarker) {
+			s.userURLs(line)
+		}
 	})
 	s.offset += n
 	return s.result(), err
@@ -129,7 +163,13 @@ var usageMarkers = [][]byte{
 	[]byte("McpToolCall"), []byte("use_tool"), []byte("SKILL.md"), []byte("CallDynamicTool"),
 	[]byte(`"Bash"`), []byte(`"Shell"`), []byte("run_terminal_command"), []byte("exec_command"),
 	[]byte(`"shell"`), []byte("CommandExecution"),
+	[]byte("WebFetch"), []byte("WebSearch"), []byte("web_search_call"), []byte("backend_tool_call"),
 }
+
+var (
+	httpMarker      = []byte("http")
+	codexMetaMarker = []byte(`"session_meta"`)
+)
 
 func hasUsageMarker(line []byte) bool { return containsAny(line, usageMarkers) }
 
@@ -169,17 +209,23 @@ func (s *UsageScanner) cursorLine(b []byte) {
 		switch bl.Name {
 		case "CallDynamicTool":
 			var a struct {
-				Namespace string `json:"namespace"`
-				ToolName  string `json:"toolName"`
+				Namespace string          `json:"namespace"`
+				ToolName  string          `json:"toolName"`
+				Arguments json.RawMessage `json:"arguments"`
 			}
 			if json.Unmarshal(bl.Input, &a) == nil && a.Namespace != "cursor" {
 				s.addMCPTool(a.Namespace, a.ToolName)
+				s.toolURL(a.Arguments, a.Namespace+"."+a.ToolName)
+			} else if a.Namespace == "cursor" {
+				s.webTool(a.ToolName, a.Arguments)
 			}
 		case "Read", "ReadFile":
 			a, _ := decodeToolArgs(bl.Input)
 			s.skillRead(a.Path)
 		case "Shell":
 			s.command(commandOf(bl.Input))
+		default:
+			s.webTool(bl.Name, bl.Input)
 		}
 	}
 }
@@ -201,11 +247,14 @@ func (s *UsageScanner) claudeLine(b []byte) {
 		case "tool_use":
 			if name, ok := strings.CutPrefix(bl.Name, "mcp__"); ok {
 				s.addMCP(name)
+				s.toolURL(bl.Input, mcpVia(name))
 			} else if bl.Name == "Read" {
 				a, _ := decodeToolArgs(bl.Input)
 				s.skillRead(a.FilePath)
 			} else if bl.Name == "Bash" {
 				s.command(commandOf(bl.Input))
+			} else {
+				s.webTool(bl.Name, bl.Input)
 			}
 		}
 	}
@@ -235,8 +284,11 @@ func (s *UsageScanner) event(e UsageEvent) {
 	e.At = s.at
 	s.seq++
 	list := &s.tools
-	if e.CLI != "" {
+	switch {
+	case e.CLI != "":
 		list = &s.cmds
+	case e.isWeb():
+		list = &s.webs
 	}
 	*list = append(*list, seqEvent{s.seq, e})
 	if len(*list) > maxUsageEvents*2 {
@@ -275,21 +327,42 @@ func (s *UsageScanner) command(cmd string) {
 	s.cliCommand(cmd)
 }
 
-// cliCommand 记下一条命令运行的程序。
+// cliCommand 记下一条命令运行的程序和访问的网址。
 func (s *UsageScanner) cliCommand(cmd string) {
-	for _, p := range cliPrograms(cmd) {
+	programs := cliPrograms(cmd)
+	for _, p := range programs {
 		src, ok := s.sources[p.Name]
 		if !ok {
 			src = cliSource(p.Name, p.Path)
 			s.sources[p.Name] = src
 		}
 		s.cli[p.Name]++
-		short := cmd
-		if r := []rune(short); len(r) > maxEventCommand {
-			short = string(r[:maxEventCommand]) + "…"
-		}
-		s.event(UsageEvent{CLI: p.Name, Source: src, Command: short})
+		s.event(UsageEvent{CLI: p.Name, Source: src, Command: clipRunes(cmd, maxEventCommand)})
 	}
+	s.webCommand(cmd, programs)
+}
+
+// webTool 认出 agent 自带的网页工具：WebFetch 记网址，WebSearch 记搜索。
+func (s *UsageScanner) webTool(name string, input []byte) {
+	switch name {
+	case "WebFetch", "web_fetch":
+		s.toolURL(input, name)
+	case "WebSearch", "web_search":
+		var a struct {
+			Query string `json:"query"`
+		}
+		if json.Unmarshal(input, &a) == nil {
+			s.addSearch(a.Query, name)
+		}
+	}
+}
+
+// mcpVia 把 <服务>__<工具> 写成 <服务>.<工具>，当网址的来源。
+func mcpVia(name string) string {
+	if i := strings.LastIndex(name, "__"); i > 0 {
+		return name[:i] + "." + name[i+2:]
+	}
+	return name
 }
 
 // addMCP 记一次 MCP 调用，name 是 <服务>__<工具>；服务名里可能有下划线，所以按最后一个 "__" 切。
@@ -326,11 +399,17 @@ func (s *UsageScanner) codexLine(b []byte) {
 			Content   []struct {
 				Text string `json:"text"`
 			} `json:"content"`
+			Action struct {
+				Query string `json:"query"`
+				URL   string `json:"url"`
+			} `json:"action"`
 			Item struct {
 				Type      string          `json:"type"`
 				ID        string          `json:"id"`
 				Server    string          `json:"server"`
 				Tool      string          `json:"tool"`
+				Arguments json.RawMessage `json:"arguments"`
+				Query     string          `json:"query"`
 				Command   json.RawMessage `json:"command"`
 				ParsedCmd []struct {
 					Type string `json:"type"`
@@ -354,6 +433,7 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
 			s.addMCP(name)
+			s.toolURL([]byte(p.Arguments), mcpVia(name))
 		} else if cmd := commandOf([]byte(p.Arguments)); p.Type == "function_call" && cmd != "" && s.once(cmdKey(p.CallID)) {
 			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令。
 			// 同一条命令随后的 CommandExecution 用 call_id 当 id，靠 once 不重复算
@@ -362,6 +442,18 @@ func (s *UsageScanner) codexLine(b []byte) {
 	case p.Item.Type == "McpToolCall":
 		if s.once(p.Item.ID) {
 			s.addMCPTool(p.Item.Server, p.Item.Tool)
+			s.toolURL(p.Item.Arguments, p.Item.Server+"."+p.Item.Tool)
+		}
+	// 网页搜索和历史索引一样按格式只读一处：旧格式读 web_search_call（action 是 search 带 query，
+	// 或 open_page 带 url），新格式（paginated）读 WebSearch 条目
+	case r.Type == "response_item" && p.Type == "web_search_call" && s.st.Mode != "paginated":
+		s.addSearch(p.Action.Query, "web_search")
+		if p.Action.URL != "" {
+			s.addURL(p.Action.URL, "web_search")
+		}
+	case p.Item.Type == "WebSearch" && s.st.Mode == "paginated":
+		if s.once("web:" + p.Item.ID) {
+			s.addSearch(p.Item.Query, "web_search")
 		}
 	// 新版 Codex 把命令包在 exec 的脚本里跑，每条实际执行的命令记一条 CommandExecution，
 	// parsed_cmd 已经标出读了哪个文件
@@ -402,18 +494,32 @@ func (s *UsageScanner) once(id string) bool {
 
 func (s *UsageScanner) grokLine(b []byte) {
 	var r struct {
+		Type      string         `json:"type"`
 		ToolCalls []grokToolCall `json:"tool_calls"`
+		Kind      struct {
+			ToolType string `json:"tool_type"`
+			Action   struct {
+				Query string `json:"query"`
+			} `json:"action"`
+		} `json:"kind"`
 	}
 	if json.Unmarshal(b, &r) != nil {
+		return
+	}
+	// grok 在服务端跑的搜索
+	if r.Type == "backend_tool_call" {
+		s.addSearch(r.Kind.Action.Query, r.Kind.ToolType)
 		return
 	}
 	for _, c := range r.ToolCalls {
 		if c.Name == "use_tool" {
 			var a struct {
-				ToolName string `json:"tool_name"`
+				ToolName  string          `json:"tool_name"`
+				ToolInput json.RawMessage `json:"tool_input"`
 			}
 			if json.Unmarshal([]byte(c.Arguments), &a) == nil {
 				s.addMCP(a.ToolName)
+				s.toolURL(a.ToolInput, mcpVia(a.ToolName))
 			}
 			continue
 		}
@@ -423,19 +529,21 @@ func (s *UsageScanner) grokLine(b []byte) {
 			s.skillRead(a.TargetFile)
 		case "run_terminal_command":
 			s.command(commandOf([]byte(c.Arguments)))
+		default:
+			s.webTool(c.Name, []byte(c.Arguments))
 		}
 	}
 }
 
 func (s *UsageScanner) result() Usage {
 	var u Usage
-	tools, cmds := s.tools[max(0, len(s.tools)-maxUsageEvents):], s.cmds[max(0, len(s.cmds)-maxUsageEvents):]
-	for len(tools) > 0 || len(cmds) > 0 {
-		if len(cmds) == 0 || len(tools) > 0 && tools[0].n < cmds[0].n {
-			u.Events, tools = append(u.Events, tools[0].e), tools[1:]
-		} else {
-			u.Events, cmds = append(u.Events, cmds[0].e), cmds[1:]
-		}
+	var all []seqEvent
+	for _, l := range [][]seqEvent{s.tools, s.cmds, s.webs} {
+		all = append(all, l[max(0, len(l)-maxUsageEvents):]...)
+	}
+	slices.SortFunc(all, func(a, b seqEvent) int { return a.n - b.n })
+	for _, e := range all {
+		u.Events = append(u.Events, e.e)
 	}
 	for name, n := range s.skills {
 		u.Skills = append(u.Skills, UsageItem{name, n})
@@ -465,6 +573,16 @@ func (s *UsageScanner) result() Usage {
 		}
 		return strings.Compare(a.Name, b.Name)
 	})
+	for host, n := range s.web {
+		u.Web = append(u.Web, WebUsage{Host: host, Count: n})
+	}
+	slices.SortFunc(u.Web, func(a, b WebUsage) int {
+		if a.Count != b.Count {
+			return b.Count - a.Count
+		}
+		return strings.Compare(a.Host, b.Host)
+	})
+	u.Searches = s.searches
 	return u
 }
 
