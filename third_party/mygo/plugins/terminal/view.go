@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"math"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -1127,11 +1128,50 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 	return false
 }
 
-// linkSpan is the cells of a link in a row of the viewport, columns x0 up
-// to x1; the zero span is no link.
-type linkSpan struct{ row, x0, x1 int }
+// linkSpan is the cells of a link in the viewport, in its first row and
+// the rows after it, columns x[i][0] up to x[i][1] of row+i; the zero span
+// is no link. Posse: a link a long line wrapped spans its rows, each with
+// its own columns, the indent a program broke it onto left out.
+type linkSpan struct {
+	row, rows int
+	x         [linkRows][2]int
+}
 
-func (s linkSpan) on() bool { return s.x1 > s.x0 }
+// linkRows is the most rows a link's span holds; the rest of a longer
+// one takes no underline.
+const linkRows = 16
+
+func (s linkSpan) on() bool { return s.rows > 0 }
+
+// cells returns the columns of the span in row y, x0 up to x1, which are
+// equal outside it. (Posse)
+func (s linkSpan) cells(y int) (x0, x1 int) {
+	if y < s.row || y >= s.row+s.rows {
+		return 0, 0
+	}
+	return s.x[y-s.row][0], s.x[y-s.row][1]
+}
+
+// spanOf returns the span of the cells at places at, row*cols+col, in
+// order. (Posse)
+func (v *view) spanOf(at []int) linkSpan {
+	var s linkSpan
+	if len(at) == 0 {
+		return s
+	}
+	s.row = at[0] / v.cols
+	for _, p := range at {
+		i, x := p/v.cols-s.row, p%v.cols
+		if i >= linkRows {
+			break
+		}
+		if i >= s.rows {
+			s.rows, s.x[i] = i+1, [2]int{x, x + 1}
+		}
+		s.x[i] = [2]int{min(s.x[i][0], x), max(s.x[i][1], x+1)}
+	}
+	return s
+}
 
 // HoveredLink returns the link Command (Control elsewhere) is held over
 // in the view, which a click opens and which shows underlined, as
@@ -1148,11 +1188,15 @@ func (t *Terminal) HoveredLink() (link string, path bool, at ui.Rect) {
 	}
 	cw, ch := float32(v.cellW)/v.scale, float32(v.cellH)/v.scale
 	h := v.hover
+	x0, x1 := h.x[0][0], h.x[0][1]
+	for _, x := range h.x[1:h.rows] {
+		x0, x1 = min(x0, x[0]), max(x1, x[1])
+	}
 	return v.hoverLink, v.hoverPath, ui.Rect{
-		X: float32(v.ox)/v.scale + float32(h.x0)*cw,
+		X: float32(v.ox)/v.scale + float32(x0)*cw,
 		Y: float32(v.oy)/v.scale + float32(h.row)*ch,
-		W: float32(h.x1-h.x0) * cw,
-		H: ch,
+		W: float32(x1-x0) * cw,
+		H: float32(h.rows) * ch,
 	}
 }
 
@@ -1199,29 +1243,128 @@ func (v *view) setHover(link string, path bool, at linkSpan) {
 
 // linkAt is the link at the cell: a hyperlink (OSC 8), a URL printed as
 // text, or with Options.OpenLink a file path, or ""; t.mu is held.
+//
+// Posse: it reads the cell's line across the rows it wrapped into, so a
+// link a long line broke shows and opens whole: the rows the terminal
+// soft-wrapped, and for a path also those a program broke itself after a
+// slash, as Codex does. Such a path that Options.LinkUsable cannot open is
+// rather the row's own.
 func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 	t := v.t
+	if col < 0 || col >= v.cols || row < 0 || row >= v.rows {
+		return "", false, linkSpan{}
+	}
 	if url := v.hyperlinkAt(col, row); url != "" {
 		// The hyperlink's cells are those around the cell with its URL.
-		x0, x1 := col, col+1
-		for x0 > 0 && v.hyperlinkAt(x0-1, row) == url {
-			x0--
+		top, bottom := v.wrapped(row, false)
+		cell := func(i int) (int, int) { return i % v.cols, i / v.cols }
+		a, b := row*v.cols+col, row*v.cols+col+1
+		for a > top*v.cols && v.hyperlinkAt(cell(a-1)) == url {
+			a--
 		}
-		for x1 < v.cols && v.hyperlinkAt(x1, row) == url {
-			x1++
+		for b < (bottom+1)*v.cols && v.hyperlinkAt(cell(b)) == url {
+			b++
 		}
-		return url, false, linkSpan{row, x0, x1}
+		cells := make([]int, 0, b-a)
+		for i := a; i < b; i++ {
+			cells = append(cells, i)
+		}
+		return url, false, v.spanOf(cells)
 	}
-	text, cols := t.term.RowText(row)
-	if url, x0, x1 := urlAt(text, cols, col); url != "" {
-		return url, false, linkSpan{row, x0, x1}
+	text, cols := v.lineText(row, false)
+	if url, at := v.matchLink(urlPattern, text, cols, col, row); url != "" {
+		return url, false, at
 	}
-	if t.opts.OpenLink != nil || t.opts.LinkClick != nil {
-		if p, x0, x1 := pathAt(text, cols, col); p != "" {
-			return p, true, linkSpan{row, x0, x1}
+	if t.opts.OpenLink == nil && t.opts.LinkClick == nil {
+		return "", false, linkSpan{}
+	}
+	if text, cols := v.lineText(row, true); len(text) > 0 {
+		p, at := v.matchLink(pathPattern, text, cols, col, row)
+		if usable := t.opts.LinkUsable; p != "" && (at.rows == 1 || usable == nil || usable(p)) {
+			return p, true, at
 		}
+	}
+	if p, at := v.matchLink(pathPattern, text, cols, col, row); p != "" {
+		return p, true, at
 	}
 	return "", false, linkSpan{}
+}
+
+// wrapped returns the first and the last row of the viewport of the line
+// row is in: the rows soft-wrapped, and with broken those broken after a
+// path's slash. (Posse)
+func (v *view) wrapped(row int, broken bool) (top, bottom int) {
+	joins := func(y int) bool {
+		return v.t.term.RowWrapped(y) || broken && v.brokenAfter(y)
+	}
+	top, bottom = row, row
+	for top > 0 && joins(top-1) {
+		top--
+	}
+	for bottom < v.rows-1 && joins(bottom) {
+		bottom++
+	}
+	return top, bottom
+}
+
+// brokenAfter reports whether a program broke a path at the end of row y
+// onto the next row itself: the row ends, before blanks, in a slash after
+// one more in the same word, and the next row holds something. (Posse)
+func (v *view) brokenAfter(y int) bool {
+	if y+1 >= v.rows {
+		return false
+	}
+	text, _ := v.t.term.RowText(y)
+	word := strings.TrimRight(string(text), " ")
+	if k := strings.LastIndexByte(word, ' '); k >= 0 {
+		word = word[k+1:]
+	}
+	if !strings.HasSuffix(word, "/") || !strings.Contains(word[:len(word)-1], "/") {
+		return false
+	}
+	next, _ := v.t.term.RowText(y + 1)
+	return strings.TrimSpace(string(next)) != ""
+}
+
+// lineText returns the text of the line row is in, as wrapped, and the
+// place of each of its runes, row*cols+col. Rows a program broke itself
+// leave out the blanks around the break. (Posse)
+func (v *view) lineText(row int, broken bool) (text []rune, at []int) {
+	top, bottom := v.wrapped(row, broken)
+	for y := top; y <= bottom; y++ {
+		tx, cs := v.t.term.RowText(y)
+		a, b := 0, len(tx)
+		if broken && y > top && !v.t.term.RowWrapped(y-1) {
+			for a < b && tx[a] == ' ' {
+				a++
+			}
+		}
+		if broken && y < bottom && !v.t.term.RowWrapped(y) {
+			for b > a && tx[b-1] == ' ' {
+				b--
+			}
+		}
+		text = append(text, tx[a:b]...)
+		for _, x := range cs[a:b] {
+			at = append(at, y*v.cols+x)
+		}
+	}
+	return text, at
+}
+
+// matchLink returns the match of re in the line text, whose runes are at
+// places at, at column col of row, and its cells: none when the cell is
+// one of the blanks left out around a break. (Posse)
+func (v *view) matchLink(re *regexp.Regexp, text []rune, at []int, col, row int) (string, linkSpan) {
+	u, start, end := matchIndex(re, text, at, row*v.cols+col)
+	if u == "" {
+		return "", linkSpan{}
+	}
+	s := v.spanOf(at[start:end])
+	if x0, x1 := s.cells(row); col < x0 || col >= x1 {
+		return "", linkSpan{}
+	}
+	return u, s
 }
 
 // hyperlinkAt is the URL of the hyperlink (OSC 8) at the cell, or ""; t.mu

@@ -32,6 +32,16 @@ func pathAt(text []rune, cols []int, col int) (path string, x0, x1 int) {
 }
 
 func matchAt(re *regexp.Regexp, text []rune, cols []int, col int) (string, int, int) {
+	u, start, end := matchIndex(re, text, cols, col)
+	if u == "" {
+		return "", 0, 0
+	}
+	return u, cols[start], cols[end-1] + 1
+}
+
+// matchIndex returns the match of re in text at column col, as matchAt,
+// and its runes, start up to end. (Posse)
+func matchIndex(re *regexp.Regexp, text []rune, cols []int, col int) (string, int, int) {
 	s := string(text)
 	for _, m := range re.FindAllStringIndex(s, -1) {
 		u := trimURL(s[m[0]:m[1]])
@@ -41,7 +51,7 @@ func matchAt(re *regexp.Regexp, text []rune, cols []int, col int) (string, int, 
 		start := len([]rune(s[:m[0]]))
 		end := start + len([]rune(u))
 		if start < len(cols) && cols[start] <= col && col <= cols[end-1] {
-			return u, cols[start], cols[end-1] + 1
+			return u, start, end
 		}
 	}
 	return "", 0, 0

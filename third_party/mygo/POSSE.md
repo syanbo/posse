@@ -49,6 +49,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 终端插件 `plugins/terminal`（新加的方法放在 `posse.go`，升级时少冲突）：
 
 - `links.go`：网址和路径遇到全角标点就结束（`fullWidthPunct`），`~/a.md)，然后` 这样紧跟着中文的也认得出；`trimURL` 也去掉结尾的中文标点（"。，）"等）。
+- 跨行的链接（`view.go` 的 `linkAt`、`linkSpan`；`vt.Terminal.RowWrapped` 经 `ghostty_grid_ref_row` 读行的软换行标记）：终端软换行的行连起来认网址、路径和 OSC 8 链接；程序自己在路径的 `/` 后硬换行（Codex 这样断长路径）的，路径也接上下一行、去掉断开处两边的空格，接出来的路径 `LinkUsable` 说打不开时退回只认本行。下划线逐行画，悬停哪一行都打开整条。测试见 `links_wrap_test.go`。
 - `terminal.go`：加 `Options.LinkUsable`，链接打不开（文件已不存在）时不显示下划线、点击无效；加 `Options.OnHoverLink`，悬停的链接变化时通知（Posse 用来预览图片）；加 `Options.LinkClick`，设了就代替 `OpenLink`，多告诉点击时按着的修饰键（Posse 单击网址弹卡片、Command+点击在 Posse 里打开、Shift+Command+点击交给浏览器）；加 `Options.ContextMenu`，设了就不弹菜单，把右键的位置交给 Posse 自己画菜单；加 `Options.OnText`（`view.go` 的 `typed`），打进来的文字先给它看，它拿走的不发给程序，那个键的松开也一起吞掉（Posse 用来把 ⌘F 之后、查找框还没拿到焦点时打的字接进搜索词）。
 - `view.go`：
   - 上游只在按住 Command 时给链接画下划线、换手形指针（`hover`、`linkUnder`）；Posse 改成不按 Command 也这样（`hoverUnder`、`setHover`），下划线沿用上游的画法。
