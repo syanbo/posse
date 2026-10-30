@@ -2,6 +2,8 @@ package app
 
 import (
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -83,5 +85,36 @@ func TestMarkdownTableWidth(t *testing.T) {
 	tt.Frame()
 	if after, _ := tt.Find(code); after.X >= before.X {
 		t.Fatalf("table did not scroll: %+v -> %+v", before, after)
+	}
+}
+
+// mermaid 代码块画好后换成图，可以切回源码；写错的照代码块显示，上面一行报错
+func TestMermaidBlock(t *testing.T) {
+	good := "flowchart LR\n  A[开始] --> B[结束]"
+	bs := parseMarkdown("```mermaid\n" + good + "\n```\n\n```mermaid\nsequenceDiagram\n  A->>B hi\n```\n")
+	defer delete(mermaidSource, good)
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+	}, 800, 900)
+	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
+	tt.Frame()
+	shows := func(prefix string) bool {
+		return slices.ContainsFunc(tt.Texts(), func(s string) bool { return strings.HasPrefix(s, prefix) })
+	}
+	if shows(good) {
+		t.Error("画好的图还显示着源码")
+	}
+	if _, ok := tt.Find("Mermaid 图"); !ok {
+		t.Error("没有图")
+	}
+	if !shows("画不出图：") {
+		t.Error("写错的图没有报错")
+	}
+	if err := tt.Click("查看源码"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !shows(good) || !mermaidSource[good] {
+		t.Error("切不到源码")
 	}
 }

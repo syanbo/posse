@@ -176,6 +176,28 @@ func previewMarkdown(a *app) {
 	}}
 }
 
+// previewMermaid 打开一个回复里有 Mermaid 流程图、时序图和一张写错的图的会话。
+func previewMermaid(a *app) {
+	h := &a.history
+	now := time.Now()
+	h.sel, h.hitSeq, h.placed = "claude:s1", -1, false
+	h.detail = &historyDetail{Session: h.sessions[0], Messages: []history.Message{
+		{Seq: 0, Role: "user", Text: "画一下常驻进程和界面的关系", At: now.Add(-40 * time.Minute)},
+		{Seq: 1, Role: "assistant", At: now.Add(-39 * time.Minute), Text: "## 结构\n\n" +
+			"```mermaid\nflowchart LR\n  UI[窗口] -- terminal.attach --> D[常驻进程]\n  CLI[posse CLI] --> D\n  D --> T1[终端 1]\n  D --> T2{还活着?}\n  T2 -- 是 --> K[保留副本]\n```\n\n" +
+			"## 接入\n\n```mermaid\nsequenceDiagram\n  participant U as 窗口\n  participant D as 常驻进程\n  U->>D: attach\n  D-->>U: 快照\n  D-->>U: 实时输出\n```\n\n" +
+			"```mermaid\nsequenceDiagram\n  A->>B hi\n```"},
+	}}
+}
+
+// mermaidTester 等后台把图画完再截图。
+func mermaidTester(t *testing.T, a *app, dark bool) *ui.Tester {
+	tt := newPreviewTester(a, dark)
+	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
+	tt.Frame()
+	return tt
+}
+
 // previewFiles 在 w1 的文件标签里依次打开 rels（最后一个是当前文件），等它们读进来；之后不再轮询磁盘。
 func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	root := filesWorkspace(t, a)
@@ -725,6 +747,11 @@ func TestPreview(t *testing.T) {
 		previewHistory(a, "")
 		previewMarkdown(a)
 		savePNG(t, newPreviewTester(a, dark), "history-markdown-"+suffix+".png")
+
+		a = previewApp(t)
+		previewHistory(a, "")
+		previewMermaid(a)
+		savePNG(t, mermaidTester(t, a, dark), "history-mermaid-"+suffix+".png")
 
 		a = previewApp(t)
 		a.openDispatch()

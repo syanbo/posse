@@ -11,6 +11,8 @@ import (
 
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/mermaid"
 )
 
 // 界面的取向和字号、字重、图标、间距、圆角、颜色、层级的规则见 docs/design.md；这里只定义取值，调用处只用名字。
@@ -186,6 +188,18 @@ func dataColor(t *ui.Theme, i int) ui.Color {
 		d = darkData
 	}
 	return d[i%len(d)]
+}
+
+// mermaidStyle 是 Markdown 里 Mermaid 图的配色和字体：画在代码块的底上，节点是中性的次级填充，
+// 强调色只给 Pele 拿来标重点的地方（关键路径、高亮）。Pele 要不透明的颜色，半透明的都先压到底色上。
+func mermaidStyle(t *ui.Theme) mermaid.Style {
+	p := colors(t)
+	flat := func(c ui.Color) ui.Color { return c.Over(p.code) }
+	return mermaid.Style{
+		Bg: p.code, Fg: flat(t.Text), Muted: flat(t.TextMuted), Line: flat(t.TextMuted),
+		Surface: flat(p.fill), SurfaceAlt: flat(p.fillHi), Border: flat(p.faint), Accent: flat(t.Accent), Danger: flat(t.Danger),
+		Mono: monoFont, Weight: fwBody, BoldWeight: fwBold, MonoWeight: fwBody,
+	}
 }
 
 // white 和 black 是不随主题变的颜色：品牌色块、勾选框里的对勾、二维码的白底这类本来就固定的地方。

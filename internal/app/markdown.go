@@ -11,6 +11,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+
+	"posse/internal/mermaid"
 )
 
 // 只用 goldmark 的解析器得到语法树，再转成下面这套简单结构缓存起来，每帧按它搭界面。
@@ -221,7 +223,13 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 		}
 		r.inline(c, b.inlines).FontSize(size).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
 	case mdCode:
-		// 上面一条语言栏，右边是复制按钮
+		// mermaid 代码块画成图；画好之前、画不出来、切到源码时照普通代码块显示
+		var d *mermaid.Diagram
+		if strings.EqualFold(b.lang, "mermaid") {
+			d = diagramOf(c, b.code)
+		}
+		drawn := d != nil && d.Err == ""
+		// 上面一条语言栏，右边是复制按钮（图多一个源码和图的切换）
 		ui.Column(c).Radius(rCard).Background(codeBackground(t)).Clip().Children(func() {
 			ui.Row(c).Height(sz(28)).Padding(0, 4, 0, 12).AlignItems(ui.Center).Children(func() {
 				lang := b.lang
@@ -230,10 +238,26 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				}
 				ui.Text(c, lang).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 				ui.Spacer(c)
+				if drawn {
+					icon, label := iconCode, "查看源码"
+					if mermaidSource[b.code] {
+						icon, label = iconEye, "查看图"
+					}
+					if pressable(iconButtonSized(c.Key("source"), icon, label, compactBox(), smallIcon())).Clicked() {
+						mermaidSource[b.code] = !mermaidSource[b.code]
+					}
+				}
 				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", compactBox(), smallIcon())).Clicked() {
 					c.WriteClipboard(b.code)
 				}
 			})
+			if drawn && !mermaidSource[b.code] {
+				diagramView(c, d)
+				return
+			}
+			if d != nil && d.Err != "" {
+				ui.Text(c, "画不出图："+d.Err).FontSize(fsSmall).TextColor(t.Danger).Padding(0, 12)
+			}
 			ui.Box(c).Padding(8, 12, 12, 12).Children(func() {
 				if r.find == nil {
 					highlighted(c, b.code, r.words).Font(monoFont).FontSize(fsSmall).LineHeight(1.5)
