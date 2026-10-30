@@ -38,6 +38,12 @@ func TestCursorPlugin(t *testing.T) {
 			t.Errorf("%s: %+v", ev, h)
 		}
 	}
+	// 工具事件只订阅做完时的，免得每条 shell 命令拉起三次 posse
+	for _, ev := range []string{"preToolUse", "afterShellExecution"} {
+		if _, ok := hooks.Hooks[ev]; ok {
+			t.Errorf("subscribed to %s", ev)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(dir, "skills", SkillName, "SKILL.md")); err != nil {
 		t.Fatal(err)
 	}

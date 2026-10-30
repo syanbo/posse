@@ -8,11 +8,10 @@ import (
 // Cursor 的 hooks 原本只能写进 ~/.cursor/hooks.json 或项目的 .cursor/hooks.json；
 // 插件也能带 hooks，cursor-agent --plugin-dir 按会话加载插件，posse 就把 hooks 和编排技能放进自己的插件。
 
-// cursorEvents 是 posse 订阅的 Cursor 事件，都在交互模式下核实过会触发。
-var cursorEvents = []string{
-	"sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure",
-	"afterShellExecution", "stop", "sessionEnd",
-}
+// cursorEvents 是 posse 订阅的 Cursor 事件，都在交互模式下核实过会触发。hook 同步调用、每次拉起一次 posse，
+// Cursor 又没有等待批准的事件，工具事件只用来给不经 beforeSubmitPrompt 开始的一轮记工作中：
+// 每个工具做完时发一次的 postToolUse、postToolUseFailure 就够，preToolUse 和 afterShellExecution（shell 命令会多发它）不订阅。
+var cursorEvents = []string{"sessionStart", "beforeSubmitPrompt", "postToolUse", "postToolUseFailure", "stop", "sessionEnd"}
 
 // cursorPlugin 写出 posse 的 Cursor 插件：hooks、编排和会话命名技能；内容没变时不重写。
 func (l Launcher) cursorPlugin() (string, error) {
@@ -55,9 +54,10 @@ func (l Launcher) cursorPlugin() (string, error) {
 
 func cursorStatus(event string) string {
 	switch event {
-	case "beforeSubmitPrompt", "preToolUse", "postToolUse", "postToolUseFailure", "afterShellExecution":
+	// preToolUse、afterShellExecution 只有交接前启动、按旧插件订阅的会话还会发
+	case "beforeSubmitPrompt", "postToolUse", "postToolUseFailure", "preToolUse", "afterShellExecution":
 		return StatusWorking
-	// sessionStart 不改状态：命令行带初始提示时第一轮不发 beforeSubmitPrompt，报空闲就错了
+	// sessionStart 不改状态：旧版 Cursor 命令行带初始提示时第一轮不发 beforeSubmitPrompt，报空闲就错了（2026.10.22 会发）
 	case "stop":
 		return StatusIdle
 	case "sessionEnd":

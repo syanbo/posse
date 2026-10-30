@@ -21,6 +21,32 @@ func TestQuoteRoundTrip(t *testing.T) {
 	}
 }
 
+// PreToolUse 只为认出向用户提问，按工具名过滤；SubagentStart 用不上，不订阅
+func TestClaudeHookMatchers(t *testing.T) {
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
+	if _, err := l.claudeSettings(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(l.Home, "claude-hooks.json"))
+	var doc struct {
+		Hooks map[string][]struct {
+			Matcher string `json:"matcher"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if g := doc.Hooks["PreToolUse"]; len(g) != 1 || g[0].Matcher != "AskUserQuestion" {
+		t.Errorf("PreToolUse %+v", g)
+	}
+	if g := doc.Hooks["PostToolUse"]; len(g) != 1 || g[0].Matcher != "*" {
+		t.Errorf("PostToolUse %+v", g)
+	}
+	if _, ok := doc.Hooks["SubagentStart"]; ok {
+		t.Error("subscribed to SubagentStart")
+	}
+}
+
 func TestClaudePermissionTimeout(t *testing.T) {
 	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	if _, err := l.claudeSettings(); err != nil {
@@ -57,15 +83,17 @@ func TestLaunchUnknown(t *testing.T) {
 // 期望值由 Codex 指纹算法的 Python 复刻（已对照 codex hooks/list 校验）算出
 func TestCodexHookHash(t *testing.T) {
 	cases := []struct {
-		key, cmd string
-		timeout  int
-		want     string
+		key, matcher, cmd string
+		timeout           int
+		want              string
 	}{
-		{"stop", `'/bin/posse' hook codex Stop`, 5, "sha256:4d22164ceb95d089a544a2f443783c043da43b7c56e2e7c78b647e8958325730"},
-		{"session_end", `'/a b/posse' hook codex SessionEnd`, 3, "sha256:5a4bf0b5be1231d3cac40835b755fb7b15375fdee1d494c58d6113fdc0293f2a"},
+		{"stop", "", `'/bin/posse' hook codex Stop`, 5, "sha256:4d22164ceb95d089a544a2f443783c043da43b7c56e2e7c78b647e8958325730"},
+		{"session_end", "", `'/a b/posse' hook codex SessionEnd`, 3, "sha256:5a4bf0b5be1231d3cac40835b755fb7b15375fdee1d494c58d6113fdc0293f2a"},
+		// 期望值是 codex 0.166 的 hooks/list 给的 currentHash
+		{"pre_tool_use", "request_user_input", `'/bin/posse' hook codex PreToolUse`, 5, "sha256:02414a3a276a94d192e0925918dd4ee02d679c470de061d0d1c78ed9a45f2ef3"},
 	}
 	for _, c := range cases {
-		if got := codexHookHash(c.key, c.cmd, c.timeout); got != c.want {
+		if got := codexHookHash(c.key, c.matcher, c.cmd, c.timeout); got != c.want {
 			t.Errorf("codexHookHash(%s) = %s, want %s", c.key, got, c.want)
 		}
 	}

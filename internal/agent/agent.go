@@ -165,9 +165,11 @@ func (l Launcher) hookCommand(agentName, event string) string {
 	return Quote(l.Exe) + " hook " + agentName + " " + event
 }
 
+// hook 是同步调用的，每个都要拉起一次 posse：只订阅改状态用得上的事件。
+// 不订阅 SubagentStart：后台子 agent 不发它，还在跑的子 agent 以 Stop 的 background_tasks 为准。
 var claudeEvents = []string{
 	"SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure",
-	"Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop", "PostCompact", "SessionEnd",
+	"Notification", "Stop", "StopFailure", "SubagentStop", "PostCompact", "SessionEnd",
 }
 
 // claudeSettings 写出只含 posse hooks 的 settings 文件，经 --settings 与用户配置合并。
@@ -191,7 +193,11 @@ func (l Launcher) claudeSettings() (string, error) {
 		}
 		g := group{Hooks: []handler{{Type: "command", Command: l.hookCommand("claude", ev), Timeout: timeout}}}
 		switch ev {
-		case "PreToolUse", "PermissionRequest", "PostToolUse", "PostToolUseFailure":
+		// PreToolUse 只用来认出向用户提问（等待用户）；工作中由 UserPromptSubmit（Claude 自己开始的一轮也发）、
+		// PostToolUse 记。别的 Stop hook 拦下停止、接着做的一轮，要到第一个工具做完才记工作中
+		case "PreToolUse":
+			g.Matcher = claudeAskTool
+		case "PermissionRequest", "PostToolUse", "PostToolUseFailure":
 			g.Matcher = "*"
 		}
 		hooks[ev] = []group{g}
@@ -248,16 +254,18 @@ var codexEvents = []struct {
 	name    string
 	key     string
 	timeout int
+	matcher string // 按工具名过滤，空是全部
 }{
-	{"SessionStart", "session_start", 5},
-	{"UserPromptSubmit", "user_prompt_submit", 5},
-	{"PreToolUse", "pre_tool_use", 5},
-	{"PermissionRequest", "permission_request", 5},
-	{"PostToolUse", "post_tool_use", 5},
-	{"Stop", "stop", 5},
+	{"SessionStart", "session_start", 5, ""},
+	{"UserPromptSubmit", "user_prompt_submit", 5, ""},
+	// 同 Claude：PreToolUse 只用来认出向用户提问
+	{"PreToolUse", "pre_tool_use", 5, codexAskTool},
+	{"PermissionRequest", "permission_request", 5, ""},
+	{"PostToolUse", "post_tool_use", 5, ""},
+	{"Stop", "stop", 5, ""},
 	// Codex 把这两个事件的超时限制在 1–3 秒
-	{"Interrupt", "interrupt", 3},
-	{"SessionEnd", "session_end", 3},
+	{"Interrupt", "interrupt", 3, ""},
+	{"SessionEnd", "session_end", 3, ""},
 }
 
 // codexArgs 用 -c 注入 hooks，并附上预先算好的信任 hash；
@@ -267,20 +275,28 @@ func (l Launcher) codexArgs() []string {
 	for _, ev := range codexEvents {
 		cmd := l.hookCommand("codex", ev.name)
 		cmdJSON, _ := json.Marshal(cmd)
-		args = append(args, "-c", fmt.Sprintf(`hooks.%s=[{hooks=[{type="command",command=%s,timeout=%d}]}]`, ev.name, cmdJSON, ev.timeout))
+		matcher := ""
+		if ev.matcher != "" {
+			m, _ := json.Marshal(ev.matcher)
+			matcher = "matcher=" + string(m) + ","
+		}
+		args = append(args, "-c", fmt.Sprintf(`hooks.%s=[{%shooks=[{type="command",command=%s,timeout=%d}]}]`, ev.name, matcher, cmdJSON, ev.timeout))
 		key, _ := json.Marshal("/<session-flags>/config.toml:" + ev.key + ":0:0")
-		state = append(state, fmt.Sprintf(`%s={trusted_hash="%s"}`, key, codexHookHash(ev.key, cmd, ev.timeout)))
+		state = append(state, fmt.Sprintf(`%s={trusted_hash="%s"}`, key, codexHookHash(ev.key, ev.matcher, cmd, ev.timeout)))
 	}
 	args = append(args, "-c", "hooks.state={"+strings.Join(state, ",")+"}")
 	return append(args, codexGuideArgs()...)
 }
 
 // codexHookHash 复刻 Codex 对 hook 定义的指纹：键排序的紧凑 JSON 取 sha256。
-// 与 Rust serde_json 一致，不转义 HTML 字符和非 ASCII 字符。
-func codexHookHash(eventKey, command string, timeout int) string {
+// 与 Rust serde_json 一致，不转义 HTML 字符和非 ASCII 字符。设了 matcher 时它也算在指纹里（0.166 用 hooks/list 核对过）。
+func codexHookHash(eventKey, matcher, command string, timeout int) string {
 	ident := map[string]any{
 		"event_name": eventKey,
 		"hooks":      []any{map[string]any{"type": "command", "command": command, "timeout": timeout, "async": false}},
+	}
+	if matcher != "" {
+		ident["matcher"] = matcher
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

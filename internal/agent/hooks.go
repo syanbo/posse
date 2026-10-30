@@ -98,7 +98,7 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 	if st.Status == StatusWaiting {
 		st.ToolName = p.ToolName
 		switch {
-		case event == "PreToolUse" && (p.ToolName == "AskUserQuestion" || p.ToolName == "request_user_input"):
+		case event == "PreToolUse" && (p.ToolName == claudeAskTool || p.ToolName == codexAskTool):
 			// 答题卡要原样的 tool_input，手机按 questions 画选项
 			st.Prompt = string(p.ToolInput)
 		case event == "PermissionRequest" && p.ToolName != "":
@@ -183,12 +183,19 @@ func cutRunes(s string, n int) string {
 	return string(r[:n])
 }
 
+// 向用户提问的工具：PreToolUse 只订阅它们（hook 的 matcher），据此记等待用户、给手机答题卡。
+const (
+	claudeAskTool = "AskUserQuestion"
+	codexAskTool  = "request_user_input"
+)
+
 func claudeStatus(event string, p hookPayload) string {
 	switch event {
 	case "UserPromptSubmit", "PostToolUse", "PostToolUseFailure":
 		return StatusWorking
+	// 只订阅了提问工具的 PreToolUse；其余工具记工作中是给交接前启动、还订阅全部工具的会话
 	case "PreToolUse":
-		if p.ToolName == "AskUserQuestion" {
+		if p.ToolName == claudeAskTool {
 			return StatusWaiting
 		}
 		return StatusWorking
@@ -226,8 +233,9 @@ func codexStatus(event string, p hookPayload) string {
 	// Codex 的 SessionStart 在第一轮首次请求模型前触发，此时已经在工作
 	case "SessionStart", "UserPromptSubmit", "PostToolUse":
 		return StatusWorking
+	// 同 Claude。默认模式下 request_user_input 调用失败、不发 PostToolUse，等待要到下一个工具做完或 Stop 才清掉
 	case "PreToolUse":
-		if p.ToolName == "request_user_input" {
+		if p.ToolName == codexAskTool {
 			return StatusWaiting
 		}
 		return StatusWorking
