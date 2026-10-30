@@ -114,7 +114,7 @@ cat >"$out/index.html" <<EOF
 <style>
 body { font-family: -apple-system, sans-serif; margin: 0; padding: 48px 24px; text-align: center; color: #1d1d1f; }
 img { width: 96px; height: 96px; border-radius: 22px; }
-h1 { font-size: 24px; margin: 16px 0 4px; }
+h1 { font-size: 24px; margin: 16px 0 10px; }
 .meta { color: #86868b; font-size: 14px; }
 a.install { display: inline-flex; align-items: center; gap: 8px; margin: 28px 0; padding: 12px 40px; border-radius: 22px; background: #e8743b; color: #fff; font-size: 17px; text-decoration: none; }
 a.install.busy { opacity: .6; pointer-events: none; }
@@ -122,7 +122,7 @@ a.install.busy::before { content: ""; width: 14px; height: 14px; border: 2px sol
 @keyframes spin { to { transform: rotate(360deg); } }
 ul.notes { text-align: left; max-width: 360px; margin: 0 auto 8px; padding-left: 20px; font-size: 15px; line-height: 1.6; }
 .note { color: #86868b; font-size: 13px; line-height: 1.6; text-align: left; max-width: 360px; margin: 0 auto; }
-.platform { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 12px; border-radius: 14px; font-size: 14px; font-weight: 600; }
+.platform { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; padding: 5px 12px; border-radius: 14px; font-size: 14px; font-weight: 600; }
 .platform svg { width: 16px; height: 16px; }
 .wrong { display: none; max-width: 360px; margin: 0 auto 24px; padding: 12px 16px; border-radius: 12px; background: #fff4e5; color: #8a4b00; font-size: 14px; line-height: 1.5; text-align: left; }
 .wrong a, .other a { color: inherit; font-weight: 600; }
