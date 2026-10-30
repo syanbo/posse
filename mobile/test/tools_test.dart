@@ -28,37 +28,77 @@ final _usage = ToolUsage.fromJson({
     {'at': '2026-10-28T01:02:00Z', 'server': 'iphone-use', 'tool': 'phone_tap'},
     {'cli': 'git', 'source': 'homebrew', 'command': 'git status'},
     {'at': '2026-10-28T01:03:00Z', 'server': 'iphone-use', 'tool': 'phone_tap'},
+    {
+      'at': '2026-10-28T01:04:00Z',
+      'url': 'https://www.github.com/a/b?x=1',
+      'via': 'user',
+    },
+    {
+      'at': '2026-10-28T01:05:00Z',
+      'query': 'flutter sliver',
+      'via': 'WebSearch',
+    },
   ],
+  'web': [
+    {'host': 'github.com', 'count': 1},
+  ],
+  'searches': 1,
 });
 
 void main() {
   test('timeline merges consecutive calls, newest first', () {
     final steps = toolSteps(_usage.events);
     expect(
-      [for (final s in steps) s.event.tool + s.event.cli + s.event.skill],
-      ['phone_tap', 'git', 'phone_tap', 'archify'],
+      [
+        for (final s in steps)
+          s.event.tool +
+              s.event.cli +
+              s.event.skill +
+              s.event.url +
+              s.event.query,
+      ],
+      [
+        'flutter sliver',
+        'https://www.github.com/a/b?x=1',
+        'phone_tap',
+        'git',
+        'phone_tap',
+        'archify',
+      ],
     );
-    expect(steps[2].count, 2);
-    expect(steps[2].first, DateTime.utc(2026, 10, 28, 1, 1).toLocal());
-    expect(steps[2].event.at, DateTime.utc(2026, 10, 28, 1, 2).toLocal());
+    expect(steps[4].count, 2);
+    expect(steps[4].first, DateTime.utc(2026, 10, 28, 1, 1).toLocal());
+    expect(steps[4].event.at, DateTime.utc(2026, 10, 28, 1, 2).toLocal());
   });
 
   test('skills only drops command line programs and rejoins the rest', () {
-    final steps = toolSteps(_usage.events, skillsOnly: true);
+    final steps = toolSteps(_usage.events, filter: ToolsFilter.skills);
     expect(steps.length, 2);
     expect(steps.first.event.tool, 'phone_tap');
     expect(steps.first.count, 3);
   });
 
-  Widget host(bool skillsOnly) => MaterialApp(
+  test('web filter keeps only urls and searches', () {
+    final steps = toolSteps(_usage.events, filter: ToolsFilter.web);
+    expect(
+      [for (final s in steps) s.event.query + s.event.url],
+      ['flutter sliver', 'https://www.github.com/a/b?x=1'],
+    );
+    expect(webSite('https://www.github.com/a/b?x=1'), (
+      'github.com',
+      '/a/b?x=1',
+    ));
+  });
+
+  Widget host(ToolsFilter filter) => MaterialApp(
     theme: posseTheme(Brightness.light),
     home: Scaffold(
-      body: ToolsView(usage: _usage, skillsOnly: skillsOnly),
+      body: ToolsView(usage: _usage, filter: filter),
     ),
   );
 
   testWidgets('groups command line programs by source', (tester) async {
-    await tester.pumpWidget(host(false));
+    await tester.pumpWidget(host(ToolsFilter.all));
     for (final t in [
       'Homebrew',
       '其他命令行',
@@ -77,7 +117,7 @@ void main() {
   });
 
   testWidgets('skills only hides command line groups', (tester) async {
-    await tester.pumpWidget(host(true));
+    await tester.pumpWidget(host(ToolsFilter.skills));
     expect(find.text('Homebrew'), findsNothing);
     expect(find.text('git'), findsNothing);
     // 汇总里 iphone-use 的次数，和时间线里跳过 git 后合成一项的三次 phone_tap
@@ -85,13 +125,26 @@ void main() {
   });
 
   testWidgets('timeline time sits at the right edge', (tester) async {
-    await tester.pumpWidget(host(false));
-    final at = DateTime.utc(2026, 10, 28, 1, 3).toLocal();
+    await tester.pumpWidget(host(ToolsFilter.all));
+    final at = DateTime.utc(2026, 10, 28, 1, 5).toLocal();
     final hm =
         '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     final time = tester.getRect(find.text(hm).first);
     final view = tester.getRect(find.byType(ToolsView));
     // 页面左右各 16 的边距
     expect(time.right, closeTo(view.right - 16, 1));
+  });
+
+  testWidgets('web filter lists sites and copies the full url', (tester) async {
+    await tester.pumpWidget(host(ToolsFilter.web));
+    expect(find.text('Homebrew'), findsNothing);
+    expect(find.text('archify'), findsNothing);
+    expect(find.text('网址  搜索 1 次'), findsOneWidget);
+    expect(find.text('你发的 · /a/b?x=1'), findsOneWidget);
+    expect(find.text('搜索 · WebSearch'), findsOneWidget);
+
+    await tester.tap(find.text('你发的 · /a/b?x=1'));
+    await tester.pump();
+    expect(find.text('已复制 https://www.github.com/a/b?x=1'), findsOneWidget);
   });
 }
