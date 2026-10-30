@@ -19,7 +19,7 @@ import (
 // "重启后恢复全部终端"（agent.RestoreAll）时常驻进程一启动就全部拉起。
 
 // resumeRec 是恢复一个终端要用的信息，存在 terminals 的 agent、session_id、cwd。
-// label 是这时显示的名字（会话标题，没有时是终端标题），重启后还没恢复时照它显示。
+// label 是这时显示的名字（会话标题，没有时是终端标题），重启后还没恢复时有 agent 的照它显示。
 type resumeRec struct{ agent, sid, cwd, label string }
 
 // resumeSettle 是 agent 退出后等多久才把它从记录上摘掉：关机时 agent 和常驻进程差不多同时收到
@@ -92,6 +92,12 @@ func (d *Daemon) lostIn(workspaceID string) []store.Terminal {
 	}
 	if len(ts) == 0 && workspaceID == "" {
 		d.noLost.Store(true)
+	}
+	for i := range ts {
+		// 没有 agent 的恢复出来是新开的 shell，记下的终端标题多半是之前退出的 agent 留下的，照默认名字显示
+		if ts[i].Agent == "" {
+			ts[i].Label = ""
+		}
 	}
 	return ts
 }

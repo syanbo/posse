@@ -75,7 +75,7 @@ func TestRestoreAfterRestart(t *testing.T) {
 	d2 := &Daemon{cfg: d.cfg, store: d.store, terms: map[string]*session{}, tchanged: make(chan struct{}), launcher: d.launcher}
 	t.Cleanup(d2.closeAll)
 	list := call(t, d2.terminalList, map[string]any{"workspace": w.ID}).([]terminalInfo)
-	if len(list) != 2 || list[0].ID != s.ID || !list[0].Lost || list[0].Agent != "claude" || list[0].Name != "登录页" || list[1].ID != plain.ID || !list[1].Lost || list[1].Title != "构建" {
+	if len(list) != 2 || list[0].ID != s.ID || !list[0].Lost || list[0].Agent != "claude" || list[0].Name != "登录页" || list[1].ID != plain.ID || !list[1].Lost || list[1].Title != "" {
 		t.Fatalf("list after restart = %+v", list)
 	}
 
