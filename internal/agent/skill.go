@@ -1,12 +1,14 @@
 package agent
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
+
+	"github.com/BurntSushi/toml"
 )
 
 // 编排技能：posse 启动的 agent 要派发、并行、监督其他 agent 时，先读 `posse task guide`。
@@ -83,25 +85,32 @@ func writeIfChanged(path string, b []byte) error {
 	return os.WriteFile(path, b, 0o644)
 }
 
-var developerInstructionsKey = regexp.MustCompile(`^\s*developer_instructions\s*=`)
+var developerInstructionsKey = regexp.MustCompile(`(?m)^\s*developer_instructions\s*=`)
 
-// codexGuideArgs 把指路放进 developer_instructions。-c 会整个替换这一项，
-// 用户自己在 config.toml 里设了它时不注入，免得覆盖用户的指令。
+// codexGuideArgs 把指路放进 developer_instructions。-c 会整个替换这一项，用户在 config.toml 里设了它时，
+// 把指路接在用户的指令后面一起交过去。profile 里的 developer_instructions 优先于这里，用户的照常生效，只是没有指路；
+// 项目里 .codex/config.toml 设的会被 -c 盖掉，这里不知道 agent 的目录，没有处理。
 func codexGuideArgs() []string {
 	home := os.Getenv("CODEX_HOME")
 	if home == "" {
 		h, _ := os.UserHomeDir()
 		home = filepath.Join(h, ".codex")
 	}
-	if f, err := os.Open(filepath.Join(home, "config.toml")); err == nil {
-		defer f.Close()
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			if developerInstructionsKey.MatchString(sc.Text()) {
+	hint := guideHint
+	if b, err := os.ReadFile(filepath.Join(home, "config.toml")); err == nil {
+		var cfg struct {
+			DeveloperInstructions string `toml:"developer_instructions"`
+		}
+		if _, err := toml.Decode(string(b), &cfg); err != nil {
+			// 解析不了（比如 Codex 认、这个库不认的写法）：用户没设这一项就照常注入，设了不注入，免得换掉用户的指令
+			if developerInstructionsKey.Match(b) {
 				return nil
 			}
 		}
+		if mine := strings.TrimSpace(cfg.DeveloperInstructions); mine != "" {
+			hint = mine + "\n\n" + guideHint
+		}
 	}
-	v, _ := json.Marshal(guideHint) // JSON 字符串同时是合法的 TOML 字符串
+	v, _ := json.Marshal(hint) // JSON 字符串同时是合法的 TOML 字符串
 	return []string{"-c", "developer_instructions=" + string(v)}
 }

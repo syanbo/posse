@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestClaudePlugin(t *testing.T) {
@@ -57,10 +59,27 @@ func TestCodexGuideArgs(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(args[1], "developer_instructions=")), &v); err != nil || v != guideHint {
 		t.Fatalf("value %q %v", v, err)
 	}
-	// 用户自己设了 developer_instructions：-c 会整个替换它，所以不注入
-	os.WriteFile(filepath.Join(home, "config.toml"), []byte("model = \"x\"\n  developer_instructions = \"mine\"\n"), 0o644)
+	// 用户自己设了 developer_instructions：-c 会整个替换它，所以接在用户的指令后面
+	os.WriteFile(filepath.Join(home, "config.toml"), []byte("model = \"x\"\ndeveloper_instructions = \"\"\"\nmine: <&> \"quoted\"\n\"\"\"\n[profiles.p]\nmodel = \"y\"\n"), 0o644)
+	args = codexGuideArgs()
+	var merged struct {
+		DeveloperInstructions string `toml:"developer_instructions"`
+	}
+	if _, err := toml.Decode(args[1], &merged); err != nil {
+		t.Fatalf("not TOML: %q %v", args, err)
+	}
+	if want := "mine: <&> \"quoted\"\n\n" + guideHint; merged.DeveloperInstructions != want {
+		t.Fatalf("merged %q, want %q", merged.DeveloperInstructions, want)
+	}
+	// 解析不了时不注入，免得换掉用户的指令
+	os.WriteFile(filepath.Join(home, "config.toml"), []byte("developer_instructions = \"mine\"\n[[broken\n"), 0o644)
 	if args := codexGuideArgs(); args != nil {
-		t.Fatalf("overrode the user's developer_instructions: %q", args)
+		t.Fatalf("injected over an unparsable config: %q", args)
+	}
+	// 解析不了、但用户没设这一项：照常注入
+	os.WriteFile(filepath.Join(home, "config.toml"), []byte("model = \"x\"\n[[broken\n"), 0o644)
+	if args := codexGuideArgs(); len(args) != 2 {
+		t.Fatalf("no hint for an unparsable config without developer_instructions: %q", args)
 	}
 	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	os.Remove(filepath.Join(home, "config.toml"))
