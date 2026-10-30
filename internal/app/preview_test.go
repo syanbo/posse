@@ -120,6 +120,22 @@ func previewApp(t *testing.T) *app {
 	return a
 }
 
+// previewShell 是跑着开发服务器的 zsh，给分屏的右栏。
+func previewShell(t *testing.T) *terminal.Terminal {
+	light, dark := terminalThemes()
+	term, err := terminal.New(terminal.Options{Conn: nopConn{make(chan struct{})}, Font: terminal.Font{Family: termFontFamily, Size: defaultFontSize}, Theme: light, DarkTheme: dark})
+	if err != nil {
+		t.Skip("terminal unavailable:", err)
+	}
+	t.Cleanup(func() { term.Close() })
+	term.Feed([]byte("~/Desktop/AI/Apps \x1b[32m❯\x1b[0m npm run dev\r\n\r\n" +
+		"  \x1b[32m\x1b[1mVITE\x1b[0m v6.2.0  ready in 312 ms\r\n\r\n" +
+		"  ➜  \x1b[1mLocal\x1b[0m:   \x1b[36mhttp://localhost:5173/\x1b[0m\r\n" +
+		"  ➜  Network: use --host to expose\r\n\r\n" +
+		"\x1b[2m10:42:07\x1b[0m \x1b[36m[vite]\x1b[0m hmr update /src/App.tsx\r\n"))
+	return term
+}
+
 // previewHistory 填一份历史页的数据：四家 agent 的会话、一次搜索的命中和一个打开的会话。
 func previewHistory(a *app, query string) {
 	now := time.Now()
@@ -566,6 +582,12 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.panes[0].find = termFind{open: true, query: "release"}
 		savePNG(t, newPreviewTester(a, dark), "terminal-find-none-"+suffix+".png")
+
+		// 左右分屏：左边 Claude，右边跑着开发服务器的 zsh，焦点在左栏
+		a = previewApp(t)
+		a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t3"}}
+		a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+		savePNG(t, newPreviewTester(a, dark), "terminal-split-"+suffix+".png")
 
 		// 刚开的 Claude 还没画第一屏：终端区居中是蜂巢加载动画和"正在启动"
 		a = previewApp(t)

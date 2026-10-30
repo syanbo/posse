@@ -46,8 +46,8 @@ func (a *app) build(c *ui.Context) {
 	}
 	cur := a.currentTerminal(w)
 	var ids [2]string
-	if cur != nil {
-		ids[0] = cur.ID
+	if w != nil {
+		ids = a.paneIDs(w, cur)
 	}
 	a.ensurePanes(ids)
 	a.shortcuts(c, w, cur)
@@ -1673,6 +1673,10 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		case cur == nil || a.panes[0] == nil:
 			a.emptyWorkspace(c, w)
 		default:
+			if a.splitShown() {
+				a.splitView(c, w)
+				break
+			}
 			if cur.PhoneSized {
 				a.phoneSizedBar(c, cur.ID)
 			}
@@ -1715,7 +1719,11 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 	area := ui.Box(c.Key(i)).Grow(1).Background(t.Background).Padding(6, 4, 2, 12).Ref(&a.termAreaRef[i])
 	v.dir = v.term.Dir()
 	area.Children(func() {
-		tv := terminal.View(c.Key(v.id), v.term).Fill().AutoFocus()
+		tv := terminal.View(c.Key(v.id), v.term).Fill()
+		// 分屏时只有焦点栏自动拿焦点，两栏都要的话谁拿到看搭界面的顺序
+		if i == a.pane {
+			tv.AutoFocus()
+		}
 		if a.focusTerm && i == a.pane {
 			a.focusTerm = false
 			tv.Focus()
@@ -1729,8 +1737,8 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 		a.termFindBar(c, v, cur)
 	})
 	a.termDrop(c, area, v, cur.Agent)
-	a.linkCardView(c, area)
-	a.hoverPreviewView(c, area)
+	a.linkCardView(c, area, v.id)
+	a.hoverPreviewView(c, area, v.id)
 }
 
 // startingHint 在程序还没画出任何内容时居中画蜂巢加载动画和"正在启动"：新开的终端要先跑完用户的
@@ -1927,6 +1935,14 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
+		// 分屏里的两个标签标出在哪一栏
+		if side := a.paneSide(term.ID); side >= 0 {
+			icon, tip := iconPanelLeft, "在左栏"
+			if side == 1 {
+				icon, tip = iconPanelRight, "在右栏"
+			}
+			ui.Icon(c, icon).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0).Label(tip)
+		}
 		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip(a.withKey("关闭终端", "closeTab"))
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
@@ -2000,6 +2016,14 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	}
 	if sid := sessionID(term); sid != "" && m.Item("复制会话 ID").Chosen() {
 		writeClipboard(sid)
+	}
+	m.Separator()
+	if a.paneSide(term.ID) >= 0 {
+		if m.Item("关闭分屏").Keys(a.keyText("closeSplit")).Chosen() {
+			a.closeSplit(w.ID)
+		}
+	} else if m.Item("在右侧打开").Chosen() {
+		a.openBeside(w, term)
 	}
 	m.Separator()
 	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {

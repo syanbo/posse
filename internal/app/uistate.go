@@ -80,6 +80,8 @@ type uiState struct {
 	Files map[string]filesState `json:"files,omitempty"`
 	// Keys 是改过的快捷键（keymap.go），键是操作 ID，值是按键写法（Super+Shift+k）；空列表表示不用快捷键
 	Keys map[string][]string `json:"keys,omitempty"`
+	// Splits 是左右分屏的工作区，键是工作区 ID（split.go）
+	Splits map[string]splitState `json:"splits,omitempty"`
 }
 
 // filesState 是一个工作区的文件标签，路径都是绝对路径。

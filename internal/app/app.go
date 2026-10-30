@@ -251,6 +251,7 @@ type app struct {
 	linkChecks map[string]linkCheck
 	// 悬停在终端里的图片链接上时预览：hoverImage 是图片路径，previews 是解码好的预览
 	hoverImage string
+	hoverTerm  string // 悬停的是哪个终端里的链接：分屏时预览只画在那一栏
 	// focusTerm 让下一帧把焦点交给终端：从文件栏拖文件进来后接着就能打字
 	focusTerm      bool
 	previews       map[string]*ui.Bitmap
@@ -277,6 +278,7 @@ type app struct {
 	resizingBranch  bool    // 正在拖分支弹窗的左边缘，松手时写 ui.json
 	resizingSide    bool    // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string  // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
+	splitDrag       float32 // 拖终端分屏的分栏线时累计的横向距离，松手才改比例
 	sidebarShown    float32 // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool    // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
 	resizingCompare bool    // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
@@ -1008,6 +1010,7 @@ func (a *app) saveState() {
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	s.Keys = maps.Clone(s.Keys)
+	s.Splits = maps.Clone(s.Splits)
 	go saveUIState(a.home, s)
 }
 

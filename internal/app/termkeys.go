@@ -42,6 +42,9 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		a.openTermFind(v)
 		return true
 	}
+	if a.splitKey(v, mods, key) {
+		return true
+	}
 	if a.keyIs("termClear", mods, key) {
 		a.clearTerminal(v, id)
 		return true

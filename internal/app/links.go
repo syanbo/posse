@@ -30,7 +30,7 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 		case system:
 			return false
 		case !direct:
-			a.linkCard = &linkCard{url: link, ws: a.termWorkspace(v)}
+			a.linkCard = &linkCard{url: link, ws: a.termWorkspace(v), term: v.id}
 			return true
 		case isWebURL(link):
 			if w := a.termWorkspace(v); w != nil {
@@ -45,7 +45,7 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 		return true
 	}
 	card := a.newLinkCard(path, linkLine(link))
-	card.ws = a.termWorkspace(v)
+	card.ws, card.term = a.termWorkspace(v), v.id
 	switch {
 	case system:
 		a.openPathExternal(card)
@@ -243,6 +243,7 @@ type linkCard struct {
 	x, y    float32 // 相对终端区域；placed 前还没取
 	placed  bool
 	preview *ui.Bitmap // 图片的预览
+	term    string     // 点的是哪个终端里的链接：分屏时卡片只画在那一栏
 }
 
 const linkPreviewWidth = 640 // 2 倍屏下 320pt
@@ -279,9 +280,9 @@ func (a *app) showLinkCard(card *linkCard) {
 }
 
 // linkCardView 画链接卡片。area 是终端区域，卡片按它定位；点卡片外面或按 Esc 关闭。
-func (a *app) linkCardView(c *ui.Context, area ui.Element) {
+func (a *app) linkCardView(c *ui.Context, area ui.Element, termID string) {
 	card := a.linkCard
-	if card == nil {
+	if card == nil || card.term != "" && card.term != termID {
 		return
 	}
 	const width = 340
@@ -423,7 +424,7 @@ func (a *app) onHoverLink(v *termView, link string) {
 	if !local || path == "" || !isImagePath(path) {
 		return
 	}
-	a.hoverImage = path
+	a.hoverImage, a.hoverTerm = path, v.id
 	if a.previews[path] != nil || a.previewLoading[path] {
 		return
 	}
@@ -447,9 +448,9 @@ func (a *app) onHoverLink(v *termView, link string) {
 }
 
 // hoverPreviewView 画悬停预览：指针在终端上半部分时出现在下方，下半部分时出现在上方。弹出链接卡片时让位给卡片。
-func (a *app) hoverPreviewView(c *ui.Context, area ui.Element) {
+func (a *app) hoverPreviewView(c *ui.Context, area ui.Element, termID string) {
 	bm := a.previews[a.hoverImage]
-	if a.hoverImage == "" || bm == nil || a.linkCard != nil {
+	if a.hoverImage == "" || bm == nil || a.linkCard != nil || a.hoverTerm != termID {
 		return
 	}
 	// 只在悬停图片时取指针位置：一直取的话指针每动一下都要重画
