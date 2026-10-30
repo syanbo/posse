@@ -142,11 +142,18 @@ func (a *app) restoreSettings(c *ui.Context) {
 }
 
 func (a *app) linkSettings(c *ui.Context) {
-	settingsCard(c, "终端链接", "默认单击链接弹出卡片，⌘ 点击直接打开：网址在网页标签里打开，文件在文件标签里打开并跳到行号，目录在文件栏中显示。打开后两者反过来：单击直接打开，⌘ 点击弹出卡片。⇧⌘ 点击始终交给系统：网址用默认浏览器，文件用默认程序，目录在访达中打开。", func() {
+	settingsCard(c, "终端链接", "默认单击链接弹出卡片，⌘ 点击直接打开：网址在网页标签里打开，文件在文件标签里打开并跳到行号，目录在文件栏中显示。⇧⌘ 点击交给系统：网址用默认浏览器，文件用默认程序，目录在访达中打开。「单击直接打开」让单击和 ⌘ 点击反过来；「互换」让直接打开和交给系统的按法对调，⌘ 点击（开了单击直接打开时是单击）交给系统，⇧⌘ 点击在 Posse 里打开。", func() {
 		on := a.state.LinkClickOpens
 		settingsRow(c, "单击直接打开", func() {
 			if ui.Switch(c.Key("linkClickOpens"), &on).Label("单击直接打开").Changed() {
 				a.state.LinkClickOpens = on
+				a.saveState()
+			}
+		})
+		swap := a.state.LinkSwapSystem
+		settingsRow(c, "⌘ 点击和 ⇧⌘ 点击互换", func() {
+			if ui.Switch(c.Key("linkSwapSystem"), &swap).Label("⌘ 点击和 ⇧⌘ 点击互换").Changed() {
+				a.state.LinkSwapSystem = swap
 				a.saveState()
 			}
 		})

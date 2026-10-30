@@ -1022,13 +1022,17 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 		return true
 	}
 	// Posse: over a link, Command held or not, a hand and an underline.
-	if link, path, hover := v.hoverUnder(ev.X, ev.Y); hover != v.hover {
+	link, path, hover := v.hoverUnder(ev.X, ev.Y)
+	if hover != v.hover {
 		v.setHover(link, path, hover)
 		v.services.Invalidate()
 	}
 	// Command over a link: a click opens it, before a program that takes
-	// the mouse sees it.
-	link, path, _ := v.linkUnder(ev.Mods, ev.X, ev.Y)
+	// the mouse sees it. Posse: the link is the one under the pointer,
+	// found once.
+	if ev.Mods&ui.Cmd == 0 {
+		link = ""
+	}
 	if link != "" && ev.Kind == ui.InputPointerDown && ev.Button == 0 {
 		v.opening, v.openingPath, v.openingMods, v.linkPress = link, path, ev.Mods, true
 		return true
@@ -1200,26 +1204,16 @@ func (t *Terminal) HoveredLink() (link string, path bool, at ui.Rect) {
 	}
 }
 
-// linkUnder is the link a click with mods at (x, y) opens, whether it is
-// a file path, and its cells: none without Command, or while the primary
-// button selects or the program has a press; t.mu is held.
-func (v *view) linkUnder(mods ui.Modifiers, x, y float32) (link string, path bool, at linkSpan) {
-	if mods&ui.Cmd == 0 {
-		return "", false, linkSpan{}
-	}
-	return v.hoverUnder(x, y)
-}
-
 // posseLink is a link and whether it is a file path. (Posse)
 type posseLink struct {
 	link string
 	path bool
 }
 
-// hoverUnder is the link under (x, y), Command held or not, as linkUnder
-// gives it: none while the primary button selects or the program has a
-// press, or when Options.LinkUsable says it cannot open; t.mu is held.
-// (Posse)
+// hoverUnder is the link under (x, y), Command held or not, whether it
+// is a file path, and its cells: none while the primary button selects or
+// the program has a press, or when Options.LinkUsable says it cannot open;
+// t.mu is held. (Posse)
 func (v *view) hoverUnder(x, y float32) (link string, path bool, at linkSpan) {
 	if v.selecting || v.reporting || v.cellW == 0 || v.t.term == nil {
 		return "", false, linkSpan{}
@@ -1254,9 +1248,10 @@ func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 	if col < 0 || col >= v.cols || row < 0 || row >= v.rows {
 		return "", false, linkSpan{}
 	}
+	r := v.newRows()
 	if url := v.hyperlinkAt(col, row); url != "" {
 		// The hyperlink's cells are those around the cell with its URL.
-		top, bottom := v.wrapped(row, false)
+		top, bottom := r.line(row, false)
 		cell := func(i int) (int, int) { return i % v.cols, i / v.cols }
 		a, b := row*v.cols+col, row*v.cols+col+1
 		for a > top*v.cols && v.hyperlinkAt(cell(a-1)) == url {
@@ -1271,14 +1266,14 @@ func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 		}
 		return url, false, v.spanOf(cells)
 	}
-	text, cols := v.lineText(row, false)
+	text, cols := r.text(row, false)
 	if url, at := v.matchLink(urlPattern, text, cols, col, row); url != "" {
 		return url, false, at
 	}
 	if t.opts.OpenLink == nil && t.opts.LinkClick == nil {
 		return "", false, linkSpan{}
 	}
-	if text, cols := v.lineText(row, true); len(text) > 0 {
+	if text, cols := r.text(row, true); len(text) > 0 {
 		p, at := v.matchLink(pathPattern, text, cols, col, row)
 		if usable := t.opts.LinkUsable; p != "" && (at.rows == 1 || usable == nil || usable(p)) {
 			return p, true, at
@@ -1290,18 +1285,50 @@ func (v *view) linkAt(col, row int) (link string, path bool, at linkSpan) {
 	return "", false, linkSpan{}
 }
 
-// wrapped returns the first and the last row of the viewport of the line
-// row is in: the rows soft-wrapped, and with broken those broken after a
-// path's slash. (Posse)
-func (v *view) wrapped(row int, broken bool) (top, bottom int) {
+// rows reads the rows of the viewport for linkAt, each once. (Posse)
+type rows struct {
+	v     *view
+	texts [][]rune
+	cols  [][]int
+	read  []bool
+	wraps []int8 // 0 not read yet, 1 wraps, -1 does not
+}
+
+func (v *view) newRows() *rows {
+	return &rows{v: v, texts: make([][]rune, v.rows), cols: make([][]int, v.rows), read: make([]bool, v.rows), wraps: make([]int8, v.rows)}
+}
+
+// row returns the text of row y, and the column of each of its runes.
+func (r *rows) row(y int) ([]rune, []int) {
+	if !r.read[y] {
+		r.texts[y], r.cols[y] = r.v.t.term.RowText(y)
+		r.read[y] = true
+	}
+	return r.texts[y], r.cols[y]
+}
+
+// wrapped reports whether row y soft-wraps into the next.
+func (r *rows) wrapped(y int) bool {
+	if r.wraps[y] == 0 {
+		r.wraps[y] = -1
+		if r.v.t.term.RowWrapped(y) {
+			r.wraps[y] = 1
+		}
+	}
+	return r.wraps[y] > 0
+}
+
+// line returns the first and the last row of the line row is in: the rows
+// soft-wrapped, and with broken those broken after a path's slash.
+func (r *rows) line(row int, broken bool) (top, bottom int) {
 	joins := func(y int) bool {
-		return v.t.term.RowWrapped(y) || broken && v.brokenAfter(y)
+		return r.wrapped(y) || broken && r.brokenAfter(y)
 	}
 	top, bottom = row, row
 	for top > 0 && joins(top-1) {
 		top--
 	}
-	for bottom < v.rows-1 && joins(bottom) {
+	for bottom < len(r.read)-1 && joins(bottom) {
 		bottom++
 	}
 	return top, bottom
@@ -1309,12 +1336,12 @@ func (v *view) wrapped(row int, broken bool) (top, bottom int) {
 
 // brokenAfter reports whether a program broke a path at the end of row y
 // onto the next row itself: the row ends, before blanks, in a slash after
-// one more in the same word, and the next row holds something. (Posse)
-func (v *view) brokenAfter(y int) bool {
-	if y+1 >= v.rows {
+// one more in the same word, and the next row holds something.
+func (r *rows) brokenAfter(y int) bool {
+	if y+1 >= len(r.read) {
 		return false
 	}
-	text, _ := v.t.term.RowText(y)
+	text, _ := r.row(y)
 	word := strings.TrimRight(string(text), " ")
 	if k := strings.LastIndexByte(word, ' '); k >= 0 {
 		word = word[k+1:]
@@ -1322,31 +1349,32 @@ func (v *view) brokenAfter(y int) bool {
 	if !strings.HasSuffix(word, "/") || !strings.Contains(word[:len(word)-1], "/") {
 		return false
 	}
-	next, _ := v.t.term.RowText(y + 1)
+	next, _ := r.row(y + 1)
 	return strings.TrimSpace(string(next)) != ""
 }
 
-// lineText returns the text of the line row is in, as wrapped, and the
+// text returns the text of the line row is in, as line joins it, and the
 // place of each of its runes, row*cols+col. Rows a program broke itself
-// leave out the blanks around the break. (Posse)
-func (v *view) lineText(row int, broken bool) (text []rune, at []int) {
-	top, bottom := v.wrapped(row, broken)
+// leave out the blanks around the break.
+func (r *rows) text(row int, broken bool) (text []rune, at []int) {
+	top, bottom := r.line(row, broken)
+	n := r.v.cols
 	for y := top; y <= bottom; y++ {
-		tx, cs := v.t.term.RowText(y)
+		tx, cs := r.row(y)
 		a, b := 0, len(tx)
-		if broken && y > top && !v.t.term.RowWrapped(y-1) {
+		if broken && y > top && !r.wrapped(y-1) {
 			for a < b && tx[a] == ' ' {
 				a++
 			}
 		}
-		if broken && y < bottom && !v.t.term.RowWrapped(y) {
+		if broken && y < bottom && !r.wrapped(y) {
 			for b > a && tx[b-1] == ' ' {
 				b--
 			}
 		}
 		text = append(text, tx[a:b]...)
 		for _, x := range cs[a:b] {
-			at = append(at, y*v.cols+x)
+			at = append(at, y*n+x)
 		}
 	}
 	return text, at
@@ -1361,7 +1389,8 @@ func (v *view) matchLink(re *regexp.Regexp, text []rune, at []int, col, row int)
 		return "", linkSpan{}
 	}
 	s := v.spanOf(at[start:end])
-	if x0, x1 := s.cells(row); col < x0 || col >= x1 {
+	// Rows past those the span holds take no underline, but open it too.
+	if x0, x1 := s.cells(row); row < s.row+linkRows && (col < x0 || col >= x1) {
 		return "", linkSpan{}
 	}
 	return u, s

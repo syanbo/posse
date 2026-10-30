@@ -216,15 +216,38 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 
 	// 直接打开文件：Cmd+点击，或设置成单击直接打开时的单击，在文件标签里打开、跳到 :行
+	// 设置互换时 Shift+Cmd+点击在 Posse 里打开
 	for _, c := range []struct {
-		opens bool
-		mods  ui.Modifiers
-	}{{false, ui.Cmd}, {true, 0}} {
-		a.state.LinkClickOpens = c.opens
+		opens, swap bool
+		mods        ui.Modifiers
+	}{{false, false, ui.Cmd}, {true, false, 0}, {false, true, ui.Cmd | ui.Shift}, {true, true, ui.Cmd | ui.Shift}} {
+		a.state.LinkClickOpens, a.state.LinkSwapSystem = c.opens, c.swap
 		delete(a.files, a.selected)
 		a.openLink(v, file+":1", c.mods)
 		if fv := a.files[a.selected]; a.linkCard != nil || fv == nil || fv.cur == nil || fv.cur.path != file {
-			t.Fatalf("open file directly (LinkClickOpens=%v): card %+v files %+v", c.opens, a.linkCard, fv)
+			t.Fatalf("open file directly (LinkClickOpens=%v LinkSwapSystem=%v): card %+v files %+v", c.opens, c.swap, a.linkCard, fv)
+		}
+	}
+	a.state.LinkClickOpens, a.state.LinkSwapSystem = false, false
+	// 没有工作区能放这个文件：弹卡片，不是点了没反应
+	sel := a.selected
+	a.selected = "gone"
+	a.openLink(&termView{id: "gone"}, file, ui.Cmd)
+	if a.linkCard == nil || a.linkCard.path != file {
+		t.Fatalf("open file with no workspace: card %+v", a.linkCard)
+	}
+	a.selected, a.linkCard = sel, nil
+}
+
+func TestLinkLine(t *testing.T) {
+	for link, want := range map[string]int{
+		"/tmp/a.go:12":         12,
+		"a.go:3:4":             3,
+		"/tmp/a.go":            0,
+		"file:///tmp/log:2024": 0,
+	} {
+		if got := linkLine(link); got != want {
+			t.Errorf("linkLine(%q) = %d, want %d", link, got, want)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/plugins/terminal/internal/vt"
@@ -20,6 +21,10 @@ func TestLinkAcrossRows(t *testing.T) {
 	broken := "  x (/tmp/aa/bb/\r\n  cc.ts:24)"
 	three := "/tmp/aa/\r\n  bb/dd/\r\n    cc.go:24"
 	no := func(string) bool { return false }
+	full := make([][2]int, linkRows)
+	for i := range full {
+		full[i] = [2]int{0, 20}
+	}
 	cases := []struct {
 		name   string
 		out    string
@@ -36,16 +41,17 @@ func TestLinkAcrossRows(t *testing.T) {
 		{"broken, blank after", broken, nil, [2]int{17, 0}, "", linkSpan{}},
 		{"broken, indent", broken, nil, [2]int{1, 1}, "", linkSpan{}},
 		{"three rows", three, nil, [2]int{5, 1}, "/tmp/aa/bb/dd/cc.go:24", rows(0, [2]int{0, 8}, [2]int{2, 8}, [2]int{4, 12})},
+		{"past the span's rows", "/tmp/" + strings.Repeat("a", 20*17), nil, [2]int{3, 17}, "/tmp/" + strings.Repeat("a", 20*17), rows(0, full...)},
 		{"one row", "a /tmp/x.go b\r\nnext", nil, [2]int{4, 0}, "/tmp/x.go", rows(0, [2]int{2, 11})},
 	}
 	for _, c := range cases {
-		term, err := vt.NewTerminal(20, 4, vt.Effects{})
+		term, err := vt.NewTerminal(20, 20, vt.Effects{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		term.Write([]byte(c.out))
 		tt := &Terminal{term: term, opts: Options{OpenLink: func(string) bool { return true }, LinkUsable: c.usable}}
-		v := &view{t: tt, cols: 20, rows: 4}
+		v := &view{t: tt, cols: 20, rows: 20}
 		link, _, span := v.linkAt(c.at[0], c.at[1])
 		if link != c.want || span != c.span {
 			t.Errorf("%s: got %q %+v, want %q %+v", c.name, link, span, c.want, c.span)
