@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,17 +14,22 @@ import (
 	"posse/internal/media"
 )
 
-// openLink 处理终端里点击的链接。网址单击弹出链接卡片；Cmd+点击在网页标签里打开（不是 http、https 的
-// 交给系统）；Shift+Cmd+点击返回 false，交给系统用默认浏览器打开。文件链接（如 Claude 的 [Image #N]
-// 指向的 file://）和路径弹出链接卡片：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
+// openLink 处理终端里点击的链接。单击弹出链接卡片，Cmd+点击直接打开（设置里可以反过来，见 directKeys），
+// Shift+Cmd+点击交给系统。直接打开：网址在网页标签里打开（不是 http、https 的交给系统），文件在文件标签里
+// 打开、跳到 :行，目录在文件栏中显示（不在当前工作区里的弹卡片）；交给系统：网址用默认浏览器，文件用默认程序，
+// 目录在访达中打开。卡片里是全部操作：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
 func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
+	system := mods&ui.Cmd != 0 && mods&ui.Shift != 0
+	direct := !system && (mods&ui.Cmd != 0) != a.state.LinkClickOpens
 	path, local := a.linkPath(v, link)
 	if !local {
 		switch {
-		case mods&ui.Cmd == 0:
+		case system:
+			return false
+		case !direct:
 			a.linkCard = &linkCard{url: link, ws: a.termWorkspace(v)}
 			return true
-		case mods&ui.Shift == 0 && isWebURL(link):
+		case isWebURL(link):
 			if w := a.termWorkspace(v); w != nil {
 				a.openWeb(w, link)
 				return true
@@ -35,8 +41,67 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 	if path == "" {
 		return true
 	}
-	a.showLinkCard(path)
+	card := a.newLinkCard(path, linkLine(link))
+	card.ws = a.termWorkspace(v)
+	switch {
+	case system:
+		a.openPathExternal(card)
+	case !direct:
+		a.showLinkCard(card)
+	case !card.isDir:
+		a.openLinkFile(card)
+	case !a.revealLinkDir(card):
+		a.showLinkCard(card)
+	}
 	return true
+}
+
+// directKeys 是直接打开链接的按法，卡片里写在对应的操作右边。
+func (a *app) directKeys() string {
+	if a.state.LinkClickOpens {
+		return "点击"
+	}
+	return "⌘ 点击"
+}
+
+const systemKeys = "⇧⌘ 点击"
+
+// linkLine 是路径末尾 :行 或 :行:列 里的行号，没有是 0。
+func linkLine(link string) int {
+	m := linePos.FindString(strings.TrimSpace(link))
+	if m == "" {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.Split(m, ":")[1])
+	return n
+}
+
+// openLinkFile 在文件标签里打开链接指向的文件：放进文件所在的工作区，不在任何工作区里就放进链接所在终端的工作区。
+func (a *app) openLinkFile(card *linkCard) {
+	w := a.workspaceOf(card.path)
+	if w == nil {
+		w = card.ws
+	}
+	if w != nil {
+		a.openFile(w, card.path, card.line, [2]int{})
+	}
+}
+
+// revealLinkDir 在文件栏中显示链接指向的目录；文件栏是当前工作区的树，不在里面的返回 false。
+func (a *app) revealLinkDir(card *linkCard) bool {
+	w := a.workspace(a.selected)
+	if w == nil || !inDir(card.path, w.Path) {
+		return false
+	}
+	a.revealInFiles(w, card.path)
+	return true
+}
+
+// openPathExternal 交给系统：目录在访达中打开，文件用默认程序打开。
+func (a *app) openPathExternal(card *linkCard) {
+	if err := mygo.Shell.OpenPath(card.path); err != nil {
+		a.err = err.Error()
+	}
 }
 
 // termWorkspace 是终端所在的工作区，找不到时是选中的工作区。
@@ -146,8 +211,9 @@ func resolveLinkPath(link, base string) string {
 // linkCard 是点击网址、文件链接或路径后弹出的卡片，出现在点击的位置。
 type linkCard struct {
 	url     string     // 网址的卡片只有它，path 为空
-	ws      *workspace // 网址在哪个工作区的网页标签里打开
+	ws      *workspace // 链接所在终端的工作区：网址在它的网页标签里打开，不在任何工作区里的文件在它的文件标签里打开
 	path    string
+	line    int // 路径带的 :行，在文件标签中打开时跳过去
 	isDir   bool
 	x, y    float32 // 相对终端区域；placed 前还没取
 	placed  bool
@@ -164,9 +230,13 @@ func isImagePath(p string) bool {
 	return false
 }
 
-func (a *app) showLinkCard(path string) {
+func (a *app) newLinkCard(path string, line int) *linkCard {
 	fi, _ := os.Stat(path)
-	card := &linkCard{path: path, isDir: fi != nil && fi.IsDir()}
+	return &linkCard{path: path, line: line, isDir: fi != nil && fi.IsDir()}
+}
+
+func (a *app) showLinkCard(card *linkCard) {
+	path := card.path
 	a.linkCard = card
 	if !card.isDir && isImagePath(path) {
 		go func() {
@@ -221,19 +291,19 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element) {
 	}
 }
 
-// urlCardItems 是网址卡片的内容：网址和复制按钮，在网页标签里打开（Cmd+点击直接做这一步）、
+// urlCardItems 是网址卡片的内容：网址和复制按钮，在网页标签里打开（直接打开的按法做这一步）、
 // 用浏览器打开（Shift+Cmd+点击）。
 func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
 	a.linkCardHead(c, card.url, card.url, "复制链接")
 	hline(c).Margin(4, 6)
 	web := isWebURL(card.url) && card.ws != nil
-	if web && linkCardItem(c, iconGlobe, "在 Posse 中打开", "⌘ 点击") {
+	if web && linkCardItem(c, iconGlobe, "在 Posse 中打开", a.directKeys()) {
 		a.openWeb(card.ws, card.url)
 		a.linkCard = nil
 	}
-	label, keys := "打开", "⌘ 点击"
+	label, keys := "打开", a.directKeys()
 	if web {
-		label, keys = "在浏览器中打开", "⇧⌘ 点击"
+		label, keys = "在浏览器中打开", systemKeys
 	}
 	if linkCardItem(c, iconOpen, label, keys) {
 		c.OpenURL(card.url)
@@ -261,18 +331,16 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	}
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开
-	if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开", "") {
-		w := a.workspaceOf(card.path)
-		if w == nil {
-			w = a.workspace(a.selected)
-		}
-		if w != nil {
-			a.openFile(w, card.path, 0, [2]int{})
-		}
+	if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开", a.directKeys()) {
+		a.openLinkFile(card)
 		a.linkCard = nil
 	}
 	// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
-	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示", "") {
+	revealKeys := ""
+	if card.isDir {
+		revealKeys = a.directKeys()
+	}
+	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示", revealKeys) {
 		a.revealInFiles(w, card.path)
 		a.linkCard = nil
 	}
@@ -283,10 +351,8 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 	} else if isImagePath(card.path) {
 		openLabel = "用预览打开"
 	}
-	if linkCardItem(c, openIcon, openLabel, "") {
-		if err := mygo.Shell.OpenPath(card.path); err != nil {
-			a.err = err.Error()
-		}
+	if linkCardItem(c, openIcon, openLabel, systemKeys) {
+		a.openPathExternal(card)
 		a.linkCard = nil
 	}
 	if !card.isDir && linkCardItem(c, iconFolder, "在访达中显示", "") {

@@ -65,8 +65,8 @@ func TestFileLinkPath(t *testing.T) {
 	}
 }
 
-// 在真的终端里点链接：OSC 8 超链接（Claude 的 [Image #N] 就是这样指向 file:// 的）和打印出来的路径都弹出链接卡片。
-// 原地单击和 Cmd+点击都打开；从链接上拖动是选文字，不打开。网址单击弹出卡片，Cmd+点击在网页标签里打开，Shift+Cmd+点击交给浏览器。
+// 在真的终端里点链接：OSC 8 超链接（Claude 的 [Image #N] 就是这样指向 file:// 的）和打印出来的路径单击弹出链接卡片，
+// Cmd+点击直接打开（文件在文件标签里，设置成单击直接打开时反过来）；从链接上拖动是选文字，不打开。网址单击弹出卡片，Cmd+点击在网页标签里打开，Shift+Cmd+点击交给浏览器。
 func TestClickOpensLinkCard(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "notes.txt")
@@ -138,14 +138,8 @@ func TestClickOpensLinkCard(t *testing.T) {
 	tt.ClickAt(290, 80)
 	tt.Frame()
 	tt.Frame()
-	if a.linkCard == nil || a.linkCard.path != file {
-		t.Fatalf("plain click on hyperlink: %+v calls=%q", a.linkCard, calls)
-	}
-	a.linkCard = nil
-	tt.Frame()
-	cmdClick(tt, 290, 80)
 	if a.linkCard == nil || a.linkCard.path != file || a.linkCard.isDir {
-		t.Fatalf("Cmd+click on hyperlink: %+v err=%q calls=%q", a.linkCard, a.err, calls)
+		t.Fatalf("plain click on hyperlink: %+v err=%q calls=%q", a.linkCard, a.err, calls)
 	}
 	tt.Frame()
 	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
@@ -161,11 +155,21 @@ func TestClickOpensLinkCard(t *testing.T) {
 	if a.linkCard != nil {
 		t.Fatal("outside click did not close the card")
 	}
+	// Cmd+点击当前工作区外的目录：文件栏里显示不了，弹卡片
 	cmdClick(tt, 290, 155)
 	if a.linkCard == nil || a.linkCard.path != sub || !a.linkCard.isDir {
 		t.Fatalf("Cmd+click on path: %+v", a.linkCard)
 	}
 	a.linkCard = nil
+	tt.Frame()
+	// 设置成单击直接打开：反过来，Cmd+点击弹卡片
+	a.state.LinkClickOpens = true
+	cmdClick(tt, 290, 80)
+	if a.linkCard == nil || a.linkCard.path != file {
+		t.Fatalf("Cmd+click with LinkClickOpens: %+v", a.linkCard)
+	}
+	a.linkCard = nil
+	a.state.LinkClickOpens = false
 	tt.Frame()
 
 	// 不存在的文件：单击和 Cmd+点击都没反应（第 8 行超链接、第 10 行路径）
@@ -209,6 +213,19 @@ func TestClickOpensLinkCard(t *testing.T) {
 	fv := a.files[a.selected]
 	if a.linkCard != nil || len(tt.OpenedURLs()) != 1 || fv == nil || fv.cur == nil || fv.cur.web == nil || fv.cur.web.url != site {
 		t.Fatalf("Cmd+click on URL: card %+v opened %q files %+v", a.linkCard, tt.OpenedURLs(), fv)
+	}
+
+	// 直接打开文件：Cmd+点击，或设置成单击直接打开时的单击，在文件标签里打开、跳到 :行
+	for _, c := range []struct {
+		opens bool
+		mods  ui.Modifiers
+	}{{false, ui.Cmd}, {true, 0}} {
+		a.state.LinkClickOpens = c.opens
+		delete(a.files, a.selected)
+		a.openLink(v, file+":1", c.mods)
+		if fv := a.files[a.selected]; a.linkCard != nil || fv == nil || fv.cur == nil || fv.cur.path != file {
+			t.Fatalf("open file directly (LinkClickOpens=%v): card %+v files %+v", c.opens, a.linkCard, fv)
+		}
 	}
 }
 

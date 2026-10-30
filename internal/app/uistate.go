@@ -43,6 +43,7 @@ type uiState struct {
 	TermLineHeight       float32   `json:"termLineHeight,omitempty"`       // 终端行高，字体自身行高的倍数，0 表示 1
 	TermSmooth           bool      `json:"termSmooth,omitempty"`           // 终端用系统的字体平滑画字（更粗），默认不用
 	TermCopyOnSelect     bool      `json:"termCopyOnSelect,omitempty"`     // 终端里选中文字松手就复制到剪贴板，默认不复制
+	LinkClickOpens       bool      `json:"linkClickOpens,omitempty"`       // 终端里单击链接直接打开、Cmd+点击弹卡片，默认反过来
 	NotifyOff            bool      `json:"notifyOff,omitempty"`            // 不发 agent 和任务的系统通知
 	BadgeOff             bool      `json:"badgeOff,omitempty"`             // Dock 图标上不显示待处理和未读的数
 	EditorWeight         int       `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
