@@ -228,6 +228,10 @@ const (
 	// surface: the content calls UpdateAccessibility at once and after
 	// every frame from then on.
 	AccessibilityOn
+	// AccessibilityOff reports that assistive technology stopped asking:
+	// the content stops describing its frames until AccessibilityOn.
+	// (Posse)
+	AccessibilityOff
 	// AccessAction performs Action on the element ID of the accessibility
 	// tree, with Text the value of AccessSetValue.
 	AccessAction

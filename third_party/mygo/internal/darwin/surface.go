@@ -138,6 +138,7 @@ type surface struct {
 	// Accessibility: whether the content describes its frames, the last
 	// tree, the elements of its nodes and those at the top (an NSArray).
 	accessOn      bool
+	accessAsked   time.Time // when assistive technology last asked (Posse)
 	access        platform.AccessTree
 	elements      map[uint64]*accessElement
 	topLevel      id

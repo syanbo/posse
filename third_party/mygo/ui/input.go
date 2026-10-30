@@ -124,6 +124,8 @@ func (rt *engine) event(ev platform.SurfaceEvent) (taken bool) {
 		taken = rt.dataDrop(x, y, ev.Drag)
 	case platform.AccessibilityOn:
 		rt.accessibilityOn()
+	case platform.AccessibilityOff:
+		rt.access = false
 	case platform.AccessAction:
 		rt.accessAction(ev)
 	}

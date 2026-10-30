@@ -5,6 +5,7 @@ package darwin
 import (
 	"slices"
 	"sync"
+	"time"
 	"unicode/utf16"
 
 	"github.com/ebitengine/purego"
@@ -331,12 +332,43 @@ func (el *accessElement) apply(n platform.AccessNode, fresh bool) (valueChanged 
 }
 
 // accessRequested starts the content describing its frames, the first
-// time AppKit asks about the surface.
+// time AppKit asks about the surface, or the first since it stopped.
 func (s *surface) accessRequested() {
+	s.accessAsked = time.Now()
 	if !s.accessOn {
 		s.accessOn = true
 		s.send(platform.SurfaceEvent{Kind: platform.AccessibilityOn})
 	}
+}
+
+// accessIdle is how long the content describes its frames after assistive
+// technology last asked about the surface or its elements, unless
+// VoiceOver or Switch Control is on: those wait for the notifications of
+// changes rather than ask. Tools that read windows now and then (window
+// managers, launchers, automation) would otherwise keep every frame
+// building the whole tree for good. (Posse)
+const accessIdle = 30 * time.Second
+
+// accessStale stops the content describing its frames when no one asked
+// for accessIdle; the next question starts it again (accessRequested).
+func (s *surface) accessStale() bool {
+	if time.Since(s.accessAsked) < accessIdle {
+		return false
+	}
+	ws := send(class("NSWorkspace"), "sharedWorkspace")
+	if byte(send(ws, "isVoiceOverEnabled")) != 0 || byte(send(ws, "isSwitchControlEnabled")) != 0 {
+		s.accessAsked = time.Now()
+		return false
+	}
+	s.accessOn = false
+	// After the frame that is updating: the content is in it. Asked again
+	// in between, the content keeps describing.
+	s.w.b.post(func() {
+		if !s.accessOn {
+			s.send(platform.SurfaceEvent{Kind: platform.AccessibilityOff})
+		}
+	})
+	return true
 }
 
 func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
@@ -344,6 +376,9 @@ func (s *surface) UpdateAccessibility(tree *platform.AccessTree) {
 		return
 	}
 	loadAccess()
+	if s.accessStale() {
+		return
+	}
 	withPool(func() {
 		s.updating = true
 		defer func() { s.updating = false }()
@@ -533,6 +568,12 @@ func (b *Backend) accessElementOf(obj id) *accessElement {
 	el := b.byAccess[obj]
 	if el == nil || el.s.w.closed {
 		return nil
+	}
+	// Every method of the elements asks here: assistive technology holding
+	// an element asks it, not the view. AppKit asking while the update sets
+	// the elements is not a question. (Posse)
+	if !el.s.updating {
+		el.s.accessRequested()
 	}
 	return el
 }
