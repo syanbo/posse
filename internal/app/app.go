@@ -32,6 +32,7 @@ import (
 	"posse/internal/gitx"
 	"posse/internal/procmem"
 	"posse/internal/projicon"
+	"posse/internal/rpc"
 )
 
 type project struct {
@@ -372,6 +373,20 @@ const termFontFamily = "JetBrainsMono Nerd Font Mono, JetBrains Mono, PingFang S
 
 // Run 打开窗口；必须在 main goroutine 调用。
 func Run(c *client.Client) error {
+	// 同一 home 只开一个窗口：一开始就占住 app.sock，已有窗口在应答就把它叫到前面，自己退出
+	ctl, err := listenCtl(CtlSocket(c.Home))
+	if errors.Is(err, errCtlBusy) {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := rpc.Call(ctx, CtlSocket(c.Home), "app.focus", nil, nil); err != nil {
+			return fmt.Errorf("a Posse window is already open for %s but did not respond: %w", c.Home, err)
+		}
+		fmt.Fprintln(os.Stderr, "posse: a Posse window is already open for", c.Home)
+		return nil
+	}
+	if err != nil {
+		log.Printf("posse web: %v", err)
+	}
 	a := &app{
 		c:            c,
 		activeTerm:   map[string]string{},
@@ -433,9 +448,11 @@ func Run(c *client.Client) error {
 			a.win.Focus()
 		})
 		go a.poll()
-		stopCtl = a.serveCtl()
+		if ctl != nil {
+			stopCtl = a.serveCtl(ctl)
+		}
 	})
-	err := mygo.App.Run()
+	err = mygo.App.Run()
 	if stopCtl != nil {
 		stopCtl()
 	}

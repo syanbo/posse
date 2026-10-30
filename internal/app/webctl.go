@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -47,13 +46,8 @@ func listenCtl(path string) (net.Listener, error) {
 	return ln, nil
 }
 
-// serveCtl 起 app.sock 的服务，返回的函数停掉它并删掉 socket。
-func (a *app) serveCtl() (stop func()) {
-	ln, err := listenCtl(CtlSocket(a.home))
-	if err != nil {
-		log.Printf("posse web: %v", err)
-		return func() {}
-	}
+// serveCtl 在 ln 上起 app.sock 的服务，返回的函数停掉它并删掉 socket。
+func (a *app) serveCtl(ln net.Listener) (stop func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -68,6 +62,7 @@ func (a *app) serveCtl() (stop func()) {
 
 func (a *app) ctlServer() *rpc.Server {
 	s := rpc.NewServer()
+	s.Handle("app.focus", a.ctlFocus)
 	s.Handle("web.list", a.webList)
 	s.Handle("web.open", a.webOpen)
 	s.Handle("web.nav", a.webNav)
@@ -75,6 +70,14 @@ func (a *app) ctlServer() *rpc.Server {
 	s.Handle("web.eval", a.webEval)
 	s.Handle("web.screenshot", a.webScreenshot)
 	return s
+}
+
+// ctlFocus 把窗口叫到前面：同一 home 再开窗口时，新进程调它后退出。
+func (a *app) ctlFocus(ctx context.Context, _ json.RawMessage) (any, error) {
+	return nil, a.onMain(ctx, func() {
+		a.win.Show()
+		a.win.Focus()
+	})
 }
 
 // onMain 在主线程上跑 fn 并等它跑完；请求先结束就不等了。

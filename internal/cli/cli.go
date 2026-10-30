@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -17,6 +18,7 @@ import (
 	"posse/internal/client"
 	"posse/internal/daemon"
 	"posse/internal/rpc"
+	"posse/internal/spawn"
 )
 
 type env struct {
@@ -304,9 +306,15 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
+// inAppBundle 报告是不是从 Posse.app 启动。常驻进程的副本只在系统拉起时算（父进程是 launchd，
+// 系统按包 ID 激活可能选中副本）：终端里敲 posse 走的是副本，不该开窗口。
 func inAppBundle() bool {
 	exe, err := os.Executable()
-	return err == nil && strings.Contains(exe, ".app/Contents/MacOS/")
+	if err != nil || !strings.Contains(exe, ".app/Contents/MacOS/") {
+		return false
+	}
+	root := spawn.RuntimeRoot()
+	return root == "" || !strings.HasPrefix(exe, root+string(filepath.Separator)) || os.Getppid() == 1
 }
 
 func cmdApp(e *env, args []string) error { return app.Run(e.client()) }
