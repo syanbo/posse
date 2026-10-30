@@ -103,6 +103,7 @@ func init() {
 		{"web press", "Press a key on the focused element", "<key> [--on <ref|css>] [--tab N]", webAct("press", 1)},
 		{"web eval", "Run JavaScript in the page and print the JSON result", "<js>|- [--tab N]", cmdWebEval},
 		{"web screenshot", "Save a PNG of the page and print its path", "[-o path] [--tab N]", cmdWebScreenshot},
+		{"web device", "Preview the page at a phone's size and user agent (reloads it)", "iphone|se|pixel|ipad|off [--landscape] [--tab N]", cmdWebDevice},
 		{"web console", "Print the page's recent console output and errors", "[--tab N]", cmdWebConsole},
 		{"history search", "Search past claude/codex/cursor/grok sessions", "<query> [--agent A] [--cwd DIR | --here] [--role user|assistant|tool] [--limit N]", cmdHistorySearch},
 		{"history list", "List recent sessions", "[--agent A] [--cwd DIR | --here] [--limit N]", cmdHistoryList},

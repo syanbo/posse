@@ -33,6 +33,7 @@ Take a fresh `snapshot` after the page changes: refs stay on the elements they w
 | `eval <js>` (`-` reads stdin) | Run JavaScript as the body of an async function; `return` a value to get it back as JSON. |
 | `screenshot [-o path]` | PNG of the visible part of the page, saved to a temp file unless `-o`. |
 | `console` | The page's last 200 console messages and uncaught errors since it loaded. |
+| `device <iphone\|se\|pixel\|ipad\|off> [--landscape]` | Show the page at a phone's (or iPad's) CSS size with its user agent, and reload it; `screenshot` then captures that size. `off` goes back to desktop. Follow with `wait`. |
 
 ## Limits
 
@@ -40,3 +41,4 @@ Take a fresh `snapshot` after the page changes: refs stay on the elements they w
 - Only the top frame: elements and console output inside iframes are not seen. Closed shadow roots are not seen.
 - `open` makes the tab the current one of your workspace's file tab, but the window only shows the workspace selected in its sidebar. A tab that has never been on screen cannot be captured (`screenshot` says so); the other commands work.
 - Pages run with the user's cookies of the Posse window, not those of their browser.
+- `device` sets the width and the user agent only: no touch events, safe areas or device pixel ratio. Sites that pick the mobile layout by `ontouchstart` will still look like desktop.

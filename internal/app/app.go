@@ -880,6 +880,19 @@ func (a *app) installMenu() {
 			{Role: mygo.RoleClose, Accelerator: a.accel("closeWindow")},
 		}},
 		{Role: mygo.RoleEditMenu},
+		// 网页有焦点时键盘在 WebKit 手里，窗口的快捷键收不到；macOS 先把按键交给菜单，放这里网页里也认
+		{Label: "View", Submenu: []*mygo.MenuItem{
+			{Label: "重新载入网页", Accelerator: a.accel("webReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(func() { a.menuWeb("reload") })
+			}},
+			{Label: "强制重新载入网页", Accelerator: a.accel("webHardReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(func() { a.menuWeb("hardReload") })
+			}},
+			mygo.Separator(),
+			{Label: "手机预览", Accelerator: a.accel("webMobile"), Click: func(*mygo.MenuItem, *mygo.Window) {
+				a.win.Update(func() { a.menuWeb("mobile") })
+			}},
+		}},
 		{Label: "Window", Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleMinimize},
 			{Role: mygo.RoleZoom},

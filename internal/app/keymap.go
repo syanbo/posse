@@ -64,6 +64,10 @@ var posseKeys = []keyAction{
 	{id: "jumpBack", group: "窗口与标签", label: "回到跳走之前的位置", def: []keyCombo{k(ui.Ctrl, ui.KeyMinus)}},
 	{id: "jumpForward", group: "窗口与标签", label: "再往前跳", def: []keyCombo{k(ui.Ctrl|ui.Shift, ui.KeyMinus)}},
 
+	{id: "webReload", group: "网页", label: "重新载入网页", def: []keyCombo{k(ui.Cmd, ui.KeyR)}, note: "在菜单栏的 View 里，网页有焦点时也认；当前不是网页标签时不起作用"},
+	{id: "webHardReload", group: "网页", label: "强制重新载入网页（不用缓存）", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyR)}, note: "在菜单栏的 View 里"},
+	{id: "webMobile", group: "网页", label: "开关手机预览", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyM)}, note: "在菜单栏的 View 里，用上次选的机型"},
+
 	{id: "quickOpen", group: "文件", label: "快速打开文件", def: []keyCombo{k(ui.Cmd, ui.KeyP)}},
 	{id: "searchFiles", group: "文件", label: "在文件里检索", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyF)}},
 	{id: "filesPanel", group: "文件", label: "开关文件栏", def: []keyCombo{k(ui.Cmd, ui.KeyL)}},
@@ -337,10 +341,13 @@ func (a *app) setKeys(id string, ks []keyCombo) {
 	}
 	a.keysVer++
 	a.saveState()
-	if id == "closeTab" || id == "closeWindow" || id == "settings" {
+	if menuBarKeys[id] {
 		a.refreshMenu()
 	}
 }
+
+// menuBarKeys 是装在菜单栏上的快捷键：改了要重装菜单。
+var menuBarKeys = map[string]bool{"closeTab": true, "closeWindow": true, "settings": true, "webReload": true, "webHardReload": true, "webMobile": true}
 
 // refreshMenu 让菜单栏上的快捷键跟着快捷键表；窗口还没建（测试里）时不装。
 func (a *app) refreshMenu() {

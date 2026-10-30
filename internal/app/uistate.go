@@ -83,6 +83,8 @@ type uiState struct {
 	Files map[string]filesState `json:"files,omitempty"`
 	// Keys 是改过的快捷键（keymap.go），键是操作 ID，值是按键写法（Super+Shift+k）；空列表表示不用快捷键
 	Keys map[string][]string `json:"keys,omitempty"`
+	// WebDevice 是网页手机预览上次选的机型（webdevice.go），⇧⌘M 打开时用它
+	WebDevice string `json:"webDevice,omitempty"`
 	// Splits 是左右分屏的工作区，键是工作区 ID（split.go）
 	Splits map[string]splitState `json:"splits,omitempty"`
 }

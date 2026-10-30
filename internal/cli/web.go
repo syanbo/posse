@@ -366,3 +366,29 @@ func cmdWebConsole(e *env, args []string) error {
 		}
 	})
 }
+
+func cmdWebDevice(e *env, args []string) error {
+	f := newWebFlags("web device", 30*time.Second)
+	landscape := f.fs.Bool("landscape", false, "")
+	pos, err := parse(f.fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "web device"); err != nil {
+		return err
+	}
+	var r struct {
+		Tab    int     `json:"tab"`
+		Device string  `json:"device"`
+		Name   string  `json:"name"`
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	}
+	return e.doApp(f, "web.device", f.params(map[string]any{"device": pos[0], "landscape": *landscape}), &r, func() {
+		if r.Device == "" {
+			fmt.Fprintf(e.out, "tab %d: desktop\n", r.Tab)
+			return
+		}
+		fmt.Fprintf(e.out, "tab %d: %s %.0fx%.0f (reloading; run posse web wait)\n", r.Tab, r.Name, r.Width, r.Height)
+	})
+}

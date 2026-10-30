@@ -29,6 +29,10 @@ type webDoc struct {
 	failed  string // 载入失败的原因，页面位置显示它；重新跳转时清掉
 	// used 是最近一次显示的时间，posse web 不带 --tab 时操作最近显示过的那个
 	used time.Time
+	// device 是手机预览的机型（webdevice.go），空是电脑；zoom 是已经设给页面的缩放，0 是没设过
+	device    string
+	landscape bool
+	zoom      float64
 }
 
 var webSeq int
@@ -213,6 +217,11 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 			wd.view.Focus()
 		}
 		ui.Box(c).Width(4)
+		phone := iconButton(c.Key("web-device"), iconPhone, a.withKey("手机预览", "webMobile"))
+		if wd.device != "" {
+			phone.Background(soft(t, t.Accent))
+		}
+		menuButton(c, phone, func(m *popMenu) { a.deviceMenu(m, wd) })
 		if iconButton(c.Key("web-copy"), iconCopy, "复制链接").Clicked() {
 			c.WriteClipboard(wd.url)
 		}
@@ -229,6 +238,8 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 				a.reloadWeb(wd)
 			}
 		})
+	} else if wd.device != "" {
+		a.deviceStage(c, d)
 	} else {
 		ui.WebView(c.Key("web:"+d.path), wd.view).Grow(1).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line)
 	}

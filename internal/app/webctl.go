@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -69,6 +70,7 @@ func (a *app) ctlServer() *rpc.Server {
 	s.Handle("web.run", a.webRun)
 	s.Handle("web.eval", a.webEval)
 	s.Handle("web.screenshot", a.webScreenshot)
+	s.Handle("web.device", a.webDeviceSet)
 	return s
 }
 
@@ -405,4 +407,50 @@ func (a *app) webScreenshot(ctx context.Context, params json.RawMessage) (any, e
 		Tab int    `json:"tab"`
 		PNG []byte `json:"png"`
 	}{h.id, png}, nil
+}
+
+// webDeviceSet 开关手机预览（webdevice.go）：device 是机型 ID，off 或空是关掉。
+func (a *app) webDeviceSet(ctx context.Context, params json.RawMessage) (any, error) {
+	var p struct {
+		webTarget
+		Device    string `json:"device"`
+		Landscape bool   `json:"landscape,omitempty"`
+	}
+	if err := rpc.Decode(params, &p); err != nil {
+		return nil, err
+	}
+	if p.Device == "off" {
+		p.Device = ""
+	}
+	dev, ok := deviceByID(p.Device)
+	if p.Device != "" && !ok {
+		ids := make([]string, 0, len(webDevices))
+		for _, d := range webDevices {
+			ids = append(ids, d.id)
+		}
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "unknown device %q; use one of %s or off", p.Device, strings.Join(ids, ", "))
+	}
+	var tab int
+	var ferr error
+	err := a.onMain(ctx, func() {
+		wd, err := a.findWeb(p.webTarget)
+		if err != nil {
+			ferr = err
+			return
+		}
+		a.setWebDevice(wd, p.Device, p.Landscape)
+		tab = wd.id
+	})
+	if err != nil {
+		return nil, err
+	}
+	if ferr != nil {
+		return nil, ferr
+	}
+	out := map[string]any{"tab": tab, "device": p.Device}
+	if ok {
+		w, h := dev.size(p.Landscape)
+		out["name"], out["width"], out["height"] = dev.name, w, h
+	}
+	return out, nil
 }
