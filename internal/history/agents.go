@@ -197,11 +197,14 @@ func toolCall(name string, input json.RawMessage) string {
 
 // contentBlock 是 claude、cursor 消息内容里的一块。
 type contentBlock struct {
-	Type    string          `json:"type"`
-	Text    string          `json:"text"`
-	Name    string          `json:"name"`
-	Input   json.RawMessage `json:"input"`
-	Content json.RawMessage `json:"content"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input"`
+	Content   json.RawMessage `json:"content"`
+	ID        string          `json:"id"`          // tool_use
+	ToolUseID string          `json:"tool_use_id"` // tool_result 对应的调用
+	IsError   bool            `json:"is_error"`
 }
 
 // contentBlocks 解析字符串或块数组形式的消息内容，字符串当成一个 text 块；两者都不是时 ok 为假。

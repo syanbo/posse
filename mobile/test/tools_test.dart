@@ -90,6 +90,21 @@ void main() {
     ));
   });
 
+  test('failed calls stay apart, unknown records are skipped', () {
+    final events = [
+      for (final j in [
+        {'server': 'iphone-use', 'tool': 'phone_tap'},
+        {'server': 'iphone-use', 'tool': 'phone_tap', 'failed': true},
+        {'server': 'iphone-use', 'tool': 'phone_tap'},
+        // 电脑以后加的新类型，这个版本不认得
+        {'at': '2026-10-28T01:06:00Z', 'future': 'x'},
+      ])
+        ToolEvent.fromJson(j),
+    ];
+    final steps = toolSteps(events);
+    expect([for (final s in steps) s.event.failed], [false, true, false]);
+  });
+
   Widget host(ToolsFilter filter) => MaterialApp(
     theme: posseTheme(Brightness.light),
     home: Scaffold(

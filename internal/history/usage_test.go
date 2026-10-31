@@ -1,6 +1,8 @@
 package history
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -60,9 +62,9 @@ func TestUsageClaude(t *testing.T) {
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"computer-use"}}]}}`+"\n",
 		// 系统提示里的技能列表不是工具调用
 		`{"type":"user","message":{"content":"available: skills/archify/SKILL.md"}}`+"\n",
-		// 写文件、grep 的参数里提到 SKILL.md 不算；读 SKILL.md 算
+		// Claude 启用技能会注入说明，读 SKILL.md（Read、cat、sed）不算
 		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"/t/a_test.go","content":"skills/archify/SKILL.md"}},{"type":"tool_use","name":"Bash","input":{"command":"grep -o skills/x/SKILL.md f"}}]}}`+"\n",
-		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/Users/x/.agents/skills/unslop/SKILL.md"}}]}}`+"\n",
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/Users/x/.agents/skills/unslop/SKILL.md"}},{"type":"tool_use","name":"Bash","input":{"command":"sed -n 1,80p ~/.agents/skills/orchestration/SKILL.md"}}]}}`+"\n",
 	)
 	s := NewUsageScanner("claude", path)
 	u, err := s.Scan()
@@ -70,7 +72,7 @@ func TestUsageClaude(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := Usage{
-		Skills: []UsageItem{{"computer-use", 1}, {"find-skills", 1}, {"unslop", 1}},
+		Skills: []UsageItem{{"computer-use", 1}, {"find-skills", 1}},
 		MCP: []MCPUsage{
 			{Server: "codex-cu", Count: 2, Tools: []UsageItem{{"js", 2}}},
 			{Server: "claude_ai_Claude_Docs", Count: 1, Tools: []UsageItem{{"batch", 1}}},
@@ -94,6 +96,99 @@ func TestUsageClaude(t *testing.T) {
 	os.WriteFile(path, []byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__a__b","input":{}}]}}`+"\n"), 0o600)
 	if u, _ = s.Scan(); len(u.Skills) != 0 || len(u.MCP) != 1 {
 		t.Fatalf("after rewrite: %+v", u)
+	}
+}
+
+// MCP 调用出错不计次数、时间线上标成失败；读 MCP 资源算那个服务。
+func TestUsageMCPFailedAndResources(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	writeLines(t, path,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"u1","name":"mcp__iphone__tap","input":{}},{"type":"tool_use","id":"u2","name":"mcp__iphone__tap","input":{}}]}}`+"\n",
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"u1","is_error":true,"content":"FAILED element_occluded"}]}}`+"\n",
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"u3","name":"ReadMcpResourceTool","input":{"server":"docs","uri":"docs://a"}},{"type":"tool_use","id":"u4","name":"ListMcpResourcesTool","input":{}}]}}`+"\n",
+	)
+	u, err := NewUsageScanner("claude", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []MCPUsage{
+		{Server: "docs", Count: 1, Tools: []UsageItem{{"read_resource", 1}}},
+		{Server: "iphone", Count: 1, Tools: []UsageItem{{"tap", 1}}},
+	}
+	if !reflect.DeepEqual(u.MCP, want) {
+		t.Fatalf("mcp %+v", u.MCP)
+	}
+	if len(u.Events) != 3 || !u.Events[0].Failed || u.Events[1].Failed || u.Events[2].Tool != "read_resource" {
+		t.Fatalf("events %+v", u.Events)
+	}
+
+	// codex 按完成时的 status，grok 按结果是不是 "Failed to call" 开头
+	path = filepath.Join(t.TempDir(), "rollout.jsonl")
+	writeLines(t, path,
+		`{"type":"event_msg","payload":{"type":"item_started","item":{"type":"McpToolCall","id":"c1","server":"cua","tool":"js","status":"inProgress"}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"c1","server":"cua","tool":"js","status":"failed"}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"McpToolCall","id":"c2","server":"cua","tool":"js","status":"completed"}}}`+"\n",
+		`{"type":"response_item","payload":{"type":"function_call","name":"read_mcp_resource","arguments":"{\"server\":\"docs\",\"uri\":\"docs://a\"}"}}`+"\n",
+	)
+	if u, _ = NewUsageScanner("codex", path).Scan(); !reflect.DeepEqual(u.MCP, []MCPUsage{
+		{Server: "cua", Count: 1, Tools: []UsageItem{{"js", 1}}},
+		{Server: "docs", Count: 1, Tools: []UsageItem{{"read_resource", 1}}},
+	}) || len(u.Events) != 3 || !u.Events[0].Failed {
+		t.Fatalf("codex %+v", u)
+	}
+	path = filepath.Join(t.TempDir(), "chat_history.jsonl")
+	writeLines(t, path,
+		`{"type":"assistant","tool_calls":[{"id":"g1","name":"use_tool","arguments":"{\"tool_name\":\"cu__js\"}"},{"id":"g2","name":"use_tool","arguments":"{\"tool_name\":\"cu__js\"}"}]}`+"\n",
+		`{"type":"tool_result","tool_call_id":"g1","content":"Failed to call js: Ambiguous app identifier"}`+"\n",
+		`{"type":"tool_result","tool_call_id":"g2","content":"Window: Posse Dev"}`+"\n",
+	)
+	if u, _ = NewUsageScanner("grok", path).Scan(); !reflect.DeepEqual(u.MCP, []MCPUsage{{Server: "cu", Count: 1, Tools: []UsageItem{{"js", 1}}}}) || !u.Events[0].Failed || u.Events[1].Failed {
+		t.Fatalf("grok %+v", u)
+	}
+}
+
+// 成功的结果行多半被粗筛跳过，记着的调用不能一直涨。
+func TestUsagePendingBounded(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	var lines []string
+	for i := range 300 {
+		lines = append(lines, fmt.Sprintf(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"u%d","name":"mcp__a__b","input":{}}]}}`+"\n", i))
+	}
+	writeLines(t, path, lines...)
+	s := NewUsageScanner("claude", path)
+	if _, err := s.Scan(); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(s.pending); n > maxPending+1 {
+		t.Fatalf("pending %d", n)
+	}
+}
+
+// codex 有技能清单时，读的文件要对得上清单里的一条，名字取清单里的；读了接给 grep 的不算。
+func TestUsageCodexCatalog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	catalog := "### Skill roots\n- `r1` = `/Users/x/.codex/skills`\n- `r2` = `/Users/x/.codex/plugins/cache/p/skills`\n### Available skills\n" +
+		"- imagegen: Generate images. (file: r1/imagegen/SKILL.md)\n- posse:posse-tasks: Dispatch work. (file: r2/posse-tasks/SKILL.md)\n"
+	dev, _ := json.Marshal(map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "developer", "content": []map[string]string{{"type": "input_text", "text": catalog}}}})
+	writeLines(t, path,
+		string(dev)+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x1","parsed_cmd":[{"type":"read","path":"/Users/x/.codex/skills/imagegen/SKILL.md"}]}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x2","parsed_cmd":[{"type":"read","path":"/Users/x/.codex/plugins/cache/p/skills/posse-tasks/SKILL.md"}]}}}`+"\n",
+		// 清单外的 SKILL.md（比如在写的技能）不算
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x3","parsed_cmd":[{"type":"read","path":"/repo/skills/draft/SKILL.md"}]}}}`+"\n",
+		// 读了接给 grep，是在搜
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x4","command":"sed -n 1,80p /Users/x/.codex/skills/imagegen/SKILL.md | rg size","parsed_cmd":[{"type":"read","path":"/Users/x/.codex/skills/imagegen/SKILL.md"},{"type":"search","query":"size"}]}}}`+"\n",
+		`{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n 1,200p /Users/x/.codex/skills/imagegen/SKILL.md 2>&1 | rg size\"}"}}`+"\n",
+		// 相对路径接在 cwd 后面；在别的目录里读同名的 SKILL.md 不算
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x5","cwd":"/Users/x/.codex/skills/imagegen","command":"cat SKILL.md && rg size .","parsed_cmd":[{"type":"read","path":"SKILL.md"},{"type":"search","query":"size"}]}}}`+"\n",
+		`{"type":"event_msg","payload":{"type":"item_completed","item":{"type":"CommandExecution","id":"x6","cwd":"/repo","parsed_cmd":[{"type":"read","path":"SKILL.md"}]}}}`+"\n",
+	)
+	u, err := NewUsageScanner("codex", path).Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []UsageItem{{"imagegen", 2}, {"posse:posse-tasks", 1}}; !reflect.DeepEqual(u.Skills, want) {
+		t.Fatalf("skills %+v", u.Skills)
 	}
 }
 
@@ -152,7 +247,7 @@ func TestUsageCursor(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "c1.jsonl")
 	writeLines(t, path,
 		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"path":"/Users/x/.claude/skills/browser-skill/SKILL.md"}},{"type":"tool_use","name":"CallDynamicTool","input":{"namespace":"probe","toolName":"ping","arguments":{}}}]}}`+"\n",
-		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"CallDynamicTool","input":{"namespace":"cursor","toolName":"WebSearch","arguments":{}}},{"type":"tool_use","name":"Shell","input":{"command":"cat ~/.agents/skills/orchestration/SKILL.md"}},{"type":"tool_use","name":"GetDynamicTools","input":{"namespace":"probe","toolName":"ping"}}]}}`+"\n",
+		`{"role":"assistant","message":{"content":[{"type":"tool_use","name":"CallDynamicTool","input":{"namespace":"cursor","toolName":"WebSearch","arguments":{}}},{"type":"tool_use","name":"Shell","input":{"command":"cat ~/.agents/skills/orchestration/SKILL.md"}},{"type":"tool_use","name":"Shell","input":{"command":"sed -n 30,200p ~/.agents/skills/orca-cli/SKILL.md | grep -n wait"}},{"type":"tool_use","name":"GetDynamicTools","input":{"namespace":"probe","toolName":"ping"}}]}}`+"\n",
 	)
 	u, err := NewUsageScanner("cursor", path).Scan()
 	if err != nil {

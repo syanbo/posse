@@ -298,7 +298,7 @@ func usageSteps(events []history.UsageEvent, mode usageMode) []usageStep {
 			continue
 		}
 		if k := len(steps) - 1; k >= 0 && steps[k].ev.Skill == e.Skill && steps[k].ev.Server == e.Server && steps[k].ev.Tool == e.Tool && steps[k].ev.CLI == e.CLI &&
-			steps[k].ev.URL == e.URL && steps[k].ev.Query == e.Query && steps[k].ev.Via == e.Via {
+			steps[k].ev.URL == e.URL && steps[k].ev.Query == e.Query && steps[k].ev.Via == e.Via && steps[k].ev.Failed == e.Failed {
 			steps[k].ev.At, steps[k].ev.Command = e.At, e.Command
 			steps[k].n++
 			continue
@@ -323,6 +323,9 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 		ui.Text(c, "时间线").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {
 			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
+			if st.ev.Failed {
+				kind += " · 失败" // 出错或被拒的 MCP 调用，没算进次数
+			}
 			copied, tip := "", st.ev.Command
 			switch {
 			case st.ev.Skill != "":

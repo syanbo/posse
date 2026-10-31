@@ -58,6 +58,7 @@ type UsageEvent struct {
 	URL     string    `json:"url,omitempty"`
 	Query   string    `json:"query,omitempty"`
 	Via     string    `json:"via,omitempty"`
+	Failed  bool      `json:"failed,omitempty"` // MCP 调用出错或被拒，不计入次数
 }
 
 // isWeb 报告这是不是访问网址或网页搜索。
@@ -84,8 +85,14 @@ const (
 //   - 网址：WebFetch 这类工具和 MCP 参数里的 url、curl 这类程序命令里的网址（见 webPrograms）、
 //     用户自己发的消息里的网址（复用历史索引的解析，去掉注入的内容），按域名计次，本机地址不算；
 //     WebSearch、codex 的网页搜索、grok 的 backend_tool_call 记成搜索。
-//   - 各家模型自己读 <名字>/SKILL.md（Read、read_file，或 cat、sed 这类读文件的命令）也算用了那个技能。
-//     只认读文件的调用：写文件、grep 的参数里提到 SKILL.md 不算，系统提示里的技能列表也不算。
+//   - 技能：Claude 只认上面注入的说明，它启用技能不靠读文件。别家是模型自己读 <名字>/SKILL.md
+//     （Read、read_file，或 cat、sed 这类读文件的命令；输出接给 grep 这类过滤程序的是在搜，不算）。
+//     codex 的会话带着这次可用的技能清单（developer 消息里的 Available skills，路径写成 r1/<名字>/SKILL.md，
+//     r1 是前面列的根目录），有清单时读的文件要对得上清单里的一条才算，名字也取清单里的。
+//   - MCP 调用出错或被拒不计入次数，时间线上标成失败：claude 看 tool_result 的 is_error，codex 看 McpToolCall
+//     的 status，grok 看 tool_result 以 "Failed to call" 开头；cursor 的会话不记结果，认不出。
+//     读 MCP 资源（claude 的 ListMcpResourcesTool、ReadMcpResourceTool，codex 的 list/read_mcp_resource）也算那个服务；
+//     codex 读资源的结果认不出出错，照算。
 type UsageScanner struct {
 	agent, path string
 	offset      int64
@@ -96,8 +103,10 @@ type UsageScanner struct {
 	seen        map[string]bool   // codex 条目的 id
 	web         map[string]int    // 域名 → 次数
 	searches    int
-	tools, cmds []seqEvent // 技能和 MCP、命令行程序的调用，n 是先后
-	webs        []seqEvent // 访问网址和搜索
+	tools, cmds []seqEvent         // 技能和 MCP、命令行程序的调用，n 是先后
+	webs        []seqEvent         // 访问网址和搜索
+	catalog     map[string]string  // codex 这次可用的技能：SKILL.md 的绝对路径 → 名字
+	pending     map[string]mcpCall // 发起了、还没看到结果的 MCP 调用：调用 id → 记下的那次
 	seq         int
 	at          time.Time // 正在解析的那一行的时间
 	parser      parser    // 认出用户自己发的消息
@@ -125,6 +134,7 @@ func (s *UsageScanner) reset() {
 	s.skills, s.mcp, s.seen, s.tools, s.cmds = map[string]int{}, map[string]map[string]int{}, map[string]bool{}, nil, nil
 	s.cli, s.sources = map[string]int{}, map[string]string{}
 	s.web, s.searches, s.webs, s.st = map[string]int{}, 0, nil, fileState{}
+	s.catalog, s.pending = map[string]string{}, map[string]mcpCall{}
 }
 
 // Scan 读文件新增的完整行（末尾没写完的一行留到下次），返回到目前为止的统计；文件变短说明被重写，从头再读。
@@ -165,6 +175,8 @@ var usageMarkers = [][]byte{
 	[]byte(`"shell"`), []byte("CommandExecution"),
 	[]byte("WebFetch"), []byte("WebSearch"), []byte("web_search_call"), []byte("backend_tool_call"),
 	[]byte(`"web"`), []byte("web.search"), // codex 的 web.run（namespace 是 web）和 Extension 条目
+	[]byte(`"is_error":true`), []byte("Failed to call"), // claude、grok 的工具出错结果
+	[]byte("McpResource"), []byte("mcp_resource"), // 读 MCP 资源
 }
 
 var (
@@ -215,14 +227,14 @@ func (s *UsageScanner) cursorLine(b []byte) {
 				Arguments json.RawMessage `json:"arguments"`
 			}
 			if json.Unmarshal(bl.Input, &a) == nil && a.Namespace != "cursor" {
-				s.addMCPTool(a.Namespace, a.ToolName)
+				s.mcpCall("", a.Namespace, a.ToolName)
 				s.toolURL(a.Arguments, a.Namespace+"."+a.ToolName)
 			} else if a.Namespace == "cursor" {
 				s.webTool(a.ToolName, a.Arguments)
 			}
 		case "Read", "ReadFile":
 			a, _ := decodeToolArgs(bl.Input)
-			s.skillRead(a.Path)
+			s.skillRead(a.Path, "")
 		case "Shell":
 			s.command(commandOf(bl.Input))
 		default:
@@ -247,15 +259,17 @@ func (s *UsageScanner) claudeLine(b []byte) {
 		switch bl.Type {
 		case "text":
 			s.skillBase(bl.Text)
+		case "tool_result":
+			s.mcpResult(bl.ToolUseID, bl.IsError)
 		case "tool_use":
 			if name, ok := strings.CutPrefix(bl.Name, "mcp__"); ok {
-				s.addMCP(name)
+				s.addMCP(bl.ID, name)
 				s.toolURL(bl.Input, mcpVia(name))
-			} else if bl.Name == "Read" {
-				a, _ := decodeToolArgs(bl.Input)
-				s.skillRead(a.FilePath)
+			} else if tool, ok := claudeResourceTools[bl.Name]; ok {
+				s.mcpCall(bl.ID, serverOf(bl.Input), tool)
 			} else if bl.Name == "Bash" {
-				s.command(commandOf(bl.Input))
+				// Claude 启用技能会注入说明，读 SKILL.md 的命令只当普通命令记
+				s.cliCommand(commandOf(bl.Input))
 			} else {
 				s.webTool(bl.Name, bl.Input)
 			}
@@ -304,9 +318,17 @@ type seqEvent struct {
 	e UsageEvent
 }
 
-// skillRead 认出读文件的工具读的是 <名字>/SKILL.md。
-func (s *UsageScanner) skillRead(path string) {
+// skillRead 认出读文件的工具读的是某个技能的 SKILL.md。有技能清单（codex）时要对得上清单里的一条，
+// 相对路径接在 cwd 后面。
+func (s *UsageScanner) skillRead(path, cwd string) {
+	path = strings.Trim(path, `'"`)
 	if filepath.Base(path) != "SKILL.md" {
+		return
+	}
+	if len(s.catalog) > 0 {
+		if name := s.catalogName(path, cwd); name != "" {
+			s.addSkill(name)
+		}
 		return
 	}
 	if name := filepath.Base(filepath.Dir(path)); name != "" && name != "." && name != "/" {
@@ -314,14 +336,64 @@ func (s *UsageScanner) skillRead(path string) {
 	}
 }
 
+// catalogName 是 path 在技能清单里的名字；对不上时解开符号链接再比（技能根目录常是链接，比如 ~/.claude/skills）。
+func (s *UsageScanner) catalogName(path, cwd string) string {
+	path = expandShellHome(path)
+	if !filepath.IsAbs(path) {
+		if cwd == "" {
+			return ""
+		}
+		path = filepath.Join(cwd, path)
+	}
+	path = filepath.Clean(path)
+	if name, ok := s.catalog[path]; ok {
+		return name
+	}
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return s.catalog[real]
+	}
+	return ""
+}
+
+// expandShellHome 展开命令里写的 ~、$HOME、$CODEX_HOME，按本机的环境。
+func expandShellHome(path string) string {
+	home, _ := os.UserHomeDir()
+	codex := os.Getenv("CODEX_HOME")
+	if codex == "" {
+		codex = filepath.Join(home, ".codex")
+	}
+	for _, v := range []struct{ prefix, dir string }{
+		{"~/", home}, {"$HOME/", home}, {"${HOME}/", home}, {"$CODEX_HOME/", codex}, {"${CODEX_HOME}/", codex},
+	} {
+		if rest, ok := strings.CutPrefix(path, v.prefix); ok {
+			return filepath.Join(v.dir, rest)
+		}
+	}
+	return path
+}
+
 // skillCmdRe 认出用 cat、sed 这类命令读 SKILL.md；只看命令开头的程序，避免把 grep、写文件里提到的路径算进去。
-var skillCmdRe = regexp.MustCompile(`^\s*(?:cat|sed|head|tail|nl|less|bat)\b[^|;&]*?([A-Za-z0-9_.@:-]+)/SKILL\.md`)
+var skillCmdRe = regexp.MustCompile(`^\s*(?:cat|sed|head|tail|nl|less|bat)\b[^|;&]*?(\S*/SKILL\.md)`)
+
+// searchPrograms 是在输出里找东西的程序：读 SKILL.md 后接给它们是在搜，模型没有读到整个技能。
+var searchPrograms = map[string]bool{"grep": true, "egrep": true, "rg": true, "ag": true, "awk": true, "wc": true, "jq": true}
+
+// cmdSepRe 是命令之间的分隔；2>&1 这类重定向里的 & 不算。
+var cmdSepRe = regexp.MustCompile(`\|\||&&|;|\|&?`)
 
 // skillCommand 认出 shell 命令读了某个技能；一条命令只算一个。
 func (s *UsageScanner) skillCommand(cmd string) {
-	if m := skillCmdRe.FindStringSubmatch(cmd); m != nil {
-		s.addSkill(m[1])
+	loc := skillCmdRe.FindStringSubmatchIndex(cmd)
+	if loc == nil {
+		return
 	}
+	rest := cmd[loc[1]:]
+	if m := cmdSepRe.FindStringIndex(rest); m != nil && rest[m[0]] == '|' && rest[m[0]:m[1]] != "||" {
+		if f := strings.Fields(rest[m[1]:]); len(f) > 0 && searchPrograms[filepath.Base(f[0])] {
+			return
+		}
+	}
+	s.skillRead(cmd[loc[2]:loc[3]], "")
 }
 
 // command 处理一条 shell 命令：读技能和用到的程序。
@@ -368,15 +440,17 @@ func mcpVia(name string) string {
 }
 
 // addMCP 记一次 MCP 调用，name 是 <服务>__<工具>；服务名里可能有下划线，所以按最后一个 "__" 切。
-func (s *UsageScanner) addMCP(name string) {
-	i := strings.LastIndex(name, "__")
-	if i <= 0 {
-		return
+func (s *UsageScanner) addMCP(id, name string) {
+	if i := strings.LastIndex(name, "__"); i > 0 {
+		s.mcpCall(id, name[:i], name[i+2:])
 	}
-	s.addMCPTool(name[:i], name[i+2:])
 }
 
-func (s *UsageScanner) addMCPTool(server, tool string) {
+// maxPending 是最多记着的未见结果的调用：成功的结果行多半被粗筛跳过，不会来删。
+const maxPending = 64
+
+// mcpCall 记一次 MCP 调用；id 不为空时记下它，等结果出错再撤回（mcpResult）。
+func (s *UsageScanner) mcpCall(id, server, tool string) {
 	if server == "" || tool == "" {
 		return
 	}
@@ -385,9 +459,103 @@ func (s *UsageScanner) addMCPTool(server, tool string) {
 	}
 	s.mcp[server][tool]++
 	s.event(UsageEvent{Server: server, Tool: tool})
+	if id == "" {
+		return
+	}
+	if len(s.pending) >= maxPending {
+		// 结果紧跟在调用后面，最早的那些已经等不到了
+		for k, c := range s.pending {
+			if c.seq <= s.seq-maxPending {
+				delete(s.pending, k)
+			}
+		}
+	}
+	s.pending[id] = mcpCall{server, tool, s.seq}
+}
+
+type mcpCall struct {
+	server, tool string
+	seq          int // 那次调用在时间线里的序号
+}
+
+// mcpResult 处理一次工具调用的结果：是记下的 MCP 调用且出错时，撤回它的次数、在时间线上标成失败。
+func (s *UsageScanner) mcpResult(id string, failed bool) {
+	c, ok := s.pending[id]
+	if !ok {
+		return
+	}
+	delete(s.pending, id)
+	if !failed {
+		return
+	}
+	if s.mcp[c.server][c.tool]--; s.mcp[c.server][c.tool] <= 0 {
+		delete(s.mcp[c.server], c.tool)
+		if len(s.mcp[c.server]) == 0 {
+			delete(s.mcp, c.server)
+		}
+	}
+	for i := len(s.tools) - 1; i >= 0; i-- {
+		if s.tools[i].n == c.seq {
+			s.tools[i].e.Failed = true
+			break
+		}
+	}
+}
+
+// claudeResourceTools 是 Claude 读 MCP 资源的工具，算成那个服务的调用。
+var claudeResourceTools = map[string]string{"ListMcpResourcesTool": "list_resources", "ReadMcpResourceTool": "read_resource"}
+
+// codexResourceTools 同上，是 codex 的。
+var codexResourceTools = map[string]string{
+	"list_mcp_resources": "list_resources", "list_mcp_resource_templates": "list_resource_templates", "read_mcp_resource": "read_resource",
+}
+
+// serverOf 取读资源工具参数里的服务名；列出全部服务的资源时没有服务名，不算。
+func serverOf(input []byte) string {
+	var a struct {
+		Server string `json:"server"`
+	}
+	json.Unmarshal(input, &a)
+	return a.Server
 }
 
 var codexSkillRe = regexp.MustCompile(`^<skill>\s*<name>([^<]+)</name>`)
+
+// parsedCmd 是 codex 拆好的一段命令：type 是 read、search、list_files 这类。
+type parsedCmd struct {
+	Type string `json:"type"`
+	Path string `json:"path"`
+}
+
+var (
+	// codex 技能清单里的根目录别名：- `r1` = `/Users/x/.codex/skills`
+	codexRootRe = regexp.MustCompile("(?m)^- `(r\\d+)` = `([^`]+)`")
+	// 清单里的一条：- <名字>: <说明> (file: r1/<名字>/SKILL.md)，名字里可能有冒号（插件技能），不会有空格
+	codexCatalogRe = regexp.MustCompile(`(?m)^- (\S+): .*\(file: ([^)\s]+/SKILL\.md)\)\s*$`)
+)
+
+// codexCatalog 从 developer 消息里读出这次可用的技能清单。
+func (s *UsageScanner) codexCatalog(text string) {
+	if !strings.Contains(text, "SKILL.md") {
+		return
+	}
+	roots := map[string]string{}
+	for _, m := range codexRootRe.FindAllStringSubmatch(text, -1) {
+		roots[m[1]] = m[2]
+	}
+	for _, m := range codexCatalogRe.FindAllStringSubmatch(text, -1) {
+		path := m[2]
+		if alias, rest, ok := strings.Cut(path, "/"); ok && roots[alias] != "" {
+			path = filepath.Join(roots[alias], rest)
+		}
+		if filepath.IsAbs(path) {
+			s.catalog[filepath.Clean(path)] = m[1]
+			if real, err := filepath.EvalSymlinks(path); err == nil {
+				s.catalog[real] = m[1]
+			}
+		}
+	}
+}
 
 func (s *UsageScanner) codexLine(b []byte) {
 	var r struct {
@@ -412,13 +580,12 @@ func (s *UsageScanner) codexLine(b []byte) {
 				ID        string          `json:"id"`
 				Server    string          `json:"server"`
 				Tool      string          `json:"tool"`
+				Status    string          `json:"status"`
 				Arguments json.RawMessage `json:"arguments"`
 				Query     string          `json:"query"`
 				Command   json.RawMessage `json:"command"`
-				ParsedCmd []struct {
-					Type string `json:"type"`
-					Path string `json:"path"`
-				} `json:"parsed_cmd"`
+				Cwd       string          `json:"cwd"`
+				ParsedCmd []parsedCmd     `json:"parsed_cmd"`
 			} `json:"item"`
 		} `json:"payload"`
 	}
@@ -434,6 +601,10 @@ func (s *UsageScanner) codexLine(b []byte) {
 				s.addSkill(strings.TrimSpace(m[1]))
 			}
 		}
+	case r.Type == "response_item" && p.Type == "message" && p.Role == "developer":
+		for _, c := range p.Content {
+			s.codexCatalog(c.Text)
+		}
 	// 新版的网页工具是 web 命名空间的 run，随后同一个 id 再记一条 Extension（kind 为 web.search）
 	case r.Type == "response_item" && p.Type == "function_call" && p.Namespace == "web" && p.Name == "run":
 		if s.once(webKey(p.CallID)) {
@@ -441,17 +612,23 @@ func (s *UsageScanner) codexLine(b []byte) {
 		}
 	case r.Type == "response_item" && (p.Type == "function_call" || p.Type == "custom_tool_call"):
 		if name, ok := strings.CutPrefix(p.Name, "mcp__"); ok {
-			s.addMCP(name)
+			s.addMCP("", name)
 			s.toolURL([]byte(p.Arguments), mcpVia(name))
+		} else if tool, ok := codexResourceTools[p.Name]; ok {
+			s.mcpCall("", serverOf([]byte(p.Arguments)), tool)
 		} else if cmd := commandOf([]byte(p.Arguments)); p.Type == "function_call" && cmd != "" && s.once(cmdKey(p.CallID)) {
 			// custom_tool_call 的参数在 input 里，是补丁这类原文，不是命令。
 			// 同一条命令随后的 CommandExecution 用 call_id 当 id，靠 once 不重复算
 			s.command(cmd)
 		}
+	// 开始、完成时各记一遍：开始时就算上（中断了的、还在跑的也看得到），完成时按 status 撤回失败的
 	case p.Item.Type == "McpToolCall":
 		if s.once(p.Item.ID) {
-			s.addMCPTool(p.Item.Server, p.Item.Tool)
+			s.mcpCall(p.Item.ID, p.Item.Server, p.Item.Tool)
 			s.toolURL(p.Item.Arguments, p.Item.Server+"."+p.Item.Tool)
+		}
+		if p.Item.Status != "inProgress" {
+			s.mcpResult(p.Item.ID, p.Item.Status == "failed")
 		}
 	// 网页搜索和历史索引一样按格式只读一处：旧格式读 web_search_call（action 是 search 带 query，
 	// 或 open_page 带 url），新格式（paginated）读 WebSearch 条目
@@ -468,9 +645,12 @@ func (s *UsageScanner) codexLine(b []byte) {
 	// parsed_cmd 已经标出读了哪个文件
 	case p.Item.Type == "CommandExecution":
 		if s.once(cmdKey(p.Item.ID)) {
+			// 读了接给 grep 这类是在搜，不算读了技能；parsed_cmd 分不出管道和 &&，看原命令里有没有管道
+			search := slices.ContainsFunc(p.Item.ParsedCmd, func(c parsedCmd) bool { return c.Type == "search" }) &&
+				strings.Contains(string(p.Item.Command), "|")
 			for _, c := range p.Item.ParsedCmd {
-				if c.Type == "read" {
-					s.skillRead(c.Path)
+				if c.Type == "read" && !search {
+					s.skillRead(c.Path, p.Item.Cwd)
 				}
 			}
 			if len(p.Item.Command) > 0 {
@@ -539,9 +719,11 @@ func (s *UsageScanner) once(id string) bool {
 
 func (s *UsageScanner) grokLine(b []byte) {
 	var r struct {
-		Type      string         `json:"type"`
-		ToolCalls []grokToolCall `json:"tool_calls"`
-		Kind      struct {
+		Type       string          `json:"type"`
+		ToolCalls  []grokToolCall  `json:"tool_calls"`
+		ToolCallID string          `json:"tool_call_id"`
+		Content    json.RawMessage `json:"content"`
+		Kind       struct {
 			ToolType string `json:"tool_type"`
 			Action   struct {
 				Query string `json:"query"`
@@ -549,6 +731,12 @@ func (s *UsageScanner) grokLine(b []byte) {
 		} `json:"kind"`
 	}
 	if json.Unmarshal(b, &r) != nil {
+		return
+	}
+	if r.Type == "tool_result" {
+		var text string
+		json.Unmarshal(r.Content, &text)
+		s.mcpResult(r.ToolCallID, strings.HasPrefix(text, "Failed to call "))
 		return
 	}
 	// grok 在服务端跑的搜索
@@ -563,7 +751,7 @@ func (s *UsageScanner) grokLine(b []byte) {
 				ToolInput json.RawMessage `json:"tool_input"`
 			}
 			if json.Unmarshal([]byte(c.Arguments), &a) == nil {
-				s.addMCP(a.ToolName)
+				s.addMCP(c.ID, a.ToolName)
 				s.toolURL(a.ToolInput, mcpVia(a.ToolName))
 			}
 			continue
@@ -571,7 +759,7 @@ func (s *UsageScanner) grokLine(b []byte) {
 		switch c.Name {
 		case "read_file":
 			a, _ := decodeToolArgs([]byte(c.Arguments))
-			s.skillRead(a.TargetFile)
+			s.skillRead(a.TargetFile, "")
 		case "run_terminal_command":
 			s.command(commandOf([]byte(c.Arguments)))
 		default:

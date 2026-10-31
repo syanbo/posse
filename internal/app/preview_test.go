@@ -471,7 +471,7 @@ func previewUsageEvents() []history.UsageEvent {
 	add(3, history.UsageEvent{Server: "codex-cu", Tool: "js"})
 	add(9, history.UsageEvent{Skill: "chatgpt-imagegen"})
 	add(12, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
-	add(13, history.UsageEvent{Server: "androidmirror", Tool: "screen_act"})
+	add(13, history.UsageEvent{Server: "androidmirror", Tool: "screen_act", Failed: true})
 	add(14, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
 	add(15, history.UsageEvent{Server: "androidmirror", Tool: "screen_observe"})
 	add(16, history.UsageEvent{CLI: "go", Source: history.SourceHomebrew, Command: "go vet ./... && go test ./internal/history"})

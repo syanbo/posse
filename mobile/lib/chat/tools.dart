@@ -40,6 +40,7 @@ class ToolEvent {
     this.url = '',
     this.query = '',
     this.via = '',
+    this.failed = false,
   });
 
   factory ToolEvent.fromJson(Map<String, Object?> j) => ToolEvent(
@@ -53,6 +54,7 @@ class ToolEvent {
     url: j['url'] as String? ?? '',
     query: j['query'] as String? ?? '',
     via: j['via'] as String? ?? '',
+    failed: j['failed'] as bool? ?? false,
   );
 
   /// grok、cursor 的会话文件没有时间。
@@ -73,7 +75,14 @@ class ToolEvent {
   /// 网址、搜索经什么访问：工具名、程序名，用户自己发的是 user。
   final String via;
 
+  /// MCP 调用出错或被拒，电脑没算进次数。
+  final bool failed;
+
   bool get isWeb => url.isNotEmpty || query.isNotEmpty;
+
+  /// 这个版本认得的记录：电脑以后加了新类型，旧 App 跳过，不画成没名字的一行。
+  bool get known =>
+      skill.isNotEmpty || tool.isNotEmpty || cli.isNotEmpty || isWeb;
 
   bool same(ToolEvent o) =>
       skill == o.skill &&
@@ -82,7 +91,8 @@ class ToolEvent {
       cli == o.cli &&
       url == o.url &&
       query == o.query &&
-      via == o.via;
+      via == o.via &&
+      failed == o.failed;
 }
 
 /// `session.tools` 的结果。
@@ -160,7 +170,8 @@ List<ToolStep> toolSteps(
 }) {
   final steps = <ToolStep>[];
   for (final e in events) {
-    if (filter == ToolsFilter.skills && (e.cli.isNotEmpty || e.isWeb) ||
+    if (!e.known ||
+        filter == ToolsFilter.skills && (e.cli.isNotEmpty || e.isWeb) ||
         filter == ToolsFilter.web && !e.isWeb) {
       continue;
     }
@@ -560,7 +571,7 @@ class _StepRow extends StatelessWidget {
         '搜索 · ${webVia(e.via)}',
         e.query,
       ),
-      _ => (_mcpColor(c), e.server, e.tool),
+      _ => (_mcpColor(c), e.failed ? '${e.server} · 失败' : e.server, e.tool),
     };
     return InkWell(
       onTap: () => _copy(context, e.url.isNotEmpty ? e.url : name),
