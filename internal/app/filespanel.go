@@ -139,7 +139,7 @@ func (a *app) migratePanels() {
 func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 	v := a.filesFor(w)
 	v.side = side
-	a.setFilesPanelHistory(false)
+	a.setFilesPanelTab("")
 	a.setFilesPanel(w.ProjectID, true)
 	return v
 }
@@ -167,7 +167,7 @@ func (a *app) revealCurrent(w *workspace) {
 
 // toggleFilesPanel 开着且就在 side 上时关掉，否则打开到 side（⇧⌘E、⇧⌘G）。
 func (a *app) toggleFilesPanel(w *workspace, side int) {
-	if a.filesPanelOpen() && !a.state.FilesPanelHistory && a.filesFor(w).side == side {
+	if a.filesPanelOpen() && a.state.FilesPanelTab == "" && a.filesFor(w).side == side {
 		a.closeFilesPanel()
 		return
 	}
@@ -214,15 +214,21 @@ func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
 	}
 }
 
-// setFilesPanelHistory 切文件栏顶上的"历史""文件"，变了才写 ui.json。
-func (a *app) setFilesPanelHistory(on bool) {
-	if a.state.FilesPanelHistory != on {
-		a.state.FilesPanelHistory = on
+// 文件栏顶上的页签（ui.json 的 filesPanelTab），空是"文件"。
+const (
+	tabHistory = "history"
+	tabSkills  = "skills"
+)
+
+// setFilesPanelTab 切文件栏顶上的"历史""文件""技能"，变了才写 ui.json。
+func (a *app) setFilesPanelTab(tab string) {
+	if a.state.FilesPanelTab != tab {
+		a.state.FilesPanelTab = tab
 		a.saveState()
 	}
 }
 
-// filesPanel 画文件栏：顶上和标签栏一样高，放"历史""文件"两个图标页签和开关按钮；文件下面一行是文件、检索、改动。
+// filesPanel 画文件栏：顶上和标签栏一样高，放"历史""文件""技能"三个图标页签和开关按钮；文件下面一行是文件、检索、改动。
 // 左边缘拖动调宽。
 func (a *app) filesPanel(c *ui.Context, w *workspace) {
 	p := colors(c.Theme())
@@ -232,14 +238,18 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 		// 右边距和标签栏一样，开关按钮打开前后不挪位置
 		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 12).Gap(4).AlignItems(ui.Center).
 			BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Children(func() {
-			if panelTab(c, iconHistory, "历史", a.state.FilesPanelHistory) {
-				a.setFilesPanelHistory(true)
+			tab := a.state.FilesPanelTab
+			if panelTab(c, iconHistory, "历史", tab == tabHistory) {
+				a.setFilesPanelTab(tabHistory)
 			}
-			if panelTab(c, iconFile, "文件", !a.state.FilesPanelHistory) {
-				a.setFilesPanelHistory(false)
+			if panelTab(c, iconFile, "文件", tab == "") {
+				a.setFilesPanelTab("")
+			}
+			if panelTab(c, iconSkill, "技能", tab == tabSkills) {
+				a.setFilesPanelTab(tabSkills)
 			}
 			ui.Spacer(c)
-			if !a.state.FilesPanelHistory && !w.Missing && v.side == sideFiles {
+			if tab == "" && !w.Missing && v.side == sideFiles {
 				// 没有能定位的文件时置灰：外面包一层先禁用，按钮里的悬停才不亮
 				wrap := ui.Box(c).Shrink(0)
 				if !revealable(v, v.cur) {
@@ -260,8 +270,10 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 			ui.Box(c).Width(28).Shrink(0)
 		})
 		switch {
-		case a.state.FilesPanelHistory:
+		case a.state.FilesPanelTab == tabHistory:
 			a.recentList(c, w)
+		case a.state.FilesPanelTab == tabSkills && !w.Missing:
+			a.skillsPanel(c, w)
 		case w.Missing:
 			ui.Text(c, "工作区的目录已经不在了").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(12, 16)
 		default:

@@ -50,6 +50,7 @@ internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，
 internal/desk       手机看 Mac 桌面的采集侧：子进程（`posse desk helper`）用 ScreenCaptureKit 采屏（可选屏，也可只看一个窗口，window_darwin.go）、VideoToolbox 硬编码，帧经管道交给父进程，手机的键鼠输入由父进程排序去重（input.go）、子进程发 CGEvent 注入（inject_darwin.go）；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`posse desk cast` 是还没接进常驻进程时的推流入口）
 internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $POSSE_HOME/usage.json
 internal/files      文件标签的纯逻辑：读写文件（原子保存、磁盘戳）、目录树、文件清单、模糊匹配、全文检索、跳到定义、识别行内链接和路径
+internal/skills     技能管理：扫描四家 agent 的技能目录，按各家的读取规则和开关（Claude 的 skillOverrides、Codex 的 [[skills.config]] 和 app-server、Grok 的 [skills]）算谁用得上，体检断链、同名冲突、多余链接和 npx skills 锁文件；界面在 internal/app/skills.go
 internal/media      会话里的图片和视频（粘贴的、agent 生成的），桌面的图片面板和手机共用
 internal/mermaid    Markdown 里的 Mermaid 图（移植自 Mayoi），不依赖 mygo、桌面和手机共用：Pele（`pele.js.gz`，`scripts/pele.sh` 打包）在 QuickJS（modernc，和 sqlite 共用 libc，两边要求的 libc 版本必须一致，升级时一起看）里排版出 SVG，换上主题色、抽出文字，宽度由调用方的量法给；`diagram/` 用 mygo 画（形状交给 mygo 的 SVG、文字由 mygo 排字），手机经 `posse_quic` 的 `hq_mermaid` 调。JS 运行时画第一张图时启动，之后一直留着（约 11 MB，桌面在窗口进程里）
 internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流；quic.go 给 Posse 手机客户端在同一端口号的 UDP 上开 QUIC（局域网和中转）

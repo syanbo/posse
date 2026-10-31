@@ -36,6 +36,7 @@ func (a *app) build(c *ui.Context) {
 	}
 	a.setHistoryVisible(a.selected == historyBoardID)
 	a.setMobileVisible(a.selected == mobileBoardID)
+	a.setSkillsVisible(a.selected == skillsBoardID)
 	if a.loaded && a.selected != a.state.Selected {
 		a.state.Selected = a.selected
 		a.saveState()
@@ -93,6 +94,8 @@ func (a *app) build(c *ui.Context) {
 					a.historyBoard(c)
 				case a.selected == mobileBoardID:
 					a.mobileBoard(c)
+				case a.selected == skillsBoardID:
+					a.skillsBoard(c)
 				case a.selected == settingsBoardID:
 					a.settingsBoard(c)
 				default:
@@ -268,9 +271,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	}
 }
 
-// isBoard 报告选中的是不是任务、历史、手机、设置这几个不属于工作区的页面。
+// isBoard 报告选中的是不是任务、历史、技能、手机、设置这几个不属于工作区的页面。
 func isBoard(id string) bool {
-	return id == taskBoardID || id == historyBoardID || id == mobileBoardID || id == settingsBoardID
+	return id == taskBoardID || id == historyBoardID || id == skillsBoardID || id == mobileBoardID || id == settingsBoardID
 }
 
 // closeBoard 关掉当前的任务、历史、手机或设置页，回到上次看的工作区，放掉页面读进来的内容；
@@ -283,6 +286,8 @@ func (a *app) closeBoard() {
 		a.detail, a.taskSel, a.taskHome = nil, "", false
 	case mobileBoardID:
 		a.mobile.devices = nil
+	case skillsBoardID:
+		a.releaseSkills()
 	}
 	next := a.lastWS
 	if a.workspace(next) == nil {
@@ -419,6 +424,7 @@ func (a *app) sidebar(c *ui.Context) {
 			a.taskSidebarItem(c)
 		}
 		a.historySidebarItem(c)
+		a.skillsSidebarItem(c)
 		a.mobileSidebarItem(c)
 		hline(c).Margin(6, navPad, 0, navPad)
 	})

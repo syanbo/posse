@@ -710,7 +710,7 @@ func TestPreview(t *testing.T) {
 		previewHistory(a, "")
 		a.selected = "w1" // previewHistory 会切到历史页
 		a.state.FilesPanels = map[string]bool{"p1": true}
-		a.state.FilesPanelHistory = true
+		a.state.FilesPanelTab = tabHistory
 		a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions,
 			previews: map[string]recentPreview{}}
 		for i, s := range a.history.sessions {
@@ -721,6 +721,21 @@ func TestPreview(t *testing.T) {
 			a.recent.previews[sessionKey(s)] = p
 		}
 		savePNG(t, newPreviewTester(a, dark), "recent-"+suffix+".png")
+
+		// 技能页：全局技能按来源分组，行尾四家的状态；右边是选中技能的详情。体检结果另一张
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		savePNG(t, newPreviewTester(a, dark), "skills-"+suffix+".png")
+		a = previewApp(t)
+		previewSkillsBoard(a, homeDir+"/.agents/skills/lark-calendar")
+		savePNG(t, newPreviewTester(a, dark), "skills-off-"+suffix+".png")
+		a = previewApp(t)
+		previewSkillsBoard(a, skillIssuesKey)
+		savePNG(t, newPreviewTester(a, dark), "skills-issues-"+suffix+".png")
+		// 文件栏的技能页签：当前工作区的项目级技能
+		a = previewApp(t)
+		previewSkillsTab(a)
+		savePNG(t, newPreviewTester(a, dark), "skills-panel-"+suffix+".png")
 
 		a = previewApp(t)
 		a.selected = "w2"

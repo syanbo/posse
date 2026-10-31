@@ -19,7 +19,8 @@ type uiState struct {
 	RightPanel           string    `json:"rightPanel,omitempty"`           // 右侧开着的浮层面板：panelUsage、panelImages 或空
 	FilesPanel           bool      `json:"filesPanel,omitempty"`           // 旧版不分项目的文件栏开关，读到后记到当前项目上
 	FilesPanelWidth      float32   `json:"filesPanelWidth,omitempty"`      // 文件栏的宽度，0 表示默认
-	FilesPanelHistory    bool      `json:"filesPanelHistory,omitempty"`    // 文件栏顶上选的是"历史"（当前项目的会话），不是文件
+	FilesPanelHistory    bool      `json:"filesPanelHistory,omitempty"`    // 旧版：文件栏顶上选的是"历史"，读到后换成 FilesPanelTab
+	FilesPanelTab        string    `json:"filesPanelTab,omitempty"`        // 文件栏顶上选的页签：tabHistory、tabSkills，空是"文件"
 	FilesPanelShared     bool      `json:"filesPanelShared,omitempty"`     // 文件栏开关所有项目共用（记在 FilesPanelOn），不按项目记
 	FilesPanelOn         bool      `json:"filesPanelOn,omitempty"`         // 共用时文件栏开着
 	SidebarHidden        bool      `json:"sidebarHidden,omitempty"`        // 左边的侧栏收起了
@@ -121,7 +122,13 @@ func loadUIState(home string) uiState {
 	}
 	// 历史以前也是浮层面板，现在在文件栏里
 	if s.RightPanel == panelHistory {
-		s.RightPanel, s.FilesPanelHistory = "", true
+		s.RightPanel, s.FilesPanelTab = "", tabHistory
+	}
+	if s.FilesPanelHistory {
+		s.FilesPanelHistory = false
+		if s.FilesPanelTab == "" {
+			s.FilesPanelTab = tabHistory
+		}
 	}
 	return s
 }

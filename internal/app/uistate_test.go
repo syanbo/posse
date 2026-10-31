@@ -118,6 +118,9 @@ func TestSidebarTree(t *testing.T) {
 	offlineClient(t, a)
 	a.sectionsOpen = map[string]*bool{}
 	tt := newPreviewTester(a, true)
+	// 窗口高一些：侧栏顶上任务、历史、技能、手机之后，展开的 ios-crash 才在窗口里点得到
+	tt.SetSize(1200, 860)
+	tt.Frame()
 	for _, label := range []string{"重写 posse 界面", "feat-login", "ios-crash"} {
 		if _, ok := tt.Find(label); !ok {
 			t.Fatalf("%q not shown", label)

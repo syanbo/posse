@@ -468,7 +468,7 @@ func TestFilesPanelStateMigrates(t *testing.T) {
 	}
 	// 历史以前也是浮层面板，现在是文件栏的"历史"页
 	os.WriteFile(uiStatePath(home), []byte(`{"rightPanel":"history"}`), 0o600)
-	if s := loadUIState(home); s.RightPanel != "" || !s.FilesPanelHistory {
+	if s := loadUIState(home); s.RightPanel != "" || s.FilesPanelTab != tabHistory {
 		t.Fatalf("%+v", s)
 	}
 }
@@ -495,12 +495,12 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.state.FilesPanelHistory || tt.HasText("检索") {
-		t.Fatalf("history tab: %v", a.state.FilesPanelHistory)
+	if a.state.FilesPanelTab != tabHistory || tt.HasText("检索") {
+		t.Fatalf("history tab: %q", a.state.FilesPanelTab)
 	}
 	a.toggleFilesPanel(w, sideFiles)
 	tt.Frame()
-	if a.state.FilesPanelHistory || !a.filesPanelOpen() || a.filesFor(w).side != sideFiles {
+	if a.state.FilesPanelTab != "" || !a.filesPanelOpen() || a.filesFor(w).side != sideFiles {
 		t.Fatal("⇧⌘E should show the files tab")
 	}
 }
@@ -786,7 +786,7 @@ func TestRecentTrashButton(t *testing.T) {
 	previewHistory(a, "")
 	a.selected = "w1"
 	a.state.FilesPanels = map[string]bool{"p1": true}
-	a.state.FilesPanelHistory = true
+	a.state.FilesPanelTab = tabHistory
 	a.recent = recentView{key: "p1", loaded: true, poll: panelPoll{at: time.Now()}, sessions: a.history.sessions}
 	tt := newPreviewTester(a, true)
 	if tt.HasText("移到废纸篓") {
