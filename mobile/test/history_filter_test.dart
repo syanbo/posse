@@ -8,6 +8,7 @@ import 'package:posse_mobile/history/models.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
+import 'package:posse_mobile/workspace/workspace.dart';
 
 class _Rpc implements PhoneRpc {
   final asked = <(String, Map<String, Object?>)>[];
@@ -167,5 +168,37 @@ void main() {
     await tester.tap(grok);
     await tester.pumpAndSettle();
     expect(rpc.asked.last.$2['agent'], 'grok');
+  });
+
+  testWidgets('project page history tab only lists its own directory', (
+    tester,
+  ) async {
+    final rpc = _Rpc();
+    final model = _Model(rpc);
+    model.worktrees = parseWorktrees([
+      {
+        'worktreeId': 'p::main',
+        'repo': 'posse',
+        'displayName': 'main',
+        'path': '/Users/x/posse',
+        'isMainWorktree': true,
+      },
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: posseTheme(Brightness.dark),
+        home: TabScreen(model: model, worktree: model.worktrees.first, page: 2),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(rpc.asked.last.$1, 'history.list');
+    expect(rpc.asked.last.$2['cwd'], '/Users/x/posse');
+    // 没有分组按钮，搜索也带上目录
+    expect(find.byTooltip('按时间分组，点按文件夹'), findsNothing);
+    await tester.enterText(find.byType(TextField), '登录');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(rpc.asked.last.$1, 'history.search');
+    expect(rpc.asked.last.$2['cwd'], '/Users/x/posse');
   });
 }

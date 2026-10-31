@@ -18,9 +18,13 @@ import 'models.dart';
 /// 电脑上的会话历史：顶上搜索和按 agent 筛选，下面按时间或文件夹分组。照桌面的历史页，只读；点开看对话，
 /// 底部"在电脑上继续"让电脑在这个会话的目录里开终端接着聊。
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key, required this.model});
+  const HistoryScreen({super.key, required this.model, this.cwd});
 
   final PosseAppModel model;
+
+  /// 只列这个目录（含子目录）里的会话。给了时是项目详情里的一页：没有顶栏，搜索框在列表上面，
+  /// 只按时间分组。
+  final String? cwd;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -71,12 +75,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() => _loading = true);
     final q = _query.text.trim();
     final agent = historyAgents[_agent];
+    final cwd = widget.cwd;
     try {
       final result = q.isEmpty
-          ? await rpc.call('history.list', {'agent': agent, 'limit': 300})
+          ? await rpc.call('history.list', {
+              'agent': agent,
+              'cwd': ?cwd,
+              'limit': 300,
+            })
           : await rpc.call('history.search', {
               'query': q,
               'agent': agent,
+              'cwd': ?cwd,
               'limit': 100,
             });
       if (!mounted || seq != _seq) return;
@@ -109,69 +119,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final c = PosseColors.of(context);
     final now = DateTime.now();
     final searching = _query.text.trim().isNotEmpty;
-    final byFolder = widget.model.settings.historyByFolder;
+    // 项目详情里的会话都在同一个目录，不按文件夹分
+    final byFolder =
+        widget.cwd == null && widget.model.settings.historyByFolder;
     final groups = byFolder
         ? groupHistoryByFolder(_sessions, [
             for (final w in widget.model.worktrees) (w.path, w.repo),
           ])
         : groupHistory(_sessions, now);
     final agent = historyAgents[_agent];
+    if (widget.cwd != null) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(height: 38, child: _searchField(c, searching)),
+          ),
+          Expanded(child: _body(c, searching, groups, agent, now)),
+        ],
+      );
+    }
     return Scaffold(
       // 顶栏：返回、搜索框、分组方式。筛选只留一行 agent 小标签，不用两条整宽的分段
       appBar: AppBar(
         titleSpacing: 0,
         // 高度钉死 38：清除按钮、转圈出现时框不变高
-        title: SizedBox(
-          height: 38,
-          child: TextField(
-            controller: _query,
-            onChanged: _onQuery,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _load(),
-            // expands 要求多行，粘贴进来的换行去掉，框里始终一行
-            expands: true,
-            maxLines: null,
-            inputFormatters: [FilteringTextInputFormatter.deny('\n')],
-            textAlignVertical: TextAlignVertical.center,
-            style: TextStyle(fontSize: Fs.body, color: c.text),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              hintText: '搜索提问、回复和工具输出',
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                size: Ic.medium,
-                color: c.muted,
-              ),
-              prefixIconConstraints: const BoxConstraints.tightFor(
-                width: 38,
-                height: 38,
-              ),
-              suffixIconConstraints: const BoxConstraints.tightFor(
-                width: 38,
-                height: 38,
-              ),
-              // 已有结果时重读，转圈放在搜索框里，不挤动下面的列表
-              suffixIcon: _loading && _sessions.isNotEmpty
-                  ? const Center(widthFactor: 1, child: HexSpinner())
-                  : searching
-                  ? IconButton(
-                      tooltip: '清除',
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.cancel_rounded,
-                        size: Ic.medium,
-                        color: c.faint,
-                      ),
-                      onPressed: () {
-                        _query.clear();
-                        unawaited(_load());
-                      },
-                    )
-                  : null,
-            ),
-          ),
-        ),
+        title: SizedBox(height: 38, child: _searchField(c, searching)),
         actions: [
           // 和桌面一样：分组方式记住；图标是现在的分组，点一下换另一种。搜索结果按相关度排、不分组
           IconButton(
@@ -193,78 +166,134 @@ class _HistoryScreenState extends State<HistoryScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: Column(
-        children: [
-          // 写得下时铺满一行、两端对齐，窄屏写不下再横着滑
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-            child: LayoutBuilder(
-              builder: (context, box) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                // 和下面的卡片同宽：「全部」的底色左边贴卡片左边
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: box.maxWidth - 32),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (var i = 0; i < historyAgents.length; i++)
-                        _AgentChip(
-                          agent: historyAgents[i],
-                          selected: i == _agent,
-                          onTap: () {
-                            if (i == _agent) return;
-                            _debounce?.cancel();
-                            setState(() {
-                              _agent = i;
-                              _open.clear();
-                            });
-                            unawaited(_load());
-                          },
-                        ),
-                    ],
-                  ),
+      body: _body(c, searching, groups, agent, now),
+    );
+  }
+
+  Widget _searchField(PosseColors c, bool searching) {
+    return TextField(
+      controller: _query,
+      onChanged: _onQuery,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (_) => _load(),
+      // expands 要求多行，粘贴进来的换行去掉，框里始终一行
+      expands: true,
+      maxLines: null,
+      inputFormatters: [FilteringTextInputFormatter.deny('\n')],
+      textAlignVertical: TextAlignVertical.center,
+      style: TextStyle(fontSize: Fs.body, color: c.text),
+      decoration: InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
+        hintText: '搜索提问、回复和工具输出',
+        prefixIcon: Icon(Icons.search_rounded, size: Ic.medium, color: c.muted),
+        prefixIconConstraints: const BoxConstraints.tightFor(
+          width: 38,
+          height: 38,
+        ),
+        suffixIconConstraints: const BoxConstraints.tightFor(
+          width: 38,
+          height: 38,
+        ),
+        // 已有结果时重读，转圈放在搜索框里，不挤动下面的列表
+        suffixIcon: _loading && _sessions.isNotEmpty
+            ? const Center(widthFactor: 1, child: HexSpinner())
+            : searching
+            ? IconButton(
+                tooltip: '清除',
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.cancel_rounded,
+                  size: Ic.medium,
+                  color: c.faint,
+                ),
+                onPressed: () {
+                  _query.clear();
+                  unawaited(_load());
+                },
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _body(
+    PosseColors c,
+    bool searching,
+    List<(String, List<HistorySession>)> groups,
+    String agent,
+    DateTime now,
+  ) {
+    return Column(
+      children: [
+        // 写得下时铺满一行、两端对齐，窄屏写不下再横着滑
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+          child: LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              // 和下面的卡片同宽：「全部」的底色左边贴卡片左边
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: box.maxWidth - 32),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (var i = 0; i < historyAgents.length; i++)
+                      _AgentChip(
+                        agent: historyAgents[i],
+                        selected: i == _agent,
+                        onTap: () {
+                          if (i == _agent) return;
+                          _debounce?.cancel();
+                          setState(() {
+                            _agent = i;
+                            _open.clear();
+                          });
+                          unawaited(_load());
+                        },
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
-          if (_error != null) NoticeBar(_error!),
-          if (searching && _any && _sessions.isNotEmpty)
-            const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
-          Expanded(
-            child: _loading && _sessions.isEmpty
-                ? const Center(child: PosseLoader())
-                : _sessions.isEmpty && _error == null
-                ? EmptyState(
-                    icon: Icons.history_rounded,
-                    text: searching
-                        ? '没有找到'
-                        : agent.isEmpty
-                        ? '电脑上还没有会话历史'
-                        : '电脑上还没有 ${agentLabel(agent)} 的会话历史',
-                  )
-                : CustomScrollView(
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
-                    slivers: [
-                      // 搜索结果按相关度排，不分组
-                      if (searching)
-                        SliverSection(
-                          inset: 52,
-                          itemCount: _sessions.length,
-                          itemBuilder: (context, i) =>
-                              _row(context, _sessions[i], now),
-                        )
-                      else
-                        for (final (i, (label, list)) in groups.indexed)
-                          ..._group(context, label, list, i == 0, now),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    ],
+        ),
+        if (_error != null) NoticeBar(_error!),
+        if (searching && _any && _sessions.isNotEmpty)
+          const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
+        Expanded(
+          child: _loading && _sessions.isEmpty
+              ? const Center(child: PosseLoader())
+              : _sessions.isEmpty && _error == null
+              ? EmptyState(
+                  icon: Icons.history_rounded,
+                  text: searching
+                      ? '没有找到'
+                      : '${widget.cwd == null ? '电脑上' : '这个目录'}还没有'
+                            '${agent.isEmpty ? '' : ' ${agentLabel(agent)} 的'}会话历史',
+                )
+              : CustomScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
                   ),
-          ),
-        ],
-      ),
+                  slivers: [
+                    // 搜索结果按相关度排，不分组
+                    if (searching)
+                      SliverSection(
+                        inset: 52,
+                        itemCount: _sessions.length,
+                        itemBuilder: (context, i) =>
+                            _row(context, _sessions[i], now),
+                      )
+                    else
+                      for (final (i, (label, list)) in groups.indexed)
+                        ..._group(context, label, list, i == 0, now),
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  ],
+                ),
+        ),
+      ],
     );
   }
 

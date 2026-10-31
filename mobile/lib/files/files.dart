@@ -859,7 +859,7 @@ String worktreePath(PosseAppModel model, String worktree) {
   return '';
 }
 
-/// 会话页、终端页顶栏上的按钮：打开和项目详情一样的"改动 | 文件"页，不离开会话也能看 git 和文件。
+/// 会话页、终端页顶栏上的按钮：打开和项目详情一样的"改动 | 文件 | 历史"页，不离开会话也能看 git、文件和这个目录的会话历史。
 class FilesButton extends StatelessWidget {
   const FilesButton({
     super.key,

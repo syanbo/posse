@@ -1455,7 +1455,7 @@ class TabScreen extends StatefulWidget {
   final PosseAppModel model;
   final WorktreeRow worktree;
 
-  /// 打开时停在哪一页：0 改动，1 文件。
+  /// 打开时停在哪一页：0 改动，1 文件，2 历史。
   final int page;
 
   @override
@@ -1510,7 +1510,7 @@ class _TabScreenState extends State<TabScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Segmented(
-              labels: const ['改动', '文件'],
+              labels: const ['改动', '文件', '历史'],
               selected: _page,
               onChanged: (i) => setState(() {
                 _page = i;
@@ -1544,6 +1544,10 @@ class _TabScreenState extends State<TabScreen> {
                   const SizedBox.shrink()
                 else
                   FilesPane(model: widget.model, worktree: row.id),
+                if (!_seen.contains(2))
+                  const SizedBox.shrink()
+                else
+                  HistoryScreen(model: widget.model, cwd: row.path),
               ],
             ),
           ),
