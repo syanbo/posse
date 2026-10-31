@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
@@ -208,6 +210,11 @@ class TerminalRenderBox extends RenderBox {
   /// Posse: 上次布局时的屏幕。切进备用屏幕时回滚行数常常不变（刚建的终端都是 0），
   /// 只重画不重新布局的话，滚动范围停在主屏幕的 0..0，备用屏幕里滑不动，要等改尺寸才好。
   TerminalScreen? _lastScreen;
+
+  /// Posse: 等程序这次同步更新（mode 2026）结束的计时，不在同步更新里时是 null；
+  /// 到点后 [_holdExpired] 为真，不再等。
+  Timer? _holdTimer;
+  var _holdExpired = false;
   var _preeditText = '';
   LinkSnapshot _linkSnapshot;
 
@@ -470,6 +477,8 @@ class TerminalRenderBox extends RenderBox {
     _offset.removeListener(_onScroll);
     _renderObserver.removeListener(_onRenderObserverChanged);
     _terminal.removeListener(_onTerminalChanged);
+    _holdTimer?.cancel();
+    _holdTimer = null;
     super.detach();
   }
 
@@ -686,6 +695,11 @@ class TerminalRenderBox extends RenderBox {
   void _onTerminalChanged() {
     if (_paintState.rows == 0 || _performingLayout) return;
 
+    if (_syncHeld) {
+      _needsFrameSync = true;
+      return;
+    }
+
     if (_terminal.scrollbackRows != _lastScrollbackRows ||
         _terminal.activeScreen != _lastScreen) {
       _needsFrameSync = true;
@@ -695,6 +709,26 @@ class TerminalRenderBox extends RenderBox {
 
     _markFrameDirty();
   }
+
+  /// Posse: 程序在同步更新（mode 2026）里时先不画新内容，等它结束，最多等 [_syncHoldLimit]，
+  /// 同桌面端和 Ghostty。Claude Code 每次重画都包在同步更新里，经网络分几段到，
+  /// 中间出帧会画出半截，状态行折行时整屏上下跳一行。
+  /// libghostty 的 Dart 绑定不报同步更新的开始，从看到它在同步更新里算起。
+  bool get _syncHeld {
+    if (!_terminal.modeGet(const .syncOutput())) {
+      _holdTimer?.cancel();
+      _holdTimer = null;
+      _holdExpired = false;
+      return false;
+    }
+    _holdTimer ??= Timer(_syncHoldLimit, () {
+      _holdExpired = true;
+      if (attached) _onTerminalChanged();
+    });
+    return !_holdExpired;
+  }
+
+  static const _syncHoldLimit = Duration(seconds: 1);
 
   // Maintains scroll position and content dimensions.
   //
@@ -743,8 +777,10 @@ class TerminalRenderBox extends RenderBox {
   void _syncFrameState() {
     if (_paintState.rows == 0) return;
 
-    final terminalDirty = _needsFrameSync;
-    _needsFrameSync = false;
+    // 同步更新里别的原因（滚动、光标闪烁）要重画时，接着画上一帧的内容
+    final held = _needsFrameSync && _syncHeld;
+    final terminalDirty = _needsFrameSync && !held;
+    if (!held) _needsFrameSync = false;
     _pipeline.sync(
       _terminal,
       terminalDirty: terminalDirty,

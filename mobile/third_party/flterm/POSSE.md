@@ -23,5 +23,6 @@ pub.dev 上 flterm 0.0.5 的副本（MIT），`pubspec.yaml` 用 `dependency_ove
 - `lib/src/widgets/terminal_gesture_detector.dart`：长按选中词时不震动。
 - `lib/src/widgets/terminal_input_client.dart`、`terminal_controller_impl.dart`、`terminal_controller.dart`：一次插进好几个字又带换行的（系统菜单粘贴、听写）交给 `onPasted` 当粘贴，不拆成字和回车；`paste` 去掉末尾的换行（`trimPastedNewlines`，导出给外层复制用），粘贴完不直接回车发出去。
 - `lib/src/rendering/terminal_frame_builder.dart`：实现 `TerminalTheme.minimumContrast`（原版只声明没用到），照 Ghostty 的 minimum-contrast：字色和底色的对比度不够时往黑或白里调到刚够，保留色相；淡色字按叠到底色上的颜色算。手机和电脑深浅色相反时，程序按电脑配的暗灰、黄色字在手机的底色上看不清。
+- `lib/src/rendering/terminal_renderer.dart`：程序在同步更新（mode 2026）里时不画新内容，等它结束，最多等一秒（同桌面端和 Ghostty）。原版收到输出就出帧，Claude Code 包在同步更新里的整屏重画经网络分几段到，中间画出半截，状态行折行时整屏上下跳一行。libghostty 的 Dart 绑定不报同步更新的开始，从看到终端在同步更新里时开始计时。
 
 升级 flterm 时从 pub 缓存重新复制，再把上面的改动补回来。
