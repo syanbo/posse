@@ -130,6 +130,7 @@ func (a *app) build(c *ui.Context) {
 	a.unsavedDialog(c)
 	a.rollbackDialog(c)
 	a.confirmDialog(c)
+	a.skillChangeDialog(c)
 	a.projectIconDialog(c)
 	a.sysMenuView(c)
 }

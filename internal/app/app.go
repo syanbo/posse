@@ -202,6 +202,7 @@ type app struct {
 	recent      recentView            // 右侧历史面板
 	skills      skillsView            // 侧栏的「技能」页
 	skillsTab   skillsPanelView       // 文件栏的「技能」页签
+	skillChange skillChangeView       // 开关技能的确认框
 	images      imagesView            // 右侧图片面板
 	mobile      mobileView            // 侧栏「手机」页：配对码和已配对的手机
 	mem         memView               // 底栏的内存浮窗

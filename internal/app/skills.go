@@ -43,6 +43,9 @@ type skillsPanelView struct {
 	poll panelPoll
 }
 
+// findCodex 找 codex 可执行文件，测试里换掉免得拉起真的 codex。
+var findCodex = skills.FindCodex
+
 // skillsRefresh 是文件栏的技能页签开着时多久重扫一次：只是 stat 几个目录。
 const skillsRefresh = 3 * time.Second
 
@@ -63,7 +66,7 @@ func (a *app) scanSkills() {
 	req := s.req
 	go func() {
 		var list []skills.CodexSkill
-		if codex := skills.FindCodex(homeDir); codex != "" {
+		if codex := findCodex(homeDir); codex != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			list, _ = skills.CodexList(ctx, codex, homeDir)
 			cancel()
@@ -279,7 +282,7 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 	row.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, sk.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
-			skillMarks(c, sk)
+			skillMarks(c, sk, nil)
 		})
 		if sk.Description != "" {
 			ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
@@ -291,22 +294,37 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 }
 
 // skillMarks 是一行末尾四家的状态：用得上的是 agent 的色块，只能手动调用的淡一些，关了的更淡，
-// 读不到的只留一个空位，四家对齐成列。悬停看原因。
-func skillMarks(c *ui.Context, sk skills.Skill) {
+// 读不到的只留一个空位，四家对齐成列。悬停看原因。toggle 不为空时能开关的那几家点一下切换（先弹框确认）。
+func skillMarks(c *ui.Context, sk skills.Skill, toggle func(ag skills.Agent, enable bool)) {
 	ui.Row(c).Gap(4).Shrink(0).Children(func() {
 		for _, ag := range skills.Agents {
 			st := sk.Agents[ag]
 			size := smallIcon()
+			tip := skillStateTip(ag, st)
 			if st.State == skills.Unseen {
-				ui.Box(c).Size(size, size).Shrink(0).Tooltip(skillStateTip(ag, st))
+				ui.Box(c).Size(size, size).Shrink(0).Tooltip(tip)
 				continue
 			}
-			e := agentIcon(c, ag.String(), size).Tooltip(skillStateTip(ag, st))
+			can := toggle != nil && skills.CanToggle(ag, sk)
+			if can {
+				if st.State == skills.Off {
+					tip += "\n点一下打开"
+				} else {
+					tip += "\n点一下关掉"
+				}
+			}
+			e := agentIcon(c, ag.String(), size).Tooltip(tip)
 			switch st.State {
 			case skills.Manual:
 				e.Opacity(0.55)
 			case skills.Off, skills.Shadowed:
 				e.Opacity(0.2)
+			}
+			if can {
+				e.Role(ui.RoleButton).Label(agentTitle(ag.String()))
+				if pressable(e).Clicked() {
+					toggle(ag, st.State == skills.Off)
+				}
 			}
 		}
 	})
@@ -367,7 +385,7 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
 		cardTitle(c, "各家状态").Margin(0, 0, 4, 0)
 		for _, ag := range skills.Agents {
-			skillAgentRow(c, ag, sk.Agents[ag])
+			a.skillAgentRow(c, sk, ag, skills.Options{Home: homeDir})
 		}
 	})
 	if len(sk.Paths) > 1 {
@@ -387,10 +405,11 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 	}
 }
 
-// skillAgentRow 是详情里一家的状态：色块、名字、状态，下面一行是原因和读到它的路径。
-func skillAgentRow(c *ui.Context, ag skills.Agent, st skills.Status) {
+// skillAgentRow 是详情里一家的状态：色块、名字、状态，下面一行是原因和读到它的路径；能开关的行尾有开关。
+func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o skills.Options) {
 	t := c.Theme()
-	ui.Row(c).Padding(6, 0).Gap(12).AlignItems(ui.Start).Children(func() {
+	st := sk.Agents[ag]
+	ui.Row(c.Key("agent-"+ag.String())).Padding(6, 0).Gap(12).AlignItems(ui.Start).Children(func() {
 		e := agentIcon(c, ag.String(), iconSize)
 		if st.State != skills.On {
 			e.Opacity(0.55)
@@ -417,6 +436,12 @@ func skillAgentRow(c *ui.Context, ag skills.Agent, st skills.Status) {
 				ui.Text(c, shortPath(st.Via)).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).MaxLines(2)
 			}
 		})
+		if skills.CanToggle(ag, sk) {
+			on := st.State != skills.Off
+			if ui.Switch(c, &on).Label(agentTitle(ag.String()) + "里启用").Changed() {
+				a.planSkillToggle(o, sk, ag, on)
+			}
+		}
 	})
 }
 
@@ -550,7 +575,9 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 				row.Children(func() {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, sk.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
-						skillMarks(c, sk)
+						skillMarks(c, sk, func(ag skills.Agent, enable bool) {
+							a.planSkillToggle(skills.Options{Home: homeDir, Dir: w.Path}, sk, ag, enable)
+						})
 					})
 					if sk.Description != "" {
 						ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
@@ -565,6 +592,97 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 					a.openFile(w, sk.File, 0, [2]int{})
 				}
 			}
+		})
+	})
+}
+
+// --- 开关：先算好要改的文件和内容，弹框给用户看 diff，确认后写
+
+// skillChangeView 是开关技能的确认框。
+type skillChangeView struct {
+	open bool
+	ch   skills.Change
+}
+
+// planSkillToggle 算出改动并弹框确认；算不出来（配置认不出、不用改）时报在错误条上。
+func (a *app) planSkillToggle(o skills.Options, sk skills.Skill, ag skills.Agent, enable bool) {
+	ch, err := skills.PlanToggle(o, sk, ag, enable)
+	if err != nil {
+		a.err = "没有改" + agentTitle(ag.String()) + "的配置：" + err.Error()
+		return
+	}
+	a.skillChange = skillChangeView{open: true, ch: ch}
+}
+
+// applySkillChange 写入确认过的改动，写完重扫技能页和文件栏的技能页签。
+func (a *app) applySkillChange(ch skills.Change) {
+	go func() {
+		err := ch.Apply()
+		a.update(func() {
+			if err != nil {
+				a.err = "没有改" + shortPath(ch.File) + "：" + err.Error()
+			}
+			if a.skills.visible {
+				a.scanSkills()
+			}
+			a.skillsTab.poll.at = time.Time{}
+		})
+	}()
+}
+
+// skillChangeDialog 是开关技能的确认框：改哪个文件、diff，确认才写。
+func (a *app) skillChangeDialog(c *ui.Context) {
+	t := c.Theme()
+	p := colors(t)
+	v := &a.skillChange
+	ui.Modal(c, &v.open, func() {
+		ch := v.ch
+		verb := "关掉"
+		if ch.Enable {
+			verb = "打开"
+		}
+		ui.Column(c).Width(520).Gap(12).Children(func() {
+			titleText(c, fmt.Sprintf("在 %s 里%s %s", agentTitle(ch.Agent.String()), verb, ch.Skill), fsTitle)
+			ui.Column(c).Gap(4).Children(func() {
+				what := "会修改这个文件："
+				if ch.Before == "" {
+					what = "会新建这个文件："
+				}
+				ui.Text(c, what).FontSize(fsBody).TextColor(t.TextMuted)
+				ui.Text(c, shortPath(ch.File)).FontSize(fsSmall).Font(monoFont).Selectable()
+			})
+			ui.Scroll(c).MaxHeight(sz(260)).Children(func() {
+				ui.Column(c).Padding(8, 0).Radius(rCard).Background(p.code).Children(func() {
+					for _, l := range skills.Diff(ch.Before, ch.After, 3) {
+						row := ui.Row(c).Padding(0, 12)
+						fg := t.Text
+						text := string(l.Kind) + " " + l.Text
+						switch l.Kind {
+						case '+':
+							row.Background(soft(t, p.sage))
+						case '-':
+							row.Background(soft(t, t.Danger))
+						case 0:
+							fg, text = t.TextMuted, "⋯"
+						default:
+							fg = t.TextMuted
+						}
+						row.Children(func() {
+							ui.Text(c, text).FontSize(fsSmall).Font(monoFont).TextColor(fg).LineHeight(1.5)
+						})
+					}
+				})
+			})
+			ui.Text(c, "已经开着的会话可能要重开才会生效。").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
+				if pressable(textButton(c, "取消")).Clicked() {
+					v.open = false
+				}
+				if pressable(accentButton(c, "确认修改")).Clicked() {
+					v.open = false
+					a.applySkillChange(ch)
+				}
+			})
 		})
 	})
 }

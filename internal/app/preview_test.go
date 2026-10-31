@@ -22,6 +22,7 @@ import (
 	"posse/internal/gitx"
 	"posse/internal/history"
 	"posse/internal/media"
+	"posse/internal/skills"
 	"posse/internal/usage"
 )
 
@@ -732,6 +733,13 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewSkillsBoard(a, skillIssuesKey)
 		savePNG(t, newPreviewTester(a, dark), "skills-issues-"+suffix+".png")
+		// 开关技能的确认框：改哪个文件、diff
+		a = previewApp(t)
+		previewSkillsBoard(a, homeDir+"/.agents/skills/lark-calendar")
+		before := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"skillOverrides\": {\n    \"lark-calendar\": \"off\"\n  },\n  \"theme\": \"dark\"\n}\n"
+		after := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"theme\": \"dark\"\n}\n"
+		a.skillChange = skillChangeView{open: true, ch: skills.Change{Agent: skills.Claude, Skill: "lark-calendar", Enable: true, File: homeDir + "/.claude/settings.json", Before: before, After: after}}
+		savePNG(t, newPreviewTester(a, dark), "skills-confirm-"+suffix+".png")
 		// 文件栏的技能页签：当前工作区的项目级技能
 		a = previewApp(t)
 		previewSkillsTab(a)
