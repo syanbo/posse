@@ -5,6 +5,7 @@ package skills
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -72,6 +73,10 @@ type Skill struct {
 	Scope     Scope
 	// Source 是 npx skills 锁文件里记的来源（如 vercel-labs/skills），不是它装的为空。
 	Source string
+	// SourceURL 是来源的网页（GitHub 上技能所在的目录、well-known 的 SKILL.md），推不出来时为空。
+	SourceURL string
+	// LockHash 是锁文件里记的装上时的版本（GitHub 的目录树哈希或 well-known 的摘要），和 CheckUpdates 查到的比。
+	LockHash string
 	// Paths 是它出现在各个技能目录里的位置（链接或目录本身）。
 	Paths  []string
 	Meta   Meta
@@ -335,8 +340,8 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 					s.Scope = sc
 				}
 			}
-			if src, ok := cfg.lock[it.name]; ok && filepath.Dir(it.real) == realDir(filepath.Join(o.Home, ".agents", "skills")) {
-				s.Source = src
+			if e, ok := cfg.lock[it.name]; ok && filepath.Dir(it.real) == realDir(filepath.Join(o.Home, ".agents", "skills")) {
+				s.Source, s.SourceURL, s.LockHash = e.Source, e.url(), e.hash()
 			}
 			out = append(out, s)
 		}
@@ -447,7 +452,7 @@ func redundant(rs []root, items []found) []Issue {
 }
 
 // lockMissing 找锁文件里有、~/.agents/skills 里没有的技能。
-func lockMissing(home string, lock map[string]string) []Issue {
+func lockMissing(home string, lock map[string]lockEntry) []Issue {
 	dir := filepath.Join(home, ".agents", "skills")
 	var out []Issue
 	for name := range lock {
@@ -459,23 +464,57 @@ func lockMissing(home string, lock map[string]string) []Issue {
 	return out
 }
 
-// readLock 读 npx skills 的锁文件，返回 名字 → 来源。
-func readLock(home string) map[string]string {
+// lockEntry 是 npx skills 锁文件里的一项。
+type lockEntry struct {
+	Source     string `json:"source"`
+	SourceType string `json:"sourceType"`
+	SourceURL  string `json:"sourceUrl"`
+	SkillPath  string `json:"skillPath"`
+	Ref        string `json:"ref"`
+
+	SkillFolderHash string `json:"skillFolderHash"`
+	SourceBaseURL   string `json:"sourceBaseUrl"`
+	WellKnownDigest string `json:"wellKnownDigest"`
+}
+
+// hash 是装上时的版本：well-known 的看摘要，别的看目录树哈希。
+func (e lockEntry) hash() string {
+	if e.SourceType == "well-known" {
+		return e.WellKnownDigest
+	}
+	return e.SkillFolderHash
+}
+
+// url 是来源的网页：GitHub 的指到技能所在目录（没记分支用 HEAD，GitHub 认），别的 http(s) 地址去掉 .git 原样用。
+func (e lockEntry) url() string {
+	if e.SourceType == "github" && strings.Count(e.Source, "/") == 1 {
+		u := "https://github.com/" + e.Source
+		if dir := path.Dir(e.SkillPath); e.SkillPath != "" && dir != "." {
+			ref := e.Ref
+			if ref == "" {
+				ref = "HEAD"
+			}
+			u += "/tree/" + ref + "/" + dir
+		}
+		return u
+	}
+	if strings.HasPrefix(e.SourceURL, "https://") || strings.HasPrefix(e.SourceURL, "http://") {
+		return strings.TrimSuffix(e.SourceURL, ".git")
+	}
+	return ""
+}
+
+// readLock 读 npx skills 的锁文件，返回 名字 → 记录。
+func readLock(home string) map[string]lockEntry {
 	b, err := os.ReadFile(filepath.Join(home, ".agents", ".skill-lock.json"))
 	if err != nil {
 		return nil
 	}
 	var l struct {
-		Skills map[string]struct {
-			Source string `json:"source"`
-		} `json:"skills"`
+		Skills map[string]lockEntry `json:"skills"`
 	}
 	if json.Unmarshal(b, &l) != nil {
 		return nil
 	}
-	out := make(map[string]string, len(l.Skills))
-	for name, s := range l.Skills {
-		out[name] = s.Source
-	}
-	return out
+	return l.Skills
 }

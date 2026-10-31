@@ -16,7 +16,7 @@ type configs struct {
 	claude map[string]string
 	codex  []codexEntry
 	grok   grokConfig
-	lock   map[string]string
+	lock   map[string]lockEntry
 }
 
 // codexEntry 是 Codex config.toml 里的一条 [[skills.config]]：按名字或路径选中技能。

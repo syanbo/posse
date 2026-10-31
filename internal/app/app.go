@@ -204,6 +204,8 @@ type app struct {
 	skillsTab    skillsPanelView       // 文件栏的「技能」页签
 	skillChange  skillChangeView       // 开关技能的确认框
 	skillInstall skillInstallView      // 安装技能的对话框
+	skillRun     skillRunView          // 技能的安装、更新、删除：对话框里嵌终端跑命令
+	hiddenTerms  map[string]bool       // 不进标签栏和侧栏的终端（技能命令的对话框里那个）
 	skillNew     skillNewView          // 新建项目技能的对话框
 	images       imagesView            // 右侧图片面板
 	mobile       mobileView            // 侧栏「手机」页：配对码和已配对的手机
@@ -662,6 +664,14 @@ func (a *app) apply(ps []project, ws []workspace) {
 	for i := range ws {
 		// ws 是浅拷贝，终端列表还和上次轮询的结果共用，排序前先复制
 		ws[i].Terminals = slices.Clone(ws[i].Terminals)
+		// 技能命令的对话框里嵌着的终端不进标签栏和侧栏，它的状态交给对话框
+		ws[i].Terminals = slices.DeleteFunc(ws[i].Terminals, func(t terminalInfo) bool {
+			if a.hiddenTerms[t.ID] {
+				a.skillRunExited(t)
+				return true
+			}
+			return false
+		})
 		sortTerminals(ws[i].Terminals, a.state.TermOrder[ws[i].ID])
 		for j := range ws[i].Terminals {
 			a.syncTermName(&ws[i].Terminals[j])

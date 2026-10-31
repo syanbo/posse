@@ -132,6 +132,7 @@ func (a *app) build(c *ui.Context) {
 	a.confirmDialog(c)
 	a.skillChangeDialog(c)
 	a.skillInstallDialog(c)
+	a.skillRunDialog(c)
 	a.skillNewDialog(c)
 	a.projectIconDialog(c)
 	a.sysMenuView(c)

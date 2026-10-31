@@ -740,11 +740,39 @@ func TestPreview(t *testing.T) {
 		after := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"theme\": \"dark\"\n}\n"
 		a.skillChange = skillChangeView{open: true, ch: skills.Change{Agent: skills.Claude, Skill: "lark-calendar", Enable: true, File: homeDir + "/.claude/settings.json", Before: before, After: after}}
 		savePNG(t, newPreviewTester(a, dark), "skills-confirm-"+suffix+".png")
-		// 安装对话框：填了来源，下面是要跑的命令
+		// 安装对话框：读出了来源里的技能，勾掉一个，下面是要跑的命令
 		a = previewApp(t)
 		previewSkillsBoard(a, "")
-		a.skillInstall = skillInstallView{open: true, ws: "w1", global: true, claude: true, source: "vercel-labs/agent-skills", names: "web-design-guidelines"}
+		a.skillInstall = skillInstallView{open: true, ws: "w1", global: true, claude: true, source: "anthropics/skills", listSrc: "anthropics/skills",
+			listed: []skills.Listed{
+				{Name: "docx", Description: "Create, read, edit, or manipulate Word documents.", Group: "Document Skills"},
+				{Name: "pdf", Description: "Read, merge, split and fill PDF files.", Group: "Document Skills"},
+				{Name: "frontend-design", Description: "Create distinctive, production-grade frontend interfaces with high design quality.", Group: "Design"},
+			},
+			picked: []bool{true, false, true}, installed: []bool{true, false, false}}
 		savePNG(t, newPreviewTester(a, dark), "skills-install-"+suffix+".png")
+		// 读不到列表：报错，退回手填名字
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		a.skillInstall = skillInstallView{open: true, ws: "w1", global: true, claude: true, source: "nobody/nope", listSrc: "nobody/nope",
+			listErr: "Failed to clone repository：Authentication failed for https://github.com/nobody/nope.git."}
+		savePNG(t, newPreviewTester(a, dark), "skills-install-failed-"+suffix+".png")
+		// 更新技能：框里写明命令，点「运行」后在框里的终端跑
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		a.skillRun = skillRunView{open: true, title: "更新 archify？", about: "按锁文件里记的来源（tt-a1i/archify）拉最新的版本，覆盖本地的改动。", line: "DISABLE_TELEMETRY=1 npx -y skills@1.7.4 update archify -g -y", ws: "w1"}
+		savePNG(t, newPreviewTester(a, dark), "skills-run-"+suffix+".png")
+		// 没装 Node.js：提示去装
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		a.skillInstall = skillInstallView{open: true, ws: "w1", global: true, claude: true, source: "anthropics/skills", listSrc: "anthropics/skills",
+			listErr: skills.ErrNoNPX.Error(), noNPX: true}
+		savePNG(t, newPreviewTester(a, dark), "skills-install-nonpx-"+suffix+".png")
+		// MCP 分页：四家的服务和状态，详情是各家从哪读到、每份配置
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		a.skills.page, a.skills.mcpSel = 1, "iphone-use"
+		savePNG(t, newPreviewTester(a, dark), "skills-mcp-"+suffix+".png")
 		// 文件栏的技能页签：当前工作区的项目级技能
 		a = previewApp(t)
 		previewSkillsTab(a)

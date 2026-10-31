@@ -93,7 +93,7 @@ func TestScanAgents(t *testing.T) {
 	link(t, "../../.agents/skills/shared", filepath.Join(h, ".claude", "skills", "shared"))
 	link(t, "../../.agents/skills/shared", filepath.Join(h, ".grok", "skills", "shared"))
 	link(t, "../../.agents/skills/gone", filepath.Join(h, ".claude", "skills", "gone"))
-	write(t, filepath.Join(h, ".agents", ".skill-lock.json"), `{"version":3,"skills":{"shared":{"source":"me/shared"},"lost":{"source":"me/lost"}}}`)
+	write(t, filepath.Join(h, ".agents", ".skill-lock.json"), `{"version":3,"skills":{"shared":{"source":"me/shared","sourceType":"github","skillPath":"skills/shared/SKILL.md"},"lost":{"source":"me/lost"}}}`)
 
 	c := Scan(Options{Home: h})
 	s := find(t, c, "shared", ScopeUser)
@@ -102,6 +102,9 @@ func TestScanAgents(t *testing.T) {
 	}
 	if s.Source != "me/shared" || len(s.Paths) != 3 {
 		t.Errorf("shared 来源 %q，位置 %v", s.Source, s.Paths)
+	}
+	if s.SourceURL != "https://github.com/me/shared/tree/HEAD/skills/shared" {
+		t.Errorf("shared 来源网页 %q", s.SourceURL)
 	}
 	if got := states(find(t, c, "manual", ScopeUser)); got != [NumAgents]State{Unseen, On, Manual, Manual} {
 		t.Errorf("manual 各家状态 %v（Codex 不认 disable-model-invocation）", got)
@@ -238,6 +241,24 @@ func TestGrokExtraPaths(t *testing.T) {
 	for _, n := range []string{"flat", "lint", "oneshot"} {
 		if st := find(t, c, n, ScopeUser).Agents[Grok].State; st != On {
 			t.Errorf("%s：%v", n, st)
+		}
+	}
+}
+
+func TestLockURL(t *testing.T) {
+	cases := []struct {
+		e    lockEntry
+		want string
+	}{
+		{lockEntry{Source: "a/b", SourceType: "github", SkillPath: "SKILL.md"}, "https://github.com/a/b"},
+		{lockEntry{Source: "a/b", SourceType: "github", SkillPath: "x/y/SKILL.md", Ref: "dev"}, "https://github.com/a/b/tree/dev/x/y"},
+		{lockEntry{Source: "open.feishu.cn", SourceType: "well-known", SourceURL: "https://open.feishu.cn/.well-known/skills/lark-doc/SKILL.md"}, "https://open.feishu.cn/.well-known/skills/lark-doc/SKILL.md"},
+		{lockEntry{Source: "gitlab.com/a/b", SourceType: "git", SourceURL: "https://gitlab.com/a/b.git"}, "https://gitlab.com/a/b"},
+		{lockEntry{Source: "./local", SourceType: "local", SourceURL: "/Users/x/local"}, ""},
+	}
+	for _, c := range cases {
+		if got := c.e.url(); got != c.want {
+			t.Errorf("%+v：%q，要 %q", c.e, got, c.want)
 		}
 	}
 }

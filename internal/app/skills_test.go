@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,8 +18,9 @@ func TestSkillToggleConfirm(t *testing.T) {
 	homeDir = home
 	t.Cleanup(func() { homeDir = old })
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
-	findCodex = func(string) string { return "" } // 不去问真的 codex
-	t.Cleanup(func() { findCodex = skills.FindCodex })
+	findCodex = func(string) string { return "" } // 不去问真的 codex、grok
+	findGrok = func(string) string { return "" }
+	t.Cleanup(func() { findCodex, findGrok = skills.FindCodex, skills.FindGrok })
 	dir := filepath.Join(home, ".claude", "skills", "demo")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: demo\ndescription: 测试用\n---\n"), 0o644)
@@ -106,7 +108,8 @@ func TestSkillStatsSurviveRescan(t *testing.T) {
 	homeDir = home
 	t.Cleanup(func() { homeDir = old })
 	findCodex = func(string) string { return "" }
-	t.Cleanup(func() { findCodex = skills.FindCodex })
+	findGrok = func(string) string { return "" }
+	t.Cleanup(func() { findCodex, findGrok = skills.FindCodex, skills.FindGrok })
 	a := previewApp(t)
 	a.skills.visible = true
 	a.scanSkills()
@@ -119,4 +122,58 @@ func TestSkillStatsSurviveRescan(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("statsLoading %v stats %v", a.skills.statsLoading, a.skills.stats)
+}
+
+func TestSkillStep(t *testing.T) {
+	keys := []string{"a", "b", "c"}
+	s := &skillsView{sel: "b"}
+	s.step(keys, &s.sel, 1)
+	if s.sel != "c" || !s.reveal {
+		t.Fatalf("下键：%q %v", s.sel, s.reveal)
+	}
+	s.step(keys, &s.sel, 1)
+	if s.sel != "c" {
+		t.Errorf("到底了不动：%q", s.sel)
+	}
+	s.sel = skillIssuesKey
+	s.step(keys, &s.sel, -1)
+	if s.sel != skillIssuesKey {
+		t.Errorf("看体检时上键不动：%q", s.sel)
+	}
+	s.step(keys, &s.sel, 1)
+	if s.sel != "a" {
+		t.Errorf("看体检时下键选第一个：%q", s.sel)
+	}
+}
+
+// 技能命令对话框里的终端：不进工作区的终端列表，跑完后对话框拿到退出码。
+func TestSkillRunHidden(t *testing.T) {
+	a := previewApp(t)
+	a.skillRun = skillRunView{open: true, title: "更新 x？", line: "true", ws: "w1", id: "t_run"}
+	a.hiddenTerms = map[string]bool{"t_run": true}
+	code := 3
+	ws := slices.Clone(a.workspaces)
+	for i := range ws {
+		if ws[i].ID == "w1" {
+			ws[i].Terminals = append(slices.Clone(ws[i].Terminals), terminalInfo{ID: "t_run", WorkspaceID: "w1", Running: true})
+		}
+	}
+	a.apply(slices.Clone(a.projects), slices.Clone(ws))
+	if _, tm := a.findTerminal("t_run"); tm != nil {
+		t.Fatal("藏起来的终端进了列表")
+	}
+	if a.skillRun.exit != nil {
+		t.Fatal("还在跑时不该有退出码")
+	}
+	for i := range ws {
+		for j := range ws[i].Terminals {
+			if ws[i].Terminals[j].ID == "t_run" {
+				ws[i].Terminals[j].Running, ws[i].Terminals[j].ExitCode = false, &code
+			}
+		}
+	}
+	a.apply(slices.Clone(a.projects), slices.Clone(ws))
+	if a.skillRun.exit == nil || *a.skillRun.exit != 3 {
+		t.Fatalf("退出码 %v", a.skillRun.exit)
+	}
 }

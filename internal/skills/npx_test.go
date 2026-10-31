@@ -35,3 +35,36 @@ func TestInstallCheck(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestParseList(t *testing.T) {
+	out := "\x1b[?25l│\n\x1b[1G\x1b[J◇  Found 3 skills\n\x1b[?25h\n│\n◇  Available Skills\n" +
+		"Academy Guide\n│\n│    academy-guide\n│\n│      Recommends courses.\n\n" +
+		"General\n│\n│    template-skill\n│\n│      Replace with description.\n│      Second line.\n\n" +
+		"│\n│    pdf\n│\n\n│\n└  Use --skill <name> to install specific skills\n\n"
+	list, err := ParseList(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Listed{
+		{Name: "academy-guide", Description: "Recommends courses.", Group: "Academy Guide"},
+		{Name: "template-skill", Description: "Replace with description. Second line.", Group: "General"},
+		{Name: "pdf", Group: "General"},
+	}
+	if len(list) != len(want) {
+		t.Fatalf("%+v", list)
+	}
+	for i := range want {
+		if list[i] != want[i] {
+			t.Errorf("第 %d 个：%+v", i, list[i])
+		}
+	}
+
+	_, err = ParseList("◒  Cloning repository…..│\n■  Failed to clone repository\n│\n│  Authentication failed for https://github.com/a/b.git.\n│\n└  Installation failed\n\n\x1b[1G\x1b[J■  Canceled\n")
+	if err == nil || err.Error() != "Failed to clone repository：Authentication failed for https://github.com/a/b.git." {
+		t.Errorf("克隆失败：%v", err)
+	}
+	_, err = ParseList("◇  No skills found\n│\n└  No valid skills found. Skills require a SKILL.md with name and description.\n")
+	if err == nil || !strings.HasPrefix(err.Error(), "No valid skills found") {
+		t.Errorf("没有技能：%v", err)
+	}
+}

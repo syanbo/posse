@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"posse/internal/agent"
 	"posse/internal/history"
 	"posse/internal/skills"
 )
@@ -36,12 +36,24 @@ type skillsView struct {
 	loaded  bool
 	at      time.Time
 	sel     string // 选中技能的目录，或 skillIssuesKey
+	reveal  bool   // 方向键换了选中：下一帧把它滚进视野
 	query   string
 	agent   int // 0 全部，其余是 skills.Agents[agent-1] 用得上的
 	byUse   int // 列表排序：0 按名字，1 按用量（多的在前）
+	page    int // 0 技能，1 MCP
+
+	mcp    skills.MCPCatalog
+	mcpSel string // 选中的 MCP 服务名，或 skillIssuesKey
+
+	// 检查更新：点了才查（要联网），结果一直留着，更新后锁文件里的版本对上了标记自然消失
+	updates     *skills.Updates
+	checking    bool
+	checkReq    int
+	onlyUpdates bool // 只看有新版本的
 
 	// 跨会话的用量，单独在后台算：第一次要把各家的会话文件都读一遍（几十秒），之后按文件缓存
 	stats        map[string]*history.SkillStat
+	mcpStats     map[string]*history.SkillStat // MCP 服务的用量，和技能同一遍算
 	statsLoading bool
 	statsGen     int // 关掉技能页加一：之前在算的结果不要；页面开着时重扫不影响正在算的用量
 	statsDone    int
@@ -56,8 +68,11 @@ type skillsPanelView struct {
 	poll panelPoll
 }
 
-// findCodex 找 codex 可执行文件，测试里换掉免得拉起真的 codex。
-var findCodex = skills.FindCodex
+// findCodex、findGrok 找 codex、grok 可执行文件，测试里换掉免得拉起真的。
+var (
+	findCodex = skills.FindCodex
+	findGrok  = skills.FindGrok
+)
 
 // skillsRefresh 是文件栏的技能页签开着时多久重扫一次：只是 stat 几个目录。
 const skillsRefresh = 3 * time.Second
@@ -78,8 +93,18 @@ func (a *app) scanSkills() {
 	s.loading = true
 	req := s.req
 	go func() {
+		codex := findCodex(homeDir)
+		// MCP 另起一路扫、扫完自己交给界面：grok 慢时不拖着技能列表
+		go func() {
+			mcp := skills.ScanMCP(context.Background(), skills.MCPOptions{Home: homeDir, Codex: codex, Grok: findGrok(homeDir)})
+			a.update(func() {
+				if s.req == req {
+					s.mcp = mcp
+				}
+			})
+		}()
 		var list []skills.CodexSkill
-		if codex := findCodex(homeDir); codex != "" {
+		if codex != "" {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			list, _ = skills.CodexList(ctx, codex, homeDir)
 			cancel()
@@ -111,16 +136,48 @@ func (a *app) scanSkills() {
 				if s.statsGen != gen {
 					return
 				}
-				s.stats, s.statsLoading = stats, false
+				s.statsLoading = false
+				if stats != nil {
+					s.stats, s.mcpStats = stats.Skills, stats.MCP
+				}
 			})
 		}()
 	}
 }
 
+// checkSkillUpdates 在后台查 npx skills 装的技能有没有新版本。
+func (a *app) checkSkillUpdates() {
+	s := &a.skills
+	s.checkReq++
+	req := s.checkReq
+	s.checking = true
+	go func() {
+		u := skills.CheckUpdates(context.Background(), homeDir)
+		a.update(func() {
+			if s.checkReq != req {
+				return
+			}
+			s.updates, s.checking = &u, false
+		})
+	}()
+}
+
+// updateCount 是有新版本的技能数。
+func (s *skillsView) updateCount() int {
+	n := 0
+	for _, sk := range s.cat.Skills {
+		if s.updates.HasUpdate(sk) {
+			n++
+		}
+	}
+	return n
+}
+
 func (a *app) releaseSkills() {
 	s := &a.skills
 	s.req++
-	*s = skillsView{req: s.req, statsGen: s.statsGen + 1, query: s.query, agent: s.agent, byUse: s.byUse}
+	*s = skillsView{req: s.req, statsGen: s.statsGen + 1, query: s.query, agent: s.agent, byUse: s.byUse, page: s.page,
+		updates: s.updates, checking: s.checking, checkReq: s.checkReq, onlyUpdates: s.onlyUpdates}
 }
 
 func (a *app) skillsSidebarItem(c *ui.Context) {
@@ -157,6 +214,10 @@ func scopeLabel(sc skills.Scope) string {
 
 // shownSkills 是技能页列出的技能：不含项目级（文件栏里看），按搜索词和 agent 筛过。
 func (s *skillsView) shownSkills() []skills.Skill {
+	// 更新完最后一个就没有可看的了：回到全部，不然列表空着、也没有那一行可以点回去
+	if s.onlyUpdates && s.updateCount() == 0 {
+		s.onlyUpdates = false
+	}
 	q := strings.ToLower(strings.TrimSpace(s.query))
 	var out []skills.Skill
 	for _, sk := range s.cat.Skills {
@@ -167,6 +228,9 @@ func (s *skillsView) shownSkills() []skills.Skill {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(sk.Name), q) && !strings.Contains(strings.ToLower(sk.Description), q) {
+			continue
+		}
+		if s.onlyUpdates && !s.updates.HasUpdate(sk) {
 			continue
 		}
 		out = append(out, sk)
@@ -193,6 +257,20 @@ func (s *skillsView) shownSkills() []skills.Skill {
 	return out
 }
 
+// refreshButton 是顶栏的重新扫描：技能和 MCP 一起扫。
+func (a *app) refreshButton(c *ui.Context) {
+	s := &a.skills
+	refresh := ui.Box(c).Shrink(0)
+	if s.loading {
+		refresh.Disabled(true).Opacity(0.5)
+	}
+	refresh.Children(func() {
+		if iconButton(c.Key("skills-refresh"), iconRefresh, "重新扫描").Clicked() {
+			a.scanSkills()
+		}
+	})
+}
+
 // uses 是技能在所有会话里用过的次数。
 func (s *skillsView) uses(name string) int {
 	if st := s.stats[name]; st != nil {
@@ -204,27 +282,41 @@ func (s *skillsView) uses(name string) int {
 func (a *app) skillsBoard(c *ui.Context) {
 	s := &a.skills
 	a.band(c, func() {
-		titleText(c, "技能", fsTitle).Margin(0, 6, 0, 0).Shrink(0)
-		fieldInputSized(c, &s.query, "搜索名字和说明", 280, 160).Label("搜索技能")
+		// 分页兼作标题：侧栏里叫「技能」，这里分技能和 MCP
+		segmented(c, &s.page, "技能或 MCP", "技能", "MCP")
+		placeholder := "搜索名字和说明"
+		if s.page == 1 {
+			placeholder = "搜索名字和命令"
+		}
+		fieldInputSized(c, &s.query, placeholder, 280, 160).Label("搜索")
 		ui.Spacer(c)
 		segmented(c, &s.agent, "按 agent 筛选", skillAgentLabels...)
+		if s.page == 1 {
+			a.refreshButton(c)
+			a.closeBoardButton(c)
+			return
+		}
 		if pressable(textButton(c, "安装…")).Clicked() {
 			a.openSkillInstall(a.skillsWorkspace(), true)
 		}
-		if pressable(textButton(c, "全部更新")).Clicked() {
-			a.askSkillCommand("更新 npx skills 装的全部技能？", "按锁文件里记的来源拉最新的版本，覆盖本地的改动。", skills.UpdateArgs(nil, true), a.skillsWorkspace())
+		check := ui.Box(c).Shrink(0)
+		label := "检查更新"
+		if s.checking {
+			label = "正在检查…"
+			check.Disabled(true).Opacity(0.5)
 		}
-		refresh := ui.Box(c).Shrink(0)
-		if s.loading {
-			refresh.Disabled(true).Opacity(0.5)
-		}
-		refresh.Children(func() {
-			if iconButton(c.Key("skills-refresh"), iconRefresh, "重新扫描").Clicked() {
-				a.scanSkills()
+		check.Children(func() {
+			if pressable(textButton(c, label)).Clicked() {
+				a.checkSkillUpdates()
 			}
 		})
+		a.refreshButton(c)
 		a.closeBoardButton(c)
 	})
+	if s.page == 1 {
+		a.mcpBody(c)
+		return
+	}
 	list := s.shownSkills()
 	if s.sel == "" || s.sel != skillIssuesKey && !slices.ContainsFunc(list, func(sk skills.Skill) bool { return sk.Dir == s.sel }) {
 		s.sel = ""
@@ -233,7 +325,8 @@ func (a *app) skillsBoard(c *ui.Context) {
 		}
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
-		card(c).Width(380).Shrink(0).Clip().Label("技能列表").Children(func() {
+		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
+		card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("技能列表").Children(func() {
 			a.skillTotals(c)
 			ui.Scroll(c).Grow(1).Children(func() {
 				ui.Column(c).Padding(4, 8, 16, 8).Gap(2).Children(func() {
@@ -256,7 +349,11 @@ func (a *app) skillsBoard(c *ui.Context) {
 							}
 							skillGroupHeader(c, scopeLabel(group), n)
 						}
-						a.skillRow(c, sk, s.sel == sk.Dir, func() { s.sel = sk.Dir })
+						row := a.skillRow(c, sk, s.sel == sk.Dir, func() { s.sel = sk.Dir })
+						if s.reveal && s.sel == sk.Dir {
+							row.ScrollIntoView()
+							s.reveal = false
+						}
 					}
 				})
 			})
@@ -273,6 +370,84 @@ func (a *app) skillsBoard(c *ui.Context) {
 			}
 		})
 	})
+	keys := make([]string, len(list))
+	for i, sk := range list {
+		keys[i] = sk.Dir
+	}
+	a.skillsArrowKeys(c, keys, &s.sel)
+}
+
+// skillsArrowKeys 让上下方向键在列表里换选中（技能和 MCP 共用）；焦点在搜索框里、列表上或哪儿都不在时都管用，
+// 对话框开着时不管。
+func (a *app) skillsArrowKeys(c *ui.Context, keys []string, sel *string) {
+	if a.skillInstall.open || a.skillChange.open || a.skillRun.open || a.skillNew.open || a.confirming {
+		return
+	}
+	switch {
+	case c.Shortcut(0, ui.KeyDown):
+		a.skills.step(keys, sel, 1)
+	case c.Shortcut(0, ui.KeyUp):
+		a.skills.step(keys, sel, -1)
+	}
+}
+
+// step 选中 keys 里的下一个（step 为 1）或上一个；在看体检时下键选第一个、上键不动。到头了不动。
+func (s *skillsView) step(keys []string, sel *string, step int) {
+	cur := slices.Index(keys, *sel)
+	j := cur + step
+	if cur < 0 {
+		j = 0
+		if step < 0 {
+			return
+		}
+	}
+	if j >= 0 && j < len(keys) {
+		*sel, s.reveal = keys[j], true
+	}
+}
+
+// skillUpdatesLine 是检查更新的结果：有新版本时点一下只看它们（再点回到全部），都是最新的写一句，
+// 有查不了的来源一并写上，悬停看原因。
+func (a *app) skillUpdatesLine(c *ui.Context) {
+	t := c.Theme()
+	s := &a.skills
+	u := s.updates
+	if u == nil {
+		return
+	}
+	n := s.updateCount()
+	failed := ""
+	if len(u.Failed) > 0 {
+		failed = fmt.Sprintf("%d 个来源没查到", len(u.Failed))
+	}
+	if n == 0 {
+		text := "都是最新的"
+		if failed != "" {
+			text += "，" + failed
+		}
+		e := ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).Margin(0, 20, 8, 20)
+		if failed != "" {
+			e.Tooltip(strings.Join(u.Failed, "\n"))
+		}
+		return
+	}
+	row := ui.Row(c.Key("skill-updates")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label("有新版本的技能")
+	selectedBg(c, row, s.onlyUpdates)
+	row.Children(func() {
+		ui.Icon(c, iconFetch).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+		ui.Text(c, fmt.Sprintf("%d 个有新版本", n)).FontSize(fsBody).FontFeatures("tnum").Grow(1)
+		if failed != "" {
+			ui.Text(c, failed).FontSize(fsSmall).TextColor(t.TextMuted).Tooltip(strings.Join(u.Failed, "\n"))
+		}
+	})
+	if s.onlyUpdates {
+		row.Tooltip("再点一下看全部")
+	} else {
+		row.Tooltip("只看有新版本的")
+	}
+	if row.Clicked() {
+		s.onlyUpdates = !s.onlyUpdates
+	}
 }
 
 // skillTotals 是列表顶上的总计：技能数、各家用得上的数，和体检发现的问题（点开看）。
@@ -317,6 +492,7 @@ func (a *app) skillTotals(c *ui.Context) {
 			}
 		})
 	})
+	a.skillUpdatesLine(c)
 	if k := len(s.cat.Issues); k > 0 {
 		row := ui.Row(c.Key("skill-issues")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label("体检")
 		selectedBg(c, row, s.sel == skillIssuesKey)
@@ -341,7 +517,7 @@ func skillGroupHeader(c *ui.Context, label string, n int) {
 }
 
 // skillRow 是列表里的一个技能：名字和说明，行尾是四家的状态。
-func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick func()) {
+func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick func()) ui.Element {
 	t := c.Theme()
 	row := ui.Column(c.Key(sk.Dir)).Padding(8, 12).Gap(2).Radius(rControl).Role(ui.RoleButton).Label(sk.Name)
 	selectedBg(c, row, selected)
@@ -353,28 +529,47 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 		if sk.Description != "" {
 			ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 		}
-		if a.skills.stats != nil {
-			skillUseLine(c, a.skills.stats[sk.Name])
+		manual := sk.Meta.ModelOff || sk.Meta.UserHidden
+		update := a.skills.updates.HasUpdate(sk)
+		if a.skills.stats != nil || manual || update {
+			ui.Row(c).Gap(12).Children(func() {
+				if update {
+					ui.Text(c, "有新版本").FontSize(fsSmall).TextColor(t.Accent)
+				}
+				// 默认是自动触发，列表里只标例外，免得每行都多两个字
+				if manual {
+					skillTrigger(c, sk.Meta)
+				}
+				if a.skills.stats != nil {
+					skillUseLine(c, a.skills.stats[sk.Name])
+				}
+			})
 		}
 	})
 	if row.Clicked() {
 		onClick()
 	}
+	return row
 }
 
 // skillMarks 是一行末尾四家的状态：用得上的是 agent 的色块，只能手动调用的淡一些，关了的更淡，
-// 读不到的只留一个空位，四家对齐成列。悬停看原因。toggle 不为空时能开关的那几家点一下切换（先弹框确认）。
+// 读不到的是同形的淡底空块（不用淡图标，免得和关了混淆），四家对齐成列。悬停看原因。toggle 不为空时能开关的那几家点一下切换（先弹框确认）。
 func skillMarks(c *ui.Context, sk skills.Skill, toggle func(ag skills.Agent, enable bool)) {
+	agentMarks(c, sk.Agents, func(ag skills.Agent) bool { return toggle != nil && skills.CanToggle(ag, sk) }, toggle)
+}
+
+// agentMarks 是四家的状态标记，技能和 MCP 共用；can 说哪几家点一下能切换，toggle 为空时都不能。
+func agentMarks(c *ui.Context, sts [skills.NumAgents]skills.Status, can func(skills.Agent) bool, toggle func(ag skills.Agent, enable bool)) {
 	ui.Row(c).Gap(4).Shrink(0).Children(func() {
 		for _, ag := range skills.Agents {
-			st := sk.Agents[ag]
+			st := sts[ag]
 			size := smallIcon()
 			tip := skillStateTip(ag, st)
 			if st.State == skills.Unseen {
-				ui.Box(c).Size(size, size).Shrink(0).Tooltip(tip)
+				ui.Box(c).Size(size, size).Radius(size * 0.26).Background(colors(c.Theme()).fill).Shrink(0).Tooltip(tip)
 				continue
 			}
-			can := toggle != nil && skills.CanToggle(ag, sk)
+			can := toggle != nil && can(ag)
 			if can {
 				if st.State == skills.Off {
 					tip += "\n点一下打开"
@@ -443,6 +638,9 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 					a.openSkillFile(sk.File)
 				}
 				a.skillActions(c, sk, a.skillsWorkspace(), true)
+				if sk.SourceURL != "" && pressable(iconButton(c.Key("skill-source"), iconOpen, "打开来源网页")).Clicked() {
+					c.OpenURL(sk.SourceURL)
+				}
 				if pressable(iconButton(c.Key("skill-reveal"), iconFolder, "在访达中显示")).Clicked() {
 					mygo.Shell.ShowItemInFolder(sk.File)
 				}
@@ -456,26 +654,17 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 		skillUseCard(c, a.skills.stats[sk.Name])
 	}
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
-		cardTitle(c, "各家状态").Margin(0, 0, 4, 0)
-		for _, ag := range skills.Agents {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Margin(0, 0, 4, 0).Children(func() {
+			cardTitle(c, "各家状态")
+			skillTrigger(c, sk.Meta)
+		})
+		for i, ag := range skills.Agents {
+			if i > 0 {
+				hline(c)
+			}
 			a.skillAgentRow(c, sk, ag, skills.Options{Home: homeDir})
 		}
 	})
-	if len(sk.Paths) > 1 {
-		card(c).Padding(cardPad).Gap(6).Shrink(0).Children(func() {
-			cardTitle(c, "出现的位置").Margin(0, 0, 2, 0)
-			for _, p := range sk.Paths {
-				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					icon := iconFolder
-					if p != sk.Dir {
-						icon = iconFolderLink
-					}
-					ui.Icon(c, icon).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-					ui.Text(c, shortPath(p)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(2).Shrink(1)
-				})
-			}
-		})
-	}
 }
 
 // skillAgentRow 是详情里一家的状态：色块、名字、状态，下面一行是原因和读到它的路径；能开关的行尾有开关。
@@ -506,7 +695,17 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 				ui.Text(c, st.Why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			if st.Via != "" {
-				ui.Text(c, shortPath(st.Via)).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).MaxLines(2)
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, shortPath(st.Via)).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).MaxLines(2).Shrink(1)
+					// Codex 报的是 SKILL.md 的路径
+					// 只看这条路径本身是不是链接：上级目录是链接（如 ~/.claude 链到 dotfiles）时它照样不是软链
+					if fi, err := os.Lstat(strings.TrimSuffix(st.Via, string(filepath.Separator)+"SKILL.md")); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+						ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Tooltip("软链，指向 " + shortPath(sk.Dir)).Children(func() {
+							ui.Icon(c, iconFolderLink).FontSize(fsSmall).TextColor(colors(t).faint)
+							ui.Text(c, "软链").FontSize(fsSmall).TextColor(colors(t).faint)
+						})
+					}
+				})
 			}
 		})
 		if skills.CanToggle(ag, sk) {
@@ -797,50 +996,27 @@ func (a *app) skillsWorkspace() *workspace {
 	return nil
 }
 
-// askSkillCommand 弹框给出完整的命令，确认后在 w 里开终端跑。
-func (a *app) askSkillCommand(title, about string, args []string, w *workspace) {
-	if w == nil {
-		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
-		return
-	}
-	line := skills.ShellLine(args)
-	a.confirm(title, about+"\n\n会在「"+w.Label+"」里开一个终端运行：\n"+line, "在终端里运行", func() {
-		a.runSkillCommand(w.ID, line)
-	})
-}
-
-// runSkillCommand 在工作区里开一个终端跑 line，跑完留在 shell 里；回到技能页时重扫。
-func (a *app) runSkillCommand(wsID, line string) {
-	sh := os.Getenv("SHELL")
-	if sh == "" {
-		sh = "/bin/zsh"
-	}
-	script := line + "; echo; echo '跑完了。回到技能页会重新扫描。'; exec " + agent.Quote(sh) + " -l"
-	var term terminalInfo
-	if a.call("terminal.create", map[string]any{"workspace": wsID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
-		return
-	}
-	a.refresh()
-	a.update(func() {
-		a.releaseSkills()
-		a.openTerminal(wsID, term.ID)
-	})
-}
-
 // skillActions 是详情顶上的更新、删除：npx skills 装的交给它（删除不进废纸篓，连同各家的链接）；
 // 自己放的用户级技能移到废纸篓，连同指向它的链接。插件、系统自带和账号同步的归各家自己管。
 func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global bool) {
 	switch {
 	case sk.Source != "":
-		if pressable(iconButton(c.Key("skill-update"), iconFetch, "更新")).Clicked() {
-			a.askSkillCommand("更新 "+sk.Name+"？", "按锁文件里记的来源（"+sk.Source+"）拉最新的版本，覆盖本地的改动。", skills.UpdateArgs([]string{sk.Name}, global), w)
+		// 查到有新版本时换成显眼的按钮
+		var update ui.Element
+		if a.skills.updates.HasUpdate(sk) {
+			update = accentButton(c.Key("skill-update"), "更新")
+		} else {
+			update = iconButton(c.Key("skill-update"), iconFetch, "更新")
+		}
+		if pressable(update).Clicked() {
+			a.askSkillCommand("更新 "+sk.Name+"？", "按锁文件里记的来源（"+sk.Source+"）拉最新的版本，覆盖本地的改动。", skills.ShellLine(skills.UpdateArgs([]string{sk.Name}, global)), w, false)
 		}
 		if pressable(iconButton(c.Key("skill-remove"), iconTrash, "删除")).Clicked() {
 			var list []string
 			for _, p := range sk.Paths {
 				list = append(list, shortPath(p))
 			}
-			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉这些（各家目录里同名的都删），不经过废纸篓：\n"+strings.Join(list, "\n"), skills.RemoveArgs(sk.Name, global), w)
+			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉这些（各家目录里同名的都删），不经过废纸篓：\n"+strings.Join(list, "\n"), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
 		}
 	case sk.Scope == skills.ScopeUser || sk.Scope == skills.ScopeProject:
 		if pressable(iconButton(c.Key("skill-trash"), iconTrash, "移到废纸篓")).Clicked() {
@@ -903,14 +1079,23 @@ func (a *app) trashPaths(paths []string) {
 	})
 }
 
-// skillInstallView 是安装对话框。
+// skillInstallView 是安装对话框：填好来源先列出里面的技能（npx skills add --list）再勾选，列不出来时退回手填名字。
 type skillInstallView struct {
 	open   bool
 	ws     string
 	global bool
 	source string
-	names  string
+	names  string // 列不出来时手填的名字
 	claude bool
+
+	listing   bool
+	listReq   int
+	listSrc   string // 列出下面这些时的来源，来源改了就作废
+	listed    []skills.Listed
+	picked    []bool
+	installed []bool
+	listErr   string
+	noNPX     bool // 读不了是因为没装 Node.js：提示去装，手填名字也装不了
 }
 
 func (a *app) openSkillInstall(w *workspace, global bool) {
@@ -918,11 +1103,71 @@ func (a *app) openSkillInstall(w *workspace, global bool) {
 		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
 		return
 	}
-	a.skillInstall = skillInstallView{open: true, ws: w.ID, global: global, claude: true}
+	// listReq 接着数：上一次没读完的结果回来时对不上号
+	a.skillInstall = skillInstallView{open: true, ws: w.ID, global: global, claude: true, listReq: a.skillInstall.listReq}
 }
 
-func (v skillInstallView) install() skills.Install {
-	return skills.Install{Source: v.source, Skills: strings.Fields(v.names), Claude: v.claude, Global: v.global}
+func (v *skillInstallView) current() bool {
+	return v.listSrc != "" && v.listSrc == strings.TrimSpace(v.source)
+}
+func (v *skillInstallView) listedNow() bool { return v.current() && v.listed != nil }
+func (v *skillInstallView) failedNow() bool { return v.current() && v.listErr != "" }
+
+func (v *skillInstallView) install() skills.Install {
+	in := skills.Install{Source: v.source, Claude: v.claude, Global: v.global}
+	if !v.listedNow() {
+		in.Skills = strings.Fields(v.names)
+	} else if slices.Contains(v.picked, false) {
+		for i, l := range v.listed {
+			if v.picked[i] {
+				in.Skills = append(in.Skills, l.Name)
+			}
+		}
+	}
+	return in
+}
+
+// listInstallSource 在后台列出来源里的技能，并看哪些已经装在要装去的 .agents/skills 里。
+func (a *app) listInstallSource(w *workspace) {
+	v := &a.skillInstall
+	src := strings.TrimSpace(v.source)
+	v.listReq++
+	req := v.listReq
+	v.listing, v.listSrc, v.listed, v.picked, v.installed, v.listErr, v.noNPX = true, src, nil, nil, nil, "", false
+	root := w.Path
+	if v.global {
+		root = homeDir
+	}
+	go func() {
+		list, err := skills.ListSource(context.Background(), userShell(), w.Path, src)
+		installed := make([]bool, len(list))
+		for i, l := range list {
+			_, serr := os.Stat(filepath.Join(root, ".agents", "skills", l.Name))
+			installed[i] = serr == nil
+		}
+		a.update(func() {
+			if v.listReq != req {
+				return
+			}
+			v.listing = false
+			if err != nil {
+				v.listErr, v.noNPX = err.Error(), errors.Is(err, skills.ErrNoNPX)
+				return
+			}
+			v.listed, v.installed = list, installed
+			v.picked = make([]bool, len(list))
+			for i := range v.picked {
+				v.picked[i] = true
+			}
+		})
+	}()
+}
+
+func userShell() string {
+	if sh := os.Getenv("SHELL"); sh != "" {
+		return sh
+	}
+	return "/bin/zsh"
 }
 
 // skillInstallDialog 收来源、要装的技能和给不给 Claude 用，下面实时显示要跑的命令。
@@ -940,16 +1185,35 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 			}
 			titleText(c, title, fsTitle)
 			ui.Text(c, where).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
-			submitted := fieldInput(c.Key("source"), &v.source, "来源：owner/repo、网址或本地目录").AutoFocus().Submitted()
-			if fieldInput(c.Key("names"), &v.names, "只装其中几个（名字用空格分开，留空装全部）").Submitted() {
-				submitted = true
+			sourceSubmitted := fieldInput(c.Key("source"), &v.source, "来源：owner/repo、网址或本地目录").AutoFocus().Submitted()
+			submitted := false
+			canList := strings.TrimSpace(v.source) != "" && !v.listing && w != nil && v.install().Check() == nil
+			switch {
+			case v.listing:
+				ui.Text(c, "正在读取来源里的技能…").FontSize(fsSmall).TextColor(t.TextMuted)
+			case v.listedNow():
+				a.skillInstallPicker(c)
+			case v.failedNow() && v.noNPX:
+				how := "到 nodejs.org 下载安装，装好后点「重新读取」。"
+				if skills.FindBrew() != "" {
+					how = "点「安装 Node.js」用 Homebrew 装，装好后再来安装技能。"
+				}
+				ui.Text(c, "没找到 npx：安装技能要用 Node.js 自带的 npx。"+how).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45)
+			case v.failedNow():
+				ui.Text(c, "读不到技能列表："+v.listErr).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45).Selectable()
+				if fieldInput(c.Key("names"), &v.names, "只装其中几个（名字用空格分开，留空装全部）").Submitted() {
+					submitted = true
+				}
+			default:
+				ui.Text(c, "填好来源后回车，先列出里面有哪些技能再选。").FontSize(fsSmall).TextColor(t.TextMuted)
 			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Switch(c, &v.claude).Label("也给 Claude 用")
 				ui.Text(c, "也给 Claude 用").FontSize(fsBody)
 			})
 			ui.Text(c, "Codex、Grok、Cursor 都读 .agents/skills，装进去就都能用；Claude 只读自己的目录，要另建一条链接。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
-			ready := strings.TrimSpace(v.source) != ""
+			// 列出来了按勾选装；列不出来也能照手填的名字装，npx 在终端里会报出具体原因
+			ready := (v.listedNow() && slices.Contains(v.picked, true)) || (v.failedNow() && !v.noNPX)
 			if err := v.install().Check(); ready && err != nil {
 				ready = false
 				ui.Text(c, err.Error()).FontSize(fsSmall).TextColor(t.Danger)
@@ -958,25 +1222,111 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 				ui.Text(c, skills.ShellLine(v.install().Args())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Padding(8, 12).Radius(rCard).Background(colors(t).code).Selectable()
 			}
 			ui.Text(c, "装上的技能带着它的脚本，用之前先看一眼里面会跑什么。").FontSize(fsSmall).TextColor(t.TextMuted)
+			list, installNode := false, false
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
 				if pressable(textButton(c, "取消")).Clicked() {
 					v.open = false
 				}
+				if v.failedNow() && pressable(textButton(c, "重新读取")).Clicked() {
+					list = true
+				}
+				label := "安装"
+				enabled := ready
+				switch {
+				case v.failedNow() && v.noNPX:
+					label, enabled = "打开 nodejs.org", true
+					if skills.FindBrew() != "" {
+						label = "安装 Node.js"
+					}
+				case !v.listedNow() && !v.failedNow():
+					label, enabled = "读取", canList
+				}
 				run := ui.Box(c).Shrink(0)
-				if !ready {
+				if !enabled {
 					run.Disabled(true).Opacity(0.5)
 				}
 				run.Children(func() {
-					if pressable(accentButton(c, "在终端里运行")).Clicked() {
-						submitted = true
+					if pressable(accentButton(c, label)).Clicked() {
+						switch label {
+						case "读取":
+							list = true
+						case "安装 Node.js", "打开 nodejs.org":
+							installNode = true
+						default:
+							submitted = true
+						}
 					}
 				})
 			})
-			if submitted && ready && w != nil {
-				v.open = false
-				line := skills.ShellLine(v.install().Args())
-				go a.runSkillCommand(w.ID, line)
+			if installNode {
+				if brew := skills.FindBrew(); brew != "" && w != nil {
+					// 两个对话框不叠着：装好后再点「安装…」
+					v.open = false
+					a.askSkillCommand("安装 Node.js", "用 Homebrew 安装 Node.js，装技能要用它自带的 npx。", installNodeLine(brew), w, true)
+				} else {
+					c.OpenURL("https://nodejs.org/")
+				}
 			}
+			if sourceSubmitted {
+				if v.listedNow() || (v.failedNow() && !v.noNPX) {
+					submitted = true
+				} else {
+					list = true
+				}
+			}
+			if list && canList {
+				a.listInstallSource(w)
+			} else if submitted && ready && w != nil {
+				v.open = false
+				a.askSkillCommand("安装技能", "", skills.ShellLine(v.install().Args()), w, true)
+			}
+		})
+	})
+}
+
+// skillInstallPicker 是来源里的技能：只有一个时直接列出，多个时逐个勾选，默认全选，按来源给的组分开。
+func (a *app) skillInstallPicker(c *ui.Context) {
+	t := c.Theme()
+	v := &a.skillInstall
+	item := func(i int, l skills.Listed, check bool) {
+		ui.Column(c.Key("skill:" + l.Name)).Gap(2).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if check {
+					ui.Checkbox(c, &v.picked[i], l.Name)
+				} else {
+					ui.Text(c, l.Name).FontSize(fsBody).Font(monoFont)
+				}
+				if v.installed[i] {
+					ui.Text(c, "已装").FontSize(fsSmall).TextColor(colors(t).faint)
+				}
+			})
+			if l.Description != "" {
+				d := ui.Text(c, l.Description).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45).MaxLines(2)
+				if check {
+					// 和勾选框的文字对齐：mygo 的勾选框是 Space(4) 的框加 Space(2) 的间距
+					d.Padding(0, 0, 0, t.Space(6))
+				}
+			}
+		})
+	}
+	if len(v.listed) == 1 {
+		ui.Column(c).Padding(8, 12).Radius(rControl).Background(colors(t).fill).Children(func() {
+			item(0, v.listed[0], false)
+		})
+		return
+	}
+	ui.Scroll(c).MaxHeight(280).Children(func() {
+		ui.Column(c).Gap(12).Children(func() {
+			ui.CheckboxGroup(c, fmt.Sprintf("全部 %d 个", len(v.listed)), func() {
+				group := ""
+				for i, l := range v.listed {
+					if l.Group != group {
+						group = l.Group
+						ui.Text(c, group).FontSize(fsSmall).TextColor(colors(t).faint).Padding(6, 0, 0, 0)
+					}
+					item(i, l, true)
+				}
+			})
 		})
 	})
 }
@@ -1070,14 +1420,34 @@ func (a *app) skillNewDialog(c *ui.Context) {
 // skillUseLine 是列表行最下面的用量：用过几次、最后一次多久以前；没用过的写出来，好清理。
 func skillUseLine(c *ui.Context, st *history.SkillStat) {
 	t := c.Theme()
-	ui.Row(c).Gap(12).Children(func() {
-		if st == nil || st.Count == 0 {
-			ui.Text(c, "会话里没用过").FontSize(fsSmall).TextColor(colors(t).faint)
-			return
-		}
-		ui.Text(c, fmt.Sprintf("用过 %d 次", st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-		ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip("最近一次 " + st.Last.Local().Format("1月2日 15:04"))
-	})
+	if st == nil || st.Count == 0 {
+		ui.Text(c, "会话里没用过").FontSize(fsSmall).TextColor(colors(t).faint)
+		return
+	}
+	ui.Text(c, fmt.Sprintf("用过 %d 次", st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+	ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip("最近一次 " + st.Last.Local().Format("1月2日 15:04"))
+}
+
+// skillTriggerText 是技能怎么被调起来：SKILL.md 头部的 disable-model-invocation、user-invocable。
+func skillTriggerText(m skills.Meta) (text, tip string) {
+	switch {
+	case m.ModelOff:
+		return "手动触发", "disable-model-invocation: true：模型不会自己调用，要输入 /名字 调用（Codex 不认这一项，照样自动）"
+	case m.UserHidden:
+		return "只自动触发", "user-invocable: false：不出现在斜杠命令里，只由模型按说明自己调用"
+	}
+	return "自动触发", "模型按说明自己判断什么时候用，也能输入 /名字 手动调用"
+}
+
+// skillTrigger 是触发方式的小标签：手动的用强调色，和默认的自动区分开。
+func skillTrigger(c *ui.Context, m skills.Meta) {
+	t := c.Theme()
+	text, tip := skillTriggerText(m)
+	color := t.TextMuted
+	if m.ModelOff {
+		color = colors(t).honey
+	}
+	ui.Text(c, text).FontSize(fsSmall).TextColor(color).Tooltip(tip)
 }
 
 // skillUseCard 是详情里的用量：次数、会话数、最后一次，和各家各用了几次。
