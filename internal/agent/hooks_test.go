@@ -145,3 +145,44 @@ func TestGrokTitleStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestDelivery(t *testing.T) {
+	// 子 agent 的事件在 MapEvent 就排除了，提醒只交给主线程
+	if _, ok := MapEvent("cursor", "postToolUse", json.RawMessage(`{"parent_tool_call_id":"p1"}`)); ok {
+		t.Error("cursor subagent tool event taken as the main thread")
+	}
+	for _, c := range []struct {
+		agent, event string
+		payload      json.RawMessage
+		want         bool
+	}{
+		{"claude", "PostToolUse", nil, true},
+		{"claude", "Stop", nil, true},
+		{"claude", "UserPromptSubmit", nil, false},
+		{"codex", "PostToolUse", nil, true},
+		{"codex", "Stop", nil, true},
+		{"cursor", "stop", nil, true},
+		{"cursor", "postToolUseFailure", nil, true},
+		{"cursor", "stop", json.RawMessage(`{"status":"aborted"}`), false}, // 用户停下的不读 followup_message
+		{"cursor", "postToolUseFailure", json.RawMessage(`{"is_interrupt":true}`), false},
+		{"claude", "PostToolUseFailure", json.RawMessage(`{"is_interrupt":true}`), false},
+		{"claude", "PostToolUseFailure", nil, true},
+		{"grok", "stop", nil, false},
+	} {
+		if got := DeliversOn(c.agent, c.event, c.payload); got != c.want {
+			t.Errorf("DeliversOn(%s, %s, %s) = %v", c.agent, c.event, c.payload, got)
+		}
+	}
+	for _, c := range []struct{ agent, event, want string }{
+		{"claude", "PostToolUse", `{"hookSpecificOutput":{"additionalContext":"hi","hookEventName":"PostToolUse"}}`},
+		{"claude", "Stop", `{"hookSpecificOutput":{"additionalContext":"hi","hookEventName":"Stop"}}`},
+		{"codex", "PostToolUse", `{"hookSpecificOutput":{"additionalContext":"hi","hookEventName":"PostToolUse"}}`},
+		{"codex", "Stop", `{"decision":"block","reason":"hi"}`},
+		{"cursor", "postToolUse", `{"additional_context":"hi"}`},
+		{"cursor", "stop", `{"followup_message":"hi"}`},
+	} {
+		if got := DeliveryOutput(c.agent, c.event, "hi"); got != c.want {
+			t.Errorf("DeliveryOutput(%s, %s) = %s", c.agent, c.event, got)
+		}
+	}
+}

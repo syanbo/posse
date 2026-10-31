@@ -39,7 +39,7 @@ Start every independent task before you end your turn. Work with an order runs i
 
 ## Wait and answer
 
-Do not block on workers by default. After you start the tasks, tell the user what is running and end your turn, or keep doing your own part of the work. The user can keep talking to you meanwhile. When you are idle, Posse types a reminder into your terminal ("Posse: k_… finished. Run `posse task inbox` to read."); then read and handle the messages:
+Do not block on workers by default. After you start the tasks, tell the user what is running and end your turn, or keep doing your own part of the work. The user can keep talking to you meanwhile. When a worker reports or asks, Posse gives you a reminder line ("Posse: k_… finished. Run `posse task inbox` to read."): next to a tool result while you work, when your turn ends, or typed into your terminal while you are idle. Then read and handle the messages:
 
 ```sh
 posse task inbox    # unread messages from your workers; never blocks

@@ -166,3 +166,99 @@ func TestSendReopensReportedTask(t *testing.T) {
 		t.Fatalf("status changed to %s", got.Status)
 	}
 }
+
+// 有 hook 的 agent 由 hook 交提醒：工具做完时随结果进上下文，本轮结束时让它接着处理，都不往终端里打字。
+func TestHookDeliversNudge(t *testing.T) {
+	d, w := newTestDaemon(t)
+	coord, err := d.startTerminal(w, []string{"/bin/cat"}, "claude", 100, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := func(event string) hookEventResult {
+		raw, _ := json.Marshal(map[string]any{"terminalId": coord.ID, "agent": "claude", "event": event, "payload": map[string]any{"session_id": "s1"}})
+		res, err := d.hookEvent(context.Background(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.(hookEventResult)
+	}
+	hook("UserPromptSubmit")
+	info := call(t, d.taskStart, map[string]any{"caller": coord.ID, "command": []string{"/bin/cat"}, "spec": "x"}).(taskInfo)
+	worker := d.liveSession(info.Worker)
+	worker.mu.Lock()
+	worker.agent = "claude"
+	worker.mu.Unlock()
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "ok"})
+	want := "Posse: " + info.ID + " finished. Run `posse task inbox` to read."
+	if res := hook("PostToolUse"); res.Deliver != want || res.Status != agent.StatusWorking {
+		t.Fatalf("PostToolUse = %+v", res)
+	}
+	// 交过的不再交，Stop 照常空闲
+	if res := hook("Stop"); res.Deliver != "" || res.Status != agent.StatusIdle {
+		t.Fatalf("Stop after delivery = %+v", res)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if strings.Contains(strings.Join(coord.Lines(), "\n"), "Posse:") {
+		t.Fatal("typed into the terminal although the hook delivered")
+	}
+
+	// 本轮结束时才到的：Stop 交给它并让它接着做，不记空闲
+	hook("UserPromptSubmit")
+	call(t, d.taskSend, map[string]any{"task": info.ID, "caller": coord.ID, "body": "more"})
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "again"})
+	if res := hook("Stop"); res.Deliver != want || res.Status != agent.StatusWorking {
+		t.Fatalf("Stop = %+v", res)
+	}
+	if st := coord.Agent(); st.Status != agent.StatusWorking {
+		t.Fatalf("state after delivering at Stop: %+v", st)
+	}
+}
+
+// 本轮结束时交了提醒，agent 却没接着做（之后没有 hook 事件）：退回提醒、记回空闲，改为往终端里打字。
+func TestStopDeliveryFallsBack(t *testing.T) {
+	old := stopDeliveryGrace
+	stopDeliveryGrace = 300 * time.Millisecond
+	t.Cleanup(func() { stopDeliveryGrace = old })
+	d, w := newTestDaemon(t)
+	coord, err := d.startTerminal(w, []string{"/bin/cat"}, "claude", 100, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := func(event string) hookEventResult {
+		raw, _ := json.Marshal(map[string]any{"terminalId": coord.ID, "agent": "claude", "event": event, "payload": map[string]any{"session_id": "s1"}})
+		res, err := d.hookEvent(context.Background(), raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res.(hookEventResult)
+	}
+	hook("UserPromptSubmit")
+	info := call(t, d.taskStart, map[string]any{"caller": coord.ID, "command": []string{"/bin/cat"}, "spec": "x"}).(taskInfo)
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "ok"})
+	if res := hook("Stop"); res.Deliver == "" {
+		t.Fatalf("Stop = %+v", res)
+	}
+	waitScreen(t, coord, "Posse: "+info.ID+" finished.")
+	if st := coord.Agent(); st.Status != agent.StatusIdle {
+		t.Fatalf("state %+v", st)
+	}
+
+	// 接着做了（有下一个 hook 事件）就不退回
+	hook("UserPromptSubmit")
+	worker := d.liveSession(info.Worker)
+	worker.mu.Lock()
+	worker.agent = "claude"
+	worker.mu.Unlock()
+	call(t, d.taskSend, map[string]any{"task": info.ID, "caller": coord.ID, "body": "more"})
+	call(t, d.taskDone, map[string]any{"task": info.ID, "caller": info.Worker, "summary": "again"})
+	time.Sleep(300 * time.Millisecond) // PTY 回显一次、cat 再输出一次，等两遍都到了再数
+	before := strings.Count(strings.Join(coord.Lines(), "\n"), "Posse:")
+	if res := hook("Stop"); res.Deliver == "" {
+		t.Fatalf("second Stop = %+v", res)
+	}
+	hook("PostToolUse")
+	time.Sleep(600 * time.Millisecond)
+	if n := strings.Count(strings.Join(coord.Lines(), "\n"), "Posse:"); n != before {
+		t.Fatalf("typed again although the agent continued: %d -> %d", before, n)
+	}
+}

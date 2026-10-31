@@ -64,6 +64,7 @@ type session struct {
 	unread   bool      // 本轮完成了还没看（unread.go）
 	viewers  int       // 正看着它的手机页面数
 	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
+	hookSeq  uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
 }
 
 func (s *session) userName() string {

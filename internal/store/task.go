@@ -294,6 +294,19 @@ func (s *Store) MarkNudged(ids []string, at time.Time) error {
 	return s.markMessages("nudged_at", ids, at)
 }
 
+// UnmarkNudged 把交给 agent 却没被处理的提醒退回去，之后再提醒一次。
+func (s *Store) UnmarkNudged(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	_, err := s.db.Exec(`UPDATE messages SET nudged_at=NULL WHERE id IN (?`+strings.Repeat(",?", len(ids)-1)+`)`, args...)
+	return err
+}
+
 // OpenQuestions 统计每个任务里还没回复的问题数。
 func (s *Store) OpenQuestions() (map[string]int, error) {
 	rows, err := s.db.Query(`SELECT task_id, COUNT(*) FROM messages q WHERE kind='question'

@@ -100,7 +100,7 @@ func (e *env) printStarted(t taskInfo) {
 		return
 	}
 	// agent 在每一步的输出里看到下一步，技能没触发或说明被压缩掉也走得下去
-	fmt.Fprintln(e.out, "no need to wait: end your turn or keep working; while an agent runs in this terminal, Posse types a reminder here when a worker reports or asks, then run: posse task inbox (scripts: posse task wait)")
+	fmt.Fprintln(e.out, "no need to wait: end your turn or keep working; while an agent runs in this terminal, Posse reminds it when a worker reports or asks, then run: posse task inbox (scripts: posse task wait)")
 }
 
 // retryable 是可以重试的任务状态：worker 已经确定不在做了。
@@ -399,7 +399,7 @@ func cmdTaskDone(e *env, args []string) error {
 	var t taskInfo
 	return e.do("task.done", params, &t, func() {
 		fmt.Fprintf(e.out, "reported %s as %s\n", t.ID, t.Status)
-		fmt.Fprintf(e.out, "now stop and wait at the prompt; if follow-up work arrives, Posse types a reminder here: run posse task check %s, then report again\n", t.ID)
+		fmt.Fprintf(e.out, "now stop and wait at the prompt; if follow-up work arrives, Posse gives you a reminder: run posse task check %s, then report again\n", t.ID)
 	})
 }
 

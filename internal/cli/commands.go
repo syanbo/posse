@@ -16,6 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"posse/internal/agent"
 	"posse/internal/daemon"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
@@ -579,9 +580,10 @@ func cmdHook(e *env, args []string) error {
 	id := os.Getenv("POSSE_TERMINAL_ID")
 	payload, _ := io.ReadAll(io.LimitReader(os.Stdin, 1<<20))
 	// Cursor 要从 stdout 读一个 JSON 回应，空对象表示不干预（不放行也不拦截）；
-	// 其他 agent 不能有随意的输出，Claude 会把它注入模型上下文，只写它认的 hookSpecificOutput
+	// 其他 agent 不能有随意的输出，Claude 会把它注入模型上下文，只写它认的回应
+	cursorReply := "{}"
 	if args[0] == "cursor" {
-		fmt.Fprintln(e.out, "{}")
+		defer func() { fmt.Fprintln(e.out, cursorReply) }()
 	}
 	if id == "" {
 		return nil
@@ -623,9 +625,19 @@ func cmdHook(e *env, args []string) error {
 	defer cancel()
 	var out struct {
 		SessionTitle string `json:"sessionTitle"`
+		Deliver      string `json:"deliver"`
 	}
 	if err := rpc.Call(ctx, socket, "hook.event", params, &out); err != nil {
 		fmt.Fprintln(e.errOut, "posse hook:", err)
+	}
+	// 常驻进程交来的任务提醒：工具做完时进上下文，本轮结束时让 agent 接着处理
+	if out.Deliver != "" {
+		if args[0] == "cursor" {
+			cursorReply = agent.DeliveryOutput(args[0], args[1], out.Deliver)
+		} else {
+			fmt.Fprintln(e.out, agent.DeliveryOutput(args[0], args[1], out.Deliver))
+		}
+		return nil
 	}
 	// posse session title 给 Claude 起的标题：它只从 UserPromptSubmit 的回应里接受改名
 	if args[0] == "claude" && args[1] == "UserPromptSubmit" && out.SessionTitle != "" {

@@ -1,8 +1,8 @@
 package daemon
 
 // 多 agent 编排：派发方（一个 agent，或在界面里操作的用户）把任务派给新开的 worker agent。
-// worker 用 posse task ask/check/done 和派发方通信；派发方用 posse task wait 阻塞等待，
-// 或者在它空闲时由 posse 往它的终端里输入一行提醒，让它去读收件箱。
+// worker 用 posse task ask/check/done 和派发方通信。有新消息时 posse 给对方一行提醒，让它去读收件箱：
+// 有 hook 的 agent 在工具做完或本轮结束时由 hook 交给它（takeNudge），否则等它空闲时往终端里输入（deliver）。
 
 import (
 	"context"
@@ -235,7 +235,7 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 	b.WriteString("  Report once when you finish, and once after each follow-up. Pass --failed when the task could not be completed; never hide a failure in prose. Add --report only for a file you actually wrote.\n\n")
 	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
 	b.WriteString("After `posse task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
-	fmt.Fprintf(&b, "The coordinator may send follow-up work for the same task later. Posse then types a reminder here: run `posse task check %s`, do the follow-up, and report it with `posse task done` again.\n", t.ID)
+	fmt.Fprintf(&b, "The coordinator may send follow-up work for the same task later. Posse then gives you a reminder line: run `posse task check %s`, do the follow-up, and report it with `posse task done` again.\n", t.ID)
 	if w.Kind == "worktree" {
 		fmt.Fprintf(&b, "\nYou work in your own git worktree on branch %s, created from %s. Commit your changes on this branch before reporting.\n", w.Branch, w.BaseRef)
 	}
@@ -773,14 +773,12 @@ func (d *Daemon) workerGone(terminalID, reason string) {
 	}
 }
 
-// deliver 在终端里的 agent 空闲时输入一行提醒，告诉它有未读的任务消息。
+// deliver 在终端里的 agent 空闲时输入一行提醒，告诉它有未读的任务消息。hook 已经交过的不再输入。
 // agent 正在工作时什么也不做，等它空闲（hooks 或标题报告 idle）时会再调用。
 func (d *Daemon) deliver(terminalID string) {
 	if terminalID == "" || d.stopping.Load() {
 		return
 	}
-	d.nudgeMu.Lock()
-	defer d.nudgeMu.Unlock()
 	s := d.liveSession(terminalID)
 	if s == nil || s.agentName() == "" || !s.Running() || s.Agent().Status != agent.StatusIdle && !agent.Parked(s.Agent()) {
 		return
@@ -789,7 +787,22 @@ func (d *Daemon) deliver(terminalID string) {
 		time.AfterFunc(wait, func() { d.deliver(terminalID) })
 		return
 	}
-	var ids, notes []string
+	// 取提醒和记已提醒在锁里，hook 就不会再交同一条；打字在锁外，免得别的终端的 hook 跟着等
+	text, _ := d.takeNudge(terminalID)
+	if text == "" {
+		return
+	}
+	if err := s.Inject([]byte(text)); err != nil {
+		return
+	}
+	// 和 terminal send 一样：回车与文本分开到达，TUI 才会当作提交
+	time.Sleep(150 * time.Millisecond)
+	s.Inject([]byte("\r"))
+}
+
+// nudgeText 是给这个终端里的 agent 的一行提醒和它涵盖的消息；没有未提醒过的消息时为空。调用方持有 nudgeMu。
+func (d *Daemon) nudgeText(terminalID string) (text string, ids []string) {
+	var notes []string
 	msgs, _ := d.store.Inbox(store.Inbox{Coordinator: &terminalID, Unread: true, Unnudged: true})
 	for _, m := range msgs {
 		ids = append(ids, m.ID)
@@ -808,7 +821,6 @@ func (d *Daemon) deliver(terminalID string) {
 			notes = append(notes, m.TaskID+"'s worker exited")
 		}
 	}
-	var text string
 	if len(notes) > 0 {
 		if len(notes) > 3 {
 			notes = append(notes[:3], fmt.Sprintf("%d more", len(notes)-3))
@@ -826,16 +838,36 @@ func (d *Daemon) deliver(terminalID string) {
 			}
 		}
 	}
-	if text == "" {
+	return text, ids
+}
+
+// takeNudge 取走给这个终端的提醒并记为已提醒，返回它涵盖的消息。
+func (d *Daemon) takeNudge(terminalID string) (string, []string) {
+	d.nudgeMu.Lock()
+	defer d.nudgeMu.Unlock()
+	text, ids := d.nudgeText(terminalID)
+	if text != "" {
+		d.store.MarkNudged(ids, time.Now())
+	}
+	return text, ids
+}
+
+// stopDeliveryGrace 是本轮结束时交了提醒后，等 agent 接着做（发出下一个 hook 事件）的时间。测试里改短。
+var stopDeliveryGrace = 90 * time.Second
+
+// checkStopDelivery 在交了提醒的 Stop 之后 stopDeliveryGrace 调用：这期间没再收到 hook 事件，
+// 说明 agent 没接着做（回应没送到、或它没理会），把提醒退回去，状态记回空闲，由 deliver 往终端里打字。
+func (d *Daemon) checkStopDelivery(s *session, seq uint64, ids []string) {
+	s.mu.Lock()
+	quiet := s.hookSeq == seq
+	s.mu.Unlock()
+	if !quiet || !s.Running() || d.stopping.Load() {
 		return
 	}
-	if err := s.Inject([]byte(text)); err != nil {
-		return
-	}
-	// 和 terminal send 一样：回车与文本分开到达，TUI 才会当作提交
-	time.Sleep(150 * time.Millisecond)
-	s.Inject([]byte("\r"))
-	d.store.MarkNudged(ids, time.Now())
+	d.store.UnmarkNudged(ids)
+	st := s.Agent()
+	st.Status, st.At = agent.StatusIdle, time.Now()
+	d.setAgent(s, st)
 }
 
 // --- worktree 改动与合并

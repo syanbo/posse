@@ -624,6 +624,10 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	if s.agentName() != p.Agent || !s.isHooked() {
 		s.markHooked(p.Agent)
 	}
+	s.mu.Lock()
+	s.hookSeq++
+	seq := s.hookSeq
+	s.mu.Unlock()
 	d.usageHook(p.Agent, p.Event, p.Payload)
 	if id, ok := agent.SubagentStopped(p.Agent, p.Event, p.Payload); ok {
 		d.subagentStopped(s, id)
@@ -634,21 +638,30 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		return map[string]bool{"ignored": true}, nil
 	}
 	st.At = time.Now()
+	res := hookEventResult{}
+	// 任务提醒由 hook 交给 agent：不用等它空闲往终端里打字，也不会和用户的键入撞上
+	if agent.DeliversOn(p.Agent, p.Event, p.Payload) {
+		var ids []string
+		if res.Deliver, ids = d.takeNudge(s.ID); res.Deliver != "" && agent.EndsTurn(p.Event) {
+			st.Status = agent.StatusWorking // 交了提醒，agent 不停下，接着处理
+			time.AfterFunc(stopDeliveryGrace, func() { d.checkStopDelivery(s, seq, ids) })
+		}
+	}
 	d.setAgent(s, st)
 	// 会话 ID 和 agent 退出都从 hook 来；标题、进程检查发现的变化由 agentLoop 记（不在 PTY 读协程里写库）
 	d.saveResume(s, false)
 	// Claude 只在 UserPromptSubmit 的回应里接受改名：把待交的标题交过去，由 posse hook 写到 stdout
 	if p.Agent == "claude" && p.Event == "UserPromptSubmit" {
-		if title := s.TakeTitle(); title != "" {
-			return hookEventResult{AgentState: st, SessionTitle: title}, nil
-		}
+		res.SessionTitle = s.TakeTitle()
 	}
-	return st, nil
+	res.AgentState = st
+	return res, nil
 }
 
 type hookEventResult struct {
 	host.AgentState
 	SessionTitle string `json:"sessionTitle,omitempty"`
+	Deliver      string `json:"deliver,omitempty"` // 交给 agent 的任务提醒，posse hook 按各家的格式写到 stdout
 }
 
 // hookPermission 先照常记下等待状态，再只在有 Posse 手机看着这个会话时挂起等决定。

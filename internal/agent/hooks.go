@@ -22,6 +22,9 @@ type hookPayload struct {
 	SessionID        string          `json:"session_id"`
 	TranscriptPath   string          `json:"transcript_path"`
 	AgentID          string          `json:"agent_id"`
+	ParentToolCall   string          `json:"parent_tool_call_id"` // Cursor 子 agent 的工具调用
+	StopStatus       string          `json:"status"`              // Cursor 的 stop：completed、aborted、error
+	IsInterrupt      bool            `json:"is_interrupt"`        // 工具失败是因为用户中断了这一轮
 	Source           string          `json:"source"`
 	Reason           string          `json:"reason"`
 	Trigger          string          `json:"trigger"`
@@ -64,7 +67,7 @@ func MapEvent(agentName, event string, payload json.RawMessage) (term.AgentState
 	}
 	st := term.AgentState{Event: event, SessionID: p.SessionID, TranscriptPath: p.TranscriptPath}
 	// 子 agent 的事件不代表主 agent 的状态
-	if p.AgentID != "" {
+	if p.AgentID != "" || p.ParentToolCall != "" {
 		return st, false
 	}
 	switch agentName {
@@ -319,4 +322,43 @@ func Truncate(s string, n int) string {
 		return string(r)
 	}
 	return string(r[:n]) + "…"
+}
+
+// DeliversOn 是这个 hook 能不能把任务提醒交给 agent，代替往终端里打字：工具做完时随结果进上下文，
+// agent 忙着也能在两次工具调用之间读到；本轮结束时让它接着处理。调用方先经 MapEvent 排除了子 agent 的事件。
+func DeliversOn(agentName, event string, payload json.RawMessage) bool {
+	var p hookPayload
+	json.Unmarshal(payload, &p)
+	switch agentName + " " + event {
+	case "claude PostToolUse", "claude Stop", "codex PostToolUse", "codex Stop", "cursor postToolUse":
+		return true
+	// 用户中断这一轮时工具也报失败，这时交的上下文随这一轮丢掉：留给空闲后往终端里输入
+	case "claude PostToolUseFailure", "cursor postToolUseFailure":
+		return !p.IsInterrupt
+	// 用户主动停下（aborted）时 Cursor 不读 followup_message，交了也会丢
+	case "cursor stop":
+		return p.StopStatus == "" || p.StopStatus == "completed"
+	}
+	return false
+}
+
+// EndsTurn 是本轮结束的事件：在这里交了提醒，agent 不会停下，接着处理它。
+func EndsTurn(event string) bool { return event == "Stop" || event == "stop" }
+
+// DeliveryOutput 是 posse hook 写到 stdout、把提醒交给 agent 的回应。
+func DeliveryOutput(agentName, event, text string) string {
+	var v any
+	switch {
+	case agentName == "cursor" && event == "stop":
+		v = map[string]string{"followup_message": text}
+	case agentName == "cursor":
+		v = map[string]string{"additional_context": text}
+	case agentName == "codex" && event == "Stop":
+		v = map[string]string{"decision": "block", "reason": text}
+	// Claude 的 Stop 也用 additionalContext：decision: block 会显示成 "Stop hook error"
+	default:
+		v = map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event, "additionalContext": text}}
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
 }
