@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:libghostty/libghostty.dart';
 import 'package:meta/meta.dart';
 
+import '../foundation/scrollback_clears.dart';
 import '../foundation.dart';
 import '../links/link_snapshot.dart';
 import 'atlas/atlas_config.dart';
@@ -215,6 +216,13 @@ class TerminalRenderBox extends RenderBox {
   /// 到点后 [_holdExpired] 为真，不再等。
   Timer? _holdTimer;
   var _holdExpired = false;
+
+  /// Posse: 清回滚后的等待，见 [_startClearHold]。[_seenClears] 是处理过的清回滚次数；
+  /// [_clearQuiet] 每隔 [_clearQuietGap] 看一次期间有没有新输出，[_clearLimit] 从清掉时算起，不续。
+  var _seenClears = 0;
+  var _outputDuringGap = false;
+  Timer? _clearQuiet;
+  Timer? _clearLimit;
   var _preeditText = '';
   LinkSnapshot _linkSnapshot;
 
@@ -407,6 +415,8 @@ class TerminalRenderBox extends RenderBox {
     if (attached) _terminal.removeListener(_onTerminalChanged);
     _terminal = value;
     if (attached) _terminal.addListener(_onTerminalChanged);
+    _seenClears = scrollbackClears[value] ?? 0;
+    _endClearHold();
     _applyTerminalThemeColors();
     _needsFrameSync = true;
     markNeedsLayout();
@@ -446,6 +456,7 @@ class TerminalRenderBox extends RenderBox {
     _offset.addListener(_onScroll);
     _renderObserver.addListener(_onRenderObserverChanged);
     _terminal.addListener(_onTerminalChanged);
+    _seenClears = scrollbackClears[_terminal] ?? 0;
     markNeedsLayout();
   }
 
@@ -479,6 +490,7 @@ class TerminalRenderBox extends RenderBox {
     _terminal.removeListener(_onTerminalChanged);
     _holdTimer?.cancel();
     _holdTimer = null;
+    _endClearHold();
     super.detach();
   }
 
@@ -695,7 +707,27 @@ class TerminalRenderBox extends RenderBox {
   void _onTerminalChanged() {
     if (_paintState.rows == 0 || _performingLayout) return;
 
-    if (_syncHeld) {
+    final clears = scrollbackClears[_terminal] ?? 0;
+    if (clears != _seenClears) {
+      _seenClears = clears;
+      if (_clearLimit == null && _terminal.activeScreen == .primary) {
+        _startClearHold();
+      }
+    }
+    // 等的是主屏幕的重写，程序切进备用屏幕（全屏界面）就不再等
+    if (_clearLimit != null && _terminal.activeScreen != .primary) {
+      _endClearHold();
+    }
+    // 先取同步更新的状态：它的计时要和清回滚的等待同时开始，前后接着等会超过一秒
+    final syncHeld = _syncHeld;
+
+    if (_clearLimit != null) {
+      _outputDuringGap = true;
+      _needsFrameSync = true;
+      return;
+    }
+
+    if (syncHeld) {
       _needsFrameSync = true;
       return;
     }
@@ -723,12 +755,49 @@ class TerminalRenderBox extends RenderBox {
     }
     _holdTimer ??= Timer(_syncHoldLimit, () {
       _holdExpired = true;
-      if (attached) _onTerminalChanged();
+      // 清回滚还在等时不算新输出，那边放行时会一起画
+      if (attached && _clearLimit == null) _onTerminalChanged();
     });
     return !_holdExpired;
   }
 
   static const _syncHoldLimit = Duration(seconds: 1);
+
+  /// Posse: 主屏幕上程序清了回滚（CSI 3J，手机复位重接也带）后先不画，输出停下
+  /// 一到两个 [_clearQuietGap] 再画，最多等 [_syncHoldLimit]。Cursor 的 Ink 在要改的行
+  /// 超出屏幕时清屏清回滚、把整段对话从头重写一遍，不包同步更新；几百 KB 经网络分段到，
+  /// 中间出帧会闪出对话开头。
+  void _startClearHold() {
+    _outputDuringGap = false;
+    _clearQuiet = Timer(_clearQuietGap, _checkClearQuiet);
+    _clearLimit = Timer(_syncHoldLimit, _releaseClearHold);
+  }
+
+  /// 输出一段段到时不每段重建计时器，到点看这段时间里有没有新输出。
+  void _checkClearQuiet() {
+    if (_outputDuringGap) {
+      _outputDuringGap = false;
+      _clearQuiet = Timer(_clearQuietGap, _checkClearQuiet);
+      return;
+    }
+    _releaseClearHold();
+  }
+
+  void _releaseClearHold() {
+    _endClearHold();
+    if (!attached || _paintState.rows == 0) return;
+    _needsFrameSync = true;
+    markNeedsLayout();
+  }
+
+  void _endClearHold() {
+    _clearQuiet?.cancel();
+    _clearLimit?.cancel();
+    _clearQuiet = null;
+    _clearLimit = null;
+  }
+
+  static const _clearQuietGap = Duration(milliseconds: 60);
 
   // Maintains scroll position and content dimensions.
   //
@@ -778,7 +847,7 @@ class TerminalRenderBox extends RenderBox {
     if (_paintState.rows == 0) return;
 
     // 同步更新里别的原因（滚动、光标闪烁）要重画时，接着画上一帧的内容
-    final held = _needsFrameSync && _syncHeld;
+    final held = _needsFrameSync && (_clearLimit != null || _syncHeld);
     final terminalDirty = _needsFrameSync && !held;
     if (!held) _needsFrameSync = false;
     _pipeline.sync(

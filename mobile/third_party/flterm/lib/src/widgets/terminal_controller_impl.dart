@@ -9,6 +9,7 @@ import 'package:libghostty/libghostty.dart' as vt;
 import 'package:libghostty/libghostty.dart' hide KeyEvent;
 import 'package:meta/meta.dart';
 
+import '../foundation/scrollback_clears.dart';
 import '../foundation.dart';
 import '../rendering/kitty_png_decoder.dart';
 import 'compression_scheduler.dart';
@@ -761,8 +762,13 @@ class TerminalControllerImpl extends TerminalController
     );
   }
 
+  final _clearScanner = ScrollbackClearScanner();
+
   @override
-  void write(Uint8List data) => terminal.write(data);
+  void write(Uint8List data) {
+    _clearScanner.scan(terminal, data);
+    terminal.write(data);
+  }
 
   void _applyModes() {
     for (final entry in _config.modes.entries) {
