@@ -172,6 +172,164 @@ void main() {
     },
   );
 
+  testWidgets('workspace rows fold their sessions and remember it', (
+    tester,
+  ) async {
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.saved = SavedComputers(
+      computers: [SavedComputer(id: 'k', code: '')],
+      active: 'k',
+    );
+    model.worktrees = parseWorktrees([
+      {
+        'worktreeId': 'p1::w1',
+        'repo': 'posse',
+        'displayName': 'posse',
+        'path': '/Users/x/posse',
+        'isMainWorktree': true,
+      },
+      {
+        'worktreeId': 'p1::w2',
+        'repo': 'posse',
+        'displayName': 'login',
+        'path': '/Users/x/.posse/worktrees/posse/login',
+        'isWorktree': true,
+      },
+    ]);
+    model.tabs = {
+      'p1::w1': const [
+        SessionTab(worktreeId: 'p1::w1', title: 'shell-a', terminalId: 't1'),
+      ],
+      'p1::w2': const [
+        SessionTab(worktreeId: 'p1::w2', title: 'shell-b', terminalId: 't2'),
+      ],
+    };
+    Future<void> pump() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: WorkspaceScreen(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await pump();
+    expect(find.text('shell-a').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('主工作区'));
+    await pump();
+    expect(model.isWorkspaceCollapsed('p1::w1'), isTrue);
+    expect(find.text('shell-a').hitTestable(), findsNothing);
+    expect(find.text('shell-b').hitTestable(), findsOneWidget);
+    expect(
+      SavedComputers.decode(model.saved.encode())
+          .computers
+          .single
+          .collapsedWorkspaces,
+      ['p1::w1'],
+    );
+    await tester.tap(find.text('主工作区'));
+    await pump();
+    expect(find.text('shell-a').hitTestable(), findsOneWidget);
+  });
+
+  test('running order sorts once, then only inserts new sessions', () {
+    final ranks = {'a': 1, 'b': 5, 'c': 3, 'd': 1};
+    int rank(String id) => ranks[id]!;
+    var order = updateRunOrder(null, ['a', 'b', 'c', 'd'], rank);
+    expect(order, ['b', 'c', 'a', 'd']);
+    // 状态变了不挪
+    ranks['a'] = 5;
+    order = updateRunOrder(order, ['a', 'b', 'c', 'd'], rank);
+    expect(order, ['b', 'c', 'a', 'd']);
+    // 新会话插到同状态那一段末尾；关掉的去掉
+    ranks['e'] = 3;
+    order = updateRunOrder(order, ['a', 'b', 'd', 'e'], rank);
+    expect(order, ['b', 'a', 'e', 'd']);
+    // 排头降了档也不挡住：新的工作中会话接在同档的 e 后面，不插到 b 前面
+    ranks['b'] = 0;
+    ranks['f'] = 3;
+    order = updateRunOrder(order, ['a', 'b', 'd', 'e', 'f'], rank);
+    expect(order, ['b', 'a', 'e', 'f', 'd']);
+  });
+
+  testWidgets('running view lists agent sessions with where they live', (
+    tester,
+  ) async {
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.worktrees = parseWorktrees([
+      {
+        'worktreeId': 'p1::w1',
+        'repo': 'posse',
+        'displayName': 'posse',
+        'path': '/Users/x/posse',
+        'isMainWorktree': true,
+      },
+      {
+        'worktreeId': 'p1::w2',
+        'repo': 'posse',
+        'displayName': 'login',
+        'path': '/Users/x/.posse/worktrees/posse/login',
+        'isWorktree': true,
+      },
+      {
+        'worktreeId': 'p2::w1',
+        'repo': 'chat',
+        'displayName': 'chat',
+        'path': '/Users/x/chat',
+        'isMainWorktree': true,
+      },
+    ]);
+    model.tabs = {
+      'p1::w1': const [
+        SessionTab(worktreeId: 'p1::w1', title: 'shell-a', terminalId: 't1'),
+      ],
+      'p1::w2': const [
+        SessionTab(
+          worktreeId: 'p1::w2',
+          title: 'fix-login',
+          terminalId: 't2',
+          agent: 'claude',
+        ),
+      ],
+      'p2::w1': const [
+        SessionTab(
+          worktreeId: 'p2::w1',
+          title: 'chat-ui',
+          terminalId: 't3',
+          agent: 'codex',
+        ),
+      ],
+    };
+    Future<void> pump() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: posseTheme(Brightness.dark),
+          home: WorkspaceScreen(model: model),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await pump();
+    await tester.tap(find.text('运行中'));
+    await pump();
+    expect(model.settings.homeByStatus, isTrue);
+    expect(find.text('shell-a'), findsNothing);
+    expect(find.text('fix-login'), findsOneWidget);
+    expect(find.text('posse · login · 等连上电脑'), findsOneWidget);
+    expect(find.text('chat · 等连上电脑'), findsOneWidget);
+    await tester.tap(find.text('项目'));
+    await pump();
+    expect(find.text('shell-a'), findsOneWidget);
+  });
+
   testWidgets('a connect that failed and stopped says so, not reconnecting', (
     tester,
   ) async {

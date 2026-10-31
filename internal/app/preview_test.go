@@ -623,6 +623,12 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.state.ProjectMetaHidden, a.state.WorkspaceMetaHidden = true, true
 		savePNG(t, newPreviewTester(a, dark), "sidebar-no-meta-"+suffix+".png")
+		// 侧栏「运行中」：所有项目的 agent 会话平铺，第二行写项目和工作区
+		a = previewApp(t)
+		a.state.SidebarGroup = sidebarByStatus
+		a.workspaces[0].Terminals[1].AgentState = &agentState{Status: "idle"}
+		setUnread(a, "t2")
+		savePNG(t, newPreviewTester(a, dark), "sidebar-running-"+suffix+".png")
 
 		// 项目自定义图标：emoji、一两个字、位图、SVG（多工作区的标题行）；再打开更换图标的对话框
 		a = previewApp(t)

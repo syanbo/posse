@@ -432,9 +432,16 @@ func (a *app) sidebar(c *ui.Context) {
 		a.mobileSidebarItem(c)
 		hline(c).Margin(6, navPad, 0, navPad)
 	})
+	if len(a.projects) > 0 {
+		a.sidebarGroupSwitch(c)
+	}
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
 	nav.Children(func() {
 		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
+			if a.state.SidebarGroup == sidebarByStatus {
+				a.runningList(c)
+				return
+			}
 			// 要定位的工作区所在的项目
 			reveal := ""
 			if w := a.workspace(a.selected); a.revealSel && w != nil {
@@ -770,7 +777,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 			for _, term := range list {
 				kids := children[term.ID]
 				if len(kids) == 0 || depth >= 4 {
-					a.navSession(c, w, term, cur == term.ID, nil, nil)
+					a.navSession(c, w, term, cur == term.ID, nil, nil, "")
 					continue
 				}
 				open := a.workersOpen[term.ID]
@@ -789,7 +796,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 					*open = true
 				}
 				// 收起时当前会话在里面，这一行算选中
-				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open)
+				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "")
 				if *open {
 					rows(kids, depth+1)
 				}
@@ -801,8 +808,8 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 
 // navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
 // 和项目行一样，单击切到这个会话、收着的顺便展开，已经在看它时再单击收起；收起时行尾写 +N，
-// 有 worker 等你处理时这一行也显示待处理。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool) {
+// 有 worker 等你处理时这一行也显示待处理。where 非空时是「运行中」视图里的平铺行：第二行写它在哪个项目和工作区，不能拖动排序。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string) {
 	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
 	if selected {
 		a.navCur = len(a.navOrder) - 1
@@ -852,8 +859,10 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			agentTile(c, term.Agent, smallIcon()).Tooltip(name)
 		})
 	}
-	row := a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, "", "", trailing)
-	a.reorderableTerm(c, row, w.ID, term.ID, false)
+	row := a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, where, "", trailing)
+	if where == "" {
+		a.reorderableTerm(c, row, w.ID, term.ID, false)
+	}
 	if row.Clicked() {
 		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
 		if open != nil {

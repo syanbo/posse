@@ -401,6 +401,7 @@ class WorkspaceScreen extends StatelessWidget {
           .add(row);
     }
     final names = model.orderProjects(projects.keys.toList());
+    final byStatus = model.settings.homeByStatus;
     var waiting = 0;
     for (final list in model.tabs.values) {
       waiting += list.where((t) => _stateOf(t) == AgentState.waiting).length;
@@ -540,50 +541,79 @@ class WorkspaceScreen extends StatelessWidget {
                             UpdateBanner(model: model),
                             if (waiting > 0) _WaitingBanner(count: waiting),
                             UsageCard(model: model),
+                            Padding(
+                              // 和项目卡片同宽
+                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                              child: Segmented(
+                                labels: const ['项目', '运行中'],
+                                selected: byStatus ? 1 : 0,
+                                onChanged: (i) {
+                                  // 每次切进来按当下的状态重排一次
+                                  model.runOrder = null;
+                                  model.updateSettings(
+                                    (s) => s.homeByStatus = i == 1,
+                                  );
+                                },
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
-                    SliverReorderableList(
-                      itemCount: names.length,
-                      proxyDecorator: (child, _, animation) => AnimatedBuilder(
-                        animation: animation,
-                        builder: (context, child) => Transform.scale(
-                          scale:
-                              1 +
-                              0.02 * Curves.easeOut.transform(animation.value),
-                          child: Material(
-                            color: Colors.transparent,
-                            elevation: 8 * animation.value,
-                            shadowColor: PosseColors.lift,
-                            borderRadius: BorderRadius.circular(Rd.card),
-                            child: child,
-                          ),
-                        ),
-                        child: child,
-                      ),
-                      onReorderItem: (from, to) {
-                        final order = List.of(names);
-                        order.insert(to, order.removeAt(from));
-                        model.setProjectOrder(order);
-                      },
-                      itemBuilder: (context, i) =>
-                          ReorderableDelayedDragStartListener(
-                            key: ValueKey(names[i]),
-                            index: i,
-                            child: Section(
-                              inset: 48,
-                              // 左右和卡片之间一样宽
-                              margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                              folded: model.isCollapsed(names[i]),
-                              children: _project(
-                                context,
-                                names[i],
-                                projects[names[i]]!,
+                    if (byStatus)
+                      SliverToBoxAdapter(
+                        child: _running(context, names, projects),
+                      )
+                    else
+                      SliverReorderableList(
+                        itemCount: names.length,
+                        proxyDecorator: (child, _, animation) =>
+                            AnimatedBuilder(
+                              animation: animation,
+                              builder: (context, child) => Transform.scale(
+                                scale:
+                                    1 +
+                                    0.02 *
+                                        Curves.easeOut.transform(
+                                          animation.value,
+                                        ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  elevation: 8 * animation.value,
+                                  shadowColor: PosseColors.lift,
+                                  borderRadius: BorderRadius.circular(Rd.card),
+                                  child: child,
+                                ),
+                              ),
+                              child: child,
+                            ),
+                        onReorderItem: (from, to) {
+                          final order = List.of(names);
+                          order.insert(to, order.removeAt(from));
+                          model.setProjectOrder(order);
+                        },
+                        itemBuilder: (context, i) =>
+                            ReorderableDelayedDragStartListener(
+                              key: ValueKey(names[i]),
+                              index: i,
+                              child: Section(
+                                inset: _dividerInset,
+                                // 左右和卡片之间一样宽
+                                margin: const EdgeInsets.fromLTRB(
+                                  10,
+                                  0,
+                                  10,
+                                  10,
+                                ),
+                                folded: model.isCollapsed(names[i]),
+                                children: _project(
+                                  context,
+                                  names[i],
+                                  projects[names[i]]!,
+                                ),
                               ),
                             ),
-                          ),
-                    ),
+                      ),
                     const SliverToBoxAdapter(child: SizedBox(height: 32)),
                   ],
                 ),
@@ -639,10 +669,7 @@ class WorkspaceScreen extends StatelessWidget {
         onToggle: () => model.toggleProject(name),
         onOpen: () => _openWorkspace(context, main),
       ),
-      for (final row in rows) ...[
-        _workspaceRow(context, row),
-        ..._sessions(context, row, indent: 82),
-      ],
+      for (final row in rows) _workspace(context, row),
     ];
   }
 
@@ -691,32 +718,57 @@ class WorkspaceScreen extends StatelessWidget {
   }
 
   /// 项目下面的一个工作区，名字和分支照桌面侧栏：分支和名字一样时不再写一遍。
-  Widget _workspaceRow(BuildContext context, WorktreeRow row) {
+  /// 和项目行一样点这一行展开收起下面的会话，点右边的圆按钮进工作区页。
+  /// 工作区行和它的会话合成 Section 里的一行，分隔线跟着会话一起收起。
+  Widget _workspace(BuildContext context, WorktreeRow row) {
     final c = PosseColors.of(context);
     final title = row.isMain ? '主工作区' : row.name;
     final branch = model.settings.workspaceMetaHidden || row.branch == title
         ? ''
         : row.branch;
-    return _Indented(
-      indent: 34,
-      child: RowTile(
-        // 照桌面侧栏：主工作区是房子，git worktree 是分支，同一目录上的文件夹工作区是文件夹
-        leading: LineIconView(
-          row.isMain
-              ? LineIcon.home
-              : row.isWorktree
-              ? LineIcon.branch
-              : LineIcon.folder,
-          size: Ic.button,
-          color: c.accent,
+    final sessions = _sessions(context, row, indent: 82);
+    final collapsed = model.isWorkspaceCollapsed(row.id);
+    // 和项目卡片 Section 画的分隔线一致
+    final divider = Padding(
+      padding: const EdgeInsets.only(left: _dividerInset),
+      child: Divider(height: 1, thickness: 1, color: c.line),
+    );
+    return Column(
+      children: [
+        _Indented(
+          indent: 34,
+          child: _ProjectHeader(
+            name: title,
+            // 照桌面侧栏：主工作区是房子，git worktree 是分支，同一目录上的文件夹工作区是文件夹
+            icon: LineIconView(
+              row.isMain
+                  ? LineIcon.home
+                  : row.isWorktree
+                  ? LineIcon.branch
+                  : LineIcon.folder,
+              size: Ic.button,
+              color: c.accent,
+            ),
+            subtitle: branch.isEmpty
+                ? null
+                : Text(branch, style: mono(Fs.small, color: c.muted)),
+            count: row.live,
+            expandable: sessions.isNotEmpty,
+            collapsed: collapsed,
+            state: _projectState([row]),
+            onToggle: () => model.toggleWorkspace(row.id),
+            onOpen: () => _openWorkspace(context, row),
+          ),
         ),
-        title: Text(title),
-        subtitle: branch.isEmpty
-            ? null
-            : Text(branch, style: mono(Fs.small, color: c.muted)),
-        trailing: _count(c, row),
-        onTap: () => _openWorkspace(context, row),
-      ),
+        Fold(
+          open: !collapsed,
+          child: Column(
+            children: [
+              for (final s in sessions) ...[divider, s],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -759,69 +811,107 @@ class WorkspaceScreen extends StatelessWidget {
     );
   }
 
-  /// 右边的终端数：桌面侧栏同样位置的数字，项目收起时也知道里面有几个。
-  Widget? _count(PosseColors c, WorktreeRow row) {
-    if (row.live == 0) return null;
-    return Text(
-      '${row.live}',
-      style: TextStyle(
-        fontSize: Fs.small,
-        color: c.faint,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
-    );
-  }
-
   /// 会话的 agent 方块和工作区的描边图标一样大：每一级都缩进「图标 + 间距」，子级的图标对齐上一级的名字，
   /// 方块大了会显得比工作区高一级。
   static const _sessionTile = 22.0;
+
+  /// 项目卡片里分隔线左边留出的宽度，对齐项目名。
+  static const _dividerInset = 48.0;
 
   List<Widget> _sessions(
     BuildContext context,
     WorktreeRow row, {
     required double indent,
   }) {
-    final c = PosseColors.of(context);
     final all = model.tabs[row.id] ?? const <SessionTab>[];
-    final tabs = all.where((t) => t.agent != null);
-    final shells = all.where((t) => t.agent == null);
     return [
-      for (final tab in tabs)
-        _Indented(
-          indent: indent - 14,
-          child: RowTile(
-            leading: AgentTile(agent: tab.agent, size: _sessionTile),
-            title: Text(cleanTitle(tab.title)),
-            subtitle: Text(
-              model.rpc == null ? '等连上电脑' : sessionDetail(tab),
-              style: TextStyle(
-                color: _stateOf(tab) == AgentState.waiting ? c.honey : null,
-              ),
-            ),
-            trailing: _sessionState(c, tab),
-            onTap: () => openSession(context, model, tab),
-            onLongPress: () => closeSession(context, model, tab),
-          ),
-        ),
-      // 普通终端和 agent 会话一样各占一行，标题是标签名（桌面改过名的用改的名字）
-      for (final tab in shells)
-        _Indented(
-          indent: indent - 14,
-          child: RowTile(
-            leading: const AgentTile(agent: null, size: _sessionTile),
-            title: Text(cleanTitle(tab.title)),
-            subtitle: Text(
-              model.rpc == null
-                  ? '等连上电脑'
-                  : tab.posse == 'lost'
-                  ? '未恢复，点开时拉起'
-                  : '终端',
-            ),
-            onTap: () => openSession(context, model, tab),
-            onLongPress: () => closeSession(context, model, tab),
-          ),
-        ),
+      // 普通终端排在 agent 会话后面
+      for (final tab in [
+        ...all.where((t) => t.agent != null),
+        ...all.where((t) => t.agent == null),
+      ])
+        _Indented(indent: indent - 14, child: _sessionRow(context, tab)),
     ];
+  }
+
+  /// 一个会话占一行。普通终端和 agent 会话一样各占一行，标题是标签名（桌面改过名的用改的名字）。
+  /// where 是「运行中」里写在状态前面的项目和工作区。
+  Widget _sessionRow(BuildContext context, SessionTab tab, {String? where}) {
+    final c = PosseColors.of(context);
+    final String detail;
+    if (model.rpc == null) {
+      detail = '等连上电脑';
+    } else if (tab.agent != null) {
+      detail = sessionDetail(tab);
+    } else {
+      detail = tab.posse == 'lost' ? '未恢复，点开时拉起' : '终端';
+    }
+    return RowTile(
+      leading: AgentTile(agent: tab.agent, size: _sessionTile),
+      title: Text(cleanTitle(tab.title)),
+      subtitle: Text(
+        where == null ? detail : '$where · $detail',
+        style: TextStyle(
+          color: tab.agent != null && _stateOf(tab) == AgentState.waiting
+              ? c.honey
+              : null,
+        ),
+      ),
+      trailing: tab.agent == null ? null : _sessionState(c, tab),
+      onTap: () => openSession(context, model, tab),
+      onLongPress: () => closeSession(context, model, tab),
+    );
+  }
+
+  /// 「运行中」：所有项目的 agent 会话平铺在一张卡片里，顺序见 [updateRunOrder]。
+  Widget _running(
+    BuildContext context,
+    List<String> names,
+    Map<String, List<WorktreeRow>> projects,
+  ) {
+    final c = PosseColors.of(context);
+    final byId = <String, (SessionTab, String)>{};
+    final natural = <String>[];
+    for (final name in names) {
+      final rows = projects[name]!;
+      for (final row in rows) {
+        final where = rows.length == 1
+            ? name
+            : '$name · ${row.isMain ? '主工作区' : row.name}';
+        for (final tab in model.tabs[row.id] ?? const <SessionTab>[]) {
+          if (tab.agent == null) continue;
+          byId[tab.terminalId] = (tab, where);
+          natural.add(tab.terminalId);
+        }
+      }
+    }
+    // 断线时和重连后还没拉到新列表时状态都不可信，先照项目的先后排，拉到了再按状态排
+    final order =
+        (model.rpc == null || model.tabsStale) && model.runOrder == null
+        ? natural
+        : model.runOrder = updateRunOrder(
+            model.runOrder,
+            natural,
+            (id) => runRank(_stateOf(byId[id]!.$1)),
+          );
+    return Section(
+      inset: _dividerInset,
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      children: order.isEmpty
+          ? [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  '没有运行中的会话',
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
+                ),
+              ),
+            ]
+          : [
+              for (final id in order)
+                _sessionRow(context, byId[id]!.$1, where: byId[id]!.$2),
+            ],
+    );
   }
 
   /// 首页显示的会话状态。断线时手上的状态已经过时，一律不显示，等你处理的横幅、项目行和会话行一致。
@@ -851,7 +941,7 @@ class WorkspaceScreen extends StatelessWidget {
   }
 }
 
-/// 首页的项目行：点这一行展开收起下面的工作区和会话，点右边的圆按钮进项目详情。
+/// 首页的项目行（也用作有多个工作区时的工作区行）：点这一行展开收起下面的工作区和会话，点右边的圆按钮进项目详情。
 /// 下面没有东西可展开时，点这一行也进详情。
 class _ProjectHeader extends StatelessWidget {
   const _ProjectHeader({
@@ -1610,4 +1700,43 @@ class _RenameDialogState extends State<_RenameDialog> {
       ],
     );
   }
+}
+
+/// 「运行中」的排序：要你处理的在前，空闲在后，还没恢复的最后。
+int runRank(AgentState state) => switch (state) {
+  AgentState.waiting => 5,
+  AgentState.unread => 4,
+  AgentState.working || AgentState.tasks => 3,
+  AgentState.starting => 2,
+  AgentState.lost => 0,
+  _ => 1,
+};
+
+/// 「运行中」的新顺序：prev 为空时整列按状态排（同状态照 natural 的先后）；否则去掉没了的会话，
+/// 新出现的插到同状态那一段末尾，已有的不挪，状态变了只换图形，列表不跟着状态来回跳。
+List<String> updateRunOrder(
+  List<String>? prev,
+  List<String> natural,
+  int Function(String id) rank,
+) {
+  if (prev == null) {
+    final out = List.of(natural);
+    // List.sort 不保证稳定，按 natural 的下标兜底
+    final at = {for (var i = 0; i < natural.length; i++) natural[i]: i};
+    out.sort((x, y) {
+      final d = rank(y) - rank(x);
+      return d != 0 ? d : at[x]! - at[y]!;
+    });
+    return out;
+  }
+  final live = natural.toSet();
+  final out = prev.where(live.contains).toList();
+  final known = out.toSet();
+  for (final id in natural) {
+    if (known.contains(id)) continue;
+    final r = rank(id);
+    // 排在最后一个状态不比它低的后面：已有的降了档还留在前面，不能找「第一个比它低的」
+    out.insert(out.lastIndexWhere((x) => rank(x) >= r) + 1, id);
+  }
+  return out;
 }

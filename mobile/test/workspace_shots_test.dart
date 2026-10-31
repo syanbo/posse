@@ -79,7 +79,13 @@ void main() {
         ),
       ],
     };
-    for (final dark in [false, true]) {
+    for (final (dark, running) in [
+      (false, false),
+      (true, false),
+      (false, true),
+      (true, true),
+    ]) {
+      model.settings.homeByStatus = running;
       final key = GlobalKey();
       await tester.pumpWidget(
         RepaintBoundary(
@@ -92,15 +98,16 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('主工作区'), findsOneWidget);
+      if (!running) expect(find.text('主工作区'), findsOneWidget);
       if (dir.isEmpty) continue;
       await tester.runAsync(() async {
         final boundary =
             key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
         final image = await boundary.toImage(pixelRatio: 3);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        File('$dir/workspace-${dark ? 'dark' : 'light'}.png')
-            .writeAsBytesSync(bytes!.buffer.asUint8List());
+        File(
+          '$dir/workspace-${running ? 'running-' : ''}${dark ? 'dark' : 'light'}.png',
+        ).writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }
   });

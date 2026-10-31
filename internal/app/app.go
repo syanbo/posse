@@ -155,6 +155,8 @@ type app struct {
 	activeTerm   map[string]string // 工作区 ID → 选中的终端 ID
 	sectionsOpen map[string]*bool  // 项目 ID → 侧栏分组是否展开
 	workersOpen  map[string]*bool  // 派发方终端 ID → 侧栏里它的 worker 是否展开（默认展开，不记进 ui.json）
+	runOrder     []string          // 侧栏「运行中」里会话的顺序（终端 ID），nil 表示下一帧按状态重排
+	pollDown     bool              // 最近一次轮询连不上常驻进程，侧栏的会话列表是旧的
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1
 	lastStatus   map[string]string // 终端 ID → 上次看到的 agent 状态，用于通知
@@ -603,6 +605,7 @@ func (a *app) refresh() {
 	prevErr := a.lastPoll != nil && a.lastPoll.err != ""
 	a.lastPoll = &r
 	a.win.Update(func() {
+		a.pollDown = r.err != ""
 		if r.err != "" {
 			a.err = r.err
 			// 设置「关于」靠它显示版本和更新、重启常驻进程的按钮

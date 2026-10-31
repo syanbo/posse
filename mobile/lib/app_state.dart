@@ -101,6 +101,7 @@ class AppSettings {
     this.historyByFolder = false,
     this.projectMetaHidden = false,
     this.workspaceMetaHidden = false,
+    this.homeByStatus = false,
     this.skippedUpdateBuild = 0,
     this.phoneId = '',
     Map<String, int>? deskDisplays,
@@ -144,6 +145,9 @@ class AppSettings {
   /// 首页项目下面的工作区行不显示分支，只留名字。
   bool workspaceMetaHidden;
 
+  /// 首页是「运行中」：所有项目的 agent 会话平铺成一列，而不是按项目分。
+  bool homeByStatus;
+
   /// 首页更新提示点了 × 的构建号：这个构建不再提示，更新的构建照常提示。
   int skippedUpdateBuild;
 
@@ -175,6 +179,7 @@ class AppSettings {
     'historyByFolder': historyByFolder,
     'projectMetaHidden': projectMetaHidden,
     'workspaceMetaHidden': workspaceMetaHidden,
+    'homeByStatus': homeByStatus,
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
     'phoneId': phoneId,
@@ -234,6 +239,9 @@ class AppSettings {
       }
       if (map['workspaceMetaHidden'] is bool) {
         out.workspaceMetaHidden = map['workspaceMetaHidden'] as bool;
+      }
+      if (map['homeByStatus'] is bool) {
+        out.homeByStatus = map['homeByStatus'] as bool;
       }
       if (map['skippedUpdateBuild'] is int) {
         out.skippedUpdateBuild = map['skippedUpdateBuild'] as int;
@@ -301,9 +309,11 @@ class SavedComputer {
     this.customName = '',
     List<String>? projectOrder,
     List<String>? collapsed,
+    List<String>? collapsedWorkspaces,
     List<String>? quic,
   }) : projectOrder = projectOrder ?? [],
        collapsed = collapsed ?? [],
+       collapsedWorkspaces = collapsedWorkspaces ?? [],
        quic = quic ?? [];
 
   final String id;
@@ -320,6 +330,9 @@ class SavedComputer {
 
   /// 首页收起的项目（项目名）。
   List<String> collapsed;
+
+  /// 首页收起的工作区（工作区 ID），项目有多个工作区时才用得上。
+  List<String> collapsedWorkspaces;
 
   /// 电脑上次给的 QUIC 地址（[PosseLink.quicUrls]，经中转的带着这台手机的令牌）。冷启动直接拨，
   /// 在外面不用先经隧道连上 WebSocket。
@@ -342,6 +355,7 @@ class SavedComputer {
     'customName': customName,
     'projectOrder': projectOrder,
     'collapsed': collapsed,
+    'collapsedWorkspaces': collapsedWorkspaces,
     'quic': quic,
   };
 
@@ -351,6 +365,7 @@ class SavedComputer {
     if (id is! String || code is! String) return null;
     final order = raw['projectOrder'];
     final collapsed = raw['collapsed'];
+    final collapsedWorkspaces = raw['collapsedWorkspaces'];
     return SavedComputer(
       id: _migrateId(id, code),
       code: code,
@@ -359,6 +374,9 @@ class SavedComputer {
       projectOrder: order is List ? order.whereType<String>().toList() : null,
       collapsed: collapsed is List
           ? collapsed.whereType<String>().toList()
+          : null,
+      collapsedWorkspaces: collapsedWorkspaces is List
+          ? collapsedWorkspaces.whereType<String>().toList()
           : null,
       quic: raw['quic'] is List
           ? (raw['quic'] as List).whereType<String>().toList()
@@ -507,6 +525,12 @@ class PosseAppModel extends ChangeNotifier {
 
   /// 有运行中终端的工作区的标签，首页照桌面侧栏把会话直接列在工作区下面。
   Map<String, List<SessionTab>> tabs = const {};
+
+  /// 首页「运行中」里会话的顺序（终端 ID），null 表示下次按状态重排。只在内存里，见 [updateRunOrder]。
+  List<String>? runOrder;
+
+  /// 断过线、重连后还没拉到新的会话列表：[tabs] 里的状态是断线前的，「运行中」先不按它排。
+  bool tabsStale = false;
   var connecting = false;
 
   /// 用户在电脑列表里点了断开：停在首页、不自动重连，点重新连接或选一台电脑才再连。只在这次运行里有效。
@@ -617,6 +641,11 @@ class PosseAppModel extends ChangeNotifier {
         if (gen != _connectGen || !identical(link, created)) return;
         final now = created.rpc;
         if (now == null) {
+          // 断线期间按项目的先后排，连上后拉到新的状态再按状态排
+          if (seen != null) {
+            runOrder = null;
+            tabsStale = true;
+          }
           if (created.lastError != null) {
             error = friendlyError(created.lastError!);
           }
@@ -644,6 +673,7 @@ class PosseAppModel extends ChangeNotifier {
       if (switched) {
         worktrees = const [];
         tabs = const {};
+        runOrder = null;
       }
       await previous?.close();
       _remember(parsed, raw.trim());
@@ -823,6 +853,7 @@ class PosseAppModel extends ChangeNotifier {
     offer = null;
     worktrees = const [];
     tabs = const {};
+    runOrder = null;
     error = null;
     connecting = false;
     notifyListeners();
@@ -855,6 +886,20 @@ class PosseAppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool isWorkspaceCollapsed(String id) =>
+      current?.collapsedWorkspaces.contains(id) ?? false;
+
+  /// 展开或收起首页的一个工作区，按电脑分别记住。
+  void toggleWorkspace(String id) {
+    final computer = current;
+    if (computer == null) return;
+    if (!computer.collapsedWorkspaces.remove(id)) {
+      computer.collapsedWorkspaces.add(id);
+    }
+    unawaited(store.write(saved.encode()));
+    notifyListeners();
+  }
+
   void setProjectOrder(List<String> names) {
     final computer = current;
     if (computer == null) return;
@@ -882,6 +927,7 @@ class PosseAppModel extends ChangeNotifier {
       if (!identical(current, rpc)) return;
       worktrees = rows;
       tabs = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
+      tabsStale = false;
       error = null;
     } catch (caught) {
       // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次
