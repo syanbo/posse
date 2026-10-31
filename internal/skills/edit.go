@@ -78,19 +78,27 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 		if s.Scope == ScopeProject {
 			sel = codexEntry{Path: realDir(s.File)}
 		}
-		ch.After = setCodexEntry(ch.Before, sel, s.Name, enable)
+		ch.After = setCodexEntry(ch.Before, sel, s.Name, realDir(s.File), enable)
 	case Grok:
 		ch.File = filepath.Join(o.Home, ".grok", "config.toml")
 		ch.Before = readText(ch.File)
-		if s.Scope == ScopeProject {
-			// ignore 按放技能的那一项比（链接本身，不是它指向的地方）
-			dir := s.Agents[Grok].Via
-			if dir == "" {
-				dir = s.Dir
+		// ignore 按放技能的那一项比（链接本身，不是它指向的地方）
+		dir := s.Agents[Grok].Via
+		if dir == "" {
+			dir = s.Dir
+		}
+		norm := func(v string) string { return expandAll(o.Home, []string{v})[0] }
+		switch {
+		case enable:
+			// 打开时两处都去掉：不管是 Posse 关的还是用户自己写的
+			ch.After, err = setTOMLList(ch.Before, "skills", "disabled", s.Name, false, nil)
+			if err == nil {
+				ch.After, err = setTOMLList(ch.After, "skills", "ignore", dir, false, norm)
 			}
-			ch.After, err = setTOMLList(ch.Before, "skills", "ignore", dir, !enable, func(v string) string { return expandAll(o.Home, []string{v})[0] })
-		} else {
-			ch.After, err = setTOMLList(ch.Before, "skills", "disabled", s.Name, !enable, nil)
+		case s.Scope == ScopeProject:
+			ch.After, err = setTOMLList(ch.Before, "skills", "ignore", dir, true, norm)
+		default:
+			ch.After, err = setTOMLList(ch.Before, "skills", "disabled", s.Name, true, nil)
 		}
 	}
 	if err != nil {
@@ -103,22 +111,31 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 }
 
 // Apply 写入改动：文件和算改动时不一样了就不写（ErrStale）；先写临时文件再改名。
+// 配置文件是符号链接（dotfiles 仓库常这样放）时写到它指向的文件，不把链接换成普通文件。
 func (ch Change) Apply() error {
 	if readText(ch.File) != ch.Before {
 		return ErrStale
 	}
-	if err := os.MkdirAll(filepath.Dir(ch.File), 0o755); err != nil {
+	file := ch.File
+	if real, err := filepath.EvalSymlinks(file); err == nil {
+		file = real
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(ch.File); err == nil {
+	if fi, err := os.Stat(file); err == nil {
 		mode = fi.Mode().Perm()
 	}
-	tmp := ch.File + ".posse-tmp"
+	tmp := file + ".posse-tmp"
 	if err := os.WriteFile(tmp, []byte(ch.After), mode); err != nil {
 		return err
 	}
-	return os.Rename(tmp, ch.File)
+	if err := os.Rename(tmp, file); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func readText(path string) string {
@@ -357,8 +374,9 @@ func codexBlocks(lines []string) []tomlBlock {
 }
 
 // setCodexEntry 关掉时：已有同一个选择的段就把 enabled 改成 false，没有就在文件末尾加一段；
-// 打开时删掉同一个选择的段，删完还被别的段（按名字的）关着就加一段 enabled = true。
-func setCodexEntry(src string, sel codexEntry, name string, enable bool) string {
+// 打开时删掉选中它的段（按路径 file 写的，用户级的还有按名字写的：Codex 自己的界面会按路径写），
+// 删完还被按名字的段关着（项目级）就加一段 enabled = true。
+func setCodexEntry(src string, sel codexEntry, name, file string, enable bool) string {
 	lines := strings.Split(src, "\n")
 	same := func(e codexEntry) bool { return e.Name == sel.Name && e.Path == sel.Path }
 	blocks := codexBlocks(lines)
@@ -370,8 +388,11 @@ func setCodexEntry(src string, sel codexEntry, name string, enable bool) string 
 		}
 		return appendBlock(src, codexBlockText(sel, false))
 	}
+	selects := func(e codexEntry) bool {
+		return same(e) || e.Path != "" && e.Path == file || sel.Name != "" && e.Name == sel.Name && e.Path == ""
+	}
 	for _, b := range slices.Backward(blocks) {
-		if !same(b.entry) {
+		if !selects(b.entry) {
 			continue
 		}
 		// 段到下一个表头之前，含它后面隔开的空行

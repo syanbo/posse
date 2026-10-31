@@ -37,22 +37,27 @@ func TestSetJSONOverride(t *testing.T) {
 
 func TestSetCodexEntry(t *testing.T) {
 	src := "model = \"gpt\"\n\n[projects.\"/x\"]\ntrust_level = \"trusted\"\n"
-	off := setCodexEntry(src, codexEntry{Name: "a"}, "a", false)
+	off := setCodexEntry(src, codexEntry{Name: "a"}, "a", "/h/a/SKILL.md", false)
 	want := src + "\n[[skills.config]]\nname = \"a\"\nenabled = false\n"
 	if off != want {
 		t.Fatalf("关：%q", off)
 	}
-	if back := setCodexEntry(off, codexEntry{Name: "a"}, "a", true); back != src {
+	if back := setCodexEntry(off, codexEntry{Name: "a"}, "a", "/h/a/SKILL.md", true); back != src {
 		t.Errorf("再打开应回到原样：%q", back)
 	}
 	// 已有 enabled = true 的段改成 false，不重复加
 	has := "[[skills.config]]\nname = \"a\"\nenabled = true\n\n[other]\nx = 1\n"
-	if got := setCodexEntry(has, codexEntry{Name: "a"}, "a", false); got != "[[skills.config]]\nname = \"a\"\nenabled = false\n\n[other]\nx = 1\n" {
+	if got := setCodexEntry(has, codexEntry{Name: "a"}, "a", "/h/a/SKILL.md", false); got != "[[skills.config]]\nname = \"a\"\nenabled = false\n\n[other]\nx = 1\n" {
 		t.Errorf("改已有的段：%q", got)
+	}
+	// Codex 自己的界面按路径关的用户级技能：按名字打开时那段也删掉
+	byPath := src + "\n[[skills.config]]\npath = \"/h/a/SKILL.md\"\nenabled = false\n"
+	if got := setCodexEntry(byPath, codexEntry{Name: "a"}, "a", "/h/a/SKILL.md", true); got != src {
+		t.Errorf("按路径关的应能打开：%q", got)
 	}
 	// 按路径打开，但按名字的那段还关着：加一段 enabled = true
 	byName := "[[skills.config]]\nname = \"a\"\nenabled = false\n"
-	if got := setCodexEntry(byName, codexEntry{Path: "/p/a/SKILL.md"}, "a", true); !strings.Contains(got, "path = \"/p/a/SKILL.md\"\nenabled = true") {
+	if got := setCodexEntry(byName, codexEntry{Path: "/p/a/SKILL.md"}, "a", "/p/a/SKILL.md", true); !strings.Contains(got, "path = \"/p/a/SKILL.md\"\nenabled = true") {
 		t.Errorf("按路径打开：%q", got)
 	}
 }
@@ -141,7 +146,7 @@ func TestPlanToggle(t *testing.T) {
 		}
 		ch.Apply()
 	}
-	if got := states(find(t, Scan(o), "p", ScopeProject)); got[Codex] != Off || got[Grok] != Unseen {
+	if got := states(find(t, Scan(o), "p", ScopeProject)); got[Codex] != Off || got[Grok] != Off {
 		t.Errorf("项目级关掉后 %v", got)
 	}
 
@@ -168,5 +173,51 @@ func TestDiff(t *testing.T) {
 	}
 	if d := Diff("", "x\n", 2); len(d) != 1 || d[0].Kind != '+' {
 		t.Errorf("新文件：%+v", d)
+	}
+}
+
+// 配置文件是符号链接时写到它指向的文件，链接留着。
+func TestApplyThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "dotfiles", "settings.json")
+	write(t, real, "{}\n")
+	at := filepath.Join(dir, "settings.json")
+	link(t, real, at)
+	ch := Change{File: at, Before: "{}\n", After: "{\"x\": 1}\n"}
+	if err := ch.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(at); fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("链接被换成了普通文件")
+	}
+	if b, _ := os.ReadFile(real); string(b) != "{\"x\": 1}\n" {
+		t.Errorf("链接指向的文件：%q", b)
+	}
+}
+
+// Grok 的项目技能关掉后（写进 ignore）仍算关了、能再打开，打开时 ignore 里去掉。
+func TestGrokProjectReenable(t *testing.T) {
+	h := t.TempDir()
+	ws := filepath.Join(t.TempDir(), "ws")
+	write(t, filepath.Join(ws, ".git", "HEAD"), "")
+	skill(t, filepath.Join(ws, ".grok", "skills", "p"), "p", "")
+	o := Options{Home: h, Dir: ws}
+	ch, err := PlanToggle(o, find(t, Scan(o), "p", ScopeProject), Grok, false)
+	if err != nil || ch.Apply() != nil {
+		t.Fatal(err)
+	}
+	p := find(t, Scan(o), "p", ScopeProject)
+	if st := p.Agents[Grok]; st.State != Off || !st.Ignored {
+		t.Fatalf("关掉后 %+v", st)
+	}
+	ch, err = PlanToggle(o, p, Grok, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ch.Apply(); err != nil {
+		t.Fatal(err)
+	}
+	if st := find(t, Scan(o), "p", ScopeProject).Agents[Grok]; st.State != On {
+		t.Errorf("打开后 %+v", st)
 	}
 }

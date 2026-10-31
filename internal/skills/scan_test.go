@@ -167,8 +167,8 @@ func TestScanConfigs(t *testing.T) {
 	if got := states(find(t, c, "a", ScopeUser)); got != [NumAgents]State{Off, Off, Off, On} {
 		t.Errorf("a %v", got)
 	}
-	// Codex 后写的 enabled = true 盖过前面的；Grok 的 ignore 藏掉 ~/.agents 那条，又不读 Claude 的目录
-	if got := states(find(t, c, "b", ScopeUser)); got != [NumAgents]State{Manual, On, Unseen, On} {
+	// Codex 后写的 enabled = true 盖过前面的；Grok 的 ignore 藏掉 ~/.agents 那条（算关了），又不读 Claude 的目录
+	if got := states(find(t, c, "b", ScopeUser)); got != [NumAgents]State{Manual, On, Off, On} {
 		t.Errorf("b %v", got)
 	}
 	if got := find(t, c, "c", ScopeUser).Agents[Claude]; got.State != On || got.Why == "" {

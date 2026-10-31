@@ -834,7 +834,11 @@ func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global 
 			a.askSkillCommand("更新 "+sk.Name+"？", "按锁文件里记的来源（"+sk.Source+"）拉最新的版本，覆盖本地的改动。", skills.UpdateArgs([]string{sk.Name}, global), w)
 		}
 		if pressable(iconButton(c.Key("skill-remove"), iconTrash, "删除")).Clicked() {
-			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉它的目录和给各家建的链接，不经过废纸篓。", skills.RemoveArgs(sk.Name, global), w)
+			var list []string
+			for _, p := range sk.Paths {
+				list = append(list, shortPath(p))
+			}
+			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉这些（各家目录里同名的都删），不经过废纸篓：\n"+strings.Join(list, "\n"), skills.RemoveArgs(sk.Name, global), w)
 		}
 	case sk.Scope == skills.ScopeUser || sk.Scope == skills.ScopeProject:
 		if pressable(iconButton(c.Key("skill-trash"), iconTrash, "移到废纸篓")).Clicked() {
@@ -843,14 +847,15 @@ func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global 
 	}
 }
 
-// askTrashSkill 确认后把技能目录和指向它的链接移到废纸篓。
+// askTrashSkill 确认后把指向技能的链接和技能目录移到废纸篓（先移链接：中途失败也不留下断链）。
 func (a *app) askTrashSkill(sk skills.Skill) {
-	paths := []string{sk.Dir}
+	var paths []string
 	for _, p := range sk.Paths {
 		if p != sk.Dir {
 			paths = append(paths, p)
 		}
 	}
+	paths = append(paths, sk.Dir)
 	var list []string
 	for _, p := range paths {
 		list = append(list, shortPath(p))

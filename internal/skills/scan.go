@@ -57,6 +57,8 @@ type Status struct {
 	Why string
 	// Inferred 表示这家的读取规则是推断，没有核实过（Cursor）。
 	Inferred bool
+	// Ignored 表示是被 Grok 的 [skills] ignore 藏掉的（算作关了，打开时从 ignore 里去掉）。
+	Ignored bool
 	// Via 是这家从哪个路径读到它的（链接或目录本身）。
 	Via string
 }
@@ -321,6 +323,13 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 				st.State, st.Why = cfg.state(a, s)
 			}
 			s.Agents[a] = st
+		}
+		// 被 ignore 藏掉的（项目技能在 Posse 里关掉就是这样）算作关了，不算读不到：界面上还能再打开
+		for _, it := range items {
+			s := &out[byDir[it.real]]
+			if rs[it.root].prio[a] >= 0 && cfg.hidden(a, it.path) && s.Agents[a].State == Unseen {
+				s.Agents[a] = Status{State: Off, Why: "config.toml 的 [skills] ignore 里有它", Via: it.path, Ignored: true}
+			}
 		}
 	}
 	return out
