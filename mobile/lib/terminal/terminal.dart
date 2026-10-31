@@ -20,6 +20,7 @@ import '../files/files.dart';
 import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
 import '../settings/custom_keys.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../workspace/models.dart';
@@ -65,6 +66,9 @@ class _TerminalScreenState extends State<TerminalScreen>
   final _resizes = ResizeGate();
   var _heldCols = 0;
   var _heldRows = 0;
+
+  /// 本地终端里已经写过远端的快照。之前是空白，盖一个加载动画。
+  var _painted = false;
 
   /// 当前订阅是不是按电脑布局订的（没带手机尺寸），以及电脑那边的列数、行数。
   var _heldDesk = false;
@@ -158,8 +162,10 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 
   /// 推入动画（连同从对话页过来时键盘收起）途中尺寸会连着变几次，停稳后再按电脑上的画面重来一遍。
+  /// 第一份快照还没到时不用：本地是空的，没什么可错位，正在路上的快照就是按现在的尺寸订的，
+  /// 重订会把它丢掉，空白多等一个来回。
   void _onEntry(AnimationStatus status) {
-    if (status == AnimationStatus.completed) _schedule(fresh: true);
+    if (status == AnimationStatus.completed && _painted) _schedule(fresh: true);
   }
 
   @override
@@ -215,7 +221,8 @@ class _TerminalScreenState extends State<TerminalScreen>
     // 推入页面、转屏、从后台回来重新布局时一次会连着报好几个尺寸。每个都订阅的话，电脑上的终端
     // 跟着连改几次尺寸，agent 每次都重画，手机也连着复位、写快照几次。等尺寸稳定下来只订阅一次；
     // 途中收到的旧尺寸输出会画乱本地画面，由这次的快照盖掉
-    _resizes.changed();
+    // 还没写过快照时本地是空的，裁不坏什么；尺寸和订阅时一样就不用重订
+    if (_painted) _resizes.changed();
     _resizeTimer?.cancel();
     _resizeTimer = Timer(_resizeSettle, () {
       if (!mounted || _desk || !_resizes.report(cols, rows)) return;
@@ -682,6 +689,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       _apply(_resetBytes);
     }
     _apply(piece.bytes);
+    if (piece.snapshot && !_painted) setState(() => _painted = true);
   }
 
   /// 新订阅从快照开始，切开的半个字符不能接到上一次的输出上。
@@ -968,6 +976,16 @@ class _TerminalScreenState extends State<TerminalScreen>
                   ),
                 ),
               ),
+              if (!_painted && _notice == null && !_ended)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: height,
+                  child: const IgnorePointer(
+                    child: Center(child: PosseLoader()),
+                  ),
+                ),
               // 提示和上传进度浮在看得见的那块终端上面，不跟着终端挪：
               // 占布局的话终端会变矮，agent 跟着重排。复制按钮贴着选区，跟着画面挪。
               if (_upload case final done?)
