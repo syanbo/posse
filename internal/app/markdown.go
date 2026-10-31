@@ -871,8 +871,9 @@ func (r mdView) spans(c *ui.Context, in mdInline) []ui.Span {
 	}
 	if in.style&mdMono != 0 {
 		// 圆角让底色只包住字、比字略宽，不铺满行高：几段代码挨着时不连成竖条
-		// 行内代码用比底色亮一档的填充（浅色主题暗一档），不用代码块那种深底：夹在正文里像挖了个洞
-		base.Font, base.Size, base.Background, base.Radius = monoFont, r.mono(), colors(t).fill, rSmall
+		// 行内代码强调色字、代码块的底，同手机端
+		base.Font, base.Size, base.Background, base.Radius = monoFont, r.mono(), codeBackground(t), rSmall
+		base.Color = t.Accent
 	}
 	if in.url != "" {
 		base.Color = t.Accent
