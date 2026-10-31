@@ -138,7 +138,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               isDense: true,
               contentPadding: EdgeInsets.zero,
               hintText: '搜索提问、回复和工具输出',
-              prefixIcon: Icon(Icons.search_rounded, size: 20, color: c.muted),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                size: Ic.medium,
+                color: c.muted,
+              ),
               prefixIconConstraints: const BoxConstraints.tightFor(
                 width: 38,
                 height: 38,
@@ -156,7 +160,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       padding: EdgeInsets.zero,
                       icon: Icon(
                         Icons.cancel_rounded,
-                        size: 18,
+                        size: Ic.medium,
                         color: c.faint,
                       ),
                       onPressed: () {
@@ -181,8 +185,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     setState(_open.clear);
                   },
             icon: Icon(
-              byFolder ? Icons.folder_outlined : Icons.schedule_rounded,
-              size: 22,
+              byFolder ? Icons.folder_rounded : Icons.schedule_rounded,
+              size: Ic.button,
               color: searching ? c.faint : c.text,
             ),
           ),
@@ -291,8 +295,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: Fs.meta,
-                        fontWeight: FontWeight.w500,
+                        fontSize: Fs.small,
+                        fontWeight: Fw.medium,
                         color: c.muted,
                       ),
                     ),
@@ -300,7 +304,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Text(
                     '${list.length}',
                     style: TextStyle(
-                      fontSize: Fs.caption,
+                      fontSize: Fs.small,
                       color: c.faint,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -311,7 +315,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     duration: const Duration(milliseconds: 150),
                     child: Icon(
                       Icons.chevron_right_rounded,
-                      size: 18,
+                      size: Ic.medium,
                       color: c.faint,
                     ),
                   ),
@@ -338,7 +342,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     ].join(' · ');
     return RowTile(
       chevron: false,
-      leading: AgentTile(agent: s.agent, size: 28),
+      leading: AgentTile(agent: s.agent, size: Ic.large),
       title: Text(
         s.title.isEmpty ? '（没有标题）' : s.title,
         maxLines: 1,
@@ -354,14 +358,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 s.snippet!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: Fs.meta, color: c.text, height: 1.4),
+                style: TextStyle(
+                  fontSize: Fs.small,
+                  color: c.text,
+                  height: Lh.code,
+                ),
               ),
             ),
           Text(
             where,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: Fs.caption, color: c.muted),
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
           ),
         ],
       ),
@@ -369,7 +377,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       trailing: Text(
         historyTime(s.updatedAt, now),
         style: TextStyle(
-          fontSize: Fs.caption,
+          fontSize: Fs.small,
           color: c.faint,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
@@ -532,7 +540,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         titleSpacing: 0,
         title: Row(
           children: [
-            AgentTile(agent: s.agent, size: 28),
+            AgentTile(agent: s.agent, size: Ic.large),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -542,15 +550,15 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
                     s.title.isEmpty ? '（没有标题）' : s.title,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontSize: Fs.title,
+                      fontWeight: Fw.bold,
                       color: c.text,
                     ),
                   ),
                   Text(
                     s.cwd,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: c.muted),
+                    style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],
               ),
@@ -598,7 +606,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
                   onPressed: _resuming || widget.model.rpc == null
                       ? null
                       : _resume,
-                  icon: const Icon(Icons.laptop_mac_rounded, size: 20),
+                  icon: const Icon(Icons.laptop_mac_rounded, size: Ic.medium),
                   label: Text(_resuming ? '正在打开…' : '在电脑上继续'),
                 ),
               ),
@@ -628,7 +636,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
   }
 }
 
-/// 历史页的 agent 筛选：一行小标签，选中的是填充底加正文色，没选的只是灰字，不用整条的陶土色分段。
+/// 历史页的 agent 筛选：一行小标签，选中的和别处的选中项一样是淡底陶土字，没选的只是灰字。
 class _AgentChip extends StatelessWidget {
   const _AgentChip({
     required this.agent,
@@ -644,29 +652,29 @@ class _AgentChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     return Material(
-      color: selected ? c.fill : Colors.transparent,
-      borderRadius: BorderRadius.circular(16),
+      color: selected ? c.tint : Colors.transparent,
+      borderRadius: BorderRadius.circular(Rd.pill),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(Rd.pill),
         onTap: onTap,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(agent.isEmpty ? 10 : 7, 7, 10, 7),
+          padding: EdgeInsets.fromLTRB(agent.isEmpty ? 10 : 6, 6, 10, 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (agent.isNotEmpty) ...[
                 Opacity(
                   opacity: selected ? 1 : 0.6,
-                  child: AgentTile(agent: agent, size: 16),
+                  child: AgentTile(agent: agent, size: Ic.small),
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
               ],
               Text(
                 agent.isEmpty ? '全部' : agentLabel(agent),
                 style: TextStyle(
-                  fontSize: Fs.meta,
-                  fontWeight: FontWeight.w500,
-                  color: selected ? c.text : c.muted,
+                  fontSize: Fs.small,
+                  fontWeight: Fw.medium,
+                  color: selected ? c.accent : c.muted,
                 ),
               ),
             ],

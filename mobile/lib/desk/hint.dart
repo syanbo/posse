@@ -17,21 +17,21 @@ class DeskGestureHint extends StatelessWidget {
   final bool trackpad;
 
   static const trackpadLines = <DeskGestureLine>[
-    (icon: Icons.near_me_outlined, action: '移动指针', how: '单指滑动'),
-    (icon: Icons.touch_app_outlined, action: '单击', how: '单指轻点，点在指针处'),
+    (icon: Icons.near_me_rounded, action: '移动指针', how: '单指滑动'),
+    (icon: Icons.touch_app_rounded, action: '单击', how: '单指轻点，点在指针处'),
     (icon: Icons.ads_click_rounded, action: '右键', how: '双指轻点'),
     (icon: Icons.open_with_rounded, action: '拖动', how: '三指滑动，或轻点后马上按住滑'),
-    (icon: Icons.swipe_vertical_outlined, action: '滚动', how: '双指拖动'),
-    (icon: Icons.pinch_outlined, action: '缩放', how: '双指捏合'),
+    (icon: Icons.swipe_vertical_rounded, action: '滚动', how: '双指拖动'),
+    (icon: Icons.pinch_rounded, action: '缩放', how: '双指捏合'),
   ];
 
   static const lines = <DeskGestureLine>[
-    (icon: Icons.touch_app_outlined, action: '单击', how: '单指轻点'),
+    (icon: Icons.touch_app_rounded, action: '单击', how: '单指轻点'),
     (icon: Icons.ads_click_rounded, action: '右键', how: '双指轻点'),
     (icon: Icons.open_with_rounded, action: '拖动', how: '长按到震一下，再拖'),
-    (icon: Icons.pan_tool_outlined, action: '移动画面', how: '放大后单指拖动'),
-    (icon: Icons.swipe_vertical_outlined, action: '滚动', how: '双指拖动'),
-    (icon: Icons.pinch_outlined, action: '缩放', how: '双指捏合'),
+    (icon: Icons.pan_tool_rounded, action: '移动画面', how: '放大后单指拖动'),
+    (icon: Icons.swipe_vertical_rounded, action: '滚动', how: '双指拖动'),
+    (icon: Icons.pinch_rounded, action: '缩放', how: '双指捏合'),
   ];
 
   @override
@@ -42,7 +42,7 @@ class DeskGestureHint extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onDismiss,
       child: ColoredBox(
-        color: const Color(0x99000000),
+        color: PosseColors.scrim,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -54,7 +54,7 @@ class DeskGestureHint extends StatelessWidget {
                   borderRadius: BorderRadius.circular(Rd.card),
                   clipBehavior: Clip.antiAlias,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+                    padding: const EdgeInsets.all(20),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -65,11 +65,8 @@ class DeskGestureHint extends StatelessWidget {
                           _row(c, line),
                         const SizedBox(height: 10),
                         Text(
-                          '点任意处关掉 · 模式在设置「看桌面」里换',
-                          style: TextStyle(
-                            fontSize: Fs.caption,
-                            color: c.faint,
-                          ),
+                          '点任意处关掉，模式在设置「看桌面」里换',
+                          style: TextStyle(fontSize: Fs.small, color: c.muted),
                         ),
                       ],
                     ),
@@ -89,8 +86,8 @@ class DeskGestureHint extends StatelessWidget {
         Text(
           '手势',
           style: TextStyle(
-            fontSize: Fs.cardTitle,
-            fontWeight: FontWeight.w600,
+            fontSize: Fs.title,
+            fontWeight: Fw.bold,
             color: c.text,
           ),
         ),
@@ -98,15 +95,15 @@ class DeskGestureHint extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: c.tint,
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(Rd.pill),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Text(
               trackpad ? '触控板模式' : '直接点按模式',
               style: TextStyle(
-                fontSize: Fs.caption,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: c.accent,
               ),
             ),
@@ -129,7 +126,7 @@ class DeskGestureHint extends StatelessWidget {
             child: SizedBox(
               width: 36,
               height: 36,
-              child: Icon(line.icon, size: 20, color: c.text),
+              child: Icon(line.icon, size: Ic.medium, color: c.text),
             ),
           ),
           const SizedBox(width: 12),
@@ -141,14 +138,14 @@ class DeskGestureHint extends StatelessWidget {
                   line.action,
                   style: TextStyle(
                     fontSize: Fs.body,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: Fw.medium,
                     color: c.text,
                   ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   line.how,
-                  style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ],
             ),

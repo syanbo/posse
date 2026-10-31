@@ -111,7 +111,11 @@ class ChatComposer extends StatelessWidget {
           ),
           child: Text(
             '这个会话已经结束，记录还在。要继续请在首页新建会话，或者在电脑的历史页恢复。',
-            style: TextStyle(fontSize: 13, height: 1.5, color: c.muted),
+            style: TextStyle(
+              fontSize: Fs.small,
+              height: Lh.body,
+              color: c.muted,
+            ),
           ),
         ),
       );
@@ -169,7 +173,7 @@ class ChatComposer extends StatelessWidget {
                                       : () => onRemoveImage(index),
                                   child: const DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: Color(0xCC1A1A19),
+                                      color: PosseColors.scrimHeavy,
                                       borderRadius: BorderRadius.only(
                                         topRight: Radius.circular(Rd.button),
                                         bottomLeft: Radius.circular(Rd.button),
@@ -180,7 +184,7 @@ class ChatComposer extends StatelessWidget {
                                       height: 18,
                                       child: Icon(
                                         Icons.close_rounded,
-                                        size: 14,
+                                        size: Ic.inline,
                                         color: Colors.white,
                                       ),
                                     ),
@@ -209,8 +213,8 @@ class ChatComposer extends StatelessWidget {
                     ),
                     onPressed: sending || !connected ? null : onPickImage,
                     icon: Icon(
-                      Icons.image_outlined,
-                      size: 22,
+                      Icons.image_rounded,
+                      size: Ic.button,
                       color: images.isEmpty ? c.muted : c.accent,
                     ),
                   ),
@@ -235,7 +239,7 @@ class ChatComposer extends StatelessWidget {
                         focusedBorder: InputBorder.none,
                         isDense: true,
                         // 单行时和 34 高的发送按钮一样高
-                        contentPadding: const EdgeInsets.fromLTRB(6, 5, 4, 6),
+                        contentPadding: const EdgeInsets.fromLTRB(6, 6, 4, 6),
                       ),
                     ),
                   ),
@@ -255,7 +259,7 @@ class ChatComposer extends StatelessWidget {
                           ? HexSpinner(color: c.muted)
                           : Icon(
                               Icons.arrow_upward_rounded,
-                              size: 20,
+                              size: Ic.medium,
                               color: ready ? Colors.white : c.faint,
                             ),
                     ),

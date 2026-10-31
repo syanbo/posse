@@ -15,6 +15,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - 终端内核 libghostty-vt 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
 - 端到端测试不要碰 `~/.posse`。只测 CLI 和常驻进程、不涉及系统授权时用 `POSSE_HOME=/tmp/posse-e2e/home ./bin/posse ...`，编得最快；单元测试和离屏预览不起 App。
 - 改界面后用离屏预览自查（屏幕锁定时也能用）：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`，生成主要界面深浅两套的 PNG（清单见 `preview_test.go`）。
+- 写手机端界面前读 `docs/mobile-design.md`：取值只用 `mobile/lib/ui/theme.dart` 里的名字，`mobile/test/design_rules_test.dart` 检查。
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 写界面前读 `docs/design.md`（取向和字号、颜色、间距等规则，只用 `style.go` 里的名字，不写数字），各界面的行为见 `docs/features/ui.md`。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。mygo 会把字重取整到固定档位，别指望细调字重。
 - `mygo.json` 用 Developer ID Application 证书签名（团队 QKSM9Z4U85；`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。

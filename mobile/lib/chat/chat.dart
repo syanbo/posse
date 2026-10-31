@@ -943,9 +943,9 @@ class _ChatScreenState extends State<ChatScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         backgroundColor: c.card,
         foregroundColor: c.accent,
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        textStyle: const TextStyle(fontSize: Fs.small, fontWeight: Fw.medium),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(Rd.pill),
           side: BorderSide(color: c.line),
         ),
       ),

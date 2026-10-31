@@ -108,7 +108,11 @@ class CustomKeysScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
                   '最左边的键盘开关固定不动，其余按这里从上到下的顺序从左往右排。自己加的键点开可以修改或删除。',
-                  style: TextStyle(fontSize: 12.5, height: 1.5, color: c.muted),
+                  style: TextStyle(
+                    fontSize: Fs.small,
+                    height: Lh.body,
+                    color: c.muted,
+                  ),
                 ),
               ),
               Section(
@@ -117,7 +121,7 @@ class CustomKeysScreen extends StatelessWidget {
                     chevron: false,
                     leading: Icon(
                       Icons.add_circle_outline_rounded,
-                      size: 22,
+                      size: Ic.button,
                       color: c.accent,
                     ),
                     title: const Text('新建快捷键'),
@@ -129,7 +133,7 @@ class CustomKeysScreen extends StatelessWidget {
                       chevron: false,
                       leading: Icon(
                         Icons.restart_alt_rounded,
-                        size: 22,
+                        size: Ic.button,
                         color: c.accent,
                       ),
                       title: const Text('恢复默认顺序'),
@@ -176,10 +180,7 @@ class _KeyRow extends StatelessWidget {
           chevron: false,
           leading: switch (item.builtin) {
             'image' => const _KeyCap(icon: Icons.attach_file_rounded),
-            'paste' => const _KeyCap(
-              icon: Icons.content_paste_rounded,
-              iconSize: 19,
-            ),
+            'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
             sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
             _ => _KeyCap(label: custom?.shown ?? item.builtin),
           },
@@ -194,7 +195,11 @@ class _KeyRow extends StatelessWidget {
             index: index,
             child: Padding(
               padding: const EdgeInsets.all(6),
-              child: Icon(Icons.drag_handle_rounded, size: 22, color: c.faint),
+              child: Icon(
+                Icons.drag_handle_rounded,
+                size: Ic.button,
+                color: c.faint,
+              ),
             ),
           ),
         ),
@@ -232,11 +237,10 @@ String describeBuiltin(String name) => switch (name) {
 
 /// 和快捷键栏上一样的键帽，设置里一眼对得上。
 class _KeyCap extends StatelessWidget {
-  const _KeyCap({this.label, this.icon, this.iconSize = 18, this.glyph});
+  const _KeyCap({this.label, this.icon, this.glyph});
 
   final String? label;
   final IconData? icon;
-  final double iconSize;
   final Widget? glyph;
 
   @override
@@ -254,14 +258,14 @@ class _KeyCap extends StatelessWidget {
       child: glyph != null
           ? glyph!
           : icon != null
-          ? Icon(icon, size: iconSize, color: c.text)
+          ? Icon(icon, size: Ic.medium, color: c.text)
           : Text(
               label ?? '',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.body,
+                fontWeight: Fw.medium,
                 color: c.text,
               ),
             ),
@@ -325,7 +329,7 @@ class _KeyEditorState extends State<_KeyEditor> {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final draft = _draft;
-    final label = TextStyle(fontSize: Fs.meta, color: c.muted);
+    final label = TextStyle(fontSize: Fs.small, color: c.muted);
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
@@ -336,8 +340,8 @@ class _KeyEditorState extends State<_KeyEditor> {
             Text(
               widget.initial == null ? '新建快捷键' : '编辑快捷键',
               style: TextStyle(
-                fontSize: Fs.cardTitle,
-                fontWeight: FontWeight.w600,
+                fontSize: Fs.title,
+                fontWeight: Fw.bold,
                 color: c.text,
               ),
             ),
@@ -393,7 +397,7 @@ class _KeyEditorState extends State<_KeyEditor> {
             autofocus: widget.initial == null,
             minLines: 1,
             maxLines: 4,
-            style: mono(14, color: c.text),
+            style: mono(Fs.body, color: c.text),
             onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(hintText: '例如 /compact'),
           ),
@@ -431,7 +435,7 @@ class _KeyEditorState extends State<_KeyEditor> {
             autocorrect: false,
             enableSuggestions: false,
             textCapitalization: TextCapitalization.none,
-            style: mono(14, color: c.text),
+            style: mono(Fs.body, color: c.text),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: ctrl ? '例如 r、d、z、l' : '例如 b、f、.',
@@ -464,8 +468,8 @@ class _KeyEditorState extends State<_KeyEditor> {
                       child: Text(
                         name,
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontSize: Fs.body,
+                          fontWeight: Fw.medium,
                           color: _special == name ? c.accent : c.text,
                         ),
                       ),

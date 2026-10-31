@@ -213,14 +213,14 @@ void main() {
 
   test('signal bars drop as latency grows', () {
     IconData at(int ms) => latencyIcon(Duration(milliseconds: ms));
-    expect(at(40), Icons.signal_cellular_alt);
-    expect(at(149), Icons.signal_cellular_alt);
-    expect(at(150), Icons.signal_cellular_alt_2_bar);
-    expect(at(299), Icons.signal_cellular_alt_2_bar);
-    expect(at(300), Icons.signal_cellular_alt_1_bar);
+    expect(at(40), Icons.signal_cellular_alt_rounded);
+    expect(at(149), Icons.signal_cellular_alt_rounded);
+    expect(at(150), Icons.signal_cellular_alt_2_bar_rounded);
+    expect(at(299), Icons.signal_cellular_alt_2_bar_rounded);
+    expect(at(300), Icons.signal_cellular_alt_1_bar_rounded);
     expect(
       latencyIcon(null, unresponsive: true),
-      Icons.signal_cellular_connected_no_internet_0_bar,
+      Icons.signal_cellular_connected_no_internet_0_bar_rounded,
     );
   });
 }

@@ -29,14 +29,14 @@ class ApprovalCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const StatusHex(state: AgentState.waiting, size: 18),
+              const StatusHex(state: AgentState.waiting, size: Ic.medium),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '允许 ${approval.tool}？',
                   style: TextStyle(
-                    fontSize: Fs.cardTitle,
-                    fontWeight: FontWeight.w600,
+                    fontSize: Fs.title,
+                    fontWeight: Fw.bold,
                     color: c.text,
                   ),
                 ),
@@ -56,7 +56,7 @@ class ApprovalCard extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Text(
                   approval.summary,
-                  style: mono(12.5, color: c.muted, height: 1.45),
+                  style: mono(Fs.small, color: c.muted, height: Lh.code),
                 ),
               ),
             ),
@@ -163,14 +163,14 @@ class _QuestionCardState extends State<QuestionCard> {
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
                           questions[i].header!,
-                          style: TextStyle(color: c.accent, fontSize: 12),
+                          style: TextStyle(color: c.accent, fontSize: Fs.small),
                         ),
                       ),
                     Text(
                       questions[i].question,
                       style: TextStyle(
                         fontSize: Fs.body,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: Fw.bold,
                         color: c.text,
                       ),
                     ),

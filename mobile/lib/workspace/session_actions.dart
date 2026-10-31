@@ -82,7 +82,7 @@ Future<String?> showSessionMore(
             if (switchLabel != null)
               RowTile(
                 chevron: false,
-                leading: Icon(switchIcon, size: 22, color: c.accent),
+                leading: Icon(switchIcon, size: Ic.button, color: c.accent),
                 title: Text(switchLabel),
                 onTap: () => Navigator.of(sheet).pop('switch'),
               ),
@@ -90,8 +90,8 @@ Future<String?> showSessionMore(
               RowTile(
                 chevron: false,
                 leading: Icon(
-                  Icons.photo_library_outlined,
-                  size: 22,
+                  Icons.photo_library_rounded,
+                  size: Ic.button,
                   color: c.accent,
                 ),
                 title: const Text('图片与视频'),
@@ -102,8 +102,8 @@ Future<String?> showSessionMore(
               RowTile(
                 chevron: false,
                 leading: Icon(
-                  Icons.extension_outlined,
-                  size: 22,
+                  Icons.extension_rounded,
+                  size: Ic.button,
                   color: c.accent,
                 ),
                 title: const Text('技能与工具'),
@@ -121,8 +121,8 @@ Future<String?> showSessionMore(
                   return RowTile(
                     chevron: false,
                     leading: Icon(
-                      Icons.desktop_mac_outlined,
-                      size: 22,
+                      Icons.desktop_mac_rounded,
+                      size: Ic.button,
                       color: c.accent,
                     ),
                     title: const Text('电脑布局'),
@@ -134,7 +134,11 @@ Future<String?> showSessionMore(
               ),
             RowTile(
               chevron: false,
-              leading: Icon(Icons.close_rounded, size: 22, color: c.danger),
+              leading: Icon(
+                Icons.close_rounded,
+                size: Ic.button,
+                color: c.danger,
+              ),
               title: Text(
                 tab.agent == null ? '关闭终端' : '关闭会话',
                 style: TextStyle(color: c.danger),

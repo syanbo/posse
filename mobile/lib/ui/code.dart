@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 
-/// 看源码和看 diff 共用的排版：等宽 12.5、行高 1.6，左边淡色行号，两页对得上。
-TextStyle codeStyle(PosseColors c) => mono(12.5, height: 1.6, color: c.text);
+/// 看源码和看 diff 共用的排版：等宽小字、长文行高，左边淡色行号，两页对得上。
+TextStyle codeStyle(PosseColors c) =>
+    mono(Fs.small, height: Lh.read, color: c.text);
 
 /// 代码块的边距：左边留给行号的空少一些。
 const codePadding = EdgeInsets.fromLTRB(8, 8, 16, 0);
@@ -110,7 +111,10 @@ class CodeNotice extends StatelessWidget {
     final c = PosseColors.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Text(text, style: TextStyle(fontSize: 12, color: c.honey)),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: Fs.small, color: c.honey),
+      ),
     );
   }
 }
@@ -137,10 +141,7 @@ class FilePathTitle extends StatelessWidget {
             path.substring(0, slash),
             overflow: TextOverflow.ellipsis,
             // 顶栏标题样式是 600，副标题要显式改回常规字重
-            style: mono(
-              12,
-              color: c.muted,
-            ).copyWith(fontWeight: FontWeight.w400),
+            style: mono(Fs.small, color: c.muted).copyWith(fontWeight: Fw.body),
           ),
       ],
     );

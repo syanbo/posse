@@ -91,7 +91,7 @@ void main() {
 
     expect(find.byType(Table), findsOneWidget);
     expect(find.byIcon(Icons.check_box_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.check_box_outline_blank), findsOneWidget);
+    expect(find.byIcon(Icons.check_box_outline_blank_rounded), findsOneWidget);
     expect(find.text('◦'), findsOneWidget);
     expect(find.text('▪'), findsOneWidget);
     // 没连电脑时图片画不出来，退成替代文字；图片在文末，只建看得见的块，先滚过去
@@ -178,8 +178,8 @@ void main() {
             builder: (context) => MarkdownView(
               _sample,
               style: TextStyle(
-                fontSize: Fs.read,
-                height: 1.6,
+                fontSize: Fs.body,
+                height: Lh.read,
                 color: PosseColors.of(context).text,
               ),
             ),

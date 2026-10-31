@@ -421,7 +421,7 @@ class UsageCardView extends StatelessWidget {
             builder: (_) => UsageSheet(usages: shown, onRefresh: onRefresh),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
+            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
             child: Row(
               children: [
                 Expanded(
@@ -434,7 +434,11 @@ class UsageCardView extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: c.faint),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: Ic.medium,
+                  color: c.faint,
+                ),
               ],
             ),
           ),
@@ -459,18 +463,18 @@ class _UsageChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AgentTile(agent: usage.agent, size: 16),
+        AgentTile(agent: usage.agent, size: Ic.small),
         const SizedBox(width: 6),
         Text(
           windowShort(w.minutes),
-          style: TextStyle(fontSize: Fs.caption, color: c.muted),
+          style: TextStyle(fontSize: Fs.small, color: c.muted),
         ),
-        const SizedBox(width: 3),
+        const SizedBox(width: 4),
         Text(
           '${shownPercent(w, remaining).round()}%',
           style: TextStyle(
-            fontSize: Fs.caption,
-            fontWeight: FontWeight.w500,
+            fontSize: Fs.small,
+            fontWeight: Fw.medium,
             color: urgent ? c.danger : c.text,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
@@ -583,8 +587,8 @@ class _UsageSheetState extends State<UsageSheet> {
                 child: Text(
                   '套餐用量',
                   style: TextStyle(
-                    fontSize: Fs.cardTitle,
-                    fontWeight: FontWeight.w600,
+                    fontSize: Fs.title,
+                    fontWeight: Fw.bold,
                     color: c.text,
                   ),
                 ),
@@ -596,7 +600,11 @@ class _UsageSheetState extends State<UsageSheet> {
                   onPressed: _refreshing ? null : _refresh,
                   icon: _refreshing
                       ? HexSpinner(color: c.muted)
-                      : Icon(Icons.refresh_rounded, size: 20, color: c.muted),
+                      : Icon(
+                          Icons.refresh_rounded,
+                          size: Ic.medium,
+                          color: c.muted,
+                        ),
                 ),
               SizedBox(
                 width: 128,
@@ -613,20 +621,20 @@ class _UsageSheetState extends State<UsageSheet> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 _error,
-                style: TextStyle(fontSize: Fs.caption, color: c.danger),
+                style: TextStyle(fontSize: Fs.small, color: c.danger),
               ),
             ),
           for (final u in usages) ...[
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Row(
               children: [
-                AgentTile(agent: u.agent, size: 22),
+                AgentTile(agent: u.agent, size: Ic.button),
                 const SizedBox(width: 10),
                 Text(
                   agentTitle(u.agent),
                   style: TextStyle(
                     fontSize: Fs.body,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: Fw.medium,
                     color: c.text,
                   ),
                 ),
@@ -637,14 +645,14 @@ class _UsageSheetState extends State<UsageSheet> {
                       u.plan,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                      style: TextStyle(fontSize: Fs.small, color: c.muted),
                     ),
                   ),
                 ] else
                   const Spacer(),
                 Text(
                   agoText(u.updatedAt, now),
-                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ],
             ),
@@ -655,7 +663,7 @@ class _UsageSheetState extends State<UsageSheet> {
                   Expanded(
                     child: Text(
                       windowName(w),
-                      style: TextStyle(fontSize: Fs.meta, color: c.text),
+                      style: TextStyle(fontSize: Fs.small, color: c.text),
                     ),
                   ),
                   Text(
@@ -665,7 +673,7 @@ class _UsageSheetState extends State<UsageSheet> {
                                 const Duration(minutes: 10)
                         ? '${resetText(w.resetsAt, now)}，${agoText(w.at!, now)}的读数'
                         : resetText(w.resetsAt, now),
-                    style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                    style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],
               ),
@@ -684,8 +692,8 @@ class _UsageSheetState extends State<UsageSheet> {
                       '${remaining ? '剩余' : '已用'} ${shownPercent(w, remaining).round()}%',
                       textAlign: TextAlign.end,
                       style: TextStyle(
-                        fontSize: Fs.meta,
-                        fontWeight: FontWeight.w500,
+                        fontSize: Fs.small,
+                        fontWeight: Fw.medium,
                         color: w.percent >= usageUrgent ? c.danger : c.text,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
@@ -698,14 +706,18 @@ class _UsageSheetState extends State<UsageSheet> {
               const SizedBox(height: 8),
               Text(
                 f,
-                style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ],
           ],
           const SizedBox(height: 20),
           Text(
             '电脑上的 agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后电脑会查一次。',
-            style: TextStyle(fontSize: Fs.caption, color: c.muted, height: 1.5),
+            style: TextStyle(
+              fontSize: Fs.small,
+              color: c.muted,
+              height: Lh.body,
+            ),
           ),
         ],
       ),

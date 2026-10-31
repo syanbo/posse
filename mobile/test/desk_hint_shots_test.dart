@@ -3,33 +3,21 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/desk/hint.dart';
 import 'package:posse_mobile/ui/theme.dart';
 
+import 'shot_fonts.dart';
+
 // 看桌面手势提示的离屏截图，给人看样子用：
 // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/desk_hint_shots_test.dart
-// 字体的顶替办法同 usage_shots_test.dart。
+// 字体见 shot_fonts.dart。
 
 void main() {
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
   testWidgets('desk hint screenshots', (tester) async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    final fonts = {
-      'Roboto': '/Library/Fonts/Arial Unicode.ttf',
-      'MaterialIcons':
-          '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-    };
-    await tester.runAsync(() async {
-      for (final e in fonts.entries) {
-        final bytes = File(e.value).readAsBytesSync();
-        await (FontLoader(
-          e.key,
-        )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-      }
-    });
+    await loadShotFonts(tester);
     await tester.binding.setSurfaceSize(const Size(390, 844));
     for (final dark in [false, true]) {
       for (final trackpad in [true, false]) {

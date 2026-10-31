@@ -81,7 +81,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                         widget.canRemember
                             ? '输入 Mac 的登录密码，发到锁屏界面后自动回车。勾「记住」只存在这台手机上'
                             : '输入 Mac 的登录密码，发到锁屏界面后自动回车',
-                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                        style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                     ),
                   ),

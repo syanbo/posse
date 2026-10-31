@@ -99,7 +99,7 @@ class SettingsScreen extends StatelessWidget {
                             const Spacer(),
                             Text(
                               s.terminalFontSize.toStringAsFixed(1),
-                              style: mono(14, color: c.muted),
+                              style: mono(Fs.small, color: c.muted),
                             ),
                           ],
                         ),
@@ -179,7 +179,7 @@ class SettingsScreen extends StatelessWidget {
                   RowTile(
                     leading: Icon(
                       Icons.laptop_mac_rounded,
-                      size: 24,
+                      size: Ic.button,
                       color: c.accent,
                     ),
                     title: Text(
@@ -231,7 +231,7 @@ class SettingsScreen extends StatelessWidget {
                     title: const Text('Posse'),
                     trailing: Text(
                       appBuild > 0 ? '$appVersion（$appBuild）' : appVersion,
-                      style: mono(13, color: c.muted),
+                      style: mono(Fs.small, color: c.muted),
                     ),
                   ),
                   // 首页的更新提示关掉了也能在这里更新
@@ -239,7 +239,7 @@ class SettingsScreen extends StatelessWidget {
                     RowTile(
                       leading: Icon(
                         Icons.system_update_rounded,
-                        size: 22,
+                        size: Ic.button,
                         color: c.accent,
                       ),
                       title: Text('更新到 ${release.version}（${release.build}）'),
@@ -248,7 +248,7 @@ class SettingsScreen extends StatelessWidget {
                           : Text(
                               release.size,
                               style: TextStyle(
-                                fontSize: Fs.caption,
+                                fontSize: Fs.small,
                                 color: c.faint,
                               ),
                             ),
@@ -383,7 +383,7 @@ class _Note extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
       child: Text(
         text,
-        style: TextStyle(fontSize: 12.5, height: 1.5, color: c.muted),
+        style: TextStyle(fontSize: Fs.small, height: Lh.body, color: c.muted),
       ),
     );
   }

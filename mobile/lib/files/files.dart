@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
+import '../ui/line_icons.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
 import '../ui/loading.dart';
@@ -51,6 +52,12 @@ List<FileEntry> parseDir(String parent, Object? raw) {
   });
   return out;
 }
+
+// 文件树每层缩进，照桌面端文件树
+const _treeIndent = 18.0;
+
+// 行首展开箭头占的宽，和箭头图标一样大
+const _arrowBox = Ic.medium;
 
 const _imageExts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'};
 const _binaryExts = {
@@ -97,9 +104,9 @@ class FilesScreen extends StatelessWidget {
               title,
               overflow: TextOverflow.ellipsis,
               style: mono(
-                12,
+                Fs.small,
                 color: c.muted,
-              ).copyWith(fontWeight: FontWeight.w400),
+              ).copyWith(fontWeight: Fw.body),
             ),
           ],
         ),
@@ -261,7 +268,7 @@ class _FilesPaneState extends State<FilesPane> {
             child: Row(
               children: [
                 const SizedBox(width: 12),
-                Icon(Icons.search_rounded, size: 20, color: c.faint),
+                Icon(Icons.search_rounded, size: Ic.medium, color: c.faint),
                 const SizedBox(width: 8),
                 Text('按文件名或路径找', style: TextStyle(color: c.faint)),
               ],
@@ -312,36 +319,33 @@ class _FilesPaneState extends State<FilesPane> {
               ),
             ),
       child: Padding(
-        // 尺寸照桌面端文件树：每层缩进 18
-        padding: EdgeInsets.fromLTRB(12 + depth * 18.0, 0, 12, 0),
+        padding: EdgeInsets.fromLTRB(12 + depth * _treeIndent, 0, 12, 0),
         child: SizedBox(
           height: 40,
           child: Row(
             children: [
               SizedBox(
-                width: 18,
+                width: _arrowBox,
                 child: e.dir
                     ? (_loading.contains(e.path)
-                          ? const HexSpinner(size: 12)
+                          ? const HexSpinner(size: Ic.glyph)
                           : AnimatedRotation(
                               turns: open ? 0.25 : 0,
                               duration: const Duration(milliseconds: 150),
                               child: Icon(
                                 Icons.chevron_right_rounded,
-                                size: 18,
+                                size: Ic.medium,
                                 color: c.faint,
                               ),
                             ))
                     : null,
               ),
               const SizedBox(width: 4),
-              Icon(
+              LineIconView(
                 e.dir
-                    ? (open
-                          ? Icons.folder_open_outlined
-                          : Icons.folder_outlined)
-                    : Icons.insert_drive_file_outlined,
-                size: 20,
+                    ? (open ? LineIcon.folderOpen : LineIcon.folder)
+                    : LineIcon.file,
+                size: Ic.medium,
                 color: e.dir ? c.accent : c.muted,
               ),
               const SizedBox(width: 10),
@@ -443,9 +447,9 @@ class _SearchSheetState extends State<_SearchSheet> {
                 final slash = path.lastIndexOf('/');
                 return RowTile(
                   chevron: false,
-                  leading: Icon(
-                    Icons.insert_drive_file_outlined,
-                    size: 20,
+                  leading: LineIconView(
+                    LineIcon.file,
+                    size: Ic.medium,
                     color: c.muted,
                   ),
                   title: Text(slash < 0 ? path : path.substring(slash + 1)),
@@ -453,7 +457,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                       ? null
                       : Text(
                           path.substring(0, slash),
-                          style: mono(12, color: c.muted),
+                          style: mono(Fs.small, color: c.muted),
                         ),
                   onTap: () => Navigator.of(context).pop(path),
                 );
@@ -636,7 +640,7 @@ class _FileViewerState extends State<FileViewer> {
     }
     if (_binary) {
       return const EmptyState(
-        icon: Icons.insert_drive_file_outlined,
+        icon: Icons.insert_drive_file_rounded,
         text: '二进制文件，手机上看不了内容',
       );
     }
@@ -740,7 +744,7 @@ class _ImageFileState extends State<_ImageFile> {
     }
     if (_binary) {
       return const EmptyState(
-        icon: Icons.insert_drive_file_outlined,
+        icon: Icons.insert_drive_file_rounded,
         text: '二进制文件，手机上看不了内容',
       );
     }
@@ -872,7 +876,7 @@ class FilesButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: '改动和文件',
-      icon: const Icon(Icons.folder_outlined),
+      icon: const Icon(Icons.folder_rounded),
       onPressed: () {
         WorktreeRow? row;
         for (final r in model.worktrees) {

@@ -65,7 +65,7 @@ class SessionTitle extends StatelessWidget {
           };
     return Row(
       children: [
-        _withLink(c, AgentTile(agent: tab.agent, size: 28)),
+        _withLink(c, AgentTile(agent: tab.agent, size: Ic.large)),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -75,8 +75,8 @@ class SessionTitle extends StatelessWidget {
                 cleanTitle(tab.title),
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: Fs.title,
+                  fontWeight: Fw.bold,
                   color: c.text,
                 ),
               ),
@@ -93,7 +93,7 @@ class SessionTitle extends StatelessWidget {
                         children: [
                           // 没有图标（普通终端、看过的完成）时不留空位，文字和标题左边对齐
                           if (hasGlyph(state)) ...[
-                            StatusHex(state: state, size: 11),
+                            StatusHex(state: state, size: Ic.glyph),
                             const SizedBox(width: 4),
                           ],
                           Flexible(
@@ -134,8 +134,8 @@ extension on SessionTitle {
     return Row(
       key: const ValueKey('reconnecting'),
       children: [
-        HexSpinner(size: 10, color: c.honey),
-        const SizedBox(width: 5),
+        HexSpinner(size: Ic.glyph, color: c.honey),
+        const SizedBox(width: 4),
         Flexible(
           child: Text(
             connecting ? '正在连接电脑…' : '连接断开，正在重连…',

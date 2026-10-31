@@ -25,13 +25,16 @@ class DraftBubble extends StatelessWidget {
               Text(
                 chatWho('assistant', agent),
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontSize: Fs.small,
+                  fontWeight: Fw.medium,
                   color: muted,
                 ),
               ),
               const SizedBox(width: 8),
-              Text('正在输出', style: TextStyle(fontSize: 11, color: muted)),
+              Text(
+                '正在输出',
+                style: TextStyle(fontSize: Fs.tiny, color: muted),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -45,7 +48,7 @@ class DraftBubble extends StatelessWidget {
                   child: Text(
                     part.text,
                     softWrap: false,
-                    style: mono(12.5, height: 1.45),
+                    style: mono(Fs.small, height: Lh.code),
                   ),
                 ),
               )
@@ -55,7 +58,7 @@ class DraftBubble extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
                   part.text,
-                  style: const TextStyle(fontSize: 15, height: 1.55),
+                  style: const TextStyle(fontSize: Fs.body, height: Lh.read),
                 ),
               ),
         ],

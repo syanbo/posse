@@ -3,16 +3,17 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/ui/line_icons.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/ui/widgets.dart';
 import 'package:posse_mobile/usage/usage.dart';
 
+import 'shot_fonts.dart';
+
 // 用量卡片和详情的离屏截图，给人看样子用：
 // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/usage_shots_test.dart
-// 测试里没有真字体，字和图标都画成方块：正文借 macOS 的 Arial Unicode（中英文都有）顶替默认的 Roboto，
-// 图标用 Flutter SDK 自带的 MaterialIcons。
+// 字体见 shot_fonts.dart。
 
 List<AgentUsage> _sample(DateTime now) => [
   AgentUsage(
@@ -112,7 +113,7 @@ class _Home extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          AgentTile(agent: agent, size: 22),
+          AgentTile(agent: agent, size: Ic.button),
           const SizedBox(width: 12),
           Text(
             title,
@@ -129,17 +130,21 @@ class _Home extends StatelessWidget {
           'Posse',
           style: TextStyle(
             fontFamily: 'Roboto',
-            fontSize: 26,
-            fontWeight: FontWeight.w600,
+            fontSize: Fs.title,
+            fontWeight: Fw.bold,
             color: c.text,
           ),
         ),
         actions: [
-          Icon(Icons.history_rounded, size: 24, color: c.text),
+          Icon(Icons.history_rounded, size: Ic.button, color: c.text),
           const SizedBox(width: 16),
-          Icon(Icons.add_circle_outline_rounded, size: 24, color: c.text),
+          Icon(
+            Icons.add_circle_outline_rounded,
+            size: Ic.button,
+            color: c.text,
+          ),
           const SizedBox(width: 16),
-          Icon(Icons.settings_outlined, size: 22, color: c.text),
+          LineIconView(LineIcon.settings, size: Ic.button, color: c.text),
           const SizedBox(width: 20),
         ],
       ),
@@ -155,7 +160,11 @@ class _Home extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 child: Row(
                   children: [
-                    Icon(Icons.folder_outlined, size: 22, color: c.accent),
+                    LineIconView(
+                      LineIcon.folder,
+                      size: Ic.button,
+                      color: c.accent,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       'posse',
@@ -192,20 +201,7 @@ void main() {
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
   testWidgets('usage screenshots', (tester) async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    final fonts = {
-      'Roboto': '/Library/Fonts/Arial Unicode.ttf',
-      'MaterialIcons':
-          '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-    };
-    await tester.runAsync(() async {
-      for (final e in fonts.entries) {
-        final bytes = File(e.value).readAsBytesSync();
-        await (FontLoader(
-          e.key,
-        )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-      }
-    });
+    await loadShotFonts(tester);
     await tester.binding.setSurfaceSize(const Size(390, 844));
     final now = DateTime.now();
     for (final dark in [false, true]) {

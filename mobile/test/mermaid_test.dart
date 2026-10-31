@@ -25,7 +25,7 @@ Widget _app(String md, {bool dark = false}) => MaterialApp(
         builder: (context) => MarkdownView(
           md,
           style: TextStyle(
-            fontSize: Fs.read,
+            fontSize: Fs.body,
             height: 1.6,
             color: PosseColors.of(context).text,
           ),
@@ -60,11 +60,11 @@ void main() {
     // 比屏幕宽的图等比缩小到可用宽度以内
     expect(tester.getSize(find.byType(MermaidDiagram)).width, lessThan(390));
 
-    await tester.tap(find.byIcon(Icons.code));
+    await tester.tap(find.byIcon(Icons.code_rounded));
     await tester.pump();
     expect(find.byType(MermaidDiagram), findsNothing);
     expect(find.textContaining('常驻进程', findRichText: true), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.visibility_outlined));
+    await tester.tap(find.byIcon(Icons.visibility_rounded));
     await tester.pump();
     expect(find.byType(MermaidDiagram), findsOneWidget);
   });

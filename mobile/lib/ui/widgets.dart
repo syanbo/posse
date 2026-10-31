@@ -43,10 +43,10 @@ class AgentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final (String? path, Color bg, Color fg) = switch (agent) {
-      'claude' => (brandClaudePath, const Color(0xFFD97757), Colors.white),
+      'claude' => (brandClaudePath, Brand.claude, Colors.white),
       'codex' => (brandCodexPath, Colors.white, Colors.black),
       'grok' => (brandGrokPath, c.text, c.card),
-      'cursor' => (brandCursorPath, const Color(0xFF6E56CF), Colors.white),
+      'cursor' => (brandCursorPath, Brand.cursor, Colors.white),
       _ => (null, c.fill, c.muted),
     };
     return Container(
@@ -56,9 +56,7 @@ class AgentTile extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(size * 0.26),
         // Codex 的白底在浅色卡片上会融掉，描一圈细边（和桌面端一致）
-        border: agent == 'codex'
-            ? Border.all(color: const Color(0x1F000000))
-            : null,
+        border: agent == 'codex' ? Border.all(color: Brand.codexEdge) : null,
       ),
       alignment: Alignment.center,
       child: path == null
@@ -435,7 +433,7 @@ class _PosseDialogRoute<T> extends RawDialogRoute<T> {
     required super.transitionBuilder,
     super.barrierLabel,
   }) : super(
-         barrierColor: Colors.black54,
+         barrierColor: PosseColors.barrier,
          transitionDuration: const Duration(milliseconds: 240),
        );
 
@@ -524,8 +522,8 @@ class _SectionTitle extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: Fs.meta,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: c.muted,
               ),
             ),
@@ -716,7 +714,7 @@ class RowTile extends StatelessWidget {
                     DefaultTextStyle.merge(
                       style: TextStyle(
                         fontSize: Fs.body,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: Fw.medium,
                         color: c.text,
                       ),
                       maxLines: 1,
@@ -724,9 +722,9 @@ class RowTile extends StatelessWidget {
                       child: title,
                     ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       DefaultTextStyle.merge(
-                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                        style: TextStyle(fontSize: Fs.small, color: c.muted),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         child: subtitle!,
@@ -741,7 +739,7 @@ class RowTile extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 4),
                   child: Icon(
                     Icons.chevron_right_rounded,
-                    size: 20,
+                    size: Ic.medium,
                     color: c.faint,
                   ),
                 ),
@@ -774,7 +772,7 @@ class PosseSwitch extends StatelessWidget {
   }
 }
 
-/// 分段选择：填充底，选中段是陶土色填充。
+/// 分段选择：填充底，选中段是淡底陶土字。
 class Segmented extends StatelessWidget {
   const Segmented({
     super.key,
@@ -792,7 +790,7 @@ class Segmented extends StatelessWidget {
     final c = PosseColors.of(context);
     return Container(
       height: 36,
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: c.fill,
         borderRadius: BorderRadius.circular(Rd.input),
@@ -809,15 +807,15 @@ class Segmented extends StatelessWidget {
                   curve: Curves.easeOut,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: i == selected ? c.accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(Rd.input - 3),
+                    color: i == selected ? c.tint : Colors.transparent,
+                    borderRadius: BorderRadius.circular(Rd.input - 2),
                   ),
                   child: Text(
                     labels[i],
                     style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: i == selected ? Colors.white : c.muted,
+                      fontSize: Fs.body,
+                      fontWeight: Fw.medium,
+                      color: i == selected ? c.accent : c.muted,
                     ),
                   ),
                 ),
@@ -853,14 +851,14 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 36, color: error ? c.danger : c.faint),
+            Icon(icon, size: Ic.hero, color: error ? c.danger : c.faint),
             const SizedBox(height: 12),
             Text(
               text,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
-                height: 1.5,
+                fontSize: Fs.body,
+                height: Lh.body,
                 color: error ? c.danger : c.muted,
               ),
             ),
@@ -887,7 +885,7 @@ class NoticeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    final tint = c.danger.withValues(alpha: c.dark ? 0.16 : 0.08);
+    final tint = c.soft(c.danger);
     final bar = Container(
       margin: floating
           ? const EdgeInsets.symmetric(horizontal: 16)
@@ -899,7 +897,7 @@ class NoticeBar extends StatelessWidget {
         boxShadow: floating
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: c.dark ? 0.4 : 0.12),
+                  color: c.shadow,
                   blurRadius: 16,
                   offset: const Offset(0, 4),
                 ),
@@ -909,12 +907,16 @@ class NoticeBar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline_rounded, size: 18, color: c.danger),
+          Icon(Icons.error_outline_rounded, size: Ic.medium, color: c.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: TextStyle(fontSize: 13, height: 1.4, color: c.danger),
+              style: TextStyle(
+                fontSize: Fs.small,
+                height: Lh.code,
+                color: c.danger,
+              ),
             ),
           ),
         ],
@@ -967,7 +969,7 @@ class UploadBar extends StatelessWidget {
             border: Border.all(color: c.line),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: c.dark ? 0.4 : 0.12),
+                color: c.shadow,
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -982,13 +984,13 @@ class UploadBar extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '正在发送$what$which',
-                      style: TextStyle(fontSize: Fs.caption, color: c.text),
+                      style: TextStyle(fontSize: Fs.small, color: c.text),
                     ),
                   ),
                   Text(
                     '${(done * 100).round()}%',
                     style: TextStyle(
-                      fontSize: Fs.caption,
+                      fontSize: Fs.small,
                       color: c.muted,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -997,7 +999,7 @@ class UploadBar extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               ClipRRect(
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(Rd.small),
                 child: LinearProgressIndicator(
                   value: overall,
                   minHeight: 3,

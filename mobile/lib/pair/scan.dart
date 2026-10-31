@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../protocol/pairing.dart';
+import '../ui/theme.dart';
 
 const qrChannel = MethodChannel('posse/qr');
 
@@ -179,7 +180,11 @@ class _QrScanPageState extends State<QrScanPage> {
 
   @override
   Widget build(BuildContext context) {
-    const hint = TextStyle(color: Colors.white, fontSize: 15, height: 1.4);
+    const hint = TextStyle(
+      color: Colors.white,
+      fontSize: Fs.body,
+      height: Lh.code,
+    );
     return Scaffold(
       backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
@@ -240,7 +245,7 @@ class _QrScanPageState extends State<QrScanPage> {
                       child: Text(
                         _note!,
                         textAlign: TextAlign.center,
-                        style: hint.copyWith(color: Colors.white70),
+                        style: hint.copyWith(color: PosseColors.onScrimMuted),
                       ),
                     ),
                 ],
@@ -274,12 +279,12 @@ class _QrScanPageState extends State<QrScanPage> {
     return TextButton.icon(
       style: TextButton.styleFrom(
         foregroundColor: Colors.white,
-        backgroundColor: Colors.white.withValues(alpha: 0.16),
+        backgroundColor: PosseColors.scrimButton,
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       ),
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: Ic.medium),
       label: Text(label),
     );
   }
@@ -293,14 +298,14 @@ class _FramePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final hole = RRect.fromRectAndRadius(frame, const Radius.circular(16));
+    final hole = RRect.fromRectAndRadius(frame, const Radius.circular(Rd.card));
     canvas.drawPath(
       Path.combine(
         PathOperation.difference,
         Path()..addRect(Offset.zero & size),
         Path()..addRRect(hole),
       ),
-      Paint()..color = Colors.black.withValues(alpha: 0.5),
+      Paint()..color = PosseColors.scrim,
     );
     final pen = Paint()
       ..color = Colors.white

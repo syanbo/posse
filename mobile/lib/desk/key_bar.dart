@@ -78,8 +78,8 @@ class DeskKeyBar extends StatelessWidget {
         child: SizedBox(
           width: 40,
           child: Icon(
-            keyboardUp ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
-            size: 21,
+            keyboardUp ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
+            size: Ic.button,
             color: c.text,
           ),
         ),
@@ -102,8 +102,8 @@ class DeskKeyBar extends StatelessWidget {
             label,
             maxLines: 1,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
               color: c.text,
             ),
           ),
@@ -157,7 +157,7 @@ class _DeskKeyStripState extends State<_DeskKeyStrip> {
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(
               horizontal: 8,
-              vertical: widget.dense ? 2 : 5,
+              vertical: widget.dense ? 2 : 4,
             ),
             itemCount: widget.children.length,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
@@ -255,8 +255,8 @@ class _ModKeyState extends State<_ModKey> {
             widget.label,
             maxLines: 1,
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.title,
+              fontWeight: Fw.medium,
               color: ink,
             ),
           ),

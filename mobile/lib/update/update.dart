@@ -142,7 +142,7 @@ class UpdateBanner extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
           child: Material(
-            color: c.accent.withValues(alpha: c.dark ? 0.16 : 0.10),
+            color: c.soft(c.accent),
             borderRadius: BorderRadius.circular(Rd.card),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -154,7 +154,7 @@ class UpdateBanner extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.system_update_rounded,
-                      size: 18,
+                      size: Ic.medium,
                       color: c.accent,
                     ),
                     const SizedBox(width: 10),
@@ -163,7 +163,7 @@ class UpdateBanner extends StatelessWidget {
                         TextSpan(
                           text: '新版本 ${release.version}（${release.build}）',
                           style: TextStyle(
-                            fontWeight: FontWeight.w500,
+                            fontWeight: Fw.medium,
                             color: c.text,
                           ),
                           children: [
@@ -171,7 +171,7 @@ class UpdateBanner extends StatelessWidget {
                               TextSpan(
                                 text: ' · ${release.size}',
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w400,
+                                  fontWeight: Fw.body,
                                   color: c.muted,
                                 ),
                               ),
@@ -179,7 +179,7 @@ class UpdateBanner extends StatelessWidget {
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: Fs.meta),
+                        style: const TextStyle(fontSize: Fs.small),
                       ),
                     ),
                     // IconButton 会被撑到最小点击尺寸，条就比用量条高一截
@@ -195,7 +195,7 @@ class UpdateBanner extends StatelessWidget {
                           height: 28,
                           child: Icon(
                             Icons.close_rounded,
-                            size: 16,
+                            size: Ic.small,
                             color: c.muted,
                           ),
                         ),
@@ -321,8 +321,8 @@ class _UpdateSheetState extends State<_UpdateSheet> {
           Text(
             '新版本 ${r.version}',
             style: TextStyle(
-              fontSize: Fs.cardTitle,
-              fontWeight: FontWeight.w600,
+              fontSize: Fs.title,
+              fontWeight: Fw.bold,
               color: c.text,
             ),
           ),
@@ -333,7 +333,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               if (r.size.isNotEmpty) r.size,
               '当前 $appVersion（$appBuild）',
             ].join(' · '),
-            style: TextStyle(fontSize: Fs.caption, color: c.muted),
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
           ),
           const SizedBox(height: 14),
           Flexible(
@@ -356,7 +356,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
                               note,
                               style: TextStyle(
                                 fontSize: Fs.body,
-                                height: 1.45,
+                                height: Lh.code,
                                 color: c.text,
                               ),
                             ),
@@ -372,8 +372,8 @@ class _UpdateSheetState extends State<_UpdateSheet> {
           FilledButton.icon(
             onPressed: _busy ? null : _install,
             icon: _busy
-                ? const HexSpinner(size: 16, color: Colors.white)
-                : const Icon(Icons.system_update_rounded, size: 20),
+                ? const HexSpinner(size: Ic.small, color: Colors.white)
+                : const Icon(Icons.system_update_rounded, size: Ic.medium),
             label: Text(_busy ? _busyLabel : '更新'),
           ),
           if (_error case final error?) ...[
@@ -381,7 +381,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
             Text(
               error,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: Fs.caption, color: c.danger),
+              style: TextStyle(fontSize: Fs.small, color: c.danger),
             ),
           ],
           const SizedBox(height: 8),
@@ -390,7 +390,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
                 ? '下载完系统会弹出安装确认，覆盖安装，配对不会丢。第一次更新要在系统设置里允许 Posse 安装应用。'
                 : '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: Fs.caption, color: c.faint),
+            style: TextStyle(fontSize: Fs.small, color: c.muted),
           ),
         ],
       ),

@@ -120,21 +120,20 @@ Widget _block(BuildContext context, md.Node node, TextStyle base) {
       case 'h2':
       case 'h3':
         final size = switch (node.tag) {
-          'h1' => 17.0,
-          'h2' => 15.5,
-          _ => 14.0,
+          'h1' => Fs.heading,
+          'h2' => Fs.title,
+          _ => Fs.body,
         };
+        // 行内的每段都带自己的样式，标题样式要当 base 传进去，只设在外层会被盖掉
+        final heading = base.copyWith(
+          fontWeight: Fw.bold,
+          fontSize: size,
+          height: Lh.title,
+        );
         return Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 6),
           child: Text.rich(
-            TextSpan(
-              style: base.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: size,
-                height: 1.35,
-              ),
-              children: _inline(context, node, base),
-            ),
+            TextSpan(style: heading, children: _inline(context, node, heading)),
           ),
         );
       default:
@@ -150,12 +149,12 @@ List<InlineSpan> _inline(BuildContext context, md.Node node, TextStyle base) {
     return [TextSpan(text: node.textContent, style: base)];
   }
   final style = switch (node.tag) {
-    'strong' => base.copyWith(fontWeight: FontWeight.w600),
+    'strong' => base.copyWith(fontWeight: Fw.bold),
     'em' => base.copyWith(fontStyle: FontStyle.italic),
     'code' => base.copyWith(
       fontFamily: monoFamily,
       fontFamilyFallback: monoFallback,
-      fontSize: (base.fontSize ?? 15) * 0.88,
+      fontSize: Fs.small,
       color: _accent(context),
       backgroundColor: _codeBg(context),
     ),
@@ -229,7 +228,7 @@ Widget _codeCard(
               Expanded(
                 child: Text(
                   lang.isEmpty ? '代码' : lang,
-                  style: mono(12, color: _muted(context)),
+                  style: mono(Fs.small, color: _muted(context)),
                 ),
               ),
               ?trailing,
@@ -251,7 +250,7 @@ Widget _codeBody(String code, String lang, TextStyle base) =>
         code: code,
         language: languageForFence(lang),
         builder: (context, hl) {
-          final style = mono(12.5, height: 1.55, color: base.color);
+          final style = mono(Fs.small, height: Lh.read, color: base.color);
           return hl == null
               ? Text(code, softWrap: false, style: style)
               : Text.rich(

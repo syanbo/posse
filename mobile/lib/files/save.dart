@@ -43,7 +43,7 @@ SaveTo saveTarget(String name, {bool image = false}) =>
 
 IconData saveIcon(SaveTo to) => to != SaveTo.share
     ? Icons.download_rounded
-    : (Platform.isIOS ? Icons.ios_share_rounded : Icons.share_outlined);
+    : (Platform.isIOS ? Icons.ios_share_rounded : Icons.share_rounded);
 
 String saveLabel(SaveTo to) => switch (to) {
   SaveTo.album => '存到相册',
@@ -290,14 +290,14 @@ class _DownloadDialogState extends State<_DownloadDialog> {
               children: [
                 LinearProgressIndicator(
                   value: total == 0 ? null : done / total,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(Rd.small),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   total == 0
                       ? '正在从电脑取文件…'
                       : '${formatBytes(done)} / ${formatBytes(total)}',
-                  style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ],
             ),
@@ -329,7 +329,7 @@ Future<void> showSaveSheet(
       final c = PosseColors.of(sheet);
       Widget row(SaveTo to, String subtitle) => RowTile(
         chevron: false,
-        leading: Icon(saveIcon(to), size: 22, color: c.accent),
+        leading: Icon(saveIcon(to), size: Ic.button, color: c.accent),
         title: Text(saveLabel(to)),
         subtitle: Text(subtitle),
         onTap: () => Navigator.of(sheet).pop(to),

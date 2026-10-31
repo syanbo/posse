@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
+import '../ui/line_icons.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
 import '../ui/loading.dart';
@@ -63,6 +64,10 @@ class GitScreen extends StatelessWidget {
 
 /// 改动多久自己刷新一次，和首页的工作区列表一样。
 const gitPoll = Duration(seconds: 3);
+
+// 树形视图：每层缩进，和行首展开箭头的宽度（文件行空出它，和目录的文件夹图标对齐）
+const _treeIndent = 16.0;
+const _arrowBox = Ic.medium;
 
 class GitPane extends StatefulWidget {
   const GitPane({
@@ -192,7 +197,7 @@ class _GitPaneState extends State<GitPane> {
             if (status != null) _BranchCard(status: status),
             if (files.isEmpty)
               const Padding(
-                padding: EdgeInsets.only(top: 48),
+                padding: EdgeInsets.only(top: 32),
                 child: EmptyState(
                   icon: Icons.check_circle_outline_rounded,
                   text: '工作区是干净的，没有改动',
@@ -237,7 +242,7 @@ class _GitPaneState extends State<GitPane> {
           Expanded(
             child: Text(
               '$count 个文件有改动',
-              style: TextStyle(fontSize: Fs.meta, color: c.muted),
+              style: TextStyle(fontSize: Fs.small, color: c.muted),
             ),
           ),
           _ModeSwitch(tree: _tree, onChanged: (v) => setState(() => _tree = v)),
@@ -278,15 +283,15 @@ class _GitPaneState extends State<GitPane> {
           Text(
             label,
             style: TextStyle(
-              fontSize: Fs.meta,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
               color: kind == ChangeKind.conflict ? c.danger : c.text,
             ),
           ),
           const SizedBox(width: 8),
           Text(
             '${files.length}',
-            style: TextStyle(fontSize: 12, color: c.faint),
+            style: TextStyle(fontSize: Fs.small, color: c.faint),
           ),
         ],
       ),
@@ -340,7 +345,7 @@ class _GitPaneState extends State<GitPane> {
       child: SizedBox(
         height: 40,
         child: Padding(
-          padding: EdgeInsets.only(left: 8 + depth * 16.0, right: 14),
+          padding: EdgeInsets.only(left: 8 + depth * _treeIndent, right: 14),
           child: Row(
             children: [
               AnimatedRotation(
@@ -348,7 +353,7 @@ class _GitPaneState extends State<GitPane> {
                 duration: const Duration(milliseconds: 150),
                 child: Icon(
                   Icons.chevron_right_rounded,
-                  size: 18,
+                  size: Ic.medium,
                   color: c.faint,
                 ),
               ),
@@ -371,9 +376,9 @@ class _GitPaneState extends State<GitPane> {
       depth: row.depth + 1,
       child: Row(
         children: [
-          Icon(
-            open ? Icons.folder_open_outlined : Icons.folder_outlined,
-            size: 18,
+          LineIconView(
+            open ? LineIcon.folderOpen : LineIcon.folder,
+            size: Ic.medium,
             color: c.accent,
           ),
           const SizedBox(width: 8),
@@ -382,11 +387,14 @@ class _GitPaneState extends State<GitPane> {
               row.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: mono(13.5, color: c.text),
+              style: mono(Fs.small, color: c.text),
             ),
           ),
           const SizedBox(width: 8),
-          Text('${row.count}', style: TextStyle(fontSize: 12, color: c.faint)),
+          Text(
+            '${row.count}',
+            style: TextStyle(fontSize: Fs.small, color: c.faint),
+          ),
         ],
       ),
     );
@@ -416,19 +424,21 @@ class _GitPaneState extends State<GitPane> {
       child: SizedBox(
         height: 40,
         child: Padding(
-          // 和目录的文件夹图标对齐：箭头 18 加间距 4
-          padding: EdgeInsets.only(left: 30 + depth * 16.0, right: 14),
+          padding: EdgeInsets.only(
+            left: 8 + _arrowBox + 4 + depth * _treeIndent,
+            right: 14,
+          ),
           child: Row(
             children: [
               SizedBox(
-                width: 18,
+                width: _arrowBox,
                 child: Text(
                   _letter(kind),
                   textAlign: TextAlign.center,
                   style: mono(
-                    12.5,
+                    Fs.small,
                     color: _letterColor(c, kind),
-                  ).copyWith(fontWeight: FontWeight.w600),
+                  ).copyWith(fontWeight: Fw.bold),
                 ),
               ),
               const SizedBox(width: 8),
@@ -463,7 +473,7 @@ class _GitPaneState extends State<GitPane> {
                               note,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: mono(12, color: c.faint),
+                              style: mono(Fs.small, color: c.faint),
                             ),
                           ),
                         ),
@@ -501,7 +511,7 @@ class _ModeSwitch extends StatelessWidget {
           onTap: on ? null : () => onChanged(value),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: on ? c.tint : Colors.transparent,
               borderRadius: BorderRadius.circular(Rd.button),
@@ -509,13 +519,13 @@ class _ModeSwitch extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 15, color: on ? c.accent : c.faint),
+                Icon(icon, size: Ic.inline, color: on ? c.accent : c.faint),
                 const SizedBox(width: 4),
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
+                    fontSize: Fs.small,
+                    fontWeight: Fw.medium,
                     color: on ? c.accent : c.muted,
                   ),
                 ),
@@ -530,12 +540,12 @@ class _ModeSwitch extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: c.fill,
-        borderRadius: BorderRadius.circular(Rd.button + 2),
+        borderRadius: BorderRadius.circular(Rd.input),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          option(true, Icons.account_tree_outlined, '按目录'),
+          option(true, Icons.account_tree_rounded, '按目录'),
           option(false, Icons.view_list_rounded, '平铺'),
         ],
       ),
@@ -573,7 +583,10 @@ class _Stats extends StatelessWidget {
     if (file.binary || (file.added == 0 && file.deleted == 0)) {
       final label = inList && file.stats == '新文件' ? '' : file.stats;
       if (label.isEmpty) return const SizedBox.shrink();
-      return Text(label, style: TextStyle(fontSize: 12, color: c.faint));
+      return Text(
+        label,
+        style: TextStyle(fontSize: Fs.small, color: c.faint),
+      );
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -581,13 +594,21 @@ class _Stats extends StatelessWidget {
         if (file.added > 0)
           Text(
             '+${file.added}',
-            style: TextStyle(fontSize: 13, color: c.sage, fontFeatures: tnum),
+            style: TextStyle(
+              fontSize: Fs.small,
+              color: c.sage,
+              fontFeatures: tnum,
+            ),
           ),
         if (file.added > 0 && file.deleted > 0) const SizedBox(width: 6),
         if (file.deleted > 0)
           Text(
             '−${file.deleted}',
-            style: TextStyle(fontSize: 13, color: c.danger, fontFeatures: tnum),
+            style: TextStyle(
+              fontSize: Fs.small,
+              color: c.danger,
+              fontFeatures: tnum,
+            ),
           ),
       ],
     );
@@ -619,16 +640,20 @@ class _BranchCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.call_split_rounded, size: 18, color: c.accent),
+                  Icon(
+                    Icons.call_split_rounded,
+                    size: Ic.medium,
+                    color: c.accent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       status.branch.isEmpty ? '分离头指针' : status.branch,
                       overflow: TextOverflow.ellipsis,
                       style: mono(
-                        14,
+                        Fs.body,
                         color: c.text,
-                      ).copyWith(fontWeight: FontWeight.w500),
+                      ).copyWith(fontWeight: Fw.medium),
                     ),
                   ),
                 ],
@@ -642,17 +667,17 @@ class _BranchCard extends StatelessWidget {
                     if (status.upstream.isNotEmpty)
                       Text(
                         '跟踪 ${status.upstream}',
-                        style: TextStyle(fontSize: 12, color: c.muted),
+                        style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                     for (final (icon, text, color) in chips)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(icon, size: 14, color: color),
-                          const SizedBox(width: 3),
+                          Icon(icon, size: Ic.inline, color: color),
+                          const SizedBox(width: 4),
                           Text(
                             text,
-                            style: TextStyle(fontSize: 12, color: color),
+                            style: TextStyle(fontSize: Fs.small, color: color),
                           ),
                         ],
                       ),
@@ -718,7 +743,7 @@ class _DiffViewerState extends State<DiffViewer> {
             IconButton(
               tooltip: '查看完整文件',
               onPressed: widget.onOpenFile,
-              icon: const Icon(Icons.description_outlined, size: 22),
+              icon: const Icon(Icons.description_rounded, size: Ic.button),
             )
           else
             const SizedBox(width: 12),
@@ -743,7 +768,7 @@ class _DiffViewerState extends State<DiffViewer> {
     if (images != null) return _ImageDiff(old: images.old, now: images.now);
     if (widget.file.binary) {
       return const EmptyState(
-        icon: Icons.insert_drive_file_outlined,
+        icon: Icons.insert_drive_file_rounded,
         text: '二进制文件，手机上看不了差异',
       );
     }
@@ -875,8 +900,8 @@ class _ImageSideViewState extends State<_ImageSideView> {
             Text(
               widget.label,
               style: TextStyle(
-                fontSize: Fs.meta,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: c.text,
               ),
             ),
@@ -884,7 +909,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
             Expanded(
               child: Text(
                 meta.join('    '),
-                style: TextStyle(fontSize: 12, color: c.faint),
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ),
           ],
@@ -904,7 +929,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
     ),
     child: Text(
       text,
-      style: TextStyle(fontSize: Fs.meta, color: c.faint),
+      style: TextStyle(fontSize: Fs.small, color: c.faint),
     ),
   );
 }

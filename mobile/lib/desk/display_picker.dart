@@ -57,8 +57,8 @@ Future<DeskPick?> pickDeskView(
                         RowTile(
                           key: Key('desk-display-${d.id}'),
                           leading: Icon(
-                            Icons.desktop_windows_outlined,
-                            size: 20,
+                            Icons.desktop_windows_rounded,
+                            size: Ic.medium,
                             color: d.id == displays.current
                                 ? c.accent
                                 : c.muted,
@@ -68,7 +68,7 @@ Future<DeskPick?> pickDeskView(
                           trailing: watching == null && d.id == displays.current
                               ? Icon(
                                   Icons.check_rounded,
-                                  size: 20,
+                                  size: Ic.medium,
                                   color: c.accent,
                                 )
                               : null,
@@ -119,7 +119,7 @@ Future<DeskPick?> pickDeskView(
                               trailing: w.id == watching?.id
                                   ? Icon(
                                       Icons.check_rounded,
-                                      size: 20,
+                                      size: Ic.medium,
                                       color: c.accent,
                                     )
                                   : null,
@@ -153,7 +153,7 @@ class _AppIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final png = window.icon;
     if (png == null) {
-      return Icon(Icons.web_asset_rounded, size: 22, color: color);
+      return Icon(Icons.web_asset_rounded, size: Ic.button, color: color);
     }
     return Image.memory(
       png,
@@ -165,7 +165,7 @@ class _AppIcon extends StatelessWidget {
       filterQuality: FilterQuality.medium,
       gaplessPlayback: true,
       errorBuilder: (_, _, _) =>
-          Icon(Icons.web_asset_rounded, size: 22, color: color),
+          Icon(Icons.web_asset_rounded, size: Ic.button, color: color),
     );
   }
 }
@@ -179,7 +179,7 @@ class _Note extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      padding: const EdgeInsets.all(16),
       child: Text(text, style: TextStyle(color: PosseColors.of(context).muted)),
     );
   }
@@ -214,9 +214,7 @@ class DeskDisplayMap extends StatelessWidget {
                     onTap: () => onPick(d.id),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: d.id == displays.current
-                            ? c.accent.withValues(alpha: 0.22)
-                            : c.wash,
+                        color: d.id == displays.current ? c.tint : c.wash,
                         border: Border.all(
                           color: d.id == displays.current ? c.accent : c.line,
                           width: d.id == displays.current ? 1.5 : 1,
@@ -235,18 +233,18 @@ class DeskDisplayMap extends StatelessWidget {
                                 Text(
                                   deskDisplayName(displays, d),
                                   style: TextStyle(
-                                    fontSize: Fs.meta,
+                                    fontSize: Fs.small,
                                     color: d.id == displays.current
                                         ? c.accent
                                         : c.text,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: Fw.medium,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   _resolution(d),
                                   style: TextStyle(
-                                    fontSize: Fs.caption,
+                                    fontSize: Fs.small,
                                     color: c.muted,
                                   ),
                                 ),

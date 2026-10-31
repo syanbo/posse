@@ -28,14 +28,18 @@ Future<ImageAsk?> askImageSource(BuildContext context) {
           inset: 48,
           children: [
             RowTile(
-              leading: Icon(Icons.photo_outlined, size: 22, color: c.accent),
+              leading: Icon(
+                Icons.photo_rounded,
+                size: Ic.button,
+                color: c.accent,
+              ),
               title: const Text('从相册选择照片或视频，可以多选'),
               onTap: () => Navigator.of(sheet).pop(ImageAsk.gallery),
             ),
             RowTile(
               leading: Icon(
-                Icons.photo_camera_outlined,
-                size: 22,
+                Icons.photo_camera_rounded,
+                size: Ic.button,
                 color: c.accent,
               ),
               title: const Text('拍照'),
@@ -44,14 +48,18 @@ Future<ImageAsk?> askImageSource(BuildContext context) {
             RowTile(
               leading: Icon(
                 Icons.content_paste_rounded,
-                size: 22,
+                size: Ic.button,
                 color: c.accent,
               ),
               title: const Text('从剪贴板粘贴'),
               onTap: () => Navigator.of(sheet).pop(ImageAsk.clipboard),
             ),
             RowTile(
-              leading: Icon(Icons.folder_outlined, size: 22, color: c.accent),
+              leading: Icon(
+                Icons.folder_rounded,
+                size: Ic.button,
+                color: c.accent,
+              ),
               title: const Text('从「文件」选择'),
               onTap: () => Navigator.of(sheet).pop(ImageAsk.files),
             ),
@@ -100,7 +108,7 @@ Future<FileAsk?> askFileSource(BuildContext context) {
       final c = PosseColors.of(sheet);
       Widget row(FileAsk ask, IconData icon, String title) => RowTile(
         key: Key('file-ask-${ask.name}'),
-        leading: Icon(icon, size: 22, color: c.accent),
+        leading: Icon(icon, size: Ic.button, color: c.accent),
         title: Text(title),
         chevron: false,
         onTap: () => Navigator.of(sheet).pop(ask),
@@ -110,9 +118,9 @@ Future<FileAsk?> askFileSource(BuildContext context) {
         child: Section(
           inset: 48,
           children: [
-            row(FileAsk.gallery, Icons.photo_library_outlined, '从相册选择照片或视频'),
-            row(FileAsk.camera, Icons.photo_camera_outlined, '拍照'),
-            row(FileAsk.files, Icons.folder_outlined, '从「文件」选择'),
+            row(FileAsk.gallery, Icons.photo_library_rounded, '从相册选择照片或视频'),
+            row(FileAsk.camera, Icons.photo_camera_rounded, '拍照'),
+            row(FileAsk.files, Icons.folder_rounded, '从「文件」选择'),
           ],
         ),
       );

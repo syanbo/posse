@@ -34,7 +34,7 @@ TextStyle _labelStyle(TextStyle font, int style, double size, [Color? color]) {
       : font.copyWith(
           fontSize: size,
           color: color,
-          fontWeight: style & _bold != 0 ? FontWeight.w600 : FontWeight.w400,
+          fontWeight: style & _bold != 0 ? Fw.bold : Fw.body,
         );
   return t.copyWith(
     fontStyle: style & _italic != 0 ? FontStyle.italic : FontStyle.normal,
@@ -255,7 +255,7 @@ class _MermaidBlockState extends State<MermaidBlock> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
                     '画不出图：$error',
-                    style: TextStyle(fontSize: Fs.caption, color: c.danger),
+                    style: TextStyle(fontSize: Fs.small, color: c.danger),
                   ),
                 ),
                 widget.source,
@@ -269,8 +269,8 @@ class _MermaidBlockState extends State<MermaidBlock> {
           child: Padding(
             padding: const EdgeInsets.only(left: 12),
             child: Icon(
-              _showSource ? Icons.visibility_outlined : Icons.code,
-              size: 16,
+              _showSource ? Icons.visibility_rounded : Icons.code_rounded,
+              size: Ic.small,
               color: c.muted,
             ),
           ),

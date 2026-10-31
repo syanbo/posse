@@ -11,6 +11,9 @@ import 'chat_style.dart';
 import 'echo.dart';
 import '../ui/widgets.dart';
 
+/// 自己的话左边至少空出的宽度，和助理正文错开。
+const _bubbleIndent = 48.0;
+
 /// 自己的话：靠右、强调色淡底。
 Widget _mine(BuildContext context, Widget body) {
   return Align(
@@ -19,11 +22,11 @@ Widget _mine(BuildContext context, Widget body) {
       constraints: BoxConstraints(
         maxWidth: MediaQuery.sizeOf(context).width * 0.8,
       ),
-      margin: const EdgeInsets.fromLTRB(48, 4, 16, 10),
+      margin: const EdgeInsets.fromLTRB(_bubbleIndent, 4, 12, 10),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
         color: chatTint(context),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Rd.input),
       ),
       child: body,
     ),
@@ -52,14 +55,14 @@ class EarlierRow extends StatelessWidget {
       height: 44,
       child: Center(
         child: loading
-            ? const HexSpinner(size: 18)
+            ? const HexSpinner(size: Ic.medium)
             : TextButton(
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 30),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   backgroundColor: Colors.transparent,
                   foregroundColor: c.muted,
-                  textStyle: const TextStyle(fontSize: 13),
+                  textStyle: const TextStyle(fontSize: Fs.small),
                 ),
                 onPressed: onLoad,
                 child: const Text('更早的消息'),
@@ -89,15 +92,15 @@ class EchoBubble extends StatelessWidget {
                 Text(
                   '你',
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontSize: Fs.small,
+                    fontWeight: Fw.medium,
                     color: chatAccent(context),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   echo.sent ? '已发送' : '发送中…',
-                  style: TextStyle(fontSize: 11, color: muted),
+                  style: TextStyle(fontSize: Fs.small, color: muted),
                 ),
               ],
             ),
@@ -105,12 +108,12 @@ class EchoBubble extends StatelessWidget {
             if (echo.images > 0)
               Text(
                 '${echo.images} 张图片',
-                style: TextStyle(fontSize: 13, color: muted),
+                style: TextStyle(fontSize: Fs.small, color: muted),
               ),
             if (echo.text.isNotEmpty)
               Text(
                 echo.text,
-                style: const TextStyle(fontSize: 15, height: 1.55),
+                style: const TextStyle(fontSize: Fs.body, height: Lh.read),
               ),
           ],
         ),
@@ -141,14 +144,14 @@ class WorkingRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Row(
         children: [
-          WorkingStar(size: 14, color: c.accent),
+          WorkingStar(size: Ic.inline, color: c.accent),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               text,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: Fs.small,
                 color: c.muted,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
@@ -186,8 +189,8 @@ class MessageBubble extends StatelessWidget {
             Text(
               who,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: mine ? chatAccent(context) : muted,
               ),
             ),
@@ -196,7 +199,7 @@ class MessageBubble extends StatelessWidget {
               Text(
                 time,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: Fs.small,
                   color: muted,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -223,18 +226,21 @@ class MessageBubble extends StatelessWidget {
     if (block.type == 'image-ref') {
       return Text(
         block.path ?? block.url ?? '图片',
-        style: TextStyle(fontSize: 13, color: muted),
+        style: TextStyle(fontSize: Fs.small, color: muted),
       );
     }
     final text = block.text ?? '';
     if (role == 'user') {
-      return Text(text, style: const TextStyle(fontSize: 15, height: 1.55));
+      return Text(
+        text,
+        style: const TextStyle(fontSize: Fs.body, height: Lh.read),
+      );
     }
     final style = role == 'reasoning'
-        ? TextStyle(fontStyle: FontStyle.italic, color: muted, height: 1.55)
+        ? TextStyle(fontStyle: FontStyle.italic, color: muted, height: Lh.read)
         : role == 'system'
-        ? TextStyle(fontSize: 13, color: muted, height: 1.5)
-        : const TextStyle(fontSize: 15, height: 1.55);
+        ? TextStyle(fontSize: Fs.small, color: muted, height: Lh.body)
+        : const TextStyle(fontSize: Fs.body, height: Lh.read);
     return MarkdownView(text, style: style);
   }
 }
@@ -265,7 +271,7 @@ class _ToolRunState extends State<ToolRun> {
             behavior: HitTestBehavior.opaque,
             onTap: () => setState(() => _open = !_open),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
               decoration: BoxDecoration(
                 color: PosseColors.of(context).fill,
                 borderRadius: BorderRadius.circular(Rd.button),
@@ -273,18 +279,18 @@ class _ToolRunState extends State<ToolRun> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.build_outlined, size: 14, color: muted),
+                  Icon(Icons.build_rounded, size: Ic.inline, color: muted),
                   const SizedBox(width: 6),
                   Text(
                     '工具调用 $count 次',
-                    style: TextStyle(fontSize: 12.5, color: muted),
+                    style: TextStyle(fontSize: Fs.small, color: muted),
                   ),
                   const SizedBox(width: 2),
                   Icon(
                     _open
                         ? Icons.expand_less_rounded
                         : Icons.expand_more_rounded,
-                    size: 16,
+                    size: Ic.small,
                     color: muted,
                   ),
                 ],
@@ -321,8 +327,8 @@ class _ToolRunState extends State<ToolRun> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
               color: block.isError
                   ? Theme.of(context).colorScheme.error
                   : muted,
@@ -333,7 +339,7 @@ class _ToolRunState extends State<ToolRun> {
               detail,
               maxLines: 8,
               overflow: TextOverflow.ellipsis,
-              style: mono(12, height: 1.45, color: muted),
+              style: mono(Fs.small, height: Lh.code, color: muted),
             ),
         ],
       ),

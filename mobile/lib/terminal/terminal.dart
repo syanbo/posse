@@ -1180,8 +1180,8 @@ class _KeyBar extends StatelessWidget {
             label,
             maxLines: 1,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.small,
+              fontWeight: Fw.medium,
               color: c.text,
             ),
           ),
@@ -1206,7 +1206,7 @@ class _KeyBar extends StatelessWidget {
         child: SizedBox(
           width: 40,
           child: Icon(
-            keyboardUp ? Icons.keyboard_hide_outlined : Icons.keyboard_outlined,
+            keyboardUp ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
             size: _keyboardIcon,
             color: c.text,
           ),
@@ -1229,7 +1229,7 @@ class _KeyBar extends StatelessWidget {
           height: _keyBarHeight - 1,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             itemCount: keys.length + 1,
             separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, i) {

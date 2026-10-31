@@ -38,7 +38,7 @@ class MarkdownDoc extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    final base = TextStyle(fontSize: Fs.read, height: 1.6, color: c.text);
+    final base = TextStyle(fontSize: Fs.body, height: Lh.read, color: c.text);
     // 表格的横向滚动条在 iOS 上是 CupertinoScrollbar，会按底部安全区抬高，压在表格最后一行上；
     // 去掉底部安全区，滚动条落回表格下面的空隙。正文自己有底边距，不靠安全区
     return MediaQuery.removePadding(
@@ -55,8 +55,10 @@ class MarkdownDoc extends StatelessWidget {
         checkboxBuilder: (checked) => Padding(
           padding: const EdgeInsets.only(right: 6),
           child: Icon(
-            checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
-            size: 18,
+            checked
+                ? Icons.check_box_rounded
+                : Icons.check_box_outline_blank_rounded,
+            size: Ic.medium,
             color: checked ? c.accent : c.muted,
           ),
         ),
@@ -152,10 +154,10 @@ class MarkdownDoc extends StatelessWidget {
   }
 }
 
-/// 文件预览的排版：标题拉开层级，块之间留足空隙，表格带边框、太宽时左右滑。
+/// 文件预览的排版：标题加粗，块之间留足空隙，表格带边框、太宽时左右滑。
 MarkdownStyleSheet markdownDocStyle(PosseColors c, TextStyle base) {
   TextStyle heading(double size) =>
-      base.copyWith(fontSize: size, fontWeight: FontWeight.w600, height: 1.3);
+      base.copyWith(fontSize: size, fontWeight: Fw.bold, height: Lh.title);
   final rule = BorderSide(color: c.line);
   return MarkdownStyleSheet(
     p: base,
@@ -167,21 +169,21 @@ MarkdownStyleSheet markdownDocStyle(PosseColors c, TextStyle base) {
     code: base.copyWith(
       fontFamily: monoFamily,
       fontFamilyFallback: monoFallback,
-      fontSize: Fs.read * 0.86,
+      fontSize: Fs.small,
       color: c.accent,
       backgroundColor: c.code,
     ),
-    h1: heading(23),
+    h1: heading(Fs.heading),
     h1Padding: const EdgeInsets.only(top: 12),
-    h2: heading(19.5),
+    h2: heading(Fs.title),
     h2Padding: const EdgeInsets.only(top: 12),
-    h3: heading(17),
+    h3: heading(Fs.body),
     h3Padding: const EdgeInsets.only(top: 8),
-    h4: heading(Fs.read),
+    h4: heading(Fs.body),
     h4Padding: const EdgeInsets.only(top: 6),
     h5: heading(Fs.body).copyWith(color: c.muted),
-    h6: heading(Fs.meta).copyWith(color: c.muted),
-    strong: const TextStyle(fontWeight: FontWeight.w600),
+    h6: heading(Fs.body).copyWith(color: c.muted),
+    strong: const TextStyle(fontWeight: Fw.bold),
     del: TextStyle(color: c.muted, decoration: TextDecoration.lineThrough),
     blockquote: base.copyWith(color: c.muted),
     img: base.copyWith(color: c.muted),
@@ -192,8 +194,8 @@ MarkdownStyleSheet markdownDocStyle(PosseColors c, TextStyle base) {
     listIndent: 22,
     listBullet: base.copyWith(color: c.muted),
     listBulletPadding: const EdgeInsets.only(right: 6),
-    tableHead: base.copyWith(fontSize: Fs.body, fontWeight: FontWeight.w600),
-    tableBody: base.copyWith(fontSize: Fs.body, height: 1.45),
+    tableHead: base.copyWith(fontSize: Fs.body, fontWeight: Fw.bold),
+    tableBody: base.copyWith(fontSize: Fs.body, height: Lh.code),
     tableHeadAlign: TextAlign.left,
     tablePadding: const EdgeInsets.only(bottom: 10),
     tableBorder: TableBorder.all(color: c.line),
@@ -264,12 +266,16 @@ class _ImageAlt extends StatelessWidget {
         children: [
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
-            child: Icon(Icons.broken_image_outlined, size: 16, color: c.muted),
+            child: Icon(
+              Icons.broken_image_rounded,
+              size: Ic.small,
+              color: c.muted,
+            ),
           ),
           if (alt != null && alt!.isNotEmpty) TextSpan(text: ' $alt'),
         ],
       ),
-      style: TextStyle(fontSize: Fs.meta, color: c.muted),
+      style: TextStyle(fontSize: Fs.small, color: c.muted),
     );
   }
 }
@@ -365,7 +371,7 @@ class _WorkspaceImageState extends State<_WorkspaceImage> {
               color: c.code,
               borderRadius: BorderRadius.circular(Rd.button),
             ),
-            child: const HexSpinner(size: 18),
+            child: const HexSpinner(size: Ic.medium),
           );
         }
         return _ImageAlt(alt ?? path, c);

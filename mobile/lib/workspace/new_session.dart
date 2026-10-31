@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../chat/transcript.dart' show chatWho;
+import '../ui/line_icons.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'models.dart';
@@ -84,9 +85,9 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                   for (final row in widget.model.worktrees)
                     RowTile(
                       chevron: false,
-                      leading: Icon(
-                        Icons.folder_outlined,
-                        size: 22,
+                      leading: LineIconView(
+                        LineIcon.folder,
+                        size: Ic.button,
                         color: c.accent,
                       ),
                       title: Text(worktreeLabel(row)),
@@ -94,7 +95,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                         row.branch.isNotEmpty
                             ? row.branch
                             : tildePath(row.path),
-                        style: mono(12, color: c.muted),
+                        style: mono(Fs.small, color: c.muted),
                       ),
                       trailing: row.id == _worktree?.id
                           ? Icon(Icons.check_rounded, color: c.accent)
@@ -188,8 +189,8 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               child: Text(
                 '新建会话',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
+                  fontSize: Fs.title,
+                  fontWeight: Fw.bold,
                   color: c.text,
                 ),
               ),
@@ -199,9 +200,9 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               inset: 48,
               children: [
                 RowTile(
-                  leading: Icon(
-                    Icons.folder_outlined,
-                    size: 22,
+                  leading: LineIconView(
+                    LineIcon.folder,
+                    size: Ic.button,
                     color: c.accent,
                   ),
                   title: Text(row == null ? '还没有工作区' : worktreeLabel(row)),
@@ -211,7 +212,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                           row.branch.isNotEmpty
                               ? row.branch
                               : tildePath(row.path),
-                          style: mono(12, color: c.muted),
+                          style: mono(Fs.small, color: c.muted),
                         ),
                   // 从工作区详情页进来时工作区已经定了
                   onTap: widget.worktree == null ? _pickWorktree : null,
@@ -223,8 +224,8 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               child: Text(
                 '用什么开',
                 style: TextStyle(
-                  fontSize: Fs.meta,
-                  fontWeight: FontWeight.w500,
+                  fontSize: Fs.small,
+                  fontWeight: Fw.medium,
                   color: c.muted,
                 ),
               ),
@@ -280,7 +281,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       onTap: () => setState(() => _agent = agent),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        margin: const EdgeInsets.symmetric(horizontal: 3),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: selected ? c.tint : c.card,
@@ -292,13 +293,13 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
         ),
         child: Column(
           children: [
-            AgentTile(agent: agent, size: 30),
+            AgentTile(agent: agent, size: Ic.large),
             const SizedBox(height: 6),
             Text(
               agent == null ? '终端' : chatWho('assistant', agent),
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: selected ? c.accent : c.text,
               ),
             ),

@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/ui/theme.dart';
@@ -11,28 +10,17 @@ import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'shot_fonts.dart';
+
 // 首页项目带 worktree 时的离屏截图，给人看样子用：
 // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/workspace_shots_test.dart
-// 字体的顶替同 usage_shots_test.dart。
+// 字体见 shot_fonts.dart。
 
 void main() {
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
 
   testWidgets('workspace screenshots', (tester) async {
-    final root = Platform.environment['FLUTTER_ROOT']!;
-    final fonts = {
-      'Roboto': '/Library/Fonts/Arial Unicode.ttf',
-      'MaterialIcons':
-          '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-    };
-    await tester.runAsync(() async {
-      for (final e in fonts.entries) {
-        final bytes = File(e.value).readAsBytesSync();
-        await (FontLoader(
-          e.key,
-        )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-      }
-    });
+    await loadShotFonts(tester);
     SharedPreferences.setMockInitialValues({});
     await tester.binding.setSurfaceSize(const Size(390, 844));
     final model = PosseAppModel(

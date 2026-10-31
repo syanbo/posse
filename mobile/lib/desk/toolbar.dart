@@ -143,8 +143,8 @@ class DeskToolbar extends StatelessWidget {
     final c = PosseColors.of(context);
     return Material(
       key: const Key('desk-toolbar'),
-      color: c.card.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(999),
+      color: c.glass,
+      borderRadius: BorderRadius.circular(Rd.pill),
       clipBehavior: Clip.antiAlias,
       child: AnimatedSize(
         duration: _fade,
@@ -158,7 +158,7 @@ class DeskToolbar extends StatelessWidget {
 
   Widget _shut(PosseColors c) {
     final signal = _signal(c);
-    final icon = Icon(signal.$1, size: 14, color: signal.$2);
+    final icon = Icon(signal.$1, size: Ic.inline, color: signal.$2);
     final label = Text(
       deskFpsLabel(fps, video: video, still: still),
       key: const Key('desk-fps'),
@@ -199,16 +199,14 @@ class DeskToolbar extends StatelessWidget {
         _icon(
           c,
           key: const Key('desk-toolbar-view'),
-          icon: Icons.desktop_windows_outlined,
+          icon: Icons.desktop_windows_rounded,
           tooltip: '画面',
           onTap: pick,
         ),
       _icon(
         c,
         key: const Key('desk-toolbar-keyboard'),
-        icon: keyboardUp
-            ? Icons.keyboard_hide_outlined
-            : Icons.keyboard_outlined,
+        icon: keyboardUp ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
         tooltip: '键盘',
         on: keyboardUp,
         onTap: onKeyboard,
@@ -253,7 +251,7 @@ class DeskToolbar extends StatelessWidget {
   /// 还没测到时不画满格，不然像是连接很好。
   (IconData, Color) _signal(PosseColors c) {
     if (latency == null && !unresponsive) {
-      return (Icons.signal_cellular_alt, c.faint);
+      return (Icons.signal_cellular_alt_rounded, c.faint);
     }
     return (
       latencyIcon(latency, unresponsive: unresponsive),
@@ -282,7 +280,7 @@ class DeskToolbar extends StatelessWidget {
           child: SizedBox(
             width: 36,
             height: 32,
-            child: Icon(icon, size: 20, color: color),
+            child: Icon(icon, size: Ic.button, color: color),
           ),
         ),
       ),

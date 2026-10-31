@@ -218,16 +218,6 @@ Future<void> _setFilter(ToolsFilter v) async {
   await prefs.setInt(_filterKey, v.index);
 }
 
-/// 技能是琥珀色、MCP 是蓝色、命令行程序是绿色，同桌面面板（MCP、命令行用桌面的数据色）。
-Color _mcpColor(PosseColors c) =>
-    c.dark ? const Color(0xFF7AA2F7) : const Color(0xFF3B6FD9);
-Color _cliColor(PosseColors c) =>
-    c.dark ? const Color(0xFF5FBFA0) : const Color(0xFF21866A);
-
-/// 网址是紫色，同桌面的数据色。
-Color _webColor(PosseColors c) =>
-    c.dark ? const Color(0xFFB36AD9) : const Color(0xFF8E4BB8);
-
 /// 网址拆成显示用的域名（去掉 www.）和其余部分，同桌面的 webSite。
 (String, String) webSite(String raw) {
   final u = Uri.tryParse(raw);
@@ -333,7 +323,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
     }
     if (!u.found) {
       return const EmptyState(
-        icon: Icons.extension_outlined,
+        icon: Icons.extension_rounded,
         text: '还没找到会话文件，agent 开始对话后会出现',
       );
     }
@@ -343,7 +333,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
         u.web.isEmpty &&
         u.searches == 0) {
       return const EmptyState(
-        icon: Icons.extension_outlined,
+        icon: Icons.extension_rounded,
         text: '这个会话还没用到技能、MCP、命令行工具和网址',
       );
     }
@@ -391,25 +381,26 @@ class ToolsView extends StatelessWidget {
                   child: Text(
                     empty,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: c.muted),
+                    style: TextStyle(fontSize: Fs.body, color: c.muted),
                   ),
                 ),
               if (filter != ToolsFilter.web && !noSkills) ...[
                 const SizedBox(height: 16),
+                // 技能琥珀色、MCP 蓝色、命令行程序绿色、网址紫色，同桌面面板的数据色
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: [
                     for (final s in u.skills)
                       _Chip(
-                        icon: Icons.auto_awesome_outlined,
+                        icon: Icons.auto_awesome_rounded,
                         color: c.honey,
                         item: s,
                       ),
                     for (final m in u.mcp)
                       _Chip(
-                        icon: Icons.extension_outlined,
-                        color: _mcpColor(c),
+                        icon: Icons.extension_rounded,
+                        color: c.sky,
                         item: m,
                       ),
                   ],
@@ -427,7 +418,7 @@ class ToolsView extends StatelessWidget {
                           if (it.source == source)
                             _Chip(
                               icon: Icons.terminal_rounded,
-                              color: _cliColor(c),
+                              color: c.teal,
                               item: it,
                             ),
                       ],
@@ -442,7 +433,7 @@ class ToolsView extends StatelessWidget {
                     for (final it in u.web)
                       _Chip(
                         icon: Icons.language_rounded,
-                        color: _webColor(c),
+                        color: c.plum,
                         item: it,
                       ),
                   ],
@@ -472,11 +463,7 @@ class ToolsView extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(0, 20, 0, 10),
     child: Text(
       title,
-      style: TextStyle(
-        fontSize: Fs.meta,
-        fontWeight: FontWeight.w600,
-        color: c.muted,
-      ),
+      style: TextStyle(fontSize: Fs.small, fontWeight: Fw.bold, color: c.muted),
     ),
   );
 }
@@ -511,22 +498,22 @@ class _Chip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 5),
+              Icon(icon, size: Ic.inline, color: color),
+              const SizedBox(width: 4),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 200),
                 child: Text(
                   item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: mono(Fs.caption, color: c.text),
+                  style: mono(Fs.small, color: c.text),
                 ),
               ),
-              const SizedBox(width: 5),
+              const SizedBox(width: 4),
               Text(
                 '×${item.count}',
                 style: TextStyle(
-                  fontSize: Fs.caption,
+                  fontSize: Fs.small,
                   color: c.muted,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -556,22 +543,14 @@ class _StepRow extends StatelessWidget {
     final e = step.event;
     final (color, kind, name) = switch (e) {
       _ when e.skill.isNotEmpty => (c.honey, '技能', e.skill),
-      _ when e.cli.isNotEmpty => (
-        _cliColor(c),
-        cliSourceLabel(e.source),
-        e.cli,
-      ),
+      _ when e.cli.isNotEmpty => (c.teal, cliSourceLabel(e.source), e.cli),
       _ when e.url.isNotEmpty => () {
         final (host, rest) = webSite(e.url);
         final via = webVia(e.via);
-        return (_webColor(c), rest.isEmpty ? via : '$via · $rest', host);
+        return (c.plum, rest.isEmpty ? via : '$via · $rest', host);
       }(),
-      _ when e.query.isNotEmpty => (
-        _webColor(c),
-        '搜索 · ${webVia(e.via)}',
-        e.query,
-      ),
-      _ => (_mcpColor(c), e.failed ? '${e.server} · 失败' : e.server, e.tool),
+      _ when e.query.isNotEmpty => (c.plum, '搜索 · ${webVia(e.via)}', e.query),
+      _ => (c.sky, e.failed ? '${e.server} · 失败' : e.server, e.tool),
     };
     return InkWell(
       onTap: () => _copy(context, e.url.isNotEmpty ? e.url : name),
@@ -608,7 +587,7 @@ class _StepRow extends StatelessWidget {
                                   name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: mono(Fs.meta, color: c.text),
+                                  style: mono(Fs.small, color: c.text),
                                 ),
                               ),
                               if (step.count > 1) ...[
@@ -626,7 +605,7 @@ class _StepRow extends StatelessWidget {
                       kind,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                      style: TextStyle(fontSize: Fs.small, color: c.muted),
                     ),
                   ],
                 ),
@@ -639,7 +618,7 @@ class _StepRow extends StatelessWidget {
   }
 
   TextStyle _num(PosseColors c) => TextStyle(
-    fontSize: Fs.caption,
+    fontSize: Fs.small,
     color: c.muted,
     fontFeatures: const [FontFeature.tabularFigures()],
   );
@@ -672,7 +651,7 @@ class _StepRow extends StatelessWidget {
                   ),
                   child: SelectableText(
                     text,
-                    style: mono(Fs.meta, color: c.text, height: 1.5),
+                    style: mono(Fs.small, color: c.text, height: Lh.body),
                   ),
                 ),
                 const SizedBox(height: 12),

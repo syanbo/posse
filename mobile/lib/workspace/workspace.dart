@@ -125,13 +125,13 @@ class _PairScreenState extends State<PairScreen> {
       appBar: widget.adding ? AppBar() : null,
       body: SafeArea(
         child: ListView(
-          padding: EdgeInsets.fromLTRB(24, widget.adding ? 8 : 56, 24, 24),
+          padding: EdgeInsets.fromLTRB(24, widget.adding ? 8 : 32, 24, 24),
           children: [
             Align(
               alignment: Alignment.centerLeft,
               // 和桌面端、手机桌面上的 App 图标同一张图（design/icon-art.png）
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(Rd.card),
                 child: Image.asset('assets/icon.png', width: 64, height: 64),
               ),
             ),
@@ -139,8 +139,8 @@ class _PairScreenState extends State<PairScreen> {
             Text(
               widget.adding ? '添加电脑' : '连接 Posse',
               style: TextStyle(
-                fontSize: Fs.pageTitle,
-                fontWeight: FontWeight.w600,
+                fontSize: Fs.hero,
+                fontWeight: Fw.bold,
                 color: c.text,
               ),
             ),
@@ -149,9 +149,13 @@ class _PairScreenState extends State<PairScreen> {
               widget.adding
                   ? '可以配对多台电脑，同一时间连其中一台，在首页顶部切换。'
                   : '在手机上看 agent 的进展、回复和批准请求。',
-              style: TextStyle(fontSize: Fs.body, height: 1.5, color: c.muted),
+              style: TextStyle(
+                fontSize: Fs.body,
+                height: Lh.body,
+                color: c.muted,
+              ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
             Section(
               inset: 52,
               margin: const EdgeInsets.only(bottom: 20),
@@ -163,14 +167,17 @@ class _PairScreenState extends State<PairScreen> {
             if (canScan) ...[
               FilledButton.icon(
                 onPressed: busy ? null : _scan,
-                icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                icon: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  size: Ic.medium,
+                ),
                 label: Text(busy ? '正在连接…' : '扫码配对'),
               ),
               const SizedBox(height: 10),
             ],
             TextButton.icon(
               onPressed: busy ? null : _paste,
-              icon: const Icon(Icons.content_paste_rounded, size: 18),
+              icon: const Icon(Icons.content_paste_rounded, size: Ic.medium),
               label: const Text('粘贴配对码'),
             ),
             if (note != null) ...[const SizedBox(height: 12), NoticeBar(note)],
@@ -190,7 +197,7 @@ class _PairScreenState extends State<PairScreen> {
                 controller: _code,
                 minLines: 3,
                 maxLines: 6,
-                style: mono(13, color: c.text),
+                style: mono(Fs.small, color: c.text),
                 decoration: const InputDecoration(
                   hintText: 'orca://pair?code=…',
                 ),
@@ -219,8 +226,8 @@ class _PairScreenState extends State<PairScreen> {
         child: Text(
           '$n',
           style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
+            fontSize: Fs.small,
+            fontWeight: Fw.bold,
             color: c.accent,
           ),
         ),
@@ -411,9 +418,9 @@ class WorkspaceScreen extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Material(
                   color: c.fill,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(Rd.pill),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(Rd.pill),
                     onTap: () => _showComputers(context),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
@@ -445,7 +452,7 @@ class WorkspaceScreen extends StatelessWidget {
                             latency: model.latency,
                             unresponsive: model.unresponsive,
                             gap: 0,
-                            size: 13,
+                            size: Ic.inline,
                           ),
                         ),
                       IconButton(
@@ -459,7 +466,7 @@ class WorkspaceScreen extends StatelessWidget {
                         // 圆形的图标墨迹比方形的小一圈，大两号才和设置看起来一样大
                         icon: Icon(
                           Icons.history_rounded,
-                          size: 24,
+                          size: Ic.button,
                           color: c.text,
                         ),
                       ),
@@ -469,7 +476,7 @@ class WorkspaceScreen extends StatelessWidget {
                         onPressed: () => showNewSession(context, model),
                         icon: Icon(
                           Icons.add_circle_outline_rounded,
-                          size: 24,
+                          size: Ic.button,
                           color: c.text,
                         ),
                       ),
@@ -487,7 +494,11 @@ class WorkspaceScreen extends StatelessWidget {
                 ),
               ),
             ),
-            icon: Icon(Icons.settings_outlined, size: 22, color: c.text),
+            icon: LineIconView(
+              LineIcon.settings,
+              size: Ic.button,
+              color: c.text,
+            ),
           ),
           const SizedBox(width: 10),
         ],
@@ -544,7 +555,7 @@ class WorkspaceScreen extends StatelessWidget {
                           child: Material(
                             color: Colors.transparent,
                             elevation: 8 * animation.value,
-                            shadowColor: Colors.black.withValues(alpha: 0.3),
+                            shadowColor: PosseColors.lift,
                             borderRadius: BorderRadius.circular(Rd.card),
                             child: child,
                           ),
@@ -620,7 +631,7 @@ class WorkspaceScreen extends StatelessWidget {
         icon: _projectIcon(c, main),
         subtitle: model.settings.projectMetaHidden
             ? null
-            : Text(tildePath(main.path), style: mono(12, color: c.muted)),
+            : Text(tildePath(main.path), style: mono(Fs.small, color: c.muted)),
         count: rows.fold(0, (n, r) => n + r.live),
         expandable: true,
         collapsed: collapsed,
@@ -639,13 +650,13 @@ class WorkspaceScreen extends StatelessWidget {
   Widget _projectIcon(PosseColors c, WorktreeRow row) {
     if (row.iconText.isNotEmpty) {
       return SizedBox.square(
-        dimension: 22,
+        dimension: Ic.button,
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(
             row.iconText,
             maxLines: 1,
-            style: TextStyle(fontSize: 19, color: c.accent, height: 1),
+            style: TextStyle(fontSize: Ic.medium, color: c.accent, height: 1),
           ),
         ),
       );
@@ -653,24 +664,28 @@ class WorkspaceScreen extends StatelessWidget {
     if (row.iconImage.isNotEmpty) {
       if (model.projectIcon(row.iconImage) case final bytes?) {
         return ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(Rd.small),
           child: Image.memory(
             bytes,
-            width: 22,
-            height: 22,
+            width: Ic.button,
+            height: Ic.button,
             fit: BoxFit.contain,
             gaplessPlayback: true,
           ),
         );
       }
     }
-    // 描边图标四周有留白，画 24 才和文字、图片图标一样大；占位仍是 22，项目名对齐
+    // 描边图标四周有留白，画大 2 才和文字、图片图标一样大；占位仍是 Ic.button，项目名对齐
     return SizedBox.square(
-      dimension: 22,
+      dimension: Ic.button,
       child: OverflowBox(
-        maxWidth: 24,
-        maxHeight: 24,
-        child: LineIconView(LineIcon.folder, size: 24, color: c.accent),
+        maxWidth: Ic.button + 2,
+        maxHeight: Ic.button + 2,
+        child: LineIconView(
+          LineIcon.folder,
+          size: Ic.button + 2,
+          color: c.accent,
+        ),
       ),
     );
   }
@@ -692,13 +707,13 @@ class WorkspaceScreen extends StatelessWidget {
               : row.isWorktree
               ? LineIcon.branch
               : LineIcon.folder,
-          size: 22,
+          size: Ic.button,
           color: c.accent,
         ),
         title: Text(title),
         subtitle: branch.isEmpty
             ? null
-            : Text(branch, style: mono(12, color: c.muted)),
+            : Text(branch, style: mono(Fs.small, color: c.muted)),
         trailing: _count(c, row),
         onTap: () => _openWorkspace(context, row),
       ),
@@ -727,17 +742,17 @@ class WorkspaceScreen extends StatelessWidget {
 
   Widget _where(PosseColors c, WorktreeRow row) {
     if (row.branch.isEmpty) {
-      return Text(tildePath(row.path), style: mono(12, color: c.muted));
+      return Text(tildePath(row.path), style: mono(Fs.small, color: c.muted));
     }
     return Row(
       children: [
-        LineIconView(LineIcon.branch, size: 14, color: c.muted),
+        LineIconView(LineIcon.branch, size: Ic.inline, color: c.muted),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             row.branch,
             overflow: TextOverflow.ellipsis,
-            style: mono(12, color: c.muted),
+            style: mono(Fs.small, color: c.muted),
           ),
         ),
       ],
@@ -750,7 +765,7 @@ class WorkspaceScreen extends StatelessWidget {
     return Text(
       '${row.live}',
       style: TextStyle(
-        fontSize: 13,
+        fontSize: Fs.small,
         color: c.faint,
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
@@ -824,8 +839,8 @@ class WorkspaceScreen extends StatelessWidget {
             child: Text(
               '待处理',
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+                fontSize: Fs.small,
+                fontWeight: Fw.medium,
                 color: c.honey,
               ),
             ),
@@ -890,7 +905,7 @@ class _ProjectHeader extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: Fs.body,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: Fw.medium,
                               color: c.text,
                             ),
                           ),
@@ -902,16 +917,16 @@ class _ProjectHeader extends StatelessWidget {
                             duration: const Duration(milliseconds: 220),
                             child: Icon(
                               Icons.expand_more_rounded,
-                              size: 18,
+                              size: Ic.medium,
                               color: c.faint,
                             ),
                           ),
                       ],
                     ),
                     if (subtitle case final sub?) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       DefaultTextStyle.merge(
-                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                        style: TextStyle(fontSize: Fs.small, color: c.muted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         child: sub,
@@ -929,7 +944,7 @@ class _ProjectHeader extends StatelessWidget {
                 Text(
                   '$count',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: Fs.small,
                     color: c.faint,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -947,7 +962,7 @@ class _ProjectHeader extends StatelessWidget {
                     dimension: 32,
                     child: Icon(
                       Icons.chevron_right_rounded,
-                      size: 20,
+                      size: Ic.medium,
                       color: c.muted,
                     ),
                   ),
@@ -987,21 +1002,22 @@ class _WaitingBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      // 和下面的用量条、项目卡片同宽
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: c.honey.withValues(alpha: c.dark ? 0.14 : 0.10),
+        color: c.soft(c.honey),
         borderRadius: BorderRadius.circular(Rd.card),
       ),
       child: Row(
         children: [
-          const StatusHex(state: AgentState.waiting, size: 18),
+          const StatusHex(state: AgentState.waiting, size: Ic.medium),
           const SizedBox(width: 10),
           Text(
             '$count 个会话等你处理',
             style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontSize: Fs.body,
+              fontWeight: Fw.medium,
               color: c.honey,
             ),
           ),
@@ -1048,13 +1064,11 @@ class _FloatingError extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: c.raised,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(Rd.pill),
                     border: Border.all(color: c.line),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: c.dark ? 0.35 : 0.12,
-                        ),
+                        color: c.shadow,
                         blurRadius: 12,
                         offset: const Offset(0, 3),
                       ),
@@ -1065,7 +1079,7 @@ class _FloatingError extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.error_outline_rounded,
-                        size: 16,
+                        size: Ic.small,
                         color: c.danger,
                       ),
                       const SizedBox(width: 8),
@@ -1075,8 +1089,8 @@ class _FloatingError extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 13,
-                            height: 1.35,
+                            fontSize: Fs.small,
+                            height: Lh.title,
                             color: c.danger,
                           ),
                         ),
@@ -1130,7 +1144,7 @@ class _ConnectionLine extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (offline)
-              HexSpinner(size: 11, color: c.honey)
+              HexSpinner(size: Ic.glyph, color: c.honey)
             else
               Container(
                 width: 7,
@@ -1151,7 +1165,7 @@ class _ConnectionLine extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: Fs.small,
                   color: offline
                       ? c.honey
                       : failed
@@ -1160,7 +1174,7 @@ class _ConnectionLine extends StatelessWidget {
                 ),
               ),
             ),
-            Icon(Icons.expand_more_rounded, size: 16, color: c.faint),
+            Icon(Icons.expand_more_rounded, size: Ic.small, color: c.faint),
           ],
         ),
       ),
@@ -1195,7 +1209,11 @@ class _ComputerSheet extends StatelessWidget {
             children: [
               RowTile(
                 chevron: false,
-                leading: Icon(Icons.edit_outlined, size: 22, color: c.accent),
+                leading: Icon(
+                  Icons.edit_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
                 title: const Text('重命名'),
                 onTap: () => Navigator.of(sheet).pop('rename'),
               ),
@@ -1203,7 +1221,7 @@ class _ComputerSheet extends StatelessWidget {
                 chevron: false,
                 leading: Icon(
                   Icons.link_off_rounded,
-                  size: 22,
+                  size: Ic.button,
                   color: c.danger,
                 ),
                 title: Text('忘掉这台电脑', style: TextStyle(color: c.danger)),
@@ -1265,8 +1283,8 @@ class _ComputerSheet extends StatelessWidget {
             if (deskSupported && model.settings.deskWatch)
               RowTile(
                 leading: Icon(
-                  Icons.desktop_mac_outlined,
-                  size: 24,
+                  Icons.desktop_mac_rounded,
+                  size: Ic.button,
                   color: c.accent,
                 ),
                 title: const Text('看桌面'),
@@ -1277,7 +1295,7 @@ class _ComputerSheet extends StatelessWidget {
                 chevron: false,
                 leading: Icon(
                   Icons.laptop_mac_rounded,
-                  size: 24,
+                  size: Ic.button,
                   color: c.accent,
                 ),
                 title: Text(model.labelOf(computer)),
@@ -1286,11 +1304,11 @@ class _ComputerSheet extends StatelessWidget {
                   computer.id == active && model.connectedUrl != null
                       ? hostOf(model.connectedUrl) ?? ''
                       : computerEndpoint(computer),
-                  style: mono(12, color: c.muted),
+                  style: mono(Fs.small, color: c.muted),
                 ),
                 trailing: computer.id == active
                     ? (model.connecting
-                          ? const HexSpinner(size: 18)
+                          ? const HexSpinner(size: Ic.medium)
                           : Icon(Icons.check_rounded, color: c.accent))
                     : null,
                 onTap: () {
@@ -1312,7 +1330,7 @@ class _ComputerSheet extends StatelessWidget {
                   Navigator.of(context).pop();
                   unawaited(model.disconnect());
                 },
-                icon: const Icon(Icons.link_off_rounded, size: 20),
+                icon: const Icon(Icons.link_off_rounded, size: Ic.medium),
                 label: const Text('断开连接'),
               ),
             ),
@@ -1320,7 +1338,7 @@ class _ComputerSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: FilledButton.icon(
               onPressed: onAdd,
-              icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+              icon: const Icon(Icons.qr_code_scanner_rounded, size: Ic.medium),
               label: const Text('扫码添加电脑'),
             ),
           ),
@@ -1329,7 +1347,7 @@ class _ComputerSheet extends StatelessWidget {
             child: Text(
               '长按一台电脑可以改名或忘掉它',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: c.faint),
+              style: TextStyle(fontSize: Fs.small, color: c.muted),
             ),
           ),
         ];
@@ -1401,13 +1419,13 @@ class _DisconnectedList extends StatelessWidget {
               RowTile(
                 leading: Icon(
                   Icons.laptop_mac_rounded,
-                  size: 24,
+                  size: Ic.button,
                   color: c.accent,
                 ),
                 title: Text(model.labelOf(computer)),
                 subtitle: Text(
                   computerEndpoint(computer),
-                  style: mono(12, color: c.muted),
+                  style: mono(Fs.small, color: c.muted),
                 ),
                 onTap: () => model.connectCode(computer.code),
               ),
@@ -1416,7 +1434,7 @@ class _DisconnectedList extends StatelessWidget {
         Center(
           child: TextButton.icon(
             onPressed: onAdd,
-            icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+            icon: const Icon(Icons.qr_code_scanner_rounded, size: Ic.medium),
             label: const Text('扫码添加电脑'),
           ),
         ),
@@ -1480,9 +1498,9 @@ class _TabScreenState extends State<TabScreen> {
               overflow: TextOverflow.ellipsis,
               // 顶栏标题样式是 600，副标题要显式改回常规字重
               style: mono(
-                12,
+                Fs.small,
                 color: c.muted,
-              ).copyWith(fontWeight: FontWeight.w400),
+              ).copyWith(fontWeight: Fw.body),
             ),
           ],
         ),

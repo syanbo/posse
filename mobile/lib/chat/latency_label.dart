@@ -20,7 +20,7 @@ class LatencyLabel extends StatelessWidget {
     this.latency,
     this.unresponsive = false,
     this.gap = 10,
-    this.size = 12,
+    this.size = Ic.glyph,
   });
 
   /// 读数，来自 [PosseAppModel.latency]、[PosseAppModel.unresponsive]。
@@ -50,7 +50,7 @@ class LatencyLabel extends StatelessWidget {
             size: size,
             color: color,
           ),
-          const SizedBox(width: 3),
+          const SizedBox(width: 4),
           Text(unresponsive ? '无响应' : '$ms', style: statusLineStyle(color)),
         ],
       ),
@@ -74,9 +74,11 @@ Color latencyColor(
 /// 信号格：一眼看出连接好不好。150 ms 内满格，300 ms 起只剩一格，
 /// 没响应是带感叹号的空格。
 IconData latencyIcon(Duration? latency, {bool unresponsive = false}) {
-  if (unresponsive) return Icons.signal_cellular_connected_no_internet_0_bar;
+  if (unresponsive) {
+    return Icons.signal_cellular_connected_no_internet_0_bar_rounded;
+  }
   final ms = latency?.inMilliseconds ?? 0;
-  if (ms < 150) return Icons.signal_cellular_alt;
-  if (ms < 300) return Icons.signal_cellular_alt_2_bar;
-  return Icons.signal_cellular_alt_1_bar;
+  if (ms < 150) return Icons.signal_cellular_alt_rounded;
+  if (ms < 300) return Icons.signal_cellular_alt_2_bar_rounded;
+  return Icons.signal_cellular_alt_1_bar_rounded;
 }

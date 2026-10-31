@@ -29,11 +29,6 @@ import 'unlock.dart';
 import 'viewport.dart';
 import 'wire.dart';
 
-/// 留空和画面要能分开：画面是黑的，留空用很深的暖灰。
-const deskLetterbox = Color(0xFF2A2926);
-const _picture = Color(0xFF000000);
-const _onPicture = Color(0xFFC8C6C1);
-
 const _markSize = 22.0;
 const _markFade = Duration(milliseconds: 280);
 const _cursorRingSize = 16.0;
@@ -1341,18 +1336,22 @@ class _DeskPageState extends State<DeskPage>
     );
     return Material(
       key: const Key('desk-locked'),
-      color: colors.card.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(999),
+      color: colors.glass,
+      borderRadius: BorderRadius.circular(Rd.pill),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.lock_outline_rounded, size: 16, color: colors.muted),
+            Icon(
+              Icons.lock_outline_rounded,
+              size: Ic.small,
+              color: colors.muted,
+            ),
             const SizedBox(width: 6),
             Text(
               'Mac 已锁屏',
-              style: TextStyle(fontSize: Fs.meta, color: colors.text),
+              style: TextStyle(fontSize: Fs.small, color: colors.text),
             ),
             const SizedBox(width: 8),
             if (_passwordSaved) ...[
@@ -1366,7 +1365,11 @@ class _DeskPageState extends State<DeskPage>
                 ),
                 padding: EdgeInsets.zero,
                 onPressed: () => unawaited(_unlock()),
-                icon: Icon(Icons.key_rounded, size: 18, color: colors.muted),
+                icon: Icon(
+                  Icons.key_rounded,
+                  size: Ic.medium,
+                  color: colors.muted,
+                ),
               ),
               const SizedBox(width: 2),
               FilledButton(
@@ -1434,7 +1437,7 @@ class _DeskPageState extends State<DeskPage>
       covered: covered,
     );
     return Scaffold(
-      backgroundColor: deskLetterbox,
+      backgroundColor: DeskColors.letterbox,
       resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
@@ -1483,7 +1486,7 @@ class _DeskPageState extends State<DeskPage>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const ColoredBox(color: deskLetterbox),
+          const ColoredBox(color: DeskColors.letterbox),
           TweenAnimationBuilder<double>(
             tween: Tween(end: lift),
             duration: const Duration(milliseconds: 220),
@@ -1624,13 +1627,13 @@ class _DeskPageState extends State<DeskPage>
     return Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: deskLetterbox),
+        const ColoredBox(color: DeskColors.letterbox),
         Positioned(
           left: image.left,
           top: image.top,
           width: image.width,
           height: image.height,
-          child: const ColoredBox(color: _picture),
+          child: const ColoredBox(color: DeskColors.picture),
         ),
         if (_texture != null)
           Positioned(
@@ -1673,12 +1676,15 @@ class _DeskPageState extends State<DeskPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            PosseLoader(size: 36, color: colors.accent),
+            PosseLoader(size: Ic.hero, color: colors.accent),
             const SizedBox(height: 14),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: Fs.body, color: _onPicture),
+              style: const TextStyle(
+                fontSize: Fs.body,
+                color: DeskColors.onPicture,
+              ),
             ),
           ],
         ),
@@ -1691,7 +1697,10 @@ class _DeskPageState extends State<DeskPage>
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: Fs.body, color: _onPicture),
+          style: const TextStyle(
+            fontSize: Fs.body,
+            color: DeskColors.onPicture,
+          ),
         ),
       );
     }
@@ -1704,18 +1713,18 @@ class _DeskPageState extends State<DeskPage>
       constraints: const BoxConstraints(maxWidth: 340),
       child: Material(
         key: const Key('desk-banner'),
-        color: colors.card.withValues(alpha: 0.94),
+        color: colors.glass,
         borderRadius: BorderRadius.circular(Rd.card),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 failed
                     ? Icons.error_outline_rounded
-                    : Icons.desktop_access_disabled_outlined,
-                size: 28,
+                    : Icons.desktop_access_disabled_rounded,
+                size: Ic.large,
                 color: failed ? colors.danger : colors.muted,
               ),
               const SizedBox(height: 10),
@@ -1724,7 +1733,7 @@ class _DeskPageState extends State<DeskPage>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: Fs.body,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: Fw.medium,
                   color: colors.text,
                 ),
               ),
@@ -1733,7 +1742,7 @@ class _DeskPageState extends State<DeskPage>
                 Text(
                   hint,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: Fs.meta, color: colors.muted),
+                  style: TextStyle(fontSize: Fs.small, color: colors.muted),
                 ),
               ],
               if (retry) ...[
@@ -1744,7 +1753,7 @@ class _DeskPageState extends State<DeskPage>
                     _pokeBar();
                     unawaited(_ensure(force: true));
                   },
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  icon: const Icon(Icons.refresh_rounded, size: Ic.medium),
                   label: Text(_stopped ? '重新连接' : '重试'),
                 ),
               ],
@@ -1823,7 +1832,7 @@ class _DeskPageState extends State<DeskPage>
       constraints: BoxConstraints(maxWidth: 260, maxHeight: cap),
       child: Material(
         key: const Key('desk-debug-panel'),
-        color: colors.card.withValues(alpha: 0.92),
+        color: colors.glass,
         borderRadius: BorderRadius.circular(Rd.card),
         clipBehavior: Clip.antiAlias,
         child: SingleChildScrollView(
@@ -1867,7 +1876,7 @@ class _DeskPageState extends State<DeskPage>
                       textStyle: statusLineStyle(colors.accent),
                     ),
                     onPressed: () => unawaited(_connectSheet()),
-                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    icon: const Icon(Icons.tune_rounded, size: Ic.small),
                     label: const Text('UDP 地址'),
                   ),
                 ),
@@ -1926,8 +1935,8 @@ class _DeskPageState extends State<DeskPage>
                       Text(
                         '连接设置',
                         style: TextStyle(
-                          fontSize: Fs.cardTitle,
-                          fontWeight: FontWeight.w600,
+                          fontSize: Fs.title,
+                          fontWeight: Fw.bold,
                           color: c.text,
                         ),
                       ),
@@ -1936,7 +1945,7 @@ class _DeskPageState extends State<DeskPage>
                         auto == null || auto.isEmpty
                             ? '没有连着的电脑'
                             : '默认走订阅。画面发到现在连着的电脑，端口由电脑分配。这里改的是 UDP 地址，留着调试。',
-                        style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                        style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                       const SizedBox(height: 14),
                       Row(
@@ -1953,7 +1962,7 @@ class _DeskPageState extends State<DeskPage>
                         const SizedBox(height: 8),
                         Text(
                           error,
-                          style: TextStyle(fontSize: Fs.meta, color: c.danger),
+                          style: TextStyle(fontSize: Fs.small, color: c.danger),
                         ),
                       ],
                       const SizedBox(height: 12),
@@ -2005,12 +2014,12 @@ class _DeskPageState extends State<DeskPage>
       controller: controller,
       keyboardType: hint == '端口' ? TextInputType.number : TextInputType.url,
       textInputAction: TextInputAction.done,
-      style: mono(13, color: colors.text),
+      style: mono(Fs.small, color: colors.text),
       cursorColor: colors.accent,
       decoration: InputDecoration(
         isDense: true,
         hintText: hint,
-        hintStyle: TextStyle(color: colors.faint, fontSize: 13),
+        hintStyle: TextStyle(color: colors.faint, fontSize: Fs.small),
         filled: true,
         fillColor: colors.fill,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

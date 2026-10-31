@@ -303,8 +303,8 @@ class _CopyChip extends StatelessWidget {
     final c = PosseColors.of(context);
     final style = TextStyle(
       color: c.accent,
-      fontSize: Fs.meta,
-      fontWeight: FontWeight.w500,
+      fontSize: Fs.small,
+      fontWeight: Fw.medium,
     );
     return Material(
       color: c.raised,
@@ -318,7 +318,7 @@ class _CopyChip extends StatelessWidget {
               left: Radius.circular(Rd.button),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Text('复制', style: style),
             ),
           ),
@@ -329,7 +329,7 @@ class _CopyChip extends StatelessWidget {
               right: Radius.circular(Rd.button),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Text('全选', style: style),
             ),
           ),

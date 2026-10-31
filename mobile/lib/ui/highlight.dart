@@ -375,9 +375,7 @@ TextStyle? tokStyle(Tok? tok, bool dark) {
   };
   return TextStyle(
     color: color == null ? null : hex(color),
-    fontWeight: tok == Tok.heading || tok == Tok.strong
-        ? FontWeight.w600
-        : null,
+    fontWeight: tok == Tok.heading || tok == Tok.strong ? Fw.bold : null,
     fontStyle: tok == Tok.emphasis ? FontStyle.italic : null,
   );
 }

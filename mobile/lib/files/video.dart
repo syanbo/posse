@@ -300,7 +300,7 @@ class _VideoViewState extends State<VideoView> {
     final c = PosseColors.of(context);
     if (_error != null) {
       return EmptyState(
-        icon: Icons.videocam_off_outlined,
+        icon: Icons.videocam_off_rounded,
         text: _error!,
         error: true,
         action: _resumable
@@ -313,20 +313,20 @@ class _VideoViewState extends State<VideoView> {
       final (done, total) = _progress ?? (0, 0);
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 48),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               LinearProgressIndicator(
                 value: total == 0 ? null : done / total,
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(Rd.small),
               ),
               const SizedBox(height: 12),
               Text(
                 total == 0
                     ? '正在从电脑取视频…'
                     : '正在从电脑取视频  ${formatBytes(done)} / ${formatBytes(total)}',
-                style: TextStyle(fontSize: Fs.meta, color: c.muted),
+                style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ],
           ),
@@ -377,12 +377,12 @@ class _PlayBadge extends StatelessWidget {
           width: 56,
           height: 56,
           decoration: const BoxDecoration(
-            color: Color(0x8A000000),
+            color: PosseColors.scrim,
             shape: BoxShape.circle,
           ),
           child: const Icon(
             Icons.play_arrow_rounded,
-            size: 36,
+            size: Ic.hero,
             color: Colors.white,
           ),
         ),
@@ -416,7 +416,7 @@ class _Controls extends StatelessWidget {
                   value.isPlaying
                       ? Icons.pause_rounded
                       : Icons.play_arrow_rounded,
-                  size: 28,
+                  size: Ic.large,
                 ),
               ),
               Expanded(
@@ -435,7 +435,7 @@ class _Controls extends StatelessWidget {
               Text(
                 '${_clock(value.position)} / ${_clock(value.duration)}',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: Fs.small,
                   color: c.muted,
                   fontFeatures: tnum,
                 ),

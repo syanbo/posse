@@ -177,7 +177,7 @@ class _MediaScreenState extends State<MediaScreen> {
     }
     if (list.isEmpty) {
       return const EmptyState(
-        icon: Icons.photo_library_outlined,
+        icon: Icons.photo_library_rounded,
         text: '这个会话还没有图片或视频',
       );
     }
@@ -195,7 +195,7 @@ class _MediaScreenState extends State<MediaScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                 child: Text(
                   '只列出最近 ${list.made.length} 项',
-                  style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                  style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ),
             ),
@@ -214,14 +214,14 @@ class _MediaScreenState extends State<MediaScreen> {
 
   Widget _header(PosseColors c, String title, int n) => SliverToBoxAdapter(
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
       child: Row(
         children: [
           Text(
             title,
             style: TextStyle(
-              fontSize: Fs.meta,
-              fontWeight: FontWeight.w600,
+              fontSize: Fs.small,
+              fontWeight: Fw.bold,
               color: c.text,
             ),
           ),
@@ -229,7 +229,7 @@ class _MediaScreenState extends State<MediaScreen> {
           Text(
             '$n',
             style: TextStyle(
-              fontSize: Fs.caption,
+              fontSize: Fs.small,
               color: c.muted,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
@@ -390,8 +390,8 @@ class _MediaTileState extends State<_MediaTile> {
                       else if (_failed)
                         Icon(
                           item.video
-                              ? Icons.videocam_off_outlined
-                              : Icons.broken_image_outlined,
+                              ? Icons.videocam_off_rounded
+                              : Icons.broken_image_rounded,
                           color: c.faint,
                         ),
                       if (item.video) const Center(child: _PlayMark()),
@@ -408,7 +408,7 @@ class _MediaTileState extends State<_MediaTile> {
                     item.label,
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
-                    style: TextStyle(fontSize: Fs.caption, color: c.muted),
+                    style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ),
                 if (time.isNotEmpty) ...[
@@ -416,7 +416,7 @@ class _MediaTileState extends State<_MediaTile> {
                   Text(
                     time,
                     style: TextStyle(
-                      fontSize: Fs.caption,
+                      fontSize: Fs.small,
                       color: c.faint,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -440,12 +440,12 @@ class _PlayMark extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: const BoxDecoration(
-        color: Color(0x8C000000),
+        color: PosseColors.scrim,
         shape: BoxShape.circle,
       ),
       child: const Icon(
         Icons.play_arrow_rounded,
-        size: 26,
+        size: Ic.large,
         color: Colors.white,
       ),
     );
@@ -536,8 +536,8 @@ class _MediaViewerState extends State<MediaViewer> {
               item.label,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontSize: Fs.title,
+                fontWeight: Fw.bold,
                 color: c.text,
               ),
             ),
@@ -658,7 +658,7 @@ class _ImageViewState extends State<_ImageView> {
   Widget build(BuildContext context) {
     if (_error != null) {
       return EmptyState(
-        icon: Icons.broken_image_outlined,
+        icon: Icons.broken_image_rounded,
         text: _error!,
         error: true,
         action: TextButton(

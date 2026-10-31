@@ -25,6 +25,9 @@ const splashSloganSize = Size(200, 80);
 const splashSloganBottom = 60.0;
 const splashSloganAsset = 'assets/splash_slogan.png';
 
+/// slogan 的字号是标志图的一部分，不跟界面字号走，改了要重新导出。
+const splashSloganFontSize = 13.0;
+
 /// slogan 本身，导出成图片给原生闪屏和 [PosseSplash] 共用：系统字体各端不同，用图片才对得上。
 class SplashSlogan extends StatelessWidget {
   const SplashSlogan({super.key, this.fontFamily});
@@ -41,11 +44,11 @@ class SplashSlogan extends StatelessWidget {
           textDirection: TextDirection.ltr,
           style: TextStyle(
             fontFamily: fontFamily,
-            fontSize: 13,
+            fontSize: splashSloganFontSize,
             letterSpacing: 0.6,
             color: const Color(0xFF8C8A85),
             decoration: TextDecoration.none,
-            fontWeight: FontWeight.w400,
+            fontWeight: Fw.body,
           ),
         ),
       ),
