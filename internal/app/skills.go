@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/history"
 	"posse/internal/skills"
 )
 
@@ -37,6 +38,13 @@ type skillsView struct {
 	sel     string // 选中技能的目录，或 skillIssuesKey
 	query   string
 	agent   int // 0 全部，其余是 skills.Agents[agent-1] 用得上的
+	byUse   int // 列表排序：0 按名字，1 按用量（多的在前）
+
+	// 跨会话的用量，单独在后台算：第一次要把各家的会话文件都读一遍（几十秒），之后按文件缓存
+	stats        map[string]*history.SkillStat
+	statsLoading bool
+	statsDone    int
+	statsTotal   int
 }
 
 // skillsPanelView 是文件栏「技能」页签的状态：当前工作区的项目级技能。
@@ -83,12 +91,34 @@ func (a *app) scanSkills() {
 			s.cat, s.loaded, s.loading, s.at = cat, true, false, time.Now()
 		})
 	}()
+	if !s.statsLoading {
+		s.statsLoading = true
+		cache := ""
+		if a.home != "" {
+			cache = filepath.Join(a.home, "skill-usage.json")
+		}
+		go func() {
+			stats, _ := history.SkillStats(context.Background(), history.Roots{Home: homeDir}, cache, func(done, total int) {
+				a.update(func() {
+					if s.req == req {
+						s.statsDone, s.statsTotal = done, total
+					}
+				})
+			})
+			a.update(func() {
+				if s.req != req {
+					return
+				}
+				s.stats, s.statsLoading = stats, false
+			})
+		}()
+	}
 }
 
 func (a *app) releaseSkills() {
 	s := &a.skills
 	s.req++
-	*s = skillsView{req: s.req, query: s.query, agent: s.agent}
+	*s = skillsView{req: s.req, query: s.query, agent: s.agent, byUse: s.byUse}
 }
 
 func (a *app) skillsSidebarItem(c *ui.Context) {
@@ -151,9 +181,22 @@ func (s *skillsView) shownSkills() []skills.Skill {
 		if d := order(x.Scope) - order(y.Scope); d != 0 {
 			return d
 		}
+		if s.byUse == 1 && s.stats != nil {
+			if d := s.uses(y.Name) - s.uses(x.Name); d != 0 {
+				return d
+			}
+		}
 		return strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name))
 	})
 	return out
+}
+
+// uses 是技能在所有会话里用过的次数。
+func (s *skillsView) uses(name string) int {
+	if st := s.stats[name]; st != nil {
+		return st.Count
+	}
+	return 0
 }
 
 func (a *app) skillsBoard(c *ui.Context) {
@@ -251,7 +294,18 @@ func (a *app) skillTotals(c *ui.Context) {
 		}
 	}
 	ui.Column(c).Padding(12, 20, 8, 20).Gap(8).Children(func() {
-		ui.Text(c, fmt.Sprintf("%d 个技能", n)).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum")
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, fmt.Sprintf("%d 个技能", n)).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum").Grow(1)
+			if s.statsLoading && s.stats == nil {
+				note := "正在统计用量…"
+				if s.statsTotal > 0 {
+					note = fmt.Sprintf("正在统计用量 %d/%d", s.statsDone, s.statsTotal)
+				}
+				ui.Text(c, note).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+			} else {
+				segmented(c, &s.byUse, "排序", "名字", "用量")
+			}
+		})
 		ui.Row(c).Gap(12).Wrap().Children(func() {
 			for _, ag := range skills.Agents {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -296,6 +350,9 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 		})
 		if sk.Description != "" {
 			ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
+		}
+		if a.skills.stats != nil {
+			skillUseLine(c, a.skills.stats[sk.Name])
 		}
 	})
 	if row.Clicked() {
@@ -393,6 +450,9 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 			ui.Text(c, sk.Description).FontSize(fsBody).LineHeight(1.55).Selectable()
 		}
 	})
+	if a.skills.stats != nil {
+		skillUseCard(c, a.skills.stats[sk.Name])
+	}
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
 		cardTitle(c, "各家状态").Margin(0, 0, 4, 0)
 		for _, ag := range skills.Agents {
@@ -989,6 +1049,47 @@ func (a *app) skillNewDialog(c *ui.Context) {
 				v.open = false
 				a.skillsTab.poll.at = time.Time{}
 				a.openFile(w, file, 0, [2]int{})
+			}
+		})
+	})
+}
+
+// --- 跨会话的用量
+
+// skillUseLine 是列表行最下面的用量：用过几次、最后一次多久以前；没用过的写出来，好清理。
+func skillUseLine(c *ui.Context, st *history.SkillStat) {
+	t := c.Theme()
+	ui.Row(c).Gap(12).Children(func() {
+		if st == nil || st.Count == 0 {
+			ui.Text(c, "会话里没用过").FontSize(fsSmall).TextColor(colors(t).faint)
+			return
+		}
+		ui.Text(c, fmt.Sprintf("用过 %d 次", st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+		ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip("最近一次 " + st.Last.Local().Format("1月2日 15:04"))
+	})
+}
+
+// skillUseCard 是详情里的用量：次数、会话数、最后一次，和各家各用了几次。
+func skillUseCard(c *ui.Context, st *history.SkillStat) {
+	t := c.Theme()
+	card(c).Padding(cardPad).Gap(8).Shrink(0).Children(func() {
+		cardTitle(c, "用量")
+		if st == nil || st.Count == 0 {
+			ui.Text(c, "各家的会话记录里都没用过它。").FontSize(fsBody).TextColor(t.TextMuted)
+			return
+		}
+		metaRow(c, meta(c, fmt.Sprintf("用过 %d 次", st.Count)), meta(c, fmt.Sprintf("%d 个会话", st.Sessions)),
+			meta(c, "最近一次 "+st.Last.Local().Format("1月2日 15:04")))
+		ui.Row(c).Gap(12).Wrap().Children(func() {
+			for _, ag := range skills.Agents {
+				n := st.ByAgent[ag.String()]
+				if n == 0 {
+					continue
+				}
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					agentIcon(c, ag.String(), smallIcon())
+					ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+				}).Tooltip(fmt.Sprintf("%s用了 %d 次", agentTitle(ag.String()), n))
 			}
 		})
 	})

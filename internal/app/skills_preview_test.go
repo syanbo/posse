@@ -3,6 +3,7 @@ package app
 import (
 	"time"
 
+	"posse/internal/history"
 	"posse/internal/skills"
 )
 
@@ -50,7 +51,13 @@ func previewSkills(home string) skills.Catalog {
 func previewSkillsBoard(a *app, sel string) {
 	cat := previewSkills(homeDir)
 	a.selected = skillsBoardID
-	a.skills = skillsView{visible: true, loaded: true, cat: cat, at: time.Now(), sel: sel}
+	now := time.Now()
+	a.skills = skillsView{visible: true, loaded: true, cat: cat, at: now, sel: sel, stats: map[string]*history.SkillStat{
+		"archify":       {Name: "archify", Count: 14, Sessions: 11, Last: now.Add(-3 * time.Hour), ByAgent: map[string]int{"claude": 9, "codex": 3, "grok": 2}},
+		"browser-skill": {Name: "browser-skill", Count: 60, Sessions: 58, Last: now.Add(-26 * time.Hour), ByAgent: map[string]int{"claude": 53, "codex": 2, "cursor": 4, "grok": 1}},
+		"lark-calendar": {Name: "lark-calendar", Count: 2, Sessions: 2, Last: now.Add(-40 * 24 * time.Hour), ByAgent: map[string]int{"claude": 2}},
+		"docx":          {Name: "docx", Count: 5, Sessions: 4, Last: now.Add(-6 * 24 * time.Hour), ByAgent: map[string]int{"claude": 5}},
+	}}
 	if sel == "" {
 		a.skills.sel = cat.Skills[0].Dir
 	}
