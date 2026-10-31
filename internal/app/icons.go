@@ -9,7 +9,16 @@ func brandIcon(d string) *ui.SVG {
 }
 
 func icon(shapes string) *ui.SVG {
-	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` + shapes + `</svg>`))
+	return svgOf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` + shapes + `</svg>`)
+}
+
+// svgSource 记着每个图标的 SVG 源码：手机端的文件类型图标由测试照它生成（TestMobileFileIcons）。
+var svgSource = map[*ui.SVG]string{}
+
+func svgOf(src string) *ui.SVG {
+	s := ui.MustParseSVG([]byte(src))
+	svgSource[s] = src
+	return s
 }
 
 const (

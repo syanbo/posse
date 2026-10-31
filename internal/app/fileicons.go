@@ -31,7 +31,7 @@ var (
 	iconFilePDF  = icon(fileShape + `<path d="M9.5 18v-6h2.25a1.75 1.75 0 0 1 0 3.5H9.5"/>`)
 	iconFileLock = icon(`<rect x="5" y="10.5" width="14" height="9.75" rx="2"/><path d="M8.25 10.5V8a3.75 3.75 0 0 1 7.5 0v2.5M12 14.25v2.25"/>`)
 	// Dart 用 Android Studio（Dart 插件 expui/dart.svg）的实心标志：深浅两块蓝改成同一颜色的两档透明度；原图几乎占满 16 格，四周各留 2 才和别的图标一样大
-	iconFileDart    = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 20 20"><path fill="currentColor" fill-opacity="0.55" fill-rule="evenodd" d="M3.37928 10.2715L3.37328 3.37354L1.19128 7.92554C0.936284 8.46854 0.828284 9.13254 1.57328 9.87654L3.71128 12.0145C3.33228 11.6355 3.38428 11.0175 3.37928 10.2715ZM12.5258 4.22274L12.0148 3.71074C11.6358 3.33174 11.0178 3.38374 10.2718 3.37874L3.37328 3.37354L12 12H15L15.0008 6.69674L12.5258 4.22274Z"/><path fill="currentColor" d="M3.37402 3.37297L10.271 3.37897C10.3587 3.37956 10.4445 3.37936 10.5285 3.37916C11.1591 3.3777 11.6805 3.37649 12.015 3.71097L9.87702 1.57297C9.13302 0.82897 8.46902 0.935969 7.92502 1.19097L3.37402 3.37297Z"/><path fill="currentColor" d="M12 12L3.37402 3.37297L3.38002 10.271C3.38061 10.3587 3.38041 10.4446 3.38022 10.5285C3.37875 11.1591 3.37754 11.6805 3.71202 12.014L4.22168 12.5259L6.69568 14.9999L12 15V12Z"/></svg>`))
+	iconFileDart    = svgOf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 20 20"><path fill="currentColor" fill-opacity="0.55" fill-rule="evenodd" d="M3.37928 10.2715L3.37328 3.37354L1.19128 7.92554C0.936284 8.46854 0.828284 9.13254 1.57328 9.87654L3.71128 12.0145C3.33228 11.6355 3.38428 11.0175 3.37928 10.2715ZM12.5258 4.22274L12.0148 3.71074C11.6358 3.33174 11.0178 3.38374 10.2718 3.37874L3.37328 3.37354L12 12H15L15.0008 6.69674L12.5258 4.22274Z"/><path fill="currentColor" d="M3.37402 3.37297L10.271 3.37897C10.3587 3.37956 10.4445 3.37936 10.5285 3.37916C11.1591 3.3777 11.6805 3.37649 12.015 3.71097L9.87702 1.57297C9.13302 0.82897 8.46902 0.935969 7.92502 1.19097L3.37402 3.37297Z"/><path fill="currentColor" d="M12 12L3.37402 3.37297L3.38002 10.271C3.38061 10.3587 3.38041 10.4446 3.38022 10.5285C3.37875 11.1591 3.37754 11.6805 3.71202 12.014L4.22168 12.5259L6.69568 14.9999L12 15V12Z"/></svg>`)
 	iconFileFlutter = icon(`<path d="M14.25 3.25h5.5L8.5 14.5 5.75 11.75z"/><path d="M14.25 11.25h5.5l-5 5 5 5h-5.5l-5-5z"/>`)
 	iconFileSwift   = icon(`<path d="M19.25 15.5c1.1-3.6-.6-7.8-5.25-11 2.4 3.4 2.6 6.4 1.65 8.4C12.6 10.8 8.4 7.6 5 4.75c2.6 3.3 5 5.75 7.1 7.4-2.75-1.25-5.1-2.6-7.6-4.4 2.9 4.8 7.6 9.5 13.75 9 .8.55 1.4 1.3 1.75 2.25.35-1.35.15-2.5-.75-3.5z"/>`)
 	iconFileKotlin  = icon(`<path d="M5 5h14l-7 7 7 7H5z"/>`)
@@ -198,18 +198,24 @@ func kindOf(name string) fileKind {
 	if k, ok := kindByName[base]; ok {
 		return k
 	}
-	switch {
-	case strings.HasPrefix(base, "dockerfile."), strings.HasSuffix(base, ".dockerfile"):
-		return kindDocker
-	case (strings.HasPrefix(base, "compose.") || strings.HasPrefix(base, "docker-compose.")) &&
-		(strings.HasSuffix(base, ".yaml") || strings.HasSuffix(base, ".yml")):
-		return kindDocker
-	case strings.HasSuffix(base, ".gradle.kts"):
-		return kindGradle
-	case strings.HasPrefix(base, ".env."):
-		return kindData
+	for _, r := range kindByAffix {
+		if strings.HasPrefix(base, r.prefix) && strings.HasSuffix(base, r.suffix) {
+			return r.kind
+		}
 	}
 	return kindByExt[filepath.Ext(base)]
+}
+
+// kindByAffix 是按名字前后缀认的类型（两头都要对上，空的不限），在完整文件名之后、扩展名之前查。
+var kindByAffix = []struct {
+	prefix, suffix string
+	kind           fileKind
+}{
+	{"dockerfile.", "", kindDocker}, {"", ".dockerfile", kindDocker},
+	{"compose.", ".yaml", kindDocker}, {"compose.", ".yml", kindDocker},
+	{"docker-compose.", ".yaml", kindDocker}, {"docker-compose.", ".yml", kindDocker},
+	{"", ".gradle.kts", kindGradle},
+	{".env.", "", kindData},
 }
 
 // Xcode 把这些目录当成一个整体（包），按扩展名认；其余目录是普通文件夹。

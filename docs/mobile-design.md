@@ -75,7 +75,7 @@ Material 图标一律用 `_rounded`。和首页项目行、文件树、Git 树�
 | 类别 | 名字 |
 |---|---|
 | 文字 | `text`、`muted`、`faint` |
-| 强调和语义 | `accent`；`honey`（待处理）、`sage`（完成、新增）、`danger`；数据色 `sky`（MCP）、`teal`（命令行程序）、`plum`（网址） |
+| 强调和语义 | `accent`；`honey`（待处理）、`sage`（完成、新增）、`danger`；数据色 `sky`（MCP）、`teal`（命令行程序）、`plum`（网址）、`gold`、`cyan`（后两个只给文件类型图标，和桌面 `palette.data` 同序） |
 | 底色 | `band`、`canvas`、`card`、`raised`、`code` |
 | 叠加 | `line`、`wash`、`fill`、`tint`（选中项的淡底） |
 | 淡底 | `soft(色)`：语义色的提示条、提醒块 |

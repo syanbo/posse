@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../protocol/rpc.dart';
-import '../ui/line_icons.dart';
+import '../ui/file_icons.dart';
 import '../ui/code.dart';
 import '../ui/highlight.dart';
 import '../ui/loading.dart';
@@ -23,11 +23,19 @@ import 'video.dart';
 
 /// 目录里的一项。路径都相对工作区根目录，用 / 分隔。
 class FileEntry {
-  const FileEntry({required this.path, required this.name, required this.dir});
+  const FileEntry({
+    required this.path,
+    required this.name,
+    required this.dir,
+    this.link = false,
+  });
 
   final String path;
   final String name;
   final bool dir;
+
+  /// 符号链接（指向目录的照样能展开）。旧电脑不给 isSymlink 时当普通文件。
+  final bool link;
 }
 
 /// files.readDir 的结果：目录在前，各按名字排。
@@ -43,6 +51,7 @@ List<FileEntry> parseDir(String parent, Object? raw) {
         path: parent.isEmpty ? name : '$parent/$name',
         name: name,
         dir: item['isDirectory'] == true,
+        link: item['isSymlink'] == true,
       ),
     );
   }
@@ -341,12 +350,13 @@ class _FilesPaneState extends State<FilesPane> {
                     : null,
               ),
               const SizedBox(width: 4),
-              LineIconView(
-                e.dir
-                    ? (open ? LineIcon.folderOpen : LineIcon.folder)
-                    : LineIcon.file,
+              // 照桌面文件树：按类型的图标，Xcode 的包目录也换成各自的图标
+              FileIconView(
+                e.name,
                 size: Ic.medium,
-                color: e.dir ? c.accent : c.muted,
+                dir: e.dir,
+                open: open,
+                link: e.link,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -447,11 +457,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                 final slash = path.lastIndexOf('/');
                 return RowTile(
                   chevron: false,
-                  leading: LineIconView(
-                    LineIcon.file,
-                    size: Ic.medium,
-                    color: c.muted,
-                  ),
+                  leading: FileIconView(path, size: Ic.medium),
                   title: Text(slash < 0 ? path : path.substring(slash + 1)),
                   subtitle: slash < 0
                       ? null

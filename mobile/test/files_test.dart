@@ -30,6 +30,12 @@ void main() {
       'a',
     );
     expect(parseDir('', null), isEmpty);
+    // 符号链接画带箭头的图标；旧电脑不给 isSymlink 时当普通文件
+    final links = parseDir('', [
+      {'name': 'docs', 'isDirectory': true, 'isSymlink': true},
+      {'name': 'a.go', 'isDirectory': false},
+    ]);
+    expect(links.map((e) => e.link), [true, false]);
   });
 }
 

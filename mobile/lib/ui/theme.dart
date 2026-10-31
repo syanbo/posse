@@ -102,6 +102,8 @@ class PosseColors extends ThemeExtension<PosseColors> {
     required this.sky,
     required this.teal,
     required this.plum,
+    required this.gold,
+    required this.cyan,
     required this.shadow,
   });
 
@@ -125,6 +127,8 @@ class PosseColors extends ThemeExtension<PosseColors> {
   final Color sky; // 数据色：MCP、信息
   final Color teal; // 数据色：命令行程序
   final Color plum; // 数据色：网址
+  final Color gold; // 数据色：文件类型（JS、配置、压缩包）
+  final Color cyan; // 数据色：文件类型（Go、数据库）
   final Color shadow; // 浮层、提示条的投影
 
   /// 语义色的淡底（提醒、错误、强调的条和块）。
@@ -172,6 +176,8 @@ class PosseColors extends ThemeExtension<PosseColors> {
     sky: Color(0xFF3B6FD9),
     teal: Color(0xFF21866A),
     plum: Color(0xFF8E4BB8),
+    gold: Color(0xFFA9771A),
+    cyan: Color(0xFF2B8A8A),
     shadow: Color(0x1F000000),
   );
 
@@ -196,6 +202,8 @@ class PosseColors extends ThemeExtension<PosseColors> {
     sky: Color(0xFF7AA2F7),
     teal: Color(0xFF5FBFA0),
     plum: Color(0xFFB36AD9),
+    gold: Color(0xFFD9A441),
+    cyan: Color(0xFF4BB3B3),
     shadow: Color(0x66000000),
   );
 
