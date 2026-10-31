@@ -224,3 +224,20 @@ func TestApplyCodex(t *testing.T) {
 		t.Errorf("插件技能应补进来：%v", got)
 	}
 }
+
+// Grok 的 [skills] paths：目录往下各级找，也可以直接是一个 SKILL.md。
+func TestGrokExtraPaths(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("GROK_CLAUDE_SKILLS_ENABLED", "")
+	t.Setenv("GROK_CURSOR_SKILLS_ENABLED", "")
+	skill(t, filepath.Join(h, "team", "flat"), "flat", "")
+	skill(t, filepath.Join(h, "team", "group", "lint"), "lint", "")
+	skill(t, filepath.Join(h, "one", "oneshot"), "oneshot", "")
+	write(t, filepath.Join(h, ".grok", "config.toml"), "[skills]\npaths = [\"~/team\", \"~/one/oneshot/SKILL.md\"]\n")
+	c := Scan(Options{Home: h})
+	for _, n := range []string{"flat", "lint", "oneshot"} {
+		if st := find(t, c, n, ScopeUser).Agents[Grok].State; st != On {
+			t.Errorf("%s：%v", n, st)
+		}
+	}
+}

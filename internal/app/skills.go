@@ -43,6 +43,7 @@ type skillsView struct {
 	// 跨会话的用量，单独在后台算：第一次要把各家的会话文件都读一遍（几十秒），之后按文件缓存
 	stats        map[string]*history.SkillStat
 	statsLoading bool
+	statsGen     int // 关掉技能页加一：之前在算的结果不要；页面开着时重扫不影响正在算的用量
 	statsDone    int
 	statsTotal   int
 }
@@ -93,6 +94,7 @@ func (a *app) scanSkills() {
 	}()
 	if !s.statsLoading {
 		s.statsLoading = true
+		gen := s.statsGen
 		cache := ""
 		if a.home != "" {
 			cache = filepath.Join(a.home, "skill-usage.json")
@@ -100,13 +102,13 @@ func (a *app) scanSkills() {
 		go func() {
 			stats, _ := history.SkillStats(context.Background(), history.Roots{Home: homeDir}, cache, func(done, total int) {
 				a.update(func() {
-					if s.req == req {
+					if s.statsGen == gen {
 						s.statsDone, s.statsTotal = done, total
 					}
 				})
 			})
 			a.update(func() {
-				if s.req != req {
+				if s.statsGen != gen {
 					return
 				}
 				s.stats, s.statsLoading = stats, false
@@ -118,7 +120,7 @@ func (a *app) scanSkills() {
 func (a *app) releaseSkills() {
 	s := &a.skills
 	s.req++
-	*s = skillsView{req: s.req, query: s.query, agent: s.agent, byUse: s.byUse}
+	*s = skillsView{req: s.req, statsGen: s.statsGen + 1, query: s.query, agent: s.agent, byUse: s.byUse}
 }
 
 func (a *app) skillsSidebarItem(c *ui.Context) {
@@ -948,6 +950,10 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 			})
 			ui.Text(c, "Codex、Grok、Cursor 都读 .agents/skills，装进去就都能用；Claude 只读自己的目录，要另建一条链接。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			ready := strings.TrimSpace(v.source) != ""
+			if err := v.install().Check(); ready && err != nil {
+				ready = false
+				ui.Text(c, err.Error()).FontSize(fsSmall).TextColor(t.Danger)
+			}
 			if ready {
 				ui.Text(c, skills.ShellLine(v.install().Args())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Padding(8, 12).Radius(rCard).Background(colors(t).code).Selectable()
 			}

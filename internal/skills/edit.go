@@ -65,8 +65,10 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 		value := "off"
 		if enable {
 			value = ""
-			// 项目文件里删掉还会被用户的设置关着：显式写 on 盖过去
-			if ch.File != filepath.Join(o.Home, ".claude", "settings.json") && claudeOverrides(filepath.Join(o.Home, ".claude", "settings.json"))[s.Name] != "" {
+			// 写在 settings.local.json 里时，删掉还会被用户的或项目 settings.json 里的设置关着：显式写 on 盖过去
+			if ch.File != filepath.Join(o.Home, ".claude", "settings.json") &&
+				(claudeOverrides(filepath.Join(o.Home, ".claude", "settings.json"))[s.Name] != "" ||
+					claudeOverrides(filepath.Join(o.Dir, ".claude", "settings.json"))[s.Name] != "") {
 				value = "on"
 			}
 		}
@@ -157,9 +159,9 @@ func setJSONOverride(src, name, value string) (string, error) {
 		return "", errors.New("settings.json 不是合法的 JSON，没有改")
 	}
 	keyStart, valStart, valEnd, found := topLevelKey(src, "skillOverrides")
-	// 已有的各项，保持原来的顺序
+	// 已有的各项，保持原来的顺序；值原样留着（不是字符串的也不动）
 	var keys []string
-	vals := map[string]string{}
+	vals := map[string]json.RawMessage{}
 	if found {
 		dec := json.NewDecoder(strings.NewReader(src[valStart:valEnd]))
 		if t, err := dec.Token(); err != nil || t != json.Delim('{') {
@@ -170,34 +172,24 @@ func setJSONOverride(src, name, value string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			var v any
+			var v json.RawMessage
 			if err := dec.Decode(&v); err != nil {
 				return "", err
 			}
 			k := t.(string)
-			keys = append(keys, k)
-			s, _ := v.(string)
-			vals[k] = s
+			if !slices.Contains(keys, k) {
+				keys = append(keys, k)
+			}
+			vals[k] = v
 		}
 	}
 	if value == "" {
 		keys = slices.DeleteFunc(keys, func(k string) bool { return k == name })
-	} else if !slices.Contains(keys, name) {
-		keys = append(keys, name)
-	}
-	if value != "" {
-		vals[name] = value
-	}
-	indent := lineIndent(src, keyStart)
-	if !found {
-		indent = "  "
-		if i := firstKeyIndent(src); i != "" {
-			indent = i
+	} else {
+		if !slices.Contains(keys, name) {
+			keys = append(keys, name)
 		}
-	}
-	unit := indent
-	if unit == "" {
-		unit = "  "
+		vals[name], _ = json.Marshal(value)
 	}
 	if len(keys) == 0 {
 		if !found {
@@ -205,18 +197,38 @@ func setJSONOverride(src, name, value string) (string, error) {
 		}
 		return removeMember(src, keyStart, valEnd), nil
 	}
+	// 顶层的键各占一行时照它的缩进写成多行；写在一行里（键前面还有别的内容）时也写成一行
+	at := keyStart
+	if !found {
+		at = skipSpace(src, strings.IndexByte(src, '{')+1)
+	}
+	indent, ownLine := lineIndent(src, at)
+	if !found && src[at] == '}' {
+		indent, ownLine = "  ", true // 空对象
+	}
+	unit := indent
+	if unit == "" {
+		unit = "  "
+	}
 	var b strings.Builder
-	b.WriteString("{\n")
+	b.WriteString("{")
 	for i, k := range keys {
 		kb, _ := json.Marshal(k)
-		vb, _ := json.Marshal(vals[k])
-		b.WriteString(indent + unit + string(kb) + ": " + string(vb))
+		if ownLine {
+			b.WriteString("\n" + indent + unit)
+		}
+		b.WriteString(string(kb) + ": " + string(vals[k]))
 		if i < len(keys)-1 {
 			b.WriteString(",")
+			if !ownLine {
+				b.WriteString(" ")
+			}
 		}
-		b.WriteString("\n")
 	}
-	b.WriteString(indent + "}")
+	if ownLine {
+		b.WriteString("\n" + indent)
+	}
+	b.WriteString("}")
 	obj := b.String()
 	if found {
 		return src[:valStart] + obj + src[valEnd:], nil
@@ -224,9 +236,15 @@ func setJSONOverride(src, name, value string) (string, error) {
 	// 加在顶层对象最后一项后面
 	end := strings.LastIndexByte(src, '}')
 	body := strings.TrimRight(src[:end], " \t\r\n")
-	member := "\n" + indent + `"skillOverrides": ` + obj + "\n"
-	if !strings.HasSuffix(body, "{") {
-		member = "," + member
+	member := `"skillOverrides": ` + obj
+	switch {
+	case ownLine && strings.HasSuffix(body, "{"):
+		member = "\n" + indent + member + "\n"
+	case ownLine:
+		member = ",\n" + indent + member + "\n"
+	default:
+		member = ", " + member
+		return body + member + src[len(body):], nil
 	}
 	return body + member + src[end:], nil
 }
@@ -327,18 +345,11 @@ func removeMember(src string, start, end int) string {
 	return src[:start] + src[end:]
 }
 
-func lineIndent(s string, at int) string {
+// lineIndent 是 at 所在行行首到 at 的空白；at 前面这一行还有别的内容时 ownLine 为假。
+func lineIndent(s string, at int) (indent string, ownLine bool) {
 	ls := strings.LastIndexByte(s[:at], '\n') + 1
-	return s[ls:at]
-}
-
-func firstKeyIndent(s string) string {
-	i := strings.IndexByte(s, '{')
-	j := skipSpace(s, i+1)
-	if j >= len(s) || s[j] != '"' {
-		return ""
-	}
-	return lineIndent(s, j)
+	indent = s[ls:at]
+	return indent, strings.TrimLeft(indent, " \t") == ""
 }
 
 // --- Codex 的 config.toml：[[skills.config]] 一项一段
@@ -378,7 +389,10 @@ func codexBlocks(lines []string) []tomlBlock {
 // 删完还被按名字的段关着（项目级）就加一段 enabled = true。
 func setCodexEntry(src string, sel codexEntry, name, file string, enable bool) string {
 	lines := strings.Split(src, "\n")
-	same := func(e codexEntry) bool { return e.Name == sel.Name && e.Path == sel.Path }
+	// 路径按解开链接后的比：Codex 写的可能是经过链接的路径（/tmp 是 /private/tmp 的链接）
+	same := func(e codexEntry) bool {
+		return e.Name == sel.Name && (e.Path == sel.Path || e.Path != "" && realDir(e.Path) == realDir(sel.Path))
+	}
 	blocks := codexBlocks(lines)
 	if !enable {
 		for _, b := range slices.Backward(blocks) {
@@ -389,7 +403,7 @@ func setCodexEntry(src string, sel codexEntry, name, file string, enable bool) s
 		return appendBlock(src, codexBlockText(sel, false))
 	}
 	selects := func(e codexEntry) bool {
-		return same(e) || e.Path != "" && e.Path == file || sel.Name != "" && e.Name == sel.Name && e.Path == ""
+		return same(e) || e.Path != "" && realDir(e.Path) == file || sel.Name != "" && e.Name == sel.Name && e.Path == ""
 	}
 	for _, b := range slices.Backward(blocks) {
 		if !selects(b.entry) {
@@ -401,6 +415,9 @@ func setCodexEntry(src string, sel codexEntry, name, file string, enable bool) s
 	out := strings.Join(lines, "\n")
 	if strings.HasSuffix(src, "\n") {
 		out = strings.TrimRight(out, "\n") + "\n"
+	}
+	if strings.TrimSpace(out) == "" {
+		out = ""
 	}
 	// 按路径打开的，还可能被按名字的那段关着
 	for _, b := range codexBlocks(strings.Split(out, "\n")) {
@@ -516,12 +533,37 @@ func setTOMLList(src, table, key, item string, add bool, norm func(string) strin
 	default:
 		items = slices.DeleteFunc(items, func(s string) bool { return norm(s) == norm(item) })
 	}
-	if ks >= 0 {
+	switch {
+	case ks >= 0 && len(items) == 0:
+		// 删空了连键一起删，表里只剩空行时连表头一起删
+		lines = slices.Delete(lines, ks, ke)
+		he -= ke - ks
+		empty := true
+		for _, l := range lines[hs+1 : he] {
+			if strings.TrimSpace(l) != "" {
+				empty = false
+			}
+		}
+		if empty {
+			start := hs
+			for start > 0 && strings.TrimSpace(lines[start-1]) == "" {
+				start--
+			}
+			lines = slices.Delete(lines, start, he)
+		}
+	case ks >= 0:
 		lines = slices.Replace(lines, ks, ke, render(items))
-	} else {
+	default:
 		lines = slices.Insert(lines, hs+1, render(items))
 	}
-	return strings.Join(lines, "\n"), nil
+	out := strings.Join(lines, "\n")
+	if strings.HasSuffix(src, "\n") && !strings.HasSuffix(out, "\n") && strings.TrimSpace(out) != "" {
+		out += "\n"
+	}
+	if strings.TrimSpace(out) == "" {
+		out = ""
+	}
+	return out, nil
 }
 
 // --- 给确认框看的 diff

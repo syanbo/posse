@@ -23,3 +23,15 @@ func TestNPXArgs(t *testing.T) {
 		t.Errorf("全部更新：%s", got)
 	}
 }
+
+func TestInstallCheck(t *testing.T) {
+	if (Install{Source: "a/b", Skills: []string{"--force"}}).Check() == nil {
+		t.Error("技能名以 - 开头应挡住")
+	}
+	if (Install{Source: "-x"}).Check() == nil {
+		t.Error("来源以 - 开头应挡住")
+	}
+	if err := (Install{Source: "a/b", Skills: []string{"x-y"}}).Check(); err != nil {
+		t.Error(err)
+	}
+}

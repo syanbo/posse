@@ -159,7 +159,7 @@ func (c configs) state(a Agent, s *Skill) (State, string) {
 		// 后写的盖过先写的
 		for i := len(c.codex) - 1; i >= 0; i-- {
 			e := c.codex[i]
-			if e.Enabled == nil || !(e.Name == s.Name || e.Path != "" && (e.Path == s.File || e.Path == s.Dir)) {
+			if e.Enabled == nil || !(e.Name == s.Name || e.Path != "" && (realDir(e.Path) == s.File || realDir(e.Path) == s.Dir)) {
 				continue
 			}
 			if !*e.Enabled {

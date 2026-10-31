@@ -35,8 +35,8 @@ xingkongliang/skills-manager、jiweiyeah/Skills-Manager、Shpigford/chops、runk
 
 - 断掉的链接、同名冲突（哪一份生效）。
 - 多余的链接：这家本来就读正本，还链了一份（如 `~/.grok/skills` 那批）。
-- 锁文件和目录对不上：目录有、锁文件没有（`browser-skill`、`iphone-use`），锁文件有、目录没有（`computer-use`、`herdr`、`minim-cli`）。
-- 没进正本的真目录（`~/.claude/skills` 里的 `browser-skill` 等）。
+- 锁文件有、目录没有（`computer-use`、`herdr`、`minim-cli`）：`npx skills update` 会再装回来。目录有、锁文件没有的（`browser-skill`、`iphone-use`）是自己放的技能，不算问题，详情里来源一栏是空的。
+- 没进正本的真目录（`~/.claude/skills` 里的 `browser-skill` 等）和正本同名时报成同名冲突；不同名的只是 Claude 一家用得上，不算问题。
 - 处理都经确认弹框，删除移到废纸篓。
 
 ## 阶段

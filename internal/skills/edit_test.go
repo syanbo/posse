@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,8 +85,8 @@ func TestSetTOMLList(t *testing.T) {
 	}
 	// 按规整后的路径去掉 ~ 写的那项
 	got, _ = setTOMLList(multi, "skills", "ignore", "/home/a", false, func(s string) string { return strings.Replace(s, "~", "/home", 1) })
-	if !strings.Contains(got, "ignore = []") {
-		t.Errorf("去掉 ~ 写的：%q", got)
+	if got != "[skills]\npaths = [\"~/x\"]\n\n[compat.claude]\nskills = true\n" {
+		t.Errorf("去掉 ~ 写的（删空了连键一起删）：%q", got)
 	}
 }
 
@@ -219,5 +220,85 @@ func TestGrokProjectReenable(t *testing.T) {
 	}
 	if st := find(t, Scan(o), "p", ScopeProject).Agents[Grok]; st.State != On {
 		t.Errorf("打开后 %+v", st)
+	}
+}
+
+// 验收发现的边界情况：单行的 settings.json、不是字符串的值、项目 settings.json 里关的、经链接写的 Codex 路径。
+func TestSetJSONOverrideInline(t *testing.T) {
+	cases := []struct{ name, src, key, value, want string }{
+		{"单行加", `{"model":"opus"}`, "demo", "off", `{"model":"opus", "skillOverrides": {"demo": "off"}}`},
+		{"单行改", `{"skillOverrides":{"keep":"name-only","demo":"off"},"x":1}`, "demo", "", `{"skillOverrides":{"keep": "name-only"},"x":1}`},
+		{"单行删空", `{"model":"opus","skillOverrides":{"demo":"off"}}`, "demo", "", `{"model":"opus"}`},
+		{"不是字符串的值原样留着", "{\n  \"skillOverrides\": {\n    \"demo\": \"off\",\n    \"extra\": {\"nested\": true}\n  }\n}\n", "demo", "",
+			"{\n  \"skillOverrides\": {\n    \"extra\": {\"nested\": true}\n  }\n}\n"},
+	}
+	for _, c := range cases {
+		got, err := setJSONOverride(c.src, c.key, c.value)
+		if err != nil || got != c.want {
+			t.Errorf("%s：得到 %q（%v），要 %q", c.name, got, err, c.want)
+		}
+		if !json.Valid([]byte(got)) {
+			t.Errorf("%s：结果不是合法 JSON：%q", c.name, got)
+		}
+	}
+}
+
+func TestClaudeProjectSettingsOff(t *testing.T) {
+	h := t.TempDir()
+	ws := filepath.Join(t.TempDir(), "ws")
+	write(t, filepath.Join(ws, ".git", "HEAD"), "")
+	skill(t, filepath.Join(ws, ".claude", "skills", "deploy"), "deploy", "")
+	write(t, filepath.Join(ws, ".claude", "settings.json"), `{"skillOverrides":{"deploy":"off"}}`)
+	o := Options{Home: h, Dir: ws}
+	s := find(t, Scan(o), "deploy", ScopeProject)
+	if s.Agents[Claude].State != Off {
+		t.Fatalf("项目 settings.json 里关了：%v", s.Agents[Claude].State)
+	}
+	ch, err := PlanToggle(o, s, Claude, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.File != filepath.Join(ws, ".claude", "settings.local.json") || !strings.Contains(ch.After, `"deploy": "on"`) {
+		t.Fatalf("应在 settings.local.json 写 on：%s %q", ch.File, ch.After)
+	}
+	ch.Apply()
+	if st := find(t, Scan(o), "deploy", ScopeProject).Agents[Claude].State; st != On {
+		t.Errorf("打开后 %v", st)
+	}
+}
+
+func TestCodexPathThroughLink(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("CODEX_HOME", "")
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	write(t, filepath.Join(real, ".git", "HEAD"), "")
+	skill(t, filepath.Join(real, ".agents", "skills", "p"), "p", "")
+	linkws := filepath.Join(base, "linkws")
+	link(t, real, linkws)
+	write(t, filepath.Join(h, ".codex", "config.toml"), "[[skills.config]]\npath = \""+filepath.Join(linkws, ".agents", "skills", "p", "SKILL.md")+"\"\nenabled = false\n")
+	o := Options{Home: h, Dir: linkws}
+	p := find(t, Scan(o), "p", ScopeProject)
+	if p.Agents[Codex].State != Off {
+		t.Fatalf("经链接写的路径也算关了：%v", p.Agents[Codex].State)
+	}
+	ch, err := PlanToggle(o, p, Codex, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.After != "" {
+		t.Errorf("打开后那段应删掉、文件变空：%q", ch.After)
+	}
+}
+
+func TestGrokEmptyCleanup(t *testing.T) {
+	src := "[marketplace]\nx = true\n"
+	on, _ := setTOMLList(src, "skills", "disabled", "a", true, nil)
+	back, _ := setTOMLList(on, "skills", "disabled", "a", false, nil)
+	if back != src {
+		t.Errorf("关了再开应回到原样：%q", back)
+	}
+	if got, _ := setTOMLList("[skills]\ndisabled = [\"a\"]\n", "skills", "disabled", "a", false, nil); got != "" {
+		t.Errorf("只有这一项时删成空文件：%q", got)
 	}
 }

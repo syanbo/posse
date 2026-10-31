@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -28,6 +29,19 @@ type Install struct {
 
 func npx(sub string, args ...string) []string {
 	return append([]string{"npx", "-y", "skills@" + NPXVersion, sub}, args...)
+}
+
+// Check 挡住会被 npx 当成自己参数的来源和名字（以 - 开头）。
+func (in Install) Check() error {
+	if strings.HasPrefix(strings.TrimSpace(in.Source), "-") {
+		return fmt.Errorf("来源不能以 - 开头")
+	}
+	for _, s := range in.Skills {
+		if strings.HasPrefix(s, "-") {
+			return fmt.Errorf("技能名 %s 不能以 - 开头", s)
+		}
+	}
+	return nil
 }
 
 // Args 是安装的命令行。

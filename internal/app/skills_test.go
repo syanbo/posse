@@ -98,3 +98,25 @@ func TestCreateProjectSkill(t *testing.T) {
 		t.Error("技能名规则不对")
 	}
 }
+
+// 第一次统计用量还没算完时重扫（确认开关、刷新）：用量照样算完显示出来，不停在「正在统计」。
+func TestSkillStatsSurviveRescan(t *testing.T) {
+	home := t.TempDir()
+	old := homeDir
+	homeDir = home
+	t.Cleanup(func() { homeDir = old })
+	findCodex = func(string) string { return "" }
+	t.Cleanup(func() { findCodex = skills.FindCodex })
+	a := previewApp(t)
+	a.skills.visible = true
+	a.scanSkills()
+	a.scanSkills() // 前一次的结果还排在 pending 里
+	for range 200 {
+		a.runPending()
+		if a.skills.stats != nil && !a.skills.statsLoading {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("statsLoading %v stats %v", a.skills.statsLoading, a.skills.stats)
+}

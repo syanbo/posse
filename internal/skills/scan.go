@@ -125,6 +125,8 @@ type root struct {
 	prio [NumAgents]int
 	// prefix 加在技能名前面（插件技能）。
 	prefix string
+	// walk 为真时往下各级找技能（Grok 的 [skills] paths：可以是目录，也可以是一个 SKILL.md）。
+	walk bool
 }
 
 func prios(claude, codex, grok, cursor int) [NumAgents]int {
@@ -161,7 +163,7 @@ func roots(o Options, cfg configs) []root {
 		}
 	}
 	for i, p := range cfg.grok.paths {
-		rs = append(rs, root{dir: p, scope: ScopeUser, prio: prios(no, no, 60+i, no)})
+		rs = append(rs, root{dir: p, scope: ScopeUser, prio: prios(no, no, 60+i, no), walk: true})
 	}
 	if o.Dir != "" {
 		// 从工作区往上到仓库根，近的优先；Claude 只读工作区自己的 .claude/skills，
@@ -223,20 +225,16 @@ func Scan(o Options) Catalog {
 			continue
 		}
 		seenRoot[r.dir] = true
-		entries, err := os.ReadDir(r.dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), ".") {
+		for _, p := range candidates(r) {
+			fi, err := os.Lstat(p)
+			if err != nil {
 				continue
 			}
-			p := filepath.Join(r.dir, e.Name())
-			alias := e.Type()&os.ModeSymlink != 0
+			alias := fi.Mode()&os.ModeSymlink != 0
 			real, err := filepath.EvalSymlinks(p)
 			if err != nil {
 				if alias {
-					cat.Issues = append(cat.Issues, Issue{Kind: BrokenLink, Name: e.Name(), Path: p, Other: linkTarget(p)})
+					cat.Issues = append(cat.Issues, Issue{Kind: BrokenLink, Name: filepath.Base(p), Path: p, Other: linkTarget(p)})
 				}
 				continue
 			}
@@ -247,7 +245,7 @@ func Scan(o Options) Catalog {
 			m := parseMeta(string(src))
 			name := m.Name
 			if name == "" {
-				name = e.Name()
+				name = filepath.Base(p)
 			}
 			items = append(items, found{root: i, path: p, real: real, name: r.prefix + name, meta: m, alias: alias})
 		}
@@ -260,6 +258,53 @@ func Scan(o Options) Catalog {
 	cat.Issues = append(cat.Issues, redundant(rs, items)...)
 	cat.Issues = append(cat.Issues, lockMissing(o.Home, cfg.lock)...)
 	return cat
+}
+
+// candidates 是 r 里可能是技能的各项：一般是下一层的各个目录（含链接）；walk 的往下各级找有 SKILL.md 的目录，
+// 找到就不再往里找，r.dir 本身是 SKILL.md 时就是它所在的目录。
+func candidates(r root) []string {
+	if r.walk {
+		if filepath.Base(r.dir) == "SKILL.md" {
+			return []string{filepath.Dir(r.dir)}
+		}
+		var out []string
+		var walk func(dir string, depth int)
+		walk = func(dir string, depth int) {
+			entries, err := os.ReadDir(dir)
+			if err != nil || depth > 6 {
+				return
+			}
+			for _, e := range entries {
+				p := filepath.Join(dir, e.Name())
+				if strings.HasPrefix(e.Name(), ".") {
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(p, "SKILL.md")); err == nil {
+					out = append(out, p)
+					continue
+				}
+				if e.IsDir() {
+					walk(p, depth+1)
+				}
+			}
+		}
+		if _, err := os.Stat(filepath.Join(r.dir, "SKILL.md")); err == nil {
+			return []string{r.dir}
+		}
+		walk(r.dir, 0)
+		return out
+	}
+	entries, err := os.ReadDir(r.dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), ".") {
+			out = append(out, filepath.Join(r.dir, e.Name()))
+		}
+	}
+	return out
 }
 
 func linkTarget(p string) string {
