@@ -20,6 +20,7 @@ import '../protocol/rpc.dart';
 import '../settings/settings.dart';
 import '../terminal/terminal.dart';
 import '../chat/latency_label.dart';
+import '../ui/line_icons.dart';
 import '../ui/theme.dart';
 import '../update/update.dart';
 import '../ui/widgets.dart';
@@ -663,7 +664,15 @@ class WorkspaceScreen extends StatelessWidget {
         );
       }
     }
-    return Icon(Icons.folder_outlined, size: 22, color: c.accent);
+    // 描边图标四周有留白，画 24 才和文字、图片图标一样大；占位仍是 22，项目名对齐
+    return SizedBox.square(
+      dimension: 22,
+      child: OverflowBox(
+        maxWidth: 24,
+        maxHeight: 24,
+        child: LineIconView(LineIcon.folder, size: 24, color: c.accent),
+      ),
+    );
   }
 
   /// 项目下面的一个工作区，名字和分支照桌面侧栏：分支和名字一样时不再写一遍。
@@ -676,15 +685,14 @@ class WorkspaceScreen extends StatelessWidget {
     return _Indented(
       indent: 34,
       child: RowTile(
-        // 主工作区、同一目录上的文件夹工作区、git worktree 各用各的图标
-        leading: Icon(
+        // 照桌面侧栏：主工作区是房子，git worktree 是分支，同一目录上的文件夹工作区是文件夹
+        leading: LineIconView(
           row.isMain
-              ? Icons.home_outlined
+              ? LineIcon.home
               : row.isWorktree
-              ? Icons.call_split_rounded
-              : Icons.folder_copy_outlined,
-          // folder_copy 的墨迹比另外两个满，同样字号看着大一圈
-          size: row.isMain || row.isWorktree ? 20 : 17,
+              ? LineIcon.branch
+              : LineIcon.folder,
+          size: 22,
           color: c.accent,
         ),
         title: Text(title),
@@ -723,7 +731,7 @@ class WorkspaceScreen extends StatelessWidget {
     }
     return Row(
       children: [
-        Icon(Icons.call_split_rounded, size: 13, color: c.muted),
+        LineIconView(LineIcon.branch, size: 14, color: c.muted),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
@@ -749,6 +757,10 @@ class WorkspaceScreen extends StatelessWidget {
     );
   }
 
+  /// 会话的 agent 方块和工作区的描边图标一样大：每一级都缩进「图标 + 间距」，子级的图标对齐上一级的名字，
+  /// 方块大了会显得比工作区高一级。
+  static const _sessionTile = 22.0;
+
   List<Widget> _sessions(
     BuildContext context,
     WorktreeRow row, {
@@ -763,7 +775,7 @@ class WorkspaceScreen extends StatelessWidget {
         _Indented(
           indent: indent - 14,
           child: RowTile(
-            leading: AgentTile(agent: tab.agent, size: 28),
+            leading: AgentTile(agent: tab.agent, size: _sessionTile),
             title: Text(cleanTitle(tab.title)),
             subtitle: Text(
               model.rpc == null ? '等连上电脑' : sessionDetail(tab),
@@ -781,7 +793,7 @@ class WorkspaceScreen extends StatelessWidget {
         _Indented(
           indent: indent - 14,
           child: RowTile(
-            leading: const AgentTile(agent: null, size: 28),
+            leading: const AgentTile(agent: null, size: _sessionTile),
             title: Text(cleanTitle(tab.title)),
             subtitle: Text(
               model.rpc == null

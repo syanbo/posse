@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/protocol/link.dart';
 import 'package:posse_mobile/protocol/pairing.dart';
+import 'package:posse_mobile/ui/line_icons.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
@@ -43,7 +44,12 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('🚀'), findsOneWidget);
-    expect(find.byIcon(Icons.folder_outlined), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is LineIconView && w.icon == LineIcon.folder,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('disconnect status lives in the computer pill, list stays put', (
@@ -147,7 +153,12 @@ void main() {
       expect(find.text('fix-crash'), findsOneWidget);
       expect(find.text('main'), findsOneWidget);
       expect(find.text('~/posse'), findsOneWidget);
-      expect(find.byIcon(Icons.call_split_rounded), findsNWidgets(2));
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is LineIconView && w.icon == LineIcon.branch,
+        ),
+        findsNWidgets(2),
+      );
 
       model.updateSettings((s) {
         s.projectMetaHidden = true;

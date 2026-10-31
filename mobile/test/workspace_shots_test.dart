@@ -1,0 +1,119 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/ui/theme.dart';
+import 'package:posse_mobile/workspace/models.dart';
+import 'package:posse_mobile/workspace/workspace.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// 首页项目带 worktree 时的离屏截图，给人看样子用：
+// POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/workspace_shots_test.dart
+// 字体的顶替同 usage_shots_test.dart。
+
+void main() {
+  final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
+
+  testWidgets('workspace screenshots', (tester) async {
+    final root = Platform.environment['FLUTTER_ROOT']!;
+    final fonts = {
+      'Roboto': '/Library/Fonts/Arial Unicode.ttf',
+      'MaterialIcons':
+          '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    };
+    await tester.runAsync(() async {
+      for (final e in fonts.entries) {
+        final bytes = File(e.value).readAsBytesSync();
+        await (FontLoader(
+          e.key,
+        )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+      }
+    });
+    SharedPreferences.setMockInitialValues({});
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    final model = PosseAppModel(
+      store: MemoryPairingStore(),
+      settingsStore: MemorySettingsStore(),
+    );
+    model.worktrees = parseWorktrees([
+      {
+        'worktreeId': 'p1::w1',
+        'repo': 'posse',
+        'displayName': 'posse',
+        'path': '/Users/x/posse',
+        'branch': 'main',
+        'isMainWorktree': true,
+        'liveTerminalCount': 3,
+      },
+      {
+        'worktreeId': 'p1::w2',
+        'repo': 'posse',
+        'displayName': 'skills',
+        'path': '/Users/x/.posse/worktrees/posse/skills',
+        'branch': 'skills',
+        'isWorktree': true,
+        'liveTerminalCount': 1,
+      },
+      {
+        'worktreeId': 'p1::w3',
+        'repo': 'posse',
+        'displayName': 'notes',
+        'path': '/Users/x/posse',
+        'isWorktree': false,
+      },
+    ]);
+    model.tabs = {
+      'p1::w1': const [
+        SessionTab(
+          worktreeId: 'p1::w1',
+          title: '界面持续跳动问题',
+          terminalId: 't1',
+          agent: 'claude',
+          state: 'done',
+        ),
+        SessionTab(
+          worktreeId: 'p1::w1',
+          title: 'Posse 交接任务阻塞与 Agent 汇报',
+          terminalId: 't2',
+        ),
+      ],
+      'p1::w2': const [
+        SessionTab(
+          worktreeId: 'p1::w2',
+          title: '技能管理方案',
+          terminalId: 't3',
+          agent: 'cursor',
+          state: 'working',
+        ),
+      ],
+    };
+    for (final dark in [false, true]) {
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: posseTheme(dark ? Brightness.dark : Brightness.light),
+            home: WorkspaceScreen(model: model),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('主工作区'), findsOneWidget);
+      if (dir.isEmpty) continue;
+      await tester.runAsync(() async {
+        final boundary =
+            key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 3);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        File('$dir/workspace-${dark ? 'dark' : 'light'}.png')
+            .writeAsBytesSync(bytes!.buffer.asUint8List());
+      });
+    }
+  });
+}
