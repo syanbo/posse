@@ -38,3 +38,23 @@ func TestLaunchModel(t *testing.T) {
 		}
 	}
 }
+
+// 派出去的 Cursor worker 不弹工作区信任框；用户自己开的照 Cursor 的默认，第一次进目录时问。
+func TestCursorWorkerTrust(t *testing.T) {
+	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
+	r, err := l.Launch("cursor", Model{Worker: true}, "do it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd := strings.Join(r.Argv, " "); !strings.Contains(cmd, "--trust") {
+		t.Errorf("worker 应带 --trust：%s", cmd)
+	}
+	r, _ = l.Launch("cursor", Model{}, "")
+	if cmd := strings.Join(r.Argv, " "); strings.Contains(cmd, "--trust") {
+		t.Errorf("用户自己开的不该带 --trust：%s", cmd)
+	}
+	r, _ = l.Launch("claude", Model{Worker: true}, "")
+	if cmd := strings.Join(r.Argv, " "); strings.Contains(cmd, "--trust") {
+		t.Errorf("只有 Cursor 加：%s", cmd)
+	}
+}

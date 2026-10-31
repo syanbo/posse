@@ -163,7 +163,9 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 	env := []string{"POSSE_TASK_ID=" + t.ID}
 	var s *session
 	if p.Agent != "" {
-		s, err = d.startAgent(w, p.Agent, p.Model, workerPrompt(t, w), p.Cols, p.Rows, env...)
+		m := p.Model
+		m.Worker = true
+		s, err = d.startAgent(w, p.Agent, m, workerPrompt(t, w), p.Cols, p.Rows, env...)
 	} else {
 		s, err = d.startTerminal(w, p.Command, "", p.Cols, p.Rows, env...)
 	}

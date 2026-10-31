@@ -33,6 +33,9 @@ type Launch struct {
 type Model struct {
 	Name   string `json:"model,omitempty"`
 	Effort string `json:"effort,omitempty"`
+	// Worker 表示是 posse task 派出去的 worker：终端前面没人守着，Cursor 加 --trust，
+	// 不然在没信任过的目录（新建的 worktree）里卡在工作区信任框上，hooks 也还没起作用，不会报待处理
+	Worker bool `json:"-"`
 }
 
 // args 是 agent 启动参数里的模型部分。Cursor 没有单独的思考深度参数，只能写进模型名的方括号。
@@ -97,6 +100,9 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 		}
 		// 会话 ID 要等 sessionStart hook 报上来
 		parts = []string{"cursor-agent", "--plugin-dir", Quote(plugin)}
+		if m.Worker {
+			parts = append(parts, "--trust")
+		}
 	default:
 		return Launch{}, fmt.Errorf("unknown agent %q (known: %s)", name, strings.Join(Known, ", "))
 	}
