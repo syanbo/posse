@@ -67,3 +67,34 @@ func TestSkillToggleConfirm(t *testing.T) {
 		t.Errorf("settings.json：%q", b)
 	}
 }
+
+// 新建项目技能：正本在 .agents/skills，Claude 的 .claude/skills 里是相对链接，扫描出来四家都读得到；重名不覆盖。
+func TestCreateProjectSkill(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".git"), 0o755)
+	file, err := createProjectSkill(root, "release-check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file != filepath.Join(root, ".agents", "skills", "release-check", "SKILL.md") {
+		t.Errorf("SKILL.md 在 %s", file)
+	}
+	if target, _ := os.Readlink(filepath.Join(root, ".claude", "skills", "release-check")); target != "../../.agents/skills/release-check" {
+		t.Errorf("链接指向 %q", target)
+	}
+	cat := skills.Scan(skills.Options{Home: t.TempDir(), Dir: root})
+	if len(cat.Skills) != 1 {
+		t.Fatalf("%+v", cat.Skills)
+	}
+	for _, ag := range skills.Agents {
+		if st := cat.Skills[0].Agents[ag].State; st != skills.On {
+			t.Errorf("%s：%v", ag, st)
+		}
+	}
+	if _, err := createProjectSkill(root, "release-check"); err == nil {
+		t.Error("重名应拒绝")
+	}
+	if !skillNameRe.MatchString("a1-b") || skillNameRe.MatchString("A") || skillNameRe.MatchString("-a") || skillNameRe.MatchString("a b") {
+		t.Error("技能名规则不对")
+	}
+}

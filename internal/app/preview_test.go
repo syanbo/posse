@@ -740,6 +740,11 @@ func TestPreview(t *testing.T) {
 		after := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"theme\": \"dark\"\n}\n"
 		a.skillChange = skillChangeView{open: true, ch: skills.Change{Agent: skills.Claude, Skill: "lark-calendar", Enable: true, File: homeDir + "/.claude/settings.json", Before: before, After: after}}
 		savePNG(t, newPreviewTester(a, dark), "skills-confirm-"+suffix+".png")
+		// 安装对话框：填了来源，下面是要跑的命令
+		a = previewApp(t)
+		previewSkillsBoard(a, "")
+		a.skillInstall = skillInstallView{open: true, ws: "w1", global: true, claude: true, source: "vercel-labs/agent-skills", names: "web-design-guidelines"}
+		savePNG(t, newPreviewTester(a, dark), "skills-install-"+suffix+".png")
 		// 文件栏的技能页签：当前工作区的项目级技能
 		a = previewApp(t)
 		previewSkillsTab(a)

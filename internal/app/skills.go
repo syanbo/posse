@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/agent"
 	"posse/internal/skills"
 )
 
@@ -39,6 +42,7 @@ type skillsView struct {
 // skillsPanelView 是文件栏「技能」页签的状态：当前工作区的项目级技能。
 type skillsPanelView struct {
 	key  string // 工作区目录，变了就重扫
+	real string // 解开链接后的工作区目录（/tmp 是 /private/tmp 的链接），技能目录是解开的，按它算相对路径
 	cat  skills.Catalog
 	poll panelPoll
 }
@@ -159,6 +163,12 @@ func (a *app) skillsBoard(c *ui.Context) {
 		fieldInputSized(c, &s.query, "搜索名字和说明", 280, 160).Label("搜索技能")
 		ui.Spacer(c)
 		segmented(c, &s.agent, "按 agent 筛选", skillAgentLabels...)
+		if pressable(textButton(c, "安装…")).Clicked() {
+			a.openSkillInstall(a.skillsWorkspace(), true)
+		}
+		if pressable(textButton(c, "全部更新")).Clicked() {
+			a.askSkillCommand("更新 npx skills 装的全部技能？", "按锁文件里记的来源拉最新的版本，覆盖本地的改动。", skills.UpdateArgs(nil, true), a.skillsWorkspace())
+		}
 		refresh := ui.Box(c).Shrink(0)
 		if s.loading {
 			refresh.Disabled(true).Opacity(0.5)
@@ -373,6 +383,7 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 				if pressable(textButton(c, "打开 SKILL.md")).Clicked() {
 					a.openSkillFile(sk.File)
 				}
+				a.skillActions(c, sk, a.skillsWorkspace(), true)
 				if pressable(iconButton(c.Key("skill-reveal"), iconFolder, "在访达中显示")).Clicked() {
 					mygo.Shell.ShowItemInFolder(sk.File)
 				}
@@ -477,9 +488,14 @@ func (a *app) skillIssues(c *ui.Context) {
 						ui.Text(c, fmt.Sprint(len(items))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 					})
 					ui.Text(c, k.about).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
+					if k.kind == skills.RedundantLink && len(items) > 1 {
+						if pressable(textButton(c, fmt.Sprintf("全部移到废纸篓（%d 条）", len(items)))).Clicked() {
+							a.askTrashLinks(items)
+						}
+					}
 					ui.Column(c).Gap(2).Children(func() {
 						for _, is := range items {
-							issueRow(c, is)
+							a.issueRow(c, is)
 						}
 					})
 				})
@@ -488,13 +504,20 @@ func (a *app) skillIssues(c *ui.Context) {
 	})
 }
 
-func issueRow(c *ui.Context, is skills.Issue) {
+func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 	t := c.Theme()
-	ui.Column(c).Padding(6, 0).Gap(2).Children(func() {
+	ui.Column(c.Key(string(is.Kind)+is.Path+is.Other)).Padding(6, 0).Gap(2).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, is.Name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 			for _, ag := range is.Agents {
 				agentTile(c, ag.String(), smallIcon())
+			}
+			ui.Spacer(c)
+			// 断掉的和多余的链接可以直接移到废纸篓；同名冲突、锁文件对不上要看情况，不给一键处理
+			if is.Kind == skills.BrokenLink || is.Kind == skills.RedundantLink {
+				if pressable(iconButtonSized(c, iconTrash, "把这条链接移到废纸篓", compactBox(), smallIcon())).Clicked() {
+					a.askTrashLinks([]skills.Issue{is})
+				}
 			}
 		})
 		var line string
@@ -539,12 +562,16 @@ func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 	key := w.Path
 	go func() {
 		cat := skills.Scan(skills.Options{Home: homeDir, Dir: key})
+		real, err := filepath.EvalSymlinks(key)
+		if err != nil {
+			real = key
+		}
 		a.update(func() {
 			if p.key != key {
 				return
 			}
 			p.poll.done()
-			p.cat = cat
+			p.cat, p.real = cat, real
 		})
 	}()
 }
@@ -561,6 +588,14 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 		}
 	}
 	slices.SortFunc(list, func(x, y skills.Skill) int { return strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name)) })
+	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Gap(8).Children(func() {
+		if pressable(textButton(c, "新建…")).Clicked() {
+			a.skillNew = skillNewView{open: true, ws: w.ID}
+		}
+		if pressable(textButton(c, "安装…")).Clicked() {
+			a.openSkillInstall(w, false)
+		}
+	})
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(8, 8, 16, 8).Gap(2).Children(func() {
 			switch {
@@ -583,7 +618,7 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 						ui.Text(c, oneLine(sk.Description)).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
 					}
 					rel := sk.Dir
-					if r, err := filepath.Rel(w.Path, sk.Dir); err == nil {
+					if r, err := filepath.Rel(p.real, sk.Dir); err == nil && !strings.HasPrefix(r, "..") {
 						rel = r
 					}
 					ui.Text(c, rel).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).SingleLine()
@@ -683,6 +718,278 @@ func (a *app) skillChangeDialog(c *ui.Context) {
 					a.applySkillChange(ch)
 				}
 			})
+		})
+	})
+}
+
+// --- 装、删、更新：拼好 npx skills 的命令，确认后在工作区里开一个终端跑，输出和它的提问都看得见
+
+// skillsWorkspace 是技能页跑命令、打开文件用的工作区：上次看的那个，没有就第一个。
+func (a *app) skillsWorkspace() *workspace {
+	if w := a.workspace(a.lastWS); w != nil {
+		return w
+	}
+	if len(a.workspaces) > 0 {
+		return &a.workspaces[0]
+	}
+	return nil
+}
+
+// askSkillCommand 弹框给出完整的命令，确认后在 w 里开终端跑。
+func (a *app) askSkillCommand(title, about string, args []string, w *workspace) {
+	if w == nil {
+		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
+		return
+	}
+	line := skills.ShellLine(args)
+	a.confirm(title, about+"\n\n会在「"+w.Label+"」里开一个终端运行：\n"+line, "在终端里运行", func() {
+		a.runSkillCommand(w.ID, line)
+	})
+}
+
+// runSkillCommand 在工作区里开一个终端跑 line，跑完留在 shell 里；回到技能页时重扫。
+func (a *app) runSkillCommand(wsID, line string) {
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		sh = "/bin/zsh"
+	}
+	script := line + "; echo; echo '跑完了。回到技能页会重新扫描。'; exec " + agent.Quote(sh) + " -l"
+	var term terminalInfo
+	if a.call("terminal.create", map[string]any{"workspace": wsID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
+		return
+	}
+	a.refresh()
+	a.update(func() {
+		a.releaseSkills()
+		a.openTerminal(wsID, term.ID)
+	})
+}
+
+// skillActions 是详情顶上的更新、删除：npx skills 装的交给它（删除不进废纸篓，连同各家的链接）；
+// 自己放的用户级技能移到废纸篓，连同指向它的链接。插件、系统自带和账号同步的归各家自己管。
+func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global bool) {
+	switch {
+	case sk.Source != "":
+		if pressable(iconButton(c.Key("skill-update"), iconFetch, "更新")).Clicked() {
+			a.askSkillCommand("更新 "+sk.Name+"？", "按锁文件里记的来源（"+sk.Source+"）拉最新的版本，覆盖本地的改动。", skills.UpdateArgs([]string{sk.Name}, global), w)
+		}
+		if pressable(iconButton(c.Key("skill-remove"), iconTrash, "删除")).Clicked() {
+			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉它的目录和给各家建的链接，不经过废纸篓。", skills.RemoveArgs(sk.Name, global), w)
+		}
+	case sk.Scope == skills.ScopeUser || sk.Scope == skills.ScopeProject:
+		if pressable(iconButton(c.Key("skill-trash"), iconTrash, "移到废纸篓")).Clicked() {
+			a.askTrashSkill(sk)
+		}
+	}
+}
+
+// askTrashSkill 确认后把技能目录和指向它的链接移到废纸篓。
+func (a *app) askTrashSkill(sk skills.Skill) {
+	paths := []string{sk.Dir}
+	for _, p := range sk.Paths {
+		if p != sk.Dir {
+			paths = append(paths, p)
+		}
+	}
+	var list []string
+	for _, p := range paths {
+		list = append(list, shortPath(p))
+	}
+	a.confirm("把 "+sk.Name+" 移到废纸篓？", "这些会移到废纸篓，可以从废纸篓找回：\n"+strings.Join(list, "\n"), "移到废纸篓", func() {
+		a.trashPaths(paths)
+	})
+}
+
+// askTrashLinks 确认后把体检找到的断链、多余的链接移到废纸篓（只是链接，它指向的目录不动）。
+func (a *app) askTrashLinks(items []skills.Issue) {
+	var paths, list []string
+	for _, is := range items {
+		paths = append(paths, is.Path)
+		if len(list) < 8 {
+			list = append(list, shortPath(is.Path))
+		}
+	}
+	if len(items) > len(list) {
+		list = append(list, fmt.Sprintf("……共 %d 条", len(items)))
+	}
+	title := "把这条链接移到废纸篓？"
+	if len(items) > 1 {
+		title = fmt.Sprintf("把 %d 条链接移到废纸篓？", len(items))
+	}
+	a.confirm(title, "只移走链接本身，它指向的目录不动，可以从废纸篓找回：\n"+strings.Join(list, "\n"), "移到废纸篓", func() {
+		a.trashPaths(paths)
+	})
+}
+
+func (a *app) trashPaths(paths []string) {
+	for _, p := range paths {
+		if err := mygo.Shell.TrashItem(p); err != nil {
+			a.update(func() { a.err = "移到废纸篓失败：" + err.Error() })
+			break
+		}
+	}
+	a.update(func() {
+		if a.skills.visible {
+			a.scanSkills()
+		}
+		a.skillsTab.poll.at = time.Time{}
+	})
+}
+
+// skillInstallView 是安装对话框。
+type skillInstallView struct {
+	open   bool
+	ws     string
+	global bool
+	source string
+	names  string
+	claude bool
+}
+
+func (a *app) openSkillInstall(w *workspace, global bool) {
+	if w == nil {
+		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
+		return
+	}
+	a.skillInstall = skillInstallView{open: true, ws: w.ID, global: global, claude: true}
+}
+
+func (v skillInstallView) install() skills.Install {
+	return skills.Install{Source: v.source, Skills: strings.Fields(v.names), Claude: v.claude, Global: v.global}
+}
+
+// skillInstallDialog 收来源、要装的技能和给不给 Claude 用，下面实时显示要跑的命令。
+func (a *app) skillInstallDialog(c *ui.Context) {
+	t := c.Theme()
+	v := &a.skillInstall
+	ui.Modal(c, &v.open, func() {
+		w := a.workspace(v.ws)
+		ui.Column(c).Width(480).Gap(12).Children(func() {
+			title := "安装技能"
+			where := "装到用户目录（~/.agents/skills），所有项目都能用。"
+			if !v.global && w != nil {
+				title = "安装到项目"
+				where = "装进「" + w.Label + "」的 .agents/skills，只在这个项目里用。"
+			}
+			titleText(c, title, fsTitle)
+			ui.Text(c, where).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
+			submitted := fieldInput(c.Key("source"), &v.source, "来源：owner/repo、网址或本地目录").AutoFocus().Submitted()
+			if fieldInput(c.Key("names"), &v.names, "只装其中几个（名字用空格分开，留空装全部）").Submitted() {
+				submitted = true
+			}
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Switch(c, &v.claude).Label("也给 Claude 用")
+				ui.Text(c, "也给 Claude 用").FontSize(fsBody)
+			})
+			ui.Text(c, "Codex、Grok、Cursor 都读 .agents/skills，装进去就都能用；Claude 只读自己的目录，要另建一条链接。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+			ready := strings.TrimSpace(v.source) != ""
+			if ready {
+				ui.Text(c, skills.ShellLine(v.install().Args())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Padding(8, 12).Radius(rCard).Background(colors(t).code).Selectable()
+			}
+			ui.Text(c, "装上的技能带着它的脚本，用之前先看一眼里面会跑什么。").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
+				if pressable(textButton(c, "取消")).Clicked() {
+					v.open = false
+				}
+				run := ui.Box(c).Shrink(0)
+				if !ready {
+					run.Disabled(true).Opacity(0.5)
+				}
+				run.Children(func() {
+					if pressable(accentButton(c, "在终端里运行")).Clicked() {
+						submitted = true
+					}
+				})
+			})
+			if submitted && ready && w != nil {
+				v.open = false
+				line := skills.ShellLine(v.install().Args())
+				go a.runSkillCommand(w.ID, line)
+			}
+		})
+	})
+}
+
+// --- 新建项目技能
+
+// skillNewView 是新建项目技能的对话框。
+type skillNewView struct {
+	open bool
+	ws   string
+	name string
+}
+
+// skillNameRe 是技能名的写法（各家一致）：小写字母、数字和连字符，首尾是字母或数字。
+var skillNameRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
+
+// createProjectSkill 在工作区的 .agents/skills 里建技能（Codex、Grok、Cursor 读这里），
+// 再在 .claude/skills 里建一条相对链接给 Claude（和 npx skills 的做法一样），返回 SKILL.md 的路径。
+func createProjectSkill(root, name string) (string, error) {
+	dir := filepath.Join(root, ".agents", "skills", name)
+	file := filepath.Join(dir, "SKILL.md")
+	if _, err := os.Lstat(dir); err == nil {
+		return "", fmt.Errorf("%s 已经有了", shortPath(dir))
+	}
+	link := filepath.Join(root, ".claude", "skills", name)
+	if _, err := os.Lstat(link); err == nil {
+		return "", fmt.Errorf("%s 已经有了", shortPath(link))
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	body := "---\nname: " + name + "\ndescription: 写清楚它做什么、什么时候用（agent 靠这一句决定要不要调用）。\n---\n\n# " + name + "\n\n步骤：\n\n1. \n"
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.Symlink(filepath.Join("..", "..", ".agents", "skills", name), link); err != nil {
+		return "", err
+	}
+	return file, nil
+}
+
+func (a *app) skillNewDialog(c *ui.Context) {
+	t := c.Theme()
+	v := &a.skillNew
+	ui.Modal(c, &v.open, func() {
+		w := a.workspace(v.ws)
+		ui.Column(c).Width(420).Gap(12).Children(func() {
+			titleText(c, "新建项目技能", fsTitle)
+			if w != nil {
+				ui.Text(c, "建在「"+w.Label+"」的 .agents/skills 里，再给 Claude 在 .claude/skills 里建一条链接，四家都能用。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
+			}
+			submitted := fieldInput(c, &v.name, "名字，比如 release-check").AutoFocus().Submitted()
+			name := strings.TrimSpace(v.name)
+			valid := skillNameRe.MatchString(name)
+			if name != "" && !valid {
+				ui.Text(c, "只用小写字母、数字和连字符，首尾是字母或数字。").FontSize(fsSmall).TextColor(t.Danger)
+			}
+			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
+				if pressable(textButton(c, "取消")).Clicked() {
+					v.open = false
+				}
+				create := ui.Box(c).Shrink(0)
+				if !valid {
+					create.Disabled(true).Opacity(0.5)
+				}
+				create.Children(func() {
+					if pressable(accentButton(c, "新建")).Clicked() {
+						submitted = true
+					}
+				})
+			})
+			if submitted && valid && w != nil {
+				file, err := createProjectSkill(w.Path, name)
+				if err != nil {
+					a.err = "没有新建：" + err.Error()
+					return
+				}
+				v.open = false
+				a.skillsTab.poll.at = time.Time{}
+				a.openFile(w, file, 0, [2]int{})
+			}
 		})
 	})
 }

@@ -43,5 +43,5 @@ xingkongliang/skills-manager、jiweiyeah/Skills-Manager、Shpigford/chops、runk
 
 1. 只读总览和体检：扫描、去重、各家状态、详情页。先出离屏预览（深浅两套）再接真数据。
 2. 开关（已做）：Claude、Codex、Grok，确认弹框。2026-10-31 核实：Codex 0.166 在临时 CODEX_HOME 里按名字和按路径（SKILL.md 的真实路径）写的 `[[skills.config]]` 都被 `skills/list` 认成 enabled = false；Grok 1.0.73 在临时 HOME 里 `grok inspect` 把 `[skills] disabled` 的标成 [disabled]，`ignore` 的项目技能不再列出（项目要先信任）。Claude 的 skillOverrides 只照程序里的设置说明，没用真实会话核实。用临时 HOME 和真实 CLI 核实写法生效，不碰日常配置。项目级的开关各家能不能写在项目里还没核实（Claude 有 `.claude/settings.local.json`；Codex 的 `skills/config/write`、Grok 的 `[skills]` 可能只有全局一份），只能写全局的那家在项目页签里置灰并说明。
-3. 装、删、更新：界面收参数，拼 `npx skills` 命令到 shell 标签里跑。
+3. 装、删、更新（已做）：界面收参数，拼 `npx skills` 命令到 shell 标签里跑。2026-10-31 在临时 HOME 核实 1.7.4：`add <本地目录> -g -a codex -a claude-code -y` 正本放 `~/.agents/skills`、`~/.claude/skills` 建相对链接；`remove <名字> -g -y` 两处一起删，不进废纸篓。项目级的新建和安装在 PosseDev 里跑通。
 4. 跨会话用量：历史索引里记技能使用，给每个技能的次数和最后使用时间（改 `parserVersions`，各家会话重读一遍）。

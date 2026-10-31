@@ -65,5 +65,5 @@ func previewSkillsTab(a *app) {
 	for i := range cat.Skills {
 		cat.Skills[i].Dir = w.Path + cat.Skills[i].Dir[len("/Users/x/Desktop/AI/Apps"):]
 	}
-	a.skillsTab = skillsPanelView{key: w.Path, cat: cat, poll: panelPoll{at: time.Now()}}
+	a.skillsTab = skillsPanelView{key: w.Path, real: w.Path, cat: cat, poll: panelPoll{at: time.Now()}}
 }

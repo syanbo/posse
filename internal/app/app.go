@@ -197,22 +197,24 @@ type app struct {
 	wantMu   sync.Mutex
 	wantTask string
 
-	history     historyView
-	usage       usageView             // 右侧"技能与工具"面板
-	recent      recentView            // 右侧历史面板
-	skills      skillsView            // 侧栏的「技能」页
-	skillsTab   skillsPanelView       // 文件栏的「技能」页签
-	skillChange skillChangeView       // 开关技能的确认框
-	images      imagesView            // 右侧图片面板
-	mobile      mobileView            // 侧栏「手机」页：配对码和已配对的手机
-	mem         memView               // 底栏的内存浮窗
-	planOpen    bool                  // 状态栏的套餐用量详情
-	emptyHeight float32               // 空工作区页滚动区上一帧的高度
-	emptyWidth  float32               // 空工作区页滚动区上一帧的宽度
-	files       map[string]*filesView // 工作区 ID → 文件标签
-	quick       quickOpen             // ⌘P 快速打开
-	defPick     defPick               // 几处同名定义的选择对话框（definition.go）
-	unsaved     *unsavedAsk           // 问要不要保存修改的对话框
+	history      historyView
+	usage        usageView             // 右侧"技能与工具"面板
+	recent       recentView            // 右侧历史面板
+	skills       skillsView            // 侧栏的「技能」页
+	skillsTab    skillsPanelView       // 文件栏的「技能」页签
+	skillChange  skillChangeView       // 开关技能的确认框
+	skillInstall skillInstallView      // 安装技能的对话框
+	skillNew     skillNewView          // 新建项目技能的对话框
+	images       imagesView            // 右侧图片面板
+	mobile       mobileView            // 侧栏「手机」页：配对码和已配对的手机
+	mem          memView               // 底栏的内存浮窗
+	planOpen     bool                  // 状态栏的套餐用量详情
+	emptyHeight  float32               // 空工作区页滚动区上一帧的高度
+	emptyWidth   float32               // 空工作区页滚动区上一帧的宽度
+	files        map[string]*filesView // 工作区 ID → 文件标签
+	quick        quickOpen             // ⌘P 快速打开
+	defPick      defPick               // 几处同名定义的选择对话框（definition.go）
+	unsaved      *unsavedAsk           // 问要不要保存修改的对话框
 	// 菜单的 ⌘W 记在这里，下一帧再关标签
 	menuCloseTab bool
 	// 快捷键（keymap.go）：keyRec 是设置页里正在录的一项，keysVer 在改了快捷键后加一，edBind 是按它缓存的编辑器按键
