@@ -686,6 +686,15 @@ func TestLogRefTree(t *testing.T) {
 	if ld.refsOpen["local"] || tt.HasText("本地分支 main") {
 		t.Fatal("← did not fold the group")
 	}
+	// 回车在组上展开、再回车收起
+	key(ui.KeyEnter)
+	if !ld.refsOpen["local"] {
+		t.Fatal("Enter did not open the group")
+	}
+	key(ui.KeyEnter)
+	if ld.refsOpen["local"] {
+		t.Fatal("Enter did not fold the group")
+	}
 	key(ui.KeyRight)
 	key(ui.KeyRight)
 	if !ld.refsOpen["local"] || !strings.HasPrefix(ld.refCursor, "l:") {

@@ -148,7 +148,7 @@ type refItem struct {
 }
 
 // refKeys 是分支树的方向键，照 WebStorm 的树：↑↓ 换行，停在分支、标签上就只看它的提交；
-// → 展开组、在展开的组上进到第一项、在分支上到右边的提交列表；← 收起组、回到上一层组；回车只看这一个。
+// → 展开组、在展开的组上进到第一项、在分支上到右边的提交列表；← 收起组、回到上一层组；回车在组上展开或收起，在分支上只看它。
 func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) {
 	ld := d.log
 	list := &ld.refList
@@ -196,8 +196,15 @@ func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) 
 			ld.refCursor = items[it.parent].key
 			list.ScrollIntoView(it.parent)
 		}
-	case cur >= 0 && items[cur].ref != "" && list.Shortcut(c, 0, ui.KeyEnter):
-		move(cur)
+	case cur >= 0 && list.Shortcut(c, 0, ui.KeyEnter):
+		if it := items[cur]; it.group != "" {
+			// 筛选时各组都展开、收不起来
+			if ld.refQuery == "" {
+				ld.refsOpen[it.group] = !it.open
+			}
+		} else {
+			move(cur)
+		}
 	}
 }
 
