@@ -137,19 +137,30 @@ func Running(shell int, agentName string) string {
 	if real, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = real
 	}
-	// 只认带着这个 agent 名字的路径：经 node 运行时程序是 node，它的路径里是 node 的版本
 	cmd := agent.Command[agentName]
 	for _, p := range append([]string{exe}, args...) {
-		if strings.Contains(p, "/") && strings.Contains(p, cmd) {
-			if v := VersionIn(p); v != "" {
-				return v
-			}
+		if v := pathVersion(p, cmd); v != "" {
+			return v
 		}
 	}
 	if exe == "" || procmem.Name([]string{exe}) != cmd {
 		return ""
 	}
 	return askVersion(exe)
+}
+
+// pathVersion 取绝对路径 p 里 agent 名字第一次出现之后的版本号：安装目录都是先有名字再有版本
+// （claude/versions/2.1.316、codex/0.166.0）；名字之前的是别的程序的版本（nvm 的 node/v22.3.0/bin/codex）。
+// 不是路径的参数（提示词、-c 配置）不看。
+func pathVersion(p, cmd string) string {
+	if !strings.HasPrefix(p, "/") || strings.ContainsAny(p, " \n") {
+		return ""
+	}
+	i := strings.Index(p, cmd)
+	if i < 0 {
+		return ""
+	}
+	return VersionIn(p[i:])
 }
 
 // find 在 pid 往下 depth 层里找第一个是 agentName 的进程（shell 直接 exec、或经 npx 这类启动器拉起都有）。
@@ -193,8 +204,13 @@ func askVersion(exe string) string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, _ := exec.CommandContext(ctx, exe, "--version").Output()
+	cmd := exec.CommandContext(ctx, exe, "--version")
+	cmd.WaitDelay = time.Second // 孙进程拿着输出管道时，超时后也别一直等
+	out, err := cmd.Output()
 	v = VersionIn(string(out))
+	if err != nil && v == "" {
+		return "" // 超时、出错不缓存，下次再试
+	}
 	askMu.Lock()
 	askCache[k] = v
 	askMu.Unlock()

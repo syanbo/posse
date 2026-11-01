@@ -102,6 +102,24 @@ func TestVersionIn(t *testing.T) {
 	}
 }
 
+func TestPathVersion(t *testing.T) {
+	for _, c := range []struct{ path, cmd, want string }{
+		{"/Users/x/.local/share/claude/versions/2.1.316", "claude", "2.1.316"},
+		{"/opt/homebrew/Caskroom/codex/0.166.0/bin/codex", "codex", "0.166.0"},
+		{"/Users/x/.grok/downloads/grok-1.0.73-macos-aarch64", "grok", "1.0.73"},
+		// nvm、asdf 装的：版本号在 agent 名字前面，是 node 的
+		{"/Users/x/.nvm/versions/node/v22.3.0/bin/codex", "codex", ""},
+		{"/Users/x/.asdf/installs/nodejs/22.3.0/lib/node_modules/@openai/codex/bin/codex.js", "codex", ""},
+		// 不是路径：提示词、配置
+		{"see /tmp/codex/1.2.3 for details", "codex", ""},
+		{"developer_instructions=codex 1.2.3", "codex", ""},
+	} {
+		if got := pathVersion(c.path, c.cmd); got != c.want {
+			t.Errorf("pathVersion(%q) = %q，要 %q", c.path, got, c.want)
+		}
+	}
+}
+
 func TestInsert(t *testing.T) {
 	if got := Insert(KindCommand, Item{Name: "/compact", Args: "[指示]"}); got != "/compact " {
 		t.Errorf("带参数的命令：%q", got)

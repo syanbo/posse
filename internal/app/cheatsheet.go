@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/agent"
 	"posse/internal/cheatsheet"
 	"posse/internal/skills"
 )
@@ -15,6 +16,7 @@ import (
 // 和它在这个工作区用得上的技能。内置的部分是 Posse 带的表，技能和本机版本打开时在后台读。
 type cheatView struct {
 	term    string // 查的是哪个终端
+	agent   string // 和终端里的哪家 agent：同一个终端里可能退出一家、又启动另一家
 	query   string
 	version string // 终端里正在运行的 agent 的版本，认不出时为空
 	skills  []cheatSkill
@@ -41,8 +43,8 @@ func skillAgent(name string) (skills.Agent, bool) {
 // pollCheat 在主线程调用：换了终端就重来，到点了在后台认版本、扫技能。
 func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 	v := &a.cheat
-	if v.term != cur.ID {
-		*v = cheatView{term: cur.ID}
+	if v.term != cur.ID || v.agent != cur.Agent {
+		*v = cheatView{term: cur.ID, agent: cur.Agent}
 	}
 	if !v.poll.due(c, cheatRefresh) {
 		return
@@ -58,7 +60,8 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 			cat := skills.Scan(skills.Options{Home: homeDir, Dir: dir})
 			for _, s := range cat.Skills {
 				st := s.Agents[ag].State
-				if (st == skills.On || st == skills.Manual) && !s.Meta.UserHidden {
+				// Claude 账号同步的技能在 Claude 里带前缀（同步目录名推不出来），按名字贴进去不对，不列
+				if (st == skills.On || st == skills.Manual) && !s.Meta.UserHidden && !(ag == skills.Claude && s.Scope == skills.ScopeSynced) {
 					list = append(list, cheatSkill{name: s.Name, desc: s.Description})
 				}
 			}
@@ -66,7 +69,7 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 		}
 		a.win.Update(func() {
 			v := &a.cheat
-			if v.term != id {
+			if v.term != id || v.agent != agentName {
 				return
 			}
 			v.poll.done()
@@ -92,7 +95,7 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 			a.cheatVersion(c, cur, sheet)
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(4, 12, 16, 12).Gap(14).Children(func() {
+			ui.Column(c).Padding(4, 12, 16, 12).Gap(16).Children(func() {
 				q := strings.ToLower(strings.TrimSpace(v.query))
 				shown := 0
 				for i, sec := range sheet.Sections {
@@ -150,8 +153,7 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 	color := t.TextMuted
 	newer := false
 	switch {
-	case !v.loaded:
-	case v.version == "":
+	case !v.loaded, v.version == "":
 		text = "速查表对照 " + text
 	case cheatsheet.Compare(v.version, sheet.Version) > 0:
 		text = "本机 " + v.version + " 比速查表（" + sheet.Version + "）新，可能有新命令"
@@ -216,17 +218,23 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 		}
 	})
 	if text != "" && row.Clicked() {
-		a.insertIntoTerminal(cur.ID, text)
+		a.insertIntoTerminal(cur, text)
 	}
 }
 
 // insertIntoTerminal 把文字当键入发进终端（不回车），收起面板、把焦点还给这个终端：
 // 斜杠命令照键入发，agent 才会弹出它的补全，用户确认参数后自己回车。
-func (a *app) insertIntoTerminal(id, text string) {
+// agent 停在审批、选择菜单上时不发：那里单个字母就是选项（Codex 的 a 是"批准且不再问"）。
+func (a *app) insertIntoTerminal(cur *terminalInfo, text string) {
+	if cur.AgentState != nil && cur.AgentState.Status == agent.StatusWaiting {
+		a.err = agentTitle(cur.Agent) + " 正等你处理确认，处理完再贴命令"
+		return
+	}
 	for i, v := range a.panes {
-		if v != nil && v.id == id {
+		if v != nil && v.id == cur.ID {
 			v.term.Send([]byte(text))
-			a.pane, a.focusTerm = i, true
+			a.focusPane(cur.WorkspaceID, i) // 不分屏时只有一栏，它什么也不做
+			a.focusTerm = true
 			a.state.RightPanel = ""
 			a.saveState()
 			return
