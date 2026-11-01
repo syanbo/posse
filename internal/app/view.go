@@ -288,7 +288,7 @@ func (a *app) closeBoard() {
 	case historyBoardID:
 		a.releaseHistory()
 	case taskBoardID:
-		a.detail, a.taskSel, a.taskHome = nil, "", false
+		a.detail, a.taskSel, a.taskHome, a.taskScroll = nil, "", false, ""
 	case mobileBoardID:
 		a.mobile.devices = nil
 	case skillsBoardID:

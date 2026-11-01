@@ -58,7 +58,6 @@ func TestTaskHome(t *testing.T) {
 		t.Fatal("overview hint missing")
 	}
 
-
 	// ↑↓ 换选中的任务：总览里下键选第一个，到头不动
 	key := func(k ui.Key) {
 		tt.Key(0, k)
@@ -77,6 +76,26 @@ func TestTaskHome(t *testing.T) {
 	if a.taskSel != a.sorted[0].ID {
 		t.Fatalf("↑ past the top: sel %q", a.taskSel)
 	}
+	// 写了一半的草稿、开着的确认框：方向键不换任务
+	for _, block := range []func(on bool){
+		func(on bool) { a.noteText = map[bool]string{true: "还没发"}[on] },
+		func(on bool) { a.confirming = on },
+	} {
+		block(true)
+		key(ui.KeyDown)
+		block(false)
+		tt.Frame()
+		tt.Frame()
+		if a.taskSel != a.sorted[0].ID {
+			t.Fatalf("↓ changed the task to %q while blocked", a.taskSel)
+		}
+	}
+	// 拦着的都去掉后照常能换（证明上面没换不是因为焦点还在回复框里）
+	key(ui.KeyDown)
+	if a.taskSel != a.sorted[1].ID {
+		t.Fatalf("↓ after unblocking: sel %q", a.taskSel)
+	}
+	key(ui.KeyUp)
 	// 焦点在回复框里时 ↑↓ 归输入框，不换任务
 	if !needsUser(a.sorted[0]) {
 		t.Fatalf("first task %q should be waiting for a reply", a.sorted[0].ID)

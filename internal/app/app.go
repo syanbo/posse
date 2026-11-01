@@ -164,11 +164,12 @@ type app struct {
 	badge        int               // Dock 角标现在显示的数
 	lastTask     map[string]string // 任务 ID → 上次看到的状态和待回复数，用于通知
 	// 轮询上次交给界面的数据，没变就不更新界面；refreshMu 保护
-	lastPoll  *pollResult
-	diffAt    map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
-	termAt    time.Time            // 上次统计终端内存的时间（轮询协程里用）
-	lastTerm  int64
-	pollForce atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	lastPoll      *pollResult
+	diffAt        map[string]time.Time // worktree 工作区 ID → 上次统计改动的时间
+	termAt        time.Time            // 上次统计终端内存的时间（轮询协程里用）
+	lastTerm      int64
+	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
+	refreshQueued atomic.Bool // selectTask 排的那次轮询还没开始
 	// panes 是主区域接入的终端：0 是左栏（不分屏时只有这一栏），1 是右栏；pane 是焦点所在的栏
 	panes [2]*termView
 	pane  int
@@ -190,7 +191,7 @@ type app struct {
 
 	// 任务总览
 	taskHome   bool                     // 只要总览：不自动打开上次看的任务
-	taskScroll bool                     // 方向键换了任务：列表把它滚进视野
+	taskScroll string                   // 方向键换到的任务：列表建到它时滚进视野
 	taskSel    string                   // 选中的任务 ID
 	lastWS     string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
 	detail     *taskDetail              // 选中任务的消息等完整内容
@@ -513,6 +514,7 @@ type pollResult struct {
 func (a *app) refresh() {
 	a.refreshMu.Lock()
 	defer a.refreshMu.Unlock()
+	a.refreshQueued.Store(false)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var r pollResult

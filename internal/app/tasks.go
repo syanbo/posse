@@ -128,7 +128,10 @@ func (a *app) selectTask(id string) {
 	a.setWantedTask(id)
 	// 详情刚清空，即使拉到的和上次一样也要交给界面
 	a.pollForce.Store(true)
-	go a.refresh()
+	// 按住方向键时每次都排一次完整轮询会堆起来：已有一次在等着就不再排，它开始时读到的就是最新选中的任务
+	if !a.refreshQueued.Swap(true) {
+		go a.refresh()
+	}
 }
 
 // needsUser 判断任务是否在等用户：用户派发的任务里有没回复的问题。
@@ -396,7 +399,10 @@ func (a *app) taskBoard(c *ui.Context) {
 			a.taskEmptyCard(c)
 		})
 	})
-	// 上下方向键换选中的任务，和历史页一样；焦点在回复框里时归输入框
+	// 上下方向键换选中的任务，和历史页一样；焦点在回复框里时归输入框，开着对话框时不动
+	if a.dispatching || a.confirming {
+		return
+	}
 	switch {
 	case c.Shortcut(0, ui.KeyDown):
 		a.stepTask(1)
@@ -407,7 +413,8 @@ func (a *app) taskBoard(c *ui.Context) {
 
 // stepTask 选中列表里的下一个（step 为 1）或上一个任务；还没选中时下键选第一个、上键选最后一个。到头了不动。
 func (a *app) stepTask(step int) {
-	if len(a.sorted) == 0 {
+	// 换任务会清掉回复和追加的草稿：写了一半时不让方向键顺手丢掉，要换就点别的任务
+	if len(a.sorted) == 0 || strings.TrimSpace(a.replyText) != "" || strings.TrimSpace(a.noteText) != "" {
 		return
 	}
 	i := -1
@@ -422,7 +429,7 @@ func (a *app) stepTask(step int) {
 		}
 	}
 	if j >= 0 && j < len(a.sorted) {
-		a.taskScroll = true
+		a.taskScroll = a.sorted[j].ID
 		a.selectTask(a.sorted[j].ID)
 	}
 }
@@ -529,8 +536,8 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 			ui.Text(c, preview).FontSize(fsSmall).TextColor(color).MaxLines(2).LineHeight(1.35)
 		})
 	})
-	if a.taskScroll && a.taskSel == task.ID {
-		a.taskScroll = false
+	if a.taskScroll == task.ID {
+		a.taskScroll = ""
 		row.ScrollIntoView()
 	}
 	if row.Clicked() {
