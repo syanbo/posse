@@ -110,6 +110,18 @@ func TestTaskHome(t *testing.T) {
 	if a.taskSel != a.sorted[0].ID {
 		t.Fatalf("↓ in the reply box changed the task to %q", a.taskSel)
 	}
+	// 空的单行补充说明框有焦点时也不换（单行输入框本身不用 ↑↓，键会落到页面上）
+	a.detail = &taskDetail{taskInfo: a.sorted[0]}
+	a.detail.Questions = 0
+	tt.Frame()
+	if err := tt.Click("补充说明：worker 会在下一个检查点读到"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	key(ui.KeyDown)
+	if a.taskSel != a.sorted[0].ID {
+		t.Fatalf("↓ in the empty note box changed the task to %q", a.taskSel)
+	}
 	// 详情上面不再有「总览」按钮
 	if _, ok := tt.Find("总览"); ok {
 		t.Fatal("overview button still shown")

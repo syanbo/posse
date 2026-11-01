@@ -383,6 +383,9 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 		} else {
 			in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Padding(4, 0)
 			sent = in.Submitted()
+			// 单行输入框自己不用 ↑↓，没人接时会落到页面上（任务页拿它换任务）：在框里打字时按到不该换走页面
+			in.Shortcut(0, ui.KeyUp)
+			in.Shortcut(0, ui.KeyDown)
 		}
 		// 中文输入法拼字时的回车是确认拼写，不是发送
 		sent = (sent || in.Shortcut(ui.Cmd, ui.KeyEnter)) && !in.Composing()
