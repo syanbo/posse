@@ -802,7 +802,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 		}
 		return out
 	}
-	// 缩进不用 Padding：每行自己画状态槽和缩进，worker 的状态也落在顶层会话那一列
+	// 缩进不用 Padding：每行自己画缩进和状态槽，选中底色铺满整行
 	var rows func(list []terminalInfo, depth int)
 	rows = func(list []terminalInfo, depth int) {
 		ui.Column(c).Gap(2).Children(func() {
@@ -841,7 +841,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 // navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
 // 和项目行一样，单击切到这个会话、收着的顺便展开，已经在看它时再单击收起；收起时行尾写 +N，
 // 有 worker 等你处理时这一行也显示待处理。where 非空时是「运行中」视图里的平铺行：第二行写它在哪个项目和工作区，不能拖动排序。
-// depth 是 worker 嵌套的层数，状态槽之后再缩进这么多层。
+// depth 是 worker 嵌套的层数，状态槽之前先缩进这么多层，状态紧挨着自己的 agent 图标。
 func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, depth int) {
 	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
 	if selected {
@@ -880,20 +880,20 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			}
 		}
 	}
-	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在左边的缩进槽里，所有会话的状态排在同一列。
+	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在图标左边的槽里，对着上一层行首图标的中线。
 	// 选中、悬停的底色和点击、拖动都按包着状态槽的整行算，状态不会飘在底色外面
 	icon := func() { agentTile(c, term.Agent, smallIcon()).Tooltip(name) }
 	line := ui.Row(c.Key("line-" + term.ID)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
 	selectedBg(c, line, selected)
 	line.Children(func() {
+		if depth > 0 {
+			ui.Box(c).Width(float32(depth) * navIndent).Shrink(0)
+		}
 		statusSlot(c, func() {
 			if status != "" {
 				a.statusIcon(c, statusID, status, smallIcon())
 			}
 		})
-		if depth > 0 {
-			ui.Box(c).Width(float32(depth) * navIndent).Shrink(0)
-		}
 		a.navRowSized(c, term.ID, false, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0).Background(ui.Transparent).Role(ui.RoleNone)
 	})
 	row := line
