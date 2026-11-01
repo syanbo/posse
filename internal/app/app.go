@@ -174,7 +174,10 @@ type app struct {
 	// panes 是主区域每栏接入的终端（下标同 cols，选中的不是终端的栏为 nil）；pane 是焦点所在的栏
 	panes [maxColumns]*termView
 	pane  int
-	cols  []colView // 这一帧显示的几栏（syncColumns 定），没分栏时只有一栏
+	cols  []colView // 这一帧显示的几格（syncColumns 定），没分栏时只有一格
+	tree  *nodeView // 这一帧显示的分割树
+	// cellSize 是各格内容区上一帧的大小，判断还分不分得开
+	cellSize [maxColumns]ui.Point
 	// docFocusPane 是正在画的文件在不在焦点栏里（columnBody 设，docArea 用）
 	docFocusPane bool
 	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID
@@ -304,8 +307,7 @@ type app struct {
 	resizingBranch  bool            // 正在拖分支弹窗的左边缘，松手时写 ui.json
 	resizingSide    bool            // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
-	splitDrag       float32         // 拖分栏线时累计的横向距离，松手才改比例
-	splitGrip       int             // 正在拖的是第几条分栏线
+	splitDrag       float32         // 拖分隔线时累计的距离，松手才改比例
 	split           bool            // 这一帧主区域分成了几栏（syncColumns 定）
 	splitPending    map[string]bool // 正在为「向右分栏」新开终端的工作区
 	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开
@@ -1098,7 +1100,7 @@ func (a *app) saveState() {
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	s.Keys = maps.Clone(s.Keys)
-	s.Columns = cloneColumns(s.Columns)
+	s.Panes = clonePanes(s.Panes)
 	// 编号在这里取：协程开始的先后不等于发起的先后
 	seq := uiSaveSeq.Add(1)
 	go saveUIStateSeq(a.home, s, seq)

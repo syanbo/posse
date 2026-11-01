@@ -53,7 +53,8 @@ func (a *app) build(c *ui.Context) {
 	cur := a.currentTerminal(w)
 	a.ensurePanes(a.paneIDs(cur))
 	// 拖着分栏线时那条线没了（栏收起、切走）：松手的那一帧不会再画它，拖的状态在这里放掉
-	if a.resizingSplit == "col-split" && a.splitGrip+1 >= len(a.cols) {
+	// 拖着分隔线时分栏没了（终端退出、切走）：松手的那一帧不会再画那条线，拖的状态在这里放掉
+	if strings.HasPrefix(a.resizingSplit, "split") && !a.splitShown() {
 		a.resizingSplit, a.splitDrag = "", 0
 	}
 
@@ -1034,7 +1035,7 @@ func (a *app) reorderableTab(c *ui.Context, e ui.Element, w *workspace, key stri
 	}
 	index := func(k string) int { return slices.Index(a.tabKeys(w), k) }
 	same := func(k string) bool { return isDocKey(k) == isDocKey(key) }
-	moves := func(k string) bool { return col >= 0 && a.colOf(k) != col && a.cols[col].at >= 0 }
+	moves := func(k string) bool { return col >= 0 && a.colOf(k) != col && a.cols[col].id != "" }
 	if g, over := ui.DragOver[tabDrag](e); over && g.ws == w.ID && g.key != key && (same(g.key) || moves(g.key)) {
 		if same(g.key) {
 			dropMark(c, e, index(g.key) < index(key), col >= 0)
@@ -1047,7 +1048,7 @@ func (a *app) reorderableTab(c *ui.Context, e ui.Element, w *workspace, key stri
 			a.reorderTabs(w, g.key, key)
 		}
 		if moves(g.key) {
-			a.moveTab(w, g.key, col, 0)
+			a.moveTab(w, g.key, col, sideIn)
 		}
 		c.AnimationFrame() // 这一帧已经按旧顺序画了，再画一帧
 	}
@@ -1600,19 +1601,14 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 
 // mainColumn 是主区域里文件栏左边的部分：标签栏和终端（或编辑器），浮层面板也浮在这里面。
 func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
-	t := c.Theme()
-	p := colors(t)
-	// 每栏一段标签栏，宽度和下面的栏一样分，中间的竖线和分栏线对齐
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Background(p.band).AlignItems(ui.Stretch).
-		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
-		for i := range a.cols {
-			if i > 0 {
-				vline(c)
-			}
-			a.columnStrip(c, w, i)
+	// 各格自带标签栏，贴着顶边的那几格的标签栏在标题栏的位置；浮层盖在标签栏下面
+	ui.Column(c.Key("main-area")).Grow(1).MinHeight(0).Children(func() {
+		a.columnsView(c, w)
+		if w.Missing && (a.splitShown() || a.cols[0].active != "") {
+			a.missingBar(c, w)
 		}
+		a.mainBody(c, w, cur)
 	})
-	a.mainBody(c, w, cur)
 }
 
 // newTerminalButton 是第 i 栏标签后面的"+"，选 agent 或普通终端，新终端放进这一栏。
@@ -1814,8 +1810,9 @@ func (a *app) reclaimSize(id string) {
 
 // mainBody 是标签栏下面的内容：终端、编辑器或空工作区，浮层面板浮在它上面。
 func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
-	// 右侧面板浮在上面，不挤压终端：终端宽度一变，程序就要按新列数重排输出
-	body := ui.Column(c).Grow(1)
+	// 右侧面板、Git 日志这些浮在标签栏下面，不挤压终端：终端宽度一变，程序就要按新列数重排输出。
+	// 这一层不接指针，底下的各格照常点得到
+	body := ui.Column(c.Key("overlays")).Absolute().Top(titleHeight(c)).Left(0).Right(0).Bottom(0).PassThrough()
 	if a.state.RightPanel != "" {
 		a.lastPanel = a.state.RightPanel
 	}
@@ -1827,14 +1824,6 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	a.panelShown = shown
 	body.Children(func() {
-		if w.Missing && (a.splitShown() || a.cols[0].active != "" && (a.filesActive(w) || a.panes[0] != nil)) {
-			a.missingBar(c, w)
-		}
-		if !a.splitShown() && a.cols[0].active == "" {
-			a.emptyWorkspace(c, w)
-		} else {
-			a.columnsView(c, w)
-		}
 		a.logPanel(c, w, body)
 		a.branchPopupView(c, w)
 		if shown < 0.01 {
@@ -1890,7 +1879,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 		}
 		a.startingHint(c, v, cur)
-		a.sessionButtons(c, cur, i == len(a.cols)-1)
+		a.sessionButtons(c, cur, a.cols[i].right)
 		a.termFindBar(c, v, cur)
 	})
 	a.termDrop(c, area, v, cur.Agent)

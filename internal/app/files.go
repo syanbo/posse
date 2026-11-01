@@ -672,7 +672,7 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	}
 	// 分了栏：选中的换成同一栏挨着的标签（可能是终端），不跳到别的栏。要在拿掉文件之前算，才知道谁挨着它
 	if w := a.workspace(v.wsID); w != nil {
-		if _, ok := a.columnsOf(w.ID); ok {
+		if _, ok := a.layoutOf(w.ID); ok {
 			a.dropColumnKey(w, docKey(d))
 			v.docs = slices.Delete(v.docs, i, i+1)
 			closeWeb(d)

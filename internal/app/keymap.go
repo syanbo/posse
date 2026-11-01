@@ -99,9 +99,10 @@ var posseKeys = []keyAction{
 	{id: "termWordLeft", group: "终端", label: "上一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyLeft)}},
 	{id: "termWordRight", group: "终端", label: "下一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyRight)}},
 	{id: "termKillWord", group: "终端", label: "删前一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyBackspace)}},
-	{id: "splitRight", group: "终端", label: "向右分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyD)}, note: "在焦点栏右边新开一栏，放一个新终端；最多三栏"},
-	{id: "closeSplit", group: "终端", label: "合并所有栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyD)}, note: "所有标签合回一栏，一个都不关"},
-	{id: "switchPane", group: "终端", label: "切换栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBracketRight), k(ui.Cmd, ui.KeyBracketLeft)}, note: "⌘] 下一栏，⌘[ 上一栏"},
+	{id: "splitRight", group: "终端", label: "向右分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyD)}, note: "在焦点格右边拆出一格，放一个新终端；最多四格"},
+	{id: "splitDown", group: "终端", label: "向下分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyD)}, note: "在焦点格下面拆出一格，放一个新终端；最多四格"},
+	{id: "closeSplit", group: "终端", label: "合并所有分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyD)}, note: "所有标签合回一格，一个都不关"},
+	{id: "switchPane", group: "终端", label: "切换分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBracketRight), k(ui.Cmd, ui.KeyBracketLeft)}, note: "⌘] 下一格，⌘[ 上一格，从左上到右下"},
 	{id: "termNewline", group: "终端", label: "Claude、Codex 输入框里换行", scope: scopeTerminal, def: []keyCombo{k(ui.Shift, ui.KeyEnter)}},
 
 	{id: "sendMessage", group: "其他", label: "多行输入框里发送、提交", def: []keyCombo{k(ui.Cmd, ui.KeyEnter)}, fixed: true},

@@ -598,7 +598,7 @@ func TestPreview(t *testing.T) {
 
 		// 两栏：左边 Claude 和 Codex，右边跑着开发服务器的 zsh，焦点在左栏
 		a = previewApp(t)
-		a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+		a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 		a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 		savePNG(t, newPreviewTester(a, dark), "terminal-split-"+suffix+".png")
 
@@ -949,19 +949,22 @@ func TestPreview(t *testing.T) {
 		a.dTitle, a.dSpec = "给登录页加上记住密码", "在登录页加一个“记住密码”开关，密码存进系统钥匙串。"
 		savePNG(t, newPreviewTester(a, dark), "dispatch-"+suffix+".png")
 
-		// 三栏：Claude、zsh 和打开的文件，焦点在文件那栏，中间那栏拖窄了
+		// 嵌套分栏：左边 Claude，右边上下分成 zsh 和打开的文件
 		// 打开文件时只有一栏、选中的是文件，终端会断开：文件在另一个 app 里开好再搬过来
 		b := previewApp(t)
 		v3 := previewFiles(t, b, "README.md", "main.go")
 		a = previewApp(t)
 		a.files, a.state.Files, a.workspaces[0].Path = b.files, b.state.Files, b.workspaces[0].Path
-		a.state.Columns = map[string]columnsState{"w1": {Focus: 2, Cols: []columnState{
-			{Tabs: []string{"t1", "t2"}, Active: "t1", Share: 1.2},
-			{Tabs: []string{"t3"}, Active: "t3", Share: 0.8},
-			{Tabs: []string{docKey(v3.docs[0]), docKey(v3.docs[1])}, Share: 1},
-		}}}
+		// 左边 Claude，右边上面 zsh、下面打开的文件，焦点在 Claude
+		a.state.Panes = map[string]layoutState{"w1": {Focus: "p1", Root: paneNode{Split: splitH, Kids: []paneNode{
+			{ID: "p1", Tabs: []string{"t1", "t2"}, Active: "t1", Share: 1.2},
+			{Split: splitV, Share: 1, Kids: []paneNode{
+				{ID: "p2", Tabs: []string{"t3"}, Active: "t3"},
+				{ID: "p3", Tabs: []string{docKey(v3.docs[0]), docKey(v3.docs[1])}},
+			}},
+		}}}}
 		a.panes[1] = &termView{id: "t3", term: previewShell(t)}
-		savePNG(t, newPreviewTester(a, dark), "columns-three-"+suffix+".png")
+		savePNG(t, newPreviewTester(a, dark), "columns-nested-"+suffix+".png")
 
 		// 文件标签：树展开到打开的文件，README 有未保存的修改
 		a = previewApp(t)
@@ -1325,7 +1328,7 @@ func settleMenu(tt *ui.Tester) {
 // 点进另一栏的内容：焦点栏换过去；点标签栏的标签、空处按标签和不动焦点。
 func TestColumnsClickAndDrag(t *testing.T) {
 	a := previewApp(t)
-	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
@@ -1359,7 +1362,7 @@ func TestColumnsClickAndDrag(t *testing.T) {
 // 真拖一次：把右栏唯一的 zsh 标签拖到左栏内容的左边缘，松手后它成为最左一栏、原来的右栏收起，焦点在它那栏。
 func TestColumnsDragTabToEdge(t *testing.T) {
 	a := previewApp(t)
-	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
@@ -1388,7 +1391,7 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 // 两栏的离屏界面：左栏 Claude、Codex（选中 Claude），右栏 zsh。
 func twoColumnTester(t *testing.T) (*app, *ui.Tester) {
 	a := previewApp(t)
-	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 	// 收起侧栏：侧栏里有同名的会话，按文字找的会是它
 	a.state.SidebarHidden = true
@@ -1422,14 +1425,14 @@ func center(t *testing.T, tt *ui.Tester, text string) ui.Point {
 func TestColumnsDragToStripTail(t *testing.T) {
 	a, tt := twoColumnTester(t)
 	// 左栏放宽到四分之三，标签栏里"+"后面留出空处
-	st := a.state.Columns["w1"]
-	st.Cols[0].Share, st.Cols[1].Share = 3, 1
-	a.state.Columns["w1"] = st
+	st := a.state.Panes["w1"]
+	st.Root.Kids[0].Share, st.Root.Kids[1].Share = 3, 1
+	a.state.Panes["w1"] = st
 	tt.Frame()
 	zsh := center(t, tt, "zsh")
 	dragTo(tt, zsh, ui.Point{X: 800, Y: zsh.Y})
-	if len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") || a.state.Columns["w1"].Cols != nil {
-		t.Fatalf("after drop on tail: cols %+v state %+v", a.cols, a.state.Columns["w1"])
+	if _, ok := a.state.Panes["w1"]; ok || len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") {
+		t.Fatalf("after drop on tail: cols %+v state %+v", a.cols, a.state.Panes["w1"])
 	}
 }
 
@@ -1448,21 +1451,21 @@ func TestColumnsDividerDrag(t *testing.T) {
 	// 侧栏收起了，主区域从窗口左边开始，分栏线在左栏的右边
 	left := float32(0)
 	inner := 1200 - left - 1
-	line := func() float32 { return left + a.cols[0].weight*inner }
+	line := func() float32 { return left + a.tree.weight[0]*inner }
 	gx := line()
-	before := a.cols[0].weight
+	before := a.tree.weight[0]
 	tt.Press(gx, 400)
 	tt.Frame()
 	tt.Move(gx-60, 400)
 	tt.Frame()
-	if a.cols[0].weight != before || a.resizingSplit != "col-split" {
-		t.Fatalf("while dragging: weight %v → %v resizing %q", before, a.cols[0].weight, a.resizingSplit)
+	if a.tree.weight[0] != before || !strings.HasPrefix(a.resizingSplit, "split") {
+		t.Fatalf("while dragging: weight %v → %v resizing %q", before, a.tree.weight[0], a.resizingSplit)
 	}
 	tt.Release(gx-60, 400)
 	tt.Frame()
 	tt.Frame()
-	if a.cols[0].weight >= before {
-		t.Fatalf("after release: weight %v, was %v", a.cols[0].weight, before)
+	if a.tree.weight[0] >= before {
+		t.Fatalf("after release: weight %v, was %v", a.tree.weight[0], before)
 	}
 	// 往左拖过头：停在最小宽度
 	gx = line()
@@ -1473,7 +1476,7 @@ func TestColumnsDividerDrag(t *testing.T) {
 	tt.Release(gx-800, 400)
 	tt.Frame()
 	tt.Frame()
-	if w := a.cols[0].weight * inner; w < colMinWidth()-2 || w > colMinWidth()+2 {
+	if w := a.tree.weight[0] * inner; w < colMinWidth()-2 || w > colMinWidth()+2 {
 		t.Fatalf("min width: %v, want %v", w, colMinWidth())
 	}
 	// 双击平分
@@ -1482,8 +1485,8 @@ func TestColumnsDividerDrag(t *testing.T) {
 	tt.ClickAt(gx, 400)
 	tt.Frame()
 	tt.Frame()
-	if d := a.cols[0].weight - a.cols[1].weight; d > 0.01 || d < -0.01 {
-		t.Fatalf("equalize: %v %v", a.cols[0].weight, a.cols[1].weight)
+	if d := a.tree.weight[0] - a.tree.weight[1]; d > 0.01 || d < -0.01 {
+		t.Fatalf("equalize: %v %v", a.tree.weight[0], a.tree.weight[1])
 	}
 }
 
@@ -1491,8 +1494,32 @@ func TestColumnsDividerDrag(t *testing.T) {
 func TestColumnsDragAloneToOwnSide(t *testing.T) {
 	a, tt := twoColumnTester(t)
 	inner := float32(1200 - 1)
-	dragTo(tt, center(t, tt, "zsh"), ui.Point{X: a.cols[0].weight*inner - 20, Y: 400})
-	if _, ok := a.state.Columns["w1"]; ok || len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") {
-		t.Fatalf("cols %+v state %+v", a.cols, a.state.Columns["w1"])
+	dragTo(tt, center(t, tt, "zsh"), ui.Point{X: a.tree.weight[0]*inner - 20, Y: 400})
+	if _, ok := a.state.Panes["w1"]; ok || len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") {
+		t.Fatalf("cols %+v state %+v", a.cols, a.state.Panes["w1"])
+	}
+}
+
+// 真拖到下边缘：右格唯一的 zsh 拖到左格内容的下边，左格上下分成 Claude 和 zsh，原来的右格收起；拖着时下半边盖淡底。
+func TestColumnsDragTabToBottom(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	zsh := center(t, tt, "zsh")
+	to := ui.Point{X: 300, Y: 720}
+	tt.Press(zsh.X, zsh.Y)
+	tt.Frame()
+	for i := 1; i <= 4; i++ {
+		f := float32(i) / 4
+		tt.Move(zsh.X+(to.X-zsh.X)*f, zsh.Y+(to.Y-zsh.Y)*f)
+		tt.Frame()
+	}
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
+		savePNG(t, tt, "columns-drag-bottom.png")
+	}
+	tt.Release(to.X, to.Y)
+	tt.Frame()
+	tt.Frame()
+	st := a.state.Panes["w1"]
+	if st.Root.Split != splitV || len(a.cols) != 2 || a.cols[1].tabs[0] != "t3" || a.pane != 1 {
+		t.Fatalf("after drag: %+v cols %+v pane %d", st.Root, a.cols, a.pane)
 	}
 }

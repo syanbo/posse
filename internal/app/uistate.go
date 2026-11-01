@@ -90,8 +90,8 @@ type uiState struct {
 	Keys map[string][]string `json:"keys,omitempty"`
 	// WebDevice 是网页手机预览上次选的机型（webdevice.go），⇧⌘M 打开时用它
 	WebDevice string `json:"webDevice,omitempty"`
-	// Columns 是分了栏的工作区，键是工作区 ID（columns.go）
-	Columns map[string]columnsState `json:"columns,omitempty"`
+	// Panes 是分了栏的工作区，键是工作区 ID（layout.go）
+	Panes map[string]layoutState `json:"panes,omitempty"`
 	// Splits 是以前只能左右两栏时的分屏，读进来换成 Columns
 	Splits map[string]legacySplit `json:"splits,omitempty"`
 }
@@ -246,35 +246,39 @@ type legacySplit struct {
 	Focus   int     `json:"focus,omitempty"`
 }
 
-// migrateSplits 把以前的左右分屏换成分栏：两栏各放原来的终端，别的标签进焦点栏（syncColumns）。
+// migrateSplits 把以前的左右分屏换成分栏：左右两格各放原来的终端，别的标签进焦点格（syncColumns）。
 func migrateSplits(s *uiState) {
 	for ws, sp := range s.Splits {
-		if _, ok := s.Columns[ws]; ok || sp.Left == "" || sp.Right == "" || sp.Left == sp.Right {
+		if _, ok := s.Panes[ws]; ok || sp.Left == "" || sp.Right == "" || sp.Left == sp.Right {
 			continue
 		}
 		pct := sp.Percent
 		if pct <= 0 {
 			pct = 50
 		}
-		if s.Columns == nil {
-			s.Columns = map[string]columnsState{}
+		focus := "p1"
+		if sp.Focus == 1 {
+			focus = "p2"
 		}
-		s.Columns[ws] = columnsState{
-			Cols: []columnState{
-				{Tabs: []string{sp.Left}, Active: sp.Left, Share: pct},
-				{Tabs: []string{sp.Right}, Active: sp.Right, Share: 100 - pct},
-			},
-			Focus: min(max(sp.Focus, 0), 1),
+		if s.Panes == nil {
+			s.Panes = map[string]layoutState{}
+		}
+		s.Panes[ws] = layoutState{
+			Root: paneNode{Split: splitH, Kids: []paneNode{
+				{ID: "p1", Tabs: []string{sp.Left}, Active: sp.Left, Share: pct},
+				{ID: "p2", Tabs: []string{sp.Right}, Active: sp.Right, Share: 100 - pct},
+			}},
+			Focus: focus,
 		}
 	}
 	s.Splits = nil
 }
 
-func cloneColumns(m map[string]columnsState) map[string]columnsState {
+func clonePanes(m map[string]layoutState) map[string]layoutState {
 	if m == nil {
 		return nil
 	}
-	out := make(map[string]columnsState, len(m))
+	out := make(map[string]layoutState, len(m))
 	for k, v := range m {
 		out[k] = v.clone()
 	}
