@@ -37,7 +37,7 @@ func TestSheets(t *testing.T) {
 			if sec.Title == "" || len(sec.Items) == 0 {
 				t.Errorf("%s 有空组 %q", s.Agent, sec.Title)
 			}
-			if sec.Kind != KindCommand && sec.Kind != KindKey && sec.Kind != KindPrefix {
+			if sec.Kind != KindCommand && sec.Kind != KindKey && sec.Kind != KindPrefix && sec.Kind != KindSkill {
 				t.Errorf("%s/%s 的类别 %q", s.Agent, sec.Title, sec.Kind)
 			}
 			for _, it := range sec.Items {
@@ -50,7 +50,7 @@ func TestSheets(t *testing.T) {
 				if strings.Contains(it.Name+it.Args+it.Desc, "&lt;") {
 					t.Errorf("%s %s 带着转义的 &lt;", s.Agent, it.Name)
 				}
-				if sec.Kind == KindCommand && !strings.HasPrefix(it.Name, "/") {
+				if (sec.Kind == KindCommand || sec.Kind == KindSkill) && !strings.HasPrefix(it.Name, "/") {
 					t.Errorf("%s 命令 %q 不以 / 开头", s.Agent, it.Name)
 				}
 				k := string(sec.Kind) + " " + it.Name

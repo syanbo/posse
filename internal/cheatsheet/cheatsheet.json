@@ -110,48 +110,13 @@
     ]
    },
    {
-    "title": "代码与审查",
+    "title": "项目与配置",
     "kind": "command",
     "items": [
-     {
-      "name": "/code-review",
-      "args": "[级别] [目标]",
-      "desc": "审查当前改动或 PR 找 bug，别名 /review"
-     },
-     {
-      "name": "/simplify",
-      "args": "[目标]",
-      "desc": "清理改动代码，不改行为"
-     },
-     {
-      "name": "/security-review",
-      "desc": "对当前分支待提交的改动做安全审查"
-     },
      {
       "name": "/diff",
       "desc": "查看未提交的改动和每轮的 diff"
      },
-     {
-      "name": "/loop",
-      "args": "[间隔] [提示]",
-      "desc": "定时重复执行某个提示或命令"
-     },
-     {
-      "name": "/batch",
-      "args": "<指示>",
-      "desc": "大规模改动拆给多个 worktree 并行做"
-     },
-     {
-      "name": "/debug",
-      "args": "[问题描述]",
-      "desc": "打开调试日志，排查 Claude Code 自身问题"
-     }
-    ]
-   },
-   {
-    "title": "项目与配置",
-    "kind": "command",
-    "items": [
      {
       "name": "/init",
       "desc": "分析代码库，生成 CLAUDE.md"
@@ -232,6 +197,77 @@
      {
       "name": "/help",
       "desc": "查看帮助和全部命令"
+     }
+    ]
+   },
+   {
+    "title": "内置技能",
+    "kind": "skill",
+    "items": [
+     {
+      "name": "/code-review",
+      "args": "[级别] [目标]",
+      "desc": "审查当前改动或 PR 找 bug，别名 /review"
+     },
+     {
+      "name": "/simplify",
+      "args": "[目标]",
+      "desc": "清理改动代码，不改行为"
+     },
+     {
+      "name": "/security-review",
+      "desc": "对当前分支待提交的改动做安全审查"
+     },
+     {
+      "name": "/loop",
+      "args": "[间隔] [提示]",
+      "desc": "定时重复执行某个提示或命令"
+     },
+     {
+      "name": "/batch",
+      "args": "<指示>",
+      "desc": "大规模改动拆给多个 worktree 并行做"
+     },
+     {
+      "name": "/debug",
+      "args": "[问题描述]",
+      "desc": "打开调试日志，排查 Claude Code 自身问题"
+     },
+     {
+      "name": "/schedule",
+      "desc": "创建和管理按计划在云端运行的 agent"
+     },
+     {
+      "name": "/run",
+      "desc": "启动并操作本项目的应用，看改动实际效果"
+     },
+     {
+      "name": "/fewer-permission-prompts",
+      "desc": "按历史记录把常用只读命令加进允许列表"
+     },
+     {
+      "name": "/update-config",
+      "desc": "改 settings.json：权限、hooks、环境变量"
+     },
+     {
+      "name": "/keybindings-help",
+      "desc": "自定义快捷键，改 keybindings.json"
+     },
+     {
+      "name": "/claude-api",
+      "desc": "Claude API 和 SDK 参考：模型、价格、缓存"
+     },
+     {
+      "name": "/dataviz",
+      "desc": "画图表前的配色和图形规范"
+     },
+     {
+      "name": "/workflow-authoring",
+      "desc": "写多 agent 工作流脚本的参考"
+     },
+     {
+      "name": "/plugin-authoring",
+      "desc": "做 Claude Code 插件和界面 mod"
      }
     ]
    },

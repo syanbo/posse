@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -24,8 +25,24 @@ type cheatView struct {
 	poll    panelPoll
 }
 
-// cheatSkill 是一个能手动调用的技能。
-type cheatSkill struct{ name, desc string }
+// cheatSkill 是一个能手动调用的技能；builtin 是 agent 自带的（扫到的「系统自带」目录）。
+type cheatSkill struct {
+	name, desc string
+	builtin    bool
+}
+
+// 面板的页签，顺序就是界面上的顺序；选的哪个记在 ui.json 的 cheatTab，所有会话共用。
+const (
+	cheatBuiltinSkills = iota
+	cheatSkills
+	cheatCommands
+	cheatKeys
+)
+
+var cheatTabs = []string{"内置技能", "技能", "内置命令", "快捷键"}
+
+// cheatWidth 是面板的宽度：比别的右侧面板宽一点，四个页签按字宽放得下。
+const cheatWidth = 320
 
 // cheatRefresh 是面板开着时多久重新认一次版本、扫一次技能：会话里可能换了 agent 版本、装了技能。
 // 还没认出版本时 cheatRetry 后再认：刚开的终端要先跑完登录 shell 的配置，agent 进程还没起来。
@@ -70,7 +87,7 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 				st := s.Agents[ag].State
 				// Claude 账号同步的技能在 Claude 里带前缀（同步目录名推不出来），按名字贴进去不对，不列
 				if (st == skills.On || st == skills.Manual) && !s.Meta.UserHidden && !(ag == skills.Claude && s.Scope == skills.ScopeSynced) {
-					list = append(list, cheatSkill{name: s.Name, desc: s.Description})
+					list = append(list, cheatSkill{name: s.Name, desc: s.Description, builtin: s.Scope == skills.ScopeSystem})
 				}
 			}
 			slices.SortFunc(list, func(x, y cheatSkill) int { return strings.Compare(x.name, y.name) })
@@ -86,57 +103,52 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 	}()
 }
 
-// cheatPanel 是终端右侧的面板：上面是搜索框和版本，下面按组列出，命令、前缀和技能点一下贴进输入框。
+// cheatPanel 是终端右侧的面板：上面是搜索框、版本和页签，下面按组列出当前页签的条目；
+// 搜索时不分页签，各页签里匹配的都列出来。命令、前缀和技能点一下贴进输入框。
 func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollCheat(c, cur)
 	v := &a.cheat
 	sheet, ok := cheatsheet.For(cur.Agent)
-	return a.rightPanel(c, "命令速查", func() {
+	return a.rightPanelSized(c, "命令速查", cheatWidth, func() {
 		if !ok {
 			ui.Column(c).Padding(0, 12, 16, 12).Children(func() {
 				usageNote(c, agentTitle(cur.Agent)+" 还没有速查表。")
 			})
 			return
 		}
+		q := strings.ToLower(strings.TrimSpace(v.query))
+		tab := min(max(a.state.CheatTab, 0), len(cheatTabs)-1)
 		ui.Column(c).Padding(0, 12, 8, 12).Gap(8).Children(func() {
-			fieldInputSized(c, &v.query, "搜索命令和说明", 0, 0).Label("搜索")
+			fieldInputSized(c, &v.query, "搜索命令、技能和说明", 0, 0).Label("搜索")
 			a.cheatVersion(c, cur, sheet)
+			// 直接放在列里：被拉到和搜索框一样宽，各段平分
+			if q == "" && segmented(c, &tab, "分类", cheatTabs...) {
+				a.state.CheatTab = tab
+				a.saveState()
+			}
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(4, 12, 16, 12).Gap(16).Children(func() {
-				q := strings.ToLower(strings.TrimSpace(v.query))
 				shown := 0
-				for i, sec := range sheet.Sections {
-					items := slices.DeleteFunc(slices.Clone(sec.Items), func(it cheatsheet.Item) bool { return !cheatMatch(q, it.Name, it.Desc) })
-					if len(items) == 0 {
+				for i := range cheatTabs {
+					if q == "" && i != tab {
 						continue
 					}
-					shown += len(items)
-					a.cheatSection(c, i, sec.Title, func() {
-						for j, it := range items {
-							a.cheatRow(c, cur, sec.Kind, it, cheatsheet.Insert(sec.Kind, it), j)
-						}
-					})
-				}
-				var sk []cheatSkill
-				for _, s := range v.skills {
-					if cheatMatch(q, s.name, s.desc) {
-						sk = append(sk, s)
-					}
-				}
-				if len(sk) > 0 {
-					shown += len(sk)
-					a.cheatSection(c, "skills", "技能", func() {
-						for j, s := range sk {
-							it := cheatsheet.Item{Name: sheet.SkillPrefix + s.name, Desc: s.desc}
-							a.cheatRow(c, cur, cheatsheet.KindCommand, it, it.Name+" ", j)
-						}
-					})
+					shown += a.cheatTab(c, cur, sheet, i, q)
 				}
 				if shown == 0 {
-					usageNote(c, "没有匹配「"+v.query+"」的命令。")
+					switch {
+					case q != "":
+						usageNote(c, "没有匹配「"+v.query+"」的命令和技能。")
+					case !v.loaded && (tab == cheatBuiltinSkills || tab == cheatSkills):
+						usageNote(c, "正在读取…")
+					case tab == cheatBuiltinSkills:
+						usageNote(c, "没有找到 "+agentTitle(cur.Agent)+" 自带的技能。")
+					case tab == cheatSkills:
+						usageNote(c, "这个工作区里没有 "+agentTitle(cur.Agent)+" 能手动调用的技能。")
+					}
 				}
-				if sheet.Docs != "" && q == "" {
+				if sheet.Docs != "" && q == "" && tab == cheatCommands {
 					ui.Row(c).Padding(0, 4).Children(func() {
 						if pressable(textButton(c, "官方文档")).Clicked() {
 							c.OpenURL(sheet.Docs)
@@ -146,6 +158,61 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 			})
 		})
 	})
+}
+
+// cheatTab 画一个页签里匹配 q 的各组，返回画了几条。内置技能是表里编在程序里的那些加上扫到的系统自带的；
+// 内置命令带上输入前缀；技能只有扫到的。
+func (a *app) cheatTab(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet, tab int, q string) int {
+	shown := 0
+	for i, sec := range sheet.Sections {
+		want := cheatCommands
+		switch sec.Kind {
+		case cheatsheet.KindSkill:
+			want = cheatBuiltinSkills
+		case cheatsheet.KindKey:
+			want = cheatKeys
+		}
+		if want != tab {
+			continue
+		}
+		items := slices.DeleteFunc(slices.Clone(sec.Items), func(it cheatsheet.Item) bool { return !cheatMatch(q, it.Name, it.Desc) })
+		if len(items) == 0 {
+			continue
+		}
+		shown += len(items)
+		a.cheatSection(c, fmt.Sprint("sec-", i), cheatGroupTitle(sec.Title, tab, q), func() {
+			for j, it := range items {
+				a.cheatRow(c, cur, sec.Kind, it, cheatsheet.Insert(sec.Kind, it), j)
+			}
+		})
+	}
+	if tab != cheatBuiltinSkills && tab != cheatSkills {
+		return shown
+	}
+	var sk []cheatSkill
+	for _, s := range a.cheat.skills {
+		if s.builtin == (tab == cheatBuiltinSkills) && cheatMatch(q, s.name, s.desc) {
+			sk = append(sk, s)
+		}
+	}
+	if len(sk) == 0 {
+		return shown
+	}
+	title := "技能"
+	if tab == cheatBuiltinSkills {
+		// 和上面编在程序里的那组分开：这些装在 agent 自己的目录里，随它升级更新
+		title = "内置技能"
+		if shown > 0 {
+			title = "随安装附带"
+		}
+	}
+	a.cheatSection(c, fmt.Sprint("skills-", tab), cheatGroupTitle(title, tab, q), func() {
+		for j, s := range sk {
+			it := cheatsheet.Item{Name: sheet.SkillPrefix + s.name, Desc: s.desc}
+			a.cheatRow(c, cur, cheatsheet.KindSkill, it, it.Name+" ", j)
+		}
+	})
+	return shown + len(sk)
 }
 
 // cheatMatch 报告条目是否匹配搜索词（已转成小写）：名字或说明里包含就算。
@@ -184,8 +251,20 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 	})
 }
 
+// cheatGroupTitle 是一组的标题：不搜索时和所在页签同名的不再写一遍（空串）；搜索时各页签混在一起，照写。
+func cheatGroupTitle(title string, tab int, q string) string {
+	if q == "" && title == cheatTabs[tab] {
+		return ""
+	}
+	return title
+}
+
 func (a *app) cheatSection(c *ui.Context, key any, title string, body func()) {
 	ui.Column(c.Key(key)).Gap(2).Children(func() {
+		if title == "" {
+			body()
+			return
+		}
 		ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted).Padding(0, 4, 4, 4)
 		body()
 	})

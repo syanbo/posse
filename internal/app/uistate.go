@@ -59,6 +59,7 @@ type uiState struct {
 	UsageRemaining       bool      `json:"usageRemaining,omitempty"`       // 底栏的套餐用量显示剩余，而不是已用
 	ImageCheckerOff      bool      `json:"imageCheckerOff,omitempty"`      // 图片预览的透明处不铺棋盘格
 	UsageSkillsOnly      bool      `json:"usageSkillsOnly,omitempty"`      // "技能与工具"面板只看技能和 MCP，不列命令行程序
+	CheatTab             int       `json:"cheatTab,omitempty"`             // "命令速查"面板选的页签（cheatTabs 的下标）
 	UsageWebOnly         bool      `json:"usageWebOnly,omitempty"`         // "技能与工具"面板只看网址
 	HistoryByFolder      bool      `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
 	ChangesByDir         bool      `json:"changesByDir,omitempty"`         // 文件栏改动页的文件按目录排成树，而不是平铺

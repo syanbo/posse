@@ -28,6 +28,7 @@ const (
 	KindCommand Kind = "command" // 斜杠命令
 	KindKey     Kind = "key"     // 按键：只看不贴
 	KindPrefix  Kind = "prefix"  // 输入前缀（@、! 等）
+	KindSkill   Kind = "skill"   // agent 自带、编在程序里的技能（Claude 的 /code-review 等），扫目录扫不到
 )
 
 // Item 是一条命令、按键或前缀。
@@ -81,7 +82,7 @@ func For(agentName string) (Sheet, bool) {
 // Insert 是点了一条后贴进输入框的文字：命令和技能带参数时后面留个空格接着写，前缀原样。按键返回空。
 func Insert(k Kind, it Item) string {
 	switch k {
-	case KindCommand:
+	case KindCommand, KindSkill:
 		if it.Args != "" {
 			return it.Name + " "
 		}

@@ -158,6 +158,8 @@ func roots(o Options, cfg configs) []root {
 		{dir: filepath.Join(h, ".codex", "skills"), scope: ScopeUser, prio: prios(no, no, no, 40)},
 		{dir: filepath.Join(h, ".codex", "skills", ".system"), scope: ScopeSystem, prio: prios(no, 50, no, no)},
 		{dir: filepath.Join(h, ".cursor", "skills-cursor"), scope: ScopeSystem, prio: prios(no, no, no, 50)},
+		// Grok 自带的技能：每次启动从程序里的技能包解到这里，同名时用户的优先
+		{dir: filepath.Join(h, ".grok", "bundled", "skills"), scope: ScopeSystem, prio: prios(no, no, 90, no)},
 	}
 	// Claude 从账号同步下来的技能，一个桶一个目录
 	if buckets, err := os.ReadDir(filepath.Join(h, ".claude", "skills", "synced")); err == nil {
