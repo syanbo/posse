@@ -28,7 +28,7 @@ type uiState struct {
 	SidebarWidth         float32   `json:"sidebarWidth,omitempty"`         // 侧栏的宽度，0 表示默认
 	ProjectMetaHidden    bool      `json:"projectMetaHidden,omitempty"`    // 侧栏的项目行不显示分支和路径，只留名字
 	SidebarGroup         string    `json:"sidebarGroup,omitempty"`         // 侧栏的看法：空是按项目，sidebarByStatus 是运行中的会话平铺
-	TopTiles             []string  `json:"topTiles,omitempty"`             // 侧栏顶上磁贴的顺序：任务、历史、技能、手机的页面 ID 和固定的工作区 ID，空是默认顺序
+	TopTiles             []string  `json:"topTiles,omitempty"`             // 侧栏顶上磁贴的顺序：任务、历史、技能、手机、聊天的页面 ID 和固定的工作区 ID，空是默认顺序
 	WorkspaceMetaHidden  bool      `json:"workspaceMetaHidden,omitempty"`  // 侧栏项目下面的工作区行不显示分支，只留名字
 	LogPanel             bool      `json:"logPanel,omitempty"`             // 旧版不分项目的日志浮层开关，读到后记到当前项目上
 	LogPanelHeight       float32   `json:"logPanelHeight,omitempty"`       // Git 日志浮层的高度，0 表示默认

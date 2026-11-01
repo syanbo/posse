@@ -133,7 +133,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 
 // restoreSettings 是重启电脑或常驻进程之后怎么恢复上次的终端，见 internal/daemon/restore.go。
 func (a *app) restoreSettings(c *ui.Context) {
-	settingsCard(c, "恢复终端", "重启电脑或常驻进程后，上次的终端照常列在侧栏和标签栏（手机上不列），标着「未恢复」，切到它时才拉起：agent 续接原来的会话，普通终端在原来的目录重开，之前的输出不保留。打开下面的开关，常驻进程一启动就全部恢复（agent 多时会一起占内存和用量）。", func() {
+	settingsCard(c, "恢复终端", "重启电脑或常驻进程后，上次的终端照常列在侧栏、标签栏和手机首页，标着「未恢复」，切到它时才拉起：agent 续接原来的会话，普通终端在原来的目录重开，之前的输出不保留。打开下面的开关，常驻进程一启动就全部恢复（agent 多时会一起占内存和用量）。", func() {
 		on := a.restoreAll
 		settingsRow(c, "启动时恢复全部终端", func() {
 			if ui.Switch(c.Key("restoreAll"), &on).Label("启动时恢复全部终端").Changed() {
@@ -209,7 +209,7 @@ var permissionModes = []struct{ mode, seg, tip string }{
 }
 
 func (a *app) permissionSettings(c *ui.Context) {
-	settingsCard(c, "Agent 权限", "在 Posse 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
+	settingsCard(c, "Agent 权限", "在 Posse 里启动的 agent（包括在终端里手动敲的 claude、codex、cursor-agent、grok）用哪种权限。改了之后新开的 agent 生效，已经在运行的不变。", func() {
 		sel := 0
 		var labels []string
 		for i, m := range permissionModes {

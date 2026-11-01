@@ -118,8 +118,8 @@ func init() {
 		{"usage", "Show plan usage of Claude, Codex, Grok and Cursor (updated as they run)", "", cmdUsage},
 		{"usage report", "Forward a Claude statusLine input to Posse (for your own statusLine script)", "< statusline.json", cmdUsageReport},
 		{"hook", "Report an agent hook event (used by agent hooks)", "<agent> <event> < payload.json", cmdHook},
-		{"statusline", "Claude statusLine injected by Posse: forwards plan usage, prints nothing", "< statusline.json", cmdStatusline},
-		{"agent exec", "Run claude, codex or cursor-agent with Posse's hooks (used by the shims in $POSSE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
+		{"statusline", "Claude statusLine injected by Posse: forwards plan usage, then runs your own statusLine and prints its output", "< statusline.json", cmdStatusline},
+		{"agent exec", "Run claude, codex, cursor-agent or grok with the hooks and permission mode Posse injects (used by the shims in $POSSE_HOME/bin)", "<command> -- [args...]", cmdAgentExec},
 		{"version", "Print the version", "", cmdVersion},
 	}
 }

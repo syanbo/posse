@@ -727,7 +727,7 @@ func (a *app) sessionList(c *ui.Context) {
 		a.historyEmpty(c, "还没有会话记录", "Posse 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
 		return
 	}
-	// 按"今天、昨天、本周、更早"或文件夹分组；默认只展开第一组，其余只列组标题和会话数
+	// 按时间（dayGroup）或文件夹分组；默认只展开第一组，其余只列组标题和会话数
 	rows := h.groupRows()
 	// 列表里有"几分钟前"，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
