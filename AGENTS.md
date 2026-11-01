@@ -27,6 +27,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - 发布 iOS 的 Ad Hoc 安装包：先在 `mobile/CHANGELOG.md` 加 `## <版本>` 一节（App 提示更新时显示的更新内容，可以不提交），再跑 `scripts/ios-adhoc.sh <版本>`：它把版本号写进 `mobile/pubspec.yaml`，连同 CHANGELOG 提交成 `chore(release): 发布 iOS <版本>`（不推送；`mobile`、`internal/mquic` 有别的未提交改动时拒绝），用 Apple Distribution 证书打 ipa（导出设置 `mobile/ios/ExportOptions-adhoc.plist`，`--dart-define` 写进版本号和构建号），连同 itms-services 清单、安装页和 `latest.json` 传到 R2 的 `ios/`，iPhone 用 Safari 打开 `https://posse.shaoyan.uk/ios/index.html` 安装，装过的 App 读 `latest.json` 在首页提示更新。不带参数时，CHANGELOG 最上面一节的版本和 `pubspec.yaml` 不同就照它发新版，相同就按现在的版本重新打包上传（登记新设备、上传失败后）。只有开发者账号里登记过 UDID 的设备装得上；构建号是提交数，覆盖安装不清配对。
 - 发布安卓安装包：同样先在 `mobile/CHANGELOG.md` 加一节（和 iOS 共用版本号，iOS 刚发过同一版就不用改），再跑 `scripts/android-release.sh <版本>`：版本号逻辑和 iOS 脚本一样（提交成 `chore(release): 发布安卓 <版本>`），打 arm64 的 APK（构建号是提交数，写成 versionCode），连同下载页和 `latest.json` 传到 R2 的 `android/`，手机浏览器打开 `https://posse.shaoyan.uk/android/index.html` 下载安装，装过的 App 在首页提示更新、应用内下载后交给系统安装器。发布证书在 `~/Library/Application Support/Posse/android/`（第一次运行时生成），丢了已装的 App 不能覆盖更新，只能卸载重装、重新配对。
 - 内存验收看 `footprint -p <pid>` 的 phys_footprint，不看 RSS：libghostty-vt 压缩回滚后 RSS 不会立即下降。
+- main 保持一条直线，不留合并提交。分支和 worktree 合入的步骤：先在分支上 `git rebase main`，解决冲突后在分支上重新跑测试；再到项目目录执行 `git merge --ff-only <分支>`。不要用 `posse workspace merge`：它按 `--no-ff` 合入，那是给用户项目准备的。`posse task` 的 worker 在 worktree 里做完后，也按这个步骤合入。
 
 ## 结构
 
