@@ -3,7 +3,7 @@
 // 手机端也要用手机的字体。量文字宽度的函数由调用方给，排出来的标签和它画的字一致。不依赖 mygo，手机的 Go 库也用它。
 //
 // 移植自 Mayoi（https://github.com/sorrycc/Mayoi，cmd/mayoi/mermaid.go），
-// MIT 许可，Copyright (c) 2026 chencheng。
+// MIT 许可，见 LICENSE.mayoi。
 package mermaid
 
 import (
