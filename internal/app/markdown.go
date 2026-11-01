@@ -34,6 +34,8 @@ const (
 	mdRule
 	mdTable
 	mdMeta
+	mdCells
+	mdDetails
 )
 
 type mdStyle uint8
@@ -49,6 +51,7 @@ type mdInline struct {
 	text  string
 	style mdStyle
 	url   string
+	img   *mdImg // 图片（文件预览）：text 为空，url 是包着它的链接
 }
 
 type mdBlock struct {
@@ -66,6 +69,10 @@ type mdBlock struct {
 	size    *mdTableSize // 表格量好的列宽，块复制时共用
 	meta    []mdField    // 文件开头的 YAML 头部
 	blank   bool         // 源文件里它前面有空行：文件预览只在有空行的地方空开
+	// 以下只出自文件预览里的 HTML（markdown_html.go）
+	textAlign ui.Align // 段落、标题的对齐（align="center" 等）
+	grid      *mdGrid  // HTML 表格：格子里是任意的块
+	open      *bool    // <details> 是否展开，inlines 是 <summary>，blocks 是内容；块复制时共用
 }
 
 // mdField 是 YAML 头部的一项，depth 是缩进层数（嵌套的键）。
@@ -79,10 +86,16 @@ type mdItem struct {
 	check  int8 // 任务列表：0 不是任务项，1 未完成，2 已完成
 }
 
-func parseMarkdown(src string) []mdBlock {
+// parseMarkdown 解析历史页、任务页里 agent 写的 Markdown：其中的 HTML 照原文显示，agent 在正文里提到的标签不会被吃掉。
+func parseMarkdown(src string) []mdBlock { return parseMarkdownWith(src, false) }
+
+// parseMarkdownDoc 解析文件预览的 Markdown：照 GitHub 解释其中的 HTML（README 常用它居中、排图、做表格）。
+func parseMarkdownDoc(src string) []mdBlock { return parseMarkdownWith(src, true) }
+
+func parseMarkdownWith(src string, html bool) []mdBlock {
 	meta, body := frontMatter(src)
 	b := []byte(body)
-	out := mdBlocks(mdParser.Parse(text.NewReader(b)), b)
+	out := mdConv{src: b, html: html}.blocks(mdParser.Parse(text.NewReader(b)))
 	if len(meta) > 0 {
 		out = append([]mdBlock{{kind: mdMeta, meta: meta}}, out...)
 	}
@@ -145,66 +158,83 @@ func yamlScalar(v string) string {
 	return v
 }
 
-func mdBlocks(n ast.Node, src []byte) []mdBlock {
+// mdConv 把 goldmark 的语法树转成 mdBlock；html 为真时解释其中的 HTML（见 markdown_html.go）。
+type mdConv struct {
+	src  []byte
+	html bool
+}
+
+func (m mdConv) blocks(n ast.Node) []mdBlock {
+	if m.html {
+		return m.htmlBlocks(n)
+	}
 	var out []mdBlock
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		from := len(out)
-		switch c := c.(type) {
-		case *ast.Paragraph, *ast.TextBlock:
-			if ins := mdInlines(c, src); len(ins) > 0 {
-				out = append(out, mdBlock{kind: mdPara, inlines: ins})
-			}
-		case *ast.Heading:
-			out = append(out, mdBlock{kind: mdHeading, level: c.Level, inlines: mdInlines(c, src)})
-		case *ast.FencedCodeBlock:
-			out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src), lang: string(c.Language(src))})
-		case *ast.CodeBlock:
-			out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src)})
-		case *ast.HTMLBlock:
-			// 原样显示，不当 HTML 解释
-			code := mdLines(c.Lines(), src)
-			if c.HasClosure() {
-				code += "\n" + strings.TrimRight(string(c.ClosureLine.Value(src)), "\n")
-			}
-			out = append(out, mdBlock{kind: mdCode, code: strings.TrimSpace(code)})
-		case *ast.Blockquote:
-			out = append(out, mdBlock{kind: mdQuote, blocks: mdBlocks(c, src)})
-		case *ast.List:
-			b := mdBlock{kind: mdList, ordered: c.IsOrdered(), start: c.Start}
-			for it := c.FirstChild(); it != nil; it = it.NextSibling() {
-				item := mdItem{blocks: mdBlocks(it, src)}
-				if p := it.FirstChild(); p != nil {
-					if box, ok := p.FirstChild().(*east.TaskCheckBox); ok {
-						item.check = 1
-						if box.IsChecked {
-							item.check = 2
-						}
+		out = append(out, m.block(c)...)
+		if from < len(out) {
+			out[from].blank = blankBefore(c, m.src)
+		}
+	}
+	return out
+}
+
+// block 转换一个块节点，HTML 块照原文当代码块。
+func (m mdConv) block(c ast.Node) []mdBlock {
+	src := m.src
+	var out []mdBlock
+	switch c := c.(type) {
+	case *ast.Paragraph, *ast.TextBlock:
+		if ins := m.inlines(c); len(ins) > 0 {
+			out = append(out, mdBlock{kind: mdPara, inlines: ins})
+		}
+	case *ast.Heading:
+		out = append(out, mdBlock{kind: mdHeading, level: c.Level, inlines: m.inlines(c)})
+	case *ast.FencedCodeBlock:
+		out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src), lang: string(c.Language(src))})
+	case *ast.CodeBlock:
+		out = append(out, mdBlock{kind: mdCode, code: mdLines(c.Lines(), src)})
+	case *ast.HTMLBlock:
+		// 原样显示，不当 HTML 解释
+		code := mdLines(c.Lines(), src)
+		if c.HasClosure() {
+			code += "\n" + strings.TrimRight(string(c.ClosureLine.Value(src)), "\n")
+		}
+		out = append(out, mdBlock{kind: mdCode, code: strings.TrimSpace(code)})
+	case *ast.Blockquote:
+		out = append(out, mdBlock{kind: mdQuote, blocks: m.blocks(c)})
+	case *ast.List:
+		b := mdBlock{kind: mdList, ordered: c.IsOrdered(), start: c.Start}
+		for it := c.FirstChild(); it != nil; it = it.NextSibling() {
+			item := mdItem{blocks: m.blocks(it)}
+			if p := it.FirstChild(); p != nil {
+				if box, ok := p.FirstChild().(*east.TaskCheckBox); ok {
+					item.check = 1
+					if box.IsChecked {
+						item.check = 2
 					}
 				}
-				b.items = append(b.items, item)
 			}
-			out = append(out, b)
-		case *ast.ThematicBreak:
-			out = append(out, mdBlock{kind: mdRule})
-		case *east.Table:
-			b := mdBlock{kind: mdTable, size: &mdTableSize{}}
-			for _, a := range c.Alignments {
-				b.align = append(b.align, map[east.Alignment]ui.Align{east.AlignRight: ui.End, east.AlignCenter: ui.Center}[a])
-			}
-			for r := c.FirstChild(); r != nil; r = r.NextSibling() {
-				var row [][]mdInline
-				for cell := r.FirstChild(); cell != nil; cell = cell.NextSibling() {
-					row = append(row, mdInlines(cell, src))
-				}
-				b.rows = append(b.rows, row)
-			}
-			out = append(out, b)
-		default:
-			out = append(out, mdBlocks(c, src)...)
+			b.items = append(b.items, item)
 		}
-		if from < len(out) {
-			out[from].blank = blankBefore(c, src)
+		out = append(out, b)
+	case *ast.ThematicBreak:
+		out = append(out, mdBlock{kind: mdRule})
+	case *east.Table:
+		b := mdBlock{kind: mdTable, size: &mdTableSize{}}
+		for _, a := range c.Alignments {
+			b.align = append(b.align, map[east.Alignment]ui.Align{east.AlignRight: ui.End, east.AlignCenter: ui.Center}[a])
 		}
+		for r := c.FirstChild(); r != nil; r = r.NextSibling() {
+			var row [][]mdInline
+			for cell := r.FirstChild(); cell != nil; cell = cell.NextSibling() {
+				row = append(row, m.inlines(cell))
+			}
+			b.rows = append(b.rows, row)
+		}
+		out = append(out, b)
+	default:
+		out = append(out, m.blocks(c)...)
 	}
 	return out
 }
@@ -250,17 +280,21 @@ func mdLines(lines *text.Segments, src []byte) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func mdInlines(n ast.Node, src []byte) []mdInline {
+func (m mdConv) inlines(n ast.Node) []mdInline {
+	src := m.src
 	var out []mdInline
+	// 文件预览里段落中的行内标签（<b>、<a href>、<img> 等）：开着的标签叠在后面的文字上
+	var tags []inlineTag
 	add := func(s string, st mdStyle, url string) {
 		if s == "" {
 			return
 		}
+		st, url = tagStyle(tags, st, url)
 		if k := len(out) - 1; k >= 0 && out[k].style == st && out[k].url == url {
 			out[k].text += s
 			return
 		}
-		out = append(out, mdInline{s, st, url})
+		out = append(out, mdInline{text: s, style: st, url: url})
 	}
 	var walk func(n ast.Node, st mdStyle, url string)
 	walk = func(n ast.Node, st mdStyle, url string) {
@@ -287,10 +321,32 @@ func mdInlines(n ast.Node, src []byte) []mdInline {
 			case *ast.Link:
 				walk(c, st, string(c.Destination))
 			case *ast.Image:
+				if m.html {
+					// 图片后面紧跟的文字不和它合并
+					out = append(out, mdInline{img: &mdImg{src: string(c.Destination), alt: plainText(c, src), title: string(c.Title)}, url: url})
+					out = append(out, mdInline{})
+					continue
+				}
 				walk(c, st|mdItalic, string(c.Destination))
 			case *ast.AutoLink:
 				add(string(c.Label(src)), st, string(c.URL(src)))
 			case *ast.RawHTML:
+				if m.html {
+					var raw strings.Builder
+					for i := range c.Segments.Len() {
+						seg := c.Segments.At(i)
+						raw.Write(seg.Value(src))
+					}
+					img, brk := inlineHTML(raw.String(), &tags)
+					if img != nil {
+						_, u := tagStyle(tags, st, url)
+						out = append(out, mdInline{img: img, url: u}, mdInline{})
+					}
+					if brk {
+						add("\n", st, url)
+					}
+					continue
+				}
 				for i := range c.Segments.Len() {
 					seg := c.Segments.At(i)
 					add(string(seg.Value(src)), st, url)
@@ -303,10 +359,7 @@ func mdInlines(n ast.Node, src []byte) []mdInline {
 		}
 	}
 	walk(n, 0, "")
-	if k := len(out) - 1; k >= 0 {
-		out[k].text = strings.TrimRight(out[k].text, "\n")
-	}
-	return wikiLinks(out)
+	return wikiLinks(trimInlines(out))
 }
 
 // wikiRe 认 [[名字]]、[[名字|显示的字]]（Obsidian 和 agent 记忆里互相引用的写法）。
@@ -323,18 +376,18 @@ func wikiLinks(ins []mdInline) []mdInline {
 		last := 0
 		for _, m := range wikiRe.FindAllStringSubmatchIndex(in.text, -1) {
 			if m[0] > last {
-				out = append(out, mdInline{in.text[last:m[0]], in.style, ""})
+				out = append(out, mdInline{text: in.text[last:m[0]], style: in.style})
 			}
 			target := strings.TrimSpace(in.text[m[2]:m[3]])
 			label := target
 			if m[4] >= 0 {
 				label = strings.TrimSpace(in.text[m[4]:m[5]])
 			}
-			out = append(out, mdInline{label, in.style, "wiki:" + target})
+			out = append(out, mdInline{text: label, style: in.style, url: "wiki:" + target})
 			last = m[1]
 		}
 		if last < len(in.text) {
-			out = append(out, mdInline{in.text[last:], in.style, ""})
+			out = append(out, mdInline{text: in.text[last:], style: in.style})
 		}
 	}
 	return out
@@ -348,6 +401,7 @@ type mdView struct {
 	size  float32             // 正文字号（设置里的 Markdown 字号），0 跟界面字号；标题、代码和它的差值同界面
 	doc   bool                // 文件预览：照长文排版，行距和段距比历史页的回复松
 	wiki  func(target string) // 点 [[名字]] 时打开它；为空时只上色、点不了
+	imgs  *mdImages           // 文件预览载入图片；为空时图片只显示说明文字
 }
 
 // lead 是正文的行高，列表的点、序号按它对齐第一行。
@@ -384,7 +438,9 @@ func (r mdView) mono() float32 {
 }
 
 // boxed 是自带底色或边框的块：代码块、表格、引用、分割线。
-func boxed(k mdKind) bool { return k == mdCode || k == mdTable || k == mdQuote || k == mdRule }
+func boxed(k mdKind) bool {
+	return k == mdCode || k == mdTable || k == mdQuote || k == mdRule || k == mdCells
+}
 
 // endsBoxed 看一串块是不是以 boxed 的块结尾，列表看它最后一项的最后一块。
 func endsBoxed(bs []mdBlock) bool {
@@ -461,9 +517,27 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	switch b.kind {
 	case mdPara:
-		r.inline(c, b.inlines).FontSize(r.body()).LineHeight(r.lead())
+		if hasImage([]mdBlock{b}) {
+			r.media(c, b)
+			return
+		}
+		e := r.inline(c, b.inlines).FontSize(r.body()).LineHeight(r.lead())
+		if b.textAlign != 0 {
+			e.TextAlign(b.textAlign)
+		}
 	case mdHeading:
-		r.inline(c, b.inlines).FontSize(r.heading(b.level)).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
+		if hasImage([]mdBlock{b}) {
+			r.media(c, b)
+			return
+		}
+		e := r.inline(c, b.inlines).FontSize(r.heading(b.level)).FontWeight(fwBold).LineHeight(1.35).Padding(4, 0, 0, 0)
+		if b.textAlign != 0 {
+			e.TextAlign(b.textAlign)
+		}
+	case mdCells:
+		r.grid(c, b.grid)
+	case mdDetails:
+		r.details(c, b)
 	case mdCode:
 		// mermaid 代码块画成图；画好之前、画不出来、切到源码时照普通代码块显示
 		var d *diagram.Diagram

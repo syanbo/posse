@@ -70,6 +70,7 @@ type fileDoc struct {
 	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
 	md         []mdBlock
 	mdVer      uint64
+	mdImgs     *mdImages      // 预览里的图片，关掉标签就释放
 	mdScroll   ui.ScrollState // 预览的滚动位置：切走后元素状态被回收，回来靠它接着看
 	find       docFind        // Markdown 预览和 Annotate 的查找栏（编辑器有自己的）
 	// 未保存判断按缓冲区版本缓存：Modified 在有改动时要整份比较文本

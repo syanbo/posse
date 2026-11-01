@@ -699,7 +699,10 @@ func isMarkdown(path string) bool {
 // 版心随字号等比放宽，放大后一行的字数不变。
 func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 	if v := d.ed.Buffer.Version(); d.md == nil || v != d.mdVer {
-		d.md, d.mdVer = parseMarkdown(d.ed.Buffer.String()), v
+		d.md, d.mdVer = parseMarkdownDoc(d.ed.Buffer.String()), v
+	}
+	if d.mdImgs == nil {
+		d.mdImgs = newMDImages(filepath.Dir(d.path), w.Path)
 	}
 	f := &d.find
 	f.shortcuts(c, a)
@@ -709,7 +712,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
 				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Selectable().Children(func() {
-					mdView{find: f, size: size, doc: true, wiki: func(target string) { a.openWiki(w, d.path, target) }}.page(c, d.md)
+					mdView{find: f, size: size, doc: true, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(w, d.path, target) }}.page(c, d.md)
 				})
 			})
 		})
