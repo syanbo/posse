@@ -189,11 +189,18 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 			case len(r.sessions) == 0:
 				usageNote(c, "这个项目还没有会话记录。")
 			}
-			for _, s := range r.sessions {
+			for i, s := range r.sessions {
+				// 细线隔开相邻的两个会话，和卡片内容同宽（两头让开卡片的内边距）
+				if i > 0 {
+					hline(c).Margin(0, 8)
+				}
 				row := ui.Row(c.Key(sessionKey(s))).Padding(8, 8).Gap(8).Radius(rControl).AlignItems(ui.Start).Role(ui.RoleButton).Label(s.Title)
 				selectedBg(c, row, a.selected == historyBoardID && a.history.sel == sessionKey(s))
 				row.Children(func() {
-					agentTile(c, s.Agent, iconSize)
+					// 图标放在和标题行同高的格子里居中，和标题对齐
+					ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Shrink(0).Children(func() {
+						agentTile(c, s.Agent, iconSize)
+					})
 					ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
 						// 固定行高，悬停时时间换成按钮也不跳
 						ui.Row(c).Height(sz(20)).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -213,9 +220,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 							if p.user {
 								text = "你：" + text
 							}
-							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35)
-							// 细线把聊天内容和下面的目录、消息数分开
-							hline(c).Margin(4, 0, 4, 0)
+							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35).Margin(0, 0, 4, 0)
 						}
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
