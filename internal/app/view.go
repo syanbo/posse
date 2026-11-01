@@ -1285,10 +1285,9 @@ func (a *app) terminalSummary(ts []terminalInfo) (running int, status string) {
 			continue
 		}
 		running++
-		if t.AgentState != nil {
-			if s := a.shownStatus(t, t.AgentState.Status); statusRank(s) > statusRank(status) {
-				status = s
-			}
+		// 和侧栏会话行同一个口径：在等任务的会话不按它本轮完成没看算成铃铛
+		if s := a.sessionStatus(t); statusRank(s) > statusRank(status) {
+			status = s
 		}
 	}
 	return running, status
@@ -1303,6 +1302,8 @@ func statusRank(s string) int {
 		return 4
 	case agent.StatusWorking:
 		return 3
+	case statusTasks:
+		return 2
 	case agent.StatusStarting:
 		return 1
 	}

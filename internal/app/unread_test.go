@@ -46,3 +46,23 @@ func TestUnreadStatus(t *testing.T) {
 		t.Fatal("seenFor kept after the daemon cleared unread")
 	}
 }
+
+// 在等任务的会话（侧栏会话行画波形）汇总进工作区、项目和固定磁贴时也是等任务，不因为它本轮完成没看就摇铃铛。
+func TestSummaryWaitingTasks(t *testing.T) {
+	a := &app{runningFor: map[string]int{"b": 1}}
+	ts := []terminalInfo{
+		{ID: "a", Agent: "claude", Running: true, AgentState: &agentState{Status: agent.StatusIdle}},
+		{ID: "b", Agent: "claude", Running: true, Unread: true, AgentState: &agentState{Status: agent.StatusIdle}},
+	}
+	if s := a.sessionStatus(ts[1]); s != statusTasks {
+		t.Fatalf("session = %q, want tasks", s)
+	}
+	if _, s := a.terminalSummary(ts); s != statusTasks {
+		t.Fatalf("summary = %q, want tasks", s)
+	}
+	// 别的会话在工作时，汇总是工作中（等任务排在工作中后面）
+	ts[0].AgentState = &agentState{Status: agent.StatusWorking}
+	if _, s := a.terminalSummary(ts); s != agent.StatusWorking {
+		t.Fatalf("summary = %q, want working", s)
+	}
+}
