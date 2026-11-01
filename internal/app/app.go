@@ -156,6 +156,7 @@ type app struct {
 	sectionsOpen map[string]*bool  // 项目 ID → 侧栏分组是否展开
 	workersOpen  map[string]*bool  // 派发方终端 ID → 侧栏里它的 worker 是否展开（默认展开，不记进 ui.json）
 	runOrder     []string          // 侧栏「运行中」里会话的顺序（终端 ID），nil 表示下一帧按状态重排
+	topSlot      int               // 侧栏顶上磁贴拖动时空出来的格子加一，0 是没有；松手时按它落
 	pollDown     bool              // 最近一次轮询连不上常驻进程，侧栏的会话列表是旧的
 	navOrder     []navTarget       // 侧栏看得见、可选中的行，按显示顺序，供方向键移动
 	navCur       int               // navOrder 里当前选中的行，没有时为 -1

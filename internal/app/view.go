@@ -422,20 +422,15 @@ func (a *app) sidebar(c *ui.Context) {
 		ui.Text(c, msg).FontSize(fsSmall).TextColor(color).Padding(6, 16)
 	}
 	a.navOrder, a.navCur = a.navOrder[:0], -1
-	// 任务、历史、手机是全局页面，固定在顶上不跟着项目列表滚动，和下面的项目用一道细线隔开
-	ui.Column(c).Padding(4, navEnd, 0, trafficLightX-navPad).Gap(2).Shrink(0).Children(func() {
-		if len(a.projects) > 0 {
-			a.taskSidebarItem(c)
-		}
-		a.historySidebarItem(c)
-		a.skillsSidebarItem(c)
-		a.mobileSidebarItem(c)
-		hline(c).Margin(6, navPad, 0, navPad)
-	})
+	a.topTiles(c)
 	if len(a.projects) > 0 {
 		a.sidebarGroupSwitch(c)
 	}
 	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
+	// 固定的工作区从顶上拖回项目列表就取消固定
+	if d, ok := ui.Drop[tileDrag](nav); ok && !slices.Contains(globalTiles, d.id) {
+		a.unpin(d.id)
+	}
 	nav.Children(func() {
 		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
 			if a.state.SidebarGroup == sidebarByStatus {
@@ -509,7 +504,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 			sessions := agentSessions(head.Terminals)
 			var toggle func()
 			if len(sessions) > 0 {
-				toggle = func() { disclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions))) }
+				toggle = func() { navDisclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions))) }
 			}
 			// 单击项目行就展开；已经选中并展开时再单击收起
 			wasSelected := a.selected == head.ID
@@ -583,7 +578,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		if !*open {
 			summaryTrailing(c, running, status)
 		}
-		disclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
+		navDisclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
 	}
 	icon := func() { a.projectGlyph(c, a.projIcons[p.ID], iconFolder) }
 	sub := shortPath(ws[0].Path)
@@ -597,8 +592,19 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(m, ws[0]) })
 }
 
+// navDisclosure 是侧栏行尾的展开箭头：行尾的内容离行边 navPad、行离列表边 navEnd，箭头要再往右挪一点，
+// 才和顶栏、底栏的图标在一条线上。
+func navDisclosure(c *ui.Context, open *bool, label string) {
+	shift := navEnd + navPad + miniBox()/2 - sideIconCenter()
+	disclosure(c, open, label).Margin(0, -shift, 0, 0)
+}
+
+// sideIconCenter 是侧栏右边一列图标的中线离侧栏右边缘的距离：顶栏的侧栏开关、底栏的齿轮（iconBarPad 让图标离边 trafficLightX），
+// 项目列表的筛选和各行的展开箭头都对着它。
+func sideIconCenter() float32 { return trafficLightX + iconSize/2 }
+
 // disclosure 是展开箭头，展开时转向下；label 是收起时的说明（"展开…"），展开后说明换成"收起…"。
-func disclosure(c *ui.Context, open *bool, label string) {
+func disclosure(c *ui.Context, open *bool, label string) ui.Element {
 	if *open {
 		label = "收起" + strings.TrimPrefix(label, "展开")
 	}
@@ -620,6 +626,7 @@ func disclosure(c *ui.Context, open *bool, label string) {
 	if b.Clicked() {
 		*open = !*open
 	}
+	return b
 }
 
 // summaryTrailing 是行尾的运行终端数和最要紧的状态。
@@ -725,6 +732,13 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], a.wsIcon(&w)) }
 	}
 	item := a.navRowAt(c, w.ID, selected, icon, label, sub, branch, trailing)
+	if nested {
+		// 项目下面的工作区行能拖到顶上固定；单行的项目整行拖的是项目（排序），顶上也接
+		item.Drag(wsDrag{w.ID})
+		if item.Dragging() {
+			item.Opacity(0.4)
+		}
+	}
 	if item.Clicked() {
 		a.selected = w.ID
 	}
@@ -847,17 +861,14 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			}
 		}
 	}
-	// 和终端标签一样：最左是状态，接着 agent 图标和名字，字和图标都小一档
+	// 状态和 agent 图标共用一格：有状态时画状态，空闲、还没有状态时画 agent 图标；同样大小，换的时候名字不跳。
+	// 单独给空闲留一格的话，最常见的空闲行左边总空着一块
 	icon := func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
-			if status != "" {
-				a.statusIcon(c, statusID, status, smallIcon())
-			} else {
-				// 还没有状态时占住位置，图标和名字不往左跳
-				ui.Box(c).Size(smallIcon(), smallIcon()).Shrink(0)
-			}
+		if status != "" {
+			a.statusIcon(c, statusID, status, smallIcon())
+		} else {
 			agentTile(c, term.Agent, smallIcon()).Tooltip(name)
-		})
+		}
 	}
 	row := a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, where, "", trailing)
 	if where == "" {
@@ -927,6 +938,15 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 		}
 	}
 	m.Separator()
+	if a.pinned(w.ID) {
+		if m.Item("取消固定").Chosen() {
+			a.unpin(w.ID)
+		}
+	} else if !a.canPin() {
+		m.Item(fmt.Sprintf("固定到顶部（顶部最多 %d 块，已满）", topTilesMax)).Disabled(true)
+	} else if m.Item("固定到顶部").Chosen() {
+		a.pin(w.ID)
+	}
 	if w.Kind == "main" && m.Item("更换图标…").Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
 			a.editProjectIcon(*p)
@@ -1023,11 +1043,7 @@ func dropMark(c *ui.Context, e ui.Element, after, across bool) {
 // navRow 是侧栏的一行，sub 非空时在名称下面用等宽小字显示（路径或分支），branch 非空时在 sub 上面单独一行；
 // 选中和悬停的样式见 selectedBg。
 func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch string, trailing func()) ui.Element {
-	selected := a.selected == id
-	a.navOrder = append(a.navOrder, navTarget{ws: id})
-	if selected {
-		a.navCur = len(a.navOrder) - 1
-	}
+	selected := a.navMark(id)
 	accent := c.Theme().Accent
 	row := a.navRowAt(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(accent).Shrink(0) }, label, sub, branch, trailing)
 	if row.Clicked() {
@@ -1038,6 +1054,61 @@ func (a *app) navRow(c *ui.Context, id string, icon *ui.SVG, label, sub, branch 
 	}
 	return row
 }
+
+// navTile 是侧栏顶上的全局页面磁贴：几个平分一行，图标下面写名字；
+// badge 非空时画在右上角（待处理、手机在线）。点击和方向键顺序同 navRow。
+func (a *app) navTile(c *ui.Context, id string, icon *ui.SVG, label string, badge func()) ui.Element {
+	selected := a.navMark(id)
+	tile := sideTile(c, id, selected, func() { ui.Icon(c, icon).FontSize(iconSize).TextColor(c.Theme().Accent) }, label, badge)
+	if tile.Clicked() {
+		if id == taskBoardID {
+			a.showTaskHome()
+		}
+		a.selected = id
+	}
+	return tile
+}
+
+// sideTile 画侧栏顶上的一块磁贴：上面是图标，下面是名字（放不下时截断），badge 在右上角。
+func sideTile(c *ui.Context, key string, selected bool, icon func(), label string, badge func()) ui.Element {
+	t := c.Theme()
+	p := colors(t)
+	tile := ui.Column(c.Key(key)).Height(tileHeight()).Grow(1).Basis(0).Gap(4).Radius(rControl).Center().
+		Label(label).Role(ui.RoleButton)
+	bg := p.fill
+	switch {
+	case selected:
+		bg = p.tint
+	case tile.Hovered():
+		bg = p.wash
+	}
+	tile.Background(tile.AnimateColor("bg", bg, hover))
+	tile.Children(func() {
+		icon()
+		name := ui.Text(c, label).FontSize(fsSmall).SingleLine()
+		// 名字放不下时截断：宽度取上一帧的，刚出现的磁贴还没量过，先不限
+		if w := tile.Bounds().W; w > 0 {
+			name.MaxWidth(max(w-12, 0))
+		}
+		if badge != nil {
+			ui.Row(c).Absolute().Top(4).Right(4).AlignItems(ui.Center).Children(badge)
+		}
+	})
+	return tile
+}
+
+// navMark 把全局页面 id 登记进侧栏方向键的顺序，返回它是否选中。
+func (a *app) navMark(id string) bool {
+	selected := a.selected == id
+	a.navOrder = append(a.navOrder, navTarget{ws: id})
+	if selected {
+		a.navCur = len(a.navOrder) - 1
+	}
+	return selected
+}
+
+// tileHeight 是侧栏顶上磁贴的高度，网格的行高和拖进来时的空格都用它。
+func tileHeight() float32 { return sz(56) }
 
 // navRowAt 画侧栏的一行，选中、点击和方向键顺序由调用方处理；icon 画行首的图标。
 func (a *app) navRowAt(c *ui.Context, key string, selected bool, icon func(), label, sub, branch string, trailing func()) ui.Element {
@@ -2255,8 +2326,13 @@ func iconButtonSized(c *ui.Context, icon *ui.SVG, label string, box, glyph float
 // toggleIconButton 是带开关状态的小图标按钮（图片的棋盘格、改动页的按目录分组），开着时垫强调色淡底；
 // 返回这一帧是否被点了。
 func toggleIconButton(c *ui.Context, key string, icon *ui.SVG, label string, on bool) bool {
+	return toggleIconButtonSized(c, key, icon, label, on, compactBox(), fsBody, rRow)
+}
+
+// toggleIconButtonSized 同 toggleIconButton，方框、图标和圆角自定（顶栏里和 iconButton 一样大）。
+func toggleIconButtonSized(c *ui.Context, key string, icon *ui.SVG, label string, on bool, box, glyph, radius float32) bool {
 	t := c.Theme()
-	b := ui.Box(c.Key(key)).Size(compactBox(), compactBox()).Radius(rRow).Center().Shrink(0).
+	b := ui.Box(c.Key(key)).Size(box, box).Radius(radius).Center().Shrink(0).
 		Role(ui.RoleButton).Label(label).Tooltip(label).Checked(on)
 	bg, fg := ui.Transparent, t.TextMuted
 	switch {
@@ -2266,7 +2342,7 @@ func toggleIconButton(c *ui.Context, key string, icon *ui.SVG, label string, on 
 		bg, fg = t.SurfaceHover, t.Text
 	}
 	b.Background(b.AnimateColor("bg", bg, hover))
-	b.Children(func() { ui.Icon(c, icon).FontSize(fsBody).TextColor(fg) })
+	b.Children(func() { ui.Icon(c, icon).FontSize(glyph).TextColor(fg) })
 	return b.Clicked()
 }
 

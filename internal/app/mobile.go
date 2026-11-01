@@ -236,21 +236,22 @@ func (a *app) dropDevices(ds []mobileDevice) {
 	a.win.Update(func() { a.mobile.devices = devices })
 }
 
-// mobileSidebarItem 是侧栏里「历史」下面的「手机」，和任务、历史同一行样式。
-func (a *app) mobileSidebarItem(c *ui.Context) {
-	// 有手机连着时行尾一个绿点（几台时带数字），悬停写是哪几台
-	var trailing func()
+// mobileSidebarItem 是侧栏顶上的「手机」磁贴。
+func (a *app) mobileSidebarItem(c *ui.Context) ui.Element {
+	// 有手机连着时右上角一个绿点（几台时带数字），悬停写是哪几台
+	var badge func()
 	if on := a.daemon.MobileOnline; len(on) > 0 {
-		trailing = func() { mobileOnlineMark(c, on) }
+		badge = func() { mobileOnlineMark(c, on) }
 	}
-	item := a.navRow(c, mobileBoardID, iconPhone, "手机", "", "", trailing)
+	item := a.navTile(c, mobileBoardID, iconPhone, "手机", badge)
 	if a.revealSel && a.selected == mobileBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
+	return item
 }
 
-// mobileOnlineMark 是侧栏「手机」行尾的连接标识：绿点，连着不止一台时前面写台数。
+// mobileOnlineMark 是侧栏「手机」磁贴角上的连接标识：绿点，连着不止一台时前面写台数。
 func mobileOnlineMark(c *ui.Context, names []string) {
 	t := c.Theme()
 	green := colors(t).sage

@@ -484,12 +484,13 @@ func resumeCommand(s history.Session) string {
 
 // --- 界面
 
-func (a *app) historySidebarItem(c *ui.Context) {
-	item := a.navRow(c, historyBoardID, iconHistory, "历史", "", "", nil)
+func (a *app) historySidebarItem(c *ui.Context) ui.Element {
+	item := a.navTile(c, historyBoardID, iconHistory, "历史", nil)
 	if a.revealSel && a.selected == historyBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
+	return item
 }
 
 func (a *app) historyBoard(c *ui.Context) {

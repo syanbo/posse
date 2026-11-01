@@ -623,6 +623,47 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		a.state.ProjectMetaHidden, a.state.WorkspaceMetaHidden = true, true
 		savePNG(t, newPreviewTester(a, dark), "sidebar-no-meta-"+suffix+".png")
+		// 固定在顶上的工作区：主工作区用项目名，worktree 用工作区名，长名字截断
+		a = previewApp(t)
+		a.state.TopTiles = []string{"w1", taskBoardID, historyBoardID, "w6", skillsBoardID, mobileBoardID, "w3"}
+		savePNG(t, newPreviewTester(a, dark), "sidebar-pinned-"+suffix+".png")
+		// 从项目树把工作区拖到顶上：最后多一块强调色描边的空位
+		a = previewApp(t)
+		tt = newPreviewTester(a, dark)
+		if r, ok := tt.Find("feat-login"); ok {
+			h, _ := tt.Find("历史")
+			tt.Press(r.X+r.W/2, r.Y+r.H/2)
+			tt.Frame()
+			for i := 1; i <= 5; i++ {
+				f := float32(i) / 5
+				tt.Move(r.X+r.W/2+(h.X-r.X)*f, r.Y+r.H/2+(h.Y+h.H/2-r.Y-r.H/2)*f)
+				tt.Frame()
+			}
+			pass(tt, 400*time.Millisecond)
+			tt.Frame()
+			savePNG(t, tt, "sidebar-pin-drag-"+suffix+".png")
+			tt.Release(h.X, h.Y)
+		}
+		// 拖顶上已有的磁贴：「手机」拖到「任务」那格，它原来的格子收拢，后面的往后让
+		a = previewApp(t)
+		tt = newPreviewTester(a, dark)
+		if m, ok := tt.Find("手机"); ok {
+			k, _ := tt.Find("任务")
+			tt.Press(m.X+m.W/2, m.Y+m.H/2)
+			tt.Frame()
+			for i := 1; i <= 5; i++ {
+				f := float32(i) / 5
+				tt.Move(m.X+m.W/2+(k.X+k.W/2-m.X-m.W/2)*f, m.Y+m.H/2)
+				tt.Frame()
+			}
+			tt.Advance(100 * time.Millisecond)
+			tt.Frame()
+			savePNG(t, tt, "sidebar-tile-move-mid-"+suffix+".png")
+			pass(tt, 400*time.Millisecond)
+			tt.Frame()
+			savePNG(t, tt, "sidebar-tile-move-"+suffix+".png")
+			tt.Release(k.X, k.Y)
+		}
 		// 侧栏「运行中」：所有项目的 agent 会话平铺，第二行写项目和工作区
 		a = previewApp(t)
 		a.state.SidebarGroup = sidebarByStatus

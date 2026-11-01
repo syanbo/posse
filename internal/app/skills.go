@@ -180,12 +180,13 @@ func (a *app) releaseSkills() {
 		updates: s.updates, checking: s.checking, checkReq: s.checkReq, onlyUpdates: s.onlyUpdates}
 }
 
-func (a *app) skillsSidebarItem(c *ui.Context) {
-	item := a.navRow(c, skillsBoardID, iconSkill, "技能", "", "", nil)
+func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {
+	item := a.navTile(c, skillsBoardID, iconSkill, "技能", nil)
 	if a.revealSel && a.selected == skillsBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
+	return item
 }
 
 // skillAgentLabels 是技能页按 agent 筛选的分段。

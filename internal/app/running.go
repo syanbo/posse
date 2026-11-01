@@ -12,16 +12,22 @@ import (
 // sidebarByStatus 是侧栏的「运行中」看法：所有项目里的 agent 会话平铺成一列，按状态排。
 const sidebarByStatus = "status"
 
-// sidebarGroupSwitch 是侧栏项目列表上面「项目 | 运行中」的切换。
+// sidebarGroupSwitch 是项目列表上面的小标题：左边写「项目」，右边是「只看运行中」的筛选开关，
+// 开着时列表换成所有项目里 agent 会话的平铺，标题改写「运行中」。
 func (a *app) sidebarGroupSwitch(c *ui.Context) {
-	sel := 0
-	if a.state.SidebarGroup == sidebarByStatus {
-		sel = 1
+	on := a.state.SidebarGroup == sidebarByStatus
+	title := "项目"
+	if on {
+		title = "运行中"
 	}
-	ui.Column(c).Padding(6, navEnd, 0, trafficLightX).Shrink(0).Children(func() {
-		if segmented(c, &sel, "侧栏分组", "项目", "运行中") {
+	// 漏斗和侧栏顶栏的开关、底栏的齿轮、项目行尾的展开箭头竖着对齐（见 sideIconCenter）
+	right := sideIconCenter() - compactBox()/2
+	ui.Row(c).Padding(6, right, 0, trafficLightX).AlignItems(ui.Center).Shrink(0).Children(func() {
+		ui.Text(c, title).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
+		ui.Spacer(c)
+		if toggleIconButton(c, "sidebar-group", iconFilter, "只看运行中的会话", on) {
 			a.state.SidebarGroup = ""
-			if sel == 1 {
+			if !on {
 				a.state.SidebarGroup = sidebarByStatus
 			}
 			// 每次切进来按当下的状态重排一次

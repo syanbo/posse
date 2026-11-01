@@ -319,26 +319,26 @@ func (a *app) viewDiff(t taskInfo) {
 
 // --- 侧栏入口
 
-func (a *app) taskSidebarItem(c *ui.Context) {
+func (a *app) taskSidebarItem(c *ui.Context) ui.Element {
 	t := c.Theme()
 	running, waiting := a.taskCounts()
-	var trailing func()
+	var badge func()
 	if running > 0 || waiting > 0 {
-		trailing = func() {
+		badge = func() {
 			if waiting > 0 {
-				pendingLabel(c)
 				statusGlyph(c, agent.StatusWaiting, smallIcon())
 				return
 			}
-			// 进行中只写个数，不再跟一个转动的图标：侧栏这一行是入口，不是哪个会话的状态
+			// 进行中只写个数，不跟转动的图标：这是入口，不是哪个会话的状态
 			ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
 		}
 	}
-	item := a.navRow(c, taskBoardID, iconTasks, "任务", "", "", trailing)
+	item := a.navTile(c, taskBoardID, iconTasks, "任务", badge)
 	if a.revealSel && a.selected == taskBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
+	return item
 }
 
 // --- 总览
