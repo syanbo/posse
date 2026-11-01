@@ -324,7 +324,9 @@ func (a *app) insertIntoTerminal(cur *terminalInfo, text string) {
 	for i, v := range a.panes {
 		if v != nil && v.id == cur.ID {
 			v.term.Send([]byte(text))
-			a.focusPane(cur.WorkspaceID, i) // 不分屏时只有一栏，它什么也不做
+			if w := a.workspace(cur.WorkspaceID); w != nil && a.splitShown() {
+				a.focusColumn(w, i, false)
+			}
 			a.focusTerm = true
 			a.state.RightPanel = ""
 			a.saveState()

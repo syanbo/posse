@@ -26,11 +26,11 @@ func (a *app) eachPane(fn func(v *termView)) {
 	}
 }
 
-// ensurePanes 让两栏接入的终端与 ids 一致：换掉的断开（释放界面侧内存），接入新的；
+// ensurePanes 让各栏接入的终端与 ids 一致：换掉的断开（释放界面侧内存），接入新的；
 // 同一个终端换到另一栏时沿用原来的视图，不重新接入。
-func (a *app) ensurePanes(ids [2]string) {
+func (a *app) ensurePanes(ids [maxColumns]string) {
 	old := a.panes
-	var next [2]*termView
+	var next [maxColumns]*termView
 	for i, id := range ids {
 		for j, v := range old {
 			if id != "" && v != nil && v.id == id {
@@ -55,7 +55,7 @@ func (a *app) ensurePanes(ids [2]string) {
 	a.panes = next
 }
 
-// dropPaneState 放掉只对断开的那个终端有用的界面状态：它里面链接的卡片和图片预览。另一栏的不动。
+// dropPaneState 放掉只对断开的那个终端有用的界面状态：它里面链接的卡片和图片预览。别的栏的不动。
 func (a *app) dropPaneState(id string) {
 	if a.linkCard != nil && (a.linkCard.term == id || a.linkCard.term == "") {
 		a.linkCard = nil

@@ -171,9 +171,12 @@ type app struct {
 	lastTerm      int64
 	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	refreshQueued atomic.Bool // selectTask 排的那次轮询还没开始
-	// panes 是主区域接入的终端：0 是左栏（不分屏时只有这一栏），1 是右栏；pane 是焦点所在的栏
-	panes [2]*termView
+	// panes 是主区域每栏接入的终端（下标同 cols，选中的不是终端的栏为 nil）；pane 是焦点所在的栏
+	panes [maxColumns]*termView
 	pane  int
+	cols  []colView // 这一帧显示的几栏（syncColumns 定），没分栏时只有一栏
+	// colFocused 是上一帧键盘焦点在不在各栏里，焦点刚进来时换焦点栏（columnFocus）
+	colFocused [maxColumns]bool
 	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID
 	carryFind    map[string]termFind
 	fontSize     float32
@@ -255,7 +258,7 @@ type app struct {
 	traceSeq      int64 // 已经取到的终端 git 命令序号（git.trace），只在轮询协程里用
 	traceLoaded   bool
 	filesPanelRef ui.Ref
-	termAreaRef   [2]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
+	termAreaRef   [maxColumns]ui.Ref // 每一栏的终端内容区（终端和它上面的查找栏）
 	// 文件栏展开的进度：0 收起，1 打开，中间是动画
 	filesPanelShown float32
 	promptDlg       *promptState
@@ -274,7 +277,7 @@ type app struct {
 	linkChecks map[string]linkCheck
 	// 悬停在终端里的图片链接上时预览：hoverImage 是图片路径，previews 是解码好的预览
 	hoverImage string
-	hoverTerm  string // 悬停的是哪个终端里的链接：分屏时预览只画在那一栏
+	hoverTerm  string // 悬停的是哪个终端里的链接：分栏时预览只画在那一栏
 	// focusTerm 让下一帧把焦点交给终端：从文件栏拖文件进来后接着就能打字
 	focusTerm      bool
 	previews       map[string]*ui.Bitmap
@@ -284,26 +287,27 @@ type app struct {
 	previewLoading map[string]bool
 	// lastPanel 是最后打开的右侧面板：关闭动画期间还要画它
 	lastPanel string
-	shownTab  string    // 最近一次滚进可见范围的标签，见 revealTab
-	termCtx   menuState // 终端内容区的右键菜单（termMenu）
-	sysMenu   sysMenu   // mygo 交来的编辑菜单（menu.go 的 presentMenu）
-	termCtxID string    // 它是哪个终端的：切走了就不画
+	shownTab  [maxColumns]string // 各栏最近一次滚进可见范围的标签，见 revealTab
+	termCtx   menuState          // 终端内容区的右键菜单（termMenu）
+	sysMenu   sysMenu            // mygo 交来的编辑菜单（menu.go 的 presentMenu）
+	termCtxID string             // 它是哪个终端的：切走了就不画
 	// 正在改名的终端标签（终端 ID）和输入框里的文字，见 tabname.go
 	renaming, renameText string
 	lastPanels           panelSnap         // 上一帧的项目和它的文件栏、日志浮层开关（snapPanels）
 	nameSent             map[string]string // 已经交给常驻进程的标签名（terminal.rename），每个只发一次
 	renameQ              chan [2]string    // 交给按顺序发改名的协程（renameWorker）
 	renameOnce           sync.Once
-	tabStripW            float32 // 标签栏能放标签的宽度，变了就把当前标签再滚进来
+	tabStripW            [maxColumns]float32 // 各栏标签栏能放标签的宽度，变了就把当前标签再滚进来
 	// overPanelButton 是这一帧指针是否在标签栏的面板按钮上：在按钮上按下交给按钮切换，不算点了面板外面
 	overPanelButton bool
 	resizingPanel   bool            // 正在拖文件栏的左边缘，松手时写 ui.json
 	resizingBranch  bool            // 正在拖分支弹窗的左边缘，松手时写 ui.json
 	resizingSide    bool            // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
-	splitDrag       float32         // 拖终端分屏的分栏线时累计的横向距离，松手才改比例
-	split           bool            // 这一帧主区域是左右两栏（paneIDs 定）
-	splitPending    map[string]bool // 正在为「向右分屏」新开终端的工作区
+	splitDrag       float32         // 拖分栏线时累计的横向距离，松手才改比例
+	splitGrip       int             // 正在拖的是第几条分栏线
+	split           bool            // 这一帧主区域分成了几栏（syncColumns 定）
+	splitPending    map[string]bool // 正在为「向右分栏」新开终端的工作区
 	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool            // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
 	resizingCompare bool            // 正在拖分支比较两栏之间的分隔条，松手时写 ui.json
@@ -981,7 +985,7 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 			return &w.Terminals[i]
 		}
 	}
-	// 还没选过（刚打开窗口）或选的没了：有分屏时选它的焦点栏，否则第一个
+	// 还没选过（刚打开窗口）或选的没了：分了栏时选焦点栏选中的终端，否则第一个
 	pick := 0
 	if f := a.splitFocusTerm(w); f != "" {
 		pick = slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == f })
@@ -1094,7 +1098,7 @@ func (a *app) saveState() {
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	s.Keys = maps.Clone(s.Keys)
-	s.Splits = maps.Clone(s.Splits)
+	s.Columns = cloneColumns(s.Columns)
 	// 编号在这里取：协程开始的先后不等于发起的先后
 	seq := uiSaveSeq.Add(1)
 	go saveUIStateSeq(a.home, s, seq)
@@ -1189,7 +1193,11 @@ func (a *app) askCloseAll(terms []terminalInfo) {
 
 func (a *app) closeTerminal(id string) {
 	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
-	a.update(func() { a.dropSplitOf(id) })
+	a.update(func() {
+		if w, _ := a.findTerminal(id); w != nil {
+			a.dropColumnKey(w, id)
+		}
+	})
 	a.refresh()
 }
 

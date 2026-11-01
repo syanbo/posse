@@ -46,14 +46,14 @@ func (a *app) build(c *ui.Context) {
 	if w != nil {
 		a.lastWS = w.ID
 	}
-	cur := a.currentTerminal(w)
-	var ids [2]string
+	a.cols, a.split, a.pane = a.cols[:0], false, 0
 	if w != nil {
-		ids = a.paneIDs(w, cur)
+		a.syncColumns(w)
 	}
-	a.ensurePanes(ids)
-	// 拖着分栏线时分屏没了（终端退出、切走）：松手的那一帧不会再搭分屏，拖的状态在这里放掉
-	if !a.splitShown() && a.resizingSplit == "term-split" {
+	cur := a.currentTerminal(w)
+	a.ensurePanes(a.paneIDs(cur))
+	// 拖着分栏线时那条线没了（栏收起、切走）：松手的那一帧不会再画它，拖的状态在这里放掉
+	if a.resizingSplit == "col-split" && a.splitGrip+1 >= len(a.cols) {
 		a.resizingSplit, a.splitDrag = "", 0
 	}
 
@@ -897,7 +897,9 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	})
 	row := line
 	if where == "" {
-		a.reorderableTerm(c, row, w.ID, term.ID, false)
+		if ws := a.workspace(w.ID); ws != nil {
+			a.reorderableTab(c, row, ws, term.ID, -1)
+		}
 	}
 	if row.Clicked() {
 		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
@@ -1019,35 +1021,62 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 	}
 }
 
-// termDrag 是拖动中的终端：标签栏的标签或侧栏的会话，只能落在同一个工作区里。
-type termDrag struct{ ws, id string }
+// tabDrag 是拖动中的标签：标签栏的终端、文件，或侧栏的会话（key 是终端 ID 或 docKey），只能落在同一个工作区里。
+type tabDrag struct{ ws, key string }
 
-// reorderableTerm 让终端标签或侧栏的会话行可以拖动排序，两处共用一个顺序（ui.json 的 termOrder），
-// 样子和拖项目一样。across 表示横排的标签，落点画成竖线。
-func (a *app) reorderableTerm(c *ui.Context, e ui.Element, wsID, id string, across bool) {
-	e.Drag(termDrag{wsID, id})
+// reorderableTab 让标签栏的标签（col 是第几栏）或侧栏的会话行（col 为 -1）可以拖动：
+// 拖到同类的标签上排序，终端的顺序标签栏和侧栏共用（ui.json 的 termOrder），文件的随打开的文件存；
+// 落在别的栏的标签上还移进那一栏。样子和拖项目一样，标签栏里的落点画成竖线。
+func (a *app) reorderableTab(c *ui.Context, e ui.Element, w *workspace, key string, col int) {
+	e.Drag(tabDrag{w.ID, key})
 	if e.Dragging() {
 		e.Opacity(0.4)
 	}
-	w := a.workspace(wsID)
-	if w == nil {
-		return
+	index := func(k string) int { return slices.Index(a.tabKeys(w), k) }
+	same := func(k string) bool { return isDocKey(k) == isDocKey(key) }
+	moves := func(k string) bool { return col >= 0 && a.colOf(k) != col && a.cols[col].at >= 0 }
+	if g, over := ui.DragOver[tabDrag](e); over && g.ws == w.ID && g.key != key && (same(g.key) || moves(g.key)) {
+		if same(g.key) {
+			dropMark(c, e, index(g.key) < index(key), col >= 0)
+		} else {
+			dropMark(c, e, true, true)
+		}
 	}
-	index := func(id string) int {
-		return slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == id })
+	if g, ok := ui.Drop[tabDrag](e); ok && g.ws == w.ID && g.key != key {
+		if same(g.key) {
+			a.reorderTabs(w, g.key, key)
+		}
+		if moves(g.key) {
+			a.moveTab(w, g.key, col, 0)
+		}
+		c.AnimationFrame() // 这一帧已经按旧顺序画了，再画一帧
 	}
-	if d, over := ui.DragOver[termDrag](e); over && d.ws == wsID && d.id != id {
-		dropMark(c, e, index(d.id) < index(id), across)
-	}
-	if d, ok := ui.Drop[termDrag](e); ok && d.ws == wsID && d.id != id {
-		order := moveTerminal(w.Terminals, d.id, id)
+}
+
+// reorderTabs 把标签 from 挪到同类的标签 to 的位置（往后拖落在它后面，往前拖落在它前面）。
+func (a *app) reorderTabs(w *workspace, from, to string) {
+	if !isDocKey(from) {
+		if isDocKey(to) {
+			return
+		}
+		order := moveTerminal(w.Terminals, from, to)
 		if a.state.TermOrder == nil {
 			a.state.TermOrder = map[string][]string{}
 		}
-		a.state.TermOrder[wsID] = order
+		a.state.TermOrder[w.ID] = order
 		sortTerminals(w.Terminals, order)
 		a.saveState()
-		c.AnimationFrame()
+		return
+	}
+	v := a.files[w.ID]
+	if v == nil || !isDocKey(to) {
+		return
+	}
+	idx := func(k string) int { return slices.IndexFunc(v.docs, func(d *fileDoc) bool { return docKey(d) == k }) }
+	if i, j := idx(from), idx(to); i >= 0 && j >= 0 {
+		moved := v.docs[i]
+		v.docs = slices.Insert(slices.Delete(v.docs, i, i+1), j, moved)
+		a.saveFilesState(v)
 	}
 }
 
@@ -1573,36 +1602,21 @@ func (a *app) main(c *ui.Context, w *workspace, cur *terminalInfo) {
 func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	t := c.Theme()
 	p := colors(t)
-	ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, iconBarPad(), 0, 8+a.barInset(c)).Gap(2).Background(p.band).
+	// 每栏一段标签栏，宽度和下面的栏一样分，中间的竖线和分栏线对齐
+	ui.Row(c).Height(titleHeight(c)).Shrink(0).Background(p.band).AlignItems(ui.Stretch).
 		BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Clip().Children(func() {
-		// 标签一段按内容宽度，放不下时收窄、左右滚动（切到哪个就滚到哪个）；"+"在滚动区外面，
-		// 没放满时跟在最后一个标签后面，放满了停在右边。右边的按钮组一直完整显示。
-		// 滚动区比标签栏高出一截、被标签栏裁掉：mygo 的滚动条压在标签下半截上，照浏览器的标签栏不显示，
-		// 触控板和滚轮照常能滚
-		strip := ui.ScrollHorizontal(c).Shrink(1).MinWidth(0).
-			Height(titleHeight(c) + 24).AlignSelf(ui.Start).AlignItems(ui.Start)
-		// 文件栏滑进来、窗口变窄之后，当前标签可能被挤到外面：宽度变了就再滚一次
-		if sw := strip.Bounds().W; sw != a.tabStripW {
-			a.tabStripW, a.shownTab = sw, ""
+		for i := range a.cols {
+			if i > 0 {
+				vline(c)
+			}
+			a.columnStrip(c, w, i)
 		}
-		strip.Children(func() {
-			ui.Row(c).Height(titleHeight(c)).Gap(2).AlignItems(ui.Center).Children(func() {
-				// 拖动排序会在这次遍历里重排 w.Terminals：遍历副本
-				for _, term := range slices.Clone(w.Terminals) {
-					a.tab(c, w, term, cur != nil && cur.ID == term.ID)
-				}
-				a.docTabs(c, w)
-			})
-		})
-		ui.Row(c).Shrink(0).Height(titleHeight(c)).AlignItems(ui.Center).Children(func() { a.newTerminalButton(c, w) })
-		ui.Box(c).Grow(1)
-		ui.Row(c).Shrink(0).Gap(2).AlignItems(ui.Center).Children(func() { a.tabBarButtons(c, w, cur) })
 	})
 	a.mainBody(c, w, cur)
 }
 
-// newTerminalButton 是标签后面的"+"，选 agent 或普通终端。
-func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
+// newTerminalButton 是第 i 栏标签后面的"+"，选 agent 或普通终端，新终端放进这一栏。
+func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
 		for _, ag := range slices.Concat(a.agentChoices(), []string{""}) {
 			name := agentTitle(ag)
@@ -1614,6 +1628,10 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 				it.Keys(a.keyText("newTerminal"))
 			}
 			if it.Chosen() {
+				// 新标签放进焦点栏：先把焦点换到这一栏
+				if i != a.pane {
+					a.focusColumn(w, i, false)
+				}
 				a.startTerminal(w.ID, ag)
 			}
 		}
@@ -1621,7 +1639,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace) {
 }
 
 // tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
-func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
+func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
 	if w.Branch != "" {
 		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey("Git 日志", "gitLog"))
@@ -1652,7 +1670,7 @@ func sessionColWidth() float32 { return buttonBox() + 2*sessionColPad }
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
 // 这个会话粘贴过的图片、用到的技能与工具、这家 agent 的命令速查。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
-// rightmost 是这一栏贴着主区域右边（不分屏，或分屏的右栏）：右侧面板开着时会盖住它的右上角，
+// rightmost 是这一栏贴着主区域右边（没分栏，或最右一栏）：右侧面板开着时会盖住它的右上角，
 // 这一列跟着面板滑入往左让开，停在面板左边。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	task := a.taskByWorker(cur.ID)
@@ -1809,21 +1827,13 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
 	a.panelShown = shown
 	body.Children(func() {
-		if w.Missing && (a.filesActive(w) || cur != nil && a.panes[0] != nil) {
+		if w.Missing && (a.splitShown() || a.cols[0].active != "" && (a.filesActive(w) || a.panes[0] != nil)) {
 			a.missingBar(c, w)
 		}
-		switch {
-		case a.filesActive(w):
-			a.filesPage(c, w)
-		case a.splitShown():
-			a.splitView(c, w)
-		case cur == nil || a.panes[0] == nil:
+		if !a.splitShown() && a.cols[0].active == "" {
 			a.emptyWorkspace(c, w)
-		default:
-			if cur.PhoneSized {
-				a.phoneSizedBar(c, cur.ID)
-			}
-			a.termPane(c, 0, cur)
+		} else {
+			a.columnsView(c, w)
 		}
 		a.logPanel(c, w, body)
 		a.branchPopupView(c, w)
@@ -1869,7 +1879,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
 	area.Children(func() {
 		tv := terminal.View(c.Key(v.id), v.term).Fill()
 		focused = tv.Focused()
-		// 分屏时只有焦点栏自动拿焦点，两栏都要的话谁拿到看搭界面的顺序
+		// 分栏时只有焦点栏自动拿焦点，几栏都要的话谁拿到看搭界面的顺序
 		if i == a.pane {
 			tv.AutoFocus()
 		}
@@ -1882,7 +1892,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
 			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 		}
 		a.startingHint(c, v, cur)
-		a.sessionButtons(c, cur, !a.splitShown() || i == 1)
+		a.sessionButtons(c, cur, i == len(a.cols)-1)
 		a.termFindBar(c, v, cur)
 	})
 	a.termDrop(c, area, v, cur.Agent)
@@ -2046,7 +2056,8 @@ func shortcutHint(c *ui.Context, keys, label string) {
 	})
 }
 
-func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
+// tab 是第 i 栏标签栏里的一个终端；active 是这栏选中的，focused 表示这栏是焦点栏。
+func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active, focused bool) {
 	t := c.Theme()
 	// 图标侧内边距比文字侧少 2px；圆角 8，内部 20px 的关闭按钮离边 4px，圆角取 8-4=4
 	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(280)
@@ -2058,7 +2069,10 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	case hovered:
 		bg = colors(t).wash
 	}
-	a.revealTab(row, term.ID, active)
+	a.revealTab(row, i, term.ID, active)
+	if active && focused && a.splitShown() {
+		tabMark(c, row)
+	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	status := ""
 	if term.AgentState != nil && term.Running || term.Lost {
@@ -2110,14 +2124,6 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		// 分屏里的两个标签标出在哪一栏
-		if side := a.paneSide(term.ID); side >= 0 {
-			icon, tip := iconPanelLeft, "在左栏"
-			if side == 1 {
-				icon, tip = iconPanelRight, "在右栏"
-			}
-			ui.Icon(c, icon).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0).Label(tip)
-		}
 		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip(a.withKey("关闭终端", "closeTab"))
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
@@ -2135,10 +2141,10 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, active bool) {
 	})
 	// 改名时不能拖：在输入框里拖着选文字会变成拖标签
 	if !renaming {
-		a.reorderableTerm(c, row, w.ID, term.ID, true)
+		a.reorderableTab(c, row, w, term.ID, i)
 	}
 	if row.Clicked() {
-		a.activeTerm[w.ID] = term.ID
+		a.selectKey(w, term.ID, a.splitShown())
 	}
 	// 双击改名，和 iTerm、Ghostty 一样
 	if row.DoubleClicked() && !renaming {
@@ -2194,13 +2200,7 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	}
 	a.chatFolderMenu(m, term)
 	m.Separator()
-	if a.paneSide(term.ID) >= 0 {
-		if m.Item("关闭分屏").Keys(a.keyText("closeSplit")).Chosen() {
-			a.closeSplit(w.ID)
-		}
-	} else if m.Item("在右侧打开").Chosen() {
-		a.openBeside(w, term)
-	}
+	a.columnMenu(m, w, term.ID)
 	m.Separator()
 	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
 		a.askClose(term)
@@ -2250,9 +2250,9 @@ func sessionID(t terminalInfo) string {
 
 // revealTab 在标签刚变成当前的那一帧把它滚进可见范围：标签多了要左右滚动时，切过去的那个不会藏在外面。
 // 只在切换时滚一次，用户自己滚开了不拉回来。
-func (a *app) revealTab(row ui.Element, id string, active bool) {
-	if active && a.shownTab != id {
-		a.shownTab = id
+func (a *app) revealTab(row ui.Element, i int, id string, active bool) {
+	if active && i < maxColumns && a.shownTab[i] != id {
+		a.shownTab[i] = id
 		row.ScrollIntoView()
 	}
 }

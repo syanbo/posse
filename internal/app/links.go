@@ -251,7 +251,7 @@ type linkCard struct {
 	x, y    float32 // 相对终端区域；placed 前还没取
 	placed  bool
 	preview *ui.Bitmap // 图片的预览
-	term    string     // 点的是哪个终端里的链接：分屏时卡片只画在那一栏
+	term    string     // 点的是哪个终端里的链接：分栏时卡片只画在那一栏
 }
 
 const linkPreviewWidth = 640 // 2 倍屏下 320pt

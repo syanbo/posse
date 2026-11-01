@@ -596,9 +596,9 @@ func TestPreview(t *testing.T) {
 		a.panes[0].find = termFind{open: true, query: "release"}
 		savePNG(t, newPreviewTester(a, dark), "terminal-find-none-"+suffix+".png")
 
-		// 左右分屏：左边 Claude，右边跑着开发服务器的 zsh，焦点在左栏
+		// 两栏：左边 Claude 和 Codex，右边跑着开发服务器的 zsh，焦点在左栏
 		a = previewApp(t)
-		a.state.Splits = map[string]splitState{"w1": {Left: "t1", Right: "t3"}}
+		a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
 		a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 		savePNG(t, newPreviewTester(a, dark), "terminal-split-"+suffix+".png")
 
@@ -948,6 +948,20 @@ func TestPreview(t *testing.T) {
 		a.dAgents = map[string]bool{"claude": true, "codex": true}
 		a.dTitle, a.dSpec = "给登录页加上记住密码", "在登录页加一个“记住密码”开关，密码存进系统钥匙串。"
 		savePNG(t, newPreviewTester(a, dark), "dispatch-"+suffix+".png")
+
+		// 三栏：Claude、zsh 和打开的文件，焦点在文件那栏，中间那栏拖窄了
+		// 打开文件时只有一栏、选中的是文件，终端会断开：文件在另一个 app 里开好再搬过来
+		b := previewApp(t)
+		v3 := previewFiles(t, b, "README.md", "main.go")
+		a = previewApp(t)
+		a.files, a.state.Files, a.workspaces[0].Path = b.files, b.state.Files, b.workspaces[0].Path
+		a.state.Columns = map[string]columnsState{"w1": {Focus: 2, Cols: []columnState{
+			{Tabs: []string{"t1", "t2"}, Active: "t1", Share: 1.2},
+			{Tabs: []string{"t3"}, Active: "t3", Share: 0.8},
+			{Tabs: []string{docKey(v3.docs[0]), docKey(v3.docs[1])}, Share: 1},
+		}}}
+		a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+		savePNG(t, newPreviewTester(a, dark), "columns-three-"+suffix+".png")
 
 		// 文件标签：树展开到打开的文件，README 有未保存的修改
 		a = previewApp(t)

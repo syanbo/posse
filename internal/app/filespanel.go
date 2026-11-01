@@ -178,9 +178,23 @@ func (a *app) closeFilesPanel() {
 	a.setFilesPanel(a.panelProject(), false)
 }
 
-// filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，或者选中了文件标签。
+// filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，选中了文件标签，或者别的栏里显示着文件。
 func (a *app) filesShown(w *workspace) bool {
-	return w != nil && (a.filesPanelOpen() || a.filesActive(w))
+	if w == nil {
+		return false
+	}
+	if a.filesPanelOpen() || a.filesActive(w) {
+		return true
+	}
+	if w.ID != a.selected {
+		return false
+	}
+	for _, col := range a.cols {
+		if isDocKey(col.active) {
+			return true
+		}
+	}
+	return false
 }
 
 // filesTick 是文件内容看得见时每帧的事：到点轮询磁盘和 git，清单过期就重列，当前文件还没读就读。

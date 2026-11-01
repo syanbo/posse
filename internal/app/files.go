@@ -668,6 +668,17 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	}
 	v.docs = slices.Delete(v.docs, i, i+1)
 	closeWeb(d)
+	// 分了栏：选中的换成同一栏挨着的标签（可能是终端），不跳到别的栏
+	if w := a.workspace(v.wsID); w != nil {
+		if _, ok := a.columnsOf(w.ID); ok {
+			if v.cur == d {
+				v.cur = nil
+			}
+			a.dropColumnKey(w, docKey(d))
+			a.saveFilesState(v)
+			return
+		}
+	}
 	if v.cur == d {
 		v.cur = nil
 		if len(v.docs) > 0 {

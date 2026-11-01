@@ -20,11 +20,6 @@ func dot(c *ui.Context, color ui.Color) ui.Element {
 	return ui.Box(c).Size(6, 6).Radius(full(6)).Background(color).Shrink(0)
 }
 
-// filesPage 是文件标签的内容：打开的文件。文件树、检索和改动在右边的文件栏里。
-func (a *app) filesPage(c *ui.Context, w *workspace) {
-	ui.Column(c).Grow(1).Shrink(1).Background(c.Theme().Background).Children(func() { a.docArea(c, w, a.filesFor(w)) })
-}
-
 // --- 文件树
 
 func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
@@ -297,13 +292,9 @@ func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 
 // --- 打开的文件
 
-func (a *app) docArea(c *ui.Context, w *workspace, v *filesView) {
+// docArea 画一栏里打开的文件 d。文件树、检索和改动在右边的文件栏里。
+func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
-	if v.cur == nil {
-		a.filesEmpty(c)
-		return
-	}
-	d := v.cur
 	if d.web != nil {
 		if d.web.view == nil {
 			docMessage(c, d, d.err)
@@ -426,29 +417,24 @@ func (a *app) filesEmpty(c *ui.Context) {
 	})
 }
 
-// docTabs 把工作区打开的文件画成标签栏里的标签，排在终端后面；同名文件后面带上级目录名。
-func (a *app) docTabs(c *ui.Context, w *workspace) {
-	v := a.files[w.ID]
-	if v == nil {
-		return
+// docDetail 是文件标签名字后面的小字：diff 的类型、分支比较，同名文件带上级目录名。
+func (a *app) docDetail(w *workspace, d *fileDoc) string {
+	switch {
+	case d.diff != nil:
+		return d.diff.tabLabel()
+	case d.comp != nil:
+		return "比较"
 	}
-	names := map[string]int{}
-	for _, d := range v.docs {
-		names[d.name()]++
-	}
-	// 点 × 会在这次遍历里关掉文件，slices.Delete 把末尾那格清成 nil：遍历副本
-	for _, d := range slices.Clone(v.docs) {
-		detail := ""
-		switch {
-		case d.diff != nil:
-			detail = d.diff.tabLabel()
-		case d.comp != nil:
-			detail = "比较"
-		case names[d.name()] > 1:
-			detail = filepath.Base(filepath.Dir(d.path))
+	same := 0
+	for _, x := range a.filesFor(w).docs {
+		if x.name() == d.name() {
+			same++
 		}
-		a.docTab(c, w, v, d, detail)
 	}
+	if same > 1 {
+		return filepath.Base(filepath.Dir(d.path))
+	}
+	return ""
 }
 
 // docIcon 是文件标签的图标：分支比较用分支图标，网页用地球，其余（包括 diff）按文件类型。
@@ -462,10 +448,9 @@ func docIcon(t *ui.Theme, d *fileDoc) (*ui.SVG, ui.Color) {
 	return fileIcon(t, d.path)
 }
 
-// docTab 是标签栏里的一个文件，样子和终端标签一样。
-func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string) {
+// docTab 是第 i 栏标签栏里的一个文件，样子和终端标签一样；active 是这栏选中的，focused 表示这栏是焦点栏。
+func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string, i int, active, focused bool) {
 	t := c.Theme()
-	active := a.filesActive(w) && v.cur == d
 	tip := shortPath(d.path)
 	if d.web != nil {
 		tip = d.web.url
@@ -481,7 +466,10 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	case hovered:
 		bg = colors(t).wash
 	}
-	a.revealTab(row, "doc:"+d.path, active)
+	a.revealTab(row, i, docKey(d), active)
+	if active && focused && a.splitShown() {
+		tabMark(c, row)
+	}
 	row.Background(row.AnimateColor("bg", bg, hover))
 	modified := d.isModified()
 	row.Children(func() {
@@ -523,39 +511,9 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 		a.closeDoc(v, d)
 	}
 	contextMenu(c, row, func(m *popMenu) { a.docTabMenu(c, m, v, d) })
-	a.reorderableDoc(c, row, w.ID, v, d)
-	if row.Clicked() && !active {
-		a.showFiles(w)
-		if v.cur != d {
-			v.cur = d
-			a.saveFilesState(v)
-		}
-		d.focus = true
-	}
-}
-
-// docDrag 是拖动中的文件标签，只在同一个工作区的文件标签之间换位置。
-type docDrag struct{ ws, path string }
-
-// reorderableDoc 让文件标签可以拖动排序，顺序随打开的文件存进 ui.json。
-func (a *app) reorderableDoc(c *ui.Context, row ui.Element, wsID string, v *filesView, d *fileDoc) {
-	row.Drag(docDrag{wsID, d.path})
-	if row.Dragging() {
-		row.Opacity(0.4)
-	}
-	index := func(path string) int {
-		return slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == path })
-	}
-	if g, over := ui.DragOver[docDrag](row); over && g.ws == wsID && g.path != d.path {
-		dropMark(c, row, index(g.path) < index(d.path), true)
-	}
-	if g, ok := ui.Drop[docDrag](row); ok && g.ws == wsID && g.path != d.path {
-		if from, to := index(g.path), index(d.path); from >= 0 && to >= 0 {
-			moved := v.docs[from]
-			v.docs = slices.Insert(slices.Delete(v.docs, from, from+1), to, moved)
-			a.saveFilesState(v)
-			c.AnimationFrame()
-		}
+	a.reorderableTab(c, row, w, docKey(d), i)
+	if row.Clicked() && !(active && focused) {
+		a.selectKey(w, docKey(d), true)
 	}
 }
 
@@ -579,6 +537,10 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	}
 	if m.Item("关闭所有文件").Chosen() {
 		a.closeDocs(v, slices.Clone(v.docs))
+	}
+	if w := a.workspace(v.wsID); w != nil {
+		m.Separator()
+		a.columnMenu(m, w, docKey(d))
 	}
 	if d.virtual() {
 		return

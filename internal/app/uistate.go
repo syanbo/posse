@@ -90,8 +90,10 @@ type uiState struct {
 	Keys map[string][]string `json:"keys,omitempty"`
 	// WebDevice 是网页手机预览上次选的机型（webdevice.go），⇧⌘M 打开时用它
 	WebDevice string `json:"webDevice,omitempty"`
-	// Splits 是左右分屏的工作区，键是工作区 ID（split.go）
-	Splits map[string]splitState `json:"splits,omitempty"`
+	// Columns 是分了栏的工作区，键是工作区 ID（columns.go）
+	Columns map[string]columnsState `json:"columns,omitempty"`
+	// Splits 是以前只能左右两栏时的分屏，读进来换成 Columns
+	Splits map[string]legacySplit `json:"splits,omitempty"`
 }
 
 // filesState 是一个工作区的文件标签，路径都是绝对路径。
@@ -127,6 +129,7 @@ func loadUIState(home string) uiState {
 	if s.RightPanel == panelHistory {
 		s.RightPanel, s.FilesPanelTab = "", tabHistory
 	}
+	migrateSplits(&s)
 	if s.FilesPanelHistory {
 		s.FilesPanelHistory = false
 		if s.FilesPanelTab == "" {
@@ -233,4 +236,47 @@ func moveID(order []string, id, target string) []string {
 // projectIndex 是项目在当前顺序里的位置，找不到为 -1。
 func projectIndex(ps []project, id string) int {
 	return slices.IndexFunc(ps, func(p project) bool { return p.ID == id })
+}
+
+// legacySplit 是以前左右两栏的分屏。
+type legacySplit struct {
+	Left    string  `json:"left"`
+	Right   string  `json:"right"`
+	Percent float32 `json:"percent,omitempty"` // 左栏占的百分比，0 是一半
+	Focus   int     `json:"focus,omitempty"`
+}
+
+// migrateSplits 把以前的左右分屏换成分栏：两栏各放原来的终端，别的标签进焦点栏（syncColumns）。
+func migrateSplits(s *uiState) {
+	for ws, sp := range s.Splits {
+		if _, ok := s.Columns[ws]; ok || sp.Left == "" || sp.Right == "" || sp.Left == sp.Right {
+			continue
+		}
+		pct := sp.Percent
+		if pct <= 0 {
+			pct = 50
+		}
+		if s.Columns == nil {
+			s.Columns = map[string]columnsState{}
+		}
+		s.Columns[ws] = columnsState{
+			Cols: []columnState{
+				{Tabs: []string{sp.Left}, Active: sp.Left, Share: pct},
+				{Tabs: []string{sp.Right}, Active: sp.Right, Share: 100 - pct},
+			},
+			Focus: min(max(sp.Focus, 0), 1),
+		}
+	}
+	s.Splits = nil
+}
+
+func cloneColumns(m map[string]columnsState) map[string]columnsState {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]columnsState, len(m))
+	for k, v := range m {
+		out[k] = v.clone()
+	}
+	return out
 }
