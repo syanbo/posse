@@ -558,7 +558,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 		color := letterColor(c, f.Status)
 		row.Children(func() {
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
-			ui.Box(c).Width(20).Shrink(0)
+			ui.Box(c).Width(miniBox()).Shrink(0)
 			ui.Text(c, string(f.Status)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
 			fileGlyph(c, r.name, iconSize)
 			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path).TextColor(color)

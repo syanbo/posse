@@ -507,7 +507,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			return
 		}
 		e := r.entries[row.entry]
-		ui.Box(c).Width(20).Shrink(0)
+		ui.Box(c).Width(miniBox()).Shrink(0)
 		state := pickNone
 		if r.on[e.Path] {
 			state = pickAll
