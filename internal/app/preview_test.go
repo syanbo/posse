@@ -1321,3 +1321,66 @@ func settleMenu(tt *ui.Tester) {
 	}
 	tt.Frame()
 }
+
+// 点进另一栏的内容：焦点栏换过去；点标签栏的标签、空处按标签和不动焦点。
+func TestColumnsClickAndDrag(t *testing.T) {
+	a := previewApp(t)
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	if a.pane != 0 {
+		t.Fatalf("pane %d", a.pane)
+	}
+	// 右栏内容的中间
+	tt.ClickAt(1000, 400)
+	tt.Frame()
+	if a.pane != 1 || a.activeTerm["w1"] != "t3" {
+		t.Fatalf("click right: pane %d active %q", a.pane, a.activeTerm["w1"])
+	}
+	// 标签栏里点左栏选中的标签：焦点回左栏（这里没有 client，点没接入的标签会去接入）
+	r, ok := tt.Find("待处理")
+	if !ok {
+		t.Fatal("no tab")
+	}
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if a.pane != 0 || a.activeTerm["w1"] != "t1" {
+		t.Fatalf("click tab: pane %d active %q", a.pane, a.activeTerm["w1"])
+	}
+	// 点标签栏不算点进哪一栏的内容：焦点不变
+	tt.ClickAt(1100, 20)
+	tt.Frame()
+	if a.pane != 0 {
+		t.Fatalf("click strip moved focus to %d", a.pane)
+	}
+}
+
+// 真拖一次：把右栏唯一的 zsh 标签拖到左栏内容的左边缘，松手后它成为最左一栏、原来的右栏收起，焦点在它那栏。
+func TestColumnsDragTabToEdge(t *testing.T) {
+	a := previewApp(t)
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	r, ok := tt.Find("zsh")
+	if !ok {
+		t.Fatal("no zsh tab")
+	}
+	tt.Press(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	for _, x := range []float32{r.X, 700, 400, 320} {
+		tt.Move(x, 400)
+		tt.Frame()
+	}
+	// 拖着时左栏的左半边盖上淡底
+	if dir := os.Getenv("POSSE_PREVIEW_DIR"); dir != "" {
+		savePNG(t, tt, "columns-drag-edge.png")
+	}
+	tt.Release(320, 400)
+	tt.Frame()
+	tt.Frame()
+	if len(a.cols) != 2 || a.cols[0].tabs[0] != "t3" || a.pane != 0 || a.activeTerm["w1"] != "t3" {
+		t.Fatalf("after drag: cols %+v pane %d active %q", a.cols, a.pane, a.activeTerm["w1"])
+	}
+}

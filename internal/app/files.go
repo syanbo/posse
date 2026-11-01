@@ -390,12 +390,16 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 			d = x
 		}
 	}
+	// 分了栏时只换掉焦点栏里的预览标签：别的栏里的留着，新的进焦点栏
+	replaceable := func(x *fileDoc) bool {
+		return x.isPreview() && (w.ID != a.selected || !a.splitShown() || a.colOf(docKey(x)) == a.pane)
+	}
 	switch {
 	case d != nil:
 		// 已经开着的预览标签被正常打开（双击、跳转）就常驻
 		d.transient = d.transient && preview
-	case preview && slices.ContainsFunc(v.docs, (*fileDoc).isPreview):
-		i := slices.IndexFunc(v.docs, (*fileDoc).isPreview)
+	case preview && slices.ContainsFunc(v.docs, replaceable):
+		i := slices.IndexFunc(v.docs, replaceable)
 		d = &fileDoc{path: path, transient: true, preview: isMarkdown(path)}
 		v.docs[i] = d
 	default:

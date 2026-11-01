@@ -326,13 +326,33 @@ func TestResizeKeepsHiddenShare(t *testing.T) {
 	}
 }
 
-// 不显示的栏下标上不留"焦点在里面"。
-func TestColFocusedResetForHiddenColumns(t *testing.T) {
+// 预览标签移到别的栏就常驻；分栏时单击预览只换掉焦点栏里的预览标签。
+func TestPreviewDocsAcrossColumns(t *testing.T) {
 	a, w := columnsApp()
-	a.state.Columns = map[string]columnsState{"w1": twoCols([]string{"t1"}, []string{"t2", "t3"}, 0)}
-	a.colFocused[2] = true
+	w.Path = t.TempDir()
+	a.selected = "w1"
+	v := a.filesFor(w)
+	a.activeTerm["w1"] = "t1"
 	frame(a, w)
-	if a.colFocused[2] {
-		t.Fatal("colFocused[2] should be cleared")
+	a.previewFile(w, w.Path+"/a.go")
+	frame(a, w)
+	a.moveTab(w, docKeyPrefix+w.Path+"/a.go", 0, 1)
+	frame(a, w)
+	if v.docs[0].transient {
+		t.Fatal("a preview moved to another column should stay")
+	}
+	// 焦点回到终端栏，单击预览两个文件：第二个换掉第一个，右栏的 a.go 不动
+	a.focusColumn(w, 0, false)
+	frame(a, w)
+	a.previewFile(w, w.Path+"/b.go")
+	frame(a, w)
+	a.previewFile(w, w.Path+"/c.go")
+	frame(a, w)
+	var paths []string
+	for _, d := range v.docs {
+		paths = append(paths, d.path[len(w.Path)+1:])
+	}
+	if !slices.Equal(paths, []string{"a.go", "c.go"}) || a.colOf(docKeyPrefix+w.Path+"/c.go") != 0 || a.colOf(docKeyPrefix+w.Path+"/a.go") != 1 {
+		t.Fatalf("docs = %v cols %+v", paths, a.cols)
 	}
 }

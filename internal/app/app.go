@@ -175,8 +175,6 @@ type app struct {
 	panes [maxColumns]*termView
 	pane  int
 	cols  []colView // 这一帧显示的几栏（syncColumns 定），没分栏时只有一栏
-	// colFocused 是上一帧键盘焦点在不在各栏里，焦点刚进来时换焦点栏（columnFocus）
-	colFocused [maxColumns]bool
 	// docFocusPane 是正在画的文件在不在焦点栏里（columnBody 设，docArea 用）
 	docFocusPane bool
 	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID

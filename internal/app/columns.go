@@ -166,12 +166,6 @@ func (a *app) dropColumns(wsID string) {
 // 选中的标签在哪栏焦点就在哪栏，选中的不在了就换成焦点栏选中的那个。
 func (a *app) syncColumns(w *workspace) {
 	a.cols, a.pane, a.split = a.cols[:0], 0, false
-	defer func() {
-		// 不显示的栏下标上不留"焦点在里面"：那栏再出现时焦点刚进来的那一下要认得出
-		for i := len(a.cols); i < maxColumns; i++ {
-			a.colFocused[i] = false
-		}
-	}()
 	saved, ok := a.columnsOf(w.ID)
 	// 刚打开窗口、第一次选这个工作区时打开的文件还没恢复：先恢复，不然栏里的文件当成不在了
 	if ok && a.files[w.ID] == nil && slices.ContainsFunc(saved.Cols, func(c columnState) bool { return slices.ContainsFunc(c.Tabs, isDocKey) }) {
@@ -407,6 +401,10 @@ func (a *app) moveTab(w *workspace, key string, target, side int) {
 			dest = at + 1
 		}
 		st.Cols = slices.Insert(st.Cols, dest, columnState{Share: half})
+	}
+	// 跨栏移动的文件转成常驻：预览标签换栏后还被下一次单击换掉，就像被关掉了
+	if d := a.docByKey(w, key); d != nil {
+		d.transient = false
 	}
 	st.Cols[dest].Tabs = append(st.Cols[dest].Tabs, key)
 	st.Cols[dest].Active = key
@@ -749,6 +747,7 @@ func (a *app) columnsView(c *ui.Context, w *workspace) {
 	width := row.Bounds().W
 	// 分栏线各占 1 像素，算比例时去掉
 	inner := width - float32(len(a.cols)-1)
+	var boxes []ui.Element
 	row.Children(func() {
 		for i := range a.cols {
 			if i > 0 {
@@ -757,9 +756,10 @@ func (a *app) columnsView(c *ui.Context, w *workspace) {
 			box := a.colBox(c, "col-"+strconv.Itoa(i), i, false)
 			box.Children(func() { a.columnBody(c, w, i) })
 			a.columnDrop(c, w, box, i)
-			a.columnFocus(w, box, i)
+			boxes = append(boxes, box)
 		}
 	})
+	a.columnPressed(w, boxes)
 	if a.resizingSplit == "col-split" && a.splitGrip+1 < len(a.cols) && inner > 0 {
 		x := float32(0)
 		for j := 0; j <= a.splitGrip; j++ {
@@ -773,17 +773,24 @@ func (a *app) columnsView(c *ui.Context, w *workspace) {
 	}
 }
 
-// columnFocus 在键盘焦点进到第 i 栏时（点进它的终端、编辑器）把焦点栏换过去。只看焦点刚进来的那一帧：
-// 界面自己移焦点（切换栏、点了别栏的标签）时，焦点还要一帧才离开原来那栏，不能当成用户点了那栏。
-func (a *app) columnFocus(w *workspace, e ui.Element, i int) {
-	if i >= maxColumns {
+// columnPressed 在指针按在某一栏的内容上时（点进它的终端、编辑器、预览）把焦点栏换过去。
+// 按着看在哪一栏，不看键盘焦点：拖标签松手、终端自己拿焦点这些不是用户点了那栏。
+// 按在第 i 栏时只有它不报"按在外面"，按在标签栏、侧栏时各栏都报。
+func (a *app) columnPressed(w *workspace, boxes []ui.Element) {
+	if len(boxes) < 2 {
 		return
 	}
-	now := e.FocusWithin()
-	if now && !a.colFocused[i] && i != a.pane && a.splitShown() {
-		a.focusColumn(w, i, false)
+	in, outside := -1, 0
+	for i, b := range boxes {
+		if b.PressedOutside() {
+			outside++
+		} else {
+			in = i
+		}
 	}
-	a.colFocused[i] = now
+	if outside == len(boxes)-1 && in >= 0 && in != a.pane {
+		a.focusColumn(w, in, false)
+	}
 }
 
 // columnBody 画第 i 栏的内容：选中的终端、文件，或空工作区。
@@ -804,9 +811,15 @@ func (a *app) columnBody(c *ui.Context, w *workspace, i int) {
 			a.loadDoc(d)
 		}
 		a.docFocusPane = i == a.pane
-		ui.Column(c.Key(col.active)).Grow(1).Shrink(1).MinHeight(0).Background(c.Theme().Background).Children(func() {
+		// 能拿焦点：Markdown 预览、图片这些没有编辑器的，选中时（d.focus）也把键盘焦点从别栏的终端拿过来
+		box := ui.Column(c.Key(col.active)).Grow(1).Shrink(1).MinHeight(0).Background(c.Theme().Background).Focusable()
+		box.Children(func() {
 			a.docArea(c, w, v, d)
 		})
+		if d.focus && i == a.pane {
+			d.focus = false
+			box.Focus()
+		}
 	default:
 		_, term := a.findTerminal(col.active)
 		if term == nil || i >= maxColumns || a.panes[i] == nil {
