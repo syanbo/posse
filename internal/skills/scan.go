@@ -3,7 +3,10 @@
 package skills
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -103,6 +106,8 @@ type Issue struct {
 	Other string
 	// Agents 是受影响的几家（同名冲突时）。
 	Agents []Agent
+	// Same 表示同名冲突的两份内容一样（各自装了一份副本），合成一份不改变哪家读到什么。
+	Same bool
 }
 
 // Catalog 是一次扫描的结果。
@@ -383,8 +388,44 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 				s.Agents[a] = Status{State: Off, Why: "config.toml 的 [skills] ignore 里有它", Via: it.path, Ignored: true}
 			}
 		}
+		for i := range out {
+			if out[i].Agents[a].State == Unseen {
+				out[i].Agents[a].Why = unseenWhy(o.Home, rs, a, out[i])
+			}
+		}
 	}
 	return out
+}
+
+// unseenWhy 说这家为什么读不到 s：它不读 s 所在的目录，同一范围里它读的是哪几个。
+func unseenWhy(home string, rs []root, a Agent, s Skill) string {
+	// 技能目录是解开链接后的，home 也比一下解开的
+	tilde := func(p string) string {
+		for _, h := range []string{home, realDir(home)} {
+			if rel, err := filepath.Rel(h, p); err == nil && !strings.HasPrefix(rel, "..") {
+				return filepath.Join("~", rel)
+			}
+		}
+		return p
+	}
+	var reads []root
+	for _, r := range rs {
+		if r.prio[a] >= 0 && r.scope == s.Scope && !r.walk {
+			reads = append(reads, r)
+		}
+	}
+	slices.SortStableFunc(reads, func(x, y root) int { return x.prio[a] - y.prio[a] })
+	var dirs []string
+	for _, r := range reads {
+		if d := tilde(r.dir); !slices.Contains(dirs, d) {
+			dirs = append(dirs, d)
+		}
+	}
+	why := "不读 " + tilde(filepath.Dir(s.Dir))
+	if len(dirs) > 0 {
+		why += "，它读 " + strings.Join(dirs, "、")
+	}
+	return why
 }
 
 // scopeOf 是 dir 所在技能目录的范围。
@@ -404,18 +445,80 @@ func realDir(p string) string {
 	return p
 }
 
+// addDuplicate 记一条同名冲突。生效的那份经不同路径读到（目录本身和指向它的链接）时算同一条。
 func addDuplicate(cat *Catalog, name, path, winner string, a Agent) {
 	for i := range cat.Issues {
 		is := &cat.Issues[i]
-		if is.Kind == Duplicate && is.Path == path && is.Other == winner {
+		if is.Kind == Duplicate && is.Path == path && realDir(is.Other) == realDir(winner) {
 			if !slices.Contains(is.Agents, a) {
 				is.Agents = append(is.Agents, a)
 			}
 			return
 		}
 	}
-	cat.Issues = append(cat.Issues, Issue{Kind: Duplicate, Name: name, Path: path, Other: winner, Agents: []Agent{a}})
+	cat.Issues = append(cat.Issues, Issue{Kind: Duplicate, Name: name, Path: path, Other: winner, Agents: []Agent{a}, Same: sameTree(realDir(path), realDir(winner))})
 }
+
+// sameTree 比两个目录里的文件（相对路径和内容）是否完全一样。先比文件清单和大小，对得上才读内容；
+// 文件栏的技能页签开着时每 3 秒扫一次，太大的不读，当作不同。
+func sameTree(a, b string) bool {
+	const limit = 8 << 20
+	type entry struct {
+		size int64
+		link string
+	}
+	list := func(root string) map[string]entry {
+		out := map[string]entry{}
+		var total int64
+		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, p)
+			switch {
+			case d.Type()&fs.ModeSymlink != 0:
+				t, _ := os.Readlink(p)
+				out[rel] = entry{link: t}
+			case d.Type().IsRegular():
+				fi, err := d.Info()
+				if err != nil {
+					return err
+				}
+				if total += fi.Size(); total > limit {
+					return errTooBig
+				}
+				out[rel] = entry{size: fi.Size()}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil
+		}
+		return out
+	}
+	x, y := list(a), list(b)
+	if x == nil || y == nil || len(x) != len(y) {
+		return false
+	}
+	for k, v := range x {
+		if w, ok := y[k]; !ok || w != v {
+			return false
+		}
+	}
+	for k, v := range x {
+		if v.link != "" {
+			continue
+		}
+		p, err1 := os.ReadFile(filepath.Join(a, k))
+		q, err2 := os.ReadFile(filepath.Join(b, k))
+		if err1 != nil || err2 != nil || !bytes.Equal(p, q) {
+			return false
+		}
+	}
+	return true
+}
+
+var errTooBig = errors.New("too big")
 
 // redundant 找多余的链接：链接所在目录的每一家，都已经从别的目录读到它指向的那一份。
 // 比如 ~/.grok/skills/x → ~/.agents/skills/x，Grok 本来就读 ~/.agents/skills。
@@ -453,12 +556,20 @@ func redundant(rs []root, items []found) []Issue {
 	return out
 }
 
-// lockMissing 找锁文件里有、~/.agents/skills 里没有的技能。
+// lockMissing 找锁文件里有、各家的用户技能目录里都没有的技能。npx skills 用 --copy 装、或只装给 Claude 这类
+// 有自己目录的一家时，技能直接放在那家的目录里，~/.agents/skills 里本来就没有。
 func lockMissing(home string, lock map[string]lockEntry) []Issue {
 	dir := filepath.Join(home, ".agents", "skills")
+	dirs := []string{dir}
+	for _, d := range []string{".claude", ".grok", ".cursor", ".codex"} {
+		dirs = append(dirs, filepath.Join(home, d, "skills"))
+	}
 	var out []Issue
 	for name := range lock {
-		if _, err := os.Stat(filepath.Join(dir, name, "SKILL.md")); err != nil {
+		if !slices.ContainsFunc(dirs, func(d string) bool {
+			_, err := os.Stat(filepath.Join(d, name, "SKILL.md"))
+			return err == nil
+		}) {
 			out = append(out, Issue{Kind: LockMissing, Name: name, Path: filepath.Join(home, ".agents", ".skill-lock.json"), Other: filepath.Join(dir, name)})
 		}
 	}

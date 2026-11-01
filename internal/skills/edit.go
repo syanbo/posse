@@ -641,3 +641,54 @@ func splitLines(s string) []string {
 	}
 	return strings.Split(s, "\n")
 }
+
+// LinkFor 是让读不到 s 的 a 读到它要建的链接：建在这家自己读、别家不受影响的目录里（Claude 是 .claude/skills，
+// Codex 是 .agents/skills，Grok 是 .grok/skills，Cursor 是 .cursor/skills；项目级的 Grok、Cursor 用工作区的 .agents/skills），
+// 指向 s 的真实目录，和 npx skills 给各家建的链接一样。只管用户级和项目级的技能；那个位置已经有东西时不建。
+func LinkFor(o Options, s Skill, a Agent) (link string, ok bool) {
+	if s.Agents[a].State != Unseen {
+		return "", false
+	}
+	var dir string
+	switch s.Scope {
+	case ScopeUser:
+		dir = filepath.Join(o.Home, [NumAgents]string{".claude", ".agents", ".grok", ".cursor"}[a], "skills")
+	case ScopeProject:
+		if o.Dir == "" {
+			return "", false
+		}
+		sub := ".agents"
+		if a == Claude {
+			sub = ".claude"
+		}
+		dir = filepath.Join(o.Dir, sub, "skills")
+	default:
+		return "", false
+	}
+	link = filepath.Join(dir, filepath.Base(s.Dir))
+	if _, err := os.Lstat(link); !errors.Is(err, os.ErrNotExist) {
+		return "", false
+	}
+	return link, true
+}
+
+// MakeLink 在 link 处建指向 dir 的相对链接（目录不在就建上）。
+func MakeLink(link, dir string) error {
+	parent := filepath.Dir(link)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	from := parent
+	if r, err := filepath.EvalSymlinks(parent); err == nil {
+		from = r
+	}
+	target, err := filepath.Rel(from, real)
+	if err != nil {
+		target = real
+	}
+	return os.Symlink(target, link)
+}

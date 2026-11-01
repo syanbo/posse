@@ -422,6 +422,19 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 	if len(u.Failed) > 0 {
 		failed = fmt.Sprintf("%d 个来源没查到", len(u.Failed))
 	}
+	var gone []string
+	for _, sk := range s.cat.Skills {
+		if u.IsGone(sk) {
+			gone = append(gone, sk.Name+"：来源里找不到了，npx skills update 跳过它")
+		}
+	}
+	if len(gone) > 0 {
+		if failed != "" {
+			failed += "，"
+		}
+		failed += fmt.Sprintf("%d 个在来源里找不到了", len(gone))
+	}
+	why := strings.Join(append(slices.Clone(u.Failed), gone...), "\n")
 	if n == 0 {
 		text := "都是最新的"
 		if failed != "" {
@@ -429,7 +442,7 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 		}
 		e := ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).Margin(0, 20, 8, 20)
 		if failed != "" {
-			e.Tooltip(strings.Join(u.Failed, "\n"))
+			e.Tooltip(why)
 		}
 		return
 	}
@@ -439,7 +452,7 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 		ui.Icon(c, iconFetch).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
 		ui.Text(c, fmt.Sprintf("%d 个有新版本", n)).FontSize(fsBody).FontFeatures("tnum").Grow(1)
 		if failed != "" {
-			ui.Text(c, failed).FontSize(fsSmall).TextColor(t.TextMuted).Tooltip(strings.Join(u.Failed, "\n"))
+			ui.Text(c, failed).FontSize(fsSmall).TextColor(t.TextMuted).Tooltip(why)
 		}
 	})
 	if s.onlyUpdates {
@@ -648,6 +661,10 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 				}
 			})
 		})
+		if a.skills.updates.IsGone(sk) {
+			ui.Text(c, "来源里已经找不到它了（上游删了、改了名或挪了位置），npx skills update 更新不了。到来源网页看看它换成了什么，装新的再删掉这个。").
+				FontSize(fsSmall).TextColor(colors(t).honey).LineHeight(1.45)
+		}
 		if sk.Description != "" {
 			ui.Text(c, sk.Description).FontSize(fsBody).LineHeight(1.55).Selectable()
 		}
@@ -715,6 +732,12 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 			if ui.Switch(c, &on).Label(agentTitle(ag.String()) + "里启用").Changed() {
 				a.planSkillToggle(o, sk, ag, on)
 			}
+		} else if link, ok := skills.LinkFor(o, sk, ag); ok {
+			// 读不到的：打开就在这家读的目录里建一条链接
+			on := false
+			if ui.Switch(c, &on).Label("让" + agentTitle(ag.String()) + "读到它").Tooltip("在 " + shortPath(filepath.Dir(link)) + " 建一条指向它的链接").Changed() {
+				a.askLinkSkill(sk, ag, link)
+			}
 		}
 	})
 }
@@ -725,8 +748,8 @@ var issueKinds = []struct {
 	title, about string
 }{
 	{skills.BrokenLink, "断掉的链接", "链接指向的目录已经不在了，各家都读不到。"},
-	{skills.Duplicate, "同名冲突", "同一家读得到两份同名但内容不同的技能，只有优先的那份生效。"},
-	{skills.LockMissing, "锁文件对不上", "npx skills 的锁文件记着它，~/.agents/skills 里却没有，npx skills update 会再装回来。"},
+	{skills.Duplicate, "同名冲突", "同一家读得到两份同名的技能，只有优先的那份生效。可以合成一份：没生效的那份移到废纸篓，原处换成指向生效那份的链接，各家都读同一份。"},
+	{skills.LockMissing, "锁文件对不上", "npx skills 的锁文件记着它，各家的技能目录里却都没有（多半是手动删掉的）。不要了就从锁文件里删掉；还要就重新安装。"},
 	{skills.RedundantLink, "多余的链接", "链接所在目录的那几家本来就从别处读得到它指向的那份，删掉不影响。"},
 }
 
@@ -776,10 +799,21 @@ func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 				agentTile(c, ag.String(), smallIcon())
 			}
 			ui.Spacer(c)
-			// 断掉的和多余的链接可以直接移到废纸篓；同名冲突、锁文件对不上要看情况，不给一键处理
-			if is.Kind == skills.BrokenLink || is.Kind == skills.RedundantLink {
+			switch is.Kind {
+			case skills.BrokenLink, skills.RedundantLink:
 				if pressable(iconButtonSized(c, iconTrash, "把这条链接移到废纸篓", compactBox(), smallIcon())).Clicked() {
 					a.askTrashLinks([]skills.Issue{is})
+				}
+			case skills.Duplicate:
+				if pressable(iconButtonSized(c.Key("dup-reveal"), iconFolder, "在访达中显示没生效的那份", compactBox(), smallIcon())).Clicked() {
+					mygo.Shell.ShowItemInFolder(is.Path)
+				}
+				if pressable(iconButtonSized(c.Key("dup-merge"), iconFolderLink, "合成一份：换成指向生效那份的链接", compactBox(), smallIcon())).Clicked() {
+					a.askMergeDuplicate(is)
+				}
+			case skills.LockMissing:
+				if pressable(iconButtonSized(c, iconTrash, "从锁文件里删掉", compactBox(), smallIcon())).Clicked() {
+					a.askSkillCommand("从锁文件里删掉 "+is.Name+"？", "各家的技能目录里都没有它了，npx skills 只会删掉锁文件里的这一项。", skills.ShellLine(skills.RemoveArgs(is.Name, true)), a.skillsWorkspace(), false)
 				}
 			}
 		})
@@ -789,6 +823,11 @@ func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 			line = shortPath(is.Path) + " → " + shortPath(is.Other)
 		case skills.Duplicate:
 			line = shortPath(is.Path) + " 被 " + shortPath(is.Other) + " 盖住"
+			if is.Same {
+				line += "，内容相同"
+			} else {
+				line += "，内容不同"
+			}
 		case skills.LockMissing:
 			line = "目录里没有 " + shortPath(is.Other)
 		case skills.RedundantLink:
@@ -1063,6 +1102,58 @@ func (a *app) askTrashLinks(items []skills.Issue) {
 	}
 	a.confirm(title, "只移走链接本身，它指向的目录不动，可以从废纸篓找回：\n"+strings.Join(list, "\n"), "移到废纸篓", func() {
 		a.trashPaths(paths)
+	})
+}
+
+// askMergeDuplicate 确认后把没生效的那份移到废纸篓，原处换成指向生效那份的链接：
+// 原来读它的那几家（如 Claude 只读自己的目录）照样读得到，读两份的不再冲突。
+func (a *app) askMergeDuplicate(is skills.Issue) {
+	body := "内容和生效的那份相同，合成后各家读到的不变。"
+	if !is.Same {
+		body = "两份内容不同：合成后原来读它的那几家也改用生效的那份，它的内容可以从废纸篓找回。"
+	}
+	body += "\n\n移到废纸篓：" + shortPath(is.Path) + "\n换成链接，指向：" + shortPath(is.Other)
+	a.confirm("把 "+is.Name+" 合成一份？", body, "合成一份", func() {
+		err := mergeDuplicate(is.Path, is.Other)
+		a.update(func() {
+			if err != nil {
+				a.err = "没有合成 " + is.Name + "：" + errtext.Text(err)
+			}
+			if a.skills.visible {
+				a.scanSkills()
+			}
+			a.skillsTab.poll.at = time.Time{}
+		})
+	})
+}
+
+// mergeDuplicate 把 path 移到废纸篓，在原处建指向 winner 真实目录的相对链接（和 npx skills 建的链接一样）。
+func mergeDuplicate(path, winner string) error {
+	if _, err := filepath.EvalSymlinks(winner); err != nil {
+		return err
+	}
+	if err := mygo.Shell.TrashItem(path); err != nil {
+		return err
+	}
+	return skills.MakeLink(path, winner)
+}
+
+// askLinkSkill 确认后在 ag 读的目录里建一条指向 sk 的链接，让读不到它的这家读到。
+func (a *app) askLinkSkill(sk skills.Skill, ag skills.Agent, link string) {
+	name := agentTitle(ag.String())
+	body := "在 " + name + " 读的目录里建一条链接指向它，不复制文件：\n" + shortPath(link) + " → " + shortPath(sk.Dir) +
+		"\n\n以后要关掉用这里的开关；要撤销，把这条链接移到废纸篓。"
+	a.confirm("让 "+name+" 读到 "+sk.Name+"？", body, "建链接", func() {
+		err := skills.MakeLink(link, sk.Dir)
+		a.update(func() {
+			if err != nil {
+				a.err = "没有建链接：" + errtext.Text(err)
+			}
+			if a.skills.visible {
+				a.scanSkills()
+			}
+			a.skillsTab.poll.at = time.Time{}
+		})
 	})
 }
 

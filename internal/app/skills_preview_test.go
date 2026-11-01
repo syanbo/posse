@@ -29,6 +29,8 @@ func previewSkills(home string) skills.Catalog {
 			[skills.NumAgents]skills.Status{{}, on(hub + "browser-skill"), on(hub + "browser-skill"), cursor(on(hub + "browser-skill"))}),
 		mk("browser-skill", "Automate the user's logged-in Chromium browser（Claude 目录里的旧副本）", skills.ScopeUser, cl+"browser-skill", "",
 			[skills.NumAgents]skills.Status{on(cl + "browser-skill"), {}, {State: skills.Shadowed, Why: "被同名的 ~/.agents/skills/browser-skill 盖住"}, cursor(skills.Status{State: skills.Shadowed, Why: "被同名的 ~/.agents/skills/browser-skill 盖住"})}),
+		mk("hypit", "Direct and produce videos with Hypit.", skills.ScopeUser, hub+"hypit", "hypit-ai/hypit",
+			[skills.NumAgents]skills.Status{{Why: "不读 ~/.agents/skills，它读 ~/.claude/skills"}, on(hub + "hypit"), on(hub + "hypit"), cursor(on(hub + "hypit"))}),
 		mk("lark-calendar", "飞书日历：管理日历日程和会议室。查看/搜索日程、创建/更新日程、管理参会人、查询忙闲和推荐时段。", skills.ScopeUser, hub+"lark-calendar", "open.feishu.cn",
 			[skills.NumAgents]skills.Status{{State: skills.Off, Why: "settings.json 的 skillOverrides 设为 off"}, on(hub + "lark-calendar"), {State: skills.Off, Why: "config.toml 的 [skills] disabled 里有它"}, cursor(on(hub + "lark-calendar"))}, cl+"lark-calendar"),
 		modelOff(mk("fiction-plot-structure", "长篇小说的情节结构：三幕、英雄之旅、救猫咪节拍表。", skills.ScopeUser, cl+"fiction-plot-structure", "",
@@ -45,7 +47,7 @@ func previewSkills(home string) skills.Catalog {
 			[skills.NumAgents]skills.Status{{}, {State: skills.Off, Why: "config.toml 的 [[skills.config]] 设为 enabled = false"}, on(""), cursor(on(""))}),
 	}, Issues: []skills.Issue{
 		{Kind: skills.BrokenLink, Name: "unslop", Path: home + "/.grok/skills/unslop", Other: hub + "unslop"},
-		{Kind: skills.Duplicate, Name: "browser-skill", Path: cl + "browser-skill", Other: hub + "browser-skill", Agents: []skills.Agent{skills.Grok, skills.Cursor}},
+		{Kind: skills.Duplicate, Name: "browser-skill", Path: cl + "browser-skill", Other: hub + "browser-skill", Agents: []skills.Agent{skills.Grok, skills.Cursor}, Same: true},
 		{Kind: skills.LockMissing, Name: "herdr", Path: home + "/.agents/.skill-lock.json", Other: hub + "herdr"},
 		{Kind: skills.RedundantLink, Name: "archify", Path: home + "/.grok/skills/archify", Other: hub + "archify"},
 		{Kind: skills.RedundantLink, Name: "eli5", Path: home + "/.grok/skills/eli5", Other: hub + "eli5"},
@@ -57,8 +59,8 @@ func previewSkillsBoard(a *app, sel string) {
 	cat := previewSkills(homeDir)
 	a.selected = skillsBoardID
 	now := time.Now()
-	// 查过更新：archify 有新版本，lark-calendar 是最新的，一个来源没查到
-	updates := &skills.Updates{Latest: map[string]string{"archify": "v2", "lark-calendar": "v1"}, Failed: []string{"me/gone：HTTP 404"}, At: now}
+	// 查过更新：archify 有新版本，lark-calendar 在来源里找不到了，一个来源没查到
+	updates := &skills.Updates{Latest: map[string]string{"archify": "v2"}, Gone: map[string]bool{"lark-calendar": true}, Failed: []string{"me/gone：HTTP 404"}, At: now}
 	a.skills = skillsView{visible: true, loaded: true, cat: cat, at: now, sel: sel, updates: updates, stats: map[string]*history.SkillStat{
 		"archify":       {Name: "archify", Count: 14, Sessions: 11, Last: now.Add(-3 * time.Hour), ByAgent: map[string]int{"claude": 9, "codex": 3, "grok": 2}},
 		"browser-skill": {Name: "browser-skill", Count: 60, Sessions: 58, Last: now.Add(-26 * time.Hour), ByAgent: map[string]int{"claude": 53, "codex": 2, "cursor": 4, "grok": 1}},

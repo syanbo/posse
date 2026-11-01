@@ -794,6 +794,10 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewSkillsBoard(a, homeDir+"/.agents/skills/lark-calendar")
 		savePNG(t, newPreviewTester(a, dark), "skills-off-"+suffix+".png")
+		// 读不到的一家写明原因，能建链接的给开关
+		a = previewApp(t)
+		previewSkillsBoard(a, homeDir+"/.agents/skills/hypit")
+		savePNG(t, newPreviewTester(a, dark), "skills-unseen-"+suffix+".png")
 		a = previewApp(t)
 		previewSkillsBoard(a, skillIssuesKey)
 		savePNG(t, newPreviewTester(a, dark), "skills-issues-"+suffix+".png")

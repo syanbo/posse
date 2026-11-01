@@ -93,7 +93,7 @@ func TestScanAgents(t *testing.T) {
 	link(t, "../../.agents/skills/shared", filepath.Join(h, ".claude", "skills", "shared"))
 	link(t, "../../.agents/skills/shared", filepath.Join(h, ".grok", "skills", "shared"))
 	link(t, "../../.agents/skills/gone", filepath.Join(h, ".claude", "skills", "gone"))
-	write(t, filepath.Join(h, ".agents", ".skill-lock.json"), `{"version":3,"skills":{"shared":{"source":"me/shared","sourceType":"github","skillPath":"skills/shared/SKILL.md"},"lost":{"source":"me/lost"}}}`)
+	write(t, filepath.Join(h, ".agents", ".skill-lock.json"), `{"version":3,"skills":{"shared":{"source":"me/shared","sourceType":"github","skillPath":"skills/shared/SKILL.md"},"lost":{"source":"me/lost"},"grok-only":{"source":"me/grok"}}}`)
 
 	c := Scan(Options{Home: h})
 	s := find(t, c, "shared", ScopeUser)
@@ -122,6 +122,7 @@ func TestScanAgents(t *testing.T) {
 	if is := issues(c, RedundantLink); len(is) != 1 || is[0].Path != filepath.Join(h, ".grok", "skills", "shared") {
 		t.Errorf("多余的链接 %+v", is)
 	}
+	// grok-only 是装成副本放在 ~/.grok/skills 里的，不算对不上
 	if is := issues(c, LockMissing); len(is) != 1 || is[0].Name != "lost" {
 		t.Errorf("锁文件对不上 %+v", is)
 	}
@@ -147,8 +148,18 @@ func TestScanDuplicate(t *testing.T) {
 	if claudeCopy.Agents[Claude].State != On || claudeCopy.Agents[Grok].State != Shadowed || hubCopy.Agents[Grok].State != On {
 		t.Errorf("同名两份：claude 那份 %v，正本 %v", states(claudeCopy), states(hubCopy))
 	}
-	if is := issues(c, Duplicate); len(is) != 1 || len(is[0].Agents) != 2 {
-		t.Errorf("同名冲突 %+v（Grok、Cursor 都读两份）", is)
+	if is := issues(c, Duplicate); len(is) != 1 || len(is[0].Agents) != 2 || !is[0].Same {
+		t.Errorf("同名冲突 %+v（Grok、Cursor 都读两份，内容一样）", is)
+	}
+
+	// Grok 经链接读到正本、Cursor 读目录本身：还是同一条；内容改了就不再算一样
+	os.MkdirAll(filepath.Join(h, ".grok", "skills"), 0o755)
+	if err := os.Symlink(filepath.Join(h, ".agents", "skills", "dup"), filepath.Join(h, ".grok", "skills", "dup")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(h, ".claude", "skills", "dup", "extra.md"), "x")
+	if is := issues(Scan(Options{Home: h}), Duplicate); len(is) != 1 || len(is[0].Agents) != 2 || is[0].Same {
+		t.Errorf("同名冲突 %+v（经链接读到的正本算同一条，内容不同）", is)
 	}
 }
 
@@ -260,5 +271,36 @@ func TestLockURL(t *testing.T) {
 		if got := c.e.url(); got != c.want {
 			t.Errorf("%+v：%q，要 %q", c.e, got, c.want)
 		}
+	}
+}
+
+func TestUnseenLink(t *testing.T) {
+	h := t.TempDir()
+	skill(t, filepath.Join(h, ".agents", "skills", "hub"), "hub", "")
+	c := Scan(Options{Home: h})
+	s := find(t, c, "hub", ScopeUser)
+	st := s.Agents[Claude]
+	if st.State != Unseen || st.Why != "不读 ~/.agents/skills，它读 ~/.claude/skills" {
+		t.Fatalf("Claude 读不到的原因 %+v", st)
+	}
+	link, ok := LinkFor(Options{Home: h}, s, Claude)
+	if !ok || link != filepath.Join(h, ".claude", "skills", "hub") {
+		t.Fatalf("链接位置 %q %v", link, ok)
+	}
+	if _, ok := LinkFor(Options{Home: h}, s, Codex); ok {
+		t.Error("读得到的不该给链接")
+	}
+	if err := MakeLink(link, s.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if target, _ := os.Readlink(link); target != filepath.Join("..", "..", ".agents", "skills", "hub") {
+		t.Errorf("链接指向 %q，要相对路径", target)
+	}
+	s = find(t, Scan(Options{Home: h}), "hub", ScopeUser)
+	if s.Agents[Claude].State != On {
+		t.Errorf("建了链接后 Claude %v", s.Agents[Claude])
+	}
+	if _, ok := LinkFor(Options{Home: h}, s, Claude); ok {
+		t.Error("读得到了不该再给链接")
 	}
 }

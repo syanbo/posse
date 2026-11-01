@@ -121,8 +121,13 @@ func applyCodex(ss []Skill, list []CodexSkill) []Skill {
 	byDir := map[string]int{}
 	for i := range ss {
 		byDir[ss[i].Dir] = i
-		if ss[i].Agents[Codex].State != Shadowed {
-			ss[i].Agents[Codex] = Status{}
+		// 没列出来就是读不到：按文件推算也读不到的留着原因，推算读得到的说明是 app-server 没列
+		switch prev := ss[i].Agents[Codex]; prev.State {
+		case Shadowed:
+		case Unseen:
+			ss[i].Agents[Codex] = Status{Why: prev.Why}
+		default:
+			ss[i].Agents[Codex] = Status{Why: "Codex 的 skills/list 里没有它"}
 		}
 	}
 	for _, c := range list {

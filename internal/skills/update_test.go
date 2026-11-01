@@ -15,7 +15,10 @@ import (
 func TestCheckUpdates(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/me/kit/git/trees/HEAD", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"sha":"root1","tree":[{"path":"skills/a","type":"tree","sha":"a-new"},{"path":"skills/b","type":"tree","sha":"b-old"}]}`))
+		w.Write([]byte(`{"sha":"root1","tree":[{"path":"skills/a","type":"tree","sha":"a-new"},{"path":"skills/a/SKILL.md","type":"blob"},` +
+			`{"path":"skills/b","type":"tree","sha":"b-old"},{"path":"skills/b/SKILL.md","type":"blob"},` +
+			`{"path":"new/m","type":"tree","sha":"m-moved"},{"path":"new/m/SKILL.md","type":"blob"},` +
+			`{"path":"x/d/SKILL.md","type":"blob"},{"path":"y/d/SKILL.md","type":"blob"}]}`))
 	})
 	gone := 0
 	mux.HandleFunc("/repos/me/gone/git/trees/", func(w http.ResponseWriter, r *http.Request) { gone++; http.NotFound(w, r) })
@@ -49,6 +52,9 @@ func TestCheckUpdates(t *testing.T) {
 	write(t, filepath.Join(h, ".agents", ".skill-lock.json"), `{"version":3,"skills":{
 		"a":{"source":"me/kit","sourceType":"github","skillPath":"skills/a/SKILL.md","skillFolderHash":"a-old"},
 		"b":{"source":"me/kit","sourceType":"github","skillPath":"skills/b/SKILL.md","skillFolderHash":"b-old"},
+		"m":{"source":"me/kit","sourceType":"github","skillPath":"skills/m/SKILL.md","skillFolderHash":"m-old"},
+		"r":{"source":"me/kit","sourceType":"github","skillPath":"SKILL.md","skillFolderHash":"r-old"},
+		"d":{"source":"me/kit","sourceType":"github","skillPath":"skills/d/SKILL.md","skillFolderHash":"d-old"},
 		"g":{"source":"me/gone","sourceType":"github","skillPath":"SKILL.md","skillFolderHash":"g"},
 		"lim":{"source":"me/limited","sourceType":"github","skillPath":"SKILL.md","skillFolderHash":"l"},
 		"wk":{"source":"local.test","sourceType":"well-known","sourceBaseUrl":"`+srv.URL+`","wellKnownDigest":"sha256:old"},
@@ -56,7 +62,7 @@ func TestCheckUpdates(t *testing.T) {
 		"loc":{"source":"./x","sourceType":"local"}}}`)
 	u := CheckUpdates(context.Background(), h)
 
-	want := map[string]string{"a": "a-new", "b": "b-old", "wk": digest("SKILL.md\x00skill\x00ref/x.md\x00x\x00"), "flaky": digest("SKILL.md\x00idc0\x00")}
+	want := map[string]string{"a": "a-new", "b": "b-old", "m": "m-moved", "wk": digest("SKILL.md\x00skill\x00ref/x.md\x00x\x00"), "flaky": digest("SKILL.md\x00idc0\x00")}
 	if len(u.Latest) != len(want) {
 		t.Fatalf("查到 %v", u.Latest)
 	}
@@ -64,6 +70,10 @@ func TestCheckUpdates(t *testing.T) {
 		if u.Latest[k] != v {
 			t.Errorf("%s：%q，要 %q", k, u.Latest[k], v)
 		}
+	}
+	// 根目录的 SKILL.md 删了（上游改名挪走）、同名目录有两个（npx 不知道是哪个）：不算新版本，npx 更新不了
+	if len(u.Gone) != 2 || !u.Gone["d"] || !u.IsGone(Skill{Name: "r", LockHash: "r-old"}) || u.HasUpdate(Skill{Name: "r", LockHash: "r-old"}) {
+		t.Errorf("来源里找不到的 %v", u.Gone)
 	}
 	if len(u.Failed) != 2 || !strings.HasPrefix(u.Failed[0], "me/gone") || !strings.HasPrefix(u.Failed[1], "me/limited") {
 		t.Errorf("查不了的来源 %v", u.Failed)

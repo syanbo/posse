@@ -29,6 +29,8 @@ import (
 type Updates struct {
 	// Latest 是 名字 → 来源上现在的版本，和 Skill.LockHash 不同就是有新版本。没查到的不在里面。
 	Latest map[string]string
+	// Gone 是来源里找不到的技能（上游删了、改了名或挪进了别的目录）：npx skills update 跳过它们，更新不了。
+	Gone map[string]bool
 	// Failed 是查不了的来源（网络不通、超出 GitHub 不登录的次数、仓库没了）。
 	Failed []string
 	At     time.Time
@@ -41,6 +43,11 @@ func (u *Updates) HasUpdate(sk Skill) bool {
 	}
 	latest, ok := u.Latest[sk.Name]
 	return ok && latest != sk.LockHash
+}
+
+// IsGone 说技能在来源里还找不找得到。
+func (u *Updates) IsGone(sk Skill) bool {
+	return u != nil && sk.LockHash != "" && u.Gone[sk.Name]
 }
 
 // checkTimeout 是一次检查最多等多久。
@@ -56,7 +63,7 @@ var (
 func CheckUpdates(ctx context.Context, home string) Updates {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
-	u := Updates{Latest: map[string]string{}, At: time.Now()}
+	u := Updates{Latest: map[string]string{}, Gone: map[string]bool{}, At: time.Now()}
 	type group struct {
 		names   []string
 		entries []lockEntry
@@ -90,10 +97,11 @@ func CheckUpdates(ctx context.Context, home string) Updates {
 		go func() {
 			defer wg.Done()
 			var latest map[string]string
+			var gone []string
 			var err error
 			src := strings.SplitN(key, "\n", 2)[0]
 			if g := github[key]; g != nil {
-				latest, err = checkGitHub(ctx, token, g.entries[0].Source, g.entries[0].Ref, g.names, g.entries)
+				latest, gone, err = checkGitHub(ctx, token, g.entries[0].Source, g.entries[0].Ref, g.names, g.entries)
 			} else {
 				g := wellKnown[key]
 				want := map[string]string{}
@@ -110,6 +118,9 @@ func CheckUpdates(ctx context.Context, home string) Updates {
 			}
 			for k, v := range latest {
 				u.Latest[k] = v
+			}
+			for _, n := range gone {
+				u.Gone[n] = true
 			}
 		}()
 	}
@@ -148,7 +159,9 @@ func githubToken() string {
 }
 
 // checkGitHub 取仓库的整棵树（没记分支时依次试 HEAD、main、master，和 npx 一样），找各技能目录的树哈希。
-func checkGitHub(ctx context.Context, token, repo, ref string, names []string, entries []lockEntry) (map[string]string, error) {
+// 锁文件记的 SKILL.md 不在树里时，npx 会克隆仓库按名字重新找：别处有同名目录的当作挪了位置，用那个目录
+// （npx 会照新路径更新）；找不到的记进 gone，npx 认为上游删了，跳过不更新。
+func checkGitHub(ctx context.Context, token, repo, ref string, names []string, entries []lockEntry) (latest map[string]string, gone []string, err error) {
 	refs := []string{"HEAD", "main", "master"}
 	if ref != "" {
 		refs = []string{ref}
@@ -162,7 +175,6 @@ func checkGitHub(ctx context.Context, token, repo, ref string, names []string, e
 		} `json:"tree"`
 		Truncated bool `json:"truncated"`
 	}
-	var err error
 	for _, r := range refs {
 		u := githubAPI + "/repos/" + repo + "/git/trees/" + url.PathEscape(r) + "?recursive=1"
 		var b []byte
@@ -175,24 +187,50 @@ func checkGitHub(ctx context.Context, token, repo, ref string, names []string, e
 		}
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	out := map[string]string{}
-	for i, e := range entries {
-		dir := skillDir(e.SkillPath)
+	blobs := map[string]bool{}
+	for _, t := range tree.Tree {
+		if t.Type == "blob" {
+			blobs[t.Path] = true
+		}
+	}
+	dirSHA := func(dir string) string {
 		if dir == "" {
-			out[names[i]] = tree.SHA
-			continue
+			return tree.SHA
 		}
 		for _, t := range tree.Tree {
 			if t.Type == "tree" && t.Path == dir {
-				out[names[i]] = t.SHA
-				break
+				return t.SHA
 			}
 		}
-		// 树被截断（仓库太大）或目录挪了：npx 这时会克隆仓库再找，这里当没查到
+		return ""
 	}
-	return out, nil
+	latest = map[string]string{}
+	for i, e := range entries {
+		dir := skillDir(e.SkillPath)
+		file := strings.TrimPrefix(path.Join(dir, "SKILL.md"), "./")
+		// 树被截断（仓库太大）时看不全，不下结论：npx 这时会克隆仓库再找，这里当没查到
+		if !blobs[file] && !tree.Truncated {
+			// 同名目录不止一个时 npx 不知道是哪个，跳过不更新，这里也当找不到
+			var found []string
+			for p := range blobs {
+				if strings.EqualFold(path.Base(p), "SKILL.md") && path.Base(path.Dir(p)) == names[i] {
+					found = append(found, path.Dir(p))
+				}
+			}
+			if len(found) == 1 {
+				dir = found[0]
+			} else {
+				gone = append(gone, names[i])
+				continue
+			}
+		}
+		if sha := dirSHA(dir); sha != "" {
+			latest[names[i]] = sha
+		}
+	}
+	return latest, gone, nil
 }
 
 // skillDir 是 SKILL.md 所在的目录，在仓库根上时为空。
