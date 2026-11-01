@@ -28,7 +28,11 @@ type cheatView struct {
 type cheatSkill struct{ name, desc string }
 
 // cheatRefresh 是面板开着时多久重新认一次版本、扫一次技能：会话里可能换了 agent 版本、装了技能。
-const cheatRefresh = 30 * time.Second
+// 还没认出版本时 cheatRetry 后再认：刚开的终端要先跑完登录 shell 的配置，agent 进程还没起来。
+const (
+	cheatRefresh = 30 * time.Second
+	cheatRetry   = 3 * time.Second
+)
 
 // skillAgent 把 agent 名字换成技能扫描里的那一家。
 func skillAgent(name string) (skills.Agent, bool) {
@@ -46,7 +50,11 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 	if v.term != cur.ID || v.agent != cur.Agent {
 		*v = cheatView{term: cur.ID, agent: cur.Agent}
 	}
-	if !v.poll.due(c, cheatRefresh) {
+	every := cheatRefresh
+	if v.loaded && v.version == "" && cur.Running {
+		every = cheatRetry
+	}
+	if !v.poll.due(c, every) {
 		return
 	}
 	id, agentName, pid, dir := cur.ID, cur.Agent, cur.Pid, cur.Dir
@@ -201,7 +209,10 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 	row.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			if kind == cheatsheet.KindKey {
-				keyChip(c, it.Name, true)
+				// 不用 keyChip：它的底是 Surface，和面板几乎同色，深色下看不出是键帽
+				ui.Box(c).Padding(2, 8).Radius(rSmall).Background(colors(t).fillHi).Shrink(0).Children(func() {
+					ui.Text(c, it.Name).FontSize(fsSmall).FontFeatures("tnum")
+				})
 				return
 			}
 			color := t.Text
@@ -214,7 +225,7 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 			}
 		})
 		if it.Desc != "" {
-			ui.Text(c, it.Desc).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).MaxLines(2)
+			ui.Text(c, it.Desc).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).MaxLines(2).Tooltip(it.Desc) // 技能的说明常超过两行
 		}
 	})
 	if text != "" && row.Clicked() {
