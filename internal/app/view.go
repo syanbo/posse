@@ -1635,7 +1635,9 @@ func sessionColWidth() float32 { return buttonBox() + 2*sessionColPad }
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
 // 这个会话粘贴过的图片、用到的技能与工具、这家 agent 的命令速查。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
-func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
+// rightmost 是这一栏贴着主区域右边（不分屏，或分屏的右栏）：右侧面板开着时会盖住它的右上角，
+// 这一列跟着面板滑入往左让开，停在面板左边。
+func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	task := a.taskByWorker(cur.ID)
 	if cur.Agent == "" && task == nil {
 		return
@@ -1663,7 +1665,11 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		return
 	}
-	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(findBarRight - sessionColGap).Gap(2).Padding(sessionColPad).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
+	right := float32(findBarRight - sessionColGap)
+	if rightmost && a.panelShown > 0 {
+		right += a.panelShown * (panelWidth(a.lastPanel) + sessionColGap)
+	}
+	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(right).Gap(2).Padding(sessionColPad).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
 	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage || a.state.RightPanel == panelCheat
 	opacity := float32(0.5)
@@ -1859,7 +1865,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
 			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
 		}
 		a.startingHint(c, v, cur)
-		a.sessionButtons(c, cur)
+		a.sessionButtons(c, cur, !a.splitShown() || i == 1)
 		a.termFindBar(c, v, cur)
 	})
 	a.termDrop(c, area, v, cur.Agent)

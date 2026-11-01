@@ -42,6 +42,14 @@ func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
 	return a.rightPanelSized(c, title, 280, body)
 }
 
+// panelWidth 是右侧面板的宽度：命令速查宽一些，别的都是 280。
+func panelWidth(name string) float32 {
+	if name == panelCheat {
+		return cheatWidth
+	}
+	return 280
+}
+
 // rightPanelSized 同 rightPanel，宽度由调用方定。
 func (a *app) rightPanelSized(c *ui.Context, title string, width float32, body func()) ui.Element {
 	return floating(c, ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(width)).Children(func() {
