@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 )
@@ -77,15 +79,42 @@ func (a *app) termDrop(c *ui.Context, area ui.Element, v *termView, agent string
 	if len(paths) == 0 || !a.live(v) || v.term == nil {
 		return
 	}
-	term := v.term
-	for _, p := range dropPieces(paths, agent) {
+	sendPieces(v.term, dropPieces(paths, agent))
+	a.focusTerm = true
+}
+
+// copiedFiles 是剪贴板里复制的文件：只有文件、或者文本只是这些文件的名字（访达复制文件时的样子）。
+// 文本是别的内容（编辑器、邮件里连着附件复制的一段字）时返回 nil，照常粘贴文本。
+func copiedFiles(d transfer.Data) []string {
+	paths, _ := d.Files()
+	if len(paths) == 0 {
+		return nil
+	}
+	text, _ := d.Read(transfer.Text)
+	if len(bytes.TrimSpace(text)) == 0 {
+		return paths
+	}
+	names := strings.FieldsFunc(string(text), func(r rune) bool { return r == '\n' || r == '\r' })
+	if len(names) != len(paths) {
+		return nil
+	}
+	for i, n := range names {
+		if strings.TrimSpace(n) != filepath.Base(paths[i]) {
+			return nil
+		}
+	}
+	return paths
+}
+
+// sendPieces 把 dropPieces 的结果送进终端：拖进来的文件和粘贴的访达文件共用。
+func sendPieces(term *terminal.Terminal, pieces []dropPiece) {
+	for _, p := range pieces {
 		if p.paste {
 			term.Paste(p.text)
 		} else {
 			term.Send([]byte(p.text))
 		}
 	}
-	a.focusTerm = true
 }
 
 // dropPiece 是拖进终端的一段输入：paste 为真时按粘贴发（程序开了括号粘贴就带上标记），否则当作键入。

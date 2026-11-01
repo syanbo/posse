@@ -1007,7 +1007,19 @@ func (a *app) attachView(id string) *termView {
 			a.termCtx, a.termCtxID = menuState{open: true, x: x, y: y}, id
 		},
 		OnPaste: func(d transfer.Data) bool {
-			if text, _ := d.Read(transfer.Text); len(text) > 0 || v.term == nil {
+			if v.term == nil {
+				return false
+			}
+			// 访达里复制的文件（视频、图片、任何文件）：剪贴板的文本只是文件名，照拖进终端一样贴完整路径
+			if paths := copiedFiles(d); len(paths) > 0 {
+				agent := ""
+				if _, t := a.findTerminal(id); t != nil {
+					agent = t.Agent
+				}
+				sendPieces(v.term, dropPieces(paths, agent))
+				return true
+			}
+			if text, _ := d.Read(transfer.Text); len(text) > 0 {
 				return false
 			}
 			if _, t := a.findTerminal(id); t == nil || t.Agent == "" {
