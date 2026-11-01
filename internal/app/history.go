@@ -946,21 +946,22 @@ func (a *app) sessionDetail(c *ui.Context) {
 			}
 		}
 	}
-	// 对话直接铺在画布上，不装卡片；版心限宽居中，一行不至于太长
-	transcript := ui.List(c, &h.messages, len(msgs), func(i int) {
-		ui.Row(c).Justify(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Shrink(1).MaxWidth(a.transcriptWidth()).Children(func() {
-				it := msgs[i]
-				if it.tools != nil {
-					a.toolRun(c, d, it.tools)
-					return
-				}
-				a.messageView(c, s, it.msg, ns, it.msg.Seq == h.hitSeq)
-			})
-		})
-	}).Grow(1).Padding(8, 0, 32, 0).Gap(6)
-	fadeEdges(transcript, &h.messages, colors(t).canvas)
+	// 对话装进卡片，和上面的会话信息一样一层底色，和画布分得开；铺满卡片宽，两边只留卡片内边距
+	card(c).Grow(1).Shrink(1).Clip().Children(func() {
+		transcript := ui.List(c, &h.messages, len(msgs), func(i int) {
+			it := msgs[i]
+			if it.tools != nil {
+				a.toolRun(c, d, it.tools)
+				return
+			}
+			a.messageView(c, s, it.msg, ns, it.msg.Seq == h.hitSeq)
+		}).Grow(1).Padding(cardPad-8, 0, 32, 0).Gap(6) // 第一条消息框上内边距 8，文字离卡片顶也是 cardPad
+		fadeEdges(transcript, &h.messages, colors(t).card)
+	})
 }
+
+// transcriptInset 是消息框离对话卡片边的距离：框自己有 12 的内边距，两者加起来文字离卡片边 cardPad，和上面会话信息卡片的文字对齐。
+const transcriptInset = cardPad - 12
 
 // transcriptWidth 是对话的版心宽度：默认字号下一行四十几个汉字，随 Markdown 字号等比放宽。
 func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultUIFontSize }
@@ -969,7 +970,7 @@ func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultUIFon
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 	t := c.Theme()
 	open := d.opened[run[0].Seq]
-	row := ui.Row(c.Key("tools")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
+	row := ui.Row(c.Key("tools")).Height(sz(26)).Margin(0, transcriptInset).Padding(0, 12).Gap(6).Radius(rControl).AlignItems(ui.Center).AlignSelf(ui.Start).Role(ui.RoleButton)
 	selectedBg(c, row, false)
 	row.Children(func() {
 		turn := float32(0)
@@ -1000,7 +1001,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		whoColor = t.Accent
 	}
 	// agent 的回复不装框，直接铺开；命中搜索的那条铺一层琥珀淡底
-	box := ui.Column(c).Margin(0, 16).Padding(8, 12).Gap(6).Radius(rCard)
+	box := ui.Column(c).Margin(0, transcriptInset).Padding(8, 12).Gap(6).Radius(rCard)
 	switch {
 	case hit:
 		box.Background(soft(t, colors(t).honey))
