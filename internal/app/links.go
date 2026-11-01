@@ -98,12 +98,13 @@ func linkLine(link string) int {
 	return n
 }
 
-// openLinkFile 在文件标签里打开链接指向的文件：放进文件所在的工作区，不在任何工作区里就放进链接所在终端的工作区；
-// 都没有返回 false。
+// openLinkFile 在链接所在终端的工作区的文件标签里打开链接指向的文件，文件属于别的工作区也一样：
+// 就在正看着的会话旁边预览，不切走。代价是文件栏的树、⌘P 和跳到定义按这个工作区算，
+// 别的工作区（比如 worktree）里的文件跳到定义会跳到这里的同名文件。没有工作区返回 false。
 func (a *app) openLinkFile(card *linkCard) bool {
-	w := a.workspaceOf(card.path)
+	w := card.ws
 	if w == nil {
-		w = card.ws
+		w = a.workspaceOf(card.path)
 	}
 	if w == nil {
 		return false

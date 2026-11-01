@@ -450,3 +450,26 @@ func TestWebAddress(t *testing.T) {
 
 // termX 是主区域里离侧栏右边 dx 的横坐标（默认宽的侧栏），终端、标签栏的坐标都按它算，侧栏宽度变了不用改测试。
 func termX(dx float32) float32 { return sidebarDefault() + dx }
+
+// 链接指向别的工作区里的文件时，在链接所在终端的工作区里打开，不切走。
+func TestOpenLinkFileStaysInWorkspace(t *testing.T) {
+	here, there := t.TempDir(), t.TempDir()
+	file := filepath.Join(there, "report.md")
+	os.WriteFile(file, nil, 0o644)
+	a := &app{activeTerm: map[string]string{}, selected: "w1", workspaces: []workspace{
+		{ID: "w1", Path: here, Terminals: []terminalInfo{{ID: "t1"}}},
+		{ID: "w2", Path: there},
+	}}
+	if !a.openLinkFile(&linkCard{path: file, ws: a.workspace("w1")}) {
+		t.Fatal("not opened")
+	}
+	if a.selected != "w1" || a.activeTerm["w1"] != filesTabID {
+		t.Fatalf("selected %q, active tab %q", a.selected, a.activeTerm["w1"])
+	}
+	if v := a.files["w1"]; v == nil || v.cur == nil || v.cur.path != file {
+		t.Fatal("file not current in w1's files tab")
+	}
+	if a.files["w2"] != nil {
+		t.Fatal("opened in the file's own workspace")
+	}
+}
