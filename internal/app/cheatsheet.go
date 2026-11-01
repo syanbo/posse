@@ -274,7 +274,11 @@ func (a *app) cheatSection(c *ui.Context, key any, title string, body func()) {
 // text 为空的（按键）只看，名字画成键帽。会丢掉对话的命令名字用警示色。
 func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, it cheatsheet.Item, text string, i int) {
 	t := c.Theme()
-	row := ui.Column(c.Key(i)).Gap(2).Padding(6, 6).Radius(rRow)
+	// 细线隔开相邻两条，和条目文字同宽（两头让开行的内边距）
+	if i > 0 {
+		hline(c).Margin(0, 6)
+	}
+	row := ui.Column(c.Key(i)).Gap(4).Padding(8, 6).Radius(rRow)
 	if text != "" {
 		row.Role(ui.RoleButton).Label("贴进输入框 " + it.Name)
 		bg := ui.Transparent
@@ -304,7 +308,7 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 			}
 		})
 		if it.Desc != "" {
-			ui.Text(c, it.Desc).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).MaxLines(2).Tooltip(it.Desc) // 技能的说明常超过两行
+			ui.Text(c, it.Desc).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).MaxLines(2)
 		}
 	})
 	if text != "" && row.Clicked() {
