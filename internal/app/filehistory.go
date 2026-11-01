@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -130,11 +131,28 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				}
 			}
 		})
-		if row.Clicked() && h.sel != ci.Hash {
-			a.selectHistory(v, d, ci)
+		if row.Clicked() {
+			if h.sel != ci.Hash {
+				a.selectHistory(v, d, ci)
+			}
+			// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
+			ld.list.Focus(c)
 		}
 		contextMenu(c, row, func(m *popMenu) { a.commitMenu(c, m, w, v, d, ci) })
 	}).Grow(1)
+	// ↑↓ 换选中的提交，右边跟着换成它的 diff
+	cur := slices.IndexFunc(ld.commits, func(x gitx.CommitInfo) bool { return x.Hash == h.sel })
+	j := -1
+	switch {
+	case ld.list.Shortcut(c, 0, ui.KeyDown):
+		j = cur + 1
+	case ld.list.Shortcut(c, 0, ui.KeyUp):
+		j = max(cur-1, 0)
+	}
+	if j >= 0 && j < len(ld.commits) && j != cur {
+		a.selectHistory(v, d, ld.commits[j])
+		ld.list.ScrollIntoView(j)
+	}
 }
 
 // historyDiff 是右边选中提交的 diff：上一处 / 下一处、排版、差异数，两个版本和路径，下面是 diff。

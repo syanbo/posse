@@ -31,6 +31,7 @@ type compareDoc struct {
 	queryCur   string
 	list       ui.ListState
 	folded     map[string]bool // 文件树里收起的目录
+	cursor     string          // 和工作区比较时键盘停在的文件
 	listOther  ui.ListState    // 只在 other 里的提交
 	listCur    ui.ListState    // 只在 cur 里的提交
 }
@@ -42,6 +43,8 @@ type commitView struct {
 	err    string
 	list   ui.ListState
 	folded map[string]bool // 文件树里收起的目录
+	focus  bool            // 在提交列表里按了 →：文件列表建出来时拿焦点
+	cursor string          // 键盘停在的文件（diff 会挡住列表时才用）
 }
 
 func compareKey(other, cur string, files bool) string {
@@ -180,7 +183,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			return
 		}
 		selected, open := a.tabDiffs(w, v, specs)
-		a.fileChangeList(c, &cd.list, &cd.folded, cd.changes, selected, open)
+		a.fileChangeList(c, &cd.list, &cd.folded, cd.changes, selected, open, fileListNav{cursor: &cd.cursor})
 		return
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
@@ -202,7 +205,16 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		})
 		if cd.commit != nil {
 			vline(c)
-			ui.Column(c).Width(340).Shrink(0).Children(func() { a.commitDetail(c, w, v, cd.commit) })
+			ui.Column(c).Width(340).Shrink(0).Children(func() {
+				// ← 回到选中提交所在的那一栏
+				a.commitDetail(c, w, v, cd.commit, false, func() {
+					if slices.ContainsFunc(cd.onlyOther, func(x gitx.CommitInfo) bool { return x.Hash == cd.commit.info.Hash }) {
+						cd.listOther.Focus(c)
+					} else {
+						cd.listCur.Focus(c)
+					}
+				})
+			})
 		}
 	})
 }
@@ -413,8 +425,28 @@ func (a *app) commitPane(c *ui.Context, v *filesView, cd *compareDoc, list *ui.L
 		ci := commits[i]
 		if row := commitRow(c, ci, slices.Contains(sel, ci.Hash), i == 0, i == len(commits)-1, lane); row.Clicked() {
 			a.clickCommit(v, cd, all, commits, ci, row.ClickModifiers())
+			// 行是按钮、不拿焦点；焦点给列表，方向键才能接着用
+			list.Focus(c)
 		}
 	}).Grow(1).Padding(4, 0, 8, 0)
+	// ↑↓ 在这一栏里换选中的提交（只选一个），→ 到右边它改的文件
+	cur := -1
+	if cd.commit != nil {
+		cur = slices.IndexFunc(commits, func(x gitx.CommitInfo) bool { return x.Hash == cd.commit.info.Hash })
+	}
+	j := -1
+	switch {
+	case list.Shortcut(c, 0, ui.KeyDown):
+		j = cur + 1
+	case list.Shortcut(c, 0, ui.KeyUp):
+		j = max(cur-1, 0)
+	case cur >= 0 && list.Shortcut(c, 0, ui.KeyRight):
+		cd.commit.focus = true
+	}
+	if j >= 0 && j < len(commits) && j != cur {
+		a.clickCommit(v, cd, all, commits, commits[j], 0)
+		list.ScrollIntoView(j)
+	}
 }
 
 // commitRow 是比较页的一个提交，和 Git 日志一个样子：左边一条线串起圆点，标题、分支和标签、作者、时间。
@@ -487,7 +519,8 @@ func commitStamp(at time.Time) string {
 }
 
 // commitDetail 是选中提交的说明和它改的文件，点文件看这个提交里的改动。
-func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commitView) {
+// live 说明打开的 diff 不挡住这里（日志浮层），↑↓ 才直接打开；back 是在文件列表里按 ← 时回到哪，nil 时不处理。
+func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commitView, live bool, back func()) {
 	t := c.Theme()
 	ci := cv.info
 	ui.Column(c).Padding(12, 16, 8, 16).Gap(4).Shrink(0).Children(func() {
@@ -504,7 +537,11 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
 	default:
 		selected, open := a.tabDiffs(w, v, commitSpecs(ci, cv.files))
-		a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, open)
+		nav := fileListNav{focus: &cv.focus, back: back}
+		if !live {
+			nav.cursor = &cv.cursor
+		}
+		a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, open, nav)
 	}
 }
 
@@ -516,7 +553,8 @@ func (a *app) tabDiffs(w *workspace, v *filesView, specs []diffSpec) (selected f
 }
 
 // fileChangeList 是一组改了的文件，照 WebStorm 按目录排成树，点文件交给 open 打开它的 diff（参数是 files 的下标）。
-func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, selected func(int) bool, open func(int)) {
+// 方向键见 fileListNav。
+func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[string]bool, files []gitx.FileChange, selected func(int) bool, open func(int), nav fileListNav) {
 	t := c.Theme()
 	if *folded == nil {
 		*folded = map[string]bool{}
@@ -551,7 +589,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 		}
 		f := files[r.entry]
 		row.Role(ui.RoleButton).Label(f.Path)
-		selectedBg(c, row, selected(r.entry))
+		selectedBg(c, row, selected(r.entry) || nav.cursor != nil && *nav.cursor == f.Path && list.FocusWithin(c))
 		color := letterColor(c, f.Status)
 		row.Children(func() {
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
@@ -564,9 +602,72 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 			}
 		})
 		if row.Clicked() {
+			if nav.cursor != nil {
+				*nav.cursor = f.Path
+			}
 			open(r.entry)
+			// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
+			list.Focus(c)
 		}
 	}).Grow(1).Padding(0, 0, 8, 0)
+	nav.keys(c, list, rows, files, selected, open)
+}
+
+// fileListNav 是文件树的方向键，照 WebStorm：↑↓ 在展开着的文件之间换（跳过目录），← 交给 back。
+type fileListNav struct {
+	focus *bool // 为 true 时列表拿焦点，没选中的文件就选第一个
+	// cursor 非 nil 时 ↑↓ 只移动它、回车才打开：打开的 diff 会换掉列表所在的标签（比较页），
+	// 直接打开的话列表一下就看不见了。nil 时 ↑↓ 直接打开 diff（日志浮层、推送对话框）。
+	cursor *string
+	back   func()
+}
+
+func (nav fileListNav) keys(c *ui.Context, list *ui.ListState, rows []treeRow, files []gitx.FileChange, selected func(int) bool, open func(int)) {
+	var order []int // 文件所在的行
+	cur := -1
+	for i, r := range rows {
+		if r.dir {
+			continue
+		}
+		if nav.cursor != nil && *nav.cursor == files[r.entry].Path || nav.cursor == nil && selected(r.entry) {
+			cur = len(order)
+		}
+		order = append(order, i)
+	}
+	pick := func(j int) {
+		r := rows[order[j]]
+		if nav.cursor != nil {
+			*nav.cursor = files[r.entry].Path
+		} else {
+			open(r.entry)
+		}
+		list.ScrollIntoView(order[j])
+		// 打开 diff 不该把焦点从列表拿走，接着按 ↑↓
+		list.Focus(c)
+	}
+	if nav.focus != nil && *nav.focus && list.Focus(c) {
+		*nav.focus = false
+		if cur < 0 && len(order) > 0 {
+			pick(0)
+		}
+		return
+	}
+	switch {
+	case list.Shortcut(c, 0, ui.KeyDown):
+		if j := cur + 1; j < len(order) {
+			pick(j)
+		}
+	case list.Shortcut(c, 0, ui.KeyUp):
+		if cur > 0 {
+			pick(cur - 1)
+		} else if cur < 0 && len(order) > 0 {
+			pick(0)
+		}
+	case nav.cursor != nil && cur >= 0 && list.Shortcut(c, 0, ui.KeyEnter):
+		open(rows[order[cur]].entry)
+	case nav.back != nil && list.Shortcut(c, 0, ui.KeyLeft):
+		nav.back()
+	}
 }
 
 // --- Push 对话框
@@ -716,7 +817,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
 					default:
 						selected := func(i int) bool { return ps.detail != nil && ps.detail.diff.rel == cv.files[i].Path }
-						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) })
+						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) }, fileListNav{})
 					}
 				})
 				if ps.detail != nil {

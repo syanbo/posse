@@ -509,30 +509,41 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				}
 				a.logRow(c, w, v, d, commits[i], gr)
 			}).Grow(1)
-			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，照 WebStorm 的日志
-			step := 0
-			switch {
-			case ld.list.Shortcut(c, 0, ui.KeyDown):
-				step = 1
-			case ld.list.Shortcut(c, 0, ui.KeyUp):
-				step = -1
-			}
-			if step != 0 {
-				i := -1
-				if ld.commit != nil {
-					i = slices.IndexFunc(commits, func(ci gitx.CommitInfo) bool { return ci.Hash == ld.commit.info.Hash })
-				}
-				if j := i + step; j >= 0 && j < len(commits) {
-					a.selectCommit(v, &ld.commit, commits[j])
-					ld.list.ScrollIntoView(j)
-				}
-			}
+			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，→ 到右边它改的文件，照 WebStorm 的日志
+			a.commitListKeys(c, v, &ld.list, commits, &ld.commit)
 		})
 		if ld.commit != nil {
 			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
-			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, ld.commit) })
+			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() {
+				a.commitDetail(c, w, v, ld.commit, true, func() { ld.list.Focus(c) })
+			})
 		}
 	})
+}
+
+// commitListKeys 是提交列表的方向键：↑↓ 换选中的提交，→ 让右边的文件列表拿焦点。
+func (a *app) commitListKeys(c *ui.Context, v *filesView, list *ui.ListState, commits []gitx.CommitInfo, holder **commitView) {
+	cv := *holder
+	step := 0
+	switch {
+	case list.Shortcut(c, 0, ui.KeyDown):
+		step = 1
+	case list.Shortcut(c, 0, ui.KeyUp):
+		step = -1
+	case cv != nil && list.Shortcut(c, 0, ui.KeyRight):
+		cv.focus = true
+	}
+	if step == 0 {
+		return
+	}
+	i := -1
+	if cv != nil {
+		i = slices.IndexFunc(commits, func(ci gitx.CommitInfo) bool { return ci.Hash == cv.info.Hash })
+	}
+	if j := i + step; j >= 0 && j < len(commits) {
+		a.selectCommit(v, holder, commits[j])
+		list.ScrollIntoView(j)
+	}
 }
 
 // logFilterBar 是日志上方的筛选：文字或哈希、分支、作者；文件历史时显示路径。
@@ -971,7 +982,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		})
 		if bd.sel != nil {
 			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
-			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, bd.sel) })
+			ui.Column(c).Width(paneWidth(a.state.LogDetailWidth, logDetailPane)).Shrink(0).Children(func() { a.commitDetail(c, w, v, bd.sel, false, nil) })
 		}
 	})
 }
