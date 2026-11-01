@@ -1684,7 +1684,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	}
 	right := float32(findBarRight - sessionColGap)
 	if rightmost && a.panelShown > 0 {
-		right += a.panelShown * (panelWidth(a.lastPanel) + sessionColGap)
+		right += a.panelShown * (panelWidth + sessionColGap)
 	}
 	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(right).Gap(2).Padding(sessionColPad).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来

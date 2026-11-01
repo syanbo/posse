@@ -37,22 +37,12 @@ func (p *panelPoll) due(c *ui.Context, every time.Duration) bool {
 
 func (p *panelPoll) done() { p.busy, p.at = false, time.Now() }
 
+// panelWidth 是右侧面板的宽度，各面板一样宽。
+const panelWidth = 280
+
 // rightPanel 是右侧面板的外框：浮在终端右侧的卡片，有标题和关闭按钮，body 自己决定滚动。
 func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
-	return a.rightPanelSized(c, title, 280, body)
-}
-
-// panelWidth 是右侧面板的宽度：命令速查宽一些，别的都是 280。
-func panelWidth(name string) float32 {
-	if name == panelCheat {
-		return cheatWidth
-	}
-	return 280
-}
-
-// rightPanelSized 同 rightPanel，宽度由调用方定。
-func (a *app) rightPanelSized(c *ui.Context, title string, width float32, body func()) ui.Element {
-	return floating(c, ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(width)).Children(func() {
+	return floating(c, ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(panelWidth)).Children(func() {
 		ui.Row(c).Padding(16, 12, 12, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 			cardTitle(c, title).Grow(1)
 			if iconButtonSized(c, iconClose, "关闭", compactBox(), smallIcon()).Clicked() {

@@ -41,9 +41,6 @@ const (
 
 var cheatTabs = []string{"内置技能", "技能", "内置命令", "快捷键"}
 
-// cheatWidth 是面板的宽度：比别的右侧面板宽一点，四个页签按字宽放得下。
-const cheatWidth = 320
-
 // cheatRefresh 是面板开着时多久重新认一次版本、扫一次技能：会话里可能换了 agent 版本、装了技能。
 // 还没认出版本时 cheatRetry 后再认：刚开的终端要先跑完登录 shell 的配置，agent 进程还没起来。
 const (
@@ -109,7 +106,7 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollCheat(c, cur)
 	v := &a.cheat
 	sheet, ok := cheatsheet.For(cur.Agent)
-	return a.rightPanelSized(c, "命令速查", cheatWidth, func() {
+	return a.rightPanel(c, "命令速查", func() {
 		if !ok {
 			ui.Column(c).Padding(0, 12, 16, 12).Children(func() {
 				usageNote(c, agentTitle(cur.Agent)+" 还没有速查表。")
@@ -122,7 +119,7 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 			fieldInputSized(c, &v.query, "搜索命令、技能和说明", 0, 0).Label("搜索")
 			a.cheatVersion(c, cur, sheet)
 			// 直接放在列里：被拉到和搜索框一样宽，各段平分
-			if q == "" && segmented(c, &tab, "分类", cheatTabs...) {
+			if q == "" && segmentedTight(c, &tab, "分类", cheatTabs...) {
 				a.state.CheatTab = tab
 				a.saveState()
 			}

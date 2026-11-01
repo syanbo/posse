@@ -588,11 +588,21 @@ func liftButton(c *ui.Context, b ui.Element) ui.Element {
 
 // segmented 是分段选择：轨道是一层淡底，选中的一段填强调色；返回这一帧是否换了选择。
 func segmented(c *ui.Context, sel *int, label string, options ...string) bool {
-	return segmentedBadges(c, sel, label, nil, options...)
+	return segmentedPad(c, sel, label, nil, 12, options...)
+}
+
+// segmentedTight 同 segmented，每段两侧的留白窄一些：面板宽度里要放下四个页签（命令速查）。
+func segmentedTight(c *ui.Context, sel *int, label string, options ...string) bool {
+	return segmentedPad(c, sel, label, nil, 6, options...)
 }
 
 // segmentedBadges 是带计数的分段：badges[i] 大于 0 时在第 i 段文字后面画强调色的数（文件栏"改动"的改动文件数）。
 func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, options ...string) bool {
+	return segmentedPad(c, sel, label, badges, 12, options...)
+}
+
+// segmentedPad 是分段的实现，pad 是每段两侧的留白。
+func segmentedPad(c *ui.Context, sel *int, label string, badges []int, pad float32, options ...string) bool {
 	t := c.Theme()
 	p := colors(t)
 	changed := false
@@ -611,7 +621,7 @@ func segmentedBadges(c *ui.Context, sel *int, label string, badges []int, option
 				tw += max(bw+10, 16) + 5
 				name = fmt.Sprintf("%s %d", o, n)
 			}
-			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(sz(24)).Padding(0, 12).Grow(1).Shrink(0).MinWidth(tw + 26).Radius(rRow).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
+			seg := ui.Box(c.Key(fmt.Sprint("seg-", i))).Height(sz(24)).Padding(0, pad).Grow(1).Shrink(0).MinWidth(tw + 2*pad + 2).Radius(rRow).Center().Label(name).Role(ui.RoleRadio).Checked(i == *sel)
 			bg, fg := ui.Transparent, t.TextMuted
 			switch {
 			case i == *sel:
