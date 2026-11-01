@@ -686,14 +686,35 @@ func TestLogRefTree(t *testing.T) {
 	if ld.refsOpen["local"] || tt.HasText("本地分支 main") {
 		t.Fatal("← did not fold the group")
 	}
-	// 回车在组上展开、再回车收起
+	// 回车在组上展开、再回车收起；只输了空格不算筛选，照样能收
+	ld.refQuery = " "
 	key(ui.KeyEnter)
-	if !ld.refsOpen["local"] {
+	if !ld.refsOpen["local"] || !tt.HasText("本地分支 main") {
 		t.Fatal("Enter did not open the group")
 	}
 	key(ui.KeyEnter)
-	if ld.refsOpen["local"] {
+	if ld.refsOpen["local"] || tt.HasText("本地分支 main") {
 		t.Fatal("Enter did not fold the group")
+	}
+	// 筛选时各组都展开、收不起来：回车和点击都不改记下的展开状态，清掉筛选后还是收着的
+	ld.refQuery = "ma"
+	tt.Frame()
+	if !tt.HasText("本地分支 main") {
+		t.Fatal("filter did not open the group")
+	}
+	key(ui.KeyEnter)
+	if err := tt.Click("本地"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if ld.refsOpen["local"] {
+		t.Fatal("folding a group while filtering changed its saved state")
+	}
+	ld.refQuery = ""
+	ld.refCursor = "g:local"
+	tt.Frame()
+	if tt.HasText("本地分支 main") {
+		t.Fatal("group open after clearing the filter")
 	}
 	key(ui.KeyRight)
 	key(ui.KeyRight)
@@ -713,6 +734,20 @@ func TestLogRefTree(t *testing.T) {
 	key(ui.KeyDown)
 	if ld.refCursor == before {
 		t.Fatal("← in the commit list did not go back to the ref tree")
+	}
+	// 分支上回车和单击一样：正只看它时回到全部分支，再回车又只看它
+	until(t, tt, "loaded", func() bool { return !ld.loading })
+	if len(ld.filter.Branches) != 1 {
+		t.Fatalf("filter %v", ld.filter.Branches)
+	}
+	only := ld.filter.Branches[0]
+	key(ui.KeyEnter)
+	if len(ld.filter.Branches) != 0 {
+		t.Fatalf("Enter on the viewed branch: filter %v", ld.filter.Branches)
+	}
+	key(ui.KeyEnter)
+	if !slices.Equal(ld.filter.Branches, []string{only}) {
+		t.Fatalf("Enter again: filter %v", ld.filter.Branches)
 	}
 }
 

@@ -66,7 +66,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	// 先排成一列行，再交给列表：列表能拿焦点，方向键才有地方收
 	var items []refItem
 	group := func(key, label string, n, indent, parent int) (int, bool) {
-		items = append(items, refItem{key: "g:" + key, group: key, label: label, n: n, indent: indent, parent: parent, open: open(key)})
+		items = append(items, refItem{key: "g:" + key, group: key, label: label, n: n, indent: indent, parent: parent, open: open(key), fixed: query != ""})
 		return len(items) - 1, open(key)
 	}
 	ref := func(key, label, name string, indent, parent int, r string, mark func(*ui.Context)) {
@@ -117,7 +117,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 		cursor := it.key == ld.refCursor && list.FocusWithin(c)
 		if it.group != "" {
 			if a.refGroupAt(c, it, cursor) {
-				ld.refsOpen[it.group] = !ld.refsOpen[it.group]
+				ld.toggleGroup(it)
 				ld.refCursor = it.key
 				list.Focus(c)
 			}
@@ -143,12 +143,20 @@ type refItem struct {
 	indent int
 	parent int // 上一层组所在的行，-1 是顶层
 	open   bool
+	fixed  bool   // 筛选时各组都展开、收不起来：点击、←、回车都不改 refsOpen，清掉筛选后还是原来的样子
 	ref    string // 日志按它筛选的引用名
 	mark   func(c *ui.Context)
 }
 
+// toggleGroup 展开或收起一组；筛选时不动（见 refItem.fixed）。点击、←、回车都走这里。
+func (ld *logDoc) toggleGroup(it refItem) {
+	if !it.fixed {
+		ld.refsOpen[it.group] = !it.open
+	}
+}
+
 // refKeys 是分支树的方向键，照 WebStorm 的树：↑↓ 换行，停在分支、标签上就只看它的提交；
-// → 展开组、在展开的组上进到第一项、在分支上到右边的提交列表；← 收起组、回到上一层组；回车在组上展开或收起，在分支上只看它。
+// → 展开组、在展开的组上进到第一项、在分支上到右边的提交列表；← 收起组、回到上一层组；回车在组上展开或收起，在分支上和单击一样：只看它，已经只看它时回到全部分支。
 func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) {
 	ld := d.log
 	list := &ld.refList
@@ -190,21 +198,26 @@ func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) 
 		it := items[cur]
 		switch {
 		// 筛选时各组都展开、收不起来，只回到上一层
-		case it.group != "" && it.open && ld.refQuery == "":
-			ld.refsOpen[it.group] = false
+		case it.group != "" && it.open && !it.fixed:
+			ld.toggleGroup(it)
 		case it.parent >= 0:
 			ld.refCursor = items[it.parent].key
 			list.ScrollIntoView(it.parent)
 		}
-	case cur >= 0 && list.Shortcut(c, 0, ui.KeyEnter):
-		if it := items[cur]; it.group != "" {
-			// 筛选时各组都展开、收不起来
-			if ld.refQuery == "" {
-				ld.refsOpen[it.group] = !it.open
-			}
-		} else {
-			move(cur)
+	// 收不起来的组上回车什么也不做，不接这个键
+	case cur >= 0 && !items[cur].fixed && list.Shortcut(c, 0, ui.KeyEnter):
+		it := items[cur]
+		if it.group != "" {
+			ld.toggleGroup(it)
+			break
 		}
+		ld.refCursor = it.key
+		if len(ld.filter.Branches) == 1 && ld.filter.Branches[0] == it.ref {
+			ld.filter.Branches = nil
+		} else {
+			ld.filter.Branches = []string{it.ref}
+		}
+		a.loadLog(v, d, false)
 	}
 }
 
