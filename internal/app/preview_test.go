@@ -1384,3 +1384,115 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 		t.Fatalf("after drag: cols %+v pane %d active %q", a.cols, a.pane, a.activeTerm["w1"])
 	}
 }
+
+// 两栏的离屏界面：左栏 Claude、Codex（选中 Claude），右栏 zsh。
+func twoColumnTester(t *testing.T) (*app, *ui.Tester) {
+	a := previewApp(t)
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1", "t2"}, Active: "t1"}, {Tabs: []string{"t3"}, Active: "t3"}}}}
+	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+	// 收起侧栏：侧栏里有同名的会话，按文字找的会是它
+	a.state.SidebarHidden = true
+	tt := ui.NewTester(a.build, 1200, 760)
+	tt.Frame()
+	return a, tt
+}
+
+func dragTo(tt *ui.Tester, from, to ui.Point) {
+	tt.Press(from.X, from.Y)
+	tt.Frame()
+	for i := 1; i <= 4; i++ {
+		f := float32(i) / 4
+		tt.Move(from.X+(to.X-from.X)*f, from.Y+(to.Y-from.Y)*f)
+		tt.Frame()
+	}
+	tt.Release(to.X, to.Y)
+	tt.Frame()
+	tt.Frame()
+}
+
+func center(t *testing.T, tt *ui.Tester, text string) ui.Point {
+	r, ok := tt.Find(text)
+	if !ok {
+		t.Fatalf("no %q", text)
+	}
+	return ui.Point{X: r.X + r.W/2, Y: r.Y + r.H/2}
+}
+
+// 拖到另一栏标签后面的空处：移进那一栏；原来那栏空了就收起。
+func TestColumnsDragToStripTail(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	// 左栏放宽到四分之三，标签栏里"+"后面留出空处
+	st := a.state.Columns["w1"]
+	st.Cols[0].Share, st.Cols[1].Share = 3, 1
+	a.state.Columns["w1"] = st
+	tt.Frame()
+	zsh := center(t, tt, "zsh")
+	dragTo(tt, zsh, ui.Point{X: 800, Y: zsh.Y})
+	if len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") || a.state.Columns["w1"].Cols != nil {
+		t.Fatalf("after drop on tail: cols %+v state %+v", a.cols, a.state.Columns["w1"])
+	}
+}
+
+// 同一栏里拖标签排序：Codex 拖到 Claude 前面。
+func TestColumnsReorderInColumn(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	dragTo(tt, center(t, tt, "Codex"), center(t, tt, "待处理"))
+	if got := a.cols[0].tabs; len(got) < 2 || got[0] != "t2" || got[1] != "t1" || a.pane != 0 {
+		t.Fatalf("order %v pane %d", got, a.pane)
+	}
+}
+
+// 拖分栏线：拖动途中各栏不变，松手才改；拖过头停在最小宽度；双击平分。
+func TestColumnsDividerDrag(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	// 侧栏收起了，主区域从窗口左边开始，分栏线在左栏的右边
+	left := float32(0)
+	inner := 1200 - left - 1
+	line := func() float32 { return left + a.cols[0].weight*inner }
+	gx := line()
+	before := a.cols[0].weight
+	tt.Press(gx, 400)
+	tt.Frame()
+	tt.Move(gx-60, 400)
+	tt.Frame()
+	if a.cols[0].weight != before || a.resizingSplit != "col-split" {
+		t.Fatalf("while dragging: weight %v → %v resizing %q", before, a.cols[0].weight, a.resizingSplit)
+	}
+	tt.Release(gx-60, 400)
+	tt.Frame()
+	tt.Frame()
+	if a.cols[0].weight >= before {
+		t.Fatalf("after release: weight %v, was %v", a.cols[0].weight, before)
+	}
+	// 往左拖过头：停在最小宽度
+	gx = line()
+	tt.Press(gx, 400)
+	tt.Frame()
+	tt.Move(gx-800, 400)
+	tt.Frame()
+	tt.Release(gx-800, 400)
+	tt.Frame()
+	tt.Frame()
+	if w := a.cols[0].weight * inner; w < colMinWidth()-2 || w > colMinWidth()+2 {
+		t.Fatalf("min width: %v, want %v", w, colMinWidth())
+	}
+	// 双击平分
+	gx = line()
+	tt.ClickAt(gx, 400)
+	tt.ClickAt(gx, 400)
+	tt.Frame()
+	tt.Frame()
+	if d := a.cols[0].weight - a.cols[1].weight; d > 0.01 || d < -0.01 {
+		t.Fatalf("equalize: %v %v", a.cols[0].weight, a.cols[1].weight)
+	}
+}
+
+// 一栏唯一的标签拖到紧挨着它那一侧的边上：不新开一栏（放下去还是原样、只改了宽度），当成移进那一栏。
+func TestColumnsDragAloneToOwnSide(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	inner := float32(1200 - 1)
+	dragTo(tt, center(t, tt, "zsh"), ui.Point{X: a.cols[0].weight*inner - 20, Y: 400})
+	if _, ok := a.state.Columns["w1"]; ok || len(a.cols) != 1 || !slices.Contains(a.cols[0].tabs, "t3") {
+		t.Fatalf("cols %+v state %+v", a.cols, a.state.Columns["w1"])
+	}
+}

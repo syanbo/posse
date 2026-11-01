@@ -611,10 +611,13 @@ func (a *app) zoneAt(e ui.Element, i int, key string) dropZone {
 	width := e.Bounds().W
 	edge := min(width/4, 140)
 	split := a.canSplitWith(key, i)
+	// 一栏唯一的标签拖到紧挨着它那一侧的边上：放下去还是原样，不算落点（不然只改了宽度）
+	from := a.colOf(key)
+	alone := from >= 0 && len(a.cols[from].tabs) == 1
 	switch {
-	case x < edge && split:
+	case x < edge && split && !(alone && from == i-1):
 		return zoneLeft
-	case x > width-edge && split:
+	case x > width-edge && split && !(alone && from == i+1):
 		return zoneRight
 	case a.colOf(key) != i && a.cols[i].at >= 0:
 		return zoneCenter

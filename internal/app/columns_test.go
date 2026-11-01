@@ -356,3 +356,15 @@ func TestPreviewDocsAcrossColumns(t *testing.T) {
 		t.Fatalf("docs = %v cols %+v", paths, a.cols)
 	}
 }
+
+// ⌘[ 往回切，到头绕到最后一栏。
+func TestSwitchColumnBackward(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{{Tabs: []string{"t1"}}, {Tabs: []string{"t2"}}, {Tabs: []string{"t3"}}}}}
+	frame(a, w)
+	a.panes = [maxColumns]*termView{{id: "t1"}, {id: "t2"}, {id: "t3"}}
+	a.splitKey(a.panes[0], ui.Cmd, ui.KeyBracketLeft)
+	if a.pane != 2 || a.activeTerm["w1"] != "t3" {
+		t.Fatalf("⌘[ from first: pane %d active %q", a.pane, a.activeTerm["w1"])
+	}
+}
