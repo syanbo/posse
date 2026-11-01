@@ -290,9 +290,24 @@ func TestBranchPopupAndCompare(t *testing.T) {
 		t.Fatal(err)
 	}
 	until(t, tt, "commit files", func() bool { return cd.commit != nil && cd.commit.files != nil && tt.HasText("feat.txt") })
-	if err := tt.Click("feat.txt"); err != nil {
-		t.Fatal(err)
+	// 方向键：→ 到右边的文件，只移动高亮、不打开（打开的 diff 会换掉比较页）；← 回到提交，回车不再打开文件
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	tt.Frame()
+	if cd.commit.cursor != "feat.txt" || v.cur.comp != cd {
+		t.Fatalf("→: cursor %q, compare still current %v", cd.commit.cursor, v.cur.comp == cd)
 	}
+	tt.Key(0, ui.KeyLeft)
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if v.cur.comp != cd {
+		t.Fatal("← did not leave the file list: Enter opened a diff")
+	}
+	tt.Key(0, ui.KeyRight)
+	tt.Frame()
+	tt.Frame()
+	tt.Key(0, ui.KeyEnter)
 	until(t, tt, "commit diff", func() bool { return v.cur.diff != nil && v.cur.kind == docDiff })
 	if v.cur.diff.oldRev != "" || v.cur.diff.state.New.String() != "feat\n" {
 		t.Fatalf("added file diff: old %q new %q", v.cur.diff.oldRev, v.cur.diff.state.New.String())
@@ -1090,6 +1105,14 @@ func TestFileHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	until(t, tt, "second", func() bool {
+		hd := ld.hist.diff
+		return ld.hist.sel == second.Hash && hd.diff.newRev == second.Hash && hd.kind == docDiff
+	})
+	// ↑↓ 换提交，右边跟着换 diff
+	tt.Key(0, ui.KeyUp)
+	until(t, tt, "↑", func() bool { return ld.hist.sel == first.Hash && ld.hist.diff.diff.newRev == first.Hash })
+	tt.Key(0, ui.KeyDown)
+	until(t, tt, "↓", func() bool {
 		hd := ld.hist.diff
 		return ld.hist.sel == second.Hash && hd.diff.newRev == second.Hash && hd.kind == docDiff
 	})
