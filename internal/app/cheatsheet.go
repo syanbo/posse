@@ -239,7 +239,7 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 	default:
 		text = agentTitle(cur.Agent) + " " + v.version
 	}
-	ui.Column(c).Gap(2).Padding(0, 4).Children(func() {
+	ui.Column(c).Gap(8).Padding(0, 4).Children(func() {
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).LineHeight(1.4)
 		if newer && sheet.Changelog != "" {
 			ui.Row(c).Children(func() {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/media"
@@ -194,6 +195,40 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 	}()
 }
 
+// copyImage 把图片放进剪贴板：同一项里既有 PNG 数据（贴进聊天、文档这类认图片的地方）又有文件
+// （访达里粘贴得到文件，Posse 的终端里 ⌘V 贴的是路径，agent 当附件）。转 PNG 在后台做，大图要一会儿。
+func (a *app) copyImage(it imageItem) {
+	a.withImagePath(it, func(path string) error {
+		go func() {
+			b, err := media.PNGBytes(path)
+			a.update(func() {
+				if err != nil {
+					a.err = "复制图片失败：" + err.Error()
+					return
+				}
+				files, err := transfer.FileData(path)
+				if err != nil {
+					a.err = "复制图片失败：" + err.Error()
+					return
+				}
+				reps := []transfer.Representation{transfer.Bytes(transfer.PNG, b)}
+				for _, f := range []transfer.Format{transfer.FileList, transfer.URIList} {
+					if fb, err := files.Read(f); err == nil {
+						reps = append(reps, transfer.Bytes(f, fb))
+					}
+				}
+				mygo.Clipboard.Write(transfer.New(transfer.NewItem(reps...)))
+				a.notify("已复制图片", "", nil)
+			})
+		}()
+		return nil
+	})
+}
+
+// imageDrag 是从图片面板拖出来的一张图片或视频，放到终端上贴入路径（照拖文件进来那样，agent 当附件）。
+// 带的是整项而不是路径：工具调用里的截图要先写成临时文件，等放下时再写。
+type imageDrag struct{ item imageItem }
+
 // openImage 是点卡片：图片在文件标签里预览（可缩放），视频和找不到工作区的用默认应用打开。
 func (a *app) openImage(it imageItem) {
 	a.withImagePath(it, func(path string) error {
@@ -213,6 +248,9 @@ func (a *app) openImage(it imageItem) {
 // imageMenu 是卡片的右键菜单。图片指定用系统的"预览"打开：默认应用可能被改成别的编辑器。
 func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
 	contextMenu(c, card, func(m *popMenu) {
+		if !it.Video && m.Item("复制图片").Icon(iconCopy).Chosen() {
+			a.copyImage(it)
+		}
 		if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
 			a.withImagePath(it, func(path string) error {
 				mygo.Shell.ShowItemInFolder(path)
@@ -330,6 +368,10 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 		}
 		if card.Clicked() {
 			a.openImage(it)
+		}
+		// 滑入途中不能拖：卡片在不动的指针下面移动，mygo 会把这一下点击当成拖动（同 dragPath）
+		if a.panelShown >= 1 {
+			card.Drag(imageDrag{it})
 		}
 		a.imageMenu(c, card, it)
 	}

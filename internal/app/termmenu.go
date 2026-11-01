@@ -66,10 +66,20 @@ func (a *app) dragPath(row ui.Element, path string) {
 // termDrop 让终端区接住从访达和文件栏拖来的文件，把路径贴进终端；拖到上面时画一圈强调色的框。
 func (a *app) termDrop(c *ui.Context, area ui.Element, v *termView, agent string) {
 	_, inner := ui.DragOver[pathDrag](area)
-	if area.FileDragOver() || inner {
+	_, image := ui.DragOver[imageDrag](area)
+	if area.FileDragOver() || inner || image {
 		accent := c.Theme().Accent
 		area.DrawOver(func(p *ui.Painter, r ui.Rect) {
 			p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, accent, 8, 2)
+		})
+	}
+	if d, ok := ui.Drop[imageDrag](area); ok {
+		a.withImagePath(d.item, func(path string) error {
+			if a.live(v) && v.term != nil {
+				sendPieces(v.term, dropPieces([]string{path}, agent))
+				a.focusTerm = true
+			}
+			return nil
 		})
 	}
 	paths := area.DroppedFiles()

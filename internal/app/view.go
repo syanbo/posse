@@ -1784,6 +1784,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		target = 1
 	}
 	shown := body.AnimateTo("panel", target, ui.Animation{Duration: 180 * time.Millisecond, Ease: ui.EaseOut})
+	a.panelShown = shown
 	body.Children(func() {
 		if w.Missing && (a.filesActive(w) || cur != nil && a.panes[0] != nil) {
 			a.missingBar(c, w)

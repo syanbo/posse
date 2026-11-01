@@ -16,7 +16,7 @@ import (
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
-	_ "image/png"
+	"image/png"
 	"math"
 	"os"
 	"os/exec"
@@ -284,6 +284,27 @@ func ScaledImage(path string, width int) (*image.RGBA, error) {
 // ScaledImageBytes 是 ScaledImage 读内存里的图片，顺带返回原始尺寸。
 func ScaledImageBytes(b []byte, width int) (*image.RGBA, image.Point, error) {
 	return decodeScaled(b, width)
+}
+
+// PNGBytes 读图片文件，返回 PNG 编码的内容（剪贴板的图片只认 PNG）：本来就是 PNG 的原样返回，
+// 别的格式（JPEG、WebP、GIF 取第一帧）按原分辨率解码后重新编码。
+func PNGBytes(path string) ([]byte, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")) {
+		return b, nil
+	}
+	img, _, err := decodeAny(b)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 // PreviewImage 是 DecodePreview 解出的图片。

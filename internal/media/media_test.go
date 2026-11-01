@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"image"
+	"image/color"
+	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -117,5 +119,37 @@ func TestAgentImages(t *testing.T) {
 	}
 	if got := CodexImages("../x"); got != nil {
 		t.Fatalf("bad session id gave %v", got)
+	}
+}
+
+// TestPNGBytes：PNG 原样返回，别的格式转成 PNG（剪贴板的图片只认 PNG）。
+func TestPNGBytes(t *testing.T) {
+	dir := t.TempDir()
+	img := image.NewRGBA(image.Rect(0, 0, 3, 2))
+	img.Set(1, 1, color.RGBA{200, 10, 10, 255})
+	var pb, jb bytes.Buffer
+	if err := png.Encode(&pb, img); err != nil {
+		t.Fatal(err)
+	}
+	if err := jpeg.Encode(&jb, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	pp, jp := filepath.Join(dir, "a.png"), filepath.Join(dir, "a.jpg")
+	os.WriteFile(pp, pb.Bytes(), 0o600)
+	os.WriteFile(jp, jb.Bytes(), 0o600)
+	got, err := PNGBytes(pp)
+	if err != nil || !bytes.Equal(got, pb.Bytes()) {
+		t.Fatalf("PNG 应原样返回：%v", err)
+	}
+	got, err = PNGBytes(jp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec, err := png.Decode(bytes.NewReader(got))
+	if err != nil || dec.Bounds().Dx() != 3 || dec.Bounds().Dy() != 2 {
+		t.Fatalf("JPEG 转出的不是同尺寸的 PNG：%v", err)
+	}
+	if _, err := PNGBytes(filepath.Join(dir, "missing.png")); err == nil {
+		t.Fatal("文件不在时要报错")
 	}
 }
