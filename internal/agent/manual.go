@@ -125,6 +125,10 @@ func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 			return nil, err
 		}
 		extra = []string{"--settings", settings, "--plugin-dir", plugin}
+		// 用户自己给了系统提示时不再追加，免得两个同名参数谁生效说不准
+		if !hasFlag(args, []string{"--append-system-prompt", "--append-system-prompt-file", "--system-prompt", "--system-prompt-file"}) {
+			extra = append(extra, "--append-system-prompt", notesHint)
+		}
 	case "codex":
 		extra = l.codexArgs()
 	case "cursor-agent":

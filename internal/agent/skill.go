@@ -22,7 +22,13 @@ const (
 	skillBody        = "Before running any `posse task` command, run `posse task guide` and follow it: it is the guide for this exact posse version.\n"
 	// guideHint 是给 Codex、Grok 的附加指令
 	guideHint = "You are running in a Posse terminal. When the user asks you to delegate, parallelize, hand off or supervise work with other agents (claude, codex, grok, cursor), first run `posse task guide`, then coordinate them with `posse task` as it says. " +
-		"When the user asks to name or title this session (e.g. session-namer), run `posse session guide` and follow it."
+		"When the user asks to name or title this session (e.g. session-namer), run `posse session guide` and follow it.\n\n" + notesHint
+
+	// notesHint 告诉 agent 文件放哪：留给人看的放项目根目录的 .posse/，临时的放系统临时目录，
+	// 不往下载、桌面和项目旁边随手放东西。Claude 经 --append-system-prompt 拿到，Codex、Grok 跟着 guideHint。
+	notesHint = "Where files go: reports, plans and handoff notes meant for people go in $POSSE_NOTES (a git-ignored .posse folder at the project root), unless the project's own instructions name another place. " +
+		"Throwaway files (test builds, screenshots, logs, scratch scripts, comparison copies) go in a fresh directory under $TMPDIR, not in the project, ~/Downloads, ~/Desktop or next to the project. " +
+		"For a separate checkout, use `posse workspace create <project> <name> --mode worktree` instead of `git worktree add` or copying the repository."
 )
 
 // 会话命名技能：只在用户主动调用时用（disable-model-invocation），规则由 `posse session guide` 输出。

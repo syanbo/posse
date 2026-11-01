@@ -109,6 +109,7 @@ func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName stri
 	if agentName != "" {
 		env = append(env, "POSSE_AGENT="+agentName)
 	}
+	env = append(env, d.notesEnv(w)...)
 	env = append(env, gitTraceEnv(d.cfg.Home)...)
 	if err := d.shellFiles(); err == nil {
 		env = append(env, agent.ShellEnv(d.cfg.Home, argv[0], d.userZdotdir)...)
@@ -629,6 +630,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 	seq := s.hookSeq
 	s.mu.Unlock()
 	d.usageHook(p.Agent, p.Event, p.Payload)
+	d.noteToolWrites(s, p.Agent, p.Event, p.Payload)
 	if id, ok := agent.SubagentStopped(p.Agent, p.Event, p.Payload); ok {
 		d.subagentStopped(s, id)
 		return map[string]bool{"ignored": true}, nil

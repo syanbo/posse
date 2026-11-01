@@ -134,6 +134,7 @@ type shToken struct {
 	word string
 	op   string
 	sub  string
+	in   bool // 输入重定向（<、<<<），目标是读的
 }
 
 // commandWords 返回每个简单命令的程序名（原样，可能是路径）。funcs 收集命令里定义的函数，调用它们不算程序。
@@ -448,7 +449,7 @@ func shLex(s string) []shToken {
 			flush()
 			if c == '<' && strings.HasPrefix(s[i:], "<<<") {
 				i += 2
-				toks = append(toks, shToken{op: "redir"})
+				toks = append(toks, shToken{op: "redir", in: true})
 				continue
 			}
 			if c == '<' && strings.HasPrefix(s[i:], "<<") {
@@ -470,7 +471,7 @@ func shLex(s string) []shToken {
 				}
 				continue
 			}
-			toks = append(toks, shToken{op: "redir"})
+			toks = append(toks, shToken{op: "redir", in: c == '<' && s[i] == '<'})
 		default:
 			word.WriteByte(c)
 			inWord = true

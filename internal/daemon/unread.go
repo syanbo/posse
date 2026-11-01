@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	"posse/internal/agent"
 	"posse/internal/rpc"
@@ -17,12 +18,25 @@ import (
 func (s *session) noteStatus(prev, next string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if next == agent.StatusWorking && prev != agent.StatusWorking {
+		s.turnAt = time.Now()
+	}
 	switch {
 	case next != agent.StatusIdle:
 		s.unread = false
 	case prev == agent.StatusWorking && s.viewers == 0:
 		s.unread = true
 	}
+}
+
+// turnStart 是这一轮开始的时间；还没见过开始工作时用终端的创建时间。
+func (s *session) turnStart() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.turnAt.IsZero() {
+		return s.CreatedAt
+	}
+	return s.turnAt
 }
 
 func (s *session) isUnread() bool {

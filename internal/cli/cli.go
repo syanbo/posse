@@ -64,6 +64,7 @@ func init() {
 		{"workspace rm", "Remove a workspace (and its git worktree)", "<workspace> [--force] [--delete-branch]", cmdWorkspaceRm},
 		{"workspace diff", "Show what a worktree changed since its base", "<workspace>", cmdWorkspaceDiff},
 		{"workspace merge", "Merge a worktree's branch into the project directory", "<workspace>", cmdWorkspaceMerge},
+		{"trace list", "List files agents left outside their workspaces", "[--workspace W] [--project P]", cmdTraceList},
 		{"terminal create", "Start a terminal", "<workspace> [--agent claude|codex|grok|cursor [--model M] [--effort E]] [--prompt P] [--cols N --rows N] [-- command args...]", cmdTerminalCreate},
 		{"terminal list", "List terminals", "[--workspace W]", cmdTerminalList},
 		{"terminal show", "Show a terminal and its screen", "<terminal>", cmdTerminalShow},

@@ -80,7 +80,7 @@ func (l Launcher) Launch(name string, m Model, prompt string) (Launch, error) {
 			return Launch{}, err
 		}
 		sessionID = newUUID()
-		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--session-id", sessionID}
+		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--append-system-prompt", Quote(notesHint), "--session-id", sessionID}
 	case "codex":
 		parts = []string{"codex"}
 		for _, a := range l.codexArgs() {
@@ -128,7 +128,7 @@ func (l Launcher) Resume(name, sessionID, dir string) (Launch, error) {
 			return Launch{}, err
 		}
 		// 恢复后沿用原会话 ID，hooks 上报的也是它
-		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--resume", Quote(sessionID)}
+		parts = []string{"claude", "--settings", Quote(settings), "--plugin-dir", Quote(plugin), "--append-system-prompt", Quote(notesHint), "--resume", Quote(sessionID)}
 	case "codex":
 		parts = []string{"codex"}
 		for _, a := range l.codexArgs() {

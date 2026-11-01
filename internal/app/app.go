@@ -324,6 +324,8 @@ type app struct {
 	confirmVerb  string // 确认按钮的文字，说清楚会发生什么
 	confirmDo    func()
 
+	traces tracesView // agent 痕迹的确认框（traces.go）
+
 	refreshMu sync.Mutex
 
 	// 常驻进程跑的是旧包时交给本窗口的包接着跑（upgrade.go）
@@ -1176,17 +1178,6 @@ func (a *app) closeTerminal(id string) {
 	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
 	a.update(func() { a.dropSplitOf(id) })
 	a.refresh()
-}
-
-func (a *app) askRemoveWorkspace(w workspace) {
-	body := "工作区里的终端会被关闭。"
-	if w.Kind == "worktree" {
-		body = "会关闭终端并删除 git worktree 目录（分支保留）。有未提交的改动时会拒绝删除。"
-	}
-	a.confirm("删除工作区 "+displayName(&w)+"？", body, "删除", func() {
-		a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": w.Kind != "worktree"}, nil, 30*time.Second)
-		a.refresh()
-	})
 }
 
 // askRemoveProject 从 Posse 里移除 main 工作区 w 所在的项目：只删记录，不碰磁盘上的文件。

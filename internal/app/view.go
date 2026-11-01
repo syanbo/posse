@@ -130,6 +130,7 @@ func (a *app) build(c *ui.Context) {
 	a.unsavedDialog(c)
 	a.rollbackDialog(c)
 	a.confirmDialog(c)
+	a.tracesDialog(c)
 	a.skillChangeDialog(c)
 	a.skillInstallDialog(c)
 	a.skillRunDialog(c)
@@ -962,6 +963,9 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 	}
 	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
 	if w.Kind == "main" {
+		if m.Item("清理 agent 痕迹…").Chosen() {
+			a.askCleanTraces(w)
+		}
 		if m.Item("移除项目…").Chosen() {
 			a.askRemoveProject(w)
 		}

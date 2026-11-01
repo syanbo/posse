@@ -790,6 +790,18 @@ func TestPreview(t *testing.T) {
 		after := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"theme\": \"dark\"\n}\n"
 		a.skillChange = skillChangeView{open: true, ch: skills.Change{Agent: skills.Claude, Skill: "lark-calendar", Enable: true, File: homeDir + "/.claude/settings.json", Before: before, After: after}}
 		savePNG(t, newPreviewTester(a, dark), "skills-confirm-"+suffix+".png")
+		// 删工作区时列出 agent 在工作区外留下的痕迹
+		a = previewApp(t)
+		at := time.Date(2026, 10, 30, 14, 20, 0, 0, time.Local)
+		a.traces = tracesView{open: true, title: "删除工作区 posse/anim-image？", verb: "删除",
+			body: "会关闭终端并删除 git worktree 目录（分支保留）。有未提交的改动时会拒绝删除。\n\nagent 在工作区外留下了下面这些，勾选的会一起移到废纸篓：",
+			rows: []traceRow{
+				{traceItem: traceItem{Path: homeDir + "/Downloads/ddt-ios-sim-test", Kind: "created", Agent: "claude", At: at, IsDir: true}, checked: true, size: 1700 << 20},
+				{traceItem: traceItem{Path: homeDir + "/Desktop/Works/cl-snap-wt", Kind: "worktree", Agent: "codex", At: at.Add(-time.Hour), IsDir: true}, size: 1300 << 20},
+				{traceItem: traceItem{Path: homeDir + "/Downloads/fs-2267.png", Kind: "created", Agent: "claude", At: at.Add(-2 * time.Hour), Running: true}, checked: true, size: 516 << 10},
+				{traceItem: traceItem{Path: homeDir + "/.ssh/config", Kind: "config", Agent: "grok", At: at.Add(-3 * time.Hour)}, size: -1},
+			}}
+		savePNG(t, newPreviewTester(a, dark), "traces-"+suffix+".png")
 		// 安装对话框：读出了来源里的技能，勾掉一个，下面是要跑的命令
 		a = previewApp(t)
 		previewSkillsBoard(a, "")

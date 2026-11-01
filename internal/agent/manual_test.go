@@ -40,8 +40,13 @@ func TestManualArgs(t *testing.T) {
 		}
 	}
 	got, _ := l.ManualArgs("claude", []string{"-c"})
-	if !slices.Equal(got, []string{"--settings", settings, "--plugin-dir", plugin, "-c"}) {
+	if !slices.Equal(got, []string{"--settings", settings, "--plugin-dir", plugin, "--append-system-prompt", notesHint, "-c"}) {
 		t.Errorf("claude -c -> %q", got)
+	}
+	// 用户自己给了系统提示时不追加
+	got, _ = l.ManualArgs("claude", []string{"--append-system-prompt", "mine"})
+	if !slices.Equal(got, []string{"--settings", settings, "--plugin-dir", plugin, "--append-system-prompt", "mine"}) {
+		t.Errorf("claude --append-system-prompt -> %q", got)
 	}
 	if _, err := os.Stat(settings); err != nil {
 		t.Error("claude settings not written")

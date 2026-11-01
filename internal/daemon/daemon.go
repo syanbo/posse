@@ -65,6 +65,7 @@ type session struct {
 	viewers  int       // 正看着它的手机页面数
 	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
 	hookSeq  uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
+	turnAt   time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
 }
 
 func (s *session) userName() string {
@@ -500,6 +501,8 @@ func (d *Daemon) register(srv *rpc.Server, stop context.CancelFunc) {
 	srv.Handle("history.resume", d.historyResume)
 	srv.Handle("history.index", d.historyIndexNow)
 	srv.Handle("hook.event", d.hookEvent)
+	srv.Handle("trace.list", d.traceList)
+	srv.Handle("trace.forget", d.traceForget)
 	srv.Handle("hook.permission.hold", d.hookPermission)
 	srv.Handle("mobile.pair", d.mobilePair)
 	srv.Handle("mobile.devices", d.mobileDevices)

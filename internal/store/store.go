@@ -95,7 +95,7 @@ func Open(path string) (*Store, error) {
 	}
 	// 单写者足够，也避免 SQLITE_BUSY
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema + taskSchema); err != nil {
+	if _, err := db.Exec(schema + taskSchema + traceSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}

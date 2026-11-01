@@ -165,6 +165,7 @@ func (d *Daemon) readGitTrace(c net.Conn) {
 		}
 	}
 	d.gitTrace.add(r)
+	d.traceGit(r)
 }
 
 func (g *gitTrace) load() {
