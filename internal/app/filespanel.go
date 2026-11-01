@@ -178,7 +178,7 @@ func (a *app) closeFilesPanel() {
 	a.setFilesPanel(a.panelProject(), false)
 }
 
-// filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，选中了文件标签，或者别的栏里显示着文件。
+// filesShown 报告工作区的文件内容这一帧看不看得见：文件栏开着，选中了文件标签，或者别的格里显示着文件。
 func (a *app) filesShown(w *workspace) bool {
 	if w == nil {
 		return false

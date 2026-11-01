@@ -390,7 +390,7 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 			d = x
 		}
 	}
-	// 分了栏时只换掉焦点栏里的预览标签：别的栏里的留着，新的进焦点栏
+	// 分了栏时只换掉焦点格里的预览标签：别的格里的留着，新的进焦点格
 	replaceable := func(x *fileDoc) bool {
 		return x.isPreview() && (w.ID != a.selected || !a.splitShown() || a.colOf(docKey(x)) == a.pane)
 	}
@@ -401,6 +401,8 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 	case preview && slices.ContainsFunc(v.docs, replaceable):
 		i := slices.IndexFunc(v.docs, replaceable)
 		d = &fileDoc{path: path, transient: true, preview: isMarkdown(path)}
+		// 分栏里原地换：被换掉的是这格唯一的标签时，先删旧的会把这格收掉、新的跑到别格
+		a.renameColumnKey(w.ID, docKey(v.docs[i]), docKey(d))
 		v.docs[i] = d
 	default:
 		d = &fileDoc{path: path, transient: preview, preview: isMarkdown(path)}
@@ -670,7 +672,7 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	if i < 0 {
 		return
 	}
-	// 分了栏：选中的换成同一栏挨着的标签（可能是终端），不跳到别的栏。要在拿掉文件之前算，才知道谁挨着它
+	// 分了栏：选中的换成同一格挨着的标签（可能是终端），不跳到别的格。要在拿掉文件之前算，才知道谁挨着它
 	if w := a.workspace(v.wsID); w != nil {
 		if _, ok := a.layoutOf(w.ID); ok {
 			a.dropColumnKey(w, docKey(d))

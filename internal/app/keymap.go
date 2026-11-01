@@ -101,7 +101,7 @@ var posseKeys = []keyAction{
 	{id: "termKillWord", group: "终端", label: "删前一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyBackspace)}},
 	{id: "splitRight", group: "终端", label: "向右分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyD)}, note: "在焦点格右边拆出一格，放一个新终端；最多四格"},
 	{id: "splitDown", group: "终端", label: "向下分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyD)}, note: "在焦点格下面拆出一格，放一个新终端；最多四格"},
-	{id: "closeSplit", group: "终端", label: "合并所有分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Alt|ui.Shift, ui.KeyD)}, note: "所有标签合回一格，一个都不关（⌥⌘D 是系统开关程序坞的键，让开）"},
+	{id: "closeSplit", group: "终端", label: "合并所有分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Ctrl, ui.KeyD)}, note: "所有标签合回一格，一个都不关"},
 	{id: "switchPane", group: "终端", label: "切换分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBracketRight), k(ui.Cmd, ui.KeyBracketLeft)}, note: "⌘] 下一格，⌘[ 上一格，从左上到右下"},
 	{id: "termNewline", group: "终端", label: "Claude、Codex 输入框里换行", scope: scopeTerminal, def: []keyCombo{k(ui.Shift, ui.KeyEnter)}},
 

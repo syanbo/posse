@@ -1025,9 +1025,9 @@ func (a *app) reorderable(c *ui.Context, e ui.Element, id string) {
 // tabDrag 是拖动中的标签：标签栏的终端、文件，或侧栏的会话（key 是终端 ID 或 docKey），只能落在同一个工作区里。
 type tabDrag struct{ ws, key string }
 
-// reorderableTab 让标签栏的标签（col 是第几栏）或侧栏的会话行（col 为 -1）可以拖动：
+// reorderableTab 让标签栏的标签（col 是第几格）或侧栏的会话行（col 为 -1）可以拖动：
 // 拖到同类的标签上排序，终端的顺序标签栏和侧栏共用（ui.json 的 termOrder），文件的随打开的文件存；
-// 落在别的栏的标签上还移进那一栏。样子和拖项目一样，标签栏里的落点画成竖线。
+// 落在别的格的标签上还移进那一格。样子和拖项目一样，标签栏里的落点画成竖线。
 func (a *app) reorderableTab(c *ui.Context, e ui.Element, w *workspace, key string, col int) {
 	e.Drag(tabDrag{w.ID, key})
 	if e.Dragging() {
@@ -1608,7 +1608,7 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	})
 }
 
-// newTerminalButton 是第 i 栏标签后面的"+"，选 agent 或普通终端，新终端放进这一栏。
+// newTerminalButton 是第 i 格标签后面的"+"，选 agent 或普通终端，新终端放进这一格。
 func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
 		for _, ag := range slices.Concat(a.agentChoices(), []string{""}) {
@@ -1621,7 +1621,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 				it.Keys(a.keyText("newTerminal"))
 			}
 			if it.Chosen() {
-				// 新标签放进焦点栏：先把焦点换到这一栏
+				// 新标签放进焦点格：先把焦点换到这一格
 				if i != a.pane {
 					a.focusColumn(w, i, false)
 				}
@@ -1663,7 +1663,7 @@ func sessionColWidth() float32 { return buttonBox() + 2*sessionColPad }
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
 // 这个会话粘贴过的图片、用到的技能与工具、这家 agent 的命令速查。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
-// rightmost 是这一栏贴着主区域右边（没分栏，或最右一栏）：右侧面板开着时会盖住它的右上角，
+// rightmost 是这一格贴着主区域右边（没分栏，或最右一格）：右侧面板开着时会盖住它的右上角，
 // 这一列跟着面板滑入往左让开，停在面板左边。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	task := a.taskByWorker(cur.ID)
@@ -1854,7 +1854,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 	})
 }
 
-// termPane 画主区域的一栏终端：终端视图，和浮在它上面的右键菜单、启动提示、会话按钮、查找栏、链接卡片。
+// termPane 画主区域的一格终端：终端视图，和浮在它上面的右键菜单、启动提示、会话按钮、查找栏、链接卡片。
 func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 	t := c.Theme()
 	v := a.panes[i]
@@ -1863,7 +1863,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 	v.dir = v.term.Dir()
 	area.Children(func() {
 		tv := terminal.View(c.Key(v.id), v.term).Fill()
-		// 分栏时只有焦点栏自动拿焦点：几栏都要的话谁拿到看搭界面的顺序
+		// 分栏时只有焦点格自动拿焦点：几格都要的话谁拿到看搭界面的顺序
 		if i == a.pane {
 			tv.AutoFocus()
 		}
@@ -2039,7 +2039,7 @@ func shortcutHint(c *ui.Context, keys, label string) {
 	})
 }
 
-// tab 是第 i 栏标签栏里的一个终端；active 是这栏选中的，focused 表示这栏是焦点栏。
+// tab 是第 i 格标签栏里的一个终端；active 是这格选中的，focused 表示这格是焦点格。
 func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active, focused bool) {
 	t := c.Theme()
 	// 图标侧内边距比文字侧少 2px；圆角 8，内部 20px 的关闭按钮离边 4px，圆角取 8-4=4

@@ -342,7 +342,7 @@ func TestEnsurePanesMoves(t *testing.T) {
 	}
 }
 
-// ⇧⌘D 是向下分栏；「合并所有分栏」是 ⌥⇧⌘D（⌥⌘D 被系统拿去开关程序坞）。
+// ⇧⌘D 是向下分栏；「合并所有分栏」是 ⌃⌘D。
 func TestSplitDownKey(t *testing.T) {
 	a, w := columnsApp()
 	a.activeTerm["w1"] = "t1"
@@ -352,8 +352,8 @@ func TestSplitDownKey(t *testing.T) {
 	if !a.splitKey(a.panes[0], ui.Cmd|ui.Shift, ui.KeyD) {
 		t.Fatal("⇧⌘D not handled")
 	}
-	if !a.keyIs("closeSplit", ui.Cmd|ui.Alt|ui.Shift, ui.KeyD) {
-		t.Fatal("merge should be ⌥⇧⌘D")
+	if !a.keyIs("closeSplit", ui.Cmd|ui.Ctrl, ui.KeyD) {
+		t.Fatal("merge should be ⌃⌘D")
 	}
 }
 
@@ -382,5 +382,59 @@ func TestSwitchColumnBackward(t *testing.T) {
 	a.splitKey(a.panes[0], ui.Cmd, ui.KeyBracketLeft)
 	if a.pane != 2 || a.activeTerm["w1"] != "t3" {
 		t.Fatalf("⌘[ from first: pane %d active %q", a.pane, a.activeTerm["w1"])
+	}
+}
+
+// 格里只剩一个预览标签时单击别的文件：原地换掉，这格不收起、新的不跑到别格。
+func TestPreviewReplacedInPlace(t *testing.T) {
+	a, w := columnsApp()
+	w.Path = t.TempDir()
+	a.filesFor(w)
+	a.activeTerm["w1"] = "t1"
+	frame(a, w)
+	a.previewFile(w, w.Path+"/a.go")
+	frame(a, w)
+	a.moveTab(w, docKeyPrefix+w.Path+"/a.go", 0, sideRight)
+	frame(a, w)
+	// 拖到别格的转成了常驻，再变回预览模拟"这格只剩一个预览标签"
+	a.files["w1"].docs[0].transient = true
+	a.previewFile(w, w.Path+"/b.go")
+	frame(a, w)
+	if len(a.cols) != 2 || a.colOf(docKeyPrefix+w.Path+"/b.go") != 1 || a.pane != 1 {
+		t.Fatalf("cols %+v pane %d", a.cols, a.pane)
+	}
+}
+
+// 焦点格的终端一时不在列表里（交接）：选中和焦点都不动，回来后还是原样。
+func TestFocusCellHiddenKeepsFocus(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1"}, []string{"t2", "t3"}, 0)}
+	a.activeTerm["w1"] = "t1"
+	frame(a, w)
+	all := w.Terminals
+	w.Terminals = all[1:]
+	frame(a, w)
+	frame(a, w)
+	if a.activeTerm["w1"] != "t1" || a.state.Panes["w1"].Focus != "p1" {
+		t.Fatalf("hidden: active %q focus %q", a.activeTerm["w1"], a.state.Panes["w1"].Focus)
+	}
+	w.Terminals = all
+	st := a.state.Panes["w1"]
+	if frame(a, w); a.pane != 0 || a.activeTerm["w1"] != "t1" || st.leaf("p2").Active != "t2" {
+		t.Fatalf("back: pane %d active %q", a.pane, a.activeTerm["w1"])
+	}
+}
+
+// 关标签时不收起别的格里一时看不见的终端那格。
+func TestDropKeyKeepsHiddenCells(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Panes = map[string]layoutState{"w1": {Root: paneNode{Split: splitH, Kids: []paneNode{leaf("p1", "t1", "t2"), leaf("p2", "t3")}}, Focus: "p1"}}
+	a.activeTerm["w1"] = "t1"
+	all := w.Terminals
+	w.Terminals = all[:2]
+	frame(a, w)
+	a.dropColumnKey(w, "t2")
+	if st := a.state.Panes["w1"]; st.leaf("p2") == nil {
+		t.Fatalf("hidden cell dropped: %+v", st)
 	}
 }

@@ -292,7 +292,7 @@ func toggleChip(c *ui.Context, label, tip string, on bool) bool {
 
 // --- 打开的文件
 
-// docArea 画一栏里打开的文件 d。文件树、检索和改动在右边的文件栏里。
+// docArea 画一格里打开的文件 d。文件树、检索和改动在右边的文件栏里。
 func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	if d.web != nil {
@@ -356,7 +356,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		// 包一层：改动卡片按行的位置浮在编辑器上面
 		ui.Box(c).Grow(1).Children(func() {
 			el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Fill()
-			// 分栏时只有焦点栏自动拿焦点：别的栏的编辑器一出现就拿走焦点，焦点栏会跟着换过去
+			// 分栏时只有焦点格自动拿焦点：别的格的编辑器一出现就拿走焦点，焦点格会跟着换过去
 			if a.docFocusPane {
 				el.AutoFocus()
 			}
@@ -445,7 +445,7 @@ func docIcon(t *ui.Theme, d *fileDoc) (*ui.SVG, ui.Color) {
 	return fileIcon(t, d.path)
 }
 
-// docTab 是第 i 栏标签栏里的一个文件，样子和终端标签一样；active 是这栏选中的，focused 表示这栏是焦点栏。
+// docTab 是第 i 格标签栏里的一个文件，样子和终端标签一样；active 是这格选中的，focused 表示这格是焦点格。
 func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, detail string, i int, active, focused bool) {
 	t := c.Theme()
 	tip := shortPath(d.path)

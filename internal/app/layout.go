@@ -168,6 +168,8 @@ func (a *app) currentKey(w *workspace) string {
 
 // selectKey 选中一个标签。focus 表示把键盘焦点也给它（点标签、切换格），只是跟着焦点格换时不给。
 func (a *app) selectKey(w *workspace, key string, focus bool) {
+	// 键盘焦点只给看得见的工作区：在侧栏关掉别的工作区的会话时不把焦点拉到当前终端上
+	focus = focus && w.ID == a.selected
 	switch {
 	case isDocKey(key):
 		d := a.docByKey(w, key)
@@ -221,6 +223,25 @@ func (a *app) dropLayout(wsID string) {
 	}
 	delete(a.state.Panes, wsID)
 	a.saveState()
+}
+
+// renameColumnKey 把格里的标签键 from 原地换成 to（预览标签被下一次单击换掉时），不挪格。
+func (a *app) renameColumnKey(wsID, from, to string) {
+	saved, ok := a.layoutOf(wsID)
+	if !ok {
+		return
+	}
+	st := saved.clone()
+	for _, l := range st.Root.leaves(nil) {
+		if j := slices.Index(l.Tabs, from); j >= 0 {
+			l.Tabs[j] = to
+			if l.Active == from {
+				l.Active = to
+			}
+			a.setLayout(wsID, st)
+			return
+		}
+	}
 }
 
 // prune 收起 keep 说不要的格，只剩一个子节点的层收掉（它占上一层的比例给剩下的那个），
@@ -291,7 +312,7 @@ func pruneNode(n paneNode, keep func(*paneNode) bool) (paneNode, bool) {
 // syncColumns 定下这一帧显示哪几格（a.cols、a.tree）、焦点在哪格（a.pane）：新标签放进焦点格，
 // 选中的标签在哪格焦点就在哪格，选中的不在了就换成焦点格选中的那个。
 func (a *app) syncColumns(w *workspace) {
-	a.cols, a.tree, a.pane, a.split = a.cols[:0], nil, 0, false
+	a.cols, a.tree, a.pane, a.split, a.focusHidden = a.cols[:0], nil, 0, false, false
 	saved, ok := a.layoutOf(w.ID)
 	// 刚打开窗口、第一次选这个工作区时打开的文件还没恢复：先恢复，不然格里的文件当成不在了
 	if ok && a.files[w.ID] == nil && slices.ContainsFunc(saved.Root.leaves(nil), func(l *paneNode) bool { return slices.ContainsFunc(l.Tabs, isDocKey) }) {
@@ -371,8 +392,14 @@ func (a *app) syncColumns(w *workspace) {
 		single()
 		return
 	}
-	a.pane = max(slices.IndexFunc(a.cols, func(c colView) bool { return c.id == st.Focus }), 0)
+	a.pane = slices.IndexFunc(a.cols, func(c colView) bool { return c.id == st.Focus })
 	a.split = len(a.cols) > 1
+	// 焦点格还在、只是它的终端一时不在列表里（交接）：选中和焦点都不动，画面上先把第一格当焦点格，
+	// 免得焦点永久跳到别格
+	if a.pane < 0 {
+		a.pane, a.focusHidden = 0, true
+		return
+	}
 	// 选中的不在了（关掉、刚打开窗口）：换成焦点格选中的那个
 	if active := a.cols[a.pane].active; a.currentKey(w) != active {
 		a.selectKey(w, active, false)
@@ -690,7 +717,8 @@ func (a *app) dropColumnKey(w *workspace, key string) {
 		return
 	}
 	focused := st.Focus == from.ID
-	prune(&st, a.presentKeep(w))
+	// 只收起这样空掉的格：别的格里一时不在列表里的终端（交接）还要回到原来那格
+	prune(&st, func(l *paneNode) bool { return len(l.Tabs) > 0 })
 	next := ""
 	if l := st.leaf(st.Focus); l != nil {
 		next = l.Active

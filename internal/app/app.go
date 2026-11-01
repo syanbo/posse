@@ -171,14 +171,14 @@ type app struct {
 	lastTerm      int64
 	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	refreshQueued atomic.Bool // selectTask 排的那次轮询还没开始
-	// panes 是主区域每栏接入的终端（下标同 cols，选中的不是终端的栏为 nil）；pane 是焦点所在的栏
+	// panes 是主区域每格接入的终端（下标同 cols，选中的不是终端的格为 nil）；pane 是焦点所在的格
 	panes [maxColumns]*termView
 	pane  int
 	cols  []colView // 这一帧显示的几格（syncColumns 定），没分栏时只有一格
 	tree  *nodeView // 这一帧显示的分割树
 	// cellSize 是各格内容区上一帧的大小，判断还分不分得开
 	cellSize [maxColumns]ui.Point
-	// docFocusPane 是正在画的文件在不在焦点栏里（columnBody 设，docArea 用）
+	// docFocusPane 是正在画的文件在不在焦点格里（columnBody 设，docArea 用）
 	docFocusPane bool
 	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID
 	carryFind    map[string]termFind
@@ -309,7 +309,8 @@ type app struct {
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	splitDrag       float32         // 拖分隔线时累计的距离，松手才改比例
 	gripDrawn       bool            // 这一帧画了正在拖的分隔线
-	split           bool            // 这一帧主区域分成了几栏（syncColumns 定）
+	split           bool            // 这一帧主区域分成了几格（syncColumns 定）
+	focusHidden     bool            // 这一帧焦点格看不见（它的终端一时不在列表里）
 	splitPending    map[string]bool // 正在为「向右分栏」新开终端的工作区
 	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开
 	resizingLog     bool            // 正在拖 Git 日志浮层的上边缘，松手时写 ui.json
@@ -988,7 +989,16 @@ func (a *app) currentTerminal(w *workspace) *terminalInfo {
 			return &w.Terminals[i]
 		}
 	}
-	// 还没选过（刚打开窗口）或选的没了：分了栏时选焦点栏选中的终端，否则第一个
+	// 焦点格一时看不见（交接时它的终端不在列表里）：画面上的第一格当焦点格，不改记下的选中
+	if a.focusHidden && w.ID == a.selected && len(a.cols) > 0 {
+		for i := range w.Terminals {
+			if w.Terminals[i].ID == a.cols[0].active {
+				return &w.Terminals[i]
+			}
+		}
+		return nil
+	}
+	// 还没选过（刚打开窗口）或选的没了：分了栏时选焦点格选中的终端，否则第一个
 	pick := 0
 	if f := a.splitFocusTerm(w); f != "" {
 		pick = slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == f })
