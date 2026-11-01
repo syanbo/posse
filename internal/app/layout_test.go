@@ -342,7 +342,7 @@ func TestEnsurePanesMoves(t *testing.T) {
 	}
 }
 
-// ⇧⌘D 是向下分栏；「合并所有分栏」是 ⌥⌘D。
+// ⇧⌘D 是向下分栏；「合并所有分栏」是 ⌥⇧⌘D（⌥⌘D 被系统拿去开关程序坞）。
 func TestSplitDownKey(t *testing.T) {
 	a, w := columnsApp()
 	a.activeTerm["w1"] = "t1"
@@ -352,8 +352,8 @@ func TestSplitDownKey(t *testing.T) {
 	if !a.splitKey(a.panes[0], ui.Cmd|ui.Shift, ui.KeyD) {
 		t.Fatal("⇧⌘D not handled")
 	}
-	if !a.keyIs("closeSplit", ui.Cmd|ui.Alt, ui.KeyD) {
-		t.Fatal("merge should be ⌥⌘D")
+	if !a.keyIs("closeSplit", ui.Cmd|ui.Alt|ui.Shift, ui.KeyD) {
+		t.Fatal("merge should be ⌥⇧⌘D")
 	}
 }
 

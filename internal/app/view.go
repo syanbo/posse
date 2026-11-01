@@ -52,11 +52,11 @@ func (a *app) build(c *ui.Context) {
 	}
 	cur := a.currentTerminal(w)
 	a.ensurePanes(a.paneIDs(cur))
-	// 拖着分栏线时那条线没了（栏收起、切走）：松手的那一帧不会再画它，拖的状态在这里放掉
-	// 拖着分隔线时分栏没了（终端退出、切走）：松手的那一帧不会再画那条线，拖的状态在这里放掉
-	if strings.HasPrefix(a.resizingSplit, "split") && !a.splitShown() {
+	// 拖着的分隔线上一帧没画（那一层收起、变了样、切走）：松手的那一帧不会再画它，拖的状态在这里放掉
+	if strings.HasPrefix(a.resizingSplit, "split") && !a.gripDrawn {
 		a.resizingSplit, a.splitDrag = "", 0
 	}
+	a.gripDrawn = false
 
 	a.shortcuts(c, w, cur)
 	// 看不见的文件内容放掉文件清单，再显示时重列；快速打开要用清单
@@ -1604,9 +1604,6 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 	// 各格自带标签栏，贴着顶边的那几格的标签栏在标题栏的位置；浮层盖在标签栏下面
 	ui.Column(c.Key("main-area")).Grow(1).MinHeight(0).Children(func() {
 		a.columnsView(c, w)
-		if w.Missing && (a.splitShown() || a.cols[0].active != "") {
-			a.missingBar(c, w)
-		}
 		a.mainBody(c, w, cur)
 	})
 }

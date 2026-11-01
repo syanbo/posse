@@ -646,8 +646,8 @@ func (a *app) canSplitWith(key string, i int, side dropSide) bool {
 	if len(a.cols) >= maxColumns && !(alone && from != i) {
 		return false
 	}
-	// 拆完两半都不能太小；拖走的那格会空掉时不算：空出来的地方还给旁边的格
-	if size := a.cellSize[i]; size != (ui.Point{}) && !(alone && from != i) {
+	// 拆完两半都不能太小
+	if size := a.cellSize[i]; size != (ui.Point{}) {
 		if side.axis() == splitH && size.X < 2*colMinWidth() || side.axis() == splitV && size.Y < 2*rowMinHeight() {
 			return false
 		}
@@ -751,7 +751,11 @@ func (a *app) splitNew(w *workspace, side dropSide) {
 			a.syncColumns(w)
 			if !a.canSplitWith(t.ID, a.pane, side) {
 				a.selectKey(w, t.ID, true)
-				a.warn("最多分成四格", "新终端放在了当前这一格")
+				title := "这一格太小，分不开了"
+				if len(a.cols) >= maxColumns {
+					title = "最多分成四格"
+				}
+				a.warn(title, "新终端放在了当前这一格")
 				return
 			}
 			a.moveTab(w, t.ID, a.pane, side)
@@ -1070,6 +1074,9 @@ func (a *app) splitGrip(c *ui.Context, w *workspace, n *nodeView, i int, size fl
 		if grip.DoubleClicked() {
 			a.equalizeSplit(w, n)
 		}
+		if a.resizingSplit == key {
+			a.gripDrawn = true
+		}
 		if grip.Hovered() || a.resizingSplit == key {
 			accent := c.Theme().Accent
 			grip.Draw(func(pt *ui.Painter, r ui.Rect) {
@@ -1088,6 +1095,10 @@ func (a *app) cellView(c *ui.Context, w *workspace, i int, boxes *[]ui.Element) 
 	col := a.cols[i]
 	ui.Column(c.Key("cell-" + col.id)).Grow(1).MinWidth(0).MinHeight(0).Children(func() {
 		a.columnStrip(c, w, i)
+		// 目录不在了：提示条在第一格的标签栏下面；空工作区页自己有这些按钮
+		if w.Missing && i == 0 && (a.splitShown() || col.active == filesTabID || isDocKey(col.active) || a.panes[0] != nil) {
+			a.missingBar(c, w)
+		}
 		body := ui.Column(c.Key("body")).Grow(1).MinHeight(0)
 		if b := body.Bounds(); i < maxColumns {
 			a.cellSize[i] = ui.Point{X: b.W, Y: b.H}

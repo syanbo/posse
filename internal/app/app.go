@@ -308,6 +308,7 @@ type app struct {
 	resizingSide    bool            // 正在拖侧栏的右边缘，松手时写 ui.json
 	resizingSplit   string          // 正在拖的分栏线（paneDivider 的 key），松手时写 ui.json
 	splitDrag       float32         // 拖分隔线时累计的距离，松手才改比例
+	gripDrawn       bool            // 这一帧画了正在拖的分隔线
 	split           bool            // 这一帧主区域分成了几栏（syncColumns 定）
 	splitPending    map[string]bool // 正在为「向右分栏」新开终端的工作区
 	sidebarShown    float32         // 侧栏滑进滑出的进度，1 是完全展开

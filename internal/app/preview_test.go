@@ -1364,6 +1364,8 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 	a := previewApp(t)
 	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
+	// 收起侧栏：左格要宽过两倍最窄宽度才拆得开
+	a.state.SidebarHidden = true
 	tt := ui.NewTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("zsh")
@@ -1372,7 +1374,7 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 	}
 	tt.Press(r.X+r.W/2, r.Y+r.H/2)
 	tt.Frame()
-	for _, x := range []float32{r.X, 700, 400, 320} {
+	for _, x := range []float32{r.X, 400, 200, 60} {
 		tt.Move(x, 400)
 		tt.Frame()
 	}
@@ -1380,7 +1382,7 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 	if dir := os.Getenv("POSSE_PREVIEW_DIR"); dir != "" {
 		savePNG(t, tt, "columns-drag-edge.png")
 	}
-	tt.Release(320, 400)
+	tt.Release(60, 400)
 	tt.Frame()
 	tt.Frame()
 	if len(a.cols) != 2 || a.cols[0].tabs[0] != "t3" || a.pane != 0 || a.activeTerm["w1"] != "t3" {
@@ -1521,5 +1523,16 @@ func TestColumnsDragTabToBottom(t *testing.T) {
 	st := a.state.Panes["w1"]
 	if st.Root.Split != splitV || len(a.cols) != 2 || a.cols[1].tabs[0] != "t3" || a.pane != 1 {
 		t.Fatalf("after drag: %+v cols %+v pane %d", st.Root, a.cols, a.pane)
+	}
+}
+
+// 正在拖的分隔线没了（那一层收起、变了样）：拖的状态放掉，不留到下一条同名的线上。
+func TestStaleGripDragReleased(t *testing.T) {
+	a, tt := twoColumnTester(t)
+	a.resizingSplit, a.splitDrag = "split/9:0", 50
+	tt.Frame()
+	tt.Frame()
+	if a.resizingSplit != "" || a.splitDrag != 0 {
+		t.Fatalf("resizing %q drag %v", a.resizingSplit, a.splitDrag)
 	}
 }

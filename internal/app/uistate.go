@@ -92,7 +92,7 @@ type uiState struct {
 	WebDevice string `json:"webDevice,omitempty"`
 	// Panes 是分了栏的工作区，键是工作区 ID（layout.go）
 	Panes map[string]layoutState `json:"panes,omitempty"`
-	// Splits 是以前只能左右两栏时的分屏，读进来换成 Columns
+	// Splits 是以前只能左右两栏时的分屏，读进来换成 Panes
 	Splits map[string]legacySplit `json:"splits,omitempty"`
 }
 
