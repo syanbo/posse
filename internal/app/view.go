@@ -879,12 +879,13 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			}
 		}
 	}
-	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在左边的缩进槽里，在选中底色之外，
-	// 所有会话的状态排在同一列
+	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在左边的缩进槽里，所有会话的状态排在同一列。
+	// 选中、悬停的底色和点击、拖动都按包着状态槽的整行算，状态不会飘在底色外面
 	icon := func() { agentTile(c, term.Agent, smallIcon()).Tooltip(name) }
-	var row, slot ui.Element
-	ui.Row(c).AlignItems(ui.Center).Shrink(0).Children(func() {
-		slot = statusSlot(c, func() {
+	line := ui.Row(c.Key("line-" + term.ID)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
+	selectedBg(c, line, selected)
+	line.Children(func() {
+		statusSlot(c, func() {
 			if status != "" {
 				a.statusIcon(c, statusID, status, smallIcon())
 			}
@@ -892,12 +893,13 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		if depth > 0 {
 			ui.Box(c).Width(float32(depth) * navIndent).Shrink(0)
 		}
-		row = a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0)
+		a.navRowSized(c, term.ID, false, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0).Background(ui.Transparent).Role(ui.RoleNone)
 	})
+	row := line
 	if where == "" {
 		a.reorderableTerm(c, row, w.ID, term.ID, false)
 	}
-	if row.Clicked() || slot.Clicked() {
+	if row.Clicked() {
 		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
 		if open != nil {
 			*open = !*open || !viewing
