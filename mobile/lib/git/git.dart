@@ -438,7 +438,12 @@ class _GitPaneState extends State<GitPane> {
                 ),
               ),
               const SizedBox(width: 8),
-              FileIconView(file.name, size: Ic.medium),
+              FileIconView(
+                file.name,
+                size: Ic.medium,
+                dir: file.isDir,
+                muted: deleted,
+              ),
               const SizedBox(width: 8),
               // 文件名完整显示，放不下时先截淡色的目录和原名；文件名本身最多占四分之三
               Expanded(

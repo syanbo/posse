@@ -13,6 +13,7 @@ class GitFileChange {
     this.orig = '',
     this.x = '',
     this.y = '',
+    this.submodule = false,
   });
 
   final String path;
@@ -33,14 +34,25 @@ class GitFileChange {
     return ChangeKind.modified;
   }
 
+  /// 子模块（旧电脑不给这个字段）。
+  final bool submodule;
+
+  /// 子模块和未跟踪的嵌套仓库是目录：后者 git 报成带斜杠的路径（nested/）。
+  bool get isDir => submodule || path.endsWith('/');
+
+  String get _bare =>
+      path.endsWith('/') ? path.substring(0, path.length - 1) : path;
+
   String get name {
-    final slash = path.lastIndexOf('/');
-    return slash < 0 ? path : path.substring(slash + 1);
+    final p = _bare;
+    final slash = p.lastIndexOf('/');
+    return slash < 0 ? p : p.substring(slash + 1);
   }
 
   String get dir {
-    final slash = path.lastIndexOf('/');
-    return slash < 0 ? '' : path.substring(0, slash);
+    final p = _bare;
+    final slash = p.lastIndexOf('/');
+    return slash < 0 ? '' : p.substring(0, slash);
   }
 
   final int added;
@@ -223,6 +235,7 @@ GitStatusView parseGitStatus(Map<String, Object?> raw) {
           orig: item['orig'] as String? ?? '',
           x: item['x'] as String? ?? '',
           y: item['y'] as String? ?? '',
+          submodule: item['submodule'] == true,
         ),
       );
     }

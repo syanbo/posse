@@ -85,7 +85,11 @@ type Entry struct {
 	X, Y      byte
 	Untracked bool
 	Conflict  bool
+	Submodule bool
 }
+
+// IsDir 报告这一项是目录：子模块，或者未跟踪的嵌套仓库（-uall 也进不去，git 报成带斜杠的路径）。
+func (e Entry) IsDir() bool { return e.Submodule || strings.HasSuffix(e.Path, "/") }
 
 // Staged 报告暂存区有这个文件的改动。
 func (e Entry) Staged() bool { return !e.Untracked && !e.Conflict && e.X != '.' }
@@ -138,13 +142,13 @@ func parseStatus(out []byte) *Status {
 			// 1 XY sub mH mI mW hH hI path
 			p := strings.SplitN(f, " ", 9)
 			if len(p) == 9 {
-				st.Entries = append(st.Entries, Entry{Path: p[8], X: p[1][0], Y: p[1][1]})
+				st.Entries = append(st.Entries, Entry{Path: p[8], X: p[1][0], Y: p[1][1], Submodule: p[2][0] == 'S'})
 			}
 		case strings.HasPrefix(f, "2 "):
 			// 2 XY sub mH mI mW hH hI Xscore path，-z 时原路径是下一个字段
 			p := strings.SplitN(f, " ", 10)
 			if len(p) == 10 {
-				e := Entry{Path: p[9], X: p[1][0], Y: p[1][1]}
+				e := Entry{Path: p[9], X: p[1][0], Y: p[1][1], Submodule: p[2][0] == 'S'}
 				if i+1 < len(fields) {
 					e.Orig = fields[i+1]
 					i++
@@ -155,7 +159,7 @@ func parseStatus(out []byte) *Status {
 			// u XY sub m1 m2 m3 mW h1 h2 h3 path
 			p := strings.SplitN(f, " ", 11)
 			if len(p) == 11 {
-				st.Entries = append(st.Entries, Entry{Path: p[10], X: p[1][0], Y: p[1][1], Conflict: true})
+				st.Entries = append(st.Entries, Entry{Path: p[10], X: p[1][0], Y: p[1][1], Conflict: true, Submodule: p[2][0] == 'S'})
 			}
 		case strings.HasPrefix(f, "? "):
 			st.Entries = append(st.Entries, Entry{Path: f[2:], X: '?', Y: '?', Untracked: true})

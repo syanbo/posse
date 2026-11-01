@@ -324,3 +324,20 @@ func TestWithoutHints(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// 子模块（sub 字段 S 开头）和嵌套仓库（带斜杠的未跟踪路径）都认成目录。
+func TestParseStatusDirs(t *testing.T) {
+	out := "1 .M S.M. 160000 160000 160000 b7f7 b7f7 sm\x00? nested/\x001 .M N... 100644 100644 100644 aa aa a.txt\x00"
+	st := parseStatus([]byte(out))
+	if len(st.Entries) != 3 {
+		t.Fatalf("entries = %+v", st.Entries)
+	}
+	for i, want := range []bool{true, true, false} {
+		if e := st.Entries[i]; e.IsDir() != want {
+			t.Errorf("%s IsDir = %v, want %v", e.Path, e.IsDir(), want)
+		}
+	}
+	if !st.Entries[0].Submodule {
+		t.Error("sm 应该是子模块")
+	}
+}

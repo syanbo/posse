@@ -21,6 +21,8 @@ FileKind fileKindOf(String name) {
 
 /// Xcode 把一些目录当成一个整体（包），按扩展名认；其余目录是普通文件夹，返回空。
 FileKind? dirKindOf(String name) {
+  // Git 改动页的目录行是并起来的路径（vendor/.bundle），按最后一段认
+  name = _base(name);
   final ext = _ext(name);
   // 点开头的目录（Ruby 的 .bundle 配置目录）只是名字像，不是包
   if (ext.isEmpty || ext == name) return null;
@@ -59,6 +61,7 @@ class FileIconView extends StatelessWidget {
     this.dir = false,
     this.open = false,
     this.link = false,
+    this.muted = false,
   });
 
   final String name;
@@ -66,6 +69,9 @@ class FileIconView extends StatelessWidget {
   final bool dir;
   final bool open;
   final bool link;
+
+  /// 不按类型上色，画成次要色（Git 改动页删除的文件）。
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -83,14 +89,14 @@ class FileIconView extends StatelessWidget {
       return LineIconView(
         open ? LineIcon.folderOpen : LineIcon.folder,
         size: size,
-        color: c.accent,
+        color: muted ? c.muted : c.accent,
       );
     }
     return SvgPicture.string(
       kind.svg,
       width: size,
       height: size,
-      theme: SvgTheme(currentColor: fileKindColor(c, kind)),
+      theme: SvgTheme(currentColor: muted ? c.muted : fileKindColor(c, kind)),
     );
   }
 }

@@ -37,7 +37,7 @@
 - `runtime.clientCapabilities.update` 声明的能力记在这条连接上，没声明能力的连接不收 Posse 扩展推送，也调不到要能力的方法。
 - `runtime.ping`：不用声明能力，电脑立刻回空结果。
 - `posse.permission.v1`：正在订阅某个终端对话时，Claude 的 PermissionRequest 走 `hook.permission.hold`：往这条对话流推 `type:permission`，等 `agent.permission.decide`；桌面有人键入或 30 秒到了就返回空 behavior。时序和 hook 超时见 `docs/mobile-flutter-architecture.md` 5.3。
-- `posse.git.v1`：只读的 `git.status`、`git.diff`（拒绝绝对路径和 `..`；图片的 diff 另带 `images`：HEAD 里的旧图和工作区的新图，base64）。checkout、commit、push 不开放。这两项在常驻进程里，不走窗口进程的 Git 界面。
+- `posse.git.v1`：只读的 `git.status`（文件带 `submodule`，旧常驻进程不给，手机当作不是）、`git.diff`（拒绝绝对路径和 `..`；图片的 diff 另带 `images`：HEAD 里的旧图和工作区的新图，base64）。checkout、commit、push 不开放。这两项在常驻进程里，不走窗口进程的 Git 界面。
 - `posse.history.v1`：`history.list`、`history.search`、`history.resume`，转给常驻进程同名的接口；resume 回终端 ID 和手机上的工作区 ID，报错是中文。看会话内容走 `nativeChat.readSession`（按会话文件读，claude、codex、grok、cursor 都认；cursor 的记录没有工具结果，时间只有用户消息开头的 `<timestamp>`）。手机上不能移到废纸篓。
 - `posse.context.v1`：`session.context`（参数同 `nativeChat.readSession`），读会话最后一次请求的上下文，claude、codex 才有。
 - `posse.status.v1`：对话流里另收 `type:status`。终端一有输出，就从屏幕最后一行有字的往上 16 行里认出 agent 的状态行（Claude 的 `✻ Puzzling… (1m 54s · ↓ 9.5k tokens)`、Codex 的 `• Working (12s • esc to interrupt)`），去掉转圈符号、按键提示和"thought for"，变了才推，最多每 500ms 一次；状态行消失时推空串。
@@ -90,7 +90,7 @@
 
 ## 文件与媒体
 
-- 文件页：`files.readDir`（手机优先用，没有才退回 `files.list`）、`files.list`、`files.searchPaths`、`files.read`、`files.readPreview`、`files.stat`，只读，路径相对工作区、拒绝绝对路径和 `..`，限制照 Orca（文本 512 KB 截断、图片 10 MB、清单 5000 个）。音频、编辑保存、在桌面打开没做。文件树、搜索结果和改动页的图标照桌面按类型画（见 `files.md`，Xcode 的包目录也换成各自的图标）：图形、颜色和按文件名、扩展名认类型的表由 Go 测试 `TestMobileFileIcons` 从 `internal/app/fileicons.go` 生成到 `mobile/lib/ui/file_icons_data.dart`，桌面改了表不重新生成测试就失败（`POSSE_GEN=1 go test ./internal/app -run TestMobileFileIcons`）；按前后缀认的几条（`kindByAffix`）和符号链接的图标也一起生成。符号链接照桌面是带拐弯箭头的文件夹和纸（`files.readDir` 的 `isSymlink`）。
+- 文件页：`files.readDir`（手机优先用，没有才退回 `files.list`）、`files.list`、`files.searchPaths`、`files.read`、`files.readPreview`、`files.stat`，只读，路径相对工作区、拒绝绝对路径和 `..`，限制照 Orca（文本 512 KB 截断、图片 10 MB、清单 5000 个）。音频、编辑保存、在桌面打开没做。文件树、搜索结果和改动页的图标照桌面按类型画（改动页删除的文件图标变灰，子模块和嵌套仓库画成目录）（见 `files.md`，Xcode 的包目录也换成各自的图标）：图形、颜色和按文件名、扩展名认类型的表由 Go 测试 `TestMobileFileIcons` 从 `internal/app/fileicons.go` 生成到 `mobile/lib/ui/file_icons_data.dart`，桌面改了表不重新生成测试就失败（`POSSE_GEN=1 go test ./internal/app -run TestMobileFileIcons`）；按前后缀认的几条（`kindByAffix`）和符号链接的图标也一起生成。符号链接照桌面是带拐弯箭头的文件夹和纸（`files.readDir` 的 `isSymlink`）。
 - 视频（mp4、mov、m4v、webm）由 Posse 扩展 `files.readRange` 分段下载（每段 1 MB，同时 2 段，每段等 60 秒、超时再试两次）到手机临时目录再播放，按路径、大小、修改时间缓存，超过 500 MB 不下。没下完时留着 `.part`，错误页的"接着下载"或下次打开从断处接着下。
 - 从文件树点开图片或视频时，同目录的其他图片、视频按树里的顺序排成一组，左右滑切换，顶栏的文件名和存到手机跟着换（搜索结果、Git 页、链接打开的只看这一个）。
 - Markdown：表格按内容宽排、一列最宽 220、太宽左右滑，任务列表画勾选框，嵌套列表逐层换圆点；相对链接和图片按 md 文件所在目录算，工作区里的文件在文件页打开、图片向电脑要（最近 24 张留在内存里），网址交给浏览器。文件页和对话页用同一套 GitHub 风格的解析规则。语言是 `mermaid` 的代码块画成图（和桌面同一套排版，见 `files.md`）：排版在编进 App 的 Go 库里（`posse_quic` 的 `renderMermaid`，后台 isolate 调，不经过电脑），Dart 先用 App 的字体量好源码里的字和 ASCII 的宽度交过去，图形用 flutter_svg 画，文字用 App 的字体自己画；画好之前照代码块显示，语言栏右边可以切回源码，写错的上面一行红字报错；比屏幕宽就等比缩小，点图全屏、双指放大看。

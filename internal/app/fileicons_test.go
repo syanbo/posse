@@ -93,6 +93,9 @@ func TestDirIcon(t *testing.T) {
 		"lib":                  iconFolder,
 		"node_modules":         iconFolder,
 		".bundle":              iconFolder,
+		// Git 列表里并起来的目录行按最后一段认
+		"vendor/.bundle":       iconFolder,
+		"ios/Runner.xcodeproj": iconDirXcode,
 	} {
 		if got, _ := dirIcon(th, name); got != want {
 			t.Errorf("dirIcon(%q) 图标不对", name)

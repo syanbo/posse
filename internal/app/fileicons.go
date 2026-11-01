@@ -228,6 +228,8 @@ var kindByDirExt = map[string]fileKind{
 
 // dirIcon 是目录 name 的图标和颜色：Xcode 的包目录有自己的图标，其余是强调色的文件夹。
 func dirIcon(t *ui.Theme, name string) (*ui.SVG, ui.Color) {
+	// Git 列表的目录行是并起来的路径（vendor/.bundle），按最后一段认
+	name = filepath.Base(name)
 	ext := filepath.Ext(name)
 	k, ok := kindByDirExt[strings.ToLower(ext)]
 	// 点开头的目录（Ruby 的 .bundle 配置目录）只是名字像，不是包
@@ -244,6 +246,25 @@ func fileIcon(t *ui.Theme, name string) (*ui.SVG, ui.Color) {
 		return k.icon, t.TextMuted
 	}
 	return k.icon, colors(t).data[k.color]
+}
+
+// dirGlyph 画目录 name 的图标。
+func dirGlyph(c *ui.Context, name string, size float32) ui.Element {
+	svg, color := dirIcon(c.Theme(), name)
+	return ui.Icon(c, svg).FontSize(size).TextColor(color).Shrink(0)
+}
+
+// changeGlyph 是 Git 文件列表里一项的图标：目录（子模块、嵌套仓库）画目录图标，删除的和文件名一样变灰。
+func changeGlyph(c *ui.Context, name string, dir, deleted bool) {
+	t := c.Theme()
+	svg, color := fileIcon(t, name)
+	if dir {
+		svg, color = dirIcon(t, name)
+	}
+	if deleted {
+		color = t.TextMuted
+	}
+	ui.Icon(c, svg).FontSize(iconSize).TextColor(color).Shrink(0)
 }
 
 // fileGlyph 画 name 这类文件的图标，颜色由类型定。

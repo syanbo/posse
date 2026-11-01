@@ -18,6 +18,17 @@ void main() {
     expect(status.headline, 'main  origin/main  领先 2');
     expect(status.files.first.stats, '+3 -1');
     expect(status.files.last.stats, '二进制');
+    // 子模块和嵌套仓库（带斜杠）是目录，名字不带斜杠
+    final dirs = parseGitStatus({
+      'files': [
+        {'path': 'third_party/sm', 'submodule': true},
+        {'path': 'nested/', 'untracked': true},
+      ],
+    }).files;
+    expect(dirs.map((f) => f.isDir), [true, true]);
+    expect(dirs.last.name, 'nested');
+    expect(dirs.last.dir, '');
+    expect(dirs.first.name, 'sm');
     expect(gitWorktree('p1::w1'), 'id:p1::w1');
     expect(gitWorktree('id:p1::w1'), 'id:p1::w1');
     final diff = parseGitDiff({

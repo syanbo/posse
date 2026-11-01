@@ -2220,3 +2220,16 @@ func TestFileTreeGitMarks(t *testing.T) {
 		t.Fatalf("no status tooltip: %v", tt.Texts())
 	}
 }
+
+// 嵌套仓库（nested/）是树里的一项，不是 nested 目录里的一项。
+func TestChangeTreeNestedRepo(t *testing.T) {
+	rows := changeTree([]string{"nested/", "lib/a.go"}, nil)
+	var got []string
+	for _, r := range rows {
+		got = append(got, fmt.Sprintf("%v:%s:%d", r.dir, r.name, r.depth))
+	}
+	want := []string{"true:lib:0", "false:a.go:1", "false:nested:0"}
+	if !slices.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}

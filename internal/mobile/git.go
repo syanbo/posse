@@ -37,7 +37,7 @@ func (c *conn) gitStatus(id string, p json.RawMessage) error {
 		files = append(files, map[string]any{
 			"path": e.Path, "orig": e.Orig,
 			"x": string(rune(e.X)), "y": string(rune(e.Y)),
-			"untracked": e.Untracked, "conflict": e.Conflict,
+			"untracked": e.Untracked, "conflict": e.Conflict, "submodule": e.Submodule,
 			"added": s.Added, "deleted": s.Deleted, "binary": s.Binary,
 		})
 	}

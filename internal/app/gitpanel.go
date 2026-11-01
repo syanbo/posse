@@ -305,12 +305,12 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 		}
 		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
-		fileGlyph(c, e.Path, iconSize)
+		changeGlyph(c, e.Path, e.IsDir(), letter == 'D')
 		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0).TextColor(color)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}
-		if dir := filepath.Dir(e.Path); dir != "." && !r.tree {
+		if dir := filepath.Dir(strings.TrimSuffix(e.Path, "/")); dir != "." && !r.tree {
 			ui.Text(c, dir).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		}
 		ui.Spacer(c)
@@ -396,7 +396,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 				g.setPickedAll(r.files, state != pickAll)
 			}
 		}
-		treeDirLabel(c, r.name, len(r.files))
+		treeDirLabel(c, r.name, len(r.files), "")
 	})
 	if row.Clicked() {
 		folds[r.path] = !folds[r.path]
@@ -883,12 +883,14 @@ func pickStateOf(on, n int) int {
 	return pickSome
 }
 
-// treeDirLabel 是改动文件树目录行的文件夹图标、目录名和文件数，回滚对话框和改动页共用。
-func treeDirLabel(c *ui.Context, name string, n int) {
+// treeDirLabel 是改动文件树目录行的文件夹图标、目录名和文件数，回滚对话框、改动页、提交和比较的文件列表共用；tip 非空时悬停目录名显示它。
+func treeDirLabel(c *ui.Context, name string, n int, tip string) {
 	t := c.Theme()
-	icon, color := dirIcon(t, name)
-	ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
-	ui.Text(c, name).FontSize(fsBody).SingleLine().Shrink(1)
+	dirGlyph(c, name, iconSize)
+	label := ui.Text(c, name).FontSize(fsBody).SingleLine().Shrink(1)
+	if tip != "" {
+		label.Tooltip(tip)
+	}
 	ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 }
 

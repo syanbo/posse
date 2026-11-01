@@ -62,7 +62,8 @@ func changeTree(paths []string, folded map[string]bool) []treeRow {
 	root := &treeNode{}
 	for i, p := range paths {
 		n := root
-		if dir := filepath.Dir(p); dir != "." {
+		// 嵌套仓库报成带斜杠的路径（nested/），它自己是一项，不是 nested 目录里的一项
+		if dir := filepath.Dir(strings.TrimSuffix(p, "/")); dir != "." {
 			for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
 				if n.dirs == nil {
 					n.dirs = map[string]*treeNode{}
@@ -503,7 +504,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			if pickBox(c, "dir:"+row.path, row.path, state) {
 				r.setPicked(row.files, state != pickAll)
 			}
-			treeDirLabel(c, row.name, len(row.files))
+			treeDirLabel(c, row.name, len(row.files), "")
 			return
 		}
 		e := r.entries[row.entry]
@@ -517,7 +518,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 		}
 		letter := statusLetter(e)
 		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(letterColor(c, letter)).Width(sz(10)).Shrink(0)
-		fileGlyph(c, row.name, iconSize)
+		changeGlyph(c, row.name, e.IsDir(), letter == 'D')
 		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter))
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
