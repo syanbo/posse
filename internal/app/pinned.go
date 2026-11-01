@@ -42,6 +42,10 @@ func (d projectDrag) topTarget(a *app) (string, bool) { return a.projectMain(d.i
 func (a *app) topOrder() []string {
 	order := make([]string, 0, topTilesMax)
 	for _, id := range a.state.TopTiles {
+		// 聊天工作区已经有「聊天」磁贴：改聊天目录前固定过它的，不再单独画一块
+		if a.isChat(id) {
+			continue
+		}
 		if slices.Contains(globalTiles, id) || !a.loaded || a.workspace(id) != nil {
 			order = append(order, id)
 		}
@@ -225,8 +229,7 @@ func dropSlot(c *ui.Context) {
 		BorderWidth(focusRing, focusRing, focusRing, focusRing).BorderColor(t.Accent)
 }
 
-// pinnedTile 是一个固定的工作区：主工作区用项目的图标和名字，别的用工作区自己的；
-// 右上角是它的终端里最要紧的状态，点了切到这个工作区（停在上次看的标签）。
+// pinnedTile 是一个固定的工作区：主工作区用项目的图标和名字，别的用工作区自己的。
 func (a *app) pinnedTile(c *ui.Context, w workspace) ui.Element {
 	label, glyph := cmp.Or(w.Shown, w.Name), a.wsIcon(&w)
 	icon := func() { ui.Icon(c, glyph).FontSize(iconSize).TextColor(c.Theme().Accent).Shrink(0) }
@@ -234,15 +237,27 @@ func (a *app) pinnedTile(c *ui.Context, w workspace) ui.Element {
 		label = w.Project
 		icon = func() { a.projectGlyph(c, a.projIcons[w.ProjectID], glyph) }
 	}
-	var badge func()
-	if _, status := a.terminalSummary(w.Terminals); status != "" {
-		badge = func() { statusGlyph(c, status, smallIcon()) }
-	}
-	// 不登记进方向键的顺序：项目树里还有它那一行，登记两次 navCur 会跳到后一处
-	tile := sideTile(c, "pin-"+w.ID, a.selected == w.ID, icon, label, badge)
+	tile := a.workspaceTile(c, "pin-"+w.ID, &w, icon, label)
 	if tile.Clicked() {
 		a.selected = w.ID
 	}
-	contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(m, w) })
+	return tile
+}
+
+// workspaceTile 是顶上代表一个工作区的磁贴（固定的工作区、「聊天」）：选中这个工作区时高亮，
+// 右上角是它的终端里最要紧的状态，右键是工作区菜单；w 为 nil 时（聊天目录还不是项目）只有图标和名字。
+// 点了做什么由调用方决定。
+func (a *app) workspaceTile(c *ui.Context, key string, w *workspace, icon func(), label string) ui.Element {
+	var badge func()
+	if w != nil {
+		if _, status := a.terminalSummary(w.Terminals); status != "" {
+			badge = func() { statusGlyph(c, status, smallIcon()) }
+		}
+	}
+	// 不登记进方向键的顺序：项目树里还有它那一行，登记两次 navCur 会跳到后一处
+	tile := sideTile(c, key, w != nil && a.selected == w.ID, icon, label, badge)
+	if w != nil {
+		contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(m, *w) })
+	}
 	return tile
 }

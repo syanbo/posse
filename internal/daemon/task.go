@@ -161,13 +161,18 @@ func (d *Daemon) taskStart(ctx context.Context, raw json.RawMessage) (any, error
 		t.Title = firstLine(p.Spec, 60)
 	}
 	env := []string{"POSSE_TASK_ID=" + t.ID}
+	// 聊天里派出的 worker 和派发方在同一个聊天文件夹里，相对路径指的是同一批文件
+	var dir string
+	if c := d.liveSession(p.Caller); c != nil && c.WorkspaceID == w.ID && d.isChatFolder(c.Dir) {
+		dir = c.Dir
+	}
 	var s *session
 	if p.Agent != "" {
 		m := p.Model
 		m.Worker = true
-		s, err = d.startAgent(w, p.Agent, m, workerPrompt(t, w), p.Cols, p.Rows, env...)
+		s, err = d.startAgentIn(w, dir, p.Agent, m, workerPrompt(t, w), p.Cols, p.Rows, env...)
 	} else {
-		s, err = d.startTerminal(w, p.Command, "", p.Cols, p.Rows, env...)
+		s, err = d.launchTerminal(w, p.Command, "", p.Cols, p.Rows, store.Terminal{Cwd: dir}, env...)
 	}
 	if err != nil {
 		return nil, err

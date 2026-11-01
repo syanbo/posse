@@ -67,15 +67,7 @@ func (d *Daemon) startAgent(w store.Workspace, name string, model agent.Model, p
 }
 
 // startAgentIn 同 startAgent，dir 不为空时在这个目录启动（聊天工作区的子文件夹），否则在工作区目录。
-func (d *Daemon) startAgentIn(w store.Workspace, dir, name string, model agent.Model, prompt string, cols, rows int, env ...string) (_ *session, err error) {
-	if dir != "" {
-		// 没启动起来就不留空文件夹
-		defer func() {
-			if err != nil {
-				agent.RemoveChatFolder(w.Path, dir)
-			}
-		}()
-	}
+func (d *Daemon) startAgentIn(w store.Workspace, dir, name string, model agent.Model, prompt string, cols, rows int, env ...string) (*session, error) {
 	if err := d.checkEnabled(name); err != nil {
 		return nil, err
 	}
@@ -193,6 +185,11 @@ func (d *Daemon) onExit(id string, code int) {
 	if d.handoff.deferExit(id, code) {
 		return
 	}
+	// 聊天文件夹按启动时的目录认：shell 后来 cd 去的目录可能是别的聊天的。用户关掉的终端已经不在列表里，由 closeSession 清理
+	var dir string
+	if s := d.liveSession(id); s != nil {
+		dir = s.Dir
+	}
 	// 常驻进程退出时关掉的终端留着记录，下次启动后恢复。关机时直接跑命令（不在交互式 shell 里）的终端
 	// 可能比常驻进程先收到 SIGTERM 退出，等 resumeSettle 再记，这期间常驻进程开始退出就留着
 	time.AfterFunc(resumeSettle, func() {
@@ -202,9 +199,7 @@ func (d *Daemon) onExit(id string, code int) {
 		if err := d.store.EndTerminal(id, "exited", &code, time.Now()); err != nil {
 			log.Printf("terminal %s: record exit: %v", id, err)
 		}
-		if t, err := d.store.TerminalResume(id); err == nil {
-			d.dropChatFolder(t.Cwd)
-		}
+		d.dropChatFolder(id, dir)
 	})
 	d.workerGone(id, fmt.Sprintf("worker terminal exited (code %d) before reporting", code))
 	d.refreshAwake()
@@ -237,10 +232,7 @@ func (d *Daemon) terminalCreate(ctx context.Context, raw json.RawMessage) (any, 
 	case p.Agent == "" && p.Model != (agent.Model{}):
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "model and effort require agent")
 	case p.Agent != "":
-		var dir string
-		if dir, err = d.chatFolder(w); err == nil {
-			s, err = d.startAgentIn(w, dir, p.Agent, p.Model, p.Prompt, p.Cols, p.Rows)
-		}
+		s, err = d.startUserAgent(w, p.Agent, p.Model, p.Prompt, p.Cols, p.Rows)
 	case len(p.Command) > 0:
 		s, err = d.startTerminal(w, p.Command, "", p.Cols, p.Rows)
 	default:
@@ -805,24 +797,3 @@ func (d *Daemon) agentLoop(ctx context.Context) {
 }
 
 const agentTick = 2 * time.Second
-
-// chatFolder 是在聊天工作区里启动 agent 时新建的子文件夹，别的工作区是空串（在工作区目录启动）。
-// 只有用户开的会话（窗口、手机、CLI 的 terminal create）分文件夹；任务的 worker 留在工作区目录，和派发方看得到同一批文件。
-func (d *Daemon) chatFolder(w store.Workspace) (string, error) {
-	if w.Kind != "main" || !samePath(w.Path, agent.ChatDir(d.cfg.Home)) {
-		return "", nil
-	}
-	dir, err := agent.NewChatFolder(w.Path, time.Now())
-	if err != nil {
-		return "", rpc.Errorf(rpc.CodeInternal, "create chat folder: %v", err)
-	}
-	return dir, nil
-}
-
-// dropChatFolder 在聊天结束（终端关掉或自己退出）后删掉没留下文件的聊天文件夹。
-// 常驻进程退出时不删：重启后恢复的终端要回到这个目录。
-func (d *Daemon) dropChatFolder(dir string) {
-	if !d.exiting.Load() {
-		agent.RemoveChatFolder(agent.ChatDir(d.cfg.Home), dir)
-	}
-}

@@ -391,6 +391,10 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	dir := s.Cwd
 	if dir != "" {
+		// 没留下文件的聊天文件夹在聊天结束时删掉了，恢复时建回来
+		if _, err := os.Stat(dir); os.IsNotExist(err) && d.isChatFolder(dir) {
+			os.Mkdir(dir, 0o755)
+		}
 		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 			return nil, rpc.Errorf(rpc.CodeConflict, "the session's directory %s no longer exists", dir)
 		}

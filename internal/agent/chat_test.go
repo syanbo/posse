@@ -29,16 +29,6 @@ func TestChatFolder(t *testing.T) {
 	if IsChatFolder(root, own) || IsChatFolder(root, root) || IsChatFolder(filepath.Dir(root), a) {
 		t.Fatal("recognized a folder that is not a chat folder")
 	}
-	// 有文件的留着，空的删掉，用户自己建的空目录不碰
-	os.WriteFile(filepath.Join(b, "out.md"), []byte("x"), 0o644)
-	RemoveChatFolder(root, a)
-	RemoveChatFolder(root, b)
-	RemoveChatFolder(root, own)
-	for dir, want := range map[string]bool{a: false, b: true, own: true} {
-		if _, err := os.Stat(dir); (err == nil) != want {
-			t.Errorf("%s exists=%v, want %v", dir, err == nil, want)
-		}
-	}
 }
 
 func TestChatDirSetting(t *testing.T) {

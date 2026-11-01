@@ -106,6 +106,11 @@ func TestChatTile(t *testing.T) {
 	if a.pinned(w.ID) {
 		t.Fatal("pinned the chat workspace")
 	}
+	// 改聊天目录前固定过它的，不再单独画一块
+	a.state.TopTiles = []string{w.ID, historyBoardID}
+	if slices.Contains(a.topOrder(), w.ID) {
+		t.Fatalf("chat workspace still in the top order: %v", a.topOrder())
+	}
 	a.selected = historyBoardID
 	tt := ui.NewTester(a.build, 1200, 1400)
 	tt.Frame()

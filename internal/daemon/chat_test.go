@@ -35,6 +35,15 @@ func TestChatFolders(t *testing.T) {
 
 	t.Setenv("OUT", "")
 	empty := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
+	converted := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
+	call(t, d.projectAdd, map[string]any{"path": converted.Dir})
+	shared := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
+	// 聊天里派出的 worker 在派发方的文件夹里
+	task := call(t, d.taskStart, map[string]any{"spec": "x", "command": []string{"/bin/sh", "-c", "exec sleep 30"}, "caller": shared.ID}).(taskInfo)
+	worker := d.liveSession(task.Worker)
+	if worker == nil || worker.Dir != shared.Dir {
+		t.Fatalf("worker = %+v, want it in %s", worker, shared.Dir)
+	}
 	t.Setenv("OUT", "1")
 	kept := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
 	plain := call(t, d.terminalCreate, map[string]any{"workspace": other.ID, "agent": "grok"}).(terminalInfo)
@@ -61,8 +70,19 @@ func TestChatFolders(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	call(t, d.terminalClose, map[string]any{"terminal": empty.ID, "graceMs": 200})
-	call(t, d.terminalClose, map[string]any{"terminal": kept.ID, "graceMs": 200})
+	for _, id := range []string{empty.ID, kept.ID, converted.ID, shared.ID} {
+		call(t, d.terminalClose, map[string]any{"terminal": id, "graceMs": 200})
+	}
+	// 转成项目的、还有 worker 在里面的不删
+	for _, dir := range []string{converted.Dir, shared.Dir} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("%s removed: %v", dir, err)
+		}
+	}
+	call(t, d.terminalClose, map[string]any{"terminal": worker.ID, "graceMs": 200})
+	if _, err := os.Stat(shared.Dir); !os.IsNotExist(err) {
+		t.Fatalf("shared folder after its worker closed: %v", err)
+	}
 	deadline = time.Now().Add(5 * time.Second)
 	for {
 		_, errEmpty := os.Stat(empty.Dir)

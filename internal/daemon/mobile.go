@@ -177,10 +177,7 @@ func (h mobileHost) CreateTerminal(workspaceID, agentName, prompt, command strin
 	}
 	var s *session
 	if agentName != "" {
-		var dir string
-		if dir, err = h.d.chatFolder(w); err == nil {
-			s, err = h.d.startAgentIn(w, dir, agentName, agent.Model{}, prompt, 0, 0)
-		}
+		s, err = h.d.startUserAgent(w, agentName, agent.Model{}, prompt, 0, 0)
 	} else {
 		s, err = h.d.startTerminal(w, agent.ShellArgv(command), "", 0, 0)
 	}

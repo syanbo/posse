@@ -38,9 +38,12 @@ func SetChatDir(home, dir string) error {
 // chatFolderRe 是 NewChatFolder 起的名字；退出时只清理这种名字的空文件夹，不碰用户自己建的。
 var chatFolderRe = regexp.MustCompile(`^\d{4}-\d{4}(-\d+)?$`)
 
+// IsChatFolderName 判断目录名是不是 NewChatFolder 起的。
+func IsChatFolderName(name string) bool { return chatFolderRe.MatchString(name) }
+
 // IsChatFolder 判断 dir 是不是 chatDir 下面一次聊天的文件夹。
 func IsChatFolder(chatDir, dir string) bool {
-	return filepath.Dir(filepath.Clean(dir)) == filepath.Clean(chatDir) && chatFolderRe.MatchString(filepath.Base(dir))
+	return filepath.Dir(filepath.Clean(dir)) == filepath.Clean(chatDir) && IsChatFolderName(filepath.Base(dir))
 }
 
 // NewChatFolder 在 chatDir 下建一个按「月日-时分」命名的文件夹，同一分钟已有就加序号。
@@ -63,12 +66,5 @@ func NewChatFolder(chatDir string, now time.Time) (string, error) {
 		if !os.IsExist(err) {
 			return "", err
 		}
-	}
-}
-
-// RemoveChatFolder 在聊天结束后删掉没留下文件的文件夹；os.Remove 只删空目录，有文件就留着。
-func RemoveChatFolder(chatDir, dir string) {
-	if IsChatFolder(chatDir, dir) {
-		os.Remove(dir)
 	}
 }

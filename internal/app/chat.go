@@ -42,23 +42,12 @@ func (a *app) isChat(id string) bool {
 	return w != nil && w.ID == id
 }
 
-// chatSidebarItem 是顶上的「聊天」磁贴：选中聊天工作区时高亮，右上角是里面最要紧的状态。
+// chatSidebarItem 是顶上的「聊天」磁贴。
 func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
-	w := a.chatWorkspace()
-	selected := w != nil && a.selected == w.ID
-	var badge func()
-	if w != nil {
-		if _, status := a.terminalSummary(w.Terminals); status != "" {
-			badge = func() { statusGlyph(c, status, smallIcon()) }
-		}
-	}
 	icon := func() { ui.Icon(c, iconChat).FontSize(iconSize).TextColor(c.Theme().Accent) }
-	tile := sideTile(c, chatBoardID, selected, icon, "聊天", badge)
+	tile := a.workspaceTile(c, chatBoardID, a.chatWorkspace(), icon, "聊天")
 	if tile.Clicked() {
 		a.openChat(false)
-	}
-	if w != nil {
-		contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(m, *w) })
 	}
 	return tile
 }
@@ -75,23 +64,34 @@ func (a *app) openChat(fresh bool) {
 		}
 		return
 	}
+	// 还没拿到项目列表时不知道它是不是已经加过；正在加的不重复加
+	if !a.loaded || a.chatAdding {
+		return
+	}
+	a.chatAdding = true
 	dir := a.chatPath()
 	go func() {
+		defer a.update(func() { a.chatAdding = false })
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			a.update(func() { a.err = "建聊天目录失败：" + err.Error() })
 			return
 		}
-		// 已经有叫「聊天」的项目时用目录名
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err := a.c.Call(ctx, "project.add", map[string]any{"path": dir, "name": "聊天"}, nil)
-		cancel()
-		if err != nil && a.call("project.add", map[string]any{"path": dir}, nil, 10*time.Second) != nil {
-			return
+		// 已经有叫「聊天」的项目时用目录名；目录已经是项目（常驻进程认的路径写法不同）时两次都失败，刷新后照样找得到
+		var err error
+		for _, params := range []map[string]any{{"path": dir, "name": "聊天"}, {"path": dir}} {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err = a.c.Call(ctx, "project.add", params, nil)
+			cancel()
+			if err == nil {
+				break
+			}
 		}
 		a.refresh()
 		a.update(func() {
 			if w := a.chatWorkspace(); w != nil {
 				a.selected = w.ID
+			} else if err != nil {
+				a.err = "把聊天目录加成项目失败：" + err.Error()
 			}
 		})
 	}()
@@ -161,7 +161,7 @@ func (a *app) setChatDir(dir string) {
 			return
 		}
 	}
-	a.chatDir = agent.ChatDir(a.home)
+	a.chatDir = agent.DefaultChatDir()
 	if dir != "" {
 		a.chatDir = filepath.Clean(dir)
 	}

@@ -679,7 +679,7 @@ func (d *Daemon) closeSession(s *session, grace time.Duration) {
 		if err := d.store.EndTerminal(s.ID, "exited", &code, time.Now()); err != nil {
 			log.Printf("terminal %s: record exit: %v", s.ID, err)
 		}
-		d.dropChatFolder(s.Dir)
+		d.dropChatFolder(s.ID, s.Dir)
 	}
 }
 

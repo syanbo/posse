@@ -187,6 +187,7 @@ type app struct {
 	disabled     []string      // 设置里关掉的 agent，也在 agents.json
 	restoreAll   bool          // 常驻进程启动时恢复全部终端，也在 agents.json
 	chatDir      string        // 聊天磁贴的目录，也在 agents.json（chat.go）
+	chatAdding   bool          // 正在把聊天目录加成项目
 	home         string        // $POSSE_HOME，ui.json 所在目录；为空时不保存
 	state        uiState       // 写进 ui.json 的界面状态
 

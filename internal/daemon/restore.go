@@ -155,7 +155,7 @@ func (d *Daemon) closeTerminal(id string, grace time.Duration) bool {
 	if err := d.store.DeleteTerminal(id); err != nil {
 		log.Printf("terminal %s: delete: %v", id, err)
 	}
-	d.dropChatFolder(t.Cwd)
+	d.dropChatFolder(id, t.Cwd)
 	return true
 }
 

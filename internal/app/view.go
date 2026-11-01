@@ -947,16 +947,17 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 		}
 	}
 	m.Separator()
-	if a.isChat(w.ID) {
-		// 已经有「聊天」磁贴
-	} else if a.pinned(w.ID) {
-		if m.Item("取消固定").Chosen() {
-			a.unpin(w.ID)
+	// 聊天工作区已经有「聊天」磁贴
+	if !a.isChat(w.ID) {
+		if a.pinned(w.ID) {
+			if m.Item("取消固定").Chosen() {
+				a.unpin(w.ID)
+			}
+		} else if !a.canPin() {
+			m.Item(fmt.Sprintf("固定到顶部（顶部最多 %d 块，已满）", topTilesMax)).Disabled(true)
+		} else if m.Item("固定到顶部").Chosen() {
+			a.pin(w.ID)
 		}
-	} else if !a.canPin() {
-		m.Item(fmt.Sprintf("固定到顶部（顶部最多 %d 块，已满）", topTilesMax)).Disabled(true)
-	} else if m.Item("固定到顶部").Chosen() {
-		a.pin(w.ID)
 	}
 	if w.Kind == "main" && m.Item("更换图标…").Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
