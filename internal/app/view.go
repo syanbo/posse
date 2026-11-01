@@ -560,6 +560,13 @@ func collapsible(c *ui.Context, shown float32, fn func()) {
 // navIndent 是侧栏下一层相对上一层的缩进。
 const navIndent = 24
 
+// statusSlot 是会话行左边的状态槽，占一层缩进的宽度。状态图形对着上一层行首图标的中线，
+// 图标调到最大时放不下，就贴着槽的右边。
+func statusSlot(c *ui.Context, glyph func()) ui.Element {
+	left := min(navPad+(iconSize-smallIcon())/2, navIndent-smallIcon())
+	return ui.Row(c).Width(navIndent).Padding(0, 0, 0, left).AlignItems(ui.Center).Shrink(0).Children(glyph)
+}
+
 // trafficLightX 是红绿灯红点的左边缘。
 const trafficLightX = 16
 
@@ -794,13 +801,14 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 		}
 		return out
 	}
+	// 缩进不用 Padding：每行自己画状态槽和缩进，worker 的状态也落在顶层会话那一列
 	var rows func(list []terminalInfo, depth int)
 	rows = func(list []terminalInfo, depth int) {
-		ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
+		ui.Column(c).Gap(2).Children(func() {
 			for _, term := range list {
 				kids := children[term.ID]
 				if len(kids) == 0 || depth >= 4 {
-					a.navSession(c, w, term, cur == term.ID, nil, nil, "")
+					a.navSession(c, w, term, cur == term.ID, nil, nil, "", depth)
 					continue
 				}
 				open := a.workersOpen[term.ID]
@@ -819,7 +827,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 					*open = true
 				}
 				// 收起时当前会话在里面，这一行算选中
-				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "")
+				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", depth)
 				if *open {
 					rows(kids, depth+1)
 				}
@@ -832,7 +840,8 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 // navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
 // 和项目行一样，单击切到这个会话、收着的顺便展开，已经在看它时再单击收起；收起时行尾写 +N，
 // 有 worker 等你处理时这一行也显示待处理。where 非空时是「运行中」视图里的平铺行：第二行写它在哪个项目和工作区，不能拖动排序。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string) {
+// depth 是 worker 嵌套的层数，状态槽之后再缩进这么多层。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, depth int) {
 	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
 	if selected {
 		a.navCur = len(a.navOrder) - 1
@@ -870,20 +879,25 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			}
 		}
 	}
-	// 状态和 agent 图标共用一格：有状态时画状态，空闲、还没有状态时画 agent 图标；同样大小，换的时候名字不跳。
-	// 单独给空闲留一格的话，最常见的空闲行左边总空着一块
-	icon := func() {
-		if status != "" {
-			a.statusIcon(c, statusID, status, smallIcon())
-		} else {
-			agentTile(c, term.Agent, smallIcon()).Tooltip(name)
+	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在左边的缩进槽里，在选中底色之外，
+	// 所有会话的状态排在同一列
+	icon := func() { agentTile(c, term.Agent, smallIcon()).Tooltip(name) }
+	var row, slot ui.Element
+	ui.Row(c).AlignItems(ui.Center).Shrink(0).Children(func() {
+		slot = statusSlot(c, func() {
+			if status != "" {
+				a.statusIcon(c, statusID, status, smallIcon())
+			}
+		})
+		if depth > 0 {
+			ui.Box(c).Width(float32(depth) * navIndent).Shrink(0)
 		}
-	}
-	row := a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, where, "", trailing)
+		row = a.navRowSized(c, term.ID, selected, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0)
+	})
 	if where == "" {
 		a.reorderableTerm(c, row, w.ID, term.ID, false)
 	}
-	if row.Clicked() {
+	if row.Clicked() || slot.Clicked() {
 		viewing := a.selected == w.ID && a.activeTerm[w.ID] == term.ID
 		if open != nil {
 			*open = !*open || !viewing

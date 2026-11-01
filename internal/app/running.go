@@ -111,7 +111,7 @@ func (a *app) runningList(c *ui.Context) {
 	cur := a.selectedSession(a.workspace(a.selected))
 	for _, id := range a.runOrder {
 		e := entries[id]
-		a.navSession(c, e.w, e.term, id == cur, nil, nil, e.where)
+		a.navSession(c, e.w, e.term, id == cur, nil, nil, e.where, 0)
 	}
 }
 
