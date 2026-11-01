@@ -666,19 +666,21 @@ func (a *app) dropDoc(v *filesView, d *fileDoc) {
 	if i < 0 {
 		return
 	}
-	v.docs = slices.Delete(v.docs, i, i+1)
-	closeWeb(d)
-	// 分了栏：选中的换成同一栏挨着的标签（可能是终端），不跳到别的栏
+	// 分了栏：选中的换成同一栏挨着的标签（可能是终端），不跳到别的栏。要在拿掉文件之前算，才知道谁挨着它
 	if w := a.workspace(v.wsID); w != nil {
 		if _, ok := a.columnsOf(w.ID); ok {
+			a.dropColumnKey(w, docKey(d))
+			v.docs = slices.Delete(v.docs, i, i+1)
+			closeWeb(d)
 			if v.cur == d {
 				v.cur = nil
 			}
-			a.dropColumnKey(w, docKey(d))
 			a.saveFilesState(v)
 			return
 		}
 	}
+	v.docs = slices.Delete(v.docs, i, i+1)
+	closeWeb(d)
 	if v.cur == d {
 		v.cur = nil
 		if len(v.docs) > 0 {

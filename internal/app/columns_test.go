@@ -256,3 +256,83 @@ func TestSwitchColumnTwiceBeforeFrame(t *testing.T) {
 		t.Fatalf("second press: pane %d, want 1", a.pane)
 	}
 }
+
+// 关掉一栏中间选中的文件：换成挨着的那个文件，不是这栏的第一个标签。
+func TestCloseMiddleDocPicksNeighbor(t *testing.T) {
+	a, w := columnsApp()
+	w.Path = "/r"
+	v := &filesView{wsID: "w1", root: "/r", tree: files.NewTree("/r")}
+	x, y, z := &fileDoc{path: "/r/a.go"}, &fileDoc{path: "/r/b.go"}, &fileDoc{path: "/r/c.go"}
+	v.docs = []*fileDoc{x, y, z}
+	a.files = map[string]*filesView{"w1": v}
+	a.state.Columns = map[string]columnsState{"w1": twoCols([]string{"t1", docKey(x), docKey(y), docKey(z)}, []string{"t2", "t3"}, 0)}
+	a.selectKey(w, docKey(y), true)
+	frame(a, w)
+	a.dropDoc(v, y)
+	if frame(a, w); v.cur != z || !a.filesActive(w) || a.pane != 0 {
+		t.Fatalf("after close cur %v files %v pane %d", v.cur, a.filesActive(w), a.pane)
+	}
+}
+
+// 重开窗口时文件还没恢复：先恢复，焦点栏选中的文件和焦点都还在。
+func TestColumnsRestoreDocFocus(t *testing.T) {
+	a, w := columnsApp()
+	w.Path = t.TempDir()
+	readme := w.Path + "/README.md"
+	a.state.Files = map[string]filesState{"w1": {Open: []string{readme}, Current: readme}}
+	key := docKeyPrefix + readme
+	a.state.Columns = map[string]columnsState{"w1": {Focus: 1, Cols: []columnState{
+		{Tabs: []string{"t1", "t2", "t3"}, Active: "t1"},
+		{Tabs: []string{key}, Active: key},
+	}}}
+	if frame(a, w); a.pane != 1 || !a.filesActive(w) || a.state.Columns["w1"].Focus != 1 || a.files["w1"].cur.path != readme {
+		t.Fatalf("restore pane %d files %v %+v", a.pane, a.filesActive(w), a.state.Columns["w1"])
+	}
+}
+
+// 被预览替换掉、关掉的文件不留在栏里：再打开时进焦点栏，不让收起的栏又冒出来。
+func TestStaleDocKeysPruned(t *testing.T) {
+	a, w := columnsApp()
+	w.Path = "/r"
+	v := &filesView{wsID: "w1", root: "/r", tree: files.NewTree("/r")}
+	a.files = map[string]*filesView{"w1": v}
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{
+		{Tabs: []string{"t1"}, Active: "t1"}, {Tabs: []string{"t2", "t3"}}, {Tabs: []string{"doc:/r/gone.go"}},
+	}}}
+	a.activeTerm["w1"] = "t1"
+	frame(a, w)
+	if st := a.state.Columns["w1"]; len(st.Cols) != 2 {
+		t.Fatalf("stale doc column kept: %+v", st)
+	}
+}
+
+// 拖分栏线时只改显示的几栏，按原来的比例尺度：没显示的栏回来时宽度不变。
+func TestResizeKeepsHiddenShare(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Columns = map[string]columnsState{"w1": {Cols: []columnState{
+		{Tabs: []string{"t1"}, Share: 50}, {Tabs: []string{"t2"}, Share: 50}, {Tabs: []string{"t3"}, Share: 50},
+	}}}
+	all := w.Terminals
+	w.Terminals = all[:2]
+	frame(a, w)
+	a.resizeColumns(w, 0, 100, 1000)
+	st := a.state.Columns["w1"]
+	if got := st.Cols[0].Share + st.Cols[1].Share; got < 99.9 || got > 100.1 || st.Cols[2].Share != 50 {
+		t.Fatalf("shares = %+v", st.Cols)
+	}
+	w.Terminals = all
+	if frame(a, w); a.cols[2].weight < 0.33 || a.cols[2].weight > 0.34 {
+		t.Fatalf("hidden column came back at %v", a.cols[2].weight)
+	}
+}
+
+// 不显示的栏下标上不留"焦点在里面"。
+func TestColFocusedResetForHiddenColumns(t *testing.T) {
+	a, w := columnsApp()
+	a.state.Columns = map[string]columnsState{"w1": twoCols([]string{"t1"}, []string{"t2", "t3"}, 0)}
+	a.colFocused[2] = true
+	frame(a, w)
+	if a.colFocused[2] {
+		t.Fatal("colFocused[2] should be cleared")
+	}
+}

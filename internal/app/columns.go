@@ -166,6 +166,17 @@ func (a *app) dropColumns(wsID string) {
 // 选中的标签在哪栏焦点就在哪栏，选中的不在了就换成焦点栏选中的那个。
 func (a *app) syncColumns(w *workspace) {
 	a.cols, a.pane, a.split = a.cols[:0], 0, false
+	defer func() {
+		// 不显示的栏下标上不留"焦点在里面"：那栏再出现时焦点刚进来的那一下要认得出
+		for i := len(a.cols); i < maxColumns; i++ {
+			a.colFocused[i] = false
+		}
+	}()
+	saved, ok := a.columnsOf(w.ID)
+	// 刚打开窗口、第一次选这个工作区时打开的文件还没恢复：先恢复，不然栏里的文件当成不在了
+	if ok && a.files[w.ID] == nil && slices.ContainsFunc(saved.Cols, func(c columnState) bool { return slices.ContainsFunc(c.Tabs, isDocKey) }) {
+		a.filesFor(w)
+	}
 	keys := a.tabKeys(w)
 	single := func() {
 		active := a.currentKey(w)
@@ -175,12 +186,34 @@ func (a *app) syncColumns(w *workspace) {
 		a.cols = append(a.cols[:0], colView{at: -1, tabs: keys, active: active, weight: 1})
 		a.pane = 0
 	}
-	saved, ok := a.columnsOf(w.ID)
 	if !ok {
 		single()
 		return
 	}
 	st := saved.clone()
+	changed := false
+	// 关掉、被预览替换掉的文件不留在栏里（打开的文件就在窗口进程里，不会像终端列表那样一时不全）；
+	// 栏里什么都不剩了就收起
+	if a.files[w.ID] != nil {
+		for i := range st.Cols {
+			n := len(st.Cols[i].Tabs)
+			st.Cols[i].Tabs = slices.DeleteFunc(st.Cols[i].Tabs, func(k string) bool { return isDocKey(k) && !slices.Contains(keys, k) })
+			changed = changed || len(st.Cols[i].Tabs) != n
+		}
+	}
+	for i := 0; i < len(st.Cols); {
+		if len(st.Cols[i].Tabs) > 0 || len(st.Cols) == 1 {
+			i++
+			continue
+		}
+		dropCol(&st, i)
+		changed = true
+	}
+	if len(st.Cols) < 2 {
+		a.setColumns(w.ID, st)
+		single()
+		return
+	}
 	where := map[string]int{}
 	for i, col := range st.Cols {
 		for _, k := range col.Tabs {
@@ -188,7 +221,6 @@ func (a *app) syncColumns(w *workspace) {
 		}
 	}
 	st.Focus = min(max(st.Focus, 0), len(st.Cols)-1)
-	changed := false
 	cur := a.currentKey(w)
 	if i, ok := where[cur]; ok && st.Focus != i {
 		st.Focus, changed = i, true
@@ -328,16 +360,22 @@ func (a *app) pruneColumns(w *workspace, st *columnsState) {
 			i++
 			continue
 		}
-		if to := max(i-1, 0); to != i || i+1 < len(st.Cols) {
-			if i == 0 {
-				to = 1
-			}
-			st.Cols[to].Share = st.Cols[to].weight() + st.Cols[i].weight()
+		dropCol(st, i)
+	}
+}
+
+// dropCol 收起第 i 栏：宽度给左边的栏（最左的给右边），焦点跟着挪。
+func dropCol(st *columnsState, i int) {
+	if len(st.Cols) > 1 {
+		to := i - 1
+		if i == 0 {
+			to = 1
 		}
-		st.Cols = slices.Delete(st.Cols, i, i+1)
-		if st.Focus > i || st.Focus == i && i > 0 {
-			st.Focus--
-		}
+		st.Cols[to].Share = st.Cols[to].weight() + st.Cols[i].weight()
+	}
+	st.Cols = slices.Delete(st.Cols, i, i+1)
+	if st.Focus > i || st.Focus == i && i > 0 {
+		st.Focus--
 	}
 }
 
@@ -453,8 +491,14 @@ func (a *app) splitRight(w *workspace) {
 			if err != nil || w == nil || a.selected != wsID {
 				return
 			}
-			// 新终端这时可能已经被放进焦点栏（新标签都放进焦点栏），moveTab 把它拿出来
+			// 新终端这时可能已经被放进焦点栏（新标签都放进焦点栏），moveTab 把它拿出来。
+			// 等终端的时候可能已经拖出了第三栏：那就留在焦点栏
 			a.syncColumns(w)
+			if !a.canSplitWith(t.ID, a.pane) {
+				a.selectKey(w, t.ID, true)
+				a.warn("最多分成三栏", "新终端放在了当前这一栏")
+				return
+			}
 			a.moveTab(w, t.ID, a.pane, 1)
 		})
 	}()
@@ -463,7 +507,7 @@ func (a *app) splitRight(w *workspace) {
 // mergeColumns 是「合并所有栏」：所有标签合回一栏，一个都不关，留下焦点栏选中的那个。
 func (a *app) mergeColumns(w *workspace) {
 	a.dropColumns(w.ID)
-	a.focusTerm = true
+	a.selectKey(w, a.currentKey(w), true)
 }
 
 // switchColumn 是「切换栏」：焦点换到下一栏（dir 为 1）或上一栏，到头了绕回来。
@@ -659,7 +703,8 @@ func (a *app) resizeColumns(w *workspace, i int, dx, width float32) {
 	}
 	d := a.gripShift(i, dx, width) / width
 	st = st.clone()
-	// 只记显示的几栏：空着没显示的栏不占宽度
+	// 只改显示的几栏，按它们原来的比例总和换算：没显示的栏（终端一时不在列表里）回来时还是原来那么宽
+	sum := a.shownShare(st)
 	for j, col := range a.cols {
 		wt := col.weight
 		switch j {
@@ -668,7 +713,7 @@ func (a *app) resizeColumns(w *workspace, i int, dx, width float32) {
 		case i + 1:
 			wt -= d
 		}
-		st.Cols[col.at].Share = wt
+		st.Cols[col.at].Share = wt * sum
 	}
 	a.setColumns(w.ID, st)
 }
@@ -680,10 +725,22 @@ func (a *app) equalizeColumns(w *workspace) {
 		return
 	}
 	st = st.clone()
+	sum := a.shownShare(st)
 	for _, col := range a.cols {
-		st.Cols[col.at].Share = 1
+		st.Cols[col.at].Share = sum / float32(len(a.cols))
 	}
 	a.setColumns(w.ID, st)
+}
+
+// shownShare 是显示着的几栏记下的比例之和。
+func (a *app) shownShare(st columnsState) float32 {
+	sum := float32(0)
+	for _, col := range a.cols {
+		if col.at >= 0 && col.at < len(st.Cols) {
+			sum += st.Cols[col.at].weight()
+		}
+	}
+	return sum
 }
 
 // columnsView 画主区域的几栏内容和中间的分栏线；拖分栏线时画一条松手后的位置线。
@@ -746,6 +803,7 @@ func (a *app) columnBody(c *ui.Context, w *workspace, i int) {
 			d.started = true
 			a.loadDoc(d)
 		}
+		a.docFocusPane = i == a.pane
 		ui.Column(c.Key(col.active)).Grow(1).Shrink(1).MinHeight(0).Background(c.Theme().Background).Children(func() {
 			a.docArea(c, w, v, d)
 		})
@@ -791,19 +849,27 @@ func (a *app) columnStrip(c *ui.Context, w *workspace, i int) {
 			a.tabStripW[i], a.shownTab[i] = sw, ""
 		}
 		focused := i == a.pane
+		terms := map[string]terminalInfo{}
+		for _, t := range w.Terminals {
+			terms[t.ID] = t
+		}
+		docs := map[string]*fileDoc{}
+		names := map[string]int{} // 同名文件的个数：同名的标签后面带上级目录名
+		if v := a.files[w.ID]; v != nil {
+			for _, d := range v.docs {
+				docs[docKey(d)] = d
+				names[d.name()]++
+			}
+		}
 		strip.Children(func() {
 			ui.Row(c).Height(titleHeight(c)).Gap(2).AlignItems(ui.Center).Children(func() {
 				// 拖动排序会在这次遍历里重排终端和文件：遍历副本
 				for _, key := range slices.Clone(col.tabs) {
 					active := key == col.active
-					if isDocKey(key) {
-						if d := a.docByKey(w, key); d != nil {
-							a.docTab(c, w, a.filesFor(w), d, a.docDetail(w, d), i, active, focused)
-						}
-						continue
-					}
-					if _, term := a.findTerminal(key); term != nil {
-						a.tab(c, w, *term, i, active, focused)
+					if d := docs[key]; d != nil {
+						a.docTab(c, w, a.filesFor(w), d, docDetail(d, names), i, active, focused)
+					} else if term, ok := terms[key]; ok {
+						a.tab(c, w, term, i, active, focused)
 					}
 				}
 			})

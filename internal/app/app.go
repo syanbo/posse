@@ -177,6 +177,8 @@ type app struct {
 	cols  []colView // 这一帧显示的几栏（syncColumns 定），没分栏时只有一栏
 	// colFocused 是上一帧键盘焦点在不在各栏里，焦点刚进来时换焦点栏（columnFocus）
 	colFocused [maxColumns]bool
+	// docFocusPane 是正在画的文件在不在焦点栏里（columnBody 设，docArea 用）
+	docFocusPane bool
 	// carryFind 是被常驻进程断开、等着重新接入的终端的查找栏，键是终端 ID
 	carryFind    map[string]termFind
 	fontSize     float32
@@ -1192,12 +1194,13 @@ func (a *app) askCloseAll(terms []terminalInfo) {
 }
 
 func (a *app) closeTerminal(id string) {
-	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
+	// 先从分栏里拿掉：关掉之后轮询可能先一步把它从列表删了，就找不到它在哪个工作区、挨着谁
 	a.update(func() {
 		if w, _ := a.findTerminal(id); w != nil {
 			a.dropColumnKey(w, id)
 		}
 	})
+	a.call("terminal.close", map[string]any{"terminal": id}, nil, 10*time.Second)
 	a.refresh()
 }
 

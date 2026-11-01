@@ -355,7 +355,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
 		// 包一层：改动卡片按行的位置浮在编辑器上面
 		ui.Box(c).Grow(1).Children(func() {
-			el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Fill().AutoFocus()
+			el := editor.View(c.Key("ed:"+d.path), &d.ed).Ref(&d.edRef).Fill()
+			// 分栏时只有焦点栏自动拿焦点：别的栏的编辑器一出现就拿走焦点，焦点栏会跟着换过去
+			if a.docFocusPane {
+				el.AutoFocus()
+			}
 			if d.focus {
 				el.Focus()
 				d.focus = false
@@ -417,21 +421,14 @@ func (a *app) filesEmpty(c *ui.Context) {
 	})
 }
 
-// docDetail 是文件标签名字后面的小字：diff 的类型、分支比较，同名文件带上级目录名。
-func (a *app) docDetail(w *workspace, d *fileDoc) string {
+// docDetail 是文件标签名字后面的小字：diff 的类型、分支比较，同名文件（names 是各名字打开了几个）带上级目录名。
+func docDetail(d *fileDoc, names map[string]int) string {
 	switch {
 	case d.diff != nil:
 		return d.diff.tabLabel()
 	case d.comp != nil:
 		return "比较"
-	}
-	same := 0
-	for _, x := range a.filesFor(w).docs {
-		if x.name() == d.name() {
-			same++
-		}
-	}
-	if same > 1 {
+	case names[d.name()] > 1:
 		return filepath.Base(filepath.Dir(d.path))
 	}
 	return ""
@@ -456,7 +453,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 		tip = d.web.url
 	}
 	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
-	row := ui.Row(c.Key("doc:"+d.path)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(0).
+	row := ui.Row(c.Key(docKey(d))).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(0).
 		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(tip)
 	hovered := row.Hovered()
 	bg := ui.Transparent

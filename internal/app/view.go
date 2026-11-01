@@ -1869,8 +1869,7 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 }
 
 // termPane 画主区域的一栏终端：终端视图，和浮在它上面的右键菜单、启动提示、会话按钮、查找栏、链接卡片。
-// 返回这一栏的终端有没有键盘焦点。
-func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
+func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 	t := c.Theme()
 	v := a.panes[i]
 	// 留一点内边距，文字不贴边
@@ -1878,8 +1877,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
 	v.dir = v.term.Dir()
 	area.Children(func() {
 		tv := terminal.View(c.Key(v.id), v.term).Fill()
-		focused = tv.Focused()
-		// 分栏时只有焦点栏自动拿焦点，几栏都要的话谁拿到看搭界面的顺序
+		// 分栏时只有焦点栏自动拿焦点：几栏都要的话谁拿到看搭界面的顺序
 		if i == a.pane {
 			tv.AutoFocus()
 		}
@@ -1898,7 +1896,6 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) (focused bool) {
 	a.termDrop(c, area, v, cur.Agent)
 	a.linkCardView(c, area, v.id)
 	a.hoverPreviewView(c, area, v.id)
-	return focused
 }
 
 // startingHint 在程序还没画出任何内容时居中画蜂巢加载动画和"正在启动"：新开的终端要先跑完用户的
