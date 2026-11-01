@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -112,7 +111,7 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 		}
 	}
 	from := ""
-	if rel, err := filepath.Rel(v.root, d.path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if rel, ok := relInside(v.root, d.path); ok {
 		from = rel
 	}
 	s := &v.def
@@ -184,7 +183,8 @@ func editorOverlay(v *filesView) map[string]string {
 	overlay := map[string]string{}
 	for _, d := range v.docs {
 		if d.isModified() {
-			if rel, err := filepath.Rel(v.root, d.path); err == nil {
+			// 别的工作区里的文件不在这个工作区的文件清单里，放进去也对不上
+			if rel, ok := relInside(v.root, d.path); ok {
 				overlay[rel] = d.ed.Buffer.String()
 			}
 		}

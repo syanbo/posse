@@ -100,12 +100,9 @@ func linkLine(link string) int {
 
 // openLinkFile 在链接所在终端的工作区的文件标签里打开链接指向的文件，文件属于别的工作区也一样：
 // 就在正看着的会话旁边预览，不切走。代价是文件栏的树、⌘P 和跳到定义按这个工作区算，
-// 别的工作区（比如 worktree）里的文件跳到定义会跳到这里的同名文件。没有工作区返回 false。
+// 别的工作区（比如 worktree）里的文件跳到定义会跳到这里的同名文件。工作区不在了返回 false。
 func (a *app) openLinkFile(card *linkCard) bool {
-	w := card.ws
-	if w == nil {
-		w = a.workspaceOf(card.path)
-	}
+	w := a.cardWorkspace(card)
 	if w == nil {
 		return false
 	}
@@ -113,9 +110,18 @@ func (a *app) openLinkFile(card *linkCard) bool {
 	return true
 }
 
-// revealLinkDir 在文件栏中显示链接指向的目录；文件栏是当前工作区的树，不在里面的返回 false。
+// cardWorkspace 是卡片所在终端的工作区，按 ID 现查：卡片开着时轮询可能已经换掉了工作区列表，
+// 卡片里记的那份可能过时（删掉了、换了目录）。
+func (a *app) cardWorkspace(card *linkCard) *workspace {
+	if card.ws == nil {
+		return nil
+	}
+	return a.workspace(card.ws.ID)
+}
+
+// revealLinkDir 在文件栏中显示链接指向的目录；文件栏是终端所在工作区的树，不在里面的返回 false。
 func (a *app) revealLinkDir(card *linkCard) bool {
-	w := a.workspace(a.selected)
+	w := a.cardWorkspace(card)
 	if w == nil || !inDir(card.path, w.Path) {
 		return false
 	}

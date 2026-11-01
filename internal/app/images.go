@@ -197,10 +197,8 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 // openImage 是点卡片：图片在文件标签里预览（可缩放），视频和找不到工作区的用默认应用打开。
 func (a *app) openImage(it imageItem) {
 	a.withImagePath(it, func(path string) error {
-		w := a.workspaceOf(path)
-		if w == nil {
-			w = a.workspace(a.selected)
-		}
+		// 和终端里的链接一样，开在正看着的工作区里：放进图片所属的工作区（比如 worktree）就看不见了
+		w := a.workspace(a.selected)
 		if it.Video || w == nil {
 			return mygo.Shell.OpenPath(path)
 		}

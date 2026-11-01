@@ -455,12 +455,16 @@ func termX(dx float32) float32 { return sidebarDefault() + dx }
 func TestOpenLinkFileStaysInWorkspace(t *testing.T) {
 	here, there := t.TempDir(), t.TempDir()
 	file := filepath.Join(there, "report.md")
-	os.WriteFile(file, nil, 0o644)
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	a := &app{activeTerm: map[string]string{}, selected: "w1", workspaces: []workspace{
 		{ID: "w1", Path: here, Terminals: []terminalInfo{{ID: "t1"}}},
 		{ID: "w2", Path: there},
 	}}
-	if !a.openLinkFile(&linkCard{path: file, ws: a.workspace("w1")}) {
+	// 卡片记的是旧的一份工作区：按 ID 现查
+	stale := *a.workspace("w1")
+	if !a.openLinkFile(&linkCard{path: file, ws: &stale}) {
 		t.Fatal("not opened")
 	}
 	if a.selected != "w1" || a.activeTerm["w1"] != filesTabID {
@@ -471,5 +475,29 @@ func TestOpenLinkFileStaysInWorkspace(t *testing.T) {
 	}
 	if a.files["w2"] != nil {
 		t.Fatal("opened in the file's own workspace")
+	}
+	// 工作区已经不在了：不打开
+	a.workspaces = a.workspaces[1:]
+	if a.openLinkFile(&linkCard{path: file, ws: &stale}) {
+		t.Fatal("opened in a removed workspace")
+	}
+}
+
+// 别的工作区里的文件没有相对这个工作区的路径：复制相对路径、跳到定义都不用 ../.. 的路径。
+func TestRelInside(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		rel  string
+		ok   bool
+	}{
+		{"/p/main/a/b.go", "a/b.go", true},
+		{"/p/main", ".", true},
+		{"/p/wt/a.go", "", false},
+		{"/p/main..x/a.go", "", false},
+		{"/p", "", false},
+	} {
+		if rel, ok := relInside("/p/main", tc.path); rel != tc.rel || ok != tc.ok {
+			t.Errorf("%s: %q %v, want %q %v", tc.path, rel, ok, tc.rel, tc.ok)
+		}
 	}
 }

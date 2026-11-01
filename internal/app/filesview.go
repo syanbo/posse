@@ -130,7 +130,7 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 		if m.Item("复制路径").Chosen() {
 			c.WriteClipboard(path)
 		}
-		if rel, err := filepath.Rel(v.root, path); err == nil && m.Item("复制相对路径").Chosen() {
+		if rel, ok := relInside(v.root, path); ok && m.Item("复制相对路径").Chosen() {
 			c.WriteClipboard(rel)
 		}
 		m.Separator()
@@ -586,7 +586,8 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	if m.Item("复制路径").Chosen() {
 		c.WriteClipboard(d.path)
 	}
-	if rel, err := filepath.Rel(v.root, d.path); err == nil && m.Item("复制相对路径").Chosen() {
+	// 别的工作区里的文件只给绝对路径：相对这里的 ../.. 路径贴给 agent 只会让它找错
+	if rel, ok := relInside(v.root, d.path); ok && m.Item("复制相对路径").Chosen() {
 		c.WriteClipboard(rel)
 	}
 	if m.Item("在访达中显示").Icon(iconFolder).Chosen() {

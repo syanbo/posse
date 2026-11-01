@@ -810,19 +810,13 @@ func (a *app) finishClose() {
 	a.win.Close()
 }
 
-// workspaceOf 找包含 path 的工作区：优先当前选中的，否则取目录最长的。
-func (a *app) workspaceOf(path string) *workspace {
-	if w := a.workspace(a.selected); w != nil && inDir(path, w.Path) {
-		return w
+// relInside 是 path 相对 root 的路径；不在 root 下（别的工作区、工作区外的文件）时 ok 为 false。
+func relInside(root, path string) (rel string, ok bool) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
 	}
-	var best *workspace
-	for i := range a.workspaces {
-		w := &a.workspaces[i]
-		if inDir(path, w.Path) && (best == nil || len(w.Path) > len(best.Path)) {
-			best = w
-		}
-	}
-	return best
+	return rel, true
 }
 
 func inDir(path, dir string) bool {
