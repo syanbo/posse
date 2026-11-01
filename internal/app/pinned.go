@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 侧栏顶上的磁贴照 Arc 的置顶网址：聊天、任务、历史、技能、手机和固定的工作区排在一起，一行四块，最多十二块（三行），
+// 侧栏顶上的磁贴照 Arc 的置顶网址：任务、历史、技能、手机、聊天和固定的工作区排在一起，一行四块，最多十二块（三行），
 // 都能拖动换位置；项目树里的工作区拖上来就固定，固定的拖回项目列表就取消。
 const (
 	topTilesPerRow = 4
@@ -18,7 +18,7 @@ const (
 )
 
 // globalTiles 是不能取消的全局页面，ui.json 里没记顺序时按这个排。
-var globalTiles = []string{chatBoardID, taskBoardID, historyBoardID, skillsBoardID, mobileBoardID}
+var globalTiles = []string{taskBoardID, historyBoardID, skillsBoardID, mobileBoardID, chatBoardID}
 
 // tileDrag 是拖动中的顶上磁贴，wsDrag 是从项目树拖出来的工作区（项目下面的工作区行）。
 type (

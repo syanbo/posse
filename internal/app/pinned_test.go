@@ -42,21 +42,21 @@ func TestTopTilesDrag(t *testing.T) {
 	tx, ty := center("历史")
 	drag(tt, fx, fy, tx, ty)
 	settle()
-	check("pin the worktree", chatBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, mobileBoardID)
+	check("pin the worktree", taskBoardID, "w6", historyBoardID, skillsBoardID, mobileBoardID, chatBoardID)
 
-	// 单行的项目拖到「手机」那格（第二行第二格），固定它的主工作区
+	// 单行的项目拖到「手机」那格（第二行第一格），固定它的主工作区
 	fx, fy = center("Chat")
 	tx, ty = center("手机")
 	drag(tt, fx, fy, tx, ty)
 	settle()
-	check("pin a project", chatBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, "w2", mobileBoardID)
+	check("pin a project", taskBoardID, "w6", historyBoardID, skillsBoardID, "w2", mobileBoardID, chatBoardID)
 
-	// 「手机」拖到「任务」那格，排到聊天后面
+	// 「手机」拖到「任务」那格，排到最前
 	fx, fy = center("手机")
 	tx, ty = center("任务")
 	drag(tt, fx, fy, tx, ty)
 	settle()
-	check("reorder", chatBoardID, mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, "w2")
+	check("reorder", mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, "w2", chatBoardID)
 
 	// 固定的 Chat 拖回项目列表就取消；全局页面拖下去不动
 	r, _ := tt.Find("项目")
@@ -66,11 +66,11 @@ func TestTopTilesDrag(t *testing.T) {
 	}
 	drag(tt, fx, fy, fx, r.Y+300)
 	settle()
-	check("unpin", chatBoardID, mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID)
+	check("unpin", mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, chatBoardID)
 	fx, fy = center("技能")
 	drag(tt, fx, fy, fx, r.Y+300)
 	settle()
-	check("a global tile stays", chatBoardID, mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID)
+	check("a global tile stays", mobileBoardID, taskBoardID, "w6", historyBoardID, skillsBoardID, chatBoardID)
 }
 
 // 落下时不显示的（没有项目时的任务、还没报上来的工作区）留在原来的位置。
