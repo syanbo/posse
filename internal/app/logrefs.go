@@ -63,55 +63,142 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			tags = append(tags, tag)
 		}
 	}
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(0, 6, 12, 6).Children(func() {
-			if query == "" {
-				label := "HEAD（当前分支）"
-				if cur, ok := currentBranch(g.branches.list); ok {
-					label = "HEAD（" + cur.Name + "）"
-				}
-				if ok, add := a.refRow(c, "HEAD", label, label, 0, picked("HEAD"), nil); ok {
-					pick("HEAD", add)
+	// 先排成一列行，再交给列表：列表能拿焦点，方向键才有地方收
+	var items []refItem
+	group := func(key, label string, n, indent, parent int) (int, bool) {
+		items = append(items, refItem{key: "g:" + key, group: key, label: label, n: n, indent: indent, parent: parent, open: open(key)})
+		return len(items) - 1, open(key)
+	}
+	ref := func(key, label, name string, indent, parent int, r string, mark func(*ui.Context)) {
+		items = append(items, refItem{key: key, label: label, name: name, indent: indent, parent: parent, ref: r, mark: mark})
+	}
+	if query == "" {
+		label := "HEAD（当前分支）"
+		if cur, ok := currentBranch(g.branches.list); ok {
+			label = "HEAD（" + cur.Name + "）"
+		}
+		ref("HEAD", label, label, 0, -1, "HEAD", nil)
+	}
+	if gi, ok := group("local", "本地", len(local), 0, -1); ok {
+		for _, b := range local {
+			ref("l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, gi, branchRef(b), refMark(b))
+		}
+	}
+	if gi, ok := group("remote", "远程", len(remote), 0, -1); ok {
+		// 按远端分组：origin/main 放在 origin 下面
+		var remotes []string
+		for _, b := range remote {
+			r, _, _ := strings.Cut(b.Name, "/")
+			if !slices.Contains(remotes, r) {
+				remotes = append(remotes, r)
+			}
+		}
+		for _, r := range remotes {
+			ri, ok := group("remote:"+r, r, -1, 1, gi)
+			if !ok {
+				continue
+			}
+			for _, b := range remote {
+				if rest, ok := strings.CutPrefix(b.Name, r+"/"); ok {
+					ref("r:"+b.Name, rest, "远程分支 "+b.Name, 2, ri, branchRef(b), nil)
 				}
 			}
-			if a.refGroup(c, ld, "local", "本地", len(local), open("local")) {
-				for _, b := range local {
-					if ok, add := a.refRow(c, "l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, picked(branchRef(b)), refMark(b)); ok {
-						pick(branchRef(b), add)
-					}
-				}
+		}
+	}
+	if gi, ok := group("tags", "标签", len(tags), 0, -1); ok {
+		for _, tag := range tags {
+			ref("t:"+tag, tag, "标签 "+tag, 1, gi, "refs/tags/"+tag, nil)
+		}
+	}
+	list := &ld.refList
+	list.Key = func(i int) any { return items[i].key }
+	ui.List(c, list, len(items), func(i int) {
+		it := items[i]
+		cursor := it.key == ld.refCursor && list.FocusWithin(c)
+		if it.group != "" {
+			if a.refGroupAt(c, it, cursor) {
+				ld.refsOpen[it.group] = !ld.refsOpen[it.group]
+				ld.refCursor = it.key
+				list.Focus(c)
 			}
-			if a.refGroup(c, ld, "remote", "远程", len(remote), open("remote")) {
-				// 按远端分组：origin/main 放在 origin 下面
-				var remotes []string
-				for _, b := range remote {
-					r, _, _ := strings.Cut(b.Name, "/")
-					if !slices.Contains(remotes, r) {
-						remotes = append(remotes, r)
-					}
-				}
-				for _, r := range remotes {
-					if !a.refGroupAt(c, ld, "remote:"+r, r, -1, open("remote:"+r), 1) {
-						continue
-					}
-					for _, b := range remote {
-						if rest, ok := strings.CutPrefix(b.Name, r+"/"); ok {
-							if ok, add := a.refRow(c, "r:"+b.Name, rest, "远程分支 "+b.Name, 2, picked(branchRef(b)), nil); ok {
-								pick(branchRef(b), add)
-							}
-						}
-					}
-				}
+			return
+		}
+		if ok, add := a.refRow(c, it, picked(it.ref), cursor); ok {
+			pick(it.ref, add)
+			ld.refCursor = it.key
+			// 行是按钮、不拿焦点；焦点给列表，方向键才能接着用
+			list.Focus(c)
+		}
+	}).Grow(1).Padding(0, 6, 12, 6)
+	a.refKeys(c, v, d, items)
+}
+
+// refItem 是分支树的一行：组（group 非空）或一个分支、标签。
+type refItem struct {
+	key    string // 列表里的键：组是 g:<组>，分支和标签带种类前缀
+	group  string // 组的键（refsOpen 里的），分支和标签是空的
+	label  string
+	name   string // 读屏念的名字
+	n      int    // 组里有几项，-1 不显示
+	indent int
+	parent int // 上一层组所在的行，-1 是顶层
+	open   bool
+	ref    string // 日志按它筛选的引用名
+	mark   func(c *ui.Context)
+}
+
+// refKeys 是分支树的方向键，照 WebStorm 的树：↑↓ 换行，停在分支、标签上就只看它的提交；
+// → 展开组、在展开的组上进到第一项、在分支上到右边的提交列表；← 收起组、回到上一层组；回车只看这一个。
+func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) {
+	ld := d.log
+	list := &ld.refList
+	cur := slices.IndexFunc(items, func(it refItem) bool { return it.key == ld.refCursor })
+	if cur < 0 && len(ld.filter.Branches) > 0 {
+		// 还没用键盘走过（比如从提交列表按 ← 过来）：从正在看的那个分支起步
+		cur = slices.IndexFunc(items, func(it refItem) bool { return it.ref == ld.filter.Branches[0] })
+	}
+	move := func(j int) {
+		if j < 0 || j >= len(items) {
+			return
+		}
+		it := items[j]
+		ld.refCursor = it.key
+		list.ScrollIntoView(j)
+		if it.ref != "" && !(len(ld.filter.Branches) == 1 && ld.filter.Branches[0] == it.ref) {
+			ld.filter.Branches = []string{it.ref}
+			a.loadLog(v, d, false)
+		}
+	}
+	switch {
+	case list.Shortcut(c, 0, ui.KeyDown):
+		move(cur + 1)
+	case list.Shortcut(c, 0, ui.KeyUp):
+		move(max(cur-1, 0))
+	case cur >= 0 && list.Shortcut(c, 0, ui.KeyRight):
+		it := items[cur]
+		switch {
+		case it.group != "" && !it.open:
+			ld.refsOpen[it.group] = true
+		case it.group != "":
+			if cur+1 < len(items) && items[cur+1].parent == cur {
+				move(cur + 1)
 			}
-			if a.refGroup(c, ld, "tags", "标签", len(tags), open("tags")) {
-				for _, tag := range tags {
-					if ok, add := a.refRow(c, "t:"+tag, tag, "标签 "+tag, 1, picked("refs/tags/"+tag), nil); ok {
-						pick("refs/tags/"+tag, add)
-					}
-				}
-			}
-		})
-	})
+		default:
+			ld.focusList = true
+		}
+	case cur >= 0 && list.Shortcut(c, 0, ui.KeyLeft):
+		it := items[cur]
+		switch {
+		// 筛选时各组都展开、收不起来，只回到上一层
+		case it.group != "" && it.open && ld.refQuery == "":
+			ld.refsOpen[it.group] = false
+		case it.parent >= 0:
+			ld.refCursor = items[it.parent].key
+			list.ScrollIntoView(it.parent)
+		}
+	case cur >= 0 && items[cur].ref != "" && list.Shortcut(c, 0, ui.KeyEnter):
+		move(cur)
+	}
 }
 
 // branchRef 是日志按分支筛选用的完整引用名：分支和标签同名时 git 会取标签。
@@ -142,42 +229,35 @@ func refMark(b gitx.Branch) func(c *ui.Context) {
 	}
 }
 
-func (a *app) refGroup(c *ui.Context, ld *logDoc, key, label string, n int, open bool) bool {
-	return a.refGroupAt(c, ld, key, label, n, open, 0)
-}
-
-// refGroupAt 是可以展开的一组；n 是组里有几项，-1 不显示。返回是否展开。
-func (a *app) refGroupAt(c *ui.Context, ld *logDoc, key, label string, n int, open bool, indent int) bool {
+// refGroupAt 是可以展开的一组，返回这一帧是否点了它；cursor 是键盘停在这一行。
+func (a *app) refGroupAt(c *ui.Context, it refItem, cursor bool) bool {
 	t := c.Theme()
-	row := ui.Row(c.Key("g:"+key)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 8, 0, 4+float32(indent)*treeIndent).Gap(4).Radius(rRow).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label(label)
-	selectedBg(c, row, false)
+	row := ui.Row(c.Key(it.key)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 8, 0, 4+float32(it.indent)*treeIndent).Gap(4).Radius(rRow).AlignItems(ui.Center).
+		Role(ui.RoleButton).Label(it.label)
+	selectedBg(c, row, cursor)
 	row.Children(func() {
 		chevron := iconChevron
-		if open {
+		if it.open {
 			chevron = iconDown
 		}
 		ui.Icon(c, chevron).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, label).FontSize(fsBody).SingleLine().Shrink(1)
-		if n >= 0 {
-			ui.Text(c, strconv.Itoa(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, it.label).FontSize(fsBody).SingleLine().Shrink(1)
+		if it.n >= 0 {
+			ui.Text(c, strconv.Itoa(it.n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		}
 	})
-	if row.Clicked() {
-		ld.refsOpen[key] = !ld.refsOpen[key]
-	}
-	return open
+	return row.Clicked()
 }
 
-// refRow 是一个分支或标签，返回这一帧是否点了它；name 是读屏念的名字，带上种类免得和别处同名。
-func (a *app) refRow(c *ui.Context, key, label, name string, indent int, selected bool, trailing func(c *ui.Context)) (clicked, add bool) {
-	row := ui.Row(c.Key(key)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 8, 0, 20+float32(indent)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label(name).Tooltip(label)
-	selectedBg(c, row, selected)
+// refRow 是一个分支或标签，返回这一帧是否点了它；it.name 是读屏念的名字，带上种类免得和别处同名。
+func (a *app) refRow(c *ui.Context, it refItem, selected, cursor bool) (clicked, add bool) {
+	row := ui.Row(c.Key(it.key)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 8, 0, 20+float32(it.indent)*treeIndent).Gap(6).Radius(rRow).AlignItems(ui.Center).
+		Role(ui.RoleButton).Label(it.name).Tooltip(it.label)
+	selectedBg(c, row, selected || cursor)
 	row.Children(func() {
-		ui.Text(c, label).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).Grow(1)
-		if trailing != nil {
-			trailing(c)
+		ui.Text(c, it.label).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).Grow(1)
+		if it.mark != nil {
+			it.mark(c)
 		}
 	})
 	if !row.Clicked() {

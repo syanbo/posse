@@ -667,6 +667,44 @@ func TestLogRefTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	until(t, tt, "all again", func() bool { return len(ld.filter.Branches) == 0 && !ld.loading && len(ld.commits) == all })
+
+	// 方向键：↑ 换到上一个分支并只看它；← 回到组、再 ← 收起；→ 展开、→ 进到第一项、→ 到提交列表
+	key := func(k ui.Key) {
+		tt.Key(0, k)
+		tt.Frame()
+		tt.Frame()
+	}
+	key(ui.KeyUp)
+	if ld.refCursor == "l:main" || !strings.HasPrefix(ld.refCursor, "l:") || !slices.Equal(ld.filter.Branches, []string{"refs/heads/" + strings.TrimPrefix(ld.refCursor, "l:")}) {
+		t.Fatalf("↑: cursor %q filter %v", ld.refCursor, ld.filter.Branches)
+	}
+	key(ui.KeyLeft)
+	if ld.refCursor != "g:local" {
+		t.Fatalf("←: cursor %q", ld.refCursor)
+	}
+	key(ui.KeyLeft)
+	if ld.refsOpen["local"] || tt.HasText("本地分支 main") {
+		t.Fatal("← did not fold the group")
+	}
+	key(ui.KeyRight)
+	key(ui.KeyRight)
+	if !ld.refsOpen["local"] || !strings.HasPrefix(ld.refCursor, "l:") {
+		t.Fatalf("→ →: open %v cursor %q", ld.refsOpen["local"], ld.refCursor)
+	}
+	until(t, tt, "loaded", func() bool { return !ld.loading })
+	key(ui.KeyRight)
+	ld.commit = nil
+	key(ui.KeyDown)
+	if ld.commit == nil || ld.commit.info.Hash != ld.commits[0].Hash {
+		t.Fatal("→ on a branch did not move to the commit list")
+	}
+	// 提交列表里 ← 回到分支树
+	key(ui.KeyLeft)
+	before := ld.refCursor
+	key(ui.KeyDown)
+	if ld.refCursor == before {
+		t.Fatal("← in the commit list did not go back to the ref tree")
+	}
 }
 
 // 分支弹窗：远端默认收起，点标题展开；搜索时全部展开。

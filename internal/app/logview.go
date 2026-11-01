@@ -25,22 +25,25 @@ const (
 )
 
 type logDoc struct {
-	filter   gitx.LogFilter
-	text     string // 输入框里的文字，停顿后才应用到 filter
-	author   string
-	commits  []gitx.CommitInfo
-	graph    []graphRow
-	lanes    int  // 提交图最宽处的线数，每行的图一样宽，标题才对齐
-	more     bool // 还有更早的提交
-	loading  bool
-	gen      int
-	commit   *commitView
-	list     ui.ListState
-	reloaded time.Time
-	refsOpen map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
-	refQuery string
-	err      string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
-	hist     *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
+	filter    gitx.LogFilter
+	text      string // 输入框里的文字，停顿后才应用到 filter
+	author    string
+	commits   []gitx.CommitInfo
+	graph     []graphRow
+	lanes     int  // 提交图最宽处的线数，每行的图一样宽，标题才对齐
+	more      bool // 还有更早的提交
+	loading   bool
+	gen       int
+	commit    *commitView
+	list      ui.ListState
+	reloaded  time.Time
+	refsOpen  map[string]bool // 左边分支树展开了哪些组："local"、"remote"、"tags"、"remote:<远端>"
+	refQuery  string
+	refList   ui.ListState
+	refCursor string       // 分支树里键盘停在的行（refItem.key）
+	focusList bool         // 在分支树里按了 →：提交列表建出来时拿焦点
+	err       string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
+	hist      *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
 }
 
 func logKey(f gitx.LogFilter) string {
@@ -509,8 +512,14 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				}
 				a.logRow(c, w, v, d, commits[i], gr)
 			}).Grow(1)
-			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，→ 到右边它改的文件，照 WebStorm 的日志
+			if ld.focusList && ld.list.Focus(c) {
+				ld.focusList = false
+			}
+			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，→ 到右边它改的文件，← 回左边的分支树，照 WebStorm 的日志
 			a.commitListKeys(c, v, &ld.list, commits, &ld.commit)
+			if ld.list.Shortcut(c, 0, ui.KeyLeft) {
+				ld.refList.Focus(c)
+			}
 		})
 		if ld.commit != nil {
 			a.paneDivider(c, "log-detail-grip", &a.state.LogDetailWidth, logDetailPane, -1)
