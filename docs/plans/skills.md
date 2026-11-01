@@ -28,7 +28,7 @@ xingkongliang/skills-manager、jiweiyeah/Skills-Manager、Shpigford/chops、runk
 - 装、删、更新交给 `npx -y skills@<固定版本> … -g`，带 `DISABLE_TELEMETRY=1`，在当前工作区新开的 shell 标签里跑（窗口进程的 PATH 里没有 nvm 的 node，交互提示和报错也看得见），标签里的程序退出后重新扫描。
 - 两个入口，各管一层：
   - 侧栏顶上和任务、历史、手机并列的「技能」页管全局：用户级、插件、系统技能，体检，装、删、更新。左边列表（搜索、按 agent 和来源筛），右边详情（frontmatter、正文预览、各家状态、在访达中显示、在文件标签里编辑）。开关写各家的全局配置（如 `~/.claude/settings.json`）。
-  - 右侧文件栏加「技能」页签（和历史、文件并列；ui.json 的 `filesPanelHistory` 换成 `filesPanelTab`，旧的 true 读成"历史"）只管当前工作区的项目级技能（`.claude/skills`、`.agents/skills`、`.grok/skills`、`.cursor/skills`，Grok 从工作区往上到仓库根的各级都算）：一个技能一行，名字、描述，行尾四家状态，点了切换；点名字在文件标签里打开 SKILL.md。开关写项目里的配置（如 `.claude/settings.local.json`），新建项目技能也在这里。worktree 按自己的检出算。
+  - 右侧文件栏的「技能」页签（和历史、文件并列，ui.json 的 `filesPanelTab`）只管当前工作区的项目级技能（`.claude/skills`、`.agents/skills`、`.grok/skills`、`.cursor/skills`，Grok 从工作区往上到仓库根的各级都算）：一个技能一行，名字、描述，行尾四家状态，点了切换；点名字在文件标签里打开 SKILL.md。开关写项目里的配置（如 `.claude/settings.local.json`），新建项目技能也在这里。worktree 按自己的检出算。
   - 「技能与工具」面板里的技能名：项目级的跳到文件栏的技能页签，其余跳到侧栏的技能页。
 
 ## 体检
@@ -39,9 +39,13 @@ xingkongliang/skills-manager、jiweiyeah/Skills-Manager、Shpigford/chops、runk
 - 没进正本的真目录（`~/.claude/skills` 里的 `browser-skill` 等）和正本同名时报成同名冲突；不同名的只是 Claude 一家用得上，不算问题。
 - 处理都经确认弹框，删除移到废纸篓。
 
-## 阶段
+## 核实记录（2026-10-31）
 
-1. 只读总览和体检：扫描、去重、各家状态、详情页。先出离屏预览（深浅两套）再接真数据。
-2. 开关（已做）：Claude、Codex、Grok，确认弹框。2026-10-31 核实：Codex 0.166 在临时 CODEX_HOME 里按名字和按路径（SKILL.md 的真实路径）写的 `[[skills.config]]` 都被 `skills/list` 认成 enabled = false；Grok 1.0.73 在临时 HOME 里 `grok inspect` 把 `[skills] disabled` 的标成 [disabled]，`ignore` 的项目技能不再列出（项目要先信任）。Claude 的 skillOverrides 只照程序里的设置说明，没用真实会话核实。用临时 HOME 和真实 CLI 核实写法生效，不碰日常配置。项目级的开关各家能不能写在项目里还没核实（Claude 有 `.claude/settings.local.json`；Codex 的 `skills/config/write`、Grok 的 `[skills]` 可能只有全局一份），只能写全局的那家在项目页签里置灰并说明。
-3. 装、删、更新（已做）：界面收参数，拼 `npx skills` 命令到 shell 标签里跑。2026-10-31 在临时 HOME 核实 1.7.4：`add <本地目录> -g -a codex -a claude-code -y` 正本放 `~/.agents/skills`、`~/.claude/skills` 建相对链接；`remove <名字> -g -y` 两处一起删，不进废纸篓。项目级的新建和安装在 PosseDev 里跑通。
-4. 跨会话用量（已做）：没进历史索引（加表要改 `schemaVersion`，跨版本的旧常驻进程就要重启），改成窗口进程在技能页打开时用 `UsageScanner` 扫各家会话文件，按文件缓存到 `$POSSE_HOME/skill-usage.json`。本机实测第一次约 21 秒、之后约 20 毫秒，缓存约 160 KB。
+用临时 HOME 和真实 CLI 核实写法生效，不碰日常配置。
+
+- Codex 0.166：在临时 CODEX_HOME 里按名字和按路径（SKILL.md 的真实路径）写的 `[[skills.config]]` 都被 `skills/list` 认成 enabled = false。
+- Grok 1.0.73：`grok inspect` 把 `[skills] disabled` 的标成 [disabled]，`ignore` 的项目技能不再列出（项目要先信任）。
+- Claude 的 skillOverrides 只照程序里的设置说明，没用真实会话核实。
+- 项目级的开关各家能不能写在项目里没核实（Claude 有 `.claude/settings.local.json`；Codex 的 `skills/config/write`、Grok 的 `[skills]` 可能只有全局一份），只能写全局的那家在项目页签里置灰并说明。
+- `npx skills` 1.7.4：`add <本地目录> -g -a codex -a claude-code -y` 正本放 `~/.agents/skills`、`~/.claude/skills` 建相对链接；`remove <名字> -g -y` 两处一起删，不进废纸篓。
+- 跨会话用量没进历史索引（加表要改 `schemaVersion`，跨版本的旧常驻进程就要重启）：窗口进程在技能页打开时用 `UsageScanner` 扫各家会话文件，按文件缓存到 `$POSSE_HOME/skill-usage.json`。本机第一次约 21 秒、之后约 20 毫秒，缓存约 160 KB。

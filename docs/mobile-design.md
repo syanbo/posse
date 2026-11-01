@@ -14,7 +14,7 @@
 | `Fs.title` | 16 | 顶栏、卡片、弹窗、底部面板和页面标题，Markdown h2 |
 | `Fs.heading` | 18 | 只给 Markdown h1 |
 
-- 例外只有 `Fs.heading`（18，Markdown h1）和 `Fs.hero`（28，配对页的大标题）。文字画成图标时（项目的文字图标）按 `Ic` 定字号。
+- 四档之外只有 `Fs.heading`（Markdown h1）和 `Fs.hero`（28，配对页的大标题）。文字画成图标时（项目的文字图标）按 `Ic` 定字号。
 - 要让信息次要，先换次要色（`muted`、`faint`），不再缩小字号。Markdown h3 及以下用 `Fs.body` 加粗。
 - 等宽字放在正文、元信息里用 `Fs.small`；只有输入框里等宽字是主要内容时用 `Fs.body`。终端字号在设置里，不在这套阶梯里。
 

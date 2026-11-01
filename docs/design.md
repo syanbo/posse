@@ -54,9 +54,9 @@
 | 工具按钮、列表行首、菜单项 | `iconSize` | `buttonBox()` |
 | 紧凑按钮：列表行内、卡片和浮层里 | `smallIcon()` | `compactBox()` |
 | 标签和文件行里的小按钮（关闭、继续、折叠箭头） | `fsSmall` | `miniBox()` |
-| 侧栏行尾、标签页上的状态图形 | `smallIcon()`；挨着小字时 `fsSmall` | — |
+| 状态图形（侧栏会话行左边的状态槽 `statusSlot`、项目和工作区行尾、标签页上） | `smallIcon()`；挨着小字时 `fsSmall` | — |
 
-文件图标一律经 `fileGlyph`（文件标签用 `docIcon`，符号链接仍是 `iconFileLink`）：图形和颜色按文件类型定，颜色只取 `palette.data` 的数据色或 `TextMuted`，加新类型往 `fileicons.go` 的表里加。
+文件图标一律经 `fileicons.go`：文件 `fileGlyph`，目录 `dirGlyph`，Git 文件列表 `changeGlyph`，文件标签 `docIcon`，符号链接仍是 `iconFileLink`。图形和颜色按类型定，文件的颜色只取 `palette.data` 的数据色或 `TextMuted`，普通文件夹是 `Accent`；加新类型往 `fileicons.go` 的表里加。
 
 agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSize`，三行的列表项（历史会话）用 `tileMedium()`，空状态和详情页头用 `tileLarge()`。
 
@@ -88,7 +88,7 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 
 ## 尺寸
 
-行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`、`sidebarDefault()` 到 `sidebarMax()`（侧栏默认 `sz(272)`、最宽 `sz(420)`；最窄由顶上的磁贴算，`sidebarMin`：一行四块正方形磁贴加五道 8 的间隔，默认字号下 264）。
+行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`、`sidebarDefault()` 到 `sidebarMax()`（侧栏默认 `sz(272)`、最宽 `sz(420)`；最窄由顶上的磁贴算，`sidebarMin`：一行四块正方形磁贴加五道 8 的间隔，默认字号下 280）。
 
 ## 圆角
 
@@ -116,7 +116,7 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 | 语义 | `honey`、`sage`、`sky`、`Danger` | 待处理和提醒、完成和新增、信息（传入的提交、MCP）、错误和冲突 |
 | 底色 | `side`、`canvas`、`band`、`card`、`raised`、`shade`、`code` | 侧栏、主区域、顶栏、卡片（和终端同色）、浮层、底栏、代码块 |
 | 叠加 | `line`、`wash`、`fill`、`fillHi` | 分隔线和内高光、悬停底、次级按钮底和它的悬停 |
-| 淡底 | `soft(t, 色)`、`tint`、`mark` | 语义色的淡底；`tint` 是选中；`mark` 是搜索命中 |
+| 淡底 | `soft(t, 色)`、`tint`、`mark`、`markOn` | 语义色的淡底；`tint` 是选中；`mark` 是搜索命中，`markOn` 是查找栏当前那个 |
 | 投影和遮罩 | `shadow`、`scrim` | 浮层的投影；压在图片、视频上的深色底 |
 | 数据色 | `dataColor(t, i)` | 提交图的线、分支比较的两边、用量的分类，依次取 |
 | 固定色 | `white`、`black` | 不随主题变的地方：品牌色块、对勾、二维码白底 |

@@ -107,7 +107,3 @@
 
 - 窗口：开着一个终端的空闲状态不超过 220 MB；隐藏 60 秒后不超过 120 MB；打开再关掉任何文件、diff 之后，90 秒内回到打开前 +30 MB 以内（修完后 5.5 MB 的大 diff 是 +46 MB，其中 19 MB 可回收，还差一点）。
 - 常驻进程：空载不超过 25 MB；每个写满回滚区的终端不超过 1.5 MB。
-
-## 原始数据
-
-`/tmp/posse-mem/`：`results.csv`（各场景）、`soak-window.csv`、`soak-daemon.csv`（持续采样）、`window-gc-1.log`、`window-gc.log`（窗口的 GC 日志，重开前后各一份）。在 /tmp 里，重启会丢。

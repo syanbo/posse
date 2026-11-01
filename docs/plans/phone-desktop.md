@@ -1,6 +1,6 @@
 # 手机控制 Mac 桌面：决策记录
 
-iPhone 看这台 Mac 的屏幕，并发送指针、滚轮和键盘。这里只记当初的取舍和还没做的事，最终行为以 `docs/features/mobile.md`「看 Mac 桌面」为准。
+手机看这台 Mac 的屏幕，并发送指针、滚轮和键盘。这里只记当初的取舍和还没做的事，最终行为以 `docs/features/mobile.md`「看 Mac 桌面」为准。
 
 画面自己采集：ScreenCaptureKit 进 VideoToolbox，加密后走 UDP 到手机，手机原生层收包、解密、硬解。键鼠也走同一条 UDP。不连系统屏幕共享，不把 Open Screen Sharing 或 Moonlight 的代码引进来。配对过的手机就是授权，不再要 Mac 的登录密码。
 
@@ -11,7 +11,7 @@ iPhone 看这台 Mac 的屏幕，并发送指针、滚轮和键盘。这里只�
 | 桌面子进程 | 同一个已签名的 Posse 可执行文件（`posse desk helper`），由常驻进程拉起。跑 ScreenCaptureKit、编码器和 CGEvent 注入，屏幕录制和辅助功能两项授权都只用在这里。不听网络 |
 | 常驻进程 | 决定订不订阅、加密、收发 UDP、码率调节，把手机的输入转给子进程。不调用 ScreenCaptureKit，避免 `replayd` 把录屏名额记在常驻进程上、停不掉 |
 | 窗口 | 不采集。手机页显示谁在看（可以停掉）、缺哪一项授权 |
-| 手机 | Swift 原生插件收 UDP、解密、拆 RTP、硬解，画到 Flutter 纹理上；Flutter 负责手势、视口和快捷键栏。订阅和退订走手机连着的那条 RPC 连接 |
+| 手机 | 原生层（iOS 的 Swift、安卓的 Kotlin）收 UDP、解密、拆 RTP、硬解，画到 Flutter 纹理上；Flutter 负责手势、视口和快捷键栏。订阅和退订走手机连着的那条 RPC 连接 |
 
 子进程和常驻进程一样经 `internal/spawn`（`posix_spawn` 加私有的 `responsibility_spawnattrs_setdisclaim`，见 AGENTS.md）拉起，系统按它自己的签名（Posse.app 的包 ID 加证书）认授权。
 
@@ -30,7 +30,7 @@ iPhone 看这台 Mac 的屏幕，并发送指针、滚轮和键盘。这里只�
 
 ```mermaid
 sequenceDiagram
-  participant P as iPhone（Swift 插件）
+  participant P as 手机（原生层）
   participant D as 常驻进程
   participant H as 桌面子进程
   P->>D: desk.subscribe（RPC 连接，带编码能力和屏幕尺寸）
@@ -80,5 +80,4 @@ sequenceDiagram
 ## 之后
 
 - 放大到 1.5 倍以上时让 SCK 只采看得见的那块（`sourceRect`），同样的像素数看得更清楚。
-- 触控板模式：手机上画本地光标，支持悬停。
 - 丢包恢复用长期参考帧（LTR），少出关键帧。
