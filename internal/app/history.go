@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/rpc"
 )
@@ -252,7 +253,7 @@ func (a *app) fetchHistory(req int) {
 		return
 	}
 	if err != nil {
-		a.win.Update(func() { h.failed = err.Error() })
+		a.win.Update(func() { h.failed = errtext.Text(err) })
 		return
 	}
 	a.win.Update(func() {
@@ -665,7 +666,7 @@ func (a *app) cwdLink(c *ui.Context, dir string) func() {
 		})
 		if b.Clicked() {
 			if err := mygo.Shell.OpenPath(dir); err != nil {
-				a.err = err.Error()
+				a.err = errtext.Text(err)
 			}
 		}
 	}

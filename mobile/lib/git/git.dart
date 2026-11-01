@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../ui/code.dart';
 import '../ui/file_icons.dart';
@@ -136,7 +137,7 @@ class _GitPaneState extends State<GitPane> {
         _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       _busy = false;
     }
@@ -156,7 +157,7 @@ class _GitPaneState extends State<GitPane> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = '$error';
+        _error = friendlyError(error);
         _loading = false;
       });
     }
@@ -730,7 +731,7 @@ class _DiffViewerState extends State<DiffViewer> {
       await routeSettled(context);
       if (mounted) setState(() => _diff = diff);
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 

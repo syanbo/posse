@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/rpc"
 	"posse/internal/usage"
 )
@@ -372,7 +373,7 @@ func (a *app) refreshPlan() {
 			case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
 				a.err = "常驻进程版本较旧，不支持刷新套餐用量：到设置页更新常驻进程后再试。"
 			case err != nil:
-				a.err = "刷新套餐用量失败：" + err.Error()
+				a.err = "刷新套餐用量失败：" + errtext.Text(err)
 			default:
 				a.daemon.Usage = &st
 			}

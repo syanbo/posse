@@ -24,7 +24,17 @@ String friendlyError(Object error) {
         '并在手机设置里允许 Posse 使用无线数据和本地网络';
   }
   if (error is RpcException) {
-    return error.code == 'closed' ? '和电脑的连接断开了，正在重连' : error.message;
+    // 新版电脑端已经给中文说明；旧版只给英文，常见的错误码在这里认
+    return switch (error.code) {
+      'closed' => '和电脑的连接断开了，正在重连',
+      'method_not_found' ||
+      'unknown_method' => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse',
+      'binary_file' => '这是二进制文件，没法当文本打开',
+      'file_too_large' => '文件太大，手机上打不开',
+      'not_a_file' => '这不是文件',
+      'invalid_relative_path' => '路径不在工作区里',
+      _ => error.message,
+    };
   }
   final text = '$error';
   if (error is StateError && text.contains('closed') ||

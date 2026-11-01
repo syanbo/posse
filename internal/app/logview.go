@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 )
 
@@ -282,12 +283,12 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			ld.loading = false
 			// 出错时筛选栏和分支树照样画，错误写在列表里，改了筛选再读；不是 git 仓库才整页报错
 			if root == "" {
-				d.kind, d.err = docError, err.Error()
+				d.kind, d.err = docError, errtext.Text(err)
 				return
 			}
 			ld.err = ""
 			if err != nil {
-				ld.err, ld.commits, ld.graph, ld.more = err.Error(), nil, nil, false
+				ld.err, ld.commits, ld.graph, ld.more = errtext.Text(err), nil, nil, false
 				d.kind = docLog
 				return
 			}
@@ -930,7 +931,7 @@ func (a *app) openBlame(w *workspace, v *filesView, abs string) {
 		a.update(func() {
 			bd.loading = false
 			if err != nil {
-				bd.err = err.Error()
+				bd.err = errtext.Text(err)
 				return
 			}
 			bd.lines = lines

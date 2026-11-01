@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 )
 
@@ -120,7 +121,7 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 				onlyOther, onlyCur = onlyCur, onlyOther
 			}
 			if err != nil {
-				d.kind, d.err = docError, err.Error()
+				d.kind, d.err = docError, errtext.Text(err)
 				return
 			}
 			cd.onlyOther, cd.onlyCur, cd.changes = onlyOther, onlyCur, changes
@@ -144,7 +145,7 @@ func (a *app) selectCommit(v *filesView, holder **commitView, c gitx.CommitInfo)
 		a.update(func() {
 			cv.files = files
 			if err != nil {
-				cv.err = err.Error()
+				cv.err = errtext.Text(err)
 			}
 		})
 	}()
@@ -711,7 +712,7 @@ func (a *app) openPushBranch(w *workspace, branch string) {
 			}
 			ps.plan, ps.loaded = plan, true
 			if err != nil {
-				ps.err = err.Error()
+				ps.err = errtext.Text(err)
 			}
 		})
 	}()

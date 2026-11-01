@@ -343,7 +343,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (gen != _gen || !mounted) return;
       await _binary?.cancel();
       _binary = null;
-      setState(() => _notice = '$error');
+      setState(() => _notice = friendlyError(error));
     } finally {
       if (oldRpc != null && oldStream != null) {
         await _drop(oldRpc, oldStream);
@@ -700,7 +700,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     try {
       _controller.write(_bullets.apply(bytes));
     } catch (error) {
-      if (mounted) setState(() => _notice = '$error');
+      if (mounted) setState(() => _notice = friendlyError(error));
     } finally {
       _applying = false;
     }

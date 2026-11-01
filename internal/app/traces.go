@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 
 	"github.com/egoist/mygo"
@@ -172,7 +173,7 @@ func (a *app) cleanTraces(rows []traceRow) {
 			err = mygo.Shell.TrashItem(r.Path)
 		}
 		if err != nil {
-			failed = append(failed, shortPath(r.Path)+"："+firstLine(err.Error()))
+			failed = append(failed, shortPath(r.Path)+"："+firstLine(errtext.Text(err)))
 			continue
 		}
 		done = append(done, r.Path)

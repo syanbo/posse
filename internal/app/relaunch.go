@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	"github.com/egoist/mygo"
+
+	"posse/internal/errtext"
 )
 
 // exeWatch 盯着窗口自己所在的 Posse.app 有没有被换掉（重新打包、覆盖安装）。
@@ -89,7 +91,7 @@ func (a *app) doRelaunch() {
 	cmd := exec.Command("/bin/sh", append([]string{"-c", script, strconv.Itoa(os.Getpid())}, args...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		a.err = "重开窗口失败：" + err.Error()
+		a.err = "重开窗口失败：" + errtext.Text(err)
 		return
 	}
 	go cmd.Wait()

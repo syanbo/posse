@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"posse/internal/errtext"
 	"posse/internal/history"
 )
 
@@ -81,7 +82,7 @@ func (a *app) askTrashSession(d *historyDetail) {
 		"移到废纸篓", func() {
 			for _, p := range paths {
 				if err := mygo.Shell.TrashItem(p); err != nil {
-					a.win.Update(func() { a.err = "移到废纸篓失败：" + err.Error() })
+					a.win.Update(func() { a.err = "移到废纸篓失败：" + errtext.Text(err) })
 					return
 				}
 			}

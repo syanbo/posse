@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/rpc"
 )
 
@@ -230,7 +231,7 @@ func relayErrText(err error) string {
 	case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
 		return "常驻进程是旧版，在设置页更新常驻进程后再试。"
 	case errors.As(err, &re):
-		return re.Message
+		return errtext.Message(re.Message)
 	}
-	return err.Error()
+	return errtext.Text(err)
 }

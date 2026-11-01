@@ -13,6 +13,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/daemon"
+	"posse/internal/errtext"
 )
 
 // settingsBoardID 是设置页的 ID，不在侧栏里，从 ⌘, 和侧栏顶栏的齿轮进来。
@@ -195,7 +196,7 @@ func (a *app) notifySettings(c *ui.Context) {
 func (a *app) setRestoreAll(on bool) {
 	if a.home != "" {
 		if err := agent.SetRestoreAll(a.home, on); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 			return
 		}
 	}
@@ -241,7 +242,7 @@ func (a *app) agentSettings(c *ui.Context) {
 func (a *app) setAgentEnabled(name string, on bool) {
 	if a.home != "" {
 		if err := agent.SetEnabled(a.home, name, on); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 			return
 		}
 		a.disabled = agent.Disabled(a.home)
@@ -251,7 +252,7 @@ func (a *app) setAgentEnabled(name string, on bool) {
 func (a *app) setPermission(mode string) {
 	if a.home != "" {
 		if err := agent.SetPermissionMode(a.home, mode); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 			return
 		}
 	}

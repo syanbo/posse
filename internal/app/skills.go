@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/skills"
 )
@@ -905,7 +906,7 @@ type skillChangeView struct {
 func (a *app) planSkillToggle(o skills.Options, sk skills.Skill, ag skills.Agent, enable bool) {
 	ch, err := skills.PlanToggle(o, sk, ag, enable)
 	if err != nil {
-		a.err = "没有改" + agentTitle(ag.String()) + "的配置：" + err.Error()
+		a.err = "没有改" + agentTitle(ag.String()) + "的配置：" + errtext.Text(err)
 		return
 	}
 	a.skillChange = skillChangeView{open: true, ch: ch}
@@ -917,7 +918,7 @@ func (a *app) applySkillChange(ch skills.Change) {
 		err := ch.Apply()
 		a.update(func() {
 			if err != nil {
-				a.err = "没有改" + shortPath(ch.File) + "：" + err.Error()
+				a.err = "没有改" + shortPath(ch.File) + "：" + errtext.Text(err)
 			}
 			if a.skills.visible {
 				a.scanSkills()
@@ -1068,7 +1069,7 @@ func (a *app) askTrashLinks(items []skills.Issue) {
 func (a *app) trashPaths(paths []string) {
 	for _, p := range paths {
 		if err := mygo.Shell.TrashItem(p); err != nil {
-			a.update(func() { a.err = "移到废纸篓失败：" + err.Error() })
+			a.update(func() { a.err = "移到废纸篓失败：" + errtext.Text(err) })
 			break
 		}
 	}
@@ -1152,7 +1153,7 @@ func (a *app) listInstallSource(w *workspace) {
 			}
 			v.listing = false
 			if err != nil {
-				v.listErr, v.noNPX = err.Error(), errors.Is(err, skills.ErrNoNPX)
+				v.listErr, v.noNPX = errtext.Text(err), errors.Is(err, skills.ErrNoNPX)
 				return
 			}
 			v.listed, v.installed = list, installed
@@ -1217,7 +1218,7 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 			ready := (v.listedNow() && slices.Contains(v.picked, true)) || (v.failedNow() && !v.noNPX)
 			if err := v.install().Check(); ready && err != nil {
 				ready = false
-				ui.Text(c, err.Error()).FontSize(fsSmall).TextColor(t.Danger)
+				ui.Text(c, errtext.Text(err)).FontSize(fsSmall).TextColor(t.Danger)
 			}
 			if ready {
 				ui.Text(c, skills.ShellLine(v.install().Args())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Padding(8, 12).Radius(rCard).Background(colors(t).code).Selectable()
@@ -1405,7 +1406,7 @@ func (a *app) skillNewDialog(c *ui.Context) {
 			if submitted && valid && w != nil {
 				file, err := createProjectSkill(w.Path, name)
 				if err != nil {
-					a.err = "没有新建：" + err.Error()
+					a.err = "没有新建：" + errtext.Text(err)
 					return
 				}
 				v.open = false

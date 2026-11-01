@@ -21,6 +21,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"posse/internal/errtext"
 	"posse/internal/projicon"
 )
 
@@ -475,9 +476,9 @@ func (c *conn) replyOrFail(id string, res any, err error) {
 	case errors.As(err, &re):
 		c.fail(id, re.code, re.msg)
 	case errors.Is(err, fs.ErrNotExist):
-		c.fail(id, "not_found", err.Error())
+		c.fail(id, "not_found", errtext.Text(err))
 	default:
-		c.fail(id, "internal_error", err.Error())
+		c.fail(id, "internal_error", errtext.Text(err))
 	}
 }
 
@@ -485,7 +486,9 @@ func (c *conn) stream(id string, result any) error {
 	return c.sendJSON(map[string]any{"id": id, "ok": true, "streaming": true, "result": result})
 }
 
+// fail 回一个失败的应答：错误码照旧给程序判断，说明换成中文给人看。
 func (c *conn) fail(id, code, msg string) error {
+	msg = errtext.Message(msg)
 	return c.sendJSON(map[string]any{"id": id, "ok": false, "error": map[string]string{"code": code, "message": msg}})
 }
 
@@ -538,7 +541,7 @@ func (c *conn) serve() {
 			if errors.As(err, &re) {
 				c.fail(req.ID, re.code, re.msg)
 			} else {
-				c.fail(req.ID, "internal_error", err.Error())
+				c.fail(req.ID, "internal_error", errtext.Text(err))
 			}
 		}
 	}

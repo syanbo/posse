@@ -47,6 +47,7 @@ internal/namer      会话标题（posse session title）：规整 `MMDD｜类�
 internal/cli        子命令解析与输出（--json 给 agent 用）
 internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端，任务、历史、文件、Git 等界面，状态栏用量和内存；只接入当前可见的终端；各界面见 docs/features/
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
+internal/errtext    报错的界面文字：英文原文按界面语言翻译（译文表如 zh.go），桌面窗口和手机服务显示报错时用
 internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责；runtime.go 管常驻进程运行用的包副本（创建、登记、回收）
 internal/desk       手机看 Mac 桌面的采集侧：子进程（`posse desk helper`）用 ScreenCaptureKit 采屏（可选屏，也可只看一个窗口，window_darwin.go）、VideoToolbox 硬编码，帧经管道交给父进程，手机的键鼠输入由父进程排序去重（input.go）、子进程发 CGEvent 注入（inject_darwin.go）；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`posse desk cast` 是还没接进常驻进程时的推流入口）
 internal/usage      各 agent 套餐用量：解析 Claude statusLine 输入和缓存、Codex 会话文件和 app-server、Grok 日志、Cursor 接口，合并后存 $POSSE_HOME/usage.json
@@ -85,6 +86,7 @@ third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它）�
 - Posse.app 里的可执行文件叫 `Posse`，agent 在终端里调用 `posse` 能找到它，依赖 APFS 默认的大小写不敏感。
 - 快捷键都登记在 `internal/app/keymap.go` 的表里（设置页「快捷键」能看能改，改过的存 ui.json 的 `keys`）：新加快捷键往表里加一项，用 `a.pressed(c, id)` / `a.pressedIn`（终端 OnKey 用 `a.keyIs`）判断，提示文字用 `a.keyText`、`a.withKey`、菜单的 `.Keys(...)`，不写死 `c.Shortcut(ui.Cmd, …)` 和"⌘X"。编辑器的键在表里是 `editor.<命令名>`，经 `editorBindings` 交给编辑器。
 - 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
+- 报错的源文本是英文：常驻进程、CLI、各内部包照旧写英文（agent 读的是它们）。界面上显示报错一律经 `errtext.Text(err)`（桌面窗口）或手机服务的 `conn.fail`，不直接用 `err.Error()`：它去掉错误码，按界面语言（`errtext.Current`）查译文表，认不出的原样给出。新加界面碰得到的英文报错，在 `internal/errtext/zh.go` 补一条译文（键和代码里的格式串一字不差，`TestFormatsStillInSource` 核对）；加一种界面语言就加一张译文表、登记进 `catalogs`。手机 App 里显示报错经 `friendlyError`（`mobile/lib/app_state.dart`），不直接 `'$error'`。
 - 只有界面关心的状态（`internal/app/uistate.go`）存在 `$POSSE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉常驻进程。
 - 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。常驻进程和终端不受影响：它们从包的副本运行（见上面拉起常驻进程的副本一条）。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。

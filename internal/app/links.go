@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"posse/internal/errtext"
 	"posse/internal/media"
 )
 
@@ -132,7 +133,7 @@ func (a *app) revealLinkDir(card *linkCard) bool {
 // openPathExternal 交给系统：目录在访达中打开，文件用默认程序打开。
 func (a *app) openPathExternal(card *linkCard) {
 	if err := mygo.Shell.OpenPath(card.path); err != nil {
-		a.err = err.Error()
+		a.err = errtext.Text(err)
 	}
 }
 

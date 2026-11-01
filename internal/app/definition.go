@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/files"
 )
 
@@ -90,7 +91,7 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 		return
 	case files.LinkURL:
 		if err := mygo.Shell.OpenExternal(lk.Text); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 		}
 		return
 	case files.LinkPath:
@@ -147,7 +148,7 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 				s.running = false
 				switch {
 				case err != nil && len(defs) == 0:
-					a.err = "查找定义失败：" + err.Error()
+					a.err = "查找定义失败：" + errtext.Text(err)
 				case len(defs) == 0:
 					d.hint, d.hintAt = fmt.Sprintf("没找到 %s 的定义", word), time.Now()
 				default:

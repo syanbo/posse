@@ -29,6 +29,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/client"
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 	"posse/internal/procmem"
 	"posse/internal/projicon"
@@ -582,7 +583,7 @@ func (a *app) refresh() {
 		}
 	}
 	if err != nil {
-		r = pollResult{err: err.Error()}
+		r = pollResult{err: errtext.Text(err)}
 		if statusOK {
 			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
 			a.autoUpgrade(r.daemonInfo)
@@ -1072,7 +1073,7 @@ func (a *app) attachView(id string) *termView {
 		},
 	})
 	if err != nil {
-		a.err = err.Error()
+		a.err = errtext.Text(err)
 		return nil
 	}
 	v.term = t
@@ -1103,7 +1104,7 @@ func (a *app) saveState() {
 func (a *app) pasteImage(v *termView, png []byte) {
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("posse-paste-%d.png", time.Now().UnixNano()))
 	if err := os.WriteFile(path, png, 0o600); err != nil {
-		a.win.Update(func() { a.err = "粘贴图片失败：" + err.Error() })
+		a.win.Update(func() { a.err = "粘贴图片失败：" + errtext.Text(err) })
 		return
 	}
 	a.win.Update(func() {
@@ -1136,7 +1137,7 @@ func (a *app) call(method string, params any, out any, timeout time.Duration) er
 	defer cancel()
 	err := a.c.Call(ctx, method, params, out)
 	if err != nil {
-		a.win.Update(func() { a.err = err.Error() })
+		a.win.Update(func() { a.err = errtext.Text(err) })
 	}
 	return err
 }

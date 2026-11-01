@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/rpc"
 )
 
@@ -97,7 +98,7 @@ func (a *app) clearTerminal(v *termView, id string) {
 				}
 			})
 		case err != nil:
-			a.update(func() { a.err = "清屏失败：" + err.Error() })
+			a.update(func() { a.err = "清屏失败：" + errtext.Text(err) })
 		}
 	}()
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/media"
 	"posse/internal/projicon"
 )
@@ -176,7 +177,7 @@ func (a *app) pickProjectIcon(p project) {
 		e.picking = false
 		switch {
 		case err != nil:
-			a.err = "导入图标失败：" + err.Error()
+			a.err = "导入图标失败：" + errtext.Text(err)
 		case name != "" && e.open && e.project.ID == p.ID:
 			a.dropIconFile(e.image, e.project.ID)
 			e.image, e.text = name, ""

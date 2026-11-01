@@ -322,7 +322,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _chat = null;
       _tabs = null;
       _drop(rpc, chatSubId: subId, tabsId: tabsId);
-      if (mounted) setState(() => _notice = '$error');
+      if (mounted) setState(() => _notice = friendlyError(error));
     }
   }
 
@@ -374,7 +374,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {});
       if (_window.messages.length > beforeCount) _loadEarlierIfAtTop();
     } catch (error) {
-      if (mounted) setState(() => _notice = '$error');
+      if (mounted) setState(() => _notice = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loadingEarlier = false);
     }

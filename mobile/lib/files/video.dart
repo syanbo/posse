@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../app_state.dart';
 import '../protocol/rpc.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -262,12 +263,12 @@ class _VideoViewState extends State<VideoView> {
       } else if (e.code == 'closed') {
         _fail('和电脑的连接断了，下好的部分留着', resumable: true);
       } else {
-        _fail('$e');
+        _fail(friendlyError(e));
       }
     } on TimeoutException {
       _fail('网络太慢，视频没下完，下好的部分留着', resumable: true);
     } catch (e) {
-      _fail('这个视频手机上放不了：$e');
+      _fail('这个视频手机上放不了：${friendlyError(e)}');
     }
   }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 )
 
 // skillRunView 是技能的安装、更新、删除对话框：写明要跑的命令，确认后在对话框里嵌一个终端跑（照 Orca 的技能设置面板），
@@ -58,7 +59,7 @@ func (a *app) startSkillRun() {
 			}
 			r.starting = false
 			if err != nil {
-				r.err = "打不开终端：" + err.Error()
+				r.err = "打不开终端：" + errtext.Text(err)
 				return
 			}
 			if a.hiddenTerms == nil {
@@ -68,7 +69,7 @@ func (a *app) startSkillRun() {
 			light, dark := terminalThemes()
 			term, err := terminal.New(terminal.Options{Conn: a.c.Attach(t.ID), Font: a.termFont(), Theme: light, DarkTheme: dark, NoWheelZoom: true})
 			if err != nil {
-				a.err = err.Error()
+				a.err = errtext.Text(err)
 				return
 			}
 			r.id, r.term, r.exit = t.ID, term, nil

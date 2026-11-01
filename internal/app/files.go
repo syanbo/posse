@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
+	"posse/internal/errtext"
 	"posse/internal/files"
 	"posse/internal/media"
 )
@@ -346,7 +347,7 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 			v.listing = false
 			if err != nil {
 				v.listFailAt = time.Now()
-				a.err = "列出文件失败：" + err.Error()
+				a.err = "列出文件失败：" + errtext.Text(err)
 				return
 			}
 			v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
@@ -424,7 +425,7 @@ func (a *app) loadDoc(d *fileDoc) {
 			a.update(func() {
 				d.base, d.seen = st, st
 				if err != nil {
-					d.kind, d.err = docError, err.Error()
+					d.kind, d.err = docError, errtext.Text(err)
 					return
 				}
 				d.kind, d.anim = docImage, anim
@@ -502,7 +503,7 @@ func readError(err error) string {
 	case os.IsPermission(err):
 		return "没有权限读取这个文件"
 	}
-	return err.Error()
+	return errtext.Text(err)
 }
 
 // pollFiles 在后台 stat 看得见的目录和打开的文件，变了的重读，结果交回界面线程。
@@ -612,7 +613,7 @@ func (a *app) saveDoc(d *fileDoc, force bool) bool {
 		return err
 	})
 	if err != nil {
-		a.err = "保存 " + d.name() + " 失败：" + err.Error()
+		a.err = "保存 " + d.name() + " 失败：" + errtext.Text(err)
 		return false
 	}
 	// 写入在界面线程同步完成，期间不会有新的输入，缓冲区就是写下去的内容
@@ -873,7 +874,7 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 						}
 						s.running, s.truncated = false, trunc
 						if err != nil && ctx.Err() == nil {
-							s.err = err.Error()
+							s.err = errtext.Text(err)
 						}
 					})
 				}()

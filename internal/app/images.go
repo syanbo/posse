@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/media"
 )
 
@@ -178,7 +179,7 @@ func decodeBig(it media.Item) (*animPlayer, *image.RGBA, error) {
 func (a *app) withImagePath(it imageItem, f func(path string) error) {
 	if it.Tool == nil {
 		if err := f(it.Path); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 		}
 		return
 	}
@@ -189,7 +190,7 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 				err = f(path)
 			}
 			if err != nil {
-				a.err = err.Error()
+				a.err = errtext.Text(err)
 			}
 		})
 	}()
@@ -203,12 +204,12 @@ func (a *app) copyImage(it imageItem) {
 			b, err := media.PNGBytes(path)
 			a.update(func() {
 				if err != nil {
-					a.err = "复制图片失败：" + err.Error()
+					a.err = "复制图片失败：" + errtext.Text(err)
 					return
 				}
 				files, err := transfer.FileData(path)
 				if err != nil {
-					a.err = "复制图片失败：" + err.Error()
+					a.err = "复制图片失败：" + errtext.Text(err)
 					return
 				}
 				reps := []transfer.Representation{transfer.Bytes(transfer.PNG, b)}

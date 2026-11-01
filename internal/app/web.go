@@ -9,6 +9,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/errtext"
 )
 
 // 网页标签：在文件标签里用系统的 WebKit（mygo 的 WebView）打开网址，和 diff、比较一样不对应磁盘文件。
@@ -60,7 +62,7 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记
 	wv, err := a.win.NewWebView(mygo.WebViewOptions{URL: link, Page: mygo.PageOptions{PreloadScript: webctlJS}})
 	if err != nil {
-		d.kind, d.err = docError, err.Error()
+		d.kind, d.err = docError, errtext.Text(err)
 		return wd, d
 	}
 	wd.view = wv

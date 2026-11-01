@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"posse/internal/daemon"
+	"posse/internal/errtext"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
 )
@@ -104,7 +105,7 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 		a.upgrade.end(pid, unsupported)
 		a.win.Update(func() {
 			if err != nil && !unsupported && !busy {
-				a.err = "更新常驻进程失败，终端没受影响：" + err.Error()
+				a.err = "更新常驻进程失败，终端没受影响：" + errtext.Text(err)
 			}
 		})
 		a.pollForce.Store(true)
@@ -116,15 +117,15 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 // 接口对不上。版本一样时照原样报错。
 func (a *app) staleDaemonError(d daemonStatus, err error) string {
 	if d.Build == daemon.Build {
-		return err.Error()
+		return errtext.Text(err)
 	}
 	running, unsupported := a.upgrade.status(d.Pid)
 	switch {
 	case running:
 		return "常驻进程的版本和窗口不一致，正在更新常驻进程，终端不会断开…"
 	case unsupported || d.Build == "":
-		return "常驻进程的版本太旧，读不到项目，也不支持不断开终端的更新：到设置 › 关于 重启常驻进程。（" + err.Error() + "）"
+		return "常驻进程的版本太旧，读不到项目，也不支持不断开终端的更新：到设置 › 关于 重启常驻进程。（" + errtext.Text(err) + "）"
 	default:
-		return "常驻进程的版本和窗口不一致，读不到项目：到设置 › 关于 更新常驻进程，终端不会断开。（" + err.Error() + "）"
+		return "常驻进程的版本和窗口不一致，读不到项目：到设置 › 关于 更新常驻进程，终端不会断开。（" + errtext.Text(err) + "）"
 	}
 }

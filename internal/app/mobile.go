@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
+	"posse/internal/errtext"
 	"posse/internal/mobile"
 )
 
@@ -135,7 +136,7 @@ func (a *app) loadMobile(seq int, rotate bool, addr string, poll bool) {
 		m.loading, m.loadedAt = false, time.Now()
 		if err != nil {
 			if !poll {
-				m.err, m.errAddr = err.Error(), addr
+				m.err, m.errAddr = errtext.Text(err), addr
 			}
 			return
 		}

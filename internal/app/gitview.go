@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
+	"posse/internal/errtext"
 	"posse/internal/files"
 	"posse/internal/gitx"
 	"posse/internal/media"
@@ -214,7 +215,7 @@ func (a *app) pollGit(v *filesView) {
 			g.poll.done()
 			g.checked, g.repo = true, root
 			if err != nil {
-				g.err = err.Error()
+				g.err = errtext.Text(err)
 				return
 			}
 			if st == nil {
@@ -408,7 +409,7 @@ func loadDiffImage(b []byte, exists bool) diffImage {
 	}
 	img, dim, err := media.ScaledImageBytes(b, imageMaxPx)
 	if err != nil {
-		return diffImage{size: len(b), err: "解不开这张图：" + err.Error()}
+		return diffImage{size: len(b), err: "解不开这张图：" + errtext.Text(err)}
 	}
 	return diffImage{img: ui.NewBitmap(img), w: dim.X, h: dim.Y, size: len(b)}
 }
@@ -633,7 +634,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 			}
 			df.comparing = false
 			if err != nil {
-				d.kind, d.err = docError, err.Error()
+				d.kind, d.err = docError, errtext.Text(err)
 				return
 			}
 			df.stamp = stamp
@@ -797,7 +798,7 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 	snap := df.state.New.Snapshot()
 	st, err := files.WriteFile(abs, func(w io.Writer) error { _, err := snap.WriteTo(w); return err })
 	if err != nil {
-		a.err = "回滚失败：" + err.Error()
+		a.err = "回滚失败：" + errtext.Text(err)
 		a.loadDiff(v, d)
 		return
 	}
@@ -932,7 +933,7 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 			if canceled {
 				a.err = op.what + "已取消"
 			} else if err != nil {
-				a.err = op.what + "失败：" + err.Error()
+				a.err = op.what + "失败：" + errtext.Text(err)
 			} else {
 				shown := len(a.toasts)
 				if op.done != nil {

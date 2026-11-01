@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/host"
 )
@@ -237,7 +238,7 @@ func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inod
 	if !*ready || ino != *inode || fi.Size() < *pos {
 		page, err := history.ReadChatTail(a.Agent, a.SessionID, *path, a.Limit, 0)
 		if err != nil {
-			ok := c.stream(reqID, map[string]any{"type": "error", "message": err.Error()}) == nil
+			ok := c.stream(reqID, map[string]any{"type": "error", "message": errtext.Text(err)}) == nil
 			return ok, chatPoll
 		}
 		if page.Messages == nil {
@@ -265,7 +266,7 @@ func (c *conn) chatTick(reqID string, a *chatSub, path *string, pos *int64, inod
 	}
 	msgs, next, err := history.ReadChatNew(a.Agent, *path, *pos)
 	if err != nil {
-		ok := c.stream(reqID, map[string]any{"type": "error", "message": err.Error()}) == nil
+		ok := c.stream(reqID, map[string]any{"type": "error", "message": errtext.Text(err)}) == nil
 		return ok, chatPoll
 	}
 	*pos = next

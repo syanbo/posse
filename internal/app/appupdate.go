@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/spawn"
 )
 
@@ -163,7 +164,7 @@ func (a *app) checkUpdate(manual bool) {
 	u.busy = false
 	switch {
 	case err != nil:
-		u.err = err.Error()
+		u.err = errtext.Text(err)
 		if u.staged == nil {
 			u.phase = updateFailed
 		}
@@ -260,7 +261,7 @@ func (a *app) installUpdate(s *mygo.Staged, wait time.Duration) error {
 	if err := s.Apply(); err != nil {
 		u := &a.upd
 		u.mu.Lock()
-		u.installed, u.phase, u.err = false, updateFailed, err.Error()
+		u.installed, u.phase, u.err = false, updateFailed, errtext.Text(err)
 		u.mu.Unlock()
 		return err
 	}
@@ -298,7 +299,7 @@ func (a *app) restartToUpdate() {
 		a.update(func() {
 			a.updating = false
 			if err != nil {
-				a.err = "更新失败，Posse 没有改动：" + err.Error()
+				a.err = "更新失败，Posse 没有改动：" + errtext.Text(err)
 				return
 			}
 			// 等交接的这段时间里可能又改了文件，重开前再问一次

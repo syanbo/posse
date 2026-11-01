@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 )
 
@@ -187,7 +188,7 @@ func (a *app) askMergeWorkspace(wsID string) {
 					case err != nil && len(files) > 0:
 						toSync("项目目录已经还原。", files)
 					case err != nil:
-						a.err = err.Error()
+						a.err = errtext.Text(err)
 					default:
 						a.confirm("已合并到 "+base, mergedBody(branch, untracked), "删除工作区", func() {
 							a.call("workspace.rm", map[string]any{"workspace": wsID, "force": true, "deleteBranch": true}, nil, 30*time.Second)

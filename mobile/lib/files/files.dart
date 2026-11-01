@@ -196,7 +196,7 @@ class _FilesPaneState extends State<FilesPane> {
         _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = friendlyError(error));
     } finally {
       if (mounted) setState(() => _loading.remove(dir));
     }
@@ -554,7 +554,7 @@ class _FileViewerState extends State<FileViewer> {
         _truncated = res['truncated'] == true;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 
@@ -735,7 +735,7 @@ class _ImageFileState extends State<_ImageFile> {
         setState(() => _binary = true);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = friendlyError(error));
     }
   }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/media"
 )
 
@@ -937,7 +938,7 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 	m.Separator()
 	if m.Item("在访达中打开").Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(w.Path); err != nil {
-			a.err = "在访达中打开失败：" + err.Error()
+			a.err = "在访达中打开失败：" + errtext.Text(err)
 		}
 	}
 	if hasBase(&w) {
@@ -1772,7 +1773,7 @@ func (a *app) reclaimSize(id string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := a.c.Call(ctx, "terminal.reclaimSize", map[string]any{"terminal": id}, nil); err != nil {
-			a.update(func() { a.err = "改回电脑尺寸失败：" + err.Error() })
+			a.update(func() { a.err = "改回电脑尺寸失败：" + errtext.Text(err) })
 		}
 	}()
 }

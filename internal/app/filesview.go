@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
 
+	"posse/internal/errtext"
 	"posse/internal/files"
 )
 
@@ -139,7 +140,7 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 		}
 		if m.Item("用默认应用打开").Chosen() {
 			if err := mygo.Shell.OpenPath(path); err != nil {
-				a.err = err.Error()
+				a.err = errtext.Text(err)
 			}
 		}
 		if !dir {

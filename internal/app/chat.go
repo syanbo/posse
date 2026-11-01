@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 )
 
 // 聊天磁贴：侧栏顶上的「聊天」切到聊天目录（默认 ~/Posse）的工作区，第一次点时建目录、加成项目。
@@ -73,7 +74,7 @@ func (a *app) openChat(fresh bool) {
 	go func() {
 		defer a.update(func() { a.chatAdding = false })
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			a.update(func() { a.err = "建聊天目录失败：" + err.Error() })
+			a.update(func() { a.err = "建聊天目录失败：" + errtext.Text(err) })
 			return
 		}
 		// 已经有叫「聊天」的项目时用目录名；目录已经是项目（常驻进程认的路径写法不同）时两次都失败，刷新后照样找得到
@@ -91,7 +92,7 @@ func (a *app) openChat(fresh bool) {
 			if w := a.chatWorkspace(); w != nil {
 				a.selected = w.ID
 			} else if err != nil {
-				a.err = "把聊天目录加成项目失败：" + err.Error()
+				a.err = "把聊天目录加成项目失败：" + errtext.Text(err)
 			}
 		})
 	}()
@@ -115,7 +116,7 @@ func (a *app) chatFolderMenu(m *popMenu, term terminalInfo) {
 	m.Separator()
 	if m.Item("在访达中打开文件夹").Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(term.Dir); err != nil {
-			a.err = "在访达中打开失败：" + err.Error()
+			a.err = "在访达中打开失败：" + errtext.Text(err)
 		}
 	}
 	if m.Item("转为项目").Chosen() {
@@ -157,7 +158,7 @@ func (a *app) pickChatDir() {
 func (a *app) setChatDir(dir string) {
 	if a.home != "" {
 		if err := agent.SetChatDir(a.home, dir); err != nil {
-			a.err = err.Error()
+			a.err = errtext.Text(err)
 			return
 		}
 	}

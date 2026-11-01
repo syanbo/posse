@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/history"
 )
 
@@ -66,7 +67,7 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 			u.scanner, u.found = scanner, scanner != nil
 			u.err = ""
 			if err != nil {
-				u.err = err.Error()
+				u.err = errtext.Text(err)
 			} else if scanner != nil {
 				u.data = data
 			}
