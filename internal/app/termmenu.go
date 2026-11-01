@@ -52,39 +52,44 @@ func (a *app) termMenu(m *popMenu, v *termView, id string) {
 // writeClipboard 写剪贴板：菜单的回调里拿不到 ui.Context。
 func writeClipboard(s string) { mygo.Clipboard.Write(transfer.TextData(s)) }
 
-// pathDrag 是从文件栏拖出来的文件或目录，放到终端上贴入路径。
-type pathDrag struct{ path string }
+// pathDrag 是拖到终端上贴入路径的东西：文件栏里的文件或目录（path），或图片面板里的一张图（image，
+// 工具调用里的截图要放下时先写成临时文件，所以带整项）。只用这一种类型：mygo 的一个元素只认一种拖放类型，
+// 后登记的会盖掉先登记的。
+type pathDrag struct {
+	path  string
+	image *imageItem
+}
 
 // dragPath 让文件栏里的一行可以拖到终端上贴入路径。文件栏滑进来的途中不能拖：
 // 行在不动的指针下面移动，mygo 会把这一下点击当成拖动。
 func (a *app) dragPath(row ui.Element, path string) {
 	if a.filesPanelShown >= 1 {
-		row.Drag(pathDrag{path})
+		row.Drag(pathDrag{path: path})
 	}
 }
 
 // termDrop 让终端区接住从访达和文件栏拖来的文件，把路径贴进终端；拖到上面时画一圈强调色的框。
 func (a *app) termDrop(c *ui.Context, area ui.Element, v *termView, agent string) {
 	_, inner := ui.DragOver[pathDrag](area)
-	_, image := ui.DragOver[imageDrag](area)
-	if area.FileDragOver() || inner || image {
+	if area.FileDragOver() || inner {
 		accent := c.Theme().Accent
 		area.DrawOver(func(p *ui.Painter, r ui.Rect) {
 			p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, accent, 8, 2)
 		})
 	}
-	if d, ok := ui.Drop[imageDrag](area); ok {
-		a.withImagePath(d.item, func(path string) error {
-			if a.live(v) && v.term != nil {
-				sendPieces(v.term, dropPieces([]string{path}, agent))
-				a.focusTerm = true
-			}
-			return nil
-		})
-	}
 	paths := area.DroppedFiles()
 	if d, ok := ui.Drop[pathDrag](area); ok {
-		paths = append(paths, d.path)
+		if d.image != nil {
+			a.withImagePath(*d.image, func(path string) error {
+				if a.live(v) && v.term != nil {
+					sendPieces(v.term, dropPieces([]string{path}, agent))
+					a.focusTerm = true
+				}
+				return nil
+			})
+		} else {
+			paths = append(paths, d.path)
+		}
 	}
 	if len(paths) == 0 || !a.live(v) || v.term == nil {
 		return

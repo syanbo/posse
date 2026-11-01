@@ -225,10 +225,6 @@ func (a *app) copyImage(it imageItem) {
 	})
 }
 
-// imageDrag 是从图片面板拖出来的一张图片或视频，放到终端上贴入路径（照拖文件进来那样，agent 当附件）。
-// 带的是整项而不是路径：工具调用里的截图要先写成临时文件，等放下时再写。
-type imageDrag struct{ item imageItem }
-
 // openImage 是点卡片：图片在文件标签里预览（可缩放），视频和找不到工作区的用默认应用打开。
 func (a *app) openImage(it imageItem) {
 	a.withImagePath(it, func(path string) error {
@@ -371,7 +367,7 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 		}
 		// 滑入途中不能拖：卡片在不动的指针下面移动，mygo 会把这一下点击当成拖动（同 dragPath）
 		if a.panelShown >= 1 {
-			card.Drag(imageDrag{it})
+			card.Drag(pathDrag{image: &it})
 		}
 		a.imageMenu(c, card, it)
 	}
