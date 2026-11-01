@@ -1,0 +1,235 @@
+package app
+
+import (
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+
+	"posse/internal/cheatsheet"
+	"posse/internal/skills"
+)
+
+// cheatView 是右侧"命令速查"面板的状态：当前会话这家 agent 的内置命令、按键、输入前缀，
+// 和它在这个工作区用得上的技能。内置的部分是 Posse 带的表，技能和本机版本打开时在后台读。
+type cheatView struct {
+	term    string // 查的是哪个终端
+	query   string
+	version string // 终端里正在运行的 agent 的版本，认不出时为空
+	skills  []cheatSkill
+	loaded  bool // 读过一次技能和版本
+	poll    panelPoll
+}
+
+// cheatSkill 是一个能手动调用的技能。
+type cheatSkill struct{ name, desc string }
+
+// cheatRefresh 是面板开着时多久重新认一次版本、扫一次技能：会话里可能换了 agent 版本、装了技能。
+const cheatRefresh = 30 * time.Second
+
+// skillAgent 把 agent 名字换成技能扫描里的那一家。
+func skillAgent(name string) (skills.Agent, bool) {
+	for _, ag := range skills.Agents {
+		if ag.String() == name {
+			return ag, true
+		}
+	}
+	return 0, false
+}
+
+// pollCheat 在主线程调用：换了终端就重来，到点了在后台认版本、扫技能。
+func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
+	v := &a.cheat
+	if v.term != cur.ID {
+		*v = cheatView{term: cur.ID}
+	}
+	if !v.poll.due(c, cheatRefresh) {
+		return
+	}
+	id, agentName, pid, dir := cur.ID, cur.Agent, cur.Pid, cur.Dir
+	if w := a.workspace(cur.WorkspaceID); w != nil {
+		dir = w.Path
+	}
+	go func() {
+		version := cheatsheet.Running(pid, agentName)
+		var list []cheatSkill
+		if ag, ok := skillAgent(agentName); ok {
+			cat := skills.Scan(skills.Options{Home: homeDir, Dir: dir})
+			for _, s := range cat.Skills {
+				st := s.Agents[ag].State
+				if (st == skills.On || st == skills.Manual) && !s.Meta.UserHidden {
+					list = append(list, cheatSkill{name: s.Name, desc: s.Description})
+				}
+			}
+			slices.SortFunc(list, func(x, y cheatSkill) int { return strings.Compare(x.name, y.name) })
+		}
+		a.win.Update(func() {
+			v := &a.cheat
+			if v.term != id {
+				return
+			}
+			v.poll.done()
+			v.version, v.skills, v.loaded = version, list, true
+		})
+	}()
+}
+
+// cheatPanel 是终端右侧的面板：上面是搜索框和版本，下面按组列出，命令、前缀和技能点一下贴进输入框。
+func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
+	a.pollCheat(c, cur)
+	v := &a.cheat
+	sheet, ok := cheatsheet.For(cur.Agent)
+	return a.rightPanel(c, "命令速查", func() {
+		if !ok {
+			ui.Column(c).Padding(0, 12, 16, 12).Children(func() {
+				usageNote(c, agentTitle(cur.Agent)+" 还没有速查表。")
+			})
+			return
+		}
+		ui.Column(c).Padding(0, 12, 8, 12).Gap(8).Children(func() {
+			fieldInputSized(c, &v.query, "搜索命令和说明", 0, 0).Label("搜索")
+			a.cheatVersion(c, cur, sheet)
+		})
+		ui.Scroll(c).Grow(1).Children(func() {
+			ui.Column(c).Padding(4, 12, 16, 12).Gap(14).Children(func() {
+				q := strings.ToLower(strings.TrimSpace(v.query))
+				shown := 0
+				for i, sec := range sheet.Sections {
+					items := slices.DeleteFunc(slices.Clone(sec.Items), func(it cheatsheet.Item) bool { return !cheatMatch(q, it.Name, it.Desc) })
+					if len(items) == 0 {
+						continue
+					}
+					shown += len(items)
+					a.cheatSection(c, i, sec.Title, func() {
+						for j, it := range items {
+							a.cheatRow(c, cur, sec.Kind, it, cheatsheet.Insert(sec.Kind, it), j)
+						}
+					})
+				}
+				var sk []cheatSkill
+				for _, s := range v.skills {
+					if cheatMatch(q, s.name, s.desc) {
+						sk = append(sk, s)
+					}
+				}
+				if len(sk) > 0 {
+					shown += len(sk)
+					a.cheatSection(c, "skills", "技能", func() {
+						for j, s := range sk {
+							it := cheatsheet.Item{Name: sheet.SkillPrefix + s.name, Desc: s.desc}
+							a.cheatRow(c, cur, cheatsheet.KindCommand, it, it.Name+" ", j)
+						}
+					})
+				}
+				if shown == 0 {
+					usageNote(c, "没有匹配「"+v.query+"」的命令。")
+				}
+				if sheet.Docs != "" && q == "" {
+					ui.Row(c).Padding(0, 4).Children(func() {
+						if pressable(textButton(c, "官方文档")).Clicked() {
+							c.OpenURL(sheet.Docs)
+						}
+					})
+				}
+			})
+		})
+	})
+}
+
+// cheatMatch 报告条目是否匹配搜索词（已转成小写）：名字或说明里包含就算。
+func cheatMatch(q, name, desc string) bool {
+	return q == "" || strings.Contains(strings.ToLower(name), q) || strings.Contains(strings.ToLower(desc), q)
+}
+
+// cheatVersion 是搜索框下面的一行：本机在跑的版本和表对照的版本；本机更新时提示可能有新命令，给更新记录的链接。
+func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet) {
+	t := c.Theme()
+	v := &a.cheat
+	text := agentTitle(cur.Agent) + " " + sheet.Version
+	color := t.TextMuted
+	newer := false
+	switch {
+	case !v.loaded:
+	case v.version == "":
+		text = "速查表对照 " + text
+	case cheatsheet.Compare(v.version, sheet.Version) > 0:
+		text = "本机 " + v.version + " 比速查表（" + sheet.Version + "）新，可能有新命令"
+		color, newer = colors(t).honey, true
+	case cheatsheet.Compare(v.version, sheet.Version) < 0:
+		text = "本机 " + v.version + " 比速查表（" + sheet.Version + "）旧，有的命令可能还没有"
+		color = colors(t).honey
+	default:
+		text = agentTitle(cur.Agent) + " " + v.version
+	}
+	ui.Column(c).Gap(2).Padding(0, 4).Children(func() {
+		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).LineHeight(1.4)
+		if newer && sheet.Changelog != "" {
+			ui.Row(c).Children(func() {
+				if pressable(textButton(c, "看更新记录")).Clicked() {
+					c.OpenURL(sheet.Changelog)
+				}
+			})
+		}
+	})
+}
+
+func (a *app) cheatSection(c *ui.Context, key any, title string, body func()) {
+	ui.Column(c.Key(key)).Gap(2).Children(func() {
+		ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted).Padding(0, 4, 4, 4)
+		body()
+	})
+}
+
+// cheatRow 是一条：名字（等宽）和参数提示，下一行是说明。命令、前缀和技能能点，点了贴进输入框；
+// text 为空的（按键）只看，名字画成键帽。会丢掉对话的命令名字用警示色。
+func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, it cheatsheet.Item, text string, i int) {
+	t := c.Theme()
+	row := ui.Column(c.Key(i)).Gap(2).Padding(6, 6).Radius(rRow)
+	if text != "" {
+		row.Role(ui.RoleButton).Label("贴进输入框 " + it.Name)
+		bg := ui.Transparent
+		if row.Hovered() {
+			bg = colors(t).wash
+		}
+		row.Background(row.AnimateColor("bg", bg, hover))
+	} else {
+		row.Cursor(ui.CursorDefault)
+	}
+	row.Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			if kind == cheatsheet.KindKey {
+				keyChip(c, it.Name, true)
+				return
+			}
+			color := t.Text
+			if it.Warn {
+				color = t.Danger
+			}
+			ui.Text(c, it.Name).FontSize(fsSmall).Font(monoFont).TextColor(color).SingleLine().Shrink(1)
+			if it.Args != "" {
+				ui.Text(c, it.Args).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).SingleLine().Shrink(1)
+			}
+		})
+		if it.Desc != "" {
+			ui.Text(c, it.Desc).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.4).MaxLines(2)
+		}
+	})
+	if text != "" && row.Clicked() {
+		a.insertIntoTerminal(cur.ID, text)
+	}
+}
+
+// insertIntoTerminal 把文字当键入发进终端（不回车），收起面板、把焦点还给这个终端：
+// 斜杠命令照键入发，agent 才会弹出它的补全，用户确认参数后自己回车。
+func (a *app) insertIntoTerminal(id, text string) {
+	for i, v := range a.panes {
+		if v != nil && v.id == id {
+			v.term.Send([]byte(text))
+			a.pane, a.focusTerm = i, true
+			a.state.RightPanel = ""
+			a.saveState()
+			return
+		}
+	}
+}

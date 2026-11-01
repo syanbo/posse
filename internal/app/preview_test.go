@@ -733,6 +733,16 @@ func TestPreview(t *testing.T) {
 		a.state.UsageSkillsOnly, a.state.UsageWebOnly = false, true
 		savePNG(t, newPreviewTester(a, dark), "usage-web-"+suffix+".png")
 
+		// 右侧"命令速查"面板：本机版本比表新，带两个技能；刚读过一次，预览期间不会再去扫
+		a = previewApp(t)
+		a.state.RightPanel = panelCheat
+		a.cheat = cheatView{term: "t1", loaded: true, version: "9.9.9", poll: panelPoll{at: time.Now()},
+			skills: []cheatSkill{{name: "computer-use", desc: "Operate native macOS desktop apps"}, {name: "review-local", desc: "本地代码审查"}}}
+		savePNG(t, newPreviewTester(a, dark), "cheat-"+suffix+".png")
+		// 搜索：只列匹配的条目，没有命中的组不画
+		a.cheat.query = "compact"
+		savePNG(t, newPreviewTester(a, dark), "cheat-search-"+suffix+".png")
+
 		// 右侧图片面板：顶部分段切换生成的和粘贴的，刚读过一次
 		a = previewApp(t)
 		a.state.RightPanel = panelImages

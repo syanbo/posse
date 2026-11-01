@@ -208,6 +208,7 @@ type app struct {
 
 	history      historyView
 	usage        usageView             // 右侧"技能与工具"面板
+	cheat        cheatView             // 右侧"命令速查"面板
 	recent       recentView            // 右侧历史面板
 	skills       skillsView            // 侧栏的「技能」页
 	skillsTab    skillsPanelView       // 文件栏的「技能」页签

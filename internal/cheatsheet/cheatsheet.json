@@ -1,0 +1,1366 @@
+[
+ {
+  "agent": "claude",
+  "version": "2.1.316",
+  "docs": "https://code.claude.com/docs/en/commands",
+  "changelog": "https://code.claude.com/docs/en/changelog",
+  "skillPrefix": "/",
+  "sections": [
+   {
+    "title": "对话与上下文",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/compact",
+      "args": "[指示]",
+      "desc": "压缩对话腾出上下文，可指定保留什么"
+     },
+     {
+      "name": "/clear",
+      "args": "[名称]",
+      "desc": "开新会话清空上下文，旧会话可 /resume 找回",
+      "warn": true
+     },
+     {
+      "name": "/rewind",
+      "desc": "回到之前某一步，可同时撤回代码改动",
+      "warn": true
+     },
+     {
+      "name": "/resume",
+      "args": "[会话 ID 或关键词]",
+      "desc": "接着之前的某个会话继续"
+     },
+     {
+      "name": "/branch",
+      "args": "[名称]",
+      "desc": "从当前位置分出一条对话，另试一种做法"
+     },
+     {
+      "name": "/rename",
+      "args": "[名称]",
+      "desc": "给当前会话起名，方便以后找回"
+     },
+     {
+      "name": "/btw",
+      "args": "[问题]",
+      "desc": "顺口问个小问题，不打断主对话"
+     },
+     {
+      "name": "/context",
+      "args": "[all]",
+      "desc": "查看上下文占用情况"
+     },
+     {
+      "name": "/copy",
+      "desc": "复制最近一条回复，/copy N 取倒数第 N 条"
+     },
+     {
+      "name": "/export",
+      "args": "[文件名]",
+      "desc": "把对话导出到文件或剪贴板"
+     },
+     {
+      "name": "/goal",
+      "args": "[条件|clear]",
+      "desc": "设定完成条件，达成前不收工"
+     }
+    ]
+   },
+   {
+    "title": "模型与模式",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/model",
+      "args": "[模型]",
+      "desc": "切换模型"
+     },
+     {
+      "name": "/effort",
+      "args": "[级别|auto]",
+      "desc": "调整推理力度"
+     },
+     {
+      "name": "/fast",
+      "desc": "开关快速模式，仅部分模型可用"
+     },
+     {
+      "name": "/plan",
+      "args": "[open|描述]",
+      "desc": "进入计划模式，或查看本会话的计划"
+     },
+     {
+      "name": "/advisor",
+      "desc": "让 Claude 在关键时刻请教更强的模型"
+     },
+     {
+      "name": "/permissions",
+      "desc": "管理工具的允许和拒绝规则"
+     },
+     {
+      "name": "/background",
+      "args": "[提示]",
+      "desc": "把会话转到后台继续跑，腾出终端"
+     },
+     {
+      "name": "/tasks",
+      "desc": "查看和管理后台运行的命令与子代理"
+     }
+    ]
+   },
+   {
+    "title": "代码与审查",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/code-review",
+      "args": "[级别] [目标]",
+      "desc": "审查当前改动或 PR 找 bug，别名 /review"
+     },
+     {
+      "name": "/simplify",
+      "args": "[目标]",
+      "desc": "清理改动代码，不改行为"
+     },
+     {
+      "name": "/security-review",
+      "desc": "对当前分支待提交的改动做安全审查"
+     },
+     {
+      "name": "/diff",
+      "desc": "查看未提交的改动和每轮的 diff"
+     },
+     {
+      "name": "/loop",
+      "args": "[间隔] [提示]",
+      "desc": "定时重复执行某个提示或命令"
+     },
+     {
+      "name": "/batch",
+      "args": "<指示>",
+      "desc": "大规模改动拆给多个 worktree 并行做"
+     },
+     {
+      "name": "/debug",
+      "args": "[问题描述]",
+      "desc": "打开调试日志，排查 Claude Code 自身问题"
+     }
+    ]
+   },
+   {
+    "title": "项目与配置",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/init",
+      "desc": "分析代码库，生成 CLAUDE.md"
+     },
+     {
+      "name": "/memory",
+      "desc": "编辑 CLAUDE.md 和记忆设置"
+     },
+     {
+      "name": "/config",
+      "args": "[key=value]",
+      "desc": "打开设置，或直接改某一项"
+     },
+     {
+      "name": "/add-dir",
+      "args": "<路径>",
+      "desc": "再加一个可访问的工作目录"
+     },
+     {
+      "name": "/mcp",
+      "desc": "管理 MCP 服务器，可重连、启用、停用"
+     },
+     {
+      "name": "/plugin",
+      "desc": "管理插件和插件市场"
+     },
+     {
+      "name": "/skills",
+      "desc": "列出可用的技能"
+     },
+     {
+      "name": "/hooks",
+      "desc": "查看已配置的 hooks"
+     },
+     {
+      "name": "/statusline",
+      "desc": "让 Claude 帮你配置状态栏"
+     },
+     {
+      "name": "/keybindings",
+      "desc": "打开快捷键配置文件"
+     },
+     {
+      "name": "/terminal-setup",
+      "desc": "配置终端换行键等设置"
+     }
+    ]
+   },
+   {
+    "title": "账号与其他",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/usage",
+      "desc": "查看本会话花费和套餐用量，别名 /cost"
+     },
+     {
+      "name": "/status",
+      "desc": "查看版本、模型、账号和连接状态"
+     },
+     {
+      "name": "/doctor",
+      "desc": "体检安装和配置，并帮你修复问题"
+     },
+     {
+      "name": "/login",
+      "desc": "登录或切换 Anthropic 账号"
+     },
+     {
+      "name": "/feedback",
+      "args": "[描述]",
+      "desc": "反馈问题或报 bug"
+     },
+     {
+      "name": "/release-notes",
+      "desc": "查看更新说明"
+     },
+     {
+      "name": "/help",
+      "desc": "查看帮助和全部命令"
+     }
+    ]
+   },
+   {
+    "title": "输入与编辑",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Shift+Enter",
+      "desc": "输入框里换行，部分终端要先 /terminal-setup"
+     },
+     {
+      "name": "Ctrl+J",
+      "desc": "换行，任何终端都能用"
+     },
+     {
+      "name": "Ctrl+V",
+      "desc": "粘贴剪贴板里的图片"
+     },
+     {
+      "name": "Tab",
+      "desc": "接受补全建议"
+     },
+     {
+      "name": "Up",
+      "desc": "翻出之前输入过的内容"
+     },
+     {
+      "name": "Ctrl+R",
+      "desc": "搜索输入历史"
+     },
+     {
+      "name": "Ctrl+G",
+      "desc": "在外部编辑器里写长提示"
+     },
+     {
+      "name": "Ctrl+S",
+      "desc": "暂存当前输入，空输入框时再按恢复"
+     },
+     {
+      "name": "Ctrl+_",
+      "desc": "撤销上一次输入编辑"
+     },
+     {
+      "name": "Ctrl+L",
+      "desc": "画面错乱时重绘屏幕"
+     }
+    ]
+   },
+   {
+    "title": "会话控制",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Esc",
+      "desc": "打断 Claude 当前的回复或工具调用"
+     },
+     {
+      "name": "Esc Esc",
+      "desc": "有输入时清空；空输入时打开回退菜单"
+     },
+     {
+      "name": "Ctrl+C",
+      "desc": "中断或清空输入，空闲时连按两次退出"
+     },
+     {
+      "name": "Ctrl+D",
+      "desc": "连按两次退出会话"
+     },
+     {
+      "name": "Shift+Tab",
+      "desc": "切换权限模式：手动、自动接受编辑、计划等"
+     },
+     {
+      "name": "Alt+P",
+      "desc": "不清空输入就切换模型"
+     },
+     {
+      "name": "Shift+Up",
+      "desc": "调高推理力度，Shift+Down 调低"
+     },
+     {
+      "name": "Alt+T",
+      "desc": "开关扩展思考"
+     },
+     {
+      "name": "Alt+O",
+      "desc": "开关快速模式"
+     },
+     {
+      "name": "Ctrl+O",
+      "desc": "展开详细记录，看完整工具输出"
+     },
+     {
+      "name": "Ctrl+T",
+      "desc": "显示或隐藏 Claude 的任务清单"
+     },
+     {
+      "name": "Ctrl+B",
+      "desc": "把正在跑的命令或子代理转到后台"
+     },
+     {
+      "name": "Ctrl+X Ctrl+K",
+      "desc": "连按两次，停掉所有后台子代理"
+     },
+     {
+      "name": "Ctrl+Enter",
+      "desc": "立刻发送排队中的消息"
+     }
+    ]
+   },
+   {
+    "title": "输入前缀",
+    "kind": "prefix",
+    "items": [
+     {
+      "name": "/",
+      "desc": "调用命令或技能，句中也可补全"
+     },
+     {
+      "name": "@",
+      "desc": "引用文件或目录，带路径补全"
+     },
+     {
+      "name": "!",
+      "desc": "直接运行 shell 命令，输出交给 Claude"
+     },
+     {
+      "name": ":",
+      "desc": "输入表情短码，如 :name:"
+     },
+     {
+      "name": "?",
+      "desc": "空输入时打开快捷键帮助"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "agent": "codex",
+  "version": "0.166.0",
+  "docs": "https://developers.openai.com/codex/cli/slash-commands",
+  "changelog": "https://github.com/openai/codex/releases",
+  "skillPrefix": "$",
+  "sections": [
+   {
+    "title": "对话与会话",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/new",
+      "desc": "结束当前对话，开始新对话",
+      "warn": true
+     },
+     {
+      "name": "/clear",
+      "desc": "清屏并开始新对话",
+      "warn": true
+     },
+     {
+      "name": "/resume",
+      "args": "[会话 ID 或名称]",
+      "desc": "接着之前保存的对话继续"
+     },
+     {
+      "name": "/fork",
+      "desc": "从当前对话分叉出一份副本"
+     },
+     {
+      "name": "/side",
+      "args": "[问题]",
+      "desc": "临时开旁支对话问点别的，不污染主线"
+     },
+     {
+      "name": "/compact",
+      "desc": "压缩对话，腾出上下文"
+     },
+     {
+      "name": "/recap",
+      "desc": "马上总结目前的对话"
+     },
+     {
+      "name": "/rename",
+      "args": "<名称>",
+      "desc": "给当前会话改名，方便以后找"
+     },
+     {
+      "name": "/copy",
+      "desc": "复制最后一条回复或其中一段"
+     },
+     {
+      "name": "/export",
+      "args": "[文件路径]",
+      "desc": "把对话导出成 Markdown"
+     },
+     {
+      "name": "/archive",
+      "desc": "归档当前会话，之后可恢复"
+     },
+     {
+      "name": "/delete",
+      "desc": "永久删除当前会话",
+      "warn": true
+     },
+     {
+      "name": "/quit",
+      "desc": "退出 Codex，/exit 同效"
+     }
+    ]
+   },
+   {
+    "title": "模型与模式",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/model",
+      "args": "[模型]",
+      "desc": "切换模型和推理强度"
+     },
+     {
+      "name": "/plan",
+      "args": "[任务]",
+      "desc": "进入只出方案的 Plan 模式"
+     },
+     {
+      "name": "/goal",
+      "args": "[目标]",
+      "desc": "给长任务设定或查看目标"
+     },
+     {
+      "name": "/permissions",
+      "desc": "调整 Codex 能做什么、何时要批准"
+     },
+     {
+      "name": "/status",
+      "desc": "查看当前配置和 token 用量"
+     },
+     {
+      "name": "/usage",
+      "desc": "查看账号用量；仅 ChatGPT 登录可见"
+     },
+     {
+      "name": "/presets",
+      "desc": "保存或运行常用提示和命令"
+     },
+     {
+      "name": "/experimental",
+      "desc": "开关实验功能"
+     }
+    ]
+   },
+   {
+    "title": "代码与工作区",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/review",
+      "args": "[审查要求]",
+      "desc": "审查当前改动找问题"
+     },
+     {
+      "name": "/diff",
+      "desc": "查看 git diff，含未跟踪文件"
+     },
+     {
+      "name": "/init",
+      "desc": "生成 AGENTS.md 项目说明"
+     },
+     {
+      "name": "/worktree",
+      "desc": "在新 worktree 里开始或继续对话"
+     },
+     {
+      "name": "/cd",
+      "args": "<目录>",
+      "desc": "切换工作目录"
+     },
+     {
+      "name": "/ide",
+      "desc": "带上 IDE 里的选区和打开的文件"
+     },
+     {
+      "name": "/ps",
+      "desc": "列出后台运行的终端"
+     },
+     {
+      "name": "/stop",
+      "desc": "结束所有后台终端进程",
+      "warn": true
+     }
+    ]
+   },
+   {
+    "title": "扩展与设置",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/skills",
+      "desc": "查看和开关技能"
+     },
+     {
+      "name": "/mcp",
+      "args": "[verbose | login <名称>]",
+      "desc": "查看 MCP 工具或登录 MCP 服务"
+     },
+     {
+      "name": "/plugins",
+      "desc": "浏览插件"
+     },
+     {
+      "name": "/hooks",
+      "desc": "查看和管理生命周期 hooks"
+     },
+     {
+      "name": "/memories",
+      "desc": "设置记忆的使用和生成"
+     },
+     {
+      "name": "/agents",
+      "desc": "打开 agent 总览，看各会话"
+     },
+     {
+      "name": "/subagents",
+      "desc": "在本会话的子 agent 间切换"
+     },
+     {
+      "name": "/import",
+      "desc": "从 Claude Code 导入配置和近期对话"
+     },
+     {
+      "name": "/config",
+      "desc": "调整 Codex 偏好设置"
+     },
+     {
+      "name": "/keymap",
+      "desc": "自定义快捷键"
+     },
+     {
+      "name": "/vim",
+      "desc": "输入框切换 Vim 模式"
+     },
+     {
+      "name": "/statusline",
+      "desc": "选择状态栏显示哪些项"
+     },
+     {
+      "name": "/theme",
+      "desc": "选代码高亮主题"
+     },
+     {
+      "name": "/feedback",
+      "desc": "把日志发给官方反馈问题"
+     },
+     {
+      "name": "/logout",
+      "desc": "退出登录"
+     }
+    ]
+   },
+   {
+    "title": "常用快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Enter",
+      "desc": "发送消息"
+     },
+     {
+      "name": "Esc",
+      "desc": "打断正在进行的回合"
+     },
+     {
+      "name": "Ctrl+C",
+      "desc": "运行中打断，空闲时连按两下退出"
+     },
+     {
+      "name": "Ctrl+D",
+      "desc": "连按两下退出，同 Ctrl+C"
+     },
+     {
+      "name": "Ctrl+J",
+      "desc": "换行不发送，也可 Shift+Enter"
+     },
+     {
+      "name": "Ctrl+V",
+      "desc": "粘贴剪贴板里的图片"
+     },
+     {
+      "name": "Up",
+      "desc": "翻出以前发过的消息，Down 往回"
+     },
+     {
+      "name": "Ctrl+R",
+      "desc": "搜索以前输入过的内容"
+     },
+     {
+      "name": "Esc Esc",
+      "desc": "空输入框时回退并编辑上一条消息"
+     },
+     {
+      "name": "Ctrl+T",
+      "desc": "打开完整对话转录"
+     },
+     {
+      "name": "Ctrl+L",
+      "desc": "清屏，不影响对话"
+     },
+     {
+      "name": "?",
+      "desc": "空输入框时显示全部快捷键"
+     }
+    ]
+   },
+   {
+    "title": "进阶快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Tab",
+      "desc": "运行中把消息排队，本轮结束后发"
+     },
+     {
+      "name": "Shift+Left",
+      "desc": "取回排队的消息重新编辑，也可 Alt+Up"
+     },
+     {
+      "name": "Shift+Tab",
+      "desc": "切换协作模式，如 Plan"
+     },
+     {
+      "name": "Alt+.",
+      "desc": "提高推理强度，Alt+, 降低"
+     },
+     {
+      "name": "Ctrl+G",
+      "desc": "用外部编辑器写长提示"
+     },
+     {
+      "name": "Ctrl+O",
+      "desc": "复制最后一条回复"
+     },
+     {
+      "name": "F3",
+      "desc": "在对话转录里查找文字"
+     },
+     {
+      "name": "Ctrl+/",
+      "desc": "打开或关闭旁支对话"
+     },
+     {
+      "name": "Alt+R",
+      "desc": "原始滚动模式，便于选中复制"
+     },
+     {
+      "name": "F4",
+      "desc": "查看正在进行的活动详情"
+     }
+    ]
+   },
+   {
+    "title": "输入前缀",
+    "kind": "prefix",
+    "items": [
+     {
+      "name": "/",
+      "desc": "打开命令列表"
+     },
+     {
+      "name": "@",
+      "desc": "引用文件，也能选插件和技能"
+     },
+     {
+      "name": "!",
+      "desc": "直接在本机运行 shell 命令"
+     },
+     {
+      "name": "$",
+      "desc": "调用技能或 App"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "agent": "grok",
+  "version": "1.0.73",
+  "docs": "https://docs.x.ai/build/overview",
+  "skillPrefix": "/",
+  "sections": [
+   {
+    "title": "会话",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/new",
+      "desc": "开新会话，清空当前对话（别名 /clear）",
+      "warn": true
+     },
+     {
+      "name": "/resume",
+      "args": "[会话 ID 或标题]",
+      "desc": "恢复以前的会话，不带参数时打开选择列表"
+     },
+     {
+      "name": "/rename",
+      "args": "<标题> | --auto",
+      "desc": "给会话改名，--auto 改回自动命名"
+     },
+     {
+      "name": "/fork",
+      "args": "[--worktree] [指令]",
+      "desc": "从当前进度分出一个新 agent，可以放进 worktree"
+     },
+     {
+      "name": "/rewind",
+      "desc": "回到之前某一轮，丢掉之后的对话（文件改动不撤回）",
+      "warn": true
+     },
+     {
+      "name": "/delete",
+      "desc": "删除当前会话的历史，会先确认",
+      "warn": true
+     },
+     {
+      "name": "/copy",
+      "args": "[N] [文件]",
+      "desc": "复制最近第 N 条回复的 Markdown，或写到文件"
+     },
+     {
+      "name": "/export",
+      "args": "[文件名]",
+      "desc": "把整段对话导出到文件或剪贴板"
+     },
+     {
+      "name": "/dashboard",
+      "desc": "打开 Agent 面板，同时查看和管理多个会话"
+     },
+     {
+      "name": "/quit",
+      "desc": "退出 grok（别名 /exit）"
+     }
+    ]
+   },
+   {
+    "title": "对话与上下文",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/compact",
+      "desc": "压缩对话历史，腾出上下文"
+     },
+     {
+      "name": "/context",
+      "desc": "查看上下文窗口各部分的占用"
+     },
+     {
+      "name": "/session-info",
+      "desc": "查看模型、轮数、登录方式和上下文用量"
+     },
+     {
+      "name": "/btw",
+      "args": "<问题>",
+      "desc": "顺带问一句，不打断正在跑的任务"
+     },
+     {
+      "name": "/recap",
+      "desc": "让 agent 总结到目前为止的会话"
+     },
+     {
+      "name": "/history",
+      "desc": "模糊搜索本会话发过的提示，填回输入框"
+     },
+     {
+      "name": "/plan",
+      "args": "[描述]",
+      "desc": "进入计划模式，先出方案、不改文件"
+     },
+     {
+      "name": "/view-plan",
+      "desc": "查看当前保存的计划"
+     },
+     {
+      "name": "/edit-prompt",
+      "desc": "用 $EDITOR 写提示，保存后回到输入框"
+     }
+    ]
+   },
+   {
+    "title": "模型与设置",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/model",
+      "args": "<模型> [窗口] [推理强度]",
+      "desc": "切换模型，可同时设上下文窗口和推理强度"
+     },
+     {
+      "name": "/effort",
+      "args": "<low|medium|high|xhigh>",
+      "desc": "只改当前模型的推理强度"
+     },
+     {
+      "name": "/always-approve",
+      "desc": "开关全部自动批准，工具调用不再询问"
+     },
+     {
+      "name": "/multiline",
+      "desc": "切换多行输入：Enter 换行，Shift+Enter 发送"
+     },
+     {
+      "name": "/usage",
+      "args": "[manage]",
+      "desc": "查看额度用量，或管理账单"
+     },
+     {
+      "name": "/settings",
+      "desc": "打开设置面板"
+     },
+     {
+      "name": "/theme",
+      "args": "<主题>",
+      "desc": "切换配色主题"
+     }
+    ]
+   },
+   {
+    "title": "后台任务与扩展",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/tasks",
+      "desc": "列出后台任务、子 agent 和定时任务"
+     },
+     {
+      "name": "/loop",
+      "args": "[间隔] <提示>",
+      "desc": "按间隔反复执行一条提示，7 天后过期"
+     },
+     {
+      "name": "/deep-research",
+      "args": "<问题>",
+      "desc": "后台多 agent 调研，交叉核对后出带出处的报告"
+     },
+     {
+      "name": "/workflow",
+      "args": "<名称> | runs",
+      "desc": "启动保存好的工作流，或查看、管理运行中的"
+     },
+     {
+      "name": "/skills",
+      "desc": "查看和开关已装的技能"
+     },
+     {
+      "name": "/plugins",
+      "desc": "管理插件：安装、信任、重新加载"
+     },
+     {
+      "name": "/mcps",
+      "desc": "管理 MCP 服务器"
+     },
+     {
+      "name": "/hooks",
+      "desc": "查看、增删和开关 hooks"
+     },
+     {
+      "name": "/memory",
+      "desc": "浏览和管理保存的记忆"
+     },
+     {
+      "name": "/remember",
+      "args": "<内容>",
+      "desc": "直接存一条全局记忆，存之前会先给你看"
+     },
+     {
+      "name": "/doctor",
+      "args": "[fix]",
+      "desc": "检查终端、剪贴板、按键和沙箱问题，给出修法"
+     },
+     {
+      "name": "/help",
+      "desc": "浏览全部命令和快捷键"
+     }
+    ]
+   },
+   {
+    "title": "常用快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Enter",
+      "desc": "发送；agent 运行中按会排进队列，等这一轮结束"
+     },
+     {
+      "name": "Shift+Enter",
+      "desc": "换行；SSH 或 tmux 下用 Alt+Enter 或行尾 \\"
+     },
+     {
+      "name": "Ctrl+V",
+      "desc": "粘贴截图、复制的图片或文件"
+     },
+     {
+      "name": "Ctrl+C",
+      "desc": "停止当前这一轮；有草稿时先清空草稿"
+     },
+     {
+      "name": "Ctrl+Enter",
+      "desc": "运行中立即发送：打断当前这一轮，先处理新消息"
+     },
+     {
+      "name": "Esc Esc",
+      "desc": "空闲时：有草稿就清空，空输入框就回退到之前某轮"
+     },
+     {
+      "name": "Ctrl+Z",
+      "desc": "刚清空或暂存草稿后按，把草稿恢复回来"
+     },
+     {
+      "name": "Up",
+      "desc": "空输入框时调出发过的提示"
+     },
+     {
+      "name": "Ctrl+S",
+      "desc": "暂存草稿，输入框为空时再按取回"
+     },
+     {
+      "name": "Shift+Tab",
+      "desc": "轮换普通、计划、全部自动批准几种模式"
+     },
+     {
+      "name": "Ctrl+O",
+      "desc": "开关全部自动批准"
+     },
+     {
+      "name": "Ctrl+B",
+      "desc": "把前台正在跑的命令放到后台"
+     },
+     {
+      "name": "Tab",
+      "desc": "在输入框和对话记录之间切换焦点"
+     }
+    ]
+   },
+   {
+    "title": "面板与会话快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Ctrl+P",
+      "desc": "命令面板，按名字搜动作和命令"
+     },
+     {
+      "name": "Ctrl+M",
+      "desc": "焦点不在输入框时选模型，在输入框里切换多行"
+     },
+     {
+      "name": "Ctrl+R",
+      "desc": "打开会话列表，恢复以前的会话"
+     },
+     {
+      "name": "Ctrl+N",
+      "desc": "开新会话，要连按两次"
+     },
+     {
+      "name": "Ctrl+Q",
+      "desc": "退出，要连按两次"
+     },
+     {
+      "name": "Ctrl+G",
+      "desc": "开关后台任务栏"
+     },
+     {
+      "name": "Ctrl+T",
+      "desc": "开关待办栏"
+     },
+     {
+      "name": "Ctrl+E",
+      "desc": "一次展开或收起全部思考块"
+     },
+     {
+      "name": "Ctrl+\\",
+      "desc": "打开或关闭 Agent 面板"
+     },
+     {
+      "name": "Ctrl+.",
+      "desc": "打开快捷键速查（部分终端是 Ctrl+X）"
+     }
+    ]
+   },
+   {
+    "title": "输入前缀",
+    "kind": "prefix",
+    "items": [
+     {
+      "name": "/",
+      "desc": "命令和技能菜单，输入时模糊匹配"
+     },
+     {
+      "name": "@",
+      "desc": "引用文件或目录，@a.rs:10-50 只取这几行"
+     },
+     {
+      "name": "@!",
+      "desc": "引用隐藏文件，如 @!.env"
+     },
+     {
+      "name": "!",
+      "desc": "空输入框开头输入，直接运行 shell 命令"
+     },
+     {
+      "name": "/user:",
+      "desc": "技能和内置命令重名时，指明用户级技能"
+     },
+     {
+      "name": "/local:",
+      "desc": "指明项目级技能；插件技能写 /插件名:技能"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "agent": "cursor",
+  "version": "2026.10.22",
+  "docs": "https://cursor.com/docs/cli/overview",
+  "changelog": "https://cursor.com/docs/cli/changelog",
+  "skillPrefix": "/",
+  "sections": [
+   {
+    "title": "对话与上下文",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/clear",
+      "desc": "开新对话，旧对话可用 /resume 找回；别名 /new",
+      "warn": true
+     },
+     {
+      "name": "/resume",
+      "desc": "从最近的对话里挑一个接着聊"
+     },
+     {
+      "name": "/fork",
+      "desc": "复制当前对话为新会话，换个方向试"
+     },
+     {
+      "name": "/rename",
+      "args": "<名字>",
+      "desc": "给当前对话改名，方便以后找"
+     },
+     {
+      "name": "/summarize",
+      "desc": "总结对话腾出上下文；别名 /compress"
+     },
+     {
+      "name": "/rewind",
+      "desc": "回到之前某条消息，可连文件一起恢复",
+      "warn": true
+     },
+     {
+      "name": "/context",
+      "desc": "查看上下文占用明细"
+     },
+     {
+      "name": "/copy",
+      "desc": "把之前的某条消息复制到剪贴板"
+     },
+     {
+      "name": "/btw",
+      "args": "<问题>",
+      "desc": "旁问一句，不打断主对话、不进历史"
+     }
+    ]
+   },
+   {
+    "title": "模式与模型",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/model",
+      "args": "[筛选]",
+      "desc": "切换模型，Tab 可调参数"
+     },
+     {
+      "name": "/plan",
+      "args": "[提示]",
+      "desc": "进入计划模式，或查看当前计划"
+     },
+     {
+      "name": "/ask",
+      "desc": "切换只读问答，不改文件不跑命令"
+     },
+     {
+      "name": "/debug",
+      "args": "[提示]",
+      "desc": "切换调试模式，或以调试模式提问"
+     },
+     {
+      "name": "/fast",
+      "desc": "开关当前模型的快速模式"
+     },
+     {
+      "name": "/run-everything",
+      "args": "[on|off|status]",
+      "desc": "开关自动执行所有工具调用，不再逐个确认"
+     },
+     {
+      "name": "/sandbox",
+      "desc": "设置沙箱和网络访问"
+     },
+     {
+      "name": "/shell",
+      "args": "[命令]",
+      "desc": "进入 Shell 模式直接跑命令"
+     }
+    ]
+   },
+   {
+    "title": "代码与工作区",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/changes",
+      "desc": "审阅本次对话、暂存区和已提交的改动"
+     },
+     {
+      "name": "/commit",
+      "desc": "让 agent 暂存并提交，不推送"
+     },
+     {
+      "name": "/jobs",
+      "desc": "查看正在运行的后台任务"
+     },
+     {
+      "name": "/add-dir",
+      "args": "<路径>",
+      "desc": "把另一个目录加入工作区"
+     },
+     {
+      "name": "/save-workspace",
+      "args": "<名字>",
+      "desc": "保存当前这组工作区目录"
+     },
+     {
+      "name": "/load-workspace",
+      "args": "<名字>",
+      "desc": "载入保存过的工作区"
+     },
+     {
+      "name": "/open",
+      "desc": "在 Cursor 编辑器里打开仓库根目录"
+     }
+    ]
+   },
+   {
+    "title": "扩展与设置",
+    "kind": "command",
+    "items": [
+     {
+      "name": "/skills",
+      "desc": "打开技能菜单"
+     },
+     {
+      "name": "/rule",
+      "desc": "管理 Cursor 规则"
+     },
+     {
+      "name": "/command",
+      "desc": "管理自定义命令"
+     },
+     {
+      "name": "/mcp",
+      "args": "[list|list-tools] [服务]",
+      "desc": "查看 MCP 服务器及其工具"
+     },
+     {
+      "name": "/plugin",
+      "args": "[list|marketplace …]",
+      "desc": "管理插件和插件市场"
+     },
+     {
+      "name": "/config",
+      "desc": "交互式修改 CLI 设置"
+     },
+     {
+      "name": "/vim",
+      "desc": "开关输入框的 Vim 键位"
+     },
+     {
+      "name": "/show-thinking",
+      "desc": "开关思考过程的显示"
+     },
+     {
+      "name": "/usage",
+      "desc": "查看套餐和按量用量"
+     },
+     {
+      "name": "/about",
+      "desc": "显示版本、系统和账号信息并复制"
+     },
+     {
+      "name": "/setup-terminal",
+      "desc": "配置终端，让 Shift+Enter 能换行"
+     },
+     {
+      "name": "/update",
+      "desc": "升级 Cursor Agent"
+     },
+     {
+      "name": "/help",
+      "args": "[命令]",
+      "desc": "查看帮助或某条命令的参数"
+     },
+     {
+      "name": "/quit",
+      "desc": "退出 CLI；也可用 /exit"
+     }
+    ]
+   },
+   {
+    "title": "常用快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Ctrl+C",
+      "desc": "运行中停止 agent；空闲时清空输入"
+     },
+     {
+      "name": "Ctrl+C Ctrl+C",
+      "desc": "连按两次退出 CLI"
+     },
+     {
+      "name": "Ctrl+D Ctrl+D",
+      "desc": "输入为空时连按两次退出"
+     },
+     {
+      "name": "Shift+Enter",
+      "desc": "换行不发送，终端不支持时先 /setup-terminal"
+     },
+     {
+      "name": "Ctrl+J",
+      "desc": "换行，所有终端都可用"
+     },
+     {
+      "name": "\\ Enter",
+      "desc": "行尾输反斜杠再回车，同样是换行"
+     },
+     {
+      "name": "Shift+Tab",
+      "desc": "循环切换 Agent、Plan、Debug、Ask 模式"
+     },
+     {
+      "name": "Up",
+      "desc": "在第一行时翻出之前发过的消息"
+     },
+     {
+      "name": "Ctrl+V",
+      "desc": "粘贴剪贴板里的图片"
+     },
+     {
+      "name": "Ctrl+L",
+      "desc": "清屏，agent 空闲时才生效"
+     }
+    ]
+   },
+   {
+    "title": "进阶快捷键",
+    "kind": "key",
+    "items": [
+     {
+      "name": "Ctrl+G",
+      "desc": "在 $EDITOR 里编辑当前输入"
+     },
+     {
+      "name": "Ctrl+Y",
+      "desc": "打开历史对话列表，同 /resume"
+     },
+     {
+      "name": "Ctrl+/",
+      "desc": "循环切换模型"
+     },
+     {
+      "name": "Ctrl+O",
+      "desc": "展开或折叠工具输出"
+     },
+     {
+      "name": "Ctrl+R",
+      "desc": "agent 改了文件、等你确认时审阅改动"
+     },
+     {
+      "name": "Ctrl+B Ctrl+B",
+      "desc": "把正在跑的命令转到后台"
+     },
+     {
+      "name": "Esc",
+      "desc": "关闭补全列表、弹窗或退出 Shell 模式"
+     }
+    ]
+   },
+   {
+    "title": "输入前缀",
+    "kind": "prefix",
+    "items": [
+     {
+      "name": "/",
+      "desc": "命令、技能、自定义命令都在这里"
+     },
+     {
+      "name": "/subagent-",
+      "desc": "接子 agent 名字，让它去做后面写的事"
+     },
+     {
+      "name": "@",
+      "desc": "引用文件或目录进上下文"
+     },
+     {
+      "name": "!",
+      "desc": "空行时输入，进入 Shell 模式跑命令"
+     },
+     {
+      "name": "&",
+      "desc": "空行时输入，把消息交给云端 agent（限 git 仓库）"
+     },
+     {
+      "name": "?",
+      "desc": "空行时输入，显示快捷键提示"
+     }
+    ]
+   }
+  ]
+ }
+]

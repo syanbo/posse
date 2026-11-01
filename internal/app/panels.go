@@ -11,6 +11,7 @@ const (
 	panelUsage   = "usage"
 	panelHistory = "history" // 旧版 ui.json 里历史是浮层面板，读进来时改成文件栏里的"历史"
 	panelImages  = "images"
+	panelCheat   = "cheat"
 	panelFiles   = "files" // 旧版 ui.json 里文件栏也是浮层面板，读进来时改成 FilesPanel
 )
 

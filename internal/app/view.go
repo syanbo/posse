@@ -1608,7 +1608,7 @@ func (a *app) tabBarButtons(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.toggleLogPanel(w)
 		}
 	}
-	// 图片、技能与工具跟着会话走，放在终端右上角（sessionButtons）；历史按项目，在文件栏里
+	// 图片、技能与工具、命令速查跟着会话走，放在终端右上角（sessionButtons）；历史按项目，在文件栏里
 	// 文件栏开着时开关在它的顶栏右端，和关着时同一个位置（照 Orca）
 	if !a.filesPanelOpen() && a.filesPanelShown == 0 {
 		a.filesPanelButton(c, w)
@@ -1626,7 +1626,7 @@ const (
 func sessionColWidth() float32 { return buttonBox() + 2*sessionColPad }
 
 // sessionButtons 是 agent 终端右上角竖排的一组按钮，都跟着这个会话走：worker 回到它的任务、
-// 这个会话粘贴过的图片、用到的技能与工具。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
+// 这个会话粘贴过的图片、用到的技能与工具、这家 agent 的命令速查。放在终端里而不是标签栏，标签多时也看得出是哪个会话的。
 // 它盖在终端内容上：鼠标不在上面时变淡；底部的箭头收成贴着右边缘的小把手，点把手再展开（记在 ui.json）。
 func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	task := a.taskByWorker(cur.ID)
@@ -1658,7 +1658,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 	}
 	col := ui.Column(c.Key("session-buttons")).Absolute().Top(8).Right(findBarRight - sessionColGap).Gap(2).Padding(sessionColPad).Radius(rControl).Background(t.Surface) // 不透明：挡住底下的终端文字，不描边也和终端分得开
 	// 鼠标不在上面、也没打开它的面板时变淡，底下的字透得出来
-	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage
+	ours := a.state.RightPanel == panelImages || a.state.RightPanel == panelUsage || a.state.RightPanel == panelCheat
 	opacity := float32(0.5)
 	if col.Hovered() || ours {
 		opacity = 1
@@ -1674,6 +1674,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo) {
 		}
 		if cur.Agent != "" {
 			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
+			a.panelButton(c, panelCheat, iconSlash, "命令速查")
 		}
 		hline(c).Margin(2, 4)
 		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", buttonBox(), iconSize-4).Clicked() {
@@ -1804,6 +1805,10 @@ func (a *app) mainBody(c *ui.Context, w *workspace, cur *terminalInfo) {
 		case panelUsage:
 			if cur != nil && cur.Agent != "" {
 				panel, drawn = a.usagePanel(c, cur), true
+			}
+		case panelCheat:
+			if cur != nil && cur.Agent != "" {
+				panel, drawn = a.cheatPanel(c, cur), true
 			}
 		case panelImages:
 			if cur != nil && cur.Agent != "" {

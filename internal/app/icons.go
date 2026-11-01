@@ -79,6 +79,7 @@ var (
 	iconMemory     = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/>`)
 	iconSkill      = icon(`<path d="M12 4.5 13.8 9l4.7 1.8-4.7 1.8L12 17.2l-1.8-4.6-4.7-1.8L10.2 9z"/><path d="M18 15.5v4M16 17.5h4"/>`)
 	iconAppearance = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>`)
+	iconSlash      = icon(`<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M14.5 7.5 9.5 16.5"/>`)
 	iconKeyboard   = icon(`<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M10.33 10h.01M13.67 10h.01M17 10h.01M7 14h.01M17 14h.01M10 14h4"/>`)
 	iconInfo       = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.75v.01"/>`)
 	iconLocate     = icon(`<circle cx="12" cy="12" r="6.75"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M12 2.75v3.5M12 17.75v3.5M2.75 12h3.5M17.75 12h3.5"/>`) // 定位当前文件，照 WebStorm 的准星
