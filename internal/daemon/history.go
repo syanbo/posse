@@ -419,7 +419,12 @@ func (d *Daemon) historyResume(ctx context.Context, raw json.RawMessage) (any, e
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}
-	t, err := d.startTerminal(ws, l.Argv, s.Agent, p.Cols, p.Rows)
+	// 聊天会话回到它自己的子文件夹：关掉时按它清理，从它派出的 worker 也放进去
+	var cwd string
+	if d.isChatFolder(dir) {
+		cwd = dir
+	}
+	t, err := d.launchTerminal(ws, l.Argv, s.Agent, p.Cols, p.Rows, store.Terminal{Cwd: cwd})
 	if err != nil {
 		return nil, err
 	}

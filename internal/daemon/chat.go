@@ -56,25 +56,24 @@ func (d *Daemon) isChatFolder(dir string) bool {
 }
 
 // dropChatFolder 在聊天结束（终端关掉或自己退出）后删掉没留下文件的聊天文件夹（os.Remove 只删空目录）。
-// 不删的：常驻进程退出时（重启后恢复的终端要回到这个目录）、已经「转为项目」的、还有别的终端在里面启动的（派出去的 worker）。
-// 删掉以后从历史页恢复这个会话时再建回来（historyResume）。
+// 不删的：常驻进程退出时（重启后恢复的终端要回到这个目录）、已经「转为项目」的、还有别的终端在里面运行的（派出去的 worker）。
+// 删掉以后从历史页恢复这个会话时再建回来（historyResume）。路径一律经 samePath 比：重启后库里记的是解析过符号链接的目录。
 func (d *Daemon) dropChatFolder(id, dir string) {
 	if d.exiting.Load() || !d.isChatFolder(dir) {
 		return
 	}
-	if _, err := d.store.FindProject(dir); err == nil {
+	if ps, err := d.store.Projects(); err != nil || slices.ContainsFunc(ps, func(p store.Project) bool { return samePath(p.Path, dir) }) {
 		return
 	}
+	var others []string
 	d.mu.Lock()
-	inUse := false
 	for _, s := range d.terms {
-		if s.ID != id && samePath(s.Dir, dir) {
-			inUse = true
-			break
+		if s.ID != id && s.Running() {
+			others = append(others, s.Dir)
 		}
 	}
 	d.mu.Unlock()
-	if !inUse {
+	if !slices.ContainsFunc(others, func(o string) bool { return samePath(o, dir) }) {
 		os.Remove(dir)
 	}
 }

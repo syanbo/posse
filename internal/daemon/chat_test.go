@@ -36,7 +36,8 @@ func TestChatFolders(t *testing.T) {
 	t.Setenv("OUT", "")
 	empty := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
 	converted := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
-	call(t, d.projectAdd, map[string]any{"path": converted.Dir})
+	// 转为项目时写的路径和终端记的写法不同（/tmp 是 /private/tmp 的符号链接，重启后库里记的是解析过的）
+	call(t, d.projectAdd, map[string]any{"path": "/private" + converted.Dir})
 	shared := call(t, d.terminalCreate, map[string]any{"workspace": w.ID, "agent": "grok"}).(terminalInfo)
 	// 聊天里派出的 worker 在派发方的文件夹里
 	task := call(t, d.taskStart, map[string]any{"spec": "x", "command": []string{"/bin/sh", "-c", "exec sleep 30"}, "caller": shared.ID}).(taskInfo)
