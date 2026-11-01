@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../protocol/rpc.dart';
-import '../ui/line_icons.dart';
 import '../ui/code.dart';
+import '../ui/file_icons.dart';
 import '../ui/highlight.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
@@ -376,11 +376,7 @@ class _GitPaneState extends State<GitPane> {
       depth: row.depth + 1,
       child: Row(
         children: [
-          LineIconView(
-            open ? LineIcon.folderOpen : LineIcon.folder,
-            size: Ic.medium,
-            color: c.accent,
-          ),
+          FileIconView(row.label, size: Ic.medium, dir: true, open: open),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -441,6 +437,8 @@ class _GitPaneState extends State<GitPane> {
                   ).copyWith(fontWeight: Fw.bold),
                 ),
               ),
+              const SizedBox(width: 8),
+              FileIconView(file.name, size: Ic.medium),
               const SizedBox(width: 8),
               // 文件名完整显示，放不下时先截淡色的目录和原名；文件名本身最多占四分之三
               Expanded(

@@ -74,6 +74,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	ld := d.log
 	h := ld.hist
 	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 8, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
+		fileGlyph(c, ld.filter.Path, fsSmall)
 		ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(ld.filter.Path)
 		ui.Spacer(c)
 		n := fmt.Sprintf("%d 个提交", len(ld.commits))

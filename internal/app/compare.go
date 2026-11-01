@@ -542,7 +542,8 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 					chev := ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
 					chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
 				})
-				ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+				icon, color := dirIcon(t, r.name)
+				ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
 				ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(r.path)
 				ui.Text(c, fmt.Sprint(len(r.files))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
@@ -559,6 +560,7 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
 			ui.Box(c).Width(20).Shrink(0)
 			ui.Text(c, string(f.Status)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
+			fileGlyph(c, r.name, iconSize)
 			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path).TextColor(color)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)

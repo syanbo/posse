@@ -305,6 +305,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 			}
 		}
 		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
+		fileGlyph(c, e.Path, iconSize)
 		name := ui.Text(c, filepath.Base(e.Path)).FontSize(fsBody).SingleLine().Shrink(0).TextColor(color)
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
@@ -885,7 +886,8 @@ func pickStateOf(on, n int) int {
 // treeDirLabel 是改动文件树目录行的文件夹图标、目录名和文件数，回滚对话框和改动页共用。
 func treeDirLabel(c *ui.Context, name string, n int) {
 	t := c.Theme()
-	ui.Icon(c, iconFolder).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
+	icon, color := dirIcon(t, name)
+	ui.Icon(c, icon).FontSize(iconSize).TextColor(color).Shrink(0)
 	ui.Text(c, name).FontSize(fsBody).SingleLine().Shrink(1)
 	ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 }

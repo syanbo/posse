@@ -517,6 +517,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 		}
 		letter := statusLetter(e)
 		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(letterColor(c, letter)).Width(sz(10)).Shrink(0)
+		fileGlyph(c, row.name, iconSize)
 		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter))
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
