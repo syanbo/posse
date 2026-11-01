@@ -116,26 +116,26 @@ func TestClickOpensLinkCard(t *testing.T) {
 
 	// 第 0–3 行是超链接，第 4–7 行是路径；行高约 18.5，第一行约在 y=51
 	// 从链接上拖开：选文字，不打开
-	tt.Move(290, 80)
+	tt.Move(termX(42), 80)
 	tt.Frame()
-	tt.Press(290, 80)
+	tt.Press(termX(42), 80)
 	tt.Frame()
-	tt.Move(330, 120)
+	tt.Move(termX(82), 120)
 	tt.Frame()
-	tt.Release(330, 120)
+	tt.Release(termX(82), 120)
 	tt.Frame()
 	if a.linkCard != nil {
 		t.Fatal("drag from a link opened the card")
 	}
 	// 悬停时链接下面有下划线
-	tt.Move(290, 80)
+	tt.Move(termX(42), 80)
 	tt.Frame()
 	tt.Frame()
 	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
 		savePNG(t, tt, "link-hover.png")
 	}
 	// 原地单击打开
-	tt.ClickAt(290, 80)
+	tt.ClickAt(termX(42), 80)
 	tt.Frame()
 	tt.Frame()
 	if a.linkCard == nil || a.linkCard.path != file || a.linkCard.isDir {
@@ -156,7 +156,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 		t.Fatal("outside click did not close the card")
 	}
 	// Cmd+点击当前工作区外的目录：文件栏里显示不了，弹卡片
-	cmdClick(tt, 290, 155)
+	cmdClick(tt, termX(42), 155)
 	if a.linkCard == nil || a.linkCard.path != sub || !a.linkCard.isDir {
 		t.Fatalf("Cmd+click on path: %+v", a.linkCard)
 	}
@@ -164,7 +164,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 	tt.Frame()
 	// 设置成单击直接打开：反过来，Cmd+点击弹卡片
 	a.state.LinkClickOpens = true
-	cmdClick(tt, 290, 80)
+	cmdClick(tt, termX(42), 80)
 	if a.linkCard == nil || a.linkCard.path != file {
 		t.Fatalf("Cmd+click with LinkClickOpens: %+v", a.linkCard)
 	}
@@ -175,9 +175,9 @@ func TestClickOpensLinkCard(t *testing.T) {
 	// 不存在的文件：单击和 Cmd+点击都没反应（第 8 行超链接、第 10 行路径）
 	calls = nil
 	for _, y := range []float32{51 + 8.5*18.5, 51 + 10.5*18.5} {
-		tt.ClickAt(290, y)
+		tt.ClickAt(termX(42), y)
 		tt.Frame()
-		cmdClick(tt, 290, y)
+		cmdClick(tt, termX(42), y)
 	}
 	if a.linkCard != nil || len(calls) != 0 || a.err != "" {
 		t.Fatalf("missing files opened: card %+v calls %q err %q", a.linkCard, calls, a.err)
@@ -185,7 +185,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 
 	// 网址：单击弹出卡片、不打开，Cmd+点击直接打开、不弹卡片
 	urlY := float32(51 + 12.5*18.5)
-	tt.ClickAt(290, urlY)
+	tt.ClickAt(termX(42), urlY)
 	tt.Frame()
 	tt.Frame()
 	if a.linkCard == nil || a.linkCard.url != site || len(tt.OpenedURLs()) != 0 {
@@ -199,9 +199,9 @@ func TestClickOpensLinkCard(t *testing.T) {
 	tt.Frame()
 	// Shift+Cmd+点击：交给浏览器，不开网页标签
 	tt.HoldModifiers(ui.Cmd | ui.Shift)
-	tt.Move(290, urlY)
+	tt.Move(termX(42), urlY)
 	tt.Frame()
-	tt.ClickAtWith(ui.Cmd|ui.Shift, 290, urlY)
+	tt.ClickAtWith(ui.Cmd|ui.Shift, termX(42), urlY)
 	tt.Frame()
 	tt.HoldModifiers(0)
 	tt.Frame()
@@ -209,7 +209,7 @@ func TestClickOpensLinkCard(t *testing.T) {
 		t.Fatalf("Shift+Cmd+click on URL: card %+v opened %q", a.linkCard, tt.OpenedURLs())
 	}
 	// Cmd+点击：在网页标签里打开
-	cmdClick(tt, 290, urlY)
+	cmdClick(tt, termX(42), urlY)
 	fv := a.files[a.selected]
 	if a.linkCard != nil || len(tt.OpenedURLs()) != 1 || fv == nil || fv.cur == nil || fv.cur.web == nil || fv.cur.web.url != site {
 		t.Fatalf("Cmd+click on URL: card %+v opened %q files %+v", a.linkCard, tt.OpenedURLs(), fv)
@@ -280,13 +280,13 @@ func TestDragFromLinkWithMouseTracking(t *testing.T) {
 	term.Feed([]byte(feed))
 	tt := newPreviewTester(a, true)
 
-	tt.Move(290, 80)
+	tt.Move(termX(42), 80)
 	tt.Frame()
-	tt.Press(290, 80)
+	tt.Press(termX(42), 80)
 	tt.Frame()
-	tt.Move(340, 120)
+	tt.Move(termX(92), 120)
 	tt.Frame()
-	tt.Release(340, 120)
+	tt.Release(termX(92), 120)
 	tt.Frame()
 	if len(opened) != 0 {
 		t.Fatalf("drag from a link opened it: %q", opened)
@@ -298,9 +298,9 @@ func TestDragFromLinkWithMouseTracking(t *testing.T) {
 		t.Fatalf("program got mouse reports %q", w)
 	}
 
-	tt.Move(290, 80)
+	tt.Move(termX(42), 80)
 	tt.Frame()
-	tt.ClickAt(290, 80)
+	tt.ClickAt(termX(42), 80)
 	tt.Frame()
 	if len(opened) != 1 || term.Selection() != "" {
 		t.Fatalf("click on a link: opened %q selection %q", opened, term.Selection())
@@ -447,3 +447,6 @@ func TestWebAddress(t *testing.T) {
 		}
 	}
 }
+
+// termX 是主区域里离侧栏右边 dx 的横坐标（默认宽的侧栏），终端、标签栏的坐标都按它算，侧栏宽度变了不用改测试。
+func termX(dx float32) float32 { return sidebarDefault() + dx }

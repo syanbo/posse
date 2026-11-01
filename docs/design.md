@@ -88,7 +88,7 @@ agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSiz
 
 ## 尺寸
 
-行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`、`sidebarDefault()` 到 `sidebarMax()`。
+行高、按钮高、输入框高和跟着文字的列宽写成 `sz(v)`，按正文字号等比缩放（`v` 是 13 号正文时的值）。同一类列表用同一个行高。已有的：侧栏行 `sz(32)`、`sz(46)`、`sz(64)`（一到三行），`logRowH()`、`fontRowHeight()`、`appNameWidth()`、`sidebarDefault()` 到 `sidebarMax()`（侧栏默认 `sz(272)`、最宽 `sz(420)`；最窄由顶上的磁贴算，`sidebarMin`：一行四块正方形磁贴加五道 8 的间隔，默认字号下 264）。
 
 ## 圆角
 

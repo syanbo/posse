@@ -375,7 +375,7 @@ const taskBoardID = "tasks"
 
 const defaultFontSize = 14
 
-// 窗口最小尺寸：默认宽的侧栏（248）旁边，默认字号的终端还有约 75 列；高度够放下对话框和 30 行左右的终端。
+// 窗口最小尺寸：默认宽的侧栏（272）旁边，默认字号的终端还有约 72 列；高度够放下对话框和 30 行左右的终端。
 const minWindowWidth, minWindowHeight = 900, 560
 
 // termFontFamily 与用户的 Ghostty 一致。中文显式回退到 PingFang SC：系统等宽字体的级联

@@ -310,10 +310,14 @@ func (a *app) closeBoardButton(c *ui.Context) {
 	}
 }
 
-// 侧栏的宽度，拖右边缘调整；默认宽度和上下限跟着界面字号缩放，拖过的照拖的宽度。
-func sidebarDefault() float32 { return sz(248) }
-func sidebarMin() float32     { return sz(200) }
-func sidebarMax() float32     { return sz(420) }
+// 侧栏的宽度，拖右边缘调整，拖过的照拖的宽度；默认宽度和上限跟着界面字号缩放。
+// 下限由顶上的磁贴算：最窄时一行四块正好是正方形（宽等于 tileHeight，跟着字号），再窄名字就截得认不出了；
+// 间隔和其他间距一样不跟字号。拉宽时磁贴跟着变宽。
+func sidebarDefault() float32 { return max(sz(272), sidebarMin()) }
+func sidebarMin() float32 {
+	return topTilesPerRow*tileHeight() + (topTilesPerRow+1)*tileGap
+}
+func sidebarMax() float32 { return sz(420) }
 
 func (a *app) sidebarWidth() float32 {
 	w := a.state.SidebarWidth

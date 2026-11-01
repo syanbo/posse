@@ -63,7 +63,7 @@ func TestReorderTerminals(t *testing.T) {
 	if !ok {
 		t.Fatal("zsh tab missing")
 	}
-	drag(tt, zsh.X+zsh.W/2, zsh.Y+zsh.H/2, 300, zsh.Y+zsh.H/2)
+	drag(tt, zsh.X+zsh.W/2, zsh.Y+zsh.H/2, termX(52), zsh.Y+zsh.H/2)
 	want := []string{"t3", "t1", "t2", "t6"}
 	if got := termIDs(a.workspace("w1").Terminals); !slices.Equal(got, want) {
 		t.Fatalf("after dragging the tab: %v, want %v", got, want)

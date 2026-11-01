@@ -13,6 +13,8 @@ import (
 const (
 	topTilesPerRow = 4
 	topTilesMax    = 8
+	// 照 Arc，磁贴离侧栏左右两边、顶上和磁贴之间横竖的间隔都一样
+	tileGap = 8
 )
 
 // globalTiles 是不能取消的全局页面，ui.json 里没记顺序时按这个排。
@@ -85,7 +87,7 @@ func (a *app) topTiles(c *ui.Context) {
 		}
 		shown = append(shown, id)
 	}
-	ui.Column(c).Padding(8, navEnd, 4, trafficLightX-navPad).Shrink(0).Children(func() {
+	ui.Column(c).Padding(tileGap, tileGap, 4, tileGap).Shrink(0).Children(func() {
 		area := ui.Box(c.Key("top-tiles")).Shrink(0)
 		// 先收落下的，再按新顺序排：否则松手这一帧会先按旧顺序摆一遍，磁贴来回跳
 		if d, ok := ui.Drop[topDrag](area); ok {
@@ -93,8 +95,7 @@ func (a *app) topTiles(c *ui.Context) {
 			c.AnimationFrame()
 		}
 		w := area.LayoutBounds().W
-		const gap = 6
-		cw, ch := (w-gap*(topTilesPerRow-1))/topTilesPerRow, tileHeight()
+		cw, ch := (w-tileGap*(topTilesPerRow-1))/topTilesPerRow, tileHeight()
 		hole, moving, incoming := -1, "", ""
 		if d, over := ui.DragOver[topDrag](area); over {
 			id, own := d.topTarget(a)
@@ -105,8 +106,8 @@ func (a *app) topTiles(c *ui.Context) {
 				incoming = id
 			}
 			if x, y, _ := area.PointerPosition(); (moving != "" || incoming != "") && cw > 0 {
-				col := min(max(int(x/(cw+gap)), 0), topTilesPerRow-1)
-				hole = max(int(y/(ch+gap)), 0)*topTilesPerRow + col
+				col := min(max(int(x/(cw+tileGap)), 0), topTilesPerRow-1)
+				hole = max(int(y/(ch+tileGap)), 0)*topTilesPerRow + col
 			}
 		}
 		list := shown
@@ -120,15 +121,15 @@ func (a *app) topTiles(c *ui.Context) {
 			cells++
 		}
 		rows := (cells + topTilesPerRow - 1) / topTilesPerRow
-		area.Height(area.AnimateTo("h", float32(rows)*ch+float32(max(rows-1, 0))*gap, topTileMotion))
+		area.Height(area.AnimateTo("h", float32(rows)*ch+float32(max(rows-1, 0))*tileGap, topTileMotion))
 		if w <= 0 {
 			// 第一帧还不知道宽度，量好了下一帧再摆
 			c.AnimationFrame()
 			return
 		}
 		place := func(e ui.Element, slot int) ui.Element {
-			x := float32(slot%topTilesPerRow) * (cw + gap)
-			y := float32(slot/topTilesPerRow) * (ch + gap)
+			x := float32(slot%topTilesPerRow) * (cw + tileGap)
+			y := float32(slot/topTilesPerRow) * (ch + tileGap)
 			return e.Absolute().Left(e.AnimateTo("x", x, topTileMotion)).Top(e.AnimateTo("y", y, topTileMotion)).Width(cw).Height(ch)
 		}
 		area.Children(func() {

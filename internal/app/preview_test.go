@@ -621,6 +621,9 @@ func TestPreview(t *testing.T) {
 		a.state.SidebarWidth = 340
 		savePNG(t, newPreviewTester(a, dark), "sidebar-wide-"+suffix+".png")
 		a = previewApp(t)
+		a.state.SidebarWidth = 1 // 拉到最窄：顶上的磁贴是正方形
+		savePNG(t, newPreviewTester(a, dark), "sidebar-narrow-"+suffix+".png")
+		a = previewApp(t)
 		a.state.ProjectMetaHidden, a.state.WorkspaceMetaHidden = true, true
 		savePNG(t, newPreviewTester(a, dark), "sidebar-no-meta-"+suffix+".png")
 		// 固定在顶上的工作区：主工作区用项目名，worktree 用工作区名，长名字截断
