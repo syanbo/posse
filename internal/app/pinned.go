@@ -8,17 +8,17 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 侧栏顶上的磁贴照 Arc 的置顶网址：任务、历史、技能、手机和固定的工作区排在一起，一行四块，最多八块（两行），
+// 侧栏顶上的磁贴照 Arc 的置顶网址：聊天、任务、历史、技能、手机和固定的工作区排在一起，一行四块，最多十二块（三行），
 // 都能拖动换位置；项目树里的工作区拖上来就固定，固定的拖回项目列表就取消。
 const (
 	topTilesPerRow = 4
-	topTilesMax    = 8
+	topTilesMax    = 12
 	// 照 Arc，磁贴离侧栏左右两边、顶上和磁贴之间横竖的间隔都一样
 	tileGap = 8
 )
 
 // globalTiles 是不能取消的全局页面，ui.json 里没记顺序时按这个排。
-var globalTiles = []string{taskBoardID, historyBoardID, skillsBoardID, mobileBoardID}
+var globalTiles = []string{chatBoardID, taskBoardID, historyBoardID, skillsBoardID, mobileBoardID}
 
 // tileDrag 是拖动中的顶上磁贴，wsDrag 是从项目树拖出来的工作区（项目下面的工作区行）。
 type (
@@ -58,9 +58,12 @@ func (a *app) pinned(id string) bool { return slices.Contains(a.state.TopTiles, 
 
 func (a *app) canPin() bool { return len(a.topOrder()) < topTilesMax }
 
+// pinnable 是工作区能不能固定到顶上：聊天工作区已经有「聊天」磁贴，不再单独固定。
+func (a *app) pinnable(id string) bool { return id != "" && !a.pinned(id) && !a.isChat(id) }
+
 // pin 把工作区固定到顶上，排在最后。
 func (a *app) pin(id string) {
-	if a.pinned(id) || !a.canPin() {
+	if !a.pinnable(id) || !a.canPin() {
 		return
 	}
 	a.state.TopTiles = append(a.topOrder(), id)
@@ -102,7 +105,7 @@ func (a *app) topTiles(c *ui.Context) {
 			switch {
 			case own:
 				moving = id
-			case id != "" && !a.pinned(id) && len(order) < topTilesMax:
+			case a.pinnable(id) && len(order) < topTilesMax:
 				incoming = id
 			}
 			if x, y, _ := area.PointerPosition(); (moving != "" || incoming != "") && cw > 0 {
@@ -173,7 +176,7 @@ func (a *app) placedTile(c *ui.Context, place func(ui.Element, int) ui.Element, 
 func (a *app) dropTile(d topDrag, shown, order []string) []string {
 	id, own := d.topTarget(a)
 	hole := a.topSlot - 1
-	if id == "" || hole < 0 || (!own && (a.pinned(id) || len(order) >= topTilesMax)) {
+	if id == "" || hole < 0 || (!own && (!a.pinnable(id) || len(order) >= topTilesMax)) {
 		return shown
 	}
 	list := slices.DeleteFunc(slices.Clone(shown), func(x string) bool { return x == id })
@@ -201,6 +204,8 @@ func (a *app) projectMain(projectID string) string {
 // topTile 画一块磁贴：全局页面或固定的工作区。
 func (a *app) topTile(c *ui.Context, id string) ui.Element {
 	switch id {
+	case chatBoardID:
+		return a.chatSidebarItem(c)
 	case taskBoardID:
 		return a.taskSidebarItem(c)
 	case historyBoardID:

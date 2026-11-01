@@ -39,6 +39,8 @@ type agentSettings struct {
 	Disabled    []string `json:"disabled,omitempty"` // 设置里关掉的 agent：菜单不列，常驻进程不启动
 	// RestoreAll 是常驻进程启动时把上次留下的终端全部恢复；默认只列出来，接入时才恢复
 	RestoreAll bool `json:"restoreAll,omitempty"`
+	// ChatDir 是聊天磁贴的目录，空时用 ~/Posse；只由窗口写，见 chat.go
+	ChatDir string `json:"chatDir,omitempty"`
 }
 
 func loadSettings(home string) agentSettings {

@@ -148,12 +148,14 @@ func (d *Daemon) closeTerminal(id string, grace time.Duration) bool {
 		d.closeSession(s, grace)
 		return true
 	}
-	if _, err := d.store.LostTerminal(id); err != nil {
+	t, err := d.store.LostTerminal(id)
+	if err != nil {
 		return false
 	}
 	if err := d.store.DeleteTerminal(id); err != nil {
 		log.Printf("terminal %s: delete: %v", id, err)
 	}
+	d.dropChatFolder(t.Cwd)
 	return true
 }
 

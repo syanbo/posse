@@ -147,6 +147,9 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if w != nil && a.pressed(c, "newTerminal") {
 		a.startTerminal(w.ID, "")
 	}
+	if a.pressed(c, "newChat") {
+		a.openChat(true)
+	}
 	if w != nil {
 		if a.pressed(c, "quickOpen") {
 			a.openQuick(w)
@@ -895,6 +898,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		if m.Item("关闭会话…").Chosen() {
 			a.askClose(term)
 		}
+		a.chatFolderMenu(m, term)
 	})
 }
 
@@ -943,7 +947,9 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 		}
 	}
 	m.Separator()
-	if a.pinned(w.ID) {
+	if a.isChat(w.ID) {
+		// 已经有「聊天」磁贴
+	} else if a.pinned(w.ID) {
 		if m.Item("取消固定").Chosen() {
 			a.unpin(w.ID)
 		}
@@ -2161,6 +2167,7 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	if sid := sessionID(term); sid != "" && m.Item("复制会话 ID").Chosen() {
 		writeClipboard(sid)
 	}
+	a.chatFolderMenu(m, term)
 	m.Separator()
 	if a.paneSide(term.ID) >= 0 {
 		if m.Item("关闭分屏").Keys(a.keyText("closeSplit")).Chosen() {

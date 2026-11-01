@@ -51,6 +51,7 @@ func k(mods ui.Modifiers, key ui.Key) keyCombo { return keyCombo{mods: mods, key
 var posseKeys = []keyAction{
 	{id: "newTerminal", group: "窗口与标签", label: "新建终端", def: []keyCombo{k(ui.Cmd, ui.KeyT)}},
 	{id: "newWorkspace", group: "窗口与标签", label: "新建工作区", def: []keyCombo{k(ui.Cmd, ui.KeyN)}},
+	{id: "newChat", group: "窗口与标签", label: "新聊天", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyN)}, note: "切到侧栏顶上的「聊天」，用上一次聊天的 agent 再开一个；还没聊过时只切过去"},
 	{id: "closeTab", group: "窗口与标签", label: "关闭标签", def: []keyCombo{k(ui.Cmd, ui.KeyW)}, note: "在菜单栏的 File 里，改了菜单跟着改"},
 	{id: "closeWindow", group: "窗口与标签", label: "关闭窗口", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyW)}, note: "在菜单栏的 File 里，改了菜单跟着改"},
 	{id: "settings", group: "窗口与标签", label: "打开设置", def: []keyCombo{k(ui.Cmd, ui.KeyComma)}, note: "在菜单栏的 Posse 里，改了菜单跟着改"},

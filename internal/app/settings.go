@@ -61,6 +61,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 				ui.Column(c).Width(640).MaxWidth(640).Gap(16).Children(func() {
 					switch tab {
 					case "general":
+						a.chatSettings(c)
 						a.awakeSettings(c)
 						a.restoreSettings(c)
 						a.selectSettings(c)
