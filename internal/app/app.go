@@ -190,7 +190,11 @@ type app struct {
 	state        uiState       // 写进 ui.json 的界面状态
 
 	// 任务总览
-	taskHome   bool                     // 只要总览：不自动打开上次看的任务
+	taskHome bool // 只要总览：不自动打开上次看的任务
+	specMD   struct {
+		src    string
+		blocks []mdBlock
+	} // 任务说明解析好的 Markdown，见 specMarkdown
 	taskScroll string                   // 方向键换到的任务：列表建到它时滚进视野
 	taskSel    string                   // 选中的任务 ID
 	lastWS     string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里

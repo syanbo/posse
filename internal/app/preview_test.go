@@ -84,7 +84,7 @@ func previewApp(t *testing.T) *app {
 			Coordinator: "t1", CreatedAt: now.Add(-12 * time.Minute), Terminal: &terminalInfo{ID: "t6", Agent: "grok", Running: true, AgentState: state("working")}},
 		{ID: "k2", Title: "给登录页加上记住密码", Agent: "codex", Workspace: "Skill/feat-login", WorkspaceID: "w6", WorkspaceKind: "worktree", Branch: "feat-login", BaseRef: "main",
 			Worker: "t5", Status: "running", Questions: 1, CreatedAt: now.Add(-25 * time.Minute), Terminal: &terminalInfo{ID: "t5", Agent: "codex", Running: true, AgentState: state("working")},
-			Spec: "在登录页加一个“记住密码”开关，密码存进系统钥匙串。不要改注册流程。完成标准：单测通过，手动登录两次第二次免输密码。"},
+			Spec: "# 登录页记住密码\n\n在登录页加一个“记住密码”开关，密码存进系统钥匙串。\n\n## 约束\n- 不要改注册流程\n- 只改 `LoginView.swift` 和 `Keychain.swift`\n\n## 完成标准\n1. 单测通过：`swift test`\n2. 手动登录两次，第二次免输密码"},
 		{ID: "k3", Title: "统计 IM 模块的重连路径", Agent: "claude", Workspace: "Apps/main", WorkspaceID: "w1", Worker: "t9", Status: "done", Coordinator: "t1",
 			Summary: "梳理了 4 条重连路径，其中飞行模式恢复后会重复建连。已在报告里附上日志位置和复现步骤，剩下服务端超时参数待确认。",
 			Report:  "/tmp/im-reconnect/report.md", CreatedAt: now.Add(-2 * time.Hour), EndedAt: &ended},

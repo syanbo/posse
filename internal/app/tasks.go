@@ -645,7 +645,10 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 		}
 		if task.Spec != "" {
 			a.block(c, "任务说明", func() {
-				ui.Text(c, task.Spec).FontSize(fsBody).LineHeight(1.55).TextColor(t.TextMuted).Selectable()
+				// 派发方写的说明多是 Markdown（标题、列表、代码），和历史页 agent 的回复一样渲染
+				ui.Column(c).Gap(8).Selectable().Children(func() {
+					mdView{size: a.mdSize()}.blocks(c, a.specMarkdown(task.Spec))
+				})
 			})
 		}
 	})
@@ -726,6 +729,14 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 }
 
 // block 是详情里的一张卡片：标题加内容。
+// specMarkdown 返回任务说明解析好的 Markdown，只缓存正在看的这一份：说明不变时不必每帧重新解析。
+func (a *app) specMarkdown(spec string) []mdBlock {
+	if a.specMD.src != spec || a.specMD.blocks == nil {
+		a.specMD.src, a.specMD.blocks = spec, parseMarkdown(strings.TrimSpace(spec))
+	}
+	return a.specMD.blocks
+}
+
 func (a *app) block(c *ui.Context, label string, fn func()) {
 	card(c).Padding(cardPad).Gap(8).Children(func() {
 		cardTitle(c, label)
