@@ -380,8 +380,9 @@ func (a *app) taskBoard(c *ui.Context) {
 	if !a.taskHome && a.task(a.taskSel) == nil {
 		a.selectTask(a.sorted[0].ID)
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
-		card(c).Width(360).Shrink(0).Clip().Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
+		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走（和历史页一样）
+		card(c).Width(360).Shrink(0).Clip().Focusable().FocusRing(false).Label("任务列表").Children(func() {
 			ui.Scroll(c).Grow(1).Children(func() {
 				// 项与项之间留 4：悬停和选中的底色不粘在一起（和历史列表一样）
 				ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.taskList(c) })
@@ -389,17 +390,41 @@ func (a *app) taskBoard(c *ui.Context) {
 		})
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Children(func() {
 			if sel := a.task(a.taskSel); sel != nil && !a.taskHome {
-				ui.Row(c).Shrink(0).Padding(0, 0, 8, 0).Children(func() {
-					if pressable(textButton(c, "总览")).Clicked() {
-						a.showTaskHome()
-					}
-				})
 				ui.Scroll(c).Grow(1).Children(func() { a.taskDetailView(c, *sel) })
 				return
 			}
 			a.taskEmptyCard(c)
 		})
 	})
+	// 上下方向键换选中的任务，和历史页一样；焦点在回复框里时归输入框
+	switch {
+	case c.Shortcut(0, ui.KeyDown):
+		a.stepTask(1)
+	case c.Shortcut(0, ui.KeyUp):
+		a.stepTask(-1)
+	}
+}
+
+// stepTask 选中列表里的下一个（step 为 1）或上一个任务；还没选中时下键选第一个、上键选最后一个。到头了不动。
+func (a *app) stepTask(step int) {
+	if len(a.sorted) == 0 {
+		return
+	}
+	i := -1
+	if !a.taskHome {
+		i = slices.IndexFunc(a.sorted, func(t taskInfo) bool { return t.ID == a.taskSel })
+	}
+	j := i + step
+	if i < 0 {
+		j = 0
+		if step < 0 {
+			j = len(a.sorted) - 1
+		}
+	}
+	if j >= 0 && j < len(a.sorted) {
+		a.taskScroll = true
+		a.selectTask(a.sorted[j].ID)
+	}
 }
 
 // taskEmptyCard 是没选任务时右边的说明卡片，和历史页没选会话时的一样。
@@ -504,6 +529,10 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 			ui.Text(c, preview).FontSize(fsSmall).TextColor(color).MaxLines(2).LineHeight(1.35)
 		})
 	})
+	if a.taskScroll && a.taskSel == task.ID {
+		a.taskScroll = false
+		row.ScrollIntoView()
+	}
 	if row.Clicked() {
 		a.selectTask(task.ID)
 	}
@@ -552,7 +581,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 	if a.detail != nil && a.detail.ID == task.ID {
 		msgs = a.detail.Messages
 	}
-	ui.Column(c).Gap(8).MaxWidth(860).Children(func() {
+	ui.Column(c).Gap(pageGap).MaxWidth(860).Children(func() {
 		card(c).Padding(cardPad).Gap(12).Children(func() {
 			ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 				agentTile(c, task.Agent, tileLarge())

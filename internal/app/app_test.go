@@ -35,7 +35,7 @@ func TestApplyKeepsSelection(t *testing.T) {
 	}
 }
 
-// 点侧栏「任务」回到总览，不留在上次打开的任务里；详情里的「总览」也一样。
+// 点侧栏「任务」回到总览，不留在上次打开的任务里；↑↓ 换选中的任务。
 // worker 终端右上角的会话按钮里有「返回任务」。
 func TestTaskHome(t *testing.T) {
 	a := previewApp(t)
@@ -58,14 +58,42 @@ func TestTaskHome(t *testing.T) {
 		t.Fatal("overview hint missing")
 	}
 
-	a.taskHome, a.taskSel = false, "k2"
+
+	// ↑↓ 换选中的任务：总览里下键选第一个，到头不动
+	key := func(k ui.Key) {
+		tt.Key(0, k)
+		tt.Frame()
+	}
+	key(ui.KeyDown)
+	if a.taskHome || a.taskSel != a.sorted[0].ID {
+		t.Fatalf("↓ from overview: home %v sel %q", a.taskHome, a.taskSel)
+	}
+	key(ui.KeyDown)
+	if a.taskSel != a.sorted[1].ID {
+		t.Fatalf("↓: sel %q want %q", a.taskSel, a.sorted[1].ID)
+	}
+	key(ui.KeyUp)
+	key(ui.KeyUp)
+	if a.taskSel != a.sorted[0].ID {
+		t.Fatalf("↑ past the top: sel %q", a.taskSel)
+	}
+	// 焦点在回复框里时 ↑↓ 归输入框，不换任务
+	if !needsUser(a.sorted[0]) {
+		t.Fatalf("first task %q should be waiting for a reply", a.sorted[0].ID)
+	}
+	a.detail = &taskDetail{taskInfo: a.sorted[0], Messages: []taskMessage{{ID: "m1", Kind: "question", Body: "要不要补用例？", CreatedAt: time.Now()}}}
 	tt.Frame()
-	if err := tt.Click("总览"); err != nil {
+	if err := tt.Click("回答 worker 的提问"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if !a.taskHome || a.taskSel != "" {
-		t.Fatalf("after 总览: home %v sel %q", a.taskHome, a.taskSel)
+	key(ui.KeyDown)
+	if a.taskSel != a.sorted[0].ID {
+		t.Fatalf("↓ in the reply box changed the task to %q", a.taskSel)
+	}
+	// 详情上面不再有「总览」按钮
+	if _, ok := tt.Find("总览"); ok {
+		t.Fatal("overview button still shown")
 	}
 }
 

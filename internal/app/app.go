@@ -189,13 +189,14 @@ type app struct {
 	state        uiState       // 写进 ui.json 的界面状态
 
 	// 任务总览
-	taskHome  bool                     // 只要总览：不自动打开上次看的任务
-	taskSel   string                   // 选中的任务 ID
-	lastWS    string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
-	detail    *taskDetail              // 选中任务的消息等完整内容
-	diffs     map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
-	replyText string
-	noteText  string
+	taskHome   bool                     // 只要总览：不自动打开上次看的任务
+	taskScroll bool                     // 方向键换了任务：列表把它滚进视野
+	taskSel    string                   // 选中的任务 ID
+	lastWS     string                   // 上次选中的工作区：关掉任务、历史等页面后回到这里
+	detail     *taskDetail              // 选中任务的消息等完整内容
+	diffs      map[string]*worktreeDiff // worktree 工作区 ID → 改动统计
+	replyText  string
+	noteText   string
 	// wantTask 由界面线程写、轮询协程读：总览里正在看哪个任务
 	wantMu   sync.Mutex
 	wantTask string

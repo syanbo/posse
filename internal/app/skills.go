@@ -325,7 +325,7 @@ func (a *app) skillsBoard(c *ui.Context) {
 			s.sel = list[0].Dir
 		}
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("技能列表").Children(func() {
 			a.skillTotals(c)
@@ -359,7 +359,7 @@ func (a *app) skillsBoard(c *ui.Context) {
 				})
 			})
 		})
-		ui.Column(c).Grow(1).Shrink(1).Gap(8).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).Gap(pageGap).Children(func() {
 			if s.sel == skillIssuesKey {
 				a.skillIssues(c)
 				return
@@ -733,7 +733,7 @@ var issueKinds = []struct {
 func (a *app) skillIssues(c *ui.Context) {
 	t := c.Theme()
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Gap(8).Children(func() {
+		ui.Column(c).Gap(pageGap).Children(func() {
 			for _, k := range issueKinds {
 				var items []skills.Issue
 				for _, is := range a.skills.cat.Issues {

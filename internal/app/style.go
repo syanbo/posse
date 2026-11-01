@@ -97,6 +97,7 @@ var spaceScale = []float32{0, 2, 4, 6, 8, 12, 16, 20, 24, 32}
 
 const (
 	cardPad    = 16
+	pageGap    = 12 // 卡片式页面（任务、历史、技能、MCP）四周、两栏之间、卡片之间都是它，三处一样宽才整齐
 	treeIndent = 16
 	hairline   = 0.5 // 分隔线的粗细：2 倍屏上一个物理像素，1pt 显粗；对齐时要让出它
 	focusRing  = 1   // 聚焦框的粗细：要一眼看得见，不跟着分隔线变细

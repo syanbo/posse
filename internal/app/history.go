@@ -517,7 +517,7 @@ func (a *app) historyBoard(c *ui.Context) {
 		a.closeBoardButton(c)
 	})
 	searching := h.resQuery != ""
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
 		list.Children(func() {
@@ -529,7 +529,7 @@ func (a *app) historyBoard(c *ui.Context) {
 				a.sessionList(c)
 			}
 		})
-		ui.Column(c).Grow(1).Shrink(1).Gap(8).Children(func() { a.sessionDetail(c) })
+		ui.Column(c).Grow(1).Shrink(1).Gap(pageGap).Children(func() { a.sessionDetail(c) })
 	})
 	// 上下方向键换选中的会话；焦点在搜索框里、列表上或哪儿都不在时都管用
 	switch {

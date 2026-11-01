@@ -81,7 +81,7 @@ func (a *app) mcpBody(c *ui.Context) {
 			s.mcpSel = list[0].Name
 		}
 	}
-	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(12).Gap(8).Children(func() {
+	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
 		card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("MCP 列表").Children(func() {
 			a.mcpTotals(c)
@@ -106,7 +106,7 @@ func (a *app) mcpBody(c *ui.Context) {
 		})
 		// 配置多的服务详情很长，单独滚动
 		ui.Scroll(c.Key("mcp-detail")).Grow(1).Shrink(1).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
+			ui.Column(c).Gap(pageGap).Children(func() {
 				if s.mcpSel == skillIssuesKey {
 					a.mcpIssues(c)
 					return
