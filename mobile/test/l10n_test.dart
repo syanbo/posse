@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 // 界面文字经 lib/l10n 的 ARB（gen-l10n）：英文表 app_en.arb 是模板，中文表 app_zh.arb 键要一样全；
-// lib 里不写中文字面量，还没改完的文件列在 l10nPending。
+// lib 里不写中文字面量（新文件也一样；l10nPending 留着给以后成批改造用，现在是空的）。
+// 原生插件（Kotlin、Swift）也不写：报错给英文 message 和 code，界面文字由 Dart 按 code 写；
+// iOS 的权限说明 Info.plist 写英文，中文在 zh-Hans.lproj/InfoPlist.strings。
 
 /// 界面文字还没换成 ARB 键的文件（相对 lib/），换完一个去掉一个。
 const l10nPending = <String>{};
@@ -22,13 +24,23 @@ Set<String> _keys(String name) {
 
 final _hanString = RegExp(r'''(['"])[^'"\n]*\p{Script=Han}''', unicode: true);
 
-/// 去掉注释后含汉字字符串的行号。
+/// 去掉注释后含汉字字符串的行号（Dart、Kotlin、Swift 的注释写法一样）。
 List<int> _hanLines(String text) {
   final out = <int>[];
   final lines = text.split('\n');
+  var block = false;
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
-    if (line.trimLeft().startsWith('//')) continue;
+    final t = line.trimLeft();
+    if (block) {
+      if (t.contains('*/')) block = false;
+      continue;
+    }
+    if (t.startsWith('/*')) {
+      block = !t.contains('*/');
+      continue;
+    }
+    if (t.startsWith('//') || t.startsWith('* ')) continue;
     final comment = line.indexOf(' // ');
     if (comment >= 0) line = line.substring(0, comment);
     if (_hanString.hasMatch(line)) out.add(i + 1);
@@ -65,6 +77,30 @@ void main() {
     }
     for (final p in l10nPending.difference(seen)) {
       errors.add('l10nPending 里的 $p 不存在了');
+    }
+    if (errors.isNotEmpty) fail(errors.join('\n'));
+  });
+
+  test('原生插件不写中文字面量', () {
+    final errors = <String>[];
+    for (final (dir, ext) in [
+      ('android/app/src/main/kotlin', '.kt'),
+      ('ios/Runner', '.swift'),
+    ]) {
+      for (final f in Directory(
+        dir,
+      ).listSync(recursive: true).whereType<File>()) {
+        if (!f.path.endsWith(ext)) continue;
+        for (final n in _hanLines(f.readAsStringSync())) {
+          errors.add('${f.path}:$n 原生插件给英文 message 和 code，文字由 Dart 写');
+        }
+      }
+    }
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    if (RegExp(r'\p{Script=Han}', unicode: true).hasMatch(plist)) {
+      errors.add(
+        'ios/Runner/Info.plist 写英文，中文写在 zh-Hans.lproj/InfoPlist.strings',
+      );
     }
     if (errors.isNotEmpty) fail(errors.join('\n'));
   });
