@@ -75,12 +75,9 @@ int toolRunCount(List<ChatBlock> blocks) {
   return blocks.length;
 }
 
-String? chatTimeLabel(int? timestamp) {
+String? chatTimeLabel(AppLocalizations l, int? timestamp) {
   if (timestamp == null || timestamp <= 0) return null;
-  final time = DateTime.fromMillisecondsSinceEpoch(timestamp).toLocal();
-  final hour = time.hour.toString().padLeft(2, '0');
-  final minute = time.minute.toString().padLeft(2, '0');
-  return '${time.month}月${time.day}日 $hour:$minute';
+  return monthDayTime(l, DateTime.fromMillisecondsSinceEpoch(timestamp));
 }
 
 String agentLabel(String? agent) {

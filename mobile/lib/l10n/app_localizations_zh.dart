@@ -388,9 +388,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonMore => '更多';
 
   @override
-  String get errorNotConnected => '还没连上电脑';
-
-  @override
   String get commonPaste => '粘贴';
 
   @override
@@ -792,6 +789,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorNotAFile => '这不是文件';
+
+  @override
+  String get errorNotConnected => '还没连上电脑';
 
   @override
   String get errorOldDesktop => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse';
@@ -1720,6 +1720,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get terminalSwitchToChat => '切换到对话';
 
   @override
+  String timeDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 天前',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String timeHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 小时前',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get timeJustNow => '刚刚';
+
+  @override
+  String timeMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 分钟前',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get updateAndroidNote =>
       '下载完系统会弹出安装确认，覆盖安装，配对不会丢。第一次更新要在系统设置里允许 Posse 安装应用。';
 
@@ -1856,6 +1889,39 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String usageResetCardsExpiring(int count, String date, String stale) {
     return '重置卡 $count 张，最早一张 $date 过期$stale';
+  }
+
+  @override
+  String get usageResetDone => '已重置';
+
+  @override
+  String usageResetsAt(String date) {
+    return '$date 重置';
+  }
+
+  @override
+  String usageResetsInHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 小时后重置',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String usageResetsInHoursMinutes(int hours, int minutes) {
+    return '$hours 小时 $minutes 分钟后重置';
+  }
+
+  @override
+  String usageResetsInMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 分钟后重置',
+    );
+    return '$_temp0';
   }
 
   @override

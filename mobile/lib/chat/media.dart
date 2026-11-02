@@ -354,7 +354,7 @@ class _MediaTileState extends State<_MediaTile> {
     final c = PosseColors.of(context);
     final item = widget.item;
     final thumb = _thumb;
-    final time = historyTime(item.at, widget.now);
+    final time = historyTime(context.l10n, item.at, widget.now);
     return Semantics(
       button: true,
       label: item.video
@@ -544,7 +544,7 @@ class _MediaViewerState extends State<MediaViewer> {
     final rpc = widget.model.rpc;
     final file = _files[_index];
     final to = _target(item);
-    final time = historyTime(item.at, DateTime.now());
+    final time = historyTime(context.l10n, item.at, DateTime.now());
     final sub = [
       if (item.source != item.name(context.l10n)) item.source,
       if (time.isNotEmpty) time,

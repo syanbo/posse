@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/update/update.dart';
 
@@ -18,8 +19,31 @@ void main() {
     expect(r.version, '0.1.1');
     expect(r.build, 460);
     expect(r.notes, hasLength(2));
+    expect(r.notesEn, isEmpty);
     expect(AppRelease.parse({'version': '0.1.1'}), isNull);
     expect(AppRelease.parse('x'), isNull);
+  });
+
+  test('picks English notes for an English interface when there are any', () {
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    final both = AppRelease.parse({
+      ..._latest(460),
+      'notes_en': ['History groups collapse', '', 3, 'Home shows new versions'],
+    })!;
+    expect(both.notesEn, [
+      'History groups collapse',
+      'Home shows new versions',
+    ]);
+    expect(both.notesFor(en), both.notesEn);
+    expect(both.notesFor(zh), ['历史页分组可以展开收起', '首页提示新版本']);
+    // 老的 latest.json 没有 notes_en，或是写坏了：英文界面也显示中文
+    final old = AppRelease.parse(_latest(460))!;
+    expect(old.notesFor(en), old.notes);
+    final broken = AppRelease.parse({..._latest(460), 'notes_en': 'x'})!;
+    expect(broken.notesFor(en), broken.notes);
+    final empty = AppRelease.parse({..._latest(460), 'notes_en': <String>[]})!;
+    expect(empty.notesFor(en), empty.notes);
   });
 
   test('only a newer build counts, and not-ad-hoc builds never ask', () async {

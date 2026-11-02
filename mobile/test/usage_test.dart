@@ -10,6 +10,7 @@ import 'package:posse_mobile/usage/usage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final zh = lookupAppLocalizations(const Locale('zh'));
+final en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   test('parses usage.get', () {
@@ -48,12 +49,27 @@ void main() {
     expect(windowLabel(zh, 44640), '每月');
     expect(windowLabel(zh, 0), '本期');
     final now = DateTime(2026, 10, 20, 1, 0);
+    String reset(AppLocalizations l, Duration d) =>
+        resetText(l, now.add(d), now);
+    expect(resetText(zh, null, now), '');
+    expect(reset(zh, const Duration(minutes: 95)), '1 小时 35 分钟后重置');
+    expect(reset(zh, const Duration(minutes: 120)), '2 小时后重置');
+    expect(reset(zh, const Duration(minutes: 59, seconds: 30)), '60 分钟后重置');
+    expect(reset(zh, const Duration(seconds: 10)), '1 分钟后重置');
+    expect(reset(zh, Duration.zero), '已重置');
+    expect(reset(zh, const Duration(minutes: -1)), '已重置');
     expect(
-      resetText(now.add(const Duration(minutes: 95)), now),
-      '1 小时 35 分钟后重置',
+      resetText(zh, DateTime(2026, 10, 23, 18, 4), now),
+      '10月23日 18:04 重置',
     );
-    expect(resetText(now.subtract(const Duration(minutes: 1)), now), '已重置');
-    expect(resetText(DateTime(2026, 10, 23, 18, 4), now), '10月23日 18:04 重置');
+    expect(reset(en, const Duration(minutes: 95)), 'Resets in 1 hr 35 min');
+    expect(reset(en, const Duration(minutes: 120)), 'Resets in 2 hr');
+    expect(reset(en, const Duration(seconds: 10)), 'Resets in 1 min');
+    expect(reset(en, const Duration(minutes: -1)), 'Already reset');
+    expect(
+      resetText(en, DateTime(2026, 10, 23, 18, 4), now),
+      'Resets Oct 23 18:04',
+    );
   });
 
   testWidgets('sheet shows every window and the spend', (tester) async {

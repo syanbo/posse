@@ -402,9 +402,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonMore => 'More';
 
   @override
-  String get errorNotConnected => 'Not connected to the Mac yet';
-
-  @override
   String get commonPaste => 'Paste';
 
   @override
@@ -830,6 +827,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorNotAFile => 'This isn’t a file.';
+
+  @override
+  String get errorNotConnected => 'Not connected to the Mac yet';
 
   @override
   String get errorOldDesktop =>
@@ -1812,6 +1812,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get terminalSwitchToChat => 'Switch to Chat';
 
   @override
+  String timeDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '$count day ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String timeHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hr ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get timeJustNow => 'Just now';
+
+  @override
+  String timeMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count min ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get updateAndroidNote =>
       'When the download finishes, the system asks you to confirm installing over the current app. Your pairings are kept. The first time, allow Posse to install apps in Settings.';
 
@@ -1964,6 +1998,39 @@ class AppLocalizationsEn extends AppLocalizations {
       one: '$count reset card',
     );
     return '$_temp0, earliest expires $date$stale';
+  }
+
+  @override
+  String get usageResetDone => 'Already reset';
+
+  @override
+  String usageResetsAt(String date) {
+    return 'Resets $date';
+  }
+
+  @override
+  String usageResetsInHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Resets in $count hr',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String usageResetsInHoursMinutes(int hours, int minutes) {
+    return 'Resets in $hours hr $minutes min';
+  }
+
+  @override
+  String usageResetsInMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Resets in $count min',
+    );
+    return '$_temp0';
   }
 
   @override

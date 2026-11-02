@@ -512,10 +512,6 @@
   "@commonMore": {
     "description": "Tooltip of the “more” (…) button in a top bar."
   },
-  "errorNotConnected": "Not connected to the Mac yet",
-  "@errorNotConnected": {
-    "description": "Error when an action needs the Mac but the phone isn’t connected."
-  },
   "commonPaste": "Paste",
   "@commonPaste": {
     "description": "Button: paste the clipboard."
@@ -1125,6 +1121,10 @@
   "errorNotAFile": "This isn’t a file.",
   "@errorNotAFile": {
     "description": "Error from an older Mac when the path isn’t a file."
+  },
+  "errorNotConnected": "Not connected to the Mac yet",
+  "@errorNotConnected": {
+    "description": "Error when an action needs the Mac but the phone isn’t connected."
   },
   "errorOldDesktop": "Posse on the Mac is too old for this. Update Posse on the Mac.",
   "@errorOldDesktop": {
@@ -2405,6 +2405,37 @@
   "@terminalSwitchToChat": {
     "description": "Terminal More sheet: switch to the chat view."
   },
+  "timeDaysAgo": "{count, plural, one {{count} day ago} other {{count} days ago}}",
+  "@timeDaysAgo": {
+    "description": "Relative time of a day or more; count is days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "timeHoursAgo": "{count, plural, other {{count} hr ago}}",
+  "@timeHoursAgo": {
+    "description": "Relative time under one day; count is hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "timeJustNow": "Just now",
+  "@timeJustNow": {
+    "description": "Relative time under one minute (history list, Plan Usage, media)."
+  },
+  "timeMinutesAgo": "{count, plural, other {{count} min ago}}",
+  "@timeMinutesAgo": {
+    "description": "Relative time under one hour; count is minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "updateAndroidNote": "When the download finishes, the system asks you to confirm installing over the current app. Your pairings are kept. The first time, allow Posse to install apps in Settings.",
   "@updateAndroidNote": {
     "description": "Update sheet (Android): note under the button."
@@ -2642,6 +2673,49 @@
       },
       "stale": {
         "type": "String"
+      }
+    }
+  },
+  "usageResetDone": "Already reset",
+  "@usageResetDone": {
+    "description": "Plan Usage: the window’s reset time has passed."
+  },
+  "usageResetsAt": "Resets {date}",
+  "@usageResetsAt": {
+    "description": "Plan Usage: when a window resets, a day or more away; date is a date and time such as Oct 23 18:04.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "usageResetsInHours": "{count, plural, other {Resets in {count} hr}}",
+  "@usageResetsInHours": {
+    "description": "Plan Usage: when a window resets, whole hours under a day; count is hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageResetsInHoursMinutes": "Resets in {hours} hr {minutes} min",
+  "@usageResetsInHoursMinutes": {
+    "description": "Plan Usage: when a window resets, under a day; hours and minutes are numbers.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "usageResetsInMinutes": "{count, plural, other {Resets in {count} min}}",
+  "@usageResetsInMinutes": {
+    "description": "Plan Usage: when a window resets, under one hour; count is minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   },

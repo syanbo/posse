@@ -7,11 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 // lib 里不写中文字面量，还没改完的文件列在 l10nPending。
 
 /// 界面文字还没换成 ARB 键的文件（相对 lib/），换完一个去掉一个。
-const l10nPending = {
-  'chat/transcript.dart',
-  'history/models.dart',
-  'usage/usage.dart',
-};
+const l10nPending = <String>{};
 
 /// 允许中文的：生成的中文表，和各语言用自己名字的语言列表。
 const allowed = {'l10n/app_localizations_zh.dart', 'l10n/l10n.dart'};

@@ -734,12 +734,6 @@ abstract class AppLocalizations {
   /// **'More'**
   String get commonMore;
 
-  /// Error when an action needs the Mac but the phone isn’t connected.
-  ///
-  /// In en, this message translates to:
-  /// **'Not connected to the Mac yet'**
-  String get errorNotConnected;
-
   /// Button: paste the clipboard.
   ///
   /// In en, this message translates to:
@@ -1459,6 +1453,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This isn’t a file.'**
   String get errorNotAFile;
+
+  /// Error when an action needs the Mac but the phone isn’t connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected to the Mac yet'**
+  String get errorNotConnected;
 
   /// Error when the Mac’s Posse doesn’t know a request.
   ///
@@ -3110,6 +3110,30 @@ abstract class AppLocalizations {
   /// **'Switch to Chat'**
   String get terminalSwitchToChat;
 
+  /// Relative time of a day or more; count is days.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} day ago} other {{count} days ago}}'**
+  String timeDaysAgo(int count);
+
+  /// Relative time under one day; count is hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other {{count} hr ago}}'**
+  String timeHoursAgo(int count);
+
+  /// Relative time under one minute (history list, Plan Usage, media).
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get timeJustNow;
+
+  /// Relative time under one hour; count is minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other {{count} min ago}}'**
+  String timeMinutesAgo(int count);
+
   /// Update sheet (Android): note under the button.
   ///
   /// In en, this message translates to:
@@ -3301,6 +3325,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, one {{count} reset card} other {{count} reset cards}}, earliest expires {date}{stale}'**
   String usageResetCardsExpiring(int count, String date, String stale);
+
+  /// Plan Usage: the window’s reset time has passed.
+  ///
+  /// In en, this message translates to:
+  /// **'Already reset'**
+  String get usageResetDone;
+
+  /// Plan Usage: when a window resets, a day or more away; date is a date and time such as Oct 23 18:04.
+  ///
+  /// In en, this message translates to:
+  /// **'Resets {date}'**
+  String usageResetsAt(String date);
+
+  /// Plan Usage: when a window resets, whole hours under a day; count is hours.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other {Resets in {count} hr}}'**
+  String usageResetsInHours(int count);
+
+  /// Plan Usage: when a window resets, under a day; hours and minutes are numbers.
+  ///
+  /// In en, this message translates to:
+  /// **'Resets in {hours} hr {minutes} min'**
+  String usageResetsInHoursMinutes(int hours, int minutes);
+
+  /// Plan Usage: when a window resets, under one hour; count is minutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other {Resets in {count} min}}'**
+  String usageResetsInMinutes(int count);
 
   /// Plan Usage sheet: where this week’s Claude usage went; shares is a list like “Claude Code 92%”.
   ///

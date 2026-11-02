@@ -179,7 +179,7 @@ String planLabel(AppLocalizations l, String plan) =>
 List<String> usageFacts(AppLocalizations l, AgentUsage u, DateTime now) {
   String stale(DateTime? at) =>
       at != null && u.updatedAt.difference(at) > const Duration(minutes: 10)
-      ? l.usageStaleReading(agoText(at, now))
+      ? l.usageStaleReading(agoText(l, at, now))
       : '';
   final out = <String>[];
   final sp = u.spend;
@@ -213,15 +213,12 @@ List<String> usageFacts(AppLocalizations l, AgentUsage u, DateTime now) {
     final exp = u.resetsExpireAt;
     out.add(
       rs > 0 && exp != null
-          ? l.usageResetCardsExpiring(rs, _monthDay(exp), stale(u.resetsAt))
+          ? l.usageResetCardsExpiring(rs, monthDay(l, exp), stale(u.resetsAt))
           : l.usageResetCards(rs, stale(u.resetsAt)),
     );
   }
   return out;
 }
-
-// 日期格式留给第 7 步（intl 的 DateFormat）
-String _monthDay(DateTime d) => '${d.month}月${d.day}日';
 
 List<AgentUsage> parseUsages(Map<String, Object?> res) => [
   for (final u in (res['usages'] as List?) ?? const [])
@@ -264,27 +261,21 @@ enum WindowKind {
   }
 }
 
-/// "2 小时 15 分钟后重置"；超过一天写日期。
-String resetText(DateTime? at, DateTime now) {
+/// 「2 小时 15 分钟后重置」；超过一天写日期。
+String resetText(AppLocalizations l, DateTime? at, DateTime now) {
   if (at == null) return '';
   final d = at.difference(now);
-  if (d <= Duration.zero) return '已重置';
-  if (d < const Duration(hours: 1)) return '${d.inMinutes + 1} 分钟后重置';
+  if (d <= Duration.zero) return l.usageResetDone;
+  if (d < const Duration(hours: 1)) {
+    return l.usageResetsInMinutes(d.inMinutes + 1);
+  }
   if (d < const Duration(hours: 24)) {
     final m = d.inMinutes % 60;
-    return m == 0 ? '${d.inHours} 小时后重置' : '${d.inHours} 小时 $m 分钟后重置';
+    return m == 0
+        ? l.usageResetsInHours(d.inHours)
+        : l.usageResetsInHoursMinutes(d.inHours, m);
   }
-  final hh = at.hour.toString().padLeft(2, '0');
-  final mm = at.minute.toString().padLeft(2, '0');
-  return '${at.month}月${at.day}日 $hh:$mm 重置';
-}
-
-String agoText(DateTime t, DateTime now) {
-  final d = now.difference(t);
-  if (d < const Duration(minutes: 1)) return '刚刚';
-  if (d < const Duration(hours: 1)) return '${d.inMinutes} 分钟前';
-  if (d < const Duration(days: 1)) return '${d.inHours} 小时前';
-  return '${d.inDays} 天前';
+  return l.usageResetsAt(monthDayTime(l, at));
 }
 
 String agentTitle(String agent) => switch (agent) {
@@ -765,7 +756,7 @@ class _UsageSheetState extends State<UsageSheet> {
                 ] else
                   const Spacer(),
                 Text(
-                  agoText(u.updatedAt, now),
+                  agoText(l, u.updatedAt, now),
                   style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ],
@@ -786,10 +777,10 @@ class _UsageSheetState extends State<UsageSheet> {
                             u.updatedAt.difference(w.at!) >
                                 const Duration(minutes: 10)
                         ? l.usageReadingAge(
-                            resetText(w.resetsAt, now),
-                            agoText(w.at!, now),
+                            resetText(l, w.resetsAt, now),
+                            agoText(l, w.at!, now),
                           )
-                        : resetText(w.resetsAt, now),
+                        : resetText(l, w.resetsAt, now),
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],

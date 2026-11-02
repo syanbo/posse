@@ -33,6 +33,7 @@ class AppRelease {
     required this.build,
     required this.size,
     required this.notes,
+    this.notesEn = const [],
     required this.install,
   });
 
@@ -45,6 +46,13 @@ class AppRelease {
   /// mobile/CHANGELOG.md 里这个版本的条目，一行一条。
   final List<String> notes;
 
+  /// 同一批条目的英文（latest.json 的 notes_en），老的 latest.json 没有。
+  final List<String> notesEn;
+
+  /// 按界面语言选更新说明：不是中文界面且有英文时用英文，否则用中文。
+  List<String> notesFor(AppLocalizations l) =>
+      !l.localeName.startsWith('zh') && notesEn.isNotEmpty ? notesEn : notes;
+
   /// iOS 是 itms-services 链接：打开后系统弹安装确认，和安装页的按钮一样；安卓是 APK 的地址。
   final String install;
 
@@ -54,16 +62,17 @@ class AppRelease {
     final build = json['build'];
     final install = json['install'];
     if (version is! String || build is! int || install is! String) return null;
-    final notes = json['notes'];
+    List<String> lines(Object? v) => [
+      if (v is List)
+        for (final n in v)
+          if (n is String && n.isNotEmpty) n,
+    ];
     return AppRelease(
       version: version,
       build: build,
       size: json['size'] is String ? json['size'] as String : '',
-      notes: [
-        if (notes is List)
-          for (final n in notes)
-            if (n is String && n.isNotEmpty) n,
-      ],
+      notes: lines(json['notes']),
+      notesEn: lines(json['notes_en']),
       install: install,
     );
   }
@@ -363,7 +372,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final note in r.notes)
+                  for (final note in r.notesFor(l))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(

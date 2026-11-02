@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart' show Locale;
 import 'package:posse_mobile/l10n/l10n.dart';
 
 final zh = lookupAppLocalizations(const Locale('zh'));
+final en = lookupAppLocalizations(const Locale('en'));
 
 ChatMessage message(
   String id,
@@ -65,8 +66,14 @@ void main() {
 
   test('time label matches the history detail clock', () {
     final at = DateTime(2026, 10, 1, 15, 4);
-    expect(chatTimeLabel(at.millisecondsSinceEpoch), '10月1日 15:04');
-    expect(chatTimeLabel(null), isNull);
+    expect(chatTimeLabel(zh, at.millisecondsSinceEpoch), '10月1日 15:04');
+    expect(chatTimeLabel(en, at.millisecondsSinceEpoch), 'Oct 1 15:04');
+    expect(
+      chatTimeLabel(zh, DateTime(2026, 1, 2, 8, 5).millisecondsSinceEpoch),
+      '1月2日 08:05',
+    );
+    expect(chatTimeLabel(zh, null), isNull);
+    expect(chatTimeLabel(zh, 0), isNull);
     expect(chatWho(zh, 'user', 'grok'), '你');
     expect(chatWho(zh, 'assistant', 'grok'), 'Grok');
   });

@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'app_localizations.dart';
 
 export 'app_localizations.dart';
+export 'dates.dart';
 
 /// 界面文字：`context.l10n.settingsLanguageTitle`。没有译文表时（测试里自己建的 MaterialApp）用中文，
 /// 测试照旧按中文找元素；App 里 MaterialApp 总带着译文表。
