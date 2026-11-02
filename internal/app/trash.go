@@ -10,6 +10,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/history"
+	"posse/locales"
 )
 
 // sessionTrashPaths 是把一个会话移到废纸篓要移走的文件和目录。只认各家会话目录里、
@@ -66,23 +67,23 @@ func sessionTrashPaths(s history.Session) []string {
 }
 
 // askTrashSession 确认后把会话移到废纸篓，再让常驻进程更新索引，会话就从历史里去掉。
-func (a *app) askTrashSession(d *historyDetail) {
+func (a *app) askTrashSession(m locales.Messages, d *historyDetail) {
 	s := d.Session
 	if d.Terminal != "" {
-		a.err = "这个会话正在 Posse 的终端里运行，先关掉那个终端再移到废纸篓。"
+		a.err = m.TrashSessionRunning()
 		return
 	}
 	paths := sessionTrashPaths(s)
 	if len(paths) == 0 {
-		a.err = "认不出这个会话的文件位置，没有移动：" + s.Path
+		a.err = m.TrashUnknownPath(s.Path)
 		return
 	}
-	a.confirm("把会话「"+oneLine(s.Title)+"」移到废纸篓？",
-		"会话文件会移到废纸篓，可以从废纸篓找回。"+agentTitle(s.Agent)+" 自己的恢复列表里也会看不到它。",
-		"移到废纸篓", func() {
+	a.confirm(m.TrashSessionConfirm(oneLine(s.Title)),
+		m.TrashSessionBody(agentTitle(s.Agent)),
+		m.CommonMoveToTrash(), func() {
 			for _, p := range paths {
 				if err := mygo.Shell.TrashItem(p); err != nil {
-					a.win.Update(func() { a.err = "移到废纸篓失败：" + errtext.Text(err) })
+					a.win.Update(func() { a.err = m.TrashMoveError(errtext.Text(err)) })
 					return
 				}
 			}
@@ -98,12 +99,12 @@ func (a *app) askTrashSession(d *historyDetail) {
 }
 
 // trashListedSession 是列表上的删除：先问常驻进程这个会话是不是正在终端里运行，再走 askTrashSession 确认。
-func (a *app) trashListedSession(s history.Session) {
+func (a *app) trashListedSession(m locales.Messages, s history.Session) {
 	go func() {
 		var d historyDetail
 		if a.call("history.show", map[string]any{"session": s.ID, "path": s.Path, "tail": 1, "tools": false}, &d, 10*time.Second) != nil {
 			return
 		}
-		a.win.Update(func() { a.askTrashSession(&d) })
+		a.win.Update(func() { a.askTrashSession(m, &d) })
 	}()
 }

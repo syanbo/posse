@@ -11,6 +11,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/history"
+	"posse/locales"
 )
 
 // usageView 是右侧"技能与工具"面板的状态：当前终端的会话用到了哪些技能、MCP 工具、命令行程序和网址。
@@ -79,31 +80,32 @@ func (a *app) pollUsage(c *ui.Context, cur *terminalInfo) {
 func (a *app) usagePanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollUsage(c, cur)
 	u := &a.usage
-	return a.rightPanel(c, "技能与工具", func() {
+	m := L(c)
+	return a.rightPanel(c, m.UsageToolsTitle(), func() {
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
 				case cur.Agent == "":
-					usageNote(c, "普通终端没有会话记录。")
+					usageNote(c, m.UsageToolsPlainTerminal())
 				case !usageSupported(cur.Agent):
-					usageNote(c, agentTitle(cur.Agent)+" 的会话暂不支持统计。")
+					usageNote(c, m.UsageToolsUnsupported(agentTitle(cur.Agent)))
 				case u.err != "":
-					usageNote(c, "读会话文件失败："+u.err)
+					usageNote(c, m.UsageToolsReadError(u.err))
 				case !u.found && u.poll.at.IsZero():
-					usageNote(c, "正在读取…")
+					usageNote(c, m.CommonLoading())
 				case !u.found:
-					usageNote(c, "还没找到会话文件，agent 开始对话后会出现。")
+					usageNote(c, m.UsageToolsNoFile())
 				case len(u.data.Skills) == 0 && len(u.data.MCP) == 0 && len(u.data.CLI) == 0 && len(u.data.Web) == 0 && u.data.Searches == 0:
-					usageNote(c, "这个会话还没用到技能、MCP、命令行工具和网址。")
+					usageNote(c, m.UsageToolsNone())
 				default:
 					a.usageFilter(c)
 					mode := a.usageMode()
 					switch {
 					case mode == usageSkills && len(u.data.Skills) == 0 && len(u.data.MCP) == 0:
-						usageNote(c, "这个会话还没用到技能和 MCP。")
+						usageNote(c, m.UsageToolsNoSkills())
 						return
 					case mode == usageWeb && len(u.data.Web) == 0 && u.data.Searches == 0:
-						usageNote(c, "这个会话还没访问网址。")
+						usageNote(c, m.UsageToolsNoWeb())
 						return
 					}
 					a.usageSummary(c, u.data, mode)
@@ -138,8 +140,9 @@ func (a *app) usageMode() usageMode {
 // 只看网址。记在 ui.json 的 usageSkillsOnly、usageWebOnly，所有会话共用。
 func (a *app) usageFilter(c *ui.Context) {
 	sel := int(a.usageMode())
+	m := L(c)
 	ui.Row(c).Padding(0, 4).Children(func() {
-		if segmented(c, &sel, "筛选", "全部", "技能和 MCP", "网址") {
+		if segmented(c, &sel, m.UsageToolsFilter(), m.CommonAll(), m.UsageToolsSkillsMCP(), m.UsageToolsWeb()) {
 			a.state.UsageSkillsOnly, a.state.UsageWebOnly = sel == int(usageSkills), sel == int(usageWeb)
 			a.saveState()
 		}
@@ -153,20 +156,23 @@ func usageNote(c *ui.Context, text string) {
 // copyName 把技能、MCP 服务或工具的名字复制到剪贴板：常要拿去搜配置、写进提示里。
 func (a *app) copyName(c *ui.Context, name string) {
 	c.WriteClipboard(name)
-	a.notify("已复制 "+name, "", nil)
+	a.notify(L(c).UsageToolsCopied(name), "", nil)
 }
 
 // cliSources 是命令行程序分组的顺序和名字。
-var cliSources = []struct{ source, label string }{
-	{history.SourceHomebrew, "Homebrew"},
-	{history.SourceOther, "其他命令行"},
-	{history.SourceSystem, "系统自带"},
+var cliSources = []struct {
+	source string
+	label  func(locales.Messages) string
+}{
+	{history.SourceHomebrew, func(locales.Messages) string { return "Homebrew" }},
+	{history.SourceOther, locales.Messages.UsageToolsCLIOther},
+	{history.SourceSystem, locales.Messages.UsageToolsCLISystem},
 }
 
-func cliSourceLabel(source string) string {
+func cliSourceLabel(m locales.Messages, source string) string {
 	for _, s := range cliSources {
 		if s.source == source {
-			return s.label
+			return s.label(m)
 		}
 	}
 	return ""
@@ -194,9 +200,9 @@ func (a *app) usageSummary(c *ui.Context, u history.Usage, mode usageMode) {
 	if len(u.Web) > 0 || u.Searches > 0 {
 		ui.Column(c).Gap(6).Padding(0, 4).Children(func() {
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, "网址").FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
+				ui.Text(c, L(c).UsageToolsWeb()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
 				if u.Searches > 0 {
-					ui.Text(c, fmt.Sprintf("搜索 %d 次", u.Searches)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted)
+					ui.Text(c, L(c).UsageToolsSearches(u.Searches)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted)
 				}
 			})
 			ui.Row(c).Wrap().Gap(6).Children(func() {
@@ -221,7 +227,7 @@ func (a *app) usageCLI(c *ui.Context, u history.Usage) {
 			continue
 		}
 		ui.Column(c).Gap(6).Padding(0, 4).Children(func() {
-			ui.Text(c, g.label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
+			ui.Text(c, g.label(L(c))).FontSize(fsSmall).FontWeight(fwMedium).TextColor(c.Theme().TextMuted)
 			ui.Row(c).Wrap().Gap(6).Children(func() {
 				for _, it := range items {
 					a.usageChip(c, "cli-"+it.Name, iconTerminal, cliColor(c), it.Name, it.Count)
@@ -234,7 +240,7 @@ func (a *app) usageCLI(c *ui.Context, u history.Usage) {
 func (a *app) usageChip(c *ui.Context, key string, icon *ui.SVG, color ui.Color, name string, n int) {
 	t := c.Theme()
 	b := ui.Row(c.Key(key)).Height(sz(22)).Padding(0, 8, 0, 6).Gap(4).Radius(full(sz(22))).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label("复制 " + name)
+		Role(ui.RoleButton).Label(L(c).UsageToolsCopyLabel(name))
 	bg := colors(t).fill
 	if b.Hovered() {
 		bg = colors(t).wash
@@ -276,9 +282,9 @@ func webSite(raw string) (host, rest string) {
 }
 
 // webVia 是网址的来源说明：用户发的写"你发的"，其余是工具名或程序名。
-func webVia(via string) string {
+func webVia(m locales.Messages, via string) string {
 	if via == history.ViaUser {
-		return "你发的"
+		return m.UsageToolsViaUser()
 	}
 	return via
 }
@@ -315,36 +321,37 @@ func usageSteps(events []history.UsageEvent, mode usageMode) []usageStep {
 // 网址复制完整网址，悬停看完整网址，⌘ 点击在网页标签里打开、⇧⌘ 点击用浏览器打开（设置里互换了就反过来）。
 func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.UsageEvent, mode usageMode) {
 	t := c.Theme()
+	m := L(c)
 	p := colors(t)
 	steps := usageSteps(events, mode)
 	if len(steps) == 0 {
 		return
 	}
 	ui.Column(c).Gap(0).Padding(6, 4, 0, 4).Children(func() {
-		ui.Text(c, "时间线").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
+		ui.Text(c, m.UsageToolsTimeline()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
 		for i, st := range steps {
 			color, kind, name := mcpColor(c), st.ev.Server, st.ev.Tool
 			if st.ev.Failed {
-				kind += " · 失败" // 出错或被拒的 MCP 调用，没算进次数
+				kind += " · " + m.CommonFailed() // 出错或被拒的 MCP 调用，没算进次数
 			}
 			copied, tip := "", st.ev.Command
 			switch {
 			case st.ev.Skill != "":
-				color, kind, name = p.honey, "技能", st.ev.Skill
+				color, kind, name = p.honey, m.UsageToolsSkill(), st.ev.Skill
 			case st.ev.CLI != "":
-				color, kind, name = cliColor(c), cliSourceLabel(st.ev.Source), st.ev.CLI
+				color, kind, name = cliColor(c), cliSourceLabel(m, st.ev.Source), st.ev.CLI
 			case st.ev.URL != "":
 				host, rest := webSite(st.ev.URL)
-				color, kind, name, copied = webColor(c), webVia(st.ev.Via), host, st.ev.URL
+				color, kind, name, copied = webColor(c), webVia(m, st.ev.Via), host, st.ev.URL
 				if rest != "" {
 					kind += " · " + rest
 				}
-				tip = st.ev.URL + "\n⌘ 点击在 Posse 中打开，⇧⌘ 点击用浏览器打开"
+				tip = m.UsageToolsURLTip(st.ev.URL)
 				if a.state.LinkSwapSystem {
-					tip = st.ev.URL + "\n⌘ 点击用浏览器打开，⇧⌘ 点击在 Posse 中打开"
+					tip = m.UsageToolsURLTipSwapped(st.ev.URL)
 				}
 			case st.ev.Query != "":
-				color, kind, name = webColor(c), "搜索 · "+webVia(st.ev.Via), st.ev.Query
+				color, kind, name = webColor(c), m.UsageToolsSearchVia(webVia(m, st.ev.Via)), st.ev.Query
 			}
 			if copied == "" {
 				copied = name
@@ -364,7 +371,7 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 				ui.Column(c).Grow(1).Shrink(1).Gap(2).Padding(0, 0, 16, 0).Children(func() {
 					ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 						nt := ui.Text(c, name).FontSize(fsCode).Font(monoFont).SingleLine().Shrink(1).
-							Role(ui.RoleButton).Label("复制 " + copied)
+							Role(ui.RoleButton).Label(m.UsageToolsCopyLabel(copied))
 						if nt.Hovered() {
 							nt.TextColor(t.Accent)
 						}
@@ -382,7 +389,7 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 						ui.Spacer(c)
 						if !st.ev.At.IsZero() {
 							ui.Text(c, st.ev.At.Local().Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
-								Tooltip(st.first.Local().Format("1月2日 15:04:05") + " 起")
+								Tooltip(m.UsageToolsSince(st.first.Local().Format("1月2日 15:04:05")))
 						}
 					})
 					ui.Text(c, kind).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()

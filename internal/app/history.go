@@ -921,7 +921,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 				c.WriteClipboard(resumeCommand(s))
 			}
 			if pressable(textButton(c, "移到废纸篓")).Clicked() {
-				a.askTrashSession(d)
+				a.askTrashSession(L(c), d)
 			}
 			ui.Spacer(c)
 			ui.Checkbox(c, &h.tools, "显示工具调用")

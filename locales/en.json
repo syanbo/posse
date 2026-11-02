@@ -3180,6 +3180,175 @@
   "@logUncommitted": {
     "description": "Label in the Annotate view for lines that are not committed yet."
   },
+  "mcpAgentCountTip": "MCP servers available to {agent}",
+  "@mcpAgentCountTip": {
+    "description": "MCP page: tooltip of an agent’s count at the top of the list.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpConfigCount": "{count, plural, one {# config} other {# configs}}",
+  "@mcpConfigCount": {
+    "description": "MCP details: number of config entries for this server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mcpConfigNote": "Environment variables and headers show names only, not values",
+  "@mcpConfigNote": {
+    "description": "MCP details: note next to the Configuration title."
+  },
+  "mcpConfigTitle": "Configuration",
+  "@mcpConfigTitle": {
+    "description": "MCP details: card title listing each config entry."
+  },
+  "mcpCount": "{count, plural, one {# MCP server} other {# MCP servers}}",
+  "@mcpCount": {
+    "description": "MCP page: total at the top of the list.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mcpCursorInferredTip": "Where Cursor stores approvals and switches hasn’t been verified; everything found counts as enabled",
+  "@mcpCursorInferredTip": {
+    "description": "MCP details: tooltip of the Inferred marker for Cursor."
+  },
+  "mcpEnvKeys": "Environment variables: {names}",
+  "@mcpEnvKeys": {
+    "description": "MCP details: environment variable names of a config entry, joined with skillsListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpFromPlugin": "From Plugin",
+  "@mcpFromPlugin": {
+    "description": "MCP details: marker on a config entry that comes with a plugin."
+  },
+  "mcpHeaderKeys": "Headers: {names}",
+  "@mcpHeaderKeys": {
+    "description": "MCP details: request header names of a config entry, joined with skillsListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpInferredTip": "Couldn’t ask the agent itself (program not found or timed out); inferred from the read rules in its docs",
+  "@mcpInferredTip": {
+    "description": "MCP details: tooltip of the Inferred marker."
+  },
+  "mcpIssueCount": "{count, plural, one {# issue} other {# issues}}",
+  "@mcpIssueCount": {
+    "description": "MCP details: number of health check issues for this server.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mcpIssuesLabel": "MCP Health Check",
+  "@mcpIssuesLabel": {
+    "description": "MCP page: health check row label and card title."
+  },
+  "mcpIssuesNote": "Checks config files only, without starting servers.",
+  "@mcpIssuesNote": {
+    "description": "MCP health check: note under the title."
+  },
+  "mcpListLabel": "MCP List",
+  "@mcpListLabel": {
+    "description": "MCP page: accessibility label of the server list card."
+  },
+  "mcpMismatch": "The configs differ ({detail}); the agents may not launch the same server",
+  "@mcpMismatch": {
+    "description": "MCP health check: the server is configured differently for different agents. detail says what differs.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpMissingCommand": "Launch command not found: {path}",
+  "@mcpMissingCommand": {
+    "description": "MCP health check: the server’s launch command no longer exists.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "mcpNoMatch": "No matching MCP servers.",
+  "@mcpNoMatch": {
+    "description": "MCP page: empty state when the search or filter matches nothing."
+  },
+  "mcpTransportHTTP": "Remote HTTP",
+  "@mcpTransportHTTP": {
+    "description": "MCP details: how the server connects."
+  },
+  "mcpTransportSSE": "Remote SSE",
+  "@mcpTransportSSE": {
+    "description": "MCP details: how the server connects."
+  },
+  "mcpTransportStdio": "Local Process",
+  "@mcpTransportStdio": {
+    "description": "MCP details: how the server connects (started as a local process)."
+  },
+  "memoryButtonLabel": "Memory {size}, {count, plural, one {# terminal running} other {# terminals running}}",
+  "@memoryButtonLabel": {
+    "description": "Status bar: accessibility label of the memory button.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "memoryCounting": "Counting…",
+  "@memoryCounting": {
+    "description": "Memory popover: shown while measuring."
+  },
+  "memoryDaemon": "Daemon (hosts all terminals)",
+  "@memoryDaemon": {
+    "description": "Memory popover: row for the daemon."
+  },
+  "memoryNoTerminals": "No running terminals.",
+  "@memoryNoTerminals": {
+    "description": "Memory popover: empty state."
+  },
+  "memoryNote": "Terminals are measured by process tree: the shell, the agent and the child processes it starts (such as MCP servers), matching “Memory” in Activity Monitor.",
+  "@memoryNote": {
+    "description": "Memory popover: note at the bottom."
+  },
+  "memoryTermPrograms": "Programs in Terminals",
+  "@memoryTermPrograms": {
+    "description": "Memory popover: section title."
+  },
+  "memoryTip": "Memory and Terminals",
+  "@memoryTip": {
+    "description": "Status bar: tooltip of the memory button."
+  },
+  "memoryTitle": "Memory",
+  "@memoryTitle": {
+    "description": "Memory popover title."
+  },
+  "memoryWindow": "Window (pid {pid})",
+  "@memoryWindow": {
+    "description": "Memory popover: row for the window process.",
+    "placeholders": {
+      "pid": {
+        "type": "String"
+      }
+    }
+  },
   "menuCheckForUpdates": "Check for Updates…",
   "@menuCheckForUpdates": {
     "description": "App menu item."
@@ -3270,6 +3439,26 @@
         "type": "String"
       }
     }
+  },
+  "runningEmpty": "No running sessions",
+  "@runningEmpty": {
+    "description": "Sidebar running list: empty state."
+  },
+  "runningFilterTip": "Show Only Running Sessions",
+  "@runningFilterTip": {
+    "description": "Sidebar: tooltip of the filter toggle next to the heading."
+  },
+  "runningMainWorkspace": "Main Workspace",
+  "@runningMainWorkspace": {
+    "description": "Sidebar running list: name of the main workspace after the project name."
+  },
+  "runningProjects": "Projects",
+  "@runningProjects": {
+    "description": "Sidebar: heading above the project list."
+  },
+  "runningTitle": "Running",
+  "@runningTitle": {
+    "description": "Sidebar: heading when only running sessions are shown."
   },
   "settingsAboutDaemon": "Daemon",
   "@settingsAboutDaemon": {
@@ -3627,9 +3816,512 @@
   "@settingsWorkspaceMeta": {
     "description": "Row label and segmented control label."
   },
+  "skillsAgentCountTip": "Skills available to {agent}",
+  "@skillsAgentCountTip": {
+    "description": "Skills page: tooltip of an agent’s count at the top of the list.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsAgentFilter": "Filter by Agent",
+  "@skillsAgentFilter": {
+    "description": "Skills page toolbar: accessibility label of the agent filter (All, Claude, Codex, Grok, Cursor)."
+  },
+  "skillsAgentStatus": "Agent Status",
+  "@skillsAgentStatus": {
+    "description": "Skill and MCP details: card title listing each agent’s state."
+  },
+  "skillsAgentUsedTimes": "{agent}: {count, plural, one {used # time} other {used # times}}",
+  "@skillsAgentUsedTimes": {
+    "description": "Skill and MCP details: tooltip of an agent’s usage count.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsAlsoClaude": "Also for Claude",
+  "@skillsAlsoClaude": {
+    "description": "Install dialog: switch label."
+  },
+  "skillsChangeError": "Couldn’t change {file}: {error}",
+  "@skillsChangeError": {
+    "description": "Error bar: writing the confirmed skill switch change failed.",
+    "placeholders": {
+      "file": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsCheckUpdates": "Check for Updates",
+  "@skillsCheckUpdates": {
+    "description": "Skills page toolbar: button that checks npx-installed skills for new versions."
+  },
+  "skillsChecking": "Checking…",
+  "@skillsChecking": {
+    "description": "Skills page toolbar: the Check for Updates button while checking."
+  },
+  "skillsClaudeNote": "Codex, Grok and Cursor all read .agents/skills, so installing there works for them; Claude only reads its own folder and needs a separate link.",
+  "@skillsClaudeNote": {
+    "description": "Install dialog: note under the Also for Claude switch."
+  },
+  "skillsClauseSeparator": ", ",
+  "@skillsClauseSeparator": {
+    "description": "Skills page: joins the parts of the update check result, such as “2 sources couldn’t be checked” and “1 no longer in its source”."
+  },
+  "skillsClickToDisable": "Click to turn off",
+  "@skillsClickToDisable": {
+    "description": "Skills: second line of an agent mark tooltip when clicking turns the skill off."
+  },
+  "skillsClickToEnable": "Click to turn on",
+  "@skillsClickToEnable": {
+    "description": "Skills: second line of an agent mark tooltip when clicking turns the skill on."
+  },
+  "skillsConfirmChange": "Apply Change",
+  "@skillsConfirmChange": {
+    "description": "Skill switch confirmation dialog: primary button."
+  },
+  "skillsCount": "{count, plural, one {# skill} other {# skills}}",
+  "@skillsCount": {
+    "description": "Skills page: total at the top of the list.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsCountingUsage": "Counting usage…",
+  "@skillsCountingUsage": {
+    "description": "Skills page: shown at the top of the list while usage is being counted."
+  },
+  "skillsCountingUsageProgress": "Counting usage {done}/{total}",
+  "@skillsCountingUsageProgress": {
+    "description": "Skills page: usage counting progress, sessions done out of total.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsCursorInferredTip": "Which folders Cursor reads hasn’t been verified; it’s inferred from folder names found in its program.",
+  "@skillsCursorInferredTip": {
+    "description": "Skill details: tooltip of the Inferred marker for Cursor."
+  },
+  "skillsDeleteBody": "npx skills deletes these directly (including same-name copies in every agent’s folder), without using the Trash:\n{paths}",
+  "@skillsDeleteBody": {
+    "description": "Skills: body of the command dialog that deletes a skill. paths is one path per line.",
+    "placeholders": {
+      "paths": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsDeleteConfirm": "Delete {name}?",
+  "@skillsDeleteConfirm": {
+    "description": "Skills: title of the command dialog that deletes an npx-installed skill.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsDisableTitle": "Turn Off {skill} in {agent}",
+  "@skillsDisableTitle": {
+    "description": "Skill switch confirmation dialog: title when turning a skill off.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "skill": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsEnableIn": "Enable in {agent}",
+  "@skillsEnableIn": {
+    "description": "Skill details: accessibility label of the switch that turns the skill on or off for an agent.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsEnableTitle": "Turn On {skill} in {agent}",
+  "@skillsEnableTitle": {
+    "description": "Skill switch confirmation dialog: title when turning a skill on.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "skill": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsGoneCount": "{count, plural, one {# no longer in its source} other {# no longer in their sources}}",
+  "@skillsGoneCount": {
+    "description": "Skills page: update check result, number of skills that disappeared from their sources.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsGoneLine": "{name}: no longer in its source; npx skills update skips it",
+  "@skillsGoneLine": {
+    "description": "Skills page: tooltip line of the update check result for a skill that disappeared from its source.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsGoneNote": "It’s no longer in its source (deleted, renamed or moved upstream), so npx skills update can’t update it. Check the source page for what replaced it, install that, then delete this one.",
+  "@skillsGoneNote": {
+    "description": "Skill details: warning for a skill that disappeared from its source."
+  },
+  "skillsHasUpdate": "Update Available",
+  "@skillsHasUpdate": {
+    "description": "Skills page: marker in a list row for a skill with a new version."
+  },
+  "skillsInferred": "Inferred",
+  "@skillsInferred": {
+    "description": "Skill and MCP details: marker next to an agent’s state when its read rules are inferred."
+  },
+  "skillsInferredNote": "Read rules are inferred, not verified",
+  "@skillsInferredNote": {
+    "description": "Skills and MCP: line of an agent mark tooltip when the agent’s read rules are inferred."
+  },
+  "skillsInstall": "Install",
+  "@skillsInstall": {
+    "description": "Install dialog: primary button."
+  },
+  "skillsInstallEllipsis": "Install…",
+  "@skillsInstallEllipsis": {
+    "description": "Skills page toolbar and project Skills tab: button that opens the install dialog."
+  },
+  "skillsInstallGlobalNote": "Installs to your user folder (~/.agents/skills), available to all projects.",
+  "@skillsInstallGlobalNote": {
+    "description": "Install dialog: note under the title (user scope)."
+  },
+  "skillsInstallNode": "Install Node.js",
+  "@skillsInstallNode": {
+    "description": "Install dialog: primary button when npx is missing; also the title of the command dialog that installs Node.js."
+  },
+  "skillsInstallNodeBody": "Installs Node.js with Homebrew; installing skills needs the npx that comes with it.",
+  "@skillsInstallNodeBody": {
+    "description": "Command dialog body when installing Node.js."
+  },
+  "skillsInstallProjectNote": "Installs to .agents/skills in “{project}”, available only in this project.",
+  "@skillsInstallProjectNote": {
+    "description": "Install dialog: note under the title (project scope).",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsInstallProjectTitle": "Install to Project",
+  "@skillsInstallProjectTitle": {
+    "description": "Install dialog title (project scope)."
+  },
+  "skillsInstallTitle": "Install Skills",
+  "@skillsInstallTitle": {
+    "description": "Install dialog title (user scope); also the title of the command dialog that runs the install."
+  },
+  "skillsInstalled": "Installed",
+  "@skillsInstalled": {
+    "description": "Install dialog: marker next to a skill that is already installed."
+  },
+  "skillsIssueBrokenLink": "Broken Links",
+  "@skillsIssueBrokenLink": {
+    "description": "Skills health check: card title."
+  },
+  "skillsIssueBrokenLinkNote": "The folder the link points to no longer exists, so no agent can see it.",
+  "@skillsIssueBrokenLinkNote": {
+    "description": "Skills health check: explanation under Broken Links."
+  },
+  "skillsIssueDuplicate": "Name Conflicts",
+  "@skillsIssueDuplicate": {
+    "description": "Skills health check: card title."
+  },
+  "skillsIssueDuplicateNote": "An agent sees two skills with the same name, and only the preferred one takes effect. You can merge them: the inactive one moves to the Trash and is replaced with a link to the active one, so every agent reads the same copy.",
+  "@skillsIssueDuplicateNote": {
+    "description": "Skills health check: explanation under Name Conflicts."
+  },
+  "skillsIssueLockMissing": "Lock File Mismatch",
+  "@skillsIssueLockMissing": {
+    "description": "Skills health check: card title."
+  },
+  "skillsIssueLockMissingNote": "The npx skills lock file lists it, but no agent’s skill folder has it (it was probably deleted by hand). If you don’t need it, remove it from the lock file; otherwise reinstall it.",
+  "@skillsIssueLockMissingNote": {
+    "description": "Skills health check: explanation under Lock File Mismatch."
+  },
+  "skillsIssueRedundantLink": "Redundant Links",
+  "@skillsIssueRedundantLink": {
+    "description": "Skills health check: card title."
+  },
+  "skillsIssueRedundantLinkNote": "The agents that read the link’s folder already see its target from elsewhere, so deleting it changes nothing.",
+  "@skillsIssueRedundantLinkNote": {
+    "description": "Skills health check: explanation under Redundant Links."
+  },
+  "skillsIssuesFound": "{count, plural, one {Health check found # issue} other {Health check found # issues}}",
+  "@skillsIssuesFound": {
+    "description": "Skills and MCP pages: row at the top of the list that opens the health check results.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsIssuesLabel": "Health Check",
+  "@skillsIssuesLabel": {
+    "description": "Skills page: accessibility label of the row that opens the health check results."
+  },
+  "skillsLastUsed": "Last used {time}",
+  "@skillsLastUsed": {
+    "description": "Skills and MCP: when it was last used. time is a date and time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsLinkBody": "Creates a link to it in a folder {agent} reads, without copying files:\n{link} → {target}\n\nUse this switch to turn it off later; to undo, move the link to the Trash.",
+  "@skillsLinkBody": {
+    "description": "Skills: confirmation body for linking a skill into a folder an agent reads.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "link": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsLinkButton": "Create Link",
+  "@skillsLinkButton": {
+    "description": "Skills: confirmation button for linking a skill."
+  },
+  "skillsLinkConfirm": "Let {agent} see {name}?",
+  "@skillsLinkConfirm": {
+    "description": "Skills: confirmation title for linking a skill into a folder an agent reads.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsLinkError": "Couldn’t create the link: {error}",
+  "@skillsLinkError": {
+    "description": "Error bar: creating a skill link failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsLinkLabel": "Let {agent} See It",
+  "@skillsLinkLabel": {
+    "description": "Skill details: accessibility label of the switch that links the skill into a folder the agent reads.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsLinkTip": "Create a link to it in {dir}",
+  "@skillsLinkTip": {
+    "description": "Skill details: tooltip of the switch that links the skill into a folder the agent reads.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsList": "List Skills",
+  "@skillsList": {
+    "description": "Install dialog: primary button that lists the skills in the source."
+  },
+  "skillsListError": "Couldn’t read the skill list: {error}",
+  "@skillsListError": {
+    "description": "Install dialog: error when the source could not be listed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsListLabel": "Skill List",
+  "@skillsListLabel": {
+    "description": "Skills page: accessibility label of the skill list card."
+  },
   "skillsListSeparator": ", ",
   "@skillsListSeparator": {
     "description": "Skills & Tools: separator between folders in a list inside a sentence (skillsNotReadReads)."
+  },
+  "skillsListing": "Reading skills from the source…",
+  "@skillsListing": {
+    "description": "Install dialog: shown while listing the skills in the source."
+  },
+  "skillsMergeButton": "Merge",
+  "@skillsMergeButton": {
+    "description": "Skills health check: merge confirmation button."
+  },
+  "skillsMergeConfirm": "Merge {name} into one copy?",
+  "@skillsMergeConfirm": {
+    "description": "Skills health check: merge confirmation title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsMergeDiffBody": "The two copies differ: after merging, the agents that read this one switch to the active copy. Its content can be recovered from the Trash.\n\nMove to Trash: {path}\nReplace with a link to: {target}",
+  "@skillsMergeDiffBody": {
+    "description": "Skills health check: merge confirmation body when the copies differ.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsMergeError": "Couldn’t merge {name}: {error}",
+  "@skillsMergeError": {
+    "description": "Error bar: merging duplicate skills failed.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsMergeSameBody": "The content matches the active copy, so what each agent reads stays the same.\n\nMove to Trash: {path}\nReplace with a link to: {target}",
+  "@skillsMergeSameBody": {
+    "description": "Skills health check: merge confirmation body when both copies are identical.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsMergeTip": "Merge: Replace with a Link to the Active Copy",
+  "@skillsMergeTip": {
+    "description": "Skills health check: icon button tooltip on a name conflict."
+  },
+  "skillsMissingDir": "Missing: {path}",
+  "@skillsMissingDir": {
+    "description": "Skills health check: detail line of a lock file mismatch. path is the folder that is missing.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsMoreLinks": "…{count} in total",
+  "@skillsMoreLinks": {
+    "description": "Skills: last line of a shortened list of links in a confirmation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsNamesPlaceholder": "Install only some (names separated by spaces; leave empty for all)",
+  "@skillsNamesPlaceholder": {
+    "description": "Install dialog: placeholder of the names field shown when the source could not be listed."
+  },
+  "skillsNeedProject": "Add a project first: the command runs in a workspace terminal.",
+  "@skillsNeedProject": {
+    "description": "Error bar: installing or running an npx skills command with no project added."
+  },
+  "skillsNeverUsed": "Never used in sessions",
+  "@skillsNeverUsed": {
+    "description": "Skills and MCP lists: usage line for something never used."
+  },
+  "skillsNeverUsedNote": "No agent’s session history shows it being used.",
+  "@skillsNeverUsedNote": {
+    "description": "Skill and MCP details: usage card when never used."
+  },
+  "skillsNewEllipsis": "New…",
+  "@skillsNewEllipsis": {
+    "description": "Project Skills tab in the Files Panel: button that opens the New Project Skill dialog."
+  },
+  "skillsNewError": "Couldn’t create it: {error}",
+  "@skillsNewError": {
+    "description": "Error bar: creating a project skill failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsNewExists": "{path} already exists",
+  "@skillsNewExists": {
+    "description": "New Project Skill: reason shown when the folder or link already exists.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsNewNameRule": "Use only lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
+  "@skillsNewNameRule": {
+    "description": "New Project Skill dialog: error under an invalid name."
+  },
+  "skillsNewNote": "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it.",
+  "@skillsNewNote": {
+    "description": "New Project Skill dialog: note under the title.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsNewPlaceholder": "Name, e.g. release-check",
+  "@skillsNewPlaceholder": {
+    "description": "New Project Skill dialog: name field placeholder."
+  },
+  "skillsNewTitle": "New Project Skill",
+  "@skillsNewTitle": {
+    "description": "New Project Skill dialog title."
+  },
+  "skillsNoMatch": "No matching skills.",
+  "@skillsNoMatch": {
+    "description": "Skills page: empty state of the list when the search or filter matches nothing."
+  },
+  "skillsNoNPXBrew": "npx not found: installing skills needs the npx that comes with Node.js. Click “Install Node.js” to install it with Homebrew, then come back to install skills.",
+  "@skillsNoNPXBrew": {
+    "description": "Install dialog: error when npx is missing and Homebrew is available. Install Node.js is skillsInstallNode."
+  },
+  "skillsNoNPXDownload": "npx not found: installing skills needs the npx that comes with Node.js. Download it from nodejs.org, then click “Reload”.",
+  "@skillsNoNPXDownload": {
+    "description": "Install dialog: error when npx is missing and Homebrew is not available. Reload is skillsReload."
   },
   "skillsNotRead": "Doesn’t read {dir}",
   "@skillsNotRead": {
@@ -3648,6 +4340,604 @@
         "type": "String"
       },
       "dirs": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsOpenFile": "Open SKILL.md",
+  "@skillsOpenFile": {
+    "description": "Skill details: button that opens SKILL.md in a File Tab."
+  },
+  "skillsOpenNodejs": "Open nodejs.org",
+  "@skillsOpenNodejs": {
+    "description": "Install dialog: primary button when npx is missing and Homebrew is not available."
+  },
+  "skillsOpenSourcePage": "Open Source Page",
+  "@skillsOpenSourcePage": {
+    "description": "Skill details: icon button tooltip that opens the source web page."
+  },
+  "skillsPageLabel": "Skills or MCP",
+  "@skillsPageLabel": {
+    "description": "Skills page toolbar: accessibility label of the Skills / MCP segmented control."
+  },
+  "skillsPanelEmpty": "This workspace has no project skills. Skills in .claude/skills, .agents/skills, .grok/skills or .cursor/skills are listed here.",
+  "@skillsPanelEmpty": {
+    "description": "Project Skills tab in the Files Panel: empty state."
+  },
+  "skillsPickAll": "All {count}",
+  "@skillsPickAll": {
+    "description": "Install dialog: label of the checkbox that selects all listed skills.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsReload": "Reload",
+  "@skillsReload": {
+    "description": "Install dialog: button that lists the source again."
+  },
+  "skillsRemoveFromLock": "Remove from Lock File",
+  "@skillsRemoveFromLock": {
+    "description": "Skills health check: icon button tooltip on a lock file mismatch."
+  },
+  "skillsRemoveFromLockBody": "No agent’s skill folder has it anymore; npx skills will only remove this entry from the lock file.",
+  "@skillsRemoveFromLockBody": {
+    "description": "Skills: body of the command dialog that removes a skill from the lock file."
+  },
+  "skillsRemoveFromLockConfirm": "Remove {name} from the lock file?",
+  "@skillsRemoveFromLockConfirm": {
+    "description": "Skills: title of the command dialog that removes a skill from the npx skills lock file.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsReopenNote": "Sessions that are already open may need to be restarted for this to take effect.",
+  "@skillsReopenNote": {
+    "description": "Skill switch confirmation dialog: note under the diff."
+  },
+  "skillsRescan": "Rescan",
+  "@skillsRescan": {
+    "description": "Skills page toolbar: icon button tooltip that rescans skills and MCP servers."
+  },
+  "skillsRevealInactive": "Reveal Inactive Copy in Finder",
+  "@skillsRevealInactive": {
+    "description": "Skills health check: icon button tooltip on a name conflict."
+  },
+  "skillsRunButton": "Run",
+  "@skillsRunButton": {
+    "description": "npx skills command dialog: primary button that starts the command."
+  },
+  "skillsRunDone": "Done. The skill list has been rescanned.",
+  "@skillsRunDone": {
+    "description": "npx skills command dialog: status after the command succeeded."
+  },
+  "skillsRunExit": "Command exited with code {code}.",
+  "@skillsRunExit": {
+    "description": "npx skills command dialog: status after the command failed. code is the exit code.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsRunFinish": "Done",
+  "@skillsRunFinish": {
+    "description": "npx skills command dialog: button that closes the dialog after success."
+  },
+  "skillsRunOpenError": "Couldn’t open a terminal: {error}",
+  "@skillsRunOpenError": {
+    "description": "npx skills command dialog: creating the terminal failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsRunOpenInTab": "Open in Terminal Tab",
+  "@skillsRunOpenInTab": {
+    "description": "npx skills command dialog: button after failure that shows the terminal in a tab."
+  },
+  "skillsRunOpening": "Opening terminal…",
+  "@skillsRunOpening": {
+    "description": "npx skills command dialog: status while the terminal starts."
+  },
+  "skillsRunRunning": "Running. You can answer its questions in the terminal above. Closing the dialog won’t stop it; the command keeps running in a terminal tab.",
+  "@skillsRunRunning": {
+    "description": "npx skills command dialog: status while running."
+  },
+  "skillsRunToTab": "Move to Terminal Tab",
+  "@skillsRunToTab": {
+    "description": "npx skills command dialog: button that moves the running command to a terminal tab."
+  },
+  "skillsScopePlugin": "Plugin",
+  "@skillsScopePlugin": {
+    "description": "Skills page: list group header for skills that come with plugins."
+  },
+  "skillsScopeProject": "Project",
+  "@skillsScopeProject": {
+    "description": "Skills page: scope label for project skills."
+  },
+  "skillsScopeSynced": "Synced",
+  "@skillsScopeSynced": {
+    "description": "Skills page: list group header for skills synced from the agent account."
+  },
+  "skillsScopeSystem": "Built-in",
+  "@skillsScopeSystem": {
+    "description": "Skills page: list group header for skills built into the agent."
+  },
+  "skillsScopeUser": "User",
+  "@skillsScopeUser": {
+    "description": "Skills page: list group header for skills in the user folder."
+  },
+  "skillsScriptWarning": "Installed skills include their scripts. Check what they run before using them.",
+  "@skillsScriptWarning": {
+    "description": "Install dialog: warning above the buttons."
+  },
+  "skillsSearchLabel": "Search",
+  "@skillsSearchLabel": {
+    "description": "Skills page toolbar: accessibility label of the search field."
+  },
+  "skillsSearchMCP": "Search MCP servers",
+  "@skillsSearchMCP": {
+    "description": "Skills page toolbar: search field placeholder on the MCP segment."
+  },
+  "skillsSearchSkills": "Search skills",
+  "@skillsSearchSkills": {
+    "description": "Skills page toolbar: search field placeholder on the Skills segment."
+  },
+  "skillsSessions": "{count, plural, one {# session} other {# sessions}}",
+  "@skillsSessions": {
+    "description": "Skill and MCP details: number of sessions that used it.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsShadowedDiff": "{path} is shadowed by {other}; different content",
+  "@skillsShadowedDiff": {
+    "description": "Skills health check: detail line of a name conflict with different content.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "other": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsShadowedSame": "{path} is shadowed by {other}; same content",
+  "@skillsShadowedSame": {
+    "description": "Skills health check: detail line of a name conflict with identical content.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "other": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsShowAllTip": "Click again to show all",
+  "@skillsShowAllTip": {
+    "description": "Skills page: tooltip of the updates row while filtering to skills with updates."
+  },
+  "skillsShowUpdatesTip": "Show only skills with updates",
+  "@skillsShowUpdatesTip": {
+    "description": "Skills page: tooltip of the updates row."
+  },
+  "skillsSortLabel": "Sort",
+  "@skillsSortLabel": {
+    "description": "Skills and MCP pages: accessibility label of the sort segmented control."
+  },
+  "skillsSortName": "Name",
+  "@skillsSortName": {
+    "description": "Skills and MCP pages: sort segment, sort by name."
+  },
+  "skillsSortUsage": "Usage",
+  "@skillsSortUsage": {
+    "description": "Skills and MCP pages: sort segment, sort by usage count."
+  },
+  "skillsSourceFailedLine": "{source}: {error}",
+  "@skillsSourceFailedLine": {
+    "description": "Skills page: tooltip line of the update check result for a source that could not be checked.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsSourceHint": "Enter a source and press Return to list its skills, then choose.",
+  "@skillsSourceHint": {
+    "description": "Install dialog: hint before listing."
+  },
+  "skillsSourcePlaceholder": "Source: owner/repo, URL or local folder",
+  "@skillsSourcePlaceholder": {
+    "description": "Install dialog: source field placeholder."
+  },
+  "skillsSourceTip": "Source installed by npx skills",
+  "@skillsSourceTip": {
+    "description": "Skill details: tooltip of the source (owner/repo)."
+  },
+  "skillsSourcesFailed": "{count, plural, one {# source couldn’t be checked} other {# sources couldn’t be checked}}",
+  "@skillsSourcesFailed": {
+    "description": "Skills page: update check result, number of sources that could not be checked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsStateManual": "Manual only",
+  "@skillsStateManual": {
+    "description": "Skills: an agent’s state, the skill can only be invoked by the user."
+  },
+  "skillsStateOff": "Disabled",
+  "@skillsStateOff": {
+    "description": "Skills and MCP: an agent’s state, turned off; also marks a disabled MCP config."
+  },
+  "skillsStateOn": "Enabled",
+  "@skillsStateOn": {
+    "description": "Skills and MCP: an agent’s state for the skill or server."
+  },
+  "skillsStateShadowed": "Shadowed by a same-name skill",
+  "@skillsStateShadowed": {
+    "description": "Skills: an agent’s state, another skill with the same name takes precedence."
+  },
+  "skillsStateTip": "{agent}: {state}",
+  "@skillsStateTip": {
+    "description": "Skills and MCP: first line of an agent mark tooltip. state is one of the skillsState texts.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsStateUnseen": "Not visible",
+  "@skillsStateUnseen": {
+    "description": "Skills and MCP: an agent’s state, the agent does not read it."
+  },
+  "skillsSymlink": "Symlink",
+  "@skillsSymlink": {
+    "description": "Skill details: marker shown when the path an agent reads is a symlink."
+  },
+  "skillsSymlinkTip": "Symlink to {path}",
+  "@skillsSymlinkTip": {
+    "description": "Skill details: tooltip of the Symlink marker. path is the skill folder.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsTitle": "Skills",
+  "@skillsTitle": {
+    "description": "Skills page: sidebar tile label and the Skills segment at the top of the page."
+  },
+  "skillsToggleError": "Couldn’t change {agent}’s settings: {error}",
+  "@skillsToggleError": {
+    "description": "Error bar: turning a skill on or off for an agent could not be planned.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsTrashAllLinks": "{count, plural, one {Move # to Trash} other {Move All # to Trash}}",
+  "@skillsTrashAllLinks": {
+    "description": "Skills health check: button that moves all redundant links to the Trash.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsTrashBody": "These will be moved to the Trash, where you can recover them:\n{paths}",
+  "@skillsTrashBody": {
+    "description": "Skills: confirmation body for moving a skill to the Trash. paths is one path per line.",
+    "placeholders": {
+      "paths": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsTrashConfirm": "Move {name} to the Trash?",
+  "@skillsTrashConfirm": {
+    "description": "Skills: confirmation title for moving a user skill to the Trash.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsTrashLinkConfirm": "Move this link to the Trash?",
+  "@skillsTrashLinkConfirm": {
+    "description": "Skills health check: confirmation title for one link."
+  },
+  "skillsTrashLinkTip": "Move This Link to Trash",
+  "@skillsTrashLinkTip": {
+    "description": "Skills health check: icon button tooltip on a broken or redundant link."
+  },
+  "skillsTrashLinksBody": "Only the links themselves are moved; the folders they point to stay. You can recover them from the Trash:\n{paths}",
+  "@skillsTrashLinksBody": {
+    "description": "Skills health check: confirmation body for moving links. paths is one path per line.",
+    "placeholders": {
+      "paths": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsTrashLinksConfirm": "{count, plural, one {Move # link to the Trash?} other {Move # links to the Trash?}}",
+  "@skillsTrashLinksConfirm": {
+    "description": "Skills health check: confirmation title for several links.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsTriggerAuto": "Automatic",
+  "@skillsTriggerAuto": {
+    "description": "Skills: trigger label for the default trigger."
+  },
+  "skillsTriggerAutoOnly": "Automatic Only",
+  "@skillsTriggerAutoOnly": {
+    "description": "Skills: trigger label for a skill hidden from slash commands."
+  },
+  "skillsTriggerAutoOnlyTip": "user-invocable: false: not shown in slash commands; only the model invokes it, based on its description",
+  "@skillsTriggerAutoOnlyTip": {
+    "description": "Skills: tooltip of the Automatic Only trigger label."
+  },
+  "skillsTriggerAutoTip": "The model decides when to use it from its description; you can also type /name to invoke it manually",
+  "@skillsTriggerAutoTip": {
+    "description": "Skills: tooltip of the Automatic trigger label."
+  },
+  "skillsTriggerManual": "Manual",
+  "@skillsTriggerManual": {
+    "description": "Skills: trigger label for a skill the model never invokes on its own."
+  },
+  "skillsTriggerManualTip": "disable-model-invocation: true: the model won’t invoke it on its own; type /name to invoke it (Codex ignores this and still invokes it automatically)",
+  "@skillsTriggerManualTip": {
+    "description": "Skills: tooltip of the Manual trigger label."
+  },
+  "skillsUpToDate": "All up to date",
+  "@skillsUpToDate": {
+    "description": "Skills page: update check result when no skill has a new version."
+  },
+  "skillsUpToDateWith": "All up to date; {problems}",
+  "@skillsUpToDateWith": {
+    "description": "Skills page: update check result with no updates but some problems. problems is the joined list of problems.",
+    "placeholders": {
+      "problems": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsUpdate": "Update",
+  "@skillsUpdate": {
+    "description": "Skill details: button (or icon button tooltip) that updates an npx-installed skill."
+  },
+  "skillsUpdateBody": "Pulls the latest version from the source recorded in the lock file ({source}), overwriting local changes.",
+  "@skillsUpdateBody": {
+    "description": "Skills: body of the command dialog that updates a skill.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsUpdateConfirm": "Update {name}?",
+  "@skillsUpdateConfirm": {
+    "description": "Skills: title of the command dialog that updates a skill.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsUpdatesCount": "{count, plural, one {# update available} other {# updates available}}",
+  "@skillsUpdatesCount": {
+    "description": "Skills page: row showing how many skills have new versions; click to filter.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsUpdatesLabel": "Skills with Updates",
+  "@skillsUpdatesLabel": {
+    "description": "Skills page: accessibility label of the row that filters to skills with updates."
+  },
+  "skillsUsageTitle": "Usage",
+  "@skillsUsageTitle": {
+    "description": "Skill and MCP details: usage card title."
+  },
+  "skillsUsedTimes": "{count, plural, one {Used # time} other {Used # times}}",
+  "@skillsUsedTimes": {
+    "description": "Skills and MCP: usage count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "skillsWillCreate": "This file will be created:",
+  "@skillsWillCreate": {
+    "description": "Skill switch confirmation dialog: label above the file path when the file does not exist yet."
+  },
+  "skillsWillModify": "This file will be changed:",
+  "@skillsWillModify": {
+    "description": "Skill switch confirmation dialog: label above the file path."
+  },
+  "tracesCleanBody": "Agents left these outside their workspaces. Checked items move to the Trash; worktrees are removed with git.",
+  "@tracesCleanBody": {
+    "description": "Clean Up Agent Traces dialog body."
+  },
+  "tracesCleanButton": "Clean Up",
+  "@tracesCleanButton": {
+    "description": "Clean Up Agent Traces dialog: primary button."
+  },
+  "tracesCleanError": "Some traces weren’t cleaned up: {errors}",
+  "@tracesCleanError": {
+    "description": "Error bar: some traces could not be cleaned up. errors is the joined list of tracesFailedItem.",
+    "placeholders": {
+      "errors": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesCleanTitle": "Clean Up Agent Traces in {project}",
+  "@tracesCleanTitle": {
+    "description": "Clean Up Agent Traces dialog title.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesFailedItem": "{path}: {error}",
+  "@tracesFailedItem": {
+    "description": "Error bar: one trace that could not be cleaned up.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesFailedSeparator": "; ",
+  "@tracesFailedSeparator": {
+    "description": "Error bar: joins the traces that could not be cleaned up."
+  },
+  "tracesKindConfig": "Modified config, listed only",
+  "@tracesKindConfig": {
+    "description": "Agent traces: kind of a trace."
+  },
+  "tracesKindCreated": "Created",
+  "@tracesKindCreated": {
+    "description": "Agent traces: kind of a trace, a new file or folder."
+  },
+  "tracesKindModified": "Modified existing file, listed only",
+  "@tracesKindModified": {
+    "description": "Agent traces: kind of a trace."
+  },
+  "tracesKindWorktree": "Agent-created worktree, removed with git",
+  "@tracesKindWorktree": {
+    "description": "Agent traces: kind of a trace."
+  },
+  "tracesLeftBehindRemove": "Agents left these outside the workspace. Checked items will also be moved to the Trash:",
+  "@tracesLeftBehindRemove": {
+    "description": "Delete Workspace confirmation: paragraph above the list of agent traces."
+  },
+  "tracesNoneBody": "Agents in project {project} left no recorded files outside their workspaces.",
+  "@tracesNoneBody": {
+    "description": "Clean Up Agent Traces: body when nothing was recorded.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesNoneTitle": "No Agent Traces",
+  "@tracesNoneTitle": {
+    "description": "Clean Up Agent Traces: title when nothing was recorded."
+  },
+  "tracesRemoveBody": "Terminals in the workspace will be closed.",
+  "@tracesRemoveBody": {
+    "description": "Delete Workspace confirmation: body for a folder workspace."
+  },
+  "tracesRemoveDirty": "Workspace {name} has uncommitted changes and wasn’t deleted",
+  "@tracesRemoveDirty": {
+    "description": "Error bar: a worktree workspace was not deleted because of uncommitted changes.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesRemoveTitle": "Delete Workspace {name}?",
+  "@tracesRemoveTitle": {
+    "description": "Delete Workspace confirmation: title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesRemoveWorktreeBody": "Closes its terminals and deletes the git worktree folder (the branch is kept). Refuses if there are uncommitted changes.",
+  "@tracesRemoveWorktreeBody": {
+    "description": "Delete Workspace confirmation: body for a worktree workspace."
+  },
+  "tracesSelected": "{count, plural, one {# item} other {# items}} selected, {size} total",
+  "@tracesSelected": {
+    "description": "Agent traces dialog: selected count and total size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "tracesTerminal": "Terminal",
+  "@tracesTerminal": {
+    "description": "Agent traces: who left the trace when it was not an agent."
+  },
+  "tracesTerminalOpen": "terminal still open",
+  "@tracesTerminalOpen": {
+    "description": "Agent traces: marker when the terminal that left the trace is still open. Joined with “ · ”."
+  },
+  "trashMoveError": "Couldn’t move to the Trash: {error}",
+  "@trashMoveError": {
+    "description": "Error bar: moving files to the Trash failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "trashSessionBody": "The session files will be moved to the Trash, where you can recover them. It will also disappear from {agent}’s own resume list.",
+  "@trashSessionBody": {
+    "description": "History: confirmation body for moving a session to the Trash.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "trashSessionConfirm": "Move session “{title}” to the Trash?",
+  "@trashSessionConfirm": {
+    "description": "History: confirmation title for moving a session to the Trash.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "trashSessionRunning": "This session is running in a Posse terminal. Close that terminal before moving it to the Trash.",
+  "@trashSessionRunning": {
+    "description": "Error bar: moving a session to the Trash while it is running."
+  },
+  "trashUnknownPath": "Couldn’t identify where this session’s files are, so nothing was moved: {path}",
+  "@trashUnknownPath": {
+    "description": "Error bar: the session files could not be identified.",
+    "placeholders": {
+      "path": {
         "type": "String"
       }
     }
@@ -3966,6 +5256,143 @@
   "usageTitle": "Plan Usage",
   "@usageTitle": {
     "description": "Plan Usage settings or status popover: heading for Title."
+  },
+  "usageToolsCLIOther": "Other Commands",
+  "@usageToolsCLIOther": {
+    "description": "Skills & Tools panel: group heading for command-line programs not from Homebrew or macOS."
+  },
+  "usageToolsCLISystem": "Built-in",
+  "@usageToolsCLISystem": {
+    "description": "Skills & Tools panel: group heading for command-line programs that come with macOS."
+  },
+  "usageToolsCopied": "Copied {name}",
+  "@usageToolsCopied": {
+    "description": "Notification after clicking a name in the Skills & Tools panel.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsCopyLabel": "Copy {name}",
+  "@usageToolsCopyLabel": {
+    "description": "Skills & Tools panel: accessibility label of a name that copies when clicked.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsFilter": "Filter",
+  "@usageToolsFilter": {
+    "description": "Skills & Tools panel: accessibility label of the filter segmented control."
+  },
+  "usageToolsNoFile": "No session file yet. It appears once the agent starts a conversation.",
+  "@usageToolsNoFile": {
+    "description": "Skills & Tools panel: the session file was not found yet."
+  },
+  "usageToolsNoSkills": "This session hasn’t used any skills or MCP yet.",
+  "@usageToolsNoSkills": {
+    "description": "Skills & Tools panel: empty state with the Skills & MCP filter."
+  },
+  "usageToolsNoWeb": "This session hasn’t visited any URLs yet.",
+  "@usageToolsNoWeb": {
+    "description": "Skills & Tools panel: empty state with the URLs filter."
+  },
+  "usageToolsNone": "This session hasn’t used any skills, MCP, command-line tools or URLs yet.",
+  "@usageToolsNone": {
+    "description": "Skills & Tools panel: empty state."
+  },
+  "usageToolsPlainTerminal": "Plain terminals have no session history.",
+  "@usageToolsPlainTerminal": {
+    "description": "Skills & Tools panel: shown for a terminal without an agent."
+  },
+  "usageToolsReadError": "Couldn’t read the session file: {error}",
+  "@usageToolsReadError": {
+    "description": "Skills & Tools panel: reading the session file failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsSearchVia": "Search · {via}",
+  "@usageToolsSearchVia": {
+    "description": "Skills & Tools panel timeline: a web search entry. via is the tool that searched.",
+    "placeholders": {
+      "via": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsSearches": "{count, plural, one {# search} other {# searches}}",
+  "@usageToolsSearches": {
+    "description": "Skills & Tools panel: number of web searches, next to the URLs heading.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageToolsSince": "Since {time}",
+  "@usageToolsSince": {
+    "description": "Skills & Tools panel timeline: tooltip of the time of merged entries. time is a date and time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsSkill": "Skill",
+  "@usageToolsSkill": {
+    "description": "Skills & Tools panel timeline: kind of an entry that used a skill."
+  },
+  "usageToolsSkillsMCP": "Skills & MCP",
+  "@usageToolsSkillsMCP": {
+    "description": "Skills & Tools panel: filter segment."
+  },
+  "usageToolsTimeline": "Timeline",
+  "@usageToolsTimeline": {
+    "description": "Skills & Tools panel: section heading."
+  },
+  "usageToolsTitle": "Skills & Tools",
+  "@usageToolsTitle": {
+    "description": "Skills & Tools panel on the right of a terminal: title."
+  },
+  "usageToolsURLTip": "{url}\n⌘-click to open in Posse, ⇧⌘-click to open in browser",
+  "@usageToolsURLTip": {
+    "description": "Skills & Tools panel timeline: tooltip of a URL.",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsURLTipSwapped": "{url}\n⌘-click to open in browser, ⇧⌘-click to open in Posse",
+  "@usageToolsURLTipSwapped": {
+    "description": "Skills & Tools panel timeline: tooltip of a URL when the link click settings are swapped.",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsUnsupported": "Usage stats aren’t supported for {agent} sessions yet.",
+  "@usageToolsUnsupported": {
+    "description": "Skills & Tools panel: shown for an unsupported agent.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "usageToolsViaUser": "Sent by you",
+  "@usageToolsViaUser": {
+    "description": "Skills & Tools panel timeline: a URL the user sent."
+  },
+  "usageToolsWeb": "URLs",
+  "@usageToolsWeb": {
+    "description": "Skills & Tools panel: filter segment and section heading for visited URLs."
   },
   "usageUsed": "Used",
   "@usageUsed": {

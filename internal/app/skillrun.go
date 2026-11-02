@@ -9,6 +9,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/errtext"
+	"posse/locales"
 )
 
 // skillRunView 是技能的安装、更新、删除对话框：写明要跑的命令，确认后在对话框里嵌一个终端跑（照 Orca 的技能设置面板），
@@ -30,21 +31,21 @@ type skillRunView struct {
 }
 
 // askSkillCommand 弹框写明命令，确认后在框里的终端跑；start 为真时直接跑（安装对话框里已经确认过命令）。
-func (a *app) askSkillCommand(title, about, line string, w *workspace, start bool) {
+func (a *app) askSkillCommand(m locales.Messages, title, about, line string, w *workspace, start bool) {
 	if w == nil {
-		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
+		a.err = m.SkillsNeedProject()
 		return
 	}
 	a.closeSkillRun()
 	gen := a.skillRun.gen
 	a.skillRun = skillRunView{open: true, title: title, about: about, line: line, ws: w.ID, gen: gen}
 	if start {
-		a.startSkillRun()
+		a.startSkillRun(m)
 	}
 }
 
 // startSkillRun 建终端跑命令。命令跑完 shell 就退出，终端的退出码就是命令的。
-func (a *app) startSkillRun() {
+func (a *app) startSkillRun(m locales.Messages) {
 	r := &a.skillRun
 	r.gen++
 	r.starting, r.err = true, ""
@@ -59,7 +60,7 @@ func (a *app) startSkillRun() {
 			}
 			r.starting = false
 			if err != nil {
-				r.err = "打不开终端：" + errtext.Text(err)
+				r.err = m.SkillsRunOpenError(errtext.Text(err))
 				return
 			}
 			if a.hiddenTerms == nil {
@@ -127,6 +128,7 @@ func (a *app) showSkillRun() {
 
 func (a *app) skillRunDialog(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	r := &a.skillRun
 	if !r.open && r.title == "" {
 		return
@@ -148,18 +150,18 @@ func (a *app) skillRunDialog(c *ui.Context) {
 			case r.err != "":
 				ui.Text(c, r.err).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45).Selectable()
 			case r.starting:
-				ui.Text(c, "正在打开终端…").FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.SkillsRunOpening()).FontSize(fsSmall).TextColor(t.TextMuted)
 			case r.exit != nil && *r.exit == 0:
-				ui.Text(c, "已完成，技能列表已重新扫描。").FontSize(fsSmall).TextColor(colors(t).sage)
+				ui.Text(c, m.SkillsRunDone()).FontSize(fsSmall).TextColor(colors(t).sage)
 			case r.exit != nil:
-				ui.Text(c, fmt.Sprintf("命令退出，代码 %d。", *r.exit)).FontSize(fsSmall).TextColor(t.Danger)
+				ui.Text(c, m.SkillsRunExit(fmt.Sprint(*r.exit))).FontSize(fsSmall).TextColor(t.Danger)
 			case r.term != nil:
-				ui.Text(c, "正在运行，可以在上面的终端里回答它的提问。关掉对话框不会停止，命令会转到终端标签里接着跑。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+				ui.Text(c, m.SkillsRunRunning()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
 				switch {
 				case r.term == nil:
-					if pressable(textButton(c, "取消")).Clicked() {
+					if pressable(textButton(c, m.CommonCancel())).Clicked() {
 						r.open = false
 					}
 					run := ui.Box(c).Shrink(0)
@@ -167,28 +169,28 @@ func (a *app) skillRunDialog(c *ui.Context) {
 						run.Disabled(true).Opacity(0.5)
 					}
 					run.Children(func() {
-						if pressable(accentButton(c, "运行")).Clicked() {
-							a.startSkillRun()
+						if pressable(accentButton(c, m.SkillsRunButton())).Clicked() {
+							a.startSkillRun(m)
 						}
 					})
 				case r.exit == nil:
-					if pressable(textButton(c, "转到终端标签")).Clicked() {
+					if pressable(textButton(c, m.SkillsRunToTab())).Clicked() {
 						a.showSkillRun()
 					}
 				case *r.exit == 0:
-					if pressable(accentButton(c, "完成")).Clicked() {
+					if pressable(accentButton(c, m.SkillsRunFinish())).Clicked() {
 						r.open = false
 					}
 				default:
-					if pressable(textButton(c, "在终端标签中打开")).Clicked() {
+					if pressable(textButton(c, m.SkillsRunOpenInTab())).Clicked() {
 						a.showSkillRun()
 					}
-					if pressable(textButton(c, "关闭")).Clicked() {
+					if pressable(textButton(c, m.CommonClose())).Clicked() {
 						r.open = false
 					}
-					if pressable(accentButton(c, "重试")).Clicked() {
+					if pressable(accentButton(c, m.CommonRetry())).Clicked() {
 						title, about, line, ws := r.title, r.about, r.line, a.workspace(r.ws)
-						a.askSkillCommand(title, about, line, ws, true)
+						a.askSkillCommand(m, title, about, line, ws, true)
 					}
 				}
 			})

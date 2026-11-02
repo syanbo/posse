@@ -9012,6 +9012,420 @@ func (msgs Messages) LogUncommitted() string {
 	return Catalog.Format(msgs.locale, "logUncommitted", nil)
 }
 
+// McpAgentCountTip says "MCP servers available to {agent}"
+// in the language the app shows.
+//
+// MCP page: tooltip of an agent’s count at the top of the list.
+func McpAgentCountTip(agent string) string { return In(i18n.Locale()).McpAgentCountTip(agent) }
+
+// McpAgentCountTip says "MCP servers available to {agent}"
+// in the language of msgs.
+//
+// MCP page: tooltip of an agent’s count at the top of the list.
+func (msgs Messages) McpAgentCountTip(agent string) string {
+	return Catalog.Format(msgs.locale, "mcpAgentCountTip", map[string]any{"agent": agent})
+}
+
+// McpConfigCount says "{count, plural, one {# config} other {# configs}}"
+// in the language the app shows.
+//
+// MCP details: number of config entries for this server.
+func McpConfigCount(count int) string { return In(i18n.Locale()).McpConfigCount(count) }
+
+// McpConfigCount says "{count, plural, one {# config} other {# configs}}"
+// in the language of msgs.
+//
+// MCP details: number of config entries for this server.
+func (msgs Messages) McpConfigCount(count int) string {
+	return Catalog.Format(msgs.locale, "mcpConfigCount", map[string]any{"count": count})
+}
+
+// McpConfigNote says "Environment variables and headers show names only, not values"
+// in the language the app shows.
+//
+// MCP details: note next to the Configuration title.
+func McpConfigNote() string { return In(i18n.Locale()).McpConfigNote() }
+
+// McpConfigNote says "Environment variables and headers show names only, not values"
+// in the language of msgs.
+//
+// MCP details: note next to the Configuration title.
+func (msgs Messages) McpConfigNote() string {
+	return Catalog.Format(msgs.locale, "mcpConfigNote", nil)
+}
+
+// McpConfigTitle says "Configuration"
+// in the language the app shows.
+//
+// MCP details: card title listing each config entry.
+func McpConfigTitle() string { return In(i18n.Locale()).McpConfigTitle() }
+
+// McpConfigTitle says "Configuration"
+// in the language of msgs.
+//
+// MCP details: card title listing each config entry.
+func (msgs Messages) McpConfigTitle() string {
+	return Catalog.Format(msgs.locale, "mcpConfigTitle", nil)
+}
+
+// McpCount says "{count, plural, one {# MCP server} other {# MCP servers}}"
+// in the language the app shows.
+//
+// MCP page: total at the top of the list.
+func McpCount(count int) string { return In(i18n.Locale()).McpCount(count) }
+
+// McpCount says "{count, plural, one {# MCP server} other {# MCP servers}}"
+// in the language of msgs.
+//
+// MCP page: total at the top of the list.
+func (msgs Messages) McpCount(count int) string {
+	return Catalog.Format(msgs.locale, "mcpCount", map[string]any{"count": count})
+}
+
+// McpCursorInferredTip says "Where Cursor stores approvals and switches hasn’t been verified; everything found counts as enabled"
+// in the language the app shows.
+//
+// MCP details: tooltip of the Inferred marker for Cursor.
+func McpCursorInferredTip() string { return In(i18n.Locale()).McpCursorInferredTip() }
+
+// McpCursorInferredTip says "Where Cursor stores approvals and switches hasn’t been verified; everything found counts as enabled"
+// in the language of msgs.
+//
+// MCP details: tooltip of the Inferred marker for Cursor.
+func (msgs Messages) McpCursorInferredTip() string {
+	return Catalog.Format(msgs.locale, "mcpCursorInferredTip", nil)
+}
+
+// McpEnvKeys says "Environment variables: {names}"
+// in the language the app shows.
+//
+// MCP details: environment variable names of a config entry, joined with
+// skillsListSeparator.
+func McpEnvKeys(names string) string { return In(i18n.Locale()).McpEnvKeys(names) }
+
+// McpEnvKeys says "Environment variables: {names}"
+// in the language of msgs.
+//
+// MCP details: environment variable names of a config entry, joined with
+// skillsListSeparator.
+func (msgs Messages) McpEnvKeys(names string) string {
+	return Catalog.Format(msgs.locale, "mcpEnvKeys", map[string]any{"names": names})
+}
+
+// McpFromPlugin says "From Plugin"
+// in the language the app shows.
+//
+// MCP details: marker on a config entry that comes with a plugin.
+func McpFromPlugin() string { return In(i18n.Locale()).McpFromPlugin() }
+
+// McpFromPlugin says "From Plugin"
+// in the language of msgs.
+//
+// MCP details: marker on a config entry that comes with a plugin.
+func (msgs Messages) McpFromPlugin() string {
+	return Catalog.Format(msgs.locale, "mcpFromPlugin", nil)
+}
+
+// McpHeaderKeys says "Headers: {names}"
+// in the language the app shows.
+//
+// MCP details: request header names of a config entry, joined with
+// skillsListSeparator.
+func McpHeaderKeys(names string) string { return In(i18n.Locale()).McpHeaderKeys(names) }
+
+// McpHeaderKeys says "Headers: {names}"
+// in the language of msgs.
+//
+// MCP details: request header names of a config entry, joined with
+// skillsListSeparator.
+func (msgs Messages) McpHeaderKeys(names string) string {
+	return Catalog.Format(msgs.locale, "mcpHeaderKeys", map[string]any{"names": names})
+}
+
+// McpInferredTip says "Couldn’t ask the agent itself (program not found or timed out); inferred from the read rules in its docs"
+// in the language the app shows.
+//
+// MCP details: tooltip of the Inferred marker.
+func McpInferredTip() string { return In(i18n.Locale()).McpInferredTip() }
+
+// McpInferredTip says "Couldn’t ask the agent itself (program not found or timed out); inferred from the read rules in its docs"
+// in the language of msgs.
+//
+// MCP details: tooltip of the Inferred marker.
+func (msgs Messages) McpInferredTip() string {
+	return Catalog.Format(msgs.locale, "mcpInferredTip", nil)
+}
+
+// McpIssueCount says "{count, plural, one {# issue} other {# issues}}"
+// in the language the app shows.
+//
+// MCP details: number of health check issues for this server.
+func McpIssueCount(count int) string { return In(i18n.Locale()).McpIssueCount(count) }
+
+// McpIssueCount says "{count, plural, one {# issue} other {# issues}}"
+// in the language of msgs.
+//
+// MCP details: number of health check issues for this server.
+func (msgs Messages) McpIssueCount(count int) string {
+	return Catalog.Format(msgs.locale, "mcpIssueCount", map[string]any{"count": count})
+}
+
+// McpIssuesLabel says "MCP Health Check"
+// in the language the app shows.
+//
+// MCP page: health check row label and card title.
+func McpIssuesLabel() string { return In(i18n.Locale()).McpIssuesLabel() }
+
+// McpIssuesLabel says "MCP Health Check"
+// in the language of msgs.
+//
+// MCP page: health check row label and card title.
+func (msgs Messages) McpIssuesLabel() string {
+	return Catalog.Format(msgs.locale, "mcpIssuesLabel", nil)
+}
+
+// McpIssuesNote says "Checks config files only, without starting servers."
+// in the language the app shows.
+//
+// MCP health check: note under the title.
+func McpIssuesNote() string { return In(i18n.Locale()).McpIssuesNote() }
+
+// McpIssuesNote says "Checks config files only, without starting servers."
+// in the language of msgs.
+//
+// MCP health check: note under the title.
+func (msgs Messages) McpIssuesNote() string {
+	return Catalog.Format(msgs.locale, "mcpIssuesNote", nil)
+}
+
+// McpListLabel says "MCP List"
+// in the language the app shows.
+//
+// MCP page: accessibility label of the server list card.
+func McpListLabel() string { return In(i18n.Locale()).McpListLabel() }
+
+// McpListLabel says "MCP List"
+// in the language of msgs.
+//
+// MCP page: accessibility label of the server list card.
+func (msgs Messages) McpListLabel() string {
+	return Catalog.Format(msgs.locale, "mcpListLabel", nil)
+}
+
+// McpMismatch says "The configs differ ({detail}); the agents may not launch the same server"
+// in the language the app shows.
+//
+// MCP health check: the server is configured differently for different
+// agents. detail says what differs.
+func McpMismatch(detail string) string { return In(i18n.Locale()).McpMismatch(detail) }
+
+// McpMismatch says "The configs differ ({detail}); the agents may not launch the same server"
+// in the language of msgs.
+//
+// MCP health check: the server is configured differently for different
+// agents. detail says what differs.
+func (msgs Messages) McpMismatch(detail string) string {
+	return Catalog.Format(msgs.locale, "mcpMismatch", map[string]any{"detail": detail})
+}
+
+// McpMissingCommand says "Launch command not found: {path}"
+// in the language the app shows.
+//
+// MCP health check: the server’s launch command no longer exists.
+func McpMissingCommand(path string) string { return In(i18n.Locale()).McpMissingCommand(path) }
+
+// McpMissingCommand says "Launch command not found: {path}"
+// in the language of msgs.
+//
+// MCP health check: the server’s launch command no longer exists.
+func (msgs Messages) McpMissingCommand(path string) string {
+	return Catalog.Format(msgs.locale, "mcpMissingCommand", map[string]any{"path": path})
+}
+
+// McpNoMatch says "No matching MCP servers."
+// in the language the app shows.
+//
+// MCP page: empty state when the search or filter matches nothing.
+func McpNoMatch() string { return In(i18n.Locale()).McpNoMatch() }
+
+// McpNoMatch says "No matching MCP servers."
+// in the language of msgs.
+//
+// MCP page: empty state when the search or filter matches nothing.
+func (msgs Messages) McpNoMatch() string {
+	return Catalog.Format(msgs.locale, "mcpNoMatch", nil)
+}
+
+// McpTransportHTTP says "Remote HTTP"
+// in the language the app shows.
+//
+// MCP details: how the server connects.
+func McpTransportHTTP() string { return In(i18n.Locale()).McpTransportHTTP() }
+
+// McpTransportHTTP says "Remote HTTP"
+// in the language of msgs.
+//
+// MCP details: how the server connects.
+func (msgs Messages) McpTransportHTTP() string {
+	return Catalog.Format(msgs.locale, "mcpTransportHTTP", nil)
+}
+
+// McpTransportSSE says "Remote SSE"
+// in the language the app shows.
+//
+// MCP details: how the server connects.
+func McpTransportSSE() string { return In(i18n.Locale()).McpTransportSSE() }
+
+// McpTransportSSE says "Remote SSE"
+// in the language of msgs.
+//
+// MCP details: how the server connects.
+func (msgs Messages) McpTransportSSE() string {
+	return Catalog.Format(msgs.locale, "mcpTransportSSE", nil)
+}
+
+// McpTransportStdio says "Local Process"
+// in the language the app shows.
+//
+// MCP details: how the server connects (started as a local process).
+func McpTransportStdio() string { return In(i18n.Locale()).McpTransportStdio() }
+
+// McpTransportStdio says "Local Process"
+// in the language of msgs.
+//
+// MCP details: how the server connects (started as a local process).
+func (msgs Messages) McpTransportStdio() string {
+	return Catalog.Format(msgs.locale, "mcpTransportStdio", nil)
+}
+
+// MemoryButtonLabel says "Memory {size}, {count, plural, one {# terminal running} other {# terminals running}}"
+// in the language the app shows.
+//
+// Status bar: accessibility label of the memory button.
+func MemoryButtonLabel(size string, count int) string {
+	return In(i18n.Locale()).MemoryButtonLabel(size, count)
+}
+
+// MemoryButtonLabel says "Memory {size}, {count, plural, one {# terminal running} other {# terminals running}}"
+// in the language of msgs.
+//
+// Status bar: accessibility label of the memory button.
+func (msgs Messages) MemoryButtonLabel(size string, count int) string {
+	return Catalog.Format(msgs.locale, "memoryButtonLabel", map[string]any{"size": size, "count": count})
+}
+
+// MemoryCounting says "Counting…"
+// in the language the app shows.
+//
+// Memory popover: shown while measuring.
+func MemoryCounting() string { return In(i18n.Locale()).MemoryCounting() }
+
+// MemoryCounting says "Counting…"
+// in the language of msgs.
+//
+// Memory popover: shown while measuring.
+func (msgs Messages) MemoryCounting() string {
+	return Catalog.Format(msgs.locale, "memoryCounting", nil)
+}
+
+// MemoryDaemon says "Daemon (hosts all terminals)"
+// in the language the app shows.
+//
+// Memory popover: row for the daemon.
+func MemoryDaemon() string { return In(i18n.Locale()).MemoryDaemon() }
+
+// MemoryDaemon says "Daemon (hosts all terminals)"
+// in the language of msgs.
+//
+// Memory popover: row for the daemon.
+func (msgs Messages) MemoryDaemon() string {
+	return Catalog.Format(msgs.locale, "memoryDaemon", nil)
+}
+
+// MemoryNoTerminals says "No running terminals."
+// in the language the app shows.
+//
+// Memory popover: empty state.
+func MemoryNoTerminals() string { return In(i18n.Locale()).MemoryNoTerminals() }
+
+// MemoryNoTerminals says "No running terminals."
+// in the language of msgs.
+//
+// Memory popover: empty state.
+func (msgs Messages) MemoryNoTerminals() string {
+	return Catalog.Format(msgs.locale, "memoryNoTerminals", nil)
+}
+
+// MemoryNote says "Terminals are measured by process tree: the shell, the agent and the child processes it starts (such as MCP servers),…"
+// in the language the app shows.
+//
+// Memory popover: note at the bottom.
+func MemoryNote() string { return In(i18n.Locale()).MemoryNote() }
+
+// MemoryNote says "Terminals are measured by process tree: the shell, the agent and the child processes it starts (such as MCP servers),…"
+// in the language of msgs.
+//
+// Memory popover: note at the bottom.
+func (msgs Messages) MemoryNote() string {
+	return Catalog.Format(msgs.locale, "memoryNote", nil)
+}
+
+// MemoryTermPrograms says "Programs in Terminals"
+// in the language the app shows.
+//
+// Memory popover: section title.
+func MemoryTermPrograms() string { return In(i18n.Locale()).MemoryTermPrograms() }
+
+// MemoryTermPrograms says "Programs in Terminals"
+// in the language of msgs.
+//
+// Memory popover: section title.
+func (msgs Messages) MemoryTermPrograms() string {
+	return Catalog.Format(msgs.locale, "memoryTermPrograms", nil)
+}
+
+// MemoryTip says "Memory and Terminals"
+// in the language the app shows.
+//
+// Status bar: tooltip of the memory button.
+func MemoryTip() string { return In(i18n.Locale()).MemoryTip() }
+
+// MemoryTip says "Memory and Terminals"
+// in the language of msgs.
+//
+// Status bar: tooltip of the memory button.
+func (msgs Messages) MemoryTip() string {
+	return Catalog.Format(msgs.locale, "memoryTip", nil)
+}
+
+// MemoryTitle says "Memory"
+// in the language the app shows.
+//
+// Memory popover title.
+func MemoryTitle() string { return In(i18n.Locale()).MemoryTitle() }
+
+// MemoryTitle says "Memory"
+// in the language of msgs.
+//
+// Memory popover title.
+func (msgs Messages) MemoryTitle() string {
+	return Catalog.Format(msgs.locale, "memoryTitle", nil)
+}
+
+// MemoryWindow says "Window (pid {pid})"
+// in the language the app shows.
+//
+// Memory popover: row for the window process.
+func MemoryWindow(pid string) string { return In(i18n.Locale()).MemoryWindow(pid) }
+
+// MemoryWindow says "Window (pid {pid})"
+// in the language of msgs.
+//
+// Memory popover: row for the window process.
+func (msgs Messages) MemoryWindow(pid string) string {
+	return Catalog.Format(msgs.locale, "memoryWindow", map[string]any{"pid": pid})
+}
+
 // MenuCheckForUpdates says "Check for Updates…"
 // in the language the app shows.
 //
@@ -9286,6 +9700,76 @@ func RollbackViewFile(path string) string { return In(i18n.Locale()).RollbackVie
 // clicking shows its diff. path is the file path.
 func (msgs Messages) RollbackViewFile(path string) string {
 	return Catalog.Format(msgs.locale, "rollbackViewFile", map[string]any{"path": path})
+}
+
+// RunningEmpty says "No running sessions"
+// in the language the app shows.
+//
+// Sidebar running list: empty state.
+func RunningEmpty() string { return In(i18n.Locale()).RunningEmpty() }
+
+// RunningEmpty says "No running sessions"
+// in the language of msgs.
+//
+// Sidebar running list: empty state.
+func (msgs Messages) RunningEmpty() string {
+	return Catalog.Format(msgs.locale, "runningEmpty", nil)
+}
+
+// RunningFilterTip says "Show Only Running Sessions"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the filter toggle next to the heading.
+func RunningFilterTip() string { return In(i18n.Locale()).RunningFilterTip() }
+
+// RunningFilterTip says "Show Only Running Sessions"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the filter toggle next to the heading.
+func (msgs Messages) RunningFilterTip() string {
+	return Catalog.Format(msgs.locale, "runningFilterTip", nil)
+}
+
+// RunningMainWorkspace says "Main Workspace"
+// in the language the app shows.
+//
+// Sidebar running list: name of the main workspace after the project name.
+func RunningMainWorkspace() string { return In(i18n.Locale()).RunningMainWorkspace() }
+
+// RunningMainWorkspace says "Main Workspace"
+// in the language of msgs.
+//
+// Sidebar running list: name of the main workspace after the project name.
+func (msgs Messages) RunningMainWorkspace() string {
+	return Catalog.Format(msgs.locale, "runningMainWorkspace", nil)
+}
+
+// RunningProjects says "Projects"
+// in the language the app shows.
+//
+// Sidebar: heading above the project list.
+func RunningProjects() string { return In(i18n.Locale()).RunningProjects() }
+
+// RunningProjects says "Projects"
+// in the language of msgs.
+//
+// Sidebar: heading above the project list.
+func (msgs Messages) RunningProjects() string {
+	return Catalog.Format(msgs.locale, "runningProjects", nil)
+}
+
+// RunningTitle says "Running"
+// in the language the app shows.
+//
+// Sidebar: heading when only running sessions are shown.
+func RunningTitle() string { return In(i18n.Locale()).RunningTitle() }
+
+// RunningTitle says "Running"
+// in the language of msgs.
+//
+// Sidebar: heading when only running sessions are shown.
+func (msgs Messages) RunningTitle() string {
+	return Catalog.Format(msgs.locale, "runningTitle", nil)
 }
 
 // SettingsAboutDaemon says "Daemon"
@@ -10426,6 +10910,860 @@ func (msgs Messages) SettingsWorkspaceMeta() string {
 	return Catalog.Format(msgs.locale, "settingsWorkspaceMeta", nil)
 }
 
+// SkillsAgentCountTip says "Skills available to {agent}"
+// in the language the app shows.
+//
+// Skills page: tooltip of an agent’s count at the top of the list.
+func SkillsAgentCountTip(agent string) string { return In(i18n.Locale()).SkillsAgentCountTip(agent) }
+
+// SkillsAgentCountTip says "Skills available to {agent}"
+// in the language of msgs.
+//
+// Skills page: tooltip of an agent’s count at the top of the list.
+func (msgs Messages) SkillsAgentCountTip(agent string) string {
+	return Catalog.Format(msgs.locale, "skillsAgentCountTip", map[string]any{"agent": agent})
+}
+
+// SkillsAgentFilter says "Filter by Agent"
+// in the language the app shows.
+//
+// Skills page toolbar: accessibility label of the agent filter (All,
+// Claude, Codex, Grok, Cursor).
+func SkillsAgentFilter() string { return In(i18n.Locale()).SkillsAgentFilter() }
+
+// SkillsAgentFilter says "Filter by Agent"
+// in the language of msgs.
+//
+// Skills page toolbar: accessibility label of the agent filter (All,
+// Claude, Codex, Grok, Cursor).
+func (msgs Messages) SkillsAgentFilter() string {
+	return Catalog.Format(msgs.locale, "skillsAgentFilter", nil)
+}
+
+// SkillsAgentStatus says "Agent Status"
+// in the language the app shows.
+//
+// Skill and MCP details: card title listing each agent’s state.
+func SkillsAgentStatus() string { return In(i18n.Locale()).SkillsAgentStatus() }
+
+// SkillsAgentStatus says "Agent Status"
+// in the language of msgs.
+//
+// Skill and MCP details: card title listing each agent’s state.
+func (msgs Messages) SkillsAgentStatus() string {
+	return Catalog.Format(msgs.locale, "skillsAgentStatus", nil)
+}
+
+// SkillsAgentUsedTimes says "{agent}: {count, plural, one {used # time} other {used # times}}"
+// in the language the app shows.
+//
+// Skill and MCP details: tooltip of an agent’s usage count.
+func SkillsAgentUsedTimes(agent string, count int) string {
+	return In(i18n.Locale()).SkillsAgentUsedTimes(agent, count)
+}
+
+// SkillsAgentUsedTimes says "{agent}: {count, plural, one {used # time} other {used # times}}"
+// in the language of msgs.
+//
+// Skill and MCP details: tooltip of an agent’s usage count.
+func (msgs Messages) SkillsAgentUsedTimes(agent string, count int) string {
+	return Catalog.Format(msgs.locale, "skillsAgentUsedTimes", map[string]any{"agent": agent, "count": count})
+}
+
+// SkillsAlsoClaude says "Also for Claude"
+// in the language the app shows.
+//
+// Install dialog: switch label.
+func SkillsAlsoClaude() string { return In(i18n.Locale()).SkillsAlsoClaude() }
+
+// SkillsAlsoClaude says "Also for Claude"
+// in the language of msgs.
+//
+// Install dialog: switch label.
+func (msgs Messages) SkillsAlsoClaude() string {
+	return Catalog.Format(msgs.locale, "skillsAlsoClaude", nil)
+}
+
+// SkillsChangeError says "Couldn’t change {file}: {error}"
+// in the language the app shows.
+//
+// Error bar: writing the confirmed skill switch change failed.
+func SkillsChangeError(file string, error string) string {
+	return In(i18n.Locale()).SkillsChangeError(file, error)
+}
+
+// SkillsChangeError says "Couldn’t change {file}: {error}"
+// in the language of msgs.
+//
+// Error bar: writing the confirmed skill switch change failed.
+func (msgs Messages) SkillsChangeError(file string, error string) string {
+	return Catalog.Format(msgs.locale, "skillsChangeError", map[string]any{"file": file, "error": error})
+}
+
+// SkillsCheckUpdates says "Check for Updates"
+// in the language the app shows.
+//
+// Skills page toolbar: button that checks npx-installed skills for new
+// versions.
+func SkillsCheckUpdates() string { return In(i18n.Locale()).SkillsCheckUpdates() }
+
+// SkillsCheckUpdates says "Check for Updates"
+// in the language of msgs.
+//
+// Skills page toolbar: button that checks npx-installed skills for new
+// versions.
+func (msgs Messages) SkillsCheckUpdates() string {
+	return Catalog.Format(msgs.locale, "skillsCheckUpdates", nil)
+}
+
+// SkillsChecking says "Checking…"
+// in the language the app shows.
+//
+// Skills page toolbar: the Check for Updates button while checking.
+func SkillsChecking() string { return In(i18n.Locale()).SkillsChecking() }
+
+// SkillsChecking says "Checking…"
+// in the language of msgs.
+//
+// Skills page toolbar: the Check for Updates button while checking.
+func (msgs Messages) SkillsChecking() string {
+	return Catalog.Format(msgs.locale, "skillsChecking", nil)
+}
+
+// SkillsClaudeNote says "Codex, Grok and Cursor all read .agents/skills, so installing there works for them; Claude only reads its own folder …"
+// in the language the app shows.
+//
+// Install dialog: note under the Also for Claude switch.
+func SkillsClaudeNote() string { return In(i18n.Locale()).SkillsClaudeNote() }
+
+// SkillsClaudeNote says "Codex, Grok and Cursor all read .agents/skills, so installing there works for them; Claude only reads its own folder …"
+// in the language of msgs.
+//
+// Install dialog: note under the Also for Claude switch.
+func (msgs Messages) SkillsClaudeNote() string {
+	return Catalog.Format(msgs.locale, "skillsClaudeNote", nil)
+}
+
+// SkillsClauseSeparator says ", "
+// in the language the app shows.
+//
+// Skills page: joins the parts of the update check result, such as “2
+// sources couldn’t be checked” and “1 no longer in its source”.
+func SkillsClauseSeparator() string { return In(i18n.Locale()).SkillsClauseSeparator() }
+
+// SkillsClauseSeparator says ", "
+// in the language of msgs.
+//
+// Skills page: joins the parts of the update check result, such as “2
+// sources couldn’t be checked” and “1 no longer in its source”.
+func (msgs Messages) SkillsClauseSeparator() string {
+	return Catalog.Format(msgs.locale, "skillsClauseSeparator", nil)
+}
+
+// SkillsClickToDisable says "Click to turn off"
+// in the language the app shows.
+//
+// Skills: second line of an agent mark tooltip when clicking turns the
+// skill off.
+func SkillsClickToDisable() string { return In(i18n.Locale()).SkillsClickToDisable() }
+
+// SkillsClickToDisable says "Click to turn off"
+// in the language of msgs.
+//
+// Skills: second line of an agent mark tooltip when clicking turns the
+// skill off.
+func (msgs Messages) SkillsClickToDisable() string {
+	return Catalog.Format(msgs.locale, "skillsClickToDisable", nil)
+}
+
+// SkillsClickToEnable says "Click to turn on"
+// in the language the app shows.
+//
+// Skills: second line of an agent mark tooltip when clicking turns the
+// skill on.
+func SkillsClickToEnable() string { return In(i18n.Locale()).SkillsClickToEnable() }
+
+// SkillsClickToEnable says "Click to turn on"
+// in the language of msgs.
+//
+// Skills: second line of an agent mark tooltip when clicking turns the
+// skill on.
+func (msgs Messages) SkillsClickToEnable() string {
+	return Catalog.Format(msgs.locale, "skillsClickToEnable", nil)
+}
+
+// SkillsConfirmChange says "Apply Change"
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: primary button.
+func SkillsConfirmChange() string { return In(i18n.Locale()).SkillsConfirmChange() }
+
+// SkillsConfirmChange says "Apply Change"
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: primary button.
+func (msgs Messages) SkillsConfirmChange() string {
+	return Catalog.Format(msgs.locale, "skillsConfirmChange", nil)
+}
+
+// SkillsCount says "{count, plural, one {# skill} other {# skills}}"
+// in the language the app shows.
+//
+// Skills page: total at the top of the list.
+func SkillsCount(count int) string { return In(i18n.Locale()).SkillsCount(count) }
+
+// SkillsCount says "{count, plural, one {# skill} other {# skills}}"
+// in the language of msgs.
+//
+// Skills page: total at the top of the list.
+func (msgs Messages) SkillsCount(count int) string {
+	return Catalog.Format(msgs.locale, "skillsCount", map[string]any{"count": count})
+}
+
+// SkillsCountingUsage says "Counting usage…"
+// in the language the app shows.
+//
+// Skills page: shown at the top of the list while usage is being counted.
+func SkillsCountingUsage() string { return In(i18n.Locale()).SkillsCountingUsage() }
+
+// SkillsCountingUsage says "Counting usage…"
+// in the language of msgs.
+//
+// Skills page: shown at the top of the list while usage is being counted.
+func (msgs Messages) SkillsCountingUsage() string {
+	return Catalog.Format(msgs.locale, "skillsCountingUsage", nil)
+}
+
+// SkillsCountingUsageProgress says "Counting usage {done}/{total}"
+// in the language the app shows.
+//
+// Skills page: usage counting progress, sessions done out of total.
+func SkillsCountingUsageProgress(done int, total int) string {
+	return In(i18n.Locale()).SkillsCountingUsageProgress(done, total)
+}
+
+// SkillsCountingUsageProgress says "Counting usage {done}/{total}"
+// in the language of msgs.
+//
+// Skills page: usage counting progress, sessions done out of total.
+func (msgs Messages) SkillsCountingUsageProgress(done int, total int) string {
+	return Catalog.Format(msgs.locale, "skillsCountingUsageProgress", map[string]any{"done": done, "total": total})
+}
+
+// SkillsCursorInferredTip says "Which folders Cursor reads hasn’t been verified; it’s inferred from folder names found in its program."
+// in the language the app shows.
+//
+// Skill details: tooltip of the Inferred marker for Cursor.
+func SkillsCursorInferredTip() string { return In(i18n.Locale()).SkillsCursorInferredTip() }
+
+// SkillsCursorInferredTip says "Which folders Cursor reads hasn’t been verified; it’s inferred from folder names found in its program."
+// in the language of msgs.
+//
+// Skill details: tooltip of the Inferred marker for Cursor.
+func (msgs Messages) SkillsCursorInferredTip() string {
+	return Catalog.Format(msgs.locale, "skillsCursorInferredTip", nil)
+}
+
+// SkillsDeleteBody says "npx skills deletes these directly (including same-name copies in every agent’s folder), without using the Trash:\n{p…"
+// in the language the app shows.
+//
+// Skills: body of the command dialog that deletes a skill. paths is one
+// path per line.
+func SkillsDeleteBody(paths string) string { return In(i18n.Locale()).SkillsDeleteBody(paths) }
+
+// SkillsDeleteBody says "npx skills deletes these directly (including same-name copies in every agent’s folder), without using the Trash:\n{p…"
+// in the language of msgs.
+//
+// Skills: body of the command dialog that deletes a skill. paths is one
+// path per line.
+func (msgs Messages) SkillsDeleteBody(paths string) string {
+	return Catalog.Format(msgs.locale, "skillsDeleteBody", map[string]any{"paths": paths})
+}
+
+// SkillsDeleteConfirm says "Delete {name}?"
+// in the language the app shows.
+//
+// Skills: title of the command dialog that deletes an npx-installed skill.
+func SkillsDeleteConfirm(name string) string { return In(i18n.Locale()).SkillsDeleteConfirm(name) }
+
+// SkillsDeleteConfirm says "Delete {name}?"
+// in the language of msgs.
+//
+// Skills: title of the command dialog that deletes an npx-installed skill.
+func (msgs Messages) SkillsDeleteConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "skillsDeleteConfirm", map[string]any{"name": name})
+}
+
+// SkillsDisableTitle says "Turn Off {skill} in {agent}"
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: title when turning a skill off.
+func SkillsDisableTitle(agent string, skill string) string {
+	return In(i18n.Locale()).SkillsDisableTitle(agent, skill)
+}
+
+// SkillsDisableTitle says "Turn Off {skill} in {agent}"
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: title when turning a skill off.
+func (msgs Messages) SkillsDisableTitle(agent string, skill string) string {
+	return Catalog.Format(msgs.locale, "skillsDisableTitle", map[string]any{"agent": agent, "skill": skill})
+}
+
+// SkillsEnableIn says "Enable in {agent}"
+// in the language the app shows.
+//
+// Skill details: accessibility label of the switch that turns the skill on
+// or off for an agent.
+func SkillsEnableIn(agent string) string { return In(i18n.Locale()).SkillsEnableIn(agent) }
+
+// SkillsEnableIn says "Enable in {agent}"
+// in the language of msgs.
+//
+// Skill details: accessibility label of the switch that turns the skill on
+// or off for an agent.
+func (msgs Messages) SkillsEnableIn(agent string) string {
+	return Catalog.Format(msgs.locale, "skillsEnableIn", map[string]any{"agent": agent})
+}
+
+// SkillsEnableTitle says "Turn On {skill} in {agent}"
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: title when turning a skill on.
+func SkillsEnableTitle(agent string, skill string) string {
+	return In(i18n.Locale()).SkillsEnableTitle(agent, skill)
+}
+
+// SkillsEnableTitle says "Turn On {skill} in {agent}"
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: title when turning a skill on.
+func (msgs Messages) SkillsEnableTitle(agent string, skill string) string {
+	return Catalog.Format(msgs.locale, "skillsEnableTitle", map[string]any{"agent": agent, "skill": skill})
+}
+
+// SkillsGoneCount says "{count, plural, one {# no longer in its source} other {# no longer in their sources}}"
+// in the language the app shows.
+//
+// Skills page: update check result, number of skills that disappeared from
+// their sources.
+func SkillsGoneCount(count int) string { return In(i18n.Locale()).SkillsGoneCount(count) }
+
+// SkillsGoneCount says "{count, plural, one {# no longer in its source} other {# no longer in their sources}}"
+// in the language of msgs.
+//
+// Skills page: update check result, number of skills that disappeared from
+// their sources.
+func (msgs Messages) SkillsGoneCount(count int) string {
+	return Catalog.Format(msgs.locale, "skillsGoneCount", map[string]any{"count": count})
+}
+
+// SkillsGoneLine says "{name}: no longer in its source; npx skills update skips it"
+// in the language the app shows.
+//
+// Skills page: tooltip line of the update check result for a skill that
+// disappeared from its source.
+func SkillsGoneLine(name string) string { return In(i18n.Locale()).SkillsGoneLine(name) }
+
+// SkillsGoneLine says "{name}: no longer in its source; npx skills update skips it"
+// in the language of msgs.
+//
+// Skills page: tooltip line of the update check result for a skill that
+// disappeared from its source.
+func (msgs Messages) SkillsGoneLine(name string) string {
+	return Catalog.Format(msgs.locale, "skillsGoneLine", map[string]any{"name": name})
+}
+
+// SkillsGoneNote says "It’s no longer in its source (deleted, renamed or moved upstream), so npx skills update can’t update it. Check th…"
+// in the language the app shows.
+//
+// Skill details: warning for a skill that disappeared from its source.
+func SkillsGoneNote() string { return In(i18n.Locale()).SkillsGoneNote() }
+
+// SkillsGoneNote says "It’s no longer in its source (deleted, renamed or moved upstream), so npx skills update can’t update it. Check th…"
+// in the language of msgs.
+//
+// Skill details: warning for a skill that disappeared from its source.
+func (msgs Messages) SkillsGoneNote() string {
+	return Catalog.Format(msgs.locale, "skillsGoneNote", nil)
+}
+
+// SkillsHasUpdate says "Update Available"
+// in the language the app shows.
+//
+// Skills page: marker in a list row for a skill with a new version.
+func SkillsHasUpdate() string { return In(i18n.Locale()).SkillsHasUpdate() }
+
+// SkillsHasUpdate says "Update Available"
+// in the language of msgs.
+//
+// Skills page: marker in a list row for a skill with a new version.
+func (msgs Messages) SkillsHasUpdate() string {
+	return Catalog.Format(msgs.locale, "skillsHasUpdate", nil)
+}
+
+// SkillsInferred says "Inferred"
+// in the language the app shows.
+//
+// Skill and MCP details: marker next to an agent’s state when its read
+// rules are inferred.
+func SkillsInferred() string { return In(i18n.Locale()).SkillsInferred() }
+
+// SkillsInferred says "Inferred"
+// in the language of msgs.
+//
+// Skill and MCP details: marker next to an agent’s state when its read
+// rules are inferred.
+func (msgs Messages) SkillsInferred() string {
+	return Catalog.Format(msgs.locale, "skillsInferred", nil)
+}
+
+// SkillsInferredNote says "Read rules are inferred, not verified"
+// in the language the app shows.
+//
+// Skills and MCP: line of an agent mark tooltip when the agent’s read
+// rules are inferred.
+func SkillsInferredNote() string { return In(i18n.Locale()).SkillsInferredNote() }
+
+// SkillsInferredNote says "Read rules are inferred, not verified"
+// in the language of msgs.
+//
+// Skills and MCP: line of an agent mark tooltip when the agent’s read
+// rules are inferred.
+func (msgs Messages) SkillsInferredNote() string {
+	return Catalog.Format(msgs.locale, "skillsInferredNote", nil)
+}
+
+// SkillsInstall says "Install"
+// in the language the app shows.
+//
+// Install dialog: primary button.
+func SkillsInstall() string { return In(i18n.Locale()).SkillsInstall() }
+
+// SkillsInstall says "Install"
+// in the language of msgs.
+//
+// Install dialog: primary button.
+func (msgs Messages) SkillsInstall() string {
+	return Catalog.Format(msgs.locale, "skillsInstall", nil)
+}
+
+// SkillsInstallEllipsis says "Install…"
+// in the language the app shows.
+//
+// Skills page toolbar and project Skills tab: button that opens the install
+// dialog.
+func SkillsInstallEllipsis() string { return In(i18n.Locale()).SkillsInstallEllipsis() }
+
+// SkillsInstallEllipsis says "Install…"
+// in the language of msgs.
+//
+// Skills page toolbar and project Skills tab: button that opens the install
+// dialog.
+func (msgs Messages) SkillsInstallEllipsis() string {
+	return Catalog.Format(msgs.locale, "skillsInstallEllipsis", nil)
+}
+
+// SkillsInstallGlobalNote says "Installs to your user folder (~/.agents/skills), available to all projects."
+// in the language the app shows.
+//
+// Install dialog: note under the title (user scope).
+func SkillsInstallGlobalNote() string { return In(i18n.Locale()).SkillsInstallGlobalNote() }
+
+// SkillsInstallGlobalNote says "Installs to your user folder (~/.agents/skills), available to all projects."
+// in the language of msgs.
+//
+// Install dialog: note under the title (user scope).
+func (msgs Messages) SkillsInstallGlobalNote() string {
+	return Catalog.Format(msgs.locale, "skillsInstallGlobalNote", nil)
+}
+
+// SkillsInstallNode says "Install Node.js"
+// in the language the app shows.
+//
+// Install dialog: primary button when npx is missing; also the title of the
+// command dialog that installs Node.js.
+func SkillsInstallNode() string { return In(i18n.Locale()).SkillsInstallNode() }
+
+// SkillsInstallNode says "Install Node.js"
+// in the language of msgs.
+//
+// Install dialog: primary button when npx is missing; also the title of the
+// command dialog that installs Node.js.
+func (msgs Messages) SkillsInstallNode() string {
+	return Catalog.Format(msgs.locale, "skillsInstallNode", nil)
+}
+
+// SkillsInstallNodeBody says "Installs Node.js with Homebrew; installing skills needs the npx that comes with it."
+// in the language the app shows.
+//
+// Command dialog body when installing Node.js.
+func SkillsInstallNodeBody() string { return In(i18n.Locale()).SkillsInstallNodeBody() }
+
+// SkillsInstallNodeBody says "Installs Node.js with Homebrew; installing skills needs the npx that comes with it."
+// in the language of msgs.
+//
+// Command dialog body when installing Node.js.
+func (msgs Messages) SkillsInstallNodeBody() string {
+	return Catalog.Format(msgs.locale, "skillsInstallNodeBody", nil)
+}
+
+// SkillsInstallProjectNote says "Installs to .agents/skills in “{project}”, available only in this project."
+// in the language the app shows.
+//
+// Install dialog: note under the title (project scope).
+func SkillsInstallProjectNote(project string) string {
+	return In(i18n.Locale()).SkillsInstallProjectNote(project)
+}
+
+// SkillsInstallProjectNote says "Installs to .agents/skills in “{project}”, available only in this project."
+// in the language of msgs.
+//
+// Install dialog: note under the title (project scope).
+func (msgs Messages) SkillsInstallProjectNote(project string) string {
+	return Catalog.Format(msgs.locale, "skillsInstallProjectNote", map[string]any{"project": project})
+}
+
+// SkillsInstallProjectTitle says "Install to Project"
+// in the language the app shows.
+//
+// Install dialog title (project scope).
+func SkillsInstallProjectTitle() string { return In(i18n.Locale()).SkillsInstallProjectTitle() }
+
+// SkillsInstallProjectTitle says "Install to Project"
+// in the language of msgs.
+//
+// Install dialog title (project scope).
+func (msgs Messages) SkillsInstallProjectTitle() string {
+	return Catalog.Format(msgs.locale, "skillsInstallProjectTitle", nil)
+}
+
+// SkillsInstallTitle says "Install Skills"
+// in the language the app shows.
+//
+// Install dialog title (user scope); also the title of the command dialog
+// that runs the install.
+func SkillsInstallTitle() string { return In(i18n.Locale()).SkillsInstallTitle() }
+
+// SkillsInstallTitle says "Install Skills"
+// in the language of msgs.
+//
+// Install dialog title (user scope); also the title of the command dialog
+// that runs the install.
+func (msgs Messages) SkillsInstallTitle() string {
+	return Catalog.Format(msgs.locale, "skillsInstallTitle", nil)
+}
+
+// SkillsInstalled says "Installed"
+// in the language the app shows.
+//
+// Install dialog: marker next to a skill that is already installed.
+func SkillsInstalled() string { return In(i18n.Locale()).SkillsInstalled() }
+
+// SkillsInstalled says "Installed"
+// in the language of msgs.
+//
+// Install dialog: marker next to a skill that is already installed.
+func (msgs Messages) SkillsInstalled() string {
+	return Catalog.Format(msgs.locale, "skillsInstalled", nil)
+}
+
+// SkillsIssueBrokenLink says "Broken Links"
+// in the language the app shows.
+//
+// Skills health check: card title.
+func SkillsIssueBrokenLink() string { return In(i18n.Locale()).SkillsIssueBrokenLink() }
+
+// SkillsIssueBrokenLink says "Broken Links"
+// in the language of msgs.
+//
+// Skills health check: card title.
+func (msgs Messages) SkillsIssueBrokenLink() string {
+	return Catalog.Format(msgs.locale, "skillsIssueBrokenLink", nil)
+}
+
+// SkillsIssueBrokenLinkNote says "The folder the link points to no longer exists, so no agent can see it."
+// in the language the app shows.
+//
+// Skills health check: explanation under Broken Links.
+func SkillsIssueBrokenLinkNote() string { return In(i18n.Locale()).SkillsIssueBrokenLinkNote() }
+
+// SkillsIssueBrokenLinkNote says "The folder the link points to no longer exists, so no agent can see it."
+// in the language of msgs.
+//
+// Skills health check: explanation under Broken Links.
+func (msgs Messages) SkillsIssueBrokenLinkNote() string {
+	return Catalog.Format(msgs.locale, "skillsIssueBrokenLinkNote", nil)
+}
+
+// SkillsIssueDuplicate says "Name Conflicts"
+// in the language the app shows.
+//
+// Skills health check: card title.
+func SkillsIssueDuplicate() string { return In(i18n.Locale()).SkillsIssueDuplicate() }
+
+// SkillsIssueDuplicate says "Name Conflicts"
+// in the language of msgs.
+//
+// Skills health check: card title.
+func (msgs Messages) SkillsIssueDuplicate() string {
+	return Catalog.Format(msgs.locale, "skillsIssueDuplicate", nil)
+}
+
+// SkillsIssueDuplicateNote says "An agent sees two skills with the same name, and only the preferred one takes effect. You can merge them: the inactiv…"
+// in the language the app shows.
+//
+// Skills health check: explanation under Name Conflicts.
+func SkillsIssueDuplicateNote() string { return In(i18n.Locale()).SkillsIssueDuplicateNote() }
+
+// SkillsIssueDuplicateNote says "An agent sees two skills with the same name, and only the preferred one takes effect. You can merge them: the inactiv…"
+// in the language of msgs.
+//
+// Skills health check: explanation under Name Conflicts.
+func (msgs Messages) SkillsIssueDuplicateNote() string {
+	return Catalog.Format(msgs.locale, "skillsIssueDuplicateNote", nil)
+}
+
+// SkillsIssueLockMissing says "Lock File Mismatch"
+// in the language the app shows.
+//
+// Skills health check: card title.
+func SkillsIssueLockMissing() string { return In(i18n.Locale()).SkillsIssueLockMissing() }
+
+// SkillsIssueLockMissing says "Lock File Mismatch"
+// in the language of msgs.
+//
+// Skills health check: card title.
+func (msgs Messages) SkillsIssueLockMissing() string {
+	return Catalog.Format(msgs.locale, "skillsIssueLockMissing", nil)
+}
+
+// SkillsIssueLockMissingNote says "The npx skills lock file lists it, but no agent’s skill folder has it (it was probably deleted by hand). If you don…"
+// in the language the app shows.
+//
+// Skills health check: explanation under Lock File Mismatch.
+func SkillsIssueLockMissingNote() string { return In(i18n.Locale()).SkillsIssueLockMissingNote() }
+
+// SkillsIssueLockMissingNote says "The npx skills lock file lists it, but no agent’s skill folder has it (it was probably deleted by hand). If you don…"
+// in the language of msgs.
+//
+// Skills health check: explanation under Lock File Mismatch.
+func (msgs Messages) SkillsIssueLockMissingNote() string {
+	return Catalog.Format(msgs.locale, "skillsIssueLockMissingNote", nil)
+}
+
+// SkillsIssueRedundantLink says "Redundant Links"
+// in the language the app shows.
+//
+// Skills health check: card title.
+func SkillsIssueRedundantLink() string { return In(i18n.Locale()).SkillsIssueRedundantLink() }
+
+// SkillsIssueRedundantLink says "Redundant Links"
+// in the language of msgs.
+//
+// Skills health check: card title.
+func (msgs Messages) SkillsIssueRedundantLink() string {
+	return Catalog.Format(msgs.locale, "skillsIssueRedundantLink", nil)
+}
+
+// SkillsIssueRedundantLinkNote says "The agents that read the link’s folder already see its target from elsewhere, so deleting it changes nothing."
+// in the language the app shows.
+//
+// Skills health check: explanation under Redundant Links.
+func SkillsIssueRedundantLinkNote() string { return In(i18n.Locale()).SkillsIssueRedundantLinkNote() }
+
+// SkillsIssueRedundantLinkNote says "The agents that read the link’s folder already see its target from elsewhere, so deleting it changes nothing."
+// in the language of msgs.
+//
+// Skills health check: explanation under Redundant Links.
+func (msgs Messages) SkillsIssueRedundantLinkNote() string {
+	return Catalog.Format(msgs.locale, "skillsIssueRedundantLinkNote", nil)
+}
+
+// SkillsIssuesFound says "{count, plural, one {Health check found # issue} other {Health check found # issues}}"
+// in the language the app shows.
+//
+// Skills and MCP pages: row at the top of the list that opens the health
+// check results.
+func SkillsIssuesFound(count int) string { return In(i18n.Locale()).SkillsIssuesFound(count) }
+
+// SkillsIssuesFound says "{count, plural, one {Health check found # issue} other {Health check found # issues}}"
+// in the language of msgs.
+//
+// Skills and MCP pages: row at the top of the list that opens the health
+// check results.
+func (msgs Messages) SkillsIssuesFound(count int) string {
+	return Catalog.Format(msgs.locale, "skillsIssuesFound", map[string]any{"count": count})
+}
+
+// SkillsIssuesLabel says "Health Check"
+// in the language the app shows.
+//
+// Skills page: accessibility label of the row that opens the health check
+// results.
+func SkillsIssuesLabel() string { return In(i18n.Locale()).SkillsIssuesLabel() }
+
+// SkillsIssuesLabel says "Health Check"
+// in the language of msgs.
+//
+// Skills page: accessibility label of the row that opens the health check
+// results.
+func (msgs Messages) SkillsIssuesLabel() string {
+	return Catalog.Format(msgs.locale, "skillsIssuesLabel", nil)
+}
+
+// SkillsLastUsed says "Last used {time}"
+// in the language the app shows.
+//
+// Skills and MCP: when it was last used. time is a date and time.
+func SkillsLastUsed(time_ string) string { return In(i18n.Locale()).SkillsLastUsed(time_) }
+
+// SkillsLastUsed says "Last used {time}"
+// in the language of msgs.
+//
+// Skills and MCP: when it was last used. time is a date and time.
+func (msgs Messages) SkillsLastUsed(time_ string) string {
+	return Catalog.Format(msgs.locale, "skillsLastUsed", map[string]any{"time": time_})
+}
+
+// SkillsLinkBody says "Creates a link to it in a folder {agent} reads, without copying files:\n{link} → {target}\n\nUse this switch to turn i…"
+// in the language the app shows.
+//
+// Skills: confirmation body for linking a skill into a folder an agent
+// reads.
+func SkillsLinkBody(agent string, link string, target string) string {
+	return In(i18n.Locale()).SkillsLinkBody(agent, link, target)
+}
+
+// SkillsLinkBody says "Creates a link to it in a folder {agent} reads, without copying files:\n{link} → {target}\n\nUse this switch to turn i…"
+// in the language of msgs.
+//
+// Skills: confirmation body for linking a skill into a folder an agent
+// reads.
+func (msgs Messages) SkillsLinkBody(agent string, link string, target string) string {
+	return Catalog.Format(msgs.locale, "skillsLinkBody", map[string]any{"agent": agent, "link": link, "target": target})
+}
+
+// SkillsLinkButton says "Create Link"
+// in the language the app shows.
+//
+// Skills: confirmation button for linking a skill.
+func SkillsLinkButton() string { return In(i18n.Locale()).SkillsLinkButton() }
+
+// SkillsLinkButton says "Create Link"
+// in the language of msgs.
+//
+// Skills: confirmation button for linking a skill.
+func (msgs Messages) SkillsLinkButton() string {
+	return Catalog.Format(msgs.locale, "skillsLinkButton", nil)
+}
+
+// SkillsLinkConfirm says "Let {agent} see {name}?"
+// in the language the app shows.
+//
+// Skills: confirmation title for linking a skill into a folder an agent
+// reads.
+func SkillsLinkConfirm(agent string, name string) string {
+	return In(i18n.Locale()).SkillsLinkConfirm(agent, name)
+}
+
+// SkillsLinkConfirm says "Let {agent} see {name}?"
+// in the language of msgs.
+//
+// Skills: confirmation title for linking a skill into a folder an agent
+// reads.
+func (msgs Messages) SkillsLinkConfirm(agent string, name string) string {
+	return Catalog.Format(msgs.locale, "skillsLinkConfirm", map[string]any{"agent": agent, "name": name})
+}
+
+// SkillsLinkError says "Couldn’t create the link: {error}"
+// in the language the app shows.
+//
+// Error bar: creating a skill link failed.
+func SkillsLinkError(error string) string { return In(i18n.Locale()).SkillsLinkError(error) }
+
+// SkillsLinkError says "Couldn’t create the link: {error}"
+// in the language of msgs.
+//
+// Error bar: creating a skill link failed.
+func (msgs Messages) SkillsLinkError(error string) string {
+	return Catalog.Format(msgs.locale, "skillsLinkError", map[string]any{"error": error})
+}
+
+// SkillsLinkLabel says "Let {agent} See It"
+// in the language the app shows.
+//
+// Skill details: accessibility label of the switch that links the skill
+// into a folder the agent reads.
+func SkillsLinkLabel(agent string) string { return In(i18n.Locale()).SkillsLinkLabel(agent) }
+
+// SkillsLinkLabel says "Let {agent} See It"
+// in the language of msgs.
+//
+// Skill details: accessibility label of the switch that links the skill
+// into a folder the agent reads.
+func (msgs Messages) SkillsLinkLabel(agent string) string {
+	return Catalog.Format(msgs.locale, "skillsLinkLabel", map[string]any{"agent": agent})
+}
+
+// SkillsLinkTip says "Create a link to it in {dir}"
+// in the language the app shows.
+//
+// Skill details: tooltip of the switch that links the skill into a folder
+// the agent reads.
+func SkillsLinkTip(dir string) string { return In(i18n.Locale()).SkillsLinkTip(dir) }
+
+// SkillsLinkTip says "Create a link to it in {dir}"
+// in the language of msgs.
+//
+// Skill details: tooltip of the switch that links the skill into a folder
+// the agent reads.
+func (msgs Messages) SkillsLinkTip(dir string) string {
+	return Catalog.Format(msgs.locale, "skillsLinkTip", map[string]any{"dir": dir})
+}
+
+// SkillsList says "List Skills"
+// in the language the app shows.
+//
+// Install dialog: primary button that lists the skills in the source.
+func SkillsList() string { return In(i18n.Locale()).SkillsList() }
+
+// SkillsList says "List Skills"
+// in the language of msgs.
+//
+// Install dialog: primary button that lists the skills in the source.
+func (msgs Messages) SkillsList() string {
+	return Catalog.Format(msgs.locale, "skillsList", nil)
+}
+
+// SkillsListError says "Couldn’t read the skill list: {error}"
+// in the language the app shows.
+//
+// Install dialog: error when the source could not be listed.
+func SkillsListError(error string) string { return In(i18n.Locale()).SkillsListError(error) }
+
+// SkillsListError says "Couldn’t read the skill list: {error}"
+// in the language of msgs.
+//
+// Install dialog: error when the source could not be listed.
+func (msgs Messages) SkillsListError(error string) string {
+	return Catalog.Format(msgs.locale, "skillsListError", map[string]any{"error": error})
+}
+
+// SkillsListLabel says "Skill List"
+// in the language the app shows.
+//
+// Skills page: accessibility label of the skill list card.
+func SkillsListLabel() string { return In(i18n.Locale()).SkillsListLabel() }
+
+// SkillsListLabel says "Skill List"
+// in the language of msgs.
+//
+// Skills page: accessibility label of the skill list card.
+func (msgs Messages) SkillsListLabel() string {
+	return Catalog.Format(msgs.locale, "skillsListLabel", nil)
+}
+
 // SkillsListSeparator says ", "
 // in the language the app shows.
 //
@@ -10440,6 +11778,350 @@ func SkillsListSeparator() string { return In(i18n.Locale()).SkillsListSeparator
 // (skillsNotReadReads).
 func (msgs Messages) SkillsListSeparator() string {
 	return Catalog.Format(msgs.locale, "skillsListSeparator", nil)
+}
+
+// SkillsListing says "Reading skills from the source…"
+// in the language the app shows.
+//
+// Install dialog: shown while listing the skills in the source.
+func SkillsListing() string { return In(i18n.Locale()).SkillsListing() }
+
+// SkillsListing says "Reading skills from the source…"
+// in the language of msgs.
+//
+// Install dialog: shown while listing the skills in the source.
+func (msgs Messages) SkillsListing() string {
+	return Catalog.Format(msgs.locale, "skillsListing", nil)
+}
+
+// SkillsMergeButton says "Merge"
+// in the language the app shows.
+//
+// Skills health check: merge confirmation button.
+func SkillsMergeButton() string { return In(i18n.Locale()).SkillsMergeButton() }
+
+// SkillsMergeButton says "Merge"
+// in the language of msgs.
+//
+// Skills health check: merge confirmation button.
+func (msgs Messages) SkillsMergeButton() string {
+	return Catalog.Format(msgs.locale, "skillsMergeButton", nil)
+}
+
+// SkillsMergeConfirm says "Merge {name} into one copy?"
+// in the language the app shows.
+//
+// Skills health check: merge confirmation title.
+func SkillsMergeConfirm(name string) string { return In(i18n.Locale()).SkillsMergeConfirm(name) }
+
+// SkillsMergeConfirm says "Merge {name} into one copy?"
+// in the language of msgs.
+//
+// Skills health check: merge confirmation title.
+func (msgs Messages) SkillsMergeConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "skillsMergeConfirm", map[string]any{"name": name})
+}
+
+// SkillsMergeDiffBody says "The two copies differ: after merging, the agents that read this one switch to the active copy. Its content can be rec…"
+// in the language the app shows.
+//
+// Skills health check: merge confirmation body when the copies differ.
+func SkillsMergeDiffBody(path string, target string) string {
+	return In(i18n.Locale()).SkillsMergeDiffBody(path, target)
+}
+
+// SkillsMergeDiffBody says "The two copies differ: after merging, the agents that read this one switch to the active copy. Its content can be rec…"
+// in the language of msgs.
+//
+// Skills health check: merge confirmation body when the copies differ.
+func (msgs Messages) SkillsMergeDiffBody(path string, target string) string {
+	return Catalog.Format(msgs.locale, "skillsMergeDiffBody", map[string]any{"path": path, "target": target})
+}
+
+// SkillsMergeError says "Couldn’t merge {name}: {error}"
+// in the language the app shows.
+//
+// Error bar: merging duplicate skills failed.
+func SkillsMergeError(name string, error string) string {
+	return In(i18n.Locale()).SkillsMergeError(name, error)
+}
+
+// SkillsMergeError says "Couldn’t merge {name}: {error}"
+// in the language of msgs.
+//
+// Error bar: merging duplicate skills failed.
+func (msgs Messages) SkillsMergeError(name string, error string) string {
+	return Catalog.Format(msgs.locale, "skillsMergeError", map[string]any{"name": name, "error": error})
+}
+
+// SkillsMergeSameBody says "The content matches the active copy, so what each agent reads stays the same.\n\nMove to Trash: {path}\nReplace with a l…"
+// in the language the app shows.
+//
+// Skills health check: merge confirmation body when both copies are
+// identical.
+func SkillsMergeSameBody(path string, target string) string {
+	return In(i18n.Locale()).SkillsMergeSameBody(path, target)
+}
+
+// SkillsMergeSameBody says "The content matches the active copy, so what each agent reads stays the same.\n\nMove to Trash: {path}\nReplace with a l…"
+// in the language of msgs.
+//
+// Skills health check: merge confirmation body when both copies are
+// identical.
+func (msgs Messages) SkillsMergeSameBody(path string, target string) string {
+	return Catalog.Format(msgs.locale, "skillsMergeSameBody", map[string]any{"path": path, "target": target})
+}
+
+// SkillsMergeTip says "Merge: Replace with a Link to the Active Copy"
+// in the language the app shows.
+//
+// Skills health check: icon button tooltip on a name conflict.
+func SkillsMergeTip() string { return In(i18n.Locale()).SkillsMergeTip() }
+
+// SkillsMergeTip says "Merge: Replace with a Link to the Active Copy"
+// in the language of msgs.
+//
+// Skills health check: icon button tooltip on a name conflict.
+func (msgs Messages) SkillsMergeTip() string {
+	return Catalog.Format(msgs.locale, "skillsMergeTip", nil)
+}
+
+// SkillsMissingDir says "Missing: {path}"
+// in the language the app shows.
+//
+// Skills health check: detail line of a lock file mismatch. path is the
+// folder that is missing.
+func SkillsMissingDir(path string) string { return In(i18n.Locale()).SkillsMissingDir(path) }
+
+// SkillsMissingDir says "Missing: {path}"
+// in the language of msgs.
+//
+// Skills health check: detail line of a lock file mismatch. path is the
+// folder that is missing.
+func (msgs Messages) SkillsMissingDir(path string) string {
+	return Catalog.Format(msgs.locale, "skillsMissingDir", map[string]any{"path": path})
+}
+
+// SkillsMoreLinks says "…{count} in total"
+// in the language the app shows.
+//
+// Skills: last line of a shortened list of links in a confirmation.
+func SkillsMoreLinks(count int) string { return In(i18n.Locale()).SkillsMoreLinks(count) }
+
+// SkillsMoreLinks says "…{count} in total"
+// in the language of msgs.
+//
+// Skills: last line of a shortened list of links in a confirmation.
+func (msgs Messages) SkillsMoreLinks(count int) string {
+	return Catalog.Format(msgs.locale, "skillsMoreLinks", map[string]any{"count": count})
+}
+
+// SkillsNamesPlaceholder says "Install only some (names separated by spaces; leave empty for all)"
+// in the language the app shows.
+//
+// Install dialog: placeholder of the names field shown when the source
+// could not be listed.
+func SkillsNamesPlaceholder() string { return In(i18n.Locale()).SkillsNamesPlaceholder() }
+
+// SkillsNamesPlaceholder says "Install only some (names separated by spaces; leave empty for all)"
+// in the language of msgs.
+//
+// Install dialog: placeholder of the names field shown when the source
+// could not be listed.
+func (msgs Messages) SkillsNamesPlaceholder() string {
+	return Catalog.Format(msgs.locale, "skillsNamesPlaceholder", nil)
+}
+
+// SkillsNeedProject says "Add a project first: the command runs in a workspace terminal."
+// in the language the app shows.
+//
+// Error bar: installing or running an npx skills command with no project
+// added.
+func SkillsNeedProject() string { return In(i18n.Locale()).SkillsNeedProject() }
+
+// SkillsNeedProject says "Add a project first: the command runs in a workspace terminal."
+// in the language of msgs.
+//
+// Error bar: installing or running an npx skills command with no project
+// added.
+func (msgs Messages) SkillsNeedProject() string {
+	return Catalog.Format(msgs.locale, "skillsNeedProject", nil)
+}
+
+// SkillsNeverUsed says "Never used in sessions"
+// in the language the app shows.
+//
+// Skills and MCP lists: usage line for something never used.
+func SkillsNeverUsed() string { return In(i18n.Locale()).SkillsNeverUsed() }
+
+// SkillsNeverUsed says "Never used in sessions"
+// in the language of msgs.
+//
+// Skills and MCP lists: usage line for something never used.
+func (msgs Messages) SkillsNeverUsed() string {
+	return Catalog.Format(msgs.locale, "skillsNeverUsed", nil)
+}
+
+// SkillsNeverUsedNote says "No agent’s session history shows it being used."
+// in the language the app shows.
+//
+// Skill and MCP details: usage card when never used.
+func SkillsNeverUsedNote() string { return In(i18n.Locale()).SkillsNeverUsedNote() }
+
+// SkillsNeverUsedNote says "No agent’s session history shows it being used."
+// in the language of msgs.
+//
+// Skill and MCP details: usage card when never used.
+func (msgs Messages) SkillsNeverUsedNote() string {
+	return Catalog.Format(msgs.locale, "skillsNeverUsedNote", nil)
+}
+
+// SkillsNewEllipsis says "New…"
+// in the language the app shows.
+//
+// Project Skills tab in the Files Panel: button that opens the New Project
+// Skill dialog.
+func SkillsNewEllipsis() string { return In(i18n.Locale()).SkillsNewEllipsis() }
+
+// SkillsNewEllipsis says "New…"
+// in the language of msgs.
+//
+// Project Skills tab in the Files Panel: button that opens the New Project
+// Skill dialog.
+func (msgs Messages) SkillsNewEllipsis() string {
+	return Catalog.Format(msgs.locale, "skillsNewEllipsis", nil)
+}
+
+// SkillsNewError says "Couldn’t create it: {error}"
+// in the language the app shows.
+//
+// Error bar: creating a project skill failed.
+func SkillsNewError(error string) string { return In(i18n.Locale()).SkillsNewError(error) }
+
+// SkillsNewError says "Couldn’t create it: {error}"
+// in the language of msgs.
+//
+// Error bar: creating a project skill failed.
+func (msgs Messages) SkillsNewError(error string) string {
+	return Catalog.Format(msgs.locale, "skillsNewError", map[string]any{"error": error})
+}
+
+// SkillsNewExists says "{path} already exists"
+// in the language the app shows.
+//
+// New Project Skill: reason shown when the folder or link already exists.
+func SkillsNewExists(path string) string { return In(i18n.Locale()).SkillsNewExists(path) }
+
+// SkillsNewExists says "{path} already exists"
+// in the language of msgs.
+//
+// New Project Skill: reason shown when the folder or link already exists.
+func (msgs Messages) SkillsNewExists(path string) string {
+	return Catalog.Format(msgs.locale, "skillsNewExists", map[string]any{"path": path})
+}
+
+// SkillsNewNameRule says "Use only lowercase letters, digits and hyphens, starting and ending with a letter or digit."
+// in the language the app shows.
+//
+// New Project Skill dialog: error under an invalid name.
+func SkillsNewNameRule() string { return In(i18n.Locale()).SkillsNewNameRule() }
+
+// SkillsNewNameRule says "Use only lowercase letters, digits and hyphens, starting and ending with a letter or digit."
+// in the language of msgs.
+//
+// New Project Skill dialog: error under an invalid name.
+func (msgs Messages) SkillsNewNameRule() string {
+	return Catalog.Format(msgs.locale, "skillsNewNameRule", nil)
+}
+
+// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it."
+// in the language the app shows.
+//
+// New Project Skill dialog: note under the title.
+func SkillsNewNote(project string) string { return In(i18n.Locale()).SkillsNewNote(project) }
+
+// SkillsNewNote says "Created in .agents/skills of “{project}”, with a link in .claude/skills for Claude, so all four agents can use it."
+// in the language of msgs.
+//
+// New Project Skill dialog: note under the title.
+func (msgs Messages) SkillsNewNote(project string) string {
+	return Catalog.Format(msgs.locale, "skillsNewNote", map[string]any{"project": project})
+}
+
+// SkillsNewPlaceholder says "Name, e.g. release-check"
+// in the language the app shows.
+//
+// New Project Skill dialog: name field placeholder.
+func SkillsNewPlaceholder() string { return In(i18n.Locale()).SkillsNewPlaceholder() }
+
+// SkillsNewPlaceholder says "Name, e.g. release-check"
+// in the language of msgs.
+//
+// New Project Skill dialog: name field placeholder.
+func (msgs Messages) SkillsNewPlaceholder() string {
+	return Catalog.Format(msgs.locale, "skillsNewPlaceholder", nil)
+}
+
+// SkillsNewTitle says "New Project Skill"
+// in the language the app shows.
+//
+// New Project Skill dialog title.
+func SkillsNewTitle() string { return In(i18n.Locale()).SkillsNewTitle() }
+
+// SkillsNewTitle says "New Project Skill"
+// in the language of msgs.
+//
+// New Project Skill dialog title.
+func (msgs Messages) SkillsNewTitle() string {
+	return Catalog.Format(msgs.locale, "skillsNewTitle", nil)
+}
+
+// SkillsNoMatch says "No matching skills."
+// in the language the app shows.
+//
+// Skills page: empty state of the list when the search or filter matches
+// nothing.
+func SkillsNoMatch() string { return In(i18n.Locale()).SkillsNoMatch() }
+
+// SkillsNoMatch says "No matching skills."
+// in the language of msgs.
+//
+// Skills page: empty state of the list when the search or filter matches
+// nothing.
+func (msgs Messages) SkillsNoMatch() string {
+	return Catalog.Format(msgs.locale, "skillsNoMatch", nil)
+}
+
+// SkillsNoNPXBrew says "npx not found: installing skills needs the npx that comes with Node.js. Click “Install Node.js” to install it wit…"
+// in the language the app shows.
+//
+// Install dialog: error when npx is missing and Homebrew is available.
+// Install Node.js is skillsInstallNode.
+func SkillsNoNPXBrew() string { return In(i18n.Locale()).SkillsNoNPXBrew() }
+
+// SkillsNoNPXBrew says "npx not found: installing skills needs the npx that comes with Node.js. Click “Install Node.js” to install it wit…"
+// in the language of msgs.
+//
+// Install dialog: error when npx is missing and Homebrew is available.
+// Install Node.js is skillsInstallNode.
+func (msgs Messages) SkillsNoNPXBrew() string {
+	return Catalog.Format(msgs.locale, "skillsNoNPXBrew", nil)
+}
+
+// SkillsNoNPXDownload says "npx not found: installing skills needs the npx that comes with Node.js. Download it from nodejs.org, then click “Re…"
+// in the language the app shows.
+//
+// Install dialog: error when npx is missing and Homebrew is not available.
+// Reload is skillsReload.
+func SkillsNoNPXDownload() string { return In(i18n.Locale()).SkillsNoNPXDownload() }
+
+// SkillsNoNPXDownload says "npx not found: installing skills needs the npx that comes with Node.js. Download it from nodejs.org, then click “Re…"
+// in the language of msgs.
+//
+// Install dialog: error when npx is missing and Homebrew is not available.
+// Reload is skillsReload.
+func (msgs Messages) SkillsNoNPXDownload() string {
+	return Catalog.Format(msgs.locale, "skillsNoNPXDownload", nil)
 }
 
 // SkillsNotRead says "Doesn’t read {dir}"
@@ -10476,6 +12158,1522 @@ func SkillsNotReadReads(dir string, dirs string) string {
 // skillsListSeparator.
 func (msgs Messages) SkillsNotReadReads(dir string, dirs string) string {
 	return Catalog.Format(msgs.locale, "skillsNotReadReads", map[string]any{"dir": dir, "dirs": dirs})
+}
+
+// SkillsOpenFile says "Open SKILL.md"
+// in the language the app shows.
+//
+// Skill details: button that opens SKILL.md in a File Tab.
+func SkillsOpenFile() string { return In(i18n.Locale()).SkillsOpenFile() }
+
+// SkillsOpenFile says "Open SKILL.md"
+// in the language of msgs.
+//
+// Skill details: button that opens SKILL.md in a File Tab.
+func (msgs Messages) SkillsOpenFile() string {
+	return Catalog.Format(msgs.locale, "skillsOpenFile", nil)
+}
+
+// SkillsOpenNodejs says "Open nodejs.org"
+// in the language the app shows.
+//
+// Install dialog: primary button when npx is missing and Homebrew is not
+// available.
+func SkillsOpenNodejs() string { return In(i18n.Locale()).SkillsOpenNodejs() }
+
+// SkillsOpenNodejs says "Open nodejs.org"
+// in the language of msgs.
+//
+// Install dialog: primary button when npx is missing and Homebrew is not
+// available.
+func (msgs Messages) SkillsOpenNodejs() string {
+	return Catalog.Format(msgs.locale, "skillsOpenNodejs", nil)
+}
+
+// SkillsOpenSourcePage says "Open Source Page"
+// in the language the app shows.
+//
+// Skill details: icon button tooltip that opens the source web page.
+func SkillsOpenSourcePage() string { return In(i18n.Locale()).SkillsOpenSourcePage() }
+
+// SkillsOpenSourcePage says "Open Source Page"
+// in the language of msgs.
+//
+// Skill details: icon button tooltip that opens the source web page.
+func (msgs Messages) SkillsOpenSourcePage() string {
+	return Catalog.Format(msgs.locale, "skillsOpenSourcePage", nil)
+}
+
+// SkillsPageLabel says "Skills or MCP"
+// in the language the app shows.
+//
+// Skills page toolbar: accessibility label of the Skills / MCP segmented
+// control.
+func SkillsPageLabel() string { return In(i18n.Locale()).SkillsPageLabel() }
+
+// SkillsPageLabel says "Skills or MCP"
+// in the language of msgs.
+//
+// Skills page toolbar: accessibility label of the Skills / MCP segmented
+// control.
+func (msgs Messages) SkillsPageLabel() string {
+	return Catalog.Format(msgs.locale, "skillsPageLabel", nil)
+}
+
+// SkillsPanelEmpty says "This workspace has no project skills. Skills in .claude/skills, .agents/skills, .grok/skills or .cursor/skills are li…"
+// in the language the app shows.
+//
+// Project Skills tab in the Files Panel: empty state.
+func SkillsPanelEmpty() string { return In(i18n.Locale()).SkillsPanelEmpty() }
+
+// SkillsPanelEmpty says "This workspace has no project skills. Skills in .claude/skills, .agents/skills, .grok/skills or .cursor/skills are li…"
+// in the language of msgs.
+//
+// Project Skills tab in the Files Panel: empty state.
+func (msgs Messages) SkillsPanelEmpty() string {
+	return Catalog.Format(msgs.locale, "skillsPanelEmpty", nil)
+}
+
+// SkillsPickAll says "All {count}"
+// in the language the app shows.
+//
+// Install dialog: label of the checkbox that selects all listed skills.
+func SkillsPickAll(count int) string { return In(i18n.Locale()).SkillsPickAll(count) }
+
+// SkillsPickAll says "All {count}"
+// in the language of msgs.
+//
+// Install dialog: label of the checkbox that selects all listed skills.
+func (msgs Messages) SkillsPickAll(count int) string {
+	return Catalog.Format(msgs.locale, "skillsPickAll", map[string]any{"count": count})
+}
+
+// SkillsReload says "Reload"
+// in the language the app shows.
+//
+// Install dialog: button that lists the source again.
+func SkillsReload() string { return In(i18n.Locale()).SkillsReload() }
+
+// SkillsReload says "Reload"
+// in the language of msgs.
+//
+// Install dialog: button that lists the source again.
+func (msgs Messages) SkillsReload() string {
+	return Catalog.Format(msgs.locale, "skillsReload", nil)
+}
+
+// SkillsRemoveFromLock says "Remove from Lock File"
+// in the language the app shows.
+//
+// Skills health check: icon button tooltip on a lock file mismatch.
+func SkillsRemoveFromLock() string { return In(i18n.Locale()).SkillsRemoveFromLock() }
+
+// SkillsRemoveFromLock says "Remove from Lock File"
+// in the language of msgs.
+//
+// Skills health check: icon button tooltip on a lock file mismatch.
+func (msgs Messages) SkillsRemoveFromLock() string {
+	return Catalog.Format(msgs.locale, "skillsRemoveFromLock", nil)
+}
+
+// SkillsRemoveFromLockBody says "No agent’s skill folder has it anymore; npx skills will only remove this entry from the lock file."
+// in the language the app shows.
+//
+// Skills: body of the command dialog that removes a skill from the lock
+// file.
+func SkillsRemoveFromLockBody() string { return In(i18n.Locale()).SkillsRemoveFromLockBody() }
+
+// SkillsRemoveFromLockBody says "No agent’s skill folder has it anymore; npx skills will only remove this entry from the lock file."
+// in the language of msgs.
+//
+// Skills: body of the command dialog that removes a skill from the lock
+// file.
+func (msgs Messages) SkillsRemoveFromLockBody() string {
+	return Catalog.Format(msgs.locale, "skillsRemoveFromLockBody", nil)
+}
+
+// SkillsRemoveFromLockConfirm says "Remove {name} from the lock file?"
+// in the language the app shows.
+//
+// Skills: title of the command dialog that removes a skill from the npx
+// skills lock file.
+func SkillsRemoveFromLockConfirm(name string) string {
+	return In(i18n.Locale()).SkillsRemoveFromLockConfirm(name)
+}
+
+// SkillsRemoveFromLockConfirm says "Remove {name} from the lock file?"
+// in the language of msgs.
+//
+// Skills: title of the command dialog that removes a skill from the npx
+// skills lock file.
+func (msgs Messages) SkillsRemoveFromLockConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "skillsRemoveFromLockConfirm", map[string]any{"name": name})
+}
+
+// SkillsReopenNote says "Sessions that are already open may need to be restarted for this to take effect."
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: note under the diff.
+func SkillsReopenNote() string { return In(i18n.Locale()).SkillsReopenNote() }
+
+// SkillsReopenNote says "Sessions that are already open may need to be restarted for this to take effect."
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: note under the diff.
+func (msgs Messages) SkillsReopenNote() string {
+	return Catalog.Format(msgs.locale, "skillsReopenNote", nil)
+}
+
+// SkillsRescan says "Rescan"
+// in the language the app shows.
+//
+// Skills page toolbar: icon button tooltip that rescans skills and MCP
+// servers.
+func SkillsRescan() string { return In(i18n.Locale()).SkillsRescan() }
+
+// SkillsRescan says "Rescan"
+// in the language of msgs.
+//
+// Skills page toolbar: icon button tooltip that rescans skills and MCP
+// servers.
+func (msgs Messages) SkillsRescan() string {
+	return Catalog.Format(msgs.locale, "skillsRescan", nil)
+}
+
+// SkillsRevealInactive says "Reveal Inactive Copy in Finder"
+// in the language the app shows.
+//
+// Skills health check: icon button tooltip on a name conflict.
+func SkillsRevealInactive() string { return In(i18n.Locale()).SkillsRevealInactive() }
+
+// SkillsRevealInactive says "Reveal Inactive Copy in Finder"
+// in the language of msgs.
+//
+// Skills health check: icon button tooltip on a name conflict.
+func (msgs Messages) SkillsRevealInactive() string {
+	return Catalog.Format(msgs.locale, "skillsRevealInactive", nil)
+}
+
+// SkillsRunButton says "Run"
+// in the language the app shows.
+//
+// npx skills command dialog: primary button that starts the command.
+func SkillsRunButton() string { return In(i18n.Locale()).SkillsRunButton() }
+
+// SkillsRunButton says "Run"
+// in the language of msgs.
+//
+// npx skills command dialog: primary button that starts the command.
+func (msgs Messages) SkillsRunButton() string {
+	return Catalog.Format(msgs.locale, "skillsRunButton", nil)
+}
+
+// SkillsRunDone says "Done. The skill list has been rescanned."
+// in the language the app shows.
+//
+// npx skills command dialog: status after the command succeeded.
+func SkillsRunDone() string { return In(i18n.Locale()).SkillsRunDone() }
+
+// SkillsRunDone says "Done. The skill list has been rescanned."
+// in the language of msgs.
+//
+// npx skills command dialog: status after the command succeeded.
+func (msgs Messages) SkillsRunDone() string {
+	return Catalog.Format(msgs.locale, "skillsRunDone", nil)
+}
+
+// SkillsRunExit says "Command exited with code {code}."
+// in the language the app shows.
+//
+// npx skills command dialog: status after the command failed. code is the
+// exit code.
+func SkillsRunExit(code string) string { return In(i18n.Locale()).SkillsRunExit(code) }
+
+// SkillsRunExit says "Command exited with code {code}."
+// in the language of msgs.
+//
+// npx skills command dialog: status after the command failed. code is the
+// exit code.
+func (msgs Messages) SkillsRunExit(code string) string {
+	return Catalog.Format(msgs.locale, "skillsRunExit", map[string]any{"code": code})
+}
+
+// SkillsRunFinish says "Done"
+// in the language the app shows.
+//
+// npx skills command dialog: button that closes the dialog after success.
+func SkillsRunFinish() string { return In(i18n.Locale()).SkillsRunFinish() }
+
+// SkillsRunFinish says "Done"
+// in the language of msgs.
+//
+// npx skills command dialog: button that closes the dialog after success.
+func (msgs Messages) SkillsRunFinish() string {
+	return Catalog.Format(msgs.locale, "skillsRunFinish", nil)
+}
+
+// SkillsRunOpenError says "Couldn’t open a terminal: {error}"
+// in the language the app shows.
+//
+// npx skills command dialog: creating the terminal failed.
+func SkillsRunOpenError(error string) string { return In(i18n.Locale()).SkillsRunOpenError(error) }
+
+// SkillsRunOpenError says "Couldn’t open a terminal: {error}"
+// in the language of msgs.
+//
+// npx skills command dialog: creating the terminal failed.
+func (msgs Messages) SkillsRunOpenError(error string) string {
+	return Catalog.Format(msgs.locale, "skillsRunOpenError", map[string]any{"error": error})
+}
+
+// SkillsRunOpenInTab says "Open in Terminal Tab"
+// in the language the app shows.
+//
+// npx skills command dialog: button after failure that shows the terminal
+// in a tab.
+func SkillsRunOpenInTab() string { return In(i18n.Locale()).SkillsRunOpenInTab() }
+
+// SkillsRunOpenInTab says "Open in Terminal Tab"
+// in the language of msgs.
+//
+// npx skills command dialog: button after failure that shows the terminal
+// in a tab.
+func (msgs Messages) SkillsRunOpenInTab() string {
+	return Catalog.Format(msgs.locale, "skillsRunOpenInTab", nil)
+}
+
+// SkillsRunOpening says "Opening terminal…"
+// in the language the app shows.
+//
+// npx skills command dialog: status while the terminal starts.
+func SkillsRunOpening() string { return In(i18n.Locale()).SkillsRunOpening() }
+
+// SkillsRunOpening says "Opening terminal…"
+// in the language of msgs.
+//
+// npx skills command dialog: status while the terminal starts.
+func (msgs Messages) SkillsRunOpening() string {
+	return Catalog.Format(msgs.locale, "skillsRunOpening", nil)
+}
+
+// SkillsRunRunning says "Running. You can answer its questions in the terminal above. Closing the dialog won’t stop it; the command keeps ru…"
+// in the language the app shows.
+//
+// npx skills command dialog: status while running.
+func SkillsRunRunning() string { return In(i18n.Locale()).SkillsRunRunning() }
+
+// SkillsRunRunning says "Running. You can answer its questions in the terminal above. Closing the dialog won’t stop it; the command keeps ru…"
+// in the language of msgs.
+//
+// npx skills command dialog: status while running.
+func (msgs Messages) SkillsRunRunning() string {
+	return Catalog.Format(msgs.locale, "skillsRunRunning", nil)
+}
+
+// SkillsRunToTab says "Move to Terminal Tab"
+// in the language the app shows.
+//
+// npx skills command dialog: button that moves the running command to a
+// terminal tab.
+func SkillsRunToTab() string { return In(i18n.Locale()).SkillsRunToTab() }
+
+// SkillsRunToTab says "Move to Terminal Tab"
+// in the language of msgs.
+//
+// npx skills command dialog: button that moves the running command to a
+// terminal tab.
+func (msgs Messages) SkillsRunToTab() string {
+	return Catalog.Format(msgs.locale, "skillsRunToTab", nil)
+}
+
+// SkillsScopePlugin says "Plugin"
+// in the language the app shows.
+//
+// Skills page: list group header for skills that come with plugins.
+func SkillsScopePlugin() string { return In(i18n.Locale()).SkillsScopePlugin() }
+
+// SkillsScopePlugin says "Plugin"
+// in the language of msgs.
+//
+// Skills page: list group header for skills that come with plugins.
+func (msgs Messages) SkillsScopePlugin() string {
+	return Catalog.Format(msgs.locale, "skillsScopePlugin", nil)
+}
+
+// SkillsScopeProject says "Project"
+// in the language the app shows.
+//
+// Skills page: scope label for project skills.
+func SkillsScopeProject() string { return In(i18n.Locale()).SkillsScopeProject() }
+
+// SkillsScopeProject says "Project"
+// in the language of msgs.
+//
+// Skills page: scope label for project skills.
+func (msgs Messages) SkillsScopeProject() string {
+	return Catalog.Format(msgs.locale, "skillsScopeProject", nil)
+}
+
+// SkillsScopeSynced says "Synced"
+// in the language the app shows.
+//
+// Skills page: list group header for skills synced from the agent account.
+func SkillsScopeSynced() string { return In(i18n.Locale()).SkillsScopeSynced() }
+
+// SkillsScopeSynced says "Synced"
+// in the language of msgs.
+//
+// Skills page: list group header for skills synced from the agent account.
+func (msgs Messages) SkillsScopeSynced() string {
+	return Catalog.Format(msgs.locale, "skillsScopeSynced", nil)
+}
+
+// SkillsScopeSystem says "Built-in"
+// in the language the app shows.
+//
+// Skills page: list group header for skills built into the agent.
+func SkillsScopeSystem() string { return In(i18n.Locale()).SkillsScopeSystem() }
+
+// SkillsScopeSystem says "Built-in"
+// in the language of msgs.
+//
+// Skills page: list group header for skills built into the agent.
+func (msgs Messages) SkillsScopeSystem() string {
+	return Catalog.Format(msgs.locale, "skillsScopeSystem", nil)
+}
+
+// SkillsScopeUser says "User"
+// in the language the app shows.
+//
+// Skills page: list group header for skills in the user folder.
+func SkillsScopeUser() string { return In(i18n.Locale()).SkillsScopeUser() }
+
+// SkillsScopeUser says "User"
+// in the language of msgs.
+//
+// Skills page: list group header for skills in the user folder.
+func (msgs Messages) SkillsScopeUser() string {
+	return Catalog.Format(msgs.locale, "skillsScopeUser", nil)
+}
+
+// SkillsScriptWarning says "Installed skills include their scripts. Check what they run before using them."
+// in the language the app shows.
+//
+// Install dialog: warning above the buttons.
+func SkillsScriptWarning() string { return In(i18n.Locale()).SkillsScriptWarning() }
+
+// SkillsScriptWarning says "Installed skills include their scripts. Check what they run before using them."
+// in the language of msgs.
+//
+// Install dialog: warning above the buttons.
+func (msgs Messages) SkillsScriptWarning() string {
+	return Catalog.Format(msgs.locale, "skillsScriptWarning", nil)
+}
+
+// SkillsSearchLabel says "Search"
+// in the language the app shows.
+//
+// Skills page toolbar: accessibility label of the search field.
+func SkillsSearchLabel() string { return In(i18n.Locale()).SkillsSearchLabel() }
+
+// SkillsSearchLabel says "Search"
+// in the language of msgs.
+//
+// Skills page toolbar: accessibility label of the search field.
+func (msgs Messages) SkillsSearchLabel() string {
+	return Catalog.Format(msgs.locale, "skillsSearchLabel", nil)
+}
+
+// SkillsSearchMCP says "Search MCP servers"
+// in the language the app shows.
+//
+// Skills page toolbar: search field placeholder on the MCP segment.
+func SkillsSearchMCP() string { return In(i18n.Locale()).SkillsSearchMCP() }
+
+// SkillsSearchMCP says "Search MCP servers"
+// in the language of msgs.
+//
+// Skills page toolbar: search field placeholder on the MCP segment.
+func (msgs Messages) SkillsSearchMCP() string {
+	return Catalog.Format(msgs.locale, "skillsSearchMCP", nil)
+}
+
+// SkillsSearchSkills says "Search skills"
+// in the language the app shows.
+//
+// Skills page toolbar: search field placeholder on the Skills segment.
+func SkillsSearchSkills() string { return In(i18n.Locale()).SkillsSearchSkills() }
+
+// SkillsSearchSkills says "Search skills"
+// in the language of msgs.
+//
+// Skills page toolbar: search field placeholder on the Skills segment.
+func (msgs Messages) SkillsSearchSkills() string {
+	return Catalog.Format(msgs.locale, "skillsSearchSkills", nil)
+}
+
+// SkillsSessions says "{count, plural, one {# session} other {# sessions}}"
+// in the language the app shows.
+//
+// Skill and MCP details: number of sessions that used it.
+func SkillsSessions(count int) string { return In(i18n.Locale()).SkillsSessions(count) }
+
+// SkillsSessions says "{count, plural, one {# session} other {# sessions}}"
+// in the language of msgs.
+//
+// Skill and MCP details: number of sessions that used it.
+func (msgs Messages) SkillsSessions(count int) string {
+	return Catalog.Format(msgs.locale, "skillsSessions", map[string]any{"count": count})
+}
+
+// SkillsShadowedDiff says "{path} is shadowed by {other}; different content"
+// in the language the app shows.
+//
+// Skills health check: detail line of a name conflict with different
+// content.
+func SkillsShadowedDiff(path string, other string) string {
+	return In(i18n.Locale()).SkillsShadowedDiff(path, other)
+}
+
+// SkillsShadowedDiff says "{path} is shadowed by {other}; different content"
+// in the language of msgs.
+//
+// Skills health check: detail line of a name conflict with different
+// content.
+func (msgs Messages) SkillsShadowedDiff(path string, other string) string {
+	return Catalog.Format(msgs.locale, "skillsShadowedDiff", map[string]any{"path": path, "other": other})
+}
+
+// SkillsShadowedSame says "{path} is shadowed by {other}; same content"
+// in the language the app shows.
+//
+// Skills health check: detail line of a name conflict with identical
+// content.
+func SkillsShadowedSame(path string, other string) string {
+	return In(i18n.Locale()).SkillsShadowedSame(path, other)
+}
+
+// SkillsShadowedSame says "{path} is shadowed by {other}; same content"
+// in the language of msgs.
+//
+// Skills health check: detail line of a name conflict with identical
+// content.
+func (msgs Messages) SkillsShadowedSame(path string, other string) string {
+	return Catalog.Format(msgs.locale, "skillsShadowedSame", map[string]any{"path": path, "other": other})
+}
+
+// SkillsShowAllTip says "Click again to show all"
+// in the language the app shows.
+//
+// Skills page: tooltip of the updates row while filtering to skills with
+// updates.
+func SkillsShowAllTip() string { return In(i18n.Locale()).SkillsShowAllTip() }
+
+// SkillsShowAllTip says "Click again to show all"
+// in the language of msgs.
+//
+// Skills page: tooltip of the updates row while filtering to skills with
+// updates.
+func (msgs Messages) SkillsShowAllTip() string {
+	return Catalog.Format(msgs.locale, "skillsShowAllTip", nil)
+}
+
+// SkillsShowUpdatesTip says "Show only skills with updates"
+// in the language the app shows.
+//
+// Skills page: tooltip of the updates row.
+func SkillsShowUpdatesTip() string { return In(i18n.Locale()).SkillsShowUpdatesTip() }
+
+// SkillsShowUpdatesTip says "Show only skills with updates"
+// in the language of msgs.
+//
+// Skills page: tooltip of the updates row.
+func (msgs Messages) SkillsShowUpdatesTip() string {
+	return Catalog.Format(msgs.locale, "skillsShowUpdatesTip", nil)
+}
+
+// SkillsSortLabel says "Sort"
+// in the language the app shows.
+//
+// Skills and MCP pages: accessibility label of the sort segmented control.
+func SkillsSortLabel() string { return In(i18n.Locale()).SkillsSortLabel() }
+
+// SkillsSortLabel says "Sort"
+// in the language of msgs.
+//
+// Skills and MCP pages: accessibility label of the sort segmented control.
+func (msgs Messages) SkillsSortLabel() string {
+	return Catalog.Format(msgs.locale, "skillsSortLabel", nil)
+}
+
+// SkillsSortName says "Name"
+// in the language the app shows.
+//
+// Skills and MCP pages: sort segment, sort by name.
+func SkillsSortName() string { return In(i18n.Locale()).SkillsSortName() }
+
+// SkillsSortName says "Name"
+// in the language of msgs.
+//
+// Skills and MCP pages: sort segment, sort by name.
+func (msgs Messages) SkillsSortName() string {
+	return Catalog.Format(msgs.locale, "skillsSortName", nil)
+}
+
+// SkillsSortUsage says "Usage"
+// in the language the app shows.
+//
+// Skills and MCP pages: sort segment, sort by usage count.
+func SkillsSortUsage() string { return In(i18n.Locale()).SkillsSortUsage() }
+
+// SkillsSortUsage says "Usage"
+// in the language of msgs.
+//
+// Skills and MCP pages: sort segment, sort by usage count.
+func (msgs Messages) SkillsSortUsage() string {
+	return Catalog.Format(msgs.locale, "skillsSortUsage", nil)
+}
+
+// SkillsSourceFailedLine says "{source}: {error}"
+// in the language the app shows.
+//
+// Skills page: tooltip line of the update check result for a source that
+// could not be checked.
+func SkillsSourceFailedLine(source string, error string) string {
+	return In(i18n.Locale()).SkillsSourceFailedLine(source, error)
+}
+
+// SkillsSourceFailedLine says "{source}: {error}"
+// in the language of msgs.
+//
+// Skills page: tooltip line of the update check result for a source that
+// could not be checked.
+func (msgs Messages) SkillsSourceFailedLine(source string, error string) string {
+	return Catalog.Format(msgs.locale, "skillsSourceFailedLine", map[string]any{"source": source, "error": error})
+}
+
+// SkillsSourceHint says "Enter a source and press Return to list its skills, then choose."
+// in the language the app shows.
+//
+// Install dialog: hint before listing.
+func SkillsSourceHint() string { return In(i18n.Locale()).SkillsSourceHint() }
+
+// SkillsSourceHint says "Enter a source and press Return to list its skills, then choose."
+// in the language of msgs.
+//
+// Install dialog: hint before listing.
+func (msgs Messages) SkillsSourceHint() string {
+	return Catalog.Format(msgs.locale, "skillsSourceHint", nil)
+}
+
+// SkillsSourcePlaceholder says "Source: owner/repo, URL or local folder"
+// in the language the app shows.
+//
+// Install dialog: source field placeholder.
+func SkillsSourcePlaceholder() string { return In(i18n.Locale()).SkillsSourcePlaceholder() }
+
+// SkillsSourcePlaceholder says "Source: owner/repo, URL or local folder"
+// in the language of msgs.
+//
+// Install dialog: source field placeholder.
+func (msgs Messages) SkillsSourcePlaceholder() string {
+	return Catalog.Format(msgs.locale, "skillsSourcePlaceholder", nil)
+}
+
+// SkillsSourceTip says "Source installed by npx skills"
+// in the language the app shows.
+//
+// Skill details: tooltip of the source (owner/repo).
+func SkillsSourceTip() string { return In(i18n.Locale()).SkillsSourceTip() }
+
+// SkillsSourceTip says "Source installed by npx skills"
+// in the language of msgs.
+//
+// Skill details: tooltip of the source (owner/repo).
+func (msgs Messages) SkillsSourceTip() string {
+	return Catalog.Format(msgs.locale, "skillsSourceTip", nil)
+}
+
+// SkillsSourcesFailed says "{count, plural, one {# source couldn’t be checked} other {# sources couldn’t be checked}}"
+// in the language the app shows.
+//
+// Skills page: update check result, number of sources that could not be
+// checked.
+func SkillsSourcesFailed(count int) string { return In(i18n.Locale()).SkillsSourcesFailed(count) }
+
+// SkillsSourcesFailed says "{count, plural, one {# source couldn’t be checked} other {# sources couldn’t be checked}}"
+// in the language of msgs.
+//
+// Skills page: update check result, number of sources that could not be
+// checked.
+func (msgs Messages) SkillsSourcesFailed(count int) string {
+	return Catalog.Format(msgs.locale, "skillsSourcesFailed", map[string]any{"count": count})
+}
+
+// SkillsStateManual says "Manual only"
+// in the language the app shows.
+//
+// Skills: an agent’s state, the skill can only be invoked by the user.
+func SkillsStateManual() string { return In(i18n.Locale()).SkillsStateManual() }
+
+// SkillsStateManual says "Manual only"
+// in the language of msgs.
+//
+// Skills: an agent’s state, the skill can only be invoked by the user.
+func (msgs Messages) SkillsStateManual() string {
+	return Catalog.Format(msgs.locale, "skillsStateManual", nil)
+}
+
+// SkillsStateOff says "Disabled"
+// in the language the app shows.
+//
+// Skills and MCP: an agent’s state, turned off; also marks a disabled MCP
+// config.
+func SkillsStateOff() string { return In(i18n.Locale()).SkillsStateOff() }
+
+// SkillsStateOff says "Disabled"
+// in the language of msgs.
+//
+// Skills and MCP: an agent’s state, turned off; also marks a disabled MCP
+// config.
+func (msgs Messages) SkillsStateOff() string {
+	return Catalog.Format(msgs.locale, "skillsStateOff", nil)
+}
+
+// SkillsStateOn says "Enabled"
+// in the language the app shows.
+//
+// Skills and MCP: an agent’s state for the skill or server.
+func SkillsStateOn() string { return In(i18n.Locale()).SkillsStateOn() }
+
+// SkillsStateOn says "Enabled"
+// in the language of msgs.
+//
+// Skills and MCP: an agent’s state for the skill or server.
+func (msgs Messages) SkillsStateOn() string {
+	return Catalog.Format(msgs.locale, "skillsStateOn", nil)
+}
+
+// SkillsStateShadowed says "Shadowed by a same-name skill"
+// in the language the app shows.
+//
+// Skills: an agent’s state, another skill with the same name takes
+// precedence.
+func SkillsStateShadowed() string { return In(i18n.Locale()).SkillsStateShadowed() }
+
+// SkillsStateShadowed says "Shadowed by a same-name skill"
+// in the language of msgs.
+//
+// Skills: an agent’s state, another skill with the same name takes
+// precedence.
+func (msgs Messages) SkillsStateShadowed() string {
+	return Catalog.Format(msgs.locale, "skillsStateShadowed", nil)
+}
+
+// SkillsStateTip says "{agent}: {state}"
+// in the language the app shows.
+//
+// Skills and MCP: first line of an agent mark tooltip. state is one of the
+// skillsState texts.
+func SkillsStateTip(agent string, state string) string {
+	return In(i18n.Locale()).SkillsStateTip(agent, state)
+}
+
+// SkillsStateTip says "{agent}: {state}"
+// in the language of msgs.
+//
+// Skills and MCP: first line of an agent mark tooltip. state is one of the
+// skillsState texts.
+func (msgs Messages) SkillsStateTip(agent string, state string) string {
+	return Catalog.Format(msgs.locale, "skillsStateTip", map[string]any{"agent": agent, "state": state})
+}
+
+// SkillsStateUnseen says "Not visible"
+// in the language the app shows.
+//
+// Skills and MCP: an agent’s state, the agent does not read it.
+func SkillsStateUnseen() string { return In(i18n.Locale()).SkillsStateUnseen() }
+
+// SkillsStateUnseen says "Not visible"
+// in the language of msgs.
+//
+// Skills and MCP: an agent’s state, the agent does not read it.
+func (msgs Messages) SkillsStateUnseen() string {
+	return Catalog.Format(msgs.locale, "skillsStateUnseen", nil)
+}
+
+// SkillsSymlink says "Symlink"
+// in the language the app shows.
+//
+// Skill details: marker shown when the path an agent reads is a symlink.
+func SkillsSymlink() string { return In(i18n.Locale()).SkillsSymlink() }
+
+// SkillsSymlink says "Symlink"
+// in the language of msgs.
+//
+// Skill details: marker shown when the path an agent reads is a symlink.
+func (msgs Messages) SkillsSymlink() string {
+	return Catalog.Format(msgs.locale, "skillsSymlink", nil)
+}
+
+// SkillsSymlinkTip says "Symlink to {path}"
+// in the language the app shows.
+//
+// Skill details: tooltip of the Symlink marker. path is the skill folder.
+func SkillsSymlinkTip(path string) string { return In(i18n.Locale()).SkillsSymlinkTip(path) }
+
+// SkillsSymlinkTip says "Symlink to {path}"
+// in the language of msgs.
+//
+// Skill details: tooltip of the Symlink marker. path is the skill folder.
+func (msgs Messages) SkillsSymlinkTip(path string) string {
+	return Catalog.Format(msgs.locale, "skillsSymlinkTip", map[string]any{"path": path})
+}
+
+// SkillsTitle says "Skills"
+// in the language the app shows.
+//
+// Skills page: sidebar tile label and the Skills segment at the top of the
+// page.
+func SkillsTitle() string { return In(i18n.Locale()).SkillsTitle() }
+
+// SkillsTitle says "Skills"
+// in the language of msgs.
+//
+// Skills page: sidebar tile label and the Skills segment at the top of the
+// page.
+func (msgs Messages) SkillsTitle() string {
+	return Catalog.Format(msgs.locale, "skillsTitle", nil)
+}
+
+// SkillsToggleError says "Couldn’t change {agent}’s settings: {error}"
+// in the language the app shows.
+//
+// Error bar: turning a skill on or off for an agent could not be planned.
+func SkillsToggleError(agent string, error string) string {
+	return In(i18n.Locale()).SkillsToggleError(agent, error)
+}
+
+// SkillsToggleError says "Couldn’t change {agent}’s settings: {error}"
+// in the language of msgs.
+//
+// Error bar: turning a skill on or off for an agent could not be planned.
+func (msgs Messages) SkillsToggleError(agent string, error string) string {
+	return Catalog.Format(msgs.locale, "skillsToggleError", map[string]any{"agent": agent, "error": error})
+}
+
+// SkillsTrashAllLinks says "{count, plural, one {Move # to Trash} other {Move All # to Trash}}"
+// in the language the app shows.
+//
+// Skills health check: button that moves all redundant links to the Trash.
+func SkillsTrashAllLinks(count int) string { return In(i18n.Locale()).SkillsTrashAllLinks(count) }
+
+// SkillsTrashAllLinks says "{count, plural, one {Move # to Trash} other {Move All # to Trash}}"
+// in the language of msgs.
+//
+// Skills health check: button that moves all redundant links to the Trash.
+func (msgs Messages) SkillsTrashAllLinks(count int) string {
+	return Catalog.Format(msgs.locale, "skillsTrashAllLinks", map[string]any{"count": count})
+}
+
+// SkillsTrashBody says "These will be moved to the Trash, where you can recover them:\n{paths}"
+// in the language the app shows.
+//
+// Skills: confirmation body for moving a skill to the Trash. paths is one
+// path per line.
+func SkillsTrashBody(paths string) string { return In(i18n.Locale()).SkillsTrashBody(paths) }
+
+// SkillsTrashBody says "These will be moved to the Trash, where you can recover them:\n{paths}"
+// in the language of msgs.
+//
+// Skills: confirmation body for moving a skill to the Trash. paths is one
+// path per line.
+func (msgs Messages) SkillsTrashBody(paths string) string {
+	return Catalog.Format(msgs.locale, "skillsTrashBody", map[string]any{"paths": paths})
+}
+
+// SkillsTrashConfirm says "Move {name} to the Trash?"
+// in the language the app shows.
+//
+// Skills: confirmation title for moving a user skill to the Trash.
+func SkillsTrashConfirm(name string) string { return In(i18n.Locale()).SkillsTrashConfirm(name) }
+
+// SkillsTrashConfirm says "Move {name} to the Trash?"
+// in the language of msgs.
+//
+// Skills: confirmation title for moving a user skill to the Trash.
+func (msgs Messages) SkillsTrashConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "skillsTrashConfirm", map[string]any{"name": name})
+}
+
+// SkillsTrashLinkConfirm says "Move this link to the Trash?"
+// in the language the app shows.
+//
+// Skills health check: confirmation title for one link.
+func SkillsTrashLinkConfirm() string { return In(i18n.Locale()).SkillsTrashLinkConfirm() }
+
+// SkillsTrashLinkConfirm says "Move this link to the Trash?"
+// in the language of msgs.
+//
+// Skills health check: confirmation title for one link.
+func (msgs Messages) SkillsTrashLinkConfirm() string {
+	return Catalog.Format(msgs.locale, "skillsTrashLinkConfirm", nil)
+}
+
+// SkillsTrashLinkTip says "Move This Link to Trash"
+// in the language the app shows.
+//
+// Skills health check: icon button tooltip on a broken or redundant link.
+func SkillsTrashLinkTip() string { return In(i18n.Locale()).SkillsTrashLinkTip() }
+
+// SkillsTrashLinkTip says "Move This Link to Trash"
+// in the language of msgs.
+//
+// Skills health check: icon button tooltip on a broken or redundant link.
+func (msgs Messages) SkillsTrashLinkTip() string {
+	return Catalog.Format(msgs.locale, "skillsTrashLinkTip", nil)
+}
+
+// SkillsTrashLinksBody says "Only the links themselves are moved; the folders they point to stay. You can recover them from the Trash:\n{paths}"
+// in the language the app shows.
+//
+// Skills health check: confirmation body for moving links. paths is one
+// path per line.
+func SkillsTrashLinksBody(paths string) string { return In(i18n.Locale()).SkillsTrashLinksBody(paths) }
+
+// SkillsTrashLinksBody says "Only the links themselves are moved; the folders they point to stay. You can recover them from the Trash:\n{paths}"
+// in the language of msgs.
+//
+// Skills health check: confirmation body for moving links. paths is one
+// path per line.
+func (msgs Messages) SkillsTrashLinksBody(paths string) string {
+	return Catalog.Format(msgs.locale, "skillsTrashLinksBody", map[string]any{"paths": paths})
+}
+
+// SkillsTrashLinksConfirm says "{count, plural, one {Move # link to the Trash?} other {Move # links to the Trash?}}"
+// in the language the app shows.
+//
+// Skills health check: confirmation title for several links.
+func SkillsTrashLinksConfirm(count int) string {
+	return In(i18n.Locale()).SkillsTrashLinksConfirm(count)
+}
+
+// SkillsTrashLinksConfirm says "{count, plural, one {Move # link to the Trash?} other {Move # links to the Trash?}}"
+// in the language of msgs.
+//
+// Skills health check: confirmation title for several links.
+func (msgs Messages) SkillsTrashLinksConfirm(count int) string {
+	return Catalog.Format(msgs.locale, "skillsTrashLinksConfirm", map[string]any{"count": count})
+}
+
+// SkillsTriggerAuto says "Automatic"
+// in the language the app shows.
+//
+// Skills: trigger label for the default trigger.
+func SkillsTriggerAuto() string { return In(i18n.Locale()).SkillsTriggerAuto() }
+
+// SkillsTriggerAuto says "Automatic"
+// in the language of msgs.
+//
+// Skills: trigger label for the default trigger.
+func (msgs Messages) SkillsTriggerAuto() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerAuto", nil)
+}
+
+// SkillsTriggerAutoOnly says "Automatic Only"
+// in the language the app shows.
+//
+// Skills: trigger label for a skill hidden from slash commands.
+func SkillsTriggerAutoOnly() string { return In(i18n.Locale()).SkillsTriggerAutoOnly() }
+
+// SkillsTriggerAutoOnly says "Automatic Only"
+// in the language of msgs.
+//
+// Skills: trigger label for a skill hidden from slash commands.
+func (msgs Messages) SkillsTriggerAutoOnly() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerAutoOnly", nil)
+}
+
+// SkillsTriggerAutoOnlyTip says "user-invocable: false: not shown in slash commands; only the model invokes it, based on its description"
+// in the language the app shows.
+//
+// Skills: tooltip of the Automatic Only trigger label.
+func SkillsTriggerAutoOnlyTip() string { return In(i18n.Locale()).SkillsTriggerAutoOnlyTip() }
+
+// SkillsTriggerAutoOnlyTip says "user-invocable: false: not shown in slash commands; only the model invokes it, based on its description"
+// in the language of msgs.
+//
+// Skills: tooltip of the Automatic Only trigger label.
+func (msgs Messages) SkillsTriggerAutoOnlyTip() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerAutoOnlyTip", nil)
+}
+
+// SkillsTriggerAutoTip says "The model decides when to use it from its description; you can also type /name to invoke it manually"
+// in the language the app shows.
+//
+// Skills: tooltip of the Automatic trigger label.
+func SkillsTriggerAutoTip() string { return In(i18n.Locale()).SkillsTriggerAutoTip() }
+
+// SkillsTriggerAutoTip says "The model decides when to use it from its description; you can also type /name to invoke it manually"
+// in the language of msgs.
+//
+// Skills: tooltip of the Automatic trigger label.
+func (msgs Messages) SkillsTriggerAutoTip() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerAutoTip", nil)
+}
+
+// SkillsTriggerManual says "Manual"
+// in the language the app shows.
+//
+// Skills: trigger label for a skill the model never invokes on its own.
+func SkillsTriggerManual() string { return In(i18n.Locale()).SkillsTriggerManual() }
+
+// SkillsTriggerManual says "Manual"
+// in the language of msgs.
+//
+// Skills: trigger label for a skill the model never invokes on its own.
+func (msgs Messages) SkillsTriggerManual() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerManual", nil)
+}
+
+// SkillsTriggerManualTip says "disable-model-invocation: true: the model won’t invoke it on its own; type /name to invoke it (Codex ignores this a…"
+// in the language the app shows.
+//
+// Skills: tooltip of the Manual trigger label.
+func SkillsTriggerManualTip() string { return In(i18n.Locale()).SkillsTriggerManualTip() }
+
+// SkillsTriggerManualTip says "disable-model-invocation: true: the model won’t invoke it on its own; type /name to invoke it (Codex ignores this a…"
+// in the language of msgs.
+//
+// Skills: tooltip of the Manual trigger label.
+func (msgs Messages) SkillsTriggerManualTip() string {
+	return Catalog.Format(msgs.locale, "skillsTriggerManualTip", nil)
+}
+
+// SkillsUpToDate says "All up to date"
+// in the language the app shows.
+//
+// Skills page: update check result when no skill has a new version.
+func SkillsUpToDate() string { return In(i18n.Locale()).SkillsUpToDate() }
+
+// SkillsUpToDate says "All up to date"
+// in the language of msgs.
+//
+// Skills page: update check result when no skill has a new version.
+func (msgs Messages) SkillsUpToDate() string {
+	return Catalog.Format(msgs.locale, "skillsUpToDate", nil)
+}
+
+// SkillsUpToDateWith says "All up to date; {problems}"
+// in the language the app shows.
+//
+// Skills page: update check result with no updates but some problems.
+// problems is the joined list of problems.
+func SkillsUpToDateWith(problems string) string {
+	return In(i18n.Locale()).SkillsUpToDateWith(problems)
+}
+
+// SkillsUpToDateWith says "All up to date; {problems}"
+// in the language of msgs.
+//
+// Skills page: update check result with no updates but some problems.
+// problems is the joined list of problems.
+func (msgs Messages) SkillsUpToDateWith(problems string) string {
+	return Catalog.Format(msgs.locale, "skillsUpToDateWith", map[string]any{"problems": problems})
+}
+
+// SkillsUpdate says "Update"
+// in the language the app shows.
+//
+// Skill details: button (or icon button tooltip) that updates an
+// npx-installed skill.
+func SkillsUpdate() string { return In(i18n.Locale()).SkillsUpdate() }
+
+// SkillsUpdate says "Update"
+// in the language of msgs.
+//
+// Skill details: button (or icon button tooltip) that updates an
+// npx-installed skill.
+func (msgs Messages) SkillsUpdate() string {
+	return Catalog.Format(msgs.locale, "skillsUpdate", nil)
+}
+
+// SkillsUpdateBody says "Pulls the latest version from the source recorded in the lock file ({source}), overwriting local changes."
+// in the language the app shows.
+//
+// Skills: body of the command dialog that updates a skill.
+func SkillsUpdateBody(source string) string { return In(i18n.Locale()).SkillsUpdateBody(source) }
+
+// SkillsUpdateBody says "Pulls the latest version from the source recorded in the lock file ({source}), overwriting local changes."
+// in the language of msgs.
+//
+// Skills: body of the command dialog that updates a skill.
+func (msgs Messages) SkillsUpdateBody(source string) string {
+	return Catalog.Format(msgs.locale, "skillsUpdateBody", map[string]any{"source": source})
+}
+
+// SkillsUpdateConfirm says "Update {name}?"
+// in the language the app shows.
+//
+// Skills: title of the command dialog that updates a skill.
+func SkillsUpdateConfirm(name string) string { return In(i18n.Locale()).SkillsUpdateConfirm(name) }
+
+// SkillsUpdateConfirm says "Update {name}?"
+// in the language of msgs.
+//
+// Skills: title of the command dialog that updates a skill.
+func (msgs Messages) SkillsUpdateConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "skillsUpdateConfirm", map[string]any{"name": name})
+}
+
+// SkillsUpdatesCount says "{count, plural, one {# update available} other {# updates available}}"
+// in the language the app shows.
+//
+// Skills page: row showing how many skills have new versions; click to
+// filter.
+func SkillsUpdatesCount(count int) string { return In(i18n.Locale()).SkillsUpdatesCount(count) }
+
+// SkillsUpdatesCount says "{count, plural, one {# update available} other {# updates available}}"
+// in the language of msgs.
+//
+// Skills page: row showing how many skills have new versions; click to
+// filter.
+func (msgs Messages) SkillsUpdatesCount(count int) string {
+	return Catalog.Format(msgs.locale, "skillsUpdatesCount", map[string]any{"count": count})
+}
+
+// SkillsUpdatesLabel says "Skills with Updates"
+// in the language the app shows.
+//
+// Skills page: accessibility label of the row that filters to skills with
+// updates.
+func SkillsUpdatesLabel() string { return In(i18n.Locale()).SkillsUpdatesLabel() }
+
+// SkillsUpdatesLabel says "Skills with Updates"
+// in the language of msgs.
+//
+// Skills page: accessibility label of the row that filters to skills with
+// updates.
+func (msgs Messages) SkillsUpdatesLabel() string {
+	return Catalog.Format(msgs.locale, "skillsUpdatesLabel", nil)
+}
+
+// SkillsUsageTitle says "Usage"
+// in the language the app shows.
+//
+// Skill and MCP details: usage card title.
+func SkillsUsageTitle() string { return In(i18n.Locale()).SkillsUsageTitle() }
+
+// SkillsUsageTitle says "Usage"
+// in the language of msgs.
+//
+// Skill and MCP details: usage card title.
+func (msgs Messages) SkillsUsageTitle() string {
+	return Catalog.Format(msgs.locale, "skillsUsageTitle", nil)
+}
+
+// SkillsUsedTimes says "{count, plural, one {Used # time} other {Used # times}}"
+// in the language the app shows.
+//
+// Skills and MCP: usage count.
+func SkillsUsedTimes(count int) string { return In(i18n.Locale()).SkillsUsedTimes(count) }
+
+// SkillsUsedTimes says "{count, plural, one {Used # time} other {Used # times}}"
+// in the language of msgs.
+//
+// Skills and MCP: usage count.
+func (msgs Messages) SkillsUsedTimes(count int) string {
+	return Catalog.Format(msgs.locale, "skillsUsedTimes", map[string]any{"count": count})
+}
+
+// SkillsWillCreate says "This file will be created:"
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: label above the file path when the file
+// does not exist yet.
+func SkillsWillCreate() string { return In(i18n.Locale()).SkillsWillCreate() }
+
+// SkillsWillCreate says "This file will be created:"
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: label above the file path when the file
+// does not exist yet.
+func (msgs Messages) SkillsWillCreate() string {
+	return Catalog.Format(msgs.locale, "skillsWillCreate", nil)
+}
+
+// SkillsWillModify says "This file will be changed:"
+// in the language the app shows.
+//
+// Skill switch confirmation dialog: label above the file path.
+func SkillsWillModify() string { return In(i18n.Locale()).SkillsWillModify() }
+
+// SkillsWillModify says "This file will be changed:"
+// in the language of msgs.
+//
+// Skill switch confirmation dialog: label above the file path.
+func (msgs Messages) SkillsWillModify() string {
+	return Catalog.Format(msgs.locale, "skillsWillModify", nil)
+}
+
+// TracesCleanBody says "Agents left these outside their workspaces. Checked items move to the Trash; worktrees are removed with git."
+// in the language the app shows.
+//
+// Clean Up Agent Traces dialog body.
+func TracesCleanBody() string { return In(i18n.Locale()).TracesCleanBody() }
+
+// TracesCleanBody says "Agents left these outside their workspaces. Checked items move to the Trash; worktrees are removed with git."
+// in the language of msgs.
+//
+// Clean Up Agent Traces dialog body.
+func (msgs Messages) TracesCleanBody() string {
+	return Catalog.Format(msgs.locale, "tracesCleanBody", nil)
+}
+
+// TracesCleanButton says "Clean Up"
+// in the language the app shows.
+//
+// Clean Up Agent Traces dialog: primary button.
+func TracesCleanButton() string { return In(i18n.Locale()).TracesCleanButton() }
+
+// TracesCleanButton says "Clean Up"
+// in the language of msgs.
+//
+// Clean Up Agent Traces dialog: primary button.
+func (msgs Messages) TracesCleanButton() string {
+	return Catalog.Format(msgs.locale, "tracesCleanButton", nil)
+}
+
+// TracesCleanError says "Some traces weren’t cleaned up: {errors}"
+// in the language the app shows.
+//
+// Error bar: some traces could not be cleaned up. errors is the joined list
+// of tracesFailedItem.
+func TracesCleanError(errors string) string { return In(i18n.Locale()).TracesCleanError(errors) }
+
+// TracesCleanError says "Some traces weren’t cleaned up: {errors}"
+// in the language of msgs.
+//
+// Error bar: some traces could not be cleaned up. errors is the joined list
+// of tracesFailedItem.
+func (msgs Messages) TracesCleanError(errors string) string {
+	return Catalog.Format(msgs.locale, "tracesCleanError", map[string]any{"errors": errors})
+}
+
+// TracesCleanTitle says "Clean Up Agent Traces in {project}"
+// in the language the app shows.
+//
+// Clean Up Agent Traces dialog title.
+func TracesCleanTitle(project string) string { return In(i18n.Locale()).TracesCleanTitle(project) }
+
+// TracesCleanTitle says "Clean Up Agent Traces in {project}"
+// in the language of msgs.
+//
+// Clean Up Agent Traces dialog title.
+func (msgs Messages) TracesCleanTitle(project string) string {
+	return Catalog.Format(msgs.locale, "tracesCleanTitle", map[string]any{"project": project})
+}
+
+// TracesFailedItem says "{path}: {error}"
+// in the language the app shows.
+//
+// Error bar: one trace that could not be cleaned up.
+func TracesFailedItem(path string, error string) string {
+	return In(i18n.Locale()).TracesFailedItem(path, error)
+}
+
+// TracesFailedItem says "{path}: {error}"
+// in the language of msgs.
+//
+// Error bar: one trace that could not be cleaned up.
+func (msgs Messages) TracesFailedItem(path string, error string) string {
+	return Catalog.Format(msgs.locale, "tracesFailedItem", map[string]any{"path": path, "error": error})
+}
+
+// TracesFailedSeparator says "; "
+// in the language the app shows.
+//
+// Error bar: joins the traces that could not be cleaned up.
+func TracesFailedSeparator() string { return In(i18n.Locale()).TracesFailedSeparator() }
+
+// TracesFailedSeparator says "; "
+// in the language of msgs.
+//
+// Error bar: joins the traces that could not be cleaned up.
+func (msgs Messages) TracesFailedSeparator() string {
+	return Catalog.Format(msgs.locale, "tracesFailedSeparator", nil)
+}
+
+// TracesKindConfig says "Modified config, listed only"
+// in the language the app shows.
+//
+// Agent traces: kind of a trace.
+func TracesKindConfig() string { return In(i18n.Locale()).TracesKindConfig() }
+
+// TracesKindConfig says "Modified config, listed only"
+// in the language of msgs.
+//
+// Agent traces: kind of a trace.
+func (msgs Messages) TracesKindConfig() string {
+	return Catalog.Format(msgs.locale, "tracesKindConfig", nil)
+}
+
+// TracesKindCreated says "Created"
+// in the language the app shows.
+//
+// Agent traces: kind of a trace, a new file or folder.
+func TracesKindCreated() string { return In(i18n.Locale()).TracesKindCreated() }
+
+// TracesKindCreated says "Created"
+// in the language of msgs.
+//
+// Agent traces: kind of a trace, a new file or folder.
+func (msgs Messages) TracesKindCreated() string {
+	return Catalog.Format(msgs.locale, "tracesKindCreated", nil)
+}
+
+// TracesKindModified says "Modified existing file, listed only"
+// in the language the app shows.
+//
+// Agent traces: kind of a trace.
+func TracesKindModified() string { return In(i18n.Locale()).TracesKindModified() }
+
+// TracesKindModified says "Modified existing file, listed only"
+// in the language of msgs.
+//
+// Agent traces: kind of a trace.
+func (msgs Messages) TracesKindModified() string {
+	return Catalog.Format(msgs.locale, "tracesKindModified", nil)
+}
+
+// TracesKindWorktree says "Agent-created worktree, removed with git"
+// in the language the app shows.
+//
+// Agent traces: kind of a trace.
+func TracesKindWorktree() string { return In(i18n.Locale()).TracesKindWorktree() }
+
+// TracesKindWorktree says "Agent-created worktree, removed with git"
+// in the language of msgs.
+//
+// Agent traces: kind of a trace.
+func (msgs Messages) TracesKindWorktree() string {
+	return Catalog.Format(msgs.locale, "tracesKindWorktree", nil)
+}
+
+// TracesLeftBehindRemove says "Agents left these outside the workspace. Checked items will also be moved to the Trash:"
+// in the language the app shows.
+//
+// Delete Workspace confirmation: paragraph above the list of agent traces.
+func TracesLeftBehindRemove() string { return In(i18n.Locale()).TracesLeftBehindRemove() }
+
+// TracesLeftBehindRemove says "Agents left these outside the workspace. Checked items will also be moved to the Trash:"
+// in the language of msgs.
+//
+// Delete Workspace confirmation: paragraph above the list of agent traces.
+func (msgs Messages) TracesLeftBehindRemove() string {
+	return Catalog.Format(msgs.locale, "tracesLeftBehindRemove", nil)
+}
+
+// TracesNoneBody says "Agents in project {project} left no recorded files outside their workspaces."
+// in the language the app shows.
+//
+// Clean Up Agent Traces: body when nothing was recorded.
+func TracesNoneBody(project string) string { return In(i18n.Locale()).TracesNoneBody(project) }
+
+// TracesNoneBody says "Agents in project {project} left no recorded files outside their workspaces."
+// in the language of msgs.
+//
+// Clean Up Agent Traces: body when nothing was recorded.
+func (msgs Messages) TracesNoneBody(project string) string {
+	return Catalog.Format(msgs.locale, "tracesNoneBody", map[string]any{"project": project})
+}
+
+// TracesNoneTitle says "No Agent Traces"
+// in the language the app shows.
+//
+// Clean Up Agent Traces: title when nothing was recorded.
+func TracesNoneTitle() string { return In(i18n.Locale()).TracesNoneTitle() }
+
+// TracesNoneTitle says "No Agent Traces"
+// in the language of msgs.
+//
+// Clean Up Agent Traces: title when nothing was recorded.
+func (msgs Messages) TracesNoneTitle() string {
+	return Catalog.Format(msgs.locale, "tracesNoneTitle", nil)
+}
+
+// TracesRemoveBody says "Terminals in the workspace will be closed."
+// in the language the app shows.
+//
+// Delete Workspace confirmation: body for a folder workspace.
+func TracesRemoveBody() string { return In(i18n.Locale()).TracesRemoveBody() }
+
+// TracesRemoveBody says "Terminals in the workspace will be closed."
+// in the language of msgs.
+//
+// Delete Workspace confirmation: body for a folder workspace.
+func (msgs Messages) TracesRemoveBody() string {
+	return Catalog.Format(msgs.locale, "tracesRemoveBody", nil)
+}
+
+// TracesRemoveDirty says "Workspace {name} has uncommitted changes and wasn’t deleted"
+// in the language the app shows.
+//
+// Error bar: a worktree workspace was not deleted because of uncommitted
+// changes.
+func TracesRemoveDirty(name string) string { return In(i18n.Locale()).TracesRemoveDirty(name) }
+
+// TracesRemoveDirty says "Workspace {name} has uncommitted changes and wasn’t deleted"
+// in the language of msgs.
+//
+// Error bar: a worktree workspace was not deleted because of uncommitted
+// changes.
+func (msgs Messages) TracesRemoveDirty(name string) string {
+	return Catalog.Format(msgs.locale, "tracesRemoveDirty", map[string]any{"name": name})
+}
+
+// TracesRemoveTitle says "Delete Workspace {name}?"
+// in the language the app shows.
+//
+// Delete Workspace confirmation: title.
+func TracesRemoveTitle(name string) string { return In(i18n.Locale()).TracesRemoveTitle(name) }
+
+// TracesRemoveTitle says "Delete Workspace {name}?"
+// in the language of msgs.
+//
+// Delete Workspace confirmation: title.
+func (msgs Messages) TracesRemoveTitle(name string) string {
+	return Catalog.Format(msgs.locale, "tracesRemoveTitle", map[string]any{"name": name})
+}
+
+// TracesRemoveWorktreeBody says "Closes its terminals and deletes the git worktree folder (the branch is kept). Refuses if there are uncommitted changes."
+// in the language the app shows.
+//
+// Delete Workspace confirmation: body for a worktree workspace.
+func TracesRemoveWorktreeBody() string { return In(i18n.Locale()).TracesRemoveWorktreeBody() }
+
+// TracesRemoveWorktreeBody says "Closes its terminals and deletes the git worktree folder (the branch is kept). Refuses if there are uncommitted changes."
+// in the language of msgs.
+//
+// Delete Workspace confirmation: body for a worktree workspace.
+func (msgs Messages) TracesRemoveWorktreeBody() string {
+	return Catalog.Format(msgs.locale, "tracesRemoveWorktreeBody", nil)
+}
+
+// TracesSelected says "{count, plural, one {# item} other {# items}} selected, {size} total"
+// in the language the app shows.
+//
+// Agent traces dialog: selected count and total size.
+func TracesSelected(count int, size string) string {
+	return In(i18n.Locale()).TracesSelected(count, size)
+}
+
+// TracesSelected says "{count, plural, one {# item} other {# items}} selected, {size} total"
+// in the language of msgs.
+//
+// Agent traces dialog: selected count and total size.
+func (msgs Messages) TracesSelected(count int, size string) string {
+	return Catalog.Format(msgs.locale, "tracesSelected", map[string]any{"count": count, "size": size})
+}
+
+// TracesTerminal says "Terminal"
+// in the language the app shows.
+//
+// Agent traces: who left the trace when it was not an agent.
+func TracesTerminal() string { return In(i18n.Locale()).TracesTerminal() }
+
+// TracesTerminal says "Terminal"
+// in the language of msgs.
+//
+// Agent traces: who left the trace when it was not an agent.
+func (msgs Messages) TracesTerminal() string {
+	return Catalog.Format(msgs.locale, "tracesTerminal", nil)
+}
+
+// TracesTerminalOpen says "terminal still open"
+// in the language the app shows.
+//
+// Agent traces: marker when the terminal that left the trace is still open.
+// Joined with “ · ”.
+func TracesTerminalOpen() string { return In(i18n.Locale()).TracesTerminalOpen() }
+
+// TracesTerminalOpen says "terminal still open"
+// in the language of msgs.
+//
+// Agent traces: marker when the terminal that left the trace is still open.
+// Joined with “ · ”.
+func (msgs Messages) TracesTerminalOpen() string {
+	return Catalog.Format(msgs.locale, "tracesTerminalOpen", nil)
+}
+
+// TrashMoveError says "Couldn’t move to the Trash: {error}"
+// in the language the app shows.
+//
+// Error bar: moving files to the Trash failed.
+func TrashMoveError(error string) string { return In(i18n.Locale()).TrashMoveError(error) }
+
+// TrashMoveError says "Couldn’t move to the Trash: {error}"
+// in the language of msgs.
+//
+// Error bar: moving files to the Trash failed.
+func (msgs Messages) TrashMoveError(error string) string {
+	return Catalog.Format(msgs.locale, "trashMoveError", map[string]any{"error": error})
+}
+
+// TrashSessionBody says "The session files will be moved to the Trash, where you can recover them. It will also disappear from {agent}’s own…"
+// in the language the app shows.
+//
+// History: confirmation body for moving a session to the Trash.
+func TrashSessionBody(agent string) string { return In(i18n.Locale()).TrashSessionBody(agent) }
+
+// TrashSessionBody says "The session files will be moved to the Trash, where you can recover them. It will also disappear from {agent}’s own…"
+// in the language of msgs.
+//
+// History: confirmation body for moving a session to the Trash.
+func (msgs Messages) TrashSessionBody(agent string) string {
+	return Catalog.Format(msgs.locale, "trashSessionBody", map[string]any{"agent": agent})
+}
+
+// TrashSessionConfirm says "Move session “{title}” to the Trash?"
+// in the language the app shows.
+//
+// History: confirmation title for moving a session to the Trash.
+func TrashSessionConfirm(title string) string { return In(i18n.Locale()).TrashSessionConfirm(title) }
+
+// TrashSessionConfirm says "Move session “{title}” to the Trash?"
+// in the language of msgs.
+//
+// History: confirmation title for moving a session to the Trash.
+func (msgs Messages) TrashSessionConfirm(title string) string {
+	return Catalog.Format(msgs.locale, "trashSessionConfirm", map[string]any{"title": title})
+}
+
+// TrashSessionRunning says "This session is running in a Posse terminal. Close that terminal before moving it to the Trash."
+// in the language the app shows.
+//
+// Error bar: moving a session to the Trash while it is running.
+func TrashSessionRunning() string { return In(i18n.Locale()).TrashSessionRunning() }
+
+// TrashSessionRunning says "This session is running in a Posse terminal. Close that terminal before moving it to the Trash."
+// in the language of msgs.
+//
+// Error bar: moving a session to the Trash while it is running.
+func (msgs Messages) TrashSessionRunning() string {
+	return Catalog.Format(msgs.locale, "trashSessionRunning", nil)
+}
+
+// TrashUnknownPath says "Couldn’t identify where this session’s files are, so nothing was moved: {path}"
+// in the language the app shows.
+//
+// Error bar: the session files could not be identified.
+func TrashUnknownPath(path string) string { return In(i18n.Locale()).TrashUnknownPath(path) }
+
+// TrashUnknownPath says "Couldn’t identify where this session’s files are, so nothing was moved: {path}"
+// in the language of msgs.
+//
+// Error bar: the session files could not be identified.
+func (msgs Messages) TrashUnknownPath(path string) string {
+	return Catalog.Format(msgs.locale, "trashUnknownPath", map[string]any{"path": path})
 }
 
 // UpdateCheckButton says "Check for Updates"
@@ -11192,6 +14390,348 @@ func UsageTitle() string { return In(i18n.Locale()).UsageTitle() }
 // Plan Usage settings or status popover: heading for Title.
 func (msgs Messages) UsageTitle() string {
 	return Catalog.Format(msgs.locale, "usageTitle", nil)
+}
+
+// UsageToolsCLIOther says "Other Commands"
+// in the language the app shows.
+//
+// Skills & Tools panel: group heading for command-line programs not from
+// Homebrew or macOS.
+func UsageToolsCLIOther() string { return In(i18n.Locale()).UsageToolsCLIOther() }
+
+// UsageToolsCLIOther says "Other Commands"
+// in the language of msgs.
+//
+// Skills & Tools panel: group heading for command-line programs not from
+// Homebrew or macOS.
+func (msgs Messages) UsageToolsCLIOther() string {
+	return Catalog.Format(msgs.locale, "usageToolsCLIOther", nil)
+}
+
+// UsageToolsCLISystem says "Built-in"
+// in the language the app shows.
+//
+// Skills & Tools panel: group heading for command-line programs that come
+// with macOS.
+func UsageToolsCLISystem() string { return In(i18n.Locale()).UsageToolsCLISystem() }
+
+// UsageToolsCLISystem says "Built-in"
+// in the language of msgs.
+//
+// Skills & Tools panel: group heading for command-line programs that come
+// with macOS.
+func (msgs Messages) UsageToolsCLISystem() string {
+	return Catalog.Format(msgs.locale, "usageToolsCLISystem", nil)
+}
+
+// UsageToolsCopied says "Copied {name}"
+// in the language the app shows.
+//
+// Notification after clicking a name in the Skills & Tools panel.
+func UsageToolsCopied(name string) string { return In(i18n.Locale()).UsageToolsCopied(name) }
+
+// UsageToolsCopied says "Copied {name}"
+// in the language of msgs.
+//
+// Notification after clicking a name in the Skills & Tools panel.
+func (msgs Messages) UsageToolsCopied(name string) string {
+	return Catalog.Format(msgs.locale, "usageToolsCopied", map[string]any{"name": name})
+}
+
+// UsageToolsCopyLabel says "Copy {name}"
+// in the language the app shows.
+//
+// Skills & Tools panel: accessibility label of a name that copies when
+// clicked.
+func UsageToolsCopyLabel(name string) string { return In(i18n.Locale()).UsageToolsCopyLabel(name) }
+
+// UsageToolsCopyLabel says "Copy {name}"
+// in the language of msgs.
+//
+// Skills & Tools panel: accessibility label of a name that copies when
+// clicked.
+func (msgs Messages) UsageToolsCopyLabel(name string) string {
+	return Catalog.Format(msgs.locale, "usageToolsCopyLabel", map[string]any{"name": name})
+}
+
+// UsageToolsFilter says "Filter"
+// in the language the app shows.
+//
+// Skills & Tools panel: accessibility label of the filter segmented
+// control.
+func UsageToolsFilter() string { return In(i18n.Locale()).UsageToolsFilter() }
+
+// UsageToolsFilter says "Filter"
+// in the language of msgs.
+//
+// Skills & Tools panel: accessibility label of the filter segmented
+// control.
+func (msgs Messages) UsageToolsFilter() string {
+	return Catalog.Format(msgs.locale, "usageToolsFilter", nil)
+}
+
+// UsageToolsNoFile says "No session file yet. It appears once the agent starts a conversation."
+// in the language the app shows.
+//
+// Skills & Tools panel: the session file was not found yet.
+func UsageToolsNoFile() string { return In(i18n.Locale()).UsageToolsNoFile() }
+
+// UsageToolsNoFile says "No session file yet. It appears once the agent starts a conversation."
+// in the language of msgs.
+//
+// Skills & Tools panel: the session file was not found yet.
+func (msgs Messages) UsageToolsNoFile() string {
+	return Catalog.Format(msgs.locale, "usageToolsNoFile", nil)
+}
+
+// UsageToolsNoSkills says "This session hasn’t used any skills or MCP yet."
+// in the language the app shows.
+//
+// Skills & Tools panel: empty state with the Skills & MCP filter.
+func UsageToolsNoSkills() string { return In(i18n.Locale()).UsageToolsNoSkills() }
+
+// UsageToolsNoSkills says "This session hasn’t used any skills or MCP yet."
+// in the language of msgs.
+//
+// Skills & Tools panel: empty state with the Skills & MCP filter.
+func (msgs Messages) UsageToolsNoSkills() string {
+	return Catalog.Format(msgs.locale, "usageToolsNoSkills", nil)
+}
+
+// UsageToolsNoWeb says "This session hasn’t visited any URLs yet."
+// in the language the app shows.
+//
+// Skills & Tools panel: empty state with the URLs filter.
+func UsageToolsNoWeb() string { return In(i18n.Locale()).UsageToolsNoWeb() }
+
+// UsageToolsNoWeb says "This session hasn’t visited any URLs yet."
+// in the language of msgs.
+//
+// Skills & Tools panel: empty state with the URLs filter.
+func (msgs Messages) UsageToolsNoWeb() string {
+	return Catalog.Format(msgs.locale, "usageToolsNoWeb", nil)
+}
+
+// UsageToolsNone says "This session hasn’t used any skills, MCP, command-line tools or URLs yet."
+// in the language the app shows.
+//
+// Skills & Tools panel: empty state.
+func UsageToolsNone() string { return In(i18n.Locale()).UsageToolsNone() }
+
+// UsageToolsNone says "This session hasn’t used any skills, MCP, command-line tools or URLs yet."
+// in the language of msgs.
+//
+// Skills & Tools panel: empty state.
+func (msgs Messages) UsageToolsNone() string {
+	return Catalog.Format(msgs.locale, "usageToolsNone", nil)
+}
+
+// UsageToolsPlainTerminal says "Plain terminals have no session history."
+// in the language the app shows.
+//
+// Skills & Tools panel: shown for a terminal without an agent.
+func UsageToolsPlainTerminal() string { return In(i18n.Locale()).UsageToolsPlainTerminal() }
+
+// UsageToolsPlainTerminal says "Plain terminals have no session history."
+// in the language of msgs.
+//
+// Skills & Tools panel: shown for a terminal without an agent.
+func (msgs Messages) UsageToolsPlainTerminal() string {
+	return Catalog.Format(msgs.locale, "usageToolsPlainTerminal", nil)
+}
+
+// UsageToolsReadError says "Couldn’t read the session file: {error}"
+// in the language the app shows.
+//
+// Skills & Tools panel: reading the session file failed.
+func UsageToolsReadError(error string) string { return In(i18n.Locale()).UsageToolsReadError(error) }
+
+// UsageToolsReadError says "Couldn’t read the session file: {error}"
+// in the language of msgs.
+//
+// Skills & Tools panel: reading the session file failed.
+func (msgs Messages) UsageToolsReadError(error string) string {
+	return Catalog.Format(msgs.locale, "usageToolsReadError", map[string]any{"error": error})
+}
+
+// UsageToolsSearchVia says "Search · {via}"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: a web search entry. via is the tool that
+// searched.
+func UsageToolsSearchVia(via string) string { return In(i18n.Locale()).UsageToolsSearchVia(via) }
+
+// UsageToolsSearchVia says "Search · {via}"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: a web search entry. via is the tool that
+// searched.
+func (msgs Messages) UsageToolsSearchVia(via string) string {
+	return Catalog.Format(msgs.locale, "usageToolsSearchVia", map[string]any{"via": via})
+}
+
+// UsageToolsSearches says "{count, plural, one {# search} other {# searches}}"
+// in the language the app shows.
+//
+// Skills & Tools panel: number of web searches, next to the URLs heading.
+func UsageToolsSearches(count int) string { return In(i18n.Locale()).UsageToolsSearches(count) }
+
+// UsageToolsSearches says "{count, plural, one {# search} other {# searches}}"
+// in the language of msgs.
+//
+// Skills & Tools panel: number of web searches, next to the URLs heading.
+func (msgs Messages) UsageToolsSearches(count int) string {
+	return Catalog.Format(msgs.locale, "usageToolsSearches", map[string]any{"count": count})
+}
+
+// UsageToolsSince says "Since {time}"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: tooltip of the time of merged entries.
+// time is a date and time.
+func UsageToolsSince(time_ string) string { return In(i18n.Locale()).UsageToolsSince(time_) }
+
+// UsageToolsSince says "Since {time}"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: tooltip of the time of merged entries.
+// time is a date and time.
+func (msgs Messages) UsageToolsSince(time_ string) string {
+	return Catalog.Format(msgs.locale, "usageToolsSince", map[string]any{"time": time_})
+}
+
+// UsageToolsSkill says "Skill"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: kind of an entry that used a skill.
+func UsageToolsSkill() string { return In(i18n.Locale()).UsageToolsSkill() }
+
+// UsageToolsSkill says "Skill"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: kind of an entry that used a skill.
+func (msgs Messages) UsageToolsSkill() string {
+	return Catalog.Format(msgs.locale, "usageToolsSkill", nil)
+}
+
+// UsageToolsSkillsMCP says "Skills & MCP"
+// in the language the app shows.
+//
+// Skills & Tools panel: filter segment.
+func UsageToolsSkillsMCP() string { return In(i18n.Locale()).UsageToolsSkillsMCP() }
+
+// UsageToolsSkillsMCP says "Skills & MCP"
+// in the language of msgs.
+//
+// Skills & Tools panel: filter segment.
+func (msgs Messages) UsageToolsSkillsMCP() string {
+	return Catalog.Format(msgs.locale, "usageToolsSkillsMCP", nil)
+}
+
+// UsageToolsTimeline says "Timeline"
+// in the language the app shows.
+//
+// Skills & Tools panel: section heading.
+func UsageToolsTimeline() string { return In(i18n.Locale()).UsageToolsTimeline() }
+
+// UsageToolsTimeline says "Timeline"
+// in the language of msgs.
+//
+// Skills & Tools panel: section heading.
+func (msgs Messages) UsageToolsTimeline() string {
+	return Catalog.Format(msgs.locale, "usageToolsTimeline", nil)
+}
+
+// UsageToolsTitle says "Skills & Tools"
+// in the language the app shows.
+//
+// Skills & Tools panel on the right of a terminal: title.
+func UsageToolsTitle() string { return In(i18n.Locale()).UsageToolsTitle() }
+
+// UsageToolsTitle says "Skills & Tools"
+// in the language of msgs.
+//
+// Skills & Tools panel on the right of a terminal: title.
+func (msgs Messages) UsageToolsTitle() string {
+	return Catalog.Format(msgs.locale, "usageToolsTitle", nil)
+}
+
+// UsageToolsURLTip says "{url}\n⌘-click to open in Posse, ⇧⌘-click to open in browser"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: tooltip of a URL.
+func UsageToolsURLTip(url string) string { return In(i18n.Locale()).UsageToolsURLTip(url) }
+
+// UsageToolsURLTip says "{url}\n⌘-click to open in Posse, ⇧⌘-click to open in browser"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: tooltip of a URL.
+func (msgs Messages) UsageToolsURLTip(url string) string {
+	return Catalog.Format(msgs.locale, "usageToolsURLTip", map[string]any{"url": url})
+}
+
+// UsageToolsURLTipSwapped says "{url}\n⌘-click to open in browser, ⇧⌘-click to open in Posse"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: tooltip of a URL when the link click
+// settings are swapped.
+func UsageToolsURLTipSwapped(url string) string {
+	return In(i18n.Locale()).UsageToolsURLTipSwapped(url)
+}
+
+// UsageToolsURLTipSwapped says "{url}\n⌘-click to open in browser, ⇧⌘-click to open in Posse"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: tooltip of a URL when the link click
+// settings are swapped.
+func (msgs Messages) UsageToolsURLTipSwapped(url string) string {
+	return Catalog.Format(msgs.locale, "usageToolsURLTipSwapped", map[string]any{"url": url})
+}
+
+// UsageToolsUnsupported says "Usage stats aren’t supported for {agent} sessions yet."
+// in the language the app shows.
+//
+// Skills & Tools panel: shown for an unsupported agent.
+func UsageToolsUnsupported(agent string) string {
+	return In(i18n.Locale()).UsageToolsUnsupported(agent)
+}
+
+// UsageToolsUnsupported says "Usage stats aren’t supported for {agent} sessions yet."
+// in the language of msgs.
+//
+// Skills & Tools panel: shown for an unsupported agent.
+func (msgs Messages) UsageToolsUnsupported(agent string) string {
+	return Catalog.Format(msgs.locale, "usageToolsUnsupported", map[string]any{"agent": agent})
+}
+
+// UsageToolsViaUser says "Sent by you"
+// in the language the app shows.
+//
+// Skills & Tools panel timeline: a URL the user sent.
+func UsageToolsViaUser() string { return In(i18n.Locale()).UsageToolsViaUser() }
+
+// UsageToolsViaUser says "Sent by you"
+// in the language of msgs.
+//
+// Skills & Tools panel timeline: a URL the user sent.
+func (msgs Messages) UsageToolsViaUser() string {
+	return Catalog.Format(msgs.locale, "usageToolsViaUser", nil)
+}
+
+// UsageToolsWeb says "URLs"
+// in the language the app shows.
+//
+// Skills & Tools panel: filter segment and section heading for visited
+// URLs.
+func UsageToolsWeb() string { return In(i18n.Locale()).UsageToolsWeb() }
+
+// UsageToolsWeb says "URLs"
+// in the language of msgs.
+//
+// Skills & Tools panel: filter segment and section heading for visited
+// URLs.
+func (msgs Messages) UsageToolsWeb() string {
+	return Catalog.Format(msgs.locale, "usageToolsWeb", nil)
 }
 
 // UsageUsed says "Used"

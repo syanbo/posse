@@ -16,16 +16,16 @@ const sidebarByStatus = "status"
 // 开着时列表换成所有项目里 agent 会话的平铺，标题改写「运行中」。
 func (a *app) sidebarGroupSwitch(c *ui.Context) {
 	on := a.state.SidebarGroup == sidebarByStatus
-	title := "项目"
+	title := L(c).RunningProjects()
 	if on {
-		title = "运行中"
+		title = L(c).RunningTitle()
 	}
 	// 漏斗和侧栏顶栏的开关、底栏的齿轮、项目行尾的展开箭头竖着对齐（见 sideIconCenter）
 	right := sideIconCenter() - compactBox()/2
 	ui.Row(c).Padding(6, right, 0, trafficLightX).AlignItems(ui.Center).Shrink(0).Children(func() {
 		ui.Text(c, title).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
 		ui.Spacer(c)
-		if toggleIconButton(c, "sidebar-group", iconFilter, "只看运行中的会话", on) {
+		if toggleIconButton(c, "sidebar-group", iconFilter, L(c).RunningFilterTip(), on) {
 			a.state.SidebarGroup = ""
 			if !on {
 				a.state.SidebarGroup = sidebarByStatus
@@ -73,7 +73,7 @@ func (a *app) runningList(c *ui.Context) {
 			if len(ws) > 1 {
 				label := cmp.Or(w.Shown, w.Name)
 				if w.Kind == "main" {
-					label = "主工作区"
+					label = L(c).RunningMainWorkspace()
 				}
 				where += " · " + label
 			}
@@ -105,7 +105,7 @@ func (a *app) runningList(c *ui.Context) {
 		if !a.loaded || a.pollDown {
 			return
 		}
-		ui.Text(c, "没有运行中的会话").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(6, navPad)
+		ui.Text(c, L(c).RunningEmpty()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(6, navPad)
 		return
 	}
 	cur := a.selectedSession(a.workspace(a.selected))

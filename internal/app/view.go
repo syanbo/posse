@@ -995,13 +995,13 @@ func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
 	if w.Kind == "main" {
 		if m.Item("清理 agent 痕迹…").Chosen() {
-			a.askCleanTraces(w)
+			a.askCleanTraces(lm, w)
 		}
 		if m.Item("移除项目…").Chosen() {
 			a.askRemoveProject(w)
 		}
 	} else if m.Item("删除工作区…").Chosen() {
-		a.askRemoveWorkspace(w)
+		a.askRemoveWorkspace(lm, w)
 	}
 }
 

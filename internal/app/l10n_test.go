@@ -160,10 +160,10 @@ func TestCatalogGenerated(t *testing.T) {
 var l10nPending = []string{
 	"app.go", "cheatsheet.go", "compare.go", "definition.go", "docfind.go", "files.go", "filespanel.go",
 	"filesview.go", "fonts.go", "gitconsole.go", "history.go", "images.go", "imageview.go", "jsonfmt.go",
-	"layout.go", "links.go", "markdown.go", "markdown_html.go", "mcp.go", "memory.go", "menu.go", "mermaid.go",
-	"mobile.go", "panels.go", "planusage.go", "projicon.go", "recent.go", "relaunch.go", "relay.go", "running.go",
-	"skillrun.go", "skills.go", "style.go", "tabname.go", "tasks.go", "termfind.go", "termkeys.go", "termmenu.go",
-	"traces.go", "trash.go", "upgrade.go", "usage.go", "view.go", "web.go", "webdevice.go",
+	"layout.go", "links.go", "markdown.go", "markdown_html.go", "menu.go", "mermaid.go",
+	"mobile.go", "panels.go", "planusage.go", "projicon.go", "recent.go", "relaunch.go", "relay.go",
+	"skills.go", "style.go", "tabname.go", "tasks.go", "termfind.go", "termkeys.go", "termmenu.go",
+	"upgrade.go", "usage.go", "view.go", "web.go", "webdevice.go",
 }
 
 func TestNoChineseLiterals(t *testing.T) {

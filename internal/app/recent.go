@@ -226,7 +226,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
 							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
 							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", compactBox(), smallIcon()).Clicked() {
-								a.trashListedSession(s)
+								a.trashListedSession(L(c), s)
 							}
 						})
 					})

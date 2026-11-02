@@ -10,6 +10,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/locales"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -100,12 +101,12 @@ func pathSize(path string) int64 {
 }
 
 // askRemoveWorkspaceTraces 删工作区前查一下它的痕迹：有就换成带勾选的确认框，没有照旧。
-func (a *app) askRemoveWorkspace(w workspace) {
-	body := "工作区里的终端会被关闭。"
+func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
+	body := m.TracesRemoveBody()
 	if w.Kind == "worktree" {
-		body = "会关闭终端并删除 git worktree 目录（分支保留）。有未提交的改动时会拒绝删除。"
+		body = m.TracesRemoveWorktreeBody()
 	}
-	title := "删除工作区 " + displayName(&w) + "？"
+	title := m.TracesRemoveTitle(displayName(&w))
 	remove := func() bool {
 		// 常驻进程的 force 同时管关终端和丢弃改动：worktree 要保住未提交的改动，不能带 force，
 		// 就先查改动、再自己关终端，否则开着终端的 worktree 删不掉
@@ -114,7 +115,7 @@ func (a *app) askRemoveWorkspace(w workspace) {
 			out, err := gitx.Dirty(ctx, w.Path)
 			cancel()
 			if err == nil && out != "" {
-				a.update(func() { a.err = "工作区 " + displayName(&w) + " 有未提交的改动，没有删除" })
+				a.update(func() { a.err = m.TracesRemoveDirty(displayName(&w)) })
 				return false
 			}
 			for _, t := range w.Terminals {
@@ -131,30 +132,30 @@ func (a *app) askRemoveWorkspace(w workspace) {
 		items := a.fetchTraces(map[string]any{"workspace": w.ID})
 		a.update(func() {
 			if len(items) == 0 {
-				a.confirm(title, body, "删除", func() { remove() })
+				a.confirm(title, body, m.CommonDelete(), func() { remove() })
 				return
 			}
-			a.openTraces(title, body+"\n\nagent 在工作区外留下了下面这些，勾选的会一起移到废纸篓：", "删除", items, false, remove)
+			a.openTraces(title, body+"\n\n"+m.TracesLeftBehindRemove(), m.CommonDelete(), items, false, remove)
 		})
 	}()
 }
 
 // askCleanTraces 是项目右键菜单的「清理 agent 痕迹…」。
-func (a *app) askCleanTraces(w workspace) {
+func (a *app) askCleanTraces(m locales.Messages, w workspace) {
 	go func() {
 		items := a.fetchTraces(map[string]any{"project": w.ProjectID})
 		a.update(func() {
 			if len(items) == 0 {
-				a.confirm("没有 agent 痕迹", "项目 "+w.Project+" 里的 agent 没有在工作区外留下记录到的文件。", "好", nil)
+				a.confirm(m.TracesNoneTitle(), m.TracesNoneBody(w.Project), m.CommonOk(), nil)
 				return
 			}
-			a.openTraces("清理 "+w.Project+" 的 agent 痕迹", "agent 在工作区外留下了下面这些。勾选的移到废纸篓，worktree 用 git 删除。", "清理", items, true, nil)
+			a.openTraces(m.TracesCleanTitle(w.Project), m.TracesCleanBody(), m.TracesCleanButton(), items, true, nil)
 		})
 	}()
 }
 
 // cleanTraces 清理勾选的痕迹，清掉的从账本里去掉。
-func (a *app) cleanTraces(rows []traceRow) {
+func (a *app) cleanTraces(m locales.Messages, rows []traceRow) {
 	var done, failed []string
 	for _, r := range rows {
 		if !r.checked || !r.removable() {
@@ -173,7 +174,7 @@ func (a *app) cleanTraces(rows []traceRow) {
 			err = mygo.Shell.TrashItem(r.Path)
 		}
 		if err != nil {
-			failed = append(failed, shortPath(r.Path)+"："+firstLine(errtext.Text(err)))
+			failed = append(failed, m.TracesFailedItem(shortPath(r.Path), firstLine(errtext.Text(err))))
 			continue
 		}
 		done = append(done, r.Path)
@@ -184,7 +185,7 @@ func (a *app) cleanTraces(rows []traceRow) {
 		cancel()
 	}
 	if len(failed) > 0 {
-		a.update(func() { a.err = "有些痕迹没清掉：" + strings.Join(failed, "；") })
+		a.update(func() { a.err = m.TracesCleanError(strings.Join(failed, m.TracesFailedSeparator())) })
 	}
 }
 
@@ -193,15 +194,16 @@ func firstLine(s string) string {
 	return s
 }
 
-var traceKindText = map[string]string{
-	"created":  "新建",
-	"worktree": "自建的 worktree，用 git 删除",
-	"modified": "改过的已有文件，只列出",
-	"config":   "改过的配置，只列出",
+var traceKindText = map[string]func(locales.Messages) string{
+	"created":  locales.Messages.TracesKindCreated,
+	"worktree": locales.Messages.TracesKindWorktree,
+	"modified": locales.Messages.TracesKindModified,
+	"config":   locales.Messages.TracesKindConfig,
 }
 
 func (a *app) tracesDialog(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	v := &a.traces
 	ui.Modal(c, &v.open, func() {
 		ui.Column(c).Width(520).Gap(12).Children(func() {
@@ -225,10 +227,10 @@ func (a *app) tracesDialog(c *ui.Context) {
 				}
 			}
 			if picked > 0 {
-				ui.Text(c, fmt.Sprintf("已选 %d 项，共 %s", picked, sizeText(total))).FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.TracesSelected(picked, sizeText(total))).FontSize(fsSmall).TextColor(t.TextMuted)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					v.open = false
 				}
 				if pressable(accentButton(c, v.verb)).Clicked() {
@@ -238,7 +240,7 @@ func (a *app) tracesDialog(c *ui.Context) {
 						if do != nil && !do() {
 							return
 						}
-						a.cleanTraces(rows)
+						a.cleanTraces(m, rows)
 					}()
 				}
 			})
@@ -248,6 +250,7 @@ func (a *app) tracesDialog(c *ui.Context) {
 
 func (a *app) traceRowView(c *ui.Context, r *traceRow) {
 	t := c.Theme()
+	m := L(c)
 	ui.Column(c.Key("trace:" + r.Path)).Gap(2).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			name := shortPath(r.Path)
@@ -263,17 +266,20 @@ func (a *app) traceRowView(c *ui.Context, r *traceRow) {
 			if r.size >= 0 {
 				ui.Text(c, sizeText(r.size)).FontSize(fsSmall).TextColor(t.TextMuted)
 			}
-			if pressable(iconButtonSized(c, iconFolder, "在访达中显示", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconFolder, m.CommonRevealInFinder(), compactBox(), smallIcon())).Clicked() {
 				mygo.Shell.ShowItemInFolder(r.Path)
 			}
 		})
 		meta := agentTitle(r.Agent)
 		if meta == "" {
-			meta = "终端"
+			meta = m.TracesTerminal()
 		}
-		meta += " · " + r.At.Local().Format("01-02 15:04") + " · " + traceKindText[r.Kind]
+		meta += " · " + r.At.Local().Format("01-02 15:04")
+		if kind := traceKindText[r.Kind]; kind != nil {
+			meta += " · " + kind(m)
+		}
 		if r.Running {
-			meta += " · 终端还开着"
+			meta += " · " + m.TracesTerminalOpen()
 		}
 		ui.Text(c, meta).FontSize(fsSmall).TextColor(colors(t).faint).Padding(0, 0, 0, t.Space(6))
 	})

@@ -183,7 +183,7 @@ func (a *app) releaseSkills() {
 }
 
 func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {
-	item := a.navTile(c, skillsBoardID, iconSkill, "技能", nil)
+	item := a.navTile(c, skillsBoardID, iconSkill, L(c).SkillsTitle(), nil)
 	if a.revealSel && a.selected == skillsBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
@@ -192,24 +192,26 @@ func (a *app) skillsSidebarItem(c *ui.Context) ui.Element {
 }
 
 // skillAgentLabels 是技能页按 agent 筛选的分段。
-var skillAgentLabels = []string{"全部", "Claude", "Codex", "Grok", "Cursor"}
+func skillAgentLabels(m locales.Messages) []string {
+	return []string{m.CommonAll(), "Claude", "Codex", "Grok", "Cursor"}
+}
 
 // scopeLabels 是技能来源的写法和列表里分组的顺序。
 var scopeLabels = []struct {
 	scope skills.Scope
-	label string
+	label func(locales.Messages) string
 }{
-	{skills.ScopeUser, "用户"},
-	{skills.ScopeSynced, "账号同步"},
-	{skills.ScopePlugin, "插件"},
-	{skills.ScopeSystem, "系统自带"},
-	{skills.ScopeProject, "项目"},
+	{skills.ScopeUser, locales.Messages.SkillsScopeUser},
+	{skills.ScopeSynced, locales.Messages.SkillsScopeSynced},
+	{skills.ScopePlugin, locales.Messages.SkillsScopePlugin},
+	{skills.ScopeSystem, locales.Messages.SkillsScopeSystem},
+	{skills.ScopeProject, locales.Messages.SkillsScopeProject},
 }
 
-func scopeLabel(sc skills.Scope) string {
+func scopeLabel(m locales.Messages, sc skills.Scope) string {
 	for _, s := range scopeLabels {
 		if s.scope == sc {
-			return s.label
+			return s.label(m)
 		}
 	}
 	return string(sc)
@@ -241,7 +243,7 @@ func (s *skillsView) shownSkills() []skills.Skill {
 	order := func(sc skills.Scope) int {
 		return slices.IndexFunc(scopeLabels, func(x struct {
 			scope skills.Scope
-			label string
+			label func(locales.Messages) string
 		}) bool {
 			return x.scope == sc
 		})
@@ -268,7 +270,7 @@ func (a *app) refreshButton(c *ui.Context) {
 		refresh.Disabled(true).Opacity(0.5)
 	}
 	refresh.Children(func() {
-		if iconButton(c.Key("skills-refresh"), iconRefresh, "重新扫描").Clicked() {
+		if iconButton(c.Key("skills-refresh"), iconRefresh, L(c).SkillsRescan()).Clicked() {
 			a.scanSkills()
 		}
 	})
@@ -284,28 +286,29 @@ func (s *skillsView) uses(name string) int {
 
 func (a *app) skillsBoard(c *ui.Context) {
 	s := &a.skills
+	m := L(c)
 	a.band(c, func() {
 		// 分页兼作标题：侧栏里叫「技能」，这里分技能和 MCP
-		segmented(c, &s.page, "技能或 MCP", "技能", "MCP")
-		placeholder := "搜索名字和说明"
+		segmented(c, &s.page, m.SkillsPageLabel(), m.SkillsTitle(), "MCP")
+		placeholder := m.SkillsSearchSkills()
 		if s.page == 1 {
-			placeholder = "搜索名字和命令"
+			placeholder = m.SkillsSearchMCP()
 		}
-		fieldInputSized(c, &s.query, placeholder, 280, 160).Label("搜索")
+		fieldInputSized(c, &s.query, placeholder, 280, 100).Label(m.SkillsSearchLabel())
 		ui.Spacer(c)
-		segmented(c, &s.agent, "按 agent 筛选", skillAgentLabels...)
+		segmented(c, &s.agent, m.SkillsAgentFilter(), skillAgentLabels(m)...)
 		if s.page == 1 {
 			a.refreshButton(c)
 			a.closeBoardButton(c)
 			return
 		}
-		if pressable(textButton(c, "安装…")).Clicked() {
-			a.openSkillInstall(a.skillsWorkspace(), true)
+		if pressable(textButton(c, m.SkillsInstallEllipsis())).Clicked() {
+			a.openSkillInstall(m, a.skillsWorkspace(), true)
 		}
 		check := ui.Box(c).Shrink(0)
-		label := "检查更新"
+		label := m.SkillsCheckUpdates()
 		if s.checking {
-			label = "正在检查…"
+			label = m.SkillsChecking()
 			check.Disabled(true).Opacity(0.5)
 		}
 		check.Children(func() {
@@ -329,16 +332,16 @@ func (a *app) skillsBoard(c *ui.Context) {
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
-		card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("技能列表").Children(func() {
+		card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label(m.SkillsListLabel()).Children(func() {
 			a.skillTotals(c)
 			ui.Scroll(c).Grow(1).Children(func() {
 				ui.Column(c).Padding(4, 8, 16, 8).Gap(2).Children(func() {
 					if !s.loaded {
-						usageNote(c, "正在扫描…")
+						usageNote(c, m.CommonScanning())
 						return
 					}
 					if len(list) == 0 {
-						usageNote(c, "没有符合条件的技能。")
+						usageNote(c, m.SkillsNoMatch())
 					}
 					var group skills.Scope
 					for _, sk := range list {
@@ -350,7 +353,7 @@ func (a *app) skillsBoard(c *ui.Context) {
 									n++
 								}
 							}
-							skillGroupHeader(c, scopeLabel(group), n)
+							skillGroupHeader(c, scopeLabel(m, group), n)
 						}
 						row := a.skillRow(c, sk, s.sel == sk.Dir, func() { s.sel = sk.Dir })
 						if s.reveal && s.sel == sk.Dir {
@@ -413,37 +416,36 @@ func (s *skillsView) step(keys []string, sel *string, step int) {
 // 有查不了的来源一并写上，悬停看原因。
 func (a *app) skillUpdatesLine(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	s := &a.skills
 	u := s.updates
 	if u == nil {
 		return
 	}
 	n := s.updateCount()
-	failed := ""
+	var problems []string
 	if len(u.Failed) > 0 {
-		failed = fmt.Sprintf("%d 个来源没查到", len(u.Failed))
+		problems = append(problems, m.SkillsSourcesFailed(len(u.Failed)))
 	}
 	var gone []string
 	for _, sk := range s.cat.Skills {
 		if u.IsGone(sk) {
-			gone = append(gone, sk.Name+"：来源里找不到了，npx skills update 跳过它")
+			gone = append(gone, m.SkillsGoneLine(sk.Name))
 		}
 	}
 	if len(gone) > 0 {
-		if failed != "" {
-			failed += "，"
-		}
-		failed += fmt.Sprintf("%d 个在来源里找不到了", len(gone))
+		problems = append(problems, m.SkillsGoneCount(len(gone)))
 	}
+	failed := strings.Join(problems, m.SkillsClauseSeparator())
 	var lines []string
 	for _, f := range u.Failed {
-		lines = append(lines, f.Source+"："+errtext.Message(f.Err))
+		lines = append(lines, m.SkillsSourceFailedLine(f.Source, errtext.Message(f.Err)))
 	}
 	why := strings.Join(append(lines, gone...), "\n")
 	if n == 0 {
-		text := "都是最新的"
+		text := m.SkillsUpToDate()
 		if failed != "" {
-			text += "，" + failed
+			text = m.SkillsUpToDateWith(failed)
 		}
 		e := ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).Margin(0, 20, 8, 20)
 		if failed != "" {
@@ -451,19 +453,21 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 		}
 		return
 	}
-	row := ui.Row(c.Key("skill-updates")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label("有新版本的技能")
+	row := ui.Row(c.Key("skill-updates")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.SkillsUpdatesLabel())
 	selectedBg(c, row, s.onlyUpdates)
 	row.Children(func() {
 		ui.Icon(c, iconFetch).FontSize(iconSize).TextColor(t.Accent).Shrink(0)
-		ui.Text(c, fmt.Sprintf("%d 个有新版本", n)).FontSize(fsBody).FontFeatures("tnum").Grow(1)
+		// 计数不折行，挤不下时让右边的说明折行
+		ui.Text(c, m.SkillsUpdatesCount(n)).FontSize(fsBody).FontFeatures("tnum").Shrink(0)
+		ui.Spacer(c)
 		if failed != "" {
-			ui.Text(c, failed).FontSize(fsSmall).TextColor(t.TextMuted).Tooltip(why)
+			ui.Text(c, failed).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(1).Tooltip(why)
 		}
 	})
 	if s.onlyUpdates {
-		row.Tooltip("再点一下看全部")
+		row.Tooltip(m.SkillsShowAllTip())
 	} else {
-		row.Tooltip("只看有新版本的")
+		row.Tooltip(m.SkillsShowUpdatesTip())
 	}
 	if row.Clicked() {
 		s.onlyUpdates = !s.onlyUpdates
@@ -473,6 +477,7 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 // skillTotals 是列表顶上的总计：技能数、各家用得上的数，和体检发现的问题（点开看）。
 func (a *app) skillTotals(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	s := &a.skills
 	if !s.loaded {
 		return
@@ -492,15 +497,15 @@ func (a *app) skillTotals(c *ui.Context) {
 	}
 	ui.Column(c).Padding(12, 20, 8, 20).Gap(8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("%d 个技能", n)).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum").Grow(1)
+			ui.Text(c, m.SkillsCount(n)).FontSize(fsBody).FontWeight(fwMedium).FontFeatures("tnum").Grow(1)
 			if s.statsLoading && s.stats == nil {
-				note := "正在统计用量…"
+				note := m.SkillsCountingUsage()
 				if s.statsTotal > 0 {
-					note = fmt.Sprintf("正在统计用量 %d/%d", s.statsDone, s.statsTotal)
+					note = m.SkillsCountingUsageProgress(s.statsDone, s.statsTotal)
 				}
 				ui.Text(c, note).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			} else {
-				segmented(c, &s.byUse, "排序", "名字", "用量")
+				segmented(c, &s.byUse, m.SkillsSortLabel(), m.SkillsSortName(), m.SkillsSortUsage())
 			}
 		})
 		ui.Row(c).Gap(12).Wrap().Children(func() {
@@ -508,17 +513,17 @@ func (a *app) skillTotals(c *ui.Context) {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					agentIcon(c, ag.String(), smallIcon())
 					ui.Text(c, fmt.Sprint(byAgent[ag])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-				}).Tooltip(agentTitle(ag.String()) + "用得上的技能")
+				}).Tooltip(m.SkillsAgentCountTip(agentTitle(ag.String())))
 			}
 		})
 	})
 	a.skillUpdatesLine(c)
 	if k := len(s.cat.Issues); k > 0 {
-		row := ui.Row(c.Key("skill-issues")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label("体检")
+		row := ui.Row(c.Key("skill-issues")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.SkillsIssuesLabel())
 		selectedBg(c, row, s.sel == skillIssuesKey)
 		row.Children(func() {
 			ui.Icon(c, iconInfo).FontSize(iconSize).TextColor(colors(t).honey).Shrink(0)
-			ui.Text(c, fmt.Sprintf("体检发现 %d 个问题", k)).FontSize(fsBody).FontFeatures("tnum").Grow(1)
+			ui.Text(c, m.SkillsIssuesFound(k)).FontSize(fsBody).FontFeatures("tnum").Grow(1)
 			ui.Icon(c, iconForward).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		})
 		if row.Clicked() {
@@ -554,7 +559,7 @@ func (a *app) skillRow(c *ui.Context, sk skills.Skill, selected bool, onClick fu
 		if a.skills.stats != nil || manual || update {
 			ui.Row(c).Gap(12).Children(func() {
 				if update {
-					ui.Text(c, "有新版本").FontSize(fsSmall).TextColor(t.Accent)
+					ui.Text(c, L(c).SkillsHasUpdate()).FontSize(fsSmall).TextColor(t.Accent)
 				}
 				// 默认是自动触发，列表里只标例外，免得每行都多两个字
 				if manual {
@@ -592,9 +597,9 @@ func agentMarks(c *ui.Context, sts [skills.NumAgents]skills.Status, can func(ski
 			can := toggle != nil && can(ag)
 			if can {
 				if st.State == skills.Off {
-					tip += "\n点一下打开"
+					tip += "\n" + L(c).SkillsClickToEnable()
 				} else {
-					tip += "\n点一下关掉"
+					tip += "\n" + L(c).SkillsClickToDisable()
 				}
 			}
 			e := agentIcon(c, ag.String(), size).Tooltip(tip)
@@ -614,18 +619,18 @@ func agentMarks(c *ui.Context, sts [skills.NumAgents]skills.Status, can func(ski
 	})
 }
 
-func skillStateText(st skills.State) string {
+func skillStateText(m locales.Messages, st skills.State) string {
 	switch st {
 	case skills.On:
-		return "启用"
+		return m.SkillsStateOn()
 	case skills.Manual:
-		return "只能手动调用"
+		return m.SkillsStateManual()
 	case skills.Off:
-		return "已关闭"
+		return m.SkillsStateOff()
 	case skills.Shadowed:
-		return "被同名的盖住"
+		return m.SkillsStateShadowed()
 	}
-	return "读不到"
+	return m.SkillsStateUnseen()
 }
 
 // skillWhy 是这家对技能是这个状态的原因，按界面语言写。
@@ -640,12 +645,12 @@ func skillWhy(m locales.Messages, st skills.Status) string {
 }
 
 func skillStateTip(m locales.Messages, ag skills.Agent, st skills.Status) string {
-	tip := agentTitle(ag.String()) + "：" + skillStateText(st.State)
+	tip := m.SkillsStateTip(agentTitle(ag.String()), skillStateText(m, st.State))
 	if why := skillWhy(m, st); why != "" {
 		tip += "\n" + why
 	}
 	if st.Inferred && st.State != skills.Unseen {
-		tip += "\n读取规则是推断的，没有核实"
+		tip += "\n" + m.SkillsInferredNote()
 	}
 	return tip
 }
@@ -653,6 +658,7 @@ func skillStateTip(m locales.Messages, ag skills.Agent, st skills.Status) string
 // skillDetail 是右边的详情：名字、来源和位置，各家的状态，完整的说明。
 func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 	t := c.Theme()
+	m := L(c)
 	card(c).Padding(cardPad).Gap(12).Shrink(0).Children(func() {
 		ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
 			tile(c, iconSkill, tileLarge(), colors(t).tint, t.Accent)
@@ -660,25 +666,25 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 				titleText(c, sk.Name, fsPage).LineHeight(1.3).MaxLines(2).Selectable()
 				var source func()
 				if sk.Source != "" {
-					source = metaMono(c, nil, sk.Source, "npx skills 装的来源")
+					source = metaMono(c, nil, sk.Source, m.SkillsSourceTip())
 				}
-				metaRow(c, meta(c, scopeLabel(sk.Scope)), source, metaMono(c, iconFolder, shortPath(sk.Dir), sk.Dir))
+				metaRow(c, meta(c, scopeLabel(m, sk.Scope)), source, metaMono(c, iconFolder, shortPath(sk.Dir), sk.Dir))
 			})
 			ui.Row(c).Gap(4).Shrink(0).Children(func() {
-				if pressable(textButton(c, "打开 SKILL.md")).Clicked() {
+				if pressable(textButton(c, m.SkillsOpenFile())).Clicked() {
 					a.openSkillFile(sk.File)
 				}
 				a.skillActions(c, sk, a.skillsWorkspace(), true)
-				if sk.SourceURL != "" && pressable(iconButton(c.Key("skill-source"), iconOpen, "打开来源网页")).Clicked() {
+				if sk.SourceURL != "" && pressable(iconButton(c.Key("skill-source"), iconOpen, m.SkillsOpenSourcePage())).Clicked() {
 					c.OpenURL(sk.SourceURL)
 				}
-				if pressable(iconButton(c.Key("skill-reveal"), iconFolder, "在访达中显示")).Clicked() {
+				if pressable(iconButton(c.Key("skill-reveal"), iconFolder, m.CommonRevealInFinder())).Clicked() {
 					mygo.Shell.ShowItemInFolder(sk.File)
 				}
 			})
 		})
 		if a.skills.updates.IsGone(sk) {
-			ui.Text(c, "来源里已经找不到它了（上游删了、改了名或挪了位置），npx skills update 更新不了。到来源网页看看它换成了什么，装新的再删掉这个。").
+			ui.Text(c, m.SkillsGoneNote()).
 				FontSize(fsSmall).TextColor(colors(t).honey).LineHeight(1.45)
 		}
 		if sk.Description != "" {
@@ -690,7 +696,7 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 	}
 	card(c).Padding(cardPad).Gap(4).Shrink(0).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Margin(0, 0, 4, 0).Children(func() {
-			cardTitle(c, "各家状态")
+			cardTitle(c, m.SkillsAgentStatus())
 			skillTrigger(c, sk.Meta)
 		})
 		for i, ag := range skills.Agents {
@@ -705,6 +711,7 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 // skillAgentRow 是详情里一家的状态：色块、名字、状态，下面一行是原因和读到它的路径；能开关的行尾有开关。
 func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o skills.Options) {
 	t := c.Theme()
+	m := L(c)
 	st := sk.Agents[ag]
 	ui.Row(c.Key("agent-"+ag.String())).Padding(6, 0).Gap(12).AlignItems(ui.Start).Children(func() {
 		e := agentIcon(c, ag.String(), iconSize)
@@ -721,12 +728,12 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 				case skills.Shadowed:
 					color = colors(t).honey
 				}
-				ui.Text(c, skillStateText(st.State)).FontSize(fsSmall).TextColor(color)
+				ui.Text(c, skillStateText(m, st.State)).FontSize(fsSmall).TextColor(color)
 				if st.Inferred && st.State != skills.Unseen {
-					ui.Text(c, "推断").FontSize(fsSmall).TextColor(colors(t).faint).Tooltip("Cursor 读哪些目录没有核实过，按它程序里出现的目录名推断")
+					ui.Text(c, m.SkillsInferred()).FontSize(fsSmall).TextColor(colors(t).faint).Tooltip(m.SkillsCursorInferredTip())
 				}
 			})
-			if why := skillWhy(L(c), st); why != "" {
+			if why := skillWhy(m, st); why != "" {
 				ui.Text(c, why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			if st.Via != "" {
@@ -735,9 +742,9 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 					// Codex 报的是 SKILL.md 的路径
 					// 只看这条路径本身是不是链接：上级目录是链接（如 ~/.claude 链到 dotfiles）时它照样不是软链
 					if fi, err := os.Lstat(strings.TrimSuffix(st.Via, string(filepath.Separator)+"SKILL.md")); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-						ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Tooltip("软链，指向 " + shortPath(sk.Dir)).Children(func() {
+						ui.Row(c).Gap(2).AlignItems(ui.Center).Shrink(0).Tooltip(m.SkillsSymlinkTip(shortPath(sk.Dir))).Children(func() {
 							ui.Icon(c, iconFolderLink).FontSize(fsSmall).TextColor(colors(t).faint)
-							ui.Text(c, "软链").FontSize(fsSmall).TextColor(colors(t).faint)
+							ui.Text(c, m.SkillsSymlink()).FontSize(fsSmall).TextColor(colors(t).faint)
 						})
 					}
 				})
@@ -745,14 +752,14 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 		})
 		if skills.CanToggle(ag, sk) {
 			on := st.State != skills.Off
-			if ui.Switch(c, &on).Label(agentTitle(ag.String()) + "里启用").Changed() {
-				a.planSkillToggle(o, sk, ag, on)
+			if ui.Switch(c, &on).Label(m.SkillsEnableIn(agentTitle(ag.String()))).Changed() {
+				a.planSkillToggle(m, o, sk, ag, on)
 			}
 		} else if link, ok := skills.LinkFor(o, sk, ag); ok {
 			// 读不到的：打开就在这家读的目录里建一条链接
 			on := false
-			if ui.Switch(c, &on).Label("让" + agentTitle(ag.String()) + "读到它").Tooltip("在 " + shortPath(filepath.Dir(link)) + " 建一条指向它的链接").Changed() {
-				a.askLinkSkill(sk, ag, link)
+			if ui.Switch(c, &on).Label(m.SkillsLinkLabel(agentTitle(ag.String()))).Tooltip(m.SkillsLinkTip(shortPath(filepath.Dir(link)))).Changed() {
+				a.askLinkSkill(m, sk, ag, link)
 			}
 		}
 	})
@@ -761,17 +768,18 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 // issueKinds 是体检里各类问题的顺序、标题和说明。
 var issueKinds = []struct {
 	kind         skills.IssueKind
-	title, about string
+	title, about func(locales.Messages) string
 }{
-	{skills.BrokenLink, "断掉的链接", "链接指向的目录已经不在了，各家都读不到。"},
-	{skills.Duplicate, "同名冲突", "同一家读得到两份同名的技能，只有优先的那份生效。可以合成一份：没生效的那份移到废纸篓，原处换成指向生效那份的链接，各家都读同一份。"},
-	{skills.LockMissing, "锁文件对不上", "npx skills 的锁文件记着它，各家的技能目录里却都没有（多半是手动删掉的）。不要了就从锁文件里删掉；还要就重新安装。"},
-	{skills.RedundantLink, "多余的链接", "链接所在目录的那几家本来就从别处读得到它指向的那份，删掉不影响。"},
+	{skills.BrokenLink, locales.Messages.SkillsIssueBrokenLink, locales.Messages.SkillsIssueBrokenLinkNote},
+	{skills.Duplicate, locales.Messages.SkillsIssueDuplicate, locales.Messages.SkillsIssueDuplicateNote},
+	{skills.LockMissing, locales.Messages.SkillsIssueLockMissing, locales.Messages.SkillsIssueLockMissingNote},
+	{skills.RedundantLink, locales.Messages.SkillsIssueRedundantLink, locales.Messages.SkillsIssueRedundantLinkNote},
 }
 
 // skillIssues 是体检结果，按类分组。
 func (a *app) skillIssues(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Gap(pageGap).Children(func() {
 			for _, k := range issueKinds {
@@ -786,13 +794,13 @@ func (a *app) skillIssues(c *ui.Context) {
 				}
 				card(c).Padding(cardPad).Gap(8).Shrink(0).Children(func() {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						cardTitle(c, k.title)
+						cardTitle(c, k.title(m))
 						ui.Text(c, fmt.Sprint(len(items))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 					})
-					ui.Text(c, k.about).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
+					ui.Text(c, k.about(m)).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
 					if k.kind == skills.RedundantLink && len(items) > 1 {
-						if pressable(textButton(c, fmt.Sprintf("全部移到废纸篓（%d 条）", len(items)))).Clicked() {
-							a.askTrashLinks(items)
+						if pressable(textButton(c, m.SkillsTrashAllLinks(len(items)))).Clicked() {
+							a.askTrashLinks(m, items)
 						}
 					}
 					ui.Column(c).Gap(2).Children(func() {
@@ -808,6 +816,7 @@ func (a *app) skillIssues(c *ui.Context) {
 
 func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 	t := c.Theme()
+	m := L(c)
 	ui.Column(c.Key(string(is.Kind)+is.Path+is.Other)).Padding(6, 0).Gap(2).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, is.Name).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
@@ -817,19 +826,19 @@ func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 			ui.Spacer(c)
 			switch is.Kind {
 			case skills.BrokenLink, skills.RedundantLink:
-				if pressable(iconButtonSized(c, iconTrash, "把这条链接移到废纸篓", compactBox(), smallIcon())).Clicked() {
-					a.askTrashLinks([]skills.Issue{is})
+				if pressable(iconButtonSized(c, iconTrash, m.SkillsTrashLinkTip(), compactBox(), smallIcon())).Clicked() {
+					a.askTrashLinks(m, []skills.Issue{is})
 				}
 			case skills.Duplicate:
-				if pressable(iconButtonSized(c.Key("dup-reveal"), iconFolder, "在访达中显示没生效的那份", compactBox(), smallIcon())).Clicked() {
+				if pressable(iconButtonSized(c.Key("dup-reveal"), iconFolder, m.SkillsRevealInactive(), compactBox(), smallIcon())).Clicked() {
 					mygo.Shell.ShowItemInFolder(is.Path)
 				}
-				if pressable(iconButtonSized(c.Key("dup-merge"), iconFolderLink, "合成一份：换成指向生效那份的链接", compactBox(), smallIcon())).Clicked() {
-					a.askMergeDuplicate(is)
+				if pressable(iconButtonSized(c.Key("dup-merge"), iconFolderLink, m.SkillsMergeTip(), compactBox(), smallIcon())).Clicked() {
+					a.askMergeDuplicate(m, is)
 				}
 			case skills.LockMissing:
-				if pressable(iconButtonSized(c, iconTrash, "从锁文件里删掉", compactBox(), smallIcon())).Clicked() {
-					a.askSkillCommand("从锁文件里删掉 "+is.Name+"？", "各家的技能目录里都没有它了，npx skills 只会删掉锁文件里的这一项。", skills.ShellLine(skills.RemoveArgs(is.Name, true)), a.skillsWorkspace(), false)
+				if pressable(iconButtonSized(c, iconTrash, m.SkillsRemoveFromLock(), compactBox(), smallIcon())).Clicked() {
+					a.askSkillCommand(m, m.SkillsRemoveFromLockConfirm(is.Name), m.SkillsRemoveFromLockBody(), skills.ShellLine(skills.RemoveArgs(is.Name, true)), a.skillsWorkspace(), false)
 				}
 			}
 		})
@@ -838,14 +847,12 @@ func (a *app) issueRow(c *ui.Context, is skills.Issue) {
 		case skills.BrokenLink:
 			line = shortPath(is.Path) + " → " + shortPath(is.Other)
 		case skills.Duplicate:
-			line = shortPath(is.Path) + " 被 " + shortPath(is.Other) + " 盖住"
+			line = m.SkillsShadowedDiff(shortPath(is.Path), shortPath(is.Other))
 			if is.Same {
-				line += "，内容相同"
-			} else {
-				line += "，内容不同"
+				line = m.SkillsShadowedSame(shortPath(is.Path), shortPath(is.Other))
 			}
 		case skills.LockMissing:
-			line = "目录里没有 " + shortPath(is.Other)
+			line = m.SkillsMissingDir(shortPath(is.Other))
 		case skills.RedundantLink:
 			line = shortPath(is.Path) + " → " + shortPath(is.Other)
 		}
@@ -897,6 +904,7 @@ func (a *app) pollSkillsPanel(c *ui.Context, w *workspace) {
 // skillsPanel 是文件栏的「技能」页签：当前工作区的项目级技能（工作区和它往上到仓库根的各级目录里的），点一个打开 SKILL.md。
 func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 	t := c.Theme()
+	m := L(c)
 	a.pollSkillsPanel(c, w)
 	p := &a.skillsTab
 	var list []skills.Skill
@@ -907,20 +915,20 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 	}
 	slices.SortFunc(list, func(x, y skills.Skill) int { return strings.Compare(strings.ToLower(x.Name), strings.ToLower(y.Name)) })
 	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Gap(8).Children(func() {
-		if pressable(textButton(c, "新建…")).Clicked() {
+		if pressable(textButton(c, m.SkillsNewEllipsis())).Clicked() {
 			a.skillNew = skillNewView{open: true, ws: w.ID}
 		}
-		if pressable(textButton(c, "安装…")).Clicked() {
-			a.openSkillInstall(w, false)
+		if pressable(textButton(c, m.SkillsInstallEllipsis())).Clicked() {
+			a.openSkillInstall(m, w, false)
 		}
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(8, 8, 16, 8).Gap(2).Children(func() {
 			switch {
 			case p.poll.at.IsZero():
-				usageNote(c, "正在扫描…")
+				usageNote(c, m.CommonScanning())
 			case len(list) == 0:
-				usageNote(c, "这个工作区没有项目级技能。放在 .claude/skills、.agents/skills、.grok/skills 或 .cursor/skills 里的技能会列在这里。")
+				usageNote(c, m.SkillsPanelEmpty())
 			}
 			for _, sk := range list {
 				row := ui.Column(c.Key(sk.Dir)).Padding(8, 8).Gap(2).Radius(rControl).Role(ui.RoleButton).Label(sk.Name)
@@ -929,7 +937,7 @@ func (a *app) skillsPanel(c *ui.Context, w *workspace) {
 					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 						ui.Text(c, sk.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Grow(1).Shrink(1)
 						skillMarks(c, sk, func(ag skills.Agent, enable bool) {
-							a.planSkillToggle(skills.Options{Home: homeDir, Dir: w.Path}, sk, ag, enable)
+							a.planSkillToggle(m, skills.Options{Home: homeDir, Dir: w.Path}, sk, ag, enable)
 						})
 					})
 					if sk.Description != "" {
@@ -958,22 +966,22 @@ type skillChangeView struct {
 }
 
 // planSkillToggle 算出改动并弹框确认；算不出来（配置认不出、不用改）时报在错误条上。
-func (a *app) planSkillToggle(o skills.Options, sk skills.Skill, ag skills.Agent, enable bool) {
+func (a *app) planSkillToggle(m locales.Messages, o skills.Options, sk skills.Skill, ag skills.Agent, enable bool) {
 	ch, err := skills.PlanToggle(o, sk, ag, enable)
 	if err != nil {
-		a.err = "没有改" + agentTitle(ag.String()) + "的配置：" + errtext.Text(err)
+		a.err = m.SkillsToggleError(agentTitle(ag.String()), errtext.Text(err))
 		return
 	}
 	a.skillChange = skillChangeView{open: true, ch: ch}
 }
 
 // applySkillChange 写入确认过的改动，写完重扫技能页和文件栏的技能页签。
-func (a *app) applySkillChange(ch skills.Change) {
+func (a *app) applySkillChange(m locales.Messages, ch skills.Change) {
 	go func() {
 		err := ch.Apply()
 		a.update(func() {
 			if err != nil {
-				a.err = "没有改" + shortPath(ch.File) + "：" + errtext.Text(err)
+				a.err = m.SkillsChangeError(shortPath(ch.File), errtext.Text(err))
 			}
 			if a.skills.visible {
 				a.scanSkills()
@@ -986,20 +994,21 @@ func (a *app) applySkillChange(ch skills.Change) {
 // skillChangeDialog 是开关技能的确认框：改哪个文件、diff，确认才写。
 func (a *app) skillChangeDialog(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	p := colors(t)
 	v := &a.skillChange
 	ui.Modal(c, &v.open, func() {
 		ch := v.ch
-		verb := "关掉"
+		title := m.SkillsDisableTitle(agentTitle(ch.Agent.String()), ch.Skill)
 		if ch.Enable {
-			verb = "打开"
+			title = m.SkillsEnableTitle(agentTitle(ch.Agent.String()), ch.Skill)
 		}
 		ui.Column(c).Width(520).Gap(12).Children(func() {
-			titleText(c, fmt.Sprintf("在 %s 里%s %s", agentTitle(ch.Agent.String()), verb, ch.Skill), fsTitle)
+			titleText(c, title, fsTitle)
 			ui.Column(c).Gap(4).Children(func() {
-				what := "会修改这个文件："
+				what := m.SkillsWillModify()
 				if ch.Before == "" {
-					what = "会新建这个文件："
+					what = m.SkillsWillCreate()
 				}
 				ui.Text(c, what).FontSize(fsBody).TextColor(t.TextMuted)
 				ui.Text(c, shortPath(ch.File)).FontSize(fsSmall).Font(monoFont).Selectable()
@@ -1026,14 +1035,14 @@ func (a *app) skillChangeDialog(c *ui.Context) {
 					}
 				})
 			})
-			ui.Text(c, "已经开着的会话可能要重开才会生效。").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Text(c, m.SkillsReopenNote()).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					v.open = false
 				}
-				if pressable(accentButton(c, "确认修改")).Clicked() {
+				if pressable(accentButton(c, m.SkillsConfirmChange())).Clicked() {
 					v.open = false
-					a.applySkillChange(ch)
+					a.applySkillChange(m, ch)
 				}
 			})
 		})
@@ -1056,34 +1065,35 @@ func (a *app) skillsWorkspace() *workspace {
 // skillActions 是详情顶上的更新、删除：npx skills 装的交给它（删除不进废纸篓，连同各家的链接）；
 // 自己放的用户级技能移到废纸篓，连同指向它的链接。插件、系统自带和账号同步的归各家自己管。
 func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global bool) {
+	m := L(c)
 	switch {
 	case sk.Source != "":
 		// 查到有新版本时换成显眼的按钮
 		var update ui.Element
 		if a.skills.updates.HasUpdate(sk) {
-			update = accentButton(c.Key("skill-update"), "更新")
+			update = accentButton(c.Key("skill-update"), m.SkillsUpdate())
 		} else {
-			update = iconButton(c.Key("skill-update"), iconFetch, "更新")
+			update = iconButton(c.Key("skill-update"), iconFetch, m.SkillsUpdate())
 		}
 		if pressable(update).Clicked() {
-			a.askSkillCommand("更新 "+sk.Name+"？", "按锁文件里记的来源（"+sk.Source+"）拉最新的版本，覆盖本地的改动。", skills.ShellLine(skills.UpdateArgs([]string{sk.Name}, global)), w, false)
+			a.askSkillCommand(m, m.SkillsUpdateConfirm(sk.Name), m.SkillsUpdateBody(sk.Source), skills.ShellLine(skills.UpdateArgs([]string{sk.Name}, global)), w, false)
 		}
-		if pressable(iconButton(c.Key("skill-remove"), iconTrash, "删除")).Clicked() {
+		if pressable(iconButton(c.Key("skill-remove"), iconTrash, m.CommonDelete())).Clicked() {
 			var list []string
 			for _, p := range sk.Paths {
 				list = append(list, shortPath(p))
 			}
-			a.askSkillCommand("删除 "+sk.Name+"？", "npx skills 会直接删掉这些（各家目录里同名的都删），不经过废纸篓：\n"+strings.Join(list, "\n"), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
+			a.askSkillCommand(m, m.SkillsDeleteConfirm(sk.Name), m.SkillsDeleteBody(strings.Join(list, "\n")), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
 		}
 	case sk.Scope == skills.ScopeUser || sk.Scope == skills.ScopeProject:
-		if pressable(iconButton(c.Key("skill-trash"), iconTrash, "移到废纸篓")).Clicked() {
-			a.askTrashSkill(sk)
+		if pressable(iconButton(c.Key("skill-trash"), iconTrash, m.CommonMoveToTrash())).Clicked() {
+			a.askTrashSkill(m, sk)
 		}
 	}
 }
 
 // askTrashSkill 确认后把指向技能的链接和技能目录移到废纸篓（先移链接：中途失败也不留下断链）。
-func (a *app) askTrashSkill(sk skills.Skill) {
+func (a *app) askTrashSkill(m locales.Messages, sk skills.Skill) {
 	var paths []string
 	for _, p := range sk.Paths {
 		if p != sk.Dir {
@@ -1095,13 +1105,13 @@ func (a *app) askTrashSkill(sk skills.Skill) {
 	for _, p := range paths {
 		list = append(list, shortPath(p))
 	}
-	a.confirm("把 "+sk.Name+" 移到废纸篓？", "这些会移到废纸篓，可以从废纸篓找回：\n"+strings.Join(list, "\n"), "移到废纸篓", func() {
-		a.trashPaths(paths)
+	a.confirm(m.SkillsTrashConfirm(sk.Name), m.SkillsTrashBody(strings.Join(list, "\n")), m.CommonMoveToTrash(), func() {
+		a.trashPaths(m, paths)
 	})
 }
 
 // askTrashLinks 确认后把体检找到的断链、多余的链接移到废纸篓（只是链接，它指向的目录不动）。
-func (a *app) askTrashLinks(items []skills.Issue) {
+func (a *app) askTrashLinks(m locales.Messages, items []skills.Issue) {
 	var paths, list []string
 	for _, is := range items {
 		paths = append(paths, is.Path)
@@ -1110,30 +1120,29 @@ func (a *app) askTrashLinks(items []skills.Issue) {
 		}
 	}
 	if len(items) > len(list) {
-		list = append(list, fmt.Sprintf("……共 %d 条", len(items)))
+		list = append(list, m.SkillsMoreLinks(len(items)))
 	}
-	title := "把这条链接移到废纸篓？"
+	title := m.SkillsTrashLinkConfirm()
 	if len(items) > 1 {
-		title = fmt.Sprintf("把 %d 条链接移到废纸篓？", len(items))
+		title = m.SkillsTrashLinksConfirm(len(items))
 	}
-	a.confirm(title, "只移走链接本身，它指向的目录不动，可以从废纸篓找回：\n"+strings.Join(list, "\n"), "移到废纸篓", func() {
-		a.trashPaths(paths)
+	a.confirm(title, m.SkillsTrashLinksBody(strings.Join(list, "\n")), m.CommonMoveToTrash(), func() {
+		a.trashPaths(m, paths)
 	})
 }
 
 // askMergeDuplicate 确认后把没生效的那份移到废纸篓，原处换成指向生效那份的链接：
 // 原来读它的那几家（如 Claude 只读自己的目录）照样读得到，读两份的不再冲突。
-func (a *app) askMergeDuplicate(is skills.Issue) {
-	body := "内容和生效的那份相同，合成后各家读到的不变。"
+func (a *app) askMergeDuplicate(m locales.Messages, is skills.Issue) {
+	body := m.SkillsMergeSameBody(shortPath(is.Path), shortPath(is.Other))
 	if !is.Same {
-		body = "两份内容不同：合成后原来读它的那几家也改用生效的那份，它的内容可以从废纸篓找回。"
+		body = m.SkillsMergeDiffBody(shortPath(is.Path), shortPath(is.Other))
 	}
-	body += "\n\n移到废纸篓：" + shortPath(is.Path) + "\n换成链接，指向：" + shortPath(is.Other)
-	a.confirm("把 "+is.Name+" 合成一份？", body, "合成一份", func() {
+	a.confirm(m.SkillsMergeConfirm(is.Name), body, m.SkillsMergeButton(), func() {
 		err := mergeDuplicate(is.Path, is.Other)
 		a.update(func() {
 			if err != nil {
-				a.err = "没有合成 " + is.Name + "：" + errtext.Text(err)
+				a.err = m.SkillsMergeError(is.Name, errtext.Text(err))
 			}
 			if a.skills.visible {
 				a.scanSkills()
@@ -1155,15 +1164,14 @@ func mergeDuplicate(path, winner string) error {
 }
 
 // askLinkSkill 确认后在 ag 读的目录里建一条指向 sk 的链接，让读不到它的这家读到。
-func (a *app) askLinkSkill(sk skills.Skill, ag skills.Agent, link string) {
+func (a *app) askLinkSkill(m locales.Messages, sk skills.Skill, ag skills.Agent, link string) {
 	name := agentTitle(ag.String())
-	body := "在 " + name + " 读的目录里建一条链接指向它，不复制文件：\n" + shortPath(link) + " → " + shortPath(sk.Dir) +
-		"\n\n以后要关掉用这里的开关；要撤销，把这条链接移到废纸篓。"
-	a.confirm("让 "+name+" 读到 "+sk.Name+"？", body, "建链接", func() {
+	body := m.SkillsLinkBody(name, shortPath(link), shortPath(sk.Dir))
+	a.confirm(m.SkillsLinkConfirm(name, sk.Name), body, m.SkillsLinkButton(), func() {
 		err := skills.MakeLink(link, sk.Dir)
 		a.update(func() {
 			if err != nil {
-				a.err = "没有建链接：" + errtext.Text(err)
+				a.err = m.SkillsLinkError(errtext.Text(err))
 			}
 			if a.skills.visible {
 				a.scanSkills()
@@ -1173,10 +1181,10 @@ func (a *app) askLinkSkill(sk skills.Skill, ag skills.Agent, link string) {
 	})
 }
 
-func (a *app) trashPaths(paths []string) {
+func (a *app) trashPaths(m locales.Messages, paths []string) {
 	for _, p := range paths {
 		if err := mygo.Shell.TrashItem(p); err != nil {
-			a.update(func() { a.err = "移到废纸篓失败：" + errtext.Text(err) })
+			a.update(func() { a.err = m.TrashMoveError(errtext.Text(err)) })
 			break
 		}
 	}
@@ -1207,9 +1215,9 @@ type skillInstallView struct {
 	noNPX     bool // 读不了是因为没装 Node.js：提示去装，手填名字也装不了
 }
 
-func (a *app) openSkillInstall(w *workspace, global bool) {
+func (a *app) openSkillInstall(m locales.Messages, w *workspace, global bool) {
 	if w == nil {
-		a.err = "先添加一个项目：命令要在工作区的终端里跑。"
+		a.err = m.SkillsNeedProject()
 		return
 	}
 	// listReq 接着数：上一次没读完的结果回来时对不上号
@@ -1282,45 +1290,46 @@ func userShell() string {
 // skillInstallDialog 收来源、要装的技能和给不给 Claude 用，下面实时显示要跑的命令。
 func (a *app) skillInstallDialog(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	v := &a.skillInstall
 	ui.Modal(c, &v.open, func() {
 		w := a.workspace(v.ws)
 		ui.Column(c).Width(480).Gap(12).Children(func() {
-			title := "安装技能"
-			where := "装到用户目录（~/.agents/skills），所有项目都能用。"
+			title := m.SkillsInstallTitle()
+			where := m.SkillsInstallGlobalNote()
 			if !v.global && w != nil {
-				title = "安装到项目"
-				where = "装进「" + w.Label + "」的 .agents/skills，只在这个项目里用。"
+				title = m.SkillsInstallProjectTitle()
+				where = m.SkillsInstallProjectNote(w.Label)
 			}
 			titleText(c, title, fsTitle)
 			ui.Text(c, where).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
-			sourceSubmitted := fieldInput(c.Key("source"), &v.source, "来源：owner/repo、网址或本地目录").AutoFocus().Submitted()
+			sourceSubmitted := fieldInput(c.Key("source"), &v.source, m.SkillsSourcePlaceholder()).AutoFocus().Submitted()
 			submitted := false
 			canList := strings.TrimSpace(v.source) != "" && !v.listing && w != nil && v.install().Check() == nil
 			switch {
 			case v.listing:
-				ui.Text(c, "正在读取来源里的技能…").FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.SkillsListing()).FontSize(fsSmall).TextColor(t.TextMuted)
 			case v.listedNow():
 				a.skillInstallPicker(c)
 			case v.failedNow() && v.noNPX:
-				how := "到 nodejs.org 下载安装，装好后点「重新读取」。"
+				text := m.SkillsNoNPXDownload()
 				if skills.FindBrew() != "" {
-					how = "点「安装 Node.js」用 Homebrew 装，装好后再来安装技能。"
+					text = m.SkillsNoNPXBrew()
 				}
-				ui.Text(c, "没找到 npx：安装技能要用 Node.js 自带的 npx。"+how).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45)
+				ui.Text(c, text).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45)
 			case v.failedNow():
-				ui.Text(c, "读不到技能列表："+v.listErr).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45).Selectable()
-				if fieldInput(c.Key("names"), &v.names, "只装其中几个（名字用空格分开，留空装全部）").Submitted() {
+				ui.Text(c, m.SkillsListError(v.listErr)).FontSize(fsSmall).TextColor(t.Danger).LineHeight(1.45).Selectable()
+				if fieldInput(c.Key("names"), &v.names, m.SkillsNamesPlaceholder()).Submitted() {
 					submitted = true
 				}
 			default:
-				ui.Text(c, "填好来源后回车，先列出里面有哪些技能再选。").FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.SkillsSourceHint()).FontSize(fsSmall).TextColor(t.TextMuted)
 			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Switch(c, &v.claude).Label("也给 Claude 用")
-				ui.Text(c, "也给 Claude 用").FontSize(fsBody)
+				ui.Switch(c, &v.claude).Label(m.SkillsAlsoClaude())
+				ui.Text(c, m.SkillsAlsoClaude()).FontSize(fsBody)
 			})
-			ui.Text(c, "Codex、Grok、Cursor 都读 .agents/skills，装进去就都能用；Claude 只读自己的目录，要另建一条链接。").FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+			ui.Text(c, m.SkillsClaudeNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			// 列出来了按勾选装；列不出来也能照手填的名字装，npx 在终端里会报出具体原因
 			ready := (v.listedNow() && slices.Contains(v.picked, true)) || (v.failedNow() && !v.noNPX)
 			if err := v.install().Check(); ready && err != nil {
@@ -1330,13 +1339,13 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 			if ready {
 				ui.Text(c, skills.ShellLine(v.install().Args())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Padding(8, 12).Radius(rCard).Background(colors(t).code).Selectable()
 			}
-			ui.Text(c, "装上的技能带着它的脚本，用之前先看一眼里面会跑什么。").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Text(c, m.SkillsScriptWarning()).FontSize(fsSmall).TextColor(t.TextMuted)
 			list, installNode := false, false
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					v.open = false
 				}
-				if v.failedNow() && pressable(textButton(c, "重新读取")).Clicked() {
+				if v.failedNow() && pressable(textButton(c, m.SkillsReload())).Clicked() {
 					list = true
 				}
 				// 主按钮做的事（action）和文字分开定：按文字判断，换了语言就认不出了
@@ -1345,16 +1354,16 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 					doList
 					doInstallNode
 				)
-				label, action := "安装", doInstall
+				label, action := m.SkillsInstall(), doInstall
 				enabled := ready
 				switch {
 				case v.failedNow() && v.noNPX:
-					label, action, enabled = "打开 nodejs.org", doInstallNode, true
+					label, action, enabled = m.SkillsOpenNodejs(), doInstallNode, true
 					if skills.FindBrew() != "" {
-						label = "安装 Node.js"
+						label = m.SkillsInstallNode()
 					}
 				case !v.listedNow() && !v.failedNow():
-					label, action, enabled = "读取", doList, canList
+					label, action, enabled = m.SkillsList(), doList, canList
 				}
 				run := ui.Box(c).Shrink(0)
 				if !enabled {
@@ -1377,7 +1386,7 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 				if brew := skills.FindBrew(); brew != "" && w != nil {
 					// 两个对话框不叠着：装好后再点「安装…」
 					v.open = false
-					a.askSkillCommand("安装 Node.js", "用 Homebrew 安装 Node.js，装技能要用它自带的 npx。", installNodeLine(brew), w, true)
+					a.askSkillCommand(m, m.SkillsInstallNode(), m.SkillsInstallNodeBody(), installNodeLine(brew), w, true)
 				} else {
 					c.OpenURL("https://nodejs.org/")
 				}
@@ -1393,7 +1402,7 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 				a.listInstallSource(w)
 			} else if submitted && ready && w != nil {
 				v.open = false
-				a.askSkillCommand("安装技能", "", skills.ShellLine(v.install().Args()), w, true)
+				a.askSkillCommand(m, m.SkillsInstallTitle(), "", skills.ShellLine(v.install().Args()), w, true)
 			}
 		})
 	})
@@ -1412,7 +1421,7 @@ func (a *app) skillInstallPicker(c *ui.Context) {
 					ui.Text(c, l.Name).FontSize(fsBody).Font(monoFont)
 				}
 				if v.installed[i] {
-					ui.Text(c, "已装").FontSize(fsSmall).TextColor(colors(t).faint)
+					ui.Text(c, L(c).SkillsInstalled()).FontSize(fsSmall).TextColor(colors(t).faint)
 				}
 			})
 			if l.Description != "" {
@@ -1432,7 +1441,7 @@ func (a *app) skillInstallPicker(c *ui.Context) {
 	}
 	ui.Scroll(c).MaxHeight(280).Children(func() {
 		ui.Column(c).Gap(12).Children(func() {
-			ui.CheckboxGroup(c, fmt.Sprintf("全部 %d 个", len(v.listed)), func() {
+			ui.CheckboxGroup(c, L(c).SkillsPickAll(len(v.listed)), func() {
 				group := ""
 				for i, l := range v.listed {
 					if l.Group != group {
@@ -1464,11 +1473,11 @@ func createProjectSkill(root, name string) (string, error) {
 	dir := filepath.Join(root, ".agents", "skills", name)
 	file := filepath.Join(dir, "SKILL.md")
 	if _, err := os.Lstat(dir); err == nil {
-		return "", fmt.Errorf("%s 已经有了", shortPath(dir))
+		return "", existsError(dir)
 	}
 	link := filepath.Join(root, ".claude", "skills", name)
 	if _, err := os.Lstat(link); err == nil {
-		return "", fmt.Errorf("%s 已经有了", shortPath(link))
+		return "", existsError(link)
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -1486,24 +1495,30 @@ func createProjectSkill(root, name string) (string, error) {
 	return file, nil
 }
 
+// existsError 是新建技能时目录或链接已经有了：界面按语言写这句，不经 errtext。
+type existsError string
+
+func (e existsError) Error() string { return shortPath(string(e)) + " already exists" }
+
 func (a *app) skillNewDialog(c *ui.Context) {
 	t := c.Theme()
+	m := L(c)
 	v := &a.skillNew
 	ui.Modal(c, &v.open, func() {
 		w := a.workspace(v.ws)
 		ui.Column(c).Width(420).Gap(12).Children(func() {
-			titleText(c, "新建项目技能", fsTitle)
+			titleText(c, m.SkillsNewTitle(), fsTitle)
 			if w != nil {
-				ui.Text(c, "建在「"+w.Label+"」的 .agents/skills 里，再给 Claude 在 .claude/skills 里建一条链接，四家都能用。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
+				ui.Text(c, m.SkillsNewNote(w.Label)).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			}
-			submitted := fieldInput(c, &v.name, "名字，比如 release-check").AutoFocus().Submitted()
+			submitted := fieldInput(c, &v.name, m.SkillsNewPlaceholder()).AutoFocus().Submitted()
 			name := strings.TrimSpace(v.name)
 			valid := skillNameRe.MatchString(name)
 			if name != "" && !valid {
-				ui.Text(c, "只用小写字母、数字和连字符，首尾是字母或数字。").FontSize(fsSmall).TextColor(t.Danger)
+				ui.Text(c, m.SkillsNewNameRule()).FontSize(fsSmall).TextColor(t.Danger)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					v.open = false
 				}
 				create := ui.Box(c).Shrink(0)
@@ -1511,7 +1526,7 @@ func (a *app) skillNewDialog(c *ui.Context) {
 					create.Disabled(true).Opacity(0.5)
 				}
 				create.Children(func() {
-					if pressable(accentButton(c, "新建")).Clicked() {
+					if pressable(accentButton(c, m.CommonNew())).Clicked() {
 						submitted = true
 					}
 				})
@@ -1519,7 +1534,12 @@ func (a *app) skillNewDialog(c *ui.Context) {
 			if submitted && valid && w != nil {
 				file, err := createProjectSkill(w.Path, name)
 				if err != nil {
-					a.err = "没有新建：" + errtext.Text(err)
+					reason := errtext.Text(err)
+					var ex existsError
+					if errors.As(err, &ex) {
+						reason = m.SkillsNewExists(shortPath(string(ex)))
+					}
+					a.err = m.SkillsNewError(reason)
 					return
 				}
 				v.open = false
@@ -1535,29 +1555,30 @@ func (a *app) skillNewDialog(c *ui.Context) {
 // skillUseLine 是列表行最下面的用量：用过几次、最后一次多久以前；没用过的写出来，好清理。
 func skillUseLine(c *ui.Context, st *history.SkillStat) {
 	t := c.Theme()
+	m := L(c)
 	if st == nil || st.Count == 0 {
-		ui.Text(c, "会话里没用过").FontSize(fsSmall).TextColor(colors(t).faint)
+		ui.Text(c, m.SkillsNeverUsed()).FontSize(fsSmall).TextColor(colors(t).faint)
 		return
 	}
-	ui.Text(c, fmt.Sprintf("用过 %d 次", st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-	ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip("最近一次 " + st.Last.Local().Format("1月2日 15:04"))
+	ui.Text(c, m.SkillsUsedTimes(st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+	ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(m.SkillsLastUsed(st.Last.Local().Format("1月2日 15:04")))
 }
 
 // skillTriggerText 是技能怎么被调起来：SKILL.md 头部的 disable-model-invocation、user-invocable。
-func skillTriggerText(m skills.Meta) (text, tip string) {
+func skillTriggerText(l locales.Messages, m skills.Meta) (text, tip string) {
 	switch {
 	case m.ModelOff:
-		return "手动触发", "disable-model-invocation: true：模型不会自己调用，要输入 /名字 调用（Codex 不认这一项，照样自动）"
+		return l.SkillsTriggerManual(), l.SkillsTriggerManualTip()
 	case m.UserHidden:
-		return "只自动触发", "user-invocable: false：不出现在斜杠命令里，只由模型按说明自己调用"
+		return l.SkillsTriggerAutoOnly(), l.SkillsTriggerAutoOnlyTip()
 	}
-	return "自动触发", "模型按说明自己判断什么时候用，也能输入 /名字 手动调用"
+	return l.SkillsTriggerAuto(), l.SkillsTriggerAutoTip()
 }
 
 // skillTrigger 是触发方式的小标签：手动的用强调色，和默认的自动区分开。
 func skillTrigger(c *ui.Context, m skills.Meta) {
 	t := c.Theme()
-	text, tip := skillTriggerText(m)
+	text, tip := skillTriggerText(L(c), m)
 	color := t.TextMuted
 	if m.ModelOff {
 		color = colors(t).honey
@@ -1568,14 +1589,15 @@ func skillTrigger(c *ui.Context, m skills.Meta) {
 // skillUseCard 是详情里的用量：次数、会话数、最后一次，和各家各用了几次。
 func skillUseCard(c *ui.Context, st *history.SkillStat) {
 	t := c.Theme()
+	m := L(c)
 	card(c).Padding(cardPad).Gap(8).Shrink(0).Children(func() {
-		cardTitle(c, "用量")
+		cardTitle(c, m.SkillsUsageTitle())
 		if st == nil || st.Count == 0 {
-			ui.Text(c, "各家的会话记录里都没用过它。").FontSize(fsBody).TextColor(t.TextMuted)
+			ui.Text(c, m.SkillsNeverUsedNote()).FontSize(fsBody).TextColor(t.TextMuted)
 			return
 		}
-		metaRow(c, meta(c, fmt.Sprintf("用过 %d 次", st.Count)), meta(c, fmt.Sprintf("%d 个会话", st.Sessions)),
-			meta(c, "最近一次 "+st.Last.Local().Format("1月2日 15:04")))
+		metaRow(c, meta(c, m.SkillsUsedTimes(st.Count)), meta(c, m.SkillsSessions(st.Sessions)),
+			meta(c, m.SkillsLastUsed(st.Last.Local().Format("1月2日 15:04"))))
 		ui.Row(c).Gap(12).Wrap().Children(func() {
 			for _, ag := range skills.Agents {
 				n := st.ByAgent[ag.String()]
@@ -1585,7 +1607,7 @@ func skillUseCard(c *ui.Context, st *history.SkillStat) {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					agentIcon(c, ag.String(), smallIcon())
 					ui.Text(c, fmt.Sprint(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-				}).Tooltip(fmt.Sprintf("%s用了 %d 次", agentTitle(ag.String()), n))
+				}).Tooltip(m.SkillsAgentUsedTimes(agentTitle(ag.String()), n))
 			}
 		})
 	})

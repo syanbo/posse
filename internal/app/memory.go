@@ -151,7 +151,7 @@ func (a *app) memoryButton(c *ui.Context) {
 	total := a.daemon.FootprintKB + a.selfKB + a.termKB
 	n := a.daemon.Running
 	b := ui.Row(c.Key("memory")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label(fmt.Sprintf("内存 %s，%d 个终端在运行", mb(total), n)).Tooltip("内存和终端")
+		Role(ui.RoleButton).Label(L(c).MemoryButtonLabel(mb(total), n)).Tooltip(L(c).MemoryTip())
 	bg := ui.Transparent
 	if m.open || b.Hovered() {
 		bg = colors(t).wash
@@ -217,10 +217,11 @@ func memSection(c *ui.Context, title, value string) {
 
 func (a *app) memoryPanel(c *ui.Context) {
 	t := c.Theme()
+	l := L(c)
 	m := &a.mem
 	ui.Column(c).Width(320).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).AlignItems(ui.Center).Children(func() {
-			titleText(c, "内存", fsTitle).Grow(1)
+			titleText(c, l.MemoryTitle(), fsTitle).Grow(1)
 			terms := a.termKB
 			if m.rows != nil {
 				terms = m.terms
@@ -229,19 +230,19 @@ func (a *app) memoryPanel(c *ui.Context) {
 		})
 		ui.Column(c).Children(func() {
 			memSection(c, "POSSE", mb(a.daemon.FootprintKB+a.selfKB))
-			memLine(c, "daemon", nil, "常驻进程（托管所有终端）", mb(a.daemon.FootprintKB), 1)
-			memLine(c, "window", nil, fmt.Sprintf("窗口（pid %d）", os.Getpid()), mb(a.selfKB), 1)
+			memLine(c, "daemon", nil, l.MemoryDaemon(), mb(a.daemon.FootprintKB), 1)
+			memLine(c, "window", nil, l.MemoryWindow(fmt.Sprint(os.Getpid())), mb(a.selfKB), 1)
 		})
 		hline(c)
 		ui.Column(c).Children(func() {
 			if m.rows == nil {
-				memSection(c, "终端里的程序", "")
-				ui.Text(c, "正在统计…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
+				memSection(c, l.MemoryTermPrograms(), "")
+				ui.Text(c, l.MemoryCounting()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
 				return
 			}
-			memSection(c, "终端里的程序", mb(m.terms))
+			memSection(c, l.MemoryTermPrograms(), mb(m.terms))
 			if len(m.rows) == 0 {
-				ui.Text(c, "没有运行中的终端。").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
+				ui.Text(c, l.MemoryNoTerminals()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 0)
 				return
 			}
 			// 滚动区向两边扩到浮窗的内边距里，内容再缩回来：滚动条落在右边的留白上，不压着数字
@@ -283,7 +284,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 									}
 								}
 								if open && x.procs == nil {
-									memLine(c, x.term.ID+"-loading", nil, "正在统计…", "", 3)
+									memLine(c, x.term.ID+"-loading", nil, l.MemoryCounting(), "", 3)
 								}
 								if open {
 									for i, pr := range x.procs {
@@ -300,7 +301,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 				})
 			})
 		})
-		ui.Text(c, "终端按进程树统计：shell、agent 和它拉起的子进程（如 MCP 服务），和活动监视器的“内存”一致。").
+		ui.Text(c, l.MemoryNote()).
 			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }
