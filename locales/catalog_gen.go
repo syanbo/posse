@@ -34,6 +34,216 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// CommonAll says "All"
+// in the language the app shows.
+//
+// Common word: a filter or segment that shows everything.
+func CommonAll() string { return In(i18n.Locale()).CommonAll() }
+
+// CommonAll says "All"
+// in the language of msgs.
+//
+// Common word: a filter or segment that shows everything.
+func (msgs Messages) CommonAll() string {
+	return Catalog.Format(msgs.locale, "commonAll", nil)
+}
+
+// CommonCancel says "Cancel"
+// in the language the app shows.
+//
+// Common button: dismisses a dialog or stops an operation.
+func CommonCancel() string { return In(i18n.Locale()).CommonCancel() }
+
+// CommonCancel says "Cancel"
+// in the language of msgs.
+//
+// Common button: dismisses a dialog or stops an operation.
+func (msgs Messages) CommonCancel() string {
+	return Catalog.Format(msgs.locale, "commonCancel", nil)
+}
+
+// CommonClose says "Close"
+// in the language the app shows.
+//
+// Common button or menu item.
+func CommonClose() string { return In(i18n.Locale()).CommonClose() }
+
+// CommonClose says "Close"
+// in the language of msgs.
+//
+// Common button or menu item.
+func (msgs Messages) CommonClose() string {
+	return Catalog.Format(msgs.locale, "commonClose", nil)
+}
+
+// CommonContinue says "Continue"
+// in the language the app shows.
+//
+// Common button.
+func CommonContinue() string { return In(i18n.Locale()).CommonContinue() }
+
+// CommonContinue says "Continue"
+// in the language of msgs.
+//
+// Common button.
+func (msgs Messages) CommonContinue() string {
+	return Catalog.Format(msgs.locale, "commonContinue", nil)
+}
+
+// CommonCopy says "Copy"
+// in the language the app shows.
+//
+// Common menu item.
+func CommonCopy() string { return In(i18n.Locale()).CommonCopy() }
+
+// CommonCopy says "Copy"
+// in the language of msgs.
+//
+// Common menu item.
+func (msgs Messages) CommonCopy() string {
+	return Catalog.Format(msgs.locale, "commonCopy", nil)
+}
+
+// CommonCopyPath says "Copy Path"
+// in the language the app shows.
+//
+// Common menu item: copies a file's path.
+func CommonCopyPath() string { return In(i18n.Locale()).CommonCopyPath() }
+
+// CommonCopyPath says "Copy Path"
+// in the language of msgs.
+//
+// Common menu item: copies a file's path.
+func (msgs Messages) CommonCopyPath() string {
+	return Catalog.Format(msgs.locale, "commonCopyPath", nil)
+}
+
+// CommonDefault says "Default"
+// in the language the app shows.
+//
+// Common button: resets one value to its default.
+func CommonDefault() string { return In(i18n.Locale()).CommonDefault() }
+
+// CommonDefault says "Default"
+// in the language of msgs.
+//
+// Common button: resets one value to its default.
+func (msgs Messages) CommonDefault() string {
+	return Catalog.Format(msgs.locale, "commonDefault", nil)
+}
+
+// CommonDelete says "Delete"
+// in the language the app shows.
+//
+// Common button or menu item.
+func CommonDelete() string { return In(i18n.Locale()).CommonDelete() }
+
+// CommonDelete says "Delete"
+// in the language of msgs.
+//
+// Common button or menu item.
+func (msgs Messages) CommonDelete() string {
+	return Catalog.Format(msgs.locale, "commonDelete", nil)
+}
+
+// CommonDeleteEllipsis says "Delete…"
+// in the language the app shows.
+//
+// Common menu item that asks before deleting.
+func CommonDeleteEllipsis() string { return In(i18n.Locale()).CommonDeleteEllipsis() }
+
+// CommonDeleteEllipsis says "Delete…"
+// in the language of msgs.
+//
+// Common menu item that asks before deleting.
+func (msgs Messages) CommonDeleteEllipsis() string {
+	return Catalog.Format(msgs.locale, "commonDeleteEllipsis", nil)
+}
+
+// CommonDone says "Done"
+// in the language the app shows.
+//
+// Common status: finished.
+func CommonDone() string { return In(i18n.Locale()).CommonDone() }
+
+// CommonDone says "Done"
+// in the language of msgs.
+//
+// Common status: finished.
+func (msgs Messages) CommonDone() string {
+	return Catalog.Format(msgs.locale, "commonDone", nil)
+}
+
+// CommonFailed says "Failed"
+// in the language the app shows.
+//
+// Common status.
+func CommonFailed() string { return In(i18n.Locale()).CommonFailed() }
+
+// CommonFailed says "Failed"
+// in the language of msgs.
+//
+// Common status.
+func (msgs Messages) CommonFailed() string {
+	return Catalog.Format(msgs.locale, "commonFailed", nil)
+}
+
+// CommonInProgress says "In Progress"
+// in the language the app shows.
+//
+// Common status.
+func CommonInProgress() string { return In(i18n.Locale()).CommonInProgress() }
+
+// CommonInProgress says "In Progress"
+// in the language of msgs.
+//
+// Common status.
+func (msgs Messages) CommonInProgress() string {
+	return Catalog.Format(msgs.locale, "commonInProgress", nil)
+}
+
+// CommonLoading says "Loading…"
+// in the language the app shows.
+//
+// Common placeholder while something loads.
+func CommonLoading() string { return In(i18n.Locale()).CommonLoading() }
+
+// CommonLoading says "Loading…"
+// in the language of msgs.
+//
+// Common placeholder while something loads.
+func (msgs Messages) CommonLoading() string {
+	return Catalog.Format(msgs.locale, "commonLoading", nil)
+}
+
+// CommonMoveToTrash says "Move to Trash"
+// in the language the app shows.
+//
+// Common menu item, as Finder names it.
+func CommonMoveToTrash() string { return In(i18n.Locale()).CommonMoveToTrash() }
+
+// CommonMoveToTrash says "Move to Trash"
+// in the language of msgs.
+//
+// Common menu item, as Finder names it.
+func (msgs Messages) CommonMoveToTrash() string {
+	return Catalog.Format(msgs.locale, "commonMoveToTrash", nil)
+}
+
+// CommonNew says "New"
+// in the language the app shows.
+//
+// Common button or menu item.
+func CommonNew() string { return In(i18n.Locale()).CommonNew() }
+
+// CommonNew says "New"
+// in the language of msgs.
+//
+// Common button or menu item.
+func (msgs Messages) CommonNew() string {
+	return Catalog.Format(msgs.locale, "commonNew", nil)
+}
+
 // CommonOff says "Off"
 // in the language the app shows.
 //
@@ -48,6 +258,20 @@ func (msgs Messages) CommonOff() string {
 	return Catalog.Format(msgs.locale, "commonOff", nil)
 }
 
+// CommonOk says "OK"
+// in the language the app shows.
+//
+// Common button that acknowledges a dialog.
+func CommonOk() string { return In(i18n.Locale()).CommonOk() }
+
+// CommonOk says "OK"
+// in the language of msgs.
+//
+// Common button that acknowledges a dialog.
+func (msgs Messages) CommonOk() string {
+	return Catalog.Format(msgs.locale, "commonOk", nil)
+}
+
 // CommonOn says "On"
 // in the language the app shows.
 //
@@ -60,6 +284,188 @@ func CommonOn() string { return In(i18n.Locale()).CommonOn() }
 // Segment of an on/off switch.
 func (msgs Messages) CommonOn() string {
 	return Catalog.Format(msgs.locale, "commonOn", nil)
+}
+
+// CommonOpen says "Open"
+// in the language the app shows.
+//
+// Common button or menu item.
+func CommonOpen() string { return In(i18n.Locale()).CommonOpen() }
+
+// CommonOpen says "Open"
+// in the language of msgs.
+//
+// Common button or menu item.
+func (msgs Messages) CommonOpen() string {
+	return Catalog.Format(msgs.locale, "commonOpen", nil)
+}
+
+// CommonOpenInFinder says "Open in Finder"
+// in the language the app shows.
+//
+// Common menu item for a folder.
+func CommonOpenInFinder() string { return In(i18n.Locale()).CommonOpenInFinder() }
+
+// CommonOpenInFinder says "Open in Finder"
+// in the language of msgs.
+//
+// Common menu item for a folder.
+func (msgs Messages) CommonOpenInFinder() string {
+	return Catalog.Format(msgs.locale, "commonOpenInFinder", nil)
+}
+
+// CommonOther says "Other"
+// in the language the app shows.
+//
+// Common group name for what fits no other group.
+func CommonOther() string { return In(i18n.Locale()).CommonOther() }
+
+// CommonOther says "Other"
+// in the language of msgs.
+//
+// Common group name for what fits no other group.
+func (msgs Messages) CommonOther() string {
+	return Catalog.Format(msgs.locale, "commonOther", nil)
+}
+
+// CommonPaste says "Paste"
+// in the language the app shows.
+//
+// Common menu item.
+func CommonPaste() string { return In(i18n.Locale()).CommonPaste() }
+
+// CommonPaste says "Paste"
+// in the language of msgs.
+//
+// Common menu item.
+func (msgs Messages) CommonPaste() string {
+	return Catalog.Format(msgs.locale, "commonPaste", nil)
+}
+
+// CommonPreview says "Preview"
+// in the language the app shows.
+//
+// Common button or tab.
+func CommonPreview() string { return In(i18n.Locale()).CommonPreview() }
+
+// CommonPreview says "Preview"
+// in the language of msgs.
+//
+// Common button or tab.
+func (msgs Messages) CommonPreview() string {
+	return Catalog.Format(msgs.locale, "commonPreview", nil)
+}
+
+// CommonRemove says "Remove"
+// in the language the app shows.
+//
+// Common button: takes something out of a list without deleting it.
+func CommonRemove() string { return In(i18n.Locale()).CommonRemove() }
+
+// CommonRemove says "Remove"
+// in the language of msgs.
+//
+// Common button: takes something out of a list without deleting it.
+func (msgs Messages) CommonRemove() string {
+	return Catalog.Format(msgs.locale, "commonRemove", nil)
+}
+
+// CommonResetToDefault says "Reset to Default"
+// in the language the app shows.
+//
+// Common button.
+func CommonResetToDefault() string { return In(i18n.Locale()).CommonResetToDefault() }
+
+// CommonResetToDefault says "Reset to Default"
+// in the language of msgs.
+//
+// Common button.
+func (msgs Messages) CommonResetToDefault() string {
+	return Catalog.Format(msgs.locale, "commonResetToDefault", nil)
+}
+
+// CommonRetry says "Retry"
+// in the language the app shows.
+//
+// Common button.
+func CommonRetry() string { return In(i18n.Locale()).CommonRetry() }
+
+// CommonRetry says "Retry"
+// in the language of msgs.
+//
+// Common button.
+func (msgs Messages) CommonRetry() string {
+	return Catalog.Format(msgs.locale, "commonRetry", nil)
+}
+
+// CommonRevealInFilesPanel says "Reveal in Files Panel"
+// in the language the app shows.
+//
+// Common menu item: shows the file in Posse's files panel.
+func CommonRevealInFilesPanel() string { return In(i18n.Locale()).CommonRevealInFilesPanel() }
+
+// CommonRevealInFilesPanel says "Reveal in Files Panel"
+// in the language of msgs.
+//
+// Common menu item: shows the file in Posse's files panel.
+func (msgs Messages) CommonRevealInFilesPanel() string {
+	return Catalog.Format(msgs.locale, "commonRevealInFilesPanel", nil)
+}
+
+// CommonRevealInFinder says "Reveal in Finder"
+// in the language the app shows.
+//
+// Common menu item, as macOS names it.
+func CommonRevealInFinder() string { return In(i18n.Locale()).CommonRevealInFinder() }
+
+// CommonRevealInFinder says "Reveal in Finder"
+// in the language of msgs.
+//
+// Common menu item, as macOS names it.
+func (msgs Messages) CommonRevealInFinder() string {
+	return Catalog.Format(msgs.locale, "commonRevealInFinder", nil)
+}
+
+// CommonSave says "Save"
+// in the language the app shows.
+//
+// Common button.
+func CommonSave() string { return In(i18n.Locale()).CommonSave() }
+
+// CommonSave says "Save"
+// in the language of msgs.
+//
+// Common button.
+func (msgs Messages) CommonSave() string {
+	return Catalog.Format(msgs.locale, "commonSave", nil)
+}
+
+// CommonScanning says "Scanning…"
+// in the language the app shows.
+//
+// Common placeholder while Posse scans.
+func CommonScanning() string { return In(i18n.Locale()).CommonScanning() }
+
+// CommonScanning says "Scanning…"
+// in the language of msgs.
+//
+// Common placeholder while Posse scans.
+func (msgs Messages) CommonScanning() string {
+	return Catalog.Format(msgs.locale, "commonScanning", nil)
+}
+
+// CommonSelectAll says "Select All"
+// in the language the app shows.
+//
+// Common menu item.
+func CommonSelectAll() string { return In(i18n.Locale()).CommonSelectAll() }
+
+// CommonSelectAll says "Select All"
+// in the language of msgs.
+//
+// Common menu item.
+func (msgs Messages) CommonSelectAll() string {
+	return Catalog.Format(msgs.locale, "commonSelectAll", nil)
 }
 
 // MenuCheckForUpdates says "Check for Updates…"

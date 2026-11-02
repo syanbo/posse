@@ -1,12 +1,128 @@
 {
   "@@locale": "en",
+  "commonAll": "All",
+  "@commonAll": {
+    "description": "Common word: a filter or segment that shows everything."
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Common button: dismisses a dialog or stops an operation."
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Common button or menu item."
+  },
+  "commonContinue": "Continue",
+  "@commonContinue": {
+    "description": "Common button."
+  },
+  "commonCopy": "Copy",
+  "@commonCopy": {
+    "description": "Common menu item."
+  },
+  "commonCopyPath": "Copy Path",
+  "@commonCopyPath": {
+    "description": "Common menu item: copies a file's path."
+  },
+  "commonDefault": "Default",
+  "@commonDefault": {
+    "description": "Common button: resets one value to its default."
+  },
+  "commonDelete": "Delete",
+  "@commonDelete": {
+    "description": "Common button or menu item."
+  },
+  "commonDeleteEllipsis": "Delete…",
+  "@commonDeleteEllipsis": {
+    "description": "Common menu item that asks before deleting."
+  },
+  "commonDone": "Done",
+  "@commonDone": {
+    "description": "Common status: finished."
+  },
+  "commonFailed": "Failed",
+  "@commonFailed": {
+    "description": "Common status."
+  },
+  "commonInProgress": "In Progress",
+  "@commonInProgress": {
+    "description": "Common status."
+  },
+  "commonLoading": "Loading…",
+  "@commonLoading": {
+    "description": "Common placeholder while something loads."
+  },
+  "commonMoveToTrash": "Move to Trash",
+  "@commonMoveToTrash": {
+    "description": "Common menu item, as Finder names it."
+  },
+  "commonNew": "New",
+  "@commonNew": {
+    "description": "Common button or menu item."
+  },
   "commonOff": "Off",
   "@commonOff": {
     "description": "Segment of an on/off switch."
   },
+  "commonOk": "OK",
+  "@commonOk": {
+    "description": "Common button that acknowledges a dialog."
+  },
   "commonOn": "On",
   "@commonOn": {
     "description": "Segment of an on/off switch."
+  },
+  "commonOpen": "Open",
+  "@commonOpen": {
+    "description": "Common button or menu item."
+  },
+  "commonOpenInFinder": "Open in Finder",
+  "@commonOpenInFinder": {
+    "description": "Common menu item for a folder."
+  },
+  "commonOther": "Other",
+  "@commonOther": {
+    "description": "Common group name for what fits no other group."
+  },
+  "commonPaste": "Paste",
+  "@commonPaste": {
+    "description": "Common menu item."
+  },
+  "commonPreview": "Preview",
+  "@commonPreview": {
+    "description": "Common button or tab."
+  },
+  "commonRemove": "Remove",
+  "@commonRemove": {
+    "description": "Common button: takes something out of a list without deleting it."
+  },
+  "commonResetToDefault": "Reset to Default",
+  "@commonResetToDefault": {
+    "description": "Common button."
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Common button."
+  },
+  "commonRevealInFilesPanel": "Reveal in Files Panel",
+  "@commonRevealInFilesPanel": {
+    "description": "Common menu item: shows the file in Posse's files panel."
+  },
+  "commonRevealInFinder": "Reveal in Finder",
+  "@commonRevealInFinder": {
+    "description": "Common menu item, as macOS names it."
+  },
+  "commonSave": "Save",
+  "@commonSave": {
+    "description": "Common button."
+  },
+  "commonScanning": "Scanning…",
+  "@commonScanning": {
+    "description": "Common placeholder while Posse scans."
+  },
+  "commonSelectAll": "Select All",
+  "@commonSelectAll": {
+    "description": "Common menu item."
   },
   "menuCheckForUpdates": "Check for Updates…",
   "@menuCheckForUpdates": {
