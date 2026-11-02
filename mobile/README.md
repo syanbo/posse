@@ -12,6 +12,12 @@ fvm flutter analyze
 
 构建时 `packages/posse_quic` 的构建钩子会调 `go build` 把 Go 库（QUIC 客户端、Mermaid 排版）编进 App，本机要装 Go（版本照仓库根目录的 go.mod；找不到时设 `GO` 指向 go 可执行文件），安卓还要 NDK。改了 `packages/posse_quic/go`、`internal/mquic`、`internal/mermaid` 后它自己重编。`packages/posse_quic` 自己的测试（起一个 Go 写的回显服务，经 FFI 收发）在那个目录里跑 `fvm dart test`。
 
+## 自己构建
+
+- 装到 iPhone：在 Xcode 打开 `ios/Runner.xcworkspace`，Runner 的 Signing & Capabilities 里把 Team 换成自己的、Bundle Identifier 换成自己的（工程里写的是发布者的团队 `QKSM9Z4U85` 和包 ID），再 `fvm flutter run --release`。
+- 安卓：`fvm flutter build apk --release`。没有发布证书（`~/Library/Application Support/Posse/android/key.properties`，可用环境变量 `POSSE_ANDROID_KEY` 换路径）时用 debug 证书签，装得上，但和官方安装包不能互相覆盖安装。
+- 自己构建的包不带构建号（只有发布脚本用 `--dart-define=POSSE_BUILD` 写进去），不检查更新。
+
 ## 构建注意
 
 - iOS 给登记过的 iPhone 分发用仓库根目录的 `scripts/ios-adhoc.sh`，安装页 `https://posse.shaoyan.uk/ios/index.html`（见 AGENTS.md）。

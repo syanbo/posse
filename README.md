@@ -150,6 +150,8 @@ go build -o bin/posse ./cmd/posse
 go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # 临时签名打包 Posse.app
 ```
 
+临时签名的包不检查更新，装进「应用程序」也不会被官方版本换掉。手机端的构建见 [`mobile/README.md`](mobile/README.md)。
+
 架构和开发约定见 [`AGENTS.md`](AGENTS.md)，各功能的行为见 [`docs/features/`](docs/features)。
 
 ## 致谢
