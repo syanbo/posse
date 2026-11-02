@@ -321,7 +321,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
         _error = e is PlatformException
             ? (e.code == 'bad_args'
                   ? context.l10n.updateBadPackage
-                  : context.l10n.updateCantInstall)
+                  : context.l10n.updateCantInstall(e.message ?? e.code))
             : context.l10n.updateDownloadFailed;
       });
     } finally {

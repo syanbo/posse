@@ -1874,7 +1874,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateButton => 'Update';
 
   @override
-  String get updateCantInstall => 'Can’t open the installer';
+  String updateCantInstall(String detail) {
+    return 'Can’t open the installer: $detail';
+  }
 
   @override
   String updateCurrent(String version, String build) {

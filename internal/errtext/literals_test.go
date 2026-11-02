@@ -98,12 +98,25 @@ func TestLangOf(t *testing.T) {
 
 func TestParseLanguages(t *testing.T) {
 	for in, want := range map[string]string{
-		"(\n    \"zh-Hans-CN\",\n    en\n)\n": "zh-Hans-CN",
+		"(\n    \"zh-Hans-CN\",\n    en\n)\n": "zh-Hans-CN,en",
 		"(\n    en\n)\n":                      "en",
 		"(\n)\n":                              "",
 	} {
-		if got := parseLanguages(in); got != want {
+		if got := strings.Join(parseLanguages(in), ","); got != want {
 			t.Errorf("parseLanguages(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// 和窗口一样取第一个有译文的语言：日语在前、中文在后时是中文。
+func TestPickLang(t *testing.T) {
+	for in, want := range map[string]Lang{"": ZH, "ja,zh-Hans": ZH, "ja,en-US,zh-Hans": EN, "ja,fr": EN, "en": EN, "zh-Hant-TW": ZH} {
+		var tags []string
+		if in != "" {
+			tags = strings.Split(in, ",")
+		}
+		if got := pickLang(tags); got != want {
+			t.Errorf("pickLang(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

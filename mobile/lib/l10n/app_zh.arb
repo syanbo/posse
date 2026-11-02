@@ -513,7 +513,7 @@
   "updateBanner": "新版本 {version}（{build}）",
   "updateBuild": "构建 {build}",
   "updateButton": "更新",
-  "updateCantInstall": "打不开安装",
+  "updateCantInstall": "打不开安装：{detail}",
   "updateCurrent": "当前 {version}（{build}）",
   "updateDownloadFailed": "下载失败，稍后再试",
   "updateDownloading": "正在下载…",

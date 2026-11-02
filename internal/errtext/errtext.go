@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"unicode"
 	"unicode/utf8"
@@ -28,8 +29,16 @@ const (
 	ZH Lang = "zh"
 )
 
+// current 是 Text、Message 用的界面语言：窗口在主线程上换语言，后台协程同时在显示报错。
+var current atomic.Value // Lang
+
+func init() { current.Store(ZH) }
+
+// SetCurrent 换 Text、Message 用的界面语言。
+func SetCurrent(lang Lang) { current.Store(lang) }
+
 // Current 是 Text、Message 用的界面语言。
-var Current = ZH
+func Current() Lang { return current.Load().(Lang) }
 
 // catalogs 登记各语言的译文表；英文是源文本，不需要表。
 var catalogs = map[Lang]*catalog{
@@ -54,7 +63,7 @@ const (
 )
 
 // Text 是 err 在界面上显示的文字（界面语言为 Current）。
-func Text(err error) string { return TextIn(Current, err) }
+func Text(err error) string { return TextIn(Current(), err) }
 
 // TextIn 是 err 用 lang 显示的文字：常驻进程的报错去掉错误码，认得的翻译，认不出的原样给出，方便排查。
 func TextIn(lang Lang, err error) string {
@@ -115,7 +124,7 @@ func pathText(lang Lang, pe *fs.PathError) string {
 }
 
 // Message 把一条报错的原文翻译成界面语言；认不出的原样返回。
-func Message(msg string) string { return MessageIn(Current, msg) }
+func Message(msg string) string { return MessageIn(Current(), msg) }
 
 // MessageIn 把一条报错的原文翻译成 lang。
 func MessageIn(lang Lang, msg string) string {

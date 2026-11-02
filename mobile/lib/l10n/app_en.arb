@@ -2477,9 +2477,14 @@
   "@updateButton": {
     "description": "Update sheet: install button."
   },
-  "updateCantInstall": "Can’t open the installer",
+  "updateCantInstall": "Can’t open the installer: {detail}",
   "@updateCantInstall": {
-    "description": "Update sheet (Android): error when the system installer can’t be opened."
+    "description": "Update sheet (Android): error when the system installer can’t be opened. {detail} is the reason the system gave, shown as-is.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
   },
   "updateCurrent": "Current {version} ({build})",
   "@updateCurrent": {

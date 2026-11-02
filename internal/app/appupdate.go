@@ -456,7 +456,10 @@ func (a *app) updateCard(c *ui.Context, reason string, v updateView) {
 				go a.checkUpdate(true)
 			}
 		})
-		if notes := localNotes(v.notes, c.Locale()); v.phase == updateReady && notes != "" {
+		if v.phase != updateReady {
+			return
+		}
+		if notes := localNotes(v.notes, c.Locale()); notes != "" {
 			ui.Column(c).Gap(4).Padding(4, 0, 0, 0).Children(func() {
 				ui.Text(c, L(c).UpdateReleaseNotesTitle()).FontSize(fsBody).TextColor(t.TextMuted)
 				ui.Text(c, notes).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)

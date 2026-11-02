@@ -73,9 +73,9 @@ func (a *app) setLocale(tag string) {
 // setErrLang 让报错的译文表跟着界面语言：中文用 zh 表，其余都显示英文原文。
 func setErrLang(locale string) {
 	if i18n.Base(locale) == "zh" {
-		errtext.Current = errtext.ZH
+		errtext.SetCurrent(errtext.ZH)
 	} else {
-		errtext.Current = errtext.EN
+		errtext.SetCurrent(errtext.EN)
 	}
 }
 

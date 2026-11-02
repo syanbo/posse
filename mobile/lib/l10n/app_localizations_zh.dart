@@ -1779,7 +1779,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateButton => '更新';
 
   @override
-  String get updateCantInstall => '打不开安装';
+  String updateCantInstall(String detail) {
+    return '打不开安装：$detail';
+  }
 
   @override
   String updateCurrent(String version, String build) {

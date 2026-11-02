@@ -3176,11 +3176,11 @@ abstract class AppLocalizations {
   /// **'Update'**
   String get updateButton;
 
-  /// Update sheet (Android): error when the system installer can’t be opened.
+  /// Update sheet (Android): error when the system installer can’t be opened. {detail} is the reason the system gave, shown as-is.
   ///
   /// In en, this message translates to:
-  /// **'Can’t open the installer'**
-  String get updateCantInstall;
+  /// **'Can’t open the installer: {detail}'**
+  String updateCantInstall(String detail);
 
   /// Update sheet: the installed version.
   ///
