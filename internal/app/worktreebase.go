@@ -11,6 +11,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // worktree 工作区相对基准分支（建工作区时分出来的那个）的状态：改动页顶上一行，
@@ -30,20 +31,20 @@ func pollBase(ctx context.Context, w *workspace, prev *gitx.Divergence) (gitx.Di
 }
 
 // baseTip 是分支按钮悬停提示里相对基准分支的几行。
-func baseTip(base string, tr *trackInfo) string {
+func baseTip(m locales.Messages, base string, tr *trackInfo) string {
 	if !tr.baseOK {
 		return ""
 	}
 	d := tr.base
 	var tip string
 	if d.Behind > 0 {
-		tip += fmt.Sprintf("\n%s 上有 %d 个新提交", base, d.Behind)
+		tip += "\n" + m.BranchBaseNew(base, d.Behind)
 	}
 	if d.Ahead > 0 {
-		tip += fmt.Sprintf("\n%d 个提交待合回 %s", d.Ahead, base)
+		tip += "\n" + m.BranchBaseAhead(d.Ahead, base)
 	}
 	if len(d.Conflicts) > 0 {
-		tip += fmt.Sprintf("\n现在合并会有 %d 个文件冲突", len(d.Conflicts))
+		tip += "\n" + m.BranchBaseConflicts(len(d.Conflicts))
 	}
 	return tip
 }
@@ -58,35 +59,40 @@ func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	t := c.Theme()
+	m := L(c)
 	d, base := tr.base, w.BaseRef
-	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, "相对 "+base).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(0)
+	// 英文放不下时同步、合并按钮换到下一行、靠右
+	ui.Row(c).MinHeight(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(6).Wrap().Justify(ui.End).AlignItems(ui.Center).AlignContent(ui.Center).Children(func() {
+		ui.Text(c, m.BranchRelativeTo(base)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(0)
 		switch {
 		case d.Ahead == 0 && d.Behind == 0:
-			ui.Text(c, "没有差别").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, m.CompareNoDifference()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 		default:
-			baseBadge(c, iconFetch, incomingColor(t), d.Behind, fmt.Sprintf("%s 上有 %d 个新提交，这个分支还没有", base, d.Behind))
-			baseBadge(c, iconPush, colors(t).sage, d.Ahead, fmt.Sprintf("%d 个提交待合回 %s", d.Ahead, base))
+			baseBadge(c, iconFetch, incomingColor(t), d.Behind, m.BranchBaseNewTip(base, d.Behind))
+			baseBadge(c, iconPush, colors(t).sage, d.Ahead, m.BranchBaseAhead(d.Ahead, base))
 		}
 		if len(d.Conflicts) > 0 {
-			tip := "现在合并会冲突的文件：\n" + strings.Join(d.Conflicts, "\n")
-			ui.Text(c, fmt.Sprintf("会冲突 %d", len(d.Conflicts))).FontSize(fsSmall).TextColor(t.Danger).Shrink(0).Tooltip(tip)
+			tip := m.BranchConflictFilesTip(strings.Join(d.Conflicts, "\n"))
+			ui.Text(c, m.BranchConflictCount(len(d.Conflicts))).FontSize(fsSmall).TextColor(t.Danger).Shrink(0).Tooltip(tip)
 		}
 		ui.Spacer(c)
-		if d.Behind > 0 {
-			sync := pressable(smallButton(c, "同步")).Tooltip("把 " + base + " 的新提交拿过来")
-			menuButton(c, sync, func(m *popMenu) {
-				if m.Item("把 " + base + " 合并进来").Chosen() {
-					a.syncBase(w, false)
-				}
-				if m.Item("rebase 到 " + base + " 上").Chosen() {
-					a.syncBase(w, true)
-				}
-			})
-		}
-		if d.Ahead > 0 && pressable(smallButton(c, "合并").Tooltip("合并到 "+base)).Clicked() {
-			a.askMergeWorkspace(w.ID)
-		}
+		// 两个按钮放在一起，换行时一起换
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
+			if d.Behind > 0 {
+				sync := pressable(smallButton(c, m.BranchSync())).Tooltip(m.BranchSyncTip(base))
+				menuButton(c, sync, func(pm *popMenu) {
+					if pm.Item(m.BranchMergeFrom(base)).Chosen() {
+						a.syncBase(m, w, false)
+					}
+					if pm.Item(m.BranchRebaseOntoBase(base)).Chosen() {
+						a.syncBase(m, w, true)
+					}
+				})
+			}
+			if d.Ahead > 0 && pressable(smallButton(c, m.GitMerge()).Tooltip(m.BranchMergeToTip(base))).Clicked() {
+				a.askMergeWorkspace(m, w.ID)
+			}
+		})
 	})
 }
 
@@ -108,12 +114,12 @@ func baseBadge(c *ui.Context, icon *ui.SVG, color ui.Color, n int, tip string) {
 
 // syncBase 在 worktree 里把基准分支合并进来或 rebase 上去。停在冲突上时改动页有操作横幅，
 // 解决后继续，再合回项目目录就不会冲突了。
-func (a *app) syncBase(w *workspace, rebase bool) {
+func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
 	base := w.BaseRef
-	what := "把 " + base + " 合并进来"
+	what, done := m.BranchMergeFrom(base), m.BranchMerged(base)
 	run := gitx.MergeInto
 	if rebase {
-		what, run = "rebase 到 "+base, gitx.Rebase
+		what, done, run = m.BranchRebaseToOp(base), m.BranchRebased(base), gitx.Rebase
 	}
 	// 停在冲突上是这一步预期之内的结果：横幅会说明怎么继续，不再在错误条上报"失败"
 	stopped := false
@@ -127,16 +133,16 @@ func (a *app) syncBase(w *workspace, rebase bool) {
 		}
 		return err
 	}
-	a.guardAgent(w, what, func() {
+	a.guardAgent(m, w, what, func() {
 		v := a.openFilesPanel(w, sideChanges)
 		v.git.tab = 0
 		// 文件栏没打开过时还没确认仓库根目录；worktree 工作区的目录就是它的根目录
 		if !v.git.checked {
 			v.git.checked, v.git.repo = true, filepath.Clean(w.Path)
 		}
-		a.gitDoThen(v, what, fn, func() {
+		a.gitDoThen(m, v, what, fn, func() {
 			if !stopped {
-				a.notify("已"+what, "", nil)
+				a.notify(done, "", nil)
 			}
 		})
 	})
@@ -145,7 +151,7 @@ func (a *app) syncBase(w *workspace, rebase bool) {
 // askMergeWorkspace 把 worktree 的分支合进项目目录（workspace.merge，冲突时常驻进程会还原）。
 // 先现算一次会不会冲突（轮询的结果可能是同步之前的），会就不去试，改问要不要先在工作区里同步；
 // 常驻进程合并失败时再算一次，确实是冲突的同样引过去，别的原因（项目目录不在基准分支上等）照常报错。
-func (a *app) askMergeWorkspace(wsID string) {
+func (a *app) askMergeWorkspace(m locales.Messages, wsID string) {
 	w := a.workspace(wsID)
 	if w == nil || !hasBase(w) {
 		return
@@ -156,23 +162,27 @@ func (a *app) askMergeWorkspace(wsID string) {
 		d, _ := gitx.BaseDivergence(context.Background(), ws.Path, base, nil)
 		return d.Conflicts
 	}
-	toSync := func(lead string, files []string) {
-		a.confirm("合并会冲突", fmt.Sprintf("%s%s 上的新提交和 %s 改了同样的地方（%s）。先在这个工作区里把 %s 合并进来、解决冲突，再合回去。", lead, base, branch, fileList(files, 3), base),
-			"把 "+base+" 合并进来", func() {
-				a.update(func() {
-					if w := a.workspace(wsID); w != nil {
-						a.syncBase(w, false)
-					}
-				})
+	// restored 是常驻进程试过合并、冲突后已经还原了项目目录
+	toSync := func(restored bool, files []string) {
+		body := m.BranchSyncFirstBody(base, branch, fileList(m, files, 3))
+		if restored {
+			body = m.BranchSyncFirstBodyRestored(base, branch, fileList(m, files, 3))
+		}
+		a.confirm(m.BranchMergeConflicts(), body, m.BranchMergeFrom(base), func() {
+			a.update(func() {
+				if w := a.workspace(wsID); w != nil {
+					a.syncBase(m, w, false)
+				}
 			})
+		})
 	}
 	go func() {
 		if files := conflicts(); len(files) > 0 {
-			a.update(func() { toSync("", files) })
+			a.update(func() { toSync(false, files) })
 			return
 		}
 		a.update(func() {
-			a.confirm("把 "+branch+" 合并到 "+base+"？", "在项目目录里以 merge commit 合入。项目目录必须在 "+base+" 分支上，两边都不能有未提交的改动（未跟踪的新文件不算）；冲突时会自动还原。", "合并", func() {
+			a.confirm(m.BranchMergeWorkspaceConfirm(branch, base), m.BranchMergeWorkspaceBody(base), m.GitMerge(), func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
 				err := a.c.Call(ctx, "workspace.merge", map[string]any{"workspace": wsID}, nil)
@@ -186,11 +196,11 @@ func (a *app) askMergeWorkspace(wsID string) {
 					a.refsChanged(ws.ProjectID)
 					switch {
 					case err != nil && len(files) > 0:
-						toSync("项目目录已经还原。", files)
+						toSync(true, files)
 					case err != nil:
 						a.err = errtext.Text(err)
 					default:
-						a.confirm("已合并到 "+base, mergedBody(branch, untracked), "删除工作区", func() {
+						a.confirm(m.BranchMergedTo(base), mergedBody(m, branch, untracked), m.BranchDeleteWorkspace(), func() {
 							a.call("workspace.rm", map[string]any{"workspace": wsID, "force": true, "deleteBranch": true}, nil, 30*time.Second)
 							a.refresh()
 						})
@@ -217,18 +227,17 @@ func untrackedFiles(ctx context.Context, dir string) []string {
 }
 
 // mergedBody 是合并成功后问要不要删工作区的说明。
-func mergedBody(branch string, untracked []string) string {
-	body := "worktree 和分支 " + branch + " 还在，不需要了可以删掉。"
+func mergedBody(m locales.Messages, branch string, untracked []string) string {
 	if len(untracked) > 0 {
-		body += "删除时会连同没提交的文件一起删掉：" + fileList(untracked, 3) + "。"
+		return m.BranchMergedBodyUntracked(branch, fileList(m, untracked, 3))
 	}
-	return body
+	return m.BranchMergedBody(branch)
 }
 
 // fileList 列出前 n 个文件，多的写"等 N 个"。
-func fileList(files []string, n int) string {
+func fileList(m locales.Messages, files []string, n int) string {
 	if len(files) <= n {
-		return strings.Join(files, "、")
+		return strings.Join(files, m.BranchFileListSeparator())
 	}
-	return strings.Join(files[:n], "、") + fmt.Sprintf(" 等 %d 个文件", len(files))
+	return m.BranchFileListMore(strings.Join(files[:n], m.BranchFileListSeparator()), len(files))
 }

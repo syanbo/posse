@@ -13,6 +13,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // Git 日志标签页，照 WebStorm 的 Log：左边是分支树（logrefs.go），中间是提交图和筛选栏（文字或哈希、分支、作者，文件历史时是路径），
@@ -44,6 +45,7 @@ type logDoc struct {
 	refCursor string       // 分支树里键盘停在的行（refItem.key）
 	focusList bool         // 在分支树里按了 →：提交列表建出来时拿焦点
 	err       string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
+	notRepo   bool         // 不是 git 仓库：整页报错（d.kind 是 docError）
 	hist      *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
 }
 
@@ -177,7 +179,7 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 				}
 			}
 			ui.Spacer(c)
-			if iconButton(c.Key("log-hide"), iconMinus, a.withKey("隐藏", "gitLog")).Clicked() {
+			if iconButton(c.Key("log-hide"), iconMinus, a.withKey(L(c).LogHide(), "gitLog")).Clicked() {
 				a.setLogPanel(false)
 			}
 		})
@@ -188,10 +190,12 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 		case d == nil:
 		case d.kind == docLog:
 			a.logView(c, w, v, d)
+		case d.kind == docError && d.log != nil && d.log.notRepo:
+			docMessage(c, d, L(c).GitNotRepo())
 		case d.kind == docError:
 			docMessage(c, d, d.err)
 		default:
-			ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
+			ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		}
 		// 拖上边缘调高度，松手才写 ui.json
 		grip := ui.Box(c.Key("log-panel-grip")).Absolute().Left(0).Right(0).Top(-3).Height(6).Cursor(ui.CursorResizeNS)
@@ -216,9 +220,9 @@ func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	active := v.logCur == d && !v.console
-	label := "提交日志"
+	label := L(c).LogCommitsTitle()
 	if f := d.log.filter; f.Path != "" {
-		label = "历史：" + path.Base(f.Path)
+		label = L(c).LogHistoryTab(path.Base(f.Path))
 	}
 	row := ui.Row(c.Key(d.path)).Height(sz(26)).Margin(2, 0, 0, 0).Padding(0, 6, 0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
@@ -230,7 +234,7 @@ func (a *app) logTab(c *ui.Context, v *filesView, d *fileDoc) {
 			ui.Box(c).Width(4)
 			return
 		}
-		x := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭" + label)
+		x := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(L(c).LogCloseTab(label))
 		if x.Hovered() {
 			x.Background(t.SurfacePressed)
 		}
@@ -270,9 +274,6 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
 		}
 		list, err := gitx.Log(ctx, root, f, skip, limit)
-		if root == "" {
-			list, err = nil, fmt.Errorf("这个工作区不是 git 仓库")
-		}
 		a.update(func() {
 			if !v.git.checked {
 				v.git.checked, v.git.repo = true, root
@@ -283,7 +284,7 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 			ld.loading = false
 			// 出错时筛选栏和分支树照样画，错误写在列表里，改了筛选再读；不是 git 仓库才整页报错
 			if root == "" {
-				d.kind, d.err = docError, errtext.Text(err)
+				d.kind, ld.notRepo = docError, true
 				return
 			}
 			ld.err = ""
@@ -472,16 +473,16 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Children(func() {
 			if len(ld.commits) == 0 {
-				msg, col := "没有符合条件的提交", t.TextMuted
+				msg, col := L(c).LogNoMatch(), t.TextMuted
 				switch {
 				case ld.loading:
-					msg = "正在读取…"
+					msg = L(c).CommonLoading()
 				case ld.err != "":
 					msg, col = ld.err, t.Danger
 				}
 				ui.Column(c).Padding(12, 16).Gap(8).Children(func() {
 					ui.Text(c, msg).FontSize(fsSmall).TextColor(col).LineHeight(1.4)
-					if !ld.loading && ld.filtered() && pressable(textButton(c, "清除筛选")).Clicked() {
+					if !ld.loading && ld.filtered() && pressable(textButton(c, L(c).LogClearFilter())).Clicked() {
 						a.clearLogFilter(v, d)
 					}
 				})
@@ -501,7 +502,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			ui.List(c, &ld.list, n, func(i int) {
 				if i == len(commits) {
 					more := ui.Row(c.Key("more")).Height(logRowH()).Padding(0, 16).AlignItems(ui.Center).Role(ui.RoleButton)
-					more.Children(func() { ui.Text(c, "加载更早的提交").FontSize(fsSmall).TextColor(t.Accent) })
+					more.Children(func() { ui.Text(c, L(c).LogLoadEarlier()).FontSize(fsSmall).TextColor(t.Accent) })
 					if more.Clicked() && !ld.loading {
 						a.loadLog(v, d, true)
 					}
@@ -561,29 +562,29 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	ld := d.log
 	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 12, 0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		text := fieldInputWidth(c, &ld.text, "提交信息或哈希", 220).Label("按提交信息或哈希筛选")
+		text := fieldInputWidth(c, &ld.text, L(c).LogMessageHash(), 220).Label(L(c).LogMessageFilter())
 		if text.Changed() || text.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		author := fieldInputWidth(c.Key("author"), &ld.author, "作者", 120).Label("按作者筛选")
+		author := fieldInputWidth(c.Key("author"), &ld.author, L(c).LogAuthor(), 120).Label(L(c).LogAuthorFilter())
 		if author.Changed() || author.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		branch := "全部分支"
+		branch := L(c).LogAllBranches()
 		switch n := len(ld.filter.Branches); {
 		case n == 1:
 			branch = refShort(ld.filter.Branches[0])
 		case n > 1:
-			branch = fmt.Sprintf("%d 个分支", n)
+			branch = L(c).LogBranchCount(n)
 		}
 		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(t.Surface).
-			Role(ui.RoleButton).Label("按分支筛选").Children(func() {
+			Role(ui.RoleButton).Label(L(c).LogBranchFilter()).Children(func() {
 			ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(160)
 			ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted)
 		})
 		menuButton(c, filter, func(m *popMenu) {
-			if m.Item("全部分支").Checked(len(ld.filter.Branches) == 0).Chosen() {
+			if m.Item(L(c).LogAllBranches()).Checked(len(ld.filter.Branches) == 0).Chosen() {
 				ld.filter.Branches = nil
 				a.loadLog(v, d, false)
 			}
@@ -606,9 +607,9 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		}
 		ui.Spacer(c)
 		if ld.loading {
-			ui.Text(c, "读取中…").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Text(c, L(c).LogReading()).FontSize(fsSmall).TextColor(t.TextMuted)
 		}
-		if pressable(iconButtonSized(c, iconRefresh, "刷新日志", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, L(c).LogRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.loadLog(v, d, false)
 		}
 	})
@@ -767,63 +768,64 @@ func refNames(d string) []refName {
 
 // commitMenu 是日志里一个提交的操作；改写历史的几项只对当前分支上的提交有效（gitx 会检查）。
 func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, d *fileDoc, ci gitx.CommitInfo) {
+	lm := L(c)
 	short := ci.Hash[:7]
 	// 做完由 gitDo 里的 refsChanged 重读日志，翻过的页数一起读回来
 	do := func(what string, fn func(ctx context.Context, root string) error) {
-		a.guardAgent(w, what, func() { a.gitDo(v, what, fn) })
+		a.guardAgent(lm, w, what, func() { a.gitDo(lm, v, what, fn) })
 	}
-	if m.Item("复制提交哈希").Chosen() {
+	if m.Item(lm.LogCopyHash()).Chosen() {
 		c.WriteClipboard(ci.Hash)
 	}
 	m.Separator()
-	if m.Item("检出这个提交").Chosen() {
-		do("检出", func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, ci.Hash) })
+	if m.Item(lm.LogCheckoutCommit()).Chosen() {
+		do(lm.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, ci.Hash) })
 	}
-	if m.Item("基于这个提交新建分支…").Chosen() {
-		a.askNewBranch(w, v, ci.Hash)
+	if m.Item(lm.LogNewBranch()).Chosen() {
+		a.askNewBranch(lm, w, v, ci.Hash)
 	}
 	m.Separator()
 	if m.Item("Cherry-pick").Icon(iconCherryPick).Chosen() {
 		do("Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, ci.Hash) })
 	}
-	m.Submenu("把当前分支重置到这里", func(sm *popMenu) {
-		if sm.Item("Soft：改动留在暂存区").Chosen() {
-			do("重置", func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "soft") })
+	m.Submenu(lm.LogResetHere(), func(sm *popMenu) {
+		if sm.Item(lm.LogSoftReset()).Chosen() {
+			do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "soft") })
 		}
-		if sm.Item("Mixed：改动留在工作区").Chosen() {
-			do("重置", func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "mixed") })
+		if sm.Item(lm.LogMixedReset()).Chosen() {
+			do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "mixed") })
 		}
-		if sm.Item("Hard：丢掉之后的改动…").Chosen() {
-			a.confirm("硬重置到 "+short+"？", "当前分支会回到这个提交，之后的提交和所有没提交的改动都会丢掉。", "硬重置", func() {
+		if sm.Item(lm.LogHardResetEllipsis()).Chosen() {
+			a.confirm(lm.LogHardResetConfirm(short), lm.LogHardResetBody(), lm.LogHardReset(), func() {
 				a.update(func() {
-					do("重置", func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "hard") })
+					do(lm.LogReset(), func(ctx context.Context, root string) error { return gitx.Reset(ctx, root, ci.Hash, "hard") })
 				})
 			})
 		}
 	})
-	if m.Item("Revert：新建撤销它的提交").Chosen() {
+	if m.Item(lm.LogRevertCommit()).Chosen() {
 		do("Revert", func(ctx context.Context, root string) error { return gitx.RevertCommit(ctx, root, ci.Hash) })
 	}
 	m.Separator()
-	if m.Item("改提交信息…").Chosen() {
-		a.guardPushed(v, ci.Hash, func() {
-			a.askMessage(v, "改 "+short+" 的提交信息", ci.Hash, "", func(msg string) {
-				do("改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
+	if m.Item(lm.LogRewordEllipsis()).Chosen() {
+		a.guardPushed(lm, v, ci.Hash, func() {
+			a.askMessage(lm, v, lm.LogRewordTitle(short), ci.Hash, "", func(msg string) {
+				do(lm.LogReword(), func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
 			})
 		})
 	}
-	if len(ci.Parents) == 1 && m.Item("和上一个提交合并…").Chosen() {
-		a.guardPushed(v, ci.Parents[0], func() {
-			a.askMessage(v, "和上一个提交合并", ci.Parents[0], ci.Hash, func(msg string) {
-				do("合并提交", func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
+	if len(ci.Parents) == 1 && m.Item(lm.LogSquashEllipsis()).Chosen() {
+		a.guardPushed(lm, v, ci.Parents[0], func() {
+			a.askMessage(lm, v, lm.LogSquashTitle(), ci.Parents[0], ci.Hash, func(msg string) {
+				do(lm.LogSquash(), func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
 			})
 		})
 	}
-	if m.Item("删除这个提交…").Chosen() {
-		a.guardPushed(v, ci.Hash, func() {
-			a.confirm("从历史里删除 "+short+"？", "“"+ci.Subject+"”会从当前分支的历史里去掉，它的改动也一起去掉。", "删除提交", func() {
+	if m.Item(lm.LogDropEllipsis()).Chosen() {
+		a.guardPushed(lm, v, ci.Hash, func() {
+			a.confirm(lm.LogDropConfirm(short), lm.LogDropBody(ci.Subject), lm.LogDrop(), func() {
 				a.update(func() {
-					do("删除提交", func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
+					do(lm.LogDrop(), func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
 				})
 			})
 		})
@@ -831,7 +833,7 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 }
 
 // guardPushed 在改写从 oldest 开始的历史之前查它推送过没有：推送过的先说明之后要强制推送，确认了再继续。
-func (a *app) guardPushed(v *filesView, oldest string, then func()) {
+func (a *app) guardPushed(m locales.Messages, v *filesView, oldest string, then func()) {
 	root := v.git.repo
 	go func() {
 		remotes := gitx.RemotesContaining(context.Background(), root, oldest)
@@ -842,9 +844,9 @@ func (a *app) guardPushed(v *filesView, oldest string, then func()) {
 			}
 			where := remotes[0]
 			if len(remotes) > 1 {
-				where += fmt.Sprintf(" 等 %d 个远端分支", len(remotes))
+				where = m.LogRemotesMore(remotes[0], len(remotes))
 			}
-			a.confirm("这些提交已经推送过", "它们在 "+where+" 上。改写之后要强制推送，别人基于旧提交的工作会对不上。", "仍然改写", func() {
+			a.confirm(m.LogPushedTitle(), m.LogPushedBody(where), m.LogRewriteAnyway(), func() {
 				a.update(then)
 			})
 		})
@@ -852,7 +854,7 @@ func (a *app) guardPushed(v *filesView, oldest string, then func()) {
 }
 
 // askMessage 读出提交信息（两个提交时拼在一起）填进输入框，让用户改完再执行。
-func (a *app) askMessage(v *filesView, title, hash, second string, do func(string)) {
+func (a *app) askMessage(m locales.Messages, v *filesView, title, hash, second string, do func(string)) {
 	root := v.git.repo
 	go func() {
 		ctx := context.Background()
@@ -861,7 +863,7 @@ func (a *app) askMessage(v *filesView, title, hash, second string, do func(strin
 			msg += "\n\n" + gitx.FullMessage(ctx, root, second)
 		}
 		a.update(func() {
-			a.prompt(promptReq{title: title, initial: msg, verb: "确定", multiline: true, do: func(s string, _ bool) { do(s) }})
+			a.prompt(promptReq{title: title, initial: msg, verb: m.LogMessageConfirm(), multiline: true, do: func(s string, _ bool) { do(s) }})
 		})
 	}()
 }
@@ -911,10 +913,10 @@ func (bd *blameDoc) findHits(f *docFind) {
 }
 
 // openBlame 在这个文件的标签里打开 Annotate（文件没开着就先打开）。
-func (a *app) openBlame(w *workspace, v *filesView, abs string) {
+func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs string) {
 	rel := v.git.relPath(abs)
 	if rel == "" {
-		a.err = "这个文件不在 git 仓库里"
+		a.err = m.LogFileNotRepo()
 		return
 	}
 	a.openFile(w, abs, 0, [2]int{})
@@ -948,7 +950,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		docMessage(c, d, bd.err)
 		return
 	case bd.loading:
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
+		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		return
 	}
 	f := &d.find
@@ -972,7 +974,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 							return
 						}
 						if uncommitted {
-							ui.Text(c, "没提交").FontSize(fsSmall).TextColor(t.Accent)
+							ui.Text(c, L(c).LogUncommitted()).FontSize(fsSmall).TextColor(t.Accent)
 							return
 						}
 						ui.Text(c, l.Time.Format("2006-01-02")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -1014,16 +1016,16 @@ func blameLine(c *ui.Context, bd *blameDoc, f *docFind, i int) ui.Element {
 }
 
 // gitFileMenu 是文件在 Git 下的操作：文件历史、Annotate。用在文件树和打开的文件上。
-func (a *app) gitFileMenu(m *popMenu, w *workspace, v *filesView, abs string) {
+func (a *app) gitFileMenu(lm locales.Messages, m *popMenu, w *workspace, v *filesView, abs string) {
 	rel := v.git.relPath(abs)
 	if rel == "" {
 		return
 	}
 	m.Separator()
-	if m.Item("文件历史").Chosen() {
+	if m.Item(lm.LogFileHistory()).Chosen() {
 		a.openLog(w, "", rel)
 	}
-	if m.Item("Annotate（逐行看是谁改的）").Chosen() {
-		a.openBlame(w, v, abs)
+	if m.Item(lm.LogAnnotate()).Chosen() {
+		a.openBlame(lm, w, v, abs)
 	}
 }

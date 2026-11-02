@@ -232,6 +232,1514 @@ func (msgs Messages) AwakeUnavailable() string {
 	return Catalog.Format(msgs.locale, "awakeUnavailable", nil)
 }
 
+// BranchAgentWorkingBody says "{operation} changes files in the working directory and may overwrite or disrupt what the agent is editing. {operation…"
+// in the language the app shows.
+//
+// Body of the confirmation shown before a Git operation while an agent is
+// working in the workspace. operation is the name of the Git operation,
+// such as Checkout or Pop Stash.
+func BranchAgentWorkingBody(operation string) string {
+	return In(i18n.Locale()).BranchAgentWorkingBody(operation)
+}
+
+// BranchAgentWorkingBody says "{operation} changes files in the working directory and may overwrite or disrupt what the agent is editing. {operation…"
+// in the language of msgs.
+//
+// Body of the confirmation shown before a Git operation while an agent is
+// working in the workspace. operation is the name of the Git operation,
+// such as Checkout or Pop Stash.
+func (msgs Messages) BranchAgentWorkingBody(operation string) string {
+	return Catalog.Format(msgs.locale, "branchAgentWorkingBody", map[string]any{"operation": operation})
+}
+
+// BranchAgentWorkingTitle says "{agent} Is Working in This Workspace"
+// in the language the app shows.
+//
+// Title of the confirmation shown before a Git operation that changes the
+// working directory while an agent is working there. agent is the agent
+// name, such as Claude.
+func BranchAgentWorkingTitle(agent string) string {
+	return In(i18n.Locale()).BranchAgentWorkingTitle(agent)
+}
+
+// BranchAgentWorkingTitle says "{agent} Is Working in This Workspace"
+// in the language of msgs.
+//
+// Title of the confirmation shown before a Git operation that changes the
+// working directory while an agent is working there. agent is the agent
+// name, such as Claude.
+func (msgs Messages) BranchAgentWorkingTitle(agent string) string {
+	return Catalog.Format(msgs.locale, "branchAgentWorkingTitle", map[string]any{"agent": agent})
+}
+
+// BranchAutoFetch says "Automatic Fetch"
+// in the language the app shows.
+//
+// Operation name of the automatic background fetch (every 5 minutes), shown
+// in the Console log.
+func BranchAutoFetch() string { return In(i18n.Locale()).BranchAutoFetch() }
+
+// BranchAutoFetch says "Automatic Fetch"
+// in the language of msgs.
+//
+// Operation name of the automatic background fetch (every 5 minutes), shown
+// in the Console log.
+func (msgs Messages) BranchAutoFetch() string {
+	return Catalog.Format(msgs.locale, "branchAutoFetch", nil)
+}
+
+// BranchBaseAhead says "{count, plural, one {# commit} other {# commits}} to merge back into {base}"
+// in the language the app shows.
+//
+// Worktree workspace status (tooltip line and badge tooltip): commits on
+// this branch not yet merged into its base branch. base is the base branch
+// name.
+func BranchBaseAhead(count int, base string) string {
+	return In(i18n.Locale()).BranchBaseAhead(count, base)
+}
+
+// BranchBaseAhead says "{count, plural, one {# commit} other {# commits}} to merge back into {base}"
+// in the language of msgs.
+//
+// Worktree workspace status (tooltip line and badge tooltip): commits on
+// this branch not yet merged into its base branch. base is the base branch
+// name.
+func (msgs Messages) BranchBaseAhead(count int, base string) string {
+	return Catalog.Format(msgs.locale, "branchBaseAhead", map[string]any{"count": count, "base": base})
+}
+
+// BranchBaseConflicts says "Merging now would cause conflicts in {count, plural, one {# file} other {# files}}"
+// in the language the app shows.
+//
+// Line in the branch button tooltip of a worktree workspace: how many files
+// would conflict if merged into the base branch now.
+func BranchBaseConflicts(count int) string { return In(i18n.Locale()).BranchBaseConflicts(count) }
+
+// BranchBaseConflicts says "Merging now would cause conflicts in {count, plural, one {# file} other {# files}}"
+// in the language of msgs.
+//
+// Line in the branch button tooltip of a worktree workspace: how many files
+// would conflict if merged into the base branch now.
+func (msgs Messages) BranchBaseConflicts(count int) string {
+	return Catalog.Format(msgs.locale, "branchBaseConflicts", map[string]any{"count": count})
+}
+
+// BranchBaseNew says "{count, plural, one {# new commit} other {# new commits}} on {base}"
+// in the language the app shows.
+//
+// Line in the branch button tooltip of a worktree workspace: new commits on
+// the base branch. base is the base branch name.
+func BranchBaseNew(base string, count int) string {
+	return In(i18n.Locale()).BranchBaseNew(base, count)
+}
+
+// BranchBaseNew says "{count, plural, one {# new commit} other {# new commits}} on {base}"
+// in the language of msgs.
+//
+// Line in the branch button tooltip of a worktree workspace: new commits on
+// the base branch. base is the base branch name.
+func (msgs Messages) BranchBaseNew(base string, count int) string {
+	return Catalog.Format(msgs.locale, "branchBaseNew", map[string]any{"base": base, "count": count})
+}
+
+// BranchBaseNewTip says "{count, plural, one {# new commit} other {# new commits}} on {base} not yet in this branch"
+// in the language the app shows.
+//
+// Tooltip of the incoming badge in the base row of the Changes view of a
+// worktree workspace. base is the base branch name.
+func BranchBaseNewTip(base string, count int) string {
+	return In(i18n.Locale()).BranchBaseNewTip(base, count)
+}
+
+// BranchBaseNewTip says "{count, plural, one {# new commit} other {# new commits}} on {base} not yet in this branch"
+// in the language of msgs.
+//
+// Tooltip of the incoming badge in the base row of the Changes view of a
+// worktree workspace. base is the base branch name.
+func (msgs Messages) BranchBaseNewTip(base string, count int) string {
+	return Catalog.Format(msgs.locale, "branchBaseNewTip", map[string]any{"base": base, "count": count})
+}
+
+// BranchButtonLabel says "Branch {branch}"
+// in the language the app shows.
+//
+// Accessibility label of the branch button in the tab bar that opens the
+// branches popup.
+func BranchButtonLabel(branch string) string { return In(i18n.Locale()).BranchButtonLabel(branch) }
+
+// BranchButtonLabel says "Branch {branch}"
+// in the language of msgs.
+//
+// Accessibility label of the branch button in the tab bar that opens the
+// branches popup.
+func (msgs Messages) BranchButtonLabel(branch string) string {
+	return Catalog.Format(msgs.locale, "branchButtonLabel", map[string]any{"branch": branch})
+}
+
+// BranchCancelFetch says "Cancel Fetch"
+// in the language the app shows.
+//
+// Accessibility label of the spinner button in the branches popup that
+// cancels a running fetch.
+func BranchCancelFetch() string { return In(i18n.Locale()).BranchCancelFetch() }
+
+// BranchCancelFetch says "Cancel Fetch"
+// in the language of msgs.
+//
+// Accessibility label of the spinner button in the branches popup that
+// cancels a running fetch.
+func (msgs Messages) BranchCancelFetch() string {
+	return Catalog.Format(msgs.locale, "branchCancelFetch", nil)
+}
+
+// BranchCheckout says "Checkout"
+// in the language the app shows.
+//
+// Branch menu item and prompt button in the branches popup and Git Log:
+// check out the branch, tag or commit. Also the operation name shown in
+// busy text, error messages and the Console.
+func BranchCheckout() string { return In(i18n.Locale()).BranchCheckout() }
+
+// BranchCheckout says "Checkout"
+// in the language of msgs.
+//
+// Branch menu item and prompt button in the branches popup and Git Log:
+// check out the branch, tag or commit. Also the operation name shown in
+// busy text, error messages and the Console.
+func (msgs Messages) BranchCheckout() string {
+	return Catalog.Format(msgs.locale, "branchCheckout", nil)
+}
+
+// BranchCheckoutNew says "Checkout New Branch"
+// in the language the app shows.
+//
+// Checkbox in the New Branch dialog: switch to the new branch after
+// creating it.
+func BranchCheckoutNew() string { return In(i18n.Locale()).BranchCheckoutNew() }
+
+// BranchCheckoutNew says "Checkout New Branch"
+// in the language of msgs.
+//
+// Checkbox in the New Branch dialog: switch to the new branch after
+// creating it.
+func (msgs Messages) BranchCheckoutNew() string {
+	return Catalog.Format(msgs.locale, "branchCheckoutNew", nil)
+}
+
+// BranchCheckoutRebase says "Checkout and Rebase"
+// in the language the app shows.
+//
+// Operation name of Checkout and Rebase onto the current branch in the
+// branches popup, shown in busy text, error messages and the Console.
+func BranchCheckoutRebase() string { return In(i18n.Locale()).BranchCheckoutRebase() }
+
+// BranchCheckoutRebase says "Checkout and Rebase"
+// in the language of msgs.
+//
+// Operation name of Checkout and Rebase onto the current branch in the
+// branches popup, shown in busy text, error messages and the Console.
+func (msgs Messages) BranchCheckoutRebase() string {
+	return Catalog.Format(msgs.locale, "branchCheckoutRebase", nil)
+}
+
+// BranchCheckoutRebaseOnto says "Checkout and Rebase onto ‘{branch}’"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup (WebStorm: Checkout and Rebase
+// onto Current). branch is the current branch name.
+func BranchCheckoutRebaseOnto(branch string) string {
+	return In(i18n.Locale()).BranchCheckoutRebaseOnto(branch)
+}
+
+// BranchCheckoutRebaseOnto says "Checkout and Rebase onto ‘{branch}’"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup (WebStorm: Checkout and Rebase
+// onto Current). branch is the current branch name.
+func (msgs Messages) BranchCheckoutRebaseOnto(branch string) string {
+	return Catalog.Format(msgs.locale, "branchCheckoutRebaseOnto", map[string]any{"branch": branch})
+}
+
+// BranchCheckoutRevision says "Checkout Tag or Revision"
+// in the language the app shows.
+//
+// Title of the dialog in the branches popup that checks out a tag or commit
+// by name.
+func BranchCheckoutRevision() string { return In(i18n.Locale()).BranchCheckoutRevision() }
+
+// BranchCheckoutRevision says "Checkout Tag or Revision"
+// in the language of msgs.
+//
+// Title of the dialog in the branches popup that checks out a tag or commit
+// by name.
+func (msgs Messages) BranchCheckoutRevision() string {
+	return Catalog.Format(msgs.locale, "branchCheckoutRevision", nil)
+}
+
+// BranchCheckoutRevisionEllipsis says "Checkout Tag or Revision…"
+// in the language the app shows.
+//
+// Item in the branches popup that opens the dialog to check out a tag or
+// commit.
+func BranchCheckoutRevisionEllipsis() string {
+	return In(i18n.Locale()).BranchCheckoutRevisionEllipsis()
+}
+
+// BranchCheckoutRevisionEllipsis says "Checkout Tag or Revision…"
+// in the language of msgs.
+//
+// Item in the branches popup that opens the dialog to check out a tag or
+// commit.
+func (msgs Messages) BranchCheckoutRevisionEllipsis() string {
+	return Catalog.Format(msgs.locale, "branchCheckoutRevisionEllipsis", nil)
+}
+
+// BranchCommit says "Commit…"
+// in the language the app shows.
+//
+// Item in the branches popup that focuses the commit message box in the
+// Changes view.
+func BranchCommit() string { return In(i18n.Locale()).BranchCommit() }
+
+// BranchCommit says "Commit…"
+// in the language of msgs.
+//
+// Item in the branches popup that focuses the commit message box in the
+// Changes view.
+func (msgs Messages) BranchCommit() string {
+	return Catalog.Format(msgs.locale, "branchCommit", nil)
+}
+
+// BranchCompareWith says "Compare with ‘{branch}’"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup: compare the branch with the
+// current branch. branch is the current branch name.
+func BranchCompareWith(branch string) string { return In(i18n.Locale()).BranchCompareWith(branch) }
+
+// BranchCompareWith says "Compare with ‘{branch}’"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup: compare the branch with the
+// current branch. branch is the current branch name.
+func (msgs Messages) BranchCompareWith(branch string) string {
+	return Catalog.Format(msgs.locale, "branchCompareWith", map[string]any{"branch": branch})
+}
+
+// BranchCompareWorkspace says "Compare with Workspace"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup: compare the branch with the files
+// in the workspace.
+func BranchCompareWorkspace() string { return In(i18n.Locale()).BranchCompareWorkspace() }
+
+// BranchCompareWorkspace says "Compare with Workspace"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup: compare the branch with the files
+// in the workspace.
+func (msgs Messages) BranchCompareWorkspace() string {
+	return Catalog.Format(msgs.locale, "branchCompareWorkspace", nil)
+}
+
+// BranchConflictCount says "{count, plural, one {# conflict} other {# conflicts}}"
+// in the language the app shows.
+//
+// Short red label in the base row of a worktree workspace: files that would
+// conflict if merged now.
+func BranchConflictCount(count int) string { return In(i18n.Locale()).BranchConflictCount(count) }
+
+// BranchConflictCount says "{count, plural, one {# conflict} other {# conflicts}}"
+// in the language of msgs.
+//
+// Short red label in the base row of a worktree workspace: files that would
+// conflict if merged now.
+func (msgs Messages) BranchConflictCount(count int) string {
+	return Catalog.Format(msgs.locale, "branchConflictCount", map[string]any{"count": count})
+}
+
+// BranchConflictFilesTip says "Files that would conflict if merged now:\n{files}"
+// in the language the app shows.
+//
+// Tooltip of the conflict count in the base row of a worktree workspace.
+// files is one path per line.
+func BranchConflictFilesTip(files string) string {
+	return In(i18n.Locale()).BranchConflictFilesTip(files)
+}
+
+// BranchConflictFilesTip says "Files that would conflict if merged now:\n{files}"
+// in the language of msgs.
+//
+// Tooltip of the conflict count in the base row of a worktree workspace.
+// files is one path per line.
+func (msgs Messages) BranchConflictFilesTip(files string) string {
+	return Catalog.Format(msgs.locale, "branchConflictFilesTip", map[string]any{"files": files})
+}
+
+// BranchCopyWorktreePath says "Copy Worktree Path"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: copy that worktree's path.
+func BranchCopyWorktreePath() string { return In(i18n.Locale()).BranchCopyWorktreePath() }
+
+// BranchCopyWorktreePath says "Copy Worktree Path"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: copy that worktree's path.
+func (msgs Messages) BranchCopyWorktreePath() string {
+	return Catalog.Format(msgs.locale, "branchCopyWorktreePath", nil)
+}
+
+// BranchDelete says "Delete Branch"
+// in the language the app shows.
+//
+// Operation name of deleting a local branch, shown in busy text, error
+// messages and the Console.
+func BranchDelete() string { return In(i18n.Locale()).BranchDelete() }
+
+// BranchDelete says "Delete Branch"
+// in the language of msgs.
+//
+// Operation name of deleting a local branch, shown in busy text, error
+// messages and the Console.
+func (msgs Messages) BranchDelete() string {
+	return Catalog.Format(msgs.locale, "branchDelete", nil)
+}
+
+// BranchDeleteRemote says "Delete Remote Branch"
+// in the language the app shows.
+//
+// Operation name of deleting a remote branch, shown in busy text, error
+// messages and the Console.
+func BranchDeleteRemote() string { return In(i18n.Locale()).BranchDeleteRemote() }
+
+// BranchDeleteRemote says "Delete Remote Branch"
+// in the language of msgs.
+//
+// Operation name of deleting a remote branch, shown in busy text, error
+// messages and the Console.
+func (msgs Messages) BranchDeleteRemote() string {
+	return Catalog.Format(msgs.locale, "branchDeleteRemote", nil)
+}
+
+// BranchDeleteRemoteBody says "This will push the deletion to the remote. Other users will no longer be able to fetch this branch."
+// in the language the app shows.
+//
+// Body of the confirmation before deleting a remote branch.
+func BranchDeleteRemoteBody() string { return In(i18n.Locale()).BranchDeleteRemoteBody() }
+
+// BranchDeleteRemoteBody says "This will push the deletion to the remote. Other users will no longer be able to fetch this branch."
+// in the language of msgs.
+//
+// Body of the confirmation before deleting a remote branch.
+func (msgs Messages) BranchDeleteRemoteBody() string {
+	return Catalog.Format(msgs.locale, "branchDeleteRemoteBody", nil)
+}
+
+// BranchDeleteRemoteConfirm says "Delete Remote Branch {branch}?"
+// in the language the app shows.
+//
+// Title of the confirmation before deleting a remote branch. branch is like
+// origin/feature.
+func BranchDeleteRemoteConfirm(branch string) string {
+	return In(i18n.Locale()).BranchDeleteRemoteConfirm(branch)
+}
+
+// BranchDeleteRemoteConfirm says "Delete Remote Branch {branch}?"
+// in the language of msgs.
+//
+// Title of the confirmation before deleting a remote branch. branch is like
+// origin/feature.
+func (msgs Messages) BranchDeleteRemoteConfirm(branch string) string {
+	return Catalog.Format(msgs.locale, "branchDeleteRemoteConfirm", map[string]any{"branch": branch})
+}
+
+// BranchDeleteWorkspace says "Delete Workspace"
+// in the language the app shows.
+//
+// Button in the dialog shown after a worktree workspace was merged into its
+// base branch: delete the workspace together with its branch.
+func BranchDeleteWorkspace() string { return In(i18n.Locale()).BranchDeleteWorkspace() }
+
+// BranchDeleteWorkspace says "Delete Workspace"
+// in the language of msgs.
+//
+// Button in the dialog shown after a worktree workspace was merged into its
+// base branch: delete the workspace together with its branch.
+func (msgs Messages) BranchDeleteWorkspace() string {
+	return Catalog.Format(msgs.locale, "branchDeleteWorkspace", nil)
+}
+
+// BranchDeleted says "Deleted branch {branch}"
+// in the language the app shows.
+//
+// Notification after deleting a local branch; it has a Restore button.
+func BranchDeleted(branch string) string { return In(i18n.Locale()).BranchDeleted(branch) }
+
+// BranchDeleted says "Deleted branch {branch}"
+// in the language of msgs.
+//
+// Notification after deleting a local branch; it has a Restore button.
+func (msgs Messages) BranchDeleted(branch string) string {
+	return Catalog.Format(msgs.locale, "branchDeleted", map[string]any{"branch": branch})
+}
+
+// BranchFetchTip says "Fetch from all remotes (automatically every 5 minutes)"
+// in the language the app shows.
+//
+// Tooltip of the Fetch button at the top of the branches popup.
+func BranchFetchTip() string { return In(i18n.Locale()).BranchFetchTip() }
+
+// BranchFetchTip says "Fetch from all remotes (automatically every 5 minutes)"
+// in the language of msgs.
+//
+// Tooltip of the Fetch button at the top of the branches popup.
+func (msgs Messages) BranchFetchTip() string {
+	return Catalog.Format(msgs.locale, "branchFetchTip", nil)
+}
+
+// BranchFetched says "Fetch completed"
+// in the language the app shows.
+//
+// Notification after a manual fetch from the branches popup finished.
+func BranchFetched() string { return In(i18n.Locale()).BranchFetched() }
+
+// BranchFetched says "Fetch completed"
+// in the language of msgs.
+//
+// Notification after a manual fetch from the branches popup finished.
+func (msgs Messages) BranchFetched() string {
+	return Catalog.Format(msgs.locale, "branchFetched", nil)
+}
+
+// BranchFetching says "Fetching"
+// in the language the app shows.
+//
+// Accessibility label of the spinner shown in the branches popup while
+// fetching.
+func BranchFetching() string { return In(i18n.Locale()).BranchFetching() }
+
+// BranchFetching says "Fetching"
+// in the language of msgs.
+//
+// Accessibility label of the spinner shown in the branches popup while
+// fetching.
+func (msgs Messages) BranchFetching() string {
+	return Catalog.Format(msgs.locale, "branchFetching", nil)
+}
+
+// BranchFetchingTip says "Fetching; click to cancel"
+// in the language the app shows.
+//
+// Tooltip of the spinner button shown in place of the Fetch button while
+// fetching; clicking cancels.
+func BranchFetchingTip() string { return In(i18n.Locale()).BranchFetchingTip() }
+
+// BranchFetchingTip says "Fetching; click to cancel"
+// in the language of msgs.
+//
+// Tooltip of the spinner button shown in place of the Fetch button while
+// fetching; clicking cancels.
+func (msgs Messages) BranchFetchingTip() string {
+	return Catalog.Format(msgs.locale, "branchFetchingTip", nil)
+}
+
+// BranchFileListMore says "{files}, and others ({count, plural, one {# file} other {# files}} in total)"
+// in the language the app shows.
+//
+// A shortened file list in merge dialogs: the first few files, then the
+// total count. files is the first few names joined with
+// branchFileListSeparator.
+func BranchFileListMore(files string, count int) string {
+	return In(i18n.Locale()).BranchFileListMore(files, count)
+}
+
+// BranchFileListMore says "{files}, and others ({count, plural, one {# file} other {# files}} in total)"
+// in the language of msgs.
+//
+// A shortened file list in merge dialogs: the first few files, then the
+// total count. files is the first few names joined with
+// branchFileListSeparator.
+func (msgs Messages) BranchFileListMore(files string, count int) string {
+	return Catalog.Format(msgs.locale, "branchFileListMore", map[string]any{"files": files, "count": count})
+}
+
+// BranchFileListSeparator says ", "
+// in the language the app shows.
+//
+// Separator between file names in a short inline list (merge dialogs).
+func BranchFileListSeparator() string { return In(i18n.Locale()).BranchFileListSeparator() }
+
+// BranchFileListSeparator says ", "
+// in the language of msgs.
+//
+// Separator between file names in a short inline list (merge dialogs).
+func (msgs Messages) BranchFileListSeparator() string {
+	return Catalog.Format(msgs.locale, "branchFileListSeparator", nil)
+}
+
+// BranchForceDelete says "Force Delete"
+// in the language the app shows.
+//
+// Button in the confirmation shown when a local branch to delete has
+// unmerged commits.
+func BranchForceDelete() string { return In(i18n.Locale()).BranchForceDelete() }
+
+// BranchForceDelete says "Force Delete"
+// in the language of msgs.
+//
+// Button in the confirmation shown when a local branch to delete has
+// unmerged commits.
+func (msgs Messages) BranchForceDelete() string {
+	return Catalog.Format(msgs.locale, "branchForceDelete", nil)
+}
+
+// BranchForceDeleteOperation says "Force Delete Branch"
+// in the language the app shows.
+//
+// Operation name of force-deleting an unmerged local branch, shown in busy
+// text, error messages and the Console.
+func BranchForceDeleteOperation() string { return In(i18n.Locale()).BranchForceDeleteOperation() }
+
+// BranchForceDeleteOperation says "Force Delete Branch"
+// in the language of msgs.
+//
+// Operation name of force-deleting an unmerged local branch, shown in busy
+// text, error messages and the Console.
+func (msgs Messages) BranchForceDeleteOperation() string {
+	return Catalog.Format(msgs.locale, "branchForceDeleteOperation", nil)
+}
+
+// BranchInWorkspace says "In {workspace}"
+// in the language the app shows.
+//
+// Right side of a branch row in the branches popup: the branch is checked
+// out in another workspace.
+func BranchInWorkspace(workspace string) string {
+	return In(i18n.Locale()).BranchInWorkspace(workspace)
+}
+
+// BranchInWorkspace says "In {workspace}"
+// in the language of msgs.
+//
+// Right side of a branch row in the branches popup: the branch is checked
+// out in another workspace.
+func (msgs Messages) BranchInWorkspace(workspace string) string {
+	return Catalog.Format(msgs.locale, "branchInWorkspace", map[string]any{"workspace": workspace})
+}
+
+// BranchIncoming says "{count, plural, one {# incoming commit} other {# incoming commits}}"
+// in the language the app shows.
+//
+// Line in the branch button tooltip: commits on the upstream branch not yet
+// pulled.
+func BranchIncoming(count int) string { return In(i18n.Locale()).BranchIncoming(count) }
+
+// BranchIncoming says "{count, plural, one {# incoming commit} other {# incoming commits}}"
+// in the language of msgs.
+//
+// Line in the branch button tooltip: commits on the upstream branch not yet
+// pulled.
+func (msgs Messages) BranchIncoming(count int) string {
+	return Catalog.Format(msgs.locale, "branchIncoming", map[string]any{"count": count})
+}
+
+// BranchIncomingTip says "{count, plural, one {# incoming commit (on the remote, not yet pulled)} other {# incoming commits (on the remote, not…"
+// in the language the app shows.
+//
+// Tooltip of the incoming arrow badge next to a branch.
+func BranchIncomingTip(count int) string { return In(i18n.Locale()).BranchIncomingTip(count) }
+
+// BranchIncomingTip says "{count, plural, one {# incoming commit (on the remote, not yet pulled)} other {# incoming commits (on the remote, not…"
+// in the language of msgs.
+//
+// Tooltip of the incoming arrow badge next to a branch.
+func (msgs Messages) BranchIncomingTip(count int) string {
+	return Catalog.Format(msgs.locale, "branchIncomingTip", map[string]any{"count": count})
+}
+
+// BranchLocal says "Local"
+// in the language the app shows.
+//
+// Group header for local branches in the branches popup and the branch list
+// of the Git Log panel.
+func BranchLocal() string { return In(i18n.Locale()).BranchLocal() }
+
+// BranchLocal says "Local"
+// in the language of msgs.
+//
+// Group header for local branches in the branches popup and the branch list
+// of the Git Log panel.
+func (msgs Messages) BranchLocal() string {
+	return Catalog.Format(msgs.locale, "branchLocal", nil)
+}
+
+// BranchMergeConflicts says "Merge Would Cause Conflicts"
+// in the language the app shows.
+//
+// Title of the confirmation in a worktree workspace when merging the base
+// branch into it would cause conflicts.
+func BranchMergeConflicts() string { return In(i18n.Locale()).BranchMergeConflicts() }
+
+// BranchMergeConflicts says "Merge Would Cause Conflicts"
+// in the language of msgs.
+//
+// Title of the confirmation in a worktree workspace when merging the base
+// branch into it would cause conflicts.
+func (msgs Messages) BranchMergeConflicts() string {
+	return Catalog.Format(msgs.locale, "branchMergeConflicts", nil)
+}
+
+// BranchMergeFrom says "Merge {base} into This Branch"
+// in the language the app shows.
+//
+// Sync menu item, dialog button and operation name in a worktree workspace:
+// merge the base branch into the workspace branch.
+func BranchMergeFrom(base string) string { return In(i18n.Locale()).BranchMergeFrom(base) }
+
+// BranchMergeFrom says "Merge {base} into This Branch"
+// in the language of msgs.
+//
+// Sync menu item, dialog button and operation name in a worktree workspace:
+// merge the base branch into the workspace branch.
+func (msgs Messages) BranchMergeFrom(base string) string {
+	return Catalog.Format(msgs.locale, "branchMergeFrom", map[string]any{"base": base})
+}
+
+// BranchMergeInto says "Merge ‘{branch}’ into ‘{current}’"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup. branch is the chosen branch,
+// current the current branch.
+func BranchMergeInto(branch string, current string) string {
+	return In(i18n.Locale()).BranchMergeInto(branch, current)
+}
+
+// BranchMergeInto says "Merge ‘{branch}’ into ‘{current}’"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup. branch is the chosen branch,
+// current the current branch.
+func (msgs Messages) BranchMergeInto(branch string, current string) string {
+	return Catalog.Format(msgs.locale, "branchMergeInto", map[string]any{"branch": branch, "current": current})
+}
+
+// BranchMergeToTip says "Merge into {base}"
+// in the language the app shows.
+//
+// Tooltip of the Merge button in the base row of a worktree workspace.
+func BranchMergeToTip(base string) string { return In(i18n.Locale()).BranchMergeToTip(base) }
+
+// BranchMergeToTip says "Merge into {base}"
+// in the language of msgs.
+//
+// Tooltip of the Merge button in the base row of a worktree workspace.
+func (msgs Messages) BranchMergeToTip(base string) string {
+	return Catalog.Format(msgs.locale, "branchMergeToTip", map[string]any{"base": base})
+}
+
+// BranchMergeWorkspaceBody says "Merges into the project directory with a merge commit. The project directory must be on the {base} branch, and neithe…"
+// in the language the app shows.
+//
+// Body of the confirmation before merging a worktree workspace into the
+// project directory.
+func BranchMergeWorkspaceBody(base string) string {
+	return In(i18n.Locale()).BranchMergeWorkspaceBody(base)
+}
+
+// BranchMergeWorkspaceBody says "Merges into the project directory with a merge commit. The project directory must be on the {base} branch, and neithe…"
+// in the language of msgs.
+//
+// Body of the confirmation before merging a worktree workspace into the
+// project directory.
+func (msgs Messages) BranchMergeWorkspaceBody(base string) string {
+	return Catalog.Format(msgs.locale, "branchMergeWorkspaceBody", map[string]any{"base": base})
+}
+
+// BranchMergeWorkspaceConfirm says "Merge {branch} into {base}?"
+// in the language the app shows.
+//
+// Title of the confirmation before merging a worktree workspace into the
+// project directory.
+func BranchMergeWorkspaceConfirm(branch string, base string) string {
+	return In(i18n.Locale()).BranchMergeWorkspaceConfirm(branch, base)
+}
+
+// BranchMergeWorkspaceConfirm says "Merge {branch} into {base}?"
+// in the language of msgs.
+//
+// Title of the confirmation before merging a worktree workspace into the
+// project directory.
+func (msgs Messages) BranchMergeWorkspaceConfirm(branch string, base string) string {
+	return Catalog.Format(msgs.locale, "branchMergeWorkspaceConfirm", map[string]any{"branch": branch, "base": base})
+}
+
+// BranchMerged says "Merged {base} into this branch"
+// in the language the app shows.
+//
+// Notification after merging the base branch into a worktree workspace.
+func BranchMerged(base string) string { return In(i18n.Locale()).BranchMerged(base) }
+
+// BranchMerged says "Merged {base} into this branch"
+// in the language of msgs.
+//
+// Notification after merging the base branch into a worktree workspace.
+func (msgs Messages) BranchMerged(base string) string {
+	return Catalog.Format(msgs.locale, "branchMerged", map[string]any{"base": base})
+}
+
+// BranchMergedBody says "The worktree and branch {branch} still exist. Delete them if you no longer need them."
+// in the language the app shows.
+//
+// Body of the dialog after a worktree workspace was merged into the project
+// directory; the button deletes the workspace.
+func BranchMergedBody(branch string) string { return In(i18n.Locale()).BranchMergedBody(branch) }
+
+// BranchMergedBody says "The worktree and branch {branch} still exist. Delete them if you no longer need them."
+// in the language of msgs.
+//
+// Body of the dialog after a worktree workspace was merged into the project
+// directory; the button deletes the workspace.
+func (msgs Messages) BranchMergedBody(branch string) string {
+	return Catalog.Format(msgs.locale, "branchMergedBody", map[string]any{"branch": branch})
+}
+
+// BranchMergedBodyUntracked says "The worktree and branch {branch} still exist. Delete them if you no longer need them. Deleting also removes these unc…"
+// in the language the app shows.
+//
+// Same as branchMergedBody, when the worktree still has uncommitted files.
+// files is a short file list.
+func BranchMergedBodyUntracked(branch string, files string) string {
+	return In(i18n.Locale()).BranchMergedBodyUntracked(branch, files)
+}
+
+// BranchMergedBodyUntracked says "The worktree and branch {branch} still exist. Delete them if you no longer need them. Deleting also removes these unc…"
+// in the language of msgs.
+//
+// Same as branchMergedBody, when the worktree still has uncommitted files.
+// files is a short file list.
+func (msgs Messages) BranchMergedBodyUntracked(branch string, files string) string {
+	return Catalog.Format(msgs.locale, "branchMergedBodyUntracked", map[string]any{"branch": branch, "files": files})
+}
+
+// BranchMergedTo says "Merged into {base}"
+// in the language the app shows.
+//
+// Title of the dialog after a worktree workspace was merged into its base
+// branch.
+func BranchMergedTo(base string) string { return In(i18n.Locale()).BranchMergedTo(base) }
+
+// BranchMergedTo says "Merged into {base}"
+// in the language of msgs.
+//
+// Title of the dialog after a worktree workspace was merged into its base
+// branch.
+func (msgs Messages) BranchMergedTo(base string) string {
+	return Catalog.Format(msgs.locale, "branchMergedTo", map[string]any{"base": base})
+}
+
+// BranchName says "Branch name"
+// in the language the app shows.
+//
+// Placeholder of the name field in the New Branch dialog.
+func BranchName() string { return In(i18n.Locale()).BranchName() }
+
+// BranchName says "Branch name"
+// in the language of msgs.
+//
+// Placeholder of the name field in the New Branch dialog.
+func (msgs Messages) BranchName() string {
+	return Catalog.Format(msgs.locale, "branchName", nil)
+}
+
+// BranchNew says "New Branch"
+// in the language the app shows.
+//
+// Title of the New Branch dialog, also the operation name shown in busy
+// text, error messages and the Console.
+func BranchNew() string { return In(i18n.Locale()).BranchNew() }
+
+// BranchNew says "New Branch"
+// in the language of msgs.
+//
+// Title of the New Branch dialog, also the operation name shown in busy
+// text, error messages and the Console.
+func (msgs Messages) BranchNew() string {
+	return Catalog.Format(msgs.locale, "branchNew", nil)
+}
+
+// BranchNewEllipsis says "New Branch…"
+// in the language the app shows.
+//
+// Item in the branches popup that opens the New Branch dialog.
+func BranchNewEllipsis() string { return In(i18n.Locale()).BranchNewEllipsis() }
+
+// BranchNewEllipsis says "New Branch…"
+// in the language of msgs.
+//
+// Item in the branches popup that opens the New Branch dialog.
+func (msgs Messages) BranchNewEllipsis() string {
+	return Catalog.Format(msgs.locale, "branchNewEllipsis", nil)
+}
+
+// BranchNewFrom says "New Branch from ‘{branch}’…"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup.
+func BranchNewFrom(branch string) string { return In(i18n.Locale()).BranchNewFrom(branch) }
+
+// BranchNewFrom says "New Branch from ‘{branch}’…"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup.
+func (msgs Messages) BranchNewFrom(branch string) string {
+	return Catalog.Format(msgs.locale, "branchNewFrom", map[string]any{"branch": branch})
+}
+
+// BranchNewFromTitle says "New Branch from {revision}"
+// in the language the app shows.
+//
+// Title of the new branch dialog when starting from a branch or commit.
+// revision is a branch name or commit hash.
+func BranchNewFromTitle(revision string) string {
+	return In(i18n.Locale()).BranchNewFromTitle(revision)
+}
+
+// BranchNewFromTitle says "New Branch from {revision}"
+// in the language of msgs.
+//
+// Title of the new branch dialog when starting from a branch or commit.
+// revision is a branch name or commit hash.
+func (msgs Messages) BranchNewFromTitle(revision string) string {
+	return Catalog.Format(msgs.locale, "branchNewFromTitle", map[string]any{"revision": revision})
+}
+
+// BranchNewWorkspaceFrom says "New Workspace from ‘{branch}’…"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup: create a worktree workspace from
+// this branch.
+func BranchNewWorkspaceFrom(branch string) string {
+	return In(i18n.Locale()).BranchNewWorkspaceFrom(branch)
+}
+
+// BranchNewWorkspaceFrom says "New Workspace from ‘{branch}’…"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup: create a worktree workspace from
+// this branch.
+func (msgs Messages) BranchNewWorkspaceFrom(branch string) string {
+	return Catalog.Format(msgs.locale, "branchNewWorkspaceFrom", map[string]any{"branch": branch})
+}
+
+// BranchNewWorkspaceTitle says "New Workspace from {branch}"
+// in the language the app shows.
+//
+// Title of the new worktree workspace dialog.
+func BranchNewWorkspaceTitle(branch string) string {
+	return In(i18n.Locale()).BranchNewWorkspaceTitle(branch)
+}
+
+// BranchNewWorkspaceTitle says "New Workspace from {branch}"
+// in the language of msgs.
+//
+// Title of the new worktree workspace dialog.
+func (msgs Messages) BranchNewWorkspaceTitle(branch string) string {
+	return Catalog.Format(msgs.locale, "branchNewWorkspaceTitle", map[string]any{"branch": branch})
+}
+
+// BranchNoMatch says "No branches matching “{query}”"
+// in the language the app shows.
+//
+// Empty state of the branch search in the branches popup.
+func BranchNoMatch(query string) string { return In(i18n.Locale()).BranchNoMatch(query) }
+
+// BranchNoMatch says "No branches matching “{query}”"
+// in the language of msgs.
+//
+// Empty state of the branch search in the branches popup.
+func (msgs Messages) BranchNoMatch(query string) string {
+	return Catalog.Format(msgs.locale, "branchNoMatch", map[string]any{"query": query})
+}
+
+// BranchNoUpstream says "The current branch has no upstream branch and cannot be updated"
+// in the language the app shows.
+//
+// Error bar text when choosing Update Project in the branches popup while
+// the current branch has no upstream branch.
+func BranchNoUpstream() string { return In(i18n.Locale()).BranchNoUpstream() }
+
+// BranchNoUpstream says "The current branch has no upstream branch and cannot be updated"
+// in the language of msgs.
+//
+// Error bar text when choosing Update Project in the branches popup while
+// the current branch has no upstream branch.
+func (msgs Messages) BranchNoUpstream() string {
+	return Catalog.Format(msgs.locale, "branchNoUpstream", nil)
+}
+
+// BranchOpenPosse says "Open in Posse"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: open that worktree as a workspace in Posse.
+func BranchOpenPosse() string { return In(i18n.Locale()).BranchOpenPosse() }
+
+// BranchOpenPosse says "Open in Posse"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: open that worktree as a workspace in Posse.
+func (msgs Messages) BranchOpenPosse() string {
+	return Catalog.Format(msgs.locale, "branchOpenPosse", nil)
+}
+
+// BranchOutgoing says "{count, plural, one {# outgoing commit} other {# outgoing commits}}"
+// in the language the app shows.
+//
+// Line in the branch button tooltip: local commits not yet pushed.
+func BranchOutgoing(count int) string { return In(i18n.Locale()).BranchOutgoing(count) }
+
+// BranchOutgoing says "{count, plural, one {# outgoing commit} other {# outgoing commits}}"
+// in the language of msgs.
+//
+// Line in the branch button tooltip: local commits not yet pushed.
+func (msgs Messages) BranchOutgoing(count int) string {
+	return Catalog.Format(msgs.locale, "branchOutgoing", map[string]any{"count": count})
+}
+
+// BranchOutgoingTip says "{count, plural, one {# outgoing commit (local, not yet pushed)} other {# outgoing commits (local, not yet pushed)}}"
+// in the language the app shows.
+//
+// Tooltip of the outgoing arrow badge next to a branch.
+func BranchOutgoingTip(count int) string { return In(i18n.Locale()).BranchOutgoingTip(count) }
+
+// BranchOutgoingTip says "{count, plural, one {# outgoing commit (local, not yet pushed)} other {# outgoing commits (local, not yet pushed)}}"
+// in the language of msgs.
+//
+// Tooltip of the outgoing arrow badge next to a branch.
+func (msgs Messages) BranchOutgoingTip(count int) string {
+	return Catalog.Format(msgs.locale, "branchOutgoingTip", map[string]any{"count": count})
+}
+
+// BranchPulled says "{branch}: pulled {count, plural, one {# commit} other {# commits}}"
+// in the language the app shows.
+//
+// Notification after updating a branch.
+func BranchPulled(branch string, count int) string {
+	return In(i18n.Locale()).BranchPulled(branch, count)
+}
+
+// BranchPulled says "{branch}: pulled {count, plural, one {# commit} other {# commits}}"
+// in the language of msgs.
+//
+// Notification after updating a branch.
+func (msgs Messages) BranchPulled(branch string, count int) string {
+	return Catalog.Format(msgs.locale, "branchPulled", map[string]any{"branch": branch, "count": count})
+}
+
+// BranchReading says "Reading branches…"
+// in the language the app shows.
+//
+// Placeholder in the branches popup while the branch list is being read.
+func BranchReading() string { return In(i18n.Locale()).BranchReading() }
+
+// BranchReading says "Reading branches…"
+// in the language of msgs.
+//
+// Placeholder in the branches popup while the branch list is being read.
+func (msgs Messages) BranchReading() string {
+	return Catalog.Format(msgs.locale, "branchReading", nil)
+}
+
+// BranchRebaseOnto says "Rebase ‘{current}’ onto ‘{branch}’"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup. current is the current branch,
+// branch the chosen one.
+func BranchRebaseOnto(current string, branch string) string {
+	return In(i18n.Locale()).BranchRebaseOnto(current, branch)
+}
+
+// BranchRebaseOnto says "Rebase ‘{current}’ onto ‘{branch}’"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup. current is the current branch,
+// branch the chosen one.
+func (msgs Messages) BranchRebaseOnto(current string, branch string) string {
+	return Catalog.Format(msgs.locale, "branchRebaseOnto", map[string]any{"current": current, "branch": branch})
+}
+
+// BranchRebaseOntoBase says "Rebase onto {base}"
+// in the language the app shows.
+//
+// Sync menu item in the base row of a worktree workspace.
+func BranchRebaseOntoBase(base string) string { return In(i18n.Locale()).BranchRebaseOntoBase(base) }
+
+// BranchRebaseOntoBase says "Rebase onto {base}"
+// in the language of msgs.
+//
+// Sync menu item in the base row of a worktree workspace.
+func (msgs Messages) BranchRebaseOntoBase(base string) string {
+	return Catalog.Format(msgs.locale, "branchRebaseOntoBase", map[string]any{"base": base})
+}
+
+// BranchRebaseToOp says "Rebase onto {base}"
+// in the language the app shows.
+//
+// Operation name (busy text, Console) of rebasing a worktree workspace onto
+// its base branch.
+func BranchRebaseToOp(base string) string { return In(i18n.Locale()).BranchRebaseToOp(base) }
+
+// BranchRebaseToOp says "Rebase onto {base}"
+// in the language of msgs.
+//
+// Operation name (busy text, Console) of rebasing a worktree workspace onto
+// its base branch.
+func (msgs Messages) BranchRebaseToOp(base string) string {
+	return Catalog.Format(msgs.locale, "branchRebaseToOp", map[string]any{"base": base})
+}
+
+// BranchRebased says "Rebased onto {base}"
+// in the language the app shows.
+//
+// Notification after rebasing a worktree workspace onto its base branch.
+func BranchRebased(base string) string { return In(i18n.Locale()).BranchRebased(base) }
+
+// BranchRebased says "Rebased onto {base}"
+// in the language of msgs.
+//
+// Notification after rebasing a worktree workspace onto its base branch.
+func (msgs Messages) BranchRebased(base string) string {
+	return Catalog.Format(msgs.locale, "branchRebased", map[string]any{"base": base})
+}
+
+// BranchRecent says "Recent"
+// in the language the app shows.
+//
+// Group header for recently checked-out branches in the branches popup.
+func BranchRecent() string { return In(i18n.Locale()).BranchRecent() }
+
+// BranchRecent says "Recent"
+// in the language of msgs.
+//
+// Group header for recently checked-out branches in the branches popup.
+func (msgs Messages) BranchRecent() string {
+	return Catalog.Format(msgs.locale, "branchRecent", nil)
+}
+
+// BranchRelativeTo says "vs. {base}"
+// in the language the app shows.
+//
+// Start of the base row in the Changes view of a worktree workspace, before
+// the incoming and outgoing counts.
+func BranchRelativeTo(base string) string { return In(i18n.Locale()).BranchRelativeTo(base) }
+
+// BranchRelativeTo says "vs. {base}"
+// in the language of msgs.
+//
+// Start of the base row in the Changes view of a worktree workspace, before
+// the incoming and outgoing counts.
+func (msgs Messages) BranchRelativeTo(base string) string {
+	return Catalog.Format(msgs.locale, "branchRelativeTo", map[string]any{"base": base})
+}
+
+// BranchRemote says "Remote"
+// in the language the app shows.
+//
+// Group header for remote branches in the branch list of the Git Log panel.
+func BranchRemote() string { return In(i18n.Locale()).BranchRemote() }
+
+// BranchRemote says "Remote"
+// in the language of msgs.
+//
+// Group header for remote branches in the branch list of the Git Log panel.
+func (msgs Messages) BranchRemote() string {
+	return Catalog.Format(msgs.locale, "branchRemote", nil)
+}
+
+// BranchRemoteDeleted says "Deleted on remote"
+// in the language the app shows.
+//
+// Small gray label on a branch row in the branches popup: the branch's
+// upstream branch has been deleted on the remote.
+func BranchRemoteDeleted() string { return In(i18n.Locale()).BranchRemoteDeleted() }
+
+// BranchRemoteDeleted says "Deleted on remote"
+// in the language of msgs.
+//
+// Small gray label on a branch row in the branches popup: the branch's
+// upstream branch has been deleted on the remote.
+func (msgs Messages) BranchRemoteDeleted() string {
+	return Catalog.Format(msgs.locale, "branchRemoteDeleted", nil)
+}
+
+// BranchRemoteGroup says "Remote: {remote}"
+// in the language the app shows.
+//
+// Group header in the branches popup for the branches of one remote, such
+// as origin.
+func BranchRemoteGroup(remote string) string { return In(i18n.Locale()).BranchRemoteGroup(remote) }
+
+// BranchRemoteGroup says "Remote: {remote}"
+// in the language of msgs.
+//
+// Group header in the branches popup for the branches of one remote, such
+// as origin.
+func (msgs Messages) BranchRemoteGroup(remote string) string {
+	return Catalog.Format(msgs.locale, "branchRemoteGroup", map[string]any{"remote": remote})
+}
+
+// BranchRename says "Rename"
+// in the language the app shows.
+//
+// Button in the rename dialog for a local branch in the branches popup.
+// Also the operation name shown in busy text, error messages and the
+// Console.
+func BranchRename() string { return In(i18n.Locale()).BranchRename() }
+
+// BranchRename says "Rename"
+// in the language of msgs.
+//
+// Button in the rename dialog for a local branch in the branches popup.
+// Also the operation name shown in busy text, error messages and the
+// Console.
+func (msgs Messages) BranchRename() string {
+	return Catalog.Format(msgs.locale, "branchRename", nil)
+}
+
+// BranchRenameEllipsis says "Rename…"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup that opens the rename dialog for a
+// local branch.
+func BranchRenameEllipsis() string { return In(i18n.Locale()).BranchRenameEllipsis() }
+
+// BranchRenameEllipsis says "Rename…"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup that opens the rename dialog for a
+// local branch.
+func (msgs Messages) BranchRenameEllipsis() string {
+	return Catalog.Format(msgs.locale, "branchRenameEllipsis", nil)
+}
+
+// BranchRenameTitle says "Rename Branch {branch}"
+// in the language the app shows.
+//
+// Title of the rename branch dialog.
+func BranchRenameTitle(branch string) string { return In(i18n.Locale()).BranchRenameTitle(branch) }
+
+// BranchRenameTitle says "Rename Branch {branch}"
+// in the language of msgs.
+//
+// Title of the rename branch dialog.
+func (msgs Messages) BranchRenameTitle(branch string) string {
+	return Catalog.Format(msgs.locale, "branchRenameTitle", map[string]any{"branch": branch})
+}
+
+// BranchRestore says "Restore Branch"
+// in the language the app shows.
+//
+// Operation name of restoring a just-deleted branch from the notification's
+// Restore button, shown in busy text, error messages and the Console.
+func BranchRestore() string { return In(i18n.Locale()).BranchRestore() }
+
+// BranchRestore says "Restore Branch"
+// in the language of msgs.
+//
+// Operation name of restoring a just-deleted branch from the notification's
+// Restore button, shown in busy text, error messages and the Console.
+func (msgs Messages) BranchRestore() string {
+	return Catalog.Format(msgs.locale, "branchRestore", nil)
+}
+
+// BranchRevealWorktree says "Show Worktree in Finder"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: show that worktree folder in Finder.
+func BranchRevealWorktree() string { return In(i18n.Locale()).BranchRevealWorktree() }
+
+// BranchRevealWorktree says "Show Worktree in Finder"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup for a branch checked out in
+// another worktree: show that worktree folder in Finder.
+func (msgs Messages) BranchRevealWorktree() string {
+	return Catalog.Format(msgs.locale, "branchRevealWorktree", nil)
+}
+
+// BranchRevisionPlaceholder says "Tag name or commit hash"
+// in the language the app shows.
+//
+// Placeholder of the input in the Checkout Tag or Revision dialog.
+func BranchRevisionPlaceholder() string { return In(i18n.Locale()).BranchRevisionPlaceholder() }
+
+// BranchRevisionPlaceholder says "Tag name or commit hash"
+// in the language of msgs.
+//
+// Placeholder of the input in the Checkout Tag or Revision dialog.
+func (msgs Messages) BranchRevisionPlaceholder() string {
+	return Catalog.Format(msgs.locale, "branchRevisionPlaceholder", nil)
+}
+
+// BranchSearch says "Search branches"
+// in the language the app shows.
+//
+// Placeholder of the search field at the top of the branches popup.
+func BranchSearch() string { return In(i18n.Locale()).BranchSearch() }
+
+// BranchSearch says "Search branches"
+// in the language of msgs.
+//
+// Placeholder of the search field at the top of the branches popup.
+func (msgs Messages) BranchSearch() string {
+	return Catalog.Format(msgs.locale, "branchSearch", nil)
+}
+
+// BranchShowInLog says "Show in Log"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup: open the Git Log filtered to this
+// branch.
+func BranchShowInLog() string { return In(i18n.Locale()).BranchShowInLog() }
+
+// BranchShowInLog says "Show in Log"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup: open the Git Log filtered to this
+// branch.
+func (msgs Messages) BranchShowInLog() string {
+	return Catalog.Format(msgs.locale, "branchShowInLog", nil)
+}
+
+// BranchSwitch says "Switch Branch"
+// in the language the app shows.
+//
+// Operation name of creating a new branch and switching to it, shown in
+// busy text, error messages, the Console and the agent-is-working warning.
+func BranchSwitch() string { return In(i18n.Locale()).BranchSwitch() }
+
+// BranchSwitch says "Switch Branch"
+// in the language of msgs.
+//
+// Operation name of creating a new branch and switching to it, shown in
+// busy text, error messages, the Console and the agent-is-working warning.
+func (msgs Messages) BranchSwitch() string {
+	return Catalog.Format(msgs.locale, "branchSwitch", nil)
+}
+
+// BranchSwitchToWorkspace says "Switch to Workspace {workspace}"
+// in the language the app shows.
+//
+// Branch menu item when the branch is checked out in another workspace.
+func BranchSwitchToWorkspace(workspace string) string {
+	return In(i18n.Locale()).BranchSwitchToWorkspace(workspace)
+}
+
+// BranchSwitchToWorkspace says "Switch to Workspace {workspace}"
+// in the language of msgs.
+//
+// Branch menu item when the branch is checked out in another workspace.
+func (msgs Messages) BranchSwitchToWorkspace(workspace string) string {
+	return Catalog.Format(msgs.locale, "branchSwitchToWorkspace", map[string]any{"workspace": workspace})
+}
+
+// BranchSync says "Sync"
+// in the language the app shows.
+//
+// Small button in the base row of a worktree workspace's Changes view;
+// opens a menu to merge or rebase onto the base branch.
+func BranchSync() string { return In(i18n.Locale()).BranchSync() }
+
+// BranchSync says "Sync"
+// in the language of msgs.
+//
+// Small button in the base row of a worktree workspace's Changes view;
+// opens a menu to merge or rebase onto the base branch.
+func (msgs Messages) BranchSync() string {
+	return Catalog.Format(msgs.locale, "branchSync", nil)
+}
+
+// BranchSyncFirstBody says "New commits on {base} and {branch} change the same places ({files}). Merge {base} into this workspace first and resol…"
+// in the language the app shows.
+//
+// Body of the dialog when merging a worktree workspace back would conflict.
+// files is a short file list.
+func BranchSyncFirstBody(base string, branch string, files string) string {
+	return In(i18n.Locale()).BranchSyncFirstBody(base, branch, files)
+}
+
+// BranchSyncFirstBody says "New commits on {base} and {branch} change the same places ({files}). Merge {base} into this workspace first and resol…"
+// in the language of msgs.
+//
+// Body of the dialog when merging a worktree workspace back would conflict.
+// files is a short file list.
+func (msgs Messages) BranchSyncFirstBody(base string, branch string, files string) string {
+	return Catalog.Format(msgs.locale, "branchSyncFirstBody", map[string]any{"base": base, "branch": branch, "files": files})
+}
+
+// BranchSyncFirstBodyRestored says "The project directory has been restored. New commits on {base} and {branch} change the same places ({files}). Merge {…"
+// in the language the app shows.
+//
+// Same as branchSyncFirstBody, after the merge was tried, conflicted and
+// was rolled back.
+func BranchSyncFirstBodyRestored(base string, branch string, files string) string {
+	return In(i18n.Locale()).BranchSyncFirstBodyRestored(base, branch, files)
+}
+
+// BranchSyncFirstBodyRestored says "The project directory has been restored. New commits on {base} and {branch} change the same places ({files}). Merge {…"
+// in the language of msgs.
+//
+// Same as branchSyncFirstBody, after the merge was tried, conflicted and
+// was rolled back.
+func (msgs Messages) BranchSyncFirstBodyRestored(base string, branch string, files string) string {
+	return Catalog.Format(msgs.locale, "branchSyncFirstBodyRestored", map[string]any{"base": base, "branch": branch, "files": files})
+}
+
+// BranchSyncTip says "Bring in new commits from {base}"
+// in the language the app shows.
+//
+// Tooltip of the Sync button in the base row of a worktree workspace.
+func BranchSyncTip(base string) string { return In(i18n.Locale()).BranchSyncTip(base) }
+
+// BranchSyncTip says "Bring in new commits from {base}"
+// in the language of msgs.
+//
+// Tooltip of the Sync button in the base row of a worktree workspace.
+func (msgs Messages) BranchSyncTip(base string) string {
+	return Catalog.Format(msgs.locale, "branchSyncTip", map[string]any{"base": base})
+}
+
+// BranchTrackTip says "Git Branch: {branch}"
+// in the language the app shows.
+//
+// First line of the branch button tooltip in the tab bar.
+func BranchTrackTip(branch string) string { return In(i18n.Locale()).BranchTrackTip(branch) }
+
+// BranchTrackTip says "Git Branch: {branch}"
+// in the language of msgs.
+//
+// First line of the branch button tooltip in the tab bar.
+func (msgs Messages) BranchTrackTip(branch string) string {
+	return Catalog.Format(msgs.locale, "branchTrackTip", map[string]any{"branch": branch})
+}
+
+// BranchUnmergedBody says "This branch has commits not found on other branches. After forcing deletion, you can restore it immediately from the …"
+// in the language the app shows.
+//
+// Body of the confirmation shown when a local branch to delete has commits
+// not found on other branches.
+func BranchUnmergedBody() string { return In(i18n.Locale()).BranchUnmergedBody() }
+
+// BranchUnmergedBody says "This branch has commits not found on other branches. After forcing deletion, you can restore it immediately from the …"
+// in the language of msgs.
+//
+// Body of the confirmation shown when a local branch to delete has commits
+// not found on other branches.
+func (msgs Messages) BranchUnmergedBody() string {
+	return Catalog.Format(msgs.locale, "branchUnmergedBody", nil)
+}
+
+// BranchUnmergedTitle says "Branch {branch} Is Not Fully Merged"
+// in the language the app shows.
+//
+// Title of the confirmation to force-delete an unmerged branch.
+func BranchUnmergedTitle(branch string) string { return In(i18n.Locale()).BranchUnmergedTitle(branch) }
+
+// BranchUnmergedTitle says "Branch {branch} Is Not Fully Merged"
+// in the language of msgs.
+//
+// Title of the confirmation to force-delete an unmerged branch.
+func (msgs Messages) BranchUnmergedTitle(branch string) string {
+	return Catalog.Format(msgs.locale, "branchUnmergedTitle", map[string]any{"branch": branch})
+}
+
+// BranchUpToDate says "{branch} is up to date"
+// in the language the app shows.
+//
+// Notification after updating a branch that had nothing to pull.
+func BranchUpToDate(branch string) string { return In(i18n.Locale()).BranchUpToDate(branch) }
+
+// BranchUpToDate says "{branch} is up to date"
+// in the language of msgs.
+//
+// Notification after updating a branch that had nothing to pull.
+func (msgs Messages) BranchUpToDate(branch string) string {
+	return Catalog.Format(msgs.locale, "branchUpToDate", map[string]any{"branch": branch})
+}
+
+// BranchUpdate says "Update"
+// in the language the app shows.
+//
+// Branch menu item in the branches popup: pull the branch from its
+// upstream. Also the operation name shown in busy text, error messages and
+// the Console.
+func BranchUpdate() string { return In(i18n.Locale()).BranchUpdate() }
+
+// BranchUpdate says "Update"
+// in the language of msgs.
+//
+// Branch menu item in the branches popup: pull the branch from its
+// upstream. Also the operation name shown in busy text, error messages and
+// the Console.
+func (msgs Messages) BranchUpdate() string {
+	return Catalog.Format(msgs.locale, "branchUpdate", nil)
+}
+
+// BranchUpdateNamed says "Update {branch}"
+// in the language the app shows.
+//
+// Operation name (busy text, Console) of updating a branch that is not
+// checked out.
+func BranchUpdateNamed(branch string) string { return In(i18n.Locale()).BranchUpdateNamed(branch) }
+
+// BranchUpdateNamed says "Update {branch}"
+// in the language of msgs.
+//
+// Operation name (busy text, Console) of updating a branch that is not
+// checked out.
+func (msgs Messages) BranchUpdateNamed(branch string) string {
+	return Catalog.Format(msgs.locale, "branchUpdateNamed", map[string]any{"branch": branch})
+}
+
+// BranchUpdateProject says "Update Project"
+// in the language the app shows.
+//
+// Item in the branches popup (WebStorm: Update Project): pull the current
+// branch from its upstream. Also the operation name shown in busy text,
+// error messages and the Console.
+func BranchUpdateProject() string { return In(i18n.Locale()).BranchUpdateProject() }
+
+// BranchUpdateProject says "Update Project"
+// in the language of msgs.
+//
+// Item in the branches popup (WebStorm: Update Project): pull the current
+// branch from its upstream. Also the operation name shown in busy text,
+// error messages and the Console.
+func (msgs Messages) BranchUpdateProject() string {
+	return Catalog.Format(msgs.locale, "branchUpdateProject", nil)
+}
+
+// BranchWorkspaceName says "Workspace name (also the new branch name)"
+// in the language the app shows.
+//
+// Placeholder of the name field in the New Workspace dialog opened from a
+// branch.
+func BranchWorkspaceName() string { return In(i18n.Locale()).BranchWorkspaceName() }
+
+// BranchWorkspaceName says "Workspace name (also the new branch name)"
+// in the language of msgs.
+//
+// Placeholder of the name field in the New Workspace dialog opened from a
+// branch.
+func (msgs Messages) BranchWorkspaceName() string {
+	return Catalog.Format(msgs.locale, "branchWorkspaceName", nil)
+}
+
 // ChatAddProjectError says "Could not add the chat folder as a project: {error}"
 // in the language the app shows.
 //
@@ -728,6 +2236,22 @@ func (msgs Messages) CommonPreview() string {
 	return Catalog.Format(msgs.locale, "commonPreview", nil)
 }
 
+// CommonRefresh says "Refresh"
+// in the language the app shows.
+//
+// Tooltip of the refresh icon button in the Changes view, branch comparison
+// and file history.
+func CommonRefresh() string { return In(i18n.Locale()).CommonRefresh() }
+
+// CommonRefresh says "Refresh"
+// in the language of msgs.
+//
+// Tooltip of the refresh icon button in the Changes view, branch comparison
+// and file history.
+func (msgs Messages) CommonRefresh() string {
+	return Catalog.Format(msgs.locale, "commonRefresh", nil)
+}
+
 // CommonRemove says "Remove"
 // in the language the app shows.
 //
@@ -754,6 +2278,22 @@ func CommonResetToDefault() string { return In(i18n.Locale()).CommonResetToDefau
 // Common button.
 func (msgs Messages) CommonResetToDefault() string {
 	return Catalog.Format(msgs.locale, "commonResetToDefault", nil)
+}
+
+// CommonRestore says "Restore"
+// in the language the app shows.
+//
+// Button on the notification after deleting a local branch: recreate the
+// branch.
+func CommonRestore() string { return In(i18n.Locale()).CommonRestore() }
+
+// CommonRestore says "Restore"
+// in the language of msgs.
+//
+// Button on the notification after deleting a local branch: recreate the
+// branch.
+func (msgs Messages) CommonRestore() string {
+	return Catalog.Format(msgs.locale, "commonRestore", nil)
 }
 
 // CommonRetry says "Retry"
@@ -838,6 +2378,3158 @@ func CommonSelectAll() string { return In(i18n.Locale()).CommonSelectAll() }
 // Common menu item.
 func (msgs Messages) CommonSelectAll() string {
 	return Catalog.Format(msgs.locale, "commonSelectAll", nil)
+}
+
+// CompareBinary says "Binary file; content is not displayed"
+// in the language the app shows.
+//
+// Placeholder in the push dialog's diff when the file is binary.
+func CompareBinary() string { return In(i18n.Locale()).CompareBinary() }
+
+// CompareBinary says "Binary file; content is not displayed"
+// in the language of msgs.
+//
+// Placeholder in the push dialog's diff when the file is binary.
+func (msgs Messages) CompareBinary() string {
+	return Catalog.Format(msgs.locale, "compareBinary", nil)
+}
+
+// CompareCherryPickCheckedOut says "Can only cherry-pick onto the checked-out branch. Currently checked out: {branch}"
+// in the language the app shows.
+//
+// Tooltip of the disabled Cherry-pick button in the branch comparison.
+func CompareCherryPickCheckedOut(branch string) string {
+	return In(i18n.Locale()).CompareCherryPickCheckedOut(branch)
+}
+
+// CompareCherryPickCheckedOut says "Can only cherry-pick onto the checked-out branch. Currently checked out: {branch}"
+// in the language of msgs.
+//
+// Tooltip of the disabled Cherry-pick button in the branch comparison.
+func (msgs Messages) CompareCherryPickCheckedOut(branch string) string {
+	return Catalog.Format(msgs.locale, "compareCherryPickCheckedOut", map[string]any{"branch": branch})
+}
+
+// CompareCherryPickMany says "Apply {count, plural, one {# commit} other {# commits}} to {branch} in order"
+// in the language the app shows.
+//
+// Detail of the Cherry-pick button tooltip in the branch comparison,
+// several commits selected.
+func CompareCherryPickMany(count int, branch string) string {
+	return In(i18n.Locale()).CompareCherryPickMany(count, branch)
+}
+
+// CompareCherryPickMany says "Apply {count, plural, one {# commit} other {# commits}} to {branch} in order"
+// in the language of msgs.
+//
+// Detail of the Cherry-pick button tooltip in the branch comparison,
+// several commits selected.
+func (msgs Messages) CompareCherryPickMany(count int, branch string) string {
+	return Catalog.Format(msgs.locale, "compareCherryPickMany", map[string]any{"count": count, "branch": branch})
+}
+
+// CompareCherryPickOne says "Apply {commit} to {branch}"
+// in the language the app shows.
+//
+// Detail of the Cherry-pick button tooltip in the branch comparison. commit
+// is a short hash.
+func CompareCherryPickOne(commit string, branch string) string {
+	return In(i18n.Locale()).CompareCherryPickOne(commit, branch)
+}
+
+// CompareCherryPickOne says "Apply {commit} to {branch}"
+// in the language of msgs.
+//
+// Detail of the Cherry-pick button tooltip in the branch comparison. commit
+// is a short hash.
+func (msgs Messages) CompareCherryPickOne(commit string, branch string) string {
+	return Catalog.Format(msgs.locale, "compareCherryPickOne", map[string]any{"commit": commit, "branch": branch})
+}
+
+// CompareCherryPickTip says "Cherry-pick: {detail}"
+// in the language the app shows.
+//
+// Tooltip of the Cherry-pick button in the branch comparison. detail is
+// what it will do or why it is disabled.
+func CompareCherryPickTip(detail string) string {
+	return In(i18n.Locale()).CompareCherryPickTip(detail)
+}
+
+// CompareCherryPickTip says "Cherry-pick: {detail}"
+// in the language of msgs.
+//
+// Tooltip of the Cherry-pick button in the branch comparison. detail is
+// what it will do or why it is disabled.
+func (msgs Messages) CompareCherryPickTip(detail string) string {
+	return Catalog.Format(msgs.locale, "compareCherryPickTip", map[string]any{"detail": detail})
+}
+
+// CompareCount says "{count, plural, one {# commit} other {# commits}}"
+// in the language the app shows.
+//
+// Commit count at the right of a pane header in the branch comparison.
+func CompareCount(count int) string { return In(i18n.Locale()).CompareCount(count) }
+
+// CompareCount says "{count, plural, one {# commit} other {# commits}}"
+// in the language of msgs.
+//
+// Commit count at the right of a pane header in the branch comparison.
+func (msgs Messages) CompareCount(count int) string {
+	return Catalog.Format(msgs.locale, "compareCount", map[string]any{"count": count})
+}
+
+// CompareDetachedPush says "Cannot push from a detached HEAD"
+// in the language the app shows.
+//
+// Error bar text when trying to push while HEAD is detached.
+func CompareDetachedPush() string { return In(i18n.Locale()).CompareDetachedPush() }
+
+// CompareDetachedPush says "Cannot push from a detached HEAD"
+// in the language of msgs.
+//
+// Error bar text when trying to push while HEAD is detached.
+func (msgs Messages) CompareDetachedPush() string {
+	return Catalog.Format(msgs.locale, "compareDetachedPush", nil)
+}
+
+// CompareFilteredCount says "{shown} of {count, plural, one {# commit} other {# commits}}"
+// in the language the app shows.
+//
+// Commit count in a pane header of the branch comparison while filtering.
+func CompareFilteredCount(shown int, count int) string {
+	return In(i18n.Locale()).CompareFilteredCount(shown, count)
+}
+
+// CompareFilteredCount says "{shown} of {count, plural, one {# commit} other {# commits}}"
+// in the language of msgs.
+//
+// Commit count in a pane header of the branch comparison while filtering.
+func (msgs Messages) CompareFilteredCount(shown int, count int) string {
+	return Catalog.Format(msgs.locale, "compareFilteredCount", map[string]any{"shown": shown, "count": count})
+}
+
+// CompareForcePush says "Force Push"
+// in the language the app shows.
+//
+// Confirm button of the force push confirmation in the Push dialog.
+func CompareForcePush() string { return In(i18n.Locale()).CompareForcePush() }
+
+// CompareForcePush says "Force Push"
+// in the language of msgs.
+//
+// Confirm button of the force push confirmation in the Push dialog.
+func (msgs Messages) CompareForcePush() string {
+	return Catalog.Format(msgs.locale, "compareForcePush", nil)
+}
+
+// CompareForcePushBody says "Replaces {remote} with your local history. The push is rejected if the remote has commits you have not integrated, so…"
+// in the language the app shows.
+//
+// Body of the force push confirmation. remote is like origin/main.
+func CompareForcePushBody(remote string) string {
+	return In(i18n.Locale()).CompareForcePushBody(remote)
+}
+
+// CompareForcePushBody says "Replaces {remote} with your local history. The push is rejected if the remote has commits you have not integrated, so…"
+// in the language of msgs.
+//
+// Body of the force push confirmation. remote is like origin/main.
+func (msgs Messages) CompareForcePushBody(remote string) string {
+	return Catalog.Format(msgs.locale, "compareForcePushBody", map[string]any{"remote": remote})
+}
+
+// CompareForcePushConfirm says "Force Push {branch}?"
+// in the language the app shows.
+//
+// Title of the force push confirmation.
+func CompareForcePushConfirm(branch string) string {
+	return In(i18n.Locale()).CompareForcePushConfirm(branch)
+}
+
+// CompareForcePushConfirm says "Force Push {branch}?"
+// in the language of msgs.
+//
+// Title of the force push confirmation.
+func (msgs Messages) CompareForcePushConfirm(branch string) string {
+	return Catalog.Format(msgs.locale, "compareForcePushConfirm", map[string]any{"branch": branch})
+}
+
+// CompareForcePushEllipsis says "Force Push…"
+// in the language the app shows.
+//
+// Button in the Push dialog that asks for confirmation and then force
+// pushes.
+func CompareForcePushEllipsis() string { return In(i18n.Locale()).CompareForcePushEllipsis() }
+
+// CompareForcePushEllipsis says "Force Push…"
+// in the language of msgs.
+//
+// Button in the Push dialog that asks for confirmation and then force
+// pushes.
+func (msgs Messages) CompareForcePushEllipsis() string {
+	return Catalog.Format(msgs.locale, "compareForcePushEllipsis", nil)
+}
+
+// CompareForcePushTip says "--force-with-lease --force-if-includes: rejected if the remote has commits you have not integrated, so others’ comm…"
+// in the language the app shows.
+//
+// Tooltip of the Force Push button in the Push dialog explaining the git
+// flags used.
+func CompareForcePushTip() string { return In(i18n.Locale()).CompareForcePushTip() }
+
+// CompareForcePushTip says "--force-with-lease --force-if-includes: rejected if the remote has commits you have not integrated, so others’ comm…"
+// in the language of msgs.
+//
+// Tooltip of the Force Push button in the Push dialog explaining the git
+// flags used.
+func (msgs Messages) CompareForcePushTip() string {
+	return Catalog.Format(msgs.locale, "compareForcePushTip", nil)
+}
+
+// CompareForceRejected says "Force push was rejected because the remote has commits you have not integrated. Update the branch first to see who pu…"
+// in the language the app shows.
+//
+// Error when a force push is rejected because the remote has commits not
+// yet integrated locally.
+func CompareForceRejected() string { return In(i18n.Locale()).CompareForceRejected() }
+
+// CompareForceRejected says "Force push was rejected because the remote has commits you have not integrated. Update the branch first to see who pu…"
+// in the language of msgs.
+//
+// Error when a force push is rejected because the remote has commits not
+// yet integrated locally.
+func (msgs Messages) CompareForceRejected() string {
+	return Catalog.Format(msgs.locale, "compareForceRejected", nil)
+}
+
+// CompareHideDiff says "Hide Diff"
+// in the language the app shows.
+//
+// Tooltip of the close button that hides the file diff in the Push dialog.
+func CompareHideDiff() string { return In(i18n.Locale()).CompareHideDiff() }
+
+// CompareHideDiff says "Hide Diff"
+// in the language of msgs.
+//
+// Tooltip of the close button that hides the file diff in the Push dialog.
+func (msgs Messages) CompareHideDiff() string {
+	return Catalog.Format(msgs.locale, "compareHideDiff", nil)
+}
+
+// CompareNewBranch says "New Branch"
+// in the language the app shows.
+//
+// Green label in the Push dialog: the branch does not exist on the remote
+// yet and will be created.
+func CompareNewBranch() string { return In(i18n.Locale()).CompareNewBranch() }
+
+// CompareNewBranch says "New Branch"
+// in the language of msgs.
+//
+// Green label in the Push dialog: the branch does not exist on the remote
+// yet and will be created.
+func (msgs Messages) CompareNewBranch() string {
+	return Catalog.Format(msgs.locale, "compareNewBranch", nil)
+}
+
+// CompareNoDifference says "No differences"
+// in the language the app shows.
+//
+// Empty state of the branch comparison, and the base row of a worktree
+// workspace when it is level with its base branch.
+func CompareNoDifference() string { return In(i18n.Locale()).CompareNoDifference() }
+
+// CompareNoDifference says "No differences"
+// in the language of msgs.
+//
+// Empty state of the branch comparison, and the base row of a worktree
+// workspace when it is level with its base branch.
+func (msgs Messages) CompareNoDifference() string {
+	return Catalog.Format(msgs.locale, "compareNoDifference", nil)
+}
+
+// CompareNoMatch says "No matching commits"
+// in the language the app shows.
+//
+// Empty state of a commit list in the branch comparison when the search
+// matches nothing.
+func CompareNoMatch() string { return In(i18n.Locale()).CompareNoMatch() }
+
+// CompareNoMatch says "No matching commits"
+// in the language of msgs.
+//
+// Empty state of a commit list in the branch comparison when the search
+// matches nothing.
+func (msgs Messages) CompareNoMatch() string {
+	return Catalog.Format(msgs.locale, "compareNoMatch", nil)
+}
+
+// CompareNoneOnly says "None. {other} already contains all commits from {branch}."
+// in the language the app shows.
+//
+// Empty state of a pane in the branch comparison.
+func CompareNoneOnly(other string, branch string) string {
+	return In(i18n.Locale()).CompareNoneOnly(other, branch)
+}
+
+// CompareNoneOnly says "None. {other} already contains all commits from {branch}."
+// in the language of msgs.
+//
+// Empty state of a pane in the branch comparison.
+func (msgs Messages) CompareNoneOnly(other string, branch string) string {
+	return Catalog.Format(msgs.locale, "compareNoneOnly", map[string]any{"other": other, "branch": branch})
+}
+
+// CompareOnlyIn says "Commits in {branch} but not in {other}"
+// in the language the app shows.
+//
+// Header of a pane in the branch comparison (WebStorm: Commits that exist
+// in X but not in Y). The branch names are drawn in a different font.
+func CompareOnlyIn(branch string, other string) string {
+	return In(i18n.Locale()).CompareOnlyIn(branch, other)
+}
+
+// CompareOnlyIn says "Commits in {branch} but not in {other}"
+// in the language of msgs.
+//
+// Header of a pane in the branch comparison (WebStorm: Commits that exist
+// in X but not in Y). The branch names are drawn in a different font.
+func (msgs Messages) CompareOnlyIn(branch string, other string) string {
+	return Catalog.Format(msgs.locale, "compareOnlyIn", map[string]any{"branch": branch, "other": other})
+}
+
+// ComparePush says "Push"
+// in the language the app shows.
+//
+// Primary button of the Push dialog.
+func ComparePush() string { return In(i18n.Locale()).ComparePush() }
+
+// ComparePush says "Push"
+// in the language of msgs.
+//
+// Primary button of the Push dialog.
+func (msgs Messages) ComparePush() string {
+	return Catalog.Format(msgs.locale, "comparePush", nil)
+}
+
+// ComparePushEmpty says "No commits to push"
+// in the language the app shows.
+//
+// Empty state of the commit list in the Push dialog.
+func ComparePushEmpty() string { return In(i18n.Locale()).ComparePushEmpty() }
+
+// ComparePushEmpty says "No commits to push"
+// in the language of msgs.
+//
+// Empty state of the commit list in the Push dialog.
+func (msgs Messages) ComparePushEmpty() string {
+	return Catalog.Format(msgs.locale, "comparePushEmpty", nil)
+}
+
+// ComparePushGone says "The upstream branch was deleted. Pushing will create {branch} on {remote} again."
+// in the language the app shows.
+//
+// Note in the push dialog when the upstream branch is gone.
+func ComparePushGone(remote string, branch string) string {
+	return In(i18n.Locale()).ComparePushGone(remote, branch)
+}
+
+// ComparePushGone says "The upstream branch was deleted. Pushing will create {branch} on {remote} again."
+// in the language of msgs.
+//
+// Note in the push dialog when the upstream branch is gone.
+func (msgs Messages) ComparePushGone(remote string, branch string) string {
+	return Catalog.Format(msgs.locale, "comparePushGone", map[string]any{"remote": remote, "branch": branch})
+}
+
+// ComparePushRejected says "The remote has commits you have not fetched. Update the branch before pushing, or confirm a force push."
+// in the language the app shows.
+//
+// Error when a push is rejected because the remote has commits not fetched
+// yet.
+func ComparePushRejected() string { return In(i18n.Locale()).ComparePushRejected() }
+
+// ComparePushRejected says "The remote has commits you have not fetched. Update the branch before pushing, or confirm a force push."
+// in the language of msgs.
+//
+// Error when a push is rejected because the remote has commits not fetched
+// yet.
+func (msgs Messages) ComparePushRejected() string {
+	return Catalog.Format(msgs.locale, "comparePushRejected", nil)
+}
+
+// ComparePushTags says "Push Tags"
+// in the language the app shows.
+//
+// Checkbox in the Push dialog: also push tags.
+func ComparePushTags() string { return In(i18n.Locale()).ComparePushTags() }
+
+// ComparePushTags says "Push Tags"
+// in the language of msgs.
+//
+// Checkbox in the Push dialog: also push tags.
+func (msgs Messages) ComparePushTags() string {
+	return Catalog.Format(msgs.locale, "comparePushTags", nil)
+}
+
+// ComparePushTitle says "Push Commits"
+// in the language the app shows.
+//
+// Title of the Push dialog.
+func ComparePushTitle() string { return In(i18n.Locale()).ComparePushTitle() }
+
+// ComparePushTitle says "Push Commits"
+// in the language of msgs.
+//
+// Title of the Push dialog.
+func (msgs Messages) ComparePushTitle() string {
+	return Catalog.Format(msgs.locale, "comparePushTitle", nil)
+}
+
+// ComparePushed says "Pushed {count, plural, one {# commit} other {# commits}} to {target}"
+// in the language the app shows.
+//
+// Notification after a push. target is like origin/main.
+func ComparePushed(count int, target string) string {
+	return In(i18n.Locale()).ComparePushed(count, target)
+}
+
+// ComparePushed says "Pushed {count, plural, one {# commit} other {# commits}} to {target}"
+// in the language of msgs.
+//
+// Notification after a push. target is like origin/main.
+func (msgs Messages) ComparePushed(count int, target string) string {
+	return Catalog.Format(msgs.locale, "comparePushed", map[string]any{"count": count, "target": target})
+}
+
+// ComparePushedTo says "Pushed to {target}"
+// in the language the app shows.
+//
+// Notification after pushing a new branch with no commits to list. target
+// is like origin/main.
+func ComparePushedTo(target string) string { return In(i18n.Locale()).ComparePushedTo(target) }
+
+// ComparePushedTo says "Pushed to {target}"
+// in the language of msgs.
+//
+// Notification after pushing a new branch with no commits to list. target
+// is like origin/main.
+func (msgs Messages) ComparePushedTo(target string) string {
+	return Catalog.Format(msgs.locale, "comparePushedTo", map[string]any{"target": target})
+}
+
+// CompareSearch says "Search commits"
+// in the language the app shows.
+//
+// Placeholder of the search field above each commit column in the branch
+// comparison.
+func CompareSearch() string { return In(i18n.Locale()).CompareSearch() }
+
+// CompareSearch says "Search commits"
+// in the language of msgs.
+//
+// Placeholder of the search field above each commit column in the branch
+// comparison.
+func (msgs Messages) CompareSearch() string {
+	return Catalog.Format(msgs.locale, "compareSearch", nil)
+}
+
+// CompareSearchLabel says "Filter commits only in {branch} by message, hash, or author"
+// in the language the app shows.
+//
+// Accessibility label of the search field of a pane in the branch
+// comparison.
+func CompareSearchLabel(branch string) string { return In(i18n.Locale()).CompareSearchLabel(branch) }
+
+// CompareSearchLabel says "Filter commits only in {branch} by message, hash, or author"
+// in the language of msgs.
+//
+// Accessibility label of the search field of a pane in the branch
+// comparison.
+func (msgs Messages) CompareSearchLabel(branch string) string {
+	return Catalog.Format(msgs.locale, "compareSearchLabel", map[string]any{"branch": branch})
+}
+
+// CompareSelectCommit says "Select a commit to see its changed files"
+// in the language the app shows.
+//
+// Placeholder in the Push dialog's file list before a commit is selected.
+func CompareSelectCommit() string { return In(i18n.Locale()).CompareSelectCommit() }
+
+// CompareSelectCommit says "Select a commit to see its changed files"
+// in the language of msgs.
+//
+// Placeholder in the Push dialog's file list before a commit is selected.
+func (msgs Messages) CompareSelectCommit() string {
+	return Catalog.Format(msgs.locale, "compareSelectCommit", nil)
+}
+
+// CompareSelectHint says "Select commits first; use ⌘ or ⇧ click to select several"
+// in the language the app shows.
+//
+// Tooltip of the cherry-pick button in the branch comparison when no
+// commits are selected.
+func CompareSelectHint() string { return In(i18n.Locale()).CompareSelectHint() }
+
+// CompareSelectHint says "Select commits first; use ⌘ or ⇧ click to select several"
+// in the language of msgs.
+//
+// Tooltip of the cherry-pick button in the branch comparison when no
+// commits are selected.
+func (msgs Messages) CompareSelectHint() string {
+	return Catalog.Format(msgs.locale, "compareSelectHint", nil)
+}
+
+// CompareSwap says "Swap Branches"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the branch comparison that swaps the two
+// branches.
+func CompareSwap() string { return In(i18n.Locale()).CompareSwap() }
+
+// CompareSwap says "Swap Branches"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the branch comparison that swaps the two
+// branches.
+func (msgs Messages) CompareSwap() string {
+	return Catalog.Format(msgs.locale, "compareSwap", nil)
+}
+
+// CompareWorkspaceFiles says "{count, plural, one {# file differs} other {# files differ}} between the workspace and {branch}"
+// in the language the app shows.
+//
+// Header of the comparison of the workspace with a branch.
+func CompareWorkspaceFiles(branch string, count int) string {
+	return In(i18n.Locale()).CompareWorkspaceFiles(branch, count)
+}
+
+// CompareWorkspaceFiles says "{count, plural, one {# file differs} other {# files differ}} between the workspace and {branch}"
+// in the language of msgs.
+//
+// Header of the comparison of the workspace with a branch.
+func (msgs Messages) CompareWorkspaceFiles(branch string, count int) string {
+	return Catalog.Format(msgs.locale, "compareWorkspaceFiles", map[string]any{"branch": branch, "count": count})
+}
+
+// GitAbort says "Abort"
+// in the language the app shows.
+//
+// Button in the in-progress operation banner (merge, rebase, cherry-pick,
+// revert) and confirm button of its confirmation. Also the operation name
+// shown in busy text, error messages and the Console.
+func GitAbort() string { return In(i18n.Locale()).GitAbort() }
+
+// GitAbort says "Abort"
+// in the language of msgs.
+//
+// Button in the in-progress operation banner (merge, rebase, cherry-pick,
+// revert) and confirm button of its confirmation. Also the operation name
+// shown in busy text, error messages and the Console.
+func (msgs Messages) GitAbort() string {
+	return Catalog.Format(msgs.locale, "gitAbort", nil)
+}
+
+// GitAbortBody says "Everything returns to how it was before the {operation} started. Resolved conflicts are also lost."
+// in the language the app shows.
+//
+// Body of the confirmation to abort a rebase, merge, cherry-pick or revert
+// in progress. operation is gitOpRebase, gitMerge and so on.
+func GitAbortBody(operation string) string { return In(i18n.Locale()).GitAbortBody(operation) }
+
+// GitAbortBody says "Everything returns to how it was before the {operation} started. Resolved conflicts are also lost."
+// in the language of msgs.
+//
+// Body of the confirmation to abort a rebase, merge, cherry-pick or revert
+// in progress. operation is gitOpRebase, gitMerge and so on.
+func (msgs Messages) GitAbortBody(operation string) string {
+	return Catalog.Format(msgs.locale, "gitAbortBody", map[string]any{"operation": operation})
+}
+
+// GitAbortConfirm says "Abort {operation}?"
+// in the language the app shows.
+//
+// Title of the confirmation to abort an operation in progress. operation is
+// gitOpRebase, gitMerge and so on.
+func GitAbortConfirm(operation string) string { return In(i18n.Locale()).GitAbortConfirm(operation) }
+
+// GitAbortConfirm says "Abort {operation}?"
+// in the language of msgs.
+//
+// Title of the confirmation to abort an operation in progress. operation is
+// gitOpRebase, gitMerge and so on.
+func (msgs Messages) GitAbortConfirm(operation string) string {
+	return Catalog.Format(msgs.locale, "gitAbortConfirm", map[string]any{"operation": operation})
+}
+
+// GitAcceptSide says "Accept {side}"
+// in the language the app shows.
+//
+// Context menu item on a conflicted file: take one side entirely. side is
+// gitMergeOurs, gitRebaseTheirs and so on.
+func GitAcceptSide(side string) string { return In(i18n.Locale()).GitAcceptSide(side) }
+
+// GitAcceptSide says "Accept {side}"
+// in the language of msgs.
+//
+// Context menu item on a conflicted file: take one side entirely. side is
+// gitMergeOurs, gitRebaseTheirs and so on.
+func (msgs Messages) GitAcceptSide(side string) string {
+	return Catalog.Format(msgs.locale, "gitAcceptSide", map[string]any{"side": side})
+}
+
+// GitAdd says "Add to Git"
+// in the language the app shows.
+//
+// Context menu item on an unversioned file in the Changes view (git add).
+// Also the operation name shown in busy text, error messages and the
+// Console.
+func GitAdd() string { return In(i18n.Locale()).GitAdd() }
+
+// GitAdd says "Add to Git"
+// in the language of msgs.
+//
+// Context menu item on an unversioned file in the Changes view (git add).
+// Also the operation name shown in busy text, error messages and the
+// Console.
+func (msgs Messages) GitAdd() string {
+	return Catalog.Format(msgs.locale, "gitAdd", nil)
+}
+
+// GitAdded says "Added"
+// in the language the app shows.
+//
+// Change status of a file added to Git; also the old-version label in file
+// history when the file did not exist in the parent commit.
+func GitAdded() string { return In(i18n.Locale()).GitAdded() }
+
+// GitAdded says "Added"
+// in the language of msgs.
+//
+// Change status of a file added to Git; also the old-version label in file
+// history when the file did not exist in the parent commit.
+func (msgs Messages) GitAdded() string {
+	return Catalog.Format(msgs.locale, "gitAdded", nil)
+}
+
+// GitAddedLines says "{count, plural, one {# line was} other {# lines were}} added here since the last commit"
+// in the language the app shows.
+//
+// Text in the editor's gutter change popup when the change only adds lines.
+// count is the number of lines.
+func GitAddedLines(count int) string { return In(i18n.Locale()).GitAddedLines(count) }
+
+// GitAddedLines says "{count, plural, one {# line was} other {# lines were}} added here since the last commit"
+// in the language of msgs.
+//
+// Text in the editor's gutter change popup when the change only adds lines.
+// count is the number of lines.
+func (msgs Messages) GitAddedLines(count int) string {
+	return Catalog.Format(msgs.locale, "gitAddedLines", map[string]any{"count": count})
+}
+
+// GitAmend says "Amend Last Commit"
+// in the language the app shows.
+//
+// Checkbox under the commit message in the Changes view: amend the last
+// commit.
+func GitAmend() string { return In(i18n.Locale()).GitAmend() }
+
+// GitAmend says "Amend Last Commit"
+// in the language of msgs.
+//
+// Checkbox under the commit message in the Changes view: amend the last
+// commit.
+func (msgs Messages) GitAmend() string {
+	return Catalog.Format(msgs.locale, "gitAmend", nil)
+}
+
+// GitAutostashConflicts says "Local changes from before the update conflict with the pulled commits ({count, plural, one {# file} other {# files}})…"
+// in the language the app shows.
+//
+// Banner in the Changes view after an update restored local changes with
+// conflicts.
+func GitAutostashConflicts(count int) string { return In(i18n.Locale()).GitAutostashConflicts(count) }
+
+// GitAutostashConflicts says "Local changes from before the update conflict with the pulled commits ({count, plural, one {# file} other {# files}})…"
+// in the language of msgs.
+//
+// Banner in the Changes view after an update restored local changes with
+// conflicts.
+func (msgs Messages) GitAutostashConflicts(count int) string {
+	return Catalog.Format(msgs.locale, "gitAutostashConflicts", map[string]any{"count": count})
+}
+
+// GitAutostashDeleteBody says "This contains your local changes from before the update. Deleting it cannot be undone."
+// in the language the app shows.
+//
+// Body of the confirmation before deleting the stash that holds local
+// changes saved before an update.
+func GitAutostashDeleteBody() string { return In(i18n.Locale()).GitAutostashDeleteBody() }
+
+// GitAutostashDeleteBody says "This contains your local changes from before the update. Deleting it cannot be undone."
+// in the language of msgs.
+//
+// Body of the confirmation before deleting the stash that holds local
+// changes saved before an update.
+func (msgs Messages) GitAutostashDeleteBody() string {
+	return Catalog.Format(msgs.locale, "gitAutostashDeleteBody", nil)
+}
+
+// GitAutostashResolved says "All conflicts are resolved. Your local changes from before the update remain in Stash; delete them once you have veri…"
+// in the language the app shows.
+//
+// Hint in the Changes view after an update whose local changes came back
+// with conflicts, once all conflicts are resolved.
+func GitAutostashResolved() string { return In(i18n.Locale()).GitAutostashResolved() }
+
+// GitAutostashResolved says "All conflicts are resolved. Your local changes from before the update remain in Stash; delete them once you have veri…"
+// in the language of msgs.
+//
+// Hint in the Changes view after an update whose local changes came back
+// with conflicts, once all conflicts are resolved.
+func (msgs Messages) GitAutostashResolved() string {
+	return Catalog.Format(msgs.locale, "gitAutostashResolved", nil)
+}
+
+// GitAutostashUnrestored says "Local changes could not be restored after updating because they would overwrite incoming files. They remain in Stash;…"
+// in the language the app shows.
+//
+// Hint in the Changes view when local changes stashed before an update
+// could not be reapplied afterwards.
+func GitAutostashUnrestored() string { return In(i18n.Locale()).GitAutostashUnrestored() }
+
+// GitAutostashUnrestored says "Local changes could not be restored after updating because they would overwrite incoming files. They remain in Stash;…"
+// in the language of msgs.
+//
+// Hint in the Changes view when local changes stashed before an update
+// could not be reapplied afterwards.
+func (msgs Messages) GitAutostashUnrestored() string {
+	return Catalog.Format(msgs.locale, "gitAutostashUnrestored", nil)
+}
+
+// GitBinaryDiff says "Binary file; diff is not available"
+// in the language the app shows.
+//
+// Placeholder in the file history diff when the file is binary.
+func GitBinaryDiff() string { return In(i18n.Locale()).GitBinaryDiff() }
+
+// GitBinaryDiff says "Binary file; diff is not available"
+// in the language of msgs.
+//
+// Placeholder in the file history diff when the file is binary.
+func (msgs Messages) GitBinaryDiff() string {
+	return Catalog.Format(msgs.locale, "gitBinaryDiff", nil)
+}
+
+// GitBusyNext says "{current}…, then {next}"
+// in the language the app shows.
+//
+// Busy text in the Changes view: the running Git operation and the queued
+// one.
+func GitBusyNext(current string, next string) string {
+	return In(i18n.Locale()).GitBusyNext(current, next)
+}
+
+// GitBusyNext says "{current}…, then {next}"
+// in the language of msgs.
+//
+// Busy text in the Changes view: the running Git operation and the queued
+// one.
+func (msgs Messages) GitBusyNext(current string, next string) string {
+	return Catalog.Format(msgs.locale, "gitBusyNext", map[string]any{"current": current, "next": next})
+}
+
+// GitBusyQueue says "{current}…, then {next} ({count} queued)"
+// in the language the app shows.
+//
+// Busy text in the Changes view: the running operation, the next queued one
+// and how many are queued.
+func GitBusyQueue(current string, next string, count int) string {
+	return In(i18n.Locale()).GitBusyQueue(current, next, count)
+}
+
+// GitBusyQueue says "{current}…, then {next} ({count} queued)"
+// in the language of msgs.
+//
+// Busy text in the Changes view: the running operation, the next queued one
+// and how many are queued.
+func (msgs Messages) GitBusyQueue(current string, next string, count int) string {
+	return Catalog.Format(msgs.locale, "gitBusyQueue", map[string]any{"current": current, "next": next, "count": count})
+}
+
+// GitCancelOperation says "Cancel {operation}"
+// in the language the app shows.
+//
+// Accessibility label of the Cancel link next to the busy text. operation
+// is the name of the Git operation, such as Checkout or Pop Stash.
+func GitCancelOperation(operation string) string {
+	return In(i18n.Locale()).GitCancelOperation(operation)
+}
+
+// GitCancelOperation says "Cancel {operation}"
+// in the language of msgs.
+//
+// Accessibility label of the Cancel link next to the busy text. operation
+// is the name of the Git operation, such as Checkout or Pop Stash.
+func (msgs Messages) GitCancelOperation(operation string) string {
+	return Catalog.Format(msgs.locale, "gitCancelOperation", map[string]any{"operation": operation})
+}
+
+// GitChangeCommitted says "Committed this change: {message}"
+// in the language the app shows.
+//
+// Notification after committing a single change from the editor's gutter
+// change popup. message is the commit message.
+func GitChangeCommitted(message string) string { return In(i18n.Locale()).GitChangeCommitted(message) }
+
+// GitChangeCommitted says "Committed this change: {message}"
+// in the language of msgs.
+//
+// Notification after committing a single change from the editor's gutter
+// change popup. message is the commit message.
+func (msgs Messages) GitChangeCommitted(message string) string {
+	return Catalog.Format(msgs.locale, "gitChangeCommitted", map[string]any{"message": message})
+}
+
+// GitChangePosition says "Change {index} of {count}"
+// in the language the app shows.
+//
+// Position counter in the editor's gutter change popup. index is the
+// current change, count the total.
+func GitChangePosition(index int, count int) string {
+	return In(i18n.Locale()).GitChangePosition(index, count)
+}
+
+// GitChangePosition says "Change {index} of {count}"
+// in the language of msgs.
+//
+// Position counter in the editor's gutter change popup. index is the
+// current change, count the total.
+func (msgs Messages) GitChangePosition(index int, count int) string {
+	return Catalog.Format(msgs.locale, "gitChangePosition", map[string]any{"index": index, "count": count})
+}
+
+// GitChangeStats says "Change {index} of {count}  +{added} −{deleted}"
+// in the language the app shows.
+//
+// Counter in diff toolbars (diff tab, Rollback dialog, Push dialog). index
+// is the current change, count the total, added and deleted the line
+// counts.
+func GitChangeStats(index int, count int, added int, deleted int) string {
+	return In(i18n.Locale()).GitChangeStats(index, count, added, deleted)
+}
+
+// GitChangeStats says "Change {index} of {count}  +{added} −{deleted}"
+// in the language of msgs.
+//
+// Counter in diff toolbars (diff tab, Rollback dialog, Push dialog). index
+// is the current change, count the total, added and deleted the line
+// counts.
+func (msgs Messages) GitChangeStats(index int, count int, added int, deleted int) string {
+	return Catalog.Format(msgs.locale, "gitChangeStats", map[string]any{"index": index, "count": count, "added": added, "deleted": deleted})
+}
+
+// GitChanges says "Changes"
+// in the language the app shows.
+//
+// Group header for changed files in the Changes view, and the diff tab
+// label for workspace changes against HEAD.
+func GitChanges() string { return In(i18n.Locale()).GitChanges() }
+
+// GitChanges says "Changes"
+// in the language of msgs.
+//
+// Group header for changed files in the Changes view, and the diff tab
+// label for workspace changes against HEAD.
+func (msgs Messages) GitChanges() string {
+	return Catalog.Format(msgs.locale, "gitChanges", nil)
+}
+
+// GitCloseEscape says "Close Esc"
+// in the language the app shows.
+//
+// Tooltip of the close button of the editor's gutter change popup; Esc is
+// the key that closes it.
+func GitCloseEscape() string { return In(i18n.Locale()).GitCloseEscape() }
+
+// GitCloseEscape says "Close Esc"
+// in the language of msgs.
+//
+// Tooltip of the close button of the editor's gutter change popup; Esc is
+// the key that closes it.
+func (msgs Messages) GitCloseEscape() string {
+	return Catalog.Format(msgs.locale, "gitCloseEscape", nil)
+}
+
+// GitCollapseAll says "Collapse All"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the Rollback dialog that collapses all
+// folders.
+func GitCollapseAll() string { return In(i18n.Locale()).GitCollapseAll() }
+
+// GitCollapseAll says "Collapse All"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the Rollback dialog that collapses all
+// folders.
+func (msgs Messages) GitCollapseAll() string {
+	return Catalog.Format(msgs.locale, "gitCollapseAll", nil)
+}
+
+// GitCollapseGroup says "Collapse {group}"
+// in the language the app shows.
+//
+// Accessibility label of the disclosure arrow of a group (Changes,
+// Unversioned Files…) in the Changes view.
+func GitCollapseGroup(group string) string { return In(i18n.Locale()).GitCollapseGroup(group) }
+
+// GitCollapseGroup says "Collapse {group}"
+// in the language of msgs.
+//
+// Accessibility label of the disclosure arrow of a group (Changes,
+// Unversioned Files…) in the Changes view.
+func (msgs Messages) GitCollapseGroup(group string) string {
+	return Catalog.Format(msgs.locale, "gitCollapseGroup", map[string]any{"group": group})
+}
+
+// GitCollapsePath says "Collapse {path}"
+// in the language the app shows.
+//
+// Accessibility label of the disclosure triangle of a folder row in the
+// Changes view and Rollback dialog. path is the folder path.
+func GitCollapsePath(path string) string { return In(i18n.Locale()).GitCollapsePath(path) }
+
+// GitCollapsePath says "Collapse {path}"
+// in the language of msgs.
+//
+// Accessibility label of the disclosure triangle of a folder row in the
+// Changes view and Rollback dialog. path is the folder path.
+func (msgs Messages) GitCollapsePath(path string) string {
+	return Catalog.Format(msgs.locale, "gitCollapsePath", map[string]any{"path": path})
+}
+
+// GitCommitButton says "Commit"
+// in the language the app shows.
+//
+// Label of the Commit tab in the Changes view; also the operation name of
+// committing, shown in busy text, error messages and the Console.
+func GitCommitButton() string { return In(i18n.Locale()).GitCommitButton() }
+
+// GitCommitButton says "Commit"
+// in the language of msgs.
+//
+// Label of the Commit tab in the Changes view; also the operation name of
+// committing, shown in busy text, error messages and the Console.
+func (msgs Messages) GitCommitButton() string {
+	return Catalog.Format(msgs.locale, "gitCommitButton", nil)
+}
+
+// GitCommitChange says "Commit this change"
+// in the language the app shows.
+//
+// Placeholder of the commit message field in the editor's gutter change
+// popup, which commits only this change.
+func GitCommitChange() string { return In(i18n.Locale()).GitCommitChange() }
+
+// GitCommitChange says "Commit this change"
+// in the language of msgs.
+//
+// Placeholder of the commit message field in the editor's gutter change
+// popup, which commits only this change.
+func (msgs Messages) GitCommitChange() string {
+	return Catalog.Format(msgs.locale, "gitCommitChange", nil)
+}
+
+// GitCommitFiles says "Commit {count, plural, one {# File} other {# Files}}"
+// in the language the app shows.
+//
+// Commit button in the Changes view: how many selected files will be
+// committed.
+func GitCommitFiles(count int) string { return In(i18n.Locale()).GitCommitFiles(count) }
+
+// GitCommitFiles says "Commit {count, plural, one {# File} other {# Files}}"
+// in the language of msgs.
+//
+// Commit button in the Changes view: how many selected files will be
+// committed.
+func (msgs Messages) GitCommitFiles(count int) string {
+	return Catalog.Format(msgs.locale, "gitCommitFiles", map[string]any{"count": count})
+}
+
+// GitCommitMergeResult says "Commit Merge Result"
+// in the language the app shows.
+//
+// Commit button in the Changes view while a merge is in progress.
+func GitCommitMergeResult() string { return In(i18n.Locale()).GitCommitMergeResult() }
+
+// GitCommitMergeResult says "Commit Merge Result"
+// in the language of msgs.
+//
+// Commit button in the Changes view while a merge is in progress.
+func (msgs Messages) GitCommitMergeResult() string {
+	return Catalog.Format(msgs.locale, "gitCommitMergeResult", nil)
+}
+
+// GitCommitMessage says "Commit Message"
+// in the language the app shows.
+//
+// Placeholder of the commit message box in the Changes view.
+func GitCommitMessage() string { return In(i18n.Locale()).GitCommitMessage() }
+
+// GitCommitMessage says "Commit Message"
+// in the language of msgs.
+//
+// Placeholder of the commit message box in the Changes view.
+func (msgs Messages) GitCommitMessage() string {
+	return Catalog.Format(msgs.locale, "gitCommitMessage", nil)
+}
+
+// GitCommitOperationHint says "A merge or rebase is in progress. Commit from Changes."
+// in the language the app shows.
+//
+// Disabled placeholder in the editor's gutter change popup when a merge or
+// rebase is in progress.
+func GitCommitOperationHint() string { return In(i18n.Locale()).GitCommitOperationHint() }
+
+// GitCommitOperationHint says "A merge or rebase is in progress. Commit from Changes."
+// in the language of msgs.
+//
+// Disabled placeholder in the editor's gutter change popup when a merge or
+// rebase is in progress.
+func (msgs Messages) GitCommitOperationHint() string {
+	return Catalog.Format(msgs.locale, "gitCommitOperationHint", nil)
+}
+
+// GitCommitPickResult says "Commit Cherry-pick Result"
+// in the language the app shows.
+//
+// Commit button label in the Changes view while a cherry-pick is in
+// progress.
+func GitCommitPickResult() string { return In(i18n.Locale()).GitCommitPickResult() }
+
+// GitCommitPickResult says "Commit Cherry-pick Result"
+// in the language of msgs.
+//
+// Commit button label in the Changes view while a cherry-pick is in
+// progress.
+func (msgs Messages) GitCommitPickResult() string {
+	return Catalog.Format(msgs.locale, "gitCommitPickResult", nil)
+}
+
+// GitCommitRevertResult says "Commit Revert Result"
+// in the language the app shows.
+//
+// Commit button in the Changes view while a revert is in progress.
+func GitCommitRevertResult() string { return In(i18n.Locale()).GitCommitRevertResult() }
+
+// GitCommitRevertResult says "Commit Revert Result"
+// in the language of msgs.
+//
+// Commit button in the Changes view while a revert is in progress.
+func (msgs Messages) GitCommitRevertResult() string {
+	return Catalog.Format(msgs.locale, "gitCommitRevertResult", nil)
+}
+
+// GitCommitSelectedTip says "Commit selected files, leaving unselected changes in the workspace"
+// in the language the app shows.
+//
+// Tooltip of the commit button in the Changes view when committing the
+// checked files.
+func GitCommitSelectedTip() string { return In(i18n.Locale()).GitCommitSelectedTip() }
+
+// GitCommitSelectedTip says "Commit selected files, leaving unselected changes in the workspace"
+// in the language of msgs.
+//
+// Tooltip of the commit button in the Changes view when committing the
+// checked files.
+func (msgs Messages) GitCommitSelectedTip() string {
+	return Catalog.Format(msgs.locale, "gitCommitSelectedTip", nil)
+}
+
+// GitCommitted says "Committed: {subject}"
+// in the language the app shows.
+//
+// Notification after committing. subject is the first line of the commit
+// message.
+func GitCommitted(subject string) string { return In(i18n.Locale()).GitCommitted(subject) }
+
+// GitCommitted says "Committed: {subject}"
+// in the language of msgs.
+//
+// Notification after committing. subject is the first line of the commit
+// message.
+func (msgs Messages) GitCommitted(subject string) string {
+	return Catalog.Format(msgs.locale, "gitCommitted", map[string]any{"subject": subject})
+}
+
+// GitCompareAnyway says "Compare Anyway"
+// in the language the app shows.
+//
+// Button in a diff tab whose files are too large: show the diff anyway.
+func GitCompareAnyway() string { return In(i18n.Locale()).GitCompareAnyway() }
+
+// GitCompareAnyway says "Compare Anyway"
+// in the language of msgs.
+//
+// Button in a diff tab whose files are too large: show the diff anyway.
+func (msgs Messages) GitCompareAnyway() string {
+	return Catalog.Format(msgs.locale, "gitCompareAnyway", nil)
+}
+
+// GitComparing says "Comparing…"
+// in the language the app shows.
+//
+// Placeholder in a diff tab while the diff is being computed.
+func GitComparing() string { return In(i18n.Locale()).GitComparing() }
+
+// GitComparing says "Comparing…"
+// in the language of msgs.
+//
+// Placeholder in a diff tab while the diff is being computed.
+func (msgs Messages) GitComparing() string {
+	return Catalog.Format(msgs.locale, "gitComparing", nil)
+}
+
+// GitConflicts says "Conflicts"
+// in the language the app shows.
+//
+// Group header for conflicted files in the Changes view.
+func GitConflicts() string { return In(i18n.Locale()).GitConflicts() }
+
+// GitConflicts says "Conflicts"
+// in the language of msgs.
+//
+// Group header for conflicted files in the Changes view.
+func (msgs Messages) GitConflicts() string {
+	return Catalog.Format(msgs.locale, "gitConflicts", nil)
+}
+
+// GitConsoleAgentTerminal says "{agent} Terminal"
+// in the language the app shows.
+//
+// Operation name in the Console for git commands run by an agent in a Posse
+// terminal. agent is like Claude.
+func GitConsoleAgentTerminal(agent string) string {
+	return In(i18n.Locale()).GitConsoleAgentTerminal(agent)
+}
+
+// GitConsoleAgentTerminal says "{agent} Terminal"
+// in the language of msgs.
+//
+// Operation name in the Console for git commands run by an agent in a Posse
+// terminal. agent is like Claude.
+func (msgs Messages) GitConsoleAgentTerminal(agent string) string {
+	return Catalog.Format(msgs.locale, "gitConsoleAgentTerminal", map[string]any{"agent": agent})
+}
+
+// GitConsoleBackground says "Background"
+// in the language the app shows.
+//
+// Operation name in the Console for git commands not started by a named
+// Posse operation.
+func GitConsoleBackground() string { return In(i18n.Locale()).GitConsoleBackground() }
+
+// GitConsoleBackground says "Background"
+// in the language of msgs.
+//
+// Operation name in the Console for git commands not started by a named
+// Posse operation.
+func (msgs Messages) GitConsoleBackground() string {
+	return Catalog.Format(msgs.locale, "gitConsoleBackground", nil)
+}
+
+// GitConsoleCanceled says "Canceled"
+// in the language the app shows.
+//
+// Status of a canceled operation in the Console.
+func GitConsoleCanceled() string { return In(i18n.Locale()).GitConsoleCanceled() }
+
+// GitConsoleCanceled says "Canceled"
+// in the language of msgs.
+//
+// Status of a canceled operation in the Console.
+func (msgs Messages) GitConsoleCanceled() string {
+	return Catalog.Format(msgs.locale, "gitConsoleCanceled", nil)
+}
+
+// GitConsoleClear says "Clear"
+// in the language the app shows.
+//
+// Tooltip of the trash icon button in the Console that clears this
+// project's entries.
+func GitConsoleClear() string { return In(i18n.Locale()).GitConsoleClear() }
+
+// GitConsoleClear says "Clear"
+// in the language of msgs.
+//
+// Tooltip of the trash icon button in the Console that clears this
+// project's entries.
+func (msgs Messages) GitConsoleClear() string {
+	return Catalog.Format(msgs.locale, "gitConsoleClear", nil)
+}
+
+// GitConsoleCopyCommand says "Copy Command"
+// in the language the app shows.
+//
+// Context menu item on a command in the Console: copy the git command line.
+func GitConsoleCopyCommand() string { return In(i18n.Locale()).GitConsoleCopyCommand() }
+
+// GitConsoleCopyCommand says "Copy Command"
+// in the language of msgs.
+//
+// Context menu item on a command in the Console: copy the git command line.
+func (msgs Messages) GitConsoleCopyCommand() string {
+	return Catalog.Format(msgs.locale, "gitConsoleCopyCommand", nil)
+}
+
+// GitConsoleCopyOutput says "Copy Output"
+// in the language the app shows.
+//
+// Context menu item on a command in the Console: copy its output.
+func GitConsoleCopyOutput() string { return In(i18n.Locale()).GitConsoleCopyOutput() }
+
+// GitConsoleCopyOutput says "Copy Output"
+// in the language of msgs.
+//
+// Context menu item on a command in the Console: copy its output.
+func (msgs Messages) GitConsoleCopyOutput() string {
+	return Catalog.Format(msgs.locale, "gitConsoleCopyOutput", nil)
+}
+
+// GitConsoleDuration says "Total {duration}"
+// in the language the app shows.
+//
+// Tooltip of the start time of an operation in the Console. duration is the
+// total time taken, such as 1.2s.
+func GitConsoleDuration(duration string) string {
+	return In(i18n.Locale()).GitConsoleDuration(duration)
+}
+
+// GitConsoleDuration says "Total {duration}"
+// in the language of msgs.
+//
+// Tooltip of the start time of an operation in the Console. duration is the
+// total time taken, such as 1.2s.
+func (msgs Messages) GitConsoleDuration(duration string) string {
+	return Catalog.Format(msgs.locale, "gitConsoleDuration", map[string]any{"duration": duration})
+}
+
+// GitConsoleEmpty says "No Git operations yet"
+// in the language the app shows.
+//
+// Empty state of the Console.
+func GitConsoleEmpty() string { return In(i18n.Locale()).GitConsoleEmpty() }
+
+// GitConsoleEmpty says "No Git operations yet"
+// in the language of msgs.
+//
+// Empty state of the Console.
+func (msgs Messages) GitConsoleEmpty() string {
+	return Catalog.Format(msgs.locale, "gitConsoleEmpty", nil)
+}
+
+// GitConsoleFailedCommands says "There are failed git commands"
+// in the language the app shows.
+//
+// Tooltip and accessibility label of the red dot on the Console tab when
+// some git commands failed.
+func GitConsoleFailedCommands() string { return In(i18n.Locale()).GitConsoleFailedCommands() }
+
+// GitConsoleFailedCommands says "There are failed git commands"
+// in the language of msgs.
+//
+// Tooltip and accessibility label of the red dot on the Console tab when
+// some git commands failed.
+func (msgs Messages) GitConsoleFailedCommands() string {
+	return Catalog.Format(msgs.locale, "gitConsoleFailedCommands", nil)
+}
+
+// GitConsoleInfo says "Git operations performed by Posse and their git commands, plus git commands that change repositories in Posse termina…"
+// in the language the app shows.
+//
+// Tooltip of the info icon at the top of the Console explaining what it
+// lists.
+func GitConsoleInfo() string { return In(i18n.Locale()).GitConsoleInfo() }
+
+// GitConsoleInfo says "Git operations performed by Posse and their git commands, plus git commands that change repositories in Posse termina…"
+// in the language of msgs.
+//
+// Tooltip of the info icon at the top of the Console explaining what it
+// lists.
+func (msgs Messages) GitConsoleInfo() string {
+	return Catalog.Format(msgs.locale, "gitConsoleInfo", nil)
+}
+
+// GitConsoleRepeat says "{count, plural, one {# time} other {# times}} between {start} and {end}"
+// in the language the app shows.
+//
+// Tooltip of the ×N badge on a grouped operation in the Console. start and
+// end are times like 14:03:22.
+func GitConsoleRepeat(start string, end string, count int) string {
+	return In(i18n.Locale()).GitConsoleRepeat(start, end, count)
+}
+
+// GitConsoleRepeat says "{count, plural, one {# time} other {# times}} between {start} and {end}"
+// in the language of msgs.
+//
+// Tooltip of the ×N badge on a grouped operation in the Console. start and
+// end are times like 14:03:22.
+func (msgs Messages) GitConsoleRepeat(start string, end string, count int) string {
+	return Catalog.Format(msgs.locale, "gitConsoleRepeat", map[string]any{"start": start, "end": end, "count": count})
+}
+
+// GitConsoleRunning says "In progress…"
+// in the language the app shows.
+//
+// Status of a running operation in the Console.
+func GitConsoleRunning() string { return In(i18n.Locale()).GitConsoleRunning() }
+
+// GitConsoleRunning says "In progress…"
+// in the language of msgs.
+//
+// Status of a running operation in the Console.
+func (msgs Messages) GitConsoleRunning() string {
+	return Catalog.Format(msgs.locale, "gitConsoleRunning", nil)
+}
+
+// GitConsoleSuccess says "Succeeded"
+// in the language the app shows.
+//
+// Status of a successful operation in the Console.
+func GitConsoleSuccess() string { return In(i18n.Locale()).GitConsoleSuccess() }
+
+// GitConsoleSuccess says "Succeeded"
+// in the language of msgs.
+//
+// Status of a successful operation in the Console.
+func (msgs Messages) GitConsoleSuccess() string {
+	return Catalog.Format(msgs.locale, "gitConsoleSuccess", nil)
+}
+
+// GitConsoleTerminal says "Terminal"
+// in the language the app shows.
+//
+// Operation name in the Console for git commands typed in a Posse terminal.
+func GitConsoleTerminal() string { return In(i18n.Locale()).GitConsoleTerminal() }
+
+// GitConsoleTerminal says "Terminal"
+// in the language of msgs.
+//
+// Operation name in the Console for git commands typed in a Posse terminal.
+func (msgs Messages) GitConsoleTerminal() string {
+	return Catalog.Format(msgs.locale, "gitConsoleTerminal", nil)
+}
+
+// GitConsoleTitle says "Console"
+// in the language the app shows.
+//
+// Tab label of the Console (the log of Git operations) next to the Git Log
+// tabs.
+func GitConsoleTitle() string { return In(i18n.Locale()).GitConsoleTitle() }
+
+// GitConsoleTitle says "Console"
+// in the language of msgs.
+//
+// Tab label of the Console (the log of Git operations) next to the Git Log
+// tabs.
+func (msgs Messages) GitConsoleTitle() string {
+	return Catalog.Format(msgs.locale, "gitConsoleTitle", nil)
+}
+
+// GitConsoleWorkspaces says "All workspaces in {project}"
+// in the language the app shows.
+//
+// Header line of the Console: entries cover every workspace of the project.
+// project is the project name.
+func GitConsoleWorkspaces(project string) string {
+	return In(i18n.Locale()).GitConsoleWorkspaces(project)
+}
+
+// GitConsoleWorkspaces says "All workspaces in {project}"
+// in the language of msgs.
+//
+// Header line of the Console: entries cover every workspace of the project.
+// project is the project name.
+func (msgs Messages) GitConsoleWorkspaces(project string) string {
+	return Catalog.Format(msgs.locale, "gitConsoleWorkspaces", map[string]any{"project": project})
+}
+
+// GitContinueOperation says "Continue {operation}"
+// in the language the app shows.
+//
+// Operation name (busy text, Console) of continuing a rebase, merge and so
+// on. operation is gitOpRebase, gitMerge and so on.
+func GitContinueOperation(operation string) string {
+	return In(i18n.Locale()).GitContinueOperation(operation)
+}
+
+// GitContinueOperation says "Continue {operation}"
+// in the language of msgs.
+//
+// Operation name (busy text, Console) of continuing a rebase, merge and so
+// on. operation is gitOpRebase, gitMerge and so on.
+func (msgs Messages) GitContinueOperation(operation string) string {
+	return Catalog.Format(msgs.locale, "gitContinueOperation", map[string]any{"operation": operation})
+}
+
+// GitCopyBefore says "Copy Previous Content"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the editor's gutter change popup that
+// copies the content before the change.
+func GitCopyBefore() string { return In(i18n.Locale()).GitCopyBefore() }
+
+// GitCopyBefore says "Copy Previous Content"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the editor's gutter change popup that
+// copies the content before the change.
+func (msgs Messages) GitCopyBefore() string {
+	return Catalog.Format(msgs.locale, "gitCopyBefore", nil)
+}
+
+// GitDeleted says "Deleted"
+// in the language the app shows.
+//
+// Label on the new side of an image diff when the file was deleted.
+func GitDeleted() string { return In(i18n.Locale()).GitDeleted() }
+
+// GitDeleted says "Deleted"
+// in the language of msgs.
+//
+// Label on the new side of an image diff when the file was deleted.
+func (msgs Messages) GitDeleted() string {
+	return Catalog.Format(msgs.locale, "gitDeleted", nil)
+}
+
+// GitDetachedHead says "Detached HEAD"
+// in the language the app shows.
+//
+// Shown in place of the branch name at the top of the Changes view when
+// HEAD is detached.
+func GitDetachedHead() string { return In(i18n.Locale()).GitDetachedHead() }
+
+// GitDetachedHead says "Detached HEAD"
+// in the language of msgs.
+//
+// Shown in place of the branch name at the top of the Changes view when
+// HEAD is detached.
+func (msgs Messages) GitDetachedHead() string {
+	return Catalog.Format(msgs.locale, "gitDetachedHead", nil)
+}
+
+// GitDifferenceCount says "{count, plural, one {# difference} other {# differences}}"
+// in the language the app shows.
+//
+// Counter in the file history diff toolbar: how many differences between
+// the two versions.
+func GitDifferenceCount(count int) string { return In(i18n.Locale()).GitDifferenceCount(count) }
+
+// GitDifferenceCount says "{count, plural, one {# difference} other {# differences}}"
+// in the language of msgs.
+//
+// Counter in the file history diff toolbar: how many differences between
+// the two versions.
+func (msgs Messages) GitDifferenceCount(count int) string {
+	return Catalog.Format(msgs.locale, "gitDifferenceCount", map[string]any{"count": count})
+}
+
+// GitDismissHint says "Dismiss"
+// in the language the app shows.
+//
+// Tooltip of the close button on the hint about local changes left in Stash
+// after an update.
+func GitDismissHint() string { return In(i18n.Locale()).GitDismissHint() }
+
+// GitDismissHint says "Dismiss"
+// in the language of msgs.
+//
+// Tooltip of the close button on the hint about local changes left in Stash
+// after an update.
+func (msgs Messages) GitDismissHint() string {
+	return Catalog.Format(msgs.locale, "gitDismissHint", nil)
+}
+
+// GitExpandAll says "Expand All"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the Rollback dialog that expands all
+// folders; also the accessibility label of a folded run of unchanged lines
+// in a diff, which expands it.
+func GitExpandAll() string { return In(i18n.Locale()).GitExpandAll() }
+
+// GitExpandAll says "Expand All"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the Rollback dialog that expands all
+// folders; also the accessibility label of a folded run of unchanged lines
+// in a diff, which expands it.
+func (msgs Messages) GitExpandAll() string {
+	return Catalog.Format(msgs.locale, "gitExpandAll", nil)
+}
+
+// GitExpandDown says "Expand Down"
+// in the language the app shows.
+//
+// Tooltip of the small arrow button on a folded run of unchanged lines in a
+// diff: reveal more lines below.
+func GitExpandDown() string { return In(i18n.Locale()).GitExpandDown() }
+
+// GitExpandDown says "Expand Down"
+// in the language of msgs.
+//
+// Tooltip of the small arrow button on a folded run of unchanged lines in a
+// diff: reveal more lines below.
+func (msgs Messages) GitExpandDown() string {
+	return Catalog.Format(msgs.locale, "gitExpandDown", nil)
+}
+
+// GitExpandGroup says "Expand {group}"
+// in the language the app shows.
+//
+// Accessibility label of the disclosure arrow of a group (Changes,
+// Unversioned Files…) in the Changes view.
+func GitExpandGroup(group string) string { return In(i18n.Locale()).GitExpandGroup(group) }
+
+// GitExpandGroup says "Expand {group}"
+// in the language of msgs.
+//
+// Accessibility label of the disclosure arrow of a group (Changes,
+// Unversioned Files…) in the Changes view.
+func (msgs Messages) GitExpandGroup(group string) string {
+	return Catalog.Format(msgs.locale, "gitExpandGroup", map[string]any{"group": group})
+}
+
+// GitExpandPath says "Expand {path}"
+// in the language the app shows.
+//
+// Accessibility label of the disclosure triangle of a folder row in the
+// Changes view and Rollback dialog. path is the folder path.
+func GitExpandPath(path string) string { return In(i18n.Locale()).GitExpandPath(path) }
+
+// GitExpandPath says "Expand {path}"
+// in the language of msgs.
+//
+// Accessibility label of the disclosure triangle of a folder row in the
+// Changes view and Rollback dialog. path is the folder path.
+func (msgs Messages) GitExpandPath(path string) string {
+	return Catalog.Format(msgs.locale, "gitExpandPath", map[string]any{"path": path})
+}
+
+// GitExpandUp says "Expand Up"
+// in the language the app shows.
+//
+// Tooltip of the small arrow button on a folded run of unchanged lines in a
+// diff: reveal more lines above.
+func GitExpandUp() string { return In(i18n.Locale()).GitExpandUp() }
+
+// GitExpandUp says "Expand Up"
+// in the language of msgs.
+//
+// Tooltip of the small arrow button on a folded run of unchanged lines in a
+// diff: reveal more lines above.
+func (msgs Messages) GitExpandUp() string {
+	return Catalog.Format(msgs.locale, "gitExpandUp", nil)
+}
+
+// GitFileAbsent says "This file does not exist in the last commit"
+// in the language the app shows.
+//
+// Disabled placeholder in the editor's gutter change popup when the file is
+// not in the last commit.
+func GitFileAbsent() string { return In(i18n.Locale()).GitFileAbsent() }
+
+// GitFileAbsent says "This file does not exist in the last commit"
+// in the language of msgs.
+//
+// Disabled placeholder in the editor's gutter change popup when the file is
+// not in the last commit.
+func (msgs Messages) GitFileAbsent() string {
+	return Catalog.Format(msgs.locale, "gitFileAbsent", nil)
+}
+
+// GitFileChanged says "The file changed and has been reloaded. Review the change before rolling it back."
+// in the language the app shows.
+//
+// Error bar text when rolling back from a diff whose file was changed on
+// disk in the meantime; the diff is reloaded.
+func GitFileChanged() string { return In(i18n.Locale()).GitFileChanged() }
+
+// GitFileChanged says "The file changed and has been reloaded. Review the change before rolling it back."
+// in the language of msgs.
+//
+// Error bar text when rolling back from a diff whose file was changed on
+// disk in the meantime; the diff is reloaded.
+func (msgs Messages) GitFileChanged() string {
+	return Catalog.Format(msgs.locale, "gitFileChanged", nil)
+}
+
+// GitFirstChange says "Already at the first change"
+// in the language the app shows.
+//
+// Short message when stepping to the previous change in a diff that is
+// already at the first one.
+func GitFirstChange() string { return In(i18n.Locale()).GitFirstChange() }
+
+// GitFirstChange says "Already at the first change"
+// in the language of msgs.
+//
+// Short message when stepping to the previous change in a diff that is
+// already at the first one.
+func (msgs Messages) GitFirstChange() string {
+	return Catalog.Format(msgs.locale, "gitFirstChange", nil)
+}
+
+// GitFirstDifference says "Already at the first difference"
+// in the language the app shows.
+//
+// Short message when stepping to the previous difference in the file
+// history diff that is already at the first one.
+func GitFirstDifference() string { return In(i18n.Locale()).GitFirstDifference() }
+
+// GitFirstDifference says "Already at the first difference"
+// in the language of msgs.
+//
+// Short message when stepping to the previous difference in the file
+// history diff that is already at the first one.
+func (msgs Messages) GitFirstDifference() string {
+	return Catalog.Format(msgs.locale, "gitFirstDifference", nil)
+}
+
+// GitFrameCount says "{count, plural, one {# frame} other {# frames}}"
+// in the language the app shows.
+//
+// Frame count of an animated image in an image diff.
+func GitFrameCount(count int) string { return In(i18n.Locale()).GitFrameCount(count) }
+
+// GitFrameCount says "{count, plural, one {# frame} other {# frames}}"
+// in the language of msgs.
+//
+// Frame count of an animated image in an image diff.
+func (msgs Messages) GitFrameCount(count int) string {
+	return Catalog.Format(msgs.locale, "gitFrameCount", map[string]any{"count": count})
+}
+
+// GitGroupByDirectory says "Group by Directory"
+// in the language the app shows.
+//
+// Tooltip of the toggle button in the Changes view that groups files by
+// folder.
+func GitGroupByDirectory() string { return In(i18n.Locale()).GitGroupByDirectory() }
+
+// GitGroupByDirectory says "Group by Directory"
+// in the language of msgs.
+//
+// Tooltip of the toggle button in the Changes view that groups files by
+// folder.
+func (msgs Messages) GitGroupByDirectory() string {
+	return Catalog.Format(msgs.locale, "gitGroupByDirectory", nil)
+}
+
+// GitHasConflicts says "Has Conflicts"
+// in the language the app shows.
+//
+// Change status of a conflicted file.
+func GitHasConflicts() string { return In(i18n.Locale()).GitHasConflicts() }
+
+// GitHasConflicts says "Has Conflicts"
+// in the language of msgs.
+//
+// Change status of a conflicted file.
+func (msgs Messages) GitHasConflicts() string {
+	return Catalog.Format(msgs.locale, "gitHasConflicts", nil)
+}
+
+// GitIgnoreWhitespace says "Ignore Whitespace"
+// in the language the app shows.
+//
+// Toggle chip in diff toolbars (diff tab, Rollback, Push, file history).
+func GitIgnoreWhitespace() string { return In(i18n.Locale()).GitIgnoreWhitespace() }
+
+// GitIgnoreWhitespace says "Ignore Whitespace"
+// in the language of msgs.
+//
+// Toggle chip in diff toolbars (diff tab, Rollback, Push, file history).
+func (msgs Messages) GitIgnoreWhitespace() string {
+	return Catalog.Format(msgs.locale, "gitIgnoreWhitespace", nil)
+}
+
+// GitIgnoreWhitespaceTip says "Ignore lines that differ only in whitespace"
+// in the language the app shows.
+//
+// Tooltip of the Ignore Whitespace toggle in diff toolbars.
+func GitIgnoreWhitespaceTip() string { return In(i18n.Locale()).GitIgnoreWhitespaceTip() }
+
+// GitIgnoreWhitespaceTip says "Ignore lines that differ only in whitespace"
+// in the language of msgs.
+//
+// Tooltip of the Ignore Whitespace toggle in diff toolbars.
+func (msgs Messages) GitIgnoreWhitespaceTip() string {
+	return Catalog.Format(msgs.locale, "gitIgnoreWhitespaceTip", nil)
+}
+
+// GitImageBefore says "Before"
+// in the language the app shows.
+//
+// Label above the old image in an image diff against the workspace.
+func GitImageBefore() string { return In(i18n.Locale()).GitImageBefore() }
+
+// GitImageBefore says "Before"
+// in the language of msgs.
+//
+// Label above the old image in an image diff against the workspace.
+func (msgs Messages) GitImageBefore() string {
+	return Catalog.Format(msgs.locale, "gitImageBefore", nil)
+}
+
+// GitImageBeforeRev says "Before ({revision})"
+// in the language the app shows.
+//
+// Label of the old side of an image diff. revision is a short hash or
+// branch.
+func GitImageBeforeRev(revision string) string { return In(i18n.Locale()).GitImageBeforeRev(revision) }
+
+// GitImageBeforeRev says "Before ({revision})"
+// in the language of msgs.
+//
+// Label of the old side of an image diff. revision is a short hash or
+// branch.
+func (msgs Messages) GitImageBeforeRev(revision string) string {
+	return Catalog.Format(msgs.locale, "gitImageBeforeRev", map[string]any{"revision": revision})
+}
+
+// GitImageCurrent says "Now (Workspace)"
+// in the language the app shows.
+//
+// Label above the current image in an image diff when the new side is the
+// file in the workspace.
+func GitImageCurrent() string { return In(i18n.Locale()).GitImageCurrent() }
+
+// GitImageCurrent says "Now (Workspace)"
+// in the language of msgs.
+//
+// Label above the current image in an image diff when the new side is the
+// file in the workspace.
+func (msgs Messages) GitImageCurrent() string {
+	return Catalog.Format(msgs.locale, "gitImageCurrent", nil)
+}
+
+// GitImageNow says "Now ({revision})"
+// in the language the app shows.
+//
+// Label of the new side of an image diff between two revisions.
+func GitImageNow(revision string) string { return In(i18n.Locale()).GitImageNow(revision) }
+
+// GitImageNow says "Now ({revision})"
+// in the language of msgs.
+//
+// Label of the new side of an image diff between two revisions.
+func (msgs Messages) GitImageNow(revision string) string {
+	return Catalog.Format(msgs.locale, "gitImageNow", map[string]any{"revision": revision})
+}
+
+// GitImageUnreadable says "Can’t decode this image: {error}"
+// in the language the app shows.
+//
+// Shown in an image diff when one side cannot be decoded.
+func GitImageUnreadable(error string) string { return In(i18n.Locale()).GitImageUnreadable(error) }
+
+// GitImageUnreadable says "Can’t decode this image: {error}"
+// in the language of msgs.
+//
+// Shown in an image diff when one side cannot be decoded.
+func (msgs Messages) GitImageUnreadable(error string) string {
+	return Catalog.Format(msgs.locale, "gitImageUnreadable", map[string]any{"error": error})
+}
+
+// GitLastChange says "Already at the last change"
+// in the language the app shows.
+//
+// Short message when stepping to the next change in a diff that is already
+// at the last one.
+func GitLastChange() string { return In(i18n.Locale()).GitLastChange() }
+
+// GitLastChange says "Already at the last change"
+// in the language of msgs.
+//
+// Short message when stepping to the next change in a diff that is already
+// at the last one.
+func (msgs Messages) GitLastChange() string {
+	return Catalog.Format(msgs.locale, "gitLastChange", nil)
+}
+
+// GitLastDifference says "Already at the last difference"
+// in the language the app shows.
+//
+// Short message when stepping to the next difference in the file history
+// diff that is already at the last one.
+func GitLastDifference() string { return In(i18n.Locale()).GitLastDifference() }
+
+// GitLastDifference says "Already at the last difference"
+// in the language of msgs.
+//
+// Short message when stepping to the next difference in the file history
+// diff that is already at the last one.
+func (msgs Messages) GitLastDifference() string {
+	return Catalog.Format(msgs.locale, "gitLastDifference", nil)
+}
+
+// GitLocalChanges says "My Local Changes"
+// in the language the app shows.
+//
+// Name of the theirs side when reapplying local changes after an update
+// conflicts; used in the Accept menu items on a conflicted file.
+func GitLocalChanges() string { return In(i18n.Locale()).GitLocalChanges() }
+
+// GitLocalChanges says "My Local Changes"
+// in the language of msgs.
+//
+// Name of the theirs side when reapplying local changes after an update
+// conflicts; used in the Accept menu items on a conflicted file.
+func (msgs Messages) GitLocalChanges() string {
+	return Catalog.Format(msgs.locale, "gitLocalChanges", nil)
+}
+
+// GitLogTitle says "Git Log"
+// in the language the app shows.
+//
+// Tooltip of the icon button at the top of the Changes view that opens the
+// Git Log.
+func GitLogTitle() string { return In(i18n.Locale()).GitLogTitle() }
+
+// GitLogTitle says "Git Log"
+// in the language of msgs.
+//
+// Tooltip of the icon button at the top of the Changes view that opens the
+// Git Log.
+func (msgs Messages) GitLogTitle() string {
+	return Catalog.Format(msgs.locale, "gitLogTitle", nil)
+}
+
+// GitMarkResolved says "Mark as Resolved"
+// in the language the app shows.
+//
+// Operation name of marking a conflicted file as resolved, shown in busy
+// text, error messages and the Console.
+func GitMarkResolved() string { return In(i18n.Locale()).GitMarkResolved() }
+
+// GitMarkResolved says "Mark as Resolved"
+// in the language of msgs.
+//
+// Operation name of marking a conflicted file as resolved, shown in busy
+// text, error messages and the Console.
+func (msgs Messages) GitMarkResolved() string {
+	return Catalog.Format(msgs.locale, "gitMarkResolved", nil)
+}
+
+// GitMarkResolvedLabel says "Mark as Resolved After Editing"
+// in the language the app shows.
+//
+// Context menu item on a conflicted file in the Changes view: the user
+// finished editing it, stage it as resolved.
+func GitMarkResolvedLabel() string { return In(i18n.Locale()).GitMarkResolvedLabel() }
+
+// GitMarkResolvedLabel says "Mark as Resolved After Editing"
+// in the language of msgs.
+//
+// Context menu item on a conflicted file in the Changes view: the user
+// finished editing it, stage it as resolved.
+func (msgs Messages) GitMarkResolvedLabel() string {
+	return Catalog.Format(msgs.locale, "gitMarkResolvedLabel", nil)
+}
+
+// GitMerge says "Merge"
+// in the language the app shows.
+//
+// Merge button and menu item (base row of a worktree workspace, branches
+// popup), the name of an in-progress merge in the operation banner. Also
+// the operation name shown in busy text, error messages and the Console.
+func GitMerge() string { return In(i18n.Locale()).GitMerge() }
+
+// GitMerge says "Merge"
+// in the language of msgs.
+//
+// Merge button and menu item (base row of a worktree workspace, branches
+// popup), the name of an in-progress merge in the operation banner. Also
+// the operation name shown in busy text, error messages and the Console.
+func (msgs Messages) GitMerge() string {
+	return Catalog.Format(msgs.locale, "gitMerge", nil)
+}
+
+// GitMergeOurs says "Current Branch (ours)"
+// in the language the app shows.
+//
+// Name of the ours side of a merge conflict, used in Accept menu items on a
+// conflicted file.
+func GitMergeOurs() string { return In(i18n.Locale()).GitMergeOurs() }
+
+// GitMergeOurs says "Current Branch (ours)"
+// in the language of msgs.
+//
+// Name of the ours side of a merge conflict, used in Accept menu items on a
+// conflicted file.
+func (msgs Messages) GitMergeOurs() string {
+	return Catalog.Format(msgs.locale, "gitMergeOurs", nil)
+}
+
+// GitMergeTheirs says "Incoming Commit (theirs)"
+// in the language the app shows.
+//
+// Name of the theirs side of a merge conflict, used in Accept menu items on
+// a conflicted file.
+func GitMergeTheirs() string { return In(i18n.Locale()).GitMergeTheirs() }
+
+// GitMergeTheirs says "Incoming Commit (theirs)"
+// in the language of msgs.
+//
+// Name of the theirs side of a merge conflict, used in Accept menu items on
+// a conflicted file.
+func (msgs Messages) GitMergeTheirs() string {
+	return Catalog.Format(msgs.locale, "gitMergeTheirs", nil)
+}
+
+// GitMessageRequired says "Enter a commit message first"
+// in the language the app shows.
+//
+// Error bar text and commit button tooltip in the Changes view when the
+// commit message is empty.
+func GitMessageRequired() string { return In(i18n.Locale()).GitMessageRequired() }
+
+// GitMessageRequired says "Enter a commit message first"
+// in the language of msgs.
+//
+// Error bar text and commit button tooltip in the Changes view when the
+// commit message is empty.
+func (msgs Messages) GitMessageRequired() string {
+	return Catalog.Format(msgs.locale, "gitMessageRequired", nil)
+}
+
+// GitModified says "Modified"
+// in the language the app shows.
+//
+// Change status of a modified file.
+func GitModified() string { return In(i18n.Locale()).GitModified() }
+
+// GitModified says "Modified"
+// in the language of msgs.
+//
+// Change status of a modified file.
+func (msgs Messages) GitModified() string {
+	return Catalog.Format(msgs.locale, "gitModified", nil)
+}
+
+// GitMoreLines says "{count, plural, one {# more line} other {# more lines}}"
+// in the language the app shows.
+//
+// Footer in the editor's gutter change popup when the old content is cut
+// off. count is the number of hidden lines.
+func GitMoreLines(count int) string { return In(i18n.Locale()).GitMoreLines(count) }
+
+// GitMoreLines says "{count, plural, one {# more line} other {# more lines}}"
+// in the language of msgs.
+//
+// Footer in the editor's gutter change popup when the old content is cut
+// off. count is the number of hidden lines.
+func (msgs Messages) GitMoreLines(count int) string {
+	return Catalog.Format(msgs.locale, "gitMoreLines", map[string]any{"count": count})
+}
+
+// GitNewFile says "New File"
+// in the language the app shows.
+//
+// Label on the old side of an image diff when the file is new.
+func GitNewFile() string { return In(i18n.Locale()).GitNewFile() }
+
+// GitNewFile says "New File"
+// in the language of msgs.
+//
+// Label on the old side of an image diff when the file is new.
+func (msgs Messages) GitNewFile() string {
+	return Catalog.Format(msgs.locale, "gitNewFile", nil)
+}
+
+// GitNextChange says "Next Change"
+// in the language the app shows.
+//
+// Tooltip of the down arrow button in diff toolbars and the gutter change
+// popup: go to the next change.
+func GitNextChange() string { return In(i18n.Locale()).GitNextChange() }
+
+// GitNextChange says "Next Change"
+// in the language of msgs.
+//
+// Tooltip of the down arrow button in diff toolbars and the gutter change
+// popup: go to the next change.
+func (msgs Messages) GitNextChange() string {
+	return Catalog.Format(msgs.locale, "gitNextChange", nil)
+}
+
+// GitNextDifference says "Next Difference"
+// in the language the app shows.
+//
+// Tooltip of the down arrow button in the file history diff toolbar.
+func GitNextDifference() string { return In(i18n.Locale()).GitNextDifference() }
+
+// GitNextDifference says "Next Difference"
+// in the language of msgs.
+//
+// Tooltip of the down arrow button in the file history diff toolbar.
+func (msgs Messages) GitNextDifference() string {
+	return Catalog.Format(msgs.locale, "gitNextDifference", nil)
+}
+
+// GitNoChanges says "No changes"
+// in the language the app shows.
+//
+// Empty state of the Commit tab in the Changes view.
+func GitNoChanges() string { return In(i18n.Locale()).GitNoChanges() }
+
+// GitNoChanges says "No changes"
+// in the language of msgs.
+//
+// Empty state of the Commit tab in the Changes view.
+func (msgs Messages) GitNoChanges() string {
+	return Catalog.Format(msgs.locale, "gitNoChanges", nil)
+}
+
+// GitNoDifferences says "No differences"
+// in the language the app shows.
+//
+// Diff toolbar text (diff tab, file history) when the two versions are
+// identical.
+func GitNoDifferences() string { return In(i18n.Locale()).GitNoDifferences() }
+
+// GitNoDifferences says "No differences"
+// in the language of msgs.
+//
+// Diff toolbar text (diff tab, file history) when the two versions are
+// identical.
+func (msgs Messages) GitNoDifferences() string {
+	return Catalog.Format(msgs.locale, "gitNoDifferences", nil)
+}
+
+// GitNoStashes says "No stashes"
+// in the language the app shows.
+//
+// Empty state of the Stash tab in the Changes view.
+func GitNoStashes() string { return In(i18n.Locale()).GitNoStashes() }
+
+// GitNoStashes says "No stashes"
+// in the language of msgs.
+//
+// Empty state of the Stash tab in the Changes view.
+func (msgs Messages) GitNoStashes() string {
+	return Catalog.Format(msgs.locale, "gitNoStashes", nil)
+}
+
+// GitNotAdded says "Unversioned"
+// in the language the app shows.
+//
+// Change status of a file not added to Git (git status ?).
+func GitNotAdded() string { return In(i18n.Locale()).GitNotAdded() }
+
+// GitNotAdded says "Unversioned"
+// in the language of msgs.
+//
+// Change status of a file not added to Git (git status ?).
+func (msgs Messages) GitNotAdded() string {
+	return Catalog.Format(msgs.locale, "gitNotAdded", nil)
+}
+
+// GitNotRepo says "This workspace is not a Git repository"
+// in the language the app shows.
+//
+// Empty state of the Changes view and Git Log when the workspace is not a
+// Git repository.
+func GitNotRepo() string { return In(i18n.Locale()).GitNotRepo() }
+
+// GitNotRepo says "This workspace is not a Git repository"
+// in the language of msgs.
+//
+// Empty state of the Changes view and Git Log when the workspace is not a
+// Git repository.
+func (msgs Messages) GitNotRepo() string {
+	return Catalog.Format(msgs.locale, "gitNotRepo", nil)
+}
+
+// GitOpCherryPick says "Cherry-pick"
+// in the language the app shows.
+//
+// Name of a cherry-pick in progress, used inside gitOperationReady,
+// gitAbortConfirm and so on.
+func GitOpCherryPick() string { return In(i18n.Locale()).GitOpCherryPick() }
+
+// GitOpCherryPick says "Cherry-pick"
+// in the language of msgs.
+//
+// Name of a cherry-pick in progress, used inside gitOperationReady,
+// gitAbortConfirm and so on.
+func (msgs Messages) GitOpCherryPick() string {
+	return Catalog.Format(msgs.locale, "gitOpCherryPick", nil)
+}
+
+// GitOpRebase says "Rebase"
+// in the language the app shows.
+//
+// Name of a rebase, used inside gitOperationReady, gitAbortConfirm and as
+// an operation name.
+func GitOpRebase() string { return In(i18n.Locale()).GitOpRebase() }
+
+// GitOpRebase says "Rebase"
+// in the language of msgs.
+//
+// Name of a rebase, used inside gitOperationReady, gitAbortConfirm and as
+// an operation name.
+func (msgs Messages) GitOpRebase() string {
+	return Catalog.Format(msgs.locale, "gitOpRebase", nil)
+}
+
+// GitOpRevert says "Revert"
+// in the language the app shows.
+//
+// Name of a revert in progress, used inside gitOperationReady,
+// gitAbortConfirm and so on.
+func GitOpRevert() string { return In(i18n.Locale()).GitOpRevert() }
+
+// GitOpRevert says "Revert"
+// in the language of msgs.
+//
+// Name of a revert in progress, used inside gitOperationReady,
+// gitAbortConfirm and so on.
+func (msgs Messages) GitOpRevert() string {
+	return Catalog.Format(msgs.locale, "gitOpRevert", nil)
+}
+
+// GitOpenFile says "Open File"
+// in the language the app shows.
+//
+// Context menu item on a file in the Changes view: open it in the editor.
+func GitOpenFile() string { return In(i18n.Locale()).GitOpenFile() }
+
+// GitOpenFile says "Open File"
+// in the language of msgs.
+//
+// Context menu item on a file in the Changes view: open it in the editor.
+func (msgs Messages) GitOpenFile() string {
+	return Catalog.Format(msgs.locale, "gitOpenFile", nil)
+}
+
+// GitOpenInEditor says "Open in Editor"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the diff tab toolbar that opens the file in
+// the editor.
+func GitOpenInEditor() string { return In(i18n.Locale()).GitOpenInEditor() }
+
+// GitOpenInEditor says "Open in Editor"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the diff tab toolbar that opens the file in
+// the editor.
+func (msgs Messages) GitOpenInEditor() string {
+	return Catalog.Format(msgs.locale, "gitOpenInEditor", nil)
+}
+
+// GitOperationAnyway says "{operation} Anyway"
+// in the language the app shows.
+//
+// Button of a confirmation that warns before a Git operation. operation is
+// the name of the Git operation, such as Checkout or Pop Stash.
+func GitOperationAnyway(operation string) string {
+	return In(i18n.Locale()).GitOperationAnyway(operation)
+}
+
+// GitOperationAnyway says "{operation} Anyway"
+// in the language of msgs.
+//
+// Button of a confirmation that warns before a Git operation. operation is
+// the name of the Git operation, such as Checkout or Pop Stash.
+func (msgs Messages) GitOperationAnyway(operation string) string {
+	return Catalog.Format(msgs.locale, "gitOperationAnyway", map[string]any{"operation": operation})
+}
+
+// GitOperationCanceled says "{operation} canceled"
+// in the language the app shows.
+//
+// Error bar after the user canceled a Git operation. operation is the name
+// of the Git operation, such as Checkout or Pop Stash.
+func GitOperationCanceled(operation string) string {
+	return In(i18n.Locale()).GitOperationCanceled(operation)
+}
+
+// GitOperationCanceled says "{operation} canceled"
+// in the language of msgs.
+//
+// Error bar after the user canceled a Git operation. operation is the name
+// of the Git operation, such as Checkout or Pop Stash.
+func (msgs Messages) GitOperationCanceled(operation string) string {
+	return Catalog.Format(msgs.locale, "gitOperationCanceled", map[string]any{"operation": operation})
+}
+
+// GitOperationConflicts says "{operation} in progress with {count, plural, one {# conflicted file} other {# conflicted files}}. Resolve them, then …"
+// in the language the app shows.
+//
+// Banner in the Changes view while a rebase, merge and so on stops on
+// conflicts. operation is gitOpRebase, gitMerge and so on.
+func GitOperationConflicts(operation string, count int) string {
+	return In(i18n.Locale()).GitOperationConflicts(operation, count)
+}
+
+// GitOperationConflicts says "{operation} in progress with {count, plural, one {# conflicted file} other {# conflicted files}}. Resolve them, then …"
+// in the language of msgs.
+//
+// Banner in the Changes view while a rebase, merge and so on stops on
+// conflicts. operation is gitOpRebase, gitMerge and so on.
+func (msgs Messages) GitOperationConflicts(operation string, count int) string {
+	return Catalog.Format(msgs.locale, "gitOperationConflicts", map[string]any{"operation": operation, "count": count})
+}
+
+// GitOperationFailed says "{operation} failed: {error}"
+// in the language the app shows.
+//
+// Error bar after a Git operation failed. operation is the name of the Git
+// operation, such as Checkout or Pop Stash.
+func GitOperationFailed(operation string, error string) string {
+	return In(i18n.Locale()).GitOperationFailed(operation, error)
+}
+
+// GitOperationFailed says "{operation} failed: {error}"
+// in the language of msgs.
+//
+// Error bar after a Git operation failed. operation is the name of the Git
+// operation, such as Checkout or Pop Stash.
+func (msgs Messages) GitOperationFailed(operation string, error string) string {
+	return Catalog.Format(msgs.locale, "gitOperationFailed", map[string]any{"operation": operation, "error": error})
+}
+
+// GitOperationReady says "{operation} in progress. No conflicts remain; you can continue."
+// in the language the app shows.
+//
+// Banner in the Changes view while a rebase, merge and so on has no
+// conflicts left. operation is gitOpRebase, gitMerge and so on.
+func GitOperationReady(operation string) string {
+	return In(i18n.Locale()).GitOperationReady(operation)
+}
+
+// GitOperationReady says "{operation} in progress. No conflicts remain; you can continue."
+// in the language of msgs.
+//
+// Banner in the Changes view while a rebase, merge and so on has no
+// conflicts left. operation is gitOpRebase, gitMerge and so on.
+func (msgs Messages) GitOperationReady(operation string) string {
+	return Catalog.Format(msgs.locale, "gitOperationReady", map[string]any{"operation": operation})
+}
+
+// GitPickLabel says "Select {name}"
+// in the language the app shows.
+//
+// Accessibility label of the checkbox that includes a file, folder or group
+// in the commit or rollback.
+func GitPickLabel(name string) string { return In(i18n.Locale()).GitPickLabel(name) }
+
+// GitPickLabel says "Select {name}"
+// in the language of msgs.
+//
+// Accessibility label of the checkbox that includes a file, folder or group
+// in the commit or rollback.
+func (msgs Messages) GitPickLabel(name string) string {
+	return Catalog.Format(msgs.locale, "gitPickLabel", map[string]any{"name": name})
+}
+
+// GitPreviousChange says "Previous Change"
+// in the language the app shows.
+//
+// Tooltip of the up arrow button in diff toolbars and the gutter change
+// popup: go to the previous change.
+func GitPreviousChange() string { return In(i18n.Locale()).GitPreviousChange() }
+
+// GitPreviousChange says "Previous Change"
+// in the language of msgs.
+//
+// Tooltip of the up arrow button in diff toolbars and the gutter change
+// popup: go to the previous change.
+func (msgs Messages) GitPreviousChange() string {
+	return Catalog.Format(msgs.locale, "gitPreviousChange", nil)
+}
+
+// GitPreviousDifference says "Previous Difference"
+// in the language the app shows.
+//
+// Tooltip of the up arrow button in the file history diff toolbar.
+func GitPreviousDifference() string { return In(i18n.Locale()).GitPreviousDifference() }
+
+// GitPreviousDifference says "Previous Difference"
+// in the language of msgs.
+//
+// Tooltip of the up arrow button in the file history diff toolbar.
+func (msgs Messages) GitPreviousDifference() string {
+	return Catalog.Format(msgs.locale, "gitPreviousDifference", nil)
+}
+
+// GitRebaseOurs says "Target Branch (ours)"
+// in the language the app shows.
+//
+// Name of the ours side of a rebase conflict (the branch being rebased
+// onto), used in Accept menu items on a conflicted file.
+func GitRebaseOurs() string { return In(i18n.Locale()).GitRebaseOurs() }
+
+// GitRebaseOurs says "Target Branch (ours)"
+// in the language of msgs.
+//
+// Name of the ours side of a rebase conflict (the branch being rebased
+// onto), used in Accept menu items on a conflicted file.
+func (msgs Messages) GitRebaseOurs() string {
+	return Catalog.Format(msgs.locale, "gitRebaseOurs", nil)
+}
+
+// GitRebaseTheirs says "Your Commit (theirs)"
+// in the language the app shows.
+//
+// Name of the theirs side of a rebase conflict (the user's commit being
+// replayed), used in Accept menu items on a conflicted file.
+func GitRebaseTheirs() string { return In(i18n.Locale()).GitRebaseTheirs() }
+
+// GitRebaseTheirs says "Your Commit (theirs)"
+// in the language of msgs.
+//
+// Name of the theirs side of a rebase conflict (the user's commit being
+// replayed), used in Accept menu items on a conflicted file.
+func (msgs Messages) GitRebaseTheirs() string {
+	return Catalog.Format(msgs.locale, "gitRebaseTheirs", nil)
+}
+
+// GitResolve says "Resolve Conflicts"
+// in the language the app shows.
+//
+// Operation name of accepting one side for a conflicted file, shown in busy
+// text, error messages and the Console.
+func GitResolve() string { return In(i18n.Locale()).GitResolve() }
+
+// GitResolve says "Resolve Conflicts"
+// in the language of msgs.
+//
+// Operation name of accepting one side for a conflicted file, shown in busy
+// text, error messages and the Console.
+func (msgs Messages) GitResolve() string {
+	return Catalog.Format(msgs.locale, "gitResolve", nil)
+}
+
+// GitRestoreConflicts says "Local changes were restored with conflicts"
+// in the language the app shows.
+//
+// Notification title when local changes reapplied after an update conflict.
+func GitRestoreConflicts() string { return In(i18n.Locale()).GitRestoreConflicts() }
+
+// GitRestoreConflicts says "Local changes were restored with conflicts"
+// in the language of msgs.
+//
+// Notification title when local changes reapplied after an update conflict.
+func (msgs Messages) GitRestoreConflicts() string {
+	return Catalog.Format(msgs.locale, "gitRestoreConflicts", nil)
+}
+
+// GitRestoreConflictsAfter says "{title}, but local changes were restored with conflicts"
+// in the language the app shows.
+//
+// Warning that replaces the success notification of an update when local
+// changes came back with conflicts. title is that success notification.
+func GitRestoreConflictsAfter(title string) string {
+	return In(i18n.Locale()).GitRestoreConflictsAfter(title)
+}
+
+// GitRestoreConflictsAfter says "{title}, but local changes were restored with conflicts"
+// in the language of msgs.
+//
+// Warning that replaces the success notification of an update when local
+// changes came back with conflicts. title is that success notification.
+func (msgs Messages) GitRestoreConflictsAfter(title string) string {
+	return Catalog.Format(msgs.locale, "gitRestoreConflictsAfter", map[string]any{"title": title})
+}
+
+// GitRestoreConflictsNote says "Resolve them in Changes. The original changes remain in Stash."
+// in the language the app shows.
+//
+// Notification body under gitRestoreConflicts.
+func GitRestoreConflictsNote() string { return In(i18n.Locale()).GitRestoreConflictsNote() }
+
+// GitRestoreConflictsNote says "Resolve them in Changes. The original changes remain in Stash."
+// in the language of msgs.
+//
+// Notification body under gitRestoreConflicts.
+func (msgs Messages) GitRestoreConflictsNote() string {
+	return Catalog.Format(msgs.locale, "gitRestoreConflictsNote", nil)
+}
+
+// GitRestoreFailed says "Local changes could not be restored"
+// in the language the app shows.
+//
+// Notification title when local changes stashed before an update could not
+// be reapplied.
+func GitRestoreFailed() string { return In(i18n.Locale()).GitRestoreFailed() }
+
+// GitRestoreFailed says "Local changes could not be restored"
+// in the language of msgs.
+//
+// Notification title when local changes stashed before an update could not
+// be reapplied.
+func (msgs Messages) GitRestoreFailed() string {
+	return Catalog.Format(msgs.locale, "gitRestoreFailed", nil)
+}
+
+// GitRestoreFailedAfter says "{title}, but local changes could not be restored"
+// in the language the app shows.
+//
+// Warning that replaces the success notification of an update when local
+// changes could not be restored. title is that success notification.
+func GitRestoreFailedAfter(title string) string {
+	return In(i18n.Locale()).GitRestoreFailedAfter(title)
+}
+
+// GitRestoreFailedAfter says "{title}, but local changes could not be restored"
+// in the language of msgs.
+//
+// Warning that replaces the success notification of an update when local
+// changes could not be restored. title is that success notification.
+func (msgs Messages) GitRestoreFailedAfter(title string) string {
+	return Catalog.Format(msgs.locale, "gitRestoreFailedAfter", map[string]any{"title": title})
+}
+
+// GitRestoreFailedNote says "They remain in Stash and can be applied manually from Changes."
+// in the language the app shows.
+//
+// Notification body under gitRestoreFailed.
+func GitRestoreFailedNote() string { return In(i18n.Locale()).GitRestoreFailedNote() }
+
+// GitRestoreFailedNote says "They remain in Stash and can be applied manually from Changes."
+// in the language of msgs.
+//
+// Notification body under gitRestoreFailed.
+func (msgs Messages) GitRestoreFailedNote() string {
+	return Catalog.Format(msgs.locale, "gitRestoreFailedNote", nil)
+}
+
+// GitRevert says "Revert"
+// in the language the app shows.
+//
+// Name of the revert operation, inserted into the commit button tooltip
+// while a revert is in progress (gitWholeCommitTip).
+func GitRevert() string { return In(i18n.Locale()).GitRevert() }
+
+// GitRevert says "Revert"
+// in the language of msgs.
+//
+// Name of the revert operation, inserted into the commit button tooltip
+// while a revert is in progress (gitWholeCommitTip).
+func (msgs Messages) GitRevert() string {
+	return Catalog.Format(msgs.locale, "gitRevert", nil)
+}
+
+// GitRewordOnly says "Edit Commit Message Only"
+// in the language the app shows.
+//
+// Commit button label in the Changes view when Amend is checked and no
+// files are selected: only change the last commit message.
+func GitRewordOnly() string { return In(i18n.Locale()).GitRewordOnly() }
+
+// GitRewordOnly says "Edit Commit Message Only"
+// in the language of msgs.
+//
+// Commit button label in the Changes view when Amend is checked and no
+// files are selected: only change the last commit message.
+func (msgs Messages) GitRewordOnly() string {
+	return Catalog.Format(msgs.locale, "gitRewordOnly", nil)
+}
+
+// GitRollback says "Rollback"
+// in the language the app shows.
+//
+// Text of the rollback button on a change in a diff. Also the operation
+// name shown in busy text, error messages and the Console.
+func GitRollback() string { return In(i18n.Locale()).GitRollback() }
+
+// GitRollback says "Rollback"
+// in the language of msgs.
+//
+// Text of the rollback button on a change in a diff. Also the operation
+// name shown in busy text, error messages and the Console.
+func (msgs Messages) GitRollback() string {
+	return Catalog.Format(msgs.locale, "gitRollback", nil)
+}
+
+// GitRollbackChange says "Rollback This Change"
+// in the language the app shows.
+//
+// Tooltip and accessibility label of the rollback button next to a change
+// in a diff.
+func GitRollbackChange() string { return In(i18n.Locale()).GitRollbackChange() }
+
+// GitRollbackChange says "Rollback This Change"
+// in the language of msgs.
+//
+// Tooltip and accessibility label of the rollback button next to a change
+// in a diff.
+func (msgs Messages) GitRollbackChange() string {
+	return Catalog.Format(msgs.locale, "gitRollbackChange", nil)
+}
+
+// GitRollbackEllipsis says "Rollback…"
+// in the language the app shows.
+//
+// Tooltip of the rollback icon button in the Changes view, and context menu
+// item on a changed file or folder; opens the Rollback dialog.
+func GitRollbackEllipsis() string { return In(i18n.Locale()).GitRollbackEllipsis() }
+
+// GitRollbackEllipsis says "Rollback…"
+// in the language of msgs.
+//
+// Tooltip of the rollback icon button in the Changes view, and context menu
+// item on a changed file or folder; opens the Rollback dialog.
+func (msgs Messages) GitRollbackEllipsis() string {
+	return Catalog.Format(msgs.locale, "gitRollbackEllipsis", nil)
+}
+
+// GitRollbackFailed says "Rollback failed: {error}"
+// in the language the app shows.
+//
+// Error bar after rolling back one change in a diff failed.
+func GitRollbackFailed(error string) string { return In(i18n.Locale()).GitRollbackFailed(error) }
+
+// GitRollbackFailed says "Rollback failed: {error}"
+// in the language of msgs.
+//
+// Error bar after rolling back one change in a diff failed.
+func (msgs Messages) GitRollbackFailed(error string) string {
+	return Catalog.Format(msgs.locale, "gitRollbackFailed", map[string]any{"error": error})
+}
+
+// GitRollbackFile says "Rollback This File…"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the diff tab toolbar that rolls back the
+// whole file after confirmation.
+func GitRollbackFile() string { return In(i18n.Locale()).GitRollbackFile() }
+
+// GitRollbackFile says "Rollback This File…"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the diff tab toolbar that rolls back the
+// whole file after confirmation.
+func (msgs Messages) GitRollbackFile() string {
+	return Catalog.Format(msgs.locale, "gitRollbackFile", nil)
+}
+
+// GitRollbackHunk says "Rollback This Change"
+// in the language the app shows.
+//
+// Button in the Rollback dialog's diff and tooltip of the icon button in
+// the gutter change popup: roll back the current change.
+func GitRollbackHunk() string { return In(i18n.Locale()).GitRollbackHunk() }
+
+// GitRollbackHunk says "Rollback This Change"
+// in the language of msgs.
+//
+// Button in the Rollback dialog's diff and tooltip of the icon button in
+// the gutter change popup: roll back the current change.
+func (msgs Messages) GitRollbackHunk() string {
+	return Catalog.Format(msgs.locale, "gitRollbackHunk", nil)
+}
+
+// GitSaveBeforeCommit says "Save before committing this change"
+// in the language the app shows.
+//
+// Disabled placeholder in the editor's gutter change popup when the file
+// has unsaved edits.
+func GitSaveBeforeCommit() string { return In(i18n.Locale()).GitSaveBeforeCommit() }
+
+// GitSaveBeforeCommit says "Save before committing this change"
+// in the language of msgs.
+//
+// Disabled placeholder in the editor's gutter change popup when the file
+// has unsaved edits.
+func (msgs Messages) GitSaveBeforeCommit() string {
+	return Catalog.Format(msgs.locale, "gitSaveBeforeCommit", nil)
+}
+
+// GitSelectFiles says "Select files to commit first"
+// in the language the app shows.
+//
+// Error bar text when committing with no files checked in the Changes view.
+func GitSelectFiles() string { return In(i18n.Locale()).GitSelectFiles() }
+
+// GitSelectFiles says "Select files to commit first"
+// in the language of msgs.
+//
+// Error bar text when committing with no files checked in the Changes view.
+func (msgs Messages) GitSelectFiles() string {
+	return Catalog.Format(msgs.locale, "gitSelectFiles", nil)
+}
+
+// GitShowDiff says "Show Diff"
+// in the language the app shows.
+//
+// Tooltip of the icon button in the editor's gutter change popup that opens
+// the file's diff.
+func GitShowDiff() string { return In(i18n.Locale()).GitShowDiff() }
+
+// GitShowDiff says "Show Diff"
+// in the language of msgs.
+//
+// Tooltip of the icon button in the editor's gutter change popup that opens
+// the file's diff.
+func (msgs Messages) GitShowDiff() string {
+	return Catalog.Format(msgs.locale, "gitShowDiff", nil)
+}
+
+// GitSideBySide says "Side-by-side"
+// in the language the app shows.
+//
+// Toggle chip in diff toolbars: side-by-side layout when on, unified when
+// off.
+func GitSideBySide() string { return In(i18n.Locale()).GitSideBySide() }
+
+// GitSideBySide says "Side-by-side"
+// in the language of msgs.
+//
+// Toggle chip in diff toolbars: side-by-side layout when on, unified when
+// off.
+func (msgs Messages) GitSideBySide() string {
+	return Catalog.Format(msgs.locale, "gitSideBySide", nil)
+}
+
+// GitSideBySideTip says "Compare side by side; turn off for unified view"
+// in the language the app shows.
+//
+// Tooltip of the Side-by-side toggle in diff toolbars.
+func GitSideBySideTip() string { return In(i18n.Locale()).GitSideBySideTip() }
+
+// GitSideBySideTip says "Compare side by side; turn off for unified view"
+// in the language of msgs.
+//
+// Tooltip of the Side-by-side toggle in diff toolbars.
+func (msgs Messages) GitSideBySideTip() string {
+	return Catalog.Format(msgs.locale, "gitSideBySideTip", nil)
+}
+
+// GitSizeLines says "{size} · {count, plural, one {# line} other {# lines}}"
+// in the language the app shows.
+//
+// Size of one side of a file too large to compare. size is like 21.3 MB.
+func GitSizeLines(size string, count int) string { return In(i18n.Locale()).GitSizeLines(size, count) }
+
+// GitSizeLines says "{size} · {count, plural, one {# line} other {# lines}}"
+// in the language of msgs.
+//
+// Size of one side of a file too large to compare. size is like 21.3 MB.
+func (msgs Messages) GitSizeLines(size string, count int) string {
+	return Catalog.Format(msgs.locale, "gitSizeLines", map[string]any{"size": size, "count": count})
+}
+
+// GitSkip says "Skip"
+// in the language the app shows.
+//
+// Operation name of skipping the current commit during a rebase or
+// cherry-pick, shown in busy text, error messages and the Console.
+func GitSkip() string { return In(i18n.Locale()).GitSkip() }
+
+// GitSkip says "Skip"
+// in the language of msgs.
+//
+// Operation name of skipping the current commit during a rebase or
+// cherry-pick, shown in busy text, error messages and the Console.
+func (msgs Messages) GitSkip() string {
+	return Catalog.Format(msgs.locale, "gitSkip", nil)
+}
+
+// GitSkipCommit says "Skip This Commit"
+// in the language the app shows.
+//
+// Button in the in-progress rebase or cherry-pick banner in the Changes
+// view.
+func GitSkipCommit() string { return In(i18n.Locale()).GitSkipCommit() }
+
+// GitSkipCommit says "Skip This Commit"
+// in the language of msgs.
+//
+// Button in the in-progress rebase or cherry-pick banner in the Changes
+// view.
+func (msgs Messages) GitSkipCommit() string {
+	return Catalog.Format(msgs.locale, "gitSkipCommit", nil)
+}
+
+// GitStash says "Stash"
+// in the language the app shows.
+//
+// Label of the Stash tab and group header in the Changes view, and confirm
+// button of the Stash Changes dialog. Also the operation name shown in busy
+// text, error messages and the Console.
+func GitStash() string { return In(i18n.Locale()).GitStash() }
+
+// GitStash says "Stash"
+// in the language of msgs.
+//
+// Label of the Stash tab and group header in the Changes view, and confirm
+// button of the Stash Changes dialog. Also the operation name shown in busy
+// text, error messages and the Console.
+func (msgs Messages) GitStash() string {
+	return Catalog.Format(msgs.locale, "gitStash", nil)
+}
+
+// GitStashApply says "Apply"
+// in the language the app shows.
+//
+// Context menu item on a stash in the Changes view: apply it and keep the
+// stash.
+func GitStashApply() string { return In(i18n.Locale()).GitStashApply() }
+
+// GitStashApply says "Apply"
+// in the language of msgs.
+//
+// Context menu item on a stash in the Changes view: apply it and keep the
+// stash.
+func (msgs Messages) GitStashApply() string {
+	return Catalog.Format(msgs.locale, "gitStashApply", nil)
+}
+
+// GitStashApplyOperation says "Apply Stash"
+// in the language the app shows.
+//
+// Operation name of applying a stash, shown in busy text, error messages
+// and the Console.
+func GitStashApplyOperation() string { return In(i18n.Locale()).GitStashApplyOperation() }
+
+// GitStashApplyOperation says "Apply Stash"
+// in the language of msgs.
+//
+// Operation name of applying a stash, shown in busy text, error messages
+// and the Console.
+func (msgs Messages) GitStashApplyOperation() string {
+	return Catalog.Format(msgs.locale, "gitStashApplyOperation", nil)
+}
+
+// GitStashBody says "Save all changes, including unversioned files, in git stash and leave the workspace clean."
+// in the language the app shows.
+//
+// Body of the Stash Changes dialog.
+func GitStashBody() string { return In(i18n.Locale()).GitStashBody() }
+
+// GitStashBody says "Save all changes, including unversioned files, in git stash and leave the workspace clean."
+// in the language of msgs.
+//
+// Body of the Stash Changes dialog.
+func (msgs Messages) GitStashBody() string {
+	return Catalog.Format(msgs.locale, "gitStashBody", nil)
+}
+
+// GitStashDelete says "Delete Stash"
+// in the language the app shows.
+//
+// Operation name of deleting a stash, shown in busy text, error messages
+// and the Console.
+func GitStashDelete() string { return In(i18n.Locale()).GitStashDelete() }
+
+// GitStashDelete says "Delete Stash"
+// in the language of msgs.
+//
+// Operation name of deleting a stash, shown in busy text, error messages
+// and the Console.
+func (msgs Messages) GitStashDelete() string {
+	return Catalog.Format(msgs.locale, "gitStashDelete", nil)
+}
+
+// GitStashDeleteBody says "The stashed changes will be lost: {message}"
+// in the language the app shows.
+//
+// Body of the confirmation to delete a stash. message is the stash
+// description.
+func GitStashDeleteBody(message string) string { return In(i18n.Locale()).GitStashDeleteBody(message) }
+
+// GitStashDeleteBody says "The stashed changes will be lost: {message}"
+// in the language of msgs.
+//
+// Body of the confirmation to delete a stash. message is the stash
+// description.
+func (msgs Messages) GitStashDeleteBody(message string) string {
+	return Catalog.Format(msgs.locale, "gitStashDeleteBody", map[string]any{"message": message})
+}
+
+// GitStashDeleteConfirm says "Delete This Stash?"
+// in the language the app shows.
+//
+// Title of the confirmation before deleting a stash.
+func GitStashDeleteConfirm() string { return In(i18n.Locale()).GitStashDeleteConfirm() }
+
+// GitStashDeleteConfirm says "Delete This Stash?"
+// in the language of msgs.
+//
+// Title of the confirmation before deleting a stash.
+func (msgs Messages) GitStashDeleteConfirm() string {
+	return Catalog.Format(msgs.locale, "gitStashDeleteConfirm", nil)
+}
+
+// GitStashDeleteEllipsis says "Delete Stash…"
+// in the language the app shows.
+//
+// Button on the hint shown after resolving conflicts from an update: delete
+// the stash with the local changes after confirming.
+func GitStashDeleteEllipsis() string { return In(i18n.Locale()).GitStashDeleteEllipsis() }
+
+// GitStashDeleteEllipsis says "Delete Stash…"
+// in the language of msgs.
+//
+// Button on the hint shown after resolving conflicts from an update: delete
+// the stash with the local changes after confirming.
+func (msgs Messages) GitStashDeleteEllipsis() string {
+	return Catalog.Format(msgs.locale, "gitStashDeleteEllipsis", nil)
+}
+
+// GitStashMessage says "Description (optional)"
+// in the language the app shows.
+//
+// Placeholder of the message field in the Stash Changes dialog.
+func GitStashMessage() string { return In(i18n.Locale()).GitStashMessage() }
+
+// GitStashMessage says "Description (optional)"
+// in the language of msgs.
+//
+// Placeholder of the message field in the Stash Changes dialog.
+func (msgs Messages) GitStashMessage() string {
+	return Catalog.Format(msgs.locale, "gitStashMessage", nil)
+}
+
+// GitStashOnBranch says "Stashed on branch {branch}"
+// in the language the app shows.
+//
+// Tooltip of the branch name on a stash from another branch.
+func GitStashOnBranch(branch string) string { return In(i18n.Locale()).GitStashOnBranch(branch) }
+
+// GitStashOnBranch says "Stashed on branch {branch}"
+// in the language of msgs.
+//
+// Tooltip of the branch name on a stash from another branch.
+func (msgs Messages) GitStashOnBranch(branch string) string {
+	return Catalog.Format(msgs.locale, "gitStashOnBranch", map[string]any{"branch": branch})
+}
+
+// GitStashOtherBody says "This stash was created in {where}. {operation} will put those changes into the current directory."
+// in the language the app shows.
+//
+// Body of the confirmation before applying or popping a stash from another
+// branch. where is gitStashWhereBranch or gitStashWhereWorkspace; operation
+// is Pop Stash or Apply Stash.
+func GitStashOtherBody(where string, operation string) string {
+	return In(i18n.Locale()).GitStashOtherBody(where, operation)
+}
+
+// GitStashOtherBody says "This stash was created in {where}. {operation} will put those changes into the current directory."
+// in the language of msgs.
+//
+// Body of the confirmation before applying or popping a stash from another
+// branch. where is gitStashWhereBranch or gitStashWhereWorkspace; operation
+// is Pop Stash or Apply Stash.
+func (msgs Messages) GitStashOtherBody(where string, operation string) string {
+	return Catalog.Format(msgs.locale, "gitStashOtherBody", map[string]any{"where": where, "operation": operation})
+}
+
+// GitStashOtherConfirm says "{operation} from Another Branch?"
+// in the language the app shows.
+//
+// Title of the confirmation before applying or popping a stash from another
+// branch. operation is Pop Stash or Apply Stash.
+func GitStashOtherConfirm(operation string) string {
+	return In(i18n.Locale()).GitStashOtherConfirm(operation)
+}
+
+// GitStashOtherConfirm says "{operation} from Another Branch?"
+// in the language of msgs.
+//
+// Title of the confirmation before applying or popping a stash from another
+// branch. operation is Pop Stash or Apply Stash.
+func (msgs Messages) GitStashOtherConfirm(operation string) string {
+	return Catalog.Format(msgs.locale, "gitStashOtherConfirm", map[string]any{"operation": operation})
+}
+
+// GitStashPop says "Pop"
+// in the language the app shows.
+//
+// Context menu item on a stash in the Changes view: apply it and delete the
+// stash.
+func GitStashPop() string { return In(i18n.Locale()).GitStashPop() }
+
+// GitStashPop says "Pop"
+// in the language of msgs.
+//
+// Context menu item on a stash in the Changes view: apply it and delete the
+// stash.
+func (msgs Messages) GitStashPop() string {
+	return Catalog.Format(msgs.locale, "gitStashPop", nil)
+}
+
+// GitStashPopOperation says "Pop Stash"
+// in the language the app shows.
+//
+// Operation name of popping a stash, shown in busy text, error messages,
+// the Console and the agent-is-working warning.
+func GitStashPopOperation() string { return In(i18n.Locale()).GitStashPopOperation() }
+
+// GitStashPopOperation says "Pop Stash"
+// in the language of msgs.
+//
+// Operation name of popping a stash, shown in busy text, error messages,
+// the Console and the agent-is-working warning.
+func (msgs Messages) GitStashPopOperation() string {
+	return Catalog.Format(msgs.locale, "gitStashPopOperation", nil)
+}
+
+// GitStashTip says "Stash Changes… (git stash, including unversioned files)"
+// in the language the app shows.
+//
+// Tooltip of the stash icon button in the Changes view.
+func GitStashTip() string { return In(i18n.Locale()).GitStashTip() }
+
+// GitStashTip says "Stash Changes… (git stash, including unversioned files)"
+// in the language of msgs.
+//
+// Tooltip of the stash icon button in the Changes view.
+func (msgs Messages) GitStashTip() string {
+	return Catalog.Format(msgs.locale, "gitStashTip", nil)
+}
+
+// GitStashTitle says "Stash Changes"
+// in the language the app shows.
+//
+// Title of the Stash Changes dialog.
+func GitStashTitle() string { return In(i18n.Locale()).GitStashTitle() }
+
+// GitStashTitle says "Stash Changes"
+// in the language of msgs.
+//
+// Title of the Stash Changes dialog.
+func (msgs Messages) GitStashTitle() string {
+	return Catalog.Format(msgs.locale, "gitStashTitle", nil)
+}
+
+// GitStashWhereBranch says "branch {branch}"
+// in the language the app shows.
+//
+// Where a stash was created, inside gitStashOtherBody.
+func GitStashWhereBranch(branch string) string { return In(i18n.Locale()).GitStashWhereBranch(branch) }
+
+// GitStashWhereBranch says "branch {branch}"
+// in the language of msgs.
+//
+// Where a stash was created, inside gitStashOtherBody.
+func (msgs Messages) GitStashWhereBranch(branch string) string {
+	return Catalog.Format(msgs.locale, "gitStashWhereBranch", map[string]any{"branch": branch})
+}
+
+// GitStashWhereWorkspace says "workspace {workspace} (branch {branch})"
+// in the language the app shows.
+//
+// Where a stash was created, inside gitStashOtherBody.
+func GitStashWhereWorkspace(workspace string, branch string) string {
+	return In(i18n.Locale()).GitStashWhereWorkspace(workspace, branch)
+}
+
+// GitStashWhereWorkspace says "workspace {workspace} (branch {branch})"
+// in the language of msgs.
+//
+// Where a stash was created, inside gitStashOtherBody.
+func (msgs Messages) GitStashWhereWorkspace(workspace string, branch string) string {
+	return Catalog.Format(msgs.locale, "gitStashWhereWorkspace", map[string]any{"workspace": workspace, "branch": branch})
+}
+
+// GitSwitchFile says "Switch File"
+// in the language the app shows.
+//
+// Accessibility label of the file name button in the diff tab toolbar that
+// opens a list of the other changed files.
+func GitSwitchFile() string { return In(i18n.Locale()).GitSwitchFile() }
+
+// GitSwitchFile says "Switch File"
+// in the language of msgs.
+//
+// Accessibility label of the file name button in the diff tab toolbar that
+// opens a list of the other changed files.
+func (msgs Messages) GitSwitchFile() string {
+	return Catalog.Format(msgs.locale, "gitSwitchFile", nil)
+}
+
+// GitSwitchFileTip says "Switch File {next} / {previous}"
+// in the language the app shows.
+//
+// Tooltip of the file name above a diff. next and previous are the keyboard
+// shortcuts, such as F7.
+func GitSwitchFileTip(next string, previous string) string {
+	return In(i18n.Locale()).GitSwitchFileTip(next, previous)
+}
+
+// GitSwitchFileTip says "Switch File {next} / {previous}"
+// in the language of msgs.
+//
+// Tooltip of the file name above a diff. next and previous are the keyboard
+// shortcuts, such as F7.
+func (msgs Messages) GitSwitchFileTip(next string, previous string) string {
+	return Catalog.Format(msgs.locale, "gitSwitchFileTip", map[string]any{"next": next, "previous": previous})
+}
+
+// GitSwitchToWorkspace says "Switch to Workspace {workspace}"
+// in the language the app shows.
+//
+// Stash menu item: go to the workspace where the stash's branch is checked
+// out.
+func GitSwitchToWorkspace(workspace string) string {
+	return In(i18n.Locale()).GitSwitchToWorkspace(workspace)
+}
+
+// GitSwitchToWorkspace says "Switch to Workspace {workspace}"
+// in the language of msgs.
+//
+// Stash menu item: go to the workspace where the stash's branch is checked
+// out.
+func (msgs Messages) GitSwitchToWorkspace(workspace string) string {
+	return Catalog.Format(msgs.locale, "gitSwitchToWorkspace", map[string]any{"workspace": workspace})
+}
+
+// GitTooLarge says "The file is larger than {size} MB; comparing will take a moment"
+// in the language the app shows.
+//
+// Shown instead of a diff for a large file, with a Compare Anyway button.
+func GitTooLarge(size int) string { return In(i18n.Locale()).GitTooLarge(size) }
+
+// GitTooLarge says "The file is larger than {size} MB; comparing will take a moment"
+// in the language of msgs.
+//
+// Shown instead of a diff for a large file, with a Compare Anyway button.
+func (msgs Messages) GitTooLarge(size int) string {
+	return Catalog.Format(msgs.locale, "gitTooLarge", map[string]any{"size": size})
+}
+
+// GitTooLargeSides says "Before: {before}; after: {after}"
+// in the language the app shows.
+//
+// Sizes of both sides of a file too large to compare. before and after are
+// gitSizeLines.
+func GitTooLargeSides(before string, after string) string {
+	return In(i18n.Locale()).GitTooLargeSides(before, after)
+}
+
+// GitTooLargeSides says "Before: {before}; after: {after}"
+// in the language of msgs.
+//
+// Sizes of both sides of a file too large to compare. before and after are
+// gitSizeLines.
+func (msgs Messages) GitTooLargeSides(before string, after string) string {
+	return Catalog.Format(msgs.locale, "gitTooLargeSides", map[string]any{"before": before, "after": after})
+}
+
+// GitUnchangedLines says "{count, plural, one {# unchanged line} other {# unchanged lines}}"
+// in the language the app shows.
+//
+// Folded unchanged lines in a diff; click to expand.
+func GitUnchangedLines(count int) string { return In(i18n.Locale()).GitUnchangedLines(count) }
+
+// GitUnchangedLines says "{count, plural, one {# unchanged line} other {# unchanged lines}}"
+// in the language of msgs.
+//
+// Folded unchanged lines in a diff; click to expand.
+func (msgs Messages) GitUnchangedLines(count int) string {
+	return Catalog.Format(msgs.locale, "gitUnchangedLines", map[string]any{"count": count})
+}
+
+// GitUnversioned says "Unversioned Files"
+// in the language the app shows.
+//
+// Group header for unversioned files in the Changes view.
+func GitUnversioned() string { return In(i18n.Locale()).GitUnversioned() }
+
+// GitUnversioned says "Unversioned Files"
+// in the language of msgs.
+//
+// Group header for unversioned files in the Changes view.
+func (msgs Messages) GitUnversioned() string {
+	return Catalog.Format(msgs.locale, "gitUnversioned", nil)
+}
+
+// GitUpdatedVersion says "Updated Version"
+// in the language the app shows.
+//
+// Name of the ours side when reapplying local changes after an update
+// conflicts (HEAD after the update); used in Accept menu items.
+func GitUpdatedVersion() string { return In(i18n.Locale()).GitUpdatedVersion() }
+
+// GitUpdatedVersion says "Updated Version"
+// in the language of msgs.
+//
+// Name of the ours side when reapplying local changes after an update
+// conflicts (HEAD after the update); used in Accept menu items.
+func (msgs Messages) GitUpdatedVersion() string {
+	return Catalog.Format(msgs.locale, "gitUpdatedVersion", nil)
+}
+
+// GitViewStash says "View Stash"
+// in the language the app shows.
+//
+// Button on the hint about local changes left in Stash: switch to the Stash
+// tab.
+func GitViewStash() string { return In(i18n.Locale()).GitViewStash() }
+
+// GitViewStash says "View Stash"
+// in the language of msgs.
+//
+// Button on the hint about local changes left in Stash: switch to the Stash
+// tab.
+func (msgs Messages) GitViewStash() string {
+	return Catalog.Format(msgs.locale, "gitViewStash", nil)
+}
+
+// GitWhitespaceOnly says "Only whitespace differs. Turn off Ignore Whitespace to see it."
+// in the language the app shows.
+//
+// Diff toolbar text when Ignore Whitespace hides every difference.
+func GitWhitespaceOnly() string { return In(i18n.Locale()).GitWhitespaceOnly() }
+
+// GitWhitespaceOnly says "Only whitespace differs. Turn off Ignore Whitespace to see it."
+// in the language of msgs.
+//
+// Diff toolbar text when Ignore Whitespace hides every difference.
+func (msgs Messages) GitWhitespaceOnly() string {
+	return Catalog.Format(msgs.locale, "gitWhitespaceOnly", nil)
+}
+
+// GitWholeCommitTip says "{operation} in progress, so only a full commit is possible: selected files are added to Git first, then committed tog…"
+// in the language the app shows.
+//
+// Tooltip of the commit button while a merge, cherry-pick or revert is in
+// progress. operation is gitMerge, Cherry-pick or gitRevert.
+func GitWholeCommitTip(operation string) string {
+	return In(i18n.Locale()).GitWholeCommitTip(operation)
+}
+
+// GitWholeCommitTip says "{operation} in progress, so only a full commit is possible: selected files are added to Git first, then committed tog…"
+// in the language of msgs.
+//
+// Tooltip of the commit button while a merge, cherry-pick or revert is in
+// progress. operation is gitMerge, Cherry-pick or gitRevert.
+func (msgs Messages) GitWholeCommitTip(operation string) string {
+	return Catalog.Format(msgs.locale, "gitWholeCommitTip", map[string]any{"operation": operation})
+}
+
+// GitWorkspace says "Workspace"
+// in the language the app shows.
+//
+// Name of the working-copy version in diff tab labels and branch
+// comparison, as in main → Workspace.
+func GitWorkspace() string { return In(i18n.Locale()).GitWorkspace() }
+
+// GitWorkspace says "Workspace"
+// in the language of msgs.
+//
+// Name of the working-copy version in diff tab labels and branch
+// comparison, as in main → Workspace.
+func (msgs Messages) GitWorkspace() string {
+	return Catalog.Format(msgs.locale, "gitWorkspace", nil)
 }
 
 // KeysAdd says "Add Another Shortcut"
@@ -3406,6 +8098,856 @@ func (msgs Messages) KeysZoomResetNote() string {
 	return Catalog.Format(msgs.locale, "keysZoomResetNote", nil)
 }
 
+// LogAllBranches says "All Branches"
+// in the language the app shows.
+//
+// Item in the branch filter menu of the Git Log, and the filter button text
+// when no branch is selected.
+func LogAllBranches() string { return In(i18n.Locale()).LogAllBranches() }
+
+// LogAllBranches says "All Branches"
+// in the language of msgs.
+//
+// Item in the branch filter menu of the Git Log, and the filter button text
+// when no branch is selected.
+func (msgs Messages) LogAllBranches() string {
+	return Catalog.Format(msgs.locale, "logAllBranches", nil)
+}
+
+// LogAnnotate says "Annotate (See Who Changed Each Line)"
+// in the language the app shows.
+//
+// Context menu item on a file: open Annotate (git blame) for it.
+func LogAnnotate() string { return In(i18n.Locale()).LogAnnotate() }
+
+// LogAnnotate says "Annotate (See Who Changed Each Line)"
+// in the language of msgs.
+//
+// Context menu item on a file: open Annotate (git blame) for it.
+func (msgs Messages) LogAnnotate() string {
+	return Catalog.Format(msgs.locale, "logAnnotate", nil)
+}
+
+// LogAuthor says "Author"
+// in the language the app shows.
+//
+// Placeholder of the author filter field in the Git Log.
+func LogAuthor() string { return In(i18n.Locale()).LogAuthor() }
+
+// LogAuthor says "Author"
+// in the language of msgs.
+//
+// Placeholder of the author filter field in the Git Log.
+func (msgs Messages) LogAuthor() string {
+	return Catalog.Format(msgs.locale, "logAuthor", nil)
+}
+
+// LogAuthorFilter says "Filter by author"
+// in the language the app shows.
+//
+// Accessibility label of the author filter field in the Git Log.
+func LogAuthorFilter() string { return In(i18n.Locale()).LogAuthorFilter() }
+
+// LogAuthorFilter says "Filter by author"
+// in the language of msgs.
+//
+// Accessibility label of the author filter field in the Git Log.
+func (msgs Messages) LogAuthorFilter() string {
+	return Catalog.Format(msgs.locale, "logAuthorFilter", nil)
+}
+
+// LogBranchCount says "{count, plural, one {# branch} other {# branches}}"
+// in the language the app shows.
+//
+// Branch filter button in the Git Log when several branches are selected.
+func LogBranchCount(count int) string { return In(i18n.Locale()).LogBranchCount(count) }
+
+// LogBranchCount says "{count, plural, one {# branch} other {# branches}}"
+// in the language of msgs.
+//
+// Branch filter button in the Git Log when several branches are selected.
+func (msgs Messages) LogBranchCount(count int) string {
+	return Catalog.Format(msgs.locale, "logBranchCount", map[string]any{"count": count})
+}
+
+// LogBranchFilter says "Filter by branch"
+// in the language the app shows.
+//
+// Accessibility label of the branch filter button in the Git Log.
+func LogBranchFilter() string { return In(i18n.Locale()).LogBranchFilter() }
+
+// LogBranchFilter says "Filter by branch"
+// in the language of msgs.
+//
+// Accessibility label of the branch filter button in the Git Log.
+func (msgs Messages) LogBranchFilter() string {
+	return Catalog.Format(msgs.locale, "logBranchFilter", nil)
+}
+
+// LogCheckoutCommit says "Checkout This Commit"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log: check out the commit
+// (detached HEAD).
+func LogCheckoutCommit() string { return In(i18n.Locale()).LogCheckoutCommit() }
+
+// LogCheckoutCommit says "Checkout This Commit"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log: check out the commit
+// (detached HEAD).
+func (msgs Messages) LogCheckoutCommit() string {
+	return Catalog.Format(msgs.locale, "logCheckoutCommit", nil)
+}
+
+// LogClearFilter says "Clear Filters"
+// in the language the app shows.
+//
+// Button in the Git Log empty state when filters match no commits.
+func LogClearFilter() string { return In(i18n.Locale()).LogClearFilter() }
+
+// LogClearFilter says "Clear Filters"
+// in the language of msgs.
+//
+// Button in the Git Log empty state when filters match no commits.
+func (msgs Messages) LogClearFilter() string {
+	return Catalog.Format(msgs.locale, "logClearFilter", nil)
+}
+
+// LogCloseTab says "Close {tab}"
+// in the language the app shows.
+//
+// Accessibility label of the close button of a tab in the Git Log panel.
+// tab is the tab title.
+func LogCloseTab(tab string) string { return In(i18n.Locale()).LogCloseTab(tab) }
+
+// LogCloseTab says "Close {tab}"
+// in the language of msgs.
+//
+// Accessibility label of the close button of a tab in the Git Log panel.
+// tab is the tab title.
+func (msgs Messages) LogCloseTab(tab string) string {
+	return Catalog.Format(msgs.locale, "logCloseTab", map[string]any{"tab": tab})
+}
+
+// LogCommitCount says "{count, plural, one {# commit} other {# commits}}"
+// in the language the app shows.
+//
+// Commit count in the file history header.
+func LogCommitCount(count int) string { return In(i18n.Locale()).LogCommitCount(count) }
+
+// LogCommitCount says "{count, plural, one {# commit} other {# commits}}"
+// in the language of msgs.
+//
+// Commit count in the file history header.
+func (msgs Messages) LogCommitCount(count int) string {
+	return Catalog.Format(msgs.locale, "logCommitCount", map[string]any{"count": count})
+}
+
+// LogCommitsTitle says "Commit Log"
+// in the language the app shows.
+//
+// Tab label of the commit log in the Git Log panel.
+func LogCommitsTitle() string { return In(i18n.Locale()).LogCommitsTitle() }
+
+// LogCommitsTitle says "Commit Log"
+// in the language of msgs.
+//
+// Tab label of the commit log in the Git Log panel.
+func (msgs Messages) LogCommitsTitle() string {
+	return Catalog.Format(msgs.locale, "logCommitsTitle", nil)
+}
+
+// LogCopyHash says "Copy Commit Hash"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log.
+func LogCopyHash() string { return In(i18n.Locale()).LogCopyHash() }
+
+// LogCopyHash says "Copy Commit Hash"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log.
+func (msgs Messages) LogCopyHash() string {
+	return Catalog.Format(msgs.locale, "logCopyHash", nil)
+}
+
+// LogCurrent says "Current"
+// in the language the app shows.
+//
+// Small gray label after the current branch in the Git Log branch list.
+func LogCurrent() string { return In(i18n.Locale()).LogCurrent() }
+
+// LogCurrent says "Current"
+// in the language of msgs.
+//
+// Small gray label after the current branch in the Git Log branch list.
+func (msgs Messages) LogCurrent() string {
+	return Catalog.Format(msgs.locale, "logCurrent", nil)
+}
+
+// LogDrop says "Drop Commit"
+// in the language the app shows.
+//
+// Confirm button of the drop commit confirmation in the Git Log. Also the
+// operation name shown in busy text, error messages and the Console.
+func LogDrop() string { return In(i18n.Locale()).LogDrop() }
+
+// LogDrop says "Drop Commit"
+// in the language of msgs.
+//
+// Confirm button of the drop commit confirmation in the Git Log. Also the
+// operation name shown in busy text, error messages and the Console.
+func (msgs Messages) LogDrop() string {
+	return Catalog.Format(msgs.locale, "logDrop", nil)
+}
+
+// LogDropBody says "“{subject}” and its changes will be removed from the current branch’s history."
+// in the language the app shows.
+//
+// Body of the confirmation to drop a commit. subject is the commit subject.
+func LogDropBody(subject string) string { return In(i18n.Locale()).LogDropBody(subject) }
+
+// LogDropBody says "“{subject}” and its changes will be removed from the current branch’s history."
+// in the language of msgs.
+//
+// Body of the confirmation to drop a commit. subject is the commit subject.
+func (msgs Messages) LogDropBody(subject string) string {
+	return Catalog.Format(msgs.locale, "logDropBody", map[string]any{"subject": subject})
+}
+
+// LogDropConfirm says "Drop {commit} from History?"
+// in the language the app shows.
+//
+// Title of the confirmation to drop a commit. commit is a short hash.
+func LogDropConfirm(commit string) string { return In(i18n.Locale()).LogDropConfirm(commit) }
+
+// LogDropConfirm says "Drop {commit} from History?"
+// in the language of msgs.
+//
+// Title of the confirmation to drop a commit. commit is a short hash.
+func (msgs Messages) LogDropConfirm(commit string) string {
+	return Catalog.Format(msgs.locale, "logDropConfirm", map[string]any{"commit": commit})
+}
+
+// LogDropEllipsis says "Drop This Commit…"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log: remove the commit from
+// history after confirming.
+func LogDropEllipsis() string { return In(i18n.Locale()).LogDropEllipsis() }
+
+// LogDropEllipsis says "Drop This Commit…"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log: remove the commit from
+// history after confirming.
+func (msgs Messages) LogDropEllipsis() string {
+	return Catalog.Format(msgs.locale, "logDropEllipsis", nil)
+}
+
+// LogFileEmpty says "This file has no commits yet"
+// in the language the app shows.
+//
+// Empty state of file history when the file has no commits.
+func LogFileEmpty() string { return In(i18n.Locale()).LogFileEmpty() }
+
+// LogFileEmpty says "This file has no commits yet"
+// in the language of msgs.
+//
+// Empty state of file history when the file has no commits.
+func (msgs Messages) LogFileEmpty() string {
+	return Catalog.Format(msgs.locale, "logFileEmpty", nil)
+}
+
+// LogFileHistory says "File History"
+// in the language the app shows.
+//
+// Context menu item on a file: open its Git history.
+func LogFileHistory() string { return In(i18n.Locale()).LogFileHistory() }
+
+// LogFileHistory says "File History"
+// in the language of msgs.
+//
+// Context menu item on a file: open its Git history.
+func (msgs Messages) LogFileHistory() string {
+	return Catalog.Format(msgs.locale, "logFileHistory", nil)
+}
+
+// LogFileNotRepo says "This file is not in a Git repository"
+// in the language the app shows.
+//
+// Error bar text when opening file history or Annotate for a file outside
+// any Git repository.
+func LogFileNotRepo() string { return In(i18n.Locale()).LogFileNotRepo() }
+
+// LogFileNotRepo says "This file is not in a Git repository"
+// in the language of msgs.
+//
+// Error bar text when opening file history or Annotate for a file outside
+// any Git repository.
+func (msgs Messages) LogFileNotRepo() string {
+	return Catalog.Format(msgs.locale, "logFileNotRepo", nil)
+}
+
+// LogFilterRefs says "Filter branches and tags"
+// in the language the app shows.
+//
+// Placeholder of the search field above the branch list in the Git Log.
+func LogFilterRefs() string { return In(i18n.Locale()).LogFilterRefs() }
+
+// LogFilterRefs says "Filter branches and tags"
+// in the language of msgs.
+//
+// Placeholder of the search field above the branch list in the Git Log.
+func (msgs Messages) LogFilterRefs() string {
+	return Catalog.Format(msgs.locale, "logFilterRefs", nil)
+}
+
+// LogHardReset says "Hard Reset"
+// in the language the app shows.
+//
+// Confirm button of the hard reset confirmation in the Git Log.
+func LogHardReset() string { return In(i18n.Locale()).LogHardReset() }
+
+// LogHardReset says "Hard Reset"
+// in the language of msgs.
+//
+// Confirm button of the hard reset confirmation in the Git Log.
+func (msgs Messages) LogHardReset() string {
+	return Catalog.Format(msgs.locale, "logHardReset", nil)
+}
+
+// LogHardResetBody says "The current branch will return to this commit. Subsequent commits and all uncommitted changes will be discarded."
+// in the language the app shows.
+//
+// Body of the confirmation before a hard reset in the Git Log.
+func LogHardResetBody() string { return In(i18n.Locale()).LogHardResetBody() }
+
+// LogHardResetBody says "The current branch will return to this commit. Subsequent commits and all uncommitted changes will be discarded."
+// in the language of msgs.
+//
+// Body of the confirmation before a hard reset in the Git Log.
+func (msgs Messages) LogHardResetBody() string {
+	return Catalog.Format(msgs.locale, "logHardResetBody", nil)
+}
+
+// LogHardResetConfirm says "Hard Reset to {commit}?"
+// in the language the app shows.
+//
+// Title of the confirmation before a hard reset. commit is a short hash.
+func LogHardResetConfirm(commit string) string { return In(i18n.Locale()).LogHardResetConfirm(commit) }
+
+// LogHardResetConfirm says "Hard Reset to {commit}?"
+// in the language of msgs.
+//
+// Title of the confirmation before a hard reset. commit is a short hash.
+func (msgs Messages) LogHardResetConfirm(commit string) string {
+	return Catalog.Format(msgs.locale, "logHardResetConfirm", map[string]any{"commit": commit})
+}
+
+// LogHardResetEllipsis says "Hard: Discard Subsequent Changes…"
+// in the language the app shows.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --hard), asks for confirmation.
+func LogHardResetEllipsis() string { return In(i18n.Locale()).LogHardResetEllipsis() }
+
+// LogHardResetEllipsis says "Hard: Discard Subsequent Changes…"
+// in the language of msgs.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --hard), asks for confirmation.
+func (msgs Messages) LogHardResetEllipsis() string {
+	return Catalog.Format(msgs.locale, "logHardResetEllipsis", nil)
+}
+
+// LogHead says "HEAD (Current Branch)"
+// in the language the app shows.
+//
+// First row of the Git Log branch list: show the log of HEAD.
+func LogHead() string { return In(i18n.Locale()).LogHead() }
+
+// LogHead says "HEAD (Current Branch)"
+// in the language of msgs.
+//
+// First row of the Git Log branch list: show the log of HEAD.
+func (msgs Messages) LogHead() string {
+	return Catalog.Format(msgs.locale, "logHead", nil)
+}
+
+// LogHide says "Hide"
+// in the language the app shows.
+//
+// Tooltip of the button that hides the Git Log panel.
+func LogHide() string { return In(i18n.Locale()).LogHide() }
+
+// LogHide says "Hide"
+// in the language of msgs.
+//
+// Tooltip of the button that hides the Git Log panel.
+func (msgs Messages) LogHide() string {
+	return Catalog.Format(msgs.locale, "logHide", nil)
+}
+
+// LogHistoryTab says "History: {file}"
+// in the language the app shows.
+//
+// Title of a file history tab in the Git Log panel. file is the file name.
+func LogHistoryTab(file string) string { return In(i18n.Locale()).LogHistoryTab(file) }
+
+// LogHistoryTab says "History: {file}"
+// in the language of msgs.
+//
+// Title of a file history tab in the Git Log panel. file is the file name.
+func (msgs Messages) LogHistoryTab(file string) string {
+	return Catalog.Format(msgs.locale, "logHistoryTab", map[string]any{"file": file})
+}
+
+// LogLoadEarlier says "Load Earlier Commits"
+// in the language the app shows.
+//
+// Row at the end of the Git Log and file history list that loads more
+// commits.
+func LogLoadEarlier() string { return In(i18n.Locale()).LogLoadEarlier() }
+
+// LogLoadEarlier says "Load Earlier Commits"
+// in the language of msgs.
+//
+// Row at the end of the Git Log and file history list that loads more
+// commits.
+func (msgs Messages) LogLoadEarlier() string {
+	return Catalog.Format(msgs.locale, "logLoadEarlier", nil)
+}
+
+// LogLocalBranch says "Local branch {name}"
+// in the language the app shows.
+//
+// Accessibility label of a local branch row in the Git Log branch list.
+// name is the branch name.
+func LogLocalBranch(name string) string { return In(i18n.Locale()).LogLocalBranch(name) }
+
+// LogLocalBranch says "Local branch {name}"
+// in the language of msgs.
+//
+// Accessibility label of a local branch row in the Git Log branch list.
+// name is the branch name.
+func (msgs Messages) LogLocalBranch(name string) string {
+	return Catalog.Format(msgs.locale, "logLocalBranch", map[string]any{"name": name})
+}
+
+// LogMessageConfirm says "OK"
+// in the language the app shows.
+//
+// Confirm button of the dialog that edits a commit message before rewording
+// or squashing commits in the Log.
+func LogMessageConfirm() string { return In(i18n.Locale()).LogMessageConfirm() }
+
+// LogMessageConfirm says "OK"
+// in the language of msgs.
+//
+// Confirm button of the dialog that edits a commit message before rewording
+// or squashing commits in the Log.
+func (msgs Messages) LogMessageConfirm() string {
+	return Catalog.Format(msgs.locale, "logMessageConfirm", nil)
+}
+
+// LogMessageFilter says "Filter by commit message or hash"
+// in the language the app shows.
+//
+// Accessibility label of the text filter field in the Git Log.
+func LogMessageFilter() string { return In(i18n.Locale()).LogMessageFilter() }
+
+// LogMessageFilter says "Filter by commit message or hash"
+// in the language of msgs.
+//
+// Accessibility label of the text filter field in the Git Log.
+func (msgs Messages) LogMessageFilter() string {
+	return Catalog.Format(msgs.locale, "logMessageFilter", nil)
+}
+
+// LogMessageHash says "Commit message or hash"
+// in the language the app shows.
+//
+// Placeholder of the text filter field in the Git Log.
+func LogMessageHash() string { return In(i18n.Locale()).LogMessageHash() }
+
+// LogMessageHash says "Commit message or hash"
+// in the language of msgs.
+//
+// Placeholder of the text filter field in the Git Log.
+func (msgs Messages) LogMessageHash() string {
+	return Catalog.Format(msgs.locale, "logMessageHash", nil)
+}
+
+// LogMixedReset says "Mixed: Keep Changes in the Workspace"
+// in the language the app shows.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --mixed).
+func LogMixedReset() string { return In(i18n.Locale()).LogMixedReset() }
+
+// LogMixedReset says "Mixed: Keep Changes in the Workspace"
+// in the language of msgs.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --mixed).
+func (msgs Messages) LogMixedReset() string {
+	return Catalog.Format(msgs.locale, "logMixedReset", nil)
+}
+
+// LogMoreCommitCount says "{count, plural, one {#+ commit} other {#+ commits}}"
+// in the language the app shows.
+//
+// Commit count in the file history header when more commits can still be
+// loaded.
+func LogMoreCommitCount(count int) string { return In(i18n.Locale()).LogMoreCommitCount(count) }
+
+// LogMoreCommitCount says "{count, plural, one {#+ commit} other {#+ commits}}"
+// in the language of msgs.
+//
+// Commit count in the file history header when more commits can still be
+// loaded.
+func (msgs Messages) LogMoreCommitCount(count int) string {
+	return Catalog.Format(msgs.locale, "logMoreCommitCount", map[string]any{"count": count})
+}
+
+// LogNewBranch says "New Branch from This Commit…"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log: create a branch starting at
+// it.
+func LogNewBranch() string { return In(i18n.Locale()).LogNewBranch() }
+
+// LogNewBranch says "New Branch from This Commit…"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log: create a branch starting at
+// it.
+func (msgs Messages) LogNewBranch() string {
+	return Catalog.Format(msgs.locale, "logNewBranch", nil)
+}
+
+// LogNoMatch says "No matching commits"
+// in the language the app shows.
+//
+// Empty state of the Git Log when the filters match no commits.
+func LogNoMatch() string { return In(i18n.Locale()).LogNoMatch() }
+
+// LogNoMatch says "No matching commits"
+// in the language of msgs.
+//
+// Empty state of the Git Log when the filters match no commits.
+func (msgs Messages) LogNoMatch() string {
+	return Catalog.Format(msgs.locale, "logNoMatch", nil)
+}
+
+// LogPushedBody says "They are on {where}. After rewriting, you will need to force push, and work others based on the old commits will no l…"
+// in the language the app shows.
+//
+// Body of the confirmation before rewriting commits that were already
+// pushed. where is a remote branch or logRemotesMore.
+func LogPushedBody(where string) string { return In(i18n.Locale()).LogPushedBody(where) }
+
+// LogPushedBody says "They are on {where}. After rewriting, you will need to force push, and work others based on the old commits will no l…"
+// in the language of msgs.
+//
+// Body of the confirmation before rewriting commits that were already
+// pushed. where is a remote branch or logRemotesMore.
+func (msgs Messages) LogPushedBody(where string) string {
+	return Catalog.Format(msgs.locale, "logPushedBody", map[string]any{"where": where})
+}
+
+// LogPushedTitle says "These Commits Have Already Been Pushed"
+// in the language the app shows.
+//
+// Title of the warning before rewriting commits that are already on a
+// remote (reword, squash, drop).
+func LogPushedTitle() string { return In(i18n.Locale()).LogPushedTitle() }
+
+// LogPushedTitle says "These Commits Have Already Been Pushed"
+// in the language of msgs.
+//
+// Title of the warning before rewriting commits that are already on a
+// remote (reword, squash, drop).
+func (msgs Messages) LogPushedTitle() string {
+	return Catalog.Format(msgs.locale, "logPushedTitle", nil)
+}
+
+// LogReading says "Loading…"
+// in the language the app shows.
+//
+// Small text in the Git Log toolbar while commits are being read.
+func LogReading() string { return In(i18n.Locale()).LogReading() }
+
+// LogReading says "Loading…"
+// in the language of msgs.
+//
+// Small text in the Git Log toolbar while commits are being read.
+func (msgs Messages) LogReading() string {
+	return Catalog.Format(msgs.locale, "logReading", nil)
+}
+
+// LogRefresh says "Refresh Log"
+// in the language the app shows.
+//
+// Tooltip of the refresh icon button in the Git Log toolbar.
+func LogRefresh() string { return In(i18n.Locale()).LogRefresh() }
+
+// LogRefresh says "Refresh Log"
+// in the language of msgs.
+//
+// Tooltip of the refresh icon button in the Git Log toolbar.
+func (msgs Messages) LogRefresh() string {
+	return Catalog.Format(msgs.locale, "logRefresh", nil)
+}
+
+// LogRemoteBranch says "Remote branch {name}"
+// in the language the app shows.
+//
+// Accessibility label of a remote branch row in the Git Log branch list.
+// name is like origin/main.
+func LogRemoteBranch(name string) string { return In(i18n.Locale()).LogRemoteBranch(name) }
+
+// LogRemoteBranch says "Remote branch {name}"
+// in the language of msgs.
+//
+// Accessibility label of a remote branch row in the Git Log branch list.
+// name is like origin/main.
+func (msgs Messages) LogRemoteBranch(name string) string {
+	return Catalog.Format(msgs.locale, "logRemoteBranch", map[string]any{"name": name})
+}
+
+// LogRemotesMore says "{remote} and other remote branches ({count} in total)"
+// in the language the app shows.
+//
+// Several remote branches containing a commit, inside logPushedBody.
+func LogRemotesMore(remote string, count int) string {
+	return In(i18n.Locale()).LogRemotesMore(remote, count)
+}
+
+// LogRemotesMore says "{remote} and other remote branches ({count} in total)"
+// in the language of msgs.
+//
+// Several remote branches containing a commit, inside logPushedBody.
+func (msgs Messages) LogRemotesMore(remote string, count int) string {
+	return Catalog.Format(msgs.locale, "logRemotesMore", map[string]any{"remote": remote, "count": count})
+}
+
+// LogReset says "Reset"
+// in the language the app shows.
+//
+// Operation name of resetting the current branch to a commit, shown in busy
+// text, error messages and the Console.
+func LogReset() string { return In(i18n.Locale()).LogReset() }
+
+// LogReset says "Reset"
+// in the language of msgs.
+//
+// Operation name of resetting the current branch to a commit, shown in busy
+// text, error messages and the Console.
+func (msgs Messages) LogReset() string {
+	return Catalog.Format(msgs.locale, "logReset", nil)
+}
+
+// LogResetHere says "Reset Current Branch to Here"
+// in the language the app shows.
+//
+// Submenu title in the context menu of a commit in the Git Log; contains
+// Soft, Mixed and Hard.
+func LogResetHere() string { return In(i18n.Locale()).LogResetHere() }
+
+// LogResetHere says "Reset Current Branch to Here"
+// in the language of msgs.
+//
+// Submenu title in the context menu of a commit in the Git Log; contains
+// Soft, Mixed and Hard.
+func (msgs Messages) LogResetHere() string {
+	return Catalog.Format(msgs.locale, "logResetHere", nil)
+}
+
+// LogRevertCommit says "Revert: Create a Commit That Undoes This One"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log (git revert).
+func LogRevertCommit() string { return In(i18n.Locale()).LogRevertCommit() }
+
+// LogRevertCommit says "Revert: Create a Commit That Undoes This One"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log (git revert).
+func (msgs Messages) LogRevertCommit() string {
+	return Catalog.Format(msgs.locale, "logRevertCommit", nil)
+}
+
+// LogReword says "Edit Commit Message"
+// in the language the app shows.
+//
+// Operation name of changing a commit's message from the Git Log, shown in
+// busy text, error messages and the Console.
+func LogReword() string { return In(i18n.Locale()).LogReword() }
+
+// LogReword says "Edit Commit Message"
+// in the language of msgs.
+//
+// Operation name of changing a commit's message from the Git Log, shown in
+// busy text, error messages and the Console.
+func (msgs Messages) LogReword() string {
+	return Catalog.Format(msgs.locale, "logReword", nil)
+}
+
+// LogRewordEllipsis says "Edit Commit Message…"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log: edit its commit message.
+func LogRewordEllipsis() string { return In(i18n.Locale()).LogRewordEllipsis() }
+
+// LogRewordEllipsis says "Edit Commit Message…"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log: edit its commit message.
+func (msgs Messages) LogRewordEllipsis() string {
+	return Catalog.Format(msgs.locale, "logRewordEllipsis", nil)
+}
+
+// LogRewordTitle says "Edit Commit Message of {commit}"
+// in the language the app shows.
+//
+// Title of the dialog to edit a commit message. commit is a short hash.
+func LogRewordTitle(commit string) string { return In(i18n.Locale()).LogRewordTitle(commit) }
+
+// LogRewordTitle says "Edit Commit Message of {commit}"
+// in the language of msgs.
+//
+// Title of the dialog to edit a commit message. commit is a short hash.
+func (msgs Messages) LogRewordTitle(commit string) string {
+	return Catalog.Format(msgs.locale, "logRewordTitle", map[string]any{"commit": commit})
+}
+
+// LogRewriteAnyway says "Rewrite Anyway"
+// in the language the app shows.
+//
+// Confirm button of the warning before rewriting commits that are already
+// pushed.
+func LogRewriteAnyway() string { return In(i18n.Locale()).LogRewriteAnyway() }
+
+// LogRewriteAnyway says "Rewrite Anyway"
+// in the language of msgs.
+//
+// Confirm button of the warning before rewriting commits that are already
+// pushed.
+func (msgs Messages) LogRewriteAnyway() string {
+	return Catalog.Format(msgs.locale, "logRewriteAnyway", nil)
+}
+
+// LogSoftReset says "Soft: Keep Changes in the Index"
+// in the language the app shows.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --soft).
+func LogSoftReset() string { return In(i18n.Locale()).LogSoftReset() }
+
+// LogSoftReset says "Soft: Keep Changes in the Index"
+// in the language of msgs.
+//
+// Item in the Reset Current Branch to Here submenu of a commit in the Git
+// Log (git reset --soft).
+func (msgs Messages) LogSoftReset() string {
+	return Catalog.Format(msgs.locale, "logSoftReset", nil)
+}
+
+// LogSquash says "Squash Commits"
+// in the language the app shows.
+//
+// Operation name of squashing a commit into its parent, shown in busy text,
+// error messages and the Console.
+func LogSquash() string { return In(i18n.Locale()).LogSquash() }
+
+// LogSquash says "Squash Commits"
+// in the language of msgs.
+//
+// Operation name of squashing a commit into its parent, shown in busy text,
+// error messages and the Console.
+func (msgs Messages) LogSquash() string {
+	return Catalog.Format(msgs.locale, "logSquash", nil)
+}
+
+// LogSquashEllipsis says "Squash into Previous Commit…"
+// in the language the app shows.
+//
+// Context menu item on a commit in the Git Log: squash it into its parent
+// commit.
+func LogSquashEllipsis() string { return In(i18n.Locale()).LogSquashEllipsis() }
+
+// LogSquashEllipsis says "Squash into Previous Commit…"
+// in the language of msgs.
+//
+// Context menu item on a commit in the Git Log: squash it into its parent
+// commit.
+func (msgs Messages) LogSquashEllipsis() string {
+	return Catalog.Format(msgs.locale, "logSquashEllipsis", nil)
+}
+
+// LogSquashTitle says "Squash into Previous Commit"
+// in the language the app shows.
+//
+// Title of the commit message dialog for squashing a commit into its
+// parent.
+func LogSquashTitle() string { return In(i18n.Locale()).LogSquashTitle() }
+
+// LogSquashTitle says "Squash into Previous Commit"
+// in the language of msgs.
+//
+// Title of the commit message dialog for squashing a commit into its
+// parent.
+func (msgs Messages) LogSquashTitle() string {
+	return Catalog.Format(msgs.locale, "logSquashTitle", nil)
+}
+
+// LogTag says "Tag {name}"
+// in the language the app shows.
+//
+// Accessibility label of a tag row in the Git Log branch list. name is the
+// tag name.
+func LogTag(name string) string { return In(i18n.Locale()).LogTag(name) }
+
+// LogTag says "Tag {name}"
+// in the language of msgs.
+//
+// Accessibility label of a tag row in the Git Log branch list. name is the
+// tag name.
+func (msgs Messages) LogTag(name string) string {
+	return Catalog.Format(msgs.locale, "logTag", map[string]any{"name": name})
+}
+
+// LogTags says "Tags"
+// in the language the app shows.
+//
+// Group header for tags in the Git Log branch list.
+func LogTags() string { return In(i18n.Locale()).LogTags() }
+
+// LogTags says "Tags"
+// in the language of msgs.
+//
+// Group header for tags in the Git Log branch list.
+func (msgs Messages) LogTags() string {
+	return Catalog.Format(msgs.locale, "logTags", nil)
+}
+
+// LogUncommitted says "Uncommitted"
+// in the language the app shows.
+//
+// Label in the Annotate view for lines that are not committed yet.
+func LogUncommitted() string { return In(i18n.Locale()).LogUncommitted() }
+
+// LogUncommitted says "Uncommitted"
+// in the language of msgs.
+//
+// Label in the Annotate view for lines that are not committed yet.
+func (msgs Messages) LogUncommitted() string {
+	return Catalog.Format(msgs.locale, "logUncommitted", nil)
+}
+
 // MenuCheckForUpdates says "Check for Updates…"
 // in the language the app shows.
 //
@@ -3532,6 +9074,156 @@ func (msgs Messages) MenuWindow() string {
 	return Catalog.Format(msgs.locale, "menuWindow", nil)
 }
 
+// RollbackBinary says "Binary file; only the whole file can be rolled back"
+// in the language the app shows.
+//
+// Placeholder in the Rollback dialog's diff when the file is binary.
+func RollbackBinary() string { return In(i18n.Locale()).RollbackBinary() }
+
+// RollbackBinary says "Binary file; only the whole file can be rolled back"
+// in the language of msgs.
+//
+// Placeholder in the Rollback dialog's diff when the file is binary.
+func (msgs Messages) RollbackBinary() string {
+	return Catalog.Format(msgs.locale, "rollbackBinary", nil)
+}
+
+// RollbackDeleteNew says "Also delete new files (unversioned and newly added to Git)"
+// in the language the app shows.
+//
+// Checkbox in the Rollback Changes dialog.
+func RollbackDeleteNew() string { return In(i18n.Locale()).RollbackDeleteNew() }
+
+// RollbackDeleteNew says "Also delete new files (unversioned and newly added to Git)"
+// in the language of msgs.
+//
+// Checkbox in the Rollback Changes dialog.
+func (msgs Messages) RollbackDeleteNew() string {
+	return Catalog.Format(msgs.locale, "rollbackDeleteNew", nil)
+}
+
+// RollbackFileClean says "This file has no changes left"
+// in the language the app shows.
+//
+// Placeholder in the Rollback dialog's diff when the file no longer has
+// changes.
+func RollbackFileClean() string { return In(i18n.Locale()).RollbackFileClean() }
+
+// RollbackFileClean says "This file has no changes left"
+// in the language of msgs.
+//
+// Placeholder in the Rollback dialog's diff when the file no longer has
+// changes.
+func (msgs Messages) RollbackFileClean() string {
+	return Catalog.Format(msgs.locale, "rollbackFileClean", nil)
+}
+
+// RollbackFileCount says "{count, plural, one {# file} other {# files}}"
+// in the language the app shows.
+//
+// Number of files next to the select-all checkbox in the Rollback Changes
+// dialog.
+func RollbackFileCount(count int) string { return In(i18n.Locale()).RollbackFileCount(count) }
+
+// RollbackFileCount says "{count, plural, one {# file} other {# files}}"
+// in the language of msgs.
+//
+// Number of files next to the select-all checkbox in the Rollback Changes
+// dialog.
+func (msgs Messages) RollbackFileCount(count int) string {
+	return Catalog.Format(msgs.locale, "rollbackFileCount", map[string]any{"count": count})
+}
+
+// RollbackFilesButton says "Rollback {count, plural, one {# File} other {# Files}}"
+// in the language the app shows.
+//
+// Primary button of the Rollback Changes dialog. count is the number of
+// files to roll back.
+func RollbackFilesButton(count int) string { return In(i18n.Locale()).RollbackFilesButton(count) }
+
+// RollbackFilesButton says "Rollback {count, plural, one {# File} other {# Files}}"
+// in the language of msgs.
+//
+// Primary button of the Rollback Changes dialog. count is the number of
+// files to roll back.
+func (msgs Messages) RollbackFilesButton(count int) string {
+	return Catalog.Format(msgs.locale, "rollbackFilesButton", map[string]any{"count": count})
+}
+
+// RollbackHunkTip says "Roll back the current change and write it to disk immediately"
+// in the language the app shows.
+//
+// Tooltip of the Rollback This Change button in the Rollback dialog's diff.
+func RollbackHunkTip() string { return In(i18n.Locale()).RollbackHunkTip() }
+
+// RollbackHunkTip says "Roll back the current change and write it to disk immediately"
+// in the language of msgs.
+//
+// Tooltip of the Rollback This Change button in the Rollback dialog's diff.
+func (msgs Messages) RollbackHunkTip() string {
+	return Catalog.Format(msgs.locale, "rollbackHunkTip", nil)
+}
+
+// RollbackInclude says "Include in Rollback"
+// in the language the app shows.
+//
+// Checkbox in the Rollback dialog's diff header: include this file in the
+// rollback.
+func RollbackInclude() string { return In(i18n.Locale()).RollbackInclude() }
+
+// RollbackInclude says "Include in Rollback"
+// in the language of msgs.
+//
+// Checkbox in the Rollback dialog's diff header: include this file in the
+// rollback.
+func (msgs Messages) RollbackInclude() string {
+	return Catalog.Format(msgs.locale, "rollbackInclude", nil)
+}
+
+// RollbackNote says "Selected tracked files will be restored to the last commit, discarding uncommitted changes. Click a file name to view…"
+// in the language the app shows.
+//
+// Explanation under the title of the Rollback Changes dialog.
+func RollbackNote() string { return In(i18n.Locale()).RollbackNote() }
+
+// RollbackNote says "Selected tracked files will be restored to the last commit, discarding uncommitted changes. Click a file name to view…"
+// in the language of msgs.
+//
+// Explanation under the title of the Rollback Changes dialog.
+func (msgs Messages) RollbackNote() string {
+	return Catalog.Format(msgs.locale, "rollbackNote", nil)
+}
+
+// RollbackTitle says "Rollback Changes"
+// in the language the app shows.
+//
+// Title of the Rollback Changes dialog.
+func RollbackTitle() string { return In(i18n.Locale()).RollbackTitle() }
+
+// RollbackTitle says "Rollback Changes"
+// in the language of msgs.
+//
+// Title of the Rollback Changes dialog.
+func (msgs Messages) RollbackTitle() string {
+	return Catalog.Format(msgs.locale, "rollbackTitle", nil)
+}
+
+// RollbackViewFile says "View {path}"
+// in the language the app shows.
+//
+// Accessibility label of a file row in the Rollback Changes dialog;
+// clicking shows its diff. path is the file path.
+func RollbackViewFile(path string) string { return In(i18n.Locale()).RollbackViewFile(path) }
+
+// RollbackViewFile says "View {path}"
+// in the language of msgs.
+//
+// Accessibility label of a file row in the Rollback Changes dialog;
+// clicking shows its diff. path is the file path.
+func (msgs Messages) RollbackViewFile(path string) string {
+	return Catalog.Format(msgs.locale, "rollbackViewFile", map[string]any{"path": path})
+}
+
 // SettingsAboutDaemon says "Daemon"
 // in the language the app shows.
 //
@@ -3574,13 +9266,13 @@ func (msgs Messages) SettingsAboutWindow() string {
 	return Catalog.Format(msgs.locale, "settingsAboutWindow", nil)
 }
 
-// SettingsAgentsNote says "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won't start…"
+// SettingsAgentsNote says "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won’t sta…"
 // in the language the app shows.
 //
 // Note of the Agents card.
 func SettingsAgentsNote() string { return In(i18n.Locale()).SettingsAgentsNote() }
 
-// SettingsAgentsNote says "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won't start…"
+// SettingsAgentsNote says "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won’t sta…"
 // in the language of msgs.
 //
 // Note of the Agents card.
@@ -3602,13 +9294,13 @@ func (msgs Messages) SettingsAgentsTitle() string {
 	return Catalog.Format(msgs.locale, "settingsAgentsTitle", nil)
 }
 
-// SettingsAwakeNote says "While Posse runs, the Mac doesn't sleep but the display still turns off; the coffee cup in the status bar toggles thi…"
+// SettingsAwakeNote says "While Posse runs, the Mac doesn’t sleep but the display still turns off; the coffee cup in the status bar toggles t…"
 // in the language the app shows.
 //
 // Note of the Prevent Sleep card; quotes the third segment's label.
 func SettingsAwakeNote() string { return In(i18n.Locale()).SettingsAwakeNote() }
 
-// SettingsAwakeNote says "While Posse runs, the Mac doesn't sleep but the display still turns off; the coffee cup in the status bar toggles thi…"
+// SettingsAwakeNote says "While Posse runs, the Mac doesn’t sleep but the display still turns off; the coffee cup in the status bar toggles t…"
 // in the language of msgs.
 //
 // Note of the Prevent Sleep card; quotes the third segment's label.
@@ -3658,13 +9350,13 @@ func (msgs Messages) SettingsCopyOnSelect() string {
 	return Catalog.Format(msgs.locale, "settingsCopyOnSelect", nil)
 }
 
-// SettingsDaemonNeedsRestart says "The daemon is older than the window and can't be updated without disconnecting terminals; restart it once. Restarting…"
+// SettingsDaemonNeedsRestart says "The daemon is older than the window and can’t be updated without disconnecting terminals; restart it once. Restarti…"
 // in the language the app shows.
 //
 // About card notice.
 func SettingsDaemonNeedsRestart() string { return In(i18n.Locale()).SettingsDaemonNeedsRestart() }
 
-// SettingsDaemonNeedsRestart says "The daemon is older than the window and can't be updated without disconnecting terminals; restart it once. Restarting…"
+// SettingsDaemonNeedsRestart says "The daemon is older than the window and can’t be updated without disconnecting terminals; restart it once. Restarti…"
 // in the language of msgs.
 //
 // About card notice.
@@ -4144,13 +9836,13 @@ func (msgs Messages) SettingsNotifyBadge() string {
 	return Catalog.Format(msgs.locale, "settingsNotifyBadge", nil)
 }
 
-// SettingsNotifyNote says "Posse sends a system notification when an agent needs you or finished while you weren't looking, and when a task has …"
+// SettingsNotifyNote says "Posse sends a system notification when an agent needs you or finished while you weren’t looking, and when a task ha…"
 // in the language the app shows.
 //
 // Note of the Notifications card.
 func SettingsNotifyNote() string { return In(i18n.Locale()).SettingsNotifyNote() }
 
-// SettingsNotifyNote says "Posse sends a system notification when an agent needs you or finished while you weren't looking, and when a task has …"
+// SettingsNotifyNote says "Posse sends a system notification when an agent needs you or finished while you weren’t looking, and when a task ha…"
 // in the language of msgs.
 //
 // Note of the Notifications card.
@@ -4228,13 +9920,13 @@ func (msgs Messages) SettingsPermissionAsk() string {
 	return Catalog.Format(msgs.locale, "settingsPermissionAsk", nil)
 }
 
-// SettingsPermissionAskTip says "Follows each agent's own settings and stops to ask before reading or writing files and running commands; Claude's pro…"
+// SettingsPermissionAskTip says "Follows each agent’s own settings and stops to ask before reading or writing files and running commands; Claude’s…"
 // in the language the app shows.
 //
 // Explains the Ask Each Time mode.
 func SettingsPermissionAskTip() string { return In(i18n.Locale()).SettingsPermissionAskTip() }
 
-// SettingsPermissionAskTip says "Follows each agent's own settings and stops to ask before reading or writing files and running commands; Claude's pro…"
+// SettingsPermissionAskTip says "Follows each agent’s own settings and stops to ask before reading or writing files and running commands; Claude’s…"
 // in the language of msgs.
 //
 // Explains the Ask Each Time mode.
@@ -4386,13 +10078,13 @@ func (msgs Messages) SettingsRestoreAll() string {
 	return Catalog.Format(msgs.locale, "settingsRestoreAll", nil)
 }
 
-// SettingsRestoreNote says "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone's…"
+// SettingsRestoreNote says "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone…"
 // in the language the app shows.
 //
 // Note of the Restore Terminals card.
 func SettingsRestoreNote() string { return In(i18n.Locale()).SettingsRestoreNote() }
 
-// SettingsRestoreNote says "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone's…"
+// SettingsRestoreNote says "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone…"
 // in the language of msgs.
 //
 // Note of the Restore Terminals card.

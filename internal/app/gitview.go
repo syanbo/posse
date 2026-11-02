@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"posse/internal/files"
 	"posse/internal/gitx"
 	"posse/internal/media"
+	"posse/locales"
 )
 
 // 文件标签里的 Git：文件栏"改动"、diff 标签页、编辑器行号旁的改动标记。全部在窗口进程里调用系统 git。
@@ -76,7 +76,9 @@ const (
 	groupStash
 )
 
-var groupTitles = [...]string{"冲突", "改动", "未跟踪", "储藏"}
+var groupTitles = [...]func(locales.Messages) string{
+	locales.Messages.GitConflicts, locales.Messages.GitChanges, locales.Messages.GitUnversioned, locales.Messages.GitStash,
+}
 
 // changeRow 是改动列表的一行：组标题、一个文件，或一条储藏；按目录分组时还有目录行。
 type changeRow struct {
@@ -398,7 +400,7 @@ type diffImage struct {
 	anim *animPlayer // 动图：img 是它的位图
 	w, h int
 	size int
-	err  string
+	err  string // 解不开图片时的报错（已经过 errtext）
 }
 
 func loadDiffImage(b []byte, exists bool) diffImage {
@@ -410,20 +412,20 @@ func loadDiffImage(b []byte, exists bool) diffImage {
 	}
 	img, dim, err := media.ScaledImageBytes(b, imageMaxPx)
 	if err != nil {
-		return diffImage{size: len(b), err: "解不开这张图：" + errtext.Text(err)}
+		return diffImage{size: len(b), err: errtext.Text(err)}
 	}
 	return diffImage{img: ui.NewBitmap(img), w: dim.X, h: dim.Y, size: len(b)}
 }
 
 // label 是标签页上的补充说明。
-func (df *diffDoc) tabLabel() string {
+func (df *diffDoc) tabLabel(m locales.Messages) string {
 	switch {
 	case df.label != "":
 		return df.label
 	case df.plainChanges():
-		return "改动"
+		return m.GitChanges()
 	}
-	return shortRev(df.oldRev) + " → " + shortRev(df.newRev)
+	return shortRev(m, df.oldRev) + " → " + shortRev(m, df.newRev)
 }
 
 // plainChanges 报告是工作区对 HEAD 的改动，标签就叫"改动"、不另标版本。
@@ -432,10 +434,10 @@ func (df *diffDoc) plainChanges() bool {
 }
 
 // shortRev 是版本在界面上的写法：提交取前 7 位，空的是工作区。
-func shortRev(rev string) string {
+func shortRev(m locales.Messages, rev string) string {
 	switch {
 	case rev == "":
-		return "工作区"
+		return m.GitWorkspace()
 	case len(rev) == 40:
 		return rev[:7]
 	}
@@ -504,24 +506,25 @@ const diffMaxSize = 20 << 20
 const diffAheadSize = 1 << 20
 
 // diffLoadingText 是 diff 还没出来时的提示。
-func diffLoadingText(df *diffDoc) string {
+func diffLoadingText(m locales.Messages, df *diffDoc) string {
 	if df.comparing {
-		return "正在比较…"
+		return m.GitComparing()
 	}
-	return "正在读取…"
+	return m.CommonLoading()
 }
 
 // tooLargeDiffView 是超过 diffMaxSize 的文件：两边多大、多少行，可以仍要比较。
 func (a *app) tooLargeDiffView(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
+	m := L(c)
 	df := d.diff
 	side := func(i int) string {
-		return byteSize(df.sizes[i]) + " · " + thousands(df.lines[i]) + " 行"
+		return m.GitSizeLines(byteSize(df.sizes[i]), df.lines[i])
 	}
 	ui.Column(c).Grow(1).AlignSelf(ui.Stretch).Center().Gap(12).Padding(16).Children(func() {
-		ui.Text(c, fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)).FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, "改之前 "+side(0)+"，改之后 "+side(1)).FontSize(fsSmall).TextColor(t.TextMuted).FontFeatures("tnum")
-		if pressable(textButton(c, "仍要比较")).Clicked() {
+		ui.Text(c, m.GitTooLarge(diffMaxSize>>20)).FontSize(fsBody).TextColor(t.TextMuted)
+		ui.Text(c, m.GitTooLargeSides(side(0), side(1))).FontSize(fsSmall).TextColor(t.TextMuted).FontFeatures("tnum")
+		if pressable(textButton(c, m.GitCompareAnyway())).Clicked() {
 			df.force = true
 			d.kind = docLoading
 			a.loadDiff(v, d)
@@ -692,7 +695,7 @@ func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 // stepDiff 是 F7 / ⇧F7：在当前 diff 里跳到下一处 / 上一处改动，到头了打开同一组里的下一个 / 上一个文件
 // （改动列表，或比较、提交里的文件）。
 // 已经是第一处或最后一处、前后也没有文件可换时，在 diff 栏下面提示一下。
-func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
+func (a *app) stepDiff(m locales.Messages, w *workspace, v *filesView, d *fileDoc, dir int) {
 	df := d.diff
 	// 还在读：连按 F7 时不跳过没读完的文件
 	if d.kind == docLoading {
@@ -720,9 +723,9 @@ func (a *app) stepDiff(w *workspace, v *filesView, d *fileDoc, dir int) {
 		a.openDiff(w, list[j], df.siblings, dir > 0)
 		return
 	}
-	msg := "已经是最后一处改动"
+	msg := m.GitLastChange()
 	if dir < 0 {
-		msg = "已经是第一处改动"
+		msg = m.GitFirstChange()
 	}
 	df.hint, df.hintAt = msg, time.Now()
 }
@@ -786,7 +789,7 @@ func diffJump(df *diffDoc) {
 }
 
 // revertHunk 回滚工作区 diff 里的一处改动，立刻写回磁盘（和 WebStorm 一样不用再保存）。
-func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
+func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
 	df := d.diff
 	if !df.worktree() {
 		return
@@ -794,7 +797,7 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 	abs := v.git.absPath(df.rel)
 	// 读进来之后文件又被改过（agent 在写）：拿旧内容回滚会把新写的冲掉，先重读
 	if !files.StatFile(abs).Same(df.stamp) {
-		a.err = "文件刚被改过，已重新读取，请再看一眼要回滚的改动"
+		a.err = m.GitFileChanged()
 		a.loadDiff(v, d)
 		return
 	}
@@ -804,7 +807,7 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 	snap := df.state.New.Snapshot()
 	st, err := files.WriteFile(abs, func(w io.Writer) error { _, err := snap.WriteTo(w); return err })
 	if err != nil {
-		a.err = "回滚失败：" + errtext.Text(err)
+		a.err = m.GitRollbackFailed(errtext.Text(err))
 		a.loadDiff(v, d)
 		return
 	}
@@ -815,23 +818,24 @@ func (a *app) revertHunk(v *filesView, d *fileDoc, i int) {
 // --- 文件和提交操作：都在后台执行，完成后重读状态
 
 // gitDo 在后台执行一个 git 操作，期间 busy 显示操作名；出错显示在错误条上。
-func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root string) error) {
-	a.gitDoThen(v, what, fn, nil)
+func (a *app) gitDo(m locales.Messages, v *filesView, what string, fn func(ctx context.Context, root string) error) {
+	a.gitDoThen(m, v, what, fn, nil)
 }
 
 // gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。已经有操作在执行（比如自动 Fetch）时排在后面，
 // 不丢掉用户的点击。
-func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
-	a.gitDoKind(v, "", what, fn, done)
+func (a *app) gitDoThen(m locales.Messages, v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
+	a.gitDoKind(m, v, "", what, fn, done)
 }
 
 // gitDoKind 同 gitDoThen，带上操作的代号。
-func (a *app) gitDoKind(v *filesView, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
+// m 是发起操作的视图的界面文字，操作结束后的报错、提示用它。
+func (a *app) gitDoKind(m locales.Messages, v *filesView, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
 	g := &v.git
 	if g.repo == "" {
 		return
 	}
-	op := gitOp{kind: kind, what: what, fn: fn, done: done}
+	op := gitOp{m: m, kind: kind, what: what, fn: fn, done: done}
 	if g.busy != "" {
 		g.queue = append(g.queue, op)
 		return
@@ -841,15 +845,19 @@ func (a *app) gitDoKind(v *filesView, kind gitKind, what string, fn func(ctx con
 
 // autostashLeft 在操作留下 autostash 后：记到这个工作区，打开改动页；操作自己的成功提示（拉到几个提交）
 // 和这条合成一条警告，免得一绿一黄同时说两样。shown 是操作结束前已有的提示数。
-func (a *app) autostashLeft(v *filesView, left *gitx.AutostashLeft, shown int) {
+func (a *app) autostashLeft(m locales.Messages, v *filesView, left *gitx.AutostashLeft, shown int) {
 	g := &v.git
 	g.autostash, g.autostashConflicts, g.autostashSeen = left.Stash, left.Conflicts, false
-	title, desc := "取回本地改动时有冲突", "在改动页解决，原来的改动还在储藏里"
+	title, desc := m.GitRestoreConflicts(), m.GitRestoreConflictsNote()
 	if !left.Conflicts {
-		title, desc = "本地改动没能取回", "还在储藏里，可以在改动页的储藏里手动应用"
+		title, desc = m.GitRestoreFailed(), m.GitRestoreFailedNote()
 	}
 	if len(a.toasts) > shown {
-		title = a.toasts[shown].Title + "，但" + title
+		if prev := a.toasts[shown].Title; left.Conflicts {
+			title = m.GitRestoreConflictsAfter(prev)
+		} else {
+			title = m.GitRestoreFailedAfter(prev)
+		}
 		a.toasts = a.toasts[:shown]
 	}
 	a.warn(title, desc)
@@ -876,6 +884,7 @@ func (a *app) notify(title, action string, onAction func()) {
 
 // gitOp 是一个排队等着执行的 git 操作。
 type gitOp struct {
+	m    locales.Messages
 	kind gitKind
 	what string
 	fn   func(ctx context.Context, root string) error
@@ -900,10 +909,11 @@ func (g *gitState) pending(kind gitKind) bool {
 // busyLine 画忙碌的文字，网络操作后面跟一个"取消"。
 func busyLine(c *ui.Context, g *gitState) {
 	t := c.Theme()
+	m := L(c)
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(1).Children(func() {
-		ui.Text(c, g.busyText()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, g.busyText(m)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		if g.cancel != nil {
-			if ui.Text(c.Key("cancel-git"), "取消").FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Label("取消 " + g.busy).Clicked() {
+			if ui.Text(c.Key("cancel-git"), m.CommonCancel()).FontSize(fsSmall).TextColor(t.Accent).Role(ui.RoleButton).Label(m.GitCancelOperation(g.busy)).Clicked() {
 				g.cancel()
 			}
 		}
@@ -911,15 +921,14 @@ func busyLine(c *ui.Context, g *gitState) {
 }
 
 // busyText 是忙碌时显示的文字：正在执行的操作，后面排着的跟在后面。
-func (g *gitState) busyText() string {
-	s := g.busy + "…"
-	if n := len(g.queue); n > 0 {
-		s += "，接着" + g.queue[0].what
-		if n > 1 {
-			s += fmt.Sprintf("等 %d 个", n)
-		}
+func (g *gitState) busyText(m locales.Messages) string {
+	switch n := len(g.queue); {
+	case n == 1:
+		return m.GitBusyNext(g.busy, g.queue[0].what)
+	case n > 1:
+		return m.GitBusyQueue(g.busy, g.queue[0].what, n)
 	}
-	return s
+	return g.busy + "…"
 }
 
 // networkOp 报告操作要连远端：可能很慢、等不到回应，忙碌时给"取消"。
@@ -953,16 +962,16 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 		a.update(func() {
 			g.busy, g.busyKind, g.cancel = "", "", nil
 			if canceled {
-				a.err = op.what + "已取消"
+				a.err = op.m.GitOperationCanceled(op.what)
 			} else if err != nil {
-				a.err = op.what + "失败：" + errtext.Text(err)
+				a.err = op.m.GitOperationFailed(op.what, errtext.Text(err))
 			} else {
 				shown := len(a.toasts)
 				if op.done != nil {
 					op.done()
 				}
 				if left != nil {
-					a.autostashLeft(v, left, shown)
+					a.autostashLeft(op.m, v, left, shown)
 				}
 			}
 			a.refreshGit(v)
@@ -1051,7 +1060,19 @@ func (g *gitState) treeMarks() map[string]byte {
 }
 
 // treeMarkText 是悬停文件名时的说明。
-var treeMarkText = map[byte]string{'M': "已修改", 'A': "新增", '?': "未加入 Git", 'U': "有冲突"}
+func treeMarkText(m locales.Messages, mark byte) string {
+	switch mark {
+	case 'M':
+		return m.GitModified()
+	case 'A':
+		return m.GitAdded()
+	case '?':
+		return m.GitNotAdded()
+	case 'U':
+		return m.GitHasConflicts()
+	}
+	return ""
+}
 
 // rollbackDiffFile 是 diff 栏的"回滚这个文件"：在回滚对话框里回滚了这个文件后接着看同一组的下一个文件（没有就看上一个），
 // 都没有了就关掉 diff 标签。
@@ -1145,36 +1166,32 @@ func (g *gitState) pickedPaths() (paths, add []string, n int) {
 	return paths, add, n
 }
 
-// wholeCommit 返回进行中、只能整体提交的操作的名字（合并、Cherry-pick、还原），没有时为空。
+// wholeCommit 返回进行中、只能整体提交的操作（merge、cherry-pick、revert），没有时为空。
 func (g *gitState) wholeCommit() string {
 	if g.status == nil {
 		return ""
 	}
-	switch g.status.Operation {
-	case "merge":
-		return "合并"
-	case "cherry-pick":
-		return "Cherry-pick"
-	case "revert":
-		return "还原"
+	switch op := g.status.Operation; op {
+	case "merge", "cherry-pick", "revert":
+		return op
 	}
 	return ""
 }
 
-func (a *app) commit(v *filesView) {
+func (a *app) commit(m locales.Messages, v *filesView) {
 	g := &v.git
 	msg := strings.TrimSpace(g.message)
 	if msg == "" {
-		a.err = "先写提交信息"
+		a.err = m.GitMessageRequired()
 		return
 	}
 	paths, add, n := g.pickedPaths()
 	amend, whole := g.amend, g.wholeCommit() != ""
 	if n == 0 && !amend && !whole {
-		a.err = "先勾选要提交的文件"
+		a.err = m.GitSelectFiles()
 		return
 	}
-	a.gitDoKind(v, gitCommit, "提交", func(ctx context.Context, root string) error {
+	a.gitDoKind(m, v, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
 		var err error
 		if whole {
 			// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
@@ -1194,7 +1211,7 @@ func (a *app) commit(v *filesView) {
 		return nil
 	}, func() {
 		subject, _, _ := strings.Cut(msg, "\n")
-		a.notify("已提交："+subject, "", nil)
+		a.notify(m.GitCommitted(subject), "", nil)
 	})
 }
 

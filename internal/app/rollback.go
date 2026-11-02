@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // rollbackDlg 是改动页的批量回滚，照 WebStorm 提交窗口的 Rollback：列出改动的文件，默认勾上提交时勾着的
@@ -203,7 +204,7 @@ func (a *app) rollbackShow(e gitx.Entry, first bool) {
 }
 
 // rollbackStep 是详情里的上一处 / 下一处：到头了换到树里的上一个 / 下一个文件。
-func (a *app) rollbackStep(dir int) {
+func (a *app) rollbackStep(m locales.Messages, dir int) {
 	r := &a.rollback
 	d := r.detail
 	if d == nil {
@@ -227,9 +228,9 @@ func (a *app) rollbackStep(dir int) {
 		a.rollbackShow(e, dir > 0)
 		return
 	}
-	msg := "已经是最后一处改动"
+	msg := m.GitLastChange()
 	if dir < 0 {
-		msg = "已经是第一处改动"
+		msg = m.GitFirstChange()
 	}
 	df.hint, df.hintAt = msg, time.Now()
 }
@@ -295,8 +296,8 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 		col.Grow(1).Shrink(1)
 	}
 	col.Children(func() {
-		a.rollbackBox.title(c, "回滚改动")
-		ui.Text(c, "勾上的已跟踪文件会恢复成上一次提交时的样子，没提交的改动会丢失。点文件名看 diff，可以只回滚其中几处。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
+		a.rollbackBox.title(c, L(c).RollbackTitle())
+		ui.Text(c, L(c).RollbackNote()).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 		all := make([]int, len(r.entries))
 		for i := range all {
 			all[i] = i
@@ -304,10 +305,10 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 		rows := rollbackTree(r.entries, r.folded)
 		ui.Row(c).Height(sz(26)).Padding(0, 4, 0, 8).Gap(8).AlignItems(ui.Center).Children(func() {
 			state := r.pickState(all)
-			if pickBox(c, "all", "全部", state) {
+			if pickBox(c, "all", L(c).CommonAll(), state) {
 				r.setPicked(all, state != pickAll)
 			}
-			ui.Text(c, fmt.Sprintf("%d 个文件", len(r.entries))).FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Text(c, L(c).RollbackFileCount(len(r.entries))).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Spacer(c)
 			var dirs []string
 			for _, row := range rollbackTree(r.entries, nil) {
@@ -316,10 +317,10 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				}
 			}
 			if len(dirs) > 0 {
-				if pressable(iconButtonSized(c, iconDown, "全部展开", compactBox(), smallIcon())).Clicked() {
+				if pressable(iconButtonSized(c, iconDown, L(c).GitExpandAll(), compactBox(), smallIcon())).Clicked() {
 					clear(r.folded)
 				}
-				if pressable(iconButtonSized(c, iconUp, "全部收起", compactBox(), smallIcon())).Clicked() {
+				if pressable(iconButtonSized(c, iconUp, L(c).GitCollapseAll(), compactBox(), smallIcon())).Clicked() {
 					for _, d := range dirs {
 						r.folded[d] = true
 					}
@@ -338,13 +339,13 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				a.rollbackRowView(c, g, rows[i])
 			}).Grow(1).Padding(4, 0)
 		})
-		ui.Checkbox(c, &r.delNew, "同时删除新文件（未跟踪的和刚加入 Git 的）")
+		ui.Checkbox(c, &r.delNew, L(c).RollbackDeleteNew())
 		restore, remove, unstage, n := r.rollbackPaths()
 		ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-			if pressable(textButton(c, "取消")).Clicked() {
+			if pressable(textButton(c, L(c).CommonCancel())).Clicked() {
 				r.open = false
 			}
-			verb := fmt.Sprintf("回滚 %d 个文件", n)
+			verb := L(c).RollbackFilesButton(n)
 			btn := pressable(accentButton(c, verb))
 			if n == 0 {
 				btn.Opacity(0.5)
@@ -354,7 +355,7 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				if then := r.then; then != nil {
 					done = func() { then(restore, remove) }
 				}
-				a.gitDoThen(r.v, "回滚", func(ctx context.Context, root string) error {
+				a.gitDoThen(L(c), r.v, L(c).GitRollback(), func(ctx context.Context, root string) error {
 					if len(restore) > 0 {
 						if err := gitx.Rollback(ctx, root, restore...); err != nil {
 							return err
@@ -390,12 +391,12 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 		defer box.grips(c)
 		switch {
 		case a.pressed(c, "nextChange"):
-			a.rollbackStep(1)
+			a.rollbackStep(L(c), 1)
 		case a.pressed(c, "prevChange"):
-			a.rollbackStep(-1)
+			a.rollbackStep(L(c), -1)
 		case a.pressed(c, "rollback") && d.kind == docDiff && listed:
 			if hunks := df.state.Hunks(); df.hunk < len(hunks) {
-				a.revertHunk(r.v, d, df.hunk)
+				a.revertHunk(L(c), r.v, d, df.hunk)
 			}
 		}
 		col := ui.Column(c).Gap(8)
@@ -407,28 +408,28 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 		col.Children(func() {
 			box.title(c, df.rel)
 			ui.Row(c).Height(sz(28)).Shrink(0).Gap(4).AlignItems(ui.Center).Children(func() {
-				if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
-					a.rollbackStep(-1)
+				if pressable(iconButtonSized(c, iconArrowUp, a.withKey(L(c).GitPreviousChange(), "prevChange"), buttonBox(), iconSize)).Clicked() {
+					a.rollbackStep(L(c), -1)
 				}
-				if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
-					a.rollbackStep(1)
+				if pressable(iconButtonSized(c, iconArrowDown, a.withKey(L(c).GitNextChange(), "nextChange"), buttonBox(), iconSize)).Clicked() {
+					a.rollbackStep(L(c), 1)
 				}
 				if d.kind == docDiff {
 					split := df.state.Layout == editor.DiffSplit
-					if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+					if toggleChip(c, L(c).GitSideBySide(), L(c).GitSideBySideTip(), split) {
 						if split {
 							df.state.Layout = editor.DiffUnified
 						} else {
 							df.state.Layout = editor.DiffSplit
 						}
 					}
-					if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+					if toggleChip(c, L(c).GitIgnoreWhitespace(), L(c).GitIgnoreWhitespaceTip(), df.state.IgnoreWhitespace) {
 						a.toggleIgnoreSpace(d)
 					}
 				}
 				if listed {
 					on := r.on[df.rel]
-					if ui.Checkbox(c.Key("include"), &on, "包含在回滚中").Padding(0, 6).Changed() {
+					if ui.Checkbox(c.Key("include"), &on, L(c).RollbackInclude()).Padding(0, 6).Changed() {
 						r.on[df.rel] = !r.on[df.rel]
 					}
 				}
@@ -436,12 +437,12 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				if d.kind == docDiff && listed {
 					if n := len(df.state.Hunks()); n > 0 {
 						added, deleted := df.state.Stats()
-						ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+						ui.Text(c, L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					// 每处旁边的 >> 要找到那一处才点得到，这里常驻一个，作用在 F7 走到的那一处
 					if df.hunk < len(df.state.Hunks()) {
-						if pressable(textButton(c, "回滚这一处")).Tooltip(a.withKey("回滚当前这处改动，立刻写回磁盘", "rollback")).Clicked() {
-							a.revertHunk(r.v, d, df.hunk)
+						if pressable(textButton(c, L(c).GitRollbackHunk())).Tooltip(a.withKey(L(c).RollbackHunkTip(), "rollback")).Clicked() {
+							a.revertHunk(L(c), r.v, d, df.hunk)
 						}
 					}
 				}
@@ -452,15 +453,15 @@ func (a *app) rollbackDiffDialog(c *ui.Context) {
 				}
 				switch {
 				case !listed:
-					muted("这个文件已经没有改动了")
+					muted(L(c).RollbackFileClean())
 				case d.kind == docLoading:
-					muted(diffLoadingText(df))
+					muted(diffLoadingText(L(c), df))
 				case d.kind == docError:
 					ui.Text(c, d.err).FontSize(fsBody).TextColor(t.Danger).Padding(16)
 				case d.kind == docImageDiff:
 					imageDiffView(c, d)
 				case d.kind == docBinary:
-					muted("二进制文件，只能整个回滚")
+					muted(L(c).RollbackBinary())
 				case d.kind == docTooLarge:
 					a.tooLargeDiffView(c, r.v, d)
 				default:
@@ -485,7 +486,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	line := ui.Row(c.Key(row.path)).Height(sz(26)).Padding(0, 12, 0, 4+float32(row.depth)*treeIndent).Gap(6).AlignItems(ui.Center)
 	if !row.dir {
 		// 文件行点了在 diff 浮窗里看；勾选框自己接住点击
-		line.Role(ui.RoleButton).Label("查看 " + row.path)
+		line.Role(ui.RoleButton).Label(L(c).RollbackViewFile(row.path))
 		selectedBg(c, line, r.detail != nil && r.detail.diff.rel == row.path)
 		if line.Clicked() {
 			if e, ok := r.entry(row.path); ok && (r.detail == nil || r.detail.diff.rel != row.path) {
@@ -496,7 +497,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	line.Children(func() {
 		if row.dir {
 			open := !r.folded[row.path]
-			disclosure(c, &open, "展开 "+row.path, "收起 "+row.path)
+			disclosure(c, &open, L(c).GitExpandPath(row.path), L(c).GitCollapsePath(row.path))
 			if open == r.folded[row.path] {
 				r.folded[row.path] = !open
 			}

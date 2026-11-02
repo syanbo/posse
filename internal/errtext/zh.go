@@ -71,6 +71,8 @@ var zh = [][2]string{
 	{"%s is not installed on this Mac (installed: %s)", "这台 Mac 上没装 {1}（装了的：{2}）"},
 	{"the session's directory %s no longer exists", "会话所在的目录 {1} 已经没了"},
 	{"the session has no recorded directory; pass a workspace", "会话没记下所在的目录，选一个工作区再试"},
+	{"did not exit normally", "没有正常结束"},
+	{"exit code %d", "退出码 {1}"},
 
 	// 任务
 	{"task %s not found", "找不到任务 {1}"},

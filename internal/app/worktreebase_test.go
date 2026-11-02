@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // worktreeWorkspace 把 w1 换成从项目目录分出去的 worktree，两边改了 main.go 的同一行：
@@ -102,10 +103,10 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 }
 
 func TestMergedBody(t *testing.T) {
-	if got := mergedBody("feat", nil); strings.Contains(got, "没提交") {
+	if got := mergedBody(locales.In("zh-Hans"), "feat", nil); strings.Contains(got, "没提交") {
 		t.Fatalf("clean worktree: %q", got)
 	}
-	got := mergedBody("feat", []string{".env", "tmp/a.log", "tmp/b.log", "out.bin"})
+	got := mergedBody(locales.In("zh-Hans"), "feat", []string{".env", "tmp/a.log", "tmp/b.log", "out.bin"})
 	if !strings.Contains(got, "没提交的文件一起删掉：.env、tmp/a.log、tmp/b.log 等 4 个文件。") {
 		t.Fatalf("untracked listed: %q", got)
 	}

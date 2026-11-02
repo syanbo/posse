@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -50,23 +49,23 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				cp.index = i
 				d.ed.ScrollTo(chs[i].NewStart)
 			}
-			if pressable(iconButtonSized(c, iconArrowUp, "上一处改动", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowUp, L(c).GitPreviousChange(), compactBox(), smallIcon())).Clicked() {
 				step(cp.index - 1)
 			}
-			if pressable(iconButtonSized(c, iconArrowDown, "下一处改动", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconArrowDown, L(c).GitNextChange(), compactBox(), smallIcon())).Clicked() {
 				step(cp.index + 1)
 			}
-			ui.Text(c, fmt.Sprintf("第 %d / %d 处", cp.index+1, len(chs))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
-			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, a.withKey("回滚这一处", "editor.revertHunk"), compactBox(), smallIcon())).Clicked() {
+			ui.Text(c, L(c).GitChangePosition(cp.index+1, len(chs))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Padding(0, 6).Shrink(0)
+			if !d.ed.ReadOnly && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackHunk(), "editor.revertHunk"), compactBox(), smallIcon())).Clicked() {
 				d.ed.RevertChange(cp.index)
 				d.change = nil
 			}
 			rel := v.git.relPath(d.path)
-			if rel != "" && pressable(iconButtonSized(c, iconDiff, "显示 diff", compactBox(), smallIcon())).Clicked() {
+			if rel != "" && pressable(iconButtonSized(c, iconDiff, L(c).GitShowDiff(), compactBox(), smallIcon())).Clicked() {
 				d.change = nil
 				a.openDiff(w, diffSpec{rel: rel, oldRev: "HEAD"}, nil, true)
 			}
-			copyOld := pressable(iconButtonSized(c, iconCopy, "复制改之前的内容", compactBox(), smallIcon()))
+			copyOld := pressable(iconButtonSized(c, iconCopy, L(c).GitCopyBefore(), compactBox(), smallIcon()))
 			if ch.Old == "" {
 				copyOld.Disabled(true)
 			} else if copyOld.Clicked() {
@@ -76,7 +75,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			if rel != "" {
 				a.commitChangeInput(c, v, d, cp, rel, ch)
 			}
-			if pressable(iconButtonSized(c, iconClose, "关闭 Esc", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconClose, L(c).GitCloseEscape(), compactBox(), smallIcon())).Clicked() {
 				d.change = nil
 			}
 		})
@@ -84,7 +83,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		box := ui.Column(c).Radius(rControl).Background(soft(t, t.Danger)).Padding(6, 12)
 		box.Children(func() {
 			if ch.Old == "" {
-				ui.Text(c, fmt.Sprintf("这里新增了 %d 行，上一次提交时没有", ch.NewEnd-ch.NewStart)).FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, L(c).GitAddedLines(ch.NewEnd-ch.NewStart)).FontSize(fsSmall).TextColor(t.TextMuted)
 				return
 			}
 			lines := strings.Split(ch.Old, "\n")
@@ -94,7 +93,7 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 			}
 			ui.Text(c, strings.Join(lines, "\n")).FontSize(a.editorSize).Font(fontStack(a.editorFamily)).LineHeight(1.45).Selectable()
 			if more > 0 {
-				ui.Text(c, fmt.Sprintf("还有 %d 行", more)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 0, 0, 0)
+				ui.Text(c, L(c).GitMoreLines(more)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 0, 0, 0)
 			}
 		})
 	})
@@ -110,15 +109,15 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 // 提交的是编辑器里这一处的内容，所以有没保存的改动时先保存；合并、rebase 进行中不做。
 func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *changePop, rel string, ch editor.BaseChange) {
 	g := &v.git
-	placeholder := "提交此更改"
+	placeholder := L(c).GitCommitChange()
 	blocked := ""
 	switch {
 	case d.headBuf == nil:
-		blocked = "上一次提交里没有这个文件"
+		blocked = L(c).GitFileAbsent()
 	case d.isModified():
-		blocked = "先保存再提交这一处"
+		blocked = L(c).GitSaveBeforeCommit()
 	case g.status != nil && g.status.Operation != "":
-		blocked = "合并或 rebase 进行中，到改动页里提交"
+		blocked = L(c).GitCommitOperationHint()
 	}
 	if blocked != "" {
 		placeholder = blocked
@@ -134,13 +133,14 @@ func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *cha
 			return
 		}
 		content := changeContent(d.headBuf.String(), d.ed.Buffer.String(), ch)
-		a.gitDoKind(v, gitCommit, "提交", func(ctx context.Context, root string) error {
+		m := L(c)
+		a.gitDoKind(m, v, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
 			return gitx.CommitChange(ctx, root, rel, []byte(content), msg)
 		}, func() {
 			if d.change == cp {
 				d.change = nil
 			}
-			a.notify("已提交这一处："+msg, "", nil)
+			a.notify(m.GitChangeCommitted(msg), "", nil)
 		})
 	})
 }

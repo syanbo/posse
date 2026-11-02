@@ -15,6 +15,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // Git 操作记录：照 WebStorm Git 工具窗口的 Console，列出日志浮层所在项目里界面执行过的 Git 操作（提交、推送、储藏……），
@@ -166,16 +167,13 @@ func (a *app) addTermRuns(recs []termGitRun, initial bool) {
 		if x.Start.Before(a.state.GitConsoleCleared) {
 			continue
 		}
-		r := gitx.Run{ID: -x.Seq, Op: "终端", Dir: x.Dir, Args: x.Args, Start: x.Start,
+		r := gitx.Run{ID: -x.Seq, Op: termRunOp + x.Agent, Dir: x.Dir, Args: x.Args, Start: x.Start,
 			Took: time.Duration(x.TookMs) * time.Millisecond, Done: true}
-		if x.Agent != "" {
-			r.Op = agentTitle(x.Agent) + " 终端"
-		}
 		switch {
 		case x.Code == -1:
-			r.Err = "没有正常结束"
+			r.Err = "did not exit normally"
 		case x.Code != 0:
-			r.Err = fmt.Sprintf("退出码 %d", x.Code)
+			r.Err = fmt.Sprintf("exit code %d", x.Code)
 		}
 		if slices.ContainsFunc(a.gitRuns, func(o gitx.Run) bool { return o.ID == r.ID }) {
 			continue
@@ -262,9 +260,6 @@ func groupGitRuns(runs []gitx.Run) []gitOpRecord {
 			at[r.OpID] = len(ops)
 		}
 		name := r.Op
-		if name == "" {
-			name = "后台"
-		}
 		ops = append(ops, gitOpRecord{name: name, runs: []gitx.Run{r}})
 	}
 	return ops
@@ -399,7 +394,7 @@ func (a *app) runWhere(dir string) string {
 // consoleTab 是日志浮层顶上的"操作记录"标签；有没看过的失败命令时带个红点。
 func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
-	label := "操作记录"
+	label := L(c).GitConsoleTitle()
 	row := ui.Row(c.Key("console-tab")).Height(sz(26)).Padding(0, 12).Gap(6).Radius(rRow).AlignItems(ui.Center).Shrink(0).
 		Label(label).Role(ui.RoleButton)
 	selectedBg(c, row, v.console)
@@ -407,7 +402,7 @@ func (a *app) consoleTab(c *ui.Context, w *workspace, v *filesView) {
 		ui.Icon(c, iconOpLog).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 		tabText(c, ui.Text(c, label).FontSize(fsSmall).Shrink(0), v.console)
 		if !v.console && a.projectConsoleErr(w.ProjectID, false) {
-			ui.Box(c).Size(6, 6).Radius(full(6)).Background(t.Danger).Shrink(0).Label("有失败的 git 命令").Tooltip("有失败的 git 命令")
+			ui.Box(c).Size(6, 6).Radius(full(6)).Background(t.Danger).Shrink(0).Label(L(c).GitConsoleFailedCommands()).Tooltip(L(c).GitConsoleFailedCommands())
 		}
 	})
 	if row.Clicked() {
@@ -422,12 +417,12 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	runs := a.projectRuns(w.ProjectID)
 	ops := foldGitOps(groupGitRuns(runs))
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, w.Project+" 的所有工作区").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, L(c).GitConsoleWorkspaces(w.Project)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Icon(c, iconInfo).FontSize(smallIcon()).TextColor(t.TextMuted).Shrink(0).
-			Tooltip("Posse 执行的 Git 操作和它们调用的 git 命令，以及 Posse 终端里改动仓库的 git 命令。连着几次相同、没有输出的操作合成一条")
+			Tooltip(L(c).GitConsoleInfo())
 		ui.Spacer(c)
 		// 只清这个项目的：记下时间，文件里的记录留给别的项目
-		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, "清空", compactBox(), smallIcon())).Clicked() {
+		if len(ops) > 0 && pressable(iconButtonSized(c, iconTrash, L(c).GitConsoleClear(), compactBox(), smallIcon())).Clicked() {
 			runs, ops = nil, nil
 			if a.state.GitConsoleClearedAt == nil {
 				a.state.GitConsoleClearedAt = map[string]time.Time{}
@@ -437,7 +432,7 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 		}
 	})
 	if len(ops) == 0 {
-		ui.Text(c, "还没有执行过 Git 操作").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, L(c).GitConsoleEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
@@ -469,23 +464,23 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 		selectedBg(c, row, false)
 		row.Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				icon, tone, label := iconCheck, p.sage, "成功"
+				icon, tone, label := iconCheck, p.sage, L(c).GitConsoleSuccess()
 				switch {
 				case op.running():
-					icon, tone, label = iconRefresh, t.TextMuted, "进行中"
+					icon, tone, label = iconRefresh, t.TextMuted, L(c).CommonInProgress()
 				case op.canceled():
-					icon, tone, label = iconMinus, t.TextMuted, "已取消"
+					icon, tone, label = iconMinus, t.TextMuted, L(c).GitConsoleCanceled()
 				case failed:
-					icon, tone, label = iconClose, t.Danger, "失败"
+					icon, tone, label = iconClose, t.Danger, L(c).CommonFailed()
 				}
 				ui.Box(c).Width(consoleIconW()).Shrink(0).Center().Children(func() {
 					ui.Icon(c, icon).FontSize(smallIcon()).TextColor(tone).Label(label).Tooltip(label)
 				})
-				ui.Text(c, op.name).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
+				ui.Text(c, consoleOpName(L(c), op.name)).FontSize(fsBody).FontWeight(fwMedium).SingleLine().Shrink(0)
 				if op.repeat > 1 {
 					ui.Text(c, fmt.Sprintf("×%d", op.repeat)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 						Padding(0, 6).Radius(rSmall).Background(p.wash).Shrink(0).
-						Tooltip(fmt.Sprintf("%s 到 %s 之间 %d 次", op.since.Format("15:04:05"), first.Start.Format("15:04:05"), op.repeat))
+						Tooltip(L(c).GitConsoleRepeat(op.since.Format("15:04:05"), first.Start.Format("15:04:05"), op.repeat))
 				}
 				if where := a.runWhere(first.Dir); where != "" {
 					ui.Text(c, where).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -493,15 +488,15 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 				ui.Spacer(c)
 				switch {
 				case op.running():
-					ui.Text(c, "进行中…").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, L(c).GitConsoleRunning()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 				case op.canceled():
-					ui.Text(c, "已取消").FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, L(c).GitConsoleCanceled()).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 				case failed:
-					ui.Text(c, "失败").FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
+					ui.Text(c, L(c).CommonFailed()).FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
 				}
 				// 耗时写在各条命令后面，和这里的时间上下对齐；整个操作的耗时悬停看
 				ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
-					Tooltip("共 " + took(last.Start.Add(last.Took).Sub(first.Start)))
+					Tooltip(L(c).GitConsoleDuration(took(last.Start.Add(last.Took).Sub(first.Start))))
 			})
 			ui.Column(c).Gap(4).Padding(0, 0, 0, consoleIconW()+8).Children(func() {
 				for _, r := range op.runs {
@@ -517,6 +512,22 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 			})
 		})
 	})
+}
+
+// termRunOp 是终端里的 git 命令的操作名前缀，后面接 agent 的代号（用户自己敲的为空），显示时才换成文字。
+const termRunOp = "\x00terminal:"
+
+func consoleOpName(m locales.Messages, name string) string {
+	if name == "" {
+		return m.GitConsoleBackground()
+	}
+	if agent, ok := strings.CutPrefix(name, termRunOp); ok {
+		if agent == "" {
+			return m.GitConsoleTerminal()
+		}
+		return m.GitConsoleAgentTerminal(agentTitle(agent))
+	}
+	return name
 }
 
 // consoleIconW 是操作记录里结果图标占的宽度，命令和操作名对齐要用它。
@@ -556,10 +567,10 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 		}
 	})
 	contextMenu(c, col, func(m *popMenu) {
-		if m.Item("复制命令").Icon(iconCopy).Chosen() {
+		if m.Item(L(c).GitConsoleCopyCommand()).Icon(iconCopy).Chosen() {
 			c.WriteClipboard(cmd)
 		}
-		if out := strings.TrimSpace(r.Out + "\n" + r.Err); out != "" && m.Item("复制输出").Chosen() {
+		if out := strings.TrimSpace(r.Out + "\n" + r.Err); out != "" && m.Item(L(c).GitConsoleCopyOutput()).Chosen() {
 			c.WriteClipboard(out)
 		}
 	})

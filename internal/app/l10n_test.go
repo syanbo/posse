@@ -158,15 +158,12 @@ func TestCatalogGenerated(t *testing.T) {
 // l10nPending 是界面文字还没换成 locales 的键的文件，换完一个从这里去掉一个；不在表里的文件不许写中文字面量
 // （注释和测试不算）。
 var l10nPending = []string{
-	"app.go", "branchpop.go", "changepop.go", "cheatsheet.go",
-	"compare.go", "definition.go", "docfind.go", "filehistory.go", "files.go", "filespanel.go",
-	"filesview.go", "fonts.go", "gitconsole.go", "gitpanel.go", "gitview.go", "history.go",
-	"images.go", "imageview.go", "jsonfmt.go", "layout.go", "links.go",
-	"logrefs.go", "logview.go", "markdown_html.go", "markdown.go", "mcp.go", "memory.go", "menu.go",
-	"mermaid.go", "mobile.go", "panels.go", "planusage.go", "projicon.go", "recent.go", "relaunch.go",
-	"relay.go", "rollback.go", "running.go", "skillrun.go", "skills.go", "style.go", "tabname.go",
-	"tasks.go", "termfind.go", "termkeys.go", "termmenu.go", "traces.go", "trash.go", "upgrade.go",
-	"usage.go", "view.go", "web.go", "webdevice.go", "worktreebase.go",
+	"app.go", "cheatsheet.go", "compare.go", "definition.go", "docfind.go", "files.go", "filespanel.go",
+	"filesview.go", "fonts.go", "gitconsole.go", "history.go", "images.go", "imageview.go", "jsonfmt.go",
+	"layout.go", "links.go", "markdown.go", "markdown_html.go", "mcp.go", "memory.go", "menu.go", "mermaid.go",
+	"mobile.go", "panels.go", "planusage.go", "projicon.go", "recent.go", "relaunch.go", "relay.go", "running.go",
+	"skillrun.go", "skills.go", "style.go", "tabname.go", "tasks.go", "termfind.go", "termkeys.go", "termmenu.go",
+	"traces.go", "trash.go", "upgrade.go", "usage.go", "view.go", "web.go", "webdevice.go",
 }
 
 func TestNoChineseLiterals(t *testing.T) {

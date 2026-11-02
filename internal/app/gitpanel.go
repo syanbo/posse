@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // changesView 是文件栏的"改动"：分支和同步状态、改动列表（含储藏），底部是提交框。
@@ -21,13 +22,13 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 	g := &v.git
 	switch {
 	case !g.checked:
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	case g.repo == "":
-		ui.Text(c, "这个工作区不是 git 仓库").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, L(c).GitNotRepo()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	case g.status == nil:
-		msg := "正在读取…"
+		msg := L(c).CommonLoading()
 		if g.err != "" {
 			msg = g.err
 		}
@@ -53,19 +54,19 @@ func (a *app) changesView(c *ui.Context, w *workspace, v *filesView) {
 		files = byDirRows(files, g.dirFolds)
 	}
 	ui.Row(c).Gap(4).Padding(2, 12, 6, 12).AlignItems(ui.Center).Children(func() {
-		changesTab(c, &g.tab, 0, "提交", g.changeCount())
-		changesTab(c, &g.tab, 1, "储藏", len(stashes))
+		changesTab(c, &g.tab, 0, L(c).GitCommitButton(), g.changeCount())
+		changesTab(c, &g.tab, 1, L(c).GitStash(), len(stashes))
 		if g.tab == 0 {
 			ui.Spacer(c)
-			if toggleIconButton(c, "by-dir", iconFolder, "按目录分组", a.state.ChangesByDir) {
+			if toggleIconButton(c, "by-dir", iconFolder, L(c).GitGroupByDirectory(), a.state.ChangesByDir) {
 				a.state.ChangesByDir = !a.state.ChangesByDir
 				a.saveState()
 			}
 		}
 	})
-	rows, list, empty := files, &g.list, "没有改动"
+	rows, list, empty := files, &g.list, L(c).GitNoChanges()
 	if g.tab == 1 {
-		rows, list, empty = stashes, &g.stashLst, "没有储藏"
+		rows, list, empty = stashes, &g.stashLst, L(c).GitNoStashes()
 	}
 	if len(rows) == 0 {
 		ui.Column(c).Grow(1).Children(func() {
@@ -180,7 +181,7 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 6, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		head := st.Head
 		if head == "" {
-			head = "分离的 HEAD"
+			head = L(c).GitDetachedHead()
 		}
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, head).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -189,19 +190,20 @@ func (a *app) changesHeader(c *ui.Context, w *workspace, v *filesView) {
 		if g.busy != "" {
 			busyLine(c, g)
 		}
-		if pressable(iconButtonSized(c, iconGitLog, "Git 日志", buttonBox(), iconSize)).Clicked() {
+		if pressable(iconButtonSized(c, iconGitLog, L(c).GitLogTitle(), buttonBox(), iconSize)).Clicked() {
 			a.openLog(w, "", "")
 		}
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", buttonBox(), iconSize)).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), buttonBox(), iconSize)).Clicked() {
 			a.refreshGit(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey("回滚…", "rollback"), buttonBox(), iconSize)).Clicked() {
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconRollback, a.withKey(L(c).GitRollbackEllipsis(), "rollback"), buttonBox(), iconSize)).Clicked() {
 			a.openRollback(v)
 		}
-		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, "储藏更改…（git stash，含未跟踪文件）", buttonBox(), iconSize)).Clicked() {
-			a.prompt(promptReq{title: "储藏更改", body: "把全部改动（含未跟踪文件）存进 git stash，工作区回到干净的状态。",
-				placeholder: "说明（可以留空）", verb: "储藏", optional: true, do: func(msg string, _ bool) {
-					a.gitDo(v, "储藏", func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, msg) })
+		if g.changeCount() > 0 && pressable(iconButtonSized(c, iconShelve, L(c).GitStashTip(), buttonBox(), iconSize)).Clicked() {
+			m := L(c)
+			a.prompt(promptReq{title: m.GitStashTitle(), body: m.GitStashBody(),
+				placeholder: m.GitStashMessage(), verb: m.GitStash(), optional: true, do: func(msg string, _ bool) {
+					a.gitDo(m, v, m.GitStash(), func(ctx context.Context, root string) error { return gitx.StashPush(ctx, root, msg) })
 				}})
 		}
 	})
@@ -244,7 +246,8 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		head := ui.Row(c).Height(sz(26)).Padding(6, 16, 0, groupHeadPad).Gap(6).AlignItems(ui.Center)
 		head.Children(func() {
 			// 箭头在最左边，点它或组名展开收起
-			disclosure(c, open, "展开"+groupTitles[r.group], "收起"+groupTitles[r.group])
+			title := groupTitles[r.group](L(c))
+			disclosure(c, open, L(c).GitExpandGroup(title), L(c).GitCollapseGroup(title))
 			// 改动和未跟踪的组标题能一键全选、全不选
 			if r.group == groupChanged || r.group == groupUntracked {
 				var in []gitx.Entry
@@ -254,16 +257,16 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 					}
 				}
 				state := g.pickState(in)
-				if pickBox(c, fmt.Sprint("group-", r.group), groupTitles[r.group], state) {
+				if pickBox(c, fmt.Sprint("group-", r.group), title, state) {
 					g.setPickedAll(in, state != pickAll)
 				}
 			}
-			title := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(groupTitles[r.group])
-			title.Children(func() {
-				ui.Text(c, groupTitles[r.group]).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+			row := ui.Row(c.Key("title")).Gap(6).AlignItems(ui.Center).Role(ui.RoleButton).Label(title)
+			row.Children(func() {
+				ui.Text(c, title).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 				ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			})
-			if title.Clicked() {
+			if row.Clicked() {
 				*open = !*open
 			}
 		})
@@ -336,31 +339,31 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 	}
 	contextMenu(c, row, func(m *popMenu) {
-		if letter != 'D' && m.Item("打开文件").Chosen() {
+		if letter != 'D' && m.Item(L(c).GitOpenFile()).Chosen() {
 			a.openFile(w, g.absPath(e.Path), 0, [2]int{})
 		}
 		m.Separator()
 		switch {
 		case e.Untracked:
-			if m.Item("加入 Git").Chosen() {
-				a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
+			if m.Item(L(c).GitAdd()).Chosen() {
+				a.gitDo(L(c), v, L(c).GitAdd(), func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		case e.Conflict:
-			ours, theirs := sideNames(g.status.Operation, g.autostash != "" && g.autostashConflicts)
-			if m.Item("采用" + ours).Chosen() {
-				a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, true) })
+			ours, theirs := sideNames(L(c), g.status.Operation, g.autostash != "" && g.autostashConflicts)
+			if m.Item(L(c).GitAcceptSide(ours)).Chosen() {
+				a.gitDo(L(c), v, L(c).GitResolve(), func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, true) })
 			}
-			if m.Item("采用" + theirs).Chosen() {
-				a.gitDo(v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, false) })
+			if m.Item(L(c).GitAcceptSide(theirs)).Chosen() {
+				a.gitDo(L(c), v, L(c).GitResolve(), func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, e.Path, false) })
 			}
-			if m.Item("改完了，标记为已解决").Chosen() {
-				a.gitDo(v, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
+			if m.Item(L(c).GitMarkResolvedLabel()).Chosen() {
+				a.gitDo(L(c), v, L(c).GitMarkResolved(), func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, e.Path) })
 			}
 		}
 		if !e.Conflict {
-			label := "回滚…"
+			label := L(c).GitRollbackEllipsis()
 			if e.Untracked {
-				label = "删除…"
+				label = L(c).CommonDeleteEllipsis()
 			}
 			if m.Item(label).Keys(a.keyText("rollback")).Chosen() {
 				a.openRollbackFor(v, []string{e.Path}, nil)
@@ -368,10 +371,10 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		}
 		m.Separator()
 		abs := g.absPath(e.Path)
-		if letter != 'D' && m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+		if letter != 'D' && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
-		if m.Item("复制路径").Chosen() {
+		if m.Item(L(c).CommonCopyPath()).Chosen() {
 			c.WriteClipboard(abs)
 		}
 	})
@@ -386,7 +389,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 	selectedBg(c, row, false)
 	row.Children(func() {
 		open := !folds[r.path]
-		disclosure(c, &open, "展开 "+r.path, "收起 "+r.path)
+		disclosure(c, &open, L(c).GitExpandPath(r.path), L(c).GitCollapsePath(r.path))
 		if open == folds[r.path] {
 			folds[r.path] = !open
 		}
@@ -403,9 +406,9 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 	}
 	contextMenu(c, row, func(m *popMenu) {
 		if r.group != groupConflict {
-			label := "回滚…"
+			label := L(c).GitRollbackEllipsis()
 			if r.group == groupUntracked {
-				label = "删除…"
+				label = L(c).CommonDeleteEllipsis()
 			}
 			if m.Item(label).Chosen() {
 				paths := make([]string, len(r.files))
@@ -419,10 +422,10 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 		abs := g.absPath(r.path)
 		// 里面的文件全删了时目录可能已经不在
 		exists := slices.ContainsFunc(r.files, func(e gitx.Entry) bool { return statusLetter(e) != 'D' })
-		if exists && m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+		if exists && m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(abs)
 		}
-		if m.Item("复制路径").Chosen() {
+		if m.Item(L(c).CommonCopyPath()).Chosen() {
 			c.WriteClipboard(abs)
 		}
 	})
@@ -430,6 +433,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 
 func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 	t := c.Theme()
+	lm := L(c)
 	// 储藏是整个仓库共用的：别的 worktree 里存的也列在这里，标出分支，取回前先确认
 	other := ""
 	if head := v.git.status.Head; s.Branch != "" && head != "" && s.Branch != head {
@@ -442,41 +446,41 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 		ui.Icon(c, iconShelve).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, stashTitle(s.Message)).FontSize(fsBody).SingleLine().Shrink(1).Grow(1).Tooltip(s.Message)
 		if other != "" {
-			ui.Text(c, other).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip("在分支 " + other + " 上存的")
+			ui.Text(c, other).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip(lm.GitStashOnBranch(other))
 		}
 		ui.Text(c, ago(s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	owner := a.stashOwner(v, other)
 	take := func(what string, fn func(ctx context.Context, root string) error) {
 		if other == "" {
-			a.gitDo(v, what, fn)
+			a.gitDo(lm, v, what, fn)
 			return
 		}
-		where := "分支 " + other
+		where := lm.GitStashWhereBranch(other)
 		if owner != nil {
-			where = "工作区 " + displayName(owner) + "（分支 " + other + "）"
+			where = lm.GitStashWhereWorkspace(displayName(owner), other)
 		}
-		a.confirm(what+"别的分支的储藏？", "这条储藏是在"+where+"里存的，"+what+"会把那边的改动放进当前目录。", "仍然"+what, func() {
-			a.update(func() { a.gitDo(v, what, fn) })
+		a.confirm(lm.GitStashOtherConfirm(what), lm.GitStashOtherBody(where, what), lm.GitOperationAnyway(what), func() {
+			a.update(func() { a.gitDo(lm, v, what, fn) })
 		})
 	}
 	menuButton(c, row, func(m *popMenu) {
-		if owner != nil && m.Item("切到工作区 "+displayName(owner)).Chosen() {
+		if owner != nil && m.Item(lm.GitSwitchToWorkspace(displayName(owner))).Chosen() {
 			a.selected, a.revealSel = owner.ID, true
 			a.openFilesPanel(owner, sideChanges).git.tab = 1
 		}
 		// 照 WebStorm 储藏标签的右键：弹出（取回并删掉）、应用（储藏留着）、删除
-		if m.Item("弹出").Chosen() {
-			take("弹出储藏", func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
+		if m.Item(lm.GitStashPop()).Chosen() {
+			take(lm.GitStashPopOperation(), func(ctx context.Context, root string) error { return gitx.StashPop(ctx, root, s.Ref) })
 		}
-		if m.Item("应用").Chosen() {
-			take("应用储藏", func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
+		if m.Item(lm.GitStashApply()).Chosen() {
+			take(lm.GitStashApplyOperation(), func(ctx context.Context, root string) error { return gitx.StashApply(ctx, root, s.Ref) })
 		}
 		m.Separator()
-		if m.Item("删除…").Chosen() {
-			a.confirm("删除这条储藏？", "储藏的改动会丢失："+s.Message, "删除", func() {
+		if m.Item(lm.CommonDeleteEllipsis()).Chosen() {
+			a.confirm(lm.GitStashDeleteConfirm(), lm.GitStashDeleteBody(s.Message), lm.CommonDelete(), func() {
 				a.update(func() {
-					a.gitDo(v, "删除储藏", func(ctx context.Context, root string) error { return gitx.StashDrop(ctx, root, s.Ref) })
+					a.gitDo(lm, v, lm.GitStashDelete(), func(ctx context.Context, root string) error { return gitx.StashDrop(ctx, root, s.Ref) })
 				})
 			})
 		}
@@ -497,18 +501,31 @@ func (a *app) stashOwner(v *filesView, branch string) *workspace {
 	return nil
 }
 
-var opNames = map[string]string{"rebase": "rebase", "merge": "合并", "cherry-pick": "cherry-pick", "revert": "revert"}
+// opName 是进行到一半的操作在横幅、确认里的名字。
+func opName(m locales.Messages, op string) string {
+	switch op {
+	case "rebase":
+		return m.GitOpRebase()
+	case "merge":
+		return m.GitMerge()
+	case "cherry-pick":
+		return m.GitOpCherryPick()
+	case "revert":
+		return m.GitOpRevert()
+	}
+	return op
+}
 
 // sideNames 是冲突两边在这个操作里各是什么：rebase 时 ours 是要 rebase 到的分支，theirs 是你正在重放的提交。
-func sideNames(op string, autostash bool) (ours, theirs string) {
+func sideNames(m locales.Messages, op string, autostash bool) (ours, theirs string) {
 	// 这个工作区的更新取回本地改动时冲突：ours 是更新后的 HEAD，theirs 是储藏里的本地改动
 	if op == "" && autostash {
-		return "更新后的版本", "我的本地改动"
+		return m.GitUpdatedVersion(), m.GitLocalChanges()
 	}
 	if op == "rebase" {
-		return "目标分支的（ours）", "你的提交的（theirs）"
+		return m.GitRebaseOurs(), m.GitRebaseTheirs()
 	}
-	return "当前分支的（ours）", "合入的提交的（theirs）"
+	return m.GitMergeOurs(), m.GitMergeTheirs()
 }
 
 // operationBanner 是 rebase、合并等操作进行到一半时的横幅：冲突数，继续、跳过、中止。
@@ -519,32 +536,34 @@ func (a *app) operationBanner(c *ui.Context, w *workspace, v *filesView) {
 		return
 	}
 	t := c.Theme()
+	m := L(c)
+	name := opName(m, op)
 	conflicts := 0
 	for _, e := range g.status.Entries {
 		if e.Conflict {
 			conflicts++
 		}
 	}
-	msg := "正在" + opNames[op] + "，没有冲突了，可以继续。"
+	msg := m.GitOperationReady(name)
 	if conflicts > 0 {
-		msg = fmt.Sprintf("正在%s，有 %d 个文件冲突。解决后点继续：右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决。", opNames[op], conflicts)
+		msg = m.GitOperationConflicts(name, conflicts)
 	}
 	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45)
 		ui.Row(c).Gap(6).Children(func() {
-			cont := pressable(accentButton(c, "继续"))
+			cont := pressable(accentButton(c, m.CommonContinue()))
 			if conflicts > 0 {
 				cont.Disabled(true)
 			} else if cont.Clicked() {
-				a.gitDo(v, "继续"+opNames[op], func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, op) })
+				a.gitDo(m, v, m.GitContinueOperation(name), func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, op) })
 			}
-			if (op == "rebase" || op == "cherry-pick") && pressable(textButton(c, "跳过这个提交")).Clicked() {
-				a.gitDo(v, "跳过", func(ctx context.Context, root string) error { return gitx.Skip(ctx, root, op) })
+			if (op == "rebase" || op == "cherry-pick") && pressable(textButton(c, m.GitSkipCommit())).Clicked() {
+				a.gitDo(m, v, m.GitSkip(), func(ctx context.Context, root string) error { return gitx.Skip(ctx, root, op) })
 			}
-			if pressable(textButton(c, "中止")).Clicked() {
-				a.confirm("中止"+opNames[op]+"？", "会回到开始"+opNames[op]+"之前的样子，已经解决的冲突也会丢掉。", "中止", func() {
+			if pressable(textButton(c, m.GitAbort())).Clicked() {
+				a.confirm(m.GitAbortConfirm(name), m.GitAbortBody(name), m.GitAbort(), func() {
 					a.update(func() {
-						a.gitDo(v, "中止", func(ctx context.Context, root string) error { return gitx.Abort(ctx, root, op) })
+						a.gitDo(m, v, m.GitAbort(), func(ctx context.Context, root string) error { return gitx.Abort(ctx, root, op) })
 					})
 				})
 			}
@@ -569,6 +588,7 @@ func (a *app) autostashBanner(c *ui.Context, v *filesView) {
 		return
 	}
 	t := c.Theme()
+	m := L(c)
 	conflicts := 0
 	for _, e := range g.status.Entries {
 		if e.Conflict {
@@ -578,34 +598,34 @@ func (a *app) autostashBanner(c *ui.Context, v *filesView) {
 	var msg string
 	switch {
 	case !g.autostashConflicts:
-		msg = "更新前的本地改动没能取回（会覆盖拉下来的文件），还在储藏里：在储藏里手动应用。"
+		msg = m.GitAutostashUnrestored()
 	case conflicts > 0:
-		msg = fmt.Sprintf("更新前的本地改动和拉下来的提交有冲突（%d 个文件）。右键冲突文件可以整个采用一方，或者打开文件改完后标记为已解决；原来的改动还在储藏里。", conflicts)
+		msg = m.GitAutostashConflicts(conflicts)
 	default:
-		msg = "冲突都解决了。更新前的本地改动还在储藏里，确认没问题可以删掉。"
+		msg = m.GitAutostashResolved()
 	}
 	ui.Column(c).Shrink(0).Margin(2, 12, 8, 12).Padding(12, 6, 12, 12).Gap(8).Radius(rControl).Background(t.Surface).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Start).Children(func() {
 			ui.Text(c, msg).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
-			if iconButtonSized(c, iconClose, "不再提示", compactBox(), smallIcon()).Clicked() {
+			if iconButtonSized(c, iconClose, L(c).GitDismissHint(), compactBox(), smallIcon()).Clicked() {
 				g.autostash = ""
 			}
 		})
 		ui.Row(c).Gap(6).Children(func() {
 			if g.autostashConflicts && conflicts == 0 {
-				drop := pressable(accentButton(c, "删除储藏…"))
+				drop := pressable(accentButton(c, L(c).GitStashDeleteEllipsis()))
 				if g.busy != "" {
 					drop.Disabled(true)
 				}
 				if drop.Clicked() {
-					a.confirm("删除这条储藏？", "里面是更新前的本地改动，删掉后找不回来。", "删除", func() {
+					a.confirm(m.GitStashDeleteConfirm(), m.GitAutostashDeleteBody(), m.CommonDelete(), func() {
 						a.update(func() {
-							a.gitDo(v, "删除储藏", func(ctx context.Context, root string) error { return gitx.StashDropHash(ctx, root, hash) })
+							a.gitDo(m, v, m.GitStashDelete(), func(ctx context.Context, root string) error { return gitx.StashDropHash(ctx, root, hash) })
 						})
 					})
 				}
 			}
-			if pressable(textButton(c, "查看储藏")).Clicked() {
+			if pressable(textButton(c, L(c).GitViewStash())).Clicked() {
 				g.tab = 1
 			}
 		})
@@ -627,42 +647,48 @@ func stashTitle(msg string) string {
 // commitBox 是左栏底部的提交框：提交信息、修改上一次提交、提交按钮。
 func (a *app) commitBox(c *ui.Context, v *filesView) {
 	g := &v.git
+	m := L(c)
 	_, _, picked := g.pickedPaths()
-	label := fmt.Sprintf("提交 %d 个文件", picked)
-	tip := a.withKey("提交勾选的文件，没勾的改动留在工作区", "commit")
+	label := m.GitCommitFiles(picked)
+	tip := a.withKey(m.GitCommitSelectedTip(), "commit")
 	whole := g.wholeCommit()
-	switch {
-	case whole != "":
-		label = "提交" + whole + "结果"
-		if whole == "Cherry-pick" {
-			label = "提交 Cherry-pick 结果"
-		}
-		tip = whole + a.withKey("进行中只能整体提交：勾选的文件先加入 Git，再连同已加入的一起提交", "commit")
-	case picked == 0 && g.amend:
-		label = "只改提交信息"
+	switch whole {
+	case "merge":
+		label = m.GitCommitMergeResult()
+		tip = a.withKey(m.GitWholeCommitTip(m.GitMerge()), "commit")
+	case "cherry-pick":
+		label = m.GitCommitPickResult()
+		tip = a.withKey(m.GitWholeCommitTip("Cherry-pick"), "commit")
+	case "revert":
+		label = m.GitCommitRevertResult()
+		tip = a.withKey(m.GitWholeCommitTip(m.GitRevert()), "commit")
+	}
+	if whole == "" && picked == 0 && g.amend {
+		label = m.GitRewordOnly()
 	}
 	hline(c)
 	ui.Column(c).Shrink(0).Padding(12).Gap(8).Children(func() {
-		msg := fieldArea(c, &g.message, "提交信息", 58).FontSize(fsBody)
+		msg := fieldArea(c, &g.message, L(c).GitCommitMessage(), 58).FontSize(fsBody)
 		if g.focusMsg {
 			msg.Focus()
 			g.focusMsg = false
 		}
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		// 英文的勾选项和按钮都长，一行放不下时按钮换到下一行、靠右
+		ui.Row(c).Gap(8).Wrap().Justify(ui.End).AlignItems(ui.Center).Children(func() {
 			amend := g.amend
-			if ui.Checkbox(c, &amend, "修改上一次提交").Changed() {
+			if ui.Checkbox(c, &amend, L(c).GitAmend()).Changed() {
 				a.setAmend(v, amend)
 			}
 			ui.Spacer(c)
 			btn := pressable(accentButton(c, label)).Tooltip(tip)
 			// 自动 Fetch 期间也能点，提交排在它后面
 			if strings.TrimSpace(g.message) == "" {
-				btn.Tooltip("先写提交信息")
+				btn.Tooltip(L(c).GitMessageRequired())
 			}
 			if g.busy != "" && g.busyKind != gitFetch || g.pending(gitCommit) || strings.TrimSpace(g.message) == "" || picked == 0 && !g.amend && whole == "" {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
-				a.commit(v)
+				a.commit(m, v)
 			}
 		})
 	})
@@ -682,13 +708,13 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 	if df.worktree() && split {
 		df.state.RenderHunkMark = func(c *ui.Context, btn ui.Element, act *editor.DiffHunkActions) {
 			t := c.Theme()
-			btn.Width(24).Radius(rSmall).AlignItems(ui.Center).Justify(ui.Center).Label("回滚这处改动").Tooltip("回滚这处改动")
+			btn.Width(24).Radius(rSmall).AlignItems(ui.Center).Justify(ui.Center).Label(L(c).GitRollbackChange()).Tooltip(L(c).GitRollbackChange())
 			if btn.Hovered() {
 				btn.Background(colors(t).wash)
 			}
 			btn.Children(func() { ui.Icon(c, iconRevertHunk).FontSize(iconSize).TextColor(t.TextMuted) })
 			if btn.Clicked() {
-				a.revertHunk(v, d, act.Index)
+				a.revertHunk(L(c), v, d, act.Index)
 			}
 		}
 	}
@@ -697,10 +723,10 @@ func (a *app) diffView(c *ui.Context, v *filesView, d *fileDoc) {
 			t := c.Theme()
 			bar.Row().Gap(4)
 			bar.Children(func() {
-				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Label("回滚这处改动")
-				btn.Children(func() { ui.Text(c, "回滚").FontSize(fsSmall) })
+				btn := ui.ButtonBase(c).Key("revert").Padding(0, 8).Height(sz(20)).Radius(rSmall).Background(t.Surface).Label(L(c).GitRollbackChange())
+				btn.Children(func() { ui.Text(c, L(c).GitRollback()).FontSize(fsSmall) })
 				if btn.Clicked() {
-					a.revertHunk(v, d, act.Index)
+					a.revertHunk(L(c), v, d, act.Index)
 				}
 			})
 		}
@@ -745,14 +771,14 @@ func diffSeparator(c *ui.Context, sep ui.Element, s *editor.DiffSeparator) {
 				ui.Text(c, s.Header).Font(monoFont).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 				return
 			}
-			if !s.First && pressable(iconButtonSized(c.Key("down"), iconDown, "向下展开", miniBox(), fsSmall)).Clicked() {
+			if !s.First && pressable(iconButtonSized(c.Key("down"), iconDown, L(c).GitExpandDown(), miniBox(), fsSmall)).Clicked() {
 				s.ExpandDown()
 			}
-			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, "向上展开", miniBox(), fsSmall)).Clicked() {
+			if !s.Last && pressable(iconButtonSized(c.Key("up"), iconUp, L(c).GitExpandUp(), miniBox(), fsSmall)).Clicked() {
 				s.ExpandUp()
 			}
-			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(rSmall).Role(ui.RoleButton).Label("全部展开")
-			b.Children(func() { ui.Text(c, fmt.Sprintf("%d 行未改动", s.Lines)).FontSize(fsSmall).TextColor(t.TextMuted) })
+			b := ui.Box(c.Key("all")).Padding(2, 6).Radius(rSmall).Role(ui.RoleButton).Label(L(c).GitExpandAll())
+			b.Children(func() { ui.Text(c, L(c).GitUnchangedLines(s.Lines)).FontSize(fsSmall).TextColor(t.TextMuted) })
 			if b.Clicked() {
 				s.ExpandAll()
 			}
@@ -766,16 +792,16 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
 	ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 8, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 		// 上一处、下一处放在最左边（照 WebStorm 的 diff 工具栏），到头了换到同一组的上一个、下一个文件
-		if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
-			a.stepDiff(w, v, d, -1)
+		if pressable(iconButtonSized(c, iconArrowUp, a.withKey(L(c).GitPreviousChange(), "prevChange"), buttonBox(), iconSize)).Clicked() {
+			a.stepDiff(L(c), w, v, d, -1)
 		}
-		if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
-			a.stepDiff(w, v, d, 1)
+		if pressable(iconButtonSized(c, iconArrowDown, a.withKey(L(c).GitNextChange(), "nextChange"), buttonBox(), iconSize)).Clicked() {
+			a.stepDiff(L(c), w, v, d, 1)
 		}
 		// 点路径弹出同一组的文件，在这个标签里换着看
 		group := diffGroup(v, df)
 		path := ui.Row(c.Key("diff-file")).Gap(4).Padding(2, 6).Radius(rSmall).AlignItems(ui.Center).Shrink(1).
-			Role(ui.RoleButton).Label("切换文件").Tooltip("切换文件 " + a.keyText("nextChange") + " / " + a.keyText("prevChange"))
+			Role(ui.RoleButton).Label(L(c).GitSwitchFile()).Tooltip(L(c).GitSwitchFileTip(a.keyText("nextChange"), a.keyText("prevChange")))
 		if path.Hovered() && len(group) > 1 {
 			path.Background(t.SurfaceHover)
 		}
@@ -799,39 +825,39 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			})
 		}
 		if !df.plainChanges() {
-			ui.Text(c, df.tabLabel()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
+			ui.Text(c, df.tabLabel(L(c))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())
 			added, deleted := df.state.Stats()
-			msg := "没有差异"
+			msg := L(c).GitNoDifferences()
 			if n == 0 && df.state.IgnoreWhitespace && df.state.Old.String() != df.state.New.String() {
-				msg = "只有空白不同，关掉“忽略空白”能看到"
+				msg = L(c).GitWhitespaceOnly()
 			}
 			if n > 0 {
-				msg = fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)
+				msg = L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)
 			}
-			ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).Padding(0, 0, 0, 8)
+			ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 0, 0, 8)
 		}
 		ui.Spacer(c)
 		// 排版和忽略空白只对文字的 diff 有用
 		if d.kind != docImageDiff {
 			split := df.state.Layout == editor.DiffSplit
-			if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+			if toggleChip(c, L(c).GitSideBySide(), L(c).GitSideBySideTip(), split) {
 				if split {
 					df.state.Layout = editor.DiffUnified
 				} else {
 					df.state.Layout = editor.DiffSplit
 				}
 			}
-			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+			if toggleChip(c, L(c).GitIgnoreWhitespace(), L(c).GitIgnoreWhitespaceTip(), df.state.IgnoreWhitespace) {
 				a.toggleIgnoreSpace(d)
 			}
 		}
-		if df.worktree() && pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
+		if df.worktree() && pressable(iconButtonSized(c, iconRollback, L(c).GitRollbackFile(), compactBox(), smallIcon())).Clicked() {
 			a.rollbackDiffFile(w, v, d)
 		}
-		if pressable(iconButtonSized(c, iconOpen, a.withKey("在编辑器中打开", "diffOpenFile"), compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconOpen, a.withKey(L(c).GitOpenInEditor(), "diffOpenFile"), compactBox(), smallIcon())).Clicked() {
 			a.diffToEditor(w, v, d)
 		}
 	})
@@ -853,14 +879,14 @@ func (a *app) gitShortcuts(c *ui.Context, w *workspace, v *filesView) {
 	if d != nil && d.diff != nil {
 		switch {
 		case a.pressed(c, "nextChange"):
-			a.stepDiff(w, v, d, 1)
+			a.stepDiff(L(c), w, v, d, 1)
 		case a.pressed(c, "prevChange"):
-			a.stepDiff(w, v, d, -1)
+			a.stepDiff(L(c), w, v, d, -1)
 		case a.pressed(c, "diffOpenFile"):
 			a.diffToEditor(w, v, d)
 		case a.pressed(c, "rollback") && d.diff.worktree() && d.kind == docDiff:
 			if hunks := d.diff.state.Hunks(); d.diff.hunk < len(hunks) {
-				a.revertHunk(v, d, d.diff.hunk)
+				a.revertHunk(L(c), v, d, d.diff.hunk)
 			}
 		}
 	}
@@ -898,7 +924,7 @@ func treeDirLabel(c *ui.Context, name string, n int, tip string) {
 func pickBox(c *ui.Context, key, name string, state int) bool {
 	t := c.Theme()
 	on := state == pickAll
-	box := ui.CheckboxBase(c.Key("pick:"+key), &on).Size(14, 14).Radius(rSmall).Label("勾选 " + name)
+	box := ui.CheckboxBase(c.Key("pick:"+key), &on).Size(14, 14).Radius(rSmall).Label(L(c).GitPickLabel(name))
 	if state == pickSome {
 		box.Mixed()
 	}
@@ -925,14 +951,14 @@ func pickBox(c *ui.Context, key, name string, state int) bool {
 func imageDiffView(c *ui.Context, d *fileDoc) {
 	t := c.Theme()
 	df := d.diff
-	newLabel := "现在（工作区）"
-	switch {
-	case !df.worktree():
-		newLabel = "现在（" + shortRev(df.newRev) + "）"
+	m := L(c)
+	newLabel := m.GitImageCurrent()
+	if !df.worktree() {
+		newLabel = m.GitImageNow(shortRev(m, df.newRev))
 	}
-	oldLabel := "原来"
+	oldLabel := m.GitImageBefore()
 	if df.oldRev != "" {
-		oldLabel += "（" + shortRev(df.oldRev) + "）"
+		oldLabel = m.GitImageBeforeRev(shortRev(m, df.oldRev))
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 		for i, side := range df.images {
@@ -948,21 +974,21 @@ func imageDiffView(c *ui.Context, d *fileDoc) {
 					ui.Text(c, label).FontSize(fsBody).FontWeight(fwMedium)
 					switch {
 					case side.size < 0 && i == 0:
-						ui.Text(c, "新文件").FontSize(fsSmall).TextColor(colors(t).sage)
+						ui.Text(c, L(c).GitNewFile()).FontSize(fsSmall).TextColor(colors(t).sage)
 					case side.size < 0:
-						ui.Text(c, "已删除").FontSize(fsSmall).TextColor(t.Danger)
+						ui.Text(c, L(c).GitDeleted()).FontSize(fsSmall).TextColor(t.Danger)
 					case side.img != nil:
 						ui.Text(c, fmt.Sprintf("%d×%d", side.w, side.h)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted)
 						ui.Text(c, byteSize(side.size)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						if side.anim != nil {
-							ui.Text(c, fmt.Sprintf("%d 帧", len(side.anim.delays))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+							ui.Text(c, m.GitFrameCount(len(side.anim.delays))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						}
 					}
 				})
 				ui.Box(c).Grow(1).Center().Children(func() {
 					switch {
 					case side.err != "":
-						ui.Text(c, side.err).FontSize(fsSmall).TextColor(t.TextMuted)
+						ui.Text(c, m.GitImageUnreadable(side.err)).FontSize(fsSmall).TextColor(t.TextMuted)
 					case side.img != nil:
 						// 位图按 2 倍屏解码，按一半的尺寸显示才是原大
 						w, h := side.img.Size()

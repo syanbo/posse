@@ -60,6 +60,666 @@
   "@awakeUnavailable": {
     "description": "Prevent Sleep settings or status button: label for Unavailable."
   },
+  "branchAgentWorkingBody": "{operation} changes files in the working directory and may overwrite or disrupt what the agent is editing. {operation} anyway?",
+  "@branchAgentWorkingBody": {
+    "description": "Body of the confirmation shown before a Git operation while an agent is working in the workspace. operation is the name of the Git operation, such as Checkout or Pop Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "branchAgentWorkingTitle": "{agent} Is Working in This Workspace",
+  "@branchAgentWorkingTitle": {
+    "description": "Title of the confirmation shown before a Git operation that changes the working directory while an agent is working there. agent is the agent name, such as Claude.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "branchAutoFetch": "Automatic Fetch",
+  "@branchAutoFetch": {
+    "description": "Operation name of the automatic background fetch (every 5 minutes), shown in the Console log."
+  },
+  "branchBaseAhead": "{count, plural, one {# commit} other {# commits}} to merge back into {base}",
+  "@branchBaseAhead": {
+    "description": "Worktree workspace status (tooltip line and badge tooltip): commits on this branch not yet merged into its base branch. base is the base branch name.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchBaseConflicts": "Merging now would cause conflicts in {count, plural, one {# file} other {# files}}",
+  "@branchBaseConflicts": {
+    "description": "Line in the branch button tooltip of a worktree workspace: how many files would conflict if merged into the base branch now.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchBaseNew": "{count, plural, one {# new commit} other {# new commits}} on {base}",
+  "@branchBaseNew": {
+    "description": "Line in the branch button tooltip of a worktree workspace: new commits on the base branch. base is the base branch name.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchBaseNewTip": "{count, plural, one {# new commit} other {# new commits}} on {base} not yet in this branch",
+  "@branchBaseNewTip": {
+    "description": "Tooltip of the incoming badge in the base row of the Changes view of a worktree workspace. base is the base branch name.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchButtonLabel": "Branch {branch}",
+  "@branchButtonLabel": {
+    "description": "Accessibility label of the branch button in the tab bar that opens the branches popup.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchCancelFetch": "Cancel Fetch",
+  "@branchCancelFetch": {
+    "description": "Accessibility label of the spinner button in the branches popup that cancels a running fetch."
+  },
+  "branchCheckout": "Checkout",
+  "@branchCheckout": {
+    "description": "Branch menu item and prompt button in the branches popup and Git Log: check out the branch, tag or commit. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "branchCheckoutNew": "Checkout New Branch",
+  "@branchCheckoutNew": {
+    "description": "Checkbox in the New Branch dialog: switch to the new branch after creating it."
+  },
+  "branchCheckoutRebase": "Checkout and Rebase",
+  "@branchCheckoutRebase": {
+    "description": "Operation name of Checkout and Rebase onto the current branch in the branches popup, shown in busy text, error messages and the Console."
+  },
+  "branchCheckoutRebaseOnto": "Checkout and Rebase onto ‘{branch}’",
+  "@branchCheckoutRebaseOnto": {
+    "description": "Branch menu item in the branches popup (WebStorm: Checkout and Rebase onto Current). branch is the current branch name.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchCheckoutRevision": "Checkout Tag or Revision",
+  "@branchCheckoutRevision": {
+    "description": "Title of the dialog in the branches popup that checks out a tag or commit by name."
+  },
+  "branchCheckoutRevisionEllipsis": "Checkout Tag or Revision…",
+  "@branchCheckoutRevisionEllipsis": {
+    "description": "Item in the branches popup that opens the dialog to check out a tag or commit."
+  },
+  "branchCommit": "Commit…",
+  "@branchCommit": {
+    "description": "Item in the branches popup that focuses the commit message box in the Changes view."
+  },
+  "branchCompareWith": "Compare with ‘{branch}’",
+  "@branchCompareWith": {
+    "description": "Branch menu item in the branches popup: compare the branch with the current branch. branch is the current branch name.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchCompareWorkspace": "Compare with Workspace",
+  "@branchCompareWorkspace": {
+    "description": "Branch menu item in the branches popup: compare the branch with the files in the workspace."
+  },
+  "branchConflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
+  "@branchConflictCount": {
+    "description": "Short red label in the base row of a worktree workspace: files that would conflict if merged now.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchConflictFilesTip": "Files that would conflict if merged now:\n{files}",
+  "@branchConflictFilesTip": {
+    "description": "Tooltip of the conflict count in the base row of a worktree workspace. files is one path per line.",
+    "placeholders": {
+      "files": {
+        "type": "String"
+      }
+    }
+  },
+  "branchCopyWorktreePath": "Copy Worktree Path",
+  "@branchCopyWorktreePath": {
+    "description": "Branch menu item in the branches popup for a branch checked out in another worktree: copy that worktree's path."
+  },
+  "branchDelete": "Delete Branch",
+  "@branchDelete": {
+    "description": "Operation name of deleting a local branch, shown in busy text, error messages and the Console."
+  },
+  "branchDeleteRemote": "Delete Remote Branch",
+  "@branchDeleteRemote": {
+    "description": "Operation name of deleting a remote branch, shown in busy text, error messages and the Console."
+  },
+  "branchDeleteRemoteBody": "This will push the deletion to the remote. Other users will no longer be able to fetch this branch.",
+  "@branchDeleteRemoteBody": {
+    "description": "Body of the confirmation before deleting a remote branch."
+  },
+  "branchDeleteRemoteConfirm": "Delete Remote Branch {branch}?",
+  "@branchDeleteRemoteConfirm": {
+    "description": "Title of the confirmation before deleting a remote branch. branch is like origin/feature.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchDeleteWorkspace": "Delete Workspace",
+  "@branchDeleteWorkspace": {
+    "description": "Button in the dialog shown after a worktree workspace was merged into its base branch: delete the workspace together with its branch."
+  },
+  "branchDeleted": "Deleted branch {branch}",
+  "@branchDeleted": {
+    "description": "Notification after deleting a local branch; it has a Restore button.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchFetchTip": "Fetch from all remotes (automatically every 5 minutes)",
+  "@branchFetchTip": {
+    "description": "Tooltip of the Fetch button at the top of the branches popup."
+  },
+  "branchFetched": "Fetch completed",
+  "@branchFetched": {
+    "description": "Notification after a manual fetch from the branches popup finished."
+  },
+  "branchFetching": "Fetching",
+  "@branchFetching": {
+    "description": "Accessibility label of the spinner shown in the branches popup while fetching."
+  },
+  "branchFetchingTip": "Fetching; click to cancel",
+  "@branchFetchingTip": {
+    "description": "Tooltip of the spinner button shown in place of the Fetch button while fetching; clicking cancels."
+  },
+  "branchFileListMore": "{files}, and others ({count, plural, one {# file} other {# files}} in total)",
+  "@branchFileListMore": {
+    "description": "A shortened file list in merge dialogs: the first few files, then the total count. files is the first few names joined with branchFileListSeparator.",
+    "placeholders": {
+      "files": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchFileListSeparator": ", ",
+  "@branchFileListSeparator": {
+    "description": "Separator between file names in a short inline list (merge dialogs)."
+  },
+  "branchForceDelete": "Force Delete",
+  "@branchForceDelete": {
+    "description": "Button in the confirmation shown when a local branch to delete has unmerged commits."
+  },
+  "branchForceDeleteOperation": "Force Delete Branch",
+  "@branchForceDeleteOperation": {
+    "description": "Operation name of force-deleting an unmerged local branch, shown in busy text, error messages and the Console."
+  },
+  "branchInWorkspace": "In {workspace}",
+  "@branchInWorkspace": {
+    "description": "Right side of a branch row in the branches popup: the branch is checked out in another workspace.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "branchIncoming": "{count, plural, one {# incoming commit} other {# incoming commits}}",
+  "@branchIncoming": {
+    "description": "Line in the branch button tooltip: commits on the upstream branch not yet pulled.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchIncomingTip": "{count, plural, one {# incoming commit (on the remote, not yet pulled)} other {# incoming commits (on the remote, not yet pulled)}}",
+  "@branchIncomingTip": {
+    "description": "Tooltip of the incoming arrow badge next to a branch.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchLocal": "Local",
+  "@branchLocal": {
+    "description": "Group header for local branches in the branches popup and the branch list of the Git Log panel."
+  },
+  "branchMergeConflicts": "Merge Would Cause Conflicts",
+  "@branchMergeConflicts": {
+    "description": "Title of the confirmation in a worktree workspace when merging the base branch into it would cause conflicts."
+  },
+  "branchMergeFrom": "Merge {base} into This Branch",
+  "@branchMergeFrom": {
+    "description": "Sync menu item, dialog button and operation name in a worktree workspace: merge the base branch into the workspace branch.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergeInto": "Merge ‘{branch}’ into ‘{current}’",
+  "@branchMergeInto": {
+    "description": "Branch menu item in the branches popup. branch is the chosen branch, current the current branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "current": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergeToTip": "Merge into {base}",
+  "@branchMergeToTip": {
+    "description": "Tooltip of the Merge button in the base row of a worktree workspace.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergeWorkspaceBody": "Merges into the project directory with a merge commit. The project directory must be on the {base} branch, and neither side can have uncommitted changes (new unversioned files are fine). Conflicts are rolled back automatically.",
+  "@branchMergeWorkspaceBody": {
+    "description": "Body of the confirmation before merging a worktree workspace into the project directory.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergeWorkspaceConfirm": "Merge {branch} into {base}?",
+  "@branchMergeWorkspaceConfirm": {
+    "description": "Title of the confirmation before merging a worktree workspace into the project directory.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMerged": "Merged {base} into this branch",
+  "@branchMerged": {
+    "description": "Notification after merging the base branch into a worktree workspace.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergedBody": "The worktree and branch {branch} still exist. Delete them if you no longer need them.",
+  "@branchMergedBody": {
+    "description": "Body of the dialog after a worktree workspace was merged into the project directory; the button deletes the workspace.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergedBodyUntracked": "The worktree and branch {branch} still exist. Delete them if you no longer need them. Deleting also removes these uncommitted files: {files}.",
+  "@branchMergedBodyUntracked": {
+    "description": "Same as branchMergedBody, when the worktree still has uncommitted files. files is a short file list.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "files": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergedTo": "Merged into {base}",
+  "@branchMergedTo": {
+    "description": "Title of the dialog after a worktree workspace was merged into its base branch.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchName": "Branch name",
+  "@branchName": {
+    "description": "Placeholder of the name field in the New Branch dialog."
+  },
+  "branchNew": "New Branch",
+  "@branchNew": {
+    "description": "Title of the New Branch dialog, also the operation name shown in busy text, error messages and the Console."
+  },
+  "branchNewEllipsis": "New Branch…",
+  "@branchNewEllipsis": {
+    "description": "Item in the branches popup that opens the New Branch dialog."
+  },
+  "branchNewFrom": "New Branch from ‘{branch}’…",
+  "@branchNewFrom": {
+    "description": "Branch menu item in the branches popup.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNewFromTitle": "New Branch from {revision}",
+  "@branchNewFromTitle": {
+    "description": "Title of the new branch dialog when starting from a branch or commit. revision is a branch name or commit hash.",
+    "placeholders": {
+      "revision": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNewWorkspaceFrom": "New Workspace from ‘{branch}’…",
+  "@branchNewWorkspaceFrom": {
+    "description": "Branch menu item in the branches popup: create a worktree workspace from this branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNewWorkspaceTitle": "New Workspace from {branch}",
+  "@branchNewWorkspaceTitle": {
+    "description": "Title of the new worktree workspace dialog.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNoMatch": "No branches matching “{query}”",
+  "@branchNoMatch": {
+    "description": "Empty state of the branch search in the branches popup.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "branchNoUpstream": "The current branch has no upstream branch and cannot be updated",
+  "@branchNoUpstream": {
+    "description": "Error bar text when choosing Update Project in the branches popup while the current branch has no upstream branch."
+  },
+  "branchOpenPosse": "Open in Posse",
+  "@branchOpenPosse": {
+    "description": "Branch menu item in the branches popup for a branch checked out in another worktree: open that worktree as a workspace in Posse."
+  },
+  "branchOutgoing": "{count, plural, one {# outgoing commit} other {# outgoing commits}}",
+  "@branchOutgoing": {
+    "description": "Line in the branch button tooltip: local commits not yet pushed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchOutgoingTip": "{count, plural, one {# outgoing commit (local, not yet pushed)} other {# outgoing commits (local, not yet pushed)}}",
+  "@branchOutgoingTip": {
+    "description": "Tooltip of the outgoing arrow badge next to a branch.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchPulled": "{branch}: pulled {count, plural, one {# commit} other {# commits}}",
+  "@branchPulled": {
+    "description": "Notification after updating a branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "branchReading": "Reading branches…",
+  "@branchReading": {
+    "description": "Placeholder in the branches popup while the branch list is being read."
+  },
+  "branchRebaseOnto": "Rebase ‘{current}’ onto ‘{branch}’",
+  "@branchRebaseOnto": {
+    "description": "Branch menu item in the branches popup. current is the current branch, branch the chosen one.",
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRebaseOntoBase": "Rebase onto {base}",
+  "@branchRebaseOntoBase": {
+    "description": "Sync menu item in the base row of a worktree workspace.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRebaseToOp": "Rebase onto {base}",
+  "@branchRebaseToOp": {
+    "description": "Operation name (busy text, Console) of rebasing a worktree workspace onto its base branch.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRebased": "Rebased onto {base}",
+  "@branchRebased": {
+    "description": "Notification after rebasing a worktree workspace onto its base branch.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRecent": "Recent",
+  "@branchRecent": {
+    "description": "Group header for recently checked-out branches in the branches popup."
+  },
+  "branchRelativeTo": "vs. {base}",
+  "@branchRelativeTo": {
+    "description": "Start of the base row in the Changes view of a worktree workspace, before the incoming and outgoing counts.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRemote": "Remote",
+  "@branchRemote": {
+    "description": "Group header for remote branches in the branch list of the Git Log panel."
+  },
+  "branchRemoteDeleted": "Deleted on remote",
+  "@branchRemoteDeleted": {
+    "description": "Small gray label on a branch row in the branches popup: the branch's upstream branch has been deleted on the remote."
+  },
+  "branchRemoteGroup": "Remote: {remote}",
+  "@branchRemoteGroup": {
+    "description": "Group header in the branches popup for the branches of one remote, such as origin.",
+    "placeholders": {
+      "remote": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRename": "Rename",
+  "@branchRename": {
+    "description": "Button in the rename dialog for a local branch in the branches popup. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "branchRenameEllipsis": "Rename…",
+  "@branchRenameEllipsis": {
+    "description": "Branch menu item in the branches popup that opens the rename dialog for a local branch."
+  },
+  "branchRenameTitle": "Rename Branch {branch}",
+  "@branchRenameTitle": {
+    "description": "Title of the rename branch dialog.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRestore": "Restore Branch",
+  "@branchRestore": {
+    "description": "Operation name of restoring a just-deleted branch from the notification's Restore button, shown in busy text, error messages and the Console."
+  },
+  "branchRevealWorktree": "Show Worktree in Finder",
+  "@branchRevealWorktree": {
+    "description": "Branch menu item in the branches popup for a branch checked out in another worktree: show that worktree folder in Finder."
+  },
+  "branchRevisionPlaceholder": "Tag name or commit hash",
+  "@branchRevisionPlaceholder": {
+    "description": "Placeholder of the input in the Checkout Tag or Revision dialog."
+  },
+  "branchSearch": "Search branches",
+  "@branchSearch": {
+    "description": "Placeholder of the search field at the top of the branches popup."
+  },
+  "branchShowInLog": "Show in Log",
+  "@branchShowInLog": {
+    "description": "Branch menu item in the branches popup: open the Git Log filtered to this branch."
+  },
+  "branchSwitch": "Switch Branch",
+  "@branchSwitch": {
+    "description": "Operation name of creating a new branch and switching to it, shown in busy text, error messages, the Console and the agent-is-working warning."
+  },
+  "branchSwitchToWorkspace": "Switch to Workspace {workspace}",
+  "@branchSwitchToWorkspace": {
+    "description": "Branch menu item when the branch is checked out in another workspace.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "branchSync": "Sync",
+  "@branchSync": {
+    "description": "Small button in the base row of a worktree workspace's Changes view; opens a menu to merge or rebase onto the base branch."
+  },
+  "branchSyncFirstBody": "New commits on {base} and {branch} change the same places ({files}). Merge {base} into this workspace first and resolve the conflicts, then merge back.",
+  "@branchSyncFirstBody": {
+    "description": "Body of the dialog when merging a worktree workspace back would conflict. files is a short file list.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      },
+      "files": {
+        "type": "String"
+      }
+    }
+  },
+  "branchSyncFirstBodyRestored": "The project directory has been restored. New commits on {base} and {branch} change the same places ({files}). Merge {base} into this workspace first and resolve the conflicts, then merge back.",
+  "@branchSyncFirstBodyRestored": {
+    "description": "Same as branchSyncFirstBody, after the merge was tried, conflicted and was rolled back.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      },
+      "files": {
+        "type": "String"
+      }
+    }
+  },
+  "branchSyncTip": "Bring in new commits from {base}",
+  "@branchSyncTip": {
+    "description": "Tooltip of the Sync button in the base row of a worktree workspace.",
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "branchTrackTip": "Git Branch: {branch}",
+  "@branchTrackTip": {
+    "description": "First line of the branch button tooltip in the tab bar.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchUnmergedBody": "This branch has commits not found on other branches. After forcing deletion, you can restore it immediately from the notification; later you will need its commit hash.",
+  "@branchUnmergedBody": {
+    "description": "Body of the confirmation shown when a local branch to delete has commits not found on other branches."
+  },
+  "branchUnmergedTitle": "Branch {branch} Is Not Fully Merged",
+  "@branchUnmergedTitle": {
+    "description": "Title of the confirmation to force-delete an unmerged branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchUpToDate": "{branch} is up to date",
+  "@branchUpToDate": {
+    "description": "Notification after updating a branch that had nothing to pull.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchUpdate": "Update",
+  "@branchUpdate": {
+    "description": "Branch menu item in the branches popup: pull the branch from its upstream. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "branchUpdateNamed": "Update {branch}",
+  "@branchUpdateNamed": {
+    "description": "Operation name (busy text, Console) of updating a branch that is not checked out.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchUpdateProject": "Update Project",
+  "@branchUpdateProject": {
+    "description": "Item in the branches popup (WebStorm: Update Project): pull the current branch from its upstream. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "branchWorkspaceName": "Workspace name (also the new branch name)",
+  "@branchWorkspaceName": {
+    "description": "Placeholder of the name field in the New Workspace dialog opened from a branch."
+  },
   "chatAddProjectError": "Could not add the chat folder as a project: {error}",
   "@chatAddProjectError": {
     "description": "Chat sidebar tile, settings card, or folder action: error message for AddProjectError. Values: error.",
@@ -211,6 +871,10 @@
   "@commonPreview": {
     "description": "Common button or tab."
   },
+  "commonRefresh": "Refresh",
+  "@commonRefresh": {
+    "description": "Tooltip of the refresh icon button in the Changes view, branch comparison and file history."
+  },
   "commonRemove": "Remove",
   "@commonRemove": {
     "description": "Common button: takes something out of a list without deleting it."
@@ -218,6 +882,10 @@
   "commonResetToDefault": "Reset to Default",
   "@commonResetToDefault": {
     "description": "Common button."
+  },
+  "commonRestore": "Restore",
+  "@commonRestore": {
+    "description": "Button on the notification after deleting a local branch: recreate the branch."
   },
   "commonRetry": "Retry",
   "@commonRetry": {
@@ -242,6 +910,1203 @@
   "commonSelectAll": "Select All",
   "@commonSelectAll": {
     "description": "Common menu item."
+  },
+  "compareBinary": "Binary file; content is not displayed",
+  "@compareBinary": {
+    "description": "Placeholder in the push dialog's diff when the file is binary."
+  },
+  "compareCherryPickCheckedOut": "Can only cherry-pick onto the checked-out branch. Currently checked out: {branch}",
+  "@compareCherryPickCheckedOut": {
+    "description": "Tooltip of the disabled Cherry-pick button in the branch comparison.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareCherryPickMany": "Apply {count, plural, one {# commit} other {# commits}} to {branch} in order",
+  "@compareCherryPickMany": {
+    "description": "Detail of the Cherry-pick button tooltip in the branch comparison, several commits selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareCherryPickOne": "Apply {commit} to {branch}",
+  "@compareCherryPickOne": {
+    "description": "Detail of the Cherry-pick button tooltip in the branch comparison. commit is a short hash.",
+    "placeholders": {
+      "commit": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareCherryPickTip": "Cherry-pick: {detail}",
+  "@compareCherryPickTip": {
+    "description": "Tooltip of the Cherry-pick button in the branch comparison. detail is what it will do or why it is disabled.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "compareCount": "{count, plural, one {# commit} other {# commits}}",
+  "@compareCount": {
+    "description": "Commit count at the right of a pane header in the branch comparison.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "compareDetachedPush": "Cannot push from a detached HEAD",
+  "@compareDetachedPush": {
+    "description": "Error bar text when trying to push while HEAD is detached."
+  },
+  "compareFilteredCount": "{shown} of {count, plural, one {# commit} other {# commits}}",
+  "@compareFilteredCount": {
+    "description": "Commit count in a pane header of the branch comparison while filtering.",
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "compareForcePush": "Force Push",
+  "@compareForcePush": {
+    "description": "Confirm button of the force push confirmation in the Push dialog."
+  },
+  "compareForcePushBody": "Replaces {remote} with your local history. The push is rejected if the remote has commits you have not integrated, so nobody else’s commits are overwritten.",
+  "@compareForcePushBody": {
+    "description": "Body of the force push confirmation. remote is like origin/main.",
+    "placeholders": {
+      "remote": {
+        "type": "String"
+      }
+    }
+  },
+  "compareForcePushConfirm": "Force Push {branch}?",
+  "@compareForcePushConfirm": {
+    "description": "Title of the force push confirmation.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareForcePushEllipsis": "Force Push…",
+  "@compareForcePushEllipsis": {
+    "description": "Button in the Push dialog that asks for confirmation and then force pushes."
+  },
+  "compareForcePushTip": "--force-with-lease --force-if-includes: rejected if the remote has commits you have not integrated, so others’ commits are not overwritten",
+  "@compareForcePushTip": {
+    "description": "Tooltip of the Force Push button in the Push dialog explaining the git flags used."
+  },
+  "compareForceRejected": "Force push was rejected because the remote has commits you have not integrated. Update the branch first to see who pushed them.",
+  "@compareForceRejected": {
+    "description": "Error when a force push is rejected because the remote has commits not yet integrated locally."
+  },
+  "compareHideDiff": "Hide Diff",
+  "@compareHideDiff": {
+    "description": "Tooltip of the close button that hides the file diff in the Push dialog."
+  },
+  "compareNewBranch": "New Branch",
+  "@compareNewBranch": {
+    "description": "Green label in the Push dialog: the branch does not exist on the remote yet and will be created."
+  },
+  "compareNoDifference": "No differences",
+  "@compareNoDifference": {
+    "description": "Empty state of the branch comparison, and the base row of a worktree workspace when it is level with its base branch."
+  },
+  "compareNoMatch": "No matching commits",
+  "@compareNoMatch": {
+    "description": "Empty state of a commit list in the branch comparison when the search matches nothing."
+  },
+  "compareNoneOnly": "None. {other} already contains all commits from {branch}.",
+  "@compareNoneOnly": {
+    "description": "Empty state of a pane in the branch comparison.",
+    "placeholders": {
+      "other": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareOnlyIn": "Commits in {branch} but not in {other}",
+  "@compareOnlyIn": {
+    "description": "Header of a pane in the branch comparison (WebStorm: Commits that exist in X but not in Y). The branch names are drawn in a different font.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "other": {
+        "type": "String"
+      }
+    }
+  },
+  "comparePush": "Push",
+  "@comparePush": {
+    "description": "Primary button of the Push dialog."
+  },
+  "comparePushEmpty": "No commits to push",
+  "@comparePushEmpty": {
+    "description": "Empty state of the commit list in the Push dialog."
+  },
+  "comparePushGone": "The upstream branch was deleted. Pushing will create {branch} on {remote} again.",
+  "@comparePushGone": {
+    "description": "Note in the push dialog when the upstream branch is gone.",
+    "placeholders": {
+      "remote": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "comparePushRejected": "The remote has commits you have not fetched. Update the branch before pushing, or confirm a force push.",
+  "@comparePushRejected": {
+    "description": "Error when a push is rejected because the remote has commits not fetched yet."
+  },
+  "comparePushTags": "Push Tags",
+  "@comparePushTags": {
+    "description": "Checkbox in the Push dialog: also push tags."
+  },
+  "comparePushTitle": "Push Commits",
+  "@comparePushTitle": {
+    "description": "Title of the Push dialog."
+  },
+  "comparePushed": "Pushed {count, plural, one {# commit} other {# commits}} to {target}",
+  "@comparePushed": {
+    "description": "Notification after a push. target is like origin/main.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "comparePushedTo": "Pushed to {target}",
+  "@comparePushedTo": {
+    "description": "Notification after pushing a new branch with no commits to list. target is like origin/main.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "compareSearch": "Search commits",
+  "@compareSearch": {
+    "description": "Placeholder of the search field above each commit column in the branch comparison."
+  },
+  "compareSearchLabel": "Filter commits only in {branch} by message, hash, or author",
+  "@compareSearchLabel": {
+    "description": "Accessibility label of the search field of a pane in the branch comparison.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "compareSelectCommit": "Select a commit to see its changed files",
+  "@compareSelectCommit": {
+    "description": "Placeholder in the Push dialog's file list before a commit is selected."
+  },
+  "compareSelectHint": "Select commits first; use ⌘ or ⇧ click to select several",
+  "@compareSelectHint": {
+    "description": "Tooltip of the cherry-pick button in the branch comparison when no commits are selected."
+  },
+  "compareSwap": "Swap Branches",
+  "@compareSwap": {
+    "description": "Tooltip of the icon button in the branch comparison that swaps the two branches."
+  },
+  "compareWorkspaceFiles": "{count, plural, one {# file differs} other {# files differ}} between the workspace and {branch}",
+  "@compareWorkspaceFiles": {
+    "description": "Header of the comparison of the workspace with a branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitAbort": "Abort",
+  "@gitAbort": {
+    "description": "Button in the in-progress operation banner (merge, rebase, cherry-pick, revert) and confirm button of its confirmation. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "gitAbortBody": "Everything returns to how it was before the {operation} started. Resolved conflicts are also lost.",
+  "@gitAbortBody": {
+    "description": "Body of the confirmation to abort a rebase, merge, cherry-pick or revert in progress. operation is gitOpRebase, gitMerge and so on.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitAbortConfirm": "Abort {operation}?",
+  "@gitAbortConfirm": {
+    "description": "Title of the confirmation to abort an operation in progress. operation is gitOpRebase, gitMerge and so on.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitAcceptSide": "Accept {side}",
+  "@gitAcceptSide": {
+    "description": "Context menu item on a conflicted file: take one side entirely. side is gitMergeOurs, gitRebaseTheirs and so on.",
+    "placeholders": {
+      "side": {
+        "type": "String"
+      }
+    }
+  },
+  "gitAdd": "Add to Git",
+  "@gitAdd": {
+    "description": "Context menu item on an unversioned file in the Changes view (git add). Also the operation name shown in busy text, error messages and the Console."
+  },
+  "gitAdded": "Added",
+  "@gitAdded": {
+    "description": "Change status of a file added to Git; also the old-version label in file history when the file did not exist in the parent commit."
+  },
+  "gitAddedLines": "{count, plural, one {# line was} other {# lines were}} added here since the last commit",
+  "@gitAddedLines": {
+    "description": "Text in the editor's gutter change popup when the change only adds lines. count is the number of lines.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitAmend": "Amend Last Commit",
+  "@gitAmend": {
+    "description": "Checkbox under the commit message in the Changes view: amend the last commit."
+  },
+  "gitAutostashConflicts": "Local changes from before the update conflict with the pulled commits ({count, plural, one {# file} other {# files}}). Right-click a conflicted file to accept one side entirely, or open it, edit it, and mark it as resolved. The original changes remain in Stash.",
+  "@gitAutostashConflicts": {
+    "description": "Banner in the Changes view after an update restored local changes with conflicts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitAutostashDeleteBody": "This contains your local changes from before the update. Deleting it cannot be undone.",
+  "@gitAutostashDeleteBody": {
+    "description": "Body of the confirmation before deleting the stash that holds local changes saved before an update."
+  },
+  "gitAutostashResolved": "All conflicts are resolved. Your local changes from before the update remain in Stash; delete them once you have verified the result.",
+  "@gitAutostashResolved": {
+    "description": "Hint in the Changes view after an update whose local changes came back with conflicts, once all conflicts are resolved."
+  },
+  "gitAutostashUnrestored": "Local changes could not be restored after updating because they would overwrite incoming files. They remain in Stash; apply them manually.",
+  "@gitAutostashUnrestored": {
+    "description": "Hint in the Changes view when local changes stashed before an update could not be reapplied afterwards."
+  },
+  "gitBinaryDiff": "Binary file; diff is not available",
+  "@gitBinaryDiff": {
+    "description": "Placeholder in the file history diff when the file is binary."
+  },
+  "gitBusyNext": "{current}…, then {next}",
+  "@gitBusyNext": {
+    "description": "Busy text in the Changes view: the running Git operation and the queued one.",
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "next": {
+        "type": "String"
+      }
+    }
+  },
+  "gitBusyQueue": "{current}…, then {next} ({count} queued)",
+  "@gitBusyQueue": {
+    "description": "Busy text in the Changes view: the running operation, the next queued one and how many are queued.",
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "next": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitCancelOperation": "Cancel {operation}",
+  "@gitCancelOperation": {
+    "description": "Accessibility label of the Cancel link next to the busy text. operation is the name of the Git operation, such as Checkout or Pop Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitChangeCommitted": "Committed this change: {message}",
+  "@gitChangeCommitted": {
+    "description": "Notification after committing a single change from the editor's gutter change popup. message is the commit message.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "gitChangePosition": "Change {index} of {count}",
+  "@gitChangePosition": {
+    "description": "Position counter in the editor's gutter change popup. index is the current change, count the total.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitChangeStats": "Change {index} of {count}  +{added} −{deleted}",
+  "@gitChangeStats": {
+    "description": "Counter in diff toolbars (diff tab, Rollback dialog, Push dialog). index is the current change, count the total, added and deleted the line counts.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      },
+      "added": {
+        "type": "int"
+      },
+      "deleted": {
+        "type": "int"
+      }
+    }
+  },
+  "gitChanges": "Changes",
+  "@gitChanges": {
+    "description": "Group header for changed files in the Changes view, and the diff tab label for workspace changes against HEAD."
+  },
+  "gitCloseEscape": "Close Esc",
+  "@gitCloseEscape": {
+    "description": "Tooltip of the close button of the editor's gutter change popup; Esc is the key that closes it."
+  },
+  "gitCollapseAll": "Collapse All",
+  "@gitCollapseAll": {
+    "description": "Tooltip of the icon button in the Rollback dialog that collapses all folders."
+  },
+  "gitCollapseGroup": "Collapse {group}",
+  "@gitCollapseGroup": {
+    "description": "Accessibility label of the disclosure arrow of a group (Changes, Unversioned Files…) in the Changes view.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCollapsePath": "Collapse {path}",
+  "@gitCollapsePath": {
+    "description": "Accessibility label of the disclosure triangle of a folder row in the Changes view and Rollback dialog. path is the folder path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCommitButton": "Commit",
+  "@gitCommitButton": {
+    "description": "Label of the Commit tab in the Changes view; also the operation name of committing, shown in busy text, error messages and the Console."
+  },
+  "gitCommitChange": "Commit this change",
+  "@gitCommitChange": {
+    "description": "Placeholder of the commit message field in the editor's gutter change popup, which commits only this change."
+  },
+  "gitCommitFiles": "Commit {count, plural, one {# File} other {# Files}}",
+  "@gitCommitFiles": {
+    "description": "Commit button in the Changes view: how many selected files will be committed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitCommitMergeResult": "Commit Merge Result",
+  "@gitCommitMergeResult": {
+    "description": "Commit button in the Changes view while a merge is in progress."
+  },
+  "gitCommitMessage": "Commit Message",
+  "@gitCommitMessage": {
+    "description": "Placeholder of the commit message box in the Changes view."
+  },
+  "gitCommitOperationHint": "A merge or rebase is in progress. Commit from Changes.",
+  "@gitCommitOperationHint": {
+    "description": "Disabled placeholder in the editor's gutter change popup when a merge or rebase is in progress."
+  },
+  "gitCommitPickResult": "Commit Cherry-pick Result",
+  "@gitCommitPickResult": {
+    "description": "Commit button label in the Changes view while a cherry-pick is in progress."
+  },
+  "gitCommitRevertResult": "Commit Revert Result",
+  "@gitCommitRevertResult": {
+    "description": "Commit button in the Changes view while a revert is in progress."
+  },
+  "gitCommitSelectedTip": "Commit selected files, leaving unselected changes in the workspace",
+  "@gitCommitSelectedTip": {
+    "description": "Tooltip of the commit button in the Changes view when committing the checked files."
+  },
+  "gitCommitted": "Committed: {subject}",
+  "@gitCommitted": {
+    "description": "Notification after committing. subject is the first line of the commit message.",
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCompareAnyway": "Compare Anyway",
+  "@gitCompareAnyway": {
+    "description": "Button in a diff tab whose files are too large: show the diff anyway."
+  },
+  "gitComparing": "Comparing…",
+  "@gitComparing": {
+    "description": "Placeholder in a diff tab while the diff is being computed."
+  },
+  "gitConflicts": "Conflicts",
+  "@gitConflicts": {
+    "description": "Group header for conflicted files in the Changes view."
+  },
+  "gitConsoleAgentTerminal": "{agent} Terminal",
+  "@gitConsoleAgentTerminal": {
+    "description": "Operation name in the Console for git commands run by an agent in a Posse terminal. agent is like Claude.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "gitConsoleBackground": "Background",
+  "@gitConsoleBackground": {
+    "description": "Operation name in the Console for git commands not started by a named Posse operation."
+  },
+  "gitConsoleCanceled": "Canceled",
+  "@gitConsoleCanceled": {
+    "description": "Status of a canceled operation in the Console."
+  },
+  "gitConsoleClear": "Clear",
+  "@gitConsoleClear": {
+    "description": "Tooltip of the trash icon button in the Console that clears this project's entries."
+  },
+  "gitConsoleCopyCommand": "Copy Command",
+  "@gitConsoleCopyCommand": {
+    "description": "Context menu item on a command in the Console: copy the git command line."
+  },
+  "gitConsoleCopyOutput": "Copy Output",
+  "@gitConsoleCopyOutput": {
+    "description": "Context menu item on a command in the Console: copy its output."
+  },
+  "gitConsoleDuration": "Total {duration}",
+  "@gitConsoleDuration": {
+    "description": "Tooltip of the start time of an operation in the Console. duration is the total time taken, such as 1.2s.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "gitConsoleEmpty": "No Git operations yet",
+  "@gitConsoleEmpty": {
+    "description": "Empty state of the Console."
+  },
+  "gitConsoleFailedCommands": "There are failed git commands",
+  "@gitConsoleFailedCommands": {
+    "description": "Tooltip and accessibility label of the red dot on the Console tab when some git commands failed."
+  },
+  "gitConsoleInfo": "Git operations performed by Posse and their git commands, plus git commands that change repositories in Posse terminals. Consecutive identical operations with no output are grouped together.",
+  "@gitConsoleInfo": {
+    "description": "Tooltip of the info icon at the top of the Console explaining what it lists."
+  },
+  "gitConsoleRepeat": "{count, plural, one {# time} other {# times}} between {start} and {end}",
+  "@gitConsoleRepeat": {
+    "description": "Tooltip of the ×N badge on a grouped operation in the Console. start and end are times like 14:03:22.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitConsoleRunning": "In progress…",
+  "@gitConsoleRunning": {
+    "description": "Status of a running operation in the Console."
+  },
+  "gitConsoleSuccess": "Succeeded",
+  "@gitConsoleSuccess": {
+    "description": "Status of a successful operation in the Console."
+  },
+  "gitConsoleTerminal": "Terminal",
+  "@gitConsoleTerminal": {
+    "description": "Operation name in the Console for git commands typed in a Posse terminal."
+  },
+  "gitConsoleTitle": "Console",
+  "@gitConsoleTitle": {
+    "description": "Tab label of the Console (the log of Git operations) next to the Git Log tabs."
+  },
+  "gitConsoleWorkspaces": "All workspaces in {project}",
+  "@gitConsoleWorkspaces": {
+    "description": "Header line of the Console: entries cover every workspace of the project. project is the project name.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "gitContinueOperation": "Continue {operation}",
+  "@gitContinueOperation": {
+    "description": "Operation name (busy text, Console) of continuing a rebase, merge and so on. operation is gitOpRebase, gitMerge and so on.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitCopyBefore": "Copy Previous Content",
+  "@gitCopyBefore": {
+    "description": "Tooltip of the icon button in the editor's gutter change popup that copies the content before the change."
+  },
+  "gitDeleted": "Deleted",
+  "@gitDeleted": {
+    "description": "Label on the new side of an image diff when the file was deleted."
+  },
+  "gitDetachedHead": "Detached HEAD",
+  "@gitDetachedHead": {
+    "description": "Shown in place of the branch name at the top of the Changes view when HEAD is detached."
+  },
+  "gitDifferenceCount": "{count, plural, one {# difference} other {# differences}}",
+  "@gitDifferenceCount": {
+    "description": "Counter in the file history diff toolbar: how many differences between the two versions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitDismissHint": "Dismiss",
+  "@gitDismissHint": {
+    "description": "Tooltip of the close button on the hint about local changes left in Stash after an update."
+  },
+  "gitExpandAll": "Expand All",
+  "@gitExpandAll": {
+    "description": "Tooltip of the icon button in the Rollback dialog that expands all folders; also the accessibility label of a folded run of unchanged lines in a diff, which expands it."
+  },
+  "gitExpandDown": "Expand Down",
+  "@gitExpandDown": {
+    "description": "Tooltip of the small arrow button on a folded run of unchanged lines in a diff: reveal more lines below."
+  },
+  "gitExpandGroup": "Expand {group}",
+  "@gitExpandGroup": {
+    "description": "Accessibility label of the disclosure arrow of a group (Changes, Unversioned Files…) in the Changes view.",
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "gitExpandPath": "Expand {path}",
+  "@gitExpandPath": {
+    "description": "Accessibility label of the disclosure triangle of a folder row in the Changes view and Rollback dialog. path is the folder path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "gitExpandUp": "Expand Up",
+  "@gitExpandUp": {
+    "description": "Tooltip of the small arrow button on a folded run of unchanged lines in a diff: reveal more lines above."
+  },
+  "gitFileAbsent": "This file does not exist in the last commit",
+  "@gitFileAbsent": {
+    "description": "Disabled placeholder in the editor's gutter change popup when the file is not in the last commit."
+  },
+  "gitFileChanged": "The file changed and has been reloaded. Review the change before rolling it back.",
+  "@gitFileChanged": {
+    "description": "Error bar text when rolling back from a diff whose file was changed on disk in the meantime; the diff is reloaded."
+  },
+  "gitFirstChange": "Already at the first change",
+  "@gitFirstChange": {
+    "description": "Short message when stepping to the previous change in a diff that is already at the first one."
+  },
+  "gitFirstDifference": "Already at the first difference",
+  "@gitFirstDifference": {
+    "description": "Short message when stepping to the previous difference in the file history diff that is already at the first one."
+  },
+  "gitFrameCount": "{count, plural, one {# frame} other {# frames}}",
+  "@gitFrameCount": {
+    "description": "Frame count of an animated image in an image diff.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitGroupByDirectory": "Group by Directory",
+  "@gitGroupByDirectory": {
+    "description": "Tooltip of the toggle button in the Changes view that groups files by folder."
+  },
+  "gitHasConflicts": "Has Conflicts",
+  "@gitHasConflicts": {
+    "description": "Change status of a conflicted file."
+  },
+  "gitIgnoreWhitespace": "Ignore Whitespace",
+  "@gitIgnoreWhitespace": {
+    "description": "Toggle chip in diff toolbars (diff tab, Rollback, Push, file history)."
+  },
+  "gitIgnoreWhitespaceTip": "Ignore lines that differ only in whitespace",
+  "@gitIgnoreWhitespaceTip": {
+    "description": "Tooltip of the Ignore Whitespace toggle in diff toolbars."
+  },
+  "gitImageBefore": "Before",
+  "@gitImageBefore": {
+    "description": "Label above the old image in an image diff against the workspace."
+  },
+  "gitImageBeforeRev": "Before ({revision})",
+  "@gitImageBeforeRev": {
+    "description": "Label of the old side of an image diff. revision is a short hash or branch.",
+    "placeholders": {
+      "revision": {
+        "type": "String"
+      }
+    }
+  },
+  "gitImageCurrent": "Now (Workspace)",
+  "@gitImageCurrent": {
+    "description": "Label above the current image in an image diff when the new side is the file in the workspace."
+  },
+  "gitImageNow": "Now ({revision})",
+  "@gitImageNow": {
+    "description": "Label of the new side of an image diff between two revisions.",
+    "placeholders": {
+      "revision": {
+        "type": "String"
+      }
+    }
+  },
+  "gitImageUnreadable": "Can’t decode this image: {error}",
+  "@gitImageUnreadable": {
+    "description": "Shown in an image diff when one side cannot be decoded.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "gitLastChange": "Already at the last change",
+  "@gitLastChange": {
+    "description": "Short message when stepping to the next change in a diff that is already at the last one."
+  },
+  "gitLastDifference": "Already at the last difference",
+  "@gitLastDifference": {
+    "description": "Short message when stepping to the next difference in the file history diff that is already at the last one."
+  },
+  "gitLocalChanges": "My Local Changes",
+  "@gitLocalChanges": {
+    "description": "Name of the theirs side when reapplying local changes after an update conflicts; used in the Accept menu items on a conflicted file."
+  },
+  "gitLogTitle": "Git Log",
+  "@gitLogTitle": {
+    "description": "Tooltip of the icon button at the top of the Changes view that opens the Git Log."
+  },
+  "gitMarkResolved": "Mark as Resolved",
+  "@gitMarkResolved": {
+    "description": "Operation name of marking a conflicted file as resolved, shown in busy text, error messages and the Console."
+  },
+  "gitMarkResolvedLabel": "Mark as Resolved After Editing",
+  "@gitMarkResolvedLabel": {
+    "description": "Context menu item on a conflicted file in the Changes view: the user finished editing it, stage it as resolved."
+  },
+  "gitMerge": "Merge",
+  "@gitMerge": {
+    "description": "Merge button and menu item (base row of a worktree workspace, branches popup), the name of an in-progress merge in the operation banner. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "gitMergeOurs": "Current Branch (ours)",
+  "@gitMergeOurs": {
+    "description": "Name of the ours side of a merge conflict, used in Accept menu items on a conflicted file."
+  },
+  "gitMergeTheirs": "Incoming Commit (theirs)",
+  "@gitMergeTheirs": {
+    "description": "Name of the theirs side of a merge conflict, used in Accept menu items on a conflicted file."
+  },
+  "gitMessageRequired": "Enter a commit message first",
+  "@gitMessageRequired": {
+    "description": "Error bar text and commit button tooltip in the Changes view when the commit message is empty."
+  },
+  "gitModified": "Modified",
+  "@gitModified": {
+    "description": "Change status of a modified file."
+  },
+  "gitMoreLines": "{count, plural, one {# more line} other {# more lines}}",
+  "@gitMoreLines": {
+    "description": "Footer in the editor's gutter change popup when the old content is cut off. count is the number of hidden lines.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitNewFile": "New File",
+  "@gitNewFile": {
+    "description": "Label on the old side of an image diff when the file is new."
+  },
+  "gitNextChange": "Next Change",
+  "@gitNextChange": {
+    "description": "Tooltip of the down arrow button in diff toolbars and the gutter change popup: go to the next change."
+  },
+  "gitNextDifference": "Next Difference",
+  "@gitNextDifference": {
+    "description": "Tooltip of the down arrow button in the file history diff toolbar."
+  },
+  "gitNoChanges": "No changes",
+  "@gitNoChanges": {
+    "description": "Empty state of the Commit tab in the Changes view."
+  },
+  "gitNoDifferences": "No differences",
+  "@gitNoDifferences": {
+    "description": "Diff toolbar text (diff tab, file history) when the two versions are identical."
+  },
+  "gitNoStashes": "No stashes",
+  "@gitNoStashes": {
+    "description": "Empty state of the Stash tab in the Changes view."
+  },
+  "gitNotAdded": "Unversioned",
+  "@gitNotAdded": {
+    "description": "Change status of a file not added to Git (git status ?)."
+  },
+  "gitNotRepo": "This workspace is not a Git repository",
+  "@gitNotRepo": {
+    "description": "Empty state of the Changes view and Git Log when the workspace is not a Git repository."
+  },
+  "gitOpCherryPick": "Cherry-pick",
+  "@gitOpCherryPick": {
+    "description": "Name of a cherry-pick in progress, used inside gitOperationReady, gitAbortConfirm and so on."
+  },
+  "gitOpRebase": "Rebase",
+  "@gitOpRebase": {
+    "description": "Name of a rebase, used inside gitOperationReady, gitAbortConfirm and as an operation name."
+  },
+  "gitOpRevert": "Revert",
+  "@gitOpRevert": {
+    "description": "Name of a revert in progress, used inside gitOperationReady, gitAbortConfirm and so on."
+  },
+  "gitOpenFile": "Open File",
+  "@gitOpenFile": {
+    "description": "Context menu item on a file in the Changes view: open it in the editor."
+  },
+  "gitOpenInEditor": "Open in Editor",
+  "@gitOpenInEditor": {
+    "description": "Tooltip of the icon button in the diff tab toolbar that opens the file in the editor."
+  },
+  "gitOperationAnyway": "{operation} Anyway",
+  "@gitOperationAnyway": {
+    "description": "Button of a confirmation that warns before a Git operation. operation is the name of the Git operation, such as Checkout or Pop Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitOperationCanceled": "{operation} canceled",
+  "@gitOperationCanceled": {
+    "description": "Error bar after the user canceled a Git operation. operation is the name of the Git operation, such as Checkout or Pop Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitOperationConflicts": "{operation} in progress with {count, plural, one {# conflicted file} other {# conflicted files}}. Resolve them, then click Continue: right-click a conflicted file to accept one side entirely, or open it, edit it, and mark it as resolved.",
+  "@gitOperationConflicts": {
+    "description": "Banner in the Changes view while a rebase, merge and so on stops on conflicts. operation is gitOpRebase, gitMerge and so on.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitOperationFailed": "{operation} failed: {error}",
+  "@gitOperationFailed": {
+    "description": "Error bar after a Git operation failed. operation is the name of the Git operation, such as Checkout or Pop Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "gitOperationReady": "{operation} in progress. No conflicts remain; you can continue.",
+  "@gitOperationReady": {
+    "description": "Banner in the Changes view while a rebase, merge and so on has no conflicts left. operation is gitOpRebase, gitMerge and so on.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitPickLabel": "Select {name}",
+  "@gitPickLabel": {
+    "description": "Accessibility label of the checkbox that includes a file, folder or group in the commit or rollback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "gitPreviousChange": "Previous Change",
+  "@gitPreviousChange": {
+    "description": "Tooltip of the up arrow button in diff toolbars and the gutter change popup: go to the previous change."
+  },
+  "gitPreviousDifference": "Previous Difference",
+  "@gitPreviousDifference": {
+    "description": "Tooltip of the up arrow button in the file history diff toolbar."
+  },
+  "gitRebaseOurs": "Target Branch (ours)",
+  "@gitRebaseOurs": {
+    "description": "Name of the ours side of a rebase conflict (the branch being rebased onto), used in Accept menu items on a conflicted file."
+  },
+  "gitRebaseTheirs": "Your Commit (theirs)",
+  "@gitRebaseTheirs": {
+    "description": "Name of the theirs side of a rebase conflict (the user's commit being replayed), used in Accept menu items on a conflicted file."
+  },
+  "gitResolve": "Resolve Conflicts",
+  "@gitResolve": {
+    "description": "Operation name of accepting one side for a conflicted file, shown in busy text, error messages and the Console."
+  },
+  "gitRestoreConflicts": "Local changes were restored with conflicts",
+  "@gitRestoreConflicts": {
+    "description": "Notification title when local changes reapplied after an update conflict."
+  },
+  "gitRestoreConflictsAfter": "{title}, but local changes were restored with conflicts",
+  "@gitRestoreConflictsAfter": {
+    "description": "Warning that replaces the success notification of an update when local changes came back with conflicts. title is that success notification.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "gitRestoreConflictsNote": "Resolve them in Changes. The original changes remain in Stash.",
+  "@gitRestoreConflictsNote": {
+    "description": "Notification body under gitRestoreConflicts."
+  },
+  "gitRestoreFailed": "Local changes could not be restored",
+  "@gitRestoreFailed": {
+    "description": "Notification title when local changes stashed before an update could not be reapplied."
+  },
+  "gitRestoreFailedAfter": "{title}, but local changes could not be restored",
+  "@gitRestoreFailedAfter": {
+    "description": "Warning that replaces the success notification of an update when local changes could not be restored. title is that success notification.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "gitRestoreFailedNote": "They remain in Stash and can be applied manually from Changes.",
+  "@gitRestoreFailedNote": {
+    "description": "Notification body under gitRestoreFailed."
+  },
+  "gitRevert": "Revert",
+  "@gitRevert": {
+    "description": "Name of the revert operation, inserted into the commit button tooltip while a revert is in progress (gitWholeCommitTip)."
+  },
+  "gitRewordOnly": "Edit Commit Message Only",
+  "@gitRewordOnly": {
+    "description": "Commit button label in the Changes view when Amend is checked and no files are selected: only change the last commit message."
+  },
+  "gitRollback": "Rollback",
+  "@gitRollback": {
+    "description": "Text of the rollback button on a change in a diff. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "gitRollbackChange": "Rollback This Change",
+  "@gitRollbackChange": {
+    "description": "Tooltip and accessibility label of the rollback button next to a change in a diff."
+  },
+  "gitRollbackEllipsis": "Rollback…",
+  "@gitRollbackEllipsis": {
+    "description": "Tooltip of the rollback icon button in the Changes view, and context menu item on a changed file or folder; opens the Rollback dialog."
+  },
+  "gitRollbackFailed": "Rollback failed: {error}",
+  "@gitRollbackFailed": {
+    "description": "Error bar after rolling back one change in a diff failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "gitRollbackFile": "Rollback This File…",
+  "@gitRollbackFile": {
+    "description": "Tooltip of the icon button in the diff tab toolbar that rolls back the whole file after confirmation."
+  },
+  "gitRollbackHunk": "Rollback This Change",
+  "@gitRollbackHunk": {
+    "description": "Button in the Rollback dialog's diff and tooltip of the icon button in the gutter change popup: roll back the current change."
+  },
+  "gitSaveBeforeCommit": "Save before committing this change",
+  "@gitSaveBeforeCommit": {
+    "description": "Disabled placeholder in the editor's gutter change popup when the file has unsaved edits."
+  },
+  "gitSelectFiles": "Select files to commit first",
+  "@gitSelectFiles": {
+    "description": "Error bar text when committing with no files checked in the Changes view."
+  },
+  "gitShowDiff": "Show Diff",
+  "@gitShowDiff": {
+    "description": "Tooltip of the icon button in the editor's gutter change popup that opens the file's diff."
+  },
+  "gitSideBySide": "Side-by-side",
+  "@gitSideBySide": {
+    "description": "Toggle chip in diff toolbars: side-by-side layout when on, unified when off."
+  },
+  "gitSideBySideTip": "Compare side by side; turn off for unified view",
+  "@gitSideBySideTip": {
+    "description": "Tooltip of the Side-by-side toggle in diff toolbars."
+  },
+  "gitSizeLines": "{size} · {count, plural, one {# line} other {# lines}}",
+  "@gitSizeLines": {
+    "description": "Size of one side of a file too large to compare. size is like 21.3 MB.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitSkip": "Skip",
+  "@gitSkip": {
+    "description": "Operation name of skipping the current commit during a rebase or cherry-pick, shown in busy text, error messages and the Console."
+  },
+  "gitSkipCommit": "Skip This Commit",
+  "@gitSkipCommit": {
+    "description": "Button in the in-progress rebase or cherry-pick banner in the Changes view."
+  },
+  "gitStash": "Stash",
+  "@gitStash": {
+    "description": "Label of the Stash tab and group header in the Changes view, and confirm button of the Stash Changes dialog. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "gitStashApply": "Apply",
+  "@gitStashApply": {
+    "description": "Context menu item on a stash in the Changes view: apply it and keep the stash."
+  },
+  "gitStashApplyOperation": "Apply Stash",
+  "@gitStashApplyOperation": {
+    "description": "Operation name of applying a stash, shown in busy text, error messages and the Console."
+  },
+  "gitStashBody": "Save all changes, including unversioned files, in git stash and leave the workspace clean.",
+  "@gitStashBody": {
+    "description": "Body of the Stash Changes dialog."
+  },
+  "gitStashDelete": "Delete Stash",
+  "@gitStashDelete": {
+    "description": "Operation name of deleting a stash, shown in busy text, error messages and the Console."
+  },
+  "gitStashDeleteBody": "The stashed changes will be lost: {message}",
+  "@gitStashDeleteBody": {
+    "description": "Body of the confirmation to delete a stash. message is the stash description.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "gitStashDeleteConfirm": "Delete This Stash?",
+  "@gitStashDeleteConfirm": {
+    "description": "Title of the confirmation before deleting a stash."
+  },
+  "gitStashDeleteEllipsis": "Delete Stash…",
+  "@gitStashDeleteEllipsis": {
+    "description": "Button on the hint shown after resolving conflicts from an update: delete the stash with the local changes after confirming."
+  },
+  "gitStashMessage": "Description (optional)",
+  "@gitStashMessage": {
+    "description": "Placeholder of the message field in the Stash Changes dialog."
+  },
+  "gitStashOnBranch": "Stashed on branch {branch}",
+  "@gitStashOnBranch": {
+    "description": "Tooltip of the branch name on a stash from another branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "gitStashOtherBody": "This stash was created in {where}. {operation} will put those changes into the current directory.",
+  "@gitStashOtherBody": {
+    "description": "Body of the confirmation before applying or popping a stash from another branch. where is gitStashWhereBranch or gitStashWhereWorkspace; operation is Pop Stash or Apply Stash.",
+    "placeholders": {
+      "where": {
+        "type": "String"
+      },
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitStashOtherConfirm": "{operation} from Another Branch?",
+  "@gitStashOtherConfirm": {
+    "description": "Title of the confirmation before applying or popping a stash from another branch. operation is Pop Stash or Apply Stash.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitStashPop": "Pop",
+  "@gitStashPop": {
+    "description": "Context menu item on a stash in the Changes view: apply it and delete the stash."
+  },
+  "gitStashPopOperation": "Pop Stash",
+  "@gitStashPopOperation": {
+    "description": "Operation name of popping a stash, shown in busy text, error messages, the Console and the agent-is-working warning."
+  },
+  "gitStashTip": "Stash Changes… (git stash, including unversioned files)",
+  "@gitStashTip": {
+    "description": "Tooltip of the stash icon button in the Changes view."
+  },
+  "gitStashTitle": "Stash Changes",
+  "@gitStashTitle": {
+    "description": "Title of the Stash Changes dialog."
+  },
+  "gitStashWhereBranch": "branch {branch}",
+  "@gitStashWhereBranch": {
+    "description": "Where a stash was created, inside gitStashOtherBody.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "gitStashWhereWorkspace": "workspace {workspace} (branch {branch})",
+  "@gitStashWhereWorkspace": {
+    "description": "Where a stash was created, inside gitStashOtherBody.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "gitSwitchFile": "Switch File",
+  "@gitSwitchFile": {
+    "description": "Accessibility label of the file name button in the diff tab toolbar that opens a list of the other changed files."
+  },
+  "gitSwitchFileTip": "Switch File {next} / {previous}",
+  "@gitSwitchFileTip": {
+    "description": "Tooltip of the file name above a diff. next and previous are the keyboard shortcuts, such as F7.",
+    "placeholders": {
+      "next": {
+        "type": "String"
+      },
+      "previous": {
+        "type": "String"
+      }
+    }
+  },
+  "gitSwitchToWorkspace": "Switch to Workspace {workspace}",
+  "@gitSwitchToWorkspace": {
+    "description": "Stash menu item: go to the workspace where the stash's branch is checked out.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "gitTooLarge": "The file is larger than {size} MB; comparing will take a moment",
+  "@gitTooLarge": {
+    "description": "Shown instead of a diff for a large file, with a Compare Anyway button.",
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "gitTooLargeSides": "Before: {before}; after: {after}",
+  "@gitTooLargeSides": {
+    "description": "Sizes of both sides of a file too large to compare. before and after are gitSizeLines.",
+    "placeholders": {
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "gitUnchangedLines": "{count, plural, one {# unchanged line} other {# unchanged lines}}",
+  "@gitUnchangedLines": {
+    "description": "Folded unchanged lines in a diff; click to expand.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitUnversioned": "Unversioned Files",
+  "@gitUnversioned": {
+    "description": "Group header for unversioned files in the Changes view."
+  },
+  "gitUpdatedVersion": "Updated Version",
+  "@gitUpdatedVersion": {
+    "description": "Name of the ours side when reapplying local changes after an update conflicts (HEAD after the update); used in Accept menu items."
+  },
+  "gitViewStash": "View Stash",
+  "@gitViewStash": {
+    "description": "Button on the hint about local changes left in Stash: switch to the Stash tab."
+  },
+  "gitWhitespaceOnly": "Only whitespace differs. Turn off Ignore Whitespace to see it.",
+  "@gitWhitespaceOnly": {
+    "description": "Diff toolbar text when Ignore Whitespace hides every difference."
+  },
+  "gitWholeCommitTip": "{operation} in progress, so only a full commit is possible: selected files are added to Git first, then committed together with what is already added",
+  "@gitWholeCommitTip": {
+    "description": "Tooltip of the commit button while a merge, cherry-pick or revert is in progress. operation is gitMerge, Cherry-pick or gitRevert.",
+    "placeholders": {
+      "operation": {
+        "type": "String"
+      }
+    }
+  },
+  "gitWorkspace": "Workspace",
+  "@gitWorkspace": {
+    "description": "Name of the working-copy version in diff tab labels and branch comparison, as in main → Workspace."
   },
   "keysAdd": "Add Another Shortcut",
   "@keysAdd": {
@@ -993,7 +2858,307 @@
   "@keysZoomResetNote": {
     "description": "Keyboard Shortcuts settings: explanation for ZoomResetNote."
   },
-  "@@locale": "en",
+  "logAllBranches": "All Branches",
+  "@logAllBranches": {
+    "description": "Item in the branch filter menu of the Git Log, and the filter button text when no branch is selected."
+  },
+  "logAnnotate": "Annotate (See Who Changed Each Line)",
+  "@logAnnotate": {
+    "description": "Context menu item on a file: open Annotate (git blame) for it."
+  },
+  "logAuthor": "Author",
+  "@logAuthor": {
+    "description": "Placeholder of the author filter field in the Git Log."
+  },
+  "logAuthorFilter": "Filter by author",
+  "@logAuthorFilter": {
+    "description": "Accessibility label of the author filter field in the Git Log."
+  },
+  "logBranchCount": "{count, plural, one {# branch} other {# branches}}",
+  "@logBranchCount": {
+    "description": "Branch filter button in the Git Log when several branches are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logBranchFilter": "Filter by branch",
+  "@logBranchFilter": {
+    "description": "Accessibility label of the branch filter button in the Git Log."
+  },
+  "logCheckoutCommit": "Checkout This Commit",
+  "@logCheckoutCommit": {
+    "description": "Context menu item on a commit in the Git Log: check out the commit (detached HEAD)."
+  },
+  "logClearFilter": "Clear Filters",
+  "@logClearFilter": {
+    "description": "Button in the Git Log empty state when filters match no commits."
+  },
+  "logCloseTab": "Close {tab}",
+  "@logCloseTab": {
+    "description": "Accessibility label of the close button of a tab in the Git Log panel. tab is the tab title.",
+    "placeholders": {
+      "tab": {
+        "type": "String"
+      }
+    }
+  },
+  "logCommitCount": "{count, plural, one {# commit} other {# commits}}",
+  "@logCommitCount": {
+    "description": "Commit count in the file history header.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logCommitsTitle": "Commit Log",
+  "@logCommitsTitle": {
+    "description": "Tab label of the commit log in the Git Log panel."
+  },
+  "logCopyHash": "Copy Commit Hash",
+  "@logCopyHash": {
+    "description": "Context menu item on a commit in the Git Log."
+  },
+  "logCurrent": "Current",
+  "@logCurrent": {
+    "description": "Small gray label after the current branch in the Git Log branch list."
+  },
+  "logDrop": "Drop Commit",
+  "@logDrop": {
+    "description": "Confirm button of the drop commit confirmation in the Git Log. Also the operation name shown in busy text, error messages and the Console."
+  },
+  "logDropBody": "“{subject}” and its changes will be removed from the current branch’s history.",
+  "@logDropBody": {
+    "description": "Body of the confirmation to drop a commit. subject is the commit subject.",
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "logDropConfirm": "Drop {commit} from History?",
+  "@logDropConfirm": {
+    "description": "Title of the confirmation to drop a commit. commit is a short hash.",
+    "placeholders": {
+      "commit": {
+        "type": "String"
+      }
+    }
+  },
+  "logDropEllipsis": "Drop This Commit…",
+  "@logDropEllipsis": {
+    "description": "Context menu item on a commit in the Git Log: remove the commit from history after confirming."
+  },
+  "logFileEmpty": "This file has no commits yet",
+  "@logFileEmpty": {
+    "description": "Empty state of file history when the file has no commits."
+  },
+  "logFileHistory": "File History",
+  "@logFileHistory": {
+    "description": "Context menu item on a file: open its Git history."
+  },
+  "logFileNotRepo": "This file is not in a Git repository",
+  "@logFileNotRepo": {
+    "description": "Error bar text when opening file history or Annotate for a file outside any Git repository."
+  },
+  "logFilterRefs": "Filter branches and tags",
+  "@logFilterRefs": {
+    "description": "Placeholder of the search field above the branch list in the Git Log."
+  },
+  "logHardReset": "Hard Reset",
+  "@logHardReset": {
+    "description": "Confirm button of the hard reset confirmation in the Git Log."
+  },
+  "logHardResetBody": "The current branch will return to this commit. Subsequent commits and all uncommitted changes will be discarded.",
+  "@logHardResetBody": {
+    "description": "Body of the confirmation before a hard reset in the Git Log."
+  },
+  "logHardResetConfirm": "Hard Reset to {commit}?",
+  "@logHardResetConfirm": {
+    "description": "Title of the confirmation before a hard reset. commit is a short hash.",
+    "placeholders": {
+      "commit": {
+        "type": "String"
+      }
+    }
+  },
+  "logHardResetEllipsis": "Hard: Discard Subsequent Changes…",
+  "@logHardResetEllipsis": {
+    "description": "Item in the Reset Current Branch to Here submenu of a commit in the Git Log (git reset --hard), asks for confirmation."
+  },
+  "logHead": "HEAD (Current Branch)",
+  "@logHead": {
+    "description": "First row of the Git Log branch list: show the log of HEAD."
+  },
+  "logHide": "Hide",
+  "@logHide": {
+    "description": "Tooltip of the button that hides the Git Log panel."
+  },
+  "logHistoryTab": "History: {file}",
+  "@logHistoryTab": {
+    "description": "Title of a file history tab in the Git Log panel. file is the file name.",
+    "placeholders": {
+      "file": {
+        "type": "String"
+      }
+    }
+  },
+  "logLoadEarlier": "Load Earlier Commits",
+  "@logLoadEarlier": {
+    "description": "Row at the end of the Git Log and file history list that loads more commits."
+  },
+  "logLocalBranch": "Local branch {name}",
+  "@logLocalBranch": {
+    "description": "Accessibility label of a local branch row in the Git Log branch list. name is the branch name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "logMessageConfirm": "OK",
+  "@logMessageConfirm": {
+    "description": "Confirm button of the dialog that edits a commit message before rewording or squashing commits in the Log."
+  },
+  "logMessageFilter": "Filter by commit message or hash",
+  "@logMessageFilter": {
+    "description": "Accessibility label of the text filter field in the Git Log."
+  },
+  "logMessageHash": "Commit message or hash",
+  "@logMessageHash": {
+    "description": "Placeholder of the text filter field in the Git Log."
+  },
+  "logMixedReset": "Mixed: Keep Changes in the Workspace",
+  "@logMixedReset": {
+    "description": "Item in the Reset Current Branch to Here submenu of a commit in the Git Log (git reset --mixed)."
+  },
+  "logMoreCommitCount": "{count, plural, one {#+ commit} other {#+ commits}}",
+  "@logMoreCommitCount": {
+    "description": "Commit count in the file history header when more commits can still be loaded.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logNewBranch": "New Branch from This Commit…",
+  "@logNewBranch": {
+    "description": "Context menu item on a commit in the Git Log: create a branch starting at it."
+  },
+  "logNoMatch": "No matching commits",
+  "@logNoMatch": {
+    "description": "Empty state of the Git Log when the filters match no commits."
+  },
+  "logPushedBody": "They are on {where}. After rewriting, you will need to force push, and work others based on the old commits will no longer line up.",
+  "@logPushedBody": {
+    "description": "Body of the confirmation before rewriting commits that were already pushed. where is a remote branch or logRemotesMore.",
+    "placeholders": {
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "logPushedTitle": "These Commits Have Already Been Pushed",
+  "@logPushedTitle": {
+    "description": "Title of the warning before rewriting commits that are already on a remote (reword, squash, drop)."
+  },
+  "logReading": "Loading…",
+  "@logReading": {
+    "description": "Small text in the Git Log toolbar while commits are being read."
+  },
+  "logRefresh": "Refresh Log",
+  "@logRefresh": {
+    "description": "Tooltip of the refresh icon button in the Git Log toolbar."
+  },
+  "logRemoteBranch": "Remote branch {name}",
+  "@logRemoteBranch": {
+    "description": "Accessibility label of a remote branch row in the Git Log branch list. name is like origin/main.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "logRemotesMore": "{remote} and other remote branches ({count} in total)",
+  "@logRemotesMore": {
+    "description": "Several remote branches containing a commit, inside logPushedBody.",
+    "placeholders": {
+      "remote": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "logReset": "Reset",
+  "@logReset": {
+    "description": "Operation name of resetting the current branch to a commit, shown in busy text, error messages and the Console."
+  },
+  "logResetHere": "Reset Current Branch to Here",
+  "@logResetHere": {
+    "description": "Submenu title in the context menu of a commit in the Git Log; contains Soft, Mixed and Hard."
+  },
+  "logRevertCommit": "Revert: Create a Commit That Undoes This One",
+  "@logRevertCommit": {
+    "description": "Context menu item on a commit in the Git Log (git revert)."
+  },
+  "logReword": "Edit Commit Message",
+  "@logReword": {
+    "description": "Operation name of changing a commit's message from the Git Log, shown in busy text, error messages and the Console."
+  },
+  "logRewordEllipsis": "Edit Commit Message…",
+  "@logRewordEllipsis": {
+    "description": "Context menu item on a commit in the Git Log: edit its commit message."
+  },
+  "logRewordTitle": "Edit Commit Message of {commit}",
+  "@logRewordTitle": {
+    "description": "Title of the dialog to edit a commit message. commit is a short hash.",
+    "placeholders": {
+      "commit": {
+        "type": "String"
+      }
+    }
+  },
+  "logRewriteAnyway": "Rewrite Anyway",
+  "@logRewriteAnyway": {
+    "description": "Confirm button of the warning before rewriting commits that are already pushed."
+  },
+  "logSoftReset": "Soft: Keep Changes in the Index",
+  "@logSoftReset": {
+    "description": "Item in the Reset Current Branch to Here submenu of a commit in the Git Log (git reset --soft)."
+  },
+  "logSquash": "Squash Commits",
+  "@logSquash": {
+    "description": "Operation name of squashing a commit into its parent, shown in busy text, error messages and the Console."
+  },
+  "logSquashEllipsis": "Squash into Previous Commit…",
+  "@logSquashEllipsis": {
+    "description": "Context menu item on a commit in the Git Log: squash it into its parent commit."
+  },
+  "logSquashTitle": "Squash into Previous Commit",
+  "@logSquashTitle": {
+    "description": "Title of the commit message dialog for squashing a commit into its parent."
+  },
+  "logTag": "Tag {name}",
+  "@logTag": {
+    "description": "Accessibility label of a tag row in the Git Log branch list. name is the tag name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "logTags": "Tags",
+  "@logTags": {
+    "description": "Group header for tags in the Git Log branch list."
+  },
+  "logUncommitted": "Uncommitted",
+  "@logUncommitted": {
+    "description": "Label in the Annotate view for lines that are not committed yet."
+  },
   "menuCheckForUpdates": "Check for Updates…",
   "@menuCheckForUpdates": {
     "description": "App menu item."
@@ -1030,6 +3195,61 @@
   "@menuWindow": {
     "description": "Title of the Window menu."
   },
+  "rollbackBinary": "Binary file; only the whole file can be rolled back",
+  "@rollbackBinary": {
+    "description": "Placeholder in the Rollback dialog's diff when the file is binary."
+  },
+  "rollbackDeleteNew": "Also delete new files (unversioned and newly added to Git)",
+  "@rollbackDeleteNew": {
+    "description": "Checkbox in the Rollback Changes dialog."
+  },
+  "rollbackFileClean": "This file has no changes left",
+  "@rollbackFileClean": {
+    "description": "Placeholder in the Rollback dialog's diff when the file no longer has changes."
+  },
+  "rollbackFileCount": "{count, plural, one {# file} other {# files}}",
+  "@rollbackFileCount": {
+    "description": "Number of files next to the select-all checkbox in the Rollback Changes dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rollbackFilesButton": "Rollback {count, plural, one {# File} other {# Files}}",
+  "@rollbackFilesButton": {
+    "description": "Primary button of the Rollback Changes dialog. count is the number of files to roll back.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rollbackHunkTip": "Roll back the current change and write it to disk immediately",
+  "@rollbackHunkTip": {
+    "description": "Tooltip of the Rollback This Change button in the Rollback dialog's diff."
+  },
+  "rollbackInclude": "Include in Rollback",
+  "@rollbackInclude": {
+    "description": "Checkbox in the Rollback dialog's diff header: include this file in the rollback."
+  },
+  "rollbackNote": "Selected tracked files will be restored to the last commit, discarding uncommitted changes. Click a file name to view its diff and roll back individual changes.",
+  "@rollbackNote": {
+    "description": "Explanation under the title of the Rollback Changes dialog."
+  },
+  "rollbackTitle": "Rollback Changes",
+  "@rollbackTitle": {
+    "description": "Title of the Rollback Changes dialog."
+  },
+  "rollbackViewFile": "View {path}",
+  "@rollbackViewFile": {
+    "description": "Accessibility label of a file row in the Rollback Changes dialog; clicking shows its diff. path is the file path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
   "settingsAboutDaemon": "Daemon",
   "@settingsAboutDaemon": {
     "description": "About card: label of the daemon's version row."
@@ -1042,7 +3262,7 @@
   "@settingsAboutWindow": {
     "description": "About card: label of the window's version row."
   },
-  "settingsAgentsNote": "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won't start them; ones already running keep going, and typing their command in a terminal still works. Only agents installed on this Mac are listed.",
+  "settingsAgentsNote": "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won’t start them; ones already running keep going, and typing their command in a terminal still works. Only agents installed on this Mac are listed.",
   "@settingsAgentsNote": {
     "description": "Note of the Agents card."
   },
@@ -1050,7 +3270,7 @@
   "@settingsAgentsTitle": {
     "description": "Title of the card of agent switches."
   },
-  "settingsAwakeNote": "While Posse runs, the Mac doesn't sleep but the display still turns off; the coffee cup in the status bar toggles this too. “Keep Display On” keeps the display awake as well: when the display turns off, the screen locks with it.",
+  "settingsAwakeNote": "While Posse runs, the Mac doesn’t sleep but the display still turns off; the coffee cup in the status bar toggles this too. “Keep Display On” keeps the display awake as well: when the display turns off, the screen locks with it.",
   "@settingsAwakeNote": {
     "description": "Note of the Prevent Sleep card; quotes the third segment's label."
   },
@@ -1066,7 +3286,7 @@
   "@settingsCopyOnSelect": {
     "description": "Switch in the Terminal Selection card."
   },
-  "settingsDaemonNeedsRestart": "The daemon is older than the window and can't be updated without disconnecting terminals; restart it once. Restarting closes all terminals.",
+  "settingsDaemonNeedsRestart": "The daemon is older than the window and can’t be updated without disconnecting terminals; restart it once. Restarting closes all terminals.",
   "@settingsDaemonNeedsRestart": {
     "description": "About card notice."
   },
@@ -1103,7 +3323,7 @@
   "@settingsDaemonUpdating": {
     "description": "About card notice."
   },
-  "settingsDaemonWindowOlder": "The window is older than the daemon; you may have opened an old Posse.app. Updating replaces the daemon with the window's version.",
+  "settingsDaemonWindowOlder": "The window is older than the daemon; you may have opened an old Posse.app. Updating replaces the daemon with the window’s version.",
   "@settingsDaemonWindowOlder": {
     "description": "About card notice."
   },
@@ -1111,7 +3331,7 @@
   "@settingsEditorFont": {
     "description": "Label of the editor's font picker."
   },
-  "settingsEditorNote": "Code in files, diffs, blame and the Git log uses this font; while a file tab is in front, ⌘= ⌘- ⌘0 change the editor's size. The bold weight applies to Markdown headings and bold text.",
+  "settingsEditorNote": "Code in files, diffs, blame and the Git log uses this font; while a file tab is in front, ⌘= ⌘- ⌘0 change the editor’s size. The bold weight applies to Markdown headings and bold text.",
   "@settingsEditorNote": {
     "description": "Note of the Editor card."
   },
@@ -1220,7 +3440,7 @@
   "@settingsNotifyBadge": {
     "description": "Switch of the Notifications card."
   },
-  "settingsNotifyNote": "Posse sends a system notification when an agent needs you or finished while you weren't looking, and when a task has a question, finishes or fails; clicking it jumps to that session or task. Notifications need the window open, and the session you're looking at doesn't notify. The Dock badge counts sessions that need you or finished unseen.",
+  "settingsNotifyNote": "Posse sends a system notification when an agent needs you or finished while you weren’t looking, and when a task has a question, finishes or fails; clicking it jumps to that session or task. Notifications need the window open, and the session you’re looking at doesn’t notify. The Dock badge counts sessions that need you or finished unseen.",
   "@settingsNotifyNote": {
     "description": "Note of the Notifications card."
   },
@@ -1244,7 +3464,7 @@
   "@settingsPermissionAsk": {
     "description": "Segment of the Agent Permissions card."
   },
-  "settingsPermissionAskTip": "Follows each agent's own settings and stops to ask before reading or writing files and running commands; Claude's prompts are also pushed to the paired phone.",
+  "settingsPermissionAskTip": "Follows each agent’s own settings and stops to ask before reading or writing files and running commands; Claude’s prompts are also pushed to the paired phone.",
   "@settingsPermissionAskTip": {
     "description": "Explains the Ask Each Time mode."
   },
@@ -1276,7 +3496,7 @@
   "@settingsRestartDaemon": {
     "description": "Button of the About card."
   },
-  "settingsRestartDaemonBody": "{count, plural, =0 {All terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent's session, without the earlier output.} one {The running terminal will disconnect and be marked “Not restored” after the restart; switching to it resumes the agent's session, without the earlier output.} other {All # running terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent's session, without the earlier output.}}",
+  "settingsRestartDaemonBody": "{count, plural, =0 {All terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent’s session, without the earlier output.} one {The running terminal will disconnect and be marked “Not restored” after the restart; switching to it resumes the agent’s session, without the earlier output.} other {All # running terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent’s session, without the earlier output.}}",
   "@settingsRestartDaemonBody": {
     "description": "Body of the restart-daemon dialog; count is the number of running terminals, 0 when unknown.",
     "placeholders": {
@@ -1293,7 +3513,7 @@
   "@settingsRestoreAll": {
     "description": "Switch of the Restore Terminals card."
   },
-  "settingsRestoreNote": "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone's home, marked “Not restored”, and start when you switch to them: agents resume their sessions and plain terminals reopen in their folders, without the earlier output. Turn on the switch below to restore them all as soon as the daemon starts (many agents together take memory and usage).",
+  "settingsRestoreNote": "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone’s home, marked “Not restored”, and start when you switch to them: agents resume their sessions and plain terminals reopen in their folders, without the earlier output. Turn on the switch below to restore them all as soon as the daemon starts (many agents together take memory and usage).",
   "@settingsRestoreNote": {
     "description": "Note of the Restore Terminals card."
   },
@@ -1333,7 +3553,7 @@
   "@settingsTerminalFont": {
     "description": "Label of the terminal's font picker."
   },
-  "settingsTerminalNote": "In a terminal, ⌘= zooms in, ⌘- zooms out and ⌘0 resets. Font smoothing is how native macOS apps draw text, which makes light text on a dark background look a step bolder; off, it is as thin as Ghostty's default.",
+  "settingsTerminalNote": "In a terminal, ⌘= zooms in, ⌘- zooms out and ⌘0 resets. Font smoothing is how native macOS apps draw text, which makes light text on a dark background look a step bolder; off, it is as thin as Ghostty’s default.",
   "@settingsTerminalNote": {
     "description": "Note of the Terminal card."
   },

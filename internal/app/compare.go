@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +12,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // 分支比较的标签页，照 WebStorm：
@@ -174,13 +175,13 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	if cd.files {
 		specs := make([]diffSpec, len(cd.changes))
 		for i, f := range cd.changes {
-			specs[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → 工作区"}
+			specs[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → " + L(c).GitWorkspace()}
 		}
 		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, fmt.Sprintf("工作区和 %s 有 %d 个文件不同", cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium)
+			ui.Text(c, L(c).CompareWorkspaceFiles(cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium)
 		})
 		if len(cd.changes) == 0 {
-			ui.Text(c, "没有差别").FontSize(fsSmall).TextColor(t.TextMuted).Padding(8, 16)
+			ui.Text(c, L(c).CompareNoDifference()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(8, 16)
 			return
 		}
 		selected, open := a.tabDiffs(w, v, specs)
@@ -258,7 +259,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 	cd := d.comp
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0).Children(func() {
 		a.comparePick(c, w, v, cd)
-		if pressable(iconButtonSized(c, iconSwap, "对调两边的分支", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconSwap, L(c).CompareSwap(), compactBox(), smallIcon())).Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
 			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.cur, cd.other, false) }); i >= 0 {
 				v.cur = v.docs[i]
@@ -270,7 +271,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 			cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
 			d.path = compareKey(cd.other, cd.cur, false)
 		}
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.loadCompare(v, d)
 		}
 	})
@@ -279,7 +280,8 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 // comparePick 是 Cherry-pick 按钮：把选中的提交按提交先后应用到当前分支。
 // cherry-pick 只能落在检出的分支上，所以选中的提交要都来自另一边、另一边又正好是工作区检出的分支才可点。
 func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compareDoc) {
-	target, tip := "", "先选提交，⌘ 或 ⇧ 点可以多选"
+	m := L(c)
+	target, tip := "", m.CompareSelectHint()
 	var hashes []string
 	if sel := cd.selected(); len(sel) > 0 {
 		// 列表从新到旧，倒过来才是 cherry-pick 的先后
@@ -299,25 +301,25 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 			target, hashes = cd.other, inOrder(cd.onlyCur)
 		}
 		if target != "" && target != w.Branch {
-			tip = "只能 Cherry-pick 到检出的分支，现在检出的是 " + w.Branch
+			tip = m.CompareCherryPickCheckedOut(w.Branch)
 			target = ""
 		}
 	}
 	switch {
 	case target == "":
 	case len(hashes) == 1:
-		tip = "把 " + hashes[0][:7] + " 应用到 " + target
+		tip = m.CompareCherryPickOne(hashes[0][:7], target)
 	default:
-		tip = fmt.Sprintf("把 %d 个提交按先后应用到 %s", len(hashes), target)
+		tip = m.CompareCherryPickMany(len(hashes), target)
 	}
-	b := quietIconButton(c, iconCherryPick, "Cherry-pick", compactBox(), smallIcon()).Tooltip("Cherry-pick：" + tip)
+	b := quietIconButton(c, iconCherryPick, "Cherry-pick", compactBox(), smallIcon()).Tooltip(m.CompareCherryPickTip(tip))
 	if target == "" {
 		b.Disabled(true)
 		return
 	}
 	if b.Clicked() {
-		a.guardAgent(w, "Cherry-pick", func() {
-			a.gitDo(v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
+		a.guardAgent(m, w, "Cherry-pick", func() {
+			a.gitDo(m, v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
 		})
 	}
 }
@@ -389,22 +391,30 @@ func (a *app) commitPane(c *ui.Context, v *filesView, cd *compareDoc, list *ui.L
 	if q != "" {
 		commits = slices.DeleteFunc(slices.Clone(all), func(ci gitx.CommitInfo) bool { return !matchCommit(ci, q) })
 	}
-	count := fmt.Sprintf("%d 个", len(all))
+	m := L(c)
+	count := m.CompareCount(len(all))
 	if q != "" {
-		count = fmt.Sprintf("%d / %d 个", len(commits), len(all))
+		count = m.CompareFilteredCount(len(commits), len(all))
 	}
 	// 琥珀色只给"待处理"，这里用顶栏的底
 	ui.Row(c).Height(sz(42)).Shrink(0).Padding(0, 16, 0, 8).Gap(8).AlignItems(ui.Center).Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 		// 照 WebStorm 每栏一个搜索框，放在最左边，两栏各搜各的
-		fieldInputSized(c.Key("search-"+in), query, "搜索提交", 220, 100).Label("在 " + in + " 独有的提交里按信息、哈希或作者筛选")
+		fieldInputSized(c.Key("search-"+in), query, m.CompareSearch(), 220, 100).Label(m.CompareSearchLabel(in))
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(lane).Shrink(0)
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
-			ui.Text(c, "存在于").FontSize(fsBody).SingleLine().Shrink(0)
-			// 分支名不缩，地方不够时让搜索框缩；太长的才截断
-			ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(0).MaxWidth(200)
-			ui.Text(c, "中但不存在于").FontSize(fsBody).SingleLine().Shrink(0)
-			ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(0).MaxWidth(200)
-			ui.Text(c, "中的提交").FontSize(fsBody).SingleLine().Shrink(0)
+			// 两个分支名换了字体和颜色：整句按语言取出来，在占位处切开，分支名单独画
+			for _, part := range strings.Split(m.CompareOnlyIn("\x00in\x00", "\x00notIn\x00"), "\x00") {
+				switch part {
+				case "":
+				case "in":
+					// 分支名不缩，地方不够时让搜索框缩；太长的才截断
+					ui.Text(c, in).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).TextColor(lane).SingleLine().Shrink(0).MaxWidth(200)
+				case "notIn":
+					ui.Text(c, notIn).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(0).MaxWidth(200)
+				default:
+					ui.Text(c, strings.TrimSpace(part)).FontSize(fsBody).SingleLine().Shrink(0)
+				}
+			}
 		})
 		ui.Spacer(c)
 		ui.Text(c, count).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -413,11 +423,11 @@ func (a *app) commitPane(c *ui.Context, v *filesView, cd *compareDoc, list *ui.L
 		}
 	})
 	if len(all) == 0 {
-		ui.Text(c, fmt.Sprintf("没有，%s 已经包含 %s 的全部提交", notIn, in)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, m.CompareNoneOnly(notIn, in)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	if len(commits) == 0 {
-		ui.Text(c, "没有匹配的提交").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+		ui.Text(c, L(c).CompareNoMatch()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
 	}
 	sel := cd.selected()
@@ -535,7 +545,7 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	case cv.err != "":
 		ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
 	case cv.files == nil:
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
 	default:
 		selected, open := a.tabDiffs(w, v, commitSpecs(ci, cv.files))
 		nav := fileListNav{focus: &cv.focus, back: back}
@@ -686,11 +696,11 @@ type pushState struct {
 }
 
 // openPush 推送当前分支。
-func (a *app) openPush(w *workspace) {
+func (a *app) openPush(m locales.Messages, w *workspace) {
 	// 直接读 HEAD：文件栏没打开过时没有状态，w.Branch 在游离时是哈希
 	branch, detached := gitx.HeadRef(w.Path)
 	if branch == "" || detached {
-		a.err = "现在不在分支上（分离的 HEAD），没法推送"
+		a.err = m.CompareDetachedPush()
 		return
 	}
 	a.openPushBranch(w, branch)
@@ -751,7 +761,7 @@ func (a *app) pushDialog(c *ui.Context) {
 			dlg.Width(width)
 		}
 		dlg.Children(func() {
-			box.title(c, "推送提交")
+			box.title(c, L(c).ComparePushTitle())
 			body := ui.Row(c).Gap(0).AlignItems(ui.Stretch)
 			if box.sized() {
 				body.Grow(1).Shrink(1)
@@ -763,7 +773,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					plan := ps.plan
 					switch {
 					case !ps.loaded:
-						ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
+						ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
 						return
 					case ps.err != "":
 						ui.Text(c, ps.err).FontSize(fsSmall).TextColor(t.Danger).Padding(4).LineHeight(1.4)
@@ -772,14 +782,14 @@ func (a *app) pushDialog(c *ui.Context) {
 					ui.Row(c).Gap(6).Padding(2, 4, 8, 4).Children(func() {
 						ui.Text(c, plan.Branch+" → "+plan.Remote+" : "+plan.RemoteBranch).FontSize(fsCode).Font(monoFont).FontWeight(fwMedium).SingleLine().Shrink(1)
 						if plan.NewBranch {
-							ui.Text(c, "新分支").FontSize(fsSmall).TextColor(colors(t).sage).Shrink(0)
+							ui.Text(c, L(c).CompareNewBranch()).FontSize(fsSmall).TextColor(colors(t).sage).Shrink(0)
 						}
 					})
 					if plan.Gone {
-						ui.Text(c, "跟踪的远端分支已经被删了，推送会在 "+plan.Remote+" 上重新建出 "+plan.RemoteBranch+"").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
+						ui.Text(c, L(c).ComparePushGone(plan.Remote, plan.RemoteBranch)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, 4, 8, 4).LineHeight(1.4)
 					}
 					if len(plan.Commits) == 0 {
-						ui.Text(c, "没有要推送的提交").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
+						ui.Text(c, L(c).ComparePushEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4)
 						return
 					}
 					ui.Scroll(c).Grow(1).Children(func() {
@@ -803,7 +813,7 @@ func (a *app) pushDialog(c *ui.Context) {
 				}
 				files.Children(func() {
 					if ps.commit == nil {
-						ui.Text(c, "选一个提交看它改的文件").FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
+						ui.Text(c, L(c).CompareSelectCommit()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 						return
 					}
 					cv := ps.commit
@@ -815,7 +825,7 @@ func (a *app) pushDialog(c *ui.Context) {
 					case cv.err != "":
 						ui.Text(c, cv.err).FontSize(fsSmall).TextColor(t.Danger).Padding(6, 16)
 					case cv.files == nil:
-						ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
+						ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
 					default:
 						selected := func(i int) bool { return ps.detail != nil && ps.detail.diff.rel == cv.files[i].Path }
 						a.fileChangeList(c, &cv.list, &cv.folded, cv.files, selected, func(i int) { a.pushShow(v, ps, i, true) }, fileListNav{})
@@ -826,24 +836,25 @@ func (a *app) pushDialog(c *ui.Context) {
 				}
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Checkbox(c, &ps.tags, "一起推送标签")
+				ui.Checkbox(c, &ps.tags, L(c).ComparePushTags())
 				ui.Spacer(c)
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, L(c).CommonCancel())).Clicked() {
 					a.push = nil
 				}
 				ready := ps.loaded && ps.err == "" && (len(ps.plan.Commits) > 0 || ps.plan.NewBranch) && !ps.pushing
-				force := pressable(textButton(c, "强制推送…")).Tooltip("--force-with-lease --force-if-includes：远端有你没合进来的提交时会被拒绝，不会覆盖别人的提交")
-				push := pressable(accentButton(c, "推送"))
+				force := pressable(textButton(c, L(c).CompareForcePushEllipsis())).Tooltip(L(c).CompareForcePushTip())
+				push := pressable(accentButton(c, L(c).ComparePush()))
 				if !ready {
 					force.Disabled(true)
 					push.Disabled(true)
 				}
+				m := L(c)
 				if ready && push.Clicked() {
-					a.doPush(v, ps, false)
+					a.doPush(m, v, ps, false)
 				}
 				if ready && force.Clicked() {
-					a.confirm("强制推送 "+ps.plan.Branch+"？", "会用本地的历史替换远端的 "+ps.plan.Remote+"/"+ps.plan.RemoteBranch+"。远端有你还没合进来的提交时会被拒绝，不会覆盖别人的提交。", "强制推送", func() {
-						a.update(func() { a.doPush(v, ps, true) })
+					a.confirm(m.CompareForcePushConfirm(ps.plan.Branch), m.CompareForcePushBody(ps.plan.Remote+"/"+ps.plan.RemoteBranch), m.CompareForcePush(), func() {
+						a.update(func() { a.doPush(m, v, ps, true) })
 					})
 				}
 			})
@@ -868,7 +879,7 @@ func (a *app) pushShow(v *filesView, ps *pushState, i int, first bool) {
 }
 
 // pushStep 是 diff 里的上一处 / 下一处：到头了换到文件树里的上一个 / 下一个文件。
-func (a *app) pushStep(v *filesView, ps *pushState, dir int) {
+func (a *app) pushStep(m locales.Messages, v *filesView, ps *pushState, dir int) {
 	d, cv := ps.detail, ps.commit
 	df := d.diff
 	if next := df.hunk + dir; d.kind == docDiff && next >= 0 && next < len(df.state.Hunks()) {
@@ -891,9 +902,9 @@ func (a *app) pushStep(v *filesView, ps *pushState, dir int) {
 		a.pushShow(v, ps, order[j], dir > 0)
 		return
 	}
-	msg := "已经是最后一处改动"
+	msg := m.GitLastChange()
 	if dir < 0 {
-		msg = "已经是第一处改动"
+		msg = m.GitFirstChange()
 	}
 	df.hint, df.hintAt = msg, time.Now()
 }
@@ -905,40 +916,40 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 	df := d.diff
 	switch {
 	case a.pressed(c, "nextChange"):
-		a.pushStep(v, ps, 1)
+		a.pushStep(L(c), v, ps, 1)
 	case a.pressed(c, "prevChange"):
-		a.pushStep(v, ps, -1)
+		a.pushStep(L(c), v, ps, -1)
 	}
 	ui.Column(c).Grow(1).Shrink(1).Margin(0, 0, 0, 12).Radius(rControl).Background(colors(t).fill).Clip().Children(func() {
 		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 6, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
-			if pressable(iconButtonSized(c, iconArrowUp, a.withKey("上一处改动", "prevChange"), buttonBox(), iconSize)).Clicked() {
-				a.pushStep(v, ps, -1)
+			if pressable(iconButtonSized(c, iconArrowUp, a.withKey(L(c).GitPreviousChange(), "prevChange"), buttonBox(), iconSize)).Clicked() {
+				a.pushStep(L(c), v, ps, -1)
 			}
-			if pressable(iconButtonSized(c, iconArrowDown, a.withKey("下一处改动", "nextChange"), buttonBox(), iconSize)).Clicked() {
-				a.pushStep(v, ps, 1)
+			if pressable(iconButtonSized(c, iconArrowDown, a.withKey(L(c).GitNextChange(), "nextChange"), buttonBox(), iconSize)).Clicked() {
+				a.pushStep(L(c), v, ps, 1)
 			}
 			ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Padding(0, 4).Tooltip(df.rel)
 			if d.kind == docDiff {
 				if n := len(df.state.Hunks()); n > 0 {
 					added, deleted := df.state.Stats()
-					ui.Text(c, fmt.Sprintf("第 %d / %d 处  +%d −%d", min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, L(c).GitChangeStats(min(df.hunk+1, n), n, added, deleted)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1)
 				}
 			}
 			ui.Spacer(c)
 			if d.kind == docDiff {
 				split := df.state.Layout == editor.DiffSplit
-				if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+				if toggleChip(c, L(c).GitSideBySide(), L(c).GitSideBySideTip(), split) {
 					if split {
 						df.state.Layout = editor.DiffUnified
 					} else {
 						df.state.Layout = editor.DiffSplit
 					}
 				}
-				if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+				if toggleChip(c, L(c).GitIgnoreWhitespace(), L(c).GitIgnoreWhitespaceTip(), df.state.IgnoreWhitespace) {
 					a.toggleIgnoreSpace(d)
 				}
 			}
-			if pressable(iconButtonSized(c, iconClose, "收起 diff", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconClose, L(c).CompareHideDiff(), compactBox(), smallIcon())).Clicked() {
 				ps.detail = nil
 			}
 		})
@@ -952,13 +963,13 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 			}
 			switch d.kind {
 			case docLoading:
-				muted(diffLoadingText(df))
+				muted(diffLoadingText(L(c), df))
 			case docError:
 				ui.Text(c, d.err).FontSize(fsBody).TextColor(t.Danger).Padding(16)
 			case docImageDiff:
 				imageDiffView(c, d)
 			case docBinary:
-				muted("二进制文件，不显示内容")
+				muted(L(c).CompareBinary())
 			case docTooLarge:
 				a.tooLargeDiffView(c, v, d)
 			default:
@@ -969,10 +980,10 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 	})
 }
 
-func (a *app) doPush(v *filesView, ps *pushState, force bool) {
+func (a *app) doPush(m locales.Messages, v *filesView, ps *pushState, force bool) {
 	ps.pushing = true
 	plan, tags := ps.plan, ps.tags
-	a.gitDoKind(v, gitPush, "Push", func(ctx context.Context, root string) error {
+	a.gitDoKind(m, v, gitPush, "Push", func(ctx context.Context, root string) error {
 		err := gitx.Push(ctx, root, plan, force, tags)
 		a.update(func() {
 			ps.pushing = false
@@ -982,15 +993,15 @@ func (a *app) doPush(v *filesView, ps *pushState, force bool) {
 		})
 		if gitx.Rejected(err) {
 			if force {
-				return fmt.Errorf("远端有你还没合进来的提交，强制推送被拒绝；先更新分支看看是谁推的")
+				return errors.New(m.CompareForceRejected())
 			}
-			return fmt.Errorf("远端有你还没拉到的提交；先更新分支再推送，或者确认后强制推送")
+			return errors.New(m.ComparePushRejected())
 		}
 		return err
 	}, func() {
-		msg := fmt.Sprintf("已推送 %d 个提交到 %s/%s", len(plan.Commits), plan.Remote, plan.RemoteBranch)
+		msg := m.ComparePushed(len(plan.Commits), plan.Remote+"/"+plan.RemoteBranch)
 		if len(plan.Commits) == 0 {
-			msg = "已推送到 " + plan.Remote + "/" + plan.RemoteBranch
+			msg = m.ComparePushedTo(plan.Remote + "/" + plan.RemoteBranch)
 		}
 		a.notify(msg, "", nil)
 	})

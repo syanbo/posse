@@ -14,6 +14,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/files"
+	"posse/locales"
 )
 
 func dot(c *ui.Context, color ui.Color) ui.Element {
@@ -88,7 +89,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			if mark, ok := marks[r.Path]; ok && !ignored {
 				name.TextColor(letterColor(c, mark))
 				if !r.Dir {
-					name.Tooltip(treeMarkText[mark])
+					name.Tooltip(treeMarkText(L(c), mark))
 				}
 			}
 			if ignored {
@@ -139,7 +140,7 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 			}
 		}
 		if !dir {
-			a.gitFileMenu(m, w, v, path)
+			a.gitFileMenu(L(c), m, w, v, path)
 		}
 	})
 }
@@ -320,7 +321,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		a.diffBar(c, w, v, d)
 		switch d.kind {
 		case docLoading:
-			ui.Text(c, diffLoadingText(d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
+			ui.Text(c, diffLoadingText(L(c), d.diff)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		case docDiff:
 			a.diffView(c, v, d)
 		case docImageDiff:
@@ -422,10 +423,10 @@ func (a *app) filesEmpty(c *ui.Context) {
 }
 
 // docDetail 是文件标签名字后面的小字：diff 的类型、分支比较，同名文件（names 是各名字打开了几个）带上级目录名。
-func docDetail(d *fileDoc, names map[string]int) string {
+func docDetail(m locales.Messages, d *fileDoc, names map[string]int) string {
 	switch {
 	case d.diff != nil:
-		return d.diff.tabLabel()
+		return d.diff.tabLabel(m)
 	case d.comp != nil:
 		return "比较"
 	case names[d.name()] > 1:
@@ -601,7 +602,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					d.blame = nil
 				}
 			} else if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", compactBox(), smallIcon())).Clicked() {
-				a.openBlame(w, v, d.path)
+				a.openBlame(L(c), w, v, d.path)
 			}
 			if e := v.git.entry(d.path); e != nil && !e.Conflict {
 				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {

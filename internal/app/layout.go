@@ -1249,7 +1249,7 @@ func (a *app) columnStrip(c *ui.Context, w *workspace, i int) {
 				for _, key := range slices.Clone(col.tabs) {
 					active := key == col.active
 					if d := docs[key]; d != nil {
-						a.docTab(c, w, a.filesFor(w), d, docDetail(d, names), i, active, focused)
+						a.docTab(c, w, a.filesFor(w), d, docDetail(L(c), d, names), i, active, focused)
 					} else if term, ok := terms[key]; ok {
 						a.tab(c, w, term, i, active, focused)
 					}

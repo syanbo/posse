@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui/editor"
 
 	"posse/internal/gitx"
+	"posse/locales"
 )
 
 // 单个文件的历史，照 WebStorm 的"历史记录"：左边是改过这个文件的提交（作者、时间、提交信息、标签），
@@ -78,19 +78,19 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		fileGlyph(c, ld.filter.Path, fsSmall)
 		ui.Text(c, ld.filter.Path).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(ld.filter.Path)
 		ui.Spacer(c)
-		n := fmt.Sprintf("%d 个提交", len(ld.commits))
+		n := L(c).LogCommitCount(len(ld.commits))
 		if ld.more {
-			n = fmt.Sprintf("%d+ 个提交", len(ld.commits))
+			n = L(c).LogMoreCommitCount(len(ld.commits))
 		}
 		ui.Text(c, n).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
-		if pressable(iconButtonSized(c, iconRefresh, "刷新", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.loadLog(v, d, false)
 		}
 	})
 	if len(ld.commits) == 0 {
-		msg := "这个文件还没有提交过"
+		msg := L(c).LogFileEmpty()
 		if ld.loading {
-			msg = "正在读取…"
+			msg = L(c).CommonLoading()
 		}
 		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
@@ -107,8 +107,8 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	}
 	ui.List(c, &ld.list, rows, func(i int) {
 		if i == len(ld.commits) {
-			b := ui.Box(c.Key("more")).Height(sz(30)).Padding(0, 16).Role(ui.RoleButton).Label("加载更早的提交")
-			b.Children(func() { ui.Text(c, "加载更早的提交").FontSize(fsSmall).TextColor(t.Accent) })
+			b := ui.Box(c.Key("more")).Height(sz(30)).Padding(0, 16).Role(ui.RoleButton).Label(L(c).LogLoadEarlier())
+			b.Children(func() { ui.Text(c, L(c).LogLoadEarlier()).FontSize(fsSmall).TextColor(t.Accent) })
 			if b.Clicked() && !ld.loading {
 				a.loadLog(v, d, true)
 			}
@@ -164,41 +164,41 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 	}
 	df := hd.diff
 	ui.Row(c).Height(sz(34)).Shrink(0).Padding(0, 12, 0, 6).Gap(4).AlignItems(ui.Center).Children(func() {
-		if pressable(iconButtonSized(c, iconArrowUp, "上一处差异", buttonBox(), iconSize)).Clicked() {
-			stepHunk(df, -1)
+		if pressable(iconButtonSized(c, iconArrowUp, L(c).GitPreviousDifference(), buttonBox(), iconSize)).Clicked() {
+			stepHunk(L(c), df, -1)
 		}
-		if pressable(iconButtonSized(c, iconArrowDown, "下一处差异", buttonBox(), iconSize)).Clicked() {
-			stepHunk(df, 1)
+		if pressable(iconButtonSized(c, iconArrowDown, L(c).GitNextDifference(), buttonBox(), iconSize)).Clicked() {
+			stepHunk(L(c), df, 1)
 		}
 		if hd.kind == docDiff {
 			split := df.state.Layout == editor.DiffSplit
-			if toggleChip(c, "左右", "左右对照，关掉是上下合并", split) {
+			if toggleChip(c, L(c).GitSideBySide(), L(c).GitSideBySideTip(), split) {
 				if split {
 					df.state.Layout = editor.DiffUnified
 				} else {
 					df.state.Layout = editor.DiffSplit
 				}
 			}
-			if toggleChip(c, "忽略空白", "只差空白的行不算改动", df.state.IgnoreWhitespace) {
+			if toggleChip(c, L(c).GitIgnoreWhitespace(), L(c).GitIgnoreWhitespaceTip(), df.state.IgnoreWhitespace) {
 				a.toggleIgnoreSpace(hd)
 			}
 		}
 		ui.Spacer(c)
 		if hd.kind == docDiff {
-			msg := "没有差异"
+			msg := L(c).GitNoDifferences()
 			if n := len(df.state.Hunks()); n > 0 {
-				msg = fmt.Sprintf("%d 处差异", n)
+				msg = L(c).GitDifferenceCount(n)
 			}
 			ui.Text(c, msg).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		}
 	})
 	// 两个版本：父提交（没有就是"新增"）和这个提交，后面是路径
 	ui.Row(c).Shrink(0).Padding(0, 16, 6, 16).Gap(8).AlignItems(ui.Center).Children(func() {
-		old := "新增"
+		old := L(c).GitAdded()
 		if df.oldRev != "" {
-			old = shortRev(df.oldRev)
+			old = shortRev(L(c), df.oldRev)
 		}
-		ui.Text(c, old+" → "+shortRev(df.newRev)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0).Selectable()
+		ui.Text(c, old+" → "+shortRev(L(c), df.newRev)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0).Selectable()
 		ui.Text(c, df.rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 	})
 	ui.Column(c).Grow(1).Children(func() {
@@ -208,26 +208,26 @@ func (a *app) historyDiff(c *ui.Context, v *filesView, d *fileDoc) {
 		case docImageDiff:
 			imageDiffView(c, hd)
 		case docBinary:
-			docMessage(c, hd, "二进制文件，不显示 diff")
+			docMessage(c, hd, L(c).GitBinaryDiff())
 		case docError:
 			docMessage(c, hd, hd.err)
 		case docTooLarge:
 			a.tooLargeDiffView(c, v, hd)
 		default:
-			ui.Text(c, diffLoadingText(df)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
+			ui.Text(c, diffLoadingText(L(c), df)).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		}
 		diffHint(c, df)
 	})
 }
 
 // stepHunk 在 diff 里跳到上一处 / 下一处改动；到头了提示一下。
-func stepHunk(df *diffDoc, dir int) {
+func stepHunk(m locales.Messages, df *diffDoc, dir int) {
 	hunks := df.state.Hunks()
 	next := df.hunk + dir
 	if next < 0 || next >= len(hunks) {
-		msg := "已经是最后一处差异"
+		msg := m.GitLastDifference()
 		if dir < 0 {
-			msg = "已经是第一处差异"
+			msg = m.GitFirstDifference()
 		}
 		df.hint, df.hintAt = msg, time.Now()
 		return

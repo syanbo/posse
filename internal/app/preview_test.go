@@ -24,6 +24,7 @@ import (
 	"posse/internal/media"
 	"posse/internal/skills"
 	"posse/internal/usage"
+	"posse/locales"
 )
 
 // nopConn 让界面里的终端只显示喂进去的内容。
@@ -400,7 +401,7 @@ func previewCompare(t *testing.T, a *app) {
 func previewPush(t *testing.T, a *app) {
 	branchWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
-	a.openPush(&a.workspaces[0])
+	a.openPush(locales.In("zh-Hans"), &a.workspaces[0])
 	until(t, tt, "push plan", func() bool { return a.push.loaded })
 	a.selectCommit(a.files["w1"], &a.push.commit, a.push.plan.Commits[0])
 	until(t, tt, "commit files", func() bool { return a.push.commit.files != nil })
@@ -1032,60 +1033,82 @@ func TestPreview(t *testing.T) {
 		}}
 		savePNG(t, newPreviewTester(a, dark), "definition-pick-"+suffix+".png")
 
+		// Git 各界面另出英文和伪语言（en-XA 把英文加长、加重音）各一张：看英文有没有截断、重叠
+		gitLangs := func(a *app, name string) {
+			for _, lang := range []string{"en", "en-XA"} {
+				lt := newPreviewTester(a, dark)
+				lt.SetLocale(lang)
+				lt.Frame()
+				savePNG(t, lt, name+"-"+lang+"-"+suffix+".png")
+			}
+		}
+
 		// 左栏"改动"和 main.go 的 diff
 		a = previewApp(t)
 		previewGit(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-changes-"+suffix+".png")
+		gitLangs(a, "git-changes")
 
 		// worktree 的改动页：相对基准分支的提交数、会冲突的文件，同步和合并；储藏分页里别的分支存的标出分支
 		a = previewApp(t)
 		previewWorktree(t, a, 0)
 		savePNG(t, newPreviewTester(a, dark), "git-worktree-"+suffix+".png")
+		gitLangs(a, "git-worktree")
 		a = previewApp(t)
 		previewWorktree(t, a, 1)
 		savePNG(t, newPreviewTester(a, dark), "git-worktree-stash-"+suffix+".png")
+		gitLangs(a, "git-worktree-stash")
 
 		// 批量回滚对话框：按目录排的文件树
 		a = previewApp(t)
 		previewRollback(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-rollback-"+suffix+".png")
+		gitLangs(a, "git-rollback")
 
 		// 改动页按目录分组
 		a = previewApp(t)
 		previewChangesByDir(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-changes-dir-"+suffix+".png")
+		gitLangs(a, "git-changes-dir")
 
 		// 编辑器行号旁的改动卡片
 		a = previewApp(t)
 		previewChangePop(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-change-pop-"+suffix+".png")
+		gitLangs(a, "git-change-pop")
 
 		// 回滚对话框里点开文件：右边是 diff，可以逐处回滚
 		a = previewApp(t)
 		previewRollbackDetail(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-rollback-detail-"+suffix+".png")
+		gitLangs(a, "git-rollback-detail")
 
 		// 分支弹窗：在终端标签上点分支名打开
 		a = previewApp(t)
 		previewBranches(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-branches-"+suffix+".png")
+		gitLangs(a, "git-branches")
 
 		a = previewApp(t)
 		previewPush(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-push-"+suffix+".png")
+		gitLangs(a, "git-push")
 
 		// Push 对话框里点开文件：右边是 diff
 		a = previewApp(t)
 		previewPushDetail(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-push-detail-"+suffix+".png")
+		gitLangs(a, "git-push-detail")
 
 		a = previewApp(t)
 		previewCompare(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-compare-"+suffix+".png")
+		gitLangs(a, "git-compare")
 
 		a = previewApp(t)
 		previewImageDiff(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-image-diff-"+suffix+".png")
+		gitLangs(a, "git-image-diff")
 
 		a = previewApp(t)
 		previewImageDoc(t, a, 0)
@@ -1098,11 +1121,13 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewLog(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-log-"+suffix+".png")
+		gitLangs(a, "git-log")
 
 		// 日志浮层的控制台：Posse 执行的 git 命令，失败的是红的
 		a = previewApp(t)
 		previewConsole(t, a)
 		savePNG(t, newPreviewTester(a, dark), "git-console-"+suffix+".png")
+		gitLangs(a, "git-console")
 
 		a = previewApp(t)
 		url := "orca://pair?code=eyJ2IjoyLCJlbmRwb2ludCI6IndzOi8vMTcyLjMxLjAuMjMwOjY3ODgiLCJkZXZpY2VUb2tlbiI6IjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0"

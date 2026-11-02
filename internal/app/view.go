@@ -188,10 +188,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.openRollback(a.filesFor(w))
 		}
 		if w.Branch != "" && a.pressed(c, "push") {
-			a.openPush(w)
+			a.openPush(L(c), w)
 		}
 		if w.Branch != "" && a.pressed(c, "newBranch") {
-			a.askNewBranch(w, a.filesFor(w), "")
+			a.askNewBranch(L(c), w, a.filesFor(w), "")
 		}
 		if a.pressed(c, "fileTree") {
 			a.toggleFilesPanel(w, sideFiles)
@@ -609,7 +609,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	if row.Clicked() {
 		*open = !*open
 	}
-	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(m, ws[0]) })
+	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(L(c), m, ws[0]) })
 }
 
 // navDisclosure 是侧栏行尾的展开箭头：行尾的内容离行边 navPad、行离列表边 navEnd，箭头要再往右挪一点，
@@ -767,7 +767,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
-	contextMenu(c, item, func(m *popMenu) { a.workspaceMenu(m, w) })
+	contextMenu(c, item, func(m *popMenu) { a.workspaceMenu(L(c), m, w) })
 	return item
 }
 
@@ -949,7 +949,7 @@ func (a *app) sessionStatus(term terminalInfo) string {
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
-func (a *app) workspaceMenu(m *popMenu, w workspace) {
+func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	for _, ag := range a.agentChoices() {
 		if m.Item("启动 " + agentTitle(ag)).Chosen() {
 			a.startTerminal(w.ID, ag)
@@ -967,7 +967,7 @@ func (a *app) workspaceMenu(m *popMenu, w workspace) {
 	if hasBase(&w) {
 		m.Separator()
 		if m.Item("合并到 " + w.BaseRef + "…").Chosen() {
-			a.askMergeWorkspace(w.ID)
+			a.askMergeWorkspace(lm, w.ID)
 		}
 	}
 	m.Separator()

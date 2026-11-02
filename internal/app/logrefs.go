@@ -23,7 +23,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 		ld.refsOpen = map[string]bool{"local": true}
 	}
 	ui.Box(c).Height(sz(40)).Shrink(0).Padding(0, 8).Center().Children(func() {
-		fieldInput(c, &ld.refQuery, "筛选分支和标签")
+		fieldInput(c, &ld.refQuery, L(c).LogFilterRefs())
 	})
 	query := strings.ToLower(strings.TrimSpace(ld.refQuery))
 	match := func(name string) bool { return query == "" || strings.Contains(strings.ToLower(name), query) }
@@ -73,18 +73,18 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 		items = append(items, refItem{key: key, label: label, name: name, indent: indent, parent: parent, ref: r, mark: mark})
 	}
 	if query == "" {
-		label := "HEAD（当前分支）"
+		label := L(c).LogHead()
 		if cur, ok := currentBranch(g.branches.list); ok {
 			label = "HEAD（" + cur.Name + "）"
 		}
 		ref("HEAD", label, label, 0, -1, "HEAD", nil)
 	}
-	if gi, ok := group("local", "本地", len(local), 0, -1); ok {
+	if gi, ok := group("local", L(c).BranchLocal(), len(local), 0, -1); ok {
 		for _, b := range local {
-			ref("l:"+b.Name, b.Name, "本地分支 "+b.Name, 1, gi, branchRef(b), refMark(b))
+			ref("l:"+b.Name, b.Name, L(c).LogLocalBranch(b.Name), 1, gi, branchRef(b), refMark(b))
 		}
 	}
-	if gi, ok := group("remote", "远程", len(remote), 0, -1); ok {
+	if gi, ok := group("remote", L(c).BranchRemote(), len(remote), 0, -1); ok {
 		// 按远端分组：origin/main 放在 origin 下面
 		var remotes []string
 		for _, b := range remote {
@@ -100,14 +100,14 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			for _, b := range remote {
 				if rest, ok := strings.CutPrefix(b.Name, r+"/"); ok {
-					ref("r:"+b.Name, rest, "远程分支 "+b.Name, 2, ri, branchRef(b), nil)
+					ref("r:"+b.Name, rest, L(c).LogRemoteBranch(b.Name), 2, ri, branchRef(b), nil)
 				}
 			}
 		}
 	}
-	if gi, ok := group("tags", "标签", len(tags), 0, -1); ok {
+	if gi, ok := group("tags", L(c).LogTags(), len(tags), 0, -1); ok {
 		for _, tag := range tags {
-			ref("t:"+tag, tag, "标签 "+tag, 1, gi, "refs/tags/"+tag, nil)
+			ref("t:"+tag, tag, L(c).LogTag(tag), 1, gi, "refs/tags/"+tag, nil)
 		}
 	}
 	list := &ld.refList
@@ -245,7 +245,7 @@ func refMark(b gitx.Branch) func(c *ui.Context) {
 		return nil
 	}
 	return func(c *ui.Context) {
-		ui.Text(c, "当前").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
+		ui.Text(c, L(c).LogCurrent()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
 	}
 }
 

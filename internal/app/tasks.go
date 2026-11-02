@@ -686,7 +686,7 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 				a.viewDiff(task)
 			}
 			if task.Status != "running" && pressable(textButton(c, "合并到 "+task.BaseRef)).Clicked() {
-				a.askMergeWorkspace(task.WorkspaceID)
+				a.askMergeWorkspace(L(c), task.WorkspaceID)
 			}
 		}
 		ui.Spacer(c)
