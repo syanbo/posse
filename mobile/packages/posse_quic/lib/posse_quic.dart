@@ -1,4 +1,4 @@
-/// Posse 手机端编进 App 的 Go 库：QUIC 连接，和 Mermaid 图的排版（[renderMermaid]）。
+/// Posse 手机端编进 App 的 Go 库：QUIC 连接、E2EE 的 secretbox 加解密（[secretboxSeal]），和 Mermaid 图的排版（[renderMermaid]）。
 /// QUIC 的协议见仓库里的 internal/mquic：一条流上收发文本、二进制两种消息。
 @DefaultAsset('package:posse_quic/posse_quic.dart')
 library;
@@ -52,6 +52,56 @@ external void _reset();
 
 @Native<Void Function(Pointer<Uint8>)>(symbol: 'hq_free')
 external void _free(Pointer<Uint8> p);
+
+@Native<
+  Void Function(Pointer<Uint8>, Pointer<Uint8>, Pointer<Uint8>, Int32, Pointer<Uint8>)
+>(symbol: 'hq_seal', isLeaf: true)
+external void _seal(
+  Pointer<Uint8> key,
+  Pointer<Uint8> nonce,
+  Pointer<Uint8> msg,
+  int len,
+  Pointer<Uint8> out,
+);
+
+@Native<Int32 Function(Pointer<Uint8>, Pointer<Uint8>, Int32, Pointer<Uint8>)>(
+  symbol: 'hq_open',
+  isLeaf: true,
+)
+external int _open(
+  Pointer<Uint8> key,
+  Pointer<Uint8> frame,
+  int len,
+  Pointer<Uint8> out,
+);
+
+/// secretbox 的开销：Poly1305 标签 16 字节，nonce 24 字节拼在密文前面。
+const secretboxOverhead = 16;
+const secretboxNonceLength = 24;
+
+/// 用 Go 的 nacl/secretbox 加密：返回 nonce 加密文，和 Go 的 `secretbox.Seal(nonce[:], …)` 同格式。
+/// 直接把 Dart 的缓冲区交给 Go，不拷贝。
+Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
+  if (key.length != 32 || nonce.length != secretboxNonceLength) {
+    throw ArgumentError('secretbox: bad key or nonce length');
+  }
+  final out = Uint8List(
+    secretboxNonceLength + secretboxOverhead + plain.length,
+  );
+  _seal(key.address, nonce.address, plain.address, plain.length, out.address);
+  return out;
+}
+
+/// 解开 [secretboxSeal] 的结果（nonce 取自 frame 的前 24 字节），认证失败返回 null。
+Uint8List? secretboxOpen(Uint8List key, Uint8List frame) {
+  if (key.length != 32) throw ArgumentError('secretbox: bad key length');
+  if (frame.length < secretboxNonceLength + secretboxOverhead) return null;
+  final out = Uint8List(
+    frame.length - secretboxNonceLength - secretboxOverhead,
+  );
+  final ok = _open(key.address, frame.address, frame.length, out.address);
+  return ok == 1 ? out : null;
+}
 
 @Native<Pointer<Utf8> Function(Pointer<Utf8>, Int32)>(symbol: 'hq_mermaid')
 external Pointer<Utf8> _mermaid(Pointer<Utf8> request, int len);

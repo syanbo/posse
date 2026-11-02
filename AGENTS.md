@@ -63,7 +63,7 @@ internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条�
 internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
 scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包；`android-release.sh`：发布安卓安装包；`pele.sh`：打包 Mermaid 渲染器 Pele（升级 Pele 时跑，要 npx）；`memprobe.sh`：按类别采样进程内存（做法和上次的结果见 `docs/plans/memory.md`）
-mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go 库（QUIC 客户端和 Mermaid 排版），构建钩子调 `go build`，Dart 经 FFI 调用）
+mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go 库（QUIC 客户端、E2EE 的 secretbox 加解密和 Mermaid 排版），构建钩子调 `go build`，Dart 经 FFI 调用）
 third_party/mygo    带改动的 mygo v0.7.4（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
 ```
 

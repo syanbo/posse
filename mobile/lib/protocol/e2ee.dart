@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:pinenacl/tweetnacl.dart';
+import 'package:posse_quic/posse_quic.dart' as quic;
 
 const transcriptDomain = 'orca-mobile-e2ee/v2/transcript';
 const protocolName = 'orca-mobile-e2ee';
@@ -135,11 +136,11 @@ class E2eeSession {
 
   Uint8List open(Uint8List frame, {required int direction, required int kind}) {
     final nonce = frameNonce(id, direction, kind, recvN);
-    if (frame.length < 24 + TweetNaCl.macBytes + headerLen ||
+    if (frame.length < 24 + quic.secretboxOverhead + headerLen ||
         !bytesEqual(frame.sublist(0, 24), nonce)) {
       throw E2eeException('bad frame');
     }
-    final plain = secretboxOpen(recvKey, nonce, frame.sublist(24));
+    final plain = secretboxOpen(recvKey, frame);
     final header = frameHeader(id, direction, kind, recvN);
     if (!bytesEqual(plain.sublist(0, headerLen), header)) {
       throw E2eeException('bad frame');
@@ -367,38 +368,13 @@ Uint8List hkdfSha256(
   return Uint8List.sublistView(out.takeBytes(), 0, length);
 }
 
-/// Go 的 secretbox.Seal 把 nonce 拼在前面。TweetNaCl 的明文要先垫 32 个 0。
-Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
-  final message = Uint8List(TweetNaCl.zerobytesLength + plain.length);
-  message.setRange(TweetNaCl.zerobytesLength, message.length, plain);
-  final box = Uint8List(message.length);
-  final cipher = TweetNaCl.crypto_secretbox(
-    box,
-    message,
-    message.length,
-    nonce,
-    key,
-  );
-  return concat([nonce, Uint8List.fromList(cipher)]);
-}
+/// Go 的 secretbox.Seal 格式：nonce 拼在密文前面。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 慢约 5 倍。
+Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) =>
+    quic.secretboxSeal(key, nonce, plain);
 
-Uint8List secretboxOpen(Uint8List key, Uint8List nonce, Uint8List box) {
-  final cipher = Uint8List(TweetNaCl.boxzerobytesLength + box.length);
-  cipher.setRange(TweetNaCl.boxzerobytesLength, cipher.length, box);
-  final opened = Uint8List(cipher.length);
-  try {
-    final plain = TweetNaCl.crypto_secretbox_open(
-      opened,
-      cipher,
-      cipher.length,
-      nonce,
-      key,
-    );
-    return Uint8List.fromList(plain);
-  } catch (_) {
-    throw E2eeException('bad frame');
-  }
-}
+/// 解开整帧（nonce 加密文），nonce 用帧里的。
+Uint8List secretboxOpen(Uint8List key, Uint8List frame) =>
+    quic.secretboxOpen(key, frame) ?? (throw E2eeException('bad frame'));
 
 Uint8List frameNonce(Uint8List id, int direction, int kind, int counter) {
   final out = Uint8List(24);
