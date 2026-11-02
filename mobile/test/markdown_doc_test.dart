@@ -69,6 +69,45 @@ const _longTable = '''
 | B | Flutter 客户端，复用阶段 A 的协议，再加 Posse 自己的扩展（hook 审批决策、多地址竞速、Git 速览） | 自研，iOS 先、Android 后期 | 摆脱 Orca App 的节奏和 UI 限制 |
 ''';
 
+// README 常见的 HTML：居中的标题和徽章、折叠、图文表格、格子里空了行写的 Markdown
+const _html = '''
+<p align="center">
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" width="40" alt="标志">
+  <h1 align="center">居中标题</h1>
+</p>
+
+按 <kbd>Ctrl</kbd>+<kbd>C</kbd> 复制，<b>加粗</b>换行<br>第二行 <!-- 注释 -->
+
+<details>
+<summary>展开看看</summary>
+
+折起来的 **内容**
+
+</details>
+
+<table>
+<tr><th>名称</th><th>说明</th></tr>
+<tr><td>甲</td><td>第一项</td></tr>
+</table>
+
+<table>
+<tr>
+<td width="50%">
+
+### 格子里的标题
+
+- 列表项
+
+</td>
+<td><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" alt="右图"></td>
+</tr>
+</table>
+
+<script>alert("不显示")</script>
+
+结尾段落
+''';
+
 MarkdownDoc _doc(
   PosseAppModel model,
   void Function(String) open, {
@@ -147,6 +186,86 @@ void main() {
     expect(MediaQuery.paddingOf(ctx).bottom, 0);
   });
 
+  testWidgets('html in markdown is interpreted like GitHub', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 1600));
+    final model = PosseAppModel(store: MemoryPairingStore());
+    await tester.pumpWidget(_app(_doc(model, (_) {}, data: _html)));
+    await tester.pumpAndSettle();
+
+    // 标签不原样露出来，注释和 <script> 的内容不显示
+    expect(find.textContaining('<', findRichText: true), findsNothing);
+    expect(find.textContaining('注释', findRichText: true), findsNothing);
+    expect(find.textContaining('不显示', findRichText: true), findsNothing);
+    expect(find.textContaining('结尾段落', findRichText: true), findsOneWidget);
+
+    // 居中的标题
+    final title = find.textContaining('居中标题', findRichText: true);
+    expect(title, findsOneWidget);
+    final center = tester.getCenter(title).dx;
+    expect(center, closeTo(390 / 2, 20));
+
+    // data: 地址的图按写的宽度画
+    final logo = find.byWidgetPredicate((w) => w is Image && w.width == 40);
+    expect(logo, findsOneWidget);
+
+    // 行内标签：<kbd> 是行内代码，<br> 换行
+    expect(find.textContaining('Ctrl', findRichText: true), findsOneWidget);
+    expect(find.textContaining('换行\n第二行', findRichText: true), findsOneWidget);
+
+    // <details> 默认收着，点 summary 展开
+    final folded = find.textContaining('折起来的', findRichText: true);
+    expect(folded, findsNothing);
+    await tester.tap(find.textContaining('展开看看', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(folded, findsOneWidget);
+
+    // 只有文字、第一行是 <th> 的表格照 Markdown 表格画；带图和块的是 HTML 表格，
+    // 格子里空了行写的 Markdown 挂回格子
+    expect(find.byType(Table), findsNWidgets(2));
+    final cellTitle = find.textContaining('格子里的标题', findRichText: true);
+    expect(cellTitle, findsOneWidget);
+    expect(
+      find.ancestor(of: cellTitle, matching: find.byType(Table)),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate((w) => w is Image && w.width == null),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('ragged html tables and tags inside dropped content', (
+    tester,
+  ) async {
+    final model = PosseAppModel(store: MemoryPairingStore());
+    const data = '''
+<table>
+<tr><th>甲</th><th>乙</th></tr>
+<tr><td>只有一格</td></tr>
+</table>
+
+前文 <svg><a href="x"><text>图里的字</text></svg> 后文
+''';
+    await tester.pumpWidget(_app(_doc(model, (_) {}, data: data)));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('只有一格', findRichText: true), findsOneWidget);
+    expect(find.textContaining('图里的字', findRichText: true), findsNothing);
+    expect(find.textContaining('后文', findRichText: true), findsOneWidget);
+  });
+
+  test('image sources follow GitHub', () {
+    MdImageSource? src(String s) =>
+        mdImageSource(s, worktree: 'w1', docPath: 'docs/guide.md');
+    expect(src('img/a.png')!.path, 'docs/img/a.png');
+    expect(src('../logo.png?raw=true')!.path, 'logo.png');
+    expect(src('/design/icon.png')!.path, 'design/icon.png');
+    expect(src('https://img.shields.io/badge/a-b-green')!.url, isNotNull);
+    expect(src('data:image/png;base64,AAAA')!.url, startsWith('data:'));
+    expect(src('../../outside.png'), isNull);
+    expect(src('ftp://x/y.png'), isNull);
+  });
+
   // 离屏截图对比新旧渲染，给人看：
   // POSSE_SHOTS_DIR=/tmp/shots fvm flutter test test/markdown_doc_test.dart
   final dir = Platform.environment['POSSE_SHOTS_DIR'] ?? '';
@@ -172,6 +291,7 @@ void main() {
       for (final (name, child) in [
         ('new', _doc(model, (_) {}) as Widget),
         ('table', _doc(model, (_) {}, data: _longTable)),
+        ('html', _doc(model, (_) {}, data: _html)),
         (
           'old',
           Builder(
