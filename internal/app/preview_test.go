@@ -1141,7 +1141,7 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
 		// 设置页的英文和伪语言（en-XA 把英文加长、加重音）：看排版有没有截断
 		for _, lang := range []string{"en", "en-XA"} {
-			for _, tab := range []string{"general", "appearance", "about"} {
+			for _, tab := range []string{"general", "appearance", "about", "agent", "keys"} {
 				a.settingsTab = tab
 				lt := newPreviewTester(a, dark)
 				lt.SetLocale(lang)
@@ -1544,5 +1544,53 @@ func TestStaleGripDragReleased(t *testing.T) {
 	tt.Frame()
 	if a.resizingSplit != "" || a.splitDrag != 0 {
 		t.Fatalf("resizing %q drag %v", a.resizingSplit, a.splitDrag)
+	}
+}
+
+// TestPreviewSettingsI18n 单独展示卡片，避免长设置页下半部分没进入截图。
+func TestPreviewSettingsI18n(t *testing.T) {
+	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
+		t.Skip("POSSE_PREVIEW_DIR not set")
+	}
+	for _, dark := range []bool{false, true} {
+		suffix := "light"
+		if dark {
+			suffix = "dark"
+		}
+		for _, lang := range []string{"zh-Hans", "en", "en-XA"} {
+			a := previewApp(t)
+			views := []struct {
+				name string
+				view func(*ui.Context)
+			}{
+				{"chat-awake", func(c *ui.Context) { a.chatSettings(c); a.awakeSettings(c) }},
+				{"usage-settings", a.planSettings},
+				{"usage-panel", func(c *ui.Context) { a.state.UsageRemaining = false; a.planPanel(c, a.daemon.Usage.Usages) }},
+				{"usage-panel-remaining", func(c *ui.Context) { a.state.UsageRemaining = true; a.planPanel(c, a.daemon.Usage.Usages) }},
+				{"update-ready", func(c *ui.Context) {
+					a.updateCard(c, "", updateView{phase: updateReady, version: "0.9.0", notes: "更新说明正文保持原样。"})
+				}},
+				{"update-progress", func(c *ui.Context) {
+					a.updateCard(c, "", updateView{phase: updateDownloading, version: "0.9.0", percent: 42})
+				}},
+				{"keys-recording", func(c *ui.Context) { a.keyRec = &keyRecording{id: "newWorkspace", idx: 0}; a.keySettings(c) }},
+			}
+			for _, v := range views {
+				tt := newTester(func(c *ui.Context) {
+					c.SetTheme(posseTheme(c.Theme().Dark))
+					ui.Scroll(c).Grow(1).Children(func() { ui.Column(c).Padding(24).Gap(16).Children(func() { v.view(c) }) })
+				}, 760, 900)
+				tt.SetDark(dark)
+				tt.SetLocale(lang)
+				tt.SetScale(2)
+				tt.Frame()
+				savePNG(t, tt, "i18n-"+v.name+"-"+lang+"-"+suffix+".png")
+			}
+			a.upd.phase, a.upd.version = updateReady, "0.9.0"
+			tt := newPreviewTester(a, dark)
+			tt.SetLocale(lang)
+			tt.Frame()
+			savePNG(t, tt, "i18n-update-bar-"+lang+"-"+suffix+".png")
+		}
 	}
 }

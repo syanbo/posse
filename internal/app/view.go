@@ -17,6 +17,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/errtext"
 	"posse/internal/media"
+	"posse/locales"
 )
 
 func (a *app) build(c *ui.Context) {
@@ -150,7 +151,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		a.startTerminal(w.ID, "")
 	}
 	if a.pressed(c, "newChat") {
-		a.openChat(true)
+		a.openChat(L(c), true)
 	}
 	if w != nil {
 		if a.pressed(c, "quickOpen") {
@@ -921,7 +922,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		if m.Item("关闭会话…").Chosen() {
 			a.askClose(term)
 		}
-		a.chatFolderMenu(m, term)
+		a.chatFolderMenu(L(c), m, term)
 	})
 }
 
@@ -2141,7 +2142,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 		a.askClose(term)
 	}
 	row.Tooltip(tabTooltip(term))
-	contextMenu(c, row, func(m *popMenu) { a.tabMenu(m, w, term) })
+	contextMenu(c, row, func(m *popMenu) { a.tabMenu(L(c), m, w, term) })
 }
 
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
@@ -2163,7 +2164,7 @@ func tabTooltip(t terminalInfo) string {
 }
 
 // tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
-func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
+func (a *app) tabMenu(l locales.Messages, m *popMenu, w *workspace, term terminalInfo) {
 	if m.Item("重命名…").Chosen() {
 		a.startRename(term)
 	}
@@ -2184,7 +2185,7 @@ func (a *app) tabMenu(m *popMenu, w *workspace, term terminalInfo) {
 	if sid := sessionID(term); sid != "" && m.Item("复制会话 ID").Chosen() {
 		writeClipboard(sid)
 	}
-	a.chatFolderMenu(m, term)
+	a.chatFolderMenu(l, m, term)
 	m.Separator()
 	a.columnMenu(m, w, term.ID)
 	m.Separator()

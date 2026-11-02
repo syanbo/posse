@@ -7,6 +7,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"posse/locales"
 )
 
 // 快捷键表：设置页「快捷键」列出这里的每一项，改过的存在 ui.json 的 keys（只存和默认不同的）。
@@ -33,154 +35,173 @@ const (
 	scopeSystem                   // 系统菜单，只列出来
 )
 
+type keyGroup string
+
+const (
+	keyGroupWindow       keyGroup = "window"
+	keyGroupWeb          keyGroup = "web"
+	keyGroupFiles        keyGroup = "files"
+	keyGroupGit          keyGroup = "git"
+	keyGroupHistory      keyGroup = "history"
+	keyGroupTerminal     keyGroup = "terminal"
+	keyGroupOther        keyGroup = "other"
+	keyGroupEditorMove   keyGroup = "editorMove"
+	keyGroupEditorSelect keyGroup = "editorSelect"
+	keyGroupEditorEdit   keyGroup = "editorEdit"
+	keyGroupEditorFold   keyGroup = "editorFold"
+	keyGroupEditorFind   keyGroup = "editorFind"
+)
+
 type keyAction struct {
-	id    string
-	group string
-	label string
-	scope keyScope
-	def   []keyCombo
-	fixed bool           // 只列出来，不能改
-	cmd   editor.Command // scopeEditor 的命令
-	note  string         // 悬停说明
-	text  string         // 设置页上代替按键写法显示的文字（⌘1…9）
+	id         string
+	group      keyGroup
+	groupLabel func(locales.Messages) string
+	label      func(locales.Messages) string
+	scope      keyScope
+	def        []keyCombo
+	fixed      bool                          // 只列出来，不能改
+	cmd        editor.Command                // scopeEditor 的命令
+	note       func(locales.Messages) string // 悬停说明
+	text       string                        // 设置页上代替按键写法显示的文字（⌘1…9）
 }
 
 func k(mods ui.Modifiers, key ui.Key) keyCombo { return keyCombo{mods: mods, key: key} }
 
 // Posse 自己的快捷键。和编辑器的查找共用 editor.find 等几项，预览、Annotate 的查找栏跟着编辑器的改。
 var posseKeys = []keyAction{
-	{id: "newTerminal", group: "窗口与标签", label: "新建终端", def: []keyCombo{k(ui.Cmd, ui.KeyT)}},
-	{id: "newWorkspace", group: "窗口与标签", label: "新建工作区", def: []keyCombo{k(ui.Cmd, ui.KeyN)}},
-	{id: "newChat", group: "窗口与标签", label: "新聊天", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyN)}, note: "切到侧栏顶上的「聊天」，用上一次聊天的 agent 再开一个；还没聊过时只切过去"},
-	{id: "closeTab", group: "窗口与标签", label: "关闭标签", def: []keyCombo{k(ui.Cmd, ui.KeyW)}, note: "在菜单栏的 File 里，改了菜单跟着改"},
-	{id: "closeWindow", group: "窗口与标签", label: "关闭窗口", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyW)}, note: "在菜单栏的 File 里，改了菜单跟着改"},
-	{id: "settings", group: "窗口与标签", label: "打开设置", def: []keyCombo{k(ui.Cmd, ui.KeyComma)}, note: "在菜单栏的 Posse 里，改了菜单跟着改"},
-	{id: "nextTab", group: "窗口与标签", label: "下一个标签", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyBracketRight), k(ui.Ctrl, ui.KeyTab)}},
-	{id: "prevTab", group: "窗口与标签", label: "上一个标签", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyBracketLeft), k(ui.Ctrl|ui.Shift, ui.KeyTab)}},
-	{id: "selectTab", group: "窗口与标签", label: "切到第 1…9 个终端", def: []keyCombo{k(ui.Cmd, ui.Key1)}, fixed: true, text: "⌘1…9"},
-	{id: "toggleSidebar", group: "窗口与标签", label: "收起 / 展开侧栏", def: []keyCombo{k(ui.Cmd, ui.KeyB)}},
-	{id: "zoomIn", group: "窗口与标签", label: "放大字号", def: []keyCombo{k(ui.Cmd, ui.KeyEqual)}, note: "终端里调终端字号，文件标签里调编辑器字号，Markdown 预览和历史页调 Markdown 字号，看图片时放大图片"},
-	{id: "zoomOut", group: "窗口与标签", label: "缩小字号", def: []keyCombo{k(ui.Cmd, ui.KeyMinus)}, note: "终端里调终端字号，文件标签里调编辑器字号，Markdown 预览和历史页调 Markdown 字号，看图片时缩小图片"},
-	{id: "zoomReset", group: "窗口与标签", label: "恢复默认字号", def: []keyCombo{k(ui.Cmd, ui.Key0)}, note: "看图片时是适应窗口"},
-	{id: "jumpBack", group: "窗口与标签", label: "回到跳走之前的位置", def: []keyCombo{k(ui.Ctrl, ui.KeyMinus)}},
-	{id: "jumpForward", group: "窗口与标签", label: "再往前跳", def: []keyCombo{k(ui.Ctrl|ui.Shift, ui.KeyMinus)}},
+	{id: "newTerminal", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysNewTerminalLabel, def: []keyCombo{k(ui.Cmd, ui.KeyT)}},
+	{id: "newWorkspace", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysNewWorkspaceLabel, def: []keyCombo{k(ui.Cmd, ui.KeyN)}},
+	{id: "newChat", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysNewChatLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyN)}, note: locales.Messages.KeysNewChatNote},
+	{id: "closeTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysCloseTabLabel, def: []keyCombo{k(ui.Cmd, ui.KeyW)}, note: locales.Messages.KeysCloseTabNote},
+	{id: "closeWindow", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysCloseWindowLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyW)}, note: locales.Messages.KeysCloseWindowNote},
+	{id: "settings", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysSettingsLabel, def: []keyCombo{k(ui.Cmd, ui.KeyComma)}, note: locales.Messages.KeysSettingsNote},
+	{id: "nextTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysNextTabLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyBracketRight), k(ui.Ctrl, ui.KeyTab)}},
+	{id: "prevTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysPrevTabLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyBracketLeft), k(ui.Ctrl|ui.Shift, ui.KeyTab)}},
+	{id: "selectTab", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysSelectTabLabel, def: []keyCombo{k(ui.Cmd, ui.Key1)}, fixed: true, text: "⌘1…9"},
+	{id: "toggleSidebar", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysToggleSidebarLabel, def: []keyCombo{k(ui.Cmd, ui.KeyB)}},
+	{id: "zoomIn", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomInLabel, def: []keyCombo{k(ui.Cmd, ui.KeyEqual)}, note: locales.Messages.KeysZoomInNote},
+	{id: "zoomOut", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomOutLabel, def: []keyCombo{k(ui.Cmd, ui.KeyMinus)}, note: locales.Messages.KeysZoomOutNote},
+	{id: "zoomReset", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysZoomResetLabel, def: []keyCombo{k(ui.Cmd, ui.Key0)}, note: locales.Messages.KeysZoomResetNote},
+	{id: "jumpBack", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysJumpBackLabel, def: []keyCombo{k(ui.Ctrl, ui.KeyMinus)}},
+	{id: "jumpForward", group: keyGroupWindow, groupLabel: locales.Messages.KeysGroupWindow, label: locales.Messages.KeysJumpForwardLabel, def: []keyCombo{k(ui.Ctrl|ui.Shift, ui.KeyMinus)}},
 
-	{id: "webReload", group: "网页", label: "重新载入网页", def: []keyCombo{k(ui.Cmd, ui.KeyR)}, note: "在菜单栏的 View 里，网页有焦点时也认；当前不是网页标签时不起作用"},
-	{id: "webHardReload", group: "网页", label: "强制重新载入网页（不用缓存）", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyR)}, note: "在菜单栏的 View 里"},
-	{id: "webMobile", group: "网页", label: "开关手机预览", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyM)}, note: "在菜单栏的 View 里，用上次选的机型"},
+	{id: "webReload", group: keyGroupWeb, groupLabel: locales.Messages.KeysGroupWeb, label: locales.Messages.KeysWebReloadLabel, def: []keyCombo{k(ui.Cmd, ui.KeyR)}, note: locales.Messages.KeysWebReloadNote},
+	{id: "webHardReload", group: keyGroupWeb, groupLabel: locales.Messages.KeysGroupWeb, label: locales.Messages.KeysWebHardReloadLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyR)}, note: locales.Messages.KeysWebHardReloadNote},
+	{id: "webMobile", group: keyGroupWeb, groupLabel: locales.Messages.KeysGroupWeb, label: locales.Messages.KeysWebMobileLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyM)}, note: locales.Messages.KeysWebMobileNote},
 
-	{id: "quickOpen", group: "文件", label: "快速打开文件", def: []keyCombo{k(ui.Cmd, ui.KeyP)}},
-	{id: "searchFiles", group: "文件", label: "在文件里检索", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyF)}},
-	{id: "filesPanel", group: "文件", label: "开关文件栏", def: []keyCombo{k(ui.Cmd, ui.KeyL)}},
-	{id: "fileTree", group: "文件", label: "文件树", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyE)}},
-	{id: "revealFile", group: "文件", label: "在文件树中定位当前文件", def: []keyCombo{k(ui.Alt, ui.KeyF1)}},
-	{id: "save", group: "文件", label: "保存", scope: scopeFiles, def: []keyCombo{k(ui.Cmd, ui.KeyS)}},
-	{id: "formatJSON", group: "文件", label: "格式化 JSON", scope: scopeFiles, def: []keyCombo{k(ui.Alt|ui.Shift, ui.KeyF)}},
+	{id: "quickOpen", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysQuickOpenLabel, def: []keyCombo{k(ui.Cmd, ui.KeyP)}},
+	{id: "searchFiles", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysSearchFilesLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyF)}},
+	{id: "filesPanel", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFilesPanelLabel, def: []keyCombo{k(ui.Cmd, ui.KeyL)}},
+	{id: "fileTree", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFileTreeLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyE)}},
+	{id: "revealFile", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysRevealFileLabel, def: []keyCombo{k(ui.Alt, ui.KeyF1)}},
+	{id: "save", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.CommonSave, scope: scopeFiles, def: []keyCombo{k(ui.Cmd, ui.KeyS)}},
+	{id: "formatJSON", group: keyGroupFiles, groupLabel: locales.Messages.KeysGroupFiles, label: locales.Messages.KeysFormatJSONLabel, scope: scopeFiles, def: []keyCombo{k(ui.Alt|ui.Shift, ui.KeyF)}},
 
-	{id: "changes", group: "Git", label: "改动页", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyG)}, note: "编辑器有焦点、预览开着查找栏时让给\"查找上一个\""},
-	{id: "commit", group: "Git", label: "提交", scope: scopeFiles, def: []keyCombo{k(ui.Cmd, ui.KeyK)}, note: "焦点在文件或文件栏上时"},
-	{id: "push", group: "Git", label: "Push", def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyK)}},
-	{id: "newBranch", group: "Git", label: "新建分支", def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyN)}},
-	{id: "gitLog", group: "Git", label: "Git 日志", def: []keyCombo{k(ui.Cmd, ui.Key9)}},
-	{id: "nextChange", group: "Git", label: "下一处改动", scope: scopeFiles, def: []keyCombo{k(0, ui.KeyF7)}, note: "diff、分支比较和回滚对话框里"},
-	{id: "prevChange", group: "Git", label: "上一处改动", scope: scopeFiles, def: []keyCombo{k(ui.Shift, ui.KeyF7)}, note: "diff、分支比较和回滚对话框里"},
-	{id: "diffOpenFile", group: "Git", label: "从 diff 打开文件", scope: scopeFiles, def: []keyCombo{k(0, ui.KeyF4)}},
-	{id: "rollback", group: "Git", label: "回滚", scope: scopeFiles, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyZ)}, note: "改动页里批量回滚，diff 里回滚当前这一处"},
+	{id: "changes", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysChangesLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyG)}, note: locales.Messages.KeysChangesNote},
+	{id: "commit", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysCommitLabel, scope: scopeFiles, def: []keyCombo{k(ui.Cmd, ui.KeyK)}, note: locales.Messages.KeysCommitNote},
+	{id: "push", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysPushLabel, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyK)}},
+	{id: "newBranch", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysNewBranchLabel, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyN)}},
+	{id: "gitLog", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysGitLogLabel, def: []keyCombo{k(ui.Cmd, ui.Key9)}},
+	{id: "nextChange", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysNextChangeLabel, scope: scopeFiles, def: []keyCombo{k(0, ui.KeyF7)}, note: locales.Messages.KeysNextChangeNote},
+	{id: "prevChange", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysPrevChangeLabel, scope: scopeFiles, def: []keyCombo{k(ui.Shift, ui.KeyF7)}, note: locales.Messages.KeysPrevChangeNote},
+	{id: "diffOpenFile", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysDiffOpenFileLabel, scope: scopeFiles, def: []keyCombo{k(0, ui.KeyF4)}},
+	{id: "rollback", group: keyGroupGit, groupLabel: locales.Messages.KeysGroupGit, label: locales.Messages.KeysRollbackLabel, scope: scopeFiles, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyZ)}, note: locales.Messages.KeysRollbackNote},
 
-	{id: "historySearch", group: "历史", label: "搜索会话", scope: scopeHistory, def: []keyCombo{k(ui.Cmd, ui.KeyF)}},
+	{id: "historySearch", group: keyGroupHistory, groupLabel: locales.Messages.KeysGroupHistory, label: locales.Messages.KeysHistorySearchLabel, scope: scopeHistory, def: []keyCombo{k(ui.Cmd, ui.KeyF)}},
 
-	{id: "termFind", group: "终端", label: "在终端里查找", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyF)}, note: "查找栏开着时，下一个、上一个跟着编辑器的查找"},
-	{id: "termClear", group: "终端", label: "清屏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyK)}},
-	{id: "termTop", group: "终端", label: "滚到顶", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyUp)}},
-	{id: "termBottom", group: "终端", label: "滚到底", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyDown)}},
-	{id: "termLineStart", group: "终端", label: "光标到行首", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyLeft)}},
-	{id: "termLineEnd", group: "终端", label: "光标到行尾", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyRight)}},
-	{id: "termKillLine", group: "终端", label: "删到行首", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBackspace)}},
-	{id: "termWordLeft", group: "终端", label: "上一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyLeft)}},
-	{id: "termWordRight", group: "终端", label: "下一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyRight)}},
-	{id: "termKillWord", group: "终端", label: "删前一个词", scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyBackspace)}},
-	{id: "splitRight", group: "终端", label: "向右分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyD)}, note: "在焦点格右边拆出一格，放一个新终端；最多四格"},
-	{id: "splitDown", group: "终端", label: "向下分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyD)}, note: "在焦点格下面拆出一格，放一个新终端；最多四格"},
-	{id: "closeSplit", group: "终端", label: "合并所有分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Ctrl, ui.KeyD)}, note: "所有标签合回一格，一个都不关"},
-	{id: "switchPane", group: "终端", label: "切换分栏", scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBracketRight), k(ui.Cmd, ui.KeyBracketLeft)}, note: "⌘] 下一格，⌘[ 上一格，从左上到右下"},
-	{id: "termNewline", group: "终端", label: "Claude、Codex 输入框里换行", scope: scopeTerminal, def: []keyCombo{k(ui.Shift, ui.KeyEnter)}},
+	{id: "termFind", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermFindLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyF)}, note: locales.Messages.KeysTermFindNote},
+	{id: "termClear", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermClearLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyK)}},
+	{id: "termTop", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermTopLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyUp)}},
+	{id: "termBottom", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermBottomLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyDown)}},
+	{id: "termLineStart", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermLineStartLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyLeft)}},
+	{id: "termLineEnd", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermLineEndLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyRight)}},
+	{id: "termKillLine", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermKillLineLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBackspace)}},
+	{id: "termWordLeft", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermWordLeftLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyLeft)}},
+	{id: "termWordRight", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermWordRightLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyRight)}},
+	{id: "termKillWord", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermKillWordLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Alt, ui.KeyBackspace)}},
+	{id: "splitRight", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysSplitRightLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyD)}, note: locales.Messages.KeysSplitRightNote},
+	{id: "splitDown", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysSplitDownLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Shift, ui.KeyD)}, note: locales.Messages.KeysSplitDownNote},
+	{id: "closeSplit", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysCloseSplitLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd|ui.Ctrl, ui.KeyD)}, note: locales.Messages.KeysCloseSplitNote},
+	{id: "switchPane", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysSwitchPaneLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Cmd, ui.KeyBracketRight), k(ui.Cmd, ui.KeyBracketLeft)}, note: locales.Messages.KeysSwitchPaneNote},
+	{id: "termNewline", group: keyGroupTerminal, groupLabel: locales.Messages.KeysGroupTerminal, label: locales.Messages.KeysTermNewlineLabel, scope: scopeTerminal, def: []keyCombo{k(ui.Shift, ui.KeyEnter)}},
 
-	{id: "sendMessage", group: "其他", label: "多行输入框里发送、提交", def: []keyCombo{k(ui.Cmd, ui.KeyEnter)}, fixed: true},
-	{id: "sysQuit", group: "其他", label: "退出 Posse", scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyQ)}, fixed: true},
-	{id: "sysHide", group: "其他", label: "隐藏 Posse", scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyH)}, fixed: true},
-	{id: "sysHideOthers", group: "其他", label: "隐藏其他", scope: scopeSystem, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyH)}, fixed: true},
-	{id: "sysMinimize", group: "其他", label: "最小化窗口", scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyM)}, fixed: true},
-	{id: "sysFullScreen", group: "其他", label: "全屏", scope: scopeSystem, def: []keyCombo{k(ui.Cmd|ui.Ctrl, ui.KeyF)}, fixed: true},
+	{id: "sendMessage", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSendMessageLabel, def: []keyCombo{k(ui.Cmd, ui.KeyEnter)}, fixed: true},
+	{id: "sysQuit", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSysQuitLabel, scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyQ)}, fixed: true},
+	{id: "sysHide", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSysHideLabel, scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyH)}, fixed: true},
+	{id: "sysHideOthers", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSysHideOthersLabel, scope: scopeSystem, def: []keyCombo{k(ui.Cmd|ui.Alt, ui.KeyH)}, fixed: true},
+	{id: "sysMinimize", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSysMinimizeLabel, scope: scopeSystem, def: []keyCombo{k(ui.Cmd, ui.KeyM)}, fixed: true},
+	{id: "sysFullScreen", group: keyGroupOther, groupLabel: locales.Messages.CommonOther, label: locales.Messages.KeysSysFullScreenLabel, scope: scopeSystem, def: []keyCombo{k(ui.Cmd|ui.Ctrl, ui.KeyF)}, fixed: true},
 }
 
 // editorKeyLabels 是编辑器里列进设置页的命令；方向键移动、打字、退格这类基本操作不列，也不能改。
 var editorKeyLabels = []struct {
-	group string
-	cmds  []editor.Command
-	names []string
+	group      keyGroup
+	groupLabel func(locales.Messages) string
+	cmds       []editor.Command
+	names      []func(locales.Messages) string
 }{
-	{"编辑器 · 移动", []editor.Command{
+	{keyGroupEditorMove, locales.Messages.KeysGroupEditorMove, []editor.Command{
 		editor.MoveWordLeft, editor.MoveWordRight, editor.MoveSubwordLeft, editor.MoveSubwordRight,
 		editor.MoveLineStart, editor.MoveLineEnd, editor.MoveDocStart, editor.MoveDocEnd,
 		editor.MoveParagraphUp, editor.MoveParagraphDown, editor.MovePageUp, editor.MovePageDown, editor.MoveToBracket,
-	}, []string{
-		"上一个词", "下一个词", "上一个子词", "下一个子词",
-		"行首", "行尾", "文件开头", "文件末尾",
-		"上一段", "下一段", "上一页", "下一页", "跳到匹配的括号",
+	}, []func(locales.Messages) string{
+		locales.Messages.KeysEditorMoveWordLeft, locales.Messages.KeysEditorMoveWordRight, locales.Messages.KeysEditorMoveSubwordLeft, locales.Messages.KeysEditorMoveSubwordRight,
+		locales.Messages.KeysEditorMoveLineStart, locales.Messages.KeysEditorMoveLineEnd, locales.Messages.KeysEditorMoveDocStart, locales.Messages.KeysEditorMoveDocEnd,
+		locales.Messages.KeysEditorMoveParagraphUp, locales.Messages.KeysEditorMoveParagraphDown, locales.Messages.KeysEditorMovePageUp, locales.Messages.KeysEditorMovePageDown, locales.Messages.KeysEditorMoveToBracket,
 	}},
-	{"编辑器 · 选择", []editor.Command{
+	{keyGroupEditorSelect, locales.Messages.KeysGroupEditorSelect, []editor.Command{
 		editor.SelectWordLeft, editor.SelectWordRight, editor.SelectSubwordLeft, editor.SelectSubwordRight,
 		editor.SelectLineStart, editor.SelectLineEnd, editor.SelectDocStart, editor.SelectDocEnd,
 		editor.SelectParagraphUp, editor.SelectParagraphDown, editor.SelectPageUp, editor.SelectPageDown,
 		editor.SelectAll, editor.SelectLine, editor.SelectNext, editor.SelectPrevious, editor.SelectAllMatches,
 		editor.AddCursorAbove, editor.AddCursorBelow, editor.SelectLarger, editor.SelectSmaller,
 		editor.UndoSelection, editor.RedoSelection,
-	}, []string{
-		"选到上一个词", "选到下一个词", "选到上一个子词", "选到下一个子词",
-		"选到行首", "选到行尾", "选到文件开头", "选到文件末尾",
-		"选到上一段", "选到下一段", "向上选一页", "向下选一页",
-		"全选", "选中整行", "选中下一个相同的", "选中上一个相同的", "选中所有相同的",
-		"在上面加光标", "在下面加光标", "扩大选区", "缩小选区",
-		"撤销选择", "重做选择",
+	}, []func(locales.Messages) string{
+		locales.Messages.KeysEditorSelectWordLeft, locales.Messages.KeysEditorSelectWordRight, locales.Messages.KeysEditorSelectSubwordLeft, locales.Messages.KeysEditorSelectSubwordRight,
+		locales.Messages.KeysEditorSelectLineStart, locales.Messages.KeysEditorSelectLineEnd, locales.Messages.KeysEditorSelectDocStart, locales.Messages.KeysEditorSelectDocEnd,
+		locales.Messages.KeysEditorSelectParagraphUp, locales.Messages.KeysEditorSelectParagraphDown, locales.Messages.KeysEditorSelectPageUp, locales.Messages.KeysEditorSelectPageDown,
+		locales.Messages.CommonSelectAll, locales.Messages.KeysEditorSelectLine, locales.Messages.KeysEditorSelectNext, locales.Messages.KeysEditorSelectPrevious, locales.Messages.KeysEditorSelectAllMatches,
+		locales.Messages.KeysEditorAddCursorAbove, locales.Messages.KeysEditorAddCursorBelow, locales.Messages.KeysEditorSelectLarger, locales.Messages.KeysEditorSelectSmaller,
+		locales.Messages.KeysEditorUndoSelection, locales.Messages.KeysEditorRedoSelection,
 	}},
-	{"编辑器 · 编辑", []editor.Command{
+	{keyGroupEditorEdit, locales.Messages.KeysGroupEditorEdit, []editor.Command{
 		editor.Undo, editor.Redo, editor.Cut, editor.Copy, editor.Paste,
 		editor.DeleteWordLeft, editor.DeleteWordRight, editor.DeleteSubwordLeft, editor.DeleteSubwordRight,
 		editor.DeleteToLineStart, editor.DeleteToLineEnd, editor.CutToLineEnd, editor.DeleteLine,
 		editor.NewlineBelow, editor.NewlineAbove, editor.MoveLinesUp, editor.MoveLinesDown,
 		editor.DuplicateLinesUp, editor.DuplicateLinesDown, editor.JoinLines, editor.Transpose,
 		editor.Indent, editor.Outdent, editor.ToggleComment, editor.ToggleBlockComment,
-	}, []string{
-		"撤销", "重做", "剪切", "复制", "粘贴",
-		"删前一个词", "删后一个词", "删前一个子词", "删后一个子词",
-		"删到行首", "删到行尾", "剪切到行尾", "删除行",
-		"在下面插入新行", "在上面插入新行", "上移行", "下移行",
-		"向上复制行", "向下复制行", "合并行", "交换前后字符",
-		"增加缩进", "减少缩进", "切换行注释", "切换块注释",
+	}, []func(locales.Messages) string{
+		locales.Messages.KeysEditorUndo, locales.Messages.KeysEditorRedo, locales.Messages.KeysEditorCut, locales.Messages.CommonCopy, locales.Messages.CommonPaste,
+		locales.Messages.KeysEditorDeleteWordLeft, locales.Messages.KeysEditorDeleteWordRight, locales.Messages.KeysEditorDeleteSubwordLeft, locales.Messages.KeysEditorDeleteSubwordRight,
+		locales.Messages.KeysEditorDeleteToLineStart, locales.Messages.KeysEditorDeleteToLineEnd, locales.Messages.KeysEditorCutToLineEnd, locales.Messages.KeysEditorDeleteLine,
+		locales.Messages.KeysEditorNewlineBelow, locales.Messages.KeysEditorNewlineAbove, locales.Messages.KeysEditorMoveLinesUp, locales.Messages.KeysEditorMoveLinesDown,
+		locales.Messages.KeysEditorDuplicateLinesUp, locales.Messages.KeysEditorDuplicateLinesDown, locales.Messages.KeysEditorJoinLines, locales.Messages.KeysEditorTranspose,
+		locales.Messages.KeysEditorIndent, locales.Messages.KeysEditorOutdent, locales.Messages.KeysEditorToggleComment, locales.Messages.KeysEditorToggleBlockComment,
 	}},
-	{"编辑器 · 折叠", []editor.Command{
+	{keyGroupEditorFold, locales.Messages.KeysGroupEditorFold, []editor.Command{
 		editor.Fold, editor.Unfold, editor.ToggleFold, editor.FoldAll, editor.UnfoldAll, editor.FoldRecursive, editor.UnfoldRecursive,
-	}, []string{
-		"折叠", "展开", "切换折叠", "全部折叠", "全部展开", "递归折叠", "递归展开",
+	}, []func(locales.Messages) string{
+		locales.Messages.KeysEditorFold, locales.Messages.KeysEditorUnfold, locales.Messages.KeysEditorToggleFold, locales.Messages.KeysEditorFoldAll, locales.Messages.KeysEditorUnfoldAll, locales.Messages.KeysEditorFoldRecursive, locales.Messages.KeysEditorUnfoldRecursive,
 	}},
-	{"编辑器 · 查找与跳转", []editor.Command{
+	{keyGroupEditorFind, locales.Messages.KeysGroupEditorFind, []editor.Command{
 		editor.Find, editor.FindReplace, editor.FindNext, editor.FindPrevious, editor.UseSelectionForFind, editor.FindInSelection,
 		editor.GoToLine, editor.ScrollCursorCenter, editor.ScrollLineUp, editor.ScrollLineDown,
 		editor.GoToDefinition, editor.ShowCompletions, editor.ShowHover,
 		editor.NextHunk, editor.PreviousHunk, editor.RevertHunk, editor.ToggleSoftWrap, editor.ToggleLineNumbers,
-	}, []string{
-		"查找", "替换", "查找下一个", "查找上一个", "用选中的文字查找", "在选区里查找",
-		"跳到行", "把光标所在行滚到中间", "向上滚一行", "向下滚一行",
-		"跳到定义", "补全", "显示悬停信息",
-		"下一处改动", "上一处改动", "回滚这一处改动", "切换自动换行", "切换行号",
+	}, []func(locales.Messages) string{
+		locales.Messages.KeysEditorFind, locales.Messages.KeysEditorFindReplace, locales.Messages.KeysEditorFindNext, locales.Messages.KeysEditorFindPrevious, locales.Messages.KeysEditorUseSelectionForFind, locales.Messages.KeysEditorFindInSelection,
+		locales.Messages.KeysEditorGoToLine, locales.Messages.KeysEditorScrollCursorCenter, locales.Messages.KeysEditorScrollLineUp, locales.Messages.KeysEditorScrollLineDown,
+		locales.Messages.KeysEditorGoToDefinition, locales.Messages.KeysEditorShowCompletions, locales.Messages.KeysEditorShowHover,
+		locales.Messages.KeysEditorNextHunk, locales.Messages.KeysEditorPreviousHunk, locales.Messages.KeysEditorRevertHunk, locales.Messages.KeysEditorToggleSoftWrap, locales.Messages.KeysEditorToggleLineNumbers,
 	}},
 }
 
 // editorNotes 是编辑器命令的补充说明。
-var editorNotes = map[editor.Command]string{
-	editor.Find:         "Markdown 预览、Annotate 的查找栏也用它",
-	editor.FindNext:     "Markdown 预览、Annotate 的查找栏也用它",
-	editor.FindPrevious: "Markdown 预览、Annotate 的查找栏也用它",
+var editorNotes = map[editor.Command]func(locales.Messages) string{
+	editor.Find:         locales.Messages.KeysEditorFindNote,
+	editor.FindNext:     locales.Messages.KeysEditorFindNote,
+	editor.FindPrevious: locales.Messages.KeysEditorFindNote,
 }
 
 var allKeyActions = buildKeyActions()
@@ -193,7 +214,7 @@ func buildKeyActions() []keyAction {
 	}
 	for _, g := range editorKeyLabels {
 		for i, cmd := range g.cmds {
-			out = append(out, keyAction{id: "editor." + cmd.String(), group: g.group, label: g.names[i], scope: scopeEditor,
+			out = append(out, keyAction{id: "editor." + cmd.String(), group: g.group, groupLabel: g.groupLabel, label: g.names[i], scope: scopeEditor,
 				def: defs[cmd], cmd: cmd, note: editorNotes[cmd]})
 		}
 	}

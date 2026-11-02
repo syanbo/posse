@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/locales"
 )
 
 // 设置页「快捷键」：按快捷键表（keymap.go）分组列出，可以搜索；点一组键录新的，行尾的 + 再加一组，
@@ -22,8 +24,8 @@ func (a *app) keySettings(c *ui.Context) {
 	t := c.Theme()
 	q := strings.ToLower(strings.TrimSpace(a.keyQuery))
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).Children(func() { fieldInput(c, &a.keyQuery, "搜索操作或按键，如 提交、⌘K") })
-		if len(a.state.Keys) > 0 && pressable(textButton(c, "全部恢复默认")).Clicked() {
+		ui.Column(c).Grow(1).Children(func() { fieldInput(c, &a.keyQuery, L(c).KeysSearch()) })
+		if len(a.state.Keys) > 0 && pressable(textButton(c, L(c).KeysResetAll())).Clicked() {
 			a.state.Keys = nil
 			a.keysVer++
 			a.keyRec = nil
@@ -31,13 +33,13 @@ func (a *app) keySettings(c *ui.Context) {
 			a.refreshMenu()
 		}
 	})
-	ui.Text(c, "点按键换成新的组合，Esc 取消，⌫ 删掉这一组；行尾的 + 再加一组。菜单栏占用的键（⌘Q、⌘H 这类）录不进来。同一处的两项不能用同一组键，录了别人在用的，会从那一项上去掉。").
+	ui.Text(c, L(c).KeysNote()).
 		FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
-	var groups []string
-	byGroup := map[string][]*keyAction{}
+	var groups []keyGroup
+	byGroup := map[keyGroup][]*keyAction{}
 	for i := range allKeyActions {
 		ka := &allKeyActions[i]
-		if q != "" && !keyMatches(a, ka, q) {
+		if q != "" && !keyMatches(L(c), a, ka, q) {
 			continue
 		}
 		if byGroup[ka.group] == nil {
@@ -46,10 +48,10 @@ func (a *app) keySettings(c *ui.Context) {
 		byGroup[ka.group] = append(byGroup[ka.group], ka)
 	}
 	if len(groups) == 0 {
-		ui.Text(c, "没有匹配的快捷键").FontSize(fsBody).TextColor(t.TextMuted).Padding(12, 0)
+		ui.Text(c, L(c).KeysEmpty()).FontSize(fsBody).TextColor(t.TextMuted).Padding(12, 0)
 	}
 	for _, g := range groups {
-		settingsCard(c, g, "", func() {
+		settingsCard(c, byGroup[g][0].groupLabel(L(c)), "", func() {
 			ui.Column(c).Gap(2).Children(func() {
 				for _, ka := range byGroup[g] {
 					a.keyRow(c, ka)
@@ -60,8 +62,8 @@ func (a *app) keySettings(c *ui.Context) {
 }
 
 // keyMatches 报告 q 出现在名称、分组或按键的写法里。
-func keyMatches(a *app, ka *keyAction, q string) bool {
-	if strings.Contains(strings.ToLower(ka.label), q) || strings.Contains(strings.ToLower(ka.group), q) {
+func keyMatches(m locales.Messages, a *app, ka *keyAction, q string) bool {
+	if strings.Contains(strings.ToLower(ka.label(m)), q) || strings.Contains(strings.ToLower(ka.groupLabel(m)), q) {
 		return true
 	}
 	for _, kc := range a.keysFor(ka.id) {
@@ -81,11 +83,11 @@ func (a *app) keyRow(c *ui.Context, ka *keyAction) {
 		row.Background(colors(t).wash)
 	}
 	row.Children(func() {
-		label := ui.Text(c, ka.label).FontSize(fsBody).Grow(1).Shrink(1)
-		if ka.note != "" {
-			label.Tooltip(ka.note)
+		label := ui.Text(c, ka.label(L(c))).FontSize(fsBody).Grow(1).Shrink(1)
+		if ka.note != nil {
+			label.Tooltip(ka.note(L(c)))
 		}
-		if changed && !ka.fixed && pressable(textButton(c.Key("reset"), "恢复默认")).Clicked() {
+		if changed && !ka.fixed && pressable(textButton(c.Key("reset"), L(c).CommonResetToDefault())).Clicked() {
 			a.setKeys(ka.id, ka.def)
 			a.keyRec = nil
 		}
@@ -101,13 +103,13 @@ func (a *app) keyRow(c *ui.Context, ka *keyAction) {
 			}
 			chip := keyChip(c.Key(i), text, ka.fixed)
 			if ka.fixed {
-				chip.Tooltip(cmpNote(ka.note, "固定的快捷键，不能修改"))
+				chip.Tooltip(keyFixedNote(L(c), ka.note))
 			} else if chip.Clicked() {
 				a.keyRec = &keyRecording{id: ka.id, idx: i, focus: true}
 			}
 		}
 		if len(keys) == 0 && !(rec != nil && rec.id == ka.id) {
-			ui.Text(c, "无").FontSize(fsSmall).TextColor(colors(t).faint).Padding(2, 6)
+			ui.Text(c, L(c).KeysNone()).FontSize(fsSmall).TextColor(colors(t).faint).Padding(2, 6)
 		}
 		if rec != nil && rec.id == ka.id && rec.idx < 0 {
 			a.keyRecorder(c, ka)
@@ -117,7 +119,7 @@ func (a *app) keyRow(c *ui.Context, ka *keyAction) {
 			ui.Box(c).Size(compactBox(), compactBox()).Shrink(0)
 			return
 		}
-		add := quietIconButton(c.Key("add"), iconPlus, "再加一组快捷键", compactBox(), smallIcon()).Tooltip("再加一组快捷键")
+		add := quietIconButton(c.Key("add"), iconPlus, L(c).KeysAdd(), compactBox(), smallIcon()).Tooltip(L(c).KeysAdd())
 		if !row.Hovered() {
 			add.Opacity(0)
 		}
@@ -127,11 +129,11 @@ func (a *app) keyRow(c *ui.Context, ka *keyAction) {
 	})
 }
 
-func cmpNote(note, def string) string {
-	if note != "" {
-		return note + "。" + def
+func keyFixedNote(m locales.Messages, note func(locales.Messages) string) string {
+	if note != nil {
+		return m.KeysFixedNote(note(m))
 	}
-	return def
+	return m.KeysFixedTip()
 }
 
 // keyChip 是一组键的小块：能改的可以点，固定的淡一些。
@@ -142,7 +144,7 @@ func keyChip(c *ui.Context, text string, fixed bool) ui.Element {
 	if fixed {
 		color = t.TextMuted
 	} else {
-		chip.Role(ui.RoleButton).Label("修改快捷键 " + text)
+		chip.Role(ui.RoleButton).Label(L(c).KeysEditShortcut(text))
 		if chip.Hovered() {
 			chip.Background(colors(t).fillHi)
 		}
@@ -156,7 +158,7 @@ func (a *app) keyRecorder(c *ui.Context, ka *keyAction) {
 	t := c.Theme()
 	rec := a.keyRec
 	box := ui.Box(c.Key("recorder")).Padding(2, 8).Radius(rSmall).Background(soft(t, t.Accent)).Shrink(0).
-		Focusable().FocusRing(false).Label("按下新的快捷键")
+		Focusable().FocusRing(false).Label(L(c).KeysRecordLabel())
 	fieldBorder(box, true, soft(t, t.Accent), t.Focus)
 	if rec.focus {
 		box.Focus()
@@ -166,10 +168,10 @@ func (a *app) keyRecorder(c *ui.Context, ka *keyAction) {
 		if ev.Kind != ui.InputKeyDown {
 			return ev.Kind == ui.InputText
 		}
-		a.recordKey(ka, ev.Mods, ev.Key)
+		a.recordKey(L(c), ka, ev.Mods, ev.Key)
 		return true
 	})
-	text := "按下快捷键…"
+	text := L(c).KeysRecording()
 	if rec.hint != "" {
 		text = rec.hint
 	}
@@ -180,7 +182,7 @@ func (a *app) keyRecorder(c *ui.Context, ka *keyAction) {
 }
 
 // recordKey 处理录制框收到的一个键。
-func (a *app) recordKey(ka *keyAction, mods ui.Modifiers, key ui.Key) {
+func (a *app) recordKey(m locales.Messages, ka *keyAction, mods ui.Modifiers, key ui.Key) {
 	rec := a.keyRec
 	if rec == nil {
 		return
@@ -204,7 +206,7 @@ func (a *app) recordKey(ka *keyAction, mods ui.Modifiers, key ui.Key) {
 	}
 	fkey := key >= ui.KeyF1 && key <= ui.KeyF12
 	if mods == 0 && !fkey || printable(key) && mods&^ui.Shift == 0 {
-		rec.hint = "要带 ⌘、⌃ 或 ⌥"
+		rec.hint = m.KeysModifierRequired()
 		return
 	}
 	kc := keyCombo{mods: mods, key: key}
@@ -217,7 +219,7 @@ func (a *app) recordKey(ka *keyAction, mods ui.Modifiers, key ui.Key) {
 			}
 		}
 		a.setKeys(other.id, kept)
-		a.notify("已从「"+other.label+"」去掉 "+kc.String(), "", nil)
+		a.notify(m.KeysConflictRemoved(other.label(m), kc.String()), "", nil)
 	}
 	switch {
 	case rec.idx >= 0 && rec.idx < len(keys):

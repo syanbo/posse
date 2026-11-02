@@ -12,6 +12,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/rpc"
 	"posse/internal/usage"
+	"posse/locales"
 )
 
 // planStatus 是常驻进程记下的各家套餐用量（internal/daemon/usage.go），随 daemon.status 来；
@@ -27,22 +28,22 @@ type planStatus struct {
 const planUrgent = 80
 
 // windowLabel 按窗口长度写名字：Claude、Codex 的 5 小时和每周，Grok 的每周，Cursor 的计费周期（约一个月）。
-func windowLabel(minutes int) string {
+func windowLabel(m locales.Messages, minutes int) string {
 	const day = 24 * 60
 	switch windowKindOf(minutes) {
 	case windowPeriod:
-		return "本期"
+		return m.UsageWindowPeriod()
 	case window5h:
-		return "5 小时"
+		return m.UsageWindowFiveHours()
 	case windowWeek:
-		return "每周"
+		return m.UsageWindowWeek()
 	case windowMonth:
-		return "每月"
+		return m.UsageWindowMonth()
 	}
 	if minutes >= day {
-		return fmt.Sprintf("%d 天", (minutes+day/2)/day)
+		return m.UsageWindowDays((minutes + day/2) / day)
 	}
-	return fmt.Sprintf("%d 小时", (minutes+30)/60)
+	return m.UsageWindowHours((minutes + 30) / 60)
 }
 
 // windowKind 是套餐窗口的类别，逻辑按它判断，不比较显示的文字。
@@ -106,11 +107,11 @@ func (a *app) shown(w usage.Window) float64 {
 	return w.Percent
 }
 
-func (a *app) shownWord() string {
+func (a *app) shownWord(m locales.Messages) string {
 	if a.state.UsageRemaining {
-		return "剩余"
+		return m.UsageRemaining()
 	}
-	return "已用"
+	return m.UsageUsed()
 }
 
 // chipPad 是状态栏里文字按钮（用量、内存、防休眠）的左右内边距。
@@ -151,11 +152,11 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 		}
 	}
 	if len(shown) == 0 {
-		ui.Text(c, "Agent 运行后在这里显示套餐用量").FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, chipPad).SingleLine()
+		ui.Text(c, L(c).UsageEmpty()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(0, chipPad).SingleLine()
 		return
 	}
 	b := ui.Row(c.Key("plan")).Height(sz(26)).Padding(0, chipPad).Gap(12).Radius(rRow).AlignItems(ui.Center).Shrink(0).
-		Role(ui.RoleButton).Label("套餐用量")
+		Role(ui.RoleButton).Label(L(c).UsageTitle())
 	bg := ui.Transparent
 	if a.planOpen || b.Hovered() {
 		bg = p.wash
@@ -171,7 +172,7 @@ func (a *app) planButton(c *ui.Context, st *planStatus) {
 			ui.Row(c.Key(u.Agent)).Gap(4).AlignItems(ui.Center).Shrink(0).
 				Children(func() {
 					agentIcon(c, u.Agent, smallIcon())
-					ui.Text(c, windowShort(w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
+					ui.Text(c, windowShort(L(c), w.Minutes)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 					ui.Text(c, percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).SingleLine()
 				})
 		}
@@ -224,17 +225,17 @@ func headWindow(u usage.Usage) usage.Window {
 }
 
 // cursorPools 是 Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
-var cursorPools = map[string]string{"Auto": "Cursor 模型", "API": "其他模型"}
+var cursorPools = map[string]func(locales.Messages) string{"Auto": locales.Messages.UsageCursorModels, "API": locales.Messages.UsageOtherModels}
 
 // windowName 是详情里窗口的名字：分池带上池名，"Fable 每周"；Cursor 的两池只写池名，重置时间在同一行。
-func windowName(w usage.Window) string {
+func windowName(m locales.Messages, w usage.Window) string {
 	if w.Name == "" {
-		return windowLabel(w.Minutes)
+		return windowLabel(m, w.Minutes)
 	}
 	if n, ok := cursorPools[w.Name]; ok {
-		return n
+		return n(m)
 	}
-	return w.Name + " " + windowLabel(w.Minutes)
+	return m.UsageNamedWindow(w.Name, windowLabel(m, w.Minutes))
 }
 
 // money 把美分写成 $12.34。
@@ -244,53 +245,53 @@ func money(cents float64) string {
 
 // planFacts 是详情里窗口下面的几行：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 // 和整家的读数不是同一份的，后面写上是多久前的。
-func planFacts(u usage.Usage) []string {
+func planFacts(m locales.Messages, u usage.Usage) []string {
 	stale := func(at int64) string {
 		if at > 0 && u.UpdatedAt-at > int64(10*time.Minute/time.Millisecond) {
-			return "（" + ago(time.UnixMilli(at)) + "的读数）"
+			return m.UsageStaleReading(ago(time.UnixMilli(at)))
 		}
 		return ""
 	}
 	var out []string
 	if sp := u.Spend; sp != nil && sp.Limit > 0 {
 		// Cursor 的套餐内用量按 API 价折成金额（Ultra 月费 $200，含 $400），和两池的百分比分母不同
-		out = append(out, fmt.Sprintf("套餐内用量 %s / %s（%.0f%%）", money(sp.Used), money(sp.Limit), sp.Used/sp.Limit*100))
+		out = append(out, m.UsageIncludedSpend(money(sp.Used), money(sp.Limit), percentText(sp.Used/sp.Limit*100)))
 	}
 	if od := u.OnDemand; od != nil {
-		line := "按需用量 " + money(od.Used)
+		line := m.UsageOnDemand(money(od.Used), stale(od.At))
 		if od.Limit > 0 {
-			line += "，上限 " + money(od.Limit)
+			line = m.UsageOnDemandLimited(money(od.Used), money(od.Limit), stale(od.At))
 		}
-		out = append(out, line+stale(od.At))
+		out = append(out, line)
 	}
 	if sh := u.Shares; sh != nil && len(sh.Items) > 0 {
 		var parts []string
 		for _, it := range sh.Items {
 			parts = append(parts, fmt.Sprintf("%s %.0f%%", it.Name, it.Percent))
 		}
-		out = append(out, "本周用量用在 "+strings.Join(parts, "，")+stale(sh.At))
+		out = append(out, m.UsageShares(strings.Join(parts, m.UsageListSeparator()), stale(sh.At)))
 	}
 	if rs := u.Resets; rs != nil {
-		line := fmt.Sprintf("重置卡 %d 张", rs.Count)
+		line := m.UsageResetCards(rs.Count, stale(rs.At))
 		if rs.Count > 0 && rs.ExpiresAt > 0 {
-			line += "，最早一张 " + time.UnixMilli(rs.ExpiresAt).Local().Format("1月2日") + " 过期"
+			line = m.UsageResetCardsExpiring(rs.Count, time.UnixMilli(rs.ExpiresAt).Local().Format("1月2日"), stale(rs.At))
 		}
-		out = append(out, line+stale(rs.At))
+		out = append(out, line)
 	}
 	return out
 }
 
 // windowShort 是状态栏里的窗口名，比 windowLabel 短。
-func windowShort(minutes int) string {
+func windowShort(m locales.Messages, minutes int) string {
 	switch windowKindOf(minutes) {
 	case window5h:
 		return "5h"
 	case windowWeek:
-		return "周"
+		return m.UsageWindowWeekShort()
 	case windowMonth:
-		return "月"
+		return m.UsageWindowMonthShort()
 	}
-	return windowLabel(minutes)
+	return windowLabel(m, minutes)
 }
 
 // planBar 是进度条：画已用或剩余的那一段，快用完时是红色。
@@ -323,23 +324,27 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 	// 浮窗至少和底下整排一样宽，面板跟着撑满
 	ui.Column(c).MinWidth(420).Grow(1).AlignSelf(ui.Stretch).Gap(12).Padding(8, 8, 6, 8).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			titleText(c, "套餐用量", fsTitle).Grow(1)
+			titleText(c, L(c).UsageTitle(), fsTitle).Grow(1)
 			// 查询进行中按钮换成转圈
 			if a.planBusy {
 				ui.Row(c.Key("plan-refreshing")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
-					Tooltip("正在查询").Children(func() { ui.Spinner(c).Label("正在查询") })
-			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, "立即查询各家用量", buttonBox(), iconSize)).Clicked() {
-				a.refreshPlan()
+					Tooltip(L(c).UsageRefreshing()).Children(func() { ui.Spinner(c).Label(L(c).UsageRefreshing()) })
+			} else if pressable(iconButtonSized(c.Key("plan-refresh"), iconRefresh, L(c).UsageRefreshTip(), buttonBox(), iconSize)).Clicked() {
+				a.refreshPlan(L(c))
 			}
 			sel := 0
 			if a.state.UsageRemaining {
 				sel = 1
 			}
-			if segmented(c, &sel, "套餐用量显示", "已用", "剩余") {
+			if segmented(c, &sel, L(c).UsageDisplayLabel(), L(c).UsageUsed(), L(c).UsageRemaining()) {
 				a.state.UsageRemaining = sel == 1
 				a.saveState()
 			}
 		})
+		// 百分比一列按最长的写法定宽（英文的 Remaining 比中文长），各行的进度条一样长
+		pctText := func(pct float64) string { return L(c).UsageShownPercent(a.shownWord(L(c)), percentText(pct)) }
+		pctW, _ := c.MeasureText(0, ui.Span{Text: pctText(100), Size: fsSmall})
+		pctW = max(sz(64), pctW+2)
 		for i, u := range us {
 			if i > 0 {
 				hline(c)
@@ -353,7 +358,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					}
 					ui.Spacer(c)
 					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
-						Tooltip("读数来自 agent 最近一次运行：" + time.UnixMilli(u.UpdatedAt).Local().Format("1月2日 15:04"))
+						Tooltip(L(c).UsageReadAt(time.UnixMilli(u.UpdatedAt).Local().Format("1月2日 15:04")))
 				})
 				for j, w := range planWindows(u) {
 					color := t.Text
@@ -362,31 +367,31 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					}
 					// 一个窗口一行：名称、进度条、百分比、重置时间
 					ui.Row(c.Key(fmt.Sprint(j))).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Text(c, windowName(w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
+						ui.Text(c, windowName(L(c), w)).FontSize(fsSmall).Width(planNameWidth()).Shrink(0).SingleLine()
 						a.planBar(c, w, 0, 5)
-						ui.Text(c, a.shownWord()+" "+percentText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
-							Width(sz(64)).Shrink(0).TextAlign(ui.End)
+						ui.Text(c, pctText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
+							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
 						ui.Text(c, resetText(w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 							Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
 					})
 					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
 					if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
-						ui.Text(c.Key(fmt.Sprint(j, "-at")), ago(time.UnixMilli(w.At))+"的读数").
+						ui.Text(c.Key(fmt.Sprint(j, "-at")), L(c).UsageReadingAge(ago(time.UnixMilli(w.At)))).
 							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, planNameWidth()+8) // 和上一行的名称列之后对齐
 					}
 				}
-				for _, f := range planFacts(u) {
+				for _, f := range planFacts(L(c), u) {
 					ui.Text(c, f).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 				}
 			})
 		}
-		ui.Text(c, "Agent 运行时顺带更新，点右上角的刷新马上查一次；Claude 没有可查的接口，只读它自己的缓存。").
+		ui.Text(c, L(c).UsageRefreshNote()).
 			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5).Padding(2, 0, 0, 0)
 	})
 }
 
 // refreshPlan 让常驻进程马上向各家取一次用量，做完才回（Codex、Cursor 要联网，最长半分钟）。
-func (a *app) refreshPlan() {
+func (a *app) refreshPlan(m locales.Messages) {
 	a.planBusy = true
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -398,9 +403,9 @@ func (a *app) refreshPlan() {
 			var re *rpc.Error
 			switch {
 			case errors.As(err, &re) && re.Code == rpc.CodeUnknown:
-				a.err = "常驻进程版本较旧，不支持刷新套餐用量：到设置页更新常驻进程后再试。"
+				a.err = m.UsageOldDaemonError()
 			case err != nil:
-				a.err = "刷新套餐用量失败：" + errtext.Text(err)
+				a.err = m.UsageRefreshError(errtext.Text(err))
 			default:
 				a.daemon.Usage = &st
 			}
@@ -411,14 +416,14 @@ func (a *app) refreshPlan() {
 // planSettings 是设置页里两项查询的开关：Cursor 用量和 Codex 重置卡本地没有，要在它们用过之后查一次。
 func (a *app) planSettings(c *ui.Context) {
 	st := a.daemon.Usage
-	settingsCard(c, "套餐用量", "关掉后底栏和手机都不显示，常驻进程也不再读取和查询。打开时底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。", func() {
+	settingsCard(c, L(c).UsageTitle(), L(c).UsageSettingsNote(), func() {
 		if st == nil {
-			ui.Text(c, "更新常驻进程后可用。").FontSize(fsBody).TextColor(c.Theme().TextMuted)
+			ui.Text(c, L(c).UsageDaemonRequired()).FontSize(fsBody).TextColor(c.Theme().TextMuted)
 			return
 		}
 		on := !st.Off
-		settingsRow(c, "显示套餐用量", func() {
-			if ui.Switch(c, &on).Label("显示套餐用量").Changed() {
+		settingsRow(c, L(c).UsageShowLabel(), func() {
+			if ui.Switch(c, &on).Label(L(c).UsageShowLabel()).Changed() {
 				a.setUsageQuery("off", on)
 			}
 		})
@@ -426,13 +431,13 @@ func (a *app) planSettings(c *ui.Context) {
 			return
 		}
 		cursor, codex := !st.CursorOff, !st.CodexOff
-		settingsRow(c, "查询 Cursor 用量", func() {
-			if ui.Switch(c, &cursor).Label("查询 Cursor 用量").Changed() {
+		settingsRow(c, L(c).UsageCursorQuery(), func() {
+			if ui.Switch(c, &cursor).Label(L(c).UsageCursorQuery()).Changed() {
 				a.setUsageQuery("cursorOff", cursor)
 			}
 		})
-		settingsRow(c, "查询 Codex 重置卡", func() {
-			if ui.Switch(c, &codex).Label("查询 Codex 重置卡").Changed() {
+		settingsRow(c, L(c).UsageCodexQuery(), func() {
+			if ui.Switch(c, &codex).Label(L(c).UsageCodexQuery()).Changed() {
 				a.setUsageQuery("codexOff", codex)
 			}
 		})

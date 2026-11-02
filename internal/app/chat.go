@@ -12,6 +12,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/errtext"
+	"posse/locales"
 )
 
 // 聊天磁贴：侧栏顶上的「聊天」切到聊天目录（默认 ~/Posse）的工作区，第一次点时建目录、加成项目。
@@ -45,17 +46,18 @@ func (a *app) isChat(id string) bool {
 
 // chatSidebarItem 是顶上的「聊天」磁贴。
 func (a *app) chatSidebarItem(c *ui.Context) ui.Element {
+	l := L(c)
 	icon := func() { ui.Icon(c, iconChat).FontSize(iconSize).TextColor(c.Theme().Accent) }
-	tile := a.workspaceTile(c, chatBoardID, a.chatWorkspace(), icon, "聊天")
+	tile := a.workspaceTile(c, chatBoardID, a.chatWorkspace(), icon, l.ChatTitle())
 	if tile.Clicked() {
-		a.openChat(false)
+		a.openChat(L(c), false)
 	}
 	return tile
 }
 
 // openChat 切到聊天工作区（停在上次看的标签），fresh 时再开一个新聊天：沿用最近一次聊天的 agent，
 // 还没聊过时只切过去，空工作区里有选 agent 的卡片。聊天目录还不是项目时先建目录、加成项目。
-func (a *app) openChat(fresh bool) {
+func (a *app) openChat(l locales.Messages, fresh bool) {
 	if w := a.chatWorkspace(); w != nil {
 		a.selected = w.ID
 		if fresh {
@@ -74,12 +76,12 @@ func (a *app) openChat(fresh bool) {
 	go func() {
 		defer a.update(func() { a.chatAdding = false })
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			a.update(func() { a.err = "建聊天目录失败：" + errtext.Text(err) })
+			a.update(func() { a.err = l.ChatCreateFolderError(errtext.Text(err)) })
 			return
 		}
 		// 已经有叫「聊天」的项目时用目录名；目录已经是项目（常驻进程认的路径写法不同）时两次都失败，刷新后照样找得到
 		var err error
-		for _, params := range []map[string]any{{"path": dir, "name": "聊天"}, {"path": dir}} {
+		for _, params := range []map[string]any{{"path": dir, "name": l.ChatTitle()}, {"path": dir}} {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			err = a.c.Call(ctx, "project.add", params, nil)
 			cancel()
@@ -92,7 +94,7 @@ func (a *app) openChat(fresh bool) {
 			if w := a.chatWorkspace(); w != nil {
 				a.selected = w.ID
 			} else if err != nil {
-				a.err = "把聊天目录加成项目失败：" + errtext.Text(err)
+				a.err = l.ChatAddProjectError(errtext.Text(err))
 			}
 		})
 	}()
@@ -109,17 +111,17 @@ func lastChatAgent(w *workspace) string {
 }
 
 // chatFolderMenu 是聊天会话的右键菜单项：打开它的文件夹，或者把聊天里做出来的东西转成一个项目（原地登记，不挪目录）。
-func (a *app) chatFolderMenu(m *popMenu, term terminalInfo) {
+func (a *app) chatFolderMenu(l locales.Messages, m *popMenu, term terminalInfo) {
 	if !agent.IsChatFolder(a.chatPath(), term.Dir) {
 		return
 	}
 	m.Separator()
-	if m.Item("在访达中打开文件夹").Icon(iconFolder).Chosen() {
+	if m.Item(l.ChatOpenFolder()).Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(term.Dir); err != nil {
-			a.err = "在访达中打开失败：" + errtext.Text(err)
+			a.err = l.ChatOpenFolderError(errtext.Text(err))
 		}
 	}
-	if m.Item("转为项目").Chosen() {
+	if m.Item(l.ChatConvertProject()).Chosen() {
 		dir := term.Dir
 		go func() {
 			if a.call("project.add", map[string]any{"path": dir}, nil, 10*time.Second) == nil {
@@ -132,22 +134,23 @@ func (a *app) chatFolderMenu(m *popMenu, term terminalInfo) {
 // chatSettings 是设置页的聊天目录：显示在用的目录，可以换成别的或恢复默认。
 // 只在这里改（存在 agents.json），手机和 CLI 改不了，免得被远程指到任意目录。
 func (a *app) chatSettings(c *ui.Context) {
-	settingsCard(c, "聊天", "侧栏顶上的「聊天」切到这个目录，第一次点时加成项目。在里面开的每个 agent 会话各有一个按时间命名的子文件夹，关掉时没留下文件的自动删掉；会话右键「转为项目」把它的文件夹单独加成项目。换目录后原来的项目照常留在列表里。", func() {
+	l := L(c)
+	settingsCard(c, l.ChatTitle(), l.ChatSettingsNote(), func() {
 		t := c.Theme()
 		settingsRow(c, shortPath(a.chatPath()), func() {
-			if a.chatPath() != agent.DefaultChatDir() && textButton(c, "恢复默认").Clicked() {
+			if a.chatPath() != agent.DefaultChatDir() && textButton(c, l.CommonResetToDefault()).Clicked() {
 				a.setChatDir("")
 			}
-			if textButton(c, "更改…").Clicked() {
-				go a.pickChatDir()
+			if textButton(c, l.ChatChangeFolderButton()).Clicked() {
+				go a.pickChatDir(L(c))
 			}
 		})
-		ui.Text(c, "Grok 在每个没信任过的目录都要确认一次，新聊天的第一屏按 y 就好。").FontSize(fsSmall).TextColor(t.TextMuted)
+		ui.Text(c, l.ChatGrokNote()).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 }
 
-func (a *app) pickChatDir() {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "选择聊天目录", ButtonLabel: "选择",
+func (a *app) pickChatDir(l locales.Messages) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: l.ChatChooseFolderTitle(), ButtonLabel: l.ChatChooseButton(),
 		DefaultPath: nearestDir(a.chatPath()), Directory: true})
 	if err != nil || len(paths) == 0 {
 		return

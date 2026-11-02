@@ -1,55 +1,55 @@
 {
   "awakeActiveTip": "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual.",
   "@awakeActiveTip": {
-    "description": "Prevent Sleep control: ActiveTip."
+    "description": "Prevent Sleep settings or status button: tooltip for ActiveTip."
   },
   "awakeDisplay": "Keep Display On",
   "@awakeDisplay": {
-    "description": "Prevent Sleep control: Display."
+    "description": "Prevent Sleep settings or status button: label for Display."
   },
   "awakeDisplayActiveTip": "Prevent Sleep: Posse is running, keeping your computer awake and the display on.",
   "@awakeDisplayActiveTip": {
-    "description": "Prevent Sleep control: DisplayActiveTip."
+    "description": "Prevent Sleep settings or status button: tooltip for DisplayActiveTip."
   },
   "awakeDisplayItem": "Keep Display On While Posse Is Running",
   "@awakeDisplayItem": {
-    "description": "Prevent Sleep control: DisplayItem."
+    "description": "Prevent Sleep settings or status button: label for DisplayItem."
   },
   "awakeDisplayShort": "Display On",
   "@awakeDisplayShort": {
-    "description": "Prevent Sleep control: DisplayShort."
+    "description": "Prevent Sleep settings or status button: label for DisplayShort."
   },
   "awakeDisplayTip": "Prevent Sleep: keeps your computer awake and the display on while Posse is running.",
   "@awakeDisplayTip": {
-    "description": "Prevent Sleep control: DisplayTip."
+    "description": "Prevent Sleep settings or status button: tooltip for DisplayTip."
   },
   "awakeOff": "Off",
   "@awakeOff": {
-    "description": "Prevent Sleep control: Off."
+    "description": "Prevent Sleep mode: disables sleep prevention."
   },
   "awakeOffTip": "Prevent Sleep is off. Your computer sleeps according to system settings.",
   "@awakeOffTip": {
-    "description": "Prevent Sleep control: OffTip."
+    "description": "Prevent Sleep settings or status button: tooltip for OffTip."
   },
   "awakeRestartTip": "Prevent Sleep: available after restarting the daemon",
   "@awakeRestartTip": {
-    "description": "Prevent Sleep control: RestartTip."
+    "description": "Prevent Sleep settings or status button: tooltip for RestartTip."
   },
   "awakeRunning": "While Posse Is Running",
   "@awakeRunning": {
-    "description": "Prevent Sleep control: Running."
+    "description": "Prevent Sleep settings or status button: label for Running."
   },
   "awakeRunningShort": "Running",
   "@awakeRunningShort": {
-    "description": "Prevent Sleep control: RunningShort."
+    "description": "Prevent Sleep settings or status button: label for RunningShort."
   },
   "awakeRunningTip": "Prevent Sleep: keeps your computer awake while Posse is running.",
   "@awakeRunningTip": {
-    "description": "Prevent Sleep control: RunningTip."
+    "description": "Prevent Sleep settings or status button: tooltip for RunningTip."
   },
   "awakeStatus": "Prevent Sleep: {status}",
   "@awakeStatus": {
-    "description": "Accessible label for the Prevent Sleep status button.",
+    "description": "Prevent Sleep settings or status button: label for Status. Values: status.",
     "placeholders": {
       "status": {
         "type": "String"
@@ -58,7 +58,66 @@
   },
   "awakeUnavailable": "Unavailable",
   "@awakeUnavailable": {
-    "description": "Prevent Sleep control: Unavailable."
+    "description": "Prevent Sleep settings or status button: label for Unavailable."
+  },
+  "chatAddProjectError": "Could not add the chat folder as a project: {error}",
+  "@chatAddProjectError": {
+    "description": "Chat sidebar tile, settings card, or folder action: error message for AddProjectError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatChangeFolderButton": "Change…",
+  "@chatChangeFolderButton": {
+    "description": "Chat sidebar tile, settings card, or folder action: label for CommonChangeEllipsis."
+  },
+  "chatChooseButton": "Choose",
+  "@chatChooseButton": {
+    "description": "Chat sidebar tile, settings card, or folder action: label for CommonChoose."
+  },
+  "chatChooseFolderTitle": "Choose Chat Folder",
+  "@chatChooseFolderTitle": {
+    "description": "Chat sidebar tile, settings card, or folder action: heading for ChooseFolderTitle."
+  },
+  "chatConvertProject": "Convert to Project",
+  "@chatConvertProject": {
+    "description": "Chat sidebar tile, settings card, or folder action: label for ConvertProject."
+  },
+  "chatCreateFolderError": "Could not create the chat folder: {error}",
+  "@chatCreateFolderError": {
+    "description": "Chat sidebar tile, settings card, or folder action: error message for CreateFolderError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatGrokNote": "Grok asks for confirmation in each untrusted folder. Press y on the first screen of a new chat.",
+  "@chatGrokNote": {
+    "description": "Chat sidebar tile, settings card, or folder action: explanation for GrokNote."
+  },
+  "chatOpenFolder": "Open Folder in Finder",
+  "@chatOpenFolder": {
+    "description": "Chat sidebar tile, settings card, or folder action: label for OpenFolder."
+  },
+  "chatOpenFolderError": "Could not open in Finder: {error}",
+  "@chatOpenFolderError": {
+    "description": "Chat sidebar tile, settings card, or folder action: error message for OpenFolderError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chatSettingsNote": "Chat at the top of the sidebar opens this folder and adds it as a project on first use. Each agent session gets a subfolder named by time; empty folders are deleted when the session closes. Choose Convert to Project from a session’s context menu to add its folder as a separate project. Changing this folder keeps the previous project in the list.",
+  "@chatSettingsNote": {
+    "description": "Chat sidebar tile, settings card, or folder action: explanation for SettingsNote."
+  },
+  "chatTitle": "Chat",
+  "@chatTitle": {
+    "description": "Chat sidebar tile, settings card, or folder action: heading for Title."
   },
   "commonAll": "All",
   "@commonAll": {
@@ -183,6 +242,756 @@
   "commonSelectAll": "Select All",
   "@commonSelectAll": {
     "description": "Common menu item."
+  },
+  "keysAdd": "Add Another Shortcut",
+  "@keysAdd": {
+    "description": "Keyboard Shortcuts settings: label for Add."
+  },
+  "keysChangesLabel": "Changes",
+  "@keysChangesLabel": {
+    "description": "Keyboard Shortcuts settings: label for ChangesLabel."
+  },
+  "keysChangesNote": "Yields to Find Previous when the editor has focus or the preview find bar is open.",
+  "@keysChangesNote": {
+    "description": "Keyboard Shortcuts settings: explanation for ChangesNote."
+  },
+  "keysCloseSplitLabel": "Merge All Panes",
+  "@keysCloseSplitLabel": {
+    "description": "Keyboard Shortcuts settings: label for CloseSplitLabel."
+  },
+  "keysCloseSplitNote": "Merges all tabs into one pane without closing any.",
+  "@keysCloseSplitNote": {
+    "description": "Keyboard Shortcuts settings: explanation for CloseSplitNote."
+  },
+  "keysCloseTabLabel": "Close Tab",
+  "@keysCloseTabLabel": {
+    "description": "Keyboard Shortcuts settings: label for CloseTabLabel."
+  },
+  "keysCloseTabNote": "Also updates the File menu shortcut.",
+  "@keysCloseTabNote": {
+    "description": "Keyboard Shortcuts settings: explanation for CloseTabNote."
+  },
+  "keysCloseWindowLabel": "Close Window",
+  "@keysCloseWindowLabel": {
+    "description": "Keyboard Shortcuts settings: label for CloseWindowLabel."
+  },
+  "keysCloseWindowNote": "Also updates the File menu shortcut.",
+  "@keysCloseWindowNote": {
+    "description": "Keyboard Shortcuts settings: explanation for CloseWindowNote."
+  },
+  "keysCommitLabel": "Commit",
+  "@keysCommitLabel": {
+    "description": "Keyboard Shortcuts settings: label for CommitLabel."
+  },
+  "keysCommitNote": "When a file or the Files Panel has focus.",
+  "@keysCommitNote": {
+    "description": "Keyboard Shortcuts settings: explanation for CommitNote."
+  },
+  "keysConflictRemoved": "Removed {shortcut} from “{action}”",
+  "@keysConflictRemoved": {
+    "description": "Keyboard Shortcuts settings: label for ConflictRemoved. Values: action, shortcut.",
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "keysDiffOpenFileLabel": "Open File from Diff",
+  "@keysDiffOpenFileLabel": {
+    "description": "Keyboard Shortcuts settings: label for DiffOpenFileLabel."
+  },
+  "keysEditShortcut": "Change shortcut {shortcut}",
+  "@keysEditShortcut": {
+    "description": "Keyboard Shortcuts settings: label for EditShortcut. Values: shortcut.",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "keysEditorAddCursorAbove": "Add Cursor Above",
+  "@keysEditorAddCursorAbove": {
+    "description": "Keyboard Shortcuts settings: label for EditorAddCursorAbove."
+  },
+  "keysEditorAddCursorBelow": "Add Cursor Below",
+  "@keysEditorAddCursorBelow": {
+    "description": "Keyboard Shortcuts settings: label for EditorAddCursorBelow."
+  },
+  "keysEditorCut": "Cut",
+  "@keysEditorCut": {
+    "description": "Keyboard Shortcuts settings: label for EditorCut."
+  },
+  "keysEditorCutToLineEnd": "Cut to Line End",
+  "@keysEditorCutToLineEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorCutToLineEnd."
+  },
+  "keysEditorDeleteLine": "Delete Line",
+  "@keysEditorDeleteLine": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteLine."
+  },
+  "keysEditorDeleteSubwordLeft": "Delete Previous Subword",
+  "@keysEditorDeleteSubwordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteSubwordLeft."
+  },
+  "keysEditorDeleteSubwordRight": "Delete Next Subword",
+  "@keysEditorDeleteSubwordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteSubwordRight."
+  },
+  "keysEditorDeleteToLineEnd": "Delete to Line End",
+  "@keysEditorDeleteToLineEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteToLineEnd."
+  },
+  "keysEditorDeleteToLineStart": "Delete to Line Start",
+  "@keysEditorDeleteToLineStart": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteToLineStart."
+  },
+  "keysEditorDeleteWordLeft": "Delete Previous Word",
+  "@keysEditorDeleteWordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteWordLeft."
+  },
+  "keysEditorDeleteWordRight": "Delete Next Word",
+  "@keysEditorDeleteWordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorDeleteWordRight."
+  },
+  "keysEditorDuplicateLinesDown": "Duplicate Line Down",
+  "@keysEditorDuplicateLinesDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorDuplicateLinesDown."
+  },
+  "keysEditorDuplicateLinesUp": "Duplicate Line Up",
+  "@keysEditorDuplicateLinesUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorDuplicateLinesUp."
+  },
+  "keysEditorFind": "Find",
+  "@keysEditorFind": {
+    "description": "Keyboard Shortcuts settings: label for EditorFind."
+  },
+  "keysEditorFindInSelection": "Find in Selection",
+  "@keysEditorFindInSelection": {
+    "description": "Keyboard Shortcuts settings: label for EditorFindInSelection."
+  },
+  "keysEditorFindNext": "Find Next",
+  "@keysEditorFindNext": {
+    "description": "Keyboard Shortcuts settings: label for EditorFindNext."
+  },
+  "keysEditorFindNote": "Also used by the find bars in Markdown preview and Annotate.",
+  "@keysEditorFindNote": {
+    "description": "Keyboard Shortcuts settings: explanation for EditorFindNote."
+  },
+  "keysEditorFindPrevious": "Find Previous",
+  "@keysEditorFindPrevious": {
+    "description": "Keyboard Shortcuts settings: label for EditorFindPrevious."
+  },
+  "keysEditorFindReplace": "Replace",
+  "@keysEditorFindReplace": {
+    "description": "Keyboard Shortcuts settings: label for EditorFindReplace."
+  },
+  "keysEditorFold": "Fold",
+  "@keysEditorFold": {
+    "description": "Keyboard Shortcuts settings: label for EditorFold."
+  },
+  "keysEditorFoldAll": "Fold All",
+  "@keysEditorFoldAll": {
+    "description": "Keyboard Shortcuts settings: label for EditorFoldAll."
+  },
+  "keysEditorFoldRecursive": "Fold Recursively",
+  "@keysEditorFoldRecursive": {
+    "description": "Keyboard Shortcuts settings: label for EditorFoldRecursive."
+  },
+  "keysEditorGoToDefinition": "Go to Definition",
+  "@keysEditorGoToDefinition": {
+    "description": "Keyboard Shortcuts settings: label for EditorGoToDefinition."
+  },
+  "keysEditorGoToLine": "Go to Line",
+  "@keysEditorGoToLine": {
+    "description": "Keyboard Shortcuts settings: label for EditorGoToLine."
+  },
+  "keysEditorIndent": "Indent",
+  "@keysEditorIndent": {
+    "description": "Keyboard Shortcuts settings: label for EditorIndent."
+  },
+  "keysEditorJoinLines": "Join Lines",
+  "@keysEditorJoinLines": {
+    "description": "Keyboard Shortcuts settings: label for EditorJoinLines."
+  },
+  "keysEditorMoveDocEnd": "File End",
+  "@keysEditorMoveDocEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveDocEnd."
+  },
+  "keysEditorMoveDocStart": "File Start",
+  "@keysEditorMoveDocStart": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveDocStart."
+  },
+  "keysEditorMoveLineEnd": "Line End",
+  "@keysEditorMoveLineEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveLineEnd."
+  },
+  "keysEditorMoveLineStart": "Line Start",
+  "@keysEditorMoveLineStart": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveLineStart."
+  },
+  "keysEditorMoveLinesDown": "Move Line Down",
+  "@keysEditorMoveLinesDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveLinesDown."
+  },
+  "keysEditorMoveLinesUp": "Move Line Up",
+  "@keysEditorMoveLinesUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveLinesUp."
+  },
+  "keysEditorMovePageDown": "Next Page",
+  "@keysEditorMovePageDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorMovePageDown."
+  },
+  "keysEditorMovePageUp": "Previous Page",
+  "@keysEditorMovePageUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorMovePageUp."
+  },
+  "keysEditorMoveParagraphDown": "Next Paragraph",
+  "@keysEditorMoveParagraphDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveParagraphDown."
+  },
+  "keysEditorMoveParagraphUp": "Previous Paragraph",
+  "@keysEditorMoveParagraphUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveParagraphUp."
+  },
+  "keysEditorMoveSubwordLeft": "Previous Subword",
+  "@keysEditorMoveSubwordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveSubwordLeft."
+  },
+  "keysEditorMoveSubwordRight": "Next Subword",
+  "@keysEditorMoveSubwordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveSubwordRight."
+  },
+  "keysEditorMoveToBracket": "Go to Matching Bracket",
+  "@keysEditorMoveToBracket": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveToBracket."
+  },
+  "keysEditorMoveWordLeft": "Previous Word",
+  "@keysEditorMoveWordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveWordLeft."
+  },
+  "keysEditorMoveWordRight": "Next Word",
+  "@keysEditorMoveWordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorMoveWordRight."
+  },
+  "keysEditorNewlineAbove": "Insert Line Above",
+  "@keysEditorNewlineAbove": {
+    "description": "Keyboard Shortcuts settings: label for EditorNewlineAbove."
+  },
+  "keysEditorNewlineBelow": "Insert Line Below",
+  "@keysEditorNewlineBelow": {
+    "description": "Keyboard Shortcuts settings: label for EditorNewlineBelow."
+  },
+  "keysEditorNextHunk": "Next Change",
+  "@keysEditorNextHunk": {
+    "description": "Keyboard Shortcuts settings: label for EditorNextHunk."
+  },
+  "keysEditorOutdent": "Outdent",
+  "@keysEditorOutdent": {
+    "description": "Keyboard Shortcuts settings: label for EditorOutdent."
+  },
+  "keysEditorPreviousHunk": "Previous Change",
+  "@keysEditorPreviousHunk": {
+    "description": "Keyboard Shortcuts settings: label for EditorPreviousHunk."
+  },
+  "keysEditorRedo": "Redo",
+  "@keysEditorRedo": {
+    "description": "Keyboard Shortcuts settings: label for EditorRedo."
+  },
+  "keysEditorRedoSelection": "Redo Selection",
+  "@keysEditorRedoSelection": {
+    "description": "Keyboard Shortcuts settings: label for EditorRedoSelection."
+  },
+  "keysEditorRevertHunk": "Rollback Current Change",
+  "@keysEditorRevertHunk": {
+    "description": "Keyboard Shortcuts settings: label for EditorRevertHunk."
+  },
+  "keysEditorScrollCursorCenter": "Scroll Cursor to Center",
+  "@keysEditorScrollCursorCenter": {
+    "description": "Keyboard Shortcuts settings: label for EditorScrollCursorCenter."
+  },
+  "keysEditorScrollLineDown": "Scroll Line Down",
+  "@keysEditorScrollLineDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorScrollLineDown."
+  },
+  "keysEditorScrollLineUp": "Scroll Line Up",
+  "@keysEditorScrollLineUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorScrollLineUp."
+  },
+  "keysEditorSelectAllMatches": "Select All Occurrences",
+  "@keysEditorSelectAllMatches": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectAllMatches."
+  },
+  "keysEditorSelectDocEnd": "Select to File End",
+  "@keysEditorSelectDocEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectDocEnd."
+  },
+  "keysEditorSelectDocStart": "Select to File Start",
+  "@keysEditorSelectDocStart": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectDocStart."
+  },
+  "keysEditorSelectLarger": "Expand Selection",
+  "@keysEditorSelectLarger": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectLarger."
+  },
+  "keysEditorSelectLine": "Select Line",
+  "@keysEditorSelectLine": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectLine."
+  },
+  "keysEditorSelectLineEnd": "Select to Line End",
+  "@keysEditorSelectLineEnd": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectLineEnd."
+  },
+  "keysEditorSelectLineStart": "Select to Line Start",
+  "@keysEditorSelectLineStart": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectLineStart."
+  },
+  "keysEditorSelectNext": "Select Next Occurrence",
+  "@keysEditorSelectNext": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectNext."
+  },
+  "keysEditorSelectPageDown": "Select Page Down",
+  "@keysEditorSelectPageDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectPageDown."
+  },
+  "keysEditorSelectPageUp": "Select Page Up",
+  "@keysEditorSelectPageUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectPageUp."
+  },
+  "keysEditorSelectParagraphDown": "Select to Next Paragraph",
+  "@keysEditorSelectParagraphDown": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectParagraphDown."
+  },
+  "keysEditorSelectParagraphUp": "Select to Previous Paragraph",
+  "@keysEditorSelectParagraphUp": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectParagraphUp."
+  },
+  "keysEditorSelectPrevious": "Select Previous Occurrence",
+  "@keysEditorSelectPrevious": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectPrevious."
+  },
+  "keysEditorSelectSmaller": "Shrink Selection",
+  "@keysEditorSelectSmaller": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectSmaller."
+  },
+  "keysEditorSelectSubwordLeft": "Select to Previous Subword",
+  "@keysEditorSelectSubwordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectSubwordLeft."
+  },
+  "keysEditorSelectSubwordRight": "Select to Next Subword",
+  "@keysEditorSelectSubwordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectSubwordRight."
+  },
+  "keysEditorSelectWordLeft": "Select to Previous Word",
+  "@keysEditorSelectWordLeft": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectWordLeft."
+  },
+  "keysEditorSelectWordRight": "Select to Next Word",
+  "@keysEditorSelectWordRight": {
+    "description": "Keyboard Shortcuts settings: label for EditorSelectWordRight."
+  },
+  "keysEditorShowCompletions": "Complete",
+  "@keysEditorShowCompletions": {
+    "description": "Keyboard Shortcuts settings: label for EditorShowCompletions."
+  },
+  "keysEditorShowHover": "Show Hover Information",
+  "@keysEditorShowHover": {
+    "description": "Keyboard Shortcuts settings: label for EditorShowHover."
+  },
+  "keysEditorToggleBlockComment": "Toggle Block Comment",
+  "@keysEditorToggleBlockComment": {
+    "description": "Keyboard Shortcuts settings: label for EditorToggleBlockComment."
+  },
+  "keysEditorToggleComment": "Toggle Line Comment",
+  "@keysEditorToggleComment": {
+    "description": "Keyboard Shortcuts settings: label for EditorToggleComment."
+  },
+  "keysEditorToggleFold": "Toggle Fold",
+  "@keysEditorToggleFold": {
+    "description": "Keyboard Shortcuts settings: label for EditorToggleFold."
+  },
+  "keysEditorToggleLineNumbers": "Toggle Line Numbers",
+  "@keysEditorToggleLineNumbers": {
+    "description": "Keyboard Shortcuts settings: label for EditorToggleLineNumbers."
+  },
+  "keysEditorToggleSoftWrap": "Toggle Word Wrap",
+  "@keysEditorToggleSoftWrap": {
+    "description": "Keyboard Shortcuts settings: label for EditorToggleSoftWrap."
+  },
+  "keysEditorTranspose": "Transpose Characters",
+  "@keysEditorTranspose": {
+    "description": "Keyboard Shortcuts settings: label for EditorTranspose."
+  },
+  "keysEditorUndo": "Undo",
+  "@keysEditorUndo": {
+    "description": "Keyboard Shortcuts settings: label for EditorUndo."
+  },
+  "keysEditorUndoSelection": "Undo Selection",
+  "@keysEditorUndoSelection": {
+    "description": "Keyboard Shortcuts settings: label for EditorUndoSelection."
+  },
+  "keysEditorUnfold": "Unfold",
+  "@keysEditorUnfold": {
+    "description": "Keyboard Shortcuts settings: label for EditorUnfold."
+  },
+  "keysEditorUnfoldAll": "Unfold All",
+  "@keysEditorUnfoldAll": {
+    "description": "Keyboard Shortcuts settings: label for EditorUnfoldAll."
+  },
+  "keysEditorUnfoldRecursive": "Unfold Recursively",
+  "@keysEditorUnfoldRecursive": {
+    "description": "Keyboard Shortcuts settings: label for EditorUnfoldRecursive."
+  },
+  "keysEditorUseSelectionForFind": "Find Selected Text",
+  "@keysEditorUseSelectionForFind": {
+    "description": "Keyboard Shortcuts settings: label for EditorUseSelectionForFind."
+  },
+  "keysEmpty": "No matching shortcuts",
+  "@keysEmpty": {
+    "description": "Keyboard Shortcuts settings: label for Empty."
+  },
+  "keysFileTreeLabel": "File Tree",
+  "@keysFileTreeLabel": {
+    "description": "Keyboard Shortcuts settings: label for FileTreeLabel."
+  },
+  "keysFilesPanelLabel": "Toggle Files Panel",
+  "@keysFilesPanelLabel": {
+    "description": "Keyboard Shortcuts settings: label for FilesPanelLabel."
+  },
+  "keysFixedNote": "{note} This shortcut cannot be changed.",
+  "@keysFixedNote": {
+    "description": "Keyboard Shortcuts settings: explanation for FixedNote. Values: note.",
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "keysFixedTip": "This shortcut cannot be changed.",
+  "@keysFixedTip": {
+    "description": "Keyboard Shortcuts settings: tooltip for FixedTip."
+  },
+  "keysFormatJSONLabel": "Format JSON",
+  "@keysFormatJSONLabel": {
+    "description": "Keyboard Shortcuts settings: label for FormatJSONLabel."
+  },
+  "keysGitLogLabel": "Git Log",
+  "@keysGitLogLabel": {
+    "description": "Keyboard Shortcuts settings: label for GitLogLabel."
+  },
+  "keysGroupEditorEdit": "Editor · Editing",
+  "@keysGroupEditorEdit": {
+    "description": "Keyboard Shortcuts settings: label for GroupEditorEdit."
+  },
+  "keysGroupEditorFind": "Editor · Find & Go To",
+  "@keysGroupEditorFind": {
+    "description": "Keyboard Shortcuts settings: label for GroupEditorFind."
+  },
+  "keysGroupEditorFold": "Editor · Folding",
+  "@keysGroupEditorFold": {
+    "description": "Keyboard Shortcuts settings: label for GroupEditorFold."
+  },
+  "keysGroupEditorMove": "Editor · Navigation",
+  "@keysGroupEditorMove": {
+    "description": "Keyboard Shortcuts settings: label for GroupEditorMove."
+  },
+  "keysGroupEditorSelect": "Editor · Selection",
+  "@keysGroupEditorSelect": {
+    "description": "Keyboard Shortcuts settings: label for GroupEditorSelect."
+  },
+  "keysGroupFiles": "Files",
+  "@keysGroupFiles": {
+    "description": "Keyboard Shortcuts settings: label for GroupFiles."
+  },
+  "keysGroupGit": "Git",
+  "@keysGroupGit": {
+    "description": "Keyboard Shortcuts settings: label for GroupGit."
+  },
+  "keysGroupHistory": "History",
+  "@keysGroupHistory": {
+    "description": "Keyboard Shortcuts settings: label for GroupHistory."
+  },
+  "keysGroupTerminal": "Terminal",
+  "@keysGroupTerminal": {
+    "description": "Keyboard Shortcuts settings: label for GroupTerminal."
+  },
+  "keysGroupWeb": "Web",
+  "@keysGroupWeb": {
+    "description": "Keyboard Shortcuts settings: label for GroupWeb."
+  },
+  "keysGroupWindow": "Window & Tabs",
+  "@keysGroupWindow": {
+    "description": "Keyboard Shortcuts settings: label for GroupWindow."
+  },
+  "keysHistorySearchLabel": "Search Sessions",
+  "@keysHistorySearchLabel": {
+    "description": "Keyboard Shortcuts settings: label for HistorySearchLabel."
+  },
+  "keysJumpBackLabel": "Navigate Back",
+  "@keysJumpBackLabel": {
+    "description": "Keyboard Shortcuts settings: label for JumpBackLabel."
+  },
+  "keysJumpForwardLabel": "Navigate Forward",
+  "@keysJumpForwardLabel": {
+    "description": "Keyboard Shortcuts settings: label for JumpForwardLabel."
+  },
+  "keysModifierRequired": "Include ⌘, ⌃, or ⌥",
+  "@keysModifierRequired": {
+    "description": "Keyboard Shortcuts settings: label for ModifierRequired."
+  },
+  "keysNewBranchLabel": "New Branch",
+  "@keysNewBranchLabel": {
+    "description": "Keyboard Shortcuts settings: label for NewBranchLabel."
+  },
+  "keysNewChatLabel": "New Chat",
+  "@keysNewChatLabel": {
+    "description": "Keyboard Shortcuts settings: label for NewChatLabel."
+  },
+  "keysNewChatNote": "Opens Chat in the sidebar and starts another session with the last chat agent. If there is no previous chat, only opens Chat.",
+  "@keysNewChatNote": {
+    "description": "Keyboard Shortcuts settings: explanation for NewChatNote."
+  },
+  "keysNewTerminalLabel": "New Terminal",
+  "@keysNewTerminalLabel": {
+    "description": "Keyboard Shortcuts settings: label for NewTerminalLabel."
+  },
+  "keysNewWorkspaceLabel": "New Workspace",
+  "@keysNewWorkspaceLabel": {
+    "description": "Keyboard Shortcuts settings: label for NewWorkspaceLabel."
+  },
+  "keysNextChangeLabel": "Next Change",
+  "@keysNextChangeLabel": {
+    "description": "Keyboard Shortcuts settings: label for NextChangeLabel."
+  },
+  "keysNextChangeNote": "In diffs, branch comparisons, and the Rollback dialog.",
+  "@keysNextChangeNote": {
+    "description": "Keyboard Shortcuts settings: explanation for NextChangeNote."
+  },
+  "keysNextTabLabel": "Next Tab",
+  "@keysNextTabLabel": {
+    "description": "Keyboard Shortcuts settings: label for NextTabLabel."
+  },
+  "keysNone": "None",
+  "@keysNone": {
+    "description": "Keyboard Shortcuts settings: label for None."
+  },
+  "keysNote": "Click a shortcut to replace it. Esc cancels; ⌫ deletes it. Use + at the end of a row to add another shortcut. Menu bar shortcuts such as ⌘Q and ⌘H cannot be recorded. Two actions in the same context cannot share a shortcut; recording one already in use removes it from the other action.",
+  "@keysNote": {
+    "description": "Keyboard Shortcuts settings: explanation for Note."
+  },
+  "keysPrevChangeLabel": "Previous Change",
+  "@keysPrevChangeLabel": {
+    "description": "Keyboard Shortcuts settings: label for PrevChangeLabel."
+  },
+  "keysPrevChangeNote": "In diffs, branch comparisons, and the Rollback dialog.",
+  "@keysPrevChangeNote": {
+    "description": "Keyboard Shortcuts settings: explanation for PrevChangeNote."
+  },
+  "keysPrevTabLabel": "Previous Tab",
+  "@keysPrevTabLabel": {
+    "description": "Keyboard Shortcuts settings: label for PrevTabLabel."
+  },
+  "keysPushLabel": "Push",
+  "@keysPushLabel": {
+    "description": "Keyboard Shortcuts settings: label for PushLabel."
+  },
+  "keysQuickOpenLabel": "Quick Open File",
+  "@keysQuickOpenLabel": {
+    "description": "Keyboard Shortcuts settings: label for QuickOpenLabel."
+  },
+  "keysRecordLabel": "Press a new shortcut",
+  "@keysRecordLabel": {
+    "description": "Keyboard Shortcuts settings: label for RecordLabel."
+  },
+  "keysRecording": "Press a shortcut…",
+  "@keysRecording": {
+    "description": "Keyboard Shortcuts settings: label for Recording."
+  },
+  "keysResetAll": "Reset All to Default",
+  "@keysResetAll": {
+    "description": "Keyboard Shortcuts settings: label for ResetAll."
+  },
+  "keysRevealFileLabel": "Locate Current File in Tree",
+  "@keysRevealFileLabel": {
+    "description": "Keyboard Shortcuts settings: label for RevealFileLabel."
+  },
+  "keysRollbackLabel": "Rollback",
+  "@keysRollbackLabel": {
+    "description": "Keyboard Shortcuts settings: label for RollbackLabel."
+  },
+  "keysRollbackNote": "Rolls back selected files on the Changes page, or the current change in a diff.",
+  "@keysRollbackNote": {
+    "description": "Keyboard Shortcuts settings: explanation for RollbackNote."
+  },
+  "keysSearch": "Search actions or shortcuts, e.g. Commit, ⌘K",
+  "@keysSearch": {
+    "description": "Keyboard Shortcuts settings: label for Search."
+  },
+  "keysSearchFilesLabel": "Search in Files",
+  "@keysSearchFilesLabel": {
+    "description": "Keyboard Shortcuts settings: label for SearchFilesLabel."
+  },
+  "keysSelectTabLabel": "Switch to Terminal 1…9",
+  "@keysSelectTabLabel": {
+    "description": "Keyboard Shortcuts settings: label for SelectTabLabel."
+  },
+  "keysSendMessageLabel": "Send or Submit Multiline Input",
+  "@keysSendMessageLabel": {
+    "description": "Keyboard Shortcuts settings: label for SendMessageLabel."
+  },
+  "keysSettingsLabel": "Open Settings",
+  "@keysSettingsLabel": {
+    "description": "Keyboard Shortcuts settings: label for SettingsLabel."
+  },
+  "keysSettingsNote": "Also updates the Posse menu shortcut.",
+  "@keysSettingsNote": {
+    "description": "Keyboard Shortcuts settings: explanation for SettingsNote."
+  },
+  "keysSplitDownLabel": "Split Down",
+  "@keysSplitDownLabel": {
+    "description": "Keyboard Shortcuts settings: label for SplitDownLabel."
+  },
+  "keysSplitDownNote": "Adds a new terminal pane below the focused pane, up to four panes.",
+  "@keysSplitDownNote": {
+    "description": "Keyboard Shortcuts settings: explanation for SplitDownNote."
+  },
+  "keysSplitRightLabel": "Split Right",
+  "@keysSplitRightLabel": {
+    "description": "Keyboard Shortcuts settings: label for SplitRightLabel."
+  },
+  "keysSplitRightNote": "Adds a new terminal pane to the right of the focused pane, up to four panes.",
+  "@keysSplitRightNote": {
+    "description": "Keyboard Shortcuts settings: explanation for SplitRightNote."
+  },
+  "keysSwitchPaneLabel": "Switch Pane",
+  "@keysSwitchPaneLabel": {
+    "description": "Keyboard Shortcuts settings: label for SwitchPaneLabel."
+  },
+  "keysSwitchPaneNote": "⌘] moves to the next pane; ⌘[ to the previous pane, from top left to bottom right.",
+  "@keysSwitchPaneNote": {
+    "description": "Keyboard Shortcuts settings: explanation for SwitchPaneNote."
+  },
+  "keysSysFullScreenLabel": "Full Screen",
+  "@keysSysFullScreenLabel": {
+    "description": "Keyboard Shortcuts settings: label for SysFullScreenLabel."
+  },
+  "keysSysHideLabel": "Hide Posse",
+  "@keysSysHideLabel": {
+    "description": "Keyboard Shortcuts settings: label for SysHideLabel."
+  },
+  "keysSysHideOthersLabel": "Hide Others",
+  "@keysSysHideOthersLabel": {
+    "description": "Keyboard Shortcuts settings: label for SysHideOthersLabel."
+  },
+  "keysSysMinimizeLabel": "Minimize Window",
+  "@keysSysMinimizeLabel": {
+    "description": "Keyboard Shortcuts settings: label for SysMinimizeLabel."
+  },
+  "keysSysQuitLabel": "Quit Posse",
+  "@keysSysQuitLabel": {
+    "description": "Keyboard Shortcuts settings: label for SysQuitLabel."
+  },
+  "keysTermBottomLabel": "Scroll to Bottom",
+  "@keysTermBottomLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermBottomLabel."
+  },
+  "keysTermClearLabel": "Clear Screen",
+  "@keysTermClearLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermClearLabel."
+  },
+  "keysTermFindLabel": "Find in Terminal",
+  "@keysTermFindLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermFindLabel."
+  },
+  "keysTermFindNote": "When the find bar is open, Next and Previous use the editor find shortcuts.",
+  "@keysTermFindNote": {
+    "description": "Keyboard Shortcuts settings: explanation for TermFindNote."
+  },
+  "keysTermKillLineLabel": "Delete to Line Start",
+  "@keysTermKillLineLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermKillLineLabel."
+  },
+  "keysTermKillWordLabel": "Delete Previous Word",
+  "@keysTermKillWordLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermKillWordLabel."
+  },
+  "keysTermLineEndLabel": "Move Cursor to Line End",
+  "@keysTermLineEndLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermLineEndLabel."
+  },
+  "keysTermLineStartLabel": "Move Cursor to Line Start",
+  "@keysTermLineStartLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermLineStartLabel."
+  },
+  "keysTermNewlineLabel": "New Line in Claude or Codex Input",
+  "@keysTermNewlineLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermNewlineLabel."
+  },
+  "keysTermTopLabel": "Scroll to Top",
+  "@keysTermTopLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermTopLabel."
+  },
+  "keysTermWordLeftLabel": "Previous Word",
+  "@keysTermWordLeftLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermWordLeftLabel."
+  },
+  "keysTermWordRightLabel": "Next Word",
+  "@keysTermWordRightLabel": {
+    "description": "Keyboard Shortcuts settings: label for TermWordRightLabel."
+  },
+  "keysToggleSidebarLabel": "Toggle Sidebar",
+  "@keysToggleSidebarLabel": {
+    "description": "Keyboard Shortcuts settings: label for ToggleSidebarLabel."
+  },
+  "keysWebHardReloadLabel": "Reload Page Without Cache",
+  "@keysWebHardReloadLabel": {
+    "description": "Keyboard Shortcuts settings: label for WebHardReloadLabel."
+  },
+  "keysWebHardReloadNote": "Listed in the View menu.",
+  "@keysWebHardReloadNote": {
+    "description": "Keyboard Shortcuts settings: explanation for WebHardReloadNote."
+  },
+  "keysWebMobileLabel": "Toggle Mobile Preview",
+  "@keysWebMobileLabel": {
+    "description": "Keyboard Shortcuts settings: label for WebMobileLabel."
+  },
+  "keysWebMobileNote": "Listed in the View menu; uses the last selected device.",
+  "@keysWebMobileNote": {
+    "description": "Keyboard Shortcuts settings: explanation for WebMobileNote."
+  },
+  "keysWebReloadLabel": "Reload Page",
+  "@keysWebReloadLabel": {
+    "description": "Keyboard Shortcuts settings: label for WebReloadLabel."
+  },
+  "keysWebReloadNote": "Listed in the View menu and works when the web page has focus. Only applies to web tabs.",
+  "@keysWebReloadNote": {
+    "description": "Keyboard Shortcuts settings: explanation for WebReloadNote."
+  },
+  "keysZoomInLabel": "Increase Font Size",
+  "@keysZoomInLabel": {
+    "description": "Keyboard Shortcuts settings: label for ZoomInLabel."
+  },
+  "keysZoomInNote": "Increases the terminal, editor, or Markdown font size depending on the current view; zooms in when viewing an image.",
+  "@keysZoomInNote": {
+    "description": "Keyboard Shortcuts settings: explanation for ZoomInNote."
+  },
+  "keysZoomOutLabel": "Decrease Font Size",
+  "@keysZoomOutLabel": {
+    "description": "Keyboard Shortcuts settings: label for ZoomOutLabel."
+  },
+  "keysZoomOutNote": "Decreases the terminal, editor, or Markdown font size depending on the current view; zooms out when viewing an image.",
+  "@keysZoomOutNote": {
+    "description": "Keyboard Shortcuts settings: explanation for ZoomOutNote."
+  },
+  "keysZoomResetLabel": "Reset Font Size",
+  "@keysZoomResetLabel": {
+    "description": "Keyboard Shortcuts settings: label for ZoomResetLabel."
+  },
+  "keysZoomResetNote": "Fits the image to the window when viewing an image.",
+  "@keysZoomResetNote": {
+    "description": "Keyboard Shortcuts settings: explanation for ZoomResetNote."
   },
   "@@locale": "en",
   "menuCheckForUpdates": "Check for Updates…",
@@ -576,5 +1385,362 @@
   "settingsWorkspaceMeta": "Show branch of workspaces in the sidebar",
   "@settingsWorkspaceMeta": {
     "description": "Row label and segmented control label."
+  },
+  "updateCheckButton": "Check for Updates",
+  "@updateCheckButton": {
+    "description": "About settings update card or sidebar update notice: button for CheckButton."
+  },
+  "updateCheckError": "Could not check for updates: {error}",
+  "@updateCheckError": {
+    "description": "About settings update card or sidebar update notice: error message for CheckError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateChecking": "Checking for updates…",
+  "@updateChecking": {
+    "description": "About settings update card or sidebar update notice: label for Checking."
+  },
+  "updateCurrentNote": "You’re up to date (checked {time}).",
+  "@updateCurrentNote": {
+    "description": "About settings update card or sidebar update notice: explanation for CurrentNote. Values: time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloading": "Downloading {version}…{percent}%",
+  "@updateDownloading": {
+    "description": "About settings update card or sidebar update notice: label for Downloading. Values: version, percent.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "updateInstallError": "Update failed. Posse was not changed: {error}",
+  "@updateInstallError": {
+    "description": "About settings update card or sidebar update notice: error message for InstallError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateInstalling": "Updating…",
+  "@updateInstalling": {
+    "description": "About settings update card or sidebar update notice: label for Installing."
+  },
+  "updateMoveToApplications": "Move Posse to the Applications folder to enable automatic updates.",
+  "@updateMoveToApplications": {
+    "description": "About settings update card or sidebar update notice: label for MoveToApplications."
+  },
+  "updateNeverChecked": "Updates have not been checked yet.",
+  "@updateNeverChecked": {
+    "description": "About settings update card or sidebar update notice: label for NeverChecked."
+  },
+  "updatePermissionRequired": "Automatic updates require permission to write to the Applications folder.",
+  "@updatePermissionRequired": {
+    "description": "About settings update card or sidebar update notice: label for PermissionRequired."
+  },
+  "updateReadyNote": "{version} is ready. Restart to update; terminals will stay connected.",
+  "@updateReadyNote": {
+    "description": "About settings update card or sidebar update notice: explanation for ReadyNote. Values: version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateReadyTitle": "Posse {version} Is Ready",
+  "@updateReadyTitle": {
+    "description": "About settings update card or sidebar update notice: heading for ReadyTitle. Values: version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateRecheckError": "Could not check for updates again: {error}",
+  "@updateRecheckError": {
+    "description": "About settings update card or sidebar update notice: error message for RecheckError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "updateReleaseNotesTitle": "What’s New",
+  "@updateReleaseNotesTitle": {
+    "description": "About settings update card or sidebar update notice: heading for ReleaseNotesTitle."
+  },
+  "updateRestartButton": "Restart to Update",
+  "@updateRestartButton": {
+    "description": "About settings update card or sidebar update notice: button for RestartButton."
+  },
+  "updateTitle": "Updates",
+  "@updateTitle": {
+    "description": "About settings update card or sidebar update notice: heading for Title."
+  },
+  "updateUninterruptedNote": "Terminals stay connected during the update.",
+  "@updateUninterruptedNote": {
+    "description": "About settings update card or sidebar update notice: explanation for UninterruptedNote."
+  },
+  "usageCodexQuery": "Query Codex Reset Cards",
+  "@usageCodexQuery": {
+    "description": "Plan Usage settings or status popover: label for CodexQuery."
+  },
+  "usageCursorModels": "Cursor Models",
+  "@usageCursorModels": {
+    "description": "Plan Usage settings or status popover: label for CursorModels."
+  },
+  "usageCursorQuery": "Query Cursor Usage",
+  "@usageCursorQuery": {
+    "description": "Plan Usage settings or status popover: label for CursorQuery."
+  },
+  "usageDaemonRequired": "Available after updating the daemon.",
+  "@usageDaemonRequired": {
+    "description": "Plan Usage settings or status popover: label for DaemonRequired."
+  },
+  "usageDisplayLabel": "Plan Usage Display",
+  "@usageDisplayLabel": {
+    "description": "Plan Usage settings or status popover: label for DisplayLabel."
+  },
+  "usageEmpty": "Plan usage appears here after an agent runs",
+  "@usageEmpty": {
+    "description": "Plan Usage settings or status popover: label for Empty."
+  },
+  "usageIncludedSpend": "Included usage {used} / {limit} ({percent})",
+  "@usageIncludedSpend": {
+    "description": "Plan Usage settings or status popover: label for IncludedSpend. Values: used, limit, percent.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "usageListSeparator": ", ",
+  "@usageListSeparator": {
+    "description": "Plan Usage settings or status popover: label for ListSeparator."
+  },
+  "usageNamedWindow": "{name} {window}",
+  "@usageNamedWindow": {
+    "description": "Plan Usage settings or status popover: label for NamedWindow. Values: name, window.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "usageOldDaemonError": "This daemon version cannot refresh plan usage. Update the daemon in Settings, then try again.",
+  "@usageOldDaemonError": {
+    "description": "Plan Usage settings or status popover: error message for OldDaemonError."
+  },
+  "usageOnDemand": "On-demand usage {used}{stale}",
+  "@usageOnDemand": {
+    "description": "Plan Usage settings or status popover: label for OnDemand. Values: used, stale.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageOnDemandLimited": "On-demand usage {used}, limit {limit}{stale}",
+  "@usageOnDemandLimited": {
+    "description": "Plan Usage settings or status popover: label for OnDemandLimited. Values: used, limit, stale.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageOtherModels": "Other Models",
+  "@usageOtherModels": {
+    "description": "Plan Usage settings or status popover: label for OtherModels."
+  },
+  "usageReadAt": "Reading from the agent’s last run: {time}",
+  "@usageReadAt": {
+    "description": "Plan Usage settings or status popover: label for ReadAt. Values: time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageReadingAge": "Reading from {time}",
+  "@usageReadingAge": {
+    "description": "Plan Usage settings or status popover: label for ReadingAge. Values: time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageRefreshError": "Could not refresh plan usage: {error}",
+  "@usageRefreshError": {
+    "description": "Plan Usage settings or status popover: error message for RefreshError. Values: error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "usageRefreshNote": "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache is read.",
+  "@usageRefreshNote": {
+    "description": "Plan Usage settings or status popover: explanation for RefreshNote."
+  },
+  "usageRefreshTip": "Refresh All Plan Usage Now",
+  "@usageRefreshTip": {
+    "description": "Plan Usage settings or status popover: tooltip for RefreshTip."
+  },
+  "usageRefreshing": "Refreshing",
+  "@usageRefreshing": {
+    "description": "Plan Usage settings or status popover: label for Refreshing."
+  },
+  "usageRemaining": "Remaining",
+  "@usageRemaining": {
+    "description": "Plan Usage settings or status popover: label for Remaining."
+  },
+  "usageResetCards": "{count, plural, one {# reset card} other {# reset cards}}{stale}",
+  "@usageResetCards": {
+    "description": "Plan Usage settings or status popover: label for ResetCards. Values: count, stale.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageResetCardsExpiring": "{count, plural, one {# reset card} other {# reset cards}}, earliest expires {date}{stale}",
+  "@usageResetCardsExpiring": {
+    "description": "Plan Usage settings or status popover: label for ResetCardsExpiring. Values: count, date, stale.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageSettingsNote": "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan usage updates as agents run: Claude, Codex, and Grok use their local records. The two options below require online queries, at least five minutes apart. Cursor usage is checked when the daemon starts and after Cursor runs, using cursor-agent credentials in Keychain. Codex checks reset cards after it runs, using its own sign-in.",
+  "@usageSettingsNote": {
+    "description": "Plan Usage settings or status popover: explanation for SettingsNote."
+  },
+  "usageShares": "This week’s usage: {shares}{stale}",
+  "@usageShares": {
+    "description": "Plan Usage settings or status popover: label for Shares. Values: shares, stale.",
+    "placeholders": {
+      "shares": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageShowLabel": "Show Plan Usage",
+  "@usageShowLabel": {
+    "description": "Plan Usage settings or status popover: label for ShowLabel."
+  },
+  "usageShownPercent": "{kind} {percent}",
+  "@usageShownPercent": {
+    "description": "Plan Usage settings or status popover: label for ShownPercent. Values: kind, percent.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "usageStaleReading": " (reading from {time})",
+  "@usageStaleReading": {
+    "description": "Plan Usage settings or status popover: label for StaleReading. Values: time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageTitle": "Plan Usage",
+  "@usageTitle": {
+    "description": "Plan Usage settings or status popover: heading for Title."
+  },
+  "usageUsed": "Used",
+  "@usageUsed": {
+    "description": "Plan Usage settings or status popover: label for Used."
+  },
+  "usageWindowDays": "{count, plural, one {# Day} other {# Days}}",
+  "@usageWindowDays": {
+    "description": "Plan Usage settings or status popover: label for WindowDays. Values: count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageWindowFiveHours": "5 Hours",
+  "@usageWindowFiveHours": {
+    "description": "Plan Usage settings or status popover: label for WindowFiveHours."
+  },
+  "usageWindowHours": "{count, plural, one {# Hour} other {# Hours}}",
+  "@usageWindowHours": {
+    "description": "Plan Usage settings or status popover: label for WindowHours. Values: count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageWindowMonth": "Monthly",
+  "@usageWindowMonth": {
+    "description": "Plan Usage settings or status popover: label for WindowMonth."
+  },
+  "usageWindowMonthShort": "mo",
+  "@usageWindowMonthShort": {
+    "description": "Plan Usage settings or status popover: label for WindowMonthShort."
+  },
+  "usageWindowPeriod": "Current Period",
+  "@usageWindowPeriod": {
+    "description": "Plan Usage settings or status popover: label for WindowPeriod."
+  },
+  "usageWindowWeek": "Weekly",
+  "@usageWindowWeek": {
+    "description": "Plan Usage settings or status popover: label for WindowWeek."
+  },
+  "usageWindowWeekShort": "wk",
+  "@usageWindowWeekShort": {
+    "description": "Plan Usage settings or status popover: label for WindowWeekShort."
   }
 }

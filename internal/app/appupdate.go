@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/spawn"
+	"posse/locales"
 )
 
 // Posse 的自动更新（方案见 docs/plans/mac-update.md）：后台只把新版本下载、解压到 app 旁边，
@@ -85,7 +85,7 @@ func (u *selfUpdate) due(manual bool, now time.Time) bool {
 	return manual || u.checkedAt.IsZero() || now.Sub(u.checkedAt) >= updateEvery
 }
 
-// updateUnavailable 说明这个包为什么不能自动更新；空串表示能。
+// updateUnavailable 返回不能自动更新的原因代号；空串表示能。
 // 不带更新地址的包（PosseDev、go build、mygo dev）和不是发布证书签的包（从源码打的）不显示更新，hidden 为真。
 func (a *app) updateUnavailable() (reason string, hidden bool) {
 	if !mygo.Updater.Configured() || a.exe.bundle == "" {
@@ -100,13 +100,13 @@ func (a *app) updateUnavailable() (reason string, hidden bool) {
 	}
 	if !inApplications(a.exe.bundle) {
 		// build/ 里用本地代码打的包也在这里：别让线上版本把它覆盖掉
-		return "把 Posse 移到「应用程序」文件夹后才能自动更新。", false
+		return "location", false
 	}
 	if a.upd.writable == nil {
 		a.upd.writable = sync.OnceValue(mygo.Updater.Enabled)
 	}
 	if !a.upd.writable() {
-		return "没有写入「应用程序」文件夹的权限，不能自动更新。", false
+		return "permission", false
 	}
 	return "", false
 }
@@ -292,9 +292,9 @@ func (a *app) installUpdate(s *mygo.Staged, wait time.Duration) error {
 }
 
 // restartToUpdate 是「重启更新」：先处理未保存的文件，再换包、交接常驻进程、重开窗口。
-func (a *app) restartToUpdate() {
+func (a *app) restartToUpdate(m locales.Messages) {
 	if docs := a.dirtyDocs(); len(docs) > 0 {
-		a.askUnsaved(docs, a.restartToUpdate)
+		a.askUnsaved(docs, func() { a.restartToUpdate(m) })
 		return
 	}
 	s := a.takeStaged()
@@ -308,7 +308,7 @@ func (a *app) restartToUpdate() {
 		a.update(func() {
 			a.updating = false
 			if err != nil {
-				a.err = "更新失败，Posse 没有改动：" + errtext.Text(err)
+				a.err = m.UpdateInstallError(errtext.Text(err))
 				return
 			}
 			// 等交接的这段时间里可能又改了文件，重开前再问一次
@@ -342,16 +342,17 @@ func (a *app) updateBar(c *ui.Context) {
 		a.state.UpdateDismissed = v.version
 		a.saveState()
 	}
-	sideNotice(c, false, fmt.Sprintf("Posse %s 已就绪", v.version), "更新时终端不会断开。", dismiss, func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			b := pressable(accentButton(c, "重启更新"))
+	sideNotice(c, false, L(c).UpdateReadyTitle(v.version), L(c).UpdateUninterruptedNote(), dismiss, func() {
+		// 侧栏窄，按钮文字长的语言放不下一行时折到下一行
+		ui.Row(c).Gap(8).Wrap().AlignItems(ui.Center).Children(func() {
+			b := pressable(accentButton(c, L(c).UpdateRestartButton()))
 			if a.updating {
 				b.Disabled(true)
 			}
 			if b.Clicked() {
-				a.restartToUpdate()
+				a.restartToUpdate(L(c))
 			}
-			if pressable(textButton(c, "更新内容")).Clicked() {
+			if pressable(textButton(c, L(c).UpdateReleaseNotesTitle())).Clicked() {
 				a.openAbout()
 			}
 		})
@@ -369,47 +370,54 @@ func (a *app) updateSettings(c *ui.Context) {
 	if hidden {
 		return
 	}
+	a.updateCard(c, reason, a.upd.view())
+}
+
+func (a *app) updateCard(c *ui.Context, reason string, v updateView) {
 	t := c.Theme()
-	v := a.upd.view()
-	settingsCard(c, "更新", "", func() {
+	settingsCard(c, L(c).UpdateTitle(), "", func() {
 		var status string
 		switch {
 		case reason != "":
-			status = reason
+			if reason == "location" {
+				status = L(c).UpdateMoveToApplications()
+			} else {
+				status = L(c).UpdatePermissionRequired()
+			}
 		case a.updating:
-			status = "正在更新…"
+			status = L(c).UpdateInstalling()
 		case v.phase == updateChecking:
-			status = "正在检查更新…"
+			status = L(c).UpdateChecking()
 		case v.phase == updateDownloading:
-			status = fmt.Sprintf("正在下载 %s…%d%%", v.version, v.percent)
+			status = L(c).UpdateDownloading(v.version, v.percent)
 		case v.phase == updateReady:
-			status = fmt.Sprintf("%s 已就绪，重启后生效，终端不会断开。", v.version)
+			status = L(c).UpdateReadyNote(v.version)
 		case v.phase == updateFailed:
-			status = "检查更新失败：" + v.err
+			status = L(c).UpdateCheckError(v.err)
 		case v.checkedAt.IsZero():
-			status = "还没有检查过更新。"
+			status = L(c).UpdateNeverChecked()
 		default:
 			c.After(time.Minute)
-			status = fmt.Sprintf("已是最新版本（%s检查）。", ago(v.checkedAt))
+			status = L(c).UpdateCurrentNote(ago(v.checkedAt))
 		}
 		ui.Text(c, status).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
 		if v.phase == updateReady && v.err != "" && !a.updating {
-			ui.Text(c, "再次检查更新失败："+v.err).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
+			ui.Text(c, L(c).UpdateRecheckError(v.err)).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
 		}
 		if reason != "" {
 			return
 		}
 		ui.Row(c).Gap(8).Padding(4, 0, 0, 0).Children(func() {
 			if v.phase == updateReady {
-				b := pressable(accentButton(c, "重启更新"))
+				b := pressable(accentButton(c, L(c).UpdateRestartButton()))
 				if a.updating {
 					b.Disabled(true)
 				}
 				if b.Clicked() {
-					a.restartToUpdate()
+					a.restartToUpdate(L(c))
 				}
 			}
-			b := pressable(textButton(c, "检查更新"))
+			b := pressable(textButton(c, L(c).UpdateCheckButton()))
 			if v.busy || a.updating {
 				b.Disabled(true)
 			}
@@ -419,7 +427,7 @@ func (a *app) updateSettings(c *ui.Context) {
 		})
 		if v.phase == updateReady && strings.TrimSpace(v.notes) != "" {
 			ui.Column(c).Gap(4).Padding(4, 0, 0, 0).Children(func() {
-				ui.Text(c, "更新内容").FontSize(fsBody).TextColor(t.TextMuted)
+				ui.Text(c, L(c).UpdateReleaseNotesTitle()).FontSize(fsBody).TextColor(t.TextMuted)
 				ui.Text(c, strings.TrimSpace(v.notes)).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
 			})
 		}

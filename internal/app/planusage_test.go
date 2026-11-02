@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"posse/internal/usage"
+	"posse/locales"
 )
 
 func TestCursorPools(t *testing.T) {
@@ -13,7 +14,7 @@ func TestCursorPools(t *testing.T) {
 		{Percent: 77, Minutes: 44640, Name: "API"},
 	}}
 	ws := planWindows(u)
-	if len(ws) != 2 || windowName(ws[0]) != "Cursor 模型" || windowName(ws[1]) != "其他模型" {
+	if len(ws) != 2 || windowName(locales.In("zh-Hans"), ws[0]) != "Cursor 模型" || windowName(locales.In("zh-Hans"), ws[1]) != "其他模型" {
 		t.Fatalf("windows = %+v", ws)
 	}
 	if h := headWindow(u); h.Name != "API" {

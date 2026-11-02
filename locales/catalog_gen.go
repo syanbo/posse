@@ -37,13 +37,13 @@ func In(locale string) Messages { return Messages{locale} }
 // AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
 // in the language the app shows.
 //
-// Prevent Sleep control: ActiveTip.
+// Prevent Sleep settings or status button: tooltip for ActiveTip.
 func AwakeActiveTip() string { return In(i18n.Locale()).AwakeActiveTip() }
 
 // AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
 // in the language of msgs.
 //
-// Prevent Sleep control: ActiveTip.
+// Prevent Sleep settings or status button: tooltip for ActiveTip.
 func (msgs Messages) AwakeActiveTip() string {
 	return Catalog.Format(msgs.locale, "awakeActiveTip", nil)
 }
@@ -51,13 +51,13 @@ func (msgs Messages) AwakeActiveTip() string {
 // AwakeDisplay says "Keep Display On"
 // in the language the app shows.
 //
-// Prevent Sleep control: Display.
+// Prevent Sleep settings or status button: label for Display.
 func AwakeDisplay() string { return In(i18n.Locale()).AwakeDisplay() }
 
 // AwakeDisplay says "Keep Display On"
 // in the language of msgs.
 //
-// Prevent Sleep control: Display.
+// Prevent Sleep settings or status button: label for Display.
 func (msgs Messages) AwakeDisplay() string {
 	return Catalog.Format(msgs.locale, "awakeDisplay", nil)
 }
@@ -65,13 +65,13 @@ func (msgs Messages) AwakeDisplay() string {
 // AwakeDisplayActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake and the display on."
 // in the language the app shows.
 //
-// Prevent Sleep control: DisplayActiveTip.
+// Prevent Sleep settings or status button: tooltip for DisplayActiveTip.
 func AwakeDisplayActiveTip() string { return In(i18n.Locale()).AwakeDisplayActiveTip() }
 
 // AwakeDisplayActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake and the display on."
 // in the language of msgs.
 //
-// Prevent Sleep control: DisplayActiveTip.
+// Prevent Sleep settings or status button: tooltip for DisplayActiveTip.
 func (msgs Messages) AwakeDisplayActiveTip() string {
 	return Catalog.Format(msgs.locale, "awakeDisplayActiveTip", nil)
 }
@@ -79,13 +79,13 @@ func (msgs Messages) AwakeDisplayActiveTip() string {
 // AwakeDisplayItem says "Keep Display On While Posse Is Running"
 // in the language the app shows.
 //
-// Prevent Sleep control: DisplayItem.
+// Prevent Sleep settings or status button: label for DisplayItem.
 func AwakeDisplayItem() string { return In(i18n.Locale()).AwakeDisplayItem() }
 
 // AwakeDisplayItem says "Keep Display On While Posse Is Running"
 // in the language of msgs.
 //
-// Prevent Sleep control: DisplayItem.
+// Prevent Sleep settings or status button: label for DisplayItem.
 func (msgs Messages) AwakeDisplayItem() string {
 	return Catalog.Format(msgs.locale, "awakeDisplayItem", nil)
 }
@@ -93,13 +93,13 @@ func (msgs Messages) AwakeDisplayItem() string {
 // AwakeDisplayShort says "Display On"
 // in the language the app shows.
 //
-// Prevent Sleep control: DisplayShort.
+// Prevent Sleep settings or status button: label for DisplayShort.
 func AwakeDisplayShort() string { return In(i18n.Locale()).AwakeDisplayShort() }
 
 // AwakeDisplayShort says "Display On"
 // in the language of msgs.
 //
-// Prevent Sleep control: DisplayShort.
+// Prevent Sleep settings or status button: label for DisplayShort.
 func (msgs Messages) AwakeDisplayShort() string {
 	return Catalog.Format(msgs.locale, "awakeDisplayShort", nil)
 }
@@ -107,13 +107,13 @@ func (msgs Messages) AwakeDisplayShort() string {
 // AwakeDisplayTip says "Prevent Sleep: keeps your computer awake and the display on while Posse is running."
 // in the language the app shows.
 //
-// Prevent Sleep control: DisplayTip.
+// Prevent Sleep settings or status button: tooltip for DisplayTip.
 func AwakeDisplayTip() string { return In(i18n.Locale()).AwakeDisplayTip() }
 
 // AwakeDisplayTip says "Prevent Sleep: keeps your computer awake and the display on while Posse is running."
 // in the language of msgs.
 //
-// Prevent Sleep control: DisplayTip.
+// Prevent Sleep settings or status button: tooltip for DisplayTip.
 func (msgs Messages) AwakeDisplayTip() string {
 	return Catalog.Format(msgs.locale, "awakeDisplayTip", nil)
 }
@@ -121,13 +121,13 @@ func (msgs Messages) AwakeDisplayTip() string {
 // AwakeOff says "Off"
 // in the language the app shows.
 //
-// Prevent Sleep control: Off.
+// Prevent Sleep mode: disables sleep prevention.
 func AwakeOff() string { return In(i18n.Locale()).AwakeOff() }
 
 // AwakeOff says "Off"
 // in the language of msgs.
 //
-// Prevent Sleep control: Off.
+// Prevent Sleep mode: disables sleep prevention.
 func (msgs Messages) AwakeOff() string {
 	return Catalog.Format(msgs.locale, "awakeOff", nil)
 }
@@ -135,13 +135,13 @@ func (msgs Messages) AwakeOff() string {
 // AwakeOffTip says "Prevent Sleep is off. Your computer sleeps according to system settings."
 // in the language the app shows.
 //
-// Prevent Sleep control: OffTip.
+// Prevent Sleep settings or status button: tooltip for OffTip.
 func AwakeOffTip() string { return In(i18n.Locale()).AwakeOffTip() }
 
 // AwakeOffTip says "Prevent Sleep is off. Your computer sleeps according to system settings."
 // in the language of msgs.
 //
-// Prevent Sleep control: OffTip.
+// Prevent Sleep settings or status button: tooltip for OffTip.
 func (msgs Messages) AwakeOffTip() string {
 	return Catalog.Format(msgs.locale, "awakeOffTip", nil)
 }
@@ -149,13 +149,13 @@ func (msgs Messages) AwakeOffTip() string {
 // AwakeRestartTip says "Prevent Sleep: available after restarting the daemon"
 // in the language the app shows.
 //
-// Prevent Sleep control: RestartTip.
+// Prevent Sleep settings or status button: tooltip for RestartTip.
 func AwakeRestartTip() string { return In(i18n.Locale()).AwakeRestartTip() }
 
 // AwakeRestartTip says "Prevent Sleep: available after restarting the daemon"
 // in the language of msgs.
 //
-// Prevent Sleep control: RestartTip.
+// Prevent Sleep settings or status button: tooltip for RestartTip.
 func (msgs Messages) AwakeRestartTip() string {
 	return Catalog.Format(msgs.locale, "awakeRestartTip", nil)
 }
@@ -163,13 +163,13 @@ func (msgs Messages) AwakeRestartTip() string {
 // AwakeRunning says "While Posse Is Running"
 // in the language the app shows.
 //
-// Prevent Sleep control: Running.
+// Prevent Sleep settings or status button: label for Running.
 func AwakeRunning() string { return In(i18n.Locale()).AwakeRunning() }
 
 // AwakeRunning says "While Posse Is Running"
 // in the language of msgs.
 //
-// Prevent Sleep control: Running.
+// Prevent Sleep settings or status button: label for Running.
 func (msgs Messages) AwakeRunning() string {
 	return Catalog.Format(msgs.locale, "awakeRunning", nil)
 }
@@ -177,13 +177,13 @@ func (msgs Messages) AwakeRunning() string {
 // AwakeRunningShort says "Running"
 // in the language the app shows.
 //
-// Prevent Sleep control: RunningShort.
+// Prevent Sleep settings or status button: label for RunningShort.
 func AwakeRunningShort() string { return In(i18n.Locale()).AwakeRunningShort() }
 
 // AwakeRunningShort says "Running"
 // in the language of msgs.
 //
-// Prevent Sleep control: RunningShort.
+// Prevent Sleep settings or status button: label for RunningShort.
 func (msgs Messages) AwakeRunningShort() string {
 	return Catalog.Format(msgs.locale, "awakeRunningShort", nil)
 }
@@ -191,13 +191,13 @@ func (msgs Messages) AwakeRunningShort() string {
 // AwakeRunningTip says "Prevent Sleep: keeps your computer awake while Posse is running."
 // in the language the app shows.
 //
-// Prevent Sleep control: RunningTip.
+// Prevent Sleep settings or status button: tooltip for RunningTip.
 func AwakeRunningTip() string { return In(i18n.Locale()).AwakeRunningTip() }
 
 // AwakeRunningTip says "Prevent Sleep: keeps your computer awake while Posse is running."
 // in the language of msgs.
 //
-// Prevent Sleep control: RunningTip.
+// Prevent Sleep settings or status button: tooltip for RunningTip.
 func (msgs Messages) AwakeRunningTip() string {
 	return Catalog.Format(msgs.locale, "awakeRunningTip", nil)
 }
@@ -205,13 +205,15 @@ func (msgs Messages) AwakeRunningTip() string {
 // AwakeStatus says "Prevent Sleep: {status}"
 // in the language the app shows.
 //
-// Accessible label for the Prevent Sleep status button.
+// Prevent Sleep settings or status button: label for Status. Values:
+// status.
 func AwakeStatus(status string) string { return In(i18n.Locale()).AwakeStatus(status) }
 
 // AwakeStatus says "Prevent Sleep: {status}"
 // in the language of msgs.
 //
-// Accessible label for the Prevent Sleep status button.
+// Prevent Sleep settings or status button: label for Status. Values:
+// status.
 func (msgs Messages) AwakeStatus(status string) string {
 	return Catalog.Format(msgs.locale, "awakeStatus", map[string]any{"status": status})
 }
@@ -219,15 +221,189 @@ func (msgs Messages) AwakeStatus(status string) string {
 // AwakeUnavailable says "Unavailable"
 // in the language the app shows.
 //
-// Prevent Sleep control: Unavailable.
+// Prevent Sleep settings or status button: label for Unavailable.
 func AwakeUnavailable() string { return In(i18n.Locale()).AwakeUnavailable() }
 
 // AwakeUnavailable says "Unavailable"
 // in the language of msgs.
 //
-// Prevent Sleep control: Unavailable.
+// Prevent Sleep settings or status button: label for Unavailable.
 func (msgs Messages) AwakeUnavailable() string {
 	return Catalog.Format(msgs.locale, "awakeUnavailable", nil)
+}
+
+// ChatAddProjectError says "Could not add the chat folder as a project: {error}"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// AddProjectError. Values: error.
+func ChatAddProjectError(error string) string { return In(i18n.Locale()).ChatAddProjectError(error) }
+
+// ChatAddProjectError says "Could not add the chat folder as a project: {error}"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// AddProjectError. Values: error.
+func (msgs Messages) ChatAddProjectError(error string) string {
+	return Catalog.Format(msgs.locale, "chatAddProjectError", map[string]any{"error": error})
+}
+
+// ChatChangeFolderButton says "Change…"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// CommonChangeEllipsis.
+func ChatChangeFolderButton() string { return In(i18n.Locale()).ChatChangeFolderButton() }
+
+// ChatChangeFolderButton says "Change…"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// CommonChangeEllipsis.
+func (msgs Messages) ChatChangeFolderButton() string {
+	return Catalog.Format(msgs.locale, "chatChangeFolderButton", nil)
+}
+
+// ChatChooseButton says "Choose"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// CommonChoose.
+func ChatChooseButton() string { return In(i18n.Locale()).ChatChooseButton() }
+
+// ChatChooseButton says "Choose"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// CommonChoose.
+func (msgs Messages) ChatChooseButton() string {
+	return Catalog.Format(msgs.locale, "chatChooseButton", nil)
+}
+
+// ChatChooseFolderTitle says "Choose Chat Folder"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: heading for
+// ChooseFolderTitle.
+func ChatChooseFolderTitle() string { return In(i18n.Locale()).ChatChooseFolderTitle() }
+
+// ChatChooseFolderTitle says "Choose Chat Folder"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: heading for
+// ChooseFolderTitle.
+func (msgs Messages) ChatChooseFolderTitle() string {
+	return Catalog.Format(msgs.locale, "chatChooseFolderTitle", nil)
+}
+
+// ChatConvertProject says "Convert to Project"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// ConvertProject.
+func ChatConvertProject() string { return In(i18n.Locale()).ChatConvertProject() }
+
+// ChatConvertProject says "Convert to Project"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: label for
+// ConvertProject.
+func (msgs Messages) ChatConvertProject() string {
+	return Catalog.Format(msgs.locale, "chatConvertProject", nil)
+}
+
+// ChatCreateFolderError says "Could not create the chat folder: {error}"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// CreateFolderError. Values: error.
+func ChatCreateFolderError(error string) string {
+	return In(i18n.Locale()).ChatCreateFolderError(error)
+}
+
+// ChatCreateFolderError says "Could not create the chat folder: {error}"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// CreateFolderError. Values: error.
+func (msgs Messages) ChatCreateFolderError(error string) string {
+	return Catalog.Format(msgs.locale, "chatCreateFolderError", map[string]any{"error": error})
+}
+
+// ChatGrokNote says "Grok asks for confirmation in each untrusted folder. Press y on the first screen of a new chat."
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: explanation for
+// GrokNote.
+func ChatGrokNote() string { return In(i18n.Locale()).ChatGrokNote() }
+
+// ChatGrokNote says "Grok asks for confirmation in each untrusted folder. Press y on the first screen of a new chat."
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: explanation for
+// GrokNote.
+func (msgs Messages) ChatGrokNote() string {
+	return Catalog.Format(msgs.locale, "chatGrokNote", nil)
+}
+
+// ChatOpenFolder says "Open Folder in Finder"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: label for OpenFolder.
+func ChatOpenFolder() string { return In(i18n.Locale()).ChatOpenFolder() }
+
+// ChatOpenFolder says "Open Folder in Finder"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: label for OpenFolder.
+func (msgs Messages) ChatOpenFolder() string {
+	return Catalog.Format(msgs.locale, "chatOpenFolder", nil)
+}
+
+// ChatOpenFolderError says "Could not open in Finder: {error}"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// OpenFolderError. Values: error.
+func ChatOpenFolderError(error string) string { return In(i18n.Locale()).ChatOpenFolderError(error) }
+
+// ChatOpenFolderError says "Could not open in Finder: {error}"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: error message for
+// OpenFolderError. Values: error.
+func (msgs Messages) ChatOpenFolderError(error string) string {
+	return Catalog.Format(msgs.locale, "chatOpenFolderError", map[string]any{"error": error})
+}
+
+// ChatSettingsNote says "Chat at the top of the sidebar opens this folder and adds it as a project on first use. Each agent session gets a sub…"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: explanation for
+// SettingsNote.
+func ChatSettingsNote() string { return In(i18n.Locale()).ChatSettingsNote() }
+
+// ChatSettingsNote says "Chat at the top of the sidebar opens this folder and adds it as a project on first use. Each agent session gets a sub…"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: explanation for
+// SettingsNote.
+func (msgs Messages) ChatSettingsNote() string {
+	return Catalog.Format(msgs.locale, "chatSettingsNote", nil)
+}
+
+// ChatTitle says "Chat"
+// in the language the app shows.
+//
+// Chat sidebar tile, settings card, or folder action: heading for Title.
+func ChatTitle() string { return In(i18n.Locale()).ChatTitle() }
+
+// ChatTitle says "Chat"
+// in the language of msgs.
+//
+// Chat sidebar tile, settings card, or folder action: heading for Title.
+func (msgs Messages) ChatTitle() string {
+	return Catalog.Format(msgs.locale, "chatTitle", nil)
 }
 
 // CommonAll says "All"
@@ -662,6 +838,2572 @@ func CommonSelectAll() string { return In(i18n.Locale()).CommonSelectAll() }
 // Common menu item.
 func (msgs Messages) CommonSelectAll() string {
 	return Catalog.Format(msgs.locale, "commonSelectAll", nil)
+}
+
+// KeysAdd says "Add Another Shortcut"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for Add.
+func KeysAdd() string { return In(i18n.Locale()).KeysAdd() }
+
+// KeysAdd says "Add Another Shortcut"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for Add.
+func (msgs Messages) KeysAdd() string {
+	return Catalog.Format(msgs.locale, "keysAdd", nil)
+}
+
+// KeysChangesLabel says "Changes"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ChangesLabel.
+func KeysChangesLabel() string { return In(i18n.Locale()).KeysChangesLabel() }
+
+// KeysChangesLabel says "Changes"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ChangesLabel.
+func (msgs Messages) KeysChangesLabel() string {
+	return Catalog.Format(msgs.locale, "keysChangesLabel", nil)
+}
+
+// KeysChangesNote says "Yields to Find Previous when the editor has focus or the preview find bar is open."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for ChangesNote.
+func KeysChangesNote() string { return In(i18n.Locale()).KeysChangesNote() }
+
+// KeysChangesNote says "Yields to Find Previous when the editor has focus or the preview find bar is open."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for ChangesNote.
+func (msgs Messages) KeysChangesNote() string {
+	return Catalog.Format(msgs.locale, "keysChangesNote", nil)
+}
+
+// KeysCloseSplitLabel says "Merge All Panes"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for CloseSplitLabel.
+func KeysCloseSplitLabel() string { return In(i18n.Locale()).KeysCloseSplitLabel() }
+
+// KeysCloseSplitLabel says "Merge All Panes"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for CloseSplitLabel.
+func (msgs Messages) KeysCloseSplitLabel() string {
+	return Catalog.Format(msgs.locale, "keysCloseSplitLabel", nil)
+}
+
+// KeysCloseSplitNote says "Merges all tabs into one pane without closing any."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for CloseSplitNote.
+func KeysCloseSplitNote() string { return In(i18n.Locale()).KeysCloseSplitNote() }
+
+// KeysCloseSplitNote says "Merges all tabs into one pane without closing any."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for CloseSplitNote.
+func (msgs Messages) KeysCloseSplitNote() string {
+	return Catalog.Format(msgs.locale, "keysCloseSplitNote", nil)
+}
+
+// KeysCloseTabLabel says "Close Tab"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for CloseTabLabel.
+func KeysCloseTabLabel() string { return In(i18n.Locale()).KeysCloseTabLabel() }
+
+// KeysCloseTabLabel says "Close Tab"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for CloseTabLabel.
+func (msgs Messages) KeysCloseTabLabel() string {
+	return Catalog.Format(msgs.locale, "keysCloseTabLabel", nil)
+}
+
+// KeysCloseTabNote says "Also updates the File menu shortcut."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for CloseTabNote.
+func KeysCloseTabNote() string { return In(i18n.Locale()).KeysCloseTabNote() }
+
+// KeysCloseTabNote says "Also updates the File menu shortcut."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for CloseTabNote.
+func (msgs Messages) KeysCloseTabNote() string {
+	return Catalog.Format(msgs.locale, "keysCloseTabNote", nil)
+}
+
+// KeysCloseWindowLabel says "Close Window"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for CloseWindowLabel.
+func KeysCloseWindowLabel() string { return In(i18n.Locale()).KeysCloseWindowLabel() }
+
+// KeysCloseWindowLabel says "Close Window"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for CloseWindowLabel.
+func (msgs Messages) KeysCloseWindowLabel() string {
+	return Catalog.Format(msgs.locale, "keysCloseWindowLabel", nil)
+}
+
+// KeysCloseWindowNote says "Also updates the File menu shortcut."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for CloseWindowNote.
+func KeysCloseWindowNote() string { return In(i18n.Locale()).KeysCloseWindowNote() }
+
+// KeysCloseWindowNote says "Also updates the File menu shortcut."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for CloseWindowNote.
+func (msgs Messages) KeysCloseWindowNote() string {
+	return Catalog.Format(msgs.locale, "keysCloseWindowNote", nil)
+}
+
+// KeysCommitLabel says "Commit"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for CommitLabel.
+func KeysCommitLabel() string { return In(i18n.Locale()).KeysCommitLabel() }
+
+// KeysCommitLabel says "Commit"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for CommitLabel.
+func (msgs Messages) KeysCommitLabel() string {
+	return Catalog.Format(msgs.locale, "keysCommitLabel", nil)
+}
+
+// KeysCommitNote says "When a file or the Files Panel has focus."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for CommitNote.
+func KeysCommitNote() string { return In(i18n.Locale()).KeysCommitNote() }
+
+// KeysCommitNote says "When a file or the Files Panel has focus."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for CommitNote.
+func (msgs Messages) KeysCommitNote() string {
+	return Catalog.Format(msgs.locale, "keysCommitNote", nil)
+}
+
+// KeysConflictRemoved says "Removed {shortcut} from “{action}”"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ConflictRemoved. Values: action,
+// shortcut.
+func KeysConflictRemoved(action string, shortcut string) string {
+	return In(i18n.Locale()).KeysConflictRemoved(action, shortcut)
+}
+
+// KeysConflictRemoved says "Removed {shortcut} from “{action}”"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ConflictRemoved. Values: action,
+// shortcut.
+func (msgs Messages) KeysConflictRemoved(action string, shortcut string) string {
+	return Catalog.Format(msgs.locale, "keysConflictRemoved", map[string]any{"action": action, "shortcut": shortcut})
+}
+
+// KeysDiffOpenFileLabel says "Open File from Diff"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for DiffOpenFileLabel.
+func KeysDiffOpenFileLabel() string { return In(i18n.Locale()).KeysDiffOpenFileLabel() }
+
+// KeysDiffOpenFileLabel says "Open File from Diff"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for DiffOpenFileLabel.
+func (msgs Messages) KeysDiffOpenFileLabel() string {
+	return Catalog.Format(msgs.locale, "keysDiffOpenFileLabel", nil)
+}
+
+// KeysEditShortcut says "Change shortcut {shortcut}"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditShortcut. Values: shortcut.
+func KeysEditShortcut(shortcut string) string { return In(i18n.Locale()).KeysEditShortcut(shortcut) }
+
+// KeysEditShortcut says "Change shortcut {shortcut}"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditShortcut. Values: shortcut.
+func (msgs Messages) KeysEditShortcut(shortcut string) string {
+	return Catalog.Format(msgs.locale, "keysEditShortcut", map[string]any{"shortcut": shortcut})
+}
+
+// KeysEditorAddCursorAbove says "Add Cursor Above"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorAddCursorAbove.
+func KeysEditorAddCursorAbove() string { return In(i18n.Locale()).KeysEditorAddCursorAbove() }
+
+// KeysEditorAddCursorAbove says "Add Cursor Above"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorAddCursorAbove.
+func (msgs Messages) KeysEditorAddCursorAbove() string {
+	return Catalog.Format(msgs.locale, "keysEditorAddCursorAbove", nil)
+}
+
+// KeysEditorAddCursorBelow says "Add Cursor Below"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorAddCursorBelow.
+func KeysEditorAddCursorBelow() string { return In(i18n.Locale()).KeysEditorAddCursorBelow() }
+
+// KeysEditorAddCursorBelow says "Add Cursor Below"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorAddCursorBelow.
+func (msgs Messages) KeysEditorAddCursorBelow() string {
+	return Catalog.Format(msgs.locale, "keysEditorAddCursorBelow", nil)
+}
+
+// KeysEditorCut says "Cut"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorCut.
+func KeysEditorCut() string { return In(i18n.Locale()).KeysEditorCut() }
+
+// KeysEditorCut says "Cut"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorCut.
+func (msgs Messages) KeysEditorCut() string {
+	return Catalog.Format(msgs.locale, "keysEditorCut", nil)
+}
+
+// KeysEditorCutToLineEnd says "Cut to Line End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorCutToLineEnd.
+func KeysEditorCutToLineEnd() string { return In(i18n.Locale()).KeysEditorCutToLineEnd() }
+
+// KeysEditorCutToLineEnd says "Cut to Line End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorCutToLineEnd.
+func (msgs Messages) KeysEditorCutToLineEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorCutToLineEnd", nil)
+}
+
+// KeysEditorDeleteLine says "Delete Line"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteLine.
+func KeysEditorDeleteLine() string { return In(i18n.Locale()).KeysEditorDeleteLine() }
+
+// KeysEditorDeleteLine says "Delete Line"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteLine.
+func (msgs Messages) KeysEditorDeleteLine() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteLine", nil)
+}
+
+// KeysEditorDeleteSubwordLeft says "Delete Previous Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteSubwordLeft.
+func KeysEditorDeleteSubwordLeft() string { return In(i18n.Locale()).KeysEditorDeleteSubwordLeft() }
+
+// KeysEditorDeleteSubwordLeft says "Delete Previous Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteSubwordLeft.
+func (msgs Messages) KeysEditorDeleteSubwordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteSubwordLeft", nil)
+}
+
+// KeysEditorDeleteSubwordRight says "Delete Next Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteSubwordRight.
+func KeysEditorDeleteSubwordRight() string { return In(i18n.Locale()).KeysEditorDeleteSubwordRight() }
+
+// KeysEditorDeleteSubwordRight says "Delete Next Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteSubwordRight.
+func (msgs Messages) KeysEditorDeleteSubwordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteSubwordRight", nil)
+}
+
+// KeysEditorDeleteToLineEnd says "Delete to Line End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteToLineEnd.
+func KeysEditorDeleteToLineEnd() string { return In(i18n.Locale()).KeysEditorDeleteToLineEnd() }
+
+// KeysEditorDeleteToLineEnd says "Delete to Line End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteToLineEnd.
+func (msgs Messages) KeysEditorDeleteToLineEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteToLineEnd", nil)
+}
+
+// KeysEditorDeleteToLineStart says "Delete to Line Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteToLineStart.
+func KeysEditorDeleteToLineStart() string { return In(i18n.Locale()).KeysEditorDeleteToLineStart() }
+
+// KeysEditorDeleteToLineStart says "Delete to Line Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteToLineStart.
+func (msgs Messages) KeysEditorDeleteToLineStart() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteToLineStart", nil)
+}
+
+// KeysEditorDeleteWordLeft says "Delete Previous Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteWordLeft.
+func KeysEditorDeleteWordLeft() string { return In(i18n.Locale()).KeysEditorDeleteWordLeft() }
+
+// KeysEditorDeleteWordLeft says "Delete Previous Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteWordLeft.
+func (msgs Messages) KeysEditorDeleteWordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteWordLeft", nil)
+}
+
+// KeysEditorDeleteWordRight says "Delete Next Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteWordRight.
+func KeysEditorDeleteWordRight() string { return In(i18n.Locale()).KeysEditorDeleteWordRight() }
+
+// KeysEditorDeleteWordRight says "Delete Next Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDeleteWordRight.
+func (msgs Messages) KeysEditorDeleteWordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorDeleteWordRight", nil)
+}
+
+// KeysEditorDuplicateLinesDown says "Duplicate Line Down"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDuplicateLinesDown.
+func KeysEditorDuplicateLinesDown() string { return In(i18n.Locale()).KeysEditorDuplicateLinesDown() }
+
+// KeysEditorDuplicateLinesDown says "Duplicate Line Down"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDuplicateLinesDown.
+func (msgs Messages) KeysEditorDuplicateLinesDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorDuplicateLinesDown", nil)
+}
+
+// KeysEditorDuplicateLinesUp says "Duplicate Line Up"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorDuplicateLinesUp.
+func KeysEditorDuplicateLinesUp() string { return In(i18n.Locale()).KeysEditorDuplicateLinesUp() }
+
+// KeysEditorDuplicateLinesUp says "Duplicate Line Up"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorDuplicateLinesUp.
+func (msgs Messages) KeysEditorDuplicateLinesUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorDuplicateLinesUp", nil)
+}
+
+// KeysEditorFind says "Find"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFind.
+func KeysEditorFind() string { return In(i18n.Locale()).KeysEditorFind() }
+
+// KeysEditorFind says "Find"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFind.
+func (msgs Messages) KeysEditorFind() string {
+	return Catalog.Format(msgs.locale, "keysEditorFind", nil)
+}
+
+// KeysEditorFindInSelection says "Find in Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFindInSelection.
+func KeysEditorFindInSelection() string { return In(i18n.Locale()).KeysEditorFindInSelection() }
+
+// KeysEditorFindInSelection says "Find in Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFindInSelection.
+func (msgs Messages) KeysEditorFindInSelection() string {
+	return Catalog.Format(msgs.locale, "keysEditorFindInSelection", nil)
+}
+
+// KeysEditorFindNext says "Find Next"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFindNext.
+func KeysEditorFindNext() string { return In(i18n.Locale()).KeysEditorFindNext() }
+
+// KeysEditorFindNext says "Find Next"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFindNext.
+func (msgs Messages) KeysEditorFindNext() string {
+	return Catalog.Format(msgs.locale, "keysEditorFindNext", nil)
+}
+
+// KeysEditorFindNote says "Also used by the find bars in Markdown preview and Annotate."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for EditorFindNote.
+func KeysEditorFindNote() string { return In(i18n.Locale()).KeysEditorFindNote() }
+
+// KeysEditorFindNote says "Also used by the find bars in Markdown preview and Annotate."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for EditorFindNote.
+func (msgs Messages) KeysEditorFindNote() string {
+	return Catalog.Format(msgs.locale, "keysEditorFindNote", nil)
+}
+
+// KeysEditorFindPrevious says "Find Previous"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFindPrevious.
+func KeysEditorFindPrevious() string { return In(i18n.Locale()).KeysEditorFindPrevious() }
+
+// KeysEditorFindPrevious says "Find Previous"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFindPrevious.
+func (msgs Messages) KeysEditorFindPrevious() string {
+	return Catalog.Format(msgs.locale, "keysEditorFindPrevious", nil)
+}
+
+// KeysEditorFindReplace says "Replace"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFindReplace.
+func KeysEditorFindReplace() string { return In(i18n.Locale()).KeysEditorFindReplace() }
+
+// KeysEditorFindReplace says "Replace"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFindReplace.
+func (msgs Messages) KeysEditorFindReplace() string {
+	return Catalog.Format(msgs.locale, "keysEditorFindReplace", nil)
+}
+
+// KeysEditorFold says "Fold"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFold.
+func KeysEditorFold() string { return In(i18n.Locale()).KeysEditorFold() }
+
+// KeysEditorFold says "Fold"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFold.
+func (msgs Messages) KeysEditorFold() string {
+	return Catalog.Format(msgs.locale, "keysEditorFold", nil)
+}
+
+// KeysEditorFoldAll says "Fold All"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFoldAll.
+func KeysEditorFoldAll() string { return In(i18n.Locale()).KeysEditorFoldAll() }
+
+// KeysEditorFoldAll says "Fold All"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFoldAll.
+func (msgs Messages) KeysEditorFoldAll() string {
+	return Catalog.Format(msgs.locale, "keysEditorFoldAll", nil)
+}
+
+// KeysEditorFoldRecursive says "Fold Recursively"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorFoldRecursive.
+func KeysEditorFoldRecursive() string { return In(i18n.Locale()).KeysEditorFoldRecursive() }
+
+// KeysEditorFoldRecursive says "Fold Recursively"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorFoldRecursive.
+func (msgs Messages) KeysEditorFoldRecursive() string {
+	return Catalog.Format(msgs.locale, "keysEditorFoldRecursive", nil)
+}
+
+// KeysEditorGoToDefinition says "Go to Definition"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorGoToDefinition.
+func KeysEditorGoToDefinition() string { return In(i18n.Locale()).KeysEditorGoToDefinition() }
+
+// KeysEditorGoToDefinition says "Go to Definition"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorGoToDefinition.
+func (msgs Messages) KeysEditorGoToDefinition() string {
+	return Catalog.Format(msgs.locale, "keysEditorGoToDefinition", nil)
+}
+
+// KeysEditorGoToLine says "Go to Line"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorGoToLine.
+func KeysEditorGoToLine() string { return In(i18n.Locale()).KeysEditorGoToLine() }
+
+// KeysEditorGoToLine says "Go to Line"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorGoToLine.
+func (msgs Messages) KeysEditorGoToLine() string {
+	return Catalog.Format(msgs.locale, "keysEditorGoToLine", nil)
+}
+
+// KeysEditorIndent says "Indent"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorIndent.
+func KeysEditorIndent() string { return In(i18n.Locale()).KeysEditorIndent() }
+
+// KeysEditorIndent says "Indent"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorIndent.
+func (msgs Messages) KeysEditorIndent() string {
+	return Catalog.Format(msgs.locale, "keysEditorIndent", nil)
+}
+
+// KeysEditorJoinLines says "Join Lines"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorJoinLines.
+func KeysEditorJoinLines() string { return In(i18n.Locale()).KeysEditorJoinLines() }
+
+// KeysEditorJoinLines says "Join Lines"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorJoinLines.
+func (msgs Messages) KeysEditorJoinLines() string {
+	return Catalog.Format(msgs.locale, "keysEditorJoinLines", nil)
+}
+
+// KeysEditorMoveDocEnd says "File End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveDocEnd.
+func KeysEditorMoveDocEnd() string { return In(i18n.Locale()).KeysEditorMoveDocEnd() }
+
+// KeysEditorMoveDocEnd says "File End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveDocEnd.
+func (msgs Messages) KeysEditorMoveDocEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveDocEnd", nil)
+}
+
+// KeysEditorMoveDocStart says "File Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveDocStart.
+func KeysEditorMoveDocStart() string { return In(i18n.Locale()).KeysEditorMoveDocStart() }
+
+// KeysEditorMoveDocStart says "File Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveDocStart.
+func (msgs Messages) KeysEditorMoveDocStart() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveDocStart", nil)
+}
+
+// KeysEditorMoveLineEnd says "Line End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLineEnd.
+func KeysEditorMoveLineEnd() string { return In(i18n.Locale()).KeysEditorMoveLineEnd() }
+
+// KeysEditorMoveLineEnd says "Line End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLineEnd.
+func (msgs Messages) KeysEditorMoveLineEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveLineEnd", nil)
+}
+
+// KeysEditorMoveLineStart says "Line Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLineStart.
+func KeysEditorMoveLineStart() string { return In(i18n.Locale()).KeysEditorMoveLineStart() }
+
+// KeysEditorMoveLineStart says "Line Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLineStart.
+func (msgs Messages) KeysEditorMoveLineStart() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveLineStart", nil)
+}
+
+// KeysEditorMoveLinesDown says "Move Line Down"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLinesDown.
+func KeysEditorMoveLinesDown() string { return In(i18n.Locale()).KeysEditorMoveLinesDown() }
+
+// KeysEditorMoveLinesDown says "Move Line Down"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLinesDown.
+func (msgs Messages) KeysEditorMoveLinesDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveLinesDown", nil)
+}
+
+// KeysEditorMoveLinesUp says "Move Line Up"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLinesUp.
+func KeysEditorMoveLinesUp() string { return In(i18n.Locale()).KeysEditorMoveLinesUp() }
+
+// KeysEditorMoveLinesUp says "Move Line Up"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveLinesUp.
+func (msgs Messages) KeysEditorMoveLinesUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveLinesUp", nil)
+}
+
+// KeysEditorMovePageDown says "Next Page"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMovePageDown.
+func KeysEditorMovePageDown() string { return In(i18n.Locale()).KeysEditorMovePageDown() }
+
+// KeysEditorMovePageDown says "Next Page"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMovePageDown.
+func (msgs Messages) KeysEditorMovePageDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorMovePageDown", nil)
+}
+
+// KeysEditorMovePageUp says "Previous Page"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMovePageUp.
+func KeysEditorMovePageUp() string { return In(i18n.Locale()).KeysEditorMovePageUp() }
+
+// KeysEditorMovePageUp says "Previous Page"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMovePageUp.
+func (msgs Messages) KeysEditorMovePageUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorMovePageUp", nil)
+}
+
+// KeysEditorMoveParagraphDown says "Next Paragraph"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveParagraphDown.
+func KeysEditorMoveParagraphDown() string { return In(i18n.Locale()).KeysEditorMoveParagraphDown() }
+
+// KeysEditorMoveParagraphDown says "Next Paragraph"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveParagraphDown.
+func (msgs Messages) KeysEditorMoveParagraphDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveParagraphDown", nil)
+}
+
+// KeysEditorMoveParagraphUp says "Previous Paragraph"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveParagraphUp.
+func KeysEditorMoveParagraphUp() string { return In(i18n.Locale()).KeysEditorMoveParagraphUp() }
+
+// KeysEditorMoveParagraphUp says "Previous Paragraph"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveParagraphUp.
+func (msgs Messages) KeysEditorMoveParagraphUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveParagraphUp", nil)
+}
+
+// KeysEditorMoveSubwordLeft says "Previous Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveSubwordLeft.
+func KeysEditorMoveSubwordLeft() string { return In(i18n.Locale()).KeysEditorMoveSubwordLeft() }
+
+// KeysEditorMoveSubwordLeft says "Previous Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveSubwordLeft.
+func (msgs Messages) KeysEditorMoveSubwordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveSubwordLeft", nil)
+}
+
+// KeysEditorMoveSubwordRight says "Next Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveSubwordRight.
+func KeysEditorMoveSubwordRight() string { return In(i18n.Locale()).KeysEditorMoveSubwordRight() }
+
+// KeysEditorMoveSubwordRight says "Next Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveSubwordRight.
+func (msgs Messages) KeysEditorMoveSubwordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveSubwordRight", nil)
+}
+
+// KeysEditorMoveToBracket says "Go to Matching Bracket"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveToBracket.
+func KeysEditorMoveToBracket() string { return In(i18n.Locale()).KeysEditorMoveToBracket() }
+
+// KeysEditorMoveToBracket says "Go to Matching Bracket"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveToBracket.
+func (msgs Messages) KeysEditorMoveToBracket() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveToBracket", nil)
+}
+
+// KeysEditorMoveWordLeft says "Previous Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveWordLeft.
+func KeysEditorMoveWordLeft() string { return In(i18n.Locale()).KeysEditorMoveWordLeft() }
+
+// KeysEditorMoveWordLeft says "Previous Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveWordLeft.
+func (msgs Messages) KeysEditorMoveWordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveWordLeft", nil)
+}
+
+// KeysEditorMoveWordRight says "Next Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorMoveWordRight.
+func KeysEditorMoveWordRight() string { return In(i18n.Locale()).KeysEditorMoveWordRight() }
+
+// KeysEditorMoveWordRight says "Next Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorMoveWordRight.
+func (msgs Messages) KeysEditorMoveWordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorMoveWordRight", nil)
+}
+
+// KeysEditorNewlineAbove says "Insert Line Above"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorNewlineAbove.
+func KeysEditorNewlineAbove() string { return In(i18n.Locale()).KeysEditorNewlineAbove() }
+
+// KeysEditorNewlineAbove says "Insert Line Above"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorNewlineAbove.
+func (msgs Messages) KeysEditorNewlineAbove() string {
+	return Catalog.Format(msgs.locale, "keysEditorNewlineAbove", nil)
+}
+
+// KeysEditorNewlineBelow says "Insert Line Below"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorNewlineBelow.
+func KeysEditorNewlineBelow() string { return In(i18n.Locale()).KeysEditorNewlineBelow() }
+
+// KeysEditorNewlineBelow says "Insert Line Below"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorNewlineBelow.
+func (msgs Messages) KeysEditorNewlineBelow() string {
+	return Catalog.Format(msgs.locale, "keysEditorNewlineBelow", nil)
+}
+
+// KeysEditorNextHunk says "Next Change"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorNextHunk.
+func KeysEditorNextHunk() string { return In(i18n.Locale()).KeysEditorNextHunk() }
+
+// KeysEditorNextHunk says "Next Change"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorNextHunk.
+func (msgs Messages) KeysEditorNextHunk() string {
+	return Catalog.Format(msgs.locale, "keysEditorNextHunk", nil)
+}
+
+// KeysEditorOutdent says "Outdent"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorOutdent.
+func KeysEditorOutdent() string { return In(i18n.Locale()).KeysEditorOutdent() }
+
+// KeysEditorOutdent says "Outdent"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorOutdent.
+func (msgs Messages) KeysEditorOutdent() string {
+	return Catalog.Format(msgs.locale, "keysEditorOutdent", nil)
+}
+
+// KeysEditorPreviousHunk says "Previous Change"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorPreviousHunk.
+func KeysEditorPreviousHunk() string { return In(i18n.Locale()).KeysEditorPreviousHunk() }
+
+// KeysEditorPreviousHunk says "Previous Change"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorPreviousHunk.
+func (msgs Messages) KeysEditorPreviousHunk() string {
+	return Catalog.Format(msgs.locale, "keysEditorPreviousHunk", nil)
+}
+
+// KeysEditorRedo says "Redo"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorRedo.
+func KeysEditorRedo() string { return In(i18n.Locale()).KeysEditorRedo() }
+
+// KeysEditorRedo says "Redo"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorRedo.
+func (msgs Messages) KeysEditorRedo() string {
+	return Catalog.Format(msgs.locale, "keysEditorRedo", nil)
+}
+
+// KeysEditorRedoSelection says "Redo Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorRedoSelection.
+func KeysEditorRedoSelection() string { return In(i18n.Locale()).KeysEditorRedoSelection() }
+
+// KeysEditorRedoSelection says "Redo Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorRedoSelection.
+func (msgs Messages) KeysEditorRedoSelection() string {
+	return Catalog.Format(msgs.locale, "keysEditorRedoSelection", nil)
+}
+
+// KeysEditorRevertHunk says "Rollback Current Change"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorRevertHunk.
+func KeysEditorRevertHunk() string { return In(i18n.Locale()).KeysEditorRevertHunk() }
+
+// KeysEditorRevertHunk says "Rollback Current Change"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorRevertHunk.
+func (msgs Messages) KeysEditorRevertHunk() string {
+	return Catalog.Format(msgs.locale, "keysEditorRevertHunk", nil)
+}
+
+// KeysEditorScrollCursorCenter says "Scroll Cursor to Center"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorScrollCursorCenter.
+func KeysEditorScrollCursorCenter() string { return In(i18n.Locale()).KeysEditorScrollCursorCenter() }
+
+// KeysEditorScrollCursorCenter says "Scroll Cursor to Center"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorScrollCursorCenter.
+func (msgs Messages) KeysEditorScrollCursorCenter() string {
+	return Catalog.Format(msgs.locale, "keysEditorScrollCursorCenter", nil)
+}
+
+// KeysEditorScrollLineDown says "Scroll Line Down"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorScrollLineDown.
+func KeysEditorScrollLineDown() string { return In(i18n.Locale()).KeysEditorScrollLineDown() }
+
+// KeysEditorScrollLineDown says "Scroll Line Down"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorScrollLineDown.
+func (msgs Messages) KeysEditorScrollLineDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorScrollLineDown", nil)
+}
+
+// KeysEditorScrollLineUp says "Scroll Line Up"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorScrollLineUp.
+func KeysEditorScrollLineUp() string { return In(i18n.Locale()).KeysEditorScrollLineUp() }
+
+// KeysEditorScrollLineUp says "Scroll Line Up"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorScrollLineUp.
+func (msgs Messages) KeysEditorScrollLineUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorScrollLineUp", nil)
+}
+
+// KeysEditorSelectAllMatches says "Select All Occurrences"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectAllMatches.
+func KeysEditorSelectAllMatches() string { return In(i18n.Locale()).KeysEditorSelectAllMatches() }
+
+// KeysEditorSelectAllMatches says "Select All Occurrences"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectAllMatches.
+func (msgs Messages) KeysEditorSelectAllMatches() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectAllMatches", nil)
+}
+
+// KeysEditorSelectDocEnd says "Select to File End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectDocEnd.
+func KeysEditorSelectDocEnd() string { return In(i18n.Locale()).KeysEditorSelectDocEnd() }
+
+// KeysEditorSelectDocEnd says "Select to File End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectDocEnd.
+func (msgs Messages) KeysEditorSelectDocEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectDocEnd", nil)
+}
+
+// KeysEditorSelectDocStart says "Select to File Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectDocStart.
+func KeysEditorSelectDocStart() string { return In(i18n.Locale()).KeysEditorSelectDocStart() }
+
+// KeysEditorSelectDocStart says "Select to File Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectDocStart.
+func (msgs Messages) KeysEditorSelectDocStart() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectDocStart", nil)
+}
+
+// KeysEditorSelectLarger says "Expand Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLarger.
+func KeysEditorSelectLarger() string { return In(i18n.Locale()).KeysEditorSelectLarger() }
+
+// KeysEditorSelectLarger says "Expand Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLarger.
+func (msgs Messages) KeysEditorSelectLarger() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectLarger", nil)
+}
+
+// KeysEditorSelectLine says "Select Line"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLine.
+func KeysEditorSelectLine() string { return In(i18n.Locale()).KeysEditorSelectLine() }
+
+// KeysEditorSelectLine says "Select Line"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLine.
+func (msgs Messages) KeysEditorSelectLine() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectLine", nil)
+}
+
+// KeysEditorSelectLineEnd says "Select to Line End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLineEnd.
+func KeysEditorSelectLineEnd() string { return In(i18n.Locale()).KeysEditorSelectLineEnd() }
+
+// KeysEditorSelectLineEnd says "Select to Line End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLineEnd.
+func (msgs Messages) KeysEditorSelectLineEnd() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectLineEnd", nil)
+}
+
+// KeysEditorSelectLineStart says "Select to Line Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLineStart.
+func KeysEditorSelectLineStart() string { return In(i18n.Locale()).KeysEditorSelectLineStart() }
+
+// KeysEditorSelectLineStart says "Select to Line Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectLineStart.
+func (msgs Messages) KeysEditorSelectLineStart() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectLineStart", nil)
+}
+
+// KeysEditorSelectNext says "Select Next Occurrence"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectNext.
+func KeysEditorSelectNext() string { return In(i18n.Locale()).KeysEditorSelectNext() }
+
+// KeysEditorSelectNext says "Select Next Occurrence"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectNext.
+func (msgs Messages) KeysEditorSelectNext() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectNext", nil)
+}
+
+// KeysEditorSelectPageDown says "Select Page Down"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPageDown.
+func KeysEditorSelectPageDown() string { return In(i18n.Locale()).KeysEditorSelectPageDown() }
+
+// KeysEditorSelectPageDown says "Select Page Down"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPageDown.
+func (msgs Messages) KeysEditorSelectPageDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectPageDown", nil)
+}
+
+// KeysEditorSelectPageUp says "Select Page Up"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPageUp.
+func KeysEditorSelectPageUp() string { return In(i18n.Locale()).KeysEditorSelectPageUp() }
+
+// KeysEditorSelectPageUp says "Select Page Up"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPageUp.
+func (msgs Messages) KeysEditorSelectPageUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectPageUp", nil)
+}
+
+// KeysEditorSelectParagraphDown says "Select to Next Paragraph"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectParagraphDown.
+func KeysEditorSelectParagraphDown() string { return In(i18n.Locale()).KeysEditorSelectParagraphDown() }
+
+// KeysEditorSelectParagraphDown says "Select to Next Paragraph"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectParagraphDown.
+func (msgs Messages) KeysEditorSelectParagraphDown() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectParagraphDown", nil)
+}
+
+// KeysEditorSelectParagraphUp says "Select to Previous Paragraph"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectParagraphUp.
+func KeysEditorSelectParagraphUp() string { return In(i18n.Locale()).KeysEditorSelectParagraphUp() }
+
+// KeysEditorSelectParagraphUp says "Select to Previous Paragraph"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectParagraphUp.
+func (msgs Messages) KeysEditorSelectParagraphUp() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectParagraphUp", nil)
+}
+
+// KeysEditorSelectPrevious says "Select Previous Occurrence"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPrevious.
+func KeysEditorSelectPrevious() string { return In(i18n.Locale()).KeysEditorSelectPrevious() }
+
+// KeysEditorSelectPrevious says "Select Previous Occurrence"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectPrevious.
+func (msgs Messages) KeysEditorSelectPrevious() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectPrevious", nil)
+}
+
+// KeysEditorSelectSmaller says "Shrink Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSmaller.
+func KeysEditorSelectSmaller() string { return In(i18n.Locale()).KeysEditorSelectSmaller() }
+
+// KeysEditorSelectSmaller says "Shrink Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSmaller.
+func (msgs Messages) KeysEditorSelectSmaller() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectSmaller", nil)
+}
+
+// KeysEditorSelectSubwordLeft says "Select to Previous Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSubwordLeft.
+func KeysEditorSelectSubwordLeft() string { return In(i18n.Locale()).KeysEditorSelectSubwordLeft() }
+
+// KeysEditorSelectSubwordLeft says "Select to Previous Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSubwordLeft.
+func (msgs Messages) KeysEditorSelectSubwordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectSubwordLeft", nil)
+}
+
+// KeysEditorSelectSubwordRight says "Select to Next Subword"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSubwordRight.
+func KeysEditorSelectSubwordRight() string { return In(i18n.Locale()).KeysEditorSelectSubwordRight() }
+
+// KeysEditorSelectSubwordRight says "Select to Next Subword"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectSubwordRight.
+func (msgs Messages) KeysEditorSelectSubwordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectSubwordRight", nil)
+}
+
+// KeysEditorSelectWordLeft says "Select to Previous Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectWordLeft.
+func KeysEditorSelectWordLeft() string { return In(i18n.Locale()).KeysEditorSelectWordLeft() }
+
+// KeysEditorSelectWordLeft says "Select to Previous Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectWordLeft.
+func (msgs Messages) KeysEditorSelectWordLeft() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectWordLeft", nil)
+}
+
+// KeysEditorSelectWordRight says "Select to Next Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorSelectWordRight.
+func KeysEditorSelectWordRight() string { return In(i18n.Locale()).KeysEditorSelectWordRight() }
+
+// KeysEditorSelectWordRight says "Select to Next Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorSelectWordRight.
+func (msgs Messages) KeysEditorSelectWordRight() string {
+	return Catalog.Format(msgs.locale, "keysEditorSelectWordRight", nil)
+}
+
+// KeysEditorShowCompletions says "Complete"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorShowCompletions.
+func KeysEditorShowCompletions() string { return In(i18n.Locale()).KeysEditorShowCompletions() }
+
+// KeysEditorShowCompletions says "Complete"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorShowCompletions.
+func (msgs Messages) KeysEditorShowCompletions() string {
+	return Catalog.Format(msgs.locale, "keysEditorShowCompletions", nil)
+}
+
+// KeysEditorShowHover says "Show Hover Information"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorShowHover.
+func KeysEditorShowHover() string { return In(i18n.Locale()).KeysEditorShowHover() }
+
+// KeysEditorShowHover says "Show Hover Information"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorShowHover.
+func (msgs Messages) KeysEditorShowHover() string {
+	return Catalog.Format(msgs.locale, "keysEditorShowHover", nil)
+}
+
+// KeysEditorToggleBlockComment says "Toggle Block Comment"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorToggleBlockComment.
+func KeysEditorToggleBlockComment() string { return In(i18n.Locale()).KeysEditorToggleBlockComment() }
+
+// KeysEditorToggleBlockComment says "Toggle Block Comment"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorToggleBlockComment.
+func (msgs Messages) KeysEditorToggleBlockComment() string {
+	return Catalog.Format(msgs.locale, "keysEditorToggleBlockComment", nil)
+}
+
+// KeysEditorToggleComment says "Toggle Line Comment"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorToggleComment.
+func KeysEditorToggleComment() string { return In(i18n.Locale()).KeysEditorToggleComment() }
+
+// KeysEditorToggleComment says "Toggle Line Comment"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorToggleComment.
+func (msgs Messages) KeysEditorToggleComment() string {
+	return Catalog.Format(msgs.locale, "keysEditorToggleComment", nil)
+}
+
+// KeysEditorToggleFold says "Toggle Fold"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorToggleFold.
+func KeysEditorToggleFold() string { return In(i18n.Locale()).KeysEditorToggleFold() }
+
+// KeysEditorToggleFold says "Toggle Fold"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorToggleFold.
+func (msgs Messages) KeysEditorToggleFold() string {
+	return Catalog.Format(msgs.locale, "keysEditorToggleFold", nil)
+}
+
+// KeysEditorToggleLineNumbers says "Toggle Line Numbers"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorToggleLineNumbers.
+func KeysEditorToggleLineNumbers() string { return In(i18n.Locale()).KeysEditorToggleLineNumbers() }
+
+// KeysEditorToggleLineNumbers says "Toggle Line Numbers"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorToggleLineNumbers.
+func (msgs Messages) KeysEditorToggleLineNumbers() string {
+	return Catalog.Format(msgs.locale, "keysEditorToggleLineNumbers", nil)
+}
+
+// KeysEditorToggleSoftWrap says "Toggle Word Wrap"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorToggleSoftWrap.
+func KeysEditorToggleSoftWrap() string { return In(i18n.Locale()).KeysEditorToggleSoftWrap() }
+
+// KeysEditorToggleSoftWrap says "Toggle Word Wrap"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorToggleSoftWrap.
+func (msgs Messages) KeysEditorToggleSoftWrap() string {
+	return Catalog.Format(msgs.locale, "keysEditorToggleSoftWrap", nil)
+}
+
+// KeysEditorTranspose says "Transpose Characters"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorTranspose.
+func KeysEditorTranspose() string { return In(i18n.Locale()).KeysEditorTranspose() }
+
+// KeysEditorTranspose says "Transpose Characters"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorTranspose.
+func (msgs Messages) KeysEditorTranspose() string {
+	return Catalog.Format(msgs.locale, "keysEditorTranspose", nil)
+}
+
+// KeysEditorUndo says "Undo"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUndo.
+func KeysEditorUndo() string { return In(i18n.Locale()).KeysEditorUndo() }
+
+// KeysEditorUndo says "Undo"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUndo.
+func (msgs Messages) KeysEditorUndo() string {
+	return Catalog.Format(msgs.locale, "keysEditorUndo", nil)
+}
+
+// KeysEditorUndoSelection says "Undo Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUndoSelection.
+func KeysEditorUndoSelection() string { return In(i18n.Locale()).KeysEditorUndoSelection() }
+
+// KeysEditorUndoSelection says "Undo Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUndoSelection.
+func (msgs Messages) KeysEditorUndoSelection() string {
+	return Catalog.Format(msgs.locale, "keysEditorUndoSelection", nil)
+}
+
+// KeysEditorUnfold says "Unfold"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUnfold.
+func KeysEditorUnfold() string { return In(i18n.Locale()).KeysEditorUnfold() }
+
+// KeysEditorUnfold says "Unfold"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUnfold.
+func (msgs Messages) KeysEditorUnfold() string {
+	return Catalog.Format(msgs.locale, "keysEditorUnfold", nil)
+}
+
+// KeysEditorUnfoldAll says "Unfold All"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUnfoldAll.
+func KeysEditorUnfoldAll() string { return In(i18n.Locale()).KeysEditorUnfoldAll() }
+
+// KeysEditorUnfoldAll says "Unfold All"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUnfoldAll.
+func (msgs Messages) KeysEditorUnfoldAll() string {
+	return Catalog.Format(msgs.locale, "keysEditorUnfoldAll", nil)
+}
+
+// KeysEditorUnfoldRecursive says "Unfold Recursively"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUnfoldRecursive.
+func KeysEditorUnfoldRecursive() string { return In(i18n.Locale()).KeysEditorUnfoldRecursive() }
+
+// KeysEditorUnfoldRecursive says "Unfold Recursively"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUnfoldRecursive.
+func (msgs Messages) KeysEditorUnfoldRecursive() string {
+	return Catalog.Format(msgs.locale, "keysEditorUnfoldRecursive", nil)
+}
+
+// KeysEditorUseSelectionForFind says "Find Selected Text"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for EditorUseSelectionForFind.
+func KeysEditorUseSelectionForFind() string { return In(i18n.Locale()).KeysEditorUseSelectionForFind() }
+
+// KeysEditorUseSelectionForFind says "Find Selected Text"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for EditorUseSelectionForFind.
+func (msgs Messages) KeysEditorUseSelectionForFind() string {
+	return Catalog.Format(msgs.locale, "keysEditorUseSelectionForFind", nil)
+}
+
+// KeysEmpty says "No matching shortcuts"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for Empty.
+func KeysEmpty() string { return In(i18n.Locale()).KeysEmpty() }
+
+// KeysEmpty says "No matching shortcuts"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for Empty.
+func (msgs Messages) KeysEmpty() string {
+	return Catalog.Format(msgs.locale, "keysEmpty", nil)
+}
+
+// KeysFileTreeLabel says "File Tree"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for FileTreeLabel.
+func KeysFileTreeLabel() string { return In(i18n.Locale()).KeysFileTreeLabel() }
+
+// KeysFileTreeLabel says "File Tree"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for FileTreeLabel.
+func (msgs Messages) KeysFileTreeLabel() string {
+	return Catalog.Format(msgs.locale, "keysFileTreeLabel", nil)
+}
+
+// KeysFilesPanelLabel says "Toggle Files Panel"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for FilesPanelLabel.
+func KeysFilesPanelLabel() string { return In(i18n.Locale()).KeysFilesPanelLabel() }
+
+// KeysFilesPanelLabel says "Toggle Files Panel"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for FilesPanelLabel.
+func (msgs Messages) KeysFilesPanelLabel() string {
+	return Catalog.Format(msgs.locale, "keysFilesPanelLabel", nil)
+}
+
+// KeysFixedNote says "{note} This shortcut cannot be changed."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for FixedNote. Values: note.
+func KeysFixedNote(note string) string { return In(i18n.Locale()).KeysFixedNote(note) }
+
+// KeysFixedNote says "{note} This shortcut cannot be changed."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for FixedNote. Values: note.
+func (msgs Messages) KeysFixedNote(note string) string {
+	return Catalog.Format(msgs.locale, "keysFixedNote", map[string]any{"note": note})
+}
+
+// KeysFixedTip says "This shortcut cannot be changed."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: tooltip for FixedTip.
+func KeysFixedTip() string { return In(i18n.Locale()).KeysFixedTip() }
+
+// KeysFixedTip says "This shortcut cannot be changed."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: tooltip for FixedTip.
+func (msgs Messages) KeysFixedTip() string {
+	return Catalog.Format(msgs.locale, "keysFixedTip", nil)
+}
+
+// KeysFormatJSONLabel says "Format JSON"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for FormatJSONLabel.
+func KeysFormatJSONLabel() string { return In(i18n.Locale()).KeysFormatJSONLabel() }
+
+// KeysFormatJSONLabel says "Format JSON"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for FormatJSONLabel.
+func (msgs Messages) KeysFormatJSONLabel() string {
+	return Catalog.Format(msgs.locale, "keysFormatJSONLabel", nil)
+}
+
+// KeysGitLogLabel says "Git Log"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GitLogLabel.
+func KeysGitLogLabel() string { return In(i18n.Locale()).KeysGitLogLabel() }
+
+// KeysGitLogLabel says "Git Log"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GitLogLabel.
+func (msgs Messages) KeysGitLogLabel() string {
+	return Catalog.Format(msgs.locale, "keysGitLogLabel", nil)
+}
+
+// KeysGroupEditorEdit says "Editor · Editing"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupEditorEdit.
+func KeysGroupEditorEdit() string { return In(i18n.Locale()).KeysGroupEditorEdit() }
+
+// KeysGroupEditorEdit says "Editor · Editing"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupEditorEdit.
+func (msgs Messages) KeysGroupEditorEdit() string {
+	return Catalog.Format(msgs.locale, "keysGroupEditorEdit", nil)
+}
+
+// KeysGroupEditorFind says "Editor · Find & Go To"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupEditorFind.
+func KeysGroupEditorFind() string { return In(i18n.Locale()).KeysGroupEditorFind() }
+
+// KeysGroupEditorFind says "Editor · Find & Go To"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupEditorFind.
+func (msgs Messages) KeysGroupEditorFind() string {
+	return Catalog.Format(msgs.locale, "keysGroupEditorFind", nil)
+}
+
+// KeysGroupEditorFold says "Editor · Folding"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupEditorFold.
+func KeysGroupEditorFold() string { return In(i18n.Locale()).KeysGroupEditorFold() }
+
+// KeysGroupEditorFold says "Editor · Folding"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupEditorFold.
+func (msgs Messages) KeysGroupEditorFold() string {
+	return Catalog.Format(msgs.locale, "keysGroupEditorFold", nil)
+}
+
+// KeysGroupEditorMove says "Editor · Navigation"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupEditorMove.
+func KeysGroupEditorMove() string { return In(i18n.Locale()).KeysGroupEditorMove() }
+
+// KeysGroupEditorMove says "Editor · Navigation"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupEditorMove.
+func (msgs Messages) KeysGroupEditorMove() string {
+	return Catalog.Format(msgs.locale, "keysGroupEditorMove", nil)
+}
+
+// KeysGroupEditorSelect says "Editor · Selection"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupEditorSelect.
+func KeysGroupEditorSelect() string { return In(i18n.Locale()).KeysGroupEditorSelect() }
+
+// KeysGroupEditorSelect says "Editor · Selection"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupEditorSelect.
+func (msgs Messages) KeysGroupEditorSelect() string {
+	return Catalog.Format(msgs.locale, "keysGroupEditorSelect", nil)
+}
+
+// KeysGroupFiles says "Files"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupFiles.
+func KeysGroupFiles() string { return In(i18n.Locale()).KeysGroupFiles() }
+
+// KeysGroupFiles says "Files"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupFiles.
+func (msgs Messages) KeysGroupFiles() string {
+	return Catalog.Format(msgs.locale, "keysGroupFiles", nil)
+}
+
+// KeysGroupGit says "Git"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupGit.
+func KeysGroupGit() string { return In(i18n.Locale()).KeysGroupGit() }
+
+// KeysGroupGit says "Git"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupGit.
+func (msgs Messages) KeysGroupGit() string {
+	return Catalog.Format(msgs.locale, "keysGroupGit", nil)
+}
+
+// KeysGroupHistory says "History"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupHistory.
+func KeysGroupHistory() string { return In(i18n.Locale()).KeysGroupHistory() }
+
+// KeysGroupHistory says "History"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupHistory.
+func (msgs Messages) KeysGroupHistory() string {
+	return Catalog.Format(msgs.locale, "keysGroupHistory", nil)
+}
+
+// KeysGroupTerminal says "Terminal"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupTerminal.
+func KeysGroupTerminal() string { return In(i18n.Locale()).KeysGroupTerminal() }
+
+// KeysGroupTerminal says "Terminal"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupTerminal.
+func (msgs Messages) KeysGroupTerminal() string {
+	return Catalog.Format(msgs.locale, "keysGroupTerminal", nil)
+}
+
+// KeysGroupWeb says "Web"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupWeb.
+func KeysGroupWeb() string { return In(i18n.Locale()).KeysGroupWeb() }
+
+// KeysGroupWeb says "Web"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupWeb.
+func (msgs Messages) KeysGroupWeb() string {
+	return Catalog.Format(msgs.locale, "keysGroupWeb", nil)
+}
+
+// KeysGroupWindow says "Window & Tabs"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for GroupWindow.
+func KeysGroupWindow() string { return In(i18n.Locale()).KeysGroupWindow() }
+
+// KeysGroupWindow says "Window & Tabs"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for GroupWindow.
+func (msgs Messages) KeysGroupWindow() string {
+	return Catalog.Format(msgs.locale, "keysGroupWindow", nil)
+}
+
+// KeysHistorySearchLabel says "Search Sessions"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for HistorySearchLabel.
+func KeysHistorySearchLabel() string { return In(i18n.Locale()).KeysHistorySearchLabel() }
+
+// KeysHistorySearchLabel says "Search Sessions"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for HistorySearchLabel.
+func (msgs Messages) KeysHistorySearchLabel() string {
+	return Catalog.Format(msgs.locale, "keysHistorySearchLabel", nil)
+}
+
+// KeysJumpBackLabel says "Navigate Back"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for JumpBackLabel.
+func KeysJumpBackLabel() string { return In(i18n.Locale()).KeysJumpBackLabel() }
+
+// KeysJumpBackLabel says "Navigate Back"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for JumpBackLabel.
+func (msgs Messages) KeysJumpBackLabel() string {
+	return Catalog.Format(msgs.locale, "keysJumpBackLabel", nil)
+}
+
+// KeysJumpForwardLabel says "Navigate Forward"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for JumpForwardLabel.
+func KeysJumpForwardLabel() string { return In(i18n.Locale()).KeysJumpForwardLabel() }
+
+// KeysJumpForwardLabel says "Navigate Forward"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for JumpForwardLabel.
+func (msgs Messages) KeysJumpForwardLabel() string {
+	return Catalog.Format(msgs.locale, "keysJumpForwardLabel", nil)
+}
+
+// KeysModifierRequired says "Include ⌘, ⌃, or ⌥"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ModifierRequired.
+func KeysModifierRequired() string { return In(i18n.Locale()).KeysModifierRequired() }
+
+// KeysModifierRequired says "Include ⌘, ⌃, or ⌥"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ModifierRequired.
+func (msgs Messages) KeysModifierRequired() string {
+	return Catalog.Format(msgs.locale, "keysModifierRequired", nil)
+}
+
+// KeysNewBranchLabel says "New Branch"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NewBranchLabel.
+func KeysNewBranchLabel() string { return In(i18n.Locale()).KeysNewBranchLabel() }
+
+// KeysNewBranchLabel says "New Branch"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NewBranchLabel.
+func (msgs Messages) KeysNewBranchLabel() string {
+	return Catalog.Format(msgs.locale, "keysNewBranchLabel", nil)
+}
+
+// KeysNewChatLabel says "New Chat"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NewChatLabel.
+func KeysNewChatLabel() string { return In(i18n.Locale()).KeysNewChatLabel() }
+
+// KeysNewChatLabel says "New Chat"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NewChatLabel.
+func (msgs Messages) KeysNewChatLabel() string {
+	return Catalog.Format(msgs.locale, "keysNewChatLabel", nil)
+}
+
+// KeysNewChatNote says "Opens Chat in the sidebar and starts another session with the last chat agent. If there is no previous chat, only ope…"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for NewChatNote.
+func KeysNewChatNote() string { return In(i18n.Locale()).KeysNewChatNote() }
+
+// KeysNewChatNote says "Opens Chat in the sidebar and starts another session with the last chat agent. If there is no previous chat, only ope…"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for NewChatNote.
+func (msgs Messages) KeysNewChatNote() string {
+	return Catalog.Format(msgs.locale, "keysNewChatNote", nil)
+}
+
+// KeysNewTerminalLabel says "New Terminal"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NewTerminalLabel.
+func KeysNewTerminalLabel() string { return In(i18n.Locale()).KeysNewTerminalLabel() }
+
+// KeysNewTerminalLabel says "New Terminal"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NewTerminalLabel.
+func (msgs Messages) KeysNewTerminalLabel() string {
+	return Catalog.Format(msgs.locale, "keysNewTerminalLabel", nil)
+}
+
+// KeysNewWorkspaceLabel says "New Workspace"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NewWorkspaceLabel.
+func KeysNewWorkspaceLabel() string { return In(i18n.Locale()).KeysNewWorkspaceLabel() }
+
+// KeysNewWorkspaceLabel says "New Workspace"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NewWorkspaceLabel.
+func (msgs Messages) KeysNewWorkspaceLabel() string {
+	return Catalog.Format(msgs.locale, "keysNewWorkspaceLabel", nil)
+}
+
+// KeysNextChangeLabel says "Next Change"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NextChangeLabel.
+func KeysNextChangeLabel() string { return In(i18n.Locale()).KeysNextChangeLabel() }
+
+// KeysNextChangeLabel says "Next Change"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NextChangeLabel.
+func (msgs Messages) KeysNextChangeLabel() string {
+	return Catalog.Format(msgs.locale, "keysNextChangeLabel", nil)
+}
+
+// KeysNextChangeNote says "In diffs, branch comparisons, and the Rollback dialog."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for NextChangeNote.
+func KeysNextChangeNote() string { return In(i18n.Locale()).KeysNextChangeNote() }
+
+// KeysNextChangeNote says "In diffs, branch comparisons, and the Rollback dialog."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for NextChangeNote.
+func (msgs Messages) KeysNextChangeNote() string {
+	return Catalog.Format(msgs.locale, "keysNextChangeNote", nil)
+}
+
+// KeysNextTabLabel says "Next Tab"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for NextTabLabel.
+func KeysNextTabLabel() string { return In(i18n.Locale()).KeysNextTabLabel() }
+
+// KeysNextTabLabel says "Next Tab"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for NextTabLabel.
+func (msgs Messages) KeysNextTabLabel() string {
+	return Catalog.Format(msgs.locale, "keysNextTabLabel", nil)
+}
+
+// KeysNone says "None"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for None.
+func KeysNone() string { return In(i18n.Locale()).KeysNone() }
+
+// KeysNone says "None"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for None.
+func (msgs Messages) KeysNone() string {
+	return Catalog.Format(msgs.locale, "keysNone", nil)
+}
+
+// KeysNote says "Click a shortcut to replace it. Esc cancels; ⌫ deletes it. Use + at the end of a row to add another shortcut. Menu …"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for Note.
+func KeysNote() string { return In(i18n.Locale()).KeysNote() }
+
+// KeysNote says "Click a shortcut to replace it. Esc cancels; ⌫ deletes it. Use + at the end of a row to add another shortcut. Menu …"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for Note.
+func (msgs Messages) KeysNote() string {
+	return Catalog.Format(msgs.locale, "keysNote", nil)
+}
+
+// KeysPrevChangeLabel says "Previous Change"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for PrevChangeLabel.
+func KeysPrevChangeLabel() string { return In(i18n.Locale()).KeysPrevChangeLabel() }
+
+// KeysPrevChangeLabel says "Previous Change"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for PrevChangeLabel.
+func (msgs Messages) KeysPrevChangeLabel() string {
+	return Catalog.Format(msgs.locale, "keysPrevChangeLabel", nil)
+}
+
+// KeysPrevChangeNote says "In diffs, branch comparisons, and the Rollback dialog."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for PrevChangeNote.
+func KeysPrevChangeNote() string { return In(i18n.Locale()).KeysPrevChangeNote() }
+
+// KeysPrevChangeNote says "In diffs, branch comparisons, and the Rollback dialog."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for PrevChangeNote.
+func (msgs Messages) KeysPrevChangeNote() string {
+	return Catalog.Format(msgs.locale, "keysPrevChangeNote", nil)
+}
+
+// KeysPrevTabLabel says "Previous Tab"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for PrevTabLabel.
+func KeysPrevTabLabel() string { return In(i18n.Locale()).KeysPrevTabLabel() }
+
+// KeysPrevTabLabel says "Previous Tab"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for PrevTabLabel.
+func (msgs Messages) KeysPrevTabLabel() string {
+	return Catalog.Format(msgs.locale, "keysPrevTabLabel", nil)
+}
+
+// KeysPushLabel says "Push"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for PushLabel.
+func KeysPushLabel() string { return In(i18n.Locale()).KeysPushLabel() }
+
+// KeysPushLabel says "Push"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for PushLabel.
+func (msgs Messages) KeysPushLabel() string {
+	return Catalog.Format(msgs.locale, "keysPushLabel", nil)
+}
+
+// KeysQuickOpenLabel says "Quick Open File"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for QuickOpenLabel.
+func KeysQuickOpenLabel() string { return In(i18n.Locale()).KeysQuickOpenLabel() }
+
+// KeysQuickOpenLabel says "Quick Open File"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for QuickOpenLabel.
+func (msgs Messages) KeysQuickOpenLabel() string {
+	return Catalog.Format(msgs.locale, "keysQuickOpenLabel", nil)
+}
+
+// KeysRecordLabel says "Press a new shortcut"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for RecordLabel.
+func KeysRecordLabel() string { return In(i18n.Locale()).KeysRecordLabel() }
+
+// KeysRecordLabel says "Press a new shortcut"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for RecordLabel.
+func (msgs Messages) KeysRecordLabel() string {
+	return Catalog.Format(msgs.locale, "keysRecordLabel", nil)
+}
+
+// KeysRecording says "Press a shortcut…"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for Recording.
+func KeysRecording() string { return In(i18n.Locale()).KeysRecording() }
+
+// KeysRecording says "Press a shortcut…"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for Recording.
+func (msgs Messages) KeysRecording() string {
+	return Catalog.Format(msgs.locale, "keysRecording", nil)
+}
+
+// KeysResetAll says "Reset All to Default"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ResetAll.
+func KeysResetAll() string { return In(i18n.Locale()).KeysResetAll() }
+
+// KeysResetAll says "Reset All to Default"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ResetAll.
+func (msgs Messages) KeysResetAll() string {
+	return Catalog.Format(msgs.locale, "keysResetAll", nil)
+}
+
+// KeysRevealFileLabel says "Locate Current File in Tree"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for RevealFileLabel.
+func KeysRevealFileLabel() string { return In(i18n.Locale()).KeysRevealFileLabel() }
+
+// KeysRevealFileLabel says "Locate Current File in Tree"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for RevealFileLabel.
+func (msgs Messages) KeysRevealFileLabel() string {
+	return Catalog.Format(msgs.locale, "keysRevealFileLabel", nil)
+}
+
+// KeysRollbackLabel says "Rollback"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for RollbackLabel.
+func KeysRollbackLabel() string { return In(i18n.Locale()).KeysRollbackLabel() }
+
+// KeysRollbackLabel says "Rollback"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for RollbackLabel.
+func (msgs Messages) KeysRollbackLabel() string {
+	return Catalog.Format(msgs.locale, "keysRollbackLabel", nil)
+}
+
+// KeysRollbackNote says "Rolls back selected files on the Changes page, or the current change in a diff."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for RollbackNote.
+func KeysRollbackNote() string { return In(i18n.Locale()).KeysRollbackNote() }
+
+// KeysRollbackNote says "Rolls back selected files on the Changes page, or the current change in a diff."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for RollbackNote.
+func (msgs Messages) KeysRollbackNote() string {
+	return Catalog.Format(msgs.locale, "keysRollbackNote", nil)
+}
+
+// KeysSearch says "Search actions or shortcuts, e.g. Commit, ⌘K"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for Search.
+func KeysSearch() string { return In(i18n.Locale()).KeysSearch() }
+
+// KeysSearch says "Search actions or shortcuts, e.g. Commit, ⌘K"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for Search.
+func (msgs Messages) KeysSearch() string {
+	return Catalog.Format(msgs.locale, "keysSearch", nil)
+}
+
+// KeysSearchFilesLabel says "Search in Files"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SearchFilesLabel.
+func KeysSearchFilesLabel() string { return In(i18n.Locale()).KeysSearchFilesLabel() }
+
+// KeysSearchFilesLabel says "Search in Files"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SearchFilesLabel.
+func (msgs Messages) KeysSearchFilesLabel() string {
+	return Catalog.Format(msgs.locale, "keysSearchFilesLabel", nil)
+}
+
+// KeysSelectTabLabel says "Switch to Terminal 1…9"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SelectTabLabel.
+func KeysSelectTabLabel() string { return In(i18n.Locale()).KeysSelectTabLabel() }
+
+// KeysSelectTabLabel says "Switch to Terminal 1…9"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SelectTabLabel.
+func (msgs Messages) KeysSelectTabLabel() string {
+	return Catalog.Format(msgs.locale, "keysSelectTabLabel", nil)
+}
+
+// KeysSendMessageLabel says "Send or Submit Multiline Input"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SendMessageLabel.
+func KeysSendMessageLabel() string { return In(i18n.Locale()).KeysSendMessageLabel() }
+
+// KeysSendMessageLabel says "Send or Submit Multiline Input"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SendMessageLabel.
+func (msgs Messages) KeysSendMessageLabel() string {
+	return Catalog.Format(msgs.locale, "keysSendMessageLabel", nil)
+}
+
+// KeysSettingsLabel says "Open Settings"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SettingsLabel.
+func KeysSettingsLabel() string { return In(i18n.Locale()).KeysSettingsLabel() }
+
+// KeysSettingsLabel says "Open Settings"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SettingsLabel.
+func (msgs Messages) KeysSettingsLabel() string {
+	return Catalog.Format(msgs.locale, "keysSettingsLabel", nil)
+}
+
+// KeysSettingsNote says "Also updates the Posse menu shortcut."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for SettingsNote.
+func KeysSettingsNote() string { return In(i18n.Locale()).KeysSettingsNote() }
+
+// KeysSettingsNote says "Also updates the Posse menu shortcut."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for SettingsNote.
+func (msgs Messages) KeysSettingsNote() string {
+	return Catalog.Format(msgs.locale, "keysSettingsNote", nil)
+}
+
+// KeysSplitDownLabel says "Split Down"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SplitDownLabel.
+func KeysSplitDownLabel() string { return In(i18n.Locale()).KeysSplitDownLabel() }
+
+// KeysSplitDownLabel says "Split Down"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SplitDownLabel.
+func (msgs Messages) KeysSplitDownLabel() string {
+	return Catalog.Format(msgs.locale, "keysSplitDownLabel", nil)
+}
+
+// KeysSplitDownNote says "Adds a new terminal pane below the focused pane, up to four panes."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for SplitDownNote.
+func KeysSplitDownNote() string { return In(i18n.Locale()).KeysSplitDownNote() }
+
+// KeysSplitDownNote says "Adds a new terminal pane below the focused pane, up to four panes."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for SplitDownNote.
+func (msgs Messages) KeysSplitDownNote() string {
+	return Catalog.Format(msgs.locale, "keysSplitDownNote", nil)
+}
+
+// KeysSplitRightLabel says "Split Right"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SplitRightLabel.
+func KeysSplitRightLabel() string { return In(i18n.Locale()).KeysSplitRightLabel() }
+
+// KeysSplitRightLabel says "Split Right"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SplitRightLabel.
+func (msgs Messages) KeysSplitRightLabel() string {
+	return Catalog.Format(msgs.locale, "keysSplitRightLabel", nil)
+}
+
+// KeysSplitRightNote says "Adds a new terminal pane to the right of the focused pane, up to four panes."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for SplitRightNote.
+func KeysSplitRightNote() string { return In(i18n.Locale()).KeysSplitRightNote() }
+
+// KeysSplitRightNote says "Adds a new terminal pane to the right of the focused pane, up to four panes."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for SplitRightNote.
+func (msgs Messages) KeysSplitRightNote() string {
+	return Catalog.Format(msgs.locale, "keysSplitRightNote", nil)
+}
+
+// KeysSwitchPaneLabel says "Switch Pane"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SwitchPaneLabel.
+func KeysSwitchPaneLabel() string { return In(i18n.Locale()).KeysSwitchPaneLabel() }
+
+// KeysSwitchPaneLabel says "Switch Pane"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SwitchPaneLabel.
+func (msgs Messages) KeysSwitchPaneLabel() string {
+	return Catalog.Format(msgs.locale, "keysSwitchPaneLabel", nil)
+}
+
+// KeysSwitchPaneNote says "⌘] moves to the next pane; ⌘[ to the previous pane, from top left to bottom right."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for SwitchPaneNote.
+func KeysSwitchPaneNote() string { return In(i18n.Locale()).KeysSwitchPaneNote() }
+
+// KeysSwitchPaneNote says "⌘] moves to the next pane; ⌘[ to the previous pane, from top left to bottom right."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for SwitchPaneNote.
+func (msgs Messages) KeysSwitchPaneNote() string {
+	return Catalog.Format(msgs.locale, "keysSwitchPaneNote", nil)
+}
+
+// KeysSysFullScreenLabel says "Full Screen"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SysFullScreenLabel.
+func KeysSysFullScreenLabel() string { return In(i18n.Locale()).KeysSysFullScreenLabel() }
+
+// KeysSysFullScreenLabel says "Full Screen"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SysFullScreenLabel.
+func (msgs Messages) KeysSysFullScreenLabel() string {
+	return Catalog.Format(msgs.locale, "keysSysFullScreenLabel", nil)
+}
+
+// KeysSysHideLabel says "Hide Posse"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SysHideLabel.
+func KeysSysHideLabel() string { return In(i18n.Locale()).KeysSysHideLabel() }
+
+// KeysSysHideLabel says "Hide Posse"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SysHideLabel.
+func (msgs Messages) KeysSysHideLabel() string {
+	return Catalog.Format(msgs.locale, "keysSysHideLabel", nil)
+}
+
+// KeysSysHideOthersLabel says "Hide Others"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SysHideOthersLabel.
+func KeysSysHideOthersLabel() string { return In(i18n.Locale()).KeysSysHideOthersLabel() }
+
+// KeysSysHideOthersLabel says "Hide Others"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SysHideOthersLabel.
+func (msgs Messages) KeysSysHideOthersLabel() string {
+	return Catalog.Format(msgs.locale, "keysSysHideOthersLabel", nil)
+}
+
+// KeysSysMinimizeLabel says "Minimize Window"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SysMinimizeLabel.
+func KeysSysMinimizeLabel() string { return In(i18n.Locale()).KeysSysMinimizeLabel() }
+
+// KeysSysMinimizeLabel says "Minimize Window"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SysMinimizeLabel.
+func (msgs Messages) KeysSysMinimizeLabel() string {
+	return Catalog.Format(msgs.locale, "keysSysMinimizeLabel", nil)
+}
+
+// KeysSysQuitLabel says "Quit Posse"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for SysQuitLabel.
+func KeysSysQuitLabel() string { return In(i18n.Locale()).KeysSysQuitLabel() }
+
+// KeysSysQuitLabel says "Quit Posse"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for SysQuitLabel.
+func (msgs Messages) KeysSysQuitLabel() string {
+	return Catalog.Format(msgs.locale, "keysSysQuitLabel", nil)
+}
+
+// KeysTermBottomLabel says "Scroll to Bottom"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermBottomLabel.
+func KeysTermBottomLabel() string { return In(i18n.Locale()).KeysTermBottomLabel() }
+
+// KeysTermBottomLabel says "Scroll to Bottom"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermBottomLabel.
+func (msgs Messages) KeysTermBottomLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermBottomLabel", nil)
+}
+
+// KeysTermClearLabel says "Clear Screen"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermClearLabel.
+func KeysTermClearLabel() string { return In(i18n.Locale()).KeysTermClearLabel() }
+
+// KeysTermClearLabel says "Clear Screen"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermClearLabel.
+func (msgs Messages) KeysTermClearLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermClearLabel", nil)
+}
+
+// KeysTermFindLabel says "Find in Terminal"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermFindLabel.
+func KeysTermFindLabel() string { return In(i18n.Locale()).KeysTermFindLabel() }
+
+// KeysTermFindLabel says "Find in Terminal"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermFindLabel.
+func (msgs Messages) KeysTermFindLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermFindLabel", nil)
+}
+
+// KeysTermFindNote says "When the find bar is open, Next and Previous use the editor find shortcuts."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for TermFindNote.
+func KeysTermFindNote() string { return In(i18n.Locale()).KeysTermFindNote() }
+
+// KeysTermFindNote says "When the find bar is open, Next and Previous use the editor find shortcuts."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for TermFindNote.
+func (msgs Messages) KeysTermFindNote() string {
+	return Catalog.Format(msgs.locale, "keysTermFindNote", nil)
+}
+
+// KeysTermKillLineLabel says "Delete to Line Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermKillLineLabel.
+func KeysTermKillLineLabel() string { return In(i18n.Locale()).KeysTermKillLineLabel() }
+
+// KeysTermKillLineLabel says "Delete to Line Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermKillLineLabel.
+func (msgs Messages) KeysTermKillLineLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermKillLineLabel", nil)
+}
+
+// KeysTermKillWordLabel says "Delete Previous Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermKillWordLabel.
+func KeysTermKillWordLabel() string { return In(i18n.Locale()).KeysTermKillWordLabel() }
+
+// KeysTermKillWordLabel says "Delete Previous Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermKillWordLabel.
+func (msgs Messages) KeysTermKillWordLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermKillWordLabel", nil)
+}
+
+// KeysTermLineEndLabel says "Move Cursor to Line End"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermLineEndLabel.
+func KeysTermLineEndLabel() string { return In(i18n.Locale()).KeysTermLineEndLabel() }
+
+// KeysTermLineEndLabel says "Move Cursor to Line End"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermLineEndLabel.
+func (msgs Messages) KeysTermLineEndLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermLineEndLabel", nil)
+}
+
+// KeysTermLineStartLabel says "Move Cursor to Line Start"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermLineStartLabel.
+func KeysTermLineStartLabel() string { return In(i18n.Locale()).KeysTermLineStartLabel() }
+
+// KeysTermLineStartLabel says "Move Cursor to Line Start"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermLineStartLabel.
+func (msgs Messages) KeysTermLineStartLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermLineStartLabel", nil)
+}
+
+// KeysTermNewlineLabel says "New Line in Claude or Codex Input"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermNewlineLabel.
+func KeysTermNewlineLabel() string { return In(i18n.Locale()).KeysTermNewlineLabel() }
+
+// KeysTermNewlineLabel says "New Line in Claude or Codex Input"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermNewlineLabel.
+func (msgs Messages) KeysTermNewlineLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermNewlineLabel", nil)
+}
+
+// KeysTermTopLabel says "Scroll to Top"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermTopLabel.
+func KeysTermTopLabel() string { return In(i18n.Locale()).KeysTermTopLabel() }
+
+// KeysTermTopLabel says "Scroll to Top"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermTopLabel.
+func (msgs Messages) KeysTermTopLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermTopLabel", nil)
+}
+
+// KeysTermWordLeftLabel says "Previous Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermWordLeftLabel.
+func KeysTermWordLeftLabel() string { return In(i18n.Locale()).KeysTermWordLeftLabel() }
+
+// KeysTermWordLeftLabel says "Previous Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermWordLeftLabel.
+func (msgs Messages) KeysTermWordLeftLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermWordLeftLabel", nil)
+}
+
+// KeysTermWordRightLabel says "Next Word"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for TermWordRightLabel.
+func KeysTermWordRightLabel() string { return In(i18n.Locale()).KeysTermWordRightLabel() }
+
+// KeysTermWordRightLabel says "Next Word"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for TermWordRightLabel.
+func (msgs Messages) KeysTermWordRightLabel() string {
+	return Catalog.Format(msgs.locale, "keysTermWordRightLabel", nil)
+}
+
+// KeysToggleSidebarLabel says "Toggle Sidebar"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ToggleSidebarLabel.
+func KeysToggleSidebarLabel() string { return In(i18n.Locale()).KeysToggleSidebarLabel() }
+
+// KeysToggleSidebarLabel says "Toggle Sidebar"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ToggleSidebarLabel.
+func (msgs Messages) KeysToggleSidebarLabel() string {
+	return Catalog.Format(msgs.locale, "keysToggleSidebarLabel", nil)
+}
+
+// KeysWebHardReloadLabel says "Reload Page Without Cache"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for WebHardReloadLabel.
+func KeysWebHardReloadLabel() string { return In(i18n.Locale()).KeysWebHardReloadLabel() }
+
+// KeysWebHardReloadLabel says "Reload Page Without Cache"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for WebHardReloadLabel.
+func (msgs Messages) KeysWebHardReloadLabel() string {
+	return Catalog.Format(msgs.locale, "keysWebHardReloadLabel", nil)
+}
+
+// KeysWebHardReloadNote says "Listed in the View menu."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for WebHardReloadNote.
+func KeysWebHardReloadNote() string { return In(i18n.Locale()).KeysWebHardReloadNote() }
+
+// KeysWebHardReloadNote says "Listed in the View menu."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for WebHardReloadNote.
+func (msgs Messages) KeysWebHardReloadNote() string {
+	return Catalog.Format(msgs.locale, "keysWebHardReloadNote", nil)
+}
+
+// KeysWebMobileLabel says "Toggle Mobile Preview"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for WebMobileLabel.
+func KeysWebMobileLabel() string { return In(i18n.Locale()).KeysWebMobileLabel() }
+
+// KeysWebMobileLabel says "Toggle Mobile Preview"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for WebMobileLabel.
+func (msgs Messages) KeysWebMobileLabel() string {
+	return Catalog.Format(msgs.locale, "keysWebMobileLabel", nil)
+}
+
+// KeysWebMobileNote says "Listed in the View menu; uses the last selected device."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for WebMobileNote.
+func KeysWebMobileNote() string { return In(i18n.Locale()).KeysWebMobileNote() }
+
+// KeysWebMobileNote says "Listed in the View menu; uses the last selected device."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for WebMobileNote.
+func (msgs Messages) KeysWebMobileNote() string {
+	return Catalog.Format(msgs.locale, "keysWebMobileNote", nil)
+}
+
+// KeysWebReloadLabel says "Reload Page"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for WebReloadLabel.
+func KeysWebReloadLabel() string { return In(i18n.Locale()).KeysWebReloadLabel() }
+
+// KeysWebReloadLabel says "Reload Page"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for WebReloadLabel.
+func (msgs Messages) KeysWebReloadLabel() string {
+	return Catalog.Format(msgs.locale, "keysWebReloadLabel", nil)
+}
+
+// KeysWebReloadNote says "Listed in the View menu and works when the web page has focus. Only applies to web tabs."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for WebReloadNote.
+func KeysWebReloadNote() string { return In(i18n.Locale()).KeysWebReloadNote() }
+
+// KeysWebReloadNote says "Listed in the View menu and works when the web page has focus. Only applies to web tabs."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for WebReloadNote.
+func (msgs Messages) KeysWebReloadNote() string {
+	return Catalog.Format(msgs.locale, "keysWebReloadNote", nil)
+}
+
+// KeysZoomInLabel says "Increase Font Size"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ZoomInLabel.
+func KeysZoomInLabel() string { return In(i18n.Locale()).KeysZoomInLabel() }
+
+// KeysZoomInLabel says "Increase Font Size"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ZoomInLabel.
+func (msgs Messages) KeysZoomInLabel() string {
+	return Catalog.Format(msgs.locale, "keysZoomInLabel", nil)
+}
+
+// KeysZoomInNote says "Increases the terminal, editor, or Markdown font size depending on the current view; zooms in when viewing an image."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for ZoomInNote.
+func KeysZoomInNote() string { return In(i18n.Locale()).KeysZoomInNote() }
+
+// KeysZoomInNote says "Increases the terminal, editor, or Markdown font size depending on the current view; zooms in when viewing an image."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for ZoomInNote.
+func (msgs Messages) KeysZoomInNote() string {
+	return Catalog.Format(msgs.locale, "keysZoomInNote", nil)
+}
+
+// KeysZoomOutLabel says "Decrease Font Size"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ZoomOutLabel.
+func KeysZoomOutLabel() string { return In(i18n.Locale()).KeysZoomOutLabel() }
+
+// KeysZoomOutLabel says "Decrease Font Size"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ZoomOutLabel.
+func (msgs Messages) KeysZoomOutLabel() string {
+	return Catalog.Format(msgs.locale, "keysZoomOutLabel", nil)
+}
+
+// KeysZoomOutNote says "Decreases the terminal, editor, or Markdown font size depending on the current view; zooms out when viewing an image."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for ZoomOutNote.
+func KeysZoomOutNote() string { return In(i18n.Locale()).KeysZoomOutNote() }
+
+// KeysZoomOutNote says "Decreases the terminal, editor, or Markdown font size depending on the current view; zooms out when viewing an image."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for ZoomOutNote.
+func (msgs Messages) KeysZoomOutNote() string {
+	return Catalog.Format(msgs.locale, "keysZoomOutNote", nil)
+}
+
+// KeysZoomResetLabel says "Reset Font Size"
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: label for ZoomResetLabel.
+func KeysZoomResetLabel() string { return In(i18n.Locale()).KeysZoomResetLabel() }
+
+// KeysZoomResetLabel says "Reset Font Size"
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: label for ZoomResetLabel.
+func (msgs Messages) KeysZoomResetLabel() string {
+	return Catalog.Format(msgs.locale, "keysZoomResetLabel", nil)
+}
+
+// KeysZoomResetNote says "Fits the image to the window when viewing an image."
+// in the language the app shows.
+//
+// Keyboard Shortcuts settings: explanation for ZoomResetNote.
+func KeysZoomResetNote() string { return In(i18n.Locale()).KeysZoomResetNote() }
+
+// KeysZoomResetNote says "Fits the image to the window when viewing an image."
+// in the language of msgs.
+//
+// Keyboard Shortcuts settings: explanation for ZoomResetNote.
+func (msgs Messages) KeysZoomResetNote() string {
+	return Catalog.Format(msgs.locale, "keysZoomResetNote", nil)
 }
 
 // MenuCheckForUpdates says "Check for Updates…"
@@ -1926,4 +4668,834 @@ func SettingsWorkspaceMeta() string { return In(i18n.Locale()).SettingsWorkspace
 // Row label and segmented control label.
 func (msgs Messages) SettingsWorkspaceMeta() string {
 	return Catalog.Format(msgs.locale, "settingsWorkspaceMeta", nil)
+}
+
+// UpdateCheckButton says "Check for Updates"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: button for
+// CheckButton.
+func UpdateCheckButton() string { return In(i18n.Locale()).UpdateCheckButton() }
+
+// UpdateCheckButton says "Check for Updates"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: button for
+// CheckButton.
+func (msgs Messages) UpdateCheckButton() string {
+	return Catalog.Format(msgs.locale, "updateCheckButton", nil)
+}
+
+// UpdateCheckError says "Could not check for updates: {error}"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: error message for
+// CheckError. Values: error.
+func UpdateCheckError(error string) string { return In(i18n.Locale()).UpdateCheckError(error) }
+
+// UpdateCheckError says "Could not check for updates: {error}"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: error message for
+// CheckError. Values: error.
+func (msgs Messages) UpdateCheckError(error string) string {
+	return Catalog.Format(msgs.locale, "updateCheckError", map[string]any{"error": error})
+}
+
+// UpdateChecking says "Checking for updates…"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for Checking.
+func UpdateChecking() string { return In(i18n.Locale()).UpdateChecking() }
+
+// UpdateChecking says "Checking for updates…"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for Checking.
+func (msgs Messages) UpdateChecking() string {
+	return Catalog.Format(msgs.locale, "updateChecking", nil)
+}
+
+// UpdateCurrentNote says "You’re up to date (checked {time})."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: explanation for
+// CurrentNote. Values: time.
+func UpdateCurrentNote(time_ string) string { return In(i18n.Locale()).UpdateCurrentNote(time_) }
+
+// UpdateCurrentNote says "You’re up to date (checked {time})."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: explanation for
+// CurrentNote. Values: time.
+func (msgs Messages) UpdateCurrentNote(time_ string) string {
+	return Catalog.Format(msgs.locale, "updateCurrentNote", map[string]any{"time": time_})
+}
+
+// UpdateDownloading says "Downloading {version}…{percent}%"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for
+// Downloading. Values: version, percent.
+func UpdateDownloading(version string, percent int) string {
+	return In(i18n.Locale()).UpdateDownloading(version, percent)
+}
+
+// UpdateDownloading says "Downloading {version}…{percent}%"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for
+// Downloading. Values: version, percent.
+func (msgs Messages) UpdateDownloading(version string, percent int) string {
+	return Catalog.Format(msgs.locale, "updateDownloading", map[string]any{"version": version, "percent": percent})
+}
+
+// UpdateInstallError says "Update failed. Posse was not changed: {error}"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: error message for
+// InstallError. Values: error.
+func UpdateInstallError(error string) string { return In(i18n.Locale()).UpdateInstallError(error) }
+
+// UpdateInstallError says "Update failed. Posse was not changed: {error}"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: error message for
+// InstallError. Values: error.
+func (msgs Messages) UpdateInstallError(error string) string {
+	return Catalog.Format(msgs.locale, "updateInstallError", map[string]any{"error": error})
+}
+
+// UpdateInstalling says "Updating…"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for
+// Installing.
+func UpdateInstalling() string { return In(i18n.Locale()).UpdateInstalling() }
+
+// UpdateInstalling says "Updating…"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for
+// Installing.
+func (msgs Messages) UpdateInstalling() string {
+	return Catalog.Format(msgs.locale, "updateInstalling", nil)
+}
+
+// UpdateMoveToApplications says "Move Posse to the Applications folder to enable automatic updates."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for
+// MoveToApplications.
+func UpdateMoveToApplications() string { return In(i18n.Locale()).UpdateMoveToApplications() }
+
+// UpdateMoveToApplications says "Move Posse to the Applications folder to enable automatic updates."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for
+// MoveToApplications.
+func (msgs Messages) UpdateMoveToApplications() string {
+	return Catalog.Format(msgs.locale, "updateMoveToApplications", nil)
+}
+
+// UpdateNeverChecked says "Updates have not been checked yet."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for
+// NeverChecked.
+func UpdateNeverChecked() string { return In(i18n.Locale()).UpdateNeverChecked() }
+
+// UpdateNeverChecked says "Updates have not been checked yet."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for
+// NeverChecked.
+func (msgs Messages) UpdateNeverChecked() string {
+	return Catalog.Format(msgs.locale, "updateNeverChecked", nil)
+}
+
+// UpdatePermissionRequired says "Automatic updates require permission to write to the Applications folder."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: label for
+// PermissionRequired.
+func UpdatePermissionRequired() string { return In(i18n.Locale()).UpdatePermissionRequired() }
+
+// UpdatePermissionRequired says "Automatic updates require permission to write to the Applications folder."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: label for
+// PermissionRequired.
+func (msgs Messages) UpdatePermissionRequired() string {
+	return Catalog.Format(msgs.locale, "updatePermissionRequired", nil)
+}
+
+// UpdateReadyNote says "{version} is ready. Restart to update; terminals will stay connected."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: explanation for
+// ReadyNote. Values: version.
+func UpdateReadyNote(version string) string { return In(i18n.Locale()).UpdateReadyNote(version) }
+
+// UpdateReadyNote says "{version} is ready. Restart to update; terminals will stay connected."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: explanation for
+// ReadyNote. Values: version.
+func (msgs Messages) UpdateReadyNote(version string) string {
+	return Catalog.Format(msgs.locale, "updateReadyNote", map[string]any{"version": version})
+}
+
+// UpdateReadyTitle says "Posse {version} Is Ready"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: heading for
+// ReadyTitle. Values: version.
+func UpdateReadyTitle(version string) string { return In(i18n.Locale()).UpdateReadyTitle(version) }
+
+// UpdateReadyTitle says "Posse {version} Is Ready"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: heading for
+// ReadyTitle. Values: version.
+func (msgs Messages) UpdateReadyTitle(version string) string {
+	return Catalog.Format(msgs.locale, "updateReadyTitle", map[string]any{"version": version})
+}
+
+// UpdateRecheckError says "Could not check for updates again: {error}"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: error message for
+// RecheckError. Values: error.
+func UpdateRecheckError(error string) string { return In(i18n.Locale()).UpdateRecheckError(error) }
+
+// UpdateRecheckError says "Could not check for updates again: {error}"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: error message for
+// RecheckError. Values: error.
+func (msgs Messages) UpdateRecheckError(error string) string {
+	return Catalog.Format(msgs.locale, "updateRecheckError", map[string]any{"error": error})
+}
+
+// UpdateReleaseNotesTitle says "What’s New"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: heading for
+// ReleaseNotesTitle.
+func UpdateReleaseNotesTitle() string { return In(i18n.Locale()).UpdateReleaseNotesTitle() }
+
+// UpdateReleaseNotesTitle says "What’s New"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: heading for
+// ReleaseNotesTitle.
+func (msgs Messages) UpdateReleaseNotesTitle() string {
+	return Catalog.Format(msgs.locale, "updateReleaseNotesTitle", nil)
+}
+
+// UpdateRestartButton says "Restart to Update"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: button for
+// RestartButton.
+func UpdateRestartButton() string { return In(i18n.Locale()).UpdateRestartButton() }
+
+// UpdateRestartButton says "Restart to Update"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: button for
+// RestartButton.
+func (msgs Messages) UpdateRestartButton() string {
+	return Catalog.Format(msgs.locale, "updateRestartButton", nil)
+}
+
+// UpdateTitle says "Updates"
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: heading for Title.
+func UpdateTitle() string { return In(i18n.Locale()).UpdateTitle() }
+
+// UpdateTitle says "Updates"
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: heading for Title.
+func (msgs Messages) UpdateTitle() string {
+	return Catalog.Format(msgs.locale, "updateTitle", nil)
+}
+
+// UpdateUninterruptedNote says "Terminals stay connected during the update."
+// in the language the app shows.
+//
+// About settings update card or sidebar update notice: explanation for
+// UninterruptedNote.
+func UpdateUninterruptedNote() string { return In(i18n.Locale()).UpdateUninterruptedNote() }
+
+// UpdateUninterruptedNote says "Terminals stay connected during the update."
+// in the language of msgs.
+//
+// About settings update card or sidebar update notice: explanation for
+// UninterruptedNote.
+func (msgs Messages) UpdateUninterruptedNote() string {
+	return Catalog.Format(msgs.locale, "updateUninterruptedNote", nil)
+}
+
+// UsageCodexQuery says "Query Codex Reset Cards"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for CodexQuery.
+func UsageCodexQuery() string { return In(i18n.Locale()).UsageCodexQuery() }
+
+// UsageCodexQuery says "Query Codex Reset Cards"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for CodexQuery.
+func (msgs Messages) UsageCodexQuery() string {
+	return Catalog.Format(msgs.locale, "usageCodexQuery", nil)
+}
+
+// UsageCursorModels says "Cursor Models"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for CursorModels.
+func UsageCursorModels() string { return In(i18n.Locale()).UsageCursorModels() }
+
+// UsageCursorModels says "Cursor Models"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for CursorModels.
+func (msgs Messages) UsageCursorModels() string {
+	return Catalog.Format(msgs.locale, "usageCursorModels", nil)
+}
+
+// UsageCursorQuery says "Query Cursor Usage"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for CursorQuery.
+func UsageCursorQuery() string { return In(i18n.Locale()).UsageCursorQuery() }
+
+// UsageCursorQuery says "Query Cursor Usage"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for CursorQuery.
+func (msgs Messages) UsageCursorQuery() string {
+	return Catalog.Format(msgs.locale, "usageCursorQuery", nil)
+}
+
+// UsageDaemonRequired says "Available after updating the daemon."
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for DaemonRequired.
+func UsageDaemonRequired() string { return In(i18n.Locale()).UsageDaemonRequired() }
+
+// UsageDaemonRequired says "Available after updating the daemon."
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for DaemonRequired.
+func (msgs Messages) UsageDaemonRequired() string {
+	return Catalog.Format(msgs.locale, "usageDaemonRequired", nil)
+}
+
+// UsageDisplayLabel says "Plan Usage Display"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for DisplayLabel.
+func UsageDisplayLabel() string { return In(i18n.Locale()).UsageDisplayLabel() }
+
+// UsageDisplayLabel says "Plan Usage Display"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for DisplayLabel.
+func (msgs Messages) UsageDisplayLabel() string {
+	return Catalog.Format(msgs.locale, "usageDisplayLabel", nil)
+}
+
+// UsageEmpty says "Plan usage appears here after an agent runs"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for Empty.
+func UsageEmpty() string { return In(i18n.Locale()).UsageEmpty() }
+
+// UsageEmpty says "Plan usage appears here after an agent runs"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for Empty.
+func (msgs Messages) UsageEmpty() string {
+	return Catalog.Format(msgs.locale, "usageEmpty", nil)
+}
+
+// UsageIncludedSpend says "Included usage {used} / {limit} ({percent})"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for IncludedSpend. Values:
+// used, limit, percent.
+func UsageIncludedSpend(used string, limit string, percent string) string {
+	return In(i18n.Locale()).UsageIncludedSpend(used, limit, percent)
+}
+
+// UsageIncludedSpend says "Included usage {used} / {limit} ({percent})"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for IncludedSpend. Values:
+// used, limit, percent.
+func (msgs Messages) UsageIncludedSpend(used string, limit string, percent string) string {
+	return Catalog.Format(msgs.locale, "usageIncludedSpend", map[string]any{"used": used, "limit": limit, "percent": percent})
+}
+
+// UsageListSeparator says ", "
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ListSeparator.
+func UsageListSeparator() string { return In(i18n.Locale()).UsageListSeparator() }
+
+// UsageListSeparator says ", "
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ListSeparator.
+func (msgs Messages) UsageListSeparator() string {
+	return Catalog.Format(msgs.locale, "usageListSeparator", nil)
+}
+
+// UsageNamedWindow says "{name} {window}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for NamedWindow. Values:
+// name, window.
+func UsageNamedWindow(name string, window string) string {
+	return In(i18n.Locale()).UsageNamedWindow(name, window)
+}
+
+// UsageNamedWindow says "{name} {window}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for NamedWindow. Values:
+// name, window.
+func (msgs Messages) UsageNamedWindow(name string, window string) string {
+	return Catalog.Format(msgs.locale, "usageNamedWindow", map[string]any{"name": name, "window": window})
+}
+
+// UsageOldDaemonError says "This daemon version cannot refresh plan usage. Update the daemon in Settings, then try again."
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: error message for OldDaemonError.
+func UsageOldDaemonError() string { return In(i18n.Locale()).UsageOldDaemonError() }
+
+// UsageOldDaemonError says "This daemon version cannot refresh plan usage. Update the daemon in Settings, then try again."
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: error message for OldDaemonError.
+func (msgs Messages) UsageOldDaemonError() string {
+	return Catalog.Format(msgs.locale, "usageOldDaemonError", nil)
+}
+
+// UsageOnDemand says "On-demand usage {used}{stale}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for OnDemand. Values: used,
+// stale.
+func UsageOnDemand(used string, stale string) string {
+	return In(i18n.Locale()).UsageOnDemand(used, stale)
+}
+
+// UsageOnDemand says "On-demand usage {used}{stale}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for OnDemand. Values: used,
+// stale.
+func (msgs Messages) UsageOnDemand(used string, stale string) string {
+	return Catalog.Format(msgs.locale, "usageOnDemand", map[string]any{"used": used, "stale": stale})
+}
+
+// UsageOnDemandLimited says "On-demand usage {used}, limit {limit}{stale}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for OnDemandLimited. Values:
+// used, limit, stale.
+func UsageOnDemandLimited(used string, limit string, stale string) string {
+	return In(i18n.Locale()).UsageOnDemandLimited(used, limit, stale)
+}
+
+// UsageOnDemandLimited says "On-demand usage {used}, limit {limit}{stale}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for OnDemandLimited. Values:
+// used, limit, stale.
+func (msgs Messages) UsageOnDemandLimited(used string, limit string, stale string) string {
+	return Catalog.Format(msgs.locale, "usageOnDemandLimited", map[string]any{"used": used, "limit": limit, "stale": stale})
+}
+
+// UsageOtherModels says "Other Models"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for OtherModels.
+func UsageOtherModels() string { return In(i18n.Locale()).UsageOtherModels() }
+
+// UsageOtherModels says "Other Models"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for OtherModels.
+func (msgs Messages) UsageOtherModels() string {
+	return Catalog.Format(msgs.locale, "usageOtherModels", nil)
+}
+
+// UsageReadAt says "Reading from the agent’s last run: {time}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ReadAt. Values: time.
+func UsageReadAt(time_ string) string { return In(i18n.Locale()).UsageReadAt(time_) }
+
+// UsageReadAt says "Reading from the agent’s last run: {time}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ReadAt. Values: time.
+func (msgs Messages) UsageReadAt(time_ string) string {
+	return Catalog.Format(msgs.locale, "usageReadAt", map[string]any{"time": time_})
+}
+
+// UsageReadingAge says "Reading from {time}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ReadingAge. Values:
+// time.
+func UsageReadingAge(time_ string) string { return In(i18n.Locale()).UsageReadingAge(time_) }
+
+// UsageReadingAge says "Reading from {time}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ReadingAge. Values:
+// time.
+func (msgs Messages) UsageReadingAge(time_ string) string {
+	return Catalog.Format(msgs.locale, "usageReadingAge", map[string]any{"time": time_})
+}
+
+// UsageRefreshError says "Could not refresh plan usage: {error}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: error message for RefreshError.
+// Values: error.
+func UsageRefreshError(error string) string { return In(i18n.Locale()).UsageRefreshError(error) }
+
+// UsageRefreshError says "Could not refresh plan usage: {error}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: error message for RefreshError.
+// Values: error.
+func (msgs Messages) UsageRefreshError(error string) string {
+	return Catalog.Format(msgs.locale, "usageRefreshError", map[string]any{"error": error})
+}
+
+// UsageRefreshNote says "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache …"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: explanation for RefreshNote.
+func UsageRefreshNote() string { return In(i18n.Locale()).UsageRefreshNote() }
+
+// UsageRefreshNote says "Usage updates when agents run. Refresh in the top right to check now. Claude has no query API, so only its own cache …"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: explanation for RefreshNote.
+func (msgs Messages) UsageRefreshNote() string {
+	return Catalog.Format(msgs.locale, "usageRefreshNote", nil)
+}
+
+// UsageRefreshTip says "Refresh All Plan Usage Now"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: tooltip for RefreshTip.
+func UsageRefreshTip() string { return In(i18n.Locale()).UsageRefreshTip() }
+
+// UsageRefreshTip says "Refresh All Plan Usage Now"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: tooltip for RefreshTip.
+func (msgs Messages) UsageRefreshTip() string {
+	return Catalog.Format(msgs.locale, "usageRefreshTip", nil)
+}
+
+// UsageRefreshing says "Refreshing"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for Refreshing.
+func UsageRefreshing() string { return In(i18n.Locale()).UsageRefreshing() }
+
+// UsageRefreshing says "Refreshing"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for Refreshing.
+func (msgs Messages) UsageRefreshing() string {
+	return Catalog.Format(msgs.locale, "usageRefreshing", nil)
+}
+
+// UsageRemaining says "Remaining"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for Remaining.
+func UsageRemaining() string { return In(i18n.Locale()).UsageRemaining() }
+
+// UsageRemaining says "Remaining"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for Remaining.
+func (msgs Messages) UsageRemaining() string {
+	return Catalog.Format(msgs.locale, "usageRemaining", nil)
+}
+
+// UsageResetCards says "{count, plural, one {# reset card} other {# reset cards}}{stale}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ResetCards. Values:
+// count, stale.
+func UsageResetCards(count int, stale string) string {
+	return In(i18n.Locale()).UsageResetCards(count, stale)
+}
+
+// UsageResetCards says "{count, plural, one {# reset card} other {# reset cards}}{stale}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ResetCards. Values:
+// count, stale.
+func (msgs Messages) UsageResetCards(count int, stale string) string {
+	return Catalog.Format(msgs.locale, "usageResetCards", map[string]any{"count": count, "stale": stale})
+}
+
+// UsageResetCardsExpiring says "{count, plural, one {# reset card} other {# reset cards}}, earliest expires {date}{stale}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ResetCardsExpiring.
+// Values: count, date, stale.
+func UsageResetCardsExpiring(count int, date string, stale string) string {
+	return In(i18n.Locale()).UsageResetCardsExpiring(count, date, stale)
+}
+
+// UsageResetCardsExpiring says "{count, plural, one {# reset card} other {# reset cards}}, earliest expires {date}{stale}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ResetCardsExpiring.
+// Values: count, date, stale.
+func (msgs Messages) UsageResetCardsExpiring(count int, date string, stale string) string {
+	return Catalog.Format(msgs.locale, "usageResetCardsExpiring", map[string]any{"count": count, "date": date, "stale": stale})
+}
+
+// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan …"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: explanation for SettingsNote.
+func UsageSettingsNote() string { return In(i18n.Locale()).UsageSettingsNote() }
+
+// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan …"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: explanation for SettingsNote.
+func (msgs Messages) UsageSettingsNote() string {
+	return Catalog.Format(msgs.locale, "usageSettingsNote", nil)
+}
+
+// UsageShares says "This week’s usage: {shares}{stale}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for Shares. Values: shares,
+// stale.
+func UsageShares(shares string, stale string) string {
+	return In(i18n.Locale()).UsageShares(shares, stale)
+}
+
+// UsageShares says "This week’s usage: {shares}{stale}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for Shares. Values: shares,
+// stale.
+func (msgs Messages) UsageShares(shares string, stale string) string {
+	return Catalog.Format(msgs.locale, "usageShares", map[string]any{"shares": shares, "stale": stale})
+}
+
+// UsageShowLabel says "Show Plan Usage"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ShowLabel.
+func UsageShowLabel() string { return In(i18n.Locale()).UsageShowLabel() }
+
+// UsageShowLabel says "Show Plan Usage"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ShowLabel.
+func (msgs Messages) UsageShowLabel() string {
+	return Catalog.Format(msgs.locale, "usageShowLabel", nil)
+}
+
+// UsageShownPercent says "{kind} {percent}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for ShownPercent. Values:
+// kind, percent.
+func UsageShownPercent(kind string, percent string) string {
+	return In(i18n.Locale()).UsageShownPercent(kind, percent)
+}
+
+// UsageShownPercent says "{kind} {percent}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for ShownPercent. Values:
+// kind, percent.
+func (msgs Messages) UsageShownPercent(kind string, percent string) string {
+	return Catalog.Format(msgs.locale, "usageShownPercent", map[string]any{"kind": kind, "percent": percent})
+}
+
+// UsageStaleReading says " (reading from {time})"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for StaleReading. Values:
+// time.
+func UsageStaleReading(time_ string) string { return In(i18n.Locale()).UsageStaleReading(time_) }
+
+// UsageStaleReading says " (reading from {time})"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for StaleReading. Values:
+// time.
+func (msgs Messages) UsageStaleReading(time_ string) string {
+	return Catalog.Format(msgs.locale, "usageStaleReading", map[string]any{"time": time_})
+}
+
+// UsageTitle says "Plan Usage"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: heading for Title.
+func UsageTitle() string { return In(i18n.Locale()).UsageTitle() }
+
+// UsageTitle says "Plan Usage"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: heading for Title.
+func (msgs Messages) UsageTitle() string {
+	return Catalog.Format(msgs.locale, "usageTitle", nil)
+}
+
+// UsageUsed says "Used"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for Used.
+func UsageUsed() string { return In(i18n.Locale()).UsageUsed() }
+
+// UsageUsed says "Used"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for Used.
+func (msgs Messages) UsageUsed() string {
+	return Catalog.Format(msgs.locale, "usageUsed", nil)
+}
+
+// UsageWindowDays says "{count, plural, one {# Day} other {# Days}}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowDays. Values:
+// count.
+func UsageWindowDays(count int) string { return In(i18n.Locale()).UsageWindowDays(count) }
+
+// UsageWindowDays says "{count, plural, one {# Day} other {# Days}}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowDays. Values:
+// count.
+func (msgs Messages) UsageWindowDays(count int) string {
+	return Catalog.Format(msgs.locale, "usageWindowDays", map[string]any{"count": count})
+}
+
+// UsageWindowFiveHours says "5 Hours"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowFiveHours.
+func UsageWindowFiveHours() string { return In(i18n.Locale()).UsageWindowFiveHours() }
+
+// UsageWindowFiveHours says "5 Hours"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowFiveHours.
+func (msgs Messages) UsageWindowFiveHours() string {
+	return Catalog.Format(msgs.locale, "usageWindowFiveHours", nil)
+}
+
+// UsageWindowHours says "{count, plural, one {# Hour} other {# Hours}}"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowHours. Values:
+// count.
+func UsageWindowHours(count int) string { return In(i18n.Locale()).UsageWindowHours(count) }
+
+// UsageWindowHours says "{count, plural, one {# Hour} other {# Hours}}"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowHours. Values:
+// count.
+func (msgs Messages) UsageWindowHours(count int) string {
+	return Catalog.Format(msgs.locale, "usageWindowHours", map[string]any{"count": count})
+}
+
+// UsageWindowMonth says "Monthly"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowMonth.
+func UsageWindowMonth() string { return In(i18n.Locale()).UsageWindowMonth() }
+
+// UsageWindowMonth says "Monthly"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowMonth.
+func (msgs Messages) UsageWindowMonth() string {
+	return Catalog.Format(msgs.locale, "usageWindowMonth", nil)
+}
+
+// UsageWindowMonthShort says "mo"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowMonthShort.
+func UsageWindowMonthShort() string { return In(i18n.Locale()).UsageWindowMonthShort() }
+
+// UsageWindowMonthShort says "mo"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowMonthShort.
+func (msgs Messages) UsageWindowMonthShort() string {
+	return Catalog.Format(msgs.locale, "usageWindowMonthShort", nil)
+}
+
+// UsageWindowPeriod says "Current Period"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowPeriod.
+func UsageWindowPeriod() string { return In(i18n.Locale()).UsageWindowPeriod() }
+
+// UsageWindowPeriod says "Current Period"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowPeriod.
+func (msgs Messages) UsageWindowPeriod() string {
+	return Catalog.Format(msgs.locale, "usageWindowPeriod", nil)
+}
+
+// UsageWindowWeek says "Weekly"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowWeek.
+func UsageWindowWeek() string { return In(i18n.Locale()).UsageWindowWeek() }
+
+// UsageWindowWeek says "Weekly"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowWeek.
+func (msgs Messages) UsageWindowWeek() string {
+	return Catalog.Format(msgs.locale, "usageWindowWeek", nil)
+}
+
+// UsageWindowWeekShort says "wk"
+// in the language the app shows.
+//
+// Plan Usage settings or status popover: label for WindowWeekShort.
+func UsageWindowWeekShort() string { return In(i18n.Locale()).UsageWindowWeekShort() }
+
+// UsageWindowWeekShort says "wk"
+// in the language of msgs.
+//
+// Plan Usage settings or status popover: label for WindowWeekShort.
+func (msgs Messages) UsageWindowWeekShort() string {
+	return Catalog.Format(msgs.locale, "usageWindowWeekShort", nil)
 }
