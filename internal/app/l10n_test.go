@@ -156,7 +156,7 @@ func TestCatalogGenerated(t *testing.T) {
 }
 
 // l10nPending 是界面文字还没换成 locales 的键的文件，换完一个从这里去掉一个；不在表里的文件不许写中文字面量
-// （注释和测试不算）。
+// （注释和测试不算）。全角标点也算：拿它拼的句子没有汉字，英文界面上照样露出中文标点（如 "HEAD（" + 分支 + "）"）。
 var l10nPending = []string{}
 
 func TestNoChineseLiterals(t *testing.T) {
@@ -173,7 +173,7 @@ func TestNoChineseLiterals(t *testing.T) {
 		var found []string
 		ast.Inspect(file, func(n ast.Node) bool {
 			if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING {
-				if s, err := strconv.Unquote(lit.Value); err == nil && hasHan(s) {
+				if s, err := strconv.Unquote(lit.Value); err == nil && (hasHan(s) || hasFullwidthPunct(s)) {
 					found = append(found, fset.Position(lit.Pos()).String()+" "+lit.Value)
 				}
 			}
@@ -194,6 +194,11 @@ func TestNoChineseLiterals(t *testing.T) {
 			t.Errorf("l10nPending 里的 %s 不存在了", f)
 		}
 	}
+}
+
+// hasFullwidthPunct 认中文句子里才用的全角标点；… 和弯引号英文也用，不算。
+func hasFullwidthPunct(s string) bool {
+	return strings.ContainsAny(s, "（）：，、「」。；！？《》【】　")
 }
 
 func hasHan(s string) bool {

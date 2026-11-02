@@ -744,6 +744,12 @@ func TestPreview(t *testing.T) {
 			a.state.CheatTab = i
 			savePNG(t, newPreviewTester(a, dark), "cheat-"+name+"-"+suffix+".png")
 		}
+		// 英文：搜索框占位放不放得下
+		a.state.CheatTab = 0
+		lt := newPreviewTester(a, dark)
+		lt.SetLocale("en")
+		lt.Frame()
+		savePNG(t, lt, "cheat-builtin-skills-en-"+suffix+".png")
 		// 搜索：不分页签，只列匹配的条目，没有命中的组不画
 		a.cheat.query = "review"
 		savePNG(t, newPreviewTester(a, dark), "cheat-search-"+suffix+".png")
@@ -792,6 +798,10 @@ func TestPreview(t *testing.T) {
 		a = previewApp(t)
 		previewSkillsBoard(a, "")
 		savePNG(t, newPreviewTester(a, dark), "skills-"+suffix+".png")
+		lt = newPreviewTester(a, dark)
+		lt.SetLocale("en")
+		lt.Frame()
+		savePNG(t, lt, "skills-en-"+suffix+".png")
 		a = previewApp(t)
 		previewSkillsBoard(a, homeDir+"/.agents/skills/lark-calendar")
 		savePNG(t, newPreviewTester(a, dark), "skills-off-"+suffix+".png")

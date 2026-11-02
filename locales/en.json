@@ -1171,7 +1171,7 @@
   "@cheatsheetSearch": {
     "description": "Cheat Sheet panel: accessibility label of the search field."
   },
-  "cheatsheetSearchPlaceholder": "Search commands, skills and descriptions",
+  "cheatsheetSearchPlaceholder": "Search commands and skills",
   "@cheatsheetSearchPlaceholder": {
     "description": "Cheat Sheet panel: placeholder of the search field."
   },
@@ -4443,6 +4443,15 @@
   "@logHardResetEllipsis": {
     "description": "Item in the Reset Current Branch to Here submenu of a commit in the Git Log (git reset --hard), asks for confirmation."
   },
+  "logHeadBranch": "HEAD ({name})",
+  "@logHeadBranch": {
+    "description": "First row of the Git Log branch list when on a branch: show the log of HEAD. name is the current branch.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "logHead": "HEAD (Current Branch)",
   "@logHead": {
     "description": "First row of the Git Log branch list: show the log of HEAD."
@@ -5639,7 +5648,7 @@
   "@settingsRestoreAll": {
     "description": "Switch of the Restore Terminals card."
   },
-  "settingsRestoreNote": "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone’s home, marked “Not restored”, and start when you switch to them: agents resume their sessions and plain terminals reopen in their folders, without the earlier output. Turn on the switch below to restore them all as soon as the daemon starts (many agents together take memory and usage).",
+  "settingsRestoreNote": "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone’s home, marked “Not restored”, and start when you switch to them: agents resume their sessions and plain terminals reopen in their folders, without the earlier output. Turn on the switch below to restore them all as soon as the daemon starts (restoring many agents at once takes more memory and plan usage).",
   "@settingsRestoreNote": {
     "description": "Note of the Restore Terminals card."
   },
@@ -6101,9 +6110,9 @@
   "@skillsHasUpdate": {
     "description": "Skills page: marker in a list row for a skill with a new version."
   },
-  "skillsInferred": "Inferred",
+  "skillsInferred": "(inferred)",
   "@skillsInferred": {
-    "description": "Skill and MCP details: marker next to an agent’s state when its read rules are inferred."
+    "description": "Skill and MCP details: marker right after an agent’s state (e.g. Enabled) when its read rules are inferred; written so it doesn’t read as part of the state."
   },
   "skillsInferredNote": "Read rules are inferred, not verified",
   "@skillsInferredNote": {

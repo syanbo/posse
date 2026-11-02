@@ -562,11 +562,11 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	ld := d.log
 	ui.Row(c).Height(sz(40)).Shrink(0).Padding(0, 12, 0, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-		text := fieldInputWidth(c, &ld.text, L(c).LogMessageHash(), 220).Label(L(c).LogMessageFilter())
+		text := fieldInputSized(c, &ld.text, L(c).LogMessageHash(), 220, 120).Label(L(c).LogMessageFilter())
 		if text.Changed() || text.Submitted() {
 			a.applyLogFilter(v, d)
 		}
-		author := fieldInputWidth(c.Key("author"), &ld.author, L(c).LogAuthor(), 120).Label(L(c).LogAuthorFilter())
+		author := fieldInputSized(c.Key("author"), &ld.author, L(c).LogAuthor(), 120, 80).Label(L(c).LogAuthorFilter())
 		if author.Changed() || author.Submitted() {
 			a.applyLogFilter(v, d)
 		}
@@ -577,7 +577,8 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 		case n > 1:
 			branch = L(c).LogBranchCount(n)
 		}
-		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(t.Surface).
+		// 分支芯片不缩：窄的时候让两个输入框让出宽度
+		filter := ui.Row(c.Key("branch-filter")).Height(sz(26)).Shrink(0).Padding(0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Background(t.Surface).
 			Role(ui.RoleButton).Label(L(c).LogBranchFilter()).Children(func() {
 			ui.Icon(c, iconBranch).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).SingleLine().MaxWidth(160)

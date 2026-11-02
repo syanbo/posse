@@ -68,8 +68,8 @@ func TestMessage(t *testing.T) {
 		if got := MessageIn(ZH, c.in); got != c.want {
 			t.Errorf("MessageIn(zh, %q) = %q, want %q", c.in, got, c.want)
 		}
-		if got := MessageIn(EN, c.in); got != c.in {
-			t.Errorf("MessageIn(en, %q) = %q, want the source", c.in, got)
+		if got := MessageIn(EN, c.in); got != capitalize(c.in) {
+			t.Errorf("MessageIn(en, %q) = %q, want the source with a capital", c.in, got)
 		}
 	}
 }
@@ -79,13 +79,13 @@ func TestText(t *testing.T) {
 		err    error
 		zh, en string
 	}{
-		{rpc.Errorf(rpc.CodeNotFound, "project %q not found", "demo"), "找不到项目 demo", `project "demo" not found`},
-		{rpc.Errorf(rpc.CodeConflict, "something new"), "something new", "something new"},
-		{rpc.Errorf(rpc.CodeUnknown, "unknown method x"), "常驻进程是旧版，不认识这个操作：到设置 › 关于 更新常驻进程，终端不会断开", srcOldDaemon},
-		{fmt.Errorf("call: %w", context.DeadlineExceeded), "常驻进程没有及时回应，稍后再试", srcTimeout},
-		{&fs.PathError{Op: "open", Path: "/x/y", Err: fs.ErrPermission}, "没有权限访问 /x/y", "no permission to access /x/y"},
+		{rpc.Errorf(rpc.CodeNotFound, "project %q not found", "demo"), "找不到项目 demo", `Project "demo" not found`},
+		{rpc.Errorf(rpc.CodeConflict, "something new"), "something new", "Something new"},
+		{rpc.Errorf(rpc.CodeUnknown, "unknown method x"), "常驻进程是旧版，不认识这个操作：到设置 › 关于 更新常驻进程，终端不会断开", capitalize(srcOldDaemon)},
+		{fmt.Errorf("call: %w", context.DeadlineExceeded), "常驻进程没有及时回应，稍后再试", capitalize(srcTimeout)},
+		{&fs.PathError{Op: "open", Path: "/x/y", Err: fs.ErrPermission}, "没有权限访问 /x/y", "No permission to access /x/y"},
 		{&fs.PathError{Op: "open", Path: "/x/y", Err: errors.New("odd")}, "/x/y：odd", "/x/y: odd"},
-		{errors.New("not an image"), "这不是图片", "not an image"},
+		{errors.New("not an image"), "这不是图片", "Not an image"},
 	}
 	for _, c := range cases {
 		if got := TextIn(ZH, c.err); got != c.zh {
@@ -95,7 +95,35 @@ func TestText(t *testing.T) {
 			t.Errorf("TextIn(en, %v) = %q, want %q", c.err, got, c.en)
 		}
 	}
+	if got := TextIn(EN, errors.New("this repository has no remote")); got != "This repository has no remote" {
+		t.Errorf("TextIn(en, no remote) = %q", got)
+	}
 	if _, err := os.Open("/nonexistent/posse"); TextIn(ZH, err) != "找不到 /nonexistent/posse" {
 		t.Errorf("TextIn(zh, ENOENT) = %q", TextIn(ZH, err))
+	}
+}
+
+// 英文显示时首字母大写，只动开头那个全小写的单词。
+func TestCapitalize(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"this repository has no remote", "This repository has no remote"},
+		{"fatal: no upstream", "Fatal: no upstream"},
+		{"macOS is too old", "macOS is too old"},
+		{"iPhone disconnected", "iPhone disconnected"},
+		{"binary_file", "binary_file"},
+		{"/x/y: odd", "/x/y: odd"},
+		{"2 terminals", "2 terminals"},
+		{"Already capital", "Already capital"},
+		{"canceled", "Canceled"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := capitalize(c.in); got != c.want {
+			t.Errorf("capitalize(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// 中文的路径不经 display：译文原样，没有译文的英文原文也不改
+	if got := MessageIn(ZH, "something new"); got != "something new" {
+		t.Errorf("MessageIn(zh, unknown) = %q", got)
 	}
 }

@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"unicode"
+	"unicode/utf8"
 
 	"posse/internal/rpc"
 )
@@ -56,6 +58,10 @@ func Text(err error) string { return TextIn(Current, err) }
 
 // TextIn 是 err 用 lang 显示的文字：常驻进程的报错去掉错误码，认得的翻译，认不出的原样给出，方便排查。
 func TextIn(lang Lang, err error) string {
+	return display(lang, textIn(lang, err))
+}
+
+func textIn(lang Lang, err error) string {
 	if err == nil {
 		return ""
 	}
@@ -115,9 +121,36 @@ func Message(msg string) string { return MessageIn(Current, msg) }
 func MessageIn(lang Lang, msg string) string {
 	c := catalogs[lang]
 	if c == nil {
-		return msg
+		return display(lang, msg)
 	}
 	return c.match(msg, 0)
+}
+
+// display 是给人看之前的最后一步：英文源文本按 Go 的习惯小写开头，界面上要像一句话，首字母大写。
+// 只在这个出口做，CLI 和 agent 读到的原文不变。
+func display(lang Lang, s string) string {
+	if lang != EN {
+		return s
+	}
+	return capitalize(s)
+}
+
+// capitalize 把开头的单词首字母大写；单词里本来就有大写（macOS、iPhone）、是代号（binary_file）或不是字母开头（路径、数字）的不动。
+func capitalize(s string) string {
+	end := 0
+	for end < len(s) && s[end] >= 'a' && s[end] <= 'z' {
+		end++
+	}
+	if end == 0 {
+		return s
+	}
+	if end < len(s) {
+		r, _ := utf8.DecodeRuneInString(s[end:])
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			return s
+		}
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // sprintf 按格式串取 lang 的译文填参数；没有译文时用英文原文。

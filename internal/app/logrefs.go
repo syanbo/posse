@@ -75,7 +75,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	if query == "" {
 		label := L(c).LogHead()
 		if cur, ok := currentBranch(g.branches.list); ok {
-			label = "HEAD（" + cur.Name + "）"
+			label = L(c).LogHeadBranch(cur.Name)
 		}
 		ref("HEAD", label, label, 0, -1, "HEAD", nil)
 	}

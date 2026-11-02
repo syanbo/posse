@@ -806,6 +806,7 @@
   "logHardResetBody": "当前分支会回到这个提交，之后的提交和所有没提交的改动都会丢掉。",
   "logHardResetConfirm": "硬重置到 {commit}？",
   "logHardResetEllipsis": "Hard：丢掉之后的改动…",
+  "logHeadBranch": "HEAD（{name}）",
   "logHead": "HEAD（当前分支）",
   "logHide": "隐藏",
   "logHistoryTab": "历史：{file}",

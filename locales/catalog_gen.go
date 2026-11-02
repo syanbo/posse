@@ -2735,13 +2735,13 @@ func (msgs Messages) CheatsheetSearch() string {
 	return Catalog.Format(msgs.locale, "cheatsheetSearch", nil)
 }
 
-// CheatsheetSearchPlaceholder says "Search commands, skills and descriptions"
+// CheatsheetSearchPlaceholder says "Search commands and skills"
 // in the language the app shows.
 //
 // Cheat Sheet panel: placeholder of the search field.
 func CheatsheetSearchPlaceholder() string { return In(i18n.Locale()).CheatsheetSearchPlaceholder() }
 
-// CheatsheetSearchPlaceholder says "Search commands, skills and descriptions"
+// CheatsheetSearchPlaceholder says "Search commands and skills"
 // in the language of msgs.
 //
 // Cheat Sheet panel: placeholder of the search field.
@@ -12135,6 +12135,22 @@ func (msgs Messages) LogHardResetEllipsis() string {
 	return Catalog.Format(msgs.locale, "logHardResetEllipsis", nil)
 }
 
+// LogHeadBranch says "HEAD ({name})"
+// in the language the app shows.
+//
+// First row of the Git Log branch list when on a branch: show the log of
+// HEAD. name is the current branch.
+func LogHeadBranch(name string) string { return In(i18n.Locale()).LogHeadBranch(name) }
+
+// LogHeadBranch says "HEAD ({name})"
+// in the language of msgs.
+//
+// First row of the Git Log branch list when on a branch: show the log of
+// HEAD. name is the current branch.
+func (msgs Messages) LogHeadBranch(name string) string {
+	return Catalog.Format(msgs.locale, "logHeadBranch", map[string]any{"name": name})
+}
+
 // LogHead says "HEAD (Current Branch)"
 // in the language the app shows.
 //
@@ -16843,18 +16859,20 @@ func (msgs Messages) SkillsHasUpdate() string {
 	return Catalog.Format(msgs.locale, "skillsHasUpdate", nil)
 }
 
-// SkillsInferred says "Inferred"
+// SkillsInferred says "(inferred)"
 // in the language the app shows.
 //
-// Skill and MCP details: marker next to an agent’s state when its read
-// rules are inferred.
+// Skill and MCP details: marker right after an agent’s state (e.g.
+// Enabled) when its read rules are inferred; written so it doesn’t read
+// as part of the state.
 func SkillsInferred() string { return In(i18n.Locale()).SkillsInferred() }
 
-// SkillsInferred says "Inferred"
+// SkillsInferred says "(inferred)"
 // in the language of msgs.
 //
-// Skill and MCP details: marker next to an agent’s state when its read
-// rules are inferred.
+// Skill and MCP details: marker right after an agent’s state (e.g.
+// Enabled) when its read rules are inferred; written so it doesn’t read
+// as part of the state.
 func (msgs Messages) SkillsInferred() string {
 	return Catalog.Format(msgs.locale, "skillsInferred", nil)
 }
