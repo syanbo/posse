@@ -4,9 +4,12 @@ import 'app_localizations.dart';
 
 export 'app_localizations.dart';
 
-/// 界面文字：`context.l10n.settingsLanguageTitle`。
+/// 界面文字：`context.l10n.settingsLanguageTitle`。没有译文表时（测试里自己建的 MaterialApp）用中文，
+/// 测试照旧按中文找元素；App 里 MaterialApp 总带着译文表。
 extension L10nContext on BuildContext {
-  AppLocalizations get l10n => AppLocalizations.of(this);
+  AppLocalizations get l10n =>
+      Localizations.of<AppLocalizations>(this, AppLocalizations) ??
+      lookupAppLocalizations(const Locale('zh'));
 }
 
 /// 设置里选的语言：空串跟随系统，否则是 [AppLocalizations.supportedLocales] 里的语言代码。
