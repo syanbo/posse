@@ -127,6 +127,8 @@ type phone struct {
 	binary chan []byte
 	resp   chan map[string]any
 	held   []map[string]any
+	// 握手选的分帧：Posse 手机客户端是 framingBinary，Orca App 是 framingText
+	framing int
 }
 
 type testOffer struct {
@@ -155,15 +157,19 @@ func dialPhone(t *testing.T, srv *Server, info PairInfo) *phone {
 	return handshakePhone(t, ws, offer)
 }
 
-// handshakePhone 在连好的传输上走 hello、ready、auth。
+// handshakePhone 在连好的传输上走 hello、ready、auth，和 Posse 手机客户端一样用 framingBinary。
 func handshakePhone(t *testing.T, ws phoneWire, offer testOffer) *phone {
+	return handshakeFraming(t, ws, offer, framingBinary)
+}
+
+func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) *phone {
 	ctx := context.Background()
 	cpub, cpriv, _ := box.GenerateKey(rand.Reader)
 	var cn [32]byte
 	rand.Read(cn[:])
 	hb, _ := json.Marshal(map[string]any{
 		"type": "e2ee_hello", "v": 2, "clientPublicKeyB64": b64(*cpub), "clientNonceB64": b64(cn),
-		"capabilities": map[string]any{"framing": []int{2}, "payloadKinds": []string{"text", "binary"}},
+		"capabilities": map[string]any{"framing": []int{framing}, "payloadKinds": []string{"text", "binary"}},
 		"context":      map[string]any{"protocol": "orca-mobile-e2ee", "initiator": "mobile", "responder": "desktop", "transport": "direct"},
 	})
 	ws.Write(ctx, websocket.MessageText, hb)
@@ -173,6 +179,9 @@ func handshakePhone(t *testing.T, ws phoneWire, offer testOffer) *phone {
 	}
 	var r ready
 	json.Unmarshal(rb, &r)
+	if r.Selection.Framing != framing {
+		t.Fatalf("ready selected framing %d, want %d", r.Selection.Framing, framing)
+	}
 	if r.DesktopPublicKeyB64 != offer.PublicKeyB64 {
 		t.Fatalf("ready key %s does not match offer", r.DesktopPublicKeyB64)
 	}
@@ -182,11 +191,14 @@ func handshakePhone(t *testing.T, ws phoneWire, offer testOffer) *phone {
 	var shared [32]byte
 	box.Precompute(&shared, &hostPub, cpriv)
 	s := newSession(shared, transcript(h, r), cn, dn)
-	p := &phone{t: t, ws: ws, sess: s, token: offer.DeviceToken, binary: make(chan []byte, 256), resp: make(chan map[string]any, 256)}
+	p := &phone{t: t, ws: ws, sess: s, token: offer.DeviceToken, binary: make(chan []byte, 256), resp: make(chan map[string]any, 256), framing: framing}
 	p.sendRaw(map[string]any{"type": "e2ee_auth", "v": 2, "transcriptHashB64": b64(s.transcriptHash), "deviceToken": offer.DeviceToken})
-	_, ab, err := ws.Read(ctx)
+	at, ab, err := ws.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if want := p.messageType(); at != want {
+		t.Fatalf("auth reply came as %v, want %v", at, want)
 	}
 	plain := p.open(ab, kindText)
 	if !strings.Contains(string(plain), "e2ee_authenticated") {
@@ -204,12 +216,24 @@ func (p *phone) sendRaw(v any) {
 	s.recvN++
 	nonce := s.nonce(dirMobileToDesktop, kindText, n)
 	frame := secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kindText, n), b...), &nonce, &s.recvKey)
+	if p.framing == framingBinary {
+		p.ws.Write(context.Background(), websocket.MessageBinary, frame)
+		return
+	}
 	p.ws.Write(context.Background(), websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(frame)))
+}
+
+// messageType 是 JSON 消息该走的帧类型。
+func (p *phone) messageType() websocket.MessageType {
+	if p.framing == framingBinary {
+		return websocket.MessageBinary
+	}
+	return websocket.MessageText
 }
 
 func (p *phone) open(raw []byte, kind byte) []byte {
 	s := p.sess
-	if kind == kindText {
+	if kind == kindText && p.framing != framingBinary {
 		raw, _ = base64.StdEncoding.DecodeString(string(raw))
 	}
 	nonce := s.nonce(dirDesktopToMobile, kind, s.sendN)
@@ -228,7 +252,15 @@ func (p *phone) readLoop() {
 			close(p.resp)
 			return
 		}
-		if typ == websocket.MessageBinary {
+		binary := typ == websocket.MessageBinary
+		if p.framing == framingBinary {
+			if !binary || len(raw) < 24 {
+				p.t.Errorf("framing 3 got a %v frame of %d bytes", typ, len(raw))
+				continue
+			}
+			binary = raw[14] == kindBinary
+		}
+		if binary {
 			p.binary <- p.open(raw, kindBinary)
 			continue
 		}
@@ -436,6 +468,36 @@ func TestPhoneSession(t *testing.T) {
 	srv.RemoveDevice(dev.ID)
 	if srv.pair.valid(p.token) {
 		t.Fatal("token still valid after removal")
+	}
+}
+
+// Orca App 用 framing 2：JSON 照旧加密后 base64 走文本帧，终端流走二进制帧
+func TestOrcaTextFraming(t *testing.T) {
+	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"/bin/sh"}, Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tm.Close(time.Second)
+	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}, order: []string{"t_1"}}, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.port = 0
+	defer srv.Close()
+	info, err := srv.Pair(false, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	offer := parseTestOffer(t, info)
+	ws, _, err := websocket.Dial(context.Background(), offer.Endpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.SetReadLimit(8 << 20)
+	p := handshakeFraming(t, ws, offer, framingText)
+	st := result(t, p.next(p.call("status.get", nil)))
+	if st["protocolVersion"] != float64(3) {
+		t.Fatalf("status %v", st)
 	}
 }
 

@@ -17,6 +17,11 @@ const headerLen = 42;
 
 const payloadKinds = ['text', 'binary'];
 
+/// 分帧（握手里的 framing）：2 是 Orca 的，JSON 加密后再 base64 走文本帧；
+/// 3 是 Posse 的，所有帧都是加密后的原始字节、走二进制帧，JSON 和二进制靠 nonce 里的 kind（第 14 字节）区分。
+const framingText = 2;
+const framingBinary = 3;
+
 class E2eeException implements Exception {
   E2eeException(this.message);
   final String message;
@@ -53,11 +58,13 @@ class Hello {
     required this.clientPublicKey,
     required this.clientNonce,
     required this.context,
+    this.framing = framingBinary,
   });
 
   final Uint8List clientPublicKey;
   final Uint8List clientNonce;
   final HelloContext context;
+  final int framing;
 
   Map<String, Object?> toJson() => {
     'type': 'e2ee_hello',
@@ -65,7 +72,7 @@ class Hello {
     'clientPublicKeyB64': b64(clientPublicKey),
     'clientNonceB64': b64(clientNonce),
     'capabilities': {
-      'framing': [2],
+      'framing': [framing],
       'payloadKinds': payloadKinds,
     },
     'context': context.toJson(),
@@ -78,12 +85,14 @@ class Ready {
     required this.clientNonce,
     required this.desktopNonce,
     required this.context,
+    this.framing = framingBinary,
   });
 
   final Uint8List desktopPublicKey;
   final Uint8List clientNonce;
   final Uint8List desktopNonce;
   final HelloContext context;
+  final int framing;
 
   Map<String, Object?> toJson() => {
     'type': 'e2ee_ready',
@@ -91,7 +100,7 @@ class Ready {
     'desktopPublicKeyB64': b64(desktopPublicKey),
     'clientNonceB64': b64(clientNonce),
     'desktopNonceB64': b64(desktopNonce),
-    'selection': {'framing': 2, 'payloadKinds': payloadKinds},
+    'selection': {'framing': framing, 'payloadKinds': payloadKinds},
     'context': context.toJson(),
   };
 }
@@ -115,13 +124,19 @@ class E2eeSession {
   int recvN = 0;
   int sendN = 0;
 
+  /// 握手选定的分帧，见 [framingBinary]。
+  int framing = framingText;
+
+  /// JSON 消息是不是也走二进制帧（不 base64）。
+  bool get binaryMessages => framing == framingBinary;
+
   /// 手机侧收发密钥对调：主机的 send 是手机的 recv。
   E2eeSession asPhone() => E2eeSession(
     recvKey: sendKey,
     sendKey: recvKey,
     id: id,
     transcriptHash: transcriptHash,
-  );
+  )..framing = framing;
 
   Uint8List seal(
     Uint8List payload, {
@@ -156,9 +171,30 @@ class E2eeSession {
         ),
       );
 
-  Uint8List openText(Uint8List b64Bytes, {required int direction}) {
-    final raw = base64.decode(utf8.decode(b64Bytes));
-    return open(Uint8List.fromList(raw), direction: direction, kind: kindText);
+  Uint8List openText(Uint8List b64Bytes, {required int direction}) => open(
+    base64.decode(latin1.decode(b64Bytes)),
+    direction: direction,
+    kind: kindText,
+  );
+
+  /// 解开收到的一帧，返回它的 kind（[kindText] 是 JSON）和明文。
+  (int, Uint8List) openMessage(
+    Uint8List bytes, {
+    required bool binary,
+    required int direction,
+  }) {
+    if (binaryMessages) {
+      if (!binary || bytes.length < 24) throw E2eeException('bad frame');
+      final kind = bytes[14];
+      if (kind != kindText && kind != kindBinary) {
+        throw E2eeException('bad frame');
+      }
+      return (kind, open(bytes, direction: direction, kind: kind));
+    }
+    if (binary) {
+      return (kindBinary, open(bytes, direction: direction, kind: kindBinary));
+    }
+    return (kindText, openText(bytes, direction: direction));
   }
 }
 
@@ -206,7 +242,10 @@ Uint8List encodeTranscript(Hello hello, Ready ready) {
     field('mobile-to-desktop.version', u32(2)),
     field('mobile-to-desktop.client-public-key', hello.clientPublicKey),
     field('mobile-to-desktop.client-nonce', hello.clientNonce),
-    field('mobile-to-desktop.capabilities.framing', encodeNumbers(const [2])),
+    field(
+      'mobile-to-desktop.capabilities.framing',
+      encodeNumbers([hello.framing]),
+    ),
     field(
       'mobile-to-desktop.capabilities.payload-kinds',
       encodeStrings(payloadKinds),
@@ -217,7 +256,7 @@ Uint8List encodeTranscript(Hello hello, Ready ready) {
     field('desktop-to-mobile.desktop-public-key', ready.desktopPublicKey),
     field('desktop-to-mobile.client-nonce-echo', hello.clientNonce),
     field('desktop-to-mobile.desktop-nonce', ready.desktopNonce),
-    field('desktop-to-mobile.selection.framing', u32(2)),
+    field('desktop-to-mobile.selection.framing', u32(ready.framing)),
     field(
       'desktop-to-mobile.selection.payload-kinds',
       encodeStrings(payloadKinds),
@@ -291,7 +330,7 @@ Ready? parseReady(String raw, Hello hello) {
     return null;
   }
   final kinds = selection['payloadKinds'];
-  if (selection['framing'] != 2 ||
+  if (selection['framing'] != hello.framing ||
       kinds is! List ||
       !_sameStrings(kinds, payloadKinds)) {
     return null;
@@ -321,6 +360,7 @@ Ready? parseReady(String raw, Hello hello) {
     clientNonce: hello.clientNonce,
     desktopNonce: desktopNonce,
     context: hello.context,
+    framing: hello.framing,
   );
 }
 

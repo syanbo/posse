@@ -26,6 +26,9 @@ const posseCapabilities = [
 /// 大块数据的二进制帧（电脑的 internal/mobile/bulk.go）：u8 0x62、u8 版本 1、u8 操作、u8 0、
 /// u32 编号（小端）、内容。电脑先把回复里的大字段按块发来，回复里写 `blobs: {字段路径: 编号}`；
 /// 上传的分段由手机按同样的格式发给电脑。
+/// 收到的 JSON 直接从 UTF-8 字节解析，不先转成字符串。
+final _jsonUtf8 = utf8.decoder.fuse(json.decoder);
+
 const bulkMagic = 0x62;
 const bulkHeader = 8;
 const opBlobChunk = 1;
@@ -192,7 +195,7 @@ class PhoneRpc {
       if (_closed) throw StateError('closed');
       final frame = session.seal(plain, direction: direction, kind: kind);
       sentBytes += frame.length;
-      if (kind == kindText) {
+      if (kind == kindText && !session.binaryMessages) {
         await socket.sendText(base64.encode(frame));
       } else {
         await socket.sendBinary(frame);
@@ -267,7 +270,7 @@ class PhoneRpc {
       'params': params,
     });
     return sendPlain(
-      Uint8List.fromList(utf8.encode(body)),
+      utf8.encode(body),
       direction: dirMobileToDesktop,
       kind: kindText,
     );
@@ -285,15 +288,13 @@ class PhoneRpc {
       if (_closed) return;
       receivedBytes += event.bytes.length;
       try {
-        final plain = event.binary
-            ? session.open(
-                event.bytes,
-                direction: dirDesktopToMobile,
-                kind: kindBinary,
-              )
-            : session.openText(event.bytes, direction: dirDesktopToMobile);
+        final (kind, plain) = session.openMessage(
+          event.bytes,
+          binary: event.binary,
+          direction: dirDesktopToMobile,
+        );
         _bad = 0;
-        if (event.binary) {
+        if (kind == kindBinary) {
           if (plain.length >= bulkHeader &&
               plain[0] == bulkMagic &&
               plain[1] == 1) {
@@ -309,7 +310,7 @@ class PhoneRpc {
           if (!_binary.isClosed) _binary.add(plain);
           continue;
         }
-        final decoded = jsonDecode(utf8.decode(plain));
+        final decoded = _jsonUtf8.convert(plain);
         if (decoded is Map) _dispatch(decoded.cast<String, Object?>());
       } catch (_) {
         if (++_bad >= 5) {

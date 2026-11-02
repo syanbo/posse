@@ -13,16 +13,19 @@ void main() {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
     );
+    // Go 那边的固定向量是 Orca 的分帧 2
     final hello = Hello(
       clientPublicKey: repeated(1, 32),
       clientNonce: repeated(2, 32),
       context: context,
+      framing: framingText,
     );
     final ready = Ready(
       desktopPublicKey: repeated(3, 32),
       clientNonce: repeated(2, 32),
       desktopNonce: repeated(4, 32),
       context: context,
+      framing: framingText,
     );
     final transcript = encodeTranscript(hello, ready);
     expect(transcript.length, 1347);
@@ -189,5 +192,80 @@ void main() {
       context: relay.context,
     );
     expect(parseReady(jsonEncode(relayReady.toJson()), relay), isNull);
+  });
+
+  test('ready must select the framing the hello offered', () {
+    final hello = Hello(
+      clientPublicKey: repeated(1, 32),
+      clientNonce: repeated(2, 32),
+      context: const HelloContext(
+        protocol: protocolName,
+        initiator: 'mobile',
+        responder: 'desktop',
+        transport: 'direct',
+      ),
+    );
+    expect(hello.toJson()['capabilities'], containsPair('framing', [3]));
+    Ready ready(int framing) => Ready(
+      desktopPublicKey: repeated(3, 32),
+      clientNonce: hello.clientNonce,
+      desktopNonce: repeated(4, 32),
+      context: hello.context,
+      framing: framing,
+    );
+    expect(
+      parseReady(jsonEncode(ready(framingBinary).toJson()), hello)?.framing,
+      framingBinary,
+    );
+    expect(parseReady(jsonEncode(ready(framingText).toJson()), hello), isNull);
+  });
+
+  test('binary framing tells messages from binary frames by the nonce', () {
+    E2eeSession make() => E2eeSession(
+      recvKey: repeated(1, 32),
+      sendKey: repeated(2, 32),
+      id: repeated(9, 32),
+      transcriptHash: Uint8List(32),
+    )..framing = framingBinary;
+    final host = make();
+    final phone = host.asPhone();
+    expect(phone.binaryMessages, isTrue);
+    for (final kind in [kindText, kindBinary, kindBinary, kindText]) {
+      final frame = host.seal(
+        Uint8List.fromList(utf8.encode('k$kind')),
+        direction: dirDesktopToMobile,
+        kind: kind,
+      );
+      final (got, plain) = phone.openMessage(
+        frame,
+        binary: true,
+        direction: dirDesktopToMobile,
+      );
+      expect(got, kind);
+      expect(utf8.decode(plain), 'k$kind');
+    }
+    // 改了 nonce 里的 kind：nonce 对不上，解不开
+    final frame = host.seal(
+      Uint8List.fromList([1]),
+      direction: dirDesktopToMobile,
+      kind: kindText,
+    );
+    frame[14] = kindBinary;
+    expect(
+      () =>
+          phone.openMessage(frame, binary: true, direction: dirDesktopToMobile),
+      throwsA(isA<E2eeException>()),
+    );
+    // 分帧 3 下不收文本帧
+    final next = host.seal(
+      Uint8List.fromList([2]),
+      direction: dirDesktopToMobile,
+      kind: kindText,
+    );
+    expect(
+      () =>
+          phone.openMessage(next, binary: false, direction: dirDesktopToMobile),
+      throwsA(isA<E2eeException>()),
+    );
   });
 }

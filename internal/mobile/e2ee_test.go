@@ -121,6 +121,26 @@ func TestHelloRejectsRelayAndExtraKeys(t *testing.T) {
 	}
 }
 
+// 分帧只认 2（Orca）和 3（Posse），一次只能报一种
+func TestHelloFraming(t *testing.T) {
+	base := `{"type":"e2ee_hello","v":2,"clientPublicKeyB64":"` + b64(rep32(1)) + `","clientNonceB64":"` + b64(rep32(2)) +
+		`","capabilities":{"framing":%s,"payloadKinds":["text","binary"]},"context":{"protocol":"orca-mobile-e2ee","initiator":"mobile","responder":"desktop","transport":"direct"}}`
+	for f, want := range map[string]bool{"[2]": true, "[3]": true, "[1]": false, "[4]": false, "[2,3]": false, "[]": false} {
+		h, ok := parseHello([]byte(sprintf(base, f)))
+		if ok != want {
+			t.Errorf("framing %s: accepted=%v", f, ok)
+			continue
+		}
+		if ok {
+			pub, priv, _ := box.GenerateKey(rand.Reader)
+			r, s := accept(h, pub, priv)
+			if r.Selection.Framing != h.Capabilities.Framing[0] || s.framing != r.Selection.Framing {
+				t.Errorf("framing %s: selected %d, session %d", f, r.Selection.Framing, s.framing)
+			}
+		}
+	}
+}
+
 func sealWith(nonce [24]byte, plain []byte, key *[32]byte) []byte {
 	return secretbox.Seal(nonce[:], plain, &nonce, key)
 }

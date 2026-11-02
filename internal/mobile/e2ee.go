@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/coder/websocket"
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
 )
@@ -65,7 +66,16 @@ type session struct {
 	id               [32]byte
 	recvN, sendN     uint64
 	transcriptHash   [32]byte
+	framing          int // 握手选定的分帧，见 framingText、framingBinary
 }
+
+// 分帧：Orca App 只会 2，JSON 加密后再整帧 base64 放进文本帧。
+// 3 是 Posse 手机客户端的：所有帧都是加密后的原始字节、走二进制帧，
+// JSON 和二进制靠 nonce 里的 kind（第 14 字节）区分，不用另加标记；解密时 nonce 照样逐字节核对。
+const (
+	framingText   = 2
+	framingBinary = 3
+)
 
 const (
 	dirMobileToDesktop = 0
@@ -114,7 +124,8 @@ func parseHello(raw []byte) (hello, bool) {
 	c := h.Context
 	if h.Type != "e2ee_hello" || h.V != 2 ||
 		!exactKeys(obj.Capabilities, "framing", "payloadKinds") ||
-		len(h.Capabilities.Framing) != 1 || h.Capabilities.Framing[0] != 2 ||
+		len(h.Capabilities.Framing) != 1 ||
+		(h.Capabilities.Framing[0] != framingText && h.Capabilities.Framing[0] != framingBinary) ||
 		!equalStrings(h.Capabilities.PayloadKinds, payloadKinds) ||
 		!exactKeys(obj.Context, "protocol", "initiator", "responder", "transport") ||
 		c.Protocol != "orca-mobile-e2ee" || c.Initiator != "mobile" || c.Responder != "desktop" || c.Transport != "direct" {
@@ -150,14 +161,16 @@ func accept(h hello, pub, priv *[32]byte) (ready, *session) {
 		DesktopPublicKeyB64: base64.StdEncoding.EncodeToString(pub[:]),
 		ClientNonceB64:      h.ClientNonceB64,
 		DesktopNonceB64:     base64.StdEncoding.EncodeToString(nonce[:]),
-		Selection:           readySelection{Framing: 2, PayloadKinds: payloadKinds},
+		Selection:           readySelection{Framing: h.Capabilities.Framing[0], PayloadKinds: payloadKinds},
 		Context:             h.Context,
 	}
 	clientPub, _ := decode32(h.ClientPublicKeyB64)
 	var shared [32]byte
 	box.Precompute(&shared, &clientPub, priv)
 	cn, _ := decode32(h.ClientNonceB64)
-	return r, newSession(shared, transcript(h, r), cn, nonce)
+	s := newSession(shared, transcript(h, r), cn, nonce)
+	s.framing = r.Selection.Framing
+	return r, s
 }
 
 func newSession(shared [32]byte, t []byte, cn, dn [32]byte) *session {
@@ -282,6 +295,35 @@ func (s *session) open(frame []byte, kind byte) ([]byte, error) {
 	}
 	s.recvN++
 	return plain[headerLen:], nil
+}
+
+// sealMessage 加密一条 JSON 消息，返回该用的帧类型和帧内容。
+func (s *session) sealMessage(p []byte) (websocket.MessageType, []byte) {
+	if s.framing == framingBinary {
+		return websocket.MessageBinary, s.seal(p, kindText)
+	}
+	return websocket.MessageText, s.sealText(p)
+}
+
+// openMessage 解开手机发来的一帧，返回它的 kind（kindText 是 JSON）。
+func (s *session) openMessage(typ websocket.MessageType, raw []byte) (byte, []byte, error) {
+	if s.framing == framingBinary {
+		if typ != websocket.MessageBinary || len(raw) < 24 {
+			return 0, nil, errFrame
+		}
+		kind := raw[14]
+		if kind != kindText && kind != kindBinary {
+			return 0, nil, errFrame
+		}
+		p, err := s.open(raw, kind)
+		return kind, p, err
+	}
+	if typ == websocket.MessageText {
+		p, err := s.openText(raw)
+		return kindText, p, err
+	}
+	p, err := s.open(raw, kindBinary)
+	return kindBinary, p, err
 }
 
 // sealText 加密 JSON 文本，结果是放进 WebSocket 文本帧的 base64。

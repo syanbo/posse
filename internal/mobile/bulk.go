@@ -5,7 +5,7 @@ import (
 	"sort"
 )
 
-// 大块数据走二进制帧（Posse 扩展 posse.bulk.v1）。文本帧是 JSON 加密后再整帧 base64，
+// 大块数据走二进制帧（Posse 扩展 posse.bulk.v1）。分帧 2（Orca）的文本帧是 JSON 加密后再整帧 base64，
 // 回复里的文件内容本身又是 base64，体积约为原始数据的 1.78 倍；整条消息还一直占着发送锁，
 // 按键回显和 ping 的回复只能排在后面。
 //

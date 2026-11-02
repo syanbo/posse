@@ -45,7 +45,9 @@ func TestStalledWriteDropsOnlyASilentPhone(t *testing.T) {
 	}()
 	done := make(chan error, 1)
 	start := time.Now()
-	go func() { done <- c.write(websocket.MessageText, seal) }()
+	go func() {
+		done <- c.write(func() (websocket.MessageType, []byte) { return websocket.MessageText, seal() })
+	}()
 	select {
 	case err := <-done:
 		t.Fatalf("dropped a phone that is still talking: %v", err)
@@ -65,7 +67,7 @@ func TestStalledWriteDropsOnlyASilentPhone(t *testing.T) {
 	c = &conn{ctx: context.Background(), ws: stuckWire{}}
 	c.lastRead.Store(time.Now().Add(-time.Minute).UnixNano())
 	start = time.Now()
-	if err := c.write(websocket.MessageText, seal); err == nil || time.Since(start) > time.Second {
+	if err := c.write(func() (websocket.MessageType, []byte) { return websocket.MessageText, seal() }); err == nil || time.Since(start) > time.Second {
 		t.Fatalf("err %v after %v", err, time.Since(start))
 	}
 }

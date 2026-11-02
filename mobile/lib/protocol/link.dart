@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 
@@ -62,7 +61,7 @@ Future<PhoneRpc> handshake({
       transcript: transcript,
       clientNonce: clientNonce,
       desktopNonce: ready.desktopNonce,
-    ).asPhone();
+    ).asPhone()..framing = ready.framing;
     final rpc = PhoneRpc(
       socket: socket,
       session: session,
@@ -76,16 +75,17 @@ Future<PhoneRpc> handshake({
       'deviceToken': offer.deviceToken,
     });
     await rpc.sendPlain(
-      Uint8List.fromList(utf8.encode(auth)),
+      utf8.encode(auth),
       direction: dirMobileToDesktop,
       kind: kindText,
     );
     final authEvent = await reader.next(cancel);
-    if (authEvent.binary) throw E2eeException('auth reply was binary');
-    final plain = session.openText(
+    final (kind, plain) = session.openMessage(
       authEvent.bytes,
+      binary: authEvent.binary,
       direction: dirDesktopToMobile,
     );
+    if (kind != kindText) throw E2eeException('auth reply was not a message');
     final reply = jsonDecode(utf8.decode(plain));
     if (reply is! Map || reply['type'] != 'e2ee_authenticated') {
       throw E2eeException('authentication rejected');

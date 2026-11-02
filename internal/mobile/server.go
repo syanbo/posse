@@ -369,12 +369,9 @@ func (c *conn) handshake() error {
 		TranscriptHashB64 string `json:"transcriptHashB64"`
 		DeviceToken       string `json:"deviceToken"`
 	}
-	var plain []byte
-	if typ == websocket.MessageText {
-		plain, err = sess.openText(raw)
-	}
+	kind, plain, err := sess.openMessage(typ, raw)
 	th := b64(sess.transcriptHash)
-	if typ != websocket.MessageText || err != nil || json.Unmarshal(plain, &auth) != nil ||
+	if kind != kindText || err != nil || json.Unmarshal(plain, &auth) != nil ||
 		auth.Type != "e2ee_auth" || auth.V != 2 || auth.TranscriptHashB64 != th {
 		c.ws.Close(4001, "Unauthorized")
 		return errors.New("bad auth")
@@ -395,21 +392,23 @@ func (c *conn) sendJSON(v any) error {
 	if err != nil {
 		return err
 	}
-	return c.write(websocket.MessageText, func() []byte { return c.sess.sealText(b) })
+	return c.write(func() (websocket.MessageType, []byte) { return c.sess.sealMessage(b) })
 }
 
 func (c *conn) sendBinary(p []byte) error {
-	return c.write(websocket.MessageBinary, func() []byte { return c.sess.seal(p, kindBinary) })
+	return c.write(func() (websocket.MessageType, []byte) {
+		return websocket.MessageBinary, c.sess.seal(p, kindBinary)
+	})
 }
 
 // write 在发送锁里加密（计数器和发送顺序必须一致）并写出。等锁或写得久的记下来：
 // 分得清是排在别的大消息后面，还是线路本身慢。
-func (c *conn) write(typ websocket.MessageType, seal func() []byte) error {
+func (c *conn) write(seal func() (websocket.MessageType, []byte)) error {
 	asked := time.Now()
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	got := time.Now()
-	frame := seal()
+	typ, frame := seal()
 	ctx, cancel := context.WithTimeout(c.ctx, writeTimeout(len(frame)))
 	defer cancel()
 	// 先建好再启动：回调里要用 watch
@@ -513,18 +512,17 @@ func (c *conn) serve() {
 			return
 		}
 		c.lastRead.Store(time.Now().UnixNano())
-		if typ != websocket.MessageText {
+		kind, plain, err := c.sess.openMessage(typ, raw)
+		if kind == kindBinary {
 			// 手机的二进制帧只有上传的分段（bulk.go），别的解开只为让计数器前进
-			p, err := c.sess.open(raw, kindBinary)
 			if err != nil {
 				return
 			}
-			if op, blob, payload, ok := parseBulk(p); ok && op == opUploadChunk {
+			if op, blob, payload, ok := parseBulk(plain); ok && op == opUploadChunk {
 				c.uploadChunk(blob, payload)
 			}
 			continue
 		}
-		plain, err := c.sess.openText(raw)
 		if err != nil {
 			// 计数器对不上之后的帧都解不开，连续失败就断开让手机重连
 			if bad++; bad >= 5 {

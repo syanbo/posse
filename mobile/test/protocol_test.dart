@@ -1093,10 +1093,16 @@ Future<void> _serve(
     transcript: encodeTranscript(hello, ready),
     clientNonce: clientNonce,
     desktopNonce: desktopNonce,
-  );
+  )..framing = ready.framing;
   final authEvent = await reader.next(CancelToken());
   final authPlain = utf8.decode(
-    session.openText(authEvent.bytes, direction: dirMobileToDesktop),
+    session
+        .openMessage(
+          authEvent.bytes,
+          binary: authEvent.binary,
+          direction: dirMobileToDesktop,
+        )
+        .$2,
   );
   final auth = jsonDecode(authPlain);
   if (auth is! Map || auth['deviceToken'] != token) return;
@@ -1105,13 +1111,11 @@ Future<void> _serve(
     'v': 2,
     'transcriptHashB64': b64(session.transcriptHash),
   });
-  await socket.sendText(
-    base64.encode(
-      session.seal(
-        Uint8List.fromList(utf8.encode(ok)),
-        direction: dirDesktopToMobile,
-        kind: kindText,
-      ),
+  await socket.sendBinary(
+    session.seal(
+      Uint8List.fromList(utf8.encode(ok)),
+      direction: dirDesktopToMobile,
+      kind: kindText,
     ),
   );
   while (true) {
@@ -1120,7 +1124,13 @@ Future<void> _serve(
     try {
       final decoded = jsonDecode(
         utf8.decode(
-          session.openText(event.bytes, direction: dirMobileToDesktop),
+          session
+              .openMessage(
+                event.bytes,
+                binary: event.binary,
+                direction: dirMobileToDesktop,
+              )
+              .$2,
         ),
       );
       if (decoded is! Map) continue;
@@ -1157,13 +1167,11 @@ Future<void> _serve(
       'result': result,
       if (!ok) 'error': error,
     });
-    await socket.sendText(
-      base64.encode(
-        session.seal(
-          Uint8List.fromList(utf8.encode(reply)),
-          direction: dirDesktopToMobile,
-          kind: kindText,
-        ),
+    await socket.sendBinary(
+      session.seal(
+        Uint8List.fromList(utf8.encode(reply)),
+        direction: dirDesktopToMobile,
+        kind: kindText,
       ),
     );
     if (method == 'status.get' && !stay) return;
