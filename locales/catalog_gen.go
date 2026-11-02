@@ -34,6 +34,202 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
+// in the language the app shows.
+//
+// Prevent Sleep control: ActiveTip.
+func AwakeActiveTip() string { return In(i18n.Locale()).AwakeActiveTip() }
+
+// AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
+// in the language of msgs.
+//
+// Prevent Sleep control: ActiveTip.
+func (msgs Messages) AwakeActiveTip() string {
+	return Catalog.Format(msgs.locale, "awakeActiveTip", nil)
+}
+
+// AwakeDisplay says "Keep Display On"
+// in the language the app shows.
+//
+// Prevent Sleep control: Display.
+func AwakeDisplay() string { return In(i18n.Locale()).AwakeDisplay() }
+
+// AwakeDisplay says "Keep Display On"
+// in the language of msgs.
+//
+// Prevent Sleep control: Display.
+func (msgs Messages) AwakeDisplay() string {
+	return Catalog.Format(msgs.locale, "awakeDisplay", nil)
+}
+
+// AwakeDisplayActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake and the display on."
+// in the language the app shows.
+//
+// Prevent Sleep control: DisplayActiveTip.
+func AwakeDisplayActiveTip() string { return In(i18n.Locale()).AwakeDisplayActiveTip() }
+
+// AwakeDisplayActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake and the display on."
+// in the language of msgs.
+//
+// Prevent Sleep control: DisplayActiveTip.
+func (msgs Messages) AwakeDisplayActiveTip() string {
+	return Catalog.Format(msgs.locale, "awakeDisplayActiveTip", nil)
+}
+
+// AwakeDisplayItem says "Keep Display On While Posse Is Running"
+// in the language the app shows.
+//
+// Prevent Sleep control: DisplayItem.
+func AwakeDisplayItem() string { return In(i18n.Locale()).AwakeDisplayItem() }
+
+// AwakeDisplayItem says "Keep Display On While Posse Is Running"
+// in the language of msgs.
+//
+// Prevent Sleep control: DisplayItem.
+func (msgs Messages) AwakeDisplayItem() string {
+	return Catalog.Format(msgs.locale, "awakeDisplayItem", nil)
+}
+
+// AwakeDisplayShort says "Display On"
+// in the language the app shows.
+//
+// Prevent Sleep control: DisplayShort.
+func AwakeDisplayShort() string { return In(i18n.Locale()).AwakeDisplayShort() }
+
+// AwakeDisplayShort says "Display On"
+// in the language of msgs.
+//
+// Prevent Sleep control: DisplayShort.
+func (msgs Messages) AwakeDisplayShort() string {
+	return Catalog.Format(msgs.locale, "awakeDisplayShort", nil)
+}
+
+// AwakeDisplayTip says "Prevent Sleep: keeps your computer awake and the display on while Posse is running."
+// in the language the app shows.
+//
+// Prevent Sleep control: DisplayTip.
+func AwakeDisplayTip() string { return In(i18n.Locale()).AwakeDisplayTip() }
+
+// AwakeDisplayTip says "Prevent Sleep: keeps your computer awake and the display on while Posse is running."
+// in the language of msgs.
+//
+// Prevent Sleep control: DisplayTip.
+func (msgs Messages) AwakeDisplayTip() string {
+	return Catalog.Format(msgs.locale, "awakeDisplayTip", nil)
+}
+
+// AwakeOff says "Off"
+// in the language the app shows.
+//
+// Prevent Sleep control: Off.
+func AwakeOff() string { return In(i18n.Locale()).AwakeOff() }
+
+// AwakeOff says "Off"
+// in the language of msgs.
+//
+// Prevent Sleep control: Off.
+func (msgs Messages) AwakeOff() string {
+	return Catalog.Format(msgs.locale, "awakeOff", nil)
+}
+
+// AwakeOffTip says "Prevent Sleep is off. Your computer sleeps according to system settings."
+// in the language the app shows.
+//
+// Prevent Sleep control: OffTip.
+func AwakeOffTip() string { return In(i18n.Locale()).AwakeOffTip() }
+
+// AwakeOffTip says "Prevent Sleep is off. Your computer sleeps according to system settings."
+// in the language of msgs.
+//
+// Prevent Sleep control: OffTip.
+func (msgs Messages) AwakeOffTip() string {
+	return Catalog.Format(msgs.locale, "awakeOffTip", nil)
+}
+
+// AwakeRestartTip says "Prevent Sleep: available after restarting the daemon"
+// in the language the app shows.
+//
+// Prevent Sleep control: RestartTip.
+func AwakeRestartTip() string { return In(i18n.Locale()).AwakeRestartTip() }
+
+// AwakeRestartTip says "Prevent Sleep: available after restarting the daemon"
+// in the language of msgs.
+//
+// Prevent Sleep control: RestartTip.
+func (msgs Messages) AwakeRestartTip() string {
+	return Catalog.Format(msgs.locale, "awakeRestartTip", nil)
+}
+
+// AwakeRunning says "While Posse Is Running"
+// in the language the app shows.
+//
+// Prevent Sleep control: Running.
+func AwakeRunning() string { return In(i18n.Locale()).AwakeRunning() }
+
+// AwakeRunning says "While Posse Is Running"
+// in the language of msgs.
+//
+// Prevent Sleep control: Running.
+func (msgs Messages) AwakeRunning() string {
+	return Catalog.Format(msgs.locale, "awakeRunning", nil)
+}
+
+// AwakeRunningShort says "Running"
+// in the language the app shows.
+//
+// Prevent Sleep control: RunningShort.
+func AwakeRunningShort() string { return In(i18n.Locale()).AwakeRunningShort() }
+
+// AwakeRunningShort says "Running"
+// in the language of msgs.
+//
+// Prevent Sleep control: RunningShort.
+func (msgs Messages) AwakeRunningShort() string {
+	return Catalog.Format(msgs.locale, "awakeRunningShort", nil)
+}
+
+// AwakeRunningTip says "Prevent Sleep: keeps your computer awake while Posse is running."
+// in the language the app shows.
+//
+// Prevent Sleep control: RunningTip.
+func AwakeRunningTip() string { return In(i18n.Locale()).AwakeRunningTip() }
+
+// AwakeRunningTip says "Prevent Sleep: keeps your computer awake while Posse is running."
+// in the language of msgs.
+//
+// Prevent Sleep control: RunningTip.
+func (msgs Messages) AwakeRunningTip() string {
+	return Catalog.Format(msgs.locale, "awakeRunningTip", nil)
+}
+
+// AwakeStatus says "Prevent Sleep: {status}"
+// in the language the app shows.
+//
+// Accessible label for the Prevent Sleep status button.
+func AwakeStatus(status string) string { return In(i18n.Locale()).AwakeStatus(status) }
+
+// AwakeStatus says "Prevent Sleep: {status}"
+// in the language of msgs.
+//
+// Accessible label for the Prevent Sleep status button.
+func (msgs Messages) AwakeStatus(status string) string {
+	return Catalog.Format(msgs.locale, "awakeStatus", map[string]any{"status": status})
+}
+
+// AwakeUnavailable says "Unavailable"
+// in the language the app shows.
+//
+// Prevent Sleep control: Unavailable.
+func AwakeUnavailable() string { return In(i18n.Locale()).AwakeUnavailable() }
+
+// AwakeUnavailable says "Unavailable"
+// in the language of msgs.
+//
+// Prevent Sleep control: Unavailable.
+func (msgs Messages) AwakeUnavailable() string {
+	return Catalog.Format(msgs.locale, "awakeUnavailable", nil)
+}
+
 // CommonAll says "All"
 // in the language the app shows.
 //

@@ -124,7 +124,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 		sel := 0
 		var labels []string
 		for i, m := range awakeModes {
-			labels = append(labels, m.seg)
+			labels = append(labels, m.seg(L(c)))
 			if m.mode == st.Mode {
 				sel = i
 			}
@@ -132,7 +132,7 @@ func (a *app) awakeSettings(c *ui.Context) {
 		if segmented(c, &sel, m.SettingsAwakeTitle(), labels...) {
 			a.setAwake(awakeModes[sel].mode)
 		}
-		ui.Text(c, awakeTip(st)).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
+		ui.Text(c, awakeTip(m, st)).FontSize(fsSmall).TextColor(c.Theme().TextMuted)
 	})
 }
 

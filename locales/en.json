@@ -1,5 +1,65 @@
 {
-  "@@locale": "en",
+  "awakeActiveTip": "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual.",
+  "@awakeActiveTip": {
+    "description": "Prevent Sleep control: ActiveTip."
+  },
+  "awakeDisplay": "Keep Display On",
+  "@awakeDisplay": {
+    "description": "Prevent Sleep control: Display."
+  },
+  "awakeDisplayActiveTip": "Prevent Sleep: Posse is running, keeping your computer awake and the display on.",
+  "@awakeDisplayActiveTip": {
+    "description": "Prevent Sleep control: DisplayActiveTip."
+  },
+  "awakeDisplayItem": "Keep Display On While Posse Is Running",
+  "@awakeDisplayItem": {
+    "description": "Prevent Sleep control: DisplayItem."
+  },
+  "awakeDisplayShort": "Display On",
+  "@awakeDisplayShort": {
+    "description": "Prevent Sleep control: DisplayShort."
+  },
+  "awakeDisplayTip": "Prevent Sleep: keeps your computer awake and the display on while Posse is running.",
+  "@awakeDisplayTip": {
+    "description": "Prevent Sleep control: DisplayTip."
+  },
+  "awakeOff": "Off",
+  "@awakeOff": {
+    "description": "Prevent Sleep control: Off."
+  },
+  "awakeOffTip": "Prevent Sleep is off. Your computer sleeps according to system settings.",
+  "@awakeOffTip": {
+    "description": "Prevent Sleep control: OffTip."
+  },
+  "awakeRestartTip": "Prevent Sleep: available after restarting the daemon",
+  "@awakeRestartTip": {
+    "description": "Prevent Sleep control: RestartTip."
+  },
+  "awakeRunning": "While Posse Is Running",
+  "@awakeRunning": {
+    "description": "Prevent Sleep control: Running."
+  },
+  "awakeRunningShort": "Running",
+  "@awakeRunningShort": {
+    "description": "Prevent Sleep control: RunningShort."
+  },
+  "awakeRunningTip": "Prevent Sleep: keeps your computer awake while Posse is running.",
+  "@awakeRunningTip": {
+    "description": "Prevent Sleep control: RunningTip."
+  },
+  "awakeStatus": "Prevent Sleep: {status}",
+  "@awakeStatus": {
+    "description": "Accessible label for the Prevent Sleep status button.",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "awakeUnavailable": "Unavailable",
+  "@awakeUnavailable": {
+    "description": "Prevent Sleep control: Unavailable."
+  },
   "commonAll": "All",
   "@commonAll": {
     "description": "Common word: a filter or segment that shows everything."
@@ -124,6 +184,7 @@
   "@commonSelectAll": {
     "description": "Common menu item."
   },
+  "@@locale": "en",
   "menuCheckForUpdates": "Check for Updates…",
   "@menuCheckForUpdates": {
     "description": "App menu item."

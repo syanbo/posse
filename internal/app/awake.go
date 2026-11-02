@@ -3,6 +3,8 @@ package app
 import (
 	"time"
 
+	"posse/locales"
+
 	"github.com/egoist/mygo/ui"
 )
 
@@ -15,44 +17,47 @@ type awakeStatus struct {
 }
 
 // short 是底栏按钮上的字，item 是菜单项，seg 是设置页分段按钮上的字（菜单项太长放不下）。
-var awakeModes = []struct{ mode, short, item, seg string }{
-	{"off", "关闭", "关闭", "关闭"},
-	{"auto", "运行", "Posse 运行时", "Posse 运行时"},
-	{"display", "亮屏", "Posse 运行时，屏幕也亮", "运行时亮屏"},
+var awakeModes = []struct {
+	mode             string
+	short, item, seg func(locales.Messages) string
+}{
+	{"off", locales.Messages.AwakeOff, locales.Messages.AwakeOff, locales.Messages.AwakeOff},
+	{"auto", locales.Messages.AwakeRunningShort, locales.Messages.AwakeRunning, locales.Messages.AwakeRunning},
+	{"display", locales.Messages.AwakeDisplayShort, locales.Messages.AwakeDisplayItem, locales.Messages.AwakeDisplay},
 }
 
 // awakeTip 是按钮的悬停说明。
-func awakeTip(st *awakeStatus) string {
+func awakeTip(m locales.Messages, st *awakeStatus) string {
 	switch {
 	case st == nil:
-		return "防休眠：重启常驻进程后可用"
+		return m.AwakeRestartTip()
 	case st.Mode == "off":
-		return "防休眠已关闭，电脑按系统设置休眠"
+		return m.AwakeOffTip()
 	case st.Mode == "display" && st.Active:
-		return "防休眠：Posse 运行中，电脑不休眠，屏幕也不熄"
+		return m.AwakeDisplayActiveTip()
 	case st.Mode == "display":
-		return "防休眠：Posse 运行时电脑不休眠、屏幕不熄"
+		return m.AwakeDisplayTip()
 	case st.Active:
-		return "防休眠：Posse 运行中，电脑不会休眠，屏幕照常熄灭"
+		return m.AwakeActiveTip()
 	}
-	return "防休眠：Posse 运行时电脑不休眠"
+	return m.AwakeRunningTip()
 }
 
 // awakeButton 在主区域状态栏最右边：咖啡杯图标加档位，托着不让睡时图标是强调色。点开选档位。
 func (a *app) awakeButton(c *ui.Context) {
 	t := c.Theme()
 	st := a.daemon.Awake
-	short := "不可用"
+	short := L(c).AwakeUnavailable()
 	if st != nil {
 		for _, m := range awakeModes {
 			if m.mode == st.Mode {
-				short = m.short
+				short = m.short(L(c))
 			}
 		}
 	}
-	tip := awakeTip(st)
+	tip := awakeTip(L(c), st)
 	b := ui.Row(c.Key("awake")).Height(sz(24)).Padding(0, chipPad).Gap(6).Radius(rRow).AlignItems(ui.Center).
-		Role(ui.RoleButton).Label("防休眠：" + short).Tooltip(tip)
+		Role(ui.RoleButton).Label(L(c).AwakeStatus(short)).Tooltip(tip)
 	bg := ui.Transparent
 	if b.Hovered() && st != nil {
 		bg = colors(t).wash
@@ -74,7 +79,7 @@ func (a *app) awakeButton(c *ui.Context) {
 	}
 	menuButton(c, b, func(m *popMenu) {
 		for _, o := range awakeModes {
-			if m.Item(o.item).Checked(o.mode == st.Mode).Chosen() {
+			if m.Item(o.item(L(c))).Checked(o.mode == st.Mode).Chosen() {
 				a.setAwake(o.mode)
 			}
 		}
