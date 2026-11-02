@@ -550,7 +550,7 @@ func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b g
 		if ws := a.workspaceAt(other); ws != nil {
 			a.selected, a.revealSel = ws.ID, true
 		} else {
-			a.attachWorktree(w, other)
+			a.attachWorktree(m, w, other)
 		}
 		return
 	}
@@ -577,7 +577,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		case inOther:
 			if m.Item(lm.BranchOpenPosse()).Chosen() {
 				done()
-				a.attachWorktree(w, other)
+				a.attachWorktree(L(c), w, other)
 			}
 			if m.Item(lm.BranchRevealWorktree()).Icon(iconFolder).Chosen() {
 				done()
@@ -750,13 +750,13 @@ func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from 
 // askWorktreeFrom 是 WebStorm 的 New Worktree：在 posse 里新建一个 worktree 工作区，分支从 base 分出去。
 func (a *app) askWorktreeFrom(m locales.Messages, w *workspace, base string) {
 	a.prompt(promptReq{title: m.BranchNewWorkspaceTitle(base), placeholder: m.BranchWorkspaceName(), verb: m.CommonNew(), do: func(name string, _ bool) {
-		go a.createWorkspace(map[string]any{"project": w.Project, "name": name, "mode": "worktree", "base": base})
+		go a.createWorkspace(m, map[string]any{"project": w.Project, "name": name, "mode": "worktree", "base": base})
 	}})
 }
 
 // attachWorktree 把不是 posse 建的 worktree 加成项目的工作区并切过去，名字取目录名。
 // 常驻进程把它记成 folder：删工作区只删记录，不碰别人建的目录和分支。
-func (a *app) attachWorktree(w *workspace, dir string) {
+func (a *app) attachWorktree(m locales.Messages, w *workspace, dir string) {
 	name := strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune(`/\:*?"<>|~^`, r) {
 			return '-'
@@ -774,7 +774,7 @@ func (a *app) attachWorktree(w *workspace, dir string) {
 	for i, base := 2, name; taken[name]; i++ {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
-	go a.createWorkspace(map[string]any{"project": w.Project, "name": name, "mode": "attach", "path": dir})
+	go a.createWorkspace(m, map[string]any{"project": w.Project, "name": name, "mode": "attach", "path": dir})
 }
 
 // workspaceAt 找目录正好是 dir 的工作区（比较时解析符号链接）。

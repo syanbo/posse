@@ -131,30 +131,31 @@ func (a *app) termFindBar(c *ui.Context, v *termView, cur *terminalInfo) {
 	// 终端视图先搭，这一帧推进过的搜索在这里已经算进去了；输入框改了词之后要再取
 	st := v.term.SearchStatus()
 	agent := cur.Agent != ""
+	m := L(c)
 	a.findBar(c, findBarSpec{
-		key: "term-find", label: "在终端里查找", right: right,
+		key: "term-find", label: m.TermFindLabel(), right: right,
 		query: &f.query, focus: &f.focus,
 		changed: func() { f.search(v); st = v.term.SearchStatus() },
 		submit:  v.term.SearchNext, submitBack: v.term.SearchPrevious,
 		up: v.term.SearchNext, down: v.term.SearchPrevious,
-		upTip:   a.withKey("往上（更早的输出）", "editor.findNext"),
-		downTip: a.withKey("往下（更新的输出）", "editor.findPrevious"),
+		upTip:   a.withKey(m.TermFindUpTip(), "editor.findNext"),
+		downTip: a.withKey(m.TermFindDownTip(), "editor.findPrevious"),
 		close:   func() { a.closeTermFind(v) },
 		status: func() string {
 			switch {
 			case f.query == "":
 				return ""
 			case st.Total == 0 && st.Searching:
-				return "搜索中"
+				return m.TermFindSearching()
 			case st.Total == 0:
-				return "无结果"
+				return m.TermFindNoResults()
 			case st.Selected == 0:
 				return fmt.Sprint(st.Total)
 			}
 			return fmt.Sprintf("%d/%d", st.Selected, st.Total)
 		},
 		extra: func() {
-			if agent && iconButtonSized(c, iconHistory, "在历史里搜", compactBox(), smallIcon()).Clicked() {
+			if agent && iconButtonSized(c, iconHistory, m.TermFindInHistory(), compactBox(), smallIcon()).Clicked() {
 				a.searchInHistory(f.query, cur.Agent)
 			}
 		},
@@ -164,9 +165,9 @@ func (a *app) termFindBar(c *ui.Context, v *termView, cur *terminalInfo) {
 				return
 			}
 			ui.Row(c).Padding(4, 8, 2, 8).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, "agent 的对话不一定留在终端里").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(1)
+				ui.Text(c, m.TermFindHistoryHint()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(1)
 				ui.Spacer(c)
-				if pressable(textButton(c, "在历史里搜")).Clicked() {
+				if pressable(textButton(c, m.TermFindInHistory())).Clicked() {
 					a.searchInHistory(f.query, cur.Agent)
 				}
 			})

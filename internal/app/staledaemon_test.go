@@ -51,7 +51,14 @@ func TestStaleDaemonStillUpgrades(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no handoff to the stale daemon")
 	}
-	if a.lastPoll == nil || !strings.Contains(a.lastPoll.err, "常驻进程的版本和窗口不一致") {
+	// 正在更新和读不到项目两句开头一样（"版本和窗口不一致"），按 App 的语言取
+	m := appL()
+	running, mismatch := []rune(m.UpgradeRunning()), []rune(m.UpgradeMismatch(""))
+	n := 0
+	for n < len(running) && n < len(mismatch) && running[n] == mismatch[n] {
+		n++
+	}
+	if a.lastPoll == nil || !strings.HasPrefix(a.lastPoll.err, string(running[:n])) {
 		t.Fatalf("poll error = %q", a.lastPoll.err)
 	}
 	if a.lastPoll.daemonInfo.Pid != 4242 {

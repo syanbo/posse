@@ -11,6 +11,8 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"posse/locales"
 )
 
 // 终端和编辑器各有字体、字号，存在 ui.json。编辑器指文件标签里的代码视图：编辑器、diff、逐行追溯、
@@ -190,9 +192,9 @@ func (a *app) loadFonts() ([]ui.FontFamily, map[string]string, bool) {
 }
 
 // fontLabel 是字体在列表和按钮上显示的名字：有本地化的名字就用它，空是默认。
-func fontLabel(family string, labels map[string]string) string {
+func fontLabel(m locales.Messages, family string, labels map[string]string) string {
 	if family == "" {
-		return "默认（JetBrains Mono）"
+		return m.FontsDefault()
 	}
 	if l := labels[family]; l != "" {
 		return l
@@ -216,11 +218,11 @@ type fontRow struct {
 // fontRows 照 Orca 列出系统的全部字体，不只是等宽的：等宽的在前面一组，其余在"其他字体"下。
 // 中文字体显示中文名，按显示的名字排序，原名和中文名都能搜。
 // 搜索时不列"默认"，第一个匹配的字体就是高亮的一行，回车直接选它。
-func fontRows(all []ui.FontFamily, labels map[string]string, query string) []fontRow {
+func fontRows(m locales.Messages, all []ui.FontFamily, labels map[string]string, query string) []fontRow {
 	q := strings.ToLower(strings.TrimSpace(query))
 	var mono, other []fontRow
 	for _, f := range all {
-		label := fontLabel(f.Name, labels)
+		label := fontLabel(m, f.Name, labels)
 		if q != "" && !strings.Contains(strings.ToLower(f.Name), q) && !strings.Contains(strings.ToLower(label), q) {
 			continue
 		}
@@ -236,13 +238,13 @@ func fontRows(all []ui.FontFamily, labels map[string]string, query string) []fon
 	slices.SortStableFunc(other, byLabel)
 	var rows []fontRow
 	if q == "" {
-		rows = append(rows, fontRow{label: fontLabel("", nil)})
+		rows = append(rows, fontRow{label: fontLabel(m, "", nil)})
 	}
 	if len(mono) > 0 {
-		rows = append(append(rows, fontRow{header: "等宽字体"}), mono...)
+		rows = append(append(rows, fontRow{header: m.FontsMono()}), mono...)
 	}
 	if len(other) > 0 {
-		rows = append(append(rows, fontRow{header: "其他字体"}), other...)
+		rows = append(append(rows, fontRow{header: m.FontsOther()}), other...)
 	}
 	return rows
 }
@@ -261,7 +263,7 @@ func nextFont(rows []fontRow, i, d int) int {
 func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick func(family string)) {
 	t := c.Theme()
 	_, labels, _ := a.loadFonts()
-	name := fontLabel(current, labels)
+	name := fontLabel(L(c), current, labels)
 	b := ui.ButtonBase(c).Height(sz(28)).Width(240).Padding(0, 8, 0, 12).Gap(6).Radius(rControl).Label(label).AlignItems(ui.Center)
 	bg := colors(t).fill
 	if b.Hovered() {
@@ -289,12 +291,12 @@ func (a *app) fontPicker(c *ui.Context, p *fontPick, current, label string, pick
 func fontRowHeight() float32 { return sz(28) }
 
 func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(family string)) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	all, labels, done := a.loadFonts()
 	// 先画搜索框：它在这一帧就改写 p.query，下面按新的搜索词列出来。最后一个字和回车常落在同一帧，
 	// 按旧词列的话回车会落在分组标题上
-	in := fieldInput(c, &p.query, "搜索字体").AutoFocus()
-	rows := fontRows(all, labels, p.query)
+	in := fieldInput(c, &p.query, m.FontsSearch()).AutoFocus()
+	rows := fontRows(m, all, labels, p.query)
 	if !done {
 		rows = rows[:min(len(rows), 1)]
 	}
@@ -339,9 +341,9 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 	}
 	switch {
 	case !done:
-		ui.Text(c, "正在读取字体…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
+		ui.Text(c, m.FontsLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 	case len(rows) == 0:
-		ui.Text(c, "没有名字里含“"+strings.TrimSpace(p.query)+"”的字体").FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
+		ui.Text(c, m.FontsNoMatch(strings.TrimSpace(p.query))).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
 	}
 	if len(rows) == 0 {
 		return
@@ -379,19 +381,20 @@ func (a *app) fontList(c *ui.Context, p *fontPick, current string, pick func(fam
 
 // fontSizeStepper 是字号的"− 13 + 默认"一组按钮。
 func fontSizeStepper(c *ui.Context, size, def float32, set func(float32)) {
-	stepper(c, "字号", fmt.Sprintf("%g", size), func(d int) { set(size + float32(d)) }, func() { set(def) })
+	stepper(c, L(c).SettingsFontSize(), fmt.Sprintf("%g", size), func(d int) { set(size + float32(d)) }, func() { set(def) })
 }
 
 // stepper 是"− 值 + 默认"一组按钮：step 收到 -1 或 1，reset 恢复默认；what 是读屏念的名字。
 func stepper(c *ui.Context, what, value string, step func(d int), reset func()) {
-	if pressable(textButton(c, "−")).Label("减小" + what).Clicked() {
+	m := L(c)
+	if pressable(textButton(c, "−")).Label(m.FontsDecrease(what)).Clicked() {
 		step(-1)
 	}
 	ui.Text(c, value).FontSize(fsBody).FontFeatures("tnum").Width(sz(32)).Center()
-	if pressable(textButton(c, "+")).Label("增大" + what).Clicked() {
+	if pressable(textButton(c, "+")).Label(m.FontsIncrease(what)).Clicked() {
 		step(1)
 	}
-	if pressable(textButton(c, "默认")).Label(what + "恢复默认").Clicked() {
+	if pressable(textButton(c, m.CommonDefault())).Label(m.FontsResetWhat(what)).Clicked() {
 		reset()
 	}
 }
@@ -401,24 +404,29 @@ func stepper(c *ui.Context, what, value string, step func(d int), reset func()) 
 func previewBlock(c *ui.Context, body func()) {
 	t := c.Theme()
 	ui.Column(c).Gap(8).Padding(16, 0, 0, 0).Margin(4, 0, 0, 0).Children(func() {
-		ui.Text(c, "预览").FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+		ui.Text(c, L(c).CommonPreview()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 		body()
 	})
 }
 
 // termPreviewLines 是终端预览的内容：每段是颜色在调色板里的序号（-1 是前景色）、是否粗体和文字。
 // 分支图标来自 Nerd Font，看得出选的字体缺不缺图标。
-var termPreviewLines = [][]struct {
+func termPreviewLines(m locales.Messages) [][]termPreviewSeg {
+	sample := m.FontsTermSample()
+	return [][]termPreviewSeg{
+		{{6, true, "~/posse"}, {-1, false, " on "}, {5, false, "\ue0a0 main"}, {1, false, " [!]"}},
+		{{2, false, "❯ "}, {-1, false, "ls"}},
+		{{4, true, "cmd  docs  internal  "}, {-1, false, "go.mod  README.md"}},
+		{{2, false, "❯ "}, {-1, false, `echo "` + sample + `"`}},
+		{{-1, false, sample}},
+		{{-1, false, "0O 1lI {}[] => != ≥ █"}},
+	}
+}
+
+type termPreviewSeg struct {
 	color int
 	bold  bool
 	text  string
-}{
-	{{6, true, "~/posse"}, {-1, false, " on "}, {5, false, "\ue0a0 main"}, {1, false, " [!]"}},
-	{{2, false, "❯ "}, {-1, false, "ls"}},
-	{{4, true, "cmd  docs  internal  "}, {-1, false, "go.mod  README.md"}},
-	{{2, false, "❯ "}, {-1, false, `echo "中文 English 123"`}},
-	{{-1, false, "中文 English 123"}},
-	{{-1, false, "0O 1lI {}[] => != ≥ █"}},
 }
 
 // termPreview 照终端的配色、用终端同样的字体（字重、粗体、行高、平滑）画一段提示符、ls 和中英混排。
@@ -437,9 +445,10 @@ func (a *app) termPreview(c *ui.Context) {
 	m := font.Metrics()
 	lineH := (m.Ascent + m.Descent + m.LineGap) * termLineHeightOf(a.state)
 	base := (lineH-(m.Ascent+m.Descent))/2 + m.Ascent
+	lines := termPreviewLines(L(c))
 	previewBlock(c, func() {
-		ui.Box(c).Height(lineH * float32(len(termPreviewLines))).Draw(func(p *ui.Painter, r ui.Rect) {
-			for i, line := range termPreviewLines {
+		ui.Box(c).Height(lineH * float32(len(lines))).Draw(func(p *ui.Painter, r ui.Rect) {
+			for i, line := range lines {
 				x := r.X
 				for _, seg := range line {
 					f, col := font, th.Foreground
@@ -462,19 +471,23 @@ func (a *app) termPreview(c *ui.Context) {
 	})
 }
 
-const editorPreviewText = `// greet 返回问候语：预览编辑器的字体和字号
+// editorPreviewText 是编辑器预览的示例代码，注释和返回的问候语按界面语言填。
+const editorPreviewText = `// %s
 func greet(name string) string {
 	if name == "" {
-		return "你好，世界"
+		return %q
 	}
-	return fmt.Sprintf("hi %s => %d", name, len(name))
+	return fmt.Sprintf("hi %%s => %%d", name, len(name))
 }`
 
 // editorPreview 是一个只读的真编辑器，高亮、行号、行高都和文件标签里一样。
 func (a *app) editorPreview(c *ui.Context) {
-	if a.editorDemo == nil {
-		a.editorDemo = &editor.State{Buffer: editor.NewBuffer(editorPreviewText), ReadOnly: true, FitContent: true,
-			NoActiveLine: true, NoFolding: true, NoScrollPastEnd: true, Label: "编辑器预览"}
+	m := L(c)
+	// 换了界面语言，示例代码跟着换
+	text := fmt.Sprintf(editorPreviewText, m.FontsEditorSampleComment(), m.FontsEditorSampleGreeting())
+	if a.editorDemo == nil || a.editorDemo.Buffer.String() != text {
+		a.editorDemo = &editor.State{Buffer: editor.NewBuffer(text), ReadOnly: true, FitContent: true,
+			NoActiveLine: true, NoFolding: true, NoScrollPastEnd: true, Label: m.FontsEditorPreview()}
 		a.editorDemo.Buffer.SetLanguage(editor.LanguageFor("preview.go"))
 	}
 	a.editorDemo.Font, a.editorDemo.LineHeight, a.editorDemo.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()

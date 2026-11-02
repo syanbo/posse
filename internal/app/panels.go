@@ -45,7 +45,7 @@ func (a *app) rightPanel(c *ui.Context, title string, body func()) ui.Element {
 	return floating(c, ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Width(panelWidth)).Children(func() {
 		ui.Row(c).Padding(16, 12, 12, 16).Gap(8).AlignItems(ui.Center).Children(func() {
 			cardTitle(c, title).Grow(1)
-			if iconButtonSized(c, iconClose, "关闭", compactBox(), smallIcon()).Clicked() {
+			if iconButtonSized(c, iconClose, L(c).CommonClose(), compactBox(), smallIcon()).Clicked() {
 				a.state.RightPanel = ""
 				a.saveState()
 			}

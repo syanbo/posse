@@ -84,7 +84,7 @@ func (a *app) statusIcon(c *ui.Context, id, status string, size float32) {
 		return
 	}
 	color := c.Theme().Accent
-	ui.Box(c).Size(size, size).Shrink(0).Tooltip(statusText(status)).Draw(func(p *ui.Painter, r ui.Rect) {
+	ui.Box(c).Size(size, size).Shrink(0).Tooltip(statusText(L(c), status)).Draw(func(p *ui.Painter, r ui.Rect) {
 		d := p.Now().Sub(at) % (bellRing + bellRest)
 		if d >= bellRing {
 			p.After(bellRing + bellRest - d)

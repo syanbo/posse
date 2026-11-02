@@ -214,11 +214,11 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.menuCloseTab {
 		a.menuCloseTab = false
 		if !c.ModalOpen() {
-			a.closeTab()
+			a.closeTab(L(c))
 		}
 	}
 	if a.pressed(c, "closeTab") {
-		a.closeTab()
+		a.closeTab(L(c))
 	}
 	// ⌃- 回到跳走之前的位置、⌃⇧- 再往前（和 VS Code 一样；⌘[ 是编辑器的减少缩进）
 	if w != nil && a.pressed(c, "jumpBack") {
@@ -312,7 +312,7 @@ func (a *app) closeBoard() {
 
 // closeBoardButton 是页面顶栏最右边的关闭按钮。
 func (a *app) closeBoardButton(c *ui.Context) {
-	if iconButton(c.Key("close-board"), iconClose, a.withKey("关闭", "closeTab")).Clicked() {
+	if iconButton(c.Key("close-board"), iconClose, a.withKey(L(c).CommonClose(), "closeTab")).Clicked() {
 		a.closeBoard()
 	}
 }
@@ -341,9 +341,9 @@ func (a *app) toggleSidebar() {
 
 // sidebarButton 是收起、展开侧栏的开关。
 func (a *app) sidebarButton(c *ui.Context) {
-	label := a.withKey("收起侧栏", "toggleSidebar")
+	label := a.withKey(L(c).SidebarHide(), "toggleSidebar")
 	if a.state.SidebarHidden {
-		label = a.withKey("展开侧栏", "toggleSidebar")
+		label = a.withKey(L(c).SidebarShow(), "toggleSidebar")
 	}
 	if iconButton(c.Key("sidebar-toggle"), iconPanelLeft, label).Clicked() {
 		a.toggleSidebar()
@@ -426,9 +426,9 @@ func (a *app) sidebar(c *ui.Context) {
 		a.sidebarButton(c)
 	})
 	if !a.loaded {
-		msg, color := "正在连接常驻进程…", t.TextMuted
+		msg, color := L(c).SidebarConnecting(), t.TextMuted
 		if a.err != "" {
-			msg, color = "连不上常驻进程："+a.err, t.Danger
+			msg, color = L(c).SidebarConnectError(a.err), t.Danger
 		}
 		ui.Text(c, msg).FontSize(fsSmall).TextColor(color).Padding(6, 16)
 	}
@@ -437,7 +437,7 @@ func (a *app) sidebar(c *ui.Context) {
 	if len(a.projects) > 0 {
 		a.sidebarGroupSwitch(c)
 	}
-	nav := ui.Scroll(c).Grow(1).Focusable().Label("工作区")
+	nav := ui.Scroll(c).Grow(1).Focusable().Label(L(c).SidebarWorkspaces())
 	// 固定的工作区从顶上拖回项目列表就取消固定
 	if d, ok := ui.Drop[tileDrag](nav); ok && !slices.Contains(globalTiles, d.id) {
 		a.unpin(d.id)
@@ -516,7 +516,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 			var toggle func()
 			if len(sessions) > 0 {
 				toggle = func() {
-					navDisclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions)), fmt.Sprintf("收起 %d 个会话", len(sessions)))
+					navDisclosure(c, open, L(c).SidebarShowSessions(len(sessions)), L(c).SidebarHideSessions(len(sessions)))
 				}
 			}
 			// 单击项目行就展开；已经选中并展开时再单击收起
@@ -533,7 +533,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 				for _, w := range ws {
 					label := cmp.Or(w.Shown, w.Name)
 					if w.Kind == "main" {
-						label = "主工作区"
+						label = L(c).SidebarMainWorkspace()
 					}
 					a.sidebarItem(c, w, label, true, false, nil)
 					a.sessionRows(c, w, agentSessions(w.Terminals))
@@ -598,7 +598,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		if !*open {
 			summaryTrailing(c, running, status)
 		}
-		navDisclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)), fmt.Sprintf("收起 %d 个工作区", len(ws)))
+		navDisclosure(c, open, L(c).SidebarShowWorkspaces(len(ws)), L(c).SidebarHideWorkspaces(len(ws)))
 	}
 	icon := func() { a.projectGlyph(c, a.projIcons[p.ID], iconFolder) }
 	sub := shortPath(ws[0].Path)
@@ -655,7 +655,7 @@ func summaryTrailing(c *ui.Context, running int, status string) {
 	if status == agent.StatusWaiting {
 		pendingLabel(c)
 	} else if running > 0 {
-		ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(fmt.Sprintf("%d 个终端在运行", running))
+		ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).Tooltip(L(c).SidebarRunningTip(running))
 	}
 	if status != "" {
 		statusGlyph(c, status, smallIcon())
@@ -729,7 +729,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		sub, branch = "", ""
 		more := trailing
 		trailing = func() {
-			ui.Text(c, "目录不存在").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
+			ui.Text(c, L(c).SidebarMissing()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Shrink(0)
 			if more != nil {
 				more()
 			}
@@ -852,7 +852,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		a.navCur = len(a.navOrder) - 1
 	}
 	// 和标签一样：任务 worker 用任务标题
-	name, detail := fullLabel(term)
+	name, detail := fullLabel(L(c), term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
 		detail = title
 	}
@@ -880,7 +880,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			}
 			if folded {
 				ui.Text(c, fmt.Sprintf("+%d", len(workers))).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).
-					Tooltip(fmt.Sprintf("收起了 %d 个任务 worker", len(workers)))
+					Tooltip(L(c).SidebarFoldedWorkers(len(workers)))
 			}
 		}
 	}
@@ -919,8 +919,8 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		a.revealSel = false
 	}
 	contextMenu(c, row, func(m *popMenu) {
-		if m.Item("关闭会话…").Chosen() {
-			a.askClose(term)
+		if m.Item(L(c).SidebarCloseSession()).Chosen() {
+			a.askClose(L(c), term)
 		}
 		a.chatFolderMenu(L(c), m, term)
 	})
@@ -951,22 +951,22 @@ func (a *app) sessionStatus(term terminalInfo) string {
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
 func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	for _, ag := range a.agentChoices() {
-		if m.Item("启动 " + agentTitle(ag)).Chosen() {
+		if m.Item(lm.TermStart(agentTitle(ag))).Chosen() {
 			a.startTerminal(w.ID, ag)
 		}
 	}
-	if m.Item("打开终端").Chosen() {
+	if m.Item(lm.SidebarOpenTerminal()).Chosen() {
 		a.startTerminal(w.ID, "")
 	}
 	m.Separator()
-	if m.Item("在访达中打开").Icon(iconFolder).Chosen() {
+	if m.Item(lm.CommonOpenInFinder()).Icon(iconFolder).Chosen() {
 		if err := mygo.Shell.OpenPath(w.Path); err != nil {
-			a.err = "在访达中打开失败：" + errtext.Text(err)
+			a.err = lm.SidebarOpenInFinderError(errtext.Text(err))
 		}
 	}
 	if hasBase(&w) {
 		m.Separator()
-		if m.Item("合并到 " + w.BaseRef + "…").Chosen() {
+		if m.Item(lm.SidebarMergeInto(w.BaseRef)).Chosen() {
 			a.askMergeWorkspace(lm, w.ID)
 		}
 	}
@@ -974,33 +974,33 @@ func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	// 聊天工作区已经有「聊天」磁贴
 	if !a.isChat(w.ID) {
 		if a.pinned(w.ID) {
-			if m.Item("取消固定").Chosen() {
+			if m.Item(lm.SidebarUnpin()).Chosen() {
 				a.unpin(w.ID)
 			}
 		} else if !a.canPin() {
-			m.Item(fmt.Sprintf("固定到顶部（顶部最多 %d 块，已满）", topTilesMax)).Disabled(true)
-		} else if m.Item("固定到顶部").Chosen() {
+			m.Item(lm.SidebarPinFull(topTilesMax)).Disabled(true)
+		} else if m.Item(lm.SidebarPin()).Chosen() {
 			a.pin(w.ID)
 		}
 	}
-	if w.Kind == "main" && m.Item("更换图标…").Chosen() {
+	if w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
 			a.editProjectIcon(*p)
 		}
 	}
-	if m.Item("在此项目新建工作区…").Chosen() {
+	if m.Item(lm.SidebarNewWorkspaceHere()).Chosen() {
 		a.openNewWorkspace()
 		a.newProject = w.Project
 	}
 	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
 	if w.Kind == "main" {
-		if m.Item("清理 agent 痕迹…").Chosen() {
+		if m.Item(lm.SidebarCleanTraces()).Chosen() {
 			a.askCleanTraces(lm, w)
 		}
-		if m.Item("移除项目…").Chosen() {
-			a.askRemoveProject(w)
+		if m.Item(lm.SidebarRemoveProject()).Chosen() {
+			a.askRemoveProject(lm, w)
 		}
-	} else if m.Item("删除工作区…").Chosen() {
+	} else if m.Item(lm.SidebarDeleteWorkspace()).Chosen() {
 		a.askRemoveWorkspace(lm, w)
 	}
 }
@@ -1225,9 +1225,10 @@ func (a *app) staleBar(c *ui.Context) {
 	}
 	// 收起只在这次窗口里有效：不重开，桌面、文稿里的项目一直读不了文件，底栏留圆点提醒
 	hide := func() { a.staleHidden = true }
-	sideNotice(c, false, "Posse 已更新", "重开窗口后生效。重开前，桌面、文稿里的项目可能读不了文件。", hide, func() {
-		if pressable(accentButton(c, "重开窗口")).Clicked() {
-			a.relaunch()
+	m := L(c)
+	sideNotice(c, false, m.SidebarUpdatedTitle(), m.SidebarUpdatedBody(), hide, func() {
+		if pressable(accentButton(c, m.SidebarReopenWindow())).Clicked() {
+			a.relaunch(L(c))
 		}
 	})
 }
@@ -1250,7 +1251,7 @@ func sideNotice(c *ui.Context, danger bool, title, body string, onClose func(), 
 				ui.Text(c, body).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
 			}
 			if onClose != nil {
-				if iconButtonSized(c, iconClose, "关闭提示", compactBox(), smallIcon()).Clicked() {
+				if iconButtonSized(c, iconClose, L(c).SidebarDismissNotice(), compactBox(), smallIcon()).Clicked() {
 					onClose()
 				}
 			}
@@ -1272,23 +1273,23 @@ func (a *app) errorBar(c *ui.Context) {
 }
 
 func (a *app) footer(c *ui.Context) {
-	t := c.Theme()
+	t, l := c.Theme(), L(c)
 	if !a.loaded {
 		return
 	}
 	ui.Row(c).Height(footHeight).Padding(0, iconBarPad()).Shrink(0).Background(footShade(t)).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-		menuButton(c, iconButton(c, iconPlus, "新建"), func(m *popMenu) {
-			if m.Item("添加项目…").Chosen() {
-				go a.addProject()
+		menuButton(c, iconButton(c, iconPlus, l.CommonNew()), func(m *popMenu) {
+			if m.Item(l.SidebarAddProject()).Chosen() {
+				go a.addProject(l)
 			}
-			if m.Item("新建工作区…").Keys(a.keyText("newWorkspace")).Chosen() {
+			if m.Item(l.SidebarNewWorkspace()).Keys(a.keyText("newWorkspace")).Chosen() {
 				a.openNewWorkspace()
 			}
-			if m.Item("派发任务…").Chosen() {
+			if m.Item(l.TasksDispatchEllipsis()).Chosen() {
 				a.openDispatch()
 			}
 			m.Separator()
-			if m.Item("连接手机…").Chosen() {
+			if m.Item(l.SidebarConnectPhone()).Chosen() {
 				a.openMobile()
 			}
 		})
@@ -1296,7 +1297,7 @@ func (a *app) footer(c *ui.Context) {
 		if a.staleApp && a.staleHidden {
 			a.staleDot(c)
 		}
-		if iconButton(c, iconSettings, a.withKey("设置", "settings")).Clicked() {
+		if iconButton(c, iconSettings, a.withKey(l.SettingsTitle(), "settings")).Clicked() {
 			a.openSettings()
 		}
 	})
@@ -1305,7 +1306,7 @@ func (a *app) footer(c *ui.Context) {
 // staleDot 是收起重开提示后留在齿轮旁的圆点，点了把提示卡放回来。
 func (a *app) staleDot(c *ui.Context) {
 	t := c.Theme()
-	label := "Posse 已更新，重开窗口后生效"
+	label := L(c).SidebarUpdatedDot()
 	b := ui.Box(c).Size(buttonBox(), buttonBox()).Radius(buttonBox() / 4).Center().Shrink(0).Label(label).Tooltip(label)
 	bg := ui.Transparent
 	if b.Hovered() {
@@ -1387,17 +1388,17 @@ func statusGlyph(c *ui.Context, status string, size float32) {
 		icon, color = iconHexLost, t.TextMuted
 	}
 	if status == agent.StatusWorking && !c.Preferences().ReduceMotion {
-		workingStar(c, size, t.Accent).Tooltip(statusText(status))
+		workingStar(c, size, t.Accent).Tooltip(statusText(L(c), status))
 		return
 	}
 	if status == statusTasks {
-		waitingPulse(c, size, t.Accent, c.Preferences().ReduceMotion).Tooltip(statusText(status))
+		waitingPulse(c, size, t.Accent, c.Preferences().ReduceMotion).Tooltip(statusText(L(c), status))
 		return
 	}
 	if status == statusUnread {
 		icon, color = iconBell, t.Accent
 	}
-	ui.Icon(c, icon).FontSize(size).TextColor(color).Shrink(0).Tooltip(statusText(status))
+	ui.Icon(c, icon).FontSize(size).TextColor(color).Shrink(0).Tooltip(statusText(L(c), status))
 }
 
 // 工作中用 Claude Code 转圈的星号，来回换字符；每 starFrame 换一次。
@@ -1477,7 +1478,7 @@ func waitingPulse(c *ui.Context, size float32, color ui.Color, still bool) ui.El
 // 亮度按时间连续算，按 pulseFrame（每秒 20 次）重绘就够平滑，只重绘不重建界面；still 时停在一帧上。
 func posseLoader(c *ui.Context, size float32, color ui.Color, still bool) ui.Element {
 	const cycle = 1200 * time.Millisecond
-	return ui.Box(c).Size(size, size).Shrink(0).Role(ui.RoleProgress).Label("正在加载").Draw(func(p *ui.Painter, r ui.Rect) {
+	return ui.Box(c).Size(size, size).Shrink(0).Role(ui.RoleProgress).Label(L(c).TermLoading()).Draw(func(p *ui.Painter, r ui.Rect) {
 		// 横向放得下 3√3 个外接圆半径加两道缝
 		const gapRatio = 0.2
 		sqrt3 := float32(math.Sqrt(3))
@@ -1535,24 +1536,24 @@ func easeOut(x float32) float32 { return 1 - (1-x)*(1-x)*(1-x) }
 // smoothstep 是两头慢中间快的缓动。
 func smoothstep(x float32) float32 { return x * x * (3 - 2*x) }
 
-func statusText(status string) string {
+func statusText(m locales.Messages, status string) string {
 	switch status {
 	case agent.StatusWaiting:
-		return "待处理：agent 在等你批准或回答"
+		return m.TermStatusWaiting()
 	case agent.StatusWorking:
-		return "工作中"
+		return m.TermStatusWorking()
 	case agent.StatusIdle:
-		return "本轮完成，等你下一步"
+		return m.TermStatusIdle()
 	case agent.StatusStarting:
-		return "启动中"
+		return m.TermStatusStarting()
 	case agent.StatusExited:
-		return "已退出"
+		return m.TermStatusExited()
 	case statusTasks:
-		return "等待任务：在等它派出去的 agent"
+		return m.TermStatusTasks()
 	case statusUnread:
-		return "本轮完成，你还没看"
+		return m.TermStatusUnread()
 	case statusLost:
-		return "未恢复：切到它时再拉起，agent 续接原来的会话"
+		return m.TermStatusLost()
 	}
 	return status
 }
@@ -1614,11 +1615,11 @@ func (a *app) mainColumn(c *ui.Context, w *workspace, cur *terminalInfo) {
 
 // newTerminalButton 是第 i 格标签后面的"+"，选 agent 或普通终端，新终端放进这一格。
 func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
-	menuButton(c, iconButton(c.Key("new"), iconPlus, "新建终端"), func(m *popMenu) {
+	menuButton(c, iconButton(c.Key("new"), iconPlus, L(c).TabNewTerminal()), func(m *popMenu) {
 		for _, ag := range slices.Concat(a.agentChoices(), []string{""}) {
 			name := agentTitle(ag)
 			if ag == "" {
-				name = "终端"
+				name = L(c).TermName()
 			}
 			it := m.Item(name).Lead(func() { agentIcon(c, ag, iconSize) })
 			if ag == "" {
@@ -1639,7 +1640,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
 	if w.Branch != "" {
 		a.branchButton(c, w)
-		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey("Git 日志", "gitLog"))
+		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
 		if a.logPanelOpen() {
 			b.Background(colors(c.Theme()).tint)
 		}
@@ -1680,7 +1681,7 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 		a.saveState()
 	}
 	if a.state.SessionButtonsHidden {
-		label := "展开会话按钮"
+		label := L(c).TabShowSessionButtons()
 		h := ui.Box(c.Key("session-handle")).Absolute().Top(10).Right(-4).Size(16, 34).Radius(rRow).Center().
 			Background(t.Surface).Label(label).Tooltip(label)
 		fg := t.TextMuted
@@ -1711,18 +1712,18 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	col.Opacity(col.AnimateTo("fade", opacity, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}))
 	col.Children(func() {
 		// 这一列的按钮不带悬停提示：它们贴着终端内容，提示会盖住旁边的字
-		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, "返回任务", buttonBox(), iconSize).Clicked() {
+		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, L(c).TabBackToTask(), buttonBox(), iconSize).Clicked() {
 			a.openTask(task.ID)
 		}
 		if media.Supported(cur.Agent) {
-			a.panelButton(c, panelImages, iconImage, "这个会话里生成和粘贴的图片")
+			a.panelButton(c, panelImages, iconImage, L(c).TabSessionImages())
 		}
 		if cur.Agent != "" {
-			a.panelButton(c, panelUsage, iconExtensions, "这个会话用到的技能与工具")
-			a.panelButton(c, panelCheat, iconSlash, "命令速查")
+			a.panelButton(c, panelUsage, iconExtensions, L(c).TabSessionTools())
+			a.panelButton(c, panelCheat, iconSlash, L(c).TabCheatSheet())
 		}
 		hline(c).Margin(2, 4)
-		if quietIconButton(c.Key("session-fold"), iconChevron, "收起会话按钮", buttonBox(), iconSize-4).Clicked() {
+		if quietIconButton(c.Key("session-fold"), iconChevron, L(c).TabHideSessionButtons(), buttonBox(), iconSize-4).Clicked() {
 			toggle()
 		}
 	})
@@ -1736,63 +1737,63 @@ func (a *app) phoneSizedBar(c *ui.Context, id string) {
 	ui.Row(c.Key("phone-sized")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).
 		Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 		ui.Icon(c, iconPhone).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
-		ui.Text(c, "手机正在看这个终端，按手机屏幕排版").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, L(c).TermPhoneSized()).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		ui.Spacer(c)
-		if pressable(textButton(c, "改回电脑尺寸")).Clicked() {
-			a.reclaimSize(id)
+		if pressable(textButton(c, L(c).TermReclaimSize())).Clicked() {
+			a.reclaimSize(L(c), id)
 		}
 	})
 }
 
 // missingBar 是目录不在了、但还开着终端或文件时，标签栏下面的一条提示。
 func (a *app) missingBar(c *ui.Context, w *workspace) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	p := colors(t)
 	ui.Row(c.Key("missing")).Height(sz(32)).Shrink(0).Padding(0, 8, 0, 16).Gap(8).AlignItems(ui.Center).
 		Background(p.band).BorderWidth(0, 0, hairline, 0).BorderColor(p.line).Children(func() {
 		ui.Icon(c, iconInfo).FontSize(fsBody).TextColor(t.Danger).Shrink(0)
-		ui.Text(c, "工作区的目录 "+shortPath(w.Path)+" 已经不在了").FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(w.Path)
+		ui.Text(c, m.TabMissingFolder(shortPath(w.Path))).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(w.Path)
 		ui.Spacer(c)
-		if pressable(textButton(c, "重新指定目录…")).Clicked() {
-			go a.relocateWorkspace(*w)
+		if pressable(textButton(c, m.TabLocateFolder())).Clicked() {
+			go a.relocateWorkspace(m, *w)
 		}
-		if pressable(textButton(c, missingRemoveLabel(w))).Clicked() {
-			a.askRemoveMissing(*w)
+		if pressable(textButton(c, missingRemoveLabel(m, w))).Clicked() {
+			a.askRemoveMissing(m, *w)
 		}
 	})
 }
 
 // missingActions 是空工作区页在目录不在了时代替启动按钮的说明和操作。
 func (a *app) missingActions(c *ui.Context, w *workspace) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	ui.Column(c).Gap(12).Padding(16).Radius(rCard).Background(soft(t, t.Danger)).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, iconInfo).FontSize(smallIcon()).TextColor(t.Danger).Shrink(0)
-			ui.Text(c, "目录已经不在了").FontSize(fsBody).FontWeight(fwMedium)
+			ui.Text(c, m.TabMissingTitle()).FontSize(fsBody).FontWeight(fwMedium)
 		})
-		ui.Text(c, "它可能被删掉、挪走，或者在没挂上的外接盘上。挪了地方的话重新指定目录；不要了就从 Posse 移除，磁盘上的文件和分支都不动。").
+		ui.Text(c, m.TabMissingBody()).
 			FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.5)
 		ui.Row(c).Gap(8).Children(func() {
-			if pressable(accentButton(c, "重新指定目录…")).Clicked() {
-				go a.relocateWorkspace(*w)
+			if pressable(accentButton(c, m.TabLocateFolder())).Clicked() {
+				go a.relocateWorkspace(m, *w)
 			}
-			if pressable(textButton(c, missingRemoveLabel(w))).Clicked() {
-				a.askRemoveMissing(*w)
+			if pressable(textButton(c, missingRemoveLabel(m, w))).Clicked() {
+				a.askRemoveMissing(m, *w)
 			}
 		})
 	})
 }
 
 // missingRemoveLabel：项目目录不在时移除的是整个项目。
-func missingRemoveLabel(w *workspace) string {
+func missingRemoveLabel(m locales.Messages, w *workspace) string {
 	if w.Kind == "main" {
-		return "移除项目…"
+		return m.SidebarRemoveProject()
 	}
-	return "从 Posse 移除…"
+	return m.TabRemoveFromPosse()
 }
 
 // reclaimSize 让常驻进程放掉手机对终端尺寸的占用，按窗口的尺寸重排。
-func (a *app) reclaimSize(id string) {
+func (a *app) reclaimSize(m locales.Messages, id string) {
 	for i := range a.workspaces {
 		for j := range a.workspaces[i].Terminals {
 			if a.workspaces[i].Terminals[j].ID == id {
@@ -1804,7 +1805,7 @@ func (a *app) reclaimSize(id string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := a.c.Call(ctx, "terminal.reclaimSize", map[string]any{"terminal": id}, nil); err != nil {
-			a.update(func() { a.err = "改回电脑尺寸失败：" + errtext.Text(err) })
+			a.update(func() { a.err = m.TermReclaimError(errtext.Text(err)) })
 		}
 	}()
 }
@@ -1877,7 +1878,7 @@ func (a *app) termPane(c *ui.Context, i int, cur *terminalInfo) {
 		}
 		// 右键菜单由终端插件交来位置，Posse 自己画（termMenu）
 		if a.termCtxID == v.id {
-			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(m, v, v.id) })
+			contextMenuAt(c, &a.termCtx, func(m *popMenu) { a.termMenu(L(c), m, v, v.id) })
 		}
 		a.startingHint(c, v, cur)
 		a.sessionButtons(c, cur, a.cols[i].right)
@@ -1906,11 +1907,11 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 		return
 	}
 	t := c.Theme()
-	name := "终端"
+	name := L(c).TermName()
 	if cur.Agent != "" {
 		name = agentTitle(cur.Agent)
 	}
-	label := "正在启动 " + name
+	label := L(c).TermStarting(name)
 	ui.Box(c.Key("starting-hint")).Absolute().Fill().Center().Cursor(ui.CursorDefault).Children(func() {
 		ui.Column(c).Gap(12).AlignItems(ui.Center).Children(func() {
 			posseLoader(c, tileLarge(), t.Accent, c.Preferences().ReduceMotion)
@@ -1921,17 +1922,17 @@ func (a *app) startingHint(c *ui.Context, v *termView, cur *terminalInfo) {
 
 // firstRun 是还没有项目时的引导：空界面是去行动的邀请。
 func (a *app) firstRun(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	ui.Column(c).Grow(1).Center().Children(func() {
 		emptyCard(c).MaxWidth(440).Padding(24).Gap(16).Children(func() {
 			tile(c, iconHexOutline, 48, soft(t, colors(t).honey), colors(t).honey)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "把项目放进来", fsPage)
-				ui.Text(c, "Posse 按项目管理终端和 agent。选一个文件夹作为项目，之后就能在里面开终端和 agent。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
+				titleText(c, m.SidebarFirstRunTitle(), fsPage)
+				ui.Text(c, m.SidebarFirstRunBody()).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if pressable(accentButton(c, "添加项目…")).Clicked() {
-					go a.addProject()
+				if pressable(accentButton(c, m.SidebarAddProject())).Clicked() {
+					go a.addProject(m)
 				}
 			})
 		})
@@ -1980,10 +1981,10 @@ func (a *app) emptyWorkspace(c *ui.Context, w *workspace) {
 					a.launchTile(c, w, "", a.keyText("newTerminal"))
 				})
 				ui.Row(c).Gap(12).Padding(2, 4).Justify(ui.Center).Wrap().Children(func() {
-					shortcutHint(c, a.keyText("newTerminal"), "新建终端")
-					shortcutHint(c, a.keyText("newWorkspace"), "新建工作区")
-					shortcutHint(c, "⌘1…9", "切换终端")
-					shortcutHint(c, a.keyText("quickOpen"), "打开文件")
+					shortcutHint(c, a.keyText("newTerminal"), L(c).EmptyNewTerminal())
+					shortcutHint(c, a.keyText("newWorkspace"), L(c).EmptyNewWorkspace())
+					shortcutHint(c, "⌘1…9", L(c).EmptySwitchTerminal())
+					shortcutHint(c, a.keyText("quickOpen"), L(c).EmptyOpenFile())
 				})
 			})
 		})
@@ -2014,9 +2015,9 @@ func (a *app) launchTile(c *ui.Context, w *workspace, agent, note string) {
 	t := c.Theme()
 	name := agentTitle(agent)
 	if agent == "" {
-		name = "终端"
+		name = L(c).TermName()
 	}
-	b := ui.Column(c.Key("launch-"+name)).Padding(16, 8, 16, 8).Gap(8).Radius(rCard).AlignItems(ui.Center).Label("启动 " + name).Role(ui.RoleButton)
+	b := ui.Column(c.Key("launch-"+agent)).Padding(16, 8, 16, 8).Gap(8).Radius(rCard).AlignItems(ui.Center).Label(L(c).TermStart(name)).Role(ui.RoleButton)
 	bg := colors(t).wash
 	if b.Hovered() {
 		bg = t.SurfaceHover
@@ -2065,14 +2066,14 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	if term.AgentState != nil && term.Running || term.Lost {
 		status = a.sessionStatus(term)
 	}
-	name, detail := tabLabel(term)
+	name, detail := tabLabel(L(c), term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Running && term.Name == "" {
 		detail = truncate(title, 22)
 	}
 	renaming := a.renaming == term.ID
 	if renaming && !active {
 		// 用快捷键切走了：按现在输入的保存
-		a.finishRename(term)
+		a.finishRename(L(c), term)
 		renaming = false
 	}
 	if renaming {
@@ -2100,7 +2101,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
 		if waiting {
 			// 字号、字重和别的标签标题一样，只用琥珀色区分
-			label := ui.Text(c, "待处理").FontSize(fsSmall).Shrink(0)
+			label := ui.Text(c, L(c).TermPending()).FontSize(fsSmall).Shrink(0)
 			tabText(c, label, active)
 			label.TextColor(colors(t).honey)
 		} else if detail != "" {
@@ -2111,7 +2112,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label("关闭终端").Tooltip(a.withKey("关闭终端", "closeTab"))
+		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(L(c).TermClose()).Tooltip(a.withKey(L(c).TermClose(), "closeTab"))
 		closeBg := ui.Transparent
 		if closeBtn.Hovered() {
 			closeBg = t.SurfacePressed
@@ -2123,7 +2124,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 		}
 		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(fsSmall).TextColor(t.TextMuted) })
 		if visible && closeBtn.Clicked() {
-			a.askClose(term)
+			a.askClose(L(c), term)
 		}
 	})
 	// 改名时不能拖：在输入框里拖着选文字会变成拖标签
@@ -2135,18 +2136,18 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	}
 	// 双击改名，和 iTerm、Ghostty 一样
 	if row.DoubleClicked() && !renaming {
-		a.startRename(term)
+		a.startRename(L(c), term)
 	}
 	// 中键关闭，和浏览器、Orca 一样
 	if row.MiddleClicked() {
-		a.askClose(term)
+		a.askClose(L(c), term)
 	}
-	row.Tooltip(tabTooltip(term))
+	row.Tooltip(tabTooltip(L(c), term))
 	contextMenu(c, row, func(m *popMenu) { a.tabMenu(L(c), m, w, term) })
 }
 
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
-func tabTooltip(t terminalInfo) string {
+func tabTooltip(m locales.Messages, t terminalInfo) string {
 	name := agentTitle(t.Agent)
 	title := bareTitle(t)
 	if t.Name != "" {
@@ -2154,7 +2155,7 @@ func tabTooltip(t terminalInfo) string {
 	}
 	switch {
 	case name == "" && title == "":
-		return "终端"
+		return m.TermName()
 	case name == "":
 		return title
 	case title == "" || strings.EqualFold(title, name) || title == "Claude Code":
@@ -2165,32 +2166,32 @@ func tabTooltip(t terminalInfo) string {
 
 // tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
 func (a *app) tabMenu(l locales.Messages, m *popMenu, w *workspace, term terminalInfo) {
-	if m.Item("重命名…").Chosen() {
-		a.startRename(term)
+	if m.Item(l.TabRename()).Chosen() {
+		a.startRename(l, term)
 	}
-	if term.Name != "" && m.Item("恢复默认名称").Chosen() {
+	if term.Name != "" && m.Item(l.TabResetName()).Chosen() {
 		a.renameTerminal(term.ID, "")
 	}
 	m.Separator()
 	task := a.taskByWorker(term.ID)
-	if m.Item("复制引用").Chosen() {
-		writeClipboard(tabRef(term, task))
+	if m.Item(l.TabCopyRef()).Chosen() {
+		writeClipboard(tabRef(l, term, task))
 	}
-	if m.Item("复制终端 ID").Chosen() {
+	if m.Item(l.TabCopyTerminalId()).Chosen() {
 		writeClipboard(term.ID)
 	}
-	if task != nil && m.Item("复制任务 ID").Chosen() {
+	if task != nil && m.Item(l.TabCopyTaskId()).Chosen() {
 		writeClipboard(task.ID)
 	}
-	if sid := sessionID(term); sid != "" && m.Item("复制会话 ID").Chosen() {
+	if sid := sessionID(term); sid != "" && m.Item(l.TermCopySessionId()).Chosen() {
 		writeClipboard(sid)
 	}
 	a.chatFolderMenu(l, m, term)
 	m.Separator()
-	a.columnMenu(m, w, term.ID)
+	a.columnMenu(l, m, w, term.ID)
 	m.Separator()
-	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
-		a.askClose(term)
+	if m.Item(l.CommonClose()).Keys(a.keyText("closeTab")).Chosen() {
+		a.askClose(l, term)
 	}
 	i := slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == term.ID })
 	if i < 0 {
@@ -2198,34 +2199,34 @@ func (a *app) tabMenu(l locales.Messages, m *popMenu, w *workspace, term termina
 	}
 	others := slices.Concat(w.Terminals[:i], w.Terminals[i+1:])
 	right := slices.Clone(w.Terminals[i+1:])
-	if m.Item("关闭其他终端").Disabled(len(others) == 0).Chosen() {
-		a.askCloseAll(others)
+	if m.Item(l.TabCloseOthers()).Disabled(len(others) == 0).Chosen() {
+		a.askCloseAll(l, others)
 	}
-	if m.Item("关闭右侧终端").Disabled(len(right) == 0).Chosen() {
-		a.askCloseAll(right)
+	if m.Item(l.TabCloseRight()).Disabled(len(right) == 0).Chosen() {
+		a.askCloseAll(l, right)
 	}
 }
 
 // tabRef 是标签右键「复制引用」的一行字：贴给 agent 时带上每个 ID 是什么、用哪条命令看，不用它再去查。
-func tabRef(t terminalInfo, task *taskInfo) string {
+func tabRef(m locales.Messages, t terminalInfo, task *taskInfo) string {
 	// 不用 fullLabel：它对退出了的终端把标题换成「已退出」，引用里要的正是跑完的会话叫什么
 	name, title := agentTitle(t.Agent), termTitle(t)
 	switch {
 	case name == "" && title != "":
 		name = title
 	case name == "":
-		name = "终端"
+		name = m.TermName()
 	case title != "" && !strings.EqualFold(title, name) && title != "Claude Code":
-		name += "「" + title + "」"
+		name = m.TabRefNamed(name, title)
 	}
-	parts := []string{"终端 " + t.ID + "（posse terminal read " + t.ID + "）"}
+	parts := []string{m.TabRefTerminal(t.ID)}
 	if task != nil {
-		parts = append(parts, "任务 "+task.ID+"（posse task show "+task.ID+"）")
+		parts = append(parts, m.TabRefTask(task.ID))
 	}
 	if sid := sessionID(t); sid != "" {
-		parts = append(parts, "会话 "+sid+"（posse history show "+sid+"）")
+		parts = append(parts, m.TabRefSession(sid))
 	}
-	return name + "：" + strings.Join(parts, "，")
+	return m.TabRefLine(name, strings.Join(parts, m.TabRefSeparator()))
 }
 
 func sessionID(t terminalInfo) string {
@@ -2255,26 +2256,26 @@ func tabText(c *ui.Context, e ui.Element, active bool) {
 
 // tabLabel 返回标签的名字和补充说明（会话名，没有时是终端标题），分开显示而不是用分隔符拼接。
 // 标签宽度跟着文字走，所以截短；侧栏行宽是定的，用不截短的 fullLabel，放不下才由排版截。
-func tabLabel(t terminalInfo) (string, string) {
-	name, detail := fullLabel(t)
+func tabLabel(m locales.Messages, t terminalInfo) (string, string) {
+	name, detail := fullLabel(m, t)
 	return truncate(name, 24), truncate(detail, 22)
 }
 
 // fullLabel 同 tabLabel，不截短。
-func fullLabel(t terminalInfo) (string, string) {
+func fullLabel(m locales.Messages, t terminalInfo) (string, string) {
 	name, title := agentTitle(t.Agent), termTitle(t)
 	detail := ""
 	switch {
 	case name == "" && title != "":
 		name = title
 	case name == "":
-		name = "终端"
+		name = m.TermName()
 	case title != "" && !strings.EqualFold(title, name) && title != "Claude Code":
 		detail = title
 	}
 	// 还没恢复的照旧写原来的名字，「未恢复」是状态图标
 	if !t.Running && !t.Lost {
-		detail = "已退出"
+		detail = m.TermExited()
 	}
 	return name, detail
 }
@@ -2404,7 +2405,7 @@ func (a *app) confirmDialog(c *ui.Context) {
 				ui.Text(c, a.confirmBody).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if a.confirmDo != nil && pressable(textButton(c, "取消")).Clicked() {
+				if a.confirmDo != nil && pressable(textButton(c, L(c).CommonCancel())).Clicked() {
 					a.confirming = false
 				}
 				if pressable(accentButton(c, a.confirmVerb)).Clicked() {
@@ -2419,10 +2420,11 @@ func (a *app) confirmDialog(c *ui.Context) {
 }
 
 func (a *app) newWorkspaceDialog(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	ui.Modal(c, &a.creating, func() {
-		ui.Column(c).Width(380).Gap(12).Children(func() {
-			titleText(c, "新建工作区", fsTitle)
+		// 英文的 agent 选择条（"Workspace Only" 加四家 agent）在 380 里放不下
+		ui.Column(c).Width(440).Gap(12).Children(func() {
+			titleText(c, m.NewWorkspaceTitle(), fsTitle)
 			var names []string
 			kind := ""
 			for _, p := range a.projects {
@@ -2433,37 +2435,37 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 			}
 			ui.Column(c).Gap(6).Children(func() {
 				ui.Select(c, &a.newProject, names)
-				hint := "在同一个文件夹里另开一组终端。"
+				hint := m.NewWorkspaceFolderHint()
 				if kind == "git" {
-					hint = "新建一个 git worktree 和同名分支，改动互不干扰。"
+					hint = m.NewWorkspaceGitHint()
 				}
 				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
-			submitted := fieldInput(c, &a.newName, "名称，比如 feat-login").AutoFocus().Submitted()
+			submitted := fieldInput(c, &a.newName, m.NewWorkspaceNamePlaceholder()).AutoFocus().Submitted()
 			choices := a.newAgentChoices()
 			if a.newAgent >= len(choices) {
 				a.newAgent = 0
 			}
 			labels := agentTitles(choices)
-			labels[0] = "只建工作区"
-			segmented(c, &a.newAgent, "同时启动", labels...)
+			labels[0] = m.NewWorkspaceOnly()
+			segmented(c, &a.newAgent, m.NewWorkspaceStartWith(), labels...)
 			if a.newAgent != 0 {
-				if fieldInput(c.Key("prompt"), &a.newPrompt, "交给 agent 的任务（可留空）").Submitted() {
+				if fieldInput(c.Key("prompt"), &a.newPrompt, m.NewWorkspacePromptPlaceholder()).Submitted() {
 					submitted = true
 				}
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					a.creating = false
 				}
-				if pressable(accentButton(c, "创建工作区")).Clicked() {
+				if pressable(accentButton(c, m.NewWorkspaceCreate())).Clicked() {
 					submitted = true
 				}
 			})
 			if submitted && strings.TrimSpace(a.newName) != "" {
 				a.creating = false
 				params := map[string]any{"project": a.newProject, "name": strings.TrimSpace(a.newName), "agent": choices[a.newAgent], "prompt": a.newPrompt}
-				go a.createWorkspace(params)
+				go a.createWorkspace(m, params)
 			}
 		})
 	})

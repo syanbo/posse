@@ -312,7 +312,7 @@ func (a *app) restartToUpdate(m locales.Messages) {
 				return
 			}
 			// 等交接的这段时间里可能又改了文件，重开前再问一次
-			a.relaunch()
+			a.relaunch(m)
 		})
 	}()
 }

@@ -1,4 +1,150 @@
 {
+  "appAddProjectButton": "Add",
+  "@appAddProjectButton": {
+    "description": "Default button of the system open dialog for adding a project."
+  },
+  "appAddProjectTitle": "Add Project",
+  "@appAddProjectTitle": {
+    "description": "Title of the system open dialog for adding a folder as a project."
+  },
+  "appCloseAllBody": "Programs running in them will be terminated.",
+  "@appCloseAllBody": {
+    "description": "Confirmation body before closing several terminals."
+  },
+  "appCloseAllConfirm": "{count, plural, one {Close # terminal?} other {Close # terminals?}}",
+  "@appCloseAllConfirm": {
+    "description": "Confirmation title before closing several terminals (Close Other / Close to the Right).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appCloseBody": "The program running in it will be terminated.",
+  "@appCloseBody": {
+    "description": "Confirmation body before closing one terminal."
+  },
+  "appCloseConfirm": "Close {name}?",
+  "@appCloseConfirm": {
+    "description": "Confirmation title before closing a terminal with a running program. name is the agent name or “Terminal”.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "appListSeparator": ", ",
+  "@appListSeparator": {
+    "description": "Separator between names in a list inside a sentence (workspace names)."
+  },
+  "appNoticeBody": "{workspace}: {message}",
+  "@appNoticeBody": {
+    "description": "System notification body: the workspace and the agent’s latest message.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "appNoticeDone": "{agent} finished",
+  "@appNoticeDone": {
+    "description": "System notification title: an agent finished its turn while you were not looking. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "appNoticeWaiting": "{agent} needs you",
+  "@appNoticeWaiting": {
+    "description": "System notification title: an agent session is waiting for approval or an answer. agent is the agent name (Claude, Codex…).",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "appPasteImageError": "Couldn’t paste the image: {error}",
+  "@appPasteImageError": {
+    "description": "Error bar: saving a pasted clipboard image for the terminal failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "appRelocateButton": "Choose",
+  "@appRelocateButton": {
+    "description": "Default button of the system open dialog for locating a workspace folder."
+  },
+  "appRelocateTitle": "Locate the Folder of {workspace}",
+  "@appRelocateTitle": {
+    "description": "Title of the system open dialog for choosing the new folder of a workspace whose folder moved.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "appRemoveProjectBody": "It’s only removed from Posse; files on disk aren’t deleted. Running terminals in the project will be closed.",
+  "@appRemoveProjectBody": {
+    "description": "Confirmation body before removing a project."
+  },
+  "appRemoveProjectConfirm": "Remove project {project} from Posse?",
+  "@appRemoveProjectConfirm": {
+    "description": "Confirmation title before removing a project from the sidebar.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "appRemoveWorkspaceBody": "Its folder no longer exists. Only its record is removed from Posse; the branch isn’t deleted. Running terminals in the workspace will be closed.",
+  "@appRemoveWorkspaceBody": {
+    "description": "Confirmation body before removing a workspace whose folder is gone."
+  },
+  "appRemoveWorkspaceConfirm": "Remove workspace {workspace} from Posse?",
+  "@appRemoveWorkspaceConfirm": {
+    "description": "Confirmation title before removing a workspace whose folder is gone.",
+    "placeholders": {
+      "workspace": {
+        "type": "String"
+      }
+    }
+  },
+  "appRemoveWorktreesFirst": "Delete the worktree workspaces in {project} first: {names}",
+  "@appRemoveWorktreesFirst": {
+    "description": "Error bar: a project can’t be removed while it has worktree workspaces. names is the list of workspace names.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "appSetupError": "Setup script failed: {output}",
+  "@appSetupError": {
+    "description": "Error bar: the workspace setup script failed after creating a workspace. output is the start of its output.",
+    "placeholders": {
+      "output": {
+        "type": "String"
+      }
+    }
+  },
+  "appWorkspacesRemoved": "Removed workspaces whose folders were deleted: {names}",
+  "@appWorkspacesRemoved": {
+    "description": "Toast: worktree folders were deleted outside Posse, so their workspaces were removed. names is the list of workspace names.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
   "awakeActiveTip": "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual.",
   "@awakeActiveTip": {
     "description": "Prevent Sleep settings or status button: tooltip for ActiveTip."
@@ -1281,6 +1427,22 @@
       }
     }
   },
+  "emptyNewTerminal": "New Terminal",
+  "@emptyNewTerminal": {
+    "description": "Empty workspace page: shortcut hint."
+  },
+  "emptyNewWorkspace": "New Workspace",
+  "@emptyNewWorkspace": {
+    "description": "Empty workspace page: shortcut hint."
+  },
+  "emptyOpenFile": "Open File",
+  "@emptyOpenFile": {
+    "description": "Empty workspace page: shortcut hint."
+  },
+  "emptySwitchTerminal": "Switch Terminal",
+  "@emptySwitchTerminal": {
+    "description": "Empty workspace page: shortcut hint for ⌘1…9."
+  },
   "filesAnnotateTip": "Annotate: see who changed each line",
   "@filesAnnotateTip": {
     "description": "Tooltip of the button in a file tab that shows Git Annotate (blame)."
@@ -1762,6 +1924,78 @@
   "filesWorkspaceGone": "The workspace folder no longer exists",
   "@filesWorkspaceGone": {
     "description": "Files Panel message when the workspace folder was removed."
+  },
+  "fontsDecrease": "Decrease {what}",
+  "@fontsDecrease": {
+    "description": "Settings: accessibility label of the − button of a stepper. what is the setting name, such as “Font size”.",
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "fontsDefault": "Default (JetBrains Mono)",
+  "@fontsDefault": {
+    "description": "Settings, font picker: the entry (and button text) for the built-in default font."
+  },
+  "fontsEditorPreview": "Editor Preview",
+  "@fontsEditorPreview": {
+    "description": "Settings, editor font card: accessibility label of the read-only sample editor."
+  },
+  "fontsEditorSampleComment": "greet returns a greeting: previews the editor font and size",
+  "@fontsEditorSampleComment": {
+    "description": "Settings, editor font preview: the comment on the first line of the sample Go code (after “// ”)."
+  },
+  "fontsEditorSampleGreeting": "Hello, world",
+  "@fontsEditorSampleGreeting": {
+    "description": "Settings, editor font preview: the string the sample Go function returns."
+  },
+  "fontsIncrease": "Increase {what}",
+  "@fontsIncrease": {
+    "description": "Settings: accessibility label of the + button of a stepper. what is the setting name.",
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "fontsLoading": "Loading fonts…",
+  "@fontsLoading": {
+    "description": "Settings, font picker: shown while the system font list loads."
+  },
+  "fontsMono": "Monospaced Fonts",
+  "@fontsMono": {
+    "description": "Settings, font picker list: group header above monospaced fonts."
+  },
+  "fontsNoMatch": "No fonts with “{query}” in the name",
+  "@fontsNoMatch": {
+    "description": "Settings, font picker: empty state for a search. query is the search text.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "fontsOther": "Other Fonts",
+  "@fontsOther": {
+    "description": "Settings, font picker list: group header above proportional fonts."
+  },
+  "fontsResetWhat": "Reset {what} to Default",
+  "@fontsResetWhat": {
+    "description": "Settings: accessibility label of the Default button of a stepper. what is the setting name.",
+    "placeholders": {
+      "what": {
+        "type": "String"
+      }
+    }
+  },
+  "fontsSearch": "Search fonts",
+  "@fontsSearch": {
+    "description": "Settings, font picker: placeholder of the search field."
+  },
+  "fontsTermSample": "中文 English 123",
+  "@fontsTermSample": {
+    "description": "Settings, terminal font preview: sample text echoed in the fake terminal. Keep some CJK characters: it shows how the chosen font falls back for them."
   },
   "gitAbort": "Abort",
   "@gitAbort": {
@@ -3751,6 +3985,10 @@
   "@keysSettingsNote": {
     "description": "Keyboard Shortcuts settings: explanation for SettingsNote."
   },
+  "keysSpaceKey": "Space",
+  "@keysSpaceKey": {
+    "description": "Name of the Space key when a shortcut is written out, as in menus and tooltips (⌃Space)."
+  },
   "keysSplitDownLabel": "Split Down",
   "@keysSplitDownLabel": {
     "description": "Keyboard Shortcuts settings: label for SplitDownLabel."
@@ -4692,6 +4930,132 @@
   "@mobileUse": {
     "description": "Mobile page: button applying a typed custom address or relay invite code."
   },
+  "newWorkspaceCreate": "Create Workspace",
+  "@newWorkspaceCreate": {
+    "description": "New Workspace dialog: default button."
+  },
+  "newWorkspaceFolderHint": "Opens another set of terminals in the same folder.",
+  "@newWorkspaceFolderHint": {
+    "description": "New Workspace dialog: note for a project that isn’t a git repository."
+  },
+  "newWorkspaceGitHint": "Creates a git worktree and a branch of the same name, so changes don’t interfere.",
+  "@newWorkspaceGitHint": {
+    "description": "New Workspace dialog: note for a git project."
+  },
+  "newWorkspaceNamePlaceholder": "Name, e.g. feat-login",
+  "@newWorkspaceNamePlaceholder": {
+    "description": "New Workspace dialog: placeholder of the name field."
+  },
+  "newWorkspaceOnly": "Workspace Only",
+  "@newWorkspaceOnly": {
+    "description": "New Workspace dialog: first segment of the agent picker; starts no agent."
+  },
+  "newWorkspacePromptPlaceholder": "Task for the agent (optional)",
+  "@newWorkspacePromptPlaceholder": {
+    "description": "New Workspace dialog: placeholder of the prompt field passed to the started agent."
+  },
+  "newWorkspaceStartWith": "Also Start",
+  "@newWorkspaceStartWith": {
+    "description": "New Workspace dialog: accessibility label of the agent picker."
+  },
+  "newWorkspaceTitle": "New Workspace",
+  "@newWorkspaceTitle": {
+    "description": "New Workspace dialog: title."
+  },
+  "projectIconBadImage": "Can’t read this image: {error}",
+  "@projectIconBadImage": {
+    "description": "Reason shown inside the project icon import error: the chosen image could not be decoded. error is the decoder’s reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "projectIconBadSvg": "Can’t read this SVG: {error}",
+  "@projectIconBadSvg": {
+    "description": "Reason shown inside the project icon import error: the chosen SVG could not be parsed. error is the parser’s reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "projectIconChooseImage": "Choose Image…",
+  "@projectIconChooseImage": {
+    "description": "Project icon dialog: button that opens a file dialog to pick an image."
+  },
+  "projectIconChoosing": "Choosing…",
+  "@projectIconChoosing": {
+    "description": "Project icon dialog: the Choose Image button while the file dialog is open."
+  },
+  "projectIconCopyNote": "The image is copied, so the original file can be deleted.",
+  "@projectIconCopyNote": {
+    "description": "Project icon dialog: note under the buttons."
+  },
+  "projectIconDone": "Done",
+  "@projectIconDone": {
+    "description": "Project icon dialog: button that applies the icon and closes the dialog."
+  },
+  "projectIconImages": "Images",
+  "@projectIconImages": {
+    "description": "File type filter name in the system open dialog for choosing a project icon."
+  },
+  "projectIconImportError": "Couldn’t import the icon: {error}",
+  "@projectIconImportError": {
+    "description": "Error bar: importing a project icon failed. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "projectIconPickButton": "Choose",
+  "@projectIconPickButton": {
+    "description": "Default button of the system open dialog for choosing a project icon image."
+  },
+  "projectIconPickTitle": "Choose an Icon for {project}",
+  "@projectIconPickTitle": {
+    "description": "Title of the system open dialog for choosing a project icon image. project is the project name.",
+    "placeholders": {
+      "project": {
+        "type": "String"
+      }
+    }
+  },
+  "projectIconTextPlaceholder": "An emoji or one or two characters",
+  "@projectIconTextPlaceholder": {
+    "description": "Project icon dialog: placeholder of the text field; the text becomes the icon."
+  },
+  "projectIconTitle": "Change Icon",
+  "@projectIconTitle": {
+    "description": "Project icon dialog: title."
+  },
+  "recentContinue": "Continue in Posse",
+  "@recentContinue": {
+    "description": "Files panel, History page: tooltip of the play button on a session card; resumes the session in a Posse terminal."
+  },
+  "recentEmpty": "This project has no sessions yet.",
+  "@recentEmpty": {
+    "description": "Files panel, History page: empty state when the current project has no agent sessions."
+  },
+  "recentYou": "You: {text}",
+  "@recentYou": {
+    "description": "Files panel, History page: preview line under a session title when the last message was written by the user. text is the message.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "relaunchError": "Couldn’t reopen the window: {error}",
+  "@relaunchError": {
+    "description": "Error bar: reopening the window after Posse was updated failed. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "relayClock": "Clock Off",
   "@relayClock": {
     "description": "Mobile page, Relay card: state after the title; this Mac’s clock is wrong."
@@ -5219,6 +5583,196 @@
   "settingsWorkspaceMeta": "Show branch of workspaces in the sidebar",
   "@settingsWorkspaceMeta": {
     "description": "Row label and segmented control label."
+  },
+  "sidebarAddProject": "Add Project…",
+  "@sidebarAddProject": {
+    "description": "Sidebar footer New menu item, and button on the first-run page."
+  },
+  "sidebarChangeIcon": "Change Icon…",
+  "@sidebarChangeIcon": {
+    "description": "Sidebar project context menu item: opens the project icon dialog."
+  },
+  "sidebarCleanTraces": "Clean Up Agent Traces…",
+  "@sidebarCleanTraces": {
+    "description": "Sidebar project context menu item: opens the dialog that removes files agents left in the project."
+  },
+  "sidebarCloseSession": "Close Session…",
+  "@sidebarCloseSession": {
+    "description": "Sidebar: session row context menu item."
+  },
+  "sidebarConnectError": "Can’t connect to the daemon: {error}",
+  "@sidebarConnectError": {
+    "description": "Sidebar: shown when the daemon cannot be reached.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarConnectPhone": "Connect Phone…",
+  "@sidebarConnectPhone": {
+    "description": "Sidebar footer New menu item: opens the phone pairing page."
+  },
+  "sidebarConnecting": "Connecting to the daemon…",
+  "@sidebarConnecting": {
+    "description": "Sidebar: shown at startup until the daemon answers."
+  },
+  "sidebarDeleteWorkspace": "Delete Workspace…",
+  "@sidebarDeleteWorkspace": {
+    "description": "Sidebar workspace context menu item."
+  },
+  "sidebarDismissNotice": "Dismiss",
+  "@sidebarDismissNotice": {
+    "description": "Sidebar notice: tooltip of the close button."
+  },
+  "sidebarFirstRunBody": "Posse organizes terminals and agents by project. Choose a folder as a project, then open terminals and agents in it.",
+  "@sidebarFirstRunBody": {
+    "description": "First-run page body."
+  },
+  "sidebarFirstRunTitle": "Add Your First Project",
+  "@sidebarFirstRunTitle": {
+    "description": "First-run page title, shown when there are no projects."
+  },
+  "sidebarFoldedWorkers": "{count, plural, one {# task worker collapsed} other {# task workers collapsed}}",
+  "@sidebarFoldedWorkers": {
+    "description": "Sidebar: tooltip of the “+N” on a session row whose task workers are folded away.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarHide": "Hide Sidebar",
+  "@sidebarHide": {
+    "description": "Title bar button tooltip: hides the sidebar. The shortcut is appended."
+  },
+  "sidebarHideSessions": "{count, plural, one {Hide # Session} other {Hide # Sessions}}",
+  "@sidebarHideSessions": {
+    "description": "Sidebar: tooltip of the disclosure arrow when the sessions are shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarHideWorkspaces": "{count, plural, one {Hide # Workspace} other {Hide # Workspaces}}",
+  "@sidebarHideWorkspaces": {
+    "description": "Sidebar: tooltip of the disclosure arrow when the workspaces are shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarMainWorkspace": "Main Workspace",
+  "@sidebarMainWorkspace": {
+    "description": "Sidebar: name of a project’s main workspace (the project folder itself) under the project header."
+  },
+  "sidebarMergeInto": "Merge into {branch}…",
+  "@sidebarMergeInto": {
+    "description": "Sidebar workspace context menu and task detail: merges the worktree branch into its base branch. branch is the base branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarMissing": "Folder missing",
+  "@sidebarMissing": {
+    "description": "Sidebar: shown at the end of a workspace row whose folder no longer exists."
+  },
+  "sidebarNewWorkspace": "New Workspace…",
+  "@sidebarNewWorkspace": {
+    "description": "Sidebar footer New menu item."
+  },
+  "sidebarNewWorkspaceHere": "New Workspace in This Project…",
+  "@sidebarNewWorkspaceHere": {
+    "description": "Sidebar workspace context menu item."
+  },
+  "sidebarOpenInFinderError": "Couldn’t open in Finder: {error}",
+  "@sidebarOpenInFinderError": {
+    "description": "Error bar: opening a workspace folder in Finder failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarOpenTerminal": "Open Terminal",
+  "@sidebarOpenTerminal": {
+    "description": "Sidebar: workspace context menu item that opens a plain shell."
+  },
+  "sidebarPin": "Pin to Top",
+  "@sidebarPin": {
+    "description": "Sidebar workspace context menu item: adds the workspace as a tile at the top of the sidebar."
+  },
+  "sidebarPinFull": "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}",
+  "@sidebarPinFull": {
+    "description": "Sidebar workspace context menu item, disabled because the tiles at the top are full.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarRemoveProject": "Remove Project…",
+  "@sidebarRemoveProject": {
+    "description": "Sidebar project context menu item and missing-folder button: removes the project from Posse (files stay)."
+  },
+  "sidebarReopenWindow": "Reopen Window",
+  "@sidebarReopenWindow": {
+    "description": "Sidebar notice button: quits and reopens the window with the new version."
+  },
+  "sidebarRunningTip": "{count, plural, one {# terminal running} other {# terminals running}}",
+  "@sidebarRunningTip": {
+    "description": "Sidebar: tooltip of the running-terminal count at the end of a collapsed row.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarShow": "Show Sidebar",
+  "@sidebarShow": {
+    "description": "Title bar button tooltip: shows the sidebar. The shortcut is appended."
+  },
+  "sidebarShowSessions": "{count, plural, one {Show # Session} other {Show # Sessions}}",
+  "@sidebarShowSessions": {
+    "description": "Sidebar: tooltip of the disclosure arrow on a project row that lists agent sessions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarShowWorkspaces": "{count, plural, one {Show # Workspace} other {Show # Workspaces}}",
+  "@sidebarShowWorkspaces": {
+    "description": "Sidebar: tooltip of the disclosure arrow on a project header with several workspaces.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sidebarUnpin": "Unpin",
+  "@sidebarUnpin": {
+    "description": "Sidebar workspace context menu item: removes the workspace from the tiles at the top."
+  },
+  "sidebarUpdatedBody": "Reopen the window to apply. Until then, projects in Desktop and Documents may not be able to read files.",
+  "@sidebarUpdatedBody": {
+    "description": "Sidebar notice body under “Posse Updated”."
+  },
+  "sidebarUpdatedDot": "Posse updated. Reopen the window to apply.",
+  "@sidebarUpdatedDot": {
+    "description": "Sidebar footer: tooltip of the dot shown after the update notice was dismissed; clicking it brings the notice back."
+  },
+  "sidebarUpdatedTitle": "Posse Updated",
+  "@sidebarUpdatedTitle": {
+    "description": "Sidebar notice title: the Posse.app on disk was replaced by a newer version."
+  },
+  "sidebarWorkspaces": "Workspaces",
+  "@sidebarWorkspaces": {
+    "description": "Sidebar: accessibility label of the scrolling project and workspace list."
   },
   "skillsAgentCountTip": "Skills available to {agent}",
   "@skillsAgentCountTip": {
@@ -6185,6 +6739,673 @@
   "@skillsWillModify": {
     "description": "Skill switch confirmation dialog: label above the file path."
   },
+  "tabBackToTask": "Back to Task",
+  "@tabBackToTask": {
+    "description": "Top right of a worker terminal: button that opens its task."
+  },
+  "tabCheatSheet": "Cheat Sheet",
+  "@tabCheatSheet": {
+    "description": "Top right of an agent terminal: button that opens the Cheat Sheet panel."
+  },
+  "tabCloseOthers": "Close Other Terminals",
+  "@tabCloseOthers": {
+    "description": "Tab context menu item."
+  },
+  "tabCloseRight": "Close Terminals to the Right",
+  "@tabCloseRight": {
+    "description": "Tab context menu item."
+  },
+  "tabCopyRef": "Copy Reference",
+  "@tabCopyRef": {
+    "description": "Tab context menu item: copies a line naming the terminal, task and session IDs, to paste to an agent."
+  },
+  "tabCopyTaskId": "Copy Task ID",
+  "@tabCopyTaskId": {
+    "description": "Tab context menu item for a worker terminal."
+  },
+  "tabCopyTerminalId": "Copy Terminal ID",
+  "@tabCopyTerminalId": {
+    "description": "Tab context menu item."
+  },
+  "tabHideSessionButtons": "Hide Session Buttons",
+  "@tabHideSessionButtons": {
+    "description": "Top right of an agent terminal: button that folds the session buttons into a handle."
+  },
+  "tabLocateFolder": "Locate Folder…",
+  "@tabLocateFolder": {
+    "description": "Button for a workspace whose folder is gone: choose where it moved."
+  },
+  "tabMergePanes": "Merge All Panes",
+  "@tabMergePanes": {
+    "description": "Tab context menu item: merges all panes back into one, closing none."
+  },
+  "tabMissingBody": "It may have been deleted, moved, or be on an external drive that isn’t connected. If it moved, locate the folder; if you don’t need it, remove it from Posse. Files on disk and branches are left alone.",
+  "@tabMissingBody": {
+    "description": "Empty workspace page: body of the card when the folder is gone."
+  },
+  "tabMissingFolder": "The workspace folder {path} no longer exists",
+  "@tabMissingFolder": {
+    "description": "Bar under the tab bar when the workspace folder is gone. path is the shortened folder path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "tabMissingTitle": "Folder No Longer Exists",
+  "@tabMissingTitle": {
+    "description": "Empty workspace page: title of the card when the folder is gone."
+  },
+  "tabMoveDown": "Move to New Pane Below",
+  "@tabMoveDown": {
+    "description": "Tab context menu item: moves the tab into a new pane below."
+  },
+  "tabMoveRight": "Move to New Pane on the Right",
+  "@tabMoveRight": {
+    "description": "Tab context menu item: moves the tab into a new pane to the right."
+  },
+  "tabNewTerminal": "New Terminal",
+  "@tabNewTerminal": {
+    "description": "Tab bar: tooltip of the + button that starts an agent or terminal in this pane."
+  },
+  "tabRefLine": "{name}: {parts}",
+  "@tabRefLine": {
+    "description": "Copy Reference text: the whole line. parts are the IDs joined.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRefNamed": "{name} “{title}”",
+  "@tabRefNamed": {
+    "description": "Copy Reference text: agent name with the session title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRefSeparator": ", ",
+  "@tabRefSeparator": {
+    "description": "Copy Reference text: separator between the terminal, task and session parts."
+  },
+  "tabRefSession": "session {id} (posse history show {id})",
+  "@tabRefSession": {
+    "description": "Copy Reference text: the session ID and the command that shows it. Keep the command as is.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRefTask": "task {id} (posse task show {id})",
+  "@tabRefTask": {
+    "description": "Copy Reference text: the task ID and the command that shows it. Keep the command as is.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRefTerminal": "terminal {id} (posse terminal read {id})",
+  "@tabRefTerminal": {
+    "description": "Copy Reference text: the terminal ID and the command that reads it. Keep the command as is.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "tabRemoveFromPosse": "Remove from Posse…",
+  "@tabRemoveFromPosse": {
+    "description": "Button for a workspace whose folder is gone: removes its record."
+  },
+  "tabRename": "Rename…",
+  "@tabRename": {
+    "description": "Tab context menu item."
+  },
+  "tabRenameLabel": "Tab Name",
+  "@tabRenameLabel": {
+    "description": "Tab bar: accessibility label of the text field shown while renaming a tab."
+  },
+  "tabResetName": "Restore Default Name",
+  "@tabResetName": {
+    "description": "Tab context menu item: drops the custom tab name."
+  },
+  "tabSessionImages": "Images generated and pasted in this session",
+  "@tabSessionImages": {
+    "description": "Top right of an agent terminal: button that opens the Images panel."
+  },
+  "tabSessionTools": "Skills and tools used in this session",
+  "@tabSessionTools": {
+    "description": "Top right of an agent terminal: button that opens the Skills & Tools panel."
+  },
+  "tabShowSessionButtons": "Show Session Buttons",
+  "@tabShowSessionButtons": {
+    "description": "Top right of an agent terminal: handle that brings back the session buttons."
+  },
+  "tabSplitMax": "Up to four panes",
+  "@tabSplitMax": {
+    "description": "Warning toast title: a split was requested but the tab area already has four panes."
+  },
+  "tabSplitMaxBody": "Drag the tab into an existing pane, or merge the panes first",
+  "@tabSplitMaxBody": {
+    "description": "Warning toast body under “Up to four panes”."
+  },
+  "tabSplitPlacedHere": "The new terminal was put in the current pane",
+  "@tabSplitPlacedHere": {
+    "description": "Warning toast body: a split could not be made, so the new terminal went into the focused pane."
+  },
+  "tabSplitTooSmall": "This pane is too small to split",
+  "@tabSplitTooSmall": {
+    "description": "Warning toast title: the focused pane is too small to be split."
+  },
+  "tasksAssignTo": "Assign to",
+  "@tasksAssignTo": {
+    "description": "Dispatch Task dialog: label before the agent checkboxes."
+  },
+  "tasksBranchNote": "With several agents selected, the branch name gets a suffix such as -claude.",
+  "@tasksBranchNote": {
+    "description": "Dispatch Task dialog: note under the branch field."
+  },
+  "tasksBranchPlaceholder": "Branch name",
+  "@tasksBranchPlaceholder": {
+    "description": "Dispatch Task dialog: placeholder of the branch field."
+  },
+  "tasksBranchVsBase": "{branch} vs {base}",
+  "@tasksBranchVsBase": {
+    "description": "Task detail diff line: the worker branch compared with its base branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "base": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksByAgent": "Dispatched by {agent}",
+  "@tasksByAgent": {
+    "description": "Task detail meta row: an agent session dispatched the task. agent is its name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksByAnyAgent": "Dispatched by an agent",
+  "@tasksByAnyAgent": {
+    "description": "Task detail meta row: an agent whose terminal is gone dispatched the task."
+  },
+  "tasksByYou": "Dispatched by you",
+  "@tasksByYou": {
+    "description": "Task detail meta row: who dispatched the task."
+  },
+  "tasksClearEnded": "Clear Ended",
+  "@tasksClearEnded": {
+    "description": "Tasks page header button: removes ended tasks from the list."
+  },
+  "tasksCloseBody": "The worker terminal will be closed.",
+  "@tasksCloseBody": {
+    "description": "Confirmation body before closing a finished task’s worker."
+  },
+  "tasksCloseConfirm": "Close {agent} worker?",
+  "@tasksCloseConfirm": {
+    "description": "Confirmation title before closing a task’s worker. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksCloseRunningBody": "The task hasn’t reported yet. Closing marks it as stopped and interrupts what the worker is doing.",
+  "@tasksCloseRunningBody": {
+    "description": "Confirmation body before closing a running task’s worker."
+  },
+  "tasksCloseWorker": "Close Worker",
+  "@tasksCloseWorker": {
+    "description": "Task detail button."
+  },
+  "tasksCommits": "{count, plural, one {# commit} other {# commits}}",
+  "@tasksCommits": {
+    "description": "Task detail diff line: number of commits on the worker branch.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksCountEnded": "Ended {count}",
+  "@tasksCountEnded": {
+    "description": "Tasks page overview card: number of ended tasks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksCountPending": "Needs You {count}",
+  "@tasksCountPending": {
+    "description": "Tasks page overview card: number of tasks waiting for you.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksCountRunning": "In Progress {count}",
+  "@tasksCountRunning": {
+    "description": "Tasks page overview card: number of running tasks.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksCounting": "Counting changes…",
+  "@tasksCounting": {
+    "description": "Task detail diff line: shown while the diff is computed."
+  },
+  "tasksDiffDirty": "{summary}. There are uncommitted changes; commit them before merging",
+  "@tasksDiffDirty": {
+    "description": "Task detail diff line when the worktree has uncommitted changes. summary is the rest of the line.",
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksDiffSeparator": ", ",
+  "@tasksDiffSeparator": {
+    "description": "Task detail diff line: separator between the commit, file and unversioned parts."
+  },
+  "tasksDirHint": "The worker works in this workspace’s folder.",
+  "@tasksDirHint": {
+    "description": "Dispatch Task dialog: note under the workspace picker."
+  },
+  "tasksDispatch": "Dispatch",
+  "@tasksDispatch": {
+    "description": "Dispatch Task dialog: default button with one agent selected."
+  },
+  "tasksDispatchEllipsis": "Dispatch Task…",
+  "@tasksDispatchEllipsis": {
+    "description": "Sidebar footer New menu item and Tasks page button: opens the Dispatch Task dialog."
+  },
+  "tasksDispatchTitle": "Dispatch Task",
+  "@tasksDispatchTitle": {
+    "description": "Dispatch Task dialog: title."
+  },
+  "tasksDispatchTo": "{count, plural, one {Dispatch to # Agent} other {Dispatch to # Agents}}",
+  "@tasksDispatchTo": {
+    "description": "Dispatch Task dialog: default button with several agents selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksDispatcher": "Dispatcher",
+  "@tasksDispatcher": {
+    "description": "Task detail messages: sender of answers and notes (the user or the dispatching agent)."
+  },
+  "tasksEmptyBody": "Hand something to Claude, Codex or Grok. They report here when they’re done, and ask you here when they have questions. An agent can also act as a coordinator and dispatch work to other agents.",
+  "@tasksEmptyBody": {
+    "description": "Tasks page: empty state body."
+  },
+  "tasksEmptyTitle": "No Tasks Yet",
+  "@tasksEmptyTitle": {
+    "description": "Tasks page: empty state title."
+  },
+  "tasksFilesChanged": "{count, plural, one {# file changed} other {# files changed}}, +{insertions} −{deletions}",
+  "@tasksFilesChanged": {
+    "description": "Task detail diff line: files changed with added and removed lines.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "insertions": {
+        "type": "int"
+      },
+      "deletions": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksFollowUpPlaceholder": "Follow-up: give the same worker more to do",
+  "@tasksFollowUpPlaceholder": {
+    "description": "Task detail: placeholder of the follow-up box after the task reported."
+  },
+  "tasksGuideNote": "How agents use tasks",
+  "@tasksGuideNote": {
+    "description": "Tasks page empty state: caption next to the command “posse task guide”."
+  },
+  "tasksHomeNote": "Hand work to other agents, then follow their progress, answer their questions and merge the results here. Select a task on the left to see its details.",
+  "@tasksHomeNote": {
+    "description": "Tasks page: overview card body when no task is selected."
+  },
+  "tasksInWorkspace": "In Workspace Folder",
+  "@tasksInWorkspace": {
+    "description": "Dispatch Task dialog: working directory option."
+  },
+  "tasksLastReport": "Previous Report",
+  "@tasksLastReport": {
+    "description": "Task detail: title of the report card while follow-up work is still running."
+  },
+  "tasksList": "Task List",
+  "@tasksList": {
+    "description": "Tasks page: accessibility label of the task list."
+  },
+  "tasksMergeInto": "Merge into {branch}",
+  "@tasksMergeInto": {
+    "description": "Task detail button: merges the worker’s branch into its base branch.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksMessages": "Messages",
+  "@tasksMessages": {
+    "description": "Task detail: title of the message thread card."
+  },
+  "tasksMsgAnswer": "Reply",
+  "@tasksMsgAnswer": {
+    "description": "Task detail messages: label of an answer to the worker."
+  },
+  "tasksMsgExit": "Exited",
+  "@tasksMsgExit": {
+    "description": "Task detail messages: label of the worker exiting."
+  },
+  "tasksMsgNote": "Note",
+  "@tasksMsgNote": {
+    "description": "Task detail messages: label of a note sent to the worker."
+  },
+  "tasksMsgQuestion": "Question",
+  "@tasksMsgQuestion": {
+    "description": "Task detail messages: label of a question from the worker."
+  },
+  "tasksNewWorktrees": "New Worktree Each",
+  "@tasksNewWorktrees": {
+    "description": "Dispatch Task dialog: working directory option; each agent gets a new git worktree."
+  },
+  "tasksNoAgents": "No Claude, Codex, grok or Cursor found on this Mac",
+  "@tasksNoAgents": {
+    "description": "Dispatch Task dialog: shown instead of the agent checkboxes."
+  },
+  "tasksNoChanges": "No changes yet",
+  "@tasksNoChanges": {
+    "description": "Task detail diff line: the worker hasn’t changed anything."
+  },
+  "tasksNotePlaceholder": "Add a note: the worker reads it at its next checkpoint",
+  "@tasksNotePlaceholder": {
+    "description": "Task detail: placeholder of the note box while the task runs."
+  },
+  "tasksNoticeDone": "Task finished",
+  "@tasksNoticeDone": {
+    "description": "System notification title: a task you dispatched reported done."
+  },
+  "tasksNoticeExited": "The worker exited without reporting",
+  "@tasksNoticeExited": {
+    "description": "System notification title: a task’s worker exited before reporting."
+  },
+  "tasksNoticeFailed": "Task failed",
+  "@tasksNoticeFailed": {
+    "description": "System notification title: a task you dispatched reported failure."
+  },
+  "tasksNoticeQuestion": "{agent} is waiting for your reply",
+  "@tasksNoticeQuestion": {
+    "description": "System notification title: a worker of a task you dispatched asked a question. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "tasksOpenWorker": "Open Worker Terminal",
+  "@tasksOpenWorker": {
+    "description": "Task detail button."
+  },
+  "tasksReplyButton": "Reply",
+  "@tasksReplyButton": {
+    "description": "Task detail: button that sends the answer."
+  },
+  "tasksReplyForDispatcher": "Answer for the dispatcher (it may also answer itself)",
+  "@tasksReplyForDispatcher": {
+    "description": "Task detail: placeholder of the reply box when an agent dispatched the task."
+  },
+  "tasksReplyPlaceholder": "Answer the worker’s question",
+  "@tasksReplyPlaceholder": {
+    "description": "Task detail: placeholder of the reply box under an open question."
+  },
+  "tasksReport": "Report",
+  "@tasksReport": {
+    "description": "Task detail: title of the worker’s report card; also the label of a report in the message list."
+  },
+  "tasksRunningTip": "{count, plural, one {# task in progress} other {# tasks in progress}}",
+  "@tasksRunningTip": {
+    "description": "Sidebar Tasks tile: tooltip of the running-task count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksSectionEnded": "Ended",
+  "@tasksSectionEnded": {
+    "description": "Tasks page list: section header for ended tasks."
+  },
+  "tasksSectionNeedsReply": "Needs Your Reply",
+  "@tasksSectionNeedsReply": {
+    "description": "Tasks page list: section header for tasks waiting for your reply."
+  },
+  "tasksSend": "Send",
+  "@tasksSend": {
+    "description": "Task detail: button that sends a note or follow-up."
+  },
+  "tasksSpec": "Task Description",
+  "@tasksSpec": {
+    "description": "Task detail: title of the card showing the task spec."
+  },
+  "tasksSpecPlaceholder": "What to do, the scope, what not to touch, and when it’s done. The worker can’t see your conversations with other agents, so write everything here.",
+  "@tasksSpecPlaceholder": {
+    "description": "Dispatch Task dialog: placeholder of the spec field."
+  },
+  "tasksStatusAwaitDispatcher": "Waiting for the dispatcher’s reply",
+  "@tasksStatusAwaitDispatcher": {
+    "description": "Tasks page: status of a running task whose worker asked the dispatching agent a question."
+  },
+  "tasksStatusExited": "Exited without reporting",
+  "@tasksStatusExited": {
+    "description": "Tasks page: status of a task whose worker exited before reporting."
+  },
+  "tasksStatusLost": "Interrupted when the daemon restarted",
+  "@tasksStatusLost": {
+    "description": "Tasks page: status of a task cut off by a daemon restart."
+  },
+  "tasksStatusNeedsApproval": "Needs You: the worker is waiting for your approval",
+  "@tasksStatusNeedsApproval": {
+    "description": "Tasks page: status of a running task whose worker waits for a permission prompt."
+  },
+  "tasksStatusNeedsReply": "Needs your reply",
+  "@tasksStatusNeedsReply": {
+    "description": "Tasks page: status of a running task whose worker asked you a question."
+  },
+  "tasksStatusStopped": "Stopped",
+  "@tasksStatusStopped": {
+    "description": "Tasks page: status of a task closed before it reported."
+  },
+  "tasksTitle": "Tasks",
+  "@tasksTitle": {
+    "description": "Sidebar tile name, Tasks page title and the title of its overview card."
+  },
+  "tasksTitlePlaceholder": "Title, e.g. Fix login page crash",
+  "@tasksTitlePlaceholder": {
+    "description": "Dispatch Task dialog: placeholder of the title field."
+  },
+  "tasksUntracked": "{count, plural, one {# unversioned new file} other {# unversioned new files}}",
+  "@tasksUntracked": {
+    "description": "Task detail diff line: new files not added to git.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tasksViewChanges": "View Changes",
+  "@tasksViewChanges": {
+    "description": "Task detail button: opens a terminal showing the worktree diff."
+  },
+  "tasksWorkDir": "Working Directory",
+  "@tasksWorkDir": {
+    "description": "Dispatch Task dialog: accessibility label of the working directory picker."
+  },
+  "tasksWorktreeHint": "Each agent gets its own git worktree and branch, so changes don’t interfere. Compare and merge when they’re done.",
+  "@tasksWorktreeHint": {
+    "description": "Dispatch Task dialog: note under the workspace picker when each agent gets a new worktree."
+  },
+  "termClear": "Clear",
+  "@termClear": {
+    "description": "Terminal context menu item: clears the screen and scrollback."
+  },
+  "termClearError": "Couldn’t clear the terminal: {error}",
+  "@termClearError": {
+    "description": "Error bar: clearing the terminal failed. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "termClose": "Close Terminal",
+  "@termClose": {
+    "description": "Terminal context menu item and tab close button tooltip: closes the terminal (asks first if a program is running)."
+  },
+  "termCopySessionId": "Copy Session ID",
+  "@termCopySessionId": {
+    "description": "Terminal and tab context menu item: copies the agent session ID."
+  },
+  "termDone": "Done",
+  "@termDone": {
+    "description": "Sidebar row label: an agent finished a turn you haven’t looked at yet."
+  },
+  "termExited": "Exited",
+  "@termExited": {
+    "description": "Tab and sidebar row: shown instead of the title once the terminal’s program has exited."
+  },
+  "termFindDownTip": "Down (Newer Output)",
+  "@termFindDownTip": {
+    "description": "Terminal find bar: tooltip of the button that jumps to the next match, further down in newer output. The shortcut is appended."
+  },
+  "termFindHistoryHint": "Agent conversations aren’t always kept in the terminal",
+  "@termFindHistoryHint": {
+    "description": "Terminal find bar in an agent terminal: hint under the bar when nothing matches, next to the Search in History button."
+  },
+  "termFindInHistory": "Search in History",
+  "@termFindInHistory": {
+    "description": "Terminal find bar in an agent terminal: button (and tooltip) that searches the same text in the History page."
+  },
+  "termFindLabel": "Find in Terminal",
+  "@termFindLabel": {
+    "description": "Terminal find bar: accessibility label of the search field."
+  },
+  "termFindNoResults": "No Results",
+  "@termFindNoResults": {
+    "description": "Terminal find bar: status shown when nothing matches."
+  },
+  "termFindSearching": "Searching",
+  "@termFindSearching": {
+    "description": "Terminal find bar: status shown in place of the match count while searching."
+  },
+  "termFindUpTip": "Up (Earlier Output)",
+  "@termFindUpTip": {
+    "description": "Terminal find bar: tooltip of the button that jumps to the previous match, higher up in older output. The shortcut is appended."
+  },
+  "termLoading": "Loading",
+  "@termLoading": {
+    "description": "Accessibility label of the honeycomb loading animation."
+  },
+  "termName": "Terminal",
+  "@termName": {
+    "description": "Name of a plain shell terminal (no agent) in tabs, menus and dialogs."
+  },
+  "termPending": "Needs You",
+  "@termPending": {
+    "description": "Sidebar row and tab label: an agent is waiting for approval or an answer. Shown in amber."
+  },
+  "termPhoneSized": "A phone is viewing this terminal, so it’s laid out for the phone’s screen",
+  "@termPhoneSized": {
+    "description": "Bar above a terminal while a phone is viewing it."
+  },
+  "termReclaimError": "Couldn’t resize for this Mac: {error}",
+  "@termReclaimError": {
+    "description": "Error bar: taking the terminal size back from the phone failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "termReclaimSize": "Resize for This Mac",
+  "@termReclaimSize": {
+    "description": "Button in the phone bar above a terminal: lays it out for the window again."
+  },
+  "termStart": "Start {name}",
+  "@termStart": {
+    "description": "Sidebar workspace context menu item and launch tile label: starts an agent. name is the agent name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "termStarting": "Starting {name}",
+  "@termStarting": {
+    "description": "Shown over a new terminal until its first output. name is the agent name or “Terminal”.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "termStatusExited": "Exited",
+  "@termStatusExited": {
+    "description": "Tooltip of an agent status icon."
+  },
+  "termStatusIdle": "Turn finished, waiting for your next step",
+  "@termStatusIdle": {
+    "description": "Tooltip of an agent status icon."
+  },
+  "termStatusLost": "Not Restored: starts when you switch to it, and the agent resumes its session",
+  "@termStatusLost": {
+    "description": "Tooltip of an agent status icon: a terminal left over from a previous daemon."
+  },
+  "termStatusStarting": "Starting",
+  "@termStatusStarting": {
+    "description": "Tooltip of an agent status icon."
+  },
+  "termStatusTasks": "Waiting on Tasks: waiting for the agents it dispatched",
+  "@termStatusTasks": {
+    "description": "Tooltip of an agent status icon: the session is waiting for tasks it dispatched."
+  },
+  "termStatusUnread": "Turn finished, not seen yet",
+  "@termStatusUnread": {
+    "description": "Tooltip of an agent status icon."
+  },
+  "termStatusWaiting": "Needs You: the agent is waiting for your approval or answer",
+  "@termStatusWaiting": {
+    "description": "Tooltip of an agent status icon."
+  },
+  "termStatusWorking": "Working",
+  "@termStatusWorking": {
+    "description": "Tooltip of an agent status icon."
+  },
   "tracesCleanBody": "Agents left these outside their workspaces. Checked items move to the Trash; worktrees are removed with git.",
   "@tracesCleanBody": {
     "description": "Clean Up Agent Traces dialog body."
@@ -6451,6 +7672,37 @@
   "updateUninterruptedNote": "Terminals stay connected during the update.",
   "@updateUninterruptedNote": {
     "description": "About settings update card or sidebar update notice: explanation for UninterruptedNote."
+  },
+  "upgradeError": "Couldn’t update the daemon. Terminals weren’t affected: {error}",
+  "@upgradeError": {
+    "description": "Error bar: handing terminals over to a new daemon failed. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "upgradeMismatch": "The daemon’s version doesn’t match the window, so projects can’t be read. Update the daemon in Settings › About; terminals will stay connected. ({error})",
+  "@upgradeMismatch": {
+    "description": "Sidebar error when the daemon version differs from the window and projects cannot be read. error is the underlying error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "upgradeRunning": "The daemon’s version doesn’t match the window. Updating the daemon; terminals will stay connected…",
+  "@upgradeRunning": {
+    "description": "Sidebar status while the window cannot read projects from an older daemon and is updating it."
+  },
+  "upgradeTooOld": "The daemon is too old to read projects and can’t be updated without disconnecting terminals. Restart it in Settings › About. ({error})",
+  "@upgradeTooOld": {
+    "description": "Sidebar error when the daemon is too old to talk to and cannot hand over terminals. error is the underlying error.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "usageCodexQuery": "Query Codex Reset Cards",
   "@usageCodexQuery": {

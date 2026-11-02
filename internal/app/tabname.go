@@ -9,11 +9,12 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。
-func (a *app) startRename(term terminalInfo) {
-	name, detail := tabLabel(term)
+func (a *app) startRename(m locales.Messages, term terminalInfo) {
+	name, detail := tabLabel(m, term)
 	// 退出的终端 detail 是"已退出"，不是标题，不拿来当名字
 	exited := !term.Running && !term.Lost
 	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
@@ -30,7 +31,7 @@ func (a *app) startRename(term terminalInfo) {
 
 // renameInput 是改名时标签里的输入框：回车或点别处保存，Esc 取消；清空等于恢复默认名称。
 func (a *app) renameInput(c *ui.Context, term terminalInfo) {
-	in := ui.TextInputBase(c, &a.renameText).Label("标签名").FontSize(fsSmall).MinWidth(120).Grow(1)
+	in := ui.TextInputBase(c, &a.renameText).Label(L(c).TabRenameLabel()).FontSize(fsSmall).MinWidth(120).Grow(1)
 	// 终端视图出现时会自动聚焦（切回这个标签、重新接入），没点别处就把焦点拿回来
 	if !in.Focused() {
 		in.Focus()
@@ -40,15 +41,15 @@ func (a *app) renameInput(c *ui.Context, term terminalInfo) {
 		a.renaming = ""
 	case in.Submitted(), in.PressedOutside():
 		// 点了别处也保存，和访达改名一样
-		a.finishRename(term)
+		a.finishRename(L(c), term)
 	}
 }
 
-func (a *app) finishRename(term terminalInfo) {
+func (a *app) finishRename(m locales.Messages, term terminalInfo) {
 	a.renaming = ""
 	name := strings.TrimSpace(a.renameText)
 	// 和默认显示的一样就不记，之后会话标题变了还能跟着变
-	if def, detail := tabLabel(terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail) {
+	if def, detail := tabLabel(m, terminalInfo{ID: term.ID, Title: term.Title, Agent: term.Agent, AgentState: term.AgentState, Running: true}); term.Name == "" && (name == def || name == detail) {
 		return
 	}
 	a.renameTerminal(term.ID, name)

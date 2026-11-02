@@ -598,7 +598,7 @@ func (a *app) refresh() {
 		if statusOK {
 			r.daemonInfo = daemonStatus{Version: st.Version, Build: st.Build, Pid: st.Pid, StartedAt: st.StartedAt}
 			a.autoUpgrade(r.daemonInfo)
-			r.err = a.staleDaemonError(r.daemonInfo, err)
+			r.err = a.staleDaemonError(appL(), r.daemonInfo, err)
 		}
 	} else {
 		for id := range a.diffAt {
@@ -797,7 +797,8 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	if !seen || a.state.NotifyOff {
 		return
 	}
-	title := noticeTitle(prev, status, t)
+	m := appL()
+	title := noticeTitle(m, prev, status, t)
 	if title == "" {
 		return
 	}
@@ -807,7 +808,7 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 	}
 	body := w.Label
 	if t.AgentState != nil && t.AgentState.Message != "" {
-		body += "：" + truncate(t.AgentState.Message, 120)
+		body = m.AppNoticeBody(w.Label, truncate(t.AgentState.Message, 120))
 	}
 	n := mygo.NewNotification(mygo.NotificationOptions{ID: "posse:" + w.ID + ":" + t.ID, Title: title, Body: body, Group: w.ID})
 	go func() {
@@ -819,15 +820,15 @@ func (a *app) noticeStatus(w workspace, t terminalInfo) {
 
 // noticeTitle 是终端状态从 prev 变成 status 时系统通知的标题，不用通知时为空。
 // 已完成跟着常驻进程的未读：手机看着时完成的不算未读，也就不通知。
-func noticeTitle(prev, status string, t terminalInfo) string {
+func noticeTitle(m locales.Messages, prev, status string, t terminalInfo) string {
 	if prev == status || t.Agent == "" {
 		return ""
 	}
 	switch {
 	case status == agent.StatusWaiting:
-		return agentTitle(t.Agent) + " 等待你处理"
+		return m.AppNoticeWaiting(agentTitle(t.Agent))
 	case status == agent.StatusIdle && prev == agent.StatusWorking && t.Unread:
-		return agentTitle(t.Agent) + " 已完成"
+		return m.AppNoticeDone(agentTitle(t.Agent))
 	}
 	return ""
 }
@@ -959,7 +960,7 @@ func (a *app) accel(id string) string {
 }
 
 // closeTab 是 ⌘W：文件标签里关当前文件（没有文件时回到终端），否则关当前终端（先问）。
-func (a *app) closeTab() {
+func (a *app) closeTab(m locales.Messages) {
 	if isBoard(a.selected) {
 		a.closeBoard()
 		return
@@ -974,7 +975,7 @@ func (a *app) closeTab() {
 		return
 	}
 	if cur := a.currentTerminal(w); cur != nil {
-		a.askClose(*cur)
+		a.askClose(m, *cur)
 	}
 }
 
@@ -1124,7 +1125,7 @@ func (a *app) saveState() {
 func (a *app) pasteImage(v *termView, png []byte) {
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("posse-paste-%d.png", time.Now().UnixNano()))
 	if err := os.WriteFile(path, png, 0o600); err != nil {
-		a.win.Update(func() { a.err = "粘贴图片失败：" + errtext.Text(err) })
+		a.win.Update(func() { a.err = appL().AppPasteImageError(errtext.Text(err)) })
 		return
 	}
 	a.win.Update(func() {
@@ -1174,20 +1175,20 @@ func (a *app) startTerminal(workspaceID, agent string) {
 	}()
 }
 
-func (a *app) askClose(t terminalInfo) {
+func (a *app) askClose(m locales.Messages, t terminalInfo) {
 	if !t.Running {
 		go a.closeTerminal(t.ID)
 		return
 	}
 	name := agentTitle(t.Agent)
 	if name == "" {
-		name = "终端"
+		name = m.TermName()
 	}
-	a.confirm("关闭 "+name+"？", "里面正在运行的程序会被结束。", "关闭", func() { a.closeTerminal(t.ID) })
+	a.confirm(m.AppCloseConfirm(name), m.AppCloseBody(), m.CommonClose(), func() { a.closeTerminal(t.ID) })
 }
 
 // askCloseAll 一次关掉几个终端：有程序在运行时只问一次。
-func (a *app) askCloseAll(terms []terminalInfo) {
+func (a *app) askCloseAll(m locales.Messages, terms []terminalInfo) {
 	running := 0
 	for _, t := range terms {
 		if t.Running {
@@ -1204,7 +1205,7 @@ func (a *app) askCloseAll(terms []terminalInfo) {
 		go closeAll()
 		return
 	}
-	a.confirm(fmt.Sprintf("关闭 %d 个终端？", len(terms)), "里面正在运行的程序会被结束。", "关闭", closeAll)
+	a.confirm(m.AppCloseAllConfirm(len(terms)), m.AppCloseAllBody(), m.CommonClose(), closeAll)
 }
 
 func (a *app) closeTerminal(id string) {
@@ -1220,7 +1221,7 @@ func (a *app) closeTerminal(id string) {
 
 // askRemoveProject 从 Posse 里移除 main 工作区 w 所在的项目：只删记录，不碰磁盘上的文件。
 // 常驻进程要求先删掉 worktree 工作区，这里先挡住并说明要删哪些。
-func (a *app) askRemoveProject(w workspace) {
+func (a *app) askRemoveProject(m locales.Messages, w workspace) {
 	var worktrees []string
 	for _, x := range a.byProject[w.ProjectID] {
 		if x.Kind == "worktree" {
@@ -1228,10 +1229,10 @@ func (a *app) askRemoveProject(w workspace) {
 		}
 	}
 	if len(worktrees) > 0 {
-		a.err = "先删除项目 " + w.Project + " 里的 worktree 工作区：" + strings.Join(worktrees, "、")
+		a.err = m.AppRemoveWorktreesFirst(w.Project, strings.Join(worktrees, m.AppListSeparator()))
 		return
 	}
-	a.confirm("从 Posse 移除项目 "+w.Project+"？", "只从 Posse 里移除，磁盘上的文件不会删除。项目里运行中的终端会被关闭。", "移除", func() {
+	a.confirm(m.AppRemoveProjectConfirm(w.Project), m.AppRemoveProjectBody(), m.CommonRemove(), func() {
 		a.call("project.rm", map[string]any{"project": w.ProjectID, "force": true}, nil, 30*time.Second)
 		a.refresh()
 	})
@@ -1256,9 +1257,9 @@ func showBranches(ws []workspace) {
 }
 
 // askRemoveMissing 移除目录已经不在的工作区：只删记录，不碰分支；项目目录不在时移除的是整个项目。
-func (a *app) askRemoveMissing(w workspace) {
+func (a *app) askRemoveMissing(m locales.Messages, w workspace) {
 	if w.Kind == "main" {
-		a.askRemoveProject(w)
+		a.askRemoveProject(m, w)
 		return
 	}
 	repo := ""
@@ -1267,7 +1268,7 @@ func (a *app) askRemoveMissing(w workspace) {
 			repo = x.Path
 		}
 	}
-	a.confirm("从 Posse 移除工作区 "+displayName(&w)+"？", "它的目录已经不在了，只从 Posse 里移除记录，分支不会删除。工作区里运行中的终端会被关闭。", "移除", func() {
+	a.confirm(m.AppRemoveWorkspaceConfirm(displayName(&w)), m.AppRemoveWorkspaceBody(), m.CommonRemove(), func() {
 		go func() {
 			if a.call("workspace.rm", map[string]any{"workspace": w.ID, "force": true}, nil, 30*time.Second) != nil {
 				return
@@ -1284,8 +1285,8 @@ func (a *app) askRemoveMissing(w workspace) {
 }
 
 // relocateWorkspace 给目录已经不在的工作区重新选目录（目录在外面挪了地方）。
-func (a *app) relocateWorkspace(w workspace) {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "重新指定 " + displayName(&w) + " 的目录", ButtonLabel: "选择",
+func (a *app) relocateWorkspace(m locales.Messages, w workspace) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.AppRelocateTitle(displayName(&w)), ButtonLabel: m.AppRelocateButton(),
 		DefaultPath: nearestDir(w.Path), Directory: true})
 	if err != nil || len(paths) == 0 {
 		return
@@ -1313,8 +1314,8 @@ func (a *app) confirm(title, body, verb string, do func()) {
 	a.confirming = true
 }
 
-func (a *app) addProject() {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "添加项目", ButtonLabel: "添加", Directory: true})
+func (a *app) addProject(m locales.Messages) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.AppAddProjectTitle(), ButtonLabel: m.AppAddProjectButton(), Directory: true})
 	if err != nil || len(paths) == 0 {
 		return
 	}
@@ -1334,7 +1335,7 @@ func (a *app) openNewWorkspace() {
 	}
 }
 
-func (a *app) createWorkspace(params map[string]any) {
+func (a *app) createWorkspace(m locales.Messages, params map[string]any) {
 	var w struct {
 		ID        string
 		Terminals []terminalInfo
@@ -1346,7 +1347,7 @@ func (a *app) createWorkspace(params map[string]any) {
 	if a.call("workspace.create", params, &w, 2*time.Minute) == nil {
 		a.win.Update(func() {
 			if w.Setup != nil && !w.Setup.OK {
-				a.err = "setup 脚本失败：" + truncate(w.Setup.Output, 200)
+				a.err = m.AppSetupError(truncate(w.Setup.Output, 200))
 			}
 			a.selected, a.revealSel = w.ID, true
 			if len(w.Terminals) > 0 {
@@ -1396,7 +1397,8 @@ func (a *app) dropGoneWorktrees(ctx context.Context, ws []workspace) []workspace
 		}
 	}
 	if len(names) > 0 && a.win != nil {
-		a.win.Update(func() { a.notify("目录已删除，移除了工作区 "+strings.Join(names, "、"), "", nil) })
+		m := appL()
+		a.win.Update(func() { a.notify(m.AppWorkspacesRemoved(strings.Join(names, m.AppListSeparator())), "", nil) })
 	}
 	return keep
 }

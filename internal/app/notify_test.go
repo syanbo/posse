@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"posse/internal/agent"
+	"posse/locales"
 )
 
 func TestNoticeTitle(t *testing.T) {
@@ -26,7 +27,7 @@ func TestNoticeTitle(t *testing.T) {
 		{"普通终端", "", agent.StatusWaiting, terminalInfo{ID: "t2"}, ""},
 	}
 	for _, c := range cases {
-		if got := noticeTitle(c.prev, c.status, c.t); got != c.want {
+		if got := noticeTitle(locales.In("zh-Hans"), c.prev, c.status, c.t); got != c.want {
 			t.Errorf("%s: noticeTitle = %q, want %q", c.name, got, c.want)
 		}
 	}

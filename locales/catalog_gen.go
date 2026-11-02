@@ -34,6 +34,310 @@ type Messages struct{ locale string }
 // source language.
 func In(locale string) Messages { return Messages{locale} }
 
+// AppAddProjectButton says "Add"
+// in the language the app shows.
+//
+// Default button of the system open dialog for adding a project.
+func AppAddProjectButton() string { return In(i18n.Locale()).AppAddProjectButton() }
+
+// AppAddProjectButton says "Add"
+// in the language of msgs.
+//
+// Default button of the system open dialog for adding a project.
+func (msgs Messages) AppAddProjectButton() string {
+	return Catalog.Format(msgs.locale, "appAddProjectButton", nil)
+}
+
+// AppAddProjectTitle says "Add Project"
+// in the language the app shows.
+//
+// Title of the system open dialog for adding a folder as a project.
+func AppAddProjectTitle() string { return In(i18n.Locale()).AppAddProjectTitle() }
+
+// AppAddProjectTitle says "Add Project"
+// in the language of msgs.
+//
+// Title of the system open dialog for adding a folder as a project.
+func (msgs Messages) AppAddProjectTitle() string {
+	return Catalog.Format(msgs.locale, "appAddProjectTitle", nil)
+}
+
+// AppCloseAllBody says "Programs running in them will be terminated."
+// in the language the app shows.
+//
+// Confirmation body before closing several terminals.
+func AppCloseAllBody() string { return In(i18n.Locale()).AppCloseAllBody() }
+
+// AppCloseAllBody says "Programs running in them will be terminated."
+// in the language of msgs.
+//
+// Confirmation body before closing several terminals.
+func (msgs Messages) AppCloseAllBody() string {
+	return Catalog.Format(msgs.locale, "appCloseAllBody", nil)
+}
+
+// AppCloseAllConfirm says "{count, plural, one {Close # terminal?} other {Close # terminals?}}"
+// in the language the app shows.
+//
+// Confirmation title before closing several terminals (Close Other / Close
+// to the Right).
+func AppCloseAllConfirm(count int) string { return In(i18n.Locale()).AppCloseAllConfirm(count) }
+
+// AppCloseAllConfirm says "{count, plural, one {Close # terminal?} other {Close # terminals?}}"
+// in the language of msgs.
+//
+// Confirmation title before closing several terminals (Close Other / Close
+// to the Right).
+func (msgs Messages) AppCloseAllConfirm(count int) string {
+	return Catalog.Format(msgs.locale, "appCloseAllConfirm", map[string]any{"count": count})
+}
+
+// AppCloseBody says "The program running in it will be terminated."
+// in the language the app shows.
+//
+// Confirmation body before closing one terminal.
+func AppCloseBody() string { return In(i18n.Locale()).AppCloseBody() }
+
+// AppCloseBody says "The program running in it will be terminated."
+// in the language of msgs.
+//
+// Confirmation body before closing one terminal.
+func (msgs Messages) AppCloseBody() string {
+	return Catalog.Format(msgs.locale, "appCloseBody", nil)
+}
+
+// AppCloseConfirm says "Close {name}?"
+// in the language the app shows.
+//
+// Confirmation title before closing a terminal with a running program. name
+// is the agent name or “Terminal”.
+func AppCloseConfirm(name string) string { return In(i18n.Locale()).AppCloseConfirm(name) }
+
+// AppCloseConfirm says "Close {name}?"
+// in the language of msgs.
+//
+// Confirmation title before closing a terminal with a running program. name
+// is the agent name or “Terminal”.
+func (msgs Messages) AppCloseConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "appCloseConfirm", map[string]any{"name": name})
+}
+
+// AppListSeparator says ", "
+// in the language the app shows.
+//
+// Separator between names in a list inside a sentence (workspace names).
+func AppListSeparator() string { return In(i18n.Locale()).AppListSeparator() }
+
+// AppListSeparator says ", "
+// in the language of msgs.
+//
+// Separator between names in a list inside a sentence (workspace names).
+func (msgs Messages) AppListSeparator() string {
+	return Catalog.Format(msgs.locale, "appListSeparator", nil)
+}
+
+// AppNoticeBody says "{workspace}: {message}"
+// in the language the app shows.
+//
+// System notification body: the workspace and the agent’s latest message.
+func AppNoticeBody(workspace string, message string) string {
+	return In(i18n.Locale()).AppNoticeBody(workspace, message)
+}
+
+// AppNoticeBody says "{workspace}: {message}"
+// in the language of msgs.
+//
+// System notification body: the workspace and the agent’s latest message.
+func (msgs Messages) AppNoticeBody(workspace string, message string) string {
+	return Catalog.Format(msgs.locale, "appNoticeBody", map[string]any{"workspace": workspace, "message": message})
+}
+
+// AppNoticeDone says "{agent} finished"
+// in the language the app shows.
+//
+// System notification title: an agent finished its turn while you were not
+// looking. agent is the agent name.
+func AppNoticeDone(agent string) string { return In(i18n.Locale()).AppNoticeDone(agent) }
+
+// AppNoticeDone says "{agent} finished"
+// in the language of msgs.
+//
+// System notification title: an agent finished its turn while you were not
+// looking. agent is the agent name.
+func (msgs Messages) AppNoticeDone(agent string) string {
+	return Catalog.Format(msgs.locale, "appNoticeDone", map[string]any{"agent": agent})
+}
+
+// AppNoticeWaiting says "{agent} needs you"
+// in the language the app shows.
+//
+// System notification title: an agent session is waiting for approval or an
+// answer. agent is the agent name (Claude, Codex…).
+func AppNoticeWaiting(agent string) string { return In(i18n.Locale()).AppNoticeWaiting(agent) }
+
+// AppNoticeWaiting says "{agent} needs you"
+// in the language of msgs.
+//
+// System notification title: an agent session is waiting for approval or an
+// answer. agent is the agent name (Claude, Codex…).
+func (msgs Messages) AppNoticeWaiting(agent string) string {
+	return Catalog.Format(msgs.locale, "appNoticeWaiting", map[string]any{"agent": agent})
+}
+
+// AppPasteImageError says "Couldn’t paste the image: {error}"
+// in the language the app shows.
+//
+// Error bar: saving a pasted clipboard image for the terminal failed.
+func AppPasteImageError(error string) string { return In(i18n.Locale()).AppPasteImageError(error) }
+
+// AppPasteImageError says "Couldn’t paste the image: {error}"
+// in the language of msgs.
+//
+// Error bar: saving a pasted clipboard image for the terminal failed.
+func (msgs Messages) AppPasteImageError(error string) string {
+	return Catalog.Format(msgs.locale, "appPasteImageError", map[string]any{"error": error})
+}
+
+// AppRelocateButton says "Choose"
+// in the language the app shows.
+//
+// Default button of the system open dialog for locating a workspace folder.
+func AppRelocateButton() string { return In(i18n.Locale()).AppRelocateButton() }
+
+// AppRelocateButton says "Choose"
+// in the language of msgs.
+//
+// Default button of the system open dialog for locating a workspace folder.
+func (msgs Messages) AppRelocateButton() string {
+	return Catalog.Format(msgs.locale, "appRelocateButton", nil)
+}
+
+// AppRelocateTitle says "Locate the Folder of {workspace}"
+// in the language the app shows.
+//
+// Title of the system open dialog for choosing the new folder of a
+// workspace whose folder moved.
+func AppRelocateTitle(workspace string) string { return In(i18n.Locale()).AppRelocateTitle(workspace) }
+
+// AppRelocateTitle says "Locate the Folder of {workspace}"
+// in the language of msgs.
+//
+// Title of the system open dialog for choosing the new folder of a
+// workspace whose folder moved.
+func (msgs Messages) AppRelocateTitle(workspace string) string {
+	return Catalog.Format(msgs.locale, "appRelocateTitle", map[string]any{"workspace": workspace})
+}
+
+// AppRemoveProjectBody says "It’s only removed from Posse; files on disk aren’t deleted. Running terminals in the project will be closed."
+// in the language the app shows.
+//
+// Confirmation body before removing a project.
+func AppRemoveProjectBody() string { return In(i18n.Locale()).AppRemoveProjectBody() }
+
+// AppRemoveProjectBody says "It’s only removed from Posse; files on disk aren’t deleted. Running terminals in the project will be closed."
+// in the language of msgs.
+//
+// Confirmation body before removing a project.
+func (msgs Messages) AppRemoveProjectBody() string {
+	return Catalog.Format(msgs.locale, "appRemoveProjectBody", nil)
+}
+
+// AppRemoveProjectConfirm says "Remove project {project} from Posse?"
+// in the language the app shows.
+//
+// Confirmation title before removing a project from the sidebar.
+func AppRemoveProjectConfirm(project string) string {
+	return In(i18n.Locale()).AppRemoveProjectConfirm(project)
+}
+
+// AppRemoveProjectConfirm says "Remove project {project} from Posse?"
+// in the language of msgs.
+//
+// Confirmation title before removing a project from the sidebar.
+func (msgs Messages) AppRemoveProjectConfirm(project string) string {
+	return Catalog.Format(msgs.locale, "appRemoveProjectConfirm", map[string]any{"project": project})
+}
+
+// AppRemoveWorkspaceBody says "Its folder no longer exists. Only its record is removed from Posse; the branch isn’t deleted. Running terminals in …"
+// in the language the app shows.
+//
+// Confirmation body before removing a workspace whose folder is gone.
+func AppRemoveWorkspaceBody() string { return In(i18n.Locale()).AppRemoveWorkspaceBody() }
+
+// AppRemoveWorkspaceBody says "Its folder no longer exists. Only its record is removed from Posse; the branch isn’t deleted. Running terminals in …"
+// in the language of msgs.
+//
+// Confirmation body before removing a workspace whose folder is gone.
+func (msgs Messages) AppRemoveWorkspaceBody() string {
+	return Catalog.Format(msgs.locale, "appRemoveWorkspaceBody", nil)
+}
+
+// AppRemoveWorkspaceConfirm says "Remove workspace {workspace} from Posse?"
+// in the language the app shows.
+//
+// Confirmation title before removing a workspace whose folder is gone.
+func AppRemoveWorkspaceConfirm(workspace string) string {
+	return In(i18n.Locale()).AppRemoveWorkspaceConfirm(workspace)
+}
+
+// AppRemoveWorkspaceConfirm says "Remove workspace {workspace} from Posse?"
+// in the language of msgs.
+//
+// Confirmation title before removing a workspace whose folder is gone.
+func (msgs Messages) AppRemoveWorkspaceConfirm(workspace string) string {
+	return Catalog.Format(msgs.locale, "appRemoveWorkspaceConfirm", map[string]any{"workspace": workspace})
+}
+
+// AppRemoveWorktreesFirst says "Delete the worktree workspaces in {project} first: {names}"
+// in the language the app shows.
+//
+// Error bar: a project can’t be removed while it has worktree workspaces.
+// names is the list of workspace names.
+func AppRemoveWorktreesFirst(project string, names string) string {
+	return In(i18n.Locale()).AppRemoveWorktreesFirst(project, names)
+}
+
+// AppRemoveWorktreesFirst says "Delete the worktree workspaces in {project} first: {names}"
+// in the language of msgs.
+//
+// Error bar: a project can’t be removed while it has worktree workspaces.
+// names is the list of workspace names.
+func (msgs Messages) AppRemoveWorktreesFirst(project string, names string) string {
+	return Catalog.Format(msgs.locale, "appRemoveWorktreesFirst", map[string]any{"project": project, "names": names})
+}
+
+// AppSetupError says "Setup script failed: {output}"
+// in the language the app shows.
+//
+// Error bar: the workspace setup script failed after creating a workspace.
+// output is the start of its output.
+func AppSetupError(output string) string { return In(i18n.Locale()).AppSetupError(output) }
+
+// AppSetupError says "Setup script failed: {output}"
+// in the language of msgs.
+//
+// Error bar: the workspace setup script failed after creating a workspace.
+// output is the start of its output.
+func (msgs Messages) AppSetupError(output string) string {
+	return Catalog.Format(msgs.locale, "appSetupError", map[string]any{"output": output})
+}
+
+// AppWorkspacesRemoved says "Removed workspaces whose folders were deleted: {names}"
+// in the language the app shows.
+//
+// Toast: worktree folders were deleted outside Posse, so their workspaces
+// were removed. names is the list of workspace names.
+func AppWorkspacesRemoved(names string) string { return In(i18n.Locale()).AppWorkspacesRemoved(names) }
+
+// AppWorkspacesRemoved says "Removed workspaces whose folders were deleted: {names}"
+// in the language of msgs.
+//
+// Toast: worktree folders were deleted outside Posse, so their workspaces
+// were removed. names is the list of workspace names.
+func (msgs Messages) AppWorkspacesRemoved(names string) string {
+	return Catalog.Format(msgs.locale, "appWorkspacesRemoved", map[string]any{"names": names})
+}
+
 // AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
 // in the language the app shows.
 //
@@ -3240,6 +3544,62 @@ func (msgs Messages) CompareWorkspaceFiles(branch string, count int) string {
 	return Catalog.Format(msgs.locale, "compareWorkspaceFiles", map[string]any{"branch": branch, "count": count})
 }
 
+// EmptyNewTerminal says "New Terminal"
+// in the language the app shows.
+//
+// Empty workspace page: shortcut hint.
+func EmptyNewTerminal() string { return In(i18n.Locale()).EmptyNewTerminal() }
+
+// EmptyNewTerminal says "New Terminal"
+// in the language of msgs.
+//
+// Empty workspace page: shortcut hint.
+func (msgs Messages) EmptyNewTerminal() string {
+	return Catalog.Format(msgs.locale, "emptyNewTerminal", nil)
+}
+
+// EmptyNewWorkspace says "New Workspace"
+// in the language the app shows.
+//
+// Empty workspace page: shortcut hint.
+func EmptyNewWorkspace() string { return In(i18n.Locale()).EmptyNewWorkspace() }
+
+// EmptyNewWorkspace says "New Workspace"
+// in the language of msgs.
+//
+// Empty workspace page: shortcut hint.
+func (msgs Messages) EmptyNewWorkspace() string {
+	return Catalog.Format(msgs.locale, "emptyNewWorkspace", nil)
+}
+
+// EmptyOpenFile says "Open File"
+// in the language the app shows.
+//
+// Empty workspace page: shortcut hint.
+func EmptyOpenFile() string { return In(i18n.Locale()).EmptyOpenFile() }
+
+// EmptyOpenFile says "Open File"
+// in the language of msgs.
+//
+// Empty workspace page: shortcut hint.
+func (msgs Messages) EmptyOpenFile() string {
+	return Catalog.Format(msgs.locale, "emptyOpenFile", nil)
+}
+
+// EmptySwitchTerminal says "Switch Terminal"
+// in the language the app shows.
+//
+// Empty workspace page: shortcut hint for ⌘1…9.
+func EmptySwitchTerminal() string { return In(i18n.Locale()).EmptySwitchTerminal() }
+
+// EmptySwitchTerminal says "Switch Terminal"
+// in the language of msgs.
+//
+// Empty workspace page: shortcut hint for ⌘1…9.
+func (msgs Messages) EmptySwitchTerminal() string {
+	return Catalog.Format(msgs.locale, "emptySwitchTerminal", nil)
+}
+
 // FilesAnnotateTip says "Annotate: see who changed each line"
 // in the language the app shows.
 //
@@ -4538,6 +4898,206 @@ func FilesWorkspaceGone() string { return In(i18n.Locale()).FilesWorkspaceGone()
 // Files Panel message when the workspace folder was removed.
 func (msgs Messages) FilesWorkspaceGone() string {
 	return Catalog.Format(msgs.locale, "filesWorkspaceGone", nil)
+}
+
+// FontsDecrease says "Decrease {what}"
+// in the language the app shows.
+//
+// Settings: accessibility label of the − button of a stepper. what is the
+// setting name, such as “Font size”.
+func FontsDecrease(what string) string { return In(i18n.Locale()).FontsDecrease(what) }
+
+// FontsDecrease says "Decrease {what}"
+// in the language of msgs.
+//
+// Settings: accessibility label of the − button of a stepper. what is the
+// setting name, such as “Font size”.
+func (msgs Messages) FontsDecrease(what string) string {
+	return Catalog.Format(msgs.locale, "fontsDecrease", map[string]any{"what": what})
+}
+
+// FontsDefault says "Default (JetBrains Mono)"
+// in the language the app shows.
+//
+// Settings, font picker: the entry (and button text) for the built-in
+// default font.
+func FontsDefault() string { return In(i18n.Locale()).FontsDefault() }
+
+// FontsDefault says "Default (JetBrains Mono)"
+// in the language of msgs.
+//
+// Settings, font picker: the entry (and button text) for the built-in
+// default font.
+func (msgs Messages) FontsDefault() string {
+	return Catalog.Format(msgs.locale, "fontsDefault", nil)
+}
+
+// FontsEditorPreview says "Editor Preview"
+// in the language the app shows.
+//
+// Settings, editor font card: accessibility label of the read-only sample
+// editor.
+func FontsEditorPreview() string { return In(i18n.Locale()).FontsEditorPreview() }
+
+// FontsEditorPreview says "Editor Preview"
+// in the language of msgs.
+//
+// Settings, editor font card: accessibility label of the read-only sample
+// editor.
+func (msgs Messages) FontsEditorPreview() string {
+	return Catalog.Format(msgs.locale, "fontsEditorPreview", nil)
+}
+
+// FontsEditorSampleComment says "greet returns a greeting: previews the editor font and size"
+// in the language the app shows.
+//
+// Settings, editor font preview: the comment on the first line of the
+// sample Go code (after “// ”).
+func FontsEditorSampleComment() string { return In(i18n.Locale()).FontsEditorSampleComment() }
+
+// FontsEditorSampleComment says "greet returns a greeting: previews the editor font and size"
+// in the language of msgs.
+//
+// Settings, editor font preview: the comment on the first line of the
+// sample Go code (after “// ”).
+func (msgs Messages) FontsEditorSampleComment() string {
+	return Catalog.Format(msgs.locale, "fontsEditorSampleComment", nil)
+}
+
+// FontsEditorSampleGreeting says "Hello, world"
+// in the language the app shows.
+//
+// Settings, editor font preview: the string the sample Go function returns.
+func FontsEditorSampleGreeting() string { return In(i18n.Locale()).FontsEditorSampleGreeting() }
+
+// FontsEditorSampleGreeting says "Hello, world"
+// in the language of msgs.
+//
+// Settings, editor font preview: the string the sample Go function returns.
+func (msgs Messages) FontsEditorSampleGreeting() string {
+	return Catalog.Format(msgs.locale, "fontsEditorSampleGreeting", nil)
+}
+
+// FontsIncrease says "Increase {what}"
+// in the language the app shows.
+//
+// Settings: accessibility label of the + button of a stepper. what is the
+// setting name.
+func FontsIncrease(what string) string { return In(i18n.Locale()).FontsIncrease(what) }
+
+// FontsIncrease says "Increase {what}"
+// in the language of msgs.
+//
+// Settings: accessibility label of the + button of a stepper. what is the
+// setting name.
+func (msgs Messages) FontsIncrease(what string) string {
+	return Catalog.Format(msgs.locale, "fontsIncrease", map[string]any{"what": what})
+}
+
+// FontsLoading says "Loading fonts…"
+// in the language the app shows.
+//
+// Settings, font picker: shown while the system font list loads.
+func FontsLoading() string { return In(i18n.Locale()).FontsLoading() }
+
+// FontsLoading says "Loading fonts…"
+// in the language of msgs.
+//
+// Settings, font picker: shown while the system font list loads.
+func (msgs Messages) FontsLoading() string {
+	return Catalog.Format(msgs.locale, "fontsLoading", nil)
+}
+
+// FontsMono says "Monospaced Fonts"
+// in the language the app shows.
+//
+// Settings, font picker list: group header above monospaced fonts.
+func FontsMono() string { return In(i18n.Locale()).FontsMono() }
+
+// FontsMono says "Monospaced Fonts"
+// in the language of msgs.
+//
+// Settings, font picker list: group header above monospaced fonts.
+func (msgs Messages) FontsMono() string {
+	return Catalog.Format(msgs.locale, "fontsMono", nil)
+}
+
+// FontsNoMatch says "No fonts with “{query}” in the name"
+// in the language the app shows.
+//
+// Settings, font picker: empty state for a search. query is the search
+// text.
+func FontsNoMatch(query string) string { return In(i18n.Locale()).FontsNoMatch(query) }
+
+// FontsNoMatch says "No fonts with “{query}” in the name"
+// in the language of msgs.
+//
+// Settings, font picker: empty state for a search. query is the search
+// text.
+func (msgs Messages) FontsNoMatch(query string) string {
+	return Catalog.Format(msgs.locale, "fontsNoMatch", map[string]any{"query": query})
+}
+
+// FontsOther says "Other Fonts"
+// in the language the app shows.
+//
+// Settings, font picker list: group header above proportional fonts.
+func FontsOther() string { return In(i18n.Locale()).FontsOther() }
+
+// FontsOther says "Other Fonts"
+// in the language of msgs.
+//
+// Settings, font picker list: group header above proportional fonts.
+func (msgs Messages) FontsOther() string {
+	return Catalog.Format(msgs.locale, "fontsOther", nil)
+}
+
+// FontsResetWhat says "Reset {what} to Default"
+// in the language the app shows.
+//
+// Settings: accessibility label of the Default button of a stepper. what is
+// the setting name.
+func FontsResetWhat(what string) string { return In(i18n.Locale()).FontsResetWhat(what) }
+
+// FontsResetWhat says "Reset {what} to Default"
+// in the language of msgs.
+//
+// Settings: accessibility label of the Default button of a stepper. what is
+// the setting name.
+func (msgs Messages) FontsResetWhat(what string) string {
+	return Catalog.Format(msgs.locale, "fontsResetWhat", map[string]any{"what": what})
+}
+
+// FontsSearch says "Search fonts"
+// in the language the app shows.
+//
+// Settings, font picker: placeholder of the search field.
+func FontsSearch() string { return In(i18n.Locale()).FontsSearch() }
+
+// FontsSearch says "Search fonts"
+// in the language of msgs.
+//
+// Settings, font picker: placeholder of the search field.
+func (msgs Messages) FontsSearch() string {
+	return Catalog.Format(msgs.locale, "fontsSearch", nil)
+}
+
+// FontsTermSample says "中文 English 123"
+// in the language the app shows.
+//
+// Settings, terminal font preview: sample text echoed in the fake terminal.
+// Keep some CJK characters: it shows how the chosen font falls back for
+// them.
+func FontsTermSample() string { return In(i18n.Locale()).FontsTermSample() }
+
+// FontsTermSample says "中文 English 123"
+// in the language of msgs.
+//
+// Settings, terminal font preview: sample text echoed in the fake terminal.
+// Keep some CJK characters: it shows how the chosen font falls back for
+// them.
+func (msgs Messages) FontsTermSample() string {
+	return Catalog.Format(msgs.locale, "fontsTermSample", nil)
 }
 
 // GitAbort says "Abort"
@@ -10272,6 +10832,22 @@ func (msgs Messages) KeysSettingsNote() string {
 	return Catalog.Format(msgs.locale, "keysSettingsNote", nil)
 }
 
+// KeysSpaceKey says "Space"
+// in the language the app shows.
+//
+// Name of the Space key when a shortcut is written out, as in menus and
+// tooltips (⌃Space).
+func KeysSpaceKey() string { return In(i18n.Locale()).KeysSpaceKey() }
+
+// KeysSpaceKey says "Space"
+// in the language of msgs.
+//
+// Name of the Space key when a shortcut is written out, as in menus and
+// tooltips (⌃Space).
+func (msgs Messages) KeysSpaceKey() string {
+	return Catalog.Format(msgs.locale, "keysSpaceKey", nil)
+}
+
 // KeysSplitDownLabel says "Split Down"
 // in the language the app shows.
 //
@@ -12994,6 +13570,370 @@ func (msgs Messages) MobileUse() string {
 	return Catalog.Format(msgs.locale, "mobileUse", nil)
 }
 
+// NewWorkspaceCreate says "Create Workspace"
+// in the language the app shows.
+//
+// New Workspace dialog: default button.
+func NewWorkspaceCreate() string { return In(i18n.Locale()).NewWorkspaceCreate() }
+
+// NewWorkspaceCreate says "Create Workspace"
+// in the language of msgs.
+//
+// New Workspace dialog: default button.
+func (msgs Messages) NewWorkspaceCreate() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceCreate", nil)
+}
+
+// NewWorkspaceFolderHint says "Opens another set of terminals in the same folder."
+// in the language the app shows.
+//
+// New Workspace dialog: note for a project that isn’t a git repository.
+func NewWorkspaceFolderHint() string { return In(i18n.Locale()).NewWorkspaceFolderHint() }
+
+// NewWorkspaceFolderHint says "Opens another set of terminals in the same folder."
+// in the language of msgs.
+//
+// New Workspace dialog: note for a project that isn’t a git repository.
+func (msgs Messages) NewWorkspaceFolderHint() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceFolderHint", nil)
+}
+
+// NewWorkspaceGitHint says "Creates a git worktree and a branch of the same name, so changes don’t interfere."
+// in the language the app shows.
+//
+// New Workspace dialog: note for a git project.
+func NewWorkspaceGitHint() string { return In(i18n.Locale()).NewWorkspaceGitHint() }
+
+// NewWorkspaceGitHint says "Creates a git worktree and a branch of the same name, so changes don’t interfere."
+// in the language of msgs.
+//
+// New Workspace dialog: note for a git project.
+func (msgs Messages) NewWorkspaceGitHint() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceGitHint", nil)
+}
+
+// NewWorkspaceNamePlaceholder says "Name, e.g. feat-login"
+// in the language the app shows.
+//
+// New Workspace dialog: placeholder of the name field.
+func NewWorkspaceNamePlaceholder() string { return In(i18n.Locale()).NewWorkspaceNamePlaceholder() }
+
+// NewWorkspaceNamePlaceholder says "Name, e.g. feat-login"
+// in the language of msgs.
+//
+// New Workspace dialog: placeholder of the name field.
+func (msgs Messages) NewWorkspaceNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceNamePlaceholder", nil)
+}
+
+// NewWorkspaceOnly says "Workspace Only"
+// in the language the app shows.
+//
+// New Workspace dialog: first segment of the agent picker; starts no agent.
+func NewWorkspaceOnly() string { return In(i18n.Locale()).NewWorkspaceOnly() }
+
+// NewWorkspaceOnly says "Workspace Only"
+// in the language of msgs.
+//
+// New Workspace dialog: first segment of the agent picker; starts no agent.
+func (msgs Messages) NewWorkspaceOnly() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceOnly", nil)
+}
+
+// NewWorkspacePromptPlaceholder says "Task for the agent (optional)"
+// in the language the app shows.
+//
+// New Workspace dialog: placeholder of the prompt field passed to the
+// started agent.
+func NewWorkspacePromptPlaceholder() string { return In(i18n.Locale()).NewWorkspacePromptPlaceholder() }
+
+// NewWorkspacePromptPlaceholder says "Task for the agent (optional)"
+// in the language of msgs.
+//
+// New Workspace dialog: placeholder of the prompt field passed to the
+// started agent.
+func (msgs Messages) NewWorkspacePromptPlaceholder() string {
+	return Catalog.Format(msgs.locale, "newWorkspacePromptPlaceholder", nil)
+}
+
+// NewWorkspaceStartWith says "Also Start"
+// in the language the app shows.
+//
+// New Workspace dialog: accessibility label of the agent picker.
+func NewWorkspaceStartWith() string { return In(i18n.Locale()).NewWorkspaceStartWith() }
+
+// NewWorkspaceStartWith says "Also Start"
+// in the language of msgs.
+//
+// New Workspace dialog: accessibility label of the agent picker.
+func (msgs Messages) NewWorkspaceStartWith() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceStartWith", nil)
+}
+
+// NewWorkspaceTitle says "New Workspace"
+// in the language the app shows.
+//
+// New Workspace dialog: title.
+func NewWorkspaceTitle() string { return In(i18n.Locale()).NewWorkspaceTitle() }
+
+// NewWorkspaceTitle says "New Workspace"
+// in the language of msgs.
+//
+// New Workspace dialog: title.
+func (msgs Messages) NewWorkspaceTitle() string {
+	return Catalog.Format(msgs.locale, "newWorkspaceTitle", nil)
+}
+
+// ProjectIconBadImage says "Can’t read this image: {error}"
+// in the language the app shows.
+//
+// Reason shown inside the project icon import error: the chosen image could
+// not be decoded. error is the decoder’s reason.
+func ProjectIconBadImage(error string) string { return In(i18n.Locale()).ProjectIconBadImage(error) }
+
+// ProjectIconBadImage says "Can’t read this image: {error}"
+// in the language of msgs.
+//
+// Reason shown inside the project icon import error: the chosen image could
+// not be decoded. error is the decoder’s reason.
+func (msgs Messages) ProjectIconBadImage(error string) string {
+	return Catalog.Format(msgs.locale, "projectIconBadImage", map[string]any{"error": error})
+}
+
+// ProjectIconBadSvg says "Can’t read this SVG: {error}"
+// in the language the app shows.
+//
+// Reason shown inside the project icon import error: the chosen SVG could
+// not be parsed. error is the parser’s reason.
+func ProjectIconBadSvg(error string) string { return In(i18n.Locale()).ProjectIconBadSvg(error) }
+
+// ProjectIconBadSvg says "Can’t read this SVG: {error}"
+// in the language of msgs.
+//
+// Reason shown inside the project icon import error: the chosen SVG could
+// not be parsed. error is the parser’s reason.
+func (msgs Messages) ProjectIconBadSvg(error string) string {
+	return Catalog.Format(msgs.locale, "projectIconBadSvg", map[string]any{"error": error})
+}
+
+// ProjectIconChooseImage says "Choose Image…"
+// in the language the app shows.
+//
+// Project icon dialog: button that opens a file dialog to pick an image.
+func ProjectIconChooseImage() string { return In(i18n.Locale()).ProjectIconChooseImage() }
+
+// ProjectIconChooseImage says "Choose Image…"
+// in the language of msgs.
+//
+// Project icon dialog: button that opens a file dialog to pick an image.
+func (msgs Messages) ProjectIconChooseImage() string {
+	return Catalog.Format(msgs.locale, "projectIconChooseImage", nil)
+}
+
+// ProjectIconChoosing says "Choosing…"
+// in the language the app shows.
+//
+// Project icon dialog: the Choose Image button while the file dialog is
+// open.
+func ProjectIconChoosing() string { return In(i18n.Locale()).ProjectIconChoosing() }
+
+// ProjectIconChoosing says "Choosing…"
+// in the language of msgs.
+//
+// Project icon dialog: the Choose Image button while the file dialog is
+// open.
+func (msgs Messages) ProjectIconChoosing() string {
+	return Catalog.Format(msgs.locale, "projectIconChoosing", nil)
+}
+
+// ProjectIconCopyNote says "The image is copied, so the original file can be deleted."
+// in the language the app shows.
+//
+// Project icon dialog: note under the buttons.
+func ProjectIconCopyNote() string { return In(i18n.Locale()).ProjectIconCopyNote() }
+
+// ProjectIconCopyNote says "The image is copied, so the original file can be deleted."
+// in the language of msgs.
+//
+// Project icon dialog: note under the buttons.
+func (msgs Messages) ProjectIconCopyNote() string {
+	return Catalog.Format(msgs.locale, "projectIconCopyNote", nil)
+}
+
+// ProjectIconDone says "Done"
+// in the language the app shows.
+//
+// Project icon dialog: button that applies the icon and closes the dialog.
+func ProjectIconDone() string { return In(i18n.Locale()).ProjectIconDone() }
+
+// ProjectIconDone says "Done"
+// in the language of msgs.
+//
+// Project icon dialog: button that applies the icon and closes the dialog.
+func (msgs Messages) ProjectIconDone() string {
+	return Catalog.Format(msgs.locale, "projectIconDone", nil)
+}
+
+// ProjectIconImages says "Images"
+// in the language the app shows.
+//
+// File type filter name in the system open dialog for choosing a project
+// icon.
+func ProjectIconImages() string { return In(i18n.Locale()).ProjectIconImages() }
+
+// ProjectIconImages says "Images"
+// in the language of msgs.
+//
+// File type filter name in the system open dialog for choosing a project
+// icon.
+func (msgs Messages) ProjectIconImages() string {
+	return Catalog.Format(msgs.locale, "projectIconImages", nil)
+}
+
+// ProjectIconImportError says "Couldn’t import the icon: {error}"
+// in the language the app shows.
+//
+// Error bar: importing a project icon failed. error is the reason.
+func ProjectIconImportError(error string) string {
+	return In(i18n.Locale()).ProjectIconImportError(error)
+}
+
+// ProjectIconImportError says "Couldn’t import the icon: {error}"
+// in the language of msgs.
+//
+// Error bar: importing a project icon failed. error is the reason.
+func (msgs Messages) ProjectIconImportError(error string) string {
+	return Catalog.Format(msgs.locale, "projectIconImportError", map[string]any{"error": error})
+}
+
+// ProjectIconPickButton says "Choose"
+// in the language the app shows.
+//
+// Default button of the system open dialog for choosing a project icon
+// image.
+func ProjectIconPickButton() string { return In(i18n.Locale()).ProjectIconPickButton() }
+
+// ProjectIconPickButton says "Choose"
+// in the language of msgs.
+//
+// Default button of the system open dialog for choosing a project icon
+// image.
+func (msgs Messages) ProjectIconPickButton() string {
+	return Catalog.Format(msgs.locale, "projectIconPickButton", nil)
+}
+
+// ProjectIconPickTitle says "Choose an Icon for {project}"
+// in the language the app shows.
+//
+// Title of the system open dialog for choosing a project icon image.
+// project is the project name.
+func ProjectIconPickTitle(project string) string {
+	return In(i18n.Locale()).ProjectIconPickTitle(project)
+}
+
+// ProjectIconPickTitle says "Choose an Icon for {project}"
+// in the language of msgs.
+//
+// Title of the system open dialog for choosing a project icon image.
+// project is the project name.
+func (msgs Messages) ProjectIconPickTitle(project string) string {
+	return Catalog.Format(msgs.locale, "projectIconPickTitle", map[string]any{"project": project})
+}
+
+// ProjectIconTextPlaceholder says "An emoji or one or two characters"
+// in the language the app shows.
+//
+// Project icon dialog: placeholder of the text field; the text becomes the
+// icon.
+func ProjectIconTextPlaceholder() string { return In(i18n.Locale()).ProjectIconTextPlaceholder() }
+
+// ProjectIconTextPlaceholder says "An emoji or one or two characters"
+// in the language of msgs.
+//
+// Project icon dialog: placeholder of the text field; the text becomes the
+// icon.
+func (msgs Messages) ProjectIconTextPlaceholder() string {
+	return Catalog.Format(msgs.locale, "projectIconTextPlaceholder", nil)
+}
+
+// ProjectIconTitle says "Change Icon"
+// in the language the app shows.
+//
+// Project icon dialog: title.
+func ProjectIconTitle() string { return In(i18n.Locale()).ProjectIconTitle() }
+
+// ProjectIconTitle says "Change Icon"
+// in the language of msgs.
+//
+// Project icon dialog: title.
+func (msgs Messages) ProjectIconTitle() string {
+	return Catalog.Format(msgs.locale, "projectIconTitle", nil)
+}
+
+// RecentContinue says "Continue in Posse"
+// in the language the app shows.
+//
+// Files panel, History page: tooltip of the play button on a session card;
+// resumes the session in a Posse terminal.
+func RecentContinue() string { return In(i18n.Locale()).RecentContinue() }
+
+// RecentContinue says "Continue in Posse"
+// in the language of msgs.
+//
+// Files panel, History page: tooltip of the play button on a session card;
+// resumes the session in a Posse terminal.
+func (msgs Messages) RecentContinue() string {
+	return Catalog.Format(msgs.locale, "recentContinue", nil)
+}
+
+// RecentEmpty says "This project has no sessions yet."
+// in the language the app shows.
+//
+// Files panel, History page: empty state when the current project has no
+// agent sessions.
+func RecentEmpty() string { return In(i18n.Locale()).RecentEmpty() }
+
+// RecentEmpty says "This project has no sessions yet."
+// in the language of msgs.
+//
+// Files panel, History page: empty state when the current project has no
+// agent sessions.
+func (msgs Messages) RecentEmpty() string {
+	return Catalog.Format(msgs.locale, "recentEmpty", nil)
+}
+
+// RecentYou says "You: {text}"
+// in the language the app shows.
+//
+// Files panel, History page: preview line under a session title when the
+// last message was written by the user. text is the message.
+func RecentYou(text string) string { return In(i18n.Locale()).RecentYou(text) }
+
+// RecentYou says "You: {text}"
+// in the language of msgs.
+//
+// Files panel, History page: preview line under a session title when the
+// last message was written by the user. text is the message.
+func (msgs Messages) RecentYou(text string) string {
+	return Catalog.Format(msgs.locale, "recentYou", map[string]any{"text": text})
+}
+
+// RelaunchError says "Couldn’t reopen the window: {error}"
+// in the language the app shows.
+//
+// Error bar: reopening the window after Posse was updated failed. error is
+// the reason.
+func RelaunchError(error string) string { return In(i18n.Locale()).RelaunchError(error) }
+
+// RelaunchError says "Couldn’t reopen the window: {error}"
+// in the language of msgs.
+//
+// Error bar: reopening the window after Posse was updated failed. error is
+// the reason.
+func (msgs Messages) RelaunchError(error string) string {
+	return Catalog.Format(msgs.locale, "relaunchError", map[string]any{"error": error})
+}
+
 // RelayClock says "Clock Off"
 // in the language the app shows.
 //
@@ -14682,6 +15622,526 @@ func SettingsWorkspaceMeta() string { return In(i18n.Locale()).SettingsWorkspace
 // Row label and segmented control label.
 func (msgs Messages) SettingsWorkspaceMeta() string {
 	return Catalog.Format(msgs.locale, "settingsWorkspaceMeta", nil)
+}
+
+// SidebarAddProject says "Add Project…"
+// in the language the app shows.
+//
+// Sidebar footer New menu item, and button on the first-run page.
+func SidebarAddProject() string { return In(i18n.Locale()).SidebarAddProject() }
+
+// SidebarAddProject says "Add Project…"
+// in the language of msgs.
+//
+// Sidebar footer New menu item, and button on the first-run page.
+func (msgs Messages) SidebarAddProject() string {
+	return Catalog.Format(msgs.locale, "sidebarAddProject", nil)
+}
+
+// SidebarChangeIcon says "Change Icon…"
+// in the language the app shows.
+//
+// Sidebar project context menu item: opens the project icon dialog.
+func SidebarChangeIcon() string { return In(i18n.Locale()).SidebarChangeIcon() }
+
+// SidebarChangeIcon says "Change Icon…"
+// in the language of msgs.
+//
+// Sidebar project context menu item: opens the project icon dialog.
+func (msgs Messages) SidebarChangeIcon() string {
+	return Catalog.Format(msgs.locale, "sidebarChangeIcon", nil)
+}
+
+// SidebarCleanTraces says "Clean Up Agent Traces…"
+// in the language the app shows.
+//
+// Sidebar project context menu item: opens the dialog that removes files
+// agents left in the project.
+func SidebarCleanTraces() string { return In(i18n.Locale()).SidebarCleanTraces() }
+
+// SidebarCleanTraces says "Clean Up Agent Traces…"
+// in the language of msgs.
+//
+// Sidebar project context menu item: opens the dialog that removes files
+// agents left in the project.
+func (msgs Messages) SidebarCleanTraces() string {
+	return Catalog.Format(msgs.locale, "sidebarCleanTraces", nil)
+}
+
+// SidebarCloseSession says "Close Session…"
+// in the language the app shows.
+//
+// Sidebar: session row context menu item.
+func SidebarCloseSession() string { return In(i18n.Locale()).SidebarCloseSession() }
+
+// SidebarCloseSession says "Close Session…"
+// in the language of msgs.
+//
+// Sidebar: session row context menu item.
+func (msgs Messages) SidebarCloseSession() string {
+	return Catalog.Format(msgs.locale, "sidebarCloseSession", nil)
+}
+
+// SidebarConnectError says "Can’t connect to the daemon: {error}"
+// in the language the app shows.
+//
+// Sidebar: shown when the daemon cannot be reached.
+func SidebarConnectError(error string) string { return In(i18n.Locale()).SidebarConnectError(error) }
+
+// SidebarConnectError says "Can’t connect to the daemon: {error}"
+// in the language of msgs.
+//
+// Sidebar: shown when the daemon cannot be reached.
+func (msgs Messages) SidebarConnectError(error string) string {
+	return Catalog.Format(msgs.locale, "sidebarConnectError", map[string]any{"error": error})
+}
+
+// SidebarConnectPhone says "Connect Phone…"
+// in the language the app shows.
+//
+// Sidebar footer New menu item: opens the phone pairing page.
+func SidebarConnectPhone() string { return In(i18n.Locale()).SidebarConnectPhone() }
+
+// SidebarConnectPhone says "Connect Phone…"
+// in the language of msgs.
+//
+// Sidebar footer New menu item: opens the phone pairing page.
+func (msgs Messages) SidebarConnectPhone() string {
+	return Catalog.Format(msgs.locale, "sidebarConnectPhone", nil)
+}
+
+// SidebarConnecting says "Connecting to the daemon…"
+// in the language the app shows.
+//
+// Sidebar: shown at startup until the daemon answers.
+func SidebarConnecting() string { return In(i18n.Locale()).SidebarConnecting() }
+
+// SidebarConnecting says "Connecting to the daemon…"
+// in the language of msgs.
+//
+// Sidebar: shown at startup until the daemon answers.
+func (msgs Messages) SidebarConnecting() string {
+	return Catalog.Format(msgs.locale, "sidebarConnecting", nil)
+}
+
+// SidebarDeleteWorkspace says "Delete Workspace…"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item.
+func SidebarDeleteWorkspace() string { return In(i18n.Locale()).SidebarDeleteWorkspace() }
+
+// SidebarDeleteWorkspace says "Delete Workspace…"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item.
+func (msgs Messages) SidebarDeleteWorkspace() string {
+	return Catalog.Format(msgs.locale, "sidebarDeleteWorkspace", nil)
+}
+
+// SidebarDismissNotice says "Dismiss"
+// in the language the app shows.
+//
+// Sidebar notice: tooltip of the close button.
+func SidebarDismissNotice() string { return In(i18n.Locale()).SidebarDismissNotice() }
+
+// SidebarDismissNotice says "Dismiss"
+// in the language of msgs.
+//
+// Sidebar notice: tooltip of the close button.
+func (msgs Messages) SidebarDismissNotice() string {
+	return Catalog.Format(msgs.locale, "sidebarDismissNotice", nil)
+}
+
+// SidebarFirstRunBody says "Posse organizes terminals and agents by project. Choose a folder as a project, then open terminals and agents in it."
+// in the language the app shows.
+//
+// First-run page body.
+func SidebarFirstRunBody() string { return In(i18n.Locale()).SidebarFirstRunBody() }
+
+// SidebarFirstRunBody says "Posse organizes terminals and agents by project. Choose a folder as a project, then open terminals and agents in it."
+// in the language of msgs.
+//
+// First-run page body.
+func (msgs Messages) SidebarFirstRunBody() string {
+	return Catalog.Format(msgs.locale, "sidebarFirstRunBody", nil)
+}
+
+// SidebarFirstRunTitle says "Add Your First Project"
+// in the language the app shows.
+//
+// First-run page title, shown when there are no projects.
+func SidebarFirstRunTitle() string { return In(i18n.Locale()).SidebarFirstRunTitle() }
+
+// SidebarFirstRunTitle says "Add Your First Project"
+// in the language of msgs.
+//
+// First-run page title, shown when there are no projects.
+func (msgs Messages) SidebarFirstRunTitle() string {
+	return Catalog.Format(msgs.locale, "sidebarFirstRunTitle", nil)
+}
+
+// SidebarFoldedWorkers says "{count, plural, one {# task worker collapsed} other {# task workers collapsed}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the “+N” on a session row whose task workers are
+// folded away.
+func SidebarFoldedWorkers(count int) string { return In(i18n.Locale()).SidebarFoldedWorkers(count) }
+
+// SidebarFoldedWorkers says "{count, plural, one {# task worker collapsed} other {# task workers collapsed}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the “+N” on a session row whose task workers are
+// folded away.
+func (msgs Messages) SidebarFoldedWorkers(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarFoldedWorkers", map[string]any{"count": count})
+}
+
+// SidebarHide says "Hide Sidebar"
+// in the language the app shows.
+//
+// Title bar button tooltip: hides the sidebar. The shortcut is appended.
+func SidebarHide() string { return In(i18n.Locale()).SidebarHide() }
+
+// SidebarHide says "Hide Sidebar"
+// in the language of msgs.
+//
+// Title bar button tooltip: hides the sidebar. The shortcut is appended.
+func (msgs Messages) SidebarHide() string {
+	return Catalog.Format(msgs.locale, "sidebarHide", nil)
+}
+
+// SidebarHideSessions says "{count, plural, one {Hide # Session} other {Hide # Sessions}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the disclosure arrow when the sessions are shown.
+func SidebarHideSessions(count int) string { return In(i18n.Locale()).SidebarHideSessions(count) }
+
+// SidebarHideSessions says "{count, plural, one {Hide # Session} other {Hide # Sessions}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the disclosure arrow when the sessions are shown.
+func (msgs Messages) SidebarHideSessions(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarHideSessions", map[string]any{"count": count})
+}
+
+// SidebarHideWorkspaces says "{count, plural, one {Hide # Workspace} other {Hide # Workspaces}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the disclosure arrow when the workspaces are shown.
+func SidebarHideWorkspaces(count int) string { return In(i18n.Locale()).SidebarHideWorkspaces(count) }
+
+// SidebarHideWorkspaces says "{count, plural, one {Hide # Workspace} other {Hide # Workspaces}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the disclosure arrow when the workspaces are shown.
+func (msgs Messages) SidebarHideWorkspaces(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarHideWorkspaces", map[string]any{"count": count})
+}
+
+// SidebarMainWorkspace says "Main Workspace"
+// in the language the app shows.
+//
+// Sidebar: name of a project’s main workspace (the project folder itself)
+// under the project header.
+func SidebarMainWorkspace() string { return In(i18n.Locale()).SidebarMainWorkspace() }
+
+// SidebarMainWorkspace says "Main Workspace"
+// in the language of msgs.
+//
+// Sidebar: name of a project’s main workspace (the project folder itself)
+// under the project header.
+func (msgs Messages) SidebarMainWorkspace() string {
+	return Catalog.Format(msgs.locale, "sidebarMainWorkspace", nil)
+}
+
+// SidebarMergeInto says "Merge into {branch}…"
+// in the language the app shows.
+//
+// Sidebar workspace context menu and task detail: merges the worktree
+// branch into its base branch. branch is the base branch.
+func SidebarMergeInto(branch string) string { return In(i18n.Locale()).SidebarMergeInto(branch) }
+
+// SidebarMergeInto says "Merge into {branch}…"
+// in the language of msgs.
+//
+// Sidebar workspace context menu and task detail: merges the worktree
+// branch into its base branch. branch is the base branch.
+func (msgs Messages) SidebarMergeInto(branch string) string {
+	return Catalog.Format(msgs.locale, "sidebarMergeInto", map[string]any{"branch": branch})
+}
+
+// SidebarMissing says "Folder missing"
+// in the language the app shows.
+//
+// Sidebar: shown at the end of a workspace row whose folder no longer
+// exists.
+func SidebarMissing() string { return In(i18n.Locale()).SidebarMissing() }
+
+// SidebarMissing says "Folder missing"
+// in the language of msgs.
+//
+// Sidebar: shown at the end of a workspace row whose folder no longer
+// exists.
+func (msgs Messages) SidebarMissing() string {
+	return Catalog.Format(msgs.locale, "sidebarMissing", nil)
+}
+
+// SidebarNewWorkspace says "New Workspace…"
+// in the language the app shows.
+//
+// Sidebar footer New menu item.
+func SidebarNewWorkspace() string { return In(i18n.Locale()).SidebarNewWorkspace() }
+
+// SidebarNewWorkspace says "New Workspace…"
+// in the language of msgs.
+//
+// Sidebar footer New menu item.
+func (msgs Messages) SidebarNewWorkspace() string {
+	return Catalog.Format(msgs.locale, "sidebarNewWorkspace", nil)
+}
+
+// SidebarNewWorkspaceHere says "New Workspace in This Project…"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item.
+func SidebarNewWorkspaceHere() string { return In(i18n.Locale()).SidebarNewWorkspaceHere() }
+
+// SidebarNewWorkspaceHere says "New Workspace in This Project…"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item.
+func (msgs Messages) SidebarNewWorkspaceHere() string {
+	return Catalog.Format(msgs.locale, "sidebarNewWorkspaceHere", nil)
+}
+
+// SidebarOpenInFinderError says "Couldn’t open in Finder: {error}"
+// in the language the app shows.
+//
+// Error bar: opening a workspace folder in Finder failed.
+func SidebarOpenInFinderError(error string) string {
+	return In(i18n.Locale()).SidebarOpenInFinderError(error)
+}
+
+// SidebarOpenInFinderError says "Couldn’t open in Finder: {error}"
+// in the language of msgs.
+//
+// Error bar: opening a workspace folder in Finder failed.
+func (msgs Messages) SidebarOpenInFinderError(error string) string {
+	return Catalog.Format(msgs.locale, "sidebarOpenInFinderError", map[string]any{"error": error})
+}
+
+// SidebarOpenTerminal says "Open Terminal"
+// in the language the app shows.
+//
+// Sidebar: workspace context menu item that opens a plain shell.
+func SidebarOpenTerminal() string { return In(i18n.Locale()).SidebarOpenTerminal() }
+
+// SidebarOpenTerminal says "Open Terminal"
+// in the language of msgs.
+//
+// Sidebar: workspace context menu item that opens a plain shell.
+func (msgs Messages) SidebarOpenTerminal() string {
+	return Catalog.Format(msgs.locale, "sidebarOpenTerminal", nil)
+}
+
+// SidebarPin says "Pin to Top"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item: adds the workspace as a tile at the
+// top of the sidebar.
+func SidebarPin() string { return In(i18n.Locale()).SidebarPin() }
+
+// SidebarPin says "Pin to Top"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item: adds the workspace as a tile at the
+// top of the sidebar.
+func (msgs Messages) SidebarPin() string {
+	return Catalog.Format(msgs.locale, "sidebarPin", nil)
+}
+
+// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item, disabled because the tiles at the
+// top are full.
+func SidebarPinFull(count int) string { return In(i18n.Locale()).SidebarPinFull(count) }
+
+// SidebarPinFull says "{count, plural, one {Pin to Top (Full: # Tile Max)} other {Pin to Top (Full: # Tiles Max)}}"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item, disabled because the tiles at the
+// top are full.
+func (msgs Messages) SidebarPinFull(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarPinFull", map[string]any{"count": count})
+}
+
+// SidebarRemoveProject says "Remove Project…"
+// in the language the app shows.
+//
+// Sidebar project context menu item and missing-folder button: removes the
+// project from Posse (files stay).
+func SidebarRemoveProject() string { return In(i18n.Locale()).SidebarRemoveProject() }
+
+// SidebarRemoveProject says "Remove Project…"
+// in the language of msgs.
+//
+// Sidebar project context menu item and missing-folder button: removes the
+// project from Posse (files stay).
+func (msgs Messages) SidebarRemoveProject() string {
+	return Catalog.Format(msgs.locale, "sidebarRemoveProject", nil)
+}
+
+// SidebarReopenWindow says "Reopen Window"
+// in the language the app shows.
+//
+// Sidebar notice button: quits and reopens the window with the new version.
+func SidebarReopenWindow() string { return In(i18n.Locale()).SidebarReopenWindow() }
+
+// SidebarReopenWindow says "Reopen Window"
+// in the language of msgs.
+//
+// Sidebar notice button: quits and reopens the window with the new version.
+func (msgs Messages) SidebarReopenWindow() string {
+	return Catalog.Format(msgs.locale, "sidebarReopenWindow", nil)
+}
+
+// SidebarRunningTip says "{count, plural, one {# terminal running} other {# terminals running}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the running-terminal count at the end of a collapsed
+// row.
+func SidebarRunningTip(count int) string { return In(i18n.Locale()).SidebarRunningTip(count) }
+
+// SidebarRunningTip says "{count, plural, one {# terminal running} other {# terminals running}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the running-terminal count at the end of a collapsed
+// row.
+func (msgs Messages) SidebarRunningTip(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarRunningTip", map[string]any{"count": count})
+}
+
+// SidebarShow says "Show Sidebar"
+// in the language the app shows.
+//
+// Title bar button tooltip: shows the sidebar. The shortcut is appended.
+func SidebarShow() string { return In(i18n.Locale()).SidebarShow() }
+
+// SidebarShow says "Show Sidebar"
+// in the language of msgs.
+//
+// Title bar button tooltip: shows the sidebar. The shortcut is appended.
+func (msgs Messages) SidebarShow() string {
+	return Catalog.Format(msgs.locale, "sidebarShow", nil)
+}
+
+// SidebarShowSessions says "{count, plural, one {Show # Session} other {Show # Sessions}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the disclosure arrow on a project row that lists
+// agent sessions.
+func SidebarShowSessions(count int) string { return In(i18n.Locale()).SidebarShowSessions(count) }
+
+// SidebarShowSessions says "{count, plural, one {Show # Session} other {Show # Sessions}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the disclosure arrow on a project row that lists
+// agent sessions.
+func (msgs Messages) SidebarShowSessions(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarShowSessions", map[string]any{"count": count})
+}
+
+// SidebarShowWorkspaces says "{count, plural, one {Show # Workspace} other {Show # Workspaces}}"
+// in the language the app shows.
+//
+// Sidebar: tooltip of the disclosure arrow on a project header with several
+// workspaces.
+func SidebarShowWorkspaces(count int) string { return In(i18n.Locale()).SidebarShowWorkspaces(count) }
+
+// SidebarShowWorkspaces says "{count, plural, one {Show # Workspace} other {Show # Workspaces}}"
+// in the language of msgs.
+//
+// Sidebar: tooltip of the disclosure arrow on a project header with several
+// workspaces.
+func (msgs Messages) SidebarShowWorkspaces(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarShowWorkspaces", map[string]any{"count": count})
+}
+
+// SidebarUnpin says "Unpin"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item: removes the workspace from the tiles
+// at the top.
+func SidebarUnpin() string { return In(i18n.Locale()).SidebarUnpin() }
+
+// SidebarUnpin says "Unpin"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item: removes the workspace from the tiles
+// at the top.
+func (msgs Messages) SidebarUnpin() string {
+	return Catalog.Format(msgs.locale, "sidebarUnpin", nil)
+}
+
+// SidebarUpdatedBody says "Reopen the window to apply. Until then, projects in Desktop and Documents may not be able to read files."
+// in the language the app shows.
+//
+// Sidebar notice body under “Posse Updated”.
+func SidebarUpdatedBody() string { return In(i18n.Locale()).SidebarUpdatedBody() }
+
+// SidebarUpdatedBody says "Reopen the window to apply. Until then, projects in Desktop and Documents may not be able to read files."
+// in the language of msgs.
+//
+// Sidebar notice body under “Posse Updated”.
+func (msgs Messages) SidebarUpdatedBody() string {
+	return Catalog.Format(msgs.locale, "sidebarUpdatedBody", nil)
+}
+
+// SidebarUpdatedDot says "Posse updated. Reopen the window to apply."
+// in the language the app shows.
+//
+// Sidebar footer: tooltip of the dot shown after the update notice was
+// dismissed; clicking it brings the notice back.
+func SidebarUpdatedDot() string { return In(i18n.Locale()).SidebarUpdatedDot() }
+
+// SidebarUpdatedDot says "Posse updated. Reopen the window to apply."
+// in the language of msgs.
+//
+// Sidebar footer: tooltip of the dot shown after the update notice was
+// dismissed; clicking it brings the notice back.
+func (msgs Messages) SidebarUpdatedDot() string {
+	return Catalog.Format(msgs.locale, "sidebarUpdatedDot", nil)
+}
+
+// SidebarUpdatedTitle says "Posse Updated"
+// in the language the app shows.
+//
+// Sidebar notice title: the Posse.app on disk was replaced by a newer
+// version.
+func SidebarUpdatedTitle() string { return In(i18n.Locale()).SidebarUpdatedTitle() }
+
+// SidebarUpdatedTitle says "Posse Updated"
+// in the language of msgs.
+//
+// Sidebar notice title: the Posse.app on disk was replaced by a newer
+// version.
+func (msgs Messages) SidebarUpdatedTitle() string {
+	return Catalog.Format(msgs.locale, "sidebarUpdatedTitle", nil)
+}
+
+// SidebarWorkspaces says "Workspaces"
+// in the language the app shows.
+//
+// Sidebar: accessibility label of the scrolling project and workspace list.
+func SidebarWorkspaces() string { return In(i18n.Locale()).SidebarWorkspaces() }
+
+// SidebarWorkspaces says "Workspaces"
+// in the language of msgs.
+//
+// Sidebar: accessibility label of the scrolling project and workspace list.
+func (msgs Messages) SidebarWorkspaces() string {
+	return Catalog.Format(msgs.locale, "sidebarWorkspaces", nil)
 }
 
 // SkillsAgentCountTip says "Skills available to {agent}"
@@ -17090,6 +18550,1958 @@ func (msgs Messages) SkillsWillModify() string {
 	return Catalog.Format(msgs.locale, "skillsWillModify", nil)
 }
 
+// TabBackToTask says "Back to Task"
+// in the language the app shows.
+//
+// Top right of a worker terminal: button that opens its task.
+func TabBackToTask() string { return In(i18n.Locale()).TabBackToTask() }
+
+// TabBackToTask says "Back to Task"
+// in the language of msgs.
+//
+// Top right of a worker terminal: button that opens its task.
+func (msgs Messages) TabBackToTask() string {
+	return Catalog.Format(msgs.locale, "tabBackToTask", nil)
+}
+
+// TabCheatSheet says "Cheat Sheet"
+// in the language the app shows.
+//
+// Top right of an agent terminal: button that opens the Cheat Sheet panel.
+func TabCheatSheet() string { return In(i18n.Locale()).TabCheatSheet() }
+
+// TabCheatSheet says "Cheat Sheet"
+// in the language of msgs.
+//
+// Top right of an agent terminal: button that opens the Cheat Sheet panel.
+func (msgs Messages) TabCheatSheet() string {
+	return Catalog.Format(msgs.locale, "tabCheatSheet", nil)
+}
+
+// TabCloseOthers says "Close Other Terminals"
+// in the language the app shows.
+//
+// Tab context menu item.
+func TabCloseOthers() string { return In(i18n.Locale()).TabCloseOthers() }
+
+// TabCloseOthers says "Close Other Terminals"
+// in the language of msgs.
+//
+// Tab context menu item.
+func (msgs Messages) TabCloseOthers() string {
+	return Catalog.Format(msgs.locale, "tabCloseOthers", nil)
+}
+
+// TabCloseRight says "Close Terminals to the Right"
+// in the language the app shows.
+//
+// Tab context menu item.
+func TabCloseRight() string { return In(i18n.Locale()).TabCloseRight() }
+
+// TabCloseRight says "Close Terminals to the Right"
+// in the language of msgs.
+//
+// Tab context menu item.
+func (msgs Messages) TabCloseRight() string {
+	return Catalog.Format(msgs.locale, "tabCloseRight", nil)
+}
+
+// TabCopyRef says "Copy Reference"
+// in the language the app shows.
+//
+// Tab context menu item: copies a line naming the terminal, task and
+// session IDs, to paste to an agent.
+func TabCopyRef() string { return In(i18n.Locale()).TabCopyRef() }
+
+// TabCopyRef says "Copy Reference"
+// in the language of msgs.
+//
+// Tab context menu item: copies a line naming the terminal, task and
+// session IDs, to paste to an agent.
+func (msgs Messages) TabCopyRef() string {
+	return Catalog.Format(msgs.locale, "tabCopyRef", nil)
+}
+
+// TabCopyTaskId says "Copy Task ID"
+// in the language the app shows.
+//
+// Tab context menu item for a worker terminal.
+func TabCopyTaskId() string { return In(i18n.Locale()).TabCopyTaskId() }
+
+// TabCopyTaskId says "Copy Task ID"
+// in the language of msgs.
+//
+// Tab context menu item for a worker terminal.
+func (msgs Messages) TabCopyTaskId() string {
+	return Catalog.Format(msgs.locale, "tabCopyTaskId", nil)
+}
+
+// TabCopyTerminalId says "Copy Terminal ID"
+// in the language the app shows.
+//
+// Tab context menu item.
+func TabCopyTerminalId() string { return In(i18n.Locale()).TabCopyTerminalId() }
+
+// TabCopyTerminalId says "Copy Terminal ID"
+// in the language of msgs.
+//
+// Tab context menu item.
+func (msgs Messages) TabCopyTerminalId() string {
+	return Catalog.Format(msgs.locale, "tabCopyTerminalId", nil)
+}
+
+// TabHideSessionButtons says "Hide Session Buttons"
+// in the language the app shows.
+//
+// Top right of an agent terminal: button that folds the session buttons
+// into a handle.
+func TabHideSessionButtons() string { return In(i18n.Locale()).TabHideSessionButtons() }
+
+// TabHideSessionButtons says "Hide Session Buttons"
+// in the language of msgs.
+//
+// Top right of an agent terminal: button that folds the session buttons
+// into a handle.
+func (msgs Messages) TabHideSessionButtons() string {
+	return Catalog.Format(msgs.locale, "tabHideSessionButtons", nil)
+}
+
+// TabLocateFolder says "Locate Folder…"
+// in the language the app shows.
+//
+// Button for a workspace whose folder is gone: choose where it moved.
+func TabLocateFolder() string { return In(i18n.Locale()).TabLocateFolder() }
+
+// TabLocateFolder says "Locate Folder…"
+// in the language of msgs.
+//
+// Button for a workspace whose folder is gone: choose where it moved.
+func (msgs Messages) TabLocateFolder() string {
+	return Catalog.Format(msgs.locale, "tabLocateFolder", nil)
+}
+
+// TabMergePanes says "Merge All Panes"
+// in the language the app shows.
+//
+// Tab context menu item: merges all panes back into one, closing none.
+func TabMergePanes() string { return In(i18n.Locale()).TabMergePanes() }
+
+// TabMergePanes says "Merge All Panes"
+// in the language of msgs.
+//
+// Tab context menu item: merges all panes back into one, closing none.
+func (msgs Messages) TabMergePanes() string {
+	return Catalog.Format(msgs.locale, "tabMergePanes", nil)
+}
+
+// TabMissingBody says "It may have been deleted, moved, or be on an external drive that isn’t connected. If it moved, locate the folder; i…"
+// in the language the app shows.
+//
+// Empty workspace page: body of the card when the folder is gone.
+func TabMissingBody() string { return In(i18n.Locale()).TabMissingBody() }
+
+// TabMissingBody says "It may have been deleted, moved, or be on an external drive that isn’t connected. If it moved, locate the folder; i…"
+// in the language of msgs.
+//
+// Empty workspace page: body of the card when the folder is gone.
+func (msgs Messages) TabMissingBody() string {
+	return Catalog.Format(msgs.locale, "tabMissingBody", nil)
+}
+
+// TabMissingFolder says "The workspace folder {path} no longer exists"
+// in the language the app shows.
+//
+// Bar under the tab bar when the workspace folder is gone. path is the
+// shortened folder path.
+func TabMissingFolder(path string) string { return In(i18n.Locale()).TabMissingFolder(path) }
+
+// TabMissingFolder says "The workspace folder {path} no longer exists"
+// in the language of msgs.
+//
+// Bar under the tab bar when the workspace folder is gone. path is the
+// shortened folder path.
+func (msgs Messages) TabMissingFolder(path string) string {
+	return Catalog.Format(msgs.locale, "tabMissingFolder", map[string]any{"path": path})
+}
+
+// TabMissingTitle says "Folder No Longer Exists"
+// in the language the app shows.
+//
+// Empty workspace page: title of the card when the folder is gone.
+func TabMissingTitle() string { return In(i18n.Locale()).TabMissingTitle() }
+
+// TabMissingTitle says "Folder No Longer Exists"
+// in the language of msgs.
+//
+// Empty workspace page: title of the card when the folder is gone.
+func (msgs Messages) TabMissingTitle() string {
+	return Catalog.Format(msgs.locale, "tabMissingTitle", nil)
+}
+
+// TabMoveDown says "Move to New Pane Below"
+// in the language the app shows.
+//
+// Tab context menu item: moves the tab into a new pane below.
+func TabMoveDown() string { return In(i18n.Locale()).TabMoveDown() }
+
+// TabMoveDown says "Move to New Pane Below"
+// in the language of msgs.
+//
+// Tab context menu item: moves the tab into a new pane below.
+func (msgs Messages) TabMoveDown() string {
+	return Catalog.Format(msgs.locale, "tabMoveDown", nil)
+}
+
+// TabMoveRight says "Move to New Pane on the Right"
+// in the language the app shows.
+//
+// Tab context menu item: moves the tab into a new pane to the right.
+func TabMoveRight() string { return In(i18n.Locale()).TabMoveRight() }
+
+// TabMoveRight says "Move to New Pane on the Right"
+// in the language of msgs.
+//
+// Tab context menu item: moves the tab into a new pane to the right.
+func (msgs Messages) TabMoveRight() string {
+	return Catalog.Format(msgs.locale, "tabMoveRight", nil)
+}
+
+// TabNewTerminal says "New Terminal"
+// in the language the app shows.
+//
+// Tab bar: tooltip of the + button that starts an agent or terminal in this
+// pane.
+func TabNewTerminal() string { return In(i18n.Locale()).TabNewTerminal() }
+
+// TabNewTerminal says "New Terminal"
+// in the language of msgs.
+//
+// Tab bar: tooltip of the + button that starts an agent or terminal in this
+// pane.
+func (msgs Messages) TabNewTerminal() string {
+	return Catalog.Format(msgs.locale, "tabNewTerminal", nil)
+}
+
+// TabRefLine says "{name}: {parts}"
+// in the language the app shows.
+//
+// Copy Reference text: the whole line. parts are the IDs joined.
+func TabRefLine(name string, parts string) string { return In(i18n.Locale()).TabRefLine(name, parts) }
+
+// TabRefLine says "{name}: {parts}"
+// in the language of msgs.
+//
+// Copy Reference text: the whole line. parts are the IDs joined.
+func (msgs Messages) TabRefLine(name string, parts string) string {
+	return Catalog.Format(msgs.locale, "tabRefLine", map[string]any{"name": name, "parts": parts})
+}
+
+// TabRefNamed says "{name} “{title}”"
+// in the language the app shows.
+//
+// Copy Reference text: agent name with the session title.
+func TabRefNamed(name string, title string) string { return In(i18n.Locale()).TabRefNamed(name, title) }
+
+// TabRefNamed says "{name} “{title}”"
+// in the language of msgs.
+//
+// Copy Reference text: agent name with the session title.
+func (msgs Messages) TabRefNamed(name string, title string) string {
+	return Catalog.Format(msgs.locale, "tabRefNamed", map[string]any{"name": name, "title": title})
+}
+
+// TabRefSeparator says ", "
+// in the language the app shows.
+//
+// Copy Reference text: separator between the terminal, task and session
+// parts.
+func TabRefSeparator() string { return In(i18n.Locale()).TabRefSeparator() }
+
+// TabRefSeparator says ", "
+// in the language of msgs.
+//
+// Copy Reference text: separator between the terminal, task and session
+// parts.
+func (msgs Messages) TabRefSeparator() string {
+	return Catalog.Format(msgs.locale, "tabRefSeparator", nil)
+}
+
+// TabRefSession says "session {id} (posse history show {id})"
+// in the language the app shows.
+//
+// Copy Reference text: the session ID and the command that shows it. Keep
+// the command as is.
+func TabRefSession(id string) string { return In(i18n.Locale()).TabRefSession(id) }
+
+// TabRefSession says "session {id} (posse history show {id})"
+// in the language of msgs.
+//
+// Copy Reference text: the session ID and the command that shows it. Keep
+// the command as is.
+func (msgs Messages) TabRefSession(id string) string {
+	return Catalog.Format(msgs.locale, "tabRefSession", map[string]any{"id": id})
+}
+
+// TabRefTask says "task {id} (posse task show {id})"
+// in the language the app shows.
+//
+// Copy Reference text: the task ID and the command that shows it. Keep the
+// command as is.
+func TabRefTask(id string) string { return In(i18n.Locale()).TabRefTask(id) }
+
+// TabRefTask says "task {id} (posse task show {id})"
+// in the language of msgs.
+//
+// Copy Reference text: the task ID and the command that shows it. Keep the
+// command as is.
+func (msgs Messages) TabRefTask(id string) string {
+	return Catalog.Format(msgs.locale, "tabRefTask", map[string]any{"id": id})
+}
+
+// TabRefTerminal says "terminal {id} (posse terminal read {id})"
+// in the language the app shows.
+//
+// Copy Reference text: the terminal ID and the command that reads it. Keep
+// the command as is.
+func TabRefTerminal(id string) string { return In(i18n.Locale()).TabRefTerminal(id) }
+
+// TabRefTerminal says "terminal {id} (posse terminal read {id})"
+// in the language of msgs.
+//
+// Copy Reference text: the terminal ID and the command that reads it. Keep
+// the command as is.
+func (msgs Messages) TabRefTerminal(id string) string {
+	return Catalog.Format(msgs.locale, "tabRefTerminal", map[string]any{"id": id})
+}
+
+// TabRemoveFromPosse says "Remove from Posse…"
+// in the language the app shows.
+//
+// Button for a workspace whose folder is gone: removes its record.
+func TabRemoveFromPosse() string { return In(i18n.Locale()).TabRemoveFromPosse() }
+
+// TabRemoveFromPosse says "Remove from Posse…"
+// in the language of msgs.
+//
+// Button for a workspace whose folder is gone: removes its record.
+func (msgs Messages) TabRemoveFromPosse() string {
+	return Catalog.Format(msgs.locale, "tabRemoveFromPosse", nil)
+}
+
+// TabRename says "Rename…"
+// in the language the app shows.
+//
+// Tab context menu item.
+func TabRename() string { return In(i18n.Locale()).TabRename() }
+
+// TabRename says "Rename…"
+// in the language of msgs.
+//
+// Tab context menu item.
+func (msgs Messages) TabRename() string {
+	return Catalog.Format(msgs.locale, "tabRename", nil)
+}
+
+// TabRenameLabel says "Tab Name"
+// in the language the app shows.
+//
+// Tab bar: accessibility label of the text field shown while renaming a
+// tab.
+func TabRenameLabel() string { return In(i18n.Locale()).TabRenameLabel() }
+
+// TabRenameLabel says "Tab Name"
+// in the language of msgs.
+//
+// Tab bar: accessibility label of the text field shown while renaming a
+// tab.
+func (msgs Messages) TabRenameLabel() string {
+	return Catalog.Format(msgs.locale, "tabRenameLabel", nil)
+}
+
+// TabResetName says "Restore Default Name"
+// in the language the app shows.
+//
+// Tab context menu item: drops the custom tab name.
+func TabResetName() string { return In(i18n.Locale()).TabResetName() }
+
+// TabResetName says "Restore Default Name"
+// in the language of msgs.
+//
+// Tab context menu item: drops the custom tab name.
+func (msgs Messages) TabResetName() string {
+	return Catalog.Format(msgs.locale, "tabResetName", nil)
+}
+
+// TabSessionImages says "Images generated and pasted in this session"
+// in the language the app shows.
+//
+// Top right of an agent terminal: button that opens the Images panel.
+func TabSessionImages() string { return In(i18n.Locale()).TabSessionImages() }
+
+// TabSessionImages says "Images generated and pasted in this session"
+// in the language of msgs.
+//
+// Top right of an agent terminal: button that opens the Images panel.
+func (msgs Messages) TabSessionImages() string {
+	return Catalog.Format(msgs.locale, "tabSessionImages", nil)
+}
+
+// TabSessionTools says "Skills and tools used in this session"
+// in the language the app shows.
+//
+// Top right of an agent terminal: button that opens the Skills & Tools
+// panel.
+func TabSessionTools() string { return In(i18n.Locale()).TabSessionTools() }
+
+// TabSessionTools says "Skills and tools used in this session"
+// in the language of msgs.
+//
+// Top right of an agent terminal: button that opens the Skills & Tools
+// panel.
+func (msgs Messages) TabSessionTools() string {
+	return Catalog.Format(msgs.locale, "tabSessionTools", nil)
+}
+
+// TabShowSessionButtons says "Show Session Buttons"
+// in the language the app shows.
+//
+// Top right of an agent terminal: handle that brings back the session
+// buttons.
+func TabShowSessionButtons() string { return In(i18n.Locale()).TabShowSessionButtons() }
+
+// TabShowSessionButtons says "Show Session Buttons"
+// in the language of msgs.
+//
+// Top right of an agent terminal: handle that brings back the session
+// buttons.
+func (msgs Messages) TabShowSessionButtons() string {
+	return Catalog.Format(msgs.locale, "tabShowSessionButtons", nil)
+}
+
+// TabSplitMax says "Up to four panes"
+// in the language the app shows.
+//
+// Warning toast title: a split was requested but the tab area already has
+// four panes.
+func TabSplitMax() string { return In(i18n.Locale()).TabSplitMax() }
+
+// TabSplitMax says "Up to four panes"
+// in the language of msgs.
+//
+// Warning toast title: a split was requested but the tab area already has
+// four panes.
+func (msgs Messages) TabSplitMax() string {
+	return Catalog.Format(msgs.locale, "tabSplitMax", nil)
+}
+
+// TabSplitMaxBody says "Drag the tab into an existing pane, or merge the panes first"
+// in the language the app shows.
+//
+// Warning toast body under “Up to four panes”.
+func TabSplitMaxBody() string { return In(i18n.Locale()).TabSplitMaxBody() }
+
+// TabSplitMaxBody says "Drag the tab into an existing pane, or merge the panes first"
+// in the language of msgs.
+//
+// Warning toast body under “Up to four panes”.
+func (msgs Messages) TabSplitMaxBody() string {
+	return Catalog.Format(msgs.locale, "tabSplitMaxBody", nil)
+}
+
+// TabSplitPlacedHere says "The new terminal was put in the current pane"
+// in the language the app shows.
+//
+// Warning toast body: a split could not be made, so the new terminal went
+// into the focused pane.
+func TabSplitPlacedHere() string { return In(i18n.Locale()).TabSplitPlacedHere() }
+
+// TabSplitPlacedHere says "The new terminal was put in the current pane"
+// in the language of msgs.
+//
+// Warning toast body: a split could not be made, so the new terminal went
+// into the focused pane.
+func (msgs Messages) TabSplitPlacedHere() string {
+	return Catalog.Format(msgs.locale, "tabSplitPlacedHere", nil)
+}
+
+// TabSplitTooSmall says "This pane is too small to split"
+// in the language the app shows.
+//
+// Warning toast title: the focused pane is too small to be split.
+func TabSplitTooSmall() string { return In(i18n.Locale()).TabSplitTooSmall() }
+
+// TabSplitTooSmall says "This pane is too small to split"
+// in the language of msgs.
+//
+// Warning toast title: the focused pane is too small to be split.
+func (msgs Messages) TabSplitTooSmall() string {
+	return Catalog.Format(msgs.locale, "tabSplitTooSmall", nil)
+}
+
+// TasksAssignTo says "Assign to"
+// in the language the app shows.
+//
+// Dispatch Task dialog: label before the agent checkboxes.
+func TasksAssignTo() string { return In(i18n.Locale()).TasksAssignTo() }
+
+// TasksAssignTo says "Assign to"
+// in the language of msgs.
+//
+// Dispatch Task dialog: label before the agent checkboxes.
+func (msgs Messages) TasksAssignTo() string {
+	return Catalog.Format(msgs.locale, "tasksAssignTo", nil)
+}
+
+// TasksBranchNote says "With several agents selected, the branch name gets a suffix such as -claude."
+// in the language the app shows.
+//
+// Dispatch Task dialog: note under the branch field.
+func TasksBranchNote() string { return In(i18n.Locale()).TasksBranchNote() }
+
+// TasksBranchNote says "With several agents selected, the branch name gets a suffix such as -claude."
+// in the language of msgs.
+//
+// Dispatch Task dialog: note under the branch field.
+func (msgs Messages) TasksBranchNote() string {
+	return Catalog.Format(msgs.locale, "tasksBranchNote", nil)
+}
+
+// TasksBranchPlaceholder says "Branch name"
+// in the language the app shows.
+//
+// Dispatch Task dialog: placeholder of the branch field.
+func TasksBranchPlaceholder() string { return In(i18n.Locale()).TasksBranchPlaceholder() }
+
+// TasksBranchPlaceholder says "Branch name"
+// in the language of msgs.
+//
+// Dispatch Task dialog: placeholder of the branch field.
+func (msgs Messages) TasksBranchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksBranchPlaceholder", nil)
+}
+
+// TasksBranchVsBase says "{branch} vs {base}"
+// in the language the app shows.
+//
+// Task detail diff line: the worker branch compared with its base branch.
+func TasksBranchVsBase(branch string, base string) string {
+	return In(i18n.Locale()).TasksBranchVsBase(branch, base)
+}
+
+// TasksBranchVsBase says "{branch} vs {base}"
+// in the language of msgs.
+//
+// Task detail diff line: the worker branch compared with its base branch.
+func (msgs Messages) TasksBranchVsBase(branch string, base string) string {
+	return Catalog.Format(msgs.locale, "tasksBranchVsBase", map[string]any{"branch": branch, "base": base})
+}
+
+// TasksByAgent says "Dispatched by {agent}"
+// in the language the app shows.
+//
+// Task detail meta row: an agent session dispatched the task. agent is its
+// name.
+func TasksByAgent(agent string) string { return In(i18n.Locale()).TasksByAgent(agent) }
+
+// TasksByAgent says "Dispatched by {agent}"
+// in the language of msgs.
+//
+// Task detail meta row: an agent session dispatched the task. agent is its
+// name.
+func (msgs Messages) TasksByAgent(agent string) string {
+	return Catalog.Format(msgs.locale, "tasksByAgent", map[string]any{"agent": agent})
+}
+
+// TasksByAnyAgent says "Dispatched by an agent"
+// in the language the app shows.
+//
+// Task detail meta row: an agent whose terminal is gone dispatched the
+// task.
+func TasksByAnyAgent() string { return In(i18n.Locale()).TasksByAnyAgent() }
+
+// TasksByAnyAgent says "Dispatched by an agent"
+// in the language of msgs.
+//
+// Task detail meta row: an agent whose terminal is gone dispatched the
+// task.
+func (msgs Messages) TasksByAnyAgent() string {
+	return Catalog.Format(msgs.locale, "tasksByAnyAgent", nil)
+}
+
+// TasksByYou says "Dispatched by you"
+// in the language the app shows.
+//
+// Task detail meta row: who dispatched the task.
+func TasksByYou() string { return In(i18n.Locale()).TasksByYou() }
+
+// TasksByYou says "Dispatched by you"
+// in the language of msgs.
+//
+// Task detail meta row: who dispatched the task.
+func (msgs Messages) TasksByYou() string {
+	return Catalog.Format(msgs.locale, "tasksByYou", nil)
+}
+
+// TasksClearEnded says "Clear Ended"
+// in the language the app shows.
+//
+// Tasks page header button: removes ended tasks from the list.
+func TasksClearEnded() string { return In(i18n.Locale()).TasksClearEnded() }
+
+// TasksClearEnded says "Clear Ended"
+// in the language of msgs.
+//
+// Tasks page header button: removes ended tasks from the list.
+func (msgs Messages) TasksClearEnded() string {
+	return Catalog.Format(msgs.locale, "tasksClearEnded", nil)
+}
+
+// TasksCloseBody says "The worker terminal will be closed."
+// in the language the app shows.
+//
+// Confirmation body before closing a finished task’s worker.
+func TasksCloseBody() string { return In(i18n.Locale()).TasksCloseBody() }
+
+// TasksCloseBody says "The worker terminal will be closed."
+// in the language of msgs.
+//
+// Confirmation body before closing a finished task’s worker.
+func (msgs Messages) TasksCloseBody() string {
+	return Catalog.Format(msgs.locale, "tasksCloseBody", nil)
+}
+
+// TasksCloseConfirm says "Close {agent} worker?"
+// in the language the app shows.
+//
+// Confirmation title before closing a task’s worker. agent is the agent
+// name.
+func TasksCloseConfirm(agent string) string { return In(i18n.Locale()).TasksCloseConfirm(agent) }
+
+// TasksCloseConfirm says "Close {agent} worker?"
+// in the language of msgs.
+//
+// Confirmation title before closing a task’s worker. agent is the agent
+// name.
+func (msgs Messages) TasksCloseConfirm(agent string) string {
+	return Catalog.Format(msgs.locale, "tasksCloseConfirm", map[string]any{"agent": agent})
+}
+
+// TasksCloseRunningBody says "The task hasn’t reported yet. Closing marks it as stopped and interrupts what the worker is doing."
+// in the language the app shows.
+//
+// Confirmation body before closing a running task’s worker.
+func TasksCloseRunningBody() string { return In(i18n.Locale()).TasksCloseRunningBody() }
+
+// TasksCloseRunningBody says "The task hasn’t reported yet. Closing marks it as stopped and interrupts what the worker is doing."
+// in the language of msgs.
+//
+// Confirmation body before closing a running task’s worker.
+func (msgs Messages) TasksCloseRunningBody() string {
+	return Catalog.Format(msgs.locale, "tasksCloseRunningBody", nil)
+}
+
+// TasksCloseWorker says "Close Worker"
+// in the language the app shows.
+//
+// Task detail button.
+func TasksCloseWorker() string { return In(i18n.Locale()).TasksCloseWorker() }
+
+// TasksCloseWorker says "Close Worker"
+// in the language of msgs.
+//
+// Task detail button.
+func (msgs Messages) TasksCloseWorker() string {
+	return Catalog.Format(msgs.locale, "tasksCloseWorker", nil)
+}
+
+// TasksCommits says "{count, plural, one {# commit} other {# commits}}"
+// in the language the app shows.
+//
+// Task detail diff line: number of commits on the worker branch.
+func TasksCommits(count int) string { return In(i18n.Locale()).TasksCommits(count) }
+
+// TasksCommits says "{count, plural, one {# commit} other {# commits}}"
+// in the language of msgs.
+//
+// Task detail diff line: number of commits on the worker branch.
+func (msgs Messages) TasksCommits(count int) string {
+	return Catalog.Format(msgs.locale, "tasksCommits", map[string]any{"count": count})
+}
+
+// TasksCountEnded says "Ended {count}"
+// in the language the app shows.
+//
+// Tasks page overview card: number of ended tasks.
+func TasksCountEnded(count int) string { return In(i18n.Locale()).TasksCountEnded(count) }
+
+// TasksCountEnded says "Ended {count}"
+// in the language of msgs.
+//
+// Tasks page overview card: number of ended tasks.
+func (msgs Messages) TasksCountEnded(count int) string {
+	return Catalog.Format(msgs.locale, "tasksCountEnded", map[string]any{"count": count})
+}
+
+// TasksCountPending says "Needs You {count}"
+// in the language the app shows.
+//
+// Tasks page overview card: number of tasks waiting for you.
+func TasksCountPending(count int) string { return In(i18n.Locale()).TasksCountPending(count) }
+
+// TasksCountPending says "Needs You {count}"
+// in the language of msgs.
+//
+// Tasks page overview card: number of tasks waiting for you.
+func (msgs Messages) TasksCountPending(count int) string {
+	return Catalog.Format(msgs.locale, "tasksCountPending", map[string]any{"count": count})
+}
+
+// TasksCountRunning says "In Progress {count}"
+// in the language the app shows.
+//
+// Tasks page overview card: number of running tasks.
+func TasksCountRunning(count int) string { return In(i18n.Locale()).TasksCountRunning(count) }
+
+// TasksCountRunning says "In Progress {count}"
+// in the language of msgs.
+//
+// Tasks page overview card: number of running tasks.
+func (msgs Messages) TasksCountRunning(count int) string {
+	return Catalog.Format(msgs.locale, "tasksCountRunning", map[string]any{"count": count})
+}
+
+// TasksCounting says "Counting changes…"
+// in the language the app shows.
+//
+// Task detail diff line: shown while the diff is computed.
+func TasksCounting() string { return In(i18n.Locale()).TasksCounting() }
+
+// TasksCounting says "Counting changes…"
+// in the language of msgs.
+//
+// Task detail diff line: shown while the diff is computed.
+func (msgs Messages) TasksCounting() string {
+	return Catalog.Format(msgs.locale, "tasksCounting", nil)
+}
+
+// TasksDiffDirty says "{summary}. There are uncommitted changes; commit them before merging"
+// in the language the app shows.
+//
+// Task detail diff line when the worktree has uncommitted changes. summary
+// is the rest of the line.
+func TasksDiffDirty(summary string) string { return In(i18n.Locale()).TasksDiffDirty(summary) }
+
+// TasksDiffDirty says "{summary}. There are uncommitted changes; commit them before merging"
+// in the language of msgs.
+//
+// Task detail diff line when the worktree has uncommitted changes. summary
+// is the rest of the line.
+func (msgs Messages) TasksDiffDirty(summary string) string {
+	return Catalog.Format(msgs.locale, "tasksDiffDirty", map[string]any{"summary": summary})
+}
+
+// TasksDiffSeparator says ", "
+// in the language the app shows.
+//
+// Task detail diff line: separator between the commit, file and unversioned
+// parts.
+func TasksDiffSeparator() string { return In(i18n.Locale()).TasksDiffSeparator() }
+
+// TasksDiffSeparator says ", "
+// in the language of msgs.
+//
+// Task detail diff line: separator between the commit, file and unversioned
+// parts.
+func (msgs Messages) TasksDiffSeparator() string {
+	return Catalog.Format(msgs.locale, "tasksDiffSeparator", nil)
+}
+
+// TasksDirHint says "The worker works in this workspace’s folder."
+// in the language the app shows.
+//
+// Dispatch Task dialog: note under the workspace picker.
+func TasksDirHint() string { return In(i18n.Locale()).TasksDirHint() }
+
+// TasksDirHint says "The worker works in this workspace’s folder."
+// in the language of msgs.
+//
+// Dispatch Task dialog: note under the workspace picker.
+func (msgs Messages) TasksDirHint() string {
+	return Catalog.Format(msgs.locale, "tasksDirHint", nil)
+}
+
+// TasksDispatch says "Dispatch"
+// in the language the app shows.
+//
+// Dispatch Task dialog: default button with one agent selected.
+func TasksDispatch() string { return In(i18n.Locale()).TasksDispatch() }
+
+// TasksDispatch says "Dispatch"
+// in the language of msgs.
+//
+// Dispatch Task dialog: default button with one agent selected.
+func (msgs Messages) TasksDispatch() string {
+	return Catalog.Format(msgs.locale, "tasksDispatch", nil)
+}
+
+// TasksDispatchEllipsis says "Dispatch Task…"
+// in the language the app shows.
+//
+// Sidebar footer New menu item and Tasks page button: opens the Dispatch
+// Task dialog.
+func TasksDispatchEllipsis() string { return In(i18n.Locale()).TasksDispatchEllipsis() }
+
+// TasksDispatchEllipsis says "Dispatch Task…"
+// in the language of msgs.
+//
+// Sidebar footer New menu item and Tasks page button: opens the Dispatch
+// Task dialog.
+func (msgs Messages) TasksDispatchEllipsis() string {
+	return Catalog.Format(msgs.locale, "tasksDispatchEllipsis", nil)
+}
+
+// TasksDispatchTitle says "Dispatch Task"
+// in the language the app shows.
+//
+// Dispatch Task dialog: title.
+func TasksDispatchTitle() string { return In(i18n.Locale()).TasksDispatchTitle() }
+
+// TasksDispatchTitle says "Dispatch Task"
+// in the language of msgs.
+//
+// Dispatch Task dialog: title.
+func (msgs Messages) TasksDispatchTitle() string {
+	return Catalog.Format(msgs.locale, "tasksDispatchTitle", nil)
+}
+
+// TasksDispatchTo says "{count, plural, one {Dispatch to # Agent} other {Dispatch to # Agents}}"
+// in the language the app shows.
+//
+// Dispatch Task dialog: default button with several agents selected.
+func TasksDispatchTo(count int) string { return In(i18n.Locale()).TasksDispatchTo(count) }
+
+// TasksDispatchTo says "{count, plural, one {Dispatch to # Agent} other {Dispatch to # Agents}}"
+// in the language of msgs.
+//
+// Dispatch Task dialog: default button with several agents selected.
+func (msgs Messages) TasksDispatchTo(count int) string {
+	return Catalog.Format(msgs.locale, "tasksDispatchTo", map[string]any{"count": count})
+}
+
+// TasksDispatcher says "Dispatcher"
+// in the language the app shows.
+//
+// Task detail messages: sender of answers and notes (the user or the
+// dispatching agent).
+func TasksDispatcher() string { return In(i18n.Locale()).TasksDispatcher() }
+
+// TasksDispatcher says "Dispatcher"
+// in the language of msgs.
+//
+// Task detail messages: sender of answers and notes (the user or the
+// dispatching agent).
+func (msgs Messages) TasksDispatcher() string {
+	return Catalog.Format(msgs.locale, "tasksDispatcher", nil)
+}
+
+// TasksEmptyBody says "Hand something to Claude, Codex or Grok. They report here when they’re done, and ask you here when they have questi…"
+// in the language the app shows.
+//
+// Tasks page: empty state body.
+func TasksEmptyBody() string { return In(i18n.Locale()).TasksEmptyBody() }
+
+// TasksEmptyBody says "Hand something to Claude, Codex or Grok. They report here when they’re done, and ask you here when they have questi…"
+// in the language of msgs.
+//
+// Tasks page: empty state body.
+func (msgs Messages) TasksEmptyBody() string {
+	return Catalog.Format(msgs.locale, "tasksEmptyBody", nil)
+}
+
+// TasksEmptyTitle says "No Tasks Yet"
+// in the language the app shows.
+//
+// Tasks page: empty state title.
+func TasksEmptyTitle() string { return In(i18n.Locale()).TasksEmptyTitle() }
+
+// TasksEmptyTitle says "No Tasks Yet"
+// in the language of msgs.
+//
+// Tasks page: empty state title.
+func (msgs Messages) TasksEmptyTitle() string {
+	return Catalog.Format(msgs.locale, "tasksEmptyTitle", nil)
+}
+
+// TasksFilesChanged says "{count, plural, one {# file changed} other {# files changed}}, +{insertions} −{deletions}"
+// in the language the app shows.
+//
+// Task detail diff line: files changed with added and removed lines.
+func TasksFilesChanged(count int, insertions int, deletions int) string {
+	return In(i18n.Locale()).TasksFilesChanged(count, insertions, deletions)
+}
+
+// TasksFilesChanged says "{count, plural, one {# file changed} other {# files changed}}, +{insertions} −{deletions}"
+// in the language of msgs.
+//
+// Task detail diff line: files changed with added and removed lines.
+func (msgs Messages) TasksFilesChanged(count int, insertions int, deletions int) string {
+	return Catalog.Format(msgs.locale, "tasksFilesChanged", map[string]any{"count": count, "insertions": insertions, "deletions": deletions})
+}
+
+// TasksFollowUpPlaceholder says "Follow-up: give the same worker more to do"
+// in the language the app shows.
+//
+// Task detail: placeholder of the follow-up box after the task reported.
+func TasksFollowUpPlaceholder() string { return In(i18n.Locale()).TasksFollowUpPlaceholder() }
+
+// TasksFollowUpPlaceholder says "Follow-up: give the same worker more to do"
+// in the language of msgs.
+//
+// Task detail: placeholder of the follow-up box after the task reported.
+func (msgs Messages) TasksFollowUpPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksFollowUpPlaceholder", nil)
+}
+
+// TasksGuideNote says "How agents use tasks"
+// in the language the app shows.
+//
+// Tasks page empty state: caption next to the command “posse task
+// guide”.
+func TasksGuideNote() string { return In(i18n.Locale()).TasksGuideNote() }
+
+// TasksGuideNote says "How agents use tasks"
+// in the language of msgs.
+//
+// Tasks page empty state: caption next to the command “posse task
+// guide”.
+func (msgs Messages) TasksGuideNote() string {
+	return Catalog.Format(msgs.locale, "tasksGuideNote", nil)
+}
+
+// TasksHomeNote says "Hand work to other agents, then follow their progress, answer their questions and merge the results here. Select a ta…"
+// in the language the app shows.
+//
+// Tasks page: overview card body when no task is selected.
+func TasksHomeNote() string { return In(i18n.Locale()).TasksHomeNote() }
+
+// TasksHomeNote says "Hand work to other agents, then follow their progress, answer their questions and merge the results here. Select a ta…"
+// in the language of msgs.
+//
+// Tasks page: overview card body when no task is selected.
+func (msgs Messages) TasksHomeNote() string {
+	return Catalog.Format(msgs.locale, "tasksHomeNote", nil)
+}
+
+// TasksInWorkspace says "In Workspace Folder"
+// in the language the app shows.
+//
+// Dispatch Task dialog: working directory option.
+func TasksInWorkspace() string { return In(i18n.Locale()).TasksInWorkspace() }
+
+// TasksInWorkspace says "In Workspace Folder"
+// in the language of msgs.
+//
+// Dispatch Task dialog: working directory option.
+func (msgs Messages) TasksInWorkspace() string {
+	return Catalog.Format(msgs.locale, "tasksInWorkspace", nil)
+}
+
+// TasksLastReport says "Previous Report"
+// in the language the app shows.
+//
+// Task detail: title of the report card while follow-up work is still
+// running.
+func TasksLastReport() string { return In(i18n.Locale()).TasksLastReport() }
+
+// TasksLastReport says "Previous Report"
+// in the language of msgs.
+//
+// Task detail: title of the report card while follow-up work is still
+// running.
+func (msgs Messages) TasksLastReport() string {
+	return Catalog.Format(msgs.locale, "tasksLastReport", nil)
+}
+
+// TasksList says "Task List"
+// in the language the app shows.
+//
+// Tasks page: accessibility label of the task list.
+func TasksList() string { return In(i18n.Locale()).TasksList() }
+
+// TasksList says "Task List"
+// in the language of msgs.
+//
+// Tasks page: accessibility label of the task list.
+func (msgs Messages) TasksList() string {
+	return Catalog.Format(msgs.locale, "tasksList", nil)
+}
+
+// TasksMergeInto says "Merge into {branch}"
+// in the language the app shows.
+//
+// Task detail button: merges the worker’s branch into its base branch.
+func TasksMergeInto(branch string) string { return In(i18n.Locale()).TasksMergeInto(branch) }
+
+// TasksMergeInto says "Merge into {branch}"
+// in the language of msgs.
+//
+// Task detail button: merges the worker’s branch into its base branch.
+func (msgs Messages) TasksMergeInto(branch string) string {
+	return Catalog.Format(msgs.locale, "tasksMergeInto", map[string]any{"branch": branch})
+}
+
+// TasksMessages says "Messages"
+// in the language the app shows.
+//
+// Task detail: title of the message thread card.
+func TasksMessages() string { return In(i18n.Locale()).TasksMessages() }
+
+// TasksMessages says "Messages"
+// in the language of msgs.
+//
+// Task detail: title of the message thread card.
+func (msgs Messages) TasksMessages() string {
+	return Catalog.Format(msgs.locale, "tasksMessages", nil)
+}
+
+// TasksMsgAnswer says "Reply"
+// in the language the app shows.
+//
+// Task detail messages: label of an answer to the worker.
+func TasksMsgAnswer() string { return In(i18n.Locale()).TasksMsgAnswer() }
+
+// TasksMsgAnswer says "Reply"
+// in the language of msgs.
+//
+// Task detail messages: label of an answer to the worker.
+func (msgs Messages) TasksMsgAnswer() string {
+	return Catalog.Format(msgs.locale, "tasksMsgAnswer", nil)
+}
+
+// TasksMsgExit says "Exited"
+// in the language the app shows.
+//
+// Task detail messages: label of the worker exiting.
+func TasksMsgExit() string { return In(i18n.Locale()).TasksMsgExit() }
+
+// TasksMsgExit says "Exited"
+// in the language of msgs.
+//
+// Task detail messages: label of the worker exiting.
+func (msgs Messages) TasksMsgExit() string {
+	return Catalog.Format(msgs.locale, "tasksMsgExit", nil)
+}
+
+// TasksMsgNote says "Note"
+// in the language the app shows.
+//
+// Task detail messages: label of a note sent to the worker.
+func TasksMsgNote() string { return In(i18n.Locale()).TasksMsgNote() }
+
+// TasksMsgNote says "Note"
+// in the language of msgs.
+//
+// Task detail messages: label of a note sent to the worker.
+func (msgs Messages) TasksMsgNote() string {
+	return Catalog.Format(msgs.locale, "tasksMsgNote", nil)
+}
+
+// TasksMsgQuestion says "Question"
+// in the language the app shows.
+//
+// Task detail messages: label of a question from the worker.
+func TasksMsgQuestion() string { return In(i18n.Locale()).TasksMsgQuestion() }
+
+// TasksMsgQuestion says "Question"
+// in the language of msgs.
+//
+// Task detail messages: label of a question from the worker.
+func (msgs Messages) TasksMsgQuestion() string {
+	return Catalog.Format(msgs.locale, "tasksMsgQuestion", nil)
+}
+
+// TasksNewWorktrees says "New Worktree Each"
+// in the language the app shows.
+//
+// Dispatch Task dialog: working directory option; each agent gets a new git
+// worktree.
+func TasksNewWorktrees() string { return In(i18n.Locale()).TasksNewWorktrees() }
+
+// TasksNewWorktrees says "New Worktree Each"
+// in the language of msgs.
+//
+// Dispatch Task dialog: working directory option; each agent gets a new git
+// worktree.
+func (msgs Messages) TasksNewWorktrees() string {
+	return Catalog.Format(msgs.locale, "tasksNewWorktrees", nil)
+}
+
+// TasksNoAgents says "No Claude, Codex, grok or Cursor found on this Mac"
+// in the language the app shows.
+//
+// Dispatch Task dialog: shown instead of the agent checkboxes.
+func TasksNoAgents() string { return In(i18n.Locale()).TasksNoAgents() }
+
+// TasksNoAgents says "No Claude, Codex, grok or Cursor found on this Mac"
+// in the language of msgs.
+//
+// Dispatch Task dialog: shown instead of the agent checkboxes.
+func (msgs Messages) TasksNoAgents() string {
+	return Catalog.Format(msgs.locale, "tasksNoAgents", nil)
+}
+
+// TasksNoChanges says "No changes yet"
+// in the language the app shows.
+//
+// Task detail diff line: the worker hasn’t changed anything.
+func TasksNoChanges() string { return In(i18n.Locale()).TasksNoChanges() }
+
+// TasksNoChanges says "No changes yet"
+// in the language of msgs.
+//
+// Task detail diff line: the worker hasn’t changed anything.
+func (msgs Messages) TasksNoChanges() string {
+	return Catalog.Format(msgs.locale, "tasksNoChanges", nil)
+}
+
+// TasksNotePlaceholder says "Add a note: the worker reads it at its next checkpoint"
+// in the language the app shows.
+//
+// Task detail: placeholder of the note box while the task runs.
+func TasksNotePlaceholder() string { return In(i18n.Locale()).TasksNotePlaceholder() }
+
+// TasksNotePlaceholder says "Add a note: the worker reads it at its next checkpoint"
+// in the language of msgs.
+//
+// Task detail: placeholder of the note box while the task runs.
+func (msgs Messages) TasksNotePlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksNotePlaceholder", nil)
+}
+
+// TasksNoticeDone says "Task finished"
+// in the language the app shows.
+//
+// System notification title: a task you dispatched reported done.
+func TasksNoticeDone() string { return In(i18n.Locale()).TasksNoticeDone() }
+
+// TasksNoticeDone says "Task finished"
+// in the language of msgs.
+//
+// System notification title: a task you dispatched reported done.
+func (msgs Messages) TasksNoticeDone() string {
+	return Catalog.Format(msgs.locale, "tasksNoticeDone", nil)
+}
+
+// TasksNoticeExited says "The worker exited without reporting"
+// in the language the app shows.
+//
+// System notification title: a task’s worker exited before reporting.
+func TasksNoticeExited() string { return In(i18n.Locale()).TasksNoticeExited() }
+
+// TasksNoticeExited says "The worker exited without reporting"
+// in the language of msgs.
+//
+// System notification title: a task’s worker exited before reporting.
+func (msgs Messages) TasksNoticeExited() string {
+	return Catalog.Format(msgs.locale, "tasksNoticeExited", nil)
+}
+
+// TasksNoticeFailed says "Task failed"
+// in the language the app shows.
+//
+// System notification title: a task you dispatched reported failure.
+func TasksNoticeFailed() string { return In(i18n.Locale()).TasksNoticeFailed() }
+
+// TasksNoticeFailed says "Task failed"
+// in the language of msgs.
+//
+// System notification title: a task you dispatched reported failure.
+func (msgs Messages) TasksNoticeFailed() string {
+	return Catalog.Format(msgs.locale, "tasksNoticeFailed", nil)
+}
+
+// TasksNoticeQuestion says "{agent} is waiting for your reply"
+// in the language the app shows.
+//
+// System notification title: a worker of a task you dispatched asked a
+// question. agent is the agent name.
+func TasksNoticeQuestion(agent string) string { return In(i18n.Locale()).TasksNoticeQuestion(agent) }
+
+// TasksNoticeQuestion says "{agent} is waiting for your reply"
+// in the language of msgs.
+//
+// System notification title: a worker of a task you dispatched asked a
+// question. agent is the agent name.
+func (msgs Messages) TasksNoticeQuestion(agent string) string {
+	return Catalog.Format(msgs.locale, "tasksNoticeQuestion", map[string]any{"agent": agent})
+}
+
+// TasksOpenWorker says "Open Worker Terminal"
+// in the language the app shows.
+//
+// Task detail button.
+func TasksOpenWorker() string { return In(i18n.Locale()).TasksOpenWorker() }
+
+// TasksOpenWorker says "Open Worker Terminal"
+// in the language of msgs.
+//
+// Task detail button.
+func (msgs Messages) TasksOpenWorker() string {
+	return Catalog.Format(msgs.locale, "tasksOpenWorker", nil)
+}
+
+// TasksReplyButton says "Reply"
+// in the language the app shows.
+//
+// Task detail: button that sends the answer.
+func TasksReplyButton() string { return In(i18n.Locale()).TasksReplyButton() }
+
+// TasksReplyButton says "Reply"
+// in the language of msgs.
+//
+// Task detail: button that sends the answer.
+func (msgs Messages) TasksReplyButton() string {
+	return Catalog.Format(msgs.locale, "tasksReplyButton", nil)
+}
+
+// TasksReplyForDispatcher says "Answer for the dispatcher (it may also answer itself)"
+// in the language the app shows.
+//
+// Task detail: placeholder of the reply box when an agent dispatched the
+// task.
+func TasksReplyForDispatcher() string { return In(i18n.Locale()).TasksReplyForDispatcher() }
+
+// TasksReplyForDispatcher says "Answer for the dispatcher (it may also answer itself)"
+// in the language of msgs.
+//
+// Task detail: placeholder of the reply box when an agent dispatched the
+// task.
+func (msgs Messages) TasksReplyForDispatcher() string {
+	return Catalog.Format(msgs.locale, "tasksReplyForDispatcher", nil)
+}
+
+// TasksReplyPlaceholder says "Answer the worker’s question"
+// in the language the app shows.
+//
+// Task detail: placeholder of the reply box under an open question.
+func TasksReplyPlaceholder() string { return In(i18n.Locale()).TasksReplyPlaceholder() }
+
+// TasksReplyPlaceholder says "Answer the worker’s question"
+// in the language of msgs.
+//
+// Task detail: placeholder of the reply box under an open question.
+func (msgs Messages) TasksReplyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksReplyPlaceholder", nil)
+}
+
+// TasksReport says "Report"
+// in the language the app shows.
+//
+// Task detail: title of the worker’s report card; also the label of a
+// report in the message list.
+func TasksReport() string { return In(i18n.Locale()).TasksReport() }
+
+// TasksReport says "Report"
+// in the language of msgs.
+//
+// Task detail: title of the worker’s report card; also the label of a
+// report in the message list.
+func (msgs Messages) TasksReport() string {
+	return Catalog.Format(msgs.locale, "tasksReport", nil)
+}
+
+// TasksRunningTip says "{count, plural, one {# task in progress} other {# tasks in progress}}"
+// in the language the app shows.
+//
+// Sidebar Tasks tile: tooltip of the running-task count.
+func TasksRunningTip(count int) string { return In(i18n.Locale()).TasksRunningTip(count) }
+
+// TasksRunningTip says "{count, plural, one {# task in progress} other {# tasks in progress}}"
+// in the language of msgs.
+//
+// Sidebar Tasks tile: tooltip of the running-task count.
+func (msgs Messages) TasksRunningTip(count int) string {
+	return Catalog.Format(msgs.locale, "tasksRunningTip", map[string]any{"count": count})
+}
+
+// TasksSectionEnded says "Ended"
+// in the language the app shows.
+//
+// Tasks page list: section header for ended tasks.
+func TasksSectionEnded() string { return In(i18n.Locale()).TasksSectionEnded() }
+
+// TasksSectionEnded says "Ended"
+// in the language of msgs.
+//
+// Tasks page list: section header for ended tasks.
+func (msgs Messages) TasksSectionEnded() string {
+	return Catalog.Format(msgs.locale, "tasksSectionEnded", nil)
+}
+
+// TasksSectionNeedsReply says "Needs Your Reply"
+// in the language the app shows.
+//
+// Tasks page list: section header for tasks waiting for your reply.
+func TasksSectionNeedsReply() string { return In(i18n.Locale()).TasksSectionNeedsReply() }
+
+// TasksSectionNeedsReply says "Needs Your Reply"
+// in the language of msgs.
+//
+// Tasks page list: section header for tasks waiting for your reply.
+func (msgs Messages) TasksSectionNeedsReply() string {
+	return Catalog.Format(msgs.locale, "tasksSectionNeedsReply", nil)
+}
+
+// TasksSend says "Send"
+// in the language the app shows.
+//
+// Task detail: button that sends a note or follow-up.
+func TasksSend() string { return In(i18n.Locale()).TasksSend() }
+
+// TasksSend says "Send"
+// in the language of msgs.
+//
+// Task detail: button that sends a note or follow-up.
+func (msgs Messages) TasksSend() string {
+	return Catalog.Format(msgs.locale, "tasksSend", nil)
+}
+
+// TasksSpec says "Task Description"
+// in the language the app shows.
+//
+// Task detail: title of the card showing the task spec.
+func TasksSpec() string { return In(i18n.Locale()).TasksSpec() }
+
+// TasksSpec says "Task Description"
+// in the language of msgs.
+//
+// Task detail: title of the card showing the task spec.
+func (msgs Messages) TasksSpec() string {
+	return Catalog.Format(msgs.locale, "tasksSpec", nil)
+}
+
+// TasksSpecPlaceholder says "What to do, the scope, what not to touch, and when it’s done. The worker can’t see your conversations with other …"
+// in the language the app shows.
+//
+// Dispatch Task dialog: placeholder of the spec field.
+func TasksSpecPlaceholder() string { return In(i18n.Locale()).TasksSpecPlaceholder() }
+
+// TasksSpecPlaceholder says "What to do, the scope, what not to touch, and when it’s done. The worker can’t see your conversations with other …"
+// in the language of msgs.
+//
+// Dispatch Task dialog: placeholder of the spec field.
+func (msgs Messages) TasksSpecPlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksSpecPlaceholder", nil)
+}
+
+// TasksStatusAwaitDispatcher says "Waiting for the dispatcher’s reply"
+// in the language the app shows.
+//
+// Tasks page: status of a running task whose worker asked the dispatching
+// agent a question.
+func TasksStatusAwaitDispatcher() string { return In(i18n.Locale()).TasksStatusAwaitDispatcher() }
+
+// TasksStatusAwaitDispatcher says "Waiting for the dispatcher’s reply"
+// in the language of msgs.
+//
+// Tasks page: status of a running task whose worker asked the dispatching
+// agent a question.
+func (msgs Messages) TasksStatusAwaitDispatcher() string {
+	return Catalog.Format(msgs.locale, "tasksStatusAwaitDispatcher", nil)
+}
+
+// TasksStatusExited says "Exited without reporting"
+// in the language the app shows.
+//
+// Tasks page: status of a task whose worker exited before reporting.
+func TasksStatusExited() string { return In(i18n.Locale()).TasksStatusExited() }
+
+// TasksStatusExited says "Exited without reporting"
+// in the language of msgs.
+//
+// Tasks page: status of a task whose worker exited before reporting.
+func (msgs Messages) TasksStatusExited() string {
+	return Catalog.Format(msgs.locale, "tasksStatusExited", nil)
+}
+
+// TasksStatusLost says "Interrupted when the daemon restarted"
+// in the language the app shows.
+//
+// Tasks page: status of a task cut off by a daemon restart.
+func TasksStatusLost() string { return In(i18n.Locale()).TasksStatusLost() }
+
+// TasksStatusLost says "Interrupted when the daemon restarted"
+// in the language of msgs.
+//
+// Tasks page: status of a task cut off by a daemon restart.
+func (msgs Messages) TasksStatusLost() string {
+	return Catalog.Format(msgs.locale, "tasksStatusLost", nil)
+}
+
+// TasksStatusNeedsApproval says "Needs You: the worker is waiting for your approval"
+// in the language the app shows.
+//
+// Tasks page: status of a running task whose worker waits for a permission
+// prompt.
+func TasksStatusNeedsApproval() string { return In(i18n.Locale()).TasksStatusNeedsApproval() }
+
+// TasksStatusNeedsApproval says "Needs You: the worker is waiting for your approval"
+// in the language of msgs.
+//
+// Tasks page: status of a running task whose worker waits for a permission
+// prompt.
+func (msgs Messages) TasksStatusNeedsApproval() string {
+	return Catalog.Format(msgs.locale, "tasksStatusNeedsApproval", nil)
+}
+
+// TasksStatusNeedsReply says "Needs your reply"
+// in the language the app shows.
+//
+// Tasks page: status of a running task whose worker asked you a question.
+func TasksStatusNeedsReply() string { return In(i18n.Locale()).TasksStatusNeedsReply() }
+
+// TasksStatusNeedsReply says "Needs your reply"
+// in the language of msgs.
+//
+// Tasks page: status of a running task whose worker asked you a question.
+func (msgs Messages) TasksStatusNeedsReply() string {
+	return Catalog.Format(msgs.locale, "tasksStatusNeedsReply", nil)
+}
+
+// TasksStatusStopped says "Stopped"
+// in the language the app shows.
+//
+// Tasks page: status of a task closed before it reported.
+func TasksStatusStopped() string { return In(i18n.Locale()).TasksStatusStopped() }
+
+// TasksStatusStopped says "Stopped"
+// in the language of msgs.
+//
+// Tasks page: status of a task closed before it reported.
+func (msgs Messages) TasksStatusStopped() string {
+	return Catalog.Format(msgs.locale, "tasksStatusStopped", nil)
+}
+
+// TasksTitle says "Tasks"
+// in the language the app shows.
+//
+// Sidebar tile name, Tasks page title and the title of its overview card.
+func TasksTitle() string { return In(i18n.Locale()).TasksTitle() }
+
+// TasksTitle says "Tasks"
+// in the language of msgs.
+//
+// Sidebar tile name, Tasks page title and the title of its overview card.
+func (msgs Messages) TasksTitle() string {
+	return Catalog.Format(msgs.locale, "tasksTitle", nil)
+}
+
+// TasksTitlePlaceholder says "Title, e.g. Fix login page crash"
+// in the language the app shows.
+//
+// Dispatch Task dialog: placeholder of the title field.
+func TasksTitlePlaceholder() string { return In(i18n.Locale()).TasksTitlePlaceholder() }
+
+// TasksTitlePlaceholder says "Title, e.g. Fix login page crash"
+// in the language of msgs.
+//
+// Dispatch Task dialog: placeholder of the title field.
+func (msgs Messages) TasksTitlePlaceholder() string {
+	return Catalog.Format(msgs.locale, "tasksTitlePlaceholder", nil)
+}
+
+// TasksUntracked says "{count, plural, one {# unversioned new file} other {# unversioned new files}}"
+// in the language the app shows.
+//
+// Task detail diff line: new files not added to git.
+func TasksUntracked(count int) string { return In(i18n.Locale()).TasksUntracked(count) }
+
+// TasksUntracked says "{count, plural, one {# unversioned new file} other {# unversioned new files}}"
+// in the language of msgs.
+//
+// Task detail diff line: new files not added to git.
+func (msgs Messages) TasksUntracked(count int) string {
+	return Catalog.Format(msgs.locale, "tasksUntracked", map[string]any{"count": count})
+}
+
+// TasksViewChanges says "View Changes"
+// in the language the app shows.
+//
+// Task detail button: opens a terminal showing the worktree diff.
+func TasksViewChanges() string { return In(i18n.Locale()).TasksViewChanges() }
+
+// TasksViewChanges says "View Changes"
+// in the language of msgs.
+//
+// Task detail button: opens a terminal showing the worktree diff.
+func (msgs Messages) TasksViewChanges() string {
+	return Catalog.Format(msgs.locale, "tasksViewChanges", nil)
+}
+
+// TasksWorkDir says "Working Directory"
+// in the language the app shows.
+//
+// Dispatch Task dialog: accessibility label of the working directory
+// picker.
+func TasksWorkDir() string { return In(i18n.Locale()).TasksWorkDir() }
+
+// TasksWorkDir says "Working Directory"
+// in the language of msgs.
+//
+// Dispatch Task dialog: accessibility label of the working directory
+// picker.
+func (msgs Messages) TasksWorkDir() string {
+	return Catalog.Format(msgs.locale, "tasksWorkDir", nil)
+}
+
+// TasksWorktreeHint says "Each agent gets its own git worktree and branch, so changes don’t interfere. Compare and merge when they’re done."
+// in the language the app shows.
+//
+// Dispatch Task dialog: note under the workspace picker when each agent
+// gets a new worktree.
+func TasksWorktreeHint() string { return In(i18n.Locale()).TasksWorktreeHint() }
+
+// TasksWorktreeHint says "Each agent gets its own git worktree and branch, so changes don’t interfere. Compare and merge when they’re done."
+// in the language of msgs.
+//
+// Dispatch Task dialog: note under the workspace picker when each agent
+// gets a new worktree.
+func (msgs Messages) TasksWorktreeHint() string {
+	return Catalog.Format(msgs.locale, "tasksWorktreeHint", nil)
+}
+
+// TermClear says "Clear"
+// in the language the app shows.
+//
+// Terminal context menu item: clears the screen and scrollback.
+func TermClear() string { return In(i18n.Locale()).TermClear() }
+
+// TermClear says "Clear"
+// in the language of msgs.
+//
+// Terminal context menu item: clears the screen and scrollback.
+func (msgs Messages) TermClear() string {
+	return Catalog.Format(msgs.locale, "termClear", nil)
+}
+
+// TermClearError says "Couldn’t clear the terminal: {error}"
+// in the language the app shows.
+//
+// Error bar: clearing the terminal failed. error is the reason.
+func TermClearError(error string) string { return In(i18n.Locale()).TermClearError(error) }
+
+// TermClearError says "Couldn’t clear the terminal: {error}"
+// in the language of msgs.
+//
+// Error bar: clearing the terminal failed. error is the reason.
+func (msgs Messages) TermClearError(error string) string {
+	return Catalog.Format(msgs.locale, "termClearError", map[string]any{"error": error})
+}
+
+// TermClose says "Close Terminal"
+// in the language the app shows.
+//
+// Terminal context menu item and tab close button tooltip: closes the
+// terminal (asks first if a program is running).
+func TermClose() string { return In(i18n.Locale()).TermClose() }
+
+// TermClose says "Close Terminal"
+// in the language of msgs.
+//
+// Terminal context menu item and tab close button tooltip: closes the
+// terminal (asks first if a program is running).
+func (msgs Messages) TermClose() string {
+	return Catalog.Format(msgs.locale, "termClose", nil)
+}
+
+// TermCopySessionId says "Copy Session ID"
+// in the language the app shows.
+//
+// Terminal and tab context menu item: copies the agent session ID.
+func TermCopySessionId() string { return In(i18n.Locale()).TermCopySessionId() }
+
+// TermCopySessionId says "Copy Session ID"
+// in the language of msgs.
+//
+// Terminal and tab context menu item: copies the agent session ID.
+func (msgs Messages) TermCopySessionId() string {
+	return Catalog.Format(msgs.locale, "termCopySessionId", nil)
+}
+
+// TermDone says "Done"
+// in the language the app shows.
+//
+// Sidebar row label: an agent finished a turn you haven’t looked at yet.
+func TermDone() string { return In(i18n.Locale()).TermDone() }
+
+// TermDone says "Done"
+// in the language of msgs.
+//
+// Sidebar row label: an agent finished a turn you haven’t looked at yet.
+func (msgs Messages) TermDone() string {
+	return Catalog.Format(msgs.locale, "termDone", nil)
+}
+
+// TermExited says "Exited"
+// in the language the app shows.
+//
+// Tab and sidebar row: shown instead of the title once the terminal’s
+// program has exited.
+func TermExited() string { return In(i18n.Locale()).TermExited() }
+
+// TermExited says "Exited"
+// in the language of msgs.
+//
+// Tab and sidebar row: shown instead of the title once the terminal’s
+// program has exited.
+func (msgs Messages) TermExited() string {
+	return Catalog.Format(msgs.locale, "termExited", nil)
+}
+
+// TermFindDownTip says "Down (Newer Output)"
+// in the language the app shows.
+//
+// Terminal find bar: tooltip of the button that jumps to the next match,
+// further down in newer output. The shortcut is appended.
+func TermFindDownTip() string { return In(i18n.Locale()).TermFindDownTip() }
+
+// TermFindDownTip says "Down (Newer Output)"
+// in the language of msgs.
+//
+// Terminal find bar: tooltip of the button that jumps to the next match,
+// further down in newer output. The shortcut is appended.
+func (msgs Messages) TermFindDownTip() string {
+	return Catalog.Format(msgs.locale, "termFindDownTip", nil)
+}
+
+// TermFindHistoryHint says "Agent conversations aren’t always kept in the terminal"
+// in the language the app shows.
+//
+// Terminal find bar in an agent terminal: hint under the bar when nothing
+// matches, next to the Search in History button.
+func TermFindHistoryHint() string { return In(i18n.Locale()).TermFindHistoryHint() }
+
+// TermFindHistoryHint says "Agent conversations aren’t always kept in the terminal"
+// in the language of msgs.
+//
+// Terminal find bar in an agent terminal: hint under the bar when nothing
+// matches, next to the Search in History button.
+func (msgs Messages) TermFindHistoryHint() string {
+	return Catalog.Format(msgs.locale, "termFindHistoryHint", nil)
+}
+
+// TermFindInHistory says "Search in History"
+// in the language the app shows.
+//
+// Terminal find bar in an agent terminal: button (and tooltip) that
+// searches the same text in the History page.
+func TermFindInHistory() string { return In(i18n.Locale()).TermFindInHistory() }
+
+// TermFindInHistory says "Search in History"
+// in the language of msgs.
+//
+// Terminal find bar in an agent terminal: button (and tooltip) that
+// searches the same text in the History page.
+func (msgs Messages) TermFindInHistory() string {
+	return Catalog.Format(msgs.locale, "termFindInHistory", nil)
+}
+
+// TermFindLabel says "Find in Terminal"
+// in the language the app shows.
+//
+// Terminal find bar: accessibility label of the search field.
+func TermFindLabel() string { return In(i18n.Locale()).TermFindLabel() }
+
+// TermFindLabel says "Find in Terminal"
+// in the language of msgs.
+//
+// Terminal find bar: accessibility label of the search field.
+func (msgs Messages) TermFindLabel() string {
+	return Catalog.Format(msgs.locale, "termFindLabel", nil)
+}
+
+// TermFindNoResults says "No Results"
+// in the language the app shows.
+//
+// Terminal find bar: status shown when nothing matches.
+func TermFindNoResults() string { return In(i18n.Locale()).TermFindNoResults() }
+
+// TermFindNoResults says "No Results"
+// in the language of msgs.
+//
+// Terminal find bar: status shown when nothing matches.
+func (msgs Messages) TermFindNoResults() string {
+	return Catalog.Format(msgs.locale, "termFindNoResults", nil)
+}
+
+// TermFindSearching says "Searching"
+// in the language the app shows.
+//
+// Terminal find bar: status shown in place of the match count while
+// searching.
+func TermFindSearching() string { return In(i18n.Locale()).TermFindSearching() }
+
+// TermFindSearching says "Searching"
+// in the language of msgs.
+//
+// Terminal find bar: status shown in place of the match count while
+// searching.
+func (msgs Messages) TermFindSearching() string {
+	return Catalog.Format(msgs.locale, "termFindSearching", nil)
+}
+
+// TermFindUpTip says "Up (Earlier Output)"
+// in the language the app shows.
+//
+// Terminal find bar: tooltip of the button that jumps to the previous
+// match, higher up in older output. The shortcut is appended.
+func TermFindUpTip() string { return In(i18n.Locale()).TermFindUpTip() }
+
+// TermFindUpTip says "Up (Earlier Output)"
+// in the language of msgs.
+//
+// Terminal find bar: tooltip of the button that jumps to the previous
+// match, higher up in older output. The shortcut is appended.
+func (msgs Messages) TermFindUpTip() string {
+	return Catalog.Format(msgs.locale, "termFindUpTip", nil)
+}
+
+// TermLoading says "Loading"
+// in the language the app shows.
+//
+// Accessibility label of the honeycomb loading animation.
+func TermLoading() string { return In(i18n.Locale()).TermLoading() }
+
+// TermLoading says "Loading"
+// in the language of msgs.
+//
+// Accessibility label of the honeycomb loading animation.
+func (msgs Messages) TermLoading() string {
+	return Catalog.Format(msgs.locale, "termLoading", nil)
+}
+
+// TermName says "Terminal"
+// in the language the app shows.
+//
+// Name of a plain shell terminal (no agent) in tabs, menus and dialogs.
+func TermName() string { return In(i18n.Locale()).TermName() }
+
+// TermName says "Terminal"
+// in the language of msgs.
+//
+// Name of a plain shell terminal (no agent) in tabs, menus and dialogs.
+func (msgs Messages) TermName() string {
+	return Catalog.Format(msgs.locale, "termName", nil)
+}
+
+// TermPending says "Needs You"
+// in the language the app shows.
+//
+// Sidebar row and tab label: an agent is waiting for approval or an answer.
+// Shown in amber.
+func TermPending() string { return In(i18n.Locale()).TermPending() }
+
+// TermPending says "Needs You"
+// in the language of msgs.
+//
+// Sidebar row and tab label: an agent is waiting for approval or an answer.
+// Shown in amber.
+func (msgs Messages) TermPending() string {
+	return Catalog.Format(msgs.locale, "termPending", nil)
+}
+
+// TermPhoneSized says "A phone is viewing this terminal, so it’s laid out for the phone’s screen"
+// in the language the app shows.
+//
+// Bar above a terminal while a phone is viewing it.
+func TermPhoneSized() string { return In(i18n.Locale()).TermPhoneSized() }
+
+// TermPhoneSized says "A phone is viewing this terminal, so it’s laid out for the phone’s screen"
+// in the language of msgs.
+//
+// Bar above a terminal while a phone is viewing it.
+func (msgs Messages) TermPhoneSized() string {
+	return Catalog.Format(msgs.locale, "termPhoneSized", nil)
+}
+
+// TermReclaimError says "Couldn’t resize for this Mac: {error}"
+// in the language the app shows.
+//
+// Error bar: taking the terminal size back from the phone failed.
+func TermReclaimError(error string) string { return In(i18n.Locale()).TermReclaimError(error) }
+
+// TermReclaimError says "Couldn’t resize for this Mac: {error}"
+// in the language of msgs.
+//
+// Error bar: taking the terminal size back from the phone failed.
+func (msgs Messages) TermReclaimError(error string) string {
+	return Catalog.Format(msgs.locale, "termReclaimError", map[string]any{"error": error})
+}
+
+// TermReclaimSize says "Resize for This Mac"
+// in the language the app shows.
+//
+// Button in the phone bar above a terminal: lays it out for the window
+// again.
+func TermReclaimSize() string { return In(i18n.Locale()).TermReclaimSize() }
+
+// TermReclaimSize says "Resize for This Mac"
+// in the language of msgs.
+//
+// Button in the phone bar above a terminal: lays it out for the window
+// again.
+func (msgs Messages) TermReclaimSize() string {
+	return Catalog.Format(msgs.locale, "termReclaimSize", nil)
+}
+
+// TermStart says "Start {name}"
+// in the language the app shows.
+//
+// Sidebar workspace context menu item and launch tile label: starts an
+// agent. name is the agent name.
+func TermStart(name string) string { return In(i18n.Locale()).TermStart(name) }
+
+// TermStart says "Start {name}"
+// in the language of msgs.
+//
+// Sidebar workspace context menu item and launch tile label: starts an
+// agent. name is the agent name.
+func (msgs Messages) TermStart(name string) string {
+	return Catalog.Format(msgs.locale, "termStart", map[string]any{"name": name})
+}
+
+// TermStarting says "Starting {name}"
+// in the language the app shows.
+//
+// Shown over a new terminal until its first output. name is the agent name
+// or “Terminal”.
+func TermStarting(name string) string { return In(i18n.Locale()).TermStarting(name) }
+
+// TermStarting says "Starting {name}"
+// in the language of msgs.
+//
+// Shown over a new terminal until its first output. name is the agent name
+// or “Terminal”.
+func (msgs Messages) TermStarting(name string) string {
+	return Catalog.Format(msgs.locale, "termStarting", map[string]any{"name": name})
+}
+
+// TermStatusExited says "Exited"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusExited() string { return In(i18n.Locale()).TermStatusExited() }
+
+// TermStatusExited says "Exited"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusExited() string {
+	return Catalog.Format(msgs.locale, "termStatusExited", nil)
+}
+
+// TermStatusIdle says "Turn finished, waiting for your next step"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusIdle() string { return In(i18n.Locale()).TermStatusIdle() }
+
+// TermStatusIdle says "Turn finished, waiting for your next step"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusIdle() string {
+	return Catalog.Format(msgs.locale, "termStatusIdle", nil)
+}
+
+// TermStatusLost says "Not Restored: starts when you switch to it, and the agent resumes its session"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon: a terminal left over from a previous
+// daemon.
+func TermStatusLost() string { return In(i18n.Locale()).TermStatusLost() }
+
+// TermStatusLost says "Not Restored: starts when you switch to it, and the agent resumes its session"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon: a terminal left over from a previous
+// daemon.
+func (msgs Messages) TermStatusLost() string {
+	return Catalog.Format(msgs.locale, "termStatusLost", nil)
+}
+
+// TermStatusStarting says "Starting"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusStarting() string { return In(i18n.Locale()).TermStatusStarting() }
+
+// TermStatusStarting says "Starting"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusStarting() string {
+	return Catalog.Format(msgs.locale, "termStatusStarting", nil)
+}
+
+// TermStatusTasks says "Waiting on Tasks: waiting for the agents it dispatched"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon: the session is waiting for tasks it
+// dispatched.
+func TermStatusTasks() string { return In(i18n.Locale()).TermStatusTasks() }
+
+// TermStatusTasks says "Waiting on Tasks: waiting for the agents it dispatched"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon: the session is waiting for tasks it
+// dispatched.
+func (msgs Messages) TermStatusTasks() string {
+	return Catalog.Format(msgs.locale, "termStatusTasks", nil)
+}
+
+// TermStatusUnread says "Turn finished, not seen yet"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusUnread() string { return In(i18n.Locale()).TermStatusUnread() }
+
+// TermStatusUnread says "Turn finished, not seen yet"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusUnread() string {
+	return Catalog.Format(msgs.locale, "termStatusUnread", nil)
+}
+
+// TermStatusWaiting says "Needs You: the agent is waiting for your approval or answer"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusWaiting() string { return In(i18n.Locale()).TermStatusWaiting() }
+
+// TermStatusWaiting says "Needs You: the agent is waiting for your approval or answer"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusWaiting() string {
+	return Catalog.Format(msgs.locale, "termStatusWaiting", nil)
+}
+
+// TermStatusWorking says "Working"
+// in the language the app shows.
+//
+// Tooltip of an agent status icon.
+func TermStatusWorking() string { return In(i18n.Locale()).TermStatusWorking() }
+
+// TermStatusWorking says "Working"
+// in the language of msgs.
+//
+// Tooltip of an agent status icon.
+func (msgs Messages) TermStatusWorking() string {
+	return Catalog.Format(msgs.locale, "termStatusWorking", nil)
+}
+
 // TracesCleanBody says "Agents left these outside their workspaces. Checked items move to the Trash; worktrees are removed with git."
 // in the language the app shows.
 //
@@ -17718,6 +21130,70 @@ func UpdateUninterruptedNote() string { return In(i18n.Locale()).UpdateUninterru
 // UninterruptedNote.
 func (msgs Messages) UpdateUninterruptedNote() string {
 	return Catalog.Format(msgs.locale, "updateUninterruptedNote", nil)
+}
+
+// UpgradeError says "Couldn’t update the daemon. Terminals weren’t affected: {error}"
+// in the language the app shows.
+//
+// Error bar: handing terminals over to a new daemon failed. error is the
+// reason.
+func UpgradeError(error string) string { return In(i18n.Locale()).UpgradeError(error) }
+
+// UpgradeError says "Couldn’t update the daemon. Terminals weren’t affected: {error}"
+// in the language of msgs.
+//
+// Error bar: handing terminals over to a new daemon failed. error is the
+// reason.
+func (msgs Messages) UpgradeError(error string) string {
+	return Catalog.Format(msgs.locale, "upgradeError", map[string]any{"error": error})
+}
+
+// UpgradeMismatch says "The daemon’s version doesn’t match the window, so projects can’t be read. Update the daemon in Settings › Abo…"
+// in the language the app shows.
+//
+// Sidebar error when the daemon version differs from the window and
+// projects cannot be read. error is the underlying error.
+func UpgradeMismatch(error string) string { return In(i18n.Locale()).UpgradeMismatch(error) }
+
+// UpgradeMismatch says "The daemon’s version doesn’t match the window, so projects can’t be read. Update the daemon in Settings › Abo…"
+// in the language of msgs.
+//
+// Sidebar error when the daemon version differs from the window and
+// projects cannot be read. error is the underlying error.
+func (msgs Messages) UpgradeMismatch(error string) string {
+	return Catalog.Format(msgs.locale, "upgradeMismatch", map[string]any{"error": error})
+}
+
+// UpgradeRunning says "The daemon’s version doesn’t match the window. Updating the daemon; terminals will stay connected…"
+// in the language the app shows.
+//
+// Sidebar status while the window cannot read projects from an older daemon
+// and is updating it.
+func UpgradeRunning() string { return In(i18n.Locale()).UpgradeRunning() }
+
+// UpgradeRunning says "The daemon’s version doesn’t match the window. Updating the daemon; terminals will stay connected…"
+// in the language of msgs.
+//
+// Sidebar status while the window cannot read projects from an older daemon
+// and is updating it.
+func (msgs Messages) UpgradeRunning() string {
+	return Catalog.Format(msgs.locale, "upgradeRunning", nil)
+}
+
+// UpgradeTooOld says "The daemon is too old to read projects and can’t be updated without disconnecting terminals. Restart it in Settings…"
+// in the language the app shows.
+//
+// Sidebar error when the daemon is too old to talk to and cannot hand over
+// terminals. error is the underlying error.
+func UpgradeTooOld(error string) string { return In(i18n.Locale()).UpgradeTooOld(error) }
+
+// UpgradeTooOld says "The daemon is too old to read projects and can’t be updated without disconnecting terminals. Restart it in Settings…"
+// in the language of msgs.
+//
+// Sidebar error when the daemon is too old to talk to and cannot hand over
+// terminals. error is the underlying error.
+func (msgs Messages) UpgradeTooOld(error string) string {
+	return Catalog.Format(msgs.locale, "upgradeTooOld", map[string]any{"error": error})
 }
 
 // UsageCodexQuery says "Query Codex Reset Cards"

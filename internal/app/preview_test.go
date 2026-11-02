@@ -1288,7 +1288,7 @@ func TestPreview(t *testing.T) {
 		// 双击标签改名
 		a = previewApp(t)
 		if cur := a.currentTerminal(a.workspace(a.selected)); cur != nil {
-			a.startRename(*cur)
+			a.startRename(locales.In("zh-Hans"), *cur)
 			a.renameText = "登录页重构"
 		}
 		savePNG(t, newPreviewTester(a, dark), "tab-rename-"+suffix+".png")

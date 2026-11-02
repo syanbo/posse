@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/locales"
 )
 
 func TestEditorSizeOf(t *testing.T) {
@@ -40,7 +42,7 @@ func TestFontStack(t *testing.T) {
 func TestFontRows(t *testing.T) {
 	all := []ui.FontFamily{{Name: "Helvetica"}, {Name: "Menlo", Monospaced: true}, {Name: "Monaco", Monospaced: true}, {Name: "PingFang SC"}}
 	labels := map[string]string{"PingFang SC": "苹方-简"}
-	rows := fontRows(all, labels, "")
+	rows := fontRows(locales.In("zh-Hans"), all, labels, "")
 	var got []string
 	for _, r := range rows {
 		got = append(got, r.header+r.label)
@@ -51,7 +53,7 @@ func TestFontRows(t *testing.T) {
 	}
 	// 中文名和原名都能搜，搜索时不列默认
 	for _, q := range []string{"苹方", "pingfang"} {
-		rows = fontRows(all, labels, q)
+		rows = fontRows(locales.In("zh-Hans"), all, labels, q)
 		if len(rows) != 2 || rows[1].family != "PingFang SC" {
 			t.Fatalf("fontRows(%s) = %v", q, rows)
 		}
@@ -59,7 +61,7 @@ func TestFontRows(t *testing.T) {
 	if got := nextFont(rows, 0, 1); got != 1 {
 		t.Errorf("nextFont = %d, want 1", got)
 	}
-	rows = fontRows(all, labels, "")
+	rows = fontRows(locales.In("zh-Hans"), all, labels, "")
 	if got := nextFont(rows, 4, -1); got != 3 {
 		t.Errorf("nextFont up over header = %d, want 3", got)
 	}

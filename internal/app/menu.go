@@ -91,10 +91,13 @@ func shortcutText(mods ui.Modifiers, key ui.Key) string {
 		b.WriteRune(rune('0' + key - ui.Key0))
 	case key >= ui.KeyF1 && key <= ui.KeyF12:
 		b.WriteString("F" + strconv.Itoa(int(key-ui.KeyF1)+1))
+	case key == ui.KeySpace:
+		// 键名跟着界面语言；快捷键提示没有 Context，按 App 的语言
+		b.WriteString(appL().KeysSpaceKey())
 	default:
 		b.WriteString(map[ui.Key]string{
 			ui.KeyEnter: "↩", ui.KeyEscape: "⎋", ui.KeyBackspace: "⌫", ui.KeyDelete: "⌦", ui.KeyTab: "⇥",
-			ui.KeyEqual: "=", ui.KeyMinus: "-", ui.KeySpace: "空格", ui.KeyHome: "↖", ui.KeyEnd: "↘", ui.KeyPageUp: "⇞", ui.KeyPageDown: "⇟",
+			ui.KeyEqual: "=", ui.KeyMinus: "-", ui.KeyHome: "↖", ui.KeyEnd: "↘", ui.KeyPageUp: "⇞", ui.KeyPageDown: "⇟",
 			ui.KeyUp: "↑", ui.KeyDown: "↓", ui.KeyLeft: "←", ui.KeyRight: "→",
 			ui.KeyComma: ",", ui.KeyPeriod: ".", ui.KeySlash: "/", ui.KeySemicolon: ";", ui.KeyQuote: "'",
 			ui.KeyBracketLeft: "[", ui.KeyBracketRight: "]", ui.KeyBackslash: "\\", ui.KeyBackquote: "`",
@@ -416,8 +419,12 @@ func acceleratorText(acc string) string {
 			b.WriteString(m.sym)
 		}
 	}
+	if key == "Space" {
+		b.WriteString(appL().KeysSpaceKey())
+		return b.String()
+	}
 	if sym, ok := map[string]string{
-		"Enter": "↩", "Escape": "⎋", "Backspace": "⌫", "Delete": "⌦", "Tab": "⇥", "Space": "空格",
+		"Enter": "↩", "Escape": "⎋", "Backspace": "⌫", "Delete": "⌦", "Tab": "⇥",
 		"Up": "↑", "Down": "↓", "Left": "←", "Right": "→", "PageUp": "⇞", "PageDown": "⇟", "Home": "↖", "End": "↘",
 	}[key]; ok {
 		key = sym

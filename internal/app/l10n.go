@@ -16,6 +16,11 @@ import (
 // 平面函数只留给没有 Context 的地方（菜单、通知），TestNoFlatMessages 检查。
 func L(c *ui.Context) locales.Messages { return locales.In(c.Locale()) }
 
+// appL 按 App 当前的语言取文字，只给没有 Context、也没有视图调用方的地方用：系统通知、轮询线程里发的提示和报错。
+// 视图和由视图触发的操作一律用 L(c) 或调用方传进来的 Messages。
+// 用 i18n.Locale 而不是 mygo.App.Locale：后者在 App 没跑起来时（单元测试）会一直等主线程。
+func appL() locales.Messages { return locales.In(i18n.Locale()) }
+
 // startLocale 在窗口建好后读出用户选的语言（设置页显示），并在语言变了时重装菜单：mygo 只重贴系统角色的菜单项，
 // installMenu 自己加的项和 File、View、Window 的标题是装的时候按当时的语言取的。
 func (a *app) startLocale() {

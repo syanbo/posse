@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/locales"
 )
 
 // 分栏：一个工作区的主区域可以左右、上下任意分成几格（最多 maxColumns），是一棵分割树；同方向连着分的摊平成一层。
@@ -745,13 +747,13 @@ func (a *app) focusColumn(w *workspace, i int, focus bool) {
 }
 
 // splitNew 是「向右分栏」「向下分栏」：在焦点格那一边拆出一格，放一个新 shell。
-func (a *app) splitNew(w *workspace, side dropSide) {
+func (a *app) splitNew(m locales.Messages, w *workspace, side dropSide) {
 	if len(a.cols) >= maxColumns {
-		a.warn("最多分成四格", "把标签拖进已有的格，或先合并")
+		a.warn(m.TabSplitMax(), m.TabSplitMaxBody())
 		return
 	}
 	if size := a.cellSize[a.pane]; size != (ui.Point{}) && (side.axis() == splitH && size.X < 2*colMinWidth() || side.axis() == splitV && size.Y < 2*rowMinHeight()) {
-		a.warn("这一格太小，分不开了", "")
+		a.warn(m.TabSplitTooSmall(), "")
 		return
 	}
 	// 连按 ⌘D 时终端还没建好：只建一个
@@ -779,11 +781,11 @@ func (a *app) splitNew(w *workspace, side dropSide) {
 			a.syncColumns(w)
 			if !a.canSplitWith(t.ID, a.pane, side) {
 				a.selectKey(w, t.ID, true)
-				title := "这一格太小，分不开了"
+				title := m.TabSplitTooSmall()
 				if len(a.cols) >= maxColumns {
-					title = "最多分成四格"
+					title = m.TabSplitMax()
 				}
-				a.warn(title, "新终端放在了当前这一格")
+				a.warn(title, m.TabSplitPlacedHere())
 				return
 			}
 			a.moveTab(w, t.ID, a.pane, side)
@@ -818,9 +820,9 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	}
 	switch {
 	case a.keyIs("splitRight", mods, key):
-		a.splitNew(w, sideRight)
+		a.splitNew(appL(), w, sideRight)
 	case a.keyIs("splitDown", mods, key):
-		a.splitNew(w, sideBottom)
+		a.splitNew(appL(), w, sideBottom)
 	case a.keyIs("closeSplit", mods, key):
 		if !a.splitShown() {
 			return false
@@ -842,18 +844,18 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 }
 
 // columnMenu 是标签右键菜单里分栏的几项。
-func (a *app) columnMenu(m *popMenu, w *workspace, key string) {
+func (a *app) columnMenu(lm locales.Messages, m *popMenu, w *workspace, key string) {
 	i := a.colOf(key)
 	if i < 0 {
 		return
 	}
-	if m.Item("移到右边新分栏").Disabled(!a.canSplitWith(key, i, sideRight)).Chosen() {
+	if m.Item(lm.TabMoveRight()).Disabled(!a.canSplitWith(key, i, sideRight)).Chosen() {
 		a.moveTab(w, key, i, sideRight)
 	}
-	if m.Item("移到下方新分栏").Disabled(!a.canSplitWith(key, i, sideBottom)).Chosen() {
+	if m.Item(lm.TabMoveDown()).Disabled(!a.canSplitWith(key, i, sideBottom)).Chosen() {
 		a.moveTab(w, key, i, sideBottom)
 	}
-	if a.splitShown() && m.Item("合并所有分栏").Keys(a.keyText("closeSplit")).Chosen() {
+	if a.splitShown() && m.Item(lm.TabMergePanes()).Keys(a.keyText("closeSplit")).Chosen() {
 		a.mergeColumns(w)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/history"
+	"posse/locales"
 )
 
 // 点汇总里的标签和时间线里的名字都复制名字
@@ -71,11 +72,11 @@ func TestUsageWebTimeline(t *testing.T) {
 // 起过名的会话在标签和侧栏上写会话名，没起名时写终端标题
 func TestTabLabelSessionTitle(t *testing.T) {
 	term := terminalInfo{Agent: "claude", Title: "✳ 自动标题", Running: true, AgentState: &agentState{Status: "idle"}}
-	if _, d := tabLabel(term); d != "自动标题" {
+	if _, d := tabLabel(locales.In("zh-Hans"), term); d != "自动标题" {
 		t.Fatalf("untitled %q", d)
 	}
 	term.AgentState.Title = "1020｜feat｜会话命名"
-	if _, d := tabLabel(term); d != "1020｜feat｜会话命名" {
+	if _, d := tabLabel(locales.In("zh-Hans"), term); d != "1020｜feat｜会话命名" {
 		t.Fatalf("titled %q", d)
 	}
 }

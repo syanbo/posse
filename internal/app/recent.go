@@ -178,16 +178,16 @@ func topDirs(dirs []string) []string {
 
 // recentList 是文件栏的"历史"页：当前项目的会话，点一个跳到历史页打开它。
 func (a *app) recentList(c *ui.Context, w *workspace) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	a.pollRecent(c, w)
 	r := &a.recent
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(8, 8, 16, 8).Gap(2).Children(func() {
 			switch {
 			case !r.loaded:
-				usageNote(c, "正在读取…")
+				usageNote(c, m.CommonLoading())
 			case len(r.sessions) == 0:
-				usageNote(c, "这个项目还没有会话记录。")
+				usageNote(c, m.RecentEmpty())
 			}
 			for i, s := range r.sessions {
 				// 细线隔开相邻的两个会话，和卡片内容同宽（两头让开卡片的内边距）
@@ -218,15 +218,15 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 						if p := r.previews[sessionKey(s)]; p.text != "" {
 							text := p.text
 							if p.user {
-								text = "你：" + text
+								text = m.RecentYou(text)
 							}
 							ui.Text(c, text).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(2).LineHeight(1.35).Margin(0, 0, 4, 0)
 						}
 						// 右下角悬停时有删除（移到废纸篓）；固定行高，按钮出现时卡片不跳
 						ui.Row(c).Height(sz(20)).AlignItems(ui.Center).Children(func() {
 							ui.Column(c).Grow(1).Shrink(1).Children(func() { sessionMeta(c, s) })
-							if row.Hovered() && iconButtonSized(c, iconTrash, "移到废纸篓", compactBox(), smallIcon()).Clicked() {
-								a.trashListedSession(L(c), s)
+							if row.Hovered() && iconButtonSized(c, iconTrash, m.CommonMoveToTrash(), compactBox(), smallIcon()).Clicked() {
+								a.trashListedSession(m, s)
 							}
 						})
 					})
@@ -243,7 +243,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 // playButton 是卡片上"在 Posse 里继续"的小按钮：强调色底、白色播放图标，悬停时颜色加深。
 func playButton(c *ui.Context) ui.Element {
 	t := c.Theme()
-	b := ui.Box(c).Size(miniBox()+2, miniBox()).Radius(rRow).Center().Shrink(0).Label("在 Posse 里继续").Tooltip("在 Posse 里继续").Role(ui.RoleButton)
+	b := ui.Box(c).Size(miniBox()+2, miniBox()).Radius(rRow).Center().Shrink(0).Label(L(c).RecentContinue()).Tooltip(L(c).RecentContinue()).Role(ui.RoleButton)
 	bg := t.Accent
 	if b.Hovered() {
 		bg = t.AccentHover

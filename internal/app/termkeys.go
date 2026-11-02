@@ -9,6 +9,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 // 终端里的常用快捷键，照 macOS 上 Ghostty、iTerm 和 Orca 的默认：
@@ -47,7 +48,7 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 		return true
 	}
 	if a.keyIs("termClear", mods, key) {
-		a.clearTerminal(v, id)
+		a.clearTerminal(appL(), v, id)
 		return true
 	}
 	// 全屏程序（vim、less）有自己的按键，下面这些原样交给它
@@ -82,7 +83,7 @@ func (a *app) termKey(v *termView, id string, mods ui.Modifiers, key ui.Key) boo
 const termClearSeq = "\x1b[H\x1b[2J\x1b[3J"
 
 // clearTerminal 是 ⌘K：由常驻进程清屏并清空回滚区（之后重新接入也是空的），再给程序发 Ctrl+L 重画提示符。
-func (a *app) clearTerminal(v *termView, id string) {
+func (a *app) clearTerminal(m locales.Messages, v *termView, id string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -98,7 +99,7 @@ func (a *app) clearTerminal(v *termView, id string) {
 				}
 			})
 		case err != nil:
-			a.update(func() { a.err = "清屏失败：" + errtext.Text(err) })
+			a.update(func() { a.err = m.TermClearError(errtext.Text(err)) })
 		}
 	}()
 }

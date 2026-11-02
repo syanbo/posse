@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -18,6 +19,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/media"
 	"posse/internal/projicon"
+	"posse/locales"
 )
 
 // projectIcon 是侧栏项目行自定义的图标，存在 $POSSE_HOME/project-icons（不放 ui.json：手机也要显示，由常驻进程读）。
@@ -80,13 +82,13 @@ func importProjectIcon(home, projectID, src string) (string, error) {
 	if strings.EqualFold(filepath.Ext(src), ".svg") {
 		svg, err := ui.ParseSVG(data)
 		if err != nil {
-			return "", fmt.Errorf("读不了这个 SVG：%w", err)
+			return "", &iconReadError{svg: true, err: err}
 		}
 		img = rasterSVG(svg, projectIconPx)
 	} else {
 		cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 		if err != nil {
-			return "", fmt.Errorf("读不了这张图片：%w", err)
+			return "", &iconReadError{err: err}
 		}
 		// 长边缩到 projectIconPx：media 按宽度缩，竖图换算成对应的宽度
 		width := cfg.Width
@@ -94,7 +96,7 @@ func importProjectIcon(home, projectID, src string) (string, error) {
 			width = max(cfg.Width*projectIconPx/long, 1)
 		}
 		if img, _, err = media.ScaledImageBytes(data, width); err != nil {
-			return "", fmt.Errorf("读不了这张图片：%w", err)
+			return "", &iconReadError{err: err}
 		}
 	}
 	var buf bytes.Buffer
@@ -158,6 +160,27 @@ func (e *iconEditor) draft() projectIcon {
 	return projectIcon{Image: e.image}
 }
 
+// iconReadError 是选的文件读不出图片：说明由界面按语言写（iconErrorText）。
+type iconReadError struct {
+	svg bool
+	err error
+}
+
+func (e *iconReadError) Error() string { return "can't read image: " + e.err.Error() }
+func (e *iconReadError) Unwrap() error { return e.err }
+
+// iconErrorText 是导入图标失败时错误条上的话。
+func iconErrorText(m locales.Messages, err error) string {
+	var re *iconReadError
+	switch {
+	case errors.As(err, &re) && re.svg:
+		return m.ProjectIconImportError(m.ProjectIconBadSvg(errtext.Text(re.err)))
+	case errors.As(err, &re):
+		return m.ProjectIconImportError(m.ProjectIconBadImage(errtext.Text(re.err)))
+	}
+	return m.ProjectIconImportError(errtext.Text(err))
+}
+
 // editProjectIcon 打开项目 p 的图标对话框。
 func (a *app) editProjectIcon(p project) {
 	cur := a.projIcons[p.ID]
@@ -165,9 +188,9 @@ func (a *app) editProjectIcon(p project) {
 }
 
 // pickProjectIcon 让用户选一张图片导入成草稿；在后台调用，系统对话框会等用户选完。
-func (a *app) pickProjectIcon(p project) {
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: "选择 " + p.Name + " 的图标", ButtonLabel: "选择",
-		DefaultPath: p.Path, Filters: []mygo.FileFilter{{Name: "图片", Extensions: []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}}}})
+func (a *app) pickProjectIcon(m locales.Messages, p project) {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.win, Title: m.ProjectIconPickTitle(p.Name), ButtonLabel: m.ProjectIconPickButton(),
+		DefaultPath: p.Path, Filters: []mygo.FileFilter{{Name: m.ProjectIconImages(), Extensions: []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}}}})
 	var name string
 	if err == nil && len(paths) > 0 {
 		name, err = importProjectIcon(a.home, p.ID, paths[0])
@@ -177,7 +200,7 @@ func (a *app) pickProjectIcon(p project) {
 		e.picking = false
 		switch {
 		case err != nil:
-			a.err = "导入图标失败：" + errtext.Text(err)
+			a.err = iconErrorText(m, err)
 		case name != "" && e.open && e.project.ID == p.ID:
 			a.dropIconFile(e.image, e.project.ID)
 			e.image, e.text = name, ""
@@ -241,7 +264,7 @@ func (a *app) projectIconDialog(c *ui.Context) {
 	if !e.open {
 		return
 	}
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	cancel := func() {
 		e.open = false
 		a.dropIconFile(e.image, e.project.ID)
@@ -249,33 +272,33 @@ func (a *app) projectIconDialog(c *ui.Context) {
 	open := true
 	ui.Modal(c, &open, func() {
 		ui.Column(c).Width(360).Gap(12).Children(func() {
-			titleText(c, "更换图标", fsTitle)
+			titleText(c, m.ProjectIconTitle(), fsTitle)
 			// 照侧栏项目行的样子预览
 			ui.Row(c).Height(sz(32)).Padding(0, navPad).Gap(8).Radius(rControl).Background(colors(t).fill).AlignItems(ui.Center).Children(func() {
 				a.projectGlyph(c, e.draft(), iconFolder)
 				ui.Text(c, e.project.Name).FontSize(fsBody).SingleLine()
 			})
-			submitted := fieldInput(c, &e.text, "一个 emoji 或一两个字").AutoFocus().Submitted()
+			submitted := fieldInput(c, &e.text, m.ProjectIconTextPlaceholder()).AutoFocus().Submitted()
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				label := "选择图片…"
+				label := m.ProjectIconChooseImage()
 				if e.picking {
-					label = "正在选择…"
+					label = m.ProjectIconChoosing()
 				}
 				if pressable(textButton(c, label)).Clicked() && !e.picking {
 					e.picking = true
-					go a.pickProjectIcon(e.project)
+					go a.pickProjectIcon(m, e.project)
 				}
-				if e.draft() != (projectIcon{}) && pressable(textButton(c, "恢复默认")).Clicked() {
+				if e.draft() != (projectIcon{}) && pressable(textButton(c, m.CommonResetToDefault())).Clicked() {
 					a.dropIconFile(e.image, e.project.ID)
 					e.image, e.text = "", ""
 				}
 			})
-			ui.Text(c, "图片会复制一份保存，原文件可以删掉。").FontSize(fsSmall).TextColor(t.TextMuted)
+			ui.Text(c, m.ProjectIconCopyNote()).FontSize(fsSmall).TextColor(t.TextMuted)
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					cancel()
 				}
-				if pressable(accentButton(c, "完成")).Clicked() {
+				if pressable(accentButton(c, m.ProjectIconDone())).Clicked() {
 					submitted = true
 				}
 			})

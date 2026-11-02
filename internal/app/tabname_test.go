@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"posse/locales"
+)
 
 func TestTabLabelCustomName(t *testing.T) {
 	cases := []struct {
@@ -17,7 +21,7 @@ func TestTabLabelCustomName(t *testing.T) {
 		{terminalInfo{Title: "zsh"}, "zsh", "已退出"},
 	}
 	for _, tc := range cases {
-		if name, detail := tabLabel(tc.term); name != tc.name || detail != tc.detail {
+		if name, detail := tabLabel(locales.In("zh-Hans"), tc.term); name != tc.name || detail != tc.detail {
 			t.Errorf("tabLabel(%+v) = %q, %q; want %q, %q", tc.term, name, detail, tc.name, tc.detail)
 		}
 	}
@@ -69,7 +73,7 @@ func TestTabRef(t *testing.T) {
 		{terminalInfo{ID: "t_6", Name: "已退出", Running: true}, nil, "已退出：终端 t_6（posse terminal read t_6）"},
 	}
 	for _, tc := range cases {
-		if got := tabRef(tc.term, tc.task); got != tc.want {
+		if got := tabRef(locales.In("zh-Hans"), tc.term, tc.task); got != tc.want {
 			t.Errorf("tabRef(%+v) = %q, want %q", tc.term, got, tc.want)
 		}
 	}

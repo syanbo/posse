@@ -254,7 +254,7 @@ func (a *app) memoryPanel(c *ui.Context) {
 								ui.Icon(c, iconFolder).FontSize(fsBody).TextColor(t.Accent).Shrink(0)
 							}, r.label, mb(r.kb), 0)
 							for _, x := range r.terms {
-								name, detail := tabLabel(x.term)
+								name, detail := tabLabel(L(c), x.term)
 								if detail != "" {
 									name = detail
 								}

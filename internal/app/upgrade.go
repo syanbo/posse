@@ -13,6 +13,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/rpc"
 	"posse/internal/spawn"
+	"posse/locales"
 )
 
 // upgradeState 记着把常驻进程换成本窗口的包（daemon.handoff）的进度，按常驻进程的 pid 记：
@@ -74,11 +75,11 @@ func (a *app) autoUpgrade(d daemonStatus) {
 	if !ok1 || !ok2 || !mine.After(theirs) {
 		return
 	}
-	a.upgradeDaemon(d.Pid, true)
+	a.upgradeDaemon(appL(), d.Pid, true)
 }
 
 // upgradeDaemon 让常驻进程把终端交给用本窗口的包启动的新进程，终端不断。
-func (a *app) upgradeDaemon(pid int, auto bool) {
+func (a *app) upgradeDaemon(m locales.Messages, pid int, auto bool) {
 	if !a.upgrade.begin(pid, auto) {
 		return
 	}
@@ -105,7 +106,7 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 		a.upgrade.end(pid, unsupported)
 		a.win.Update(func() {
 			if err != nil && !unsupported && !busy {
-				a.err = "更新常驻进程失败，终端没受影响：" + errtext.Text(err)
+				a.err = m.UpgradeError(errtext.Text(err))
 			}
 		})
 		a.pollForce.Store(true)
@@ -115,17 +116,17 @@ func (a *app) upgradeDaemon(pid int, auto bool) {
 
 // staleDaemonError 是连上了常驻进程、却读不到数据时的提示：多半是窗口换了新版本，常驻进程还是旧的，
 // 接口对不上。版本一样时照原样报错。
-func (a *app) staleDaemonError(d daemonStatus, err error) string {
+func (a *app) staleDaemonError(m locales.Messages, d daemonStatus, err error) string {
 	if d.Build == daemon.Build {
 		return errtext.Text(err)
 	}
 	running, unsupported := a.upgrade.status(d.Pid)
 	switch {
 	case running:
-		return "常驻进程的版本和窗口不一致，正在更新常驻进程，终端不会断开…"
+		return m.UpgradeRunning()
 	case unsupported || d.Build == "":
-		return "常驻进程的版本太旧，读不到项目，也不支持不断开终端的更新：到设置 › 关于 重启常驻进程。（" + errtext.Text(err) + "）"
+		return m.UpgradeTooOld(errtext.Text(err))
 	default:
-		return "常驻进程的版本和窗口不一致，读不到项目：到设置 › 关于 更新常驻进程，终端不会断开。（" + errtext.Text(err) + "）"
+		return m.UpgradeMismatch(errtext.Text(err))
 	}
 }

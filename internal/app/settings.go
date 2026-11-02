@@ -515,7 +515,7 @@ func (a *app) aboutSettings(c *ui.Context) {
 					b.Disabled(true)
 				}
 				if b.Clicked() {
-					a.upgradeDaemon(d.Pid, false)
+					a.upgradeDaemon(m, d.Pid, false)
 				}
 			}
 			button := textButton

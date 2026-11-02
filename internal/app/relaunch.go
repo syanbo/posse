@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"posse/internal/errtext"
+	"posse/locales"
 )
 
 // exeWatch 盯着窗口自己所在的 Posse.app 有没有被换掉（重新打包、覆盖安装）。
@@ -69,15 +70,15 @@ func (a *app) checkReplaced() {
 
 // relaunch 重开窗口：先处理未保存的文件，再退出、由后台脚本等本进程退出后用新包重新打开。
 // 终端都在常驻进程里，不受影响；新窗口的包比常驻进程新时会照常自动交接。
-func (a *app) relaunch() {
+func (a *app) relaunch(m locales.Messages) {
 	if docs := a.dirtyDocs(); len(docs) > 0 {
-		a.askUnsaved(docs, a.doRelaunch)
+		a.askUnsaved(docs, func() { a.doRelaunch(m) })
 		return
 	}
-	a.doRelaunch()
+	a.doRelaunch(m)
 }
 
-func (a *app) doRelaunch() {
+func (a *app) doRelaunch(m locales.Messages) {
 	args := []string{"-n"}
 	// 端到端测试靠 POSSE_HOME 等变量隔离，open 起的新实例要带上
 	for _, kv := range os.Environ() {
@@ -91,7 +92,7 @@ func (a *app) doRelaunch() {
 	cmd := exec.Command("/bin/sh", append([]string{"-c", script, strconv.Itoa(os.Getpid())}, args...)...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		a.err = "重开窗口失败：" + errtext.Text(err)
+		a.err = m.RelaunchError(errtext.Text(err))
 		return
 	}
 	go cmd.Wait()

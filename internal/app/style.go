@@ -420,12 +420,12 @@ func fieldBorder(box ui.Element, focused bool, fill, focus ui.Color) {
 
 // pendingLabel 是"待处理"三个字：界面上唯一用琥珀色的文字。
 func pendingLabel(c *ui.Context) ui.Element {
-	return ui.Text(c, "待处理").FontSize(fsSmall).FontWeight(fwBold).TextColor(colors(c.Theme()).honey)
+	return ui.Text(c, L(c).TermPending()).FontSize(fsSmall).FontWeight(fwBold).TextColor(colors(c.Theme()).honey)
 }
 
 // doneLabel 是"已完成"三个字，和"待处理"一样是要你看一眼的状态，用强调色。
 func doneLabel(c *ui.Context) ui.Element {
-	return ui.Text(c, "已完成").FontSize(fsSmall).FontWeight(fwBold).TextColor(c.Theme().Accent)
+	return ui.Text(c, L(c).TermDone()).FontSize(fsSmall).FontWeight(fwBold).TextColor(c.Theme().Accent)
 }
 
 // isWorktree 报告工作区是不是 git worktree：posse 建的（worktree），或者从别处加进来的（attach 记成 folder，

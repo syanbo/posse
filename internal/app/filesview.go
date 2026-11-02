@@ -543,7 +543,7 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	}
 	if w := a.workspace(v.wsID); w != nil {
 		m.Separator()
-		a.columnMenu(m, w, docKey(d))
+		a.columnMenu(L(c), m, w, docKey(d))
 	}
 	if d.virtual() {
 		return

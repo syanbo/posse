@@ -12,39 +12,41 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+
+	"posse/locales"
 )
 
 // termMenu 是终端内容区的右键菜单（照 Orca 的终端菜单），换掉终端插件自带的英文菜单：
 // 清屏和 ⌘K 一样由常驻进程清，关闭和 ⌘W 一样先问。
-func (a *app) termMenu(m *popMenu, v *termView, id string) {
+func (a *app) termMenu(lm locales.Messages, m *popMenu, v *termView, id string) {
 	if v.term == nil {
 		return
 	}
 	sel := v.term.Selection()
-	if m.Item("复制").Shortcut(ui.Cmd, ui.KeyC).Disabled(sel == "").Chosen() {
+	if m.Item(lm.CommonCopy()).Shortcut(ui.Cmd, ui.KeyC).Disabled(sel == "").Chosen() {
 		writeClipboard(sel)
 	}
-	if m.Item("粘贴").Shortcut(ui.Cmd, ui.KeyV).Chosen() {
+	if m.Item(lm.CommonPaste()).Shortcut(ui.Cmd, ui.KeyV).Chosen() {
 		v.term.PasteClipboard()
 	}
-	if m.Item("全选").Shortcut(ui.Cmd, ui.KeyA).Chosen() {
+	if m.Item(lm.CommonSelectAll()).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
 		v.term.SelectAll()
 	}
 	m.Separator()
-	if m.Item("清屏").Keys(a.keyText("termClear")).Chosen() {
-		a.clearTerminal(v, id)
+	if m.Item(lm.TermClear()).Keys(a.keyText("termClear")).Chosen() {
+		a.clearTerminal(lm, v, id)
 	}
 	_, t := a.findTerminal(id)
 	if t != nil && sessionID(*t) != "" {
 		m.Separator()
-		if m.Item("复制会话 ID").Chosen() {
+		if m.Item(lm.TermCopySessionId()).Chosen() {
 			writeClipboard(sessionID(*t))
 		}
 	}
 	if t != nil {
 		m.Separator()
-		if m.Item("关闭终端").Keys(a.keyText("closeTab")).Chosen() {
-			a.askClose(*t)
+		if m.Item(lm.TermClose()).Keys(a.keyText("closeTab")).Chosen() {
+			a.askClose(lm, *t)
 		}
 	}
 }

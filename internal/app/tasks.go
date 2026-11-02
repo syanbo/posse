@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/locales"
 )
 
 // --- 状态
@@ -33,15 +34,16 @@ func (a *app) applyTasks(ts []taskInfo) {
 			continue
 		}
 		var title string
+		m := appL()
 		switch {
 		case t.Questions > 0 && !strings.HasSuffix(prev, fmt.Sprintf(":%d", t.Questions)) && t.Status == "running":
-			title = agentTitle(t.Agent) + " 在等你回复"
+			title = m.TasksNoticeQuestion(agentTitle(t.Agent))
 		case t.Status == "done" && !strings.HasPrefix(prev, "done"):
-			title = "任务完成"
+			title = m.TasksNoticeDone()
 		case t.Status == "failed" && !strings.HasPrefix(prev, "failed"):
-			title = "任务失败"
+			title = m.TasksNoticeFailed()
 		case t.Status == "exited" && !strings.HasPrefix(prev, "exited"):
-			title = "worker 没有汇报就退出了"
+			title = m.TasksNoticeExited()
 		default:
 			continue
 		}
@@ -168,29 +170,29 @@ func taskGlyph(t taskInfo) string {
 	return "ended"
 }
 
-func taskStatusText(t taskInfo) string {
+func taskStatusText(m locales.Messages, t taskInfo) string {
 	switch t.Status {
 	case "running":
 		if needsUser(t) {
-			return "待你回复"
+			return m.TasksStatusNeedsReply()
 		}
 		if t.Questions > 0 {
-			return "等派发方回复"
+			return m.TasksStatusAwaitDispatcher()
 		}
 		if t.Terminal != nil && t.Terminal.AgentState != nil && t.Terminal.AgentState.Status == agent.StatusWaiting {
-			return "待处理：worker 在等你批准"
+			return m.TasksStatusNeedsApproval()
 		}
-		return "进行中"
+		return m.CommonInProgress()
 	case "done":
-		return "已完成"
+		return m.CommonDone()
 	case "failed":
-		return "失败"
+		return m.CommonFailed()
 	case "stopped":
-		return "已停止"
+		return m.TasksStatusStopped()
 	case "exited":
-		return "没有汇报就退出了"
+		return m.TasksStatusExited()
 	case "lost":
-		return "常驻进程重启时中断"
+		return m.TasksStatusLost()
 	}
 	return t.Status
 }
@@ -291,12 +293,12 @@ func (a *app) sendNote(taskID, text string) {
 	a.refresh()
 }
 
-func (a *app) askCloseTask(t taskInfo) {
-	body := "worker 终端会被关闭。"
+func (a *app) askCloseTask(m locales.Messages, t taskInfo) {
+	body := m.TasksCloseBody()
 	if t.Status == "running" {
-		body = "任务还没汇报，关闭后记为已停止，worker 正在做的事会被打断。"
+		body = m.TasksCloseRunningBody()
 	}
-	a.confirm("关闭 "+agentTitle(t.Agent)+" worker？", body, "关闭", func() {
+	a.confirm(m.TasksCloseConfirm(agentTitle(t.Agent)), body, m.CommonClose(), func() {
 		a.call("task.close", map[string]any{"task": t.ID}, nil, 15*time.Second)
 		a.refresh()
 	})
@@ -333,10 +335,10 @@ func (a *app) taskSidebarItem(c *ui.Context) ui.Element {
 				return
 			}
 			// 进行中只写个数，不跟转动的图标：这是入口，不是哪个会话的状态
-			ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(fmt.Sprintf("%d 个任务进行中", running))
+			ui.Text(c, fmt.Sprint(running)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(L(c).TasksRunningTip(running))
 		}
 	}
-	item := a.navTile(c, taskBoardID, iconTasks, "任务", badge)
+	item := a.navTile(c, taskBoardID, iconTasks, L(c).TasksTitle(), badge)
 	if a.revealSel && a.selected == taskBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
@@ -358,11 +360,12 @@ func (a *app) taskBoard(c *ui.Context) {
 			ended++
 		}
 	}
+	m := L(c)
 	a.band(c, func() {
-		titleText(c, "任务", fsTitle)
+		titleText(c, m.TasksTitle(), fsTitle)
 		ui.Spacer(c)
 		if ended > 0 {
-			if pressable(textButton(c, "清除已结束")).Clicked() {
+			if pressable(textButton(c, m.TasksClearEnded())).Clicked() {
 				go func() {
 					a.call("task.clear", nil, nil, 10*time.Second)
 					a.refresh()
@@ -370,7 +373,7 @@ func (a *app) taskBoard(c *ui.Context) {
 			}
 		}
 		// 空总览中间已有同一个按钮
-		if len(a.tasks) > 0 && pressable(accentButton(c, "派发任务…")).Clicked() {
+		if len(a.tasks) > 0 && pressable(accentButton(c, m.TasksDispatchEllipsis())).Clicked() {
 			a.openDispatch()
 		}
 		a.closeBoardButton(c)
@@ -385,7 +388,7 @@ func (a *app) taskBoard(c *ui.Context) {
 	}
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走（和历史页一样）
-		card(c).Width(360).Shrink(0).Clip().Focusable().FocusRing(false).Label("任务列表").Children(func() {
+		card(c).Width(360).Shrink(0).Clip().Focusable().FocusRing(false).Label(m.TasksList()).Children(func() {
 			ui.Scroll(c).Grow(1).Children(func() {
 				// 项与项之间留 4：悬停和选中的底色不粘在一起（和历史列表一样）
 				ui.Column(c).Padding(4, 0, 8, 0).Gap(4).Children(func() { a.taskList(c) })
@@ -436,7 +439,7 @@ func (a *app) stepTask(step int) {
 
 // taskEmptyCard 是没选任务时右边的说明卡片，和历史页没选会话时的一样。
 func (a *app) taskEmptyCard(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	var counts [3]int
 	for _, k := range a.tasks {
 		counts[taskSection(k)]++
@@ -445,15 +448,15 @@ func (a *app) taskEmptyCard(c *ui.Context) {
 		emptyCard(c).MaxWidth(420).Padding(24).Gap(12).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "任务", fsPage)
-				ui.Text(c, "把活儿派给其他 agent，在这里看进度、回答它们的问题、合入结果。从左边选一个任务看详情。").
+				titleText(c, m.TasksTitle(), fsPage)
+				ui.Text(c, m.TasksHomeNote()).
 					FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			if len(a.tasks) > 0 {
 				ui.Row(c).Gap(12).Children(func() {
-					for i, label := range []string{"待处理", "进行中", "已结束"} {
+					for i, label := range []func(int) string{m.TasksCountPending, m.TasksCountRunning, m.TasksCountEnded} {
 						if counts[i] > 0 {
-							ui.Text(c, fmt.Sprintf("%s %d", label, counts[i])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+							ui.Text(c, label(counts[i])).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						}
 					}
 				})
@@ -486,14 +489,14 @@ func sortTasks(tasks []taskInfo) []taskInfo {
 }
 
 func (a *app) taskList(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	// 列表里有"几分钟"这样的相对时间，界面不再每秒重建，自己约下一帧
 	c.After(30 * time.Second)
 	section := -1
 	for _, task := range a.sorted {
 		if s := taskSection(task); s != section {
 			section = s
-			label := []string{"需要你回复", "进行中", "已结束"}[s]
+			label := []string{m.TasksSectionNeedsReply(), m.CommonInProgress(), m.TasksSectionEnded()}[s]
 			ui.Text(c.Key(fmt.Sprint("section-", s)), label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted).Padding(12, 20, 4, 20)
 		}
 		a.taskRow(c, task)
@@ -501,7 +504,7 @@ func (a *app) taskList(c *ui.Context) {
 }
 
 func (a *app) taskRow(c *ui.Context, task taskInfo) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	row := ui.Row(c.Key(task.ID)).Margin(0, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Start)
 	selectedBg(c, row, a.taskSel == task.ID)
 	row.Children(func() {
@@ -516,7 +519,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 					if task.Status == "failed" {
 						color = t.Danger
 					}
-					ui.Text(c, taskStatusText(task)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
+					ui.Text(c, taskStatusText(m, task)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
 				}
 				ui.Spacer(c)
 				ui.Text(c, elapsed(task.CreatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
@@ -526,7 +529,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 				agentTile(c, task.Agent, smallIcon())
 				ui.Text(c, task.Workspace).FontSize(fsSmall).TextColor(t.TextMuted).MaxLines(1).Shrink(1)
 			})
-			preview, color := taskStatusText(task), t.TextMuted
+			preview, color := taskStatusText(m, task), t.TextMuted
 			switch {
 			case needsUser(task):
 				color = colors(t).honey
@@ -554,36 +557,36 @@ func taskGlyphIcon(c *ui.Context, task taskInfo, size float32) {
 		if task.Status == "failed" {
 			color = t.Danger
 		}
-		ui.Icon(c, iconHexOutline).FontSize(size).TextColor(color).Shrink(0).Tooltip(taskStatusText(task))
+		ui.Icon(c, iconHexOutline).FontSize(size).TextColor(color).Shrink(0).Tooltip(taskStatusText(L(c), task))
 		return
 	}
 	statusGlyph(c, g, size)
 }
 
 func (a *app) emptyBoard(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	ui.Column(c).Grow(1).Center().Children(func() {
 		emptyCard(c).MaxWidth(460).Padding(24).Gap(16).Children(func() {
 			tile(c, iconTasks, 48, colors(t).tint, t.Accent)
 			ui.Column(c).Gap(6).Children(func() {
-				titleText(c, "还没有任务", fsPage)
-				ui.Text(c, "把一件事交给 Claude、Codex 或 Grok 去做，它们做完会在这里汇报，有问题也会在这里问你。也可以让一个 agent 当协调者，派活给其他 agent。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
+				titleText(c, m.TasksEmptyTitle(), fsPage)
+				ui.Text(c, m.TasksEmptyBody()).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if pressable(accentButton(c, "派发任务…")).Clicked() {
+				if pressable(accentButton(c, m.TasksDispatchEllipsis())).Clicked() {
 					a.openDispatch()
 				}
 			})
 			ui.Row(c).Gap(6).Children(func() {
 				ui.Text(c, "posse task guide").FontSize(fsSmall).Font(monoFont).TextColor(t.Text).Padding(2, 6).Radius(rSmall).Background(t.Surface)
-				ui.Text(c, "Agent 的用法说明").FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.TasksGuideNote()).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		})
 	})
 }
 
 func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	var msgs []taskMessage
 	if a.detail != nil && a.detail.ID == task.ID {
 		msgs = a.detail.Messages
@@ -601,11 +604,11 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 							if needsUser(task) {
 								color = colors(t).honey
 							}
-							ui.Text(c, taskStatusText(task)).FontSize(fsSmall).TextColor(color).MaxLines(1)
+							ui.Text(c, taskStatusText(m, task)).FontSize(fsSmall).TextColor(color).MaxLines(1)
 						})
 					}
 					metaRow(c, status, meta(c, agentTitle(task.Agent)), metaMono(c, workspaceIcon(task.WorkspaceKind), task.Workspace, ""),
-						meta(c, a.coordinatorLabel(task)), meta(c, task.CreatedAt.Format("1月2日 15:04")))
+						meta(c, a.coordinatorLabel(m, task)), meta(c, task.CreatedAt.Format("1月2日 15:04")))
 				})
 			})
 			a.taskActions(c, task)
@@ -614,9 +617,9 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			}
 		})
 		if task.Summary != "" {
-			title := "汇报"
+			title := m.TasksReport()
 			if task.Status == "running" {
-				title = "上一轮汇报" // 追加的活还在做
+				title = m.TasksLastReport() // 追加的活还在做
 			}
 			a.block(c, title, func() {
 				ui.Text(c, task.Summary).FontSize(fsBody).LineHeight(1.55).Selectable()
@@ -627,24 +630,24 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 		}
 		if open := a.thread(c, task, msgs); open != nil && task.Status == "running" {
 			q := *open
-			placeholder := "回答 worker 的提问"
+			placeholder := m.TasksReplyPlaceholder()
 			if task.Coordinator != "" {
-				placeholder = "替派发方回答（它也可能自己回答）"
+				placeholder = m.TasksReplyForDispatcher()
 			}
-			if composer(c, &a.replyText, placeholder, "回复", true) {
+			if composer(c, &a.replyText, placeholder, m.TasksReplyButton(), true) {
 				go a.reply(q.ID, strings.TrimSpace(a.replyText))
 			}
 		} else if task.Status == "running" && task.Terminal != nil {
-			if composer(c, &a.noteText, "补充说明：worker 会在下一个检查点读到", "发送", false) {
+			if composer(c, &a.noteText, m.TasksNotePlaceholder(), m.TasksSend(), false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		} else if followable(task) {
-			if composer(c, &a.noteText, "追加任务：交给同一个 worker 接着做", "发送", false) {
+			if composer(c, &a.noteText, m.TasksFollowUpPlaceholder(), m.TasksSend(), false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
 		}
 		if task.Spec != "" {
-			a.block(c, "任务说明", func() {
+			a.block(c, m.TasksSpec(), func() {
 				// 派发方写的说明多是 Markdown（标题、列表、代码），和历史页 agent 的回复一样渲染
 				ui.Column(c).Gap(8).Selectable().Children(func() {
 					mdView{size: a.mdSize()}.blocks(c, a.specMarkdown(task.Spec))
@@ -661,69 +664,71 @@ func followable(task taskInfo) bool {
 		task.Terminal != nil && task.Terminal.Running && task.Terminal.Agent != "" && (task.Agent == "" || task.Terminal.Agent == task.Agent)
 }
 
-func (a *app) coordinatorLabel(task taskInfo) string {
+func (a *app) coordinatorLabel(m locales.Messages, task taskInfo) string {
 	if task.Coordinator == "" {
-		return "你派发的"
+		return m.TasksByYou()
 	}
 	if _, term := a.findTerminal(task.Coordinator); term != nil {
-		return agentTitle(term.Agent) + " 派发的"
+		return m.TasksByAgent(agentTitle(term.Agent))
 	}
-	return "Agent 派发的"
+	return m.TasksByAnyAgent()
 }
 
 func (a *app) taskActions(c *ui.Context, task taskInfo) {
 	if task.Terminal == nil && task.WorkspaceKind != "worktree" {
 		return
 	}
-	ui.Row(c).Gap(8).Children(func() {
+	m := L(c)
+	// 英文的按钮长，详情窄时换行
+	ui.Row(c).Gap(8).Wrap().Children(func() {
 		if task.Terminal != nil {
-			if pressable(textButton(c, "打开 worker 终端")).Clicked() {
+			if pressable(textButton(c, m.TasksOpenWorker())).Clicked() {
 				a.openTerminal(task.WorkspaceID, task.Worker)
 			}
 		}
 		if task.WorkspaceKind == "worktree" {
-			if pressable(textButton(c, "查看改动")).Clicked() {
+			if pressable(textButton(c, m.TasksViewChanges())).Clicked() {
 				a.viewDiff(task)
 			}
-			if task.Status != "running" && pressable(textButton(c, "合并到 "+task.BaseRef)).Clicked() {
-				a.askMergeWorkspace(L(c), task.WorkspaceID)
+			if task.Status != "running" && pressable(textButton(c, m.TasksMergeInto(task.BaseRef))).Clicked() {
+				a.askMergeWorkspace(m, task.WorkspaceID)
 			}
 		}
 		ui.Spacer(c)
 		if task.Terminal != nil {
-			if pressable(textButton(c, "关闭 worker")).Clicked() {
-				a.askCloseTask(task)
+			if pressable(textButton(c, m.TasksCloseWorker())).Clicked() {
+				a.askCloseTask(m, task)
 			}
 		}
 	})
 }
 
 func (a *app) diffLine(c *ui.Context, task taskInfo) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	d := a.diffs[task.WorkspaceID]
-	text := "正在统计改动…"
+	text := m.TasksCounting()
 	if d != nil {
 		parts := []string{}
 		if d.Commits > 0 {
-			parts = append(parts, fmt.Sprintf("%d 个提交", d.Commits))
+			parts = append(parts, m.TasksCommits(d.Commits))
 		}
 		if d.Files > 0 {
-			parts = append(parts, fmt.Sprintf("改了 %d 个文件，+%d −%d", d.Files, d.Insertions, d.Deletions))
+			parts = append(parts, m.TasksFilesChanged(d.Files, d.Insertions, d.Deletions))
 		}
 		if d.Untracked > 0 {
-			parts = append(parts, fmt.Sprintf("%d 个新文件未跟踪", d.Untracked))
+			parts = append(parts, m.TasksUntracked(d.Untracked))
 		}
-		text = strings.Join(parts, "，")
+		text = strings.Join(parts, m.TasksDiffSeparator())
 		if text == "" {
-			text = "还没有改动"
+			text = m.TasksNoChanges()
 		}
 		if d.Dirty {
-			text += "。有未提交的改动，合并前要先提交"
+			text = m.TasksDiffDirty(text)
 		}
 	}
 	ui.Row(c).Gap(8).Padding(12, 12).Radius(rControl).Background(colors(t).wash).Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, task.Branch+" 相对 "+task.BaseRef).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, m.TasksBranchVsBase(task.Branch, task.BaseRef)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)
 	})
 }
@@ -747,11 +752,22 @@ func (a *app) block(c *ui.Context, label string, fn func()) {
 // monoFont 用于路径和命令；系统的 monospace 在部分环境下会落到 Courier
 const monoFont = "SF Mono, Menlo, monospace"
 
-var messageLabels = map[string]string{"question": "提问", "answer": "回复", "note": "补充说明", "done": "汇报", "exit": "退出"}
+var messageLabels = map[string]func(locales.Messages) string{
+	"question": locales.Messages.TasksMsgQuestion, "answer": locales.Messages.TasksMsgAnswer, "note": locales.Messages.TasksMsgNote,
+	"done": locales.Messages.TasksReport, "exit": locales.Messages.TasksMsgExit,
+}
+
+// messageLabel 是往来消息里一条消息的种类名，认不出的种类不写。
+func messageLabel(m locales.Messages, kind string) string {
+	if f := messageLabels[kind]; f != nil {
+		return f(m)
+	}
+	return ""
+}
 
 // thread 画往来消息，返回还没回答的提问（没有为 nil）。
 func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMessage {
-	t := c.Theme()
+	t, l := c.Theme(), L(c)
 	answered := map[string]bool{}
 	var open *taskMessage
 	var shown []taskMessage
@@ -778,22 +794,22 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 	if len(shown) == 0 {
 		return open
 	}
-	a.block(c, "往来消息", func() {
+	a.block(c, l.TasksMessages(), func() {
 		ui.Column(c).Gap(12).Children(func() {
 			for _, m := range shown {
 				ui.Column(c.Key(m.ID)).Gap(4).Children(func() {
 					ui.Row(c).Gap(8).Children(func() {
 						from := "worker"
 						if m.Kind == "answer" || m.Kind == "note" {
-							from = "派发方"
+							from = l.TasksDispatcher()
 						}
-						ui.Text(c, messageLabels[m.Kind]).FontSize(fsSmall).FontWeight(fwMedium)
+						ui.Text(c, messageLabel(l, m.Kind)).FontSize(fsSmall).FontWeight(fwMedium)
 						ui.Text(c, from).FontSize(fsSmall).TextColor(t.TextMuted)
 						ui.Text(c, m.CreatedAt.Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						if m.Kind == "question" && !answered[m.ID] && task.Status == "running" {
-							label, color := "等派发方回复", t.TextMuted
+							label, color := l.TasksStatusAwaitDispatcher(), t.TextMuted
 							if task.Coordinator == "" {
-								label, color = "待你回复", colors(t).honey
+								label, color = l.TasksStatusNeedsReply(), colors(t).honey
 							}
 							ui.Text(c, label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color)
 						}
@@ -809,10 +825,10 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 // --- 派发对话框
 
 func (a *app) dispatchDialog(c *ui.Context) {
-	t := c.Theme()
+	t, m := c.Theme(), L(c)
 	ui.Modal(c, &a.dispatching, func() {
 		ui.Column(c).Width(460).Gap(12).Children(func() {
-			titleText(c, "派发任务", fsTitle)
+			titleText(c, m.TasksDispatchTitle(), fsTitle)
 			var labels []string
 			for _, w := range a.workspaces {
 				labels = append(labels, w.Label)
@@ -826,16 +842,16 @@ func (a *app) dispatchDialog(c *ui.Context) {
 			}
 			ui.Column(c).Gap(6).Children(func() {
 				ui.Select(c, &a.dWorkspace, labels)
-				hint := "worker 在这个工作区的目录里工作。"
+				hint := m.TasksDirHint()
 				if isGit && a.dMode == 1 {
-					hint = "每个 agent 各开一个 git worktree 和分支，改动互不干扰，做完可以对比后合并。"
+					hint = m.TasksWorktreeHint()
 				}
 				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
-			fieldInput(c, &a.dTitle, "标题，比如 修复登录页闪退").AutoFocus()
-			fieldArea(c, &a.dSpec, "要做什么、范围在哪、不能动什么、怎样算完成。worker 看不到你和其他 agent 的对话，这里要写全。", 136)
+			fieldInput(c, &a.dTitle, m.TasksTitlePlaceholder()).AutoFocus()
+			fieldArea(c, &a.dSpec, m.TasksSpecPlaceholder(), 136)
 			ui.Row(c).Gap(16).Children(func() {
-				ui.Text(c, "交给").FontSize(fsBody).TextColor(t.TextMuted)
+				ui.Text(c, m.TasksAssignTo()).FontSize(fsBody).TextColor(t.TextMuted)
 				if a.dAgents == nil {
 					a.dAgents = map[string]bool{}
 				}
@@ -845,15 +861,15 @@ func (a *app) dispatchDialog(c *ui.Context) {
 					a.dAgents[name] = on
 				}
 				if len(a.agentChoices()) == 0 {
-					ui.Text(c, "这台 Mac 上没找到 Claude、Codex、grok 或 Cursor").FontSize(fsBody).TextColor(t.TextMuted)
+					ui.Text(c, m.TasksNoAgents()).FontSize(fsBody).TextColor(t.TextMuted)
 				}
 			})
 			if isGit {
-				segmented(c, &a.dMode, "工作目录", "在工作区目录里", "各自新建 worktree")
+				segmented(c, &a.dMode, m.TasksWorkDir(), m.TasksInWorkspace(), m.TasksNewWorktrees())
 				if a.dMode == 1 {
 					ui.Column(c).Gap(6).Children(func() {
-						fieldInput(c, &a.dBranch, "分支名")
-						ui.Text(c, "选了多个 agent 时，分支名会加上 -claude 这样的后缀。").FontSize(fsSmall).TextColor(t.TextMuted)
+						fieldInput(c, &a.dBranch, m.TasksBranchPlaceholder())
+						ui.Text(c, m.TasksBranchNote()).FontSize(fsSmall).TextColor(t.TextMuted)
 					})
 				}
 			}
@@ -865,12 +881,12 @@ func (a *app) dispatchDialog(c *ui.Context) {
 			}
 			ready := w != nil && len(agents) > 0 && strings.TrimSpace(a.dSpec) != "" && (!isGit || a.dMode == 0 || strings.TrimSpace(a.dBranch) != "")
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					a.dispatching = false
 				}
-				verb := "派发"
+				verb := m.TasksDispatch()
 				if len(agents) > 1 {
-					verb = fmt.Sprintf("派发给 %d 个 agent", len(agents))
+					verb = m.TasksDispatchTo(len(agents))
 				}
 				btn := accentButton(c, verb).Disabled(!ready)
 				if pressable(btn).Clicked() && ready {
