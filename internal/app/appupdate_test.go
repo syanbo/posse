@@ -49,3 +49,26 @@ func TestUpdateHiddenWithoutFeed(t *testing.T) {
 		t.Fatalf("updateUnavailable() = %q, %v; want hidden", reason, hidden)
 	}
 }
+
+// 从源码打的包是临时签名，读不出团队；发布证书签的包读得出 releaseTeam。
+func TestSigningTeam(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := signingTeam(exe); got != "" {
+		t.Errorf("signingTeam(test binary) = %q, want empty (linker adhoc signature)", got)
+	}
+	if got := signingTeam("/nonexistent"); got != "" {
+		t.Errorf("signingTeam(missing) = %q", got)
+	}
+	// 本机有发布证书签的包时顺便核对（只读）
+	for _, p := range []string{"../../build/darwin-arm64/Posse.app/Contents/MacOS/Posse", "../../build/dev/PosseDev.app/Contents/MacOS/Posse"} {
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		if got := signingTeam(p); got != releaseTeam {
+			t.Errorf("signingTeam(%s) = %q, want %q", p, got, releaseTeam)
+		}
+	}
+}

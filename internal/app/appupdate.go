@@ -52,6 +52,8 @@ type selfUpdate struct {
 
 	// writable 是能不能写 app 所在的目录：mygo 每问一次都在里面建、删一个临时目录，设置页每帧都要用，只探一次
 	writable func() bool
+	// team 是这个包签名的团队 ID，只读一次
+	team func() string
 }
 
 // updateView 是界面要显示的一份快照。
@@ -84,9 +86,16 @@ func (u *selfUpdate) due(manual bool, now time.Time) bool {
 }
 
 // updateUnavailable 说明这个包为什么不能自动更新；空串表示能。
-// 不带更新地址的包（PosseDev、go build、mygo dev）不显示更新，hidden 为真。
+// 不带更新地址的包（PosseDev、go build、mygo dev）和不是发布证书签的包（从源码打的）不显示更新，hidden 为真。
 func (a *app) updateUnavailable() (reason string, hidden bool) {
 	if !mygo.Updater.Configured() || a.exe.bundle == "" {
+		return "", true
+	}
+	if a.upd.team == nil {
+		exe := a.exe.exe
+		a.upd.team = sync.OnceValue(func() string { return signingTeam(exe) })
+	}
+	if a.upd.team() != releaseTeam {
 		return "", true
 	}
 	if !inApplications(a.exe.bundle) {
