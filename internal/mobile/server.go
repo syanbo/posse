@@ -225,8 +225,8 @@ func (s *Server) dropDevices(ids []string) {
 
 func (s *Server) serveWS(w http.ResponseWriter, r *http.Request) {
 	// 手机 App 的 WebSocket 不带 Origin；安全靠 E2EE 和设备 token
-	// 不开 permessage-deflate：消息都是密文的 base64，只有 HuffmanOnly 压得动（约少四分之一），
-	// websocket 库写死用 BestSpeed，Go 1.27 的 BestSpeed 遇到这种数据原样存储，开了只白费 CPU
+	// 不开 permessage-deflate：消息都是密文（分帧 2 是密文的 base64，只有 HuffmanOnly 压得动、约少四分之一；
+	// 分帧 3 是原始密文，更压不动），websocket 库写死用 BestSpeed，Go 1.27 的 BestSpeed 遇到这种数据原样存储，开了只白费 CPU
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
@@ -386,7 +386,7 @@ func (c *conn) handshake() error {
 	return c.sendJSON(map[string]any{"type": "e2ee_authenticated", "v": 2, "transcriptHashB64": th})
 }
 
-// sendJSON 加密并发送一个 JSON 文本帧。
+// sendJSON 加密一条 JSON 消息，按握手选的分帧发送（见 sealMessage）。
 func (c *conn) sendJSON(v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {

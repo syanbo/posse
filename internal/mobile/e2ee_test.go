@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/coder/websocket"
 	"golang.org/x/crypto/nacl/box"
 	"golang.org/x/crypto/nacl/secretbox"
 )
@@ -151,3 +152,41 @@ func openWith(frame []byte, key *[32]byte) ([]byte, bool) {
 }
 
 func sprintf(f string, a ...any) string { return fmt.Sprintf(f, a...) }
+
+// 分帧 3 下 openMessage 的拒绝路径：失败都不推进计数器
+func TestOpenMessageBinaryFraming(t *testing.T) {
+	s := &session{framing: framingBinary}
+	rand.Read(s.recvKey[:])
+	rand.Read(s.id[:])
+	frame := func(kind byte, n uint64, payload string) []byte {
+		nonce := s.nonce(dirMobileToDesktop, kind, n)
+		return secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kind, n), payload...), &nonce, &s.recvKey)
+	}
+	flipped := frame(kindText, 0, "x")
+	flipped[14] = kindBinary
+	badKind := frame(kindText, 0, "x")
+	badKind[14] = 2
+	for name, c := range map[string]struct {
+		typ websocket.MessageType
+		raw []byte
+	}{
+		"text frame":   {websocket.MessageText, frame(kindText, 0, "x")},
+		"short":        {websocket.MessageBinary, make([]byte, 20)},
+		"unknown kind": {websocket.MessageBinary, badKind},
+		"flipped kind": {websocket.MessageBinary, flipped},
+		"replayed":     {websocket.MessageBinary, frame(kindText, 1, "x")},
+	} {
+		if _, _, err := s.openMessage(c.typ, c.raw); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+		if s.recvN != 0 {
+			t.Fatalf("%s: counter moved to %d", name, s.recvN)
+		}
+	}
+	for i, want := range []byte{kindText, kindBinary, kindText} {
+		kind, p, err := s.openMessage(websocket.MessageBinary, frame(want, uint64(i), "ok"))
+		if err != nil || kind != want || string(p) != "ok" {
+			t.Fatalf("frame %d: kind %d, %q, %v", i, kind, p, err)
+		}
+	}
+}

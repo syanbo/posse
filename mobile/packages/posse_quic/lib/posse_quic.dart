@@ -54,7 +54,13 @@ external void _reset();
 external void _free(Pointer<Uint8> p);
 
 @Native<
-  Void Function(Pointer<Uint8>, Pointer<Uint8>, Pointer<Uint8>, Int32, Pointer<Uint8>)
+  Void Function(
+    Pointer<Uint8>,
+    Pointer<Uint8>,
+    Pointer<Uint8>,
+    Int32,
+    Pointer<Uint8>,
+  )
 >(symbol: 'hq_seal', isLeaf: true)
 external void _seal(
   Pointer<Uint8> key,
@@ -78,12 +84,17 @@ external int _open(
 /// secretbox 的开销：Poly1305 标签 16 字节，nonce 24 字节拼在密文前面。
 const secretboxOverhead = 16;
 const secretboxNonceLength = 24;
+const _maxSecretbox = 0x7fffffff - secretboxNonceLength - secretboxOverhead;
 
 /// 用 Go 的 nacl/secretbox 加密：返回 nonce 加密文，和 Go 的 `secretbox.Seal(nonce[:], …)` 同格式。
 /// 直接把 Dart 的缓冲区交给 Go，不拷贝。
 Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
   if (key.length != 32 || nonce.length != secretboxNonceLength) {
     throw ArgumentError('secretbox: bad key or nonce length');
+  }
+  // 长度按 Int32 交给 Go，超出会变成负数，Go 那边 panic 会带崩 App
+  if (plain.length > _maxSecretbox) {
+    throw ArgumentError('secretbox: message too large');
   }
   final out = Uint8List(
     secretboxNonceLength + secretboxOverhead + plain.length,
@@ -95,6 +106,9 @@ Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
 /// 解开 [secretboxSeal] 的结果（nonce 取自 frame 的前 24 字节），认证失败返回 null。
 Uint8List? secretboxOpen(Uint8List key, Uint8List frame) {
   if (key.length != 32) throw ArgumentError('secretbox: bad key length');
+  if (frame.length > _maxSecretbox) {
+    throw ArgumentError('secretbox: frame too large');
+  }
   if (frame.length < secretboxNonceLength + secretboxOverhead) return null;
   final out = Uint8List(
     frame.length - secretboxNonceLength - secretboxOverhead,

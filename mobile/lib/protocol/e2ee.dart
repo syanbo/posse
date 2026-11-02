@@ -164,13 +164,6 @@ class E2eeSession {
     return Uint8List.sublistView(plain, headerLen);
   }
 
-  Uint8List sealText(Uint8List payload, {required int direction}) =>
-      Uint8List.fromList(
-        utf8.encode(
-          base64.encode(seal(payload, direction: direction, kind: kindText)),
-        ),
-      );
-
   Uint8List openText(Uint8List b64Bytes, {required int direction}) => open(
     base64.decode(latin1.decode(b64Bytes)),
     direction: direction,
