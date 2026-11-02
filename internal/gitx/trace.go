@@ -22,7 +22,12 @@ type Run struct {
 	Done  bool
 	Out   string // 标准输出和标准错误（fetch、push 的进度和结果在标准错误里），太长截掉中间
 	Err   string // 失败时 git 的报错，成功为空
+	// Canceled 报告是被取消的（Err 是 MsgCanceled）：界面按它判断，不比较 Err 的文字
+	Canceled bool `json:",omitempty"`
 }
+
+// MsgCanceled 是取消了的命令和操作的报错，英文源文本，界面经 errtext 翻译。
+const MsgCanceled = "canceled"
 
 // Trace 收到操作里的每条命令（包括它顺带做的查询），以及操作之外会改动仓库的命令和失败的命令；
 // 操作之外成功的查询（每 1.5 秒的 status、diff、log 等）不报，不然全是轮询。在执行 git 的协程里调用，不能阻塞。
@@ -61,6 +66,15 @@ func OpResult(ctx context.Context, dir, msg string) {
 	Trace(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: now, Done: true, Err: msg})
 }
 
+// OpCanceled 报出操作被取消了。
+func OpCanceled(ctx context.Context, dir string) {
+	op, _ := ctx.Value(opKey{}).(opInfo)
+	if Trace == nil || op.id == 0 {
+		return
+	}
+	Trace(Run{ID: traceSeq.Add(1), Op: op.name, OpID: op.id, Dir: dir, Start: time.Now(), Done: true, Err: MsgCanceled, Canceled: true})
+}
+
 func traceStart(ctx context.Context, dir string, args []string) *Run {
 	if Trace == nil {
 		return nil
@@ -73,11 +87,11 @@ func traceStart(ctx context.Context, dir string, args []string) *Run {
 	return r
 }
 
-func traceEnd(r *Run, stdout, stderr []byte, errMsg string) {
+func traceEnd(r *Run, stdout, stderr []byte, errMsg string, canceled bool) {
 	if r == nil || Trace == nil || (errMsg == "" && r.Op == "" && readOnly(r.Args)) {
 		return
 	}
-	r.Took, r.Done, r.Err = time.Since(r.Start), true, errMsg
+	r.Took, r.Done, r.Err, r.Canceled = time.Since(r.Start), true, errMsg, canceled
 	// 查询的标准输出是界面要解析的数据，失败时才值得看；改动的命令两样都留
 	text := strings.TrimRight(string(stderr), "\n")
 	if !readOnly(r.Args) {

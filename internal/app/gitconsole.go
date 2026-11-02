@@ -13,6 +13,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"posse/internal/errtext"
 	"posse/internal/gitx"
 )
 
@@ -237,7 +238,7 @@ func (o gitOpRecord) failed() bool {
 }
 
 func (o gitOpRecord) canceled() bool {
-	return slices.ContainsFunc(o.runs, func(r gitx.Run) bool { return len(r.Args) == 0 && r.Err == "已取消" })
+	return slices.ContainsFunc(o.runs, func(r gitx.Run) bool { return len(r.Args) == 0 && r.Canceled })
 }
 
 func (o gitOpRecord) running() bool {
@@ -510,7 +511,7 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 					}
 					// 操作的结果：和某条命令的报错一样时不再写一遍
 					if !slices.ContainsFunc(op.runs, func(o gitx.Run) bool { return len(o.Args) > 0 && o.Err != "" && strings.Contains(r.Err, o.Err) }) {
-						ui.Text(c, r.Err).FontSize(fsSmall).LineHeight(1.4).TextColor(t.Danger).Selectable()
+						ui.Text(c, errtext.Message(r.Err)).FontSize(fsSmall).LineHeight(1.4).TextColor(t.Danger).Selectable()
 					}
 				}
 			})
@@ -541,7 +542,7 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 		})
 		out := r.Out
 		if r.Err != "" && !strings.Contains(out, r.Err) {
-			out = strings.TrimLeft(out+"\n"+r.Err, "\n")
+			out = strings.TrimLeft(out+"\n"+errtext.Message(r.Err), "\n")
 		}
 		if out = strings.TrimRight(out, "\n"); out != "" {
 			tone, bar := t.TextMuted, p.line

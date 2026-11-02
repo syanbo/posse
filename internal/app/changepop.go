@@ -130,11 +130,11 @@ func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *cha
 			return
 		}
 		msg := strings.TrimSpace(cp.message)
-		if !in.Submitted() || msg == "" || g.pending("提交") {
+		if !in.Submitted() || msg == "" || g.pending(gitCommit) {
 			return
 		}
 		content := changeContent(d.headBuf.String(), d.ed.Buffer.String(), ch)
-		a.gitDoThen(v, "提交", func(ctx context.Context, root string) error {
+		a.gitDoKind(v, gitCommit, "提交", func(ctx context.Context, root string) error {
 			return gitx.CommitChange(ctx, root, rel, []byte(content), msg)
 		}, func() {
 			if d.change == cp {

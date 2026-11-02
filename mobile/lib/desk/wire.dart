@@ -27,7 +27,18 @@ const deskKeyHid = {
 
 /// 快捷键栏上切空间的三个键：都是 ⌃ 加方向键，对应系统设置里调度中心的默认快捷键
 /// （向左、向右移动一个空间，调度中心）。不吃掉用户按着的修饰键。
-const deskSpaceKeys = {'◀ 空间': '←', '空间 ▶': '→', '调度中心': '↑'};
+/// 键是代号，显示的文字在 [deskSpaceLabels]。
+const deskSpaceKeys = {
+  'spaceLeft': '←',
+  'spaceRight': '→',
+  'missionControl': '↑',
+};
+
+const deskSpaceLabels = {
+  'spaceLeft': '◀ 空间',
+  'spaceRight': '空间 ▶',
+  'missionControl': '调度中心',
+};
 
 /// 整屏 0–1 换成绝对坐标 0–65535。
 int deskAxis(double unit) => (unit.clamp(0.0, 1.0) * 65535).round();

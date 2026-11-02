@@ -389,10 +389,10 @@ func (a *app) resumeSession(s history.Session) {
 
 // ago 是会话最后使用的时间，写成"20 分钟前"。
 func ago(t time.Time) string {
-	if s := elapsed(t); s != "刚刚" {
-		return s + "前"
+	if time.Since(t) < time.Minute {
+		return elapsed(t) // "刚刚"
 	}
-	return "刚刚"
+	return elapsed(t) + "前"
 }
 
 // sessionMeta 是会话卡片上的消息数和最近用的模型；常驻进程是旧版本时没有模型，只显示消息数。

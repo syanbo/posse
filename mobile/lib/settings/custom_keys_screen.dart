@@ -182,7 +182,9 @@ class _KeyRow extends StatelessWidget {
             'image' => const _KeyCap(icon: Icons.attach_file_rounded),
             'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
             sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
-            _ => _KeyCap(label: custom?.shown ?? item.builtin),
+            _ => _KeyCap(
+              label: custom?.shown ?? item.termKey?.label ?? item.builtin,
+            ),
           },
           title: Text(
             custom != null
@@ -226,7 +228,7 @@ String describeBuiltin(String name) => switch (name) {
   sendNowLabel => 'Ctrl + Enter：排队的消息马上交给 Claude',
   '⇧Tab' => 'Shift + Tab：切换模式',
   '^C' => 'Ctrl + C：结束程序',
-  clearInputLabel => '清空输入框',
+  clearInputKey => '清空输入框',
   exitAgentLabel => '退出 agent（/exit）',
   '↑' => '方向键：上',
   '↓' => '方向键：下',

@@ -496,7 +496,7 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 	line.Children(func() {
 		if row.dir {
 			open := !r.folded[row.path]
-			disclosure(c, &open, "展开 "+row.path)
+			disclosure(c, &open, "展开 "+row.path, "收起 "+row.path)
 			if open == r.folded[row.path] {
 				r.folded[row.path] = !open
 			}

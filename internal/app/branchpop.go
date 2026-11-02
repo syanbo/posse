@@ -146,7 +146,7 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 	a.fetchAt[w.ProjectID] = time.Now()
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), "自动 Fetch"))
 	for _, v := range views {
-		v.git.busy, v.git.cancel = "Fetch", cancel
+		v.git.busy, v.git.busyKind, v.git.cancel = "Fetch", gitFetch, cancel
 	}
 	dir, project := w.Path, w.ProjectID
 	go func() {
@@ -156,8 +156,8 @@ func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
 			tr.poll = panelPoll{}
 			a.refsChanged(project)
 			for _, v := range views {
-				if v.git.busy == "Fetch" {
-					v.git.busy, v.git.cancel = "", nil
+				if v.git.busyKind == gitFetch {
+					v.git.busy, v.git.busyKind, v.git.cancel = "", "", nil
 					a.gitNext(v)
 				}
 			}
@@ -265,7 +265,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				}
 			})
 			// Fetch 进行中按钮换成转圈，不另起一行文字
-			if g.busy == "Fetch" {
+			if g.busyKind == gitFetch {
 				spin := ui.Row(c.Key("fetching")).Size(buttonBox(), buttonBox()).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).
 					Role(ui.RoleButton).Label("取消 Fetch").Tooltip("正在 Fetch，点一下取消")
 				spin.Children(func() { ui.Spinner(c).Label("正在 Fetch") })
@@ -273,13 +273,13 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 					g.cancel()
 				}
 			} else if fetch := pressable(iconButtonSized(c, iconFetch, "Fetch：从所有远端拉取（每 5 分钟自动一次）", buttonBox(), iconSize)); g.busy == "" && fetch.Clicked() {
-				a.gitDoThen(v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
+				a.gitDoKind(v, gitFetch, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
 					func() { a.notify("Fetch 完成", "", nil) })
 			} else if g.busy != "" {
 				fetch.Opacity(0.4)
 			}
 		})
-		if g.busy != "" && (g.busy != "Fetch" || len(g.queue) > 0) {
+		if g.busy != "" && (g.busyKind != gitFetch || len(g.queue) > 0) {
 			ui.Row(c).Padding(0, 12, 4, 12).Children(func() { busyLine(c, g) })
 		}
 		query := strings.ToLower(strings.TrimSpace(bp.query))
@@ -670,7 +670,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 // updateBranch 用远端更新分支，做完提示拉到了几个提交。
 func (a *app) updateBranch(v *filesView, what string, b gitx.Branch) {
 	var n int
-	a.gitDoThen(v, what, func(ctx context.Context, root string) error {
+	a.gitDoKind(v, gitUpdate, what, func(ctx context.Context, root string) error {
 		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.Update(ctx, root, b)
 		var left *gitx.AutostashLeft

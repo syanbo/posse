@@ -48,8 +48,9 @@ type gitState struct {
 	poll     panelPoll
 	message  string
 	amend    bool
-	amendMsg string // 勾"修改上一次提交"时自动填进来的信息
-	busy     string // 正在执行的操作，期间按钮不可点
+	amendMsg string  // 勾"修改上一次提交"时自动填进来的信息
+	busy     string  // 正在执行的操作，期间按钮不可点
+	busyKind gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
 	queue    []gitOp
 	cancel   context.CancelFunc // 正在执行的是网络操作时可以取消
 	err      string
@@ -419,10 +420,15 @@ func (df *diffDoc) tabLabel() string {
 	switch {
 	case df.label != "":
 		return df.label
-	case df.worktree() && df.oldRev == "HEAD":
+	case df.plainChanges():
 		return "改动"
 	}
 	return shortRev(df.oldRev) + " → " + shortRev(df.newRev)
+}
+
+// plainChanges 报告是工作区对 HEAD 的改动，标签就叫"改动"、不另标版本。
+func (df *diffDoc) plainChanges() bool {
+	return df.label == "" && df.worktree() && df.oldRev == "HEAD"
 }
 
 // shortRev 是版本在界面上的写法：提交取前 7 位，空的是工作区。
@@ -816,11 +822,16 @@ func (a *app) gitDo(v *filesView, what string, fn func(ctx context.Context, root
 // gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。已经有操作在执行（比如自动 Fetch）时排在后面，
 // 不丢掉用户的点击。
 func (a *app) gitDoThen(v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
+	a.gitDoKind(v, "", what, fn, done)
+}
+
+// gitDoKind 同 gitDoThen，带上操作的代号。
+func (a *app) gitDoKind(v *filesView, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
 	g := &v.git
 	if g.repo == "" {
 		return
 	}
-	op := gitOp{what: what, fn: fn, done: done}
+	op := gitOp{kind: kind, what: what, fn: fn, done: done}
 	if g.busy != "" {
 		g.queue = append(g.queue, op)
 		return
@@ -865,14 +876,25 @@ func (a *app) notify(title, action string, onAction func()) {
 
 // gitOp 是一个排队等着执行的 git 操作。
 type gitOp struct {
+	kind gitKind
 	what string
 	fn   func(ctx context.Context, root string) error
 	done func()
 }
 
-// pending 报告 what 正在执行或排着队。
-func (g *gitState) pending(what string) bool {
-	return g.busy == what || slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.what == what })
+// gitKind 是要按种类判断的 git 操作的代号（要不要给取消、是不是在提交）；其余操作为空。
+type gitKind string
+
+const (
+	gitFetch  gitKind = "fetch"
+	gitPush   gitKind = "push"
+	gitUpdate gitKind = "update"
+	gitCommit gitKind = "commit"
+)
+
+// pending 报告 kind 这种操作正在执行或排着队。
+func (g *gitState) pending(kind gitKind) bool {
+	return g.busyKind == kind || slices.ContainsFunc(g.queue, func(op gitOp) bool { return op.kind == kind })
 }
 
 // busyLine 画忙碌的文字，网络操作后面跟一个"取消"。
@@ -901,16 +923,16 @@ func (g *gitState) busyText() string {
 }
 
 // networkOp 报告操作要连远端：可能很慢、等不到回应，忙碌时给"取消"。
-func networkOp(what string) bool {
-	return what == "Fetch" || what == "Push" || strings.HasPrefix(what, "更新")
+func networkOp(kind gitKind) bool {
+	return kind == gitFetch || kind == gitPush || kind == gitUpdate
 }
 
 func (a *app) gitRun(v *filesView, op gitOp) {
 	g := &v.git
-	g.busy = op.what
+	g.busy, g.busyKind = op.what, op.kind
 	root := g.repo
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), op.what))
-	if networkOp(op.what) {
+	if networkOp(op.kind) {
 		g.cancel = cancel
 	}
 	go func() {
@@ -923,13 +945,13 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 		canceled := ctx.Err() != nil
 		switch {
 		case canceled:
-			gitx.OpResult(ctx, root, "已取消")
+			gitx.OpCanceled(ctx, root)
 		case err != nil:
 			gitx.OpResult(ctx, root, err.Error())
 		}
 		cancel()
 		a.update(func() {
-			g.busy, g.cancel = "", nil
+			g.busy, g.busyKind, g.cancel = "", "", nil
 			if canceled {
 				a.err = op.what + "已取消"
 			} else if err != nil {
@@ -1152,7 +1174,7 @@ func (a *app) commit(v *filesView) {
 		a.err = "先勾选要提交的文件"
 		return
 	}
-	a.gitDoThen(v, "提交", func(ctx context.Context, root string) error {
+	a.gitDoKind(v, gitCommit, "提交", func(ctx context.Context, root string) error {
 		var err error
 		if whole {
 			// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区

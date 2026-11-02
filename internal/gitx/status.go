@@ -49,13 +49,14 @@ func runRaw(ctx context.Context, dir string, stdin []byte, env []string, args ..
 		if msg == "" {
 			msg = err.Error()
 		}
-		if ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			msg = "已取消"
+		canceled := ctx.Err() != nil && !errors.Is(ctx.Err(), context.DeadlineExceeded)
+		if canceled {
+			msg = MsgCanceled
 		}
-		traceEnd(rec, out.Bytes(), errb.Bytes(), msg)
+		traceEnd(rec, out.Bytes(), errb.Bytes(), msg, canceled)
 		return out.Bytes(), &Error{Args: args, Msg: msg}
 	}
-	traceEnd(rec, out.Bytes(), errb.Bytes(), "")
+	traceEnd(rec, out.Bytes(), errb.Bytes(), "", false)
 	return out.Bytes(), nil
 }
 

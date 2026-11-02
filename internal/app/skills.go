@@ -1323,16 +1323,22 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 				if v.failedNow() && pressable(textButton(c, "重新读取")).Clicked() {
 					list = true
 				}
-				label := "安装"
+				// 主按钮做的事（action）和文字分开定：按文字判断，换了语言就认不出了
+				const (
+					doInstall = iota
+					doList
+					doInstallNode
+				)
+				label, action := "安装", doInstall
 				enabled := ready
 				switch {
 				case v.failedNow() && v.noNPX:
-					label, enabled = "打开 nodejs.org", true
+					label, action, enabled = "打开 nodejs.org", doInstallNode, true
 					if skills.FindBrew() != "" {
 						label = "安装 Node.js"
 					}
 				case !v.listedNow() && !v.failedNow():
-					label, enabled = "读取", canList
+					label, action, enabled = "读取", doList, canList
 				}
 				run := ui.Box(c).Shrink(0)
 				if !enabled {
@@ -1340,10 +1346,10 @@ func (a *app) skillInstallDialog(c *ui.Context) {
 				}
 				run.Children(func() {
 					if pressable(accentButton(c, label)).Clicked() {
-						switch label {
-						case "读取":
+						switch action {
+						case doList:
 							list = true
-						case "安装 Node.js", "打开 nodejs.org":
+						case doInstallNode:
 							installNode = true
 						default:
 							submitted = true

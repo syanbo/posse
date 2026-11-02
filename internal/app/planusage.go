@@ -29,19 +29,47 @@ const planUrgent = 80
 // windowLabel 按窗口长度写名字：Claude、Codex 的 5 小时和每周，Grok 的每周，Cursor 的计费周期（约一个月）。
 func windowLabel(minutes int) string {
 	const day = 24 * 60
-	switch {
-	case minutes == 0:
+	switch windowKindOf(minutes) {
+	case windowPeriod:
 		return "本期"
-	case minutes >= 295 && minutes <= 305:
+	case window5h:
 		return "5 小时"
-	case minutes >= 7*day-10 && minutes <= 7*day+10:
+	case windowWeek:
 		return "每周"
-	case minutes >= 27*day && minutes <= 32*day:
+	case windowMonth:
 		return "每月"
-	case minutes >= day:
+	}
+	if minutes >= day {
 		return fmt.Sprintf("%d 天", (minutes+day/2)/day)
 	}
 	return fmt.Sprintf("%d 小时", (minutes+30)/60)
+}
+
+// windowKind 是套餐窗口的类别，逻辑按它判断，不比较显示的文字。
+type windowKind int
+
+const (
+	windowOther  windowKind = iota
+	windowPeriod            // 不知道长度：本期
+	window5h
+	windowWeek
+	windowMonth
+)
+
+// windowKindOf 按窗口的分钟数认出类别，各家报的长度有几分钟的出入。
+func windowKindOf(minutes int) windowKind {
+	const day = 24 * 60
+	switch {
+	case minutes == 0:
+		return windowPeriod
+	case minutes >= 295 && minutes <= 305:
+		return window5h
+	case minutes >= 7*day-10 && minutes <= 7*day+10:
+		return windowWeek
+	case minutes >= 27*day && minutes <= 32*day:
+		return windowMonth
+	}
+	return windowOther
 }
 
 // resetText 是"2 小时 15 分钟后重置"；超过一天写日期。
@@ -177,7 +205,7 @@ func planWindows(u usage.Usage) []usage.Window {
 func headWindow(u usage.Usage) usage.Window {
 	ws := planWindows(u)
 	for _, w := range ws {
-		if w.Name == "" && windowLabel(w.Minutes) == "5 小时" {
+		if w.Name == "" && windowKindOf(w.Minutes) == window5h {
 			return w
 		}
 	}
@@ -254,16 +282,15 @@ func planFacts(u usage.Usage) []string {
 
 // windowShort 是状态栏里的窗口名，比 windowLabel 短。
 func windowShort(minutes int) string {
-	switch l := windowLabel(minutes); l {
-	case "5 小时":
+	switch windowKindOf(minutes) {
+	case window5h:
 		return "5h"
-	case "每周":
+	case windowWeek:
 		return "周"
-	case "每月":
+	case windowMonth:
 		return "月"
-	default:
-		return l
 	}
+	return windowLabel(minutes)
 }
 
 // planBar 是进度条：画已用或剩余的那一段，快用完时是红色。

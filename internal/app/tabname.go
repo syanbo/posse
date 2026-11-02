@@ -14,13 +14,15 @@ import (
 // startRename 让终端标签原地变成输入框，填上现在显示的名字。
 func (a *app) startRename(term terminalInfo) {
 	name, detail := tabLabel(term)
+	// 退出的终端 detail 是"已退出"，不是标题，不拿来当名字
+	exited := !term.Running && !term.Lost
 	if title, ok := a.workerTitle[term.ID]; ok && term.Name == "" {
-		detail = title
+		detail, exited = title, false
 	}
 	switch {
 	case term.Name != "":
 		name = term.Name
-	case term.Agent != "" && detail != "" && detail != "已退出":
+	case term.Agent != "" && detail != "" && !exited:
 		name = detail
 	}
 	a.renaming, a.renameText = term.ID, name

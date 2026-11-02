@@ -64,12 +64,12 @@ void main() {
   });
 
   test('key bar bytes are the terminal sequences', () {
-    final byLabel = {for (final key in termKeys) key.label: key.bytes};
+    final byLabel = {for (final key in termKeys) key.id: key.bytes};
     expect(byLabel['Esc'], [0x1b]);
     expect(byLabel['Tab'], [0x09]);
     expect(byLabel['Enter'], [0x0d]);
     // Enter 排在 Tab 后面
-    final labels = termKeys.map((k) => k.label).toList();
+    final labels = termKeys.map((k) => k.id).toList();
     expect(labels.indexOf('Enter'), labels.indexOf('Tab') + 1);
     // Claude 排队消息立即发送（chat:sendNow 的 Ctrl+X Ctrl+S），紧跟在 Enter 后面
     expect(byLabel[sendNowLabel], [0x18, 0x13]);

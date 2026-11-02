@@ -972,7 +972,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 func (a *app) doPush(v *filesView, ps *pushState, force bool) {
 	ps.pushing = true
 	plan, tags := ps.plan, ps.tags
-	a.gitDoThen(v, "Push", func(ctx context.Context, root string) error {
+	a.gitDoKind(v, gitPush, "Push", func(ctx context.Context, root string) error {
 		err := gitx.Push(ctx, root, plan, force, tags)
 		a.update(func() {
 			ps.pushing = false

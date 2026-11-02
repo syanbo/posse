@@ -67,7 +67,7 @@ void main() {
       sendNowLabel,
       '⇧Tab',
       '^C',
-      '清空',
+      clearInputKey,
       exitAgentLabel,
       '↑',
       '↓',
@@ -131,7 +131,7 @@ void main() {
       sendNowLabel,
       '⇧Tab',
       '^C',
-      '清空',
+      clearInputKey,
       exitAgentLabel,
       '↑',
       '↓',
@@ -185,5 +185,17 @@ void main() {
     final names = [for (final k in normalizeBarKeys(keys)) k.builtin];
     expect(names.first, exitAgentLabel);
     expect(names.where((n) => n == exitAgentLabel).length, 1);
+  });
+
+  // 「清空」原来拿键帽文字当代号存盘：旧设置里存的留在原来的位置上，键帽照样写「清空」
+  test('clear key saved under its label keeps its place', () {
+    final keys = [
+      for (final name in ['清空', 'Esc', 'image'])
+        ?BarKey.fromJson({'builtin': name}),
+    ];
+    final norm = normalizeBarKeys(keys);
+    expect(norm.first.builtin, clearInputKey);
+    expect(norm.first.termKey?.label, '清空');
+    expect(norm.where((k) => k.builtin == clearInputKey).length, 1);
   });
 }

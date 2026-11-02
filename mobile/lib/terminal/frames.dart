@@ -131,9 +131,17 @@ class TermAssembler {
 }
 
 class TermKey {
-  const TermKey(this.label, this.bytes);
-  final String label;
+  const TermKey(this.id, this.bytes, {this.keycap});
+
+  /// 键的代号，快捷键栏的顺序按它存盘。早先的键用键帽文字当代号，存过的设置照样认。
+  final String id;
   final List<int> bytes;
+
+  /// 键帽上的文字和代号不同时另给。
+  final String? keycap;
+
+  /// 键帽上的文字。
+  String get label => keycap ?? id;
 }
 
 /// 程序开着光标键应用模式（DECCKM）时，方向键、Home、End 换成 ESC O 开头的编码：
@@ -151,8 +159,8 @@ List<int> cursorKeysApp(List<int> bytes) {
 /// 立即发送的键帽 ⌃↩。U+FE0E 让 ↩ 按文字画：手机字体里没有它时会退到 emoji 字体，画成彩色图标。
 const sendNowLabel = '⌃↩\uFE0E';
 
-/// 清空输入框的键帽。按下后由终端页按有没有 agent 发 [clearLines] 或只清当前行。
-const clearInputLabel = '清空';
+/// 清空输入框的键的代号。按下后由终端页按有没有 agent 发 [clearLines] 或只清当前行。
+const clearInputKey = 'clear';
 
 /// 清空 agent 的多行输入框：Ctrl+E 到行尾、Ctrl+U 删到行首，再退格并到上一行，重复下去。
 /// Claude Code 和 Codex 的 Ctrl+U 都只删当前这一行；光标一般在最后一行，往上删 [lines] 行就清空了，
@@ -182,7 +190,7 @@ const termKeys = <TermKey>[
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   // 清空输入框，实际发的见 [clearLines]。不用 ^C：agent 干活时它是打断
-  TermKey(clearInputLabel, [0x05, 0x15]),
+  TermKey(clearInputKey, [0x05, 0x15], keycap: '清空'),
   TermKey(exitAgentLabel, [0x04]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
   TermKey('↓', [0x1b, 0x5b, 0x42]),

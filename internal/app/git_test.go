@@ -1239,18 +1239,19 @@ func TestGitOpQueue(t *testing.T) {
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
-	v.git.busy = "Fetch"
+	v.git.busy, v.git.busyKind = "Fetch", gitFetch
 	var ran []string
-	for _, what := range []string{"检出", "提交"} {
-		a.gitDo(v, what, func(ctx context.Context, root string) error {
+	for i, what := range []string{"检出", "提交"} {
+		kind := []gitKind{"", gitCommit}[i]
+		a.gitDoKind(v, kind, what, func(ctx context.Context, root string) error {
 			a.update(func() { ran = append(ran, what) })
 			return nil
-		})
+		}, nil)
 	}
-	if len(v.git.queue) != 2 || !v.git.pending("提交") || v.git.busyText() != "Fetch…，接着检出等 2 个" {
+	if len(v.git.queue) != 2 || !v.git.pending(gitCommit) || v.git.busyText() != "Fetch…，接着检出等 2 个" {
 		t.Fatalf("queue %d %q", len(v.git.queue), v.git.busyText())
 	}
-	v.git.busy = ""
+	v.git.busy, v.git.busyKind = "", ""
 	a.gitNext(v)
 	until(t, tt, "queued ops ran", func() bool { return len(ran) == 2 && v.git.busy == "" })
 	if ran[0] != "检出" || ran[1] != "提交" {
@@ -1431,12 +1432,12 @@ func TestCancelNetworkOp(t *testing.T) {
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
-	a.gitDo(v, "Push", func(ctx context.Context, root string) error {
+	a.gitDoKind(v, gitPush, "Push", func(ctx context.Context, root string) error {
 		<-ctx.Done()
 		return ctx.Err()
-	})
+	}, nil)
 	ran := false
-	a.gitDo(v, "提交", func(ctx context.Context, root string) error { ran = true; return nil })
+	a.gitDoKind(v, gitCommit, "提交", func(ctx context.Context, root string) error { ran = true; return nil }, nil)
 	tt.Frame()
 	if err := tt.Click("取消 Push"); err != nil {
 		t.Fatal(err)

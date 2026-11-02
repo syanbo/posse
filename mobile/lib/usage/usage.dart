@@ -137,7 +137,9 @@ class AgentUsage {
   UsageWindow get headWindow {
     final ws = shownWindows;
     for (final w in ws) {
-      if (w.name.isEmpty && windowLabel(w.minutes) == '5 小时') return w;
+      if (w.name.isEmpty && WindowKind.of(w.minutes) == WindowKind.fiveHours) {
+        return w;
+      }
     }
     if (agent == 'claude') return const UsageWindow(percent: 0, minutes: 300);
     if (ws.first.name.isEmpty) return ws.first;
@@ -203,12 +205,37 @@ List<AgentUsage> parseUsages(Map<String, Object?> res) => [
 /// 窗口的名字，和桌面端 windowLabel 一致。
 String windowLabel(int minutes) {
   const day = 24 * 60;
-  if (minutes == 0) return '本期';
-  if (minutes >= 295 && minutes <= 305) return '5 小时';
-  if (minutes >= 7 * day - 10 && minutes <= 7 * day + 10) return '每周';
-  if (minutes >= 27 * day && minutes <= 32 * day) return '每月';
+  switch (WindowKind.of(minutes)) {
+    case WindowKind.period:
+      return '本期';
+    case WindowKind.fiveHours:
+      return '5 小时';
+    case WindowKind.week:
+      return '每周';
+    case WindowKind.month:
+      return '每月';
+    case WindowKind.other:
+  }
   if (minutes >= day) return '${(minutes + day ~/ 2) ~/ day} 天';
   return '${(minutes + 30) ~/ 60} 小时';
+}
+
+/// 套餐窗口的类别，逻辑按它判断，不比较显示的文字。各家报的长度有几分钟的出入。
+enum WindowKind {
+  other,
+  period, // 不知道长度：本期
+  fiveHours,
+  week,
+  month;
+
+  static WindowKind of(int minutes) {
+    const day = 24 * 60;
+    if (minutes == 0) return period;
+    if (minutes >= 295 && minutes <= 305) return fiveHours;
+    if (minutes >= 7 * day - 10 && minutes <= 7 * day + 10) return week;
+    if (minutes >= 27 * day && minutes <= 32 * day) return month;
+    return other;
+  }
 }
 
 /// "2 小时 15 分钟后重置"；超过一天写日期。
@@ -485,11 +512,11 @@ class _UsageChip extends StatelessWidget {
 }
 
 /// 窗口简称，和桌面状态栏一致：5h、周、月。
-String windowShort(int minutes) => switch (windowLabel(minutes)) {
-  '5 小时' => '5h',
-  '每周' => '周',
-  '每月' => '月',
-  final other => other,
+String windowShort(int minutes) => switch (WindowKind.of(minutes)) {
+  WindowKind.fiveHours => '5h',
+  WindowKind.week => '周',
+  WindowKind.month => '月',
+  _ => windowLabel(minutes),
 };
 
 /// 进度条：画已用或剩余的那一段，陶土色，快用完时变红。

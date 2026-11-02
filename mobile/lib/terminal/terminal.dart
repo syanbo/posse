@@ -1240,7 +1240,7 @@ class _KeyBar extends StatelessWidget {
                 return _textKey(c, custom.shown, () => onCustom(custom));
               }
               final term = key.termKey;
-              if (term != null && term.label == sendNowLabel) {
+              if (term != null && term.id == sendNowLabel) {
                 return _iconKey(
                   c,
                   glyph: SendNowGlyph(color: c.text),
@@ -1248,10 +1248,10 @@ class _KeyBar extends StatelessWidget {
                   onTap: () => onKey(term.bytes),
                 );
               }
-              if (term != null && term.label == exitAgentLabel) {
+              if (term != null && term.id == exitAgentLabel) {
                 return _textKey(c, term.label, onExit);
               }
-              if (term != null && term.label == clearInputLabel) {
+              if (term != null && term.id == clearInputKey) {
                 return _textKey(c, term.label, onClear);
               }
               if (term != null) {

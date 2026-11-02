@@ -244,7 +244,7 @@ func (a *app) changeRow(c *ui.Context, w *workspace, v *filesView, r changeRow) 
 		head := ui.Row(c).Height(sz(26)).Padding(6, 16, 0, groupHeadPad).Gap(6).AlignItems(ui.Center)
 		head.Children(func() {
 			// 箭头在最左边，点它或组名展开收起
-			disclosure(c, open, "展开"+groupTitles[r.group])
+			disclosure(c, open, "展开"+groupTitles[r.group], "收起"+groupTitles[r.group])
 			// 改动和未跟踪的组标题能一键全选、全不选
 			if r.group == groupChanged || r.group == groupUntracked {
 				var in []gitx.Entry
@@ -386,7 +386,7 @@ func (a *app) changeDirRow(c *ui.Context, v *filesView, r changeRow) {
 	selectedBg(c, row, false)
 	row.Children(func() {
 		open := !folds[r.path]
-		disclosure(c, &open, "展开 "+r.path)
+		disclosure(c, &open, "展开 "+r.path, "收起 "+r.path)
 		if open == folds[r.path] {
 			folds[r.path] = !open
 		}
@@ -659,7 +659,7 @@ func (a *app) commitBox(c *ui.Context, v *filesView) {
 			if strings.TrimSpace(g.message) == "" {
 				btn.Tooltip("先写提交信息")
 			}
-			if g.busy != "" && g.busy != "Fetch" || g.pending("提交") || strings.TrimSpace(g.message) == "" || picked == 0 && !g.amend && whole == "" {
+			if g.busy != "" && g.busyKind != gitFetch || g.pending(gitCommit) || strings.TrimSpace(g.message) == "" || picked == 0 && !g.amend && whole == "" {
 				btn.Disabled(true)
 			} else if btn.Clicked() || msg.Shortcut(ui.Cmd, ui.KeyEnter) {
 				a.commit(v)
@@ -798,8 +798,8 @@ func (a *app) diffBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				}
 			})
 		}
-		if label := df.tabLabel(); label != "改动" {
-			ui.Text(c, label).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
+		if !df.plainChanges() {
+			ui.Text(c, df.tabLabel()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0)
 		}
 		if d.kind == docDiff {
 			n := len(df.state.Hunks())

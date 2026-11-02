@@ -114,7 +114,7 @@ class BarKey {
   /// 内置的终端键（Esc、方向键这些），图片和粘贴不是。
   TermKey? get termKey {
     for (final key in termKeys) {
-      if (key.label == builtin) return key;
+      if (key.id == builtin) return key;
     }
     return null;
   }
@@ -140,22 +140,18 @@ const barKeysVersion = 2;
 /// 改过名的内置键：旧名字 → 新名字。旧名字存的顺序读进来不认，新名字回到默认位置。
 const renamedBuiltins = {'立即发送': sendNowLabel};
 
-/// 只改了键帽文字的内置键：旧名字 → 新名字，留在用户排好的位置上。
-const relabeledBuiltins = {'退出': exitAgentLabel};
+/// 改了代号的内置键：旧名字 → 新名字，留在用户排好的位置上。「清空」原来拿键帽文字当代号。
+const relabeledBuiltins = {'退出': exitAgentLabel, '清空': clearInputKey};
 
 /// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
-final builtinBarKeys = [
-  'image',
-  'paste',
-  for (final key in termKeys) key.label,
-];
+final builtinBarKeys = ['image', 'paste', for (final key in termKeys) key.id];
 
 /// 默认顺序：图片、粘贴、自己加的键、终端键。旧版只存了自己加的键，读进来也排成这样。
 List<BarKey> defaultBarKeys([List<CustomKey> custom = const []]) => [
   const BarKey.builtin('image'),
   const BarKey.builtin('paste'),
   for (final key in custom) BarKey.custom(key),
-  for (final key in termKeys) BarKey.builtin(key.label),
+  for (final key in termKeys) BarKey.builtin(key.id),
 ];
 
 /// 去掉重复的内置键；缺的（新版本加的内置键）插在默认顺序里它前面那个键后面，

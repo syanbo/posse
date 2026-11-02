@@ -27,10 +27,10 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		traceEnd(rec, out.Bytes(), errb.Bytes(), msg)
+		traceEnd(rec, out.Bytes(), errb.Bytes(), msg, false)
 		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
 	}
-	traceEnd(rec, out.Bytes(), errb.Bytes(), "")
+	traceEnd(rec, out.Bytes(), errb.Bytes(), "", false)
 	return strings.TrimSpace(out.String()), nil
 }
 

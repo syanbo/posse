@@ -514,7 +514,9 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 			sessions := agentSessions(head.Terminals)
 			var toggle func()
 			if len(sessions) > 0 {
-				toggle = func() { navDisclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions))) }
+				toggle = func() {
+					navDisclosure(c, open, fmt.Sprintf("展开 %d 个会话", len(sessions)), fmt.Sprintf("收起 %d 个会话", len(sessions)))
+				}
 			}
 			// 单击项目行就展开；已经选中并展开时再单击收起
 			wasSelected := a.selected == head.ID
@@ -595,7 +597,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 		if !*open {
 			summaryTrailing(c, running, status)
 		}
-		navDisclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)))
+		navDisclosure(c, open, fmt.Sprintf("展开 %d 个工作区", len(ws)), fmt.Sprintf("收起 %d 个工作区", len(ws)))
 	}
 	icon := func() { a.projectGlyph(c, a.projIcons[p.ID], iconFolder) }
 	sub := shortPath(ws[0].Path)
@@ -611,19 +613,20 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 
 // navDisclosure 是侧栏行尾的展开箭头：行尾的内容离行边 navPad、行离列表边 navEnd，箭头要再往右挪一点，
 // 才和顶栏、底栏的图标在一条线上。
-func navDisclosure(c *ui.Context, open *bool, label string) {
+func navDisclosure(c *ui.Context, open *bool, expand, collapse string) {
 	shift := navEnd + navPad + miniBox()/2 - sideIconCenter()
-	disclosure(c, open, label).Margin(0, -shift, 0, 0)
+	disclosure(c, open, expand, collapse).Margin(0, -shift, 0, 0)
 }
 
 // sideIconCenter 是侧栏右边一列图标的中线离侧栏右边缘的距离：顶栏的侧栏开关、底栏的齿轮（iconBarPad 让图标离边 trafficLightX），
 // 项目列表的筛选和各行的展开箭头都对着它。
 func sideIconCenter() float32 { return trafficLightX + iconSize/2 }
 
-// disclosure 是展开箭头，展开时转向下；label 是收起时的说明（"展开…"），展开后说明换成"收起…"。
-func disclosure(c *ui.Context, open *bool, label string) ui.Element {
+// disclosure 是展开箭头，展开时转向下；expand、collapse 是收起和展开时的说明（"展开…""收起…"）。
+func disclosure(c *ui.Context, open *bool, expand, collapse string) ui.Element {
+	label := expand
 	if *open {
-		label = "收起" + strings.TrimPrefix(label, "展开")
+		label = collapse
 	}
 	t := c.Theme()
 	b := ui.Box(c).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(label).Tooltip(label)

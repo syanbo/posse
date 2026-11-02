@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../ui/theme.dart';
 import 'chrome.dart';
 import 'mods.dart';
+import 'wire.dart';
 
 /// 和终端快捷键栏同一排的高度：40 的按键加 1 的上边线。安全区由外面补。
 const deskKeyBarBody = 40.0;
@@ -37,7 +38,17 @@ class DeskKeyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    const keys = ['Esc', 'Tab', '↑', '↓', '←', '→', '◀ 空间', '空间 ▶', '调度中心'];
+    const keys = [
+      'Esc',
+      'Tab',
+      '↑',
+      '↓',
+      '←',
+      '→',
+      'spaceLeft',
+      'spaceRight',
+      'missionControl',
+    ];
     final color = dense ? c.band.withValues(alpha: 0.86) : c.band;
     return Container(
       decoration: BoxDecoration(
@@ -53,7 +64,8 @@ class DeskKeyBar extends StatelessWidget {
             dense: dense,
             children: [
               _keyboard(c),
-              for (final label in keys) _textKey(c, label, () => onKey(label)),
+              for (final key in keys)
+                _textKey(c, deskSpaceLabels[key] ?? key, () => onKey(key)),
               for (final mod in DeskMod.values)
                 _ModKey(
                   label: deskModMark[mod]!,

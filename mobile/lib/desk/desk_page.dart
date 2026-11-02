@@ -1652,25 +1652,28 @@ class _DeskPageState extends State<DeskPage>
     );
   }
 
-  (bool waiting, String text)? _banner() {
-    if (_background) return (false, '已暂停（后台）');
-    if (_viewNote != null) return (false, _viewNote!);
+  /// 画面上的提示：waiting 是在等（转圈），failed 是连不上（红色图标）。
+  _Banner? _banner() {
+    if (_background) return const _Banner('已暂停（后台）');
+    if (_viewNote != null) return _Banner(_viewNote!);
     if (_accessNote != null && (_stats.video || _up)) {
-      return (false, _accessNote!);
+      return _Banner(_accessNote!);
     }
     if (_stats.video) return null;
-    if (_indirect) return (false, deskIndirectText);
-    if (_fail != null) return (false, '连不上：$_fail');
-    if (_endNote != null) return (false, _endNote!);
-    if (_stopped) return (false, '已断开');
+    if (_indirect) return const _Banner(deskIndirectText, failed: true);
+    if (_fail != null) return _Banner(_fail!, failed: true);
+    if (_endNote != null) return _Banner(_endNote!);
+    if (_stopped) return const _Banner('已断开');
     final host = _autoHost;
-    if (host == null || host.isEmpty) return (false, '连不上：没有连着的电脑');
-    if (!_up) return (true, '正在连接');
-    return (true, '已连上，等画面');
+    if (host == null || host.isEmpty) {
+      return const _Banner('没有连着的电脑', failed: true);
+    }
+    if (!_up) return const _Banner('正在连接', waiting: true);
+    return const _Banner('已连上，等画面', waiting: true);
   }
 
-  Widget _bannerView(PosseColors colors, (bool waiting, String text) banner) {
-    final (waiting, text) = banner;
+  Widget _bannerView(PosseColors colors, _Banner banner) {
+    final _Banner(:waiting, :failed, :text) = banner;
     if (waiting) {
       return IgnorePointer(
         child: Column(
@@ -1690,7 +1693,6 @@ class _DeskPageState extends State<DeskPage>
         ),
       );
     }
-    final failed = text.startsWith('连不上') || text == deskIndirectText;
     // 有画面时的提示（缺辅助功能）只是一行字，不挡操作
     if (_stats.video) {
       return IgnorePointer(
@@ -1729,7 +1731,7 @@ class _DeskPageState extends State<DeskPage>
               ),
               const SizedBox(height: 10),
               Text(
-                text.replaceFirst('连不上：', ''),
+                text,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: Fs.body,
@@ -1955,7 +1957,15 @@ class _DeskPageState extends State<DeskPage>
                             child: _field(c, host, '主机', apply),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(child: _field(c, port, '端口', apply)),
+                          Expanded(
+                            child: _field(
+                              c,
+                              port,
+                              '端口',
+                              apply,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
                         ],
                       ),
                       if (error.isNotEmpty) ...[
@@ -2008,11 +2018,12 @@ class _DeskPageState extends State<DeskPage>
     PosseColors colors,
     TextEditingController controller,
     String hint,
-    VoidCallback onSubmitted,
-  ) {
+    VoidCallback onSubmitted, {
+    TextInputType keyboardType = TextInputType.url,
+  }) {
     return TextField(
       controller: controller,
-      keyboardType: hint == '端口' ? TextInputType.number : TextInputType.url,
+      keyboardType: keyboardType,
       textInputAction: TextInputAction.done,
       style: mono(Fs.small, color: colors.text),
       cursorColor: colors.accent,
@@ -2072,4 +2083,13 @@ class DeskSurfaceView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 看桌面画面上的提示，见 [_DeskPageState._banner]。
+class _Banner {
+  const _Banner(this.text, {this.waiting = false, this.failed = false});
+
+  final String text;
+  final bool waiting;
+  final bool failed;
 }
