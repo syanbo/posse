@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
 import 'events.dart';
 
 /// 方向锁和边缘手势是进程里的全局状态。页面滑出要等转场结束才 dispose，
@@ -111,17 +112,22 @@ Future<void> restoreDeskOrientation() async {
 bool deskHapticFor(DeskEvent event) => event is DeskRightClickEvent;
 
 /// 调试面板里画面走的路，取值见 [DeskStats.path]。
-String deskPathLabel(String? path) => switch (path) {
-  'lan' => '直连',
-  'relay' => '中转',
-  'punched' => '打洞直连',
+String deskPathLabel(AppLocalizations l, String? path) => switch (path) {
+  'lan' => l.deskPathLan,
+  'relay' => l.deskPathRelay,
+  'punched' => l.deskPathPunched,
   _ => '—',
 };
 
 /// 还没收到视频、还没满 1 秒的读数（fps 为负）时不写 0；画面没动、没有新帧时写「静止」，免得看成卡住了。
-String deskFpsLabel(double fps, {required bool video, bool still = false}) {
+String deskFpsLabel(
+  AppLocalizations l,
+  double fps, {
+  required bool video,
+  bool still = false,
+}) {
   if (!video || fps < 0) return '— fps';
-  if (still) return '静止';
+  if (still) return l.deskFpsStill;
   return '${fps.toStringAsFixed(0)} fps';
 }
 

@@ -1,3 +1,5 @@
+import '../l10n/l10n.dart';
+
 /// 交给 Mac 的输入。这一步只记在本地，UDP 的 input 类型第 4 步再发。
 sealed class DeskEvent {
   const DeskEvent();
@@ -83,23 +85,27 @@ class DeskEventLog {
   }
 }
 
-String deskEventLine(DeskEvent event) {
+String deskEventLine(AppLocalizations l, DeskEvent event) {
   String fmt(DeskPoint p) =>
       '${p.x.toStringAsFixed(3)}, ${p.y.toStringAsFixed(3)}';
   return switch (event) {
     DeskTapEvent(:final at, :final clicks) =>
-      clicks <= 1 ? '单击 ${fmt(at)}' : '$clicks 击 ${fmt(at)}',
-    DeskRightClickEvent(:final at) => '右键 ${fmt(at)}',
+      clicks <= 1
+          ? l.deskEventClick(fmt(at))
+          : l.deskEventClicks(clicks, fmt(at)),
+    DeskRightClickEvent(:final at) => l.deskEventRightClick(fmt(at)),
     DeskDragEvent(:final phase, :final at) => switch (phase) {
-      DeskDragPhase.down => '按下 ${fmt(at)}',
-      DeskDragPhase.move => '拖动 ${fmt(at)}',
-      DeskDragPhase.up => '松开 ${fmt(at)}',
+      DeskDragPhase.down => l.deskEventDown(fmt(at)),
+      DeskDragPhase.move => l.deskEventMove(fmt(at)),
+      DeskDragPhase.up => l.deskEventUp(fmt(at)),
     },
-    DeskPointEvent(:final at) => '指向 ${fmt(at)}',
+    DeskPointEvent(:final at) => l.deskEventPoint(fmt(at)),
     DeskScrollEvent(:final dx, :final dy, :final inertia) =>
-      '滚动 ${dx.toStringAsFixed(0)}, ${dy.toStringAsFixed(0)}'
-          '${inertia ? ' 惯性' : ''}',
+      (inertia ? l.deskEventScrollInertia : l.deskEventScroll)(
+        dx.toStringAsFixed(0),
+        dy.toStringAsFixed(0),
+      ),
     DeskKeyEvent(:final label) => label,
-    DeskTextEvent(:final text) => '文字 $text',
+    DeskTextEvent(:final text) => l.deskEventText(text),
   };
 }

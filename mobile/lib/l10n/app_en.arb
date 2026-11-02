@@ -1,5 +1,571 @@
 {
   "@@locale": "en",
+  "commonRefresh": "Refresh",
+  "@commonRefresh": {
+    "description": "Common: refresh button or tooltip."
+  },
+  "commonResetToDefault": "Reset to Default",
+  "@commonResetToDefault": {
+    "description": "Common: button that restores the default value."
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Common: button that tries again."
+  },
+  "deskAddressRequired": "Enter an address first",
+  "@deskAddressRequired": {
+    "description": "Remote Desktop › connection settings sheet: error."
+  },
+  "deskAlreadyUnlocked": "The Mac is already unlocked. The password wasn’t sent.",
+  "@deskAlreadyUnlocked": {
+    "description": "Remote Desktop: short note over the picture."
+  },
+  "deskBack": "Back",
+  "@deskBack": {
+    "description": "Remote Desktop: floating bar button tooltip that leaves the page."
+  },
+  "deskCaptureFailed": "Capture failed",
+  "@deskCaptureFailed": {
+    "description": "Remote Desktop: banner when capturing the Mac screen failed."
+  },
+  "deskChangePasswordTip": "Change or Forget Password",
+  "@deskChangePasswordTip": {
+    "description": "Remote Desktop: lock-screen pill key button tooltip."
+  },
+  "deskConnecting": "Connecting…",
+  "@deskConnecting": {
+    "description": "Remote Desktop: banner while connecting."
+  },
+  "deskConnectionNote": "By default the picture goes to the connected computer by subscription, and the computer picks the port. This changes the UDP address, for debugging.",
+  "@deskConnectionNote": {
+    "description": "Remote Desktop › connection settings sheet: explanation."
+  },
+  "deskConnectionSettings": "Connection Settings",
+  "@deskConnectionSettings": {
+    "description": "Remote Desktop › connection settings sheet: title."
+  },
+  "deskDebug": "Debug",
+  "@deskDebug": {
+    "description": "Remote Desktop: floating bar button tooltip that shows the debug panel."
+  },
+  "deskDebugDecode": "Decode {ms} ms",
+  "@deskDebugDecode": {
+    "description": "Remote Desktop › debug panel: decode time.",
+    "placeholders": {
+      "ms": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugHeadline": "{fps}  received {received} fps",
+  "@deskDebugHeadline": {
+    "description": "Remote Desktop › debug panel: first line; fps is the shown frame rate label.",
+    "placeholders": {
+      "fps": {
+        "type": "String"
+      },
+      "received": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugInput": "Input: sent {sent}, acked {acked}",
+  "@deskDebugInput": {
+    "description": "Remote Desktop › debug panel: input sequence numbers.",
+    "placeholders": {
+      "sent": {
+        "type": "String"
+      },
+      "acked": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugKeyframes": "Keyframes {count}",
+  "@deskDebugKeyframes": {
+    "description": "Remote Desktop › debug panel: keyframe recoveries.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugLoss": "Loss {loss}",
+  "@deskDebugLoss": {
+    "description": "Remote Desktop › debug panel: lost packets.",
+    "placeholders": {
+      "loss": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugPath": "Path {path}",
+  "@deskDebugPath": {
+    "description": "Remote Desktop › debug panel: network path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugRate": "Bitrate {bitrate} ({bytes})  peak {peak}",
+  "@deskDebugRate": {
+    "description": "Remote Desktop › debug panel: bitrate line.",
+    "placeholders": {
+      "bitrate": {
+        "type": "String"
+      },
+      "bytes": {
+        "type": "String"
+      },
+      "peak": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDebugView": "Zoom {zoom}  pan {x}, {y}",
+  "@deskDebugView": {
+    "description": "Remote Desktop › debug panel: viewport.",
+    "placeholders": {
+      "zoom": {
+        "type": "String"
+      },
+      "x": {
+        "type": "String"
+      },
+      "y": {
+        "type": "String"
+      }
+    }
+  },
+  "deskDisconnect": "Disconnect",
+  "@deskDisconnect": {
+    "description": "Remote Desktop: floating bar button tooltip."
+  },
+  "deskDisconnected": "Disconnected",
+  "@deskDisconnected": {
+    "description": "Remote Desktop: banner after the user disconnected."
+  },
+  "deskDisplayNumbered": "Display {number}",
+  "@deskDisplayNumbered": {
+    "description": "Remote Desktop › screen picker: name of another display, numbered left to right.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEndGeneric": "Connection ended",
+  "@deskEndGeneric": {
+    "description": "Remote Desktop: banner when viewing ended for any other reason."
+  },
+  "deskEndNoReport": "The computer received no reports from the phone",
+  "@deskEndNoReport": {
+    "description": "Remote Desktop: banner when the Mac ended the stream because the phone’s receive reports stopped arriving."
+  },
+  "deskEndStopped": "Stopped on the Mac",
+  "@deskEndStopped": {
+    "description": "Remote Desktop: banner when viewing was stopped from the Mac."
+  },
+  "deskEndUnsubscribed": "Stopped viewing",
+  "@deskEndUnsubscribed": {
+    "description": "Remote Desktop: banner when this phone stopped viewing."
+  },
+  "deskEnterPassword": "Enter Password",
+  "@deskEnterPassword": {
+    "description": "Remote Desktop: lock-screen pill button when no password is saved."
+  },
+  "deskEntireScreen": "Entire Screen",
+  "@deskEntireScreen": {
+    "description": "Remote Desktop › screen picker: section title for whole displays."
+  },
+  "deskEventClick": "Click {point}",
+  "@deskEventClick": {
+    "description": "Remote Desktop › debug panel: input log line; point is “x, y”.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventClicks": "{count, plural, one {{count} click} other {{count} clicks}} {point}",
+  "@deskEventClicks": {
+    "description": "Remote Desktop › debug panel: input log line for a multi-click; point is “x, y”.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventDown": "Down {point}",
+  "@deskEventDown": {
+    "description": "Remote Desktop › debug panel: input log line when a drag presses.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventMove": "Drag {point}",
+  "@deskEventMove": {
+    "description": "Remote Desktop › debug panel: input log line while dragging.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventPoint": "Point {point}",
+  "@deskEventPoint": {
+    "description": "Remote Desktop › debug panel: input log line when the pointer moves.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventRightClick": "Right-click {point}",
+  "@deskEventRightClick": {
+    "description": "Remote Desktop › debug panel: input log line.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventScroll": "Scroll {dx}, {dy}",
+  "@deskEventScroll": {
+    "description": "Remote Desktop › debug panel: input log line.",
+    "placeholders": {
+      "dx": {
+        "type": "String"
+      },
+      "dy": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventScrollInertia": "Scroll {dx}, {dy} inertia",
+  "@deskEventScrollInertia": {
+    "description": "Remote Desktop › debug panel: input log line for an inertia scroll.",
+    "placeholders": {
+      "dx": {
+        "type": "String"
+      },
+      "dy": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventText": "Text {text}",
+  "@deskEventText": {
+    "description": "Remote Desktop › debug panel: input log line for typed text.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "deskEventUp": "Up {point}",
+  "@deskEventUp": {
+    "description": "Remote Desktop › debug panel: input log line when a drag releases.",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deskFailBusy": "Another phone is viewing",
+  "@deskFailBusy": {
+    "description": "Remote Desktop: banner when another phone is already watching this Mac."
+  },
+  "deskFailCodec": "This computer can’t encode video this phone can play",
+  "@deskFailCodec": {
+    "description": "Remote Desktop: banner when the Mac and the phone share no video codec."
+  },
+  "deskFailDisconnected": "Connection lost",
+  "@deskFailDisconnected": {
+    "description": "Remote Desktop: banner when the connection to the computer dropped."
+  },
+  "deskFailGeneric": "Couldn’t connect",
+  "@deskFailGeneric": {
+    "description": "Remote Desktop: banner for any other connection failure."
+  },
+  "deskFailLan": "This phone and the Mac aren’t on the same local network",
+  "@deskFailLan": {
+    "description": "Remote Desktop: banner when the guessed LAN address doesn’t reach the Mac."
+  },
+  "deskFailNoPlugin": "This device can’t view the desktop",
+  "@deskFailNoPlugin": {
+    "description": "Remote Desktop: banner when this device has no desktop viewer support."
+  },
+  "deskFailOutdated": "Posse on this computer needs an update",
+  "@deskFailOutdated": {
+    "description": "Remote Desktop: banner when the computer’s Posse is too old to stream the desktop."
+  },
+  "deskFailRoute": "Neither a direct connection nor the relay works",
+  "@deskFailRoute": {
+    "description": "Remote Desktop: banner when neither the direct path nor the relay delivers the picture."
+  },
+  "deskFailScreenPermission": "Allow screen recording on the Mac",
+  "@deskFailScreenPermission": {
+    "description": "Remote Desktop: banner when Posse lacks the screen recording permission on the Mac."
+  },
+  "deskForgetPassword": "Forget Password",
+  "@deskForgetPassword": {
+    "description": "Remote Desktop › unlock sheet: button."
+  },
+  "deskFpsStill": "Still",
+  "@deskFpsStill": {
+    "description": "Remote Desktop: floating bar label in place of the frame rate when the picture isn’t changing."
+  },
+  "deskGestureClick": "Click",
+  "@deskGestureClick": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGestureDismiss": "Tap anywhere to close. Change the mode under Remote Desktop in Settings.",
+  "@deskGestureDismiss": {
+    "description": "Remote Desktop › gesture help: note at the bottom."
+  },
+  "deskGestureDrag": "Drag",
+  "@deskGestureDrag": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGestureLongPressDrag": "Long-press until it buzzes, then drag",
+  "@deskGestureLongPressDrag": {
+    "description": "Remote Desktop › gesture help: how to drag in direct touch mode."
+  },
+  "deskGestureMovePointer": "Move Pointer",
+  "@deskGestureMovePointer": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGesturePan": "Pan",
+  "@deskGesturePan": {
+    "description": "Remote Desktop › gesture help: action name for moving the zoomed-in picture."
+  },
+  "deskGesturePinch": "Pinch",
+  "@deskGesturePinch": {
+    "description": "Remote Desktop › gesture help: how to zoom."
+  },
+  "deskGestureRightClick": "Right-Click",
+  "@deskGestureRightClick": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGestureScroll": "Scroll",
+  "@deskGestureScroll": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGestureSlideOne": "Slide one finger",
+  "@deskGestureSlideOne": {
+    "description": "Remote Desktop › gesture help: how to move the pointer in trackpad mode."
+  },
+  "deskGestureTap": "Tap one finger",
+  "@deskGestureTap": {
+    "description": "Remote Desktop › gesture help: how to click in direct touch mode."
+  },
+  "deskGestureTapAtPointer": "Tap one finger; clicks at the pointer",
+  "@deskGestureTapAtPointer": {
+    "description": "Remote Desktop › gesture help: how to click in trackpad mode."
+  },
+  "deskGestureThreeFingerDrag": "Slide three fingers, or tap then hold and slide",
+  "@deskGestureThreeFingerDrag": {
+    "description": "Remote Desktop › gesture help: how to drag in trackpad mode."
+  },
+  "deskGestureTitle": "Gestures",
+  "@deskGestureTitle": {
+    "description": "Remote Desktop: title of the gesture help and tooltip of its button in the floating bar."
+  },
+  "deskGestureTwoFingerDrag": "Drag two fingers",
+  "@deskGestureTwoFingerDrag": {
+    "description": "Remote Desktop › gesture help: how to scroll."
+  },
+  "deskGestureTwoFingerTap": "Tap two fingers",
+  "@deskGestureTwoFingerTap": {
+    "description": "Remote Desktop › gesture help: how to right-click."
+  },
+  "deskGestureZoom": "Zoom",
+  "@deskGestureZoom": {
+    "description": "Remote Desktop › gesture help: action name."
+  },
+  "deskGestureZoomedDrag": "Drag one finger when zoomed in",
+  "@deskGestureZoomedDrag": {
+    "description": "Remote Desktop › gesture help: how to pan in direct touch mode."
+  },
+  "deskHost": "Host",
+  "@deskHost": {
+    "description": "Remote Desktop › connection settings sheet: field label."
+  },
+  "deskIndirect": "The picture can’t get through the tunnel. On the same Wi-Fi, scan this Mac’s LAN code, or use Tailscale.",
+  "@deskIndirect": {
+    "description": "Remote Desktop: banner when the phone reached the Mac through a tunnel the video can’t use."
+  },
+  "deskKeyboard": "Keyboard",
+  "@deskKeyboard": {
+    "description": "Remote Desktop: floating bar button tooltip."
+  },
+  "deskListingWindows": "Listing windows…",
+  "@deskListingWindows": {
+    "description": "Remote Desktop › screen picker: loading note."
+  },
+  "deskMacLocked": "Mac is locked",
+  "@deskMacLocked": {
+    "description": "Remote Desktop: banner and lock-screen pill label when the Mac is locked."
+  },
+  "deskMainDisplay": "Main Display",
+  "@deskMainDisplay": {
+    "description": "Remote Desktop › screen picker: name of the main display when macOS gives none."
+  },
+  "deskMissionControl": "Mission Control",
+  "@deskMissionControl": {
+    "description": "Remote Desktop › shortcut bar: key that opens Mission Control."
+  },
+  "deskModeDirect": "Direct Touch Mode",
+  "@deskModeDirect": {
+    "description": "Remote Desktop › gesture help: badge naming the direct touch input mode."
+  },
+  "deskModeTrackpad": "Trackpad Mode",
+  "@deskModeTrackpad": {
+    "description": "Remote Desktop › gesture help: badge naming the trackpad input mode."
+  },
+  "deskNoAccessibility": "View only. Turn on Accessibility for Posse on the Mac to control it.",
+  "@deskNoAccessibility": {
+    "description": "Remote Desktop: note over the picture when Posse lacks the Accessibility permission on the Mac."
+  },
+  "deskNoComputer": "No computer connected",
+  "@deskNoComputer": {
+    "description": "Remote Desktop: banner and connection settings note when no computer is connected."
+  },
+  "deskPasswordForgotten": "Saved password forgotten",
+  "@deskPasswordForgotten": {
+    "description": "Remote Desktop: short note over the picture."
+  },
+  "deskPasswordHint": "Login Password",
+  "@deskPasswordHint": {
+    "description": "Remote Desktop › unlock sheet: password field placeholder."
+  },
+  "deskPasswordSaveFailed": "Couldn’t save the password",
+  "@deskPasswordSaveFailed": {
+    "description": "Remote Desktop: short note over the picture."
+  },
+  "deskPasswordSaved": "Password saved. Next time the Mac locks, tap “Unlock”.",
+  "@deskPasswordSaved": {
+    "description": "Remote Desktop: short note over the picture."
+  },
+  "deskPathLan": "Direct",
+  "@deskPathLan": {
+    "description": "Remote Desktop › debug panel: the picture comes over the local network."
+  },
+  "deskPathPunched": "Direct (Hole-Punched)",
+  "@deskPathPunched": {
+    "description": "Remote Desktop › debug panel: the picture comes over a hole-punched direct UDP path."
+  },
+  "deskPathRelay": "Relay",
+  "@deskPathRelay": {
+    "description": "Remote Desktop › debug panel: the picture comes through the relay."
+  },
+  "deskPaused": "Paused (in background)",
+  "@deskPaused": {
+    "description": "Remote Desktop: banner while the app is in the background."
+  },
+  "deskPort": "Port",
+  "@deskPort": {
+    "description": "Remote Desktop › connection settings sheet: field label."
+  },
+  "deskPortRange": "Port must be from 1 to 65535",
+  "@deskPortRange": {
+    "description": "Remote Desktop › connection settings sheet: error."
+  },
+  "deskReconnect": "Reconnect",
+  "@deskReconnect": {
+    "description": "Remote Desktop: floating bar tooltip and banner button after disconnecting."
+  },
+  "deskRemember": "Remember",
+  "@deskRemember": {
+    "description": "Remote Desktop › unlock sheet: checkbox chip."
+  },
+  "deskResolutionMain": "{width} × {height} · Main",
+  "@deskResolutionMain": {
+    "description": "Remote Desktop › screen picker: resolution of the main display.",
+    "placeholders": {
+      "width": {
+        "type": "String"
+      },
+      "height": {
+        "type": "String"
+      }
+    }
+  },
+  "deskScreenPermissionHint": "On the Mac, turn on Posse in System Settings › Privacy & Security › Screen & System Audio Recording, then retry.",
+  "@deskScreenPermissionHint": {
+    "description": "Remote Desktop: hint under the screen recording permission banner."
+  },
+  "deskShortcuts": "Shortcuts",
+  "@deskShortcuts": {
+    "description": "Remote Desktop: floating bar button tooltip that shows the shortcut key bar."
+  },
+  "deskSpaceLeft": "◀ Space",
+  "@deskSpaceLeft": {
+    "description": "Remote Desktop › shortcut bar: key that moves one space left."
+  },
+  "deskSpaceRight": "Space ▶",
+  "@deskSpaceRight": {
+    "description": "Remote Desktop › shortcut bar: key that moves one space right."
+  },
+  "deskToLandscape": "Switch to Landscape",
+  "@deskToLandscape": {
+    "description": "Remote Desktop: floating bar button tooltip."
+  },
+  "deskToPortrait": "Switch to Portrait",
+  "@deskToPortrait": {
+    "description": "Remote Desktop: floating bar button tooltip."
+  },
+  "deskUdpAddress": "UDP Address",
+  "@deskUdpAddress": {
+    "description": "Remote Desktop › debug panel: button that opens connection settings."
+  },
+  "deskUnlock": "Unlock",
+  "@deskUnlock": {
+    "description": "Remote Desktop: button that unlocks the Mac (lock-screen pill and unlock sheet)."
+  },
+  "deskUnlockNote": "Enter the Mac’s login password. It’s typed on the lock screen, then Return is pressed.",
+  "@deskUnlockNote": {
+    "description": "Remote Desktop › unlock sheet: explanation."
+  },
+  "deskUnlockNoteRemember": "Enter the Mac’s login password. It’s typed on the lock screen, then Return is pressed. “Remember” stores it on this phone only.",
+  "@deskUnlockNoteRemember": {
+    "description": "Remote Desktop › unlock sheet: explanation when the password can be remembered."
+  },
+  "deskUse": "Use",
+  "@deskUse": {
+    "description": "Remote Desktop › connection settings sheet: button that applies the address."
+  },
+  "deskViewTip": "Choose Screen or Window",
+  "@deskViewTip": {
+    "description": "Remote Desktop: floating bar button tooltip that opens the screen and window picker."
+  },
+  "deskWaitingPicture": "Connected. Waiting for the picture…",
+  "@deskWaitingPicture": {
+    "description": "Remote Desktop: banner while waiting for the first frame."
+  },
+  "deskWindowGone": "The window closed or left this space. Showing the entire screen.",
+  "@deskWindowGone": {
+    "description": "Remote Desktop: short note over the picture when the watched window disappears."
+  },
+  "deskWindows": "Windows",
+  "@deskWindows": {
+    "description": "Remote Desktop › screen picker: section title for single windows."
+  },
+  "deskWindowsEmpty": "No windows in this space can be viewed on their own",
+  "@deskWindowsEmpty": {
+    "description": "Remote Desktop › screen picker: empty note."
+  },
+  "deskWindowsError": "Couldn’t list windows. Try again later.",
+  "@deskWindowsError": {
+    "description": "Remote Desktop › screen picker: error note."
+  },
   "settingsLanguageSystem": "System",
   "@settingsLanguageSystem": {
     "description": "Settings › Language: option that follows the phone's language."
@@ -7,5 +573,213 @@
   "settingsLanguageTitle": "Language",
   "@settingsLanguageTitle": {
     "description": "Settings: title of the section that picks the app language."
+  },
+  "usageCursorModels": "Cursor Models",
+  "@usageCursorModels": {
+    "description": "Plan Usage: Cursor’s Auto pool, named as in its dashboard."
+  },
+  "usageIncludedSpend": "Included usage {used} / {limit} ({percent})",
+  "@usageIncludedSpend": {
+    "description": "Plan Usage sheet: money used of the included amount.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "usageListSeparator": ", ",
+  "@usageListSeparator": {
+    "description": "Plan Usage sheet: separator between items in usageShares."
+  },
+  "usageNamedWindow": "{name} {window}",
+  "@usageNamedWindow": {
+    "description": "Plan Usage sheet: a pool’s window, e.g. “Fable Weekly”.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "usageNotConnected": "The computer isn’t connected",
+  "@usageNotConnected": {
+    "description": "Plan Usage sheet: error when refreshing without a connection."
+  },
+  "usageOldPosse": "Posse on the computer is too old. Update it to refresh.",
+  "@usageOldPosse": {
+    "description": "Plan Usage sheet: error when the computer can’t refresh usage."
+  },
+  "usageOnDemand": "On-demand usage {used}{stale}",
+  "@usageOnDemand": {
+    "description": "Plan Usage sheet: on-demand money spent; stale is usageStaleReading or empty.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageOnDemandLimited": "On-demand usage {used}, limit {limit}{stale}",
+  "@usageOnDemandLimited": {
+    "description": "Plan Usage sheet: on-demand money spent with a limit; stale is usageStaleReading or empty.",
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "limit": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageOtherModels": "Other Models",
+  "@usageOtherModels": {
+    "description": "Plan Usage: Cursor’s API pool, named as in its dashboard."
+  },
+  "usagePerMonth": "/mo",
+  "@usagePerMonth": {
+    "description": "Plan Usage: replaces “/mo” in a plan’s monthly price."
+  },
+  "usageReadingAge": "{reset}, reading from {time}",
+  "@usageReadingAge": {
+    "description": "Plan Usage sheet: reset time plus the age of a pool’s own reading.",
+    "placeholders": {
+      "reset": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageRemaining": "Remaining",
+  "@usageRemaining": {
+    "description": "Plan Usage sheet: segmented option showing remaining percentages."
+  },
+  "usageResetCards": "{count, plural, one {{count} reset card} other {{count} reset cards}}{stale}",
+  "@usageResetCards": {
+    "description": "Plan Usage sheet: Codex reset cards.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageResetCardsExpiring": "{count, plural, one {{count} reset card} other {{count} reset cards}}, earliest expires {date}{stale}",
+  "@usageResetCardsExpiring": {
+    "description": "Plan Usage sheet: Codex reset cards with the earliest expiry date.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageShares": "This week’s usage: {shares}{stale}",
+  "@usageShares": {
+    "description": "Plan Usage sheet: where this week’s Claude usage went; shares is a list like “Claude Code 92%”.",
+    "placeholders": {
+      "shares": {
+        "type": "String"
+      },
+      "stale": {
+        "type": "String"
+      }
+    }
+  },
+  "usageSheetNote": "Usage updates as agents run on the computer. Cursor usage and Codex reset cards aren’t stored locally; the computer checks them after each one runs.",
+  "@usageSheetNote": {
+    "description": "Plan Usage sheet: note at the bottom."
+  },
+  "usageShownPercent": "{kind} {percent}",
+  "@usageShownPercent": {
+    "description": "Plan Usage sheet: percentage after a bar; kind is Used or Remaining, percent includes %.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "usageStaleReading": " (reading from {time})",
+  "@usageStaleReading": {
+    "description": "Plan Usage sheet: appended to a fact from an older reading; time is a relative time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "usageTitle": "Plan Usage",
+  "@usageTitle": {
+    "description": "Plan Usage sheet: title."
+  },
+  "usageUsed": "Used",
+  "@usageUsed": {
+    "description": "Plan Usage sheet: segmented option showing used percentages."
+  },
+  "usageWindowDays": "{count, plural, one {{count} Day} other {{count} Days}}",
+  "@usageWindowDays": {
+    "description": "Plan Usage: limit window measured in days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageWindowFiveHours": "5 Hours",
+  "@usageWindowFiveHours": {
+    "description": "Plan Usage: five-hour limit window."
+  },
+  "usageWindowHours": "{count, plural, one {{count} Hour} other {{count} Hours}}",
+  "@usageWindowHours": {
+    "description": "Plan Usage: limit window measured in hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageWindowMonth": "Monthly",
+  "@usageWindowMonth": {
+    "description": "Plan Usage: monthly limit window."
+  },
+  "usageWindowMonthShort": "mo",
+  "@usageWindowMonthShort": {
+    "description": "Plan Usage card: short name of the monthly window."
+  },
+  "usageWindowPeriod": "Current Period",
+  "@usageWindowPeriod": {
+    "description": "Plan Usage: limit window of unknown length."
+  },
+  "usageWindowWeek": "Weekly",
+  "@usageWindowWeek": {
+    "description": "Plan Usage: weekly limit window."
+  },
+  "usageWindowWeekShort": "wk",
+  "@usageWindowWeekShort": {
+    "description": "Plan Usage card: short name of the weekly window."
   }
 }

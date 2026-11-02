@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/desk/display_picker.dart';
 import 'package:posse_mobile/desk/displays.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
 
 // 内建屏在左，一块 4K 外接屏在右边、顶端对齐，和电脑报来的一样
@@ -51,6 +52,8 @@ final _rawWindows = [
 
 final _windows = DeskWindow.parseList({'windows': _rawWindows});
 
+final zh = lookupAppLocalizations(const Locale('zh'));
+
 void main() {
   test('displays parse, skip bad entries and name the unnamed', () {
     final d = DeskDisplays.parse(_frame);
@@ -59,8 +62,8 @@ void main() {
     expect(d.several, isTrue);
     expect(d.list.first.main, isTrue);
     expect(d.list.last.rect, const Rect.fromLTWH(1512, 0, 1920, 1080));
-    expect(deskDisplayName(d, d.list.first), 'Built-in Retina Display');
-    expect(deskDisplayName(d, d.list.last), '显示器 2');
+    expect(deskDisplayName(zh, d, d.list.first), 'Built-in Retina Display');
+    expect(deskDisplayName(zh, d, d.list.last), '显示器 2');
     expect(DeskDisplays.parse(const {}).several, isFalse);
   });
 

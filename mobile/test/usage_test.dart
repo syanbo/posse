@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/protocol/pairing.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/usage/usage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('parses usage.get', () {
@@ -40,10 +43,10 @@ void main() {
   });
 
   test('labels windows like the desktop', () {
-    expect(windowLabel(300), '5 小时');
-    expect(windowLabel(10080), '每周');
-    expect(windowLabel(44640), '每月');
-    expect(windowLabel(0), '本期');
+    expect(windowLabel(zh, 300), '5 小时');
+    expect(windowLabel(zh, 10080), '每周');
+    expect(windowLabel(zh, 44640), '每月');
+    expect(windowLabel(zh, 0), '本期');
     final now = DateTime(2026, 10, 20, 1, 0);
     expect(
       resetText(now.add(const Duration(minutes: 95)), now),
@@ -167,12 +170,15 @@ void main() {
         },
       ],
     });
-    expect(windowName(u[0].windows[1]), 'Fable 每周');
+    expect(windowName(zh, u[0].windows[1]), 'Fable 每周');
     expect(u[0].shownWindows.length, 2);
     expect(u[0].headWindow.name, '');
     final now = DateTime.fromMillisecondsSinceEpoch(3600000);
-    expect(usageFacts(u[0], now).single, startsWith('本周用量用在 Claude Code 92%（'));
-    expect(usageFacts(u[1], now).single, startsWith('重置卡 3 张，最早一张 '));
+    expect(
+      usageFacts(zh, u[0], now).single,
+      startsWith('本周用量用在 Claude Code 92%（'),
+    );
+    expect(usageFacts(zh, u[1], now).single, startsWith('重置卡 3 张，最早一张 '));
   });
 
   testWidgets('sheet refresh swaps in the new readings', (tester) async {

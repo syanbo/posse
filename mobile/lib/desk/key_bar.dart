@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import 'chrome.dart';
 import 'mods.dart';
@@ -65,7 +66,11 @@ class DeskKeyBar extends StatelessWidget {
             children: [
               _keyboard(c),
               for (final key in keys)
-                _textKey(c, deskSpaceLabels[key] ?? key, () => onKey(key)),
+                _textKey(
+                  c,
+                  deskSpaceLabel(context.l10n, key),
+                  () => onKey(key),
+                ),
               for (final mod in DeskMod.values)
                 _ModKey(
                   label: deskModMark[mod]!,

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/chat/media.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
@@ -16,7 +18,10 @@ void main() {
   });
 
   test('a plan’s monthly price says /月', () {
-    expect(planName('Ultra \$200/mo'), 'Ultra \$200/月');
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(planLabel(zh, planName('Ultra \$200/mo')), 'Ultra \$200/月');
+    expect(planLabel(en, planName('Ultra \$200/mo')), 'Ultra \$200/mo');
     expect(planName('plus'), 'Plus');
   });
 

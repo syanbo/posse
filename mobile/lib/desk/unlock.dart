@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 
 /// 弹层的结果：[password] 为空是点了「忘掉密码」。
@@ -58,6 +59,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     // 横屏时键盘占掉大半屏：「记住」和「解锁」跟输入框放一行，看得见输入框就点得到
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -79,8 +81,8 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                       ),
                       child: Text(
                         widget.canRemember
-                            ? '输入 Mac 的登录密码，发到锁屏界面后自动回车。勾「记住」只存在这台手机上'
-                            : '输入 Mac 的登录密码，发到锁屏界面后自动回车',
+                            ? l.deskUnlockNoteRemember
+                            : l.deskUnlockNote,
                         style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                     ),
@@ -91,7 +93,10 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                       onPressed: () =>
                           Navigator.of(context)
                               .pop((password: null, remember: false)),
-                      child: Text('忘掉密码', style: TextStyle(color: c.danger)),
+                      child: Text(
+                        l.deskForgetPassword,
+                        style: TextStyle(color: c.danger),
+                      ),
                     ),
                 ],
               ),
@@ -110,7 +115,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _submit(),
                       decoration: InputDecoration(
-                        hintText: '登录密码',
+                        hintText: l.deskPasswordHint,
                         fillColor: c.card,
                       ),
                     ),
@@ -119,7 +124,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                     const SizedBox(width: 8),
                     FilterChip(
                       key: const Key('desk-password-remember'),
-                      label: const Text('记住'),
+                      label: Text(l.deskRemember),
                       selected: _remember,
                       onSelected: (on) => setState(() => _remember = on),
                     ),
@@ -128,7 +133,7 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                   FilledButton(
                     key: const Key('desk-unlock-send'),
                     onPressed: _password.text.isEmpty ? null : _submit,
-                    child: const Text('解锁'),
+                    child: Text(l.deskUnlock),
                   ),
                 ],
               ),

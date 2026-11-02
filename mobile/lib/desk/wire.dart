@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import '../l10n/l10n.dart';
+
 /// 和 internal/desk/input.go 的 EncodeInput 同一条明文。小端，版本 1。
 const deskEventMove = 1;
 const deskEventDown = 2;
@@ -27,17 +29,18 @@ const deskKeyHid = {
 
 /// 快捷键栏上切空间的三个键：都是 ⌃ 加方向键，对应系统设置里调度中心的默认快捷键
 /// （向左、向右移动一个空间，调度中心）。不吃掉用户按着的修饰键。
-/// 键是代号，显示的文字在 [deskSpaceLabels]。
+/// 键是代号，显示的文字在 [deskSpaceLabel]。
 const deskSpaceKeys = {
   'spaceLeft': '←',
   'spaceRight': '→',
   'missionControl': '↑',
 };
 
-const deskSpaceLabels = {
-  'spaceLeft': '◀ 空间',
-  'spaceRight': '空间 ▶',
-  'missionControl': '调度中心',
+String deskSpaceLabel(AppLocalizations l, String key) => switch (key) {
+  'spaceLeft' => l.deskSpaceLeft,
+  'spaceRight' => l.deskSpaceRight,
+  'missionControl' => l.deskMissionControl,
+  _ => key,
 };
 
 /// 整屏 0–1 换成绝对坐标 0–65535。

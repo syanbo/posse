@@ -31,7 +31,7 @@ class AppUpdate(private val activity: Activity, messenger: BinaryMessenger) {
                 "install" -> {
                     val file = File(call.arguments as String)
                     if (file.parentFile?.canonicalPath != dir.canonicalPath || !file.isFile) {
-                        result.error("bad_args", "安装包不在更新目录里", null)
+                        result.error("bad_args", "the APK is not in the update directory", null)
                         return@setMethodCallHandler
                     }
                     install(file, result)

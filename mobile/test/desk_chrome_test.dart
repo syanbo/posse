@@ -12,7 +12,10 @@ import 'package:posse_mobile/desk/hint.dart';
 import 'package:posse_mobile/desk/key_bar.dart';
 import 'package:posse_mobile/desk/mods.dart';
 import 'package:posse_mobile/desk/toolbar.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('landscape choice and the one-time hint round-trip', () async {
@@ -94,10 +97,10 @@ void main() {
     expect(deskBarAlignment(0.5), 0);
     expect(deskBarAlignment(0), -1);
     expect(deskBarTrack(390, 280), 110);
-    expect(deskFpsLabel(59.6, video: true), '60 fps');
-    expect(deskFpsLabel(0, video: false), '— fps');
-    expect(deskFpsLabel(-1, video: true), '— fps');
-    expect(deskFpsLabel(0, video: true, still: true), '静止');
+    expect(deskFpsLabel(zh, 59.6, video: true), '60 fps');
+    expect(deskFpsLabel(zh, 0, video: false), '— fps');
+    expect(deskFpsLabel(zh, -1, video: true), '— fps');
+    expect(deskFpsLabel(zh, 0, video: true, still: true), '静止');
     expect(
       deskHapticFor(const DeskRightClickEvent(DeskPoint(0.2, 0.3))),
       isTrue,

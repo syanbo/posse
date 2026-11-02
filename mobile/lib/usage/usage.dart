@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -148,55 +150,78 @@ class AgentUsage {
 }
 
 /// Cursor 两池在它控制台上的叫法：Auto 池含 Composer 和 Cursor Grok，API 池是其余模型。
-const _cursorPools = {'Auto': 'Cursor 模型', 'API': '其他模型'};
+String? _cursorPool(AppLocalizations l, String name) => switch (name) {
+  'Auto' => l.usageCursorModels,
+  'API' => l.usageOtherModels,
+  _ => null,
+};
 
 /// 详情里窗口的名字：分池带上池名，"Fable 每周"；Cursor 的两池只写池名，重置时间在同一行。
-String windowName(UsageWindow w) {
-  if (w.name.isEmpty) return windowLabel(w.minutes);
-  return _cursorPools[w.name] ?? '${w.name} ${windowLabel(w.minutes)}';
+String windowName(AppLocalizations l, UsageWindow w) {
+  if (w.name.isEmpty) return windowLabel(l, w.minutes);
+  return _cursorPool(l, w.name) ??
+      l.usageNamedWindow(w.name, windowLabel(l, w.minutes));
 }
 
 String _money(double cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 
 /// planName 照各家网页的叫法把套餐名首字母大写（Codex 给的是 plus、pro）。新的常驻进程已经这样写，
-/// 这里兜住还没升级的电脑。月费的 /mo（Cursor 给的原样）按界面语言写。
-String planName(String s) => s.isEmpty
-    ? s
-    : (s[0].toUpperCase() + s.substring(1)).replaceFirst('/mo', '/月');
+/// 这里兜住还没升级的电脑。
+String planName(String s) =>
+    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// 显示的套餐名：月费的 /mo（Cursor 给的原样）按界面语言写。
+String planLabel(AppLocalizations l, String plan) =>
+    plan.replaceFirst('/mo', l.usagePerMonth);
 
 /// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 /// 和整家的读数不是同一份的，后面写上是多久前的。
-List<String> usageFacts(AgentUsage u, DateTime now) {
+List<String> usageFacts(AppLocalizations l, AgentUsage u, DateTime now) {
   String stale(DateTime? at) =>
       at != null && u.updatedAt.difference(at) > const Duration(minutes: 10)
-      ? '（${agoText(at, now)}的读数）'
+      ? l.usageStaleReading(agoText(at, now))
       : '';
   final out = <String>[];
   final sp = u.spend;
   if (sp != null && sp.limit > 0) {
     out.add(
-      '套餐内用量 ${_money(sp.used)} / ${_money(sp.limit)}（${(sp.used / sp.limit * 100).round()}%）',
+      l.usageIncludedSpend(
+        _money(sp.used),
+        _money(sp.limit),
+        '${(sp.used / sp.limit * 100).round()}%',
+      ),
     );
   }
   final od = u.onDemand;
   if (od != null) {
-    final limit = od.limit > 0 ? '，上限 ${_money(od.limit)}' : '';
-    out.add('按需用量 ${_money(od.used)}$limit${stale(od.at)}');
+    out.add(
+      od.limit > 0
+          ? l.usageOnDemandLimited(
+              _money(od.used),
+              _money(od.limit),
+              stale(od.at),
+            )
+          : l.usageOnDemand(_money(od.used), stale(od.at)),
+    );
   }
   if (u.shares.isNotEmpty) {
     final parts = [for (final (n, p) in u.shares) '$n ${p.round()}%'];
-    out.add('本周用量用在 ${parts.join('，')}${stale(u.sharesAt)}');
+    out.add(l.usageShares(parts.join(l.usageListSeparator), stale(u.sharesAt)));
   }
   final rs = u.resets;
   if (rs != null) {
     final exp = u.resetsExpireAt;
-    final when = rs > 0 && exp != null
-        ? '，最早一张 ${exp.month}月${exp.day}日 过期'
-        : '';
-    out.add('重置卡 $rs 张$when${stale(u.resetsAt)}');
+    out.add(
+      rs > 0 && exp != null
+          ? l.usageResetCardsExpiring(rs, _monthDay(exp), stale(u.resetsAt))
+          : l.usageResetCards(rs, stale(u.resetsAt)),
+    );
   }
   return out;
 }
+
+// 日期格式留给第 7 步（intl 的 DateFormat）
+String _monthDay(DateTime d) => '${d.month}月${d.day}日';
 
 List<AgentUsage> parseUsages(Map<String, Object?> res) => [
   for (final u in (res['usages'] as List?) ?? const [])
@@ -204,21 +229,21 @@ List<AgentUsage> parseUsages(Map<String, Object?> res) => [
 ];
 
 /// 窗口的名字，和桌面端 windowLabel 一致。
-String windowLabel(int minutes) {
+String windowLabel(AppLocalizations l, int minutes) {
   const day = 24 * 60;
   switch (WindowKind.of(minutes)) {
     case WindowKind.period:
-      return '本期';
+      return l.usageWindowPeriod;
     case WindowKind.fiveHours:
-      return '5 小时';
+      return l.usageWindowFiveHours;
     case WindowKind.week:
-      return '每周';
+      return l.usageWindowWeek;
     case WindowKind.month:
-      return '每月';
+      return l.usageWindowMonth;
     case WindowKind.other:
   }
-  if (minutes >= day) return '${(minutes + day ~/ 2) ~/ day} 天';
-  return '${(minutes + 30) ~/ 60} 小时';
+  if (minutes >= day) return l.usageWindowDays((minutes + day ~/ 2) ~/ day);
+  return l.usageWindowHours((minutes + 30) ~/ 60);
 }
 
 /// 套餐窗口的类别，逻辑按它判断，不比较显示的文字。各家报的长度有几分钟的出入。
@@ -383,7 +408,7 @@ class _UsageCardState extends State<UsageCard> {
   /// 详情里的刷新：电脑上各家马上取一次（Codex、Cursor 要联网，最长半分钟），首页卡片一起换上新读数。
   Future<List<AgentUsage>> _refresh() async {
     final rpc = widget.model.rpc;
-    if (rpc == null) throw StateError('电脑没有连上');
+    if (rpc == null) throw const _NotConnected();
     final res = await rpc.call(
       'usage.refresh',
       {},
@@ -404,6 +429,11 @@ class _UsageCardState extends State<UsageCard> {
   @override
   Widget build(BuildContext context) =>
       UsageCardView(usages: _usages, onRefresh: _refresh);
+}
+
+/// 刷新时电脑没连上，详情里按界面语言写。
+class _NotConnected implements Exception {
+  const _NotConnected();
 }
 
 /// 卡片的样子，和取数据分开，测试和截图直接给读数。
@@ -494,7 +524,7 @@ class _UsageChip extends StatelessWidget {
         AgentTile(agent: usage.agent, size: Ic.small),
         const SizedBox(width: 6),
         Text(
-          windowShort(w.minutes),
+          windowShort(context.l10n, w.minutes),
           style: TextStyle(fontSize: Fs.small, color: c.muted),
         ),
         const SizedBox(width: 4),
@@ -513,12 +543,13 @@ class _UsageChip extends StatelessWidget {
 }
 
 /// 窗口简称，和桌面状态栏一致：5h、周、月。
-String windowShort(int minutes) => switch (WindowKind.of(minutes)) {
-  WindowKind.fiveHours => '5h',
-  WindowKind.week => '周',
-  WindowKind.month => '月',
-  _ => windowLabel(minutes),
-};
+String windowShort(AppLocalizations l, int minutes) =>
+    switch (WindowKind.of(minutes)) {
+      WindowKind.fiveHours => '5h',
+      WindowKind.week => l.usageWindowWeekShort,
+      WindowKind.month => l.usageWindowMonthShort,
+      _ => windowLabel(l, minutes),
+    };
 
 /// 进度条：画已用或剩余的那一段，陶土色，快用完时变红。
 class UsageBar extends StatelessWidget {
@@ -556,6 +587,27 @@ class UsageBar extends StatelessWidget {
   }
 }
 
+const _segmentStyle = TextStyle(fontSize: Fs.body, fontWeight: Fw.medium);
+const _percentStyle = TextStyle(
+  fontSize: Fs.small,
+  fontWeight: Fw.medium,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+double _textWidth(BuildContext context, String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: DefaultTextStyle.of(context).style.merge(style),
+    ),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  final width = painter.width;
+  painter.dispose();
+  return width;
+}
+
 /// 点开卡片的详情：每家的套餐、各窗口的进度和重置时间、读数时间。
 class UsageSheet extends StatefulWidget {
   const UsageSheet({super.key, required this.usages, this.onRefresh});
@@ -586,8 +638,15 @@ class _UsageSheetState extends State<UsageSheet> {
     } catch (e) {
       if (!mounted) return;
       // 电脑上的 Posse 太旧没有这个接口时说清楚，别的错误照常写
+      final l = context.l10n;
       final old = e.toString().contains('method_not_found');
-      setState(() => _error = old ? '电脑上的 Posse 太旧，更新后才能刷新' : friendlyError(e));
+      setState(
+        () => _error = e is _NotConnected
+            ? l.usageNotConnected
+            : old
+            ? l.usageOldPosse
+            : friendlyError(e),
+      );
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -601,7 +660,34 @@ class _UsageSheetState extends State<UsageSheet> {
 
   Widget _sheet(BuildContext context, bool remaining) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final now = DateTime.now();
+    // 两列宽度按当前语言最长的文字量，至少是中文排好的宽度，英文的 Remaining 不折行
+    final segmentedWidth = math.max<double>(
+      128.0,
+      2 *
+              math.max(
+                _textWidth(context, l.usageUsed, _segmentStyle),
+                _textWidth(context, l.usageRemaining, _segmentStyle),
+              ) +
+          28,
+    );
+    final percentWidth = math.max<double>(
+      76.0,
+      math.max(
+            _textWidth(
+              context,
+              l.usageShownPercent(l.usageUsed, '100%'),
+              _percentStyle,
+            ),
+            _textWidth(
+              context,
+              l.usageShownPercent(l.usageRemaining, '100%'),
+              _percentStyle,
+            ),
+          ) +
+          2,
+    );
     // 滚动区铺到屏幕底边，内容底下垫出安全区：滚到底时最后一行在 Home 条上方，滚动时内容从它后面经过
     final bottom = MediaQuery.paddingOf(context).bottom;
     return SingleChildScrollView(
@@ -613,7 +699,7 @@ class _UsageSheetState extends State<UsageSheet> {
             children: [
               Expanded(
                 child: Text(
-                  '套餐用量',
+                  l.usageTitle,
                   style: TextStyle(
                     fontSize: Fs.title,
                     fontWeight: Fw.bold,
@@ -623,7 +709,7 @@ class _UsageSheetState extends State<UsageSheet> {
               ),
               if (widget.onRefresh != null)
                 IconButton(
-                  tooltip: '刷新',
+                  tooltip: l.commonRefresh,
                   visualDensity: VisualDensity.compact,
                   onPressed: _refreshing ? null : _refresh,
                   icon: _refreshing
@@ -635,9 +721,9 @@ class _UsageSheetState extends State<UsageSheet> {
                         ),
                 ),
               SizedBox(
-                width: 128,
+                width: segmentedWidth,
                 child: Segmented(
-                  labels: const ['已用', '剩余'],
+                  labels: [l.usageUsed, l.usageRemaining],
                   selected: remaining ? 1 : 0,
                   onChanged: (i) => setUsageRemaining(i == 1),
                 ),
@@ -670,7 +756,7 @@ class _UsageSheetState extends State<UsageSheet> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      u.plan,
+                      planLabel(l, u.plan),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: Fs.small, color: c.muted),
@@ -690,7 +776,7 @@ class _UsageSheetState extends State<UsageSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      windowName(w),
+                      windowName(l, w),
                       style: TextStyle(fontSize: Fs.small, color: c.text),
                     ),
                   ),
@@ -699,7 +785,10 @@ class _UsageSheetState extends State<UsageSheet> {
                     w.at != null &&
                             u.updatedAt.difference(w.at!) >
                                 const Duration(minutes: 10)
-                        ? '${resetText(w.resetsAt, now)}，${agoText(w.at!, now)}的读数'
+                        ? l.usageReadingAge(
+                            resetText(w.resetsAt, now),
+                            agoText(w.at!, now),
+                          )
                         : resetText(w.resetsAt, now),
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
@@ -715,9 +804,12 @@ class _UsageSheetState extends State<UsageSheet> {
                     ),
                   ),
                   SizedBox(
-                    width: 76,
+                    width: percentWidth,
                     child: Text(
-                      '${remaining ? '剩余' : '已用'} ${shownPercent(w, remaining).round()}%',
+                      l.usageShownPercent(
+                        remaining ? l.usageRemaining : l.usageUsed,
+                        '${shownPercent(w, remaining).round()}%',
+                      ),
                       textAlign: TextAlign.end,
                       style: TextStyle(
                         fontSize: Fs.small,
@@ -730,7 +822,7 @@ class _UsageSheetState extends State<UsageSheet> {
                 ],
               ),
             ],
-            for (final f in usageFacts(u, now)) ...[
+            for (final f in usageFacts(l, u, now)) ...[
               const SizedBox(height: 8),
               Text(
                 f,
@@ -740,7 +832,7 @@ class _UsageSheetState extends State<UsageSheet> {
           ],
           const SizedBox(height: 20),
           Text(
-            '电脑上的 agent 运行时顺带更新；Cursor 用量和 Codex 重置卡本地没有，在它们用过之后电脑会查一次。',
+            l.usageSheetNote,
             style: TextStyle(
               fontSize: Fs.small,
               color: c.muted,

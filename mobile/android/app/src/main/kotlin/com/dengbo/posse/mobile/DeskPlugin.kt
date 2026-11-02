@@ -96,7 +96,7 @@ class DeskPlugin(
             "input" -> {
                 val plain = call.arguments as? ByteArray
                 if (plain == null) {
-                    result.error("bad_args", "没有输入", null)
+                    result.error("bad_args", "missing input", null)
                 } else {
                     current()?.sendInput(plain)
                     result.success(null)
@@ -105,14 +105,14 @@ class DeskPlugin(
             "punch" -> {
                 val text = call.arguments as? String
                 if (text == null) {
-                    result.error("bad_address", "地址不对", null)
+                    result.error("bad_address", "bad address", null)
                     return
                 }
                 control.execute {
                     val peer = deskResolveHostPort(text)
                     main.post {
                         if (peer == null) {
-                            result.error("bad_address", "地址不对", null)
+                            result.error("bad_address", "bad address", null)
                         } else {
                             current()?.punch(peer)
                             result.success(null)
@@ -129,16 +129,16 @@ class DeskPlugin(
         val toMac = call.argument<ByteArray>("keyToMac")
         val codec = call.argument<String>("codec")
         if (toPhone == null || toMac == null || codec == null) {
-            result.error("bad_args", "主机、端口或密钥不对", null)
+            result.error("bad_args", "bad host, port or key", null)
             return
         }
         if (toPhone.size != 32 || toMac.size != 32) {
-            result.error("bad_args", "密钥长度不对", null)
+            result.error("bad_args", "bad key length", null)
             return
         }
         val decoderName = deskHevcDecoder()
         if (codec != "hevc" || decoderName == null) {
-            result.error("unsupported_codec", "还不能解这种编码", null)
+            result.error("unsupported_codec", "codec not supported yet", null)
             return
         }
         val host = call.argument<String>("host")
@@ -153,14 +153,14 @@ class DeskPlugin(
             if (!host.isNullOrEmpty()) {
                 val peer = deskResolve(host, port)
                 if (peer == null) {
-                    main.post { result.error("bad_address", "解析不了 $host", null) }
+                    main.post { result.error("bad_address", "cannot resolve $host", null) }
                     return@execute
                 }
                 peers.add(peer)
             }
             val relay = if (relayText.isNullOrEmpty()) null else deskResolveHostPort(relayText)
             if (peers.isEmpty() && relay == null) {
-                main.post { result.error("bad_address", "没有能连的地址", null) }
+                main.post { result.error("bad_address", "no address to connect to", null) }
                 return@execute
             }
             val view = decoderName.startsWith("OMX.hisi") || decoderName.startsWith("c2.hisi")
@@ -180,13 +180,13 @@ class DeskPlugin(
         result: MethodChannel.Result,
     ) {
         if (synchronized(lock) { generation != gen }) {
-            result.error("cancelled", "连接已取消", null)
+            result.error("cancelled", "connection cancelled", null)
             return
         }
         val created = try {
             DeskSession(toPhone, toMac, peers, relay, relayToken, nack, view)
         } catch (e: Exception) {
-            result.error("desk", "打不开接收", null)
+            result.error("desk", "cannot open the receiver", null)
             return
         }
         val producer = textures.createSurfaceProducer()
@@ -206,7 +206,7 @@ class DeskPlugin(
         synchronized(lock) {
             if (generation != gen) {
                 producer.release()
-                result.error("cancelled", "连接已取消", null)
+                result.error("cancelled", "connection cancelled", null)
                 return
             }
             session = created

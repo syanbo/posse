@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'displays.dart';
@@ -37,7 +38,7 @@ Future<DeskPick?> pickDeskView(
             child: Column(
               children: [
                 Section(
-                  title: '整块屏',
+                  title: sheet.l10n.deskEntireScreen,
                   inset: 48,
                   children: [
                     // 多块屏只画排布图，名字和分辨率写在各块里
@@ -63,8 +64,8 @@ Future<DeskPick?> pickDeskView(
                                 ? c.accent
                                 : c.muted,
                           ),
-                          title: Text(deskDisplayName(displays, d)),
-                          subtitle: Text(_resolution(d)),
+                          title: Text(deskDisplayName(sheet.l10n, displays, d)),
+                          subtitle: Text(_resolution(sheet.l10n, d)),
                           trailing: watching == null && d.id == displays.current
                               ? Icon(
                                   Icons.check_rounded,
@@ -82,18 +83,18 @@ Future<DeskPick?> pickDeskView(
                   builder: (context, snap) {
                     final list = snap.data;
                     return Section(
-                      title: '窗口',
+                      title: context.l10n.deskWindows,
                       inset: 48,
                       children: [
                         if (snap.connectionState != ConnectionState.done)
-                          const _Note(
-                            key: Key('desk-windows-loading'),
-                            '正在列出窗口…',
+                          _Note(
+                            key: const Key('desk-windows-loading'),
+                            context.l10n.deskListingWindows,
                           )
                         else if (snap.hasError)
-                          const _Note('列不出窗口，稍后再试')
+                          _Note(context.l10n.deskWindowsError)
                         else if (list == null || list.isEmpty)
-                          const _Note('这个空间里没有可以单独看的窗口')
+                          _Note(context.l10n.deskWindowsEmpty)
                         else
                           for (final w in list)
                             RowTile(
@@ -139,8 +140,9 @@ Future<DeskPick?> pickDeskView(
   );
 }
 
-String _resolution(DeskDisplay d) =>
-    '${d.pixelWidth} × ${d.pixelHeight}${d.main ? ' · 主屏' : ''}';
+String _resolution(AppLocalizations l, DeskDisplay d) => d.main
+    ? l.deskResolutionMain('${d.pixelWidth}', '${d.pixelHeight}')
+    : '${d.pixelWidth} × ${d.pixelHeight}';
 
 /// 窗口所属 App 的图标；电脑没给图标时画一个通用的窗口图标。
 class _AppIcon extends StatelessWidget {
@@ -231,7 +233,7 @@ class DeskDisplayMap extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  deskDisplayName(displays, d),
+                                  deskDisplayName(context.l10n, displays, d),
                                   style: TextStyle(
                                     fontSize: Fs.small,
                                     color: d.id == displays.current
@@ -242,7 +244,7 @@ class DeskDisplayMap extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  _resolution(d),
+                                  _resolution(context.l10n, d),
                                   style: TextStyle(
                                     fontSize: Fs.small,
                                     color: c.muted,

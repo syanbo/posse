@@ -8,6 +8,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/pairing.dart';
 import '../protocol/rpc.dart';
 import '../ui/loading.dart';
@@ -115,9 +116,11 @@ class _DeskPageState extends State<DeskPage>
   /// Mac 上的屏和正在看的那块，订阅流里的 displays 事件给。旧电脑不给，一直是空的。
   DeskDisplays _displays = DeskDisplays.none;
   int? _texture;
+  // 失败的代号、结束的 reason（文字见 status.dart），显示时才按界面语言取
   String? _fail;
   String? _endNote;
-  String? _accessNote;
+  // Mac 没给 Posse 辅助功能：能看不能操作
+  var _noAccess = false;
   // Mac 锁着屏：画面照常，上方给一个输密码解锁的入口。旧电脑锁屏时结束观看，不报这个
   var _macLocked = false;
   // 这台电脑在手机钥匙串里记着登录密码：锁屏时一点就解
@@ -523,7 +526,7 @@ class _DeskPageState extends State<DeskPage>
       setState(() {
         _fail = null;
         _endNote = null;
-        _accessNote = null;
+        _noAccess = false;
         _macLocked = false;
         _indirect = false;
         _up = false;
@@ -636,7 +639,7 @@ class _DeskPageState extends State<DeskPage>
     }
     // 没有桌面插件（测试）时先返回，不会去解析域名。
     if (!deskSupported) {
-      setState(() => _fail = '这台设备不能看桌面');
+      setState(() => _fail = 'no_plugin');
       return;
     }
     final rpc = widget.model.rpc;
@@ -654,7 +657,7 @@ class _DeskPageState extends State<DeskPage>
       setState(() {
         _fail = null;
         _endNote = null;
-        _accessNote = null;
+        _noAccess = false;
         _macLocked = false;
         _indirect = false;
         _up = false;
@@ -681,7 +684,7 @@ class _DeskPageState extends State<DeskPage>
       _displays = DeskDisplays.none;
       _fail = null;
       _endNote = null;
-      _accessNote = null;
+      _noAccess = false;
       _macLocked = false;
       _indirect = false;
       _up = false;
@@ -711,7 +714,7 @@ class _DeskPageState extends State<DeskPage>
       });
     } on Object {
       if (!mounted || gen != _gen) return;
-      setState(() => _fail = deskFailText('rpc'));
+      setState(() => _fail = 'rpc');
       return;
     }
     if (!mounted || gen != _gen) {
@@ -742,9 +745,9 @@ class _DeskPageState extends State<DeskPage>
         if (!mounted) return;
         switch (frame['state']) {
           case 'no_accessibility':
-            setState(() => _accessNote = deskAccessText);
+            setState(() => _noAccess = true);
           case 'accessibility':
-            setState(() => _accessNote = null);
+            setState(() => _noAccess = false);
           case 'locked':
             setState(() => _macLocked = true);
             unawaited(_checkSaved());
@@ -762,7 +765,7 @@ class _DeskPageState extends State<DeskPage>
           _gestures.cursor = const DeskPoint(0.5, 0.5);
         }
         setState(() => _displays = displays);
-        if (displays.gone) _note('窗口关掉了或不在这个空间，回到整块屏');
+        if (displays.gone) _note(context.l10n.deskWindowGone);
       case 'end':
         final reason = frame['reason'];
         await _finishWatch(gen, reason is String ? reason : '');
@@ -926,7 +929,7 @@ class _DeskPageState extends State<DeskPage>
       setState(() {
         _up = false;
         _texture = null;
-        _fail = '连接已断开';
+        _fail = 'disconnected';
       });
       return;
     }
@@ -950,7 +953,7 @@ class _DeskPageState extends State<DeskPage>
       _texture = null;
       _fail = null;
       _macLocked = false;
-      _endNote = deskEndText(reason);
+      _endNote = reason;
       if (reason == 'stopped') _stopped = true;
     });
     if (reason == 'locked' && !_stopped && !_background) _armLockRetry();
@@ -967,7 +970,7 @@ class _DeskPageState extends State<DeskPage>
     _keys = null;
     if (!mounted) return;
     setState(() {
-      _fail = deskFailText(code);
+      _fail = code;
       _endNote = null;
       _up = false;
       _texture = null;
@@ -1270,7 +1273,7 @@ class _DeskPageState extends State<DeskPage>
       await _passwords.forget(key!);
       if (!mounted) return;
       setState(() => _passwordSaved = false);
-      _note('已忘掉记住的密码');
+      _note(context.l10n.deskPasswordForgotten);
       return;
     }
     _sendPassword(password);
@@ -1293,7 +1296,9 @@ class _DeskPageState extends State<DeskPage>
     final ok = await _passwords.save(pending.key, pending.password);
     if (!mounted) return;
     setState(() => _passwordSaved = ok);
-    _note(ok ? '已记住密码，下次锁屏点「解锁」即可' : '没能记住密码');
+    _note(
+      ok ? context.l10n.deskPasswordSaved : context.l10n.deskPasswordSaveFailed,
+    );
   }
 
   /// 用记住的密码解锁。
@@ -1314,7 +1319,7 @@ class _DeskPageState extends State<DeskPage>
   void _sendPassword(String password) {
     // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
     if (!_macLocked) {
-      _note('Mac 已经解锁，密码没有发送');
+      _note(context.l10n.deskAlreadyUnlocked);
       return;
     }
     final enter = deskKeyHid['Enter']!;
@@ -1350,14 +1355,14 @@ class _DeskPageState extends State<DeskPage>
             ),
             const SizedBox(width: 6),
             Text(
-              'Mac 已锁屏',
+              context.l10n.deskMacLocked,
               style: TextStyle(fontSize: Fs.small, color: colors.text),
             ),
             const SizedBox(width: 8),
             if (_passwordSaved) ...[
               IconButton(
                 key: const Key('desk-unlock-edit'),
-                tooltip: '换密码或忘掉',
+                tooltip: context.l10n.deskChangePasswordTip,
                 visualDensity: VisualDensity.compact,
                 constraints: const BoxConstraints.tightFor(
                   width: 36,
@@ -1376,14 +1381,14 @@ class _DeskPageState extends State<DeskPage>
                 key: const Key('desk-unlock'),
                 style: button,
                 onPressed: () => unawaited(_unlockSaved()),
-                child: const Text('解锁'),
+                child: Text(context.l10n.deskUnlock),
               ),
             ] else
               FilledButton(
                 key: const Key('desk-unlock'),
                 style: button,
                 onPressed: () => unawaited(_unlock()),
-                child: const Text('输入密码'),
+                child: Text(context.l10n.deskEnterPassword),
               ),
           ],
         ),
@@ -1654,22 +1659,25 @@ class _DeskPageState extends State<DeskPage>
 
   /// 画面上的提示：waiting 是在等（转圈），failed 是连不上（红色图标）。
   _Banner? _banner() {
-    if (_background) return const _Banner('已暂停（后台）');
+    final l = context.l10n;
+    if (_background) return _Banner(l.deskPaused);
     if (_viewNote != null) return _Banner(_viewNote!);
-    if (_accessNote != null && (_stats.video || _up)) {
-      return _Banner(_accessNote!);
+    if (_noAccess && (_stats.video || _up)) {
+      return _Banner(l.deskNoAccessibility);
     }
     if (_stats.video) return null;
-    if (_indirect) return const _Banner(deskIndirectText, failed: true);
-    if (_fail != null) return _Banner(_fail!, failed: true);
-    if (_endNote != null) return _Banner(_endNote!);
-    if (_stopped) return const _Banner('已断开');
+    if (_indirect) return _Banner(l.deskIndirect, failed: true);
+    if (_fail case final code?) {
+      return _Banner(deskFailText(l, code), failed: true);
+    }
+    if (_endNote case final reason?) return _Banner(deskEndText(l, reason));
+    if (_stopped) return _Banner(l.deskDisconnected);
     final host = _autoHost;
     if (host == null || host.isEmpty) {
-      return const _Banner('没有连着的电脑', failed: true);
+      return _Banner(l.deskNoComputer, failed: true);
     }
-    if (!_up) return const _Banner('正在连接', waiting: true);
-    return const _Banner('已连上，等画面', waiting: true);
+    if (!_up) return _Banner(l.deskConnecting, waiting: true);
+    return _Banner(l.deskWaitingPicture, waiting: true);
   }
 
   Widget _bannerView(PosseColors colors, _Banner banner) {
@@ -1708,8 +1716,8 @@ class _DeskPageState extends State<DeskPage>
     }
     final retry =
         !_background && (_fail != null || _endNote != null || _stopped);
-    final hint = _fail == deskFailText('permission_screen')
-        ? 'Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」里的 Posse，再重试'
+    final hint = _fail == 'permission_screen'
+        ? context.l10n.deskScreenPermissionHint
         : null;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 340),
@@ -1756,7 +1764,11 @@ class _DeskPageState extends State<DeskPage>
                     unawaited(_ensure(force: true));
                   },
                   icon: const Icon(Icons.refresh_rounded, size: Ic.medium),
-                  label: Text(_stopped ? '重新连接' : '重试'),
+                  label: Text(
+                    _stopped
+                        ? context.l10n.deskReconnect
+                        : context.l10n.commonRetry,
+                  ),
                 ),
               ],
             ],
@@ -1823,12 +1835,16 @@ class _DeskPageState extends State<DeskPage>
 
   Widget _debugPanel(PosseColors colors, DeskStats stats) {
     final view = _gestures.viewport;
-    final headline =
-        '${deskFpsLabel(stats.fps, video: stats.video, still: stats.still)}'
-        '  收到 ${stats.received.toStringAsFixed(0)} fps';
-    final rate =
-        '码率 ${deskBitrate(stats.bitrate)}（${deskByteRate(stats.bitrate)}）'
-        '  峰值 ${deskBitrate(stats.peak)}';
+    final l = context.l10n;
+    final headline = l.deskDebugHeadline(
+      deskFpsLabel(l, stats.fps, video: stats.video, still: stats.still),
+      stats.received.toStringAsFixed(0),
+    );
+    final rate = l.deskDebugRate(
+      deskBitrate(stats.bitrate),
+      deskByteRate(stats.bitrate),
+      deskBitrate(stats.peak),
+    );
     final cap = MediaQuery.sizeOf(context).height * 0.45;
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: 260, maxHeight: cap),
@@ -1847,23 +1863,25 @@ class _DeskPageState extends State<DeskPage>
               children: [
                 Text(headline),
                 Text(rate),
-                Text('丢包 ${stats.loss}'),
-                Text('线路 ${deskPathLabel(stats.path)}'),
+                Text(l.deskDebugLoss('${stats.loss}')),
+                Text(l.deskDebugPath(deskPathLabel(l, stats.path))),
                 ValueListenableBuilder<(int, int)>(
                   valueListenable: _inputLine,
                   builder: (context, line, _) =>
-                      Text('输入：已发 ${line.$1}、已确认 ${line.$2}'),
+                      Text(l.deskDebugInput('${line.$1}', '${line.$2}')),
                 ),
-                Text('解码 ${stats.decodeMs.toStringAsFixed(1)} ms'),
-                Text('关键帧 ${stats.recoveries}'),
+                Text(l.deskDebugDecode(stats.decodeMs.toStringAsFixed(1))),
+                Text(l.deskDebugKeyframes('${stats.recoveries}')),
                 Text(
-                  '缩放 ${view.zoom.toStringAsFixed(2)}'
-                  '  平移 ${view.panX.toStringAsFixed(2)},'
-                  ' ${view.panY.toStringAsFixed(2)}',
+                  l.deskDebugView(
+                    view.zoom.toStringAsFixed(2),
+                    view.panX.toStringAsFixed(2),
+                    view.panY.toStringAsFixed(2),
+                  ),
                 ),
                 for (final event in _log.events)
                   Text(
-                    deskEventLine(event),
+                    deskEventLine(l, event),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1879,7 +1897,7 @@ class _DeskPageState extends State<DeskPage>
                     ),
                     onPressed: () => unawaited(_connectSheet()),
                     icon: const Icon(Icons.tune_rounded, size: Ic.small),
-                    label: const Text('UDP 地址'),
+                    label: Text(l.deskUdpAddress),
                   ),
                 ),
               ],
@@ -1911,14 +1929,14 @@ class _DeskPageState extends State<DeskPage>
                 final nextHost = host.text.trim();
                 final portText = port.text.trim();
                 if (nextHost.isEmpty) {
-                  setSheet(() => error = '先填地址');
+                  setSheet(() => error = context.l10n.deskAddressRequired);
                   return;
                 }
                 int? nextPort;
                 if (portText.isNotEmpty) {
                   nextPort = parseDeskPort(portText);
                   if (nextPort == null) {
-                    setSheet(() => error = '端口要在 1 到 65535');
+                    setSheet(() => error = context.l10n.deskPortRange);
                     return;
                   }
                 }
@@ -1935,7 +1953,7 @@ class _DeskPageState extends State<DeskPage>
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '连接设置',
+                        context.l10n.deskConnectionSettings,
                         style: TextStyle(
                           fontSize: Fs.title,
                           fontWeight: Fw.bold,
@@ -1945,8 +1963,8 @@ class _DeskPageState extends State<DeskPage>
                       const SizedBox(height: 6),
                       Text(
                         auto == null || auto.isEmpty
-                            ? '没有连着的电脑'
-                            : '默认走订阅。画面发到现在连着的电脑，端口由电脑分配。这里改的是 UDP 地址，留着调试。',
+                            ? context.l10n.deskNoComputer
+                            : context.l10n.deskConnectionNote,
                         style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                       const SizedBox(height: 14),
@@ -1954,14 +1972,19 @@ class _DeskPageState extends State<DeskPage>
                         children: [
                           Expanded(
                             flex: 3,
-                            child: _field(c, host, '主机', apply),
+                            child: _field(
+                              c,
+                              host,
+                              context.l10n.deskHost,
+                              apply,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: _field(
                               c,
                               port,
-                              '端口',
+                              context.l10n.deskPort,
                               apply,
                               keyboardType: TextInputType.number,
                             ),
@@ -1980,7 +2003,7 @@ class _DeskPageState extends State<DeskPage>
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: apply,
-                          child: const Text('使用'),
+                          child: Text(context.l10n.deskUse),
                         ),
                       ),
                       if (_custom)
@@ -1994,7 +2017,7 @@ class _DeskPageState extends State<DeskPage>
                               unawaited(_enqueue(_retargetBody));
                               setState(() {});
                             },
-                            child: const Text('恢复默认'),
+                            child: Text(context.l10n.commonResetToDefault),
                           ),
                         ),
                     ],

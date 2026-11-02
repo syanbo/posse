@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/desk/direct.dart';
@@ -7,6 +8,9 @@ import 'package:posse_mobile/desk/keys.dart';
 import 'package:posse_mobile/desk/mods.dart';
 import 'package:posse_mobile/desk/status.dart';
 import 'package:posse_mobile/desk/wire.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('input bytes match EncodeInput', () {
@@ -286,23 +290,23 @@ void main() {
   });
 
   test('status copy is one sentence per reason', () {
-    expect(deskFailText('unsupported'), '这台电脑的 Posse 需要更新');
-    expect(deskFailText('method_not_found'), '这台电脑的 Posse 需要更新');
-    expect(deskFailText('unknown_method'), '这台电脑的 Posse 需要更新');
-    expect(deskFailText('busy'), '另一台手机正在看');
-    expect(deskFailText('locked'), 'Mac 已锁屏');
-    expect(deskFailText('permission_screen'), '请到 Mac 上允许屏幕录制');
-    expect(deskFailText('unsupported_codec'), '这台电脑不支持手机的视频编码');
-    expect(deskFailText('capture_failed'), '采集失败');
-    expect(deskFailText('other'), '连接失败');
-    expect(deskEndText('locked'), 'Mac 已锁屏');
-    expect(deskEndText('stopped'), '已在 Mac 上停止');
-    expect(deskEndText('unsubscribed'), '已停止观看');
-    expect(deskEndText('no_report'), '电脑没有收到画面报告');
-    expect(deskEndText('capture_failed'), '采集失败');
-    expect(deskEndText('other'), '连接已结束');
-    expect(deskAccessText, '能看不能操作，请到 Mac 上打开辅助功能');
-    expect(deskIndirectText, contains('Tailscale'));
+    expect(deskFailText(zh, 'unsupported'), '这台电脑的 Posse 需要更新');
+    expect(deskFailText(zh, 'method_not_found'), '这台电脑的 Posse 需要更新');
+    expect(deskFailText(zh, 'unknown_method'), '这台电脑的 Posse 需要更新');
+    expect(deskFailText(zh, 'busy'), '另一台手机正在看');
+    expect(deskFailText(zh, 'locked'), 'Mac 已锁屏');
+    expect(deskFailText(zh, 'permission_screen'), '请到 Mac 上允许屏幕录制');
+    expect(deskFailText(zh, 'unsupported_codec'), '这台电脑不支持手机的视频编码');
+    expect(deskFailText(zh, 'capture_failed'), '采集失败');
+    expect(deskFailText(zh, 'other'), '连接失败');
+    expect(deskEndText(zh, 'locked'), 'Mac 已锁屏');
+    expect(deskEndText(zh, 'stopped'), '已在 Mac 上停止');
+    expect(deskEndText(zh, 'unsubscribed'), '已停止观看');
+    expect(deskEndText(zh, 'no_report'), '电脑没有收到画面报告');
+    expect(deskEndText(zh, 'capture_failed'), '采集失败');
+    expect(deskEndText(zh, 'other'), '连接已结束');
+    expect(zh.deskNoAccessibility, '能看不能操作，请到 Mac 上打开辅助功能');
+    expect(zh.deskIndirect, contains('Tailscale'));
   });
 
   // 隐藏输入框不再每次清空：比前后文本，只发新打的；删掉的每个字是一次退格

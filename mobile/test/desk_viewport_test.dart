@@ -7,6 +7,9 @@ import 'package:posse_mobile/desk/events.dart';
 import 'package:posse_mobile/desk/keys.dart';
 import 'package:posse_mobile/desk/plugin.dart';
 import 'package:posse_mobile/desk/viewport.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('contain fit letterboxes the long axis', () {
@@ -105,8 +108,8 @@ void main() {
     });
     expect(stats.fps, 59.5);
     expect(stats.public, '203.0.113.5:4100');
-    expect(deskPathLabel(stats.path), '打洞直连');
-    expect(deskPathLabel(DeskStats.parse(null).path), '—');
+    expect(deskPathLabel(zh, stats.path), '打洞直连');
+    expect(deskPathLabel(zh, DeskStats.parse(null).path), '—');
     expect(stats.loss, 3);
     expect(stats.recoveries, 2);
     expect(stats.video, isTrue);
@@ -125,25 +128,25 @@ void main() {
     log.add(const DeskDragEvent(DeskDragPhase.move, DeskPoint(0.2, 0.2)));
     log.add(const DeskDragEvent(DeskDragPhase.move, DeskPoint(0.3, 0.2)));
     expect(log.events, hasLength(2));
-    expect(deskEventLine(log.events.last), '拖动 0.300, 0.200');
+    expect(deskEventLine(zh, log.events.last), '拖动 0.300, 0.200');
     for (var i = 0; i < 8; i++) {
       log.add(DeskTapEvent(DeskPoint(i / 10, 0.5), 1));
     }
     expect(log.events, hasLength(DeskEventLog.keep));
     expect(
-      deskEventLine(const DeskTapEvent(DeskPoint(0.25, 0.5), 2)),
+      deskEventLine(zh, const DeskTapEvent(DeskPoint(0.25, 0.5), 2)),
       '2 击 0.250, 0.500',
     );
     expect(
-      deskEventLine(const DeskRightClickEvent(DeskPoint(0.3, 0.55))),
+      deskEventLine(zh, const DeskRightClickEvent(DeskPoint(0.3, 0.55))),
       '右键 0.300, 0.550',
     );
     expect(
-      deskEventLine(const DeskScrollEvent(12, -4, inertia: true)),
+      deskEventLine(zh, const DeskScrollEvent(12, -4, inertia: true)),
       '滚动 12, -4 惯性',
     );
-    expect(deskEventLine(const DeskKeyEvent('⌘C')), '⌘C');
-    expect(deskEventLine(const DeskTextEvent('你好')), '文字 你好');
+    expect(deskEventLine(zh, const DeskKeyEvent('⌘C')), '⌘C');
+    expect(deskEventLine(zh, const DeskTextEvent('你好')), '文字 你好');
   });
 
   test('endpoint brackets an ipv6 host', () {

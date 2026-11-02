@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../chat/latency_label.dart';
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import 'chrome.dart';
 
@@ -141,6 +142,7 @@ class DeskToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     return Material(
       key: const Key('desk-toolbar'),
       color: c.glass,
@@ -151,16 +153,16 @@ class DeskToolbar extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment.center,
         // 没画面时没什么可挡的，按钮一直摆出来，返回和横屏不用先找胶囊点开
-        child: expanded || !video ? _open(c) : _shut(c),
+        child: expanded || !video ? _open(c, l) : _shut(c, l),
       ),
     );
   }
 
-  Widget _shut(PosseColors c) {
+  Widget _shut(PosseColors c, AppLocalizations l) {
     final signal = _signal(c);
     final icon = Icon(signal.$1, size: Ic.inline, color: signal.$2);
     final label = Text(
-      deskFpsLabel(fps, video: video, still: still),
+      deskFpsLabel(l, fps, video: video, still: still),
       key: const Key('desk-fps'),
       style: statusLineStyle(c.text),
     );
@@ -176,13 +178,13 @@ class DeskToolbar extends StatelessWidget {
     );
   }
 
-  Widget _open(PosseColors c) {
+  Widget _open(PosseColors c, AppLocalizations l) {
     final icons = <Widget>[
       _icon(
         c,
         key: const Key('desk-toolbar-back'),
         icon: Icons.arrow_back_ios_new_rounded,
-        tooltip: '返回',
+        tooltip: l.deskBack,
         onTap: onBack,
       ),
       // 图标画当前的方向，点一下切到另一个
@@ -192,7 +194,7 @@ class DeskToolbar extends StatelessWidget {
         icon: landscape
             ? Icons.stay_current_landscape_rounded
             : Icons.stay_current_portrait_rounded,
-        tooltip: landscape ? '切到竖屏' : '切到横屏',
+        tooltip: landscape ? l.deskToPortrait : l.deskToLandscape,
         onTap: onOrientation,
       ),
       if (onView case final pick?)
@@ -200,14 +202,14 @@ class DeskToolbar extends StatelessWidget {
           c,
           key: const Key('desk-toolbar-view'),
           icon: Icons.desktop_windows_rounded,
-          tooltip: '画面',
+          tooltip: l.deskViewTip,
           onTap: pick,
         ),
       _icon(
         c,
         key: const Key('desk-toolbar-keyboard'),
         icon: keyboardUp ? Icons.keyboard_hide_rounded : Icons.keyboard_rounded,
-        tooltip: '键盘',
+        tooltip: l.deskKeyboard,
         on: keyboardUp,
         onTap: onKeyboard,
       ),
@@ -215,7 +217,7 @@ class DeskToolbar extends StatelessWidget {
         c,
         key: const Key('desk-toolbar-shortcuts'),
         icon: Icons.keyboard_command_key_rounded,
-        tooltip: '快捷键',
+        tooltip: l.deskShortcuts,
         on: shortcuts,
         onTap: onShortcuts,
       ),
@@ -223,7 +225,7 @@ class DeskToolbar extends StatelessWidget {
         c,
         key: const Key('desk-toolbar-debug'),
         icon: Icons.speed_rounded,
-        tooltip: '调试',
+        tooltip: l.deskDebug,
         on: debugOpen,
         onTap: onDebug,
       ),
@@ -231,14 +233,14 @@ class DeskToolbar extends StatelessWidget {
         c,
         key: const Key('desk-toolbar-help'),
         icon: Icons.help_outline_rounded,
-        tooltip: '手势',
+        tooltip: l.deskGestureTitle,
         onTap: onHelp,
       ),
       _icon(
         c,
         key: const Key('desk-toolbar-disconnect'),
         icon: stopped ? Icons.refresh_rounded : Icons.link_off_rounded,
-        tooltip: stopped ? '重新连接' : '断开',
+        tooltip: stopped ? l.deskReconnect : l.deskDisconnect,
         onTap: onDisconnect,
       ),
     ];

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/line_icons.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/ui/widgets.dart';
@@ -74,7 +75,7 @@ List<AgentUsage> _sample(DateTime now) => [
   ),
   AgentUsage(
     agent: 'cursor',
-    plan: 'Ultra',
+    plan: 'Ultra \$200/mo',
     updatedAt: now.subtract(const Duration(minutes: 40)),
     windows: [
       UsageWindow(
@@ -204,29 +205,35 @@ void main() {
     await loadShotFonts(tester);
     await tester.binding.setSurfaceSize(const Size(390, 844));
     final now = DateTime.now();
-    for (final dark in [false, true]) {
-      final key = GlobalKey();
-      final theme = posseTheme(dark ? Brightness.dark : Brightness.light);
-      await tester.pumpWidget(
-        RepaintBoundary(
-          key: key,
-          child: MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: theme,
-            home: _Home(usages: _sample(now)),
+    for (final lang in ['zh', 'en']) {
+      for (final dark in [false, true]) {
+        final key = GlobalKey();
+        final theme = posseTheme(dark ? Brightness.dark : Brightness.light);
+        await tester.pumpWidget(
+          RepaintBoundary(
+            key: key,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: theme,
+              locale: Locale(lang),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: _Home(usages: _sample(now)),
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final suffix = dark ? 'dark' : 'light';
-      await _shot(tester, key, '$dir/mobile-home-$suffix.png');
-      await tester.tap(find.byType(UsageCardView));
-      await tester.pumpAndSettle();
-      await _shot(tester, key, '$dir/mobile-sheet-$suffix.png');
-      usageRemaining.value = true;
-      await tester.pumpAndSettle();
-      await _shot(tester, key, '$dir/mobile-sheet-left-$suffix.png');
-      usageRemaining.value = false;
+        );
+        await tester.pumpAndSettle();
+        final suffix =
+            '${dark ? 'dark' : 'light'}${lang == 'zh' ? '' : '-$lang'}';
+        await _shot(tester, key, '$dir/mobile-home-$suffix.png');
+        await tester.tap(find.byType(UsageCardView));
+        await tester.pumpAndSettle();
+        await _shot(tester, key, '$dir/mobile-sheet-$suffix.png');
+        usageRemaining.value = true;
+        await tester.pumpAndSettle();
+        await _shot(tester, key, '$dir/mobile-sheet-left-$suffix.png');
+        usageRemaining.value = false;
+      }
     }
   }, skip: dir.isEmpty);
 }

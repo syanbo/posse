@@ -125,11 +125,11 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
       let toMac = bytes(args["keyToMac"]),
       let codec = DeskCodec(rawValue: args["codec"] as? String ?? "")
     else {
-      result(FlutterError(code: "bad_args", message: "主机、端口或密钥不对", details: nil))
+      result(FlutterError(code: "bad_args", message: "bad host, port or key", details: nil))
       return
     }
     guard toPhone.count == 32, toMac.count == 32 else {
-      result(FlutterError(code: "bad_args", message: "密钥长度不对", details: nil))
+      result(FlutterError(code: "bad_args", message: "bad key length", details: nil))
       return
     }
     // 直连地址可以没有（经隧道连着、只能走中转），中转也可以没有，但不能都没有
@@ -137,7 +137,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     if let host = args["host"] as? String, !host.isEmpty {
       let port = (args["port"] as? NSNumber)?.intValue ?? 0
       guard port > 0, port < 65536, let peer = deskResolve(host: host, port: UInt16(port)) else {
-        result(FlutterError(code: "bad_address", message: "解析不了 \(host)", details: nil))
+        result(FlutterError(code: "bad_address", message: "cannot resolve \(host)", details: nil))
         return
       }
       peers.append(peer)
@@ -149,7 +149,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
     let relayToken = bytes(args["relayToken"])
     let nack = args["nack"] as? Bool ?? false
     guard !peers.isEmpty || relay != nil else {
-      result(FlutterError(code: "bad_address", message: "没有能连的地址", details: nil))
+      result(FlutterError(code: "bad_address", message: "no address to connect to", details: nil))
       return
     }
     control.async { [weak self] in
@@ -160,7 +160,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
         let live = self.generation == generation
         self.sessionLock.unlock()
         guard live else {
-          result(FlutterError(code: "cancelled", message: "连接已取消", details: nil))
+          result(FlutterError(code: "cancelled", message: "connection cancelled", details: nil))
           return
         }
         do {
@@ -180,7 +180,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
           guard self.generation == generation else {
             self.sessionLock.unlock()
             texture.unregister()
-            result(FlutterError(code: "cancelled", message: "连接已取消", details: nil))
+            result(FlutterError(code: "cancelled", message: "connection cancelled", details: nil))
             return
           }
           self.session = session
@@ -192,9 +192,9 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
           self.texture = texture
           result(texture.textureId)
         } catch DeskError.unsupportedCodec {
-          result(FlutterError(code: "unsupported_codec", message: "还不能解这种编码", details: nil))
+          result(FlutterError(code: "unsupported_codec", message: "codec not supported yet", details: nil))
         } catch {
-          result(FlutterError(code: "desk", message: "打不开接收", details: nil))
+          result(FlutterError(code: "desk", message: "cannot open the receiver", details: nil))
         }
       }
     }
@@ -202,7 +202,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
 
   private func sendInput(_ arguments: Any?, result: @escaping FlutterResult) {
     guard let plain = bytes(arguments) else {
-      result(FlutterError(code: "bad_args", message: "没有输入", details: nil))
+      result(FlutterError(code: "bad_args", message: "missing input", details: nil))
       return
     }
     sessionLock.lock()
@@ -215,7 +215,7 @@ final class DeskPlugin: NSObject, FlutterStreamHandler {
   /// Mac 出口的公网地址（"ip:port"），由 desk.punch 换来。
   private func punch(_ arguments: Any?, result: @escaping FlutterResult) {
     guard let text = arguments as? String, let peer = deskResolveHostPort(text) else {
-      result(FlutterError(code: "bad_address", message: "地址不对", details: nil))
+      result(FlutterError(code: "bad_address", message: "bad address", details: nil))
       return
     }
     sessionLock.lock()

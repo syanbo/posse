@@ -5,18 +5,23 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>扫描电脑上的 Posse 配对二维码，以及拍摄要发给会话的图片。</string>
+	<string>Scan the pairing QR code shown by Posse on your computer, and take photos to send to a session.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>选择要发给会话的图片，以及把电脑上的图片和视频存进相册的「Posse」相簿。</string>
+	<string>Choose images to send to a session, and save images and videos from your computer to the “Posse” album.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>把电脑上的图片和视频存进相册的「Posse」相簿。</string>
+	<string>Save images and videos from your computer to the “Posse” album.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>连接这台电脑上的 Posse，查看终端和改动。</string>
+	<string>Connect to Posse on your computer to see its terminals and changes.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

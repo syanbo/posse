@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 
 /// 一种手势：做什么、怎么做。
@@ -16,27 +17,76 @@ class DeskGestureHint extends StatelessWidget {
   final VoidCallback onDismiss;
   final bool trackpad;
 
-  static const trackpadLines = <DeskGestureLine>[
-    (icon: Icons.near_me_rounded, action: '移动指针', how: '单指滑动'),
-    (icon: Icons.touch_app_rounded, action: '单击', how: '单指轻点，点在指针处'),
-    (icon: Icons.ads_click_rounded, action: '右键', how: '双指轻点'),
-    (icon: Icons.open_with_rounded, action: '拖动', how: '三指滑动，或轻点后马上按住滑'),
-    (icon: Icons.swipe_vertical_rounded, action: '滚动', how: '双指拖动'),
-    (icon: Icons.pinch_rounded, action: '缩放', how: '双指捏合'),
+  static List<DeskGestureLine> trackpadLines(AppLocalizations l) => [
+    (
+      icon: Icons.near_me_rounded,
+      action: l.deskGestureMovePointer,
+      how: l.deskGestureSlideOne,
+    ),
+    (
+      icon: Icons.touch_app_rounded,
+      action: l.deskGestureClick,
+      how: l.deskGestureTapAtPointer,
+    ),
+    (
+      icon: Icons.ads_click_rounded,
+      action: l.deskGestureRightClick,
+      how: l.deskGestureTwoFingerTap,
+    ),
+    (
+      icon: Icons.open_with_rounded,
+      action: l.deskGestureDrag,
+      how: l.deskGestureThreeFingerDrag,
+    ),
+    (
+      icon: Icons.swipe_vertical_rounded,
+      action: l.deskGestureScroll,
+      how: l.deskGestureTwoFingerDrag,
+    ),
+    (
+      icon: Icons.pinch_rounded,
+      action: l.deskGestureZoom,
+      how: l.deskGesturePinch,
+    ),
   ];
 
-  static const lines = <DeskGestureLine>[
-    (icon: Icons.touch_app_rounded, action: '单击', how: '单指轻点'),
-    (icon: Icons.ads_click_rounded, action: '右键', how: '双指轻点'),
-    (icon: Icons.open_with_rounded, action: '拖动', how: '长按到震一下，再拖'),
-    (icon: Icons.pan_tool_rounded, action: '移动画面', how: '放大后单指拖动'),
-    (icon: Icons.swipe_vertical_rounded, action: '滚动', how: '双指拖动'),
-    (icon: Icons.pinch_rounded, action: '缩放', how: '双指捏合'),
+  static List<DeskGestureLine> lines(AppLocalizations l) => [
+    (
+      icon: Icons.touch_app_rounded,
+      action: l.deskGestureClick,
+      how: l.deskGestureTap,
+    ),
+    (
+      icon: Icons.ads_click_rounded,
+      action: l.deskGestureRightClick,
+      how: l.deskGestureTwoFingerTap,
+    ),
+    (
+      icon: Icons.open_with_rounded,
+      action: l.deskGestureDrag,
+      how: l.deskGestureLongPressDrag,
+    ),
+    (
+      icon: Icons.pan_tool_rounded,
+      action: l.deskGesturePan,
+      how: l.deskGestureZoomedDrag,
+    ),
+    (
+      icon: Icons.swipe_vertical_rounded,
+      action: l.deskGestureScroll,
+      how: l.deskGestureTwoFingerDrag,
+    ),
+    (
+      icon: Icons.pinch_rounded,
+      action: l.deskGestureZoom,
+      how: l.deskGesturePinch,
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     return GestureDetector(
       key: const Key('desk-gesture-hint'),
       behavior: HitTestBehavior.opaque,
@@ -59,13 +109,14 @@ class DeskGestureHint extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _header(c),
+                        _header(c, l),
                         const SizedBox(height: 14),
-                        for (final line in trackpad ? trackpadLines : lines)
+                        for (final line
+                            in trackpad ? trackpadLines(l) : lines(l))
                           _row(c, line),
                         const SizedBox(height: 10),
                         Text(
-                          '点任意处关掉，模式在设置「看桌面」里换',
+                          l.deskGestureDismiss,
                           style: TextStyle(fontSize: Fs.small, color: c.muted),
                         ),
                       ],
@@ -80,11 +131,11 @@ class DeskGestureHint extends StatelessWidget {
     );
   }
 
-  Widget _header(PosseColors c) {
+  Widget _header(PosseColors c, AppLocalizations l) {
     return Row(
       children: [
         Text(
-          '手势',
+          l.deskGestureTitle,
           style: TextStyle(
             fontSize: Fs.title,
             fontWeight: Fw.bold,
@@ -100,7 +151,7 @@ class DeskGestureHint extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Text(
-              trackpad ? '触控板模式' : '直接点按模式',
+              trackpad ? l.deskModeTrackpad : l.deskModeDirect,
               style: TextStyle(
                 fontSize: Fs.small,
                 fontWeight: Fw.medium,

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui';
 
+import '../l10n/l10n.dart';
+
 /// Mac 上的一块屏（电脑的 desk.Display）。位置和大小是全局坐标里的点，主屏左上角是原点。
 class DeskDisplay {
   const DeskDisplay({
@@ -133,13 +135,17 @@ class DeskDisplays {
   }
 }
 
-/// 屏的名字：系统给的，没有时主屏写「主显示器」，其余按排布从左到右编号。
-String deskDisplayName(DeskDisplays displays, DeskDisplay d) {
+/// 屏的名字：系统给的，没有时主屏写主显示器，其余按排布从左到右编号。
+String deskDisplayName(
+  AppLocalizations l,
+  DeskDisplays displays,
+  DeskDisplay d,
+) {
   if (d.name.isNotEmpty) return d.name;
-  if (d.main) return '主显示器';
+  if (d.main) return l.deskMainDisplay;
   final order = [...displays.list]
     ..sort((a, b) => a.rect.left.compareTo(b.rect.left));
-  return '显示器 ${order.indexOf(d) + 1}';
+  return l.deskDisplayNumbered('${order.indexOf(d) + 1}');
 }
 
 /// 排布图：把所有屏按真实的相对位置和大小缩进 [box]，居中，返回每块屏在图里的矩形。
