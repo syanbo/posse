@@ -74,6 +74,12 @@ var startDir, _ = os.Getwd()
 // again.
 func (a *Application) Relaunch() {
 	postMain(func() {
+		if a.stopping {
+			// Quitting already, and not done: start again after all.
+			a.relaunch = true
+			backend().Quit()
+			return
+		}
 		a.relaunch = true
 		// On Windows the app gives up the foreground as its windows close,
 		// and the app it starts after could not take it: its windows would
@@ -81,7 +87,7 @@ func (a *Application) Relaunch() {
 		// still has it.
 		backend().App().AllowForeground()
 		if a.prepareQuit() {
-			backend().Quit()
+			a.stopLoop()
 		} else {
 			a.relaunch = false
 		}

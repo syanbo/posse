@@ -11,7 +11,7 @@ go vet ./... && go test ./... && go tool mygo vet
 go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app
 ```
 
-- go.mod 要求 Go 1.27.1（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。
+- go.mod 要求 Go 1.27.3（MyGo 的要求），本机 Go 1.26 会通过 GOTOOLCHAIN=auto 自动下载。
 - 终端内核 libghostty-vt 首次运行时由 MyGo 下载到 `~/Library/Caches/mygo/natives/`。
 - 端到端测试不要碰 `~/.posse`。只测 CLI 和常驻进程、不涉及系统授权时用 `POSSE_HOME=/tmp/posse-e2e/home ./bin/posse ...`，编得最快；单元测试和离屏预览不起 App。
 - 改界面后用离屏预览自查（屏幕锁定时也能用）：`POSSE_PREVIEW_DIR=/tmp/posse-preview go test ./internal/app -run TestPreview`，生成主要界面深浅两套的 PNG（清单见 `preview_test.go`）。
@@ -61,7 +61,7 @@ internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共�
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）
 scripts             `dev-app.sh`：装开发用的 PosseDev.app；`release.sh`：发布 Mac 版；`ios-adhoc.sh`：发布 iOS 的 Ad Hoc 安装包；`android-release.sh`：发布安卓安装包；`pele.sh`：打包 Mermaid 渲染器 Pele（升级 Pele 时跑，要 npx）；`memprobe.sh`：按类别采样进程内存（做法和上次的结果见 `docs/plans/memory.md`）
 mobile              Posse 手机客户端（Flutter，用 fvm 固定版本，命令见其中的 README；`third_party/flterm` 是带改动的终端组件，改动见其中的 POSSE.md；`packages/posse_quic` 是编进 App 的 Go 库（QUIC 客户端和 Mermaid 排版），构建钩子调 `go build`，Dart 经 FFI 调用）
-third_party/mygo    带改动的 mygo v0.6.3（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
+third_party/mygo    带改动的 mygo v0.7.4（go.mod 用 replace 指向它），改动和升级方法见其中的 POSSE.md
 ```
 
 ## 关键约定

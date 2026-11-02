@@ -1,6 +1,6 @@
 # Posse 带的 mygo
 
-github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去掉了 website、examples、docs、测试文件和 testdata 目录，其余原样。
+github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去掉了 website、examples、docs、测试文件和 testdata 目录，其余原样。
 
 ## 改动
 
@@ -12,17 +12,16 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `diffmodel.go`：开着它时比较前去掉每行的空白（`cmpLines`），只差空白的行算没改；两边没改的段行数仍然相等，左右对照照常对齐。显示、行内高亮和回滚用的仍是原文。没有做"忽略空行"：把只增删空行的段去掉会让两边对不齐。
 
 - `diffview.go`、`diffside.go`：加 `DiffState.RenderHunkMark`，左右对照时在旧版一侧的右边缘（挨着分隔线）给每处改动放一个按钮（`hunkTop` 找这处改动在旧版一侧的位置，没有行时是占位块），Posse 画成 WebStorm 的 `>>`；加 `DiffState.OldNumbersRight`，左右对照时旧版一侧的行号栏放到右边缘，两列行号挨着分隔线，`>>` 在行号左边（编辑器选项 `gutterRight`、`gutterExtra`，`editor.go` 的 `textLeft`、`rightGutter`、`inGutter`，`paint.go`、`input.go` 里原来按行号栏在左边算的地方改用它们）。
-- `editor.go`、`input.go`、`paint.go`：左右对照的横向滚动加一个两边共用的位置（`sharedScroll.x`），上限取两边里最远的（`maxX`），每边按自己的上限截；唯一的横向滚动条（新版一侧）、滚轮和光标跟随都改它（`sideways`、`setScrollX`）。旧版行号在右边时文字区更窄，原来新版滚到头时旧版行尾还压在行号栏下面；只有旧版超宽时新版也显示横向滚动条。
+- `editor.go`、`input.go`、`paint.go`：左右对照的横向滚动加一个两边共用的位置（`sharedScroll.x`），上限取两边里最远的（`maxX`），每边按自己的上限截；唯一的横向滚动条（新版一侧，`bar` 按 `sideways` 给 `ui.Scrollbar` 的长度和位置；共用滚动时 `noScrollbar` 的旧版一侧不显示横向的，`FitContent` 不共用滚动时两边照上游各有横向的）、滚轮和光标跟随都改它（`sideways`、`setScrollX`）。旧版行号在右边时文字区更窄，原来新版滚到头时旧版行尾还压在行号栏下面；只有旧版超宽时新版也显示横向滚动条。
 - `diffview.go`：加 `DiffState.Split`、`SplitDragging`，左右对照时旧版一侧占的宽度比例（0 是一半），分隔线上盖一条 5 DIP 宽的拖动条（`split-grip`，按上一帧的宽度摆），拖动改比例、限制在 0.15 到 0.85，拖动中 `SplitDragging` 为真，应用在松手后保存。
 - `diffahead.go`、`diffmodel.go`：加 `CompareTexts`（任何协程都能调，和 `DiffState` 一样比较两段文字）和 `DiffState.UseComparison`：下一次整体比较时两边文字和忽略空白的设置都和算过的一样，就直接用结果（`diffModel.takeAhead`），否则照常比较。Posse 在读文件的协程里先比好，几 MB 的文件不卡界面线程。
-- `diffside.go`：左右对照里一边缺行的占位块（斜纹）只画看得见的那一段（`paintBlock`），斜线位置和整块画时相同。上游按整块高度画：新文件的占位块和文件一样高，12 万行的文件一帧画约 39 万条线，绘制指令的缓冲按这一帧扩容到几百 MB 后不再缩小。
 - `diffview.go`、`diffside.go`：加 `DiffState.Current`（改动的序号加一，0 表示没有），这一处的底色和行号栏比别的改动深、竖条总是显示，F7 上下切换时看得出走到了哪。
 
 `ui/editor` 的编辑器（`gitdiff.go`、`input.go`、`paint.go`、`state.go`）：加 `State.OnChangeClick`，点行号栏里相对 DiffBase 的改动色条时回调（改动序号和这一行底边的位置），色条的位置抽成 `changeBarX` 和绘制共用；加 `State.Changes`（改动列表和改之前的内容）、`State.RevertChange`（回滚一处，可以撤销）、`State.LineBottom`（某一行底边相对编辑器顶的位置）。Posse 用它们做 WebStorm 那样的改动卡片。
 
 `ui/editor` 的跳到定义（`state.go`、`editor.go`、`input.go`、`build.go`、`paint.go`）：加 `State.LinkAt`，按住 Command 时指针下要画下划线的范围（Posse 用它认引号里的路径和网址），没设或返回空范围时是指针下的词；`pointerMove` 记下这段（`link`），`build` 在 Command 按住、指针在文字上、设了 `OnDefinition` 时把指针换成手形（`linkOn`），`paint` 在这段下面画一条 1 DIP 的线，照 Zed 按住 Command 时的链接样式。
 
-`ui/editor` 的粗体和字体平滑（`state.go`、`diffview.go`、`editor.go`、`paint.go`、`view.go`）：上游主题里给 Markdown 标题、加粗标了 `Bold` 却不画；加 `State.BoldWeight`、`DiffState.BoldWeight`（为 0 时 700），`paintRow` 把这些记号空出来，另用粗体字重排字（`boldShaped`）画在原位（等宽字体，宽度不变）；`Font.Antialiased` 开着时不用字体平滑画字（`setStyle` 记下它，它不进排版的 `text.Style`）。`ui/glyphs.go` 为此加 `Painter.TextLineWith`：可以不平滑，颜色透明的字不画。
+`ui/editor` 的粗体字重和字体平滑（`state.go`、`diffview.go`、`editor.go`、`paint.go`、`view.go`）：粗体和斜体的记号上游 0.6.4 起自己画（`faceStyle`）；加 `State.BoldWeight`、`DiffState.BoldWeight`，设了时代替上游 `boldWeight()` 的 700（`view.boldW`）；`Font.Antialiased` 开着时 `paintRow` 不用字体平滑画字（`setStyle` 记下它，它不进排版的 `text.Style`）。`ui/glyphs.go` 为此加 `Painter.TextLineWith`：可以不平滑，颜色透明的字不画。
 
 `ui/headless.go`：加 `Tester.MoveWith`、`Tester.ScrollWith`，带修饰键移动指针、滚动（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
 
@@ -61,7 +60,7 @@ github.com/egoist/mygo v0.6.3 的副本，go.mod 用 replace 指向这里。去�
 - `paint.go`、`view.go`：重建一行时拼行用的缓冲（`rowBuild`）挂在视图上，跨行、跨帧复用；字形切片沿用这一行上次的容量（`shapeRun`）。上游每行每次重建都新分配，程序持续输出时每帧都要重建所有变了的行：整屏 20 帧/秒重画时窗口 30 秒 GC 25 次，改后 5 次。
 - `posse.go`：`Terminal.Selection`、`SelectAll`、`PasteClipboard`（照常经过 `OnPaste`）给 Posse 自己的右键菜单用；`ScrollToEdge`、`AltScreen` 给 Posse 的 ⌘↑/⌘↓ 和编辑键用（视图把带 Command 的键都交给 app）。
 
-`updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步。拆出 `stageUpdate`、`swapUpdate`（`Install` 照旧用它们），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。
+`updater.go`、`updater_stage.go`：`Update.Install` 把下载和换包放在一步（0.7 起 macOS 上留一个 shell 进程等 app 退出再换，`stageBundle`）。拆出 `stageUpdate`（`Install` 照旧用它，下载经上游的 `get`，走系统代理和 `SetSource`）和 `swapUpdate`（macOS 上用保留下来的 `swapBundle` 当场换：Posse 换包后马上把常驻进程交接到新包，不能等 app 退出），加 `Update.Stage`（下载、校验、解压到 app 旁边的 `.<名字>.app.update-*`，app 不动）、`Staged.Apply`（换包）、`Staged.Discard`、`Updater.CleanStaged`（清掉上次留下的暂存和换包残留）和 `Updater.Configured`（这个包带不带更新地址）。macOS 上包被换掉后，进程还没用过的隐私授权（文稿、桌面等）会失效，常驻进程也从同一个包运行，所以 Posse 后台只暂存，用户重启时才换包。
 
 ## 升级 mygo
 

@@ -1,13 +1,13 @@
 module posse
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.6.3
+	github.com/egoist/mygo v0.7.4
 	github.com/quic-go/quic-go v0.64.1
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/crypto v0.58.0

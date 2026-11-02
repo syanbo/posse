@@ -53,7 +53,11 @@ func (up *Update) Stage(ctx context.Context, progress func(downloaded, total int
 	if err != nil {
 		return nil, fmt.Errorf("mygo: staging the update: %w", err)
 	}
-	unpacked, err := stageUpdate(ctx, up.manifest, up.key, up.current, target, work, progress)
+	get := httpGet
+	if up.source != nil {
+		get = up.source.Open
+	}
+	unpacked, err := stageUpdate(ctx, get, up.manifest, up.key, up.current, target, work, progress)
 	if err != nil {
 		os.RemoveAll(work)
 		return nil, fmt.Errorf("mygo: staging the update: %w", err)
