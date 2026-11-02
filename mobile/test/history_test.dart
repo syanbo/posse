@@ -60,17 +60,43 @@ void main() {
 
   test('time label', () {
     final now = DateTime(2026, 10, 18, 9, 30);
-    expect(historyTime(zh, null, now), '');
-    expect(historyTime(zh, DateTime(2026, 10, 18, 9, 29, 30), now), '刚刚');
-    expect(historyTime(zh, DateTime(2026, 10, 18, 9, 10), now), '20 分钟前');
-    expect(historyTime(zh, DateTime(2026, 10, 18, 7, 5), now), '07:05');
-    expect(historyTime(zh, DateTime(2026, 9, 3), now), '9月3日');
-    expect(historyTime(zh, DateTime(2025, 9, 3), now), '2025年9月3日');
-    expect(historyTime(en, DateTime(2026, 10, 18, 9, 29, 30), now), 'Just now');
-    expect(historyTime(en, DateTime(2026, 10, 18, 9, 10), now), '20 min ago');
-    expect(historyTime(en, DateTime(2026, 10, 18, 7, 5), now), '07:05');
-    expect(historyTime(en, DateTime(2026, 9, 3), now), 'Sep 3');
-    expect(historyTime(en, DateTime(2025, 9, 3), now), 'Sep 3, 2025');
+    expect(historyTime(zh, null, now, h24: true), '');
+    expect(
+      historyTime(zh, DateTime(2026, 10, 18, 9, 29, 30), now, h24: true),
+      '刚刚',
+    );
+    expect(
+      historyTime(zh, DateTime(2026, 10, 18, 9, 10), now, h24: true),
+      '20 分钟前',
+    );
+    expect(
+      historyTime(zh, DateTime(2026, 10, 18, 7, 5), now, h24: true),
+      '07:05',
+    );
+    expect(historyTime(zh, DateTime(2026, 9, 3), now, h24: true), '9月3日');
+    expect(historyTime(zh, DateTime(2025, 9, 3), now, h24: true), '2025年9月3日');
+    expect(
+      historyTime(en, DateTime(2026, 10, 18, 9, 29, 30), now, h24: true),
+      'Just now',
+    );
+    expect(
+      historyTime(en, DateTime(2026, 10, 18, 9, 10), now, h24: true),
+      '20 min ago',
+    );
+    expect(
+      historyTime(en, DateTime(2026, 10, 18, 7, 5), now, h24: true),
+      '07:05',
+    );
+    expect(historyTime(en, DateTime(2026, 9, 3), now, h24: true), 'Sep 3');
+    expect(
+      historyTime(en, DateTime(2025, 9, 3), now, h24: true),
+      'Sep 3, 2025',
+    );
+    // 12 小时制只改今天的时刻
+    final morning = DateTime(2026, 10, 18, 7, 5);
+    expect(historyTime(en, morning, now, h24: false), '7:05 AM');
+    expect(historyTime(zh, morning, now, h24: false), '上午7:05');
+    expect(historyTime(zh, DateTime(2026, 9, 3), now, h24: false), '9月3日');
   });
 
   test('ago text', () {

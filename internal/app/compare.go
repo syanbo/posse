@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -496,7 +497,7 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 		refChips(c, ci.Refs)
 		// 作者按名字本身的宽度紧挨着时间，不占固定的一列，标题多显示一些；时间列靠右对齐，作者也就右对齐
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
-		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(L(c), ci.Time))
+		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW(c)).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(L(c), ci.Time))
 	})
 	return row
 }
@@ -518,13 +519,24 @@ func commitTime(m locales.Messages, at time.Time) string {
 	return at.Format("2006-01-02")
 }
 
-// commitTimeW 放得下 commitTime 最长的写法（"12月30日 23:59"、"Yesterday 23:59"）。
-const commitTimeW = 96
+// commitTimeW 放得下 commitTime 最长的写法（"12月30日 23:59"、"Yesterday 23:59"）：按这一帧的语言和时制量，
+// 12 小时制多出的 PM、「下午」也放得下，至少 96。
+func commitTimeW(c *ui.Context) float32 {
+	m := L(c)
+	at := time.Date(2026, 12, 30, 22, 58, 0, 0, time.Local) // 两位数的钟点，12 小时制是 10:58 PM
+	w := float32(96)
+	for _, s := range []string{m.AppTodayAt(at), m.AppYesterdayAt(at), m.AppDateTime(at)} {
+		if tw, _ := c.MeasureText(0, ui.Span{Text: s, Size: fsSmall}); tw+2 > w {
+			w = float32(math.Ceil(float64(tw + 2)))
+		}
+	}
+	return w
+}
 
 // commitStamp 是悬停时看的完整时间：2026-10-14 17:17:05 周三。
 func commitStamp(m locales.Messages, at time.Time) string {
 	at = at.Local()
-	return m.AppTimestamp(at.Format("2006-01-02 15:04:05"), at)
+	return m.AppTimestamp(at.Format("2006-01-02"), at)
 }
 
 // commitDetail 是选中提交的说明和它改的文件，点文件看这个提交里的改动。
@@ -534,7 +546,7 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	ci := cv.info
 	ui.Column(c).Padding(12, 16, 8, 16).Gap(4).Shrink(0).Children(func() {
 		ui.Text(c, ci.Subject).FontSize(fsBody).FontWeight(fwMedium).LineHeight(1.35).Selectable()
-		ui.Text(c, ci.Hash[:10]+"  "+ci.Author+"  "+ci.Time.Format("2006-01-02 15:04")).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Selectable()
+		ui.Text(c, ci.Hash[:10]+"  "+ci.Author+"  "+L(c).AppDigitsDateTime(ci.Time.Local().Format("2006-01-02"), ci.Time.Local())).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Selectable()
 		if ci.Refs != "" {
 			ui.Text(c, ci.Refs).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 		}

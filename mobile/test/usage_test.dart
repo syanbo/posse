@@ -50,8 +50,8 @@ void main() {
     expect(windowLabel(zh, 0), '本期');
     final now = DateTime(2026, 10, 20, 1, 0);
     String reset(AppLocalizations l, Duration d) =>
-        resetText(l, now.add(d), now);
-    expect(resetText(zh, null, now), '');
+        resetText(l, now.add(d), now, h24: true);
+    expect(resetText(zh, null, now, h24: true), '');
     expect(reset(zh, const Duration(minutes: 95)), '1 小时 35 分钟后重置');
     expect(reset(zh, const Duration(minutes: 120)), '2 小时后重置');
     expect(reset(zh, const Duration(minutes: 59, seconds: 30)), '60 分钟后重置');
@@ -59,7 +59,7 @@ void main() {
     expect(reset(zh, Duration.zero), '已重置');
     expect(reset(zh, const Duration(minutes: -1)), '已重置');
     expect(
-      resetText(zh, DateTime(2026, 10, 23, 18, 4), now),
+      resetText(zh, DateTime(2026, 10, 23, 18, 4), now, h24: true),
       '10月23日 18:04 重置',
     );
     expect(reset(en, const Duration(minutes: 95)), 'Resets in 1 hr 35 min');
@@ -67,9 +67,13 @@ void main() {
     expect(reset(en, const Duration(seconds: 10)), 'Resets in 1 min');
     expect(reset(en, const Duration(minutes: -1)), 'Already reset');
     expect(
-      resetText(en, DateTime(2026, 10, 23, 18, 4), now),
+      resetText(en, DateTime(2026, 10, 23, 18, 4), now, h24: true),
       'Resets Oct 23 18:04',
     );
+    // 12 小时制
+    final later = DateTime(2026, 10, 23, 18, 4);
+    expect(resetText(en, later, now, h24: false), 'Resets Oct 23 6:04 PM');
+    expect(resetText(zh, later, now, h24: false), '10月23日 下午6:04 重置');
   });
 
   testWidgets('sheet shows every window and the spend', (tester) async {

@@ -137,34 +137,34 @@ func (msgs Messages) AppDate(at time.Time) string {
 	return Catalog.Format(msgs.locale, "appDate", map[string]any{"at": at})
 }
 
-// AppDateTime says "{at, date, ::MMMd} {at, date, ::Hm}"
+// AppDateTime says "{at, date, ::MMMd} {at, date, ::jm}"
 // in the language the app shows.
 //
-// A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at
-// is the time.
+// A date and time to the minute, as “Oct 3 09:12” or “Oct 3 9:12
+// AM” by the system’s 12/24-hour setting. at is the time.
 func AppDateTime(at time.Time) string { return In(i18n.Locale()).AppDateTime(at) }
 
-// AppDateTime says "{at, date, ::MMMd} {at, date, ::Hm}"
+// AppDateTime says "{at, date, ::MMMd} {at, date, ::jm}"
 // in the language of msgs.
 //
-// A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at
-// is the time.
+// A date and time to the minute, as “Oct 3 09:12” or “Oct 3 9:12
+// AM” by the system’s 12/24-hour setting. at is the time.
 func (msgs Messages) AppDateTime(at time.Time) string {
 	return Catalog.Format(msgs.locale, "appDateTime", map[string]any{"at": at})
 }
 
-// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::Hms}"
+// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::jms}"
 // in the language the app shows.
 //
-// A date and time to the second in 24-hour time, as “Oct 3 09:12:05”.
-// at is the time.
+// A date and time to the second, as “Oct 3 09:12:05” or “Oct 3
+// 9:12:05 AM” by the system’s 12/24-hour setting. at is the time.
 func AppDateTimeSeconds(at time.Time) string { return In(i18n.Locale()).AppDateTimeSeconds(at) }
 
-// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::Hms}"
+// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::jms}"
 // in the language of msgs.
 //
-// A date and time to the second in 24-hour time, as “Oct 3 09:12:05”.
-// at is the time.
+// A date and time to the second, as “Oct 3 09:12:05” or “Oct 3
+// 9:12:05 AM” by the system’s 12/24-hour setting. at is the time.
 func (msgs Messages) AppDateTimeSeconds(at time.Time) string {
 	return Catalog.Format(msgs.locale, "appDateTimeSeconds", map[string]any{"at": at})
 }
@@ -213,6 +213,28 @@ func AppDaysAgo(count int) string { return In(i18n.Locale()).AppDaysAgo(count) }
 // is the number of days.
 func (msgs Messages) AppDaysAgo(count int) string {
 	return Catalog.Format(msgs.locale, "appDaysAgo", map[string]any{"count": count})
+}
+
+// AppDigitsDateTime says "{date} {at, date, ::jm}"
+// in the language the app shows.
+//
+// A date in digits and a time to the minute, as “2026-10-14 17:17” or
+// “10-14 5:17 PM” by the system’s 12/24-hour setting: commit details,
+// file history, traces, build time. date is the date in digits, at the
+// time.
+func AppDigitsDateTime(date string, at time.Time) string {
+	return In(i18n.Locale()).AppDigitsDateTime(date, at)
+}
+
+// AppDigitsDateTime says "{date} {at, date, ::jm}"
+// in the language of msgs.
+//
+// A date in digits and a time to the minute, as “2026-10-14 17:17” or
+// “10-14 5:17 PM” by the system’s 12/24-hour setting: commit details,
+// file history, traces, build time. date is the date in digits, at the
+// time.
+func (msgs Messages) AppDigitsDateTime(date string, at time.Time) string {
+	return Catalog.Format(msgs.locale, "appDigitsDateTime", map[string]any{"date": date, "at": at})
 }
 
 // AppHours says "{count, plural, one {# hr} other {# hr}}"
@@ -509,22 +531,56 @@ func (msgs Messages) AppSetupError(output string) string {
 	return Catalog.Format(msgs.locale, "appSetupError", map[string]any{"output": output})
 }
 
-// AppTimestamp says "{stamp} {at, date, ::E}"
+// AppTime says "{at, date, ::jm}"
 // in the language the app shows.
 //
-// Tooltip of a commit time: the full time and the weekday, as “2026-10-14
-// 17:17:05 Wed”. stamp is the date and time in digits, at the time.
-func AppTimestamp(stamp string, at time.Time) string {
-	return In(i18n.Locale()).AppTimestamp(stamp, at)
-}
+// A time of day to the minute, as “09:12” or “9:12 AM” by the
+// system’s 12/24-hour setting: task messages, Skills & Tools timeline. at
+// is the time.
+func AppTime(at time.Time) string { return In(i18n.Locale()).AppTime(at) }
 
-// AppTimestamp says "{stamp} {at, date, ::E}"
+// AppTime says "{at, date, ::jm}"
 // in the language of msgs.
 //
-// Tooltip of a commit time: the full time and the weekday, as “2026-10-14
-// 17:17:05 Wed”. stamp is the date and time in digits, at the time.
-func (msgs Messages) AppTimestamp(stamp string, at time.Time) string {
-	return Catalog.Format(msgs.locale, "appTimestamp", map[string]any{"stamp": stamp, "at": at})
+// A time of day to the minute, as “09:12” or “9:12 AM” by the
+// system’s 12/24-hour setting: task messages, Skills & Tools timeline. at
+// is the time.
+func (msgs Messages) AppTime(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appTime", map[string]any{"at": at})
+}
+
+// AppTimeSeconds says "{at, date, ::jms}"
+// in the language the app shows.
+//
+// A time of day to the second, as “09:12:05” or “9:12:05 AM” by the
+// system’s 12/24-hour setting: Git Console. at is the time.
+func AppTimeSeconds(at time.Time) string { return In(i18n.Locale()).AppTimeSeconds(at) }
+
+// AppTimeSeconds says "{at, date, ::jms}"
+// in the language of msgs.
+//
+// A time of day to the second, as “09:12:05” or “9:12:05 AM” by the
+// system’s 12/24-hour setting: Git Console. at is the time.
+func (msgs Messages) AppTimeSeconds(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appTimeSeconds", map[string]any{"at": at})
+}
+
+// AppTimestamp says "{date} {at, date, ::jms} {at, date, ::E}"
+// in the language the app shows.
+//
+// Tooltip of a commit time: the full date and time and the weekday, as
+// “2026-10-14 17:17:05 Wed” or “2026-10-14 5:17:05 PM Wed” by the
+// system’s 12/24-hour setting. date is the date in digits, at the time.
+func AppTimestamp(date string, at time.Time) string { return In(i18n.Locale()).AppTimestamp(date, at) }
+
+// AppTimestamp says "{date} {at, date, ::jms} {at, date, ::E}"
+// in the language of msgs.
+//
+// Tooltip of a commit time: the full date and time and the weekday, as
+// “2026-10-14 17:17:05 Wed” or “2026-10-14 5:17:05 PM Wed” by the
+// system’s 12/24-hour setting. date is the date in digits, at the time.
+func (msgs Messages) AppTimestamp(date string, at time.Time) string {
+	return Catalog.Format(msgs.locale, "appTimestamp", map[string]any{"date": date, "at": at})
 }
 
 // AppToday says "Today"
@@ -541,18 +597,20 @@ func (msgs Messages) AppToday() string {
 	return Catalog.Format(msgs.locale, "appToday", nil)
 }
 
-// AppTodayAt says "Today {at, date, ::Hm}"
+// AppTodayAt says "Today {at, date, ::jm}"
 // in the language the app shows.
 //
-// Git Log and Compare commit list, image panel: a time today. at is the
-// time.
+// Git Log and Compare commit list, image panel: a time today, as “Today
+// 09:12” or “Today 9:12 AM” by the system’s 12/24-hour setting. at
+// is the time.
 func AppTodayAt(at time.Time) string { return In(i18n.Locale()).AppTodayAt(at) }
 
-// AppTodayAt says "Today {at, date, ::Hm}"
+// AppTodayAt says "Today {at, date, ::jm}"
 // in the language of msgs.
 //
-// Git Log and Compare commit list, image panel: a time today. at is the
-// time.
+// Git Log and Compare commit list, image panel: a time today, as “Today
+// 09:12” or “Today 9:12 AM” by the system’s 12/24-hour setting. at
+// is the time.
 func (msgs Messages) AppTodayAt(at time.Time) string {
 	return Catalog.Format(msgs.locale, "appTodayAt", map[string]any{"at": at})
 }
@@ -587,18 +645,20 @@ func (msgs Messages) AppYesterday() string {
 	return Catalog.Format(msgs.locale, "appYesterday", nil)
 }
 
-// AppYesterdayAt says "Yesterday {at, date, ::Hm}"
+// AppYesterdayAt says "Yesterday {at, date, ::jm}"
 // in the language the app shows.
 //
-// Git Log and Compare commit list, image panel: a time yesterday. at is the
-// time.
+// Git Log and Compare commit list, image panel: a time yesterday, as
+// “Yesterday 09:12” or “Yesterday 9:12 AM” by the system’s
+// 12/24-hour setting. at is the time.
 func AppYesterdayAt(at time.Time) string { return In(i18n.Locale()).AppYesterdayAt(at) }
 
-// AppYesterdayAt says "Yesterday {at, date, ::Hm}"
+// AppYesterdayAt says "Yesterday {at, date, ::jm}"
 // in the language of msgs.
 //
-// Git Log and Compare commit list, image panel: a time yesterday. at is the
-// time.
+// Git Log and Compare commit list, image panel: a time yesterday, as
+// “Yesterday 09:12” or “Yesterday 9:12 AM” by the system’s
+// 12/24-hour setting. at is the time.
 func (msgs Messages) AppYesterdayAt(at time.Time) string {
 	return Catalog.Format(msgs.locale, "appYesterdayAt", map[string]any{"at": at})
 }
@@ -6135,7 +6195,8 @@ func (msgs Messages) GitConsoleOmitted(count int) string {
 // in the language the app shows.
 //
 // Tooltip of the ×N badge on a grouped operation in the Console. start and
-// end are times like 14:03:22.
+// end are times like 14:03:22 or 2:03:22 PM (by the system’s 12/24-hour
+// setting).
 func GitConsoleRepeat(start string, end string, count int) string {
 	return In(i18n.Locale()).GitConsoleRepeat(start, end, count)
 }
@@ -6144,7 +6205,8 @@ func GitConsoleRepeat(start string, end string, count int) string {
 // in the language of msgs.
 //
 // Tooltip of the ×N badge on a grouped operation in the Console. start and
-// end are times like 14:03:22.
+// end are times like 14:03:22 or 2:03:22 PM (by the system’s 12/24-hour
+// setting).
 func (msgs Messages) GitConsoleRepeat(start string, end string, count int) string {
 	return Catalog.Format(msgs.locale, "gitConsoleRepeat", map[string]any{"start": start, "end": end, "count": count})
 }
@@ -15876,13 +15938,15 @@ func (msgs Messages) SettingsUpdateDaemonFirst() string {
 // SettingsVersionBuilt says "built {time}"
 // in the language the app shows.
 //
-// Part of a version label: when the binary was built, as "10-18 15:15".
+// Part of a version label: when the binary was built, as "10-18 15:15" or
+// "10-18 3:15 PM".
 func SettingsVersionBuilt(time_ string) string { return In(i18n.Locale()).SettingsVersionBuilt(time_) }
 
 // SettingsVersionBuilt says "built {time}"
 // in the language of msgs.
 //
-// Part of a version label: when the binary was built, as "10-18 15:15".
+// Part of a version label: when the binary was built, as "10-18 15:15" or
+// "10-18 3:15 PM".
 func (msgs Messages) SettingsVersionBuilt(time_ string) string {
 	return Catalog.Format(msgs.locale, "settingsVersionBuilt", map[string]any{"time": time_})
 }
@@ -21869,18 +21933,18 @@ func (msgs Messages) UsageRemaining() string {
 	return Catalog.Format(msgs.locale, "usageRemaining", nil)
 }
 
-// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::Hm}"
+// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::jm}"
 // in the language the app shows.
 //
-// Plan Usage: the window resets more than a day from now. at is the reset
-// time.
+// Plan Usage: the window resets more than a day from now; the time is by
+// the system’s 12/24-hour setting. at is the reset time.
 func UsageResetAt(at time.Time) string { return In(i18n.Locale()).UsageResetAt(at) }
 
-// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::Hm}"
+// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::jm}"
 // in the language of msgs.
 //
-// Plan Usage: the window resets more than a day from now. at is the reset
-// time.
+// Plan Usage: the window resets more than a day from now; the time is by
+// the system’s 12/24-hour setting. at is the reset time.
 func (msgs Messages) UsageResetAt(at time.Time) string {
 	return Catalog.Format(msgs.locale, "usageResetAt", map[string]any{"at": at})
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:intl/intl.dart';
 
 import 'app_localizations.dart';
@@ -13,13 +14,25 @@ String monthDay(AppLocalizations l, DateTime t) =>
 String yearMonthDay(AppLocalizations l, DateTime t) =>
     DateFormat.yMMMd(l.localeName).format(t);
 
-/// 时刻，24 小时制：「18:04」。
-String clockTime(AppLocalizations l, DateTime t) =>
-    DateFormat.Hm(l.localeName).format(t);
+/// 系统的时制：iOS、安卓设置里的「24 小时制」开关。钟点都按它写，没有 context 的函数由调用方传进去。
+bool use24Hour(BuildContext context) =>
+    MediaQuery.alwaysUse24HourFormatOf(context);
 
-/// 月日加时刻：「10月23日 18:04」「Oct 23 18:04」。
-String monthDayTime(AppLocalizations l, DateTime t) =>
-    DateFormat.MMMd(l.localeName).add_Hm().format(t);
+/// 时刻：24 小时制「18:04」；12 小时制「6:04 PM」「下午6:04」。
+String clockTime(AppLocalizations l, DateTime t, {required bool h24}) =>
+    _clock(l.localeName, h24).format(t).replaceAll('\u202f', ' ');
+
+/// 月日加时刻：「10月23日 18:04」「Oct 23 18:04」；12 小时制「10月23日 下午6:04」「Oct 23 6:04 PM」。
+String monthDayTime(AppLocalizations l, DateTime t, {required bool h24}) =>
+    '${monthDay(l, t)} ${clockTime(l, t, h24: h24)}';
+
+// 英文的 jm 在 PM 前用窄不换行空格，换成普通空格，和桌面一样。中文的 jm 是 24 小时（中文习惯），
+// 12 小时制用 CLDR 的 hm 写法「ah:mm」。
+DateFormat _clock(String locale, bool h24) {
+  if (h24) return DateFormat.Hm(locale);
+  final f = DateFormat.jm(locale);
+  return f.pattern!.contains('H') ? DateFormat('ah:mm', locale) : f;
+}
 
 /// 多久以前：刚刚、N 分钟前、N 小时前、N 天前。
 String agoText(AppLocalizations l, DateTime t, DateTime now) {

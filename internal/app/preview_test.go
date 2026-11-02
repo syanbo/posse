@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/plugins/terminal"
 	"github.com/egoist/mygo/ui"
 
@@ -486,6 +487,35 @@ func previewUsageEvents() []history.UsageEvent {
 	return evs
 }
 
+// previewUsagePanel 打开右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件。
+func previewUsagePanel(a *app) {
+	a.state.RightPanel = panelUsage
+	a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
+		Skills: []history.UsageItem{{Name: "computer-use", Count: 3}, {Name: "chatgpt-imagegen", Count: 1}},
+		MCP: []history.MCPUsage{
+			{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},
+			{Server: "androidmirror", Count: 4, Tools: []history.UsageItem{{Name: "screen_observe", Count: 3}, {Name: "screen_act", Count: 1}}},
+		},
+		CLI: []history.CLIUsage{
+			{Name: "go", Source: history.SourceHomebrew, Count: 12}, {Name: "git", Source: history.SourceSystem, Count: 9},
+			{Name: "rg", Source: history.SourceHomebrew, Count: 6}, {Name: "bsk", Count: 4}, {Name: "adb", Count: 2},
+			{Name: "fvm", Source: history.SourceHomebrew, Count: 1}, {Name: "xcrun", Source: history.SourceSystem, Count: 1},
+		},
+		Web:      []history.WebUsage{{Host: "github.com", Count: 3}, {Host: "posse.shaoyan.uk", Count: 2}, {Host: "docs.rs", Count: 1}},
+		Searches: 1,
+		Events:   previewUsageEvents(),
+	}}
+}
+
+// previewTaskDetail 选中一个跑着的任务，详情里有一条备注和一个等回复的问题。
+func previewTaskDetail(a *app) {
+	a.selected, a.taskSel = taskBoardID, "k2"
+	a.detail = &taskDetail{taskInfo: *a.task("k2"), Messages: []taskMessage{
+		{ID: "m1", Kind: "note", Body: "钥匙串的 service 名用 com.example.skill。", CreatedAt: time.Now().Add(-20 * time.Minute)},
+		{ID: "m2", Kind: "question", Body: "现在的单测用的是内存版钥匙串，要不要给它补一个“记住密码”的用例？还是只测登录流程？", CreatedAt: time.Now().Add(-2 * time.Minute)},
+	}}
+}
+
 func savePNG(t *testing.T, tt *ui.Tester, name string) {
 	dir := os.Getenv("POSSE_PREVIEW_DIR")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -710,22 +740,7 @@ func TestPreview(t *testing.T) {
 
 		// 右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)
-		a.state.RightPanel = panelUsage
-		a.usage = usageView{term: "t1", found: true, poll: panelPoll{at: time.Now()}, data: history.Usage{
-			Skills: []history.UsageItem{{Name: "computer-use", Count: 3}, {Name: "chatgpt-imagegen", Count: 1}},
-			MCP: []history.MCPUsage{
-				{Server: "codex-cu", Count: 55, Tools: []history.UsageItem{{Name: "js", Count: 54}, {Name: "js_reset", Count: 1}}},
-				{Server: "androidmirror", Count: 4, Tools: []history.UsageItem{{Name: "screen_observe", Count: 3}, {Name: "screen_act", Count: 1}}},
-			},
-			CLI: []history.CLIUsage{
-				{Name: "go", Source: history.SourceHomebrew, Count: 12}, {Name: "git", Source: history.SourceSystem, Count: 9},
-				{Name: "rg", Source: history.SourceHomebrew, Count: 6}, {Name: "bsk", Count: 4}, {Name: "adb", Count: 2},
-				{Name: "fvm", Source: history.SourceHomebrew, Count: 1}, {Name: "xcrun", Source: history.SourceSystem, Count: 1},
-			},
-			Web:      []history.WebUsage{{Host: "github.com", Count: 3}, {Host: "posse.shaoyan.uk", Count: 2}, {Host: "docs.rs", Count: 1}},
-			Searches: 1,
-			Events:   previewUsageEvents(),
-		}}
+		previewUsagePanel(a)
 		savePNG(t, newPreviewTester(a, dark), "usage-"+suffix+".png")
 		// 筛选成只看技能和 MCP：命令行程序的分组和时间线里的命令都不列
 		a.state.UsageSkillsOnly = true
@@ -895,11 +910,7 @@ func TestPreview(t *testing.T) {
 		savePNG(t, newPreviewTester(a, dark), "new-workspace-"+suffix+".png")
 
 		a = previewApp(t)
-		a.selected, a.taskSel = taskBoardID, "k2"
-		a.detail = &taskDetail{taskInfo: *a.task("k2"), Messages: []taskMessage{
-			{ID: "m1", Kind: "note", Body: "钥匙串的 service 名用 com.example.skill。", CreatedAt: time.Now().Add(-20 * time.Minute)},
-			{ID: "m2", Kind: "question", Body: "现在的单测用的是内存版钥匙串，要不要给它补一个“记住密码”的用例？还是只测登录流程？", CreatedAt: time.Now().Add(-2 * time.Minute)},
-		}}
+		previewTaskDetail(a)
 		savePNG(t, newPreviewTester(a, dark), "tasks-"+suffix+".png")
 
 		a = previewApp(t)
@@ -1626,6 +1637,38 @@ func TestPreviewSettingsI18n(t *testing.T) {
 			tt.SetLocale(lang)
 			tt.Frame()
 			savePNG(t, tt, "i18n-update-bar-"+lang+"-"+suffix+".png")
+		}
+	}
+}
+
+// TestPreviewHour12 出 12 小时制的一套（中英文、浅色）：钟点多出 AM/PM、「下午」，看各处的时间列放不放得下。
+func TestPreviewHour12(t *testing.T) {
+	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
+		t.Skip("set POSSE_PREVIEW_DIR to render previews")
+	}
+	screens := []struct {
+		name  string
+		setup func(a *app)
+	}{
+		{"git-log", func(a *app) { previewLog(t, a) }},
+		{"git-console", func(a *app) { previewConsole(t, a) }},
+		{"git-compare", func(a *app) { previewCompare(t, a) }},
+		{"tasks", previewTaskDetail},
+		{"history", func(a *app) { previewHistory(a, ""); previewMarkdown(a) }},
+		{"plan", func(a *app) { a.planOpen = true }},
+		{"usage", previewUsagePanel},
+	}
+	for _, sc := range screens {
+		for _, lang := range []string{"en", "zh-Hans"} {
+			a := previewApp(t)
+			sc.setup(a)
+			tt := newPreviewTester(a, false)
+			tt.SetLocale(lang)
+			tt.SetRegion(i18n.Region{HourCycle: 12})
+			for range 3 {
+				tt.Frame()
+			}
+			savePNG(t, tt, "hour12-"+sc.name+"-"+lang+".png")
 		}
 	}
 }

@@ -450,7 +450,7 @@ func versionLabel(m locales.Messages, version, build string) string {
 		parts = append(parts, m.SettingsVersionDirty())
 	}
 	if t, ok := buildTime(build); ok {
-		parts = append(parts, m.SettingsVersionBuilt(t.Local().Format("01-02 15:04")))
+		parts = append(parts, m.SettingsVersionBuilt(m.AppDigitsDateTime(t.Local().Format("01-02"), t.Local())))
 	}
 	if len(parts) == 0 {
 		return version

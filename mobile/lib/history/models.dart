@@ -146,11 +146,16 @@ List<(String, List<HistorySession>)> groupHistoryByFolder(
 }
 
 /// 列表右边的时间：一小时内写几分钟前，今天写时刻，今年写月日，更早带年份。
-String historyTime(AppLocalizations l, DateTime? t, DateTime now) {
+String historyTime(
+  AppLocalizations l,
+  DateTime? t,
+  DateTime now, {
+  required bool h24,
+}) {
   if (t == null) return '';
   if (now.difference(t) < const Duration(hours: 1)) return agoText(l, t, now);
   if (t.year == now.year && t.month == now.month && t.day == now.day) {
-    return clockTime(l, t);
+    return clockTime(l, t, h24: h24);
   }
   if (t.year == now.year) return monthDay(l, t);
   return yearMonthDay(l, t);

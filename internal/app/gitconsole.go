@@ -480,7 +480,7 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 				if op.repeat > 1 {
 					ui.Text(c, fmt.Sprintf("×%d", op.repeat)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 						Padding(0, 6).Radius(rSmall).Background(p.wash).Shrink(0).
-						Tooltip(L(c).GitConsoleRepeat(op.since.Format("15:04:05"), first.Start.Format("15:04:05"), op.repeat))
+						Tooltip(L(c).GitConsoleRepeat(L(c).AppTimeSeconds(op.since.Local()), L(c).AppTimeSeconds(first.Start.Local()), op.repeat))
 				}
 				if where := a.runWhere(first.Dir); where != "" {
 					ui.Text(c, where).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
@@ -495,7 +495,7 @@ func (a *app) gitOpRow(c *ui.Context, op gitOpRecord, day string) {
 					ui.Text(c, L(c).CommonFailed()).FontSize(fsSmall).TextColor(t.Danger).Shrink(0)
 				}
 				// 耗时写在各条命令后面，和这里的时间上下对齐；整个操作的耗时悬停看
-				ui.Text(c, first.Start.Format("15:04:05")).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
+				ui.Text(c, L(c).AppTimeSeconds(first.Start.Local())).FontSize(fsSmall).Font(monoFont).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
 					Tooltip(L(c).GitConsoleDuration(took(last.Start.Add(last.Took).Sub(first.Start))))
 			})
 			ui.Column(c).Gap(4).Padding(0, 0, 0, consoleIconW()+8).Children(func() {

@@ -536,9 +536,6 @@ class _Chip extends StatelessWidget {
   }
 }
 
-String _hm(DateTime t) =>
-    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-
 /// 时间线上的一项：左边圆点和连到下一项的线，右边名字、次数、时间，下面是所属服务或来源。
 /// 点一下复制名字（网址复制完整网址）；命令行程序长按看最近一次的完整命令，网址长按看完整网址、用浏览器打开。
 class _StepRow extends StatelessWidget {
@@ -616,7 +613,11 @@ class _StepRow extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (e.at != null) Text(_hm(e.at!), style: _num(c)),
+                        if (e.at != null)
+                          Text(
+                            clockTime(l, e.at!, h24: use24Hour(context)),
+                            style: _num(c),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 2),

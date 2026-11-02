@@ -417,7 +417,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
       // 时间放在右边和箭头一起上下居中，不跟着副标题沉到底
       trailing: Text(
-        historyTime(context.l10n, s.updatedAt, now),
+        historyTime(context.l10n, s.updatedAt, now, h24: use24Hour(context)),
         style: TextStyle(
           fontSize: Fs.small,
           color: c.faint,

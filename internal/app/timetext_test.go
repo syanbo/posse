@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/ui"
+
 	"posse/locales"
 )
 
@@ -51,7 +54,7 @@ func TestAgoAndElapsed(t *testing.T) {
 
 // 日期分组、操作记录的日期标题、提交时间：今天、昨天、今年、跨年。
 func TestDayTextsEnglish(t *testing.T) {
-	en, zh := locales.In("en"), locales.In("zh-Hans")
+	en, zh := locales.In(clockLocale("en", 24)), locales.In(clockLocale("zh-Hans", 24))
 	now := time.Now()
 	at := func(d time.Time, h, m int) time.Time {
 		return time.Date(d.Year(), d.Month(), d.Day(), h, m, 5, 0, time.Local)
@@ -111,7 +114,7 @@ func TestDayTextsEnglish(t *testing.T) {
 
 // 套餐窗口的重置时间：已过、不到一小时、整小时、小时加分钟、超过一天写日期。
 func TestResetText(t *testing.T) {
-	en, zh := locales.In("en"), locales.In("zh-Hans")
+	en, zh := locales.In(clockLocale("en", 24)), locales.In(clockLocale("zh-Hans", 24))
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.Local)
 	ms := func(d time.Duration) int64 { return now.Add(d).UnixMilli() }
 	cases := []struct {
@@ -151,5 +154,53 @@ func TestDateTextsKeepChinese(t *testing.T) {
 		if got, want := zh.AppDateTimeSeconds(at), at.Format("1月2日 15:04:05"); got != want {
 			t.Errorf("AppDateTimeSeconds %q, want %q", got, want)
 		}
+	}
+}
+
+// 钟点跟系统的时制：12 小时制英文 3:04 PM、中文「下午3:04」，24 小时制和原来一样；四种组合逐个看。
+func TestClockHourCycle(t *testing.T) {
+	at := time.Date(2026, 10, 14, 15, 4, 5, 0, time.Local)
+	cases := []struct {
+		lang                     string
+		hc                       int
+		time, seconds, dt, today string
+		digits, stamp, resetAt   string
+	}{
+		{"en", 24, "15:04", "15:04:05", "Oct 14 15:04", "Today 15:04", "10-14 15:04", "2026-10-14 15:04:05 Wed", "Resets Oct 14 15:04"},
+		{"en", 12, "3:04 PM", "3:04:05 PM", "Oct 14 3:04 PM", "Today 3:04 PM", "10-14 3:04 PM", "2026-10-14 3:04:05 PM Wed", "Resets Oct 14 3:04 PM"},
+		{"zh-Hans", 24, "15:04", "15:04:05", "10月14日 15:04", "今天 15:04", "10-14 15:04", "2026-10-14 15:04:05 周三", "10月14日 15:04 重置"},
+		{"zh-Hans", 12, "下午3:04", "下午3:04:05", "10月14日 下午3:04", "今天 下午3:04", "10-14 下午3:04", "2026-10-14 下午3:04:05 周三", "10月14日 下午3:04 重置"},
+	}
+	for _, tc := range cases {
+		m := locales.In(clockLocale(tc.lang, tc.hc))
+		got := []string{m.AppTime(at), m.AppTimeSeconds(at), m.AppDateTime(at), m.AppTodayAt(at),
+			m.AppDigitsDateTime(at.Format("01-02"), at), commitStamp(m, at), m.UsageResetAt(at)}
+		want := []string{tc.time, tc.seconds, tc.dt, tc.today, tc.digits, tc.stamp, tc.resetAt}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s %dh #%d = %q, want %q", tc.lang, tc.hc, i, got[i], want[i])
+			}
+		}
+	}
+	// 没有时制（Tester 的零值 Region）按 24 小时；语言自带的扩展保留，只补时制
+	if got := locales.In(clockLocale("en", 0)).AppTime(at); got != "15:04" {
+		t.Errorf("hour cycle 0 = %q", got)
+	}
+	if got := clockLocale("en-u-nu-latn", 12); got != "en-u-nu-latn-hc-h12" {
+		t.Errorf("clockLocale with extension = %q", got)
+	}
+
+	// 视图里的 L(c) 跟着窗口的 Region 走
+	var shown string
+	tt := newTester(func(c *ui.Context) { shown = L(c).AppTime(at) }, 200, 100)
+	tt.Frame()
+	if shown != "15:04" {
+		t.Errorf("tester default = %q", shown)
+	}
+	tt.SetLocale("en")
+	tt.SetRegion(i18n.Region{HourCycle: 12})
+	tt.Frame()
+	if shown != "3:04 PM" {
+		t.Errorf("tester 12-hour = %q", shown)
 	}
 }

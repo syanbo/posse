@@ -230,68 +230,75 @@ void main() {
       });
     }
 
-    testWidgets('chat screenshots ($lang)', (tester) async {
-      await _fonts(tester);
-      final rpc = _Rpc();
-      await shot(
+    // 12 小时制另出一张：消息时间写成 3:04 PM、下午3:04
+    for (final h24 in [true, false]) {
+      testWidgets('chat screenshots ($lang${h24 ? '' : ', 12-hour'})', (
         tester,
-        'chat',
-        ChatScreen(model: _Model(rpc), tab: _tab),
-        after: () async {
-          rpc.tabs.add({
-            'type': 'snapshot',
-            'tabs': [
-              {
-                'type': 'terminal',
-                'terminal': 't1',
-                'title': 'Fix login on the phone',
-                'launchAgent': 'claude',
-                'agentStatus': {
-                  'state': 'working',
-                  'agentType': 'claude',
-                  'toolName': 'Bash',
-                  'providerSession': {'id': 's1'},
-                },
-              },
-            ],
-          });
-          rpc.chat.add({
-            'type': 'snapshot',
-            'hasMore': true,
-            'beforeOffset': 1,
-            'messages': [
-              _msg('1', 'user', [
-                {'type': 'text', 'text': 'Why does login fail on the phone?'},
-              ], 10),
-              _msg('2', 'assistant', [
+      ) async {
+        await _fonts(tester);
+        tester.platformDispatcher.alwaysUse24HourFormatTestValue = h24;
+        tester.binding.handleAccessibilityFeaturesChanged();
+        final rpc = _Rpc();
+        await shot(
+          tester,
+          h24 ? 'chat' : 'chat-12h',
+          ChatScreen(model: _Model(rpc), tab: _tab),
+          after: () async {
+            rpc.tabs.add({
+              'type': 'snapshot',
+              'tabs': [
                 {
-                  'type': 'tool-call',
-                  'name': 'Bash',
-                  'callId': 'c1',
-                  'input': {'command': 'go test ./...'},
+                  'type': 'terminal',
+                  'terminal': 't1',
+                  'title': 'Fix login on the phone',
+                  'launchAgent': 'claude',
+                  'agentStatus': {
+                    'state': 'working',
+                    'agentType': 'claude',
+                    'toolName': 'Bash',
+                    'providerSession': {'id': 's1'},
+                  },
                 },
-              ], 20),
-              _msg('3', 'assistant', [
-                {
-                  'type': 'tool-call',
-                  'name': 'Read',
-                  'callId': 'c2',
-                  'input': {'file_path': 'lib/main.dart'},
-                },
-              ], 30),
-              _msg('4', 'assistant', [
-                {
-                  'type': 'text',
-                  'text': 'The token expires before refresh.\n\n```\nflutter test\n```',
-                },
-              ], 40),
-            ],
-          });
-          await tester.pump();
-          await tester.pump(const Duration(milliseconds: 400));
-        },
-      );
-    });
+              ],
+            });
+            rpc.chat.add({
+              'type': 'snapshot',
+              'hasMore': true,
+              'beforeOffset': 1,
+              'messages': [
+                _msg('1', 'user', [
+                  {'type': 'text', 'text': 'Why does login fail on the phone?'},
+                ], 10),
+                _msg('2', 'assistant', [
+                  {
+                    'type': 'tool-call',
+                    'name': 'Bash',
+                    'callId': 'c1',
+                    'input': {'command': 'go test ./...'},
+                  },
+                ], 20),
+                _msg('3', 'assistant', [
+                  {
+                    'type': 'tool-call',
+                    'name': 'Read',
+                    'callId': 'c2',
+                    'input': {'file_path': 'lib/main.dart'},
+                  },
+                ], 30),
+                _msg('4', 'assistant', [
+                  {
+                    'type': 'text',
+                    'text': 'The token expires before refresh.\n\n```\nflutter test\n```',
+                  },
+                ], 40),
+              ],
+            });
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 400));
+          },
+        );
+      });
+    }
 
     testWidgets('chat pieces screenshots ($lang)', (tester) async {
       await _fonts(tester);
@@ -347,18 +354,24 @@ void main() {
       );
     });
 
-    testWidgets('tools screenshots ($lang)', (tester) async {
-      await _fonts(tester);
-      await shot(
+    for (final h24 in [true, false]) {
+      testWidgets('tools screenshots ($lang${h24 ? '' : ', 12-hour'})', (
         tester,
-        'tools',
-        Scaffold(
-          appBar: AppBar(title: const Text('Tools')),
-          body: ToolsView(usage: _usage),
-        ),
-        size: const Size(390, 1000),
-      );
-    });
+      ) async {
+        await _fonts(tester);
+        tester.platformDispatcher.alwaysUse24HourFormatTestValue = h24;
+        tester.binding.handleAccessibilityFeaturesChanged();
+        await shot(
+          tester,
+          h24 ? 'tools' : 'tools-12h',
+          Scaffold(
+            appBar: AppBar(title: const Text('Tools')),
+            body: ToolsView(usage: _usage),
+          ),
+          size: const Size(390, 1000),
+        );
+      });
+    }
 
     testWidgets('media screenshots ($lang)', (tester) async {
       await _fonts(tester);

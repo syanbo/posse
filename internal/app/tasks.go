@@ -806,7 +806,7 @@ func (a *app) thread(c *ui.Context, task taskInfo, msgs []taskMessage) *taskMess
 						}
 						ui.Text(c, messageLabel(l, m.Kind)).FontSize(fsSmall).FontWeight(fwMedium)
 						ui.Text(c, from).FontSize(fsSmall).TextColor(t.TextMuted)
-						ui.Text(c, m.CreatedAt.Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+						ui.Text(c, l.AppTime(m.CreatedAt.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 						if m.Kind == "question" && !answered[m.ID] && task.Status == "running" {
 							label, color := l.TasksStatusAwaitDispatcher(), t.TextMuted
 							if task.Coordinator == "" {

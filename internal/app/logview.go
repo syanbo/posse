@@ -665,12 +665,12 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 	row.Children(func() {
 		graphCell(c, gr, ci.Hash, ld.lanes)
 		// 标题和引用让位，作者、时间固定宽度、各行对齐，不被挤掉
-		// 窗口太窄时标题至少留 90；短标题不撑到 90，后面的分支标签紧挨着它
+		// 窗口太窄时标题至少留 56（12 小时制的时间列宽出 PM、「下午」，标题先让）；短标题不撑满，后面的分支标签紧挨着它
 		sw, _ := c.MeasureText(0, ui.Span{Text: ci.Subject, Size: fsBody})
-		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(90, sw))
+		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(56, sw))
 		refChips(c, ci.Refs)
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
-		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(L(c), ci.Time))
+		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW(c)).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(L(c), ci.Time))
 	})
 	if row.Clicked() {
 		a.selectCommit(v, &ld.commit, ci)

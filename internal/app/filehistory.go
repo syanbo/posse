@@ -120,7 +120,7 @@ func (a *app) historyList(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 		selectedBg(c, row, h.sel == ci.Hash)
 		row.Children(func() {
 			ui.Text(c, ci.Author).FontSize(fsBody).SingleLine().Width(sz(84)).Shrink(0).Tooltip(ci.Author + " <" + ci.Email + ">")
-			ui.Text(c, ci.Time.Format("2006/1/2 15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, L(c).AppDigitsDateTime(ci.Time.Local().Format("2006/1/2"), ci.Time.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().Shrink(1).Grow(1)
 			for _, r := range refNames(ci.Refs) {
 				if strings.Contains(ci.Refs, "tag: "+r.name) {

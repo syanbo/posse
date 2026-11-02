@@ -42,18 +42,18 @@
       }
     }
   },
-  "appDateTime": "{at, date, ::MMMd} {at, date, ::Hm}",
+  "appDateTime": "{at, date, ::MMMd} {at, date, ::jm}",
   "@appDateTime": {
-    "description": "A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at is the time.",
+    "description": "A date and time to the minute, as “Oct 3 09:12” or “Oct 3 9:12 AM” by the system’s 12/24-hour setting. at is the time.",
     "placeholders": {
       "at": {
         "type": "DateTime"
       }
     }
   },
-  "appDateTimeSeconds": "{at, date, ::MMMd} {at, date, ::Hms}",
+  "appDateTimeSeconds": "{at, date, ::MMMd} {at, date, ::jms}",
   "@appDateTimeSeconds": {
-    "description": "A date and time to the second in 24-hour time, as “Oct 3 09:12:05”. at is the time.",
+    "description": "A date and time to the second, as “Oct 3 09:12:05” or “Oct 3 9:12:05 AM” by the system’s 12/24-hour setting. at is the time.",
     "placeholders": {
       "at": {
         "type": "DateTime"
@@ -84,6 +84,18 @@
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+  "appDigitsDateTime": "{date} {at, date, ::jm}",
+  "@appDigitsDateTime": {
+    "description": "A date in digits and a time to the minute, as “2026-10-14 17:17” or “10-14 5:17 PM” by the system’s 12/24-hour setting: commit details, file history, traces, build time. date is the date in digits, at the time.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "at": {
+        "type": "DateTime"
       }
     }
   },
@@ -234,11 +246,29 @@
       }
     }
   },
-  "appTimestamp": "{stamp} {at, date, ::E}",
-  "@appTimestamp": {
-    "description": "Tooltip of a commit time: the full time and the weekday, as “2026-10-14 17:17:05 Wed”. stamp is the date and time in digits, at the time.",
+  "appTime": "{at, date, ::jm}",
+  "@appTime": {
+    "description": "A time of day to the minute, as “09:12” or “9:12 AM” by the system’s 12/24-hour setting: task messages, Skills & Tools timeline. at is the time.",
     "placeholders": {
-      "stamp": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appTimeSeconds": "{at, date, ::jms}",
+  "@appTimeSeconds": {
+    "description": "A time of day to the second, as “09:12:05” or “9:12:05 AM” by the system’s 12/24-hour setting: Git Console. at is the time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appTimestamp": "{date} {at, date, ::jms} {at, date, ::E}",
+  "@appTimestamp": {
+    "description": "Tooltip of a commit time: the full date and time and the weekday, as “2026-10-14 17:17:05 Wed” or “2026-10-14 5:17:05 PM Wed” by the system’s 12/24-hour setting. date is the date in digits, at the time.",
+    "placeholders": {
+      "date": {
         "type": "String"
       },
       "at": {
@@ -250,9 +280,9 @@
   "@appToday": {
     "description": "Day heading: History list group and Git Console day separator."
   },
-  "appTodayAt": "Today {at, date, ::Hm}",
+  "appTodayAt": "Today {at, date, ::jm}",
   "@appTodayAt": {
-    "description": "Git Log and Compare commit list, image panel: a time today. at is the time.",
+    "description": "Git Log and Compare commit list, image panel: a time today, as “Today 09:12” or “Today 9:12 AM” by the system’s 12/24-hour setting. at is the time.",
     "placeholders": {
       "at": {
         "type": "DateTime"
@@ -272,9 +302,9 @@
   "@appYesterday": {
     "description": "Day heading: History list group and Git Console day separator."
   },
-  "appYesterdayAt": "Yesterday {at, date, ::Hm}",
+  "appYesterdayAt": "Yesterday {at, date, ::jm}",
   "@appYesterdayAt": {
-    "description": "Git Log and Compare commit list, image panel: a time yesterday. at is the time.",
+    "description": "Git Log and Compare commit list, image panel: a time yesterday, as “Yesterday 09:12” or “Yesterday 9:12 AM” by the system’s 12/24-hour setting. at is the time.",
     "placeholders": {
       "at": {
         "type": "DateTime"
@@ -2438,7 +2468,7 @@
   },
   "gitConsoleRepeat": "{count, plural, one {# time} other {# times}} between {start} and {end}",
   "@gitConsoleRepeat": {
-    "description": "Tooltip of the ×N badge on a grouped operation in the Console. start and end are times like 14:03:22.",
+    "description": "Tooltip of the ×N badge on a grouped operation in the Console. start and end are times like 14:03:22 or 2:03:22 PM (by the system’s 12/24-hour setting).",
     "placeholders": {
       "start": {
         "type": "String"
@@ -5710,7 +5740,7 @@
   },
   "settingsVersionBuilt": "built {time}",
   "@settingsVersionBuilt": {
-    "description": "Part of a version label: when the binary was built, as \"10-18 15:15\".",
+    "description": "Part of a version label: when the binary was built, as \"10-18 15:15\" or \"10-18 3:15 PM\".",
     "placeholders": {
       "time": {
         "type": "String"
@@ -8006,9 +8036,9 @@
   "@usageRemaining": {
     "description": "Plan Usage settings or status popover: label for Remaining."
   },
-  "usageResetAt": "Resets {at, date, ::MMMd} {at, date, ::Hm}",
+  "usageResetAt": "Resets {at, date, ::MMMd} {at, date, ::jm}",
   "@usageResetAt": {
-    "description": "Plan Usage: the window resets more than a day from now. at is the reset time.",
+    "description": "Plan Usage: the window resets more than a day from now; the time is by the system’s 12/24-hour setting. at is the reset time.",
     "placeholders": {
       "at": {
         "type": "DateTime"

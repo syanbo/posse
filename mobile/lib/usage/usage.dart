@@ -262,7 +262,12 @@ enum WindowKind {
 }
 
 /// 「2 小时 15 分钟后重置」；超过一天写日期。
-String resetText(AppLocalizations l, DateTime? at, DateTime now) {
+String resetText(
+  AppLocalizations l,
+  DateTime? at,
+  DateTime now, {
+  required bool h24,
+}) {
   if (at == null) return '';
   final d = at.difference(now);
   if (d <= Duration.zero) return l.usageResetDone;
@@ -275,7 +280,7 @@ String resetText(AppLocalizations l, DateTime? at, DateTime now) {
         ? l.usageResetsInHours(d.inHours)
         : l.usageResetsInHoursMinutes(d.inHours, m);
   }
-  return l.usageResetsAt(monthDayTime(l, at));
+  return l.usageResetsAt(monthDayTime(l, at, h24: h24));
 }
 
 String agentTitle(String agent) => switch (agent) {
@@ -776,7 +781,7 @@ class _UsageSheetState extends State<UsageSheet> {
                     ),
                   ),
                   Text(
-                    resetText(l, w.resetsAt, now),
+                    resetText(l, w.resetsAt, now, h24: use24Hour(context)),
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],

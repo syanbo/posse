@@ -235,5 +235,29 @@ void main() {
         usageRemaining.value = false;
       }
     }
+    // 12 小时制：超过一天的重置时间写成 6:04 PM、下午6:04
+    tester.platformDispatcher.alwaysUse24HourFormatTestValue = false;
+    tester.binding.handleAccessibilityFeaturesChanged();
+    for (final lang in ['zh', 'en']) {
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: key,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: posseTheme(Brightness.light),
+            locale: Locale(lang),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: _Home(usages: _sample(now)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(UsageCardView));
+      await tester.pumpAndSettle();
+      final suffix = lang == 'zh' ? '' : '-$lang';
+      await _shot(tester, key, '$dir/mobile-sheet-12h-light$suffix.png');
+    }
   }, skip: dir.isEmpty);
 }

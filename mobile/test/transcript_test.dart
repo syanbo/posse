@@ -66,14 +66,32 @@ void main() {
 
   test('time label matches the history detail clock', () {
     final at = DateTime(2026, 10, 1, 15, 4);
-    expect(chatTimeLabel(zh, at.millisecondsSinceEpoch), '10月1日 15:04');
-    expect(chatTimeLabel(en, at.millisecondsSinceEpoch), 'Oct 1 15:04');
     expect(
-      chatTimeLabel(zh, DateTime(2026, 1, 2, 8, 5).millisecondsSinceEpoch),
+      chatTimeLabel(zh, at.millisecondsSinceEpoch, h24: true),
+      '10月1日 15:04',
+    );
+    expect(
+      chatTimeLabel(en, at.millisecondsSinceEpoch, h24: true),
+      'Oct 1 15:04',
+    );
+    expect(
+      chatTimeLabel(
+        zh,
+        DateTime(2026, 1, 2, 8, 5).millisecondsSinceEpoch,
+        h24: true,
+      ),
       '1月2日 08:05',
     );
-    expect(chatTimeLabel(zh, null), isNull);
-    expect(chatTimeLabel(zh, 0), isNull);
+    expect(chatTimeLabel(zh, null, h24: true), isNull);
+    expect(chatTimeLabel(zh, 0, h24: true), isNull);
+    expect(
+      chatTimeLabel(zh, at.millisecondsSinceEpoch, h24: false),
+      '10月1日 下午3:04',
+    );
+    expect(
+      chatTimeLabel(en, at.millisecondsSinceEpoch, h24: false),
+      'Oct 1 3:04 PM',
+    );
     expect(chatWho(zh, 'user', 'grok'), '你');
     expect(chatWho(zh, 'assistant', 'grok'), 'Grok');
   });

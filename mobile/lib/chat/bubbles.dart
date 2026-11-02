@@ -181,7 +181,11 @@ class MessageBubble extends StatelessWidget {
     final mine = message.role == 'user';
     final muted = chatMuted(context);
     final who = chatWho(context.l10n, message.role, agent);
-    final time = chatTimeLabel(context.l10n, message.timestamp);
+    final time = chatTimeLabel(
+      context.l10n,
+      message.timestamp,
+      h24: use24Hour(context),
+    );
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

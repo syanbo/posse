@@ -274,7 +274,7 @@ func (a *app) traceRowView(c *ui.Context, r *traceRow) {
 		if meta == "" {
 			meta = m.TracesTerminal()
 		}
-		meta += " · " + r.At.Local().Format("01-02 15:04")
+		meta += " · " + m.AppDigitsDateTime(r.At.Local().Format("01-02"), r.At.Local())
 		if kind := traceKindText[r.Kind]; kind != nil {
 			meta += " · " + kind(m)
 		}
