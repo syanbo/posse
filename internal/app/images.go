@@ -199,18 +199,18 @@ func (a *app) withImagePath(it imageItem, f func(path string) error) {
 
 // copyImage 把图片放进剪贴板：同一项里既有 PNG 数据（贴进聊天、文档这类认图片的地方）又有文件
 // （访达里粘贴得到文件，Posse 的终端里 ⌘V 贴的是路径，agent 当附件）。转 PNG 在后台做，大图要一会儿。
-func (a *app) copyImage(it imageItem) {
+func (a *app) copyImage(m locales.Messages, it imageItem) {
 	a.withImagePath(it, func(path string) error {
 		go func() {
 			b, err := media.PNGBytes(path)
 			a.update(func() {
 				if err != nil {
-					a.err = "复制图片失败：" + errtext.Text(err)
+					a.err = m.ImagesCopyFailed(errtext.Text(err))
 					return
 				}
 				files, err := transfer.FileData(path)
 				if err != nil {
-					a.err = "复制图片失败：" + errtext.Text(err)
+					a.err = m.ImagesCopyFailed(errtext.Text(err))
 					return
 				}
 				reps := []transfer.Representation{transfer.Bytes(transfer.PNG, b)}
@@ -220,7 +220,7 @@ func (a *app) copyImage(it imageItem) {
 					}
 				}
 				mygo.Clipboard.Write(transfer.New(transfer.NewItem(reps...)))
-				a.notify("已复制图片", "", nil)
+				a.notify(m.ImagesCopied(), "", nil)
 			})
 		}()
 		return nil
@@ -246,20 +246,20 @@ func (a *app) openImage(it imageItem) {
 // imageMenu 是卡片的右键菜单。图片指定用系统的"预览"打开：默认应用可能被改成别的编辑器。
 func (a *app) imageMenu(c *ui.Context, card ui.Element, it imageItem) {
 	contextMenu(c, card, func(m *popMenu) {
-		if !it.Video && m.Item("复制图片").Icon(iconCopy).Chosen() {
-			a.copyImage(it)
+		if !it.Video && m.Item(L(c).ImagesCopyImage()).Icon(iconCopy).Chosen() {
+			a.copyImage(L(c), it)
 		}
-		if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+		if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			a.withImagePath(it, func(path string) error {
 				mygo.Shell.ShowItemInFolder(path)
 				return nil
 			})
 		}
 		if it.Video {
-			if m.Item("用默认应用打开").Chosen() {
+			if m.Item(L(c).FilesOpenWithDefaultApp()).Chosen() {
 				a.withImagePath(it, mygo.Shell.OpenPath)
 			}
-		} else if m.Item("用系统预览打开").Chosen() {
+		} else if m.Item(L(c).ImagesOpenInPreview()).Chosen() {
 			a.withImagePath(it, func(path string) error {
 				return exec.Command("open", "-a", "Preview", path).Run()
 			})
@@ -273,12 +273,12 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	v := &a.images
 	v.hover = ""
 	a.imagesDrawn = true
-	return a.rightPanel(c, "图片", func() {
+	return a.rightPanel(c, L(c).ImagesTitle(), func() {
 		if media.Supported(cur.Agent) && !v.poll.at.IsZero() && (len(v.made) > 0 || len(v.pasted) > 0) {
 			ui.Row(c).Padding(0, 12, 12, 12).Shrink(0).Children(func() {
 				// 和文件栏的分段一样撑满栏宽
 				ui.Column(c).Grow(1).Children(func() {
-					if segmentedBadges(c, &v.tab, "图片来源", []int{v.madeAll, len(v.pasted)}, "生成", "粘贴") {
+					if segmentedBadges(c, &v.tab, L(c).ImagesSource(), []int{v.madeAll, len(v.pasted)}, L(c).ImagesGeneratedTab(), L(c).ImagesPastedTab()) {
 						v.tabSet = true
 					}
 				})
@@ -288,28 +288,28 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 			ui.Column(c).Padding(0, 12, 16, 12).Gap(12).Children(func() {
 				switch {
 				case !media.Supported(cur.Agent):
-					usageNote(c, "目前只支持 Claude、Codex、Grok 和 Cursor 会话。")
+					usageNote(c, L(c).ImagesUnsupported())
 					return
 				case v.poll.at.IsZero():
-					usageNote(c, "正在读取…")
+					usageNote(c, L(c).CommonLoading())
 					return
 				case len(v.made) == 0 && len(v.pasted) == 0:
-					usageNote(c, "这个会话还没有图片或视频。")
+					usageNote(c, L(c).ImagesNone())
 					return
 				}
 				if v.tab == 0 {
 					if len(v.made) == 0 {
-						usageNote(c, "agent 还没有生成图片或视频。")
+						usageNote(c, L(c).ImagesNoneGenerated())
 						return
 					}
 					a.imageGroup(c, v.made)
 					if v.madeAll > len(v.made) {
-						usageNote(c, fmt.Sprintf("只列出最近 %d 项。", len(v.made)))
+						usageNote(c, L(c).ImagesRecentOnly(len(v.made)))
 					}
 					return
 				}
 				if len(v.pasted) == 0 {
-					usageNote(c, "这个会话还没有粘贴过图片。")
+					usageNote(c, L(c).ImagesNonePasted())
 					return
 				}
 				a.imageGroup(c, v.pasted)
@@ -336,11 +336,11 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 	t := c.Theme()
 	v := &a.images
 	for _, it := range items {
-		kind := "图片 "
+		label := L(c).ImagesImageLabel(mediaLabel(L(c), it.Item))
 		if it.Video {
-			kind = "视频 "
+			label = L(c).ImagesVideoLabel(mediaLabel(L(c), it.Item))
 		}
-		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(rCard).Role(ui.RoleButton).Label(kind + mediaLabel(L(c), it.Item))
+		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(rCard).Role(ui.RoleButton).Label(label)
 		selectedBg(c, card, false)
 		card.Children(func() {
 			if it.thumb != nil {

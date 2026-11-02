@@ -779,6 +779,141 @@
   "@chatTitle": {
     "description": "Chat sidebar tile, settings card, or folder action: heading for Title."
   },
+  "cheatsheetAgentWaiting": "{agent} is waiting for your confirmation. Handle it, then insert the command.",
+  "@cheatsheetAgentWaiting": {
+    "description": "Error bar text when inserting a command while the agent waits on a prompt. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetBuiltinSkills": "Built-in Skills",
+  "@cheatsheetBuiltinSkills": {
+    "description": "Cheat Sheet panel: tab and group title for skills that ship with the agent."
+  },
+  "cheatsheetBundled": "Bundled with the Install",
+  "@cheatsheetBundled": {
+    "description": "Cheat Sheet panel: group title for built-in skills found in the agent’s install folder."
+  },
+  "cheatsheetCategory": "Category",
+  "@cheatsheetCategory": {
+    "description": "Cheat Sheet panel: accessibility label of the tabs."
+  },
+  "cheatsheetChangelog": "View Changelog",
+  "@cheatsheetChangelog": {
+    "description": "Cheat Sheet panel: button opening the agent’s changelog."
+  },
+  "cheatsheetCommands": "Commands",
+  "@cheatsheetCommands": {
+    "description": "Cheat Sheet panel: tab listing the agent’s built-in slash commands and input prefixes. Keep it short: four tabs share a narrow panel."
+  },
+  "cheatsheetDocs": "Official Docs",
+  "@cheatsheetDocs": {
+    "description": "Cheat Sheet panel: button opening the agent’s documentation."
+  },
+  "cheatsheetInsertLabel": "Insert {name} into the Input",
+  "@cheatsheetInsertLabel": {
+    "description": "Cheat Sheet panel: accessibility label of a row; clicking types it into the agent’s input. name is the command.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetKeys": "Keys",
+  "@cheatsheetKeys": {
+    "description": "Cheat Sheet panel: tab listing the agent’s keyboard shortcuts. Keep it short: four tabs share a narrow panel."
+  },
+  "cheatsheetNewer": "Installed {installed} is newer than the cheat sheet ({sheet}); there may be new commands",
+  "@cheatsheetNewer": {
+    "description": "Cheat Sheet panel: the agent installed on this Mac is newer than the sheet.",
+    "placeholders": {
+      "installed": {
+        "type": "String"
+      },
+      "sheet": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetNoBuiltinSkills": "No built-in skills found for {agent}.",
+  "@cheatsheetNoBuiltinSkills": {
+    "description": "Cheat Sheet panel note in the Built-in Skills tab. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetNoMatches": "No commands or skills match “{query}”.",
+  "@cheatsheetNoMatches": {
+    "description": "Cheat Sheet panel note when the search finds nothing.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetNoSheet": "There’s no cheat sheet for {agent} yet.",
+  "@cheatsheetNoSheet": {
+    "description": "Cheat Sheet panel note for an agent without a sheet. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetNoSkills": "This workspace has no skills {agent} can invoke manually.",
+  "@cheatsheetNoSkills": {
+    "description": "Cheat Sheet panel note in the Skills tab. agent is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetOlder": "Installed {installed} is older than the cheat sheet ({sheet}); some commands may be missing",
+  "@cheatsheetOlder": {
+    "description": "Cheat Sheet panel: the agent installed on this Mac is older than the sheet.",
+    "placeholders": {
+      "installed": {
+        "type": "String"
+      },
+      "sheet": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetSearch": "Search",
+  "@cheatsheetSearch": {
+    "description": "Cheat Sheet panel: accessibility label of the search field."
+  },
+  "cheatsheetSearchPlaceholder": "Search commands, skills and descriptions",
+  "@cheatsheetSearchPlaceholder": {
+    "description": "Cheat Sheet panel: placeholder of the search field."
+  },
+  "cheatsheetSheetFor": "Cheat sheet for {version}",
+  "@cheatsheetSheetFor": {
+    "description": "Cheat Sheet panel: which agent version the sheet describes. version is the agent name and version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "cheatsheetSkills": "Skills",
+  "@cheatsheetSkills": {
+    "description": "Cheat Sheet panel: tab and group title for skills installed for the agent."
+  },
+  "cheatsheetTabBuiltin": "Built-in",
+  "@cheatsheetTabBuiltin": {
+    "description": "Cheat Sheet panel: tab listing skills that ship with the agent. Keep it short: four tabs share a narrow panel."
+  },
+  "cheatsheetTitle": "Cheat Sheet",
+  "@cheatsheetTitle": {
+    "description": "Title of the Cheat Sheet panel on the right."
+  },
   "commonAll": "All",
   "@commonAll": {
     "description": "Common word: a filter or segment that shows everything."
@@ -1145,6 +1280,488 @@
         "type": "int"
       }
     }
+  },
+  "filesAnnotateTip": "Annotate: see who changed each line",
+  "@filesAnnotateTip": {
+    "description": "Tooltip of the button in a file tab that shows Git Annotate (blame)."
+  },
+  "filesBadRegex": "Invalid regular expression: {error}",
+  "@filesBadRegex": {
+    "description": "Files Panel search status when the regular expression doesn’t compile. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesBinaryNoContent": "Binary file, content not shown",
+  "@filesBinaryNoContent": {
+    "description": "File tab message: the file is binary."
+  },
+  "filesBinaryNoDiff": "Binary file, no diff shown",
+  "@filesBinaryNoDiff": {
+    "description": "File tab message: a diff of a binary file."
+  },
+  "filesCloseAll": "Close All Files",
+  "@filesCloseAll": {
+    "description": "File tab context menu item."
+  },
+  "filesCloseAnnotate": "Close Annotate",
+  "@filesCloseAnnotate": {
+    "description": "Button in a file tab that hides the Git Annotate (blame) column."
+  },
+  "filesCloseFile": "Close File",
+  "@filesCloseFile": {
+    "description": "Accessibility label of the close button on a file tab."
+  },
+  "filesCloseOthers": "Close Other Files",
+  "@filesCloseOthers": {
+    "description": "File tab context menu item."
+  },
+  "filesCloseRight": "Close Files to the Right",
+  "@filesCloseRight": {
+    "description": "File tab context menu item."
+  },
+  "filesCollapseAll": "Collapse All",
+  "@filesCollapseAll": {
+    "description": "Tooltip of the button above the file tree that collapses all folders."
+  },
+  "filesCompareDetail": "Compare",
+  "@filesCompareDetail": {
+    "description": "Small text after a file tab name: the tab compares the file with a branch."
+  },
+  "filesCompareWorkspaceTab": "Workspace ↔ {branch}",
+  "@filesCompareWorkspaceTab": {
+    "description": "Name of a tab comparing the workspace files with a branch. branch is the branch name.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "filesConflictBanner": "The file on disk was changed (maybe by an agent), and you also have unsaved changes here.",
+  "@filesConflictBanner": {
+    "description": "Banner at the top of a file tab when the file changed on disk while it has unsaved edits."
+  },
+  "filesCopyRelativePath": "Copy Relative Path",
+  "@filesCopyRelativePath": {
+    "description": "Context menu item of a file (file tree, search results, file tab): copies the path relative to the workspace."
+  },
+  "filesDefinitionCount": "{count, plural, one {# definition} other {# definitions}}",
+  "@filesDefinitionCount": {
+    "description": "Header of the dialog listing several definitions of the same name, after the name.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesDefinitionFailed": "Couldn’t find the definition: {error}",
+  "@filesDefinitionFailed": {
+    "description": "Error bar text when Go to Definition fails.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesDeletedBanner": "The file has been deleted.",
+  "@filesDeletedBanner": {
+    "description": "Banner at the top of a file tab when the file was deleted on disk."
+  },
+  "filesDeletedBannerSave": "The file has been deleted. Saving will create it again.",
+  "@filesDeletedBannerSave": {
+    "description": "Banner at the top of an editable file tab when the file was deleted on disk."
+  },
+  "filesDiffTab": "Diff: {name}",
+  "@filesDiffTab": {
+    "description": "Name of a diff tab. name is the file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesDontSave": "Don’t Save",
+  "@filesDontSave": {
+    "description": "Button in the unsaved files dialog: close without saving."
+  },
+  "filesEmptyFolder": "This folder is empty",
+  "@filesEmptyFolder": {
+    "description": "Files Panel file tree: shown when the folder has no files."
+  },
+  "filesEmptyTitle": "Choose a file in the Files Panel on the right",
+  "@filesEmptyTitle": {
+    "description": "Title of the empty file area when no file is open."
+  },
+  "filesExcludePlaceholder": "Exclude, e.g. vendor, *_test.go",
+  "@filesExcludePlaceholder": {
+    "description": "Placeholder of the exclude-files field in the Files Panel search."
+  },
+  "filesFileHistory": "File History",
+  "@filesFileHistory": {
+    "description": "Tooltip of the button in a file tab that opens the Git log of the file."
+  },
+  "filesFilter": "Filter",
+  "@filesFilter": {
+    "description": "Short toggle chip in the Files Panel search that shows the include/exclude fields."
+  },
+  "filesFilterTip": "Search only some files, or skip some",
+  "@filesFilterTip": {
+    "description": "Tooltip of the Filter chip in the Files Panel search."
+  },
+  "filesFind": "Find",
+  "@filesFind": {
+    "description": "Placeholder and accessibility label of the find bar over a Markdown preview or Annotate view."
+  },
+  "filesFindClose": "Close (Esc)",
+  "@filesFindClose": {
+    "description": "Tooltip of the close button of the find bar."
+  },
+  "filesFindNext": "Next",
+  "@filesFindNext": {
+    "description": "Tooltip of the down arrow in the find bar: next match."
+  },
+  "filesFindNoResults": "No results",
+  "@filesFindNoResults": {
+    "description": "Find bar status when nothing matches."
+  },
+  "filesFindPrevious": "Previous",
+  "@filesFindPrevious": {
+    "description": "Tooltip of the up arrow in the find bar: previous match."
+  },
+  "filesFindingDefinition": "Finding the definition of {name}…",
+  "@filesFindingDefinition": {
+    "description": "Hint at the bottom of a file tab while Go to Definition runs. name is the word under the cursor.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesFormatJSON": "Format JSON",
+  "@filesFormatJSON": {
+    "description": "Tooltip of the button in a JSON file tab that reformats the file."
+  },
+  "filesGitLogTab": "Git Log",
+  "@filesGitLogTab": {
+    "description": "Name of the tab that shows the Git Log of the whole repository."
+  },
+  "filesIncludePlaceholder": "Include, e.g. *.go, src/",
+  "@filesIncludePlaceholder": {
+    "description": "Placeholder of the include-files field in the Files Panel search."
+  },
+  "filesIsDirectory": "This is a folder",
+  "@filesIsDirectory": {
+    "description": "File tab message: the path opened is a folder."
+  },
+  "filesJSONAlreadyFormatted": "Already formatted",
+  "@filesJSONAlreadyFormatted": {
+    "description": "Hint at the bottom of a JSON file tab: Format JSON changed nothing."
+  },
+  "filesJSONFormatFailed": "Can’t format: {error}",
+  "@filesJSONFormatFailed": {
+    "description": "Hint at the bottom of a JSON file tab when formatting fails. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesJSONFormatted": "Formatted. Undo",
+  "@filesJSONFormatted": {
+    "description": "Hint at the bottom of a JSON file tab after Format JSON; followed by the undo shortcut."
+  },
+  "filesJSONSyntaxError": "Can’t format: JSON syntax error on line {line}",
+  "@filesJSONSyntaxError": {
+    "description": "Hint at the bottom of a JSON file tab when the JSON is invalid. line is the line number.",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "filesKeepMine": "Keep Mine",
+  "@filesKeepMine": {
+    "description": "Button in the file conflict banner: keep the unsaved edits."
+  },
+  "filesListFailed": "Couldn’t list files: {error}",
+  "@filesListFailed": {
+    "description": "Error bar text when listing the workspace files fails. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesListSeparator": ", ",
+  "@filesListSeparator": {
+    "description": "Separator between file names in a list (unsaved files dialog)."
+  },
+  "filesListing": "Listing files…",
+  "@filesListing": {
+    "description": "Quick open status while the file list loads."
+  },
+  "filesMatchCase": "Match Case",
+  "@filesMatchCase": {
+    "description": "Tooltip of the Aa toggle in the Files Panel search."
+  },
+  "filesNoDefinition": "No definition of {name} found",
+  "@filesNoDefinition": {
+    "description": "Hint at the bottom of a file tab when Go to Definition finds nothing.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesNoMatches": "No matching files",
+  "@filesNoMatches": {
+    "description": "Quick open status when no file name matches."
+  },
+  "filesNoPermission": "No permission to read this file",
+  "@filesNoPermission": {
+    "description": "File tab message: macOS denied reading the file."
+  },
+  "filesNoResults": "No results",
+  "@filesNoResults": {
+    "description": "Files Panel search status when nothing matched."
+  },
+  "filesNotFound": "The file doesn’t exist",
+  "@filesNotFound": {
+    "description": "File tab message: the file is missing."
+  },
+  "filesOpenWithDefaultApp": "Open with Default App",
+  "@filesOpenWithDefaultApp": {
+    "description": "Context menu item and button: opens the file in the app macOS uses for it."
+  },
+  "filesOverwriteBody": "{name} was changed after you opened it (maybe by an agent). Saving will overwrite those changes.",
+  "@filesOverwriteBody": {
+    "description": "Body of the overwrite confirmation. name is the file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesOverwriteConfirm": "Overwrite Changes on Disk?",
+  "@filesOverwriteConfirm": {
+    "description": "Title of the confirmation when saving a file that changed on disk after it was opened."
+  },
+  "filesPanelChangesTab": "Changes",
+  "@filesPanelChangesTab": {
+    "description": "Segment in the Files Panel: Git changes."
+  },
+  "filesPanelFilesTab": "Files",
+  "@filesPanelFilesTab": {
+    "description": "Tab at the top of the Files Panel, and segment for the file tree."
+  },
+  "filesPanelHint": "Files Panel",
+  "@filesPanelHint": {
+    "description": "Shortcut hint under the empty file area: toggles the Files Panel."
+  },
+  "filesPanelHistoryTab": "History",
+  "@filesPanelHistoryTab": {
+    "description": "Tab at the top of the Files Panel: the project’s sessions."
+  },
+  "filesPanelSearchTab": "Search",
+  "@filesPanelSearchTab": {
+    "description": "Segment in the Files Panel: full-text search."
+  },
+  "filesPanelSkillsTab": "Skills",
+  "@filesPanelSkillsTab": {
+    "description": "Tab at the top of the Files Panel: the workspace’s skills."
+  },
+  "filesPanelTitle": "Files Panel",
+  "@filesPanelTitle": {
+    "description": "Tooltip of the button that toggles the Files Panel, and accessibility label of its segmented control."
+  },
+  "filesPathNotFound": "Can’t find {path}",
+  "@filesPathNotFound": {
+    "description": "Hint at the bottom of a file tab: the path under the cursor (an import) can’t be resolved.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "filesQuickOpenHint": "Open by Name",
+  "@filesQuickOpenHint": {
+    "description": "Shortcut hint under the empty file area: quick open."
+  },
+  "filesQuickOpenPlaceholder": "Find a file by name; add :line to jump to that line",
+  "@filesQuickOpenPlaceholder": {
+    "description": "Placeholder of the quick open field."
+  },
+  "filesReadOnly": "Read-Only",
+  "@filesReadOnly": {
+    "description": "Badge in the file tab path bar: the file is opened read-only."
+  },
+  "filesReadOnlyTip": "The file is larger than {size} MB and is opened read-only",
+  "@filesReadOnlyTip": {
+    "description": "Tooltip of the Read-Only badge. size is a number of megabytes.",
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "filesRegex": "Regular Expression",
+  "@filesRegex": {
+    "description": "Tooltip of the .* toggle in the Files Panel search."
+  },
+  "filesRevealCurrent": "Reveal Current File",
+  "@filesRevealCurrent": {
+    "description": "Tooltip of the button above the file tree that selects the open file."
+  },
+  "filesRevealInTree": "Reveal in File Tree",
+  "@filesRevealInTree": {
+    "description": "Tooltip of the button in a file tab that selects the file in the Files Panel tree."
+  },
+  "filesRollbackFile": "Rollback This File…",
+  "@filesRollbackFile": {
+    "description": "Tooltip of the button in a file tab that rolls back the file’s Git changes."
+  },
+  "filesSaveAnyway": "Save Anyway",
+  "@filesSaveAnyway": {
+    "description": "Confirm button of the overwrite confirmation."
+  },
+  "filesSaveFailed": "Couldn’t save {name}: {error}",
+  "@filesSaveFailed": {
+    "description": "Error bar text when saving a file fails.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesSearchCount": "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}",
+  "@filesSearchCount": {
+    "description": "Files Panel search status: how many matching lines in how many files.",
+    "placeholders": {
+      "files": {
+        "type": "int"
+      },
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
+  "filesSearchCountRunning": "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; still searching",
+  "@filesSearchCountRunning": {
+    "description": "Files Panel search status while the search is still running.",
+    "placeholders": {
+      "files": {
+        "type": "int"
+      },
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
+  "filesSearchCountTruncated": "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; too many results, showing the first ones",
+  "@filesSearchCountTruncated": {
+    "description": "Files Panel search status when the results were cut off.",
+    "placeholders": {
+      "files": {
+        "type": "int"
+      },
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
+  "filesSearchHint": "Search in Files",
+  "@filesSearchHint": {
+    "description": "Shortcut hint under the empty file area: full-text search."
+  },
+  "filesSearchPlaceholder": "Search in Files",
+  "@filesSearchPlaceholder": {
+    "description": "Placeholder of the full-text search field in the Files Panel."
+  },
+  "filesSearching": "Searching…",
+  "@filesSearching": {
+    "description": "Files Panel search status while the search runs and nothing is found yet."
+  },
+  "filesSymlinkTip": "Symbolic link → {target}",
+  "@filesSymlinkTip": {
+    "description": "Files Panel file tree: tooltip of a symbolic link row. target is where the link points.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "filesTooLarge": "The file is larger than {size} MB and isn’t opened here",
+  "@filesTooLarge": {
+    "description": "File tab message: the file is too large to open. size is a number of megabytes.",
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
+  "filesUnsavedBody": "If you don’t save, your changes will be lost.",
+  "@filesUnsavedBody": {
+    "description": "Body of the dialog asking to save one unsaved file."
+  },
+  "filesUnsavedBodyMany": "{names}. If you don’t save, your changes will be lost.",
+  "@filesUnsavedBodyMany": {
+    "description": "Body of the dialog asking to save several unsaved files. names lists the file names joined with filesListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "filesUnsavedTip": "Unsaved changes",
+  "@filesUnsavedTip": {
+    "description": "Files Panel file tree: tooltip of the dot after a file that has unsaved changes."
+  },
+  "filesUnsavedTitle": "Save Changes to {name}?",
+  "@filesUnsavedTitle": {
+    "description": "Title of the dialog asking to save one unsaved file before closing.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesUnsavedTitleMany": "{count, plural, one {# file has} other {# files have}} unsaved changes",
+  "@filesUnsavedTitleMany": {
+    "description": "Title of the dialog asking to save several unsaved files before closing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesUseDisk": "Use Disk Version",
+  "@filesUseDisk": {
+    "description": "Button in the file conflict banner: reload the file from disk."
+  },
+  "filesViewSource": "View Source",
+  "@filesViewSource": {
+    "description": "Tooltip of the button in a Markdown file tab that switches from preview to source."
+  },
+  "filesWikiNotFound": "Can’t find the file [[{target}]] points to: {path}",
+  "@filesWikiNotFound": {
+    "description": "Error bar text when a [[wiki link]] in Markdown points to a missing file.",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "filesWorkspaceGone": "The workspace folder no longer exists",
+  "@filesWorkspaceGone": {
+    "description": "Files Panel message when the workspace folder was removed."
   },
   "gitAbort": "Abort",
   "@gitAbort": {
@@ -2117,17 +2734,416 @@
   "@gitWorkspace": {
     "description": "Name of the working-copy version in diff tab labels and branch comparison, as in main → Workspace."
   },
+  "historyAddAndContinue": "Add and Continue",
+  "@historyAddAndContinue": {
+    "description": "History: confirm button of the add-project confirmation."
+  },
+  "historyAddProjectBody": "No workspace in Posse contains this folder yet. Once it’s added, the session continues in that project.",
+  "@historyAddProjectBody": {
+    "description": "History: body of the add-project confirmation."
+  },
+  "historyAddProjectConfirm": "Add {path} as a Project?",
+  "@historyAddProjectConfirm": {
+    "description": "History: title of the confirmation shown when continuing a session whose folder is not in any workspace. path is the folder.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "historyAnyWord": "No session contains all the words; showing sessions with any of them",
+  "@historyAnyWord": {
+    "description": "History: notice when the search falls back to matching any word."
+  },
+  "historyContext": "Context {percent}%",
+  "@historyContext": {
+    "description": "History: share of the context window used by the session’s last request.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "historyContextTip": "The last request used {used} / {window} tokens",
+  "@historyContextTip": {
+    "description": "History: tooltip of the context share. used and window are token counts.",
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "window": {
+        "type": "int"
+      }
+    }
+  },
+  "historyContinueInPosse": "Continue in Posse",
+  "@historyContinueInPosse": {
+    "description": "History: button that resumes the session in a new terminal."
+  },
+  "historyCopyResumeCommand": "Copy Resume Command",
+  "@historyCopyResumeCommand": {
+    "description": "History: button that copies the shell command resuming the session."
+  },
+  "historyEmptyBody": "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them.",
+  "@historyEmptyBody": {
+    "description": "History: empty list body."
+  },
+  "historyEmptyTitle": "No sessions yet",
+  "@historyEmptyTitle": {
+    "description": "History: empty list title."
+  },
+  "historyFilterByAgent": "Filter by Agent",
+  "@historyFilterByAgent": {
+    "description": "History: accessibility label of the agent filter segmented control."
+  },
+  "historyGroupBy": "Group Sessions By",
+  "@historyGroupBy": {
+    "description": "History: accessibility label of the segmented control choosing how sessions are grouped."
+  },
+  "historyGroupByFolder": "By Folder",
+  "@historyGroupByFolder": {
+    "description": "History: segment that groups sessions by project folder."
+  },
+  "historyGroupByTime": "By Time",
+  "@historyGroupByTime": {
+    "description": "History: segment that groups sessions by date."
+  },
+  "historyIndexFailed": "Index update failed: {error}",
+  "@historyIndexFailed": {
+    "description": "History: notice when updating the index failed.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "historyIndexedCount": "{count, plural, one {# session indexed} other {# sessions indexed}}",
+  "@historyIndexedCount": {
+    "description": "History: number of indexed sessions, in the placeholder card.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyIndexing": "Building the index…",
+  "@historyIndexing": {
+    "description": "History: notice while the index is being built and the total is unknown."
+  },
+  "historyIndexingProgress": "Building the index: checked {done} / {total} session files; results will fill in",
+  "@historyIndexingProgress": {
+    "description": "History: notice while the index is being built. done and total are file counts, shown without digit grouping.",
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "historyIntroBody": "Find past conversations with agents here. Select one to continue it in Posse.",
+  "@historyIntroBody": {
+    "description": "History: body of the placeholder card when no session is selected."
+  },
+  "historyIntroTitle": "Session History",
+  "@historyIntroTitle": {
+    "description": "History: title of the placeholder card when no session is selected."
+  },
+  "historyLoading": "Loading…",
+  "@historyLoading": {
+    "description": "History: notice while the list loads."
+  },
+  "historyMatchCount": "{count, plural, one {# matching session} other {# matching sessions}}",
+  "@historyMatchCount": {
+    "description": "History: header of the session list while searching.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyMessageCount": "{count, plural, one {# message} other {# messages}}",
+  "@historyMessageCount": {
+    "description": "History: number of messages in a session or in all sessions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyMessageHits": "{count, plural, one {# matching message} other {# matching messages}}",
+  "@historyMessageHits": {
+    "description": "History: number of messages matching the search.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyNoMessages": "This session has no messages to show",
+  "@historyNoMessages": {
+    "description": "History: empty transcript title."
+  },
+  "historyNoMessagesBody": "Turn on “Show Tool Calls” to see tool inputs and outputs.",
+  "@historyNoMessagesBody": {
+    "description": "History: empty transcript body."
+  },
+  "historyNoResults": "No results for “{query}”",
+  "@historyNoResults": {
+    "description": "History: title shown when the search finds nothing.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "historyNoResultsBody": "Chinese matches by character, English by word prefix; use quotes to search a phrase.",
+  "@historyNoResultsBody": {
+    "description": "History: search tips shown when the search finds nothing."
+  },
+  "historyOpenInFinderTip": "Open {path} in Finder",
+  "@historyOpenInFinderTip": {
+    "description": "History: tooltip of the session folder link.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "historyQueryFailed": "Query failed: {error}",
+  "@historyQueryFailed": {
+    "description": "History: notice above the list when the query fails.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "historyRoleTool": "Tool",
+  "@historyRoleTool": {
+    "description": "History: a tool result, as the speaker of a message."
+  },
+  "historyRoleUser": "You",
+  "@historyRoleUser": {
+    "description": "History: the user, as the speaker of a message."
+  },
+  "historySearchLabel": "Search Sessions",
+  "@historySearchLabel": {
+    "description": "History: accessibility label of the search field."
+  },
+  "historySearchPlaceholder": "Search session content  {shortcut}",
+  "@historySearchPlaceholder": {
+    "description": "History: placeholder of the search field. shortcut is the keyboard shortcut that focuses it.",
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "historySearching": "Searching…",
+  "@historySearching": {
+    "description": "History: notice while a search runs."
+  },
+  "historySessionCount": "{count, plural, one {# session} other {# sessions}}",
+  "@historySessionCount": {
+    "description": "History: header of the session list, number of sessions.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historySessionList": "Sessions",
+  "@historySessionList": {
+    "description": "History: accessibility label of the session list."
+  },
+  "historyShowToolCalls": "Show Tool Calls",
+  "@historyShowToolCalls": {
+    "description": "History: checkbox showing tool calls in the transcript."
+  },
+  "historySnippetRole": "{who}: ",
+  "@historySnippetRole": {
+    "description": "History: prefix of a search hit snippet naming who said it.",
+    "placeholders": {
+      "who": {
+        "type": "String"
+      }
+    }
+  },
+  "historySwitchToTerminal": "Switch to Running Terminal",
+  "@historySwitchToTerminal": {
+    "description": "History: button for a session that is already running in a terminal."
+  },
+  "historyTitle": "History",
+  "@historyTitle": {
+    "description": "Sidebar tile and page title of History."
+  },
+  "historyToolCalls": "{count, plural, one {# tool call} other {# tool calls}}",
+  "@historyToolCalls": {
+    "description": "History: a folded run of tool calls in the transcript.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyTopMatches": "Top {count} matching sessions",
+  "@historyTopMatches": {
+    "description": "History: header of the session list when the search hit the result limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historyUnknownFolder": "Unknown Folder",
+  "@historyUnknownFolder": {
+    "description": "History: group title (grouped by folder) for sessions without a folder."
+  },
+  "imagesChecker": "Show Checkerboard Behind Transparency",
+  "@imagesChecker": {
+    "description": "Image file tab bar: tooltip of the checkerboard toggle."
+  },
   "imagesCodeOutput": "Code output",
   "@imagesCodeOutput": {
     "description": "Images panel: name under a thumbnail of an image produced by code the agent ran (Codex exec- files)."
+  },
+  "imagesCopied": "Image Copied",
+  "@imagesCopied": {
+    "description": "Images panel: notification after copying an image."
+  },
+  "imagesCopyFailed": "Couldn’t copy the image: {error}",
+  "@imagesCopyFailed": {
+    "description": "Images panel: error bar text when copying an image fails.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "imagesCopyImage": "Copy Image",
+  "@imagesCopyImage": {
+    "description": "Images panel: context menu item of an image card."
+  },
+  "imagesFrames": "{count, plural, one {# frame} other {# frames}}  {seconds} s",
+  "@imagesFrames": {
+    "description": "Image file tab bar: frame count and duration of an animated image. seconds is a decimal number.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "seconds": {
+        "type": "String"
+      }
+    }
   },
   "imagesGenerated": "Generated image",
   "@imagesGenerated": {
     "description": "Images panel: name under a thumbnail of an image the agent generated (Codex ig_ files)."
   },
+  "imagesGeneratedTab": "Generated",
+  "@imagesGeneratedTab": {
+    "description": "Images panel: segment listing images and videos the agent generated."
+  },
+  "imagesImageLabel": "Image {name}",
+  "@imagesImageLabel": {
+    "description": "Images panel: accessibility label of an image card. name is the image label.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "imagesNone": "This session has no images or videos yet.",
+  "@imagesNone": {
+    "description": "Images panel note."
+  },
+  "imagesNoneGenerated": "The agent hasn’t generated any images or videos yet.",
+  "@imagesNoneGenerated": {
+    "description": "Images panel note in the Generated segment."
+  },
+  "imagesNonePasted": "No images have been pasted into this session yet.",
+  "@imagesNonePasted": {
+    "description": "Images panel note in the Pasted segment."
+  },
+  "imagesOpenInPreview": "Open in Preview",
+  "@imagesOpenInPreview": {
+    "description": "Images panel: context menu item that opens the image in the macOS Preview app."
+  },
   "imagesPasted": "Pasted",
   "@imagesPasted": {
     "description": "Images panel: name under a thumbnail of an image the user pasted, when it has no number."
+  },
+  "imagesPastedTab": "Pasted",
+  "@imagesPastedTab": {
+    "description": "Images panel: segment listing images pasted into the session."
+  },
+  "imagesPause": "Pause",
+  "@imagesPause": {
+    "description": "Image file tab bar: tooltip of the button that pauses an animated image."
+  },
+  "imagesPlay": "Play",
+  "@imagesPlay": {
+    "description": "Image file tab bar: tooltip of the button that plays an animated image."
+  },
+  "imagesRecentOnly": "Showing only the {count, plural, one {most recent item} other {# most recent items}}.",
+  "@imagesRecentOnly": {
+    "description": "Images panel note under a cut-off list.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "imagesSource": "Image Source",
+  "@imagesSource": {
+    "description": "Images panel: accessibility label of the segmented control."
+  },
+  "imagesTitle": "Images",
+  "@imagesTitle": {
+    "description": "Title of the Images panel on the right."
+  },
+  "imagesUnsupported": "Only Claude, Codex, Grok and Cursor sessions are supported for now.",
+  "@imagesUnsupported": {
+    "description": "Images panel note for other agents."
+  },
+  "imagesVideoLabel": "Video {name}",
+  "@imagesVideoLabel": {
+    "description": "Images panel: accessibility label of a video card. name is the video label.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "imagesZoom": "Zoom",
+  "@imagesZoom": {
+    "description": "Image file tab bar: accessibility label of the zoom button."
+  },
+  "imagesZoomIn": "Zoom In",
+  "@imagesZoomIn": {
+    "description": "Image zoom menu item."
+  },
+  "imagesZoomOut": "Zoom Out",
+  "@imagesZoomOut": {
+    "description": "Image zoom menu item."
+  },
+  "imagesZoomTip": "Zoom: ⌘-scroll, {zoomIn} {zoomOut}; double-click switches between Zoom to Fit and actual size",
+  "@imagesZoomTip": {
+    "description": "Image file tab bar: tooltip of the zoom button. zoomIn and zoomOut are keyboard shortcuts.",
+    "placeholders": {
+      "zoomIn": {
+        "type": "String"
+      },
+      "zoomOut": {
+        "type": "String"
+      }
+    }
+  },
+  "imagesZoomToFit": "Zoom to Fit",
+  "@imagesZoomToFit": {
+    "description": "Image zoom menu item."
   },
   "keysAdd": "Add Another Shortcut",
   "@keysAdd": {
@@ -2879,6 +3895,38 @@
   "@keysZoomResetNote": {
     "description": "Keyboard Shortcuts settings: explanation for ZoomResetNote."
   },
+  "linksClick": "Click",
+  "@linksClick": {
+    "description": "Link card: how to open a link directly, shown next to an action."
+  },
+  "linksCmdClick": "⌘-Click",
+  "@linksCmdClick": {
+    "description": "Link card: how to open a link directly, shown next to an action."
+  },
+  "linksCopyLink": "Copy Link",
+  "@linksCopyLink": {
+    "description": "Link card and web tab: tooltip of the copy button."
+  },
+  "linksOpenInBrowser": "Open in Browser",
+  "@linksOpenInBrowser": {
+    "description": "Link card item and web tab button: opens the URL in the default browser."
+  },
+  "linksOpenInFileTab": "Open in File Tab",
+  "@linksOpenInFileTab": {
+    "description": "Link card item: opens the file in a file tab."
+  },
+  "linksOpenInPosse": "Open in Posse",
+  "@linksOpenInPosse": {
+    "description": "Link card item: opens the URL in a web tab."
+  },
+  "linksOpenInPreview": "Open in Preview",
+  "@linksOpenInPreview": {
+    "description": "Link card item: opens an image file in the macOS Preview app."
+  },
+  "linksShiftCmdClick": "⇧⌘-Click",
+  "@linksShiftCmdClick": {
+    "description": "Link card: how to hand a link to macOS, shown next to an action."
+  },
   "logAllBranches": "All Branches",
   "@logAllBranches": {
     "description": "Item in the branch filter menu of the Git Log, and the filter button text when no branch is selected."
@@ -3180,6 +4228,39 @@
   "@logUncommitted": {
     "description": "Label in the Annotate view for lines that are not committed yet."
   },
+  "markdownCode": "Code",
+  "@markdownCode": {
+    "description": "Markdown preview: label of a code block without a language."
+  },
+  "markdownCopyCode": "Copy Code",
+  "@markdownCopyCode": {
+    "description": "Markdown preview: tooltip of the copy button on a code block."
+  },
+  "markdownDetails": "Details",
+  "@markdownDetails": {
+    "description": "Markdown preview: title of a <details> block without a <summary>, like browsers show."
+  },
+  "markdownDiagramFailed": "Can’t draw the diagram: {error}",
+  "@markdownDiagramFailed": {
+    "description": "Markdown preview: shown under a Mermaid block that fails to render.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "markdownImage": "Image",
+  "@markdownImage": {
+    "description": "Markdown preview: placeholder of an image that can’t load and has no alt text."
+  },
+  "markdownMermaidLabel": "Mermaid Diagram",
+  "@markdownMermaidLabel": {
+    "description": "Accessibility label of a Mermaid diagram in a Markdown preview."
+  },
+  "markdownViewDiagram": "View Diagram",
+  "@markdownViewDiagram": {
+    "description": "Markdown preview: tooltip of the button on a Mermaid block that switches from source back to the diagram."
+  },
   "mcpAgentCountTip": "MCP servers available to {agent}",
   "@mcpAgentCountTip": {
     "description": "MCP page: tooltip of an agent’s count at the top of the list.",
@@ -3384,6 +4465,329 @@
   "menuWindow": "Window",
   "@menuWindow": {
     "description": "Title of the Window menu."
+  },
+  "mobileAddressAuto": "Automatic (the phone tries all of this Mac’s addresses)",
+  "@mobileAddressAuto": {
+    "description": "Mobile page: first item of the address picker."
+  },
+  "mobileAddressCustom": "Custom, e.g. host:8443 or https://example.com/posse",
+  "@mobileAddressCustom": {
+    "description": "Mobile page: placeholder of the custom address field."
+  },
+  "mobileAddressLAN": "LAN {ip}",
+  "@mobileAddressLAN": {
+    "description": "Mobile page: address picker item for a local network address.",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileAddressNote": "The phone must be able to reach it: the same Wi-Fi, Tailscale, or a tunnel to this Mac. If you choose a specific address, the phone connects only to that one.",
+  "@mobileAddressNote": {
+    "description": "Mobile page: explanation under the address picker."
+  },
+  "mobileAddressRemoveTip": "Remove this address from the list and go back to Automatic",
+  "@mobileAddressRemoveTip": {
+    "description": "Mobile page: tooltip of Remove next to a custom address."
+  },
+  "mobileAddressTailscale": "Tailscale {ip}",
+  "@mobileAddressTailscale": {
+    "description": "Mobile page: address picker item for a Tailscale address.",
+    "placeholders": {
+      "ip": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileAddressTitle": "This Mac’s Address",
+  "@mobileAddressTitle": {
+    "description": "Mobile page: label above the address picker."
+  },
+  "mobileCollapse": "Hide",
+  "@mobileCollapse": {
+    "description": "Mobile page: hint on the Other Pairings row that clicking collapses it."
+  },
+  "mobileConnected": "Connected",
+  "@mobileConnected": {
+    "description": "Mobile page: status of a phone that is connected now."
+  },
+  "mobileCopyCode": "Copy Pairing Code",
+  "@mobileCopyCode": {
+    "description": "Mobile page: button copying the pairing code."
+  },
+  "mobileCopyCodeTip": "If you can’t scan the code, paste it on the app’s pairing page",
+  "@mobileCopyCodeTip": {
+    "description": "Mobile page: tooltip of Copy Pairing Code."
+  },
+  "mobileDeskStop": "Stop",
+  "@mobileDeskStop": {
+    "description": "Mobile page, Remote Desktop card: button that stops the phone’s view."
+  },
+  "mobileDeskStopTip": "Disconnect this phone’s view and control",
+  "@mobileDeskStopTip": {
+    "description": "Mobile page, Remote Desktop card: tooltip of Stop."
+  },
+  "mobileDeskTitle": "Remote Desktop",
+  "@mobileDeskTitle": {
+    "description": "Mobile page: title of the card about phones viewing this Mac’s desktop."
+  },
+  "mobileDeskViewing": "{name} is viewing this Mac’s desktop",
+  "@mobileDeskViewing": {
+    "description": "Mobile page, Remote Desktop card. name is the phone name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileExpand": "Show",
+  "@mobileExpand": {
+    "description": "Mobile page: hint on the Other Pairings row that clicking expands it."
+  },
+  "mobileGenerating": "Generating…",
+  "@mobileGenerating": {
+    "description": "Mobile page: shown in place of the QR code while it is generated."
+  },
+  "mobileLastSeen": "Connected {ago}",
+  "@mobileLastSeen": {
+    "description": "Mobile page: when a phone last connected. ago is a relative time like “20 minutes ago”.",
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileListSeparator": ", ",
+  "@mobileListSeparator": {
+    "description": "Separator between phone names in a list."
+  },
+  "mobileNewCode": "New Code",
+  "@mobileNewCode": {
+    "description": "Mobile page: button generating a new pairing code."
+  },
+  "mobileNewCodeTip": "Invalidates the old code that hasn’t been used",
+  "@mobileNewCodeTip": {
+    "description": "Mobile page: tooltip of New Code."
+  },
+  "mobileNoAccessibility": "Posse isn’t allowed to use Accessibility yet: the phone can watch but not control",
+  "@mobileNoAccessibility": {
+    "description": "Mobile page, Remote Desktop card: the Accessibility permission is missing."
+  },
+  "mobileNoDevices": "No phones paired yet",
+  "@mobileNoDevices": {
+    "description": "Mobile page: empty paired phones list."
+  },
+  "mobileNoScreenRecording": "Posse isn’t allowed to use Screen Recording yet",
+  "@mobileNoScreenRecording": {
+    "description": "Mobile page, Remote Desktop card: the Screen Recording permission is missing."
+  },
+  "mobileOnlineTip": "{names} connected",
+  "@mobileOnlineTip": {
+    "description": "Tooltip of the green dot on the Mobile sidebar tile. names lists the connected phones joined with mobileListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileOpenSystemSettings": "Open System Settings",
+  "@mobileOpenSystemSettings": {
+    "description": "Mobile page, Remote Desktop card: button opening the privacy pane of System Settings."
+  },
+  "mobileOpenSystemSettingsTip": "Turn on Posse in Privacy & Security",
+  "@mobileOpenSystemSettingsTip": {
+    "description": "Mobile page, Remote Desktop card: tooltip of Open System Settings."
+  },
+  "mobileOthers": "{count, plural, one {# Other Pairing} other {# Other Pairings}}",
+  "@mobileOthers": {
+    "description": "Mobile page: row grouping pairings not tied to a Posse Mobile phone.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mobileOthersNote": "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
+  "@mobileOthersNote": {
+    "description": "Mobile page: explanation under Other Pairings."
+  },
+  "mobileOthersNoteOnline": "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
+  "@mobileOthersNoteOnline": {
+    "description": "Mobile page: explanation under Other Pairings when some are connected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mobilePairNote": "Scan the code on the left with Posse Mobile. If you can’t scan it, copy the pairing code and paste it on the app’s pairing page.",
+  "@mobilePairNote": {
+    "description": "Mobile page: instructions in the pairing card."
+  },
+  "mobilePairTitle": "Pair a New Phone",
+  "@mobilePairTitle": {
+    "description": "Mobile page: title of the pairing card."
+  },
+  "mobilePairedOn": "Paired {date}",
+  "@mobilePairedOn": {
+    "description": "Mobile page: under a phone’s name. date is the pairing date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "mobilePairedOnLinks": "Paired {date}; {count, plural, one {# pairing code} other {# pairing codes}} saved (different addresses or rescanned)",
+  "@mobilePairedOnLinks": {
+    "description": "Mobile page: under a phone’s name when it saved several pairing codes. date is the pairing date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mobilePairedTitle": "Paired Phones",
+  "@mobilePairedTitle": {
+    "description": "Mobile page: title of the paired phones card."
+  },
+  "mobileRemoveAll": "Remove All",
+  "@mobileRemoveAll": {
+    "description": "Mobile page: button removing all other pairings, and confirm button of that confirmation."
+  },
+  "mobileRemoveBody": "This phone disconnects right away. To use it again, scan the code to pair again.",
+  "@mobileRemoveBody": {
+    "description": "Mobile page: body of the confirmation removing a paired phone."
+  },
+  "mobileRemoveConfirm": "Remove “{name}”?",
+  "@mobileRemoveConfirm": {
+    "description": "Mobile page: title of the confirmation removing a paired phone. name is the phone name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "mobileRemoveOthersBody": "All these pairing codes stop working. Phones still using one of them disconnect and need to scan again to pair.",
+  "@mobileRemoveOthersBody": {
+    "description": "Mobile page: body of the confirmation removing all other pairings."
+  },
+  "mobileRemoveOthersConfirm": "Remove {count, plural, one {# Other Pairing} other {# Other Pairings}}?",
+  "@mobileRemoveOthersConfirm": {
+    "description": "Mobile page: title of the confirmation removing all other pairings.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mobileTitle": "Mobile",
+  "@mobileTitle": {
+    "description": "Sidebar tile and page title of the Mobile page (pairing phones with this Mac)."
+  },
+  "mobileUse": "Use",
+  "@mobileUse": {
+    "description": "Mobile page: button applying a typed custom address or relay invite code."
+  },
+  "relayClock": "Clock Off",
+  "@relayClock": {
+    "description": "Mobile page, Relay card: state after the title; this Mac’s clock is wrong."
+  },
+  "relayClockNote": "This Mac’s clock differs from the relay’s by more than 5 minutes. Turn on “Set time and date automatically” in System Settings.",
+  "@relayClockNote": {
+    "description": "Mobile page, Relay card: note for the Clock Off state."
+  },
+  "relayCodePlaceholder": "Paste Relay Invite Code",
+  "@relayCodePlaceholder": {
+    "description": "Mobile page, Relay card: placeholder of the invite code field."
+  },
+  "relayDenied": "Invalid Invite Code",
+  "@relayDenied": {
+    "description": "Mobile page, Relay card: state after the title."
+  },
+  "relayDeniedNote": "The relay doesn’t accept this invite code. Ask whoever sent it for a new one.",
+  "@relayDeniedNote": {
+    "description": "Mobile page, Relay card: note for the Invalid Invite Code state."
+  },
+  "relayInviteCreate": "Create Invite Code",
+  "@relayInviteCreate": {
+    "description": "Mobile page, Relay card: button creating an invite code."
+  },
+  "relayInviteNamePlaceholder": "Their name, e.g. lvxiaohai",
+  "@relayInviteNamePlaceholder": {
+    "description": "Mobile page, Relay card: placeholder of the invitee name field."
+  },
+  "relayInviteNote": "They paste the invite code on the Mobile page of Posse on their own Mac. Names can use only lowercase letters, digits, dots and hyphens; use it to revoke someone on the server.",
+  "@relayInviteNote": {
+    "description": "Mobile page, Relay card: explanation under the invite row."
+  },
+  "relayInviteTitle": "Invite Others",
+  "@relayInviteTitle": {
+    "description": "Mobile page, Relay card: label above the invite row (admin only)."
+  },
+  "relayNote": "When the phone isn’t on the same Wi-Fi, it connects back to this Mac through a relay. Paste the relay invite code you received.",
+  "@relayNote": {
+    "description": "Mobile page, Relay card: explanation when no relay is set."
+  },
+  "relayOldDaemon": "The daemon is an older version. Update the daemon in Settings, then try again.",
+  "@relayOldDaemon": {
+    "description": "Mobile page, Relay card: error when the daemon doesn’t know the relay request."
+  },
+  "relayReady": "Ready",
+  "@relayReady": {
+    "description": "Mobile page, Relay card: state after the title."
+  },
+  "relayReadyNote": "Once a phone has connected to this Mac on Wi-Fi, it can also connect when away.",
+  "@relayReadyNote": {
+    "description": "Mobile page, Relay card: note for the Ready state."
+  },
+  "relayRemoveBody": "Phones away from home can no longer connect back to this Mac. To use it again, paste an invite code again.",
+  "@relayRemoveBody": {
+    "description": "Mobile page, Relay card: body of the confirmation removing the relay."
+  },
+  "relayRemoveBodyAdmin": "This Mac holds the relay’s master key. After removing it you can’t invite others until you get an admin code from the server again. Invite codes already sent keep working.",
+  "@relayRemoveBodyAdmin": {
+    "description": "Mobile page, Relay card: body of the confirmation removing the relay on the admin Mac."
+  },
+  "relayRemoveConfirm": "Stop Using the Relay?",
+  "@relayRemoveConfirm": {
+    "description": "Mobile page, Relay card: title of the confirmation removing the relay."
+  },
+  "relayRemoveTip": "Stop using the relay on this Mac",
+  "@relayRemoveTip": {
+    "description": "Mobile page, Relay card: tooltip of Remove."
+  },
+  "relayRevoked": "Revoked",
+  "@relayRevoked": {
+    "description": "Mobile page, Relay card: state after the title."
+  },
+  "relayRevokedNote": "The relay’s admin has revoked this invite code.",
+  "@relayRevokedNote": {
+    "description": "Mobile page, Relay card: note for the Revoked state."
+  },
+  "relayTitle": "Relay",
+  "@relayTitle": {
+    "description": "Mobile page: title of the Relay card (connecting phones from outside the local network)."
+  },
+  "relayTitleState": "Relay · {state}",
+  "@relayTitleState": {
+    "description": "Mobile page: title of the Relay card with its state.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "relayUnreachable": "Not Responding",
+  "@relayUnreachable": {
+    "description": "Mobile page, Relay card: state after the title; the relay server doesn’t answer."
+  },
+  "relayUnreachableNote": "The relay server isn’t running, or the current network blocks UDP.",
+  "@relayUnreachableNote": {
+    "description": "Mobile page, Relay card: note for the Not Responding state."
   },
   "rollbackBinary": "Binary file; only the whole file can be rolled back",
   "@rollbackBinary": {
@@ -5439,5 +6843,54 @@
   "usageWindowWeekShort": "wk",
   "@usageWindowWeekShort": {
     "description": "Plan Usage settings or status popover: label for WindowWeekShort."
+  },
+  "webAddressPlaceholder": "Enter URL",
+  "@webAddressPlaceholder": {
+    "description": "Web tab toolbar: placeholder of the address field."
+  },
+  "webBack": "Back",
+  "@webBack": {
+    "description": "Web tab toolbar: tooltip of the back button."
+  },
+  "webDesktop": "Desktop",
+  "@webDesktop": {
+    "description": "Web tab mobile preview menu: show the page at the full tab size."
+  },
+  "webForward": "Forward",
+  "@webForward": {
+    "description": "Web tab toolbar: tooltip of the forward button."
+  },
+  "webLandscape": "Landscape",
+  "@webLandscape": {
+    "description": "Web tab mobile preview menu: rotate the device to landscape."
+  },
+  "webLoadFailed": "Can’t open {url}",
+  "@webLoadFailed": {
+    "description": "Web tab: title shown when the page fails to load.",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "webMobilePreview": "Mobile Preview",
+  "@webMobilePreview": {
+    "description": "Web tab toolbar: tooltip of the button showing the page at a phone size."
+  },
+  "webReload": "Reload",
+  "@webReload": {
+    "description": "Web tab toolbar: tooltip of the reload button, and button after a page fails to load."
+  },
+  "webStop": "Stop",
+  "@webStop": {
+    "description": "Web tab toolbar: tooltip of the stop loading button."
+  },
+  "webTabName": "Web Page",
+  "@webTabName": {
+    "description": "Name of a web tab before the page has a title or host."
+  },
+  "webUnavailable": "Web pages can’t be opened here",
+  "@webUnavailable": {
+    "description": "Web tab message when no window can host a web view."
   }
 }

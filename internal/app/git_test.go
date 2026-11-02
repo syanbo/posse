@@ -77,8 +77,8 @@ func TestGitChangesAndDiff(t *testing.T) {
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
 	d := v.cur
-	if d.name() != "差异：README.md" {
-		t.Fatalf("diff tab title %q", d.name())
+	if d.name(locales.In("zh-Hans")) != "差异：README.md" {
+		t.Fatalf("diff tab title %q", d.name(locales.In("zh-Hans")))
 	}
 	if n := len(d.diff.state.Hunks()); n != 1 {
 		t.Fatalf("README hunks %d", n)
@@ -461,8 +461,8 @@ func TestLogBlameAndReword(t *testing.T) {
 	until(t, tt, "blame", func() bool {
 		return d.blame != nil && !d.blame.loading && len(d.blame.lines) > 0 && tt.HasText("// local edit")
 	})
-	if d.path != filepath.Join(root, "main.go") || d.name() != "main.go" {
-		t.Fatalf("annotate not in the file tab: %s", d.name())
+	if d.path != filepath.Join(root, "main.go") || d.name(locales.In("zh-Hans")) != "main.go" {
+		t.Fatalf("annotate not in the file tab: %s", d.name(locales.In("zh-Hans")))
 	}
 	// 再点一次 Annotate 不会多出标签
 	a.openBlame(locales.In("zh-Hans"), w, v, filepath.Join(root, "main.go"))

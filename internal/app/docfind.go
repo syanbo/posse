@@ -80,19 +80,19 @@ func (f *docFind) bar(c *ui.Context, a *app) {
 		return
 	}
 	a.findBar(c, findBarSpec{
-		key: "doc-find", label: "查找", right: findBarRight,
+		key: "doc-find", label: L(c).FilesFind(), right: findBarRight,
 		query: &f.query, focus: &f.focus,
 		changed: func() { f.cur, f.scroll = 0, true },
 		submit:  func() { f.step(1) }, submitBack: func() { f.step(-1) },
 		up: func() { f.step(-1) }, down: func() { f.step(1) },
-		upTip: a.withKey("上一个", "editor.findPrevious"), downTip: a.withKey("下一个", "editor.findNext"),
+		upTip: a.withKey(L(c).FilesFindPrevious(), "editor.findPrevious"), downTip: a.withKey(L(c).FilesFindNext(), "editor.findNext"),
 		close: func() { f.open = false },
 		status: func() string {
 			switch {
 			case f.query == "":
 				return ""
 			case f.n == 0:
-				return "无结果"
+				return L(c).FilesFindNoResults()
 			}
 			return fmt.Sprintf("%d/%d", f.cur+1, f.n)
 		},
@@ -148,7 +148,7 @@ func (a *app) findBar(c *ui.Context, s findBarSpec) {
 			if s.extra != nil {
 				s.extra()
 			}
-			if iconButtonSized(c, iconClose, "关闭 Esc", compactBox(), smallIcon()).Clicked() {
+			if iconButtonSized(c, iconClose, L(c).FilesFindClose(), compactBox(), smallIcon()).Clicked() {
 				s.close()
 			}
 		})

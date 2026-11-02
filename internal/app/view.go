@@ -204,10 +204,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		v := a.filesFor(w)
 		a.gitShortcuts(c, w, v)
 		if a.pressed(c, "save") && v.cur != nil {
-			a.saveDoc(v.cur, false)
+			a.saveDoc(L(c), v.cur, false)
 		}
 		if v.cur != nil && isJSON(v.cur.path) && a.pressed(c, "formatJSON") {
-			a.formatJSON(v.cur)
+			a.formatJSON(L(c), v.cur)
 		}
 	}
 	// 打包的 app 里 ⌘W 先被菜单拿走（installMenu），菜单只记下来，到这里和快捷键一样在有对话框时不动

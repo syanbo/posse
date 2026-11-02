@@ -208,7 +208,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 							// 悬停时时间换成"继续"按钮：已在 Posse 里运行的会话切过去，否则开终端接着聊
 							if row.Hovered() {
 								if pressable(playButton(c)).Clicked() {
-									a.resumeSession(s)
+									a.resumeSession(L(c), s)
 								}
 							} else {
 								ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)

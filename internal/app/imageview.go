@@ -284,11 +284,11 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 	ui.Text(c, fmt.Sprintf("%d × %d  %s  %s", info.w, info.h, strings.ToUpper(info.format), byteSize(int(info.bytes)))).
 		FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(0)
 	if an := d.anim; an != nil {
-		ui.Text(c, fmt.Sprintf("%d 帧  %.1f 秒", len(an.delays), an.duration().Seconds())).
+		ui.Text(c, L(c).ImagesFrames(len(an.delays), fmt.Sprintf("%.1f", an.duration().Seconds()))).
 			FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(0)
-		ic, label := iconPause, "暂停"
+		ic, label := iconPause, L(c).ImagesPause()
 		if !an.playing() {
-			ic, label = iconPlay, "播放"
+			ic, label = iconPlay, L(c).ImagesPlay()
 		}
 		if pressable(iconButtonSized(c, ic, label, compactBox(), smallIcon())).Clicked() {
 			an.toggle()
@@ -296,13 +296,13 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 	}
 	if info.alpha {
 		on := !a.state.ImageCheckerOff
-		if toggleIconButton(c, "img-checker", iconChecker, "透明处显示棋盘格", on) {
+		if toggleIconButton(c, "img-checker", iconChecker, L(c).ImagesChecker(), on) {
 			a.state.ImageCheckerOff = on
 			a.saveState()
 		}
 	}
 	z := ui.Box(c.Key("img-zoom")).Height(sz(22)).MinWidth(48).Padding(0, 8).Radius(rSmall).Center().Shrink(0).
-		Role(ui.RoleButton).Label("缩放").Tooltip("缩放：⌘ 加滚动、" + a.keyText("zoomIn") + " " + a.keyText("zoomOut") + "，双击切换适应窗口和原大")
+		Role(ui.RoleButton).Label(L(c).ImagesZoom()).Tooltip(L(c).ImagesZoomTip(a.keyText("zoomIn"), a.keyText("zoomOut")))
 	bg := ui.Transparent
 	if z.Hovered() {
 		bg = t.SurfaceHover
@@ -313,7 +313,7 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 			FontFeatures("tnum")
 	})
 	menuButton(c, z, func(m *popMenu) {
-		if m.Item("适应窗口").Keys(a.keyText("zoomReset")).Checked(d.iv.zoom == 0).Chosen() {
+		if m.Item(L(c).ImagesZoomToFit()).Keys(a.keyText("zoomReset")).Checked(d.iv.zoom == 0).Chosen() {
 			d.setZoom(0, 0, 0)
 		}
 		for _, p := range []float32{1, 2} {
@@ -322,10 +322,10 @@ func (a *app) imageBar(c *ui.Context, d *fileDoc) {
 			}
 		}
 		m.Separator()
-		if m.Item("放大").Keys(a.keyText("zoomIn")).Chosen() {
+		if m.Item(L(c).ImagesZoomIn()).Keys(a.keyText("zoomIn")).Chosen() {
 			d.zoomStep(true)
 		}
-		if m.Item("缩小").Keys(a.keyText("zoomOut")).Chosen() {
+		if m.Item(L(c).ImagesZoomOut()).Keys(a.keyText("zoomOut")).Chosen() {
 			d.zoomStep(false)
 		}
 	})

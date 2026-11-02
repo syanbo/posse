@@ -1240,7 +1240,7 @@ func (a *app) columnStrip(c *ui.Context, w *workspace, i int) {
 		if v := a.files[w.ID]; v != nil {
 			for _, d := range v.docs {
 				docs[docKey(d)] = d
-				names[d.name()]++
+				names[d.name(L(c))]++
 			}
 		}
 		strip.Children(func() {

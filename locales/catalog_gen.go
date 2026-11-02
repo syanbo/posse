@@ -1914,6 +1914,334 @@ func (msgs Messages) ChatTitle() string {
 	return Catalog.Format(msgs.locale, "chatTitle", nil)
 }
 
+// CheatsheetAgentWaiting says "{agent} is waiting for your confirmation. Handle it, then insert the command."
+// in the language the app shows.
+//
+// Error bar text when inserting a command while the agent waits on a
+// prompt. agent is the agent name.
+func CheatsheetAgentWaiting(agent string) string {
+	return In(i18n.Locale()).CheatsheetAgentWaiting(agent)
+}
+
+// CheatsheetAgentWaiting says "{agent} is waiting for your confirmation. Handle it, then insert the command."
+// in the language of msgs.
+//
+// Error bar text when inserting a command while the agent waits on a
+// prompt. agent is the agent name.
+func (msgs Messages) CheatsheetAgentWaiting(agent string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetAgentWaiting", map[string]any{"agent": agent})
+}
+
+// CheatsheetBuiltinSkills says "Built-in Skills"
+// in the language the app shows.
+//
+// Cheat Sheet panel: tab and group title for skills that ship with the
+// agent.
+func CheatsheetBuiltinSkills() string { return In(i18n.Locale()).CheatsheetBuiltinSkills() }
+
+// CheatsheetBuiltinSkills says "Built-in Skills"
+// in the language of msgs.
+//
+// Cheat Sheet panel: tab and group title for skills that ship with the
+// agent.
+func (msgs Messages) CheatsheetBuiltinSkills() string {
+	return Catalog.Format(msgs.locale, "cheatsheetBuiltinSkills", nil)
+}
+
+// CheatsheetBundled says "Bundled with the Install"
+// in the language the app shows.
+//
+// Cheat Sheet panel: group title for built-in skills found in the agent’s
+// install folder.
+func CheatsheetBundled() string { return In(i18n.Locale()).CheatsheetBundled() }
+
+// CheatsheetBundled says "Bundled with the Install"
+// in the language of msgs.
+//
+// Cheat Sheet panel: group title for built-in skills found in the agent’s
+// install folder.
+func (msgs Messages) CheatsheetBundled() string {
+	return Catalog.Format(msgs.locale, "cheatsheetBundled", nil)
+}
+
+// CheatsheetCategory says "Category"
+// in the language the app shows.
+//
+// Cheat Sheet panel: accessibility label of the tabs.
+func CheatsheetCategory() string { return In(i18n.Locale()).CheatsheetCategory() }
+
+// CheatsheetCategory says "Category"
+// in the language of msgs.
+//
+// Cheat Sheet panel: accessibility label of the tabs.
+func (msgs Messages) CheatsheetCategory() string {
+	return Catalog.Format(msgs.locale, "cheatsheetCategory", nil)
+}
+
+// CheatsheetChangelog says "View Changelog"
+// in the language the app shows.
+//
+// Cheat Sheet panel: button opening the agent’s changelog.
+func CheatsheetChangelog() string { return In(i18n.Locale()).CheatsheetChangelog() }
+
+// CheatsheetChangelog says "View Changelog"
+// in the language of msgs.
+//
+// Cheat Sheet panel: button opening the agent’s changelog.
+func (msgs Messages) CheatsheetChangelog() string {
+	return Catalog.Format(msgs.locale, "cheatsheetChangelog", nil)
+}
+
+// CheatsheetCommands says "Commands"
+// in the language the app shows.
+//
+// Cheat Sheet panel: tab listing the agent’s built-in slash commands and
+// input prefixes. Keep it short: four tabs share a narrow panel.
+func CheatsheetCommands() string { return In(i18n.Locale()).CheatsheetCommands() }
+
+// CheatsheetCommands says "Commands"
+// in the language of msgs.
+//
+// Cheat Sheet panel: tab listing the agent’s built-in slash commands and
+// input prefixes. Keep it short: four tabs share a narrow panel.
+func (msgs Messages) CheatsheetCommands() string {
+	return Catalog.Format(msgs.locale, "cheatsheetCommands", nil)
+}
+
+// CheatsheetDocs says "Official Docs"
+// in the language the app shows.
+//
+// Cheat Sheet panel: button opening the agent’s documentation.
+func CheatsheetDocs() string { return In(i18n.Locale()).CheatsheetDocs() }
+
+// CheatsheetDocs says "Official Docs"
+// in the language of msgs.
+//
+// Cheat Sheet panel: button opening the agent’s documentation.
+func (msgs Messages) CheatsheetDocs() string {
+	return Catalog.Format(msgs.locale, "cheatsheetDocs", nil)
+}
+
+// CheatsheetInsertLabel says "Insert {name} into the Input"
+// in the language the app shows.
+//
+// Cheat Sheet panel: accessibility label of a row; clicking types it into
+// the agent’s input. name is the command.
+func CheatsheetInsertLabel(name string) string { return In(i18n.Locale()).CheatsheetInsertLabel(name) }
+
+// CheatsheetInsertLabel says "Insert {name} into the Input"
+// in the language of msgs.
+//
+// Cheat Sheet panel: accessibility label of a row; clicking types it into
+// the agent’s input. name is the command.
+func (msgs Messages) CheatsheetInsertLabel(name string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetInsertLabel", map[string]any{"name": name})
+}
+
+// CheatsheetKeys says "Keys"
+// in the language the app shows.
+//
+// Cheat Sheet panel: tab listing the agent’s keyboard shortcuts. Keep it
+// short: four tabs share a narrow panel.
+func CheatsheetKeys() string { return In(i18n.Locale()).CheatsheetKeys() }
+
+// CheatsheetKeys says "Keys"
+// in the language of msgs.
+//
+// Cheat Sheet panel: tab listing the agent’s keyboard shortcuts. Keep it
+// short: four tabs share a narrow panel.
+func (msgs Messages) CheatsheetKeys() string {
+	return Catalog.Format(msgs.locale, "cheatsheetKeys", nil)
+}
+
+// CheatsheetNewer says "Installed {installed} is newer than the cheat sheet ({sheet}); there may be new commands"
+// in the language the app shows.
+//
+// Cheat Sheet panel: the agent installed on this Mac is newer than the
+// sheet.
+func CheatsheetNewer(installed string, sheet string) string {
+	return In(i18n.Locale()).CheatsheetNewer(installed, sheet)
+}
+
+// CheatsheetNewer says "Installed {installed} is newer than the cheat sheet ({sheet}); there may be new commands"
+// in the language of msgs.
+//
+// Cheat Sheet panel: the agent installed on this Mac is newer than the
+// sheet.
+func (msgs Messages) CheatsheetNewer(installed string, sheet string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetNewer", map[string]any{"installed": installed, "sheet": sheet})
+}
+
+// CheatsheetNoBuiltinSkills says "No built-in skills found for {agent}."
+// in the language the app shows.
+//
+// Cheat Sheet panel note in the Built-in Skills tab. agent is the agent
+// name.
+func CheatsheetNoBuiltinSkills(agent string) string {
+	return In(i18n.Locale()).CheatsheetNoBuiltinSkills(agent)
+}
+
+// CheatsheetNoBuiltinSkills says "No built-in skills found for {agent}."
+// in the language of msgs.
+//
+// Cheat Sheet panel note in the Built-in Skills tab. agent is the agent
+// name.
+func (msgs Messages) CheatsheetNoBuiltinSkills(agent string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetNoBuiltinSkills", map[string]any{"agent": agent})
+}
+
+// CheatsheetNoMatches says "No commands or skills match “{query}”."
+// in the language the app shows.
+//
+// Cheat Sheet panel note when the search finds nothing.
+func CheatsheetNoMatches(query string) string { return In(i18n.Locale()).CheatsheetNoMatches(query) }
+
+// CheatsheetNoMatches says "No commands or skills match “{query}”."
+// in the language of msgs.
+//
+// Cheat Sheet panel note when the search finds nothing.
+func (msgs Messages) CheatsheetNoMatches(query string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetNoMatches", map[string]any{"query": query})
+}
+
+// CheatsheetNoSheet says "There’s no cheat sheet for {agent} yet."
+// in the language the app shows.
+//
+// Cheat Sheet panel note for an agent without a sheet. agent is the agent
+// name.
+func CheatsheetNoSheet(agent string) string { return In(i18n.Locale()).CheatsheetNoSheet(agent) }
+
+// CheatsheetNoSheet says "There’s no cheat sheet for {agent} yet."
+// in the language of msgs.
+//
+// Cheat Sheet panel note for an agent without a sheet. agent is the agent
+// name.
+func (msgs Messages) CheatsheetNoSheet(agent string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetNoSheet", map[string]any{"agent": agent})
+}
+
+// CheatsheetNoSkills says "This workspace has no skills {agent} can invoke manually."
+// in the language the app shows.
+//
+// Cheat Sheet panel note in the Skills tab. agent is the agent name.
+func CheatsheetNoSkills(agent string) string { return In(i18n.Locale()).CheatsheetNoSkills(agent) }
+
+// CheatsheetNoSkills says "This workspace has no skills {agent} can invoke manually."
+// in the language of msgs.
+//
+// Cheat Sheet panel note in the Skills tab. agent is the agent name.
+func (msgs Messages) CheatsheetNoSkills(agent string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetNoSkills", map[string]any{"agent": agent})
+}
+
+// CheatsheetOlder says "Installed {installed} is older than the cheat sheet ({sheet}); some commands may be missing"
+// in the language the app shows.
+//
+// Cheat Sheet panel: the agent installed on this Mac is older than the
+// sheet.
+func CheatsheetOlder(installed string, sheet string) string {
+	return In(i18n.Locale()).CheatsheetOlder(installed, sheet)
+}
+
+// CheatsheetOlder says "Installed {installed} is older than the cheat sheet ({sheet}); some commands may be missing"
+// in the language of msgs.
+//
+// Cheat Sheet panel: the agent installed on this Mac is older than the
+// sheet.
+func (msgs Messages) CheatsheetOlder(installed string, sheet string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetOlder", map[string]any{"installed": installed, "sheet": sheet})
+}
+
+// CheatsheetSearch says "Search"
+// in the language the app shows.
+//
+// Cheat Sheet panel: accessibility label of the search field.
+func CheatsheetSearch() string { return In(i18n.Locale()).CheatsheetSearch() }
+
+// CheatsheetSearch says "Search"
+// in the language of msgs.
+//
+// Cheat Sheet panel: accessibility label of the search field.
+func (msgs Messages) CheatsheetSearch() string {
+	return Catalog.Format(msgs.locale, "cheatsheetSearch", nil)
+}
+
+// CheatsheetSearchPlaceholder says "Search commands, skills and descriptions"
+// in the language the app shows.
+//
+// Cheat Sheet panel: placeholder of the search field.
+func CheatsheetSearchPlaceholder() string { return In(i18n.Locale()).CheatsheetSearchPlaceholder() }
+
+// CheatsheetSearchPlaceholder says "Search commands, skills and descriptions"
+// in the language of msgs.
+//
+// Cheat Sheet panel: placeholder of the search field.
+func (msgs Messages) CheatsheetSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "cheatsheetSearchPlaceholder", nil)
+}
+
+// CheatsheetSheetFor says "Cheat sheet for {version}"
+// in the language the app shows.
+//
+// Cheat Sheet panel: which agent version the sheet describes. version is
+// the agent name and version.
+func CheatsheetSheetFor(version string) string { return In(i18n.Locale()).CheatsheetSheetFor(version) }
+
+// CheatsheetSheetFor says "Cheat sheet for {version}"
+// in the language of msgs.
+//
+// Cheat Sheet panel: which agent version the sheet describes. version is
+// the agent name and version.
+func (msgs Messages) CheatsheetSheetFor(version string) string {
+	return Catalog.Format(msgs.locale, "cheatsheetSheetFor", map[string]any{"version": version})
+}
+
+// CheatsheetSkills says "Skills"
+// in the language the app shows.
+//
+// Cheat Sheet panel: tab and group title for skills installed for the
+// agent.
+func CheatsheetSkills() string { return In(i18n.Locale()).CheatsheetSkills() }
+
+// CheatsheetSkills says "Skills"
+// in the language of msgs.
+//
+// Cheat Sheet panel: tab and group title for skills installed for the
+// agent.
+func (msgs Messages) CheatsheetSkills() string {
+	return Catalog.Format(msgs.locale, "cheatsheetSkills", nil)
+}
+
+// CheatsheetTabBuiltin says "Built-in"
+// in the language the app shows.
+//
+// Cheat Sheet panel: tab listing skills that ship with the agent. Keep it
+// short: four tabs share a narrow panel.
+func CheatsheetTabBuiltin() string { return In(i18n.Locale()).CheatsheetTabBuiltin() }
+
+// CheatsheetTabBuiltin says "Built-in"
+// in the language of msgs.
+//
+// Cheat Sheet panel: tab listing skills that ship with the agent. Keep it
+// short: four tabs share a narrow panel.
+func (msgs Messages) CheatsheetTabBuiltin() string {
+	return Catalog.Format(msgs.locale, "cheatsheetTabBuiltin", nil)
+}
+
+// CheatsheetTitle says "Cheat Sheet"
+// in the language the app shows.
+//
+// Title of the Cheat Sheet panel on the right.
+func CheatsheetTitle() string { return In(i18n.Locale()).CheatsheetTitle() }
+
+// CheatsheetTitle says "Cheat Sheet"
+// in the language of msgs.
+//
+// Title of the Cheat Sheet panel on the right.
+func (msgs Messages) CheatsheetTitle() string {
+	return Catalog.Format(msgs.locale, "cheatsheetTitle", nil)
+}
+
 // CommonAll says "All"
 // in the language the app shows.
 //
@@ -2910,6 +3238,1306 @@ func CompareWorkspaceFiles(branch string, count int) string {
 // Header of the comparison of the workspace with a branch.
 func (msgs Messages) CompareWorkspaceFiles(branch string, count int) string {
 	return Catalog.Format(msgs.locale, "compareWorkspaceFiles", map[string]any{"branch": branch, "count": count})
+}
+
+// FilesAnnotateTip says "Annotate: see who changed each line"
+// in the language the app shows.
+//
+// Tooltip of the button in a file tab that shows Git Annotate (blame).
+func FilesAnnotateTip() string { return In(i18n.Locale()).FilesAnnotateTip() }
+
+// FilesAnnotateTip says "Annotate: see who changed each line"
+// in the language of msgs.
+//
+// Tooltip of the button in a file tab that shows Git Annotate (blame).
+func (msgs Messages) FilesAnnotateTip() string {
+	return Catalog.Format(msgs.locale, "filesAnnotateTip", nil)
+}
+
+// FilesBadRegex says "Invalid regular expression: {error}"
+// in the language the app shows.
+//
+// Files Panel search status when the regular expression doesn’t compile.
+// error is the reason.
+func FilesBadRegex(error string) string { return In(i18n.Locale()).FilesBadRegex(error) }
+
+// FilesBadRegex says "Invalid regular expression: {error}"
+// in the language of msgs.
+//
+// Files Panel search status when the regular expression doesn’t compile.
+// error is the reason.
+func (msgs Messages) FilesBadRegex(error string) string {
+	return Catalog.Format(msgs.locale, "filesBadRegex", map[string]any{"error": error})
+}
+
+// FilesBinaryNoContent says "Binary file, content not shown"
+// in the language the app shows.
+//
+// File tab message: the file is binary.
+func FilesBinaryNoContent() string { return In(i18n.Locale()).FilesBinaryNoContent() }
+
+// FilesBinaryNoContent says "Binary file, content not shown"
+// in the language of msgs.
+//
+// File tab message: the file is binary.
+func (msgs Messages) FilesBinaryNoContent() string {
+	return Catalog.Format(msgs.locale, "filesBinaryNoContent", nil)
+}
+
+// FilesBinaryNoDiff says "Binary file, no diff shown"
+// in the language the app shows.
+//
+// File tab message: a diff of a binary file.
+func FilesBinaryNoDiff() string { return In(i18n.Locale()).FilesBinaryNoDiff() }
+
+// FilesBinaryNoDiff says "Binary file, no diff shown"
+// in the language of msgs.
+//
+// File tab message: a diff of a binary file.
+func (msgs Messages) FilesBinaryNoDiff() string {
+	return Catalog.Format(msgs.locale, "filesBinaryNoDiff", nil)
+}
+
+// FilesCloseAll says "Close All Files"
+// in the language the app shows.
+//
+// File tab context menu item.
+func FilesCloseAll() string { return In(i18n.Locale()).FilesCloseAll() }
+
+// FilesCloseAll says "Close All Files"
+// in the language of msgs.
+//
+// File tab context menu item.
+func (msgs Messages) FilesCloseAll() string {
+	return Catalog.Format(msgs.locale, "filesCloseAll", nil)
+}
+
+// FilesCloseAnnotate says "Close Annotate"
+// in the language the app shows.
+//
+// Button in a file tab that hides the Git Annotate (blame) column.
+func FilesCloseAnnotate() string { return In(i18n.Locale()).FilesCloseAnnotate() }
+
+// FilesCloseAnnotate says "Close Annotate"
+// in the language of msgs.
+//
+// Button in a file tab that hides the Git Annotate (blame) column.
+func (msgs Messages) FilesCloseAnnotate() string {
+	return Catalog.Format(msgs.locale, "filesCloseAnnotate", nil)
+}
+
+// FilesCloseFile says "Close File"
+// in the language the app shows.
+//
+// Accessibility label of the close button on a file tab.
+func FilesCloseFile() string { return In(i18n.Locale()).FilesCloseFile() }
+
+// FilesCloseFile says "Close File"
+// in the language of msgs.
+//
+// Accessibility label of the close button on a file tab.
+func (msgs Messages) FilesCloseFile() string {
+	return Catalog.Format(msgs.locale, "filesCloseFile", nil)
+}
+
+// FilesCloseOthers says "Close Other Files"
+// in the language the app shows.
+//
+// File tab context menu item.
+func FilesCloseOthers() string { return In(i18n.Locale()).FilesCloseOthers() }
+
+// FilesCloseOthers says "Close Other Files"
+// in the language of msgs.
+//
+// File tab context menu item.
+func (msgs Messages) FilesCloseOthers() string {
+	return Catalog.Format(msgs.locale, "filesCloseOthers", nil)
+}
+
+// FilesCloseRight says "Close Files to the Right"
+// in the language the app shows.
+//
+// File tab context menu item.
+func FilesCloseRight() string { return In(i18n.Locale()).FilesCloseRight() }
+
+// FilesCloseRight says "Close Files to the Right"
+// in the language of msgs.
+//
+// File tab context menu item.
+func (msgs Messages) FilesCloseRight() string {
+	return Catalog.Format(msgs.locale, "filesCloseRight", nil)
+}
+
+// FilesCollapseAll says "Collapse All"
+// in the language the app shows.
+//
+// Tooltip of the button above the file tree that collapses all folders.
+func FilesCollapseAll() string { return In(i18n.Locale()).FilesCollapseAll() }
+
+// FilesCollapseAll says "Collapse All"
+// in the language of msgs.
+//
+// Tooltip of the button above the file tree that collapses all folders.
+func (msgs Messages) FilesCollapseAll() string {
+	return Catalog.Format(msgs.locale, "filesCollapseAll", nil)
+}
+
+// FilesCompareDetail says "Compare"
+// in the language the app shows.
+//
+// Small text after a file tab name: the tab compares the file with a
+// branch.
+func FilesCompareDetail() string { return In(i18n.Locale()).FilesCompareDetail() }
+
+// FilesCompareDetail says "Compare"
+// in the language of msgs.
+//
+// Small text after a file tab name: the tab compares the file with a
+// branch.
+func (msgs Messages) FilesCompareDetail() string {
+	return Catalog.Format(msgs.locale, "filesCompareDetail", nil)
+}
+
+// FilesCompareWorkspaceTab says "Workspace ↔ {branch}"
+// in the language the app shows.
+//
+// Name of a tab comparing the workspace files with a branch. branch is the
+// branch name.
+func FilesCompareWorkspaceTab(branch string) string {
+	return In(i18n.Locale()).FilesCompareWorkspaceTab(branch)
+}
+
+// FilesCompareWorkspaceTab says "Workspace ↔ {branch}"
+// in the language of msgs.
+//
+// Name of a tab comparing the workspace files with a branch. branch is the
+// branch name.
+func (msgs Messages) FilesCompareWorkspaceTab(branch string) string {
+	return Catalog.Format(msgs.locale, "filesCompareWorkspaceTab", map[string]any{"branch": branch})
+}
+
+// FilesConflictBanner says "The file on disk was changed (maybe by an agent), and you also have unsaved changes here."
+// in the language the app shows.
+//
+// Banner at the top of a file tab when the file changed on disk while it
+// has unsaved edits.
+func FilesConflictBanner() string { return In(i18n.Locale()).FilesConflictBanner() }
+
+// FilesConflictBanner says "The file on disk was changed (maybe by an agent), and you also have unsaved changes here."
+// in the language of msgs.
+//
+// Banner at the top of a file tab when the file changed on disk while it
+// has unsaved edits.
+func (msgs Messages) FilesConflictBanner() string {
+	return Catalog.Format(msgs.locale, "filesConflictBanner", nil)
+}
+
+// FilesCopyRelativePath says "Copy Relative Path"
+// in the language the app shows.
+//
+// Context menu item of a file (file tree, search results, file tab): copies
+// the path relative to the workspace.
+func FilesCopyRelativePath() string { return In(i18n.Locale()).FilesCopyRelativePath() }
+
+// FilesCopyRelativePath says "Copy Relative Path"
+// in the language of msgs.
+//
+// Context menu item of a file (file tree, search results, file tab): copies
+// the path relative to the workspace.
+func (msgs Messages) FilesCopyRelativePath() string {
+	return Catalog.Format(msgs.locale, "filesCopyRelativePath", nil)
+}
+
+// FilesDefinitionCount says "{count, plural, one {# definition} other {# definitions}}"
+// in the language the app shows.
+//
+// Header of the dialog listing several definitions of the same name, after
+// the name.
+func FilesDefinitionCount(count int) string { return In(i18n.Locale()).FilesDefinitionCount(count) }
+
+// FilesDefinitionCount says "{count, plural, one {# definition} other {# definitions}}"
+// in the language of msgs.
+//
+// Header of the dialog listing several definitions of the same name, after
+// the name.
+func (msgs Messages) FilesDefinitionCount(count int) string {
+	return Catalog.Format(msgs.locale, "filesDefinitionCount", map[string]any{"count": count})
+}
+
+// FilesDefinitionFailed says "Couldn’t find the definition: {error}"
+// in the language the app shows.
+//
+// Error bar text when Go to Definition fails.
+func FilesDefinitionFailed(error string) string {
+	return In(i18n.Locale()).FilesDefinitionFailed(error)
+}
+
+// FilesDefinitionFailed says "Couldn’t find the definition: {error}"
+// in the language of msgs.
+//
+// Error bar text when Go to Definition fails.
+func (msgs Messages) FilesDefinitionFailed(error string) string {
+	return Catalog.Format(msgs.locale, "filesDefinitionFailed", map[string]any{"error": error})
+}
+
+// FilesDeletedBanner says "The file has been deleted."
+// in the language the app shows.
+//
+// Banner at the top of a file tab when the file was deleted on disk.
+func FilesDeletedBanner() string { return In(i18n.Locale()).FilesDeletedBanner() }
+
+// FilesDeletedBanner says "The file has been deleted."
+// in the language of msgs.
+//
+// Banner at the top of a file tab when the file was deleted on disk.
+func (msgs Messages) FilesDeletedBanner() string {
+	return Catalog.Format(msgs.locale, "filesDeletedBanner", nil)
+}
+
+// FilesDeletedBannerSave says "The file has been deleted. Saving will create it again."
+// in the language the app shows.
+//
+// Banner at the top of an editable file tab when the file was deleted on
+// disk.
+func FilesDeletedBannerSave() string { return In(i18n.Locale()).FilesDeletedBannerSave() }
+
+// FilesDeletedBannerSave says "The file has been deleted. Saving will create it again."
+// in the language of msgs.
+//
+// Banner at the top of an editable file tab when the file was deleted on
+// disk.
+func (msgs Messages) FilesDeletedBannerSave() string {
+	return Catalog.Format(msgs.locale, "filesDeletedBannerSave", nil)
+}
+
+// FilesDiffTab says "Diff: {name}"
+// in the language the app shows.
+//
+// Name of a diff tab. name is the file name.
+func FilesDiffTab(name string) string { return In(i18n.Locale()).FilesDiffTab(name) }
+
+// FilesDiffTab says "Diff: {name}"
+// in the language of msgs.
+//
+// Name of a diff tab. name is the file name.
+func (msgs Messages) FilesDiffTab(name string) string {
+	return Catalog.Format(msgs.locale, "filesDiffTab", map[string]any{"name": name})
+}
+
+// FilesDontSave says "Don’t Save"
+// in the language the app shows.
+//
+// Button in the unsaved files dialog: close without saving.
+func FilesDontSave() string { return In(i18n.Locale()).FilesDontSave() }
+
+// FilesDontSave says "Don’t Save"
+// in the language of msgs.
+//
+// Button in the unsaved files dialog: close without saving.
+func (msgs Messages) FilesDontSave() string {
+	return Catalog.Format(msgs.locale, "filesDontSave", nil)
+}
+
+// FilesEmptyFolder says "This folder is empty"
+// in the language the app shows.
+//
+// Files Panel file tree: shown when the folder has no files.
+func FilesEmptyFolder() string { return In(i18n.Locale()).FilesEmptyFolder() }
+
+// FilesEmptyFolder says "This folder is empty"
+// in the language of msgs.
+//
+// Files Panel file tree: shown when the folder has no files.
+func (msgs Messages) FilesEmptyFolder() string {
+	return Catalog.Format(msgs.locale, "filesEmptyFolder", nil)
+}
+
+// FilesEmptyTitle says "Choose a file in the Files Panel on the right"
+// in the language the app shows.
+//
+// Title of the empty file area when no file is open.
+func FilesEmptyTitle() string { return In(i18n.Locale()).FilesEmptyTitle() }
+
+// FilesEmptyTitle says "Choose a file in the Files Panel on the right"
+// in the language of msgs.
+//
+// Title of the empty file area when no file is open.
+func (msgs Messages) FilesEmptyTitle() string {
+	return Catalog.Format(msgs.locale, "filesEmptyTitle", nil)
+}
+
+// FilesExcludePlaceholder says "Exclude, e.g. vendor, *_test.go"
+// in the language the app shows.
+//
+// Placeholder of the exclude-files field in the Files Panel search.
+func FilesExcludePlaceholder() string { return In(i18n.Locale()).FilesExcludePlaceholder() }
+
+// FilesExcludePlaceholder says "Exclude, e.g. vendor, *_test.go"
+// in the language of msgs.
+//
+// Placeholder of the exclude-files field in the Files Panel search.
+func (msgs Messages) FilesExcludePlaceholder() string {
+	return Catalog.Format(msgs.locale, "filesExcludePlaceholder", nil)
+}
+
+// FilesFileHistory says "File History"
+// in the language the app shows.
+//
+// Tooltip of the button in a file tab that opens the Git log of the file.
+func FilesFileHistory() string { return In(i18n.Locale()).FilesFileHistory() }
+
+// FilesFileHistory says "File History"
+// in the language of msgs.
+//
+// Tooltip of the button in a file tab that opens the Git log of the file.
+func (msgs Messages) FilesFileHistory() string {
+	return Catalog.Format(msgs.locale, "filesFileHistory", nil)
+}
+
+// FilesFilter says "Filter"
+// in the language the app shows.
+//
+// Short toggle chip in the Files Panel search that shows the
+// include/exclude fields.
+func FilesFilter() string { return In(i18n.Locale()).FilesFilter() }
+
+// FilesFilter says "Filter"
+// in the language of msgs.
+//
+// Short toggle chip in the Files Panel search that shows the
+// include/exclude fields.
+func (msgs Messages) FilesFilter() string {
+	return Catalog.Format(msgs.locale, "filesFilter", nil)
+}
+
+// FilesFilterTip says "Search only some files, or skip some"
+// in the language the app shows.
+//
+// Tooltip of the Filter chip in the Files Panel search.
+func FilesFilterTip() string { return In(i18n.Locale()).FilesFilterTip() }
+
+// FilesFilterTip says "Search only some files, or skip some"
+// in the language of msgs.
+//
+// Tooltip of the Filter chip in the Files Panel search.
+func (msgs Messages) FilesFilterTip() string {
+	return Catalog.Format(msgs.locale, "filesFilterTip", nil)
+}
+
+// FilesFind says "Find"
+// in the language the app shows.
+//
+// Placeholder and accessibility label of the find bar over a Markdown
+// preview or Annotate view.
+func FilesFind() string { return In(i18n.Locale()).FilesFind() }
+
+// FilesFind says "Find"
+// in the language of msgs.
+//
+// Placeholder and accessibility label of the find bar over a Markdown
+// preview or Annotate view.
+func (msgs Messages) FilesFind() string {
+	return Catalog.Format(msgs.locale, "filesFind", nil)
+}
+
+// FilesFindClose says "Close (Esc)"
+// in the language the app shows.
+//
+// Tooltip of the close button of the find bar.
+func FilesFindClose() string { return In(i18n.Locale()).FilesFindClose() }
+
+// FilesFindClose says "Close (Esc)"
+// in the language of msgs.
+//
+// Tooltip of the close button of the find bar.
+func (msgs Messages) FilesFindClose() string {
+	return Catalog.Format(msgs.locale, "filesFindClose", nil)
+}
+
+// FilesFindNext says "Next"
+// in the language the app shows.
+//
+// Tooltip of the down arrow in the find bar: next match.
+func FilesFindNext() string { return In(i18n.Locale()).FilesFindNext() }
+
+// FilesFindNext says "Next"
+// in the language of msgs.
+//
+// Tooltip of the down arrow in the find bar: next match.
+func (msgs Messages) FilesFindNext() string {
+	return Catalog.Format(msgs.locale, "filesFindNext", nil)
+}
+
+// FilesFindNoResults says "No results"
+// in the language the app shows.
+//
+// Find bar status when nothing matches.
+func FilesFindNoResults() string { return In(i18n.Locale()).FilesFindNoResults() }
+
+// FilesFindNoResults says "No results"
+// in the language of msgs.
+//
+// Find bar status when nothing matches.
+func (msgs Messages) FilesFindNoResults() string {
+	return Catalog.Format(msgs.locale, "filesFindNoResults", nil)
+}
+
+// FilesFindPrevious says "Previous"
+// in the language the app shows.
+//
+// Tooltip of the up arrow in the find bar: previous match.
+func FilesFindPrevious() string { return In(i18n.Locale()).FilesFindPrevious() }
+
+// FilesFindPrevious says "Previous"
+// in the language of msgs.
+//
+// Tooltip of the up arrow in the find bar: previous match.
+func (msgs Messages) FilesFindPrevious() string {
+	return Catalog.Format(msgs.locale, "filesFindPrevious", nil)
+}
+
+// FilesFindingDefinition says "Finding the definition of {name}…"
+// in the language the app shows.
+//
+// Hint at the bottom of a file tab while Go to Definition runs. name is the
+// word under the cursor.
+func FilesFindingDefinition(name string) string {
+	return In(i18n.Locale()).FilesFindingDefinition(name)
+}
+
+// FilesFindingDefinition says "Finding the definition of {name}…"
+// in the language of msgs.
+//
+// Hint at the bottom of a file tab while Go to Definition runs. name is the
+// word under the cursor.
+func (msgs Messages) FilesFindingDefinition(name string) string {
+	return Catalog.Format(msgs.locale, "filesFindingDefinition", map[string]any{"name": name})
+}
+
+// FilesFormatJSON says "Format JSON"
+// in the language the app shows.
+//
+// Tooltip of the button in a JSON file tab that reformats the file.
+func FilesFormatJSON() string { return In(i18n.Locale()).FilesFormatJSON() }
+
+// FilesFormatJSON says "Format JSON"
+// in the language of msgs.
+//
+// Tooltip of the button in a JSON file tab that reformats the file.
+func (msgs Messages) FilesFormatJSON() string {
+	return Catalog.Format(msgs.locale, "filesFormatJSON", nil)
+}
+
+// FilesGitLogTab says "Git Log"
+// in the language the app shows.
+//
+// Name of the tab that shows the Git Log of the whole repository.
+func FilesGitLogTab() string { return In(i18n.Locale()).FilesGitLogTab() }
+
+// FilesGitLogTab says "Git Log"
+// in the language of msgs.
+//
+// Name of the tab that shows the Git Log of the whole repository.
+func (msgs Messages) FilesGitLogTab() string {
+	return Catalog.Format(msgs.locale, "filesGitLogTab", nil)
+}
+
+// FilesIncludePlaceholder says "Include, e.g. *.go, src/"
+// in the language the app shows.
+//
+// Placeholder of the include-files field in the Files Panel search.
+func FilesIncludePlaceholder() string { return In(i18n.Locale()).FilesIncludePlaceholder() }
+
+// FilesIncludePlaceholder says "Include, e.g. *.go, src/"
+// in the language of msgs.
+//
+// Placeholder of the include-files field in the Files Panel search.
+func (msgs Messages) FilesIncludePlaceholder() string {
+	return Catalog.Format(msgs.locale, "filesIncludePlaceholder", nil)
+}
+
+// FilesIsDirectory says "This is a folder"
+// in the language the app shows.
+//
+// File tab message: the path opened is a folder.
+func FilesIsDirectory() string { return In(i18n.Locale()).FilesIsDirectory() }
+
+// FilesIsDirectory says "This is a folder"
+// in the language of msgs.
+//
+// File tab message: the path opened is a folder.
+func (msgs Messages) FilesIsDirectory() string {
+	return Catalog.Format(msgs.locale, "filesIsDirectory", nil)
+}
+
+// FilesJSONAlreadyFormatted says "Already formatted"
+// in the language the app shows.
+//
+// Hint at the bottom of a JSON file tab: Format JSON changed nothing.
+func FilesJSONAlreadyFormatted() string { return In(i18n.Locale()).FilesJSONAlreadyFormatted() }
+
+// FilesJSONAlreadyFormatted says "Already formatted"
+// in the language of msgs.
+//
+// Hint at the bottom of a JSON file tab: Format JSON changed nothing.
+func (msgs Messages) FilesJSONAlreadyFormatted() string {
+	return Catalog.Format(msgs.locale, "filesJSONAlreadyFormatted", nil)
+}
+
+// FilesJSONFormatFailed says "Can’t format: {error}"
+// in the language the app shows.
+//
+// Hint at the bottom of a JSON file tab when formatting fails. error is the
+// reason.
+func FilesJSONFormatFailed(error string) string {
+	return In(i18n.Locale()).FilesJSONFormatFailed(error)
+}
+
+// FilesJSONFormatFailed says "Can’t format: {error}"
+// in the language of msgs.
+//
+// Hint at the bottom of a JSON file tab when formatting fails. error is the
+// reason.
+func (msgs Messages) FilesJSONFormatFailed(error string) string {
+	return Catalog.Format(msgs.locale, "filesJSONFormatFailed", map[string]any{"error": error})
+}
+
+// FilesJSONFormatted says "Formatted. Undo"
+// in the language the app shows.
+//
+// Hint at the bottom of a JSON file tab after Format JSON; followed by the
+// undo shortcut.
+func FilesJSONFormatted() string { return In(i18n.Locale()).FilesJSONFormatted() }
+
+// FilesJSONFormatted says "Formatted. Undo"
+// in the language of msgs.
+//
+// Hint at the bottom of a JSON file tab after Format JSON; followed by the
+// undo shortcut.
+func (msgs Messages) FilesJSONFormatted() string {
+	return Catalog.Format(msgs.locale, "filesJSONFormatted", nil)
+}
+
+// FilesJSONSyntaxError says "Can’t format: JSON syntax error on line {line}"
+// in the language the app shows.
+//
+// Hint at the bottom of a JSON file tab when the JSON is invalid. line is
+// the line number.
+func FilesJSONSyntaxError(line int) string { return In(i18n.Locale()).FilesJSONSyntaxError(line) }
+
+// FilesJSONSyntaxError says "Can’t format: JSON syntax error on line {line}"
+// in the language of msgs.
+//
+// Hint at the bottom of a JSON file tab when the JSON is invalid. line is
+// the line number.
+func (msgs Messages) FilesJSONSyntaxError(line int) string {
+	return Catalog.Format(msgs.locale, "filesJSONSyntaxError", map[string]any{"line": line})
+}
+
+// FilesKeepMine says "Keep Mine"
+// in the language the app shows.
+//
+// Button in the file conflict banner: keep the unsaved edits.
+func FilesKeepMine() string { return In(i18n.Locale()).FilesKeepMine() }
+
+// FilesKeepMine says "Keep Mine"
+// in the language of msgs.
+//
+// Button in the file conflict banner: keep the unsaved edits.
+func (msgs Messages) FilesKeepMine() string {
+	return Catalog.Format(msgs.locale, "filesKeepMine", nil)
+}
+
+// FilesListFailed says "Couldn’t list files: {error}"
+// in the language the app shows.
+//
+// Error bar text when listing the workspace files fails. error is the
+// reason.
+func FilesListFailed(error string) string { return In(i18n.Locale()).FilesListFailed(error) }
+
+// FilesListFailed says "Couldn’t list files: {error}"
+// in the language of msgs.
+//
+// Error bar text when listing the workspace files fails. error is the
+// reason.
+func (msgs Messages) FilesListFailed(error string) string {
+	return Catalog.Format(msgs.locale, "filesListFailed", map[string]any{"error": error})
+}
+
+// FilesListSeparator says ", "
+// in the language the app shows.
+//
+// Separator between file names in a list (unsaved files dialog).
+func FilesListSeparator() string { return In(i18n.Locale()).FilesListSeparator() }
+
+// FilesListSeparator says ", "
+// in the language of msgs.
+//
+// Separator between file names in a list (unsaved files dialog).
+func (msgs Messages) FilesListSeparator() string {
+	return Catalog.Format(msgs.locale, "filesListSeparator", nil)
+}
+
+// FilesListing says "Listing files…"
+// in the language the app shows.
+//
+// Quick open status while the file list loads.
+func FilesListing() string { return In(i18n.Locale()).FilesListing() }
+
+// FilesListing says "Listing files…"
+// in the language of msgs.
+//
+// Quick open status while the file list loads.
+func (msgs Messages) FilesListing() string {
+	return Catalog.Format(msgs.locale, "filesListing", nil)
+}
+
+// FilesMatchCase says "Match Case"
+// in the language the app shows.
+//
+// Tooltip of the Aa toggle in the Files Panel search.
+func FilesMatchCase() string { return In(i18n.Locale()).FilesMatchCase() }
+
+// FilesMatchCase says "Match Case"
+// in the language of msgs.
+//
+// Tooltip of the Aa toggle in the Files Panel search.
+func (msgs Messages) FilesMatchCase() string {
+	return Catalog.Format(msgs.locale, "filesMatchCase", nil)
+}
+
+// FilesNoDefinition says "No definition of {name} found"
+// in the language the app shows.
+//
+// Hint at the bottom of a file tab when Go to Definition finds nothing.
+func FilesNoDefinition(name string) string { return In(i18n.Locale()).FilesNoDefinition(name) }
+
+// FilesNoDefinition says "No definition of {name} found"
+// in the language of msgs.
+//
+// Hint at the bottom of a file tab when Go to Definition finds nothing.
+func (msgs Messages) FilesNoDefinition(name string) string {
+	return Catalog.Format(msgs.locale, "filesNoDefinition", map[string]any{"name": name})
+}
+
+// FilesNoMatches says "No matching files"
+// in the language the app shows.
+//
+// Quick open status when no file name matches.
+func FilesNoMatches() string { return In(i18n.Locale()).FilesNoMatches() }
+
+// FilesNoMatches says "No matching files"
+// in the language of msgs.
+//
+// Quick open status when no file name matches.
+func (msgs Messages) FilesNoMatches() string {
+	return Catalog.Format(msgs.locale, "filesNoMatches", nil)
+}
+
+// FilesNoPermission says "No permission to read this file"
+// in the language the app shows.
+//
+// File tab message: macOS denied reading the file.
+func FilesNoPermission() string { return In(i18n.Locale()).FilesNoPermission() }
+
+// FilesNoPermission says "No permission to read this file"
+// in the language of msgs.
+//
+// File tab message: macOS denied reading the file.
+func (msgs Messages) FilesNoPermission() string {
+	return Catalog.Format(msgs.locale, "filesNoPermission", nil)
+}
+
+// FilesNoResults says "No results"
+// in the language the app shows.
+//
+// Files Panel search status when nothing matched.
+func FilesNoResults() string { return In(i18n.Locale()).FilesNoResults() }
+
+// FilesNoResults says "No results"
+// in the language of msgs.
+//
+// Files Panel search status when nothing matched.
+func (msgs Messages) FilesNoResults() string {
+	return Catalog.Format(msgs.locale, "filesNoResults", nil)
+}
+
+// FilesNotFound says "The file doesn’t exist"
+// in the language the app shows.
+//
+// File tab message: the file is missing.
+func FilesNotFound() string { return In(i18n.Locale()).FilesNotFound() }
+
+// FilesNotFound says "The file doesn’t exist"
+// in the language of msgs.
+//
+// File tab message: the file is missing.
+func (msgs Messages) FilesNotFound() string {
+	return Catalog.Format(msgs.locale, "filesNotFound", nil)
+}
+
+// FilesOpenWithDefaultApp says "Open with Default App"
+// in the language the app shows.
+//
+// Context menu item and button: opens the file in the app macOS uses for
+// it.
+func FilesOpenWithDefaultApp() string { return In(i18n.Locale()).FilesOpenWithDefaultApp() }
+
+// FilesOpenWithDefaultApp says "Open with Default App"
+// in the language of msgs.
+//
+// Context menu item and button: opens the file in the app macOS uses for
+// it.
+func (msgs Messages) FilesOpenWithDefaultApp() string {
+	return Catalog.Format(msgs.locale, "filesOpenWithDefaultApp", nil)
+}
+
+// FilesOverwriteBody says "{name} was changed after you opened it (maybe by an agent). Saving will overwrite those changes."
+// in the language the app shows.
+//
+// Body of the overwrite confirmation. name is the file name.
+func FilesOverwriteBody(name string) string { return In(i18n.Locale()).FilesOverwriteBody(name) }
+
+// FilesOverwriteBody says "{name} was changed after you opened it (maybe by an agent). Saving will overwrite those changes."
+// in the language of msgs.
+//
+// Body of the overwrite confirmation. name is the file name.
+func (msgs Messages) FilesOverwriteBody(name string) string {
+	return Catalog.Format(msgs.locale, "filesOverwriteBody", map[string]any{"name": name})
+}
+
+// FilesOverwriteConfirm says "Overwrite Changes on Disk?"
+// in the language the app shows.
+//
+// Title of the confirmation when saving a file that changed on disk after
+// it was opened.
+func FilesOverwriteConfirm() string { return In(i18n.Locale()).FilesOverwriteConfirm() }
+
+// FilesOverwriteConfirm says "Overwrite Changes on Disk?"
+// in the language of msgs.
+//
+// Title of the confirmation when saving a file that changed on disk after
+// it was opened.
+func (msgs Messages) FilesOverwriteConfirm() string {
+	return Catalog.Format(msgs.locale, "filesOverwriteConfirm", nil)
+}
+
+// FilesPanelChangesTab says "Changes"
+// in the language the app shows.
+//
+// Segment in the Files Panel: Git changes.
+func FilesPanelChangesTab() string { return In(i18n.Locale()).FilesPanelChangesTab() }
+
+// FilesPanelChangesTab says "Changes"
+// in the language of msgs.
+//
+// Segment in the Files Panel: Git changes.
+func (msgs Messages) FilesPanelChangesTab() string {
+	return Catalog.Format(msgs.locale, "filesPanelChangesTab", nil)
+}
+
+// FilesPanelFilesTab says "Files"
+// in the language the app shows.
+//
+// Tab at the top of the Files Panel, and segment for the file tree.
+func FilesPanelFilesTab() string { return In(i18n.Locale()).FilesPanelFilesTab() }
+
+// FilesPanelFilesTab says "Files"
+// in the language of msgs.
+//
+// Tab at the top of the Files Panel, and segment for the file tree.
+func (msgs Messages) FilesPanelFilesTab() string {
+	return Catalog.Format(msgs.locale, "filesPanelFilesTab", nil)
+}
+
+// FilesPanelHint says "Files Panel"
+// in the language the app shows.
+//
+// Shortcut hint under the empty file area: toggles the Files Panel.
+func FilesPanelHint() string { return In(i18n.Locale()).FilesPanelHint() }
+
+// FilesPanelHint says "Files Panel"
+// in the language of msgs.
+//
+// Shortcut hint under the empty file area: toggles the Files Panel.
+func (msgs Messages) FilesPanelHint() string {
+	return Catalog.Format(msgs.locale, "filesPanelHint", nil)
+}
+
+// FilesPanelHistoryTab says "History"
+// in the language the app shows.
+//
+// Tab at the top of the Files Panel: the project’s sessions.
+func FilesPanelHistoryTab() string { return In(i18n.Locale()).FilesPanelHistoryTab() }
+
+// FilesPanelHistoryTab says "History"
+// in the language of msgs.
+//
+// Tab at the top of the Files Panel: the project’s sessions.
+func (msgs Messages) FilesPanelHistoryTab() string {
+	return Catalog.Format(msgs.locale, "filesPanelHistoryTab", nil)
+}
+
+// FilesPanelSearchTab says "Search"
+// in the language the app shows.
+//
+// Segment in the Files Panel: full-text search.
+func FilesPanelSearchTab() string { return In(i18n.Locale()).FilesPanelSearchTab() }
+
+// FilesPanelSearchTab says "Search"
+// in the language of msgs.
+//
+// Segment in the Files Panel: full-text search.
+func (msgs Messages) FilesPanelSearchTab() string {
+	return Catalog.Format(msgs.locale, "filesPanelSearchTab", nil)
+}
+
+// FilesPanelSkillsTab says "Skills"
+// in the language the app shows.
+//
+// Tab at the top of the Files Panel: the workspace’s skills.
+func FilesPanelSkillsTab() string { return In(i18n.Locale()).FilesPanelSkillsTab() }
+
+// FilesPanelSkillsTab says "Skills"
+// in the language of msgs.
+//
+// Tab at the top of the Files Panel: the workspace’s skills.
+func (msgs Messages) FilesPanelSkillsTab() string {
+	return Catalog.Format(msgs.locale, "filesPanelSkillsTab", nil)
+}
+
+// FilesPanelTitle says "Files Panel"
+// in the language the app shows.
+//
+// Tooltip of the button that toggles the Files Panel, and accessibility
+// label of its segmented control.
+func FilesPanelTitle() string { return In(i18n.Locale()).FilesPanelTitle() }
+
+// FilesPanelTitle says "Files Panel"
+// in the language of msgs.
+//
+// Tooltip of the button that toggles the Files Panel, and accessibility
+// label of its segmented control.
+func (msgs Messages) FilesPanelTitle() string {
+	return Catalog.Format(msgs.locale, "filesPanelTitle", nil)
+}
+
+// FilesPathNotFound says "Can’t find {path}"
+// in the language the app shows.
+//
+// Hint at the bottom of a file tab: the path under the cursor (an import)
+// can’t be resolved.
+func FilesPathNotFound(path string) string { return In(i18n.Locale()).FilesPathNotFound(path) }
+
+// FilesPathNotFound says "Can’t find {path}"
+// in the language of msgs.
+//
+// Hint at the bottom of a file tab: the path under the cursor (an import)
+// can’t be resolved.
+func (msgs Messages) FilesPathNotFound(path string) string {
+	return Catalog.Format(msgs.locale, "filesPathNotFound", map[string]any{"path": path})
+}
+
+// FilesQuickOpenHint says "Open by Name"
+// in the language the app shows.
+//
+// Shortcut hint under the empty file area: quick open.
+func FilesQuickOpenHint() string { return In(i18n.Locale()).FilesQuickOpenHint() }
+
+// FilesQuickOpenHint says "Open by Name"
+// in the language of msgs.
+//
+// Shortcut hint under the empty file area: quick open.
+func (msgs Messages) FilesQuickOpenHint() string {
+	return Catalog.Format(msgs.locale, "filesQuickOpenHint", nil)
+}
+
+// FilesQuickOpenPlaceholder says "Find a file by name; add :line to jump to that line"
+// in the language the app shows.
+//
+// Placeholder of the quick open field.
+func FilesQuickOpenPlaceholder() string { return In(i18n.Locale()).FilesQuickOpenPlaceholder() }
+
+// FilesQuickOpenPlaceholder says "Find a file by name; add :line to jump to that line"
+// in the language of msgs.
+//
+// Placeholder of the quick open field.
+func (msgs Messages) FilesQuickOpenPlaceholder() string {
+	return Catalog.Format(msgs.locale, "filesQuickOpenPlaceholder", nil)
+}
+
+// FilesReadOnly says "Read-Only"
+// in the language the app shows.
+//
+// Badge in the file tab path bar: the file is opened read-only.
+func FilesReadOnly() string { return In(i18n.Locale()).FilesReadOnly() }
+
+// FilesReadOnly says "Read-Only"
+// in the language of msgs.
+//
+// Badge in the file tab path bar: the file is opened read-only.
+func (msgs Messages) FilesReadOnly() string {
+	return Catalog.Format(msgs.locale, "filesReadOnly", nil)
+}
+
+// FilesReadOnlyTip says "The file is larger than {size} MB and is opened read-only"
+// in the language the app shows.
+//
+// Tooltip of the Read-Only badge. size is a number of megabytes.
+func FilesReadOnlyTip(size int) string { return In(i18n.Locale()).FilesReadOnlyTip(size) }
+
+// FilesReadOnlyTip says "The file is larger than {size} MB and is opened read-only"
+// in the language of msgs.
+//
+// Tooltip of the Read-Only badge. size is a number of megabytes.
+func (msgs Messages) FilesReadOnlyTip(size int) string {
+	return Catalog.Format(msgs.locale, "filesReadOnlyTip", map[string]any{"size": size})
+}
+
+// FilesRegex says "Regular Expression"
+// in the language the app shows.
+//
+// Tooltip of the .* toggle in the Files Panel search.
+func FilesRegex() string { return In(i18n.Locale()).FilesRegex() }
+
+// FilesRegex says "Regular Expression"
+// in the language of msgs.
+//
+// Tooltip of the .* toggle in the Files Panel search.
+func (msgs Messages) FilesRegex() string {
+	return Catalog.Format(msgs.locale, "filesRegex", nil)
+}
+
+// FilesRevealCurrent says "Reveal Current File"
+// in the language the app shows.
+//
+// Tooltip of the button above the file tree that selects the open file.
+func FilesRevealCurrent() string { return In(i18n.Locale()).FilesRevealCurrent() }
+
+// FilesRevealCurrent says "Reveal Current File"
+// in the language of msgs.
+//
+// Tooltip of the button above the file tree that selects the open file.
+func (msgs Messages) FilesRevealCurrent() string {
+	return Catalog.Format(msgs.locale, "filesRevealCurrent", nil)
+}
+
+// FilesRevealInTree says "Reveal in File Tree"
+// in the language the app shows.
+//
+// Tooltip of the button in a file tab that selects the file in the Files
+// Panel tree.
+func FilesRevealInTree() string { return In(i18n.Locale()).FilesRevealInTree() }
+
+// FilesRevealInTree says "Reveal in File Tree"
+// in the language of msgs.
+//
+// Tooltip of the button in a file tab that selects the file in the Files
+// Panel tree.
+func (msgs Messages) FilesRevealInTree() string {
+	return Catalog.Format(msgs.locale, "filesRevealInTree", nil)
+}
+
+// FilesRollbackFile says "Rollback This File…"
+// in the language the app shows.
+//
+// Tooltip of the button in a file tab that rolls back the file’s Git
+// changes.
+func FilesRollbackFile() string { return In(i18n.Locale()).FilesRollbackFile() }
+
+// FilesRollbackFile says "Rollback This File…"
+// in the language of msgs.
+//
+// Tooltip of the button in a file tab that rolls back the file’s Git
+// changes.
+func (msgs Messages) FilesRollbackFile() string {
+	return Catalog.Format(msgs.locale, "filesRollbackFile", nil)
+}
+
+// FilesSaveAnyway says "Save Anyway"
+// in the language the app shows.
+//
+// Confirm button of the overwrite confirmation.
+func FilesSaveAnyway() string { return In(i18n.Locale()).FilesSaveAnyway() }
+
+// FilesSaveAnyway says "Save Anyway"
+// in the language of msgs.
+//
+// Confirm button of the overwrite confirmation.
+func (msgs Messages) FilesSaveAnyway() string {
+	return Catalog.Format(msgs.locale, "filesSaveAnyway", nil)
+}
+
+// FilesSaveFailed says "Couldn’t save {name}: {error}"
+// in the language the app shows.
+//
+// Error bar text when saving a file fails.
+func FilesSaveFailed(name string, error string) string {
+	return In(i18n.Locale()).FilesSaveFailed(name, error)
+}
+
+// FilesSaveFailed says "Couldn’t save {name}: {error}"
+// in the language of msgs.
+//
+// Error bar text when saving a file fails.
+func (msgs Messages) FilesSaveFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "filesSaveFailed", map[string]any{"name": name, "error": error})
+}
+
+// FilesSearchCount says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}"
+// in the language the app shows.
+//
+// Files Panel search status: how many matching lines in how many files.
+func FilesSearchCount(files int, lines int) string {
+	return In(i18n.Locale()).FilesSearchCount(files, lines)
+}
+
+// FilesSearchCount says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}"
+// in the language of msgs.
+//
+// Files Panel search status: how many matching lines in how many files.
+func (msgs Messages) FilesSearchCount(files int, lines int) string {
+	return Catalog.Format(msgs.locale, "filesSearchCount", map[string]any{"files": files, "lines": lines})
+}
+
+// FilesSearchCountRunning says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; still searching"
+// in the language the app shows.
+//
+// Files Panel search status while the search is still running.
+func FilesSearchCountRunning(files int, lines int) string {
+	return In(i18n.Locale()).FilesSearchCountRunning(files, lines)
+}
+
+// FilesSearchCountRunning says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; still searching"
+// in the language of msgs.
+//
+// Files Panel search status while the search is still running.
+func (msgs Messages) FilesSearchCountRunning(files int, lines int) string {
+	return Catalog.Format(msgs.locale, "filesSearchCountRunning", map[string]any{"files": files, "lines": lines})
+}
+
+// FilesSearchCountTruncated says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; too many results, sho…"
+// in the language the app shows.
+//
+// Files Panel search status when the results were cut off.
+func FilesSearchCountTruncated(files int, lines int) string {
+	return In(i18n.Locale()).FilesSearchCountTruncated(files, lines)
+}
+
+// FilesSearchCountTruncated says "{lines, plural, one {# line} other {# lines}} in {files, plural, one {# file} other {# files}}; too many results, sho…"
+// in the language of msgs.
+//
+// Files Panel search status when the results were cut off.
+func (msgs Messages) FilesSearchCountTruncated(files int, lines int) string {
+	return Catalog.Format(msgs.locale, "filesSearchCountTruncated", map[string]any{"files": files, "lines": lines})
+}
+
+// FilesSearchHint says "Search in Files"
+// in the language the app shows.
+//
+// Shortcut hint under the empty file area: full-text search.
+func FilesSearchHint() string { return In(i18n.Locale()).FilesSearchHint() }
+
+// FilesSearchHint says "Search in Files"
+// in the language of msgs.
+//
+// Shortcut hint under the empty file area: full-text search.
+func (msgs Messages) FilesSearchHint() string {
+	return Catalog.Format(msgs.locale, "filesSearchHint", nil)
+}
+
+// FilesSearchPlaceholder says "Search in Files"
+// in the language the app shows.
+//
+// Placeholder of the full-text search field in the Files Panel.
+func FilesSearchPlaceholder() string { return In(i18n.Locale()).FilesSearchPlaceholder() }
+
+// FilesSearchPlaceholder says "Search in Files"
+// in the language of msgs.
+//
+// Placeholder of the full-text search field in the Files Panel.
+func (msgs Messages) FilesSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "filesSearchPlaceholder", nil)
+}
+
+// FilesSearching says "Searching…"
+// in the language the app shows.
+//
+// Files Panel search status while the search runs and nothing is found yet.
+func FilesSearching() string { return In(i18n.Locale()).FilesSearching() }
+
+// FilesSearching says "Searching…"
+// in the language of msgs.
+//
+// Files Panel search status while the search runs and nothing is found yet.
+func (msgs Messages) FilesSearching() string {
+	return Catalog.Format(msgs.locale, "filesSearching", nil)
+}
+
+// FilesSymlinkTip says "Symbolic link → {target}"
+// in the language the app shows.
+//
+// Files Panel file tree: tooltip of a symbolic link row. target is where
+// the link points.
+func FilesSymlinkTip(target string) string { return In(i18n.Locale()).FilesSymlinkTip(target) }
+
+// FilesSymlinkTip says "Symbolic link → {target}"
+// in the language of msgs.
+//
+// Files Panel file tree: tooltip of a symbolic link row. target is where
+// the link points.
+func (msgs Messages) FilesSymlinkTip(target string) string {
+	return Catalog.Format(msgs.locale, "filesSymlinkTip", map[string]any{"target": target})
+}
+
+// FilesTooLarge says "The file is larger than {size} MB and isn’t opened here"
+// in the language the app shows.
+//
+// File tab message: the file is too large to open. size is a number of
+// megabytes.
+func FilesTooLarge(size int) string { return In(i18n.Locale()).FilesTooLarge(size) }
+
+// FilesTooLarge says "The file is larger than {size} MB and isn’t opened here"
+// in the language of msgs.
+//
+// File tab message: the file is too large to open. size is a number of
+// megabytes.
+func (msgs Messages) FilesTooLarge(size int) string {
+	return Catalog.Format(msgs.locale, "filesTooLarge", map[string]any{"size": size})
+}
+
+// FilesUnsavedBody says "If you don’t save, your changes will be lost."
+// in the language the app shows.
+//
+// Body of the dialog asking to save one unsaved file.
+func FilesUnsavedBody() string { return In(i18n.Locale()).FilesUnsavedBody() }
+
+// FilesUnsavedBody says "If you don’t save, your changes will be lost."
+// in the language of msgs.
+//
+// Body of the dialog asking to save one unsaved file.
+func (msgs Messages) FilesUnsavedBody() string {
+	return Catalog.Format(msgs.locale, "filesUnsavedBody", nil)
+}
+
+// FilesUnsavedBodyMany says "{names}. If you don’t save, your changes will be lost."
+// in the language the app shows.
+//
+// Body of the dialog asking to save several unsaved files. names lists the
+// file names joined with filesListSeparator.
+func FilesUnsavedBodyMany(names string) string { return In(i18n.Locale()).FilesUnsavedBodyMany(names) }
+
+// FilesUnsavedBodyMany says "{names}. If you don’t save, your changes will be lost."
+// in the language of msgs.
+//
+// Body of the dialog asking to save several unsaved files. names lists the
+// file names joined with filesListSeparator.
+func (msgs Messages) FilesUnsavedBodyMany(names string) string {
+	return Catalog.Format(msgs.locale, "filesUnsavedBodyMany", map[string]any{"names": names})
+}
+
+// FilesUnsavedTip says "Unsaved changes"
+// in the language the app shows.
+//
+// Files Panel file tree: tooltip of the dot after a file that has unsaved
+// changes.
+func FilesUnsavedTip() string { return In(i18n.Locale()).FilesUnsavedTip() }
+
+// FilesUnsavedTip says "Unsaved changes"
+// in the language of msgs.
+//
+// Files Panel file tree: tooltip of the dot after a file that has unsaved
+// changes.
+func (msgs Messages) FilesUnsavedTip() string {
+	return Catalog.Format(msgs.locale, "filesUnsavedTip", nil)
+}
+
+// FilesUnsavedTitle says "Save Changes to {name}?"
+// in the language the app shows.
+//
+// Title of the dialog asking to save one unsaved file before closing.
+func FilesUnsavedTitle(name string) string { return In(i18n.Locale()).FilesUnsavedTitle(name) }
+
+// FilesUnsavedTitle says "Save Changes to {name}?"
+// in the language of msgs.
+//
+// Title of the dialog asking to save one unsaved file before closing.
+func (msgs Messages) FilesUnsavedTitle(name string) string {
+	return Catalog.Format(msgs.locale, "filesUnsavedTitle", map[string]any{"name": name})
+}
+
+// FilesUnsavedTitleMany says "{count, plural, one {# file has} other {# files have}} unsaved changes"
+// in the language the app shows.
+//
+// Title of the dialog asking to save several unsaved files before closing.
+func FilesUnsavedTitleMany(count int) string { return In(i18n.Locale()).FilesUnsavedTitleMany(count) }
+
+// FilesUnsavedTitleMany says "{count, plural, one {# file has} other {# files have}} unsaved changes"
+// in the language of msgs.
+//
+// Title of the dialog asking to save several unsaved files before closing.
+func (msgs Messages) FilesUnsavedTitleMany(count int) string {
+	return Catalog.Format(msgs.locale, "filesUnsavedTitleMany", map[string]any{"count": count})
+}
+
+// FilesUseDisk says "Use Disk Version"
+// in the language the app shows.
+//
+// Button in the file conflict banner: reload the file from disk.
+func FilesUseDisk() string { return In(i18n.Locale()).FilesUseDisk() }
+
+// FilesUseDisk says "Use Disk Version"
+// in the language of msgs.
+//
+// Button in the file conflict banner: reload the file from disk.
+func (msgs Messages) FilesUseDisk() string {
+	return Catalog.Format(msgs.locale, "filesUseDisk", nil)
+}
+
+// FilesViewSource says "View Source"
+// in the language the app shows.
+//
+// Tooltip of the button in a Markdown file tab that switches from preview
+// to source.
+func FilesViewSource() string { return In(i18n.Locale()).FilesViewSource() }
+
+// FilesViewSource says "View Source"
+// in the language of msgs.
+//
+// Tooltip of the button in a Markdown file tab that switches from preview
+// to source.
+func (msgs Messages) FilesViewSource() string {
+	return Catalog.Format(msgs.locale, "filesViewSource", nil)
+}
+
+// FilesWikiNotFound says "Can’t find the file [[{target}]] points to: {path}"
+// in the language the app shows.
+//
+// Error bar text when a [[wiki link]] in Markdown points to a missing file.
+func FilesWikiNotFound(target string, path string) string {
+	return In(i18n.Locale()).FilesWikiNotFound(target, path)
+}
+
+// FilesWikiNotFound says "Can’t find the file [[{target}]] points to: {path}"
+// in the language of msgs.
+//
+// Error bar text when a [[wiki link]] in Markdown points to a missing file.
+func (msgs Messages) FilesWikiNotFound(target string, path string) string {
+	return Catalog.Format(msgs.locale, "filesWikiNotFound", map[string]any{"target": target, "path": path})
+}
+
+// FilesWorkspaceGone says "The workspace folder no longer exists"
+// in the language the app shows.
+//
+// Files Panel message when the workspace folder was removed.
+func FilesWorkspaceGone() string { return In(i18n.Locale()).FilesWorkspaceGone() }
+
+// FilesWorkspaceGone says "The workspace folder no longer exists"
+// in the language of msgs.
+//
+// Files Panel message when the workspace folder was removed.
+func (msgs Messages) FilesWorkspaceGone() string {
+	return Catalog.Format(msgs.locale, "filesWorkspaceGone", nil)
 }
 
 // GitAbort says "Abort"
@@ -5548,6 +7176,656 @@ func (msgs Messages) GitWorkspace() string {
 	return Catalog.Format(msgs.locale, "gitWorkspace", nil)
 }
 
+// HistoryAddAndContinue says "Add and Continue"
+// in the language the app shows.
+//
+// History: confirm button of the add-project confirmation.
+func HistoryAddAndContinue() string { return In(i18n.Locale()).HistoryAddAndContinue() }
+
+// HistoryAddAndContinue says "Add and Continue"
+// in the language of msgs.
+//
+// History: confirm button of the add-project confirmation.
+func (msgs Messages) HistoryAddAndContinue() string {
+	return Catalog.Format(msgs.locale, "historyAddAndContinue", nil)
+}
+
+// HistoryAddProjectBody says "No workspace in Posse contains this folder yet. Once it’s added, the session continues in that project."
+// in the language the app shows.
+//
+// History: body of the add-project confirmation.
+func HistoryAddProjectBody() string { return In(i18n.Locale()).HistoryAddProjectBody() }
+
+// HistoryAddProjectBody says "No workspace in Posse contains this folder yet. Once it’s added, the session continues in that project."
+// in the language of msgs.
+//
+// History: body of the add-project confirmation.
+func (msgs Messages) HistoryAddProjectBody() string {
+	return Catalog.Format(msgs.locale, "historyAddProjectBody", nil)
+}
+
+// HistoryAddProjectConfirm says "Add {path} as a Project?"
+// in the language the app shows.
+//
+// History: title of the confirmation shown when continuing a session whose
+// folder is not in any workspace. path is the folder.
+func HistoryAddProjectConfirm(path string) string {
+	return In(i18n.Locale()).HistoryAddProjectConfirm(path)
+}
+
+// HistoryAddProjectConfirm says "Add {path} as a Project?"
+// in the language of msgs.
+//
+// History: title of the confirmation shown when continuing a session whose
+// folder is not in any workspace. path is the folder.
+func (msgs Messages) HistoryAddProjectConfirm(path string) string {
+	return Catalog.Format(msgs.locale, "historyAddProjectConfirm", map[string]any{"path": path})
+}
+
+// HistoryAnyWord says "No session contains all the words; showing sessions with any of them"
+// in the language the app shows.
+//
+// History: notice when the search falls back to matching any word.
+func HistoryAnyWord() string { return In(i18n.Locale()).HistoryAnyWord() }
+
+// HistoryAnyWord says "No session contains all the words; showing sessions with any of them"
+// in the language of msgs.
+//
+// History: notice when the search falls back to matching any word.
+func (msgs Messages) HistoryAnyWord() string {
+	return Catalog.Format(msgs.locale, "historyAnyWord", nil)
+}
+
+// HistoryContext says "Context {percent}%"
+// in the language the app shows.
+//
+// History: share of the context window used by the session’s last
+// request.
+func HistoryContext(percent int) string { return In(i18n.Locale()).HistoryContext(percent) }
+
+// HistoryContext says "Context {percent}%"
+// in the language of msgs.
+//
+// History: share of the context window used by the session’s last
+// request.
+func (msgs Messages) HistoryContext(percent int) string {
+	return Catalog.Format(msgs.locale, "historyContext", map[string]any{"percent": percent})
+}
+
+// HistoryContextTip says "The last request used {used} / {window} tokens"
+// in the language the app shows.
+//
+// History: tooltip of the context share. used and window are token counts.
+func HistoryContextTip(used int, window int) string {
+	return In(i18n.Locale()).HistoryContextTip(used, window)
+}
+
+// HistoryContextTip says "The last request used {used} / {window} tokens"
+// in the language of msgs.
+//
+// History: tooltip of the context share. used and window are token counts.
+func (msgs Messages) HistoryContextTip(used int, window int) string {
+	return Catalog.Format(msgs.locale, "historyContextTip", map[string]any{"used": used, "window": window})
+}
+
+// HistoryContinueInPosse says "Continue in Posse"
+// in the language the app shows.
+//
+// History: button that resumes the session in a new terminal.
+func HistoryContinueInPosse() string { return In(i18n.Locale()).HistoryContinueInPosse() }
+
+// HistoryContinueInPosse says "Continue in Posse"
+// in the language of msgs.
+//
+// History: button that resumes the session in a new terminal.
+func (msgs Messages) HistoryContinueInPosse() string {
+	return Catalog.Format(msgs.locale, "historyContinueInPosse", nil)
+}
+
+// HistoryCopyResumeCommand says "Copy Resume Command"
+// in the language the app shows.
+//
+// History: button that copies the shell command resuming the session.
+func HistoryCopyResumeCommand() string { return In(i18n.Locale()).HistoryCopyResumeCommand() }
+
+// HistoryCopyResumeCommand says "Copy Resume Command"
+// in the language of msgs.
+//
+// History: button that copies the shell command resuming the session.
+func (msgs Messages) HistoryCopyResumeCommand() string {
+	return Catalog.Format(msgs.locale, "historyCopyResumeCommand", nil)
+}
+
+// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them."
+// in the language the app shows.
+//
+// History: empty list body.
+func HistoryEmptyBody() string { return In(i18n.Locale()).HistoryEmptyBody() }
+
+// HistoryEmptyBody says "Posse reads the sessions in ~/.claude, ~/.codex, ~/.cursor and ~/.grok, and never changes them."
+// in the language of msgs.
+//
+// History: empty list body.
+func (msgs Messages) HistoryEmptyBody() string {
+	return Catalog.Format(msgs.locale, "historyEmptyBody", nil)
+}
+
+// HistoryEmptyTitle says "No sessions yet"
+// in the language the app shows.
+//
+// History: empty list title.
+func HistoryEmptyTitle() string { return In(i18n.Locale()).HistoryEmptyTitle() }
+
+// HistoryEmptyTitle says "No sessions yet"
+// in the language of msgs.
+//
+// History: empty list title.
+func (msgs Messages) HistoryEmptyTitle() string {
+	return Catalog.Format(msgs.locale, "historyEmptyTitle", nil)
+}
+
+// HistoryFilterByAgent says "Filter by Agent"
+// in the language the app shows.
+//
+// History: accessibility label of the agent filter segmented control.
+func HistoryFilterByAgent() string { return In(i18n.Locale()).HistoryFilterByAgent() }
+
+// HistoryFilterByAgent says "Filter by Agent"
+// in the language of msgs.
+//
+// History: accessibility label of the agent filter segmented control.
+func (msgs Messages) HistoryFilterByAgent() string {
+	return Catalog.Format(msgs.locale, "historyFilterByAgent", nil)
+}
+
+// HistoryGroupBy says "Group Sessions By"
+// in the language the app shows.
+//
+// History: accessibility label of the segmented control choosing how
+// sessions are grouped.
+func HistoryGroupBy() string { return In(i18n.Locale()).HistoryGroupBy() }
+
+// HistoryGroupBy says "Group Sessions By"
+// in the language of msgs.
+//
+// History: accessibility label of the segmented control choosing how
+// sessions are grouped.
+func (msgs Messages) HistoryGroupBy() string {
+	return Catalog.Format(msgs.locale, "historyGroupBy", nil)
+}
+
+// HistoryGroupByFolder says "By Folder"
+// in the language the app shows.
+//
+// History: segment that groups sessions by project folder.
+func HistoryGroupByFolder() string { return In(i18n.Locale()).HistoryGroupByFolder() }
+
+// HistoryGroupByFolder says "By Folder"
+// in the language of msgs.
+//
+// History: segment that groups sessions by project folder.
+func (msgs Messages) HistoryGroupByFolder() string {
+	return Catalog.Format(msgs.locale, "historyGroupByFolder", nil)
+}
+
+// HistoryGroupByTime says "By Time"
+// in the language the app shows.
+//
+// History: segment that groups sessions by date.
+func HistoryGroupByTime() string { return In(i18n.Locale()).HistoryGroupByTime() }
+
+// HistoryGroupByTime says "By Time"
+// in the language of msgs.
+//
+// History: segment that groups sessions by date.
+func (msgs Messages) HistoryGroupByTime() string {
+	return Catalog.Format(msgs.locale, "historyGroupByTime", nil)
+}
+
+// HistoryIndexFailed says "Index update failed: {error}"
+// in the language the app shows.
+//
+// History: notice when updating the index failed.
+func HistoryIndexFailed(error string) string { return In(i18n.Locale()).HistoryIndexFailed(error) }
+
+// HistoryIndexFailed says "Index update failed: {error}"
+// in the language of msgs.
+//
+// History: notice when updating the index failed.
+func (msgs Messages) HistoryIndexFailed(error string) string {
+	return Catalog.Format(msgs.locale, "historyIndexFailed", map[string]any{"error": error})
+}
+
+// HistoryIndexedCount says "{count, plural, one {# session indexed} other {# sessions indexed}}"
+// in the language the app shows.
+//
+// History: number of indexed sessions, in the placeholder card.
+func HistoryIndexedCount(count int) string { return In(i18n.Locale()).HistoryIndexedCount(count) }
+
+// HistoryIndexedCount says "{count, plural, one {# session indexed} other {# sessions indexed}}"
+// in the language of msgs.
+//
+// History: number of indexed sessions, in the placeholder card.
+func (msgs Messages) HistoryIndexedCount(count int) string {
+	return Catalog.Format(msgs.locale, "historyIndexedCount", map[string]any{"count": count})
+}
+
+// HistoryIndexing says "Building the index…"
+// in the language the app shows.
+//
+// History: notice while the index is being built and the total is unknown.
+func HistoryIndexing() string { return In(i18n.Locale()).HistoryIndexing() }
+
+// HistoryIndexing says "Building the index…"
+// in the language of msgs.
+//
+// History: notice while the index is being built and the total is unknown.
+func (msgs Messages) HistoryIndexing() string {
+	return Catalog.Format(msgs.locale, "historyIndexing", nil)
+}
+
+// HistoryIndexingProgress says "Building the index: checked {done} / {total} session files; results will fill in"
+// in the language the app shows.
+//
+// History: notice while the index is being built. done and total are file
+// counts, shown without digit grouping.
+func HistoryIndexingProgress(done string, total string) string {
+	return In(i18n.Locale()).HistoryIndexingProgress(done, total)
+}
+
+// HistoryIndexingProgress says "Building the index: checked {done} / {total} session files; results will fill in"
+// in the language of msgs.
+//
+// History: notice while the index is being built. done and total are file
+// counts, shown without digit grouping.
+func (msgs Messages) HistoryIndexingProgress(done string, total string) string {
+	return Catalog.Format(msgs.locale, "historyIndexingProgress", map[string]any{"done": done, "total": total})
+}
+
+// HistoryIntroBody says "Find past conversations with agents here. Select one to continue it in Posse."
+// in the language the app shows.
+//
+// History: body of the placeholder card when no session is selected.
+func HistoryIntroBody() string { return In(i18n.Locale()).HistoryIntroBody() }
+
+// HistoryIntroBody says "Find past conversations with agents here. Select one to continue it in Posse."
+// in the language of msgs.
+//
+// History: body of the placeholder card when no session is selected.
+func (msgs Messages) HistoryIntroBody() string {
+	return Catalog.Format(msgs.locale, "historyIntroBody", nil)
+}
+
+// HistoryIntroTitle says "Session History"
+// in the language the app shows.
+//
+// History: title of the placeholder card when no session is selected.
+func HistoryIntroTitle() string { return In(i18n.Locale()).HistoryIntroTitle() }
+
+// HistoryIntroTitle says "Session History"
+// in the language of msgs.
+//
+// History: title of the placeholder card when no session is selected.
+func (msgs Messages) HistoryIntroTitle() string {
+	return Catalog.Format(msgs.locale, "historyIntroTitle", nil)
+}
+
+// HistoryLoading says "Loading…"
+// in the language the app shows.
+//
+// History: notice while the list loads.
+func HistoryLoading() string { return In(i18n.Locale()).HistoryLoading() }
+
+// HistoryLoading says "Loading…"
+// in the language of msgs.
+//
+// History: notice while the list loads.
+func (msgs Messages) HistoryLoading() string {
+	return Catalog.Format(msgs.locale, "historyLoading", nil)
+}
+
+// HistoryMatchCount says "{count, plural, one {# matching session} other {# matching sessions}}"
+// in the language the app shows.
+//
+// History: header of the session list while searching.
+func HistoryMatchCount(count int) string { return In(i18n.Locale()).HistoryMatchCount(count) }
+
+// HistoryMatchCount says "{count, plural, one {# matching session} other {# matching sessions}}"
+// in the language of msgs.
+//
+// History: header of the session list while searching.
+func (msgs Messages) HistoryMatchCount(count int) string {
+	return Catalog.Format(msgs.locale, "historyMatchCount", map[string]any{"count": count})
+}
+
+// HistoryMessageCount says "{count, plural, one {# message} other {# messages}}"
+// in the language the app shows.
+//
+// History: number of messages in a session or in all sessions.
+func HistoryMessageCount(count int) string { return In(i18n.Locale()).HistoryMessageCount(count) }
+
+// HistoryMessageCount says "{count, plural, one {# message} other {# messages}}"
+// in the language of msgs.
+//
+// History: number of messages in a session or in all sessions.
+func (msgs Messages) HistoryMessageCount(count int) string {
+	return Catalog.Format(msgs.locale, "historyMessageCount", map[string]any{"count": count})
+}
+
+// HistoryMessageHits says "{count, plural, one {# matching message} other {# matching messages}}"
+// in the language the app shows.
+//
+// History: number of messages matching the search.
+func HistoryMessageHits(count int) string { return In(i18n.Locale()).HistoryMessageHits(count) }
+
+// HistoryMessageHits says "{count, plural, one {# matching message} other {# matching messages}}"
+// in the language of msgs.
+//
+// History: number of messages matching the search.
+func (msgs Messages) HistoryMessageHits(count int) string {
+	return Catalog.Format(msgs.locale, "historyMessageHits", map[string]any{"count": count})
+}
+
+// HistoryNoMessages says "This session has no messages to show"
+// in the language the app shows.
+//
+// History: empty transcript title.
+func HistoryNoMessages() string { return In(i18n.Locale()).HistoryNoMessages() }
+
+// HistoryNoMessages says "This session has no messages to show"
+// in the language of msgs.
+//
+// History: empty transcript title.
+func (msgs Messages) HistoryNoMessages() string {
+	return Catalog.Format(msgs.locale, "historyNoMessages", nil)
+}
+
+// HistoryNoMessagesBody says "Turn on “Show Tool Calls” to see tool inputs and outputs."
+// in the language the app shows.
+//
+// History: empty transcript body.
+func HistoryNoMessagesBody() string { return In(i18n.Locale()).HistoryNoMessagesBody() }
+
+// HistoryNoMessagesBody says "Turn on “Show Tool Calls” to see tool inputs and outputs."
+// in the language of msgs.
+//
+// History: empty transcript body.
+func (msgs Messages) HistoryNoMessagesBody() string {
+	return Catalog.Format(msgs.locale, "historyNoMessagesBody", nil)
+}
+
+// HistoryNoResults says "No results for “{query}”"
+// in the language the app shows.
+//
+// History: title shown when the search finds nothing.
+func HistoryNoResults(query string) string { return In(i18n.Locale()).HistoryNoResults(query) }
+
+// HistoryNoResults says "No results for “{query}”"
+// in the language of msgs.
+//
+// History: title shown when the search finds nothing.
+func (msgs Messages) HistoryNoResults(query string) string {
+	return Catalog.Format(msgs.locale, "historyNoResults", map[string]any{"query": query})
+}
+
+// HistoryNoResultsBody says "Chinese matches by character, English by word prefix; use quotes to search a phrase."
+// in the language the app shows.
+//
+// History: search tips shown when the search finds nothing.
+func HistoryNoResultsBody() string { return In(i18n.Locale()).HistoryNoResultsBody() }
+
+// HistoryNoResultsBody says "Chinese matches by character, English by word prefix; use quotes to search a phrase."
+// in the language of msgs.
+//
+// History: search tips shown when the search finds nothing.
+func (msgs Messages) HistoryNoResultsBody() string {
+	return Catalog.Format(msgs.locale, "historyNoResultsBody", nil)
+}
+
+// HistoryOpenInFinderTip says "Open {path} in Finder"
+// in the language the app shows.
+//
+// History: tooltip of the session folder link.
+func HistoryOpenInFinderTip(path string) string {
+	return In(i18n.Locale()).HistoryOpenInFinderTip(path)
+}
+
+// HistoryOpenInFinderTip says "Open {path} in Finder"
+// in the language of msgs.
+//
+// History: tooltip of the session folder link.
+func (msgs Messages) HistoryOpenInFinderTip(path string) string {
+	return Catalog.Format(msgs.locale, "historyOpenInFinderTip", map[string]any{"path": path})
+}
+
+// HistoryQueryFailed says "Query failed: {error}"
+// in the language the app shows.
+//
+// History: notice above the list when the query fails.
+func HistoryQueryFailed(error string) string { return In(i18n.Locale()).HistoryQueryFailed(error) }
+
+// HistoryQueryFailed says "Query failed: {error}"
+// in the language of msgs.
+//
+// History: notice above the list when the query fails.
+func (msgs Messages) HistoryQueryFailed(error string) string {
+	return Catalog.Format(msgs.locale, "historyQueryFailed", map[string]any{"error": error})
+}
+
+// HistoryRoleTool says "Tool"
+// in the language the app shows.
+//
+// History: a tool result, as the speaker of a message.
+func HistoryRoleTool() string { return In(i18n.Locale()).HistoryRoleTool() }
+
+// HistoryRoleTool says "Tool"
+// in the language of msgs.
+//
+// History: a tool result, as the speaker of a message.
+func (msgs Messages) HistoryRoleTool() string {
+	return Catalog.Format(msgs.locale, "historyRoleTool", nil)
+}
+
+// HistoryRoleUser says "You"
+// in the language the app shows.
+//
+// History: the user, as the speaker of a message.
+func HistoryRoleUser() string { return In(i18n.Locale()).HistoryRoleUser() }
+
+// HistoryRoleUser says "You"
+// in the language of msgs.
+//
+// History: the user, as the speaker of a message.
+func (msgs Messages) HistoryRoleUser() string {
+	return Catalog.Format(msgs.locale, "historyRoleUser", nil)
+}
+
+// HistorySearchLabel says "Search Sessions"
+// in the language the app shows.
+//
+// History: accessibility label of the search field.
+func HistorySearchLabel() string { return In(i18n.Locale()).HistorySearchLabel() }
+
+// HistorySearchLabel says "Search Sessions"
+// in the language of msgs.
+//
+// History: accessibility label of the search field.
+func (msgs Messages) HistorySearchLabel() string {
+	return Catalog.Format(msgs.locale, "historySearchLabel", nil)
+}
+
+// HistorySearchPlaceholder says "Search session content  {shortcut}"
+// in the language the app shows.
+//
+// History: placeholder of the search field. shortcut is the keyboard
+// shortcut that focuses it.
+func HistorySearchPlaceholder(shortcut string) string {
+	return In(i18n.Locale()).HistorySearchPlaceholder(shortcut)
+}
+
+// HistorySearchPlaceholder says "Search session content  {shortcut}"
+// in the language of msgs.
+//
+// History: placeholder of the search field. shortcut is the keyboard
+// shortcut that focuses it.
+func (msgs Messages) HistorySearchPlaceholder(shortcut string) string {
+	return Catalog.Format(msgs.locale, "historySearchPlaceholder", map[string]any{"shortcut": shortcut})
+}
+
+// HistorySearching says "Searching…"
+// in the language the app shows.
+//
+// History: notice while a search runs.
+func HistorySearching() string { return In(i18n.Locale()).HistorySearching() }
+
+// HistorySearching says "Searching…"
+// in the language of msgs.
+//
+// History: notice while a search runs.
+func (msgs Messages) HistorySearching() string {
+	return Catalog.Format(msgs.locale, "historySearching", nil)
+}
+
+// HistorySessionCount says "{count, plural, one {# session} other {# sessions}}"
+// in the language the app shows.
+//
+// History: header of the session list, number of sessions.
+func HistorySessionCount(count int) string { return In(i18n.Locale()).HistorySessionCount(count) }
+
+// HistorySessionCount says "{count, plural, one {# session} other {# sessions}}"
+// in the language of msgs.
+//
+// History: header of the session list, number of sessions.
+func (msgs Messages) HistorySessionCount(count int) string {
+	return Catalog.Format(msgs.locale, "historySessionCount", map[string]any{"count": count})
+}
+
+// HistorySessionList says "Sessions"
+// in the language the app shows.
+//
+// History: accessibility label of the session list.
+func HistorySessionList() string { return In(i18n.Locale()).HistorySessionList() }
+
+// HistorySessionList says "Sessions"
+// in the language of msgs.
+//
+// History: accessibility label of the session list.
+func (msgs Messages) HistorySessionList() string {
+	return Catalog.Format(msgs.locale, "historySessionList", nil)
+}
+
+// HistoryShowToolCalls says "Show Tool Calls"
+// in the language the app shows.
+//
+// History: checkbox showing tool calls in the transcript.
+func HistoryShowToolCalls() string { return In(i18n.Locale()).HistoryShowToolCalls() }
+
+// HistoryShowToolCalls says "Show Tool Calls"
+// in the language of msgs.
+//
+// History: checkbox showing tool calls in the transcript.
+func (msgs Messages) HistoryShowToolCalls() string {
+	return Catalog.Format(msgs.locale, "historyShowToolCalls", nil)
+}
+
+// HistorySnippetRole says "{who}: "
+// in the language the app shows.
+//
+// History: prefix of a search hit snippet naming who said it.
+func HistorySnippetRole(who string) string { return In(i18n.Locale()).HistorySnippetRole(who) }
+
+// HistorySnippetRole says "{who}: "
+// in the language of msgs.
+//
+// History: prefix of a search hit snippet naming who said it.
+func (msgs Messages) HistorySnippetRole(who string) string {
+	return Catalog.Format(msgs.locale, "historySnippetRole", map[string]any{"who": who})
+}
+
+// HistorySwitchToTerminal says "Switch to Running Terminal"
+// in the language the app shows.
+//
+// History: button for a session that is already running in a terminal.
+func HistorySwitchToTerminal() string { return In(i18n.Locale()).HistorySwitchToTerminal() }
+
+// HistorySwitchToTerminal says "Switch to Running Terminal"
+// in the language of msgs.
+//
+// History: button for a session that is already running in a terminal.
+func (msgs Messages) HistorySwitchToTerminal() string {
+	return Catalog.Format(msgs.locale, "historySwitchToTerminal", nil)
+}
+
+// HistoryTitle says "History"
+// in the language the app shows.
+//
+// Sidebar tile and page title of History.
+func HistoryTitle() string { return In(i18n.Locale()).HistoryTitle() }
+
+// HistoryTitle says "History"
+// in the language of msgs.
+//
+// Sidebar tile and page title of History.
+func (msgs Messages) HistoryTitle() string {
+	return Catalog.Format(msgs.locale, "historyTitle", nil)
+}
+
+// HistoryToolCalls says "{count, plural, one {# tool call} other {# tool calls}}"
+// in the language the app shows.
+//
+// History: a folded run of tool calls in the transcript.
+func HistoryToolCalls(count int) string { return In(i18n.Locale()).HistoryToolCalls(count) }
+
+// HistoryToolCalls says "{count, plural, one {# tool call} other {# tool calls}}"
+// in the language of msgs.
+//
+// History: a folded run of tool calls in the transcript.
+func (msgs Messages) HistoryToolCalls(count int) string {
+	return Catalog.Format(msgs.locale, "historyToolCalls", map[string]any{"count": count})
+}
+
+// HistoryTopMatches says "Top {count} matching sessions"
+// in the language the app shows.
+//
+// History: header of the session list when the search hit the result limit.
+func HistoryTopMatches(count int) string { return In(i18n.Locale()).HistoryTopMatches(count) }
+
+// HistoryTopMatches says "Top {count} matching sessions"
+// in the language of msgs.
+//
+// History: header of the session list when the search hit the result limit.
+func (msgs Messages) HistoryTopMatches(count int) string {
+	return Catalog.Format(msgs.locale, "historyTopMatches", map[string]any{"count": count})
+}
+
+// HistoryUnknownFolder says "Unknown Folder"
+// in the language the app shows.
+//
+// History: group title (grouped by folder) for sessions without a folder.
+func HistoryUnknownFolder() string { return In(i18n.Locale()).HistoryUnknownFolder() }
+
+// HistoryUnknownFolder says "Unknown Folder"
+// in the language of msgs.
+//
+// History: group title (grouped by folder) for sessions without a folder.
+func (msgs Messages) HistoryUnknownFolder() string {
+	return Catalog.Format(msgs.locale, "historyUnknownFolder", nil)
+}
+
+// ImagesChecker says "Show Checkerboard Behind Transparency"
+// in the language the app shows.
+//
+// Image file tab bar: tooltip of the checkerboard toggle.
+func ImagesChecker() string { return In(i18n.Locale()).ImagesChecker() }
+
+// ImagesChecker says "Show Checkerboard Behind Transparency"
+// in the language of msgs.
+//
+// Image file tab bar: tooltip of the checkerboard toggle.
+func (msgs Messages) ImagesChecker() string {
+	return Catalog.Format(msgs.locale, "imagesChecker", nil)
+}
+
 // ImagesCodeOutput says "Code output"
 // in the language the app shows.
 //
@@ -5562,6 +7840,66 @@ func ImagesCodeOutput() string { return In(i18n.Locale()).ImagesCodeOutput() }
 // agent ran (Codex exec- files).
 func (msgs Messages) ImagesCodeOutput() string {
 	return Catalog.Format(msgs.locale, "imagesCodeOutput", nil)
+}
+
+// ImagesCopied says "Image Copied"
+// in the language the app shows.
+//
+// Images panel: notification after copying an image.
+func ImagesCopied() string { return In(i18n.Locale()).ImagesCopied() }
+
+// ImagesCopied says "Image Copied"
+// in the language of msgs.
+//
+// Images panel: notification after copying an image.
+func (msgs Messages) ImagesCopied() string {
+	return Catalog.Format(msgs.locale, "imagesCopied", nil)
+}
+
+// ImagesCopyFailed says "Couldn’t copy the image: {error}"
+// in the language the app shows.
+//
+// Images panel: error bar text when copying an image fails.
+func ImagesCopyFailed(error string) string { return In(i18n.Locale()).ImagesCopyFailed(error) }
+
+// ImagesCopyFailed says "Couldn’t copy the image: {error}"
+// in the language of msgs.
+//
+// Images panel: error bar text when copying an image fails.
+func (msgs Messages) ImagesCopyFailed(error string) string {
+	return Catalog.Format(msgs.locale, "imagesCopyFailed", map[string]any{"error": error})
+}
+
+// ImagesCopyImage says "Copy Image"
+// in the language the app shows.
+//
+// Images panel: context menu item of an image card.
+func ImagesCopyImage() string { return In(i18n.Locale()).ImagesCopyImage() }
+
+// ImagesCopyImage says "Copy Image"
+// in the language of msgs.
+//
+// Images panel: context menu item of an image card.
+func (msgs Messages) ImagesCopyImage() string {
+	return Catalog.Format(msgs.locale, "imagesCopyImage", nil)
+}
+
+// ImagesFrames says "{count, plural, one {# frame} other {# frames}}  {seconds} s"
+// in the language the app shows.
+//
+// Image file tab bar: frame count and duration of an animated image.
+// seconds is a decimal number.
+func ImagesFrames(count int, seconds string) string {
+	return In(i18n.Locale()).ImagesFrames(count, seconds)
+}
+
+// ImagesFrames says "{count, plural, one {# frame} other {# frames}}  {seconds} s"
+// in the language of msgs.
+//
+// Image file tab bar: frame count and duration of an animated image.
+// seconds is a decimal number.
+func (msgs Messages) ImagesFrames(count int, seconds string) string {
+	return Catalog.Format(msgs.locale, "imagesFrames", map[string]any{"count": count, "seconds": seconds})
 }
 
 // ImagesGenerated says "Generated image"
@@ -5580,6 +7918,94 @@ func (msgs Messages) ImagesGenerated() string {
 	return Catalog.Format(msgs.locale, "imagesGenerated", nil)
 }
 
+// ImagesGeneratedTab says "Generated"
+// in the language the app shows.
+//
+// Images panel: segment listing images and videos the agent generated.
+func ImagesGeneratedTab() string { return In(i18n.Locale()).ImagesGeneratedTab() }
+
+// ImagesGeneratedTab says "Generated"
+// in the language of msgs.
+//
+// Images panel: segment listing images and videos the agent generated.
+func (msgs Messages) ImagesGeneratedTab() string {
+	return Catalog.Format(msgs.locale, "imagesGeneratedTab", nil)
+}
+
+// ImagesImageLabel says "Image {name}"
+// in the language the app shows.
+//
+// Images panel: accessibility label of an image card. name is the image
+// label.
+func ImagesImageLabel(name string) string { return In(i18n.Locale()).ImagesImageLabel(name) }
+
+// ImagesImageLabel says "Image {name}"
+// in the language of msgs.
+//
+// Images panel: accessibility label of an image card. name is the image
+// label.
+func (msgs Messages) ImagesImageLabel(name string) string {
+	return Catalog.Format(msgs.locale, "imagesImageLabel", map[string]any{"name": name})
+}
+
+// ImagesNone says "This session has no images or videos yet."
+// in the language the app shows.
+//
+// Images panel note.
+func ImagesNone() string { return In(i18n.Locale()).ImagesNone() }
+
+// ImagesNone says "This session has no images or videos yet."
+// in the language of msgs.
+//
+// Images panel note.
+func (msgs Messages) ImagesNone() string {
+	return Catalog.Format(msgs.locale, "imagesNone", nil)
+}
+
+// ImagesNoneGenerated says "The agent hasn’t generated any images or videos yet."
+// in the language the app shows.
+//
+// Images panel note in the Generated segment.
+func ImagesNoneGenerated() string { return In(i18n.Locale()).ImagesNoneGenerated() }
+
+// ImagesNoneGenerated says "The agent hasn’t generated any images or videos yet."
+// in the language of msgs.
+//
+// Images panel note in the Generated segment.
+func (msgs Messages) ImagesNoneGenerated() string {
+	return Catalog.Format(msgs.locale, "imagesNoneGenerated", nil)
+}
+
+// ImagesNonePasted says "No images have been pasted into this session yet."
+// in the language the app shows.
+//
+// Images panel note in the Pasted segment.
+func ImagesNonePasted() string { return In(i18n.Locale()).ImagesNonePasted() }
+
+// ImagesNonePasted says "No images have been pasted into this session yet."
+// in the language of msgs.
+//
+// Images panel note in the Pasted segment.
+func (msgs Messages) ImagesNonePasted() string {
+	return Catalog.Format(msgs.locale, "imagesNonePasted", nil)
+}
+
+// ImagesOpenInPreview says "Open in Preview"
+// in the language the app shows.
+//
+// Images panel: context menu item that opens the image in the macOS Preview
+// app.
+func ImagesOpenInPreview() string { return In(i18n.Locale()).ImagesOpenInPreview() }
+
+// ImagesOpenInPreview says "Open in Preview"
+// in the language of msgs.
+//
+// Images panel: context menu item that opens the image in the macOS Preview
+// app.
+func (msgs Messages) ImagesOpenInPreview() string {
+	return Catalog.Format(msgs.locale, "imagesOpenInPreview", nil)
+}
+
 // ImagesPasted says "Pasted"
 // in the language the app shows.
 //
@@ -5594,6 +8020,194 @@ func ImagesPasted() string { return In(i18n.Locale()).ImagesPasted() }
 // has no number.
 func (msgs Messages) ImagesPasted() string {
 	return Catalog.Format(msgs.locale, "imagesPasted", nil)
+}
+
+// ImagesPastedTab says "Pasted"
+// in the language the app shows.
+//
+// Images panel: segment listing images pasted into the session.
+func ImagesPastedTab() string { return In(i18n.Locale()).ImagesPastedTab() }
+
+// ImagesPastedTab says "Pasted"
+// in the language of msgs.
+//
+// Images panel: segment listing images pasted into the session.
+func (msgs Messages) ImagesPastedTab() string {
+	return Catalog.Format(msgs.locale, "imagesPastedTab", nil)
+}
+
+// ImagesPause says "Pause"
+// in the language the app shows.
+//
+// Image file tab bar: tooltip of the button that pauses an animated image.
+func ImagesPause() string { return In(i18n.Locale()).ImagesPause() }
+
+// ImagesPause says "Pause"
+// in the language of msgs.
+//
+// Image file tab bar: tooltip of the button that pauses an animated image.
+func (msgs Messages) ImagesPause() string {
+	return Catalog.Format(msgs.locale, "imagesPause", nil)
+}
+
+// ImagesPlay says "Play"
+// in the language the app shows.
+//
+// Image file tab bar: tooltip of the button that plays an animated image.
+func ImagesPlay() string { return In(i18n.Locale()).ImagesPlay() }
+
+// ImagesPlay says "Play"
+// in the language of msgs.
+//
+// Image file tab bar: tooltip of the button that plays an animated image.
+func (msgs Messages) ImagesPlay() string {
+	return Catalog.Format(msgs.locale, "imagesPlay", nil)
+}
+
+// ImagesRecentOnly says "Showing only the {count, plural, one {most recent item} other {# most recent items}}."
+// in the language the app shows.
+//
+// Images panel note under a cut-off list.
+func ImagesRecentOnly(count int) string { return In(i18n.Locale()).ImagesRecentOnly(count) }
+
+// ImagesRecentOnly says "Showing only the {count, plural, one {most recent item} other {# most recent items}}."
+// in the language of msgs.
+//
+// Images panel note under a cut-off list.
+func (msgs Messages) ImagesRecentOnly(count int) string {
+	return Catalog.Format(msgs.locale, "imagesRecentOnly", map[string]any{"count": count})
+}
+
+// ImagesSource says "Image Source"
+// in the language the app shows.
+//
+// Images panel: accessibility label of the segmented control.
+func ImagesSource() string { return In(i18n.Locale()).ImagesSource() }
+
+// ImagesSource says "Image Source"
+// in the language of msgs.
+//
+// Images panel: accessibility label of the segmented control.
+func (msgs Messages) ImagesSource() string {
+	return Catalog.Format(msgs.locale, "imagesSource", nil)
+}
+
+// ImagesTitle says "Images"
+// in the language the app shows.
+//
+// Title of the Images panel on the right.
+func ImagesTitle() string { return In(i18n.Locale()).ImagesTitle() }
+
+// ImagesTitle says "Images"
+// in the language of msgs.
+//
+// Title of the Images panel on the right.
+func (msgs Messages) ImagesTitle() string {
+	return Catalog.Format(msgs.locale, "imagesTitle", nil)
+}
+
+// ImagesUnsupported says "Only Claude, Codex, Grok and Cursor sessions are supported for now."
+// in the language the app shows.
+//
+// Images panel note for other agents.
+func ImagesUnsupported() string { return In(i18n.Locale()).ImagesUnsupported() }
+
+// ImagesUnsupported says "Only Claude, Codex, Grok and Cursor sessions are supported for now."
+// in the language of msgs.
+//
+// Images panel note for other agents.
+func (msgs Messages) ImagesUnsupported() string {
+	return Catalog.Format(msgs.locale, "imagesUnsupported", nil)
+}
+
+// ImagesVideoLabel says "Video {name}"
+// in the language the app shows.
+//
+// Images panel: accessibility label of a video card. name is the video
+// label.
+func ImagesVideoLabel(name string) string { return In(i18n.Locale()).ImagesVideoLabel(name) }
+
+// ImagesVideoLabel says "Video {name}"
+// in the language of msgs.
+//
+// Images panel: accessibility label of a video card. name is the video
+// label.
+func (msgs Messages) ImagesVideoLabel(name string) string {
+	return Catalog.Format(msgs.locale, "imagesVideoLabel", map[string]any{"name": name})
+}
+
+// ImagesZoom says "Zoom"
+// in the language the app shows.
+//
+// Image file tab bar: accessibility label of the zoom button.
+func ImagesZoom() string { return In(i18n.Locale()).ImagesZoom() }
+
+// ImagesZoom says "Zoom"
+// in the language of msgs.
+//
+// Image file tab bar: accessibility label of the zoom button.
+func (msgs Messages) ImagesZoom() string {
+	return Catalog.Format(msgs.locale, "imagesZoom", nil)
+}
+
+// ImagesZoomIn says "Zoom In"
+// in the language the app shows.
+//
+// Image zoom menu item.
+func ImagesZoomIn() string { return In(i18n.Locale()).ImagesZoomIn() }
+
+// ImagesZoomIn says "Zoom In"
+// in the language of msgs.
+//
+// Image zoom menu item.
+func (msgs Messages) ImagesZoomIn() string {
+	return Catalog.Format(msgs.locale, "imagesZoomIn", nil)
+}
+
+// ImagesZoomOut says "Zoom Out"
+// in the language the app shows.
+//
+// Image zoom menu item.
+func ImagesZoomOut() string { return In(i18n.Locale()).ImagesZoomOut() }
+
+// ImagesZoomOut says "Zoom Out"
+// in the language of msgs.
+//
+// Image zoom menu item.
+func (msgs Messages) ImagesZoomOut() string {
+	return Catalog.Format(msgs.locale, "imagesZoomOut", nil)
+}
+
+// ImagesZoomTip says "Zoom: ⌘-scroll, {zoomIn} {zoomOut}; double-click switches between Zoom to Fit and actual size"
+// in the language the app shows.
+//
+// Image file tab bar: tooltip of the zoom button. zoomIn and zoomOut are
+// keyboard shortcuts.
+func ImagesZoomTip(zoomIn string, zoomOut string) string {
+	return In(i18n.Locale()).ImagesZoomTip(zoomIn, zoomOut)
+}
+
+// ImagesZoomTip says "Zoom: ⌘-scroll, {zoomIn} {zoomOut}; double-click switches between Zoom to Fit and actual size"
+// in the language of msgs.
+//
+// Image file tab bar: tooltip of the zoom button. zoomIn and zoomOut are
+// keyboard shortcuts.
+func (msgs Messages) ImagesZoomTip(zoomIn string, zoomOut string) string {
+	return Catalog.Format(msgs.locale, "imagesZoomTip", map[string]any{"zoomIn": zoomIn, "zoomOut": zoomOut})
+}
+
+// ImagesZoomToFit says "Zoom to Fit"
+// in the language the app shows.
+//
+// Image zoom menu item.
+func ImagesZoomToFit() string { return In(i18n.Locale()).ImagesZoomToFit() }
+
+// ImagesZoomToFit says "Zoom to Fit"
+// in the language of msgs.
+//
+// Image zoom menu item.
+func (msgs Messages) ImagesZoomToFit() string {
+	return Catalog.Format(msgs.locale, "imagesZoomToFit", nil)
 }
 
 // KeysAdd says "Add Another Shortcut"
@@ -8162,6 +10776,118 @@ func (msgs Messages) KeysZoomResetNote() string {
 	return Catalog.Format(msgs.locale, "keysZoomResetNote", nil)
 }
 
+// LinksClick says "Click"
+// in the language the app shows.
+//
+// Link card: how to open a link directly, shown next to an action.
+func LinksClick() string { return In(i18n.Locale()).LinksClick() }
+
+// LinksClick says "Click"
+// in the language of msgs.
+//
+// Link card: how to open a link directly, shown next to an action.
+func (msgs Messages) LinksClick() string {
+	return Catalog.Format(msgs.locale, "linksClick", nil)
+}
+
+// LinksCmdClick says "⌘-Click"
+// in the language the app shows.
+//
+// Link card: how to open a link directly, shown next to an action.
+func LinksCmdClick() string { return In(i18n.Locale()).LinksCmdClick() }
+
+// LinksCmdClick says "⌘-Click"
+// in the language of msgs.
+//
+// Link card: how to open a link directly, shown next to an action.
+func (msgs Messages) LinksCmdClick() string {
+	return Catalog.Format(msgs.locale, "linksCmdClick", nil)
+}
+
+// LinksCopyLink says "Copy Link"
+// in the language the app shows.
+//
+// Link card and web tab: tooltip of the copy button.
+func LinksCopyLink() string { return In(i18n.Locale()).LinksCopyLink() }
+
+// LinksCopyLink says "Copy Link"
+// in the language of msgs.
+//
+// Link card and web tab: tooltip of the copy button.
+func (msgs Messages) LinksCopyLink() string {
+	return Catalog.Format(msgs.locale, "linksCopyLink", nil)
+}
+
+// LinksOpenInBrowser says "Open in Browser"
+// in the language the app shows.
+//
+// Link card item and web tab button: opens the URL in the default browser.
+func LinksOpenInBrowser() string { return In(i18n.Locale()).LinksOpenInBrowser() }
+
+// LinksOpenInBrowser says "Open in Browser"
+// in the language of msgs.
+//
+// Link card item and web tab button: opens the URL in the default browser.
+func (msgs Messages) LinksOpenInBrowser() string {
+	return Catalog.Format(msgs.locale, "linksOpenInBrowser", nil)
+}
+
+// LinksOpenInFileTab says "Open in File Tab"
+// in the language the app shows.
+//
+// Link card item: opens the file in a file tab.
+func LinksOpenInFileTab() string { return In(i18n.Locale()).LinksOpenInFileTab() }
+
+// LinksOpenInFileTab says "Open in File Tab"
+// in the language of msgs.
+//
+// Link card item: opens the file in a file tab.
+func (msgs Messages) LinksOpenInFileTab() string {
+	return Catalog.Format(msgs.locale, "linksOpenInFileTab", nil)
+}
+
+// LinksOpenInPosse says "Open in Posse"
+// in the language the app shows.
+//
+// Link card item: opens the URL in a web tab.
+func LinksOpenInPosse() string { return In(i18n.Locale()).LinksOpenInPosse() }
+
+// LinksOpenInPosse says "Open in Posse"
+// in the language of msgs.
+//
+// Link card item: opens the URL in a web tab.
+func (msgs Messages) LinksOpenInPosse() string {
+	return Catalog.Format(msgs.locale, "linksOpenInPosse", nil)
+}
+
+// LinksOpenInPreview says "Open in Preview"
+// in the language the app shows.
+//
+// Link card item: opens an image file in the macOS Preview app.
+func LinksOpenInPreview() string { return In(i18n.Locale()).LinksOpenInPreview() }
+
+// LinksOpenInPreview says "Open in Preview"
+// in the language of msgs.
+//
+// Link card item: opens an image file in the macOS Preview app.
+func (msgs Messages) LinksOpenInPreview() string {
+	return Catalog.Format(msgs.locale, "linksOpenInPreview", nil)
+}
+
+// LinksShiftCmdClick says "⇧⌘-Click"
+// in the language the app shows.
+//
+// Link card: how to hand a link to macOS, shown next to an action.
+func LinksShiftCmdClick() string { return In(i18n.Locale()).LinksShiftCmdClick() }
+
+// LinksShiftCmdClick says "⇧⌘-Click"
+// in the language of msgs.
+//
+// Link card: how to hand a link to macOS, shown next to an action.
+func (msgs Messages) LinksShiftCmdClick() string {
+	return Catalog.Format(msgs.locale, "linksShiftCmdClick", nil)
+}
+
 // LogAllBranches says "All Branches"
 // in the language the app shows.
 //
@@ -9012,6 +11738,112 @@ func (msgs Messages) LogUncommitted() string {
 	return Catalog.Format(msgs.locale, "logUncommitted", nil)
 }
 
+// MarkdownCode says "Code"
+// in the language the app shows.
+//
+// Markdown preview: label of a code block without a language.
+func MarkdownCode() string { return In(i18n.Locale()).MarkdownCode() }
+
+// MarkdownCode says "Code"
+// in the language of msgs.
+//
+// Markdown preview: label of a code block without a language.
+func (msgs Messages) MarkdownCode() string {
+	return Catalog.Format(msgs.locale, "markdownCode", nil)
+}
+
+// MarkdownCopyCode says "Copy Code"
+// in the language the app shows.
+//
+// Markdown preview: tooltip of the copy button on a code block.
+func MarkdownCopyCode() string { return In(i18n.Locale()).MarkdownCopyCode() }
+
+// MarkdownCopyCode says "Copy Code"
+// in the language of msgs.
+//
+// Markdown preview: tooltip of the copy button on a code block.
+func (msgs Messages) MarkdownCopyCode() string {
+	return Catalog.Format(msgs.locale, "markdownCopyCode", nil)
+}
+
+// MarkdownDetails says "Details"
+// in the language the app shows.
+//
+// Markdown preview: title of a <details> block without a <summary>, like
+// browsers show.
+func MarkdownDetails() string { return In(i18n.Locale()).MarkdownDetails() }
+
+// MarkdownDetails says "Details"
+// in the language of msgs.
+//
+// Markdown preview: title of a <details> block without a <summary>, like
+// browsers show.
+func (msgs Messages) MarkdownDetails() string {
+	return Catalog.Format(msgs.locale, "markdownDetails", nil)
+}
+
+// MarkdownDiagramFailed says "Can’t draw the diagram: {error}"
+// in the language the app shows.
+//
+// Markdown preview: shown under a Mermaid block that fails to render.
+func MarkdownDiagramFailed(error string) string {
+	return In(i18n.Locale()).MarkdownDiagramFailed(error)
+}
+
+// MarkdownDiagramFailed says "Can’t draw the diagram: {error}"
+// in the language of msgs.
+//
+// Markdown preview: shown under a Mermaid block that fails to render.
+func (msgs Messages) MarkdownDiagramFailed(error string) string {
+	return Catalog.Format(msgs.locale, "markdownDiagramFailed", map[string]any{"error": error})
+}
+
+// MarkdownImage says "Image"
+// in the language the app shows.
+//
+// Markdown preview: placeholder of an image that can’t load and has no
+// alt text.
+func MarkdownImage() string { return In(i18n.Locale()).MarkdownImage() }
+
+// MarkdownImage says "Image"
+// in the language of msgs.
+//
+// Markdown preview: placeholder of an image that can’t load and has no
+// alt text.
+func (msgs Messages) MarkdownImage() string {
+	return Catalog.Format(msgs.locale, "markdownImage", nil)
+}
+
+// MarkdownMermaidLabel says "Mermaid Diagram"
+// in the language the app shows.
+//
+// Accessibility label of a Mermaid diagram in a Markdown preview.
+func MarkdownMermaidLabel() string { return In(i18n.Locale()).MarkdownMermaidLabel() }
+
+// MarkdownMermaidLabel says "Mermaid Diagram"
+// in the language of msgs.
+//
+// Accessibility label of a Mermaid diagram in a Markdown preview.
+func (msgs Messages) MarkdownMermaidLabel() string {
+	return Catalog.Format(msgs.locale, "markdownMermaidLabel", nil)
+}
+
+// MarkdownViewDiagram says "View Diagram"
+// in the language the app shows.
+//
+// Markdown preview: tooltip of the button on a Mermaid block that switches
+// from source back to the diagram.
+func MarkdownViewDiagram() string { return In(i18n.Locale()).MarkdownViewDiagram() }
+
+// MarkdownViewDiagram says "View Diagram"
+// in the language of msgs.
+//
+// Markdown preview: tooltip of the button on a Mermaid block that switches
+// from source back to the diagram.
+func (msgs Messages) MarkdownViewDiagram() string {
+	return Catalog.Format(msgs.locale, "markdownViewDiagram", nil)
+}
+
 // McpAgentCountTip says "MCP servers available to {agent}"
 // in the language the app shows.
 //
@@ -9550,6 +12382,948 @@ func MenuWindow() string { return In(i18n.Locale()).MenuWindow() }
 // Title of the Window menu.
 func (msgs Messages) MenuWindow() string {
 	return Catalog.Format(msgs.locale, "menuWindow", nil)
+}
+
+// MobileAddressAuto says "Automatic (the phone tries all of this Mac’s addresses)"
+// in the language the app shows.
+//
+// Mobile page: first item of the address picker.
+func MobileAddressAuto() string { return In(i18n.Locale()).MobileAddressAuto() }
+
+// MobileAddressAuto says "Automatic (the phone tries all of this Mac’s addresses)"
+// in the language of msgs.
+//
+// Mobile page: first item of the address picker.
+func (msgs Messages) MobileAddressAuto() string {
+	return Catalog.Format(msgs.locale, "mobileAddressAuto", nil)
+}
+
+// MobileAddressCustom says "Custom, e.g. host:8443 or https://example.com/posse"
+// in the language the app shows.
+//
+// Mobile page: placeholder of the custom address field.
+func MobileAddressCustom() string { return In(i18n.Locale()).MobileAddressCustom() }
+
+// MobileAddressCustom says "Custom, e.g. host:8443 or https://example.com/posse"
+// in the language of msgs.
+//
+// Mobile page: placeholder of the custom address field.
+func (msgs Messages) MobileAddressCustom() string {
+	return Catalog.Format(msgs.locale, "mobileAddressCustom", nil)
+}
+
+// MobileAddressLAN says "LAN {ip}"
+// in the language the app shows.
+//
+// Mobile page: address picker item for a local network address.
+func MobileAddressLAN(ip string) string { return In(i18n.Locale()).MobileAddressLAN(ip) }
+
+// MobileAddressLAN says "LAN {ip}"
+// in the language of msgs.
+//
+// Mobile page: address picker item for a local network address.
+func (msgs Messages) MobileAddressLAN(ip string) string {
+	return Catalog.Format(msgs.locale, "mobileAddressLAN", map[string]any{"ip": ip})
+}
+
+// MobileAddressNote says "The phone must be able to reach it: the same Wi-Fi, Tailscale, or a tunnel to this Mac. If you choose a specific addr…"
+// in the language the app shows.
+//
+// Mobile page: explanation under the address picker.
+func MobileAddressNote() string { return In(i18n.Locale()).MobileAddressNote() }
+
+// MobileAddressNote says "The phone must be able to reach it: the same Wi-Fi, Tailscale, or a tunnel to this Mac. If you choose a specific addr…"
+// in the language of msgs.
+//
+// Mobile page: explanation under the address picker.
+func (msgs Messages) MobileAddressNote() string {
+	return Catalog.Format(msgs.locale, "mobileAddressNote", nil)
+}
+
+// MobileAddressRemoveTip says "Remove this address from the list and go back to Automatic"
+// in the language the app shows.
+//
+// Mobile page: tooltip of Remove next to a custom address.
+func MobileAddressRemoveTip() string { return In(i18n.Locale()).MobileAddressRemoveTip() }
+
+// MobileAddressRemoveTip says "Remove this address from the list and go back to Automatic"
+// in the language of msgs.
+//
+// Mobile page: tooltip of Remove next to a custom address.
+func (msgs Messages) MobileAddressRemoveTip() string {
+	return Catalog.Format(msgs.locale, "mobileAddressRemoveTip", nil)
+}
+
+// MobileAddressTailscale says "Tailscale {ip}"
+// in the language the app shows.
+//
+// Mobile page: address picker item for a Tailscale address.
+func MobileAddressTailscale(ip string) string { return In(i18n.Locale()).MobileAddressTailscale(ip) }
+
+// MobileAddressTailscale says "Tailscale {ip}"
+// in the language of msgs.
+//
+// Mobile page: address picker item for a Tailscale address.
+func (msgs Messages) MobileAddressTailscale(ip string) string {
+	return Catalog.Format(msgs.locale, "mobileAddressTailscale", map[string]any{"ip": ip})
+}
+
+// MobileAddressTitle says "This Mac’s Address"
+// in the language the app shows.
+//
+// Mobile page: label above the address picker.
+func MobileAddressTitle() string { return In(i18n.Locale()).MobileAddressTitle() }
+
+// MobileAddressTitle says "This Mac’s Address"
+// in the language of msgs.
+//
+// Mobile page: label above the address picker.
+func (msgs Messages) MobileAddressTitle() string {
+	return Catalog.Format(msgs.locale, "mobileAddressTitle", nil)
+}
+
+// MobileCollapse says "Hide"
+// in the language the app shows.
+//
+// Mobile page: hint on the Other Pairings row that clicking collapses it.
+func MobileCollapse() string { return In(i18n.Locale()).MobileCollapse() }
+
+// MobileCollapse says "Hide"
+// in the language of msgs.
+//
+// Mobile page: hint on the Other Pairings row that clicking collapses it.
+func (msgs Messages) MobileCollapse() string {
+	return Catalog.Format(msgs.locale, "mobileCollapse", nil)
+}
+
+// MobileConnected says "Connected"
+// in the language the app shows.
+//
+// Mobile page: status of a phone that is connected now.
+func MobileConnected() string { return In(i18n.Locale()).MobileConnected() }
+
+// MobileConnected says "Connected"
+// in the language of msgs.
+//
+// Mobile page: status of a phone that is connected now.
+func (msgs Messages) MobileConnected() string {
+	return Catalog.Format(msgs.locale, "mobileConnected", nil)
+}
+
+// MobileCopyCode says "Copy Pairing Code"
+// in the language the app shows.
+//
+// Mobile page: button copying the pairing code.
+func MobileCopyCode() string { return In(i18n.Locale()).MobileCopyCode() }
+
+// MobileCopyCode says "Copy Pairing Code"
+// in the language of msgs.
+//
+// Mobile page: button copying the pairing code.
+func (msgs Messages) MobileCopyCode() string {
+	return Catalog.Format(msgs.locale, "mobileCopyCode", nil)
+}
+
+// MobileCopyCodeTip says "If you can’t scan the code, paste it on the app’s pairing page"
+// in the language the app shows.
+//
+// Mobile page: tooltip of Copy Pairing Code.
+func MobileCopyCodeTip() string { return In(i18n.Locale()).MobileCopyCodeTip() }
+
+// MobileCopyCodeTip says "If you can’t scan the code, paste it on the app’s pairing page"
+// in the language of msgs.
+//
+// Mobile page: tooltip of Copy Pairing Code.
+func (msgs Messages) MobileCopyCodeTip() string {
+	return Catalog.Format(msgs.locale, "mobileCopyCodeTip", nil)
+}
+
+// MobileDeskStop says "Stop"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: button that stops the phone’s view.
+func MobileDeskStop() string { return In(i18n.Locale()).MobileDeskStop() }
+
+// MobileDeskStop says "Stop"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: button that stops the phone’s view.
+func (msgs Messages) MobileDeskStop() string {
+	return Catalog.Format(msgs.locale, "mobileDeskStop", nil)
+}
+
+// MobileDeskStopTip says "Disconnect this phone’s view and control"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: tooltip of Stop.
+func MobileDeskStopTip() string { return In(i18n.Locale()).MobileDeskStopTip() }
+
+// MobileDeskStopTip says "Disconnect this phone’s view and control"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: tooltip of Stop.
+func (msgs Messages) MobileDeskStopTip() string {
+	return Catalog.Format(msgs.locale, "mobileDeskStopTip", nil)
+}
+
+// MobileDeskTitle says "Remote Desktop"
+// in the language the app shows.
+//
+// Mobile page: title of the card about phones viewing this Mac’s desktop.
+func MobileDeskTitle() string { return In(i18n.Locale()).MobileDeskTitle() }
+
+// MobileDeskTitle says "Remote Desktop"
+// in the language of msgs.
+//
+// Mobile page: title of the card about phones viewing this Mac’s desktop.
+func (msgs Messages) MobileDeskTitle() string {
+	return Catalog.Format(msgs.locale, "mobileDeskTitle", nil)
+}
+
+// MobileDeskViewing says "{name} is viewing this Mac’s desktop"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card. name is the phone name.
+func MobileDeskViewing(name string) string { return In(i18n.Locale()).MobileDeskViewing(name) }
+
+// MobileDeskViewing says "{name} is viewing this Mac’s desktop"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card. name is the phone name.
+func (msgs Messages) MobileDeskViewing(name string) string {
+	return Catalog.Format(msgs.locale, "mobileDeskViewing", map[string]any{"name": name})
+}
+
+// MobileExpand says "Show"
+// in the language the app shows.
+//
+// Mobile page: hint on the Other Pairings row that clicking expands it.
+func MobileExpand() string { return In(i18n.Locale()).MobileExpand() }
+
+// MobileExpand says "Show"
+// in the language of msgs.
+//
+// Mobile page: hint on the Other Pairings row that clicking expands it.
+func (msgs Messages) MobileExpand() string {
+	return Catalog.Format(msgs.locale, "mobileExpand", nil)
+}
+
+// MobileGenerating says "Generating…"
+// in the language the app shows.
+//
+// Mobile page: shown in place of the QR code while it is generated.
+func MobileGenerating() string { return In(i18n.Locale()).MobileGenerating() }
+
+// MobileGenerating says "Generating…"
+// in the language of msgs.
+//
+// Mobile page: shown in place of the QR code while it is generated.
+func (msgs Messages) MobileGenerating() string {
+	return Catalog.Format(msgs.locale, "mobileGenerating", nil)
+}
+
+// MobileLastSeen says "Connected {ago}"
+// in the language the app shows.
+//
+// Mobile page: when a phone last connected. ago is a relative time like
+// “20 minutes ago”.
+func MobileLastSeen(ago string) string { return In(i18n.Locale()).MobileLastSeen(ago) }
+
+// MobileLastSeen says "Connected {ago}"
+// in the language of msgs.
+//
+// Mobile page: when a phone last connected. ago is a relative time like
+// “20 minutes ago”.
+func (msgs Messages) MobileLastSeen(ago string) string {
+	return Catalog.Format(msgs.locale, "mobileLastSeen", map[string]any{"ago": ago})
+}
+
+// MobileListSeparator says ", "
+// in the language the app shows.
+//
+// Separator between phone names in a list.
+func MobileListSeparator() string { return In(i18n.Locale()).MobileListSeparator() }
+
+// MobileListSeparator says ", "
+// in the language of msgs.
+//
+// Separator between phone names in a list.
+func (msgs Messages) MobileListSeparator() string {
+	return Catalog.Format(msgs.locale, "mobileListSeparator", nil)
+}
+
+// MobileNewCode says "New Code"
+// in the language the app shows.
+//
+// Mobile page: button generating a new pairing code.
+func MobileNewCode() string { return In(i18n.Locale()).MobileNewCode() }
+
+// MobileNewCode says "New Code"
+// in the language of msgs.
+//
+// Mobile page: button generating a new pairing code.
+func (msgs Messages) MobileNewCode() string {
+	return Catalog.Format(msgs.locale, "mobileNewCode", nil)
+}
+
+// MobileNewCodeTip says "Invalidates the old code that hasn’t been used"
+// in the language the app shows.
+//
+// Mobile page: tooltip of New Code.
+func MobileNewCodeTip() string { return In(i18n.Locale()).MobileNewCodeTip() }
+
+// MobileNewCodeTip says "Invalidates the old code that hasn’t been used"
+// in the language of msgs.
+//
+// Mobile page: tooltip of New Code.
+func (msgs Messages) MobileNewCodeTip() string {
+	return Catalog.Format(msgs.locale, "mobileNewCodeTip", nil)
+}
+
+// MobileNoAccessibility says "Posse isn’t allowed to use Accessibility yet: the phone can watch but not control"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: the Accessibility permission is
+// missing.
+func MobileNoAccessibility() string { return In(i18n.Locale()).MobileNoAccessibility() }
+
+// MobileNoAccessibility says "Posse isn’t allowed to use Accessibility yet: the phone can watch but not control"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: the Accessibility permission is
+// missing.
+func (msgs Messages) MobileNoAccessibility() string {
+	return Catalog.Format(msgs.locale, "mobileNoAccessibility", nil)
+}
+
+// MobileNoDevices says "No phones paired yet"
+// in the language the app shows.
+//
+// Mobile page: empty paired phones list.
+func MobileNoDevices() string { return In(i18n.Locale()).MobileNoDevices() }
+
+// MobileNoDevices says "No phones paired yet"
+// in the language of msgs.
+//
+// Mobile page: empty paired phones list.
+func (msgs Messages) MobileNoDevices() string {
+	return Catalog.Format(msgs.locale, "mobileNoDevices", nil)
+}
+
+// MobileNoScreenRecording says "Posse isn’t allowed to use Screen Recording yet"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: the Screen Recording permission is
+// missing.
+func MobileNoScreenRecording() string { return In(i18n.Locale()).MobileNoScreenRecording() }
+
+// MobileNoScreenRecording says "Posse isn’t allowed to use Screen Recording yet"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: the Screen Recording permission is
+// missing.
+func (msgs Messages) MobileNoScreenRecording() string {
+	return Catalog.Format(msgs.locale, "mobileNoScreenRecording", nil)
+}
+
+// MobileOnlineTip says "{names} connected"
+// in the language the app shows.
+//
+// Tooltip of the green dot on the Mobile sidebar tile. names lists the
+// connected phones joined with mobileListSeparator.
+func MobileOnlineTip(names string) string { return In(i18n.Locale()).MobileOnlineTip(names) }
+
+// MobileOnlineTip says "{names} connected"
+// in the language of msgs.
+//
+// Tooltip of the green dot on the Mobile sidebar tile. names lists the
+// connected phones joined with mobileListSeparator.
+func (msgs Messages) MobileOnlineTip(names string) string {
+	return Catalog.Format(msgs.locale, "mobileOnlineTip", map[string]any{"names": names})
+}
+
+// MobileOpenSystemSettings says "Open System Settings"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: button opening the privacy pane of
+// System Settings.
+func MobileOpenSystemSettings() string { return In(i18n.Locale()).MobileOpenSystemSettings() }
+
+// MobileOpenSystemSettings says "Open System Settings"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: button opening the privacy pane of
+// System Settings.
+func (msgs Messages) MobileOpenSystemSettings() string {
+	return Catalog.Format(msgs.locale, "mobileOpenSystemSettings", nil)
+}
+
+// MobileOpenSystemSettingsTip says "Turn on Posse in Privacy & Security"
+// in the language the app shows.
+//
+// Mobile page, Remote Desktop card: tooltip of Open System Settings.
+func MobileOpenSystemSettingsTip() string { return In(i18n.Locale()).MobileOpenSystemSettingsTip() }
+
+// MobileOpenSystemSettingsTip says "Turn on Posse in Privacy & Security"
+// in the language of msgs.
+//
+// Mobile page, Remote Desktop card: tooltip of Open System Settings.
+func (msgs Messages) MobileOpenSystemSettingsTip() string {
+	return Catalog.Format(msgs.locale, "mobileOpenSystemSettingsTip", nil)
+}
+
+// MobileOthers says "{count, plural, one {# Other Pairing} other {# Other Pairings}}"
+// in the language the app shows.
+//
+// Mobile page: row grouping pairings not tied to a Posse Mobile phone.
+func MobileOthers(count int) string { return In(i18n.Locale()).MobileOthers(count) }
+
+// MobileOthers says "{count, plural, one {# Other Pairing} other {# Other Pairings}}"
+// in the language of msgs.
+//
+// Mobile page: row grouping pairings not tied to a Posse Mobile phone.
+func (msgs Messages) MobileOthers(count int) string {
+	return Catalog.Format(msgs.locale, "mobileOthers", map[string]any{"count": count})
+}
+
+// MobileOthersNote says "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updatin…"
+// in the language the app shows.
+//
+// Mobile page: explanation under Other Pairings.
+func MobileOthersNote() string { return In(i18n.Locale()).MobileOthersNote() }
+
+// MobileOthersNote says "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updatin…"
+// in the language of msgs.
+//
+// Mobile page: explanation under Other Pairings.
+func (msgs Messages) MobileOthersNote() string {
+	return Catalog.Format(msgs.locale, "mobileOthersNote", nil)
+}
+
+// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; cod…"
+// in the language the app shows.
+//
+// Mobile page: explanation under Other Pairings when some are connected.
+func MobileOthersNoteOnline(count int) string { return In(i18n.Locale()).MobileOthersNoteOnline(count) }
+
+// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; cod…"
+// in the language of msgs.
+//
+// Mobile page: explanation under Other Pairings when some are connected.
+func (msgs Messages) MobileOthersNoteOnline(count int) string {
+	return Catalog.Format(msgs.locale, "mobileOthersNoteOnline", map[string]any{"count": count})
+}
+
+// MobilePairNote says "Scan the code on the left with Posse Mobile. If you can’t scan it, copy the pairing code and paste it on the app…"
+// in the language the app shows.
+//
+// Mobile page: instructions in the pairing card.
+func MobilePairNote() string { return In(i18n.Locale()).MobilePairNote() }
+
+// MobilePairNote says "Scan the code on the left with Posse Mobile. If you can’t scan it, copy the pairing code and paste it on the app…"
+// in the language of msgs.
+//
+// Mobile page: instructions in the pairing card.
+func (msgs Messages) MobilePairNote() string {
+	return Catalog.Format(msgs.locale, "mobilePairNote", nil)
+}
+
+// MobilePairTitle says "Pair a New Phone"
+// in the language the app shows.
+//
+// Mobile page: title of the pairing card.
+func MobilePairTitle() string { return In(i18n.Locale()).MobilePairTitle() }
+
+// MobilePairTitle says "Pair a New Phone"
+// in the language of msgs.
+//
+// Mobile page: title of the pairing card.
+func (msgs Messages) MobilePairTitle() string {
+	return Catalog.Format(msgs.locale, "mobilePairTitle", nil)
+}
+
+// MobilePairedOn says "Paired {date}"
+// in the language the app shows.
+//
+// Mobile page: under a phone’s name. date is the pairing date.
+func MobilePairedOn(date string) string { return In(i18n.Locale()).MobilePairedOn(date) }
+
+// MobilePairedOn says "Paired {date}"
+// in the language of msgs.
+//
+// Mobile page: under a phone’s name. date is the pairing date.
+func (msgs Messages) MobilePairedOn(date string) string {
+	return Catalog.Format(msgs.locale, "mobilePairedOn", map[string]any{"date": date})
+}
+
+// MobilePairedOnLinks says "Paired {date}; {count, plural, one {# pairing code} other {# pairing codes}} saved (different addresses or rescanned)"
+// in the language the app shows.
+//
+// Mobile page: under a phone’s name when it saved several pairing codes.
+// date is the pairing date.
+func MobilePairedOnLinks(date string, count int) string {
+	return In(i18n.Locale()).MobilePairedOnLinks(date, count)
+}
+
+// MobilePairedOnLinks says "Paired {date}; {count, plural, one {# pairing code} other {# pairing codes}} saved (different addresses or rescanned)"
+// in the language of msgs.
+//
+// Mobile page: under a phone’s name when it saved several pairing codes.
+// date is the pairing date.
+func (msgs Messages) MobilePairedOnLinks(date string, count int) string {
+	return Catalog.Format(msgs.locale, "mobilePairedOnLinks", map[string]any{"date": date, "count": count})
+}
+
+// MobilePairedTitle says "Paired Phones"
+// in the language the app shows.
+//
+// Mobile page: title of the paired phones card.
+func MobilePairedTitle() string { return In(i18n.Locale()).MobilePairedTitle() }
+
+// MobilePairedTitle says "Paired Phones"
+// in the language of msgs.
+//
+// Mobile page: title of the paired phones card.
+func (msgs Messages) MobilePairedTitle() string {
+	return Catalog.Format(msgs.locale, "mobilePairedTitle", nil)
+}
+
+// MobileRemoveAll says "Remove All"
+// in the language the app shows.
+//
+// Mobile page: button removing all other pairings, and confirm button of
+// that confirmation.
+func MobileRemoveAll() string { return In(i18n.Locale()).MobileRemoveAll() }
+
+// MobileRemoveAll says "Remove All"
+// in the language of msgs.
+//
+// Mobile page: button removing all other pairings, and confirm button of
+// that confirmation.
+func (msgs Messages) MobileRemoveAll() string {
+	return Catalog.Format(msgs.locale, "mobileRemoveAll", nil)
+}
+
+// MobileRemoveBody says "This phone disconnects right away. To use it again, scan the code to pair again."
+// in the language the app shows.
+//
+// Mobile page: body of the confirmation removing a paired phone.
+func MobileRemoveBody() string { return In(i18n.Locale()).MobileRemoveBody() }
+
+// MobileRemoveBody says "This phone disconnects right away. To use it again, scan the code to pair again."
+// in the language of msgs.
+//
+// Mobile page: body of the confirmation removing a paired phone.
+func (msgs Messages) MobileRemoveBody() string {
+	return Catalog.Format(msgs.locale, "mobileRemoveBody", nil)
+}
+
+// MobileRemoveConfirm says "Remove “{name}”?"
+// in the language the app shows.
+//
+// Mobile page: title of the confirmation removing a paired phone. name is
+// the phone name.
+func MobileRemoveConfirm(name string) string { return In(i18n.Locale()).MobileRemoveConfirm(name) }
+
+// MobileRemoveConfirm says "Remove “{name}”?"
+// in the language of msgs.
+//
+// Mobile page: title of the confirmation removing a paired phone. name is
+// the phone name.
+func (msgs Messages) MobileRemoveConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "mobileRemoveConfirm", map[string]any{"name": name})
+}
+
+// MobileRemoveOthersBody says "All these pairing codes stop working. Phones still using one of them disconnect and need to scan again to pair."
+// in the language the app shows.
+//
+// Mobile page: body of the confirmation removing all other pairings.
+func MobileRemoveOthersBody() string { return In(i18n.Locale()).MobileRemoveOthersBody() }
+
+// MobileRemoveOthersBody says "All these pairing codes stop working. Phones still using one of them disconnect and need to scan again to pair."
+// in the language of msgs.
+//
+// Mobile page: body of the confirmation removing all other pairings.
+func (msgs Messages) MobileRemoveOthersBody() string {
+	return Catalog.Format(msgs.locale, "mobileRemoveOthersBody", nil)
+}
+
+// MobileRemoveOthersConfirm says "Remove {count, plural, one {# Other Pairing} other {# Other Pairings}}?"
+// in the language the app shows.
+//
+// Mobile page: title of the confirmation removing all other pairings.
+func MobileRemoveOthersConfirm(count int) string {
+	return In(i18n.Locale()).MobileRemoveOthersConfirm(count)
+}
+
+// MobileRemoveOthersConfirm says "Remove {count, plural, one {# Other Pairing} other {# Other Pairings}}?"
+// in the language of msgs.
+//
+// Mobile page: title of the confirmation removing all other pairings.
+func (msgs Messages) MobileRemoveOthersConfirm(count int) string {
+	return Catalog.Format(msgs.locale, "mobileRemoveOthersConfirm", map[string]any{"count": count})
+}
+
+// MobileTitle says "Mobile"
+// in the language the app shows.
+//
+// Sidebar tile and page title of the Mobile page (pairing phones with this
+// Mac).
+func MobileTitle() string { return In(i18n.Locale()).MobileTitle() }
+
+// MobileTitle says "Mobile"
+// in the language of msgs.
+//
+// Sidebar tile and page title of the Mobile page (pairing phones with this
+// Mac).
+func (msgs Messages) MobileTitle() string {
+	return Catalog.Format(msgs.locale, "mobileTitle", nil)
+}
+
+// MobileUse says "Use"
+// in the language the app shows.
+//
+// Mobile page: button applying a typed custom address or relay invite code.
+func MobileUse() string { return In(i18n.Locale()).MobileUse() }
+
+// MobileUse says "Use"
+// in the language of msgs.
+//
+// Mobile page: button applying a typed custom address or relay invite code.
+func (msgs Messages) MobileUse() string {
+	return Catalog.Format(msgs.locale, "mobileUse", nil)
+}
+
+// RelayClock says "Clock Off"
+// in the language the app shows.
+//
+// Mobile page, Relay card: state after the title; this Mac’s clock is
+// wrong.
+func RelayClock() string { return In(i18n.Locale()).RelayClock() }
+
+// RelayClock says "Clock Off"
+// in the language of msgs.
+//
+// Mobile page, Relay card: state after the title; this Mac’s clock is
+// wrong.
+func (msgs Messages) RelayClock() string {
+	return Catalog.Format(msgs.locale, "relayClock", nil)
+}
+
+// RelayClockNote says "This Mac’s clock differs from the relay’s by more than 5 minutes. Turn on “Set time and date automatically” i…"
+// in the language the app shows.
+//
+// Mobile page, Relay card: note for the Clock Off state.
+func RelayClockNote() string { return In(i18n.Locale()).RelayClockNote() }
+
+// RelayClockNote says "This Mac’s clock differs from the relay’s by more than 5 minutes. Turn on “Set time and date automatically” i…"
+// in the language of msgs.
+//
+// Mobile page, Relay card: note for the Clock Off state.
+func (msgs Messages) RelayClockNote() string {
+	return Catalog.Format(msgs.locale, "relayClockNote", nil)
+}
+
+// RelayCodePlaceholder says "Paste Relay Invite Code"
+// in the language the app shows.
+//
+// Mobile page, Relay card: placeholder of the invite code field.
+func RelayCodePlaceholder() string { return In(i18n.Locale()).RelayCodePlaceholder() }
+
+// RelayCodePlaceholder says "Paste Relay Invite Code"
+// in the language of msgs.
+//
+// Mobile page, Relay card: placeholder of the invite code field.
+func (msgs Messages) RelayCodePlaceholder() string {
+	return Catalog.Format(msgs.locale, "relayCodePlaceholder", nil)
+}
+
+// RelayDenied says "Invalid Invite Code"
+// in the language the app shows.
+//
+// Mobile page, Relay card: state after the title.
+func RelayDenied() string { return In(i18n.Locale()).RelayDenied() }
+
+// RelayDenied says "Invalid Invite Code"
+// in the language of msgs.
+//
+// Mobile page, Relay card: state after the title.
+func (msgs Messages) RelayDenied() string {
+	return Catalog.Format(msgs.locale, "relayDenied", nil)
+}
+
+// RelayDeniedNote says "The relay doesn’t accept this invite code. Ask whoever sent it for a new one."
+// in the language the app shows.
+//
+// Mobile page, Relay card: note for the Invalid Invite Code state.
+func RelayDeniedNote() string { return In(i18n.Locale()).RelayDeniedNote() }
+
+// RelayDeniedNote says "The relay doesn’t accept this invite code. Ask whoever sent it for a new one."
+// in the language of msgs.
+//
+// Mobile page, Relay card: note for the Invalid Invite Code state.
+func (msgs Messages) RelayDeniedNote() string {
+	return Catalog.Format(msgs.locale, "relayDeniedNote", nil)
+}
+
+// RelayInviteCreate says "Create Invite Code"
+// in the language the app shows.
+//
+// Mobile page, Relay card: button creating an invite code.
+func RelayInviteCreate() string { return In(i18n.Locale()).RelayInviteCreate() }
+
+// RelayInviteCreate says "Create Invite Code"
+// in the language of msgs.
+//
+// Mobile page, Relay card: button creating an invite code.
+func (msgs Messages) RelayInviteCreate() string {
+	return Catalog.Format(msgs.locale, "relayInviteCreate", nil)
+}
+
+// RelayInviteNamePlaceholder says "Their name, e.g. lvxiaohai"
+// in the language the app shows.
+//
+// Mobile page, Relay card: placeholder of the invitee name field.
+func RelayInviteNamePlaceholder() string { return In(i18n.Locale()).RelayInviteNamePlaceholder() }
+
+// RelayInviteNamePlaceholder says "Their name, e.g. lvxiaohai"
+// in the language of msgs.
+//
+// Mobile page, Relay card: placeholder of the invitee name field.
+func (msgs Messages) RelayInviteNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "relayInviteNamePlaceholder", nil)
+}
+
+// RelayInviteNote says "They paste the invite code on the Mobile page of Posse on their own Mac. Names can use only lowercase letters, digits…"
+// in the language the app shows.
+//
+// Mobile page, Relay card: explanation under the invite row.
+func RelayInviteNote() string { return In(i18n.Locale()).RelayInviteNote() }
+
+// RelayInviteNote says "They paste the invite code on the Mobile page of Posse on their own Mac. Names can use only lowercase letters, digits…"
+// in the language of msgs.
+//
+// Mobile page, Relay card: explanation under the invite row.
+func (msgs Messages) RelayInviteNote() string {
+	return Catalog.Format(msgs.locale, "relayInviteNote", nil)
+}
+
+// RelayInviteTitle says "Invite Others"
+// in the language the app shows.
+//
+// Mobile page, Relay card: label above the invite row (admin only).
+func RelayInviteTitle() string { return In(i18n.Locale()).RelayInviteTitle() }
+
+// RelayInviteTitle says "Invite Others"
+// in the language of msgs.
+//
+// Mobile page, Relay card: label above the invite row (admin only).
+func (msgs Messages) RelayInviteTitle() string {
+	return Catalog.Format(msgs.locale, "relayInviteTitle", nil)
+}
+
+// RelayNote says "When the phone isn’t on the same Wi-Fi, it connects back to this Mac through a relay. Paste the relay invite code y…"
+// in the language the app shows.
+//
+// Mobile page, Relay card: explanation when no relay is set.
+func RelayNote() string { return In(i18n.Locale()).RelayNote() }
+
+// RelayNote says "When the phone isn’t on the same Wi-Fi, it connects back to this Mac through a relay. Paste the relay invite code y…"
+// in the language of msgs.
+//
+// Mobile page, Relay card: explanation when no relay is set.
+func (msgs Messages) RelayNote() string {
+	return Catalog.Format(msgs.locale, "relayNote", nil)
+}
+
+// RelayOldDaemon says "The daemon is an older version. Update the daemon in Settings, then try again."
+// in the language the app shows.
+//
+// Mobile page, Relay card: error when the daemon doesn’t know the relay
+// request.
+func RelayOldDaemon() string { return In(i18n.Locale()).RelayOldDaemon() }
+
+// RelayOldDaemon says "The daemon is an older version. Update the daemon in Settings, then try again."
+// in the language of msgs.
+//
+// Mobile page, Relay card: error when the daemon doesn’t know the relay
+// request.
+func (msgs Messages) RelayOldDaemon() string {
+	return Catalog.Format(msgs.locale, "relayOldDaemon", nil)
+}
+
+// RelayReady says "Ready"
+// in the language the app shows.
+//
+// Mobile page, Relay card: state after the title.
+func RelayReady() string { return In(i18n.Locale()).RelayReady() }
+
+// RelayReady says "Ready"
+// in the language of msgs.
+//
+// Mobile page, Relay card: state after the title.
+func (msgs Messages) RelayReady() string {
+	return Catalog.Format(msgs.locale, "relayReady", nil)
+}
+
+// RelayReadyNote says "Once a phone has connected to this Mac on Wi-Fi, it can also connect when away."
+// in the language the app shows.
+//
+// Mobile page, Relay card: note for the Ready state.
+func RelayReadyNote() string { return In(i18n.Locale()).RelayReadyNote() }
+
+// RelayReadyNote says "Once a phone has connected to this Mac on Wi-Fi, it can also connect when away."
+// in the language of msgs.
+//
+// Mobile page, Relay card: note for the Ready state.
+func (msgs Messages) RelayReadyNote() string {
+	return Catalog.Format(msgs.locale, "relayReadyNote", nil)
+}
+
+// RelayRemoveBody says "Phones away from home can no longer connect back to this Mac. To use it again, paste an invite code again."
+// in the language the app shows.
+//
+// Mobile page, Relay card: body of the confirmation removing the relay.
+func RelayRemoveBody() string { return In(i18n.Locale()).RelayRemoveBody() }
+
+// RelayRemoveBody says "Phones away from home can no longer connect back to this Mac. To use it again, paste an invite code again."
+// in the language of msgs.
+//
+// Mobile page, Relay card: body of the confirmation removing the relay.
+func (msgs Messages) RelayRemoveBody() string {
+	return Catalog.Format(msgs.locale, "relayRemoveBody", nil)
+}
+
+// RelayRemoveBodyAdmin says "This Mac holds the relay’s master key. After removing it you can’t invite others until you get an admin code from…"
+// in the language the app shows.
+//
+// Mobile page, Relay card: body of the confirmation removing the relay on
+// the admin Mac.
+func RelayRemoveBodyAdmin() string { return In(i18n.Locale()).RelayRemoveBodyAdmin() }
+
+// RelayRemoveBodyAdmin says "This Mac holds the relay’s master key. After removing it you can’t invite others until you get an admin code from…"
+// in the language of msgs.
+//
+// Mobile page, Relay card: body of the confirmation removing the relay on
+// the admin Mac.
+func (msgs Messages) RelayRemoveBodyAdmin() string {
+	return Catalog.Format(msgs.locale, "relayRemoveBodyAdmin", nil)
+}
+
+// RelayRemoveConfirm says "Stop Using the Relay?"
+// in the language the app shows.
+//
+// Mobile page, Relay card: title of the confirmation removing the relay.
+func RelayRemoveConfirm() string { return In(i18n.Locale()).RelayRemoveConfirm() }
+
+// RelayRemoveConfirm says "Stop Using the Relay?"
+// in the language of msgs.
+//
+// Mobile page, Relay card: title of the confirmation removing the relay.
+func (msgs Messages) RelayRemoveConfirm() string {
+	return Catalog.Format(msgs.locale, "relayRemoveConfirm", nil)
+}
+
+// RelayRemoveTip says "Stop using the relay on this Mac"
+// in the language the app shows.
+//
+// Mobile page, Relay card: tooltip of Remove.
+func RelayRemoveTip() string { return In(i18n.Locale()).RelayRemoveTip() }
+
+// RelayRemoveTip says "Stop using the relay on this Mac"
+// in the language of msgs.
+//
+// Mobile page, Relay card: tooltip of Remove.
+func (msgs Messages) RelayRemoveTip() string {
+	return Catalog.Format(msgs.locale, "relayRemoveTip", nil)
+}
+
+// RelayRevoked says "Revoked"
+// in the language the app shows.
+//
+// Mobile page, Relay card: state after the title.
+func RelayRevoked() string { return In(i18n.Locale()).RelayRevoked() }
+
+// RelayRevoked says "Revoked"
+// in the language of msgs.
+//
+// Mobile page, Relay card: state after the title.
+func (msgs Messages) RelayRevoked() string {
+	return Catalog.Format(msgs.locale, "relayRevoked", nil)
+}
+
+// RelayRevokedNote says "The relay’s admin has revoked this invite code."
+// in the language the app shows.
+//
+// Mobile page, Relay card: note for the Revoked state.
+func RelayRevokedNote() string { return In(i18n.Locale()).RelayRevokedNote() }
+
+// RelayRevokedNote says "The relay’s admin has revoked this invite code."
+// in the language of msgs.
+//
+// Mobile page, Relay card: note for the Revoked state.
+func (msgs Messages) RelayRevokedNote() string {
+	return Catalog.Format(msgs.locale, "relayRevokedNote", nil)
+}
+
+// RelayTitle says "Relay"
+// in the language the app shows.
+//
+// Mobile page: title of the Relay card (connecting phones from outside the
+// local network).
+func RelayTitle() string { return In(i18n.Locale()).RelayTitle() }
+
+// RelayTitle says "Relay"
+// in the language of msgs.
+//
+// Mobile page: title of the Relay card (connecting phones from outside the
+// local network).
+func (msgs Messages) RelayTitle() string {
+	return Catalog.Format(msgs.locale, "relayTitle", nil)
+}
+
+// RelayTitleState says "Relay · {state}"
+// in the language the app shows.
+//
+// Mobile page: title of the Relay card with its state.
+func RelayTitleState(state string) string { return In(i18n.Locale()).RelayTitleState(state) }
+
+// RelayTitleState says "Relay · {state}"
+// in the language of msgs.
+//
+// Mobile page: title of the Relay card with its state.
+func (msgs Messages) RelayTitleState(state string) string {
+	return Catalog.Format(msgs.locale, "relayTitleState", map[string]any{"state": state})
+}
+
+// RelayUnreachable says "Not Responding"
+// in the language the app shows.
+//
+// Mobile page, Relay card: state after the title; the relay server
+// doesn’t answer.
+func RelayUnreachable() string { return In(i18n.Locale()).RelayUnreachable() }
+
+// RelayUnreachable says "Not Responding"
+// in the language of msgs.
+//
+// Mobile page, Relay card: state after the title; the relay server
+// doesn’t answer.
+func (msgs Messages) RelayUnreachable() string {
+	return Catalog.Format(msgs.locale, "relayUnreachable", nil)
+}
+
+// RelayUnreachableNote says "The relay server isn’t running, or the current network blocks UDP."
+// in the language the app shows.
+//
+// Mobile page, Relay card: note for the Not Responding state.
+func RelayUnreachableNote() string { return In(i18n.Locale()).RelayUnreachableNote() }
+
+// RelayUnreachableNote says "The relay server isn’t running, or the current network blocks UDP."
+// in the language of msgs.
+//
+// Mobile page, Relay card: note for the Not Responding state.
+func (msgs Messages) RelayUnreachableNote() string {
+	return Catalog.Format(msgs.locale, "relayUnreachableNote", nil)
 }
 
 // RollbackBinary says "Binary file; only the whole file can be rolled back"
@@ -14862,4 +18636,160 @@ func UsageWindowWeekShort() string { return In(i18n.Locale()).UsageWindowWeekSho
 // Plan Usage settings or status popover: label for WindowWeekShort.
 func (msgs Messages) UsageWindowWeekShort() string {
 	return Catalog.Format(msgs.locale, "usageWindowWeekShort", nil)
+}
+
+// WebAddressPlaceholder says "Enter URL"
+// in the language the app shows.
+//
+// Web tab toolbar: placeholder of the address field.
+func WebAddressPlaceholder() string { return In(i18n.Locale()).WebAddressPlaceholder() }
+
+// WebAddressPlaceholder says "Enter URL"
+// in the language of msgs.
+//
+// Web tab toolbar: placeholder of the address field.
+func (msgs Messages) WebAddressPlaceholder() string {
+	return Catalog.Format(msgs.locale, "webAddressPlaceholder", nil)
+}
+
+// WebBack says "Back"
+// in the language the app shows.
+//
+// Web tab toolbar: tooltip of the back button.
+func WebBack() string { return In(i18n.Locale()).WebBack() }
+
+// WebBack says "Back"
+// in the language of msgs.
+//
+// Web tab toolbar: tooltip of the back button.
+func (msgs Messages) WebBack() string {
+	return Catalog.Format(msgs.locale, "webBack", nil)
+}
+
+// WebDesktop says "Desktop"
+// in the language the app shows.
+//
+// Web tab mobile preview menu: show the page at the full tab size.
+func WebDesktop() string { return In(i18n.Locale()).WebDesktop() }
+
+// WebDesktop says "Desktop"
+// in the language of msgs.
+//
+// Web tab mobile preview menu: show the page at the full tab size.
+func (msgs Messages) WebDesktop() string {
+	return Catalog.Format(msgs.locale, "webDesktop", nil)
+}
+
+// WebForward says "Forward"
+// in the language the app shows.
+//
+// Web tab toolbar: tooltip of the forward button.
+func WebForward() string { return In(i18n.Locale()).WebForward() }
+
+// WebForward says "Forward"
+// in the language of msgs.
+//
+// Web tab toolbar: tooltip of the forward button.
+func (msgs Messages) WebForward() string {
+	return Catalog.Format(msgs.locale, "webForward", nil)
+}
+
+// WebLandscape says "Landscape"
+// in the language the app shows.
+//
+// Web tab mobile preview menu: rotate the device to landscape.
+func WebLandscape() string { return In(i18n.Locale()).WebLandscape() }
+
+// WebLandscape says "Landscape"
+// in the language of msgs.
+//
+// Web tab mobile preview menu: rotate the device to landscape.
+func (msgs Messages) WebLandscape() string {
+	return Catalog.Format(msgs.locale, "webLandscape", nil)
+}
+
+// WebLoadFailed says "Can’t open {url}"
+// in the language the app shows.
+//
+// Web tab: title shown when the page fails to load.
+func WebLoadFailed(url string) string { return In(i18n.Locale()).WebLoadFailed(url) }
+
+// WebLoadFailed says "Can’t open {url}"
+// in the language of msgs.
+//
+// Web tab: title shown when the page fails to load.
+func (msgs Messages) WebLoadFailed(url string) string {
+	return Catalog.Format(msgs.locale, "webLoadFailed", map[string]any{"url": url})
+}
+
+// WebMobilePreview says "Mobile Preview"
+// in the language the app shows.
+//
+// Web tab toolbar: tooltip of the button showing the page at a phone size.
+func WebMobilePreview() string { return In(i18n.Locale()).WebMobilePreview() }
+
+// WebMobilePreview says "Mobile Preview"
+// in the language of msgs.
+//
+// Web tab toolbar: tooltip of the button showing the page at a phone size.
+func (msgs Messages) WebMobilePreview() string {
+	return Catalog.Format(msgs.locale, "webMobilePreview", nil)
+}
+
+// WebReload says "Reload"
+// in the language the app shows.
+//
+// Web tab toolbar: tooltip of the reload button, and button after a page
+// fails to load.
+func WebReload() string { return In(i18n.Locale()).WebReload() }
+
+// WebReload says "Reload"
+// in the language of msgs.
+//
+// Web tab toolbar: tooltip of the reload button, and button after a page
+// fails to load.
+func (msgs Messages) WebReload() string {
+	return Catalog.Format(msgs.locale, "webReload", nil)
+}
+
+// WebStop says "Stop"
+// in the language the app shows.
+//
+// Web tab toolbar: tooltip of the stop loading button.
+func WebStop() string { return In(i18n.Locale()).WebStop() }
+
+// WebStop says "Stop"
+// in the language of msgs.
+//
+// Web tab toolbar: tooltip of the stop loading button.
+func (msgs Messages) WebStop() string {
+	return Catalog.Format(msgs.locale, "webStop", nil)
+}
+
+// WebTabName says "Web Page"
+// in the language the app shows.
+//
+// Name of a web tab before the page has a title or host.
+func WebTabName() string { return In(i18n.Locale()).WebTabName() }
+
+// WebTabName says "Web Page"
+// in the language of msgs.
+//
+// Name of a web tab before the page has a title or host.
+func (msgs Messages) WebTabName() string {
+	return Catalog.Format(msgs.locale, "webTabName", nil)
+}
+
+// WebUnavailable says "Web pages can’t be opened here"
+// in the language the app shows.
+//
+// Web tab message when no window can host a web view.
+func WebUnavailable() string { return In(i18n.Locale()).WebUnavailable() }
+
+// WebUnavailable says "Web pages can’t be opened here"
+// in the language of msgs.
+//
+// Web tab message when no window can host a web view.
+func (msgs Messages) WebUnavailable() string {
+	return Catalog.Format(msgs.locale, "webUnavailable", nil)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"posse/internal/errtext"
 	"posse/internal/media"
+	"posse/locales"
 )
 
 // openLink 处理终端里点击的链接。单击弹出链接卡片，Cmd+点击直接打开，Shift+Cmd+点击交给系统；设置里可以
@@ -62,16 +63,16 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 }
 
 // posseKeys 是在 Posse 里直接打开链接的按法，systemKeys 是交给系统的，卡片里写在对应的操作右边。
-func (a *app) posseKeys() string {
-	direct, system := a.linkKeys()
+func (a *app) posseKeys(m locales.Messages) string {
+	direct, system := a.linkKeys(m)
 	if a.state.LinkSwapSystem {
 		return system
 	}
 	return direct
 }
 
-func (a *app) systemKeys() string {
-	direct, system := a.linkKeys()
+func (a *app) systemKeys(m locales.Messages) string {
+	direct, system := a.linkKeys(m)
 	if a.state.LinkSwapSystem {
 		return direct
 	}
@@ -79,11 +80,11 @@ func (a *app) systemKeys() string {
 }
 
 // linkKeys 是不互换时直接打开和交给系统的按法。
-func (a *app) linkKeys() (direct, system string) {
+func (a *app) linkKeys(m locales.Messages) (direct, system string) {
 	if a.state.LinkClickOpens {
-		return "点击", "⇧⌘ 点击"
+		return m.LinksClick(), m.LinksShiftCmdClick()
 	}
-	return "⌘ 点击", "⇧⌘ 点击"
+	return m.LinksCmdClick(), m.LinksShiftCmdClick()
 }
 
 // linkLine 是打印出来的路径末尾 :行 或 :行:列 里的行号，没有是 0。file:// 链接不带行号，文件名里的 :数字 是名字的一部分。
@@ -328,17 +329,17 @@ func (a *app) linkCardView(c *ui.Context, area ui.Element, termID string) {
 // urlCardItems 是网址卡片的内容：网址和复制按钮，在网页标签里打开（直接打开的按法做这一步）、
 // 用浏览器打开（交给系统的按法）。
 func (a *app) urlCardItems(c *ui.Context, card *linkCard) {
-	a.linkCardHead(c, card.url, card.url, "复制链接")
+	a.linkCardHead(c, card.url, card.url, L(c).LinksCopyLink())
 	hline(c).Margin(4, 6)
 	web := isWebURL(card.url) && card.ws != nil
-	if web && linkCardItem(c, iconGlobe, "在 Posse 中打开", a.posseKeys()) {
+	if web && linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), a.posseKeys(L(c))) {
 		a.openWeb(card.ws, card.url)
 		a.linkCard = nil
 	}
 	// 不是 http、https 的网址两种按法都交给系统，写在 Posse 里打开的那个
-	label, keys := "打开", a.posseKeys()
+	label, keys := L(c).CommonOpen(), a.posseKeys(L(c))
 	if web {
-		label, keys = "在浏览器中打开", a.systemKeys()
+		label, keys = L(c).LinksOpenInBrowser(), a.systemKeys(L(c))
 	}
 	if linkCardItem(c, iconOpen, label, keys) {
 		c.OpenURL(card.url)
@@ -360,37 +361,37 @@ func (a *app) linkCardHead(c *ui.Context, text, value, label string) {
 
 // pathCardItems 是文件链接和路径卡片的内容。
 func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
-	a.linkCardHead(c, shortPath(card.path), card.path, "复制路径")
+	a.linkCardHead(c, shortPath(card.path), card.path, L(c).CommonCopyPath())
 	if card.preview != nil {
 		ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
 	}
 	hline(c).Margin(4, 6)
 	// 最常用的在最上面：在 Posse 里打开
-	if !card.isDir && linkCardItem(c, iconFile, "在文件标签中打开", a.posseKeys()) {
+	if !card.isDir && linkCardItem(c, iconFile, L(c).LinksOpenInFileTab(), a.posseKeys(L(c))) {
 		a.openLinkFile(card)
 		a.linkCard = nil
 	}
 	// 文件栏显示的是当前工作区的树，只有它里面的路径能选中
 	revealKeys := ""
 	if card.isDir {
-		revealKeys = a.posseKeys()
+		revealKeys = a.posseKeys(L(c))
 	}
-	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, "在文件栏中显示", revealKeys) {
+	if w := a.workspace(a.selected); w != nil && inDir(card.path, w.Path) && linkCardItem(c, iconPanelRight, L(c).CommonRevealInFilesPanel(), revealKeys) {
 		a.revealInFiles(w, card.path)
 		a.linkCard = nil
 	}
-	openIcon, openLabel := iconOpen, "打开"
+	openIcon, openLabel := iconOpen, L(c).CommonOpen()
 	if card.isDir {
 		// 在访达里的动作都用文件夹图标
-		openIcon, openLabel = iconFolder, "在访达中打开"
+		openIcon, openLabel = iconFolder, L(c).CommonOpenInFinder()
 	} else if isImagePath(card.path) {
-		openLabel = "用预览打开"
+		openLabel = L(c).LinksOpenInPreview()
 	}
-	if linkCardItem(c, openIcon, openLabel, a.systemKeys()) {
+	if linkCardItem(c, openIcon, openLabel, a.systemKeys(L(c))) {
 		a.openPathExternal(card)
 		a.linkCard = nil
 	}
-	if !card.isDir && linkCardItem(c, iconFolder, "在访达中显示", "") {
+	if !card.isDir && linkCardItem(c, iconFolder, L(c).CommonRevealInFinder(), "") {
 		mygo.Shell.ShowItemInFolder(card.path)
 		a.linkCard = nil
 	}

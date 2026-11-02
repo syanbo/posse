@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/errtext"
+	"posse/locales"
 )
 
 // 网页标签：在文件标签里用系统的 WebKit（mygo 的 WebView）打开网址，和 diff、比较一样不对应磁盘文件。
@@ -56,7 +57,7 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 	d := &fileDoc{path: "web:" + strconv.Itoa(webSeq), web: wd, started: true, focus: focus}
 	v.insertDoc(d)
 	if a.win == nil {
-		d.kind, d.err = docError, "这里打不开网页"
+		d.kind, d.errMsg = docError, locales.Messages.WebUnavailable
 		return wd, d
 	}
 	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记
@@ -162,14 +163,14 @@ func closeWeb(d *fileDoc) {
 }
 
 // name 是网页标签上的名字：页面标题，还没有时是主机名。
-func (wd *webDoc) name() string {
+func (wd *webDoc) name(m locales.Messages) string {
 	if wd.title != "" {
 		return wd.title
 	}
 	if u, err := url.Parse(wd.url); err == nil && u.Host != "" {
 		return u.Host
 	}
-	return "网页"
+	return m.WebTabName()
 }
 
 // webView 画网页标签：上面一行导航和地址栏，下面是页面。
@@ -188,24 +189,24 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 			}
 			return on && b.Clicked()
 		}
-		if navButton("web-back", iconBack, "后退", wd.back) {
+		if navButton("web-back", iconBack, L(c).WebBack(), wd.back) {
 			p.GoBack()
 		}
-		if navButton("web-forward", iconForward, "前进", wd.forward) {
+		if navButton("web-forward", iconForward, L(c).WebForward(), wd.forward) {
 			p.GoForward()
 		}
 		if wd.loading {
-			if navButton("web-stop", iconClose, "停止", true) {
+			if navButton("web-stop", iconClose, L(c).WebStop(), true) {
 				// 页面已经显示出来、只差子资源时停下，WebKit 不一定再发载入结束的事件
 				p.Stop()
 				wd.loading = false
 			}
-		} else if navButton("web-reload", iconRefresh, "重新载入", true) {
+		} else if navButton("web-reload", iconRefresh, L(c).WebReload(), true) {
 			a.reloadWeb(wd)
 		}
 		ui.Box(c).Width(4)
 		var in ui.Element
-		ui.Column(c).Grow(1).Shrink(1).Children(func() { in = fieldInput(c, &wd.addr, "输入网址") })
+		ui.Column(c).Grow(1).Shrink(1).Children(func() { in = fieldInput(c, &wd.addr, L(c).WebAddressPlaceholder()) })
 		wd.editing = in.Focused()
 		if in.Submitted() {
 			if link := webAddress(wd.addr); link != "" {
@@ -219,24 +220,24 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 			wd.view.Focus()
 		}
 		ui.Box(c).Width(4)
-		phone := iconButton(c.Key("web-device"), iconPhone, a.withKey("手机预览", "webMobile"))
+		phone := iconButton(c.Key("web-device"), iconPhone, a.withKey(L(c).WebMobilePreview(), "webMobile"))
 		if wd.device != "" {
 			phone.Background(soft(t, t.Accent))
 		}
-		menuButton(c, phone, func(m *popMenu) { a.deviceMenu(m, wd) })
-		if iconButton(c.Key("web-copy"), iconCopy, "复制链接").Clicked() {
+		menuButton(c, phone, func(m *popMenu) { a.deviceMenu(L(c), m, wd) })
+		if iconButton(c.Key("web-copy"), iconCopy, L(c).LinksCopyLink()).Clicked() {
 			c.WriteClipboard(wd.url)
 		}
-		if iconButton(c.Key("web-browser"), iconOpen, "在浏览器中打开").Clicked() {
+		if iconButton(c.Key("web-browser"), iconOpen, L(c).LinksOpenInBrowser()).Clicked() {
 			c.OpenURL(wd.url)
 		}
 	})
 	if wd.failed != "" {
 		// 不建 WebView 就不显示它，页面留着；重新载入或跳转后再显示
 		ui.Column(c).Grow(1).Center().Gap(8).Padding(24).BorderWidth(hairline, 0, 0, 0).BorderColor(colors(t).line).Children(func() {
-			titleText(c, "打不开 "+wd.url, fsTitle)
+			titleText(c, L(c).WebLoadFailed(wd.url), fsTitle)
 			ui.Text(c, wd.failed).FontSize(fsBody).TextColor(t.TextMuted).Selectable()
-			if pressable(textButton(c, "重新载入")).Clicked() {
+			if pressable(textButton(c, L(c).WebReload())).Clicked() {
 				a.reloadWeb(wd)
 			}
 		})

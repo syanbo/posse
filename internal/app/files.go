@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/files"
 	"posse/internal/media"
+	"posse/locales"
 )
 
 // 文件标签：每个工作区一个，和终端标签并列，浏览、查看、轻量编辑和检索工作区目录里的文件。
@@ -63,6 +63,7 @@ type fileDoc struct {
 	conflict   bool // 磁盘上改了，自己也有未保存的改动
 	deleted    bool
 	err        string
+	errMsg     func(locales.Messages) string // Posse 自己写的报错（err 为空时用），显示时按界面语言取
 	img        *ui.Bitmap
 	anim       *animPlayer // 动图：img 是它的位图
 	imgInfo    imageInfo
@@ -100,26 +101,34 @@ type fileDoc struct {
 	hintAt time.Time
 }
 
-func (d *fileDoc) name() string {
+func (d *fileDoc) name(m locales.Messages) string {
 	if d.web != nil {
-		return d.web.name()
+		return d.web.name(m)
 	}
 	if ld := d.log; ld != nil {
 		if ld.filter.Path != "" {
 			return filepath.Base(ld.filter.Path)
 		}
-		return "Git 日志"
+		return m.FilesGitLogTab()
 	}
 	if d.diff != nil {
-		return "差异：" + path.Base(d.diff.rel)
+		return m.FilesDiffTab(path.Base(d.diff.rel))
 	}
 	if cd := d.comp; cd != nil {
 		if cd.files {
-			return "工作区 ↔ " + cd.other
+			return m.FilesCompareWorkspaceTab(cd.other)
 		}
 		return cd.other + " ↔ " + cd.cur
 	}
 	return filepath.Base(d.path)
+}
+
+// errText 是文件标签的报错（kind 是 docError 时显示）。
+func (d *fileDoc) errText(m locales.Messages) string {
+	if d.err == "" && d.errMsg != nil {
+		return d.errMsg(m)
+	}
+	return d.err
 }
 
 // virtual 报告这个标签页不对应磁盘上的文件（diff、比较、网页）：不轮询磁盘，不记进 ui.json。
@@ -157,6 +166,7 @@ type fileSearch struct {
 	rows       []searchRow
 	truncated  bool
 	err        string
+	badRegex   bool // err 是正则编译的报错，显示时加上说明
 	list       ui.ListState
 	focus      bool // 下一帧把焦点给检索框
 	showFilter bool
@@ -182,6 +192,7 @@ type filesView struct {
 	list         *files.List // 文件清单：快速打开、检索、判断忽略；文件标签不可见时放掉
 	listAt       time.Time
 	listFailAt   time.Time // 上次列文件失败的时间：每帧都会来要清单，失败后等一个周期再试
+	listErr      error     // 列文件失败还没报：后台没有界面语言，由下一帧的视图（reportListErr）写进错误条
 	listing      bool
 	docs         []*fileDoc
 	cur          *fileDoc
@@ -326,6 +337,14 @@ func (a *app) toggleDir(v *filesView, dir string) {
 	a.saveFilesState(v)
 }
 
+// reportListErr 把后台列文件的失败写进错误条。
+func (a *app) reportListErr(c *ui.Context, v *filesView) {
+	if v.listErr != nil {
+		a.err = L(c).FilesListFailed(errtext.Text(v.listErr))
+		v.listErr = nil
+	}
+}
+
 // refreshList 在后台重列文件清单；force 为假时清单还新鲜就不列。done 在界面线程、清单就绪后调用。
 func (a *app) refreshList(v *filesView, force bool, done func()) {
 	if !force && v.list != nil && time.Since(v.listAt) < listMaxAge {
@@ -348,7 +367,7 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 			v.listing = false
 			if err != nil {
 				v.listFailAt = time.Now()
-				a.err = "列出文件失败：" + errtext.Text(err)
+				v.listErr = err
 				return
 			}
 			v.list, v.listAt, v.listFailAt = l, time.Now(), time.Time{}
@@ -432,7 +451,7 @@ func (a *app) loadDoc(d *fileDoc) {
 			a.update(func() {
 				d.base, d.seen = st, st
 				if err != nil {
-					d.kind, d.err = docError, errtext.Text(err)
+					d.kind, d.err, d.errMsg = docError, errtext.Text(err), nil
 					return
 				}
 				d.kind, d.anim = docImage, anim
@@ -470,7 +489,8 @@ func (a *app) applyContent(d *fileDoc, c files.Content, err error) {
 	d.base, d.seen, d.conflict, d.deleted = c.Stamp, c.Stamp, false, false
 	switch {
 	case err != nil:
-		d.kind, d.err = docError, readError(err)
+		d.kind = docError
+		d.err, d.errMsg = readError(err)
 		return
 	case c.Kind == files.Binary:
 		d.kind = docBinary
@@ -479,7 +499,7 @@ func (a *app) applyContent(d *fileDoc, c files.Content, err error) {
 		d.kind = docTooLarge
 		return
 	case c.Kind == files.Directory:
-		d.kind, d.err = docError, "这是一个目录"
+		d.kind, d.err, d.errMsg = docError, "", locales.Messages.FilesIsDirectory
 		return
 	}
 	d.readOnly = c.ReadOnly
@@ -497,20 +517,21 @@ func (a *app) applyContent(d *fileDoc, c files.Content, err error) {
 		return
 	}
 	d.kind = docText
-	d.ed = editor.State{Buffer: editor.NewBuffer(c.Text), ReadOnly: c.ReadOnly, Label: d.name()}
+	d.ed = editor.State{Buffer: editor.NewBuffer(c.Text), ReadOnly: c.ReadOnly, Label: filepath.Base(d.path)}
 	d.ed.Buffer.SetLanguage(editor.LanguageFor(d.path))
 	d.modStale = true
 	d.shown = 0
 }
 
-func readError(err error) string {
+// readError 是读文件失败时文件标签显示的报错：认得的两种给 Posse 自己的说明，其余经 errtext。
+func readError(err error) (string, func(locales.Messages) string) {
 	switch {
 	case os.IsNotExist(err):
-		return "文件不存在"
+		return "", locales.Messages.FilesNotFound
 	case os.IsPermission(err):
-		return "没有权限读取这个文件"
+		return "", locales.Messages.FilesNoPermission
 	}
-	return errtext.Text(err)
+	return errtext.Text(err), nil
 }
 
 // pollFiles 在后台 stat 看得见的目录和打开的文件，变了的重读，结果交回界面线程。
@@ -604,13 +625,13 @@ func (a *app) reloadDoc(d *fileDoc) {
 }
 
 // saveDoc 保存文档；磁盘上的文件在打开后被改过时先问，force 为真时直接覆盖。成功返回真。
-func (a *app) saveDoc(d *fileDoc, force bool) bool {
+func (a *app) saveDoc(m locales.Messages, d *fileDoc, force bool) bool {
 	if d.kind != docText || d.readOnly {
 		return false
 	}
 	if !force && !d.base.Missing && !files.StatFile(d.path).Same(d.base) {
-		a.confirm("覆盖磁盘上的修改？", d.name()+" 在你打开后被改过（可能是 agent），保存会覆盖那些修改。", "仍然保存", func() {
-			a.update(func() { a.saveDoc(d, true) })
+		a.confirm(m.FilesOverwriteConfirm(), m.FilesOverwriteBody(d.name(m)), m.FilesSaveAnyway(), func() {
+			a.update(func() { a.saveDoc(m, d, true) })
 		})
 		return false
 	}
@@ -620,7 +641,7 @@ func (a *app) saveDoc(d *fileDoc, force bool) bool {
 		return err
 	})
 	if err != nil {
-		a.err = "保存 " + d.name() + " 失败：" + errtext.Text(err)
+		a.err = m.FilesSaveFailed(d.name(m), errtext.Text(err))
 		return false
 	}
 	// 写入在界面线程同步完成，期间不会有新的输入，缓冲区就是写下去的内容
@@ -735,35 +756,36 @@ func (a *app) unsavedDialog(c *ui.Context) {
 			return
 		}
 		ui.Column(c).Width(360).Gap(8).Children(func() {
-			title := "保存对 " + u.docs[0].name() + " 的修改？"
+			m := L(c)
+			title := m.FilesUnsavedTitle(u.docs[0].name(m))
 			if len(u.docs) > 1 {
-				title = "有 " + strconv.Itoa(len(u.docs)) + " 个文件的修改还没保存"
+				title = m.FilesUnsavedTitleMany(len(u.docs))
 			}
 			titleText(c, title, fsTitle)
-			body := "不保存的话，这些修改会丢失。"
+			body := m.FilesUnsavedBody()
 			if len(u.docs) > 1 {
 				var names []string
 				for _, d := range u.docs {
-					names = append(names, d.name())
+					names = append(names, d.name(m))
 				}
-				body = strings.Join(names, "、") + "。不保存的话，这些修改会丢失。"
+				body = m.FilesUnsavedBodyMany(strings.Join(names, m.FilesListSeparator()))
 			}
 			ui.Text(c, body).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			ui.Row(c).Gap(8).Padding(8, 0, 0, 0).Children(func() {
-				if pressable(textButton(c, "不保存")).Clicked() {
+				if pressable(textButton(c, m.FilesDontSave())).Clicked() {
 					a.unsaved = nil
 					u.then()
 				}
 				ui.Spacer(c)
-				if pressable(textButton(c, "取消")).Clicked() {
+				if pressable(textButton(c, m.CommonCancel())).Clicked() {
 					a.unsaved = nil
 					a.quitting.Store(false)
 				}
-				if pressable(accentButton(c, "保存")).Clicked() {
+				if pressable(accentButton(c, m.CommonSave())).Clicked() {
 					a.unsaved = nil
 					ok := true
 					for _, d := range u.docs {
-						ok = a.saveDoc(d, false) && ok
+						ok = a.saveDoc(m, d, false) && ok
 					}
 					if ok {
 						u.then()
@@ -859,10 +881,10 @@ func (a *app) startSearch(v *filesView, delay time.Duration) {
 		return
 	}
 	if _, err := s.query.Compile(); err != nil {
-		s.hits, s.rows, s.running, s.err = nil, nil, false, "正则写得不对："+err.Error()
+		s.hits, s.rows, s.running, s.err, s.badRegex = nil, nil, false, err.Error(), true
 		return
 	}
-	s.running, s.err = true, ""
+	s.running, s.err, s.badRegex = true, "", false
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 	q := s.query

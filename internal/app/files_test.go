@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/client"
+	"posse/locales"
 )
 
 const sampleGo = `package main
@@ -841,7 +842,7 @@ func TestGoToDefinition(t *testing.T) {
 	until(t, tt, "chat loaded", func() bool { return v.cur.kind == docText })
 	d := v.cur
 	off := strings.Index(d.ed.Buffer.String(), "open(") + 1
-	a.goToDefinition(w, v, d, off)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, d, off)
 	helper := filepath.Join(root, "lib", "Helper.java")
 	until(t, tt, "jump", func() bool { return v.cur.path == helper && v.cur.kind == docText && v.cur.ed.SelectedText() == "open" })
 	if v.cur.ed.CursorPos().Line != 1 {
@@ -871,7 +872,7 @@ func TestGoToDefinition(t *testing.T) {
 	a.openFile(w, use, 0, [2]int{})
 	until(t, tt, "use loaded", func() bool { return v.cur.path == use && v.cur.kind == docText })
 	ud := v.cur
-	a.goToDefinition(w, v, ud, strings.Index(ud.ed.Buffer.String(), "p.open(")+3)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, ud, strings.Index(ud.ed.Buffer.String(), "p.open(")+3)
 	until(t, tt, "typed receiver", func() bool { return v.cur.path == helper && v.cur.ed.SelectedText() == "open" })
 
 	// 光标在 Other.java 自己的 open 上、别处还有两处同分的声明：排除自己，弹出列表，按下键再回车跳到第二处
@@ -883,7 +884,7 @@ func TestGoToDefinition(t *testing.T) {
 	a.openFile(w, other, 0, [2]int{})
 	until(t, tt, "other loaded", func() bool { return v.cur.path == other && v.cur.kind == docText })
 	od := v.cur
-	a.goToDefinition(w, v, od, strings.Index(od.ed.Buffer.String(), "open(")+1)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, od, strings.Index(od.ed.Buffer.String(), "open(")+1)
 	until(t, tt, "pick", func() bool { return a.defPick.open })
 	if n := len(a.defPick.defs); n != 2 || a.defPick.defs[0].Path != filepath.Join("lib", "Another.java") {
 		t.Fatalf("defs = %+v", a.defPick.defs)
@@ -898,7 +899,7 @@ func TestGoToDefinition(t *testing.T) {
 
 	// 光标就在定义上、别处没有同名的：退化为在检索页按整词找用法
 	v.cur = d
-	a.goToDefinition(w, v, d, strings.Index(d.ed.Buffer.String(), "init(")+1)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, d, strings.Index(d.ed.Buffer.String(), "init(")+1)
 	until(t, tt, "usages", func() bool { return v.side == sideSearch && v.search.query.Regex })
 	if v.search.query.Text != `\binit\b` || !a.filesPanelOpen() || v.cur != d {
 		t.Fatalf("query = %+v", v.search.query)
@@ -914,16 +915,16 @@ func TestGoToDefinition(t *testing.T) {
 	a.openFile(w, appJS, 0, [2]int{})
 	until(t, tt, "app.js", func() bool { return v.cur.path == appJS && v.cur.kind == docText })
 	js := v.cur
-	a.goToDefinition(w, v, js, strings.Index(js.ed.Buffer.String(), "lib/util")+1)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, js, strings.Index(js.ed.Buffer.String(), "lib/util")+1)
 	util := filepath.Join(root, "web", "lib", "util.js")
 	until(t, tt, "import path", func() bool { return v.cur.path == util })
 	v.cur = js
-	a.goToDefinition(w, v, js, strings.Index(js.ed.Buffer.String(), "helper")+1)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, js, strings.Index(js.ed.Buffer.String(), "helper")+1)
 	until(t, tt, "imported name", func() bool { return v.cur.path == util && v.cur.ed.SelectedText() == "helper" })
 
 	// 找不到：提示一句，不跳
 	v.cur = d
-	a.goToDefinition(w, v, d, strings.Index(d.ed.Buffer.String(), "this")+1)
+	a.goToDefinition(locales.In("zh-Hans"), w, v, d, strings.Index(d.ed.Buffer.String(), "this")+1)
 	until(t, tt, "no definition", func() bool { return d.hint != "" })
 	if d.hint != "没找到 this 的定义" || v.cur != d {
 		t.Fatalf("hint = %q", d.hint)

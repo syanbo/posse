@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -14,6 +13,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/files"
+	"posse/locales"
 )
 
 // 跳到定义：编辑器里 ⌘点击、F12 或右键"跳到定义"。照 Zed 的 hover_links 先看指针下是什么（files.LinkAt）：
@@ -76,7 +76,7 @@ type defPick struct {
 }
 
 // goToDefinition 找编辑器 off 处标识符的定义。
-func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
+func (a *app) goToDefinition(m locales.Messages, w *workspace, v *filesView, d *fileDoc, off int) {
 	snap := d.ed.Buffer.Snapshot()
 	ln := snap.LineOf(off)
 	col := off - snap.LineStart(ln)
@@ -97,7 +97,7 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 	case files.LinkPath:
 		p, line, ok := files.ResolveImport(v.root, d.path, lk.Text)
 		if !ok {
-			d.hint, d.hintAt = fmt.Sprintf("找不到 %s", lk.Text), time.Now()
+			d.hint, d.hintAt = m.FilesPathNotFound(lk.Text), time.Now()
 			return
 		}
 		v.jumpFrom = &origin
@@ -148,9 +148,9 @@ func (a *app) goToDefinition(w *workspace, v *filesView, d *fileDoc, off int) {
 				s.running = false
 				switch {
 				case err != nil && len(defs) == 0:
-					a.err = "查找定义失败：" + errtext.Text(err)
+					a.err = m.FilesDefinitionFailed(errtext.Text(err))
 				case len(defs) == 0:
-					d.hint, d.hintAt = fmt.Sprintf("没找到 %s 的定义", word), time.Now()
+					d.hint, d.hintAt = m.FilesNoDefinition(word), time.Now()
 				default:
 					// 光标所在的那一行本身就是定义：照 Zed 把它排除，别的都没有就找用法
 					here := func(x files.Definition) bool { return from != "" && x.Path == from && x.Line == ln }
@@ -273,7 +273,7 @@ func (a *app) defDialog(c *ui.Context) {
 		ui.Column(c).Width(620).Gap(8).Children(func() {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(2, 2, 0, 2).Children(func() {
 				ui.Text(c, p.word).FontSize(fsCode).FontWeight(fwBold).Font(monoFont)
-				ui.Text(c, fmt.Sprintf("有 %d 处定义", n)).FontSize(fsBody).TextColor(t.TextMuted)
+				ui.Text(c, L(c).FilesDefinitionCount(n)).FontSize(fsBody).TextColor(t.TextMuted)
 			})
 			ui.Scroll(c).MaxHeight(400).Children(func() {
 				ui.Column(c).Gap(2).Children(func() {

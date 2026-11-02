@@ -5,6 +5,8 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/locales"
 )
 
 // 网页标签的手机预览：Mac 上的 WebKit 没有设备模拟，也不认 <meta viewport>，排版宽度就是视图宽度。
@@ -109,8 +111,8 @@ func (a *app) toggleWebDevice(wd *webDoc) {
 }
 
 // deviceMenu 是工具栏上手机按钮的菜单：电脑、各机型和横屏。
-func (a *app) deviceMenu(m *popMenu, wd *webDoc) {
-	if m.Item("电脑").Checked(wd.device == "").Chosen() {
+func (a *app) deviceMenu(msg locales.Messages, m *popMenu, wd *webDoc) {
+	if m.Item(msg.WebDesktop()).Checked(wd.device == "").Chosen() {
 		a.setWebDevice(wd, "", false)
 	}
 	for _, d := range webDevices {
@@ -120,7 +122,7 @@ func (a *app) deviceMenu(m *popMenu, wd *webDoc) {
 		}
 	}
 	m.Separator()
-	if m.Item("横屏").Checked(wd.landscape).Disabled(wd.device == "").Chosen() {
+	if m.Item(msg.WebLandscape()).Checked(wd.landscape).Disabled(wd.device == "").Chosen() {
 		a.setWebDevice(wd, wd.device, !wd.landscape)
 	}
 }

@@ -89,6 +89,6 @@ func diagramsPending() bool {
 func diagramView(c *ui.Context, d *diagram.Diagram) {
 	w, h := d.Size()
 	ui.Column(c).AlignItems(ui.Center).Padding(8, 12, 12, 12).Children(func() {
-		ui.Box(c).WidthPercent(100).MaxWidth(w).AspectRatio(w / h).Draw(d.Draw).Label("Mermaid 图").Unselectable()
+		ui.Box(c).WidthPercent(100).MaxWidth(w).AspectRatio(w / h).Draw(d.Draw).Label(L(c).MarkdownMermaidLabel()).Unselectable()
 	})
 }

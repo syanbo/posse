@@ -11,6 +11,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/cheatsheet"
 	"posse/internal/skills"
+	"posse/locales"
 )
 
 // cheatView 是右侧"命令速查"面板的状态：当前会话这家 agent 的内置命令、按键、输入前缀，
@@ -39,7 +40,10 @@ const (
 	cheatKeys
 )
 
-var cheatTabs = []string{"内置技能", "技能", "内置命令", "快捷键"}
+var cheatTabs = []func(locales.Messages) string{
+	locales.Messages.CheatsheetTabBuiltin, locales.Messages.CheatsheetSkills,
+	locales.Messages.CheatsheetCommands, locales.Messages.CheatsheetKeys,
+}
 
 // cheatRefresh 是面板开着时多久重新认一次版本、扫一次技能：会话里可能换了 agent 版本、装了技能。
 // 还没认出版本时 cheatRetry 后再认：刚开的终端要先跑完登录 shell 的配置，agent 进程还没起来。
@@ -106,20 +110,25 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollCheat(c, cur)
 	v := &a.cheat
 	sheet, ok := cheatsheet.For(cur.Agent)
-	return a.rightPanel(c, "命令速查", func() {
+	m := L(c)
+	return a.rightPanel(c, m.CheatsheetTitle(), func() {
 		if !ok {
 			ui.Column(c).Padding(0, 12, 16, 12).Children(func() {
-				usageNote(c, agentTitle(cur.Agent)+" 还没有速查表。")
+				usageNote(c, m.CheatsheetNoSheet(agentTitle(cur.Agent)))
 			})
 			return
 		}
 		q := strings.ToLower(strings.TrimSpace(v.query))
 		tab := min(max(a.state.CheatTab, 0), len(cheatTabs)-1)
 		ui.Column(c).Padding(0, 12, 8, 12).Gap(8).Children(func() {
-			fieldInputSized(c, &v.query, "搜索命令、技能和说明", 0, 0).Label("搜索")
+			fieldInputSized(c, &v.query, m.CheatsheetSearchPlaceholder(), 0, 0).Label(m.CheatsheetSearch())
 			a.cheatVersion(c, cur, sheet)
 			// 直接放在列里：被拉到和搜索框一样宽，各段平分
-			if q == "" && segmentedTight(c, &tab, "分类", cheatTabs...) {
+			labels := make([]string, len(cheatTabs))
+			for i, f := range cheatTabs {
+				labels[i] = f(m)
+			}
+			if q == "" && segmentedTight(c, &tab, m.CheatsheetCategory(), labels...) {
 				a.state.CheatTab = tab
 				a.saveState()
 			}
@@ -136,18 +145,18 @@ func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 				if shown == 0 {
 					switch {
 					case q != "":
-						usageNote(c, "没有匹配「"+v.query+"」的命令和技能。")
+						usageNote(c, m.CheatsheetNoMatches(v.query))
 					case !v.loaded && (tab == cheatBuiltinSkills || tab == cheatSkills):
-						usageNote(c, "正在读取…")
+						usageNote(c, m.CommonLoading())
 					case tab == cheatBuiltinSkills:
-						usageNote(c, "没有找到 "+agentTitle(cur.Agent)+" 自带的技能。")
+						usageNote(c, m.CheatsheetNoBuiltinSkills(agentTitle(cur.Agent)))
 					case tab == cheatSkills:
-						usageNote(c, "这个工作区里没有 "+agentTitle(cur.Agent)+" 能手动调用的技能。")
+						usageNote(c, m.CheatsheetNoSkills(agentTitle(cur.Agent)))
 					}
 				}
 				if sheet.Docs != "" && q == "" && tab == cheatCommands {
 					ui.Row(c).Padding(0, 4).Children(func() {
-						if pressable(textButton(c, "官方文档")).Clicked() {
+						if pressable(textButton(c, m.CheatsheetDocs())).Clicked() {
 							c.OpenURL(sheet.Docs)
 						}
 					})
@@ -177,7 +186,8 @@ func (a *app) cheatTab(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet,
 			continue
 		}
 		shown += len(items)
-		a.cheatSection(c, fmt.Sprint("sec-", i), cheatGroupTitle(sec.Title, tab, q), func() {
+		// 表里的内置技能只有一组，就是这个页签本身，不再写组名
+		a.cheatSection(c, fmt.Sprint("sec-", i), cheatGroupTitle(sec.Title, sec.Kind == cheatsheet.KindSkill, q), func() {
 			for j, it := range items {
 				a.cheatRow(c, cur, sec.Kind, it, cheatsheet.Insert(sec.Kind, it), j)
 			}
@@ -195,15 +205,16 @@ func (a *app) cheatTab(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sheet,
 	if len(sk) == 0 {
 		return shown
 	}
-	title := "技能"
+	m := L(c)
+	title, same := m.CheatsheetSkills(), true
 	if tab == cheatBuiltinSkills {
 		// 和上面编在程序里的那组分开：这些装在 agent 自己的目录里，随它升级更新
-		title = "内置技能"
+		title = m.CheatsheetBuiltinSkills()
 		if shown > 0 {
-			title = "随安装附带"
+			title, same = m.CheatsheetBundled(), false
 		}
 	}
-	a.cheatSection(c, fmt.Sprint("skills-", tab), cheatGroupTitle(title, tab, q), func() {
+	a.cheatSection(c, fmt.Sprint("skills-", tab), cheatGroupTitle(title, same, q), func() {
 		for j, s := range sk {
 			it := cheatsheet.Item{Name: sheet.SkillPrefix + s.name, Desc: s.desc}
 			a.cheatRow(c, cur, cheatsheet.KindSkill, it, it.Name+" ", j)
@@ -226,12 +237,12 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 	newer := false
 	switch {
 	case !v.loaded, v.version == "":
-		text = "速查表对照 " + text
+		text = L(c).CheatsheetSheetFor(text)
 	case cheatsheet.Compare(v.version, sheet.Version) > 0:
-		text = "本机 " + v.version + " 比速查表（" + sheet.Version + "）新，可能有新命令"
+		text = L(c).CheatsheetNewer(v.version, sheet.Version)
 		color, newer = colors(t).honey, true
 	case cheatsheet.Compare(v.version, sheet.Version) < 0:
-		text = "本机 " + v.version + " 比速查表（" + sheet.Version + "）旧，有的命令可能还没有"
+		text = L(c).CheatsheetOlder(v.version, sheet.Version)
 		color = colors(t).honey
 	default:
 		text = agentTitle(cur.Agent) + " " + v.version
@@ -240,7 +251,7 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).LineHeight(1.4)
 		if newer && sheet.Changelog != "" {
 			ui.Row(c).Children(func() {
-				if pressable(textButton(c, "看更新记录")).Clicked() {
+				if pressable(textButton(c, L(c).CheatsheetChangelog())).Clicked() {
 					c.OpenURL(sheet.Changelog)
 				}
 			})
@@ -248,9 +259,9 @@ func (a *app) cheatVersion(c *ui.Context, cur *terminalInfo, sheet cheatsheet.Sh
 	})
 }
 
-// cheatGroupTitle 是一组的标题：不搜索时和所在页签同名的不再写一遍（空串）；搜索时各页签混在一起，照写。
-func cheatGroupTitle(title string, tab int, q string) string {
-	if q == "" && title == cheatTabs[tab] {
+// cheatGroupTitle 是一组的标题：不搜索时就是所在页签本身的（same）不再写一遍（空串）；搜索时各页签混在一起，照写。
+func cheatGroupTitle(title string, same bool, q string) string {
+	if q == "" && same {
 		return ""
 	}
 	return title
@@ -277,7 +288,7 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 	}
 	row := ui.Column(c.Key(i)).Gap(4).Padding(8, 6).Radius(rRow)
 	if text != "" {
-		row.Role(ui.RoleButton).Label("贴进输入框 " + it.Name)
+		row.Role(ui.RoleButton).Label(L(c).CheatsheetInsertLabel(it.Name))
 		bg := ui.Transparent
 		if row.Hovered() {
 			bg = colors(t).wash
@@ -309,16 +320,16 @@ func (a *app) cheatRow(c *ui.Context, cur *terminalInfo, kind cheatsheet.Kind, i
 		}
 	})
 	if text != "" && row.Clicked() {
-		a.insertIntoTerminal(cur, text)
+		a.insertIntoTerminal(L(c), cur, text)
 	}
 }
 
 // insertIntoTerminal 把文字当键入发进终端（不回车），收起面板、把焦点还给这个终端：
 // 斜杠命令照键入发，agent 才会弹出它的补全，用户确认参数后自己回车。
 // agent 停在审批、选择菜单上时不发：那里单个字母就是选项（Codex 的 a 是"批准且不再问"）。
-func (a *app) insertIntoTerminal(cur *terminalInfo, text string) {
+func (a *app) insertIntoTerminal(m locales.Messages, cur *terminalInfo, text string) {
 	if cur.AgentState != nil && cur.AgentState.Status == agent.StatusWaiting {
-		a.err = agentTitle(cur.Agent) + " 正等你处理确认，处理完再贴命令"
+		a.err = m.CheatsheetAgentWaiting(agentTitle(cur.Agent))
 		return
 	}
 	for i, v := range a.panes {

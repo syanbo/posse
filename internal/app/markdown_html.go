@@ -509,9 +509,6 @@ func (h *hconv) node(n *hnode, st mdStyle, url string, pre bool) {
 			}
 			rest = append(rest, k)
 		}
-		if b.inlines == nil {
-			b.inlines = []mdInline{{text: "详细信息"}}
-		}
 		b.blocks = hblocks(rest, 0)
 		h.emit(b)
 	default:
@@ -714,7 +711,7 @@ func (r mdView) image(c *ui.Context, im *mdImg, link string, alone bool) {
 	if e.src == nil {
 		label := im.alt
 		if label == "" {
-			label = "图片"
+			label = L(c).MarkdownImage()
 		}
 		el = ui.Row(c).Padding(r.scaled(2), r.scaled(8)).Radius(rSmall).Background(codeBackground(t)).Shrink(1).Children(func() {
 			ui.Text(c, label).FontSize(r.small()).TextColor(t.TextMuted)
@@ -854,7 +851,12 @@ func (r mdView) details(c *ui.Context, b mdBlock) {
 				turn = 90
 			}
 			ui.Icon(c, iconChevron).FontSize(r.small()).TextColor(t.TextMuted).Rotate(turn)
-			r.inline(c, b.inlines).FontSize(r.body()).LineHeight(r.lead()).Unselectable()
+			summary := b.inlines
+			if summary == nil {
+				// 没写 <summary> 的照浏览器写"详细信息"
+				summary = []mdInline{{text: L(c).MarkdownDetails()}}
+			}
+			r.inline(c, summary).FontSize(r.body()).LineHeight(r.lead()).Unselectable()
 		})
 		if row.Clicked() {
 			*b.open = !*b.open

@@ -207,6 +207,7 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 		a.pollGit(v)
 	}
 	a.refreshList(v, false, nil)
+	a.reportListErr(c, v)
 	if d := v.cur; a.filesActive(w) && d != nil && d.kind == docLoading && !d.started {
 		d.started = true
 		a.loadDoc(d)
@@ -215,7 +216,7 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 
 // filesPanelButton 是开关文件栏的按钮：关着时在标签栏最右边，开着时在文件栏顶栏最右边，垫一层强调色淡底。
 func (a *app) filesPanelButton(c *ui.Context, w *workspace) {
-	b := iconButton(c.Key("files-panel"), iconPanelRight, a.withKey("文件栏", "filesPanel"))
+	b := iconButton(c.Key("files-panel"), iconPanelRight, a.withKey(L(c).FilesPanelTitle(), "filesPanel"))
 	if a.filesPanelOpen() {
 		b.Background(colors(c.Theme()).tint)
 	}
@@ -253,13 +254,13 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 		ui.Row(c).Height(titleHeight(c)).Shrink(0).Padding(0, 16, 0, 12).Gap(4).AlignItems(ui.Center).
 			BorderWidth(0, 0, hairline, 0).BorderColor(p.line).DragWindow().Children(func() {
 			tab := a.state.FilesPanelTab
-			if panelTab(c, iconHistory, "历史", tab == tabHistory) {
+			if panelTab(c, iconHistory, L(c).FilesPanelHistoryTab(), tab == tabHistory) {
 				a.setFilesPanelTab(tabHistory)
 			}
-			if panelTab(c, iconFile, "文件", tab == "") {
+			if panelTab(c, iconFile, L(c).FilesPanelFilesTab(), tab == "") {
 				a.setFilesPanelTab("")
 			}
-			if panelTab(c, iconSkill, "技能", tab == tabSkills) {
+			if panelTab(c, iconSkill, L(c).FilesPanelSkillsTab(), tab == tabSkills) {
 				a.setFilesPanelTab(tabSkills)
 			}
 			ui.Spacer(c)
@@ -270,11 +271,11 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 					wrap.Disabled(true).Opacity(0.5)
 				}
 				wrap.Children(func() {
-					if iconButton(c.Key("tree-locate"), iconLocate, a.withKey("定位当前文件", "revealFile")).Clicked() {
+					if iconButton(c.Key("tree-locate"), iconLocate, a.withKey(L(c).FilesRevealCurrent(), "revealFile")).Clicked() {
 						a.revealCurrent(w)
 					}
 				})
-				if iconButton(c.Key("tree-collapse"), iconCollapse, "全部折叠").Clicked() {
+				if iconButton(c.Key("tree-collapse"), iconCollapse, L(c).FilesCollapseAll()).Clicked() {
 					v.tree.CollapseAll()
 					v.reveal = ""
 					a.saveFilesState(v)
@@ -289,7 +290,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 		case a.state.FilesPanelTab == tabSkills && !w.Missing:
 			a.skillsPanel(c, w)
 		case w.Missing:
-			ui.Text(c, "工作区的目录已经不在了").FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(12, 16)
+			ui.Text(c, L(c).FilesWorkspaceGone()).FontSize(fsSmall).TextColor(c.Theme().TextMuted).Padding(12, 16)
 		default:
 			a.filesSide(c, w, v)
 		}
@@ -320,7 +321,7 @@ func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 		// 撑满栏宽：分段平分宽度，带计数的"改动"长一些的才放得下
 		ui.Column(c).Grow(1).Children(func() {
 			badges := []int{0, 0, v.git.changeCount()}
-			if segmentedBadges(c, &v.side, "文件栏", badges, "文件", "检索", "改动") && v.side == sideSearch {
+			if segmentedBadges(c, &v.side, L(c).FilesPanelTitle(), badges, L(c).FilesPanelFilesTab(), L(c).FilesPanelSearchTab(), L(c).FilesPanelChangesTab()) && v.side == sideSearch {
 				v.search.focus = true
 			}
 		})

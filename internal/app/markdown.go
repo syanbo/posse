@@ -551,20 +551,20 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 			ui.Row(c).Height(max(sz(28), r.sz(28))).Padding(0, 4, 0, 12).AlignItems(ui.Center).Children(func() {
 				lang := b.lang
 				if lang == "" {
-					lang = "代码"
+					lang = L(c).MarkdownCode()
 				}
 				ui.Text(c, lang).FontSize(r.small()).Font(monoFont).TextColor(t.TextMuted)
 				ui.Spacer(c)
 				if drawn {
-					icon, label := iconCode, "查看源码"
+					icon, label := iconCode, L(c).FilesViewSource()
 					if mermaidSource[b.code] {
-						icon, label = iconEye, "查看图"
+						icon, label = iconEye, L(c).MarkdownViewDiagram()
 					}
 					if pressable(iconButtonSized(c.Key("source"), icon, label, compactBox(), smallIcon())).Clicked() {
 						mermaidSource[b.code] = !mermaidSource[b.code]
 					}
 				}
-				if pressable(iconButtonSized(c.Key("copy"), iconCopy, "复制代码", compactBox(), smallIcon())).Clicked() {
+				if pressable(iconButtonSized(c.Key("copy"), iconCopy, L(c).MarkdownCopyCode(), compactBox(), smallIcon())).Clicked() {
 					c.WriteClipboard(b.code)
 				}
 			})
@@ -573,7 +573,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				return
 			}
 			if d != nil && d.Err != "" {
-				ui.Text(c, "画不出图："+errtext.Message(d.Err)).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
+				ui.Text(c, L(c).MarkdownDiagramFailed(errtext.Message(d.Err))).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
 			}
 			// 代码不折行，放不下左右滚：目录树、对齐的注释折行后列就乱了
 			ui.ScrollHorizontal(c).Children(func() {
@@ -776,7 +776,7 @@ func (r mdView) measure(c *ui.Context, b mdBlock, cols int) {
 						key.Text = ""
 						w, ok := cjk[key]
 						if !ok {
-							sp.Text = "中"
+							sp.Text = string(rune(0x4E2D)) // 「中」：量一个全角字的宽度
 							w, _ = c.MeasureText(0, sp)
 							cjk[key] = w
 						}

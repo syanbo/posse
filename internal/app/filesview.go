@@ -27,9 +27,9 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	rows := v.tree.Rows()
 	if len(rows) == 0 {
-		msg := "目录是空的"
+		msg := L(c).FilesEmptyFolder()
 		if !v.tree.Loaded(v.root) {
-			msg = "正在读取…"
+			msg = L(c).CommonLoading()
 		}
 		ui.Text(c, msg).FontSize(fsSmall).TextColor(t.TextMuted).Padding(12, 16)
 		return
@@ -96,7 +96,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 				name.TextColor(t.TextMuted)
 			}
 			if modified[r.Path] {
-				dot(c, t.Accent).Tooltip("有未保存的修改")
+				dot(c, t.Accent).Tooltip(L(c).FilesUnsavedTip())
 			}
 		})
 		if ignored {
@@ -107,7 +107,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			if link == files.LinkUnreadable {
 				link = errtext.Message(link)
 			}
-			row.Tooltip("符号链接 → " + link)
+			row.Tooltip(L(c).FilesSymlinkTip(link))
 		}
 		if row.Clicked() {
 			v.reveal = ""
@@ -128,17 +128,17 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 // pathMenu 是文件树和检索结果里一行的右键菜单；在 git 仓库里的文件多了文件历史和 Annotate。
 func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, path string, dir bool) {
 	contextMenu(c, e, func(m *popMenu) {
-		if m.Item("复制路径").Chosen() {
+		if m.Item(L(c).CommonCopyPath()).Chosen() {
 			c.WriteClipboard(path)
 		}
-		if rel, ok := relInside(v.root, path); ok && m.Item("复制相对路径").Chosen() {
+		if rel, ok := relInside(v.root, path); ok && m.Item(L(c).FilesCopyRelativePath()).Chosen() {
 			c.WriteClipboard(rel)
 		}
 		m.Separator()
-		if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+		if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 			mygo.Shell.ShowItemInFolder(path)
 		}
-		if m.Item("用默认应用打开").Chosen() {
+		if m.Item(L(c).FilesOpenWithDefaultApp()).Chosen() {
 			if err := mygo.Shell.OpenPath(path); err != nil {
 				a.err = errtext.Text(err)
 			}
@@ -155,7 +155,7 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	s := &v.search
 	ui.Column(c).Padding(0, 12, 8, 12).Gap(6).Shrink(0).Children(func() {
-		in := fieldInput(c, &s.query.Text, "在文件里检索")
+		in := fieldInput(c, &s.query.Text, L(c).FilesSearchPlaceholder())
 		if s.focus {
 			in.Focus()
 			s.focus = false
@@ -169,28 +169,28 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			a.startSearch(v, 0)
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
-			if toggleChip(c, "Aa", "区分大小写", s.query.MatchCase) {
+			if toggleChip(c, "Aa", L(c).FilesMatchCase(), s.query.MatchCase) {
 				s.query.MatchCase = !s.query.MatchCase
 				a.startSearch(v, 0)
 			}
-			if toggleChip(c, ".*", "正则表达式", s.query.Regex) {
+			if toggleChip(c, ".*", L(c).FilesRegex(), s.query.Regex) {
 				s.query.Regex = !s.query.Regex
 				a.startSearch(v, 0)
 			}
 			filtered := s.query.Include != "" || s.query.Exclude != ""
-			if toggleChip(c, "筛选", "只搜或不搜某些文件", s.showFilter || filtered) {
+			if toggleChip(c, L(c).FilesFilter(), L(c).FilesFilterTip(), s.showFilter || filtered) {
 				s.showFilter = !s.showFilter
 			}
 		})
 		if s.showFilter {
-			if fieldInput(c.Key("include"), &s.query.Include, "包含，如 *.go, src/").Changed() {
+			if fieldInput(c.Key("include"), &s.query.Include, L(c).FilesIncludePlaceholder()).Changed() {
 				a.startSearch(v, 300*time.Millisecond)
 			}
-			if fieldInput(c.Key("exclude"), &s.query.Exclude, "排除，如 vendor, *_test.go").Changed() {
+			if fieldInput(c.Key("exclude"), &s.query.Exclude, L(c).FilesExcludePlaceholder()).Changed() {
 				a.startSearch(v, 300*time.Millisecond)
 			}
 		}
-		if msg := searchStatus(s); msg != "" {
+		if msg := searchStatus(L(c), s); msg != "" {
 			color := t.TextMuted
 			if s.err != "" {
 				color = t.Danger
@@ -251,16 +251,18 @@ func trimHit(h files.Hit) (string, [][2]int) {
 	return text, spans
 }
 
-func searchStatus(s *fileSearch) string {
+func searchStatus(m locales.Messages, s *fileSearch) string {
 	switch {
+	case s.badRegex:
+		return m.FilesBadRegex(s.err)
 	case s.err != "":
 		return s.err
 	case strings.TrimSpace(s.query.Text) == "":
 		return ""
 	case s.running && len(s.hits) == 0:
-		return "正在检索…"
+		return m.FilesSearching()
 	case !s.running && len(s.hits) == 0:
-		return "没有找到"
+		return m.FilesNoResults()
 	}
 	files := 0
 	for _, r := range s.rows {
@@ -268,14 +270,13 @@ func searchStatus(s *fileSearch) string {
 			files++
 		}
 	}
-	msg := fmt.Sprintf("%d 个文件里有 %d 行", files, len(s.hits))
 	switch {
 	case s.truncated:
-		msg += "，结果太多，只列出前面这些"
+		return m.FilesSearchCountTruncated(files, len(s.hits))
 	case s.running:
-		msg += "，还在检索"
+		return m.FilesSearchCountRunning(files, len(s.hits))
 	}
-	return msg
+	return m.FilesSearchCount(files, len(s.hits))
 }
 
 // toggleChip 是检索选项的小开关，开着时垫强调色淡底；返回这一帧是否被点了。
@@ -302,7 +303,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	t := c.Theme()
 	if d.web != nil {
 		if d.web.view == nil {
-			docMessage(c, d, d.err)
+			docMessage(c, d, d.errText(L(c)))
 		} else {
 			a.webView(c, d)
 		}
@@ -310,14 +311,14 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	}
 	// diff 读的时候 diff 栏照样画，连按 F7 换文件时不闪
 	if d.kind == docLoading && d.diff == nil {
-		ui.Text(c, "正在读取…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
+		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(16, 16)
 		return
 	}
 	if d.comp != nil {
 		if d.kind == docCompare {
 			a.compareView(c, w, v, d)
 		} else {
-			docMessage(c, d, d.err)
+			docMessage(c, d, d.errText(L(c)))
 		}
 		return
 	}
@@ -331,11 +332,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		case docImageDiff:
 			imageDiffView(c, d)
 		case docBinary:
-			docMessage(c, d, "二进制文件，不显示 diff")
+			docMessage(c, d, L(c).FilesBinaryNoDiff())
 		case docTooLarge:
 			a.tooLargeDiffView(c, v, d)
 		default:
-			docMessage(c, d, d.err)
+			docMessage(c, d, d.errText(L(c)))
 		}
 		diffHint(c, d.diff)
 		return
@@ -356,7 +357,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		d.ed.Font, d.ed.LineHeight, d.ed.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
 		d.ed.Bindings = a.editorBindings()
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
-		d.ed.OnDefinition = func(off int) { a.goToDefinition(w, v, d, off) }
+		d.ed.OnDefinition = func(off int) { a.goToDefinition(L(c), w, v, d, off) }
 		d.ed.LinkAt = func(off int) (int, int) { return linkRange(d, off) }
 		// 包一层：改动卡片按行的位置浮在编辑器上面
 		ui.Box(c).Grow(1).Children(func() {
@@ -371,7 +372,7 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			}
 			a.changePopup(c, w, v, d)
 			if v.def.running && v.def.doc == d {
-				fadeHint(c, "doc-hint", "正在查找 "+v.def.word+" 的定义…", time.Time{}, 12)
+				fadeHint(c, "doc-hint", L(c).FilesFindingDefinition(v.def.word), time.Time{}, 12)
 			} else {
 				fadeHint(c, "doc-hint", d.hint, d.hintAt, 12)
 			}
@@ -388,11 +389,11 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	case docImage:
 		a.imageDocView(c, d)
 	case docBinary:
-		docMessage(c, d, "二进制文件，不显示内容")
+		docMessage(c, d, L(c).FilesBinaryNoContent())
 	case docTooLarge:
-		docMessage(c, d, fmt.Sprintf("文件超过 %d MB，不在这里打开", files.MaxSize>>20))
+		docMessage(c, d, L(c).FilesTooLarge(files.MaxSize>>20))
 	case docError:
-		docMessage(c, d, d.err)
+		docMessage(c, d, d.errText(L(c)))
 	}
 }
 
@@ -417,11 +418,11 @@ func (a *app) filesEmpty(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Grow(1).Center().Gap(12).Children(func() {
 		tile(c, iconFile, 48, colors(t).tint, t.Accent)
-		titleText(c, "在右边的文件栏里选一个文件", fsTitle)
+		titleText(c, L(c).FilesEmptyTitle(), fsTitle)
 		ui.Row(c).Gap(12).Children(func() {
-			shortcutHint(c, a.keyText("quickOpen"), "按名称打开")
-			shortcutHint(c, a.keyText("searchFiles"), "在文件里检索")
-			shortcutHint(c, a.keyText("filesPanel"), "文件栏")
+			shortcutHint(c, a.keyText("quickOpen"), L(c).FilesQuickOpenHint())
+			shortcutHint(c, a.keyText("searchFiles"), L(c).FilesSearchHint())
+			shortcutHint(c, a.keyText("filesPanel"), L(c).FilesPanelHint())
 		})
 	})
 }
@@ -432,8 +433,8 @@ func docDetail(m locales.Messages, d *fileDoc, names map[string]int) string {
 	case d.diff != nil:
 		return d.diff.tabLabel(m)
 	case d.comp != nil:
-		return "比较"
-	case names[d.name()] > 1:
+		return m.FilesCompareDetail()
+	case names[d.name(m)] > 1:
 		return filepath.Base(filepath.Dir(d.path))
 	}
 	return ""
@@ -459,7 +460,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	}
 	// 文件名短，不跟着收缩：放不下时先缩终端标签里的标题
 	row := ui.Row(c.Key(docKey(d))).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(0).
-		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name()).Tooltip(tip)
+		AlignItems(ui.Center).Role(ui.RoleButton).Label(d.name(L(c))).Tooltip(tip)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {
@@ -477,7 +478,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 	row.Children(func() {
 		svg, color := docIcon(t, d)
 		ui.Icon(c, svg).FontSize(smallIcon()).TextColor(color).Shrink(0)
-		name := ui.Text(c, d.name()).FontSize(fsSmall).SingleLine().MaxWidth(180)
+		name := ui.Text(c, d.name(L(c))).FontSize(fsSmall).SingleLine().MaxWidth(180)
 		tabText(c, name, active)
 		if d.isPreview() {
 			name.Italic()
@@ -489,7 +490,7 @@ func (a *app) docTab(c *ui.Context, w *workspace, v *filesView, d *fileDoc, deta
 			ui.Text(c, detail).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(100)
 		}
 		// 未保存时显示圆点，指上去换成关闭按钮，和常见编辑器一样
-		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Role(ui.RoleButton).Label("关闭文件").Tooltip(a.withKey("关闭", "closeTab"))
+		btn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Role(ui.RoleButton).Label(L(c).FilesCloseFile()).Tooltip(a.withKey(L(c).CommonClose(), "closeTab"))
 		if btn.Hovered() {
 			btn.Background(t.SurfacePressed)
 		}
@@ -526,18 +527,18 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 	if i < 0 {
 		return
 	}
-	if m.Item("关闭").Keys(a.keyText("closeTab")).Chosen() {
+	if m.Item(L(c).CommonClose()).Keys(a.keyText("closeTab")).Chosen() {
 		a.closeDoc(v, d)
 	}
 	others := slices.Concat(v.docs[:i], v.docs[i+1:])
 	right := slices.Clone(v.docs[i+1:])
-	if m.Item("关闭其他文件").Disabled(len(others) == 0).Chosen() {
+	if m.Item(L(c).FilesCloseOthers()).Disabled(len(others) == 0).Chosen() {
 		a.closeDocs(v, others)
 	}
-	if m.Item("关闭右侧文件").Disabled(len(right) == 0).Chosen() {
+	if m.Item(L(c).FilesCloseRight()).Disabled(len(right) == 0).Chosen() {
 		a.closeDocs(v, right)
 	}
-	if m.Item("关闭所有文件").Chosen() {
+	if m.Item(L(c).FilesCloseAll()).Chosen() {
 		a.closeDocs(v, slices.Clone(v.docs))
 	}
 	if w := a.workspace(v.wsID); w != nil {
@@ -548,14 +549,14 @@ func (a *app) docTabMenu(c *ui.Context, m *popMenu, v *filesView, d *fileDoc) {
 		return
 	}
 	m.Separator()
-	if m.Item("复制路径").Chosen() {
+	if m.Item(L(c).CommonCopyPath()).Chosen() {
 		c.WriteClipboard(d.path)
 	}
 	// 别的工作区里的文件只给绝对路径：相对这里的 ../.. 路径贴给 agent 只会让它找错
-	if rel, ok := relInside(v.root, d.path); ok && m.Item("复制相对路径").Chosen() {
+	if rel, ok := relInside(v.root, d.path); ok && m.Item(L(c).FilesCopyRelativePath()).Chosen() {
 		c.WriteClipboard(rel)
 	}
-	if m.Item("在访达中显示").Icon(iconFolder).Chosen() {
+	if m.Item(L(c).CommonRevealInFinder()).Icon(iconFolder).Chosen() {
 		mygo.Shell.ShowItemInFolder(d.path)
 	}
 }
@@ -570,8 +571,8 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 	ui.Row(c).Height(sz(30)).Shrink(0).Padding(0, 8, 0, 16).Gap(4).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, rel).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1).Selectable()
 		if d.readOnly {
-			ui.Text(c, "只读").FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0).
-				Tooltip(fmt.Sprintf("文件超过 %d MB，只读打开", files.ReadOnlySize>>20))
+			ui.Text(c, L(c).FilesReadOnly()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(2, 6).Radius(rSmall).Background(t.Surface).Shrink(0).
+				Tooltip(L(c).FilesReadOnlyTip(files.ReadOnlySize >> 20))
 		}
 		ui.Spacer(c)
 		if d.kind == docImage {
@@ -579,50 +580,50 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		}
 		if d.kind == docText && isMarkdown(d.path) {
 			// 图标是点了之后去的那一边：预览时显示源码，源码时显示预览
-			icon, label := iconEye, "预览"
+			icon, label := iconEye, L(c).CommonPreview()
 			if d.preview {
-				icon, label = iconCode, "查看源码"
+				icon, label = iconCode, L(c).FilesViewSource()
 			}
 			if pressable(iconButtonSized(c, icon, label, compactBox(), smallIcon())).Clicked() {
 				d.preview = !d.preview
 			}
 		}
 		if d.kind == docText && !d.readOnly && d.blame == nil && isJSON(d.path) {
-			if pressable(iconButtonSized(c, iconBraces, a.withKey("格式化 JSON", "formatJSON"), compactBox(), smallIcon())).Clicked() {
-				a.formatJSON(d)
+			if pressable(iconButtonSized(c, iconBraces, a.withKey(L(c).FilesFormatJSON(), "formatJSON"), compactBox(), smallIcon())).Clicked() {
+				a.formatJSON(L(c), d)
 			}
 		}
 		if d.kind == docText && !d.readOnly && d.isModified() {
-			if pressable(iconButtonSized(c, iconSave, a.withKey("保存", "save"), compactBox(), smallIcon())).Clicked() {
-				a.saveDoc(d, false)
+			if pressable(iconButtonSized(c, iconSave, a.withKey(L(c).CommonSave(), "save"), compactBox(), smallIcon())).Clicked() {
+				a.saveDoc(L(c), d, false)
 			}
 		}
 		if d.kind == docText && v.git.relPath(d.path) != "" {
-			if pressable(iconButtonSized(c, iconHistory, "文件历史", compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconHistory, L(c).FilesFileHistory(), compactBox(), smallIcon())).Clicked() {
 				a.openLog(w, "", v.git.relPath(d.path))
 			}
 			if d.blame != nil {
-				if pressable(textButton(c, "关闭 Annotate")).Clicked() {
+				if pressable(textButton(c, L(c).FilesCloseAnnotate())).Clicked() {
 					d.blame = nil
 				}
-			} else if pressable(iconButtonSized(c, iconBlame, "Annotate：逐行看是谁改的", compactBox(), smallIcon())).Clicked() {
+			} else if pressable(iconButtonSized(c, iconBlame, L(c).FilesAnnotateTip(), compactBox(), smallIcon())).Clicked() {
 				a.openBlame(L(c), w, v, d.path)
 			}
 			if e := v.git.entry(d.path); e != nil && !e.Conflict {
-				if pressable(iconButtonSized(c, iconRollback, "回滚这个文件…", compactBox(), smallIcon())).Clicked() {
+				if pressable(iconButtonSized(c, iconRollback, L(c).FilesRollbackFile(), compactBox(), smallIcon())).Clicked() {
 					a.rollbackDoc(v, d)
 				}
 			}
 		}
 		if revealable(v, d) {
-			if pressable(iconButtonSized(c, iconLocate, a.withKey("在文件树中定位", "revealFile"), compactBox(), smallIcon())).Clicked() {
+			if pressable(iconButtonSized(c, iconLocate, a.withKey(L(c).FilesRevealInTree(), "revealFile"), compactBox(), smallIcon())).Clicked() {
 				a.revealCurrent(w)
 			}
 		}
-		if pressable(iconButtonSized(c, iconFolder, "在访达中显示", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconFolder, L(c).CommonRevealInFinder(), compactBox(), smallIcon())).Clicked() {
 			mygo.Shell.ShowItemInFolder(d.path)
 		}
-		if pressable(iconButtonSized(c, iconCopy, "复制路径", compactBox(), smallIcon())).Clicked() {
+		if pressable(iconButtonSized(c, iconCopy, L(c).CommonCopyPath(), compactBox(), smallIcon())).Clicked() {
 			c.WriteClipboard(d.path)
 		}
 	})
@@ -634,19 +635,19 @@ func (a *app) docBanner(c *ui.Context, d *fileDoc) {
 	var actions func()
 	switch {
 	case d.conflict:
-		msg = "磁盘上的文件被改过了（可能是 agent），你这里也有没保存的修改。"
+		msg = L(c).FilesConflictBanner()
 		actions = func() {
-			if pressable(textButton(c, "保留我的")).Clicked() {
+			if pressable(textButton(c, L(c).FilesKeepMine())).Clicked() {
 				d.conflict = false
 			}
-			if pressable(accentButton(c, "用磁盘上的")).Clicked() {
+			if pressable(accentButton(c, L(c).FilesUseDisk())).Clicked() {
 				a.reloadDoc(d)
 			}
 		}
 	case d.deleted:
-		msg = "文件已经被删除。"
+		msg = L(c).FilesDeletedBanner()
 		if d.kind == docText && !d.readOnly {
-			msg += "保存会重新创建它。"
+			msg = L(c).FilesDeletedBannerSave()
 		}
 	default:
 		return
@@ -666,7 +667,7 @@ func docMessage(c *ui.Context, d *fileDoc, msg string) {
 		ui.Text(c, msg).FontSize(fsBody).TextColor(t.TextMuted)
 		// diff、日志这些不是磁盘上的文件（路径是 diff:…、log:…），没有可打开的
 		if filepath.IsAbs(d.path) && (d.kind != docError || !d.deleted) {
-			if pressable(textButton(c, "用默认应用打开")).Clicked() {
+			if pressable(textButton(c, L(c).FilesOpenWithDefaultApp())).Clicked() {
 				mygo.Shell.OpenPath(d.path)
 			}
 		}
@@ -717,7 +718,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
 				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Selectable().Children(func() {
-					mdView{find: f, size: size, doc: true, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(w, d.path, target) }}.page(c, d.md)
+					mdView{find: f, size: size, doc: true, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(L(c), w, d.path, target) }}.page(c, d.md)
 				})
 			})
 		})
@@ -727,7 +728,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 }
 
 // openWiki 打开 Markdown 里 [[名字]] 指向的文件：相对当前文件所在的目录，没写扩展名的补 .md，#后面的标题不管。
-func (a *app) openWiki(w *workspace, from, target string) {
+func (a *app) openWiki(m locales.Messages, w *workspace, from, target string) {
 	name, _, _ := strings.Cut(target, "#")
 	p := filepath.Join(filepath.Dir(from), name)
 	if filepath.Ext(name) != ".md" {
@@ -736,7 +737,7 @@ func (a *app) openWiki(w *workspace, from, target string) {
 		}
 	}
 	if _, err := os.Stat(p); err != nil {
-		a.err = "找不到 [[" + target + "]] 指向的文件：" + p
+		a.err = m.FilesWikiNotFound(target, p)
 		return
 	}
 	a.openFile(w, p, 0, [2]int{})
@@ -773,10 +774,11 @@ func (a *app) quickDialog(c *ui.Context) {
 		return
 	}
 	v := a.filesFor(w)
+	a.reportListErr(c, v)
 	t := c.Theme()
 	ui.Modal(c, &q.open, func() {
 		ui.Column(c).Width(560).Gap(8).Children(func() {
-			in := fieldInput(c, &q.query, "按名称查找文件，加 :行号 跳到那一行").AutoFocus()
+			in := fieldInput(c, &q.query, L(c).FilesQuickOpenPlaceholder()).AutoFocus()
 			path, line := files.SplitLine(q.query)
 			if v.list != nil && (q.list != v.list || q.key != path) {
 				q.matches, q.key, q.list, q.sel = files.Fuzzy(v.list.Files, path, 50), path, v.list, 0
@@ -791,9 +793,9 @@ func (a *app) quickDialog(c *ui.Context) {
 			submitted := in.Submitted()
 			switch {
 			case v.list == nil:
-				ui.Text(c, "正在列出文件…").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
+				ui.Text(c, L(c).FilesListing()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			case n == 0:
-				ui.Text(c, "没有匹配的文件").FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
+				ui.Text(c, L(c).FilesNoMatches()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(4, 2)
 			default:
 				ui.Scroll(c).MaxHeight(380).Children(func() {
 					ui.Column(c).Gap(2).Children(func() {

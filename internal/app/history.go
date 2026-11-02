@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 // historyLimit 是列表和搜索最多取的会话数。
@@ -25,10 +27,12 @@ const historyLimit = 200
 const historyBoardID = "history"
 
 // historyAgents 与界面上的筛选分段一一对应，0 是全部。
-var (
-	historyAgents      = append([]string{""}, history.Agents...)
-	historyAgentLabels = append([]string{"全部"}, agentTitles(history.Agents)...)
-)
+var historyAgents = append([]string{""}, history.Agents...)
+
+// historyAgentLabels 是筛选分段的文字，和 historyAgents 一一对应。
+func historyAgentLabels(m locales.Messages) []string {
+	return append([]string{m.CommonAll()}, agentTitles(history.Agents)...)
+}
 
 type historyStatus struct {
 	Sessions int              `json:"sessions"`
@@ -98,7 +102,7 @@ type historyView struct {
 	query    string
 	agent    int
 	sessions []history.Session // 没有搜索词时：最近的会话
-	groups   []string          // 与 sessions 对应的分组："今天、昨天……"或文件夹
+	groups   []string          // 与 sessions 对应的分组："今天、昨天……"或文件夹（空串是不知道目录的会话）
 	// folderOf 不为空时按文件夹分组，返回会话目录归到的组名
 	folderOf func(cwd string) string
 	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
@@ -182,7 +186,7 @@ func (a *app) setHistoryGrouping() {
 // 都不在就用目录名。
 func (a *app) folderGroup(cwd string) string {
 	if cwd == "" {
-		return "未知文件夹"
+		return ""
 	}
 	name, best := "", -1
 	match := func(root, label string) {
@@ -301,7 +305,7 @@ func (a *app) historyGroupSwitch(c *ui.Context) {
 	if a.state.HistoryByFolder {
 		sel = 1
 	}
-	if segmented(c, &sel, "会话分组方式", "按时间", "按文件夹") {
+	if segmented(c, &sel, L(c).HistoryGroupBy(), L(c).HistoryGroupByTime(), L(c).HistoryGroupByFolder()) {
 		a.state.HistoryByFolder = sel == 1
 		a.saveState()
 		a.setHistoryGrouping()
@@ -356,7 +360,7 @@ func (a *app) selectSession(sess history.Session, seq int) {
 }
 
 // resumeSession 在 posse 里继续会话；会话目录不在任何工作区时，问一句再把目录加成项目。
-func (a *app) resumeSession(s history.Session) {
+func (a *app) resumeSession(m locales.Messages, s history.Session) {
 	go func() {
 		var t struct {
 			ID          string `json:"id"`
@@ -366,15 +370,15 @@ func (a *app) resumeSession(s history.Session) {
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == rpc.CodeNotFound && s.Cwd != "" && strings.Contains(re.Message, "no workspace contains") {
 			a.win.Update(func() {
-				a.confirm("把 "+shortPath(s.Cwd)+" 添加为项目？",
-					"Posse 里还没有包含这个目录的工作区。添加后会话在这个项目里继续。",
-					"添加并继续", func() {
+				a.confirm(m.HistoryAddProjectConfirm(shortPath(s.Cwd)),
+					m.HistoryAddProjectBody(),
+					m.HistoryAddAndContinue(), func() {
 						go func() {
 							if a.call("project.add", map[string]any{"path": s.Cwd}, nil, 10*time.Second) != nil {
 								return
 							}
 							a.refresh()
-							a.resumeSession(s)
+							a.resumeSession(m, s)
 						}()
 					})
 			})
@@ -399,7 +403,7 @@ func ago(t time.Time) string {
 func sessionMeta(c *ui.Context, s history.Session) {
 	t := c.Theme()
 	ui.Row(c).Gap(12).Children(func() {
-		ui.Text(c, fmt.Sprintf("%d 条消息", s.Messages)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, L(c).HistoryMessageCount(s.Messages)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		if s.Model != "" {
 			ui.Text(c, shortModel(s.Model)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(s.Model)
 		}
@@ -486,7 +490,7 @@ func resumeCommand(s history.Session) string {
 // --- 界面
 
 func (a *app) historySidebarItem(c *ui.Context) ui.Element {
-	item := a.navTile(c, historyBoardID, iconHistory, "历史", nil)
+	item := a.navTile(c, historyBoardID, iconHistory, L(c).HistoryTitle(), nil)
 	if a.revealSel && a.selected == historyBoardID {
 		item.ScrollIntoView()
 		a.revealSel = false
@@ -497,9 +501,9 @@ func (a *app) historySidebarItem(c *ui.Context) ui.Element {
 func (a *app) historyBoard(c *ui.Context) {
 	h := &a.history
 	a.band(c, func() {
-		titleText(c, "历史", fsTitle).Margin(0, 6, 0, 0).Shrink(0)
+		titleText(c, L(c).HistoryTitle(), fsTitle).Margin(0, 6, 0, 0).Shrink(0)
 		// 系统搜索框的占位文字固定是英文 Search，这里用普通输入框
-		search := fieldInputSized(c, &h.query, "搜索会话内容  "+a.keyText("historySearch"), 340, 160).Label("搜索会话")
+		search := fieldInputSized(c, &h.query, L(c).HistorySearchPlaceholder(a.keyText("historySearch")), 340, 160).Label(L(c).HistorySearchLabel())
 		if a.pressed(c, "historySearch") {
 			search.Focus()
 		}
@@ -512,7 +516,7 @@ func (a *app) historyBoard(c *ui.Context) {
 		}
 		a.historyGroupSwitch(c)
 		ui.Spacer(c)
-		if segmented(c, &h.agent, "按 agent 筛选", historyAgentLabels...) {
+		if segmented(c, &h.agent, L(c).HistoryFilterByAgent(), historyAgentLabels(L(c))...) {
 			a.searchHistory(0)
 		}
 		a.closeBoardButton(c)
@@ -520,7 +524,7 @@ func (a *app) historyBoard(c *ui.Context) {
 	searching := h.resQuery != ""
 	ui.Row(c).Grow(1).AlignItems(ui.Stretch).Padding(pageGap).Gap(pageGap).Children(func() {
 		// 可以聚焦：点过列表后方向键归它，不被侧栏拿走
-		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label("会话列表")
+		list := card(c).Width(380).Shrink(0).Clip().Focusable().FocusRing(false).Label(L(c).HistorySessionList())
 		list.Children(func() {
 			a.historyTotals(c)
 			a.historyNotice(c, searching)
@@ -592,7 +596,8 @@ func (a *app) historyTotals(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
 	st := h.status
-	sessions, messages, byAgent := st.Sessions, fmt.Sprintf("%s 条消息", thousands(st.Messages)), st.ByAgent
+	m := L(c)
+	sessions, messages, byAgent := st.Sessions, m.HistoryMessageCount(st.Messages), st.ByAgent
 	if h.resQuery != "" {
 		byAgent = map[string]int{}
 		n := 0
@@ -600,7 +605,7 @@ func (a *app) historyTotals(c *ui.Context) {
 			byAgent[hit.Agent]++
 			n += hit.Matches
 		}
-		sessions, messages = len(h.hits), fmt.Sprintf("%s 条消息命中", thousands(n))
+		sessions, messages = len(h.hits), m.HistoryMessageHits(n)
 	} else if ag := historyAgents[h.resAgent]; ag != "" {
 		sessions = st.ByAgent[ag]
 	}
@@ -608,12 +613,12 @@ func (a *app) historyTotals(c *ui.Context) {
 	if sessions == 0 {
 		return
 	}
-	count := thousands(sessions) + " 个会话"
+	count := m.HistorySessionCount(sessions)
 	if h.resQuery != "" {
-		count = thousands(sessions) + " 个会话匹配"
+		count = m.HistoryMatchCount(sessions)
 		if sessions >= historyLimit {
 			// 搜索只取最相关的前 historyLimit 个
-			count = fmt.Sprintf("前 %d 个匹配的会话", historyLimit)
+			count = m.HistoryTopMatches(historyLimit)
 		}
 	}
 	ui.Column(c).Padding(12, 20, 8, 20).Gap(8).Children(func() {
@@ -655,7 +660,7 @@ func thousands(n int) string {
 func (a *app) cwdLink(c *ui.Context, dir string) func() {
 	return func() {
 		t := c.Theme()
-		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label("在访达中打开").Tooltip("在访达中打开 " + dir)
+		b := ui.Row(c.Key("cwd")).Gap(4).Shrink(1).Role(ui.RoleButton).Label(L(c).CommonOpenInFinder()).Tooltip(L(c).HistoryOpenInFinderTip(dir))
 		color := t.TextMuted
 		if b.Hovered() {
 			color = t.Accent
@@ -679,8 +684,8 @@ func contextMeta(c *ui.Context, d *historyDetail) func() {
 	}
 	return func() {
 		ctx := d.context
-		ui.Text(c, fmt.Sprintf("上下文 %d%%", ctx.Percent())).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
-			Tooltip(fmt.Sprintf("最后一次请求用了 %s / %s token", thousands(ctx.Used), thousands(ctx.Window)))
+		ui.Text(c, L(c).HistoryContext(ctx.Percent())).FontSize(fsSmall).FontFeatures("tnum").TextColor(c.Theme().TextMuted).MaxLines(1).Shrink(0).
+			Tooltip(L(c).HistoryContextTip(ctx.Used, ctx.Window))
 	}
 }
 
@@ -698,21 +703,22 @@ func (a *app) historyNotice(c *ui.Context, searching bool) {
 			waiting = true
 		}
 	}
+	m := L(c)
 	switch {
 	case h.failed != "":
-		msg = "查询失败：" + h.failed
+		msg = m.HistoryQueryFailed(h.failed)
 	case waiting && strings.TrimSpace(h.query) != "":
-		msg = "正在搜索…"
+		msg = m.HistorySearching()
 	case waiting:
-		msg = "正在加载…"
+		msg = m.HistoryLoading()
 	case h.status.Indexing && h.status.Progress.Total > 0:
-		msg = fmt.Sprintf("正在建立索引，已检查 %d / %d 个会话文件，结果会陆续补全", h.status.Progress.Done, h.status.Progress.Total)
+		msg = m.HistoryIndexingProgress(fmt.Sprint(h.status.Progress.Done), fmt.Sprint(h.status.Progress.Total))
 	case h.status.Indexing:
-		msg = "正在建立索引…"
+		msg = m.HistoryIndexing()
 	case searching && h.anyWord:
-		msg = "没有同时包含所有词的会话，下面是包含其中任一词的"
+		msg = m.HistoryAnyWord()
 	case h.status.Error != "":
-		msg = "索引更新失败：" + h.status.Error
+		msg = m.HistoryIndexFailed(h.status.Error)
 	}
 	if msg == "" {
 		return
@@ -724,7 +730,7 @@ func (a *app) sessionList(c *ui.Context) {
 	t := c.Theme()
 	h := &a.history
 	if h.loaded && len(h.sessions) == 0 && !h.status.Indexing && !h.pending() {
-		a.historyEmpty(c, "还没有会话记录", "Posse 会读取 ~/.claude、~/.codex、~/.cursor、~/.grok 里的会话记录，只读不改。")
+		a.historyEmpty(c, L(c).HistoryEmptyTitle(), L(c).HistoryEmptyBody())
 		return
 	}
 	// 按时间（dayGroup）或文件夹分组；默认只展开第一组，其余只列组标题和会话数
@@ -744,8 +750,9 @@ func (a *app) sessionList(c *ui.Context) {
 			return
 		}
 		open := h.isGroupOpen(r.group)
+		label := cmp.Or(r.group, L(c).HistoryUnknownFolder())
 		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(12, 12, 4, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
-			Role(ui.RoleButton).Label(r.group)
+			Role(ui.RoleButton).Label(label)
 		head.Children(func() {
 			turn := float32(0)
 			if open {
@@ -753,7 +760,7 @@ func (a *app) sessionList(c *ui.Context) {
 			}
 			chev := ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted)
 			chev.Rotate(chev.AnimateWith("turn", turn, 150*time.Millisecond, ui.EaseOut))
-			ui.Text(c, r.group).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
+			ui.Text(c, label).FontSize(fsSmall).FontWeight(fwMedium).TextColor(t.TextMuted)
 			ui.Text(c, fmt.Sprint(r.count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 		})
 		if head.Clicked() {
@@ -801,7 +808,7 @@ func (h *historyView) groupRows() []historyRow {
 func (a *app) hitList(c *ui.Context) {
 	h := &a.history
 	if h.loaded && len(h.hits) == 0 && !h.status.Indexing && !h.pending() {
-		a.historyEmpty(c, "没有找到“"+h.resQuery+"”", "中文按字匹配，英文按词的开头匹配；加引号可以搜整句。")
+		a.historyEmpty(c, L(c).HistoryNoResults(h.resQuery), L(c).HistoryNoResultsBody())
 		return
 	}
 	c.After(30 * time.Second)
@@ -855,8 +862,7 @@ func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 // snippetText 显示命中摘要，命中的词用正文色加粗，其余是次要色。
 func snippetText(c *ui.Context, hit history.Hit) ui.Element {
 	t := c.Theme()
-	label := map[string]string{"user": "你：", "assistant": agentTitle(hit.Agent) + "：", "tool": "工具："}[hit.Role]
-	spans := []ui.Span{{Text: label}}
+	spans := []ui.Span{{Text: L(c).HistorySnippetRole(roleName(L(c), hit.Role, hit.Agent))}}
 	last := 0
 	for _, sp := range hit.Spans {
 		if sp.Start < last || sp.End > len(hit.Snippet) {
@@ -877,11 +883,11 @@ func (a *app) sessionDetail(c *ui.Context) {
 			emptyCard(c).MaxWidth(420).Padding(24).Gap(12).Children(func() {
 				tile(c, iconHistory, 48, colors(t).tint, t.Accent)
 				ui.Column(c).Gap(6).Children(func() {
-					titleText(c, "会话历史", fsPage)
-					ui.Text(c, "在这里找回以前和 agent 的对话，选中后可以在 Posse 里接着聊。").FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
+					titleText(c, L(c).HistoryIntroTitle(), fsPage)
+					ui.Text(c, L(c).HistoryIntroBody()).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.5)
 				})
 				if n := h.status.Sessions; n > 0 {
-					ui.Text(c, fmt.Sprintf("已索引 %d 个会话", n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+					ui.Text(c, L(c).HistoryIndexedCount(n)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 				}
 			})
 		})
@@ -904,33 +910,35 @@ func (a *app) sessionDetail(c *ui.Context) {
 				if s.Branch != "" {
 					branch = metaMono(c, iconBranch, s.Branch, "")
 				}
-				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, s.UpdatedAt.Local().Format("1月2日 15:04")), meta(c, fmt.Sprintf("%d 条消息", s.Messages)), contextMeta(c, d))
+				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, s.UpdatedAt.Local().Format("1月2日 15:04")), meta(c, L(c).HistoryMessageCount(s.Messages)), contextMeta(c, d))
 			})
 		})
-		ui.Row(c).Gap(8).Children(func() {
+		// 放不下时折行（英文），"显示工具调用"靠右
+		ui.Row(c).Gap(8).Wrap().Children(func() {
 			if d.Terminal != "" {
-				if pressable(accentButton(c, "切到正在运行的终端")).Clicked() {
+				if pressable(accentButton(c, L(c).HistorySwitchToTerminal())).Clicked() {
 					if w, _ := a.findTerminal(d.Terminal); w != nil {
 						a.openTerminal(w.ID, d.Terminal)
 					}
 				}
-			} else if pressable(accentButton(c, "在 Posse 里继续")).Tooltip(resumeCommand(s)).Clicked() {
-				a.resumeSession(s)
+			} else if pressable(accentButton(c, L(c).HistoryContinueInPosse())).Tooltip(resumeCommand(s)).Clicked() {
+				a.resumeSession(L(c), s)
 			}
-			if pressable(textButton(c, "复制恢复命令")).Tooltip(resumeCommand(s)).Clicked() {
+			if pressable(textButton(c, L(c).HistoryCopyResumeCommand())).Tooltip(resumeCommand(s)).Clicked() {
 				c.WriteClipboard(resumeCommand(s))
 			}
-			if pressable(textButton(c, "移到废纸篓")).Clicked() {
+			if pressable(textButton(c, L(c).CommonMoveToTrash())).Clicked() {
 				a.askTrashSession(L(c), d)
 			}
-			ui.Spacer(c)
-			ui.Checkbox(c, &h.tools, "显示工具调用")
+			ui.Row(c).Grow(1).Justify(ui.End).Children(func() {
+				ui.Checkbox(c, &h.tools, L(c).HistoryShowToolCalls())
+			})
 		})
 	})
 	msgs := d.visible(h.tools, h.hitSeq)
 	if len(msgs) == 0 {
 		card(c).Children(func() {
-			a.historyEmpty(c, "这个会话没有可显示的消息", "打开“显示工具调用”可以看到工具的输入和输出。")
+			a.historyEmpty(c, L(c).HistoryNoMessages(), L(c).HistoryNoMessagesBody())
 		})
 		return
 	}
@@ -979,7 +987,7 @@ func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 			turn = 90
 		}
 		ui.Icon(c, iconChevron).FontSize(fsSmall).TextColor(t.TextMuted).Rotate(turn)
-		ui.Text(c, fmt.Sprintf("工具调用 %d 次", len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
+		ui.Text(c, L(c).HistoryToolCalls(len(run))).FontSize(fsSmall).TextColor(t.TextMuted)
 	})
 	if row.Clicked() {
 		if d.opened == nil {
@@ -996,7 +1004,7 @@ func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {
 
 func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, ns []string, hit bool) {
 	t := c.Theme()
-	who := map[string]string{"user": "你", "assistant": agentTitle(s.Agent), "tool": "工具"}[m.Role]
+	who := roleName(L(c), m.Role, s.Agent)
 	whoColor := t.TextMuted
 	if m.Role == "user" {
 		whoColor = t.Accent
@@ -1091,6 +1099,19 @@ func markRanges(text string, words []string) [][2]int {
 // queryWords 是搜索框里的词，小写，去掉引号。
 func queryWords(q string) []string {
 	return strings.Fields(strings.ToLower(strings.ReplaceAll(q, `"`, " ")))
+}
+
+// roleName 是对话里说话的一方：你、agent 的名字或工具。
+func roleName(m locales.Messages, role, agent string) string {
+	switch role {
+	case "user":
+		return m.HistoryRoleUser()
+	case "assistant":
+		return agentTitle(agent)
+	case "tool":
+		return m.HistoryRoleTool()
+	}
+	return ""
 }
 
 func dayGroup(t time.Time) string {

@@ -9,6 +9,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/editor"
+
+	"posse/locales"
 )
 
 // 存进 ui.json 的写法读回来一样；每一项都有默认键，ID 不重复。
@@ -146,12 +148,12 @@ func TestFormatJSON(t *testing.T) {
 		{"{\n\t\"a\": {\"b\": true}}\n", "{\n\t\"a\": {\n\t\t\"b\": true\n\t}\n}\n"},
 		{"{\n    \"a\": 1,  \"b\": 2\n}\n\n", "{\n    \"a\": 1,\n    \"b\": 2\n}\n"},
 	} {
-		got, err := formatJSONText(c.in)
+		got, err := formatJSONText(locales.In("zh-Hans"), c.in)
 		if err != nil || got != c.want {
 			t.Fatalf("formatJSONText(%q) = %q, %v; want %q", c.in, got, err, c.want)
 		}
 	}
-	_, err := formatJSONText("{\n  \"a\": 1,\n  \"b\": \n}")
+	_, err := formatJSONText(locales.In("zh-Hans"), "{\n  \"a\": 1,\n  \"b\": \n}")
 	if err == nil || !strings.Contains(err.Error(), "第 4 行") {
 		t.Fatalf("syntax error = %v", err)
 	}
