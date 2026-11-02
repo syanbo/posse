@@ -61,7 +61,8 @@ if [ $# -gt 0 ] && ! grep -q "^version: $version+" mobile/pubspec.yaml; then
 	git commit -q -m "chore(release): 发布安卓 $version" -- mobile/pubspec.yaml "$changelog"
 fi
 
-build=$(git rev-list --count HEAD)
+# 构建号是提交数加 8：开源前把历史捋直去掉了 8 个合并提交，加回来让构建号接着 670 往上，已装的 App 才认得出新版
+build=$(($(git rev-list --count HEAD) + 8))
 if [ -n "$(git status --porcelain -- mobile internal/mquic)" ]; then
 	echo "注意：mobile 或 internal/mquic 有未提交的改动，会一起打进包里" >&2
 fi
