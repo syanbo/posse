@@ -46,7 +46,13 @@ Future<PhoneRpc> handshake({
   final reader = SocketReader(socket.events);
   try {
     await socket.sendText(jsonEncode(hello.toJson()));
-    final readyEvent = await reader.next(cancel);
+    final SocketEvent readyEvent;
+    try {
+      readyEvent = await reader.next(cancel);
+    } on E2eeException {
+      if (socket.closeCode == 4001) throw HostTooOld();
+      rethrow;
+    }
     if (readyEvent.binary) throw E2eeException('ready was binary');
     final ready = parseReady(utf8.decode(readyEvent.bytes), hello);
     if (ready == null) throw E2eeException('bad ready');

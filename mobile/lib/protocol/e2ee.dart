@@ -17,8 +17,9 @@ const headerLen = 42;
 
 const payloadKinds = ['text', 'binary'];
 
-/// 分帧（握手里的 framing）：2 是 Orca 的，JSON 加密后再 base64 走文本帧；
-/// 3 是 Posse 的，所有帧都是加密后的原始字节、走二进制帧，JSON 和二进制靠 nonce 里的 kind（第 14 字节）区分。
+/// 分帧（握手里的 framing），格式和理由见电脑端 internal/mobile/e2ee.go：
+/// 2 是 Orca 的，帧是 nonce 加密文（明文前有 42 字节帧头），JSON 帧再 base64 走文本帧；
+/// 3 是 Posse 的，都走二进制帧，帧是 u8 kind 加标签和密文，nonce 两端按计数器各自算，每帧开销 17 字节。
 const framingText = 2;
 const framingBinary = 3;
 
@@ -27,6 +28,12 @@ class E2eeException implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+/// 电脑读了 hello 就以 4001 关连接：旧版电脑不认识手机报的分帧，要在电脑上更新 Posse。
+class HostTooOld extends E2eeException {
+  HostTooOld()
+    : super('the computer rejected the handshake: Posse there is too old');
 }
 
 class HelloContext {
@@ -145,12 +152,26 @@ class E2eeSession {
   }) {
     final n = sendN++;
     final nonce = frameNonce(id, direction, kind, n);
+    if (binaryMessages) {
+      return quic.secretboxSeal(sendKey, nonce, payload, prefix: 1)..[0] = kind;
+    }
     final plain = concat([frameHeader(id, direction, kind, n), payload]);
     return secretboxSeal(sendKey, nonce, plain);
   }
 
   Uint8List open(Uint8List frame, {required int direction, required int kind}) {
     final nonce = frameNonce(id, direction, kind, recvN);
+    if (binaryMessages) {
+      if (frame.isEmpty || frame[0] != kind) throw E2eeException('bad frame');
+      final plain = quic.secretboxOpen(
+        recvKey,
+        nonce,
+        Uint8List.sublistView(frame, 1),
+      );
+      if (plain == null) throw E2eeException('bad frame');
+      recvN++;
+      return plain;
+    }
     if (frame.length < 24 + quic.secretboxOverhead + headerLen ||
         !bytesEqual(frame.sublist(0, 24), nonce)) {
       throw E2eeException('bad frame');
@@ -177,8 +198,8 @@ class E2eeSession {
     required int direction,
   }) {
     if (binaryMessages) {
-      if (!binary || bytes.length < 24) throw E2eeException('bad frame');
-      final kind = bytes[14];
+      if (!binary || bytes.isEmpty) throw E2eeException('bad frame');
+      final kind = bytes[0];
       if (kind != kindText && kind != kindBinary) {
         throw E2eeException('bad frame');
       }
@@ -403,11 +424,16 @@ Uint8List hkdfSha256(
 
 /// Go 的 secretbox.Seal 格式：nonce 拼在密文前面。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 慢约 5 倍。
 Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) =>
-    quic.secretboxSeal(key, nonce, plain);
+    quic.secretboxSeal(key, nonce, plain, prefix: 24)..setRange(0, 24, nonce);
 
 /// 解开整帧（nonce 加密文），nonce 用帧里的。
 Uint8List secretboxOpen(Uint8List key, Uint8List frame) =>
-    quic.secretboxOpen(key, frame) ?? (throw E2eeException('bad frame'));
+    quic.secretboxOpen(
+      key,
+      Uint8List.sublistView(frame, 0, 24),
+      Uint8List.sublistView(frame, 24),
+    ) ??
+    (throw E2eeException('bad frame'));
 
 Uint8List frameNonce(Uint8List id, int direction, int kind, int counter) {
   final out = Uint8List(24);

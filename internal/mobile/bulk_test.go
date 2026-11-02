@@ -11,19 +11,13 @@ import (
 	"testing"
 
 	"github.com/coder/websocket"
-	"golang.org/x/crypto/nacl/secretbox"
 
 	"posse/internal/term"
 )
 
 // sendBin 发一个二进制帧，和 sendRaw 共用手机的发送计数。
 func (p *phone) sendBin(b []byte) {
-	s := p.sess
-	n := s.recvN
-	s.recvN++
-	nonce := s.nonce(dirMobileToDesktop, kindBinary, n)
-	frame := secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kindBinary, n), b...), &nonce, &s.recvKey)
-	p.ws.Write(context.Background(), websocket.MessageBinary, frame)
+	p.ws.Write(context.Background(), websocket.MessageBinary, p.seal(kindBinary, b))
 }
 
 // 声明 posse.bulk.v1 后，大块内容先按块走二进制帧，回复里只剩编号；上传的分段也走二进制帧

@@ -220,7 +220,27 @@ void main() {
     expect(parseReady(jsonEncode(ready(framingText).toJson()), hello), isNull);
   });
 
-  test('binary framing tells messages from binary frames by the nonce', () {
+  test('binary framing adds 17 bytes per frame, the Orca framing 82', () {
+    for (final (framing, overhead) in [
+      (framingBinary, 17),
+      (framingText, 82),
+    ]) {
+      final s = E2eeSession(
+        recvKey: repeated(1, 32),
+        sendKey: repeated(2, 32),
+        id: repeated(9, 32),
+        transcriptHash: Uint8List(32),
+      )..framing = framing;
+      final frame = s.seal(
+        Uint8List(10),
+        direction: dirDesktopToMobile,
+        kind: kindBinary,
+      );
+      expect(frame.length - 10, overhead);
+    }
+  });
+
+  test('binary framing tells messages from binary frames by the kind byte', () {
     E2eeSession make() => E2eeSession(
       recvKey: repeated(1, 32),
       sendKey: repeated(2, 32),
@@ -250,7 +270,7 @@ void main() {
       direction: dirDesktopToMobile,
       kind: kindText,
     );
-    frame[14] = kindBinary;
+    frame[0] = kindBinary;
     expect(
       () =>
           phone.openMessage(frame, binary: true, direction: dirDesktopToMobile),

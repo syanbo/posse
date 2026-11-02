@@ -69,9 +69,10 @@ type session struct {
 	framing          int // 握手选定的分帧，见 framingText、framingBinary
 }
 
-// 分帧：Orca App 只会 2，JSON 加密后再整帧 base64 放进文本帧。
-// 3 是 Posse 手机客户端的：所有帧都是加密后的原始字节、走二进制帧，
-// JSON 和二进制靠 nonce 里的 kind（第 14 字节）区分，不用另加标记；解密时 nonce 照样逐字节核对。
+// 分帧：Orca App 只会 2，帧是 nonce、密文（明文前有 42 字节的帧头），JSON 帧再整帧 base64 放进文本帧。
+// 3 是 Posse 手机客户端的：所有帧都走二进制帧，内容是 u8 kind 加 secretbox 的密文（16 字节标签在前），
+// 每帧固定开销 17 字节（2 是 82 字节）。nonce 不上线、明文不带帧头：两端按计数器各自算 nonce，
+// 它含会话 ID、方向、kind 和计数器，改了 kind、重放、乱序都解不开，帧头里的这些信息是多余的。
 const (
 	framingText   = 2
 	framingBinary = 3
@@ -272,11 +273,14 @@ func (s *session) header(dir, kind byte, n uint64) []byte {
 	return binary.BigEndian.AppendUint64(h, n)
 }
 
-// seal 加密一帧发给手机。
+// seal 按握手选的分帧加密一帧发给手机。
 func (s *session) seal(payload []byte, kind byte) []byte {
 	n := s.sendN
 	s.sendN++
 	nonce := s.nonce(dirDesktopToMobile, kind, n)
+	if s.framing == framingBinary {
+		return secretbox.Seal([]byte{kind}, payload, &nonce, &s.sendKey)
+	}
 	plain := append(s.header(dirDesktopToMobile, kind, n), payload...)
 	return secretbox.Seal(nonce[:], plain, &nonce, &s.sendKey)
 }
@@ -308,15 +312,20 @@ func (s *session) sealMessage(p []byte) (websocket.MessageType, []byte) {
 // openMessage 解开手机发来的一帧，返回它的 kind（kindText 是 JSON）。
 func (s *session) openMessage(typ websocket.MessageType, raw []byte) (byte, []byte, error) {
 	if s.framing == framingBinary {
-		if typ != websocket.MessageBinary || len(raw) < 24 {
+		if typ != websocket.MessageBinary || len(raw) < 1+secretbox.Overhead {
 			return 0, nil, errFrame
 		}
-		kind := raw[14]
+		kind := raw[0]
 		if kind != kindText && kind != kindBinary {
 			return 0, nil, errFrame
 		}
-		p, err := s.open(raw, kind)
-		return kind, p, err
+		nonce := s.nonce(dirMobileToDesktop, kind, s.recvN)
+		p, ok := secretbox.Open(nil, raw[1:], &nonce, &s.recvKey)
+		if !ok {
+			return kind, nil, errFrame
+		}
+		s.recvN++
+		return kind, p, nil
 	}
 	if typ == websocket.MessageText {
 		p, err := s.openText(raw)

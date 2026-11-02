@@ -87,6 +87,9 @@ class QuicByteSocket implements ByteSocket {
 
   @override
   Future<void> close() async => _conn.close();
+
+  @override
+  int? get closeCode => _conn.closeCode;
 }
 
 /// [QuicPuncher] 的实现，见 [QuicConnection.prepare]。

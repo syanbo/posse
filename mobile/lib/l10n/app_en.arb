@@ -1130,6 +1130,10 @@
   "@errorNotConnected": {
     "description": "Error when an action needs the Mac but the phone isn’t connected."
   },
+  "errorDesktopTooOld": "Posse on the Mac is too old to connect to this app. Update Posse on the Mac.",
+  "@errorDesktopTooOld": {
+    "description": "Error when the Mac’s Posse rejects the phone’s handshake because it is an older version."
+  },
   "errorOldDesktop": "Posse on the Mac is too old for this. Update Posse on the Mac.",
   "@errorOldDesktop": {
     "description": "Error when the Mac’s Posse doesn’t know a request."

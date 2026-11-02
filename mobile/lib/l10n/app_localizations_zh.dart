@@ -797,6 +797,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorNotConnected => '还没连上电脑';
 
   @override
+  String get errorDesktopTooOld => '电脑上的 Posse 是旧版，连不上这个 App：在电脑上更新 Posse';
+
+  @override
   String get errorOldDesktop => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse';
 
   @override

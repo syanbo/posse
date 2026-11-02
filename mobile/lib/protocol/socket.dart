@@ -24,6 +24,9 @@ abstract class ByteSocket {
   Future<void> sendBinary(Uint8List bytes);
   Stream<SocketEvent> get events;
   Future<void> close();
+
+  /// 对方关连接时给的关闭码，[events] 结束后读；不知道时是 null。
+  int? get closeCode;
 }
 
 class WebSocketByteSocket implements ByteSocket {
@@ -73,6 +76,9 @@ class WebSocketByteSocket implements ByteSocket {
   Future<void> close() async {
     await _channel.sink.close();
   }
+
+  @override
+  int? get closeCode => _channel.closeCode;
 }
 
 /// 测试里把两端接在一起。一边 send，另一边的 events 收到。
@@ -105,15 +111,19 @@ class PipeSocket implements ByteSocket {
   }
 
   @override
-  Future<void> close() async {
+  Future<void> close([int? code]) async {
     _closed = true;
     if (!_incoming.isClosed) await _incoming.close();
-    // 和真的 WebSocket 一样，一头挂断另一头也收到结束
+    // 和真的 WebSocket 一样，一头挂断另一头也收到结束和关闭码
     final other = peer;
     if (other != null && !other._incoming.isClosed) {
+      other.closeCode = code;
       await other._incoming.close();
     }
   }
+
+  @override
+  int? closeCode;
 }
 
 (PipeSocket, PipeSocket) pipePair() {

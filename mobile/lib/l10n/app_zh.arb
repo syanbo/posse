@@ -228,6 +228,7 @@
   "errorNoNewTerminal": "电脑没有返回新终端",
   "errorNotAFile": "这不是文件",
   "errorNotConnected": "还没连上电脑",
+  "errorDesktopTooOld": "电脑上的 Posse 是旧版，连不上这个 App：在电脑上更新 Posse",
   "errorOldDesktop": "电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse",
   "errorOutsideWorkspace": "路径不在工作区里",
   "errorTimeout": "电脑没有回应，可能已经休眠或者网络断了",

@@ -64,6 +64,8 @@ void main() {
     conn.send(quicText, Uint8List.fromList(utf8.encode('close')));
     await ended.future.timeout(const Duration(seconds: 5));
     expect(msgs, ['bye']);
+    // 关闭码在消息流结束前就交过来了
+    expect(conn.closeCode, 4001);
     expect(
       () => conn.send(quicText, Uint8List(1)),
       throwsA(isA<QuicException>()),

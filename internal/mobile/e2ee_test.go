@@ -158,23 +158,28 @@ func TestOpenMessageBinaryFraming(t *testing.T) {
 	s := &session{framing: framingBinary}
 	rand.Read(s.recvKey[:])
 	rand.Read(s.id[:])
-	frame := func(kind byte, n uint64, payload string) []byte {
-		nonce := s.nonce(dirMobileToDesktop, kind, n)
-		return secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kind, n), payload...), &nonce, &s.recvKey)
+	sealAs := func(id [32]byte, kind byte, n uint64, payload string) []byte {
+		o := &session{id: id}
+		nonce := o.nonce(dirMobileToDesktop, kind, n)
+		return secretbox.Seal([]byte{kind}, []byte(payload), &nonce, &s.recvKey)
 	}
+	frame := func(kind byte, n uint64, payload string) []byte { return sealAs(s.id, kind, n, payload) }
 	flipped := frame(kindText, 0, "x")
-	flipped[14] = kindBinary
+	flipped[0] = kindBinary
 	badKind := frame(kindText, 0, "x")
-	badKind[14] = 2
+	badKind[0] = 2
+	otherID := s.id
+	otherID[0] ^= 1
 	for name, c := range map[string]struct {
 		typ websocket.MessageType
 		raw []byte
 	}{
-		"text frame":   {websocket.MessageText, frame(kindText, 0, "x")},
-		"short":        {websocket.MessageBinary, make([]byte, 20)},
-		"unknown kind": {websocket.MessageBinary, badKind},
-		"flipped kind": {websocket.MessageBinary, flipped},
-		"replayed":     {websocket.MessageBinary, frame(kindText, 1, "x")},
+		"text frame":    {websocket.MessageText, frame(kindText, 0, "x")},
+		"short":         {websocket.MessageBinary, make([]byte, 16)},
+		"unknown kind":  {websocket.MessageBinary, badKind},
+		"flipped kind":  {websocket.MessageBinary, flipped},
+		"out of order":  {websocket.MessageBinary, frame(kindText, 1, "x")},
+		"other session": {websocket.MessageBinary, sealAs(otherID, kindText, 0, "x")},
 	} {
 		if _, _, err := s.openMessage(c.typ, c.raw); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -187,6 +192,21 @@ func TestOpenMessageBinaryFraming(t *testing.T) {
 		kind, p, err := s.openMessage(websocket.MessageBinary, frame(want, uint64(i), "ok"))
 		if err != nil || kind != want || string(p) != "ok" {
 			t.Fatalf("frame %d: kind %d, %q, %v", i, kind, p, err)
+		}
+	}
+	// 重放已经收过的第 0 帧
+	if _, _, err := s.openMessage(websocket.MessageBinary, frame(kindText, 0, "ok")); err == nil {
+		t.Error("replayed frame accepted")
+	}
+}
+
+// 分帧 3 每帧固定开销 17 字节（kind + Poly1305 标签），分帧 2 是 82 字节
+func TestFrameOverhead(t *testing.T) {
+	payload := make([]byte, 10)
+	for framing, want := range map[int]int{framingBinary: 17, framingText: 24 + secretbox.Overhead + headerLen} {
+		s := &session{framing: framing}
+		if got := len(s.seal(payload, kindBinary)) - len(payload); got != want {
+			t.Errorf("framing %d: overhead %d, want %d", framing, got, want)
 		}
 	}
 }

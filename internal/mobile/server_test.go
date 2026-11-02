@@ -211,16 +211,24 @@ func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) 
 // 手机方向：发用 mobile→desktop、收用 desktop→mobile；secretbox 密钥同样对调。
 func (p *phone) sendRaw(v any) {
 	b, _ := json.Marshal(v)
-	s := p.sess
-	n := s.recvN // 借用计数器字段：手机的发送计数
-	s.recvN++
-	nonce := s.nonce(dirMobileToDesktop, kindText, n)
-	frame := secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kindText, n), b...), &nonce, &s.recvKey)
+	frame := p.seal(kindText, b)
 	if p.framing == framingBinary {
 		p.ws.Write(context.Background(), websocket.MessageBinary, frame)
 		return
 	}
 	p.ws.Write(context.Background(), websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(frame)))
+}
+
+// seal 按分帧加密手机发出的一帧。借用 recvN 当手机的发送计数，密钥用主机的 recvKey。
+func (p *phone) seal(kind byte, b []byte) []byte {
+	s := p.sess
+	n := s.recvN
+	s.recvN++
+	nonce := s.nonce(dirMobileToDesktop, kind, n)
+	if p.framing == framingBinary {
+		return secretbox.Seal([]byte{kind}, b, &nonce, &s.recvKey)
+	}
+	return secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kind, n), b...), &nonce, &s.recvKey)
 }
 
 // messageType 是 JSON 消息该走的帧类型。
@@ -233,10 +241,21 @@ func (p *phone) messageType() websocket.MessageType {
 
 func (p *phone) open(raw []byte, kind byte) []byte {
 	s := p.sess
-	if kind == kindText && p.framing != framingBinary {
+	nonce := s.nonce(dirDesktopToMobile, kind, s.sendN)
+	if p.framing == framingBinary {
+		if len(raw) < 1 || raw[0] != kind {
+			p.t.Fatalf("host frame %d: kind byte %v, want %d", s.sendN, raw[:min(1, len(raw))], kind)
+		}
+		plain, ok := secretbox.Open(nil, raw[1:], &nonce, &s.sendKey)
+		if !ok {
+			p.t.Fatalf("cannot open host frame %d", s.sendN)
+		}
+		s.sendN++
+		return plain
+	}
+	if kind == kindText {
 		raw, _ = base64.StdEncoding.DecodeString(string(raw))
 	}
-	nonce := s.nonce(dirDesktopToMobile, kind, s.sendN)
 	plain, ok := secretbox.Open(nil, raw[24:], &nonce, &s.sendKey)
 	if !ok {
 		p.t.Fatalf("cannot open host frame %d", s.sendN)
@@ -254,11 +273,11 @@ func (p *phone) readLoop() {
 		}
 		binary := typ == websocket.MessageBinary
 		if p.framing == framingBinary {
-			if !binary || len(raw) < 24 {
+			if !binary || len(raw) < 1 {
 				p.t.Errorf("framing 3 got a %v frame of %d bytes", typ, len(raw))
 				continue
 			}
-			binary = raw[14] == kindBinary
+			binary = raw[0] == kindBinary
 		}
 		if binary {
 			p.binary <- p.open(raw, kindBinary)

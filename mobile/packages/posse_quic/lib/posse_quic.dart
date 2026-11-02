@@ -70,50 +70,75 @@ external void _seal(
   Pointer<Uint8> out,
 );
 
-@Native<Int32 Function(Pointer<Uint8>, Pointer<Uint8>, Int32, Pointer<Uint8>)>(
-  symbol: 'hq_open',
-  isLeaf: true,
-)
+@Native<
+  Int32 Function(
+    Pointer<Uint8>,
+    Pointer<Uint8>,
+    Pointer<Uint8>,
+    Int32,
+    Pointer<Uint8>,
+  )
+>(symbol: 'hq_open', isLeaf: true)
 external int _open(
   Pointer<Uint8> key,
-  Pointer<Uint8> frame,
+  Pointer<Uint8> nonce,
+  Pointer<Uint8> box,
   int len,
   Pointer<Uint8> out,
 );
 
-/// secretbox 的开销：Poly1305 标签 16 字节，nonce 24 字节拼在密文前面。
+/// secretbox 的 Poly1305 标签 16 字节，放在密文前面；nonce 24 字节。
 const secretboxOverhead = 16;
 const secretboxNonceLength = 24;
-const _maxSecretbox = 0x7fffffff - secretboxNonceLength - secretboxOverhead;
 
-/// 用 Go 的 nacl/secretbox 加密：返回 nonce 加密文，和 Go 的 `secretbox.Seal(nonce[:], …)` 同格式。
-/// 直接把 Dart 的缓冲区交给 Go，不拷贝。
-Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
+// 长度按 Int32 交给 Go，超出会变成负数，Go 那边 panic 会带崩 App
+const _maxSecretbox = 0x7fffffff - 64;
+
+void _checkKey(Uint8List key, Uint8List nonce) {
   if (key.length != 32 || nonce.length != secretboxNonceLength) {
     throw ArgumentError('secretbox: bad key or nonce length');
   }
-  // 长度按 Int32 交给 Go，超出会变成负数，Go 那边 panic 会带崩 App
+}
+
+/// 用 Go 的 nacl/secretbox 加密，返回 [prefix] 个留空字节、16 字节标签、密文
+/// （留空之后的部分和 Go 的 `secretbox.Seal(nil, …)` 同格式）。
+/// 留空由调用方填帧头（nonce 或 kind），整帧只分配一次；Dart 的缓冲区直接交给 Go，不拷贝。
+Uint8List secretboxSeal(
+  Uint8List key,
+  Uint8List nonce,
+  Uint8List plain, {
+  int prefix = 0,
+}) {
+  _checkKey(key, nonce);
   if (plain.length > _maxSecretbox) {
     throw ArgumentError('secretbox: message too large');
   }
-  final out = Uint8List(
-    secretboxNonceLength + secretboxOverhead + plain.length,
+  final out = Uint8List(prefix + secretboxOverhead + plain.length);
+  _seal(
+    key.address,
+    nonce.address,
+    plain.address,
+    plain.length,
+    Uint8List.sublistView(out, prefix).address,
   );
-  _seal(key.address, nonce.address, plain.address, plain.length, out.address);
   return out;
 }
 
-/// 解开 [secretboxSeal] 的结果（nonce 取自 frame 的前 24 字节），认证失败返回 null。
-Uint8List? secretboxOpen(Uint8List key, Uint8List frame) {
-  if (key.length != 32) throw ArgumentError('secretbox: bad key length');
-  if (frame.length > _maxSecretbox) {
+/// 解开 [secretboxSeal] 留空之后的部分（标签加密文），认证失败返回 null。
+Uint8List? secretboxOpen(Uint8List key, Uint8List nonce, Uint8List box) {
+  _checkKey(key, nonce);
+  if (box.length > _maxSecretbox) {
     throw ArgumentError('secretbox: frame too large');
   }
-  if (frame.length < secretboxNonceLength + secretboxOverhead) return null;
-  final out = Uint8List(
-    frame.length - secretboxNonceLength - secretboxOverhead,
+  if (box.length < secretboxOverhead) return null;
+  final out = Uint8List(box.length - secretboxOverhead);
+  final ok = _open(
+    key.address,
+    nonce.address,
+    box.address,
+    box.length,
+    out.address,
   );
-  final ok = _open(key.address, frame.address, frame.length, out.address);
   return ok == 1 ? out : null;
 }
 
@@ -163,6 +188,7 @@ const _evBinary = 3;
 const _evClosed = 4;
 const _evFailed = 5;
 const _evPrepared = 6;
+const _evPeerCode = 7;
 
 /// 消息类型，和 Go 那边一致。
 const quicText = 1;
@@ -270,10 +296,15 @@ class QuicConnection {
   /// 收到的消息。连接断开时结束。
   Stream<QuicMessage> get messages => _messages.stream;
 
+  /// 对方发来关闭帧时的关闭码，在 [messages] 结束之前就已经填好；别的原因断开时是 null。
+  int? closeCode;
+
   void _event(int kind, Uint8List data) {
     switch (kind) {
       case _evPrepared:
         _prepared.complete(String.fromCharCodes(data));
+      case _evPeerCode:
+        if (data.length == 2) closeCode = data[0] << 8 | data[1];
       case _evOpen:
         _opened.complete();
       case _evText:

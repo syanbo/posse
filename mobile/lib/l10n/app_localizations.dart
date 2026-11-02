@@ -1466,6 +1466,12 @@ abstract class AppLocalizations {
   /// **'Not connected to the Mac yet'**
   String get errorNotConnected;
 
+  /// Error when the Mac’s Posse rejects the phone’s handshake because it is an older version.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old to connect to this app. Update Posse on the Mac.'**
+  String get errorDesktopTooOld;
+
   /// Error when the Mac’s Posse doesn’t know a request.
   ///
   /// In en, this message translates to:

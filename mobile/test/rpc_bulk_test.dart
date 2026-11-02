@@ -21,6 +21,8 @@ class _Socket implements ByteSocket {
       sent.add(SocketEvent.binary(bytes));
   @override
   Future<void> close() async {}
+  @override
+  int? get closeCode => null;
 }
 
 Uint8List _key(int seed) => Uint8List.fromList(List.filled(32, seed));

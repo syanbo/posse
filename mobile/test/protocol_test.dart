@@ -91,6 +91,38 @@ void main() {
     expect(gate.shouldReconnect('cell'), isTrue);
   });
 
+  test('a desktop that rejects the hello with 4001 is too old', () async {
+    final hostKeys = generateKeyPair();
+    final offer = PairingOffer(
+      endpoint: 'ws://mac',
+      endpoints: const ['ws://mac'],
+      deviceToken: 'tok',
+      publicKeyB64: b64(hostKeys.publicKey),
+    );
+    for (final (code, tooOld) in [(4001, true), (null, false)]) {
+      final (client, host) = pipePair();
+      final reader = SocketReader(host.events);
+      unawaited(() async {
+        final hello = await reader.next(CancelToken());
+        final caps =
+            (jsonDecode(utf8.decode(hello.bytes)) as Map)['capabilities'];
+        expect((caps as Map)['framing'], [framingBinary]);
+        // 旧版电脑只认分帧 2：读完 hello 就以 4001 关掉；电脑重启时关连接不带这个码
+        await host.close(code);
+      }());
+      final error = await handshake(
+        socket: client,
+        offer: offer,
+        cancel: CancelToken(),
+      ).then<Object?>((_) => null, onError: (Object e) => e);
+      expect(error, tooOld ? isA<HostTooOld>() : isNot(isA<HostTooOld>()));
+      expect(error, isA<E2eeException>());
+      if (tooOld) {
+        expect(friendlyError(error!, _zh), _zh.errorDesktopTooOld);
+      }
+    }
+  });
+
   test(
     'handshake declares capabilities and reconnects on a network change',
     () async {

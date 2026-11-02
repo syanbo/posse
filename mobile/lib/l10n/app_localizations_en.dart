@@ -836,6 +836,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorNotConnected => 'Not connected to the Mac yet';
 
   @override
+  String get errorDesktopTooOld =>
+      'Posse on the Mac is too old to connect to this app. Update Posse on the Mac.';
+
+  @override
   String get errorOldDesktop =>
       'Posse on the Mac is too old for this. Update Posse on the Mac.';
 

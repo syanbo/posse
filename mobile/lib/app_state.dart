@@ -21,6 +21,7 @@ import 'workspace/models.dart';
 String friendlyError(Object error, AppLocalizations l) {
   if (error is TimeoutException) return l.errorTimeout;
   if (error is FirstConnectFailed) return l.errorFirstConnect;
+  if (error is HostTooOld) return l.errorDesktopTooOld;
   if (error is PhoneError) {
     return switch (error.code) {
       PhoneError.notConnected => l.errorNotConnected,

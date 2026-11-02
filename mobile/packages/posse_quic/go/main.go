@@ -16,6 +16,8 @@ import "C"
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,6 +34,7 @@ const (
 	evClosed   = 4 // 数据是原因
 	evFailed   = 5 // 拨号失败，数据是错误
 	evPrepared = 6 // hq_prepare 问出了公网地址，数据是 "ip:端口"
+	evPeerCode = 7 // 对方发来关闭帧，数据是 u16 关闭码（大端），紧接着是 evClosed
 )
 
 // sendQueue 是还没写出去的消息上限。超过说明连接早就堵死了，断开让上层重连。
@@ -201,6 +204,10 @@ func (e *entry) serve(ctx context.Context, dial func(context.Context) (*mquic.Co
 		typ, p, err := c.Read()
 		if err != nil {
 			c.CloseNow()
+			// 手机按关闭码认出旧版电脑拒绝握手（4001），所以单独交出去
+			if ce, ok := errors.AsType[*mquic.CloseError](err); ok {
+				e.emit(evPeerCode, binary.BigEndian.AppendUint16(nil, ce.Code))
+			}
 			e.finish(evClosed, err.Error())
 			return
 		}
