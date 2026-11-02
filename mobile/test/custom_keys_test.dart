@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:flutter/widgets.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/settings/custom_keys.dart';
 import 'package:posse_mobile/terminal/frames.dart';
@@ -195,7 +197,10 @@ void main() {
     ];
     final norm = normalizeBarKeys(keys);
     expect(norm.first.builtin, clearInputKey);
-    expect(norm.first.termKey?.label, '清空');
+    expect(
+      norm.first.termKey?.label(lookupAppLocalizations(const Locale('zh'))),
+      '清空',
+    );
     expect(norm.where((k) => k.builtin == clearInputKey).length, 1);
   });
 }

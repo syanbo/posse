@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 import 'package:posse_mobile/chat/media.dart';
 import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/mermaid.dart';
@@ -26,8 +27,12 @@ void main() {
   });
 
   test('the Go library’s own diagram errors are translated', () {
-    expect(mermaidErrorText('drawing the diagram timed out'), '画图超时');
-    expect(mermaidErrorText('Parse error on line 2'), 'Parse error on line 2');
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    expect(mermaidErrorText(zh, 'drawing the diagram timed out'), '画图超时');
+    expect(
+      mermaidErrorText(zh, 'Parse error on line 2'),
+      'Parse error on line 2',
+    );
   });
 
   test('the phone tells the computer its language', () {

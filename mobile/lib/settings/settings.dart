@@ -29,17 +29,22 @@ class SettingsScreen extends StatelessWidget {
       listenable: Listenable.merge([model, updates]),
       builder: (context, _) {
         final c = PosseColors.of(context);
+        final l = context.l10n;
         final s = model.settings;
         return Scaffold(
-          appBar: AppBar(title: const Text('设置')),
+          appBar: AppBar(title: Text(l.settingsTitle)),
           body: ListView(
             padding: const EdgeInsets.only(top: 8, bottom: 32),
             children: [
               Section(
-                title: '外观',
+                title: l.settingsAppearance,
                 children: [
                   _Choice(
-                    labels: const ['深色', '浅色', '跟随系统'],
+                    labels: [
+                      l.settingsThemeDark,
+                      l.settingsThemeLight,
+                      l.settingsThemeSystem,
+                    ],
                     values: const ['dark', 'light', 'system'],
                     value: s.theme,
                     onChanged: (v) => model.updateSettings((s) => s.theme = v),
@@ -47,13 +52,10 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
-                title: context.l10n.settingsLanguageTitle,
+                title: l.settingsLanguageTitle,
                 children: [
                   _Choice(
-                    labels: [
-                      context.l10n.settingsLanguageSystem,
-                      ...languageNames.values,
-                    ],
+                    labels: [l.settingsLanguageSystem, ...languageNames.values],
                     values: ['', ...languageNames.keys],
                     value: s.language,
                     onChanged: (v) =>
@@ -62,16 +64,16 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
-                title: '首页',
+                title: l.settingsHome,
                 children: [
                   _Toggle(
-                    title: '项目显示分支和路径',
+                    title: l.settingsProjectMeta,
                     value: !s.projectMetaHidden,
                     onChanged: (v) =>
                         model.updateSettings((s) => s.projectMetaHidden = !v),
                   ),
                   _Toggle(
-                    title: '工作区显示分支',
+                    title: l.settingsWorkspaceMeta,
                     value: !s.workspaceMetaHidden,
                     onChanged: (v) =>
                         model.updateSettings((s) => s.workspaceMetaHidden = !v),
@@ -79,10 +81,10 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
-                title: '点开会话时先看',
+                title: l.settingsOpenFirst,
                 children: [
                   _Choice(
-                    labels: const ['对话', '终端'],
+                    labels: [l.settingsOpenChat, l.settingsOpenTerminal],
                     values: const ['chat', 'terminal'],
                     value: s.openMode,
                     onChanged: (v) =>
@@ -90,13 +92,13 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   _Note(
                     s.openMode == 'chat'
-                        ? '对话页右上角可以切到终端。没有会话存档的 agent 和 shell 总是开终端。'
-                        : '终端页右上角可以切到对话。对话和终端是同一个会话的两种看法，切换时互相替换。',
+                        ? l.settingsOpenChatNote
+                        : l.settingsOpenTerminalNote,
                   ),
                 ],
               ),
               Section(
-                title: '终端',
+                title: l.settingsTerminal,
                 children: [
                   // 标题、滑块和示例是一件事，放在同一块里，中间不画分隔线
                   Padding(
@@ -107,7 +109,7 @@ class SettingsScreen extends StatelessWidget {
                         Row(
                           children: [
                             Text(
-                              '字号',
+                              l.settingsFontSize,
                               style: TextStyle(
                                 fontSize: Fs.body,
                                 color: c.text,
@@ -149,20 +151,20 @@ class SettingsScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(Rd.button),
                           ),
                           child: Text(
-                            'agent 正在运行 Claude Code',
+                            l.settingsFontSample,
                             style: mono(s.terminalFontSize, color: c.text),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const _Note('手机看终端时终端按手机屏幕排版，字越小一行放得越多。'),
+                  _Note(l.settingsFontNote),
                   RowTile(
-                    title: const Text('快捷键'),
+                    title: Text(l.settingsKeys),
                     subtitle: Text(
                       s.customKeys.isEmpty
-                          ? '调整键盘上方快捷键栏的顺序，加自己的键'
-                          : '自定义 ${s.customKeys.length} 个',
+                          ? l.settingsKeysNote
+                          : l.settingsKeysCustom(s.customKeys.length),
                     ),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -173,16 +175,16 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
-                title: '对话',
+                title: l.settingsChat,
                 children: [
                   _Toggle(
-                    title: '显示思考过程',
+                    title: l.settingsShowReasoning,
                     value: s.showReasoning,
                     onChanged: (v) =>
                         model.updateSettings((s) => s.showReasoning = v),
                   ),
                   _Toggle(
-                    title: '工具调用默认展开',
+                    title: l.settingsExpandTools,
                     value: s.expandTools,
                     onChanged: (v) =>
                         model.updateSettings((s) => s.expandTools = v),
@@ -190,7 +192,7 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
               Section(
-                title: '电脑',
+                title: l.settingsComputer,
                 inset: 50,
                 children: [
                   RowTile(
@@ -201,28 +203,30 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     title: Text(
                       model.current == null
-                          ? '没有连接'
+                          ? l.settingsNotConnected
                           : model.labelOf(model.current),
                     ),
-                    subtitle: Text('共配对 ${model.computers.length} 台'),
+                    subtitle: Text(
+                      l.settingsPairedCount(model.computers.length),
+                    ),
                     onTap: onComputers,
                   ),
                 ],
               ),
               if (deskSupported)
                 Section(
-                  title: '看桌面',
+                  title: l.homeRemoteDesktop,
                   children: [
                     _Toggle(
-                      title: '看桌面',
+                      title: l.homeRemoteDesktop,
                       value: s.deskWatch,
                       onChanged: (v) =>
                           model.updateSettings((s) => s.deskWatch = v),
                     ),
-                    const _Note('点首页的电脑名，菜单里的「看桌面」能看 Mac 的屏幕，用手指操作它。'),
+                    _Note(l.settingsDeskNote),
                     if (s.deskWatch) ...[
                       _Choice(
-                        labels: const ['触控板', '直接点按'],
+                        labels: [l.settingsDeskTrackpad, l.settingsDeskDirect],
                         values: const ['trackpad', 'direct'],
                         value: s.deskTrackpad ? 'trackpad' : 'direct',
                         // 换了操作方式，下次进看桌面再提示一次手势
@@ -233,15 +237,15 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       _Note(
                         s.deskTrackpad
-                            ? '把手机屏幕当触控板：单指滑动移动指针，点按、右键都落在指针上，三指滑动拖动。'
-                            : '点画面上哪里就按哪里，长按后拖动，单指拖动平移放大后的画面。',
+                            ? l.settingsDeskTrackpadNote
+                            : l.settingsDeskDirectNote,
                       ),
                       const _DeskPasswords(),
                     ],
                   ],
                 ),
               Section(
-                title: '关于',
+                title: l.settingsAbout,
                 children: [
                   RowTile(
                     chevron: false,
@@ -259,7 +263,9 @@ class SettingsScreen extends StatelessWidget {
                         size: Ic.button,
                         color: c.accent,
                       ),
-                      title: Text('更新到 ${release.version}（${release.build}）'),
+                      title: Text(
+                        l.settingsUpdateTo(release.version, '${release.build}'),
+                      ),
                       trailing: release.size.isEmpty
                           ? null
                           : Text(
@@ -310,16 +316,16 @@ class _CheckUpdateState extends State<_CheckUpdate> {
     return RowTile(
       chevron: false,
       leading: Icon(Icons.refresh_rounded, size: Ic.button, color: c.muted),
-      title: const Text('检查更新'),
+      title: Text(context.l10n.settingsCheckUpdate),
       trailing: checking
           ? HexSpinner(size: Ic.small, color: c.muted)
           : switch (_ok) {
               true => Text(
-                '已是最新',
+                context.l10n.settingsUpToDate,
                 style: TextStyle(fontSize: Fs.small, color: c.faint),
               ),
               false => Text(
-                '检查失败，稍后再试',
+                context.l10n.settingsCheckFailed,
                 style: TextStyle(fontSize: Fs.small, color: c.danger),
               ),
               null => null,
@@ -361,15 +367,21 @@ class _DeskPasswordsState extends State<_DeskPasswords> {
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     final n = _count ?? 0;
+    final l = context.l10n;
     return RowTile(
       key: const Key('settings-desk-passwords'),
       chevron: false,
-      title: const Text('记住的 Mac 密码'),
-      subtitle: Text(n > 0 ? '记着 $n 台电脑的登录密码' : '没有记住的密码'),
+      title: Text(l.settingsDeskPasswords),
+      subtitle: Text(
+        n > 0 ? l.settingsDeskPasswordsCount(n) : l.settingsDeskPasswordsNone,
+      ),
       trailing: TextButton(
         key: const Key('settings-desk-passwords-forget'),
         onPressed: n > 0 ? _forget : null,
-        child: Text('全部忘掉', style: TextStyle(color: n > 0 ? c.danger : null)),
+        child: Text(
+          l.settingsDeskPasswordsForget,
+          style: TextStyle(color: n > 0 ? c.danger : null),
+        ),
       ),
     );
   }

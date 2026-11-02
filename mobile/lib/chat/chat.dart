@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:scrollview_observer/scrollview_observer.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../workspace/models.dart';
 import 'clipboard_paste.dart';
@@ -322,7 +323,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _chat = null;
       _tabs = null;
       _drop(rpc, chatSubId: subId, tabsId: tabsId);
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) setState(() => _notice = friendlyError(error, context.l10n));
     }
   }
 
@@ -374,7 +375,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {});
       if (_window.messages.length > beforeCount) _loadEarlierIfAtTop();
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) setState(() => _notice = friendlyError(error, context.l10n));
     } finally {
       if (mounted) setState(() => _loadingEarlier = false);
     }
@@ -468,7 +469,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       _flash('剪贴板里没有文字或图片');
     } catch (error) {
-      if (mounted) _flash(friendlyError(error));
+      if (mounted) _flash(friendlyError(error, context.l10n));
     }
   }
 
@@ -511,7 +512,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (file != null) await _attachFiles([file]);
       }
     } catch (error) {
-      if (mounted) _flash(friendlyError(error));
+      if (mounted) _flash(friendlyError(error, context.l10n));
     }
   }
 
@@ -568,7 +569,7 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       }
     } catch (error) {
-      if (mounted) _flash(friendlyError(error));
+      if (mounted) _flash(friendlyError(error, context.l10n));
     } finally {
       if (mounted) {
         final before = _tail();

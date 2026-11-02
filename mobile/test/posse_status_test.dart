@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/ui/widgets.dart';
 import 'package:posse_mobile/workspace/models.dart';
@@ -33,7 +34,8 @@ void main() {
     ]);
     // 等任务时 state 照旧是工作中，在不在干活的判断不变
     expect(agentStateOf(tabs.first.state), AgentState.working);
-    expect(tabs.map(sessionDetail), [
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    expect(tabs.map((t) => sessionDetail(zh, t)), [
       '等待任务',
       '本轮完成，还没看',
       '启动中',

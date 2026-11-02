@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../chat/transcript.dart' show chatWho;
+import '../l10n/l10n.dart';
 import '../ui/line_icons.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -79,7 +80,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
           child: ListView(
             children: [
               Section(
-                title: '在哪个工作区',
+                title: sheet.l10n.sessionPickWorkspace,
                 inset: 48,
                 children: [
                   for (final row in widget.model.worktrees)
@@ -129,7 +130,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       });
       final tab = res['tab'];
       final terminal = tab is Map ? tab['terminal'] as String? : null;
-      if (terminal == null) throw StateError('电脑没有返回新终端');
+      if (terminal == null) throw const PhoneError(PhoneError.noNewTerminal);
       final opened = await _waitForTab(row.id, terminal);
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -138,7 +139,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = friendlyError(error);
+          _error = friendlyError(error, context.l10n);
         });
       }
     }
@@ -176,6 +177,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final row = _worktree;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -187,7 +189,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
               child: Text(
-                '新建会话',
+                l.sessionNew,
                 style: TextStyle(
                   fontSize: Fs.title,
                   fontWeight: Fw.bold,
@@ -196,7 +198,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               ),
             ),
             Section(
-              title: '工作区',
+              title: l.sessionWorkspace,
               inset: 48,
               children: [
                 RowTile(
@@ -205,7 +207,9 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                     size: Ic.button,
                     color: c.accent,
                   ),
-                  title: Text(row == null ? '还没有工作区' : worktreeLabel(row)),
+                  title: Text(
+                    row == null ? l.sessionNoWorkspaces : worktreeLabel(row),
+                  ),
                   subtitle: row == null
                       ? null
                       : Text(
@@ -222,7 +226,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                '用什么开',
+                l.sessionOpenWith,
                 style: TextStyle(
                   fontSize: Fs.small,
                   fontWeight: Fw.medium,
@@ -247,7 +251,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                   minLines: 2,
                   maxLines: 6,
                   decoration: InputDecoration(
-                    hintText: '第一句话（可以不写，进去再说）',
+                    hintText: l.sessionPromptHint,
                     fillColor: c.card,
                   ),
                 ),
@@ -261,10 +265,10 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                     : _start,
                 child: Text(
                   _busy
-                      ? '正在启动…'
+                      ? l.sessionStarting
                       : _agent == null
-                      ? '打开终端'
-                      : '开始和 ${chatWho('assistant', _agent)} 对话',
+                      ? l.sessionOpenTerminal
+                      : l.sessionStartChat(chatWho('assistant', _agent)),
                 ),
               ),
             ),
@@ -296,7 +300,9 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
             AgentTile(agent: agent, size: Ic.large),
             const SizedBox(height: 6),
             Text(
-              agent == null ? '终端' : chatWho('assistant', agent),
+              agent == null
+                  ? context.l10n.sessionTerminal
+                  : chatWho('assistant', agent),
               style: TextStyle(
                 fontSize: Fs.small,
                 fontWeight: Fw.medium,

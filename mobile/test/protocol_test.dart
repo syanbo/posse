@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:flutter/widgets.dart';
 import 'package:posse_mobile/app_state.dart';
 import 'package:posse_mobile/protocol/e2ee.dart';
 import 'package:posse_mobile/protocol/link.dart';
@@ -12,6 +14,8 @@ import 'package:posse_mobile/protocol/quic_socket.dart';
 import 'package:posse_mobile/protocol/race.dart';
 import 'package:posse_mobile/protocol/socket.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
+
+final _zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('pairing offer keeps endpoint first and parses the code', () {
@@ -591,7 +595,8 @@ void main() {
             ..firstConnectRetry = const Duration(milliseconds: 10)
             ..firstConnectWindow = const Duration(milliseconds: 100);
       expect(await model.connectCode(codeFor(hostKeys)), isFalse);
-      expect(model.error, contains('本地网络'));
+      expect(model.error, isA<FirstConnectFailed>());
+      expect(friendlyError(model.error!, _zh), contains('本地网络'));
     });
 
     // 用户盯着权限弹窗看了很久：不在前台的时间不算，点完回来照样连上
@@ -732,9 +737,9 @@ void main() {
       expect(isRelayQuicUrl(quicUrlsOf(quicInfo).last), isTrue);
       expect(isRelayQuicUrl(lanUrl), isFalse);
       expect(quicUrlsOf(const {}), isEmpty);
-      expect(hostOf(lanUrl), '10.0.0.2:6788 · QUIC');
-      expect(hostOf(quicUrlsOf(quicInfo).last), '经中转 · QUIC');
-      expect(hostOf('ws://10.0.0.2:6788'), '10.0.0.2:6788');
+      expect(hostOf(_zh, lanUrl), '10.0.0.2:6788 · QUIC');
+      expect(hostOf(_zh, quicUrlsOf(quicInfo).last), '经中转 · QUIC');
+      expect(hostOf(_zh, 'ws://10.0.0.2:6788'), '10.0.0.2:6788');
     });
 
     test(
@@ -927,7 +932,7 @@ void main() {
       expect(told, 'asked');
       expect(identical(moved, relayed), isFalse);
       expect(link.url, punchedUrl('203.0.113.20:61000'));
-      expect(hostOf(link.url), '直连 · QUIC');
+      expect(hostOf(_zh, link.url), '直连 · QUIC');
       expect(isRelayQuicUrl(link.url!), isFalse);
       await expectLater(moved.call('runtime.ping', const {}), completes);
       await link.close();

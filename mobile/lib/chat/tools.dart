@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
@@ -288,11 +289,13 @@ class _ToolsScreenState extends State<ToolsScreen> {
           setState(() => _error = '电脑上的 posse 版本太旧，更新后才能在手机上看会话用到的技能和工具');
         }
       } else if (mounted && _usage == null) {
-        setState(() => _error = friendlyError(e));
+        setState(() => _error = friendlyError(e, context.l10n));
       }
     } catch (e) {
       // 读过一次之后断线不打扰，下一轮再读
-      if (mounted && _usage == null) setState(() => _error = friendlyError(e));
+      if (mounted && _usage == null) {
+        setState(() => _error = friendlyError(e, context.l10n));
+      }
     } finally {
       _busy = false;
     }

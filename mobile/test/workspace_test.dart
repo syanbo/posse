@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+import 'package:flutter/widgets.dart';
 import 'package:posse_mobile/workspace/models.dart';
 
 void main() {
@@ -49,6 +51,12 @@ void main() {
       },
     ]);
     expect(rows.single.subtitle, 'main');
-    expect(statusLabel(rows.single.status), '待处理');
+    expect(
+      statusLabel(
+        lookupAppLocalizations(const Locale('zh')),
+        rows.single.status,
+      ),
+      '待处理',
+    );
   });
 }

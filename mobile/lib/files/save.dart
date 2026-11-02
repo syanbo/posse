@@ -7,6 +7,7 @@ import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -102,6 +103,7 @@ Future<void> saveToPhone(
   SaveTo? to,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  final l10n = context.l10n;
   final box = context.findRenderObject() as RenderBox?;
   final origin = box == null || !box.hasSize
       ? null
@@ -166,7 +168,7 @@ Future<void> saveToPhone(
       ),
     );
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, l10n))));
   }
 }
 
@@ -247,17 +249,18 @@ class _DownloadDialogState extends State<_DownloadDialog> {
     } on VideoTooLarge {
       _fail('文件超过 500 MB，不往手机上下载');
     } on RpcException catch (e) {
+      if (!mounted) return;
       _fail(
         e.code == 'closed'
             ? '和电脑的连接断了，下好的部分留着'
             : e.code == 'method_not_found'
             ? '电脑上的 posse 版本太旧，更新后才能下载'
-            : friendlyError(e),
+            : friendlyError(e, context.l10n),
       );
     } on TimeoutException {
       _fail('网络太慢，没下完，下好的部分留着');
     } catch (e) {
-      _fail(friendlyError(e));
+      if (mounted) _fail(friendlyError(e, context.l10n));
     }
   }
 

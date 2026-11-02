@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
 import '../protocol/pairing.dart';
 import '../ui/theme.dart';
 
@@ -175,7 +176,11 @@ class _QrScanPageState extends State<QrScanPage> {
       _finish(ScanPick.code(text));
       return;
     }
-    setState(() => _note = text.isEmpty ? '剪贴板是空的' : '剪贴板里不是配对码');
+    setState(
+      () => _note = text.isEmpty
+          ? context.l10n.pairScanClipboardEmpty
+          : context.l10n.pairScanClipboardNotCode,
+    );
   }
 
   @override
@@ -192,7 +197,7 @@ class _QrScanPageState extends State<QrScanPage> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         leading: IconButton(
-          tooltip: '关闭',
+          tooltip: context.l10n.commonClose,
           icon: const Icon(Icons.close_rounded),
           onPressed: () => _finish(const ScanPick.end(ScanEnd.cancelled)),
         ),
@@ -231,8 +236,8 @@ class _QrScanPageState extends State<QrScanPage> {
                     left: 24,
                     right: 24,
                     bottom: box.maxHeight - frame.top + 20,
-                    child: const Text(
-                      '对准电脑上 Posse 的配对码',
+                    child: Text(
+                      context.l10n.pairScanAim,
                       textAlign: TextAlign.center,
                       style: hint,
                     ),
@@ -259,11 +264,15 @@ class _QrScanPageState extends State<QrScanPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _action(Icons.content_paste_rounded, '粘贴配对码', _paste),
+                  _action(
+                    Icons.content_paste_rounded,
+                    context.l10n.pairPasteCode,
+                    _paste,
+                  ),
                   const SizedBox(width: 12),
                   _action(
                     Icons.keyboard_rounded,
-                    '手动输入',
+                    context.l10n.pairManual,
                     () => _finish(const ScanPick.end(ScanEnd.manual)),
                   ),
                 ],

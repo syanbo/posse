@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/file_icons.dart';
 import '../ui/code.dart';
@@ -196,7 +197,7 @@ class _FilesPaneState extends State<FilesPane> {
         _error = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error, context.l10n));
     } finally {
       if (mounted) setState(() => _loading.remove(dir));
     }
@@ -554,7 +555,7 @@ class _FileViewerState extends State<FileViewer> {
         _truncated = res['truncated'] == true;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error, context.l10n));
     }
   }
 
@@ -735,7 +736,7 @@ class _ImageFileState extends State<_ImageFile> {
         setState(() => _binary = true);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = friendlyError(error));
+      if (mounted) setState(() => _error = friendlyError(error, context.l10n));
     }
   }
 

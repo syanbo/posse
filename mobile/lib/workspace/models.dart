@@ -1,3 +1,4 @@
+import '../l10n/l10n.dart';
 import '../ui/widgets.dart';
 
 const chatAgents = {'claude', 'codex', 'grok'};
@@ -241,10 +242,10 @@ List<SessionTab>? tabsFromFrame(String worktreeId, Map<String, Object?> frame) {
   return parseTabs(worktreeId, frame['tabs']);
 }
 
-String statusLabel(String status) => switch (status) {
-  'permission' => '待处理',
-  'working' => '工作中',
-  'done' => '完成',
-  'active' => '空闲',
-  _ => '没有会话',
+String statusLabel(AppLocalizations l, String status) => switch (status) {
+  'permission' => l.sessionStateWaiting,
+  'working' => l.sessionStateWorking,
+  'done' => l.sessionStateDone,
+  'active' => l.sessionStateIdle,
+  _ => l.workspaceNoSessions,
 };

@@ -8,6 +8,7 @@ import '../chat/anchor.dart';
 import '../chat/chat.dart';
 import '../chat/merge.dart';
 import '../chat/transcript.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -104,7 +105,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _loading = false;
         _error = e is Exception && '$e'.contains('method_not_found')
             ? '电脑上的 Posse 太旧，更新后才能看历史'
-            : friendlyError(e);
+            : friendlyError(e, context.l10n);
       });
     }
   }
@@ -495,7 +496,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       });
       if (_window.messages.length > before) _pageIfAtTop();
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      if (mounted) setState(() => _error = friendlyError(e, context.l10n));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -525,7 +526,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      if (mounted) setState(() => _error = friendlyError(e, context.l10n));
     } finally {
       if (mounted) setState(() => _resuming = false);
     }

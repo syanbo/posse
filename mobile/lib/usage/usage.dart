@@ -645,7 +645,7 @@ class _UsageSheetState extends State<UsageSheet> {
             ? l.usageNotConnected
             : old
             ? l.usageOldPosse
-            : friendlyError(e),
+            : friendlyError(e, l),
       );
     } finally {
       if (mounted) setState(() => _refreshing = false);

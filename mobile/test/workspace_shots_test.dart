@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/app_state.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
@@ -77,13 +78,23 @@ void main() {
           agent: 'cursor',
           state: 'working',
         ),
+        SessionTab(
+          worktreeId: 'p1::w2',
+          title: 'Rename the key bar',
+          terminalId: 't4',
+          agent: 'codex',
+          state: 'waiting',
+          toolName: 'Bash',
+        ),
       ],
     };
-    for (final (dark, running) in [
-      (false, false),
-      (true, false),
-      (false, true),
-      (true, true),
+    for (final (lang, dark, running) in [
+      ('zh', false, false),
+      ('zh', true, false),
+      ('zh', false, true),
+      ('zh', true, true),
+      ('en', false, false),
+      ('en', false, true),
     ]) {
       model.settings.homeByStatus = running;
       final key = GlobalKey();
@@ -93,12 +104,17 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: posseTheme(dark ? Brightness.dark : Brightness.light),
+            locale: Locale(lang),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: WorkspaceScreen(model: model),
           ),
         ),
       );
       await tester.pump(const Duration(milliseconds: 400));
-      if (!running) expect(find.text('主工作区'), findsOneWidget);
+      if (!running && lang == 'zh') {
+        expect(find.text('主工作区'), findsOneWidget);
+      }
       if (dir.isEmpty) continue;
       await tester.runAsync(() async {
         final boundary =
@@ -106,7 +122,7 @@ void main() {
         final image = await boundary.toImage(pixelRatio: 3);
         final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
         File(
-          '$dir/workspace-${running ? 'running-' : ''}${dark ? 'dark' : 'light'}.png',
+          '$dir/workspace-${running ? 'running-' : ''}${dark ? 'dark' : 'light'}${lang == 'zh' ? '' : '-$lang'}.png',
         ).writeAsBytesSync(bytes!.buffer.asUint8List());
       });
     }

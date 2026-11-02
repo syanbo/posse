@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import 'brand_paths.dart';
 import 'svg_path.dart';
 import 'theme.dart';
@@ -382,19 +383,6 @@ class _HexPainter extends CustomPainter {
   bool shouldRepaint(_HexPainter old) =>
       old.state != state || old.color != color;
 }
-
-/// 状态的文字。只有待处理用琥珀色，其余用次要色。
-String agentStateText(AgentState state) => switch (state) {
-  AgentState.working => '工作中',
-  AgentState.waiting => '待处理',
-  AgentState.done => '完成',
-  AgentState.idle => '空闲',
-  AgentState.none => '',
-  AgentState.starting => '启动中',
-  AgentState.tasks => '等待任务',
-  AgentState.unread => '本轮完成，还没看',
-  AgentState.lost => '未恢复',
-};
 
 /// 弹框：从略小放大到原大、同时淡入，收起时缩回去、比出来快。Material 默认只淡入一下，看着生硬。
 /// 系统开了减少动态效果时只淡入淡出。
@@ -939,11 +927,11 @@ class UploadBar extends StatelessWidget {
     required this.index,
     required this.count,
     required this.done,
-    this.what = '图片',
+    this.files = false,
   });
 
-  /// 传的是什么，写在「正在发送」后面。
-  final String what;
+  /// 传的是文件还是图片，写在「正在发送」后面。
+  final bool files;
 
   /// 正在传第几张（从 0 数）。
   final int index;
@@ -955,7 +943,6 @@ class UploadBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    final which = count > 1 ? ' ${index + 1}/$count' : '';
     // 整体进度按张数摊开，多张时进度条一路走到底，不在每张开头跳回去
     final overall = count == 0 ? 0.0 : (index + done) / count;
     return IgnorePointer(
@@ -983,7 +970,9 @@ class UploadBar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '正在发送$what$which',
+                      files
+                          ? context.l10n.uploadSendingFile(count, index + 1)
+                          : context.l10n.uploadSendingImage(count, index + 1),
                       style: TextStyle(fontSize: Fs.small, color: c.text),
                     ),
                   ),

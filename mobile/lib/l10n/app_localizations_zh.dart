@@ -10,6 +10,27 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get commonCancel => '取消';
+
+  @override
+  String get commonClose => '关闭';
+
+  @override
+  String get commonCopy => '复制';
+
+  @override
+  String get commonDelete => '删除';
+
+  @override
+  String get commonLoading => '正在加载';
+
+  @override
+  String get commonMore => '更多';
+
+  @override
+  String get commonPaste => '粘贴';
+
+  @override
   String get commonRefresh => '刷新';
 
   @override
@@ -17,6 +38,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonRetry => '重试';
+
+  @override
+  String get commonSave => '保存';
+
+  @override
+  String get commonSelectAll => '全选';
 
   @override
   String get deskAddressRequired => '先填地址';
@@ -379,10 +406,740 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskWindowsError => '列不出窗口，稍后再试';
 
   @override
+  String get errorBadPairingCode => '配对码不对，重新扫一次或者重新复制';
+
+  @override
+  String get errorBinaryFile => '这是二进制文件，没法当文本打开';
+
+  @override
+  String get errorCantConnect => '连不上电脑：确认电脑上的 Posse 开着，手机和电脑在同一个网络';
+
+  @override
+  String get errorConnectionLost => '和电脑的连接断开了，正在重连';
+
+  @override
+  String get errorFileTooLarge => '文件太大，手机上打不开';
+
+  @override
+  String get errorFirstConnect =>
+      '连不上电脑：确认电脑上的 Posse 开着、手机和电脑在同一个网络，并在手机设置里允许 Posse 使用无线数据和本地网络';
+
+  @override
+  String get errorNoNewTerminal => '电脑没有返回新终端';
+
+  @override
+  String get errorNotAFile => '这不是文件';
+
+  @override
+  String get errorNotConnected => '还没连上电脑';
+
+  @override
+  String get errorOldDesktop => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse';
+
+  @override
+  String get errorOutsideWorkspace => '路径不在工作区里';
+
+  @override
+  String get errorTimeout => '电脑没有回应，可能已经休眠或者网络断了';
+
+  @override
+  String get homeAddressDirect => '直连 · QUIC';
+
+  @override
+  String get homeAddressRelay => '经中转 · QUIC';
+
+  @override
+  String get homeCantConnect => '连不上这台电脑。';
+
+  @override
+  String get homeComputerFallback => '电脑';
+
+  @override
+  String get homeConnecting => '正在连接电脑…';
+
+  @override
+  String get homeDisconnect => '断开连接';
+
+  @override
+  String get homeDisconnected => '已断开';
+
+  @override
+  String homeDisconnectedList(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已断开 · 可以连接的电脑 $count 台',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String homeDisconnectedNamed(String name) {
+    return '$name · 已断开';
+  }
+
+  @override
+  String get homeFailed => '连不上';
+
+  @override
+  String homeFailedNamed(String name) {
+    return '$name · 连不上';
+  }
+
+  @override
+  String get homeForget => '忘掉';
+
+  @override
+  String get homeForgetBody => '之后要重新扫码才能连上它。';
+
+  @override
+  String get homeForgetComputer => '忘掉这台电脑';
+
+  @override
+  String homeForgetConfirm(String name) {
+    return '忘掉 $name';
+  }
+
+  @override
+  String get homeHistoryTip => '历史';
+
+  @override
+  String get homeLongPressHint => '长按一台电脑可以改名或忘掉它';
+
+  @override
+  String get homeNoRunning => '没有运行中的会话';
+
+  @override
+  String get homeNoWorkspaces => '电脑上的 Posse 还没有工作区';
+
+  @override
+  String get homeReconnecting => '连接断开，正在重连…';
+
+  @override
+  String get homeRemoteDesktop => '看桌面';
+
+  @override
+  String get homeRename => '重命名';
+
+  @override
+  String get homeRenameHelper => '只改手机上显示的名字，清空就用电脑自己的名字';
+
+  @override
+  String get homeRenameHint => '名字';
+
+  @override
+  String get homeRenameTitle => '给电脑改名';
+
+  @override
+  String get homeScanToAdd => '扫码添加电脑';
+
+  @override
+  String get homeSettingsTip => '设置';
+
+  @override
+  String get homeTabProjects => '项目';
+
+  @override
+  String get homeTabRunning => '运行中';
+
+  @override
+  String homeWaitingBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个会话等你处理',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeWaitingConnection => '等连上电脑';
+
+  @override
+  String get keysAltHint => '例如 b、f、.';
+
+  @override
+  String get keysAltWhich => 'Alt 加哪个键';
+
+  @override
+  String get keysBar => '快捷键栏';
+
+  @override
+  String get keysBarNote => '最左边的键盘开关固定不动，其余按这里从上到下的顺序从左往右排。自己加的键点开可以修改或删除。';
+
+  @override
+  String get keysBuiltin => '内置';
+
+  @override
+  String get keysClear => '清空输入框';
+
+  @override
+  String get keysCtrlC => 'Ctrl + C：结束程序';
+
+  @override
+  String get keysCtrlHint => '例如 r、d、z、l';
+
+  @override
+  String get keysCtrlInvalid => 'Ctrl 只能加字母或 @ [ \\ ] ^ _ ?';
+
+  @override
+  String get keysCtrlWhich => 'Ctrl 加哪个键';
+
+  @override
+  String get keysDown => '方向键：下';
+
+  @override
+  String get keysEdit => '编辑快捷键';
+
+  @override
+  String get keysEnter => '回车';
+
+  @override
+  String get keysEnterAfter => '输入后回车';
+
+  @override
+  String get keysEsc => 'Esc：中断、退出';
+
+  @override
+  String get keysExit => '退出 agent（/exit）';
+
+  @override
+  String get keysImage => '发送文件（照片、视频、文件）';
+
+  @override
+  String get keysKindSpecial => '特殊键';
+
+  @override
+  String get keysKindText => '文字';
+
+  @override
+  String get keysLabel => '按钮上的字';
+
+  @override
+  String keysLabelHint(String shown) {
+    return '不填就用 $shown';
+  }
+
+  @override
+  String get keysLeft => '方向键：左';
+
+  @override
+  String get keysNew => '新建快捷键';
+
+  @override
+  String get keysNewNote => '一段常用的文字、Ctrl 组合键或 PgUp 这类特殊键';
+
+  @override
+  String get keysPaste => '粘贴剪贴板';
+
+  @override
+  String get keysResetOrder => '恢复默认顺序';
+
+  @override
+  String get keysResetOrderNote => '自己加的键保留，排回图片、粘贴后面';
+
+  @override
+  String get keysRight => '方向键：右';
+
+  @override
+  String get keysSendNow => 'Ctrl + Enter：排队的消息马上交给 Claude';
+
+  @override
+  String get keysShiftTab => 'Shift + Tab：切换模式';
+
+  @override
+  String get keysSpecialWhich => '哪个键';
+
+  @override
+  String get keysTab => 'Tab：补全';
+
+  @override
+  String get keysText => '输入的文字';
+
+  @override
+  String get keysTextHint => '例如 /compact';
+
+  @override
+  String get keysTitle => '终端快捷键';
+
+  @override
+  String keysTypeText(String text) {
+    return '输入「$text」';
+  }
+
+  @override
+  String keysTypeTextEnter(String text) {
+    return '输入「$text」并回车';
+  }
+
+  @override
+  String get keysUp => '方向键：上';
+
+  @override
+  String mermaidCantDraw(String error) {
+    return '画不出图：$error';
+  }
+
+  @override
+  String get mermaidNoSize => '图的尺寸为空';
+
+  @override
+  String get mermaidNoSvg => 'Pele 没有画出 SVG';
+
+  @override
+  String get mermaidTimeout => '画图超时';
+
+  @override
+  String get pairAddNote => '可以配对多台电脑，同一时间连其中一台，在首页顶部切换。';
+
+  @override
+  String get pairAddTitle => '添加电脑';
+
+  @override
+  String get pairCameraDenied => '需要相机权限才能扫码：在系统设置里允许 Posse 使用相机，也可以把配对码贴进来。';
+
+  @override
+  String get pairCameraFailed => '打不开相机，可以把配对码贴进来。';
+
+  @override
+  String get pairClipboardEmpty => '剪贴板是空的。';
+
+  @override
+  String get pairClipboardNotCode => '剪贴板里不是配对码。';
+
+  @override
+  String get pairConnect => '连接';
+
+  @override
+  String get pairConnectTitle => '连接 Posse';
+
+  @override
+  String pairConnected(String name) {
+    return '已连上 $name';
+  }
+
+  @override
+  String pairConnectedAt(String name, String address) {
+    return '已连上 $name，地址 $address';
+  }
+
+  @override
+  String get pairConnecting => '正在连接…';
+
+  @override
+  String get pairHideManual => '收起';
+
+  @override
+  String get pairIntro => '在手机上看 agent 的进展、回复和批准请求。';
+
+  @override
+  String get pairManual => '手动输入';
+
+  @override
+  String get pairPasteCode => '粘贴配对码';
+
+  @override
+  String get pairScanAim => '对准电脑上 Posse 的配对码';
+
+  @override
+  String get pairScanButton => '扫码配对';
+
+  @override
+  String get pairScanClipboardEmpty => '剪贴板是空的';
+
+  @override
+  String get pairScanClipboardNotCode => '剪贴板里不是配对码';
+
+  @override
+  String get pairStepOpenDetail => '点窗口左下角的手机图标';
+
+  @override
+  String get pairStepOpenTitle => '在电脑上打开 Posse';
+
+  @override
+  String get pairStepScanDetail => '或者在电脑上复制配对码，回来粘贴';
+
+  @override
+  String get pairStepScanTitle => '扫描二维码';
+
+  @override
+  String get sessionCloseSession => '关闭会话';
+
+  @override
+  String sessionCloseSessionBody(String agent) {
+    return '$agent 会被结束，还没做完的事会中断。对话记录留在电脑的会话历史里，之后可以在桌面端恢复。';
+  }
+
+  @override
+  String get sessionCloseSessionConfirm => '关闭这个会话？';
+
+  @override
+  String get sessionCloseTerminal => '关闭终端';
+
+  @override
+  String sessionCloseTerminalBody(String title) {
+    return '「$title」里正在运行的程序会被结束。';
+  }
+
+  @override
+  String get sessionCloseTerminalConfirm => '关闭这个终端？';
+
+  @override
+  String get sessionDeskLayout => '电脑布局';
+
+  @override
+  String get sessionDeskLayoutNote => '缩到屏幕宽度，双指放大后可以滑动';
+
+  @override
+  String sessionDetailApprove(String tool) {
+    return '等你批准 $tool';
+  }
+
+  @override
+  String get sessionDetailDone => '本轮完成';
+
+  @override
+  String get sessionDetailLost => '未恢复，点开时拉起';
+
+  @override
+  String get sessionDetailTerminalOnly => '只能看终端';
+
+  @override
+  String sessionDetailUsing(String tool) {
+    return '正在用 $tool';
+  }
+
+  @override
+  String get sessionDetailWaiting => '等你处理';
+
+  @override
+  String get sessionMedia => '图片与视频';
+
+  @override
+  String get sessionMediaNote => 'agent 截的图、生成的图片和视频，粘贴过的图片';
+
+  @override
+  String get sessionNew => '新建会话';
+
+  @override
+  String get sessionNoWorkspaces => '还没有工作区';
+
+  @override
+  String get sessionOpenTerminal => '打开终端';
+
+  @override
+  String get sessionOpenWith => '用什么开';
+
+  @override
+  String get sessionPickWorkspace => '在哪个工作区';
+
+  @override
+  String get sessionPromptHint => '第一句话（可以不写，进去再说）';
+
+  @override
+  String sessionStartChat(String agent) {
+    return '开始和 $agent 对话';
+  }
+
+  @override
+  String get sessionStarting => '正在启动…';
+
+  @override
+  String get sessionStateDone => '完成';
+
+  @override
+  String get sessionStateIdle => '空闲';
+
+  @override
+  String get sessionStateStarting => '启动中';
+
+  @override
+  String get sessionStateTasks => '等待任务';
+
+  @override
+  String get sessionStateUnread => '本轮完成，还没看';
+
+  @override
+  String get sessionStateWaiting => '待处理';
+
+  @override
+  String get sessionStateWorking => '工作中';
+
+  @override
+  String get sessionTerminal => '终端';
+
+  @override
+  String get sessionTools => '技能与工具';
+
+  @override
+  String get sessionToolsNote => '用到的技能、MCP 和命令行程序';
+
+  @override
+  String get sessionWorkspace => '工作区';
+
+  @override
+  String get settingsAbout => '关于';
+
+  @override
+  String get settingsAppearance => '外观';
+
+  @override
+  String get settingsChat => '对话';
+
+  @override
+  String get settingsCheckFailed => '检查失败，稍后再试';
+
+  @override
+  String get settingsCheckUpdate => '检查更新';
+
+  @override
+  String get settingsComputer => '电脑';
+
+  @override
+  String get settingsDeskDirect => '直接点按';
+
+  @override
+  String get settingsDeskDirectNote => '点画面上哪里就按哪里，长按后拖动，单指拖动平移放大后的画面。';
+
+  @override
+  String get settingsDeskNote => '点首页的电脑名，菜单里的「看桌面」能看 Mac 的屏幕，用手指操作它。';
+
+  @override
+  String get settingsDeskPasswords => '记住的 Mac 密码';
+
+  @override
+  String settingsDeskPasswordsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '记着 $count 台电脑的登录密码',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsDeskPasswordsForget => '全部忘掉';
+
+  @override
+  String get settingsDeskPasswordsNone => '没有记住的密码';
+
+  @override
+  String get settingsDeskTrackpad => '触控板';
+
+  @override
+  String get settingsDeskTrackpadNote =>
+      '把手机屏幕当触控板：单指滑动移动指针，点按、右键都落在指针上，三指滑动拖动。';
+
+  @override
+  String get settingsExpandTools => '工具调用默认展开';
+
+  @override
+  String get settingsFontNote => '手机看终端时终端按手机屏幕排版，字越小一行放得越多。';
+
+  @override
+  String get settingsFontSample => 'agent 正在运行 Claude Code';
+
+  @override
+  String get settingsFontSize => '字号';
+
+  @override
+  String get settingsHome => '首页';
+
+  @override
+  String get settingsKeys => '快捷键';
+
+  @override
+  String settingsKeysCustom(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '自定义 $count 个',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsKeysNote => '调整键盘上方快捷键栏的顺序，加自己的键';
+
+  @override
   String get settingsLanguageSystem => '跟随系统';
 
   @override
   String get settingsLanguageTitle => '语言';
+
+  @override
+  String get settingsNotConnected => '没有连接';
+
+  @override
+  String get settingsOpenChat => '对话';
+
+  @override
+  String get settingsOpenChatNote =>
+      '对话页右上角可以切到终端。没有会话存档的 agent 和 shell 总是开终端。';
+
+  @override
+  String get settingsOpenFirst => '点开会话时先看';
+
+  @override
+  String get settingsOpenTerminal => '终端';
+
+  @override
+  String get settingsOpenTerminalNote =>
+      '终端页右上角可以切到对话。对话和终端是同一个会话的两种看法，切换时互相替换。';
+
+  @override
+  String settingsPairedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '共配对 $count 台',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsProjectMeta => '项目显示分支和路径';
+
+  @override
+  String get settingsShowReasoning => '显示思考过程';
+
+  @override
+  String get settingsTerminal => '终端';
+
+  @override
+  String get settingsThemeDark => '深色';
+
+  @override
+  String get settingsThemeLight => '浅色';
+
+  @override
+  String get settingsThemeSystem => '跟随系统';
+
+  @override
+  String get settingsTitle => '设置';
+
+  @override
+  String get settingsUpToDate => '已是最新';
+
+  @override
+  String settingsUpdateTo(String version, String build) {
+    return '更新到 $version（$build）';
+  }
+
+  @override
+  String get settingsWorkspaceMeta => '工作区显示分支';
+
+  @override
+  String terminalCantOpenLink(String url) {
+    return '打不开这个链接：$url';
+  }
+
+  @override
+  String get terminalClipboardEmpty => '剪贴板里没有文字或图片';
+
+  @override
+  String get terminalExited => '终端已经退出';
+
+  @override
+  String get terminalKeyClear => '清空';
+
+  @override
+  String get terminalNoAgent => '这个终端里没有在运行的 agent';
+
+  @override
+  String get terminalNotInWorkspace => '这个文件不在当前工作区里，手机上打不开';
+
+  @override
+  String get terminalSendFile => '发送文件';
+
+  @override
+  String get terminalSendNow => '立即发送';
+
+  @override
+  String get terminalSwitchToChat => '切换到对话';
+
+  @override
+  String get updateAndroidNote =>
+      '下载完系统会弹出安装确认，覆盖安装，配对不会丢。第一次更新要在系统设置里允许 Posse 安装应用。';
+
+  @override
+  String get updateBadPackage => '打不开安装：安装包不在更新目录里';
+
+  @override
+  String updateBanner(String version, String build) {
+    return '新版本 $version（$build）';
+  }
+
+  @override
+  String updateBuild(String build) {
+    return '构建 $build';
+  }
+
+  @override
+  String get updateButton => '更新';
+
+  @override
+  String get updateCantInstall => '打不开安装';
+
+  @override
+  String updateCurrent(String version, String build) {
+    return '当前 $version（$build）';
+  }
+
+  @override
+  String get updateDownloadFailed => '下载失败，稍后再试';
+
+  @override
+  String get updateDownloading => '正在下载…';
+
+  @override
+  String updateDownloadingPercent(int percent) {
+    return '正在下载 $percent%';
+  }
+
+  @override
+  String get updateInstallDenied => '要在系统设置里允许 Posse 安装应用，才能更新';
+
+  @override
+  String get updateIosNote => '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。';
+
+  @override
+  String get updateOpening => '正在打开安装…';
+
+  @override
+  String get updateRequesting => '正在请求安装…';
+
+  @override
+  String get updateSkip => '不再提示这个版本';
+
+  @override
+  String updateTitle(String version) {
+    return '新版本 $version';
+  }
+
+  @override
+  String uploadSendingFile(int count, int index) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '正在发送文件 $index/$count',
+      one: '正在发送文件',
+      zero: '正在发送文件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String uploadSendingImage(int count, int index) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '正在发送图片 $index/$count',
+      one: '正在发送图片',
+      zero: '正在发送图片',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get usageCursorModels => 'Cursor 模型';
@@ -492,4 +1249,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get usageWindowWeekShort => '周';
+
+  @override
+  String get workspaceMain => '主工作区';
+
+  @override
+  String get workspaceNoSessions => '没有会话';
+
+  @override
+  String get workspaceTabChanges => '改动';
+
+  @override
+  String get workspaceTabFiles => '文件';
+
+  @override
+  String get workspaceTabHistory => '历史';
 }

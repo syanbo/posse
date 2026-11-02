@@ -10,6 +10,27 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get commonCancel => 'Cancel';
+
+  @override
+  String get commonClose => 'Close';
+
+  @override
+  String get commonCopy => 'Copy';
+
+  @override
+  String get commonDelete => 'Delete';
+
+  @override
+  String get commonLoading => 'Loading';
+
+  @override
+  String get commonMore => 'More';
+
+  @override
+  String get commonPaste => 'Paste';
+
+  @override
   String get commonRefresh => 'Refresh';
 
   @override
@@ -17,6 +38,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonRetry => 'Retry';
+
+  @override
+  String get commonSave => 'Save';
+
+  @override
+  String get commonSelectAll => 'Select All';
 
   @override
   String get deskAddressRequired => 'Enter an address first';
@@ -399,10 +426,777 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskWindowsError => 'Couldn’t list windows. Try again later.';
 
   @override
+  String get errorBadPairingCode =>
+      'The pairing code isn’t valid. Scan it again or copy it again.';
+
+  @override
+  String get errorBinaryFile =>
+      'This is a binary file and can’t be opened as text.';
+
+  @override
+  String get errorCantConnect =>
+      'Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network.';
+
+  @override
+  String get errorConnectionLost =>
+      'Lost the connection to the Mac. Reconnecting…';
+
+  @override
+  String get errorFileTooLarge => 'The file is too large to open on the phone.';
+
+  @override
+  String get errorFirstConnect =>
+      'Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network, and allow Posse to use wireless data and the local network in the phone’s Settings.';
+
+  @override
+  String get errorNoNewTerminal => 'The Mac didn’t return the new terminal';
+
+  @override
+  String get errorNotAFile => 'This isn’t a file.';
+
+  @override
+  String get errorNotConnected => 'Not connected to the Mac yet';
+
+  @override
+  String get errorOldDesktop =>
+      'Posse on the Mac is too old for this. Update Posse on the Mac.';
+
+  @override
+  String get errorOutsideWorkspace => 'The path isn’t in the workspace.';
+
+  @override
+  String get errorTimeout =>
+      'The Mac isn’t responding. It may be asleep, or the network is down.';
+
+  @override
+  String get homeAddressDirect => 'Direct · QUIC';
+
+  @override
+  String get homeAddressRelay => 'Via Relay · QUIC';
+
+  @override
+  String get homeCantConnect => 'Can’t connect to this Mac.';
+
+  @override
+  String get homeComputerFallback => 'Mac';
+
+  @override
+  String get homeConnecting => 'Connecting to the Mac…';
+
+  @override
+  String get homeDisconnect => 'Disconnect';
+
+  @override
+  String get homeDisconnected => 'Disconnected';
+
+  @override
+  String homeDisconnectedList(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Disconnected · $count Macs available',
+      one: 'Disconnected · $count Mac available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String homeDisconnectedNamed(String name) {
+    return '$name · Disconnected';
+  }
+
+  @override
+  String get homeFailed => 'Can’t Connect';
+
+  @override
+  String homeFailedNamed(String name) {
+    return '$name · Can’t Connect';
+  }
+
+  @override
+  String get homeForget => 'Forget';
+
+  @override
+  String get homeForgetBody =>
+      'You’ll need to scan the code again to connect to it.';
+
+  @override
+  String get homeForgetComputer => 'Forget This Mac';
+
+  @override
+  String homeForgetConfirm(String name) {
+    return 'Forget $name?';
+  }
+
+  @override
+  String get homeHistoryTip => 'History';
+
+  @override
+  String get homeLongPressHint => 'Long-press a Mac to rename or forget it';
+
+  @override
+  String get homeNoRunning => 'No running sessions';
+
+  @override
+  String get homeNoWorkspaces => 'Posse on the Mac has no workspaces yet';
+
+  @override
+  String get homeReconnecting => 'Connection lost, reconnecting…';
+
+  @override
+  String get homeRemoteDesktop => 'Remote Desktop';
+
+  @override
+  String get homeRename => 'Rename';
+
+  @override
+  String get homeRenameHelper =>
+      'Only changes the name shown on this phone. Leave empty to use the Mac’s own name.';
+
+  @override
+  String get homeRenameHint => 'Name';
+
+  @override
+  String get homeRenameTitle => 'Rename Mac';
+
+  @override
+  String get homeScanToAdd => 'Scan to Add a Mac';
+
+  @override
+  String get homeSettingsTip => 'Settings';
+
+  @override
+  String get homeTabProjects => 'Projects';
+
+  @override
+  String get homeTabRunning => 'Running';
+
+  @override
+  String homeWaitingBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count sessions need you',
+      one: '$count session needs you',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get homeWaitingConnection => 'Waiting to connect';
+
+  @override
+  String get keysAltHint => 'e.g. b, f, .';
+
+  @override
+  String get keysAltWhich => 'Alt plus which key';
+
+  @override
+  String get keysBar => 'Key Bar';
+
+  @override
+  String get keysBarNote =>
+      'The keyboard toggle on the far left stays put; the rest go left to right in the order listed here. Tap a key you added to edit or delete it.';
+
+  @override
+  String get keysBuiltin => 'Built-in';
+
+  @override
+  String get keysClear => 'Clear Input';
+
+  @override
+  String get keysCtrlC => 'Ctrl + C: stop the program';
+
+  @override
+  String get keysCtrlHint => 'e.g. r, d, z, l';
+
+  @override
+  String get keysCtrlInvalid =>
+      'Ctrl works only with a letter or @ [ \\ ] ^ _ ?';
+
+  @override
+  String get keysCtrlWhich => 'Ctrl plus which key';
+
+  @override
+  String get keysDown => 'Arrow key: down';
+
+  @override
+  String get keysEdit => 'Edit Shortcut';
+
+  @override
+  String get keysEnter => 'Return';
+
+  @override
+  String get keysEnterAfter => 'Press Return After Typing';
+
+  @override
+  String get keysEsc => 'Esc: interrupt, exit';
+
+  @override
+  String get keysExit => 'Exit Agent (/exit)';
+
+  @override
+  String get keysImage => 'Send File (photos, videos, files)';
+
+  @override
+  String get keysKindSpecial => 'Special';
+
+  @override
+  String get keysKindText => 'Text';
+
+  @override
+  String get keysLabel => 'Button Label';
+
+  @override
+  String keysLabelHint(String shown) {
+    return 'Leave empty to use $shown';
+  }
+
+  @override
+  String get keysLeft => 'Arrow key: left';
+
+  @override
+  String get keysNew => 'New Shortcut';
+
+  @override
+  String get keysNewNote =>
+      'Frequently used text, a Ctrl combination, or a special key like PgUp';
+
+  @override
+  String get keysPaste => 'Paste Clipboard';
+
+  @override
+  String get keysResetOrder => 'Restore Default Order';
+
+  @override
+  String get keysResetOrderNote =>
+      'Keys you added are kept and placed after Send File and Paste';
+
+  @override
+  String get keysRight => 'Arrow key: right';
+
+  @override
+  String get keysSendNow => 'Ctrl + Enter: send queued messages to Claude now';
+
+  @override
+  String get keysShiftTab => 'Shift + Tab: switch mode';
+
+  @override
+  String get keysSpecialWhich => 'Which Key';
+
+  @override
+  String get keysTab => 'Tab: complete';
+
+  @override
+  String get keysText => 'Text to Type';
+
+  @override
+  String get keysTextHint => 'e.g. /compact';
+
+  @override
+  String get keysTitle => 'Terminal Shortcuts';
+
+  @override
+  String keysTypeText(String text) {
+    return 'Type “$text”';
+  }
+
+  @override
+  String keysTypeTextEnter(String text) {
+    return 'Type “$text” and press Return';
+  }
+
+  @override
+  String get keysUp => 'Arrow key: up';
+
+  @override
+  String mermaidCantDraw(String error) {
+    return 'Can’t draw the diagram: $error';
+  }
+
+  @override
+  String get mermaidNoSize => 'The diagram has no size';
+
+  @override
+  String get mermaidNoSvg => 'Pele didn’t draw an SVG';
+
+  @override
+  String get mermaidTimeout => 'Drawing the diagram timed out';
+
+  @override
+  String get pairAddNote =>
+      'You can pair several Macs and connect to one at a time. Switch between them at the top of the home screen.';
+
+  @override
+  String get pairAddTitle => 'Add a Mac';
+
+  @override
+  String get pairCameraDenied =>
+      'Posse needs camera access to scan. Allow it in Settings, or paste the pairing code.';
+
+  @override
+  String get pairCameraFailed =>
+      'Can’t open the camera. You can paste the pairing code instead.';
+
+  @override
+  String get pairClipboardEmpty => 'The clipboard is empty.';
+
+  @override
+  String get pairClipboardNotCode =>
+      'The clipboard doesn’t contain a pairing code.';
+
+  @override
+  String get pairConnect => 'Connect';
+
+  @override
+  String get pairConnectTitle => 'Connect to Posse';
+
+  @override
+  String pairConnected(String name) {
+    return 'Connected to $name';
+  }
+
+  @override
+  String pairConnectedAt(String name, String address) {
+    return 'Connected to $name at $address';
+  }
+
+  @override
+  String get pairConnecting => 'Connecting…';
+
+  @override
+  String get pairHideManual => 'Hide';
+
+  @override
+  String get pairIntro =>
+      'Follow your agents’ progress, reply, and approve requests from your phone.';
+
+  @override
+  String get pairManual => 'Enter Manually';
+
+  @override
+  String get pairPasteCode => 'Paste Pairing Code';
+
+  @override
+  String get pairScanAim => 'Point at the pairing code in Posse on your Mac';
+
+  @override
+  String get pairScanButton => 'Scan to Pair';
+
+  @override
+  String get pairScanClipboardEmpty => 'The clipboard is empty';
+
+  @override
+  String get pairScanClipboardNotCode =>
+      'The clipboard doesn’t contain a pairing code';
+
+  @override
+  String get pairStepOpenDetail =>
+      'Click the phone icon at the bottom left of the window';
+
+  @override
+  String get pairStepOpenTitle => 'Open Posse on your Mac';
+
+  @override
+  String get pairStepScanDetail =>
+      'Or copy the pairing code on the Mac and paste it here';
+
+  @override
+  String get pairStepScanTitle => 'Scan the QR code';
+
+  @override
+  String get sessionCloseSession => 'Close Session';
+
+  @override
+  String sessionCloseSessionBody(String agent) {
+    return '$agent will be stopped and unfinished work interrupted. The conversation stays in the Mac’s session history and can be resumed on the Mac later.';
+  }
+
+  @override
+  String get sessionCloseSessionConfirm => 'Close This Session?';
+
+  @override
+  String get sessionCloseTerminal => 'Close Terminal';
+
+  @override
+  String sessionCloseTerminalBody(String title) {
+    return 'Programs running in “$title” will be stopped.';
+  }
+
+  @override
+  String get sessionCloseTerminalConfirm => 'Close This Terminal?';
+
+  @override
+  String get sessionDeskLayout => 'Desktop Layout';
+
+  @override
+  String get sessionDeskLayoutNote =>
+      'Shrinks to the screen width; pinch to zoom, then drag to scroll';
+
+  @override
+  String sessionDetailApprove(String tool) {
+    return 'Waiting for you to approve $tool';
+  }
+
+  @override
+  String get sessionDetailDone => 'Turn finished';
+
+  @override
+  String get sessionDetailLost => 'Not Restored: starts when you open it';
+
+  @override
+  String get sessionDetailTerminalOnly => 'Terminal only';
+
+  @override
+  String sessionDetailUsing(String tool) {
+    return 'Using $tool';
+  }
+
+  @override
+  String get sessionDetailWaiting => 'Waiting for you';
+
+  @override
+  String get sessionMedia => 'Images & Videos';
+
+  @override
+  String get sessionMediaNote =>
+      'Screenshots the agent took, generated images and videos, and pasted images';
+
+  @override
+  String get sessionNew => 'New Session';
+
+  @override
+  String get sessionNoWorkspaces => 'No workspaces yet';
+
+  @override
+  String get sessionOpenTerminal => 'Open Terminal';
+
+  @override
+  String get sessionOpenWith => 'Open With';
+
+  @override
+  String get sessionPickWorkspace => 'Which Workspace';
+
+  @override
+  String get sessionPromptHint =>
+      'First message (optional; you can say it later)';
+
+  @override
+  String sessionStartChat(String agent) {
+    return 'Start Chat with $agent';
+  }
+
+  @override
+  String get sessionStarting => 'Starting…';
+
+  @override
+  String get sessionStateDone => 'Done';
+
+  @override
+  String get sessionStateIdle => 'Idle';
+
+  @override
+  String get sessionStateStarting => 'Starting';
+
+  @override
+  String get sessionStateTasks => 'Waiting on Tasks';
+
+  @override
+  String get sessionStateUnread => 'Turn finished, not seen yet';
+
+  @override
+  String get sessionStateWaiting => 'Needs You';
+
+  @override
+  String get sessionStateWorking => 'Working';
+
+  @override
+  String get sessionTerminal => 'Terminal';
+
+  @override
+  String get sessionTools => 'Skills & Tools';
+
+  @override
+  String get sessionToolsNote =>
+      'Skills, MCP servers, and command-line tools used';
+
+  @override
+  String get sessionWorkspace => 'Workspace';
+
+  @override
+  String get settingsAbout => 'About';
+
+  @override
+  String get settingsAppearance => 'Appearance';
+
+  @override
+  String get settingsChat => 'Chat';
+
+  @override
+  String get settingsCheckFailed => 'Check failed. Try again later.';
+
+  @override
+  String get settingsCheckUpdate => 'Check for Updates';
+
+  @override
+  String get settingsComputer => 'Mac';
+
+  @override
+  String get settingsDeskDirect => 'Direct Touch';
+
+  @override
+  String get settingsDeskDirectNote =>
+      'Tap where you want to click, long-press then move to drag, and drag one finger to pan a zoomed-in view.';
+
+  @override
+  String get settingsDeskNote =>
+      'Tap the Mac’s name on the home screen and choose Remote Desktop to see the Mac’s screen and control it with your fingers.';
+
+  @override
+  String get settingsDeskPasswords => 'Saved Mac Passwords';
+
+  @override
+  String settingsDeskPasswordsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Login passwords saved for $count Macs',
+      one: 'Login password saved for $count Mac',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsDeskPasswordsForget => 'Forget All';
+
+  @override
+  String get settingsDeskPasswordsNone => 'No saved passwords';
+
+  @override
+  String get settingsDeskTrackpad => 'Trackpad';
+
+  @override
+  String get settingsDeskTrackpadNote =>
+      'Use the phone screen as a trackpad: slide one finger to move the pointer; taps and right-clicks land on the pointer; slide three fingers to drag.';
+
+  @override
+  String get settingsExpandTools => 'Expand Tool Calls by Default';
+
+  @override
+  String get settingsFontNote =>
+      'On the phone, the terminal is laid out for the phone’s screen. Smaller text fits more on a line.';
+
+  @override
+  String get settingsFontSample => 'the agent is running Claude Code';
+
+  @override
+  String get settingsFontSize => 'Font Size';
+
+  @override
+  String get settingsHome => 'Home';
+
+  @override
+  String get settingsKeys => 'Shortcuts';
+
+  @override
+  String settingsKeysCustom(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count custom keys',
+      one: '$count custom key',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsKeysNote =>
+      'Reorder the key bar above the keyboard and add your own keys';
+
+  @override
   String get settingsLanguageSystem => 'System';
 
   @override
   String get settingsLanguageTitle => 'Language';
+
+  @override
+  String get settingsNotConnected => 'Not Connected';
+
+  @override
+  String get settingsOpenChat => 'Chat';
+
+  @override
+  String get settingsOpenChatNote =>
+      'You can switch to the terminal at the top right of the chat. Agents without a saved session and shells always open in the terminal.';
+
+  @override
+  String get settingsOpenFirst => 'Open Sessions In';
+
+  @override
+  String get settingsOpenTerminal => 'Terminal';
+
+  @override
+  String get settingsOpenTerminalNote =>
+      'You can switch to the chat at the top right of the terminal. Chat and terminal are two views of the same session; switching replaces one with the other.';
+
+  @override
+  String settingsPairedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Macs paired',
+      one: '$count Mac paired',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get settingsProjectMeta => 'Show Branch and Path for Projects';
+
+  @override
+  String get settingsShowReasoning => 'Show Thinking';
+
+  @override
+  String get settingsTerminal => 'Terminal';
+
+  @override
+  String get settingsThemeDark => 'Dark';
+
+  @override
+  String get settingsThemeLight => 'Light';
+
+  @override
+  String get settingsThemeSystem => 'System';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsUpToDate => 'Up to Date';
+
+  @override
+  String settingsUpdateTo(String version, String build) {
+    return 'Update to $version ($build)';
+  }
+
+  @override
+  String get settingsWorkspaceMeta => 'Show Branch for Workspaces';
+
+  @override
+  String terminalCantOpenLink(String url) {
+    return 'Can’t open this link: $url';
+  }
+
+  @override
+  String get terminalClipboardEmpty => 'The clipboard has no text or image';
+
+  @override
+  String get terminalExited => 'The terminal has exited';
+
+  @override
+  String get terminalKeyClear => 'Clear';
+
+  @override
+  String get terminalNoAgent => 'No agent is running in this terminal';
+
+  @override
+  String get terminalNotInWorkspace =>
+      'This file isn’t in the current workspace and can’t be opened on the phone';
+
+  @override
+  String get terminalSendFile => 'Send File';
+
+  @override
+  String get terminalSendNow => 'Send Now';
+
+  @override
+  String get terminalSwitchToChat => 'Switch to Chat';
+
+  @override
+  String get updateAndroidNote =>
+      'When the download finishes, the system asks you to confirm installing over the current app. Your pairings are kept. The first time, allow Posse to install apps in Settings.';
+
+  @override
+  String get updateBadPackage =>
+      'Can’t open the installer: the package isn’t in the update folder';
+
+  @override
+  String updateBanner(String version, String build) {
+    return 'New version $version ($build)';
+  }
+
+  @override
+  String updateBuild(String build) {
+    return 'Build $build';
+  }
+
+  @override
+  String get updateButton => 'Update';
+
+  @override
+  String get updateCantInstall => 'Can’t open the installer';
+
+  @override
+  String updateCurrent(String version, String build) {
+    return 'Current $version ($build)';
+  }
+
+  @override
+  String get updateDownloadFailed => 'Download failed. Try again later.';
+
+  @override
+  String get updateDownloading => 'Downloading…';
+
+  @override
+  String updateDownloadingPercent(int percent) {
+    return 'Downloading $percent%';
+  }
+
+  @override
+  String get updateInstallDenied =>
+      'Allow Posse to install apps in Settings to update';
+
+  @override
+  String get updateIosNote =>
+      'After you tap Update, it downloads in the background and the Home Screen icon shows the progress. When it’s installed, the app switches to the new version. Your pairings are kept.';
+
+  @override
+  String get updateOpening => 'Opening installer…';
+
+  @override
+  String get updateRequesting => 'Requesting installation…';
+
+  @override
+  String get updateSkip => 'Don’t remind me about this version';
+
+  @override
+  String updateTitle(String version) {
+    return 'New Version $version';
+  }
+
+  @override
+  String uploadSendingFile(int count, int index) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sending file $index/$count',
+      one: 'Sending file',
+      zero: 'Sending file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String uploadSendingImage(int count, int index) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sending image $index/$count',
+      one: 'Sending image',
+      zero: 'Sending image',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get usageCursorModels => 'Cursor Models';
@@ -537,4 +1331,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usageWindowWeekShort => 'wk';
+
+  @override
+  String get workspaceMain => 'Main Workspace';
+
+  @override
+  String get workspaceNoSessions => 'No Sessions';
+
+  @override
+  String get workspaceTabChanges => 'Changes';
+
+  @override
+  String get workspaceTabFiles => 'Files';
+
+  @override
+  String get workspaceTabHistory => 'History';
 }

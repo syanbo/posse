@@ -1,4 +1,5 @@
 import '../history/history.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../usage/usage.dart';
 
@@ -94,7 +95,7 @@ class _PairScreenState extends State<PairScreen> {
       case ScanEnd.manual:
         setState(() => _manual = true);
       case ScanEnd.denied || ScanEnd.failed:
-        setState(() => _note = scanNote(pick.end));
+        setState(() => _note = scanNote(context.l10n, pick.end));
       case ScanEnd.cancelled || ScanEnd.unsupported:
         break;
     }
@@ -111,7 +112,9 @@ class _PairScreenState extends State<PairScreen> {
     }
     setState(() {
       _manual = true;
-      _note = text.isEmpty ? '剪贴板是空的。' : '剪贴板里不是配对码。';
+      _note = text.isEmpty
+          ? context.l10n.pairClipboardEmpty
+          : context.l10n.pairClipboardNotCode;
     });
   }
 
@@ -119,8 +122,10 @@ class _PairScreenState extends State<PairScreen> {
   Widget build(BuildContext context) {
     final model = widget.model;
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final busy = model.connecting;
-    final note = _note ?? model.error;
+    final note =
+        _note ?? (model.error == null ? null : friendlyError(model.error!, l));
     return Scaffold(
       appBar: widget.adding ? AppBar() : null,
       body: SafeArea(
@@ -137,7 +142,7 @@ class _PairScreenState extends State<PairScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              widget.adding ? '添加电脑' : '连接 Posse',
+              widget.adding ? l.pairAddTitle : l.pairConnectTitle,
               style: TextStyle(
                 fontSize: Fs.hero,
                 fontWeight: Fw.bold,
@@ -146,9 +151,7 @@ class _PairScreenState extends State<PairScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              widget.adding
-                  ? '可以配对多台电脑，同一时间连其中一台，在首页顶部切换。'
-                  : '在手机上看 agent 的进展、回复和批准请求。',
+              widget.adding ? l.pairAddNote : l.pairIntro,
               style: TextStyle(
                 fontSize: Fs.body,
                 height: Lh.body,
@@ -160,8 +163,8 @@ class _PairScreenState extends State<PairScreen> {
               inset: 52,
               margin: const EdgeInsets.only(bottom: 20),
               children: [
-                _step(context, 1, '在电脑上打开 Posse', '点窗口左下角的手机图标'),
-                _step(context, 2, '扫描二维码', '或者在电脑上复制配对码，回来粘贴'),
+                _step(context, 1, l.pairStepOpenTitle, l.pairStepOpenDetail),
+                _step(context, 2, l.pairStepScanTitle, l.pairStepScanDetail),
               ],
             ),
             if (canScan) ...[
@@ -171,14 +174,14 @@ class _PairScreenState extends State<PairScreen> {
                   Icons.qr_code_scanner_rounded,
                   size: Ic.medium,
                 ),
-                label: Text(busy ? '正在连接…' : '扫码配对'),
+                label: Text(busy ? l.pairConnecting : l.pairScanButton),
               ),
               const SizedBox(height: 10),
             ],
             TextButton.icon(
               onPressed: busy ? null : _paste,
               icon: const Icon(Icons.content_paste_rounded, size: Ic.medium),
-              label: const Text('粘贴配对码'),
+              label: Text(l.pairPasteCode),
             ),
             if (note != null) ...[const SizedBox(height: 12), NoticeBar(note)],
             const SizedBox(height: 8),
@@ -189,7 +192,7 @@ class _PairScreenState extends State<PairScreen> {
                   foregroundColor: c.muted,
                 ),
                 onPressed: () => setState(() => _manual = !_manual),
-                child: Text(_manual ? '收起' : '手动输入'),
+                child: Text(_manual ? l.pairHideManual : l.pairManual),
               ),
             ),
             if (_manual) ...[
@@ -205,7 +208,7 @@ class _PairScreenState extends State<PairScreen> {
               const SizedBox(height: 10),
               FilledButton(
                 onPressed: busy ? null : () => _connect(_code.text),
-                child: Text(busy ? '正在连接…' : '连接'),
+                child: Text(busy ? l.pairConnecting : l.pairConnect),
               ),
             ],
           ],
@@ -245,30 +248,34 @@ Future<bool> connectAndAnnounce(
   String code,
 ) async {
   final messenger = ScaffoldMessenger.of(context);
+  final l = context.l10n;
   if (!await model.connectCode(code)) return false;
-  final name = model.current == null ? '电脑' : model.labelOf(model.current);
-  final where = hostOf(model.connectedUrl);
+  final label = model.labelOf(model.current);
+  final name = label.isEmpty ? l.homeComputerFallback : label;
+  final where = hostOf(l, model.connectedUrl);
   messenger.showSnackBar(
     SnackBar(
-      content: Text(where == null ? '已连上 $name' : '已连上 $name，地址 $where'),
+      content: Text(
+        where == null ? l.pairConnected(name) : l.pairConnectedAt(name, where),
+      ),
     ),
   );
   return true;
 }
 
-String? scanNote(ScanEnd end) => switch (end) {
-  ScanEnd.denied => '需要相机权限才能扫码：在系统设置里允许 Posse 使用相机，也可以把配对码贴进来。',
-  ScanEnd.failed => '打不开相机，可以把配对码贴进来。',
+String? scanNote(AppLocalizations l, ScanEnd end) => switch (end) {
+  ScanEnd.denied => l.pairCameraDenied,
+  ScanEnd.failed => l.pairCameraFailed,
   _ => null,
 };
 
 /// 地址里给人看的部分：主机加端口，路径不写。QUIC 标出来，经中转的不写中转的地址（令牌也不露）。
-String? hostOf(String? url) {
+String? hostOf(AppLocalizations l, String? url) {
   if (url == null) return null;
   final uri = Uri.tryParse(url);
   if (uri == null || uri.host.isEmpty) return null;
-  if (isRelayQuicUrl(url)) return '经中转 · QUIC';
-  if (isPunchedQuicUrl(url)) return '直连 · QUIC';
+  if (isRelayQuicUrl(url)) return l.homeAddressRelay;
+  if (isPunchedQuicUrl(url)) return l.homeAddressDirect;
   final host = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
   return isQuicUrl(url) ? '$host · QUIC' : host;
 }
@@ -311,17 +318,22 @@ void openSession(BuildContext context, PosseAppModel model, SessionTab tab) {
 }
 
 /// 会话这一刻在做什么，一行话。
-String sessionDetail(SessionTab tab) {
+String sessionDetail(AppLocalizations l, SessionTab tab) {
+  final tool = tab.toolName;
   return switch (tab.shown) {
     AgentState.waiting =>
-      tab.toolName == null ? '等你处理' : '等你批准 ${tab.toolName}',
-    AgentState.working => tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
-    AgentState.done => '本轮完成',
-    AgentState.unread => '本轮完成，还没看',
-    AgentState.tasks => '等待任务',
-    AgentState.starting => '启动中',
-    AgentState.lost => '未恢复，点开时拉起',
-    _ => tab.agent == null ? '终端' : (tab.eligible ? '空闲' : '只能看终端'),
+      tool == null ? l.sessionDetailWaiting : l.sessionDetailApprove(tool),
+    AgentState.working =>
+      tool == null ? l.sessionStateWorking : l.sessionDetailUsing(tool),
+    AgentState.done => l.sessionDetailDone,
+    AgentState.unread => l.sessionStateUnread,
+    AgentState.tasks => l.sessionStateTasks,
+    AgentState.starting => l.sessionStateStarting,
+    AgentState.lost => l.sessionDetailLost,
+    _ =>
+      tab.agent == null
+          ? l.sessionTerminal
+          : (tab.eligible ? l.sessionStateIdle : l.sessionDetailTerminalOnly),
   };
 }
 
@@ -344,9 +356,11 @@ class WorkspaceScreen extends StatelessWidget {
       case ScanEnd.code:
         if (await connectAndAnnounce(context, model, pick.code!)) return;
         if (!context.mounted) return;
-        note = model.error ?? '连不上这台电脑。';
+        note = model.error == null
+            ? context.l10n.homeCantConnect
+            : friendlyError(model.error!, context.l10n);
       case ScanEnd.denied || ScanEnd.failed:
-        note = scanNote(pick.end);
+        note = scanNote(context.l10n, pick.end);
       case ScanEnd.manual || ScanEnd.unsupported:
         break;
     }
@@ -394,6 +408,7 @@ class WorkspaceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final projects = <String, List<WorktreeRow>>{};
     for (final row in model.worktrees) {
       projects
@@ -457,7 +472,7 @@ class WorkspaceScreen extends StatelessWidget {
                           ),
                         ),
                       IconButton(
-                        tooltip: '历史',
+                        tooltip: l.homeHistoryTip,
                         visualDensity: VisualDensity.compact,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -472,7 +487,7 @@ class WorkspaceScreen extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        tooltip: '新建会话',
+                        tooltip: l.sessionNew,
                         visualDensity: VisualDensity.compact,
                         onPressed: () => showNewSession(context, model),
                         icon: Icon(
@@ -485,7 +500,7 @@ class WorkspaceScreen extends StatelessWidget {
                   ),
           ),
           IconButton(
-            tooltip: '设置',
+            tooltip: l.homeSettingsTip,
             visualDensity: VisualDensity.compact,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
@@ -517,11 +532,13 @@ class WorkspaceScreen extends StatelessWidget {
                     icon: model.error == null
                         ? Icons.folder_open_rounded
                         : Icons.cloud_off_rounded,
-                    text: model.error ?? '电脑上的 Posse 还没有工作区',
+                    text: model.error == null
+                        ? l.homeNoWorkspaces
+                        : friendlyError(model.error!, l),
                     error: model.error != null,
                     action: TextButton(
                       onPressed: model.retry,
-                      child: const Text('重试'),
+                      child: Text(l.commonRetry),
                     ),
                   ))
           // 长按项目卡片拖动排序，顺序按电脑分别存在手机上。
@@ -545,7 +562,7 @@ class WorkspaceScreen extends StatelessWidget {
                               // 和项目卡片同宽
                               padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                               child: Segmented(
-                                labels: const ['项目', '运行中'],
+                                labels: [l.homeTabProjects, l.homeTabRunning],
                                 selected: byStatus ? 1 : 0,
                                 onChanged: (i) {
                                   // 每次切进来按当下的状态重排一次
@@ -722,7 +739,7 @@ class WorkspaceScreen extends StatelessWidget {
   /// 工作区行和它的会话合成 Section 里的一行，分隔线跟着会话一起收起。
   Widget _workspace(BuildContext context, WorktreeRow row) {
     final c = PosseColors.of(context);
-    final title = row.isMain ? '主工作区' : row.name;
+    final title = row.isMain ? context.l10n.workspaceMain : row.name;
     final branch = model.settings.workspaceMetaHidden || row.branch == title
         ? ''
         : row.branch;
@@ -838,13 +855,14 @@ class WorkspaceScreen extends StatelessWidget {
   /// where 是「运行中」里写在状态前面的项目和工作区。
   Widget _sessionRow(BuildContext context, SessionTab tab, {String? where}) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final String detail;
     if (model.rpc == null) {
-      detail = '等连上电脑';
+      detail = l.homeWaitingConnection;
     } else if (tab.agent != null) {
-      detail = sessionDetail(tab);
+      detail = sessionDetail(l, tab);
     } else {
-      detail = tab.posse == 'lost' ? '未恢复，点开时拉起' : '终端';
+      detail = tab.posse == 'lost' ? l.sessionDetailLost : l.sessionTerminal;
     }
     return RowTile(
       leading: AgentTile(agent: tab.agent, size: _sessionTile),
@@ -857,7 +875,7 @@ class WorkspaceScreen extends StatelessWidget {
               : null,
         ),
       ),
-      trailing: tab.agent == null ? null : _sessionState(c, tab),
+      trailing: tab.agent == null ? null : _sessionState(context, tab),
       onTap: () => openSession(context, model, tab),
       onLongPress: () => closeSession(context, model, tab),
     );
@@ -877,7 +895,7 @@ class WorkspaceScreen extends StatelessWidget {
       for (final row in rows) {
         final where = rows.length == 1
             ? name
-            : '$name · ${row.isMain ? '主工作区' : row.name}';
+            : '$name · ${row.isMain ? context.l10n.workspaceMain : row.name}';
         for (final tab in model.tabs[row.id] ?? const <SessionTab>[]) {
           if (tab.agent == null) continue;
           byId[tab.terminalId] = (tab, where);
@@ -902,7 +920,7 @@ class WorkspaceScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  '没有运行中的会话',
+                  context.l10n.homeNoRunning,
                   style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ),
@@ -918,7 +936,8 @@ class WorkspaceScreen extends StatelessWidget {
   AgentState _stateOf(SessionTab tab) =>
       model.rpc == null ? AgentState.none : tab.shown;
 
-  Widget _sessionState(PosseColors c, SessionTab tab) {
+  Widget _sessionState(BuildContext context, SessionTab tab) {
+    final c = PosseColors.of(context);
     final state = _stateOf(tab);
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -927,7 +946,7 @@ class WorkspaceScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: Text(
-              '待处理',
+              context.l10n.sessionStateWaiting,
               style: TextStyle(
                 fontSize: Fs.small,
                 fontWeight: Fw.medium,
@@ -1104,7 +1123,7 @@ class _WaitingBanner extends StatelessWidget {
           const StatusHex(state: AgentState.waiting, size: Ic.medium),
           const SizedBox(width: 10),
           Text(
-            '$count 个会话等你处理',
+            context.l10n.homeWaitingBanner(count),
             style: TextStyle(
               fontSize: Fs.body,
               fontWeight: Fw.medium,
@@ -1127,7 +1146,9 @@ class _FloatingError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
-    final error = model.rpc == null || model.connecting ? null : model.error;
+    final error = model.rpc == null || model.connecting || model.error == null
+        ? null
+        : friendlyError(model.error!, context.l10n);
     return IgnorePointer(
       child: Center(
         child: AnimatedSwitcher(
@@ -1208,16 +1229,17 @@ class _ConnectionLine extends StatelessWidget {
     final off = model.disconnected && !model.connecting;
     final failed = model.failed;
     final offline = !off && !failed && (model.rpc == null || model.connecting);
+    final l = context.l10n;
     final current = model.current;
-    final name = current == null ? '' : '${model.labelOf(current)} · ';
+    final name = current == null ? null : model.labelOf(current);
     final text = model.connecting
-        ? '正在连接电脑…'
+        ? l.homeConnecting
         : off
-        ? '$name已断开'
+        ? (name == null ? l.homeDisconnected : l.homeDisconnectedNamed(name))
         : failed
-        ? '$name连不上'
+        ? (name == null ? l.homeFailed : l.homeFailedNamed(name))
         : offline
-        ? '连接断开，正在重连…'
+        ? l.homeReconnecting
         : model.labelOf(model.current);
     return AnimatedSize(
       duration: const Duration(milliseconds: 260),
@@ -1304,7 +1326,7 @@ class _ComputerSheet extends StatelessWidget {
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: const Text('重命名'),
+                title: Text(context.l10n.homeRename),
                 onTap: () => Navigator.of(sheet).pop('rename'),
               ),
               RowTile(
@@ -1314,7 +1336,10 @@ class _ComputerSheet extends StatelessWidget {
                   size: Ic.button,
                   color: c.danger,
                 ),
-                title: Text('忘掉这台电脑', style: TextStyle(color: c.danger)),
+                title: Text(
+                  context.l10n.homeForgetComputer,
+                  style: TextStyle(color: c.danger),
+                ),
                 onTap: () => Navigator.of(sheet).pop('remove'),
               ),
             ],
@@ -1343,16 +1368,16 @@ class _ComputerSheet extends StatelessWidget {
     final ok = await showPosseDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('忘掉 ${model.labelOf(computer)}'),
-        content: const Text('之后要重新扫码才能连上它。'),
+        title: Text(context.l10n.homeForgetConfirm(model.labelOf(computer))),
+        content: Text(context.l10n.homeForgetBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('忘掉'),
+            child: Text(context.l10n.homeForget),
           ),
         ],
       ),
@@ -1366,6 +1391,7 @@ class _ComputerSheet extends StatelessWidget {
     return ListenableBuilder(
       listenable: model,
       builder: (context, _) {
+        final l = context.l10n;
         final active = model.activeId;
         final list = Section(
           inset: 50,
@@ -1377,7 +1403,7 @@ class _ComputerSheet extends StatelessWidget {
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: const Text('看桌面'),
+                title: Text(l.homeRemoteDesktop),
                 onTap: onDesk,
               ),
             for (final computer in model.computers)
@@ -1392,7 +1418,7 @@ class _ComputerSheet extends StatelessWidget {
                 // 连着的那台写实际连上的地址，其余写配对码里的主地址
                 subtitle: Text(
                   computer.id == active && model.connectedUrl != null
-                      ? hostOf(model.connectedUrl) ?? ''
+                      ? hostOf(l, model.connectedUrl) ?? ''
                       : computerEndpoint(computer),
                   style: mono(Fs.small, color: c.muted),
                 ),
@@ -1410,7 +1436,7 @@ class _ComputerSheet extends StatelessWidget {
           ],
         );
         final footer = [
-          if (model.error != null) NoticeBar(model.error!),
+          if (model.error != null) NoticeBar(friendlyError(model.error!, l)),
           // 连着或正在连时可以主动断开：配对留着，点上面的电脑或首页的重新连接再连
           if (model.rpc != null || model.connecting)
             Padding(
@@ -1421,7 +1447,7 @@ class _ComputerSheet extends StatelessWidget {
                   unawaited(model.disconnect());
                 },
                 icon: const Icon(Icons.link_off_rounded, size: Ic.medium),
-                label: const Text('断开连接'),
+                label: Text(l.homeDisconnect),
               ),
             ),
           Padding(
@@ -1429,13 +1455,13 @@ class _ComputerSheet extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.qr_code_scanner_rounded, size: Ic.medium),
-              label: const Text('扫码添加电脑'),
+              label: Text(l.homeScanToAdd),
             ),
           ),
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              '长按一台电脑可以改名或忘掉它',
+              l.homeLongPressHint,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: Fs.small, color: c.muted),
             ),
@@ -1502,7 +1528,7 @@ class _DisconnectedList extends StatelessWidget {
       ),
       children: [
         Section(
-          title: '已断开 · 可以连接的电脑 ${computers.length} 台',
+          title: context.l10n.homeDisconnectedList(computers.length),
           inset: 50,
           children: [
             for (final computer in computers)
@@ -1525,7 +1551,7 @@ class _DisconnectedList extends StatelessWidget {
           child: TextButton.icon(
             onPressed: onAdd,
             icon: const Icon(Icons.qr_code_scanner_rounded, size: Ic.medium),
-            label: const Text('扫码添加电脑'),
+            label: Text(context.l10n.homeScanToAdd),
           ),
         ),
       ],
@@ -1568,7 +1594,9 @@ class _TabScreenState extends State<TabScreen> {
 
   Future<T> _git<T>(Future<T> Function(PhoneRpc rpc) run) {
     final rpc = widget.model.rpc;
-    if (rpc == null) return Future.error('还没连上电脑');
+    if (rpc == null) {
+      return Future.error(const PhoneError(PhoneError.notConnected));
+    }
     return run(rpc);
   }
 
@@ -1600,7 +1628,11 @@ class _TabScreenState extends State<TabScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Segmented(
-              labels: const ['改动', '文件', '历史'],
+              labels: [
+                context.l10n.workspaceTabChanges,
+                context.l10n.workspaceTabFiles,
+                context.l10n.workspaceTabHistory,
+              ],
               selected: _page,
               onChanged: (i) => setState(() {
                 _page = i;
@@ -1670,10 +1702,11 @@ class _RenameDialogState extends State<_RenameDialog> {
   @override
   Widget build(BuildContext context) {
     final computer = widget.computer;
+    final l = context.l10n;
     return AlertDialog(
       // 系统默认两边留 40，输入框太窄
       insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-      title: const Text('给电脑改名'),
+      title: Text(l.homeRenameTitle),
       content: SizedBox(
         width: double.maxFinite,
         child: TextField(
@@ -1682,8 +1715,8 @@ class _RenameDialogState extends State<_RenameDialog> {
           textInputAction: TextInputAction.done,
           onSubmitted: (v) => Navigator.pop(context, v),
           decoration: InputDecoration(
-            hintText: computer.name.isEmpty ? '名字' : computer.name,
-            helperText: '只改手机上显示的名字，清空就用电脑自己的名字',
+            hintText: computer.name.isEmpty ? l.homeRenameHint : computer.name,
+            helperText: l.homeRenameHelper,
             helperMaxLines: 2,
           ),
         ),
@@ -1691,11 +1724,11 @@ class _RenameDialogState extends State<_RenameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(l.commonCancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, _field.text),
-          child: const Text('保存'),
+          child: Text(l.commonSave),
         ),
       ],
     );

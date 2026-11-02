@@ -8,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// 界面文字还没换成 ARB 键的文件（相对 lib/），换完一个去掉一个。
 const l10nPending = {
-  'app_state.dart',
   'chat/bubbles.dart',
   'chat/cards.dart',
   'chat/chat.dart',
@@ -34,23 +33,7 @@ const l10nPending = {
   'git/status.dart',
   'history/history.dart',
   'history/models.dart',
-  'pair/scan.dart',
-  'settings/custom_keys.dart',
-  'settings/custom_keys_screen.dart',
-  'settings/settings.dart',
-  'terminal/frames.dart',
-  'terminal/selection_chrome.dart',
-  'terminal/terminal.dart',
-  'ui/loading.dart',
-  'ui/mermaid.dart',
-
-  'ui/widgets.dart',
-  'update/update.dart',
   'usage/usage.dart',
-  'workspace/models.dart',
-  'workspace/new_session.dart',
-  'workspace/session_actions.dart',
-  'workspace/workspace.dart',
 };
 
 /// 允许中文的：生成的中文表，和各语言用自己名字的语言列表。

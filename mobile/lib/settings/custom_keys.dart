@@ -138,10 +138,15 @@ class BarKey {
 const barKeysVersion = 2;
 
 /// 改过名的内置键：旧名字 → 新名字。旧名字存的顺序读进来不认，新名字回到默认位置。
-const renamedBuiltins = {'立即发送': sendNowLabel};
+// 旧版存盘的中文名字，写成转义：它们是数据，不是界面文字。'\u7acb\u5373\u53d1\u9001' 是「立即发送」
+const renamedBuiltins = {'\u7acb\u5373\u53d1\u9001': sendNowLabel};
 
 /// 改了代号的内置键：旧名字 → 新名字，留在用户排好的位置上。「清空」原来拿键帽文字当代号。
-const relabeledBuiltins = {'退出': exitAgentLabel, '清空': clearInputKey};
+// '\u9000\u51fa' 是「退出」，'\u6e05\u7a7a' 是「清空」，同样是旧版存盘的数据
+const relabeledBuiltins = {
+  '\u9000\u51fa': exitAgentLabel,
+  '\u6e05\u7a7a': clearInputKey,
+};
 
 /// 内置键的名字，也是默认顺序：图片、粘贴，然后是终端键。
 final builtinBarKeys = ['image', 'paste', for (final key in termKeys) key.id];

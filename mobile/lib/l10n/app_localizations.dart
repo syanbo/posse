@@ -98,6 +98,48 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// Button: cancel a dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
+
+  /// Button or tooltip: close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get commonClose;
+
+  /// Button: copy the selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get commonCopy;
+
+  /// Button: delete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get commonDelete;
+
+  /// Accessibility label of a loading spinner.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get commonLoading;
+
+  /// Tooltip of the “more” (…) button in a top bar.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get commonMore;
+
+  /// Button: paste the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste'**
+  String get commonPaste;
+
   /// Common: refresh button or tooltip.
   ///
   /// In en, this message translates to:
@@ -115,6 +157,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get commonRetry;
+
+  /// Button: save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// Button: select all.
+  ///
+  /// In en, this message translates to:
+  /// **'Select All'**
+  String get commonSelectAll;
 
   /// Remote Desktop › connection settings sheet: error.
   ///
@@ -752,6 +806,1002 @@ abstract class AppLocalizations {
   /// **'Couldn’t list windows. Try again later.'**
   String get deskWindowsError;
 
+  /// Error when a pairing code can’t be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'The pairing code isn’t valid. Scan it again or copy it again.'**
+  String get errorBadPairingCode;
+
+  /// Error from an older Mac when opening a binary file.
+  ///
+  /// In en, this message translates to:
+  /// **'This is a binary file and can’t be opened as text.'**
+  String get errorBinaryFile;
+
+  /// Error when the socket to the Mac can’t be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network.'**
+  String get errorCantConnect;
+
+  /// Error when the connection to the Mac drops; the app reconnects by itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Lost the connection to the Mac. Reconnecting…'**
+  String get errorConnectionLost;
+
+  /// Error from an older Mac when a file is too large.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is too large to open on the phone.'**
+  String get errorFileTooLarge;
+
+  /// Error when the first connection after pairing keeps failing (Mac off, or network permission not granted).
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network, and allow Posse to use wireless data and the local network in the phone’s Settings.'**
+  String get errorFirstConnect;
+
+  /// Error when creating a session and the Mac’s reply has no terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac didn’t return the new terminal'**
+  String get errorNoNewTerminal;
+
+  /// Error from an older Mac when the path isn’t a file.
+  ///
+  /// In en, this message translates to:
+  /// **'This isn’t a file.'**
+  String get errorNotAFile;
+
+  /// Error when an action needs the Mac but the phone isn’t connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected to the Mac yet'**
+  String get errorNotConnected;
+
+  /// Error when the Mac’s Posse doesn’t know a request.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old for this. Update Posse on the Mac.'**
+  String get errorOldDesktop;
+
+  /// Error from an older Mac when a path is outside the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'The path isn’t in the workspace.'**
+  String get errorOutsideWorkspace;
+
+  /// Error shown when a request to the Mac times out.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac isn’t responding. It may be asleep, or the network is down.'**
+  String get errorTimeout;
+
+  /// Address shown for a hole-punched direct QUIC connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct · QUIC'**
+  String get homeAddressDirect;
+
+  /// Address shown for a connection through the relay (the relay’s address is hidden).
+  ///
+  /// In en, this message translates to:
+  /// **'Via Relay · QUIC'**
+  String get homeAddressRelay;
+
+  /// Pairing page note after scanning from the home screen failed without a specific reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t connect to this Mac.'**
+  String get homeCantConnect;
+
+  /// Name used for a paired Mac when it has no name yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Mac'**
+  String get homeComputerFallback;
+
+  /// Home: Mac pill while connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the Mac…'**
+  String get homeConnecting;
+
+  /// Mac list: button that disconnects from the current Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get homeDisconnect;
+
+  /// Home: Mac pill after the user disconnected, when no Mac is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get homeDisconnected;
+
+  /// Disconnected home: title of the list of paired Macs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Disconnected · {count} Mac available} other {Disconnected · {count} Macs available}}'**
+  String homeDisconnectedList(int count);
+
+  /// Home: Mac pill after the user disconnected. name is the Mac’s name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · Disconnected'**
+  String homeDisconnectedNamed(String name);
+
+  /// Home: Mac pill when connecting failed, when no Mac is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t Connect'**
+  String get homeFailed;
+
+  /// Home: Mac pill when connecting failed. name is the Mac’s name.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · Can’t Connect'**
+  String homeFailedNamed(String name);
+
+  /// Button in the dialog confirming forgetting a Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get homeForget;
+
+  /// Body of the dialog confirming forgetting a Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'You’ll need to scan the code again to connect to it.'**
+  String get homeForgetBody;
+
+  /// Mac actions sheet: remove this pairing.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget This Mac'**
+  String get homeForgetComputer;
+
+  /// Title of the dialog confirming forgetting a Mac. name is the Mac’s name.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget {name}?'**
+  String homeForgetConfirm(String name);
+
+  /// Home top bar: tooltip of the History button.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get homeHistoryTip;
+
+  /// Mac list: hint under the buttons.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press a Mac to rename or forget it'**
+  String get homeLongPressHint;
+
+  /// Home › Running: empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No running sessions'**
+  String get homeNoRunning;
+
+  /// Home: empty state when the Mac has no workspaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac has no workspaces yet'**
+  String get homeNoWorkspaces;
+
+  /// Home: Mac pill while reconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost, reconnecting…'**
+  String get homeReconnecting;
+
+  /// Mac list row and Settings section/toggle: view and control the Mac’s screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Remote Desktop'**
+  String get homeRemoteDesktop;
+
+  /// Mac actions sheet: rename this Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get homeRename;
+
+  /// Rename dialog: helper text under the field.
+  ///
+  /// In en, this message translates to:
+  /// **'Only changes the name shown on this phone. Leave empty to use the Mac’s own name.'**
+  String get homeRenameHelper;
+
+  /// Rename dialog: placeholder when the Mac has no name of its own.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get homeRenameHint;
+
+  /// Title of the rename dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename Mac'**
+  String get homeRenameTitle;
+
+  /// Mac list and disconnected home: button that scans a code to pair another Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to Add a Mac'**
+  String get homeScanToAdd;
+
+  /// Home top bar: tooltip of the Settings button.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get homeSettingsTip;
+
+  /// Home: segment that lists sessions by project.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects'**
+  String get homeTabProjects;
+
+  /// Home: segment that lists all running agent sessions by status.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get homeTabRunning;
+
+  /// Home: banner counting sessions waiting for approval or an answer.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} session needs you} other {{count} sessions need you}}'**
+  String homeWaitingBanner(int count);
+
+  /// Home: session row detail while disconnected from the Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to connect'**
+  String get homeWaitingConnection;
+
+  /// Key editor: placeholder of the Alt key field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. b, f, .'**
+  String get keysAltHint;
+
+  /// Key editor: label of the Alt key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Alt plus which key'**
+  String get keysAltWhich;
+
+  /// Key bar settings: section title of the ordered list.
+  ///
+  /// In en, this message translates to:
+  /// **'Key Bar'**
+  String get keysBar;
+
+  /// Key bar settings: note under the list.
+  ///
+  /// In en, this message translates to:
+  /// **'The keyboard toggle on the far left stays put; the rest go left to right in the order listed here. Tap a key you added to edit or delete it.'**
+  String get keysBarNote;
+
+  /// Key bar settings: subtitle of a built-in key.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get keysBuiltin;
+
+  /// Key bar settings: built-in Clear key.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Input'**
+  String get keysClear;
+
+  /// Key bar settings: built-in Ctrl+C key.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl + C: stop the program'**
+  String get keysCtrlC;
+
+  /// Key editor: placeholder of the Ctrl key field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. r, d, z, l'**
+  String get keysCtrlHint;
+
+  /// Key editor: error when the Ctrl key has no control code.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl works only with a letter or @ [ \\ ] ^ _ ?'**
+  String get keysCtrlInvalid;
+
+  /// Key editor: label of the Ctrl key field.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl plus which key'**
+  String get keysCtrlWhich;
+
+  /// Key bar settings: built-in arrow key.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrow key: down'**
+  String get keysDown;
+
+  /// Key editor title for an existing key.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Shortcut'**
+  String get keysEdit;
+
+  /// Key bar settings: built-in Enter key.
+  ///
+  /// In en, this message translates to:
+  /// **'Return'**
+  String get keysEnter;
+
+  /// Key editor: switch for sending Return after the text.
+  ///
+  /// In en, this message translates to:
+  /// **'Press Return After Typing'**
+  String get keysEnterAfter;
+
+  /// Key bar settings: built-in Esc key.
+  ///
+  /// In en, this message translates to:
+  /// **'Esc: interrupt, exit'**
+  String get keysEsc;
+
+  /// Key bar settings: built-in Exit key.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit Agent (/exit)'**
+  String get keysExit;
+
+  /// Key bar settings: built-in Send File key.
+  ///
+  /// In en, this message translates to:
+  /// **'Send File (photos, videos, files)'**
+  String get keysImage;
+
+  /// Key editor: segment for a special key such as PgUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Special'**
+  String get keysKindSpecial;
+
+  /// Key editor: segment for a text key.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get keysKindText;
+
+  /// Key editor: label of the key cap text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Button Label'**
+  String get keysLabel;
+
+  /// Key editor: placeholder of the key cap field. shown is the generated label.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use {shown}'**
+  String keysLabelHint(String shown);
+
+  /// Key bar settings: built-in arrow key.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrow key: left'**
+  String get keysLeft;
+
+  /// Key bar settings: add button, tooltip, and the editor title for a new key.
+  ///
+  /// In en, this message translates to:
+  /// **'New Shortcut'**
+  String get keysNew;
+
+  /// Key bar settings: subtitle of New Shortcut.
+  ///
+  /// In en, this message translates to:
+  /// **'Frequently used text, a Ctrl combination, or a special key like PgUp'**
+  String get keysNewNote;
+
+  /// Key bar settings: built-in Paste key.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste Clipboard'**
+  String get keysPaste;
+
+  /// Key bar settings: row that restores the default order.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore Default Order'**
+  String get keysResetOrder;
+
+  /// Key bar settings: subtitle of Restore Default Order.
+  ///
+  /// In en, this message translates to:
+  /// **'Keys you added are kept and placed after Send File and Paste'**
+  String get keysResetOrderNote;
+
+  /// Key bar settings: built-in arrow key.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrow key: right'**
+  String get keysRight;
+
+  /// Key bar settings: built-in Send Now key.
+  ///
+  /// In en, this message translates to:
+  /// **'Ctrl + Enter: send queued messages to Claude now'**
+  String get keysSendNow;
+
+  /// Key bar settings: built-in Shift+Tab key.
+  ///
+  /// In en, this message translates to:
+  /// **'Shift + Tab: switch mode'**
+  String get keysShiftTab;
+
+  /// Key editor: label of the special key choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Which Key'**
+  String get keysSpecialWhich;
+
+  /// Key bar settings: built-in Tab key.
+  ///
+  /// In en, this message translates to:
+  /// **'Tab: complete'**
+  String get keysTab;
+
+  /// Key editor: label of the text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Text to Type'**
+  String get keysText;
+
+  /// Key editor: placeholder of the text field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. /compact'**
+  String get keysTextHint;
+
+  /// Key bar settings page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal Shortcuts'**
+  String get keysTitle;
+
+  /// Key bar settings: what a custom text key does. text is the text.
+  ///
+  /// In en, this message translates to:
+  /// **'Type “{text}”'**
+  String keysTypeText(String text);
+
+  /// Key bar settings: what a custom text key with Return does. text is the text.
+  ///
+  /// In en, this message translates to:
+  /// **'Type “{text}” and press Return'**
+  String keysTypeTextEnter(String text);
+
+  /// Key bar settings: built-in arrow key.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrow key: up'**
+  String get keysUp;
+
+  /// Mermaid diagram card: error above the source. error is the reason.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t draw the diagram: {error}'**
+  String mermaidCantDraw(String error);
+
+  /// Mermaid error: the diagram has no size.
+  ///
+  /// In en, this message translates to:
+  /// **'The diagram has no size'**
+  String get mermaidNoSize;
+
+  /// Mermaid error: the renderer produced no SVG.
+  ///
+  /// In en, this message translates to:
+  /// **'Pele didn’t draw an SVG'**
+  String get mermaidNoSvg;
+
+  /// Mermaid error: rendering timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'Drawing the diagram timed out'**
+  String get mermaidTimeout;
+
+  /// Pairing page: description when adding another Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'You can pair several Macs and connect to one at a time. Switch between them at the top of the home screen.'**
+  String get pairAddNote;
+
+  /// Pairing page title when adding another Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a Mac'**
+  String get pairAddTitle;
+
+  /// Pairing page: note when camera permission is denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse needs camera access to scan. Allow it in Settings, or paste the pairing code.'**
+  String get pairCameraDenied;
+
+  /// Pairing page: note when the camera can’t start.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t open the camera. You can paste the pairing code instead.'**
+  String get pairCameraFailed;
+
+  /// Pairing page: note after tapping Paste Pairing Code with an empty clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard is empty.'**
+  String get pairClipboardEmpty;
+
+  /// Pairing page: note after tapping Paste Pairing Code when the clipboard isn’t a code.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard doesn’t contain a pairing code.'**
+  String get pairClipboardNotCode;
+
+  /// Pairing page: button that connects with the typed code.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get pairConnect;
+
+  /// Pairing page title on first launch.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to Posse'**
+  String get pairConnectTitle;
+
+  /// Snack bar after connecting. name is the Mac’s name.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to {name}'**
+  String pairConnected(String name);
+
+  /// Snack bar after connecting. name is the Mac’s name, address is host:port or “Via Relay · QUIC”.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to {name} at {address}'**
+  String pairConnectedAt(String name, String address);
+
+  /// Pairing page: button label while connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get pairConnecting;
+
+  /// Pairing page: button that hides the manual entry field.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get pairHideManual;
+
+  /// Pairing page: description on first launch.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow your agents’ progress, reply, and approve requests from your phone.'**
+  String get pairIntro;
+
+  /// Button on the pairing page and the camera scanner: type the pairing code.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter Manually'**
+  String get pairManual;
+
+  /// Button on the pairing page and the camera scanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste Pairing Code'**
+  String get pairPasteCode;
+
+  /// Camera scanner: hint above the frame.
+  ///
+  /// In en, this message translates to:
+  /// **'Point at the pairing code in Posse on your Mac'**
+  String get pairScanAim;
+
+  /// Pairing page: button that opens the camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to Pair'**
+  String get pairScanButton;
+
+  /// Camera scanner: note under the frame after tapping Paste Pairing Code with an empty clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard is empty'**
+  String get pairScanClipboardEmpty;
+
+  /// Camera scanner: note under the frame when the clipboard isn’t a code.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard doesn’t contain a pairing code'**
+  String get pairScanClipboardNotCode;
+
+  /// Pairing page: detail of step 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Click the phone icon at the bottom left of the window'**
+  String get pairStepOpenDetail;
+
+  /// Pairing page: title of step 1.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Posse on your Mac'**
+  String get pairStepOpenTitle;
+
+  /// Pairing page: detail of step 2.
+  ///
+  /// In en, this message translates to:
+  /// **'Or copy the pairing code on the Mac and paste it here'**
+  String get pairStepScanDetail;
+
+  /// Pairing page: title of step 2.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code'**
+  String get pairStepScanTitle;
+
+  /// Session More sheet: closes an agent session.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Session'**
+  String get sessionCloseSession;
+
+  /// Body of the dialog confirming closing an agent session. agent is the agent’s name, e.g. Claude.
+  ///
+  /// In en, this message translates to:
+  /// **'{agent} will be stopped and unfinished work interrupted. The conversation stays in the Mac’s session history and can be resumed on the Mac later.'**
+  String sessionCloseSessionBody(String agent);
+
+  /// Title of the dialog confirming closing an agent session.
+  ///
+  /// In en, this message translates to:
+  /// **'Close This Session?'**
+  String get sessionCloseSessionConfirm;
+
+  /// Session More sheet: closes a plain terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Close Terminal'**
+  String get sessionCloseTerminal;
+
+  /// Body of the dialog confirming closing a terminal. title is the terminal’s title.
+  ///
+  /// In en, this message translates to:
+  /// **'Programs running in “{title}” will be stopped.'**
+  String sessionCloseTerminalBody(String title);
+
+  /// Title of the dialog confirming closing a terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Close This Terminal?'**
+  String get sessionCloseTerminalConfirm;
+
+  /// Session More sheet: switch that keeps the terminal at the Mac’s size.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop Layout'**
+  String get sessionDeskLayout;
+
+  /// Session More sheet: subtitle of Desktop Layout.
+  ///
+  /// In en, this message translates to:
+  /// **'Shrinks to the screen width; pinch to zoom, then drag to scroll'**
+  String get sessionDeskLayoutNote;
+
+  /// Home session row: the agent waits for approval of a tool. tool is the tool name.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for you to approve {tool}'**
+  String sessionDetailApprove(String tool);
+
+  /// Home session row: the agent finished a turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn finished'**
+  String get sessionDetailDone;
+
+  /// Home session row: the terminal wasn’t restored after the Mac restarted; opening it starts it.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Restored: starts when you open it'**
+  String get sessionDetailLost;
+
+  /// Home session row: an idle agent without a saved chat, only the terminal can be viewed.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal only'**
+  String get sessionDetailTerminalOnly;
+
+  /// Home session row: the agent is running a tool. tool is the tool name.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {tool}'**
+  String sessionDetailUsing(String tool);
+
+  /// Home session row: the agent is waiting for the user.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for you'**
+  String get sessionDetailWaiting;
+
+  /// Session More sheet: row that opens the session’s images and videos.
+  ///
+  /// In en, this message translates to:
+  /// **'Images & Videos'**
+  String get sessionMedia;
+
+  /// Session More sheet: subtitle of Images & Videos.
+  ///
+  /// In en, this message translates to:
+  /// **'Screenshots the agent took, generated images and videos, and pasted images'**
+  String get sessionMediaNote;
+
+  /// New Session sheet title and the home tooltip of its button.
+  ///
+  /// In en, this message translates to:
+  /// **'New Session'**
+  String get sessionNew;
+
+  /// New Session: workspace row when the Mac has none.
+  ///
+  /// In en, this message translates to:
+  /// **'No workspaces yet'**
+  String get sessionNoWorkspaces;
+
+  /// New Session: button when Terminal is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Terminal'**
+  String get sessionOpenTerminal;
+
+  /// New Session: label above the agent choices.
+  ///
+  /// In en, this message translates to:
+  /// **'Open With'**
+  String get sessionOpenWith;
+
+  /// New Session: title of the workspace picker sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Which Workspace'**
+  String get sessionPickWorkspace;
+
+  /// New Session: placeholder of the first message field.
+  ///
+  /// In en, this message translates to:
+  /// **'First message (optional; you can say it later)'**
+  String get sessionPromptHint;
+
+  /// New Session: button when an agent is chosen. agent is the agent’s name.
+  ///
+  /// In en, this message translates to:
+  /// **'Start Chat with {agent}'**
+  String sessionStartChat(String agent);
+
+  /// New Session: button label while starting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get sessionStarting;
+
+  /// Workspace status: the agent finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get sessionStateDone;
+
+  /// Session status: the agent is idle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get sessionStateIdle;
+
+  /// Session status: the agent is starting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get sessionStateStarting;
+
+  /// Session status: waiting for the agents it dispatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on Tasks'**
+  String get sessionStateTasks;
+
+  /// Session status: finished a turn the user hasn’t looked at.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn finished, not seen yet'**
+  String get sessionStateUnread;
+
+  /// Session status: the agent is waiting for approval or an answer.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs You'**
+  String get sessionStateWaiting;
+
+  /// Session status: the agent is working.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get sessionStateWorking;
+
+  /// A plain terminal (no agent): session row detail and the choice in New Session.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get sessionTerminal;
+
+  /// Session More sheet: row that opens the skills and tools the session used.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills & Tools'**
+  String get sessionTools;
+
+  /// Session More sheet: subtitle of Skills & Tools.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills, MCP servers, and command-line tools used'**
+  String get sessionToolsNote;
+
+  /// New Session: title of the workspace section.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get sessionWorkspace;
+
+  /// Settings: section title for the app version and updates.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get settingsAbout;
+
+  /// Settings: section title for the theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get settingsAppearance;
+
+  /// Settings: section title for the chat view.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get settingsChat;
+
+  /// Settings › About: Check for Updates failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Check failed. Try again later.'**
+  String get settingsCheckFailed;
+
+  /// Settings › About: row that checks for a new version.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for Updates'**
+  String get settingsCheckUpdate;
+
+  /// Settings: section title for the paired Macs.
+  ///
+  /// In en, this message translates to:
+  /// **'Mac'**
+  String get settingsComputer;
+
+  /// Settings › Remote Desktop: control mode where taps land where you touch.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct Touch'**
+  String get settingsDeskDirect;
+
+  /// Settings › Remote Desktop: note for Direct Touch.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap where you want to click, long-press then move to drag, and drag one finger to pan a zoomed-in view.'**
+  String get settingsDeskDirectNote;
+
+  /// Settings › Remote Desktop: note under the switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the Mac’s name on the home screen and choose Remote Desktop to see the Mac’s screen and control it with your fingers.'**
+  String get settingsDeskNote;
+
+  /// Settings › Remote Desktop: Mac login passwords saved for unlocking.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved Mac Passwords'**
+  String get settingsDeskPasswords;
+
+  /// Settings › Saved Mac Passwords: subtitle counting saved passwords.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Login password saved for {count} Mac} other {Login passwords saved for {count} Macs}}'**
+  String settingsDeskPasswordsCount(int count);
+
+  /// Settings › Saved Mac Passwords: button that removes them all.
+  ///
+  /// In en, this message translates to:
+  /// **'Forget All'**
+  String get settingsDeskPasswordsForget;
+
+  /// Settings › Saved Mac Passwords: subtitle when none are saved.
+  ///
+  /// In en, this message translates to:
+  /// **'No saved passwords'**
+  String get settingsDeskPasswordsNone;
+
+  /// Settings › Remote Desktop: control mode where the screen acts as a trackpad.
+  ///
+  /// In en, this message translates to:
+  /// **'Trackpad'**
+  String get settingsDeskTrackpad;
+
+  /// Settings › Remote Desktop: note for Trackpad.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the phone screen as a trackpad: slide one finger to move the pointer; taps and right-clicks land on the pointer; slide three fingers to drag.'**
+  String get settingsDeskTrackpadNote;
+
+  /// Settings › Chat: switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand Tool Calls by Default'**
+  String get settingsExpandTools;
+
+  /// Settings › Terminal: note under the font size.
+  ///
+  /// In en, this message translates to:
+  /// **'On the phone, the terminal is laid out for the phone’s screen. Smaller text fits more on a line.'**
+  String get settingsFontNote;
+
+  /// Settings › Terminal: sample text drawn at the chosen font size.
+  ///
+  /// In en, this message translates to:
+  /// **'the agent is running Claude Code'**
+  String get settingsFontSample;
+
+  /// Settings › Terminal: font size slider label.
+  ///
+  /// In en, this message translates to:
+  /// **'Font Size'**
+  String get settingsFontSize;
+
+  /// Settings: section title for the home screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get settingsHome;
+
+  /// Settings › Terminal: row that opens the key bar settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Shortcuts'**
+  String get settingsKeys;
+
+  /// Settings › Terminal › Shortcuts: subtitle counting custom keys.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} custom key} other {{count} custom keys}}'**
+  String settingsKeysCustom(int count);
+
+  /// Settings › Terminal › Shortcuts: subtitle when there are no custom keys.
+  ///
+  /// In en, this message translates to:
+  /// **'Reorder the key bar above the keyboard and add your own keys'**
+  String get settingsKeysNote;
+
   /// Settings › Language: option that follows the phone's language.
   ///
   /// In en, this message translates to:
@@ -763,6 +1813,270 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Language'**
   String get settingsLanguageTitle;
+
+  /// Settings › Mac: row title when no Mac is connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Connected'**
+  String get settingsNotConnected;
+
+  /// Settings › Open Sessions In: chat view.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat'**
+  String get settingsOpenChat;
+
+  /// Settings › Open Sessions In: note when Chat is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'You can switch to the terminal at the top right of the chat. Agents without a saved session and shells always open in the terminal.'**
+  String get settingsOpenChatNote;
+
+  /// Settings: section title choosing whether a session opens in chat or terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Sessions In'**
+  String get settingsOpenFirst;
+
+  /// Settings › Open Sessions In: terminal view.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get settingsOpenTerminal;
+
+  /// Settings › Open Sessions In: note when Terminal is chosen.
+  ///
+  /// In en, this message translates to:
+  /// **'You can switch to the chat at the top right of the terminal. Chat and terminal are two views of the same session; switching replaces one with the other.'**
+  String get settingsOpenTerminalNote;
+
+  /// Settings › Mac: subtitle counting paired Macs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} Mac paired} other {{count} Macs paired}}'**
+  String settingsPairedCount(int count);
+
+  /// Settings › Home: switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Branch and Path for Projects'**
+  String get settingsProjectMeta;
+
+  /// Settings › Chat: switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Thinking'**
+  String get settingsShowReasoning;
+
+  /// Settings: section title for the terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get settingsTerminal;
+
+  /// Settings › Appearance: dark theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get settingsThemeDark;
+
+  /// Settings › Appearance: light theme.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get settingsThemeLight;
+
+  /// Settings › Appearance: follow the phone’s appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get settingsThemeSystem;
+
+  /// Settings page title.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settingsTitle;
+
+  /// Settings › About: result of Check for Updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to Date'**
+  String get settingsUpToDate;
+
+  /// Settings › About: row that opens the update sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Update to {version} ({build})'**
+  String settingsUpdateTo(String version, String build);
+
+  /// Settings › Home: switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Branch for Workspaces'**
+  String get settingsWorkspaceMeta;
+
+  /// Terminal: notice when a tapped link can’t be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t open this link: {url}'**
+  String terminalCantOpenLink(String url);
+
+  /// Terminal: notice after tapping Paste with nothing usable.
+  ///
+  /// In en, this message translates to:
+  /// **'The clipboard has no text or image'**
+  String get terminalClipboardEmpty;
+
+  /// Terminal: notice when the terminal process ended.
+  ///
+  /// In en, this message translates to:
+  /// **'The terminal has exited'**
+  String get terminalExited;
+
+  /// Terminal key bar: key cap of the key that clears the input.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get terminalKeyClear;
+
+  /// Terminal: notice after tapping Exit with no agent running.
+  ///
+  /// In en, this message translates to:
+  /// **'No agent is running in this terminal'**
+  String get terminalNoAgent;
+
+  /// Terminal: notice after tapping a path outside the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'This file isn’t in the current workspace and can’t be opened on the phone'**
+  String get terminalNotInWorkspace;
+
+  /// Terminal key bar: accessibility label of the Send File key.
+  ///
+  /// In en, this message translates to:
+  /// **'Send File'**
+  String get terminalSendFile;
+
+  /// Terminal key bar: accessibility label of the Send Now key.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Now'**
+  String get terminalSendNow;
+
+  /// Terminal More sheet: switch to the chat view.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Chat'**
+  String get terminalSwitchToChat;
+
+  /// Update sheet (Android): note under the button.
+  ///
+  /// In en, this message translates to:
+  /// **'When the download finishes, the system asks you to confirm installing over the current app. Your pairings are kept. The first time, allow Posse to install apps in Settings.'**
+  String get updateAndroidNote;
+
+  /// Update sheet (Android): error when the downloaded package is in an unexpected place.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t open the installer: the package isn’t in the update folder'**
+  String get updateBadPackage;
+
+  /// Home update banner. version and build are the new release’s.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version} ({build})'**
+  String updateBanner(String version, String build);
+
+  /// Update sheet: build number of the new release.
+  ///
+  /// In en, this message translates to:
+  /// **'Build {build}'**
+  String updateBuild(String build);
+
+  /// Update sheet: install button.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get updateButton;
+
+  /// Update sheet (Android): error when the system installer can’t be opened.
+  ///
+  /// In en, this message translates to:
+  /// **'Can’t open the installer'**
+  String get updateCantInstall;
+
+  /// Update sheet: the installed version.
+  ///
+  /// In en, this message translates to:
+  /// **'Current {version} ({build})'**
+  String updateCurrent(String version, String build);
+
+  /// Update sheet: error when the download fails.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed. Try again later.'**
+  String get updateDownloadFailed;
+
+  /// Update sheet (Android): button label while downloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get updateDownloading;
+
+  /// Update sheet (Android): button label with progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading {percent}%'**
+  String updateDownloadingPercent(int percent);
+
+  /// Update sheet (Android): error when installing apps isn’t allowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow Posse to install apps in Settings to update'**
+  String get updateInstallDenied;
+
+  /// Update sheet (iOS): note under the button.
+  ///
+  /// In en, this message translates to:
+  /// **'After you tap Update, it downloads in the background and the Home Screen icon shows the progress. When it’s installed, the app switches to the new version. Your pairings are kept.'**
+  String get updateIosNote;
+
+  /// Update sheet (Android): button label when the download finished.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening installer…'**
+  String get updateOpening;
+
+  /// Update sheet (iOS): button label while asking the system to install.
+  ///
+  /// In en, this message translates to:
+  /// **'Requesting installation…'**
+  String get updateRequesting;
+
+  /// Home update banner: tooltip of the dismiss button.
+  ///
+  /// In en, this message translates to:
+  /// **'Don’t remind me about this version'**
+  String get updateSkip;
+
+  /// Update sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'New Version {version}'**
+  String updateTitle(String version);
+
+  /// Upload progress bar while sending files. index is the current one (from 1), count the total.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {Sending file} =1 {Sending file} other {Sending file {index}/{count}}}'**
+  String uploadSendingFile(int count, int index);
+
+  /// Upload progress bar while sending images. index is the current one (from 1), count the total.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0 {Sending image} =1 {Sending image} other {Sending image {index}/{count}}}'**
+  String uploadSendingImage(int count, int index);
 
   /// Plan Usage: Cursor’s Auto pool, named as in its dashboard.
   ///
@@ -931,6 +2245,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'wk'**
   String get usageWindowWeekShort;
+
+  /// Name of the workspace that is the project folder itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Main Workspace'**
+  String get workspaceMain;
+
+  /// Workspace status when it has no sessions.
+  ///
+  /// In en, this message translates to:
+  /// **'No Sessions'**
+  String get workspaceNoSessions;
+
+  /// Workspace page: segment for Git changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes'**
+  String get workspaceTabChanges;
+
+  /// Workspace page: segment for the file browser.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get workspaceTabFiles;
+
+  /// Workspace page: segment for session history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get workspaceTabHistory;
 }
 
 class _AppLocalizationsDelegate

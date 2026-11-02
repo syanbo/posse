@@ -4,6 +4,7 @@ import 'package:flterm/flterm.dart' hide Key;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import 'copy_chip.dart';
 
@@ -319,7 +320,7 @@ class _CopyChip extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Text('复制', style: style),
+              child: Text(context.l10n.commonCopy, style: style),
             ),
           ),
           Container(width: 1, height: 16, color: c.line),
@@ -330,7 +331,7 @@ class _CopyChip extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Text('全选', style: style),
+              child: Text(context.l10n.commonSelectAll, style: style),
             ),
           ),
         ],

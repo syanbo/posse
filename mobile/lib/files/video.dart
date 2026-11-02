@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -262,13 +263,14 @@ class _VideoViewState extends State<VideoView> {
         _fail('电脑上的 posse 版本太旧，更新后才能在手机上播放视频');
       } else if (e.code == 'closed') {
         _fail('和电脑的连接断了，下好的部分留着', resumable: true);
-      } else {
-        _fail(friendlyError(e));
+      } else if (mounted) {
+        _fail(friendlyError(e, context.l10n));
       }
     } on TimeoutException {
       _fail('网络太慢，视频没下完，下好的部分留着', resumable: true);
     } catch (e) {
-      _fail('这个视频手机上放不了：${friendlyError(e)}');
+      if (!mounted) return;
+      _fail('这个视频手机上放不了：${friendlyError(e, context.l10n)}');
     }
   }
 

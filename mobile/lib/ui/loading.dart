@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import 'theme.dart';
 
 /// 整页加载：七格蜂巢，外圈六格顺时针逐格亮起，后面拖一段渐暗。
@@ -38,7 +39,7 @@ class _PosseLoaderState extends State<PosseLoader>
   Widget build(BuildContext context) {
     final color = widget.color ?? PosseColors.of(context).accent;
     return Semantics(
-      label: '正在加载',
+      label: context.l10n.commonLoading,
       child: RepaintBoundary(
         child: CustomPaint(
           size: Size.square(widget.size),
@@ -84,7 +85,7 @@ class _HexSpinnerState extends State<HexSpinner>
   Widget build(BuildContext context) {
     final color = widget.color ?? PosseColors.of(context).accent;
     return Semantics(
-      label: '正在加载',
+      label: context.l10n.commonLoading,
       child: RepaintBoundary(
         child: CustomPaint(
           size: Size.square(widget.size),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n/l10n.dart';
 import 'protocol/e2ee.dart';
 import 'protocol/link.dart';
 import 'protocol/pairing.dart';
@@ -17,37 +18,53 @@ import 'terminal/frames.dart';
 import 'workspace/models.dart';
 
 /// 把连接、协议层的报错换成看得懂的话；认不出的原样给出，方便排查。
-String friendlyError(Object error) {
-  if (error is TimeoutException) return '电脑没有回应，可能已经休眠或者网络断了';
-  if (error is FirstConnectFailed) {
-    return '连不上电脑：确认电脑上的 Posse 开着、手机和电脑在同一个网络，'
-        '并在手机设置里允许 Posse 使用无线数据和本地网络';
+String friendlyError(Object error, AppLocalizations l) {
+  if (error is TimeoutException) return l.errorTimeout;
+  if (error is FirstConnectFailed) return l.errorFirstConnect;
+  if (error is PhoneError) {
+    return switch (error.code) {
+      PhoneError.notConnected => l.errorNotConnected,
+      PhoneError.noNewTerminal => l.errorNoNewTerminal,
+      _ => error.code,
+    };
   }
   if (error is RpcException) {
-    // 新版电脑端已经给中文说明；旧版只给英文，常见的错误码在这里认
+    // 新版电脑端已经按手机的语言给说明；旧版只给英文，常见的错误码在这里认
     return switch (error.code) {
-      'closed' => '和电脑的连接断开了，正在重连',
-      'method_not_found' ||
-      'unknown_method' => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse',
-      'binary_file' => '这是二进制文件，没法当文本打开',
-      'file_too_large' => '文件太大，手机上打不开',
-      'not_a_file' => '这不是文件',
-      'invalid_relative_path' => '路径不在工作区里',
+      'closed' => l.errorConnectionLost,
+      'method_not_found' || 'unknown_method' => l.errorOldDesktop,
+      'binary_file' => l.errorBinaryFile,
+      'file_too_large' => l.errorFileTooLarge,
+      'not_a_file' => l.errorNotAFile,
+      'invalid_relative_path' => l.errorOutsideWorkspace,
       _ => error.message,
     };
   }
   final text = '$error';
   if (error is StateError && text.contains('closed') ||
       text.contains('socket closed')) {
-    return '和电脑的连接断开了，正在重连';
+    return l.errorConnectionLost;
   }
   if (text.contains('SocketException') ||
       text.contains('Connection refused') ||
       text.contains('WebSocketChannelException')) {
-    return '连不上电脑：确认电脑上的 Posse 开着，手机和电脑在同一个网络';
+    return l.errorCantConnect;
   }
-  if (error is FormatException) return '配对码不对，重新扫一次或者重新复制';
+  if (error is FormatException) return l.errorBadPairingCode;
   return text;
+}
+
+/// 手机自己产生的报错，显示时由 [friendlyError] 按代号取文字。
+class PhoneError implements Exception {
+  const PhoneError(this.code);
+
+  final String code;
+
+  static const notConnected = 'notConnected';
+  static const noNewTerminal = 'noNewTerminal';
+
+  @override
+  String toString() => 'PhoneError($code)';
 }
 
 /// 第一次配对一直连不上：可能电脑没开，也可能没给网络权限，见 [PosseAppModel._start]。
@@ -363,7 +380,7 @@ class SavedComputer {
     try {
       return Uri.parse(PairingOffer.parse(code).endpoint).host;
     } catch (_) {
-      return '电脑';
+      return '';
     }
   }
 
@@ -554,7 +571,9 @@ class PosseAppModel extends ChangeNotifier {
 
   /// 用户在电脑列表里点了断开：停在首页、不自动重连，点重新连接或选一台电脑才再连。只在这次运行里有效。
   var disconnected = false;
-  String? error;
+
+  /// 最近一次连接或刷新的报错（原样的异常），显示时经 [friendlyError] 按界面语言写。
+  Object? error;
   Timer? _poll;
   var _connectGen = 0;
   var saved = SavedComputers();
@@ -677,7 +696,7 @@ class PosseAppModel extends ChangeNotifier {
             tabsStale = true;
           }
           if (created.lastError != null) {
-            error = friendlyError(created.lastError!);
+            error = created.lastError!;
           }
         } else if (!identical(now, seen)) {
           // 换上了新连接（重连、升级到 QUIC）：断线期间的会话状态可能已经变了，马上拉一次，
@@ -724,7 +743,7 @@ class PosseAppModel extends ChangeNotifier {
       return true;
     } catch (caught) {
       if (!identical(link, next)) await next?.close();
-      if (gen == _connectGen) error = friendlyError(caught);
+      if (gen == _connectGen) error = caught;
       return false;
     } finally {
       if (gen == _connectGen) {
@@ -962,7 +981,7 @@ class PosseAppModel extends ChangeNotifier {
     } catch (caught) {
       // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次
       if (!identical(current, rpc)) return;
-      error = friendlyError(caught);
+      error = caught;
     }
     notifyListeners();
   }

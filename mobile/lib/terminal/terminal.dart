@@ -17,6 +17,7 @@ import '../chat/image_pick.dart';
 import '../chat/image_upload.dart';
 import '../chat/send.dart';
 import '../files/files.dart';
+import '../l10n/l10n.dart';
 import '../workspace/session_actions.dart';
 import '../protocol/rpc.dart';
 import '../settings/custom_keys.dart';
@@ -104,8 +105,8 @@ class _TerminalScreenState extends State<TerminalScreen>
 
   /// 正在上传的图片传了多少，0 到 1；没在传时为空。
   double? _upload;
-  // 正在传的是图片（剪贴板）还是文件（快捷键栏的发送文件）
-  String _uploadWhat = '图片';
+  // 正在传的是文件（快捷键栏的发送文件）还是图片（剪贴板）
+  var _uploadFile = false;
 
   Timer? _noticeTimer;
 
@@ -335,7 +336,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           }
         }
         if (frame['type'] == 'end') {
-          setState(() => _notice = '终端已经退出');
+          setState(() => _notice = context.l10n.terminalExited);
         }
         // 断线由重连接手，这里不提示。
       }, onError: (Object _) {});
@@ -343,7 +344,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (gen != _gen || !mounted) return;
       await _binary?.cancel();
       _binary = null;
-      setState(() => _notice = friendlyError(error));
+      setState(() => _notice = friendlyError(error, context.l10n));
     } finally {
       if (oldRpc != null && oldStream != null) {
         await _drop(oldRpc, oldStream);
@@ -426,7 +427,7 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
         );
       case NotInWorkspace():
-        _flash('这个文件不在当前工作区里，手机上打不开');
+        _flash(context.l10n.terminalNotInWorkspace);
       case null:
         break;
     }
@@ -437,7 +438,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     try {
       ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {}
-    if (!ok && mounted) _flash('打不开这个链接：$uri');
+    if (!ok && mounted) _flash(context.l10n.terminalCantOpenLink('$uri'));
   }
 
   /// grok 自己在左右各留 [_grokMargin] 列空白、整屏铺底色，窄屏上再加外面的内边距显得空。
@@ -700,7 +701,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     try {
       _controller.write(_bullets.apply(bytes));
     } catch (error) {
-      if (mounted) setState(() => _notice = friendlyError(error));
+      if (mounted) setState(() => _notice = friendlyError(error, context.l10n));
     } finally {
       _applying = false;
     }
@@ -725,7 +726,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       if (file == null || !mounted) return;
       setState(() {
         _upload = 0;
-        _uploadWhat = '文件';
+        _uploadFile = true;
       });
       final String path;
       try {
@@ -743,7 +744,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       // 和图片一样当成一次粘贴、不回车；路径里的空格这些转义掉，shell 和 agent 都当成一个文件
       _controller.paste(shellPath(path));
     } catch (error) {
-      if (mounted) _flash(friendlyError(error));
+      if (mounted) _flash(friendlyError(error, context.l10n));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -765,9 +766,9 @@ class _TerminalScreenState extends State<TerminalScreen>
         await _typeImagePath(rpc, paste.image!);
         return;
       }
-      _flash('剪贴板里没有文字或图片');
+      _flash(context.l10n.terminalClipboardEmpty);
     } catch (error) {
-      if (mounted) _flash(friendlyError(error));
+      if (mounted) _flash(friendlyError(error, context.l10n));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -776,7 +777,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   Future<void> _typeImagePath(PhoneRpc rpc, Uint8List bytes) async {
     setState(() {
       _upload = 0;
-      _uploadWhat = '图片';
+      _uploadFile = false;
     });
     final String path;
     try {
@@ -827,7 +828,7 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 把整个终端也关掉。
   Future<void> _exitAgent() async {
     if (_liveTab.agent == null) {
-      _flash('这个终端里没有在运行的 agent');
+      _flash(context.l10n.terminalNoAgent);
       return;
     }
     if (widget.model.rpc == null) return;
@@ -890,14 +891,16 @@ class _TerminalScreenState extends State<TerminalScreen>
           ),
           // 切到对话放进"更多"里，顶栏只留文件和更多
           IconButton(
-            tooltip: '更多',
+            tooltip: context.l10n.commonMore,
             icon: const Icon(Icons.more_horiz_rounded),
             onPressed: () async {
               final nav = Navigator.of(context);
               final action = await showSessionMore(
                 context,
                 tab: widget.tab,
-                switchLabel: widget.onOpenChat == null ? null : '切换到对话',
+                switchLabel: widget.onOpenChat == null
+                    ? null
+                    : context.l10n.terminalSwitchToChat,
                 switchIcon: Icons.chat_bubble_outline_rounded,
                 media: hasMedia(_liveTab),
                 tools: hasTools(_liveTab),
@@ -997,7 +1000,7 @@ class _TerminalScreenState extends State<TerminalScreen>
                     index: 0,
                     count: 1,
                     done: done,
-                    what: _uploadWhat,
+                    files: _uploadFile,
                   ),
                 ),
               if (_notice != null)
@@ -1244,31 +1247,35 @@ class _KeyBar extends StatelessWidget {
                 return _iconKey(
                   c,
                   glyph: SendNowGlyph(color: c.text),
-                  label: '立即发送',
+                  label: context.l10n.terminalSendNow,
                   onTap: () => onKey(term.bytes),
                 );
               }
               if (term != null && term.id == exitAgentLabel) {
-                return _textKey(c, term.label, onExit);
+                return _textKey(c, term.label(context.l10n), onExit);
               }
               if (term != null && term.id == clearInputKey) {
-                return _textKey(c, term.label, onClear);
+                return _textKey(c, term.label(context.l10n), onClear);
               }
               if (term != null) {
-                return _textKey(c, term.label, () => onKey(term.bytes));
+                return _textKey(
+                  c,
+                  term.label(context.l10n),
+                  () => onKey(term.bytes),
+                );
               }
               return key.builtin == 'image'
                   ? _iconKey(
                       c,
                       icon: Icons.attach_file_rounded,
-                      label: '发送文件',
+                      label: context.l10n.terminalSendFile,
                       onTap: onImage,
                     )
                   : _iconKey(
                       c,
                       icon: Icons.content_paste_rounded,
                       size: _pasteIcon,
-                      label: '粘贴',
+                      label: context.l10n.commonPaste,
                       onTap: onPaste,
                     );
             },

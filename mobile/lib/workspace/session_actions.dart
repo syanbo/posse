@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../chat/transcript.dart' show chatWho;
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'models.dart';
@@ -13,26 +14,31 @@ Future<bool> closeSession(
   SessionTab tab,
 ) async {
   final who = tab.agent == null ? null : chatWho('assistant', tab.agent);
+  final l = context.l10n;
   final ok = await showPosseDialog<bool>(
     context: context,
     builder: (dialog) => AlertDialog(
-      title: Text(who == null ? '关闭这个终端？' : '关闭这个会话？'),
+      title: Text(
+        who == null
+            ? l.sessionCloseTerminalConfirm
+            : l.sessionCloseSessionConfirm,
+      ),
       content: Text(
         who == null
-            ? '「${cleanTitle(tab.title)}」里正在运行的程序会被结束。'
-            : '$who 会被结束，还没做完的事会中断。对话记录留在电脑的会话历史里，之后可以在桌面端恢复。',
+            ? l.sessionCloseTerminalBody(cleanTitle(tab.title))
+            : l.sessionCloseSessionBody(who),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialog, false),
-          child: const Text('取消'),
+          child: Text(l.commonCancel),
         ),
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: PosseColors.of(dialog).danger,
           ),
           onPressed: () => Navigator.pop(dialog, true),
-          child: const Text('关闭'),
+          child: Text(l.commonClose),
         ),
       ],
     ),
@@ -45,7 +51,7 @@ Future<bool> closeSession(
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(friendlyError(error))));
+          .showSnackBar(SnackBar(content: Text(friendlyError(error, l))));
     }
     return false;
   }
@@ -74,6 +80,7 @@ Future<String?> showSessionMore(
     showDragHandle: true,
     builder: (sheet) {
       final c = PosseColors.of(sheet);
+      final l = sheet.l10n;
       return SafeArea(
         top: false,
         child: Section(
@@ -94,8 +101,8 @@ Future<String?> showSessionMore(
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: const Text('图片与视频'),
-                subtitle: const Text('agent 截的图、生成的图片和视频，粘贴过的图片'),
+                title: Text(l.sessionMedia),
+                subtitle: Text(l.sessionMediaNote),
                 onTap: () => Navigator.of(sheet).pop('media'),
               ),
             if (tools)
@@ -106,8 +113,8 @@ Future<String?> showSessionMore(
                   size: Ic.button,
                   color: c.accent,
                 ),
-                title: const Text('技能与工具'),
-                subtitle: const Text('用到的技能、MCP 和命令行程序'),
+                title: Text(l.sessionTools),
+                subtitle: Text(l.sessionToolsNote),
                 onTap: () => Navigator.of(sheet).pop('tools'),
               ),
             if (desk != null)
@@ -125,8 +132,8 @@ Future<String?> showSessionMore(
                       size: Ic.button,
                       color: c.accent,
                     ),
-                    title: const Text('电脑布局'),
-                    subtitle: const Text('缩到屏幕宽度，双指放大后可以滑动'),
+                    title: Text(l.sessionDeskLayout),
+                    subtitle: Text(l.sessionDeskLayoutNote),
                     trailing: PosseSwitch(value: on, onChanged: flip),
                     onTap: () => flip(!on),
                   );
@@ -140,7 +147,9 @@ Future<String?> showSessionMore(
                 color: c.danger,
               ),
               title: Text(
-                tab.agent == null ? '关闭终端' : '关闭会话',
+                tab.agent == null
+                    ? l.sessionCloseTerminal
+                    : l.sessionCloseSession,
                 style: TextStyle(color: c.danger),
               ),
               onTap: () => Navigator.of(sheet).pop('close'),

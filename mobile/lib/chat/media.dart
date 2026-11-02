@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../files/save.dart';
 import '../files/video.dart';
 import '../history/models.dart' show historyTime;
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/loading.dart';
 import '../ui/media_pager.dart';
@@ -152,11 +153,13 @@ class _MediaScreenState extends State<MediaScreen> {
           setState(() => _error = '电脑上的 posse 版本太旧，更新后才能在手机上看会话里的图片和视频');
         }
       } else if (mounted && _list == null) {
-        setState(() => _error = friendlyError(e));
+        setState(() => _error = friendlyError(e, context.l10n));
       }
     } catch (e) {
       // 列过一次之后断线不打扰，下一轮再列
-      if (mounted && _list == null) setState(() => _error = friendlyError(e));
+      if (mounted && _list == null) {
+        setState(() => _error = friendlyError(e, context.l10n));
+      }
     } finally {
       _busy = false;
     }
@@ -658,7 +661,7 @@ class _ImageViewState extends State<_ImageView> {
     } on VideoCancelled {
       return;
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
+      if (mounted) setState(() => _error = friendlyError(e, context.l10n));
     }
   }
 

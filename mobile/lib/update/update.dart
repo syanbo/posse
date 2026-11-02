@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 
@@ -176,7 +177,10 @@ class UpdateBanner extends StatelessWidget {
                     Expanded(
                       child: Text.rich(
                         TextSpan(
-                          text: '新版本 ${release.version}（${release.build}）',
+                          text: context.l10n.updateBanner(
+                            release.version,
+                            '${release.build}',
+                          ),
                           style: TextStyle(
                             fontWeight: Fw.medium,
                             color: c.text,
@@ -199,7 +203,7 @@ class UpdateBanner extends StatelessWidget {
                     ),
                     // IconButton 会被撑到最小点击尺寸，条就比用量条高一截
                     Tooltip(
-                      message: '不再提示这个版本',
+                      message: context.l10n.updateSkip,
                       child: InkResponse(
                         radius: 18,
                         onTap: () => model.updateSettings(
@@ -299,32 +303,35 @@ class _UpdateSheetState extends State<_UpdateSheet> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        if (how == 'denied') _error = '要在系统设置里允许 Posse 安装应用，才能更新';
+        if (how == 'denied') _error = context.l10n.updateInstallDenied;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
         _error = e is PlatformException
-            ? '打不开安装：${e.message ?? e.code}'
-            : '下载失败，稍后再试';
+            ? (e.code == 'bad_args'
+                  ? context.l10n.updateBadPackage
+                  : context.l10n.updateCantInstall)
+            : context.l10n.updateDownloadFailed;
       });
     } finally {
       _apkProgress.removeListener(follow);
     }
   }
 
-  String get _busyLabel {
-    if (!Platform.isAndroid) return '正在请求安装…';
+  String _busyLabel(AppLocalizations l) {
+    if (!Platform.isAndroid) return l.updateRequesting;
     final p = _progress;
-    if (p == null) return '正在下载…';
-    if (p >= 1) return '正在打开安装…';
-    return '正在下载 ${(p * 100).floor()}%';
+    if (p == null) return l.updateDownloading;
+    if (p >= 1) return l.updateOpening;
+    return l.updateDownloadingPercent((p * 100).floor());
   }
 
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final r = widget.release;
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Padding(
@@ -334,7 +341,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '新版本 ${r.version}',
+            l.updateTitle(r.version),
             style: TextStyle(
               fontSize: Fs.title,
               fontWeight: Fw.bold,
@@ -344,9 +351,9 @@ class _UpdateSheetState extends State<_UpdateSheet> {
           const SizedBox(height: 4),
           Text(
             [
-              '构建 ${r.build}',
+              l.updateBuild('${r.build}'),
               if (r.size.isNotEmpty) r.size,
-              '当前 $appVersion（$appBuild）',
+              l.updateCurrent(appVersion, '$appBuild'),
             ].join(' · '),
             style: TextStyle(fontSize: Fs.small, color: c.muted),
           ),
@@ -389,7 +396,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
             icon: _busy
                 ? const HexSpinner(size: Ic.small, color: Colors.white)
                 : const Icon(Icons.system_update_rounded, size: Ic.medium),
-            label: Text(_busy ? _busyLabel : '更新'),
+            label: Text(_busy ? _busyLabel(l) : l.updateButton),
           ),
           if (_error case final error?) ...[
             const SizedBox(height: 8),
@@ -401,9 +408,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
           ],
           const SizedBox(height: 8),
           Text(
-            Platform.isAndroid
-                ? '下载完系统会弹出安装确认，覆盖安装，配对不会丢。第一次更新要在系统设置里允许 Posse 安装应用。'
-                : '点安装后在后台下载，回到主屏幕能在图标上看到进度，装好后 App 会自动换成新版，配对不会丢。',
+            Platform.isAndroid ? l.updateAndroidNote : l.updateIosNote,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: Fs.small, color: c.muted),
           ),

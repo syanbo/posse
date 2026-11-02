@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:posse_quic/posse_quic.dart' as quic;
 
+import '../l10n/l10n.dart';
 import 'theme.dart';
 
 // Mermaid 代码块画成图。排版在编进 App 的 Go 库里（posse_quic 的 renderMermaid，和桌面同一套 Pele）；
@@ -161,7 +162,9 @@ class MermaidResult {
             color(l['c'] as String),
           ),
       ],
-      err.isEmpty && (m['w'] == null || m['h'] == null) ? '图的尺寸为空' : err,
+      err.isEmpty && (m['w'] == null || m['h'] == null)
+          ? 'the diagram has no size'
+          : err,
     );
   }
 }
@@ -254,7 +257,9 @@ class _MermaidBlockState extends State<MermaidBlock> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
-                    '画不出图：${mermaidErrorText(error)}',
+                    context.l10n.mermaidCantDraw(
+                      mermaidErrorText(context.l10n, error),
+                    ),
                     style: TextStyle(fontSize: Fs.small, color: c.danger),
                   ),
                 ),
@@ -376,9 +381,9 @@ class _MermaidZoom extends StatelessWidget {
 }
 
 /// 手机上的 Go 库（internal/mermaid）自己的几条报错是英文源文本，按界面语言写；Pele 的语法报错原样给。
-String mermaidErrorText(String error) => switch (error) {
-  'Pele did not draw an SVG' => 'Pele 没有画出 SVG',
-  'drawing the diagram timed out' => '画图超时',
-  'the diagram has no size' => '图的尺寸为空',
+String mermaidErrorText(AppLocalizations l, String error) => switch (error) {
+  'Pele did not draw an SVG' => l.mermaidNoSvg,
+  'drawing the diagram timed out' => l.mermaidTimeout,
+  'the diagram has no size' => l.mermaidNoSize,
   _ => error,
 };

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../terminal/frames.dart';
@@ -56,14 +57,15 @@ class CustomKeysScreen extends StatelessWidget {
       listenable: model,
       builder: (context, _) {
         final c = PosseColors.of(context);
+        final l = context.l10n;
         final keys = model.settings.barKeys;
         final reset = defaultBarKeys(model.settings.customKeys);
         return Scaffold(
           appBar: AppBar(
-            title: const Text('终端快捷键'),
+            title: Text(l.keysTitle),
             actions: [
               IconButton(
-                tooltip: '新建快捷键',
+                tooltip: l.keysNew,
                 onPressed: () => _edit(context),
                 icon: const Icon(Icons.add_rounded),
               ),
@@ -74,7 +76,7 @@ class CustomKeysScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: 8, bottom: 32),
             children: [
               Section(
-                title: '快捷键栏',
+                title: l.keysBar,
                 children: [
                   ReorderableListView.builder(
                     shrinkWrap: true,
@@ -107,7 +109,7 @@ class CustomKeysScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
-                  '最左边的键盘开关固定不动，其余按这里从上到下的顺序从左往右排。自己加的键点开可以修改或删除。',
+                  l.keysBarNote,
                   style: TextStyle(
                     fontSize: Fs.small,
                     height: Lh.body,
@@ -124,8 +126,8 @@ class CustomKeysScreen extends StatelessWidget {
                       size: Ic.button,
                       color: c.accent,
                     ),
-                    title: const Text('新建快捷键'),
-                    subtitle: const Text('一段常用的文字、Ctrl 组合键或 PgUp 这类特殊键'),
+                    title: Text(l.keysNew),
+                    subtitle: Text(l.keysNewNote),
                     onTap: () => _edit(context),
                   ),
                   if (_order(keys) != _order(reset))
@@ -136,8 +138,8 @@ class CustomKeysScreen extends StatelessWidget {
                         size: Ic.button,
                         color: c.accent,
                       ),
-                      title: const Text('恢复默认顺序'),
-                      subtitle: const Text('自己加的键保留，排回图片、粘贴后面'),
+                      title: Text(l.keysResetOrder),
+                      subtitle: Text(l.keysResetOrderNote),
                       onTap: () => _save(reset),
                     ),
                 ],
@@ -167,6 +169,7 @@ class _KeyRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final custom = item.custom;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -183,15 +186,17 @@ class _KeyRow extends StatelessWidget {
             'paste' => const _KeyCap(icon: Icons.content_paste_rounded),
             sendNowLabel => _KeyCap(glyph: SendNowGlyph(color: c.text)),
             _ => _KeyCap(
-              label: custom?.shown ?? item.termKey?.label ?? item.builtin,
+              label: custom?.shown ?? item.termKey?.label(l) ?? item.builtin,
             ),
           },
           title: Text(
             custom != null
-                ? describeKey(custom)
-                : describeBuiltin(item.builtin!),
+                ? describeKey(l, custom)
+                : describeBuiltin(l, item.builtin!),
+            // 英文的说明比中文长，折行写全
+            maxLines: 3,
           ),
-          subtitle: custom == null ? const Text('内置') : null,
+          subtitle: custom == null ? Text(l.keysBuiltin) : null,
           onTap: onTap,
           trailing: ReorderableDragStartListener(
             index: index,
@@ -211,29 +216,30 @@ class _KeyRow extends StatelessWidget {
 }
 
 /// 设置列表里说明这个键会发什么。
-String describeKey(CustomKey key) => switch (key.kind) {
-  'text' => key.enter ? '输入「${key.value}」并回车' : '输入「${key.value}」',
+String describeKey(AppLocalizations l, CustomKey key) => switch (key.kind) {
+  'text' =>
+    key.enter ? l.keysTypeTextEnter(key.value) : l.keysTypeText(key.value),
   'ctrl' => 'Ctrl + ${key.value.toUpperCase()}',
   'alt' => 'Alt + ${key.value}',
   _ => key.value,
 };
 
 /// 内置键是做什么的。
-String describeBuiltin(String name) => switch (name) {
-  'image' => '发送文件（照片、视频、文件）',
-  'paste' => '粘贴剪贴板',
-  'Esc' => 'Esc：中断、退出',
-  'Tab' => 'Tab：补全',
-  'Enter' => '回车',
-  sendNowLabel => 'Ctrl + Enter：排队的消息马上交给 Claude',
-  '⇧Tab' => 'Shift + Tab：切换模式',
-  '^C' => 'Ctrl + C：结束程序',
-  clearInputKey => '清空输入框',
-  exitAgentLabel => '退出 agent（/exit）',
-  '↑' => '方向键：上',
-  '↓' => '方向键：下',
-  '←' => '方向键：左',
-  '→' => '方向键：右',
+String describeBuiltin(AppLocalizations l, String name) => switch (name) {
+  'image' => l.keysImage,
+  'paste' => l.keysPaste,
+  'Esc' => l.keysEsc,
+  'Tab' => l.keysTab,
+  'Enter' => l.keysEnter,
+  sendNowLabel => l.keysSendNow,
+  '⇧Tab' => l.keysShiftTab,
+  '^C' => l.keysCtrlC,
+  clearInputKey => l.keysClear,
+  exitAgentLabel => l.keysExit,
+  '↑' => l.keysUp,
+  '↓' => l.keysDown,
+  '←' => l.keysLeft,
+  '→' => l.keysRight,
   _ => name,
 };
 
@@ -291,8 +297,6 @@ class _KeyEditor extends StatefulWidget {
 }
 
 class _KeyEditorState extends State<_KeyEditor> {
-  static const _kindLabels = ['文字', 'Ctrl', 'Alt', '特殊键'];
-
   late String _kind = widget.initial?.kind ?? 'text';
   late final _label = TextEditingController(text: widget.initial?.label);
   late final _text = TextEditingController(
@@ -330,6 +334,7 @@ class _KeyEditorState extends State<_KeyEditor> {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final draft = _draft;
     final label = TextStyle(fontSize: Fs.small, color: c.muted);
     return Padding(
@@ -340,7 +345,7 @@ class _KeyEditorState extends State<_KeyEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              widget.initial == null ? '新建快捷键' : '编辑快捷键',
+              widget.initial == null ? l.keysNew : l.keysEdit,
               style: TextStyle(
                 fontSize: Fs.title,
                 fontWeight: Fw.bold,
@@ -349,26 +354,28 @@ class _KeyEditorState extends State<_KeyEditor> {
             ),
             const SizedBox(height: 16),
             Segmented(
-              labels: _kindLabels,
+              labels: [l.keysKindText, 'Ctrl', 'Alt', l.keysKindSpecial],
               selected: CustomKey.kinds.indexOf(_kind),
               onChanged: (i) => setState(() => _kind = CustomKey.kinds[i]),
             ),
             const SizedBox(height: 16),
-            ..._valueFields(c, label),
+            ..._valueFields(l, c, label),
             const SizedBox(height: 16),
-            Text('按钮上的字', style: label),
+            Text(l.keysLabel, style: label),
             const SizedBox(height: 6),
             TextField(
               controller: _label,
               onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(hintText: '不填就用 ${draft.shown}'),
+              decoration: InputDecoration(
+                hintText: l.keysLabelHint(draft.shown),
+              ),
             ),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: draft.valid
                   ? () => Navigator.pop(context, _EditResult(draft))
                   : null,
-              child: const Text('保存'),
+              child: Text(l.commonSave),
             ),
             if (widget.initial != null) ...[
               const SizedBox(height: 8),
@@ -379,7 +386,7 @@ class _KeyEditorState extends State<_KeyEditor> {
                 ),
                 onPressed: () =>
                     Navigator.pop(context, const _EditResult(null)),
-                child: const Text('删除'),
+                child: Text(l.commonDelete),
               ),
             ],
           ],
@@ -388,11 +395,15 @@ class _KeyEditorState extends State<_KeyEditor> {
     );
   }
 
-  List<Widget> _valueFields(PosseColors c, TextStyle label) {
+  List<Widget> _valueFields(
+    AppLocalizations l,
+    PosseColors c,
+    TextStyle label,
+  ) {
     switch (_kind) {
       case 'text':
         return [
-          Text('输入的文字', style: label),
+          Text(l.keysText, style: label),
           const SizedBox(height: 6),
           TextField(
             controller: _text,
@@ -401,7 +412,7 @@ class _KeyEditorState extends State<_KeyEditor> {
             maxLines: 4,
             style: mono(Fs.body, color: c.text),
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: '例如 /compact'),
+            decoration: InputDecoration(hintText: l.keysTextHint),
           ),
           const SizedBox(height: 4),
           InkWell(
@@ -412,7 +423,7 @@ class _KeyEditorState extends State<_KeyEditor> {
                 children: [
                   Expanded(
                     child: Text(
-                      '输入后回车',
+                      l.keysEnterAfter,
                       style: TextStyle(fontSize: Fs.body, color: c.text),
                     ),
                   ),
@@ -429,7 +440,7 @@ class _KeyEditorState extends State<_KeyEditor> {
         final ctrl = _kind == 'ctrl';
         final bad = _char.text.isNotEmpty && !_draft.valid;
         return [
-          Text(ctrl ? 'Ctrl 加哪个键' : 'Alt 加哪个键', style: label),
+          Text(ctrl ? l.keysCtrlWhich : l.keysAltWhich, style: label),
           const SizedBox(height: 6),
           TextField(
             controller: _char,
@@ -440,15 +451,15 @@ class _KeyEditorState extends State<_KeyEditor> {
             style: mono(Fs.body, color: c.text),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
-              hintText: ctrl ? '例如 r、d、z、l' : '例如 b、f、.',
+              hintText: ctrl ? l.keysCtrlHint : l.keysAltHint,
               counterText: '',
-              errorText: bad ? 'Ctrl 只能加字母或 @ [ \\ ] ^ _ ?' : null,
+              errorText: bad ? l.keysCtrlInvalid : null,
             ),
           ),
         ];
       default:
         return [
-          Text('哪个键', style: label),
+          Text(l.keysSpecialWhich, style: label),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,

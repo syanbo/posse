@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../l10n/l10n.dart';
+
 const termFrameMagic = 0x74;
 const termFrameVersion = 1;
 const termOpOutput = 1;
@@ -131,17 +133,15 @@ class TermAssembler {
 }
 
 class TermKey {
-  const TermKey(this.id, this.bytes, {this.keycap});
+  const TermKey(this.id, this.bytes);
 
   /// 键的代号，快捷键栏的顺序按它存盘。早先的键用键帽文字当代号，存过的设置照样认。
   final String id;
   final List<int> bytes;
 
-  /// 键帽上的文字和代号不同时另给。
-  final String? keycap;
-
-  /// 键帽上的文字。
-  String get label => keycap ?? id;
+  /// 键帽上的文字：清空键按界面语言写，其余就是代号。
+  String label(AppLocalizations l) =>
+      id == clearInputKey ? l.terminalKeyClear : id;
 }
 
 /// 程序开着光标键应用模式（DECCKM）时，方向键、Home、End 换成 ESC O 开头的编码：
@@ -190,7 +190,7 @@ const termKeys = <TermKey>[
   TermKey('⇧Tab', [0x1b, 0x5b, 0x5a]),
   TermKey('^C', [0x03]),
   // 清空输入框，实际发的见 [clearLines]。不用 ^C：agent 干活时它是打断
-  TermKey(clearInputKey, [0x05, 0x15], keycap: '清空'),
+  TermKey(clearInputKey, [0x05, 0x15]),
   TermKey(exitAgentLabel, [0x04]),
   TermKey('↑', [0x1b, 0x5b, 0x41]),
   TermKey('↓', [0x1b, 0x5b, 0x42]),

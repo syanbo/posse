@@ -1,5 +1,33 @@
 {
   "@@locale": "en",
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Button: cancel a dialog."
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Button or tooltip: close."
+  },
+  "commonCopy": "Copy",
+  "@commonCopy": {
+    "description": "Button: copy the selection."
+  },
+  "commonDelete": "Delete",
+  "@commonDelete": {
+    "description": "Button: delete."
+  },
+  "commonLoading": "Loading",
+  "@commonLoading": {
+    "description": "Accessibility label of a loading spinner."
+  },
+  "commonMore": "More",
+  "@commonMore": {
+    "description": "Tooltip of the “more” (…) button in a top bar."
+  },
+  "commonPaste": "Paste",
+  "@commonPaste": {
+    "description": "Button: paste the clipboard."
+  },
   "commonRefresh": "Refresh",
   "@commonRefresh": {
     "description": "Common: refresh button or tooltip."
@@ -11,6 +39,14 @@
   "commonRetry": "Retry",
   "@commonRetry": {
     "description": "Common: button that tries again."
+  },
+  "commonSave": "Save",
+  "@commonSave": {
+    "description": "Button: save."
+  },
+  "commonSelectAll": "Select All",
+  "@commonSelectAll": {
+    "description": "Button: select all."
   },
   "deskAddressRequired": "Enter an address first",
   "@deskAddressRequired": {
@@ -566,6 +602,763 @@
   "@deskWindowsError": {
     "description": "Remote Desktop › screen picker: error note."
   },
+  "errorBadPairingCode": "The pairing code isn’t valid. Scan it again or copy it again.",
+  "@errorBadPairingCode": {
+    "description": "Error when a pairing code can’t be parsed."
+  },
+  "errorBinaryFile": "This is a binary file and can’t be opened as text.",
+  "@errorBinaryFile": {
+    "description": "Error from an older Mac when opening a binary file."
+  },
+  "errorCantConnect": "Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network.",
+  "@errorCantConnect": {
+    "description": "Error when the socket to the Mac can’t be opened."
+  },
+  "errorConnectionLost": "Lost the connection to the Mac. Reconnecting…",
+  "@errorConnectionLost": {
+    "description": "Error when the connection to the Mac drops; the app reconnects by itself."
+  },
+  "errorFileTooLarge": "The file is too large to open on the phone.",
+  "@errorFileTooLarge": {
+    "description": "Error from an older Mac when a file is too large."
+  },
+  "errorFirstConnect": "Can’t connect to the Mac. Make sure Posse is open on the Mac and both are on the same network, and allow Posse to use wireless data and the local network in the phone’s Settings.",
+  "@errorFirstConnect": {
+    "description": "Error when the first connection after pairing keeps failing (Mac off, or network permission not granted)."
+  },
+  "errorNoNewTerminal": "The Mac didn’t return the new terminal",
+  "@errorNoNewTerminal": {
+    "description": "Error when creating a session and the Mac’s reply has no terminal."
+  },
+  "errorNotAFile": "This isn’t a file.",
+  "@errorNotAFile": {
+    "description": "Error from an older Mac when the path isn’t a file."
+  },
+  "errorNotConnected": "Not connected to the Mac yet",
+  "@errorNotConnected": {
+    "description": "Error when an action needs the Mac but the phone isn’t connected."
+  },
+  "errorOldDesktop": "Posse on the Mac is too old for this. Update Posse on the Mac.",
+  "@errorOldDesktop": {
+    "description": "Error when the Mac’s Posse doesn’t know a request."
+  },
+  "errorOutsideWorkspace": "The path isn’t in the workspace.",
+  "@errorOutsideWorkspace": {
+    "description": "Error from an older Mac when a path is outside the workspace."
+  },
+  "errorTimeout": "The Mac isn’t responding. It may be asleep, or the network is down.",
+  "@errorTimeout": {
+    "description": "Error shown when a request to the Mac times out."
+  },
+  "homeAddressDirect": "Direct · QUIC",
+  "@homeAddressDirect": {
+    "description": "Address shown for a hole-punched direct QUIC connection."
+  },
+  "homeAddressRelay": "Via Relay · QUIC",
+  "@homeAddressRelay": {
+    "description": "Address shown for a connection through the relay (the relay’s address is hidden)."
+  },
+  "homeCantConnect": "Can’t connect to this Mac.",
+  "@homeCantConnect": {
+    "description": "Pairing page note after scanning from the home screen failed without a specific reason."
+  },
+  "homeComputerFallback": "Mac",
+  "@homeComputerFallback": {
+    "description": "Name used for a paired Mac when it has no name yet."
+  },
+  "homeConnecting": "Connecting to the Mac…",
+  "@homeConnecting": {
+    "description": "Home: Mac pill while connecting."
+  },
+  "homeDisconnect": "Disconnect",
+  "@homeDisconnect": {
+    "description": "Mac list: button that disconnects from the current Mac."
+  },
+  "homeDisconnected": "Disconnected",
+  "@homeDisconnected": {
+    "description": "Home: Mac pill after the user disconnected, when no Mac is chosen."
+  },
+  "homeDisconnectedList": "{count, plural, one {Disconnected · {count} Mac available} other {Disconnected · {count} Macs available}}",
+  "@homeDisconnectedList": {
+    "description": "Disconnected home: title of the list of paired Macs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeDisconnectedNamed": "{name} · Disconnected",
+  "@homeDisconnectedNamed": {
+    "description": "Home: Mac pill after the user disconnected. name is the Mac’s name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeFailed": "Can’t Connect",
+  "@homeFailed": {
+    "description": "Home: Mac pill when connecting failed, when no Mac is chosen."
+  },
+  "homeFailedNamed": "{name} · Can’t Connect",
+  "@homeFailedNamed": {
+    "description": "Home: Mac pill when connecting failed. name is the Mac’s name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeForget": "Forget",
+  "@homeForget": {
+    "description": "Button in the dialog confirming forgetting a Mac."
+  },
+  "homeForgetBody": "You’ll need to scan the code again to connect to it.",
+  "@homeForgetBody": {
+    "description": "Body of the dialog confirming forgetting a Mac."
+  },
+  "homeForgetComputer": "Forget This Mac",
+  "@homeForgetComputer": {
+    "description": "Mac actions sheet: remove this pairing."
+  },
+  "homeForgetConfirm": "Forget {name}?",
+  "@homeForgetConfirm": {
+    "description": "Title of the dialog confirming forgetting a Mac. name is the Mac’s name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeHistoryTip": "History",
+  "@homeHistoryTip": {
+    "description": "Home top bar: tooltip of the History button."
+  },
+  "homeLongPressHint": "Long-press a Mac to rename or forget it",
+  "@homeLongPressHint": {
+    "description": "Mac list: hint under the buttons."
+  },
+  "homeNoRunning": "No running sessions",
+  "@homeNoRunning": {
+    "description": "Home › Running: empty state."
+  },
+  "homeNoWorkspaces": "Posse on the Mac has no workspaces yet",
+  "@homeNoWorkspaces": {
+    "description": "Home: empty state when the Mac has no workspaces."
+  },
+  "homeReconnecting": "Connection lost, reconnecting…",
+  "@homeReconnecting": {
+    "description": "Home: Mac pill while reconnecting."
+  },
+  "homeRemoteDesktop": "Remote Desktop",
+  "@homeRemoteDesktop": {
+    "description": "Mac list row and Settings section/toggle: view and control the Mac’s screen."
+  },
+  "homeRename": "Rename",
+  "@homeRename": {
+    "description": "Mac actions sheet: rename this Mac."
+  },
+  "homeRenameHelper": "Only changes the name shown on this phone. Leave empty to use the Mac’s own name.",
+  "@homeRenameHelper": {
+    "description": "Rename dialog: helper text under the field."
+  },
+  "homeRenameHint": "Name",
+  "@homeRenameHint": {
+    "description": "Rename dialog: placeholder when the Mac has no name of its own."
+  },
+  "homeRenameTitle": "Rename Mac",
+  "@homeRenameTitle": {
+    "description": "Title of the rename dialog."
+  },
+  "homeScanToAdd": "Scan to Add a Mac",
+  "@homeScanToAdd": {
+    "description": "Mac list and disconnected home: button that scans a code to pair another Mac."
+  },
+  "homeSettingsTip": "Settings",
+  "@homeSettingsTip": {
+    "description": "Home top bar: tooltip of the Settings button."
+  },
+  "homeTabProjects": "Projects",
+  "@homeTabProjects": {
+    "description": "Home: segment that lists sessions by project."
+  },
+  "homeTabRunning": "Running",
+  "@homeTabRunning": {
+    "description": "Home: segment that lists all running agent sessions by status."
+  },
+  "homeWaitingBanner": "{count, plural, one {{count} session needs you} other {{count} sessions need you}}",
+  "@homeWaitingBanner": {
+    "description": "Home: banner counting sessions waiting for approval or an answer.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeWaitingConnection": "Waiting to connect",
+  "@homeWaitingConnection": {
+    "description": "Home: session row detail while disconnected from the Mac."
+  },
+  "keysAltHint": "e.g. b, f, .",
+  "@keysAltHint": {
+    "description": "Key editor: placeholder of the Alt key field."
+  },
+  "keysAltWhich": "Alt plus which key",
+  "@keysAltWhich": {
+    "description": "Key editor: label of the Alt key field."
+  },
+  "keysBar": "Key Bar",
+  "@keysBar": {
+    "description": "Key bar settings: section title of the ordered list."
+  },
+  "keysBarNote": "The keyboard toggle on the far left stays put; the rest go left to right in the order listed here. Tap a key you added to edit or delete it.",
+  "@keysBarNote": {
+    "description": "Key bar settings: note under the list."
+  },
+  "keysBuiltin": "Built-in",
+  "@keysBuiltin": {
+    "description": "Key bar settings: subtitle of a built-in key."
+  },
+  "keysClear": "Clear Input",
+  "@keysClear": {
+    "description": "Key bar settings: built-in Clear key."
+  },
+  "keysCtrlC": "Ctrl + C: stop the program",
+  "@keysCtrlC": {
+    "description": "Key bar settings: built-in Ctrl+C key."
+  },
+  "keysCtrlHint": "e.g. r, d, z, l",
+  "@keysCtrlHint": {
+    "description": "Key editor: placeholder of the Ctrl key field."
+  },
+  "keysCtrlInvalid": "Ctrl works only with a letter or @ [ \\ ] ^ _ ?",
+  "@keysCtrlInvalid": {
+    "description": "Key editor: error when the Ctrl key has no control code."
+  },
+  "keysCtrlWhich": "Ctrl plus which key",
+  "@keysCtrlWhich": {
+    "description": "Key editor: label of the Ctrl key field."
+  },
+  "keysDown": "Arrow key: down",
+  "@keysDown": {
+    "description": "Key bar settings: built-in arrow key."
+  },
+  "keysEdit": "Edit Shortcut",
+  "@keysEdit": {
+    "description": "Key editor title for an existing key."
+  },
+  "keysEnter": "Return",
+  "@keysEnter": {
+    "description": "Key bar settings: built-in Enter key."
+  },
+  "keysEnterAfter": "Press Return After Typing",
+  "@keysEnterAfter": {
+    "description": "Key editor: switch for sending Return after the text."
+  },
+  "keysEsc": "Esc: interrupt, exit",
+  "@keysEsc": {
+    "description": "Key bar settings: built-in Esc key."
+  },
+  "keysExit": "Exit Agent (/exit)",
+  "@keysExit": {
+    "description": "Key bar settings: built-in Exit key."
+  },
+  "keysImage": "Send File (photos, videos, files)",
+  "@keysImage": {
+    "description": "Key bar settings: built-in Send File key."
+  },
+  "keysKindSpecial": "Special",
+  "@keysKindSpecial": {
+    "description": "Key editor: segment for a special key such as PgUp."
+  },
+  "keysKindText": "Text",
+  "@keysKindText": {
+    "description": "Key editor: segment for a text key."
+  },
+  "keysLabel": "Button Label",
+  "@keysLabel": {
+    "description": "Key editor: label of the key cap text field."
+  },
+  "keysLabelHint": "Leave empty to use {shown}",
+  "@keysLabelHint": {
+    "description": "Key editor: placeholder of the key cap field. shown is the generated label.",
+    "placeholders": {
+      "shown": {
+        "type": "String"
+      }
+    }
+  },
+  "keysLeft": "Arrow key: left",
+  "@keysLeft": {
+    "description": "Key bar settings: built-in arrow key."
+  },
+  "keysNew": "New Shortcut",
+  "@keysNew": {
+    "description": "Key bar settings: add button, tooltip, and the editor title for a new key."
+  },
+  "keysNewNote": "Frequently used text, a Ctrl combination, or a special key like PgUp",
+  "@keysNewNote": {
+    "description": "Key bar settings: subtitle of New Shortcut."
+  },
+  "keysPaste": "Paste Clipboard",
+  "@keysPaste": {
+    "description": "Key bar settings: built-in Paste key."
+  },
+  "keysResetOrder": "Restore Default Order",
+  "@keysResetOrder": {
+    "description": "Key bar settings: row that restores the default order."
+  },
+  "keysResetOrderNote": "Keys you added are kept and placed after Send File and Paste",
+  "@keysResetOrderNote": {
+    "description": "Key bar settings: subtitle of Restore Default Order."
+  },
+  "keysRight": "Arrow key: right",
+  "@keysRight": {
+    "description": "Key bar settings: built-in arrow key."
+  },
+  "keysSendNow": "Ctrl + Enter: send queued messages to Claude now",
+  "@keysSendNow": {
+    "description": "Key bar settings: built-in Send Now key."
+  },
+  "keysShiftTab": "Shift + Tab: switch mode",
+  "@keysShiftTab": {
+    "description": "Key bar settings: built-in Shift+Tab key."
+  },
+  "keysSpecialWhich": "Which Key",
+  "@keysSpecialWhich": {
+    "description": "Key editor: label of the special key choices."
+  },
+  "keysTab": "Tab: complete",
+  "@keysTab": {
+    "description": "Key bar settings: built-in Tab key."
+  },
+  "keysText": "Text to Type",
+  "@keysText": {
+    "description": "Key editor: label of the text field."
+  },
+  "keysTextHint": "e.g. /compact",
+  "@keysTextHint": {
+    "description": "Key editor: placeholder of the text field."
+  },
+  "keysTitle": "Terminal Shortcuts",
+  "@keysTitle": {
+    "description": "Key bar settings page title."
+  },
+  "keysTypeText": "Type “{text}”",
+  "@keysTypeText": {
+    "description": "Key bar settings: what a custom text key does. text is the text.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "keysTypeTextEnter": "Type “{text}” and press Return",
+  "@keysTypeTextEnter": {
+    "description": "Key bar settings: what a custom text key with Return does. text is the text.",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "keysUp": "Arrow key: up",
+  "@keysUp": {
+    "description": "Key bar settings: built-in arrow key."
+  },
+  "mermaidCantDraw": "Can’t draw the diagram: {error}",
+  "@mermaidCantDraw": {
+    "description": "Mermaid diagram card: error above the source. error is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "mermaidNoSize": "The diagram has no size",
+  "@mermaidNoSize": {
+    "description": "Mermaid error: the diagram has no size."
+  },
+  "mermaidNoSvg": "Pele didn’t draw an SVG",
+  "@mermaidNoSvg": {
+    "description": "Mermaid error: the renderer produced no SVG."
+  },
+  "mermaidTimeout": "Drawing the diagram timed out",
+  "@mermaidTimeout": {
+    "description": "Mermaid error: rendering timed out."
+  },
+  "pairAddNote": "You can pair several Macs and connect to one at a time. Switch between them at the top of the home screen.",
+  "@pairAddNote": {
+    "description": "Pairing page: description when adding another Mac."
+  },
+  "pairAddTitle": "Add a Mac",
+  "@pairAddTitle": {
+    "description": "Pairing page title when adding another Mac."
+  },
+  "pairCameraDenied": "Posse needs camera access to scan. Allow it in Settings, or paste the pairing code.",
+  "@pairCameraDenied": {
+    "description": "Pairing page: note when camera permission is denied."
+  },
+  "pairCameraFailed": "Can’t open the camera. You can paste the pairing code instead.",
+  "@pairCameraFailed": {
+    "description": "Pairing page: note when the camera can’t start."
+  },
+  "pairClipboardEmpty": "The clipboard is empty.",
+  "@pairClipboardEmpty": {
+    "description": "Pairing page: note after tapping Paste Pairing Code with an empty clipboard."
+  },
+  "pairClipboardNotCode": "The clipboard doesn’t contain a pairing code.",
+  "@pairClipboardNotCode": {
+    "description": "Pairing page: note after tapping Paste Pairing Code when the clipboard isn’t a code."
+  },
+  "pairConnect": "Connect",
+  "@pairConnect": {
+    "description": "Pairing page: button that connects with the typed code."
+  },
+  "pairConnectTitle": "Connect to Posse",
+  "@pairConnectTitle": {
+    "description": "Pairing page title on first launch."
+  },
+  "pairConnected": "Connected to {name}",
+  "@pairConnected": {
+    "description": "Snack bar after connecting. name is the Mac’s name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pairConnectedAt": "Connected to {name} at {address}",
+  "@pairConnectedAt": {
+    "description": "Snack bar after connecting. name is the Mac’s name, address is host:port or “Via Relay · QUIC”.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "pairConnecting": "Connecting…",
+  "@pairConnecting": {
+    "description": "Pairing page: button label while connecting."
+  },
+  "pairHideManual": "Hide",
+  "@pairHideManual": {
+    "description": "Pairing page: button that hides the manual entry field."
+  },
+  "pairIntro": "Follow your agents’ progress, reply, and approve requests from your phone.",
+  "@pairIntro": {
+    "description": "Pairing page: description on first launch."
+  },
+  "pairManual": "Enter Manually",
+  "@pairManual": {
+    "description": "Button on the pairing page and the camera scanner: type the pairing code."
+  },
+  "pairPasteCode": "Paste Pairing Code",
+  "@pairPasteCode": {
+    "description": "Button on the pairing page and the camera scanner."
+  },
+  "pairScanAim": "Point at the pairing code in Posse on your Mac",
+  "@pairScanAim": {
+    "description": "Camera scanner: hint above the frame."
+  },
+  "pairScanButton": "Scan to Pair",
+  "@pairScanButton": {
+    "description": "Pairing page: button that opens the camera."
+  },
+  "pairScanClipboardEmpty": "The clipboard is empty",
+  "@pairScanClipboardEmpty": {
+    "description": "Camera scanner: note under the frame after tapping Paste Pairing Code with an empty clipboard."
+  },
+  "pairScanClipboardNotCode": "The clipboard doesn’t contain a pairing code",
+  "@pairScanClipboardNotCode": {
+    "description": "Camera scanner: note under the frame when the clipboard isn’t a code."
+  },
+  "pairStepOpenDetail": "Click the phone icon at the bottom left of the window",
+  "@pairStepOpenDetail": {
+    "description": "Pairing page: detail of step 1."
+  },
+  "pairStepOpenTitle": "Open Posse on your Mac",
+  "@pairStepOpenTitle": {
+    "description": "Pairing page: title of step 1."
+  },
+  "pairStepScanDetail": "Or copy the pairing code on the Mac and paste it here",
+  "@pairStepScanDetail": {
+    "description": "Pairing page: detail of step 2."
+  },
+  "pairStepScanTitle": "Scan the QR code",
+  "@pairStepScanTitle": {
+    "description": "Pairing page: title of step 2."
+  },
+  "sessionCloseSession": "Close Session",
+  "@sessionCloseSession": {
+    "description": "Session More sheet: closes an agent session."
+  },
+  "sessionCloseSessionBody": "{agent} will be stopped and unfinished work interrupted. The conversation stays in the Mac’s session history and can be resumed on the Mac later.",
+  "@sessionCloseSessionBody": {
+    "description": "Body of the dialog confirming closing an agent session. agent is the agent’s name, e.g. Claude.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionCloseSessionConfirm": "Close This Session?",
+  "@sessionCloseSessionConfirm": {
+    "description": "Title of the dialog confirming closing an agent session."
+  },
+  "sessionCloseTerminal": "Close Terminal",
+  "@sessionCloseTerminal": {
+    "description": "Session More sheet: closes a plain terminal."
+  },
+  "sessionCloseTerminalBody": "Programs running in “{title}” will be stopped.",
+  "@sessionCloseTerminalBody": {
+    "description": "Body of the dialog confirming closing a terminal. title is the terminal’s title.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionCloseTerminalConfirm": "Close This Terminal?",
+  "@sessionCloseTerminalConfirm": {
+    "description": "Title of the dialog confirming closing a terminal."
+  },
+  "sessionDeskLayout": "Desktop Layout",
+  "@sessionDeskLayout": {
+    "description": "Session More sheet: switch that keeps the terminal at the Mac’s size."
+  },
+  "sessionDeskLayoutNote": "Shrinks to the screen width; pinch to zoom, then drag to scroll",
+  "@sessionDeskLayoutNote": {
+    "description": "Session More sheet: subtitle of Desktop Layout."
+  },
+  "sessionDetailApprove": "Waiting for you to approve {tool}",
+  "@sessionDetailApprove": {
+    "description": "Home session row: the agent waits for approval of a tool. tool is the tool name.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionDetailDone": "Turn finished",
+  "@sessionDetailDone": {
+    "description": "Home session row: the agent finished a turn."
+  },
+  "sessionDetailLost": "Not Restored: starts when you open it",
+  "@sessionDetailLost": {
+    "description": "Home session row: the terminal wasn’t restored after the Mac restarted; opening it starts it."
+  },
+  "sessionDetailTerminalOnly": "Terminal only",
+  "@sessionDetailTerminalOnly": {
+    "description": "Home session row: an idle agent without a saved chat, only the terminal can be viewed."
+  },
+  "sessionDetailUsing": "Using {tool}",
+  "@sessionDetailUsing": {
+    "description": "Home session row: the agent is running a tool. tool is the tool name.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionDetailWaiting": "Waiting for you",
+  "@sessionDetailWaiting": {
+    "description": "Home session row: the agent is waiting for the user."
+  },
+  "sessionMedia": "Images & Videos",
+  "@sessionMedia": {
+    "description": "Session More sheet: row that opens the session’s images and videos."
+  },
+  "sessionMediaNote": "Screenshots the agent took, generated images and videos, and pasted images",
+  "@sessionMediaNote": {
+    "description": "Session More sheet: subtitle of Images & Videos."
+  },
+  "sessionNew": "New Session",
+  "@sessionNew": {
+    "description": "New Session sheet title and the home tooltip of its button."
+  },
+  "sessionNoWorkspaces": "No workspaces yet",
+  "@sessionNoWorkspaces": {
+    "description": "New Session: workspace row when the Mac has none."
+  },
+  "sessionOpenTerminal": "Open Terminal",
+  "@sessionOpenTerminal": {
+    "description": "New Session: button when Terminal is chosen."
+  },
+  "sessionOpenWith": "Open With",
+  "@sessionOpenWith": {
+    "description": "New Session: label above the agent choices."
+  },
+  "sessionPickWorkspace": "Which Workspace",
+  "@sessionPickWorkspace": {
+    "description": "New Session: title of the workspace picker sheet."
+  },
+  "sessionPromptHint": "First message (optional; you can say it later)",
+  "@sessionPromptHint": {
+    "description": "New Session: placeholder of the first message field."
+  },
+  "sessionStartChat": "Start Chat with {agent}",
+  "@sessionStartChat": {
+    "description": "New Session: button when an agent is chosen. agent is the agent’s name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionStarting": "Starting…",
+  "@sessionStarting": {
+    "description": "New Session: button label while starting."
+  },
+  "sessionStateDone": "Done",
+  "@sessionStateDone": {
+    "description": "Workspace status: the agent finished."
+  },
+  "sessionStateIdle": "Idle",
+  "@sessionStateIdle": {
+    "description": "Session status: the agent is idle."
+  },
+  "sessionStateStarting": "Starting",
+  "@sessionStateStarting": {
+    "description": "Session status: the agent is starting."
+  },
+  "sessionStateTasks": "Waiting on Tasks",
+  "@sessionStateTasks": {
+    "description": "Session status: waiting for the agents it dispatched."
+  },
+  "sessionStateUnread": "Turn finished, not seen yet",
+  "@sessionStateUnread": {
+    "description": "Session status: finished a turn the user hasn’t looked at."
+  },
+  "sessionStateWaiting": "Needs You",
+  "@sessionStateWaiting": {
+    "description": "Session status: the agent is waiting for approval or an answer."
+  },
+  "sessionStateWorking": "Working",
+  "@sessionStateWorking": {
+    "description": "Session status: the agent is working."
+  },
+  "sessionTerminal": "Terminal",
+  "@sessionTerminal": {
+    "description": "A plain terminal (no agent): session row detail and the choice in New Session."
+  },
+  "sessionTools": "Skills & Tools",
+  "@sessionTools": {
+    "description": "Session More sheet: row that opens the skills and tools the session used."
+  },
+  "sessionToolsNote": "Skills, MCP servers, and command-line tools used",
+  "@sessionToolsNote": {
+    "description": "Session More sheet: subtitle of Skills & Tools."
+  },
+  "sessionWorkspace": "Workspace",
+  "@sessionWorkspace": {
+    "description": "New Session: title of the workspace section."
+  },
+  "settingsAbout": "About",
+  "@settingsAbout": {
+    "description": "Settings: section title for the app version and updates."
+  },
+  "settingsAppearance": "Appearance",
+  "@settingsAppearance": {
+    "description": "Settings: section title for the theme."
+  },
+  "settingsChat": "Chat",
+  "@settingsChat": {
+    "description": "Settings: section title for the chat view."
+  },
+  "settingsCheckFailed": "Check failed. Try again later.",
+  "@settingsCheckFailed": {
+    "description": "Settings › About: Check for Updates failed."
+  },
+  "settingsCheckUpdate": "Check for Updates",
+  "@settingsCheckUpdate": {
+    "description": "Settings › About: row that checks for a new version."
+  },
+  "settingsComputer": "Mac",
+  "@settingsComputer": {
+    "description": "Settings: section title for the paired Macs."
+  },
+  "settingsDeskDirect": "Direct Touch",
+  "@settingsDeskDirect": {
+    "description": "Settings › Remote Desktop: control mode where taps land where you touch."
+  },
+  "settingsDeskDirectNote": "Tap where you want to click, long-press then move to drag, and drag one finger to pan a zoomed-in view.",
+  "@settingsDeskDirectNote": {
+    "description": "Settings › Remote Desktop: note for Direct Touch."
+  },
+  "settingsDeskNote": "Tap the Mac’s name on the home screen and choose Remote Desktop to see the Mac’s screen and control it with your fingers.",
+  "@settingsDeskNote": {
+    "description": "Settings › Remote Desktop: note under the switch."
+  },
+  "settingsDeskPasswords": "Saved Mac Passwords",
+  "@settingsDeskPasswords": {
+    "description": "Settings › Remote Desktop: Mac login passwords saved for unlocking."
+  },
+  "settingsDeskPasswordsCount": "{count, plural, one {Login password saved for {count} Mac} other {Login passwords saved for {count} Macs}}",
+  "@settingsDeskPasswordsCount": {
+    "description": "Settings › Saved Mac Passwords: subtitle counting saved passwords.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsDeskPasswordsForget": "Forget All",
+  "@settingsDeskPasswordsForget": {
+    "description": "Settings › Saved Mac Passwords: button that removes them all."
+  },
+  "settingsDeskPasswordsNone": "No saved passwords",
+  "@settingsDeskPasswordsNone": {
+    "description": "Settings › Saved Mac Passwords: subtitle when none are saved."
+  },
+  "settingsDeskTrackpad": "Trackpad",
+  "@settingsDeskTrackpad": {
+    "description": "Settings › Remote Desktop: control mode where the screen acts as a trackpad."
+  },
+  "settingsDeskTrackpadNote": "Use the phone screen as a trackpad: slide one finger to move the pointer; taps and right-clicks land on the pointer; slide three fingers to drag.",
+  "@settingsDeskTrackpadNote": {
+    "description": "Settings › Remote Desktop: note for Trackpad."
+  },
+  "settingsExpandTools": "Expand Tool Calls by Default",
+  "@settingsExpandTools": {
+    "description": "Settings › Chat: switch."
+  },
+  "settingsFontNote": "On the phone, the terminal is laid out for the phone’s screen. Smaller text fits more on a line.",
+  "@settingsFontNote": {
+    "description": "Settings › Terminal: note under the font size."
+  },
+  "settingsFontSample": "the agent is running Claude Code",
+  "@settingsFontSample": {
+    "description": "Settings › Terminal: sample text drawn at the chosen font size."
+  },
+  "settingsFontSize": "Font Size",
+  "@settingsFontSize": {
+    "description": "Settings › Terminal: font size slider label."
+  },
+  "settingsHome": "Home",
+  "@settingsHome": {
+    "description": "Settings: section title for the home screen."
+  },
+  "settingsKeys": "Shortcuts",
+  "@settingsKeys": {
+    "description": "Settings › Terminal: row that opens the key bar settings."
+  },
+  "settingsKeysCustom": "{count, plural, one {{count} custom key} other {{count} custom keys}}",
+  "@settingsKeysCustom": {
+    "description": "Settings › Terminal › Shortcuts: subtitle counting custom keys.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsKeysNote": "Reorder the key bar above the keyboard and add your own keys",
+  "@settingsKeysNote": {
+    "description": "Settings › Terminal › Shortcuts: subtitle when there are no custom keys."
+  },
   "settingsLanguageSystem": "System",
   "@settingsLanguageSystem": {
     "description": "Settings › Language: option that follows the phone's language."
@@ -573,6 +1366,247 @@
   "settingsLanguageTitle": "Language",
   "@settingsLanguageTitle": {
     "description": "Settings: title of the section that picks the app language."
+  },
+  "settingsNotConnected": "Not Connected",
+  "@settingsNotConnected": {
+    "description": "Settings › Mac: row title when no Mac is connected."
+  },
+  "settingsOpenChat": "Chat",
+  "@settingsOpenChat": {
+    "description": "Settings › Open Sessions In: chat view."
+  },
+  "settingsOpenChatNote": "You can switch to the terminal at the top right of the chat. Agents without a saved session and shells always open in the terminal.",
+  "@settingsOpenChatNote": {
+    "description": "Settings › Open Sessions In: note when Chat is chosen."
+  },
+  "settingsOpenFirst": "Open Sessions In",
+  "@settingsOpenFirst": {
+    "description": "Settings: section title choosing whether a session opens in chat or terminal."
+  },
+  "settingsOpenTerminal": "Terminal",
+  "@settingsOpenTerminal": {
+    "description": "Settings › Open Sessions In: terminal view."
+  },
+  "settingsOpenTerminalNote": "You can switch to the chat at the top right of the terminal. Chat and terminal are two views of the same session; switching replaces one with the other.",
+  "@settingsOpenTerminalNote": {
+    "description": "Settings › Open Sessions In: note when Terminal is chosen."
+  },
+  "settingsPairedCount": "{count, plural, one {{count} Mac paired} other {{count} Macs paired}}",
+  "@settingsPairedCount": {
+    "description": "Settings › Mac: subtitle counting paired Macs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsProjectMeta": "Show Branch and Path for Projects",
+  "@settingsProjectMeta": {
+    "description": "Settings › Home: switch."
+  },
+  "settingsShowReasoning": "Show Thinking",
+  "@settingsShowReasoning": {
+    "description": "Settings › Chat: switch."
+  },
+  "settingsTerminal": "Terminal",
+  "@settingsTerminal": {
+    "description": "Settings: section title for the terminal."
+  },
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {
+    "description": "Settings › Appearance: dark theme."
+  },
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {
+    "description": "Settings › Appearance: light theme."
+  },
+  "settingsThemeSystem": "System",
+  "@settingsThemeSystem": {
+    "description": "Settings › Appearance: follow the phone’s appearance."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Settings page title."
+  },
+  "settingsUpToDate": "Up to Date",
+  "@settingsUpToDate": {
+    "description": "Settings › About: result of Check for Updates."
+  },
+  "settingsUpdateTo": "Update to {version} ({build})",
+  "@settingsUpdateTo": {
+    "description": "Settings › About: row that opens the update sheet.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsWorkspaceMeta": "Show Branch for Workspaces",
+  "@settingsWorkspaceMeta": {
+    "description": "Settings › Home: switch."
+  },
+  "terminalCantOpenLink": "Can’t open this link: {url}",
+  "@terminalCantOpenLink": {
+    "description": "Terminal: notice when a tapped link can’t be opened.",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "terminalClipboardEmpty": "The clipboard has no text or image",
+  "@terminalClipboardEmpty": {
+    "description": "Terminal: notice after tapping Paste with nothing usable."
+  },
+  "terminalExited": "The terminal has exited",
+  "@terminalExited": {
+    "description": "Terminal: notice when the terminal process ended."
+  },
+  "terminalKeyClear": "Clear",
+  "@terminalKeyClear": {
+    "description": "Terminal key bar: key cap of the key that clears the input."
+  },
+  "terminalNoAgent": "No agent is running in this terminal",
+  "@terminalNoAgent": {
+    "description": "Terminal: notice after tapping Exit with no agent running."
+  },
+  "terminalNotInWorkspace": "This file isn’t in the current workspace and can’t be opened on the phone",
+  "@terminalNotInWorkspace": {
+    "description": "Terminal: notice after tapping a path outside the workspace."
+  },
+  "terminalSendFile": "Send File",
+  "@terminalSendFile": {
+    "description": "Terminal key bar: accessibility label of the Send File key."
+  },
+  "terminalSendNow": "Send Now",
+  "@terminalSendNow": {
+    "description": "Terminal key bar: accessibility label of the Send Now key."
+  },
+  "terminalSwitchToChat": "Switch to Chat",
+  "@terminalSwitchToChat": {
+    "description": "Terminal More sheet: switch to the chat view."
+  },
+  "updateAndroidNote": "When the download finishes, the system asks you to confirm installing over the current app. Your pairings are kept. The first time, allow Posse to install apps in Settings.",
+  "@updateAndroidNote": {
+    "description": "Update sheet (Android): note under the button."
+  },
+  "updateBadPackage": "Can’t open the installer: the package isn’t in the update folder",
+  "@updateBadPackage": {
+    "description": "Update sheet (Android): error when the downloaded package is in an unexpected place."
+  },
+  "updateBanner": "New version {version} ({build})",
+  "@updateBanner": {
+    "description": "Home update banner. version and build are the new release’s.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "updateBuild": "Build {build}",
+  "@updateBuild": {
+    "description": "Update sheet: build number of the new release.",
+    "placeholders": {
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "updateButton": "Update",
+  "@updateButton": {
+    "description": "Update sheet: install button."
+  },
+  "updateCantInstall": "Can’t open the installer",
+  "@updateCantInstall": {
+    "description": "Update sheet (Android): error when the system installer can’t be opened."
+  },
+  "updateCurrent": "Current {version} ({build})",
+  "@updateCurrent": {
+    "description": "Update sheet: the installed version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "build": {
+        "type": "String"
+      }
+    }
+  },
+  "updateDownloadFailed": "Download failed. Try again later.",
+  "@updateDownloadFailed": {
+    "description": "Update sheet: error when the download fails."
+  },
+  "updateDownloading": "Downloading…",
+  "@updateDownloading": {
+    "description": "Update sheet (Android): button label while downloading."
+  },
+  "updateDownloadingPercent": "Downloading {percent}%",
+  "@updateDownloadingPercent": {
+    "description": "Update sheet (Android): button label with progress.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "updateInstallDenied": "Allow Posse to install apps in Settings to update",
+  "@updateInstallDenied": {
+    "description": "Update sheet (Android): error when installing apps isn’t allowed."
+  },
+  "updateIosNote": "After you tap Update, it downloads in the background and the Home Screen icon shows the progress. When it’s installed, the app switches to the new version. Your pairings are kept.",
+  "@updateIosNote": {
+    "description": "Update sheet (iOS): note under the button."
+  },
+  "updateOpening": "Opening installer…",
+  "@updateOpening": {
+    "description": "Update sheet (Android): button label when the download finished."
+  },
+  "updateRequesting": "Requesting installation…",
+  "@updateRequesting": {
+    "description": "Update sheet (iOS): button label while asking the system to install."
+  },
+  "updateSkip": "Don’t remind me about this version",
+  "@updateSkip": {
+    "description": "Home update banner: tooltip of the dismiss button."
+  },
+  "updateTitle": "New Version {version}",
+  "@updateTitle": {
+    "description": "Update sheet title.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "uploadSendingFile": "{count, plural, =0 {Sending file} =1 {Sending file} other {Sending file {index}/{count}}}",
+  "@uploadSendingFile": {
+    "description": "Upload progress bar while sending files. index is the current one (from 1), count the total.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadSendingImage": "{count, plural, =0 {Sending image} =1 {Sending image} other {Sending image {index}/{count}}}",
+  "@uploadSendingImage": {
+    "description": "Upload progress bar while sending images. index is the current one (from 1), count the total.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "index": {
+        "type": "int"
+      }
+    }
   },
   "usageCursorModels": "Cursor Models",
   "@usageCursorModels": {
@@ -781,5 +1815,25 @@
   "usageWindowWeekShort": "wk",
   "@usageWindowWeekShort": {
     "description": "Plan Usage card: short name of the weekly window."
+  },
+  "workspaceMain": "Main Workspace",
+  "@workspaceMain": {
+    "description": "Name of the workspace that is the project folder itself."
+  },
+  "workspaceNoSessions": "No Sessions",
+  "@workspaceNoSessions": {
+    "description": "Workspace status when it has no sessions."
+  },
+  "workspaceTabChanges": "Changes",
+  "@workspaceTabChanges": {
+    "description": "Workspace page: segment for Git changes."
+  },
+  "workspaceTabFiles": "Files",
+  "@workspaceTabFiles": {
+    "description": "Workspace page: segment for the file browser."
+  },
+  "workspaceTabHistory": "History",
+  "@workspaceTabHistory": {
+    "description": "Workspace page: segment for session history."
   }
 }
