@@ -413,7 +413,6 @@ class _ChatScreenState extends State<ChatScreen> {
   /// 视频和「文件」里的选了就传到电脑上，路径一个一行接在输入框后面，和图片的路径一样交给 agent 去读。
   /// 照片不走这里：先在输入框上面预览，发送时才传。
   Future<void> _attachFiles(List<XFile> files) async {
-    final l = context.l10n;
     final rpc = _rpc;
     if (files.isEmpty || rpc == null) return;
     final paths = <String>[];
@@ -422,7 +421,6 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) setState(() => _upload = (i, files.length, 0));
         paths.add(
           await uploadFile(
-            l,
             rpc,
             file,
             onProgress: (done) {
@@ -488,14 +486,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickImage() async {
-    final l = context.l10n;
     if (_rpc == null || _sending) return;
     try {
       final ask = await askImageSource(context);
       if (ask == null || !mounted) return;
       switch (ask) {
         case ImageAsk.gallery:
-          final picked = await pickGalleryMedia(l);
+          final picked = await pickGalleryMedia();
           final images = <Uint8List>[];
           final others = <XFile>[];
           for (final file in picked) {
@@ -508,7 +505,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _addImages(images);
           await _attachFiles(others);
         case ImageAsk.camera:
-          final one = await pickOneImage(l, ImageSource.camera);
+          final one = await pickOneImage(ImageSource.camera);
           if (one != null) _addImages([one]);
         case ImageAsk.clipboard:
           await _pasteClipboard();
@@ -523,7 +520,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// 有图就按顺序全部上传，说明和路径一次提交。任何一张失败，输入和图片都留着。
   Future<void> _submit() async {
-    final l = context.l10n;
     final current = _rpc;
     final images = List<Uint8List>.from(_pending);
     final caption = _input.text;
@@ -551,7 +547,6 @@ class _ChatScreenState extends State<ChatScreen> {
           if (mounted) setState(() => _upload = (i, images.length, 0));
           paths.add(
             _uploaded[image] ??= await uploadImage(
-              l,
               current,
               image,
               onProgress: (done) {

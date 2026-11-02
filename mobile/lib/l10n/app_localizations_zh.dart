@@ -158,7 +158,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatNewMessages => '新消息';
 
   @override
-  String get chatNoPhotoAccess => '没有照片权限，在系统设置里允许 Posse 访问照片或相机';
+  String get chatNoCameraAccess => '没有相机权限，在系统设置里允许 Posse 使用相机';
+
+  @override
+  String get chatNoPhotoAccess => '没有照片权限，在系统设置里允许 Posse 访问照片';
 
   @override
   String get chatNoTranscript => '这个会话没有原生存档';
@@ -1282,6 +1285,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get keysLabelHintEmpty => '不填就用要输入的文字';
+
+  @override
   String get keysLeft => '方向键：左';
 
   @override
@@ -1874,8 +1880,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usagePerMonth => '/月';
 
   @override
-  String usageReadingAge(String reset, String time) {
-    return '$reset，$time的读数';
+  String usageReadingFrom(String time) {
+    return '$time的读数';
   }
 
   @override

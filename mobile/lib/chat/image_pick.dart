@@ -3,6 +3,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../app_state.dart';
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -72,9 +73,9 @@ Future<ImageAsk?> askImageSource(BuildContext context) {
 }
 
 /// 相册或相机里的一张。取消时返回 null。最长边压到 2048。
-Future<Uint8List?> pickOneImage(AppLocalizations l, ImageSource source) async {
+Future<Uint8List?> pickOneImage(ImageSource source) async {
   final file = await _pick(
-    l,
+    source,
     () => ImagePicker().pickImage(
       source: source,
       maxWidth: _maxSide,
@@ -86,13 +87,18 @@ Future<Uint8List?> pickOneImage(AppLocalizations l, ImageSource source) async {
   return file.readAsBytes();
 }
 
-Future<T?> _pick<T>(AppLocalizations l, Future<T?> Function() run) async {
+/// 没给权限时换成 [PhoneError]，按拍照还是选照片说清楚缺的是哪个权限。
+Future<T?> _pick<T>(ImageSource source, Future<T?> Function() run) async {
   try {
     return await run();
   } on PlatformException catch (error) {
     final code = error.code;
     if (code.contains('denied') || code.contains('restricted')) {
-      throw StateError(l.chatNoPhotoAccess);
+      throw PhoneError(
+        source == ImageSource.camera
+            ? PhoneError.noCameraAccess
+            : PhoneError.noPhotoAccess,
+      );
     }
     rethrow;
   }
@@ -143,10 +149,10 @@ Future<FileAsk?> askFileSource(BuildContext context) {
 }
 
 /// 按 [ask] 选一个文件。照片照旧压到最长边 2048，视频和「文件」里的原样。取消时返回 null。
-Future<XFile?> pickAskedFile(AppLocalizations l, FileAsk ask) {
+Future<XFile?> pickAskedFile(FileAsk ask) {
   return switch (ask) {
     FileAsk.gallery => _pick(
-      l,
+      ImageSource.gallery,
       () => ImagePicker().pickMedia(
         maxWidth: _maxSide,
         maxHeight: _maxSide,
@@ -154,7 +160,7 @@ Future<XFile?> pickAskedFile(AppLocalizations l, FileAsk ask) {
       ),
     ),
     FileAsk.camera => _pick(
-      l,
+      ImageSource.camera,
       () => ImagePicker().pickImage(
         source: ImageSource.camera,
         maxWidth: _maxSide,
@@ -167,13 +173,10 @@ Future<XFile?> pickAskedFile(AppLocalizations l, FileAsk ask) {
 }
 
 /// 相册里一次多选照片和视频。取消时返回空列表。最多 [limit] 个。
-Future<List<XFile>> pickGalleryMedia(
-  AppLocalizations l, {
-  int limit = maxChatImages,
-}) async {
+Future<List<XFile>> pickGalleryMedia({int limit = maxChatImages}) async {
   if (limit < 1) return const [];
   final files = await _pick(
-    l,
+    ImageSource.gallery,
     () => ImagePicker().pickMultipleMedia(
       maxWidth: _maxSide,
       maxHeight: _maxSide,

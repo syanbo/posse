@@ -473,14 +473,18 @@ class UsageCardView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
             child: Row(
               children: [
+                // 只占一行：几家都在时英文也放得下，再多（或字号调大）时横向滑动，不折成两行
                 Expanded(
-                  child: Wrap(
-                    spacing: 16,
-                    runSpacing: 6,
-                    children: [
-                      for (final u in shown)
-                        _UsageChip(usage: u, remaining: remaining),
-                    ],
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final (i, u) in shown.indexed) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          _UsageChip(usage: u, remaining: remaining),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
                 Icon(
@@ -513,7 +517,7 @@ class _UsageChip extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         AgentTile(agent: usage.agent, size: Ic.small),
-        const SizedBox(width: 6),
+        const SizedBox(width: 4),
         Text(
           windowShort(context.l10n, w.minutes),
           style: TextStyle(fontSize: Fs.small, color: c.muted),
@@ -772,19 +776,22 @@ class _UsageSheetState extends State<UsageSheet> {
                     ),
                   ),
                   Text(
-                    // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）
-                    w.at != null &&
-                            u.updatedAt.difference(w.at!) >
-                                const Duration(minutes: 10)
-                        ? l.usageReadingAge(
-                            resetText(l, w.resetsAt, now),
-                            agoText(l, w.at!, now),
-                          )
-                        : resetText(l, w.resetsAt, now),
+                    resetText(l, w.resetsAt, now),
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
                   ),
                 ],
               ),
+              // 分池和总额度不是同一份读数（Claude 的 Fable 只在电脑上看 /usage 时更新）；单起一行，免得挤折左边的名字
+              if (w.at != null &&
+                  u.updatedAt.difference(w.at!) > const Duration(minutes: 10))
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    l.usageReadingFrom(agoText(l, w.at!, now)),
+                    textAlign: TextAlign.end,
+                    style: TextStyle(fontSize: Fs.small, color: c.muted),
+                  ),
+                ),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -794,6 +801,7 @@ class _UsageSheetState extends State<UsageSheet> {
                       urgent: w.percent >= usageUrgent,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   SizedBox(
                     width: percentWidth,
                     child: Text(

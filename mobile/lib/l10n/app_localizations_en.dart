@@ -163,8 +163,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatNewMessages => 'New Messages';
 
   @override
+  String get chatNoCameraAccess =>
+      'Posse can’t use the camera. Allow camera access for Posse in Settings.';
+
+  @override
   String get chatNoPhotoAccess =>
-      'Posse can’t access photos. Allow access to Photos or Camera in Settings.';
+      'Posse can’t access your photos. Allow photo access for Posse in Settings.';
 
   @override
   String get chatNoTranscript => 'This session has no transcript';
@@ -1150,7 +1154,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyResumed => 'Continued this session on the Mac';
 
   @override
-  String get historySearchHint => 'Search prompts, replies and tool output';
+  String get historySearchHint => 'Search sessions';
 
   @override
   String get historyToday => 'Today';
@@ -1350,6 +1354,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String keysLabelHint(String shown) {
     return 'Leave empty to use $shown';
   }
+
+  @override
+  String get keysLabelHintEmpty => 'Leave empty to use the text';
 
   @override
   String get keysLeft => 'Arrow key: left';
@@ -1971,8 +1978,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usagePerMonth => '/mo';
 
   @override
-  String usageReadingAge(String reset, String time) {
-    return '$reset, reading from $time';
+  String usageReadingFrom(String time) {
+    return 'Reading from $time';
   }
 
   @override

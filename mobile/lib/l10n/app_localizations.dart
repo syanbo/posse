@@ -326,10 +326,16 @@ abstract class AppLocalizations {
   /// **'New Messages'**
   String get chatNewMessages;
 
-  /// Chat and Terminal: error when the photo library or camera permission was denied.
+  /// Chat and Terminal: error when the camera permission was denied.
   ///
   /// In en, this message translates to:
-  /// **'Posse can’t access photos. Allow access to Photos or Camera in Settings.'**
+  /// **'Posse can’t use the camera. Allow camera access for Posse in Settings.'**
+  String get chatNoCameraAccess;
+
+  /// Chat and Terminal: error when the photo library permission was denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse can’t access your photos. Allow photo access for Posse in Settings.'**
   String get chatNoPhotoAccess;
 
   /// Chat: shown instead of the conversation when the agent keeps no session file.
@@ -1985,7 +1991,7 @@ abstract class AppLocalizations {
   /// History: placeholder of the search field.
   ///
   /// In en, this message translates to:
-  /// **'Search prompts, replies and tool output'**
+  /// **'Search sessions'**
   String get historySearchHint;
 
   /// History: group header for sessions updated today.
@@ -2329,6 +2335,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave empty to use {shown}'**
   String keysLabelHint(String shown);
+
+  /// Key editor: placeholder of the key cap field before anything to send is entered.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave empty to use the text'**
+  String get keysLabelHintEmpty;
 
   /// Key bar settings: built-in arrow key.
   ///
@@ -3302,11 +3314,11 @@ abstract class AppLocalizations {
   /// **'/mo'**
   String get usagePerMonth;
 
-  /// Plan Usage sheet: reset time plus the age of a pool’s own reading.
+  /// Plan Usage sheet: second line under a pool’s reset time, the age of that pool’s own reading.
   ///
   /// In en, this message translates to:
-  /// **'{reset}, reading from {time}'**
-  String usageReadingAge(String reset, String time);
+  /// **'Reading from {time}'**
+  String usageReadingFrom(String time);
 
   /// Plan Usage sheet: segmented option showing remaining percentages.
   ///

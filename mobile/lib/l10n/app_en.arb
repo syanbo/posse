@@ -200,9 +200,13 @@
   "@chatNewMessages": {
     "description": "Chat: floating button that jumps to new messages below."
   },
-  "chatNoPhotoAccess": "Posse can’t access photos. Allow access to Photos or Camera in Settings.",
+  "chatNoCameraAccess": "Posse can’t use the camera. Allow camera access for Posse in Settings.",
+  "@chatNoCameraAccess": {
+    "description": "Chat and Terminal: error when the camera permission was denied."
+  },
+  "chatNoPhotoAccess": "Posse can’t access your photos. Allow photo access for Posse in Settings.",
   "@chatNoPhotoAccess": {
-    "description": "Chat and Terminal: error when the photo library or camera permission was denied."
+    "description": "Chat and Terminal: error when the photo library permission was denied."
   },
   "chatNoTranscript": "This session has no transcript",
   "@chatNoTranscript": {
@@ -1542,7 +1546,7 @@
   "@historyResumed": {
     "description": "History: brief notice after Continue on Computer resumed the session."
   },
-  "historySearchHint": "Search prompts, replies and tool output",
+  "historySearchHint": "Search sessions",
   "@historySearchHint": {
     "description": "History: placeholder of the search field."
   },
@@ -1803,6 +1807,10 @@
         "type": "String"
       }
     }
+  },
+  "keysLabelHintEmpty": "Leave empty to use the text",
+  "@keysLabelHintEmpty": {
+    "description": "Key editor: placeholder of the key cap field before anything to send is entered."
   },
   "keysLeft": "Arrow key: left",
   "@keysLeft": {
@@ -2633,13 +2641,10 @@
   "@usagePerMonth": {
     "description": "Plan Usage: replaces “/mo” in a plan’s monthly price."
   },
-  "usageReadingAge": "{reset}, reading from {time}",
-  "@usageReadingAge": {
-    "description": "Plan Usage sheet: reset time plus the age of a pool’s own reading.",
+  "usageReadingFrom": "Reading from {time}",
+  "@usageReadingFrom": {
+    "description": "Plan Usage sheet: second line under a pool’s reset time, the age of that pool’s own reading.",
     "placeholders": {
-      "reset": {
-        "type": "String"
-      },
       "time": {
         "type": "String"
       }

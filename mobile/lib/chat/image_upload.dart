@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:image_picker/image_picker.dart' show XFile;
 
-import '../l10n/l10n.dart';
+import '../app_state.dart';
 import '../protocol/rpc.dart';
 
 /// 单块 base64 的字符数。整段 JSON 要低于服务端 WebSocket 的 4MB 读取上限；
@@ -34,16 +34,14 @@ List<(int, String)> imageChunks(String encoded) {
 
 /// 把图片存到电脑的临时目录，返回路径。小图一次传完，大图按块传，每传完一块报一次进度。
 Future<String> uploadImage(
-  AppLocalizations l,
   PhoneRpc rpc,
   List<int> bytes, {
   UploadProgress? onProgress,
 }) async {
-  if (bytes.isEmpty) throw StateError(l.chatImageEmpty);
+  if (bytes.isEmpty) throw const PhoneError(PhoneError.imageEmpty);
   final encoded = base64.encode(bytes);
   if (encoded.length <= imageChunkChars) {
     final path = imagePath(
-      l,
       await rpc.call('clipboard.saveImageAsTempFile', {
         'contentBase64': encoded,
       }),
@@ -58,7 +56,9 @@ Future<String> uploadImage(
     'expectedBytes': bytes.length,
   });
   final id = start['uploadId'];
-  if (id is! String || id.isEmpty) throw StateError(l.chatImageNotAccepted);
+  if (id is! String || id.isEmpty) {
+    throw const PhoneError(PhoneError.imageNotAccepted);
+  }
   final blob = start['blob'];
   if (blob is num) {
     for (var off = 0; off < bytes.length; off += bulkChunk) {
@@ -70,7 +70,6 @@ Future<String> uploadImage(
     await _uploadBase64(rpc, id, encoded, onProgress);
   }
   final path = imagePath(
-    l,
     await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
   );
   onProgress?.call(1);
@@ -95,10 +94,10 @@ Future<void> _uploadBase64(
 }
 
 /// save 和 commit 把路径放在 value 里（结果是字符串，不是对象）。
-String imagePath(AppLocalizations l, Map<String, Object?> result) {
+String imagePath(Map<String, Object?> result) {
   final value = result['value'];
   if (value is String && value.isNotEmpty) return value;
-  throw StateError(l.chatImageNotSaved);
+  throw const PhoneError(PhoneError.imageNotSaved);
 }
 
 /// base64 上传整段攒在电脑内存里，只能这么大；视频、大文件要电脑认二进制帧上传（posse.bulk.v1）
@@ -107,20 +106,21 @@ const _maxBase64Upload = 32 << 20;
 /// 把手机上的一个文件（照片、视频、「文件」里的）存到电脑上，返回路径。带上文件名，电脑用原名保存；
 /// 从文件流式读、按二进制帧发，几百 MB 的视频也不整个读进内存。
 Future<String> uploadFile(
-  AppLocalizations l,
   PhoneRpc rpc,
   XFile file, {
   UploadProgress? onProgress,
 }) async {
   final size = await file.length();
-  if (size == 0) throw StateError(l.chatFileEmpty);
+  if (size == 0) throw const PhoneError(PhoneError.fileEmpty);
   final start = await rpc.call('clipboard.startImageUpload', {
     'expectedBase64Length': (size + 2) ~/ 3 * 4,
     'expectedBytes': size,
     'name': uploadName(file.name),
   });
   final id = start['uploadId'];
-  if (id is! String || id.isEmpty) throw StateError(l.chatFileNotAccepted);
+  if (id is! String || id.isEmpty) {
+    throw const PhoneError(PhoneError.fileNotAccepted);
+  }
   final blob = start['blob'];
   if (blob is num) {
     var sent = 0;
@@ -146,7 +146,7 @@ Future<String> uploadFile(
     // 旧电脑：只能整段 base64，也不认文件名
     if (size > _maxBase64Upload) {
       await rpc.call('clipboard.abortImageUpload', {'uploadId': id});
-      throw StateError(l.chatFileTooLargeForOldPosse);
+      throw const PhoneError(PhoneError.fileTooLargeForOldPosse);
     }
     await _uploadBase64(
       rpc,
@@ -156,7 +156,6 @@ Future<String> uploadFile(
     );
   }
   final path = imagePath(
-    l,
     await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
   );
   onProgress?.call(1);

@@ -367,7 +367,9 @@ class _KeyEditorState extends State<_KeyEditor> {
               controller: _label,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: l.keysLabelHint(draft.shown),
+                hintText: draft.shown.isEmpty
+                    ? l.keysLabelHintEmpty
+                    : l.keysLabelHint(draft.shown),
               ),
             ),
             const SizedBox(height: 20),

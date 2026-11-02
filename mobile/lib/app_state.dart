@@ -25,6 +25,14 @@ String friendlyError(Object error, AppLocalizations l) {
     return switch (error.code) {
       PhoneError.notConnected => l.errorNotConnected,
       PhoneError.noNewTerminal => l.errorNoNewTerminal,
+      PhoneError.noPhotoAccess => l.chatNoPhotoAccess,
+      PhoneError.noCameraAccess => l.chatNoCameraAccess,
+      PhoneError.imageEmpty => l.chatImageEmpty,
+      PhoneError.imageNotAccepted => l.chatImageNotAccepted,
+      PhoneError.imageNotSaved => l.chatImageNotSaved,
+      PhoneError.fileEmpty => l.chatFileEmpty,
+      PhoneError.fileNotAccepted => l.chatFileNotAccepted,
+      PhoneError.fileTooLargeForOldPosse => l.chatFileTooLargeForOldPosse,
       _ => error.code,
     };
   }
@@ -62,6 +70,14 @@ class PhoneError implements Exception {
 
   static const notConnected = 'notConnected';
   static const noNewTerminal = 'noNewTerminal';
+  static const noPhotoAccess = 'noPhotoAccess';
+  static const noCameraAccess = 'noCameraAccess';
+  static const imageEmpty = 'imageEmpty';
+  static const imageNotAccepted = 'imageNotAccepted';
+  static const imageNotSaved = 'imageNotSaved';
+  static const fileEmpty = 'fileEmpty';
+  static const fileNotAccepted = 'fileNotAccepted';
+  static const fileTooLargeForOldPosse = 'fileTooLargeForOldPosse';
 
   @override
   String toString() => 'PhoneError($code)';
