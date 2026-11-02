@@ -8,6 +8,9 @@ import 'package:posse_mobile/chat/image_pick.dart';
 import 'package:posse_mobile/chat/image_upload.dart';
 import 'package:posse_mobile/chat/paste_choice.dart';
 import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 /// 只认上传用的几条 RPC。
 class _UploadRpc implements PhoneRpc {
@@ -71,7 +74,7 @@ void main() {
       path: '/picked/录屏 1.mov',
       length: bytes.length,
     );
-    final path = await uploadFile(rpc, file, onProgress: seen.add);
+    final path = await uploadFile(zh, rpc, file, onProgress: seen.add);
     expect(path, '/tmp/posse-mobile-1.png');
     expect(rpc.startParams?['name'], '录屏 1.mov');
     expect(rpc.startParams?['expectedBytes'], bytes.length);
@@ -92,7 +95,7 @@ void main() {
       path: '/picked/big.mp4',
       length: 40 << 20,
     );
-    await expectLater(uploadFile(rpc, big), throwsA(isA<StateError>()));
+    await expectLater(uploadFile(zh, rpc, big), throwsA(isA<StateError>()));
     expect(rpc.methods, contains('clipboard.abortImageUpload'));
   });
 
@@ -102,7 +105,7 @@ void main() {
     final bytes = Uint8List.fromList(
       List.generate(bulkChunk * 4 + 7, (i) => i % 256),
     );
-    final path = await uploadImage(rpc, bytes, onProgress: seen.add);
+    final path = await uploadImage(zh, rpc, bytes, onProgress: seen.add);
     expect(path, '/tmp/posse-mobile-1.png');
     expect(rpc.startParams?['expectedBytes'], bytes.length);
     expect(rpc.methods, contains('clipboard.commitImageUpload'));
@@ -120,7 +123,7 @@ void main() {
       final seen = <double>[];
       // 三块多一点
       final bytes = Uint8List(imageChunkChars * 3 * 3 ~/ 4 + 100);
-      final path = await uploadImage(rpc, bytes, onProgress: seen.add);
+      final path = await uploadImage(zh, rpc, bytes, onProgress: seen.add);
       expect(path, '/tmp/posse-mobile-1.png');
       expect(
         rpc.methods
@@ -136,7 +139,7 @@ void main() {
       expect(seen.last, 1);
 
       final small = <double>[];
-      await uploadImage(_UploadRpc(), Uint8List(10), onProgress: small.add);
+      await uploadImage(zh, _UploadRpc(), Uint8List(10), onProgress: small.add);
       expect(small, [1]);
     },
   );
@@ -231,10 +234,10 @@ void main() {
 
   test('the saved path comes back in value', () {
     expect(
-      imagePath({'value': '/tmp/posse-mobile-a.png'}),
+      imagePath(zh, {'value': '/tmp/posse-mobile-a.png'}),
       '/tmp/posse-mobile-a.png',
     );
-    expect(() => imagePath({}), throwsStateError);
+    expect(() => imagePath(zh, {}), throwsStateError);
   });
 
   test('uploadName 去掉 image_picker 加在相册视频原名前的前缀', () {

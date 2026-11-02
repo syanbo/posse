@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -108,20 +109,21 @@ class _ContextMeterState extends State<ContextMeter> {
   Future<void> _compact() async {
     final percent = _percent;
     if (percent == null) return;
-    final who = chatWho('assistant', widget.tab.agent);
+    final l = context.l10n;
+    final who = chatWho(l, 'assistant', widget.tab.agent);
     final ok = await showPosseDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
-        title: const Text('压缩上下文？'),
-        content: Text('上下文已用 $percent%。$who 会把之前的对话压成一份摘要（/compact），腾出空间接着聊。'),
+        title: Text(l.chatCompactConfirm),
+        content: Text(l.chatCompactBody(percent, who)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialog, false),
-            child: const Text('取消'),
+            child: Text(l.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialog, true),
-            child: const Text('压缩'),
+            child: Text(l.chatCompactButton),
           ),
         ],
       ),
@@ -141,7 +143,7 @@ class _ContextMeterState extends State<ContextMeter> {
     if (send == null) return;
     final tab = widget.tab;
     final outcome = await sendAgentCommand((raw) => send(tab, raw), '/compact');
-    final note = sendOutcomeText(outcome);
+    final note = sendOutcomeText(l, outcome);
     if (!mounted || note.isEmpty) return;
     ScaffoldMessenger.maybeOf(context)
         ?.showSnackBar(SnackBar(content: Text(note)));
@@ -160,7 +162,7 @@ class _ContextMeterState extends State<ContextMeter> {
         : c.muted;
     // 前面的间距放在这里：没有读数时整个不占位置，后面的延迟不会多空一截
     return Semantics(
-      label: '上下文已用 $percent%',
+      label: context.l10n.chatContextUsed(percent),
       button: true,
       excludeSemantics: true,
       child: GestureDetector(

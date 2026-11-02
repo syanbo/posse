@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart';
 import '../terminal/frames.dart';
 
@@ -45,11 +46,12 @@ Future<SendOutcome> sendTerminal(
   }
 }
 
-String sendOutcomeText(SendOutcome outcome) => switch (outcome) {
-  SendOutcome.accepted => '',
-  SendOutcome.refused => '没写进去',
-  SendOutcome.unknown => '未确认，先看聊天再重试',
-};
+String sendOutcomeText(AppLocalizations l, SendOutcome outcome) =>
+    switch (outcome) {
+      SendOutcome.accepted => '',
+      SendOutcome.refused => l.chatSendRefused,
+      SendOutcome.unknown => l.chatSendUnknown,
+    };
 
 /// 清空 agent 的输入框，再执行一条斜杠命令（/compact）。[write] 往终端里写一串按键。
 /// 三步之间各隔 [gap]：挨得太近时 Claude Code 把回车和前面的字当成同一次粘贴，命令留在输入框里不执行

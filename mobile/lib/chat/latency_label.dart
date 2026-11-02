@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/quic_socket.dart';
 import '../ui/theme.dart';
 
 /// 当前连接是经中转还是直连（局域网、Tailscale、打洞都算直连），没连上时为空。
 /// 会话页状态行在延迟读数后面写它：中转的延迟高，一眼能看出是不是线路的缘故。
-String? routeLabel(String? url) {
+String? routeLabel(AppLocalizations l, String? url) {
   if (url == null) return null;
-  return isRelayQuicUrl(url) ? '中转' : '直连';
+  return isRelayQuicUrl(url) ? l.chatRouteRelay : l.chatRouteDirect;
 }
 
 /// 和电脑的往返时间（[PosseAppModel.latency]）：信号格加毫秒数，不写单位，省出胶囊里电脑名的位置。
@@ -39,7 +40,9 @@ class LatencyLabel extends StatelessWidget {
     final ms = latency?.inMilliseconds ?? 0;
     final color = latencyColor(c, latency, unresponsive: unresponsive);
     return Semantics(
-      label: unresponsive ? '电脑没有响应' : '和电脑的延迟 $ms 毫秒',
+      label: unresponsive
+          ? context.l10n.chatLatencyUnresponsiveLabel
+          : context.l10n.chatLatencyLabel(ms),
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -51,7 +54,10 @@ class LatencyLabel extends StatelessWidget {
             color: color,
           ),
           const SizedBox(width: 4),
-          Text(unresponsive ? '无响应' : '$ms', style: statusLineStyle(color)),
+          Text(
+            unresponsive ? context.l10n.chatLatencyUnresponsive : '$ms',
+            style: statusLineStyle(color),
+          ),
         ],
       ),
     );

@@ -69,7 +69,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     if (rpc == null) {
       setState(() {
         _loading = false;
-        _error = '还没连上电脑';
+        _error = context.l10n.errorNotConnected;
       });
       return;
     }
@@ -104,7 +104,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       setState(() {
         _loading = false;
         _error = e is Exception && '$e'.contains('method_not_found')
-            ? '电脑上的 Posse 太旧，更新后才能看历史'
+            ? context.l10n.historyOldPosse
             : friendlyError(e, context.l10n);
       });
     }
@@ -124,10 +124,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final byFolder =
         widget.cwd == null && widget.model.settings.historyByFolder;
     final groups = byFolder
-        ? groupHistoryByFolder(_sessions, [
+        ? groupHistoryByFolder(context.l10n, _sessions, [
             for (final w in widget.model.worktrees) (w.path, w.repo),
           ])
-        : groupHistory(_sessions, now);
+        : groupHistory(context.l10n, _sessions, now);
     final agent = historyAgents[_agent];
     if (widget.cwd != null) {
       return Column(
@@ -149,7 +149,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         actions: [
           // 和桌面一样：分组方式记住；图标是现在的分组，点一下换另一种。搜索结果按相关度排、不分组
           IconButton(
-            tooltip: byFolder ? '按文件夹分组，点按时间' : '按时间分组，点按文件夹',
+            tooltip: byFolder
+                ? context.l10n.historyByFolderTip
+                : context.l10n.historyByTimeTip,
             onPressed: searching
                 ? null
                 : () {
@@ -186,7 +188,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       decoration: InputDecoration(
         isDense: true,
         contentPadding: EdgeInsets.zero,
-        hintText: '搜索提问、回复和工具输出',
+        hintText: context.l10n.historySearchHint,
         prefixIcon: Icon(Icons.search_rounded, size: Ic.medium, color: c.muted),
         prefixIconConstraints: const BoxConstraints.tightFor(
           width: 38,
@@ -201,7 +203,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ? const Center(widthFactor: 1, child: HexSpinner())
             : searching
             ? IconButton(
-                tooltip: '清除',
+                tooltip: context.l10n.historyClearSearch,
                 padding: EdgeInsets.zero,
                 icon: Icon(
                   Icons.cancel_rounded,
@@ -262,7 +264,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
         if (_error != null) NoticeBar(_error!),
         if (searching && _any && _sessions.isNotEmpty)
-          const NoticeBar('没有同时含所有词的会话，下面是含其中任一个词的'),
+          NoticeBar(context.l10n.historyAnyWordNotice),
         Expanded(
           child: _loading && _sessions.isEmpty
               ? const Center(child: PosseLoader())
@@ -270,9 +272,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ? EmptyState(
                   icon: Icons.history_rounded,
                   text: searching
-                      ? '没有找到'
-                      : '${widget.cwd == null ? '电脑上' : '这个目录'}还没有'
-                            '${agent.isEmpty ? '' : ' ${agentLabel(agent)} 的'}会话历史',
+                      ? context.l10n.historyNoResults
+                      : switch ((widget.cwd == null, agent.isEmpty)) {
+                          (true, true) => context.l10n.historyEmptyComputer,
+                          (true, false) =>
+                            context.l10n.historyEmptyComputerAgent(
+                              agentLabel(agent),
+                            ),
+                          (false, true) => context.l10n.historyEmptyFolder,
+                          (false, false) =>
+                            context.l10n.historyEmptyFolderAgent(
+                              agentLabel(agent),
+                            ),
+                        },
                 )
               : CustomScrollView(
                   physics: const BouncingScrollPhysics(
@@ -374,7 +386,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       chevron: false,
       leading: AgentTile(agent: s.agent, size: Ic.large),
       title: Text(
-        s.title.isEmpty ? '（没有标题）' : s.title,
+        s.title.isEmpty ? context.l10n.historyUntitled : s.title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -508,6 +520,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
     if (rpc == null) return;
     setState(() => _resuming = true);
     final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
     try {
       final res = await rpc.call('history.resume', {
         'session': widget.session.id,
@@ -517,10 +530,12 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            res['alreadyOpen'] == true ? '这个会话已经在电脑上开着' : '已在电脑上接着这个会话',
+            res['alreadyOpen'] == true
+                ? l.historyAlreadyOpen
+                : l.historyResumed,
           ),
           action: SnackBarAction(
-            label: '在手机上看',
+            label: l.historyViewOnPhone,
             onPressed: () => unawaited(_open(worktree, terminal)),
           ),
         ),
@@ -546,7 +561,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-    if (mounted) setState(() => _error = '电脑上的会话还没出现，稍后在首页找它');
+    if (mounted) setState(() => _error = context.l10n.historyNotYetOpen);
   }
 
   @override
@@ -577,7 +592,7 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    s.title.isEmpty ? '（没有标题）' : s.title,
+                    s.title.isEmpty ? context.l10n.historyUntitled : s.title,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: Fs.title,
@@ -637,7 +652,11 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
                       ? null
                       : _resume,
                   icon: const Icon(Icons.laptop_mac_rounded, size: Ic.medium),
-                  label: Text(_resuming ? '正在打开…' : '在电脑上继续'),
+                  label: Text(
+                    _resuming
+                        ? context.l10n.historyOpening
+                        : context.l10n.historyContinueOnComputer,
+                  ),
                 ),
               ),
             ),
@@ -700,7 +719,7 @@ class _AgentChip extends StatelessWidget {
                 const SizedBox(width: 6),
               ],
               Text(
-                agent.isEmpty ? '全部' : agentLabel(agent),
+                agent.isEmpty ? context.l10n.commonAll : agentLabel(agent),
                 style: TextStyle(
                   fontSize: Fs.small,
                   fontWeight: Fw.medium,

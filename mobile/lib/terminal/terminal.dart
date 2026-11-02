@@ -722,7 +722,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     try {
       final ask = await askFileSource(context);
       if (ask == null || !mounted) return;
-      final file = await pickAskedFile(ask);
+      final file = await pickAskedFile(context.l10n, ask);
       if (file == null || !mounted) return;
       setState(() {
         _upload = 0;
@@ -731,6 +731,7 @@ class _TerminalScreenState extends State<TerminalScreen>
       final String path;
       try {
         path = await uploadFile(
+          context.l10n,
           rpc,
           file,
           onProgress: (done) {
@@ -782,6 +783,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     final String path;
     try {
       path = await uploadImage(
+        context.l10n,
         rpc,
         bytes,
         onProgress: (done) {
@@ -853,8 +855,9 @@ class _TerminalScreenState extends State<TerminalScreen>
       keys: keys,
       enter: enter,
     );
-    final note = sendOutcomeText(outcome);
-    if (!mounted || note.isEmpty) return;
+    if (!mounted) return;
+    final note = sendOutcomeText(context.l10n, outcome);
+    if (note.isEmpty) return;
     _flash(note);
   }
 

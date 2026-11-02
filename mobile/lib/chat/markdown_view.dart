@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../l10n/l10n.dart';
 import '../ui/highlight.dart';
 import '../ui/mermaid.dart';
 import '../ui/theme.dart';
@@ -227,7 +228,7 @@ Widget _codeCard(
             children: [
               Expanded(
                 child: Text(
-                  lang.isEmpty ? '代码' : lang,
+                  lang.isEmpty ? context.l10n.chatCode : lang,
                   style: mono(Fs.small, color: _muted(context)),
                 ),
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../workspace/models.dart';
 import 'context_meter.dart';
@@ -52,16 +53,22 @@ class SessionTitle extends StatelessWidget {
     final c = PosseColors.of(context);
     // 断线时手上的状态已经过时，不显示；会话结束了也没有状态可言
     final state = offline || ended ? AgentState.none : tab.shown;
+    final l = context.l10n;
     final stateText = ended
-        ? '会话已经结束'
+        ? l.chatStateEnded
         : switch (state) {
             AgentState.working =>
-              tab.toolName == null ? '工作中' : '正在用 ${tab.toolName}',
-            AgentState.waiting => '等你处理',
-            AgentState.done || AgentState.unread => '本轮完成',
-            AgentState.tasks => '等待任务',
-            AgentState.starting => '启动中',
-            _ => tab.agent == null ? '终端' : chatWho('assistant', tab.agent),
+              tab.toolName == null
+                  ? l.chatStateWorking
+                  : l.chatStateUsingTool(tab.toolName!),
+            AgentState.waiting => l.chatStateWaiting,
+            AgentState.done || AgentState.unread => l.chatStateDone,
+            AgentState.tasks => l.chatStateTasks,
+            AgentState.starting => l.chatStateStarting,
+            _ =>
+              tab.agent == null
+                  ? l.chatTerminal
+                  : chatWho(l, 'assistant', tab.agent),
           };
     return Row(
       children: [
@@ -87,7 +94,7 @@ class SessionTitle extends StatelessWidget {
                   children: [...previous, ?current],
                 ),
                 child: offline && !ended
-                    ? _reconnecting(c, connecting)
+                    ? _reconnecting(l, c, connecting)
                     : Row(
                         key: const ValueKey('state'),
                         children: [
@@ -112,7 +119,7 @@ class SessionTitle extends StatelessWidget {
                               unresponsive: model!.unresponsive,
                               gap: 12,
                             ),
-                            if (routeLabel(model!.connectedUrl)
+                            if (routeLabel(l, model!.connectedUrl)
                                 case final route?) ...[
                               const SizedBox(width: 4),
                               Text(route, style: statusLineStyle(c.muted)),
@@ -130,7 +137,7 @@ class SessionTitle extends StatelessWidget {
 }
 
 extension on SessionTitle {
-  Widget _reconnecting(PosseColors c, bool connecting) {
+  Widget _reconnecting(AppLocalizations l, PosseColors c, bool connecting) {
     return Row(
       key: const ValueKey('reconnecting'),
       children: [
@@ -138,7 +145,7 @@ extension on SessionTitle {
         const SizedBox(width: 4),
         Flexible(
           child: Text(
-            connecting ? '正在连接电脑…' : '连接断开，正在重连…',
+            connecting ? l.chatConnecting : l.chatReconnecting,
             overflow: TextOverflow.ellipsis,
             style: statusLineStyle(c.honey),
           ),
@@ -162,7 +169,9 @@ extension on SessionTitle {
               right: -3,
               bottom: -3,
               child: Tooltip(
-                message: online ? '已连接电脑' : '和电脑的连接断开了',
+                message: online
+                    ? context.l10n.chatConnected
+                    : context.l10n.chatDisconnected,
                 child: Container(
                   width: 11,
                   height: 11,

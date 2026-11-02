@@ -186,7 +186,10 @@ class _GitPaneState extends State<GitPane> {
         icon: Icons.cloud_off_rounded,
         text: _error!,
         error: true,
-        action: TextButton(onPressed: _reload, child: const Text('重试')),
+        action: TextButton(
+          onPressed: _reload,
+          child: Text(context.l10n.commonRetry),
+        ),
       );
     }
     final c = PosseColors.of(context);
@@ -198,26 +201,25 @@ class _GitPaneState extends State<GitPane> {
             if (_error != null) NoticeBar(_error!),
             if (status != null) _BranchCard(status: status),
             if (files.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 32),
+              Padding(
+                padding: const EdgeInsets.only(top: 32),
                 child: EmptyState(
                   icon: Icons.check_circle_outline_rounded,
-                  text: '工作区是干净的，没有改动',
+                  text: context.l10n.gitClean,
                 ),
               )
             else
-              _listHeader(c, files.length),
+              _listHeader(context, c, files.length),
           ],
         ),
         if (files.isNotEmpty)
-          for (final (kind, label) in _groups)
+          for (final kind in _groups)
             if (files.any((f) => _groupOf(f) == kind))
-              _group(
-                context,
-                kind,
-                label,
-                files.where((f) => _groupOf(f) == kind).toList(),
-              ),
+              _group(context, kind, switch (kind) {
+                ChangeKind.conflict => context.l10n.gitConflicts,
+                ChangeKind.untracked => context.l10n.gitUnversioned,
+                _ => context.l10n.gitChanges,
+              }, files.where((f) => _groupOf(f) == kind).toList()),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
@@ -225,9 +227,9 @@ class _GitPaneState extends State<GitPane> {
 
   /// 照桌面端分组：冲突、改动、未跟踪。
   static const _groups = [
-    (ChangeKind.conflict, '冲突'),
-    (ChangeKind.modified, '改动'),
-    (ChangeKind.untracked, '未跟踪'),
+    ChangeKind.conflict,
+    ChangeKind.modified,
+    ChangeKind.untracked,
   ];
 
   static ChangeKind _groupOf(GitFileChange f) => switch (f.kind) {
@@ -236,14 +238,14 @@ class _GitPaneState extends State<GitPane> {
     _ => ChangeKind.modified,
   };
 
-  Widget _listHeader(PosseColors c, int count) {
+  Widget _listHeader(BuildContext context, PosseColors c, int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
       child: Row(
         children: [
           Expanded(
             child: Text(
-              '$count 个文件有改动',
+              context.l10n.gitChangedFiles(count),
               style: TextStyle(fontSize: Fs.small, color: c.muted),
             ),
           ),
@@ -550,8 +552,8 @@ class _ModeSwitch extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          option(true, Icons.account_tree_rounded, '按目录'),
-          option(false, Icons.view_list_rounded, '平铺'),
+          option(true, Icons.account_tree_rounded, context.l10n.gitTreeView),
+          option(false, Icons.view_list_rounded, context.l10n.gitFlatView),
         ],
       ),
     );
@@ -586,7 +588,7 @@ class _Stats extends StatelessWidget {
     final c = PosseColors.of(context);
     const tnum = [FontFeature.tabularFigures()];
     if (file.binary || (file.added == 0 && file.deleted == 0)) {
-      final label = inList && file.stats == '新文件' ? '' : file.stats;
+      final label = inList && file.isNewFile ? '' : file.stats(context.l10n);
       if (label.isEmpty) return const SizedBox.shrink();
       return Text(
         label,
@@ -628,11 +630,12 @@ class _BranchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final chips = <(IconData, String, Color)>[
       if (status.ahead > 0)
-        (Icons.arrow_upward_rounded, '领先 ${status.ahead}', c.muted),
+        (Icons.arrow_upward_rounded, l.gitAhead(status.ahead), c.muted),
       if (status.behind > 0)
-        (Icons.arrow_downward_rounded, '落后 ${status.behind}', c.muted),
+        (Icons.arrow_downward_rounded, l.gitBehind(status.behind), c.muted),
       if (status.operation.isNotEmpty)
         (Icons.warning_amber_rounded, status.operation, c.honey),
     ];
@@ -653,7 +656,7 @@ class _BranchCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      status.branch.isEmpty ? '分离头指针' : status.branch,
+                      status.branch.isEmpty ? l.gitDetachedHead : status.branch,
                       overflow: TextOverflow.ellipsis,
                       style: mono(
                         Fs.body,
@@ -671,7 +674,7 @@ class _BranchCard extends StatelessWidget {
                   children: [
                     if (status.upstream.isNotEmpty)
                       Text(
-                        '跟踪 ${status.upstream}',
+                        l.gitTracking(status.upstream),
                         style: TextStyle(fontSize: Fs.small, color: c.muted),
                       ),
                     for (final (icon, text, color) in chips)
@@ -746,7 +749,7 @@ class _DiffViewerState extends State<DiffViewer> {
           _Stats(file: widget.file),
           if (widget.onOpenFile != null)
             IconButton(
-              tooltip: '查看完整文件',
+              tooltip: context.l10n.gitViewFullFile,
               onPressed: widget.onOpenFile,
               icon: const Icon(Icons.description_rounded, size: Ic.button),
             )
@@ -772,19 +775,22 @@ class _DiffViewerState extends State<DiffViewer> {
     final images = diff.images;
     if (images != null) return _ImageDiff(old: images.old, now: images.now);
     if (widget.file.binary) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.insert_drive_file_rounded,
-        text: '二进制文件，手机上看不了差异',
+        text: context.l10n.gitBinaryDiff,
       );
     }
     final rows = parseDiffRows(diff.diff);
     if (rows.isEmpty) {
-      return const EmptyState(icon: Icons.notes_rounded, text: '没有差异');
+      return EmptyState(
+        icon: Icons.notes_rounded,
+        text: context.l10n.gitNoDifferences,
+      );
     }
     return _DiffLines(
       rows: rows,
       language: languageForPath(widget.file.path),
-      notice: diff.truncated ? const CodeNotice('差异太长，只显示前面一部分') : null,
+      notice: diff.truncated ? CodeNotice(context.l10n.gitDiffTruncated) : null,
     );
   }
 }
@@ -802,9 +808,17 @@ class _ImageDiff extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       children: [
-        _ImageSideView(label: '改之前', side: old, missing: '新文件，之前没有'),
+        _ImageSideView(
+          label: context.l10n.gitImageBefore,
+          side: old,
+          missing: context.l10n.gitImageNewFile,
+        ),
         const SizedBox(height: 20),
-        _ImageSideView(label: '现在', side: now, missing: '已删除'),
+        _ImageSideView(
+          label: context.l10n.gitImageNow,
+          side: now,
+          missing: context.l10n.gitDeleted,
+        ),
       ],
     );
   }
@@ -881,7 +895,7 @@ class _ImageSideViewState extends State<_ImageSideView> {
     if (side == null) {
       body = _placeholder(c, widget.missing);
     } else if (image == null) {
-      body = _placeholder(c, '图片超过 10 MB，手机上不显示');
+      body = _placeholder(c, context.l10n.gitImageTooLarge);
     } else {
       body = GestureDetector(
         onTap: () => _zoom(image),
@@ -891,7 +905,8 @@ class _ImageSideViewState extends State<_ImageSideView> {
             painter: _Checkerboard(c),
             child: Image(
               image: image,
-              errorBuilder: (_, _, _) => _placeholder(c, '这张图手机上画不出来'),
+              errorBuilder: (_, _, _) =>
+                  _placeholder(c, context.l10n.gitImageUndrawable),
             ),
           ),
         ),
@@ -1035,7 +1050,9 @@ class _DiffLines extends StatelessWidget {
         _ => (null, ' ', c.faint),
       };
       if (row.kind == DiffKind.hunk) {
-        final at = row.number == null ? '' : '第 ${row.number} 行';
+        final at = row.number == null
+            ? ''
+            : context.l10n.gitHunkLine(row.number!);
         final label = [at, row.text].where((s) => s.isNotEmpty).join('  ');
         return Container(
           color: c.fill,

@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../chat/markdown_view.dart';
 import '../app_state.dart';
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart' show rpcBytes;
 import '../terminal/link_target.dart';
 import '../ui/loading.dart';
@@ -151,7 +152,16 @@ class _MarkdownDocState extends State<MarkdownDoc>
           final b = _block(e);
           return _Details(
             open: b.open,
-            summary: _column(_build([md.Element('p', b.summary)])),
+            summary: _column(
+              _build([
+                md.Element(
+                  'p',
+                  b.summary.isEmpty
+                      ? [md.Text(context.l10n.filesDetails)]
+                      : b.summary,
+                ),
+              ]),
+            ),
             body: _column(_build(b.blocks)),
           );
         }),
@@ -327,6 +337,7 @@ class _MarkdownDocState extends State<MarkdownDoc>
       );
     }
     final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
     void flash(String text) =>
         messenger.showSnackBar(SnackBar(content: Text(text)));
     switch (target) {
@@ -336,12 +347,12 @@ class _MarkdownDocState extends State<MarkdownDoc>
           try {
             ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
           } catch (_) {}
-          if (!ok) flash('打不开这个链接：$uri');
+          if (!ok) flash(l.filesCantOpenLink(uri.toString()));
         }());
       case OpenFile(:final path):
         widget.openFile(path);
       case NotInWorkspace():
-        flash('这个文件不在当前工作区里，手机上打不开');
+        flash(l.filesNotInWorkspace);
       case null:
         break;
     }
@@ -595,7 +606,10 @@ class _ImageAlt extends StatelessWidget {
                     color: c.muted,
                   ),
           ),
-          TextSpan(text: ' ${alt == null || alt!.isEmpty ? '图片' : alt}'),
+          TextSpan(
+            text:
+                ' ${alt == null || alt!.isEmpty ? context.l10n.chatImage : alt}',
+          ),
         ],
       ),
       style: TextStyle(fontSize: Fs.small, color: c.muted),

@@ -187,15 +187,15 @@ List<ToolStep> toolSteps(
   return steps.reversed.toList();
 }
 
-/// 命令行程序分组的顺序和名字，同桌面。
-const cliSources = [
-  ('homebrew', 'Homebrew'),
-  ('', '其他命令行'),
-  ('system', '系统自带'),
-];
+/// 命令行程序分组的顺序，同桌面；名字见 [cliSourceLabel]。
+const cliSources = ['homebrew', '', 'system'];
 
-String cliSourceLabel(String source) =>
-    cliSources.firstWhere((s) => s.$1 == source, orElse: () => ('', '')).$2;
+String cliSourceLabel(AppLocalizations l, String source) => switch (source) {
+  'homebrew' => 'Homebrew',
+  '' => l.chatToolsCliOther,
+  'system' => l.chatToolsCliSystem,
+  _ => '',
+};
 
 /// 筛选（命令行程序常是几十个 git、adb，把技能挤得看不见）。和桌面端各记各的，存在手机上；
 /// 旧版只记了是否只看技能和 MCP（tools.skillsOnly）。
@@ -230,7 +230,8 @@ Future<void> _setFilter(ToolsFilter v) async {
 }
 
 /// 网址的来源说明：用户发的写"你发的"，其余是工具名或程序名。
-String webVia(String via) => via == 'user' ? '你发的' : via;
+String webVia(AppLocalizations l, String via) =>
+    via == 'user' ? l.chatToolsViaUser : via;
 
 /// 会话的"技能与工具"：用到的技能、MCP 服务、命令行程序和网址各几次，下面是时间线。
 /// 开着时每 3 秒重读一次（同桌面面板）。点名字复制。
@@ -286,7 +287,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
       if (e.code == 'method_not_found') {
         _timer?.cancel();
         if (mounted) {
-          setState(() => _error = '电脑上的 posse 版本太旧，更新后才能在手机上看会话用到的技能和工具');
+          setState(() => _error = context.l10n.chatToolsOldPosse);
         }
       } else if (mounted && _usage == null) {
         setState(() => _error = friendlyError(e, context.l10n));
@@ -304,7 +305,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(titleSpacing: 0, title: const Text('技能与工具')),
+      appBar: AppBar(titleSpacing: 0, title: Text(context.l10n.chatToolsTitle)),
       body: ValueListenableBuilder(
         valueListenable: toolsFilter,
         builder: (context, filter, _) => _body(context, filter),
@@ -325,9 +326,9 @@ class _ToolsScreenState extends State<ToolsScreen> {
       return const Center(child: PosseLoader());
     }
     if (!u.found) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.extension_rounded,
-        text: '还没找到会话文件，agent 开始对话后会出现',
+        text: context.l10n.chatToolsNoFile,
       );
     }
     if (u.skills.isEmpty &&
@@ -335,9 +336,9 @@ class _ToolsScreenState extends State<ToolsScreen> {
         u.cli.isEmpty &&
         u.web.isEmpty &&
         u.searches == 0) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.extension_rounded,
-        text: '这个会话还没用到技能、MCP、命令行工具和网址',
+        text: context.l10n.chatToolsNone,
       );
     }
     return ToolsView(usage: u, filter: filter);
@@ -358,13 +359,14 @@ class ToolsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final u = usage;
     final steps = toolSteps(u.events, filter: filter);
     final noSkills = u.skills.isEmpty && u.mcp.isEmpty;
     final noWeb = u.web.isEmpty && u.searches == 0;
     final empty = switch (filter) {
-      ToolsFilter.skills when noSkills => '这个会话还没用到技能和 MCP',
-      ToolsFilter.web when noWeb => '这个会话还没访问网址',
+      ToolsFilter.skills when noSkills => l.chatToolsNoSkills,
+      ToolsFilter.web when noWeb => l.chatToolsNoWeb,
       _ => null,
     };
     return CustomScrollView(
@@ -374,7 +376,7 @@ class ToolsView extends StatelessWidget {
           sliver: SliverList.list(
             children: [
               Segmented(
-                labels: const ['全部', '技能和 MCP', '网址'],
+                labels: [l.commonAll, l.chatToolsSkillsMcp, l.chatToolsWeb],
                 selected: filter.index,
                 onChanged: (i) => _setFilter(ToolsFilter.values[i]),
               ),
@@ -410,9 +412,9 @@ class ToolsView extends StatelessWidget {
                 ),
               ],
               if (filter == ToolsFilter.all)
-                for (final (source, label) in cliSources)
+                for (final source in cliSources)
                   if (u.cli.any((it) => it.source == source)) ...[
-                    _header(c, label),
+                    _header(c, cliSourceLabel(l, source)),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -428,7 +430,12 @@ class ToolsView extends StatelessWidget {
                     ),
                   ],
               if (filter != ToolsFilter.skills && !noWeb) ...[
-                _header(c, u.searches > 0 ? '网址  搜索 ${u.searches} 次' : '网址'),
+                _header(
+                  c,
+                  u.searches > 0
+                      ? l.chatToolsWebSearches(u.searches)
+                      : l.chatToolsWeb,
+                ),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -442,7 +449,7 @@ class ToolsView extends StatelessWidget {
                   ],
                 ),
               ],
-              if (steps.isNotEmpty) _header(c, '时间线'),
+              if (steps.isNotEmpty) _header(c, l.chatToolsTimeline),
             ],
           ),
         ),
@@ -476,7 +483,7 @@ void _copy(BuildContext context, String name) {
   Clipboard.setData(ClipboardData(text: name));
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text('已复制 $name')));
+    ..showSnackBar(SnackBar(content: Text(context.l10n.chatToolsCopied(name))));
 }
 
 /// 汇总里的一个小标签：图标、名字、次数，点一下复制名字。
@@ -543,25 +550,34 @@ class _StepRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
+    final l = context.l10n;
     final e = step.event;
     final (color, kind, name) = switch (e) {
-      _ when e.skill.isNotEmpty => (c.honey, '技能', e.skill),
-      _ when e.cli.isNotEmpty => (c.teal, cliSourceLabel(e.source), e.cli),
+      _ when e.skill.isNotEmpty => (c.honey, l.chatToolsSkill, e.skill),
+      _ when e.cli.isNotEmpty => (c.teal, cliSourceLabel(l, e.source), e.cli),
       _ when e.url.isNotEmpty => () {
         final (host, rest) = webSite(e.url);
-        final via = webVia(e.via);
+        final via = webVia(l, e.via);
         return (c.plum, rest.isEmpty ? via : '$via · $rest', host);
       }(),
-      _ when e.query.isNotEmpty => (c.plum, '搜索 · ${webVia(e.via)}', e.query),
-      _ => (c.sky, e.failed ? '${e.server} · 失败' : e.server, e.tool),
+      _ when e.query.isNotEmpty => (
+        c.plum,
+        l.chatToolsSearchVia(webVia(l, e.via)),
+        e.query,
+      ),
+      _ => (
+        c.sky,
+        e.failed ? l.chatToolsServerFailed(e.server) : e.server,
+        e.tool,
+      ),
     };
     return InkWell(
       onTap: () => _copy(context, e.url.isNotEmpty ? e.url : name),
       onLongPress: e.url.isNotEmpty
-          ? () => _showDetail(context, e.url, '复制网址', url: e.url)
+          ? () => _showDetail(context, e.url, l.chatToolsCopyUrl, url: e.url)
           : e.command.isEmpty
           ? null
-          : () => _showDetail(context, e.command, '复制命令'),
+          : () => _showDetail(context, e.command, l.chatToolsCopyCommand),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -677,7 +693,7 @@ class _StepRow extends StatelessWidget {
                         );
                       }
                     },
-                    child: const Text('在浏览器中打开'),
+                    child: Text(context.l10n.chatToolsOpenInBrowser),
                   ),
                 ],
               ],

@@ -257,27 +257,30 @@ class _VideoViewState extends State<VideoView> {
     } on VideoCancelled {
       return;
     } on VideoTooLarge {
-      _fail('视频超过 500 MB，手机上不下载');
+      _fail((l) => l.filesVideoTooLarge);
     } on RpcException catch (e) {
       if (e.code == 'method_not_found') {
-        _fail('电脑上的 posse 版本太旧，更新后才能在手机上播放视频');
+        _fail((l) => l.filesVideoOldPosse);
       } else if (e.code == 'closed') {
-        _fail('和电脑的连接断了，下好的部分留着', resumable: true);
-      } else if (mounted) {
-        _fail(friendlyError(e, context.l10n));
+        _fail((l) => l.filesDownloadDisconnected, resumable: true);
+      } else {
+        _fail((l) => friendlyError(e, l));
       }
     } on TimeoutException {
-      _fail('网络太慢，视频没下完，下好的部分留着', resumable: true);
+      _fail((l) => l.filesVideoSlow, resumable: true);
     } catch (e) {
-      if (!mounted) return;
-      _fail('这个视频手机上放不了：${friendlyError(e, context.l10n)}');
+      _fail((l) => l.filesVideoCantPlay(friendlyError(e, l)));
     }
   }
 
-  void _fail(String text, {bool resumable = false}) {
+  /// 报错文字等确认还挂着再取（要 context 的界面语言）。
+  void _fail(
+    String Function(AppLocalizations l) text, {
+    bool resumable = false,
+  }) {
     if (mounted) {
       setState(() {
-        _error = text;
+        _error = text(context.l10n);
         _resumable = resumable;
       });
     }
@@ -307,7 +310,10 @@ class _VideoViewState extends State<VideoView> {
         text: _error!,
         error: true,
         action: _resumable
-            ? TextButton(onPressed: _resume, child: const Text('接着下载'))
+            ? TextButton(
+                onPressed: _resume,
+                child: Text(context.l10n.filesResumeDownload),
+              )
             : null,
       );
     }
@@ -327,8 +333,11 @@ class _VideoViewState extends State<VideoView> {
               const SizedBox(height: 12),
               Text(
                 total == 0
-                    ? '正在从电脑取视频…'
-                    : '正在从电脑取视频  ${formatBytes(done)} / ${formatBytes(total)}',
+                    ? context.l10n.filesFetchingVideo
+                    : context.l10n.filesFetchingVideoProgress(
+                        formatBytes(done),
+                        formatBytes(total),
+                      ),
                 style: TextStyle(fontSize: Fs.small, color: c.muted),
               ),
             ],
@@ -412,7 +421,9 @@ class _Controls extends StatelessWidget {
           builder: (context, value, _) => Row(
             children: [
               IconButton(
-                tooltip: value.isPlaying ? '暂停' : '播放',
+                tooltip: value.isPlaying
+                    ? context.l10n.filesPause
+                    : context.l10n.filesPlay,
                 onPressed: () =>
                     value.isPlaying ? player.pause() : player.play(),
                 icon: Icon(

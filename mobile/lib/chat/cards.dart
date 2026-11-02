@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import 'prompt.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -33,7 +34,7 @@ class ApprovalCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '允许 ${approval.tool}？',
+                  context.l10n.chatAllowTitle(approval.tool),
                   style: TextStyle(
                     fontSize: Fs.title,
                     fontWeight: Fw.bold,
@@ -67,14 +68,14 @@ class ApprovalCard extends StatelessWidget {
               Expanded(
                 child: TextButton(
                   onPressed: busy ? null : () => onDecision(denyKey),
-                  child: const Text('拒绝'),
+                  child: Text(context.l10n.chatDeny),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
                   onPressed: busy ? null : () => onDecision(allowKey),
-                  child: const Text('允许'),
+                  child: Text(context.l10n.chatAllow),
                 ),
               ),
             ],
@@ -217,8 +218,8 @@ class _QuestionCardState extends State<QuestionCard> {
                     const SizedBox(height: 8),
                     TextField(
                       controller: _otherOf(i),
-                      decoration: const InputDecoration(
-                        hintText: '其他回答',
+                      decoration: InputDecoration(
+                        hintText: context.l10n.chatOtherAnswer,
                         isDense: true,
                       ),
                       onChanged: (_) => setState(() {}),
@@ -233,7 +234,7 @@ class _QuestionCardState extends State<QuestionCard> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: _ready ? _submit : null,
-              child: const Text('提交'),
+              child: Text(context.l10n.chatSubmitAnswer),
             ),
           ),
         ],

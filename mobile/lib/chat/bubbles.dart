@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import 'markdown_view.dart';
 import 'models.dart';
 import 'transcript.dart';
@@ -65,7 +66,7 @@ class EarlierRow extends StatelessWidget {
                   textStyle: const TextStyle(fontSize: Fs.small),
                 ),
                 onPressed: onLoad,
-                child: const Text('更早的消息'),
+                child: Text(context.l10n.chatEarlierMessages),
               ),
       ),
     );
@@ -90,7 +91,7 @@ class EchoBubble extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  '你',
+                  context.l10n.chatRoleYou,
                   style: TextStyle(
                     fontSize: Fs.small,
                     fontWeight: Fw.medium,
@@ -99,7 +100,7 @@ class EchoBubble extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  echo.sent ? '已发送' : '发送中…',
+                  echo.sent ? context.l10n.chatSent : context.l10n.chatSending,
                   style: TextStyle(fontSize: Fs.small, color: muted),
                 ),
               ],
@@ -107,7 +108,7 @@ class EchoBubble extends StatelessWidget {
             const SizedBox(height: 6),
             if (echo.images > 0)
               Text(
-                '${echo.images} 张图片',
+                context.l10n.chatImageCount(echo.images),
                 style: TextStyle(fontSize: Fs.small, color: muted),
               ),
             if (echo.text.isNotEmpty)
@@ -138,8 +139,8 @@ class WorkingRow extends StatelessWidget {
     final text = status != null && status.isNotEmpty
         ? status
         : tool == null || tool.isEmpty
-        ? '工作中…'
-        : '正在用 $tool…';
+        ? context.l10n.chatWorking
+        : context.l10n.chatUsingTool(tool);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Row(
@@ -179,7 +180,7 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final mine = message.role == 'user';
     final muted = chatMuted(context);
-    final who = chatWho(message.role, agent);
+    final who = chatWho(context.l10n, message.role, agent);
     final time = chatTimeLabel(message.timestamp);
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,7 +226,7 @@ class MessageBubble extends StatelessWidget {
     final muted = chatMuted(context);
     if (block.type == 'image-ref') {
       return Text(
-        block.path ?? block.url ?? '图片',
+        block.path ?? block.url ?? context.l10n.chatImage,
         style: TextStyle(fontSize: Fs.small, color: muted),
       );
     }
@@ -282,7 +283,7 @@ class _ToolRunState extends State<ToolRun> {
                   Icon(Icons.build_rounded, size: Ic.inline, color: muted),
                   const SizedBox(width: 6),
                   Text(
-                    '工具调用 $count 次',
+                    context.l10n.chatToolCalls(count),
                     style: TextStyle(fontSize: Fs.small, color: muted),
                   ),
                   const SizedBox(width: 2),
@@ -306,10 +307,10 @@ class _ToolRunState extends State<ToolRun> {
 
   Widget _toolBody(BuildContext context, ChatBlock block, Color muted) {
     final title = block.isError
-        ? '工具失败'
+        ? context.l10n.chatToolFailed
         : (block.name?.isNotEmpty ?? false)
         ? block.name!
-        : '工具';
+        : context.l10n.chatRoleTool;
     final detail = block.type == 'tool-result'
         ? (block.output ?? '')
         : _preview(block.input);

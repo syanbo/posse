@@ -98,6 +98,606 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
+  /// Chat: permission card button that allows the tool call.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get chatAllow;
+
+  /// Chat: title of the permission card when the agent asks to run a tool. {tool} is the tool name.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow {tool}?'**
+  String chatAllowTitle(String tool);
+
+  /// Chat: brief notice after tapping Paste when the clipboard is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'There’s no text or image on the clipboard'**
+  String get chatClipboardEmpty;
+
+  /// Chat and Markdown: header of a code block that names no language.
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get chatCode;
+
+  /// Chat: body of the compact-context dialog. {percent} is the used percentage, {agent} the agent name.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of the context is used. {agent} will condense the conversation so far into a summary (/compact) to make room to keep going.'**
+  String chatCompactBody(int percent, String agent);
+
+  /// Chat: confirm button of the compact-context dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get chatCompactButton;
+
+  /// Chat: title of the dialog shown after tapping the context meter.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact Context?'**
+  String get chatCompactConfirm;
+
+  /// Chat: tooltip of the green dot on the agent icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to the Mac'**
+  String get chatConnected;
+
+  /// Chat: status line while the phone connects to the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting to the Mac…'**
+  String get chatConnecting;
+
+  /// Chat: accessibility label of the context meter in the status line.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of context used'**
+  String chatContextUsed(int percent);
+
+  /// Chat: permission card button that denies the tool call.
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get chatDeny;
+
+  /// Chat: tooltip of the amber dot on the agent icon.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected from the Mac'**
+  String get chatDisconnected;
+
+  /// Chat: button at the top of the conversation that loads older messages.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier Messages'**
+  String get chatEarlierMessages;
+
+  /// Chat: shown in place of the message box after the session ended.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has ended; its transcript is kept. To keep going, start a new session from Home or restore it from History on the Mac.'**
+  String get chatEndedNote;
+
+  /// Chat and Terminal: error when uploading an empty file.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is empty'**
+  String get chatFileEmpty;
+
+  /// Chat and Terminal: error when the computer refused to start a file upload.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac didn’t accept this file'**
+  String get chatFileNotAccepted;
+
+  /// Chat and Terminal: error when an old computer can’t take a large upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old to receive a file this large. Update Posse on the Mac first.'**
+  String get chatFileTooLargeForOldPosse;
+
+  /// Chat: placeholder for an image in a message that has no path or URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get chatImage;
+
+  /// Chat: line in a just-sent message saying how many images it carries.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} image} other {{count} images}}'**
+  String chatImageCount(int count);
+
+  /// Chat and Terminal: error when uploading an empty image.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is empty'**
+  String get chatImageEmpty;
+
+  /// Chat: brief notice when the user picks more images than one message can carry.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {count, plural, one {{count} image} other {{count} images}} at a time'**
+  String chatImageLimit(int count);
+
+  /// Chat and Terminal: error when the computer refused to start an image upload.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac didn’t accept this image'**
+  String get chatImageNotAccepted;
+
+  /// Chat and Terminal: error when the computer returned no path for an uploaded image.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac didn’t save this image'**
+  String get chatImageNotSaved;
+
+  /// Accessibility label of the latency reading. {ms} is the round-trip time in milliseconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency to the Mac: {ms} ms'**
+  String chatLatencyLabel(int ms);
+
+  /// Status line: short text next to the empty signal icon when pings time out.
+  ///
+  /// In en, this message translates to:
+  /// **'No Response'**
+  String get chatLatencyUnresponsive;
+
+  /// Accessibility label of the latency reading when pings time out.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac isn’t responding'**
+  String get chatLatencyUnresponsiveLabel;
+
+  /// Images & Videos: name of an item produced by code (e.g. a notebook cell) that has no file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Code output'**
+  String get chatMediaCodeOutput;
+
+  /// Images & Videos: name of an item the agent generated that has no file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated image'**
+  String get chatMediaGenerated;
+
+  /// Images & Videos: accessibility label of an image tile. {name} is the item name.
+  ///
+  /// In en, this message translates to:
+  /// **'Image {name}'**
+  String chatMediaImageLabel(String name);
+
+  /// Images & Videos: section header for images and videos the agent generated.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated by Agent'**
+  String get chatMediaMadeHeader;
+
+  /// Images & Videos: empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has no images or videos yet'**
+  String get chatMediaNone;
+
+  /// Images & Videos: error when the computer doesn’t support listing media.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old. Update it to see the session’s images and videos on your phone.'**
+  String get chatMediaOldPosse;
+
+  /// Images & Videos: name of an image the user pasted into the session that has no file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Pasted'**
+  String get chatMediaPasted;
+
+  /// Images & Videos: section header for images the user pasted.
+  ///
+  /// In en, this message translates to:
+  /// **'Pasted'**
+  String get chatMediaPastedHeader;
+
+  /// Images & Videos: note under the generated section when older items are left out.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing only the {count, plural, one {most recent item} other {{count} most recent items}}'**
+  String chatMediaRecentOnly(int count);
+
+  /// Images & Videos: page title, opened from the session’s “…” menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Images & Videos'**
+  String get chatMediaTitle;
+
+  /// Images & Videos: accessibility label of a video tile. {name} is the item name.
+  ///
+  /// In en, this message translates to:
+  /// **'Video {name}'**
+  String chatMediaVideoLabel(String name);
+
+  /// Chat: floating button that jumps to new messages below.
+  ///
+  /// In en, this message translates to:
+  /// **'New Messages'**
+  String get chatNewMessages;
+
+  /// Chat and Terminal: error when the photo library or camera permission was denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse can’t access photos. Allow access to Photos or Camera in Settings.'**
+  String get chatNoPhotoAccess;
+
+  /// Chat: shown instead of the conversation when the agent keeps no session file.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has no transcript'**
+  String get chatNoTranscript;
+
+  /// Chat: placeholder of the free-text field under the options of a question the agent asks.
+  ///
+  /// In en, this message translates to:
+  /// **'Other answer'**
+  String get chatOtherAnswer;
+
+  /// Chat: item in the attach sheet that pastes an image or text from the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste from Clipboard'**
+  String get chatPasteFromClipboard;
+
+  /// Chat and Terminal: item in the attach sheet that opens the system Files app.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose from Files'**
+  String get chatPickFromFiles;
+
+  /// Terminal: item in the send-file sheet that opens the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a Photo or Video'**
+  String get chatPickFromLibrary;
+
+  /// Chat: item in the attach sheet that opens the photo library with multiple selection.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose Photos or Videos (Multiple Allowed)'**
+  String get chatPickFromLibraryMulti;
+
+  /// Chat: notice when the session stream reports an error without a message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t read the session'**
+  String get chatReadFailed;
+
+  /// Chat: status line after the connection to the computer dropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected, reconnecting…'**
+  String get chatReconnecting;
+
+  /// Chat: tooltip of the × on an image attached to the message box.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Image'**
+  String get chatRemoveImage;
+
+  /// Chat: placeholder of the message box. {agent} is the agent name, e.g. Claude.
+  ///
+  /// In en, this message translates to:
+  /// **'Reply to {agent}'**
+  String chatReplyHint(String agent);
+
+  /// Chat: sender name above the agent’s reasoning blocks.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get chatRoleReasoning;
+
+  /// Chat: sender name above system messages.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get chatRoleSystem;
+
+  /// Chat: sender name for tool messages; also the fallback title of a tool call with no name.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool'**
+  String get chatRoleTool;
+
+  /// Chat: sender name above the user’s own messages.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get chatRoleYou;
+
+  /// Status line after the latency reading: the connection is direct (LAN, Tailscale, hole punching).
+  ///
+  /// In en, this message translates to:
+  /// **'Direct'**
+  String get chatRouteDirect;
+
+  /// Status line after the latency reading: the connection goes through the relay.
+  ///
+  /// In en, this message translates to:
+  /// **'Relay'**
+  String get chatRouteRelay;
+
+  /// Chat: tooltip of the send button in the message box.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get chatSend;
+
+  /// Chat: tooltip of the image button in the message box.
+  ///
+  /// In en, this message translates to:
+  /// **'Send Image'**
+  String get chatSendImage;
+
+  /// Chat and Terminal: brief notice when the computer refused to write the message into the terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Not delivered'**
+  String get chatSendRefused;
+
+  /// Chat and Terminal: brief notice when it’s unknown whether the message reached the terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Not confirmed. Check the chat before retrying.'**
+  String get chatSendUnknown;
+
+  /// Chat: status next to a message the user just sent, while it is being sent.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending…'**
+  String get chatSending;
+
+  /// Chat: status next to a message the user just sent, once the computer accepted it.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get chatSent;
+
+  /// Chat: status line when the agent finished its turn.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn Finished'**
+  String get chatStateDone;
+
+  /// Chat: status line under the session title after the session ended.
+  ///
+  /// In en, this message translates to:
+  /// **'Session ended'**
+  String get chatStateEnded;
+
+  /// Chat: status line while the agent starts up.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get chatStateStarting;
+
+  /// Chat: status line while the agent waits for agents it dispatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting on Tasks'**
+  String get chatStateTasks;
+
+  /// Chat: status line while the agent runs a tool. {tool} is the tool name.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {tool}'**
+  String chatStateUsingTool(String tool);
+
+  /// Chat: status line when the agent waits for the user’s approval or answer.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs You'**
+  String get chatStateWaiting;
+
+  /// Chat: status line while the agent is working.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get chatStateWorking;
+
+  /// Chat: notice when the computer closed the session stream.
+  ///
+  /// In en, this message translates to:
+  /// **'The session stream ended'**
+  String get chatStreamEnded;
+
+  /// Chat: label next to the agent name while its reply is still streaming.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing'**
+  String get chatStreaming;
+
+  /// Chat: button that sends the answers to the agent’s questions.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get chatSubmitAnswer;
+
+  /// Chat: item in the “…” menu that shows the session as a terminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Terminal'**
+  String get chatSwitchToTerminal;
+
+  /// Chat and Terminal: item in the attach sheet that opens the camera.
+  ///
+  /// In en, this message translates to:
+  /// **'Take Photo'**
+  String get chatTakePhoto;
+
+  /// Chat: status line for a plain terminal session with no agent.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get chatTerminal;
+
+  /// Chat: stands in for the tool name in “Allow {tool}?” when the agent didn’t say which tool; lowercase in English.
+  ///
+  /// In en, this message translates to:
+  /// **'this action'**
+  String get chatThisAction;
+
+  /// Chat: collapsed row summarizing consecutive tool calls; tap to expand.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} tool call} other {{count} tool calls}}'**
+  String chatToolCalls(int count);
+
+  /// Chat: title of a tool result that returned an error.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool Failed'**
+  String get chatToolFailed;
+
+  /// Skills & Tools: group header for command-line programs that are neither from Homebrew nor built in.
+  ///
+  /// In en, this message translates to:
+  /// **'Other Commands'**
+  String get chatToolsCliOther;
+
+  /// Skills & Tools: group header for command-line programs that ship with the system.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in'**
+  String get chatToolsCliSystem;
+
+  /// Skills & Tools: brief notice after tapping a name to copy it.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied {name}'**
+  String chatToolsCopied(String name);
+
+  /// Skills & Tools: button in the sheet showing a full command line.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Command'**
+  String get chatToolsCopyCommand;
+
+  /// Skills & Tools: button in the sheet showing a full URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy URL'**
+  String get chatToolsCopyUrl;
+
+  /// Skills & Tools: empty state before the agent wrote its session file.
+  ///
+  /// In en, this message translates to:
+  /// **'No session file yet. It appears once the agent starts a conversation.'**
+  String get chatToolsNoFile;
+
+  /// Skills & Tools: empty state of the Skills & MCP filter.
+  ///
+  /// In en, this message translates to:
+  /// **'This session hasn’t used any skills or MCP yet'**
+  String get chatToolsNoSkills;
+
+  /// Skills & Tools: empty state of the URLs filter.
+  ///
+  /// In en, this message translates to:
+  /// **'This session hasn’t visited any URLs yet'**
+  String get chatToolsNoWeb;
+
+  /// Skills & Tools: empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'This session hasn’t used any skills, MCP, command-line tools or URLs yet'**
+  String get chatToolsNone;
+
+  /// Skills & Tools: error when the computer doesn’t support the page.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old. Update it to see the session’s skills and tools on your phone.'**
+  String get chatToolsOldPosse;
+
+  /// Skills & Tools: button in the sheet showing a full URL.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in Browser'**
+  String get chatToolsOpenInBrowser;
+
+  /// Skills & Tools: kind shown under a web search in the timeline. {via} is the tool that searched, or “Sent by you”.
+  ///
+  /// In en, this message translates to:
+  /// **'Search · {via}'**
+  String chatToolsSearchVia(String via);
+
+  /// Skills & Tools: kind shown under an MCP call that failed. {server} is the MCP server name.
+  ///
+  /// In en, this message translates to:
+  /// **'{server} · Failed'**
+  String chatToolsServerFailed(String server);
+
+  /// Skills & Tools: kind shown under a skill call in the timeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Skill'**
+  String get chatToolsSkill;
+
+  /// Skills & Tools: filter option showing only skills and MCP servers.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills & MCP'**
+  String get chatToolsSkillsMcp;
+
+  /// Skills & Tools: section header of the list of calls, newest first.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get chatToolsTimeline;
+
+  /// Skills & Tools: page title, opened from the session’s “…” menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills & Tools'**
+  String get chatToolsTitle;
+
+  /// Skills & Tools: source of a URL the user sent in a message (otherwise the tool or program name is shown).
+  ///
+  /// In en, this message translates to:
+  /// **'Sent by you'**
+  String get chatToolsViaUser;
+
+  /// Skills & Tools: filter option and section header for visited websites.
+  ///
+  /// In en, this message translates to:
+  /// **'URLs'**
+  String get chatToolsWeb;
+
+  /// Skills & Tools: section header for websites when the agent also ran web searches; two spaces separate the parts.
+  ///
+  /// In en, this message translates to:
+  /// **'URLs  {count, plural, one {{count} search} other {{count} searches}}'**
+  String chatToolsWebSearches(int count);
+
+  /// Chat: last row of the conversation while the agent runs a tool. {tool} is the tool name.
+  ///
+  /// In en, this message translates to:
+  /// **'Using {tool}…'**
+  String chatUsingTool(String tool);
+
+  /// Chat: last row of the conversation while the agent works and no status line is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Working…'**
+  String get chatWorking;
+
+  /// Filter option that shows everything.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get commonAll;
+
   /// Button: cancel a dialog.
   ///
   /// In en, this message translates to:
@@ -133,6 +733,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'More'**
   String get commonMore;
+
+  /// Error when an action needs the Mac but the phone isn’t connected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected to the Mac yet'**
+  String get errorNotConnected;
 
   /// Button: paste the clipboard.
   ///
@@ -854,12 +1460,6 @@ abstract class AppLocalizations {
   /// **'This isn’t a file.'**
   String get errorNotAFile;
 
-  /// Error when an action needs the Mac but the phone isn’t connected.
-  ///
-  /// In en, this message translates to:
-  /// **'Not connected to the Mac yet'**
-  String get errorNotConnected;
-
   /// Error when the Mac’s Posse doesn’t know a request.
   ///
   /// In en, this message translates to:
@@ -877,6 +1477,546 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The Mac isn’t responding. It may be asleep, or the network is down.'**
   String get errorTimeout;
+
+  /// File viewer: shown instead of the content of a binary file.
+  ///
+  /// In en, this message translates to:
+  /// **'Binary file; its content can’t be shown on the phone'**
+  String get filesBinary;
+
+  /// Markdown preview: brief notice when a link can’t be opened. {url} is the link.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t open this link: {url}'**
+  String filesCantOpenLink(String url);
+
+  /// Chat and Terminal: tooltip of the top-bar button that opens Git changes and the file tree.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes and Files'**
+  String get filesChangesAndFiles;
+
+  /// Markdown preview: title of a collapsible <details> section that has no <summary>.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get filesDetails;
+
+  /// Download dialog and video player: error when the connection dropped mid-download.
+  ///
+  /// In en, this message translates to:
+  /// **'Lost the connection to the Mac. The downloaded part is kept.'**
+  String get filesDownloadDisconnected;
+
+  /// Download dialog: error when the computer doesn’t support downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old. Update it to download files.'**
+  String get filesDownloadOldPosse;
+
+  /// Download dialog: error when the download timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'The network is too slow and the download didn’t finish. The downloaded part is kept.'**
+  String get filesDownloadSlow;
+
+  /// Files: empty state of a folder.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder is empty'**
+  String get filesEmptyFolder;
+
+  /// Download dialog: progress text before the size is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the file from the Mac…'**
+  String get filesFetching;
+
+  /// Video player: progress text before the size is known.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the video from the Mac…'**
+  String get filesFetchingVideo;
+
+  /// Video player: progress text. {done} and {total} are formatted sizes like “12 MB”.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the video from the Mac  {done} / {total}'**
+  String filesFetchingVideoProgress(String done, String total);
+
+  /// Files: placeholder of the search button above the file tree.
+  ///
+  /// In en, this message translates to:
+  /// **'Find by name or path'**
+  String get filesFindButton;
+
+  /// Files: placeholder of the search field on the find page.
+  ///
+  /// In en, this message translates to:
+  /// **'File name or path'**
+  String get filesFindHint;
+
+  /// Save: error when the photo library permission was denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse can’t access Photos. Allow access to Photos in Settings.'**
+  String get filesNoAlbumAccess;
+
+  /// File viewer: notice above a large file shown without syntax colors.
+  ///
+  /// In en, this message translates to:
+  /// **'Large file; syntax highlighting is off'**
+  String get filesNoHighlight;
+
+  /// Save: error when the phone is out of space.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough space on the phone; nothing was saved to Photos'**
+  String get filesNoSpace;
+
+  /// Save (Android): error when the storage permission was denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse can’t access storage. Allow storage access in Settings.'**
+  String get filesNoStorageAccess;
+
+  /// Markdown preview: brief notice when a relative link points outside the workspace.
+  ///
+  /// In en, this message translates to:
+  /// **'This file isn’t in the current workspace and can’t be opened on the phone'**
+  String get filesNotInWorkspace;
+
+  /// Video player: tooltip of the pause button.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get filesPause;
+
+  /// Video player: tooltip of the play button.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get filesPlay;
+
+  /// File viewer: button that switches a Markdown file from source to rendered preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get filesPreview;
+
+  /// Download dialog and video player: button that continues an interrupted download.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume Download'**
+  String get filesResumeDownload;
+
+  /// Save sheet and viewer: action that saves an image or video to the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to Photos'**
+  String get filesSaveToAlbum;
+
+  /// Save: error when saving to the photo library failed. {error} is the system’s message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save to Photos: {error}'**
+  String filesSaveToAlbumFailed(String error);
+
+  /// Save sheet: subtitle of Save to Photos.
+  ///
+  /// In en, this message translates to:
+  /// **'Download to the phone and put it in the “Posse” album in Photos'**
+  String get filesSaveToAlbumNote;
+
+  /// Save sheet and viewer (Android): action that saves a file to Downloads/Posse.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to Downloads'**
+  String get filesSaveToDownloads;
+
+  /// Save (Android): error when saving to Downloads failed. {error} is the system’s message.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t save to Downloads: {error}'**
+  String filesSaveToDownloadsFailed(String error);
+
+  /// Save sheet (Android): subtitle of Save to Downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Download to the phone and put it in Downloads/Posse, where file managers can find it'**
+  String get filesSaveToDownloadsNote;
+
+  /// Save: brief notice after saving to the photo library.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to the “Posse” album in Photos'**
+  String get filesSavedToAlbum;
+
+  /// Save (Android): brief notice after saving to Downloads. {name} is the saved file name.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to Downloads/Posse: {name}'**
+  String filesSavedToDownloads(String name);
+
+  /// Save sheet and viewer: action that opens the system share sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get filesShare;
+
+  /// Save sheet: subtitle of Share when it is the main action.
+  ///
+  /// In en, this message translates to:
+  /// **'Download to the phone, then save it to Files or send it to another app with the share sheet'**
+  String get filesShareNote;
+
+  /// Save sheet: subtitle of Share as the second action.
+  ///
+  /// In en, this message translates to:
+  /// **'Download to the phone and send it to another app'**
+  String get filesShareOtherNote;
+
+  /// File viewer: button that switches a Markdown file from preview to source.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get filesSource;
+
+  /// Files: page title; the workspace path is shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get filesTitle;
+
+  /// Download dialog: error for files over 500 MB.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is larger than 500 MB and won’t be downloaded to the phone'**
+  String get filesTooLarge;
+
+  /// File viewer: notice above a truncated file.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is too large; showing only the first 512 KB'**
+  String get filesTruncated;
+
+  /// Video player: error when the player failed. {error} is the reason.
+  ///
+  /// In en, this message translates to:
+  /// **'This video can’t be played on the phone: {error}'**
+  String filesVideoCantPlay(String error);
+
+  /// Video player: error when the computer doesn’t support video download.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old. Update it to play videos on your phone.'**
+  String get filesVideoOldPosse;
+
+  /// Video player: error when the download timed out.
+  ///
+  /// In en, this message translates to:
+  /// **'The network is too slow and the video didn’t finish downloading. The downloaded part is kept.'**
+  String get filesVideoSlow;
+
+  /// Video player: error for videos over 500 MB.
+  ///
+  /// In en, this message translates to:
+  /// **'The video is larger than 500 MB and won’t be downloaded to the phone'**
+  String get filesVideoTooLarge;
+
+  /// Git changes: branch card chip, commits not yet pushed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} ahead'**
+  String gitAhead(int count);
+
+  /// Git changes: branch card chip, commits not yet pulled.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} behind'**
+  String gitBehind(int count);
+
+  /// Git diff: shown for a binary file.
+  ///
+  /// In en, this message translates to:
+  /// **'Binary file; the diff can’t be shown on the phone'**
+  String get gitBinaryDiff;
+
+  /// Git changes: header above the file list.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} file changed} other {{count} files changed}}'**
+  String gitChangedFiles(int count);
+
+  /// Git changes: group header for modified, added, deleted and renamed files.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes'**
+  String get gitChanges;
+
+  /// Git changes: empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'The workspace is clean, no changes'**
+  String get gitClean;
+
+  /// Git changes: group header for conflicted files; also shown instead of line counts for a conflicted file.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflicts'**
+  String get gitConflicts;
+
+  /// Git image diff: placeholder on the Now side for a deleted image.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted'**
+  String get gitDeleted;
+
+  /// Git changes: shown in place of the branch name when HEAD is detached.
+  ///
+  /// In en, this message translates to:
+  /// **'Detached HEAD'**
+  String get gitDetachedHead;
+
+  /// Git diff: notice above a truncated diff.
+  ///
+  /// In en, this message translates to:
+  /// **'The diff is too long; showing only the beginning'**
+  String get gitDiffTruncated;
+
+  /// Git changes: toggle option that lists files without directories.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat'**
+  String get gitFlatView;
+
+  /// Git diff: start of a hunk header, the first line number of the change.
+  ///
+  /// In en, this message translates to:
+  /// **'Line {line}'**
+  String gitHunkLine(int line);
+
+  /// Git image diff: label above the old image.
+  ///
+  /// In en, this message translates to:
+  /// **'Before'**
+  String get gitImageBefore;
+
+  /// Git image diff: placeholder on the Before side for a new image.
+  ///
+  /// In en, this message translates to:
+  /// **'New file; it didn’t exist before'**
+  String get gitImageNewFile;
+
+  /// Git image diff: label above the current image.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get gitImageNow;
+
+  /// Git image diff: placeholder for images over 10 MB.
+  ///
+  /// In en, this message translates to:
+  /// **'The image is larger than 10 MB and isn’t shown on the phone'**
+  String get gitImageTooLarge;
+
+  /// Git image diff: placeholder when the image can’t be decoded.
+  ///
+  /// In en, this message translates to:
+  /// **'This image can’t be drawn on the phone'**
+  String get gitImageUndrawable;
+
+  /// Git diff: empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No differences'**
+  String get gitNoDifferences;
+
+  /// Git changes: shown instead of line counts for a binary file.
+  ///
+  /// In en, this message translates to:
+  /// **'Binary'**
+  String get gitStatsBinary;
+
+  /// Git changes: shown instead of line counts for an image file.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get gitStatsImage;
+
+  /// Git changes: shown instead of line counts for a new empty file.
+  ///
+  /// In en, this message translates to:
+  /// **'New File'**
+  String get gitStatsNewFile;
+
+  /// Git changes: branch card line naming the upstream branch.
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking {upstream}'**
+  String gitTracking(String upstream);
+
+  /// Git changes: toggle option that groups files by directory.
+  ///
+  /// In en, this message translates to:
+  /// **'By Directory'**
+  String get gitTreeView;
+
+  /// Git changes: group header for untracked files.
+  ///
+  /// In en, this message translates to:
+  /// **'Unversioned Files'**
+  String get gitUnversioned;
+
+  /// Git diff: tooltip of the top-bar button that opens the whole file.
+  ///
+  /// In en, this message translates to:
+  /// **'View Full File'**
+  String get gitViewFullFile;
+
+  /// History: brief notice after Continue on Computer when the session was already open.
+  ///
+  /// In en, this message translates to:
+  /// **'This session is already open on the Mac'**
+  String get historyAlreadyOpen;
+
+  /// History: notice above search results when no session matches every word.
+  ///
+  /// In en, this message translates to:
+  /// **'No session contains all the words. Showing sessions with any of them.'**
+  String get historyAnyWordNotice;
+
+  /// History: tooltip of the grouping button while grouped by folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Grouped by folder. Tap to group by time.'**
+  String get historyByFolderTip;
+
+  /// History: tooltip of the grouping button while grouped by time.
+  ///
+  /// In en, this message translates to:
+  /// **'Grouped by time. Tap to group by folder.'**
+  String get historyByTimeTip;
+
+  /// History: tooltip of the button that clears the search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get historyClearSearch;
+
+  /// History: button at the bottom of a session that resumes it on the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue on Mac'**
+  String get historyContinueOnComputer;
+
+  /// History: empty state of all sessions on the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'No session history on the Mac yet'**
+  String get historyEmptyComputer;
+
+  /// History: empty state when filtered by an agent. {agent} is the agent name.
+  ///
+  /// In en, this message translates to:
+  /// **'No {agent} session history on the Mac yet'**
+  String historyEmptyComputerAgent(String agent);
+
+  /// History: empty state in a project’s history.
+  ///
+  /// In en, this message translates to:
+  /// **'No session history in this folder yet'**
+  String get historyEmptyFolder;
+
+  /// History: empty state in a project’s history when filtered by an agent. {agent} is the agent name.
+  ///
+  /// In en, this message translates to:
+  /// **'No {agent} session history in this folder yet'**
+  String historyEmptyFolderAgent(String agent);
+
+  /// History: group header for sessions updated in the last 30 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous 30 Days'**
+  String get historyLast30Days;
+
+  /// History: group header for sessions updated in the last 7 days.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous 7 Days'**
+  String get historyLast7Days;
+
+  /// History: empty state of a search.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get historyNoResults;
+
+  /// History: error when the resumed session didn’t show up in time.
+  ///
+  /// In en, this message translates to:
+  /// **'The session hasn’t appeared on the Mac yet. Look for it on Home in a moment.'**
+  String get historyNotYetOpen;
+
+  /// History: error when the computer doesn’t support history.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on the Mac is too old. Update it to see History.'**
+  String get historyOldPosse;
+
+  /// History: group header for sessions last updated more than 30 days ago.
+  ///
+  /// In en, this message translates to:
+  /// **'Older'**
+  String get historyOlder;
+
+  /// History: button label while the session is being resumed on the computer.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get historyOpening;
+
+  /// History: brief notice after Continue on Computer resumed the session.
+  ///
+  /// In en, this message translates to:
+  /// **'Continued this session on the Mac'**
+  String get historyResumed;
+
+  /// History: placeholder of the search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search prompts, replies and tool output'**
+  String get historySearchHint;
+
+  /// History: group header for sessions updated today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get historyToday;
+
+  /// History: group header (By Folder) for sessions whose folder is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown Folder'**
+  String get historyUnknownFolder;
+
+  /// History: title of a session that has no title.
+  ///
+  /// In en, this message translates to:
+  /// **'(Untitled)'**
+  String get historyUntitled;
+
+  /// History: action in the notice after resuming, opens the session on the phone.
+  ///
+  /// In en, this message translates to:
+  /// **'View on Phone'**
+  String get historyViewOnPhone;
+
+  /// History: group header for sessions updated yesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get historyYesterday;
 
   /// Address shown for a hole-punched direct QUIC connection.
   ///

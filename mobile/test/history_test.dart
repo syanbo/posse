@@ -1,5 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/history/models.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('parses list and search results', () {
@@ -43,7 +47,7 @@ void main() {
       messages: 0,
       path: '',
     );
-    final groups = groupHistory([
+    final groups = groupHistory(zh, [
       at(DateTime(2026, 10, 18, 8)),
       at(DateTime(2026, 10, 17, 23)),
       at(DateTime(2026, 10, 14)),

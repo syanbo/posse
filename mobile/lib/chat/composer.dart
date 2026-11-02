@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 
@@ -110,7 +111,7 @@ class ChatComposer extends StatelessWidget {
             borderRadius: BorderRadius.circular(Rd.composer),
           ),
           child: Text(
-            '这个会话已经结束，记录还在。要继续请在首页新建会话，或者在电脑的历史页恢复。',
+            context.l10n.chatEndedNote,
             style: TextStyle(
               fontSize: Fs.small,
               height: Lh.body,
@@ -166,7 +167,7 @@ class ChatComposer extends StatelessWidget {
                               top: 0,
                               right: 0,
                               child: Tooltip(
-                                message: '不发这张',
+                                message: context.l10n.chatRemoveImage,
                                 child: GestureDetector(
                                   onTap: sending
                                       ? null
@@ -203,7 +204,7 @@ class ChatComposer extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   IconButton(
-                    tooltip: '发送图片',
+                    tooltip: context.l10n.chatSendImage,
                     // Material 会把点按区补到 48、撑高整条，收到和发送按钮一样 34
                     style: IconButton.styleFrom(
                       fixedSize: const Size.square(34),
@@ -253,7 +254,7 @@ class ChatComposer extends StatelessWidget {
                     ),
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      tooltip: '发送',
+                      tooltip: context.l10n.chatSend,
                       onPressed: ready ? onSubmit : null,
                       icon: sending
                           ? HexSpinner(color: c.muted)

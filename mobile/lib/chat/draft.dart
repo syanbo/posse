@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
 import '../ui/theme.dart';
 import 'chat_style.dart';
 import 'transcript.dart';
@@ -23,7 +24,7 @@ class DraftBubble extends StatelessWidget {
           Row(
             children: [
               Text(
-                chatWho('assistant', agent),
+                chatWho(context.l10n, 'assistant', agent),
                 style: TextStyle(
                   fontSize: Fs.small,
                   fontWeight: Fw.medium,
@@ -32,7 +33,7 @@ class DraftBubble extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '正在输出',
+                context.l10n.chatStreaming,
                 style: TextStyle(fontSize: Fs.tiny, color: muted),
               ),
             ],

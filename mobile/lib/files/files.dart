@@ -109,7 +109,7 @@ class FilesScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('文件'),
+            Text(context.l10n.filesTitle),
             Text(
               title,
               overflow: TextOverflow.ellipsis,
@@ -137,7 +137,7 @@ Future<void> _download(
   final rpc = model.rpc;
   if (rpc == null) {
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('还没连上电脑')));
+        .showSnackBar(SnackBar(content: Text(context.l10n.errorNotConnected)));
     return;
   }
   await downloadAndSave(
@@ -180,7 +180,7 @@ class _FilesPaneState extends State<FilesPane> {
   Future<void> _load(String dir) async {
     final rpc = widget.model.rpc;
     if (rpc == null) {
-      setState(() => _error = '还没连上电脑');
+      setState(() => _error = context.l10n.errorNotConnected);
       return;
     }
     setState(() => _loading.add(dir));
@@ -280,7 +280,11 @@ class _FilesPaneState extends State<FilesPane> {
                 const SizedBox(width: 12),
                 Icon(Icons.search_rounded, size: Ic.medium, color: c.faint),
                 const SizedBox(width: 8),
-                Text('按文件名或路径找', style: TextStyle(color: c.faint)),
+                Text(
+                  context.l10n.filesFindButton,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: c.faint),
+                ),
               ],
             ),
           ),
@@ -292,13 +296,19 @@ class _FilesPaneState extends State<FilesPane> {
         icon: Icons.cloud_off_rounded,
         text: _error!,
         error: true,
-        action: TextButton(onPressed: () => _load(''), child: const Text('重试')),
+        action: TextButton(
+          onPressed: () => _load(''),
+          child: Text(context.l10n.commonRetry),
+        ),
       );
     }
     if (rows.isEmpty) {
       return _loading.contains('')
           ? const Center(child: PosseLoader())
-          : const EmptyState(icon: Icons.folder_open_rounded, text: '目录是空的');
+          : EmptyState(
+              icon: Icons.folder_open_rounded,
+              text: context.l10n.filesEmptyFolder,
+            );
     }
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 32),
@@ -444,9 +454,9 @@ class _SearchSheetState extends State<_SearchSheet> {
               autofocus: true,
               onChanged: _changed,
               textInputAction: TextInputAction.search,
-              decoration: const InputDecoration(
-                hintText: '文件名或路径',
-                prefixIcon: Icon(Icons.search_rounded),
+              decoration: InputDecoration(
+                hintText: context.l10n.filesFindHint,
+                prefixIcon: const Icon(Icons.search_rounded),
               ),
             ),
           ),
@@ -529,7 +539,7 @@ class _FileViewerState extends State<FileViewer> {
   Future<void> _load() async {
     final rpc = widget.model.rpc;
     if (rpc == null) {
-      setState(() => _error = '还没连上电脑');
+      setState(() => _error = context.l10n.errorNotConnected);
       return;
     }
     final ext = _ext(widget.path);
@@ -574,7 +584,9 @@ class _FileViewerState extends State<FileViewer> {
                 foregroundColor: c.accent,
               ),
               onPressed: () => setState(() => _source = !_source),
-              child: Text(_source ? '预览' : '源码'),
+              child: Text(
+                _source ? context.l10n.filesPreview : context.l10n.filesSource,
+              ),
             ),
           _saveButton(),
           const SizedBox(width: 4),
@@ -593,7 +605,7 @@ class _FileViewerState extends State<FileViewer> {
     final image = _images[path];
     return Builder(
       builder: (button) => IconButton(
-        tooltip: saveLabel(to),
+        tooltip: saveLabel(context.l10n, to),
         icon: Icon(saveIcon(to)),
         onPressed: isVideo && video == null
             ? null
@@ -646,14 +658,14 @@ class _FileViewerState extends State<FileViewer> {
       );
     }
     if (_binary) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.insert_drive_file_rounded,
-        text: '二进制文件，手机上看不了内容',
+        text: context.l10n.filesBinary,
       );
     }
     final text = _text;
     if (text == null) return const Center(child: PosseLoader());
-    final notice = _truncated ? const CodeNotice('文件太大，只显示前 512 KB') : null;
+    final notice = _truncated ? CodeNotice(context.l10n.filesTruncated) : null;
     if (_markdown && !_source) {
       return SelectionArea(
         child: Column(
@@ -750,9 +762,9 @@ class _ImageFileState extends State<_ImageFile> {
       );
     }
     if (_binary) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.insert_drive_file_rounded,
-        text: '二进制文件，手机上看不了内容',
+        text: context.l10n.filesBinary,
       );
     }
     final image = _image;
@@ -848,7 +860,10 @@ class _CodeViewState extends State<_CodeView> {
         builder: (context, hl) => CodeLines(
           columns: gutter + _widest,
           extra: codePadding.horizontal + codeGutterGap,
-          header: [?widget.notice, if (big) const CodeNotice('文件较大，不着色')],
+          header: [
+            ?widget.notice,
+            if (big) CodeNotice(context.l10n.filesNoHighlight),
+          ],
           itemCount: _lines.length,
           prototype: row(0, null),
           itemBuilder: (context, i) => row(i, hl),
@@ -882,7 +897,7 @@ class FilesButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: '改动和文件',
+      tooltip: context.l10n.filesChangesAndFiles,
       icon: const Icon(Icons.folder_rounded),
       onPressed: () {
         WorktreeRow? row;

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/git/git.dart';
 import 'package:posse_mobile/git/status.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 void main() {
   test('status and diff parse the phone payload', () {
@@ -15,9 +18,9 @@ void main() {
         {'path': 'b.bin', 'binary': true, 'added': 0, 'deleted': 0},
       ],
     });
-    expect(status.headline, 'main  origin/main  领先 2');
-    expect(status.files.first.stats, '+3 -1');
-    expect(status.files.last.stats, '二进制');
+    expect(status.headline(zh), 'main  origin/main  领先 2');
+    expect(status.files.first.stats(zh), '+3 -1');
+    expect(status.files.last.stats(zh), '二进制');
     // 子模块和嵌套仓库（带斜杠）是目录，名字不带斜杠
     final dirs = parseGitStatus({
       'files': [

@@ -1,3 +1,4 @@
+import '../l10n/l10n.dart';
 import 'models.dart';
 
 bool isToolBlock(ChatBlock block) =>
@@ -98,16 +99,16 @@ String agentLabel(String? agent) {
   }
 }
 
-String chatWho(String role, String? agent) {
+String chatWho(AppLocalizations l, String role, String? agent) {
   switch (role) {
     case 'user':
-      return '你';
+      return l.chatRoleYou;
     case 'tool':
-      return '工具';
+      return l.chatRoleTool;
     case 'reasoning':
-      return '思考';
+      return l.chatRoleReasoning;
     case 'system':
-      return '系统';
+      return l.chatRoleSystem;
     default:
       return agentLabel(agent);
   }

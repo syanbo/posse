@@ -268,7 +268,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
                       ? l.sessionStarting
                       : _agent == null
                       ? l.sessionOpenTerminal
-                      : l.sessionStartChat(chatWho('assistant', _agent)),
+                      : l.sessionStartChat(chatWho(l, 'assistant', _agent)),
                 ),
               ),
             ),
@@ -302,7 +302,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
             Text(
               agent == null
                   ? context.l10n.sessionTerminal
-                  : chatWho('assistant', agent),
+                  : chatWho(context.l10n, 'assistant', agent),
               style: TextStyle(
                 fontSize: Fs.small,
                 fontWeight: Fw.medium,

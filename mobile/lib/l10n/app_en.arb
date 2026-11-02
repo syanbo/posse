@@ -1,5 +1,493 @@
 {
   "@@locale": "en",
+  "chatAllow": "Allow",
+  "@chatAllow": {
+    "description": "Chat: permission card button that allows the tool call."
+  },
+  "chatAllowTitle": "Allow {tool}?",
+  "@chatAllowTitle": {
+    "description": "Chat: title of the permission card when the agent asks to run a tool. {tool} is the tool name.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "chatClipboardEmpty": "There’s no text or image on the clipboard",
+  "@chatClipboardEmpty": {
+    "description": "Chat: brief notice after tapping Paste when the clipboard is empty."
+  },
+  "chatCode": "Code",
+  "@chatCode": {
+    "description": "Chat and Markdown: header of a code block that names no language."
+  },
+  "chatCompactBody": "{percent}% of the context is used. {agent} will condense the conversation so far into a summary (/compact) to make room to keep going.",
+  "@chatCompactBody": {
+    "description": "Chat: body of the compact-context dialog. {percent} is the used percentage, {agent} the agent name.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      },
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "chatCompactButton": "Compact",
+  "@chatCompactButton": {
+    "description": "Chat: confirm button of the compact-context dialog."
+  },
+  "chatCompactConfirm": "Compact Context?",
+  "@chatCompactConfirm": {
+    "description": "Chat: title of the dialog shown after tapping the context meter."
+  },
+  "chatConnected": "Connected to the Mac",
+  "@chatConnected": {
+    "description": "Chat: tooltip of the green dot on the agent icon."
+  },
+  "chatConnecting": "Connecting to the Mac…",
+  "@chatConnecting": {
+    "description": "Chat: status line while the phone connects to the computer."
+  },
+  "chatContextUsed": "{percent}% of context used",
+  "@chatContextUsed": {
+    "description": "Chat: accessibility label of the context meter in the status line.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "chatDeny": "Deny",
+  "@chatDeny": {
+    "description": "Chat: permission card button that denies the tool call."
+  },
+  "chatDisconnected": "Disconnected from the Mac",
+  "@chatDisconnected": {
+    "description": "Chat: tooltip of the amber dot on the agent icon."
+  },
+  "chatEarlierMessages": "Earlier Messages",
+  "@chatEarlierMessages": {
+    "description": "Chat: button at the top of the conversation that loads older messages."
+  },
+  "chatEndedNote": "This session has ended; its transcript is kept. To keep going, start a new session from Home or restore it from History on the Mac.",
+  "@chatEndedNote": {
+    "description": "Chat: shown in place of the message box after the session ended."
+  },
+  "chatFileEmpty": "The file is empty",
+  "@chatFileEmpty": {
+    "description": "Chat and Terminal: error when uploading an empty file."
+  },
+  "chatFileNotAccepted": "The Mac didn’t accept this file",
+  "@chatFileNotAccepted": {
+    "description": "Chat and Terminal: error when the computer refused to start a file upload."
+  },
+  "chatFileTooLargeForOldPosse": "Posse on the Mac is too old to receive a file this large. Update Posse on the Mac first.",
+  "@chatFileTooLargeForOldPosse": {
+    "description": "Chat and Terminal: error when an old computer can’t take a large upload."
+  },
+  "chatImage": "Image",
+  "@chatImage": {
+    "description": "Chat: placeholder for an image in a message that has no path or URL."
+  },
+  "chatImageCount": "{count, plural, one {{count} image} other {{count} images}}",
+  "@chatImageCount": {
+    "description": "Chat: line in a just-sent message saying how many images it carries.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatImageEmpty": "The image is empty",
+  "@chatImageEmpty": {
+    "description": "Chat and Terminal: error when uploading an empty image."
+  },
+  "chatImageLimit": "Up to {count, plural, one {{count} image} other {{count} images}} at a time",
+  "@chatImageLimit": {
+    "description": "Chat: brief notice when the user picks more images than one message can carry.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatImageNotAccepted": "The Mac didn’t accept this image",
+  "@chatImageNotAccepted": {
+    "description": "Chat and Terminal: error when the computer refused to start an image upload."
+  },
+  "chatImageNotSaved": "The Mac didn’t save this image",
+  "@chatImageNotSaved": {
+    "description": "Chat and Terminal: error when the computer returned no path for an uploaded image."
+  },
+  "chatLatencyLabel": "Latency to the Mac: {ms} ms",
+  "@chatLatencyLabel": {
+    "description": "Accessibility label of the latency reading. {ms} is the round-trip time in milliseconds.",
+    "placeholders": {
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "chatLatencyUnresponsive": "No Response",
+  "@chatLatencyUnresponsive": {
+    "description": "Status line: short text next to the empty signal icon when pings time out."
+  },
+  "chatLatencyUnresponsiveLabel": "The Mac isn’t responding",
+  "@chatLatencyUnresponsiveLabel": {
+    "description": "Accessibility label of the latency reading when pings time out."
+  },
+  "chatMediaCodeOutput": "Code output",
+  "@chatMediaCodeOutput": {
+    "description": "Images & Videos: name of an item produced by code (e.g. a notebook cell) that has no file name."
+  },
+  "chatMediaGenerated": "Generated image",
+  "@chatMediaGenerated": {
+    "description": "Images & Videos: name of an item the agent generated that has no file name."
+  },
+  "chatMediaImageLabel": "Image {name}",
+  "@chatMediaImageLabel": {
+    "description": "Images & Videos: accessibility label of an image tile. {name} is the item name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatMediaMadeHeader": "Generated by Agent",
+  "@chatMediaMadeHeader": {
+    "description": "Images & Videos: section header for images and videos the agent generated."
+  },
+  "chatMediaNone": "This session has no images or videos yet",
+  "@chatMediaNone": {
+    "description": "Images & Videos: empty state."
+  },
+  "chatMediaOldPosse": "Posse on the Mac is too old. Update it to see the session’s images and videos on your phone.",
+  "@chatMediaOldPosse": {
+    "description": "Images & Videos: error when the computer doesn’t support listing media."
+  },
+  "chatMediaPasted": "Pasted",
+  "@chatMediaPasted": {
+    "description": "Images & Videos: name of an image the user pasted into the session that has no file name."
+  },
+  "chatMediaPastedHeader": "Pasted",
+  "@chatMediaPastedHeader": {
+    "description": "Images & Videos: section header for images the user pasted."
+  },
+  "chatMediaRecentOnly": "Showing only the {count, plural, one {most recent item} other {{count} most recent items}}",
+  "@chatMediaRecentOnly": {
+    "description": "Images & Videos: note under the generated section when older items are left out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatMediaTitle": "Images & Videos",
+  "@chatMediaTitle": {
+    "description": "Images & Videos: page title, opened from the session’s “…” menu."
+  },
+  "chatMediaVideoLabel": "Video {name}",
+  "@chatMediaVideoLabel": {
+    "description": "Images & Videos: accessibility label of a video tile. {name} is the item name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatNewMessages": "New Messages",
+  "@chatNewMessages": {
+    "description": "Chat: floating button that jumps to new messages below."
+  },
+  "chatNoPhotoAccess": "Posse can’t access photos. Allow access to Photos or Camera in Settings.",
+  "@chatNoPhotoAccess": {
+    "description": "Chat and Terminal: error when the photo library or camera permission was denied."
+  },
+  "chatNoTranscript": "This session has no transcript",
+  "@chatNoTranscript": {
+    "description": "Chat: shown instead of the conversation when the agent keeps no session file."
+  },
+  "chatOtherAnswer": "Other answer",
+  "@chatOtherAnswer": {
+    "description": "Chat: placeholder of the free-text field under the options of a question the agent asks."
+  },
+  "chatPasteFromClipboard": "Paste from Clipboard",
+  "@chatPasteFromClipboard": {
+    "description": "Chat: item in the attach sheet that pastes an image or text from the clipboard."
+  },
+  "chatPickFromFiles": "Choose from Files",
+  "@chatPickFromFiles": {
+    "description": "Chat and Terminal: item in the attach sheet that opens the system Files app."
+  },
+  "chatPickFromLibrary": "Choose a Photo or Video",
+  "@chatPickFromLibrary": {
+    "description": "Terminal: item in the send-file sheet that opens the photo library."
+  },
+  "chatPickFromLibraryMulti": "Choose Photos or Videos (Multiple Allowed)",
+  "@chatPickFromLibraryMulti": {
+    "description": "Chat: item in the attach sheet that opens the photo library with multiple selection."
+  },
+  "chatReadFailed": "Couldn’t read the session",
+  "@chatReadFailed": {
+    "description": "Chat: notice when the session stream reports an error without a message."
+  },
+  "chatReconnecting": "Disconnected, reconnecting…",
+  "@chatReconnecting": {
+    "description": "Chat: status line after the connection to the computer dropped."
+  },
+  "chatRemoveImage": "Remove Image",
+  "@chatRemoveImage": {
+    "description": "Chat: tooltip of the × on an image attached to the message box."
+  },
+  "chatReplyHint": "Reply to {agent}",
+  "@chatReplyHint": {
+    "description": "Chat: placeholder of the message box. {agent} is the agent name, e.g. Claude.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "chatRoleReasoning": "Thinking",
+  "@chatRoleReasoning": {
+    "description": "Chat: sender name above the agent’s reasoning blocks."
+  },
+  "chatRoleSystem": "System",
+  "@chatRoleSystem": {
+    "description": "Chat: sender name above system messages."
+  },
+  "chatRoleTool": "Tool",
+  "@chatRoleTool": {
+    "description": "Chat: sender name for tool messages; also the fallback title of a tool call with no name."
+  },
+  "chatRoleYou": "You",
+  "@chatRoleYou": {
+    "description": "Chat: sender name above the user’s own messages."
+  },
+  "chatRouteDirect": "Direct",
+  "@chatRouteDirect": {
+    "description": "Status line after the latency reading: the connection is direct (LAN, Tailscale, hole punching)."
+  },
+  "chatRouteRelay": "Relay",
+  "@chatRouteRelay": {
+    "description": "Status line after the latency reading: the connection goes through the relay."
+  },
+  "chatSend": "Send",
+  "@chatSend": {
+    "description": "Chat: tooltip of the send button in the message box."
+  },
+  "chatSendImage": "Send Image",
+  "@chatSendImage": {
+    "description": "Chat: tooltip of the image button in the message box."
+  },
+  "chatSendRefused": "Not delivered",
+  "@chatSendRefused": {
+    "description": "Chat and Terminal: brief notice when the computer refused to write the message into the terminal."
+  },
+  "chatSendUnknown": "Not confirmed. Check the chat before retrying.",
+  "@chatSendUnknown": {
+    "description": "Chat and Terminal: brief notice when it’s unknown whether the message reached the terminal."
+  },
+  "chatSending": "Sending…",
+  "@chatSending": {
+    "description": "Chat: status next to a message the user just sent, while it is being sent."
+  },
+  "chatSent": "Sent",
+  "@chatSent": {
+    "description": "Chat: status next to a message the user just sent, once the computer accepted it."
+  },
+  "chatStateDone": "Turn Finished",
+  "@chatStateDone": {
+    "description": "Chat: status line when the agent finished its turn."
+  },
+  "chatStateEnded": "Session ended",
+  "@chatStateEnded": {
+    "description": "Chat: status line under the session title after the session ended."
+  },
+  "chatStateStarting": "Starting",
+  "@chatStateStarting": {
+    "description": "Chat: status line while the agent starts up."
+  },
+  "chatStateTasks": "Waiting on Tasks",
+  "@chatStateTasks": {
+    "description": "Chat: status line while the agent waits for agents it dispatched."
+  },
+  "chatStateUsingTool": "Using {tool}",
+  "@chatStateUsingTool": {
+    "description": "Chat: status line while the agent runs a tool. {tool} is the tool name.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "chatStateWaiting": "Needs You",
+  "@chatStateWaiting": {
+    "description": "Chat: status line when the agent waits for the user’s approval or answer."
+  },
+  "chatStateWorking": "Working",
+  "@chatStateWorking": {
+    "description": "Chat: status line while the agent is working."
+  },
+  "chatStreamEnded": "The session stream ended",
+  "@chatStreamEnded": {
+    "description": "Chat: notice when the computer closed the session stream."
+  },
+  "chatStreaming": "Writing",
+  "@chatStreaming": {
+    "description": "Chat: label next to the agent name while its reply is still streaming."
+  },
+  "chatSubmitAnswer": "Submit",
+  "@chatSubmitAnswer": {
+    "description": "Chat: button that sends the answers to the agent’s questions."
+  },
+  "chatSwitchToTerminal": "Switch to Terminal",
+  "@chatSwitchToTerminal": {
+    "description": "Chat: item in the “…” menu that shows the session as a terminal."
+  },
+  "chatTakePhoto": "Take Photo",
+  "@chatTakePhoto": {
+    "description": "Chat and Terminal: item in the attach sheet that opens the camera."
+  },
+  "chatTerminal": "Terminal",
+  "@chatTerminal": {
+    "description": "Chat: status line for a plain terminal session with no agent."
+  },
+  "chatThisAction": "this action",
+  "@chatThisAction": {
+    "description": "Chat: stands in for the tool name in “Allow {tool}?” when the agent didn’t say which tool; lowercase in English."
+  },
+  "chatToolCalls": "{count, plural, one {{count} tool call} other {{count} tool calls}}",
+  "@chatToolCalls": {
+    "description": "Chat: collapsed row summarizing consecutive tool calls; tap to expand.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatToolFailed": "Tool Failed",
+  "@chatToolFailed": {
+    "description": "Chat: title of a tool result that returned an error."
+  },
+  "chatToolsCliOther": "Other Commands",
+  "@chatToolsCliOther": {
+    "description": "Skills & Tools: group header for command-line programs that are neither from Homebrew nor built in."
+  },
+  "chatToolsCliSystem": "Built-in",
+  "@chatToolsCliSystem": {
+    "description": "Skills & Tools: group header for command-line programs that ship with the system."
+  },
+  "chatToolsCopied": "Copied {name}",
+  "@chatToolsCopied": {
+    "description": "Skills & Tools: brief notice after tapping a name to copy it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "chatToolsCopyCommand": "Copy Command",
+  "@chatToolsCopyCommand": {
+    "description": "Skills & Tools: button in the sheet showing a full command line."
+  },
+  "chatToolsCopyUrl": "Copy URL",
+  "@chatToolsCopyUrl": {
+    "description": "Skills & Tools: button in the sheet showing a full URL."
+  },
+  "chatToolsNoFile": "No session file yet. It appears once the agent starts a conversation.",
+  "@chatToolsNoFile": {
+    "description": "Skills & Tools: empty state before the agent wrote its session file."
+  },
+  "chatToolsNoSkills": "This session hasn’t used any skills or MCP yet",
+  "@chatToolsNoSkills": {
+    "description": "Skills & Tools: empty state of the Skills & MCP filter."
+  },
+  "chatToolsNoWeb": "This session hasn’t visited any URLs yet",
+  "@chatToolsNoWeb": {
+    "description": "Skills & Tools: empty state of the URLs filter."
+  },
+  "chatToolsNone": "This session hasn’t used any skills, MCP, command-line tools or URLs yet",
+  "@chatToolsNone": {
+    "description": "Skills & Tools: empty state."
+  },
+  "chatToolsOldPosse": "Posse on the Mac is too old. Update it to see the session’s skills and tools on your phone.",
+  "@chatToolsOldPosse": {
+    "description": "Skills & Tools: error when the computer doesn’t support the page."
+  },
+  "chatToolsOpenInBrowser": "Open in Browser",
+  "@chatToolsOpenInBrowser": {
+    "description": "Skills & Tools: button in the sheet showing a full URL."
+  },
+  "chatToolsSearchVia": "Search · {via}",
+  "@chatToolsSearchVia": {
+    "description": "Skills & Tools: kind shown under a web search in the timeline. {via} is the tool that searched, or “Sent by you”.",
+    "placeholders": {
+      "via": {
+        "type": "String"
+      }
+    }
+  },
+  "chatToolsServerFailed": "{server} · Failed",
+  "@chatToolsServerFailed": {
+    "description": "Skills & Tools: kind shown under an MCP call that failed. {server} is the MCP server name.",
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
+  },
+  "chatToolsSkill": "Skill",
+  "@chatToolsSkill": {
+    "description": "Skills & Tools: kind shown under a skill call in the timeline."
+  },
+  "chatToolsSkillsMcp": "Skills & MCP",
+  "@chatToolsSkillsMcp": {
+    "description": "Skills & Tools: filter option showing only skills and MCP servers."
+  },
+  "chatToolsTimeline": "Timeline",
+  "@chatToolsTimeline": {
+    "description": "Skills & Tools: section header of the list of calls, newest first."
+  },
+  "chatToolsTitle": "Skills & Tools",
+  "@chatToolsTitle": {
+    "description": "Skills & Tools: page title, opened from the session’s “…” menu."
+  },
+  "chatToolsViaUser": "Sent by you",
+  "@chatToolsViaUser": {
+    "description": "Skills & Tools: source of a URL the user sent in a message (otherwise the tool or program name is shown)."
+  },
+  "chatToolsWeb": "URLs",
+  "@chatToolsWeb": {
+    "description": "Skills & Tools: filter option and section header for visited websites."
+  },
+  "chatToolsWebSearches": "URLs  {count, plural, one {{count} search} other {{count} searches}}",
+  "@chatToolsWebSearches": {
+    "description": "Skills & Tools: section header for websites when the agent also ran web searches; two spaces separate the parts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatUsingTool": "Using {tool}…",
+  "@chatUsingTool": {
+    "description": "Chat: last row of the conversation while the agent runs a tool. {tool} is the tool name.",
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "chatWorking": "Working…",
+  "@chatWorking": {
+    "description": "Chat: last row of the conversation while the agent works and no status line is known."
+  },
+  "commonAll": "All",
+  "@commonAll": {
+    "description": "Filter option that shows everything."
+  },
   "commonCancel": "Cancel",
   "@commonCancel": {
     "description": "Button: cancel a dialog."
@@ -23,6 +511,10 @@
   "commonMore": "More",
   "@commonMore": {
     "description": "Tooltip of the “more” (…) button in a top bar."
+  },
+  "errorNotConnected": "Not connected to the Mac yet",
+  "@errorNotConnected": {
+    "description": "Error when an action needs the Mac but the phone isn’t connected."
   },
   "commonPaste": "Paste",
   "@commonPaste": {
@@ -634,10 +1126,6 @@
   "@errorNotAFile": {
     "description": "Error from an older Mac when the path isn’t a file."
   },
-  "errorNotConnected": "Not connected to the Mac yet",
-  "@errorNotConnected": {
-    "description": "Error when an action needs the Mac but the phone isn’t connected."
-  },
   "errorOldDesktop": "Posse on the Mac is too old for this. Update Posse on the Mac.",
   "@errorOldDesktop": {
     "description": "Error when the Mac’s Posse doesn’t know a request."
@@ -649,6 +1137,434 @@
   "errorTimeout": "The Mac isn’t responding. It may be asleep, or the network is down.",
   "@errorTimeout": {
     "description": "Error shown when a request to the Mac times out."
+  },
+  "filesBinary": "Binary file; its content can’t be shown on the phone",
+  "@filesBinary": {
+    "description": "File viewer: shown instead of the content of a binary file."
+  },
+  "filesCantOpenLink": "Couldn’t open this link: {url}",
+  "@filesCantOpenLink": {
+    "description": "Markdown preview: brief notice when a link can’t be opened. {url} is the link.",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "filesChangesAndFiles": "Changes and Files",
+  "@filesChangesAndFiles": {
+    "description": "Chat and Terminal: tooltip of the top-bar button that opens Git changes and the file tree."
+  },
+  "filesDetails": "Details",
+  "@filesDetails": {
+    "description": "Markdown preview: title of a collapsible <details> section that has no <summary>."
+  },
+  "filesDownloadDisconnected": "Lost the connection to the Mac. The downloaded part is kept.",
+  "@filesDownloadDisconnected": {
+    "description": "Download dialog and video player: error when the connection dropped mid-download."
+  },
+  "filesDownloadOldPosse": "Posse on the Mac is too old. Update it to download files.",
+  "@filesDownloadOldPosse": {
+    "description": "Download dialog: error when the computer doesn’t support downloads."
+  },
+  "filesDownloadSlow": "The network is too slow and the download didn’t finish. The downloaded part is kept.",
+  "@filesDownloadSlow": {
+    "description": "Download dialog: error when the download timed out."
+  },
+  "filesEmptyFolder": "This folder is empty",
+  "@filesEmptyFolder": {
+    "description": "Files: empty state of a folder."
+  },
+  "filesFetching": "Getting the file from the Mac…",
+  "@filesFetching": {
+    "description": "Download dialog: progress text before the size is known."
+  },
+  "filesFetchingVideo": "Getting the video from the Mac…",
+  "@filesFetchingVideo": {
+    "description": "Video player: progress text before the size is known."
+  },
+  "filesFetchingVideoProgress": "Getting the video from the Mac  {done} / {total}",
+  "@filesFetchingVideoProgress": {
+    "description": "Video player: progress text. {done} and {total} are formatted sizes like “12 MB”.",
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "filesFindButton": "Find by name or path",
+  "@filesFindButton": {
+    "description": "Files: placeholder of the search button above the file tree."
+  },
+  "filesFindHint": "File name or path",
+  "@filesFindHint": {
+    "description": "Files: placeholder of the search field on the find page."
+  },
+  "filesNoAlbumAccess": "Posse can’t access Photos. Allow access to Photos in Settings.",
+  "@filesNoAlbumAccess": {
+    "description": "Save: error when the photo library permission was denied."
+  },
+  "filesNoHighlight": "Large file; syntax highlighting is off",
+  "@filesNoHighlight": {
+    "description": "File viewer: notice above a large file shown without syntax colors."
+  },
+  "filesNoSpace": "Not enough space on the phone; nothing was saved to Photos",
+  "@filesNoSpace": {
+    "description": "Save: error when the phone is out of space."
+  },
+  "filesNoStorageAccess": "Posse can’t access storage. Allow storage access in Settings.",
+  "@filesNoStorageAccess": {
+    "description": "Save (Android): error when the storage permission was denied."
+  },
+  "filesNotInWorkspace": "This file isn’t in the current workspace and can’t be opened on the phone",
+  "@filesNotInWorkspace": {
+    "description": "Markdown preview: brief notice when a relative link points outside the workspace."
+  },
+  "filesPause": "Pause",
+  "@filesPause": {
+    "description": "Video player: tooltip of the pause button."
+  },
+  "filesPlay": "Play",
+  "@filesPlay": {
+    "description": "Video player: tooltip of the play button."
+  },
+  "filesPreview": "Preview",
+  "@filesPreview": {
+    "description": "File viewer: button that switches a Markdown file from source to rendered preview."
+  },
+  "filesResumeDownload": "Resume Download",
+  "@filesResumeDownload": {
+    "description": "Download dialog and video player: button that continues an interrupted download."
+  },
+  "filesSaveToAlbum": "Save to Photos",
+  "@filesSaveToAlbum": {
+    "description": "Save sheet and viewer: action that saves an image or video to the photo library."
+  },
+  "filesSaveToAlbumFailed": "Couldn’t save to Photos: {error}",
+  "@filesSaveToAlbumFailed": {
+    "description": "Save: error when saving to the photo library failed. {error} is the system’s message.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesSaveToAlbumNote": "Download to the phone and put it in the “Posse” album in Photos",
+  "@filesSaveToAlbumNote": {
+    "description": "Save sheet: subtitle of Save to Photos."
+  },
+  "filesSaveToDownloads": "Save to Downloads",
+  "@filesSaveToDownloads": {
+    "description": "Save sheet and viewer (Android): action that saves a file to Downloads/Posse."
+  },
+  "filesSaveToDownloadsFailed": "Couldn’t save to Downloads: {error}",
+  "@filesSaveToDownloadsFailed": {
+    "description": "Save (Android): error when saving to Downloads failed. {error} is the system’s message.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesSaveToDownloadsNote": "Download to the phone and put it in Downloads/Posse, where file managers can find it",
+  "@filesSaveToDownloadsNote": {
+    "description": "Save sheet (Android): subtitle of Save to Downloads."
+  },
+  "filesSavedToAlbum": "Saved to the “Posse” album in Photos",
+  "@filesSavedToAlbum": {
+    "description": "Save: brief notice after saving to the photo library."
+  },
+  "filesSavedToDownloads": "Saved to Downloads/Posse: {name}",
+  "@filesSavedToDownloads": {
+    "description": "Save (Android): brief notice after saving to Downloads. {name} is the saved file name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesShare": "Share",
+  "@filesShare": {
+    "description": "Save sheet and viewer: action that opens the system share sheet."
+  },
+  "filesShareNote": "Download to the phone, then save it to Files or send it to another app with the share sheet",
+  "@filesShareNote": {
+    "description": "Save sheet: subtitle of Share when it is the main action."
+  },
+  "filesShareOtherNote": "Download to the phone and send it to another app",
+  "@filesShareOtherNote": {
+    "description": "Save sheet: subtitle of Share as the second action."
+  },
+  "filesSource": "Source",
+  "@filesSource": {
+    "description": "File viewer: button that switches a Markdown file from preview to source."
+  },
+  "filesTitle": "Files",
+  "@filesTitle": {
+    "description": "Files: page title; the workspace path is shown below it."
+  },
+  "filesTooLarge": "The file is larger than 500 MB and won’t be downloaded to the phone",
+  "@filesTooLarge": {
+    "description": "Download dialog: error for files over 500 MB."
+  },
+  "filesTruncated": "The file is too large; showing only the first 512 KB",
+  "@filesTruncated": {
+    "description": "File viewer: notice above a truncated file."
+  },
+  "filesVideoCantPlay": "This video can’t be played on the phone: {error}",
+  "@filesVideoCantPlay": {
+    "description": "Video player: error when the player failed. {error} is the reason.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "filesVideoOldPosse": "Posse on the Mac is too old. Update it to play videos on your phone.",
+  "@filesVideoOldPosse": {
+    "description": "Video player: error when the computer doesn’t support video download."
+  },
+  "filesVideoSlow": "The network is too slow and the video didn’t finish downloading. The downloaded part is kept.",
+  "@filesVideoSlow": {
+    "description": "Video player: error when the download timed out."
+  },
+  "filesVideoTooLarge": "The video is larger than 500 MB and won’t be downloaded to the phone",
+  "@filesVideoTooLarge": {
+    "description": "Video player: error for videos over 500 MB."
+  },
+  "gitAhead": "{count} ahead",
+  "@gitAhead": {
+    "description": "Git changes: branch card chip, commits not yet pushed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitBehind": "{count} behind",
+  "@gitBehind": {
+    "description": "Git changes: branch card chip, commits not yet pulled.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitBinaryDiff": "Binary file; the diff can’t be shown on the phone",
+  "@gitBinaryDiff": {
+    "description": "Git diff: shown for a binary file."
+  },
+  "gitChangedFiles": "{count, plural, one {{count} file changed} other {{count} files changed}}",
+  "@gitChangedFiles": {
+    "description": "Git changes: header above the file list.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gitChanges": "Changes",
+  "@gitChanges": {
+    "description": "Git changes: group header for modified, added, deleted and renamed files."
+  },
+  "gitClean": "The workspace is clean, no changes",
+  "@gitClean": {
+    "description": "Git changes: empty state."
+  },
+  "gitConflicts": "Conflicts",
+  "@gitConflicts": {
+    "description": "Git changes: group header for conflicted files; also shown instead of line counts for a conflicted file."
+  },
+  "gitDeleted": "Deleted",
+  "@gitDeleted": {
+    "description": "Git image diff: placeholder on the Now side for a deleted image."
+  },
+  "gitDetachedHead": "Detached HEAD",
+  "@gitDetachedHead": {
+    "description": "Git changes: shown in place of the branch name when HEAD is detached."
+  },
+  "gitDiffTruncated": "The diff is too long; showing only the beginning",
+  "@gitDiffTruncated": {
+    "description": "Git diff: notice above a truncated diff."
+  },
+  "gitFlatView": "Flat",
+  "@gitFlatView": {
+    "description": "Git changes: toggle option that lists files without directories."
+  },
+  "gitHunkLine": "Line {line}",
+  "@gitHunkLine": {
+    "description": "Git diff: start of a hunk header, the first line number of the change.",
+    "placeholders": {
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "gitImageBefore": "Before",
+  "@gitImageBefore": {
+    "description": "Git image diff: label above the old image."
+  },
+  "gitImageNewFile": "New file; it didn’t exist before",
+  "@gitImageNewFile": {
+    "description": "Git image diff: placeholder on the Before side for a new image."
+  },
+  "gitImageNow": "Now",
+  "@gitImageNow": {
+    "description": "Git image diff: label above the current image."
+  },
+  "gitImageTooLarge": "The image is larger than 10 MB and isn’t shown on the phone",
+  "@gitImageTooLarge": {
+    "description": "Git image diff: placeholder for images over 10 MB."
+  },
+  "gitImageUndrawable": "This image can’t be drawn on the phone",
+  "@gitImageUndrawable": {
+    "description": "Git image diff: placeholder when the image can’t be decoded."
+  },
+  "gitNoDifferences": "No differences",
+  "@gitNoDifferences": {
+    "description": "Git diff: empty state."
+  },
+  "gitStatsBinary": "Binary",
+  "@gitStatsBinary": {
+    "description": "Git changes: shown instead of line counts for a binary file."
+  },
+  "gitStatsImage": "Image",
+  "@gitStatsImage": {
+    "description": "Git changes: shown instead of line counts for an image file."
+  },
+  "gitStatsNewFile": "New File",
+  "@gitStatsNewFile": {
+    "description": "Git changes: shown instead of line counts for a new empty file."
+  },
+  "gitTracking": "Tracking {upstream}",
+  "@gitTracking": {
+    "description": "Git changes: branch card line naming the upstream branch.",
+    "placeholders": {
+      "upstream": {
+        "type": "String"
+      }
+    }
+  },
+  "gitTreeView": "By Directory",
+  "@gitTreeView": {
+    "description": "Git changes: toggle option that groups files by directory."
+  },
+  "gitUnversioned": "Unversioned Files",
+  "@gitUnversioned": {
+    "description": "Git changes: group header for untracked files."
+  },
+  "gitViewFullFile": "View Full File",
+  "@gitViewFullFile": {
+    "description": "Git diff: tooltip of the top-bar button that opens the whole file."
+  },
+  "historyAlreadyOpen": "This session is already open on the Mac",
+  "@historyAlreadyOpen": {
+    "description": "History: brief notice after Continue on Computer when the session was already open."
+  },
+  "historyAnyWordNotice": "No session contains all the words. Showing sessions with any of them.",
+  "@historyAnyWordNotice": {
+    "description": "History: notice above search results when no session matches every word."
+  },
+  "historyByFolderTip": "Grouped by folder. Tap to group by time.",
+  "@historyByFolderTip": {
+    "description": "History: tooltip of the grouping button while grouped by folder."
+  },
+  "historyByTimeTip": "Grouped by time. Tap to group by folder.",
+  "@historyByTimeTip": {
+    "description": "History: tooltip of the grouping button while grouped by time."
+  },
+  "historyClearSearch": "Clear",
+  "@historyClearSearch": {
+    "description": "History: tooltip of the button that clears the search field."
+  },
+  "historyContinueOnComputer": "Continue on Mac",
+  "@historyContinueOnComputer": {
+    "description": "History: button at the bottom of a session that resumes it on the computer."
+  },
+  "historyEmptyComputer": "No session history on the Mac yet",
+  "@historyEmptyComputer": {
+    "description": "History: empty state of all sessions on the computer."
+  },
+  "historyEmptyComputerAgent": "No {agent} session history on the Mac yet",
+  "@historyEmptyComputerAgent": {
+    "description": "History: empty state when filtered by an agent. {agent} is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "historyEmptyFolder": "No session history in this folder yet",
+  "@historyEmptyFolder": {
+    "description": "History: empty state in a project’s history."
+  },
+  "historyEmptyFolderAgent": "No {agent} session history in this folder yet",
+  "@historyEmptyFolderAgent": {
+    "description": "History: empty state in a project’s history when filtered by an agent. {agent} is the agent name.",
+    "placeholders": {
+      "agent": {
+        "type": "String"
+      }
+    }
+  },
+  "historyLast30Days": "Previous 30 Days",
+  "@historyLast30Days": {
+    "description": "History: group header for sessions updated in the last 30 days."
+  },
+  "historyLast7Days": "Previous 7 Days",
+  "@historyLast7Days": {
+    "description": "History: group header for sessions updated in the last 7 days."
+  },
+  "historyNoResults": "No results",
+  "@historyNoResults": {
+    "description": "History: empty state of a search."
+  },
+  "historyNotYetOpen": "The session hasn’t appeared on the Mac yet. Look for it on Home in a moment.",
+  "@historyNotYetOpen": {
+    "description": "History: error when the resumed session didn’t show up in time."
+  },
+  "historyOldPosse": "Posse on the Mac is too old. Update it to see History.",
+  "@historyOldPosse": {
+    "description": "History: error when the computer doesn’t support history."
+  },
+  "historyOlder": "Older",
+  "@historyOlder": {
+    "description": "History: group header for sessions last updated more than 30 days ago."
+  },
+  "historyOpening": "Opening…",
+  "@historyOpening": {
+    "description": "History: button label while the session is being resumed on the computer."
+  },
+  "historyResumed": "Continued this session on the Mac",
+  "@historyResumed": {
+    "description": "History: brief notice after Continue on Computer resumed the session."
+  },
+  "historySearchHint": "Search prompts, replies and tool output",
+  "@historySearchHint": {
+    "description": "History: placeholder of the search field."
+  },
+  "historyToday": "Today",
+  "@historyToday": {
+    "description": "History: group header for sessions updated today."
+  },
+  "historyUnknownFolder": "Unknown Folder",
+  "@historyUnknownFolder": {
+    "description": "History: group header (By Folder) for sessions whose folder is unknown."
+  },
+  "historyUntitled": "(Untitled)",
+  "@historyUntitled": {
+    "description": "History: title of a session that has no title."
+  },
+  "historyViewOnPhone": "View on Phone",
+  "@historyViewOnPhone": {
+    "description": "History: action in the notice after resuming, opens the session on the phone."
+  },
+  "historyYesterday": "Yesterday",
+  "@historyYesterday": {
+    "description": "History: group header for sessions updated yesterday."
   },
   "homeAddressDirect": "Direct · QUIC",
   "@homeAddressDirect": {

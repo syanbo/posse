@@ -9,6 +9,9 @@ import 'package:posse_mobile/protocol/rpc.dart';
 import 'package:posse_mobile/ui/theme.dart';
 import 'package:posse_mobile/workspace/models.dart';
 import 'package:posse_mobile/workspace/workspace.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 class _Rpc implements PhoneRpc {
   final asked = <(String, Map<String, Object?>)>[];
@@ -69,6 +72,7 @@ void main() {
       path: '',
     );
     final groups = groupHistoryByFolder(
+      zh,
       [
         at('a', '/Users/x/posse-old/tool', 26),
         at('b', '/Users/x/posse/mobile', 25),

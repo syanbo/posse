@@ -23,12 +23,13 @@ bool hasMedia(SessionTab tab) =>
     mediaAgents.contains(tab.agent) && (tab.sessionId?.isNotEmpty ?? false);
 
 /// 一项的名字：没有名字的一类电脑只发代号（`tag`），按界面语言写出叫法。
-String mediaLabel(String? tag, String label) => switch (tag) {
-  'generated' => '生成的图片',
-  'codeOutput' => '代码产出',
-  'pasted' => '粘贴',
-  _ => label,
-};
+String mediaLabel(AppLocalizations l, String? tag, String label) =>
+    switch (tag) {
+      'generated' => l.chatMediaGenerated,
+      'codeOutput' => l.chatMediaCodeOutput,
+      'pasted' => l.chatMediaPasted,
+      _ => label,
+    };
 
 /// 会话里的一张图片或一个视频（`session.media` 的一项）。
 class MediaItem {
@@ -37,6 +38,7 @@ class MediaItem {
     required this.video,
     required this.label,
     required this.source,
+    this.tag,
     this.at,
     this.size,
   });
@@ -46,7 +48,8 @@ class MediaItem {
     return MediaItem(
       id: j['id'] as String? ?? '',
       video: j['kind'] == 'video',
-      label: mediaLabel(j['tag'] as String?, j['label'] as String? ?? ''),
+      label: j['label'] as String? ?? '',
+      tag: j['tag'] as String?,
       source: j['source'] as String? ?? '',
       at: at == 0 ? null : DateTime.fromMillisecondsSinceEpoch(at),
       size: (j['size'] as num?)?.toInt(),
@@ -55,7 +58,15 @@ class MediaItem {
 
   final String id;
   final bool video;
+
+  /// 电脑给的名字（文件名、工具名或 #序号），存到手机时当文件名；没有名字的一类为空，看 [tag]。
   final String label;
+
+  /// 没有名字时是哪一类（generated、codeOutput、pasted），显示用 [name]。
+  final String? tag;
+
+  /// 显示的名字：有名字用名字，否则按界面语言写出这一类的叫法。
+  String name(AppLocalizations l) => mediaLabel(l, tag, label);
 
   /// 读的文件或返回它的工具。
   final String source;
@@ -150,7 +161,7 @@ class _MediaScreenState extends State<MediaScreen> {
       if (e.code == 'method_not_found') {
         _timer?.cancel();
         if (mounted) {
-          setState(() => _error = '电脑上的 posse 版本太旧，更新后才能在手机上看会话里的图片和视频');
+          setState(() => _error = context.l10n.chatMediaOldPosse);
         }
       } else if (mounted && _list == null) {
         setState(() => _error = friendlyError(e, context.l10n));
@@ -168,7 +179,7 @@ class _MediaScreenState extends State<MediaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(titleSpacing: 0, title: const Text('图片与视频')),
+      appBar: AppBar(titleSpacing: 0, title: Text(context.l10n.chatMediaTitle)),
       body: _body(context),
     );
   }
@@ -187,9 +198,9 @@ class _MediaScreenState extends State<MediaScreen> {
       return const Center(child: PosseLoader());
     }
     if (list.isEmpty) {
-      return const EmptyState(
+      return EmptyState(
         icon: Icons.photo_library_rounded,
-        text: '这个会话还没有图片或视频',
+        text: context.l10n.chatMediaNone,
       );
     }
     final now = DateTime.now();
@@ -198,21 +209,21 @@ class _MediaScreenState extends State<MediaScreen> {
     return CustomScrollView(
       slivers: [
         if (list.made.isNotEmpty) ...[
-          _header(c, 'Agent 生成', list.madeAll),
+          _header(c, context.l10n.chatMediaMadeHeader, list.madeAll),
           _grid(all, 0, list.made.length, now),
           if (list.madeAll > list.made.length)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                 child: Text(
-                  '只列出最近 ${list.made.length} 项',
+                  context.l10n.chatMediaRecentOnly(list.made.length),
                   style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
               ),
             ),
         ],
         if (list.pasted.isNotEmpty) ...[
-          _header(c, '粘贴的', list.pasted.length),
+          _header(c, context.l10n.chatMediaPastedHeader, list.pasted.length),
           _grid(all, list.made.length, list.pasted.length, now),
         ],
         const SliverSafeArea(
@@ -346,7 +357,9 @@ class _MediaTileState extends State<_MediaTile> {
     final time = historyTime(item.at, widget.now);
     return Semantics(
       button: true,
-      label: '${item.video ? '视频' : '图片'} ${item.label}',
+      label: item.video
+          ? context.l10n.chatMediaVideoLabel(item.name(context.l10n))
+          : context.l10n.chatMediaImageLabel(item.name(context.l10n)),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => Navigator.of(context).push(
@@ -416,7 +429,7 @@ class _MediaTileState extends State<_MediaTile> {
               children: [
                 Expanded(
                   child: Text(
-                    item.label,
+                    item.name(context.l10n),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                     style: TextStyle(fontSize: Fs.small, color: c.muted),
@@ -533,7 +546,7 @@ class _MediaViewerState extends State<MediaViewer> {
     final to = _target(item);
     final time = historyTime(item.at, DateTime.now());
     final sub = [
-      if (item.source != item.label) item.source,
+      if (item.source != item.name(context.l10n)) item.source,
       if (time.isNotEmpty) time,
       if (items.length > 1) '${_index + 1}/${items.length}',
     ].join(' · ');
@@ -544,7 +557,7 @@ class _MediaViewerState extends State<MediaViewer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              item.label,
+              item.name(context.l10n),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: Fs.title,
@@ -563,7 +576,7 @@ class _MediaViewerState extends State<MediaViewer> {
         actions: [
           Builder(
             builder: (button) => IconButton(
-              tooltip: saveLabel(to),
+              tooltip: saveLabel(context.l10n, to),
               icon: Icon(saveIcon(to)),
               onPressed: file == null
                   ? null
@@ -574,9 +587,9 @@ class _MediaViewerState extends State<MediaViewer> {
         ],
       ),
       body: rpc == null
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.link_off_rounded,
-              text: '还没连上电脑',
+              text: context.l10n.errorNotConnected,
               error: true,
             )
           : MediaPager(
@@ -677,7 +690,7 @@ class _ImageViewState extends State<_ImageView> {
             setState(() => _error = null);
             _load();
           },
-          child: const Text('重试'),
+          child: Text(context.l10n.commonRetry),
         ),
       );
     }

@@ -1,3 +1,5 @@
+import '../l10n/l10n.dart';
+
 /// 电脑上的一个历史会话（常驻进程 history.list / history.search 的一项）。
 class HistorySession {
   const HistorySession({
@@ -69,19 +71,20 @@ List<HistorySession> parseHistory(Map<String, Object?> result) {
 
 /// 列表照桌面历史页按时间分组：今天、昨天、最近 7 天、最近 30 天、1 个月前。
 List<(String, List<HistorySession>)> groupHistory(
+  AppLocalizations l,
   List<HistorySession> sessions,
   DateTime now,
 ) {
   final today = DateTime(now.year, now.month, now.day);
   String label(DateTime? t) {
-    if (t == null) return '1 个月前';
+    if (t == null) return l.historyOlder;
     final day = DateTime(t.year, t.month, t.day);
     final days = today.difference(day).inDays;
-    if (days <= 0) return '今天';
-    if (days == 1) return '昨天';
-    if (days < 7) return '最近 7 天';
-    if (days < 30) return '最近 30 天';
-    return '1 个月前';
+    if (days <= 0) return l.historyToday;
+    if (days == 1) return l.historyYesterday;
+    if (days < 7) return l.historyLast7Days;
+    if (days < 30) return l.historyLast30Days;
+    return l.historyOlder;
   }
 
   final out = <(String, List<HistorySession>)>[];
@@ -102,11 +105,12 @@ const historyAgents = ['', 'claude', 'codex', 'cursor', 'grok'];
 /// 不在任何项目里的用目录名；组按其中最近的会话排先后，组内最近的在前。
 /// [roots] 是（目录, 项目名）。
 List<(String, List<HistorySession>)> groupHistoryByFolder(
+  AppLocalizations l,
   List<HistorySession> sessions,
   List<(String, String)> roots,
 ) {
   String label(String cwd) {
-    if (cwd.isEmpty) return '未知文件夹';
+    if (cwd.isEmpty) return l.historyUnknownFolder;
     var name = '';
     var best = -1;
     for (final (root, project) in roots) {

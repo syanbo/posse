@@ -1,6 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/chat/models.dart';
 import 'package:posse_mobile/chat/transcript.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:posse_mobile/l10n/l10n.dart';
+
+final zh = lookupAppLocalizations(const Locale('zh'));
 
 ChatMessage message(
   String id,
@@ -63,7 +67,7 @@ void main() {
     final at = DateTime(2026, 10, 1, 15, 4);
     expect(chatTimeLabel(at.millisecondsSinceEpoch), '10月1日 15:04');
     expect(chatTimeLabel(null), isNull);
-    expect(chatWho('user', 'grok'), '你');
-    expect(chatWho('assistant', 'grok'), 'Grok');
+    expect(chatWho(zh, 'user', 'grok'), '你');
+    expect(chatWho(zh, 'assistant', 'grok'), 'Grok');
   });
 }

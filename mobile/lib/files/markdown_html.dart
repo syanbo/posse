@@ -425,9 +425,7 @@ class _Blocks {
           conv.doc._ref(
             'x-details',
             HtmlBlock(
-              summary: summary == null
-                  ? [md.Text('详细信息')]
-                  : conv.inlines(summary.nodes),
+              summary: summary == null ? const [] : conv.inlines(summary.nodes),
               blocks: conv.blocks(rest, null),
               open: n.attributes.containsKey('open'),
             ),
@@ -486,7 +484,7 @@ class HtmlBlock {
   /// x-grid 的行。
   final List<List<HtmlCell>> grid;
 
-  /// x-details 的 `<summary>`，[blocks] 是折起来的内容。
+  /// x-details 的 `<summary>`，没写时为空、由显示的一侧按界面语言补上；[blocks] 是折起来的内容。
   final List<md.Node> summary;
   final bool open;
 }

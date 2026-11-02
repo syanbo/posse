@@ -13,8 +13,8 @@ Future<bool> closeSession(
   PosseAppModel model,
   SessionTab tab,
 ) async {
-  final who = tab.agent == null ? null : chatWho('assistant', tab.agent);
   final l = context.l10n;
+  final who = tab.agent == null ? null : chatWho(l, 'assistant', tab.agent);
   final ok = await showPosseDialog<bool>(
     context: context,
     builder: (dialog) => AlertDialog(

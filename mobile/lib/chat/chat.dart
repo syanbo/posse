@@ -390,8 +390,8 @@ class _ChatScreenState extends State<ChatScreen> {
       text: text,
       enter: enter,
     );
-    final note = sendOutcomeText(outcome);
     if (!mounted) return outcome;
+    final note = sendOutcomeText(context.l10n, outcome);
     _flash(note.isEmpty ? null : note);
     setState(() {
       if (outcome == SendOutcome.accepted && enter && text == _input.text) {
@@ -405,12 +405,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || images.isEmpty) return;
     final room = maxChatImages - _pending.length;
     setState(() => _pending.addAll(images.take(room)));
-    if (images.length > room) _flash('一次最多 $maxChatImages 张');
+    if (images.length > room) {
+      _flash(context.l10n.chatImageLimit(maxChatImages));
+    }
   }
 
   /// 视频和「文件」里的选了就传到电脑上，路径一个一行接在输入框后面，和图片的路径一样交给 agent 去读。
   /// 照片不走这里：先在输入框上面预览，发送时才传。
   Future<void> _attachFiles(List<XFile> files) async {
+    final l = context.l10n;
     final rpc = _rpc;
     if (files.isEmpty || rpc == null) return;
     final paths = <String>[];
@@ -419,6 +422,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (mounted) setState(() => _upload = (i, files.length, 0));
         paths.add(
           await uploadFile(
+            l,
             rpc,
             file,
             onProgress: (done) {
@@ -467,7 +471,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _addImages([paste.image!]);
         return;
       }
-      _flash('剪贴板里没有文字或图片');
+      _flash(context.l10n.chatClipboardEmpty);
     } catch (error) {
       if (mounted) _flash(friendlyError(error, context.l10n));
     }
@@ -484,13 +488,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickImage() async {
+    final l = context.l10n;
     if (_rpc == null || _sending) return;
     try {
       final ask = await askImageSource(context);
       if (ask == null || !mounted) return;
       switch (ask) {
         case ImageAsk.gallery:
-          final picked = await pickGalleryMedia();
+          final picked = await pickGalleryMedia(l);
           final images = <Uint8List>[];
           final others = <XFile>[];
           for (final file in picked) {
@@ -503,7 +508,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _addImages(images);
           await _attachFiles(others);
         case ImageAsk.camera:
-          final one = await pickOneImage(ImageSource.camera);
+          final one = await pickOneImage(l, ImageSource.camera);
           if (one != null) _addImages([one]);
         case ImageAsk.clipboard:
           await _pasteClipboard();
@@ -518,6 +523,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// 有图就按顺序全部上传，说明和路径一次提交。任何一张失败，输入和图片都留着。
   Future<void> _submit() async {
+    final l = context.l10n;
     final current = _rpc;
     final images = List<Uint8List>.from(_pending);
     final caption = _input.text;
@@ -545,6 +551,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (mounted) setState(() => _upload = (i, images.length, 0));
           paths.add(
             _uploaded[image] ??= await uploadImage(
+              l,
               current,
               image,
               onProgress: (done) {
@@ -613,7 +620,9 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_perm.settled) return null;
     final parsed = parseInteractivePrompt(tab.prompt)?.approval;
     if (_perm.requestId == null) return parsed;
-    final tool = _perm.tool.isNotEmpty ? _perm.tool : (parsed?.tool ?? '操作');
+    final tool = _perm.tool.isNotEmpty
+        ? _perm.tool
+        : (parsed?.tool ?? context.l10n.chatThisAction);
     final summary = parsed != null && parsed.summary.isNotEmpty
         ? parsed.summary
         : permissionSummary(_perm.input);
@@ -671,14 +680,16 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           // 切到终端放进"更多"里，和终端页对称
           IconButton(
-            tooltip: '更多',
+            tooltip: context.l10n.commonMore,
             icon: const Icon(Icons.more_horiz_rounded),
             onPressed: () async {
               final nav = Navigator.of(context);
               final action = await showSessionMore(
                 context,
                 tab: tab,
-                switchLabel: widget.onOpenTerminal == null ? null : '切换到终端',
+                switchLabel: widget.onOpenTerminal == null
+                    ? null
+                    : context.l10n.chatSwitchToTerminal,
                 switchIcon: Icons.terminal_rounded,
                 media: hasMedia(tab),
                 tools: hasTools(tab),
@@ -715,11 +726,16 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           if (!tab.eligible)
-            const Expanded(child: Center(child: Text('这个会话没有原生存档')))
+            Expanded(child: Center(child: Text(context.l10n.chatNoTranscript)))
           else ...[
             if (_window.pending && _window.messages.isEmpty)
               const LinearProgressIndicator(minHeight: 2),
-            if (_window.error != null) NoticeBar(_window.error!),
+            if (_window.error case final error?)
+              NoticeBar(switch (error) {
+                chatReadFailed => context.l10n.chatReadFailed,
+                chatStreamEnded => context.l10n.chatStreamEnded,
+                _ => error,
+              }),
             Expanded(
               child: Stack(
                 children: [
@@ -806,7 +822,9 @@ class _ChatScreenState extends State<ChatScreen> {
             sending: _sending,
             connected: _rpc != null,
             ended: _ended,
-            hint: '回复 ${chatWho('assistant', tab.agent)}',
+            hint: context.l10n.chatReplyHint(
+              chatWho(context.l10n, 'assistant', tab.agent),
+            ),
             onChanged: (_) => setState(() {}),
             onSubmit: _submit,
             onPickImage: _pickImage,
@@ -954,7 +972,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (_scroll.hasClients) _scroll.jumpTo(0);
         setState(() => _newBelow = false);
       },
-      child: const Text('新消息'),
+      child: Text(context.l10n.chatNewMessages),
     );
   }
 }

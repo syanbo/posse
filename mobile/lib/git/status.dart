@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../l10n/l10n.dart';
 import '../protocol/rpc.dart' show rpcBytes;
 
 class GitFileChange {
@@ -67,15 +68,19 @@ class GitFileChange {
     caseSensitive: false,
   ).hasMatch(path);
 
-  String get stats {
-    if (isImage) return '图片';
-    if (binary) return '二进制';
-    if (untracked && added == 0 && deleted == 0) return '新文件';
+  /// 没有增删行数的未跟踪文件，[stats] 写「新文件」。
+  bool get isNewFile =>
+      !isImage && !binary && untracked && added == 0 && deleted == 0;
+
+  String stats(AppLocalizations l) {
+    if (isImage) return l.gitStatsImage;
+    if (binary) return l.gitStatsBinary;
+    if (isNewFile) return l.gitStatsNewFile;
     final parts = <String>[
       if (added > 0) '+$added',
       if (deleted > 0) '-$deleted',
     ];
-    if (parts.isEmpty) return conflict ? '冲突' : '';
+    if (parts.isEmpty) return conflict ? l.gitConflicts : '';
     return parts.join(' ');
   }
 }
@@ -170,12 +175,12 @@ class GitStatusView {
   final String operation;
   final List<GitFileChange> files;
 
-  String get headline {
-    final name = branch.isEmpty ? '分离头指针' : branch;
+  String headline(AppLocalizations l) {
+    final name = branch.isEmpty ? l.gitDetachedHead : branch;
     final bits = <String>[name];
     if (upstream.isNotEmpty) bits.add(upstream);
-    if (ahead > 0) bits.add('领先 $ahead');
-    if (behind > 0) bits.add('落后 $behind');
+    if (ahead > 0) bits.add(l.gitAhead(ahead));
+    if (behind > 0) bits.add(l.gitBehind(behind));
     if (operation.isNotEmpty) bits.add(operation);
     return bits.join('  ');
   }

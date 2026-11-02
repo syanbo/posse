@@ -10,6 +10,366 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get chatAllow => '允许';
+
+  @override
+  String chatAllowTitle(String tool) {
+    return '允许 $tool？';
+  }
+
+  @override
+  String get chatClipboardEmpty => '剪贴板里没有文字或图片';
+
+  @override
+  String get chatCode => '代码';
+
+  @override
+  String chatCompactBody(int percent, String agent) {
+    return '上下文已用 $percent%。$agent 会把之前的对话压成一份摘要（/compact），腾出空间接着聊。';
+  }
+
+  @override
+  String get chatCompactButton => '压缩';
+
+  @override
+  String get chatCompactConfirm => '压缩上下文？';
+
+  @override
+  String get chatConnected => '已连接电脑';
+
+  @override
+  String get chatConnecting => '正在连接电脑…';
+
+  @override
+  String chatContextUsed(int percent) {
+    return '上下文已用 $percent%';
+  }
+
+  @override
+  String get chatDeny => '拒绝';
+
+  @override
+  String get chatDisconnected => '和电脑的连接断开了';
+
+  @override
+  String get chatEarlierMessages => '更早的消息';
+
+  @override
+  String get chatEndedNote => '这个会话已经结束，记录还在。要继续请在首页新建会话，或者在电脑的历史页恢复。';
+
+  @override
+  String get chatFileEmpty => '文件是空的';
+
+  @override
+  String get chatFileNotAccepted => '电脑没有接受这个文件';
+
+  @override
+  String get chatFileTooLargeForOldPosse =>
+      '电脑上的 Posse 太旧，传不了这么大的文件，先更新电脑上的 Posse';
+
+  @override
+  String get chatImage => '图片';
+
+  @override
+  String chatImageCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 张图片',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatImageEmpty => '图片是空的';
+
+  @override
+  String chatImageLimit(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '一次最多 $count 张',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatImageNotAccepted => '电脑没有接受这张图片';
+
+  @override
+  String get chatImageNotSaved => '电脑没有保存这张图片';
+
+  @override
+  String chatLatencyLabel(int ms) {
+    return '和电脑的延迟 $ms 毫秒';
+  }
+
+  @override
+  String get chatLatencyUnresponsive => '无响应';
+
+  @override
+  String get chatLatencyUnresponsiveLabel => '电脑没有响应';
+
+  @override
+  String get chatMediaCodeOutput => '代码产出';
+
+  @override
+  String get chatMediaGenerated => '生成的图片';
+
+  @override
+  String chatMediaImageLabel(String name) {
+    return '图片 $name';
+  }
+
+  @override
+  String get chatMediaMadeHeader => 'Agent 生成';
+
+  @override
+  String get chatMediaNone => '这个会话还没有图片或视频';
+
+  @override
+  String get chatMediaOldPosse => '电脑上的 posse 版本太旧，更新后才能在手机上看会话里的图片和视频';
+
+  @override
+  String get chatMediaPasted => '粘贴';
+
+  @override
+  String get chatMediaPastedHeader => '粘贴的';
+
+  @override
+  String chatMediaRecentOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '只列出最近 $count 项',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get chatMediaTitle => '图片与视频';
+
+  @override
+  String chatMediaVideoLabel(String name) {
+    return '视频 $name';
+  }
+
+  @override
+  String get chatNewMessages => '新消息';
+
+  @override
+  String get chatNoPhotoAccess => '没有照片权限，在系统设置里允许 Posse 访问照片或相机';
+
+  @override
+  String get chatNoTranscript => '这个会话没有原生存档';
+
+  @override
+  String get chatOtherAnswer => '其他回答';
+
+  @override
+  String get chatPasteFromClipboard => '从剪贴板粘贴';
+
+  @override
+  String get chatPickFromFiles => '从「文件」选择';
+
+  @override
+  String get chatPickFromLibrary => '从相册选择照片或视频';
+
+  @override
+  String get chatPickFromLibraryMulti => '从相册选择照片或视频，可以多选';
+
+  @override
+  String get chatReadFailed => '读会话失败';
+
+  @override
+  String get chatReconnecting => '连接断开，正在重连…';
+
+  @override
+  String get chatRemoveImage => '不发这张';
+
+  @override
+  String chatReplyHint(String agent) {
+    return '回复 $agent';
+  }
+
+  @override
+  String get chatRoleReasoning => '思考';
+
+  @override
+  String get chatRoleSystem => '系统';
+
+  @override
+  String get chatRoleTool => '工具';
+
+  @override
+  String get chatRoleYou => '你';
+
+  @override
+  String get chatRouteDirect => '直连';
+
+  @override
+  String get chatRouteRelay => '中转';
+
+  @override
+  String get chatSend => '发送';
+
+  @override
+  String get chatSendImage => '发送图片';
+
+  @override
+  String get chatSendRefused => '没写进去';
+
+  @override
+  String get chatSendUnknown => '未确认，先看聊天再重试';
+
+  @override
+  String get chatSending => '发送中…';
+
+  @override
+  String get chatSent => '已发送';
+
+  @override
+  String get chatStateDone => '本轮完成';
+
+  @override
+  String get chatStateEnded => '会话已经结束';
+
+  @override
+  String get chatStateStarting => '启动中';
+
+  @override
+  String get chatStateTasks => '等待任务';
+
+  @override
+  String chatStateUsingTool(String tool) {
+    return '正在用 $tool';
+  }
+
+  @override
+  String get chatStateWaiting => '等你处理';
+
+  @override
+  String get chatStateWorking => '工作中';
+
+  @override
+  String get chatStreamEnded => '会话流结束了';
+
+  @override
+  String get chatStreaming => '正在输出';
+
+  @override
+  String get chatSubmitAnswer => '提交';
+
+  @override
+  String get chatSwitchToTerminal => '切换到终端';
+
+  @override
+  String get chatTakePhoto => '拍照';
+
+  @override
+  String get chatTerminal => '终端';
+
+  @override
+  String get chatThisAction => '操作';
+
+  @override
+  String chatToolCalls(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 次',
+    );
+    return '工具调用 $_temp0';
+  }
+
+  @override
+  String get chatToolFailed => '工具失败';
+
+  @override
+  String get chatToolsCliOther => '其他命令行';
+
+  @override
+  String get chatToolsCliSystem => '系统自带';
+
+  @override
+  String chatToolsCopied(String name) {
+    return '已复制 $name';
+  }
+
+  @override
+  String get chatToolsCopyCommand => '复制命令';
+
+  @override
+  String get chatToolsCopyUrl => '复制网址';
+
+  @override
+  String get chatToolsNoFile => '还没找到会话文件，agent 开始对话后会出现';
+
+  @override
+  String get chatToolsNoSkills => '这个会话还没用到技能和 MCP';
+
+  @override
+  String get chatToolsNoWeb => '这个会话还没访问网址';
+
+  @override
+  String get chatToolsNone => '这个会话还没用到技能、MCP、命令行工具和网址';
+
+  @override
+  String get chatToolsOldPosse => '电脑上的 posse 版本太旧，更新后才能在手机上看会话用到的技能和工具';
+
+  @override
+  String get chatToolsOpenInBrowser => '在浏览器中打开';
+
+  @override
+  String chatToolsSearchVia(String via) {
+    return '搜索 · $via';
+  }
+
+  @override
+  String chatToolsServerFailed(String server) {
+    return '$server · 失败';
+  }
+
+  @override
+  String get chatToolsSkill => '技能';
+
+  @override
+  String get chatToolsSkillsMcp => '技能和 MCP';
+
+  @override
+  String get chatToolsTimeline => '时间线';
+
+  @override
+  String get chatToolsTitle => '技能与工具';
+
+  @override
+  String get chatToolsViaUser => '你发的';
+
+  @override
+  String get chatToolsWeb => '网址';
+
+  @override
+  String chatToolsWebSearches(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '网址  搜索 $count 次',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String chatUsingTool(String tool) {
+    return '正在用 $tool…';
+  }
+
+  @override
+  String get chatWorking => '工作中…';
+
+  @override
+  String get commonAll => '全部';
+
+  @override
   String get commonCancel => '取消';
 
   @override
@@ -26,6 +386,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonMore => '更多';
+
+  @override
+  String get errorNotConnected => '还没连上电脑';
 
   @override
   String get commonPaste => '粘贴';
@@ -431,9 +794,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorNotAFile => '这不是文件';
 
   @override
-  String get errorNotConnected => '还没连上电脑';
-
-  @override
   String get errorOldDesktop => '电脑上的 Posse 是旧版，不支持这个功能：在电脑上更新 Posse';
 
   @override
@@ -441,6 +801,307 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorTimeout => '电脑没有回应，可能已经休眠或者网络断了';
+
+  @override
+  String get filesBinary => '二进制文件，手机上看不了内容';
+
+  @override
+  String filesCantOpenLink(String url) {
+    return '打不开这个链接：$url';
+  }
+
+  @override
+  String get filesChangesAndFiles => '改动和文件';
+
+  @override
+  String get filesDetails => '详细信息';
+
+  @override
+  String get filesDownloadDisconnected => '和电脑的连接断了，下好的部分留着';
+
+  @override
+  String get filesDownloadOldPosse => '电脑上的 posse 版本太旧，更新后才能下载';
+
+  @override
+  String get filesDownloadSlow => '网络太慢，没下完，下好的部分留着';
+
+  @override
+  String get filesEmptyFolder => '目录是空的';
+
+  @override
+  String get filesFetching => '正在从电脑取文件…';
+
+  @override
+  String get filesFetchingVideo => '正在从电脑取视频…';
+
+  @override
+  String filesFetchingVideoProgress(String done, String total) {
+    return '正在从电脑取视频  $done / $total';
+  }
+
+  @override
+  String get filesFindButton => '按文件名或路径找';
+
+  @override
+  String get filesFindHint => '文件名或路径';
+
+  @override
+  String get filesNoAlbumAccess => '没有相册权限：在系统设置里允许 Posse 访问照片';
+
+  @override
+  String get filesNoHighlight => '文件较大，不着色';
+
+  @override
+  String get filesNoSpace => '手机空间不够，没存进相册';
+
+  @override
+  String get filesNoStorageAccess => '没有存储权限：在系统设置里允许 Posse 访问存储';
+
+  @override
+  String get filesNotInWorkspace => '这个文件不在当前工作区里，手机上打不开';
+
+  @override
+  String get filesPause => '暂停';
+
+  @override
+  String get filesPlay => '播放';
+
+  @override
+  String get filesPreview => '预览';
+
+  @override
+  String get filesResumeDownload => '接着下载';
+
+  @override
+  String get filesSaveToAlbum => '存到相册';
+
+  @override
+  String filesSaveToAlbumFailed(String error) {
+    return '没存进相册：$error';
+  }
+
+  @override
+  String get filesSaveToAlbumNote => '下载到手机，放进相册的「Posse」相簿';
+
+  @override
+  String get filesSaveToDownloads => '存到下载';
+
+  @override
+  String filesSaveToDownloadsFailed(String error) {
+    return '没存进下载目录：$error';
+  }
+
+  @override
+  String get filesSaveToDownloadsNote => '下载到手机，放进「下载/Posse」，文件管理里能找到';
+
+  @override
+  String get filesSavedToAlbum => '已存到相册的「Posse」相簿';
+
+  @override
+  String filesSavedToDownloads(String name) {
+    return '已存到「下载/Posse」：$name';
+  }
+
+  @override
+  String get filesShare => '分享';
+
+  @override
+  String get filesShareNote => '下载到手机，用系统分享存到\"文件\"或发给别的 App';
+
+  @override
+  String get filesShareOtherNote => '下载到手机，发给别的 App';
+
+  @override
+  String get filesSource => '源码';
+
+  @override
+  String get filesTitle => '文件';
+
+  @override
+  String get filesTooLarge => '文件超过 500 MB，不往手机上下载';
+
+  @override
+  String get filesTruncated => '文件太大，只显示前 512 KB';
+
+  @override
+  String filesVideoCantPlay(String error) {
+    return '这个视频手机上放不了：$error';
+  }
+
+  @override
+  String get filesVideoOldPosse => '电脑上的 posse 版本太旧，更新后才能在手机上播放视频';
+
+  @override
+  String get filesVideoSlow => '网络太慢，视频没下完，下好的部分留着';
+
+  @override
+  String get filesVideoTooLarge => '视频超过 500 MB，手机上不下载';
+
+  @override
+  String gitAhead(int count) {
+    return '领先 $count';
+  }
+
+  @override
+  String gitBehind(int count) {
+    return '落后 $count';
+  }
+
+  @override
+  String get gitBinaryDiff => '二进制文件，手机上看不了差异';
+
+  @override
+  String gitChangedFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个文件有改动',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gitChanges => '改动';
+
+  @override
+  String get gitClean => '工作区是干净的，没有改动';
+
+  @override
+  String get gitConflicts => '冲突';
+
+  @override
+  String get gitDeleted => '已删除';
+
+  @override
+  String get gitDetachedHead => '分离头指针';
+
+  @override
+  String get gitDiffTruncated => '差异太长，只显示前面一部分';
+
+  @override
+  String get gitFlatView => '平铺';
+
+  @override
+  String gitHunkLine(int line) {
+    return '第 $line 行';
+  }
+
+  @override
+  String get gitImageBefore => '改之前';
+
+  @override
+  String get gitImageNewFile => '新文件，之前没有';
+
+  @override
+  String get gitImageNow => '现在';
+
+  @override
+  String get gitImageTooLarge => '图片超过 10 MB，手机上不显示';
+
+  @override
+  String get gitImageUndrawable => '这张图手机上画不出来';
+
+  @override
+  String get gitNoDifferences => '没有差异';
+
+  @override
+  String get gitStatsBinary => '二进制';
+
+  @override
+  String get gitStatsImage => '图片';
+
+  @override
+  String get gitStatsNewFile => '新文件';
+
+  @override
+  String gitTracking(String upstream) {
+    return '跟踪 $upstream';
+  }
+
+  @override
+  String get gitTreeView => '按目录';
+
+  @override
+  String get gitUnversioned => '未跟踪';
+
+  @override
+  String get gitViewFullFile => '查看完整文件';
+
+  @override
+  String get historyAlreadyOpen => '这个会话已经在电脑上开着';
+
+  @override
+  String get historyAnyWordNotice => '没有同时含所有词的会话，下面是含其中任一个词的';
+
+  @override
+  String get historyByFolderTip => '按文件夹分组，点按时间';
+
+  @override
+  String get historyByTimeTip => '按时间分组，点按文件夹';
+
+  @override
+  String get historyClearSearch => '清除';
+
+  @override
+  String get historyContinueOnComputer => '在电脑上继续';
+
+  @override
+  String get historyEmptyComputer => '电脑上还没有会话历史';
+
+  @override
+  String historyEmptyComputerAgent(String agent) {
+    return '电脑上还没有 $agent 的会话历史';
+  }
+
+  @override
+  String get historyEmptyFolder => '这个目录还没有会话历史';
+
+  @override
+  String historyEmptyFolderAgent(String agent) {
+    return '这个目录还没有 $agent 的会话历史';
+  }
+
+  @override
+  String get historyLast30Days => '最近 30 天';
+
+  @override
+  String get historyLast7Days => '最近 7 天';
+
+  @override
+  String get historyNoResults => '没有找到';
+
+  @override
+  String get historyNotYetOpen => '电脑上的会话还没出现，稍后在首页找它';
+
+  @override
+  String get historyOldPosse => '电脑上的 Posse 太旧，更新后才能看历史';
+
+  @override
+  String get historyOlder => '1 个月前';
+
+  @override
+  String get historyOpening => '正在打开…';
+
+  @override
+  String get historyResumed => '已在电脑上接着这个会话';
+
+  @override
+  String get historySearchHint => '搜索提问、回复和工具输出';
+
+  @override
+  String get historyToday => '今天';
+
+  @override
+  String get historyUnknownFolder => '未知文件夹';
+
+  @override
+  String get historyUntitled => '（没有标题）';
+
+  @override
+  String get historyViewOnPhone => '在手机上看';
+
+  @override
+  String get historyYesterday => '昨天';
 
   @override
   String get homeAddressDirect => '直连 · QUIC';

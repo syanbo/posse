@@ -46,10 +46,10 @@ IconData saveIcon(SaveTo to) => to != SaveTo.share
     ? Icons.download_rounded
     : (Platform.isIOS ? Icons.ios_share_rounded : Icons.share_rounded);
 
-String saveLabel(SaveTo to) => switch (to) {
-  SaveTo.album => '存到相册',
-  SaveTo.downloads => '存到下载',
-  SaveTo.share => '分享',
+String saveLabel(AppLocalizations l, SaveTo to) => switch (to) {
+  SaveTo.album => l.filesSaveToAlbum,
+  SaveTo.downloads => l.filesSaveToDownloads,
+  SaveTo.share => l.filesShare,
 };
 
 /// 安卓存进"下载/Posse"（MainActivity.kt）。
@@ -84,7 +84,7 @@ Future<String> _fileName(String name, File file) async {
       .fold<List<int>>([], (all, part) => all..addAll(part));
   final ext = sniffImageExt(Uint8List.fromList(head));
   if (ext.isEmpty) return base.isEmpty ? 'Posse' : base;
-  if (base.isEmpty || base.contains(' ') || base == '粘贴') {
+  if (base.isEmpty || base.contains(' ') || base == _oldPasted) {
     final t = DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
     base =
@@ -93,6 +93,9 @@ Future<String> _fileName(String name, File file) async {
   }
   return '$base.$ext';
 }
+
+/// 旧版电脑给没有名字的粘贴图片发的 label（「粘贴」），新版发空 label 加 tag。是协议里的值，不是界面文字。
+const _oldPasted = '\u7c98\u8d34';
 
 /// 把手机上的 [file] 以 [name] 存到 [to]，不给时按格式定（[saveTarget]）；相册拒收的格式改存下载或分享。
 /// 缓存里的文件名是哈希，先复制一份改成原名：相册、下载目录和分享面板都按文件名认格式、显示名字。
@@ -103,7 +106,7 @@ Future<void> saveToPhone(
   SaveTo? to,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
-  final l10n = context.l10n;
+  final l = context.l10n;
   final box = context.findRenderObject() as RenderBox?;
   final origin = box == null || !box.hasSize
       ? null
@@ -114,7 +117,7 @@ Future<void> saveToPhone(
     if (target == SaveTo.album) {
       // 放进单独的相簿要读写权限（只给"仅添加"建不了相簿）；用户选"限制访问"也够
       if (!await Gal.requestAccess(toAlbum: true)) {
-        messenger.showSnackBar(const SnackBar(content: Text(_denied)));
+        messenger.showSnackBar(SnackBar(content: Text(l.filesNoAlbumAccess)));
         return;
       }
       try {
@@ -123,9 +126,7 @@ Future<void> saveToPhone(
         } else {
           await Gal.putImage(named.path, album: album);
         }
-        messenger.showSnackBar(
-          const SnackBar(content: Text('已存到相册的「Posse」相簿')),
-        );
+        messenger.showSnackBar(SnackBar(content: Text(l.filesSavedToAlbum)));
         return;
       } on GalException catch (e) {
         if (e.type != GalExceptionType.notSupportedFormat) rethrow;
@@ -139,15 +140,15 @@ Future<void> saveToPhone(
           'name': named.uri.pathSegments.last,
         });
         messenger.showSnackBar(
-          SnackBar(content: Text('已存到「下载/Posse」：${saved ?? ''}')),
+          SnackBar(content: Text(l.filesSavedToDownloads(saved ?? ''))),
         );
       } on PlatformException catch (e) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
               e.code == 'denied'
-                  ? '没有存储权限：在系统设置里允许 Posse 访问存储'
-                  : '没存进下载目录：${e.message ?? e.code}',
+                  ? l.filesNoStorageAccess
+                  : l.filesSaveToDownloadsFailed(e.message ?? e.code),
             ),
           ),
         );
@@ -161,18 +162,18 @@ Future<void> saveToPhone(
     messenger.showSnackBar(
       SnackBar(
         content: Text(switch (e.type) {
-          GalExceptionType.accessDenied => _denied,
-          GalExceptionType.notEnoughSpace => '手机空间不够，没存进相册',
-          _ => '没存进相册：${e.platformException.message ?? e.type.code}',
+          GalExceptionType.accessDenied => l.filesNoAlbumAccess,
+          GalExceptionType.notEnoughSpace => l.filesNoSpace,
+          _ => l.filesSaveToAlbumFailed(
+            e.platformException.message ?? e.type.code,
+          ),
         }),
       ),
     );
   } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, l10n))));
+    messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, l))));
   }
 }
-
-const _denied = '没有相册权限：在系统设置里允许 Posse 访问照片';
 
 /// 写成临时文件再存，用于已经在内存里的图片（文件页的图片预览）。
 Future<void> saveBytesToPhone(
@@ -247,25 +248,26 @@ class _DownloadDialogState extends State<_DownloadDialog> {
     } on VideoCancelled {
       return;
     } on VideoTooLarge {
-      _fail('文件超过 500 MB，不往手机上下载');
+      _fail((l) => l.filesTooLarge);
     } on RpcException catch (e) {
       if (!mounted) return;
       _fail(
-        e.code == 'closed'
-            ? '和电脑的连接断了，下好的部分留着'
+        (l) => e.code == 'closed'
+            ? l.filesDownloadDisconnected
             : e.code == 'method_not_found'
-            ? '电脑上的 posse 版本太旧，更新后才能下载'
-            : friendlyError(e, context.l10n),
+            ? l.filesDownloadOldPosse
+            : friendlyError(e, l),
       );
     } on TimeoutException {
-      _fail('网络太慢，没下完，下好的部分留着');
+      _fail((l) => l.filesDownloadSlow);
     } catch (e) {
-      if (mounted) _fail(friendlyError(e, context.l10n));
+      _fail((l) => friendlyError(e, l));
     }
   }
 
-  void _fail(String text) {
-    if (mounted && !_cancelled) setState(() => _error = text);
+  /// 报错文字等确认还挂着再取（要 context 的界面语言）。
+  void _fail(String Function(AppLocalizations l) text) {
+    if (mounted && !_cancelled) setState(() => _error = text(context.l10n));
   }
 
   @override
@@ -298,7 +300,7 @@ class _DownloadDialogState extends State<_DownloadDialog> {
                 const SizedBox(height: 12),
                 Text(
                   total == 0
-                      ? '正在从电脑取文件…'
+                      ? context.l10n.filesFetching
                       : '${formatBytes(done)} / ${formatBytes(total)}',
                   style: TextStyle(fontSize: Fs.small, color: c.muted),
                 ),
@@ -310,10 +312,13 @@ class _DownloadDialogState extends State<_DownloadDialog> {
             _cancelled = true;
             Navigator.of(context).pop();
           },
-          child: const Text('取消'),
+          child: Text(context.l10n.commonCancel),
         ),
         if (error != null)
-          TextButton(onPressed: _run, child: const Text('接着下载')),
+          TextButton(
+            onPressed: _run,
+            child: Text(context.l10n.filesResumeDownload),
+          ),
       ],
     );
   }
@@ -333,7 +338,7 @@ Future<void> showSaveSheet(
       Widget row(SaveTo to, String subtitle) => RowTile(
         chevron: false,
         leading: Icon(saveIcon(to), size: Ic.button, color: c.accent),
-        title: Text(saveLabel(to)),
+        title: Text(saveLabel(sheet.l10n, to)),
         subtitle: Text(subtitle),
         onTap: () => Navigator.of(sheet).pop(to),
       );
@@ -343,11 +348,12 @@ Future<void> showSaveSheet(
           inset: 48,
           children: [
             switch (to) {
-              SaveTo.album => row(to, '下载到手机，放进相册的「Posse」相簿'),
-              SaveTo.downloads => row(to, '下载到手机，放进「下载/Posse」，文件管理里能找到'),
-              SaveTo.share => row(to, '下载到手机，用系统分享存到"文件"或发给别的 App'),
+              SaveTo.album => row(to, sheet.l10n.filesSaveToAlbumNote),
+              SaveTo.downloads => row(to, sheet.l10n.filesSaveToDownloadsNote),
+              SaveTo.share => row(to, sheet.l10n.filesShareNote),
             },
-            if (to != SaveTo.share) row(SaveTo.share, '下载到手机，发给别的 App'),
+            if (to != SaveTo.share)
+              row(SaveTo.share, sheet.l10n.filesShareOtherNote),
           ],
         ),
       );

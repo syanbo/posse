@@ -12,10 +12,15 @@ void main() {
   test('media items without a name are labelled by their tag', () {
     MediaItem item(Map<String, Object?> j) =>
         MediaItem.fromJson({'id': 'x', 'kind': 'image', ...j});
-    expect(item({'tag': 'generated', 'label': ''}).label, '生成的图片');
-    expect(item({'tag': 'codeOutput', 'label': ''}).label, '代码产出');
-    expect(item({'tag': 'pasted', 'label': ''}).label, '粘贴');
-    expect(item({'label': '#3'}).label, '#3');
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(item({'tag': 'generated', 'label': ''}).name(zh), '生成的图片');
+    expect(item({'tag': 'codeOutput', 'label': ''}).name(zh), '代码产出');
+    expect(item({'tag': 'pasted', 'label': ''}).name(zh), '粘贴');
+    expect(item({'tag': 'pasted', 'label': ''}).name(en), 'Pasted');
+    // 存到手机时用电脑给的名字，没有名字的按时间起名，不用界面语言的叫法
+    expect(item({'tag': 'pasted', 'label': ''}).label, '');
+    expect(item({'label': '#3'}).name(zh), '#3');
   });
 
   test('a plan’s monthly price says /月', () {
