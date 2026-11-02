@@ -61,6 +61,40 @@ void main() {
     expect(offline.latest, isNull);
   });
 
+  test(
+    'a forced check skips the 6-hour wait and joins a running one',
+    () async {
+      var asked = 0;
+      final checker = UpdateChecker(
+        build: 460,
+        fetch: () async {
+          asked++;
+          return _latest(asked == 1 ? 460 : 470);
+        },
+      );
+      expect(await checker.check(), isTrue);
+      expect(checker.latest, isNull);
+      expect(await checker.check(), isTrue);
+      expect(asked, 1);
+
+      final a = checker.check(force: true);
+      expect(checker.checking, isTrue);
+      final b = checker.check(force: true);
+      expect(await a, isTrue);
+      expect(await b, isTrue);
+      expect(asked, 2);
+      expect(checker.checking, isFalse);
+      expect(checker.latest?.build, 470);
+
+      final offline = UpdateChecker(
+        build: 453,
+        fetch: () async => throw Exception('offline'),
+      );
+      expect(await offline.check(force: true), isFalse);
+      expect(offline.checking, isFalse);
+    },
+  );
+
   testWidgets('the home banner opens the notes and × hides this build', (
     tester,
   ) async {

@@ -68,7 +68,7 @@ class AppRelease {
   }
 }
 
-/// 查有没有新的安装包：启动时查一次，回到前台时隔 6 小时以上再查。
+/// 查有没有新的安装包：启动时查一次，回到前台时隔 6 小时以上再查，设置页可以手动查（force）。
 /// 比自己的构建号新就记在 [latest]，首页和设置页据此显示更新。
 class UpdateChecker extends ChangeNotifier {
   UpdateChecker({this.build = appBuild, this.fetch = _fetchLatest});
@@ -78,29 +78,44 @@ class UpdateChecker extends ChangeNotifier {
 
   AppRelease? latest;
   DateTime? _checked;
+  Future<bool>? _running;
 
   bool get enabled => build > 0;
 
-  Future<void> check({bool force = false}) async {
-    if (!enabled) return;
+  /// 正在请求 latest.json，设置页的「检查更新」据此转圈。
+  bool get checking => _running != null;
+
+  /// 返回这次是否查成功；节流跳过的也算成功。正在查时接上同一次，不重复请求。
+  Future<bool> check({bool force = false}) {
+    if (!enabled) return Future.value(false);
+    if (_running case final running?) return running;
     final now = DateTime.now();
     if (!force &&
         _checked != null &&
         now.difference(_checked!) < const Duration(hours: 6)) {
-      return;
+      return Future.value(true);
     }
     _checked = now;
+    final running = _run();
+    _running = running;
+    notifyListeners();
+    return running;
+  }
+
+  Future<bool> _run() async {
+    var ok = true;
     try {
       final release = AppRelease.parse(await fetch());
       final next = release != null && release.build > build ? release : null;
-      if (next?.build != latest?.build) {
-        latest = next;
-        notifyListeners();
-      }
+      if (next?.build != latest?.build) latest = next;
     } catch (_) {
-      // 网络不通下次再查，不打扰
+      // 自动检查时网络不通下次再查，不打扰
       _checked = null;
+      ok = false;
     }
+    _running = null;
+    notifyListeners();
+    return ok;
   }
 }
 

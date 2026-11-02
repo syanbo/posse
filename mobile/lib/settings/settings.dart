@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../desk/plugin.dart';
 import '../desk/unlock.dart';
+import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import '../update/update.dart';
@@ -253,13 +254,61 @@ class SettingsScreen extends StatelessWidget {
                               ),
                             ),
                       onTap: () => showUpdateSheet(context, release),
-                    ),
+                    )
+                  else if (updates.enabled)
+                    _CheckUpdate(checker: updates),
                 ],
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// 「关于」里手动检查更新：查到新版本时这一行换成「更新到 …」，没有就在行尾写「已是最新」。
+class _CheckUpdate extends StatefulWidget {
+  const _CheckUpdate({required this.checker});
+
+  final UpdateChecker checker;
+
+  @override
+  State<_CheckUpdate> createState() => _CheckUpdateState();
+}
+
+class _CheckUpdateState extends State<_CheckUpdate> {
+  /// 这一页上手动查过的结果；离开设置页再进来就不显示了。
+  bool? _ok;
+
+  Future<void> _check() async {
+    setState(() => _ok = null);
+    final ok = await widget.checker.check(force: true);
+    if (mounted) setState(() => _ok = ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    final checking = widget.checker.checking;
+    return RowTile(
+      chevron: false,
+      leading: Icon(Icons.refresh_rounded, size: Ic.button, color: c.muted),
+      title: const Text('检查更新'),
+      trailing: checking
+          ? HexSpinner(size: Ic.small, color: c.muted)
+          : switch (_ok) {
+              true => Text(
+                '已是最新',
+                style: TextStyle(fontSize: Fs.small, color: c.faint),
+              ),
+              false => Text(
+                '检查失败，稍后再试',
+                style: TextStyle(fontSize: Fs.small, color: c.danger),
+              ),
+              null => null,
+            },
+      onTap: checking ? null : _check,
     );
   }
 }
