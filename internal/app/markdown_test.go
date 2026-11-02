@@ -97,7 +97,7 @@ func TestMarkdownTableWidth(t *testing.T) {
 	fit := parseMarkdown("| 项目 | 说明 |\n|---|---|\n| 内存 | " + long + " |\n")
 	wide := parseMarkdown("| 入口 | 写法 |\n|---|---|\n| 私聊 拍照 | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` |\n")
 	show := func(bs []mdBlock) *ui.Tester {
-		tt := ui.NewTester(func(c *ui.Context) {
+		tt := newTester(func(c *ui.Context) {
 			ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
 		}, 400, 400)
 		tt.Frame()
@@ -132,7 +132,7 @@ func TestMermaidBlock(t *testing.T) {
 	good := "flowchart LR\n  A[开始] --> B[结束]"
 	bs := parseMarkdown("```mermaid\n" + good + "\n```\n\n```mermaid\nsequenceDiagram\n  A->>B hi\n```\n")
 	defer delete(mermaidSource, good)
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
 	}, 800, 900)
 	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
@@ -165,7 +165,7 @@ func TestMermaidManyBlocks(t *testing.T) {
 		fmt.Fprintf(&src, "```mermaid\nflowchart LR\n  A%d --> B%d\n```\n\n", i, i)
 	}
 	bs := parseMarkdown(src.String())
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		ui.Scroll(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
 	}, 800, 900)
 	until(t, tt, "mermaid", func() bool { return !diagramsPending() })

@@ -49,7 +49,7 @@ func TestTerminalTabMouse(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.selected = "w1"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("zsh")
 	if !ok {
@@ -82,7 +82,7 @@ func TestDocTabMouse(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	a.openFile(w, filepath.Join(root, "docs/plan.md"), 0, [2]int{})
@@ -133,7 +133,7 @@ func TestTextInputMenuDrawn(t *testing.T) {
 	w := &a.workspaces[0]
 	a.selected = w.ID
 	a.openFilesPanel(w, sideSearch)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if err := tt.Click("在文件里检索"); err != nil {
 		t.Fatal(err)

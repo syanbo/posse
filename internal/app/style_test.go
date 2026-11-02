@@ -15,7 +15,7 @@ func TestComposer(t *testing.T) {
 	for _, multiline := range []bool{false, true} {
 		var value string
 		sent := 0
-		tt := ui.NewTester(func(c *ui.Context) {
+		tt := newTester(func(c *ui.Context) {
 			if composer(c, &value, "说点什么", "发送", multiline) {
 				sent++
 				value = ""
@@ -87,7 +87,7 @@ func TestCodeBlockCopy(t *testing.T) {
 	if len(blocks) != 2 || blocks[1].lang != "go" {
 		t.Fatalf("blocks %+v", blocks)
 	}
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() { mdView{}.blocks(c, blocks) })
 	}, 600, 300)
 	tt.Frame()
@@ -107,7 +107,7 @@ func TestFadeEdges(t *testing.T) {
 	var s ui.ListState
 	bg := ui.Hex("#FFFFFF")
 	red := ui.Hex("#FF0000")
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		ui.Column(c).Fill().Background(bg).Children(func() {
 			fadeEdges(ui.List(c, &s, 100, func(i int) {
 				ui.Box(c).Height(30).Background(red)
@@ -143,7 +143,7 @@ func TestPointerCursor(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.selected = "w1"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	at := func(s string) ui.Cursor {
 		t.Helper()

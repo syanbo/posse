@@ -11,7 +11,7 @@ import (
 // 左右对照的分界线能拖：拖过去之后比例跟着变，松手后不再报告拖动中，拖动条跟到新位置
 func TestDiffSplitDrag(t *testing.T) {
 	d := editor.DiffState{Layout: editor.DiffSplit, Old: editor.NewBuffer("old line\n" + strings.Repeat("same\n", 5)), New: editor.NewBuffer("new line\n" + strings.Repeat("same\n", 5))}
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		editor.DiffView(c, &d).Fill()
 	}, 600, 300)
 	tt.Frame()

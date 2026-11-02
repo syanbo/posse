@@ -1,0 +1,403 @@
+{
+  "@@locale": "en",
+  "commonOff": "Off",
+  "@commonOff": {
+    "description": "Segment of an on/off switch."
+  },
+  "commonOn": "On",
+  "@commonOn": {
+    "description": "Segment of an on/off switch."
+  },
+  "menuCheckForUpdates": "Check for Updates…",
+  "@menuCheckForUpdates": {
+    "description": "App menu item."
+  },
+  "menuCloseTab": "Close Tab",
+  "@menuCloseTab": {
+    "description": "File menu item: closes the current tab."
+  },
+  "menuFile": "File",
+  "@menuFile": {
+    "description": "Title of the File menu."
+  },
+  "menuForceReloadPage": "Force Reload Page",
+  "@menuForceReloadPage": {
+    "description": "View menu item for the web tab."
+  },
+  "menuMobilePreview": "Mobile Preview",
+  "@menuMobilePreview": {
+    "description": "View menu item: shows the web tab at a phone's size."
+  },
+  "menuReloadPage": "Reload Page",
+  "@menuReloadPage": {
+    "description": "View menu item for the web tab."
+  },
+  "menuSettings": "Settings…",
+  "@menuSettings": {
+    "description": "App menu item."
+  },
+  "menuView": "View",
+  "@menuView": {
+    "description": "Title of the View menu."
+  },
+  "menuWindow": "Window",
+  "@menuWindow": {
+    "description": "Title of the Window menu."
+  },
+  "settingsAboutDaemon": "Daemon",
+  "@settingsAboutDaemon": {
+    "description": "About card: label of the daemon's version row."
+  },
+  "settingsAboutTitle": "About",
+  "@settingsAboutTitle": {
+    "description": "Title of the About card."
+  },
+  "settingsAboutWindow": "Window",
+  "@settingsAboutWindow": {
+    "description": "About card: label of the window's version row."
+  },
+  "settingsAgentsNote": "Disabled agents are left out of new sessions, task dispatch, new workspaces and the phone, and the daemon won't start them; ones already running keep going, and typing their command in a terminal still works. Only agents installed on this Mac are listed.",
+  "@settingsAgentsNote": {
+    "description": "Note of the Agents card."
+  },
+  "settingsAgentsTitle": "Agents",
+  "@settingsAgentsTitle": {
+    "description": "Title of the card of agent switches."
+  },
+  "settingsAwakeNote": "While Posse runs, the Mac doesn't sleep but the display still turns off; the coffee cup in the status bar toggles this too. “Keep Display On” keeps the display awake as well: when the display turns off, the screen locks with it.",
+  "@settingsAwakeNote": {
+    "description": "Note of the Prevent Sleep card; quotes the third segment's label."
+  },
+  "settingsAwakeTitle": "Prevent Sleep",
+  "@settingsAwakeTitle": {
+    "description": "Title of the card, and the label of its segmented control."
+  },
+  "settingsBoldWeight": "Bold weight",
+  "@settingsBoldWeight": {
+    "description": "Row label and stepper label."
+  },
+  "settingsCopyOnSelect": "Copy on select",
+  "@settingsCopyOnSelect": {
+    "description": "Switch in the Terminal Selection card."
+  },
+  "settingsDaemonNeedsRestart": "The daemon is older than the window and can't be updated without disconnecting terminals; restart it once. Restarting closes all terminals.",
+  "@settingsDaemonNeedsRestart": {
+    "description": "About card notice."
+  },
+  "settingsDaemonNotConnected": "Not connected",
+  "@settingsDaemonNotConnected": {
+    "description": "About card: the daemon isn't reachable."
+  },
+  "settingsDaemonOldVersion": "{version} (old version)",
+  "@settingsDaemonOldVersion": {
+    "description": "About card: a daemon too old to report its build.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDaemonStale": "The daemon is older than the window. Updating it keeps terminals open.",
+  "@settingsDaemonStale": {
+    "description": "About card notice."
+  },
+  "settingsDaemonStarted": "pid {pid}, started {ago}",
+  "@settingsDaemonStarted": {
+    "description": "About card: the daemon's process ID and how long ago it started, as \"3 minutes ago\".",
+    "placeholders": {
+      "pid": {
+        "type": "String"
+      },
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDaemonUpdating": "Updating the daemon…",
+  "@settingsDaemonUpdating": {
+    "description": "About card notice."
+  },
+  "settingsDaemonWindowOlder": "The window is older than the daemon; you may have opened an old Posse.app. Updating replaces the daemon with the window's version.",
+  "@settingsDaemonWindowOlder": {
+    "description": "About card notice."
+  },
+  "settingsEditorFont": "Editor font",
+  "@settingsEditorFont": {
+    "description": "Label of the editor's font picker."
+  },
+  "settingsEditorNote": "Code in files, diffs, blame and the Git log uses this font; while a file tab is in front, ⌘= ⌘- ⌘0 change the editor's size. The bold weight applies to Markdown headings and bold text.",
+  "@settingsEditorNote": {
+    "description": "Note of the Editor card."
+  },
+  "settingsEditorTitle": "Editor",
+  "@settingsEditorTitle": {
+    "description": "Title of the Editor card."
+  },
+  "settingsFilesPanel": "Files panel toggle",
+  "@settingsFilesPanel": {
+    "description": "Row label: whether the files panel's open state is per project or shared."
+  },
+  "settingsFilesPanelPerProject": "Per project",
+  "@settingsFilesPanelPerProject": {
+    "description": "Segment of the files panel toggle row."
+  },
+  "settingsFilesPanelShared": "Shared",
+  "@settingsFilesPanelShared": {
+    "description": "Segment of the files panel toggle row: one state for all projects."
+  },
+  "settingsFont": "Font",
+  "@settingsFont": {
+    "description": "Row label of a font picker."
+  },
+  "settingsFontSize": "Font size",
+  "@settingsFontSize": {
+    "description": "Row label of a font size stepper."
+  },
+  "settingsFontSmoothing": "Font smoothing",
+  "@settingsFontSmoothing": {
+    "description": "Row label and segmented control label."
+  },
+  "settingsFontWeight": "Weight",
+  "@settingsFontWeight": {
+    "description": "Row label and stepper label: the font weight."
+  },
+  "settingsIconLarge": "Large",
+  "@settingsIconLarge": {
+    "description": "Segment of the icon size row."
+  },
+  "settingsIconNormal": "Standard",
+  "@settingsIconNormal": {
+    "description": "Segment of the icon size row."
+  },
+  "settingsIconSize": "Icon size",
+  "@settingsIconSize": {
+    "description": "Row label and segmented control label."
+  },
+  "settingsIconSmall": "Small",
+  "@settingsIconSmall": {
+    "description": "Segment of the icon size row."
+  },
+  "settingsInterfaceFontSmoothing": "Interface font smoothing",
+  "@settingsInterfaceFontSmoothing": {
+    "description": "Accessible label of the interface's font smoothing control."
+  },
+  "settingsInterfaceNote": "The font size is that of body text: notes are 2 points smaller, card titles 2 larger and page titles 4 larger, and line heights follow. The Markdown size applies to Markdown previews and conversations in History; it follows the interface size by default, and {zoom} change it while a preview or History conversation is in front. The bold weight applies to titles; list titles and buttons use the weight halfway between body and bold.",
+  "@settingsInterfaceNote": {
+    "description": "Note of the Interface card; zoom is the three zoom shortcuts, as \"⌘= ⌘- ⌘0\".",
+    "placeholders": {
+      "zoom": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsInterfaceTitle": "Interface",
+  "@settingsInterfaceTitle": {
+    "description": "Title of the Interface card."
+  },
+  "settingsLanguageNote": "The language of the interface. Following the system uses the first of your macOS preferred languages that Posse has, and English when it has none of them.",
+  "@settingsLanguageNote": {
+    "description": "Note of the Language card."
+  },
+  "settingsLanguageSystem": "System",
+  "@settingsLanguageSystem": {
+    "description": "Segment of the Language card: follow the system's languages."
+  },
+  "settingsLanguageTitle": "Language",
+  "@settingsLanguageTitle": {
+    "description": "Title of the Language card, and the label of its segmented control."
+  },
+  "settingsLineHeight": "Line height",
+  "@settingsLineHeight": {
+    "description": "Row label and stepper label."
+  },
+  "settingsLinkClickOpens": "Click to open",
+  "@settingsLinkClickOpens": {
+    "description": "Switch of the Terminal Links card."
+  },
+  "settingsLinkNote": "By default, clicking a link shows a card and ⌘-clicking opens it: URLs open in a web tab, files open in a file tab at the line, folders are revealed in the files panel. ⇧⌘-click hands it to the system: URLs go to the default browser, files to their default app, folders open in Finder. “Click to open” swaps click and ⌘-click; “Swap” trades opening in Posse with handing to the system, so ⌘-click (or click, with Click to open on) goes to the system and ⇧⌘-click opens in Posse.",
+  "@settingsLinkNote": {
+    "description": "Note of the Terminal Links card; quotes its two switches."
+  },
+  "settingsLinkSwapSystem": "Swap ⌘-click and ⇧⌘-click",
+  "@settingsLinkSwapSystem": {
+    "description": "Switch of the Terminal Links card."
+  },
+  "settingsLinkTitle": "Terminal Links",
+  "@settingsLinkTitle": {
+    "description": "Title of the Terminal Links card."
+  },
+  "settingsMarkdownFontSize": "Markdown font size",
+  "@settingsMarkdownFontSize": {
+    "description": "Row label of the Markdown font size stepper."
+  },
+  "settingsNotifyBadge": "Dock badge",
+  "@settingsNotifyBadge": {
+    "description": "Switch of the Notifications card."
+  },
+  "settingsNotifyNote": "Posse sends a system notification when an agent needs you or finished while you weren't looking, and when a task has a question, finishes or fails; clicking it jumps to that session or task. Notifications need the window open, and the session you're looking at doesn't notify. The Dock badge counts sessions that need you or finished unseen.",
+  "@settingsNotifyNote": {
+    "description": "Note of the Notifications card."
+  },
+  "settingsNotifySystem": "System notifications",
+  "@settingsNotifySystem": {
+    "description": "Switch of the Notifications card."
+  },
+  "settingsNotifyTitle": "Notifications",
+  "@settingsNotifyTitle": {
+    "description": "Title of the Notifications card."
+  },
+  "settingsOpenDataDir": "Open Data Folder",
+  "@settingsOpenDataDir": {
+    "description": "Button of the About card."
+  },
+  "settingsOpenLog": "Open Log",
+  "@settingsOpenLog": {
+    "description": "Button of the About card: opens daemon.log."
+  },
+  "settingsPermissionAsk": "Ask Each Time",
+  "@settingsPermissionAsk": {
+    "description": "Segment of the Agent Permissions card."
+  },
+  "settingsPermissionAskTip": "Follows each agent's own settings and stops to ask before reading or writing files and running commands; Claude's prompts are also pushed to the paired phone.",
+  "@settingsPermissionAskTip": {
+    "description": "Explains the Ask Each Time mode."
+  },
+  "settingsPermissionNote": "The permissions of agents started in Posse, including claude, codex, cursor-agent and grok typed by hand in a terminal. Changes apply to agents started afterwards; running ones keep theirs.",
+  "@settingsPermissionNote": {
+    "description": "Note of the Agent Permissions card."
+  },
+  "settingsPermissionSkip": "Skip Approvals",
+  "@settingsPermissionSkip": {
+    "description": "Segment of the Agent Permissions card."
+  },
+  "settingsPermissionSkipTip": "Starts each agent with its flag for skipping confirmations: Claude --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox (which also turns off the sandbox), Grok --permission-mode bypassPermissions, Cursor --yolo.",
+  "@settingsPermissionSkipTip": {
+    "description": "Explains the Skip Approvals mode."
+  },
+  "settingsPermissionTitle": "Agent Permissions",
+  "@settingsPermissionTitle": {
+    "description": "Title of the card, and the label of its segmented control."
+  },
+  "settingsProjectMeta": "Show branch and path of projects in the sidebar",
+  "@settingsProjectMeta": {
+    "description": "Row label and segmented control label."
+  },
+  "settingsRestart": "Restart",
+  "@settingsRestart": {
+    "description": "Confirm button of the restart-daemon dialog."
+  },
+  "settingsRestartDaemon": "Restart Daemon",
+  "@settingsRestartDaemon": {
+    "description": "Button of the About card."
+  },
+  "settingsRestartDaemonBody": "{count, plural, =0 {All terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent's session, without the earlier output.} one {The running terminal will disconnect and be marked “Not restored” after the restart; switching to it resumes the agent's session, without the earlier output.} other {All # running terminals will disconnect and be marked “Not restored” after the restart; switching to one resumes the agent's session, without the earlier output.}}",
+  "@settingsRestartDaemonBody": {
+    "description": "Body of the restart-daemon dialog; count is the number of running terminals, 0 when unknown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsRestartDaemonConfirm": "Restart the daemon?",
+  "@settingsRestartDaemonConfirm": {
+    "description": "Title of the restart-daemon dialog."
+  },
+  "settingsRestoreAll": "Restore all terminals at startup",
+  "@settingsRestoreAll": {
+    "description": "Switch of the Restore Terminals card."
+  },
+  "settingsRestoreNote": "After the Mac or the daemon restarts, the last terminals are still listed in the sidebar, the tab bar and the phone's home, marked “Not restored”, and start when you switch to them: agents resume their sessions and plain terminals reopen in their folders, without the earlier output. Turn on the switch below to restore them all as soon as the daemon starts (many agents together take memory and usage).",
+  "@settingsRestoreNote": {
+    "description": "Note of the Restore Terminals card."
+  },
+  "settingsRestoreTitle": "Restore Terminals",
+  "@settingsRestoreTitle": {
+    "description": "Title of the Restore Terminals card."
+  },
+  "settingsSelectNote": "When on, selecting text in a terminal with the mouse copies it to the clipboard as you release, and so does Select All; when off, copy with ⌘C or the context menu as usual.",
+  "@settingsSelectNote": {
+    "description": "Note of the Terminal Selection card."
+  },
+  "settingsSelectTitle": "Terminal Selection",
+  "@settingsSelectTitle": {
+    "description": "Title of the Terminal Selection card."
+  },
+  "settingsTabAbout": "About",
+  "@settingsTabAbout": {
+    "description": "Settings category in the left column."
+  },
+  "settingsTabAgent": "Agents",
+  "@settingsTabAgent": {
+    "description": "Settings category in the left column."
+  },
+  "settingsTabAppearance": "Appearance",
+  "@settingsTabAppearance": {
+    "description": "Settings category in the left column."
+  },
+  "settingsTabGeneral": "General",
+  "@settingsTabGeneral": {
+    "description": "Settings category in the left column."
+  },
+  "settingsTabKeys": "Shortcuts",
+  "@settingsTabKeys": {
+    "description": "Settings category in the left column."
+  },
+  "settingsTerminalFont": "Terminal font",
+  "@settingsTerminalFont": {
+    "description": "Label of the terminal's font picker."
+  },
+  "settingsTerminalNote": "In a terminal, ⌘= zooms in, ⌘- zooms out and ⌘0 resets. Font smoothing is how native macOS apps draw text, which makes light text on a dark background look a step bolder; off, it is as thin as Ghostty's default.",
+  "@settingsTerminalNote": {
+    "description": "Note of the Terminal card."
+  },
+  "settingsTerminalTitle": "Terminal",
+  "@settingsTerminalTitle": {
+    "description": "Title of the Terminal card."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings page."
+  },
+  "settingsUpdateDaemon": "Update Daemon",
+  "@settingsUpdateDaemon": {
+    "description": "Button of the About card: hands the daemon over to the window's version."
+  },
+  "settingsUpdateDaemonFirst": "Available after you update the daemon.",
+  "@settingsUpdateDaemonFirst": {
+    "description": "Shown in a card whose setting the running daemon doesn't support yet."
+  },
+  "settingsVersionBuilt": "built {time}",
+  "@settingsVersionBuilt": {
+    "description": "Part of a version label: when the binary was built, as \"10-18 15:15\".",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsVersionDetails": "{version} ({details})",
+  "@settingsVersionDetails": {
+    "description": "A version followed by its details, as \"0.1.0 (663c0c7, built 10-18 15:15)\".",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "details": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsVersionDirty": "uncommitted changes",
+  "@settingsVersionDirty": {
+    "description": "Part of a version label: built from a tree with uncommitted changes."
+  },
+  "settingsVersionSeparator": ", ",
+  "@settingsVersionSeparator": {
+    "description": "Separates the details of a version label."
+  },
+  "settingsWorkspaceMeta": "Show branch of workspaces in the sidebar",
+  "@settingsWorkspaceMeta": {
+    "description": "Row label and segmented control label."
+  }
+}

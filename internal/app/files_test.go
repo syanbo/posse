@@ -104,7 +104,7 @@ func TestFilesTabOpenEditSave(t *testing.T) {
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.showFiles(w)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
 	v := a.filesFor(w)
@@ -236,7 +236,7 @@ func TestFilesTabWithoutTerminals(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)
 	a.selected = "w2"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if !tt.HasText("切换终端") || tt.HasText("文件") && a.filesActive(a.workspace("w2")) {
 		t.Fatal("expected the empty workspace page first")
@@ -265,7 +265,7 @@ func TestQuickOpenAndSearch(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyP)
 	tt.Frame()
@@ -317,7 +317,7 @@ func TestFilesStateSaved(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.home = t.TempDir()
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.openFile(w, filepath.Join(root, "docs", "plan.md"), 0, [2]int{})
 	until(t, tt, "doc", func() bool { return a.files[w.ID].cur.kind == docText })
@@ -353,7 +353,7 @@ func TestDocTabsInTabBar(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]
@@ -381,7 +381,7 @@ func TestWikiLinkOpens(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "status.md"), []byte("---\nname: status\n---\n\n偏好见 [[ui-taste]]。\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "ui-taste.md"), []byte("# 偏好\n"), 0o644)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(dir, "status.md"), 0, [2]int{})
 	v := a.files[w.ID]
 	until(t, tt, "preview", func() bool { return v.cur != nil && v.cur.mdPreview() && tt.HasText("ui-taste") })
@@ -396,7 +396,7 @@ func TestPreviewTabs(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFilesPanel(w, sideFiles)
 	until(t, tt, "tree", func() bool { return tt.HasText("main.go") && a.filesPanelShown == 1 })
 	if err := tt.Click("main.go"); err != nil {
@@ -445,7 +445,7 @@ func TestBranchPopupClosesPanel(t *testing.T) {
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	w.Branch = "main"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")} // 面板会去查常驻进程，连不上就报错
 	a.openFilesPanel(w, sideFiles)
 	a.state.RightPanel = panelUsage
@@ -481,7 +481,7 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")} // 历史会去查会话，连不上就报错
 	// 侧栏里也有"历史"，收起它，点到的才是文件栏的页签
 	a.state.SidebarHidden = true
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFilesPanel(w, sideChanges)
 	// 等文件栏滑进来
 	for range 20 {
@@ -511,7 +511,7 @@ func TestCloseDocTabsByButton(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]
@@ -542,7 +542,7 @@ func TestMenuCloseTabBehindDialog(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]
 	until(t, tt, "opened", func() bool { return v.cur != nil && v.cur.kind == docText })
@@ -569,7 +569,7 @@ func TestFilesPanelToggleStays(t *testing.T) {
 	a := previewApp(t)
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	before, ok := tt.Find("文件栏 ⌘L")
 	if !ok {
@@ -594,7 +594,7 @@ func TestFilesPanelToggleStays(t *testing.T) {
 func TestSessionButtons(t *testing.T) {
 	a := previewApp(t)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("这个会话用到的技能与工具")
 	if _, img := tt.Find("这个会话里生成和粘贴的图片"); !ok || !img {
@@ -618,7 +618,7 @@ func TestRevealInFiles(t *testing.T) {
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.selected = w.ID
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	path := filepath.Join(root, "internal", "files", "tree.go")
 	a.revealInFiles(w, path)
@@ -645,7 +645,7 @@ func TestCollapseAndRevealCurrent(t *testing.T) {
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.selected = w.ID
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	path := filepath.Join(root, "internal", "files", "tree.go")
 	a.openFile(w, path, 0, [2]int{})
@@ -760,7 +760,7 @@ func TestPanelsFollowProject(t *testing.T) {
 func TestPanelsSnapOnProjectSwitch(t *testing.T) {
 	a := previewApp(t)
 	a.selected = "w2"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.openFilesPanel(a.workspace("w2"), sideFiles)
 	tt.Frame()
@@ -834,7 +834,7 @@ func TestGoToDefinition(t *testing.T) {
 	put("lib/Helper.java", "public class Helper {\n  public static void open(Object a, int code) {\n  }\n}\n")
 	w := &a.workspaces[0]
 	a.selected = w.ID
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	chat := filepath.Join(root, "app", "Chat.java")
 	a.openFile(w, chat, 0, [2]int{})
 	v := a.filesFor(w)
@@ -1014,7 +1014,7 @@ func TestMarkdownPreviewKeepsScroll(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 360)
+	tt := newTester(a.build, 1200, 360)
 	readme := filepath.Join(root, "README.md")
 	a.openFile(w, readme, 0, [2]int{})
 	d := a.files[w.ID].doc(readme)
@@ -1056,7 +1056,7 @@ func TestMarkdownPreviewFind(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	readme := filepath.Join(root, "README.md")
 	a.openFile(w, readme, 0, [2]int{})
 	v := a.files[w.ID]
@@ -1099,7 +1099,7 @@ func TestTreeRootReappears(t *testing.T) {
 	a.workspaces[0].Path = root
 	a.indexWorkspaces()
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := a.filesFor(w)
 	a.pollFiles(v)
 	pass(tt, 200*time.Millisecond)

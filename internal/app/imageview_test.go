@@ -66,7 +66,7 @@ func TestImagesPanelTabs(t *testing.T) {
 	a := previewApp(t)
 	a.state.RightPanel = panelImages
 	a.images = previewImages()
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if !tt.HasText("phone_screenshot") || tt.HasText("#1") {
 		t.Fatalf("made tab: %v", tt.Texts())

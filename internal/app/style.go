@@ -14,6 +14,7 @@ import (
 
 	"posse/internal/mermaid/diagram"
 	"posse/internal/term"
+	"posse/locales"
 )
 
 // 界面的取向和字号、字重、图标、间距、圆角、颜色、层级的规则见 docs/design.md；这里只定义取值，调用处只用名字。
@@ -33,8 +34,8 @@ const defaultIconSize = 16
 
 var iconSizes = []struct {
 	size  float32
-	label string
-}{{14, "小"}, {16, "标准"}, {18, "大"}}
+	label func(locales.Messages) string
+}{{14, locales.Messages.SettingsIconSmall}, {16, locales.Messages.SettingsIconNormal}, {18, locales.Messages.SettingsIconLarge}}
 
 // 图标只用这几档：文字旁的图标和那行字一样大（fsSmall、fsBody）；工具按钮、列表行首是 iconSize，
 // 按钮框 buttonBox；列表行内、卡片和浮层里的紧凑按钮是 smallIcon 配 compactBox，标签和文件行里的小按钮是 miniBox；

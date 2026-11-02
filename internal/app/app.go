@@ -34,6 +34,7 @@ import (
 	"posse/internal/procmem"
 	"posse/internal/projicon"
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 type project struct {
@@ -187,6 +188,7 @@ type app struct {
 	termFamily   string // 终端字体，空是默认
 	editorFamily string // 编辑器字体，空是默认
 	settingsTab  string // 设置页左边选中的分类，空是第一个
+	locale       string // 设置页选的界面语言（mygo.App.ChosenLocale），空是跟随系统
 	termPick     fontPick
 	editorPick   fontPick
 	editorDemo   *editor.State // 设置页编辑器预览的只读编辑器，第一次打开时建
@@ -463,6 +465,7 @@ func Run(c *client.Client) error {
 			Content:              ui.View(a.build),
 		})
 		a.watchClose()
+		a.startLocale()
 		a.installMenu()
 		a.watchFocus()
 		a.startUpdates()
@@ -898,12 +901,12 @@ func (a *app) installMenu() {
 	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 		{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleAbout},
-			{Label: "检查更新…", Hidden: !mygo.Updater.Configured(), Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: locales.MenuCheckForUpdates(), Hidden: !mygo.Updater.Configured(), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(a.openAbout)
 				go a.checkUpdate(true)
 			}},
 			mygo.Separator(),
-			{Label: "设置…", Accelerator: a.accel("settings"), Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: locales.MenuSettings(), Accelerator: a.accel("settings"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(a.openSettings)
 			}},
 			mygo.Separator(),
@@ -915,27 +918,27 @@ func (a *app) installMenu() {
 			mygo.Separator(),
 			{Role: mygo.RoleQuit},
 		}},
-		{Label: "File", Submenu: []*mygo.MenuItem{
-			{Label: "关闭标签", Accelerator: a.accel("closeTab"), Click: func(*mygo.MenuItem, *mygo.Window) {
+		{Label: locales.MenuFile(), Submenu: []*mygo.MenuItem{
+			{Label: locales.MenuCloseTab(), Accelerator: a.accel("closeTab"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuCloseTab = true })
 			}},
 			{Role: mygo.RoleClose, Accelerator: a.accel("closeWindow")},
 		}},
 		{Role: mygo.RoleEditMenu},
 		// 网页有焦点时键盘在 WebKit 手里，窗口的快捷键收不到；macOS 先把按键交给菜单，放这里网页里也认
-		{Label: "View", Submenu: []*mygo.MenuItem{
-			{Label: "重新载入网页", Accelerator: a.accel("webReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
+		{Label: locales.MenuView(), Submenu: []*mygo.MenuItem{
+			{Label: locales.MenuReloadPage(), Accelerator: a.accel("webReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuWeb("reload") })
 			}},
-			{Label: "强制重新载入网页", Accelerator: a.accel("webHardReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: locales.MenuForceReloadPage(), Accelerator: a.accel("webHardReload"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuWeb("hardReload") })
 			}},
 			mygo.Separator(),
-			{Label: "手机预览", Accelerator: a.accel("webMobile"), Click: func(*mygo.MenuItem, *mygo.Window) {
+			{Label: locales.MenuMobilePreview(), Accelerator: a.accel("webMobile"), Click: func(*mygo.MenuItem, *mygo.Window) {
 				a.win.Update(func() { a.menuWeb("mobile") })
 			}},
 		}},
-		{Label: "Window", Submenu: []*mygo.MenuItem{
+		{Label: locales.MenuWindow(), Submenu: []*mygo.MenuItem{
 			{Role: mygo.RoleMinimize},
 			{Role: mygo.RoleZoom},
 			{Role: mygo.RoleToggleFullScreen},

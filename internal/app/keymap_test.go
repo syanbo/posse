@@ -52,7 +52,7 @@ func TestDefaultKeysNoConflict(t *testing.T) {
 // 改了快捷键后旧键不再管用、新键管用，提示文字跟着变。
 func TestRebindShortcut(t *testing.T) {
 	a := previewApp(t)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.setKeys("toggleSidebar", []keyCombo{{mods: ui.Cmd, key: ui.KeyJ}})
 	hidden := a.state.SidebarHidden
@@ -80,7 +80,7 @@ func TestRebindShortcut(t *testing.T) {
 func TestRecordShortcut(t *testing.T) {
 	a := previewApp(t)
 	a.selected, a.settingsTab = settingsBoardID, "keys"
-	tt := ui.NewTester(a.build, 1200, 900)
+	tt := newTester(a.build, 1200, 900)
 	tt.Frame()
 	if err := tt.Click("修改快捷键 ⌘B"); err != nil {
 		t.Fatal(err)
@@ -166,7 +166,7 @@ func TestFormatJSONDoc(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"name":"posse","private":true}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, path, 0, [2]int{})
 	d := a.files[w.ID].doc(path)
 	until(t, tt, "loaded", func() bool { return d.kind == docText && tt.HasText("格式化") })

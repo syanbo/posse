@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/egoist/mygo/ui"
-
 	"posse/internal/gitx"
 )
 
@@ -46,7 +44,7 @@ func worktreeWorkspace(t *testing.T, a *app) (root, base string) {
 func TestWorktreeBaseConflictToSync(t *testing.T) {
 	a := previewApp(t)
 	_, base := worktreeWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	until(t, tt, "base", func() bool { return a.track["w1"] != nil && a.track["w1"].baseOK })
 	d := a.track["w1"].base

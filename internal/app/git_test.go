@@ -62,7 +62,7 @@ func openChanges(t *testing.T, a *app, tt *ui.Tester) *filesView {
 func TestGitChangesAndDiff(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	for _, want := range []string{"改动 3", "README.md", "main.go", "notes.txt", "未跟踪"} {
@@ -232,7 +232,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.openBranches(w)
 	v := a.files[w.ID]
@@ -366,7 +366,7 @@ func TestPushDialog(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyK)
 	until(t, tt, "push plan", func() bool { return a.push != nil && a.push.loaded && tt.HasText("fix: 本地修复") })
@@ -416,7 +416,7 @@ func TestLogBlameAndReword(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.openLog(w, "", "")
 	v := a.files[w.ID]
@@ -504,7 +504,7 @@ func TestAutostashBanner(t *testing.T) {
 	gitRun(t, root, "commit", "-q", "-am", "feat: 改了 main.go")
 	gitRun(t, root, "switch", "-q", "main")
 	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// 没提交的改动\n"), 0o644)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
 	until(t, tt, "status", func() bool { return v.git.status != nil })
@@ -568,7 +568,7 @@ func TestConflictBanner(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// feat edit\n"), 0o644)
 	gitRun(t, root, "commit", "-q", "-am", "feat: 也改了 main.go")
 	gitRun(t, root, "switch", "-q", "main")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
 	until(t, tt, "status", func() bool { return v.git.status != nil })
@@ -602,7 +602,7 @@ func TestCommitDuringMerge(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// feat edit\n"), 0o644)
 	gitRun(t, root, "commit", "-q", "-am", "feat: 也改了 main.go")
 	gitRun(t, root, "switch", "-q", "main")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideChanges)
 	until(t, tt, "status", func() bool { return v.git.status != nil })
@@ -634,7 +634,7 @@ func TestCommitDuringMerge(t *testing.T) {
 func TestLogRefTree(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
 	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && v.git.branches.list != nil })
@@ -755,7 +755,7 @@ func TestLogRefTree(t *testing.T) {
 func TestBranchPopupFolds(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openBranches(&a.workspaces[0])
 	v := a.files["w1"]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil && tt.HasText("远端 origin") })
@@ -792,7 +792,7 @@ func TestCommitPicked(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
 	gitRun(t, root, "add", "README.md")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	if !tt.HasText("提交 2 个文件") {
@@ -837,7 +837,7 @@ func TestImageDiff(t *testing.T) {
 	gitRun(t, root, "commit", "-q", "-m", "logo")
 	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(80, 30), 0o644)
 	os.WriteFile(filepath.Join(root, "new.png"), pngOf(10, 10), 0o644)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openDiff(&a.workspaces[0], diffSpec{rel: "logo.png", oldRev: "HEAD"}, nil, true)
 	until(t, tt, "image diff", func() bool { return v.cur.kind == docImageDiff })
@@ -868,7 +868,7 @@ func TestAutoFetch(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	until(t, tt, "first fetch", func() bool { _, ok := a.fetchAt[w.ProjectID]; return ok && a.track["w1"].poll.at != time.Time{} })
 	at := a.fetchAt[w.ProjectID]
 	tt.Frame()
@@ -924,7 +924,7 @@ func TestCommitShortcut(t *testing.T) {
 	root := gitWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.activeTerm[w.ID] = w.Terminals[0].ID
@@ -948,7 +948,7 @@ func TestLogPanel(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	settle(tt)
 	cols, rows := a.panes[0].term.Size()
 	tt.Key(ui.Cmd, ui.Key9)
@@ -990,7 +990,7 @@ func TestRollback(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	exists := func(rel string) bool { _, err := os.Stat(filepath.Join(root, rel)); return err == nil }
@@ -1078,7 +1078,7 @@ func TestRollback(t *testing.T) {
 func TestChangeGroupsFold(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	if !tt.HasText("notes.txt") || !tt.HasText("main.go") {
@@ -1116,7 +1116,7 @@ func TestRollbackDoc(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
@@ -1159,7 +1159,7 @@ func TestFileHistory(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	a.openLog(w, "", "main.go")
 	v := a.files[w.ID]
@@ -1235,7 +1235,7 @@ func TestRollbackTree(t *testing.T) {
 func TestGitOpQueue(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
@@ -1262,7 +1262,7 @@ func TestGitOpQueue(t *testing.T) {
 func TestDiffFollowsHead(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "main.go"}), nil, true)
@@ -1279,7 +1279,7 @@ func TestDiffFollowsHead(t *testing.T) {
 func TestRevertHunkStaleDisk(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "README.md"}), nil, true)
@@ -1302,7 +1302,7 @@ func TestRevertHunkStaleDisk(t *testing.T) {
 func TestRollbackDetail(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openRollback(v)
@@ -1378,7 +1378,7 @@ func TestCommitChangeFromPopup(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
@@ -1427,7 +1427,7 @@ func TestChangeContent(t *testing.T) {
 func TestCancelNetworkOp(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
@@ -1451,7 +1451,7 @@ func TestCancelNetworkOp(t *testing.T) {
 func TestStepDiffAfterCommit(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	w := &a.workspaces[0]
@@ -1483,7 +1483,7 @@ func TestStepDiffAfterCommit(t *testing.T) {
 func TestDiffLargeFile(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	line := strings.Repeat("x", 1023) + "\n"
@@ -1531,7 +1531,7 @@ func TestDiffComparedAhead(t *testing.T) {
 	gitRun(t, root, "add", "big.txt")
 	gitRun(t, root, "commit", "-q", "-m", "big")
 	os.WriteFile(filepath.Join(root, "big.txt"), []byte(nw.String()), 0o644)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.txt", X: '.', Y: 'M'}), nil, true)
@@ -1560,7 +1560,7 @@ func TestLogFilterEdges(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	gitRun(t, root, "tag", "feat", "main~2") // 和分支 feat 同名、指向更早的提交
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
 	d := v.logCur
@@ -1604,7 +1604,7 @@ func TestGuardPushedAndConflictPanel(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := a.filesFor(w)
 	until(t, tt, "repo", func() bool {
 		if !v.git.checked {
@@ -1643,7 +1643,7 @@ func TestGuardPushedAndConflictPanel(t *testing.T) {
 func TestCommitBoxDetails(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	g := &v.git
@@ -1673,7 +1673,7 @@ func TestBranchPopupKeyboard(t *testing.T) {
 	a := previewApp(t)
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openBranches(w)
 	v := a.files["w1"]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
@@ -1707,7 +1707,7 @@ func TestBranchPopupKeyboard(t *testing.T) {
 func TestLogKeyboard(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
 	ld := v.logCur.log
@@ -1736,7 +1736,7 @@ func TestChangeBarClick(t *testing.T) {
 	root := gitWorkspace(t, a)
 	var d *fileDoc
 	var r ui.Rect
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		a.build(c)
 		if d != nil {
 			r = d.edRef.Bounds(c)
@@ -1770,7 +1770,7 @@ func TestChangeBarClick(t *testing.T) {
 func TestChangesKeyboard(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	if err := tt.Click("README.md"); err != nil {
@@ -1809,7 +1809,7 @@ func TestGitConsole(t *testing.T) {
 	a.traceGit()
 	defer func() { gitx.Trace = nil }()
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	a.gitDo(v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
@@ -1875,7 +1875,7 @@ func TestGitConsole(t *testing.T) {
 func TestStashTab(t *testing.T) {
 	a := previewApp(t)
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	settle(tt)
@@ -1916,7 +1916,7 @@ func TestStashTab(t *testing.T) {
 func TestCompareSplit(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
 	a.loadBranches(v)
@@ -2173,7 +2173,7 @@ func TestComparePick(t *testing.T) {
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.loadBranches(v)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
@@ -2225,7 +2225,7 @@ func TestComparePickMany(t *testing.T) {
 	gitRun(t, root, "switch", "-q", "main")
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.loadBranches(v)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
@@ -2302,7 +2302,7 @@ func TestFileTreeGitMarks(t *testing.T) {
 	os.MkdirAll(filepath.Join(root, "pkg", "sub"), 0o755)
 	os.WriteFile(filepath.Join(root, "pkg", "sub", "new.go"), []byte("package sub\n"), 0o644)
 	gitRun(t, root, "add", "pkg")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := a.openFilesPanel(&a.workspaces[0], sideFiles)
 	until(t, tt, "git status", func() bool { return v.git.status != nil && tt.HasText("main.go") })
 	m := v.git.treeMarks()

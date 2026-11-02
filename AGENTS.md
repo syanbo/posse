@@ -7,7 +7,7 @@
 ```sh
 export GOPROXY=https://goproxy.cn,direct   # 本机直连 proxy.golang.org / storage.googleapis.com 会超时
 go build -o bin/posse ./cmd/posse
-go vet ./... && go test ./... && go tool mygo vet
+go vet ./... && go test ./... && go tool mygo vet && go tool mygo i18n check
 go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm64/Posse.app
 ```
 
@@ -18,6 +18,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg   # 打包 build/darwin-arm6
 - 写手机端界面前读 `docs/mobile-design.md`：取值只用 `mobile/lib/ui/theme.dart` 里的名字，`mobile/test/design_rules_test.dart` 检查。
 - gofmt 用 `$(go env GOROOT)/bin/gofmt`：Homebrew 的 gofmt 版本较旧，对齐规则不同。
 - 写界面前读 `docs/design.md`（取向和字号、颜色、间距等规则，只用 `style.go` 里的名字，不写数字），各界面的行为见 `docs/features/ui.md`。侧栏是自绘的行（`navRow`），不用 mygo 的 Sidebar：它的选中样式改不了。mygo 会把字重取整到固定档位，别指望细调字重。
+- 桌面窗口的界面文字经 mygo 的多语言框架（方案和进度见 `docs/plans/i18n.md`）：译文表是 `locales/en.json`（源语言，每个键带 description）和 `zh-Hans.json`，键小驼峰、界面在前（`settingsRestoreTitle`），带数字、名字的整句用 ICU 占位符和复数，不拼句子。视图里写 `L(c).SettingsTitle()`，没有 Context 的菜单才用平面函数 `locales.SettingsTitle()`；不写中文字面量（`TestNoChineseLiterals`，还没改完的文件列在 `l10nPending`）。改了 JSON 跑 `go tool mygo generate` 重写 `locales/catalog_gen.go` 并提交（`go build` 不经 mygo，`TestCatalogGenerated` 核对）。mygo 自己控件的中文叫法要改，在 `zh-Hans.json` 里写 `mygo.<键>`。测试的 Tester 用 `newTester`，固定中文。
 - `mygo.json` 用 Developer ID Application 证书签名（团队 QKSM9Z4U85；`macos.signingIdentity` 写证书的 SHA-1：钥匙串里有一张同名的过期证书，写名字 codesign 会报 unknown exception）。临时签名（adhoc）时系统按每次构建的 cdhash 认 app，每打一次包访问桌面、文稿都要重新授权；用证书后按包 ID 加证书认，授权一直有效。正式打包会带强化运行时和时间戳（要联网），libghostty 在包里、同一证书签，照常加载。换证书改这里的 SHA-1（`security find-identity -v -p codesigning`）。
 - 应用图标的原图是 `design/icon-art.png`（满版、不带圆角），改图标改它和下面几处。桌面端用 Icon Composer 文档 `design/Posse.icon`（`mygo.json` 的 `macos.icon`，里面一层就是这张图，关了玻璃、高光和阴影），由 actool 编成 Assets.car、圆角由系统画：自带留白和圆角的图在新版 macOS 上会被缩小放进一块底板。`icon` 指向的 `design/icon.png` 是同一张图，只在编不了 .icon 时用；手机端的 AppIcon、安卓 mipmap 和 `mobile/assets/icon.png` 由原图缩放。旧版图标留在 `design/old-icon/`。不要放进 `resources/`：那里的文件会原样打进 app。
 - 要把 App 跑起来的测试（窗口、Computer Use、看桌面、屏幕录制和辅助功能这类按签名认的授权、访问文稿和桌面目录）一律用 `scripts/dev-app.sh` 装出的 `build/dev/PosseDev.app`：包 ID `com.dengbo.posse.dev`、同一张证书，授权一次一直有效，可反复重装。它没设 `POSSE_HOME` 时用 `~/.posse-dev`、没设 `POSSE_MOBILE_PORT` 时手机端口用 6790，`POSSE_HOME` 指向 `~/.posse` 也换成 `~/.posse-dev`（`daemon.ResolveHome`）：双击、系统重新拉起、Computer Use 按包 ID 激活都不带环境变量，在 Posse 的终端里直接运行又会继承日常的 `POSSE_HOME`，连上日常的常驻进程后窗口会把它自动交接到更新的开发包上。只有一份：在 worktree 里跑脚本也装到主仓库的 `build/dev`，换包前退出正在运行的 Posse Dev，不并行验收。命令行调用主仓库的 `build/dev/PosseDev.app/Contents/MacOS/Posse …`，窗口用 `scripts/dev-app.sh --open`（装完打开），不要 `open -n`、不要自己运行 `posse app`：同一 home 已有窗口时新开的只把它叫到前面就退出，终端里无参数的 `posse` 不开窗口。手机配对一次长期有效，用完 `daemon stop` 停掉它的常驻进程（先 `daemon status` 看 home 是 `~/.posse-dev`）。
@@ -47,6 +48,7 @@ internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
 internal/cheatsheet 各家 agent 内置命令、按键和输入前缀的速查表（手工整理的 cheatsheet.json），以及认出本机 agent 的版本
 internal/projicon   项目自定义图标：窗口里设，存在 $POSSE_HOME/project-icons，常驻进程给手机列工作区时读
+locales            界面文字的译文表（en.json、zh-Hans.json）和 mygo 生成的取文字函数（catalog_gen.go）
 internal/errtext    报错的界面文字：英文原文按界面语言翻译（译文表如 zh.go），桌面窗口和手机服务显示报错时用
 internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责；runtime.go 管常驻进程运行用的包副本（创建、登记、回收）
 internal/desk       手机看 Mac 桌面的采集侧：子进程（`posse desk helper`）用 ScreenCaptureKit 采屏（可选屏，也可只看一个窗口，window_darwin.go）、VideoToolbox 硬编码，帧经管道交给父进程，手机的键鼠输入由父进程排序去重（input.go）、子进程发 CGEvent 注入（inject_darwin.go）；父进程拆 RTP、AES-GCM 加密发 UDP、按接收报告调码率（`posse desk cast` 是还没接进常驻进程时的推流入口）
@@ -86,8 +88,8 @@ third_party/mygo    带改动的 mygo v0.7.4（go.mod 用 replace 指向它）�
 - Posse.app 里的可执行文件叫 `Posse`，agent 在终端里调用 `posse` 能找到它，依赖 APFS 默认的大小写不敏感。
 - 快捷键都登记在 `internal/app/keymap.go` 的表里（设置页「快捷键」能看能改，改过的存 ui.json 的 `keys`）：新加快捷键往表里加一项，用 `a.pressed(c, id)` / `a.pressedIn`（终端 OnKey 用 `a.keyIs`）判断，提示文字用 `a.keyText`、`a.withKey`、菜单的 `.Keys(...)`，不写死 `c.Shortcut(ui.Cmd, …)` 和"⌘X"。编辑器的键在表里是 `editor.<命令名>`，经 `editorBindings` 交给编辑器。
 - 菜单由 `installMenu` 自己装：macOS 先把按键交给菜单，mygo 默认菜单的"关闭窗口"占着 ⌘W（界面收不到，关最后一个标签会连 app 一起关掉），View 菜单占着 ⌘R、⌘=、⌘-、⌘0。⌘W 是"关闭标签"（`closeTab`），关窗口是 ⇧⌘W。
-- 菜单都是 Posse 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 NSMenu，悬停高亮改不了）。build 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Posse（`presentMenu`、`sysMenuView`），菜单项的英文在 `menuLabels` 里换成中文，mygo 加了新的菜单项要补上。能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。
-- 报错的源文本是英文：常驻进程、CLI、各内部包照旧写英文（agent 读的是它们）。界面上显示报错一律经 `errtext.Text(err)`（桌面窗口）或手机服务的 `conn.fail`，不直接用 `err.Error()`：它去掉错误码，按界面语言（`errtext.Current`）查译文表，认不出的原样给出。新加界面碰得到的英文报错，在 `internal/errtext/zh.go` 补一条译文（键和代码里的格式串一字不差，`TestFormatsStillInSource` 核对）；加一种界面语言就加一张译文表、登记进 `catalogs`。手机 App 里显示报错经 `friendlyError`（`mobile/lib/app_state.dart`），不直接 `'$error'`。
+- 菜单都是 Posse 自绘（`menu.go`）：按钮弹出用 `menuButton`，右键用 `contextMenu`（mygo 的 `ContextMenuAsked` 沿用它的右键路由，只报位置），终端内容区由插件的 `Options.ContextMenu` 交来位置；不用 mygo 的 `Menu`、`ContextMenu`（系统 NSMenu，悬停高亮改不了）。build 每帧先跑一遍收集菜单项，点了某项后同一帧再跑一遍报告 `Chosen`，两遍加的项要一样。"在访达中显示/打开"一律用 `iconFolder`。mygo 自己的菜单（文字输入框、可选文字、编辑器的编辑菜单）经 `Context.PresentMenus` 交给 Posse（`presentMenu`、`sysMenuView`），菜单项的文字由 mygo 按界面语言给（中文叫法和 mygo 不同的在 `locales/zh-Hans.json` 用 `mygo.<键>` 覆盖）。能点的元素主题已给手形指针，新控件不用单独设 `Cursor(ui.CursorPointer)`；只为挡住点击才调 `Clicked` 的大容器要设 `Cursor(ui.CursorDefault)`。
+- 报错的源文本是英文：常驻进程、CLI、各内部包照旧写英文（agent 读的是它们）。界面上显示报错一律经 `errtext.Text(err)`（桌面窗口）或手机服务的 `conn.fail`，不直接用 `err.Error()`：它去掉错误码，按界面语言（`errtext.Current`，窗口跟着 mygo 的界面语言设，见 `l10n.go`）查译文表，认不出的原样给出。新加界面碰得到的英文报错，在 `internal/errtext/zh.go` 补一条译文（键和代码里的格式串一字不差，`TestFormatsStillInSource` 核对）；加一种界面语言就加一张译文表、登记进 `catalogs`。手机 App 里显示报错经 `friendlyError`（`mobile/lib/app_state.dart`），不直接 `'$error'`。
 - 只有界面关心的状态（`internal/app/uistate.go`）存在 `$POSSE_HOME/ui.json`，由窗口进程读写，不进常驻进程：改常驻进程的协议要换掉常驻进程。
 - 重新打包、覆盖安装后，窗口进程失去 TCC 授权（读桌面、文稿等目录报 EPERM，不弹授权），要重开窗口（`internal/app/relaunch.go`，提示和重开流程见 `docs/features/ui.md`）。常驻进程和终端不受影响：它们从包的副本运行（见上面拉起常驻进程的副本一条）。
 - 界面每秒轮询常驻进程，数据和上次相同就不重建界面；只有连不上 socket 时才去拉起常驻进程。靠时间推进的内容（右侧面板的定时刷新、"几分钟前"）要在视图里用 `c.After` 约下一帧，不能指望每秒重建。操作失败的报错留在错误条上，等用户关掉。

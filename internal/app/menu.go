@@ -382,9 +382,9 @@ func addEntries(m *popMenu, items []ui.MenuEntry, chosen func(id int)) {
 		case e.Separator:
 			m.Separator()
 		case e.Submenu != nil:
-			m.Submenu(menuLabel(e.Label), func(sm *popMenu) { addEntries(sm, e.Submenu, chosen) })
+			m.Submenu(e.Label, func(sm *popMenu) { addEntries(sm, e.Submenu, chosen) })
 		default:
-			it := m.Item(menuLabel(e.Label)).Disabled(!e.Enabled)
+			it := m.Item(e.Label).Disabled(!e.Enabled)
 			it.keys = acceleratorText(e.Shortcut)
 			if e.Checked {
 				it.Checked(true)
@@ -394,27 +394,6 @@ func addEntries(m *popMenu, items []ui.MenuEntry, chosen func(id int)) {
 			}
 		}
 	}
-}
-
-// menuLabels 把 mygo 菜单里的英文换成中文，叫法照 macOS 中文版。
-var menuLabels = map[string]string{
-	"Undo": "撤销", "Redo": "重做", "Cut": "剪切", "Copy": "复制", "Paste": "粘贴", "Delete": "删除", "Select All": "全选",
-	"Go to Definition": "跳到定义", "Toggle Comment": "切换注释",
-	"Selection": "选择", "Select Next Occurrence": "选择下一个相同项", "Select All Occurrences": "选择所有相同项",
-	"Expand Selection": "扩大选择范围", "Split into Lines": "拆分到每一行",
-	"Transform": "转换", "Upper Case": "大写", "Lower Case": "小写", "Title Case": "首字母大写",
-	"Snake Case": "snake_case", "Kebab Case": "kebab-case", "Camel Case": "camelCase", "Pascal Case": "PascalCase",
-	"Sort Lines": "按行排序", "Reverse Lines": "倒转行序", "Unique Lines": "删除重复行", "Join Lines": "合并行",
-	"Trim Trailing Whitespace": "删除行尾空白",
-	"Folding":                  "折叠", "Fold": "折叠", "Unfold": "展开", "Fold All": "全部折叠", "Unfold All": "全部展开",
-	"Clear Scrollback": "清除回滚",
-}
-
-func menuLabel(s string) string {
-	if t, ok := menuLabels[s]; ok {
-		return t
-	}
-	return s
 }
 
 // acceleratorText 把 mygo 的快捷键写法（"Super+Shift+Z"）换成 macOS 菜单的写法（⇧⌘Z）。

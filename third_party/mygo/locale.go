@@ -179,6 +179,18 @@ func (a *Application) SetLocale(tag string) {
 	}
 }
 
+// ChosenLocale returns the language the app chose (SetLocale, the one
+// saved, or MYGO_LOCALE) as it was given, "" while the app follows the
+// user's languages. Posse: its settings show the choice.
+func (a *Application) ChosenLocale() string {
+	return onMainValue(func() string {
+		loadLocale()
+		locales.mu.Lock()
+		defer locales.mu.Unlock()
+		return locales.override
+	})
+}
+
 // OnLocaleChanged calls fn on the main thread with the language the app
 // shows when it changes: SetLocale chose another, the languages the app
 // is written in changed, or the user's languages changed while the app

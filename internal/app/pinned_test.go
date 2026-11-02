@@ -4,8 +4,6 @@ import (
 	"slices"
 	"testing"
 	"time"
-
-	"github.com/egoist/mygo/ui"
 )
 
 // 顶上的磁贴：项目树里的工作区、单行项目拖上去，落在指针所在的格子；磁贴之间拖动换位置；
@@ -13,7 +11,7 @@ import (
 func TestTopTilesDrag(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
-	tt := ui.NewTester(a.build, 1200, 1400)
+	tt := newTester(a.build, 1200, 1400)
 	tt.Frame()
 	tt.Frame()
 	settle := func() {
@@ -112,7 +110,7 @@ func TestChatTile(t *testing.T) {
 		t.Fatalf("chat workspace still in the top order: %v", a.topOrder())
 	}
 	a.selected = historyBoardID
-	tt := ui.NewTester(a.build, 1200, 1400)
+	tt := newTester(a.build, 1200, 1400)
 	tt.Frame()
 	tt.Frame()
 	r, ok := tt.Find("聊天")

@@ -95,7 +95,7 @@ func TestTermEditKeys(t *testing.T) {
 func TestTermClear(t *testing.T) {
 	a := previewApp(t)
 	v, conn := recTerminal(t, a)
-	tt := ui.NewTester(a.build, 800, 600)
+	tt := newTester(a.build, 800, 600)
 	sock := filepath.Join(t.TempDir(), "s")
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestStepTab(t *testing.T) {
 	root := filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]
 	a.activeTerm[w.ID] = w.Terminals[len(w.Terminals)-1].ID
@@ -179,7 +179,7 @@ func TestStepTab(t *testing.T) {
 func TestTermFind(t *testing.T) {
 	a := previewApp(t)
 	v := a.panes[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v.term.Feed([]byte("build ok\r\nBUILD failed\r\nrebuild\r\n"))
 	if !a.termKey(v, "t1", ui.Cmd, ui.KeyF) || !v.find.open {
@@ -233,7 +233,7 @@ func TestTermFind(t *testing.T) {
 func TestTermFindCarried(t *testing.T) {
 	a := previewApp(t)
 	a.panes[0].find = termFind{open: true, query: "view"}
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	until(t, tt, "searched", func() bool {
 		st := a.panes[0].term.SearchStatus()
 		return st.Text == "view" && st.Total == 2 && st.Selected == 1
@@ -244,7 +244,7 @@ func TestTermFindCarried(t *testing.T) {
 func TestTermFindEarlyText(t *testing.T) {
 	a := previewApp(t)
 	v, conn := recTerminal(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v.find = termFind{query: "old"}
 	a.termKey(v, "t1", ui.Cmd, ui.KeyF)

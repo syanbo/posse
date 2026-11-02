@@ -11,7 +11,7 @@ import (
 func TestDispatchFocusKeepsPlace(t *testing.T) {
 	a := previewApp(t)
 	a.openDispatch()
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	settle(tt)
 	title, ok := tt.Find("派发任务")
 	if !ok {
@@ -44,7 +44,7 @@ func TestDispatchFocusKeepsPlace(t *testing.T) {
 func TestDialogMoveResize(t *testing.T) {
 	a := previewApp(t)
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openRollback(v)
 	settle(tt)

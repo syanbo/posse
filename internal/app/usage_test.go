@@ -17,7 +17,7 @@ func TestUsageCopyName(t *testing.T) {
 		MCP:    []history.MCPUsage{{Server: "androidmirror", Count: 1}},
 		Events: []history.UsageEvent{{Server: "androidmirror", Tool: "screen_observe", At: time.Now()}},
 	}
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() {
 			a.usageSummary(c, u, usageAll)
 			a.usageTimeline(c, &terminalInfo{}, u.Events, usageAll)
@@ -55,7 +55,7 @@ func TestUsageWebTimeline(t *testing.T) {
 		t.Fatalf("site %q %q", host, rest)
 	}
 	a := &app{}
-	tt := ui.NewTester(func(c *ui.Context) {
+	tt := newTester(func(c *ui.Context) {
 		a.usageTimeline(c, &terminalInfo{}, evs, usageWeb)
 	}, 360, 400)
 	tt.Frame()

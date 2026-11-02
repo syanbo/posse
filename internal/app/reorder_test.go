@@ -51,7 +51,7 @@ func TestReorderTerminals(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.selected = "w1"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	w := a.workspace("w1")
 	if got := termIDs(w.Terminals); !slices.Equal(got, []string{"t1", "t2", "t3", "t6"}) {
@@ -109,7 +109,7 @@ func TestReorderDocTabs(t *testing.T) {
 	root := filesWorkspace(t, a)
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "possed.sock")}
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "README.md"), 0, [2]int{})
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]

@@ -5,6 +5,10 @@
   "main": "./cmd/posse",
   "icon": "design/icon.png",
   "out": "build",
+  "i18n": {
+    "dir": "locales",
+    "source": "en"
+  },
   "updates": {
     "publicKey": "XyNlKbJMuyckf118edk00zLSKEVR3mJWJAXEHNa34p8=",
     "url": "https://posse.shaoyan.uk"

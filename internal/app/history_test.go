@@ -19,7 +19,7 @@ func TestHistoryArrowKeys(t *testing.T) {
 	h := &a.history
 	h.sel, h.detail = "", nil
 	a.c = &client.Client{Socket: filepath.Join(t.TempDir(), "none.sock")} // 选中时取详情，连不上只报错
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	step := func(key ui.Key, want string) {
 		t.Helper()
@@ -50,7 +50,7 @@ func TestHistoryArrowKeys(t *testing.T) {
 func TestHistoryTotalsFollowSearch(t *testing.T) {
 	a := previewApp(t)
 	previewHistory(a, "")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if !tt.HasText("424 个会话") {
 		t.Fatalf("totals: %v", tt.Texts())
@@ -69,7 +69,7 @@ func TestHistorySearchPending(t *testing.T) {
 	offlineClient(t, a)
 	previewHistory(a, "")
 	h := &a.history
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	h.query, h.askedAt = "xyz", time.Now()
 	tt.Frame()

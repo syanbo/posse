@@ -12,6 +12,7 @@ import (
 	"posse/internal/agent"
 	"posse/internal/client"
 	"posse/internal/rpc"
+	"posse/locales"
 )
 
 func TestApplyKeepsSelection(t *testing.T) {
@@ -41,7 +42,7 @@ func TestTaskHome(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
 	a.taskSel = "k2"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if err := tt.Click("任务"); err != nil {
 		t.Fatal(err)
@@ -133,7 +134,7 @@ func TestWorkerReturnsToTask(t *testing.T) {
 	offlineClient(t, a)
 	a.activeTerm["w1"] = "t6"
 	a.panes[0].id = "t6"
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if _, ok := tt.Find("返回任务"); !ok {
 		t.Fatal("worker has no return button")
@@ -153,7 +154,7 @@ func TestRevealOpensSection(t *testing.T) {
 	// 刚启动时分组都展开，会话都看得见
 	a.selected, a.sectionsOpen = "", map[string]*bool{}
 	a.apply(a.projects, a.workspaces)
-	ui.NewTester(a.build, 1200, 760).Frame()
+	newTester(a.build, 1200, 760).Frame()
 	for id, open := range a.sectionsOpen {
 		if !*open {
 			t.Fatalf("section %s collapsed after launch", id)
@@ -163,25 +164,25 @@ func TestRevealOpensSection(t *testing.T) {
 	*a.sectionsOpen["p1"] = false
 	a.selected, a.revealSel = "w1", true
 	a.activeTerm["w1"] = "t3"
-	ui.NewTester(a.build, 1200, 760).Frame()
+	newTester(a.build, 1200, 760).Frame()
 	if *a.sectionsOpen["p1"] {
 		t.Fatal("revealing the project row opened it")
 	}
 	a.activeTerm["w1"], a.revealSel = "t1", true
-	ui.NewTester(a.build, 1200, 760).Frame()
+	newTester(a.build, 1200, 760).Frame()
 	if !*a.sectionsOpen["p1"] {
 		t.Fatal("revealing a session did not open its project")
 	}
 	// 最后再切到没有终端的 w8（会断开接入的终端）。w8 是 Works（p6）下面的工作区，收起时定位要展开，Skill（p5）不受影响
 	*a.sectionsOpen["p6"], *a.sectionsOpen["p5"] = false, false
 	a.selected, a.revealSel = "w8", true
-	ui.NewTester(a.build, 1200, 760).Frame()
+	newTester(a.build, 1200, 760).Frame()
 	if !*a.sectionsOpen["p6"] || *a.sectionsOpen["p5"] || a.revealSel {
 		t.Fatalf("after reveal: p6=%v p5=%v revealSel=%v", *a.sectionsOpen["p6"], *a.sectionsOpen["p5"], a.revealSel)
 	}
 	// 用户收起分组后，不定位就不再自动展开
 	*a.sectionsOpen["p6"] = false
-	ui.NewTester(a.build, 1200, 760).Frame()
+	newTester(a.build, 1200, 760).Frame()
 	if *a.sectionsOpen["p6"] {
 		t.Fatal("section reopened without reveal")
 	}
@@ -279,7 +280,7 @@ func TestVersionLabel(t *testing.T) {
 		"663c0c7+ 2026-10-18T05:18:04Z": "0.1.0（663c0c7，有未提交改动，10-18 13:18 构建）",
 		" 2026-10-18T05:18:04Z":         "0.1.0（10-18 13:18 构建）",
 	} {
-		if got := versionLabel("0.1.0", build); got != want {
+		if got := versionLabel(locales.In("zh-Hans"), "0.1.0", build); got != want {
 			t.Errorf("versionLabel(%q) = %q, want %q", build, got, want)
 		}
 	}
@@ -289,7 +290,7 @@ func TestVersionLabel(t *testing.T) {
 func TestSidebarTaskTree(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	var order []string
 	for _, n := range a.navOrder {
@@ -372,7 +373,7 @@ func TestSidebarTaskTree(t *testing.T) {
 func TestSessionButtonsFold(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	settle(tt)
 	if _, ok := tt.Find("这个会话里生成和粘贴的图片"); !ok {
 		t.Fatal("session buttons missing")
@@ -405,7 +406,7 @@ func TestPhoneSizedBar(t *testing.T) {
 	offlineClient(t, a)
 	a.workspaces[0].Terminals[0].PhoneSized = true
 	a.selected, a.activeTerm["w1"] = "w1", a.workspaces[0].Terminals[0].ID
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	settle(tt)
 	if !tt.HasText("手机正在看这个终端，按手机屏幕排版") {
 		t.Fatalf("bar missing: %v", tt.Texts())

@@ -233,7 +233,7 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 	}
 	w := &a.workspaces[0]
 	a.setProjectPanel(&a.state.FilesPanels, w.ProjectID, true)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	for _, rel := range rels {
 		a.openFile(w, filepath.Join(root, rel), 0, [2]int{})
 		v := a.files[w.ID]
@@ -247,7 +247,7 @@ func previewFiles(t *testing.T, a *app, rels ...string) *filesView {
 // previewGit 切到 w1 的改动列表，打开 main.go 的 diff。
 func previewGit(t *testing.T, a *app) {
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	gitRun(t, v.root, "stash", "push", "-q", "-m", "试验：换一种日志格式", "--", "README.md")
 	until(t, tt, "stash", func() bool { return len(v.git.stashes) == 1 })
@@ -264,7 +264,7 @@ func previewGit(t *testing.T, a *app) {
 // previewWorktree 把 w1 换成和基准分支有冲突的 worktree，打开改动页的 tab 分页。
 func previewWorktree(t *testing.T, a *app, tab int) {
 	worktreeWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	until(t, tt, "base", func() bool { return a.track["w1"] != nil && a.track["w1"].baseOK })
 	v.git.tab = tab
@@ -284,7 +284,7 @@ func previewRollback(t *testing.T, a *app) {
 	os.WriteFile(filepath.Join(root, "internal/app/view.go"), []byte("package x\n\nfunc view() {}\n"), 0o644)
 	os.WriteFile(filepath.Join(root, "internal/gitx/status.go"), []byte("package y\n"), 0o644)
 	os.Remove(filepath.Join(root, "docs/plans/git-ops.html"))
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	until(t, tt, "status", func() bool { return v.git.changeCount() == 7 })
 	a.openRollback(v)
@@ -301,7 +301,7 @@ func previewChangesByDir(t *testing.T, a *app) {
 
 func previewChangePop(t *testing.T, a *app) {
 	root := gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openFile(&a.workspaces[0], filepath.Join(root, "main.go"), 0, [2]int{})
 	d := v.cur
@@ -312,7 +312,7 @@ func previewChangePop(t *testing.T, a *app) {
 
 func previewRollbackDetail(t *testing.T, a *app) {
 	gitWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openRollback(v)
 	e, _ := a.rollback.entry("main.go")
@@ -323,7 +323,7 @@ func previewRollbackDetail(t *testing.T, a *app) {
 
 func previewBranches(t *testing.T, a *app) {
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openBranches(&a.workspaces[0])
 	v := a.files["w1"]
 	until(t, tt, "branches", func() bool { return v.git.branches.list != nil })
@@ -349,7 +349,7 @@ func previewImageDiff(t *testing.T, a *app) {
 	gitRun(t, root, "add", "logo.png")
 	gitRun(t, root, "commit", "-q", "-m", "logo")
 	os.WriteFile(filepath.Join(root, "logo.png"), pngOf(480, 360, color.RGBA{90, 130, 220, 255}), 0o644)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	a.openDiff(&a.workspaces[0], diffSpec{rel: "logo.png", oldRev: "HEAD"}, nil, true)
 	until(t, tt, "image diff", func() bool { return v.cur.kind == docImageDiff })
@@ -371,7 +371,7 @@ func previewImageDoc(t *testing.T, a *app, zoom float32) {
 	png.Encode(&b, img)
 	os.WriteFile(filepath.Join(root, "tall.png"), b.Bytes(), 0o644)
 	w := &a.workspaces[0]
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "tall.png"), 0, [2]int{})
 	v := a.files[w.ID]
 	until(t, tt, "image", func() bool { return v.cur.kind == docImage })
@@ -385,7 +385,7 @@ func previewImageDoc(t *testing.T, a *app, zoom float32) {
 // previewCompare 打开 feat 和 main 的比较，选中 feat 独有的那个提交。
 func previewCompare(t *testing.T, a *app) {
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
 	a.loadBranches(v) // 顺带查出仓库根目录
@@ -399,7 +399,7 @@ func previewCompare(t *testing.T, a *app) {
 
 func previewPush(t *testing.T, a *app) {
 	branchWorkspace(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openPush(&a.workspaces[0])
 	until(t, tt, "push plan", func() bool { return a.push.loaded })
 	a.selectCommit(a.files["w1"], &a.push.commit, a.push.plan.Commits[0])
@@ -408,7 +408,7 @@ func previewPush(t *testing.T, a *app) {
 
 func previewPushDetail(t *testing.T, a *app) {
 	previewPush(t, a)
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.pushShow(a.files["w1"], a.push, 0, true)
 	until(t, tt, "push diff", func() bool { return a.push.detail.kind == docDiff })
 }
@@ -418,7 +418,7 @@ func previewLog(t *testing.T, a *app) {
 	root := branchWorkspace(t, a)
 	gitRun(t, root, "merge", "-q", "--no-ff", "-m", "Merge branch 'feat'", "feat")
 	gitRun(t, root, "tag", "v0.2.0")
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	a.openLog(&a.workspaces[0], "", "")
 	v := a.files["w1"]
 	until(t, tt, "log", func() bool { return v.logCur.kind == docLog })
@@ -501,7 +501,7 @@ func savePNG(t *testing.T, tt *ui.Tester, name string) {
 }
 
 func newPreviewTester(a *app, dark bool) *ui.Tester {
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.SetScale(2)
 	tt.SetDark(dark)
 	tt.SetTitleBar(ui.TitleBar{Height: 40, Left: 70}) // TrafficLightPosition{16, 13} 时红绿灯占的位置
@@ -1013,7 +1013,7 @@ func TestPreview(t *testing.T) {
 		v = previewFiles(t, a, "main.go")
 		v.side, v.search.query.Text = 1, "config"
 		a.startSearch(v, 0)
-		until(t, ui.NewTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
+		until(t, newTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
 		savePNG(t, newPreviewTester(a, dark), "files-search-"+suffix+".png")
 
 		a = previewApp(t)
@@ -1139,6 +1139,16 @@ func TestPreview(t *testing.T) {
 		a.settingsTab = "about"
 		a.daemon.Version, a.daemon.Build, a.daemon.Pid, a.daemon.StartedAt = "0.1.0", "663c0c7+ 2026-10-18T05:18:04Z", 53330, now.Add(-2*time.Hour)
 		savePNG(t, newPreviewTester(a, dark), "settings-about-"+suffix+".png")
+		// 设置页的英文和伪语言（en-XA 把英文加长、加重音）：看排版有没有截断
+		for _, lang := range []string{"en", "en-XA"} {
+			for _, tab := range []string{"general", "appearance", "about"} {
+				a.settingsTab = tab
+				lt := newPreviewTester(a, dark)
+				lt.SetLocale(lang)
+				lt.Frame()
+				savePNG(t, lt, "settings-"+tab+"-"+lang+"-"+suffix+".png")
+			}
+		}
 		a.daemon.Pid = 0
 
 		// 设置页的快捷键：改过一项（有"恢复默认"），正在录另一项
@@ -1330,7 +1340,7 @@ func TestColumnsClickAndDrag(t *testing.T) {
 	a := previewApp(t)
 	a.state.Panes = map[string]layoutState{"w1": twoCols([]string{"t1", "t2"}, []string{"t3"}, 0)}
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if a.pane != 0 {
 		t.Fatalf("pane %d", a.pane)
@@ -1366,7 +1376,7 @@ func TestColumnsDragTabToEdge(t *testing.T) {
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 	// 收起侧栏：左格要宽过两倍最窄宽度才拆得开
 	a.state.SidebarHidden = true
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	r, ok := tt.Find("zsh")
 	if !ok {
@@ -1397,7 +1407,7 @@ func twoColumnTester(t *testing.T) (*app, *ui.Tester) {
 	a.panes[1] = &termView{id: "t3", term: previewShell(t)}
 	// 收起侧栏：侧栏里有同名的会话，按文字找的会是它
 	a.state.SidebarHidden = true
-	tt := ui.NewTester(a.build, 1200, 760)
+	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	return a, tt
 }

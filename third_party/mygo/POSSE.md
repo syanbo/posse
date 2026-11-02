@@ -23,6 +23,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/editor` 的粗体字重和字体平滑（`state.go`、`diffview.go`、`editor.go`、`paint.go`、`view.go`）：粗体和斜体的记号上游 0.6.4 起自己画（`faceStyle`）；加 `State.BoldWeight`、`DiffState.BoldWeight`，设了时代替上游 `boldWeight()` 的 700（`view.boldW`）；`Font.Antialiased` 开着时 `paintRow` 不用字体平滑画字（`setStyle` 记下它，它不进排版的 `text.Style`）。`ui/glyphs.go` 为此加 `Painter.TextLineWith`：可以不平滑，颜色透明的字不画。
 
+`locale.go`：加 `App.ChosenLocale`，读出应用选的语言（`SetLocale` 存下的，跟随系统时为空串）；上游只能设、读不出，Posse 的设置页要显示选中的那项。
+
 `ui/headless.go`：加 `Tester.MoveWith`、`Tester.ScrollWith`，带修饰键移动指针、滚动（平台每个指针事件都带当前修饰键，`Move` 不带会把修饰键清掉）。
 
 `ui/widgets.go`：对话框（`coreModal`）打开时遮罩淡入、对话框淡入并从 96% 放大，弹出面板（`stylePanel`：Popover、Select、ComboBox、日期、取色）淡入并下落 4 DIP，都用 `Keyframes` 播 160 ms，只在出现时播一次。
