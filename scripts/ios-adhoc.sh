@@ -58,13 +58,21 @@ if [ -n "$(git status --porcelain -- mobile internal/mquic)" ]; then
 	echo "注意：mobile 或 internal/mquic 有未提交的改动，会一起打进包里" >&2
 fi
 # 这一版的更新内容：CHANGELOG 里 "## 版本" 下面的列表，一条一项（续行接到上一条后面）
-notes=$(awk -v v="## $version" '
-	$0 == v { on = 1; next }
-	on && /^## / { exit }
-	on && /^- / { if (item != "") print item; item = substr($0, 3); next }
-	on && /^[ \t]+[^ \t]/ && item != "" { sub(/^[ \t]+/, ""); item = item $0; next }
-	END { if (item != "") print item }
-' "$changelog")
+# 中文条目在前，英文条目在 "### English" 小节里：notes 只取中文，notes_en 取英文
+notes_of() { # notes_of <小节>：空串是中文条目（English 小节之前），English 是英文条目
+	awk -v v="## $version" -v want="$1" '
+		function flush() { if (item != "") print item; item = "" }
+		$0 == v { on = 1; next }
+		on && /^## / { exit }
+		on && /^### / { flush(); part = substr($0, 5); next }
+		on && /^- / { flush(); if (part == want) item = substr($0, 3); next }
+		# 续行接到上一条后面，英文隔一个空格
+		on && /^[ \t]+[^ \t]/ && item != "" { sub(/^[ \t]+/, ""); item = item (want == "" ? "" : " ") $0; next }
+		END { flush() }
+	' "$changelog"
+}
+notes=$(notes_of "")
+notes_en=$(notes_of English)
 
 out=build/ios-adhoc
 rm -rf "$out" mobile/build/ios/ipa
@@ -166,9 +174,10 @@ EOF
 
 # App 按它判断有没有新版本、显示更新内容，点「更新」打开 install
 printf '%s\n' "$notes" | jq -R . | jq -s \
+	--argjson notes_en "$(printf '%s\n' "$notes_en" | jq -R . | jq -s 'map(select(. != ""))')" \
 	--arg version "$version" --argjson build "$build" --arg size "$size" \
 	--arg install "itms-services://?action=download-manifest&url=$base/manifest.plist" \
-	'{version: $version, build: $build, size: $size, notes: map(select(. != "")), install: $install}' >"$out/latest.json"
+	'{version: $version, build: $build, size: $size, notes: map(select(. != "")), notes_en: $notes_en, install: $install}' >"$out/latest.json"
 
 put() { # put <键> <文件> <类型> [缓存]
 	wrangler r2 object put "$bucket/$prefix/$1" --file "$2" --content-type "$3" ${4:+--cache-control "$4"} --remote

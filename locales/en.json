@@ -6265,6 +6265,14 @@
   "@skillsNewPlaceholder": {
     "description": "New Project Skill dialog: name field placeholder."
   },
+  "skillsNewTemplateDescription": "Describe what it does and when to use it (agents decide from this line whether to invoke it).",
+  "@skillsNewTemplateDescription": {
+    "description": "New Project Skill: placeholder description written into the new SKILL.md front matter; the user replaces it."
+  },
+  "skillsNewTemplateSteps": "Steps:",
+  "@skillsNewTemplateSteps": {
+    "description": "New Project Skill: heading of the numbered step list written into the new SKILL.md body."
+  },
   "skillsNewTitle": "New Project Skill",
   "@skillsNewTitle": {
     "description": "New Project Skill dialog title."

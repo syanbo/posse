@@ -2,6 +2,8 @@
 
 三端都在本机打包，传到 Cloudflare R2 的 `posse-updates`，经 `https://posse.shaoyan.uk` 下载。上传用 wrangler（本机登录的 Cloudflare 账号，过期了 `npx wrangler login`）。签名证书和更新签名私钥都不进仓库，丢了已装的 App 就收不到更新或不能覆盖安装，位置写在各节里。
 
+更新说明（`CHANGELOG.md`、`mobile/CHANGELOG.md`）每节先写中文条目，再写 `### English` 小节放对应的英文条目：Mac 端按界面语言显示其中一份（`appupdate.go` 的 `localNotes`）；手机的发布脚本把中文条目写进 `latest.json` 的 `notes` 和安装页，英文条目写进 `notes_en`。
+
 ## Mac
 
 先在 `CHANGELOG.md` 加 `## <版本>` 一节（更新时显示的更新内容，可以不提交），再跑 `scripts/release.sh <版本>`：它把版本号写进 `mygo.json` 和 `internal/daemon/daemon.go`（`TestVersionMatchesPackage` 保证两处一致），连同 CHANGELOG 提交成 `chore(release): 发布 <版本>`、打标签 `v<版本>`（不推送），再打包、公证到 `build/release/<版本>`，传到 R2。打包或上传失败后不带参数重跑，发布 `mygo.json` 里现在的版本。更新包的签名私钥在 `~/Library/Application Support/mygo/update-keys/`，丢了已装的 Posse 就收不到更新；只有 `release.sh` 把它交给 mygo，日常打包不做更新包（会提示 Not signing an update）。方案和换包时机见 `docs/plans/mac-update.md`。

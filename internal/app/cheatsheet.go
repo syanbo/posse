@@ -109,7 +109,7 @@ func (a *app) pollCheat(c *ui.Context, cur *terminalInfo) {
 func (a *app) cheatPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	a.pollCheat(c, cur)
 	v := &a.cheat
-	sheet, ok := cheatsheet.For(cur.Agent)
+	sheet, ok := cheatsheet.For(cur.Agent, c.Locale())
 	m := L(c)
 	return a.rightPanel(c, m.CheatsheetTitle(), func() {
 		if !ok {

@@ -1,11 +1,17 @@
 # 手机端更新内容
 
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
+一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
 ## 0.1.11
 
 - 文件页的 Markdown 预览照 GitHub 解释 HTML：居中的标题和徽章、折叠内容、图文表格、按键和换行都能正常显示，不再露出标签原文。
 - Markdown 里的图片都能显示：网上的图、徽章（SVG）、内嵌的图，以及工作区里按相对路径或根目录写的图；点包在链接里的图打开链接。
+
+### English
+
+- Markdown previews in Files now render HTML the way GitHub does: centered headings and badges, collapsible sections, tables with images, keys and line breaks display properly instead of showing raw tags.
+- All images in Markdown now display: web images, badges (SVG), embedded images, and workspace images referenced by relative or root paths; tapping an image wrapped in a link opens the link.
 
 ## 0.1.10
 

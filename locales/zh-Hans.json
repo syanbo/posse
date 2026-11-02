@@ -1173,6 +1173,8 @@
   "skillsNewNameRule": "只用小写字母、数字和连字符，首尾是字母或数字。",
   "skillsNewNote": "建在「{project}」的 .agents/skills 里，再给 Claude 在 .claude/skills 里建一条链接，四家都能用。",
   "skillsNewPlaceholder": "名字，比如 release-check",
+  "skillsNewTemplateDescription": "写清楚它做什么、什么时候用（agent 靠这一句决定要不要调用）。",
+  "skillsNewTemplateSteps": "步骤：",
   "skillsNewTitle": "新建项目技能",
   "skillsNoMatch": "没有符合条件的技能。",
   "skillsNoNPXBrew": "没找到 npx：安装技能要用 Node.js 自带的 npx。点「安装 Node.js」用 Homebrew 装，装好后再来安装技能。",

@@ -1,7 +1,8 @@
 // Package cheatsheet 是各家 agent 内置命令、按键和输入前缀的速查表，以及认出本机 agent 的版本。
 //
 // 表是手工整理的（cheatsheet.json，对照本机装的版本和官方文档），随 Posse 发布更新；
-// 本机版本比表新时界面提示可能有新命令，不自动抓取：命令的中文说明和取舍要人来定。
+// 本机版本比表新时界面提示可能有新命令，不自动抓取：命令的说明和取舍要人来定。
+// 给人看的字段（组名、参数提示、说明）写中文和英文两份，For 按界面语言取。
 package cheatsheet
 
 import (
@@ -36,14 +37,18 @@ type Item struct {
 	Name string `json:"name"`
 	Args string `json:"args,omitempty"` // 参数提示，如 [指示]
 	Desc string `json:"desc"`
-	Warn bool   `json:"warn,omitempty"` // 会丢掉当前对话或做不可逆的操作
+	// ArgsEn、DescEn 是英文：说法照各家官方英文文档。参数提示本来就是英文的不写
+	ArgsEn string `json:"argsEn,omitempty"`
+	DescEn string `json:"descEn,omitempty"`
+	Warn   bool   `json:"warn,omitempty"` // 会丢掉当前对话或做不可逆的操作
 }
 
 // Section 是一组条目。
 type Section struct {
-	Title string `json:"title"`
-	Kind  Kind   `json:"kind"`
-	Items []Item `json:"items"`
+	Title   string `json:"title"`
+	TitleEn string `json:"titleEn,omitempty"`
+	Kind    Kind   `json:"kind"`
+	Items   []Item `json:"items"`
 }
 
 // Sheet 是一家 agent 的速查表。
@@ -73,10 +78,38 @@ var sheets = sync.OnceValue(func() map[string]Sheet {
 	return m
 })
 
-// For 返回 agent 的速查表。
-func For(agentName string) (Sheet, bool) {
+// For 返回 agent 的速查表，给人看的字段按语言 lang（BCP 47，如 zh-Hans、en）取：
+// 中文取中文，其余语言取英文，英文没写的退回中文。
+func For(agentName, lang string) (Sheet, bool) {
 	s, ok := sheets()[agentName]
-	return s, ok
+	if !ok || isChinese(lang) {
+		return s, ok
+	}
+	secs := make([]Section, len(s.Sections))
+	for i, sec := range s.Sections {
+		sec.Title = or(sec.TitleEn, sec.Title)
+		items := make([]Item, len(sec.Items))
+		for j, it := range sec.Items {
+			it.Args = or(it.ArgsEn, it.Args)
+			it.Desc = or(it.DescEn, it.Desc)
+			items[j] = it
+		}
+		sec.Items = items
+		secs[i] = sec
+	}
+	s.Sections = secs
+	return s, true
+}
+
+func isChinese(lang string) bool {
+	return lang == "zh" || strings.HasPrefix(lang, "zh-") || strings.HasPrefix(lang, "zh_")
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // Insert 是点了一条后贴进输入框的文字：命令和技能带参数时后面留个空格接着写，前缀原样。按键返回空。

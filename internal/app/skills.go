@@ -1469,7 +1469,8 @@ var skillNameRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
 
 // createProjectSkill 在工作区的 .agents/skills 里建技能（Codex、Grok、Cursor 读这里），
 // 再在 .claude/skills 里建一条相对链接给 Claude（和 npx skills 的做法一样），返回 SKILL.md 的路径。
-func createProjectSkill(root, name string) (string, error) {
+// SKILL.md 的模板按界面语言 m 写。
+func createProjectSkill(m locales.Messages, root, name string) (string, error) {
 	dir := filepath.Join(root, ".agents", "skills", name)
 	file := filepath.Join(dir, "SKILL.md")
 	if _, err := os.Lstat(dir); err == nil {
@@ -1482,7 +1483,7 @@ func createProjectSkill(root, name string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	body := "---\nname: " + name + "\ndescription: 写清楚它做什么、什么时候用（agent 靠这一句决定要不要调用）。\n---\n\n# " + name + "\n\n步骤：\n\n1. \n"
+	body := "---\nname: " + name + "\ndescription: " + m.SkillsNewTemplateDescription() + "\n---\n\n# " + name + "\n\n" + m.SkillsNewTemplateSteps() + "\n\n1. \n"
 	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
 		return "", err
 	}
@@ -1532,7 +1533,7 @@ func (a *app) skillNewDialog(c *ui.Context) {
 				})
 			})
 			if submitted && valid && w != nil {
-				file, err := createProjectSkill(w.Path, name)
+				file, err := createProjectSkill(m, w.Path, name)
 				if err != nil {
 					reason := errtext.Text(err)
 					var ex existsError

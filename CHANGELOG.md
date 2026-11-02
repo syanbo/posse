@@ -1,6 +1,7 @@
 # 更新内容
 
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
+一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
 ## 0.1.20
 
@@ -10,6 +11,15 @@
 - 拖分隔线调整大小，双击分隔线平分；分栏随工作区记住，重开窗口还在。
 - 技能页：来源里找不到的技能不再提示有新版本；体检和读不到的那一家给出修复入口。
 - 命令速查面板和图片、技能面板宽度统一。
+
+### English
+
+- Split view is now split panes: divide the main area left/right or top/bottom into up to four panes, each with its own tab bar, holding terminals and open files alike.
+- Drag a tab to the edge of a pane to split off a new pane on that side, or onto the middle of a pane or its tabs to move it there; the drop target is highlighted while dragging.
+- ⌘D splits right, ⇧⌘D splits down, ⌃⌘D merges all panes, and ⌘] / ⌘[ move between panes; a tab’s context menu can also move it to a new pane on the right or below.
+- Drag a divider to resize and double-click it to split evenly; panes are remembered per workspace and come back when the window reopens.
+- Skills: skills that are gone from their source no longer show an update, and health check issues and agents that can’t read a skill now come with a fix.
+- The Cheat Sheet panel now matches the width of the Images and Skills panels.
 
 ## 0.1.19
 

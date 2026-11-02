@@ -7,6 +7,8 @@
   Claude Code、Codex、Cursor CLI、Grok Build 并排干活，状态一处看清；离开电脑用手机接着管，还能远程操作 Mac 桌面。
 </p>
 
+<p align="center">简体中文 · <a href="README.en.md">English</a></p>
+
 <h3 align="center"><a href="https://posse.shaoyan.uk/Posse.dmg">下载 Posse for Mac</a></h3>
 
 <p align="center">macOS 13+ · Apple Silicon · 安装包约 12 MB</p>

@@ -72,3 +72,25 @@ func TestSigningTeam(t *testing.T) {
 		}
 	}
 }
+
+// 更新说明按界面语言截取：中文去掉 English 小节，英文只取它，没写英文的旧版本整节照旧。
+func TestLocalNotes(t *testing.T) {
+	both := "- 分栏\n- 拖动\n\n### English\n\n- Split panes\n- Drag tabs"
+	old := "- 分栏\n- 拖动"
+	for _, c := range []struct{ notes, lang, want string }{
+		{both, "zh-Hans", "- 分栏\n- 拖动"},
+		{both, "zh", "- 分栏\n- 拖动"},
+		{both, "en", "- Split panes\n- Drag tabs"},
+		{both, "ja", "- Split panes\n- Drag tabs"},
+		{old, "en", old},
+		{old, "zh-Hans", old},
+		// English 之后还有别的小节：中文里留着，英文不取
+		{"- 甲\n### English\n- A\n### 已知问题\n- 乙", "zh-Hans", "- 甲\n### 已知问题\n- 乙"},
+		{"- 甲\n### English\n- A\n### 已知问题\n- 乙", "en", "- A"},
+		{"", "en", ""},
+	} {
+		if got := localNotes(c.notes, c.lang); got != c.want {
+			t.Errorf("localNotes(%q, %s) = %q，要 %q", c.notes, c.lang, got, c.want)
+		}
+	}
+}

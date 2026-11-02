@@ -80,6 +80,37 @@ func (u *selfUpdate) view() updateView {
 	return v
 }
 
+// notesEnglish 是 CHANGELOG 每节里英文条目的小节标题：中文条目在前，英文在这个小节里。
+const notesEnglish = "### English"
+
+// localNotes 从 mygo 交来的整节更新说明里取 lang 那一份：中文去掉英文小节；
+// 别的语言取英文小节，没写英文的旧版本整节照旧。
+func localNotes(notes, lang string) string {
+	var zh, en []string
+	inEn, hasEn := false, false
+	for _, line := range strings.Split(notes, "\n") {
+		if strings.HasPrefix(line, "### ") {
+			inEn = strings.TrimSpace(line) == notesEnglish
+			if inEn {
+				hasEn = true
+				continue
+			}
+		}
+		if inEn {
+			en = append(en, line)
+		} else {
+			zh = append(zh, line)
+		}
+	}
+	if lang == "zh" || strings.HasPrefix(lang, "zh-") {
+		return strings.TrimSpace(strings.Join(zh, "\n"))
+	}
+	if !hasEn {
+		return strings.TrimSpace(notes)
+	}
+	return strings.TrimSpace(strings.Join(en, "\n"))
+}
+
 // due 判断这次要不要查：手动的总是查，自动的距上次成功检查满 updateEvery 才查。
 func (u *selfUpdate) due(manual bool, now time.Time) bool {
 	return manual || u.checkedAt.IsZero() || now.Sub(u.checkedAt) >= updateEvery
@@ -425,10 +456,10 @@ func (a *app) updateCard(c *ui.Context, reason string, v updateView) {
 				go a.checkUpdate(true)
 			}
 		})
-		if v.phase == updateReady && strings.TrimSpace(v.notes) != "" {
+		if notes := localNotes(v.notes, c.Locale()); v.phase == updateReady && notes != "" {
 			ui.Column(c).Gap(4).Padding(4, 0, 0, 0).Children(func() {
 				ui.Text(c, L(c).UpdateReleaseNotesTitle()).FontSize(fsBody).TextColor(t.TextMuted)
-				ui.Text(c, strings.TrimSpace(v.notes)).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
+				ui.Text(c, notes).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
 			})
 		}
 	})

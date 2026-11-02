@@ -8,400 +8,509 @@
   "sections": [
    {
     "title": "对话与上下文",
+    "titleEn": "Conversation & Context",
     "kind": "command",
     "items": [
      {
       "name": "/compact",
       "args": "[指示]",
-      "desc": "压缩对话腾出上下文，可指定保留什么"
+      "argsEn": "[instructions]",
+      "desc": "压缩对话腾出上下文，可指定保留什么",
+      "descEn": "Compact the conversation to free context, optionally saying what to keep"
      },
      {
       "name": "/clear",
       "args": "[名称]",
+      "argsEn": "[name]",
       "desc": "开新会话清空上下文，旧会话可 /resume 找回",
+      "descEn": "Start a new session with empty context; /resume brings the old one back",
       "warn": true
      },
      {
       "name": "/rewind",
       "desc": "回到之前某一步，可同时撤回代码改动",
+      "descEn": "Rewind to an earlier point, optionally reverting code changes too",
       "warn": true
      },
      {
       "name": "/resume",
       "args": "[会话 ID 或关键词]",
-      "desc": "接着之前的某个会话继续"
+      "argsEn": "[session ID or search term]",
+      "desc": "接着之前的某个会话继续",
+      "descEn": "Resume a previous session"
      },
      {
       "name": "/branch",
       "args": "[名称]",
-      "desc": "从当前位置分出一条对话，另试一种做法"
+      "argsEn": "[name]",
+      "desc": "从当前位置分出一条对话，另试一种做法",
+      "descEn": "Branch the conversation here to try a different approach"
      },
      {
       "name": "/rename",
       "args": "[名称]",
-      "desc": "给当前会话起名，方便以后找回"
+      "argsEn": "[name]",
+      "desc": "给当前会话起名，方便以后找回",
+      "descEn": "Name the current session so it’s easy to find later"
      },
      {
       "name": "/btw",
       "args": "[问题]",
-      "desc": "顺口问个小问题，不打断主对话"
+      "argsEn": "[question]",
+      "desc": "顺口问个小问题，不打断主对话",
+      "descEn": "Ask a quick side question without interrupting the main conversation"
      },
      {
       "name": "/context",
       "args": "[all]",
-      "desc": "查看上下文占用情况"
+      "desc": "查看上下文占用情况",
+      "descEn": "Show how context is being used"
      },
      {
       "name": "/copy",
-      "desc": "复制最近一条回复，/copy N 取倒数第 N 条"
+      "desc": "复制最近一条回复，/copy N 取倒数第 N 条",
+      "descEn": "Copy the latest response; /copy N copies the Nth most recent"
      },
      {
       "name": "/export",
       "args": "[文件名]",
-      "desc": "把对话导出到文件或剪贴板"
+      "argsEn": "[filename]",
+      "desc": "把对话导出到文件或剪贴板",
+      "descEn": "Export the conversation to a file or the clipboard"
      },
      {
       "name": "/goal",
       "args": "[条件|clear]",
-      "desc": "设定完成条件，达成前不收工"
+      "argsEn": "[condition|clear]",
+      "desc": "设定完成条件，达成前不收工",
+      "descEn": "Set a completion condition and keep working until it’s met"
      }
     ]
    },
    {
     "title": "模型与模式",
+    "titleEn": "Models & Modes",
     "kind": "command",
     "items": [
      {
       "name": "/model",
       "args": "[模型]",
-      "desc": "切换模型"
+      "argsEn": "[model]",
+      "desc": "切换模型",
+      "descEn": "Switch models"
      },
      {
       "name": "/effort",
       "args": "[级别|auto]",
-      "desc": "调整推理力度"
+      "argsEn": "[level|auto]",
+      "desc": "调整推理力度",
+      "descEn": "Adjust reasoning effort"
      },
      {
       "name": "/fast",
-      "desc": "开关快速模式，仅部分模型可用"
+      "desc": "开关快速模式，仅部分模型可用",
+      "descEn": "Toggle fast mode (supported models only)"
      },
      {
       "name": "/plan",
       "args": "[open|描述]",
-      "desc": "进入计划模式，或查看本会话的计划"
+      "argsEn": "[open|description]",
+      "desc": "进入计划模式，或查看本会话的计划",
+      "descEn": "Enter plan mode, or view this session’s plan"
      },
      {
       "name": "/advisor",
-      "desc": "让 Claude 在关键时刻请教更强的模型"
+      "desc": "让 Claude 在关键时刻请教更强的模型",
+      "descEn": "Let Claude consult a stronger model at key moments"
      },
      {
       "name": "/permissions",
-      "desc": "管理工具的允许和拒绝规则"
+      "desc": "管理工具的允许和拒绝规则",
+      "descEn": "Manage allow and deny rules for tools"
      },
      {
       "name": "/background",
       "args": "[提示]",
-      "desc": "把会话转到后台继续跑，腾出终端"
+      "argsEn": "[prompt]",
+      "desc": "把会话转到后台继续跑，腾出终端",
+      "descEn": "Move the session to the background and free the terminal"
      },
      {
       "name": "/tasks",
-      "desc": "查看和管理后台运行的命令与子代理"
+      "desc": "查看和管理后台运行的命令与子代理",
+      "descEn": "View and manage background commands and subagents"
      }
     ]
    },
    {
     "title": "项目与配置",
+    "titleEn": "Project & Config",
     "kind": "command",
     "items": [
      {
       "name": "/diff",
-      "desc": "查看未提交的改动和每轮的 diff"
+      "desc": "查看未提交的改动和每轮的 diff",
+      "descEn": "View uncommitted changes and per-turn diffs"
      },
      {
       "name": "/init",
-      "desc": "分析代码库，生成 CLAUDE.md"
+      "desc": "分析代码库，生成 CLAUDE.md",
+      "descEn": "Analyze the codebase and generate CLAUDE.md"
      },
      {
       "name": "/memory",
-      "desc": "编辑 CLAUDE.md 和记忆设置"
+      "desc": "编辑 CLAUDE.md 和记忆设置",
+      "descEn": "Edit CLAUDE.md and memory settings"
      },
      {
       "name": "/config",
       "args": "[key=value]",
-      "desc": "打开设置，或直接改某一项"
+      "desc": "打开设置，或直接改某一项",
+      "descEn": "Open settings, or change one setting directly"
      },
      {
       "name": "/add-dir",
       "args": "<路径>",
-      "desc": "再加一个可访问的工作目录"
+      "argsEn": "<path>",
+      "desc": "再加一个可访问的工作目录",
+      "descEn": "Add another working directory Claude can access"
      },
      {
       "name": "/mcp",
-      "desc": "管理 MCP 服务器，可重连、启用、停用"
+      "desc": "管理 MCP 服务器，可重连、启用、停用",
+      "descEn": "Manage MCP servers: reconnect, enable, disable"
      },
      {
       "name": "/plugin",
-      "desc": "管理插件和插件市场"
+      "desc": "管理插件和插件市场",
+      "descEn": "Manage plugins and marketplaces"
      },
      {
       "name": "/skills",
-      "desc": "列出可用的技能"
+      "desc": "列出可用的技能",
+      "descEn": "List available skills"
      },
      {
       "name": "/hooks",
-      "desc": "查看已配置的 hooks"
+      "desc": "查看已配置的 hooks",
+      "descEn": "View configured hooks"
      },
      {
       "name": "/statusline",
-      "desc": "让 Claude 帮你配置状态栏"
+      "desc": "让 Claude 帮你配置状态栏",
+      "descEn": "Have Claude set up your status line"
      },
      {
       "name": "/keybindings",
-      "desc": "打开快捷键配置文件"
+      "desc": "打开快捷键配置文件",
+      "descEn": "Open the keybindings configuration file"
      },
      {
       "name": "/terminal-setup",
-      "desc": "配置终端换行键等设置"
+      "desc": "配置终端换行键等设置",
+      "descEn": "Configure the terminal, e.g. the newline key"
      }
     ]
    },
    {
     "title": "账号与其他",
+    "titleEn": "Account & More",
     "kind": "command",
     "items": [
      {
       "name": "/usage",
-      "desc": "查看本会话花费和套餐用量，别名 /cost"
+      "desc": "查看本会话花费和套餐用量，别名 /cost",
+      "descEn": "Show session cost and plan usage; alias /cost"
      },
      {
       "name": "/status",
-      "desc": "查看版本、模型、账号和连接状态"
+      "desc": "查看版本、模型、账号和连接状态",
+      "descEn": "Show version, model, account and connectivity"
      },
      {
       "name": "/doctor",
-      "desc": "体检安装和配置，并帮你修复问题"
+      "desc": "体检安装和配置，并帮你修复问题",
+      "descEn": "Diagnose the installation and settings, and help fix issues"
      },
      {
       "name": "/login",
-      "desc": "登录或切换 Anthropic 账号"
+      "desc": "登录或切换 Anthropic 账号",
+      "descEn": "Sign in or switch Anthropic accounts"
      },
      {
       "name": "/feedback",
       "args": "[描述]",
-      "desc": "反馈问题或报 bug"
+      "argsEn": "[description]",
+      "desc": "反馈问题或报 bug",
+      "descEn": "Send feedback or report a bug"
      },
      {
       "name": "/release-notes",
-      "desc": "查看更新说明"
+      "desc": "查看更新说明",
+      "descEn": "View release notes"
      },
      {
       "name": "/help",
-      "desc": "查看帮助和全部命令"
+      "desc": "查看帮助和全部命令",
+      "descEn": "Show help and all commands"
      }
     ]
    },
    {
     "title": "内置技能",
+    "titleEn": "Built-in Skills",
     "kind": "skill",
     "items": [
      {
       "name": "/code-review",
       "args": "[级别] [目标]",
-      "desc": "审查当前改动或 PR 找 bug，别名 /review"
+      "argsEn": "[level] [target]",
+      "desc": "审查当前改动或 PR 找 bug，别名 /review",
+      "descEn": "Review current changes or a PR for bugs; alias /review"
      },
      {
       "name": "/simplify",
       "args": "[目标]",
-      "desc": "清理改动代码，不改行为"
+      "argsEn": "[target]",
+      "desc": "清理改动代码，不改行为",
+      "descEn": "Clean up changed code without changing behavior"
      },
      {
       "name": "/security-review",
-      "desc": "对当前分支待提交的改动做安全审查"
+      "desc": "对当前分支待提交的改动做安全审查",
+      "descEn": "Security review of pending changes on the current branch"
      },
      {
       "name": "/loop",
       "args": "[间隔] [提示]",
-      "desc": "定时重复执行某个提示或命令"
+      "argsEn": "[interval] [prompt]",
+      "desc": "定时重复执行某个提示或命令",
+      "descEn": "Run a prompt or command repeatedly on an interval"
      },
      {
       "name": "/batch",
       "args": "<指示>",
-      "desc": "大规模改动拆给多个 worktree 并行做"
+      "argsEn": "<instructions>",
+      "desc": "大规模改动拆给多个 worktree 并行做",
+      "descEn": "Split a large change across parallel worktrees"
      },
      {
       "name": "/debug",
       "args": "[问题描述]",
-      "desc": "打开调试日志，排查 Claude Code 自身问题"
+      "argsEn": "[issue description]",
+      "desc": "打开调试日志，排查 Claude Code 自身问题",
+      "descEn": "Enable debug logging to troubleshoot Claude Code itself"
      },
      {
       "name": "/schedule",
-      "desc": "创建和管理按计划在云端运行的 agent"
+      "desc": "创建和管理按计划在云端运行的 agent",
+      "descEn": "Create and manage agents that run in the cloud on a schedule"
      },
      {
       "name": "/run",
-      "desc": "启动并操作本项目的应用，看改动实际效果"
+      "desc": "启动并操作本项目的应用，看改动实际效果",
+      "descEn": "Launch and drive this project’s app to see a change working"
      },
      {
       "name": "/fewer-permission-prompts",
-      "desc": "按历史记录把常用只读命令加进允许列表"
+      "desc": "按历史记录把常用只读命令加进允许列表",
+      "descEn": "Allowlist common read-only commands from your history"
      },
      {
       "name": "/update-config",
-      "desc": "改 settings.json：权限、hooks、环境变量"
+      "desc": "改 settings.json：权限、hooks、环境变量",
+      "descEn": "Edit settings.json: permissions, hooks, env vars"
      },
      {
       "name": "/keybindings-help",
-      "desc": "自定义快捷键，改 keybindings.json"
+      "desc": "自定义快捷键，改 keybindings.json",
+      "descEn": "Customize shortcuts in keybindings.json"
      },
      {
       "name": "/claude-api",
-      "desc": "Claude API 和 SDK 参考：模型、价格、缓存"
+      "desc": "Claude API 和 SDK 参考：模型、价格、缓存",
+      "descEn": "Claude API and SDK reference: models, pricing, caching"
      },
      {
       "name": "/dataviz",
-      "desc": "画图表前的配色和图形规范"
+      "desc": "画图表前的配色和图形规范",
+      "descEn": "Color and chart guidelines before drawing charts"
      },
      {
       "name": "/workflow-authoring",
-      "desc": "写多 agent 工作流脚本的参考"
+      "desc": "写多 agent 工作流脚本的参考",
+      "descEn": "Reference for writing multi-agent workflow scripts"
      },
      {
       "name": "/plugin-authoring",
-      "desc": "做 Claude Code 插件和界面 mod"
+      "desc": "做 Claude Code 插件和界面 mod",
+      "descEn": "Build Claude Code plugins and UI mods"
      }
     ]
    },
    {
     "title": "输入与编辑",
+    "titleEn": "Input & Editing",
     "kind": "key",
     "items": [
      {
       "name": "Shift+Enter",
-      "desc": "输入框里换行，部分终端要先 /terminal-setup"
+      "desc": "输入框里换行，部分终端要先 /terminal-setup",
+      "descEn": "New line in the prompt; some terminals need /terminal-setup"
      },
      {
       "name": "Ctrl+J",
-      "desc": "换行，任何终端都能用"
+      "desc": "换行，任何终端都能用",
+      "descEn": "New line; works in any terminal"
      },
      {
       "name": "Ctrl+V",
-      "desc": "粘贴剪贴板里的图片"
+      "desc": "粘贴剪贴板里的图片",
+      "descEn": "Paste an image from the clipboard"
      },
      {
       "name": "Tab",
-      "desc": "接受补全建议"
+      "desc": "接受补全建议",
+      "descEn": "Accept the suggestion"
      },
      {
       "name": "Up",
-      "desc": "翻出之前输入过的内容"
+      "desc": "翻出之前输入过的内容",
+      "descEn": "Recall earlier input"
      },
      {
       "name": "Ctrl+R",
-      "desc": "搜索输入历史"
+      "desc": "搜索输入历史",
+      "descEn": "Search input history"
      },
      {
       "name": "Ctrl+G",
-      "desc": "在外部编辑器里写长提示"
+      "desc": "在外部编辑器里写长提示",
+      "descEn": "Write a long prompt in an external editor"
      },
      {
       "name": "Ctrl+S",
-      "desc": "暂存当前输入，空输入框时再按恢复"
+      "desc": "暂存当前输入，空输入框时再按恢复",
+      "descEn": "Stash the current input; press again on an empty prompt to restore"
      },
      {
       "name": "Ctrl+_",
-      "desc": "撤销上一次输入编辑"
+      "desc": "撤销上一次输入编辑",
+      "descEn": "Undo the last input edit"
      },
      {
       "name": "Ctrl+L",
-      "desc": "画面错乱时重绘屏幕"
+      "desc": "画面错乱时重绘屏幕",
+      "descEn": "Redraw the screen when it’s garbled"
      }
     ]
    },
    {
     "title": "会话控制",
+    "titleEn": "Session Control",
     "kind": "key",
     "items": [
      {
       "name": "Esc",
-      "desc": "打断 Claude 当前的回复或工具调用"
+      "desc": "打断 Claude 当前的回复或工具调用",
+      "descEn": "Interrupt Claude’s current response or tool call"
      },
      {
       "name": "Esc Esc",
-      "desc": "有输入时清空；空输入时打开回退菜单"
+      "desc": "有输入时清空；空输入时打开回退菜单",
+      "descEn": "Clear input if any; on an empty prompt, open the rewind menu"
      },
      {
       "name": "Ctrl+C",
-      "desc": "中断或清空输入，空闲时连按两次退出"
+      "desc": "中断或清空输入，空闲时连按两次退出",
+      "descEn": "Interrupt or clear input; press twice when idle to exit"
      },
      {
       "name": "Ctrl+D",
-      "desc": "连按两次退出会话"
+      "desc": "连按两次退出会话",
+      "descEn": "Press twice to exit the session"
      },
      {
       "name": "Shift+Tab",
-      "desc": "切换权限模式：手动、自动接受编辑、计划等"
+      "desc": "切换权限模式：手动、自动接受编辑、计划等",
+      "descEn": "Cycle permission modes: default, auto-accept edits, plan…"
      },
      {
       "name": "Alt+P",
-      "desc": "不清空输入就切换模型"
+      "desc": "不清空输入就切换模型",
+      "descEn": "Switch models without clearing input"
      },
      {
       "name": "Shift+Up",
-      "desc": "调高推理力度，Shift+Down 调低"
+      "desc": "调高推理力度，Shift+Down 调低",
+      "descEn": "Raise reasoning effort; Shift+Down lowers it"
      },
      {
       "name": "Alt+T",
-      "desc": "开关扩展思考"
+      "desc": "开关扩展思考",
+      "descEn": "Toggle extended thinking"
      },
      {
       "name": "Alt+O",
-      "desc": "开关快速模式"
+      "desc": "开关快速模式",
+      "descEn": "Toggle fast mode"
      },
      {
       "name": "Ctrl+O",
-      "desc": "展开详细记录，看完整工具输出"
+      "desc": "展开详细记录，看完整工具输出",
+      "descEn": "Expand the transcript to see full tool output"
      },
      {
       "name": "Ctrl+T",
-      "desc": "显示或隐藏 Claude 的任务清单"
+      "desc": "显示或隐藏 Claude 的任务清单",
+      "descEn": "Show or hide Claude’s task list"
      },
      {
       "name": "Ctrl+B",
-      "desc": "把正在跑的命令或子代理转到后台"
+      "desc": "把正在跑的命令或子代理转到后台",
+      "descEn": "Move a running command or subagent to the background"
      },
      {
       "name": "Ctrl+X Ctrl+K",
-      "desc": "连按两次，停掉所有后台子代理"
+      "desc": "连按两次，停掉所有后台子代理",
+      "descEn": "Press twice to stop all background subagents"
      },
      {
       "name": "Ctrl+Enter",
-      "desc": "立刻发送排队中的消息"
+      "desc": "立刻发送排队中的消息",
+      "descEn": "Send queued messages immediately"
      }
     ]
    },
    {
     "title": "输入前缀",
+    "titleEn": "Input Prefixes",
     "kind": "prefix",
     "items": [
      {
       "name": "/",
-      "desc": "调用命令或技能，句中也可补全"
+      "desc": "调用命令或技能，句中也可补全",
+      "descEn": "Run a command or skill; completes mid-sentence too"
      },
      {
       "name": "@",
-      "desc": "引用文件或目录，带路径补全"
+      "desc": "引用文件或目录，带路径补全",
+      "descEn": "Mention a file or directory, with path completion"
      },
      {
       "name": "!",
-      "desc": "直接运行 shell 命令，输出交给 Claude"
+      "desc": "直接运行 shell 命令，输出交给 Claude",
+      "descEn": "Run a shell command directly; output goes to Claude"
      },
      {
       "name": ":",
-      "desc": "输入表情短码，如 :name:"
+      "desc": "输入表情短码，如 :name:",
+      "descEn": "Type an emoji shortcode, like :name:"
      },
      {
       "name": "?",
-      "desc": "空输入时打开快捷键帮助"
+      "desc": "空输入时打开快捷键帮助",
+      "descEn": "On an empty prompt, show keyboard shortcuts"
      }
     ]
    }
@@ -416,337 +525,424 @@
   "sections": [
    {
     "title": "对话与会话",
+    "titleEn": "Conversations & Sessions",
     "kind": "command",
     "items": [
      {
       "name": "/new",
       "desc": "结束当前对话，开始新对话",
+      "descEn": "End this conversation and start a new one",
       "warn": true
      },
      {
       "name": "/clear",
       "desc": "清屏并开始新对话",
+      "descEn": "Clear the screen and start a new conversation",
       "warn": true
      },
      {
       "name": "/resume",
       "args": "[会话 ID 或名称]",
-      "desc": "接着之前保存的对话继续"
+      "argsEn": "[session ID or name]",
+      "desc": "接着之前保存的对话继续",
+      "descEn": "Resume a saved conversation"
      },
      {
       "name": "/fork",
-      "desc": "从当前对话分叉出一份副本"
+      "desc": "从当前对话分叉出一份副本",
+      "descEn": "Fork the current conversation into a copy"
      },
      {
       "name": "/side",
       "args": "[问题]",
-      "desc": "临时开旁支对话问点别的，不污染主线"
+      "argsEn": "[question]",
+      "desc": "临时开旁支对话问点别的，不污染主线",
+      "descEn": "Open a temporary side conversation without touching the main thread"
      },
      {
       "name": "/compact",
-      "desc": "压缩对话，腾出上下文"
+      "desc": "压缩对话，腾出上下文",
+      "descEn": "Summarize the conversation to free context"
      },
      {
       "name": "/recap",
-      "desc": "马上总结目前的对话"
+      "desc": "马上总结目前的对话",
+      "descEn": "Summarize the conversation so far"
      },
      {
       "name": "/rename",
       "args": "<名称>",
-      "desc": "给当前会话改名，方便以后找"
+      "argsEn": "<name>",
+      "desc": "给当前会话改名，方便以后找",
+      "descEn": "Rename the current session so it’s easy to find"
      },
      {
       "name": "/copy",
-      "desc": "复制最后一条回复或其中一段"
+      "desc": "复制最后一条回复或其中一段",
+      "descEn": "Copy the last response or part of it"
      },
      {
       "name": "/export",
       "args": "[文件路径]",
-      "desc": "把对话导出成 Markdown"
+      "argsEn": "[file path]",
+      "desc": "把对话导出成 Markdown",
+      "descEn": "Export the conversation as Markdown"
      },
      {
       "name": "/archive",
-      "desc": "归档当前会话，之后可恢复"
+      "desc": "归档当前会话，之后可恢复",
+      "descEn": "Archive the current session; it can be restored later"
      },
      {
       "name": "/delete",
       "desc": "永久删除当前会话",
+      "descEn": "Permanently delete the current session",
       "warn": true
      },
      {
       "name": "/quit",
-      "desc": "退出 Codex，/exit 同效"
+      "desc": "退出 Codex，/exit 同效",
+      "descEn": "Exit Codex; same as /exit"
      }
     ]
    },
    {
     "title": "模型与模式",
+    "titleEn": "Models & Modes",
     "kind": "command",
     "items": [
      {
       "name": "/model",
       "args": "[模型]",
-      "desc": "切换模型和推理强度"
+      "argsEn": "[model]",
+      "desc": "切换模型和推理强度",
+      "descEn": "Choose the model and reasoning effort"
      },
      {
       "name": "/plan",
       "args": "[任务]",
-      "desc": "进入只出方案的 Plan 模式"
+      "argsEn": "[task]",
+      "desc": "进入只出方案的 Plan 模式",
+      "descEn": "Switch to Plan mode: propose a plan only"
      },
      {
       "name": "/goal",
       "args": "[目标]",
-      "desc": "给长任务设定或查看目标"
+      "argsEn": "[goal]",
+      "desc": "给长任务设定或查看目标",
+      "descEn": "Set or view the goal for a long-running task"
      },
      {
       "name": "/permissions",
-      "desc": "调整 Codex 能做什么、何时要批准"
+      "desc": "调整 Codex 能做什么、何时要批准",
+      "descEn": "Set what Codex can do and when it asks for approval"
      },
      {
       "name": "/status",
-      "desc": "查看当前配置和 token 用量"
+      "desc": "查看当前配置和 token 用量",
+      "descEn": "Show current configuration and token usage"
      },
      {
       "name": "/usage",
-      "desc": "查看账号用量；仅 ChatGPT 登录可见"
+      "desc": "查看账号用量；仅 ChatGPT 登录可见",
+      "descEn": "Show account usage; ChatGPT sign-in only"
      },
      {
       "name": "/presets",
-      "desc": "保存或运行常用提示和命令"
+      "desc": "保存或运行常用提示和命令",
+      "descEn": "Save or run frequently used prompts and commands"
      },
      {
       "name": "/experimental",
-      "desc": "开关实验功能"
+      "desc": "开关实验功能",
+      "descEn": "Toggle experimental features"
      }
     ]
    },
    {
     "title": "代码与工作区",
+    "titleEn": "Code & Workspace",
     "kind": "command",
     "items": [
      {
       "name": "/review",
       "args": "[审查要求]",
-      "desc": "审查当前改动找问题"
+      "argsEn": "[review instructions]",
+      "desc": "审查当前改动找问题",
+      "descEn": "Review current changes and find issues"
      },
      {
       "name": "/diff",
-      "desc": "查看 git diff，含未跟踪文件"
+      "desc": "查看 git diff，含未跟踪文件",
+      "descEn": "Show the git diff, including untracked files"
      },
      {
       "name": "/init",
-      "desc": "生成 AGENTS.md 项目说明"
+      "desc": "生成 AGENTS.md 项目说明",
+      "descEn": "Create an AGENTS.md file with project instructions"
      },
      {
       "name": "/worktree",
-      "desc": "在新 worktree 里开始或继续对话"
+      "desc": "在新 worktree 里开始或继续对话",
+      "descEn": "Start or continue the conversation in a new worktree"
      },
      {
       "name": "/cd",
       "args": "<目录>",
-      "desc": "切换工作目录"
+      "argsEn": "<directory>",
+      "desc": "切换工作目录",
+      "descEn": "Change the working directory"
      },
      {
       "name": "/ide",
-      "desc": "带上 IDE 里的选区和打开的文件"
+      "desc": "带上 IDE 里的选区和打开的文件",
+      "descEn": "Include the IDE selection and open files"
      },
      {
       "name": "/ps",
-      "desc": "列出后台运行的终端"
+      "desc": "列出后台运行的终端",
+      "descEn": "List background terminals"
      },
      {
       "name": "/stop",
       "desc": "结束所有后台终端进程",
+      "descEn": "Stop all background terminal processes",
       "warn": true
      }
     ]
    },
    {
     "title": "扩展与设置",
+    "titleEn": "Extensions & Settings",
     "kind": "command",
     "items": [
      {
       "name": "/skills",
-      "desc": "查看和开关技能"
+      "desc": "查看和开关技能",
+      "descEn": "Browse and toggle skills"
      },
      {
       "name": "/mcp",
       "args": "[verbose | login <名称>]",
-      "desc": "查看 MCP 工具或登录 MCP 服务"
+      "argsEn": "[verbose | login <name>]",
+      "desc": "查看 MCP 工具或登录 MCP 服务",
+      "descEn": "List MCP tools or sign in to an MCP server"
      },
      {
       "name": "/plugins",
-      "desc": "浏览插件"
+      "desc": "浏览插件",
+      "descEn": "Browse plugins"
      },
      {
       "name": "/hooks",
-      "desc": "查看和管理生命周期 hooks"
+      "desc": "查看和管理生命周期 hooks",
+      "descEn": "View and manage lifecycle hooks"
      },
      {
       "name": "/memories",
-      "desc": "设置记忆的使用和生成"
+      "desc": "设置记忆的使用和生成",
+      "descEn": "Configure how memories are used and generated"
      },
      {
       "name": "/agents",
-      "desc": "打开 agent 总览，看各会话"
+      "desc": "打开 agent 总览，看各会话",
+      "descEn": "Open the agents overview to see sessions"
      },
      {
       "name": "/subagents",
-      "desc": "在本会话的子 agent 间切换"
+      "desc": "在本会话的子 agent 间切换",
+      "descEn": "Switch between this session’s subagents"
      },
      {
       "name": "/import",
-      "desc": "从 Claude Code 导入配置和近期对话"
+      "desc": "从 Claude Code 导入配置和近期对话",
+      "descEn": "Import settings and recent chats from Claude Code"
      },
      {
       "name": "/config",
-      "desc": "调整 Codex 偏好设置"
+      "desc": "调整 Codex 偏好设置",
+      "descEn": "Adjust Codex preferences"
      },
      {
       "name": "/keymap",
-      "desc": "自定义快捷键"
+      "desc": "自定义快捷键",
+      "descEn": "Customize keyboard shortcuts"
      },
      {
       "name": "/vim",
-      "desc": "输入框切换 Vim 模式"
+      "desc": "输入框切换 Vim 模式",
+      "descEn": "Toggle Vim mode in the composer"
      },
      {
       "name": "/statusline",
-      "desc": "选择状态栏显示哪些项"
+      "desc": "选择状态栏显示哪些项",
+      "descEn": "Choose which items the status line shows"
      },
      {
       "name": "/theme",
-      "desc": "选代码高亮主题"
+      "desc": "选代码高亮主题",
+      "descEn": "Choose a syntax highlighting theme"
      },
      {
       "name": "/feedback",
-      "desc": "把日志发给官方反馈问题"
+      "desc": "把日志发给官方反馈问题",
+      "descEn": "Send logs to the maintainers to report an issue"
      },
      {
       "name": "/logout",
-      "desc": "退出登录"
+      "desc": "退出登录",
+      "descEn": "Sign out"
      }
     ]
    },
    {
     "title": "常用快捷键",
+    "titleEn": "Common Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Enter",
-      "desc": "发送消息"
+      "desc": "发送消息",
+      "descEn": "Send the message"
      },
      {
       "name": "Esc",
-      "desc": "打断正在进行的回合"
+      "desc": "打断正在进行的回合",
+      "descEn": "Interrupt the current turn"
      },
      {
       "name": "Ctrl+C",
-      "desc": "运行中打断，空闲时连按两下退出"
+      "desc": "运行中打断，空闲时连按两下退出",
+      "descEn": "Interrupt while running; press twice when idle to exit"
      },
      {
       "name": "Ctrl+D",
-      "desc": "连按两下退出，同 Ctrl+C"
+      "desc": "连按两下退出，同 Ctrl+C",
+      "descEn": "Press twice to exit, like Ctrl+C"
      },
      {
       "name": "Ctrl+J",
-      "desc": "换行不发送，也可 Shift+Enter"
+      "desc": "换行不发送，也可 Shift+Enter",
+      "descEn": "New line without sending; Shift+Enter also works"
      },
      {
       "name": "Ctrl+V",
-      "desc": "粘贴剪贴板里的图片"
+      "desc": "粘贴剪贴板里的图片",
+      "descEn": "Paste an image from the clipboard"
      },
      {
       "name": "Up",
-      "desc": "翻出以前发过的消息，Down 往回"
+      "desc": "翻出以前发过的消息，Down 往回",
+      "descEn": "Recall earlier messages; Down goes forward"
      },
      {
       "name": "Ctrl+R",
-      "desc": "搜索以前输入过的内容"
+      "desc": "搜索以前输入过的内容",
+      "descEn": "Search earlier input"
      },
      {
       "name": "Esc Esc",
-      "desc": "空输入框时回退并编辑上一条消息"
+      "desc": "空输入框时回退并编辑上一条消息",
+      "descEn": "On an empty composer, go back and edit the previous message"
      },
      {
       "name": "Ctrl+T",
-      "desc": "打开完整对话转录"
+      "desc": "打开完整对话转录",
+      "descEn": "Open the full transcript"
      },
      {
       "name": "Ctrl+L",
-      "desc": "清屏，不影响对话"
+      "desc": "清屏，不影响对话",
+      "descEn": "Clear the screen without affecting the conversation"
      },
      {
       "name": "?",
-      "desc": "空输入框时显示全部快捷键"
+      "desc": "空输入框时显示全部快捷键",
+      "descEn": "On an empty composer, show all shortcuts"
      }
     ]
    },
    {
     "title": "进阶快捷键",
+    "titleEn": "Advanced Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Tab",
-      "desc": "运行中把消息排队，本轮结束后发"
+      "desc": "运行中把消息排队，本轮结束后发",
+      "descEn": "While running, queue a message to send after this turn"
      },
      {
       "name": "Shift+Left",
-      "desc": "取回排队的消息重新编辑，也可 Alt+Up"
+      "desc": "取回排队的消息重新编辑，也可 Alt+Up",
+      "descEn": "Pull back queued messages to edit; Alt+Up also works"
      },
      {
       "name": "Shift+Tab",
-      "desc": "切换协作模式，如 Plan"
+      "desc": "切换协作模式，如 Plan",
+      "descEn": "Switch collaboration modes, such as Plan"
      },
      {
       "name": "Alt+.",
-      "desc": "提高推理强度，Alt+, 降低"
+      "desc": "提高推理强度，Alt+, 降低",
+      "descEn": "Raise reasoning effort; Alt+, lowers it"
      },
      {
       "name": "Ctrl+G",
-      "desc": "用外部编辑器写长提示"
+      "desc": "用外部编辑器写长提示",
+      "descEn": "Write a long prompt in an external editor"
      },
      {
       "name": "Ctrl+O",
-      "desc": "复制最后一条回复"
+      "desc": "复制最后一条回复",
+      "descEn": "Copy the last response"
      },
      {
       "name": "F3",
-      "desc": "在对话转录里查找文字"
+      "desc": "在对话转录里查找文字",
+      "descEn": "Find text in the transcript"
      },
      {
       "name": "Ctrl+/",
-      "desc": "打开或关闭旁支对话"
+      "desc": "打开或关闭旁支对话",
+      "descEn": "Open or close the side conversation"
      },
      {
       "name": "Alt+R",
-      "desc": "原始滚动模式，便于选中复制"
+      "desc": "原始滚动模式，便于选中复制",
+      "descEn": "Raw scrollback mode for easy selection and copying"
      },
      {
       "name": "F4",
-      "desc": "查看正在进行的活动详情"
+      "desc": "查看正在进行的活动详情",
+      "descEn": "Show details of ongoing activity"
      }
     ]
    },
    {
     "title": "输入前缀",
+    "titleEn": "Input Prefixes",
     "kind": "prefix",
     "items": [
      {
       "name": "/",
-      "desc": "打开命令列表"
+      "desc": "打开命令列表",
+      "descEn": "Open the command list"
      },
      {
       "name": "@",
-      "desc": "引用文件，也能选插件和技能"
+      "desc": "引用文件，也能选插件和技能",
+      "descEn": "Mention a file; also picks plugins and skills"
      },
      {
       "name": "!",
-      "desc": "直接在本机运行 shell 命令"
+      "desc": "直接在本机运行 shell 命令",
+      "descEn": "Run a shell command locally"
      },
      {
       "name": "$",
-      "desc": "调用技能或 App"
+      "desc": "调用技能或 App",
+      "descEn": "Invoke a skill or app"
      }
     ]
    }
@@ -760,330 +956,417 @@
   "sections": [
    {
     "title": "会话",
+    "titleEn": "Sessions",
     "kind": "command",
     "items": [
      {
       "name": "/new",
       "desc": "开新会话，清空当前对话（别名 /clear）",
+      "descEn": "Start a new session and clear the conversation (alias /clear)",
       "warn": true
      },
      {
       "name": "/resume",
       "args": "[会话 ID 或标题]",
-      "desc": "恢复以前的会话，不带参数时打开选择列表"
+      "argsEn": "[session ID or title]",
+      "desc": "恢复以前的会话，不带参数时打开选择列表",
+      "descEn": "Resume an earlier session; without arguments, open a picker"
      },
      {
       "name": "/rename",
       "args": "<标题> | --auto",
-      "desc": "给会话改名，--auto 改回自动命名"
+      "argsEn": "<title> | --auto",
+      "desc": "给会话改名，--auto 改回自动命名",
+      "descEn": "Rename the session; --auto restores automatic naming"
      },
      {
       "name": "/fork",
       "args": "[--worktree] [指令]",
-      "desc": "从当前进度分出一个新 agent，可以放进 worktree"
+      "argsEn": "[--worktree] [instructions]",
+      "desc": "从当前进度分出一个新 agent，可以放进 worktree",
+      "descEn": "Fork a new agent from here, optionally in a worktree"
      },
      {
       "name": "/rewind",
       "desc": "回到之前某一轮，丢掉之后的对话（文件改动不撤回）",
+      "descEn": "Go back to an earlier turn, dropping later ones (files stay)",
       "warn": true
      },
      {
       "name": "/delete",
       "desc": "删除当前会话的历史，会先确认",
+      "descEn": "Delete the current session’s history after confirming",
       "warn": true
      },
      {
       "name": "/copy",
       "args": "[N] [文件]",
-      "desc": "复制最近第 N 条回复的 Markdown，或写到文件"
+      "argsEn": "[N] [file]",
+      "desc": "复制最近第 N 条回复的 Markdown，或写到文件",
+      "descEn": "Copy the Nth most recent reply as Markdown, or write it to a file"
      },
      {
       "name": "/export",
       "args": "[文件名]",
-      "desc": "把整段对话导出到文件或剪贴板"
+      "argsEn": "[filename]",
+      "desc": "把整段对话导出到文件或剪贴板",
+      "descEn": "Export the whole conversation to a file or the clipboard"
      },
      {
       "name": "/dashboard",
-      "desc": "打开 Agent 面板，同时查看和管理多个会话"
+      "desc": "打开 Agent 面板，同时查看和管理多个会话",
+      "descEn": "Open the Agent Dashboard to view and manage sessions"
      },
      {
       "name": "/quit",
-      "desc": "退出 grok（别名 /exit）"
+      "desc": "退出 grok（别名 /exit）",
+      "descEn": "Quit grok (alias /exit)"
      }
     ]
    },
    {
     "title": "对话与上下文",
+    "titleEn": "Conversation & Context",
     "kind": "command",
     "items": [
      {
       "name": "/compact",
-      "desc": "压缩对话历史，腾出上下文"
+      "desc": "压缩对话历史，腾出上下文",
+      "descEn": "Compact the conversation history to free context"
      },
      {
       "name": "/context",
-      "desc": "查看上下文窗口各部分的占用"
+      "desc": "查看上下文窗口各部分的占用",
+      "descEn": "Show how the context window is used"
      },
      {
       "name": "/session-info",
-      "desc": "查看模型、轮数、登录方式和上下文用量"
+      "desc": "查看模型、轮数、登录方式和上下文用量",
+      "descEn": "Show model, turns, sign-in method and context usage"
      },
      {
       "name": "/btw",
       "args": "<问题>",
-      "desc": "顺带问一句，不打断正在跑的任务"
+      "argsEn": "<question>",
+      "desc": "顺带问一句，不打断正在跑的任务",
+      "descEn": "Ask a side question without interrupting the running task"
      },
      {
       "name": "/recap",
-      "desc": "让 agent 总结到目前为止的会话"
+      "desc": "让 agent 总结到目前为止的会话",
+      "descEn": "Have the agent summarize the session so far"
      },
      {
       "name": "/history",
-      "desc": "模糊搜索本会话发过的提示，填回输入框"
+      "desc": "模糊搜索本会话发过的提示，填回输入框",
+      "descEn": "Fuzzy-search prompts sent this session and refill the input"
      },
      {
       "name": "/plan",
       "args": "[描述]",
-      "desc": "进入计划模式，先出方案、不改文件"
+      "argsEn": "[description]",
+      "desc": "进入计划模式，先出方案、不改文件",
+      "descEn": "Enter plan mode: plan first, no file changes"
      },
      {
       "name": "/view-plan",
-      "desc": "查看当前保存的计划"
+      "desc": "查看当前保存的计划",
+      "descEn": "View the currently saved plan"
      },
      {
       "name": "/edit-prompt",
-      "desc": "用 $EDITOR 写提示，保存后回到输入框"
+      "desc": "用 $EDITOR 写提示，保存后回到输入框",
+      "descEn": "Write the prompt in $EDITOR, then return to the input"
      }
     ]
    },
    {
     "title": "模型与设置",
+    "titleEn": "Models & Settings",
     "kind": "command",
     "items": [
      {
       "name": "/model",
       "args": "<模型> [窗口] [推理强度]",
-      "desc": "切换模型，可同时设上下文窗口和推理强度"
+      "argsEn": "<model> [window] [effort]",
+      "desc": "切换模型，可同时设上下文窗口和推理强度",
+      "descEn": "Switch models, optionally setting context window and effort"
      },
      {
       "name": "/effort",
       "args": "<low|medium|high|xhigh>",
-      "desc": "只改当前模型的推理强度"
+      "desc": "只改当前模型的推理强度",
+      "descEn": "Change only the current model’s reasoning effort"
      },
      {
       "name": "/always-approve",
-      "desc": "开关全部自动批准，工具调用不再询问"
+      "desc": "开关全部自动批准，工具调用不再询问",
+      "descEn": "Toggle approving all tool calls without asking"
      },
      {
       "name": "/multiline",
-      "desc": "切换多行输入：Enter 换行，Shift+Enter 发送"
+      "desc": "切换多行输入：Enter 换行，Shift+Enter 发送",
+      "descEn": "Toggle multiline input: Enter adds a line, Shift+Enter sends"
      },
      {
       "name": "/usage",
       "args": "[manage]",
-      "desc": "查看额度用量，或管理账单"
+      "desc": "查看额度用量，或管理账单",
+      "descEn": "Show credit usage or manage billing"
      },
      {
       "name": "/settings",
-      "desc": "打开设置面板"
+      "desc": "打开设置面板",
+      "descEn": "Open the settings panel"
      },
      {
       "name": "/theme",
       "args": "<主题>",
-      "desc": "切换配色主题"
+      "argsEn": "<theme>",
+      "desc": "切换配色主题",
+      "descEn": "Switch the color theme"
      }
     ]
    },
    {
     "title": "后台任务与扩展",
+    "titleEn": "Background Tasks & Extensions",
     "kind": "command",
     "items": [
      {
       "name": "/tasks",
-      "desc": "列出后台任务、子 agent 和定时任务"
+      "desc": "列出后台任务、子 agent 和定时任务",
+      "descEn": "List background tasks, subagents and scheduled tasks"
      },
      {
       "name": "/loop",
       "args": "[间隔] <提示>",
-      "desc": "按间隔反复执行一条提示，7 天后过期"
+      "argsEn": "[interval] <prompt>",
+      "desc": "按间隔反复执行一条提示，7 天后过期",
+      "descEn": "Repeat a prompt on an interval; expires after 7 days"
      },
      {
       "name": "/deep-research",
       "args": "<问题>",
-      "desc": "后台多 agent 调研，交叉核对后出带出处的报告"
+      "argsEn": "<question>",
+      "desc": "后台多 agent 调研，交叉核对后出带出处的报告",
+      "descEn": "Multi-agent background research with a cited report"
      },
      {
       "name": "/workflow",
       "args": "<名称> | runs",
-      "desc": "启动保存好的工作流，或查看、管理运行中的"
+      "argsEn": "<name> | runs",
+      "desc": "启动保存好的工作流，或查看、管理运行中的",
+      "descEn": "Start a saved workflow, or view and manage running ones"
      },
      {
       "name": "/skills",
-      "desc": "查看和开关已装的技能"
+      "desc": "查看和开关已装的技能",
+      "descEn": "View and toggle installed skills"
      },
      {
       "name": "/plugins",
-      "desc": "管理插件：安装、信任、重新加载"
+      "desc": "管理插件：安装、信任、重新加载",
+      "descEn": "Manage plugins: install, trust, reload"
      },
      {
       "name": "/mcps",
-      "desc": "管理 MCP 服务器"
+      "desc": "管理 MCP 服务器",
+      "descEn": "Manage MCP servers"
      },
      {
       "name": "/hooks",
-      "desc": "查看、增删和开关 hooks"
+      "desc": "查看、增删和开关 hooks",
+      "descEn": "View, add, remove and toggle hooks"
      },
      {
       "name": "/memory",
-      "desc": "浏览和管理保存的记忆"
+      "desc": "浏览和管理保存的记忆",
+      "descEn": "Browse and manage saved memories"
      },
      {
       "name": "/remember",
       "args": "<内容>",
-      "desc": "直接存一条全局记忆，存之前会先给你看"
+      "argsEn": "<content>",
+      "desc": "直接存一条全局记忆，存之前会先给你看",
+      "descEn": "Save a global memory, shown to you before saving"
      },
      {
       "name": "/doctor",
       "args": "[fix]",
-      "desc": "检查终端、剪贴板、按键和沙箱问题，给出修法"
+      "desc": "检查终端、剪贴板、按键和沙箱问题，给出修法",
+      "descEn": "Check terminal, clipboard, keys and sandbox, and suggest fixes"
      },
      {
       "name": "/help",
-      "desc": "浏览全部命令和快捷键"
+      "desc": "浏览全部命令和快捷键",
+      "descEn": "Browse all commands and shortcuts"
      }
     ]
    },
    {
     "title": "常用快捷键",
+    "titleEn": "Common Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Enter",
-      "desc": "发送；agent 运行中按会排进队列，等这一轮结束"
+      "desc": "发送；agent 运行中按会排进队列，等这一轮结束",
+      "descEn": "Send; while the agent runs, queue until this turn ends"
      },
      {
       "name": "Shift+Enter",
-      "desc": "换行；SSH 或 tmux 下用 Alt+Enter 或行尾 \\"
+      "desc": "换行；SSH 或 tmux 下用 Alt+Enter 或行尾 \\",
+      "descEn": "New line; over SSH or tmux use Alt+Enter or a trailing \\"
      },
      {
       "name": "Ctrl+V",
-      "desc": "粘贴截图、复制的图片或文件"
+      "desc": "粘贴截图、复制的图片或文件",
+      "descEn": "Paste a screenshot, copied image or file"
      },
      {
       "name": "Ctrl+C",
-      "desc": "停止当前这一轮；有草稿时先清空草稿"
+      "desc": "停止当前这一轮；有草稿时先清空草稿",
+      "descEn": "Stop the current turn; clears the draft first if there is one"
      },
      {
       "name": "Ctrl+Enter",
-      "desc": "运行中立即发送：打断当前这一轮，先处理新消息"
+      "desc": "运行中立即发送：打断当前这一轮，先处理新消息",
+      "descEn": "Send now while running: interrupt and handle the new message"
      },
      {
       "name": "Esc Esc",
-      "desc": "空闲时：有草稿就清空，空输入框就回退到之前某轮"
+      "desc": "空闲时：有草稿就清空，空输入框就回退到之前某轮",
+      "descEn": "When idle: clear the draft, or rewind on an empty input"
      },
      {
       "name": "Ctrl+Z",
-      "desc": "刚清空或暂存草稿后按，把草稿恢复回来"
+      "desc": "刚清空或暂存草稿后按，把草稿恢复回来",
+      "descEn": "Restore a draft you just cleared or stashed"
      },
      {
       "name": "Up",
-      "desc": "空输入框时调出发过的提示"
+      "desc": "空输入框时调出发过的提示",
+      "descEn": "On an empty input, recall sent prompts"
      },
      {
       "name": "Ctrl+S",
-      "desc": "暂存草稿，输入框为空时再按取回"
+      "desc": "暂存草稿，输入框为空时再按取回",
+      "descEn": "Stash the draft; press again on an empty input to restore"
      },
      {
       "name": "Shift+Tab",
-      "desc": "轮换普通、计划、全部自动批准几种模式"
+      "desc": "轮换普通、计划、全部自动批准几种模式",
+      "descEn": "Cycle normal, plan and always-approve modes"
      },
      {
       "name": "Ctrl+O",
-      "desc": "开关全部自动批准"
+      "desc": "开关全部自动批准",
+      "descEn": "Toggle always-approve"
      },
      {
       "name": "Ctrl+B",
-      "desc": "把前台正在跑的命令放到后台"
+      "desc": "把前台正在跑的命令放到后台",
+      "descEn": "Move the foreground command to the background"
      },
      {
       "name": "Tab",
-      "desc": "在输入框和对话记录之间切换焦点"
+      "desc": "在输入框和对话记录之间切换焦点",
+      "descEn": "Switch focus between the input and the transcript"
      }
     ]
    },
    {
     "title": "面板与会话快捷键",
+    "titleEn": "Panel & Session Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Ctrl+P",
-      "desc": "命令面板，按名字搜动作和命令"
+      "desc": "命令面板，按名字搜动作和命令",
+      "descEn": "Command palette: search actions and commands by name"
      },
      {
       "name": "Ctrl+M",
-      "desc": "焦点不在输入框时选模型，在输入框里切换多行"
+      "desc": "焦点不在输入框时选模型，在输入框里切换多行",
+      "descEn": "Pick a model outside the input; toggles multiline inside it"
      },
      {
       "name": "Ctrl+R",
-      "desc": "打开会话列表，恢复以前的会话"
+      "desc": "打开会话列表，恢复以前的会话",
+      "descEn": "Open the session list to resume a session"
      },
      {
       "name": "Ctrl+N",
-      "desc": "开新会话，要连按两次"
+      "desc": "开新会话，要连按两次",
+      "descEn": "Start a new session; press twice"
      },
      {
       "name": "Ctrl+Q",
-      "desc": "退出，要连按两次"
+      "desc": "退出，要连按两次",
+      "descEn": "Quit; press twice"
      },
      {
       "name": "Ctrl+G",
-      "desc": "开关后台任务栏"
+      "desc": "开关后台任务栏",
+      "descEn": "Toggle the background tasks bar"
      },
      {
       "name": "Ctrl+T",
-      "desc": "开关待办栏"
+      "desc": "开关待办栏",
+      "descEn": "Toggle the to-do bar"
      },
      {
       "name": "Ctrl+E",
-      "desc": "一次展开或收起全部思考块"
+      "desc": "一次展开或收起全部思考块",
+      "descEn": "Expand or collapse all thinking blocks"
      },
      {
       "name": "Ctrl+\\",
-      "desc": "打开或关闭 Agent 面板"
+      "desc": "打开或关闭 Agent 面板",
+      "descEn": "Open or close the Agent Dashboard"
      },
      {
       "name": "Ctrl+.",
-      "desc": "打开快捷键速查（部分终端是 Ctrl+X）"
+      "desc": "打开快捷键速查（部分终端是 Ctrl+X）",
+      "descEn": "Open the shortcut cheat sheet (Ctrl+X in some terminals)"
      }
     ]
    },
    {
     "title": "输入前缀",
+    "titleEn": "Input Prefixes",
     "kind": "prefix",
     "items": [
      {
       "name": "/",
-      "desc": "命令和技能菜单，输入时模糊匹配"
+      "desc": "命令和技能菜单，输入时模糊匹配",
+      "descEn": "Command and skill menu, fuzzy-matched as you type"
      },
      {
       "name": "@",
-      "desc": "引用文件或目录，@a.rs:10-50 只取这几行"
+      "desc": "引用文件或目录，@a.rs:10-50 只取这几行",
+      "descEn": "Mention a file or directory; @a.rs:10-50 takes just those lines"
      },
      {
       "name": "@!",
-      "desc": "引用隐藏文件，如 @!.env"
+      "desc": "引用隐藏文件，如 @!.env",
+      "descEn": "Mention a hidden file, like @!.env"
      },
      {
       "name": "!",
-      "desc": "空输入框开头输入，直接运行 shell 命令"
+      "desc": "空输入框开头输入，直接运行 shell 命令",
+      "descEn": "At the start of an empty input, run a shell command"
      },
      {
       "name": "/user:",
-      "desc": "技能和内置命令重名时，指明用户级技能"
+      "desc": "技能和内置命令重名时，指明用户级技能",
+      "descEn": "Pick the user-level skill when it shares a built-in’s name"
      },
      {
       "name": "/local:",
-      "desc": "指明项目级技能；插件技能写 /插件名:技能"
+      "desc": "指明项目级技能；插件技能写 /插件名:技能",
+      "descEn": "Pick the project-level skill; plugin skills use /plugin:skill"
      }
     ]
    }
@@ -1098,302 +1381,381 @@
   "sections": [
    {
     "title": "对话与上下文",
+    "titleEn": "Conversation & Context",
     "kind": "command",
     "items": [
      {
       "name": "/clear",
       "desc": "开新对话，旧对话可用 /resume 找回；别名 /new",
+      "descEn": "Start a new chat; /resume brings the old one back; alias /new",
       "warn": true
      },
      {
       "name": "/resume",
-      "desc": "从最近的对话里挑一个接着聊"
+      "desc": "从最近的对话里挑一个接着聊",
+      "descEn": "Pick a recent chat and continue it"
      },
      {
       "name": "/fork",
-      "desc": "复制当前对话为新会话，换个方向试"
+      "desc": "复制当前对话为新会话，换个方向试",
+      "descEn": "Copy the current chat into a new session to try another direction"
      },
      {
       "name": "/rename",
       "args": "<名字>",
-      "desc": "给当前对话改名，方便以后找"
+      "argsEn": "<name>",
+      "desc": "给当前对话改名，方便以后找",
+      "descEn": "Rename the current chat so it’s easy to find"
      },
      {
       "name": "/summarize",
-      "desc": "总结对话腾出上下文；别名 /compress"
+      "desc": "总结对话腾出上下文；别名 /compress",
+      "descEn": "Summarize the chat to free context; alias /compress"
      },
      {
       "name": "/rewind",
       "desc": "回到之前某条消息，可连文件一起恢复",
+      "descEn": "Go back to an earlier message, optionally restoring files",
       "warn": true
      },
      {
       "name": "/context",
-      "desc": "查看上下文占用明细"
+      "desc": "查看上下文占用明细",
+      "descEn": "Show a breakdown of context usage"
      },
      {
       "name": "/copy",
-      "desc": "把之前的某条消息复制到剪贴板"
+      "desc": "把之前的某条消息复制到剪贴板",
+      "descEn": "Copy an earlier message to the clipboard"
      },
      {
       "name": "/btw",
       "args": "<问题>",
-      "desc": "旁问一句，不打断主对话、不进历史"
+      "argsEn": "<question>",
+      "desc": "旁问一句，不打断主对话、不进历史",
+      "descEn": "Ask a side question without interrupting or adding to history"
      }
     ]
    },
    {
     "title": "模式与模型",
+    "titleEn": "Modes & Models",
     "kind": "command",
     "items": [
      {
       "name": "/model",
       "args": "[筛选]",
-      "desc": "切换模型，Tab 可调参数"
+      "argsEn": "[filter]",
+      "desc": "切换模型，Tab 可调参数",
+      "descEn": "Switch models; Tab adjusts parameters"
      },
      {
       "name": "/plan",
       "args": "[提示]",
-      "desc": "进入计划模式，或查看当前计划"
+      "argsEn": "[prompt]",
+      "desc": "进入计划模式，或查看当前计划",
+      "descEn": "Enter plan mode, or view the current plan"
      },
      {
       "name": "/ask",
-      "desc": "切换只读问答，不改文件不跑命令"
+      "desc": "切换只读问答，不改文件不跑命令",
+      "descEn": "Toggle read-only Ask mode: no edits, no commands"
      },
      {
       "name": "/debug",
       "args": "[提示]",
-      "desc": "切换调试模式，或以调试模式提问"
+      "argsEn": "[prompt]",
+      "desc": "切换调试模式，或以调试模式提问",
+      "descEn": "Toggle Debug mode, or ask in Debug mode"
      },
      {
       "name": "/fast",
-      "desc": "开关当前模型的快速模式"
+      "desc": "开关当前模型的快速模式",
+      "descEn": "Toggle fast mode for the current model"
      },
      {
       "name": "/run-everything",
       "args": "[on|off|status]",
-      "desc": "开关自动执行所有工具调用，不再逐个确认"
+      "desc": "开关自动执行所有工具调用，不再逐个确认",
+      "descEn": "Toggle auto-running all tool calls without confirming"
      },
      {
       "name": "/sandbox",
-      "desc": "设置沙箱和网络访问"
+      "desc": "设置沙箱和网络访问",
+      "descEn": "Configure the sandbox and network access"
      },
      {
       "name": "/shell",
       "args": "[命令]",
-      "desc": "进入 Shell 模式直接跑命令"
+      "argsEn": "[command]",
+      "desc": "进入 Shell 模式直接跑命令",
+      "descEn": "Enter Shell mode to run commands directly"
      }
     ]
    },
    {
     "title": "代码与工作区",
+    "titleEn": "Code & Workspace",
     "kind": "command",
     "items": [
      {
       "name": "/changes",
-      "desc": "审阅本次对话、暂存区和已提交的改动"
+      "desc": "审阅本次对话、暂存区和已提交的改动",
+      "descEn": "Review changes from this chat, staged and committed"
      },
      {
       "name": "/commit",
-      "desc": "让 agent 暂存并提交，不推送"
+      "desc": "让 agent 暂存并提交，不推送",
+      "descEn": "Have the agent stage and commit, without pushing"
      },
      {
       "name": "/jobs",
-      "desc": "查看正在运行的后台任务"
+      "desc": "查看正在运行的后台任务",
+      "descEn": "View running background jobs"
      },
      {
       "name": "/add-dir",
       "args": "<路径>",
-      "desc": "把另一个目录加入工作区"
+      "argsEn": "<path>",
+      "desc": "把另一个目录加入工作区",
+      "descEn": "Add another directory to the workspace"
      },
      {
       "name": "/save-workspace",
       "args": "<名字>",
-      "desc": "保存当前这组工作区目录"
+      "argsEn": "<name>",
+      "desc": "保存当前这组工作区目录",
+      "descEn": "Save the current set of workspace directories"
      },
      {
       "name": "/load-workspace",
       "args": "<名字>",
-      "desc": "载入保存过的工作区"
+      "argsEn": "<name>",
+      "desc": "载入保存过的工作区",
+      "descEn": "Load a saved workspace"
      },
      {
       "name": "/open",
-      "desc": "在 Cursor 编辑器里打开仓库根目录"
+      "desc": "在 Cursor 编辑器里打开仓库根目录",
+      "descEn": "Open the repository root in the Cursor editor"
      }
     ]
    },
    {
     "title": "扩展与设置",
+    "titleEn": "Extensions & Settings",
     "kind": "command",
     "items": [
      {
       "name": "/skills",
-      "desc": "打开技能菜单"
+      "desc": "打开技能菜单",
+      "descEn": "Open the skills menu"
      },
      {
       "name": "/rule",
-      "desc": "管理 Cursor 规则"
+      "desc": "管理 Cursor 规则",
+      "descEn": "Manage Cursor rules"
      },
      {
       "name": "/command",
-      "desc": "管理自定义命令"
+      "desc": "管理自定义命令",
+      "descEn": "Manage custom commands"
      },
      {
       "name": "/mcp",
       "args": "[list|list-tools] [服务]",
-      "desc": "查看 MCP 服务器及其工具"
+      "argsEn": "[list|list-tools] [server]",
+      "desc": "查看 MCP 服务器及其工具",
+      "descEn": "List MCP servers and their tools"
      },
      {
       "name": "/plugin",
       "args": "[list|marketplace …]",
-      "desc": "管理插件和插件市场"
+      "desc": "管理插件和插件市场",
+      "descEn": "Manage plugins and marketplaces"
      },
      {
       "name": "/config",
-      "desc": "交互式修改 CLI 设置"
+      "desc": "交互式修改 CLI 设置",
+      "descEn": "Change CLI settings interactively"
      },
      {
       "name": "/vim",
-      "desc": "开关输入框的 Vim 键位"
+      "desc": "开关输入框的 Vim 键位",
+      "descEn": "Toggle Vim keys in the input"
      },
      {
       "name": "/show-thinking",
-      "desc": "开关思考过程的显示"
+      "desc": "开关思考过程的显示",
+      "descEn": "Toggle showing the thinking process"
      },
      {
       "name": "/usage",
-      "desc": "查看套餐和按量用量"
+      "desc": "查看套餐和按量用量",
+      "descEn": "Show plan and usage-based spending"
      },
      {
       "name": "/about",
-      "desc": "显示版本、系统和账号信息并复制"
+      "desc": "显示版本、系统和账号信息并复制",
+      "descEn": "Show and copy version, system and account info"
      },
      {
       "name": "/setup-terminal",
-      "desc": "配置终端，让 Shift+Enter 能换行"
+      "desc": "配置终端，让 Shift+Enter 能换行",
+      "descEn": "Configure the terminal so Shift+Enter adds a new line"
      },
      {
       "name": "/update",
-      "desc": "升级 Cursor Agent"
+      "desc": "升级 Cursor Agent",
+      "descEn": "Update Cursor Agent"
      },
      {
       "name": "/help",
       "args": "[命令]",
-      "desc": "查看帮助或某条命令的参数"
+      "argsEn": "[command]",
+      "desc": "查看帮助或某条命令的参数",
+      "descEn": "Show help, or the arguments of a command"
      },
      {
       "name": "/quit",
-      "desc": "退出 CLI；也可用 /exit"
+      "desc": "退出 CLI；也可用 /exit",
+      "descEn": "Exit the CLI; /exit also works"
      }
     ]
    },
    {
     "title": "常用快捷键",
+    "titleEn": "Common Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Ctrl+C",
-      "desc": "运行中停止 agent；空闲时清空输入"
+      "desc": "运行中停止 agent；空闲时清空输入",
+      "descEn": "Stop the agent while running; clear the input when idle"
      },
      {
       "name": "Ctrl+C Ctrl+C",
-      "desc": "连按两次退出 CLI"
+      "desc": "连按两次退出 CLI",
+      "descEn": "Press twice to exit the CLI"
      },
      {
       "name": "Ctrl+D Ctrl+D",
-      "desc": "输入为空时连按两次退出"
+      "desc": "输入为空时连按两次退出",
+      "descEn": "Press twice on an empty input to exit"
      },
      {
       "name": "Shift+Enter",
-      "desc": "换行不发送，终端不支持时先 /setup-terminal"
+      "desc": "换行不发送，终端不支持时先 /setup-terminal",
+      "descEn": "New line without sending; run /setup-terminal if unsupported"
      },
      {
       "name": "Ctrl+J",
-      "desc": "换行，所有终端都可用"
+      "desc": "换行，所有终端都可用",
+      "descEn": "New line; works in every terminal"
      },
      {
       "name": "\\ Enter",
-      "desc": "行尾输反斜杠再回车，同样是换行"
+      "desc": "行尾输反斜杠再回车，同样是换行",
+      "descEn": "A backslash at the end of the line, then Enter, also adds a line"
      },
      {
       "name": "Shift+Tab",
-      "desc": "循环切换 Agent、Plan、Debug、Ask 模式"
+      "desc": "循环切换 Agent、Plan、Debug、Ask 模式",
+      "descEn": "Cycle Agent, Plan, Debug and Ask modes"
      },
      {
       "name": "Up",
-      "desc": "在第一行时翻出之前发过的消息"
+      "desc": "在第一行时翻出之前发过的消息",
+      "descEn": "On the first line, recall earlier messages"
      },
      {
       "name": "Ctrl+V",
-      "desc": "粘贴剪贴板里的图片"
+      "desc": "粘贴剪贴板里的图片",
+      "descEn": "Paste an image from the clipboard"
      },
      {
       "name": "Ctrl+L",
-      "desc": "清屏，agent 空闲时才生效"
+      "desc": "清屏，agent 空闲时才生效",
+      "descEn": "Clear the screen; only while the agent is idle"
      }
     ]
    },
    {
     "title": "进阶快捷键",
+    "titleEn": "Advanced Shortcuts",
     "kind": "key",
     "items": [
      {
       "name": "Ctrl+G",
-      "desc": "在 $EDITOR 里编辑当前输入"
+      "desc": "在 $EDITOR 里编辑当前输入",
+      "descEn": "Edit the current input in $EDITOR"
      },
      {
       "name": "Ctrl+Y",
-      "desc": "打开历史对话列表，同 /resume"
+      "desc": "打开历史对话列表，同 /resume",
+      "descEn": "Open past chats, like /resume"
      },
      {
       "name": "Ctrl+/",
-      "desc": "循环切换模型"
+      "desc": "循环切换模型",
+      "descEn": "Cycle through models"
      },
      {
       "name": "Ctrl+O",
-      "desc": "展开或折叠工具输出"
+      "desc": "展开或折叠工具输出",
+      "descEn": "Expand or collapse tool output"
      },
      {
       "name": "Ctrl+R",
-      "desc": "agent 改了文件、等你确认时审阅改动"
+      "desc": "agent 改了文件、等你确认时审阅改动",
+      "descEn": "Review changes when the agent edits files and waits for you"
      },
      {
       "name": "Ctrl+B Ctrl+B",
-      "desc": "把正在跑的命令转到后台"
+      "desc": "把正在跑的命令转到后台",
+      "descEn": "Move a running command to the background"
      },
      {
       "name": "Esc",
-      "desc": "关闭补全列表、弹窗或退出 Shell 模式"
+      "desc": "关闭补全列表、弹窗或退出 Shell 模式",
+      "descEn": "Close completions or popups, or leave Shell mode"
      }
     ]
    },
    {
     "title": "输入前缀",
+    "titleEn": "Input Prefixes",
     "kind": "prefix",
     "items": [
      {
       "name": "/",
-      "desc": "命令、技能、自定义命令都在这里"
+      "desc": "命令、技能、自定义命令都在这里",
+      "descEn": "Commands, skills and custom commands are all here"
      },
      {
       "name": "/subagent-",
-      "desc": "接子 agent 名字，让它去做后面写的事"
+      "desc": "接子 agent 名字，让它去做后面写的事",
+      "descEn": "Add a subagent name to have it do what follows"
      },
      {
       "name": "@",
-      "desc": "引用文件或目录进上下文"
+      "desc": "引用文件或目录进上下文",
+      "descEn": "Add a file or directory to the context"
      },
      {
       "name": "!",
-      "desc": "空行时输入，进入 Shell 模式跑命令"
+      "desc": "空行时输入，进入 Shell 模式跑命令",
+      "descEn": "On an empty line, enter Shell mode to run commands"
      },
      {
       "name": "&",
-      "desc": "空行时输入，把消息交给云端 agent（限 git 仓库）"
+      "desc": "空行时输入，把消息交给云端 agent（限 git 仓库）",
+      "descEn": "On an empty line, hand the message to a cloud agent (git repos only)"
      },
      {
       "name": "?",
-      "desc": "空行时输入，显示快捷键提示"
+      "desc": "空行时输入，显示快捷键提示",
+      "descEn": "On an empty line, show shortcut hints"
      }
     ]
    }

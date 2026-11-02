@@ -17296,6 +17296,38 @@ func (msgs Messages) SkillsNewPlaceholder() string {
 	return Catalog.Format(msgs.locale, "skillsNewPlaceholder", nil)
 }
 
+// SkillsNewTemplateDescription says "Describe what it does and when to use it (agents decide from this line whether to invoke it)."
+// in the language the app shows.
+//
+// New Project Skill: placeholder description written into the new SKILL.md
+// front matter; the user replaces it.
+func SkillsNewTemplateDescription() string { return In(i18n.Locale()).SkillsNewTemplateDescription() }
+
+// SkillsNewTemplateDescription says "Describe what it does and when to use it (agents decide from this line whether to invoke it)."
+// in the language of msgs.
+//
+// New Project Skill: placeholder description written into the new SKILL.md
+// front matter; the user replaces it.
+func (msgs Messages) SkillsNewTemplateDescription() string {
+	return Catalog.Format(msgs.locale, "skillsNewTemplateDescription", nil)
+}
+
+// SkillsNewTemplateSteps says "Steps:"
+// in the language the app shows.
+//
+// New Project Skill: heading of the numbered step list written into the new
+// SKILL.md body.
+func SkillsNewTemplateSteps() string { return In(i18n.Locale()).SkillsNewTemplateSteps() }
+
+// SkillsNewTemplateSteps says "Steps:"
+// in the language of msgs.
+//
+// New Project Skill: heading of the numbered step list written into the new
+// SKILL.md body.
+func (msgs Messages) SkillsNewTemplateSteps() string {
+	return Catalog.Format(msgs.locale, "skillsNewTemplateSteps", nil)
+}
+
 // SkillsNewTitle says "New Project Skill"
 // in the language the app shows.
 //

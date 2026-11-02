@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"posse/internal/skills"
+	"posse/locales"
 )
 
 // 技能页的开关：点 Claude 的开关先弹框给 diff，确认后才写 settings.json，写完重扫显示已关闭。
@@ -74,7 +75,7 @@ func TestSkillToggleConfirm(t *testing.T) {
 func TestCreateProjectSkill(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, ".git"), 0o755)
-	file, err := createProjectSkill(root, "release-check")
+	file, err := createProjectSkill(locales.In("zh-Hans"), root, "release-check")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +94,10 @@ func TestCreateProjectSkill(t *testing.T) {
 			t.Errorf("%s：%v", ag, st)
 		}
 	}
-	if _, err := createProjectSkill(root, "release-check"); err == nil {
+	if body, _ := os.ReadFile(file); !strings.Contains(string(body), "\n步骤：\n") {
+		t.Errorf("中文模板：%s", body)
+	}
+	if _, err := createProjectSkill(locales.In("en"), root, "release-check"); err == nil {
 		t.Error("重名应拒绝")
 	}
 	if !skillNameRe.MatchString("a1-b") || skillNameRe.MatchString("A") || skillNameRe.MatchString("-a") || skillNameRe.MatchString("a b") {
