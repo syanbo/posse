@@ -20,7 +20,7 @@ fvm flutter analyze
 
 ## 构建注意
 
-- iOS 给登记过的 iPhone 分发用仓库根目录的 `scripts/ios-adhoc.sh`，安装页 `https://posse.shaoyan.uk/ios/index.html`（见 AGENTS.md）。
+- iOS 给登记过的 iPhone 分发用仓库根目录的 `scripts/ios-adhoc.sh`，安装页 `https://posse.shaoyan.uk/ios/index.html`（见 `docs/release.md`）。
 
 - 安卓 release 构建的混淆规则在 `android/app/proguard-rules.pro`：shared_preferences_android 2.5 起经 package:jni 按名字和签名调 Kotlin，插件没带保留规则，不保住这些类名（含 jni 用到的 Kotlin 协程类）冷启动就读不出存着的配对和设置。升级 shared_preferences 或 jni 后要在真机上确认冷启动能自动连上。
 - 闪屏的标志图和 slogan 图（原生各端和 `assets/splash_slogan.png` 共用）由 `POSSE_SPLASH_EXPORT=1 fvm flutter test test/splash_assets_test.dart` 导出，改了底色、标志、文字要重新导出。iOS 会缓存启动屏，改了以后真机要重启手机才看得到。
