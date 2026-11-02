@@ -23,6 +23,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/quic-go/quic-go"
+
 	"posse/internal/mquic"
 )
 
@@ -205,8 +207,8 @@ func (e *entry) serve(ctx context.Context, dial func(context.Context) (*mquic.Co
 		if err != nil {
 			c.CloseNow()
 			// 手机按关闭码认出旧版电脑拒绝握手（4001），所以单独交出去
-			if ce, ok := errors.AsType[*mquic.CloseError](err); ok {
-				e.emit(evPeerCode, binary.BigEndian.AppendUint16(nil, ce.Code))
+			if code, ok := peerCloseCode(err); ok {
+				e.emit(evPeerCode, binary.BigEndian.AppendUint16(nil, code))
 			}
 			e.finish(evClosed, err.Error())
 			return
@@ -325,6 +327,18 @@ func hq_reset() {
 			c.CloseNow()
 		}
 	}
+}
+
+// peerCloseCode 取对方关连接时给的码：读到了关闭帧，或者没来得及读、对方已经按同一个码关了整条连接
+// （mquic.Conn.Close 发完关闭帧最多等 2 秒就关连接，App 在后台冻着时会错过那一帧）。
+func peerCloseCode(err error) (uint16, bool) {
+	if ce, ok := errors.AsType[*mquic.CloseError](err); ok {
+		return ce.Code, true
+	}
+	if ae, ok := errors.AsType[*quic.ApplicationError](err); ok && ae.Remote && ae.ErrorCode != 0 && ae.ErrorCode <= 0xffff {
+		return uint16(ae.ErrorCode), true
+	}
+	return 0, false
 }
 
 //export hq_free

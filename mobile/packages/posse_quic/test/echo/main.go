@@ -1,4 +1,5 @@
-// echo 是 posse_quic 的 Dart 测试用的服务：原样回发收到的消息，收到文本 "close" 时发关闭帧。
+// echo 是 posse_quic 的 Dart 测试用的服务：原样回发收到的消息，收到文本 "close" 时发关闭帧，
+// 收到 "drop" 时不发关闭帧、直接以 4001 关掉整条连接（手机错过关闭帧的情形）。
 // 启动后在标准输出打印一行：直连端口、本地中转的端口。打洞时测试往标准输入写 "punch 手机的地址"，
 // 它回一行出口在中转看来的地址，并从出口向手机打洞；出口上也跑着同一个回显服务。
 package main
@@ -59,6 +60,10 @@ func echo(qc *quic.Conn) {
 		if typ == mquic.Text && string(p) == "close" {
 			c.Write(mquic.Text, []byte("bye"))
 			c.Close(4001, "test")
+			return
+		}
+		if typ == mquic.Text && string(p) == "drop" {
+			qc.CloseWithError(4001, "test")
 			return
 		}
 		c.Write(typ, p)

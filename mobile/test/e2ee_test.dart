@@ -240,6 +240,46 @@ void main() {
     }
   });
 
+  test(
+    'binary framing rejects replays, gaps and short frames without moving on',
+    () {
+      E2eeSession make() => E2eeSession(
+        recvKey: repeated(1, 32),
+        sendKey: repeated(2, 32),
+        id: repeated(9, 32),
+        transcriptHash: Uint8List(32),
+      )..framing = framingBinary;
+      final host = make();
+      final phone = host.asPhone();
+      Uint8List next(String text) => host.seal(
+        Uint8List.fromList(utf8.encode(text)),
+        direction: dirDesktopToMobile,
+        kind: kindText,
+      );
+      String open(Uint8List frame) => utf8.decode(
+        phone
+            .openMessage(frame, binary: true, direction: dirDesktopToMobile)
+            .$2,
+      );
+      final first = next('a');
+      final second = next('b');
+      final bad = [
+        second, // 跳号
+        Uint8List.fromList([kindText, ...List.filled(16, 0)]), // 恰好只有标签
+        Uint8List.fromList([kindText, 1, 2, 3]), // 不足标签长度
+        Uint8List.fromList([kindText]),
+        Uint8List(0),
+      ];
+      for (final frame in bad) {
+        expect(() => open(frame), throwsA(isA<E2eeException>()));
+      }
+      expect(phone.recvN, 0);
+      expect(open(first), 'a');
+      expect(() => open(first), throwsA(isA<E2eeException>())); // 重放
+      expect(open(second), 'b');
+    },
+  );
+
   test('binary framing tells messages from binary frames by the kind byte', () {
     E2eeSession make() => E2eeSession(
       recvKey: repeated(1, 32),

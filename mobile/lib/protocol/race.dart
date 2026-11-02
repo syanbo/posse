@@ -19,10 +19,13 @@ class RaceResult<T> {
 }
 
 /// 并发握手，先成功的留下，其余取消。晚到的成功交给 [abandon]。
+/// 全部失败时交出最后一个错误；[decisive] 认出的错误（换哪个地址答案都一样）立刻交出、其余取消，
+/// 不等不通的地址超时把它盖掉。
 Future<RaceResult<T>> raceEndpoints<T>({
   required List<String> urls,
   required Future<T> Function(String url, CancelToken cancel) attempt,
   required Future<void> Function(T value) abandon,
+  bool Function(Object error)? decisive,
 }) {
   if (urls.isEmpty) {
     throw StateError('no endpoints');
@@ -53,6 +56,15 @@ Future<RaceResult<T>> raceEndpoints<T>({
         .catchError((Object error) {
           lastError = error;
           pending--;
+          if (!won &&
+              !completer.isCompleted &&
+              (decisive?.call(error) ?? false)) {
+            for (final other in tokens) {
+              other.cancel();
+            }
+            completer.completeError(error);
+            return;
+          }
           if (!won && pending == 0 && !completer.isCompleted) {
             completer.completeError(
               lastError ?? StateError('all endpoints failed'),

@@ -91,6 +91,42 @@ void main() {
     expect(gate.shouldReconnect('cell'), isTrue);
   });
 
+  test(
+    'a too-old desktop is reported without waiting for dead addresses',
+    () async {
+      final hostKeys = generateKeyPair();
+      final offer = PairingOffer(
+        endpoint: 'ws://100.1.2.3',
+        endpoints: const ['ws://100.1.2.3', 'ws://192.168.1.2'],
+        deviceToken: 'tok',
+        publicKeyB64: b64(hostKeys.publicKey),
+      );
+      final link = PosseLink(
+        offer: offer,
+        connect: (url, cancel) async {
+          final (client, host) = pipePair();
+          if (url == 'ws://192.168.1.2') {
+            final reader = SocketReader(host.events);
+            unawaited(reader.next(CancelToken()).then((_) => host.close(4001)));
+          }
+          // 另一个地址不通：连上了但永远不回 ready
+          return client;
+        },
+      );
+      final started = DateTime.now();
+      final error = await link.start().then<Object?>(
+        (_) => null,
+        onError: (Object e) => e,
+      );
+      expect(error, isA<HostTooOld>());
+      expect(
+        DateTime.now().difference(started),
+        lessThan(const Duration(seconds: 2)),
+      );
+      await link.close();
+    },
+  );
+
   test('a desktop that rejects the hello with 4001 is too old', () async {
     final hostKeys = generateKeyPair();
     final offer = PairingOffer(

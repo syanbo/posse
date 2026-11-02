@@ -72,6 +72,15 @@ void main() {
     );
   });
 
+  test('a peer that drops the connection still reports its close code', () async {
+    final conn = await QuicConnection.dial('127.0.0.1', port);
+    final ended = Completer<void>();
+    conn.messages.listen((_) {}, onDone: ended.complete);
+    conn.send(quicText, Uint8List.fromList(utf8.encode('drop')));
+    await ended.future.timeout(const Duration(seconds: 5));
+    expect(conn.closeCode, 4001);
+  });
+
   test('punches through to the peer the relay saw', () async {
     final punch = await QuicConnection.prepare('127.0.0.1', relayPort);
     expect(punch.public, startsWith('127.0.0.1:'));

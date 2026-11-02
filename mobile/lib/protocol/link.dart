@@ -184,6 +184,8 @@ class PosseLink {
           return _timedAttempt(url, cancel);
         },
         abandon: (value) => value.close(),
+        // 同一台电脑的哪个地址都会这么答
+        decisive: (error) => error is HostTooOld,
       );
       if (epoch != _epoch) {
         await won.value.close();
