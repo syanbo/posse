@@ -14,6 +14,7 @@ import (
 
 	"posse/internal/errtext"
 	"posse/internal/media"
+	"posse/locales"
 )
 
 // imagesView 是右侧"图片"面板的状态：当前会话里 agent 生成的图片、视频和粘贴过的图片，怎么找见 media 包。
@@ -317,6 +318,19 @@ func (a *app) imagesPanel(c *ui.Context, cur *terminalInfo) ui.Element {
 	})
 }
 
+// mediaLabel 是缩略图下的名字：没有名字的一类按界面语言写出叫法。
+func mediaLabel(m locales.Messages, it media.Item) string {
+	switch it.Tag {
+	case media.TagGenerated:
+		return m.ImagesGenerated()
+	case media.TagCodeOutput:
+		return m.ImagesCodeOutput()
+	case media.TagPasted:
+		return m.ImagesPasted()
+	}
+	return it.Label
+}
+
 // imageGroup 是图片面板当前分段的缩略图卡片，数目在分段上。
 func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 	t := c.Theme()
@@ -326,7 +340,7 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 		if it.Video {
 			kind = "视频 "
 		}
-		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(rCard).Role(ui.RoleButton).Label(kind + it.Label)
+		card := ui.Column(c.Key(it.Key)).Gap(6).Padding(6).Radius(rCard).Role(ui.RoleButton).Label(kind + mediaLabel(L(c), it.Item))
 		selectedBg(c, card, false)
 		card.Children(func() {
 			if it.thumb != nil {
@@ -352,7 +366,7 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 				})
 			}
 			ui.Row(c).Gap(8).Padding(0, 2).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, it.Label).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
+				ui.Text(c, mediaLabel(L(c), it.Item)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
 				if !it.At.IsZero() {
 					ui.Spacer(c)
 					ui.Text(c, commitTime(it.At)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)

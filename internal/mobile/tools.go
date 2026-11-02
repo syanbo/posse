@@ -82,7 +82,7 @@ func (c *conn) toolsMethod(req request, p json.RawMessage) bool {
 	switch a.Agent {
 	case "claude", "codex", "grok", "cursor":
 	default:
-		c.fail(req.ID, "unsupported", "目前只支持 Claude、Codex、Grok 和 Cursor 会话")
+		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok and Cursor sessions are supported for now")
 		return true
 	}
 	go func() {

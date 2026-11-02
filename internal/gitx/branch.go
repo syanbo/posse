@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -196,7 +197,7 @@ func CreateBranch(ctx context.Context, dir, name, from string, checkout bool) er
 }
 
 // ErrNoUpstream 表示分支没有跟踪的远端分支，没法更新。
-var ErrNoUpstream = errors.New("这个分支没有跟踪的远端分支")
+var ErrNoUpstream = errors.New("this branch has no upstream branch")
 
 // Update 用远端更新分支。当前分支：拉取后把本地提交 rebase 上去，未提交的改动临时储藏再取回；
 // 其他分支：只能快进（git fetch 远端分支到本地分支），分叉时报错。
@@ -251,9 +252,9 @@ type AutostashLeft struct {
 
 func (e *AutostashLeft) Error() string {
 	if e.Conflicts {
-		return "已经完成，但取回本地改动时有冲突"
+		return "done, but restoring the local changes ran into conflicts"
 	}
-	return "已经完成，但本地改动没能取回，还在储藏里"
+	return "done, but the local changes could not be restored and are still in the stash"
 }
 
 // stashTop 是最新一条储藏的提交和说明，没有储藏时为空。
@@ -312,7 +313,7 @@ func NotMerged(err error) bool {
 func DeleteRemoteBranch(ctx context.Context, dir, name string) error {
 	remote, branch, ok := strings.Cut(name, "/")
 	if !ok {
-		return errors.New("不是远端分支：" + name)
+		return fmt.Errorf("not a remote branch: %s", name)
 	}
 	_, err := runRaw(ctx, dir, nil, nil, "push", remote, "--delete", branch)
 	return err

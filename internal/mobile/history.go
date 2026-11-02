@@ -29,7 +29,7 @@ func (c *conn) history(id, method string, p json.RawMessage) error {
 	return c.reply(id, res)
 }
 
-// historyError 把常驻进程的报错换成手机上看得懂的话，错误码照旧。
+// historyError 把常驻进程的报错换成手机上看得懂的话（英文源文本，c.fail 按连接的语言翻译），错误码照旧。
 func historyError(method string, err error) error {
 	var re *rpc.Error
 	if !errors.As(err, &re) {
@@ -39,11 +39,11 @@ func historyError(method string, err error) error {
 	if method == "history.resume" {
 		switch {
 		case re.Code == rpc.CodeNotFound && strings.Contains(msg, "no workspace contains"):
-			msg = "电脑上没有包含这个会话目录的工作区，先在电脑上把目录加成项目"
+			msg = "no workspace on the computer contains the session’s folder; add the folder as a project on the computer first"
 		case re.Code == rpc.CodeNotFound:
-			msg = "电脑上找不到这个会话了"
+			msg = "the computer can no longer find this session"
 		case re.Code == rpc.CodeConflict && strings.Contains(msg, "no longer exists"):
-			msg = "会话原来的目录在电脑上已经不在了"
+			msg = "the session’s original folder no longer exists on the computer"
 		}
 	}
 	return errorf(re.Code, "%s", msg)

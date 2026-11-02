@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,7 +46,7 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	}
 	name := s.agentName()
 	if name == "" {
-		return nil, rpc.Errorf(rpc.CodeBadRequest, "这个终端里没有在运行的 agent 会话")
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "no agent session is running in this terminal")
 	}
 	title, err := namer.Normalize(p.Title, time.Now())
 	if err != nil {
@@ -56,23 +57,23 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 		sid = s.Agent().SessionID
 	}
 	if sid == "" && name != "cursor" {
-		return nil, rpc.Errorf(rpc.CodeBadRequest, "还不知道这个 %s 会话的 ID，发一条消息后再试", name)
+		return nil, rpc.Errorf(rpc.CodeBadRequest, "the ID of this %s session is not known yet; send a message and try again", name)
 	}
 	var applies string
 	switch name {
 	case "claude":
-		applies = "Posse 里马上显示；Claude Code 的会话名在下一次发消息时更新"
+		applies = "shown in Posse now; Claude Code’s session name updates on the next message"
 	case "codex":
 		err = namer.WriteCodex(agentHome("CODEX_HOME", ".codex"), sid, title)
-		applies = "Posse 和 codex resume 列表已更新；Codex 界面上的名字要重开会话才变"
+		applies = "updated in Posse and the codex resume list; the name in Codex changes after the session is reopened"
 	case "grok":
 		err = namer.WriteGrok(agentHome("GROK_HOME", ".grok"), sid, p.Cwd, title)
-		applies = "Posse 和 grok 的会话列表已更新；grok 界面上的名字要重开会话才变"
+		applies = "updated in Posse and grok’s session list; the name in grok changes after the session is reopened"
 	default:
-		applies = "只在 Posse 里显示，" + name + " 自己的会话名不变"
+		applies = fmt.Sprintf("shown in Posse only; %s keeps its own session name", name)
 	}
 	if err != nil {
-		return nil, rpc.Errorf(rpc.CodeInternal, "写入标题失败：%v", err)
+		return nil, rpc.Errorf(rpc.CodeInternal, "write the title: %v", err)
 	}
 	s.SetTitle(title, sid, name == "claude")
 	return sessionTitleResult{Title: title, Agent: name, Applies: applies}, nil

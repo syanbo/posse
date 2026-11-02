@@ -21,6 +21,14 @@ const mediaAgents = {'claude', 'codex', 'grok', 'cursor'};
 bool hasMedia(SessionTab tab) =>
     mediaAgents.contains(tab.agent) && (tab.sessionId?.isNotEmpty ?? false);
 
+/// 一项的名字：没有名字的一类电脑只发代号（`tag`），按界面语言写出叫法。
+String mediaLabel(String? tag, String label) => switch (tag) {
+  'generated' => '生成的图片',
+  'codeOutput' => '代码产出',
+  'pasted' => '粘贴',
+  _ => label,
+};
+
 /// 会话里的一张图片或一个视频（`session.media` 的一项）。
 class MediaItem {
   const MediaItem({
@@ -37,7 +45,7 @@ class MediaItem {
     return MediaItem(
       id: j['id'] as String? ?? '',
       video: j['kind'] == 'video',
-      label: j['label'] as String? ?? '',
+      label: mediaLabel(j['tag'] as String?, j['label'] as String? ?? ''),
       source: j['source'] as String? ?? '',
       at: at == 0 ? null : DateTime.fromMillisecondsSinceEpoch(at),
       size: (j['size'] as num?)?.toInt(),

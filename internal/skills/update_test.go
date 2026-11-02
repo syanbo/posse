@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -75,7 +74,7 @@ func TestCheckUpdates(t *testing.T) {
 	if len(u.Gone) != 2 || !u.Gone["d"] || !u.IsGone(Skill{Name: "r", LockHash: "r-old"}) || u.HasUpdate(Skill{Name: "r", LockHash: "r-old"}) {
 		t.Errorf("来源里找不到的 %v", u.Gone)
 	}
-	if len(u.Failed) != 2 || !strings.HasPrefix(u.Failed[0], "me/gone") || !strings.HasPrefix(u.Failed[1], "me/limited") {
+	if len(u.Failed) != 2 || u.Failed[0].Source != "me/gone" || u.Failed[1].Source != "me/limited" {
 		t.Errorf("查不了的来源 %v", u.Failed)
 	}
 	if gone != 3 || limited != 1 {

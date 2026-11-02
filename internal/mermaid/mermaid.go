@@ -208,12 +208,12 @@ func peleRender(source string, m Measurer) (string, error) {
 	}
 	svg, ok := v.(string)
 	if !ok {
-		return "", errors.New("Pele 没有画出 SVG")
+		return "", errors.New("Pele did not draw an SVG")
 	}
 	return svg, nil
 }
 
-var errTimeout = errors.New("画图超时")
+var errTimeout = errors.New("drawing the diagram timed out")
 
 // Render 按 st 的颜色、m 的量法排出 source 的图，或者说出哪里写错了。任何协程都能调，同一时间只画一张。
 func Render(source string, st Style, m Measurer) (*Layout, error) {
@@ -227,7 +227,7 @@ func Render(source string, st Style, m Measurer) (*Layout, error) {
 	}
 	l := &Layout{Shapes: shapes}
 	if l.W, l.H = svgSize(shapes); l.W <= 0 || l.H <= 0 {
-		return nil, errors.New("图的尺寸为空")
+		return nil, errors.New("the diagram has no size")
 	}
 	for _, c := range chunks {
 		l.Labels = append(l.Labels, c.shape(m)...)

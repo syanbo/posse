@@ -365,7 +365,7 @@ func Commit(ctx context.Context, dir, message string, all, amend bool) error {
 }
 
 // ErrStagedChange 表示文件在暂存区里有改动：只提交一处时不知道该以哪个版本为准，不做。
-var ErrStagedChange = errors.New("这个文件有已暂存的改动，到改动页里整个提交它")
+var ErrStagedChange = errors.New("this file has staged changes; commit the whole file from Changes")
 
 // CommitChange 只提交文件里的一处改动（照 WebStorm 行号旁弹窗的"提交此更改"）：content 是 HEAD 的内容
 // 只换上这一处之后的样子。在临时的暂存区里提交（钩子照常执行），工作区不动；
@@ -379,7 +379,7 @@ func CommitChange(ctx context.Context, dir, path string, content []byte, message
 	meta, _, _ := strings.Cut(string(tree), "\t")
 	f := strings.Fields(meta)
 	if len(f) != 3 || f[1] != "blob" {
-		return errors.New("上一次提交里没有这个文件")
+		return errors.New("the last commit does not contain this file")
 	}
 	mode, headBlob := f[0], f[2]
 	staged, err := runRaw(ctx, dir, nil, nil, "ls-files", "-s", "-z", "--", literal(path)[0])
@@ -516,5 +516,5 @@ func StashDropHash(ctx context.Context, dir, hash string) error {
 			return StashDrop(ctx, dir, s.Ref)
 		}
 	}
-	return errors.New("这条储藏已经不在了")
+	return errors.New("this stash no longer exists")
 }

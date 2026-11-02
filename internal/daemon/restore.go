@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/host"
 	"posse/internal/procmem"
 	"posse/internal/rpc"
@@ -192,8 +193,13 @@ func (d *Daemon) restoreTerminal(id string, cols, rows int) (*session, error) {
 	return s, nil
 }
 
-// restoreBanner 在恢复的终端最前面打一行，说明之前的输出没有了。
-const restoreBanner = `printf '\033[2m— Posse 已恢复上次的终端 —\033[0m\n'`
+// restoreBanner 在恢复的终端最前面打一行，说明之前的输出没有了。常驻进程没有界面语言，按用户选的语言写
+// （errtext.SystemLang）；译文里不能有单引号和 %，它们会进 printf 的格式串。
+func restoreBanner() string {
+	return `printf '\033[2m` + errtext.MessageIn(errtext.SystemLang(), srcRestored) + `\033[0m\n'`
+}
+
+const srcRestored = "— Posse restored the previous terminal —"
 
 // restoreCommand 决定恢复 t 时运行什么；t.SessionID 改成实际用的会话（新开的 agent 是新会话）。
 func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.AgentState) {
@@ -213,7 +219,7 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 			}
 			t.SessionID = sid
 			argv := slices.Clone(l.Argv)
-			argv[len(argv)-1] = restoreBanner + "; " + argv[len(argv)-1]
+			argv[len(argv)-1] = restoreBanner() + "; " + argv[len(argv)-1]
 			st := &host.AgentState{Status: agent.StatusStarting, SessionID: sid, At: time.Now()}
 			// 同 historyResume：codex、cursor 改状态的第一个 hook 要到第一轮对话才来
 			if name == "codex" || name == "cursor" {
@@ -224,7 +230,7 @@ func (d *Daemon) restoreCommand(t *store.Terminal) (string, []string, *host.Agen
 		log.Printf("terminal %s: cannot restore %s: %v", t.ID, name, err)
 	}
 	t.SessionID = ""
-	return "", agent.ShellArgv(restoreBanner), nil
+	return "", agent.ShellArgv(restoreBanner()), nil
 }
 
 // restoreAll 恢复上一个常驻进程留下的全部终端。

@@ -254,7 +254,7 @@ class _MermaidBlockState extends State<MermaidBlock> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Text(
-                    '画不出图：$error',
+                    '画不出图：${mermaidErrorText(error)}',
                     style: TextStyle(fontSize: Fs.small, color: c.danger),
                   ),
                 ),
@@ -374,3 +374,11 @@ class _MermaidZoom extends StatelessWidget {
     );
   }
 }
+
+/// 手机上的 Go 库（internal/mermaid）自己的几条报错是英文源文本，按界面语言写；Pele 的语法报错原样给。
+String mermaidErrorText(String error) => switch (error) {
+  'Pele did not draw an SVG' => 'Pele 没有画出 SVG',
+  'drawing the diagram timed out' => '画图超时',
+  'the diagram has no size' => '图的尺寸为空',
+  _ => error,
+};

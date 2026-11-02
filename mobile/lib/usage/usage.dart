@@ -159,9 +159,10 @@ String windowName(UsageWindow w) {
 String _money(double cents) => '\$${(cents / 100).toStringAsFixed(2)}';
 
 /// planName 照各家网页的叫法把套餐名首字母大写（Codex 给的是 plus、pro）。新的常驻进程已经这样写，
-/// 这里兜住还没升级的电脑。
-String planName(String s) =>
-    s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+/// 这里兜住还没升级的电脑。月费的 /mo（Cursor 给的原样）按界面语言写。
+String planName(String s) => s.isEmpty
+    ? s
+    : (s[0].toUpperCase() + s.substring(1)).replaceFirst('/mo', '/月');
 
 /// 详情里窗口下面的几行，和桌面端 planFacts 一致：套餐内用量的金额、按需用量、本周用量用在哪、重置卡。
 /// 和整家的读数不是同一份的，后面写上是多久前的。

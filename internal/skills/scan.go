@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -57,8 +58,12 @@ const (
 // Status 是一家对一个技能的状态和原因。
 type Status struct {
 	State State
-	// Why 写原因（哪个配置、哪一项），给悬停提示用；On 时可以为空。
+	// Why 写原因（哪个配置、哪一项），英文源文本，界面经 errtext 翻译；On 时可以为空。
 	Why string
+	// NotRead、Reads 是读不到（Unseen）的原因：这家不读 NotRead 这个目录，同一范围里它读的是 Reads。
+	// 不拼成一句：目录的列表要按界面语言连接。
+	NotRead string
+	Reads   []string
 	// Inferred 表示这家的读取规则是推断，没有核实过（Cursor）。
 	Inferred bool
 	// Ignored 表示是被 Grok 的 [skills] ignore 藏掉的（算作关了，打开时从 ignore 里去掉）。
@@ -373,7 +378,7 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 			}
 			st := Status{Via: it.path, Inferred: a == Cursor}
 			if w, ok := winner[it.name]; ok && w.real != it.real {
-				st.State, st.Why = Shadowed, "被同名的 "+w.path+" 盖住"
+				st.State, st.Why = Shadowed, fmt.Sprintf("shadowed by %s with the same name", w.path)
 				addDuplicate(cat, it.name, it.path, w.path, a)
 			} else {
 				winner[it.name] = it
@@ -385,12 +390,12 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 		for _, it := range items {
 			s := &out[byDir[it.real]]
 			if rs[it.root].prio[a] >= 0 && cfg.hidden(a, it.path) && s.Agents[a].State == Unseen {
-				s.Agents[a] = Status{State: Off, Why: "config.toml 的 [skills] ignore 里有它", Via: it.path, Ignored: true}
+				s.Agents[a] = Status{State: Off, Why: "listed in ignore of [skills] in config.toml", Via: it.path, Ignored: true}
 			}
 		}
 		for i := range out {
-			if out[i].Agents[a].State == Unseen {
-				out[i].Agents[a].Why = unseenWhy(o.Home, rs, a, out[i])
+			if st := &out[i].Agents[a]; st.State == Unseen {
+				st.NotRead, st.Reads = unseenWhy(o.Home, rs, a, out[i])
 			}
 		}
 	}
@@ -398,7 +403,7 @@ func resolve(o Options, rs []root, cfg configs, items []found, cat *Catalog) []S
 }
 
 // unseenWhy 说这家为什么读不到 s：它不读 s 所在的目录，同一范围里它读的是哪几个。
-func unseenWhy(home string, rs []root, a Agent, s Skill) string {
+func unseenWhy(home string, rs []root, a Agent, s Skill) (notRead string, reads []string) {
 	// 技能目录是解开链接后的，home 也比一下解开的
 	tilde := func(p string) string {
 		for _, h := range []string{home, realDir(home)} {
@@ -408,24 +413,19 @@ func unseenWhy(home string, rs []root, a Agent, s Skill) string {
 		}
 		return p
 	}
-	var reads []root
+	var roots []root
 	for _, r := range rs {
 		if r.prio[a] >= 0 && r.scope == s.Scope && !r.walk {
-			reads = append(reads, r)
+			roots = append(roots, r)
 		}
 	}
-	slices.SortStableFunc(reads, func(x, y root) int { return x.prio[a] - y.prio[a] })
-	var dirs []string
-	for _, r := range reads {
-		if d := tilde(r.dir); !slices.Contains(dirs, d) {
-			dirs = append(dirs, d)
+	slices.SortStableFunc(roots, func(x, y root) int { return x.prio[a] - y.prio[a] })
+	for _, r := range roots {
+		if d := tilde(r.dir); !slices.Contains(reads, d) {
+			reads = append(reads, d)
 		}
 	}
-	why := "不读 " + tilde(filepath.Dir(s.Dir))
-	if len(dirs) > 0 {
-		why += "，它读 " + strings.Join(dirs, "、")
-	}
-	return why
+	return tilde(filepath.Dir(s.Dir)), reads
 }
 
 // scopeOf 是 dir 所在技能目录的范围。

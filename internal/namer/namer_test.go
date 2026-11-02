@@ -69,7 +69,7 @@ func TestWriteCodex(t *testing.T) {
 	if err := WriteCodex(home, "t2", title); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteCodex(home, "missing", title); err == nil || !strings.Contains(err.Error(), "没有线程 missing") {
+	if err := WriteCodex(home, "missing", title); err == nil || !strings.Contains(err.Error(), "no thread missing") {
 		t.Fatalf("missing thread: %v", err)
 	}
 	db, _ = sql.Open("sqlite", path)

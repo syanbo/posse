@@ -245,6 +245,15 @@ func TestHistoryMethods(t *testing.T) {
 	if res["ok"] != false || e["code"] != "not_found" || !strings.Contains(e["message"].(string), "加成项目") {
 		t.Fatalf("history.resume %v", res)
 	}
+	// 声明了英文界面的连接拿英文源文本
+	result(t, p.next(p.call("runtime.clientCapabilities.update", map[string]any{
+		"client": "posse-flutter", "version": 1, "capabilities": []string{"posse.history.v1"}, "locale": "en",
+	})))
+	res = p.next(p.call("history.resume", map[string]any{"session": "s1"}))
+	e, _ = res["error"].(map[string]any)
+	if res["ok"] != false || e["code"] != "not_found" || !strings.Contains(e["message"].(string), "add the folder as a project") {
+		t.Fatalf("history.resume in English %v", res)
+	}
 }
 
 // 套餐用量：没声明 posse.usage.v1 的连接看不到；声明后原样拿到常驻进程的读数。

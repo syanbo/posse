@@ -17,6 +17,7 @@ import (
 	"posse/internal/errtext"
 	"posse/internal/history"
 	"posse/internal/skills"
+	"posse/locales"
 )
 
 // 技能管理：侧栏的「技能」页管全局（用户级、账号同步、插件、系统技能和体检），文件栏的「技能」页签只管当前工作区的项目级技能。
@@ -434,7 +435,11 @@ func (a *app) skillUpdatesLine(c *ui.Context) {
 		}
 		failed += fmt.Sprintf("%d 个在来源里找不到了", len(gone))
 	}
-	why := strings.Join(append(slices.Clone(u.Failed), gone...), "\n")
+	var lines []string
+	for _, f := range u.Failed {
+		lines = append(lines, f.Source+"："+errtext.Message(f.Err))
+	}
+	why := strings.Join(append(lines, gone...), "\n")
 	if n == 0 {
 		text := "都是最新的"
 		if failed != "" {
@@ -579,7 +584,7 @@ func agentMarks(c *ui.Context, sts [skills.NumAgents]skills.Status, can func(ski
 		for _, ag := range skills.Agents {
 			st := sts[ag]
 			size := smallIcon()
-			tip := skillStateTip(ag, st)
+			tip := skillStateTip(L(c), ag, st)
 			if st.State == skills.Unseen {
 				ui.Box(c).Size(size, size).Radius(size * 0.26).Background(colors(c.Theme()).fill).Shrink(0).Tooltip(tip)
 				continue
@@ -623,10 +628,21 @@ func skillStateText(st skills.State) string {
 	return "读不到"
 }
 
-func skillStateTip(ag skills.Agent, st skills.Status) string {
+// skillWhy 是这家对技能是这个状态的原因，按界面语言写。
+func skillWhy(m locales.Messages, st skills.Status) string {
+	if st.NotRead != "" {
+		if len(st.Reads) == 0 {
+			return m.SkillsNotRead(st.NotRead)
+		}
+		return m.SkillsNotReadReads(st.NotRead, strings.Join(st.Reads, m.SkillsListSeparator()))
+	}
+	return errtext.Message(st.Why)
+}
+
+func skillStateTip(m locales.Messages, ag skills.Agent, st skills.Status) string {
 	tip := agentTitle(ag.String()) + "：" + skillStateText(st.State)
-	if st.Why != "" {
-		tip += "\n" + st.Why
+	if why := skillWhy(m, st); why != "" {
+		tip += "\n" + why
 	}
 	if st.Inferred && st.State != skills.Unseen {
 		tip += "\n读取规则是推断的，没有核实"
@@ -710,8 +726,8 @@ func (a *app) skillAgentRow(c *ui.Context, sk skills.Skill, ag skills.Agent, o s
 					ui.Text(c, "推断").FontSize(fsSmall).TextColor(colors(t).faint).Tooltip("Cursor 读哪些目录没有核实过，按它程序里出现的目录名推断")
 				}
 			})
-			if st.Why != "" {
-				ui.Text(c, st.Why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+			if why := skillWhy(L(c), st); why != "" {
+				ui.Text(c, why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			if st.Via != "" {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {

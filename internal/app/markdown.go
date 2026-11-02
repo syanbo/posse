@@ -17,6 +17,7 @@ import (
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 
+	"posse/internal/errtext"
 	"posse/internal/mermaid/diagram"
 )
 
@@ -572,7 +573,7 @@ func (r mdView) block(c *ui.Context, b mdBlock) {
 				return
 			}
 			if d != nil && d.Err != "" {
-				ui.Text(c, "画不出图："+d.Err).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
+				ui.Text(c, "画不出图："+errtext.Message(d.Err)).FontSize(r.small()).TextColor(t.Danger).Padding(0, 12)
 			}
 			// 代码不折行，放不下左右滚：目录树、对齐的注释折行后列就乱了
 			ui.ScrollHorizontal(c).Children(func() {

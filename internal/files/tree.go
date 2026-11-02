@@ -11,8 +11,11 @@ import (
 type Entry struct {
 	Name string
 	Dir  bool
-	Link string // 符号链接指向的路径（照链接里写的），不是链接时为空
+	Link string // 符号链接指向的路径（照链接里写的），不是链接时为空，读不出时是 LinkUnreadable
 }
+
+// LinkUnreadable 是读不出指向的符号链接的 Link（英文源文本，界面经 errtext 翻译）。
+const LinkUnreadable = "(cannot read the link target)"
 
 // hidden 是树里不显示的名字：git 的内部目录和访达的元数据。
 func hidden(name string) bool { return name == ".git" || name == ".DS_Store" }
@@ -37,7 +40,7 @@ func ReadDir(dir string) ([]Entry, Stamp, error) {
 				isDir = fi.IsDir()
 			}
 			if link, _ = os.Readlink(p); link == "" {
-				link = "（读不出指向）"
+				link = LinkUnreadable
 			}
 		}
 		out = append(out, Entry{Name: de.Name(), Dir: isDir, Link: link})

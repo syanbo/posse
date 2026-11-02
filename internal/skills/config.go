@@ -146,14 +146,14 @@ func (c configs) state(a Agent, s *Skill) (State, string) {
 	case Claude:
 		switch c.claude[s.Name] {
 		case "off":
-			return Off, "settings.json 的 skillOverrides 设为 off"
+			return Off, "set to off in skillOverrides of settings.json"
 		case "user-invocable-only":
-			return Manual, "settings.json 的 skillOverrides 设为 user-invocable-only"
+			return Manual, "set to user-invocable-only in skillOverrides of settings.json"
 		case "name-only":
-			return On, "settings.json 的 skillOverrides 设为 name-only：只列名字，不带说明"
+			return On, "set to name-only in skillOverrides of settings.json; only the name is listed, without the description"
 		}
 		if s.Meta.ModelOff {
-			return Manual, "SKILL.md 设了 disable-model-invocation"
+			return Manual, "SKILL.md sets disable-model-invocation"
 		}
 	case Codex:
 		// 后写的盖过先写的
@@ -163,20 +163,20 @@ func (c configs) state(a Agent, s *Skill) (State, string) {
 				continue
 			}
 			if !*e.Enabled {
-				return Off, "config.toml 的 [[skills.config]] 设为 enabled = false"
+				return Off, "set to enabled = false in [[skills.config]] of config.toml"
 			}
 			break
 		}
 	case Grok:
 		if slices.Contains(c.grok.disabled, s.Name) {
-			return Off, "config.toml 的 [skills] disabled 里有它"
+			return Off, "listed in disabled of [skills] in config.toml"
 		}
 		if s.Meta.ModelOff {
-			return Manual, "SKILL.md 设了 disable-model-invocation"
+			return Manual, "SKILL.md sets disable-model-invocation"
 		}
 	case Cursor:
 		if s.Meta.ModelOff {
-			return Manual, "SKILL.md 设了 disable-model-invocation"
+			return Manual, "SKILL.md sets disable-model-invocation"
 		}
 	}
 	return On, ""

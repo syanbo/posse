@@ -24,7 +24,7 @@ var stateDBRe = regexp.MustCompile(`^state_(\d+)\.sqlite$`)
 func codexStateDB(home string) (string, error) {
 	entries, err := os.ReadDir(home)
 	if err != nil {
-		return "", fmt.Errorf("找不到 Codex 目录 %s", home)
+		return "", fmt.Errorf("cannot find the Codex directory %s", home)
 	}
 	best, path := -1, ""
 	for _, e := range entries {
@@ -35,7 +35,7 @@ func codexStateDB(home string) (string, error) {
 		}
 	}
 	if path == "" {
-		return "", fmt.Errorf("%s 下没有 state_*.sqlite", home)
+		return "", fmt.Errorf("no state_*.sqlite in %s", home)
 	}
 	return path, nil
 }
@@ -55,7 +55,7 @@ func WriteCodex(home, threadID, title string) error {
 	var mode sql.NullString
 	if err := db.QueryRow(`SELECT history_mode FROM threads WHERE id = ?`, threadID).Scan(&mode); err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("Codex 的 state 库里没有线程 %s", threadID)
+			return fmt.Errorf("no thread %s in the Codex state database", threadID)
 		}
 		return err
 	}
@@ -126,7 +126,7 @@ func grokEscape(s string) string {
 func WriteGrok(home, sessionID, cwd, title string) error {
 	path := grokSummary(home, sessionID, cwd)
 	if path == "" {
-		return fmt.Errorf("找不到 grok 会话 %s 的 summary.json", sessionID)
+		return fmt.Errorf("cannot find summary.json of the grok session %s", sessionID)
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -134,7 +134,7 @@ func WriteGrok(home, sessionID, cwd, title string) error {
 	}
 	var data map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &data); err != nil || data == nil {
-		return fmt.Errorf("%s 不是 JSON 对象，不覆盖", path)
+		return fmt.Errorf("%s is not a JSON object; not overwriting it", path)
 	}
 	t, _ := json.Marshal(title)
 	data["generated_title"], data["session_summary"], data["title_is_manual"] = t, t, json.RawMessage("true")

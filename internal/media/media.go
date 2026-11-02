@@ -32,11 +32,19 @@ import (
 	"posse/internal/history"
 )
 
+// Item.Tag 的取值。
+const (
+	TagGenerated  = "generated"  // Codex 生成的图片（ig_ 开头）
+	TagCodeOutput = "codeOutput" // 代码执行的产出（exec- 开头）
+	TagPasted     = "pasted"     // 粘贴的图片，没有序号时
+)
+
 // Item 是会话里的一张图片或一个视频。
 type Item struct {
 	Key   string // 粘贴的和 Codex 的是文件路径，Claude 工具返回的是它在会话文件里的位置，视频是路径加修改时间
 	N     int    // 粘贴的图片的序号
-	Label string
+	Label string // 文件名、工具名或 #序号；没有可显示的名字时为空，由 Tag 说是哪一类
+	Tag   string // TagGenerated、TagCodeOutput、TagPasted：窗口和手机按自己的语言写出这一类的叫法
 	At    time.Time
 	Path  string             // 磁盘上的图片或视频
 	Tool  *history.ToolImage // 工具返回的图片，内容在会话文件 Src 里
@@ -199,15 +207,15 @@ func CodexImages(sid string) []Item {
 		if err != nil {
 			continue
 		}
-		label := e.Name()
+		label, tag := e.Name(), ""
 		switch {
 		case strings.HasPrefix(label, "ig_"):
-			label = "生成的图片"
+			label, tag = "", TagGenerated
 		case strings.HasPrefix(label, "exec-"):
-			label = "代码产出"
+			label, tag = "", TagCodeOutput
 		}
 		path := filepath.Join(dir, e.Name())
-		out = append(out, Item{Key: path, Label: label, At: fi.ModTime(), Path: path})
+		out = append(out, Item{Key: path, Label: label, Tag: tag, At: fi.ModTime(), Path: path})
 	}
 	slices.SortFunc(out, func(a, b Item) int { return b.At.Compare(a.At) })
 	return out
@@ -252,8 +260,9 @@ func SessionItems(src string, imgs []history.ToolImage) (pasted, made []Item) {
 			it.Key, it.Path, it.Tool, it.Src = im.Path, im.Path, nil, ""
 		}
 		if im.Pasted {
-			it.N, it.Label = im.N, "粘贴"
+			it.N, it.Tag = im.N, TagPasted
 			if im.N > 0 {
+				it.Tag = ""
 				it.Label = fmt.Sprintf("#%d", im.N)
 			}
 			pasted = append(pasted, it)

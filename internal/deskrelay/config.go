@@ -113,18 +113,18 @@ func AdminCode(addr string, master []byte) string {
 func (c Config) Invite(name string) (string, error) {
 	master, err := base64.StdEncoding.DecodeString(c.Master)
 	if err != nil || len(master) != KeyLen || c.Relay == "" {
-		return "", errors.New("这台电脑不是中转的管理员")
+		return "", errors.New("this computer is not the relay’s admin")
 	}
 	if !ValidName(name) {
-		return "", errors.New("名字只能用小写字母、数字、点、横线、下划线，最多 32 个字符")
+		return "", errors.New("the name may use only lowercase letters, digits, dots, hyphens and underscores, up to 32 characters")
 	}
 	if name == AdminName {
-		return "", errors.New("admin 是管理员自己用的名字")
+		return "", errors.New("admin is the name the admin uses")
 	}
 	return encodeCode(codeUser, c.Relay, name, UserKey(master, name)), nil
 }
 
-var errBadCode = errors.New("不是有效的中转邀请码")
+var errBadCode = errors.New("not a valid relay invite code")
 
 // ParseCode 解开邀请码或管理员码，得到要写进 desk.json 的设置。
 func ParseCode(s string) (Config, error) {

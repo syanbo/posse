@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/procmem"
 	"posse/internal/store"
 )
@@ -93,7 +94,7 @@ func TestRestoreAfterRestart(t *testing.T) {
 	if gotDir != wantDir || r.userName() != "登录页" || r.CreatedAt.UnixMilli() != s.CreatedAt.UnixMilli() || r.agentName() != "claude" || r.Agent().SessionID != "sid-1" {
 		t.Fatalf("restored dir %q name %q created %v (want %v) agent %q session %q", r.Dir, r.userName(), r.CreatedAt, s.CreatedAt, r.agentName(), r.Agent().SessionID)
 	}
-	waitScreen(t, r, "已恢复上次的终端")
+	waitScreen(t, r, errtext.MessageIn(errtext.SystemLang(), srcRestored))
 	list = call(t, d2.terminalList, map[string]any{"workspace": w.ID}).([]terminalInfo)
 	if len(list) != 2 || list[0].ID != s.ID || list[0].Lost || !list[0].Running || !list[1].Lost {
 		t.Fatalf("list after restoring one = %+v", list)

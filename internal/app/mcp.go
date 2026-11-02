@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/skills"
 )
 
@@ -269,8 +270,8 @@ func mcpAgentRow(c *ui.Context, sv skills.MCPServer, ag skills.Agent) {
 					ui.Text(c, "推断").FontSize(fsSmall).TextColor(colors(t).faint).Tooltip(mcpInferredTip(ag))
 				}
 			})
-			if st.Why != "" {
-				ui.Text(c, st.Why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+			if why := skillWhy(L(c), st); why != "" {
+				ui.Text(c, why).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			if st.Via != "" {
 				ui.Text(c, shortPath(st.Via)).FontSize(fsSmall).Font(monoFont).TextColor(colors(t).faint).MaxLines(2)
@@ -325,7 +326,7 @@ func mcpIssueText(is skills.MCPIssue) string {
 	case skills.MCPMissingCommand:
 		return "启动命令不在了：" + shortPath(is.Detail)
 	case skills.MCPMismatch:
-		return "几份配置写得不一样（" + is.Detail + "），各家实际启动的可能不是同一个"
+		return "几份配置写得不一样（" + errtext.Message(is.Detail) + "），各家实际启动的可能不是同一个"
 	}
 	return is.Detail
 }

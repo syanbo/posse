@@ -417,6 +417,8 @@ func (c *conn) dispatch(req request) error {
 			Client       string   `json:"client"`
 			Version      int      `json:"version"`
 			Capabilities []string `json:"capabilities"`
+			// Posse 扩展：手机界面的语言（BCP 47，如 zh-Hans、en），报错和说明按它翻译
+			Locale string `json:"locale"`
 			// Posse 扩展：这台手机的安装 ID、型号和它存着的这台电脑的全部 token，见 pairing.identify
 			Phone *struct {
 				ID     string   `json:"id"`
@@ -428,7 +430,7 @@ func (c *conn) dispatch(req request) error {
 			return c.fail(req.ID, "bad_params", "client capabilities")
 		}
 		// 每次声明整份替换。后面的扩展推送只发给带上对应能力的连接。
-		c.setClientCaps(body.Client, body.Version, body.Capabilities)
+		c.setClientCaps(body.Client, body.Version, body.Capabilities, body.Locale)
 		if ph := body.Phone; ph != nil && ph.ID != "" {
 			name := strings.TrimSpace(ph.Name)
 			if len([]rune(name)) > 64 {

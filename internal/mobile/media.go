@@ -126,7 +126,7 @@ func (c *conn) mediaMethod(req request, p json.RawMessage) bool {
 		return true
 	}
 	if !media.Supported(a.Agent) {
-		c.fail(req.ID, "unsupported", "目前只支持 Claude、Codex、Grok 和 Cursor 会话")
+		c.fail(req.ID, "unsupported", "only Claude, Codex, Grok and Cursor sessions are supported for now")
 		return true
 	}
 	go func() {
@@ -146,6 +146,10 @@ func (s *Server) mediaList(a mediaParams) (any, error) {
 				kind = "video"
 			}
 			row := map[string]any{"id": it.Key, "kind": kind, "label": it.Label, "source": it.Source(), "at": ms(it.At)}
+			// 没有名字的一类（生成的图片、粘贴）发代号，手机按自己的语言写
+			if it.Tag != "" {
+				row["tag"] = it.Tag
+			}
 			if it.Path != "" {
 				if fi, err := os.Stat(it.Path); err == nil {
 					row["size"] = fi.Size()

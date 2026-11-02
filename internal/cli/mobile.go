@@ -100,7 +100,7 @@ func cmdMobileRelay(e *env, args []string) error {
 	}
 	var out struct{ Code string }
 	return e.do("relay.invite", map[string]any{"name": args[1]}, &out, func() {
-		fmt.Fprintf(e.out, "%s\n\nOn the other computer: Posse > 手机 > 外网中转, paste this code (or `posse mobile relay set <code>`).\n", out.Code)
+		fmt.Fprintf(e.out, "%s\n\nOn the other computer: Posse > Mobile > Relay, paste this code (or `posse mobile relay set <code>`).\n", out.Code)
 	})
 }
 

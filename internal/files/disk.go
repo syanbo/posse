@@ -126,7 +126,7 @@ func WriteFile(path string, write func(io.Writer) error) (Stamp, error) {
 	mode := fs.FileMode(0o644)
 	if fi, err := os.Stat(path); err == nil {
 		if fi.IsDir() {
-			return Stamp{}, errors.New("是一个目录")
+			return Stamp{}, errors.New("is a directory")
 		}
 		mode = fi.Mode().Perm()
 	}

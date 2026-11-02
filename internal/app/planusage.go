@@ -354,7 +354,7 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 					agentTile(c, u.Agent, smallIcon())
 					ui.Text(c, agentTitle(u.Agent)).FontSize(fsBody).FontWeight(fwMedium).Shrink(0)
 					if u.Plan != "" {
-						ui.Text(c, u.Plan).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
+						ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					ui.Spacer(c)
 					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).

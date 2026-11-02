@@ -111,7 +111,7 @@ func TestAgentImages(t *testing.T) {
 	old := time.Now().Add(-time.Minute)
 	os.Chtimes(filepath.Join(dir, "ig_abc.png"), old, old)
 	codex := CodexImages("019f-codex")
-	if len(codex) != 2 || codex[0].Label != "代码产出" || codex[1].Label != "生成的图片" {
+	if len(codex) != 2 || codex[0].Tag != TagCodeOutput || codex[1].Tag != TagGenerated {
 		t.Fatalf("codex items %+v", codex)
 	}
 	if _, err := Decode(codex[1], 512); err != nil {

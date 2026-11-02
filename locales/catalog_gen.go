@@ -3662,6 +3662,22 @@ func (msgs Messages) GitConsoleInfo() string {
 	return Catalog.Format(msgs.locale, "gitConsoleInfo", nil)
 }
 
+// GitConsoleOmitted says "… {count, plural, one {# byte} other {# bytes}} omitted …"
+// in the language the app shows.
+//
+// Git Console: marker in the middle of a long command output whose middle
+// part was cut. count is the number of bytes left out.
+func GitConsoleOmitted(count int) string { return In(i18n.Locale()).GitConsoleOmitted(count) }
+
+// GitConsoleOmitted says "… {count, plural, one {# byte} other {# bytes}} omitted …"
+// in the language of msgs.
+//
+// Git Console: marker in the middle of a long command output whose middle
+// part was cut. count is the number of bytes left out.
+func (msgs Messages) GitConsoleOmitted(count int) string {
+	return Catalog.Format(msgs.locale, "gitConsoleOmitted", map[string]any{"count": count})
+}
+
 // GitConsoleRepeat says "{count, plural, one {# time} other {# times}} between {start} and {end}"
 // in the language the app shows.
 //
@@ -5530,6 +5546,54 @@ func GitWorkspace() string { return In(i18n.Locale()).GitWorkspace() }
 // comparison, as in main → Workspace.
 func (msgs Messages) GitWorkspace() string {
 	return Catalog.Format(msgs.locale, "gitWorkspace", nil)
+}
+
+// ImagesCodeOutput says "Code output"
+// in the language the app shows.
+//
+// Images panel: name under a thumbnail of an image produced by code the
+// agent ran (Codex exec- files).
+func ImagesCodeOutput() string { return In(i18n.Locale()).ImagesCodeOutput() }
+
+// ImagesCodeOutput says "Code output"
+// in the language of msgs.
+//
+// Images panel: name under a thumbnail of an image produced by code the
+// agent ran (Codex exec- files).
+func (msgs Messages) ImagesCodeOutput() string {
+	return Catalog.Format(msgs.locale, "imagesCodeOutput", nil)
+}
+
+// ImagesGenerated says "Generated image"
+// in the language the app shows.
+//
+// Images panel: name under a thumbnail of an image the agent generated
+// (Codex ig_ files).
+func ImagesGenerated() string { return In(i18n.Locale()).ImagesGenerated() }
+
+// ImagesGenerated says "Generated image"
+// in the language of msgs.
+//
+// Images panel: name under a thumbnail of an image the agent generated
+// (Codex ig_ files).
+func (msgs Messages) ImagesGenerated() string {
+	return Catalog.Format(msgs.locale, "imagesGenerated", nil)
+}
+
+// ImagesPasted says "Pasted"
+// in the language the app shows.
+//
+// Images panel: name under a thumbnail of an image the user pasted, when it
+// has no number.
+func ImagesPasted() string { return In(i18n.Locale()).ImagesPasted() }
+
+// ImagesPasted says "Pasted"
+// in the language of msgs.
+//
+// Images panel: name under a thumbnail of an image the user pasted, when it
+// has no number.
+func (msgs Messages) ImagesPasted() string {
+	return Catalog.Format(msgs.locale, "imagesPasted", nil)
 }
 
 // KeysAdd says "Add Another Shortcut"
@@ -10362,6 +10426,58 @@ func (msgs Messages) SettingsWorkspaceMeta() string {
 	return Catalog.Format(msgs.locale, "settingsWorkspaceMeta", nil)
 }
 
+// SkillsListSeparator says ", "
+// in the language the app shows.
+//
+// Skills & Tools: separator between folders in a list inside a sentence
+// (skillsNotReadReads).
+func SkillsListSeparator() string { return In(i18n.Locale()).SkillsListSeparator() }
+
+// SkillsListSeparator says ", "
+// in the language of msgs.
+//
+// Skills & Tools: separator between folders in a list inside a sentence
+// (skillsNotReadReads).
+func (msgs Messages) SkillsListSeparator() string {
+	return Catalog.Format(msgs.locale, "skillsListSeparator", nil)
+}
+
+// SkillsNotRead says "Doesn’t read {dir}"
+// in the language the app shows.
+//
+// Skills & Tools: why an agent cannot see a skill. dir is the folder the
+// skill is in.
+func SkillsNotRead(dir string) string { return In(i18n.Locale()).SkillsNotRead(dir) }
+
+// SkillsNotRead says "Doesn’t read {dir}"
+// in the language of msgs.
+//
+// Skills & Tools: why an agent cannot see a skill. dir is the folder the
+// skill is in.
+func (msgs Messages) SkillsNotRead(dir string) string {
+	return Catalog.Format(msgs.locale, "skillsNotRead", map[string]any{"dir": dir})
+}
+
+// SkillsNotReadReads says "Doesn’t read {dir}; it reads {dirs}"
+// in the language the app shows.
+//
+// Skills & Tools: why an agent cannot see a skill. dir is the folder the
+// skill is in; dirs lists the folders the agent reads, joined with
+// skillsListSeparator.
+func SkillsNotReadReads(dir string, dirs string) string {
+	return In(i18n.Locale()).SkillsNotReadReads(dir, dirs)
+}
+
+// SkillsNotReadReads says "Doesn’t read {dir}; it reads {dirs}"
+// in the language of msgs.
+//
+// Skills & Tools: why an agent cannot see a skill. dir is the folder the
+// skill is in; dirs lists the folders the agent reads, joined with
+// skillsListSeparator.
+func (msgs Messages) SkillsNotReadReads(dir string, dirs string) string {
+	return Catalog.Format(msgs.locale, "skillsNotReadReads", map[string]any{"dir": dir, "dirs": dirs})
+}
+
 // UpdateCheckButton says "Check for Updates"
 // in the language the app shows.
 //
@@ -10828,6 +10944,22 @@ func UsageOtherModels() string { return In(i18n.Locale()).UsageOtherModels() }
 // Plan Usage settings or status popover: label for OtherModels.
 func (msgs Messages) UsageOtherModels() string {
 	return Catalog.Format(msgs.locale, "usageOtherModels", nil)
+}
+
+// UsagePerMonth says "/mo"
+// in the language the app shows.
+//
+// Plan Usage: replaces /mo after a plan’s monthly price next to the plan
+// name (Cursor’s “Ultra $200/mo”).
+func UsagePerMonth() string { return In(i18n.Locale()).UsagePerMonth() }
+
+// UsagePerMonth says "/mo"
+// in the language of msgs.
+//
+// Plan Usage: replaces /mo after a plan’s monthly price next to the plan
+// name (Cursor’s “Ultra $200/mo”).
+func (msgs Messages) UsagePerMonth() string {
+	return Catalog.Format(msgs.locale, "usagePerMonth", nil)
 }
 
 // UsageReadAt says "Reading from the agent’s last run: {time}"

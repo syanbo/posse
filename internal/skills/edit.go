@@ -25,10 +25,10 @@ type Change struct {
 }
 
 // ErrNoToggle 表示这家没有能写的开关（Cursor），或这个技能不归开关管（读不到、被同名盖住、SKILL.md 里写死的）。
-var ErrNoToggle = errors.New("这一家没有能写的开关")
+var ErrNoToggle = errors.New("this agent has no switch that can be written")
 
 // ErrStale 表示算好改动后文件又被别人改过。
-var ErrStale = errors.New("配置文件刚被改过，重新扫描后再试")
+var ErrStale = errors.New("the config file was just changed; rescan and try again")
 
 // CanToggle 报告 a 对 s 能不能开关：读得到、生效的那一份，状态是启用或关了（Claude 的 skillOverrides 设成别的值时也能改回）。
 func CanToggle(a Agent, s Skill) bool {
@@ -107,7 +107,7 @@ func PlanToggle(o Options, s Skill, a Agent, enable bool) (Change, error) {
 		return Change{}, err
 	}
 	if ch.After == ch.Before {
-		return Change{}, fmt.Errorf("%s 的配置不用改", a)
+		return Change{}, fmt.Errorf("the config of %s needs no change", a)
 	}
 	return ch, nil
 }
@@ -156,7 +156,7 @@ func setJSONOverride(src, name, value string) (string, error) {
 		src = "{}\n"
 	}
 	if !json.Valid([]byte(src)) {
-		return "", errors.New("settings.json 不是合法的 JSON，没有改")
+		return "", errors.New("settings.json is not valid JSON; nothing changed")
 	}
 	keyStart, valStart, valEnd, found := topLevelKey(src, "skillOverrides")
 	// 已有的各项，保持原来的顺序；值原样留着（不是字符串的也不动）
@@ -165,7 +165,7 @@ func setJSONOverride(src, name, value string) (string, error) {
 	if found {
 		dec := json.NewDecoder(strings.NewReader(src[valStart:valEnd]))
 		if t, err := dec.Token(); err != nil || t != json.Delim('{') {
-			return "", errors.New("settings.json 的 skillOverrides 不是对象，没有改")
+			return "", errors.New("skillOverrides in settings.json is not an object; nothing changed")
 		}
 		for dec.More() {
 			t, err := dec.Token()
@@ -516,11 +516,11 @@ func setTOMLList(src, table, key, item string, add bool, norm func(string) strin
 	var items []string
 	if ks >= 0 {
 		if ke < 0 {
-			return "", fmt.Errorf("没认出 [%s] 的 %s，没有改", table, key)
+			return "", fmt.Errorf("cannot read %s of [%s]; nothing changed", key, table)
 		}
 		var v map[string][]string
 		if _, err := toml.Decode(strings.Join(lines[ks:ke], "\n"), &v); err != nil {
-			return "", fmt.Errorf("没认出 [%s] 的 %s，没有改", table, key)
+			return "", fmt.Errorf("cannot read %s of [%s]; nothing changed", key, table)
 		}
 		items = v[key]
 	}

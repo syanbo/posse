@@ -22,6 +22,7 @@ import (
 	"golang.org/x/crypto/nacl/box"
 
 	"posse/internal/deskrelay"
+	"posse/internal/errtext"
 )
 
 // Device 是一个配对码换来的设备 token。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
@@ -141,7 +142,8 @@ func (p *pairing) auth(token string) (Device, bool) {
 		now := time.Now()
 		if d.LastSeen.IsZero() {
 			d.PairedAt = now
-			d.Name = "手机 " + now.Format("01-02 15:04")
+			// 默认名字存下来给窗口和手机看，这时还不知道手机的语言，按用户在 Posse 里选的语言写
+			d.Name = errtext.MessageIn(errtext.SystemLang(), "Phone") + " " + now.Format("01-02 15:04")
 		}
 		// 只在第一次和每隔一阵写盘，免得每次重连都写
 		if d.LastSeen.IsZero() || now.Sub(d.LastSeen) > time.Hour {

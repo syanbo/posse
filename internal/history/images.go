@@ -364,12 +364,12 @@ func dataMedia(url string) string {
 func decodeDataURL(url string) ([]byte, error) {
 	_, data, ok := strings.Cut(url, ";base64,")
 	if !ok {
-		return nil, errors.New("不是内嵌的图片")
+		return nil, errors.New("not an embedded image")
 	}
 	return base64.StdEncoding.DecodeString(data)
 }
 
-var errImageGone = errors.New("会话文件里没有这张图片了")
+var errImageGone = errors.New("the session file no longer has this image")
 
 // ReadToolImage 读回 Scan 找到的一张图片的内容。
 func ReadToolImage(path string, img ToolImage) ([]byte, error) {

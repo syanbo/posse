@@ -34,7 +34,7 @@
 
 ## Posse 扩展协议
 
-- `runtime.clientCapabilities.update` 声明的能力记在这条连接上，没声明能力的连接不收 Posse 扩展推送，也调不到要能力的方法。
+- `runtime.clientCapabilities.update` 声明的能力记在这条连接上，没声明能力的连接不收 Posse 扩展推送，也调不到要能力的方法。它还带 `locale`（手机界面的语言，BCP 47），电脑给这条连接的报错和说明按它翻译，没带的按中文。
 - `runtime.ping`：不用声明能力，电脑立刻回空结果。
 - 对话照 Orca 的 `nativeChat.readSession`、`nativeChat.subscribe`、`nativeChat.unsubscribe`，Orca App 和 Posse 手机客户端共用：会话文件解码在 `internal/history/chat.go`（文本块截到 64000 字，工具输出截到 4000 字），订阅按 `subscriptionId` 登记，每 500ms stat 一次会话文件（文件还没出现时从 500ms 翻倍到 5s），追加推 `appended`，变短或换了 inode 推 `replacement`。`terminal.send` 的回复带 `writeSettlement`。
 - `posse.permission.v1`：正在订阅某个终端对话时，Claude 的 PermissionRequest 走 `hook.permission.hold`：往这条对话流推 `{type:permission, requestId, terminal, tool, input}`，等 `agent.permission.decide`；桌面有人键入或 30 秒到了就返回空 behavior，`posse hook` 不输出、TUI 照常弹框。没有带这项能力的手机订阅着时立刻放行。为了挂得住，Claude 设置里 PermissionRequest 的 hook 超时是 40 秒（其余事件 5 秒），`posse hook` 等这次 RPC 35 秒（其余 2 秒），常驻进程交接打断时到新进程上再挂。
@@ -100,7 +100,7 @@
 
 ### 图片与视频
 
-- 带 `posse.media.v1` 才有：会话页、终端页的"更多"里"图片与视频"，内容和桌面的图片面板一样。`session.media`（参数同 `nativeChat.readSession`）列出 agent 生成的（最近 40 项）和粘贴的；`session.mediaThumb` 给 480 像素宽的 JPEG 缩略图（视频取第一帧），一次只做一张；`session.mediaRead` 按段读原图或视频（同 `files.readRange`，每段 1 MB）。手机只能按列表给过的 ID 读。会话文件被重写后按旧偏移读不到时回「会话文件里没有这张图片了」。
+- 带 `posse.media.v1` 才有：会话页、终端页的"更多"里"图片与视频"，内容和桌面的图片面板一样。`session.media`（参数同 `nativeChat.readSession`）列出 agent 生成的（最近 40 项）和粘贴的；`session.mediaThumb` 给 480 像素宽的 JPEG 缩略图（视频取第一帧），一次只做一张；`session.mediaRead` 按段读原图或视频（同 `files.readRange`，每段 1 MB）。每项的 `label` 是文件名、工具名或 `#序号`，没有名字的一类改发 `tag`（`generated` 生成的图片、`codeOutput` 代码产出、`pasted` 没有序号的粘贴），手机按界面语言写出叫法。手机只能按列表给过的 ID 读。会话文件被重写后按旧偏移读不到时回「会话文件里没有这张图片了」。
 - 手机上两列网格，开着时每 3 秒重列；点开图片是原图（agent 当时看到的样子），双指放大，视频和文件页走同一套分段下载和播放。左右滑切到前一项、后一项（顺序同网格：先生成的、再粘贴的，副标题末尾写第几项），翻走的页释放（视频停下、缩放不留）。原大时单指翻页，放大后单指平移。
 
 ### 技能与工具

@@ -295,6 +295,8 @@ type conn struct {
 	clientName    string
 	clientVersion int
 	caps          map[string]struct{}
+	// lang 是手机界面的语言，报错和说明按它翻译；没报 locale 的手机是中文
+	lang errtext.Lang
 
 	// 这条连接上还开着的对话订阅。键是流的 key，值是它看着的终端。
 	chatWatch map[string]chatWatch
@@ -307,7 +309,7 @@ type conn struct {
 	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着
 }
 
-func (c *conn) setClientCaps(client string, version int, names []string) {
+func (c *conn) setClientCaps(client string, version int, names []string, locale string) {
 	set := make(map[string]struct{}, len(names))
 	for _, name := range names {
 		if name != "" {
@@ -318,7 +320,18 @@ func (c *conn) setClientCaps(client string, version int, names []string) {
 	c.clientName = client
 	c.clientVersion = version
 	c.caps = set
+	c.lang = errtext.LangOf(locale)
 	c.smu.Unlock()
+}
+
+// language 是这条连接上给人看的文字用的语言：握手之后、手机声明能力之前是中文。
+func (c *conn) language() errtext.Lang {
+	c.smu.Lock()
+	defer c.smu.Unlock()
+	if c.lang == "" {
+		return errtext.ZH
+	}
+	return c.lang
 }
 
 func (c *conn) hasCapability(name string) bool {
@@ -476,9 +489,9 @@ func (c *conn) replyOrFail(id string, res any, err error) {
 	case errors.As(err, &re):
 		c.fail(id, re.code, re.msg)
 	case errors.Is(err, fs.ErrNotExist):
-		c.fail(id, "not_found", errtext.Text(err))
+		c.fail(id, "not_found", errtext.TextIn(c.language(), err))
 	default:
-		c.fail(id, "internal_error", errtext.Text(err))
+		c.fail(id, "internal_error", errtext.TextIn(c.language(), err))
 	}
 }
 
@@ -486,9 +499,9 @@ func (c *conn) stream(id string, result any) error {
 	return c.sendJSON(map[string]any{"id": id, "ok": true, "streaming": true, "result": result})
 }
 
-// fail 回一个失败的应答：错误码照旧给程序判断，说明换成中文给人看。
+// fail 回一个失败的应答：错误码照旧给程序判断，说明按这条连接的语言给人看。
 func (c *conn) fail(id, code, msg string) error {
-	msg = errtext.Message(msg)
+	msg = errtext.MessageIn(c.language(), msg)
 	return c.sendJSON(map[string]any{"id": id, "ok": false, "error": map[string]string{"code": code, "message": msg}})
 }
 
@@ -541,7 +554,7 @@ func (c *conn) serve() {
 			if errors.As(err, &re) {
 				c.fail(req.ID, re.code, re.msg)
 			} else {
-				c.fail(req.ID, "internal_error", errtext.Text(err))
+				c.fail(req.ID, "internal_error", errtext.TextIn(c.language(), err))
 			}
 		}
 	}

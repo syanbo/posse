@@ -42,11 +42,11 @@ func npx(sub string, args ...string) []string {
 // Check 挡住会被 npx 当成自己参数的来源和名字（以 - 开头）。
 func (in Install) Check() error {
 	if strings.HasPrefix(strings.TrimSpace(in.Source), "-") {
-		return fmt.Errorf("来源不能以 - 开头")
+		return errors.New("the source must not start with -")
 	}
 	for _, s := range in.Skills {
 		if strings.HasPrefix(s, "-") {
-			return fmt.Errorf("技能名 %s 不能以 - 开头", s)
+			return fmt.Errorf("skill name %s must not start with -", s)
 		}
 	}
 	return nil
@@ -101,7 +101,7 @@ func ListSource(ctx context.Context, shell, dir, source string) ([]Listed, error
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
-		return nil, fmt.Errorf("%d 秒还没读完，检查网络或来源", int(listTimeout/time.Second))
+		return nil, fmt.Errorf("not done after %d seconds; check the network or the source", int(listTimeout/time.Second))
 	}
 	// shell 找不到命令时退出码是 127
 	if ee := (*exec.ExitError)(nil); errors.As(err, &ee) && ee.ExitCode() == 127 {
@@ -111,7 +111,7 @@ func ListSource(ctx context.Context, shell, dir, source string) ([]Listed, error
 }
 
 // ErrNoNPX 是用户的 shell 里没有 npx：没装 Node.js。
-var ErrNoNPX = errors.New("没找到 npx")
+var ErrNoNPX = errors.New("npx not found")
 
 // FindBrew 找 Homebrew：窗口进程从访达启动时 PATH 里没有它的目录。找不到返回空。
 func FindBrew() string {
@@ -178,7 +178,7 @@ func ParseList(out string) ([]Listed, error) {
 		}
 	}
 	if len(list) == 0 {
-		return nil, fmt.Errorf("来源里没有技能")
+		return nil, errors.New("the source has no skills")
 	}
 	return list, nil
 }
@@ -202,7 +202,7 @@ func listError(lines []string) error {
 			return fmt.Errorf("%s", strings.TrimSpace(t))
 		}
 	}
-	return fmt.Errorf("没读到技能列表")
+	return errors.New("no skill list in the output")
 }
 
 // RemoveArgs 是删除 npx skills 装的技能：连同它给各家建的链接。

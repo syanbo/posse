@@ -2,6 +2,7 @@ package gitx
 
 import (
 	"context"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -103,13 +104,25 @@ func traceEnd(r *Run, stdout, stderr []byte, errMsg string, canceled bool) {
 	Trace(*r)
 }
 
-// clip 超过 n 字节时留头尾、中间写省略了多少。
+// clip 超过 n 字节时留头尾、中间写省略了多少（英文的记号，界面经 Clipped 拆开后按界面语言写）。
 func clip(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	head, tail := s[:n/2], s[len(s)-n/2:]
-	return strings.ToValidUTF8(head, "") + "\n…（省略 " + strconv.Itoa(len(s)-n) + " 字节）…\n" + strings.ToValidUTF8(tail, "")
+	return strings.ToValidUTF8(head, "") + "\n… (" + strconv.Itoa(len(s)-n) + " bytes omitted) …\n" + strings.ToValidUTF8(tail, "")
+}
+
+var clipRe = regexp.MustCompile(`\n… \((\d+) bytes omitted\) …\n`)
+
+// Clipped 拆开 clip 截过的输出：省略记号前后的文字和省略的字节数；没截过时 ok 为假。
+func Clipped(s string) (head string, omitted int, tail string, ok bool) {
+	loc := clipRe.FindStringSubmatchIndex(s)
+	if loc == nil {
+		return s, 0, "", false
+	}
+	omitted, _ = strconv.Atoi(s[loc[2]:loc[3]])
+	return s[:loc[0]], omitted, s[loc[1]:], true
 }
 
 // readOnly 判断命令只是查询、不改仓库。

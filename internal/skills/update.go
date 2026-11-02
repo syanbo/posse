@@ -31,9 +31,15 @@ type Updates struct {
 	Latest map[string]string
 	// Gone 是来源里找不到的技能（上游删了、改了名或挪进了别的目录）：npx skills update 跳过它们，更新不了。
 	Gone map[string]bool
-	// Failed 是查不了的来源（网络不通、超出 GitHub 不登录的次数、仓库没了）。
-	Failed []string
+	// Failed 是查不了的来源（网络不通、超出 GitHub 不登录的次数、仓库没了），按来源排序。
+	Failed []Failure
 	At     time.Time
+}
+
+// Failure 是一个查不了的来源和原因（英文源文本，界面经 errtext 翻译）。
+type Failure struct {
+	Source string
+	Err    string
 }
 
 // HasUpdate 说技能有没有新版本：查到了，且和装上时的不同。
@@ -113,7 +119,7 @@ func CheckUpdates(ctx context.Context, home string) Updates {
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				u.Failed = append(u.Failed, src+"："+err.Error())
+				u.Failed = append(u.Failed, Failure{Source: src, Err: err.Error()})
 				return
 			}
 			for k, v := range latest {
@@ -125,7 +131,7 @@ func CheckUpdates(ctx context.Context, home string) Updates {
 		}()
 	}
 	wg.Wait()
-	slices.Sort(u.Failed)
+	slices.SortFunc(u.Failed, func(x, y Failure) int { return strings.Compare(x.Source+"\n"+x.Err, y.Source+"\n"+y.Err) })
 	return u
 }
 
@@ -274,7 +280,7 @@ func checkWellKnown(ctx context.Context, base string, dirs map[string]string) (m
 				dir = base + "/" + p
 				break
 			}
-			err = fmt.Errorf("索引格式不对")
+			err = errors.New("the index has an unexpected format")
 		}
 	}
 	if dir == "" {
@@ -343,9 +349,9 @@ func getURL(ctx context.Context, u, token string) ([]byte, error) {
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("超时")
+			return nil, errors.New("timed out")
 		}
-		return nil, fmt.Errorf("连不上")
+		return nil, errors.New("cannot connect")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
@@ -353,7 +359,7 @@ func getURL(ctx context.Context, u, token string) ([]byte, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-Ratelimit-Remaining") == "0" {
-			return nil, fmt.Errorf("超出 GitHub 不登录时每小时的次数，登录 gh 后再查")
+			return nil, errors.New("over GitHub’s hourly limit for signed-out requests; sign in with gh and check again")
 		}
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}

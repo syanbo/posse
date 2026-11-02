@@ -18,6 +18,7 @@ import (
 
 	"posse/internal/desk"
 	"posse/internal/deskrelay"
+	"posse/internal/errtext"
 	"posse/internal/mobile"
 	"posse/internal/rpc"
 )
@@ -64,6 +65,9 @@ func (h mobileHost) Desk(ctx context.Context, req mobile.DeskRequest, notify fun
 	return h.d.deskStart(ctx, req, notify)
 }
 
+// srcDefaultViewer 是没报名字的手机在看桌面时的叫法。
+const srcDefaultViewer = "Phone"
+
 func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify func(mobile.DeskEvent)) (mobile.DeskReady, error) {
 	codec, err := deskCodec(req.Codecs)
 	if err != nil {
@@ -72,11 +76,12 @@ func (d *Daemon) deskStart(ctx context.Context, req mobile.DeskRequest, notify f
 	d.desk.mu.Lock()
 	if d.desk.viewer != "" {
 		d.desk.mu.Unlock()
-		return mobile.DeskReady{}, mobile.DeskError("busy", fmt.Sprintf("%s 正在看这台电脑的桌面", d.desk.viewer))
+		return mobile.DeskReady{}, mobile.DeskError("busy", fmt.Sprintf("%s is watching this computer’s desktop", d.desk.viewer))
 	}
 	d.desk.viewer = req.Device
 	if d.desk.viewer == "" {
-		d.desk.viewer = "手机"
+		// 没报名字的手机：这个名字窗口和别的手机都会看到，常驻进程按用户选的语言写
+		d.desk.viewer = errtext.MessageIn(errtext.SystemLang(), srcDefaultViewer)
 	}
 	d.desk.stopped = false
 	d.desk.mu.Unlock()
@@ -110,7 +115,7 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 	proc, head, status, err := spawn(req.Display)
 	switch {
 	case status == desk.StatusNoScreen:
-		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "还没允许 Posse 录制屏幕")
+		return mobile.DeskReady{}, mobile.DeskError("permission_screen", "Posse is not allowed to record the screen yet")
 	case err != nil:
 		return mobile.DeskReady{}, mobile.DeskError("capture_failed", err.Error())
 	}
@@ -264,7 +269,7 @@ func deskCodec(codecs []string) (string, error) {
 	if slices.Contains(codecs, "h264") {
 		return "h264", nil
 	}
-	return "", mobile.DeskError("unsupported_codec", "手机报的编码电脑都不支持")
+	return "", mobile.DeskError("unsupported_codec", "this computer supports none of the codecs the phone reported")
 }
 
 // deskFirstFrames 读到子进程的第一帧配置为止，返回读过的帧（原样交给 Serve 接着处理）。

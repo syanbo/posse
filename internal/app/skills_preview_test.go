@@ -60,7 +60,7 @@ func previewSkillsBoard(a *app, sel string) {
 	a.selected = skillsBoardID
 	now := time.Now()
 	// 查过更新：archify 有新版本，lark-calendar 在来源里找不到了，一个来源没查到
-	updates := &skills.Updates{Latest: map[string]string{"archify": "v2"}, Gone: map[string]bool{"lark-calendar": true}, Failed: []string{"me/gone：HTTP 404"}, At: now}
+	updates := &skills.Updates{Latest: map[string]string{"archify": "v2"}, Gone: map[string]bool{"lark-calendar": true}, Failed: []skills.Failure{{Source: "me/gone", Err: "HTTP 404"}}, At: now}
 	a.skills = skillsView{visible: true, loaded: true, cat: cat, at: now, sel: sel, updates: updates, stats: map[string]*history.SkillStat{
 		"archify":       {Name: "archify", Count: 14, Sessions: 11, Last: now.Add(-3 * time.Hour), ByAgent: map[string]int{"claude": 9, "codex": 3, "grok": 2}},
 		"browser-skill": {Name: "browser-skill", Count: 60, Sessions: 58, Last: now.Add(-26 * time.Hour), ByAgent: map[string]int{"claude": 53, "codex": 2, "cursor": 4, "grok": 1}},

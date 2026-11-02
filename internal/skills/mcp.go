@@ -109,7 +109,7 @@ func ScanMCP(ctx context.Context, o MCPOptions) MCPCatalog {
 		s.Defs = append(s.Defs, d)
 		st := Status{State: On, Via: d.File}
 		if d.Disabled {
-			st.State, st.Why = Off, "config.toml 里 enabled = false"
+			st.State, st.Why = Off, "enabled = false in config.toml"
 		}
 		s.Agents[Codex] = st
 	}
@@ -150,7 +150,7 @@ func ScanMCP(ctx context.Context, o MCPOptions) MCPCatalog {
 	}
 	for name, d := range grokDefs {
 		if _, ok := used[name]; !ok && d.Disabled {
-			server(name).Agents[Grok] = Status{State: Off, Via: grokFile, Why: "config.toml 里 enabled = false"}
+			server(name).Agents[Grok] = Status{State: Off, Via: grokFile, Why: "enabled = false in config.toml"}
 		}
 	}
 
@@ -369,7 +369,7 @@ func mcpIssues(servers []MCPServer) []MCPIssue {
 			}
 		}
 		if len(sigs) > 1 {
-			out = append(out, MCPIssue{Kind: MCPMismatch, Name: s.Name, Detail: fmt.Sprintf("%d 种写法", len(sigs))})
+			out = append(out, MCPIssue{Kind: MCPMismatch, Name: s.Name, Detail: fmt.Sprintf("%d variants", len(sigs))})
 		}
 	}
 	return out

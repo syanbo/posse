@@ -125,16 +125,16 @@ func applyCodex(ss []Skill, list []CodexSkill) []Skill {
 		switch prev := ss[i].Agents[Codex]; prev.State {
 		case Shadowed:
 		case Unseen:
-			ss[i].Agents[Codex] = Status{Why: prev.Why}
+			ss[i].Agents[Codex] = Status{Why: prev.Why, NotRead: prev.NotRead, Reads: prev.Reads}
 		default:
-			ss[i].Agents[Codex] = Status{Why: "Codex 的 skills/list 里没有它"}
+			ss[i].Agents[Codex] = Status{Why: "not in Codex’s skills/list"}
 		}
 	}
 	for _, c := range list {
 		dir := realDir(filepath.Dir(c.Path))
 		st := Status{State: On, Via: c.Path}
 		if !c.Enabled {
-			st.State, st.Why = Off, "config.toml 的 [[skills.config]] 设为 enabled = false"
+			st.State, st.Why = Off, "set to enabled = false in [[skills.config]] of config.toml"
 		}
 		if i, ok := byDir[dir]; ok {
 			if ss[i].Agents[Codex].State != Shadowed {

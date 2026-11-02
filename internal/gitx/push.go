@@ -3,6 +3,7 @@ package gitx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ func PushPreview(ctx context.Context, dir, branch string) (PushPlan, error) {
 	}
 	f := strings.Split(strings.TrimSpace(string(out)), "\x00")
 	if len(f) != 5 {
-		return plan, errors.New("没有这个分支：" + branch)
+		return plan, fmt.Errorf("no such branch: %s", branch)
 	}
 	pushRemote, pushRef, upRemote, upRef := f[0], f[1], f[2], f[3]
 	plan.Gone = f[4] == "[gone]"
@@ -68,7 +69,7 @@ func defaultRemote(ctx context.Context, dir string) (string, error) {
 	}
 	names := strings.Fields(out)
 	if len(names) == 0 {
-		return "", errors.New("这个仓库没有配置远端")
+		return "", errors.New("this repository has no remote")
 	}
 	for _, n := range names {
 		if n == "origin" {

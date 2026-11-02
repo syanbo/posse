@@ -111,10 +111,10 @@ func RemotesContaining(ctx context.Context, dir, hash string) []string {
 }
 
 // ErrRewriteMerges 表示要改写的历史里有合并提交：交互式 rebase 会把它们拉平，不做。
-var ErrRewriteMerges = errors.New("这段历史里有合并提交，改写会把它们拉平，posse 不做这种改写")
+var ErrRewriteMerges = errors.New("this history contains merge commits; rewriting would flatten them, so posse does not rewrite it")
 
 // ErrNotOnBranch 表示提交不在当前分支上。
-var ErrNotOnBranch = errors.New("这个提交不在当前分支上")
+var ErrNotOnBranch = errors.New("this commit is not on the current branch")
 
 // rewriteBase 检查从 hash 到 HEAD 能不能改写，返回 rebase 的起点（hash 的父提交，根提交时为空）。
 func rewriteBase(ctx context.Context, dir, hash string) (base string, err error) {
@@ -200,7 +200,7 @@ func Reword(ctx context.Context, dir, hash, message string) error {
 func SquashIntoParent(ctx context.Context, dir, hash, message string) error {
 	parent, err := run(ctx, dir, "rev-parse", "--verify", "--quiet", hash+"^")
 	if err != nil {
-		return errors.New("这是第一个提交，前面没有可以合并的提交")
+		return errors.New("this is the first commit; there is no earlier commit to squash into")
 	}
 	return rebaseTodo(ctx, dir, parent, map[string]string{hash: "squash"}, message)
 }

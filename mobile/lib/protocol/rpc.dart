@@ -8,6 +8,10 @@ import 'socket.dart';
 
 const posseClientName = 'posse-flutter';
 const posseClientVersion = 1;
+
+/// 手机界面的语言（BCP 47），随 clientCapabilities.update 告诉电脑，电脑按它翻译报错和说明。
+/// 界面现在只有中文；接上多语言后换成当前的界面语言。
+String posseLocale() => 'zh-Hans';
 const posseCapabilities = [
   'posse.permission.v1',
   'posse.git.v1',
@@ -125,6 +129,7 @@ class PhoneRpc {
         'client': posseClientName,
         'version': posseClientVersion,
         'capabilities': posseCapabilities,
+        'locale': posseLocale(),
         'phone': ?phone,
       });
     } on RpcException catch (error) {

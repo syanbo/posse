@@ -71,6 +71,22 @@ func BundleOf(exe string) string {
 	return app
 }
 
+// BundleID 是 exe 所在 .app 的包 ID（副本和原包相同），不在 .app 里或读不出时为空。
+func BundleID(exe string) string {
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	app := BundleOf(exe)
+	if app == "" {
+		return ""
+	}
+	id, _, err := bundleInfo(app)
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
 // RuntimeDir 是 exe 所在副本的目录（<根>/<包ID>/<版本>-<构建>），不是副本时为空。
 func RuntimeDir(exe string) string {
 	return runtimeDir(RuntimeRoot(), exe)

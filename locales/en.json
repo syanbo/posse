@@ -1440,6 +1440,15 @@
   "@gitConsoleInfo": {
     "description": "Tooltip of the info icon at the top of the Console explaining what it lists."
   },
+  "gitConsoleOmitted": "… {count, plural, one {# byte} other {# bytes}} omitted …",
+  "@gitConsoleOmitted": {
+    "description": "Git Console: marker in the middle of a long command output whose middle part was cut. count is the number of bytes left out.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "gitConsoleRepeat": "{count, plural, one {# time} other {# times}} between {start} and {end}",
   "@gitConsoleRepeat": {
     "description": "Tooltip of the ×N badge on a grouped operation in the Console. start and end are times like 14:03:22.",
@@ -2107,6 +2116,18 @@
   "gitWorkspace": "Workspace",
   "@gitWorkspace": {
     "description": "Name of the working-copy version in diff tab labels and branch comparison, as in main → Workspace."
+  },
+  "imagesCodeOutput": "Code output",
+  "@imagesCodeOutput": {
+    "description": "Images panel: name under a thumbnail of an image produced by code the agent ran (Codex exec- files)."
+  },
+  "imagesGenerated": "Generated image",
+  "@imagesGenerated": {
+    "description": "Images panel: name under a thumbnail of an image the agent generated (Codex ig_ files)."
+  },
+  "imagesPasted": "Pasted",
+  "@imagesPasted": {
+    "description": "Images panel: name under a thumbnail of an image the user pasted, when it has no number."
   },
   "keysAdd": "Add Another Shortcut",
   "@keysAdd": {
@@ -3606,6 +3627,31 @@
   "@settingsWorkspaceMeta": {
     "description": "Row label and segmented control label."
   },
+  "skillsListSeparator": ", ",
+  "@skillsListSeparator": {
+    "description": "Skills & Tools: separator between folders in a list inside a sentence (skillsNotReadReads)."
+  },
+  "skillsNotRead": "Doesn’t read {dir}",
+  "@skillsNotRead": {
+    "description": "Skills & Tools: why an agent cannot see a skill. dir is the folder the skill is in.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsNotReadReads": "Doesn’t read {dir}; it reads {dirs}",
+  "@skillsNotReadReads": {
+    "description": "Skills & Tools: why an agent cannot see a skill. dir is the folder the skill is in; dirs lists the folders the agent reads, joined with skillsListSeparator.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      },
+      "dirs": {
+        "type": "String"
+      }
+    }
+  },
   "updateCheckButton": "Check for Updates",
   "@updateCheckButton": {
     "description": "About settings update card or sidebar update notice: button for CheckButton."
@@ -3801,6 +3847,10 @@
   "usageOtherModels": "Other Models",
   "@usageOtherModels": {
     "description": "Plan Usage settings or status popover: label for OtherModels."
+  },
+  "usagePerMonth": "/mo",
+  "@usagePerMonth": {
+    "description": "Plan Usage: replaces /mo after a plan’s monthly price next to the plan name (Cursor’s “Ultra $200/mo”)."
   },
   "usageReadAt": "Reading from the agent’s last run: {time}",
   "@usageReadAt": {

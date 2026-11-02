@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -280,7 +281,7 @@ func TestUnseenLink(t *testing.T) {
 	c := Scan(Options{Home: h})
 	s := find(t, c, "hub", ScopeUser)
 	st := s.Agents[Claude]
-	if st.State != Unseen || st.Why != "不读 ~/.agents/skills，它读 ~/.claude/skills" {
+	if st.State != Unseen || st.NotRead != "~/.agents/skills" || !slices.Equal(st.Reads, []string{"~/.claude/skills"}) {
 		t.Fatalf("Claude 读不到的原因 %+v", st)
 	}
 	link, ok := LinkFor(Options{Home: h}, s, Claude)

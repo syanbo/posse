@@ -266,7 +266,7 @@ func TestCodexRateLimits(t *testing.T) {
 
 func TestCursorPlan(t *testing.T) {
 	raw := `{"planInfo":{"planName":"Ultra","price":"$200/mo","billingCycleEnd":"1794853147000"}}`
-	if got := cursorPlan([]byte(raw)); got != "Ultra $200/月" {
+	if got := cursorPlan([]byte(raw)); got != "Ultra $200/mo" {
 		t.Fatalf("plan = %q", got)
 	}
 	if got := cursorPlan([]byte(`{"planInfo":{"planName":"Pro"}}`)); got != "Pro" {

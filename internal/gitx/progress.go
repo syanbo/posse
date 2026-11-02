@@ -3,6 +3,7 @@ package gitx
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // 进行中的操作（rebase、merge、cherry-pick、revert）：继续、跳过、中止，以及冲突文件采用一方。
@@ -10,7 +11,7 @@ import (
 // Continue 继续进行中的操作；需要提交信息时沿用 git 准备好的那份，不打开编辑器。
 func Continue(ctx context.Context, dir, op string) error {
 	if op == "" {
-		return errors.New("没有进行中的操作")
+		return errors.New("no operation in progress")
 	}
 	_, err := runRaw(ctx, dir, nil, []string{"GIT_EDITOR=true"}, op, "--continue")
 	return err
@@ -19,7 +20,7 @@ func Continue(ctx context.Context, dir, op string) error {
 // Skip 跳过当前这个提交（只有 rebase 和 cherry-pick 能跳过）。
 func Skip(ctx context.Context, dir, op string) error {
 	if op != "rebase" && op != "cherry-pick" {
-		return errors.New(op + " 不能跳过")
+		return fmt.Errorf("%s cannot be skipped", op)
 	}
 	_, err := runRaw(ctx, dir, nil, []string{"GIT_EDITOR=true"}, op, "--skip")
 	return err
@@ -28,7 +29,7 @@ func Skip(ctx context.Context, dir, op string) error {
 // Abort 中止进行中的操作，回到开始之前的样子。
 func Abort(ctx context.Context, dir, op string) error {
 	if op == "" {
-		return errors.New("没有进行中的操作")
+		return errors.New("no operation in progress")
 	}
 	_, err := runRaw(ctx, dir, nil, nil, op, "--abort")
 	return err

@@ -91,7 +91,7 @@ func FetchCursor(ctx context.Context, client *http.Client, token string, now tim
 	return u, nil
 }
 
-// cursorPlan 是套餐名带月费，照 Cursor 控制台写成 "Ultra $200/月"。
+// cursorPlan 是套餐名带月费，照 Cursor 给的原样写成 "Ultra $200/mo"，界面显示时按语言换掉 /mo。
 // 月费和套餐内用量（planUsage.limit，Ultra 是 $400）不是一回事，放在套餐名旁边免得混。
 func cursorPlan(raw []byte) string {
 	var p struct {
@@ -108,7 +108,7 @@ func cursorPlan(raw []byte) string {
 	if name == "" || price == "" {
 		return name
 	}
-	return name + " " + strings.Replace(price, "/mo", "/月", 1)
+	return name + " " + price
 }
 
 func cursorCall(ctx context.Context, client *http.Client, token, method string) ([]byte, error) {

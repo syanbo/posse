@@ -103,7 +103,11 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			row.Opacity(0.7)
 		}
 		if r.Link != "" {
-			row.Tooltip("符号链接 → " + r.Link)
+			link := r.Link
+			if link == files.LinkUnreadable {
+				link = errtext.Message(link)
+			}
+			row.Tooltip("符号链接 → " + link)
 		}
 		if row.Clicked() {
 			v.reveal = ""

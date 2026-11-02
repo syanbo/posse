@@ -552,6 +552,9 @@ func gitRunRow(c *ui.Context, r gitx.Run) {
 			}
 		})
 		out := r.Out
+		if head, n, tail, ok := gitx.Clipped(out); ok {
+			out = head + "\n" + L(c).GitConsoleOmitted(n) + "\n" + tail
+		}
 		if r.Err != "" && !strings.Contains(out, r.Err) {
 			out = strings.TrimLeft(out+"\n"+errtext.Message(r.Err), "\n")
 		}
