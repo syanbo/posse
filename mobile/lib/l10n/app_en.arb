@@ -1,0 +1,11 @@
+{
+  "@@locale": "en",
+  "settingsLanguageSystem": "System",
+  "@settingsLanguageSystem": {
+    "description": "Settings › Language: option that follows the phone's language."
+  },
+  "settingsLanguageTitle": "Language",
+  "@settingsLanguageTitle": {
+    "description": "Settings: title of the section that picks the app language."
+  }
+}

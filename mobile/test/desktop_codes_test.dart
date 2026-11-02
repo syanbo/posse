@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posse_mobile/chat/media.dart';
-import 'package:posse_mobile/protocol/rpc.dart';
+import 'package:posse_mobile/l10n/l10n.dart';
 import 'package:posse_mobile/ui/mermaid.dart';
 import 'package:posse_mobile/usage/usage.dart';
 

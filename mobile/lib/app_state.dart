@@ -98,6 +98,7 @@ const deskVersion = 1;
 class AppSettings {
   AppSettings({
     this.theme = 'dark',
+    this.language = '',
     this.openMode = 'terminal',
     this.terminalFontSize = 12.5,
     this.showReasoning = true,
@@ -121,6 +122,9 @@ class AppSettings {
 
   /// dark、light 或 system。默认深色。
   String theme;
+
+  /// 界面语言：空串跟随系统，zh 或 en。
+  String language;
 
   /// 点会话先看什么：chat 对话，terminal 终端。没有原生存档的会话总是开终端。
   String openMode;
@@ -175,6 +179,7 @@ class AppSettings {
 
   Map<String, Object?> toJson() => {
     'theme': theme,
+    'language': language,
     'openMode': openMode,
     'terminalFontSize': terminalFontSize,
     'showReasoning': showReasoning,
@@ -206,6 +211,10 @@ class AppSettings {
       final theme = map['theme'];
       if (theme is String && {'dark', 'light', 'system'}.contains(theme)) {
         out.theme = theme;
+      }
+      final language = map['language'];
+      if (language is String && {'', 'zh', 'en'}.contains(language)) {
+        out.language = language;
       }
       final open = map['openMode'];
       if (open is String && {'chat', 'terminal'}.contains(open)) {
@@ -597,6 +606,17 @@ class PosseAppModel extends ChangeNotifier {
     change(settings);
     unawaited(settingsStore.write(jsonEncode(settings.toJson())));
     notifyListeners();
+  }
+
+  /// 界面语言变了（设置里换了，或跟随的系统语言变了）：再报一次给连着的电脑，之后的报错和说明按新语言给。
+  void localeChanged() {
+    final o = offer;
+    if (o == null) return;
+    unawaited(
+      link?.rpc
+          ?.declareCapabilities(phone: _phoneInfo(o))
+          .catchError((Object _) {}),
+    );
   }
 
   /// 本地的设置和电脑列表读完了，闪屏等它再退。

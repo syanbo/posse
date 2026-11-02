@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../desk/plugin.dart';
 import '../desk/unlock.dart';
+import '../l10n/l10n.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -42,6 +43,21 @@ class SettingsScreen extends StatelessWidget {
                     values: const ['dark', 'light', 'system'],
                     value: s.theme,
                     onChanged: (v) => model.updateSettings((s) => s.theme = v),
+                  ),
+                ],
+              ),
+              Section(
+                title: context.l10n.settingsLanguageTitle,
+                children: [
+                  _Choice(
+                    labels: [
+                      context.l10n.settingsLanguageSystem,
+                      ...languageNames.values,
+                    ],
+                    values: ['', ...languageNames.keys],
+                    value: s.language,
+                    onChanged: (v) =>
+                        model.updateSettings((s) => s.language = v),
                   ),
                 ],
               ),

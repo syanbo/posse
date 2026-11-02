@@ -14,9 +14,12 @@ dependencies:
   flterm: ^0.0.5
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   flutter_markdown_plus: ^1.0.12
   gal: ^2.3.3
   html: ^0.15.7
+  intl: any
   posse_quic:
     path: packages/posse_quic
   image_picker: ^1.2.4
@@ -43,6 +46,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - assets/icon.png
     - assets/splash_slogan.png

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'l10n/l10n.dart';
 import 'ui/keyboard.dart';
 import 'ui/splash.dart';
 import 'ui/theme.dart';
@@ -74,18 +75,29 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
       title: 'Posse',
       debugShowCheckedModeBanner: false,
       navigatorObservers: [_keyboard],
+      locale: chosenLocale(widget.model.settings.language),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      // 界面语言定下后记下，变了再报给电脑（见 PosseAppModel.localeChanged）。
       // 闪屏盖在首页上面，首页在底下照常建好，淡出后直接露出来。
       // 一直包一层 Stack：闪屏退了换成直接返回 child 的话，Navigator 换了位置会重建
-      builder: (context, child) => Stack(
-        children: [
-          child!,
-          if (_splash)
-            PosseSplash(
-              ready: widget.model.restored,
-              onDone: () => setState(() => _splash = false),
-            ),
-        ],
-      ),
+      builder: (context, child) {
+        if (setPosseLocale(Localizations.localeOf(context))) {
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => widget.model.localeChanged(),
+          );
+        }
+        return Stack(
+          children: [
+            child!,
+            if (_splash)
+              PosseSplash(
+                ready: widget.model.restored,
+                onDone: () => setState(() => _splash = false),
+              ),
+          ],
+        );
+      },
       theme: posseTheme(Brightness.light),
       darkTheme: posseTheme(Brightness.dark),
       // 默认深色，可在设置里换成浅色或跟随系统
