@@ -16,7 +16,8 @@ import (
 )
 
 // 套餐用量：agent 运行时顺带更新，不轮询。
-//   - Claude：posse statusline 经 usage.report 报上 statusLine 的输入；Stop 时看一眼 Claude 自己的缓存（~/.claude.json）
+//   - Claude：posse statusline 经 usage.report 报上 statusLine 的输入；Stop 时和 statusLine 上报时（至少隔 claudeCacheEvery）
+//     看一眼 Claude 自己的缓存（~/.claude.json）：看 /usage 只更新缓存、不触发 Stop，之后 statusLine 会跑
 //   - Codex：Stop、PostToolUse 时读会话文件末尾的 rate_limits；重置卡只有 Codex 自己知道，
 //     Stop 之后拉起 codex app-server 问一次，至少隔 codexAskEvery
 //   - Grok：标题变化时增量读它的日志
@@ -24,10 +25,11 @@ import (
 //   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
 //   - 设置页整个关掉（usage.json 的 off）后以上都不做，读数也不给界面和手机
 const (
-	cursorEvery   = 5 * time.Minute
-	codexAskEvery = 5 * time.Minute
-	grokEvery     = 3 * time.Second
-	codexEvery    = 5 * time.Second
+	cursorEvery      = 5 * time.Minute
+	claudeCacheEvery = 5 * time.Second
+	codexAskEvery    = 5 * time.Minute
+	grokEvery        = 3 * time.Second
+	codexEvery       = 5 * time.Second
 )
 
 type usageState struct {
@@ -39,6 +41,7 @@ type usageState struct {
 	grokAt       time.Time
 	codexAt      map[string]time.Time // 按会话文件
 	claudeMod    time.Time            // 上次读 Claude 缓存时文件的修改时间
+	claudeAt     time.Time            // statusLine 上报时上次看缓存的时间
 	cursorAt     time.Time
 	cursorBusy   bool
 	cursorDenied bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
@@ -259,6 +262,15 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 		return map[string]bool{"updated": false}, nil
 	}
 	u, ok := usage.ClaudeStatusLine(p.Payload, time.Now())
+	d.usage.mu.Lock()
+	due := time.Since(d.usage.claudeAt) >= claudeCacheEvery
+	if due {
+		d.usage.claudeAt = time.Now()
+	}
+	d.usage.mu.Unlock()
+	if due {
+		go d.claudeCacheUsage()
+	}
 	return map[string]bool{"updated": ok && d.usage.store.Update(u)}, nil
 }
 
