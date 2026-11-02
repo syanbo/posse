@@ -669,7 +669,7 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 		ui.Text(c, ci.Subject).FontSize(fsBody).SingleLine().MaxWidth(460).Shrink(1).MinWidth(min(90, sw))
 		refChips(c, ci.Refs)
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Width(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(ci.Time))
+		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(L(c), ci.Time))
 	})
 	if row.Clicked() {
 		a.selectCommit(v, &ld.commit, ci)

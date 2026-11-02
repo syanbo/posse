@@ -429,7 +429,7 @@ func (a *app) updateCard(c *ui.Context, reason string, v updateView) {
 			status = L(c).UpdateNeverChecked()
 		default:
 			c.After(time.Minute)
-			status = L(c).UpdateCurrentNote(ago(v.checkedAt))
+			status = L(c).UpdateCurrentNote(agoInline(L(c), v.checkedAt))
 		}
 		ui.Text(c, status).FontSize(fsBody).TextColor(t.Text).LineHeight(1.5)
 		if v.phase == updateReady && v.err != "" && !a.updating {

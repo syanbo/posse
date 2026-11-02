@@ -158,7 +158,7 @@ func TestCatalogGenerated(t *testing.T) {
 // l10nPending 是界面文字还没换成 locales 的键的文件，换完一个从这里去掉一个；不在表里的文件不许写中文字面量
 // （注释和测试不算）。
 var l10nPending = []string{
-	"compare.go", "gitconsole.go", "history.go", "mobile.go", "planusage.go", "skills.go", "tasks.go", "usage.go",
+	"skills.go",
 }
 
 func TestNoChineseLiterals(t *testing.T) {

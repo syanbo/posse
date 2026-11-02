@@ -480,7 +480,7 @@ func (a *app) aboutSettings(c *ui.Context) {
 		if d.Pid != 0 {
 			c.After(time.Minute)
 			settingsRow(c, "", func() {
-				ui.Text(c, m.SettingsDaemonStarted(fmt.Sprint(d.Pid), ago(d.StartedAt))).FontSize(fsSmall).TextColor(t.TextMuted)
+				ui.Text(c, m.SettingsDaemonStarted(fmt.Sprint(d.Pid), agoInline(m, d.StartedAt))).FontSize(fsSmall).TextColor(t.TextMuted)
 			})
 		}
 		updating, unsupported := a.upgrade.status(d.Pid)

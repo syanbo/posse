@@ -496,37 +496,35 @@ func commitRow(c *ui.Context, ci gitx.CommitInfo, selected, first, last bool, la
 		refChips(c, ci.Refs)
 		// 作者按名字本身的宽度紧挨着时间，不占固定的一列，标题多显示一些；时间列靠右对齐，作者也就右对齐
 		ui.Text(c, ci.Author).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().MaxWidth(authorW).Shrink(0)
-		ui.Text(c, commitTime(ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(ci.Time))
+		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW).TextAlign(ui.End).Shrink(0).Tooltip(commitStamp(L(c), ci.Time))
 	})
 	return row
 }
 
 // commitTime 写成"今天 14:26""昨天 17:04""10月3日 09:12"，跨年的只写日期，和 WebStorm 一样看得出先后。
-func commitTime(at time.Time) string {
+func commitTime(m locales.Messages, at time.Time) string {
 	at = at.Local()
 	now := time.Now()
 	// 按日历日比，不按差几小时：夏令时切换那天两个零点之间不是 24 小时
 	sameDay := func(a, b time.Time) bool { return a.Year() == b.Year() && a.YearDay() == b.YearDay() }
 	switch {
 	case sameDay(at, now):
-		return "今天 " + at.Format("15:04")
+		return m.AppTodayAt(at)
 	case sameDay(at, now.AddDate(0, 0, -1)):
-		return "昨天 " + at.Format("15:04")
+		return m.AppYesterdayAt(at)
 	case at.Year() == now.Year():
-		return at.Format("1月2日 15:04")
+		return m.AppDateTime(at)
 	}
 	return at.Format("2006-01-02")
 }
 
-// commitTimeW 放得下 commitTime 最长的写法（"12月30日 23:59"）。
+// commitTimeW 放得下 commitTime 最长的写法（"12月30日 23:59"、"Yesterday 23:59"）。
 const commitTimeW = 96
 
-var weekdays = [...]string{"日", "一", "二", "三", "四", "五", "六"}
-
 // commitStamp 是悬停时看的完整时间：2026-10-14 17:17:05 周三。
-func commitStamp(at time.Time) string {
+func commitStamp(m locales.Messages, at time.Time) string {
 	at = at.Local()
-	return at.Format("2006-01-02 15:04:05") + " 周" + weekdays[at.Weekday()]
+	return m.AppTimestamp(at.Format("2006-01-02 15:04:05"), at)
 }
 
 // commitDetail 是选中提交的说明和它改的文件，点文件看这个提交里的改动。

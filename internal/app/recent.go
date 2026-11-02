@@ -211,7 +211,7 @@ func (a *app) recentList(c *ui.Context, w *workspace) {
 									a.resumeSession(L(c), s)
 								}
 							} else {
-								ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+								ui.Text(c, ago(L(c), s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 							}
 						})
 						// 标题下面是最后一段聊天内容，再下面是目录和消息数

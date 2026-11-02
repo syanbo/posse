@@ -457,7 +457,7 @@ func (a *app) mobileDeviceRow(c *ui.Context, d mobileDevice) {
 		tile(c, iconPhone, 32, colors(t).fill, fg)
 		ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
 			ui.Text(c, d.Name).FontSize(fsBody).SingleLine()
-			date := d.PairedAt.Local().Format("1月2日")
+			date := L(c).AppDate(d.PairedAt.Local())
 			sub := L(c).MobilePairedOn(date)
 			if d.Links > 1 {
 				sub = L(c).MobilePairedOnLinks(date, d.Links)
@@ -467,7 +467,7 @@ func (a *app) mobileDeviceRow(c *ui.Context, d mobileDevice) {
 		if d.Online {
 			ui.Text(c, L(c).MobileConnected()).FontSize(fsSmall).TextColor(t.Accent).Shrink(0)
 		} else {
-			ui.Text(c, L(c).MobileLastSeen(ago(d.LastSeen))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+			ui.Text(c, L(c).MobileLastSeen(agoInline(L(c), d.LastSeen))).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 		}
 		if pressable(textButton(c, L(c).CommonRemove())).Clicked() {
 			a.removeDevice(L(c), d)

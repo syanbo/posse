@@ -389,7 +389,7 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 						ui.Spacer(c)
 						if !st.ev.At.IsZero() {
 							ui.Text(c, st.ev.At.Local().Format("15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
-								Tooltip(m.UsageToolsSince(st.first.Local().Format("1月2日 15:04:05")))
+								Tooltip(m.UsageToolsSince(m.AppDateTimeSeconds(st.first.Local())))
 						}
 					})
 					ui.Text(c, kind).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()

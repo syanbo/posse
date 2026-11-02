@@ -33,9 +33,107 @@
       }
     }
   },
+  "appDate": "{at, date, ::MMMd}",
+  "@appDate": {
+    "description": "A date in this year without the year, as “Oct 3”. at is the date.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appDateTime": "{at, date, ::MMMd} {at, date, ::Hm}",
+  "@appDateTime": {
+    "description": "A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at is the time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appDateTimeSeconds": "{at, date, ::MMMd} {at, date, ::Hms}",
+  "@appDateTimeSeconds": {
+    "description": "A date and time to the second in 24-hour time, as “Oct 3 09:12:05”. at is the time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appDateYear": "{at, date, ::yMMMd}",
+  "@appDateYear": {
+    "description": "A date with its year, as “Oct 3, 2025”. at is the date.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appDays": "{count, plural, one {# day} other {# days}}",
+  "@appDays": {
+    "description": "Tasks list: how long ago a task was created, in days. count is the number of days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appDaysAgo": "{count, plural, one {# day ago} other {# days ago}}",
+  "@appDaysAgo": {
+    "description": "Relative time, shown alone in lists or inside a sentence: days ago. count is the number of days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appHours": "{count, plural, one {# hr} other {# hr}}",
+  "@appHours": {
+    "description": "Tasks list: how long ago a task was created, in hours (up to 47). count is the number of hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appHoursAgo": "{count, plural, one {# hr ago} other {# hr ago}}",
+  "@appHoursAgo": {
+    "description": "Relative time, shown alone in lists or inside a sentence: hours ago (up to 47). count is the number of hours.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appJustNow": "Just now",
+  "@appJustNow": {
+    "description": "Relative time shown alone in a list: less than a minute ago."
+  },
+  "appJustNowInline": "just now",
+  "@appJustNowInline": {
+    "description": "Relative time inside a sentence (“Connected just now”, “started just now”): less than a minute ago."
+  },
   "appListSeparator": ", ",
   "@appListSeparator": {
     "description": "Separator between names in a list inside a sentence (workspace names)."
+  },
+  "appMinutes": "{count, plural, one {# min} other {# min}}",
+  "@appMinutes": {
+    "description": "Tasks list: how long ago a task was created, in minutes. count is the number of minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appMinutesAgo": "{count, plural, one {# min ago} other {# min ago}}",
+  "@appMinutesAgo": {
+    "description": "Relative time, shown alone in lists or inside a sentence: minutes ago. count is the number of minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "appNoticeBody": "{workspace}: {message}",
   "@appNoticeBody": {
@@ -136,12 +234,50 @@
       }
     }
   },
+  "appTimestamp": "{stamp} {at, date, ::E}",
+  "@appTimestamp": {
+    "description": "Tooltip of a commit time: the full time and the weekday, as “2026-10-14 17:17:05 Wed”. stamp is the date and time in digits, at the time.",
+    "placeholders": {
+      "stamp": {
+        "type": "String"
+      },
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "appToday": "Today",
+  "@appToday": {
+    "description": "Day heading: History list group and Git Console day separator."
+  },
+  "appTodayAt": "Today {at, date, ::Hm}",
+  "@appTodayAt": {
+    "description": "Git Log and Compare commit list, image panel: a time today. at is the time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
   "appWorkspacesRemoved": "Removed workspaces whose folders were deleted: {names}",
   "@appWorkspacesRemoved": {
     "description": "Toast: worktree folders were deleted outside Posse, so their workspaces were removed. names is the list of workspace names.",
     "placeholders": {
       "names": {
         "type": "String"
+      }
+    }
+  },
+  "appYesterday": "Yesterday",
+  "@appYesterday": {
+    "description": "Day heading: History list group and Git Console day separator."
+  },
+  "appYesterdayAt": "Yesterday {at, date, ::Hm}",
+  "@appYesterdayAt": {
+    "description": "Git Log and Compare commit list, image panel: a time yesterday. at is the time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
       }
     }
   },
@@ -3041,6 +3177,18 @@
   "historyGroupByTime": "By Time",
   "@historyGroupByTime": {
     "description": "History: segment that groups sessions by date."
+  },
+  "historyGroupLast30Days": "Previous 30 Days",
+  "@historyGroupLast30Days": {
+    "description": "History list: group heading of sessions used in the last 30 days."
+  },
+  "historyGroupLast7Days": "Previous 7 Days",
+  "@historyGroupLast7Days": {
+    "description": "History list: group heading of sessions used in the last 7 days."
+  },
+  "historyGroupOlder": "Older",
+  "@historyGroupOlder": {
+    "description": "History list: group heading of sessions last used more than 30 days ago."
   },
   "historyIndexFailed": "Index update failed: {error}",
   "@historyIndexFailed": {
@@ -7849,6 +7997,15 @@
   "@usageRemaining": {
     "description": "Plan Usage settings or status popover: label for Remaining."
   },
+  "usageResetAt": "Resets {at, date, ::MMMd} {at, date, ::Hm}",
+  "@usageResetAt": {
+    "description": "Plan Usage: the window resets more than a day from now. at is the reset time.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
   "usageResetCards": "{count, plural, one {# reset card} other {# reset cards}}{stale}",
   "@usageResetCards": {
     "description": "Plan Usage settings or status popover: label for ResetCards. Values: count, stale.",
@@ -7873,6 +8030,40 @@
       },
       "stale": {
         "type": "String"
+      }
+    }
+  },
+  "usageResetDone": "Already reset",
+  "@usageResetDone": {
+    "description": "Plan Usage: the window’s reset time has passed."
+  },
+  "usageResetInHours": "{count, plural, one {Resets in # hr} other {Resets in # hr}}",
+  "@usageResetInHours": {
+    "description": "Plan Usage: the window resets in whole hours. count is the hours left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "usageResetInHoursMinutes": "Resets in {hours} hr {minutes} min",
+  "@usageResetInHoursMinutes": {
+    "description": "Plan Usage: the window resets within a day. hours and minutes are the time left.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "usageResetInMinutes": "{count, plural, one {Resets in # min} other {Resets in # min}}",
+  "@usageResetInMinutes": {
+    "description": "Plan Usage: the window resets within an hour. count is the minutes left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   },

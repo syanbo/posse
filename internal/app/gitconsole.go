@@ -298,18 +298,18 @@ func foldGitOps(ops []gitOpRecord) []gitOpRecord {
 }
 
 // consoleDay 是操作记录里按天分隔的标题。
-func consoleDay(t time.Time) string {
+func consoleDay(m locales.Messages, t time.Time) string {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	switch {
 	case !t.Before(today):
-		return "今天"
+		return m.AppToday()
 	case !t.Before(today.AddDate(0, 0, -1)):
-		return "昨天"
+		return m.AppYesterday()
 	case t.Year() == now.Year():
-		return fmt.Sprintf("%d月%d日", t.Month(), t.Day())
+		return m.AppDate(t)
 	}
-	return fmt.Sprintf("%d年%d月%d日", t.Year(), t.Month(), t.Day())
+	return m.AppDateYear(t)
 }
 
 // runWorkspace 是命令所在的工作区：目录在它下面的里面最深的那个（项目目录里可能套着别的项目）；对不上时是 nil。
@@ -437,8 +437,8 @@ func (a *app) gitConsole(c *ui.Context, w *workspace, v *filesView) {
 	}
 	v.consoleList.Key = func(i int) any { return ops[i].runs[0].ID }
 	ui.List(c, &v.consoleList, len(ops), func(i int) {
-		day := consoleDay(ops[i].since)
-		if i > 0 && consoleDay(ops[i-1].since) == day {
+		day := consoleDay(L(c), ops[i].since)
+		if i > 0 && consoleDay(L(c), ops[i-1].since) == day {
 			day = ""
 		}
 		a.gitOpRow(c, ops[i], day)

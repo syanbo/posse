@@ -74,7 +74,7 @@ func windowKindOf(minutes int) windowKind {
 }
 
 // resetText 是"2 小时 15 分钟后重置"；超过一天写日期。
-func resetText(at int64, now time.Time) string {
+func resetText(l locales.Messages, at int64, now time.Time) string {
 	if at == 0 {
 		return ""
 	}
@@ -82,17 +82,17 @@ func resetText(at int64, now time.Time) string {
 	d := t.Sub(now)
 	switch {
 	case d <= 0:
-		return "已重置"
+		return l.UsageResetDone()
 	case d < time.Hour:
-		return fmt.Sprintf("%d 分钟后重置", int(d.Minutes())+1)
+		return l.UsageResetInMinutes(int(d.Minutes()) + 1)
 	case d < 24*time.Hour:
 		h, m := int(d.Hours()), int(d.Minutes())%60
 		if m == 0 {
-			return fmt.Sprintf("%d 小时后重置", h)
+			return l.UsageResetInHours(h)
 		}
-		return fmt.Sprintf("%d 小时 %d 分钟后重置", h, m)
+		return l.UsageResetInHoursMinutes(h, m)
 	}
-	return t.Local().Format("1月2日 15:04") + " 重置"
+	return l.UsageResetAt(t.Local())
 }
 
 func percentText(p float64) string {
@@ -248,7 +248,7 @@ func money(cents float64) string {
 func planFacts(m locales.Messages, u usage.Usage) []string {
 	stale := func(at int64) string {
 		if at > 0 && u.UpdatedAt-at > int64(10*time.Minute/time.Millisecond) {
-			return m.UsageStaleReading(ago(time.UnixMilli(at)))
+			return m.UsageStaleReading(agoInline(m, time.UnixMilli(at)))
 		}
 		return ""
 	}
@@ -274,7 +274,7 @@ func planFacts(m locales.Messages, u usage.Usage) []string {
 	if rs := u.Resets; rs != nil {
 		line := m.UsageResetCards(rs.Count, stale(rs.At))
 		if rs.Count > 0 && rs.ExpiresAt > 0 {
-			line = m.UsageResetCardsExpiring(rs.Count, time.UnixMilli(rs.ExpiresAt).Local().Format("1月2日"), stale(rs.At))
+			line = m.UsageResetCardsExpiring(rs.Count, m.AppDate(time.UnixMilli(rs.ExpiresAt).Local()), stale(rs.At))
 		}
 		out = append(out, line)
 	}
@@ -357,8 +357,8 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 						ui.Text(c, strings.Replace(u.Plan, "/mo", L(c).UsagePerMonth(), 1)).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine().Shrink(1)
 					}
 					ui.Spacer(c)
-					ui.Text(c, ago(time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
-						Tooltip(L(c).UsageReadAt(time.UnixMilli(u.UpdatedAt).Local().Format("1月2日 15:04")))
+					ui.Text(c, ago(L(c), time.UnixMilli(u.UpdatedAt))).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0).
+						Tooltip(L(c).UsageReadAt(L(c).AppDateTime(time.UnixMilli(u.UpdatedAt).Local())))
 				})
 				for j, w := range planWindows(u) {
 					color := t.Text
@@ -371,12 +371,12 @@ func (a *app) planPanel(c *ui.Context, us []usage.Usage) {
 						a.planBar(c, w, 0, 5)
 						ui.Text(c, pctText(a.shown(w))).FontSize(fsSmall).FontFeatures("tnum").TextColor(color).
 							Width(pctW).Shrink(0).TextAlign(ui.End).SingleLine()
-						ui.Text(c, resetText(w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
+						ui.Text(c, resetText(L(c), w.ResetsAt, now)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).
 							Width(sz(138)).Shrink(0).TextAlign(ui.End).SingleLine()
 					})
 					// 分池和总额度不是同一份读数（Claude 的 Fable 只在用户看 /usage 时更新）
 					if w.At > 0 && u.UpdatedAt-w.At > int64(10*time.Minute/time.Millisecond) {
-						ui.Text(c.Key(fmt.Sprint(j, "-at")), L(c).UsageReadingAge(ago(time.UnixMilli(w.At)))).
+						ui.Text(c.Key(fmt.Sprint(j, "-at")), L(c).UsageReadingAge(agoInline(L(c), time.UnixMilli(w.At)))).
 							FontSize(fsSmall).TextColor(t.TextMuted).Margin(-4, 0, 0, planNameWidth()+8) // 和上一行的名称列之后对齐
 					}
 				}

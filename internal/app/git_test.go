@@ -2059,27 +2059,28 @@ func TestGitConsoleByProject(t *testing.T) {
 
 // 日志的时间写到分钟：今天、昨天写"今天 14:26"，今年写"10月3日 09:12"，跨年的只写日期；悬停是到秒的完整时间。
 func TestCommitTime(t *testing.T) {
+	zh := locales.In("zh-Hans")
 	now := time.Now()
 	at := func(d time.Time, h, m int) time.Time {
 		return time.Date(d.Year(), d.Month(), d.Day(), h, m, 5, 0, time.Local)
 	}
-	if got := commitTime(at(now, 0, 1)); got != "今天 00:01" {
+	if got := commitTime(zh, at(now, 0, 1)); got != "今天 00:01" {
 		t.Errorf("today %q", got)
 	}
-	if got := commitTime(at(now.AddDate(0, 0, -1), 23, 59)); got != "昨天 23:59" {
+	if got := commitTime(zh, at(now.AddDate(0, 0, -1), 23, 59)); got != "昨天 23:59" {
 		t.Errorf("yesterday %q", got)
 	}
 	old := time.Date(now.Year()-1, 12, 30, 9, 2, 0, 0, time.Local)
-	if got := commitTime(old); got != fmt.Sprintf("%d-12-30", now.Year()-1) {
+	if got := commitTime(zh, old); got != fmt.Sprintf("%d-12-30", now.Year()-1) {
 		t.Errorf("last year %q", got)
 	}
 	if now.YearDay() > 3 {
 		d := time.Date(now.Year(), 1, 1, 9, 2, 0, 0, time.Local)
-		if got := commitTime(d); got != "1月1日 09:02" {
+		if got := commitTime(zh, d); got != "1月1日 09:02" {
 			t.Errorf("this year %q", got)
 		}
 	}
-	if got := commitStamp(time.Date(2026, 10, 14, 17, 17, 5, 0, time.Local)); got != "2026-10-14 17:17:05 周三" {
+	if got := commitStamp(zh, time.Date(2026, 10, 14, 17, 17, 5, 0, time.Local)); got != "2026-10-14 17:17:05 周三" {
 		t.Errorf("stamp %q", got)
 	}
 }

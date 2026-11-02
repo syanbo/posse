@@ -102,7 +102,7 @@ type historyView struct {
 	query    string
 	agent    int
 	sessions []history.Session // 没有搜索词时：最近的会话
-	groups   []string          // 与 sessions 对应的分组："今天、昨天……"或文件夹（空串是不知道目录的会话）
+	groups   []string          // 与 sessions 对应的分组：按时间分组时是 dayGroup 的代号，否则是文件夹（空串是不知道目录的会话）
 	// folderOf 不为空时按文件夹分组，返回会话目录归到的组名
 	folderOf func(cwd string) string
 	// groupOpen 是点过的分组展开与否；没点过的只有第一组展开
@@ -391,12 +391,26 @@ func (a *app) resumeSession(m locales.Messages, s history.Session) {
 	}()
 }
 
-// ago 是会话最后使用的时间，写成"20 分钟前"。
-func ago(t time.Time) string {
-	if time.Since(t) < time.Minute {
-		return elapsed(t) // "刚刚"
+// ago 是会话最后使用的时间，写成"20 分钟前"；分档和 elapsed 一样。
+func ago(m locales.Messages, t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return m.AppJustNow()
+	case d < time.Hour:
+		return m.AppMinutesAgo(int(d.Minutes()))
+	case d < 48*time.Hour:
+		return m.AppHoursAgo(int(d.Hours()))
 	}
-	return elapsed(t) + "前"
+	return m.AppDaysAgo(int(d.Hours() / 24))
+}
+
+// agoInline 是嵌在句子里的 ago（"Connected just now"）：英文的"刚刚"在句中要小写。
+func agoInline(m locales.Messages, t time.Time) string {
+	if time.Since(t) < time.Minute {
+		return m.AppJustNowInline()
+	}
+	return ago(m, t)
 }
 
 // sessionMeta 是会话卡片上的消息数和最近用的模型；常驻进程是旧版本时没有模型，只显示消息数。
@@ -751,6 +765,9 @@ func (a *app) sessionList(c *ui.Context) {
 		}
 		open := h.isGroupOpen(r.group)
 		label := cmp.Or(r.group, L(c).HistoryUnknownFolder())
+		if h.folderOf == nil {
+			label = dayGroupText(L(c), r.group)
+		}
 		head := ui.Row(c.Key("group:"+r.group)).Margin(0, 8).Padding(12, 12, 4, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).
 			Role(ui.RoleButton).Label(label)
 		head.Children(func() {
@@ -838,7 +855,7 @@ func (a *app) sessionRow(c *ui.Context, s history.Session, hit *history.Hit) {
 		ui.Column(c).Gap(2).Grow(1).Shrink(1).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, oneLine(s.Title)).FontSize(fsBody).FontWeight(fwMedium).MaxLines(1).Grow(1).Shrink(1)
-				ui.Text(c, ago(s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, ago(L(c), s.UpdatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			if s.Cwd != "" {
 				ui.Text(c, shortPath(s.Cwd)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(1)
@@ -910,7 +927,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 				if s.Branch != "" {
 					branch = metaMono(c, iconBranch, s.Branch, "")
 				}
-				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, s.UpdatedAt.Local().Format("1月2日 15:04")), meta(c, L(c).HistoryMessageCount(s.Messages)), contextMeta(c, d))
+				metaRow(c, meta(c, agentTitle(s.Agent)), cwd, branch, meta(c, L(c).AppDateTime(s.UpdatedAt.Local())), meta(c, L(c).HistoryMessageCount(s.Messages)), contextMeta(c, d))
 			})
 		})
 		// 放不下时折行（英文），"显示工具调用"靠右
@@ -1022,7 +1039,7 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 		ui.Row(c).Gap(8).Children(func() {
 			ui.Text(c, who).FontSize(fsSmall).FontWeight(fwMedium).TextColor(whoColor)
 			if !m.At.IsZero() {
-				ui.Text(c, m.At.Local().Format("1月2日 15:04")).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
+				ui.Text(c, L(c).AppDateTime(m.At.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
 			}
 		})
 		text := strings.TrimSpace(m.Text)
@@ -1114,20 +1131,43 @@ func roleName(m locales.Messages, role, agent string) string {
 	return ""
 }
 
+// 按时间分组时的组名是代号，显示时由 dayGroupText 按界面语言写：切语言不会让点过的展开状态对不上。
+const (
+	groupToday     = "today"
+	groupYesterday = "yesterday"
+	groupWeek      = "week"
+	groupMonth     = "month"
+	groupOlder     = "older"
+)
+
 func dayGroup(t time.Time) string {
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	switch {
 	case !t.Before(today):
-		return "今天"
+		return groupToday
 	case !t.Before(today.AddDate(0, 0, -1)):
-		return "昨天"
+		return groupYesterday
 	case !t.Before(today.AddDate(0, 0, -7)):
-		return "最近 7 天"
+		return groupWeek
 	case !t.Before(today.AddDate(0, 0, -30)):
-		return "最近 30 天"
+		return groupMonth
 	}
-	return "1 个月前"
+	return groupOlder
+}
+
+func dayGroupText(m locales.Messages, g string) string {
+	switch g {
+	case groupToday:
+		return m.AppToday()
+	case groupYesterday:
+		return m.AppYesterday()
+	case groupWeek:
+		return m.HistoryGroupLast7Days()
+	case groupMonth:
+		return m.HistoryGroupLast30Days()
+	}
+	return m.HistoryGroupOlder()
 }
 
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

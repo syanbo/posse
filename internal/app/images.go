@@ -369,7 +369,7 @@ func (a *app) imageGroup(c *ui.Context, items []imageItem) {
 				ui.Text(c, mediaLabel(L(c), it.Item)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).SingleLine().Shrink(1).Tooltip(it.Source())
 				if !it.At.IsZero() {
 					ui.Spacer(c)
-					ui.Text(c, commitTime(it.At)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+					ui.Text(c, commitTime(L(c), it.At)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 				}
 			})
 		})

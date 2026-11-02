@@ -448,7 +448,7 @@ func (a *app) stashRow(c *ui.Context, v *filesView, s gitx.Stash) {
 		if other != "" {
 			ui.Text(c, other).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(2).Tooltip(lm.GitStashOnBranch(other))
 		}
-		ui.Text(c, ago(s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+		ui.Text(c, ago(L(c), s.When)).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
 	owner := a.stashOwner(v, other)
 	take := func(what string, fn func(ctx context.Context, root string) error) {

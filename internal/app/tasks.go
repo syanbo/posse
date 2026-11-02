@@ -197,17 +197,18 @@ func taskStatusText(m locales.Messages, t taskInfo) string {
 	return t.Status
 }
 
-func elapsed(t time.Time) string {
+// elapsed 是 t 到现在过了多久，写成"20 分钟"；不到一分钟是"刚刚"。
+func elapsed(m locales.Messages, t time.Time) string {
 	d := time.Since(t)
 	switch {
 	case d < time.Minute:
-		return "刚刚"
+		return m.AppJustNow()
 	case d < time.Hour:
-		return fmt.Sprintf("%d 分钟", int(d.Minutes()))
+		return m.AppMinutes(int(d.Minutes()))
 	case d < 48*time.Hour:
-		return fmt.Sprintf("%d 小时", int(d.Hours()))
+		return m.AppHours(int(d.Hours()))
 	}
-	return fmt.Sprintf("%d 天", int(d.Hours()/24))
+	return m.AppDays(int(d.Hours() / 24))
 }
 
 // --- 动作
@@ -522,7 +523,7 @@ func (a *app) taskRow(c *ui.Context, task taskInfo) {
 					ui.Text(c, taskStatusText(m, task)).FontSize(fsSmall).FontWeight(fwMedium).TextColor(color).Shrink(0)
 				}
 				ui.Spacer(c)
-				ui.Text(c, elapsed(task.CreatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+				ui.Text(c, elapsed(L(c), task.CreatedAt)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				// 图标代替 agent 名字，悬停提示是名字
@@ -608,7 +609,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 						})
 					}
 					metaRow(c, status, meta(c, agentTitle(task.Agent)), metaMono(c, workspaceIcon(task.WorkspaceKind), task.Workspace, ""),
-						meta(c, a.coordinatorLabel(m, task)), meta(c, task.CreatedAt.Format("1月2日 15:04")))
+						meta(c, a.coordinatorLabel(m, task)), meta(c, L(c).AppDateTime(task.CreatedAt)))
 				})
 			})
 			a.taskActions(c, task)

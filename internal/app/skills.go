@@ -1562,7 +1562,7 @@ func skillUseLine(c *ui.Context, st *history.SkillStat) {
 		return
 	}
 	ui.Text(c, m.SkillsUsedTimes(st.Count)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted)
-	ui.Text(c, ago(st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(m.SkillsLastUsed(st.Last.Local().Format("1月2日 15:04")))
+	ui.Text(c, ago(m, st.Last)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Tooltip(m.SkillsLastUsed(m.AppDateTime(st.Last.Local())))
 }
 
 // skillTriggerText 是技能怎么被调起来：SKILL.md 头部的 disable-model-invocation、user-invocable。
@@ -1598,7 +1598,7 @@ func skillUseCard(c *ui.Context, st *history.SkillStat) {
 			return
 		}
 		metaRow(c, meta(c, m.SkillsUsedTimes(st.Count)), meta(c, m.SkillsSessions(st.Sessions)),
-			meta(c, m.SkillsLastUsed(st.Last.Local().Format("1月2日 15:04"))))
+			meta(c, m.SkillsLastUsed(m.AppDateTime(st.Last.Local()))))
 		ui.Row(c).Gap(12).Wrap().Children(func() {
 			for _, ag := range skills.Agents {
 				n := st.ByAgent[ag.String()]

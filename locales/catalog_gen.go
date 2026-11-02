@@ -4,6 +4,7 @@ package locales
 
 import (
 	"embed"
+	"time"
 
 	"github.com/egoist/mygo/i18n"
 
@@ -122,6 +123,160 @@ func (msgs Messages) AppCloseConfirm(name string) string {
 	return Catalog.Format(msgs.locale, "appCloseConfirm", map[string]any{"name": name})
 }
 
+// AppDate says "{at, date, ::MMMd}"
+// in the language the app shows.
+//
+// A date in this year without the year, as “Oct 3”. at is the date.
+func AppDate(at time.Time) string { return In(i18n.Locale()).AppDate(at) }
+
+// AppDate says "{at, date, ::MMMd}"
+// in the language of msgs.
+//
+// A date in this year without the year, as “Oct 3”. at is the date.
+func (msgs Messages) AppDate(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appDate", map[string]any{"at": at})
+}
+
+// AppDateTime says "{at, date, ::MMMd} {at, date, ::Hm}"
+// in the language the app shows.
+//
+// A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at
+// is the time.
+func AppDateTime(at time.Time) string { return In(i18n.Locale()).AppDateTime(at) }
+
+// AppDateTime says "{at, date, ::MMMd} {at, date, ::Hm}"
+// in the language of msgs.
+//
+// A date and time to the minute in 24-hour time, as “Oct 3 09:12”. at
+// is the time.
+func (msgs Messages) AppDateTime(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appDateTime", map[string]any{"at": at})
+}
+
+// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::Hms}"
+// in the language the app shows.
+//
+// A date and time to the second in 24-hour time, as “Oct 3 09:12:05”.
+// at is the time.
+func AppDateTimeSeconds(at time.Time) string { return In(i18n.Locale()).AppDateTimeSeconds(at) }
+
+// AppDateTimeSeconds says "{at, date, ::MMMd} {at, date, ::Hms}"
+// in the language of msgs.
+//
+// A date and time to the second in 24-hour time, as “Oct 3 09:12:05”.
+// at is the time.
+func (msgs Messages) AppDateTimeSeconds(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appDateTimeSeconds", map[string]any{"at": at})
+}
+
+// AppDateYear says "{at, date, ::yMMMd}"
+// in the language the app shows.
+//
+// A date with its year, as “Oct 3, 2025”. at is the date.
+func AppDateYear(at time.Time) string { return In(i18n.Locale()).AppDateYear(at) }
+
+// AppDateYear says "{at, date, ::yMMMd}"
+// in the language of msgs.
+//
+// A date with its year, as “Oct 3, 2025”. at is the date.
+func (msgs Messages) AppDateYear(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appDateYear", map[string]any{"at": at})
+}
+
+// AppDays says "{count, plural, one {# day} other {# days}}"
+// in the language the app shows.
+//
+// Tasks list: how long ago a task was created, in days. count is the number
+// of days.
+func AppDays(count int) string { return In(i18n.Locale()).AppDays(count) }
+
+// AppDays says "{count, plural, one {# day} other {# days}}"
+// in the language of msgs.
+//
+// Tasks list: how long ago a task was created, in days. count is the number
+// of days.
+func (msgs Messages) AppDays(count int) string {
+	return Catalog.Format(msgs.locale, "appDays", map[string]any{"count": count})
+}
+
+// AppDaysAgo says "{count, plural, one {# day ago} other {# days ago}}"
+// in the language the app shows.
+//
+// Relative time, shown alone in lists or inside a sentence: days ago. count
+// is the number of days.
+func AppDaysAgo(count int) string { return In(i18n.Locale()).AppDaysAgo(count) }
+
+// AppDaysAgo says "{count, plural, one {# day ago} other {# days ago}}"
+// in the language of msgs.
+//
+// Relative time, shown alone in lists or inside a sentence: days ago. count
+// is the number of days.
+func (msgs Messages) AppDaysAgo(count int) string {
+	return Catalog.Format(msgs.locale, "appDaysAgo", map[string]any{"count": count})
+}
+
+// AppHours says "{count, plural, one {# hr} other {# hr}}"
+// in the language the app shows.
+//
+// Tasks list: how long ago a task was created, in hours (up to 47). count
+// is the number of hours.
+func AppHours(count int) string { return In(i18n.Locale()).AppHours(count) }
+
+// AppHours says "{count, plural, one {# hr} other {# hr}}"
+// in the language of msgs.
+//
+// Tasks list: how long ago a task was created, in hours (up to 47). count
+// is the number of hours.
+func (msgs Messages) AppHours(count int) string {
+	return Catalog.Format(msgs.locale, "appHours", map[string]any{"count": count})
+}
+
+// AppHoursAgo says "{count, plural, one {# hr ago} other {# hr ago}}"
+// in the language the app shows.
+//
+// Relative time, shown alone in lists or inside a sentence: hours ago (up
+// to 47). count is the number of hours.
+func AppHoursAgo(count int) string { return In(i18n.Locale()).AppHoursAgo(count) }
+
+// AppHoursAgo says "{count, plural, one {# hr ago} other {# hr ago}}"
+// in the language of msgs.
+//
+// Relative time, shown alone in lists or inside a sentence: hours ago (up
+// to 47). count is the number of hours.
+func (msgs Messages) AppHoursAgo(count int) string {
+	return Catalog.Format(msgs.locale, "appHoursAgo", map[string]any{"count": count})
+}
+
+// AppJustNow says "Just now"
+// in the language the app shows.
+//
+// Relative time shown alone in a list: less than a minute ago.
+func AppJustNow() string { return In(i18n.Locale()).AppJustNow() }
+
+// AppJustNow says "Just now"
+// in the language of msgs.
+//
+// Relative time shown alone in a list: less than a minute ago.
+func (msgs Messages) AppJustNow() string {
+	return Catalog.Format(msgs.locale, "appJustNow", nil)
+}
+
+// AppJustNowInline says "just now"
+// in the language the app shows.
+//
+// Relative time inside a sentence (“Connected just now”, “started
+// just now”): less than a minute ago.
+func AppJustNowInline() string { return In(i18n.Locale()).AppJustNowInline() }
+
+// AppJustNowInline says "just now"
+// in the language of msgs.
+//
+// Relative time inside a sentence (“Connected just now”, “started
+// just now”): less than a minute ago.
+func (msgs Messages) AppJustNowInline() string {
+	return Catalog.Format(msgs.locale, "appJustNowInline", nil)
+}
+
 // AppListSeparator says ", "
 // in the language the app shows.
 //
@@ -134,6 +289,38 @@ func AppListSeparator() string { return In(i18n.Locale()).AppListSeparator() }
 // Separator between names in a list inside a sentence (workspace names).
 func (msgs Messages) AppListSeparator() string {
 	return Catalog.Format(msgs.locale, "appListSeparator", nil)
+}
+
+// AppMinutes says "{count, plural, one {# min} other {# min}}"
+// in the language the app shows.
+//
+// Tasks list: how long ago a task was created, in minutes. count is the
+// number of minutes.
+func AppMinutes(count int) string { return In(i18n.Locale()).AppMinutes(count) }
+
+// AppMinutes says "{count, plural, one {# min} other {# min}}"
+// in the language of msgs.
+//
+// Tasks list: how long ago a task was created, in minutes. count is the
+// number of minutes.
+func (msgs Messages) AppMinutes(count int) string {
+	return Catalog.Format(msgs.locale, "appMinutes", map[string]any{"count": count})
+}
+
+// AppMinutesAgo says "{count, plural, one {# min ago} other {# min ago}}"
+// in the language the app shows.
+//
+// Relative time, shown alone in lists or inside a sentence: minutes ago.
+// count is the number of minutes.
+func AppMinutesAgo(count int) string { return In(i18n.Locale()).AppMinutesAgo(count) }
+
+// AppMinutesAgo says "{count, plural, one {# min ago} other {# min ago}}"
+// in the language of msgs.
+//
+// Relative time, shown alone in lists or inside a sentence: minutes ago.
+// count is the number of minutes.
+func (msgs Messages) AppMinutesAgo(count int) string {
+	return Catalog.Format(msgs.locale, "appMinutesAgo", map[string]any{"count": count})
 }
 
 // AppNoticeBody says "{workspace}: {message}"
@@ -322,6 +509,54 @@ func (msgs Messages) AppSetupError(output string) string {
 	return Catalog.Format(msgs.locale, "appSetupError", map[string]any{"output": output})
 }
 
+// AppTimestamp says "{stamp} {at, date, ::E}"
+// in the language the app shows.
+//
+// Tooltip of a commit time: the full time and the weekday, as “2026-10-14
+// 17:17:05 Wed”. stamp is the date and time in digits, at the time.
+func AppTimestamp(stamp string, at time.Time) string {
+	return In(i18n.Locale()).AppTimestamp(stamp, at)
+}
+
+// AppTimestamp says "{stamp} {at, date, ::E}"
+// in the language of msgs.
+//
+// Tooltip of a commit time: the full time and the weekday, as “2026-10-14
+// 17:17:05 Wed”. stamp is the date and time in digits, at the time.
+func (msgs Messages) AppTimestamp(stamp string, at time.Time) string {
+	return Catalog.Format(msgs.locale, "appTimestamp", map[string]any{"stamp": stamp, "at": at})
+}
+
+// AppToday says "Today"
+// in the language the app shows.
+//
+// Day heading: History list group and Git Console day separator.
+func AppToday() string { return In(i18n.Locale()).AppToday() }
+
+// AppToday says "Today"
+// in the language of msgs.
+//
+// Day heading: History list group and Git Console day separator.
+func (msgs Messages) AppToday() string {
+	return Catalog.Format(msgs.locale, "appToday", nil)
+}
+
+// AppTodayAt says "Today {at, date, ::Hm}"
+// in the language the app shows.
+//
+// Git Log and Compare commit list, image panel: a time today. at is the
+// time.
+func AppTodayAt(at time.Time) string { return In(i18n.Locale()).AppTodayAt(at) }
+
+// AppTodayAt says "Today {at, date, ::Hm}"
+// in the language of msgs.
+//
+// Git Log and Compare commit list, image panel: a time today. at is the
+// time.
+func (msgs Messages) AppTodayAt(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appTodayAt", map[string]any{"at": at})
+}
+
 // AppWorkspacesRemoved says "Removed workspaces whose folders were deleted: {names}"
 // in the language the app shows.
 //
@@ -336,6 +571,36 @@ func AppWorkspacesRemoved(names string) string { return In(i18n.Locale()).AppWor
 // were removed. names is the list of workspace names.
 func (msgs Messages) AppWorkspacesRemoved(names string) string {
 	return Catalog.Format(msgs.locale, "appWorkspacesRemoved", map[string]any{"names": names})
+}
+
+// AppYesterday says "Yesterday"
+// in the language the app shows.
+//
+// Day heading: History list group and Git Console day separator.
+func AppYesterday() string { return In(i18n.Locale()).AppYesterday() }
+
+// AppYesterday says "Yesterday"
+// in the language of msgs.
+//
+// Day heading: History list group and Git Console day separator.
+func (msgs Messages) AppYesterday() string {
+	return Catalog.Format(msgs.locale, "appYesterday", nil)
+}
+
+// AppYesterdayAt says "Yesterday {at, date, ::Hm}"
+// in the language the app shows.
+//
+// Git Log and Compare commit list, image panel: a time yesterday. at is the
+// time.
+func AppYesterdayAt(at time.Time) string { return In(i18n.Locale()).AppYesterdayAt(at) }
+
+// AppYesterdayAt says "Yesterday {at, date, ::Hm}"
+// in the language of msgs.
+//
+// Git Log and Compare commit list, image panel: a time yesterday. at is the
+// time.
+func (msgs Messages) AppYesterdayAt(at time.Time) string {
+	return Catalog.Format(msgs.locale, "appYesterdayAt", map[string]any{"at": at})
 }
 
 // AwakeActiveTip says "Prevent Sleep: Posse is running, keeping your computer awake. The display turns off as usual."
@@ -7940,6 +8205,48 @@ func HistoryGroupByTime() string { return In(i18n.Locale()).HistoryGroupByTime()
 // History: segment that groups sessions by date.
 func (msgs Messages) HistoryGroupByTime() string {
 	return Catalog.Format(msgs.locale, "historyGroupByTime", nil)
+}
+
+// HistoryGroupLast30Days says "Previous 30 Days"
+// in the language the app shows.
+//
+// History list: group heading of sessions used in the last 30 days.
+func HistoryGroupLast30Days() string { return In(i18n.Locale()).HistoryGroupLast30Days() }
+
+// HistoryGroupLast30Days says "Previous 30 Days"
+// in the language of msgs.
+//
+// History list: group heading of sessions used in the last 30 days.
+func (msgs Messages) HistoryGroupLast30Days() string {
+	return Catalog.Format(msgs.locale, "historyGroupLast30Days", nil)
+}
+
+// HistoryGroupLast7Days says "Previous 7 Days"
+// in the language the app shows.
+//
+// History list: group heading of sessions used in the last 7 days.
+func HistoryGroupLast7Days() string { return In(i18n.Locale()).HistoryGroupLast7Days() }
+
+// HistoryGroupLast7Days says "Previous 7 Days"
+// in the language of msgs.
+//
+// History list: group heading of sessions used in the last 7 days.
+func (msgs Messages) HistoryGroupLast7Days() string {
+	return Catalog.Format(msgs.locale, "historyGroupLast7Days", nil)
+}
+
+// HistoryGroupOlder says "Older"
+// in the language the app shows.
+//
+// History list: group heading of sessions last used more than 30 days ago.
+func HistoryGroupOlder() string { return In(i18n.Locale()).HistoryGroupOlder() }
+
+// HistoryGroupOlder says "Older"
+// in the language of msgs.
+//
+// History list: group heading of sessions last used more than 30 days ago.
+func (msgs Messages) HistoryGroupOlder() string {
+	return Catalog.Format(msgs.locale, "historyGroupOlder", nil)
 }
 
 // HistoryIndexFailed says "Index update failed: {error}"
@@ -21544,6 +21851,22 @@ func (msgs Messages) UsageRemaining() string {
 	return Catalog.Format(msgs.locale, "usageRemaining", nil)
 }
 
+// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::Hm}"
+// in the language the app shows.
+//
+// Plan Usage: the window resets more than a day from now. at is the reset
+// time.
+func UsageResetAt(at time.Time) string { return In(i18n.Locale()).UsageResetAt(at) }
+
+// UsageResetAt says "Resets {at, date, ::MMMd} {at, date, ::Hm}"
+// in the language of msgs.
+//
+// Plan Usage: the window resets more than a day from now. at is the reset
+// time.
+func (msgs Messages) UsageResetAt(at time.Time) string {
+	return Catalog.Format(msgs.locale, "usageResetAt", map[string]any{"at": at})
+}
+
 // UsageResetCards says "{count, plural, one {# reset card} other {# reset cards}}{stale}"
 // in the language the app shows.
 //
@@ -21578,6 +21901,66 @@ func UsageResetCardsExpiring(count int, date string, stale string) string {
 // Values: count, date, stale.
 func (msgs Messages) UsageResetCardsExpiring(count int, date string, stale string) string {
 	return Catalog.Format(msgs.locale, "usageResetCardsExpiring", map[string]any{"count": count, "date": date, "stale": stale})
+}
+
+// UsageResetDone says "Already reset"
+// in the language the app shows.
+//
+// Plan Usage: the window’s reset time has passed.
+func UsageResetDone() string { return In(i18n.Locale()).UsageResetDone() }
+
+// UsageResetDone says "Already reset"
+// in the language of msgs.
+//
+// Plan Usage: the window’s reset time has passed.
+func (msgs Messages) UsageResetDone() string {
+	return Catalog.Format(msgs.locale, "usageResetDone", nil)
+}
+
+// UsageResetInHours says "{count, plural, one {Resets in # hr} other {Resets in # hr}}"
+// in the language the app shows.
+//
+// Plan Usage: the window resets in whole hours. count is the hours left.
+func UsageResetInHours(count int) string { return In(i18n.Locale()).UsageResetInHours(count) }
+
+// UsageResetInHours says "{count, plural, one {Resets in # hr} other {Resets in # hr}}"
+// in the language of msgs.
+//
+// Plan Usage: the window resets in whole hours. count is the hours left.
+func (msgs Messages) UsageResetInHours(count int) string {
+	return Catalog.Format(msgs.locale, "usageResetInHours", map[string]any{"count": count})
+}
+
+// UsageResetInHoursMinutes says "Resets in {hours} hr {minutes} min"
+// in the language the app shows.
+//
+// Plan Usage: the window resets within a day. hours and minutes are the
+// time left.
+func UsageResetInHoursMinutes(hours int, minutes int) string {
+	return In(i18n.Locale()).UsageResetInHoursMinutes(hours, minutes)
+}
+
+// UsageResetInHoursMinutes says "Resets in {hours} hr {minutes} min"
+// in the language of msgs.
+//
+// Plan Usage: the window resets within a day. hours and minutes are the
+// time left.
+func (msgs Messages) UsageResetInHoursMinutes(hours int, minutes int) string {
+	return Catalog.Format(msgs.locale, "usageResetInHoursMinutes", map[string]any{"hours": hours, "minutes": minutes})
+}
+
+// UsageResetInMinutes says "{count, plural, one {Resets in # min} other {Resets in # min}}"
+// in the language the app shows.
+//
+// Plan Usage: the window resets within an hour. count is the minutes left.
+func UsageResetInMinutes(count int) string { return In(i18n.Locale()).UsageResetInMinutes(count) }
+
+// UsageResetInMinutes says "{count, plural, one {Resets in # min} other {Resets in # min}}"
+// in the language of msgs.
+//
+// Plan Usage: the window resets within an hour. count is the minutes left.
+func (msgs Messages) UsageResetInMinutes(count int) string {
+	return Catalog.Format(msgs.locale, "usageResetInMinutes", map[string]any{"count": count})
 }
 
 // UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan …"
