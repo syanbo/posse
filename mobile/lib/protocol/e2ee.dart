@@ -422,7 +422,7 @@ Uint8List hkdfSha256(
   return Uint8List.sublistView(out.takeBytes(), 0, length);
 }
 
-/// Go 的 secretbox.Seal 格式：nonce 拼在密文前面。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 慢约 5 倍。
+/// Go 的 secretbox.Seal 格式：nonce 拼在密文前面。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 在手机上慢约 4.7 倍（mobile/benchmark）。
 Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) =>
     quic.secretboxSeal(key, nonce, plain, prefix: 24)..setRange(0, 24, nonce);
 

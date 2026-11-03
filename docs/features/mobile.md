@@ -6,7 +6,7 @@
 
 - 兼容 Orca 的手机 App（App Store / GitHub 上的 APK）：posse 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现。不经 Orca 的云端中转（Orca 的 local-only），也不给 Orca App 做推送（它的推送只能经 Orca 的网关；Posse 手机客户端见下面「推送通知」）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
 - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。
-- 分帧在握手时定（hello 的 `framing`，格式见 `internal/mobile/e2ee.go`）：Orca App 用 2，帧是 nonce 加密文、明文前带 42 字节帧头，每帧固定开销 82 字节，JSON 帧再整帧 base64 走文本帧；Posse 手机客户端用 3，都走二进制帧，帧是 1 字节类型加 secretbox 的标签和密文，nonce 两端按计数器各自算、不上线，每帧固定开销 17 字节，JSON 也不再 base64（体积少四分之一，手机上省掉 base64 编解码）。Posse 手机客户端只报 3，要求电脑端同步升级：旧版电脑读完 hello 以 4001 关连接，手机提示在电脑上更新 Posse。手机端的 secretbox 在 `posse_quic` 的 Go 里做（纯 Dart 的 TweetNaCl 在 iPhone 12 Pro 上慢约 4.8 倍；基准见 `mobile/benchmark`）。
+- 分帧在握手时定（hello 的 `framing`，格式见 `internal/mobile/e2ee.go`）：Orca App 用 2，帧是 nonce 加密文、明文前带 42 字节帧头，每帧固定开销 82 字节，JSON 帧再整帧 base64 走文本帧；Posse 手机客户端用 3，都走二进制帧，帧是 1 字节类型加 secretbox 的标签和密文，nonce 两端按计数器各自算、不上线，每帧固定开销 17 字节，JSON 也不再 base64（体积少四分之一，手机上省掉 base64 编解码）。Posse 手机客户端只报 3，要求电脑端同步升级：旧版电脑读完 hello 以 4001 关连接，手机提示在电脑上更新 Posse。手机端的 secretbox 在 `posse_quic` 的 Go 里做（纯 Dart 的 TweetNaCl 在 iPhone 12 Pro 上慢约 4.7 倍；基准见 `mobile/benchmark`）。
 - 配对码在侧栏顶上的「手机」磁贴、「新建」菜单（侧栏底栏最左边的 +）的「连接手机…」或 `posse mobile pair`：
   - 地址默认自动选（Tailscale 优先，其次局域网）；也可以自定义（配对对话框，或 `posse mobile pair --address`），规则照 Orca 的 `pairing-endpoint.ts`：主机或 主机:端口 拼成 `ws://`，完整 URL 的 http/https 换成 ws/wss、路径保留，用于隧道或反向代理（服务端不看请求路径）。
   - 手机页的地址下拉列出自动、检测到的每个 Tailscale 和局域网地址（取码时刷新）和用过的自定义地址；选的地址和用过的自定义地址存在 ui.json 的 `mobileAddress`、`mobileAddresses`。

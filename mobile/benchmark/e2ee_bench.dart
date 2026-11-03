@@ -1,5 +1,5 @@
 // 手机端收发一条 JSON 消息的开销：改用 Go 加解密、二进制分帧之前（legacy）和现在对照。
-// Mac 上：fvm dart run benchmark/e2ee_bench.dart（JIT，只看倍数）；
+// Mac 上在 mobile/ 下 fvm dart run benchmark/e2ee_bench.dart（JIT，只看倍数）；
 // 手机上用 benchmark/app.dart，做法见 mobile/README.md。
 import 'dart:convert';
 import 'dart:io';
@@ -60,14 +60,14 @@ double median(void Function() body) {
   return samples[samples.length ~/ 2];
 }
 
-// 0230333 之前手机上的 secretbox：纯 Dart 的 TweetNaCl，明文前垫 32 个 0，结果再拷一次。
+// 以下照抄 0230333 之前手机上的做法（git show 0230333^:mobile/lib/protocol/），拷贝次数也一样。
+// secretbox 是纯 Dart 的 TweetNaCl：明文前垫 32 个 0，它返回的结果再拷一次。
 Uint8List tweetSeal(Uint8List key, Uint8List nonce, Uint8List plain) {
   final message = Uint8List(TweetNaCl.zerobytesLength + plain.length);
   message.setRange(TweetNaCl.zerobytesLength, message.length, plain);
   final box = Uint8List(message.length);
-  TweetNaCl.crypto_secretbox(box, message, message.length, nonce, key);
   return Uint8List.fromList(
-    Uint8List.sublistView(box, TweetNaCl.boxzerobytesLength),
+    TweetNaCl.crypto_secretbox(box, message, message.length, nonce, key),
   );
 }
 
@@ -75,31 +75,36 @@ Uint8List tweetOpen(Uint8List key, Uint8List nonce, Uint8List box) {
   final cipher = Uint8List(TweetNaCl.boxzerobytesLength + box.length);
   cipher.setRange(TweetNaCl.boxzerobytesLength, cipher.length, box);
   final opened = Uint8List(cipher.length);
-  TweetNaCl.crypto_secretbox_open(opened, cipher, cipher.length, nonce, key);
   return Uint8List.fromList(
-    Uint8List.sublistView(opened, TweetNaCl.zerobytesLength),
+    TweetNaCl.crypto_secretbox_open(opened, cipher, cipher.length, nonce, key),
   );
 }
 
-// 之前的分帧 2：明文前 42 字节帧头，nonce 拼在帧前，整帧 base64 走文本帧。
+// 分帧 2：明文前 42 字节帧头，nonce 拼在帧前，整帧 base64 走 WebSocket 文本帧（String）。
 String legacySend(E2eeSession s, Map<String, Object?> msg) {
+  final payload = Uint8List.fromList(utf8.encode(jsonEncode(msg)));
   final n = s.sendN++;
   final nonce = frameNonce(s.id, dirMobileToDesktop, kindText, n);
   final plain = concat([
     frameHeader(s.id, dirMobileToDesktop, kindText, n),
-    utf8.encode(jsonEncode(msg)),
+    payload,
   ]);
   return base64.encode(concat([nonce, tweetSeal(s.sendKey, nonce, plain)]));
 }
 
-Object? legacyRecv(E2eeSession s, Uint8List b64Bytes) {
-  final frame = base64.decode(latin1.decode(b64Bytes));
+// 收到的文本帧是 String：socket 先转成字节，openText 再转回字符串做 base64 解码。
+Object? legacyRecv(E2eeSession s, String event) {
+  final b64Bytes = utf8.encode(event);
+  final frame = Uint8List.fromList(base64.decode(utf8.decode(b64Bytes)));
   final nonce = frameNonce(s.id, dirDesktopToMobile, kindText, s.recvN);
-  if (!bytesEqual(frame.sublist(0, 24), nonce)) throw StateError('nonce');
+  if (frame.length < 24 + TweetNaCl.macBytes + headerLen ||
+      !bytesEqual(frame.sublist(0, 24), nonce)) {
+    throw StateError('bad frame');
+  }
   final plain = tweetOpen(s.recvKey, nonce, frame.sublist(24));
   final header = frameHeader(s.id, dirDesktopToMobile, kindText, s.recvN);
   if (!bytesEqual(plain.sublist(0, headerLen), header)) {
-    throw StateError('header');
+    throw StateError('bad frame');
   }
   s.recvN++;
   return jsonDecode(utf8.decode(Uint8List.sublistView(plain, headerLen)));
@@ -146,9 +151,7 @@ List<BenchRow> runE2eeBench([void Function(BenchRow)? onRow]) {
     // 一条 JSON 消息：发送从 Map 到上线的字节，接收从收到的字节到 Map
     final msg = message(size);
     final legacy = session(framingText);
-    final legacyFrame = latin1.encode(
-      _deskSend(msg, legacy.recvKey, legacy.id),
-    );
+    final legacyFrame = _deskSend(msg, legacy.recvKey, legacy.id);
     final now = session(framingBinary);
     final desk = E2eeSession(
       recvKey: now.sendKey,
@@ -226,6 +229,8 @@ double _of(List<BenchRow> rows, int size, String op) =>
 
 void main() {
   stdout.writeln('${Platform.operatingSystem} ${Platform.version}');
+  // JIT 要先把各条路径都跑热，不然先量的几项（300 B 的 seal）偏慢；手机上是 AOT，不用
+  runE2eeBench();
   final rows = runE2eeBench(stdout.writeln);
   speedups(rows).forEach(stdout.writeln);
 }

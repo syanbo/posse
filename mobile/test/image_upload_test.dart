@@ -13,6 +13,7 @@ import 'package:posse_mobile/app_state.dart';
 /// 只认上传用的几条 RPC。
 class _UploadRpc implements PhoneRpc {
   final methods = <String>[];
+  final calls = <(String, Map<String, Object?>)>[];
 
   @override
   Future<Map<String, Object?>> call(
@@ -21,6 +22,7 @@ class _UploadRpc implements PhoneRpc {
     Duration? timeout,
   }) async {
     methods.add(method);
+    calls.add((method, params));
     return switch (method) {
       'clipboard.startImageUpload' => {'uploadId': 'u1'},
       'clipboard.commitImageUpload' ||
@@ -76,6 +78,10 @@ void main() {
     expect(path, '/tmp/posse-mobile-1.png');
     expect(rpc.startParams?['name'], '录屏 1.mov');
     expect(rpc.startParams?['expectedBytes'], bytes.length);
+    expect(
+      rpc.startParams?['expectedBase64Length'],
+      base64.encode(bytes).length,
+    );
     expect(rpc.chunks.map((c) => c.length), [
       bulkChunk,
       bulkChunk,
@@ -113,6 +119,36 @@ void main() {
     expect(seen.last, 1);
     expect(seen[seen.length - 2], lessThan(1));
   });
+
+  test(
+    'the base64 length picks one shot or chunks, exactly as encoded',
+    () async {
+      // 正好 imageChunkChars 个 base64 字符的还一次传完，多一个字节就分段
+      final edge = imageChunkChars * 3 ~/ 4;
+      final once = _UploadRpc();
+      final small = Uint8List.fromList(List.generate(edge, (i) => i % 251));
+      await uploadImage(once, small);
+      expect(once.methods, ['clipboard.saveImageAsTempFile']);
+      expect(once.calls.single.$2['contentBase64'], base64.encode(small));
+
+      // 旧电脑按报的长度收 base64 分段，三种余数都要和实际编码一样长
+      for (final n in [edge + 1, edge + 2, edge + 3]) {
+        final rpc = _UploadRpc();
+        final bytes = Uint8List.fromList(List.generate(n, (i) => i % 251));
+        await uploadImage(rpc, bytes);
+        final encoded = base64.encode(bytes);
+        final start = rpc.calls.firstWhere(
+          (c) => c.$1 == 'clipboard.startImageUpload',
+        );
+        expect(start.$2['expectedBase64Length'], encoded.length);
+        final sent = rpc.calls
+            .where((c) => c.$1 == 'clipboard.appendImageUploadChunk')
+            .map((c) => c.$2['contentBase64'] as String)
+            .join();
+        expect(sent, encoded);
+      }
+    },
+  );
 
   test(
     'a large image reports progress chunk by chunk and ends at 100%',
