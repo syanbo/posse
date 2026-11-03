@@ -3,6 +3,42 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.21
+
+- 界面支持英文：设置「通用」的「语言」里选跟随系统、简体中文或 English，马上生效；报错、日期、命令速查和更新说明都跟着界面语言。
+- 钟点跟系统的 12/24 小时设置。
+- 设置里加主题：跟随系统、浅色、深色。
+- Markdown 预览照 GitHub 的样式排版，正文里的 HTML 和图片也照 GitHub 显示；Markdown 字号并入编辑器字号。
+- 本地网页在网页标签里打开，文件标签也能预览；`posse web open` 可以直接给文件路径。
+- 侧栏用连线把派发方和它派出的任务连起来，派到别的工作区的任务显示成影子行。
+- 侧栏恢复显示看过的本轮完成。
+- 终端和侧栏的右键菜单加了图标和快捷键，终端菜单新增分栏、重命名、复制终端 ID。
+- 终端标签的关闭按钮只在悬停时出现，标题按宽度截断。
+- 设置里加「关闭前确认」开关，关掉后关闭运行中的会话和终端不再确认。
+- Posse 自带的技能改为装进用户技能目录。
+- 修正 10 个没对齐的图标。
+- 看完 Claude 的 /usage 后，Fable 用量能及时跟上。
+- 只有正式发布的包才检查更新，从源码打的包不会被官方版本换掉。
+- 配合手机端 0.1.12：手机的消息改走加密二进制帧，iOS 支持推送通知。
+
+### English
+
+- English interface: choose System, 简体中文 or English under Settings › General › Language; it applies right away, and errors, dates, the Cheat Sheet and release notes follow the interface language.
+- Times follow the system’s 12/24-hour setting.
+- New Theme setting: System, Light or Dark.
+- Markdown previews are styled like GitHub, including HTML and images in the text; the Markdown font size now follows the editor font size.
+- Local web pages open in a web tab and can be previewed in file tabs; `posse web open` accepts a file path.
+- The sidebar draws lines from a dispatcher to the tasks it started; tasks sent to other workspaces show as shadow rows.
+- The sidebar shows finished turns you’ve already seen again.
+- Terminal and sidebar context menus now have icons and shortcuts; the terminal menu adds split panes, Rename and Copy Terminal ID.
+- A terminal tab’s close button only appears on hover, and titles are truncated by width.
+- New “Confirm before closing” setting; turn it off to close running sessions and terminals without confirming.
+- Posse’s own skills are now installed into the user skills directory.
+- Fixed 10 misaligned icons.
+- Fable usage now catches up right after viewing Claude’s /usage.
+- Only official release builds check for updates, so builds from source are never replaced by the official version.
+- Works with Posse Mobile 0.1.12: phone messages now use encrypted binary frames, and iOS supports push notifications.
+
 ## 0.1.20
 
 - 分屏改成分栏：主区域可以左右、上下任意分成几格（最多四格），每格有自己的标签栏，终端和打开的文件都能放进去。
