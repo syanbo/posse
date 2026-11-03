@@ -602,7 +602,7 @@ func TestPreview(t *testing.T) {
 		tt.Frame()
 		savePNG(t, tt, "tabs-overflow-hover-"+suffix+".png")
 
-		// 标题比标签的最大宽度还长：标题截断加省略号，关闭按钮仍在标签里
+		// 标题比标签的最大宽度还长：标题截断加省略号
 		a = previewApp(t)
 		a.workspaces[0].Terminals[0].AgentState = state("idle")
 		a.workspaces[0].Terminals[0].Name = "1009｜feat｜番茄女频长篇调研与连载写作，还要再长一点才超出标签"

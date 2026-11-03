@@ -2047,8 +2047,7 @@ func shortcutHint(c *ui.Context, keys, label string) {
 // tab 是第 i 格标签栏里的一个终端；active 是这格选中的，focused 表示这格是焦点格。
 func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active, focused bool) {
 	t := c.Theme()
-	// 图标侧内边距比文字侧少 2px；圆角 8，内部 20px 的关闭按钮离边 4px，圆角取 8-4=4
-	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 4, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(280)
+	row := ui.Row(c.Key(term.ID)).Height(sz(28)).Padding(0, 8, 0, 8).Gap(6).Radius(rControl).Shrink(1).MaxWidth(tabMaxW)
 	hovered := row.Hovered()
 	bg := ui.Transparent
 	switch {
@@ -2061,7 +2060,8 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	if active && focused && a.splitShown() {
 		tabMark(c, row)
 	}
-	row.Background(row.AnimateColor("bg", bg, hover))
+	rowBg := row.AnimateColor("bg", bg, hover)
+	row.Background(rowBg)
 	status := ""
 	if term.AgentState != nil && term.Running || term.Lost {
 		status = a.sessionStatus(term)
@@ -2079,6 +2079,47 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	if renaming {
 		row.Border(focusRing, t.Focus)
 	}
+	waiting := status == agent.StatusWaiting
+	showClose := hovered
+	showName := term.Agent == "" || detail == "" && !waiting
+	showDetail := !waiting && detail != ""
+	if !renaming {
+		// 自己按字宽截断再交给排版：排版按分到的宽度截，末尾会空出将近一个汉字，标签不收紧
+		used, items := float32(8+8), 0
+		add := func(w float32) { used += w; items++ }
+		if status != "" || term.Agent == "" {
+			add(smallIcon())
+		}
+		if term.Agent != "" {
+			add(smallIcon())
+		}
+		if waiting {
+			tw, _ := c.MeasureText(0, ui.Span{Text: L(c).TermPending(), Size: fsSmall})
+			add(tw)
+		}
+		var nw, dw float32
+		if showName {
+			nw, _ = c.MeasureText(0, ui.Span{Text: name, Size: fsSmall})
+			add(nw)
+		}
+		if showDetail {
+			dw, _ = c.MeasureText(0, ui.Span{Text: detail, Size: fsSmall})
+			add(dw)
+		}
+		natural := used + float32(max(items-1, 0))*6
+		if natural > tabMaxW {
+			avail := tabMaxW - (natural - nw - dw) - 1
+			if showName {
+				name = fitText(c, name, fsSmall, avail)
+				nw, _ = c.MeasureText(0, ui.Span{Text: name, Size: fsSmall})
+				avail -= nw
+			}
+			if showDetail {
+				detail = fitText(c, detail, fsSmall, avail)
+				showDetail = detail != ""
+			}
+		}
+	}
 	row.Children(func() {
 		if status != "" {
 			a.statusIcon(c, term.ID, status, smallIcon())
@@ -2087,7 +2128,6 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 		}
 		// agent 终端用图标代替名字（悬停提示是名字）；还没有标题时照旧写名字，标签不至于只剩图标。
 		// 图标和左边的状态格一样大
-		waiting := status == agent.StatusWaiting
 		if term.Agent != "" {
 			agentTile(c, term.Agent, smallIcon())
 		}
@@ -2095,7 +2135,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 			a.renameInput(c, term)
 			return
 		}
-		if term.Agent == "" || detail == "" && !waiting {
+		if showName {
 			tabText(c, ui.Text(c, name).FontSize(fsSmall).Shrink(1).SingleLine(), active)
 		}
 		// 待处理时只显示这个提示，标题让位，标签不至于挤成一串
@@ -2104,7 +2144,7 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 			label := ui.Text(c, L(c).TermPending()).FontSize(fsSmall).Shrink(0)
 			tabText(c, label, active)
 			label.TextColor(colors(t).honey)
-		} else if detail != "" {
+		} else if showDetail {
 			title := ui.Text(c, detail).FontSize(fsSmall).Shrink(1).SingleLine()
 			if term.Agent != "" {
 				tabText(c, title, active)
@@ -2112,20 +2152,22 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 				title.TextColor(t.TextMuted).Margin(0, 0, cjkLift, 0)
 			}
 		}
-		closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(L(c).TermClose()).Tooltip(a.withKey(L(c).TermClose(), "closeTab"))
-		closeBg := ui.Transparent
-		if closeBtn.Hovered() {
-			closeBg = t.SurfacePressed
+		// 关闭按钮只在悬停时出现（选中的也一样），平时省下这一格多放标题，切换标签时宽度也不变
+		if !showClose {
+			return
 		}
-		closeBtn.Background(closeBtn.AnimateColor("bg", closeBg, hover))
-		visible := active || hovered
-		if !visible {
-			closeBtn.Opacity(0)
-		}
-		closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(fsSmall).TextColor(t.TextMuted) })
-		if visible && closeBtn.Clicked() {
-			a.askClose(L(c), term)
-		}
+		// x 浮在右端盖住标题末尾，不占排版位置：悬停时标签不变宽，后面的标签不跟着动。
+		// 底下先垫标签栏的底色再叠标签的底色（悬停的底是半透明的），左边一段渐隐进标题
+		band := colors(t).band
+		ui.Row(c.Key("close-over")).Absolute().Top(0).Bottom(0).Right(2).AlignItems(ui.Center).Children(func() {
+			ui.Box(c).Width(12).Height(miniBox()).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+				fadeIn(p, r, band, rowBg)
+			})
+			ui.Box(c).Size(miniBox(), miniBox()).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+				p.Fill(r, band, 0)
+				p.Fill(r, rowBg, 0)
+			}).Children(func() { a.tabClose(c, term) })
+		})
 	})
 	// 改名时不能拖：在输入框里拖着选文字会变成拖标签
 	if !renaming {
@@ -2144,6 +2186,21 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	}
 	row.Tooltip(tabTooltip(L(c), term))
 	contextMenu(c, row, func(m *popMenu) { a.tabMenu(L(c), m, w, term) })
+}
+
+// tabClose 是终端标签上的关闭按钮。
+func (a *app) tabClose(c *ui.Context, term terminalInfo) {
+	t := c.Theme()
+	closeBtn := ui.Box(c.Key("close")).Size(miniBox(), miniBox()).Radius(rSmall).Center().Shrink(0).Label(L(c).TermClose()).Tooltip(a.withKey(L(c).TermClose(), "closeTab"))
+	closeBg := ui.Transparent
+	if closeBtn.Hovered() {
+		closeBg = t.SurfacePressed
+	}
+	closeBtn.Background(closeBtn.AnimateColor("bg", closeBg, hover))
+	closeBtn.Children(func() { ui.Icon(c, iconClose).FontSize(fsSmall).TextColor(t.TextMuted) })
+	if closeBtn.Clicked() {
+		a.askClose(L(c), term)
+	}
 }
 
 // tabTooltip 是终端标签的悬停提示：完整的名字和标题，标签上只有图标或标题被截断时看得到全文。
@@ -2247,6 +2304,34 @@ func (a *app) revealTab(row ui.Element, i int, id string, active bool) {
 
 // tabText 是标签上的主文字：没选中时用次要色。中文字形在行框里偏下，提半个像素才看着居中。
 // 选中不加粗：长标题缩到标签最大宽度时，加粗的字截断的位置不同，切换时文字会跳。
+// tabMaxW 是终端标签的最大宽度，不随字号缩放。
+const tabMaxW = 260
+
+// fitText 把 s 截到 size 字号下不超过 maxW 宽，截了的末尾带省略号；连省略号都放不下时是空串。
+func fitText(c *ui.Context, s string, size, maxW float32) string {
+	width := func(s string) float32 {
+		w, _ := c.MeasureText(0, ui.Span{Text: s, Size: size})
+		return w
+	}
+	if width(s) <= maxW {
+		return s
+	}
+	r := []rune(strings.TrimSuffix(s, "…"))
+	lo, hi := 0, len(r) // 二分找能放下的最长前缀
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if width(strings.TrimRight(string(r[:mid]), " ")+"…") <= maxW {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	if lo == 0 && width("…") > maxW {
+		return ""
+	}
+	return strings.TrimRight(string(r[:lo]), " ") + "…"
+}
+
 func tabText(c *ui.Context, e ui.Element, active bool) {
 	e.Margin(0, 0, cjkLift, 0)
 	if !active {
