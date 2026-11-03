@@ -18,7 +18,7 @@ const (
 var (
 	iconFileTS   = icon(letterGroup + `<path d="M3.25 7h8M7.25 7v10"/><path d="` + letterS + `"/></g>`)
 	iconFileJS   = icon(letterGroup + `<path d="M9.5 7v7.25a2.75 2.75 0 0 1-5.5 0"/><path d="` + letterS + `"/></g>`)
-	iconFileGo   = icon(letterGroup + `<path d="M10.25 8.4A4.25 5 0 1 0 11.25 12H7.75"/><ellipse cx="17.25" cy="12" rx="3.75" ry="5"/></g>`)
+	iconFileGo   = icon(letterGroup + `<path d="M10.25 8.78A4.25 5 0 1 0 11.25 12H7.75"/><ellipse cx="17.25" cy="12" rx="3.75" ry="5"/></g>`)
 	iconFileMark = icon(`<path d="m9 6.5-5.5 5.5L9 17.5M15 6.5l5.5 5.5-5.5 5.5"/>`)
 	iconFileCSS  = icon(`<path d="M10.5 4.5 8.5 19.5M16 4.5l-2 15M5 9.25h14.5M4.5 14.75H19"/>`)
 	iconFileMD   = icon(`<path d="M3.25 17V7l4.5 5.5L12.25 7v10M17.25 7v10M14 13.75l3.25 3.25 3.25-3.25"/>`)
@@ -35,9 +35,9 @@ var (
 	iconFileFlutter = icon(`<path d="M14.25 3.25h5.5L8.5 14.5 5.75 11.75z"/><path d="M14.25 11.25h5.5l-5 5 5 5h-5.5l-5-5z"/>`)
 	iconFileSwift   = icon(`<path d="M19.25 15.5c1.1-3.6-.6-7.8-5.25-11 2.4 3.4 2.6 6.4 1.65 8.4C12.6 10.8 8.4 7.6 5 4.75c2.6 3.3 5 5.75 7.1 7.4-2.75-1.25-5.1-2.6-7.6-4.4 2.9 4.8 7.6 9.5 13.75 9 .8.55 1.4 1.3 1.75 2.25.35-1.35.15-2.5-.75-3.5z"/>`)
 	iconFileKotlin  = icon(`<path d="M5 5h14l-7 7 7 7H5z"/>`)
-	iconFileVue     = icon(`<path d="M2.75 4.5h5.5L12 11l3.75-6.5h5.5L12 20.25z"/><path d="M8.25 4.5h7.5"/>`)
+	iconFileVue     = icon(`<g transform="translate(0 -0.375)"><path d="M2.75 4.5h5.5L12 11l3.75-6.5h5.5L12 20.25z"/><path d="M8.25 4.5h7.5"/></g>`)
 	iconFileDroid   = icon(`<path d="M4.5 17.5v-2.25a7.5 7.5 0 0 1 15 0v2.25z"/><path d="M7.5 9.25 5.75 6.5M16.5 9.25l1.75-2.75"/><circle cx="9.25" cy="13.75" r="1" fill="currentColor" stroke="none"/><circle cx="14.75" cy="13.75" r="1" fill="currentColor" stroke="none"/>`)
-	iconFileGradle  = icon(`<path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/>`)
+	iconFileGradle  = icon(`<g transform="translate(1 0.75)"><path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/></g>`)
 	iconFileLayout  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M3.75 9h16.5M9.5 9v10.5"/>`)
 	iconFileKey     = icon(`<circle cx="8" cy="15.5" r="3.75"/><path d="m10.75 12.75 8.5-8.5M15.75 7.75l2.5 2.5M13.5 10l2 2"/>`)
 	// C 头文件、Objective-C 照 Xcode：纸上一个小写字母

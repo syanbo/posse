@@ -18,7 +18,7 @@ enum FileKind {
     4,
   ),
   go(
-    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="1.75"><path d="M10.25 8.4A4.25 5 0 1 0 11.25 12H7.75"/><ellipse cx="17.25" cy="12" rx="3.75" ry="5"/></g></svg>''',
+    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="1.75"><path d="M10.25 8.78A4.25 5 0 1 0 11.25 12H7.75"/><ellipse cx="17.25" cy="12" rx="3.75" ry="5"/></g></svg>''',
     5,
   ),
   code(
@@ -26,7 +26,7 @@ enum FileKind {
     1,
   ),
   shell(
-    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 16 5-4-5-4M12 17h7"/></svg>''',
+    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 -0.5)"><path d="m5 16 5-4-5-4M12 17h7"/></g></svg>''',
     2,
   ),
   markup(
@@ -106,11 +106,11 @@ enum FileKind {
     3,
   ),
   java(
-    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/></svg>''',
+    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(-0.5 0.5)"><path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/></g></svg>''',
     0,
   ),
   vue(
-    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.75 4.5h5.5L12 11l3.75-6.5h5.5L12 20.25z"/><path d="M8.25 4.5h7.5"/></svg>''',
+    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(0 -0.375)"><path d="M2.75 4.5h5.5L12 11l3.75-6.5h5.5L12 20.25z"/><path d="M8.25 4.5h7.5"/></g></svg>''',
     2,
   ),
   android(
@@ -118,7 +118,7 @@ enum FileKind {
     2,
   ),
   gradle(
-    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>''',
+    r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(1 0.75)"><path d="M14.75 4.5a4.5 4.5 0 0 0-5.6 5.6L4.6 14.65a2.12 2.12 0 0 0 3 3l4.55-4.55a4.5 4.5 0 0 0 5.6-5.6l-2.6 2.6-2.4-.6-.6-2.4z"/></g></svg>''',
     5,
   ),
   layout(

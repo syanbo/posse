@@ -2,12 +2,13 @@ package app
 
 import "github.com/egoist/mygo/ui"
 
-// icon 解析 24×24 的描边图标，用 currentColor 绘制。描边 1.5 与旁边常规字重的文字匹配。
 // brandIcon 是各家 agent 的标志：单个填充路径，Claude 取自 simple-icons，Codex、Grok、Cursor 取自 LobeHub Icons。
 func brandIcon(d string) *ui.SVG {
 	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="` + d + `"/></svg>`))
 }
 
+// icon 解析 24×24 的描边图标，用 currentColor 绘制。描边 1.5 与旁边常规字重的文字匹配。
+// 图形的外框要在 24 格里居中：图标和文字、勾选框按中心对齐，偏了的用外层 translate 挪回来。
 func icon(shapes string) *ui.SVG {
 	return svgOf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` + shapes + `</svg>`)
 }
@@ -32,10 +33,10 @@ const hexPath = `M12 2.75 20 7.375v9.25L12 21.25 4 16.625v-9.25z`
 var (
 	iconPlus       = icon(`<path d="M12 4v16M4 12h16"/>`)
 	iconClose      = icon(`<path d="M17 7 7 17M7 7l10 10"/>`)
-	iconTerminal   = icon(`<path d="m5 16 5-4-5-4M12 17h7"/>`)
+	iconTerminal   = icon(`<g transform="translate(0 -0.5)"><path d="m5 16 5-4-5-4M12 17h7"/></g>`)
 	iconFolder     = icon(folderShape)
 	iconBranch     = icon(branchShape)
-	iconHome       = icon(`<path d="M4 10.4a1.5 1.5 0 0 1 .55-1.16l6.5-5.3a1.5 1.5 0 0 1 1.9 0l6.5 5.3a1.5 1.5 0 0 1 .55 1.16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M9.75 19.5v-4.75a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1v4.75"/>`) // 项目下的主工作区，和项目行的文件夹区分开
+	iconHome       = icon(`<g transform="translate(0 0.5)"><path d="M4 10.4a1.5 1.5 0 0 1 .55-1.16l6.5-5.3a1.5 1.5 0 0 1 1.9 0l6.5 5.3a1.5 1.5 0 0 1 .55 1.16V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M9.75 19.5v-4.75a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1 1v4.75"/></g>`) // 项目下的主工作区，和项目行的文件夹区分开
 	iconExtensions = icon(`<rect x="4" y="4" width="7" height="7" rx="1.75"/><rect x="13" y="4" width="7" height="7" rx="1.75"/><rect x="4" y="13" width="7" height="7" rx="1.75"/><path d="M16.5 13.5v6M13.5 16.5h6"/>`)
 	iconPlay       = icon(`<path d="M8.5 6.2v11.6a.6.6 0 0 0 .92.5l9.1-5.8a.6.6 0 0 0 0-1L9.42 5.7a.6.6 0 0 0-.92.5z" fill="currentColor"/>`)
 	iconPause      = icon(`<rect x="7" y="5.5" width="3.5" height="13" rx="0.8" fill="currentColor"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="0.8" fill="currentColor"/>`)
@@ -57,7 +58,7 @@ var (
 	iconFile       = icon(fileShape)
 	iconTag        = icon(`<path d="M4.5 4.5h7l8 8-7 7-8-8z"/><circle cx="8.5" cy="8.5" r="1.25"/>`)
 	iconRevertHunk = icon(`<path d="m6 7 5 5-5 5M13 7l5 5-5 5"/>`) // diff 里每处改动旁的 >>，照 WebStorm
-	iconRollback   = icon(`<path d="M9 14 4.5 9.5 9 5"/><path d="M4.75 9.5h9.5a5.25 5.25 0 0 1 0 10.5H11"/>`)
+	iconRollback   = icon(`<g transform="translate(0 -0.5)"><path d="M9 14 4.5 9.5 9 5"/><path d="M4.75 9.5h9.5a5.25 5.25 0 0 1 0 10.5H11"/></g>`)
 	iconRefresh    = icon(`<path d="M19.25 12a7.25 7.25 0 1 1-2.12-5.13"/><path d="M19.5 4.5v3.75h-3.75"/>`)
 	iconShelve     = icon(`<rect x="4" y="4.5" width="16" height="5" rx="1.5"/><path d="M5.5 9.5v8.25c0 .97.78 1.75 1.75 1.75h9.5c.97 0 1.75-.78 1.75-1.75V9.5M10 13h4"/>`)
 	iconUp         = icon(`<path d="m6.5 14.5 5.5-5.5 5.5 5.5"/>`)
@@ -67,15 +68,15 @@ var (
 	iconCommit     = icon(`<circle cx="12" cy="12" r="3.25"/><path d="M3.5 12h5.25M15.25 12h5.25"/>`)
 	iconBlame      = icon(`<path d="M4.5 6h4M4.5 10h4M4.5 14h4M4.5 18h4M11.5 6h8M11.5 10h6M11.5 14h8M11.5 18h5"/>`)
 	// 樱桃：两颗果子挂在一根分叉的梗上，WebStorm 的 cherry-pick 也用它
-	iconCherryPick = icon(`<circle cx="7.5" cy="16.75" r="3.25"/><circle cx="16.75" cy="15.25" r="3.25"/><path d="M7.5 13.5c.6-4 2.6-7.2 5.75-9.25M16.75 12c-1.4-2.6-2.6-5.2-3.5-7.75"/><path d="M13.25 4.25c1.6-1.4 4.1-1.6 6-.6-1.6 1.5-4.1 1.7-6 .6z"/>`)
+	iconCherryPick = icon(`<g transform="translate(0 0.5)"><circle cx="7.5" cy="16.75" r="3.25"/><circle cx="16.75" cy="15.25" r="3.25"/><path d="M7.5 13.5c.6-4 2.6-7.2 5.75-9.25M16.75 12c-1.4-2.6-2.6-5.2-3.5-7.75"/><path d="M13.25 4.25c1.6-1.4 4.1-1.6 6-.6-1.6 1.5-4.1 1.7-6 .6z"/></g>`)
 	iconDiff       = icon(`<path d="M4 8h13M13.5 4.5 17 8l-3.5 3.5"/><path d="M20 16H7M10.5 12.5 7 16l3.5 3.5"/>`)
 	// 一上一下两个箭头：对调上下两栏
 	iconSwap       = icon(`<path d="M8 19.5v-15M4.5 8 8 4.5 11.5 8"/><path d="M16 4.5v15M12.5 16 16 19.5 19.5 16"/>`)
-	iconTrash      = icon(`<path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.1a2 2 0 0 0 2 1.9h7a2 2 0 0 0 2-1.9l1-12.1M9 7V4.5h6V7"/>`)
+	iconTrash      = icon(`<g transform="translate(0 -0.75)"><path d="M4 7h16M10 11v6M14 11v6M5.5 7l1 12.1a2 2 0 0 0 2 1.9h7a2 2 0 0 0 2-1.9l1-12.1M9 7V4.5h6V7"/></g>`)
 	iconGitLog     = icon(`<path d="M6.5 3.75v16.5"/><circle cx="6.5" cy="7" r="2.25" fill="currentColor"/><circle cx="6.5" cy="17" r="2.25" fill="currentColor"/><path d="M11.5 7h8M11.5 12h6M11.5 17h8"/>`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // 提交时间线，和分支、"历史会话"的时钟区分开
 	iconOpLog      = icon(`<rect x="8.5" y="2.75" width="7" height="3.5" rx="1"/><path d="M15.5 4.5h1.75A1.75 1.75 0 0 1 19 6.25v13A1.75 1.75 0 0 1 17.25 21H6.75A1.75 1.75 0 0 1 5 19.25v-13A1.75 1.75 0 0 1 6.75 4.5H8.5"/><path d="m8.25 11.5 1.25 1.25 2-2M8.25 16.5l1.25 1.25 2-2M13.75 12h2.5M13.75 17h2.5"/>`)                                                                                                                                                                                                                                                                                                                                                                                                                                // 操作记录：一张做过的操作清单
 	iconSettings   = icon(`<g transform="translate(12 12) scale(0.82) translate(-12 -12)" stroke-width="1.83"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g>`) // 原图形占满 20，缩到和侧栏开关一样大；线宽放大抵消缩放
-	iconCoffee     = icon(`<path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/>`)
+	iconCoffee     = icon(`<g transform="translate(-0.5 0.5)"><path d="M17 8.5h1a3 3 0 0 1 0 6h-1"/><path d="M4 8.5h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M8 3.5v2M12 3.5v2"/></g>`)
 	iconMemory     = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 9.5h5v5h-5z"/><path d="M9.5 3v3M14.5 3v3M9.5 18v3M14.5 18v3M3 9.5h3M3 14.5h3M18 9.5h3M18 14.5h3"/>`)
 	iconSkill      = icon(`<path d="M12 4.5 13.8 9l4.7 1.8-4.7 1.8L12 17.2l-1.8-4.6-4.7-1.8L10.2 9z"/><path d="M18 15.5v4M16 17.5h4"/>`)
 	iconAppearance = icon(`<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>`)
@@ -87,7 +88,7 @@ var (
 	iconCode       = icon(`<path d="m8.5 7.5-4.5 4.5 4.5 4.5M15.5 7.5l4.5 4.5-4.5 4.5M13.25 5.5l-2.5 13"/>`)
 	iconEye        = icon(`<path d="M2.75 12S6 5.75 12 5.75 21.25 12 21.25 12 18 18.25 12 18.25 2.75 12 2.75 12z"/><circle cx="12" cy="12" r="2.75"/>`)
 	iconMinus      = icon(`<path d="M6 12h12"/>`)
-	iconFilter     = icon(`<path d="M4.25 5.75h15.5l-6 7.25v5.25l-3.5 1.75v-7z"/>`) // 侧栏项目列表的「只看运行中」筛选
+	iconFilter     = icon(`<g transform="translate(0 -0.875)"><path d="M4.25 5.75h15.5l-6 7.25v5.25l-3.5 1.75v-7z"/></g>`) // 侧栏项目列表的「只看运行中」筛选
 	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
 	iconBraces     = icon(`<path d="M8.5 4H8a2 2 0 0 0-2 2v3.5a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 1 6 14.5V18a2 2 0 0 0 2 2h.5"/><path d="M15.5 4h.5a2 2 0 0 1 2 2v3.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0-2.5 2.5V18a2 2 0 0 1-2 2h-.5"/>`)
