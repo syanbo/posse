@@ -39,11 +39,12 @@ Future<String> uploadImage(
   UploadProgress? onProgress,
 }) async {
   if (bytes.isEmpty) throw const PhoneError(PhoneError.imageEmpty);
-  final encoded = base64.encode(bytes);
-  if (encoded.length <= imageChunkChars) {
+  // 新电脑走二进制分段，用不到 base64：只在一次传完和旧电脑时才编码
+  final base64Length = (bytes.length + 2) ~/ 3 * 4;
+  if (base64Length <= imageChunkChars) {
     final path = imagePath(
       await rpc.call('clipboard.saveImageAsTempFile', {
-        'contentBase64': encoded,
+        'contentBase64': base64.encode(bytes),
       }),
     );
     onProgress?.call(1);
@@ -52,7 +53,7 @@ Future<String> uploadImage(
   // 新电脑认 expectedBytes 并回一个编号：分段走二进制帧，原始字节、不等每段的回复；
   // 旧电脑只认 expectedBase64Length，照旧一段段传 base64
   final start = await rpc.call('clipboard.startImageUpload', {
-    'expectedBase64Length': encoded.length,
+    'expectedBase64Length': base64Length,
     'expectedBytes': bytes.length,
   });
   final id = start['uploadId'];
@@ -67,7 +68,7 @@ Future<String> uploadImage(
       onProgress?.call(min(end / bytes.length, 0.99));
     }
   } else {
-    await _uploadBase64(rpc, id, encoded, onProgress);
+    await _uploadBase64(rpc, id, base64.encode(bytes), onProgress);
   }
   final path = imagePath(
     await rpc.call('clipboard.commitImageUpload', {'uploadId': id}),
