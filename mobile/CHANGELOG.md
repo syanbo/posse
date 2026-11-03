@@ -3,6 +3,32 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.12
+
+- 界面支持英文：设置里的「语言」可选跟随系统、简体中文或 English；报错、日期、权限说明都跟着界面语言，电脑发来的报错也按手机的语言显示。
+- 钟点跟系统的 12/24 小时设置。
+- iOS 推送通知：App 在后台、Mac 没人在用时，agent 等你处理或一轮完成，iPhone 收到通知，点开进到那个会话；在设置里可以分别开关。电脑要配好外网中转。
+- 手机终端照电脑窗口的配色画，跟着电脑的深浅主题。
+- 和电脑之间的消息改走加密的二进制帧，更省流量；发图片不再整张转 base64。连上旧版电脑时提示先更新电脑。
+- 设置「关于」可以手动检查更新。
+- 首页恢复显示看过的本轮完成。
+- 已连着别的电脑时，添加电脑失败的原因不再被刷新清掉。
+- 安卓的包名换了：这一版装上是一个新的 App，要重新配对；旧版不会被替换，确认新版能用后把旧版卸掉。
+- 需要电脑端 0.1.21。
+
+### English
+
+- English interface: choose System, 简体中文 or English under Language in Settings; errors, dates and permission prompts follow the interface language, and errors from the Mac are shown in the phone’s language too.
+- Times follow the system’s 12/24-hour setting.
+- iOS push notifications: while the app is in the background and nobody is using the Mac, your iPhone is notified when an agent needs you or finishes a turn, and tapping it opens that session; each kind can be turned off in Settings. The Mac needs a relay set up.
+- Terminals on the phone use the Mac window’s colors and follow its light or dark theme.
+- Messages to and from the Mac now travel as encrypted binary frames, using less data; images are no longer converted to base64 before sending. Connecting to an older Mac asks you to update it first.
+- You can check for updates manually under About in Settings.
+- The home screen shows finished turns you’ve already seen again.
+- When already connected to another Mac, the reason adding a Mac failed is no longer cleared by the refresh.
+- Android has a new package name: this version installs as a new app and needs pairing again; the old app isn’t replaced, so uninstall it once the new one works.
+- Requires Posse 0.1.21 on the Mac.
+
 ## 0.1.11
 
 - 文件页的 Markdown 预览照 GitHub 解释 HTML：居中的标题和徽章、折叠内容、图文表格、按键和换行都能正常显示，不再露出标签原文。
