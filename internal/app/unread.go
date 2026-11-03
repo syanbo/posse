@@ -54,16 +54,11 @@ func (a *app) watchFocus() {
 }
 
 // shownStatus 把还没看过的完成换成 statusUnread；正看着的不换，常驻进程马上会收到看过。
-// 看过的完成不画：它是多数会话平时的样子，画出来反而冲淡了要处理的几种。
-// 常驻进程里照旧是 idle（terminal wait、任务投递、手机都靠它），只是界面上留空。
 func (a *app) shownStatus(t terminalInfo, status string) string {
-	if status != agent.StatusIdle {
-		return status
-	}
-	if t.Unread && t.ID != a.viewing {
+	if status == agent.StatusIdle && t.Unread && t.ID != a.viewing {
 		return statusUnread
 	}
-	return ""
+	return status
 }
 
 // 没看的完成一直摇铃铛：每轮 bellRing 内来回摆三次、越摆越小，再静止 bellRest，看过了才停。

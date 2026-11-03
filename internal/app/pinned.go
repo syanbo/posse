@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+
+	"posse/internal/agent"
 )
 
 // 侧栏顶上的磁贴照 Arc 的置顶网址：任务、历史、技能、手机、聊天和固定的工作区排在一起，一行四块，最多十二块（三行），
@@ -250,7 +252,8 @@ func (a *app) pinnedTile(c *ui.Context, w workspace) ui.Element {
 func (a *app) workspaceTile(c *ui.Context, key string, w *workspace, icon func(), label string) ui.Element {
 	var badge func()
 	if w != nil {
-		if _, status := a.terminalSummary(w.Terminals); status != "" {
+		// 角标只提醒要留意的：看过的完成是平时的样子，每块都挂着反而看不出哪块有事
+		if _, status := a.terminalSummary(w.Terminals); status != "" && status != agent.StatusIdle {
 			badge = func() { statusGlyph(c, status, smallIcon()) }
 		}
 	}
