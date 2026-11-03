@@ -162,10 +162,16 @@ go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # �
 
 - [MyGo](https://github.com/egoist/mygo)：原生界面框架。
 - [Ghostty](https://github.com/ghostty-org/ghostty)：终端内核 libghostty-vt。
-- [Orca](https://github.com/stablyai/orca)：很多交互照它来，手机端兼容它的 App。
+- [Orca](https://github.com/stablyai/orca)：很多交互参考了它，手机端兼容它的 App。
+- [WebStorm](https://www.jetbrains.com/webstorm/)：Git 界面的交互和叫法参考了它。
+- [herdr](https://github.com/herdrdev/herdr)、[cmux](https://github.com/manaflow-ai/cmux)：Dock 角标和通知、给 agent 用的网页标签、终端分屏等参考了它们。
+- [libghostty for Dart、flterm](https://github.com/elias8/libghostty)：手机端的终端内核绑定和终端组件（`mobile/third_party/flterm` 是带改动的副本）。
+- [Moonlight](https://moonlight-stream.org)、[RustDesk](https://github.com/rustdesk/rustdesk)：看桌面的起始码率、码率和帧率的统计方式、采集出错后的重建参考了它们的实现。
+- [Nerd Fonts](https://www.nerdfonts.com)：手机端终端里图标的符号字体。
 - [Pele](https://github.com/obsidianmd/pele)、[Mayoi](https://github.com/sorrycc/Mayoi)：Mermaid 图的排版和接入方式。
 - [Alma](https://alma.now)：手机和电脑之间的加密消息改用二进制帧传输，参考了它的远程连接协议。
 - 一起开发 Posse 的 agent：[Claude Code](https://github.com/anthropics/claude-code)、[Codex](https://github.com/openai/codex)、[Cursor CLI](https://cursor.com/cli)、[Grok Build](https://docs.x.ai/build/overview)。
+- 以及 `go.mod`、`mobile/pubspec.yaml` 里的各个开源依赖。
 
 ## 许可
 

@@ -162,10 +162,16 @@ Architecture and development conventions are in [`AGENTS.md`](AGENTS.md), and ho
 
 - [MyGo](https://github.com/egoist/mygo): the native UI framework.
 - [Ghostty](https://github.com/ghostty-org/ghostty): libghostty-vt, the terminal core.
-- [Orca](https://github.com/stablyai/orca): much of the interaction follows it, and the phone side is compatible with its app.
+- [Orca](https://github.com/stablyai/orca): much of the interaction is modeled on it, and the phone side is compatible with its app.
+- [WebStorm](https://www.jetbrains.com/webstorm/): the Git interface is modeled on its interactions and naming.
+- [herdr](https://github.com/herdrdev/herdr), [cmux](https://github.com/manaflow-ai/cmux): the Dock badge and notifications, the web tab for agents, terminal splits and more were inspired by them.
+- [libghostty for Dart, flterm](https://github.com/elias8/libghostty): the terminal engine bindings and terminal widget on mobile (`mobile/third_party/flterm` is a modified copy).
+- [Moonlight](https://moonlight-stream.org), [RustDesk](https://github.com/rustdesk/rustdesk): remote desktop’s starting bitrate, how bitrate and frame rate are measured, and rebuilding capture after errors are modeled on their implementations.
+- [Nerd Fonts](https://www.nerdfonts.com): the symbol font for icons in mobile terminals.
 - [Pele](https://github.com/obsidianmd/pele), [Mayoi](https://github.com/sorrycc/Mayoi): Mermaid diagram layout and how it’s wired in.
 - [Alma](https://alma.now): sending encrypted messages between phone and Mac as binary frames is modeled on its remote connection protocol.
 - The agents that build Posse alongside: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [Cursor CLI](https://cursor.com/cli), [Grok Build](https://docs.x.ai/build/overview).
+- And the open-source dependencies in `go.mod` and `mobile/pubspec.yaml`.
 
 ## License
 
