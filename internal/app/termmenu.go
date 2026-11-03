@@ -17,35 +17,53 @@ import (
 )
 
 // termMenu 是终端内容区的右键菜单（照 Orca 的终端菜单），换掉终端插件自带的英文菜单：
-// 清屏和 ⌘K 一样由常驻进程清，关闭和 ⌘W 一样先问。
+// 清屏和 ⌘K 一样由常驻进程清，关闭和 ⌘W 一样先问；分栏和快捷键一样从右键的这一格分出去。
 func (a *app) termMenu(lm locales.Messages, m *popMenu, v *termView, id string) {
 	if v.term == nil {
 		return
 	}
 	sel := v.term.Selection()
-	if m.Item(lm.CommonCopy()).Shortcut(ui.Cmd, ui.KeyC).Disabled(sel == "").Chosen() {
+	if m.Item(lm.CommonCopy()).Icon(iconCopy).Shortcut(ui.Cmd, ui.KeyC).Disabled(sel == "").Chosen() {
 		writeClipboard(sel)
 	}
-	if m.Item(lm.CommonPaste()).Shortcut(ui.Cmd, ui.KeyV).Chosen() {
+	if m.Item(lm.CommonPaste()).Icon(iconPaste).Shortcut(ui.Cmd, ui.KeyV).Chosen() {
 		v.term.PasteClipboard()
 	}
-	if m.Item(lm.CommonSelectAll()).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
+	if m.Item(lm.CommonSelectAll()).Icon(iconSelectAll).Shortcut(ui.Cmd, ui.KeyA).Chosen() {
 		v.term.SelectAll()
 	}
-	m.Separator()
-	if m.Item(lm.TermClear()).Keys(a.keyText("termClear")).Chosen() {
-		a.clearTerminal(lm, v, id)
-	}
-	_, t := a.findTerminal(id)
-	if t != nil && sessionID(*t) != "" {
+	w, t := a.findTerminal(id)
+	if w != nil {
 		m.Separator()
-		if m.Item(lm.TermCopySessionId()).Chosen() {
-			writeClipboard(sessionID(*t))
+		if m.Item(lm.KeysSplitRightLabel()).Icon(iconSplitRight).Keys(a.keyText("splitRight")).Chosen() {
+			a.splitFrom(w, v, sideRight)
+		}
+		if m.Item(lm.KeysSplitDownLabel()).Icon(iconSplitDown).Keys(a.keyText("splitDown")).Chosen() {
+			a.splitFrom(w, v, sideBottom)
+		}
+		if a.splitShown() && m.Item(lm.TabMergePanes()).Icon(iconPane).Keys(a.keyText("closeSplit")).Chosen() {
+			a.mergeColumns(w)
 		}
 	}
 	if t != nil {
 		m.Separator()
-		if m.Item(lm.TermClose()).Keys(a.keyText("closeTab")).Chosen() {
+		if m.Item(lm.TabRename()).Icon(iconPencil).Chosen() {
+			a.startRename(lm, *t)
+		}
+		if m.Item(lm.TabCopyTerminalId()).Icon(iconCopy).Chosen() {
+			writeClipboard(t.ID)
+		}
+		if sid := sessionID(*t); sid != "" && m.Item(lm.TermCopySessionId()).Icon(iconCopy).Chosen() {
+			writeClipboard(sid)
+		}
+	}
+	m.Separator()
+	if m.Item(lm.TermClear()).Icon(iconEraser).Keys(a.keyText("termClear")).Chosen() {
+		a.clearTerminal(lm, v, id)
+	}
+	if t != nil {
+		m.Separator()
+		if m.Item(lm.TermClose()).Icon(iconClose).Danger().Keys(a.keyText("closeTab")).Chosen() {
 			a.askClose(lm, *t)
 		}
 	}

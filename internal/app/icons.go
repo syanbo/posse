@@ -92,6 +92,16 @@ var (
 	iconPanelLeft  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M9.25 4.5v15"/>`)
 	iconPanelRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M14.75 4.5v15"/>`)
 	iconBraces     = icon(`<path d="M8.5 4H8a2 2 0 0 0-2 2v3.5a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 1 6 14.5V18a2 2 0 0 0 2 2h.5"/><path d="M15.5 4h.5a2 2 0 0 1 2 2v3.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0-2.5 2.5V18a2 2 0 0 1-2 2h-.5"/>`)
+	// 右键菜单：粘贴是剪贴板，全选是四角的选框，向右、向下分栏是从中间分开的窗格，单格的窗格是合并分栏，合并是两条分支汇到一起，固定是图钉
+	iconPaste      = icon(`<rect x="8.5" y="2.75" width="7" height="3.5" rx="1"/><path d="M15.5 4.5h1.75A1.75 1.75 0 0 1 19 6.25v13A1.75 1.75 0 0 1 17.25 21H6.75A1.75 1.75 0 0 1 5 19.25v-13A1.75 1.75 0 0 1 6.75 4.5H8.5"/>`)
+	iconSelectAll  = icon(`<path d="M4.5 8.5v-2a2 2 0 0 1 2-2h2M15.5 4.5h2a2 2 0 0 1 2 2v2M19.5 15.5v2a2 2 0 0 1-2 2h-2M8.5 19.5h-2a2 2 0 0 1-2-2v-2"/><path d="M8.5 9.5h7M8.5 12h7M8.5 14.5h4.5"/>`)
+	iconSplitRight = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M12 4.5v15"/>`)
+	iconSplitDown  = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/><path d="M3.75 12h16.5"/>`)
+	iconPane       = icon(`<rect x="3.75" y="4.5" width="16.5" height="15" rx="2.5"/>`)
+	iconMerge      = icon(`<circle cx="7" cy="6" r="2.25"/><circle cx="7" cy="18" r="2.25"/><circle cx="17" cy="15" r="2.25"/><path d="M7 8.25v7.5M7 8.25c0 4 3.5 6.75 7.75 6.75"/>`)
+	iconPin        = icon(`<path d="M9.5 3.75h5M10.25 3.75v5.5L7 13.5h10l-3.25-4.25v-5.5M12 13.5v6.75"/>`)
+	iconPencil     = icon(`<path d="M15.25 5.25a2.12 2.12 0 0 1 3 3L8.5 18l-4 1 1-4z"/><path d="m13.75 6.75 3 3"/>`)
+	iconEraser     = icon(`<path d="M8.5 19.5 4.6 15.6a1.5 1.5 0 0 1 0-2.1l8.9-8.9a1.5 1.5 0 0 1 2.1 0l3.8 3.8a1.5 1.5 0 0 1 0 2.1L11 19.5z"/><path d="M8.5 19.5h11M9.25 8.75l6 6"/>`)
 	iconSave       = icon(`<path d="M5.75 4.5h10l3.75 3.75v10a1.25 1.25 0 0 1-1.25 1.25H5.75A1.25 1.25 0 0 1 4.5 18.25V5.75c0-.69.56-1.25 1.25-1.25z"/><path d="M8.5 4.5v4h6v-4M8 19.5v-5.25h8v5.25"/>`)
 	// 对话气泡：聊天磁贴
 	iconChat = icon(`<path d="M6.75 4.75h10.5a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H10.5l-3.75 3.25v-3.25a2 2 0 0 1-2-2v-7.5a2 2 0 0 1 2-2z"/><path d="M8.75 9h6.5M8.75 12h4"/>`)

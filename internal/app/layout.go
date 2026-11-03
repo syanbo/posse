@@ -815,8 +815,8 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	}
 	// 刚点进另一格、界面还没重建时，焦点格还记着原来那格：按键是哪格收到的就以哪格为准。
 	// 界面正要把焦点移到焦点格（刚切换格）时不算：这时按键还落在原来那格
-	if i := slices.Index(a.panes[:], v); i >= 0 && i != a.pane && a.splitShown() && !a.focusTerm {
-		a.focusColumn(w, i, false)
+	if !a.focusTerm {
+		a.focusPaneOf(w, v)
 	}
 	switch {
 	case a.keyIs("splitRight", mods, key):
@@ -843,19 +843,32 @@ func (a *app) splitKey(v *termView, mods ui.Modifiers, key ui.Key) bool {
 	return true
 }
 
+// focusPaneOf 让 v 所在的格成为焦点格（分栏时）。
+func (a *app) focusPaneOf(w *workspace, v *termView) {
+	if i := slices.Index(a.panes[:], v); i >= 0 && i != a.pane && a.splitShown() {
+		a.focusColumn(w, i, false)
+	}
+}
+
+// splitFrom 是终端右键菜单的分栏：从右键的那一格分出去，不管焦点在哪一格。
+func (a *app) splitFrom(w *workspace, v *termView, side dropSide) {
+	a.focusPaneOf(w, v)
+	a.splitNew(appL(), w, side)
+}
+
 // columnMenu 是标签右键菜单里分栏的几项。
 func (a *app) columnMenu(lm locales.Messages, m *popMenu, w *workspace, key string) {
 	i := a.colOf(key)
 	if i < 0 {
 		return
 	}
-	if m.Item(lm.TabMoveRight()).Disabled(!a.canSplitWith(key, i, sideRight)).Chosen() {
+	if m.Item(lm.TabMoveRight()).Icon(iconSplitRight).Disabled(!a.canSplitWith(key, i, sideRight)).Chosen() {
 		a.moveTab(w, key, i, sideRight)
 	}
-	if m.Item(lm.TabMoveDown()).Disabled(!a.canSplitWith(key, i, sideBottom)).Chosen() {
+	if m.Item(lm.TabMoveDown()).Icon(iconSplitDown).Disabled(!a.canSplitWith(key, i, sideBottom)).Chosen() {
 		a.moveTab(w, key, i, sideBottom)
 	}
-	if a.splitShown() && m.Item(lm.TabMergePanes()).Keys(a.keyText("closeSplit")).Chosen() {
+	if a.splitShown() && m.Item(lm.TabMergePanes()).Icon(iconPane).Keys(a.keyText("closeSplit")).Chosen() {
 		a.mergeColumns(w)
 	}
 }

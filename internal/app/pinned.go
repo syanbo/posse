@@ -257,7 +257,7 @@ func (a *app) workspaceTile(c *ui.Context, key string, w *workspace, icon func()
 	// 不登记进方向键的顺序：项目树里还有它那一行，登记两次 navCur 会跳到后一处
 	tile := sideTile(c, key, w != nil && a.selected == w.ID, icon, label, badge)
 	if w != nil {
-		contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(L(c), m, *w) })
+		contextMenu(c, tile, func(m *popMenu) { a.workspaceMenu(c, m, *w) })
 	}
 	return tile
 }

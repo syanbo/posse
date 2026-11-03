@@ -26,6 +26,7 @@ type menuItem struct {
 	lead     func() // 自己画最左边（agent 图标），优先于 icon
 	sep      bool
 	disabled bool
+	danger   bool  // 文字和图标用警示色（关闭这类要确认的操作）
 	checked  *bool // 不为 nil 时是可勾选的项
 	sub      *popMenu
 }
@@ -57,6 +58,7 @@ func (it *menuItem) Icon(icon *ui.SVG) *menuItem { it.icon = icon; return it }
 func (it *menuItem) Lead(draw func()) *menuItem  { it.lead = draw; return it }
 func (it *menuItem) Disabled(d bool) *menuItem   { it.disabled = d; return it }
 func (it *menuItem) Checked(on bool) *menuItem   { it.checked = &on; return it }
+func (it *menuItem) Danger() *menuItem           { it.danger = true; return it }
 
 // Shortcut 只在右边写出快捷键，不绑定：快捷键本身由界面别处处理。
 func (it *menuItem) Shortcut(mods ui.Modifiers, key ui.Key) *menuItem {
@@ -307,9 +309,12 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			bg = p.wash
 		}
 		row.Background(row.AnimateColor("bg", bg, hover))
-		fg, muted := t.Text, p.faint
-		if it.disabled {
-			fg, muted = p.faint, p.faint
+		fg, muted, iconFg := t.Text, p.faint, t.TextMuted
+		switch {
+		case it.disabled:
+			fg, muted, iconFg = p.faint, p.faint, p.faint
+		case it.danger:
+			fg, iconFg = t.Danger, t.Danger
 		}
 		row.Children(func() {
 			if checks {
@@ -322,7 +327,7 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			case it.lead != nil:
 				it.lead()
 			case it.icon != nil:
-				ui.Icon(c, it.icon).FontSize(iconSize).TextColor(t.TextMuted).Shrink(0)
+				ui.Icon(c, it.icon).FontSize(iconSize).TextColor(iconFg).Shrink(0)
 			case icons:
 				ui.Box(c).Width(15).Shrink(0)
 			}

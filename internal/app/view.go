@@ -609,7 +609,7 @@ func (a *app) projectHeader(c *ui.Context, p project, ws []workspace, open *bool
 	if row.Clicked() {
 		*open = !*open
 	}
-	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(L(c), m, ws[0]) })
+	contextMenu(c, row, func(m *popMenu) { a.workspaceMenu(c, m, ws[0]) })
 }
 
 // navDisclosure 是侧栏行尾的展开箭头：行尾的内容离行边 navPad、行离列表边 navEnd，箭头要再往右挪一点，
@@ -767,7 +767,7 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 		item.ScrollIntoView()
 		a.revealSel = false
 	}
-	contextMenu(c, item, func(m *popMenu) { a.workspaceMenu(L(c), m, w) })
+	contextMenu(c, item, func(m *popMenu) { a.workspaceMenu(c, m, w) })
 	return item
 }
 
@@ -919,10 +919,16 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		a.revealSel = false
 	}
 	contextMenu(c, row, func(m *popMenu) {
-		if m.Item(L(c).SidebarCloseSession()).Chosen() {
-			a.askClose(L(c), term)
+		l := L(c)
+		a.sessionMenu(l, m, term, func() {
+			// 名字在标签上改：先照单击切到这个会话，标签才看得见
+			a.selected = w.ID
+			a.activeTerm[w.ID] = term.ID
+		})
+		m.Separator()
+		if m.Item(l.SidebarCloseSession()).Icon(iconClose).Danger().Chosen() {
+			a.askClose(l, term)
 		}
-		a.chatFolderMenu(L(c), m, term)
 	})
 }
 
@@ -949,13 +955,14 @@ func (a *app) sessionStatus(term terminalInfo) string {
 }
 
 // workspaceMenu 是工作区行（和项目标题行）的右键菜单。
-func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
+func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
+	lm := L(c)
 	for _, ag := range a.agentChoices() {
-		if m.Item(lm.TermStart(agentTitle(ag))).Chosen() {
+		if m.Item(lm.TermStart(agentTitle(ag))).Lead(func() { agentIcon(c, ag, iconSize) }).Chosen() {
 			a.startTerminal(w.ID, ag)
 		}
 	}
-	if m.Item(lm.SidebarOpenTerminal()).Chosen() {
+	if m.Item(lm.SidebarOpenTerminal()).Lead(func() { agentIcon(c, "", iconSize) }).Chosen() {
 		a.startTerminal(w.ID, "")
 	}
 	m.Separator()
@@ -966,7 +973,7 @@ func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	}
 	if hasBase(&w) {
 		m.Separator()
-		if m.Item(lm.SidebarMergeInto(w.BaseRef)).Chosen() {
+		if m.Item(lm.SidebarMergeInto(w.BaseRef)).Icon(iconMerge).Chosen() {
 			a.askMergeWorkspace(lm, w.ID)
 		}
 	}
@@ -974,33 +981,33 @@ func (a *app) workspaceMenu(lm locales.Messages, m *popMenu, w workspace) {
 	// 聊天工作区已经有「聊天」磁贴
 	if !a.isChat(w.ID) {
 		if a.pinned(w.ID) {
-			if m.Item(lm.SidebarUnpin()).Chosen() {
+			if m.Item(lm.SidebarUnpin()).Icon(iconPin).Chosen() {
 				a.unpin(w.ID)
 			}
 		} else if !a.canPin() {
-			m.Item(lm.SidebarPinFull(topTilesMax)).Disabled(true)
-		} else if m.Item(lm.SidebarPin()).Chosen() {
+			m.Item(lm.SidebarPinFull(topTilesMax)).Icon(iconPin).Disabled(true)
+		} else if m.Item(lm.SidebarPin()).Icon(iconPin).Chosen() {
 			a.pin(w.ID)
 		}
 	}
-	if w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Chosen() {
+	if w.Kind == "main" && m.Item(lm.SidebarChangeIcon()).Icon(iconImage).Chosen() {
 		if p := a.projectByID(w.ProjectID); p != nil {
 			a.editProjectIcon(*p)
 		}
 	}
-	if m.Item(lm.SidebarNewWorkspaceHere()).Chosen() {
+	if m.Item(lm.SidebarNewWorkspaceHere()).Icon(iconPlus).Chosen() {
 		a.openNewWorkspace()
 		a.newProject = w.Project
 	}
 	// 项目行就是项目目录本身，删不了这个工作区，删的是整个项目
 	if w.Kind == "main" {
-		if m.Item(lm.SidebarCleanTraces()).Chosen() {
+		if m.Item(lm.SidebarCleanTraces()).Icon(iconEraser).Chosen() {
 			a.askCleanTraces(lm, w)
 		}
-		if m.Item(lm.SidebarRemoveProject()).Chosen() {
+		if m.Item(lm.SidebarRemoveProject()).Icon(iconTrash).Danger().Chosen() {
 			a.askRemoveProject(lm, w)
 		}
-	} else if m.Item(lm.SidebarDeleteWorkspace()).Chosen() {
+	} else if m.Item(lm.SidebarDeleteWorkspace()).Icon(iconTrash).Danger().Chosen() {
 		a.askRemoveWorkspace(lm, w)
 	}
 }
@@ -2223,31 +2230,11 @@ func tabTooltip(m locales.Messages, t terminalInfo) string {
 
 // tabMenu 是终端标签的右键菜单：关闭这个、其他的、右边的终端（照 Orca）；文件标签不受影响。
 func (a *app) tabMenu(l locales.Messages, m *popMenu, w *workspace, term terminalInfo) {
-	if m.Item(l.TabRename()).Chosen() {
-		a.startRename(l, term)
-	}
-	if term.Name != "" && m.Item(l.TabResetName()).Chosen() {
-		a.renameTerminal(term.ID, "")
-	}
-	m.Separator()
-	task := a.taskByWorker(term.ID)
-	if m.Item(l.TabCopyRef()).Chosen() {
-		writeClipboard(tabRef(l, term, task))
-	}
-	if m.Item(l.TabCopyTerminalId()).Chosen() {
-		writeClipboard(term.ID)
-	}
-	if task != nil && m.Item(l.TabCopyTaskId()).Chosen() {
-		writeClipboard(task.ID)
-	}
-	if sid := sessionID(term); sid != "" && m.Item(l.TermCopySessionId()).Chosen() {
-		writeClipboard(sid)
-	}
-	a.chatFolderMenu(l, m, term)
+	a.sessionMenu(l, m, term, nil)
 	m.Separator()
 	a.columnMenu(l, m, w, term.ID)
 	m.Separator()
-	if m.Item(l.CommonClose()).Keys(a.keyText("closeTab")).Chosen() {
+	if m.Item(l.CommonClose()).Icon(iconClose).Keys(a.keyText("closeTab")).Chosen() {
 		a.askClose(l, term)
 	}
 	i := slices.IndexFunc(w.Terminals, func(t terminalInfo) bool { return t.ID == term.ID })
@@ -2262,6 +2249,35 @@ func (a *app) tabMenu(l locales.Messages, m *popMenu, w *workspace, term termina
 	if m.Item(l.TabCloseRight()).Disabled(len(right) == 0).Chosen() {
 		a.askCloseAll(l, right)
 	}
+}
+
+// sessionMenu 是终端标签和侧栏会话行右键菜单共有的几项：改名、复制引用和各个 ID、聊天会话的文件夹。
+// reveal 在开始改名前调用（侧栏里要先切到这个会话），为 nil 时不调。
+func (a *app) sessionMenu(l locales.Messages, m *popMenu, term terminalInfo, reveal func()) {
+	if m.Item(l.TabRename()).Icon(iconPencil).Chosen() {
+		if reveal != nil {
+			reveal()
+		}
+		a.startRename(l, term)
+	}
+	if term.Name != "" && m.Item(l.TabResetName()).Icon(iconRollback).Chosen() {
+		a.renameTerminal(term.ID, "")
+	}
+	m.Separator()
+	task := a.taskByWorker(term.ID)
+	if m.Item(l.TabCopyRef()).Icon(iconCopy).Chosen() {
+		writeClipboard(tabRef(l, term, task))
+	}
+	if m.Item(l.TabCopyTerminalId()).Icon(iconCopy).Chosen() {
+		writeClipboard(term.ID)
+	}
+	if task != nil && m.Item(l.TabCopyTaskId()).Icon(iconCopy).Chosen() {
+		writeClipboard(task.ID)
+	}
+	if sid := sessionID(term); sid != "" && m.Item(l.TermCopySessionId()).Icon(iconCopy).Chosen() {
+		writeClipboard(sid)
+	}
+	a.chatFolderMenu(l, m, term)
 }
 
 // tabRef 是标签右键「复制引用」的一行字：贴给 agent 时带上每个 ID 是什么、用哪条命令看，不用它再去查。

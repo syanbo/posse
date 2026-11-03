@@ -121,7 +121,7 @@ func (a *app) chatFolderMenu(l locales.Messages, m *popMenu, term terminalInfo) 
 			a.err = l.ChatOpenFolderError(errtext.Text(err))
 		}
 	}
-	if m.Item(l.ChatConvertProject()).Chosen() {
+	if m.Item(l.ChatConvertProject()).Icon(iconFolderLink).Chosen() {
 		dir := term.Dir
 		go func() {
 			if a.call("project.add", map[string]any{"path": dir}, nil, 10*time.Second) == nil {

@@ -44,6 +44,7 @@ func TestPreviewSidebarTabs(t *testing.T) {
 		}},
 		{name: "tab-menu", setup: previewApp, act: func(_ *app, tt *ui.Tester, _ string) { tt.RightClick("zsh") }},
 		{name: "workspace-menu", setup: previewApp, act: func(_ *app, tt *ui.Tester, _ string) { tt.RightClick("Server") }},
+		{name: "session-menu", setup: previewApp, act: func(_ *app, tt *ui.Tester, _ string) { tt.RightClick("重写 posse 界面") }},
 		{name: "terminal-menu", setup: previewApp, act: func(a *app, _ *ui.Tester, _ string) {
 			// 终端插件交来位置时就是这样记下的
 			a.termCtx, a.termCtxID = menuState{open: true, x: 700, y: 300}, "t1"
