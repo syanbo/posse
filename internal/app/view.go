@@ -23,6 +23,7 @@ import (
 func (a *app) build(c *ui.Context) {
 	a.runPending()
 	c.SetTheme(posseTheme(c.Theme().Dark))
+	a.shade.Store(map[bool]int32{false: 1, true: 2}[c.Theme().Dark])
 	// 文字输入框、编辑器这些 mygo 自己的菜单也由 Posse 自绘（sysMenuView）
 	c.PresentMenus(a.presentMenu)
 	for _, t := range a.toasts {

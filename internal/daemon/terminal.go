@@ -123,7 +123,7 @@ func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName stri
 	t, err := d.terminalHost().Start(host.StartOptions{
 		ID: id, WorkspaceID: w.ID, Dir: dir, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback, CreatedAt: revive.CreatedAt,
-		OnTitle: d.onTitle, OnExit: d.onExit,
+		OnTitle: d.onTitle, OnExit: d.onExit, Colors: d.window.current(),
 	})
 	if err != nil {
 		return nil, err

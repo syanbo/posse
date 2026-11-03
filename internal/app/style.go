@@ -14,6 +14,7 @@ import (
 
 	"posse/internal/mermaid/diagram"
 	"posse/internal/term"
+	"posse/internal/vt"
 	"posse/locales"
 )
 
@@ -259,6 +260,10 @@ func terminalThemes() (light, dark *terminal.Theme) {
 	light, dark = terminal.LightTheme(), terminal.DarkTheme()
 	light.Background, light.Foreground = posseTheme(false).Background, posseTheme(false).Text
 	dark.Background, dark.Foreground = posseTheme(true).Background, posseTheme(true).Text
+	// 16 色取 term 里的那份：常驻进程的内核和手机都照它
+	for i := range 16 {
+		light.Palette[i], dark.Palette[i] = ui.Hex(term.LightPalette[i]), ui.Hex(term.DarkPalette[i])
+	}
 	// 查找的命中和预览里的查找同一种蜂蜜色淡底，文字用正文色（插件默认是黄底黑字）
 	for _, th := range []*terminal.Theme{light, dark} {
 		pt := posseTheme(th == dark)
@@ -267,6 +272,21 @@ func terminalThemes() (light, dark *terminal.Theme) {
 		th.SearchText, th.SearchSelectedText = pt.Text, pt.Text
 	}
 	return light, dark
+}
+
+// windowColors 是窗口终端在用的配色（前景、底色、16 色），报给常驻进程。
+func windowColors(dark bool) term.Colors {
+	light, darkTheme := terminalThemes()
+	th := light
+	if dark {
+		th = darkTheme
+	}
+	rgb := func(c ui.Color) vt.RGB { return vt.RGB{R: c.R, G: c.G, B: c.B} }
+	c := term.Colors{Foreground: rgb(th.Foreground), Background: rgb(th.Background)}
+	for i, p := range th.Palette {
+		c.Palette[i] = rgb(p)
+	}
+	return c
 }
 
 // floating 是浮在内容上面的卡片（右侧面板、链接卡片、图片预览）：顶栏底色、描边和投影，位置由调用方定。

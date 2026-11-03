@@ -172,6 +172,8 @@ type app struct {
 	lastTerm      int64
 	pollForce     atomic.Bool // 下一次轮询无论有没有变化都交给界面
 	refreshQueued atomic.Bool // selectTask 排的那次轮询还没开始
+	// shade 是窗口上一帧的深浅：0 还没画过，1 浅色，2 深色；轮询报给常驻进程（statusParams）
+	shade atomic.Int32
 	// panes 是主区域每格接入的终端（下标同 cols，选中的不是终端的格为 nil）；pane 是焦点所在的格
 	panes [maxColumns]*termView
 	pane  int
@@ -502,6 +504,18 @@ func (a *app) windowShown() bool {
 	return a.win != nil && a.win.IsVisible() && !a.win.IsMinimized()
 }
 
+// statusParams 是轮询 daemon.status 的参数：带上终端在用的配色，常驻进程换到所有终端上，
+// 新终端也按它起（见 daemon 的 windowColors）；窗口还没画过时不带，免得先报错一套
+func (a *app) statusParams() any {
+	switch a.shade.Load() {
+	case 1:
+		return map[string]any{"colors": windowColors(false)}
+	case 2:
+		return map[string]any{"colors": windowColors(true)}
+	}
+	return nil
+}
+
 // poll 定期从常驻进程拉取项目、工作区和终端状态；常驻进程不在时拉起它。
 func (a *app) poll() {
 	for {
@@ -552,7 +566,8 @@ func (a *app) refresh() {
 	// 状态先取：后面的列表在版本对不上的旧常驻进程上可能失败，有了状态照样能发现版本差、自动交接
 	statusOK := false
 	if err == nil {
-		err = a.c.Call(ctx, "daemon.status", nil, &st)
+		// 带上终端在用的配色：常驻进程换到所有终端上，新终端也按它起（见 daemon 的 windowColors）
+		err = a.c.Call(ctx, "daemon.status", a.statusParams(), &st)
 		statusOK = err == nil
 	}
 	if err == nil {

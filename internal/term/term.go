@@ -44,6 +44,8 @@ type Options struct {
 	CreatedAt   time.Time // 空是现在；重启后恢复的终端沿用原来的，标签顺序不变
 	OnExit      func(t *Terminal, code int)
 	OnTitle     func(t *Terminal, title string)
+	// Colors 是起始的默认配色，nil 时按系统外观选
+	Colors *Colors
 }
 
 // AgentState 来自 agent 的 hooks 上报。
@@ -104,8 +106,8 @@ type Terminal struct {
 	// answer 为 true 时由常驻进程里的内核应答程序的终端查询；
 	// 界面接入后改由界面应答，避免程序收到两份回复。
 	answer atomic.Bool
-	// dark 是建终端时系统的外观，决定内核应答的默认颜色（见 colors.go）
-	dark bool
+	// colors 是内核应答的默认配色：建终端时按系统外观选，窗口接入后换成窗口终端在用的（见 colors.go）
+	colors atomic.Pointer[Colors]
 
 	exited   chan struct{}
 	exitCode atomic.Int64
@@ -234,7 +236,13 @@ func newTerminal(o Options) *Terminal {
 		subs:        map[*Subscriber]struct{}{},
 		onTitle:     o.OnTitle,
 		scrollback:  o.Scrollback,
-		dark:        systemDark(),
+	}
+	if o.Colors != nil {
+		c := *o.Colors
+		t.colors.Store(&c)
+	} else {
+		c := DefaultColors(systemDark())
+		t.colors.Store(&c)
 	}
 	t.answer.Store(true)
 	t.lastOutput.Store(time.Now().UnixNano())
@@ -257,14 +265,14 @@ func (t *Terminal) newEmu(cols, rows, scrollback int) (*vt.Terminal, error) {
 		},
 		TitleChanged: func() { t.titleDirty = true },
 		Size:         func() (int, int, int, int) { c, r := t.emu.Size(); return c, r, 8, 16 },
-		Dark:         func() bool { return t.dark },
+		Dark:         func() bool { return t.colors.Load().Dark() },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("terminal emulator: %w", err)
 	}
 	emu.SetTerminfoName("xterm-256color")
-	fg, bg := defaultColors(t.dark)
-	emu.SetColors(fg, bg, nil, nil)
+	c := t.colors.Load()
+	emu.SetColors(c.Foreground, c.Background, nil, c.palette256())
 	// 字素簇占其宽度的格数，与界面里的 MyGo 终端一致
 	emu.SetModeDefault(vt.ModeGraphemes, true)
 	emu.SetScrollback(scrollback)
@@ -427,6 +435,22 @@ func (t *Terminal) Attach(cols, rows int) ([]byte, *Subscriber) {
 		t.smu.Unlock()
 	}
 	return t.subscribe(&Subscriber{C: make(chan []byte, 1024)})
+}
+
+// Colors 是终端当前的默认配色。
+func (t *Terminal) Colors() Colors { return *t.colors.Load() }
+
+// SetColors 换成窗口终端在用的配色：内核照它应答程序的颜色查询，手机照它画。
+func (t *Terminal) SetColors(c Colors) {
+	if *t.colors.Load() == c {
+		return
+	}
+	t.smu.Lock()
+	defer t.smu.Unlock()
+	t.colors.Store(&c)
+	if t.emu != nil {
+		t.emu.SetColors(c.Foreground, c.Background, nil, c.palette256())
+	}
 }
 
 // Watch 与 Attach 相同但不改尺寸，接入者也不接管终端查询的应答。

@@ -186,6 +186,8 @@ type Daemon struct {
 
 	mu    sync.Mutex
 	terms map[string]*session
+	// window 是窗口报来的终端配色，新终端按它起（见 windowColors）
+	window windowColors
 
 	tmu      sync.Mutex
 	waiting  map[string]int // 正阻塞在 task wait 里的派发方终端（同一终端可能同时有几次）
@@ -544,7 +546,14 @@ type statusResult struct {
 	Agents []string `json:"agents"`
 }
 
-func (d *Daemon) status(ctx context.Context, _ json.RawMessage) (any, error) {
+func (d *Daemon) status(ctx context.Context, raw json.RawMessage) (any, error) {
+	// 窗口的轮询带着它的终端配色（见 windowColors）；CLI 不带
+	var p struct {
+		Colors *host.Colors `json:"colors"`
+	}
+	if rpc.Decode(raw, &p) == nil && p.Colors != nil {
+		d.windowReported(*p.Colors)
+	}
 	d.mu.Lock()
 	total, running := len(d.terms), 0
 	for _, s := range d.terms {

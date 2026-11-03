@@ -30,6 +30,7 @@ import 'selection_chrome.dart';
 import 'frames.dart';
 import 'keyboard_lift.dart';
 import 'link_target.dart';
+import 'term_colors.dart';
 import '../chat/media.dart';
 import '../chat/tools.dart';
 
@@ -330,7 +331,15 @@ class _TerminalScreenState extends State<TerminalScreen>
       stream.frames.listen((frame) {
         if (!mounted || gen != _gen) return;
         final sid = frame['streamId'];
-        if (frame['type'] == 'subscribed' && sid is num) {
+        final type = frame['type'];
+        // 重新订阅时没带配色（换到了旧版常驻进程）就退回照手机主题画
+        if (type == 'subscribed' || type == 'colors') {
+          final colors = TermColors.parse(frame['colors']);
+          if ((type == 'subscribed' || colors != null) && colors != _colors) {
+            setState(() => _colors = colors);
+          }
+        }
+        if (type == 'subscribed' && sid is num) {
           for (final piece in _asm.accept(sid.toInt())) {
             _applyPiece(piece);
           }
@@ -385,6 +394,7 @@ class _TerminalScreenState extends State<TerminalScreen>
     controller: _controller,
     theme: terminalTheme(
       c,
+      colors: _colors,
       fontSize: fontSize ?? widget.model.settings.terminalFontSize,
     ),
     // 进来先看画面，点一下终端才弹键盘，不然键盘挡住半屏
@@ -696,6 +706,9 @@ class _TerminalScreenState extends State<TerminalScreen>
   /// 新订阅从快照开始，切开的半个字符不能接到上一次的输出上。
   var _bullets = BulletFix();
 
+  /// 电脑那边程序按它配色的终端颜色，没收到（旧版常驻进程）时照手机主题画。
+  TermColors? _colors;
+
   void _apply(Uint8List bytes) {
     _applying = true;
     try {
@@ -879,7 +892,8 @@ class _TerminalScreenState extends State<TerminalScreen>
   Widget build(BuildContext context) {
     final c = PosseColors.of(context);
     return Scaffold(
-      backgroundColor: c.card,
+      // 终端外面露出来的空白（电脑布局缩小后的上下）接着终端的底色
+      backgroundColor: _colors?.background ?? c.card,
       appBar: AppBar(
         backgroundColor: c.band,
         titleSpacing: 0,
@@ -1087,20 +1101,31 @@ class _TerminalScreenState extends State<TerminalScreen>
   }
 }
 
-/// 终端底色和卡片一致，前景用 Posse 的文字色，等宽字体用 Menlo；字色和底色至少差 3 倍对比度。
-TerminalTheme terminalTheme(PosseColors c, {double fontSize = 12.5}) {
+/// 终端的颜色照电脑窗口的终端（[colors]，程序按它配色），等宽字体用 Menlo。
+/// 没有 [colors] 时（旧版常驻进程）底色和卡片一致、前景用 Posse 的文字色，
+/// 这时程序按电脑的深浅配色、手机可能是另一种，字色和底色至少差 3 倍对比度，免得暗灰、黄色字糊进底色。
+TerminalTheme terminalTheme(
+  PosseColors c, {
+  TermColors? colors,
+  double fontSize = 12.5,
+}) {
   final base = c.dark ? TerminalTheme.dark() : TerminalTheme.light();
   return TerminalTheme(
-    palette: ColorPalette(
-      ansiColors: base.palette.ansiColors,
-      background: c.card,
-      foreground: c.text,
-    ),
+    palette: colors == null
+        ? ColorPalette(
+            ansiColors: base.palette.ansiColors,
+            background: c.card,
+            foreground: c.text,
+          )
+        : ColorPalette(
+            ansiColors: colors.palette,
+            background: colors.background,
+            foreground: colors.foreground,
+          ),
     fontFamily: monoFamily,
     fontFamilyFallback: monoFallback,
     fontSize: fontSize,
-    // 程序的配色跟着电脑的深浅色，手机换成另一种时暗灰、黄色这类字会糊进底色
-    minimumContrast: 3,
+    minimumContrast: colors == null ? 3 : 1,
   );
 }
 

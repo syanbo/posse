@@ -25,6 +25,9 @@ func TestPauseAdopt(t *testing.T) {
 	}
 	defer old.Close(time.Second)
 	waitFor(t, "ready", func() bool { return old.ContainsText("ready") && old.Title() == "hello" })
+	// 窗口报来的配色跟着交过去，不按新进程那时的系统外观重选
+	colors := DefaultColors(!old.Colors().Dark())
+	old.SetColors(colors)
 
 	st, f, err := old.Pause()
 	if err != nil {
@@ -45,6 +48,9 @@ func TestPauseAdopt(t *testing.T) {
 	defer nt.Close(time.Second)
 	if nt.Title() != "hello" || nt.Pid() != old.Pid() || !nt.ContainsText("ready") {
 		t.Fatalf("adopted state: title %q pid %d/%d lines %q", nt.Title(), nt.Pid(), old.Pid(), nt.Lines())
+	}
+	if nt.Colors() != colors {
+		t.Fatalf("adopted colors %+v, want %+v", nt.Colors(), colors)
 	}
 	// Resume 之前不读：交接没确认时输出还留在内核里
 	time.Sleep(100 * time.Millisecond)

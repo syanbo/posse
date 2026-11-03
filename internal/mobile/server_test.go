@@ -427,8 +427,28 @@ func TestPhoneSession(t *testing.T) {
 		"viewport": map[string]any{"cols": 46, "rows": 30}, "capabilities": map[string]any{"terminalBinaryStream": 1},
 	})
 	sub := result(t, p.next(tid))
+	// 没声明 posse.termcolors.v1 的（Orca App）不发配色；声明了再订阅一次
+	if _, ok := sub["colors"]; ok {
+		t.Fatalf("colors sent to a client without %s: %v", termColorsCap, sub)
+	}
+	for f := range p.binary {
+		if f[2] == opSnapshotEnd {
+			break
+		}
+	}
+	p.next(p.call("terminal.unsubscribe", map[string]any{"requestId": tid}))
+	p.next(p.call("runtime.clientCapabilities.update", map[string]any{"client": "posse-flutter", "version": 1, "capabilities": []string{termColorsCap}}))
+	tid = p.call("terminal.subscribe", map[string]any{
+		"terminal": "t_1", "client": map[string]any{"id": p.token, "type": "mobile"},
+		"viewport": map[string]any{"cols": 46, "rows": 30}, "capabilities": map[string]any{"terminalBinaryStream": 1},
+	})
+	sub = result(t, p.next(tid))
 	if sub["type"] != "subscribed" || sub["cols"] != float64(46) || sub["rows"] != float64(30) {
 		t.Fatalf("subscribed %v", sub)
+	}
+	// 订阅时带上程序按它配色的那套，手机照它画终端
+	if colors, _ := sub["colors"].(map[string]any); colors["background"] != fmt.Sprintf("#%02x%02x%02x", tm.Colors().Background.R, tm.Colors().Background.G, tm.Colors().Background.B) {
+		t.Fatalf("subscribed colors %v", sub["colors"])
 	}
 	if c, r := tm.Size(); c != 46 || r != 30 {
 		t.Fatalf("terminal not phone-sized: %dx%d", c, r)
@@ -442,6 +462,12 @@ func TestPhoneSession(t *testing.T) {
 		if f[2] == opSnapshotEnd {
 			break
 		}
+	}
+
+	// 窗口换了配色，手机收到一条 colors
+	tm.SetColors(term.DefaultColors(!tm.Colors().Dark()))
+	if m := result(t, p.next(tid)); m["type"] != "colors" || m["colors"].(map[string]any)["background"] == sub["colors"].(map[string]any)["background"] {
+		t.Fatalf("colors update %v", m)
 	}
 
 	// 界面这时调整尺寸只记下来，不打断手机

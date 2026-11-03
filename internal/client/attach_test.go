@@ -11,6 +11,8 @@ import (
 	"github.com/egoist/mygo/plugins/terminal"
 
 	"posse/internal/daemon"
+	"posse/internal/term"
+	"posse/internal/vt"
 )
 
 // startDaemon 在进程内运行常驻进程。socket 路径有长度上限，所以不用 t.TempDir()。
@@ -134,4 +136,41 @@ func TestAttachInputAndResize(t *testing.T) {
 	if !strings.Contains(strings.Join(r.Lines, "\n"), "from-ui 42") {
 		t.Errorf("daemon screen lacks the output; UI:\n%s\ndaemon:\n%s", text, strings.Join(r.Lines, "\n"))
 	}
+}
+
+func TestWindowColors(t *testing.T) {
+	// 窗口随 daemon.status 报来配色：已有的终端换上它（没接入也照它应答），新终端按它起
+	c := startDaemon(t)
+	query := `printf 'ready\n'; stty raw -echo; printf '\033]11;?\033\\'; IFS= read -t 3 -r -d '\' a; stty sane; printf 'bg=[%s]\n' "${a#?}"; sleep 5`
+	old := createTerminal(t, c, "/bin/bash", "--norc", "-c", "sleep 1.5; "+query)
+	colors := term.DefaultColors(true)
+	colors.Background = vt.RGB{R: 0x12, G: 0x34, B: 0x56}
+	var st struct{}
+	if err := c.Call(context.Background(), "daemon.status", map[string]any{"colors": colors}, &st); err != nil {
+		t.Fatal(err)
+	}
+	fresh := createTerminal(t, c, "/bin/bash", "--norc", "-c", query)
+	for _, id := range []string{old, fresh} {
+		text := waitScreen(t, c, id, "bg=[")
+		if !strings.Contains(text, "rgb:1212/3434/5656") {
+			t.Fatalf("terminal %s answered with other colors:\n%s", id, text)
+		}
+	}
+}
+
+func waitScreen(t *testing.T, c *Client, id, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var r struct{ Lines []string }
+	for time.Now().Before(deadline) {
+		if err := c.Call(context.Background(), "terminal.read", map[string]any{"terminal": id, "lines": 10}, &r); err != nil {
+			t.Fatal(err)
+		}
+		if text := strings.Join(r.Lines, "\n"); strings.Contains(text, want) {
+			return text
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %q; screen:\n%s", want, strings.Join(r.Lines, "\n"))
+	return ""
 }

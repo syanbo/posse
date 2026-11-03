@@ -1,6 +1,7 @@
 package term
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -48,14 +49,64 @@ func TestAnswersColorQueries(t *testing.T) {
 	for len(tm.replies) > 0 {
 		got += string(<-tm.replies)
 	}
-	_, bg := defaultColors(tm.dark)
+	bg := tm.Colors().Background
 	want := fmt.Sprintf("\x1b]11;rgb:%02x%02x/%02x%02x/%02x%02x", bg.R, bg.R, bg.G, bg.G, bg.B, bg.B)
 	scheme := "\x1b[?997;2n"
-	if tm.dark {
+	if tm.Colors().Dark() {
 		scheme = "\x1b[?997;1n"
 	}
 	if !strings.Contains(got, want) || !strings.Contains(got, scheme) {
 		t.Fatalf("replies %q, want %q and %q", got, want, scheme)
+	}
+}
+
+func TestSetColorsAnswers(t *testing.T) {
+	// 窗口报来另一套配色后，内核照它应答背景色、深浅和调色板查询；重建内核也沿用
+	if err := loadLib(); err != nil {
+		t.Skip(err)
+	}
+	tm := newTerminal(Options{})
+	want := DefaultColors(!tm.Colors().Dark())
+	want.Palette[1] = vt.RGB{R: 0x12, G: 0x34, B: 0x56}
+	tm.SetColors(want)
+	emu, err := tm.newEmu(80, 24, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm.emu = emu
+	defer emu.Free()
+	emu.Write([]byte("\x1b]11;?\x1b\\\x1b]4;1;?\x1b\\\x1b[?996n"))
+	var got string
+	for len(tm.replies) > 0 {
+		got += string(<-tm.replies)
+	}
+	bg := want.Background
+	for _, w := range []string{
+		fmt.Sprintf("\x1b]11;rgb:%02x%02x/%02x%02x/%02x%02x", bg.R, bg.R, bg.G, bg.G, bg.B, bg.B),
+		"\x1b]4;1;rgb:1212/3434/5656",
+		map[bool]string{true: "\x1b[?997;1n", false: "\x1b[?997;2n"}[want.Dark()],
+	} {
+		if !strings.Contains(got, w) {
+			t.Fatalf("replies %q, want %q", got, w)
+		}
+	}
+}
+
+func TestColorsJSON(t *testing.T) {
+	c := DefaultColors(true)
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"background":"#20201e"`) || !strings.Contains(string(b), `"palette":["#000000","#cd3131"`) {
+		t.Fatalf("json %s", b)
+	}
+	var back Colors
+	if err := json.Unmarshal(b, &back); err != nil || back != c {
+		t.Fatalf("round trip %+v %v", back, err)
+	}
+	if !c.Dark() || DefaultColors(false).Dark() {
+		t.Fatal("Dark() wrong")
 	}
 }
 

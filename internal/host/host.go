@@ -15,6 +15,9 @@ type AgentState = term.AgentState
 // Record 是升级时交给新常驻进程的一个终端，和 PTY 描述符一起经交接 socket 传过去。
 type Record = term.State
 
+// Colors 是终端的默认配色，见 term.Colors
+type Colors = term.Colors
+
 // Info 是终端建好后就不变的信息。
 type Info struct {
 	ID          string
@@ -34,6 +37,7 @@ type StartOptions struct {
 	Cols, Rows  int
 	Scrollback  int
 	CreatedAt   time.Time // 空是现在
+	Colors      *Colors   // 起始配色，nil 时按系统外观选
 	OnTitle     func(id, title string)
 	OnExit      func(id string, code int)
 }
@@ -86,6 +90,9 @@ type Terminal interface {
 	BracketedPaste() bool
 	ReclaimSize()
 	Clear(redraw bool) error
+	// Colors 是程序查到的默认配色（窗口终端在用的那套），SetColors 由窗口报来
+	Colors() Colors
+	SetColors(c Colors)
 
 	Lines() []string
 	ContainsText(sub string) bool
@@ -135,7 +142,7 @@ func (Local) Adopt(o StartOptions, r Record, f *os.File) (Terminal, error) {
 func termOptions(o StartOptions) term.Options {
 	opts := term.Options{
 		ID: o.ID, WorkspaceID: o.WorkspaceID, Dir: o.Dir, Command: o.Command, Env: o.Env,
-		Cols: o.Cols, Rows: o.Rows, Scrollback: o.Scrollback, CreatedAt: o.CreatedAt,
+		Cols: o.Cols, Rows: o.Rows, Scrollback: o.Scrollback, CreatedAt: o.CreatedAt, Colors: o.Colors,
 	}
 	if o.OnTitle != nil {
 		opts.OnTitle = func(t *term.Terminal, title string) { o.OnTitle(t.ID, title) }
@@ -183,6 +190,8 @@ func (l *local) CursorKeysApp() bool           { return l.t.CursorKeysApp() }
 func (l *local) BracketedPaste() bool          { return l.t.BracketedPaste() }
 func (l *local) ReclaimSize()                  { l.t.ReclaimSize() }
 func (l *local) Clear(redraw bool) error       { return l.t.Clear(redraw) }
+func (l *local) Colors() Colors                { return l.t.Colors() }
+func (l *local) SetColors(c Colors)            { l.t.SetColors(c) }
 func (l *local) Lines() []string               { return l.t.Lines() }
 func (l *local) ContainsText(sub string) bool  { return l.t.ContainsText(sub) }
 func (l *local) Screen() []string              { return l.t.Screen() }

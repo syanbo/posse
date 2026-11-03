@@ -33,6 +33,8 @@ type State struct {
 	// Ended 表示程序已经结束，没有 PTY 交过去，只留着屏幕给界面看
 	Ended    bool `json:"ended,omitempty"`
 	ExitCode int  `json:"exitCode,omitempty"`
+	// Colors 是窗口报来的配色；旧进程不带时新进程按系统外观选
+	Colors *Colors `json:"colors,omitempty"`
 }
 
 // 未写完的序列超过这么长就不再带着（大段的图片、剪贴板 OSC），交接时丢掉这一段
@@ -96,6 +98,8 @@ func (t *Terminal) Pause() (State, *os.File, error) {
 		LastOutput: t.LastOutput(), LastInput: t.LastInput(),
 		Ended: ended || !t.Running(), ExitCode: t.ExitCode(),
 	}
+	colors := t.Colors()
+	s.Colors = &colors
 	t.smu.Lock()
 	if t.emu != nil {
 		s.Snapshot = t.emu.Snapshot()
@@ -150,6 +154,10 @@ func Adopt(o Options, s State, f *os.File) (*Terminal, error) {
 	t.CreatedAt = s.CreatedAt
 	t.pid = s.Pid
 	t.storeSize(s.Cols, s.Rows)
+	if s.Colors != nil {
+		c := *s.Colors
+		t.colors.Store(&c)
+	}
 	emu, err := t.newEmu(s.Cols, s.Rows, o.Scrollback)
 	if err != nil {
 		return nil, err

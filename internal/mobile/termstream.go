@@ -84,11 +84,18 @@ func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, k
 	sid := c.srv.streamID()
 	var seq uint64
 	kind := "scrollback"
+	// colors 是程序按它配色的那套（窗口终端在用的），手机照它画终端；变了推一条 colors。
+	// 只给声明了 posse.termcolors.v1 的手机：Orca App 不认这条消息
+	colors, withColors := t.Colors(), c.hasCapability(termColorsCap)
 	for {
 		snap, sub := t.Watch()
 		cols, rows := t.Size()
 		if kind == "scrollback" {
-			if c.stream(id, map[string]any{"type": "subscribed", "streamId": sid, "cols": cols, "rows": rows, "displayMode": "auto"}) != nil {
+			msg := map[string]any{"type": "subscribed", "streamId": sid, "cols": cols, "rows": rows, "displayMode": "auto"}
+			if withColors {
+				msg["colors"] = colors
+			}
+			if c.stream(id, msg) != nil {
 				sub.Close()
 				return
 			}
@@ -108,7 +115,11 @@ func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, k
 			return
 		}
 		kind = "resized"
-		switch c.pump(ctx, sid, &seq, t, sub, cols, rows) {
+		var watch *host.Colors
+		if withColors {
+			watch = &colors
+		}
+		switch c.pump(ctx, id, sid, &seq, t, sub, cols, rows, watch) {
 		case pumpStop:
 			sub.Close()
 			return
@@ -127,8 +138,11 @@ const (
 	pumpResync
 )
 
+// termColorsCap 是手机能照电脑的配色画终端（订阅时的 colors、配色变了推的 colors 消息）
+const termColorsCap = "posse.termcolors.v1"
+
 // pump 转发输出直到流被取消、程序结束，或需要重发快照（尺寸变化、接入者跟不上被断开）。
-func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t host.Terminal, sub host.Subscription, cols, rows int) int {
+func (c *conn) pump(ctx context.Context, id string, sid uint32, seq *uint64, t host.Terminal, sub host.Subscription, cols, rows int, colors *host.Colors) int {
 	tick := time.NewTicker(500 * time.Millisecond)
 	defer tick.Stop()
 	var carry []byte
@@ -139,6 +153,12 @@ func (c *conn) pump(ctx context.Context, sid uint32, seq *uint64, t host.Termina
 		case <-tick.C:
 			if c2, r2 := t.Size(); c2 != cols || r2 != rows {
 				return pumpResync
+			}
+			if now := t.Colors(); colors != nil && now != *colors {
+				*colors = now
+				if c.stream(id, map[string]any{"type": "colors", "colors": now}) != nil {
+					return pumpStop
+				}
 			}
 			continue
 		case chunk, ok := <-sub.Output():
