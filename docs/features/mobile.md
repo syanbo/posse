@@ -118,7 +118,7 @@
 
 ## 看 Mac 桌面
 
-iOS 和安卓。收包、解密、补发、拆 RTP、硬解都在原生插件里，解出的帧直接交给 Flutter 纹理，不经 Dart；两端各一份、包格式和统计口径一致（`mobile/ios/Runner/DeskSession.swift`、`DeskPlugin.swift`，安卓是 `mobile/android/app/src/main/kotlin/com/dengbo/posse/mobile/` 下的同名 `.kt`）：iOS 用 VideoToolbox 解码，安卓用 MediaCodec 异步解码、直接画进 Flutter 纹理的 Surface，开了低延迟模式（高通另加它的低延迟开关）；海思解码器在纹理的 Surface 上配不出输出缓冲区，改画在平台视图（SurfaceView）上，别的解码器在纹理上一帧没出就坏了也换过去。手机不能硬解 HEVC 时不订阅。安卓的 UDP 包都不在主线程发（安卓不让主线程收发网络）。安卓退到后台时 Surface 会被收回，回来后重建解码器、要一张关键帧。安卓的横屏用原生方向锁（`SENSOR_LANDSCAPE`，不受自动旋转开关限制）；没有延后边缘手势的开关，靠沉浸模式（边缘第一下只唤出系统栏）。取舍记录见 `docs/plans/phone-desktop.md`，界面调研见 `docs/plans/phone-desktop-ui.md`。
+iOS 和安卓。收包、解密、补发、拆 RTP、硬解都在原生插件里，解出的帧直接交给 Flutter 纹理，不经 Dart；两端各一份、包格式和统计口径一致（`mobile/ios/Runner/DeskSession.swift`、`DeskPlugin.swift`，安卓是 `mobile/android/app/src/main/kotlin/com/neolabsapp/posse/mobile/` 下的同名 `.kt`）：iOS 用 VideoToolbox 解码，安卓用 MediaCodec 异步解码、直接画进 Flutter 纹理的 Surface，开了低延迟模式（高通另加它的低延迟开关）；海思解码器在纹理的 Surface 上配不出输出缓冲区，改画在平台视图（SurfaceView）上，别的解码器在纹理上一帧没出就坏了也换过去。手机不能硬解 HEVC 时不订阅。安卓的 UDP 包都不在主线程发（安卓不让主线程收发网络）。安卓退到后台时 Surface 会被收回，回来后重建解码器、要一张关键帧。安卓的横屏用原生方向锁（`SENSOR_LANDSCAPE`，不受自动旋转开关限制）；没有延后边缘手势的开关，靠沉浸模式（边缘第一下只唤出系统栏）。取舍记录见 `docs/plans/phone-desktop.md`，界面调研见 `docs/plans/phone-desktop-ui.md`。
 
 - 入口：设置「看桌面」开着（默认开）时，首页电脑胶囊打开的菜单第一行是「看桌面」。
 - 订阅：`desk.subscribe`（能力 `posse.desk.v1`，带屏幕像素、能解的编码（现在只有 hevc）和上次看的屏 `display`）是一个流：先回 `ready`（端口、编码、nonce；配了中转时带中转地址和令牌；支持补发时带 `nack: true`），之后推 `state`（辅助功能有无、锁屏与否）、`displays`，结束时推一条 `end`（`stopped`、`unsubscribed`、`no_report`、`capture_failed`）。UDP 的密钥用这条连接的会话密钥做 HKDF（`posse-desk/v1`）。`desk.unsubscribe` 或连接断开都会停掉采集。

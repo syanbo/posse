@@ -1,4 +1,4 @@
-package com.dengbo.posse.mobile
+package com.neolabsapp.posse.mobile
 
 import android.content.Context
 import android.os.Handler

@@ -1,4 +1,4 @@
-package com.dengbo.posse.mobile
+package com.neolabsapp.posse.mobile
 
 import android.media.MediaCodec
 import android.media.MediaCodecList
