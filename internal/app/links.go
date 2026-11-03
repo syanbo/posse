@@ -18,7 +18,7 @@ import (
 
 // openLink 处理终端里点击的链接。单击弹出链接卡片，Cmd+点击直接打开，Shift+Cmd+点击交给系统；设置里可以
 // 让单击和 Cmd+点击反过来（LinkClickOpens），也可以让直接打开和交给系统的按法互换（LinkSwapSystem），见 posseKeys。直接打开：网址在网页标签里打开（不是 http、https 的交给系统），文件在文件标签里
-// 打开、跳到 :行，目录在文件栏中显示（不在当前工作区里的弹卡片）；交给系统：网址用默认浏览器，文件用默认程序，
+// 打开、跳到 :行（本地网页在网页标签里打开），目录在文件栏中显示（不在当前工作区里的弹卡片）；交给系统：网址用默认浏览器，文件用默认程序，
 // 目录在访达中打开。卡片里是全部操作：图片带预览，可以打开、在文件栏或访达中显示、复制路径。
 func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 	system := mods&ui.Cmd != 0 && mods&ui.Shift != 0
@@ -53,6 +53,7 @@ func (a *app) openLink(v *termView, link string, mods ui.Modifiers) bool {
 		a.openPathExternal(card)
 	case !direct:
 		a.showLinkCard(card)
+	case !card.isDir && isHTML(card.path) && a.openLinkWeb(card):
 	case !card.isDir && a.openLinkFile(card):
 	case card.isDir && a.revealLinkDir(card):
 	default:
@@ -109,6 +110,16 @@ func (a *app) openLinkFile(card *linkCard) bool {
 		return false
 	}
 	a.openFile(w, card.path, card.line, [2]int{})
+	return true
+}
+
+// openLinkWeb 在链接所在终端的工作区的网页标签里打开本地网页（agent 生成的报告这类），工作区不在了返回 false。
+func (a *app) openLinkWeb(card *linkCard) bool {
+	w := a.cardWorkspace(card)
+	if w == nil {
+		return false
+	}
+	a.openWeb(w, fileURL(card.path))
 	return true
 }
 
@@ -366,8 +377,16 @@ func (a *app) pathCardItems(c *ui.Context, card *linkCard, width float32) {
 		ui.Image(c, card.preview).Width(width-12).Radius(rRow).Margin(2, 0, 4, 0)
 	}
 	hline(c).Margin(4, 6)
-	// 最常用的在最上面：在 Posse 里打开
-	if !card.isDir && linkCardItem(c, iconFile, L(c).LinksOpenInFileTab(), a.posseKeys(L(c))) {
+	// 最常用的在最上面：在 Posse 里打开。网页直接打开的是渲染出来的页面，源码在文件标签里看
+	fileKeys := a.posseKeys(L(c))
+	if !card.isDir && isHTML(card.path) && card.ws != nil {
+		if linkCardItem(c, iconGlobe, L(c).LinksOpenInPosse(), fileKeys) {
+			a.openLinkWeb(card)
+			a.linkCard = nil
+		}
+		fileKeys = ""
+	}
+	if !card.isDir && linkCardItem(c, iconFile, L(c).LinksOpenInFileTab(), fileKeys) {
 		a.openLinkFile(card)
 		a.linkCard = nil
 	}

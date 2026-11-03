@@ -92,3 +92,22 @@ func TestWebParams(t *testing.T) {
 		t.Fatalf("params = %v", p)
 	}
 }
+
+func TestWebArg(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(dir+"/r.html", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	abs, _ := os.Getwd()
+	for in, want := range map[string]string{
+		"r.html":                abs + "/r.html",
+		"missing.html":          "missing.html",
+		"localhost:3000":        "localhost:3000",
+		"http://localhost/a.md": "http://localhost/a.md",
+	} {
+		if got := webArg(in); got != want {
+			t.Errorf("webArg(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

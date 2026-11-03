@@ -136,7 +136,7 @@ func cmdWebOpen(e *env, args []string) error {
 		return err
 	}
 	var r webTab
-	return e.doApp(f, "web.open", f.params(map[string]any{"url": pos[0]}), &r, func() {
+	return e.doApp(f, "web.open", f.params(map[string]any{"url": webArg(pos[0])}), &r, func() {
 		fmt.Fprintf(e.out, "tab %d  %s\n", r.Tab, r.URL)
 	})
 }
@@ -168,6 +168,21 @@ func cmdWebList(e *env, args []string) error {
 	})
 }
 
+// webArg 把命令行给的本地文件路径（可以是相对路径）换成绝对路径：窗口进程不知道 CLI 的工作目录。
+// 网址和不存在的路径原样交过去，由窗口判断。
+func webArg(s string) string {
+	if strings.Contains(s, "://") {
+		return s
+	}
+	if _, err := os.Stat(s); err != nil {
+		return s
+	}
+	if abs, err := filepath.Abs(s); err == nil {
+		return abs
+	}
+	return s
+}
+
 // webNav 是 goto、reload、back、forward。
 func webNav(action string, withURL bool) func(e *env, args []string) error {
 	return func(e *env, args []string) error {
@@ -181,7 +196,7 @@ func webNav(action string, withURL bool) func(e *env, args []string) error {
 			if err := need(pos, 1, "web "+action); err != nil {
 				return err
 			}
-			extra["url"] = pos[0]
+			extra["url"] = webArg(pos[0])
 		}
 		return e.doApp(f, "web.nav", f.params(extra), nil, func() { fmt.Fprintln(e.out, "ok") })
 	}

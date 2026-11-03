@@ -171,10 +171,32 @@ func (a *app) currentWebDoc() *webDoc {
 	return v.cur.web
 }
 
-// menuWeb 是 View 菜单的网页命令：当前不是网页标签时什么也不做。
+// currentHTMLPage 是选中的工作区当前显示的网页预览，没有时为 nil。
+func (a *app) currentHTMLPage() *htmlPage {
+	w := a.workspace(a.selected)
+	if w == nil || !a.filesActive(w) {
+		return nil
+	}
+	v := a.files[w.ID]
+	if v == nil || v.cur == nil || !v.cur.htmlPreview() || v.cur.page == nil || v.cur.page.view == nil {
+		return nil
+	}
+	return v.cur.page
+}
+
+// menuWeb 是 View 菜单的网页命令：当前不是网页标签、网页预览时什么也不做。
 func (a *app) menuWeb(action string) {
 	wd := a.currentWebDoc()
 	if wd == nil {
+		// 网页预览只有重新载入
+		if pg := a.currentHTMLPage(); pg != nil {
+			switch action {
+			case "reload":
+				pg.view.Page().Reload()
+			case "hardReload":
+				pg.view.Page().ReloadIgnoringCache()
+			}
+		}
 		return
 	}
 	switch action {

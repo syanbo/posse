@@ -354,6 +354,10 @@ func (a *app) docArea(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			a.markdownPreview(c, w, d)
 			return
 		}
+		if d.htmlPreview() {
+			a.htmlPreview(c, w, d)
+			return
+		}
 		d.ed.Font, d.ed.LineHeight, d.ed.BoldWeight = a.editorFont(), a.state.EditorLineHeight, a.editorBoldWeight()
 		d.ed.Bindings = a.editorBindings()
 		d.ed.OnChangeClick = func(i int, _ float32) { d.change = &changePop{index: i} }
@@ -578,7 +582,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 		if d.kind == docImage {
 			a.imageBar(c, d)
 		}
-		if d.kind == docText && isMarkdown(d.path) {
+		if d.kind == docText && hasPreview(d.path) {
 			// 图标是点了之后去的那一边：预览时显示源码，源码时显示预览
 			icon, label := iconEye, L(c).CommonPreview()
 			if d.preview {
@@ -691,6 +695,22 @@ func (a *app) frontMarkdown(w *workspace) bool {
 	}
 	d := a.filesFor(w).cur
 	return d != nil && d.mdPreview()
+}
+
+// htmlPreview 报告这个文件显示成网页预览。
+func (d *fileDoc) htmlPreview() bool {
+	return d.kind == docText && d.diff == nil && d.comp == nil && d.blame == nil && d.preview && isHTML(d.path)
+}
+
+// hasPreview 报告文件有预览（Markdown、网页），打开时默认显示预览。
+func hasPreview(path string) bool { return isMarkdown(path) || isHTML(path) }
+
+func isHTML(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".html", ".htm", ".xhtml":
+		return true
+	}
+	return false
 }
 
 func isMarkdown(path string) bool {

@@ -22,7 +22,7 @@ Take a fresh `snapshot` after the page changes: refs stay on the elements they w
 
 | Command | What it does |
 |---|---|
-| `open <url>` | Open a new web tab in your workspace and show it (keyboard stays where the user is). `localhost:3000` is enough. |
+| `open <url>` | Open a new web tab in your workspace and show it (keyboard stays where the user is). `localhost:3000` is enough. A local HTML file path (relative or absolute) opens the file; pages it loads from its own folder and below work. |
 | `list` | Your workspace's web tabs; `*` marks the one used without `--tab`. |
 | `goto <url>`, `reload`, `back`, `forward` | Navigate the tab. They return at once; follow with `wait`. |
 | `wait [--for load\|selector <css>\|text <s>]` | Wait until the page has loaded, a visible element matches, or the text appears. Exit code 3 on timeout. |

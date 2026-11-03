@@ -68,7 +68,8 @@ type fileDoc struct {
 	anim       *animPlayer // 动图：img 是它的位图
 	imgInfo    imageInfo
 	iv         imageView
-	preview    bool // Markdown 显示预览：打开时默认是，跳到某一行时切回源码
+	preview    bool      // Markdown 和网页显示预览：打开时默认是，跳到某一行时切回源码
+	page       *htmlPage // 网页预览的页面，第一次显示预览时建，关掉标签时销毁
 	md         []mdBlock
 	mdVer      uint64
 	mdImgs     *mdImages      // 预览里的图片，关掉标签就释放
@@ -239,7 +240,7 @@ func (a *app) filesFor(w *workspace) *filesView {
 		}
 	}
 	for _, p := range saved.Open {
-		d := &fileDoc{path: p, preview: isMarkdown(p)}
+		d := &fileDoc{path: p, preview: hasPreview(p)}
 		v.docs = append(v.docs, d)
 		if p == saved.Current {
 			v.cur = d
@@ -420,12 +421,13 @@ func (a *app) openDoc(w *workspace, path string, line int, span [2]int, preview 
 		d.transient = d.transient && preview
 	case preview && slices.ContainsFunc(v.docs, replaceable):
 		i := slices.IndexFunc(v.docs, replaceable)
-		d = &fileDoc{path: path, transient: true, preview: isMarkdown(path)}
+		closeWeb(v.docs[i])
+		d = &fileDoc{path: path, transient: true, preview: hasPreview(path)}
 		// 分栏里原地换：被换掉的是这格唯一的标签时，先删旧的会把这格收掉、新的跑到别格
 		a.renameColumnKey(w.ID, docKey(v.docs[i]), docKey(d))
 		v.docs[i] = d
 	default:
-		d = &fileDoc{path: path, transient: preview, preview: isMarkdown(path)}
+		d = &fileDoc{path: path, transient: preview, preview: hasPreview(path)}
 		v.insertDoc(d)
 	}
 	v.cur = d

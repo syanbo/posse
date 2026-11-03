@@ -197,6 +197,22 @@ func TestClickOpensLinkCard(t *testing.T) {
 	}
 	a.linkCard = nil
 	tt.Frame()
+	// 本地网页的卡片：最前面是在网页标签里打开
+	page := filepath.Join(dir, "report.html")
+	if err := os.WriteFile(page, []byte("<h1>hi</h1>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.openLink(v, page, 0)
+	tt.Frame()
+	if a.linkCard == nil || a.linkCard.path != page || a.linkCard.ws == nil {
+		t.Fatalf("plain click on HTML: card %+v", a.linkCard)
+	}
+	if os.Getenv("POSSE_PREVIEW_DIR") != "" {
+		tt.Advance(time.Second)
+		savePNG(t, tt, "link-html-card.png")
+	}
+	a.linkCard = nil
+	tt.Frame()
 	// Shift+Cmd+点击：交给浏览器，不开网页标签
 	tt.HoldModifiers(ui.Cmd | ui.Shift)
 	tt.Move(termX(42), urlY)
@@ -229,6 +245,12 @@ func TestClickOpensLinkCard(t *testing.T) {
 		}
 	}
 	a.state.LinkClickOpens, a.state.LinkSwapSystem = false, false
+	// 本地网页直接打开的是网页标签，源码从卡片的「在文件标签中打开」看
+	delete(a.files, a.selected)
+	a.openLink(v, page, ui.Cmd)
+	if fv := a.files[a.selected]; a.linkCard != nil || fv == nil || fv.cur == nil || fv.cur.web == nil || fv.cur.web.url != fileURL(page) {
+		t.Fatalf("open HTML directly: card %+v files %+v", a.linkCard, fv)
+	}
 	// 没有工作区能放这个文件：弹卡片，不是点了没反应
 	sel := a.selected
 	a.selected = "gone"
@@ -441,6 +463,9 @@ func TestWebAddress(t *testing.T) {
 		"two words.com":         "",
 		"ftp://example.com":     "",
 		"":                      "",
+		"/tmp/a b/r.html":       "file:///tmp/a%20b/r.html",
+		"/tmp/x/../r.html":      "file:///tmp/r.html",
+		"file:///tmp/r.html":    "file:///tmp/r.html",
 	} {
 		if got := webAddress(in); got != want {
 			t.Errorf("webAddress(%q) = %q, want %q", in, got, want)

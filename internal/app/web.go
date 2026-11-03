@@ -3,6 +3,7 @@ package app
 import (
 	"net"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -40,10 +41,32 @@ type webDoc struct {
 
 var webSeq int
 
-// isWebURL 报告链接能不能在网页标签里打开：只认 http、https。
+// isWebURL 报告链接是不是 http、https 网址。
 func isWebURL(link string) bool {
 	u, err := url.Parse(link)
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// isFileURL 报告链接是不是本地文件的 file:// 网址。
+func isFileURL(link string) bool {
+	u, err := url.Parse(link)
+	return err == nil && u.Scheme == "file" && u.Path != ""
+}
+
+// webOpenable 报告链接能不能在网页标签里打开：http、https 和本地文件。
+func webOpenable(link string) bool { return isWebURL(link) || isFileURL(link) }
+
+// fileURL 是本地路径的 file:// 网址。
+func fileURL(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }
+
+// loadPage 让页面载入 link。WebKit 用 loadRequest 打不开 file://，要经 LoadFile，
+// 它允许页面读文件所在的目录（同目录和子目录里的样式、脚本、图片），上级目录读不到。
+func loadPage(p *mygo.Page, link string) error {
+	if isFileURL(link) {
+		u, _ := url.Parse(link)
+		return p.LoadFile(u.Path)
+	}
+	return p.LoadURL(link)
 }
 
 // openWeb 在工作区的文件标签里新开一个网页标签，键盘交给页面。
@@ -60,8 +83,9 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 		d.kind, d.errMsg = docError, locales.Messages.WebUnavailable
 		return wd, d
 	}
-	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记
-	wv, err := a.win.NewWebView(mygo.WebViewOptions{URL: link, Page: mygo.PageOptions{PreloadScript: webctlJS}})
+	// posse web 的脚本先注入一次，console 从页面自己的脚本运行前就开始记。
+	// 网址在下面挂好事件后再载入：本地文件要经 LoadFile，不能交给 WebViewOptions.URL
+	wv, err := a.win.NewWebView(mygo.WebViewOptions{Page: mygo.PageOptions{PreloadScript: webctlJS}})
 	if err != nil {
 		d.kind, d.err = docError, errtext.Text(err)
 		return wd, d
@@ -101,7 +125,7 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 	// 工作区列表每次轮询都会换新，按 ID 重新找；工作区已经不在了就交给浏览器
 	wsID := w.ID
 	p.SetWindowOpenHandler(func(req mygo.WindowOpenRequest) *mygo.WindowOptions {
-		if isWebURL(req.URL) {
+		if webOpenable(req.URL) {
 			a.win.Update(func() {
 				if w := a.workspace(wsID); w != nil {
 					a.openWeb(w, req.URL)
@@ -112,6 +136,7 @@ func (a *app) openWebTab(w *workspace, link string, focus bool) (*webDoc, *fileD
 		}
 		return nil
 	})
+	a.loadWeb(wd, link)
 	return wd, d
 }
 
@@ -137,15 +162,16 @@ func (a *app) loadWeb(wd *webDoc, link string) {
 	if !wd.editing {
 		wd.addr = link
 	}
-	wd.view.Page().LoadURL(link)
+	if err := loadPage(wd.view.Page(), link); err != nil {
+		wd.url, wd.loading, wd.failed = link, false, errtext.Text(err)
+	}
 }
 
 // reloadWeb 重新载入。载入失败的页面没有提交过，Reload 不知道载入什么，按原地址重新载入。
 func (a *app) reloadWeb(wd *webDoc) {
 	p := wd.view.Page()
 	if wd.failed != "" {
-		wd.failed, wd.loading = "", true
-		p.LoadURL(wd.url)
+		a.loadWeb(wd, wd.url)
 		return
 	}
 	p.Reload()
@@ -154,21 +180,27 @@ func (a *app) reloadWeb(wd *webDoc) {
 // webPoll 是看得见时对一次导航状态的间隔：pushState、hash 跳转不发页面事件，停止载入有时也不发。
 const webPoll = time.Second
 
-// closeWeb 销毁网页标签的页面。
+// closeWeb 销毁网页标签和网页预览的页面。
 func closeWeb(d *fileDoc) {
 	if d.web != nil && d.web.view != nil {
 		d.web.view.Destroy()
 		d.web.view = nil
 	}
+	if d.page != nil {
+		d.page.destroy()
+		d.page = nil
+	}
 }
 
-// name 是网页标签上的名字：页面标题，还没有时是主机名。
+// name 是网页标签上的名字：页面标题，还没有时是主机名，本地文件是文件名。
 func (wd *webDoc) name(m locales.Messages) string {
 	if wd.title != "" {
 		return wd.title
 	}
 	if u, err := url.Parse(wd.url); err == nil && u.Host != "" {
 		return u.Host
+	} else if err == nil && u.Scheme == "file" && u.Path != "" {
+		return filepath.Base(u.Path)
 	}
 	return m.WebTabName()
 }
@@ -253,9 +285,15 @@ func (a *app) webView(c *ui.Context, d *fileDoc) {
 }
 
 // webAddress 把地址栏里的文字变成网址：没写协议的补 https://，本机、局域网地址和 .local 补 http://
-// （开发服务器一般没有证书），不像网址的返回空。
+// （开发服务器一般没有证书），file:// 网址和绝对路径是本地文件，不像网址的返回空。
 func webAddress(s string) string {
 	s = strings.TrimSpace(s)
+	if filepath.IsAbs(s) {
+		return fileURL(filepath.Clean(s))
+	}
+	if isFileURL(s) {
+		return s
+	}
 	if s == "" || strings.ContainsAny(s, " \t") {
 		return ""
 	}
