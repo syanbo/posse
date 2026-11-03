@@ -164,6 +164,7 @@ Architecture and development conventions are in [`AGENTS.md`](AGENTS.md), and ho
 - [Ghostty](https://github.com/ghostty-org/ghostty): libghostty-vt, the terminal core.
 - [Orca](https://github.com/stablyai/orca): much of the interaction follows it, and the phone side is compatible with its app.
 - [Pele](https://github.com/obsidianmd/pele), [Mayoi](https://github.com/sorrycc/Mayoi): Mermaid diagram layout and how it’s wired in.
+- [Alma](https://alma.now): sending encrypted messages between phone and Mac as binary frames is modeled on its remote connection protocol.
 - The agents that build Posse alongside: [Claude Code](https://github.com/anthropics/claude-code), [Codex](https://github.com/openai/codex), [Cursor CLI](https://cursor.com/cli), [Grok Build](https://docs.x.ai/build/overview).
 
 ## License

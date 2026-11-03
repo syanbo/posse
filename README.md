@@ -164,6 +164,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # �
 - [Ghostty](https://github.com/ghostty-org/ghostty)：终端内核 libghostty-vt。
 - [Orca](https://github.com/stablyai/orca)：很多交互照它来，手机端兼容它的 App。
 - [Pele](https://github.com/obsidianmd/pele)、[Mayoi](https://github.com/sorrycc/Mayoi)：Mermaid 图的排版和接入方式。
+- [Alma](https://alma.now)：手机和电脑之间的加密消息改用二进制帧传输，参考了它的远程连接协议。
 - 一起开发 Posse 的 agent：[Claude Code](https://github.com/anthropics/claude-code)、[Codex](https://github.com/openai/codex)、[Cursor CLI](https://cursor.com/cli)、[Grok Build](https://docs.x.ai/build/overview)。
 
 ## 许可
