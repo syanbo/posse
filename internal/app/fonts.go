@@ -128,26 +128,8 @@ func (a *app) setEditorFamily(family string) {
 	a.saveState()
 }
 
-const minMarkdownFontSize, maxMarkdownFontSize = 10, 28
-
-// mdSize 是 Markdown 预览和历史页对话的正文字号；ui.json 可能被手改，读出来也限在范围里。
-func (a *app) mdSize() float32 {
-	if s := a.state.MarkdownFontSize; s > 0 {
-		return min(max(s, minMarkdownFontSize), maxMarkdownFontSize)
-	}
-	return fsBody
-}
-
-// setMarkdownFontSize 改 Markdown 字号；size 为 0 是恢复默认，之后跟着界面字号变。
-func (a *app) setMarkdownFontSize(size float32) {
-	if size != 0 {
-		size = min(max(size, minMarkdownFontSize), maxMarkdownFontSize)
-	}
-	if a.state.MarkdownFontSize != size {
-		a.state.MarkdownFontSize = size
-		a.saveState()
-	}
-}
+// mdSize 是 Markdown 预览、历史页对话和任务说明的正文字号，就是编辑器字号。
+func (a *app) mdSize() float32 { return a.editorSize }
 
 func (a *app) setEditorFontSize(size float32) {
 	a.editorSize = min(max(size, minFontSize), maxFontSize)

@@ -5504,7 +5504,7 @@
   "@settingsEditorFont": {
     "description": "Label of the editor's font picker."
   },
-  "settingsEditorNote": "Code in files, diffs, blame and the Git log uses this font; while a file tab is in front, ⌘= ⌘- ⌘0 change the editor’s size. The bold weight applies to Markdown headings and bold text.",
+  "settingsEditorNote": "Code in files, diffs, blame and the Git log uses this font; while a file tab is in front, ⌘= ⌘- ⌘0 change the editor’s size. Markdown previews and History conversations use the same size for body text. The bold weight applies to Markdown headings and bold text.",
   "@settingsEditorNote": {
     "description": "Note of the Editor card."
   },
@@ -5604,10 +5604,6 @@
   "settingsLinkTitle": "Terminal Links",
   "@settingsLinkTitle": {
     "description": "Title of the Terminal Links card."
-  },
-  "settingsMarkdownFontSize": "Markdown font size",
-  "@settingsMarkdownFontSize": {
-    "description": "Row label of the Markdown font size stepper."
   },
   "settingsNotifyBadge": "Dock badge",
   "@settingsNotifyBadge": {

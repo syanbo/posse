@@ -364,7 +364,7 @@ type mdView struct {
 	words []string
 	depth int                 // 列表嵌套层数
 	find  *docFind            // 文件预览的查找栏：命中按搭界面的顺序编号，当前那个换深底色、滚进视野
-	size  float32             // 正文字号（设置里的 Markdown 字号），0 跟界面字号；标题、代码按它的倍数
+	size  float32             // 正文字号（编辑器字号），0 跟界面字号；标题、代码按它的倍数
 	text  float32             // 当前这段文字的字号（标题里是标题字号），行内代码这类按它的倍数；0 是正文
 	wiki  func(target string) // 点 [[名字]] 时打开它；为空时只上色、点不了
 	imgs  *mdImages           // 文件预览载入图片；为空时图片只显示说明文字

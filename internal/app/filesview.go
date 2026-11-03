@@ -688,15 +688,6 @@ func (d *fileDoc) mdPreview() bool {
 	return d.kind == docText && d.diff == nil && d.comp == nil && d.blame == nil && d.preview && isMarkdown(d.path)
 }
 
-// frontMarkdown 报告文件标签在前台、显示的是 Markdown 预览。
-func (a *app) frontMarkdown(w *workspace) bool {
-	if !a.filesActive(w) {
-		return false
-	}
-	d := a.filesFor(w).cur
-	return d != nil && d.mdPreview()
-}
-
 // htmlPreview 报告这个文件显示成网页预览。
 func (d *fileDoc) htmlPreview() bool {
 	return d.kind == docText && d.diff == nil && d.comp == nil && d.blame == nil && d.preview && isHTML(d.path)
@@ -737,7 +728,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 		ui.Scroll(c.Key("md:" + d.path)).Fill().TrackScroll(&d.mdScroll).Children(func() {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
-				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Selectable().Children(func() {
+				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultEditorFontSize).Selectable().Children(func() {
 					mdView{find: f, size: size, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(L(c), w, d.path, target) }}.page(c, d.md)
 				})
 			})

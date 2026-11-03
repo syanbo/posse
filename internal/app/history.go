@@ -990,7 +990,7 @@ func (a *app) sessionDetail(c *ui.Context) {
 const transcriptInset = cardPad - 12
 
 // transcriptWidth 是对话的版心宽度：默认字号下一行四十几个汉字，随 Markdown 字号等比放宽。
-func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultUIFontSize }
+func (a *app) transcriptWidth() float32 { return 680 * a.mdSize() / defaultEditorFontSize }
 
 // toolRun 是折起来的一串工具调用：点一下展开或收起。
 func (a *app) toolRun(c *ui.Context, d *historyDetail, run []history.Message) {

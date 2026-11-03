@@ -334,9 +334,6 @@ func (a *app) interfaceSettings(c *ui.Context) {
 				})
 			})
 		})
-		settingsRow(c, m.SettingsMarkdownFontSize(), func() {
-			fontSizeStepper(c, a.mdSize(), 0, a.setMarkdownFontSize)
-		})
 		settingsRow(c, m.SettingsFontWeight(), func() {
 			stepper(c, m.SettingsFontWeight(), fmt.Sprint(fwBody),
 				func(d int) { setType(func(s *uiState) { s.UIWeight = stepWeight(fwBody, d) }) },

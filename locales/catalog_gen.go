@@ -15485,20 +15485,6 @@ func (msgs Messages) SettingsLinkTitle() string {
 	return Catalog.Format(msgs.locale, "settingsLinkTitle", nil)
 }
 
-// SettingsMarkdownFontSize says "Markdown font size"
-// in the language the app shows.
-//
-// Row label of the Markdown font size stepper.
-func SettingsMarkdownFontSize() string { return In(i18n.Locale()).SettingsMarkdownFontSize() }
-
-// SettingsMarkdownFontSize says "Markdown font size"
-// in the language of msgs.
-//
-// Row label of the Markdown font size stepper.
-func (msgs Messages) SettingsMarkdownFontSize() string {
-	return Catalog.Format(msgs.locale, "settingsMarkdownFontSize", nil)
-}
-
 // SettingsNotifyBadge says "Dock badge"
 // in the language the app shows.
 //
