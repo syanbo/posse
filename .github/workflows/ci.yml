@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # libghostty-vt 由 mygo 第一次运行时下载到这里
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/mygo
+          key: mygo-natives-${{ runner.os }}-${{ hashFiles('go.sum', 'third_party/mygo/go.mod') }}
+      # 测试里建的仓库按 main 分支、有提交身份来写
+      - run: |
+          git config --global init.defaultBranch main
+          git config --global user.name "Posse CI"
+          git config --global user.email "ci@example.com"
+      # 界面测试按终端字体 JetBrains Mono 的字宽、行高点位置，runner 上没装
+      - run: brew install --cask font-jetbrains-mono font-jetbrains-mono-nerd-font
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go tool mygo vet
+      - run: go tool mygo i18n check
+
+  mobile:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      # posse_quic 的构建钩子调 go build
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Flutter 版本以 fvm 固定的为准
+      - id: fvm
+        run: echo "flutter=$(jq -r .flutter .fvmrc)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.fvm.outputs.flutter }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter pub get
+        working-directory: mobile/packages/posse_quic
+      - run: flutter analyze
+      - run: flutter test
