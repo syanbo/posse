@@ -569,9 +569,11 @@ const navIndent = 24
 // statusSlot 是会话行左边的状态槽，占一层缩进的宽度。状态图形对着上一层行首图标的中线，
 // 图标调到最大时放不下，就贴着槽的右边。
 func statusSlot(c *ui.Context, glyph func()) ui.Element {
-	left := min(navPad+(iconSize-smallIcon())/2, navIndent-smallIcon())
-	return ui.Row(c).Width(navIndent).Padding(0, 0, 0, left).AlignItems(ui.Center).Shrink(0).Children(glyph)
+	return ui.Row(c).Width(navIndent).Padding(0, 0, 0, statusSlotLeft()).AlignItems(ui.Center).Shrink(0).Children(glyph)
 }
+
+// statusSlotLeft 是状态图形在状态槽里离左边的距离。
+func statusSlotLeft() float32 { return min(navPad+(iconSize-smallIcon())/2, navIndent-smallIcon()) }
 
 // trafficLightX 是红绿灯红点的左边缘。
 const trafficLightX = 16
@@ -782,40 +784,44 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 	if a.selected == w.ID {
 		cur = a.selectedSession(a.workspace(w.ID))
 	}
-	// 任务的 worker 排在派发它的会话下面、多缩进一层；派发方不在这个工作区（别的工作区、用户派发）的照常排
-	listed := map[string]bool{}
+	// 任务的 worker 排在派发它的会话下面、多缩进一层；派发方不在这个工作区（别的工作区、用户派发）的照常排。
+	// 派到别的工作区（worktree 这类）的 worker 排在派发方同一工作区的 worker 后面，是一行影子，连上线、点了跳过去
+	top, children := a.sessionTree(sessions)
 	for _, term := range sessions {
-		listed[term.ID] = true
-	}
-	children := map[string][]terminalInfo{}
-	var top []terminalInfo
-	for _, term := range sessions {
-		if coord := a.coordOf[term.ID]; coord != "" && coord != term.ID && listed[coord] {
-			children[coord] = append(children[coord], term)
-		} else {
-			top = append(top, term)
+		if remote := a.remoteWorkers[term.ID]; len(remote) > 0 {
+			children[term.ID] = append(children[term.ID], remote...)
 		}
 	}
-	// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归
+	// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归；影子行底下不再展开
 	var below func(id string, depth int) []terminalInfo
 	below = func(id string, depth int) []terminalInfo {
 		var out []terminalInfo
 		for _, k := range children[id] {
-			out = append(out, k)
-			if depth < 4 {
-				out = append(out, below(k.ID, depth+1)...)
+			out = append(out, k.current())
+			if depth < 4 && k.home == nil {
+				out = append(out, below(k.term.ID, depth+1)...)
 			}
 		}
 		return out
 	}
-	// 缩进不用 Padding：每行自己画缩进和状态槽，选中底色铺满整行
-	var rows func(list []terminalInfo, depth int)
-	rows = func(list []terminalInfo, depth int) {
-		ui.Column(c).Gap(2).Children(func() {
-			for _, term := range list {
+	// 缩进不用 Padding：每行自己画缩进、连接线和状态槽，选中底色铺满整行
+	// prefix 是上面几层的连线；nested 时本层的每行再加一列，记它后面还有没有同一个派发方的 worker
+	var rows func(list []sessionNode, prefix treeGuide, nested bool)
+	rows = func(list []sessionNode, prefix treeGuide, nested bool) {
+		ui.Column(c).Gap(navRowGap).Children(func() {
+			for i, node := range list {
+				term, g := node.term, prefix
+				if nested {
+					g = append(slices.Clone(prefix), i < len(list)-1)
+				}
+				if node.home != nil {
+					term = node.current()
+					a.navSession(c, *node.home, term, false, nil, nil, a.whereOf(c, *node.home), g, true)
+					continue
+				}
 				kids := children[term.ID]
-				if len(kids) == 0 || depth >= 4 {
-					a.navSession(c, w, term, cur == term.ID, nil, nil, "", depth)
+				if len(kids) == 0 || len(g) >= 4 {
+					a.navSession(c, w, term, cur == term.ID, nil, nil, "", g, false)
 					continue
 				}
 				open := a.workersOpen[term.ID]
@@ -827,31 +833,48 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 					}
 					a.workersOpen[term.ID] = open
 				}
-				all := below(term.ID, depth+1)
+				all := below(term.ID, len(g)+1)
 				hidden := slices.ContainsFunc(all, func(k terminalInfo) bool { return k.ID == cur })
 				// 要定位的会话收在里面时先展开
 				if !*open && hidden && a.revealSel {
 					*open = true
 				}
 				// 收起时当前会话在里面，这一行算选中
-				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", depth)
+				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", g, false)
 				if *open {
-					rows(kids, depth+1)
+					rows(kids, g, true)
 				}
 			}
 		})
 	}
-	rows(top, 0)
+	rows(top, nil, false)
 }
+
+// whereOf 是工作区的「项目 · 工作区」，影子行的第二行写它。
+func (a *app) whereOf(c *ui.Context, w workspace) string {
+	p := a.projectByID(w.ProjectID)
+	if p == nil {
+		return cmp.Or(w.Shown, w.Name)
+	}
+	return workspaceWhere(L(c), *p, a.byProject[w.ProjectID], w)
+}
+
+// navRowGap 是侧栏会话行之间的间隔，连接线要跨过它。
+const navRowGap = 2
 
 // navSession 是侧栏里的一个 agent 会话。有 worker 时 workers 是它下面所有层的 worker，open 是它们是否展开：
 // 和项目行一样，单击切到这个会话、收着的顺便展开，已经在看它时再单击收起；收起时行尾写 +N，
 // 有 worker 等你处理时这一行也显示待处理。where 非空时是「运行中」视图里的平铺行：第二行写它在哪个项目和工作区，不能拖动排序。
-// depth 是 worker 嵌套的层数，状态槽之前先缩进这么多层，状态紧挨着自己的 agent 图标。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, depth int) {
-	a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
-	if selected {
-		a.navCur = len(a.navOrder) - 1
+// guide 是 worker 的连接线，一层嵌套一列：状态槽之前先缩进这么多层，状态紧挨着自己的 agent 图标，
+// 竖线走在上面几层派发方的状态槽下面。shadow 是派到别的工作区的 worker 的影子行：w 是它真正所在的工作区，
+// 文字淡一些，点了切过去并滚到它真正那一行；方向键不经过它，免得同一个会话走两遍。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, guide treeGuide, shadow bool) {
+	depth := len(guide)
+	if !shadow {
+		a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
+		if selected {
+			a.navCur = len(a.navOrder) - 1
+		}
 	}
 	// 和标签一样：任务 worker 用任务标题
 	name, detail := fullLabel(L(c), term)
@@ -889,18 +912,32 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在图标左边的槽里，对着上一层行首图标的中线。
 	// 选中、悬停的底色和点击、拖动都按包着状态槽的整行算，状态不会飘在底色外面
 	icon := func() { agentTile(c, term.Agent, smallIcon()).Tooltip(name) }
-	line := ui.Row(c.Key("line-" + term.ID)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
+	key := "line-" + term.ID
+	if shadow {
+		key = "shadow-" + term.ID
+	}
+	line := ui.Row(c.Key(key)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
 	selectedBg(c, line, selected)
+	if depth > 0 {
+		color, hasStatus := colors(c.Theme()).guide, status != ""
+		line.Draw(func(p *ui.Painter, r ui.Rect) {
+			drawGuide(p, r, guide, hasStatus, navRowGap, color)
+		})
+	}
 	line.Children(func() {
 		if depth > 0 {
 			ui.Box(c).Width(float32(depth) * navIndent).Shrink(0)
 		}
-		statusSlot(c, func() {
+		slot := statusSlot(c, func() {
 			if status != "" {
 				a.statusIcon(c, statusID, status, smallIcon())
 			}
 		})
-		a.navRowSized(c, term.ID, false, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0).Background(ui.Transparent).Role(ui.RoleNone)
+		content := a.navRowSized(c, term.ID, false, icon, detail, fsSmall, where, "", trailing).Grow(1).Shrink(1).Basis(0).Background(ui.Transparent).Role(ui.RoleNone)
+		if shadow {
+			slot.Opacity(shadowDim)
+			content.Opacity(shadowDim)
+		}
 	})
 	row := line
 	if where == "" {
@@ -915,6 +952,9 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		}
 		a.selected = w.ID
 		a.activeTerm[w.ID] = term.ID
+		if shadow {
+			a.revealSel = true
+		}
 	}
 	if a.revealSel && selected {
 		row.ScrollIntoView()

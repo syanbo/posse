@@ -103,6 +103,9 @@ const (
 	treeIndent = 16
 	hairline   = 0.5 // 分隔线的粗细：2 倍屏上一个物理像素，1pt 显粗；对齐时要让出它
 	focusRing  = 1   // 聚焦框的粗细：要一眼看得见，不跟着分隔线变细
+	guideWidth = 1   // 侧栏 worker 连线的粗细
+	guideRoom  = 3   // 连线拐过来停在状态图形、agent 图标前留的空
+	shadowDim  = 0.6 // 侧栏影子行（派到别的工作区的 worker）的不透明度
 )
 
 // 圆角按角色分五档，嵌套时外圆角 = 内圆角 + 内边距（规则见 docs/design.md）。
@@ -130,6 +133,7 @@ type palette struct {
 	shade  ui.Color   // 底栏：压暗一层
 	code   ui.Color   // 代码块的底
 	line   ui.Color   // 分隔线；深色下也是卡片、浮层的内高光
+	guide  ui.Color   // 侧栏 worker 连线：分隔线叠在侧栏底上的不透明色，相邻两行的线接头处不叠深
 	tint   ui.Color   // 选中项的底：强调色淡底（soft）
 	mark   ui.Color   // 搜索命中的底
 	markOn ui.Color   // 查找栏当前所在的那个命中
@@ -176,6 +180,7 @@ var (
 // derive 补上由别的颜色推出来的几项。
 func (p palette) derive(t *ui.Theme) palette {
 	p.sky = p.data[1]
+	p.guide = p.line.Over(p.side)
 	p.tint = soft(t, t.Accent)
 	p.mark = p.honey.Alpha(0.28)
 	p.markOn = p.honey.Alpha(0.65)

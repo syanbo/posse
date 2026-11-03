@@ -105,6 +105,7 @@ func (a *app) indexTasks() {
 			a.runningFor[t.Coordinator]++
 		}
 	}
+	a.indexRemoteWorkers()
 }
 
 func (a *app) openTask(id string) {

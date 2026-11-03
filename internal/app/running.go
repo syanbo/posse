@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"posse/internal/agent"
+	"posse/locales"
 )
 
 // sidebarByStatus 是侧栏的「运行中」看法：所有项目里的 agent 会话平铺成一列，按状态排。
@@ -55,6 +56,18 @@ func runRank(status string) int {
 	return 1
 }
 
+// workspaceWhere 是会话所在的「项目 · 工作区」，项目只有一个工作区时只写项目名。
+func workspaceWhere(l locales.Messages, p project, ws []workspace, w workspace) string {
+	if len(ws) <= 1 {
+		return p.Name
+	}
+	label := cmp.Or(w.Shown, w.Name)
+	if w.Kind == "main" {
+		label = l.RunningMainWorkspace()
+	}
+	return p.Name + " · " + label
+}
+
 type runEntry struct {
 	w     workspace
 	term  terminalInfo
@@ -69,14 +82,7 @@ func (a *app) runningList(c *ui.Context) {
 	for _, p := range a.projects {
 		ws := a.byProject[p.ID]
 		for _, w := range ws {
-			where := p.Name
-			if len(ws) > 1 {
-				label := cmp.Or(w.Shown, w.Name)
-				if w.Kind == "main" {
-					label = L(c).RunningMainWorkspace()
-				}
-				where += " · " + label
-			}
+			where := workspaceWhere(L(c), p, ws, w)
 			for _, t := range a.sessionsInTree(agentSessions(w.Terminals)) {
 				entries[t.ID] = runEntry{w: w, term: t, where: where}
 				natural = append(natural, t.ID)
@@ -111,7 +117,7 @@ func (a *app) runningList(c *ui.Context) {
 	cur := a.selectedSession(a.workspace(a.selected))
 	for _, id := range a.runOrder {
 		e := entries[id]
-		a.navSession(c, e.w, e.term, id == cur, nil, nil, e.where, 0)
+		a.navSession(c, e.w, e.term, id == cur, nil, nil, e.where, nil, false)
 	}
 }
 
@@ -126,26 +132,16 @@ func runInsertAt(order []string, r int, rank func(string) int) int {
 	return 0
 }
 
-// sessionsInTree 把一个工作区的会话按「项目」看法里的先后排：派发方后面紧跟它的 worker（逐层），和 sessionRows 一样。
+// sessionsInTree 把一个工作区的会话按「项目」看法里的先后排：派发方后面紧跟它的 worker（逐层），分层按 sessionTree。
+// 派到别的工作区的 worker 留在它自己的工作区，这里不列影子。
 func (a *app) sessionsInTree(sessions []terminalInfo) []terminalInfo {
-	listed := map[string]bool{}
-	for _, t := range sessions {
-		listed[t.ID] = true
-	}
-	children := map[string][]terminalInfo{}
-	var top []terminalInfo
-	for _, t := range sessions {
-		if coord := a.coordOf[t.ID]; coord != "" && coord != t.ID && listed[coord] {
-			children[coord] = append(children[coord], t)
-		} else {
-			top = append(top, t)
-		}
-	}
+	top, children := a.sessionTree(sessions)
 	out := make([]terminalInfo, 0, len(sessions))
 	seen := map[string]bool{}
-	var walk func(list []terminalInfo)
-	walk = func(list []terminalInfo) {
-		for _, t := range list {
+	var walk func(list []sessionNode)
+	walk = func(list []sessionNode) {
+		for _, node := range list {
+			t := node.term
 			// 数据成环时不重复
 			if seen[t.ID] {
 				continue

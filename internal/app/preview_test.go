@@ -614,6 +614,23 @@ func TestPreview(t *testing.T) {
 		a.workspaces[0].Terminals[0].WaitingTasks = true
 		savePNG(t, newPreviewTester(a, dark), "tasks-waiting-"+suffix+".png")
 
+		// 派发方下面几个 worker、一层嵌套和一个派到别的工作区的：连接线照文件树画，中间 ├、最后 ╰；空闲（不画状态）的 worker 也一样连着
+		a = previewApp(t)
+		a.workspaces[0].Terminals[3].AgentState = state("idle")
+		a.workspaces[0].Terminals = append(a.workspaces[0].Terminals,
+			terminalInfo{ID: "t7", Agent: "claude", Name: "整理图片方案", Running: true, AgentState: state("idle")},
+			terminalInfo{ID: "t8", Agent: "codex", Name: "压一遍动图帧", Running: true, AgentState: state("waiting")},
+			terminalInfo{ID: "t10", Agent: "cursor", Name: "补单元测试", Running: true, AgentState: state("working")})
+		a.tasks = append(a.tasks,
+			taskInfo{ID: "k5", Title: "整理图片方案", Agent: "claude", WorkspaceID: "w1", Worker: "t7", Status: "running", Coordinator: "t1", CreatedAt: time.Now()},
+			taskInfo{ID: "k6", Title: "压一遍动图帧", Agent: "codex", WorkspaceID: "w1", Worker: "t8", Status: "running", Coordinator: "t7", CreatedAt: time.Now()},
+			taskInfo{ID: "k7", Title: "补单元测试", Agent: "cursor", WorkspaceID: "w1", Worker: "t10", Status: "running", Coordinator: "t7", CreatedAt: time.Now()})
+		// 派到 worktree 的 k2 在派发方下面有一行影子，写着它在哪个工作区
+		a.tasks[1].Coordinator = "t1"
+		a.indexWorkspaces()
+		a.indexTasks()
+		savePNG(t, newPreviewTester(a, dark), "sidebar-worker-lines-"+suffix+".png")
+
 		// 会话按钮收成右边缘的把手
 		a = previewApp(t)
 		a.state.SessionButtonsHidden = true

@@ -145,12 +145,13 @@ type app struct {
 	err        string
 
 	// 由 apply、applyTasks 算好的派生数据，免得每帧重算
-	byProject   map[string][]workspace // 项目 ID → 它的工作区，主工作区在前
-	sorted      []taskInfo             // 任务总览的顺序，见 sortTasks
-	workerTitle map[string]string      // worker 终端 ID → 任务标题，标签页和侧栏上显示
-	coordOf     map[string]string      // worker 终端 ID → 派发它的终端（用户派发的没有），侧栏把 worker 排在它下面
-	runningFor  map[string]int         // 派发方终端 ID → 它还在进行中的任务数
-	navProjects []project              // 侧栏这一帧遍历的项目，复用底层数组
+	byProject     map[string][]workspace   // 项目 ID → 它的工作区，主工作区在前
+	remoteWorkers map[string][]sessionNode // 派发方终端 ID → 它派到别的工作区的 worker（影子行），indexRemoteWorkers 算
+	sorted        []taskInfo               // 任务总览的顺序，见 sortTasks
+	workerTitle   map[string]string        // worker 终端 ID → 任务标题，标签页和侧栏上显示
+	coordOf       map[string]string        // worker 终端 ID → 派发它的终端（用户派发的没有），侧栏把 worker 排在它下面
+	runningFor    map[string]int           // 派发方终端 ID → 它还在进行中的任务数
+	navProjects   []project                // 侧栏这一帧遍历的项目，复用底层数组
 
 	selected     string            // 侧栏选中的工作区 ID
 	revealSel    bool              // 下一帧把选中项滚进可见区
@@ -795,6 +796,7 @@ func (a *app) indexWorkspaces() {
 	for _, w := range a.workspaces {
 		a.byProject[w.ProjectID] = append(a.byProject[w.ProjectID], w)
 	}
+	a.indexRemoteWorkers()
 }
 
 // pruneDiffs 去掉已经不在的工作区的改动统计。
