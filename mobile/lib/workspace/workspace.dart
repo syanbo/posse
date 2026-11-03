@@ -72,7 +72,18 @@ class _PairScreenState extends State<PairScreen> {
   Future<void> _connect(String code) async {
     setState(() => _note = null);
     final nav = Navigator.of(context);
-    if (!await connectAndAnnounce(context, widget.model, code)) return;
+    if (!await connectAndAnnounce(context, widget.model, code)) {
+      // 已连着别的电脑时，model.error 会被那台电脑的定时刷新清掉，所以连不上的原因记在这一页上，
+      // 留到下一次尝试。还在连说明被新的一次顶掉了，不算失败
+      if (!mounted || widget.model.connecting) return;
+      final error = widget.model.error;
+      final l = context.l10n;
+      setState(
+        () =>
+            _note = error == null ? l.homeCantConnect : friendlyError(error, l),
+      );
+      return;
+    }
     if (widget.adding && mounted && !_closing) {
       _closing = true;
       nav.pop();
