@@ -11,6 +11,9 @@ const deskEventKeyDown = 5;
 const deskEventKeyUp = 6;
 const deskEventText = 7;
 
+/// 锁屏密码：Mac 只在锁着屏时输进锁屏的密码框再回车。只发给 ready 带 `password: true` 的 Mac。
+const deskEventPassword = 8;
+
 const deskButtonLeft = 1;
 const deskButtonRight = 2;
 
@@ -167,6 +170,18 @@ class DeskWireEvent {
       dy = 0,
       hid = 0;
 
+  DeskWireEvent.password(this.text)
+    : kind = deskEventPassword,
+      seq = 0,
+      x = 0,
+      y = 0,
+      button = 0,
+      clicks = 0,
+      dx = 0,
+      dy = 0,
+      hid = 0,
+      mods = 0;
+
   final int kind;
   int seq;
   final int x;
@@ -306,6 +321,16 @@ List<DeskWireEvent>? decodeDeskInput(Uint8List bytes) {
         event.seq = seq;
         out.add(event);
         p += nb;
+      case deskEventPassword:
+        if (bytes.length - p < 6) return null;
+        final seq = data.getUint32(p, Endian.little);
+        final nb = data.getUint16(p + 4, Endian.little);
+        p += 6;
+        if (bytes.length - p < nb) return null;
+        final text = _utf8Decode(bytes.sublist(p, p + nb));
+        if (text == null) return null;
+        out.add(DeskWireEvent.password(text)..seq = seq);
+        p += nb;
       default:
         return null;
     }
@@ -347,6 +372,15 @@ void _writeEvent(BytesBuilder out, DeskWireEvent event) {
       out.addByte(deskEventText);
       _u32(out, event.seq);
       out.addByte(event.mods & 0xff);
+      _u16(out, raw.length);
+      out.add(raw);
+    case deskEventPassword:
+      final raw = _utf8(event.text);
+      if (raw == null || raw.length > 65535) {
+        throw DeskWireException('bad text');
+      }
+      out.addByte(deskEventPassword);
+      _u32(out, event.seq);
       _u16(out, raw.length);
       out.add(raw);
     default:
@@ -556,6 +590,12 @@ class DeskInputLink {
     });
   }
 
+  /// 锁屏密码，一条必达事件：Mac 当场查锁屏，没锁就不打。
+  void password(String value) {
+    if (value.isEmpty) return;
+    _reliable(DeskWireEvent.password(value));
+  }
+
   /// 还按着的鼠标键和键盘键各补一条松开。
   void release() {
     final buttons = _buttons.entries.toList();
@@ -642,4 +682,33 @@ const deskTypingPad = '​​​​';
     same++;
   }
   return (a.length - same, String.fromCharCodes(b.sublist(same)));
+}
+
+/// 旧 Mac（ready 不带 `password`）上文字和回车之间等多久再看一次锁屏：
+/// 解锁的 state 事件要从 Mac 传过来，等一会儿才赶得上。
+const deskLegacyEnterDelay = Duration(milliseconds: 600);
+
+/// 把锁屏密码交给 Mac。[passwordEvent] 是 Mac 认密码事件，发一条就完，锁屏判断交给 Mac。
+/// 旧 Mac 照旧发文字再回车，回车前等 [delay] 再问 [stillLocked]：这时已经解开就不回车，
+/// 免得把打进最前面 App 的字提交出去。
+Future<void> deskSendPassword(
+  DeskInputLink link,
+  String password, {
+  required bool passwordEvent,
+  required bool Function() stillLocked,
+  Duration delay = deskLegacyEnterDelay,
+}) async {
+  if (password.isEmpty) return;
+  if (passwordEvent) {
+    link.password(password);
+    return;
+  }
+  link.text(password, 0);
+  await Future<void>.delayed(delay);
+  if (!stillLocked()) return;
+  final enter = deskKeyHid['Enter']!;
+  link.batch(() {
+    link.keyDown(enter, 0);
+    link.keyUp(enter, 0);
+  });
 }

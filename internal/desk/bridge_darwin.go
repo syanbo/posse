@@ -143,6 +143,7 @@ type macAPI struct {
 	cgSetFlags    func(uintptr, uint64)
 	cgUnicode     func(uintptr, uintptr, *uint16)
 	cgPost        func(uint32, uintptr)
+	cgPostPid     func(int32, uintptr)
 	cgGetLoc      func(uintptr) cgPoint
 	cgCreate      func(uintptr) uintptr
 	cgSource      func(int32) uintptr
@@ -399,6 +400,7 @@ func (m *macAPI) loadInput() {
 	m.cgSetFlags = softFn[func(uintptr, uint64)](cg, "CGEventSetFlags")
 	m.cgUnicode = softFn[func(uintptr, uintptr, *uint16)](cg, "CGEventKeyboardSetUnicodeString")
 	m.cgPost = softFn[func(uint32, uintptr)](cg, "CGEventPost")
+	m.cgPostPid = softFn[func(int32, uintptr)](cg, "CGEventPostToPid")
 	m.cgGetLoc = softFn[func(uintptr) cgPoint](cg, "CGEventGetLocation")
 	m.cgCreate = softFn[func(uintptr) uintptr](cg, "CGEventCreate")
 	m.cgSource = softFn[func(int32) uintptr](cg, "CGEventSourceCreate")

@@ -123,6 +123,8 @@ func (c *conn) deskSubscribe(id string, raw json.RawMessage) error {
 			"nonceB64": base64.StdEncoding.EncodeToString(nonce),
 			// 手机缺包时可以点名补发（desk.PacketNack）；旧电脑不认，手机照旧直接要关键帧
 			"nack": true,
+			// 认 input 里的密码事件（desk.EventPassword）：手机看到才发，旧电脑照旧发文字加回车
+			"password": true,
 		}
 		if ready.Relay != "" {
 			frame["relay"] = ready.Relay

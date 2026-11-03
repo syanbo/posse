@@ -148,6 +148,8 @@ class _DeskPageState extends State<DeskPage>
   Uint8List? _relayToken;
   // 电脑认缺包点名补发（ready 里带 nack）
   bool _nack = false;
+  // 电脑认密码事件（ready 里带 password）：锁屏判断和只投给锁屏都在 Mac 上做
+  bool _passwordEvent = false;
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
@@ -855,6 +857,7 @@ class _DeskPageState extends State<DeskPage>
     final relayTokenB64 = frame['relayTokenB64'];
     _relay = relay is String && relay.isNotEmpty ? relay : null;
     _nack = frame['nack'] == true;
+    _passwordEvent = frame['password'] == true;
     _relayToken = null;
     if (_relay != null && relayTokenB64 is String) {
       try {
@@ -1315,19 +1318,24 @@ class _DeskPageState extends State<DeskPage>
     _sendPassword(password);
   }
 
-  /// 整段按键发过去再回车。密码不进事件记录（调试面板会显示）。
+  /// 密码不进事件记录（调试面板会显示）。
   void _sendPassword(String password) {
     // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
     if (!_macLocked) {
       _note(context.l10n.deskAlreadyUnlocked);
       return;
     }
-    final enter = deskKeyHid['Enter']!;
-    _link.batch(() {
-      _link.text(password, 0);
-      _link.keyDown(enter, 0);
-      _link.keyUp(enter, 0);
-    });
+    final gen = _gen;
+    unawaited(
+      deskSendPassword(
+        _link,
+        password,
+        passwordEvent: _passwordEvent,
+        stillLocked: () => mounted && gen == _gen && _macLocked,
+      ).then((_) {
+        if (mounted) _noteInput();
+      }),
+    );
     _noteInput();
   }
 

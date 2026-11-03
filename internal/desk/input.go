@@ -24,6 +24,8 @@ const (
 	EventKeyDown byte = 5
 	EventKeyUp   byte = 6
 	EventText    byte = 7
+	// EventPassword 是锁屏密码：只在 ready 带 password: true 的 Mac 上发
+	EventPassword byte = 8
 
 	// ScrollPerScreen 是滚动事件里一个主屏高度对应的单位数。
 	ScrollPerScreen = 4096
@@ -101,8 +103,11 @@ type Event struct {
 //	7 文字：u32 序号、u8 修饰键、u16 字节数、这么多 UTF-8。
 //	  修饰键为 0 时按 Unicode 注入；不为 0 时按当前键盘布局把每个字符反查成键码，
 //	  否则 ⌘C 这类快捷键程序不认。
+//	8 密码：u32 序号、u16 字节数、这么多 UTF-8。在锁屏的密码框里输入这串字再回车。
+//	  Mac 当场查锁屏，没锁就整条丢掉；按键和回车只投给锁屏界面的进程，逐键之间、回车之前都再查一次，
+//	  中途解开就停。手机只在 desk.subscribe 的 ready 带 password: true 时发，旧 Mac 不认这一种会整包作废。
 //
-// 按下、松开、滚动、按键、文字是必达事件。序号从 1 起，一次观看内只增不重用，0 无效。
+// 按下、松开、滚动、按键、文字、密码是必达事件。序号从 1 起，一次观看内只增不重用，0 无效。
 // 手机在之后每个 input 包里重复带上还没被确认的必达事件。包内顺序就是发生顺序：
 // 移动留在它前后的必达事件之间，先按下再移动才会变成拖动。
 //
@@ -212,6 +217,22 @@ func DecodeInput(b []byte) ([]Event, error) {
 				return nil, errInput
 			}
 			out = append(out, Event{Kind: kind, Seq: seq, Mods: mods, Text: string(raw)})
+		case EventPassword:
+			if len(b)-p < 6 {
+				return nil, errInput
+			}
+			seq := binary.LittleEndian.Uint32(b[p:])
+			nb := int(binary.LittleEndian.Uint16(b[p+4:]))
+			p += 6
+			if len(b)-p < nb {
+				return nil, errInput
+			}
+			raw := b[p : p+nb]
+			p += nb
+			if !utf8.Valid(raw) {
+				return nil, errInput
+			}
+			out = append(out, Event{Kind: kind, Seq: seq, Text: string(raw)})
 		default:
 			return nil, errInput
 		}
@@ -237,6 +258,11 @@ func eventSize(ev Event) (int, error) {
 			return 0, errInput
 		}
 		return 8 + len(ev.Text), nil
+	case EventPassword:
+		if len(ev.Text) > 65535 || !utf8.ValidString(ev.Text) {
+			return 0, errInput
+		}
+		return 7 + len(ev.Text), nil
 	default:
 		return 0, errInput
 	}
@@ -264,6 +290,10 @@ func appendEvent(buf []byte, ev Event) []byte {
 	case EventText:
 		buf = putU32(buf, ev.Seq)
 		buf = append(buf, ev.Mods)
+		buf = putU16(buf, uint16(len(ev.Text)))
+		buf = append(buf, ev.Text...)
+	case EventPassword:
+		buf = putU32(buf, ev.Seq)
 		buf = putU16(buf, uint16(len(ev.Text)))
 		buf = append(buf, ev.Text...)
 	}
@@ -358,7 +388,7 @@ const inputWindow = 1024
 
 func reliableKind(kind byte) bool {
 	switch kind {
-	case EventDown, EventUp, EventScroll, EventKeyDown, EventKeyUp, EventText:
+	case EventDown, EventUp, EventScroll, EventKeyDown, EventKeyUp, EventText, EventPassword:
 		return true
 	default:
 		return false

@@ -82,6 +82,9 @@ func TestDeskSubscribe(t *testing.T) {
 	if ready["type"] != "ready" || ready["port"] != float64(4321) || ready["codec"] != "hevc" {
 		t.Fatalf("ready %v", ready)
 	}
+	if ready["password"] != true {
+		t.Fatalf("ready without password capability: %v", ready)
+	}
 	req := <-reqs
 	nonce, _ := base64.StdEncoding.DecodeString(ready["nonceB64"].(string))
 	if string(nonce) != string(req.Nonce) || len(nonce) != 16 {

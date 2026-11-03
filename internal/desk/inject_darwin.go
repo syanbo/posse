@@ -5,10 +5,13 @@ package desk
 import (
 	"fmt"
 	"math"
+	"os"
 	"runtime"
 	"sync"
 	"time"
 	"unicode/utf16"
+
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -300,7 +303,94 @@ func (in *injector) one(ev Event, now time.Time) {
 		default:
 			in.typeChord(ev.Text, ev.Mods)
 		}
+	case EventPassword:
+		ls := macLockScreen{in: in}
+		if ls.locked() && now.Sub(in.woke) > lockWakeIdle {
+			in.wake()
+			time.Sleep(300 * time.Millisecond)
+		}
+		typePassword(ls, ev.Text, in.logf)
 	}
+}
+
+// macLockScreen 把密码只投给锁屏界面（loginwindow 进程）。
+type macLockScreen struct{ in *injector }
+
+func (s macLockScreen) locked() bool { return s.in.mac.screenLocked() }
+
+// target 是这个用户的 loginwindow：锁屏界面由它画、密码框在它的窗口里（LoginUIKit 在 loginwindow.app 里）。
+// 快速切换用户时每个会话一个 loginwindow，按 uid 挑自己的。
+func (s macLockScreen) target() (int32, bool) {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.uid", os.Getuid())
+	if err != nil {
+		s.in.logf("list processes: %v", err)
+		return 0, false
+	}
+	for _, p := range procs {
+		if unix.ByteSliceToString(p.Proc.P_comm[:]) == "loginwindow" {
+			return p.Proc.P_pid, true
+		}
+	}
+	return 0, false
+}
+
+// press 按当前键盘布局按一个键，要 Shift 的字带着 Shift；布局里没有的字按 Unicode。
+// 不带手机上锁住的修饰键：密码框只要字。
+func (s macLockScreen) press(pid int32, r rune) bool {
+	in := s.in
+	if st, ok := in.layout[r]; ok && in.haveLayout {
+		shift, _ := HIDToVirtualKey(0xE1)
+		var flags uint64
+		if st.shift {
+			flags = modifierFlags(ModLShift)
+			if !in.postKeyTo(pid, shift, true, flags) {
+				return false
+			}
+		}
+		ok := in.postKeyTo(pid, st.code, true, flags) && in.postKeyTo(pid, st.code, false, flags)
+		if st.shift {
+			ok = in.postKeyTo(pid, shift, false, 0) && ok
+		}
+		return ok
+	}
+	if in.mac.cgKey == nil || in.mac.cgUnicode == nil || in.mac.cgPostPid == nil {
+		return false
+	}
+	chars := utf16.Encode([]rune{r})
+	for _, down := range []bool{true, false} {
+		ev := in.mac.cgKey(in.source, 0, down)
+		if ev == 0 {
+			return false
+		}
+		in.mac.cgUnicode(ev, uintptr(len(chars)), &chars[0])
+		in.mac.cgPostPid(pid, ev)
+		in.mac.cfRelease(ev)
+	}
+	runtime.KeepAlive(chars)
+	return true
+}
+
+func (s macLockScreen) enter(pid int32) {
+	code, _ := HIDToVirtualKey(0x28)
+	s.in.postKeyTo(pid, code, true, 0)
+	s.in.postKeyTo(pid, code, false, 0)
+}
+
+// postKeyTo 和 postKey 一样，但只投给进程 pid。
+func (in *injector) postKeyTo(pid int32, code uint16, down bool, flags uint64) bool {
+	if in.mac.cgKey == nil || in.mac.cgPostPid == nil {
+		return false
+	}
+	ev := in.mac.cgKey(in.source, code, down)
+	if ev == 0 {
+		return false
+	}
+	defer in.mac.cfRelease(ev)
+	if in.mac.cgSetFlags != nil {
+		in.mac.cgSetFlags(ev, flags)
+	}
+	in.mac.cgPostPid(pid, ev)
+	return true
 }
 
 func (in *injector) point(x, y uint16) cgPoint {

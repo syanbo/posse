@@ -52,6 +52,98 @@ void main() {
     expect(decodeDeskInput(encodeDeskInput(<DeskWireEvent>[])), isEmpty);
   });
 
+  test('password event bytes match the Mac', () {
+    final raw = encodeDeskInput([DeskWireEvent.password('pw!')..seq = 9]);
+    // 和 internal/desk/password_test.go 的同一组字节
+    expect(_hex(raw), '010108090000000300707721');
+    final back = decodeDeskInput(raw)!;
+    expect(back.single.kind, deskEventPassword);
+    expect(back.single.seq, 9);
+    expect(back.single.text, 'pw!');
+    expect(decodeDeskInput(raw.sublist(0, raw.length - 1)), isNull);
+    expect(decodeDeskInput(Uint8List.fromList([...raw, 0])), isNull);
+    expect(decodeDeskInput(Uint8List.fromList([1, 1, 8, 1, 0, 0])), isNull);
+    expect(
+      decodeDeskInput(Uint8List.fromList([1, 1, 8, 1, 0, 0, 0, 1, 0, 0xff])),
+      isNull,
+    );
+  });
+
+  test('password is resent until acked, then dropped', () {
+    final packets = <Uint8List>[];
+    final link = DeskInputLink(onPacket: packets.add);
+    link.password('secret');
+    link.password('');
+    expect(packets, hasLength(1));
+    link.retransmit();
+    expect(packets, hasLength(2));
+    final again = decodeDeskInput(packets.last)!;
+    expect(again.single.kind, deskEventPassword);
+    expect(again.single.seq, 1);
+    link.noteAck(1);
+    expect(link.needsRetry, isFalse);
+  });
+
+  group('sending the unlock password', () {
+    List<DeskWireEvent> sent(List<Uint8List> packets) => [
+      for (final p in packets) ...decodeDeskInput(p)!,
+    ];
+
+    test(
+      'a Mac that knows password events gets one, no text or return',
+      () async {
+        final packets = <Uint8List>[];
+        final link = DeskInputLink(onPacket: packets.add);
+        var asked = false;
+        await deskSendPassword(
+          link,
+          'pw',
+          passwordEvent: true,
+          stillLocked: () => asked = true,
+          delay: Duration.zero,
+        );
+        final events = sent(packets);
+        expect(events.map((e) => e.kind), [deskEventPassword]);
+        expect(events.single.text, 'pw');
+        expect(asked, isFalse);
+      },
+    );
+
+    test('an older Mac gets text, then return while still locked', () async {
+      final packets = <Uint8List>[];
+      final link = DeskInputLink(onPacket: packets.add);
+      await deskSendPassword(
+        link,
+        'pw',
+        passwordEvent: false,
+        stillLocked: () => true,
+        delay: Duration.zero,
+      );
+      final events = sent(packets);
+      expect(events.first.kind, deskEventText);
+      expect(events.first.text, 'pw');
+      expect(events.map((e) => e.kind).toSet(), {
+        deskEventText,
+        deskEventKeyDown,
+        deskEventKeyUp,
+      });
+      expect(events.last.hid, deskKeyHid['Enter']);
+    });
+
+    test('an older Mac that unlocked meanwhile gets no return', () async {
+      final packets = <Uint8List>[];
+      final link = DeskInputLink(onPacket: packets.add);
+      await deskSendPassword(
+        link,
+        'pw',
+        passwordEvent: false,
+        stillLocked: () => false,
+        delay: Duration.zero,
+      );
+      expect(sent(packets).map((e) => e.kind), [deskEventText]);
+    });
+  });
+
   test('bad input packets are rejected whole', () {
     expect(decodeDeskInput(Uint8List.fromList([2, 0])), isNull);
     expect(decodeDeskInput(Uint8List.fromList([1, 1])), isNull);
