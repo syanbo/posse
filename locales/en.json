@@ -5263,7 +5263,7 @@
   "@relayInviteCreate": {
     "description": "Mobile page, Relay card: button creating an invite code."
   },
-  "relayInviteNamePlaceholder": "Their name, e.g. lvxiaohai",
+  "relayInviteNamePlaceholder": "Their name, e.g. alice",
   "@relayInviteNamePlaceholder": {
     "description": "Mobile page, Relay card: placeholder of the invitee name field."
   },

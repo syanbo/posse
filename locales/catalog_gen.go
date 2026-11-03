@@ -14391,13 +14391,13 @@ func (msgs Messages) RelayInviteCreate() string {
 	return Catalog.Format(msgs.locale, "relayInviteCreate", nil)
 }
 
-// RelayInviteNamePlaceholder says "Their name, e.g. lvxiaohai"
+// RelayInviteNamePlaceholder says "Their name, e.g. alice"
 // in the language the app shows.
 //
 // Mobile page, Relay card: placeholder of the invitee name field.
 func RelayInviteNamePlaceholder() string { return In(i18n.Locale()).RelayInviteNamePlaceholder() }
 
-// RelayInviteNamePlaceholder says "Their name, e.g. lvxiaohai"
+// RelayInviteNamePlaceholder says "Their name, e.g. alice"
 // in the language of msgs.
 //
 // Mobile page, Relay card: placeholder of the invitee name field.

@@ -17,8 +17,8 @@ func TestPreviewRelay(t *testing.T) {
 		relay relayView
 	}{
 		{"none", relayView{loaded: true, st: relayStatus{State: "none"}, err: "不是有效的中转邀请码"}},
-		{"ready", relayView{loaded: true, st: relayStatus{Configured: true, Name: "lvxiaohai", State: "ready"}}},
-		{"unreachable", relayView{loaded: true, st: relayStatus{Configured: true, Name: "lvxiaohai", State: "unreachable"}}},
+		{"ready", relayView{loaded: true, st: relayStatus{Configured: true, Name: "alice", State: "ready"}}},
+		{"unreachable", relayView{loaded: true, st: relayStatus{Configured: true, Name: "alice", State: "unreachable"}}},
 		{"admin", relayView{loaded: true, st: relayStatus{Configured: true, Admin: true, State: "ready"},
 			invite: "posse-relay:AQEPMjAzLjAuMTEzLjEwOjQ0Mwlsdnhpb2hhaQ7Kz3VxN2mWq9TfYhRb0cLpGa1EuJk4sXo"}},
 	}

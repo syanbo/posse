@@ -972,7 +972,7 @@
   "relayDenied": "邀请码无效",
   "relayDeniedNote": "中转不认这个邀请码，向发码的人要一个新的。",
   "relayInviteCreate": "生成邀请码",
-  "relayInviteNamePlaceholder": "对方的名字，如 lvxiaohai",
+  "relayInviteNamePlaceholder": "对方的名字，如 alice",
   "relayInviteNote": "对方在自己电脑的 Posse 手机页贴上邀请码。名字只能用小写字母、数字、点、横线，在服务器上停用某个人时用它。",
   "relayInviteTitle": "邀请别人",
   "relayNote": "手机不在同一个 Wi-Fi 时，经中转连回这台电脑。贴上收到的中转邀请码。",

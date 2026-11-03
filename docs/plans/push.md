@@ -35,7 +35,7 @@ sequenceDiagram
 2. Mac：`posse.push.v1`（`posse.push.register`、`posse.push.presence`）、注册存盘、发送器（物理网卡 socket）、常驻进程的触发和节流；单测。
 3. iOS：entitlements（aps-environment、App Group），通知扩展 target，AppDelegate 注册 token、处理点击，原生通道 `posse/push`。
 4. Flutter：申请权限、注册、前后台上报、点击打开会话、设置页开关和状态、角标；l10n。
-5. 文档 `docs/features/mobile.md`，部署中转，真机 shaoyan 验收。
+5. 文档 `docs/features/mobile.md`，部署中转，真机验收。
 
 ## 需要用户做的
 

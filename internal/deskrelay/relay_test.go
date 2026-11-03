@@ -210,7 +210,7 @@ func TestCodes(t *testing.T) {
 	if c := admin.Credential(); c == nil || c.Name != AdminName {
 		t.Fatalf("admin credential %+v", c)
 	}
-	code, err := admin.Invite("lvxiaohai")
+	code, err := admin.Invite("alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,10 +218,10 @@ func TestCodes(t *testing.T) {
 		t.Fatal("address readable in the code")
 	}
 	user, err := ParseCode(code)
-	if err != nil || user.Admin() || user.Relay != "1.2.3.4:443" || user.Name != "lvxiaohai" {
+	if err != nil || user.Admin() || user.Relay != "1.2.3.4:443" || user.Name != "alice" {
 		t.Fatalf("invite: %+v %v", user, err)
 	}
-	if c := user.Credential(); c == nil || !bytes.Equal(c.Key, UserKey(master, "lvxiaohai")) {
+	if c := user.Credential(); c == nil || !bytes.Equal(c.Key, UserKey(master, "alice")) {
 		t.Fatal("invite key does not match the master")
 	}
 	if _, err := user.Invite("x"); err == nil {

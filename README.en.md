@@ -97,7 +97,9 @@ Also: arbitrarily nested split panes, completion alerts and Dock badges, quick c
 
 **iOS**: not on the App Store yet, so build and install it on your iPhone yourself (Xcode, [fvm](https://fvm.app) and Go; a free Apple ID is enough):
 
-1. Open `mobile/ios/Runner.xcworkspace` in Xcode and change the signing Team and Bundle Identifier to your own.
+1. Open `mobile/ios/Runner.xcworkspace` in Xcode and change the signing Team and Bundle Identifier to your own. Push notifications need a paid developer account:
+   - Paid account: change the notification extension `PushService` to `<your ID>.PushService`, and the App Group of both targets to `group.<your ID>` (the code uses `group.com.neolabsapp.posse.mobile` in `PushPlugin.swift` and `NotificationService.swift`; change those too).
+   - Free Apple ID: push isn’t available. In the `Runner` target’s Signing & Capabilities, remove Push Notifications and App Groups, then delete the `PushService` target from the target list. Everything else works; you just won’t get notifications.
 2. Connect the iPhone to the Mac, turn on Developer Mode, then:
 
    ```sh
@@ -154,7 +156,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # p
 
 Ad-hoc signed builds don’t check for updates, and the official release won’t replace them in Applications. For the phone app, see [`mobile/README.md`](mobile/README.md).
 
-Architecture and development conventions are in [`AGENTS.md`](AGENTS.md), and how each feature behaves is in [`docs/features/`](docs/features) (both in Chinese).
+Architecture and development conventions are in [`AGENTS.md`](AGENTS.md), and how each feature behaves is in [`docs/features/`](docs/features) (both in Chinese). See [`CONTRIBUTING.md`](CONTRIBUTING.md) to contribute and [`SECURITY.md`](SECURITY.md) to report a security issue.
 
 ## Acknowledgments
 

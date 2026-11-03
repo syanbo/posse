@@ -95,9 +95,11 @@ Posse 自己的大部分功能，就是作者在手机上随时随地给 agent �
 
 **安卓**：手机浏览器打开 <https://posse.shaoyan.uk/android/index.html> 下载安装。
 
-**iOS**：还没上架，需要自己编译装到 iPhone（Xcode、[fvm](https://fvm.app)、Go，免费 Apple ID 即可）：
+**iOS**：还没上架，需要自己编译装到 iPhone（Xcode、[fvm](https://fvm.app)、Go，免费 Apple ID 也行）：
 
-1. 用 Xcode 打开 `mobile/ios/Runner.xcworkspace`，把签名的 Team 和 Bundle Identifier 换成你自己的。
+1. 用 Xcode 打开 `mobile/ios/Runner.xcworkspace`，把签名的 Team 和 Bundle Identifier 换成你自己的。推送通知要付费的开发者账号：
+   - 付费账号：通知扩展 `PushService` 的 Bundle Identifier 换成 `<你的 ID>.PushService`，两个 target 的 App Group 换成 `group.<你的 ID>`（代码里的 `group.com.neolabsapp.posse.mobile` 在 `PushPlugin.swift`、`NotificationService.swift`，一起改）。
+   - 免费 Apple ID：开不了推送。在 `Runner` target 的 Signing & Capabilities 里删掉 Push Notifications 和 App Groups，再在 target 列表里删掉 `PushService`。App 照常能用，只是收不到通知。
 2. iPhone 连上 Mac、打开开发者模式，然后：
 
    ```sh
@@ -154,7 +156,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # �
 
 临时签名的包不检查更新，装进「应用程序」也不会被官方版本换掉。手机端的构建见 [`mobile/README.md`](mobile/README.md)。
 
-架构和开发约定见 [`AGENTS.md`](AGENTS.md)，各功能的行为见 [`docs/features/`](docs/features)。
+架构和开发约定见 [`AGENTS.md`](AGENTS.md)，各功能的行为见 [`docs/features/`](docs/features)，参与开发见 [`CONTRIBUTING.md`](CONTRIBUTING.md)，安全问题见 [`SECURITY.md`](SECURITY.md)。
 
 ## 致谢
 

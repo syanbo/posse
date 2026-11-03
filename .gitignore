@@ -2,3 +2,6 @@
 /build/
 /.mygo/
 .wrangler/
+
+# Posse 给人看的笔记和任务报告
+/.posse/
