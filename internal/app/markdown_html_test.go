@@ -37,7 +37,7 @@ func TestMarkdownHTMLHeader(t *testing.T) {
 	if len(badges) != 3 || badges[0].img == nil || badges[0].url != "https://x.dev" || badges[0].img.alt != "stars" || badges[2].img == nil {
 		t.Errorf("徽章 = %+v", badges)
 	}
-	if !bs[3].blank || bs[3].inlines[0].text != "正文" {
+	if bs[3].inlines[0].text != "正文" {
 		t.Errorf("正文 = %+v", bs[3])
 	}
 	// 历史页不解释 HTML，照原文显示
@@ -93,7 +93,7 @@ func TestMarkdownHTMLMisc(t *testing.T) {
 		t.Errorf("pre = %+v", bs[2])
 	}
 	ins := bs[3].inlines
-	want := []mdInline{{text: "行内 "}, {text: "⌘K", style: mdMono}, {text: " 和 上标、"}, {img: &mdImg{src: "a.png", alt: "图", title: "标题"}}}
+	want := []mdInline{{text: "行内 "}, {text: "⌘K", style: mdKbd}, {text: " 和 "}, {text: "上标", style: mdSup}, {text: "、"}, {img: &mdImg{src: "a.png", alt: "图", title: "标题"}}}
 	if !reflect.DeepEqual(ins, want) {
 		t.Errorf("行内 = %+v", ins)
 	}

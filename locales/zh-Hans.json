@@ -842,7 +842,6 @@
   "logTag": "标签 {name}",
   "logTags": "标签",
   "logUncommitted": "没提交",
-  "markdownCode": "代码",
   "markdownCopyCode": "复制代码",
   "markdownDetails": "详细信息",
   "markdownDiagramFailed": "画不出图：{error}",

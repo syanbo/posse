@@ -88,12 +88,19 @@ func TestCodeBlockCopy(t *testing.T) {
 		t.Fatalf("blocks %+v", blocks)
 	}
 	tt := newTester(func(c *ui.Context) {
-		ui.Column(c).Children(func() { mdView{}.blocks(c, blocks) })
+		ui.Column(c).Children(func() { mdView{}.page(c, blocks) })
 	}, 600, 300)
 	tt.Frame()
-	if !tt.HasText("go") {
-		t.Fatal("language bar missing")
+	// 复制按钮照 GitHub 悬停在代码块上才出来
+	if tt.HasText("复制代码") {
+		t.Fatal("copy button shown without hover")
 	}
+	r, ok := tt.Find("func main() {}")
+	if !ok {
+		t.Fatal("code missing")
+	}
+	tt.Move(r.X+4, r.Y+4)
+	tt.Frame()
 	if err := tt.Click("复制代码"); err != nil {
 		t.Fatal(err)
 	}

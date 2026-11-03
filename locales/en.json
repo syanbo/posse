@@ -4653,10 +4653,6 @@
   "@logUncommitted": {
     "description": "Label in the Annotate view for lines that are not committed yet."
   },
-  "markdownCode": "Code",
-  "@markdownCode": {
-    "description": "Markdown preview: label of a code block without a language."
-  },
   "markdownCopyCode": "Copy Code",
   "@markdownCopyCode": {
     "description": "Markdown preview: tooltip of the copy button on a code block."

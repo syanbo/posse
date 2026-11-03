@@ -12699,20 +12699,6 @@ func (msgs Messages) LogUncommitted() string {
 	return Catalog.Format(msgs.locale, "logUncommitted", nil)
 }
 
-// MarkdownCode says "Code"
-// in the language the app shows.
-//
-// Markdown preview: label of a code block without a language.
-func MarkdownCode() string { return In(i18n.Locale()).MarkdownCode() }
-
-// MarkdownCode says "Code"
-// in the language of msgs.
-//
-// Markdown preview: label of a code block without a language.
-func (msgs Messages) MarkdownCode() string {
-	return Catalog.Format(msgs.locale, "markdownCode", nil)
-}
-
 // MarkdownCopyCode says "Copy Code"
 // in the language the app shows.
 //

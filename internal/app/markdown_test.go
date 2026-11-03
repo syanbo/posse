@@ -31,15 +31,6 @@ func TestFrontMatter(t *testing.T) {
 	if !reflect.DeepEqual(bs[0].meta, want) {
 		t.Errorf("meta = %+v", bs[0].meta)
 	}
-	// 记下源文件里块前面有没有空行：文件预览只在空了行的地方空开
-	bs = parseMarkdown("测试约束：\n- 一\n- 二\n\n下一段\n")
-	if len(bs) != 3 || bs[1].kind != mdList || bs[1].blank || !bs[2].blank {
-		t.Errorf("blank = %+v", bs)
-	}
-	bs = parseMarkdown("1. 一\n   - 二\n\n| 项目 | 数据 |\n|---|---|\n| 内存 | 21 MB |\n```sh\nls\n```\n")
-	if len(bs) != 3 || bs[1].kind != mdTable || !bs[1].blank || bs[2].blank {
-		t.Errorf("表格前的空行 = %+v", bs)
-	}
 	// 没有收尾的 ---、或者中间不是键值的，照原文交给 goldmark
 	for _, src := range []string{"---\nname: x\n\n正文", "---\n\n就是一条分割线\n---\n"} {
 		if bs := parseMarkdown(src); len(bs) > 0 && bs[0].kind == mdMeta {
@@ -98,7 +89,7 @@ func TestMarkdownTableWidth(t *testing.T) {
 	wide := parseMarkdown("| 入口 | 写法 |\n|---|---|\n| 私聊 拍照 | `openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)` |\n")
 	show := func(bs []mdBlock) *ui.Tester {
 		tt := newTester(func(c *ui.Context) {
-			ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+			ui.Column(c).Fill().Children(func() { mdView{}.page(c, bs) })
 		}, 400, 400)
 		tt.Frame()
 		tt.Frame()
@@ -116,7 +107,7 @@ func TestMarkdownTableWidth(t *testing.T) {
 	}
 	code := "openAlbum(this, multiple(9).compress(true).allowGif(true).cameraInAlbum(false), CHOOSE_REQUEST)"
 	before, _ := tt.Find(code)
-	if before.H > 3*fsBody*1.45+1 { // 两个空格，最多三行
+	if before.H > 3*fsBody*1.5+1 { // 两个空格，最多三行
 		t.Fatalf("code cell %+v should wrap only at spaces", before)
 	}
 	// 整张表比窗口宽，能往左滚
@@ -133,7 +124,7 @@ func TestMermaidBlock(t *testing.T) {
 	bs := parseMarkdown("```mermaid\n" + good + "\n```\n\n```mermaid\nsequenceDiagram\n  A->>B hi\n```\n")
 	defer delete(mermaidSource, good)
 	tt := newTester(func(c *ui.Context) {
-		ui.Column(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+		ui.Column(c).Fill().Children(func() { mdView{}.page(c, bs) })
 	}, 800, 900)
 	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
 	tt.Frame()
@@ -143,12 +134,16 @@ func TestMermaidBlock(t *testing.T) {
 	if shows(good) {
 		t.Error("画好的图还显示着源码")
 	}
-	if _, ok := tt.Find("Mermaid 图"); !ok {
+	pic, ok := tt.Find("Mermaid 图")
+	if !ok {
 		t.Error("没有图")
 	}
 	if !shows("画不出图：") {
 		t.Error("写错的图没有报错")
 	}
+	// 切换按钮悬停在图上才出来
+	tt.Move(pic.X+4, pic.Y+4)
+	tt.Frame()
 	if err := tt.Click("查看源码"); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +161,7 @@ func TestMermaidManyBlocks(t *testing.T) {
 	}
 	bs := parseMarkdown(src.String())
 	tt := newTester(func(c *ui.Context) {
-		ui.Scroll(c).Fill().Children(func() { mdView{}.blocks(c, bs) })
+		ui.Scroll(c).Fill().Children(func() { mdView{}.page(c, bs) })
 	}, 800, 900)
 	until(t, tt, "mermaid", func() bool { return !diagramsPending() })
 	tt.Frame()

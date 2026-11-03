@@ -1048,8 +1048,8 @@ func (a *app) messageView(c *ui.Context, s history.Session, m history.Message, n
 			highlighted(c, text, ns).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).MaxLines(8).LineHeight(1.5).Selectable()
 		case "assistant":
 			// agent 的回复按 Markdown 显示；用户自己打的字原样显示
-			ui.Column(c).Gap(8).Selectable().Children(func() {
-				mdView{words: ns, size: a.mdSize()}.blocks(c, a.markdown(m))
+			ui.Column(c).Selectable().Children(func() {
+				mdView{words: ns, size: a.mdSize()}.page(c, a.markdown(m))
 			})
 		default:
 			highlighted(c, text, ns).FontSize(a.mdSize()).LineHeight(1.55).Selectable()

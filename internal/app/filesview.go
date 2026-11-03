@@ -738,7 +738,7 @@ func (a *app) markdownPreview(c *ui.Context, w *workspace, d *fileDoc) {
 			ui.Row(c).Padding(20, 24, 32, 24).Justify(ui.Center).Children(func() {
 				size := a.mdSize()
 				ui.Column(c).Grow(1).Shrink(1).MaxWidth(820 * size / defaultUIFontSize).Selectable().Children(func() {
-					mdView{find: f, size: size, doc: true, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(L(c), w, d.path, target) }}.page(c, d.md)
+					mdView{find: f, size: size, imgs: d.mdImgs, wiki: func(target string) { a.openWiki(L(c), w, d.path, target) }}.page(c, d.md)
 				})
 			})
 		})

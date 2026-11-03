@@ -651,8 +651,8 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 		if task.Spec != "" {
 			a.block(c, m.TasksSpec(), func() {
 				// 派发方写的说明多是 Markdown（标题、列表、代码），和历史页 agent 的回复一样渲染
-				ui.Column(c).Gap(8).Selectable().Children(func() {
-					mdView{size: a.mdSize()}.blocks(c, a.specMarkdown(task.Spec))
+				ui.Column(c).Selectable().Children(func() {
+					mdView{size: a.mdSize()}.page(c, a.specMarkdown(task.Spec))
 				})
 			})
 		}

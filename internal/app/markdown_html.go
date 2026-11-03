@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -77,8 +78,14 @@ func inlineStyle(tag string) (mdStyle, bool) {
 		return mdItalic, true
 	case "s", "del", "strike":
 		return mdStrike, true
-	case "code", "kbd", "samp", "tt":
+	case "code", "samp", "tt":
 		return mdMono, true
+	case "kbd":
+		return mdKbd, true
+	case "small":
+		return mdSmall, true
+	case "sup", "sub":
+		return mdSup, true
 	}
 	return 0, false
 }
@@ -182,28 +189,19 @@ func (m mdConv) htmlBlocks(n ast.Node) []mdBlock {
 	var out []mdBlock
 	root := &hnode{tag: "#root"}
 	var stack []*hnode
-	blank, pending := false, false
 	flush := func() {
 		if len(root.kids) > 0 {
-			bs := hblocks(root.kids, 0)
-			if len(bs) > 0 {
-				bs[0].blank = blank
-			}
-			out = append(out, bs...)
+			out = append(out, hblocks(root.kids, 0)...)
 		}
-		root.kids, pending = nil, false
+		root.kids = nil
 	}
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-		if !pending {
-			blank = blankBefore(c, m.src)
-		}
 		if h, ok := c.(*ast.HTMLBlock); ok {
 			raw := mdLines(h.Lines(), m.src)
 			if h.HasClosure() {
 				raw += "\n" + string(h.ClosureLine.Value(m.src))
 			}
 			stack = feedHTML(root, stack, raw)
-			pending = true
 			if len(stack) == 0 {
 				flush()
 			}
@@ -214,9 +212,6 @@ func (m mdConv) htmlBlocks(n ast.Node) []mdBlock {
 			top := stack[len(stack)-1]
 			top.kids = append(top.kids, &hnode{tag: "#md", blocks: bs})
 			continue
-		}
-		if len(bs) > 0 {
-			bs[0].blank = blankBefore(c, m.src)
 		}
 		out = append(out, bs...)
 	}
@@ -512,7 +507,7 @@ func (h *hconv) node(n *hnode, st mdStyle, url string, pre bool) {
 		b.blocks = hblocks(rest, 0)
 		h.emit(b)
 	default:
-		// 认不出的标签（<span>、<sup>、<font> 等）只留里面的内容
+		// 认不出的标签（<span>、<font> 等）只留里面的内容
 		h.kids(n, st, url, pre)
 	}
 }
@@ -659,7 +654,7 @@ func (r mdView) media(c *ui.Context, b mdBlock) {
 		}
 	}
 	lines = append(lines, line)
-	gap := r.scaled(4)
+	gap := r.gapEm(4)
 	ui.Column(c).Gap(gap).Children(func() {
 		for _, line := range lines {
 			if len(line) == 0 {
@@ -713,7 +708,7 @@ func (r mdView) image(c *ui.Context, im *mdImg, link string, alone bool) {
 		if label == "" {
 			label = L(c).MarkdownImage()
 		}
-		el = ui.Row(c).Padding(r.scaled(2), r.scaled(8)).Radius(rSmall).Background(codeBackground(t)).Shrink(1).Children(func() {
+		el = ui.Row(c).Padding(r.gapEm(2), r.gapEm(8)).Radius(rSmall).Background(codeBackground(t)).Shrink(1).Children(func() {
 			ui.Text(c, label).FontSize(r.small()).TextColor(t.TextMuted)
 		})
 		if e.err != nil {
@@ -804,35 +799,22 @@ func (r mdView) grid(c *ui.Context, g *mdGrid) {
 			tracks[i] = ui.Fr(1)
 		}
 	}
-	ui.Grid(c).ColumnTracks(tracks...).Radius(rRow).BorderWidth(hairline).BorderColor(colors(t).line).Children(func() {
+	head := len(g.rows) > 0 && slices.ContainsFunc(g.rows[0], func(cell mdCell) bool { return cell.header })
+	ui.Grid(c).ColumnTracks(tracks...).BorderWidth(hairline).BorderColor(colors(t).line).Children(func() {
 		for ri, row := range g.rows {
 			for ci := range g.cols {
 				var cell mdCell
 				if ci < len(row) {
 					cell = row[ci]
 				}
-				bottom, right := float32(hairline), float32(hairline)
-				if ri == len(g.rows)-1 {
-					bottom = 0
-				}
-				if ci == g.cols-1 {
-					right = 0
-				}
-				box := ui.Column(c).Padding(8, 12).BorderWidth(0, right, bottom, 0).BorderColor(colors(t).line).
+				box := ui.Column(c).Padding(r.cellPadY(), r.cellPadX()).BorderColor(colors(t).line).
+					BorderWidth(0, cellEdge(ci < g.cols-1), cellEdge(ri < len(g.rows)-1), 0).
 					AlignSelf(ui.Stretch).Justify(cmp.Or(cell.valign, ui.Center))
 				if cell.header {
-					box.Background(t.Surface).FontWeight(fwBold)
+					box.FontWeight(fwBold)
 				}
-				var rad [4]float32
-				first, last := ri == 0, ri == len(g.rows)-1
-				if ci == 0 {
-					rad[0], rad[3] = corner(first), corner(last)
-				}
-				if ci == g.cols-1 {
-					rad[1], rad[2] = corner(first), corner(last)
-				}
-				if rad != [4]float32{} {
-					box.Radius(rad[0], rad[1], rad[2], rad[3])
+				if stripe(ri, head) {
+					box.Background(codeBackground(t))
 				}
 				box.Children(func() { r.page(c, cell.blocks) })
 			}
@@ -840,7 +822,7 @@ func (r mdView) grid(c *ui.Context, g *mdGrid) {
 	})
 }
 
-// details 搭 <details>：<summary> 一行可点，前面的箭头展开时转向下；内容缩进一格。
+// details 搭 <details>：<summary> 一行可点，前面的箭头展开时转向下；内容照 GitHub 不缩进。
 func (r mdView) details(c *ui.Context, b mdBlock) {
 	t := c.Theme()
 	ui.Column(c).Children(func() {
@@ -862,7 +844,7 @@ func (r mdView) details(c *ui.Context, b mdBlock) {
 			*b.open = !*b.open
 		}
 		if *b.open && len(b.blocks) > 0 {
-			ui.Column(c).Padding(r.scaled(6), 0, 0, r.scaled(20)).Children(func() { r.page(c, b.blocks) })
+			ui.Column(c).Children(func() { r.page(c, b.blocks) })
 		}
 	})
 }
