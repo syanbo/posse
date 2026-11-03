@@ -459,6 +459,15 @@ func (c *conn) dispatch(req request) error {
 		return c.reply(req.ID, map[string]any{})
 	case "status.get":
 		return c.reply(req.ID, s.status())
+	case "posse.push.register":
+		return c.registerPush(req.ID, p)
+	case "posse.push.presence":
+		var a struct {
+			Foreground bool `json:"foreground"`
+		}
+		json.Unmarshal(p, &a)
+		c.background.Store(!a.Foreground)
+		return c.reply(req.ID, map[string]any{})
 	case "posse.punch":
 		var a struct {
 			Addr string `json:"addr"`

@@ -1671,6 +1671,37 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsProjectMeta => '项目显示分支和路径';
 
   @override
+  String get settingsPushDenied =>
+      'Posse 的通知没打开。在 iPhone 的「设置 › Posse › 通知」里打开。';
+
+  @override
+  String get settingsPushDone => 'agent 完成时';
+
+  @override
+  String get settingsPushFailed => '没能开启通知，重新连上电脑后会再试。';
+
+  @override
+  String get settingsPushNoRelay => '这台电脑没配外网中转，发不出通知。在电脑 Posse 的手机页「外网中转」里配好。';
+
+  @override
+  String get settingsPushOff => '不推送通知。';
+
+  @override
+  String get settingsPushOldComputer => '这台电脑上的 Posse 太旧，不支持推送，先更新。';
+
+  @override
+  String get settingsPushOn => 'Posse 在后台、Mac 没人用时，电脑会推送到这台手机。';
+
+  @override
+  String get settingsPushTitle => '通知';
+
+  @override
+  String get settingsPushUnknown => '连上电脑后生效。';
+
+  @override
+  String get settingsPushWaiting => 'agent 等你处理时';
+
+  @override
   String get settingsShowReasoning => '显示思考过程';
 
   @override

@@ -49,6 +49,8 @@ type state struct {
 	PublicKey string   `json:"publicKey"`
 	SecretKey string   `json:"secretKey"`
 	Devices   []Device `json:"devices"`
+	// Push 是手机的推送注册（push.go），一台手机一条
+	Push []PushTarget `json:"push,omitempty"`
 }
 
 type pairing struct {
@@ -299,6 +301,7 @@ func (p *pairing) remove(id string) []string {
 		}
 		return false
 	})
+	p.prunePushLocked()
 	p.save()
 	return removed
 }

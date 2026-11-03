@@ -307,6 +307,8 @@ type conn struct {
 
 	nextBlob atomic.Uint32 // 大块字段的编号（bulk.go）
 	lastRead atomic.Int64  // 最近一次收到手机的帧（UnixNano），判断写卡住时连接还活没活着
+	// background 是手机报过 App 切到了后台（posse.push.presence），这时照常推送
+	background atomic.Bool
 }
 
 func (c *conn) setClientCaps(client string, version int, names []string, locale string) {

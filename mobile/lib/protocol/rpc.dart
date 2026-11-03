@@ -21,6 +21,7 @@ const posseCapabilities = [
   'posse.tools.v1',
   'posse.desk.v1',
   'posse.bulk.v1',
+  'posse.push.v1',
 ];
 
 /// 大块数据的二进制帧（电脑的 internal/mobile/bulk.go）：u8 0x62、u8 版本 1、u8 操作、u8 0、

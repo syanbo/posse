@@ -1,0 +1,8 @@
+/* agent 等你处理；%@ 是 agent 名（Claude、Codex……） */
+"waitingTitle" = "%@ 等待你处理";
+/* agent 这一轮做完了，还没看 */
+"doneTitle" = "%@ 已完成";
+"waitingBody" = "点开会话处理。";
+"doneBody" = "点开查看结果。";
+/* 解不开通知内容 */
+"fallbackBody" = "有会话需要你处理。";

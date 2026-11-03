@@ -3020,6 +3020,66 @@ abstract class AppLocalizations {
   /// **'Show Branch and Path for Projects'**
   String get settingsProjectMeta;
 
+  /// Settings › Notifications: note when the system permission is denied.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.'**
+  String get settingsPushDenied;
+
+  /// Settings › Notifications: switch for notifications when an agent finishes a turn the user hasn't seen.
+  ///
+  /// In en, this message translates to:
+  /// **'When an agent finishes'**
+  String get settingsPushDone;
+
+  /// Settings › Notifications: note when registering for push failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t sign up for notifications. Try again after reconnecting.'**
+  String get settingsPushFailed;
+
+  /// Settings › Notifications: note when the connected Mac has no relay.
+  ///
+  /// In en, this message translates to:
+  /// **'This Mac has no relay set up, so it can’t send notifications. Add one under Phone › Relay in Posse on the Mac.'**
+  String get settingsPushNoRelay;
+
+  /// Settings › Notifications: note when both switches are off.
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications.'**
+  String get settingsPushOff;
+
+  /// Settings › Notifications: note when the Mac doesn't support push.
+  ///
+  /// In en, this message translates to:
+  /// **'Posse on this Mac is too old to send notifications. Update it first.'**
+  String get settingsPushOldComputer;
+
+  /// Settings › Notifications: note when push is working.
+  ///
+  /// In en, this message translates to:
+  /// **'The Mac notifies this phone while Posse is in the background and nobody is using the Mac.'**
+  String get settingsPushOn;
+
+  /// Settings: section title for push notifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get settingsPushTitle;
+
+  /// Settings › Notifications: note before the phone has connected to a Mac.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes effect once connected to a Mac.'**
+  String get settingsPushUnknown;
+
+  /// Settings › Notifications: switch for notifications when an agent waits for the user.
+  ///
+  /// In en, this message translates to:
+  /// **'When an agent needs you'**
+  String get settingsPushWaiting;
+
   /// Settings › Chat: switch.
   ///
   /// In en, this message translates to:

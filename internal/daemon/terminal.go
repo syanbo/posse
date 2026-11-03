@@ -719,6 +719,7 @@ func (d *Daemon) setAgent(s *session, st host.AgentState) {
 	prev := s.Agent().Status
 	s.SetAgent(st)
 	s.noteStatus(prev, st.Status)
+	d.schedulePush(s, prev, st.Status)
 	d.refreshAwake()
 	if agent.Parked(s.Agent()) {
 		go d.deliver(s.ID)

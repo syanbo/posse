@@ -2,12 +2,14 @@
 // 协议和行为见 internal/deskrelay。
 //
 //	GOOS=linux GOARCH=amd64 go build -o deskrelay ./tools/deskrelay
-//	deskrelay --listen :443 --secret /etc/deskrelay/secret [--revoked /etc/deskrelay/revoked]
+//	deskrelay --listen :443 --secret /etc/deskrelay/secret [--revoked /etc/deskrelay/revoked] \
+//	          [--apns-key AuthKey_XXXX.p8 --apns-key-id XXXX]
 //	deskrelay admin-code --secret /etc/deskrelay/secret --public 1.2.3.4:443
 //
 // --secret 指向的主密钥文件不存在时自动生成。admin-code 打印管理员码，贴进管理员自己的 Mac
 // （Posse 手机页的「外网中转」），之后在那台 Mac 上给别人生成邀请码。--revoked 是停用的名字，一行一个，
 // 改了 10 秒内生效，这些人开的会话立刻关掉。不给 --secret 时不鉴权，谁都能用。
+// --apns-key 是 Apple 开发者后台生成的 APNs 密钥（.p8），给了才替 Mac 发手机推送。
 package main
 
 import (
@@ -34,6 +36,10 @@ func main() {
 	listen := flag.String("listen", ":443", "UDP address to listen on")
 	secret := flag.String("secret", "", "master key file (created if missing); empty: anyone can use the relay")
 	revoked := flag.String("revoked", "", "file of revoked names, one per line")
+	apnsKey := flag.String("apns-key", "", "APNs auth key (.p8); empty: no phone push")
+	apnsKeyID := flag.String("apns-key-id", "", "key ID of the APNs auth key")
+	apnsTeam := flag.String("apns-team", "QKSM9Z4U85", "Apple developer team ID")
+	apnsTopic := flag.String("apns-topic", "com.neolabsapp.posse.mobile", "bundle ID of the phone app")
 	flag.Parse()
 	addr, err := net.ResolveUDPAddr("udp", *listen)
 	if err != nil {
@@ -56,6 +62,18 @@ func main() {
 	}
 	if *revoked != "" {
 		go watchRevoked(srv, *revoked)
+	}
+	if *apnsKey != "" {
+		p8, err := os.ReadFile(*apnsKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		a, err := deskrelay.NewAPNs(p8, *apnsKeyID, *apnsTeam, *apnsTopic)
+		if err != nil {
+			log.Fatal(err)
+		}
+		srv.SetPusher(a)
+		log.Printf("deskrelay: phone push on for %s", *apnsTopic)
 	}
 	log.Printf("deskrelay: listening on %s", conn.LocalAddr())
 	log.Fatal(srv.Serve())

@@ -12,6 +12,7 @@ import 'protocol/pairing.dart';
 import 'protocol/quic_socket.dart';
 import 'protocol/race.dart';
 import 'protocol/rpc.dart';
+import 'push/push.dart';
 import 'settings/custom_keys.dart';
 import 'settings/phone_model.dart';
 import 'terminal/frames.dart';
@@ -149,6 +150,9 @@ class AppSettings {
     this.homeByStatus = false,
     this.skippedUpdateBuild = 0,
     this.phoneId = '',
+    this.pushWaiting = true,
+    this.pushDone = true,
+    this.pushAsked = false,
     Map<String, int>? deskDisplays,
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys(),
@@ -206,6 +210,13 @@ class AppSettings {
   /// 这台手机的安装 ID，第一次启动时生成。电脑靠它把同一台手机扫过的几个码认成一台。
   String phoneId;
 
+  /// 手机推送：agent 等你处理时通知、完成没看时通知。两项都关就不向电脑注册。
+  bool pushWaiting;
+  bool pushDone;
+
+  /// 已经弹过系统的通知权限框：用户拒绝后不再每次连上都问，设置页引导去系统设置。
+  bool pushAsked;
+
   /// 终端快捷键栏上的键和顺序（键盘开关除外，它固定在最左边），内置的和自己加的混排。
   List<BarKey> barKeys;
 
@@ -232,6 +243,9 @@ class AppSettings {
     'skippedUpdateBuild': skippedUpdateBuild,
     'deskDisplays': deskDisplays,
     'phoneId': phoneId,
+    'pushWaiting': pushWaiting,
+    'pushDone': pushDone,
+    'pushAsked': pushAsked,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
   };
@@ -308,6 +322,11 @@ class AppSettings {
       }
       final phoneId = map['phoneId'];
       if (phoneId is String) out.phoneId = phoneId;
+      if (map['pushWaiting'] is bool) {
+        out.pushWaiting = map['pushWaiting'] as bool;
+      }
+      if (map['pushDone'] is bool) out.pushDone = map['pushDone'] as bool;
+      if (map['pushAsked'] is bool) out.pushAsked = map['pushAsked'] as bool;
       final bar = map['barKeys'];
       final custom = map['customKeys'];
       if (bar is List) {
@@ -516,8 +535,15 @@ class PosseAppModel extends ChangeNotifier {
     SettingsStore? settingsStore,
     SocketConnector? connect,
     QuicPuncher? punch,
+    PushPlatform? push,
     this.networkSignatures,
   }) : store = store ?? PrefsPairingStore(),
+       // 只有 iOS 有推送；换了连接器（测试）时不碰原生通道
+       push =
+           push ??
+           (connect == null && defaultTargetPlatform == TargetPlatform.iOS
+               ? ChannelPush()
+               : null),
        settingsStore = settingsStore ?? PrefsSettingsStore(),
        connect = connect ?? connectAny,
        // 换了连接器（测试）时默认不打洞：打洞要真的 UDP
@@ -529,6 +555,17 @@ class PosseAppModel extends ChangeNotifier {
   final SocketConnector connect;
   final QuicPuncher? punch;
   final Stream<String>? networkSignatures;
+
+  /// 推送的原生一侧，没有推送的平台为空，见 [registerPush]。
+  final PushPlatform? push;
+
+  /// 设置页显示的推送状态。
+  late PushStatus pushStatus = push == null
+      ? PushStatus.unsupported
+      : PushStatus.unknown;
+
+  /// 点了通知、要打开的会话，由首页（main.dart）接走后打开。
+  void Function(SessionTab tab)? onOpenSession;
 
   /// 第一次配对时连不上，每隔 [firstConnectRetry] 重试，App 在前台累计 [firstConnectWindow] 为止，见 [_start]。
   Duration firstConnectWindow = const Duration(seconds: 30);
@@ -646,6 +683,7 @@ class PosseAppModel extends ChangeNotifier {
 
   /// 界面语言变了（设置里换了，或跟随的系统语言变了）：再报一次给连着的电脑，之后的报错和说明按新语言给。
   void localeChanged() {
+    unawaited(push?.setLanguage(posseLocale()).catchError((Object _) {}));
     final o = offer;
     if (o == null) return;
     unawaited(
@@ -668,9 +706,14 @@ class PosseAppModel extends ChangeNotifier {
     saved = SavedComputers.decode(await store.read());
     restored = true;
     notifyListeners();
+    push?.onOpened = () => unawaited(_openFromPush());
     final active = saved.current ?? saved.computers.firstOrNull;
-    if (active == null) return;
-    await connectCode(active.code);
+    // 冷启动是点通知起来的：连上默认那台之后再处理，要的是另一台就切过去；默认那台连不上也照样处理
+    try {
+      if (active != null) await connectCode(active.code);
+    } finally {
+      await _openFromPush();
+    }
   }
 
   /// 连一台电脑：新配对码或已保存的电脑都走这里。连上之后才断开原来那台，连不上时原来的连接不受影响。
@@ -720,6 +763,7 @@ class PosseAppModel extends ChangeNotifier {
           // 不等下一轮轮询。重试失败留下的报错也不再作数，不然首页会先闪一下红色的「连不上电脑」
           error = null;
           unawaited(refreshWorktrees());
+          unawaited(registerPush());
         }
         seen = now;
         notifyListeners();
@@ -752,6 +796,7 @@ class PosseAppModel extends ChangeNotifier {
       // 先离开配对页。工作区列表回来再补，不让扫码结果卡在「正在连接」。
       notifyListeners();
       unawaited(_fetchName(created, computerId(parsed)));
+      unawaited(registerPush());
       await refreshWorktrees();
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -995,12 +1040,147 @@ class PosseAppModel extends ChangeNotifier {
       tabs = {for (var i = 0; i < live.length; i++) live[i].id: lists[i]};
       tabsStale = false;
       error = null;
+      _updateBadge();
     } catch (caught) {
       // 换了连接（升级到 QUIC、重连）后旧连接上的失败不算：新连接马上会再拉一次
       if (!identical(current, rpc)) return;
       error = caught;
     }
     notifyListeners();
+  }
+
+  var _registering = false;
+  var _registerAgain = false;
+
+  /// 向连着的电脑注册推送（每条新连接一次，改了开关再一次）：第一次时弹系统的通知权限框。
+  /// 两项都关、没给权限时也告诉电脑，免得它接着推。
+  Future<void> registerPush() async {
+    final p = push;
+    if (p == null) return;
+    // 正在注册时又要一次（换了连接、改了开关）：这次完了再来一遍
+    if (_registering) {
+      _registerAgain = true;
+      return;
+    }
+    _registering = true;
+    try {
+      do {
+        _registerAgain = false;
+        await _registerOnce(p);
+      } while (_registerAgain);
+    } finally {
+      _registering = false;
+    }
+    notifyListeners();
+  }
+
+  Future<void> _registerOnce(PushPlatform p) async {
+    final current = rpc;
+    if (current == null) return;
+    Future<void> unregister(PushStatus status) async {
+      pushStatus = status;
+      try {
+        await current.call('posse.push.register', {'token': ''});
+      } catch (_) {}
+    }
+
+    if (!settings.pushWaiting && !settings.pushDone) {
+      return unregister(PushStatus.off);
+    }
+    try {
+      var auth = await p.authorization();
+      if (auth == 'notDetermined' && !settings.pushAsked) {
+        updateSettings((s) => s.pushAsked = true);
+        auth = await p.request() ? 'authorized' : 'denied';
+      }
+      if (auth != 'authorized') return await unregister(PushStatus.denied);
+      final res = await current.call('posse.push.register', {
+        'token': await p.token(),
+        'key': await p.key(),
+        'sandbox': await p.sandbox(),
+        'waiting': settings.pushWaiting,
+        'done': settings.pushDone,
+      });
+      pushStatus = res['relay'] == true ? PushStatus.on : PushStatus.noRelay;
+      unawaited(p.setLanguage(posseLocale()).catchError((Object _) {}));
+      _badge = null;
+      _updateBadge();
+    } on RpcException catch (e) {
+      pushStatus = e.code == 'unknown_method' || e.code == 'method_not_found'
+          ? PushStatus.unsupportedComputer
+          : PushStatus.failed;
+    } catch (_) {
+      pushStatus = PushStatus.failed;
+    }
+  }
+
+  /// App 到了前台或后台，告诉电脑：前台时电脑不推（首页自己会显示），后台时照常推。
+  void presence({required bool foreground}) {
+    if (push == null) return;
+    unawaited(
+      rpc
+          ?.call('posse.push.presence', {'foreground': foreground})
+          .catchError((Object _) => <String, Object?>{}),
+    );
+  }
+
+  int? _badge;
+
+  /// App 图标上的角标：等你处理和完成没看的会话数，和电脑推送带的口径一样。
+  void _updateBadge() {
+    final p = push;
+    if (p == null ||
+        (pushStatus != PushStatus.on && pushStatus != PushStatus.noRelay)) {
+      return;
+    }
+    var n = 0;
+    for (final list in tabs.values) {
+      for (final t in list) {
+        if (t.posse == 'waiting' || t.posse == 'unread') n++;
+      }
+    }
+    if (n == _badge) return;
+    _badge = n;
+    unawaited(p.setBadge(n).catchError((Object _) {}));
+  }
+
+  /// 点了通知：找到发通知的那台电脑（按公钥，当前连着的优先），需要就切过去，等会话列表里有它再打开。
+  Future<void> _openFromPush() async {
+    final p = push;
+    if (p == null || !restored) return;
+    final Map<String, String>? info;
+    try {
+      info = await p.takeOpened();
+    } catch (_) {
+      return;
+    }
+    if (info == null) return;
+    final key = info['c'] ?? '',
+        wt = info['wt'] ?? '',
+        term = info['tab'] ?? '';
+    String keyOf(SavedComputer c) {
+      try {
+        return PairingOffer.parse(c.code).publicKeyB64;
+      } catch (_) {
+        return '';
+      }
+    }
+
+    if (offer?.publicKeyB64 != key) {
+      final target = saved.computers.where((c) => keyOf(c) == key).firstOrNull;
+      if (target == null) return;
+      await connectCode(target.code);
+      if (offer?.publicKeyB64 != key) return;
+    }
+    for (var i = 0; i < 20; i++) {
+      final tab = tabs[wt]?.where((t) => t.terminalId == term).firstOrNull;
+      if (tab != null) {
+        onOpenSession?.call(tab);
+        return;
+      }
+      await refreshWorktrees();
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
   }
 
   @override

@@ -2332,6 +2332,46 @@
   "@settingsProjectMeta": {
     "description": "Settings › Home: switch."
   },
+  "settingsPushDenied": "Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.",
+  "@settingsPushDenied": {
+    "description": "Settings › Notifications: note when the system permission is denied."
+  },
+  "settingsPushDone": "When an agent finishes",
+  "@settingsPushDone": {
+    "description": "Settings › Notifications: switch for notifications when an agent finishes a turn the user hasn't seen."
+  },
+  "settingsPushFailed": "Couldn’t sign up for notifications. Try again after reconnecting.",
+  "@settingsPushFailed": {
+    "description": "Settings › Notifications: note when registering for push failed."
+  },
+  "settingsPushNoRelay": "This Mac has no relay set up, so it can’t send notifications. Add one under Phone › Relay in Posse on the Mac.",
+  "@settingsPushNoRelay": {
+    "description": "Settings › Notifications: note when the connected Mac has no relay."
+  },
+  "settingsPushOff": "No notifications.",
+  "@settingsPushOff": {
+    "description": "Settings › Notifications: note when both switches are off."
+  },
+  "settingsPushOldComputer": "Posse on this Mac is too old to send notifications. Update it first.",
+  "@settingsPushOldComputer": {
+    "description": "Settings › Notifications: note when the Mac doesn't support push."
+  },
+  "settingsPushOn": "The Mac notifies this phone while Posse is in the background and nobody is using the Mac.",
+  "@settingsPushOn": {
+    "description": "Settings › Notifications: note when push is working."
+  },
+  "settingsPushTitle": "Notifications",
+  "@settingsPushTitle": {
+    "description": "Settings: section title for push notifications."
+  },
+  "settingsPushUnknown": "Takes effect once connected to a Mac.",
+  "@settingsPushUnknown": {
+    "description": "Settings › Notifications: note before the phone has connected to a Mac."
+  },
+  "settingsPushWaiting": "When an agent needs you",
+  "@settingsPushWaiting": {
+    "description": "Settings › Notifications: switch for notifications when an agent waits for the user."
+  },
   "settingsShowReasoning": "Show Thinking",
   "@settingsShowReasoning": {
     "description": "Settings › Chat: switch."

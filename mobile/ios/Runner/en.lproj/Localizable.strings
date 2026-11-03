@@ -1,0 +1,3 @@
+/* Push shown when the notification extension did not run */
+"PUSH_FALLBACK_TITLE" = "Posse";
+"PUSH_FALLBACK_BODY" = "A session needs you.";

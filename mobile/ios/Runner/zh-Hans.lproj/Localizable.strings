@@ -1,0 +1,3 @@
+/* 通知扩展没运行时显示的推送 */
+"PUSH_FALLBACK_TITLE" = "Posse";
+"PUSH_FALLBACK_BODY" = "有会话需要你处理。";

@@ -1764,6 +1764,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsProjectMeta => 'Show Branch and Path for Projects';
 
   @override
+  String get settingsPushDenied =>
+      'Notifications are off for Posse. Turn them on in the iPhone’s Settings › Posse › Notifications.';
+
+  @override
+  String get settingsPushDone => 'When an agent finishes';
+
+  @override
+  String get settingsPushFailed =>
+      'Couldn’t sign up for notifications. Try again after reconnecting.';
+
+  @override
+  String get settingsPushNoRelay =>
+      'This Mac has no relay set up, so it can’t send notifications. Add one under Phone › Relay in Posse on the Mac.';
+
+  @override
+  String get settingsPushOff => 'No notifications.';
+
+  @override
+  String get settingsPushOldComputer =>
+      'Posse on this Mac is too old to send notifications. Update it first.';
+
+  @override
+  String get settingsPushOn =>
+      'The Mac notifies this phone while Posse is in the background and nobody is using the Mac.';
+
+  @override
+  String get settingsPushTitle => 'Notifications';
+
+  @override
+  String get settingsPushUnknown => 'Takes effect once connected to a Mac.';
+
+  @override
+  String get settingsPushWaiting => 'When an agent needs you';
+
+  @override
   String get settingsShowReasoning => 'Show Thinking';
 
   @override

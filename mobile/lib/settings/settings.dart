@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../desk/plugin.dart';
 import '../desk/unlock.dart';
 import '../l10n/l10n.dart';
+import '../push/push.dart';
 import '../ui/loading.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -213,6 +216,39 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              if (model.push != null)
+                Section(
+                  title: l.settingsPushTitle,
+                  children: [
+                    _Toggle(
+                      title: l.settingsPushWaiting,
+                      value: s.pushWaiting,
+                      onChanged: (v) {
+                        model.updateSettings((s) => s.pushWaiting = v);
+                        unawaited(model.registerPush());
+                      },
+                    ),
+                    _Toggle(
+                      title: l.settingsPushDone,
+                      value: s.pushDone,
+                      onChanged: (v) {
+                        model.updateSettings((s) => s.pushDone = v);
+                        unawaited(model.registerPush());
+                      },
+                    ),
+                    _Note(switch (model.pushStatus) {
+                      PushStatus.on => l.settingsPushOn,
+                      PushStatus.noRelay => l.settingsPushNoRelay,
+                      PushStatus.denied => l.settingsPushDenied,
+                      PushStatus.off => l.settingsPushOff,
+                      PushStatus.unsupportedComputer =>
+                        l.settingsPushOldComputer,
+                      PushStatus.failed => l.settingsPushFailed,
+                      PushStatus.unknown ||
+                      PushStatus.unsupported => l.settingsPushUnknown,
+                    }),
+                  ],
+                ),
               if (deskSupported)
                 Section(
                   title: l.homeRemoteDesktop,

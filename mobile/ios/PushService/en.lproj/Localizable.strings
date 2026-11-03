@@ -1,0 +1,8 @@
+/* Agent waiting for the user; %@ is the agent (Claude, Codex…) */
+"waitingTitle" = "%@ needs you";
+/* Agent finished a turn the user has not seen */
+"doneTitle" = "%@ finished";
+"waitingBody" = "Tap to open the session.";
+"doneBody" = "Tap to see the result.";
+/* The notification could not be decrypted */
+"fallbackBody" = "A session needs you.";

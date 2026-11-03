@@ -4,7 +4,7 @@
 
 ## 连接与配对
 
-- 兼容 Orca 的手机 App（App Store / GitHub 上的 APK）：posse 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现。不经 Orca 的云端中转（Orca 的 local-only），也不做推送（推送只能经 Orca 的网关）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
+- 兼容 Orca 的手机 App（App Store / GitHub 上的 APK）：posse 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现。不经 Orca 的云端中转（Orca 的 local-only），也不给 Orca App 做推送（它的推送只能经 Orca 的网关；Posse 手机客户端见下面「推送通知」）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
 - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。
 - 分帧在握手时定（hello 的 `framing`，格式见 `internal/mobile/e2ee.go`）：Orca App 用 2，帧是 nonce 加密文、明文前带 42 字节帧头，每帧固定开销 82 字节，JSON 帧再整帧 base64 走文本帧；Posse 手机客户端用 3，都走二进制帧，帧是 1 字节类型加 secretbox 的标签和密文，nonce 两端按计数器各自算、不上线，每帧固定开销 17 字节，JSON 也不再 base64（体积少四分之一，手机上省掉 base64 编解码）。Posse 手机客户端只报 3，要求电脑端同步升级：旧版电脑读完 hello 以 4001 关连接，手机提示在电脑上更新 Posse。手机端的 secretbox 在 `posse_quic` 的 Go 里做（纯 Dart 的 TweetNaCl 慢约 5 倍）。
 - 配对码在侧栏顶上的「手机」磁贴、「新建」菜单（侧栏底栏最左边的 +）的「连接手机…」或 `posse mobile pair`：
@@ -115,6 +115,16 @@
 - 按格式定存到哪：jpg、jpeg、png、gif、webp、heic、mp4、mov、m4v 存进相册的「Posse」相簿（安卓在 `Pictures/Posse`）；其余格式和相册拒收的，安卓存进「下载/Posse」（重名时改成 `x (1).md`），iOS 弹系统分享面板（里面有"存储到文件"）。存的文件用原名（会话里粘贴的图片按文件头补扩展名）。
 - 权限：相簿要相册的读写权限（iOS 选"限制访问"也行；安卓 10 及以下要写存储权限）。
 - 同一个文件同时只有一个在下，边看视频边存不冲突。
+
+## 推送通知
+
+只有 Posse 手机客户端的 iOS 版（方案见 `docs/plans/push.md`）。Orca App 和安卓没有。
+
+- 什么时候推：agent 进入等待你处理，或从工作中停下、记成完成没看（`internal/daemon/push.go`）。等 4 秒还是这个状态、仍没看才推；同一个终端 30 秒内只推一次，通知按终端折叠，后一条换掉前一条。这台手机开着 App 连着电脑（报过在前台、12 秒内收到过它的包）、Mac 60 秒内有键鼠输入（HID 空闲时间）时不推。派了任务在等结果的不推。
+- 注册（`posse.push.v1`）：手机每换上一条新连接调 `posse.push.register`，带 APNs token、推送密钥（App 第一次用时生成 32 字节，存在 App Group `group.com.neolabsapp.posse.mobile`）、是否沙盒、两类开关；两项都关或没给通知权限时 token 为空，电脑删掉注册。注册按手机安装 ID 存在 mobile.json 的 `push`，一台手机一条，这台手机的配对都移除时一起删。App 切到后台、回到前台时调 `posse.push.presence`。
+- 发送：内容（种类、agent、项目、工作区、标签名、消息、电脑公钥、工作区 ID、终端 ID）用推送密钥 AES-256-GCM 加密，经 `desk.json` 的外网中转交给 APNs（中转上配了 `--apns-key`；包格式、去重和限流见 `internal/deskrelay/push.go`），没配中转的电脑推不出去。中转 1.5 秒没回执重发，最多 3 次，最多等 12 秒；APNs 说 token 失效时删掉注册。内容太长时先缩短消息和标签名，不整条丢掉。手机开着 App、Mac 在用、没配中转而没发出去的，不占同一终端 30 秒的间隔。APNs 上的明文只有兜底文字和角标（等待处理加完成没看的会话数）。
+- 手机：通知扩展 `ios/PushService` 解密，按 App 里选的界面语言写标题（「Claude 等待你处理」「Claude 已完成」）、副标题（项目 · 工作区 · 标签名）和正文（agent 的消息），解不开时写「有会话需要你处理」。点通知按电脑公钥找到存着的电脑（连着的优先，不是就切过去），等会话列表里有这个终端就打开它。App 在前台时也显示横幅；角标在首页列表刷新时按同一口径更新。
+- 设置页「通知」：「agent 等你处理时」「agent 完成时」两个开关和一行状态（已开启、电脑没配外网中转、系统里没允许通知、电脑太旧等）。第一次连上电脑时弹系统的通知权限框，只弹一次；拒绝后回到前台会再检查一次权限。
 
 ## 看 Mac 桌面
 

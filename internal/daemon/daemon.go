@@ -66,6 +66,7 @@ type session struct {
 	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
 	hookSeq  uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
 	turnAt   time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
+	pushAt   time.Time // 上次给手机推送这个终端的时间（push.go）
 }
 
 func (s *session) userName() string {
@@ -371,9 +372,10 @@ func Run(ctx context.Context, cfg Config) error {
 	go d.awakeLoop(ctx)
 	d.openUsage()
 	d.openGitTrace(ctx)
+	// 先建好手机服务：两个 loop 里的状态变化会读 d.mobile 发推送
+	d.newMobile()
 	go d.agentLoop(ctx)
 	go d.detectLoop(ctx)
-	d.newMobile()
 	if in == nil {
 		d.startMobile()
 	} else {

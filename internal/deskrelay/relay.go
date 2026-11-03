@@ -10,7 +10,7 @@
 //	      打洞前两端各自用它问出自己在公网上的地址，和会话无关。
 //	打洞：'H' 'R' 'Y' '1'、0x05。两端直接互发、不经服务器，只为在各自的 NAT 上开口子，收到就丢。
 //
-// 服务器配了主密钥时 Mac 的登记要带签名，见 auth.go。
+// 服务器配了主密钥时 Mac 的登记要带签名，见 auth.go；Mac 经中转发手机推送见 push.go。
 //
 // 数据包是看桌面的 desk 包或手机连接的 QUIC 包。desk 包的第一个字节是类型（internal/desk 的 Packet*，都小于 'H'），
 // 撞不上控制包；QUIC 的短包头第一个字节可能是 'H'，但要连着后面的连接 ID 凑出 "RY1" 才会被误认，概率可以忽略。
@@ -110,6 +110,8 @@ type Server struct {
 
 	master  []byte          // 主密钥，空的就是不鉴权
 	revoked map[string]bool // 停用的名字
+
+	push pushState // 推送（push.go）
 }
 
 func NewServer(conn *net.UDPConn) *Server {
@@ -212,6 +214,9 @@ func (s *Server) control(b []byte, from netip.AddrPort) {
 		}
 		reply(kindCheckReply, result)
 		return
+	case b[4] == kindPush:
+		s.handlePush(b, from)
+		return
 	case len(b) < RegisterLen || (b[4] != RoleMac && b[4] != RolePhone):
 		return
 	}
@@ -299,6 +304,7 @@ func (s *Server) ownedLocked(owner string) int {
 }
 
 func (s *Server) sweep(now time.Time) {
+	s.sweepPush(now)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for token, sess := range s.sessions {

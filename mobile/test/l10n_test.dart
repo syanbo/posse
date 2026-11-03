@@ -86,6 +86,7 @@ void main() {
     for (final (dir, ext) in [
       ('android/app/src/main/kotlin', '.kt'),
       ('ios/Runner', '.swift'),
+      ('ios/PushService', '.swift'),
     ]) {
       for (final f in Directory(
         dir,
