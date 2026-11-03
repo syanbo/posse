@@ -28,6 +28,11 @@ type skillRunView struct {
 	gen      int    // 每次开跑加一：等终端建好时认得出是不是这一次
 	err      string // 建终端失败的原因：错误条被对话框挡着，在框里也写一遍
 	exit     *int   // 命令退出码，还在跑时为空
+
+	// posse 是在装 Posse 自带的技能：失败了可以改成直接复制 posseNames（posseClaude 为真时给 Claude 建链接）
+	posse       bool
+	posseNames  []string
+	posseClaude bool
 }
 
 // askSkillCommand 弹框写明命令，确认后在框里的终端跑；start 为真时直接跑（安装对话框里已经确认过命令）。
@@ -86,6 +91,7 @@ func (a *app) skillRunExited(t terminalInfo) {
 	}
 	code := *t.ExitCode
 	r.exit = &code
+	a.readPosseSkills()
 	if code == 0 {
 		if a.skills.visible {
 			a.scanSkills()
@@ -188,9 +194,16 @@ func (a *app) skillRunDialog(c *ui.Context) {
 					if pressable(textButton(c, m.CommonClose())).Clicked() {
 						r.open = false
 					}
+					if r.posse && pressable(textButton(c, m.SkillsRunCopyInstead())).Clicked() {
+						names, claude := r.posseNames, r.posseClaude
+						r.open = false
+						a.copyPosseSkills(names, claude)
+					}
 					if pressable(accentButton(c, m.CommonRetry())).Clicked() {
 						title, about, line, ws := r.title, r.about, r.line, a.workspace(r.ws)
+						posse, names, claude := r.posse, r.posseNames, r.posseClaude
 						a.askSkillCommand(m, title, about, line, ws, true)
+						a.skillRun.posse, a.skillRun.posseNames, a.skillRun.posseClaude = posse, names, claude
 					}
 				}
 			})

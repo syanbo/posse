@@ -72,6 +72,7 @@ type uiState struct {
 	MarkdownFontSize     float32   `json:"markdownFontSize,omitempty"`     // Markdown 预览和历史页对话的正文字号，0 表示跟界面字号
 	UpdateCheckedAt      time.Time `json:"updateCheckedAt,omitzero"`       // 上次成功检查更新的时间，距今满 6 小时才自动再查
 	UpdateDismissed      string    `json:"updateDismissed,omitempty"`      // 在侧栏关掉了这个版本的"已就绪"卡片
+	PosseSkillsPrompted  string    `json:"posseSkillsPrompted,omitempty"`  // 在侧栏关掉了这一版 Posse 技能的安装提示（skills.PosseVersion）
 	// GitConsoleCleared 是旧版在 Git 操作记录里点清空的时间（当时不分项目），更早的记录都不再显示
 	GitConsoleCleared time.Time `json:"gitConsoleCleared,omitzero"`
 	// GitConsoleClearedAt 是各项目在操作记录里点清空的时间，键是项目 ID，更早的不再显示

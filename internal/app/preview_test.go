@@ -738,6 +738,11 @@ func TestPreview(t *testing.T) {
 		a.staleHidden, a.err = true, ""
 		savePNG(t, newPreviewTester(a, dark), "stale-app-hidden-"+suffix+".png")
 
+		// Posse 自带的技能还没装：侧栏底部提示安装
+		a = previewApp(t)
+		a.posseSkills = posseSkillsView{read: true, st: skills.PosseState{Missing: skills.PosseNames()}}
+		savePNG(t, newPreviewTester(a, dark), "posse-skills-"+suffix+".png")
+
 		// 右侧"技能与工具"面板：刚读过一次，预览期间不会再去找会话文件
 		a = previewApp(t)
 		previewUsagePanel(a)

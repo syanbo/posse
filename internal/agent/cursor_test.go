@@ -22,7 +22,7 @@ func TestCursorPlugin(t *testing.T) {
 	}
 	var manifest map[string]string
 	b, _ := os.ReadFile(filepath.Join(dir, ".cursor-plugin", "plugin.json"))
-	if json.Unmarshal(b, &manifest) != nil || manifest["hooks"] != "./hooks/hooks.json" || manifest["skills"] != "./skills/" {
+	if json.Unmarshal(b, &manifest) != nil || manifest["hooks"] != "./hooks/hooks.json" || manifest["skills"] != "" {
 		t.Fatalf("manifest %s", b)
 	}
 	var hooks struct {
@@ -44,8 +44,8 @@ func TestCursorPlugin(t *testing.T) {
 			t.Errorf("subscribed to %s", ev)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dir, "skills", SkillName, "SKILL.md")); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(dir, "skills")); err == nil {
+		t.Fatal("skills still in the cursor plugin")
 	}
 	if !slices.Contains(Known, "cursor") {
 		t.Fatal("cursor not launchable")

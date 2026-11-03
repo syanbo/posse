@@ -5969,6 +5969,26 @@
   "@sidebarUpdatedTitle": {
     "description": "Sidebar notice title: the Posse.app on disk was replaced by a newer version."
   },
+  "sidebarPosseSkillsTitle": "Install Posse Skills",
+  "@sidebarPosseSkillsTitle": {
+    "description": "Sidebar notice title: Posse's built-in skills are not installed yet."
+  },
+  "sidebarPosseSkillsUpdateTitle": "Update Posse Skills",
+  "@sidebarPosseSkillsUpdateTitle": {
+    "description": "Sidebar notice title: the installed Posse skills are older than this version of Posse."
+  },
+  "sidebarPosseSkillsBody": "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; they only take effect inside Posse.",
+  "@sidebarPosseSkillsBody": {
+    "description": "Sidebar notice body explaining what Posse's built-in skills do and where they go."
+  },
+  "sidebarPosseSkillsUpdateBody": "This version of Posse changed its built-in skills.",
+  "@sidebarPosseSkillsUpdateBody": {
+    "description": "Sidebar notice body when the installed Posse skills are outdated."
+  },
+  "sidebarPosseSkillsView": "Details",
+  "@sidebarPosseSkillsView": {
+    "description": "Sidebar notice button: open the Skills page to see Posse's skills."
+  },
   "sidebarWorkspaces": "Workspaces",
   "@sidebarWorkspaces": {
     "description": "Sidebar: accessibility label of the scrolling project and workspace list."
@@ -6636,6 +6656,52 @@
   "skillsScopeUser": "User",
   "@skillsScopeUser": {
     "description": "Skills page: list group header for skills in the user folder."
+  },
+  "skillsScopePosse": "Posse",
+  "@skillsScopePosse": {
+    "description": "Skills page: list group header for the skills that come with Posse."
+  },
+  "skillsPosseMissing": "Posse skills aren’t installed",
+  "@skillsPosseMissing": {
+    "description": "Skills page: status line when Posse's built-in skills are not installed."
+  },
+  "skillsPosseOutdated": "Posse skills have an update",
+  "@skillsPosseOutdated": {
+    "description": "Skills page: status line when the installed Posse skills are older than this Posse."
+  },
+  "skillsPosseInstall": "Install",
+  "@skillsPosseInstall": {
+    "description": "Button that installs Posse's built-in skills."
+  },
+  "skillsPosseTaken": "You already have a skill named {names}, so Posse’s was not installed",
+  "@skillsPosseTaken": {
+    "description": "Skills page: Posse skills skipped because the user has skills with the same names. names is joined with skillsListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsPosseRunTitle": "Install Posse Skills",
+  "@skillsPosseRunTitle": {
+    "description": "Title of the command dialog that installs Posse's built-in skills."
+  },
+  "skillsPosseUpdateRunTitle": "Update Posse Skills",
+  "@skillsPosseUpdateRunTitle": {
+    "description": "Title of the command dialog that updates Posse's built-in skills."
+  },
+  "skillsPosseRunBody": "npx skills installs {names} from Posse into ~/.agents/skills, which Codex, Grok and Cursor read; Claude reads them through links in ~/.claude/skills.",
+  "@skillsPosseRunBody": {
+    "description": "Body of the dialog that installs or updates Posse's skills. names is joined with skillsListSeparator.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "skillsRunCopyInstead": "Copy Without npx",
+  "@skillsRunCopyInstead": {
+    "description": "Button shown when installing Posse's skills with npx failed: put the files in place directly instead."
   },
   "skillsScriptWarning": "Installed skills include their scripts. Check what they run before using them.",
   "@skillsScriptWarning": {

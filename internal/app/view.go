@@ -483,6 +483,7 @@ func (a *app) sidebar(c *ui.Context) {
 	}
 	a.staleBar(c)
 	a.updateBar(c)
+	a.posseSkillsBar(c)
 	a.errorBar(c)
 	a.footer(c)
 }

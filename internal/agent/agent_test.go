@@ -103,8 +103,8 @@ func TestResume(t *testing.T) {
 	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
 	for agent, want := range map[string]string{
-		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --plugin-dir '" + l.Home + "/claude-plugin' --append-system-prompt " + Quote(notesHint) + " --resume 'sid'",
-		"grok":   "cd '/w/it'\\''s' && grok --resume 'sid' --rules " + Quote(guideHint),
+		"claude": "cd '/w/it'\\''s' && claude --settings '" + l.Home + "/claude-hooks.json' --append-system-prompt " + Quote(notesHint) + " --resume 'sid'",
+		"grok":   "cd '/w/it'\\''s' && grok --resume 'sid'",
 		"cursor": "cd '/w/it'\\''s' && cursor-agent --plugin-dir '" + l.Home + "/cursor-plugin' --resume 'sid'",
 	} {
 		r, err := l.Resume(agent, "sid", "/w/it's")

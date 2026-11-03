@@ -16561,6 +16561,80 @@ func (msgs Messages) SidebarUpdatedTitle() string {
 	return Catalog.Format(msgs.locale, "sidebarUpdatedTitle", nil)
 }
 
+// SidebarPosseSkillsTitle says "Install Posse Skills"
+// in the language the app shows.
+//
+// Sidebar notice title: Posse's built-in skills are not installed yet.
+func SidebarPosseSkillsTitle() string { return In(i18n.Locale()).SidebarPosseSkillsTitle() }
+
+// SidebarPosseSkillsTitle says "Install Posse Skills"
+// in the language of msgs.
+//
+// Sidebar notice title: Posse's built-in skills are not installed yet.
+func (msgs Messages) SidebarPosseSkillsTitle() string {
+	return Catalog.Format(msgs.locale, "sidebarPosseSkillsTitle", nil)
+}
+
+// SidebarPosseSkillsUpdateTitle says "Update Posse Skills"
+// in the language the app shows.
+//
+// Sidebar notice title: the installed Posse skills are older than this
+// version of Posse.
+func SidebarPosseSkillsUpdateTitle() string { return In(i18n.Locale()).SidebarPosseSkillsUpdateTitle() }
+
+// SidebarPosseSkillsUpdateTitle says "Update Posse Skills"
+// in the language of msgs.
+//
+// Sidebar notice title: the installed Posse skills are older than this
+// version of Posse.
+func (msgs Messages) SidebarPosseSkillsUpdateTitle() string {
+	return Catalog.Format(msgs.locale, "sidebarPosseSkillsUpdateTitle", nil)
+}
+
+// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; …"
+// in the language the app shows.
+//
+// Sidebar notice body explaining what Posse's built-in skills do and where
+// they go.
+func SidebarPosseSkillsBody() string { return In(i18n.Locale()).SidebarPosseSkillsBody() }
+
+// SidebarPosseSkillsBody says "Lets Claude, Codex, Grok and Cursor hand work to other agents and name sessions. Installed into your skills folders; …"
+// in the language of msgs.
+//
+// Sidebar notice body explaining what Posse's built-in skills do and where
+// they go.
+func (msgs Messages) SidebarPosseSkillsBody() string {
+	return Catalog.Format(msgs.locale, "sidebarPosseSkillsBody", nil)
+}
+
+// SidebarPosseSkillsUpdateBody says "This version of Posse changed its built-in skills."
+// in the language the app shows.
+//
+// Sidebar notice body when the installed Posse skills are outdated.
+func SidebarPosseSkillsUpdateBody() string { return In(i18n.Locale()).SidebarPosseSkillsUpdateBody() }
+
+// SidebarPosseSkillsUpdateBody says "This version of Posse changed its built-in skills."
+// in the language of msgs.
+//
+// Sidebar notice body when the installed Posse skills are outdated.
+func (msgs Messages) SidebarPosseSkillsUpdateBody() string {
+	return Catalog.Format(msgs.locale, "sidebarPosseSkillsUpdateBody", nil)
+}
+
+// SidebarPosseSkillsView says "Details"
+// in the language the app shows.
+//
+// Sidebar notice button: open the Skills page to see Posse's skills.
+func SidebarPosseSkillsView() string { return In(i18n.Locale()).SidebarPosseSkillsView() }
+
+// SidebarPosseSkillsView says "Details"
+// in the language of msgs.
+//
+// Sidebar notice button: open the Skills page to see Posse's skills.
+func (msgs Messages) SidebarPosseSkillsView() string {
+	return Catalog.Format(msgs.locale, "sidebarPosseSkillsView", nil)
+}
+
 // SidebarWorkspaces says "Workspaces"
 // in the language the app shows.
 //
@@ -18253,6 +18327,140 @@ func SkillsScopeUser() string { return In(i18n.Locale()).SkillsScopeUser() }
 // Skills page: list group header for skills in the user folder.
 func (msgs Messages) SkillsScopeUser() string {
 	return Catalog.Format(msgs.locale, "skillsScopeUser", nil)
+}
+
+// SkillsScopePosse says "Posse"
+// in the language the app shows.
+//
+// Skills page: list group header for the skills that come with Posse.
+func SkillsScopePosse() string { return In(i18n.Locale()).SkillsScopePosse() }
+
+// SkillsScopePosse says "Posse"
+// in the language of msgs.
+//
+// Skills page: list group header for the skills that come with Posse.
+func (msgs Messages) SkillsScopePosse() string {
+	return Catalog.Format(msgs.locale, "skillsScopePosse", nil)
+}
+
+// SkillsPosseMissing says "Posse skills aren’t installed"
+// in the language the app shows.
+//
+// Skills page: status line when Posse's built-in skills are not installed.
+func SkillsPosseMissing() string { return In(i18n.Locale()).SkillsPosseMissing() }
+
+// SkillsPosseMissing says "Posse skills aren’t installed"
+// in the language of msgs.
+//
+// Skills page: status line when Posse's built-in skills are not installed.
+func (msgs Messages) SkillsPosseMissing() string {
+	return Catalog.Format(msgs.locale, "skillsPosseMissing", nil)
+}
+
+// SkillsPosseOutdated says "Posse skills have an update"
+// in the language the app shows.
+//
+// Skills page: status line when the installed Posse skills are older than
+// this Posse.
+func SkillsPosseOutdated() string { return In(i18n.Locale()).SkillsPosseOutdated() }
+
+// SkillsPosseOutdated says "Posse skills have an update"
+// in the language of msgs.
+//
+// Skills page: status line when the installed Posse skills are older than
+// this Posse.
+func (msgs Messages) SkillsPosseOutdated() string {
+	return Catalog.Format(msgs.locale, "skillsPosseOutdated", nil)
+}
+
+// SkillsPosseInstall says "Install"
+// in the language the app shows.
+//
+// Button that installs Posse's built-in skills.
+func SkillsPosseInstall() string { return In(i18n.Locale()).SkillsPosseInstall() }
+
+// SkillsPosseInstall says "Install"
+// in the language of msgs.
+//
+// Button that installs Posse's built-in skills.
+func (msgs Messages) SkillsPosseInstall() string {
+	return Catalog.Format(msgs.locale, "skillsPosseInstall", nil)
+}
+
+// SkillsPosseTaken says "You already have a skill named {names}, so Posse’s was not installed"
+// in the language the app shows.
+//
+// Skills page: Posse skills skipped because the user has skills with the
+// same names. names is joined with skillsListSeparator.
+func SkillsPosseTaken(names string) string { return In(i18n.Locale()).SkillsPosseTaken(names) }
+
+// SkillsPosseTaken says "You already have a skill named {names}, so Posse’s was not installed"
+// in the language of msgs.
+//
+// Skills page: Posse skills skipped because the user has skills with the
+// same names. names is joined with skillsListSeparator.
+func (msgs Messages) SkillsPosseTaken(names string) string {
+	return Catalog.Format(msgs.locale, "skillsPosseTaken", map[string]any{"names": names})
+}
+
+// SkillsPosseRunTitle says "Install Posse Skills"
+// in the language the app shows.
+//
+// Title of the command dialog that installs Posse's built-in skills.
+func SkillsPosseRunTitle() string { return In(i18n.Locale()).SkillsPosseRunTitle() }
+
+// SkillsPosseRunTitle says "Install Posse Skills"
+// in the language of msgs.
+//
+// Title of the command dialog that installs Posse's built-in skills.
+func (msgs Messages) SkillsPosseRunTitle() string {
+	return Catalog.Format(msgs.locale, "skillsPosseRunTitle", nil)
+}
+
+// SkillsPosseUpdateRunTitle says "Update Posse Skills"
+// in the language the app shows.
+//
+// Title of the command dialog that updates Posse's built-in skills.
+func SkillsPosseUpdateRunTitle() string { return In(i18n.Locale()).SkillsPosseUpdateRunTitle() }
+
+// SkillsPosseUpdateRunTitle says "Update Posse Skills"
+// in the language of msgs.
+//
+// Title of the command dialog that updates Posse's built-in skills.
+func (msgs Messages) SkillsPosseUpdateRunTitle() string {
+	return Catalog.Format(msgs.locale, "skillsPosseUpdateRunTitle", nil)
+}
+
+// SkillsPosseRunBody says "npx skills installs {names} from Posse into ~/.agents/skills, which Codex, Grok and Cursor read; Claude reads them th…"
+// in the language the app shows.
+//
+// Body of the dialog that installs or updates Posse's skills. names is
+// joined with skillsListSeparator.
+func SkillsPosseRunBody(names string) string { return In(i18n.Locale()).SkillsPosseRunBody(names) }
+
+// SkillsPosseRunBody says "npx skills installs {names} from Posse into ~/.agents/skills, which Codex, Grok and Cursor read; Claude reads them th…"
+// in the language of msgs.
+//
+// Body of the dialog that installs or updates Posse's skills. names is
+// joined with skillsListSeparator.
+func (msgs Messages) SkillsPosseRunBody(names string) string {
+	return Catalog.Format(msgs.locale, "skillsPosseRunBody", map[string]any{"names": names})
+}
+
+// SkillsRunCopyInstead says "Copy Without npx"
+// in the language the app shows.
+//
+// Button shown when installing Posse's skills with npx failed: put the
+// files in place directly instead.
+func SkillsRunCopyInstead() string { return In(i18n.Locale()).SkillsRunCopyInstead() }
+
+// SkillsRunCopyInstead says "Copy Without npx"
+// in the language of msgs.
+//
+// Button shown when installing Posse's skills with npx failed: put the
+// files in place directly instead.
+func (msgs Messages) SkillsRunCopyInstead() string {
+	return Catalog.Format(msgs.locale, "skillsRunCopyInstead", nil)
 }
 
 // SkillsScriptWarning says "Installed skills include their scripts. Check what they run before using them."

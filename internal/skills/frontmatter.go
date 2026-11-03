@@ -13,14 +13,17 @@ type Meta struct {
 	ModelOff bool
 	// UserHidden 是 user-invocable: false：不出现在斜杠命令里，只由模型调用。
 	UserHidden bool
+	// Posse 是 Posse 自带、由 Posse 装的技能（metadata 里有它的标记，见 posse.go）。
+	Posse bool
 }
 
 // parseMeta 读 SKILL.md 的头部。只认顶层的 键: 值，值可以带引号、写成 | 或 > 块，或者接着缩进折行；
 // 嵌套的键和列表跳过。没有头部时返回零值。
 func parseMeta(src string) Meta {
-	rest, ok := strings.CutPrefix(strings.TrimPrefix(src, "\ufeff"), "---\n")
+	src = strings.TrimPrefix(src, "\ufeff")
+	rest, ok := strings.CutPrefix(src, "---\n")
 	if !ok {
-		rest, ok = strings.CutPrefix(strings.TrimPrefix(src, "\ufeff"), "---\r\n")
+		rest, ok = strings.CutPrefix(src, "---\r\n")
 	}
 	if !ok {
 		return Meta{}
@@ -57,6 +60,7 @@ func parseMeta(src string) Meta {
 		Description: fields["description"],
 		ModelOff:    fields["disable-model-invocation"] == "true",
 		UserHidden:  fields["user-invocable"] == "false",
+		Posse:       isPosseFile(src),
 	}
 }
 

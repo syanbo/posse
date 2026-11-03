@@ -296,6 +296,9 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Printf("link %s: %v", PosseLink(cfg.Home), err)
 		hookExe = exe
 	}
+	if err := agent.RemoveOldPlugins(cfg.Home); err != nil {
+		log.Printf("old plugins: %v", err)
+	}
 	d := &Daemon{cfg: cfg, store: st, started: time.Now(), terms: map[string]*session{}, tchanged: make(chan struct{}),
 		launcher: agent.Launcher{Exe: hookExe, Home: cfg.Home}, runtime: spawn.RuntimeDir(exe),
 		awake: newAwake(cfg.Home), userZdotdir: userZdotdir(cfg.Home), host: host.Local{}}

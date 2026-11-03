@@ -120,11 +120,11 @@ func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 	var extra []string
 	switch cmd {
 	case "claude":
-		settings, plugin, err := l.claudeFiles()
+		settings, err := l.claudeSettings()
 		if err != nil {
 			return nil, err
 		}
-		extra = []string{"--settings", settings, "--plugin-dir", plugin}
+		extra = []string{"--settings", settings}
 		// 用户自己给了系统提示时不再追加，免得两个同名参数谁生效说不准
 		if !hasFlag(args, []string{"--append-system-prompt", "--append-system-prompt-file", "--system-prompt", "--system-prompt-file"}) {
 			extra = append(extra, "--append-system-prompt", notesHint)
@@ -141,9 +141,6 @@ func (l Launcher) ManualArgs(cmd string, args []string) ([]string, error) {
 		// 常驻进程从 grok 进程的参数里读出会话 ID（SessionFromArgs），技能与工具面板凭它找会话文件
 		if !hasFlag(args, grokResumeFlags) {
 			extra = []string{"--session-id", newUUID()}
-		}
-		if !hasFlag(args, []string{"--rules"}) {
-			extra = append(extra, "--rules", guideHint)
 		}
 	default:
 		return args, nil

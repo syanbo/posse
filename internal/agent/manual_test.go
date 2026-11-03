@@ -11,7 +11,7 @@ import (
 func TestManualArgs(t *testing.T) {
 	l := Launcher{Exe: "/bin/posse", Home: t.TempDir()}
 	SetPermissionMode(l.Home, PermissionAsk)
-	settings, plugin := filepath.Join(l.Home, "claude-hooks.json"), filepath.Join(l.Home, "claude-plugin")
+	settings := filepath.Join(l.Home, "claude-hooks.json")
 	for _, c := range []struct {
 		cmd    string
 		args   []string
@@ -40,12 +40,12 @@ func TestManualArgs(t *testing.T) {
 		}
 	}
 	got, _ := l.ManualArgs("claude", []string{"-c"})
-	if !slices.Equal(got, []string{"--settings", settings, "--plugin-dir", plugin, "--append-system-prompt", notesHint, "-c"}) {
+	if !slices.Equal(got, []string{"--settings", settings, "--append-system-prompt", notesHint, "-c"}) {
 		t.Errorf("claude -c -> %q", got)
 	}
 	// 用户自己给了系统提示时不追加
 	got, _ = l.ManualArgs("claude", []string{"--append-system-prompt", "mine"})
-	if !slices.Equal(got, []string{"--settings", settings, "--plugin-dir", plugin, "--append-system-prompt", "mine"}) {
+	if !slices.Equal(got, []string{"--settings", settings, "--append-system-prompt", "mine"}) {
 		t.Errorf("claude --append-system-prompt -> %q", got)
 	}
 	if _, err := os.Stat(settings); err != nil {
@@ -53,16 +53,13 @@ func TestManualArgs(t *testing.T) {
 	}
 	// grok 没有 hooks：新会话补 --session-id，好让常驻进程从参数里认出会话；自己指定了会话就不补
 	got, _ = l.ManualArgs("grok", nil)
-	if len(got) != 4 || got[0] != "--session-id" || SessionFromArgs("grok", append([]string{"grok"}, got...)) != got[1] || got[2] != "--rules" {
+	if len(got) != 2 || got[0] != "--session-id" || SessionFromArgs("grok", append([]string{"grok"}, got...)) != got[1] {
 		t.Errorf("grok -> %q", got)
 	}
 	for _, args := range [][]string{{"-r", "a1b2"}, {"--resume"}, {"-c"}, {"--session-id=x"}} {
-		if got, _ := l.ManualArgs("grok", args); slices.Contains(got, "--session-id") && !slices.Contains(args, "--session-id") || got[0] != "--rules" {
+		if got, _ := l.ManualArgs("grok", args); !slices.Equal(got, args) {
 			t.Errorf("grok %q -> %q", args, got)
 		}
-	}
-	if got, _ := l.ManualArgs("grok", []string{"--rules", "mine"}); slices.Contains(got, guideHint) {
-		t.Errorf("grok --rules mine -> %q", got)
 	}
 	for _, args := range [][]string{{"sessions", "list"}, {"-p", "hi"}, {"models"}} {
 		if got, _ := l.ManualArgs("grok", args); !slices.Equal(got, args) {

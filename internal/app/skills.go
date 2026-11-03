@@ -118,6 +118,7 @@ func (a *app) scanSkills() {
 			}
 			s.cat, s.loaded, s.loading, s.at = cat, true, false, time.Now()
 		})
+		a.update(a.readPosseSkills)
 	}()
 	if !s.statsLoading {
 		s.statsLoading = true
@@ -196,11 +197,23 @@ func skillAgentLabels(m locales.Messages) []string {
 	return []string{m.CommonAll(), "Claude", "Codex", "Grok", "Cursor"}
 }
 
+// scopePosse 是列表里 Posse 自带技能的一组：它们装在用户目录里，扫描算作用户级，界面上单列出来。
+const scopePosse skills.Scope = "posse"
+
+// listScope 是技能在列表里归哪一组。
+func listScope(sk skills.Skill) skills.Scope {
+	if sk.Meta.Posse && sk.Scope == skills.ScopeUser {
+		return scopePosse
+	}
+	return sk.Scope
+}
+
 // scopeLabels 是技能来源的写法和列表里分组的顺序。
 var scopeLabels = []struct {
 	scope skills.Scope
 	label func(locales.Messages) string
 }{
+	{scopePosse, locales.Messages.SkillsScopePosse},
 	{skills.ScopeUser, locales.Messages.SkillsScopeUser},
 	{skills.ScopeSynced, locales.Messages.SkillsScopeSynced},
 	{skills.ScopePlugin, locales.Messages.SkillsScopePlugin},
@@ -249,7 +262,7 @@ func (s *skillsView) shownSkills() []skills.Skill {
 		})
 	}
 	slices.SortStableFunc(out, func(x, y skills.Skill) int {
-		if d := order(x.Scope) - order(y.Scope); d != 0 {
+		if d := order(listScope(x)) - order(listScope(y)); d != 0 {
 			return d
 		}
 		if s.byUse == 1 && s.stats != nil {
@@ -345,11 +358,11 @@ func (a *app) skillsBoard(c *ui.Context) {
 					}
 					var group skills.Scope
 					for _, sk := range list {
-						if sk.Scope != group {
-							group = sk.Scope
+						if listScope(sk) != group {
+							group = listScope(sk)
 							n := 0
 							for _, x := range list {
-								if x.Scope == group {
+								if listScope(x) == group {
 									n++
 								}
 							}
@@ -518,6 +531,7 @@ func (a *app) skillTotals(c *ui.Context) {
 		})
 	})
 	a.skillUpdatesLine(c)
+	a.posseSkillsLine(c)
 	if k := len(s.cat.Issues); k > 0 {
 		row := ui.Row(c.Key("skill-issues")).Margin(0, 8, 4, 8).Padding(8, 12).Gap(8).Radius(rControl).AlignItems(ui.Center).Role(ui.RoleButton).Label(m.SkillsIssuesLabel())
 		selectedBg(c, row, s.sel == skillIssuesKey)
@@ -668,7 +682,7 @@ func (a *app) skillDetail(c *ui.Context, sk skills.Skill) {
 				if sk.Source != "" {
 					source = metaMono(c, nil, sk.Source, m.SkillsSourceTip())
 				}
-				metaRow(c, meta(c, scopeLabel(m, sk.Scope)), source, metaMono(c, iconFolder, shortPath(sk.Dir), sk.Dir))
+				metaRow(c, meta(c, scopeLabel(m, listScope(sk))), source, metaMono(c, iconFolder, shortPath(sk.Dir), sk.Dir))
 			})
 			ui.Row(c).Gap(4).Shrink(0).Children(func() {
 				if pressable(textButton(c, m.SkillsOpenFile())).Clicked() {
@@ -1067,6 +1081,18 @@ func (a *app) skillsWorkspace() *workspace {
 func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global bool) {
 	m := L(c)
 	switch {
+	case listScope(sk) == scopePosse:
+		// npx 不查本地来源的更新：和这一版不同时给显眼的更新，按 Posse 的办法再装一次
+		if global && slices.Contains(a.posseSkills.st.Outdated, sk.Name) && pressable(accentButton(c.Key("skill-update"), m.SkillsUpdate())).Clicked() {
+			a.installPosseSkills(m)
+		}
+		if sk.Source != "" {
+			if pressable(iconButton(c.Key("skill-remove"), iconTrash, m.CommonDelete())).Clicked() {
+				a.askSkillRemove(m, sk, w, global)
+			}
+		} else if pressable(iconButton(c.Key("skill-trash"), iconTrash, m.CommonMoveToTrash())).Clicked() {
+			a.askTrashSkill(m, sk)
+		}
 	case sk.Source != "":
 		// 查到有新版本时换成显眼的按钮
 		var update ui.Element
@@ -1079,17 +1105,22 @@ func (a *app) skillActions(c *ui.Context, sk skills.Skill, w *workspace, global 
 			a.askSkillCommand(m, m.SkillsUpdateConfirm(sk.Name), m.SkillsUpdateBody(sk.Source), skills.ShellLine(skills.UpdateArgs([]string{sk.Name}, global)), w, false)
 		}
 		if pressable(iconButton(c.Key("skill-remove"), iconTrash, m.CommonDelete())).Clicked() {
-			var list []string
-			for _, p := range sk.Paths {
-				list = append(list, shortPath(p))
-			}
-			a.askSkillCommand(m, m.SkillsDeleteConfirm(sk.Name), m.SkillsDeleteBody(strings.Join(list, "\n")), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
+			a.askSkillRemove(m, sk, w, global)
 		}
 	case sk.Scope == skills.ScopeUser || sk.Scope == skills.ScopeProject:
 		if pressable(iconButton(c.Key("skill-trash"), iconTrash, m.CommonMoveToTrash())).Clicked() {
 			a.askTrashSkill(m, sk)
 		}
 	}
+}
+
+// askSkillRemove 确认后用 npx skills 删掉它装的技能，连同各家的链接。
+func (a *app) askSkillRemove(m locales.Messages, sk skills.Skill, w *workspace, global bool) {
+	var list []string
+	for _, p := range sk.Paths {
+		list = append(list, shortPath(p))
+	}
+	a.askSkillCommand(m, m.SkillsDeleteConfirm(sk.Name), m.SkillsDeleteBody(strings.Join(list, "\n")), skills.ShellLine(skills.RemoveArgs(sk.Name, global)), w, false)
 }
 
 // askTrashSkill 确认后把指向技能的链接和技能目录移到废纸篓（先移链接：中途失败也不留下断链）。

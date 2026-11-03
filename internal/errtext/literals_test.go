@@ -18,7 +18,7 @@ var hanAllowed = []struct{ file, sub, why string }{
 	{"internal/errtext/zh.go", "", "中文译文表本身"},
 	{"internal/namer/title.go", "", "会话标题的格式（MMDD｜类型｜摘要、中文类型词）是写进 agent 会话存储的内容，不跟界面语言变"},
 	{"internal/agent/manual.go", "", "生成的 zsh 集成脚本里的注释，给读脚本的人看"},
-	{"internal/agent/skill.go", "", "session-namer 技能的说明，写给 agent，里面是会话标题的格式"},
+	{"internal/skills/posse.go", "name: posse-rename", "posse-rename 技能的说明，写给 agent，里面是会话标题的格式"},
 	{"internal/cli/cli.go", "MMDD｜类型｜摘要", "posse session title 的用法里的标题格式"},
 	{"internal/cli/session.go", "MMDD｜类型｜摘要", "posse session title 的用法里的标题格式"},
 	{"internal/history/history.go", "", "SQL 里的注释"},

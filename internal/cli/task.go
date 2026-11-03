@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"posse/internal/agent"
+	"posse/internal/skills"
 )
 
 //go:embed task_guide.md
@@ -461,7 +461,7 @@ func cmdTaskGuide(e *env, args []string) error {
 		return err
 	}
 	if *skill {
-		fmt.Fprint(e.out, agent.SkillFrontmatter())
+		fmt.Fprint(e.out, skills.TasksFrontmatter())
 	}
 	fmt.Fprint(e.out, taskGuide)
 	return nil

@@ -229,6 +229,7 @@ type app struct {
 	skillRun     skillRunView          // 技能的安装、更新、删除：对话框里嵌终端跑命令
 	hiddenTerms  map[string]bool       // 不进标签栏和侧栏的终端（技能命令的对话框里那个）
 	skillNew     skillNewView          // 新建项目技能的对话框
+	posseSkills  posseSkillsView       // Posse 自带技能装了没有（posseskills.go）
 	images       imagesView            // 右侧图片面板
 	mobile       mobileView            // 侧栏「手机」页：配对码和已配对的手机
 	mem          memView               // 底栏的内存浮窗
@@ -469,6 +470,7 @@ func Run(c *client.Client) error {
 		a.installMenu()
 		a.watchFocus()
 		a.startUpdates()
+		a.win.Update(a.readPosseSkills)
 		mygo.App.OnNotificationClick(func(id string) {
 			// 通知 ID 形如 posse:<工作区>:<终端> 或 posse-task:<任务>
 			parts := strings.Split(id, ":")
