@@ -5447,6 +5447,18 @@
   "@settingsBoldWeight": {
     "description": "Row label and stepper label."
   },
+  "settingsCloseConfirm": "Confirm before closing",
+  "@settingsCloseConfirm": {
+    "description": "Switch in the Closing Terminals card; on means a confirmation dialog appears before closing a running terminal."
+  },
+  "settingsCloseNote": "When on, closing a session or terminal that still has a program running (⌘W, the tab, the sidebar or a context menu, or closing several at once) asks first; when off, it closes right away and ends the program.",
+  "@settingsCloseNote": {
+    "description": "Note of the Closing Terminals card."
+  },
+  "settingsCloseTitle": "Closing Sessions and Terminals",
+  "@settingsCloseTitle": {
+    "description": "Title of the Closing Sessions and Terminals card in General settings."
+  },
   "settingsCopyOnSelect": "Copy on select",
   "@settingsCopyOnSelect": {
     "description": "Switch in the Terminal Selection card."

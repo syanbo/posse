@@ -52,6 +52,7 @@ type uiState struct {
 	LinkSwapSystem       bool      `json:"linkSwapSystem,omitempty"`       // 终端链接直接打开（Posse 里）和交给系统（浏览器、默认程序）的按法互换
 	NotifyOff            bool      `json:"notifyOff,omitempty"`            // 不发 agent 和任务的系统通知
 	BadgeOff             bool      `json:"badgeOff,omitempty"`             // Dock 图标上不显示待处理和未读的数
+	CloseNoConfirm       bool      `json:"closeNoConfirm,omitempty"`       // 关闭还有程序在运行的会话或终端时不再确认
 	EditorWeight         int       `json:"editorWeight,omitempty"`         // 编辑器的字重，0 表示默认（400）
 	EditorBoldWeight     int       `json:"editorBoldWeight,omitempty"`     // 编辑器粗体（Markdown 标题、加粗）的字重，规则同终端
 	EditorLineHeight     float32   `json:"editorLineHeight,omitempty"`     // 编辑器行高，字号的倍数，0 表示 1.5

@@ -14983,6 +14983,50 @@ func (msgs Messages) SettingsBoldWeight() string {
 	return Catalog.Format(msgs.locale, "settingsBoldWeight", nil)
 }
 
+// SettingsCloseConfirm says "Confirm before closing"
+// in the language the app shows.
+//
+// Switch in the Closing Terminals card; on means a confirmation dialog
+// appears before closing a running terminal.
+func SettingsCloseConfirm() string { return In(i18n.Locale()).SettingsCloseConfirm() }
+
+// SettingsCloseConfirm says "Confirm before closing"
+// in the language of msgs.
+//
+// Switch in the Closing Terminals card; on means a confirmation dialog
+// appears before closing a running terminal.
+func (msgs Messages) SettingsCloseConfirm() string {
+	return Catalog.Format(msgs.locale, "settingsCloseConfirm", nil)
+}
+
+// SettingsCloseNote says "When on, closing a session or terminal that still has a program running (⌘W, the tab, the sidebar or a context menu…"
+// in the language the app shows.
+//
+// Note of the Closing Terminals card.
+func SettingsCloseNote() string { return In(i18n.Locale()).SettingsCloseNote() }
+
+// SettingsCloseNote says "When on, closing a session or terminal that still has a program running (⌘W, the tab, the sidebar or a context menu…"
+// in the language of msgs.
+//
+// Note of the Closing Terminals card.
+func (msgs Messages) SettingsCloseNote() string {
+	return Catalog.Format(msgs.locale, "settingsCloseNote", nil)
+}
+
+// SettingsCloseTitle says "Closing Sessions and Terminals"
+// in the language the app shows.
+//
+// Title of the Closing Sessions and Terminals card in General settings.
+func SettingsCloseTitle() string { return In(i18n.Locale()).SettingsCloseTitle() }
+
+// SettingsCloseTitle says "Closing Sessions and Terminals"
+// in the language of msgs.
+//
+// Title of the Closing Sessions and Terminals card in General settings.
+func (msgs Messages) SettingsCloseTitle() string {
+	return Catalog.Format(msgs.locale, "settingsCloseTitle", nil)
+}
+
 // SettingsCopyOnSelect says "Copy on select"
 // in the language the app shows.
 //

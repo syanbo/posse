@@ -1176,7 +1176,7 @@ func (a *app) startTerminal(workspaceID, agent string) {
 }
 
 func (a *app) askClose(m locales.Messages, t terminalInfo) {
-	if !t.Running {
+	if !t.Running || a.state.CloseNoConfirm {
 		go a.closeTerminal(t.ID)
 		return
 	}
@@ -1201,7 +1201,7 @@ func (a *app) askCloseAll(m locales.Messages, terms []terminalInfo) {
 		}
 		a.refresh()
 	}
-	if running == 0 {
+	if running == 0 || a.state.CloseNoConfirm {
 		go closeAll()
 		return
 	}

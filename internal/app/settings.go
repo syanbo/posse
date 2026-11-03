@@ -70,6 +70,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.awakeSettings(c)
 						a.restoreSettings(c)
 						a.selectSettings(c)
+						a.closeSettings(c)
 						a.linkSettings(c)
 						a.notifySettings(c)
 					case "agent":
@@ -176,6 +177,19 @@ func (a *app) selectSettings(c *ui.Context) {
 		settingsRow(c, m.SettingsCopyOnSelect(), func() {
 			if ui.Switch(c.Key("termCopyOnSelect"), &on).Label(m.SettingsCopyOnSelect()).Changed() {
 				a.setCopyOnSelect(on)
+			}
+		})
+	})
+}
+
+func (a *app) closeSettings(c *ui.Context) {
+	m := L(c)
+	settingsCard(c, m.SettingsCloseTitle(), m.SettingsCloseNote(), func() {
+		on := !a.state.CloseNoConfirm
+		settingsRow(c, m.SettingsCloseConfirm(), func() {
+			if ui.Switch(c.Key("closeConfirm"), &on).Label(m.SettingsCloseConfirm()).Changed() {
+				a.state.CloseNoConfirm = !on
+				a.saveState()
 			}
 		})
 	})
