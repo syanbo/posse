@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/plugins/terminal"
 )
 
@@ -30,5 +31,16 @@ func TestWindowColors(t *testing.T) {
 	a.shade.Store(2)
 	if p, _ := a.statusParams().(map[string]any); p["colors"] != windowColors(true) {
 		t.Fatalf("statusParams = %v", p)
+	}
+}
+
+func TestThemeSource(t *testing.T) {
+	for i, want := range []mygo.ThemeSource{mygo.ThemeSystem, mygo.ThemeLight, mygo.ThemeDark} {
+		if got := themeSource(themeSources[i]); got != want {
+			t.Fatalf("themeSource(%q) = %q, want %q", themeSources[i], got, want)
+		}
+	}
+	if themeSource("bogus") != mygo.ThemeSystem {
+		t.Fatal("unknown value should follow the system")
 	}
 }

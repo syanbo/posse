@@ -15881,6 +15881,78 @@ func (msgs Messages) SettingsTabGeneral() string {
 	return Catalog.Format(msgs.locale, "settingsTabGeneral", nil)
 }
 
+// SettingsThemeTitle says "Theme"
+// in the language the app shows.
+//
+// Title of the Theme card (light, dark or following the system), and the
+// label of its segmented control.
+func SettingsThemeTitle() string { return In(i18n.Locale()).SettingsThemeTitle() }
+
+// SettingsThemeTitle says "Theme"
+// in the language of msgs.
+//
+// Title of the Theme card (light, dark or following the system), and the
+// label of its segmented control.
+func (msgs Messages) SettingsThemeTitle() string {
+	return Catalog.Format(msgs.locale, "settingsThemeTitle", nil)
+}
+
+// SettingsThemeNote says "Light or dark for the window and its terminals; following the system switches along with macOS. Phones show a termina…"
+// in the language the app shows.
+//
+// Note of the Theme card.
+func SettingsThemeNote() string { return In(i18n.Locale()).SettingsThemeNote() }
+
+// SettingsThemeNote says "Light or dark for the window and its terminals; following the system switches along with macOS. Phones show a termina…"
+// in the language of msgs.
+//
+// Note of the Theme card.
+func (msgs Messages) SettingsThemeNote() string {
+	return Catalog.Format(msgs.locale, "settingsThemeNote", nil)
+}
+
+// SettingsThemeSystem says "System"
+// in the language the app shows.
+//
+// Segment of the Theme card: follow the system's light or dark appearance.
+func SettingsThemeSystem() string { return In(i18n.Locale()).SettingsThemeSystem() }
+
+// SettingsThemeSystem says "System"
+// in the language of msgs.
+//
+// Segment of the Theme card: follow the system's light or dark appearance.
+func (msgs Messages) SettingsThemeSystem() string {
+	return Catalog.Format(msgs.locale, "settingsThemeSystem", nil)
+}
+
+// SettingsThemeLight says "Light"
+// in the language the app shows.
+//
+// Segment of the Theme card: always light.
+func SettingsThemeLight() string { return In(i18n.Locale()).SettingsThemeLight() }
+
+// SettingsThemeLight says "Light"
+// in the language of msgs.
+//
+// Segment of the Theme card: always light.
+func (msgs Messages) SettingsThemeLight() string {
+	return Catalog.Format(msgs.locale, "settingsThemeLight", nil)
+}
+
+// SettingsThemeDark says "Dark"
+// in the language the app shows.
+//
+// Segment of the Theme card: always dark.
+func SettingsThemeDark() string { return In(i18n.Locale()).SettingsThemeDark() }
+
+// SettingsThemeDark says "Dark"
+// in the language of msgs.
+//
+// Segment of the Theme card: always dark.
+func (msgs Messages) SettingsThemeDark() string {
+	return Catalog.Format(msgs.locale, "settingsThemeDark", nil)
+}
+
 // SettingsTabKeys says "Shortcuts"
 // in the language the app shows.
 //

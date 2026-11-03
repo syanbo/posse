@@ -78,6 +78,7 @@ func (a *app) settingsBoard(c *ui.Context) {
 						a.permissionSettings(c)
 						a.planSettings(c)
 					case "appearance":
+						a.themeSettings(c)
 						a.interfaceSettings(c)
 						a.termFontSettings(c)
 						a.editorFontSettings(c)
@@ -285,6 +286,32 @@ func (a *app) setPermission(mode string) {
 		}
 	}
 	a.permission = mode
+}
+
+// themeSources 是主题卡片的三档，下标即分段的位置；值存进 ui.json 的 theme
+var themeSources = []string{"", "light", "dark"}
+
+func themeSource(s string) mygo.ThemeSource {
+	switch s {
+	case "light":
+		return mygo.ThemeLight
+	case "dark":
+		return mygo.ThemeDark
+	}
+	return mygo.ThemeSystem
+}
+
+// themeSettings 选窗口的深浅。终端的配色跟着窗口，随轮询报给常驻进程，手机照它画（statusParams）。
+func (a *app) themeSettings(c *ui.Context) {
+	m := L(c)
+	sel := max(slices.Index(themeSources, a.state.Theme), 0)
+	settingsCard(c, m.SettingsThemeTitle(), m.SettingsThemeNote(), func() {
+		if segmented(c, &sel, m.SettingsThemeTitle(), m.SettingsThemeSystem(), m.SettingsThemeLight(), m.SettingsThemeDark()) {
+			a.state.Theme = themeSources[sel]
+			a.saveState()
+			mygo.Theme.SetSource(themeSource(a.state.Theme))
+		}
+	})
 }
 
 // interfaceSettings 是界面的字号、字重、字体平滑和图标大小。

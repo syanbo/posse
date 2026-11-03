@@ -65,6 +65,7 @@ type uiState struct {
 	HistoryByFolder      bool      `json:"historyByFolder,omitempty"`      // 历史页的会话按文件夹分组，而不是按时间
 	ChangesByDir         bool      `json:"changesByDir,omitempty"`         // 文件栏改动页的文件按目录排成树，而不是平铺
 	IconSize             float32   `json:"iconSize,omitempty"`             // 图标大小（iconSizes 的一档），0 表示默认
+	Theme                string    `json:"theme,omitempty"`                // 窗口的深浅："light"、"dark"，空是跟随系统
 	UISmooth             bool      `json:"uiSmooth,omitempty"`             // 界面文字用系统的字体平滑（更粗），默认不用
 	UIFontSize           float32   `json:"uiFontSize,omitempty"`           // 界面正文字号，0 表示默认
 	UIWeight             int       `json:"uiWeight,omitempty"`             // 界面正文字重，0 表示默认

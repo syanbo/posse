@@ -5722,6 +5722,26 @@
   "@settingsTabGeneral": {
     "description": "Settings category in the left column."
   },
+  "settingsThemeTitle": "Theme",
+  "@settingsThemeTitle": {
+    "description": "Title of the Theme card (light, dark or following the system), and the label of its segmented control."
+  },
+  "settingsThemeNote": "Light or dark for the window and its terminals; following the system switches along with macOS. Phones show a terminal in its colors too. Programs that read the background only when they start, such as Codex, keep their colors until they are restarted.",
+  "@settingsThemeNote": {
+    "description": "Note of the Theme card."
+  },
+  "settingsThemeSystem": "System",
+  "@settingsThemeSystem": {
+    "description": "Segment of the Theme card: follow the system's light or dark appearance."
+  },
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {
+    "description": "Segment of the Theme card: always light."
+  },
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {
+    "description": "Segment of the Theme card: always dark."
+  },
   "settingsTabKeys": "Shortcuts",
   "@settingsTabKeys": {
     "description": "Settings category in the left column."

@@ -454,6 +454,8 @@ func Run(c *client.Client) error {
 	if a.state.IconSize > 0 {
 		iconSize = a.state.IconSize
 	}
+	// Run 之前设好，窗口一出来就是选定的深浅，不先按系统画一帧
+	mygo.Theme.SetSource(themeSource(a.state.Theme))
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title:         appName(),

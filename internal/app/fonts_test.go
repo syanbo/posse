@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -83,6 +84,10 @@ func TestFontPickerSearchEnter(t *testing.T) {
 	systemFonts.mu.Unlock()
 	a.selected, a.settingsTab = settingsBoardID, "appearance"
 	tt := newPreviewTester(a, false)
+	// 主题和界面两张卡片在上面，字体卡片要往下滚才看得见
+	tt.Scroll(900, 500, 0, 400)
+	pass(tt, 300*time.Millisecond)
+	tt.Frame()
 	if err := tt.Click("终端字体"); err != nil {
 		t.Fatal(err)
 	}

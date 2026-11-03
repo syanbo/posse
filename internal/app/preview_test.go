@@ -1224,6 +1224,10 @@ func TestPreview(t *testing.T) {
 			t.Fatalf("点了左边的外观，分类是 %q", a.settingsTab)
 		}
 		savePNG(t, ft, "settings-appearance-"+suffix+".png")
+		// 主题和界面两张卡片在上面，字体卡片要往下滚才看得见
+		ft.Scroll(900, 500, 0, 400)
+		pass(ft, 300*time.Millisecond)
+		ft.Frame()
 		if err := ft.Click("终端字体"); err != nil {
 			t.Fatal(err)
 		}
