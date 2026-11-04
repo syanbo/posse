@@ -78,12 +78,14 @@ func Discover(ctx context.Context, dir string, multi bool) Discovery {
 		d.topReal = dir
 	}
 	// dir 本身在某个仓库里（是仓库根目录，或子目录工作区）：这个仓库也算，嵌套仓库只在 dir 范围里找
-	if root := enclosingRoot(dir); root != "" {
+	// 按真实路径往上找：工作区是指向某个仓库子目录的软链时，字面路径的上级里没有 .git
+	if root := enclosingRoot(d.topReal); root != "" {
 		if top := TopLevel(ctx, root); top != "" {
 			shown := ShownRoot(dir, top)
+			// pathspec 按真实路径算：shown 可能是 git 给的真实根目录，不在 dir 的字面上级
 			spec := ""
-			if shown != dir {
-				spec, _ = filepath.Rel(shown, dir)
+			if rel, err := filepath.Rel(top, d.topReal); err == nil && rel != "." {
+				spec = rel
 			}
 			if d.add(shown) && multi {
 				d.inside(shown, spec)
@@ -111,6 +113,26 @@ type discoverer struct {
 }
 
 func (d *discoverer) result() Discovery {
+	// 外层仓库经两条软链进来时，只顺着第一条找到了里面的仓库：给它们补上另一条的写法
+	for changed := true; changed; {
+		changed = false
+		for i := range d.repos {
+			outer := d.repos[i]
+			for j := range d.repos {
+				in := &d.repos[j]
+				if i == j || !strings.HasPrefix(in.Root, outer.Root+string(filepath.Separator)) {
+					continue
+				}
+				for _, a := range outer.Aliases {
+					alias := a + in.Root[len(outer.Root):]
+					if alias != in.Root && !slices.Contains(in.Aliases, alias) {
+						in.Aliases = append(in.Aliases, alias)
+						changed = true
+					}
+				}
+			}
+		}
+	}
 	slices.SortFunc(d.repos, func(a, b Repo) int { return strings.Compare(a.Root, b.Root) })
 	return Discovery{Repos: d.repos, Partial: d.partial}
 }
@@ -242,6 +264,40 @@ func (d *discoverer) inside(root, spec string) {
 			}
 		} else if !fi.IsDir() {
 			continue
+		} else if !hasDotGit(p) {
+			// 未跟踪的普通目录：--directory 把它整个报成一行 dir/。不带 --directory 再列一次这个目录：
+			// 照外层的忽略规则逐个列出文件，碰到嵌套仓库停下、报成 dir/x/
+			d.untrackedRepos(root, rel)
+			continue
+		}
+		if hasDotGit(p) && d.add(p) {
+			d.inside(p, "")
+		}
+	}
+}
+
+// untrackedRepos 找仓库 root 里未跟踪的普通目录 rel 下面的嵌套仓库（被外层忽略的不算）。
+func (d *discoverer) untrackedRepos(root, rel string) {
+	out, err := runRaw(d.ctx, root, nil, nil, "ls-files", "--others", "--exclude-standard", "-z", "--", rel+"/")
+	if err != nil {
+		return
+	}
+	for _, f := range splitZ(out) {
+		p := filepath.Join(root, filepath.FromSlash(strings.TrimSuffix(f, "/")))
+		if !strings.HasSuffix(f, "/") {
+			// 软链 git 报成文件：指向目录的照普通目录那样跟过去（和 walk 一样不跟指向工作区自己、上级的）
+			fi, err := os.Lstat(p)
+			if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
+			real, err := filepath.EvalSymlinks(p)
+			if err != nil || d.ancestorOfTop(real) {
+				continue
+			}
+			if st, err := os.Stat(p); err == nil && st.IsDir() {
+				d.walk(p)
+			}
+			continue
 		}
 		if hasDotGit(p) && d.add(p) {
 			d.inside(p, "")
@@ -303,5 +359,12 @@ func ShownRoot(ws, top string) string {
 	if err != nil || (up != "." && up != ".." && !strings.HasPrefix(up, ".."+string(filepath.Separator))) {
 		return top
 	}
-	return filepath.Join(ws, up)
+	shown := filepath.Join(ws, up)
+	// ws 是指向仓库子目录的软链时，字面路径的上级不是仓库根目录：照 git 给的写
+	if up != "." {
+		if r, err := filepath.EvalSymlinks(shown); err != nil || r != top {
+			return top
+		}
+	}
+	return shown
 }

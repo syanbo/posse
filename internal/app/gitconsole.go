@@ -313,7 +313,8 @@ func consoleDay(m locales.Messages, t time.Time) string {
 }
 
 // runWorkspace 是命令所在的工作区：目录在它下面的里面最深的那个（项目目录里可能套着别的项目）；对不上时是 nil。
-// 终端里的命令目录来自 trace2，是解析过符号链接的，所以也和工作区的真实路径比。按目录记下结果，每帧不用重找。
+// 终端里的命令目录来自 trace2，是解析过符号链接的，所以也和工作区的真实路径、工作区里找到的仓库的真实路径
+// （软链过去的仓库在工作区外面）比。按目录记下结果，每帧不用重找；仓库变了清掉重找。
 func (a *app) runWorkspace(dir string) *workspace {
 	if id, ok := a.runWS[dir]; ok {
 		return a.workspace(id)
@@ -328,6 +329,18 @@ func (a *app) runWorkspace(dir string) *workspace {
 		for _, root := range []string{w.Path, a.realPath(w.Path)} {
 			if under(root) && len(root) > depth {
 				best, depth = w, len(root)
+			}
+		}
+	}
+	for i := range a.workspaces {
+		w := &a.workspaces[i]
+		v := a.files[w.ID]
+		if v == nil {
+			continue
+		}
+		for _, g := range v.repos.list {
+			if under(g.real) && len(g.real) > depth {
+				best, depth = w, len(g.real)
 			}
 		}
 	}

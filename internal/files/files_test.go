@@ -274,6 +274,14 @@ func TestListRepos(t *testing.T) {
 	if err != nil || !slices.Equal(l.Files, []string{".gitignore", "main.go"}) {
 		t.Fatalf("single files %q %v", l.Files, err)
 	}
+	// 工作区本身是仓库、里面还嵌着仓库：外层照它的 .gitignore 列，被忽略的不列、照样算忽略
+	l, err = ListRepos(context.Background(), a, []string{a, nested})
+	if want := []string{".gitignore", "main.go", filepath.Join("nested", "n.go")}; err != nil || !slices.Equal(l.Files, want) {
+		t.Fatalf("root repo with nested: %q %v", l.Files, err)
+	}
+	if !l.Ignored(filepath.Join(a, "x.log"), false) || l.Ignored(filepath.Join(a, "nested"), true) {
+		t.Fatal("ignore rules of the root repo lost")
+	}
 }
 
 func TestFuzzyRanking(t *testing.T) {

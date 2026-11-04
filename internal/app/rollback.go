@@ -133,7 +133,12 @@ func (r *rollbackDlg) setPicked(files []int, on bool) {
 	}
 }
 
-func (a *app) openRollback(v *filesView) { a.openRollbackFor(v.git, nil, nil) }
+// openRollback 是改动页顶上的回滚和 ⌥⌘Z：对着当前仓库，它没有改动时对着第一个有改动的仓库。
+func (a *app) openRollback(v *filesView) {
+	if g := v.rollbackRepo(); g != nil {
+		a.openRollbackFor(g, nil, nil)
+	}
+}
 
 // openRollbackFor 打开回滚对话框，pick 非空时只勾这几个文件；勾的有新文件就默认勾上"删除新文件"，
 // 从这个文件发起回滚就是要它回到没有的样子。

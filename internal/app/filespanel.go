@@ -318,7 +318,7 @@ func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Children(func() {
 		// 撑满栏宽：分段平分宽度，带计数的"改动"长一些的才放得下
 		ui.Column(c).Grow(1).Children(func() {
-			badges := []int{0, 0, v.git.changeCount()}
+			badges := []int{0, 0, v.changeCount()}
 			if segmentedBadges(c, &v.side, L(c).FilesPanelTitle(), badges, L(c).FilesPanelFilesTab(), L(c).FilesPanelSearchTab(), L(c).FilesPanelChangesTab()) && v.side == sideSearch {
 				v.search.focus = true
 			}

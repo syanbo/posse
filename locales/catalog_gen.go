@@ -1555,6 +1555,40 @@ func (msgs Messages) BranchMergeInto(branch string, current string) string {
 	return Catalog.Format(msgs.locale, "branchMergeInto", map[string]any{"branch": branch, "current": current})
 }
 
+// BranchMergeReposBody says "Merges with a merge commit into each repository in the project, onto the branch it was on when the workspace was crea…"
+// in the language the app shows.
+//
+// Body of the confirmation before merging a workspace that has worktrees in
+// several repositories.
+func BranchMergeReposBody() string { return In(i18n.Locale()).BranchMergeReposBody() }
+
+// BranchMergeReposBody says "Merges with a merge commit into each repository in the project, onto the branch it was on when the workspace was crea…"
+// in the language of msgs.
+//
+// Body of the confirmation before merging a workspace that has worktrees in
+// several repositories.
+func (msgs Messages) BranchMergeReposBody() string {
+	return Catalog.Format(msgs.locale, "branchMergeReposBody", nil)
+}
+
+// BranchMergeReposConfirm says "Merge {branch} into {count, plural, one {# repository} other {# repositories}}?"
+// in the language the app shows.
+//
+// Title of the confirmation before merging a workspace that has worktrees
+// in several repositories.
+func BranchMergeReposConfirm(branch string, count int) string {
+	return In(i18n.Locale()).BranchMergeReposConfirm(branch, count)
+}
+
+// BranchMergeReposConfirm says "Merge {branch} into {count, plural, one {# repository} other {# repositories}}?"
+// in the language of msgs.
+//
+// Title of the confirmation before merging a workspace that has worktrees
+// in several repositories.
+func (msgs Messages) BranchMergeReposConfirm(branch string, count int) string {
+	return Catalog.Format(msgs.locale, "branchMergeReposConfirm", map[string]any{"branch": branch, "count": count})
+}
+
 // BranchMergeToTip says "Merge into {base}"
 // in the language the app shows.
 //
@@ -1651,6 +1685,22 @@ func BranchMergedBodyUntracked(branch string, files string) string {
 // files is a short file list.
 func (msgs Messages) BranchMergedBodyUntracked(branch string, files string) string {
 	return Catalog.Format(msgs.locale, "branchMergedBodyUntracked", map[string]any{"branch": branch, "files": files})
+}
+
+// BranchMergedRepos says "Merged into {repos}"
+// in the language the app shows.
+//
+// Title after a multi-repository workspace was merged; repos lists the
+// repositories that got the merge.
+func BranchMergedRepos(repos string) string { return In(i18n.Locale()).BranchMergedRepos(repos) }
+
+// BranchMergedRepos says "Merged into {repos}"
+// in the language of msgs.
+//
+// Title after a multi-repository workspace was merged; repos lists the
+// repositories that got the merge.
+func (msgs Messages) BranchMergedRepos(repos string) string {
+	return Catalog.Format(msgs.locale, "branchMergedRepos", map[string]any{"repos": repos})
 }
 
 // BranchMergedTo says "Merged into {base}"
@@ -2067,6 +2117,26 @@ func BranchRenameTitle(branch string) string { return In(i18n.Locale()).BranchRe
 // Title of the rename branch dialog.
 func (msgs Messages) BranchRenameTitle(branch string) string {
 	return Catalog.Format(msgs.locale, "branchRenameTitle", map[string]any{"branch": branch})
+}
+
+// BranchRepoBranch says "{repo} · {branch}"
+// in the language the app shows.
+//
+// Branch button in the tab bar when the workspace has several Git
+// repositories on different branches: the current repository and its
+// branch.
+func BranchRepoBranch(repo string, branch string) string {
+	return In(i18n.Locale()).BranchRepoBranch(repo, branch)
+}
+
+// BranchRepoBranch says "{repo} · {branch}"
+// in the language of msgs.
+//
+// Branch button in the tab bar when the workspace has several Git
+// repositories on different branches: the current repository and its
+// branch.
+func (msgs Messages) BranchRepoBranch(repo string, branch string) string {
+	return Catalog.Format(msgs.locale, "branchRepoBranch", map[string]any{"repo": repo, "branch": branch})
 }
 
 // BranchRestore says "Restore Branch"
@@ -5603,6 +5673,22 @@ func (msgs Messages) GitAmend() string {
 	return Catalog.Format(msgs.locale, "gitAmend", nil)
 }
 
+// GitAmendOneRepo says "Only one repository's last commit can be amended"
+// in the language the app shows.
+//
+// Tooltip of the disabled Amend checkbox, and error, when files of several
+// repositories are selected for commit.
+func GitAmendOneRepo() string { return In(i18n.Locale()).GitAmendOneRepo() }
+
+// GitAmendOneRepo says "Only one repository's last commit can be amended"
+// in the language of msgs.
+//
+// Tooltip of the disabled Amend checkbox, and error, when files of several
+// repositories are selected for commit.
+func (msgs Messages) GitAmendOneRepo() string {
+	return Catalog.Format(msgs.locale, "gitAmendOneRepo", nil)
+}
+
 // GitAutostashConflicts says "Local changes from before the update conflict with the pulled commits ({count, plural, one {# file} other {# files}})…"
 // in the language the app shows.
 //
@@ -5917,6 +6003,40 @@ func (msgs Messages) GitCommitFiles(count int) string {
 	return Catalog.Format(msgs.locale, "gitCommitFiles", map[string]any{"count": count})
 }
 
+// GitCommitFilesInRepos says "Commit {count, plural, one {# File} other {# Files}} in {repos} Repositories"
+// in the language the app shows.
+//
+// Commit button in the Changes view when selected files are in several
+// repositories; each repository gets its own commit. repos is at least 2.
+func GitCommitFilesInRepos(count int, repos int) string {
+	return In(i18n.Locale()).GitCommitFilesInRepos(count, repos)
+}
+
+// GitCommitFilesInRepos says "Commit {count, plural, one {# File} other {# Files}} in {repos} Repositories"
+// in the language of msgs.
+//
+// Commit button in the Changes view when selected files are in several
+// repositories; each repository gets its own commit. repos is at least 2.
+func (msgs Messages) GitCommitFilesInRepos(count int, repos int) string {
+	return Catalog.Format(msgs.locale, "gitCommitFilesInRepos", map[string]any{"count": count, "repos": repos})
+}
+
+// GitCommitInRepo says "Commit in {repo}"
+// in the language the app shows.
+//
+// Name of the commit operation in one repository, shown in the busy line
+// and in errors when committing to several repositories.
+func GitCommitInRepo(repo string) string { return In(i18n.Locale()).GitCommitInRepo(repo) }
+
+// GitCommitInRepo says "Commit in {repo}"
+// in the language of msgs.
+//
+// Name of the commit operation in one repository, shown in the busy line
+// and in errors when committing to several repositories.
+func (msgs Messages) GitCommitInRepo(repo string) string {
+	return Catalog.Format(msgs.locale, "gitCommitInRepo", map[string]any{"repo": repo})
+}
+
 // GitCommitMergeResult says "Commit Merge Result"
 // in the language the app shows.
 //
@@ -6021,6 +6141,24 @@ func GitCommitted(subject string) string { return In(i18n.Locale()).GitCommitted
 // message.
 func (msgs Messages) GitCommitted(subject string) string {
 	return Catalog.Format(msgs.locale, "gitCommitted", map[string]any{"subject": subject})
+}
+
+// GitCommittedRepos says "Committed to {count} repositories: {subject}"
+// in the language the app shows.
+//
+// Notification after committing to several repositories. subject is the
+// first line of the commit message; count is at least 2.
+func GitCommittedRepos(subject string, count int) string {
+	return In(i18n.Locale()).GitCommittedRepos(subject, count)
+}
+
+// GitCommittedRepos says "Committed to {count} repositories: {subject}"
+// in the language of msgs.
+//
+// Notification after committing to several repositories. subject is the
+// first line of the commit message; count is at least 2.
+func (msgs Messages) GitCommittedRepos(subject string, count int) string {
+	return Catalog.Format(msgs.locale, "gitCommittedRepos", map[string]any{"subject": subject, "count": count})
 }
 
 // GitCompareAnyway says "Compare Anyway"
@@ -7291,6 +7429,22 @@ func GitRenamed() string { return In(i18n.Locale()).GitRenamed() }
 // change lists.
 func (msgs Messages) GitRenamed() string {
 	return Catalog.Format(msgs.locale, "gitRenamed", nil)
+}
+
+// GitRepoPickerLabel says "Repository {repo}"
+// in the language the app shows.
+//
+// Accessibility label of the button that switches the current Git
+// repository when the workspace has several.
+func GitRepoPickerLabel(repo string) string { return In(i18n.Locale()).GitRepoPickerLabel(repo) }
+
+// GitRepoPickerLabel says "Repository {repo}"
+// in the language of msgs.
+//
+// Accessibility label of the button that switches the current Git
+// repository when the workspace has several.
+func (msgs Messages) GitRepoPickerLabel(repo string) string {
+	return Catalog.Format(msgs.locale, "gitRepoPickerLabel", map[string]any{"repo": repo})
 }
 
 // GitReposPartial says "The folder is too large to scan fully; some repositories may be missing. Refresh to scan again."
@@ -12563,6 +12717,38 @@ func (msgs Messages) LogRemotesMore(remote string, count int) string {
 	return Catalog.Format(msgs.locale, "logRemotesMore", map[string]any{"remote": remote, "count": count})
 }
 
+// LogRepo says "Repository {name}"
+// in the language the app shows.
+//
+// Accessibility label of a repository in the Repositories group of the Git
+// Log branch list.
+func LogRepo(name string) string { return In(i18n.Locale()).LogRepo(name) }
+
+// LogRepo says "Repository {name}"
+// in the language of msgs.
+//
+// Accessibility label of a repository in the Repositories group of the Git
+// Log branch list.
+func (msgs Messages) LogRepo(name string) string {
+	return Catalog.Format(msgs.locale, "logRepo", map[string]any{"name": name})
+}
+
+// LogRepos says "Repositories"
+// in the language the app shows.
+//
+// Group header in the Git Log branch list listing the workspace's Git
+// repositories; clicking one shows its log.
+func LogRepos() string { return In(i18n.Locale()).LogRepos() }
+
+// LogRepos says "Repositories"
+// in the language of msgs.
+//
+// Group header in the Git Log branch list listing the workspace's Git
+// repositories; clicking one shows its log.
+func (msgs Messages) LogRepos() string {
+	return Catalog.Format(msgs.locale, "logRepos", nil)
+}
+
 // LogReset says "Reset"
 // in the language the app shows.
 //
@@ -14089,6 +14275,22 @@ func (msgs Messages) NewWorkspaceOnly() string {
 	return Catalog.Format(msgs.locale, "newWorkspaceOnly", nil)
 }
 
+// NewWorkspacePickReposHint says "Check repositories to give each a git worktree and a branch of the same name; with none checked, the workspace shares…"
+// in the language the app shows.
+//
+// New Workspace dialog: note for a folder project that contains git
+// repositories, before any is checked.
+func NewWorkspacePickReposHint() string { return In(i18n.Locale()).NewWorkspacePickReposHint() }
+
+// NewWorkspacePickReposHint says "Check repositories to give each a git worktree and a branch of the same name; with none checked, the workspace shares…"
+// in the language of msgs.
+//
+// New Workspace dialog: note for a folder project that contains git
+// repositories, before any is checked.
+func (msgs Messages) NewWorkspacePickReposHint() string {
+	return Catalog.Format(msgs.locale, "newWorkspacePickReposHint", nil)
+}
+
 // NewWorkspacePromptPlaceholder says "Task for the agent (optional)"
 // in the language the app shows.
 //
@@ -14103,6 +14305,22 @@ func NewWorkspacePromptPlaceholder() string { return In(i18n.Locale()).NewWorksp
 // started agent.
 func (msgs Messages) NewWorkspacePromptPlaceholder() string {
 	return Catalog.Format(msgs.locale, "newWorkspacePromptPlaceholder", nil)
+}
+
+// NewWorkspaceReposHint says "Creates a git worktree and a branch of the same name in each of the {count, plural, one {# checked repository} other …"
+// in the language the app shows.
+//
+// New Workspace dialog: note for a folder project when some of its
+// repositories are checked.
+func NewWorkspaceReposHint(count int) string { return In(i18n.Locale()).NewWorkspaceReposHint(count) }
+
+// NewWorkspaceReposHint says "Creates a git worktree and a branch of the same name in each of the {count, plural, one {# checked repository} other …"
+// in the language of msgs.
+//
+// New Workspace dialog: note for a folder project when some of its
+// repositories are checked.
+func (msgs Messages) NewWorkspaceReposHint(count int) string {
+	return Catalog.Format(msgs.locale, "newWorkspaceReposHint", map[string]any{"count": count})
 }
 
 // NewWorkspaceStartWith says "Also Start"
@@ -16505,6 +16723,22 @@ func SidebarMergeInto(branch string) string { return In(i18n.Locale()).SidebarMe
 // branch into its base branch. branch is the base branch.
 func (msgs Messages) SidebarMergeInto(branch string) string {
 	return Catalog.Format(msgs.locale, "sidebarMergeInto", map[string]any{"branch": branch})
+}
+
+// SidebarMergeRepos says "Merge into Each Repository…"
+// in the language the app shows.
+//
+// Sidebar context menu of a worktree workspace that has worktrees in
+// several repositories.
+func SidebarMergeRepos() string { return In(i18n.Locale()).SidebarMergeRepos() }
+
+// SidebarMergeRepos says "Merge into Each Repository…"
+// in the language of msgs.
+//
+// Sidebar context menu of a worktree workspace that has worktrees in
+// several repositories.
+func (msgs Messages) SidebarMergeRepos() string {
+	return Catalog.Format(msgs.locale, "sidebarMergeRepos", nil)
 }
 
 // SidebarMissing says "Folder missing"
@@ -20465,6 +20699,22 @@ func TasksMergeInto(branch string) string { return In(i18n.Locale()).TasksMergeI
 // Task detail button: merges the worker’s branch into its base branch.
 func (msgs Messages) TasksMergeInto(branch string) string {
 	return Catalog.Format(msgs.locale, "tasksMergeInto", map[string]any{"branch": branch})
+}
+
+// TasksMergeRepos says "Merge into Each Repository"
+// in the language the app shows.
+//
+// Task detail button for a worker whose workspace has worktrees in several
+// repositories.
+func TasksMergeRepos() string { return In(i18n.Locale()).TasksMergeRepos() }
+
+// TasksMergeRepos says "Merge into Each Repository"
+// in the language of msgs.
+//
+// Task detail button for a worker whose workspace has worktrees in several
+// repositories.
+func (msgs Messages) TasksMergeRepos() string {
+	return Catalog.Format(msgs.locale, "tasksMergeRepos", nil)
 }
 
 // TasksMessages says "Messages"

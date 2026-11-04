@@ -65,9 +65,25 @@ type terminalInfo struct {
 // navTarget 是侧栏一行选中的东西：工作区，或其中的一个 agent 会话（term 非空）。
 type navTarget struct{ ws, term string }
 
+// wsRepo 是多仓库 worktree 工作区里的一个仓库：在工作区里的相对路径和它的基准分支。
+type wsRepo struct{ Path, Base string }
+
+// repoBases 是各仓库的基准分支，去重后连起来，写在"相对 …"里。
+func repoBases(repos []wsRepo) string {
+	var bases []string
+	for _, r := range repos {
+		if !slices.Contains(bases, r.Base) {
+			bases = append(bases, r.Base)
+		}
+	}
+	return strings.Join(bases, ", ")
+}
+
 type workspace struct {
 	ID, ProjectID, Name, Path, Kind, Branch, BaseRef, Project, Label string
 	Terminals                                                        []terminalInfo
+	// Repos 是多仓库目录上的 worktree 工作区里的各个仓库，这时 BaseRef 为空
+	Repos []wsRepo
 	// Missing 是目录已经不在了（在外面删掉或挪走，又没被 dropGoneWorktrees 自动移除），窗口每秒查一次
 	Missing bool `json:"-"`
 	// Shown 是从别处加进来的 worktree 显示的名字：它当前的分支（目录名常和仓库同名，看不出是哪个）；
@@ -78,6 +94,7 @@ type workspace struct {
 type taskInfo struct {
 	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Status, Summary, Report string
 	Workspace, WorkspaceKind, Branch, BaseRef                                         string
+	Repos                                                                             []wsRepo
 	CreatedAt                                                                         time.Time
 	EndedAt                                                                           *time.Time
 	Terminal                                                                          *terminalInfo
@@ -346,6 +363,9 @@ type app struct {
 	newName    string
 	newAgent   int // newAgentChoices 的序号，0 是不启动 agent
 	newPrompt  string
+	// 多仓库目录的项目上勾的仓库（在项目目录里的相对路径）：勾了就给它们各建 worktree，不勾是同一目录上的工作区
+	newRepos    map[string]bool
+	newReposFor string // newRepos 是哪个项目的，换了项目重来
 
 	confirming   bool
 	confirmTitle string
@@ -581,6 +601,10 @@ func (a *app) refresh() {
 		err = a.c.Call(ctx, "workspace.list", nil, &r.workspaces)
 		// 常驻进程只在建工作区时记分支，main 工作区切分支后就过时了；以 HEAD 为准
 		for i := range r.workspaces {
+			// 多仓库的 worktree 工作区根目录不是仓库，往上找到的是不相干的仓库；分支用记下的那个
+			if len(r.workspaces[i].Repos) > 0 {
+				continue
+			}
 			if b := gitx.Head(r.workspaces[i].Path); b != "" {
 				r.workspaces[i].Branch = b
 			}
@@ -1354,11 +1378,49 @@ func (a *app) addProject(m locales.Messages) {
 func (a *app) openNewWorkspace() {
 	a.creating = true
 	a.newName, a.newPrompt, a.newAgent = "", "", 1
+	a.newRepos, a.newReposFor = map[string]bool{}, ""
 	if w := a.workspace(a.selected); w != nil {
 		a.newProject = w.Project
+		// 默认勾上正在看的仓库
+		if v := a.files[w.ID]; v != nil && v.git.repo != "" {
+			if rel, ok := repoRel(v, v.git); ok {
+				a.newRepos[rel], a.newReposFor = true, w.Project
+			}
+		}
 	} else if len(a.projects) > 0 {
 		a.newProject = a.projects[0].Name
 	}
+}
+
+// projectRepos 是项目目录里找到的仓库（相对项目目录的路径）；项目的文件栏还没找过就先去找，找完下一帧再给。
+func (a *app) projectRepos(name string) []string {
+	for _, w := range a.workspaces {
+		if w.Project != name || w.Kind != "main" {
+			continue
+		}
+		v := a.filesFor(&w)
+		if !v.repos.scanned {
+			a.scanRepos(v)
+			return nil
+		}
+		var out []string
+		for _, g := range v.repos.list {
+			if rel, ok := repoRel(v, g); ok {
+				out = append(out, rel)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// repoRel 是仓库在工作区里的相对路径（斜杠分隔）；工作区所在的上级仓库不算。
+func repoRel(v *filesView, g *gitState) (string, bool) {
+	rel, err := filepath.Rel(v.root, g.repo)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }
 
 func (a *app) createWorkspace(m locales.Messages, params map[string]any) {

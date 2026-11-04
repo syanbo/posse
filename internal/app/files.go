@@ -182,8 +182,11 @@ type searchRow struct {
 
 // filesView 是一个工作区的文件标签。
 type filesView struct {
-	wsID     string
-	root     string
+	wsID string
+	root string
+	// realRoot 是 root 解析过软链的路径。工作区是指向仓库子目录的软链时，仓库根目录只能照 git 给的真实路径写，
+	// 文件路径要在两种写法之间换算（realPath、shownPath）
+	realRoot string
 	tree     *files.Tree
 	treeList ui.ListState
 	// reveal 是"在文件栏中显示"选中的路径：当前文件没换、也没在树上点别的之前，树上选中它而不是当前文件
@@ -210,6 +213,7 @@ type filesView struct {
 	consoleDone bool
 	git         *gitState // 当前仓库，见 repos.go
 	repos       repoSet
+	ch          changesPage
 	def         defSearch // 跳到定义的查找（definition.go）
 	jumps       []jumpLoc // 跳走之前的位置，⌃- 依次回去（definition.go）
 	forward     []jumpLoc // ⌃- 回去之前的位置，⌃⇧- 再往前

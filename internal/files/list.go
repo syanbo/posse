@@ -29,6 +29,8 @@ type List struct {
 	// repos 是工作区里有几个仓库时各仓库相对 Root 的路径（ListRepos）：Git 为真时只有它们里面的才按清单判断忽略，
 	// 仓库外面的普通目录什么都不算忽略。为空时整个 Root 是一个仓库
 	repos []string
+	// inRepo 是工作区本身在某个仓库里（ListRepos）：嵌套仓库外面的文件也按那个仓库的忽略规则算
+	inRepo bool
 }
 
 // ListFiles 列出 root 下的文件：git 仓库里用 git ls-files 列出已跟踪和未忽略的未跟踪文件，
@@ -74,13 +76,11 @@ func ListFiles(ctx context.Context, root string) (*List, error) {
 func ListRepos(ctx context.Context, root string, repos []string) (*List, error) {
 	root = filepath.Clean(root)
 	var rels []string
+	inRepo := false // 工作区本身在某个仓库里（是它的根目录或子目录）：整个工作区按这个仓库的忽略规则列
 	for _, r := range repos {
 		rel, err := filepath.Rel(root, filepath.Clean(r))
 		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			// 工作区本身在这个仓库里
-			if len(repos) == 1 {
-				return ListFiles(ctx, root)
-			}
+			inRepo = true
 			continue
 		}
 		rels = append(rels, rel)
@@ -89,36 +89,25 @@ func ListRepos(ctx context.Context, root string, repos []string) (*List, error) 
 		return ListFiles(ctx, root)
 	}
 	slices.Sort(rels)
-	l := &List{Root: root, Git: true, repos: rels}
+	l := &List{Root: root, Git: true, repos: rels, inRepo: inRepo}
 	isRepo := map[string]bool{}
 	for _, r := range rels {
 		isRepo[r] = true
+	}
+	if inRepo {
+		// 外层仓库从工作区列起：ls-files 在子目录里只列这个子目录，路径相对它
+		l.lsFiles(ctx, root, "", isRepo)
 	}
 	for _, rel := range rels {
 		if l.Truncated {
 			break
 		}
-		cmd := exec.CommandContext(ctx, "git", "-C", filepath.Join(root, rel), "ls-files", "-co", "--exclude-standard", "-z")
-		out, err := cmd.Output()
+		l.lsFiles(ctx, filepath.Join(root, rel), rel, isRepo)
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if err != nil {
-			continue
-		}
-		for name := range bytes.SplitSeq(out, []byte{0}) {
-			// 嵌套仓库报成 "nested/"：它的文件由它自己列
-			if len(name) == 0 || name[len(name)-1] == '/' {
-				continue
-			}
-			if len(l.Files) == MaxFiles {
-				l.Truncated = true
-				break
-			}
-			l.Files = append(l.Files, filepath.Join(rel, filepath.FromSlash(string(name))))
-		}
 	}
-	if !l.Truncated {
+	if !l.Truncated && !inRepo {
 		if err := l.walkOutside(ctx, isRepo); err != nil {
 			return nil, err
 		}
@@ -221,11 +210,34 @@ func (l *List) Ignored(abs string, dir bool) bool {
 				in = true
 			}
 		}
-		if !in {
+		if !in && !l.inRepo {
 			return false
 		}
 	}
 	// 指向目录的符号链接在 git 里是一个文件，按文件找
 	_, found := slices.BinarySearch(l.Files, rel)
 	return !found
+}
+
+// lsFiles 把 dir 里 git ls-files 列出的文件加进清单，前面加上 prefix（dir 相对 Root 的路径）。
+// 嵌套仓库（未跟踪的报成 "nested/"、子模块和指向仓库的软链报成 "nested"）跳过：它的文件由它自己列。
+func (l *List) lsFiles(ctx context.Context, dir, prefix string, isRepo map[string]bool) {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "ls-files", "-co", "--exclude-standard", "-z").Output()
+	if err != nil {
+		return
+	}
+	for name := range bytes.SplitSeq(out, []byte{0}) {
+		if len(name) == 0 || name[len(name)-1] == '/' {
+			continue
+		}
+		rel := filepath.Join(prefix, filepath.FromSlash(string(name)))
+		if isRepo[rel] {
+			continue
+		}
+		if len(l.Files) == MaxFiles {
+			l.Truncated = true
+			return
+		}
+		l.Files = append(l.Files, rel)
+	}
 }

@@ -94,6 +94,14 @@ func TestDiscoverInsideRepo(t *testing.T) {
 	initRepo(t, filepath.Join(outer, "src", "inner"))
 	// 嵌套仓库里再嵌一个
 	initRepo(t, filepath.Join(outer, "src", "inner", "innermost"))
+	// 未跟踪的普通目录里更深处的仓库：git 只报 tools/
+	initRepo(t, filepath.Join(outer, "tools", "lib", "x"))
+	// 同一个未跟踪目录里被外层忽略的（.gitignore 的 ignored/）不算
+	initRepo(t, filepath.Join(outer, "tools", "ignored", "secret"))
+	write(t, filepath.Join(outer, "tools", "keep.txt"), "k\n")
+	// 同一个未跟踪目录里指向外面仓库的软链
+	initRepo(t, filepath.Join(base, "ext3"))
+	symlink(t, filepath.Join(base, "ext3"), filepath.Join(outer, "tools", "link"))
 	// 被外层忽略的嵌套仓库不算
 	initRepo(t, filepath.Join(outer, "ignored", "x"))
 	// 没有 .gitmodules 的 gitlink
@@ -107,7 +115,7 @@ func TestDiscoverInsideRepo(t *testing.T) {
 	symlink(t, filepath.Join(base, "ext2"), filepath.Join(outer, "link2"))
 
 	d := Discover(context.Background(), outer, true)
-	want := []string{".", "gl", "link1", "link2", "src/inner", "src/inner/innermost"}
+	want := []string{".", "gl", "link1", "link2", "src/inner", "src/inner/innermost", "tools/lib/x", "tools/link"}
 	if got := roots(outer, d); !slices.Equal(got, want) {
 		t.Fatalf("repos = %v, want %v", got, want)
 	}
@@ -192,5 +200,39 @@ func TestDiscoverSingle(t *testing.T) {
 	initRepo(t, filepath.Join(base, "ws", "a", "nested"))
 	if got := roots(filepath.Join(base, "ws", "a"), Discover(context.Background(), filepath.Join(base, "ws", "a"), false)); !slices.Equal(got, []string{"."}) {
 		t.Fatalf("repos = %v", got)
+	}
+}
+
+// 工作区是指向仓库子目录的软链：按真实路径找到外围仓库（关掉多仓库时也是）。
+func TestDiscoverSymlinkSubdir(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo")
+	initRepo(t, repo)
+	write(t, filepath.Join(repo, "src", "a.txt"), "a\n")
+	symlink(t, filepath.Join(repo, "src"), filepath.Join(base, "linked-src"))
+	real, _ := filepath.EvalSymlinks(repo)
+	for _, multi := range []bool{false, true} {
+		d := Discover(context.Background(), filepath.Join(base, "linked-src"), multi)
+		if len(d.Repos) != 1 || d.Repos[0].Root != real {
+			t.Fatalf("multi=%v repos = %+v", multi, d.Repos)
+		}
+	}
+}
+
+// 外层仓库经两条软链进来：里面的仓库也有另一条的写法。
+func TestDiscoverNestedAliases(t *testing.T) {
+	base := t.TempDir()
+	outer := filepath.Join(base, "outer")
+	initRepo(t, outer)
+	initRepo(t, filepath.Join(outer, "inner"))
+	ws := filepath.Join(base, "ws")
+	symlink(t, outer, filepath.Join(ws, "a"))
+	symlink(t, outer, filepath.Join(ws, "z"))
+	d := Discover(context.Background(), ws, true)
+	if got := roots(ws, d); !slices.Equal(got, []string{"a", "a/inner"}) {
+		t.Fatalf("repos = %v", got)
+	}
+	if root, ok := d.Repos[1].Contains(filepath.Join(ws, "z", "inner", "README")); !ok || root != filepath.Join(ws, "z", "inner") {
+		t.Fatalf("inner via z: %q %v (aliases %v)", root, ok, d.Repos[1].Aliases)
 	}
 }

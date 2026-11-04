@@ -182,7 +182,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		// ⌘K 在终端里是清屏（termKey），焦点在文件、文件栏上时才是提交；不注册快捷键，终端才收得到这个键
 		commitKey := a.filesShown(w) && a.filesFor(w).git.repo != "" && (a.filesActive(w) || c.FocusWithin(a.filesPanelRef))
 		if commitKey && a.pressed(c, "commit") {
-			a.openFilesPanel(w, sideChanges).git.focusMsg = true
+			a.openFilesPanel(w, sideChanges).ch.focusMsg = true
 		}
 		// ⌥⌘Z：焦点在改动页时批量回滚（编辑器、diff 里是回滚当前这一处，见 gitShortcuts）
 		if a.filesPanelOpen() && a.filesFor(w).side == sideChanges && c.FocusWithin(a.filesPanelRef) && a.pressed(c, "rollback") {
@@ -1049,6 +1049,11 @@ func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
 		m.Separator()
 		if m.Item(lm.SidebarMergeInto(w.BaseRef)).Icon(iconMerge).Chosen() {
 			a.askMergeWorkspace(lm, w.ID)
+		}
+	} else if w.Kind == "worktree" && len(w.Repos) > 0 {
+		m.Separator()
+		if m.Item(lm.SidebarMergeRepos()).Icon(iconMerge).Chosen() {
+			a.askMergeRepos(lm, w.ID)
 		}
 	}
 	m.Separator()
@@ -2650,13 +2655,41 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 					kind = p.Kind
 				}
 			}
+			// 不是仓库的项目目录下有仓库（Works 这种）：勾上的仓库各建一个 worktree
+			var repos, picked []string
+			if kind != "git" {
+				repos = a.projectRepos(a.newProject)
+				if a.newReposFor != a.newProject {
+					a.newRepos, a.newReposFor = map[string]bool{}, a.newProject
+				}
+				for _, r := range repos {
+					if a.newRepos[r] {
+						picked = append(picked, r)
+					}
+				}
+			}
 			ui.Column(c).Gap(6).Children(func() {
 				ui.Select(c, &a.newProject, names)
 				hint := m.NewWorkspaceFolderHint()
-				if kind == "git" {
+				switch {
+				case kind == "git":
 					hint = m.NewWorkspaceGitHint()
+				case len(picked) > 0:
+					hint = m.NewWorkspaceReposHint(len(picked))
+				case len(repos) > 0:
+					hint = m.NewWorkspacePickReposHint()
 				}
 				ui.Text(c, hint).FontSize(fsSmall).TextColor(t.TextMuted)
+				if len(repos) > 0 {
+					ui.Row(c).Wrap().Gap(12).Padding(4, 0, 0, 0).Children(func() {
+						for _, r := range repos {
+							on := a.newRepos[r]
+							if ui.Checkbox(c.Key("repo:"+r), &on, r).Changed() {
+								a.newRepos[r] = on
+							}
+						}
+					})
+				}
 			})
 			submitted := fieldInput(c, &a.newName, m.NewWorkspaceNamePlaceholder()).AutoFocus().Submitted()
 			choices := a.newAgentChoices()
@@ -2682,6 +2715,9 @@ func (a *app) newWorkspaceDialog(c *ui.Context) {
 			if submitted && strings.TrimSpace(a.newName) != "" {
 				a.creating = false
 				params := map[string]any{"project": a.newProject, "name": strings.TrimSpace(a.newName), "agent": choices[a.newAgent], "prompt": a.newPrompt}
+				if len(picked) > 0 {
+					params["repos"] = picked
+				}
 				go a.createWorkspace(m, params)
 			}
 		})

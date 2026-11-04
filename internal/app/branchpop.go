@@ -237,6 +237,11 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
 	branch := a.gitBranch(w)
+	// 多个仓库、不都在这个分支上时写上是哪个仓库的分支
+	label := branch
+	if v := a.files[w.ID]; v != nil && v.multiRepo() && !v.sameBranch(branch) {
+		label = L(c).BranchRepoBranch(v.repoName(v.git), branch)
+	}
 	b := ui.Row(c.Key("branch")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).
 		Role(ui.RoleButton).Label(L(c).BranchButtonLabel(branch)).Tooltip(trackTip(L(c), branch, tr) + baseTip(L(c), w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
@@ -253,7 +258,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	}
 	b.Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, label).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, tr.ahead, tr.behind, false)
 		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
@@ -279,8 +284,16 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 	}
 	v := a.filesFor(w)
 	g := v.git
+	// 弹窗里换了仓库：读新仓库的分支
+	if g.repo != "" && g.branches.list == nil && !g.branches.loading {
+		a.loadBranches(g)
+	}
 	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(a.branchPopWidth()).MaxHeight(600).Padding(6).Gap(2))
 	panel.Children(func() {
+		// 多个仓库：最上面选仓库，下面的分支和操作都是它的
+		if v.multiRepo() {
+			ui.Row(c).Padding(0, 2, 4, 2).AlignItems(ui.Center).Children(func() { a.repoPicker(c, v) })
+		}
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Children(func() {
 				in := fieldInput(c, &bp.query, L(c).BranchSearch()).AutoFocus()
@@ -405,7 +418,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 	}
 	if popupItem(c, iconCommit, m.BranchCommit(), a.keyText("commit")) {
 		a.branchPop = nil
-		a.openFilesPanel(w, sideChanges).git.focusMsg = true
+		a.openFilesPanel(w, sideChanges).ch.focusMsg = true
 	}
 	if popupItem(c, iconPush, "Push…", a.keyText("push")) {
 		a.branchPop = nil
@@ -420,7 +433,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 		a.branchPop = nil
 		a.prompt(promptReq{title: m.BranchCheckoutRevision(), placeholder: m.BranchRevisionPlaceholder(), verb: m.BranchCheckout(), do: func(rev string, _ bool) {
 			a.guardAgent(m, w, m.BranchCheckout(), func() {
-				a.gitDo(m, v.git, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, rev) })
+				a.gitDo(m, g, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, rev) })
 			})
 		}})
 	}
@@ -575,11 +588,13 @@ func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch
 
 // checkoutBranch 是分支弹窗里回车或菜单"检出"：在别的工作区检出着的切到那个工作区，当前分支什么也不做。
 func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b gitx.Branch) {
+	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
+	g := v.git
 	a.branchPop = nil
 	if b.Current {
 		return
 	}
-	if other, inOther := gitx.WorktreeOf(b, v.git.repo); inOther {
+	if other, inOther := gitx.WorktreeOf(b, g.repo); inOther {
 		if ws := a.workspaceAt(other); ws != nil {
 			a.selected, a.revealSel = ws.ID, true
 		} else {
@@ -588,12 +603,14 @@ func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b g
 		return
 	}
 	a.guardAgent(m, w, m.BranchCheckout(), func() {
-		a.gitDo(m, v.git, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
+		a.gitDo(m, g, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
 	})
 }
 
 // branchMenu 是一个分支的操作，顺序照 WebStorm。更新、删除的结果在弹窗里看得到，不关弹窗。
 func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, b, cur gitx.Branch, other string, otherWs *workspace, inOther bool) {
+	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
+	g := v.git
 	lm := L(c)
 	done := func() { a.branchPop = nil }
 	curName := cur.Name
@@ -633,7 +650,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	if !b.Current && !b.Remote && !inOther && m.Item(lm.BranchCheckoutRebaseOnto(curName)).Chosen() {
 		done()
 		a.guardAgent(lm, w, lm.BranchCheckoutRebase(), func() {
-			a.gitDo(lm, v.git, lm.BranchCheckoutRebase(), func(ctx context.Context, root string) error {
+			a.gitDo(lm, g, lm.BranchCheckoutRebase(), func(ctx context.Context, root string) error {
 				return gitx.CheckoutAndRebase(ctx, root, b.Name, curName)
 			})
 		})
@@ -652,13 +669,13 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		if m.Item(lm.BranchRebaseOnto(curName, b.Name)).Chosen() {
 			done()
 			a.guardAgent(lm, w, lm.GitOpRebase(), func() {
-				a.gitDo(lm, v.git, lm.GitOpRebase(), func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, b.Name) })
+				a.gitDo(lm, g, lm.GitOpRebase(), func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, b.Name) })
 			})
 		}
 		if m.Item(lm.BranchMergeInto(b.Name, curName)).Chosen() {
 			done()
 			a.guardAgent(lm, w, lm.GitMerge(), func() {
-				a.gitDo(lm, v.git, lm.GitMerge(), func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, b.Name) })
+				a.gitDo(lm, g, lm.GitMerge(), func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, b.Name) })
 			})
 		}
 	}
@@ -689,7 +706,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	if !b.Remote && m.Item(lm.BranchRenameEllipsis()).Chosen() {
 		done()
 		a.prompt(promptReq{title: lm.BranchRenameTitle(b.Name), initial: b.Name, verb: lm.BranchRename(), do: func(name string, _ bool) {
-			a.gitDo(lm, v.git, lm.BranchRename(), func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
+			a.gitDo(lm, g, lm.BranchRename(), func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
 		}})
 	}
 	// 本地分支直接删、可以恢复，不再弹确认；远端分支要确认
@@ -704,8 +721,10 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 
 // updateBranch 用远端更新分支，做完提示拉到了几个提交。
 func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx.Branch) {
+	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
+	g := v.git
 	var n int
-	a.gitDoKind(m, v.git, gitUpdate, what, func(ctx context.Context, root string) error {
+	a.gitDoKind(m, g, gitUpdate, what, func(ctx context.Context, root string) error {
 		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.Update(ctx, root, b)
 		var left *gitx.AutostashLeft
@@ -725,10 +744,12 @@ func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx
 // askDeleteBranch 删除分支，照 WebStorm：已经合并的本地分支直接删，提示里可以恢复；没合并的先问一次是否强制删除。
 // 远端分支删的是远端上的，别人也拉不到了，先确认。
 func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
+	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
+	g := v.git
 	if b.Remote {
 		a.confirm(m.BranchDeleteRemoteConfirm(b.Name), m.BranchDeleteRemoteBody(), m.CommonDelete(), func() {
 			a.update(func() {
-				a.gitDo(m, v.git, m.BranchDeleteRemote(), func(ctx context.Context, root string) error { return gitx.DeleteRemoteBranch(ctx, root, b.Name) })
+				a.gitDo(m, g, m.BranchDeleteRemote(), func(ctx context.Context, root string) error { return gitx.DeleteRemoteBranch(ctx, root, b.Name) })
 			})
 		})
 		return
@@ -736,11 +757,11 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 	var tip string
 	deleted := func() {
 		a.notify(m.BranchDeleted(b.Name), m.CommonRestore(), func() {
-			a.gitDo(m, v.git, m.BranchRestore(), func(ctx context.Context, root string) error { return gitx.CreateBranch(ctx, root, b.Name, tip, false) })
+			a.gitDo(m, g, m.BranchRestore(), func(ctx context.Context, root string) error { return gitx.CreateBranch(ctx, root, b.Name, tip, false) })
 		})
 	}
 	var unmerged bool
-	a.gitDoThen(m, v.git, m.BranchDelete(), func(ctx context.Context, root string) error {
+	a.gitDoThen(m, g, m.BranchDelete(), func(ctx context.Context, root string) error {
 		tip = gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.DeleteBranch(ctx, root, b.Name, false)
 		if gitx.NotMerged(err) {
@@ -755,20 +776,22 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 		}
 		a.confirm(m.BranchUnmergedTitle(b.Name), m.BranchUnmergedBody(), m.BranchForceDelete(), func() {
 			a.update(func() {
-				a.gitDoThen(m, v.git, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
+				a.gitDoThen(m, g, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
 			})
 		})
 	})
 }
 
 func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from string) {
+	// 回调（确认框、提示、恢复）晚些才执行，那时当前仓库可能已经换了：固定成现在这个
+	g := v.git
 	title := m.BranchNew()
 	if from != "" {
 		title = m.BranchNewFromTitle(from)
 	}
 	a.prompt(promptReq{title: title, placeholder: m.BranchName(), verb: m.CommonNew(), check: m.BranchCheckoutNew(), checked: true, do: func(name string, checkout bool) {
 		run := func() {
-			a.gitDo(m, v.git, m.BranchNew(), func(ctx context.Context, root string) error {
+			a.gitDo(m, g, m.BranchNew(), func(ctx context.Context, root string) error {
 				return gitx.CreateBranch(ctx, root, name, from, checkout)
 			})
 		}
@@ -782,8 +805,16 @@ func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from 
 
 // askWorktreeFrom 是 WebStorm 的 New Worktree：在 posse 里新建一个 worktree 工作区，分支从 base 分出去。
 func (a *app) askWorktreeFrom(m locales.Messages, w *workspace, base string) {
+	params := map[string]any{"project": w.Project, "mode": "worktree", "base": base}
+	// 分支是当前仓库的：不是项目目录那个仓库时（多仓库目录、嵌套仓库），只给这一个仓库建 worktree
+	if v := a.files[w.ID]; v != nil && v.git.repo != v.root {
+		if rel, ok := repoRel(v, v.git); ok {
+			params["repos"] = []string{rel}
+		}
+	}
 	a.prompt(promptReq{title: m.BranchNewWorkspaceTitle(base), placeholder: m.BranchWorkspaceName(), verb: m.CommonNew(), do: func(name string, _ bool) {
-		go a.createWorkspace(m, map[string]any{"project": w.Project, "name": name, "mode": "worktree", "base": base})
+		params["name"] = name
+		go a.createWorkspace(m, params)
 	}})
 }
 

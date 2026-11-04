@@ -39,8 +39,11 @@ type repoSet struct {
 	rootMod  time.Time // 上次找的时候工作区目录的修改时间
 	statAt   time.Time // 上次看工作区目录修改时间的时间
 	waiting  []func()  // 等第一次找完再做的事
-	marks    map[string]byte
-	marksOf  []*gitx.Status // 合并 marks 时各仓库的状态
+	// followDoc、followRepo 是 followRepo 上次看到的当前标签和它的仓库
+	followDoc  *fileDoc
+	followRepo *gitState
+	marks      map[string]byte
+	marksOf    []*gitx.Status // 合并 marks 时各仓库的状态
 }
 
 // newGitStates 给新建的文件标签准备仓库状态：还没找过，v.git 先指向空的。
@@ -58,7 +61,35 @@ func (v *filesView) repoFor(abs string) *gitState {
 			best, n = g, len(root)
 		}
 	}
+	if best == nil {
+		// 仓库根目录是真实路径（工作区是指向仓库子目录的软链）：换成真实路径再找
+		if r, ok := v.realPath(abs); ok {
+			return v.repoFor(r)
+		}
+	}
 	return best
+}
+
+// realPath 把工作区里的路径换成真实路径；工作区不经过软链、或 abs 不在工作区里时返回假。
+func (v *filesView) realPath(abs string) (string, bool) {
+	if v.realRoot == "" || v.realRoot == v.root {
+		return "", false
+	}
+	if abs == v.root || strings.HasPrefix(abs, v.root+string(filepath.Separator)) {
+		return v.realRoot + abs[len(v.root):], true
+	}
+	return "", false
+}
+
+// shownPath 是 realPath 反过来：真实路径在工作区里的写法，不在工作区里的原样返回。
+func (v *filesView) shownPath(p string) string {
+	if v.realRoot == "" || v.realRoot == v.root {
+		return p
+	}
+	if p == v.realRoot || strings.HasPrefix(p, v.realRoot+string(filepath.Separator)) {
+		return v.root + p[len(v.realRoot):]
+	}
+	return p
 }
 
 // repoAt 按根目录找仓库；没有了（重找后消失）时为 nil。
@@ -116,16 +147,19 @@ func (a *app) applyRepos(v *filesView, d gitx.Discovery, single bool, mod time.T
 	rs := &v.repos
 	rs.scanning, rs.scanned, rs.partial, rs.single = false, true, d.Partial, single
 	rs.scanAt, rs.rootMod = time.Now(), mod
+	v.realRoot, _ = filepath.EvalSymlinks(v.root)
 	list := make([]*gitState, 0, len(d.Repos))
 	for _, r := range d.Repos {
 		g := v.repoAt(r.Root)
 		if g == nil {
 			g = &gitState{v: v, repo: r.Root}
 		}
-		g.aliases = r.Aliases
+		g.aliases, g.real = r.Aliases, r.Real
 		list = append(list, g)
 	}
 	rs.list = list
+	// 终端里的 git 命令按仓库的真实路径归到工作区：仓库变了重新归
+	a.runWS = nil
 	switch {
 	case len(list) == 0:
 		a.useRepo(v, rs.none)
@@ -169,11 +203,20 @@ func (a *app) docRepo(v *filesView, d *fileDoc) *gitState {
 }
 
 // followRepo 让当前仓库跟着当前标签：切到别的仓库里的文件，改动页、分支按钮、日志也换过去。
+// 只在标签（或它对着的仓库）换了时跟：之后在弹窗、日志里手动换的仓库留着。
 func (a *app) followRepo(v *filesView) {
-	if d := v.cur; d != nil {
-		if g := a.docRepo(v, d); g != nil && g != v.git {
-			a.useRepo(v, g)
-		}
+	rs := &v.repos
+	d := v.cur
+	var g *gitState
+	if d != nil {
+		g = a.docRepo(v, d)
+	}
+	if d == rs.followDoc && g == rs.followRepo {
+		return
+	}
+	rs.followDoc, rs.followRepo = d, g
+	if g != nil && g != v.git {
+		a.useRepo(v, g)
 	}
 }
 
@@ -257,6 +300,10 @@ func (a *app) pollRepo(g *gitState, full bool) {
 		}
 		a.update(func() {
 			g.poll.done()
+			if g.pollAgain {
+				g.pollAgain = false
+				g.poll.at = time.Time{}
+			}
 			if err != nil {
 				g.err = errtext.Text(err)
 				return
@@ -277,7 +324,7 @@ func (a *app) pollRepo(g *gitState, full bool) {
 					delete(g.picks, p)
 				}
 			}
-			g.rows = changeRows(st, g.stashes)
+			g.rows = changeRows(g, st, g.stashes)
 			a.gitChanged(g, old)
 		})
 	}()
@@ -297,7 +344,13 @@ func (a *app) refreshGit(v *filesView) {
 
 // refreshRepo 马上重读一个仓库的状态。
 func (a *app) refreshRepo(g *gitState) {
-	if g.poll.busy || g.repo == "" {
+	if g.repo == "" {
+		return
+	}
+	g.headAt = time.Time{}
+	// 正在读的那次可能是操作之前开始的：读完马上再读一次，不等下一轮（不是当前仓库的下一轮在 10 秒后）
+	if g.poll.busy {
+		g.pollAgain = true
 		return
 	}
 	g.poll.busy = true
@@ -313,8 +366,8 @@ func (a *app) rescanRepos(v *filesView) {
 // gitChanged 在一个仓库的状态变了之后更新依赖它的东西：打开的 diff 重读，编辑器的比较基准跟着 HEAD 走。
 func (a *app) gitChanged(g *gitState, old *gitx.Status) {
 	v := g.v
-	// 当前仓库的操作停在冲突上：切到改动，横幅在那里
-	if op := g.status.Operation; g == v.git && op != "" && (old == nil || old.Operation != op) {
+	// 操作停在冲突上：切到改动，横幅在那里（多个仓库时每个仓库各一条）
+	if op := g.status.Operation; op != "" && (old == nil || old.Operation != op) {
 		v.side = sideChanges
 		// 刚停在冲突上（日志里 cherry-pick、分支弹窗里合并）：文件栏关着也打开，不然看不到继续 / 中止
 		if w := a.workspace(v.wsID); w != nil && old != nil {
@@ -433,7 +486,12 @@ func (a *app) gitBranch(w *workspace) string {
 	if filepath.Clean(v.git.repo) == filepath.Clean(w.Path) && w.Branch != "" {
 		return w.Branch
 	}
-	return gitx.Head(v.git.repo)
+	// 一帧里要问好几次（快捷键、标签栏、分支按钮、日志），读 HEAD 文件最多一秒一次；操作后 refreshRepo 清掉
+	g := v.git
+	if time.Since(g.headAt) > time.Second {
+		g.headRef, g.headAt = gitx.Head(g.repo), time.Now()
+	}
+	return g.headRef
 }
 
 // repoOrGone 按根目录找仓库；重新找仓库后没了时给一个不在列表里的，交给 gitDoKind 报"仓库不在了"。
@@ -450,4 +508,85 @@ func (a *app) setSingleRepo(projectID string, single bool) {
 		p.SingleRepo = single
 	}
 	go a.call("project.set", map[string]any{"project": projectID, "singleRepo": single}, nil, 10*time.Second)
+}
+
+// changesPage 是改动页自己的状态，多个仓库共用一份：提交信息对所有仓库，提交时各仓库分别提交。
+type changesPage struct {
+	list     ui.ListState
+	tab      int // 0 提交（文件改动），1 储藏（git stash），照 WebStorm 的提交工具窗口
+	stashLst ui.ListState
+	message  string
+	amend    bool
+	amendMsg string // 勾"修改上一次提交"时自动填进来的信息
+	focusMsg bool   // 下一帧把焦点给提交信息（⌘K）
+}
+
+// multiRepo 报告工作区里找到了不止一个仓库：改动页按仓库分组，分支按钮、弹窗、日志可以换仓库。
+func (v *filesView) multiRepo() bool { return len(v.repos.list) > 1 }
+
+// repoName 是仓库在界面上的名字：相对工作区的路径；工作区就是它或在它里面时是目录名。
+func (v *filesView) repoName(g *gitState) string {
+	rel, err := filepath.Rel(v.root, g.repo)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.Base(g.repo)
+	}
+	return filepath.ToSlash(rel)
+}
+
+// changeCount 是文件栏"改动"上的数：所有仓库有改动的文件数。
+func (v *filesView) changeCount() int {
+	n := 0
+	for _, g := range v.repos.list {
+		n += g.changeCount()
+	}
+	return n
+}
+
+// rollbackRepo 是改动页顶上"回滚"对着的仓库：当前仓库有改动就是它，否则是第一个有改动的。
+func (v *filesView) rollbackRepo() *gitState {
+	if v.git.changeCount() > 0 {
+		return v.git
+	}
+	for _, g := range v.repos.list {
+		if g.changeCount() > 0 {
+			return g
+		}
+	}
+	return nil
+}
+
+// repoPicker 是换当前仓库的按钮：仓库名和下拉箭头，点开列出所有仓库。只有一个仓库时不画。
+func (a *app) repoPicker(c *ui.Context, v *filesView) {
+	if !v.multiRepo() {
+		return
+	}
+	t := c.Theme()
+	name := v.repoName(v.git)
+	b := ui.Row(c.Key("repo-picker")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).
+		Role(ui.RoleButton).Label(L(c).GitRepoPickerLabel(name))
+	if b.Hovered() {
+		b.Background(colors(t).wash)
+	}
+	b.Children(func() {
+		dirGlyph(c, filepath.Base(v.git.repo), fsBody)
+		ui.Text(c, name).FontSize(fsSmall).SingleLine().Shrink(1)
+		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
+	})
+	menuButton(c, b, func(m *popMenu) {
+		for _, g := range v.repos.list {
+			if m.Item(v.repoName(g)).Checked(g == v.git).Chosen() {
+				a.useRepo(v, g)
+			}
+		}
+	})
+}
+
+// sameBranch 报告所有仓库都检出着 branch：分支按钮就只写分支，不写仓库名。没读到状态的仓库不算相同。
+func (v *filesView) sameBranch(branch string) bool {
+	for _, g := range v.repos.list {
+		if g.status == nil || g.status.Head != branch {
+			return false
+		}
+	}
+	return true
 }

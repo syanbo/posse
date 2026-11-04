@@ -137,7 +137,7 @@ func TestGitChangesAndDiff(t *testing.T) {
 
 	// 提交：默认勾着已跟踪的改动，未跟踪的不勾、留下
 	v.side = sideChanges
-	v.git.message = "feat: 加日志"
+	v.ch.message = "feat: 加日志"
 	tt.Frame()
 	if err := tt.Click("提交 1 个文件"); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestGitChangesAndDiff(t *testing.T) {
 	if msg := gitRun(t, root, "log", "-1", "--format=%s"); msg != "feat: 加日志" {
 		t.Fatalf("commit message %q", msg)
 	}
-	if v.git.message != "" {
+	if v.ch.message != "" {
 		t.Fatal("message kept after commit")
 	}
 	// 单独回滚未跟踪的文件也打开回滚对话框，只勾它、默认勾上删除新文件
@@ -621,7 +621,7 @@ func TestCommitDuringMerge(t *testing.T) {
 	until(t, tt, "resolved", func() bool {
 		return v.git.busy == "" && !slices.ContainsFunc(v.git.status.Entries, func(e gitx.Entry) bool { return e.Conflict })
 	})
-	v.git.message = "merge feat"
+	v.ch.message = "merge feat"
 	until(t, tt, "button", func() bool { return tt.HasText("提交合并结果") })
 	a.err = ""
 	if err := tt.Click("提交合并结果"); err != nil {
@@ -823,7 +823,7 @@ func TestCommitPicked(t *testing.T) {
 	if v.git.picked(gitx.Entry{Path: "README.md"}) || !v.git.picked(gitx.Entry{Path: "notes.txt", Untracked: true}) {
 		t.Fatal("clicking the boxes should flip the picks")
 	}
-	v.git.message = "pick"
+	v.ch.message = "pick"
 	tt.Frame()
 	if err := tt.Click("提交 2 个文件"); err != nil {
 		t.Fatal(err)
@@ -947,14 +947,14 @@ func TestCommitShortcut(t *testing.T) {
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyK)
 	tt.Frame()
-	if v.git.focusMsg {
+	if v.ch.focusMsg {
 		t.Fatal("⌘K in a terminal should not go to the commit box")
 	}
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	tt.Frame()
 	tt.Key(ui.Cmd, ui.KeyK)
 	tt.Frame()
-	if !v.git.focusMsg && !tt.Focused("提交信息") {
+	if !v.ch.focusMsg && !tt.Focused("提交信息") {
 		t.Fatal("⌘K with a file in front should focus the commit message")
 	}
 }
@@ -1663,10 +1663,10 @@ func TestCommitBoxDetails(t *testing.T) {
 	v := openChanges(t, a, tt)
 	g := v.git
 	a.setAmend(v, true)
-	until(t, tt, "last message", func() bool { return g.message == "base" })
+	until(t, tt, "last message", func() bool { return v.ch.message == "base" })
 	a.setAmend(v, false)
-	if g.message != "" {
-		t.Fatalf("message kept: %q", g.message)
+	if v.ch.message != "" {
+		t.Fatalf("message kept: %q", v.ch.message)
 	}
 	tt.Frame()
 	if err := tt.Click("提交 2 个文件"); err != nil {
@@ -1676,9 +1676,9 @@ func TestCommitBoxDetails(t *testing.T) {
 	if g.busy != "" || a.err != "" {
 		t.Fatalf("commit without message: busy %q err %q", g.busy, a.err)
 	}
-	g.tab, g.focusMsg = 1, true
+	v.ch.tab, v.ch.focusMsg = 1, true
 	tt.Frame()
-	if g.tab != 0 || !tt.HasText("修改上一次提交") {
+	if v.ch.tab != 0 || !tt.HasText("修改上一次提交") {
 		t.Fatal("⌘K should switch back to the commit tab")
 	}
 }
@@ -1904,7 +1904,7 @@ func TestStashTab(t *testing.T) {
 	a.promptDlg.do("试一下储藏", false)
 	a.promptDlg = nil
 	until(t, tt, "stashed", func() bool { return v.git.busy == "" && len(v.git.status.Entries) == 0 })
-	v.git.tab = 1
+	v.ch.tab = 1
 	until(t, tt, "stash row", func() bool { return tt.HasText("试一下储藏") })
 	apply := func(item string) {
 		t.Helper()

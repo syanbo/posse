@@ -60,7 +60,7 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 	}
 
 	// 储藏是仓库共用的：项目目录里存的这里也看得到，标出分支，弹出前先问
-	v.git.tab = 1
+	v.ch.tab = 1
 	tt.Frame()
 	if !tt.HasText("项目目录里改了一半") || !tt.HasText(base) {
 		t.Fatalf("stash from %s not labeled: %v", base, tt.Texts())
@@ -68,7 +68,7 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 	if owner := a.stashOwner(v, base); owner == nil || owner.ID != "w2" {
 		t.Fatalf("stash owner %+v", owner)
 	}
-	v.git.tab = 0
+	v.ch.tab = 0
 
 	// 预测到冲突：合并按钮不去试，改问要不要先把基准分支合并进来
 	if err := tt.Click("合并"); err != nil {

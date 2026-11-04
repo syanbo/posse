@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -85,4 +86,24 @@ func quiet(ctx context.Context, dir string, args ...string) ([]byte, int, error)
 		return out.Bytes(), code, &Error{Args: args, Msg: msg}
 	}
 	return out.Bytes(), 0, nil
+}
+
+// MergeConflicts 是把 branch 合进 into 会冲突的文件，合并前用来挡住。和 BaseDivergence 的预测不同，
+// 算不出来（git 太旧、命令失败）时报错，不当成没有冲突。
+func MergeConflicts(ctx context.Context, dir, into, branch string) ([]string, error) {
+	out, code, err := quiet(ctx, dir, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", into, branch)
+	switch {
+	case err == nil:
+		return nil, nil
+	case code != 1:
+		return nil, fmt.Errorf("cannot check %s for conflicts: %w", branch, err)
+	}
+	var files []string
+	parts := strings.Split(string(out), "\x00")
+	for _, p := range parts[1:] {
+		if p != "" && !slices.Contains(files, p) {
+			files = append(files, p)
+		}
+	}
+	return files, nil
 }

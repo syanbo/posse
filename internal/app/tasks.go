@@ -312,8 +312,20 @@ func (a *app) viewDiff(t taskInfo) {
 	if sh == "" {
 		sh = "/bin/zsh"
 	}
-	mb := "$(git merge-base " + agent.Quote(t.BaseRef) + " HEAD)"
-	script := "git --no-pager diff --stat " + mb + " && git status --short && git diff " + mb + "; exec " + agent.Quote(sh) + " -l"
+	diff := func(base string) string {
+		mb := "$(git merge-base " + agent.Quote(base) + " HEAD)"
+		return "git --no-pager diff --stat " + mb + " && git status --short && git diff " + mb
+	}
+	script := diff(t.BaseRef)
+	if len(t.Repos) > 0 {
+		// 多仓库：各仓库依次看，每段前面写仓库名
+		var parts []string
+		for _, r := range t.Repos {
+			parts = append(parts, "(echo "+agent.Quote("== "+r.Path)+" && cd "+agent.Quote(r.Path)+" && "+diff(r.Base)+")")
+		}
+		script = strings.Join(parts, "; ")
+	}
+	script += "; exec " + agent.Quote(sh) + " -l"
 	go func() {
 		var term terminalInfo
 		if a.call("terminal.create", map[string]any{"workspace": t.WorkspaceID, "command": []string{sh, "-l", "-i", "-c", script}}, &term, 10*time.Second) != nil {
@@ -700,7 +712,11 @@ func (a *app) taskActions(c *ui.Context, task taskInfo) {
 			if pressable(textButton(c, m.TasksViewChanges())).Clicked() {
 				a.viewDiff(task)
 			}
-			if task.Status != "running" && pressable(textButton(c, m.TasksMergeInto(task.BaseRef))).Clicked() {
+			if len(task.Repos) > 0 {
+				if task.Status != "running" && pressable(textButton(c, m.TasksMergeRepos())).Clicked() {
+					a.askMergeRepos(m, task.WorkspaceID)
+				}
+			} else if task.Status != "running" && pressable(textButton(c, m.TasksMergeInto(task.BaseRef))).Clicked() {
 				a.askMergeWorkspace(m, task.WorkspaceID)
 			}
 		}
@@ -738,7 +754,11 @@ func (a *app) diffLine(c *ui.Context, task taskInfo) {
 	}
 	ui.Row(c).Gap(8).Padding(12, 12).Radius(rControl).Background(colors(t).wash).Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted)
-		ui.Text(c, m.TasksBranchVsBase(task.Branch, task.BaseRef)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
+		base := task.BaseRef
+		if len(task.Repos) > 0 {
+			base = repoBases(task.Repos)
+		}
+		ui.Text(c, m.TasksBranchVsBase(task.Branch, base)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Shrink(0)
 		ui.Text(c, text).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(1)
 	})
 }

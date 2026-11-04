@@ -20,7 +20,7 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 		a.loadBranches(g)
 	}
 	if ld.refsOpen == nil {
-		ld.refsOpen = map[string]bool{"local": true}
+		ld.refsOpen = map[string]bool{"local": true, "repos": true}
 	}
 	ui.Box(c).Height(sz(40)).Shrink(0).Padding(0, 8).Center().Children(func() {
 		fieldInput(c, &ld.refQuery, L(c).LogFilterRefs())
@@ -71,6 +71,21 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	}
 	ref := func(key, label, name string, indent, parent int, r string, mark func(*ui.Context)) {
 		items = append(items, refItem{key: key, label: label, name: name, indent: indent, parent: parent, ref: r, mark: mark})
+	}
+	// 多个仓库：最上面一组选仓库，一次看一个仓库的日志。文件历史对着文件所在的仓库，不能换
+	if v.multiRepo() && ld.filter.Path == "" {
+		var repos []*gitState
+		for _, r := range v.repos.list {
+			if match(v.repoName(r)) {
+				repos = append(repos, r)
+			}
+		}
+		if gi, ok := group("repos", L(c).LogRepos(), len(repos), 0, -1); ok {
+			for _, r := range repos {
+				name := v.repoName(r)
+				items = append(items, refItem{key: "repo:" + r.repo, label: name, name: L(c).LogRepo(name), indent: 1, parent: gi, repo: r})
+			}
+		}
 	}
 	if query == "" {
 		label := L(c).LogHead()
@@ -123,6 +138,14 @@ func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 			}
 			return
 		}
+		if it.repo != nil {
+			if ok, _ := a.refRow(c, it, it.repo.repo == ld.root, cursor); ok {
+				a.useRepo(v, it.repo)
+				ld.refCursor = it.key
+				list.Focus(c)
+			}
+			return
+		}
 		if ok, add := a.refRow(c, it, picked(it.ref), cursor); ok {
 			pick(it.ref, add)
 			ld.refCursor = it.key
@@ -143,8 +166,9 @@ type refItem struct {
 	indent int
 	parent int // 上一层组所在的行，-1 是顶层
 	open   bool
-	fixed  bool   // 筛选时各组都展开、收不起来：点击、←、回车都不改 refsOpen，清掉筛选后还是原来的样子
-	ref    string // 日志按它筛选的引用名
+	fixed  bool      // 筛选时各组都展开、收不起来：点击、←、回车都不改 refsOpen，清掉筛选后还是原来的样子
+	ref    string    // 日志按它筛选的引用名
+	repo   *gitState // "仓库"组里的一个仓库：点了换成看它的日志
 	mark   func(c *ui.Context)
 }
 
@@ -172,6 +196,11 @@ func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) 
 		it := items[j]
 		ld.refCursor = it.key
 		list.ScrollIntoView(j)
+		// 和分支一样，走到仓库上就换过去
+		if it.repo != nil && it.repo.repo != ld.root {
+			a.useRepo(v, it.repo)
+			return
+		}
 		if it.ref != "" && !(len(ld.filter.Branches) == 1 && ld.filter.Branches[0] == it.ref) {
 			ld.filter.Branches = []string{it.ref}
 			a.loadLog(v, d, false)
@@ -212,6 +241,10 @@ func (a *app) refKeys(c *ui.Context, v *filesView, d *fileDoc, items []refItem) 
 			break
 		}
 		ld.refCursor = it.key
+		if it.repo != nil {
+			a.useRepo(v, it.repo)
+			break
+		}
 		if len(ld.filter.Branches) == 1 && ld.filter.Branches[0] == it.ref {
 			ld.filter.Branches = nil
 		} else {

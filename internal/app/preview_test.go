@@ -260,7 +260,7 @@ func previewGit(t *testing.T, a *app) {
 		}
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
-	v.git.message = "feat(cmd): 启动时记录配置"
+	v.ch.message = "feat(cmd): 启动时记录配置"
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 }
 
@@ -270,9 +270,45 @@ func previewWorktree(t *testing.T, a *app, tab int) {
 	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
 	until(t, tt, "base", func() bool { return trackOf(a, "w1") != nil && trackOf(a, "w1").baseOK })
-	v.git.tab = tab
+	v.ch.tab = tab
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
 	trackOf(a, "w1").poll.at = time.Now().Add(time.Hour)
+}
+
+// previewMultiRepo 是工作区下面有几个仓库（子目录里的、软链过去的）：改动页按仓库分组，打开 ext 的 diff。
+// branches 为真时再打开分支弹窗，最上面是选仓库。
+func previewMultiRepo(t *testing.T, a *app, branches bool) {
+	root := multiRepoWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	v := a.openFilesPanel(w, sideChanges)
+	until(t, tt, "status", func() bool {
+		if a.filesPanelShown != 1 || !v.repos.scanned {
+			return false
+		}
+		for _, g := range v.repos.list {
+			if g.status == nil {
+				return false
+			}
+		}
+		return true
+	})
+	ext := v.repoAt(filepath.Join(root, "ext"))
+	a.openDiff(w, changeSpec(ext.repo, ext.status.Entries[0]), nil, true)
+	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped && v.git == ext })
+	v.ch.message = "feat: 两个仓库一起提交"
+	if branches {
+		a.openBranches(w)
+		until(t, tt, "branches", func() bool { return ext.branches.list != nil })
+	}
+	v.poll.at = time.Now().Add(time.Hour)
+	for _, g := range v.repos.list {
+		g.poll.at = time.Now().Add(time.Hour)
+	}
+	v.repos.scanAt, v.repos.statAt = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
+	if tr := trackOf(a, w.ID); tr != nil {
+		tr.poll.at = time.Now().Add(time.Hour)
+	}
 }
 
 // previewRollback 在几层目录里各改几个文件，打开批量回滚对话框，收起其中一个目录。
@@ -1134,6 +1170,23 @@ func TestPreview(t *testing.T) {
 		previewWorktree(t, a, 1)
 		savePNG(t, newPreviewTester(a, dark), "git-worktree-stash-"+suffix+".png")
 		gitLangs(a, "git-worktree-stash")
+
+		// 工作区下面有几个仓库：改动页按仓库分组；分支弹窗最上面选仓库
+		a = previewApp(t)
+		previewMultiRepo(t, a, false)
+		savePNG(t, newPreviewTester(a, dark), "git-multi-repo-"+suffix+".png")
+		gitLangs(a, "git-multi-repo")
+		a = previewApp(t)
+		previewMultiRepo(t, a, true)
+		savePNG(t, newPreviewTester(a, dark), "git-multi-repo-branches-"+suffix+".png")
+		// 多仓库目录的项目新建工作区：勾仓库
+		a = previewApp(t)
+		previewMultiRepo(t, a, false)
+		a.projects[0].Kind = "folder"
+		a.openNewWorkspace()
+		a.newName = "feat-login"
+		savePNG(t, newPreviewTester(a, dark), "new-workspace-repos-"+suffix+".png")
+		gitLangs(a, "new-workspace-repos")
 
 		// 批量回滚对话框：按目录排的文件树
 		a = previewApp(t)

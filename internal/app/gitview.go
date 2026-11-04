@@ -34,29 +34,27 @@ const (
 
 // gitState 是工作区里一个仓库的 Git 状态（找仓库见 repos.go）。
 type gitState struct {
-	v        *filesView
-	repo     string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
-	aliases  []string // 同一个仓库经别的软链进来的写法
-	status   *gitx.Status
-	head     map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
-	picks    map[string]bool           // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
-	stashes  []gitx.Stash
-	rows     []changeRow
-	folded   map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
-	list     ui.ListState
-	tab      int // 改动页的分页：0 提交（文件改动），1 储藏（git stash），照 WebStorm 的提交工具窗口
-	stashLst ui.ListState
-	poll     panelPoll
-	message  string
-	amend    bool
-	amendMsg string  // 勾"修改上一次提交"时自动填进来的信息
-	busy     string  // 正在执行的操作，期间按钮不可点
-	busyKind gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
-	queue    []gitOp
-	cancel   context.CancelFunc // 正在执行的是网络操作时可以取消
-	err      string
-	focusMsg bool // 下一帧把焦点给提交信息（⌘K）
-	branches branchInfo
+	v         *filesView
+	repo      string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
+	aliases   []string // 同一个仓库经别的软链进来的写法
+	status    *gitx.Status
+	head      map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
+	headRef   string                    // 检出的分支（游离时是哈希前 8 位），gitBranch 一秒最多读一次
+	headAt    time.Time
+	picks     map[string]bool // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
+	stashes   []gitx.Stash
+	real      string // 解析过软链的根目录：终端里的 git 命令按它归到工作区（runWorkspace）
+	rows      []changeRow
+	folded    map[changeGroup]*bool // 改动列表里收起的组；没有记录是展开
+	closed    bool                  // 多个仓库时改动页里收起了这个仓库
+	poll      panelPoll
+	pollAgain bool    // 读的期间要求重读（refreshRepo），读完再读一次
+	busy      string  // 正在执行的操作，期间按钮不可点
+	busyKind  gitKind // 正在执行的操作的代号，逻辑按它判断，busy 只用来显示
+	queue     []gitOp
+	cancel    context.CancelFunc // 正在执行的是网络操作时可以取消
+	err       string
+	branches  branchInfo
 	// dirFolded 是按目录分组时各组里收起的目录
 	dirFolded map[changeGroup]map[string]bool
 	// autostash 是这个工作区里的操作（更新、改写提交）留在储藏里的本地改动（储藏的提交），横幅引去处理；
@@ -83,6 +81,8 @@ var groupTitles = [...]func(locales.Messages) string{
 
 // changeRow 是改动列表的一行：组标题、一个文件，或一条储藏；按目录分组时还有目录行。
 type changeRow struct {
+	g      *gitState // 文件、目录和组标题所在的仓库
+	repo   bool      // 多个仓库时的仓库标题行
 	group  changeGroup
 	header bool
 	count  int
@@ -98,36 +98,36 @@ type changeRow struct {
 
 // changeRows 按组排好改动：冲突、改动、未跟踪、储藏。
 // 和 WebStorm 一样不分暂存区：已跟踪的改动不管暂存了没有都在"改动"里，提交时按勾选。
-func changeRows(st *gitx.Status, stashes []gitx.Stash) []changeRow {
+func changeRows(g *gitState, st *gitx.Status, stashes []gitx.Stash) []changeRow {
 	var groups [4][]changeRow
 	for _, e := range st.Entries {
 		switch {
 		case e.Conflict:
-			groups[groupConflict] = append(groups[groupConflict], changeRow{group: groupConflict, entry: e})
+			groups[groupConflict] = append(groups[groupConflict], changeRow{g: g, group: groupConflict, entry: e})
 		case e.Untracked:
-			groups[groupUntracked] = append(groups[groupUntracked], changeRow{group: groupUntracked, entry: e})
+			groups[groupUntracked] = append(groups[groupUntracked], changeRow{g: g, group: groupUntracked, entry: e})
 		default:
-			groups[groupChanged] = append(groups[groupChanged], changeRow{group: groupChanged, entry: e})
+			groups[groupChanged] = append(groups[groupChanged], changeRow{g: g, group: groupChanged, entry: e})
 		}
 	}
 	for _, s := range stashes {
-		groups[groupStash] = append(groups[groupStash], changeRow{group: groupStash, stash: s})
+		groups[groupStash] = append(groups[groupStash], changeRow{g: g, group: groupStash, stash: s})
 	}
 	var rows []changeRow
-	for g, rs := range groups {
+	for gr, rs := range groups {
 		if len(rs) == 0 {
 			continue
 		}
 		slices.SortStableFunc(rs, func(a, b changeRow) int { return strings.Compare(a.entry.Path, b.entry.Path) })
-		rows = append(rows, changeRow{group: changeGroup(g), header: true, count: len(rs)})
+		rows = append(rows, changeRow{g: g, group: changeGroup(gr), header: true, count: len(rs)})
 		rows = append(rows, rs...)
 	}
 	return rows
 }
 
 // byDirRows 把每组的文件照回滚对话框的文件树按目录排（changeTree），收起的目录不列下面的行。
-// rows 里已经去掉了收起的组，组标题原样留着。
-func byDirRows(rows []changeRow, folded func(changeGroup) map[string]bool) []changeRow {
+// rows 里已经去掉了收起的组，组标题（含仓库标题）原样留着。
+func byDirRows(rows []changeRow) []changeRow {
 	var out []changeRow
 	for i := 0; i < len(rows); {
 		if rows[i].header {
@@ -144,9 +144,9 @@ func byDirRows(rows []changeRow, folded func(changeGroup) map[string]bool) []cha
 		for k, r := range grp {
 			paths[k] = r.entry.Path
 		}
-		gr := grp[0].group
-		for _, t := range changeTree(paths, folded(gr)) {
-			r := changeRow{group: gr, tree: true, dir: t.dir, path: t.path, name: t.name, depth: t.depth}
+		gr, g := grp[0].group, grp[0].g
+		for _, t := range changeTree(paths, g.dirFolds(gr)) {
+			r := changeRow{g: g, group: gr, tree: true, dir: t.dir, path: t.path, name: t.name, depth: t.depth}
 			if t.dir {
 				for _, k := range t.files {
 					r.files = append(r.files, grp[k].entry)
@@ -205,6 +205,12 @@ func (g *gitState) relPath(abs string) string {
 		return ""
 	}
 	root, ok := gitx.Repo{Root: g.repo, Aliases: g.aliases}.Contains(abs)
+	if !ok && g.v != nil {
+		if r, isReal := g.v.realPath(abs); isReal {
+			abs = r
+			root, ok = gitx.Repo{Root: g.repo, Aliases: g.aliases}.Contains(abs)
+		}
+	}
 	if !ok {
 		return ""
 	}
@@ -216,7 +222,11 @@ func (g *gitState) relPath(abs string) string {
 }
 
 func (g *gitState) absPath(rel string) string {
-	return filepath.Join(g.repo, filepath.FromSlash(rel))
+	p := filepath.Join(g.repo, filepath.FromSlash(rel))
+	if g.v != nil {
+		p = g.v.shownPath(p)
+	}
+	return p
 }
 
 // loadHead 读文件在 HEAD 里的内容作为编辑器行号旁改动标记的基准；不在仓库里或是新文件时不标。
@@ -761,15 +771,19 @@ func (a *app) gitDoThen(m locales.Messages, g *gitState, what string, fn func(ct
 // gitDoKind 同 gitDoThen，带上操作的代号。
 // m 是发起操作的视图的界面文字，操作结束后的报错、提示用它。
 func (a *app) gitDoKind(m locales.Messages, g *gitState, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
+	a.gitStart(g, gitOp{m: m, kind: kind, what: what, fn: fn, done: done})
+}
+
+// gitStart 执行或排队一个操作。
+func (a *app) gitStart(g *gitState, op gitOp) {
 	if g.repo == "" {
 		return
 	}
 	// 重新找仓库后这个仓库没了（软链删了）：报出来，不默默丢掉操作
 	if !slices.Contains(g.v.repos.list, g) {
-		a.err = m.GitOperationFailed(what, errtext.Text(errRepoGone))
+		op.fail(a, op.m.GitOperationFailed(op.what, errtext.Text(errRepoGone)))
 		return
 	}
-	op := gitOp{m: m, kind: kind, what: what, fn: fn, done: done}
 	if g.busy != "" {
 		g.queue = append(g.queue, op)
 		return
@@ -802,7 +816,7 @@ func (a *app) autostashLeft(m locales.Messages, g *gitState, left *gitx.Autostas
 	if w := a.workspace(v.wsID); w != nil {
 		a.openFilesPanel(w, sideChanges)
 	}
-	v.side, g.tab = sideChanges, 0
+	v.side, v.ch.tab = sideChanges, 0
 }
 
 // warn 在窗口底部提示一句要留意的事，停留久一点。
@@ -827,6 +841,16 @@ type gitOp struct {
 	what string
 	fn   func(ctx context.Context, root string) error
 	done func()
+	// failed 在失败或取消时代替直接写错误条：一次点击发起几个操作（跨仓库提交）时把报错攒在一起
+	failed func(msg string)
+}
+
+func (op gitOp) fail(a *app, msg string) {
+	if op.failed != nil {
+		op.failed(msg)
+		return
+	}
+	a.err = msg
 }
 
 // gitKind 是要按种类判断的 git 操作的代号（要不要给取消、是不是在提交）；其余操作为空。
@@ -900,9 +924,9 @@ func (a *app) gitRun(g *gitState, op gitOp) {
 		a.update(func() {
 			g.busy, g.busyKind, g.cancel = "", "", nil
 			if canceled {
-				a.err = op.m.GitOperationCanceled(op.what)
+				op.fail(a, op.m.GitOperationCanceled(op.what))
 			} else if err != nil {
-				a.err = op.m.GitOperationFailed(op.what, errtext.Text(err))
+				op.fail(a, op.m.GitOperationFailed(op.what, errtext.Text(err)))
 			} else {
 				shown := len(a.toasts)
 				if op.done != nil {
@@ -931,6 +955,12 @@ func (a *app) gitNext(g *gitState) {
 	}
 	op := g.queue[0]
 	g.queue = g.queue[1:]
+	// 排队期间重新找过仓库、这个仓库不在了：照 gitStart 报出来，接着看下一个（也都会报）
+	if !slices.Contains(g.v.repos.list, g) {
+		op.fail(a, op.m.GitOperationFailed(op.what, errtext.Text(errRepoGone)))
+		a.gitNext(g)
+		return
+	}
 	a.gitRun(g, op)
 }
 
@@ -1125,64 +1155,140 @@ func (g *gitState) wholeCommit() string {
 	return ""
 }
 
+// commitTarget 是一次提交里的一个仓库：勾选的文件，以及它是不是只能整体提交（合并进行中等）。
+type commitTarget struct {
+	g          *gitState
+	paths, add []string
+	n          int
+	whole      bool
+}
+
+// commitTargets 是提交按钮要提交的仓库：各仓库里有勾选文件的。都没勾时，当前仓库在合并等操作中（整体提交）
+// 或勾了"修改上一次提交"（只改信息）也算。n 是勾选的文件总数。
+func (v *filesView) commitTargets() (ts []commitTarget, n int) {
+	for _, g := range v.repos.list {
+		paths, add, k := g.pickedPaths()
+		if k == 0 {
+			continue
+		}
+		ts = append(ts, commitTarget{g: g, paths: paths, add: add, n: k, whole: g.wholeCommit() != ""})
+		n += k
+	}
+	if g := v.git; len(ts) == 0 && g.repo != "" && (g.wholeCommit() != "" || v.ch.amend) {
+		ts = append(ts, commitTarget{g: g, whole: g.wholeCommit() != ""})
+	}
+	return ts, n
+}
+
+// commit 用同一条提交信息在各仓库分别提交勾选的文件。全部成功才清空提交信息；
+// 失败的仓库报错、留着勾选，成功的仓库勾选清掉，改好再点一次只提交剩下的。
 func (a *app) commit(m locales.Messages, v *filesView) {
-	g := v.git
-	msg := strings.TrimSpace(g.message)
+	ch := &v.ch
+	msg := strings.TrimSpace(ch.message)
 	if msg == "" {
 		a.err = m.GitMessageRequired()
 		return
 	}
-	paths, add, n := g.pickedPaths()
-	amend, whole := g.amend, g.wholeCommit() != ""
-	if n == 0 && !amend && !whole {
+	targets, _ := v.commitTargets()
+	if len(targets) == 0 {
 		a.err = m.GitSelectFiles()
 		return
 	}
-	a.gitDoKind(m, g, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
-		var err error
-		if whole {
-			// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
-			if len(paths) > 0 {
-				err = gitx.Stage(ctx, root, paths...)
-			}
-			if err == nil {
-				err = gitx.Commit(ctx, root, msg, false, amend)
-			}
-		} else {
-			err = gitx.CommitPaths(ctx, root, msg, paths, add, amend)
+	amend := ch.amend
+	if amend && len(targets) > 1 {
+		a.err = m.GitAmendOneRepo()
+		return
+	}
+	left, failed := len(targets), 0
+	var errs []string
+	finish := func() {
+		if left--; left > 0 || failed > 0 {
+			return
 		}
-		if err != nil {
-			return err
+		ch.message, ch.amend, ch.amendMsg = "", false, ""
+		for _, t := range targets {
+			t.g.picks = nil
 		}
-		a.update(func() { g.message, g.amend, g.picks = "", false, nil })
-		return nil
-	}, func() {
 		subject, _, _ := strings.Cut(msg, "\n")
-		a.notify(m.GitCommitted(subject), "", nil)
-	})
+		if len(targets) > 1 {
+			a.notify(m.GitCommittedRepos(subject, len(targets)), "", nil)
+		} else {
+			a.notify(m.GitCommitted(subject), "", nil)
+		}
+	}
+	for _, t := range targets {
+		what := m.GitCommitButton()
+		if len(targets) > 1 {
+			what = m.GitCommitInRepo(v.repoName(t.g))
+		}
+		a.gitStart(t.g, gitOp{m: m, kind: gitCommit, what: what, fn: func(ctx context.Context, root string) error {
+			if t.whole {
+				// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
+				var err error
+				if len(t.paths) > 0 {
+					err = gitx.Stage(ctx, root, t.paths...)
+				}
+				if err == nil {
+					err = gitx.Commit(ctx, root, msg, false, amend)
+				}
+				return err
+			}
+			return gitx.CommitPaths(ctx, root, msg, t.paths, t.add, amend)
+		}, done: func() {
+			// 别的仓库失败、要再点一次时：只去掉提交了的文件的勾选记录，用户取消勾选的其他文件仍不勾
+			for _, p := range t.paths {
+				delete(t.g.picks, p)
+			}
+			finish()
+		}, failed: func(msg string) {
+			failed++
+			errs = append(errs, msg)
+			a.err = strings.Join(errs, "\n")
+			finish()
+		}})
+	}
+}
+
+// amendRepo 是"修改上一次提交"改的仓库：唯一有勾选文件的仓库，都没勾时是当前仓库；勾了几个仓库时为 nil。
+func (v *filesView) amendRepo() *gitState {
+	var only *gitState
+	for _, g := range v.repos.list {
+		if _, _, k := g.pickedPaths(); k > 0 {
+			if only != nil {
+				return nil
+			}
+			only = g
+		}
+	}
+	if only == nil && v.git.repo != "" {
+		only = v.git
+	}
+	return only
 }
 
 // setAmend 切换"修改上一次提交"：打开时输入框还空着，就填上上一次的提交信息。
 func (a *app) setAmend(v *filesView, on bool) {
-	g := v.git
-	g.amend = on
+	ch := &v.ch
+	ch.amend = on
 	// 取消时把自动填进来的旧信息清掉，免得被当成新提交的信息；改过的留着
 	if !on {
-		if g.message == g.amendMsg {
-			g.message = ""
+		if ch.message == ch.amendMsg {
+			ch.message = ""
 		}
-		g.amendMsg = ""
+		ch.amendMsg = ""
 		return
 	}
-	if strings.TrimSpace(g.message) != "" || g.repo == "" {
+	g := v.amendRepo()
+	if strings.TrimSpace(ch.message) != "" || g == nil {
 		return
 	}
 	root := g.repo
 	go func() {
 		msg := gitx.LastMessage(context.Background(), root)
 		a.update(func() {
-			if g.amend && strings.TrimSpace(g.message) == "" {
-				g.message, g.amendMsg = msg, msg
+			// 读的这会儿勾选换到了别的仓库：不填，免得改的是另一个仓库的提交
+			if r := v.amendRepo(); ch.amend && strings.TrimSpace(ch.message) == "" && r != nil && r.repo == root {
+				ch.message, ch.amendMsg = msg, msg
 			}
 		})
 	}()

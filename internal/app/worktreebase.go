@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"path"
+	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -138,10 +141,12 @@ func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
 		a.withRepos(v, func() {
 			g := v.repoAt(v.root)
 			if g == nil {
+				// 找完仓库，工作区根目录却不是仓库（没找全、目录换了）：说一声，不默默什么都不做
+				a.err = m.GitOperationFailed(what, errtext.Text(errRepoGone))
 				return
 			}
 			a.useRepo(v, g)
-			g.tab = 0
+			v.ch.tab = 0
 			a.gitDoThen(m, g, what, fn, func() {
 				if !stopped {
 					a.notify(done, "", nil)
@@ -243,4 +248,52 @@ func fileList(m locales.Messages, files []string, n int) string {
 		return strings.Join(files, m.BranchFileListSeparator())
 	}
 	return m.BranchFileListMore(strings.Join(files[:n], m.BranchFileListSeparator()), len(files))
+}
+
+// askMergeRepos 是多仓库 worktree 工作区的合并：各仓库的分支合回项目里各自的基准分支（workspace.merge），
+// 常驻进程先查完所有仓库，有一个不能合就一个都不合；合完问要不要删工作区。
+func (a *app) askMergeRepos(m locales.Messages, wsID string) {
+	w := a.workspace(wsID)
+	if w == nil || len(w.Repos) == 0 {
+		return
+	}
+	branch, n, projectID, path, repos := w.Branch, len(w.Repos), w.ProjectID, w.Path, w.Repos
+	a.confirm(m.BranchMergeReposConfirm(branch, n), m.BranchMergeReposBody(), m.GitMerge(), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		var r struct{ Repos []string }
+		err := a.c.Call(ctx, "workspace.merge", map[string]any{"workspace": wsID}, &r)
+		var untracked []string
+		if err == nil {
+			untracked = reposUntracked(ctx, path, repos)
+		}
+		a.update(func() {
+			a.refsChanged(projectID)
+			if err != nil {
+				a.err = errtext.Text(err)
+				return
+			}
+			a.confirm(m.BranchMergedRepos(strings.Join(r.Repos, m.BranchFileListSeparator())), mergedBody(m, branch, untracked), m.BranchDeleteWorkspace(), func() {
+				a.call("workspace.rm", map[string]any{"workspace": wsID, "force": true, "deleteBranch": true}, nil, 30*time.Second)
+				a.refresh()
+			})
+		})
+		a.refresh()
+	})
+}
+
+// reposUntracked 是多仓库工作区里各仓库没提交的文件（工作区里的路径），放在外层里的内层仓库不算：
+// 删工作区强制删 worktree，它们会一起删掉，删之前列出来。
+func reposUntracked(ctx context.Context, ws string, repos []wsRepo) []string {
+	var out []string
+	for _, r := range repos {
+		for _, f := range untrackedFiles(ctx, filepath.Join(ws, filepath.FromSlash(r.Path))) {
+			p := path.Join(r.Path, strings.TrimSuffix(f, "/"))
+			if slices.ContainsFunc(repos, func(o wsRepo) bool { return o.Path == p }) {
+				continue
+			}
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -650,6 +650,22 @@
       }
     }
   },
+  "branchMergeReposBody": "Merges with a merge commit into each repository in the project, onto the branch it was on when the workspace was created; repositories without new commits are skipped. Each must be on that branch, and neither side may have uncommitted changes; if any repository can’t be merged, none is.",
+  "@branchMergeReposBody": {
+    "description": "Body of the confirmation before merging a workspace that has worktrees in several repositories."
+  },
+  "branchMergeReposConfirm": "Merge {branch} into {count, plural, one {# repository} other {# repositories}}?",
+  "@branchMergeReposConfirm": {
+    "description": "Title of the confirmation before merging a workspace that has worktrees in several repositories.",
+    "placeholders": {
+      "branch": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "branchMergeToTip": "Merge into {base}",
   "@branchMergeToTip": {
     "description": "Tooltip of the Merge button in the base row of a worktree workspace.",
@@ -706,6 +722,15 @@
         "type": "String"
       },
       "files": {
+        "type": "String"
+      }
+    }
+  },
+  "branchMergedRepos": "Merged into {repos}",
+  "@branchMergedRepos": {
+    "description": "Title after a multi-repository workspace was merged; repos lists the repositories that got the merge.",
+    "placeholders": {
+      "repos": {
         "type": "String"
       }
     }
@@ -899,6 +924,18 @@
   "@branchRenameTitle": {
     "description": "Title of the rename branch dialog.",
     "placeholders": {
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "branchRepoBranch": "{repo} · {branch}",
+  "@branchRepoBranch": {
+    "description": "Branch button in the tab bar when the workspace has several Git repositories on different branches: the current repository and its branch.",
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      },
       "branch": {
         "type": "String"
       }
@@ -2232,6 +2269,10 @@
   "@gitAmend": {
     "description": "Checkbox under the commit message in the Changes view: amend the last commit."
   },
+  "gitAmendOneRepo": "Only one repository's last commit can be amended",
+  "@gitAmendOneRepo": {
+    "description": "Tooltip of the disabled Amend checkbox, and error, when files of several repositories are selected for commit."
+  },
   "gitAutostashConflicts": "Local changes from before the update conflict with the pulled commits ({count, plural, one {# file} other {# files}}). Right-click a conflicted file to accept one side entirely, or open it, edit it, and mark it as resolved. The original changes remain in Stash.",
   "@gitAutostashConflicts": {
     "description": "Banner in the Changes view after an update restored local changes with conflicts.",
@@ -2379,6 +2420,27 @@
       }
     }
   },
+  "gitCommitFilesInRepos": "Commit {count, plural, one {# File} other {# Files}} in {repos} Repositories",
+  "@gitCommitFilesInRepos": {
+    "description": "Commit button in the Changes view when selected files are in several repositories; each repository gets its own commit. repos is at least 2.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "repos": {
+        "type": "int"
+      }
+    }
+  },
+  "gitCommitInRepo": "Commit in {repo}",
+  "@gitCommitInRepo": {
+    "description": "Name of the commit operation in one repository, shown in the busy line and in errors when committing to several repositories.",
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
+  },
   "gitCommitMergeResult": "Commit Merge Result",
   "@gitCommitMergeResult": {
     "description": "Commit button in the Changes view while a merge is in progress."
@@ -2409,6 +2471,18 @@
     "placeholders": {
       "subject": {
         "type": "String"
+      }
+    }
+  },
+  "gitCommittedRepos": "Committed to {count} repositories: {subject}",
+  "@gitCommittedRepos": {
+    "description": "Notification after committing to several repositories. subject is the first line of the commit message; count is at least 2.",
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
       }
     }
   },
@@ -2847,6 +2921,15 @@
   "gitRenamed": "Renamed",
   "@gitRenamed": {
     "description": "Change status of a renamed file, shown when hovering its name in the change lists."
+  },
+  "gitRepoPickerLabel": "Repository {repo}",
+  "@gitRepoPickerLabel": {
+    "description": "Accessibility label of the button that switches the current Git repository when the workspace has several.",
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
   },
   "gitReposPartial": "The folder is too large to scan fully; some repositories may be missing. Refresh to scan again.",
   "@gitReposPartial": {
@@ -4612,6 +4695,19 @@
       }
     }
   },
+  "logRepo": "Repository {name}",
+  "@logRepo": {
+    "description": "Accessibility label of a repository in the Repositories group of the Git Log branch list.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "logRepos": "Repositories",
+  "@logRepos": {
+    "description": "Group header in the Git Log branch list listing the workspace's Git repositories; clicking one shows its log."
+  },
   "logReset": "Reset",
   "@logReset": {
     "description": "Operation name of resetting the current branch to a commit, shown in busy text, error messages and the Console."
@@ -5158,9 +5254,22 @@
   "@newWorkspaceOnly": {
     "description": "New Workspace dialog: first segment of the agent picker; starts no agent."
   },
+  "newWorkspacePickReposHint": "Check repositories to give each a git worktree and a branch of the same name; with none checked, the workspace shares the folder.",
+  "@newWorkspacePickReposHint": {
+    "description": "New Workspace dialog: note for a folder project that contains git repositories, before any is checked."
+  },
   "newWorkspacePromptPlaceholder": "Task for the agent (optional)",
   "@newWorkspacePromptPlaceholder": {
     "description": "New Workspace dialog: placeholder of the prompt field passed to the started agent."
+  },
+  "newWorkspaceReposHint": "Creates a git worktree and a branch of the same name in each of the {count, plural, one {# checked repository} other {# checked repositories}}; other files in the folder aren’t included.",
+  "@newWorkspaceReposHint": {
+    "description": "New Workspace dialog: note for a folder project when some of its repositories are checked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "newWorkspaceStartWith": "Also Start",
   "@newWorkspaceStartWith": {
@@ -5942,6 +6051,10 @@
         "type": "String"
       }
     }
+  },
+  "sidebarMergeRepos": "Merge into Each Repository…",
+  "@sidebarMergeRepos": {
+    "description": "Sidebar context menu of a worktree workspace that has worktrees in several repositories."
   },
   "sidebarMissing": "Folder missing",
   "@sidebarMissing": {
@@ -7458,6 +7571,10 @@
         "type": "String"
       }
     }
+  },
+  "tasksMergeRepos": "Merge into Each Repository",
+  "@tasksMergeRepos": {
+    "description": "Task detail button for a worker whose workspace has worktrees in several repositories."
   },
   "tasksMessages": "Messages",
   "@tasksMessages": {

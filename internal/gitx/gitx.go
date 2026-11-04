@@ -187,3 +187,25 @@ func Merge(ctx context.Context, repo, branch string) error {
 	}
 	return err
 }
+
+// CheckedOutAt 是 repo 的哪个 worktree（含主 worktree）检出了 branch，没有时为空。
+func CheckedOutAt(ctx context.Context, repo, branch string) string {
+	out, err := run(ctx, repo, "worktree", "list", "--porcelain")
+	if err != nil {
+		return ""
+	}
+	dir := ""
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			dir = p
+		} else if line == "branch refs/heads/"+branch {
+			return dir
+		}
+	}
+	return ""
+}
+
+// DirtyAll 同 Dirty，未跟踪的目录逐个列出里面的文件（嵌套仓库仍是一行 dir/）。
+func DirtyAll(ctx context.Context, dir string) (string, error) {
+	return run(ctx, dir, "status", "--porcelain", "-uall")
+}

@@ -112,10 +112,25 @@ func (a *app) askRemoveWorkspace(m locales.Messages, w workspace) {
 		// 就先查改动、再自己关终端，否则开着终端的 worktree 删不掉
 		if w.Kind == "worktree" {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			out, err := gitx.Dirty(ctx, w.Path)
+			var out string
+			var err error
+			if len(w.Repos) > 0 {
+				// 多仓库的工作区根目录不是仓库：让常驻进程逐个仓库查（workspace.show 带 dirty）
+				var info struct{ Dirty *bool }
+				if err = a.c.Call(ctx, "workspace.show", map[string]any{"workspace": w.ID}, &info); err == nil && info.Dirty != nil && *info.Dirty {
+					out = "dirty"
+				}
+			} else {
+				out, err = gitx.Dirty(ctx, w.Path)
+			}
 			cancel()
 			if err == nil && out != "" {
 				a.update(func() { a.err = m.TracesRemoveDirty(displayName(&w)) })
+				return false
+			}
+			// 多仓库的查不了就不删：先关终端再被常驻进程拒绝，agent 就白关了
+			if err != nil && len(w.Repos) > 0 {
+				a.update(func() { a.err = errtext.Text(err) })
 				return false
 			}
 			for _, t := range w.Terminals {
