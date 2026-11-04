@@ -29,14 +29,15 @@ const (
 
 type taskInfo struct {
 	store.Task
-	Workspace     string          `json:"workspace"`
-	WorkspaceKind string          `json:"workspaceKind,omitempty"`
-	Branch        string          `json:"branch,omitempty"`
-	BaseRef       string          `json:"baseRef,omitempty"`
-	Terminal      *terminalInfo   `json:"terminal,omitempty"` // worker 终端还在时的状态
-	Questions     int             `json:"questions"`          // 还没回复的问题
-	Messages      []store.Message `json:"messages,omitempty"`
-	Screen        []string        `json:"screen,omitempty"`
+	Workspace     string                `json:"workspace"`
+	WorkspaceKind string                `json:"workspaceKind,omitempty"`
+	Branch        string                `json:"branch,omitempty"`
+	BaseRef       string                `json:"baseRef,omitempty"`
+	Repos         []store.WorkspaceRepo `json:"repos,omitempty"`    // 多仓库的 worktree 工作区里的仓库
+	Terminal      *terminalInfo         `json:"terminal,omitempty"` // worker 终端还在时的状态
+	Questions     int                   `json:"questions"`          // 还没回复的问题
+	Messages      []store.Message       `json:"messages,omitempty"`
+	Screen        []string              `json:"screen,omitempty"`
 }
 
 // taskInfo 的 idx 为 nil 时逐条查询工作区和项目，列表接口传入批量查好的 idx。
@@ -56,7 +57,7 @@ func (d *Daemon) taskInfo(t store.Task, questions map[string]int, idx *workspace
 		} else {
 			label = d.workspaceLabel(w)
 		}
-		info.Workspace, info.WorkspaceKind, info.Branch, info.BaseRef = label, w.Kind, w.Branch, w.BaseRef
+		info.Workspace, info.WorkspaceKind, info.Branch, info.BaseRef, info.Repos = label, w.Kind, w.Branch, w.BaseRef, w.Repos
 	} else {
 		info.Workspace = "(removed workspace)"
 	}
@@ -108,12 +109,13 @@ func (d *Daemon) taskNotify() {
 // --- 派发
 
 type taskStartParams struct {
-	Caller    string `json:"caller"` // 调用方终端（POSSE_TERMINAL_ID），即派发方
-	Cwd       string `json:"cwd"`
-	Workspace string `json:"workspace"`
-	Worktree  string `json:"worktree"` // 为 worker 新建这个名字的 git worktree
-	Base      string `json:"base"`
-	Agent     string `json:"agent"`
+	Caller    string   `json:"caller"` // 调用方终端（POSSE_TERMINAL_ID），即派发方
+	Cwd       string   `json:"cwd"`
+	Workspace string   `json:"workspace"`
+	Worktree  string   `json:"worktree"` // 为 worker 新建这个名字的 git worktree
+	Base      string   `json:"base"`
+	Repos     []string `json:"repos"` // 多仓库目录上建 worktree 时放进去的仓库
+	Agent     string   `json:"agent"`
 	agent.Model
 	Command []string `json:"command"` // 不用 agent 时直接运行的命令
 	Title   string   `json:"title"`
@@ -203,12 +205,18 @@ func (d *Daemon) taskWorkspace(ctx context.Context, p taskStartParams) (store.Wo
 	if err != nil {
 		return w, err
 	}
-	base := p.Base
+	base, repos := p.Base, p.Repos
 	if base == "" && w.Kind == "worktree" {
 		// 从派发方所在的分支分出去，而不是项目目录当前的分支
 		base = w.Branch
 	}
-	nw, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: p.Worktree, Mode: "worktree", Base: base})
+	if len(repos) == 0 {
+		// 派发方在多仓库的 worktree 里：worker 拿同样的几个仓库
+		for _, r := range w.Repos {
+			repos = append(repos, r.Path)
+		}
+	}
+	nw, _, err := d.createWorkspace(ctx, proj, workspaceCreateParams{Name: p.Worktree, Mode: "worktree", Base: base, Repos: repos})
 	return nw, err
 }
 
@@ -244,7 +252,13 @@ func workerPrompt(t store.Task, w store.Workspace) string {
 	b.WriteString("Stay inside the task: edit only what it lets you change, and ask before going beyond it. In the summary, name the evidence that shows the result, such as the command you ran and what it printed.\n")
 	b.WriteString("After `posse task done`, stop and wait at the prompt: no new work, no polling. If the user talks to you directly, do what they say.\n")
 	fmt.Fprintf(&b, "The coordinator may send follow-up work for the same task later. Posse then gives you a reminder line: run `posse task check %s`, do the follow-up, and report it with `posse task done` again.\n", t.ID)
-	if w.Kind == "worktree" {
+	if w.Kind == "worktree" && len(w.Repos) > 0 {
+		var dirs []string
+		for _, r := range w.Repos {
+			dirs = append(dirs, fmt.Sprintf("%s (from %s)", r.Path, r.Base))
+		}
+		fmt.Fprintf(&b, "\nYou work in your own git worktrees on branch %s, one per repository: %s. Commit your changes on this branch in each repository you change before reporting.\n", w.Branch, strings.Join(dirs, ", "))
+	} else if w.Kind == "worktree" {
 		fmt.Fprintf(&b, "\nYou work in your own git worktree on branch %s, created from %s. Commit your changes on this branch before reporting.\n", w.Branch, w.BaseRef)
 	}
 	b.WriteString("\n=== TASK ===\n")
@@ -885,6 +899,7 @@ type workspaceDiffResult struct {
 	Branch    string `json:"branch"`
 	Base      string `json:"base"`
 	gitx.Changes
+	Repos []repoChanges `json:"repos,omitempty"` // 多仓库的 worktree：各仓库的改动，上面是合计
 }
 
 func (d *Daemon) worktreeOf(sel string) (store.Workspace, store.Project, error) {
@@ -908,6 +923,10 @@ func (d *Daemon) workspaceDiff(ctx context.Context, raw json.RawMessage) (any, e
 	if err != nil {
 		return nil, err
 	}
+	if len(w.Repos) > 0 {
+		repos, sum := diffRepos(ctx, w)
+		return workspaceDiffResult{Workspace: d.workspaceLabel(w), Branch: w.Branch, Changes: sum, Repos: repos}, nil
+	}
 	c, err := gitx.DiffSummary(ctx, w.Path, w.BaseRef)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeConflict, "%v", err)
@@ -925,6 +944,9 @@ func (d *Daemon) workspaceMerge(ctx context.Context, raw json.RawMessage) (any, 
 	w, proj, err := d.worktreeOf(p.Workspace)
 	if err != nil {
 		return nil, err
+	}
+	if len(w.Repos) > 0 {
+		return mergeRepos(ctx, w)
 	}
 	c, err := gitx.DiffSummary(ctx, w.Path, w.BaseRef)
 	if err != nil {

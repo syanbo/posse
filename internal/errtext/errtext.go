@@ -206,8 +206,10 @@ func (c *catalog) match(msg string, depth int) string {
 	if depth > 3 {
 		return msg
 	}
+	// 多行的报错（几个仓库各一行）：单行的格式串不拿来整条匹配（%s 会把几行吞成一个参数），找不到整条的就逐行翻译
+	multi := strings.Contains(msg, "\n")
 	for _, e := range c.entries {
-		if exactOnly[e.format] {
+		if exactOnly[e.format] || multi && !strings.Contains(e.format, "\n") {
 			continue
 		}
 		m := e.re.FindStringSubmatch(msg)
@@ -228,6 +230,13 @@ func (c *catalog) match(msg string, depth int) string {
 			args[i] = a
 		}
 		return fill(e.text, args)
+	}
+	if multi {
+		lines := strings.Split(msg, "\n")
+		for i, l := range lines {
+			lines[i] = c.match(l, depth)
+		}
+		return strings.Join(lines, "\n")
 	}
 	return msg
 }

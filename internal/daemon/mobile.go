@@ -62,7 +62,7 @@ func (h mobileHost) State() mobile.State {
 	}
 	projectPath := map[string]string{}
 	for _, p := range ps {
-		st.Projects = append(st.Projects, mobile.Project{ID: p.ID, Name: p.Name, Path: p.Path})
+		st.Projects = append(st.Projects, mobile.Project{ID: p.ID, Name: p.Name, Path: p.Path, SingleRepo: p.SingleRepo})
 		projectPath[p.ID] = filepath.Clean(p.Path)
 	}
 	ws, err := d.store.Workspaces("")
@@ -82,7 +82,12 @@ func (h mobileHost) State() mobile.State {
 	}
 	for _, w := range ws {
 		// 数据库里的分支只在建工作区时记一次，main 工作区切分支后就过时了；和界面一样以 HEAD 为准
-		head, detached := gitx.HeadRef(w.Path)
+		// 多仓库的 worktree 工作区根目录不是仓库（HeadRef 会往上找到别的仓库），分支用记下的那个
+		var head string
+		var detached bool
+		if len(w.Repos) == 0 {
+			head, detached = gitx.HeadRef(w.Path)
+		}
 		if head != "" {
 			w.Branch = head
 		}

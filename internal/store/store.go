@@ -30,14 +30,23 @@ type Project struct {
 }
 
 type Workspace struct {
-	ID        string    `json:"id"`
-	ProjectID string    `json:"projectId"`
-	Name      string    `json:"name"`
-	Path      string    `json:"path"`
-	Kind      string    `json:"kind"` // main | folder | worktree
-	Branch    string    `json:"branch,omitempty"`
-	BaseRef   string    `json:"baseRef,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string `json:"id"`
+	ProjectID string `json:"projectId"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Kind      string `json:"kind"` // main | folder | worktree
+	Branch    string `json:"branch,omitempty"`
+	BaseRef   string `json:"baseRef,omitempty"`
+	// Repos 是多仓库目录上的 worktree 工作区里的各个仓库；这时 Branch 是各仓库共用的分支，BaseRef 为空
+	Repos     []WorkspaceRepo `json:"repos,omitempty"`
+	CreatedAt time.Time       `json:"createdAt"`
+}
+
+// WorkspaceRepo 是多仓库 worktree 工作区里的一个仓库。
+type WorkspaceRepo struct {
+	Path   string `json:"path"`   // 在工作区（也是在项目目录）里的相对路径，斜杠分隔
+	Source string `json:"source"` // 项目里那个仓库的根目录（解析过软链），git worktree 命令在这里执行
+	Base   string `json:"base"`   // 建 worktree 时从哪个分支开出来，合并时合回这里
 }
 
 type Terminal struct {
@@ -97,6 +106,10 @@ func Open(path string) (*Store, error) {
 	// 单写者足够，也避免 SQLITE_BUSY
 	db.SetMaxOpenConns(1)
 	if _, err := db.Exec(schema + taskSchema + traceSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+	if err := addColumn(db, "workspaces", "repos", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -196,8 +209,12 @@ func (s *Store) FindProject(sel string) (Project, error) {
 // --- workspaces
 
 func (s *Store) AddWorkspace(w Workspace) error {
-	_, err := s.db.Exec(`INSERT INTO workspaces(id,project_id,name,path,kind,branch,base_ref,created_at) VALUES(?,?,?,?,?,?,?,?)`,
-		w.ID, w.ProjectID, w.Name, w.Path, w.Kind, w.Branch, w.BaseRef, ms(w.CreatedAt))
+	var repos []byte
+	if len(w.Repos) > 0 {
+		repos, _ = json.Marshal(w.Repos)
+	}
+	_, err := s.db.Exec(`INSERT INTO workspaces(id,project_id,name,path,kind,branch,base_ref,repos,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		w.ID, w.ProjectID, w.Name, w.Path, w.Kind, w.Branch, w.BaseRef, string(repos), ms(w.CreatedAt))
 	return err
 }
 
@@ -212,14 +229,18 @@ func (s *Store) DeleteWorkspace(id string) error {
 	return err
 }
 
-const workspaceCols = `id,project_id,name,path,kind,branch,base_ref,created_at`
+const workspaceCols = `id,project_id,name,path,kind,branch,base_ref,repos,created_at`
 
 func scanWorkspace(row interface{ Scan(...any) error }) (Workspace, error) {
 	var w Workspace
 	var created int64
-	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Path, &w.Kind, &w.Branch, &w.BaseRef, &created)
+	var repos string
+	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Path, &w.Kind, &w.Branch, &w.BaseRef, &repos, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return w, ErrNotFound
+	}
+	if repos != "" {
+		json.Unmarshal([]byte(repos), &w.Repos)
 	}
 	w.CreatedAt = fromMS(created)
 	return w, err
@@ -273,7 +294,7 @@ func (s *Store) Workspace(id string) (Workspace, error) {
 
 // FindWorkspaces 按 id、名称或 "项目/名称" 查找，名称可能重名所以返回多个。
 func (s *Store) FindWorkspaces(sel string) ([]Workspace, error) {
-	rows, err := s.db.Query(`SELECT w.id,w.project_id,w.name,w.path,w.kind,w.branch,w.base_ref,w.created_at
+	rows, err := s.db.Query(`SELECT w.id,w.project_id,w.name,w.path,w.kind,w.branch,w.base_ref,w.repos,w.created_at
 		FROM workspaces w JOIN projects p ON p.id=w.project_id
 		WHERE w.id=? OR w.name=? OR p.name||'/'||w.name=? ORDER BY w.created_at`, sel, sel, sel)
 	if err != nil {

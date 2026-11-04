@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -184,8 +185,10 @@ type workspaceCreateParams struct {
 	Path    string `json:"path"` // attach：项目已有的、不是 posse 建的 worktree 目录
 	Branch  string `json:"branch"`
 	Base    string `json:"base"`
-	NoSetup bool   `json:"noSetup"`
-	Agent   string `json:"agent"`
+	// Repos 是多仓库目录上建 worktree 时选的仓库（在项目目录里的相对路径）
+	Repos   []string `json:"repos"`
+	NoSetup bool     `json:"noSetup"`
+	Agent   string   `json:"agent"`
 	agent.Model
 	Prompt string `json:"prompt"`
 }
@@ -248,11 +251,13 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 	mode := p.Mode
 	if mode == "" || mode == "auto" {
 		mode = "folder"
-		if proj.Kind == "git" {
+		if proj.Kind == "git" || len(p.Repos) > 0 {
 			mode = "worktree"
 		}
 	}
 	w := store.Workspace{ID: store.NewID("w_"), ProjectID: proj.ID, Name: p.Name, Kind: mode, CreatedAt: time.Now()}
+	var undoRepos func() // 多仓库 worktree 建好了、记录没写进去时撤掉
+	var err error
 	switch mode {
 	case "folder":
 		w.Path = proj.Path
@@ -265,12 +270,23 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 		w.Kind, w.Path = "folder", path
 		w.Branch, _ = gitx.CurrentBranch(ctx, path)
 	case "worktree":
-		if proj.Kind != "git" {
-			return w, nil, rpc.Errorf(rpc.CodeBadRequest, "project %s is not a git repository", proj.Name)
-		}
 		w.Branch = p.Branch
 		if w.Branch == "" {
 			w.Branch = p.Name
+		}
+		if len(p.Repos) > 0 {
+			// 同名的工作区先挡掉，免得在各仓库建了 worktree 和分支才发现写不进记录
+			if ws, err := d.store.Workspaces(proj.ID); err == nil && slices.ContainsFunc(ws, func(o store.Workspace) bool { return o.Name == p.Name }) {
+				return w, nil, rpc.Errorf(rpc.CodeConflict, "workspace %s/%s already exists", proj.Name, p.Name)
+			}
+			w.Path = filepath.Join(d.cfg.Home, "worktrees", proj.Name, p.Name)
+			if undoRepos, err = d.addRepoWorktrees(ctx, proj, &w, p.Repos, p.Base); err != nil {
+				return w, nil, err
+			}
+			break
+		}
+		if proj.Kind != "git" {
+			return w, nil, rpc.Errorf(rpc.CodeBadRequest, "project %s is not a git repository; pass the repositories to put in the worktree", proj.Name)
 		}
 		w.BaseRef = p.Base
 		if w.BaseRef == "" {
@@ -290,7 +306,10 @@ func (d *Daemon) createWorkspace(ctx context.Context, proj store.Project, p work
 		return w, nil, rpc.Errorf(rpc.CodeBadRequest, "unknown mode %q (auto, folder, worktree, attach)", mode)
 	}
 	if err := d.store.AddWorkspace(w); err != nil {
-		if mode == "worktree" {
+		switch {
+		case undoRepos != nil:
+			undoRepos()
+		case mode == "worktree":
 			gitx.RemoveWorktree(context.WithoutCancel(ctx), proj.Path, w.Path, true)
 		}
 		if strings.Contains(err.Error(), "UNIQUE") {
@@ -397,7 +416,10 @@ func (d *Daemon) workspaceInfo(ctx context.Context, w store.Workspace, dirty boo
 func (d *Daemon) buildWorkspaceInfo(ctx context.Context, w store.Workspace, dirty bool, label string, sessions []*session, lost []store.Terminal) workspaceInfo {
 	info := workspaceInfo{Workspace: w, Label: label, Terminals: d.terminalInfos(sessions, lost)}
 	info.Project, _, _ = strings.Cut(info.Label, "/")
-	if dirty && w.Kind != "folder" {
+	if dirty && len(w.Repos) > 0 {
+		v := reposDirty(ctx, w)
+		info.Dirty = &v
+	} else if dirty && w.Kind != "folder" {
 		if out, err := gitx.Dirty(ctx, w.Path); err == nil {
 			v := out != ""
 			info.Dirty = &v
@@ -489,7 +511,12 @@ func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, err
 	if running := d.runningIn(w.ID); running > 0 && !p.Force {
 		return nil, rpc.Errorf(rpc.CodeConflict, "workspace has %d running terminals; pass force to close them", running)
 	}
-	if w.Kind == "worktree" {
+	left := ""
+	if w.Kind == "worktree" && len(w.Repos) > 0 {
+		if left, err = d.removeRepoWorktrees(ctx, w, p.Force, p.DeleteBranch); err != nil {
+			return nil, err
+		}
+	} else if w.Kind == "worktree" {
 		proj, err := d.store.FindProject(w.ProjectID)
 		if err != nil {
 			return nil, err
@@ -515,7 +542,12 @@ func (d *Daemon) workspaceRm(ctx context.Context, raw json.RawMessage) (any, err
 	if err := d.store.DeleteWorkspace(w.ID); err != nil {
 		return nil, err
 	}
-	return map[string]string{"removed": w.ID}, nil
+	out := map[string]string{"removed": w.ID}
+	if left != "" {
+		// 工作区目录里除了各仓库的 worktree 还有别的文件：不带 force 时不删，告诉调用方还在
+		out["left"] = left
+	}
+	return out, nil
 }
 
 type workspaceRelocateParams struct {
@@ -550,7 +582,7 @@ func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (an
 	}
 	// 旧目录已经不在，比较不了符号链接，按字面比
 	onProject := w.Kind == "main" || filepath.Clean(w.Path) == filepath.Clean(proj.Path)
-	if proj.Kind == "git" {
+	if proj.Kind == "git" && len(w.Repos) == 0 {
 		if top := gitx.TopLevel(ctx, path); top == "" || !samePath(top, path) {
 			return nil, rpc.Errorf(rpc.CodeBadRequest, "%s is not a git repository root", p.Path)
 		}
@@ -573,6 +605,10 @@ func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (an
 		}
 	}
 	branch := gitx.Head(path)
+	if len(w.Repos) > 0 {
+		// 多仓库工作区的根不是仓库，Head 会往上找到不相干的仓库；分支是各仓库共用的那个，不变
+		branch = ""
+	}
 	if onProject {
 		if err := d.store.SetProjectPath(proj.ID, path); err != nil {
 			return nil, err
@@ -585,7 +621,11 @@ func (d *Daemon) workspaceRelocate(ctx context.Context, raw json.RawMessage) (an
 			}
 		}
 	}
-	if proj.Kind == "git" {
+	if len(w.Repos) > 0 {
+		for _, r := range w.Repos {
+			gitx.RepairWorktree(ctx, r.Source, repoDir(path, r.Path))
+		}
+	} else if proj.Kind == "git" {
 		// 修不好不挡：worktree 自己的 .git 还指着仓库，照样能用
 		if onProject {
 			gitx.RepairWorktree(ctx, path)

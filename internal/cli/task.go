@@ -53,6 +53,7 @@ func cmdTaskStart(e *env, args []string) error {
 	ws := fs.String("workspace", "", "")
 	worktree := fs.String("worktree", "", "")
 	base := fs.String("base", "", "")
+	repos := fs.String("repos", "", "")
 	pos, command, err := splitCommand(fs, args)
 	if err != nil {
 		return err
@@ -66,7 +67,7 @@ func cmdTaskStart(e *env, args []string) error {
 	}
 	cwd, _ := os.Getwd()
 	params := map[string]any{"caller": caller(), "cwd": cwd, "agent": *agentName, "model": *model, "effort": *effort, "command": command, "title": *title,
-		"spec": text, "workspace": *ws, "worktree": *worktree, "base": *base}
+		"spec": text, "workspace": *ws, "worktree": *worktree, "base": *base, "repos": splitList(*repos)}
 	var t taskInfo
 	return e.do("task.start", params, &t, func() { e.printStarted(t) })
 }
@@ -482,17 +483,38 @@ func cmdWorkspaceDiff(e *env, args []string) error {
 		Workspace, Branch, Base                          string
 		Commits, Files, Insertions, Deletions, Untracked int
 		Dirty                                            bool
-	}
-	return e.do("workspace.diff", map[string]any{"workspace": pos[0]}, &r, func() {
-		fmt.Fprintf(e.out, "%s: branch %s vs %s\n%d commits, %d files changed, +%d -%d", r.Workspace, r.Branch, r.Base,
-			r.Commits, r.Files, r.Insertions, r.Deletions)
-		if r.Untracked > 0 {
-			fmt.Fprintf(e.out, ", %d untracked", r.Untracked)
+		Repos                                            []struct {
+			Path, Base, Error                                string
+			Commits, Files, Insertions, Deletions, Untracked int
+			Dirty                                            bool
 		}
-		if r.Dirty {
+	}
+	line := func(commits, files, ins, del, untracked int, dirty bool) {
+		fmt.Fprintf(e.out, "%d commits, %d files changed, +%d -%d", commits, files, ins, del)
+		if untracked > 0 {
+			fmt.Fprintf(e.out, ", %d untracked", untracked)
+		}
+		if dirty {
 			fmt.Fprint(e.out, " (uncommitted changes)")
 		}
 		fmt.Fprintln(e.out)
+	}
+	return e.do("workspace.diff", map[string]any{"workspace": pos[0]}, &r, func() {
+		if len(r.Repos) == 0 {
+			fmt.Fprintf(e.out, "%s: branch %s vs %s\n", r.Workspace, r.Branch, r.Base)
+			line(r.Commits, r.Files, r.Insertions, r.Deletions, r.Untracked, r.Dirty)
+			return
+		}
+		fmt.Fprintf(e.out, "%s: branch %s, total ", r.Workspace, r.Branch)
+		line(r.Commits, r.Files, r.Insertions, r.Deletions, r.Untracked, r.Dirty)
+		for _, x := range r.Repos {
+			fmt.Fprintf(e.out, "  %s vs %s: ", x.Path, x.Base)
+			if x.Error != "" {
+				fmt.Fprintln(e.out, x.Error)
+				continue
+			}
+			line(x.Commits, x.Files, x.Insertions, x.Deletions, x.Untracked, x.Dirty)
+		}
 	})
 }
 
@@ -505,8 +527,15 @@ func cmdWorkspaceMerge(e *env, args []string) error {
 	if err := need(pos, 1, "workspace merge"); err != nil {
 		return err
 	}
-	var r struct{ Merged, Into string }
+	var r struct {
+		Merged, Into string
+		Repos        []string
+	}
 	return e.do("workspace.merge", map[string]any{"workspace": pos[0]}, &r, func() {
+		if len(r.Repos) > 0 {
+			fmt.Fprintf(e.out, "merged %s in %s\n", r.Merged, strings.Join(r.Repos, ", "))
+			return
+		}
 		fmt.Fprintf(e.out, "merged %s into %s\n", r.Merged, r.Into)
 	})
 }

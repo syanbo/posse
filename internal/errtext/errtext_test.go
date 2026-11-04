@@ -63,6 +63,10 @@ func TestMessage(t *testing.T) {
 		{"merge failed and was rolled back: terminal has exited", "合并失败，已经回滚：终端已经退出了"},
 		{"binary_file", "这是二进制文件，没法当文本打开"},
 		{"git worktree add: fatal: invalid reference", "git worktree add: fatal: invalid reference"},
+		// 几个仓库各一行：逐行翻译，单行的格式串不把几行吞成一个参数
+		{"nothing merged:\nworktree b has uncommitted changes; commit them first\nrepository a is on branch dev, not main; switch it before merging",
+			"一个仓库都没有合并：\nworktree b 有未提交的改动，先提交\n仓库 a 在分支 dev 上，不是 main，先切过去再合并"},
+		{"a: worktree removed but branch not found\nb: git failed", "a：worktree 删掉了，但是branch not found\nb: git failed"},
 	}
 	for _, c := range cases {
 		if got := MessageIn(ZH, c.in); got != c.want {

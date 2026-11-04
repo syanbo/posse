@@ -44,6 +44,7 @@ type terminalInfo struct {
 
 type workspaceInfo struct {
 	ID, ProjectID, Name, Path, Kind, Branch, BaseRef, Project, Label string
+	Repos                                                            []struct{ Path, Base string }
 	Terminals                                                        []terminalInfo
 	Setup                                                            *struct {
 		OK     bool
@@ -283,6 +284,7 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	mode := fs.String("mode", "auto", "")
 	branch := fs.String("branch", "", "")
 	base := fs.String("base", "", "")
+	repos := fs.String("repos", "", "")
 	path := fs.String("path", "", "")
 	noSetup := fs.Bool("no-setup", false, "")
 	agentName := fs.String("agent", "", "")
@@ -303,10 +305,16 @@ func cmdWorkspaceCreate(e *env, args []string) error {
 	}
 	var w workspaceInfo
 	params := map[string]any{"project": absPath(pos[0]), "name": pos[1], "mode": *mode, "branch": *branch, "base": *base, "path": *path,
-		"noSetup": *noSetup, "agent": *agentName, "model": *model, "effort": *effort, "prompt": *prompt}
+		"noSetup": *noSetup, "agent": *agentName, "model": *model, "effort": *effort, "prompt": *prompt, "repos": splitList(*repos)}
 	return e.do("workspace.create", params, &w, func() {
 		fmt.Fprintf(e.out, "created %s workspace %s (%s) at %s\n", w.Kind, w.Label, w.ID, w.Path)
 		switch {
+		case len(w.Repos) > 0:
+			fmt.Fprintf(e.out, "branch %s in", w.Branch)
+			for _, r := range w.Repos {
+				fmt.Fprintf(e.out, " %s (from %s)", r.Path, r.Base)
+			}
+			fmt.Fprintln(e.out)
 		case w.Branch != "" && w.BaseRef != "":
 			fmt.Fprintf(e.out, "branch %s from %s\n", w.Branch, w.BaseRef)
 		case w.Branch != "":
@@ -418,8 +426,12 @@ func cmdWorkspaceRm(e *env, args []string) error {
 	if err := need(pos, 1, "workspace rm"); err != nil {
 		return err
 	}
-	return e.do("workspace.rm", map[string]any{"workspace": pos[0], "force": *force, "deleteBranch": *delBranch}, nil, func() {
+	var r struct{ Left string }
+	return e.do("workspace.rm", map[string]any{"workspace": pos[0], "force": *force, "deleteBranch": *delBranch}, &r, func() {
 		fmt.Fprintf(e.out, "removed workspace %s\n", pos[0])
+		if r.Left != "" {
+			fmt.Fprintf(e.out, "kept %s: it still has other files (pass --force to delete them)\n", r.Left)
+		}
 	})
 }
 
@@ -682,4 +694,15 @@ func absPath(p string) string {
 		return abs
 	}
 	return p
+}
+
+// splitList 拆开逗号分隔的列表（--repos a,b），去掉空项。
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
