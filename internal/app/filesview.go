@@ -89,7 +89,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			if mark, ok := marks[r.Path]; ok && !ignored {
 				name.TextColor(letterColor(c, mark))
 				if !r.Dir {
-					name.Tooltip(treeMarkText(L(c), mark))
+					name.Tooltip(gitStatusText(L(c), mark))
 				}
 			}
 			if ignored {

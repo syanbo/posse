@@ -1059,19 +1059,21 @@ func (g *gitState) treeMarks() map[string]byte {
 	return g.marks
 }
 
-// treeMarkText 是悬停文件名时的说明。
-func treeMarkText(m locales.Messages, mark byte) string {
-	switch mark {
-	case 'M':
-		return m.GitModified()
+// gitStatusText 是悬停文件名时的状态说明：列表不画状态字母，色弱分不清颜色时靠它。
+func gitStatusText(m locales.Messages, letter byte) string {
+	switch letter {
 	case 'A':
 		return m.GitAdded()
+	case 'D':
+		return m.GitDeleted()
+	case 'R':
+		return m.GitRenamed()
 	case '?':
 		return m.GitNotAdded()
 	case 'U':
 		return m.GitHasConflicts()
 	}
-	return ""
+	return m.GitModified()
 }
 
 // rollbackDiffFile 是 diff 栏的"回滚这个文件"：在回滚对话框里回滚了这个文件后接着看同一组的下一个文件（没有就看上一个），

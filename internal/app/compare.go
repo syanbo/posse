@@ -615,9 +615,8 @@ func (a *app) fileChangeList(c *ui.Context, list *ui.ListState, folded *map[stri
 		row.Children(func() {
 			// 文件没有展开箭头，留出同样的宽度，和上一层目录名对齐
 			ui.Box(c).Width(miniBox()).Shrink(0)
-			ui.Text(c, string(f.Status)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(color).Width(sz(10)).Shrink(0)
 			changeGlyph(c, r.name, false, f.Status == 'D')
-			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(f.Path).TextColor(color)
+			name := ui.Text(c, r.name).FontSize(fsBody).SingleLine().Shrink(1).Tooltip(gitStatusText(L(c), f.Status) + "\n" + f.Path).TextColor(color)
 			if f.Status == 'D' {
 				name.Strikethrough().TextColor(t.TextMuted)
 			}

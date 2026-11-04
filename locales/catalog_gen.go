@@ -7277,6 +7277,22 @@ func (msgs Messages) GitRebaseTheirs() string {
 	return Catalog.Format(msgs.locale, "gitRebaseTheirs", nil)
 }
 
+// GitRenamed says "Renamed"
+// in the language the app shows.
+//
+// Change status of a renamed file, shown when hovering its name in the
+// change lists.
+func GitRenamed() string { return In(i18n.Locale()).GitRenamed() }
+
+// GitRenamed says "Renamed"
+// in the language of msgs.
+//
+// Change status of a renamed file, shown when hovering its name in the
+// change lists.
+func (msgs Messages) GitRenamed() string {
+	return Catalog.Format(msgs.locale, "gitRenamed", nil)
+}
+
 // GitResolve says "Resolve Conflicts"
 // in the language the app shows.
 //

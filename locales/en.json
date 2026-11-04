@@ -2844,6 +2844,10 @@
   "@gitRebaseTheirs": {
     "description": "Name of the theirs side of a rebase conflict (the user's commit being replayed), used in Accept menu items on a conflicted file."
   },
+  "gitRenamed": "Renamed",
+  "@gitRenamed": {
+    "description": "Change status of a renamed file, shown when hovering its name in the change lists."
+  },
   "gitResolve": "Resolve Conflicts",
   "@gitResolve": {
     "description": "Operation name of accepting one side for a conflicted file, shown in busy text, error messages and the Console."

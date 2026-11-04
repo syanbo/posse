@@ -518,9 +518,8 @@ func (a *app) rollbackRowView(c *ui.Context, g *gitState, row treeRow) {
 			r.on[e.Path] = state != pickAll
 		}
 		letter := statusLetter(e)
-		ui.Text(c, string(letter)).FontSize(fsSmall).Font(monoFont).FontWeight(fwMedium).TextColor(letterColor(c, letter)).Width(sz(10)).Shrink(0)
 		changeGlyph(c, row.name, e.IsDir(), letter == 'D')
-		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter))
+		name := ui.Text(c, row.name).FontSize(fsBody).SingleLine().Shrink(1).TextColor(letterColor(c, letter)).Tooltip(gitStatusText(L(c), letter))
 		if letter == 'D' {
 			name.Strikethrough().TextColor(t.TextMuted)
 		}

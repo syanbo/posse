@@ -281,7 +281,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('改动'), findsOneWidget);
     expect(find.text('未跟踪'), findsOneWidget);
-    expect(find.text('D'), findsOneWidget);
+    // 不写状态字母，删除的文件名划掉
+    expect(find.text('D'), findsNothing);
+    expect(find.text('M'), findsNothing);
+    expect(
+      tester.widget<Text>(find.text('gone.txt')).style?.decoration,
+      TextDecoration.lineThrough,
+    );
     expect(find.text('a.txt'), findsOneWidget);
     // 未跟踪的图片也标图片，不写新文件
     expect(find.text('图片'), findsOneWidget);

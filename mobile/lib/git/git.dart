@@ -430,18 +430,6 @@ class _GitPaneState extends State<GitPane> {
           ),
           child: Row(
             children: [
-              SizedBox(
-                width: _arrowBox,
-                child: Text(
-                  _letter(kind),
-                  textAlign: TextAlign.center,
-                  style: mono(
-                    Fs.small,
-                    color: _letterColor(c, kind),
-                  ).copyWith(fontWeight: Fw.bold),
-                ),
-              ),
-              const SizedBox(width: 8),
               FileIconView(
                 file.name,
                 size: Ic.medium,
@@ -464,7 +452,7 @@ class _GitPaneState extends State<GitPane> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: Fs.body,
-                            color: deleted ? c.muted : c.text,
+                            color: _nameColor(c, kind),
                             decoration: deleted
                                 ? TextDecoration.lineThrough
                                 : null,
@@ -560,19 +548,13 @@ class _ModeSwitch extends StatelessWidget {
   }
 }
 
-String _letter(ChangeKind kind) => switch (kind) {
-  ChangeKind.conflict => 'U',
-  ChangeKind.added => 'A',
-  ChangeKind.untracked => '?',
-  ChangeKind.deleted => 'D',
-  ChangeKind.renamed => 'R',
-  ChangeKind.modified => 'M',
-};
-
-Color _letterColor(PosseColors c, ChangeKind kind) => switch (kind) {
-  ChangeKind.conflict || ChangeKind.deleted => c.danger,
-  ChangeKind.added || ChangeKind.untracked => c.sage,
-  _ => c.accent,
+/// 文件名按状态上色，不写状态字母，和桌面一样照 WebStorm：修改和重命名蓝、新增绿、删除灰（另加删除线），
+/// 未跟踪和冲突红（两者在不同的组里）。
+Color _nameColor(PosseColors c, ChangeKind kind) => switch (kind) {
+  ChangeKind.added => c.sage,
+  ChangeKind.deleted => c.muted,
+  ChangeKind.untracked || ChangeKind.conflict => c.danger,
+  ChangeKind.modified || ChangeKind.renamed => c.sky,
 };
 
 class _Stats extends StatelessWidget {
@@ -580,7 +562,7 @@ class _Stats extends StatelessWidget {
 
   final GitFileChange file;
 
-  /// 列表里已经按组和状态字母分开了，不再写「新文件」。
+  /// 列表里已经按组和文件名颜色分开了，不再写「新文件」。
   final bool inList;
 
   @override

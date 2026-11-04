@@ -468,6 +468,7 @@
   "gitPreviousDifference": "上一处差异",
   "gitRebaseOurs": "目标分支的（ours）",
   "gitRebaseTheirs": "你的提交的（theirs）",
+  "gitRenamed": "已重命名",
   "gitResolve": "解决冲突",
   "gitRestoreConflicts": "取回本地改动时有冲突",
   "gitRestoreConflictsAfter": "{title}，但取回本地改动时有冲突",
