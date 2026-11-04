@@ -31,6 +31,8 @@ github.com/egoist/mygo v0.7.4 的副本，go.mod 用 replace 指向这里。去�
 
 `ui/input.go`、`ui/context.go`、`ui/runtime.go`、`ui/api_gen.go`：加 `Element.MiddleClicked`（中键点击，Posse 用来关标签），`ui/headless.go` 加 `Tester.MiddleClickAt`。
 
+`ui/base.go`、`ui/element.go`、`ui/input.go`、`ui/api_gen.go`：加 `Element.ClickedOutside`，对话框（`DialogBase`、`Modal`）是点遮罩关掉的（不是 Esc）时为真。Posse 的确认框据此把 `*open` 设回去，点遮罩不关，只有取消按钮和 Esc 关。
+
 `ui/theme.go`、`ui/runtime.go`（`updateCursor`）：加 `Theme.PointerCursor`，开着时能点的元素（没有禁用）显示手形指针、窗口内拖动值时显示抓握的手，照网页的习惯；mygo 默认照原生控件用箭头。只为挡住点击才标成可点的对话框遮罩和面板、弹出面板（`base.go`、`combobox.go`）明确设成箭头。
 
 `ui/theme.go`、`ui/paint.go`（`textForeground`）：加 `Theme.FlatText`，开着时元素的文字不用字体平滑画（和 `Font.Antialiased` 一样）。

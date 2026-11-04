@@ -381,8 +381,10 @@ type node struct {
 	// dismissed: Escape or a click outside closed the dialog or popover
 	// whose panel this is, in this frame (Dismissed).
 	dismissed bool
-	rotate    float32 // of an Icon, in degrees
-	label     string
+	// clickedOutside: of the dismissals, a click on the backdrop (Posse)
+	clickedOutside bool
+	rotate         float32 // of an Icon, in degrees
+	label          string
 	// widget names the widget that used the element's state as it created
 	// it, which Key would then lose.
 	widget string

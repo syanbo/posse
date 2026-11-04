@@ -1545,6 +1545,11 @@ func (e *node) Submitted() bool {
 //	}
 func (e *node) Dismissed() bool { return e.dismissed }
 
+// ClickedOutside reports whether clicking the backdrop, not Escape, closed
+// the dialog (Modal, DialogBase) returning the element, in the frame it did.
+// A dialog that only its buttons close sets *open back to true. (Posse)
+func (e *node) ClickedOutside() bool { return e.clickedOutside }
+
 // scrollbarPress starts dragging the thumb of the scroll container under
 // the pointer when the press is on its scroll bar, or pages toward the
 // press on the bar's track. Hidden bars take no press, as AppKit's

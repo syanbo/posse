@@ -3627,6 +3627,17 @@ func (_handle Element) Dismissed() bool {
 	return _node.Dismissed()
 }
 
+// ClickedOutside reports whether clicking the backdrop, not Escape, closed
+// the dialog (Modal, DialogBase) returning the element, in the frame it did.
+// A dialog that only its buttons close sets *open back to true. (Posse)
+func (_handle Element) ClickedOutside() bool {
+	_node := _handle.node()
+	if _node == nil {
+		return false
+	}
+	return _node.ClickedOutside()
+}
+
 // Dividers draws a line width DIPs thick in color c between each two
 // children of a row, a column or a List (between their rows), across the
 // element, inside its border: in the middle of the room between them,

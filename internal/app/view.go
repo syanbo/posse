@@ -2562,25 +2562,57 @@ func quietIconButton(c *ui.Context, icon *ui.SVG, label string, box, glyph float
 
 func (a *app) confirmDialog(c *ui.Context) {
 	t := c.Theme()
-	ui.Modal(c, &a.confirming, func() {
+	// 点遮罩不关，免得误点丢掉要确认的事；取消按钮和 Esc 照常关
+	if ui.Modal(c, &a.confirming, func() {
 		ui.Column(c).Width(340).Gap(8).Children(func() {
 			titleText(c, a.confirmTitle, fsTitle)
 			if a.confirmBody != "" {
 				ui.Text(c, a.confirmBody).FontSize(fsBody).TextColor(t.TextMuted).LineHeight(1.45)
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
-				if a.confirmDo != nil && pressable(textButton(c, L(c).CommonCancel())).Clicked() {
-					a.confirming = false
+				// 键盘：打开时选中取消（关闭、删除这类确认误按回车也不出事），←→ 和 Tab 换按钮，回车、空格按下选中的
+				var cancel ui.Element
+				if a.confirmDo != nil {
+					cancel = confirmButton(c, pressable(textButton(c, L(c).CommonCancel()))).AutoFocus()
+					if cancel.Clicked() {
+						a.confirming = false
+					}
 				}
-				if pressable(accentButton(c, a.confirmVerb)).Clicked() {
+				ok := confirmButton(c, pressable(accentButton(c, a.confirmVerb)))
+				if a.confirmDo == nil {
+					ok.AutoFocus()
+				}
+				if ok.Clicked() {
 					a.confirming = false
 					if a.confirmDo != nil {
 						go a.confirmDo()
 					}
 				}
+				if a.confirmDo != nil {
+					if cancel.Shortcut(0, ui.KeyRight) {
+						ok.Focus()
+					}
+					if ok.Shortcut(0, ui.KeyLeft) {
+						cancel.Focus()
+					}
+				}
 			})
 		})
-	})
+	}).ClickedOutside() {
+		a.confirming = true
+	}
+}
+
+// confirmButton 给确认框的按钮画选中框：打开时焦点不是从键盘来的，mygo 自己的聚焦框不画，这里一直画。
+func confirmButton(c *ui.Context, b ui.Element) ui.Element {
+	b.FocusRing(false)
+	if b.Focused() {
+		// 和按钮隔一道缝，强调色的按钮上也看得出
+		b.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			p.FocusRing(r, [4]float32{rControl, rControl, rControl, rControl})
+		})
+	}
+	return b
 }
 
 func (a *app) newWorkspaceDialog(c *ui.Context) {

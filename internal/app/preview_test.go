@@ -879,6 +879,15 @@ func TestPreview(t *testing.T) {
 		after := "{\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\"\n  },\n  \"theme\": \"dark\"\n}\n"
 		a.skillChange = skillChangeView{open: true, ch: skills.Change{Agent: skills.Claude, Skill: "lark-calendar", Enable: true, File: homeDir + "/.claude/settings.json", Before: before, After: after}}
 		savePNG(t, newPreviewTester(a, dark), "skills-confirm-"+suffix+".png")
+		// 确认框：打开时选中取消，→ 换到确认
+		a = previewApp(t)
+		a.confirm("把 ~/Desktop/demo 加入项目？", "文件夹留在原处，Posse 只把它列进侧栏。", "加入", func() {})
+		ct := newPreviewTester(a, dark)
+		savePNG(t, ct, "confirm-"+suffix+".png")
+		ct.Key(0, ui.KeyRight)
+		ct.Frame()
+		ct.Frame()
+		savePNG(t, ct, "confirm-ok-"+suffix+".png")
 		// 删工作区时列出 agent 在工作区外留下的痕迹
 		a = previewApp(t)
 		at := time.Date(2026, 10, 30, 14, 20, 0, 0, time.Local)

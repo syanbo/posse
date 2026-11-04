@@ -481,13 +481,15 @@ func coreDialogBase(c *context, open *bool, fn func(backdrop, panel *node)) *nod
 		back := coreBox(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Center().Modal()
 		back.flags |= flagClickable
 		back.Cursor(CursorDefault) // Posse
-		dismissed := back.Clicked() || back.OverlayShortcut(0, KeyEscape)
+		outside := back.Clicked()  // Posse
+		dismissed := outside || back.OverlayShortcut(0, KeyEscape)
 		if dismissed {
 			*open = false
 		}
 		back.Children(func() {
 			panel = coreBox(c).Role(RoleDialog)
 			panel.dismissed = dismissed
+			panel.clickedOutside = outside
 			panel.flags |= flagClickable
 			panel.Cursor(CursorDefault) // Posse
 			panel.Children(func() { fn(back, panel) })
