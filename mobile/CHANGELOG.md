@@ -3,6 +3,14 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.14
+
+- 新建会话只列电脑上能用的 agent（装了、又没在设置里关掉的），默认选第一个；电脑上刚改了开关，打开面板就生效。
+
+### English
+
+- New sessions list only the agents available on the computer (installed and not turned off in Settings), with the first one selected; a switch just changed on the computer takes effect when you open the panel.
+
 ## 0.1.13
 
 - 看桌面解锁更安全：密码作为单独的消息发给 Mac，只在锁屏时打进登录窗口，不会落进解锁后的 App；点了解锁后按钮显示「正在解锁…」，连点不会重复发送。
