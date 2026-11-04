@@ -631,6 +631,30 @@ func (t *Terminal) Agent() AgentState {
 
 func (t *Terminal) SetAgent(s AgentState) {
 	t.mu.Lock()
+	t.agent = t.mergeAgent(s)
+	t.mu.Unlock()
+	t.notify()
+}
+
+// UpdateAgent 按当前状态算出下一个状态并记下，读和写在同一把锁里：同时到的 hook 带来的字段不会被旧值盖掉。
+// fn 返回 false 时不改；fn 里不能再调 Terminal 的方法。返回改之前和改之后的状态。
+func (t *Terminal) UpdateAgent(fn func(cur AgentState) (AgentState, bool)) (prev, next AgentState, changed bool) {
+	t.mu.Lock()
+	prev = t.agent
+	s, ok := fn(prev)
+	if ok {
+		t.agent = t.mergeAgent(s)
+	}
+	next = t.agent
+	t.mu.Unlock()
+	if ok {
+		t.notify()
+	}
+	return prev, next, ok
+}
+
+// mergeAgent 在持有 mu 时把新状态和当前的合起来。
+func (t *Terminal) mergeAgent(s AgentState) AgentState {
 	// 有的事件不带会话信息，沿用之前拿到的。离开等待就清掉卡片，免得上一张审批卡
 	// 停在已经继续干活的会话上。仍在等待、但这次没带新提示的事件要留着原卡片：
 	// Claude 的 Notification permission_prompt 会在答题卡还在时再响一次，payload 是空的。
@@ -652,9 +676,7 @@ func (t *Terminal) SetAgent(s AgentState) {
 	} else if s.Prompt == "" {
 		s.ToolName, s.ToolInput, s.Prompt = t.agent.ToolName, t.agent.ToolInput, t.agent.Prompt
 	}
-	t.agent = s
-	t.mu.Unlock()
-	t.notify()
+	return s
 }
 
 // DropSubagent 划掉一个结束的子 agent，返回改后的状态。

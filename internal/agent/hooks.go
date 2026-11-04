@@ -296,6 +296,17 @@ func TitleStatus(agentName, title, current string) (string, bool) {
 	return "", false
 }
 
+// TitleWaiting 报告标题说 agent 在等批准：Codex、Grok 写 Action Required，Claude、Cursor 的标题不说。
+func TitleWaiting(agentName, title string) bool {
+	switch agentName {
+	case "codex":
+		return strings.Contains(title, "Action Required")
+	case "grok":
+		return strings.Contains(strings.ToLower(title), "action required")
+	}
+	return false
+}
+
 // TitleOnlyStatus 给没有注入 hooks 的 agent（用户在终端里自己启动的）判断状态：
 // Claude 只能靠标题，开头是转动的圆形符号就是工作中。其余和 TitleStatus 一样。
 func TitleOnlyStatus(agentName, title, current string) (string, bool) {

@@ -167,8 +167,9 @@ func (d *Daemon) onTitle(id, title string) {
 			s.mu.Unlock()
 		}
 	}
-	// 报过 7501 的 agent 不再看标题（Claude 这时也不往标题里写状态了）
+	// 报过 7501 的 agent 只从标题里看等待（Claude 这时也不往标题里写状态了）
 	if s.oscActive() {
+		d.titleWaiting(s, name, title)
 		return
 	}
 	status := agent.TitleStatus
@@ -718,18 +719,28 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 
 // setAgent 记录 agent 状态，并处理与任务相关的后续：空闲时投递未读消息，agent 退出时结束它的任务。
 func (d *Daemon) setAgent(s *session, st host.AgentState) {
-	// 主线程停下时后台子 agent 还在跑：不算本轮完成（防休眠、terminal wait、界面和手机都按工作中）
+	cur := s.Agent()
+	st = keepWorking(st, cur)
+	s.SetAgent(st)
+	d.afterAgent(s, cur.Status, st)
+}
+
+// keepWorking：主线程停下时后台子 agent 还在跑，不算本轮完成（防休眠、terminal wait、界面和手机都按工作中）。
+func keepWorking(st, cur host.AgentState) host.AgentState {
 	if st.Status == agent.StatusIdle {
 		subs := st.Subagents
-		if cur := s.Agent(); subs == nil && (st.SessionID == "" || st.SessionID == cur.SessionID) {
+		if subs == nil && (st.SessionID == "" || st.SessionID == cur.SessionID) {
 			subs = cur.Subagents
 		}
 		if len(subs) > 0 {
 			st.Status = agent.StatusWorking
 		}
 	}
-	prev := s.Agent().Status
-	s.SetAgent(st)
+	return st
+}
+
+// afterAgent 是状态记下之后的后续：未读、推送、防休眠、投递提醒、agent 退出。
+func (d *Daemon) afterAgent(s *session, prev string, st host.AgentState) {
 	s.noteStatus(prev, st.Status)
 	d.schedulePush(s, prev, st.Status)
 	d.refreshAwake()

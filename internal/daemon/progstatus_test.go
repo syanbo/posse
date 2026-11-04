@@ -97,7 +97,7 @@ func TestOSCKeepsHookWaiting(t *testing.T) {
 func TestOSCOtherAppsAndClear(t *testing.T) {
 	d, s, hook := oscTerminal(t, "claude")
 	hook("UserPromptSubmit", map[string]any{})
-	d.onProgramStatus(s.ID, host.ProgramStatus{State: "blocked", Kind: "question", App: "claude-code", Msg: "red or blue?"})
+	d.onProgramStatus(s.ID, host.ProgramStatus{State: "blocked", App: "claude-code", Msg: "red or blue?"})
 	if st := wantStatus(t, s, agent.StatusWaiting); st.Message != "red or blue?" {
 		t.Fatalf("message %+v", st)
 	}
@@ -147,5 +147,40 @@ func TestOSCIgnoresStartupWork(t *testing.T) {
 	wantStatus(t, s, agent.StatusIdle)
 	if !s.isUnread() {
 		t.Fatal("finished turn not unread")
+	}
+}
+
+// 在 shell 里手动启动的 Codex 第一个 hook 之前不算带 hooks，没经同名脚本启动的根本没有：启动时的工作中照样不算。
+func TestOSCIgnoresStartupWorkOfManualCodex(t *testing.T) {
+	d, s, _ := oscTerminal(t, "codex")
+	s.mu.Lock()
+	s.hooked = false
+	s.mu.Unlock()
+	for _, state := range []string{"idle", "working", "idle"} {
+		d.onProgramStatus(s.ID, host.ProgramStatus{State: state, App: "codex"})
+		if st := s.Agent(); st.Status == agent.StatusWorking {
+			t.Fatalf("startup counted as work after %q: %+v", state, st)
+		}
+	}
+	if s.isUnread() {
+		t.Fatal("startup left the terminal unread")
+	}
+}
+
+// 报过 7501 后标题的 Action Required 仍能升成等待，标题不这样写了退回 7501 报的状态；hook 记的等待不受标题影响。
+func TestOSCTitleWaiting(t *testing.T) {
+	d, s, hook := oscTerminal(t, "codex")
+	osc := func(state string) { d.onProgramStatus(s.ID, host.ProgramStatus{State: state, App: "codex"}) }
+	hook("UserPromptSubmit", map[string]any{})
+	osc("working")
+	d.onTitle(s.ID, "Action Required - posse")
+	wantStatus(t, s, agent.StatusWaiting)
+	d.onTitle(s.ID, "⠋ posse")
+	wantStatus(t, s, agent.StatusWorking)
+
+	hook("PermissionRequest", map[string]any{"tool_name": "Bash", "tool_input": map[string]any{"command": "ls"}})
+	d.onTitle(s.ID, "⠋ posse")
+	if st := wantStatus(t, s, agent.StatusWaiting); st.Prompt == "" {
+		t.Fatalf("title dropped the hook card %+v", st)
 	}
 }

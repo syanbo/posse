@@ -73,6 +73,8 @@ type Terminal interface {
 
 	Agent() AgentState
 	SetAgent(s AgentState)
+	// UpdateAgent 按当前状态算下一个状态，读写在同一把锁里，见 term.Terminal.UpdateAgent
+	UpdateAgent(fn func(cur AgentState) (AgentState, bool)) (prev, next AgentState, changed bool)
 	ResetAgent(s AgentState)
 	// DropSubagent 划掉一个结束的后台子 agent（它们跑着时主线程停下不算完成）
 	DropSubagent(id string) AgentState
@@ -170,19 +172,22 @@ func (l *local) Info() Info {
 	return Info{ID: l.t.ID, WorkspaceID: l.t.WorkspaceID, Dir: l.t.Dir, Command: l.t.Command, CreatedAt: l.t.CreatedAt}
 }
 
-func (l *local) Running() bool                     { return l.t.Running() }
-func (l *local) Exited() <-chan struct{}           { return l.t.Exited() }
-func (l *local) ExitCode() int                     { return l.t.ExitCode() }
-func (l *local) Pid() int                          { return l.t.Pid() }
-func (l *local) Foreground() int                   { return l.t.Foreground() }
-func (l *local) Title() string                     { return l.t.Title() }
-func (l *local) Size() (int, int)                  { return l.t.Size() }
-func (l *local) LastOutput() time.Time             { return l.t.LastOutput() }
-func (l *local) LastInput() time.Time              { return l.t.LastInput() }
-func (l *local) Changed() <-chan struct{}          { return l.t.Changed() }
-func (l *local) Agent() AgentState                 { return l.t.Agent() }
-func (l *local) SetAgent(s AgentState)             { l.t.SetAgent(s) }
-func (l *local) ResetAgent(s AgentState)           { l.t.ResetAgent(s) }
+func (l *local) Running() bool            { return l.t.Running() }
+func (l *local) Exited() <-chan struct{}  { return l.t.Exited() }
+func (l *local) ExitCode() int            { return l.t.ExitCode() }
+func (l *local) Pid() int                 { return l.t.Pid() }
+func (l *local) Foreground() int          { return l.t.Foreground() }
+func (l *local) Title() string            { return l.t.Title() }
+func (l *local) Size() (int, int)         { return l.t.Size() }
+func (l *local) LastOutput() time.Time    { return l.t.LastOutput() }
+func (l *local) LastInput() time.Time     { return l.t.LastInput() }
+func (l *local) Changed() <-chan struct{} { return l.t.Changed() }
+func (l *local) Agent() AgentState        { return l.t.Agent() }
+func (l *local) SetAgent(s AgentState)    { l.t.SetAgent(s) }
+func (l *local) ResetAgent(s AgentState)  { l.t.ResetAgent(s) }
+func (l *local) UpdateAgent(fn func(AgentState) (AgentState, bool)) (AgentState, AgentState, bool) {
+	return l.t.UpdateAgent(fn)
+}
 func (l *local) DropSubagent(id string) AgentState { return l.t.DropSubagent(id) }
 func (l *local) SetTitle(title, sessionID string, pending bool) {
 	l.t.SetTitle(title, sessionID, pending)

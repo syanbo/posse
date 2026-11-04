@@ -3,7 +3,6 @@ package term
 import (
 	"bytes"
 	"encoding/base64"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -13,13 +12,11 @@ import (
 // libghostty-vt 不认识它，常驻进程在输出交给内核之前自己挑出来。
 // 规范见 https://www.superlogical.com/rex/docs/build/program-status.md
 
-// ProgramStatus 是程序报告的一条状态（只取根记录，带 id 的子记录不管）。
+// ProgramStatus 是程序报告的一条状态（只取根记录，带 id 的子记录不管；kind、progress、title 用不上，不解析）。
 type ProgramStatus struct {
-	State    string // idle | working | done | blocked | error | clear
-	Kind     string // blocked 的原因：permission | question | auth，其余为空
-	App      string // 报告者，如 claude-code、codex、grok-build
-	Msg      string // 一行说明，已去掉控制字符
-	Progress int    // 0–100，-1 是没给
+	State string // idle | working | done | blocked | error | clear
+	App   string // 报告者，如 claude-code、codex、grok-build
+	Msg   string // 一行说明，已去掉控制字符
 }
 
 const (
@@ -103,29 +100,23 @@ func progTerminator(b []byte) (end, next int) {
 // parseProgramStatus 解析一条报告。probe 为 true 是功能探测（OSC 7501 ; ?）；ok 为 false 是格式不对，
 // 或是带 id 的子记录（含只清子记录的 clear）：agent 都只报根记录。
 func parseProgramStatus(body []byte) (st ProgramStatus, probe, ok bool) {
-	if string(body) == "?" {
+	if strings.TrimSpace(string(body)) == "?" {
 		return st, true, false
 	}
-	st.Progress = -1
 	id := ""
 	for _, pair := range strings.Split(string(body), ":") {
 		k, v, found := strings.Cut(pair, "=")
 		if !found {
 			continue
 		}
-		switch k {
+		// 规范：键和值两边的空白去掉
+		switch v = strings.TrimSpace(v); strings.TrimSpace(k) {
 		case "state":
 			st.State = v
 		case "id":
 			id = v
-		case "kind":
-			st.Kind = v
 		case "app":
 			st.App = v
-		case "progress":
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= 100 {
-				st.Progress = n
-			}
 		case "msg":
 			msg, good := decodeStatusText(v, progMaxMsg)
 			if !good {
@@ -141,14 +132,6 @@ func parseProgramStatus(body []byte) (st ProgramStatus, probe, ok bool) {
 	}
 	if id != "" {
 		return ProgramStatus{}, false, false
-	}
-	switch st.Kind {
-	case "permission", "question", "auth":
-	default:
-		st.Kind = ""
-	}
-	if st.State != "blocked" {
-		st.Kind = ""
 	}
 	if len(st.App) > 32 {
 		st.App = st.App[:32]

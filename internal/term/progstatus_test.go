@@ -61,14 +61,14 @@ func TestProgScannerDrops(t *testing.T) {
 func TestParseProgramStatus(t *testing.T) {
 	// 实测 Claude Code 2.1.318 提问时报的
 	st, probe, ok := parseProgramStatus([]byte("state=blocked:app=claude-code:kind=question:msg=5L2g5pu05Zac5qyi57qi6Imy6L+Y5piv6JOd6Imy77yf"))
-	if !ok || probe || st != (ProgramStatus{State: "blocked", Kind: "question", App: "claude-code", Msg: "你更喜欢红色还是蓝色？", Progress: -1}) {
+	if !ok || probe || st != (ProgramStatus{State: "blocked", App: "claude-code", Msg: "你更喜欢红色还是蓝色？"}) {
 		t.Fatalf("blocked: %+v %v %v", st, probe, ok)
 	}
 	if _, probe, _ := parseProgramStatus([]byte("?")); !probe {
 		t.Fatal("probe")
 	}
-	if st, _, ok := parseProgramStatus([]byte("state=working:progress=40:kind=question:x:bogus=1")); !ok || st.Progress != 40 || st.Kind != "" {
-		t.Fatalf("working: %+v", st)
+	if st, _, ok := parseProgramStatus([]byte(" state = working : app=brew :x:bogus=1")); !ok || st.State != "working" || st.App != "brew" {
+		t.Fatalf("spaces: %+v", st)
 	}
 	for _, body := range []string{
 		"state=sleeping",                                   // 不认识的状态

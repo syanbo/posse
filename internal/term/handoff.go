@@ -175,6 +175,8 @@ func Adopt(o Options, s State, f *os.File) (*Terminal, error) {
 	t.title = s.Title
 	t.agent = s.Agent
 	t.tail = append([]byte(nil), s.Tail...)
+	// 旧进程停读时没写完的 OSC 7501（比如被切开的探测）在 Tail 里，扫描器接着拼
+	t.prog.feed(s.Tail, func([]byte) {})
 	t.lastOutput.Store(s.LastOutput.UnixNano())
 	if !s.LastInput.IsZero() {
 		t.lastInput.Store(s.LastInput.UnixNano())

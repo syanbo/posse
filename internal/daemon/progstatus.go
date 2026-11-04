@@ -62,31 +62,62 @@ func (d *Daemon) onProgramStatus(id string, ps host.ProgramStatus) {
 	if prev := s.setOSC(name, status); prev == status {
 		return
 	}
-	// 带 hooks 的 agent 一轮的开始以 hook 或键入为准：Codex 启动时会先报两秒工作中，当成一轮的话刚开的终端就成了未读、还会推送
+	// 一轮的开始以 hook 或键入为准（见 oscTurnBegun）：Codex 启动时会先报两秒工作中，当成一轮的话刚开的终端就成了未读、还会推送
 	if status == agent.StatusWorking && !s.oscTurnBegun() {
 		return
 	}
-	cur := s.Agent()
-	if cur.Status == status {
-		return
+	at := time.Now()
+	prev, next, ok := s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
+		if cur.Status == status {
+			return cur, false
+		}
+		st := cur
+		st.Status, st.At = status, at
+		st.Event = eventOSC
+		// 等待时的说明是在等什么，离开等待就不再成立；空闲时沿用的是 Stop 带来的最后一条回复
+		if cur.Status == agent.StatusWaiting {
+			st.Message = ""
+		}
+		switch status {
+		case agent.StatusIdle:
+			st.Event = eventOSCStopped
+		case agent.StatusWorking:
+			st.Message = ""
+		case agent.StatusWaiting:
+			// hook 已经记了等待时留着它的说明和卡片；7501 先到时用它的说明（Claude 提问时是问题和选项）
+			st.Message = ps.Msg
+		}
+		return keepWorking(st, cur), true
+	})
+	if ok {
+		d.afterAgent(s, prev.Status, next)
 	}
-	st := cur
-	st.Status, st.At = status, time.Now()
-	st.Event = eventOSC
-	// 等待时的说明是在等什么，离开等待就不再成立；空闲时沿用的是 Stop 带来的最后一条回复
-	if cur.Status == agent.StatusWaiting {
-		st.Message = ""
+}
+
+// titleWaiting 是报过 7501 之后对标题仅剩的用处：Codex、Grok 等批准时标题含 Action Required，
+// 万一它们的 7501 这时不报 blocked，等待也不丢。只往等待升；标题不再这样写时退回 7501 报的状态。
+func (d *Daemon) titleWaiting(s *session, name, title string) {
+	waiting := agent.TitleWaiting(name, title)
+	s.mu.Lock()
+	osc := s.oscStatus
+	s.mu.Unlock()
+	at := time.Now()
+	prev, next, ok := s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
+		switch {
+		case waiting && cur.Status != agent.StatusWaiting:
+			return host.AgentState{Status: agent.StatusWaiting, Event: "title", At: at}, true
+		case !waiting && cur.Status == agent.StatusWaiting && cur.Event == "title" && osc != agent.StatusWaiting:
+			st := host.AgentState{Status: osc, Event: eventOSC, At: at}
+			if osc == agent.StatusIdle {
+				st.Event = eventOSCStopped
+			}
+			return keepWorking(st, cur), true
+		}
+		return cur, false
+	})
+	if ok {
+		d.afterAgent(s, prev.Status, next)
 	}
-	switch status {
-	case agent.StatusIdle:
-		st.Event = eventOSCStopped
-	case agent.StatusWorking:
-		st.Message = ""
-	case agent.StatusWaiting:
-		// hook 已经记了等待时留着它的说明和卡片；7501 先到时用它的说明（Claude 提问时是问题和选项）
-		st.Message = ps.Msg
-	}
-	d.setAgent(s, st)
 }
 
 // setOSC 记下当前 agent 经 7501 报的状态，返回它上一次报的（之前没报过或换了 agent 时为空）。
@@ -104,8 +135,8 @@ func (s *session) setOSC(name, status string) (prev string) {
 	return prev
 }
 
-// oscTurnBegun 报告 7501 报的工作中能不能算数：没有 hooks 的 agent 只有 7501；有 hooks 的要等 hook 报过工作中，
-// 或者开始以 7501 为准之后有人往终端里输入过。
+// oscTurnBegun 报告 7501 报的工作中能不能算数：没有 hooks 的 agent（Grok）只有 7501；有 hooks 的和 Codex
+// 要等 hook 报过工作中，或者开始以 7501 为准之后有人往终端里输入过（Codex 启动时先报两秒工作中）。
 func (s *session) oscTurnBegun() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,7 +144,8 @@ func (s *session) oscTurnBegun() bool {
 }
 
 func (s *session) oscTurnBegunLocked() bool {
-	return !s.hooked || s.oscTurn || s.LastInput().After(s.oscAt)
+	// Codex 不论带没带 hooks 都这样：手动启动的要到第一个 hook 才记成带 hooks，没经同名脚本启动的根本没有
+	return !s.hooked && s.agent != "codex" || s.oscTurn || s.LastInput().After(s.oscAt)
 }
 
 // oscActive 报告当前 agent 报过 7501。
