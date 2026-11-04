@@ -925,19 +925,30 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 		}
 	}
 	// 行首一直是 agent 图标，忙起来也认得出是谁；状态画在图标左边的槽里，对着上一层行首图标的中线。
-	// 选中、悬停的底色和点击、拖动都按包着状态槽的整行算，状态不会飘在底色外面
+	// 点击、拖动和悬停都按包着状态槽的整行算；底色从第一个可见图形前 navPad 处开始：
+	// 有状态图形时铺满整行，状态不会飘在底色外面，槽空着时跳过缩进和空槽，从 agent 图标前开始
 	icon := func() { agentTile(c, term.Agent, smallIcon()).Tooltip(name) }
 	key := "line-" + term.ID
 	if shadow {
 		key = "shadow-" + term.ID
 	}
 	line := ui.Row(c.Key(key)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
-	selectedBg(c, line, selected)
+	var bg ui.Color
+	if status != "" {
+		selectedBg(c, line, selected)
+	} else {
+		bg = selectedColor(c, line, selected)
+	}
 	// 展开着 worker、自己又没有状态图形时，下面 worker 的竖线没有东西可接，顶端拐过来接到自己的 agent 图标
 	head := open != nil && *open && status == ""
-	if depth > 0 || head {
+	if depth > 0 || head || bg.A > 0 {
 		color, hasStatus := colors(c.Theme()).guide, status != ""
 		line.Draw(func(p *ui.Painter, r ui.Rect) {
+			// 先画底色，连接线横着伸进来接到图标前时压在底色上面
+			if bg.A > 0 {
+				inset := float32(depth+1) * navIndent
+				p.Fill(ui.Rect{X: r.X + inset, Y: r.Y, W: r.W - inset, H: r.H}, bg, rControl)
+			}
 			drawGuide(p, r, guide, hasStatus, navRowGap, color)
 			if head {
 				drawGuideHead(p, r, depth, color)

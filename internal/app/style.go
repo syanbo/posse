@@ -545,6 +545,11 @@ func (a *app) band(c *ui.Context, fn func()) {
 
 // selectedBg 给列表里的一行加选中和悬停的底：选中是强调色淡底，不画竖条。
 func selectedBg(c *ui.Context, row ui.Element, selected bool) ui.Element {
+	return row.Background(selectedColor(c, row, selected))
+}
+
+// selectedColor 是 selectedBg 这一帧的底色（含动画），给要自己画底色的行用。
+func selectedColor(c *ui.Context, row ui.Element, selected bool) ui.Color {
 	p := colors(c.Theme())
 	bg := ui.Transparent
 	switch {
@@ -553,7 +558,7 @@ func selectedBg(c *ui.Context, row ui.Element, selected bool) ui.Element {
 	case row.Hovered():
 		bg = p.wash
 	}
-	return row.Background(row.AnimateColor("bg", bg, hover))
+	return row.AnimateColor("bg", bg, hover)
 }
 
 // tile 是带底色的方形图标，用在卡片标题旁边。
