@@ -1358,6 +1358,12 @@ abstract class AppLocalizations {
   /// **'Unlock'**
   String get deskUnlock;
 
+  /// Remote Desktop: the unlock button on the lock-screen pill for a few seconds after the password was sent; it can't be tapped again meanwhile.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlocking…'**
+  String get deskUnlocking;
+
   /// Remote Desktop › unlock sheet: explanation.
   ///
   /// In en, this message translates to:

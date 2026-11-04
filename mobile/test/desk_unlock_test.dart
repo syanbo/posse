@@ -35,6 +35,19 @@ Future<Future<MacPasswordAnswer?> Function()> _open(
 }
 
 void main() {
+  test('one unlock at a time: a second tap within the wait is ignored', () {
+    final gate = DeskUnlockGate();
+    final at = DateTime(2026, 11, 4, 9);
+    expect(gate.busy(at), isFalse);
+    gate.sent(at);
+    expect(gate.busy(at.add(const Duration(milliseconds: 200))), isTrue);
+    expect(gate.busy(at.add(DeskUnlockGate.wait)), isFalse);
+    // Mac 报了解锁就提前结束
+    gate.sent(at);
+    gate.clear();
+    expect(gate.busy(at), isFalse);
+  });
+
   test(
     'a password is saved only when it was typed and the Mac unlocked soon',
     () {

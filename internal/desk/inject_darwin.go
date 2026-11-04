@@ -80,7 +80,8 @@ type injector struct {
 	// woke 是上一次唤出锁屏密码框的时刻
 	woke time.Time
 	// typed 是这批输入里有密码打完、按了回车，放开锁之后报给手机
-	typed bool
+	typed  bool
+	pwGate passwordGate
 
 	bounds     cgRect
 	layout     map[rune]keyStroke
@@ -317,8 +318,13 @@ func (in *injector) one(ev Event, now time.Time) {
 			in.typeChord(ev.Text, ev.Mods)
 		}
 	case EventPassword:
+		if !in.pwGate.allow(time.Now()) {
+			in.logf("password dropped: another password was just typed")
+			return
+		}
 		if typePassword(macLockScreen{in: in}, ev.Text, in.logf) {
 			in.typed = true
+			in.pwGate.typed(time.Now())
 		}
 	}
 }

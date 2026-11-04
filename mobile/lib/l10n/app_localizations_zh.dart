@@ -742,6 +742,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deskUnlock => '解锁';
 
   @override
+  String get deskUnlocking => '正在解锁…';
+
+  @override
   String get deskUnlockNote => '输入 Mac 的登录密码，发到锁屏界面后自动回车';
 
   @override

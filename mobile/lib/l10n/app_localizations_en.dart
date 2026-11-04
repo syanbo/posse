@@ -773,6 +773,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deskUnlock => 'Unlock';
 
   @override
+  String get deskUnlocking => 'Unlocking…';
+
+  @override
   String get deskUnlockNote =>
       'Enter the Mac’s login password. It’s typed on the lock screen, then Return is pressed.';
 

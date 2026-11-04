@@ -13,6 +13,20 @@ bool deskSaveOnUnlock({
   required bool waitTyped,
 }) => !waitTyped && now.difference(sentAt) <= const Duration(seconds: 15);
 
+/// 一次解锁发出去之后的等待：这段时间里不再发密码。连点「解锁」时后几遍会在 Mac 验证
+/// 前一遍的工夫打进锁屏密码框，多算几次输错。Mac 报解锁就提前结束。
+class DeskUnlockGate {
+  static const wait = Duration(seconds: 3);
+
+  DateTime? _sentAt;
+
+  bool busy(DateTime now) => _sentAt != null && now.difference(_sentAt!) < wait;
+
+  void sent(DateTime now) => _sentAt = now;
+
+  void clear() => _sentAt = null;
+}
+
 /// 弹层的结果：[password] 为空是点了「忘掉密码」。
 typedef MacPasswordAnswer = ({String? password, bool remember});
 

@@ -152,6 +152,9 @@ class _DeskPageState extends State<DeskPage>
   bool _nack = false;
   // 电脑认密码事件（ready 里带 password）：锁屏判断和只投给锁屏都在 Mac 上做
   bool _passwordEvent = false;
+  final _unlockGate = DeskUnlockGate();
+  // 等待结束时重画胶囊，按钮从「正在解锁」变回来
+  Timer? _unlockTick;
   DeskTrafficKeys? _keys;
   String? _hostNow;
   var _watchTail = Future<void>.value();
@@ -223,6 +226,7 @@ class _DeskPageState extends State<DeskPage>
     _retry?.cancel();
     _lockRetry?.cancel();
     _lanCheck?.cancel();
+    _unlockTick?.cancel();
     // 让还在跑的订阅停在下一次检查，松开先于退订发出。
     _gen++;
     _link.release();
@@ -756,6 +760,8 @@ class _DeskPageState extends State<DeskPage>
             setState(() => _macLocked = true);
             unawaited(_checkSaved());
           case 'unlocked':
+            _unlockGate.clear();
+            _unlockTick?.cancel();
             setState(() => _macLocked = false);
             unawaited(_savePending());
           case 'password_typed':
@@ -1344,6 +1350,7 @@ class _DeskPageState extends State<DeskPage>
 
   /// 旧电脑不认密码事件：不发。旧的发法（文字加回车）在解锁的那一刻会把密码打进最前面的 App。
   bool _canSendPassword() {
+    if (_unlockGate.busy(DateTime.now())) return false;
     if (_passwordEvent) return true;
     _note(context.l10n.errorOldDesktop);
     return false;
@@ -1357,13 +1364,21 @@ class _DeskPageState extends State<DeskPage>
       _note(context.l10n.deskAlreadyUnlocked);
       return false;
     }
+    if (_unlockGate.busy(DateTime.now())) return false;
     if (!_link.password(password)) return false;
+    _unlockGate.sent(DateTime.now());
+    _unlockTick?.cancel();
+    _unlockTick = Timer(DeskUnlockGate.wait, () {
+      if (mounted) setState(() {});
+    });
+    setState(() {});
     _noteInput();
     return true;
   }
 
   /// 锁屏胶囊：和悬浮球一样的圆角和底色，按钮压到胶囊里面。
   Widget _lockPill(PosseColors colors) {
+    final unlocking = _unlockGate.busy(DateTime.now());
     final button = FilledButton.styleFrom(
       minimumSize: const Size(0, 36),
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1400,7 +1415,7 @@ class _DeskPageState extends State<DeskPage>
                   height: 36,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: () => unawaited(_unlock()),
+                onPressed: unlocking ? null : () => unawaited(_unlock()),
                 icon: Icon(
                   Icons.key_rounded,
                   size: Ic.medium,
@@ -1411,15 +1426,23 @@ class _DeskPageState extends State<DeskPage>
               FilledButton(
                 key: const Key('desk-unlock'),
                 style: button,
-                onPressed: () => unawaited(_unlockSaved()),
-                child: Text(context.l10n.deskUnlock),
+                onPressed: unlocking ? null : () => unawaited(_unlockSaved()),
+                child: Text(
+                  unlocking
+                      ? context.l10n.deskUnlocking
+                      : context.l10n.deskUnlock,
+                ),
               ),
             ] else
               FilledButton(
                 key: const Key('desk-unlock'),
                 style: button,
-                onPressed: () => unawaited(_unlock()),
-                child: Text(context.l10n.deskEnterPassword),
+                onPressed: unlocking ? null : () => unawaited(_unlock()),
+                child: Text(
+                  unlocking
+                      ? context.l10n.deskUnlocking
+                      : context.l10n.deskEnterPassword,
+                ),
               ),
           ],
         ),

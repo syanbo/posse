@@ -1,5 +1,20 @@
 package desk
 
+import "time"
+
+// passwordGap 内打完过一条密码，再来的密码整条丢掉：loginwindow 还在验证上一条，
+// 这时打进去的字会接在后面，多算一次输错。手机连点「解锁」时会连发几条。
+const passwordGap = 2 * time.Second
+
+// passwordGate 挡住紧跟在上一条后面的密码。
+type passwordGate struct{ last time.Time }
+
+func (g *passwordGate) allow(now time.Time) bool {
+	return g.last.IsZero() || now.Sub(g.last) >= passwordGap
+}
+
+func (g *passwordGate) typed(now time.Time) { g.last = now }
+
 // lockScreen 是输锁屏密码用到的系统接口，测试里换成假的。
 type lockScreen interface {
 	// locked 当场查 Mac 是否锁着屏，不看锁屏通知更新的缓存：通知晚到时缓存还是锁着

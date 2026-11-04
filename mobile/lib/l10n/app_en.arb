@@ -1058,6 +1058,10 @@
   "@deskUnlock": {
     "description": "Remote Desktop: button that unlocks the Mac (lock-screen pill and unlock sheet)."
   },
+  "deskUnlocking": "Unlocking…",
+  "@deskUnlocking": {
+    "description": "Remote Desktop: the unlock button on the lock-screen pill for a few seconds after the password was sent; it can't be tapped again meanwhile."
+  },
   "deskUnlockNote": "Enter the Mac’s login password. It’s typed on the lock screen, then Return is pressed.",
   "@deskUnlockNote": {
     "description": "Remote Desktop › unlock sheet: explanation."

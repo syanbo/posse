@@ -131,3 +131,18 @@ func TestTypePassword(t *testing.T) {
 		t.Fatal("empty password pressed return")
 	}
 }
+
+func TestPasswordGate(t *testing.T) {
+	var g passwordGate
+	at := time.Now()
+	if !g.allow(at) {
+		t.Fatal("first password blocked")
+	}
+	g.typed(at)
+	if g.allow(at.Add(500 * time.Millisecond)) {
+		t.Fatal("second password right after the first was let through")
+	}
+	if !g.allow(at.Add(passwordGap)) {
+		t.Fatal("password after the gap blocked")
+	}
+}

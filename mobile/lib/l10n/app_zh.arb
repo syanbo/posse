@@ -210,6 +210,7 @@
   "deskToPortrait": "切到竖屏",
   "deskUdpAddress": "UDP 地址",
   "deskUnlock": "解锁",
+  "deskUnlocking": "正在解锁…",
   "deskUnlockNote": "输入 Mac 的登录密码，发到锁屏界面后自动回车",
   "deskUnlockNoteRemember": "输入 Mac 的登录密码，发到锁屏界面后自动回车。勾「记住」只存在这台手机上",
   "deskUse": "使用",
