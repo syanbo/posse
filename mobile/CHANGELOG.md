@@ -3,6 +3,22 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.13
+
+- 看桌面解锁更安全：密码作为单独的消息发给 Mac，只在锁屏时打进登录窗口，不会落进解锁后的 App；点了解锁后按钮显示「正在解锁…」，连点不会重复发送。
+- 连着旧版电脑时不再发密码，提示先更新电脑上的 Posse。
+- 记住的密码要确认整串打完、Mac 解开后才存。
+- 首页不再显示看过的本轮完成。
+- 解锁需要电脑端 0.1.22。
+
+### English
+
+- Safer unlocking in Desktop view: the password goes to the Mac as its own message and is typed into the login window only while the Mac is locked, never into the app in front after unlocking; after tapping Unlock the button shows “Unlocking…” and repeated taps don’t send it again.
+- With an older Mac, the password isn’t sent; you’re asked to update Posse on the Mac first.
+- A remembered password is saved only after it was fully typed and the Mac unlocked.
+- The home screen no longer shows finished turns you’ve already seen.
+- Unlocking requires Posse 0.1.22 on the Mac.
+
 ## 0.1.12
 
 - 界面支持英文：设置里的「语言」可选跟随系统、简体中文或 English；报错、日期、权限说明都跟着界面语言，电脑发来的报错也按手机的语言显示。
