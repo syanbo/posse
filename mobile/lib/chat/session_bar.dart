@@ -133,7 +133,7 @@ extension on SessionTitle {
       key: const ValueKey('state'),
       builder: (context, constraints) => Row(
         children: [
-          // 没有状态（普通终端）时不留空位，文字和标题左边对齐
+          // 没有图标（普通终端、看过的完成）时不留空位，文字和标题左边对齐
           if (glyph) ...[
             StatusHex(state: state, size: Ic.glyph),
             const SizedBox(width: 4),

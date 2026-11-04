@@ -125,11 +125,13 @@ AgentState shownStateOf(String? state, String? posse) => switch (posse) {
 final _hex = parseSvgPath('M12 2.75 20 7.375v9.25L12 21.25 4 16.625v-9.25z');
 
 /// [StatusHex] 是否画得出东西；画不出时不必给它留位置的地方（顶栏、项目行）就省掉。
-bool hasGlyph(AgentState state) => state != AgentState.none;
+bool hasGlyph(AgentState state) =>
+    state != AgentState.none && state != AgentState.done;
 
 /// 状态图标，和桌面端 statusGlyph 一致：工作中是 Claude Code 那样来回变换的陶土色星号（减少动态效果时
-/// 退回静止的实心蜂巢格，用中性色），空心带圆点的琥珀色是待处理，空心的绿色是本轮完成，空心灰色是启动中，
+/// 退回静止的实心蜂巢格，用中性色），空心带圆点的琥珀色是待处理，空心灰色是启动中，
 /// 中间一道横线的灰色是未恢复。等任务是陶土色波形、没看是陶土色铃铛，减少动态效果时不动。
+/// 看过的本轮完成和没有状态一样只占位置：它是多数会话平时的样子，画出来反而冲淡了要处理的几种。
 class StatusHex extends StatelessWidget {
   const StatusHex({super.key, required this.state, this.size = 16, this.color});
 
@@ -152,7 +154,6 @@ class StatusHex extends StatelessWidget {
           AgentState.starting ||
           AgentState.lost => c.muted,
           AgentState.waiting => c.honey,
-          AgentState.done => c.sage,
           AgentState.tasks || AgentState.unread => c.accent,
           _ => c.faint,
         };

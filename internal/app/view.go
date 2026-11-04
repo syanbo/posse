@@ -1402,14 +1402,12 @@ func (a *app) terminalSummary(ts []terminalInfo) (running int, status string) {
 func statusRank(s string) int {
 	switch s {
 	case agent.StatusWaiting:
-		return 6
-	case statusUnread:
 		return 5
-	case agent.StatusWorking:
+	case statusUnread:
 		return 4
-	case statusTasks:
+	case agent.StatusWorking:
 		return 3
-	case agent.StatusIdle:
+	case statusTasks:
 		return 2
 	case agent.StatusStarting:
 		return 1
@@ -2113,10 +2111,6 @@ func (a *app) tab(c *ui.Context, w *workspace, term terminalInfo, i int, active,
 	status := ""
 	if term.AgentState != nil && term.Running || term.Lost {
 		status = a.sessionStatus(term)
-	}
-	// 标签上看过的完成不画：标签窄，多数时候停在这里，只留 agent 图标；侧栏照画
-	if status == agent.StatusIdle {
-		status = ""
 	}
 	name, detail := tabLabel(L(c), term)
 	if title, ok := a.workerTitle[term.ID]; ok && term.Running && term.Name == "" {

@@ -808,7 +808,6 @@ class WorkspaceScreen extends StatelessWidget {
       AgentState.waiting => 5,
       AgentState.unread => 4,
       AgentState.working || AgentState.tasks => 3,
-      AgentState.done => 2,
       AgentState.starting => 1,
       _ => 0,
     };
