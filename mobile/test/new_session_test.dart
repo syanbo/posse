@@ -48,5 +48,6 @@ void main() {
     model.notifyListeners();
     await tester.pumpAndSettle();
     expect(find.text('Open Terminal'), findsOneWidget);
+    expect(find.text('Claude'), findsOneWidget);
   });
 }

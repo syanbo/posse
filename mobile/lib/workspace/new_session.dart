@@ -51,6 +51,9 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
   /// 选中的 agent，null 是普通终端；没点过时跟着电脑给的列表选第一个。
   late String? _agent = widget.model.agents.firstOrNull;
   var _picked = false;
+
+  /// 上次画的 agent 列表：模型每 3 秒通知一次，列表换了才重画。
+  late List<String> _shown = widget.model.agents;
   var _busy = false;
   String? _error;
 
@@ -68,13 +71,16 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
     unawaited(widget.model.refreshAgents());
   }
 
-  /// 电脑给的 agent 列表回来或变了：没点过的跟着选第一个，选中的被关掉了也换成第一个。
+  /// 电脑给的 agent 列表回来或变了：重画选项，没点过的跟着选第一个，选中的被关掉了也换成第一个。
+  /// 正在启动时不换：等新会话出现还要用选中的 agent。
   void _agentsChanged() {
     final agents = widget.model.agents;
-    final keep = _picked && (_agent == null || agents.contains(_agent));
-    if (!keep && _agent != agents.firstOrNull) {
-      setState(() => _agent = agents.firstOrNull);
-    }
+    if (identical(agents, _shown)) return;
+    setState(() {
+      _shown = agents;
+      final keep = _picked && (_agent == null || agents.contains(_agent));
+      if (!keep && !_busy) _agent = agents.firstOrNull;
+    });
   }
 
   @override
@@ -255,7 +261,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 children: [
-                  for (final agent in <String?>[...widget.model.agents, null])
+                  for (final agent in <String?>[..._shown, null])
                     Expanded(child: _agentChoice(c, agent)),
                 ],
               ),
