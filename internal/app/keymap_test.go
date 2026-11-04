@@ -195,3 +195,78 @@ func TestFormatJSONDoc(t *testing.T) {
 		t.Fatal("only JSON files have 格式化")
 	}
 }
+
+func TestStepTabCrossesWorkspaces(t *testing.T) {
+	doc := &fileDoc{}
+	a := &app{
+		activeTerm: map[string]string{},
+		files:      map[string]*filesView{"w3": {root: ".", docs: []*fileDoc{doc}}},
+		projects:   []project{{ID: "p1"}, {ID: "p2"}},
+	}
+	a.workspaces = []workspace{
+		{ID: "w1", ProjectID: "p1", Terminals: []terminalInfo{{ID: "t1"}, {ID: "t2"}}},
+		{ID: "w2", ProjectID: "p1"}, // 没有标签，跳过
+		{ID: "w3", ProjectID: "p2", Terminals: []terminalInfo{{ID: "t3"}}},
+	}
+	a.indexWorkspaces()
+	step := func(dir int) string {
+		a.stepTab(a.workspace(a.selected), dir)
+		w := a.workspace(a.selected)
+		if a.filesActive(w) {
+			return w.ID + "/doc"
+		}
+		return w.ID + "/" + a.activeTerm[w.ID]
+	}
+	a.selected, a.activeTerm["w1"] = "w1", "t1"
+	for _, want := range []string{"w1/t2", "w3/t3", "w3/doc", "w1/t1"} {
+		if got := step(1); got != want {
+			t.Fatalf("next: got %s, want %s", got, want)
+		}
+	}
+	for _, want := range []string{"w3/doc", "w3/t3", "w1/t2"} {
+		if got := step(-1); got != want {
+			t.Fatalf("prev: got %s, want %s", got, want)
+		}
+	}
+	// 只有一个工作区有标签时在它里面绕回来
+	a.workspaces[2].Terminals, a.files = nil, map[string]*filesView{}
+	a.indexWorkspaces()
+	if got := step(1); got != "w1/t1" {
+		t.Fatalf("wrap: got %s", got)
+	}
+}
+
+// 一个工作区里先是 shell，再是侧栏里的会话：worker 跟在派发它的会话后面，不按标签栏的先后。
+func TestTabOrderFollowsSidebar(t *testing.T) {
+	a := &app{activeTerm: map[string]string{}, coordOf: map[string]string{"wk": "c1"}}
+	w := &workspace{ID: "w1", Terminals: []terminalInfo{
+		{ID: "c1", Agent: "claude", Running: true},
+		{ID: "sh"},
+		{ID: "c2", Agent: "codex", Running: true},
+		{ID: "wk", Agent: "cursor", Running: true},
+		{ID: "done", Agent: "claude"}, // 退出了的 agent 不在侧栏，和 shell 一起
+	}}
+	var got []string
+	for _, s := range a.tabOrder(w) {
+		got = append(got, s.term)
+	}
+	if want := []string{"sh", "done", "c1", "wk", "c2"}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// 还没选过标签时画面上是标签栏的第一个终端（这里是会话 c1），下一个是它后面的 wk，不是 c1 本身。
+func TestStepTabFromUnselected(t *testing.T) {
+	a := &app{activeTerm: map[string]string{}, coordOf: map[string]string{"wk": "c1"}, projects: []project{{ID: "p1"}}}
+	a.workspaces = []workspace{{ID: "w1", ProjectID: "p1", Terminals: []terminalInfo{
+		{ID: "c1", Agent: "claude", Running: true},
+		{ID: "sh"},
+		{ID: "wk", Agent: "cursor", Running: true},
+	}}}
+	a.indexWorkspaces()
+	a.selected = "w1"
+	a.stepTab(a.workspace("w1"), 1)
+	if got := a.activeTerm["w1"]; got != "wk" {
+		t.Fatalf("got %s, want wk", got)
+	}
+}

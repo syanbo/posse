@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -147,7 +148,7 @@ func TestTermClear(t *testing.T) {
 	}
 }
 
-// ⌘⇧] / ⌘⇧[ 按标签栏顺序切换，终端之后是文件，到头绕回来。
+// ⌘⇧] / ⌘⇧[ 按侧栏顺序切换：shell 之后是文件，再是 agent 会话，到头了切到侧栏里相邻的工作区。
 func TestStepTab(t *testing.T) {
 	a := previewApp(t)
 	root := filesWorkspace(t, a)
@@ -156,22 +157,75 @@ func TestStepTab(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	a.openFile(w, filepath.Join(root, "main.go"), 0, [2]int{})
 	v := a.files[w.ID]
-	a.activeTerm[w.ID] = w.Terminals[len(w.Terminals)-1].ID
+	sessions := agentSessions(w.Terminals)
+	if len(sessions) == 0 {
+		t.Fatal("the fixture workspace has no agent sessions")
+	}
+	for _, term := range w.Terminals {
+		if !slices.ContainsFunc(sessions, func(s terminalInfo) bool { return s.ID == term.ID }) {
+			a.activeTerm[w.ID] = term.ID
+		}
+	}
 	tt.Frame()
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
 	tt.Frame()
 	if !a.filesActive(w) || v.cur == nil {
-		t.Fatal("after the last terminal comes the file")
+		t.Fatal("after the last shell comes the file")
+	}
+	for range sessions {
+		tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
+		tt.Frame()
+		if a.selected != w.ID || a.filesActive(w) || a.selectedSession(w) == "" {
+			t.Fatalf("after the file come the sessions, selected %q", a.selected)
+		}
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
 	tt.Frame()
-	if a.activeTerm[w.ID] != w.Terminals[0].ID {
-		t.Fatalf("should wrap to the first terminal, got %q", a.activeTerm[w.ID])
+	next := a.stepWorkspace(w, 1)
+	if next == nil || a.selected != next.ID || a.selected == w.ID {
+		t.Fatalf("after the last tab should move to the next workspace, selected %q", a.selected)
 	}
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketLeft)
 	tt.Frame()
-	if !a.filesActive(w) {
-		t.Fatal("back from the first terminal is the last tab")
+	if tabs := a.tabOrder(w); a.selected != w.ID || a.activeTerm[w.ID] != tabs[len(tabs)-1].term {
+		t.Fatalf("back from the next workspace is the last tab here, selected %q", a.selected)
+	}
+}
+
+// 侧栏放不下时，切过去的那一行滚进可见区，绕回顶上时再滚回来。
+func TestStepTabScrollsSidebar(t *testing.T) {
+	a := previewApp(t)
+	offlineClient(t, a)
+	a.activeTerm["w1"] = "t3"
+	const height = 330
+	tt := newTester(a.build, 1200, height)
+	tt.Frame()
+	visible := func(s string) bool {
+		r, ok := tt.Find(s)
+		return ok && r.Y >= 0 && r.Y+r.H <= height
+	}
+	if visible("feat-login") {
+		t.Fatal("the fixture should start with feat-login below the fold")
+	}
+	for range 10 {
+		tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
+		tt.Frame()
+		if a.selected == "w6" {
+			break
+		}
+	}
+	tt.Frame()
+	if a.selected != "w6" || !visible("feat-login") {
+		t.Fatalf("selected %q, feat-login visible %v", a.selected, visible("feat-login"))
+	}
+	// 绕回 Apps：先是 shell，再是第一个会话
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
+	tt.Frame()
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyBracketRight)
+	tt.Frame()
+	tt.Frame()
+	if a.activeTerm[a.selected] != "t1" || !visible("重写 posse 界面") {
+		t.Fatalf("after wrapping: %s/%s", a.selected, a.activeTerm[a.selected])
 	}
 }
 

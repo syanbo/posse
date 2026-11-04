@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -104,36 +105,106 @@ func (a *app) clearTerminal(m locales.Messages, v *termView, id string) {
 	}()
 }
 
-// stepTab 是 ⌘⇧] / ⌘⇧[（和 ⌃Tab / ⌃⇧Tab）：按标签栏的顺序切到下一个 / 上一个标签，到头了绕回来。
-// 标签栏里先是终端，再是打开的文件。
+// stepTab 是 ⌘⇧] / ⌘⇧[（和 ⌃Tab / ⌃⇧Tab）：按侧栏从上到下的顺序切到下一个 / 上一个标签，侧栏的高亮只往一个方向走。
+// 一个工作区里先是 shell 和文件（侧栏里高亮工作区那一行），再是侧栏里列在它下面的 agent 会话。
+// 到头了切到下一个 / 上一个有标签的工作区（跨项目），停在它的第一个 / 最后一个标签；只有这一个工作区有标签时在它里面绕回来。
 func (a *app) stepTab(w *workspace, dir int) {
-	type tab struct {
-		term string
-		doc  *fileDoc
-	}
-	var tabs []tab
-	for _, t := range w.Terminals {
-		tabs = append(tabs, tab{term: t.ID})
-	}
-	var v *filesView
-	if v = a.files[w.ID]; v != nil {
-		for _, d := range v.docs {
-			tabs = append(tabs, tab{doc: d})
-		}
-	}
-	if len(tabs) < 2 {
-		return
-	}
+	// 侧栏跟着滚到切过去的那一行，收着的项目、worker 展开
+	a.revealSel = true
+	tabs := a.tabOrder(w)
+	// 按画面上显示的标签找：还没选过时显示的是标签栏的第一个终端，不一定是这个顺序的第一个
 	cur := 0
-	for i, t := range tabs {
-		if a.filesActive(w) && t.doc != nil && t.doc == v.cur || !a.filesActive(w) && t.term == a.activeTerm[w.ID] {
-			cur = i
-		}
+	if a.filesActive(w) {
+		v := a.files[w.ID]
+		cur = max(slices.IndexFunc(tabs, func(t tabStop) bool { return t.doc != nil && t.doc == v.cur }), 0)
+	} else if t := a.currentTerminal(w); t != nil {
+		cur = max(slices.IndexFunc(tabs, func(s tabStop) bool { return s.term == t.ID }), 0)
 	}
-	next := tabs[(cur+dir+len(tabs))%len(tabs)]
-	if next.doc != nil {
-		a.showFiles(w).cur = next.doc
+	if i := cur + dir; i >= 0 && i < len(tabs) {
+		a.selectTab(w, tabs[i])
 		return
 	}
-	a.activeTerm[w.ID] = next.term
+	if next := a.stepWorkspace(w, dir); next != nil {
+		tabs := a.tabOrder(next)
+		i := 0
+		if dir < 0 {
+			i = len(tabs) - 1
+		}
+		a.selected = next.ID
+		a.selectTab(next, tabs[i])
+		return
+	}
+	if len(tabs) > 1 {
+		a.selectTab(w, tabs[(cur+dir+len(tabs))%len(tabs)])
+	}
+}
+
+// tabStop 是标签栏里的一个标签：终端或打开的文件。
+type tabStop struct {
+	term string
+	doc  *fileDoc
+}
+
+// tabOrder 是工作区的标签按侧栏的顺序：shell 和文件按标签栏的先后，再是 agent 会话按侧栏的先后
+// （worker 跟在派发它的会话后面，和 sessionRows 一样）。
+func (a *app) tabOrder(w *workspace) []tabStop {
+	var tabs []tabStop
+	sessions := agentSessions(w.Terminals)
+	for _, t := range w.Terminals {
+		if !slices.ContainsFunc(sessions, func(s terminalInfo) bool { return s.ID == t.ID }) {
+			tabs = append(tabs, tabStop{term: t.ID})
+		}
+	}
+	if v := a.files[w.ID]; v != nil {
+		for _, d := range v.docs {
+			tabs = append(tabs, tabStop{doc: d})
+		}
+	}
+	top, children := a.sessionTree(sessions)
+	// 和 sessionRows 一样多留一层余量，防止数据成环时无限递归
+	var walk func(list []sessionNode, depth int)
+	walk = func(list []sessionNode, depth int) {
+		for _, n := range list {
+			tabs = append(tabs, tabStop{term: n.term.ID})
+			if depth < 4 {
+				walk(children[n.term.ID], depth+1)
+			}
+		}
+	}
+	walk(top, 0)
+	return tabs
+}
+
+func (a *app) selectTab(w *workspace, t tabStop) {
+	if t.doc != nil {
+		a.showFiles(w).cur = t.doc
+		return
+	}
+	a.activeTerm[w.ID] = t.term
+}
+
+// stepWorkspace 按侧栏的顺序（项目，再是项目里的工作区）找 w 之后 / 之前第一个有标签的工作区，到头了绕回来；
+// 没有别的就返回 nil。
+func (a *app) stepWorkspace(w *workspace, dir int) *workspace {
+	var order []*workspace
+	at := -1
+	for _, p := range a.projects {
+		ws := a.byProject[p.ID]
+		for i := range ws {
+			if ws[i].ID == w.ID {
+				at = len(order)
+			}
+			order = append(order, &ws[i])
+		}
+	}
+	if at < 0 {
+		return nil
+	}
+	n := len(order)
+	for k := 1; k < n; k++ {
+		if x := order[((at+dir*k)%n+n)%n]; len(a.tabOrder(x)) > 0 {
+			return x
+		}
+	}
+	return nil
 }
