@@ -175,6 +175,35 @@ final _usage = ToolUsage.fromJson({
   ],
 });
 
+final _repos = parseGitStatus({
+  'repos': [
+    {
+      'repo': 'posse',
+      'name': 'posse',
+      'dir': 'posse',
+      'branch': 'multi-repo',
+      'ahead': 2,
+      'files': [
+        {'path': 'internal/mobile/git.go', 'x': '.', 'y': 'M', 'added': 120},
+        {'path': 'mobile/lib/git/git.dart', 'x': '.', 'y': 'M', 'added': 96},
+      ],
+    },
+    {'repo': 'docs', 'name': 'docs', 'dir': 'docs', 'branch': 'main'},
+    {
+      'repo': 'apps/server',
+      'name': 'apps/server',
+      'dir': 'apps/server',
+      'branch': 'feature/very-long-branch-name-for-layout',
+      'behind': 3,
+      'operation': 'rebase',
+      'files': [
+        {'path': 'main.go', 'x': 'U', 'y': 'U', 'conflict': true},
+        {'path': 'notes.txt', 'x': '?', 'y': '?', 'untracked': true},
+      ],
+    },
+  ],
+});
+
 final _status = parseGitStatus({
   'branch': 'feature/mobile-i18n',
   'upstream': 'origin/feature/mobile-i18n',
@@ -413,6 +442,15 @@ void main() {
         GitScreen(
           title: 'posse',
           loadStatus: () async => _status,
+          loadDiff: (file) async => parseGitDiff({'path': file.path}),
+        ),
+      );
+      await shot(
+        tester,
+        'git-repos',
+        GitScreen(
+          title: 'Works',
+          loadStatus: () async => _repos,
           loadDiff: (file) async => parseGitDiff({'path': file.path}),
         ),
       );

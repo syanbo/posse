@@ -51,6 +51,7 @@ type Server struct {
 
 	media mediaCache
 	tools toolsCache
+	repos repoCache
 	icons projicon.Cache
 }
 

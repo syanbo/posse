@@ -56,7 +56,10 @@ type State struct {
 	Workspaces []Workspace
 }
 
-type Project struct{ ID, Name, Path string }
+type Project struct {
+	ID, Name, Path string
+	SingleRepo     bool // 关掉了"识别多个 Git 仓库"
+}
 
 type Workspace struct {
 	ID, ProjectID, Name, Path, Kind, Branch string

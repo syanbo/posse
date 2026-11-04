@@ -32,6 +32,7 @@ Future<GitDiffView> loadGitDiff(
         'worktree': gitWorktree(worktree),
         'path': file.path,
         if (file.orig.isNotEmpty) 'orig': file.orig,
+        if (file.repo != null) 'repo': file.repo,
       })
       .then(parseGitDiff);
 }
@@ -97,7 +98,8 @@ class _GitPaneState extends State<GitPane> {
   /// 按目录还是平铺，这次打开 App 期间各工作区共用。
   static var _tree = true;
 
-  /// 收起的组和目录：组是 `ChangeKind`，目录是 `ChangeKind:路径`。
+  /// 收起的仓库、组和目录：仓库是 `repo:键`，组是 `ChangeKind`，目录是 `ChangeKind:路径`；
+  /// 多个仓库时组和目录前面加上 `仓库键|`。
   final _folded = <String>{};
   GitStatusView? _status;
   String? _error;
@@ -165,13 +167,20 @@ class _GitPaneState extends State<GitPane> {
   }
 
   void _open(GitFileChange file) {
+    final status = _status;
+    var repo = status;
+    for (final r in status?.repos ?? const <GitStatusView>[]) {
+      if (r.repo == file.repo) repo = r;
+    }
+    // 仓库里的路径换成工作区里的；上级仓库里工作区外面的文件打不开
+    final path = repo == null ? file.path : repo.openPath(file.path);
     final open = widget.onOpenFile;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => DiffViewer(
           file: file,
           load: () => widget.loadDiff(file),
-          onOpenFile: open == null ? null : () => open(file.path),
+          onOpenFile: open == null || path == null ? null : () => open(path),
         ),
       ),
     );
@@ -194,6 +203,9 @@ class _GitPaneState extends State<GitPane> {
     }
     final c = PosseColors.of(context);
     final files = status?.files ?? const <GitFileChange>[];
+    if (status != null && status.repos.length > 1) {
+      return _repos(context, c, status);
+    }
     return CustomScrollView(
       slivers: [
         SliverList.list(
@@ -215,15 +227,146 @@ class _GitPaneState extends State<GitPane> {
         if (files.isNotEmpty)
           for (final kind in _groups)
             if (files.any((f) => _groupOf(f) == kind))
-              _group(context, kind, switch (kind) {
-                ChangeKind.conflict => context.l10n.gitConflicts,
-                ChangeKind.untracked => context.l10n.gitUnversioned,
-                _ => context.l10n.gitChanges,
-              }, files.where((f) => _groupOf(f) == kind).toList()),
+              _group(
+                context,
+                kind,
+                _groupLabel(context, kind),
+                files.where((f) => _groupOf(f) == kind).toList(),
+              ),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],
     );
   }
+
+  /// 工作区下有几个仓库：和桌面一样只列有改动（或停在合并、变基中）的仓库，每个仓库一行标题，下面再分组。
+  Widget _repos(BuildContext context, PosseColors c, GitStatusView status) {
+    final shown = [
+      for (final r in status.repos)
+        if (r.files.isNotEmpty || r.operation.isNotEmpty || r.error.isNotEmpty)
+          r,
+    ];
+    return CustomScrollView(
+      slivers: [
+        SliverList.list(
+          children: [
+            if (_error != null) NoticeBar(_error!),
+            if (shown.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 32),
+                child: EmptyState(
+                  icon: Icons.check_circle_outline_rounded,
+                  text: context.l10n.gitClean,
+                ),
+              )
+            else
+              _listHeader(context, c, status.files.length),
+          ],
+        ),
+        for (final repo in shown) ...[
+          SliverToBoxAdapter(child: _repoHeader(context, c, repo)),
+          if (!_folded.contains('repo:${repo.repo}'))
+            for (final kind in _groups)
+              if (repo.files.any((f) => _groupOf(f) == kind))
+                _group(
+                  context,
+                  kind,
+                  _groupLabel(context, kind),
+                  repo.files.where((f) => _groupOf(f) == kind).toList(),
+                  prefix: '${repo.repo}|',
+                ),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: 32)),
+      ],
+    );
+  }
+
+  /// 仓库标题：仓库名、分支、传入传出和进行中的操作，点一下收起这个仓库。
+  Widget _repoHeader(BuildContext context, PosseColors c, GitStatusView repo) {
+    final l = context.l10n;
+    final key = 'repo:${repo.repo}';
+    final open = !_folded.contains(key);
+    final bits = [
+      if (repo.ahead > 0) l.gitAhead(repo.ahead),
+      if (repo.behind > 0) l.gitBehind(repo.behind),
+    ].join('  ');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 16, 4),
+      child: _foldRow(
+        c,
+        open: open,
+        onTap: () => _fold(key),
+        depth: 0,
+        child: LayoutBuilder(
+          builder: (context, box) => Row(
+            children: [
+              FileIconView(repo.name, size: Ic.medium, dir: true, open: open),
+              const SizedBox(width: 8),
+              // 仓库名最多占一半多，剩下的给分支；进行中的操作和报错写在分支前面，不被截掉
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: box.maxWidth * 0.55),
+                child: Text(
+                  repo.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: Fs.body,
+                    fontWeight: Fw.medium,
+                    color: c.text,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${repo.files.length}',
+                style: TextStyle(fontSize: Fs.small, color: c.faint),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      if (repo.error.isNotEmpty)
+                        TextSpan(
+                          text: repo.error,
+                          style: TextStyle(color: c.danger),
+                        )
+                      else ...[
+                        if (repo.operation.isNotEmpty)
+                          TextSpan(
+                            text: '${repo.operation}  ',
+                            style: TextStyle(color: c.honey),
+                          ),
+                        TextSpan(
+                          text: repo.branch.isEmpty
+                              ? l.gitDetachedHead
+                              : repo.branch,
+                        ),
+                      ],
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: mono(Fs.small, color: c.muted),
+                ),
+              ),
+              // 领先落后不跟着分支名被截掉
+              if (repo.error.isEmpty && bits.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(bits, style: mono(Fs.small, color: c.muted)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _groupLabel(BuildContext context, ChangeKind kind) => switch (kind) {
+    ChangeKind.conflict => context.l10n.gitConflicts,
+    ChangeKind.untracked => context.l10n.gitUnversioned,
+    _ => context.l10n.gitChanges,
+  };
 
   /// 照桌面端分组：冲突、改动、未跟踪。
   static const _groups = [
@@ -259,16 +402,18 @@ class _GitPaneState extends State<GitPane> {
     BuildContext context,
     ChangeKind kind,
     String label,
-    List<GitFileChange> files,
-  ) {
+    List<GitFileChange> files, {
+    String prefix = '',
+  }) {
     final c = PosseColors.of(context);
-    final folded = _folded.contains('$kind');
+    final folded = _folded.contains('$prefix$kind');
     final rows = _tree
         ? changeTree(
             files,
             folded: {
               for (final k in _folded)
-                if (k.startsWith('$kind:')) k.substring('$kind:'.length),
+                if (k.startsWith('$prefix$kind:'))
+                  k.substring('$prefix$kind:'.length),
             },
           )
         : [
@@ -280,7 +425,7 @@ class _GitPaneState extends State<GitPane> {
     final header = _foldRow(
       c,
       open: !folded,
-      onTap: () => _fold('$kind'),
+      onTap: () => _fold('$prefix$kind'),
       depth: 0,
       child: Row(
         children: [
@@ -324,7 +469,7 @@ class _GitPaneState extends State<GitPane> {
             if (i > rows.length) return const SizedBox(height: 4);
             final row = rows[i - 1];
             return row.file == null
-                ? _dirRow(c, kind, row)
+                ? _dirRow(c, '$prefix$kind', row)
                 : _fileRow(c, row.file!, row.depth + 1, flat: !_tree);
           },
         ),
@@ -370,8 +515,8 @@ class _GitPaneState extends State<GitPane> {
     );
   }
 
-  Widget _dirRow(PosseColors c, ChangeKind kind, ChangeRow row) {
-    final key = '$kind:${row.key}';
+  Widget _dirRow(PosseColors c, String group, ChangeRow row) {
+    final key = '$group:${row.key}';
     final open = !_folded.contains(key);
     return _foldRow(
       c,

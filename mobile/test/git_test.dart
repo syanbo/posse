@@ -308,4 +308,116 @@ void main() {
     // 很长的文件名不撑破行
     expect(tester.takeException(), isNull);
   });
+
+  test('status with several repositories keeps each repo and its paths', () {
+    final status = parseGitStatus({
+      'repos': [
+        {
+          'repo': '..',
+          'name': 'outer',
+          'sub': 'src',
+          'branch': 'main',
+          'files': [
+            {'path': 'src/a.txt', 'x': '.', 'y': 'M'},
+            {'path': 'docs/b.md', 'x': '.', 'y': 'M'},
+          ],
+        },
+        {
+          'repo': 'ext',
+          'name': 'ext',
+          'dir': 'ext',
+          'branch': 'feat',
+          'files': [
+            {'path': 'c.txt', 'x': '.', 'y': 'M'},
+          ],
+        },
+      ],
+    });
+    expect(status.repos.map((r) => r.name), ['outer', 'ext']);
+    expect(status.branch, 'main');
+    expect(status.files.map((f) => '${f.repo}:${f.path}'), [
+      '..:src/a.txt',
+      '..:docs/b.md',
+      'ext:c.txt',
+    ]);
+    final outer = status.repos[0];
+    expect(outer.openPath('src/a.txt'), 'a.txt');
+    expect(outer.openPath('docs/b.md'), isNull);
+    expect(status.repos[1].openPath('c.txt'), 'ext/c.txt');
+    // 旧电脑只给一个仓库，文件不带仓库键
+    final legacy = parseGitStatus({
+      'branch': 'main',
+      'files': [
+        {'path': 'a.txt'},
+      ],
+    });
+    expect(legacy.repos, isEmpty);
+    expect(legacy.files.single.repo, isNull);
+    expect(legacy.openPath('a.txt'), 'a.txt');
+  });
+
+  testWidgets('changes list groups by repository', (tester) async {
+    final diffs = <String>[];
+    final opened = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        home: GitScreen(
+          title: 'demo',
+          loadStatus: () async => parseGitStatus({
+            'repos': [
+              {
+                'repo': 'app',
+                'name': 'app',
+                'dir': 'app',
+                'branch': 'main',
+                'ahead': 2,
+                'files': [
+                  {'path': 'lib/a.dart', 'x': '.', 'y': 'M'},
+                ],
+              },
+              {'repo': 'clean', 'name': 'clean', 'branch': 'main'},
+              {
+                'repo': 'server',
+                'name': 'server',
+                'dir': 'server',
+                'branch': 'feat',
+                'operation': 'merge',
+                'files': [
+                  {'path': 'main.go', 'x': '.', 'y': 'M'},
+                  {'path': 'x.go', 'x': '?', 'y': '?', 'untracked': true},
+                ],
+              },
+            ],
+          }),
+          loadDiff: (file) async {
+            diffs.add('${file.repo}:${file.path}');
+            return parseGitDiff({'path': file.path});
+          },
+          onOpenFile: opened.add,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('app'), findsOneWidget);
+    expect(find.text('server'), findsOneWidget);
+    // 没有改动的仓库不列
+    expect(find.text('clean'), findsNothing);
+    expect(find.text(zh.gitChangedFiles(3)), findsOneWidget);
+    expect(find.textContaining('feat'), findsOneWidget);
+    expect(find.text('main.go'), findsOneWidget);
+    // 收起一个仓库只收它自己
+    await tester.tap(find.text('server'));
+    await tester.pumpAndSettle();
+    expect(find.text('main.go'), findsNothing);
+    expect(find.text('a.dart'), findsOneWidget);
+    await tester.tap(find.text('a.dart'));
+    await tester.pumpAndSettle();
+    expect(diffs, ['app:lib/a.dart']);
+    await tester.tap(find.byTooltip(zh.gitViewFullFile));
+    await tester.pumpAndSettle();
+    expect(opened, ['app/lib/a.dart']);
+  });
 }

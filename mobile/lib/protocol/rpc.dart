@@ -12,6 +12,7 @@ const posseClientVersion = 1;
 const posseCapabilities = [
   'posse.permission.v1',
   'posse.git.v1',
+  'posse.git.v2',
   'posse.history.v1',
   'posse.status.v1',
   'posse.draft.v1',

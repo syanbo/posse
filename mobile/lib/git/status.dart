@@ -15,9 +15,13 @@ class GitFileChange {
     this.x = '',
     this.y = '',
     this.submodule = false,
+    this.repo,
   });
 
   final String path;
+
+  /// 所在仓库的键（git.status 的 repos[].repo），git.diff 带回去；电脑只给一个仓库时为空。
+  final String? repo;
 
   /// 改名前的路径，没改名时为空。
   final String orig;
@@ -166,6 +170,12 @@ class GitStatusView {
     required this.behind,
     required this.operation,
     required this.files,
+    this.repo,
+    this.name = '',
+    this.dir = '',
+    this.sub = '',
+    this.error = '',
+    this.repos = const [],
   });
 
   final String branch;
@@ -174,6 +184,29 @@ class GitStatusView {
   final int behind;
   final String operation;
   final List<GitFileChange> files;
+
+  /// 仓库的键和名字；电脑只给一个仓库（旧电脑）时键为空。
+  final String? repo;
+  final String name;
+
+  /// 仓库根目录在工作区里的路径（仓库在工作区下面时）。
+  final String dir;
+
+  /// 工作区在仓库里的路径（工作区是仓库的子目录时）。
+  final String sub;
+
+  /// 这个仓库没读出来（多个仓库里的一个）。
+  final String error;
+
+  /// 工作区下有几个仓库时的各个仓库；这时上面几项是第一个仓库的，[files] 是所有仓库的。
+  final List<GitStatusView> repos;
+
+  /// 仓库里的路径在工作区里的写法，打开文件用；在工作区外面（上级仓库里别的目录）时为空。
+  String? openPath(String path) {
+    if (dir.isNotEmpty) return '$dir/$path';
+    if (sub.isEmpty) return path;
+    return path.startsWith('$sub/') ? path.substring(sub.length + 1) : null;
+  }
 
   String headline(AppLocalizations l) {
     final name = branch.isEmpty ? l.gitDetachedHead : branch;
@@ -222,6 +255,34 @@ ImageSide? _imageSide(Object? raw) {
 int _count(Object? value) => value is num ? value.toInt() : 0;
 
 GitStatusView parseGitStatus(Map<String, Object?> raw) {
+  final list = raw['repos'];
+  if (list is List) {
+    final repos = [
+      for (final r in list)
+        if (r is Map) _parseRepo(r.cast<String, Object?>(), repo: true),
+    ];
+    if (repos.isEmpty) return _parseRepo(raw, repo: false);
+    final first = repos.first;
+    return GitStatusView(
+      branch: first.branch,
+      upstream: first.upstream,
+      ahead: first.ahead,
+      behind: first.behind,
+      operation: first.operation,
+      files: [for (final r in repos) ...r.files],
+      repo: first.repo,
+      name: first.name,
+      dir: first.dir,
+      sub: first.sub,
+      error: first.error,
+      repos: repos,
+    );
+  }
+  return _parseRepo(raw, repo: false);
+}
+
+GitStatusView _parseRepo(Map<String, Object?> raw, {required bool repo}) {
+  final key = repo ? raw['repo'] as String? ?? '' : null;
   final files = <GitFileChange>[];
   final list = raw['files'];
   if (list is List) {
@@ -241,6 +302,7 @@ GitStatusView parseGitStatus(Map<String, Object?> raw) {
           x: item['x'] as String? ?? '',
           y: item['y'] as String? ?? '',
           submodule: item['submodule'] == true,
+          repo: key,
         ),
       );
     }
@@ -252,6 +314,11 @@ GitStatusView parseGitStatus(Map<String, Object?> raw) {
     behind: _count(raw['behind']),
     operation: raw['operation'] as String? ?? '',
     files: files,
+    repo: key,
+    name: raw['name'] as String? ?? '',
+    dir: raw['dir'] as String? ?? '',
+    sub: raw['sub'] as String? ?? '',
+    error: raw['error'] as String? ?? '',
   );
 }
 
