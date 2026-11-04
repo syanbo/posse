@@ -537,7 +537,7 @@ class _Chip extends StatelessWidget {
 }
 
 /// 时间线上的一项：左边圆点和连到下一项的线，右边名字、次数、时间，下面是所属服务或来源。
-/// 点一下复制名字（网址复制完整网址）；命令行程序长按看最近一次的完整命令，网址长按看完整网址、用浏览器打开。
+/// 点一下复制名字（网址复制完整网址，用户发的网址名字就是整条网址）；命令行程序长按看最近一次的完整命令，网址长按看完整网址、用浏览器打开。
 class _StepRow extends StatelessWidget {
   const _StepRow({required this.step, required this.last});
 
@@ -555,6 +555,8 @@ class _StepRow extends StatelessWidget {
       _ when e.url.isNotEmpty => () {
         final (host, rest) = webSite(e.url);
         final via = webVia(l, e.via);
+        // 用户发的网址整条写出来
+        if (e.via == 'user') return (c.plum, via, e.url);
         return (c.plum, rest.isEmpty ? via : '$via · $rest', host);
       }(),
       _ when e.query.isNotEmpty => (

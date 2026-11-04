@@ -67,6 +67,22 @@ func TestUsageWebTimeline(t *testing.T) {
 	if got := tt.Clipboard(); got != evs[2].URL {
 		t.Fatalf("copied %q", got)
 	}
+	// 用户发的网址整条写出来；搜索词这类没有命令的也有提示，指针一到就出
+	if !tt.HasText(evs[2].URL) || !tt.HasText("你发的") {
+		t.Fatalf("user URL row %q", tt.Texts())
+	}
+	r, ok := tt.Find("复制 posse")
+	if !ok {
+		t.Fatal("no query row")
+	}
+	if texts := tt.Texts(); texts[len(texts)-1] == "posse" {
+		t.Fatalf("tip before hover: %q", texts)
+	}
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if texts := tt.Texts(); texts[len(texts)-1] != "posse" {
+		t.Fatalf("no instant tip: %q", texts)
+	}
 }
 
 // 起过名的会话在标签和侧栏上写会话名，没起名时写终端标题

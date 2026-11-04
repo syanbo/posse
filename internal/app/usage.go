@@ -317,8 +317,8 @@ func usageSteps(events []history.UsageEvent, mode usageMode) []usageStep {
 }
 
 // usageTimeline 画时间线：左边一条竖线串起圆点，技能是琥珀色、MCP 是蓝色、命令行程序是绿色、网址是紫色；
-// 右边是名字、所属服务（命令行程序是来源，网址是来源和路径）和时间。点名字复制，命令行程序悬停看最近一次的完整命令；
-// 网址复制完整网址，悬停看完整网址，⌘ 点击在网页标签里打开、⇧⌘ 点击用浏览器打开（设置里互换了就反过来）。
+// 右边是名字、所属服务（命令行程序是来源，网址是来源和路径）和时间。点名字复制，悬停马上出提示（命令行程序是最近一次的完整命令，其余是完整名字）；
+// 用户发的网址整条显示；网址复制完整网址，悬停看完整网址，⌘ 点击在网页标签里打开、⇧⌘ 点击用浏览器打开（设置里互换了就反过来）。
 func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.UsageEvent, mode usageMode) {
 	t := c.Theme()
 	m := L(c)
@@ -343,7 +343,9 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 			case st.ev.URL != "":
 				host, rest := webSite(st.ev.URL)
 				color, kind, name, copied = webColor(c), webVia(m, st.ev.Via), host, st.ev.URL
-				if rest != "" {
+				if st.ev.Via == history.ViaUser {
+					name = st.ev.URL
+				} else if rest != "" {
 					kind += " · " + rest
 				}
 				tip = m.UsageToolsURLTip(st.ev.URL)
@@ -355,6 +357,9 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 			}
 			if copied == "" {
 				copied = name
+			}
+			if tip == "" {
+				tip = name // 名字一行放不下会截断
 			}
 			last := i == len(steps)-1
 			ui.Row(c.Key(fmt.Sprint("step-", i))).Gap(8).AlignItems(ui.Stretch).Children(func() {
@@ -375,9 +380,7 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 						if nt.Hovered() {
 							nt.TextColor(t.Accent)
 						}
-						if tip != "" {
-							nt.Tooltip(tip)
-						}
+						instantTip(c, nt, tip)
 						if nt.Clicked() {
 							if st.ev.URL == "" || !a.openUsageURL(c, cur, st.ev.URL, nt.ClickModifiers()) {
 								a.copyName(c, copied)
@@ -388,14 +391,39 @@ func (a *app) usageTimeline(c *ui.Context, cur *terminalInfo, events []history.U
 						}
 						ui.Spacer(c)
 						if !st.ev.At.IsZero() {
-							ui.Text(c, m.AppTime(st.ev.At.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0).
-								Tooltip(m.UsageToolsSince(m.AppDateTimeSeconds(st.first.Local())))
+							at := ui.Text(c, m.AppTime(st.ev.At.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
+							instantTip(c, at, m.UsageToolsSince(m.AppDateTimeSeconds(st.first.Local())))
 						}
 					})
 					ui.Text(c, kind).FontSize(fsSmall).TextColor(t.TextMuted).SingleLine()
 				})
 			})
 		}
+	})
+}
+
+// instantTip 是指针一到就出的提示，样子照 mygo 的 Tooltip（深底上不加投影）：时间线上逐项扫过去看，等 0.6 秒的停留太慢。
+func instantTip(c *ui.Context, e ui.Element, s string) {
+	if s == "" {
+		return
+	}
+	e.Description(s)
+	if !e.Hovered() {
+		return
+	}
+	t := c.Theme()
+	fill, text := t.Inverse, t.InverseText
+	if fill == ui.Transparent {
+		fill = t.Text
+	}
+	if text == ui.Transparent {
+		text = t.Background
+	}
+	ui.Overlay(c, func() {
+		ui.Box(c).Absolute().PassThrough().Role(ui.RoleTooltip).AttachTo(e, ui.AnchorTop, ui.AnchorBottom).Margin(0, 0, 6, 0).
+			MaxWidth(320).Padding(4, 8).Radius(rRow).
+			Background(fill).TextColor(text).FontSize(fsSmall).
+			Children(func() { ui.Text(c, s) })
 	})
 }
 

@@ -155,10 +155,12 @@ void main() {
     expect(find.text('Homebrew'), findsNothing);
     expect(find.text('archify'), findsNothing);
     expect(find.text('网址  搜索 1 次'), findsOneWidget);
-    expect(find.text('你发的 · /a/b?x=1'), findsOneWidget);
+    // 用户发的网址整条写出来，第二行只写来源
+    expect(find.text('https://www.github.com/a/b?x=1'), findsOneWidget);
+    expect(find.text('你发的'), findsOneWidget);
     expect(find.text('搜索 · WebSearch'), findsOneWidget);
 
-    await tester.tap(find.text('你发的 · /a/b?x=1'));
+    await tester.tap(find.text('https://www.github.com/a/b?x=1'));
     await tester.pump();
     expect(find.text('已复制 https://www.github.com/a/b?x=1'), findsOneWidget);
   });
