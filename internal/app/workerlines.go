@@ -110,13 +110,7 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 		return
 	}
 	// ╰：竖线下来到中间，圆角拐向右边
-	radius := float32(rRow)
-	pts := [][2]float32{{x, top}}
-	const steps = 8 // 四分之一圆分几段折线
-	for i := 0; i <= steps; i++ {
-		a := float64(i) / steps * math.Pi / 2
-		pts = append(pts, [2]float32{x + radius - radius*float32(math.Cos(a)), mid - radius + radius*float32(math.Sin(a))})
-	}
+	pts := quarterArc([][2]float32{{x, top}}, x, mid, true)
 	pts = append(pts, [2]float32{end, mid})
 	p.StrokePolyline(pts, width, c)
 }
@@ -126,15 +120,25 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 func drawGuideHead(p *ui.Painter, r ui.Rect, depth int, c ui.Color) {
 	x, mid := snap(r.X+guideColumn(depth)), snap(r.Y+r.H/2)
 	end := r.X + guideEnd(depth, false)
-	radius := float32(rRow)
-	pts := [][2]float32{{end, mid}}
-	const steps = 8 // 四分之一圆分几段折线
-	for i := 0; i <= steps; i++ {
-		a := math.Pi*1.5 - float64(i)/steps*math.Pi/2
-		pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), mid + radius + radius*float32(math.Sin(a))})
-	}
+	pts := quarterArc([][2]float32{{end, mid}}, x, mid, false)
 	pts = append(pts, [2]float32{x, r.Y + r.H})
 	p.StrokePolyline(pts, guideWidth, c)
+}
+
+// quarterArc 在 pts 后面接上竖线 x 和横线 y 拐角处的四分之一圆（半径 rRow）：
+// up 是 ╰（从上面下来拐向右边），否则是 ╭（从右边过来拐下去）。
+func quarterArc(pts [][2]float32, x, y float32, up bool) [][2]float32 {
+	radius := float32(rRow)
+	const steps = 8 // 四分之一圆分几段折线
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / steps * math.Pi / 2
+		if up {
+			pts = append(pts, [2]float32{x + radius - radius*float32(math.Cos(t)), y - radius + radius*float32(math.Sin(t))})
+		} else {
+			pts = append(pts, [2]float32{x + radius - radius*float32(math.Sin(t)), y + radius - radius*float32(math.Cos(t))})
+		}
+	}
+	return pts
 }
 
 // snap 把线的坐标对到半个点上，1 点粗的线落在整像素里不发虚。
@@ -250,19 +254,9 @@ func (l *remoteLinks) draw(c *ui.Context, p *ui.Painter, r ui.Rect, list ui.Hand
 		x := lane
 		lane = max(lane-linkLaneGap, r.X+guideWidth)
 		first, last := ends[0], ends[len(ends)-1]
-		radius := float32(rRow)
-		const steps = 8 // 四分之一圆分几段折线
-		// ╭：从最上一头往左，圆角拐下来
-		pts := [][2]float32{{first.x, first.y}}
-		for i := 0; i <= steps; i++ {
-			a := math.Pi*1.5 - float64(i)/steps*math.Pi/2
-			pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), first.y + radius + radius*float32(math.Sin(a))})
-		}
-		// ╰：竖线下到最下一头，圆角拐向右边
-		for i := 0; i <= steps; i++ {
-			a := math.Pi - float64(i)/steps*math.Pi/2
-			pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), last.y - radius + radius*float32(math.Sin(a))})
-		}
+		// ╭：从最上一头往左，圆角拐下来；╰：竖线下到最下一头，圆角拐向右边
+		pts := quarterArc([][2]float32{{first.x, first.y}}, x, first.y, false)
+		pts = quarterArc(pts, x, last.y, true)
 		pts = append(pts, [2]float32{last.x, last.y})
 		p.StrokePolyline(pts, guideWidth, color)
 		for _, e := range ends[1 : len(ends)-1] {
