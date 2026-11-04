@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"posse/internal/agent"
+	"posse/internal/errtext"
 	"posse/internal/term"
 )
 
@@ -21,7 +22,12 @@ func TestSessionTitleClaude(t *testing.T) {
 	}
 	d.setAgent(s, term.AgentState{Status: agent.StatusIdle, SessionID: "c1"})
 	r := call(t, d.sessionTitle, map[string]any{"terminal": s.ID, "title": "fix｜登录按钮。", "sessionIds": map[string]string{"codex": "outer"}}).(sessionTitleResult)
-	if !strings.HasSuffix(r.Title, "｜修复｜登录按钮") || r.Agent != "claude" {
+	// 类型词跟着系统语言（CI 的 runner 是英文）
+	want := "｜修复｜登录按钮"
+	if errtext.SystemLang() == errtext.EN {
+		want = "｜fix｜登录按钮"
+	}
+	if !strings.HasSuffix(r.Title, want) || r.Agent != "claude" {
 		t.Fatalf("result %+v", r)
 	}
 	if st := d.terminalInfo(s).AgentState; st == nil || st.Title != r.Title || !st.TitlePending {
