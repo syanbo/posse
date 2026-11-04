@@ -3,6 +3,28 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.23
+
+- agent 状态更准：支持程序状态协议（OSC 7501），Claude、Codex 按 Esc 中断后马上回到空闲，Grok 也有准确的工作中和等待，提问时带着问题。更新后已经开着的 Claude、Grok 重开一次生效。
+- worker 终端的返回按钮切到派发方的会话。
+- 派发方空闲时，worker 的连线顶端拐过来接到它的图标。
+- 切换标签按侧栏顺序跨项目切换，侧栏跟着滚动。
+- 从访达把文件夹拖到侧栏，确认后加为项目。
+- Git 日志打开时默认选中当前分支。
+- 确认框点遮罩不再关掉，可以用键盘切换按钮、回车确认。
+- 修正侧栏空闲会话行的底色范围。
+
+### English
+
+- More accurate agent status: Posse now supports the program status protocol (OSC 7501). Claude and Codex return to idle right after you press Esc, and Grok shows accurate working and waiting states, including the question it asks. Reopen Claude and Grok sessions that were already open after updating.
+- The back button in a worker terminal switches to the dispatcher's session.
+- When the dispatcher is idle, the top of a worker's connecting line bends over to its icon.
+- Switching tabs follows the sidebar order across projects, and the sidebar scrolls along.
+- Drag a folder from Finder to the sidebar and confirm to add it as a project.
+- The Git log selects the current branch when it opens.
+- Clicking outside a confirmation dialog no longer closes it; use the keyboard to switch buttons and Return to confirm.
+- Fixed the background extent of idle session rows in the sidebar.
+
 ## 0.1.22
 
 - 手机看桌面解锁更安全：密码只在 Mac 锁着时投给登录窗口，逐字检查，中途解开就停，不会打进解锁后最前面的 App（比如终端）；连点解锁不会把密码发几遍。
