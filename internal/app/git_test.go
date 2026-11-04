@@ -508,7 +508,7 @@ func TestAutostashBanner(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
-	until(t, tt, "status", func() bool { return v.git.status != nil })
+	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
 	// 照 git 的 --autostash：先储藏、更新到 feat，取回时冲突，再把储藏以 "autostash" 存进列表，命令照样成功
 	a.gitDo(locales.In("zh-Hans"), v, "更新", func(ctx context.Context, root string) error {
@@ -572,7 +572,7 @@ func TestConflictBanner(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideFiles)
-	until(t, tt, "status", func() bool { return v.git.status != nil })
+	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
 	a.gitDo(locales.In("zh-Hans"), v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
 	until(t, tt, "banner", func() bool { return v.side == sideChanges && tt.HasText("正在合并，有 1 个文件冲突。") })
@@ -606,7 +606,7 @@ func TestCommitDuringMerge(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := a.openFilesPanel(w, sideChanges)
-	until(t, tt, "status", func() bool { return v.git.status != nil })
+	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	a.gitDo(locales.In("zh-Hans"), v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
 	until(t, tt, "conflict", func() bool { return v.git.status.Operation == "merge" && v.git.busy == "" })
 	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// resolved\n"), 0o644)
