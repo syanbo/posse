@@ -78,6 +78,7 @@ type macAPI struct {
 	poolPop  func(unsafe.Pointer)
 
 	mainDisplay  func() uint32
+	isAsleep     func(uint32) int32
 	pixelsWide   func(uint32) uintptr
 	pixelsHigh   func(uint32) uintptr
 	copyMode     func(uint32) uintptr
@@ -242,6 +243,7 @@ func loadMac() (*macAPI, error) {
 
 	cg := dl("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
 	m.mainDisplay = mustFn[func() uint32](cg, "CGMainDisplayID")
+	m.isAsleep = softFn[func(uint32) int32](cg, "CGDisplayIsAsleep")
 	m.activeDisplays = mustFn[func(uint32, *uint32, *uint32) int32](cg, "CGGetActiveDisplayList")
 	m.pixelsWide = mustFn[func(uint32) uintptr](cg, "CGDisplayPixelsWide")
 	m.pixelsHigh = mustFn[func(uint32) uintptr](cg, "CGDisplayPixelsHigh")
@@ -462,6 +464,11 @@ func (m *macAPI) screenLocked() bool {
 	defer m.cfRelease(dict)
 	key := m.string("CGSSessionScreenIsLocked")
 	return m.dictGet(dict, uintptr(key)) == m.cfTrue
+}
+
+// displayAsleep 是主屏熄着（显示器休眠）。查不到时当作亮着。
+func (m *macAPI) displayAsleep() bool {
+	return m.isAsleep != nil && m.isAsleep(m.mainDisplay()) != 0
 }
 
 func (m *macAPI) displayPixels(id uint32) (int, int) {

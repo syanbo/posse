@@ -6,13 +6,15 @@ type lockScreen interface {
 	locked() bool
 	// target 是锁屏界面所在的进程
 	target() (pid int32, ok bool)
+	// ready 在密码框可能收起了时唤出它，等它能收字
+	ready()
 	// press 把一个字按下再松开，只投给 pid
 	press(pid int32, r rune) bool
 	// enter 按一下回车，只投给 pid
-	enter(pid int32)
+	enter(pid int32) bool
 }
 
-// typePassword 在锁屏的密码框里输入 text 再回车，返回是否按了回车。
+// typePassword 在锁屏的密码框里输入 text 再回车，返回是否整串打完、按了回车：只有这时手机才可以记住这串密码。
 // 按键只投给锁屏界面的进程，不经 HID 层：解锁那一刻还没发出的按键在 HID 层会落进最前面的 App。
 // 逐字之间和回车之前都再查一次锁屏，解开了就停。日志里不写密码和它的长度。
 func typePassword(ls lockScreen, text string, logf func(string, ...any)) bool {
@@ -28,6 +30,7 @@ func typePassword(ls lockScreen, text string, logf func(string, ...any)) bool {
 		logf("password dropped: lock screen process not found")
 		return false
 	}
+	ls.ready()
 	for _, r := range text {
 		if !ls.locked() {
 			logf("password stopped: screen unlocked while typing")
@@ -42,6 +45,9 @@ func typePassword(ls lockScreen, text string, logf func(string, ...any)) bool {
 		logf("password stopped: screen unlocked before return")
 		return false
 	}
-	ls.enter(pid)
+	if !ls.enter(pid) {
+		logf("password stopped: key event failed")
+		return false
+	}
 	return true
 }

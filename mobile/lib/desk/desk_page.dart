@@ -126,8 +126,10 @@ class _DeskPageState extends State<DeskPage>
   // 这台电脑在手机钥匙串里记着登录密码：锁屏时一点就解
   var _passwordSaved = false;
   final _passwords = const DeskPasswordStore();
-  // 勾了记住、刚发出去的密码：Mac 随后解开了才存，输错的不记
-  ({String key, String password, DateTime at})? _pendingSave;
+  // 勾了记住、刚发出去的密码：Mac 随后解开了才存，输错的不记。
+  // waitTyped 是还没收到 Mac 报整串打完（password_typed）：认密码事件的 Mac 丢掉密码时
+  // 也可能随后解锁（本机 Touch ID 解开的），这时不存
+  ({String key, String password, DateTime at, bool waitTyped})? _pendingSave;
   // 切画面的结果（窗口没了回到整块屏），几秒后消失
   String? _viewNote;
   Timer? _noteTimer;
@@ -756,6 +758,16 @@ class _DeskPageState extends State<DeskPage>
           case 'unlocked':
             setState(() => _macLocked = false);
             unawaited(_savePending());
+          case 'password_typed':
+            final pending = _pendingSave;
+            if (pending != null) {
+              _pendingSave = (
+                key: pending.key,
+                password: pending.password,
+                at: pending.at,
+                waitTyped: false,
+              );
+            }
         }
       case 'displays':
         if (!mounted) return;
@@ -1279,10 +1291,16 @@ class _DeskPageState extends State<DeskPage>
       _note(context.l10n.deskPasswordForgotten);
       return;
     }
-    _sendPassword(password);
+    final sent = _sendPassword(password);
     if (key == null) return;
     if (answer.remember) {
-      _pendingSave = (key: key, password: password, at: DateTime.now());
+      if (!sent) return;
+      _pendingSave = (
+        key: key,
+        password: password,
+        at: DateTime.now(),
+        waitTyped: _passwordEvent,
+      );
     } else if (_passwordSaved) {
       await _passwords.forget(key);
       if (mounted) setState(() => _passwordSaved = false);
@@ -1293,7 +1311,11 @@ class _DeskPageState extends State<DeskPage>
     final pending = _pendingSave;
     _pendingSave = null;
     if (pending == null ||
-        DateTime.now().difference(pending.at) > const Duration(seconds: 15)) {
+        !deskSaveOnUnlock(
+          sentAt: pending.at,
+          now: DateTime.now(),
+          waitTyped: pending.waitTyped,
+        )) {
       return;
     }
     final ok = await _passwords.save(pending.key, pending.password);
@@ -1318,25 +1340,28 @@ class _DeskPageState extends State<DeskPage>
     _sendPassword(password);
   }
 
-  /// 密码不进事件记录（调试面板会显示）。
-  void _sendPassword(String password) {
+  /// 返回是否发了出去。密码不进事件记录（调试面板会显示）。
+  bool _sendPassword(String password) {
     // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
     if (!_macLocked) {
       _note(context.l10n.deskAlreadyUnlocked);
-      return;
+      return false;
     }
-    final gen = _gen;
+    // 不看 _gen：重新订阅后输入链路还是这一条，Mac 报回锁屏就接着回车，免得字留在密码框里
+    final sent = deskSendPassword(
+      _link,
+      password,
+      passwordEvent: _passwordEvent,
+      stillLocked: () => mounted && _macLocked,
+    );
+    if (sent == null) return false;
     unawaited(
-      deskSendPassword(
-        _link,
-        password,
-        passwordEvent: _passwordEvent,
-        stillLocked: () => mounted && gen == _gen && _macLocked,
-      ).then((_) {
+      sent.then((_) {
         if (mounted) _noteInput();
       }),
     );
     _noteInput();
+    return true;
   }
 
   /// 锁屏胶囊：和悬浮球一样的圆角和底色，按钮压到胶囊里面。

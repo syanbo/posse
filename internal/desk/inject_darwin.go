@@ -42,6 +42,9 @@ const (
 
 	// lockWakeIdle 内唤出过锁屏密码框就不再唤，直接打字
 	lockWakeIdle = 5 * time.Second
+	// lockWakeMax 是唤醒后最多等屏幕亮多久；lockScreenSettle 是亮了之后等锁屏界面画出密码框
+	lockWakeMax      = 3 * time.Second
+	lockScreenSettle = 500 * time.Millisecond
 )
 
 // 带修饰键的文字要真正按下这些键。键码从 HID 表取，避免和虚拟键码写两遍。
@@ -76,6 +79,8 @@ type injector struct {
 	locked func() bool
 	// woke 是上一次唤出锁屏密码框的时刻
 	woke time.Time
+	// typed 是这批输入里有密码打完、按了回车，放开锁之后报给手机
+	typed bool
 
 	bounds     cgRect
 	layout     map[rune]keyStroke
@@ -124,6 +129,14 @@ func (e *engine) applyInput(events []Event) {
 			in.one(ev, now)
 		}
 	})
+	in.mu.Lock()
+	typed := in.typed
+	in.typed = false
+	in.mu.Unlock()
+	// 不在 in.mu 里报：写管道失败会 halt，halt 要拿 in.mu 松开按键
+	if typed {
+		e.report(StatusPasswordTyped)
+	}
 }
 
 // wakeLocked 是开始看时 Mac 锁着屏：把锁屏界面的密码框叫出来。
@@ -304,12 +317,9 @@ func (in *injector) one(ev Event, now time.Time) {
 			in.typeChord(ev.Text, ev.Mods)
 		}
 	case EventPassword:
-		ls := macLockScreen{in: in}
-		if ls.locked() && now.Sub(in.woke) > lockWakeIdle {
-			in.wake()
-			time.Sleep(300 * time.Millisecond)
+		if typePassword(macLockScreen{in: in}, ev.Text, in.logf) {
+			in.typed = true
 		}
-		typePassword(ls, ev.Text, in.logf)
 	}
 }
 
@@ -334,63 +344,30 @@ func (s macLockScreen) target() (int32, bool) {
 	return 0, false
 }
 
-// press 按当前键盘布局按一个键，要 Shift 的字带着 Shift；布局里没有的字按 Unicode。
-// 不带手机上锁住的修饰键：密码框只要字。
-func (s macLockScreen) press(pid int32, r rune) bool {
+// ready 在密码框可能收起了时唤出它。直接投给进程的按键不算用户活动，唤不出密码框，
+// 屏幕熄着时要等它亮了再打，否则头几个字丢掉、回车照按，白白错一次。
+func (s macLockScreen) ready() {
 	in := s.in
-	if st, ok := in.layout[r]; ok && in.haveLayout {
-		shift, _ := HIDToVirtualKey(0xE1)
-		var flags uint64
-		if st.shift {
-			flags = modifierFlags(ModLShift)
-			if !in.postKeyTo(pid, shift, true, flags) {
-				return false
-			}
-		}
-		ok := in.postKeyTo(pid, st.code, true, flags) && in.postKeyTo(pid, st.code, false, flags)
-		if st.shift {
-			ok = in.postKeyTo(pid, shift, false, 0) && ok
-		}
-		return ok
+	if time.Since(in.woke) <= lockWakeIdle {
+		return
 	}
-	if in.mac.cgKey == nil || in.mac.cgUnicode == nil || in.mac.cgPostPid == nil {
-		return false
-	}
-	chars := utf16.Encode([]rune{r})
-	for _, down := range []bool{true, false} {
-		ev := in.mac.cgKey(in.source, 0, down)
-		if ev == 0 {
-			return false
+	asleep := in.mac.displayAsleep()
+	in.wake()
+	if asleep {
+		for deadline := time.Now().Add(lockWakeMax); in.mac.displayAsleep() && time.Now().Before(deadline); {
+			time.Sleep(50 * time.Millisecond)
 		}
-		in.mac.cgUnicode(ev, uintptr(len(chars)), &chars[0])
-		in.mac.cgPostPid(pid, ev)
-		in.mac.cfRelease(ev)
+		time.Sleep(lockScreenSettle)
 	}
-	runtime.KeepAlive(chars)
-	return true
+	time.Sleep(300 * time.Millisecond)
 }
 
-func (s macLockScreen) enter(pid int32) {
+// press 不带手机上锁住的修饰键：密码框只要字。
+func (s macLockScreen) press(pid int32, r rune) bool { return s.in.typeRune(pid, r, 0) }
+
+func (s macLockScreen) enter(pid int32) bool {
 	code, _ := HIDToVirtualKey(0x28)
-	s.in.postKeyTo(pid, code, true, 0)
-	s.in.postKeyTo(pid, code, false, 0)
-}
-
-// postKeyTo 和 postKey 一样，但只投给进程 pid。
-func (in *injector) postKeyTo(pid int32, code uint16, down bool, flags uint64) bool {
-	if in.mac.cgKey == nil || in.mac.cgPostPid == nil {
-		return false
-	}
-	ev := in.mac.cgKey(in.source, code, down)
-	if ev == 0 {
-		return false
-	}
-	defer in.mac.cfRelease(ev)
-	if in.mac.cgSetFlags != nil {
-		in.mac.cgSetFlags(ev, flags)
-	}
-	in.mac.cgPostPid(pid, ev)
-	return true
+	return s.in.postKeyTo(pid, code, true, 0) && s.in.postKeyTo(pid, code, false, 0)
 }
 
 func (in *injector) point(x, y uint16) cgPoint {
@@ -510,28 +487,49 @@ func (in *injector) key(ev Event) {
 
 // 按下和松开带同一段文字，接收方按 unicode 字符串插入一次。键码 0 不记成按住。
 func (in *injector) typeUnicode(s string) {
-	if s == "" || in.mac.cgKey == nil || in.mac.cgUnicode == nil || in.mac.cgPost == nil {
+	if s == "" {
 		return
 	}
 	for _, chunk := range splitUTF16(s, unicodeChunk) {
-		in.postUnicode(chunk)
+		in.postUnicode(0, chunk)
 	}
 }
 
-func (in *injector) postUnicode(chars []uint16) {
-	if len(chars) == 0 {
-		return
+// postUnicode 的 pid 为 0 时投到 HID 层，否则只投给这个进程。
+func (in *injector) postUnicode(pid int32, chars []uint16) bool {
+	if len(chars) == 0 || in.mac.cgKey == nil || in.mac.cgUnicode == nil {
+		return false
 	}
 	for _, down := range []bool{true, false} {
 		ev := in.mac.cgKey(in.source, 0, down)
 		if ev == 0 {
-			return
+			return false
 		}
 		in.mac.cgUnicode(ev, uintptr(len(chars)), &chars[0])
-		in.mac.cgPost(cgTapHID, ev)
+		ok := in.post(pid, ev)
 		in.mac.cfRelease(ev)
+		if !ok {
+			return false
+		}
 	}
 	runtime.KeepAlive(chars)
+	return true
+}
+
+// post 投出一个事件：pid 为 0 时进 HID 层（交给有键盘焦点的进程），否则只给这个进程。
+func (in *injector) post(pid int32, ev uintptr) bool {
+	if pid == 0 {
+		if in.mac.cgPost == nil {
+			return false
+		}
+		in.mac.cgPost(cgTapHID, ev)
+		return true
+	}
+	if in.mac.cgPostPid == nil {
+		return false
+	}
+	in.mac.cgPostPid(pid, ev)
+	return true
 }
 
 // typeKeys 按当前键盘布局逐字按键，要 Shift 的字单独按着 Shift。锁屏的密码框认按键，
@@ -541,24 +539,32 @@ func (in *injector) typeKeys(s string) {
 		in.typeUnicode(s)
 		return
 	}
-	shift, _ := HIDToVirtualKey(0xE1)
+	held := in.heldFlags()
 	for _, r := range s {
-		st, ok := in.layout[r]
-		if !ok {
-			in.typeUnicode(string(r))
-			continue
-		}
-		var flags uint64
-		if st.shift && !in.keys[shift] {
-			flags = modifierFlags(ModLShift)
-			in.postKey(shift, true, flags)
-		}
-		in.postKey(st.code, true, flags|in.heldFlags())
-		in.postKey(st.code, false, flags|in.heldFlags())
-		if flags != 0 {
-			in.postKey(shift, false, 0)
+		in.typeRune(0, r, held)
+	}
+}
+
+// typeRune 按当前键盘布局按一个字，要 Shift 而 held 里没有 Shift 时临时按着 Shift；布局里没有的字按 Unicode。
+// held 是要一起带上的修饰键标志。pid 的含义同 post。
+func (in *injector) typeRune(pid int32, r rune, held uint64) bool {
+	st, ok := in.layout[r]
+	if !ok {
+		return in.postUnicode(pid, utf16.Encode([]rune{r}))
+	}
+	shift, _ := HIDToVirtualKey(0xE1)
+	var flags uint64
+	if st.shift && held&flagShift == 0 {
+		flags = modifierFlags(ModLShift)
+		if !in.postKeyTo(pid, shift, true, flags) {
+			return false
 		}
 	}
+	ok = in.postKeyTo(pid, st.code, true, flags|held) && in.postKeyTo(pid, st.code, false, flags|held)
+	if flags != 0 {
+		ok = in.postKeyTo(pid, shift, false, 0) && ok
+	}
+	return ok
 }
 
 // wake 在锁屏时唤出密码框：声明一次用户活动（屏幕熄了会点亮），再原地挪一下指针。
@@ -668,18 +674,23 @@ func (in *injector) heldFlags() uint64 {
 }
 
 func (in *injector) postKey(code uint16, down bool, flags uint64) {
-	if in.mac.cgKey == nil || in.mac.cgPost == nil {
-		return
+	in.postKeyTo(0, code, down, flags)
+}
+
+// postKeyTo 的 pid 含义同 post。
+func (in *injector) postKeyTo(pid int32, code uint16, down bool, flags uint64) bool {
+	if in.mac.cgKey == nil {
+		return false
 	}
 	ev := in.mac.cgKey(in.source, code, down)
 	if ev == 0 {
-		return
+		return false
 	}
 	defer in.mac.cfRelease(ev)
 	if in.mac.cgSetFlags != nil {
 		in.mac.cgSetFlags(ev, flags)
 	}
-	in.mac.cgPost(cgTapHID, ev)
+	return in.post(pid, ev)
 }
 
 // 不只松开修饰键。字母卡住和修饰键卡住是同一件事。先拷贝，边遍历边删会漏键。

@@ -3,6 +3,15 @@ import 'package:flutter/services.dart';
 
 import '../l10n/l10n.dart';
 import '../ui/theme.dart';
+import 'wire.dart';
+
+/// 勾了记住、发出去的密码在 Mac 报解锁时存不存：15 秒内解开的才存（输错的不记）；
+/// [waitTyped] 是认密码事件的 Mac 还没报整串打完，这时解锁的不是这串密码（比如本机 Touch ID），不存。
+bool deskSaveOnUnlock({
+  required DateTime sentAt,
+  required DateTime now,
+  required bool waitTyped,
+}) => !waitTyped && now.difference(sentAt) <= const Duration(seconds: 15);
 
 /// 弹层的结果：[password] 为空是点了「忘掉密码」。
 typedef MacPasswordAnswer = ({String? password, bool remember});
@@ -109,6 +118,10 @@ class _PasswordSheetState extends State<_PasswordSheet> {
                       controller: _password,
                       autofocus: true,
                       obscureText: true,
+                      // 一条密码事件装得下的长度，Mac 的登录密码远到不了
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(deskPasswordMaxChars),
+                      ],
                       autocorrect: false,
                       enableSuggestions: false,
                       keyboardType: TextInputType.visiblePassword,

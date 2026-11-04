@@ -72,8 +72,11 @@ void main() {
   test('password is resent until acked, then dropped', () {
     final packets = <Uint8List>[];
     final link = DeskInputLink(onPacket: packets.add);
-    link.password('secret');
-    link.password('');
+    expect(link.password('secret'), isTrue);
+    expect(link.password(''), isFalse);
+    // 装不下一条明文的不占序号，后面的输入照常
+    expect(link.password('x' * (deskPasswordMaxBytes + 1)), isFalse);
+    expect(link.sent, 1);
     expect(packets, hasLength(1));
     link.retransmit();
     expect(packets, hasLength(2));
@@ -128,6 +131,26 @@ void main() {
         deskEventKeyUp,
       });
       expect(events.last.hid, deskKeyHid['Enter']);
+    });
+
+    test('a password too long for one packet is not sent at all', () {
+      final packets = <Uint8List>[];
+      final link = DeskInputLink(onPacket: packets.add);
+      final long = 'é' * (deskPasswordMaxBytes ~/ 2 + 1);
+      for (final passwordEvent in [true, false]) {
+        expect(
+          deskSendPassword(
+            link,
+            long,
+            passwordEvent: passwordEvent,
+            stillLocked: () => true,
+            delay: Duration.zero,
+          ),
+          isNull,
+        );
+      }
+      expect(packets, isEmpty);
+      expect(deskPasswordMaxChars * 4, lessThanOrEqualTo(deskPasswordMaxBytes));
     });
 
     test('an older Mac that unlocked meanwhile gets no return', () async {

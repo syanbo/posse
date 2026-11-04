@@ -57,6 +57,9 @@ type fakeLock struct {
 	calls  int
 	pid    int32
 	noPID  bool
+	// failAt 是第几个按键（从 1 数，回车也算）投递失败，0 不失败
+	failAt int
+	keys   int
 	log    []string
 }
 
@@ -68,12 +71,25 @@ func (f *fakeLock) locked() bool {
 
 func (f *fakeLock) target() (int32, bool) { return f.pid, !f.noPID }
 
+func (f *fakeLock) ready() { f.log = append(f.log, "ready") }
+
 func (f *fakeLock) press(pid int32, r rune) bool {
+	f.keys++
+	if f.keys == f.failAt {
+		return false
+	}
 	f.log = append(f.log, fmt.Sprintf("%d:%c", pid, r))
 	return true
 }
 
-func (f *fakeLock) enter(pid int32) { f.log = append(f.log, fmt.Sprintf("%d:enter", pid)) }
+func (f *fakeLock) enter(pid int32) bool {
+	f.keys++
+	if f.keys == f.failAt {
+		return false
+	}
+	f.log = append(f.log, fmt.Sprintf("%d:enter", pid))
+	return true
+}
 
 func TestTypePassword(t *testing.T) {
 	var logs []string
@@ -84,12 +100,17 @@ func TestTypePassword(t *testing.T) {
 		want   string
 		enters bool
 	}{
-		{"locked throughout", &fakeLock{states: []bool{true}, pid: 414}, "414:a 414:B 414:1 414:enter", true},
+		{"locked throughout", &fakeLock{states: []bool{true}, pid: 414}, "ready 414:a 414:B 414:1 414:enter", true},
 		{"not locked", &fakeLock{states: []bool{false}, pid: 414}, "", false},
 		{"no lock screen process", &fakeLock{states: []bool{true}, noPID: true}, "", false},
-		// 第一次查锁着，打完两个字时解开了：剩下的字和回车都不发
-		{"unlocked midway", &fakeLock{states: []bool{true, true, true, false}, pid: 414}, "414:a 414:B", false},
-		{"unlocked before return", &fakeLock{states: []bool{true, true, true, true, false}, pid: 414}, "414:a 414:B 414:1", false},
+		// 唤醒密码框的工夫解开了：一个字也不打
+		{"unlocked while waking", &fakeLock{states: []bool{true, false}, pid: 414}, "ready", false},
+		// 打完两个字时解开了：剩下的字和回车都不发
+		{"unlocked midway", &fakeLock{states: []bool{true, true, true, false}, pid: 414}, "ready 414:a 414:B", false},
+		{"unlocked before return", &fakeLock{states: []bool{true, true, true, true, false}, pid: 414}, "ready 414:a 414:B 414:1", false},
+		{"key fails", &fakeLock{states: []bool{true}, pid: 414, failAt: 2}, "ready 414:a", false},
+		// 回车没投出去不算打完：手机不能因此记住密码
+		{"return fails", &fakeLock{states: []bool{true}, pid: 414, failAt: 4}, "ready 414:a 414:B 414:1", false},
 	}
 	for _, c := range cases {
 		logs = nil

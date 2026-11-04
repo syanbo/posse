@@ -35,6 +35,25 @@ Future<Future<MacPasswordAnswer?> Function()> _open(
 }
 
 void main() {
+  test(
+    'a password is saved only when it was typed and the Mac unlocked soon',
+    () {
+      final at = DateTime(2026, 11, 4, 9);
+      final soon = at.add(const Duration(seconds: 3));
+      expect(deskSaveOnUnlock(sentAt: at, now: soon, waitTyped: false), isTrue);
+      // Mac 没报打完就解锁了：密码被丢掉，解锁的是别的途径
+      expect(deskSaveOnUnlock(sentAt: at, now: soon, waitTyped: true), isFalse);
+      expect(
+        deskSaveOnUnlock(
+          sentAt: at,
+          now: at.add(const Duration(seconds: 16)),
+          waitTyped: false,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   testWidgets('typed password comes back with the remember switch', (
     tester,
   ) async {

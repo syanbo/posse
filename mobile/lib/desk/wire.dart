@@ -14,6 +14,12 @@ const deskEventText = 7;
 /// 锁屏密码：Mac 只在锁着屏时输进锁屏的密码框再回车。只发给 ready 带 `password: true` 的 Mac。
 const deskEventPassword = 8;
 
+/// 密码最多这么多字节：一条密码事件要和别的必达事件挤进一条明文（[deskInputLimit]）。
+const deskPasswordMaxBytes = 1000;
+
+/// 密码框最多让输这么多字：每个字最多 4 字节，输满也不超过 [deskPasswordMaxBytes]。
+const deskPasswordMaxChars = deskPasswordMaxBytes ~/ 4;
+
 const deskButtonLeft = 1;
 const deskButtonRight = 2;
 
@@ -591,9 +597,14 @@ class DeskInputLink {
   }
 
   /// 锁屏密码，一条必达事件：Mac 当场查锁屏，没锁就不打。
-  void password(String value) {
-    if (value.isEmpty) return;
+  /// 空的、一条明文装不下的不发（返回 false）：装不下的占着序号却永远发不出去。
+  bool password(String value) {
+    final raw = _utf8(value);
+    if (raw == null || raw.isEmpty || raw.length > deskPasswordMaxBytes) {
+      return false;
+    }
     _reliable(DeskWireEvent.password(value));
+    return true;
   }
 
   /// 还按着的鼠标键和键盘键各补一条松开。
@@ -688,27 +699,31 @@ const deskTypingPad = '​​​​';
 /// 解锁的 state 事件要从 Mac 传过来，等一会儿才赶得上。
 const deskLegacyEnterDelay = Duration(milliseconds: 600);
 
-/// 把锁屏密码交给 Mac。[passwordEvent] 是 Mac 认密码事件，发一条就完，锁屏判断交给 Mac。
+/// 把锁屏密码交给 Mac，发不出去（空的、太长）时返回 null。
+/// [passwordEvent] 是 Mac 认密码事件，发一条就完，锁屏判断交给 Mac。
 /// 旧 Mac 照旧发文字再回车，回车前等 [delay] 再问 [stillLocked]：这时已经解开就不回车，
-/// 免得把打进最前面 App 的字提交出去。
-Future<void> deskSendPassword(
+/// 免得把打进最前面 App 的字提交出去。返回的 Future 在回车发出或放弃后完成。
+Future<void>? deskSendPassword(
   DeskInputLink link,
   String password, {
   required bool passwordEvent,
   required bool Function() stillLocked,
   Duration delay = deskLegacyEnterDelay,
-}) async {
-  if (password.isEmpty) return;
+}) {
   if (passwordEvent) {
-    link.password(password);
-    return;
+    return link.password(password) ? Future<void>.value() : null;
+  }
+  final raw = _utf8(password);
+  if (raw == null || raw.isEmpty || raw.length > deskPasswordMaxBytes) {
+    return null;
   }
   link.text(password, 0);
-  await Future<void>.delayed(delay);
-  if (!stillLocked()) return;
-  final enter = deskKeyHid['Enter']!;
-  link.batch(() {
-    link.keyDown(enter, 0);
-    link.keyUp(enter, 0);
+  return Future<void>.delayed(delay, () {
+    if (!stillLocked()) return;
+    final enter = deskKeyHid['Enter']!;
+    link.batch(() {
+      link.keyDown(enter, 0);
+      link.keyUp(enter, 0);
+    });
   });
 }

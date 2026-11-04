@@ -171,6 +171,8 @@ func (d *Daemon) deskLaunch(ctx context.Context, req mobile.DeskRequest, codec s
 					notify(mobile.DeskEvent{Type: "state", State: "locked"})
 				case desk.StatusUnlocked:
 					notify(mobile.DeskEvent{Type: "state", State: "unlocked"})
+				case desk.StatusPasswordTyped:
+					notify(mobile.DeskEvent{Type: "state", State: "password_typed"})
 				case desk.StatusNoAccessibility:
 					notify(mobile.DeskEvent{Type: "state", State: "no_accessibility"})
 				case desk.StatusAccessibility:
