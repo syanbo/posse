@@ -129,15 +129,33 @@ func TestTaskHome(t *testing.T) {
 	}
 }
 
+// worker 终端右上角的按钮：agent 派发的回到派发方的会话，用户派发的回任务页。
 func TestWorkerReturnsToTask(t *testing.T) {
 	a := previewApp(t)
 	offlineClient(t, a)
+	// t6 是 t1 派发的 k1 的 worker
 	a.activeTerm["w1"] = "t6"
 	a.panes[0].id = "t6"
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
-	if _, ok := tt.Find("返回任务"); !ok {
-		t.Fatal("worker has no return button")
+	if _, ok := tt.Find("返回任务"); ok {
+		t.Fatal("agent-dispatched worker should not offer the task page")
+	}
+	if err := tt.Click("返回派发方"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.selected != "w1" || a.activeTerm["w1"] != "t1" {
+		t.Fatalf("return to dispatcher: selected %q term %q", a.selected, a.activeTerm["w1"])
+	}
+
+	// 用户派发的：没有派发方会话，回任务页
+	a.tasks[0].Coordinator = ""
+	a.indexTasks()
+	a.activeTerm["w1"] = "t6"
+	tt.Frame()
+	if _, ok := tt.Find("返回派发方"); ok {
+		t.Fatal("user-dispatched worker should not offer a dispatcher")
 	}
 	if err := tt.Click("返回任务"); err != nil {
 		t.Fatal(err)

@@ -1308,6 +1308,7 @@
   "skillsUsedTimes": "用过 {count} 次",
   "skillsWillCreate": "会新建这个文件：",
   "skillsWillModify": "会修改这个文件：",
+  "tabBackToDispatcher": "返回派发方",
   "tabBackToTask": "返回任务",
   "tabCheatSheet": "命令速查",
   "tabCloseOthers": "关闭其他终端",

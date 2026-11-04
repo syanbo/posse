@@ -19351,16 +19351,34 @@ func (msgs Messages) SkillsWillModify() string {
 	return Catalog.Format(msgs.locale, "skillsWillModify", nil)
 }
 
+// TabBackToDispatcher says "Back to Dispatcher"
+// in the language the app shows.
+//
+// Top right of a worker terminal dispatched by another agent: button that
+// switches to the dispatcher's session.
+func TabBackToDispatcher() string { return In(i18n.Locale()).TabBackToDispatcher() }
+
+// TabBackToDispatcher says "Back to Dispatcher"
+// in the language of msgs.
+//
+// Top right of a worker terminal dispatched by another agent: button that
+// switches to the dispatcher's session.
+func (msgs Messages) TabBackToDispatcher() string {
+	return Catalog.Format(msgs.locale, "tabBackToDispatcher", nil)
+}
+
 // TabBackToTask says "Back to Task"
 // in the language the app shows.
 //
-// Top right of a worker terminal: button that opens its task.
+// Top right of a worker terminal dispatched by the user (or whose
+// dispatcher terminal is gone): button that opens its task.
 func TabBackToTask() string { return In(i18n.Locale()).TabBackToTask() }
 
 // TabBackToTask says "Back to Task"
 // in the language of msgs.
 //
-// Top right of a worker terminal: button that opens its task.
+// Top right of a worker terminal dispatched by the user (or whose
+// dispatcher terminal is gone): button that opens its task.
 func (msgs Messages) TabBackToTask() string {
 	return Catalog.Format(msgs.locale, "tabBackToTask", nil)
 }

@@ -7054,9 +7054,13 @@
   "@skillsWillModify": {
     "description": "Skill switch confirmation dialog: label above the file path."
   },
+  "tabBackToDispatcher": "Back to Dispatcher",
+  "@tabBackToDispatcher": {
+    "description": "Top right of a worker terminal dispatched by another agent: button that switches to the dispatcher's session."
+  },
   "tabBackToTask": "Back to Task",
   "@tabBackToTask": {
-    "description": "Top right of a worker terminal: button that opens its task."
+    "description": "Top right of a worker terminal dispatched by the user (or whose dispatcher terminal is gone): button that opens its task."
   },
   "tabCheatSheet": "Cheat Sheet",
   "@tabCheatSheet": {

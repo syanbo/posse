@@ -666,6 +666,14 @@ func followable(task taskInfo) bool {
 		task.Terminal != nil && task.Terminal.Running && task.Terminal.Agent != "" && (task.Agent == "" || task.Terminal.Agent == task.Agent)
 }
 
+// coordinatorTerminal 是派发这个任务的 agent 的终端和它所在的工作区；用户派发或派发方终端不在了返回 nil。
+func (a *app) coordinatorTerminal(task *taskInfo) (*workspace, *terminalInfo) {
+	if task.Coordinator == "" {
+		return nil, nil
+	}
+	return a.findTerminal(task.Coordinator)
+}
+
 func (a *app) coordinatorLabel(m locales.Messages, task taskInfo) string {
 	if task.Coordinator == "" {
 		return m.TasksByYou()

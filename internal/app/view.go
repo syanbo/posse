@@ -1793,8 +1793,15 @@ func (a *app) sessionButtons(c *ui.Context, cur *terminalInfo, rightmost bool) {
 	col.Opacity(col.AnimateTo("fade", opacity, ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}))
 	col.Children(func() {
 		// 这一列的按钮不带悬停提示：它们贴着终端内容，提示会盖住旁边的字
-		if task != nil && quietIconButton(c.Key("back-to-task"), iconTasks, L(c).TabBackToTask(), buttonBox(), iconSize).Clicked() {
-			a.openTask(task.ID)
+		// agent 派发的 worker 回到派发方的会话，派发方终端不在了才回任务页；用户派发的回任务页
+		if task != nil {
+			if w, coord := a.coordinatorTerminal(task); coord != nil {
+				if quietIconButton(c.Key("back-to-task"), iconTasks, L(c).TabBackToDispatcher(), buttonBox(), iconSize).Clicked() {
+					a.openTerminal(w.ID, coord.ID)
+				}
+			} else if quietIconButton(c.Key("back-to-task"), iconTasks, L(c).TabBackToTask(), buttonBox(), iconSize).Clicked() {
+				a.openTask(task.ID)
+			}
 		}
 		if media.Supported(cur.Agent) {
 			a.panelButton(c, panelImages, iconImage, L(c).TabSessionImages())
