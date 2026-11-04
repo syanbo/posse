@@ -523,21 +523,29 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 			if row := a.sidebarItem(c, head, p.Name, false, !*open, toggle); row.Clicked() && len(sessions) > 0 {
 				*open = !*open || !wasSelected
 			}
-			collapsible(c, shown, func() { a.sessionRows(c, head, sessions) })
+			collapsible(c, shown, func() { a.sessionRows(c, head, sessions, nil) })
 			return
 		}
 		a.projectHeader(c, p, ws, open)
 		collapsible(c, shown, func() {
-			ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent).Children(func() {
+			links := &remoteLinks{}
+			list := ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent)
+			list.Children(func() {
 				for _, w := range ws {
 					label := cmp.Or(w.Shown, w.Name)
 					if w.Kind == "main" {
 						label = L(c).SidebarMainWorkspace()
 					}
 					a.sidebarItem(c, w, label, true, false, nil)
-					a.sessionRows(c, w, agentSessions(w.Terminals))
+					a.sessionRows(c, w, agentSessions(w.Terminals), links)
 				}
 			})
+			if len(links.order) > 0 {
+				var h ui.Handle
+				list.Bind(&h)
+				color := colors(c.Theme()).guide
+				list.DrawOver(func(p *ui.Painter, r ui.Rect) { links.draw(c, p, r, h, color) })
+			}
 		})
 	})
 	a.reorderable(c, group, p.ID)
@@ -773,7 +781,8 @@ func (a *app) sidebarItem(c *ui.Context, w workspace, label string, nested, coll
 }
 
 // sessionRows 把工作区里的 agent 会话缩进列在它下面，单击切到对应的终端标签。
-func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
+// links 不为空时 w 在多工作区项目的列表里：派到同一项目别的工作区的 worker 不画影子行，记进 links 由列表直接连线。
+func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo, links *remoteLinks) {
 	if len(sessions) == 0 {
 		return
 	}
@@ -782,11 +791,16 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 		cur = a.selectedSession(a.workspace(w.ID))
 	}
 	// 任务的 worker 排在派发它的会话下面、多缩进一层；派发方不在这个工作区（别的工作区、用户派发）的照常排。
-	// 派到别的工作区（worktree 这类）的 worker 排在派发方同一工作区的 worker 后面，是一行影子，连上线、点了跳过去
+	// 派到别的项目的 worker 排在派发方同一工作区的 worker 后面，是一行影子，连上线、点了跳过去；
+	// 同一项目里的两头都在侧栏这一块，直接连过去
 	top, children := a.sessionTree(sessions)
 	for _, term := range sessions {
-		if remote := a.remoteWorkers[term.ID]; len(remote) > 0 {
-			children[term.ID] = append(children[term.ID], remote...)
+		for _, k := range a.remoteWorkers[term.ID] {
+			if links != nil && k.home.ProjectID == w.ProjectID {
+				links.link(term.ID, k.term.ID)
+			} else {
+				children[term.ID] = append(children[term.ID], k)
+			}
 		}
 	}
 	// worker 最多嵌套 3 层，这里多留一层余量，防止数据成环时无限递归；影子行底下不再展开
@@ -818,7 +832,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 				}
 				kids := children[term.ID]
 				if len(kids) == 0 || len(g) >= 4 {
-					a.navSession(c, w, term, cur == term.ID, nil, nil, "", g, false)
+					links.row(term.ID, a.navSession(c, w, term, cur == term.ID, nil, nil, "", g, false))
 					continue
 				}
 				open := a.workersOpen[term.ID]
@@ -837,7 +851,7 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo) {
 					*open = true
 				}
 				// 收起时当前会话在里面，这一行算选中
-				a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", g, false)
+				links.row(term.ID, a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", g, false))
 				if *open {
 					rows(kids, g, true)
 				}
@@ -865,7 +879,8 @@ const navRowGap = 2
 // guide 是 worker 的连接线，一层嵌套一列：状态槽之前先缩进这么多层，状态紧挨着自己的 agent 图标，
 // 竖线走在上面几层派发方的状态槽下面。shadow 是派到别的工作区的 worker 的影子行：w 是它真正所在的工作区，
 // 文字淡一些，点了切过去并滚到它真正那一行；方向键不经过它，免得同一个会话走两遍。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, guide treeGuide, shadow bool) {
+// 返回这一行，给同一项目里跨工作区的连线定位。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, guide treeGuide, shadow bool) linkEnd {
 	depth := len(guide)
 	if !shadow {
 		a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
@@ -969,6 +984,9 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			a.askClose(l, term)
 		}
 	})
+	var h ui.Handle
+	line.Bind(&h)
+	return linkEnd{row: h, depth: depth, hasStatus: status != ""}
 }
 
 // statusTasks 是界面自己的状态：会话在等它派出去的任务（阻塞在 posse task wait 上，或者停下来等 Posse 提醒），

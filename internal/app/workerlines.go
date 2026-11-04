@@ -1,7 +1,9 @@
 package app
 
 import (
+	"cmp"
 	"math"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -90,8 +92,7 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 	if d == 0 {
 		return
 	}
-	const width, room = guideWidth, guideRoom
-	snap := func(v float32) float32 { return float32(math.Round(float64(v)*2)) / 2 }
+	const width = guideWidth
 	top, bot, mid := r.Y-gap, r.Y+r.H, snap(r.Y+r.H/2)
 	for k, more := range g[:d-1] {
 		if more {
@@ -100,10 +101,7 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 		}
 	}
 	x := snap(r.X + guideColumn(d-1))
-	end := r.X + float32(d)*navIndent + statusSlotLeft() - room
-	if !hasStatus {
-		end = r.X + float32(d+1)*navIndent + navPad - room
-	}
+	end := r.X + guideEnd(d, hasStatus)
 	if g[d-1] {
 		// ├：竖线穿过本行，横线从中间伸出去
 		p.StrokePolyline([][2]float32{{x, top}, {x, bot}}, width, c)
@@ -120,4 +118,101 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 	}
 	pts = append(pts, [2]float32{end, mid})
 	p.StrokePolyline(pts, width, c)
+}
+
+// snap 把线的坐标对到半个点上，1 点粗的线落在整像素里不发虚。
+func snap(v float32) float32 { return float32(math.Round(float64(v)*2)) / 2 }
+
+// guideEnd 是拐到第 d 层会话行的横线停在哪（相对行的左边）：状态图形前，没有状态时一直连到 agent 图标前。
+func guideEnd(d int, hasStatus bool) float32 {
+	if hasStatus {
+		return float32(d)*navIndent + statusSlotLeft() - guideRoom
+	}
+	return float32(d+1)*navIndent + navPad - guideRoom
+}
+
+// linkEnd 是侧栏里画出来的一行会话，跨工作区连线的一头：depth 是它的嵌套层数，hasStatus 是状态槽里有没有图形。
+type linkEnd struct {
+	row       ui.Handle
+	depth     int
+	hasStatus bool
+}
+
+// remoteLinks 是多工作区项目里派到同一项目别的工作区的 worker：两头都在项目的工作区列表里，
+// 不画影子行，在列表左边对着项目图标中线的空当里竖着连过去，像一个「[」：最上一头圆角拐下、最下一头圆角拐出，中间的横着接上。
+// 一头没画出来（收在折起的派发方下面）就不连。
+type remoteLinks struct {
+	order   []string            // 派发方，按侧栏里出现的先后
+	workers map[string][]string // 派发方 → worker
+	rows    map[string]linkEnd  // 这一帧画出来的会话行
+}
+
+func (l *remoteLinks) link(coord, worker string) {
+	if l.workers == nil {
+		l.workers = map[string][]string{}
+	}
+	if _, ok := l.workers[coord]; !ok {
+		l.order = append(l.order, coord)
+	}
+	l.workers[coord] = append(l.workers[coord], worker)
+}
+
+func (l *remoteLinks) row(id string, e linkEnd) {
+	if l == nil {
+		return
+	}
+	if l.rows == nil {
+		l.rows = map[string]linkEnd{}
+	}
+	l.rows[id] = e
+}
+
+// linkLaneGap 是几个派发方各自的竖线之间的距离，靠左依次排开。
+const linkLaneGap = 5
+
+// draw 在工作区列表 list 画完子项后画连线，r 是列表的框。各行的位置按这一帧排好的框换算到列表里。
+func (l *remoteLinks) draw(c *ui.Context, p *ui.Painter, r ui.Rect, list ui.Handle, color ui.Color) {
+	origin := list.Bounds(c)
+	lane := snap(r.X + navPad + iconSize/2)
+	type end struct{ y, x float32 }
+	for _, coord := range l.order {
+		var ends []end
+		for _, id := range append([]string{coord}, l.workers[coord]...) {
+			e, ok := l.rows[id]
+			if !ok {
+				continue
+			}
+			b := e.row.Bounds(c)
+			if b.H <= 0 {
+				continue
+			}
+			x := r.X + b.X - origin.X
+			ends = append(ends, end{y: snap(r.Y + b.Y - origin.Y + b.H/2), x: x + guideEnd(e.depth, e.hasStatus)})
+		}
+		if len(ends) < 2 {
+			continue
+		}
+		slices.SortFunc(ends, func(a, b end) int { return cmp.Compare(a.y, b.y) })
+		x := lane
+		lane = max(lane-linkLaneGap, r.X+guideWidth)
+		first, last := ends[0], ends[len(ends)-1]
+		radius := float32(rRow)
+		const steps = 8 // 四分之一圆分几段折线
+		// ╭：从最上一头往左，圆角拐下来
+		pts := [][2]float32{{first.x, first.y}}
+		for i := 0; i <= steps; i++ {
+			a := math.Pi*1.5 - float64(i)/steps*math.Pi/2
+			pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), first.y + radius + radius*float32(math.Sin(a))})
+		}
+		// ╰：竖线下到最下一头，圆角拐向右边
+		for i := 0; i <= steps; i++ {
+			a := math.Pi - float64(i)/steps*math.Pi/2
+			pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), last.y - radius + radius*float32(math.Sin(a))})
+		}
+		pts = append(pts, [2]float32{last.x, last.y})
+		p.StrokePolyline(pts, guideWidth, color)
+		for _, e := range ends[1 : len(ends)-1] {
+			p.StrokePolyline([][2]float32{{x, e.y}, {e.x, e.y}}, guideWidth, color)
+		}
+	}
 }

@@ -631,6 +631,17 @@ func TestPreview(t *testing.T) {
 		a.indexTasks()
 		savePNG(t, newPreviewTester(a, dark), "sidebar-worker-lines-"+suffix+".png")
 
+		// 派到同一项目别的工作区的 worker 不画影子行，从派发方沿项目图标那一列直接连到它真正那一行；派到别的项目的照旧是影子行
+		a = previewApp(t)
+		a.workspaces = slices.Insert(a.workspaces, 1, workspace{ID: "w10", ProjectID: "p1", Name: "desk-password", Kind: "worktree", Project: "Apps",
+			Label: "Apps/desk-password", Branch: "desk-password", Path: "/Users/x/.posse/worktrees/Apps/desk-password",
+			Terminals: []terminalInfo{{ID: "t12", Agent: "claude", Name: "看桌面解锁", Running: true, AgentState: state("working")}}})
+		a.tasks = append(a.tasks, taskInfo{ID: "k8", Title: "看桌面解锁", Agent: "claude", WorkspaceID: "w10", Worker: "t12", Status: "running", Coordinator: "t1", CreatedAt: time.Now()})
+		a.tasks[1].Coordinator = "t1"
+		a.indexWorkspaces()
+		a.indexTasks()
+		savePNG(t, newPreviewTester(a, dark), "sidebar-worker-link-"+suffix+".png")
+
 		// 会话按钮收成右边缘的把手
 		a = previewApp(t)
 		a.state.SessionButtonsHidden = true
