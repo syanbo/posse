@@ -660,6 +660,42 @@ func TestRestartedHelperGetsTheCurrentSettings(t *testing.T) {
 	ctrlW.Close()
 }
 
+// 锁屏时开始看、解锁时采集被停掉子进程重启：新子进程没锁就不报解锁，这边在它的第一个画面配置前替它报；
+// 新子进程还锁着（配置前报了锁屏）就不报
+func TestRestartAfterUnlockReportsUnlocked(t *testing.T) {
+	for _, stillLocked := range []bool{false, true} {
+		statuses := make(chan byte, 8)
+		c := &caster{control: io.Discard, fps: 60, stopped: make(chan struct{}), onStatus: func(b byte) { statuses <- b }}
+		framesR, framesW := io.Pipe()
+		done := make(chan struct{})
+		go func() { c.readFrames(framesR); close(done) }()
+		config := Frame{Kind: KindConfig, Payload: MarshalConfig(Config{Codec: CodecHEVC, Width: 1920, Height: 1080, FullWidth: 1920, FullHeight: 1080})}
+		WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusLocked}})
+		WriteFrame(framesW, config)
+		WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusRestarted}})
+		if stillLocked {
+			WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusLocked}})
+		}
+		WriteFrame(framesW, config)
+		// 之后再来配置（切屏、改分辨率）不重复报
+		WriteFrame(framesW, config)
+		framesW.Close()
+		<-done
+		close(statuses)
+		var got []byte
+		for b := range statuses {
+			got = append(got, b)
+		}
+		want := []byte{StatusLocked, StatusUnlocked}
+		if stillLocked {
+			want = []byte{StatusLocked, StatusLocked}
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("stillLocked=%v: statuses %v, want %v", stillLocked, got, want)
+		}
+	}
+}
+
 // 画面配置比手机的 hello 先到：先按中转起步，第一次认出直连换成直连的起始码率；
 // 之后换线路只改上限，降下来的码率不跳回去
 func TestPathSetsStartBitrate(t *testing.T) {
