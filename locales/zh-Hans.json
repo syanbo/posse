@@ -1510,7 +1510,7 @@
   "usageResetInHours": "{count, plural, other {# 小时后重置}}",
   "usageResetInHoursMinutes": "{hours} 小时 {minutes} 分钟后重置",
   "usageResetInMinutes": "{count, plural, other {# 分钟后重置}}",
-  "usageSettingsNote": "关掉后底栏和手机都不显示，常驻进程也不再读取和查询。打开时底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。",
+  "usageSettingsNote": "关掉后底栏和手机都不显示，常驻进程也不再读取和查询；上面关掉的 agent 同样不显示、不读取。打开时底栏显示各 agent 套餐用了多少，在 agent 运行时顺带更新：Claude、Codex、Grok 读它们自己留在本地的记录。下面两项本地没有，要向它们查（至少隔 5 分钟）：Cursor 在常驻进程启动和它用过之后，用 cursor-agent 存在钥匙串里的登录信息去查；Codex 的重置卡在它用过之后，由 Codex 用自己的登录去查。",
   "usageShares": "本周用量用在 {shares}{stale}",
   "usageShowLabel": "显示套餐用量",
   "usageShownPercent": "{kind} {percent}",

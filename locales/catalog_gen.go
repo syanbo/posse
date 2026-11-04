@@ -22341,13 +22341,13 @@ func (msgs Messages) UsageResetInMinutes(count int) string {
 	return Catalog.Format(msgs.locale, "usageResetInMinutes", map[string]any{"count": count})
 }
 
-// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan …"
+// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned …"
 // in the language the app shows.
 //
 // Plan Usage settings or status popover: explanation for SettingsNote.
 func UsageSettingsNote() string { return In(i18n.Locale()).UsageSettingsNote() }
 
-// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan …"
+// UsageSettingsNote says "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned …"
 // in the language of msgs.
 //
 // Plan Usage settings or status popover: explanation for SettingsNote.

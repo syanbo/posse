@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -430,17 +431,22 @@ func (a *app) planSettings(c *ui.Context) {
 		if st.Off {
 			return
 		}
+		// 上面关掉的 agent 常驻进程不查，它的查询开关也不列
 		cursor, codex := !st.CursorOff, !st.CodexOff
-		settingsRow(c, L(c).UsageCursorQuery(), func() {
-			if ui.Switch(c, &cursor).Label(L(c).UsageCursorQuery()).Changed() {
-				a.setUsageQuery("cursorOff", cursor)
-			}
-		})
-		settingsRow(c, L(c).UsageCodexQuery(), func() {
-			if ui.Switch(c, &codex).Label(L(c).UsageCodexQuery()).Changed() {
-				a.setUsageQuery("codexOff", codex)
-			}
-		})
+		if !slices.Contains(a.disabled, "cursor") {
+			settingsRow(c, L(c).UsageCursorQuery(), func() {
+				if ui.Switch(c, &cursor).Label(L(c).UsageCursorQuery()).Changed() {
+					a.setUsageQuery("cursorOff", cursor)
+				}
+			})
+		}
+		if !slices.Contains(a.disabled, "codex") {
+			settingsRow(c, L(c).UsageCodexQuery(), func() {
+				if ui.Switch(c, &codex).Label(L(c).UsageCodexQuery()).Changed() {
+					a.setUsageQuery("codexOff", codex)
+				}
+			})
+		}
 	})
 }
 

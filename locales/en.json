@@ -8196,7 +8196,7 @@
       }
     }
   },
-  "usageSettingsNote": "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. When on, plan usage updates as agents run: Claude, Codex, and Grok use their local records. The two options below require online queries, at least five minutes apart. Cursor usage is checked when the daemon starts and after Cursor runs, using cursor-agent credentials in Keychain. Codex checks reset cards after it runs, using its own sign-in.",
+  "usageSettingsNote": "When off, usage is hidden from the status bar and phone, and the daemon stops reading and querying it. Agents turned off above are likewise hidden and not read. When on, plan usage updates as agents run: Claude, Codex, and Grok use their local records. The two options below require online queries, at least five minutes apart. Cursor usage is checked when the daemon starts and after Cursor runs, using cursor-agent credentials in Keychain. Codex checks reset cards after it runs, using its own sign-in.",
   "@usageSettingsNote": {
     "description": "Plan Usage settings or status popover: explanation for SettingsNote."
   },

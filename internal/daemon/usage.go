@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 
+	"posse/internal/agent"
 	"posse/internal/rpc"
 	"posse/internal/usage"
 )
@@ -23,7 +25,8 @@ import (
 //   - Grok：标题变化时增量读它的日志
 //   - Cursor：启动时和 stop 时向 Cursor 查一次，至少隔 cursorEvery
 //   - 界面点刷新（usage.refresh）时各家都马上取一次，不管间隔
-//   - 设置页整个关掉（usage.json 的 off）后以上都不做，读数也不给界面和手机
+//   - 设置页整个关掉（usage.json 的 off）后以上都不做，读数也不给界面和手机；
+//     设置里关掉的 agent（agents.json 的 disabled）同样不读不查、不给读数，重新打开时像启动时一样取一次
 const (
 	cursorEvery      = 5 * time.Minute
 	claudeCacheEvery = 5 * time.Second
@@ -47,6 +50,7 @@ type usageState struct {
 	cursorDenied bool // 读钥匙串要弹授权窗：本次常驻进程运行期间不再试
 	codexAskAt   time.Time
 	codexBusy    bool
+	disabled     []string // 上次给界面读数时关掉的 agent，用来认出重新打开的
 }
 
 // usageStatus 随 daemon.status 给界面。
@@ -71,9 +75,7 @@ func (d *Daemon) usageStart() {
 		return
 	}
 	d.claudeCacheUsage()
-	if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
-		d.usage.store.Update(u)
-	}
+	d.codexLatest()
 	d.grokUsage(true)
 	// Cursor 本地没有用量，不查就要等到下次用 Cursor 才有
 	d.cursorUsage(false)
@@ -84,6 +86,11 @@ func (d *Daemon) usageOn() bool {
 	return d.usage.store != nil && !d.usage.store.Off()
 }
 
+// usageAgentOn 是要不要读取 name 的用量：设置里关掉的 agent 不读不查。
+func (d *Daemon) usageAgentOn(name string) bool {
+	return d.usageOn() && !slices.Contains(agent.Disabled(d.cfg.Home), name)
+}
+
 func (d *Daemon) usageStatus() *usageStatus {
 	if d.usage.store == nil {
 		return nil
@@ -91,12 +98,25 @@ func (d *Daemon) usageStatus() *usageStatus {
 	if d.usage.store.Off() {
 		return &usageStatus{Usages: []usage.Usage{}, Off: true, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
 	}
-	return &usageStatus{Usages: d.usage.store.List(time.Now()), CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
+	off := agent.Disabled(d.cfg.Home)
+	d.usage.mu.Lock()
+	reopened := slices.ContainsFunc(d.usage.disabled, func(n string) bool { return !slices.Contains(off, n) })
+	d.usage.disabled = off
+	if reopened {
+		// 关着时什么都没读，Claude 缓存的修改时间要重新比
+		d.usage.claudeMod = time.Time{}
+	}
+	d.usage.mu.Unlock()
+	if reopened {
+		go d.usageStart()
+	}
+	list := slices.DeleteFunc(d.usage.store.List(time.Now()), func(u usage.Usage) bool { return slices.Contains(off, u.Agent) })
+	return &usageStatus{Usages: list, CursorOff: d.usage.store.CursorOff(), CodexOff: d.usage.store.CodexOff()}
 }
 
 // usageHook 在 hook 事件之后看要不要更新用量；都在后台做，不拖慢 hook。
 func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
-	if !d.usageOn() {
+	if !d.usageAgentOn(agentName) {
 		return
 	}
 	switch {
@@ -135,7 +155,7 @@ func (d *Daemon) usageHook(agentName, event string, payload json.RawMessage) {
 
 // claudeCacheUsage 读 Claude 自己缓存的用量，文件没改过就不读（它有几百 KB）。
 func (d *Daemon) claudeCacheUsage() {
-	if !d.usageOn() {
+	if !d.usageAgentOn("claude") {
 		return
 	}
 	path := usage.ClaudeConfigPath()
@@ -156,8 +176,18 @@ func (d *Daemon) claudeCacheUsage() {
 }
 
 // grokUsage 在 grok 终端标题变化时读日志新增的部分。
+// codexLatest 读 Codex 最近一个会话文件里的限额。
+func (d *Daemon) codexLatest() {
+	if !d.usageAgentOn("codex") {
+		return
+	}
+	if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
+		d.usage.store.Update(u)
+	}
+}
+
 func (d *Daemon) grokUsage(force bool) {
-	if !d.usageOn() {
+	if !d.usageAgentOn("grok") {
 		return
 	}
 	d.usage.mu.Lock()
@@ -177,7 +207,7 @@ func (d *Daemon) grokUsage(force bool) {
 // cursorUsage 向 Cursor 查一次用量。force 是用户点了刷新：不管间隔，钥匙串上次超时也再试。
 func (d *Daemon) cursorUsage(force bool) {
 	s := &d.usage
-	if !d.usageOn() || s.store.CursorOff() {
+	if !d.usageAgentOn("cursor") || s.store.CursorOff() {
 		return
 	}
 	s.mu.Lock()
@@ -218,7 +248,7 @@ func (d *Daemon) cursorUsage(force bool) {
 // codexAsk 让 Codex 自己查一次限额和重置卡。force 是用户点了刷新，不管间隔。
 func (d *Daemon) codexAsk(force bool) {
 	s := &d.usage
-	if !d.usageOn() || s.store.CodexOff() {
+	if !d.usageAgentOn("codex") || s.store.CodexOff() {
 		return
 	}
 	s.mu.Lock()
@@ -258,7 +288,7 @@ func (d *Daemon) usageReport(ctx context.Context, raw json.RawMessage) (any, err
 	if err := rpc.Decode(raw, &p); err != nil {
 		return nil, err
 	}
-	if !d.usageOn() || p.Agent != "claude" {
+	if p.Agent != "claude" || !d.usageAgentOn("claude") {
 		return map[string]bool{"updated": false}, nil
 	}
 	u, ok := usage.ClaudeStatusLine(p.Payload, time.Now())
@@ -290,9 +320,7 @@ func (d *Daemon) usageRefresh(ctx context.Context, raw json.RawMessage) (any, er
 	for _, f := range []func(){
 		d.claudeCacheUsage,
 		func() {
-			if u, ok := usage.CodexLatest(usage.CodexHome()); ok {
-				d.usage.store.Update(u)
-			}
+			d.codexLatest()
 			d.codexAsk(true)
 		},
 		func() { d.grokUsage(true) },
