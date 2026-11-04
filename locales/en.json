@@ -5836,6 +5836,36 @@
   "@sidebarDismissNotice": {
     "description": "Sidebar notice: tooltip of the close button."
   },
+  "sidebarDropNotFolder": "Only folders can be added as projects",
+  "@sidebarDropNotFolder": {
+    "description": "Sidebar: error shown when files that are not folders are dropped on the project list."
+  },
+  "sidebarDropProjectAdd": "Add",
+  "@sidebarDropProjectAdd": {
+    "description": "Sidebar: confirm button of the confirmation shown after dropping folders on the project list."
+  },
+  "sidebarDropProjectBody": "The folder stays where it is; Posse only lists it in the sidebar.",
+  "@sidebarDropProjectBody": {
+    "description": "Sidebar: body of the confirmation shown after dropping folders on the project list."
+  },
+  "sidebarDropProjectConfirm": "Add {path} as a Project?",
+  "@sidebarDropProjectConfirm": {
+    "description": "Sidebar: title of the confirmation shown after dropping one folder from Finder on the project list. path is the folder.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarDropProjectsConfirm": "{count, plural, one {Add # folder as a project?} other {Add # folders as projects?}}",
+  "@sidebarDropProjectsConfirm": {
+    "description": "Sidebar: title of the confirmation shown after dropping several folders from Finder on the project list.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "sidebarFirstRunBody": "Posse organizes terminals and agents by project. Choose a folder as a project, then open terminals and agents in it.",
   "@sidebarFirstRunBody": {
     "description": "First-run page body."

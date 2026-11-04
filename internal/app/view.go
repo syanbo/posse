@@ -440,6 +440,7 @@ func (a *app) sidebar(c *ui.Context) {
 	if d, ok := ui.Drop[tileDrag](nav); ok && !slices.Contains(globalTiles, d.id) {
 		a.unpin(d.id)
 	}
+	a.projectDrop(c, nav)
 	nav.Children(func() {
 		ui.Column(c).Padding(6, navEnd, 12, trafficLightX-navPad).Gap(2).Children(func() {
 			if a.state.SidebarGroup == sidebarByStatus {

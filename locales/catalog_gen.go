@@ -16227,6 +16227,90 @@ func (msgs Messages) SidebarDismissNotice() string {
 	return Catalog.Format(msgs.locale, "sidebarDismissNotice", nil)
 }
 
+// SidebarDropNotFolder says "Only folders can be added as projects"
+// in the language the app shows.
+//
+// Sidebar: error shown when files that are not folders are dropped on the
+// project list.
+func SidebarDropNotFolder() string { return In(i18n.Locale()).SidebarDropNotFolder() }
+
+// SidebarDropNotFolder says "Only folders can be added as projects"
+// in the language of msgs.
+//
+// Sidebar: error shown when files that are not folders are dropped on the
+// project list.
+func (msgs Messages) SidebarDropNotFolder() string {
+	return Catalog.Format(msgs.locale, "sidebarDropNotFolder", nil)
+}
+
+// SidebarDropProjectAdd says "Add"
+// in the language the app shows.
+//
+// Sidebar: confirm button of the confirmation shown after dropping folders
+// on the project list.
+func SidebarDropProjectAdd() string { return In(i18n.Locale()).SidebarDropProjectAdd() }
+
+// SidebarDropProjectAdd says "Add"
+// in the language of msgs.
+//
+// Sidebar: confirm button of the confirmation shown after dropping folders
+// on the project list.
+func (msgs Messages) SidebarDropProjectAdd() string {
+	return Catalog.Format(msgs.locale, "sidebarDropProjectAdd", nil)
+}
+
+// SidebarDropProjectBody says "The folder stays where it is; Posse only lists it in the sidebar."
+// in the language the app shows.
+//
+// Sidebar: body of the confirmation shown after dropping folders on the
+// project list.
+func SidebarDropProjectBody() string { return In(i18n.Locale()).SidebarDropProjectBody() }
+
+// SidebarDropProjectBody says "The folder stays where it is; Posse only lists it in the sidebar."
+// in the language of msgs.
+//
+// Sidebar: body of the confirmation shown after dropping folders on the
+// project list.
+func (msgs Messages) SidebarDropProjectBody() string {
+	return Catalog.Format(msgs.locale, "sidebarDropProjectBody", nil)
+}
+
+// SidebarDropProjectConfirm says "Add {path} as a Project?"
+// in the language the app shows.
+//
+// Sidebar: title of the confirmation shown after dropping one folder from
+// Finder on the project list. path is the folder.
+func SidebarDropProjectConfirm(path string) string {
+	return In(i18n.Locale()).SidebarDropProjectConfirm(path)
+}
+
+// SidebarDropProjectConfirm says "Add {path} as a Project?"
+// in the language of msgs.
+//
+// Sidebar: title of the confirmation shown after dropping one folder from
+// Finder on the project list. path is the folder.
+func (msgs Messages) SidebarDropProjectConfirm(path string) string {
+	return Catalog.Format(msgs.locale, "sidebarDropProjectConfirm", map[string]any{"path": path})
+}
+
+// SidebarDropProjectsConfirm says "{count, plural, one {Add # folder as a project?} other {Add # folders as projects?}}"
+// in the language the app shows.
+//
+// Sidebar: title of the confirmation shown after dropping several folders
+// from Finder on the project list.
+func SidebarDropProjectsConfirm(count int) string {
+	return In(i18n.Locale()).SidebarDropProjectsConfirm(count)
+}
+
+// SidebarDropProjectsConfirm says "{count, plural, one {Add # folder as a project?} other {Add # folders as projects?}}"
+// in the language of msgs.
+//
+// Sidebar: title of the confirmation shown after dropping several folders
+// from Finder on the project list.
+func (msgs Messages) SidebarDropProjectsConfirm(count int) string {
+	return Catalog.Format(msgs.locale, "sidebarDropProjectsConfirm", map[string]any{"count": count})
+}
+
 // SidebarFirstRunBody says "Posse organizes terminals and agents by project. Choose a folder as a project, then open terminals and agents in it."
 // in the language the app shows.
 //
