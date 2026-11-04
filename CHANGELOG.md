@@ -3,6 +3,24 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.22
+
+- 手机看桌面解锁更安全：密码只在 Mac 锁着时投给登录窗口，逐字检查，中途解开就停，不会打进解锁后最前面的 App（比如终端）；连点解锁不会把密码发几遍。
+- 侧栏里派到同一项目别的工作区的任务直接用连线连起来，不再显示影子行。
+- 设置里关掉的 agent，状态栏和手机都不再显示它的套餐用量，也不再去读取。
+- 会话标题跟着界面语言写，英文界面用英文类型。
+- 侧栏和手机不再显示看过的本轮完成。
+- 配合手机端 0.1.13 的解锁改动。
+
+### English
+
+- Safer unlocking from the phone: the password is sent only to the login window while the Mac is locked, checked key by key and stopped as soon as the Mac unlocks, so it never lands in the app in front after unlocking (such as a terminal); tapping Unlock repeatedly no longer sends the password several times.
+- Tasks sent to other workspaces of the same project are now linked directly in the sidebar instead of showing as shadow rows.
+- Agents turned off in Settings no longer show plan usage in the status bar or on the phone, and their usage is no longer read.
+- Session titles follow the interface language; an English interface uses English types.
+- The sidebar and the phone no longer show finished turns you’ve already seen.
+- Works with the unlock changes in Posse Mobile 0.1.13.
+
 ## 0.1.21
 
 - 界面支持英文：设置「通用」的「语言」里选跟随系统、简体中文或 English，马上生效；报错、日期、命令速查和更新说明都跟着界面语言。
