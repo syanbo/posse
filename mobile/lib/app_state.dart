@@ -580,6 +580,9 @@ class PosseAppModel extends ChangeNotifier {
   PosseLink? link;
   List<WorktreeRow> worktrees = const [];
 
+  /// 电脑上装了、又没在设置里关掉的 agent，按电脑给的顺序；新建会话面板只列这些。
+  List<String> agents = const [];
+
   /// 项目图标的图片，键是文件名：桌面每次导入都换一个名字，取过的不会过期。正在取的值是 null。
   final Map<String, Uint8List?> _projectIcons = {};
 
@@ -764,6 +767,7 @@ class PosseAppModel extends ChangeNotifier {
           error = null;
           unawaited(refreshWorktrees());
           unawaited(registerPush());
+          unawaited(refreshAgents());
         }
         seen = now;
         notifyListeners();
@@ -781,6 +785,7 @@ class PosseAppModel extends ChangeNotifier {
       link = next;
       offer = parsed;
       if (switched) {
+        agents = const [];
         worktrees = const [];
         tabs = const {};
         runOrder = null;
@@ -797,6 +802,7 @@ class PosseAppModel extends ChangeNotifier {
       notifyListeners();
       unawaited(_fetchName(created, computerId(parsed)));
       unawaited(registerPush());
+      unawaited(refreshAgents());
       await refreshWorktrees();
       _poll?.cancel();
       _poll = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -962,6 +968,7 @@ class PosseAppModel extends ChangeNotifier {
     final current = link;
     link = null;
     offer = null;
+    agents = const [];
     worktrees = const [];
     tabs = const {};
     runOrder = null;
@@ -1017,6 +1024,25 @@ class PosseAppModel extends ChangeNotifier {
     computer.projectOrder = List.of(names);
     unawaited(store.write(saved.encode()));
     notifyListeners();
+  }
+
+  /// 向电脑要一次能用的 agent：每条新连接一次，打开新建会话面板时再一次（电脑上刚改了开关）。
+  Future<void> refreshAgents() async {
+    final current = rpc;
+    if (current == null) return;
+    try {
+      final res = await current.call('preflight.detectAgents', const {});
+      if (!identical(current, rpc)) return;
+      final value = res['value'];
+      agents = [
+        if (value is List)
+          for (final a in value)
+            if (a is String) a,
+      ];
+      notifyListeners();
+    } catch (_) {
+      // 拿不到时沿用上一次的，下次打开面板再要
+    }
   }
 
   Future<void> refreshWorktrees() async {

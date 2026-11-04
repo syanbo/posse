@@ -11,9 +11,6 @@ import '../ui/widgets.dart';
 import 'models.dart';
 import 'workspace.dart';
 
-/// 新建会话可选的 agent，顺序和桌面端新建菜单一致；null 是普通终端。
-const newSessionAgents = <String?>['claude', 'codex', 'grok', 'cursor', null];
-
 /// 打开新建会话的面板。[worktree] 为空时先在面板里选工作区。
 Future<void> showNewSession(
   BuildContext context,
@@ -50,7 +47,10 @@ class _NewSessionSheet extends StatefulWidget {
 class _NewSessionSheetState extends State<_NewSessionSheet> {
   final _prompt = TextEditingController();
   late WorktreeRow? _worktree = widget.worktree ?? _defaultWorktree();
-  String? _agent = 'claude';
+
+  /// 选中的 agent，null 是普通终端；没点过时跟着电脑给的列表选第一个。
+  late String? _agent = widget.model.agents.firstOrNull;
+  var _picked = false;
   var _busy = false;
   String? _error;
 
@@ -62,7 +62,24 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    widget.model.addListener(_agentsChanged);
+    unawaited(widget.model.refreshAgents());
+  }
+
+  /// 电脑给的 agent 列表回来或变了：没点过的跟着选第一个，选中的被关掉了也换成第一个。
+  void _agentsChanged() {
+    final agents = widget.model.agents;
+    final keep = _picked && (_agent == null || agents.contains(_agent));
+    if (!keep && _agent != agents.firstOrNull) {
+      setState(() => _agent = agents.firstOrNull);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.model.removeListener(_agentsChanged);
     _prompt.dispose();
     super.dispose();
   }
@@ -238,7 +255,7 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 children: [
-                  for (final agent in newSessionAgents)
+                  for (final agent in <String?>[...widget.model.agents, null])
                     Expanded(child: _agentChoice(c, agent)),
                 ],
               ),
@@ -282,7 +299,10 @@ class _NewSessionSheetState extends State<_NewSessionSheet> {
     final selected = agent == _agent;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _agent = agent),
+      onTap: () => setState(() {
+        _agent = agent;
+        _picked = true;
+      }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(horizontal: 4),

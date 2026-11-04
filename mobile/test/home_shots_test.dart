@@ -38,6 +38,7 @@ PosseAppModel _model() {
       'liveTerminalCount': 1,
     },
   ]);
+  model.agents = const ['claude', 'codex', 'grok', 'cursor'];
   return model;
 }
 
