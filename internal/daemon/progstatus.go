@@ -105,9 +105,13 @@ func (d *Daemon) titleWaiting(s *session, name, title string) {
 	prev, next, ok := s.UpdateAgent(func(cur host.AgentState) (host.AgentState, bool) {
 		switch {
 		case waiting && cur.Status != agent.StatusWaiting:
-			return host.AgentState{Status: agent.StatusWaiting, Event: "title", At: at}, true
+			// 沿用当前的：空闲时 Stop 带来的最后一条回复留着，手机的会话行不变空
+			st := cur
+			st.Status, st.Event, st.At = agent.StatusWaiting, "title", at
+			return st, true
 		case !waiting && cur.Status == agent.StatusWaiting && cur.Event == "title" && osc != agent.StatusWaiting:
-			st := host.AgentState{Status: osc, Event: eventOSC, At: at}
+			st := cur
+			st.Status, st.Event, st.At = osc, eventOSC, at
 			if osc == agent.StatusIdle {
 				st.Event = eventOSCStopped
 			}
@@ -135,7 +139,7 @@ func (s *session) setOSC(name, status string) (prev string) {
 	return prev
 }
 
-// oscTurnBegun 报告 7501 报的工作中能不能算数：没有 hooks 的 agent（Grok）只有 7501；有 hooks 的和 Codex
+// oscTurnBegun 报告 7501 报的工作中能不能算数：没有 hooks 的 agent（Grok，posse 派的、没人键入也一样）只有 7501；有 hooks 的和 Codex
 // 要等 hook 报过工作中，或者开始以 7501 为准之后有人往终端里输入过（Codex 启动时先报两秒工作中）。
 func (s *session) oscTurnBegun() bool {
 	s.mu.Lock()
@@ -144,8 +148,10 @@ func (s *session) oscTurnBegun() bool {
 }
 
 func (s *session) oscTurnBegunLocked() bool {
-	// Codex 不论带没带 hooks 都这样：手动启动的要到第一个 hook 才记成带 hooks，没经同名脚本启动的根本没有
-	return !s.hooked && s.agent != "codex" || s.oscTurn || s.LastInput().After(s.oscAt)
+	// 看的是这家有没有 hooks，不是 session.hooked：posse 启动的 Grok 也记成 hooked，但永远等不到 hook；
+	// Codex 不论带没带都这样，手动启动的要到第一个 hook 才记成带 hooks，没经同名脚本启动的根本没有
+	needsTurn := s.agent == "codex" || s.hooked && agent.HasHooks(s.agent)
+	return !needsTurn || s.oscTurn || s.LastInput().After(s.oscAt)
 }
 
 // oscActive 报告当前 agent 报过 7501。

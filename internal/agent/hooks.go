@@ -296,6 +296,15 @@ func TitleStatus(agentName, title, current string) (string, bool) {
 	return "", false
 }
 
+// HasHooks 报告这家 agent 启动时注入 hooks（grok 不注入，状态靠 OSC 7501 和标题）。
+func HasHooks(agentName string) bool {
+	switch agentName {
+	case "claude", "codex", "cursor":
+		return true
+	}
+	return false
+}
+
 // TitleWaiting 报告标题说 agent 在等批准：Codex、Grok 写 Action Required，Claude、Cursor 的标题不说。
 func TitleWaiting(agentName, title string) bool {
 	switch agentName {

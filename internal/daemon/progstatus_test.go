@@ -184,3 +184,38 @@ func TestOSCTitleWaiting(t *testing.T) {
 		t.Fatalf("title dropped the hook card %+v", st)
 	}
 }
+
+// posse 用 --prompt 派出去、没人键入的 Grok：记着 hooked 也等不到 hook，第一轮的 7501 工作中照样算数，完成记未读。
+func TestOSCGrokFirstTurnWithoutInput(t *testing.T) {
+	d, s, _ := oscTerminal(t, "grok")
+	if !s.isHooked() {
+		t.Fatal("posse-started grok expected to be marked hooked")
+	}
+	for _, state := range []string{"idle", "working"} {
+		d.onProgramStatus(s.ID, host.ProgramStatus{State: state, App: "grok-build"})
+	}
+	wantStatus(t, s, agent.StatusWorking)
+	d.onProgramStatus(s.ID, host.ProgramStatus{State: "done", App: "grok-build"})
+	wantStatus(t, s, agent.StatusIdle)
+	if !s.isUnread() {
+		t.Fatal("finished turn not unread")
+	}
+}
+
+// 标题升等待、再退回时沿用当前状态：空闲时 Stop 带来的最后一条回复不丢。
+func TestOSCTitleWaitingKeepsMessage(t *testing.T) {
+	d, s, hook := oscTerminal(t, "codex")
+	osc := func(state string) { d.onProgramStatus(s.ID, host.ProgramStatus{State: state, App: "codex"}) }
+	hook("UserPromptSubmit", map[string]any{})
+	osc("working")
+	hook("Stop", map[string]any{"last_assistant_message": "all done"})
+	osc("done")
+	d.onTitle(s.ID, "Action Required - posse")
+	if st := wantStatus(t, s, agent.StatusWaiting); st.Message != "all done" {
+		t.Fatalf("waiting lost message %+v", st)
+	}
+	d.onTitle(s.ID, "posse")
+	if st := wantStatus(t, s, agent.StatusIdle); st.Message != "all done" {
+		t.Fatalf("idle lost message %+v", st)
+	}
+}
