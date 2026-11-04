@@ -32,10 +32,11 @@ const (
 	sideChanges  = 2
 )
 
-// gitState 是一个工作区的 Git 状态。
+// gitState 是工作区里一个仓库的 Git 状态（找仓库见 repos.go）。
 type gitState struct {
-	checked  bool   // 查过是不是 git 仓库
-	repo     string // 仓库根目录；不是 git 仓库时为空
+	v        *filesView
+	repo     string   // 仓库根目录，工作区里的写法（经过软链时是软链的路径）；工作区里没有仓库时为空
+	aliases  []string // 同一个仓库经别的软链进来的写法
 	status   *gitx.Status
 	head     map[string]gitx.LineStats // 相对 HEAD 的增删行数，改动列表显示
 	picks    map[string]bool           // 勾选提交的文件里用户改过的；没改过的用默认（见 picked）
@@ -195,108 +196,19 @@ func (g *gitState) changeCount() int {
 	return len(g.status.Entries)
 }
 
-// pollGit 在后台读 git 状态，读完交回界面线程；第一次先确认是不是 git 仓库。
-func (a *app) pollGit(v *filesView) {
-	g := &v.git
-	root, checked := g.repo, g.checked
-	go func() {
-		ctx := context.Background()
-		if !checked {
-			root = repoRoot(v.root, gitx.TopLevel(ctx, v.root))
-		}
-		var st *gitx.Status
-		var head map[string]gitx.LineStats
-		var stashes []gitx.Stash
-		var err error
-		if root != "" {
-			if st, err = gitx.ReadStatus(ctx, root); err == nil {
-				head, _ = gitx.NumStatHEAD(ctx, root)
-				stashes, _ = gitx.Stashes(ctx, root)
-			}
-		}
-		a.update(func() {
-			g.poll.done()
-			g.checked, g.repo = true, root
-			if err != nil {
-				g.err = errtext.Text(err)
-				return
-			}
-			if st == nil {
-				return
-			}
-			old := g.status
-			g.err = ""
-			g.status, g.head, g.stashes = st, head, stashes
-			// 不在改动里的文件不再记它的勾选
-			for p := range g.picks {
-				if !slices.ContainsFunc(st.Entries, func(e gitx.Entry) bool { return e.Path == p }) {
-					delete(g.picks, p)
-				}
-			}
-			g.rows = changeRows(st, stashes)
-			a.gitChanged(v, old)
-		})
-	}()
-}
-
-// refreshGit 在操作之后马上重读状态，不等下一次轮询。
-func (a *app) refreshGit(v *filesView) {
-	if v.git.poll.busy {
-		return
-	}
-	v.git.poll.busy = true
-	a.pollGit(v)
-}
-
-// gitChanged 在状态变了之后更新依赖它的东西：打开的 diff 重读，编辑器的比较基准跟着 HEAD 走。
-func (a *app) gitChanged(v *filesView, old *gitx.Status) {
-	// 操作停在冲突上：切到改动，横幅在那里
-	if op := v.git.status.Operation; op != "" && (old == nil || old.Operation != op) {
-		v.side = sideChanges
-		// 刚停在冲突上（日志里 cherry-pick、分支弹窗里合并）：文件栏关着也打开，不然看不到继续 / 中止
-		if w := a.workspace(v.wsID); w != nil && old != nil {
-			a.openFilesPanel(w, sideChanges)
-		}
-	}
-	headMoved := old != nil && old.Commit != v.git.status.Commit
-	for _, d := range v.docs {
-		switch {
-		case d.diff != nil && d.kind != docLoading:
-			// 终端里提交、reset 之后 HEAD 变了：工作区文件没动，旧的一边却换了
-			if headMoved && !d.diff.fixedRevs() {
-				a.loadDiff(v, d)
-			} else {
-				a.reloadDiff(v, d)
-			}
-		case d.kind == docText && (headMoved || d.headFor != v.git.status.Commit):
-			a.loadHead(v, d)
-		}
-	}
-}
-
-// repoRoot 把 git 给的仓库根目录（已解析符号链接，如 /private/var/…）换成工作区路径的写法，
-// 文件标签里的路径都以工作区路径为准，两种写法混用会把同一个文件当成两个。
-func repoRoot(ws, top string) string {
-	if top == "" {
-		return ""
-	}
-	real, err := filepath.EvalSymlinks(ws)
-	if err != nil {
-		return top
-	}
-	up, err := filepath.Rel(real, top)
-	if err != nil || (up != "." && up != ".." && !strings.HasPrefix(up, ".."+string(filepath.Separator))) {
-		return top
-	}
-	return filepath.Join(ws, up)
-}
+// repoRoot 把 git 给的仓库根目录换成工作区路径的写法，见 gitx.ShownRoot。
+func repoRoot(ws, top string) string { return gitx.ShownRoot(ws, top) }
 
 // relPath 把绝对路径换成相对仓库根目录的路径；不在仓库里时返回空。
 func (g *gitState) relPath(abs string) string {
 	if g.repo == "" {
 		return ""
 	}
-	rel, err := filepath.Rel(g.repo, abs)
+	root, ok := gitx.Repo{Root: g.repo, Aliases: g.aliases}.Contains(abs)
+	if !ok {
+		return ""
+	}
+	rel, err := filepath.Rel(root, abs)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return ""
 	}
@@ -309,9 +221,8 @@ func (g *gitState) absPath(rel string) string {
 
 // loadHead 读文件在 HEAD 里的内容作为编辑器行号旁改动标记的基准；不在仓库里或是新文件时不标。
 func (a *app) loadHead(v *filesView, d *fileDoc) {
-	g := &v.git
-	rel := g.relPath(d.path)
-	if rel == "" || g.status == nil || g.status.Commit == "" {
+	g, rel := v.relIn(d.path)
+	if g == nil || g.status == nil || g.status.Commit == "" {
 		return
 	}
 	root, commit := g.repo, g.status.Commit
@@ -342,12 +253,16 @@ func (a *app) loadHead(v *filesView, d *fileDoc) {
 // diffSpec 说明一个 diff 比较哪两个版本的哪个文件。版本的写法：newRev 为空是工作区，
 // 其余是提交或分支；oldRev 为空表示旧的一边没有这个文件（新文件、根提交）。路径相对仓库根目录。
 type diffSpec struct {
+	root           string // 仓库根目录；为空时 openDiff 填上当前仓库
 	rel, orig      string // 重命名时 orig 是旧路径
 	oldRev, newRev string
 	label          string // 标签页上的补充说明，为空时按版本推断
 }
 
 func (s diffSpec) worktree() bool { return s.newRev == "" }
+
+// abs 是文件的绝对路径。
+func (s diffSpec) abs() string { return filepath.Join(s.root, filepath.FromSlash(s.rel)) }
 
 // fixedRevs 说明两边都是提交哈希（可带 ^、~N），引用变了内容也不变；
 // HEAD、分支名这类会随 fetch、拉取移动。工作区一边另看磁盘戳。
@@ -369,8 +284,8 @@ func isCommitRev(rev string) bool {
 }
 
 // changeSpec 是改动列表里一个文件的 diff：HEAD 对比工作区。
-func changeSpec(e gitx.Entry) diffSpec {
-	return diffSpec{rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
+func changeSpec(root string, e gitx.Entry) diffSpec {
+	return diffSpec{root: root, rel: e.Path, orig: e.Orig, oldRev: "HEAD"}
 }
 
 // diffDoc 是 diff 标签页。
@@ -452,8 +367,15 @@ func diffKey(abs string, s diffSpec) string {
 // 排版和忽略空白沿用；换文件用 diff 上方的文件菜单或 F7。
 func (a *app) openDiff(w *workspace, s diffSpec, siblings []diffSpec, first bool) {
 	v := a.showFiles(w)
-	g := &v.git
-	key := diffKey(g.absPath(s.rel), s)
+	if s.root == "" {
+		s.root = v.git.repo
+	}
+	for i := range siblings {
+		if siblings[i].root == "" {
+			siblings[i].root = s.root
+		}
+	}
+	key := diffKey(s.abs(), s)
 	df := &diffDoc{diffSpec: s, siblings: siblings, first: first}
 	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
 	for _, d := range v.docs {
@@ -480,10 +402,14 @@ func diffGroup(v *filesView, df *diffDoc) []diffSpec {
 	if df.siblings != nil {
 		return df.siblings
 	}
+	g := v.repoAt(df.root)
+	if g == nil {
+		return nil
+	}
 	var list []diffSpec
-	for _, r := range v.git.rows {
+	for _, r := range g.rows {
 		if !r.header && r.group != groupStash && !r.entry.Conflict {
-			list = append(list, changeSpec(r.entry))
+			list = append(list, changeSpec(g.repo, r.entry))
 		}
 	}
 	return list
@@ -582,9 +508,11 @@ func clampHunk(df *diffDoc) {
 
 // loadDiff 在后台读两边的内容。
 func (a *app) loadDiff(v *filesView, d *fileDoc) {
-	g := &v.git
-	root, df := g.repo, d.diff
-	spec := df.diffSpec
+	df := d.diff
+	if df.root == "" {
+		df.root = v.git.repo
+	}
+	root, spec := df.root, df.diffSpec
 	ignore, force := df.state.IgnoreWhitespace, df.force
 	go func() {
 		ctx := context.Background()
@@ -686,7 +614,7 @@ func (a *app) loadDiff(v *filesView, d *fileDoc) {
 // reloadDiff 在状态变了之后重读 diff：只有工作区一边会变，看文件的磁盘戳；两边都是固定版本的不重读。
 func (a *app) reloadDiff(v *filesView, d *fileDoc) {
 	df := d.diff
-	if !df.worktree() || files.StatFile(v.git.absPath(df.rel)).Same(df.stamp) {
+	if !df.worktree() || files.StatFile(df.abs()).Same(df.stamp) {
 		return
 	}
 	a.loadDiff(v, d)
@@ -794,7 +722,7 @@ func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
 	if !df.worktree() {
 		return
 	}
-	abs := v.git.absPath(df.rel)
+	abs := df.abs()
 	// 读进来之后文件又被改过（agent 在写）：拿旧内容回滚会把新写的冲掉，先重读
 	if !files.StatFile(abs).Same(df.stamp) {
 		a.err = m.GitFileChanged()
@@ -812,27 +740,33 @@ func (a *app) revertHunk(m locales.Messages, v *filesView, d *fileDoc, i int) {
 		return
 	}
 	df.stamp = st
-	a.refreshGit(v)
+	if g := v.repoAt(df.root); g != nil {
+		a.refreshRepo(g)
+	}
 }
 
 // --- 文件和提交操作：都在后台执行，完成后重读状态
 
-// gitDo 在后台执行一个 git 操作，期间 busy 显示操作名；出错显示在错误条上。
-func (a *app) gitDo(m locales.Messages, v *filesView, what string, fn func(ctx context.Context, root string) error) {
-	a.gitDoThen(m, v, what, fn, nil)
+// gitDo 在仓库 g 里后台执行一个 git 操作，期间 busy 显示操作名；出错显示在错误条上。
+func (a *app) gitDo(m locales.Messages, g *gitState, what string, fn func(ctx context.Context, root string) error) {
+	a.gitDoThen(m, g, what, fn, nil)
 }
 
 // gitDoThen 和 gitDo 一样，成功后在界面线程上调用 done。已经有操作在执行（比如自动 Fetch）时排在后面，
 // 不丢掉用户的点击。
-func (a *app) gitDoThen(m locales.Messages, v *filesView, what string, fn func(ctx context.Context, root string) error, done func()) {
-	a.gitDoKind(m, v, "", what, fn, done)
+func (a *app) gitDoThen(m locales.Messages, g *gitState, what string, fn func(ctx context.Context, root string) error, done func()) {
+	a.gitDoKind(m, g, "", what, fn, done)
 }
 
 // gitDoKind 同 gitDoThen，带上操作的代号。
 // m 是发起操作的视图的界面文字，操作结束后的报错、提示用它。
-func (a *app) gitDoKind(m locales.Messages, v *filesView, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
-	g := &v.git
+func (a *app) gitDoKind(m locales.Messages, g *gitState, kind gitKind, what string, fn func(ctx context.Context, root string) error, done func()) {
 	if g.repo == "" {
+		return
+	}
+	// 重新找仓库后这个仓库没了（软链删了）：报出来，不默默丢掉操作
+	if !slices.Contains(g.v.repos.list, g) {
+		a.err = m.GitOperationFailed(what, errtext.Text(errRepoGone))
 		return
 	}
 	op := gitOp{m: m, kind: kind, what: what, fn: fn, done: done}
@@ -840,13 +774,16 @@ func (a *app) gitDoKind(m locales.Messages, v *filesView, kind gitKind, what str
 		g.queue = append(g.queue, op)
 		return
 	}
-	a.gitRun(v, op)
+	a.gitRun(g, op)
 }
+
+// errRepoGone 是操作的仓库在重新找仓库后不在了。
+var errRepoGone = errors.New("repository no longer in workspace")
 
 // autostashLeft 在操作留下 autostash 后：记到这个工作区，打开改动页；操作自己的成功提示（拉到几个提交）
 // 和这条合成一条警告，免得一绿一黄同时说两样。shown 是操作结束前已有的提示数。
-func (a *app) autostashLeft(m locales.Messages, v *filesView, left *gitx.AutostashLeft, shown int) {
-	g := &v.git
+func (a *app) autostashLeft(m locales.Messages, g *gitState, left *gitx.AutostashLeft, shown int) {
+	v := g.v
 	g.autostash, g.autostashConflicts, g.autostashSeen = left.Stash, left.Conflicts, false
 	title, desc := m.GitRestoreConflicts(), m.GitRestoreConflictsNote()
 	if !left.Conflicts {
@@ -861,6 +798,7 @@ func (a *app) autostashLeft(m locales.Messages, v *filesView, left *gitx.Autosta
 		a.toasts = a.toasts[:shown]
 	}
 	a.warn(title, desc)
+	a.useRepo(v, g)
 	if w := a.workspace(v.wsID); w != nil {
 		a.openFilesPanel(w, sideChanges)
 	}
@@ -936,8 +874,8 @@ func networkOp(kind gitKind) bool {
 	return kind == gitFetch || kind == gitPush || kind == gitUpdate
 }
 
-func (a *app) gitRun(v *filesView, op gitOp) {
-	g := &v.git
+func (a *app) gitRun(g *gitState, op gitOp) {
+	v := g.v
 	g.busy, g.busyKind = op.what, op.kind
 	root := g.repo
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), op.what))
@@ -971,41 +909,44 @@ func (a *app) gitRun(v *filesView, op gitOp) {
 					op.done()
 				}
 				if left != nil {
-					a.autostashLeft(op.m, v, left, shown)
+					a.autostashLeft(op.m, g, left, shown)
 				}
 			}
-			a.refreshGit(v)
+			a.refreshRepo(g)
 			// Fetch、更新、推送之后传入传出马上重算，分支弹窗、比较、diff、日志也重读
 			if w := a.workspace(v.wsID); w != nil {
 				a.refsChanged(w.ProjectID)
 			} else if g.branches.list != nil {
-				a.loadBranches(v)
+				a.loadBranches(g)
 			}
-			a.gitNext(v)
+			a.gitNext(g)
 		})
 	}()
 }
 
 // gitNext 在一个操作结束后执行排队的下一个。
-func (a *app) gitNext(v *filesView) {
-	g := &v.git
+func (a *app) gitNext(g *gitState) {
 	if g.busy != "" || len(g.queue) == 0 {
 		return
 	}
 	op := g.queue[0]
 	g.queue = g.queue[1:]
-	a.gitRun(v, op)
+	a.gitRun(g, op)
 }
 
 // rollbackDoc 是编辑器顶栏的"回滚这个文件"：打开回滚对话框只勾这个文件，回滚后编辑器按磁盘重载（没保存的改动一起丢掉，和 WebStorm 一样），
 // 新文件被删掉后关掉标签。
 func (a *app) rollbackDoc(v *filesView, d *fileDoc) {
-	e := v.git.entry(d.path)
+	g := v.repoFor(d.path)
+	if g == nil {
+		return
+	}
+	e := g.entry(d.path)
 	if e == nil || e.Conflict {
 		return
 	}
 	rel := e.Path
-	a.openRollbackFor(v, []string{rel}, func(restored, removed []string) {
+	a.openRollbackFor(g, []string{rel}, func(restored, removed []string) {
 		switch {
 		case slices.Contains(removed, rel):
 			a.closeDoc(v, d)
@@ -1081,7 +1022,11 @@ func gitStatusText(m locales.Messages, letter byte) string {
 func (a *app) rollbackDiffFile(w *workspace, v *filesView, d *fileDoc) {
 	df := d.diff
 	var entry *gitx.Entry
-	if st := v.git.status; st != nil {
+	g := v.repoAt(df.root)
+	if g == nil {
+		return
+	}
+	if st := g.status; st != nil {
 		for i := range st.Entries {
 			if st.Entries[i].Path == df.rel {
 				entry = &st.Entries[i]
@@ -1100,7 +1045,7 @@ func (a *app) rollbackDiffFile(w *workspace, v *filesView, d *fileDoc) {
 	case i > 0:
 		next = &list[i-1]
 	}
-	a.openRollbackFor(v, []string{entry.Path}, func(restored, removed []string) {
+	a.openRollbackFor(g, []string{entry.Path}, func(restored, removed []string) {
 		if !slices.Contains(restored, df.rel) && !slices.Contains(removed, df.rel) || v.cur != d || d.diff != df {
 			return
 		}
@@ -1181,7 +1126,7 @@ func (g *gitState) wholeCommit() string {
 }
 
 func (a *app) commit(m locales.Messages, v *filesView) {
-	g := &v.git
+	g := v.git
 	msg := strings.TrimSpace(g.message)
 	if msg == "" {
 		a.err = m.GitMessageRequired()
@@ -1193,7 +1138,7 @@ func (a *app) commit(m locales.Messages, v *filesView) {
 		a.err = m.GitSelectFiles()
 		return
 	}
-	a.gitDoKind(m, v, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
+	a.gitDoKind(m, g, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
 		var err error
 		if whole {
 			// 合并、Cherry-pick、还原进行中 git 不许只提交部分文件（commit --only），勾选的先加入 Git，再整体提交暂存区
@@ -1219,7 +1164,7 @@ func (a *app) commit(m locales.Messages, v *filesView) {
 
 // setAmend 切换"修改上一次提交"：打开时输入框还空着，就填上上一次的提交信息。
 func (a *app) setAmend(v *filesView, on bool) {
-	g := &v.git
+	g := v.git
 	g.amend = on
 	// 取消时把自动填进来的旧信息清掉，免得被当成新提交的信息；改过的留着
 	if !on {

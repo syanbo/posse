@@ -25,6 +25,7 @@ type Project struct {
 	Path        string    `json:"path"`
 	Kind        string    `json:"kind"` // folder | git
 	SetupScript string    `json:"setupScript,omitempty"`
+	SingleRepo  bool      `json:"singleRepo,omitempty"` // 关掉"识别多个 Git 仓库"，只认项目目录所在的仓库；存成关掉，旧常驻进程不带这个字段时照默认的开着
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -99,6 +100,10 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	if err := addColumn(db, "projects", "single_repo", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	for _, c := range [][2]string{{"tasks", "model"}, {"tasks", "effort"}, {"terminals", "session_id"}, {"terminals", "cwd"}, {"terminals", "label"}, {"messages", "outcome"}} {
 		if err := addColumn(db, c[0], c[1], "TEXT NOT NULL DEFAULT ''"); err != nil {
 			db.Close()
@@ -132,13 +137,13 @@ func fromMS(v int64) time.Time { return time.UnixMilli(v) }
 // --- projects
 
 func (s *Store) AddProject(p Project) error {
-	_, err := s.db.Exec(`INSERT INTO projects(id,name,path,kind,setup_script,created_at) VALUES(?,?,?,?,?,?)`,
-		p.ID, p.Name, p.Path, p.Kind, p.SetupScript, ms(p.CreatedAt))
+	_, err := s.db.Exec(`INSERT INTO projects(id,name,path,kind,setup_script,single_repo,created_at) VALUES(?,?,?,?,?,?,?)`,
+		p.ID, p.Name, p.Path, p.Kind, p.SetupScript, p.SingleRepo, ms(p.CreatedAt))
 	return err
 }
 
 func (s *Store) UpdateProject(p Project) error {
-	_, err := s.db.Exec(`UPDATE projects SET name=?, kind=?, setup_script=? WHERE id=?`, p.Name, p.Kind, p.SetupScript, p.ID)
+	_, err := s.db.Exec(`UPDATE projects SET name=?, kind=?, setup_script=?, single_repo=? WHERE id=?`, p.Name, p.Kind, p.SetupScript, p.SingleRepo, p.ID)
 	return err
 }
 
@@ -156,7 +161,7 @@ func (s *Store) DeleteProject(id string) error {
 func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	var p Project
 	var created int64
-	err := row.Scan(&p.ID, &p.Name, &p.Path, &p.Kind, &p.SetupScript, &created)
+	err := row.Scan(&p.ID, &p.Name, &p.Path, &p.Kind, &p.SetupScript, &p.SingleRepo, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -164,7 +169,7 @@ func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	return p, err
 }
 
-const projectCols = `id,name,path,kind,setup_script,created_at`
+const projectCols = `id,name,path,kind,setup_script,single_repo,created_at`
 
 func (s *Store) Projects() ([]Project, error) {
 	rows, err := s.db.Query(`SELECT ` + projectCols + ` FROM projects ORDER BY name`)

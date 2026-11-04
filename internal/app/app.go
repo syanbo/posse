@@ -39,6 +39,7 @@ import (
 
 type project struct {
 	ID, Name, Path, Kind string
+	SingleRepo           bool // 关掉了"识别多个 Git 仓库"
 }
 
 type agentState struct {

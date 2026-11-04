@@ -203,9 +203,7 @@ func (a *app) filesTick(c *ui.Context, w *workspace) {
 	if v.poll.due(c, filesPollEvery) {
 		a.pollFiles(v)
 	}
-	if v.git.poll.due(c, gitPollEvery) {
-		a.pollGit(v)
-	}
+	a.pollRepos(c, v)
 	a.refreshList(v, false, nil)
 	a.reportListErr(c, v)
 	if d := v.cur; a.filesActive(w) && d != nil && d.kind == docLoading && !d.started {

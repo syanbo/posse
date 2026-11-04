@@ -43,22 +43,19 @@ type branchInfo struct {
 func (a *app) openBranches(w *workspace) {
 	v := a.filesFor(w)
 	a.branchPop = &branchPopup{ws: w.ID, hl: -1}
-	a.loadBranches(v)
+	a.withRepos(v, func() { a.loadBranches(v.git) })
 }
 
-func (a *app) loadBranches(v *filesView) {
-	g := &v.git
+// loadBranches 在后台读仓库 g 的分支、最近检出的分支和标签。
+func (a *app) loadBranches(g *gitState) {
 	if g.branches.loading {
 		g.branches.again = true
 		return
 	}
 	g.branches.loading = true
-	ws, root := v.root, g.repo
+	root := g.repo
 	go func() {
 		ctx := context.Background()
-		if root == "" {
-			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
-		}
 		var list []gitx.Branch
 		var recent, tags []string
 		if root != "" {
@@ -69,11 +66,8 @@ func (a *app) loadBranches(v *filesView) {
 		a.update(func() {
 			again := g.branches.again
 			g.branches = branchInfo{list: list, recent: recent, tags: tags}
-			if !g.checked {
-				g.checked, g.repo = true, root
-			}
 			if again {
-				a.loadBranches(v)
+				a.loadBranches(g)
 			}
 		})
 	}()
@@ -90,22 +84,33 @@ type trackInfo struct {
 // trackRefresh 是分支按钮多久重算一次传入、传出；只用本地已有的远端引用，几毫秒。
 const trackRefresh = 10 * time.Second
 
-// pollTrack 在分支按钮画出来时调用，到点了在后台重算。
+// pollTrack 在分支按钮画出来时调用，到点了在后台重算当前仓库的。
 func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
 	if a.track == nil {
 		a.track = map[string]*trackInfo{}
 	}
-	tr := a.track[w.ID]
+	dir := a.filesFor(w).git.repo
+	key := trackKey(w, dir)
+	tr := a.track[key]
 	if tr == nil {
 		tr = &trackInfo{}
-		a.track[w.ID] = tr
+		a.track[key] = tr
 	}
-	a.autoFetch(c, w, tr)
+	if dir == "" {
+		return tr
+	}
+	a.autoFetch(c, w, dir, tr)
 	if tr.poll.due(c, trackRefresh) {
-		dir, ws, prev := w.Path, *w, tr.base
+		ws, prev := *w, tr.base
+		// 基准分支是工作区自己那个仓库的：当前仓库是里面嵌套的仓库时不算
+		own := filepath.Clean(dir) == filepath.Clean(w.Path)
 		go func() {
 			ahead, behind, _ := gitx.AheadBehind(context.Background(), dir)
-			base, baseOK := pollBase(context.Background(), &ws, &prev)
+			var base gitx.Divergence
+			var baseOK bool
+			if own {
+				base, baseOK = pollBase(context.Background(), &ws, &prev)
+			}
 			a.update(func() {
 				tr.ahead, tr.behind = ahead, behind
 				tr.base, tr.baseOK = base, baseOK
@@ -116,50 +121,77 @@ func (a *app) pollTrack(c *ui.Context, w *workspace) *trackInfo {
 	return tr
 }
 
-// autoFetchEvery 是多久自动 fetch 一次。只拉看得见的工作区所在的项目，同一项目的 worktree 共用远端引用，按项目计时。
+// trackKey 是 a.track 的键：工作区和它的当前仓库。
+func trackKey(w *workspace, repo string) string { return w.ID + "\x00" + repo }
+
+// autoFetchEvery 是多久自动 fetch 一次。只拉看得见的工作区的当前仓库，同一项目的 worktree 共用远端引用，
+// 按项目里仓库的位置计时（工作区自己的仓库就是项目，嵌套的仓库按它相对工作区的路径）。
 const autoFetchEvery = 5 * time.Minute
 
-// autoFetch 到点了在后台 fetch，失败不报错，下次再试。进行中占着改动页的 busy（分支弹窗的按钮转圈），
+// fetchKey 是 a.fetchAt 的键，见 autoFetchEvery；rel 是仓库相对工作区的路径，工作区自己的仓库为空。
+func fetchKey(project, rel string) string {
+	if rel == "" || rel == "." {
+		return project
+	}
+	return project + "\x00" + rel
+}
+
+// autoFetch 到点了在后台 fetch 仓库 dir，失败不报错，下次再试。进行中占着这个仓库的 busy（分支弹窗的按钮转圈），
 // 免得和用户手动的 git 操作同时改引用。
-func (a *app) autoFetch(c *ui.Context, w *workspace, tr *trackInfo) {
+func (a *app) autoFetch(c *ui.Context, w *workspace, dir string, tr *trackInfo) {
 	if a.fetchAt == nil {
 		a.fetchAt = map[string]time.Time{}
 	}
-	last, ok := a.fetchAt[w.ProjectID]
+	rel, err := filepath.Rel(filepath.Clean(w.Path), dir)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		rel = dir
+	}
+	key := fetchKey(w.ProjectID, rel)
+	last, ok := a.fetchAt[key]
 	if wait := autoFetchEvery - time.Since(last); ok && wait > 0 {
 		c.After(wait)
 		return
 	}
-	// 同一项目的 worktree 共用远端引用：fetch 期间把它们开着的改动页都占住，那边手动的 git 操作排队，不同时改引用
-	var views []*filesView
+	// 同一项目的 worktree 共用远端引用：fetch 期间把它们开着的同一个仓库都占住，那边手动的 git 操作排队，不同时改引用
+	var repos []*gitState
 	for i := range a.workspaces {
-		if a.workspaces[i].ProjectID != w.ProjectID {
+		ow := &a.workspaces[i]
+		if ow.ProjectID != w.ProjectID {
 			continue
 		}
-		if v := a.files[a.workspaces[i].ID]; v != nil {
-			if v.git.busy != "" {
-				c.After(time.Second)
-				return
-			}
-			views = append(views, v)
+		v := a.files[ow.ID]
+		if v == nil {
+			continue
 		}
+		g := v.repoAt(filepath.Join(v.root, rel))
+		if filepath.IsAbs(rel) {
+			g = v.repoAt(rel)
+		}
+		if g == nil {
+			continue
+		}
+		if g.busy != "" {
+			c.After(time.Second)
+			return
+		}
+		repos = append(repos, g)
 	}
-	a.fetchAt[w.ProjectID] = time.Now()
+	a.fetchAt[key] = time.Now()
 	ctx, cancel := context.WithCancel(gitx.WithOp(context.Background(), L(c).BranchAutoFetch()))
-	for _, v := range views {
-		v.git.busy, v.git.busyKind, v.git.cancel = "Fetch", gitFetch, cancel
+	for _, g := range repos {
+		g.busy, g.busyKind, g.cancel = "Fetch", gitFetch, cancel
 	}
-	dir, project := w.Path, w.ProjectID
+	project := w.ProjectID
 	go func() {
 		gitx.Fetch(ctx, dir)
 		cancel()
 		a.update(func() {
 			tr.poll = panelPoll{}
 			a.refsChanged(project)
-			for _, v := range views {
-				if v.git.busyKind == gitFetch {
-					v.git.busy, v.git.busyKind, v.git.cancel = "", "", nil
-					a.gitNext(v)
+			for _, g := range repos {
+				if g.busyKind == gitFetch {
+					g.busy, g.busyKind, g.cancel = "", "", nil
+					a.gitNext(g)
 				}
 			}
 		})
@@ -204,8 +236,9 @@ func trackBadge(c *ui.Context, ahead, behind int, showCount bool) {
 func (a *app) branchButton(c *ui.Context, w *workspace) {
 	t := c.Theme()
 	tr := a.pollTrack(c, w)
+	branch := a.gitBranch(w)
 	b := ui.Row(c.Key("branch")).Height(sz(26)).Padding(0, 6, 0, 8).Gap(4).Radius(rRow).AlignItems(ui.Center).Shrink(1).
-		Role(ui.RoleButton).Label(L(c).BranchButtonLabel(w.Branch)).Tooltip(trackTip(L(c), w.Branch, tr) + baseTip(L(c), w.BaseRef, tr))
+		Role(ui.RoleButton).Label(L(c).BranchButtonLabel(branch)).Tooltip(trackTip(L(c), branch, tr) + baseTip(L(c), w.BaseRef, tr))
 	open := a.branchPop != nil && a.branchPop.ws == w.ID
 	bg := ui.Transparent
 	switch {
@@ -220,7 +253,7 @@ func (a *app) branchButton(c *ui.Context, w *workspace) {
 	}
 	b.Children(func() {
 		ui.Icon(c, iconBranch).FontSize(fsBody).TextColor(t.TextMuted).Shrink(0)
-		ui.Text(c, w.Branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
+		ui.Text(c, branch).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).SingleLine().Shrink(1)
 		trackBadge(c, tr.ahead, tr.behind, false)
 		ui.Icon(c, iconDown).FontSize(fsSmall).TextColor(t.TextMuted).Shrink(0)
 	})
@@ -245,7 +278,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 		return
 	}
 	v := a.filesFor(w)
-	g := &v.git
+	g := v.git
 	panel := floating(c, ui.Column(c).Absolute().Top(6).Right(8).Width(a.branchPopWidth()).MaxHeight(600).Padding(6).Gap(2))
 	panel.Children(func() {
 		ui.Row(c).Gap(4).Padding(2, 2, 6, 2).AlignItems(ui.Center).Children(func() {
@@ -275,7 +308,7 @@ func (a *app) branchPopupView(c *ui.Context, w *workspace) {
 				}
 			} else if fetch := pressable(iconButtonSized(c, iconFetch, L(c).BranchFetchTip(), buttonBox(), iconSize)); g.busy == "" && fetch.Clicked() {
 				m := L(c)
-				a.gitDoKind(m, v, gitFetch, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
+				a.gitDoKind(m, v.git, gitFetch, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) },
 					func() { a.notify(m.BranchFetched(), "", nil) })
 			} else if g.busy != "" {
 				fetch.Opacity(0.4)
@@ -357,7 +390,7 @@ func popupItem(c *ui.Context, icon *ui.SVG, label, keys string) bool {
 }
 
 func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
-	g := &v.git
+	g := v.git
 	m := L(c)
 	cur, _ := currentBranch(g.branches.list)
 	// 更新、删除的结果就在弹窗里看得到（忙碌行、传入数、分支消失），不关弹窗
@@ -387,7 +420,7 @@ func (a *app) branchActions(c *ui.Context, w *workspace, v *filesView) {
 		a.branchPop = nil
 		a.prompt(promptReq{title: m.BranchCheckoutRevision(), placeholder: m.BranchRevisionPlaceholder(), verb: m.BranchCheckout(), do: func(rev string, _ bool) {
 			a.guardAgent(m, w, m.BranchCheckout(), func() {
-				a.gitDo(m, v, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, rev) })
+				a.gitDo(m, v.git, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, rev) })
 			})
 		}})
 	}
@@ -404,7 +437,7 @@ func currentBranch(list []gitx.Branch) (gitx.Branch, bool) {
 // branchGroups 画最近、本地、远端三组分支；远端按远端名分组。query 非空时只列名字含它的。
 func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query string) {
 	t := c.Theme()
-	g := &v.git
+	g := v.git
 	list := g.branches.list
 	if list == nil {
 		ui.Text(c, L(c).BranchReading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 12)
@@ -493,7 +526,7 @@ func (a *app) branchGroups(c *ui.Context, w *workspace, v *filesView, query stri
 func (a *app) branchRow(c *ui.Context, w *workspace, v *filesView, b gitx.Branch, group string) {
 	t := c.Theme()
 	p := colors(t)
-	g := &v.git
+	g := v.git
 	cur, _ := currentBranch(g.branches.list)
 	other, inOther := gitx.WorktreeOf(b, g.repo)
 	otherWs := a.workspaceAt(other)
@@ -555,7 +588,7 @@ func (a *app) checkoutBranch(m locales.Messages, w *workspace, v *filesView, b g
 		return
 	}
 	a.guardAgent(m, w, m.BranchCheckout(), func() {
-		a.gitDo(m, v, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
+		a.gitDo(m, v.git, m.BranchCheckout(), func(ctx context.Context, root string) error { return gitx.Checkout(ctx, root, b) })
 	})
 }
 
@@ -600,7 +633,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	if !b.Current && !b.Remote && !inOther && m.Item(lm.BranchCheckoutRebaseOnto(curName)).Chosen() {
 		done()
 		a.guardAgent(lm, w, lm.BranchCheckoutRebase(), func() {
-			a.gitDo(lm, v, lm.BranchCheckoutRebase(), func(ctx context.Context, root string) error {
+			a.gitDo(lm, v.git, lm.BranchCheckoutRebase(), func(ctx context.Context, root string) error {
 				return gitx.CheckoutAndRebase(ctx, root, b.Name, curName)
 			})
 		})
@@ -619,13 +652,13 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 		if m.Item(lm.BranchRebaseOnto(curName, b.Name)).Chosen() {
 			done()
 			a.guardAgent(lm, w, lm.GitOpRebase(), func() {
-				a.gitDo(lm, v, lm.GitOpRebase(), func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, b.Name) })
+				a.gitDo(lm, v.git, lm.GitOpRebase(), func(ctx context.Context, root string) error { return gitx.Rebase(ctx, root, b.Name) })
 			})
 		}
 		if m.Item(lm.BranchMergeInto(b.Name, curName)).Chosen() {
 			done()
 			a.guardAgent(lm, w, lm.GitMerge(), func() {
-				a.gitDo(lm, v, lm.GitMerge(), func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, b.Name) })
+				a.gitDo(lm, v.git, lm.GitMerge(), func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, b.Name) })
 			})
 		}
 	}
@@ -656,7 +689,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	if !b.Remote && m.Item(lm.BranchRenameEllipsis()).Chosen() {
 		done()
 		a.prompt(promptReq{title: lm.BranchRenameTitle(b.Name), initial: b.Name, verb: lm.BranchRename(), do: func(name string, _ bool) {
-			a.gitDo(lm, v, lm.BranchRename(), func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
+			a.gitDo(lm, v.git, lm.BranchRename(), func(ctx context.Context, root string) error { return gitx.RenameBranch(ctx, root, b.Name, name) })
 		}})
 	}
 	// 本地分支直接删、可以恢复，不再弹确认；远端分支要确认
@@ -672,7 +705,7 @@ func (a *app) branchMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 // updateBranch 用远端更新分支，做完提示拉到了几个提交。
 func (a *app) updateBranch(m locales.Messages, v *filesView, what string, b gitx.Branch) {
 	var n int
-	a.gitDoKind(m, v, gitUpdate, what, func(ctx context.Context, root string) error {
+	a.gitDoKind(m, v.git, gitUpdate, what, func(ctx context.Context, root string) error {
 		before := gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.Update(ctx, root, b)
 		var left *gitx.AutostashLeft
@@ -695,7 +728,7 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 	if b.Remote {
 		a.confirm(m.BranchDeleteRemoteConfirm(b.Name), m.BranchDeleteRemoteBody(), m.CommonDelete(), func() {
 			a.update(func() {
-				a.gitDo(m, v, m.BranchDeleteRemote(), func(ctx context.Context, root string) error { return gitx.DeleteRemoteBranch(ctx, root, b.Name) })
+				a.gitDo(m, v.git, m.BranchDeleteRemote(), func(ctx context.Context, root string) error { return gitx.DeleteRemoteBranch(ctx, root, b.Name) })
 			})
 		})
 		return
@@ -703,11 +736,11 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 	var tip string
 	deleted := func() {
 		a.notify(m.BranchDeleted(b.Name), m.CommonRestore(), func() {
-			a.gitDo(m, v, m.BranchRestore(), func(ctx context.Context, root string) error { return gitx.CreateBranch(ctx, root, b.Name, tip, false) })
+			a.gitDo(m, v.git, m.BranchRestore(), func(ctx context.Context, root string) error { return gitx.CreateBranch(ctx, root, b.Name, tip, false) })
 		})
 	}
 	var unmerged bool
-	a.gitDoThen(m, v, m.BranchDelete(), func(ctx context.Context, root string) error {
+	a.gitDoThen(m, v.git, m.BranchDelete(), func(ctx context.Context, root string) error {
 		tip = gitx.Tip(ctx, root, "refs/heads/"+b.Name)
 		err := gitx.DeleteBranch(ctx, root, b.Name, false)
 		if gitx.NotMerged(err) {
@@ -722,7 +755,7 @@ func (a *app) askDeleteBranch(m locales.Messages, v *filesView, b gitx.Branch) {
 		}
 		a.confirm(m.BranchUnmergedTitle(b.Name), m.BranchUnmergedBody(), m.BranchForceDelete(), func() {
 			a.update(func() {
-				a.gitDoThen(m, v, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
+				a.gitDoThen(m, v.git, m.BranchForceDeleteOperation(), func(ctx context.Context, root string) error { return gitx.DeleteBranch(ctx, root, b.Name, true) }, deleted)
 			})
 		})
 	})
@@ -735,7 +768,7 @@ func (a *app) askNewBranch(m locales.Messages, w *workspace, v *filesView, from 
 	}
 	a.prompt(promptReq{title: title, placeholder: m.BranchName(), verb: m.CommonNew(), check: m.BranchCheckoutNew(), checked: true, do: func(name string, checkout bool) {
 		run := func() {
-			a.gitDo(m, v, m.BranchNew(), func(ctx context.Context, root string) error {
+			a.gitDo(m, v.git, m.BranchNew(), func(ctx context.Context, root string) error {
 				return gitx.CreateBranch(ctx, root, name, from, checkout)
 			})
 		}

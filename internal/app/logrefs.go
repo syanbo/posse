@@ -15,9 +15,9 @@ import (
 
 func (a *app) logRefs(c *ui.Context, v *filesView, d *fileDoc) {
 	ld := d.log
-	g := &v.git
+	g := v.repoOrGone(ld.root)
 	if g.branches.list == nil && !g.branches.loading {
-		a.loadBranches(v)
+		a.loadBranches(g)
 	}
 	if ld.refsOpen == nil {
 		ld.refsOpen = map[string]bool{"local": true}

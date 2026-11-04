@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -51,7 +50,7 @@ func baseTip(m locales.Messages, base string, tr *trackInfo) string {
 
 // baseRow 画在改动页的分支行下面；rebase、合并进行中时让给操作横幅。
 func (a *app) baseRow(c *ui.Context, w *workspace, v *filesView) {
-	if !hasBase(w) || v.git.status == nil || v.git.status.Operation != "" {
+	if !hasBase(w) || v.git.repo != v.root || v.git.status == nil || v.git.status.Operation != "" {
 		return
 	}
 	tr := a.pollTrack(c, w)
@@ -135,15 +134,19 @@ func (a *app) syncBase(m locales.Messages, w *workspace, rebase bool) {
 	}
 	a.guardAgent(m, w, what, func() {
 		v := a.openFilesPanel(w, sideChanges)
-		v.git.tab = 0
-		// 文件栏没打开过时还没确认仓库根目录；worktree 工作区的目录就是它的根目录
-		if !v.git.checked {
-			v.git.checked, v.git.repo = true, filepath.Clean(w.Path)
-		}
-		a.gitDoThen(m, v, what, fn, func() {
-			if !stopped {
-				a.notify(done, "", nil)
+		// 同步的是工作区自己的仓库（worktree 的目录就是它的根目录），不是里面嵌套的
+		a.withRepos(v, func() {
+			g := v.repoAt(v.root)
+			if g == nil {
+				return
 			}
+			a.useRepo(v, g)
+			g.tab = 0
+			a.gitDoThen(m, g, what, fn, func() {
+				if !stopped {
+					a.notify(done, "", nil)
+				}
+			})
 		})
 	})
 }

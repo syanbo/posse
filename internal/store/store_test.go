@@ -23,6 +23,16 @@ func TestStore(t *testing.T) {
 	if err := s.AddProject(Project{ID: NewID("p_"), Name: "repo", Path: "/other", Kind: "git", CreatedAt: time.Now()}); err == nil {
 		t.Fatal("duplicate project name accepted")
 	}
+	// "识别多个 Git 仓库"默认开着，关掉后存得住
+	p.SingleRepo = true
+	if err := s.UpdateProject(p); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.FindProject("repo"); err != nil || !got.SingleRepo {
+		t.Fatalf("SingleRepo = %v, %v", got.SingleRepo, err)
+	}
+	p.SingleRepo = false
+	s.UpdateProject(p)
 	for _, name := range []string{"main", "feat"} {
 		if err := s.AddWorkspace(Workspace{ID: NewID("w_"), ProjectID: p.ID, Name: name, Path: "/r", Kind: "folder", CreatedAt: time.Now()}); err != nil {
 			t.Fatal(err)

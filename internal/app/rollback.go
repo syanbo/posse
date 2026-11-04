@@ -24,6 +24,7 @@ import (
 type rollbackDlg struct {
 	open      bool
 	v         *filesView
+	g         *gitState // 回滚的仓库
 	entries   []gitx.Entry
 	on        map[string]bool
 	delNew    bool
@@ -132,16 +133,16 @@ func (r *rollbackDlg) setPicked(files []int, on bool) {
 	}
 }
 
-func (a *app) openRollback(v *filesView) { a.openRollbackFor(v, nil, nil) }
+func (a *app) openRollback(v *filesView) { a.openRollbackFor(v.git, nil, nil) }
 
 // openRollbackFor 打开回滚对话框，pick 非空时只勾这几个文件；勾的有新文件就默认勾上"删除新文件"，
 // 从这个文件发起回滚就是要它回到没有的样子。
-func (a *app) openRollbackFor(v *filesView, pick []string, then func(restored, removed []string)) {
-	g := &v.git
+func (a *app) openRollbackFor(g *gitState, pick []string, then func(restored, removed []string)) {
+	v := g.v
 	if g.status == nil {
 		return
 	}
-	r := rollbackDlg{open: true, v: v, on: map[string]bool{}, folded: map[string]bool{}, then: then}
+	r := rollbackDlg{open: true, v: v, g: g, on: map[string]bool{}, folded: map[string]bool{}, then: then}
 	if len(pick) > 0 {
 		for _, e := range g.status.Entries {
 			r.on[e.Path] = slices.Contains(pick, e.Path)
@@ -192,14 +193,14 @@ func (r *rollbackDlg) entry(path string) (gitx.Entry, bool) {
 // rollbackShow 在 diff 浮窗里打开文件的 diff；排版和忽略空白沿用上一个。
 func (a *app) rollbackShow(e gitx.Entry, first bool) {
 	r := &a.rollback
-	df := &diffDoc{diffSpec: changeSpec(e), first: first}
+	df := &diffDoc{diffSpec: changeSpec(r.g.repo, e), first: first}
 	df.state = editor.DiffState{Layout: editor.DiffSplit, IgnoreWhitespace: true}
 	if old := r.detail; old != nil {
 		df.state.Layout, df.state.IgnoreWhitespace = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
 	} else {
 		a.rollbackDiffBox.reset()
 	}
-	r.detail = &fileDoc{path: diffKey(r.v.git.absPath(e.Path), df.diffSpec), diff: df, kind: docLoading, started: true}
+	r.detail = &fileDoc{path: diffKey(df.abs(), df.diffSpec), diff: df, kind: docLoading, started: true}
 	a.loadDiff(r.v, r.detail)
 }
 
@@ -268,7 +269,7 @@ func (a *app) rollbackDialog(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	g := &r.v.git
+	g := r.g
 	if g.status != nil && g.status != r.statusFor {
 		r.sync(g)
 		if d := r.detail; d != nil && d.kind != docLoading {
@@ -355,7 +356,7 @@ func (a *app) rollbackMain(c *ui.Context, t *ui.Theme, g *gitState) {
 				if then := r.then; then != nil {
 					done = func() { then(restore, remove) }
 				}
-				a.gitDoThen(L(c), r.v, L(c).GitRollback(), func(ctx context.Context, root string) error {
+				a.gitDoThen(L(c), r.g, L(c).GitRollback(), func(ctx context.Context, root string) error {
 					if len(restore) > 0 {
 						if err := gitx.Rollback(ctx, root, restore...); err != nil {
 							return err

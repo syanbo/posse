@@ -56,7 +56,7 @@ func (a *app) treeView(c *ui.Context, w *workspace, v *filesView) {
 			modified[d.path] = true
 		}
 	}
-	marks := v.git.treeMarks()
+	marks := v.treeMarks()
 	v.treeList.Key = func(i int) any { return rows[i].Path }
 	ui.List(c, &v.treeList, len(rows), func(i int) {
 		r := rows[i]
@@ -644,9 +644,9 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				a.saveDoc(L(c), d, false)
 			}
 		}
-		if d.kind == docText && v.git.relPath(d.path) != "" {
+		if g, rel := v.relIn(d.path); d.kind == docText && g != nil {
 			if pressable(iconButtonSized(c, iconHistory, L(c).FilesFileHistory(), compactBox(), smallIcon())).Clicked() {
-				a.openLog(w, "", v.git.relPath(d.path))
+				a.openLogIn(w, g, "", rel)
 			}
 			if d.blame != nil {
 				if pressable(textButton(c, L(c).FilesCloseAnnotate())).Clicked() {
@@ -655,7 +655,7 @@ func (a *app) docBar(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 			} else if pressable(iconButtonSized(c, iconBlame, L(c).FilesAnnotateTip(), compactBox(), smallIcon())).Clicked() {
 				a.openBlame(L(c), w, v, d.path)
 			}
-			if e := v.git.entry(d.path); e != nil && !e.Conflict {
+			if e := g.entry(d.path); e != nil && !e.Conflict {
 				if pressable(iconButtonSized(c, iconRollback, L(c).FilesRollbackFile(), compactBox(), smallIcon())).Clicked() {
 					a.rollbackDoc(v, d)
 				}

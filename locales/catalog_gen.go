@@ -7293,6 +7293,22 @@ func (msgs Messages) GitRenamed() string {
 	return Catalog.Format(msgs.locale, "gitRenamed", nil)
 }
 
+// GitReposPartial says "The folder is too large to scan fully; some repositories may be missing. Refresh to scan again."
+// in the language the app shows.
+//
+// Note at the top of the Changes view when finding the Git repositories in
+// a workspace hit the scan limit.
+func GitReposPartial() string { return In(i18n.Locale()).GitReposPartial() }
+
+// GitReposPartial says "The folder is too large to scan fully; some repositories may be missing. Refresh to scan again."
+// in the language of msgs.
+//
+// Note at the top of the Changes view when finding the Git repositories in
+// a workspace hit the scan limit.
+func (msgs Messages) GitReposPartial() string {
+	return Catalog.Format(msgs.locale, "gitReposPartial", nil)
+}
+
 // GitResolve says "Resolve Conflicts"
 // in the language the app shows.
 //
@@ -16505,6 +16521,26 @@ func SidebarMissing() string { return In(i18n.Locale()).SidebarMissing() }
 // exists.
 func (msgs Messages) SidebarMissing() string {
 	return Catalog.Format(msgs.locale, "sidebarMissing", nil)
+}
+
+// SidebarMultiRepo says "Detect Multiple Git Repositories"
+// in the language the app shows.
+//
+// Sidebar project context menu checkbox: when on, the Git views find every
+// repository inside the project folder (subfolders, symlinked and nested
+// repositories); when off, only the repository the folder itself belongs
+// to.
+func SidebarMultiRepo() string { return In(i18n.Locale()).SidebarMultiRepo() }
+
+// SidebarMultiRepo says "Detect Multiple Git Repositories"
+// in the language of msgs.
+//
+// Sidebar project context menu checkbox: when on, the Git views find every
+// repository inside the project folder (subfolders, symlinked and nested
+// repositories); when off, only the repository the folder itself belongs
+// to.
+func (msgs Messages) SidebarMultiRepo() string {
+	return Catalog.Format(msgs.locale, "sidebarMultiRepo", nil)
 }
 
 // SidebarNewWorkspace says "New Workspace…"

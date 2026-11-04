@@ -150,7 +150,7 @@ func TestGitChangesAndDiff(t *testing.T) {
 		t.Fatal("message kept after commit")
 	}
 	// 单独回滚未跟踪的文件也打开回滚对话框，只勾它、默认勾上删除新文件
-	a.openRollbackFor(v, []string{"notes.txt"}, nil)
+	a.openRollbackFor(v.git, []string{"notes.txt"}, nil)
 	if r := &a.rollback; !r.open || !r.on["notes.txt"] || !r.delNew {
 		t.Fatalf("rollback dialog %v %+v %v", r.open, r.on, r.delNew)
 	}
@@ -338,7 +338,7 @@ func TestBranchPopupAndCompare(t *testing.T) {
 	}
 	// 已经合并的分支直接删，不弹确认
 	gitRun(t, root, "branch", "merged")
-	until(t, tt, "merged listed", func() bool { a.loadBranches(v); return gitxBranch(v, "merged").Name != "" })
+	until(t, tt, "merged listed", func() bool { a.loadBranches(v.git); return gitxBranch(v, "merged").Name != "" })
 	a.askDeleteBranch(locales.In("zh-Hans"), v, gitxBranch(v, "merged"))
 	until(t, tt, "merged deleted", func() bool { return v.git.busy == "" && gitRun(t, root, "branch", "--list", "merged") == "" })
 	if a.confirming {
@@ -419,9 +419,9 @@ func TestLogBlameAndReword(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
-	a.openLog(w, "", "")
+	openLogWait(t, a, tt, w, "")
 	v := a.files[w.ID]
-	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && tt.HasText("fix: 本地修复") })
+	until(t, tt, "log", func() bool { return v.logCur != nil && v.logCur.kind == docLog && tt.HasText("fix: 本地修复") })
 	ld := v.logCur.log
 	// 默认只看当前分支，feat 上的提交不列
 	if !slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) || tt.HasText("feat: 新功能") {
@@ -448,8 +448,8 @@ func TestLogBlameAndReword(t *testing.T) {
 	}
 	until(t, tt, "detail", func() bool { return ld.commit != nil && ld.commit.files != nil && tt.HasText("main.go") })
 	// 改提交信息：读出原信息填进对话框，改完执行
-	a.askMessage(locales.In("zh-Hans"), v, "改提交信息", ld.commit.info.Hash, "", func(msg string) {
-		a.gitDo(locales.In("zh-Hans"), v, "改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ld.commit.info.Hash, msg) })
+	a.askMessage(locales.In("zh-Hans"), v.git.repo, "改提交信息", ld.commit.info.Hash, "", func(msg string) {
+		a.gitDo(locales.In("zh-Hans"), v.git, "改提交信息", func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ld.commit.info.Hash, msg) })
 	})
 	until(t, tt, "prompt", func() bool { return a.promptDlg != nil && a.promptDlg.value == "fix: 本地修复" })
 	a.promptDlg.do("fix: 本地修复（改过）", false)
@@ -459,8 +459,8 @@ func TestLogBlameAndReword(t *testing.T) {
 	})
 
 	// 文件历史和 Annotate
-	a.openLog(w, "", "main.go")
-	until(t, tt, "file history", func() bool { return v.logCur.kind == docLog && len(v.logCur.log.commits) == 3 })
+	openLogWait(t, a, tt, w, "main.go")
+	until(t, tt, "file history", func() bool { return v.logCur != nil && v.logCur.kind == docLog && len(v.logCur.log.commits) == 3 })
 	// Annotate 在这个文件自己的标签里开关，不另开标签
 	a.openBlame(locales.In("zh-Hans"), w, v, filepath.Join(root, "main.go"))
 	d := v.cur
@@ -518,7 +518,7 @@ func TestAutostashBanner(t *testing.T) {
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
 	// 照 git 的 --autostash：先储藏、更新到 feat，取回时冲突，再把储藏以 "autostash" 存进列表，命令照样成功
-	a.gitDo(locales.In("zh-Hans"), v, "更新", func(ctx context.Context, root string) error {
+	a.gitDo(locales.In("zh-Hans"), v.git, "更新", func(ctx context.Context, root string) error {
 		git := func(args ...string) (string, error) {
 			cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 			cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
@@ -552,7 +552,7 @@ func TestAutostashBanner(t *testing.T) {
 	if ours != "更新后的版本" || theirs != "我的本地改动" {
 		t.Fatal(ours, theirs)
 	}
-	a.gitDo(locales.In("zh-Hans"), v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
+	a.gitDo(locales.In("zh-Hans"), v.git, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
 	until(t, tt, "resolved", func() bool { return tt.HasText("冲突都解决了") })
 	if err := tt.Click("删除储藏…"); err != nil {
 		t.Fatal(err)
@@ -581,7 +581,7 @@ func TestConflictBanner(t *testing.T) {
 	v := a.openFilesPanel(w, sideFiles)
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
 	v.side = sideFiles
-	a.gitDo(locales.In("zh-Hans"), v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
 	until(t, tt, "banner", func() bool { return v.side == sideChanges && tt.HasText("正在合并，有 1 个文件冲突。") })
 	if !strings.Contains(a.err, "合并失败") {
 		t.Fatalf("merge error not shown: %q", a.err)
@@ -590,7 +590,7 @@ func TestConflictBanner(t *testing.T) {
 	if ours != "当前分支的（ours）" || !strings.Contains(theirs, "合入") {
 		t.Fatal(ours, theirs)
 	}
-	a.gitDo(locales.In("zh-Hans"), v, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
+	a.gitDo(locales.In("zh-Hans"), v.git, "解决冲突", func(ctx context.Context, root string) error { return gitx.TakeSide(ctx, root, "main.go", false) })
 	until(t, tt, "resolved", func() bool { return tt.HasText("正在合并，没有冲突了，可以继续。") })
 	if err := tt.Click("继续"); err != nil {
 		t.Fatal(err)
@@ -614,10 +614,10 @@ func TestCommitDuringMerge(t *testing.T) {
 	tt.Frame()
 	v := a.openFilesPanel(w, sideChanges)
 	until(t, tt, "status", func() bool { return v.git.status != nil && a.filesPanelShown == 1 })
-	a.gitDo(locales.In("zh-Hans"), v, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "合并", func(ctx context.Context, root string) error { return gitx.MergeInto(ctx, root, "feat") })
 	until(t, tt, "conflict", func() bool { return v.git.status.Operation == "merge" && v.git.busy == "" })
 	os.WriteFile(filepath.Join(root, "main.go"), []byte(sampleGo+"\n// resolved\n"), 0o644)
-	a.gitDo(locales.In("zh-Hans"), v, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "main.go") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "标记为已解决", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "main.go") })
 	until(t, tt, "resolved", func() bool {
 		return v.git.busy == "" && !slices.ContainsFunc(v.git.status.Entries, func(e gitx.Entry) bool { return e.Conflict })
 	})
@@ -643,9 +643,9 @@ func TestLogRefTree(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
-	a.openLog(&a.workspaces[0], "", "")
+	openLogWait(t, a, tt, &a.workspaces[0], "")
 	v := a.files["w1"]
-	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && v.git.branches.list != nil })
+	until(t, tt, "log", func() bool { return v.logCur != nil && v.logCur.kind == docLog && v.git.branches.list != nil })
 	ld := v.logCur.log
 	// 默认选中当前分支
 	until(t, tt, "current branch", func() bool {
@@ -885,7 +885,7 @@ func TestAutoFetch(t *testing.T) {
 	root := branchWorkspace(t, a)
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
-	until(t, tt, "first fetch", func() bool { _, ok := a.fetchAt[w.ProjectID]; return ok && a.track["w1"].poll.at != time.Time{} })
+	until(t, tt, "first fetch", func() bool { _, ok := a.fetchAt[w.ProjectID]; return ok && trackOf(a, "w1").poll.at != time.Time{} })
 	at := a.fetchAt[w.ProjectID]
 	tt.Frame()
 	if !a.fetchAt[w.ProjectID].Equal(at) {
@@ -922,7 +922,7 @@ func TestAutoFetch(t *testing.T) {
 	tt.Frame()
 	a.fetchAt[w.ProjectID] = time.Time{} // 当作五分钟到了
 	until(t, tt, "other busy", func() bool { return ov.git.busy == "Fetch" })
-	until(t, tt, "fetched", func() bool { return a.track["w1"].behind == 1 && len(d.comp.onlyOther) == 1 && ov.git.busy == "" })
+	until(t, tt, "fetched", func() bool { return trackOf(a, "w1").behind == 1 && len(d.comp.onlyOther) == 1 && ov.git.busy == "" })
 
 	// 手动 Fetch 同样重读
 	os.WriteFile(filepath.Join(other, "remote2.txt"), []byte("y\n"), 0o644)
@@ -930,7 +930,7 @@ func TestAutoFetch(t *testing.T) {
 	gitRun(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "remote 2")
 	gitRun(t, other, "push", "-q", "origin", "main")
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
-	a.gitDo(locales.In("zh-Hans"), v, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
+	a.gitDo(locales.In("zh-Hans"), v.git, "Fetch", func(ctx context.Context, root string) error { return gitx.Fetch(ctx, root) })
 	until(t, tt, "manual fetch", func() bool { return len(d.comp.onlyOther) == 2 })
 }
 
@@ -977,8 +977,8 @@ func TestLogPanel(t *testing.T) {
 	if a.filesActive(w) {
 		t.Fatal("log opened as a tab")
 	}
-	a.openLog(w, "", "main.go")
-	until(t, tt, "history", func() bool { return v.logCur.kind == docLog && tt.HasText("历史：main.go") })
+	openLogWait(t, a, tt, w, "main.go")
+	until(t, tt, "history", func() bool { return v.logCur != nil && v.logCur.kind == docLog && tt.HasText("历史：main.go") })
 	if err := tt.Click("关闭历史：main.go"); err != nil {
 		t.Fatal(err)
 	}
@@ -1177,7 +1177,7 @@ func TestFileHistory(t *testing.T) {
 	w := &a.workspaces[0]
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
-	a.openLog(w, "", "main.go")
+	openLogWait(t, a, tt, w, "main.go")
 	v := a.files[w.ID]
 	d := v.logCur
 	until(t, tt, "history", func() bool {
@@ -1259,7 +1259,7 @@ func TestGitOpQueue(t *testing.T) {
 	var ran []string
 	for i, what := range []string{"检出", "提交"} {
 		kind := []gitKind{"", gitCommit}[i]
-		a.gitDoKind(locales.In("zh-Hans"), v, kind, what, func(ctx context.Context, root string) error {
+		a.gitDoKind(locales.In("zh-Hans"), v.git, kind, what, func(ctx context.Context, root string) error {
 			a.update(func() { ran = append(ran, what) })
 			return nil
 		}, nil)
@@ -1268,7 +1268,7 @@ func TestGitOpQueue(t *testing.T) {
 		t.Fatalf("queue %d %q", len(v.git.queue), v.git.busyText(locales.In("zh-Hans")))
 	}
 	v.git.busy, v.git.busyKind = "", ""
-	a.gitNext(v)
+	a.gitNext(v.git)
 	until(t, tt, "queued ops ran", func() bool { return len(ran) == 2 && v.git.busy == "" })
 	if ran[0] != "检出" || ran[1] != "提交" {
 		t.Fatalf("order %v", ran)
@@ -1282,7 +1282,7 @@ func TestDiffFollowsHead(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "main.go"}), nil, true)
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "main.go"}), nil, true)
 	d := v.cur
 	until(t, tt, "diff", func() bool { return d.kind == docDiff && len(d.diff.state.Hunks()) == 2 })
 	gitRun(t, root, "commit", "-q", "-am", "agent commit")
@@ -1299,7 +1299,7 @@ func TestRevertHunkStaleDisk(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "README.md"}), nil, true)
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "README.md"}), nil, true)
 	d := v.cur
 	until(t, tt, "diff", func() bool { return d.kind == docDiff && len(d.diff.state.Hunks()) == 1 })
 	path := filepath.Join(root, "README.md")
@@ -1448,12 +1448,12 @@ func TestCancelNetworkOp(t *testing.T) {
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
-	a.gitDoKind(locales.In("zh-Hans"), v, gitPush, "Push", func(ctx context.Context, root string) error {
+	a.gitDoKind(locales.In("zh-Hans"), v.git, gitPush, "Push", func(ctx context.Context, root string) error {
 		<-ctx.Done()
 		return ctx.Err()
 	}, nil)
 	ran := false
-	a.gitDoKind(locales.In("zh-Hans"), v, gitCommit, "提交", func(ctx context.Context, root string) error { ran = true; return nil }, nil)
+	a.gitDoKind(locales.In("zh-Hans"), v.git, gitCommit, "提交", func(ctx context.Context, root string) error { ran = true; return nil }, nil)
 	tt.Frame()
 	if err := tt.Click("取消 Push"); err != nil {
 		t.Fatal(err)
@@ -1472,7 +1472,7 @@ func TestStepDiffAfterCommit(t *testing.T) {
 	tt.Frame()
 	v := openChanges(t, a, tt)
 	w := &a.workspaces[0]
-	a.openDiff(w, changeSpec(gitx.Entry{Path: "main.go"}), nil, true)
+	a.openDiff(w, changeSpec("", gitx.Entry{Path: "main.go"}), nil, true)
 	d := v.cur
 	until(t, tt, "diff", func() bool { return d.kind == docDiff && d.diff.jumped && len(d.diff.state.Hunks()) == 2 })
 	tt.Key(0, ui.KeyF7)
@@ -1506,7 +1506,7 @@ func TestDiffLargeFile(t *testing.T) {
 	line := strings.Repeat("x", 1023) + "\n"
 	n := diffMaxSize/len(line) + 1
 	os.WriteFile(filepath.Join(root, "big.lock"), []byte(strings.Repeat(line, n)), 0o644)
-	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.lock", Untracked: true}), nil, true)
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "big.lock", Untracked: true}), nil, true)
 	d := v.cur
 	until(t, tt, "too large", func() bool {
 		return d.kind == docTooLarge && tt.HasText(fmt.Sprintf("文件超过 %d MB，比较要等一会儿", diffMaxSize>>20)) &&
@@ -1551,7 +1551,7 @@ func TestDiffComparedAhead(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	a.openDiff(&a.workspaces[0], changeSpec(gitx.Entry{Path: "big.txt", X: '.', Y: 'M'}), nil, true)
+	a.openDiff(&a.workspaces[0], changeSpec("", gitx.Entry{Path: "big.txt", X: '.', Y: 'M'}), nil, true)
 	d := v.cur
 	want := func(ignore bool) []editor.DiffHunk {
 		s := editor.DiffState{Old: editor.NewBuffer(old.String()), New: editor.NewBuffer(nw.String()), IgnoreWhitespace: ignore}
@@ -1578,7 +1578,7 @@ func TestLogFilterEdges(t *testing.T) {
 	root := branchWorkspace(t, a)
 	gitRun(t, root, "tag", "feat", "main~2") // 和分支 feat 同名、指向更早的提交
 	tt := newTester(a.build, 1200, 760)
-	a.openLog(&a.workspaces[0], "", "")
+	openLogWait(t, a, tt, &a.workspaces[0], "")
 	v := a.files["w1"]
 	d := v.logCur
 	ld := d.log
@@ -1624,19 +1624,17 @@ func TestGuardPushedAndConflictPanel(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	v := a.filesFor(w)
 	until(t, tt, "repo", func() bool {
-		if !v.git.checked {
-			a.refreshGit(v)
-		}
+		a.refreshGit(v)
 		return v.git.status != nil
 	})
 	ran := false
-	a.guardPushed(locales.In("zh-Hans"), v, gitRun(t, root, "rev-parse", "HEAD"), func() { ran = true })
+	a.guardPushed(locales.In("zh-Hans"), v.git.repo, gitRun(t, root, "rev-parse", "HEAD"), func() { ran = true })
 	until(t, tt, "local commit", func() bool { return ran })
 	if a.confirming {
 		t.Fatal("unpushed commit should not ask")
 	}
 	ran = false
-	a.guardPushed(locales.In("zh-Hans"), v, gitRun(t, root, "rev-parse", "origin/main"), func() { ran = true })
+	a.guardPushed(locales.In("zh-Hans"), v.git.repo, gitRun(t, root, "rev-parse", "origin/main"), func() { ran = true })
 	until(t, tt, "pushed asks", func() bool { return a.confirming && strings.Contains(a.confirmBody, "origin/main") })
 	a.confirming = false
 	a.confirmDo()
@@ -1650,7 +1648,7 @@ func TestGuardPushedAndConflictPanel(t *testing.T) {
 	side := gitRun(t, root, "rev-parse", "HEAD")
 	gitRun(t, root, "switch", "-q", "main")
 	tt.Frame()
-	a.gitDo(locales.In("zh-Hans"), v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, side) })
+	a.gitDo(locales.In("zh-Hans"), v.git, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, side) })
 	until(t, tt, "panel opened", func() bool {
 		return v.git.status != nil && v.git.status.Operation == "cherry-pick" && a.filesPanelOpen() && v.side == sideChanges
 	})
@@ -1663,7 +1661,7 @@ func TestCommitBoxDetails(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	g := &v.git
+	g := v.git
 	a.setAmend(v, true)
 	until(t, tt, "last message", func() bool { return g.message == "base" })
 	a.setAmend(v, false)
@@ -1725,10 +1723,10 @@ func TestLogKeyboard(t *testing.T) {
 	a := previewApp(t)
 	branchWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
-	a.openLog(&a.workspaces[0], "", "")
+	openLogWait(t, a, tt, &a.workspaces[0], "")
 	v := a.files["w1"]
 	ld := v.logCur.log
-	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && len(ld.commits) > 2 })
+	until(t, tt, "log", func() bool { return v.logCur != nil && v.logCur.kind == docLog && len(ld.commits) > 2 })
 	settle(tt)
 	if err := tt.Click(ld.commits[0].Subject); err != nil {
 		t.Fatal(err)
@@ -1829,15 +1827,15 @@ func TestGitConsole(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	v := openChanges(t, a, tt)
-	a.gitDo(locales.In("zh-Hans"), v, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "加入 Git", func(ctx context.Context, root string) error { return gitx.Stage(ctx, root, "new.txt") })
 	until(t, tt, "idle", func() bool { return v.git.busy == "" })
-	a.gitDo(locales.In("zh-Hans"), v, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "继续", func(ctx context.Context, root string) error { return gitx.Continue(ctx, root, "rebase") })
 	until(t, tt, "failed", func() bool { return v.git.busy == "" && len(a.consoleErr) > 0 })
 	// 检出不存在的修订，和不是 git 报出来的失败，也都记在各自的操作下面
-	a.gitDo(locales.In("zh-Hans"), v, "检出", func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, "no-such-rev") })
-	a.gitDo(locales.In("zh-Hans"), v, "合并提交", func(ctx context.Context, root string) error { return errors.New("范围里有合并提交") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "检出", func(ctx context.Context, root string) error { return gitx.CheckoutRevision(ctx, root, "no-such-rev") })
+	a.gitDo(locales.In("zh-Hans"), v.git, "合并提交", func(ctx context.Context, root string) error { return errors.New("范围里有合并提交") })
 	until(t, tt, "queued ops", func() bool { return v.git.busy == "" && len(v.git.queue) == 0 })
-	a.openLog(w, "", "")
+	openLogWait(t, a, tt, w, "")
 	until(t, tt, "console tab", func() bool { return tt.HasText("操作记录") && tt.HasText("提交日志") })
 	if _, ok := tt.Find("有失败的 git 命令"); !ok {
 		t.Fatal("console tab should flag the failed command")
@@ -1936,7 +1934,7 @@ func TestCompareSplit(t *testing.T) {
 	tt := newTester(a.build, 1200, 760)
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
-	a.loadBranches(v)
+	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && v.cur.comp.onlyCur != nil })
@@ -2192,13 +2190,13 @@ func TestComparePick(t *testing.T) {
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
 	tt := newTester(a.build, 1200, 760)
-	a.loadBranches(v)
+	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
 	cd := v.cur.comp
 
-	a.selectCommit(v, &cd.commit, cd.onlyCur[0])
+	a.selectCommit(v.git.repo, &cd.commit, cd.onlyCur[0])
 	tt.Frame()
 	if err := tt.Click("Cherry-pick"); err != nil {
 		t.Fatal(err)
@@ -2208,7 +2206,7 @@ func TestComparePick(t *testing.T) {
 		t.Fatal("picked a commit already on the checked-out branch")
 	}
 
-	a.selectCommit(v, &cd.commit, cd.onlyOther[0])
+	a.selectCommit(v.git.repo, &cd.commit, cd.onlyOther[0])
 	tt.Frame()
 	if err := tt.Click("Cherry-pick"); err != nil {
 		t.Fatal(err)
@@ -2244,7 +2242,7 @@ func TestComparePickMany(t *testing.T) {
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
 	tt := newTester(a.build, 1200, 760)
-	a.loadBranches(v)
+	a.loadBranches(v.git)
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare && len(v.cur.comp.onlyOther) == 4 })
@@ -2355,4 +2353,25 @@ func TestChangeTreeNestedRepo(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("rows = %v, want %v", got, want)
 	}
+}
+
+// trackOf 是工作区当前仓库的传入传出；还没算时给空的。
+func trackOf(a *app, wsID string) *trackInfo {
+	w := a.workspace(wsID)
+	if v := a.files[wsID]; w != nil && v != nil {
+		if tr := a.track[trackKey(w, v.git.repo)]; tr != nil {
+			return tr
+		}
+	}
+	return &trackInfo{}
+}
+
+// openLogWait 打开日志或文件历史，等找完仓库、日志标签出来。
+func openLogWait(t *testing.T, a *app, tt *ui.Tester, w *workspace, path string) {
+	t.Helper()
+	a.openLog(w, "", path)
+	until(t, tt, "log open", func() bool {
+		v := a.files[w.ID]
+		return v != nil && v.logCur != nil && v.logCur.log.filter.Path == path
+	})
 }

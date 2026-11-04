@@ -108,6 +108,7 @@ type projectSetParams struct {
 	Project     string  `json:"project"`
 	Name        *string `json:"name"`
 	SetupScript *string `json:"setupScript"`
+	SingleRepo  *bool   `json:"singleRepo"`
 }
 
 func (d *Daemon) projectSet(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -127,6 +128,9 @@ func (d *Daemon) projectSet(ctx context.Context, raw json.RawMessage) (any, erro
 	}
 	if p.SetupScript != nil {
 		proj.SetupScript = *p.SetupScript
+	}
+	if p.SingleRepo != nil {
+		proj.SingleRepo = *p.SingleRepo
 	}
 	if err := d.store.UpdateProject(proj); err != nil {
 		return nil, err

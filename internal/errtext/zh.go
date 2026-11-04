@@ -18,6 +18,7 @@ var zh = [][2]string{
 	{srcPathOther, "{1}：{2}"},
 
 	// 项目、工作区
+	{"repository no longer in workspace", "这个仓库已经不在工作区里了"},
 	{"project required", "没有指定项目"},
 	{"project %q not found", "找不到项目 {1}"},
 	{"project name %q already used", "项目名 {1} 已经有了"},

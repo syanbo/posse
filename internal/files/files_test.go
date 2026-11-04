@@ -220,6 +220,62 @@ func TestListFilesWalk(t *testing.T) {
 	}
 }
 
+// 工作区下面有几个仓库：各仓库按自己的忽略规则列，软链过去的仓库也列，仓库外面的普通目录遍历。
+func TestListRepos(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "ws")
+	a := filepath.Join(root, "a")
+	ext := filepath.Join(base, "ext")
+	for _, r := range []string{a, ext} {
+		os.MkdirAll(r, 0o755)
+		git(t, r, "init", "-q")
+		write(t, filepath.Join(r, ".gitignore"), "*.log\n")
+		write(t, filepath.Join(r, "main.go"), "package main")
+		write(t, filepath.Join(r, "x.log"), "x")
+	}
+	// a 里嵌着一个仓库：外层报成 nested/，它的文件由它自己列
+	nested := filepath.Join(a, "nested")
+	os.MkdirAll(nested, 0o755)
+	git(t, nested, "init", "-q")
+	write(t, filepath.Join(nested, "n.go"), "package n")
+	if err := os.Symlink(ext, filepath.Join(root, "ext")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(root, "notes", "todo.md"), "")
+	write(t, filepath.Join(root, "notes", "x.log"), "")
+	l, err := ListRepos(context.Background(), root, []string{a, nested, filepath.Join(root, "ext")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		filepath.Join("a", ".gitignore"), filepath.Join("a", "main.go"), filepath.Join("a", "nested", "n.go"),
+		filepath.Join("ext", ".gitignore"), filepath.Join("ext", "main.go"),
+		filepath.Join("notes", "todo.md"), filepath.Join("notes", "x.log"),
+	}
+	if !l.Git || !slices.Equal(l.Files, want) {
+		t.Fatalf("files %q", l.Files)
+	}
+	cases := []struct {
+		rel  string
+		dir  bool
+		want bool
+	}{
+		{filepath.Join("a", "x.log"), false, true}, {filepath.Join("ext", "x.log"), false, true},
+		{filepath.Join("notes", "x.log"), false, false}, {"notes", true, false}, {"a", true, false},
+		{"ext", true, false}, {filepath.Join("a", "nested"), true, false},
+	}
+	for _, c := range cases {
+		if got := l.Ignored(filepath.Join(root, c.rel), c.dir); got != c.want {
+			t.Errorf("Ignored(%s) = %v, want %v", c.rel, got, c.want)
+		}
+	}
+	// 只有一个仓库、就是工作区本身：和 ListFiles 一样
+	l, err = ListRepos(context.Background(), a, []string{a})
+	if err != nil || !slices.Equal(l.Files, []string{".gitignore", "main.go"}) {
+		t.Fatalf("single files %q %v", l.Files, err)
+	}
+}
+
 func TestFuzzyRanking(t *testing.T) {
 	files := []string{
 		"internal/app/view.go",

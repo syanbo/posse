@@ -62,7 +62,7 @@ func (a *app) selectHistory(v *filesView, d *fileDoc, ci gitx.CommitInfo) {
 	if len(ci.Parents) > 0 {
 		parent = ci.Parents[0]
 	}
-	spec := diffSpec{rel: d.log.filter.Path, oldRev: parent, newRev: ci.Hash}
+	spec := diffSpec{root: d.log.root, rel: d.log.filter.Path, oldRev: parent, newRev: ci.Hash}
 	df := &diffDoc{diffSpec: spec, first: true}
 	df.state = editor.DiffState{Layout: h.layout, IgnoreWhitespace: h.ignoreWS}
 	h.diff = &fileDoc{path: "history:" + ci.Hash + ":" + spec.rel, diff: df, started: true}

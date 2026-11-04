@@ -51,8 +51,9 @@ func previewApp(t *testing.T) *app {
 		daemon:       daemonStatus{FootprintKB: 17 << 10, Running: 4, Awake: &awakeStatus{Mode: "auto", Active: true, Working: 2}},
 		selfKB:       150 << 10,
 	}
+	// Apps 指向本机真实的目录：不去找下面的仓库，截图不随本机磁盘变
 	a.projects = []project{
-		{ID: "p1", Name: "Apps"}, {ID: "p2", Name: "Chat"}, {ID: "p3", Name: "react-native-syan-image-picker"},
+		{ID: "p1", Name: "Apps", SingleRepo: true}, {ID: "p2", Name: "Chat"}, {ID: "p3", Name: "react-native-syan-image-picker"},
 		{ID: "p4", Name: "Server"}, {ID: "p5", Name: "Skill", Kind: "git"}, {ID: "p6", Name: "Works"},
 	}
 	a.workspaces = []workspace{
@@ -255,7 +256,7 @@ func previewGit(t *testing.T, a *app) {
 	until(t, tt, "stash", func() bool { return len(v.git.stashes) == 1 })
 	for _, r := range v.git.rows {
 		if !r.header && r.entry.Path == "main.go" {
-			a.openDiff(&a.workspaces[0], changeSpec(r.entry), nil, true)
+			a.openDiff(&a.workspaces[0], changeSpec(v.git.repo, r.entry), nil, true)
 		}
 	}
 	until(t, tt, "diff", func() bool { return v.cur != nil && v.cur.kind == docDiff && v.cur.diff.jumped })
@@ -268,10 +269,10 @@ func previewWorktree(t *testing.T, a *app, tab int) {
 	worktreeWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
-	until(t, tt, "base", func() bool { return a.track["w1"] != nil && a.track["w1"].baseOK })
+	until(t, tt, "base", func() bool { return trackOf(a, "w1") != nil && trackOf(a, "w1").baseOK })
 	v.git.tab = tab
 	v.poll.at, v.git.poll.at = time.Now().Add(time.Hour), time.Now().Add(time.Hour)
-	a.track["w1"].poll.at = time.Now().Add(time.Hour)
+	trackOf(a, "w1").poll.at = time.Now().Add(time.Hour)
 }
 
 // previewRollback 在几层目录里各改几个文件，打开批量回滚对话框，收起其中一个目录。
@@ -390,12 +391,12 @@ func previewCompare(t *testing.T, a *app) {
 	tt := newTester(a.build, 1200, 760)
 	w := &a.workspaces[0]
 	v := a.filesFor(w)
-	a.loadBranches(v) // 顺带查出仓库根目录
+	a.loadBranches(v.git) // 顺带查出仓库根目录
 	until(t, tt, "repo", func() bool { return v.git.repo != "" })
 	a.openCompare(w, v, "feat", "main", false)
 	until(t, tt, "compare", func() bool { return v.cur.kind == docCompare })
 	cd := v.cur.comp
-	a.selectCommit(v, &cd.commit, cd.onlyOther[0])
+	a.selectCommit(v.git.repo, &cd.commit, cd.onlyOther[0])
 	until(t, tt, "commit files", func() bool { return cd.commit.files != nil })
 }
 
@@ -403,8 +404,8 @@ func previewPush(t *testing.T, a *app) {
 	branchWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
 	a.openPush(locales.In("zh-Hans"), &a.workspaces[0])
-	until(t, tt, "push plan", func() bool { return a.push.loaded })
-	a.selectCommit(a.files["w1"], &a.push.commit, a.push.plan.Commits[0])
+	until(t, tt, "push plan", func() bool { return a.push != nil && a.push.loaded })
+	a.selectCommit(a.files["w1"].git.repo, &a.push.commit, a.push.plan.Commits[0])
 	until(t, tt, "commit files", func() bool { return a.push.commit.files != nil })
 }
 
@@ -421,10 +422,10 @@ func previewLog(t *testing.T, a *app) {
 	gitRun(t, root, "merge", "-q", "--no-ff", "-m", "Merge branch 'feat'", "feat")
 	gitRun(t, root, "tag", "v0.2.0")
 	tt := newTester(a.build, 1200, 760)
-	a.openLog(&a.workspaces[0], "", "")
+	openLogWait(t, a, tt, &a.workspaces[0], "")
 	v := a.files["w1"]
-	until(t, tt, "log", func() bool { return v.logCur.kind == docLog })
-	a.selectCommit(v, &v.logCur.log.commit, v.logCur.log.commits[0])
+	until(t, tt, "log", func() bool { return v.logCur != nil && v.logCur.kind == docLog })
+	a.selectCommit(v.git.repo, &v.logCur.log.commit, v.logCur.log.commits[0])
 	until(t, tt, "detail", func() bool { return v.logCur.log.commit.files != nil })
 }
 

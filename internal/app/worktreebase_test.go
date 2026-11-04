@@ -47,8 +47,8 @@ func TestWorktreeBaseConflictToSync(t *testing.T) {
 	_, base := worktreeWorkspace(t, a)
 	tt := newTester(a.build, 1200, 760)
 	v := openChanges(t, a, tt)
-	until(t, tt, "base", func() bool { return a.track["w1"] != nil && a.track["w1"].baseOK })
-	d := a.track["w1"].base
+	until(t, tt, "base", func() bool { return trackOf(a, "w1") != nil && trackOf(a, "w1").baseOK })
+	d := trackOf(a, "w1").base
 	if d.Ahead != 1 || d.Behind != 2 || len(d.Conflicts) != 1 || d.Conflicts[0] != "main.go" {
 		t.Fatalf("divergence %+v", d)
 	}

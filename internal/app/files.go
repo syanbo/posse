@@ -208,7 +208,8 @@ type filesView struct {
 	consoleList ui.ListState
 	consoleLast int64
 	consoleDone bool
-	git         gitState
+	git         *gitState // 当前仓库，见 repos.go
+	repos       repoSet
 	def         defSearch // 跳到定义的查找（definition.go）
 	jumps       []jumpLoc // 跳走之前的位置，⌃- 依次回去（definition.go）
 	forward     []jumpLoc // ⌃- 回去之前的位置，⌃⇧- 再往前
@@ -229,6 +230,7 @@ func (a *app) filesFor(w *workspace) *filesView {
 		}
 	}
 	v := &filesView{wsID: w.ID, root: filepath.Clean(w.Path), tree: files.NewTree(w.Path)}
+	newGitStates(v)
 	if a.files == nil {
 		a.files = map[string]*filesView{}
 	}
@@ -360,9 +362,13 @@ func (a *app) refreshList(v *filesView, force bool, done func()) {
 	}
 	v.listing = true
 	root := v.root
+	var repos []string
+	for _, g := range v.repos.list {
+		repos = append(repos, g.repo)
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		l, err := files.ListFiles(ctx, root)
+		l, err := files.ListRepos(ctx, root, repos)
 		cancel()
 		a.update(func() {
 			v.listing = false

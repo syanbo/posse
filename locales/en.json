@@ -2848,6 +2848,10 @@
   "@gitRenamed": {
     "description": "Change status of a renamed file, shown when hovering its name in the change lists."
   },
+  "gitReposPartial": "The folder is too large to scan fully; some repositories may be missing. Refresh to scan again.",
+  "@gitReposPartial": {
+    "description": "Note at the top of the Changes view when finding the Git repositories in a workspace hit the scan limit."
+  },
   "gitResolve": "Resolve Conflicts",
   "@gitResolve": {
     "description": "Operation name of accepting one side for a conflicted file, shown in busy text, error messages and the Console."
@@ -5942,6 +5946,10 @@
   "sidebarMissing": "Folder missing",
   "@sidebarMissing": {
     "description": "Sidebar: shown at the end of a workspace row whose folder no longer exists."
+  },
+  "sidebarMultiRepo": "Detect Multiple Git Repositories",
+  "@sidebarMultiRepo": {
+    "description": "Sidebar project context menu checkbox: when on, the Git views find every repository inside the project folder (subfolders, symlinked and nested repositories); when off, only the repository the folder itself belongs to."
   },
   "sidebarNewWorkspace": "New Workspace…",
   "@sidebarNewWorkspace": {

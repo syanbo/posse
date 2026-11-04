@@ -22,6 +22,7 @@ import (
 // 点文件打开 diff，F7 在同一组文件之间跳。
 
 type compareDoc struct {
+	root       string // 仓库根目录
 	other, cur string
 	files      bool
 	onlyOther  []gitx.CommitInfo
@@ -41,6 +42,7 @@ type compareDoc struct {
 
 // commitView 是选中的一个提交和它改的文件。
 type commitView struct {
+	root   string // 仓库根目录
 	info   gitx.CommitInfo
 	files  []gitx.FileChange
 	err    string
@@ -50,25 +52,25 @@ type commitView struct {
 	cursor string          // 键盘停在的文件（diff 会挡住列表时才用）
 }
 
-func compareKey(other, cur string, files bool) string {
+func compareKey(root, other, cur string, files bool) string {
 	if files {
-		return "compare:files:" + other
+		return "compare:files:" + other + "@" + root
 	}
-	return "compare:" + other + ".." + cur
+	return "compare:" + other + ".." + cur + "@" + root
 }
 
 func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files bool) {
 	// 比较要整块地方看上下两栏，底部的日志浮层盖着下半截，先收起
 	a.setLogPanel(false)
 	v = a.showFiles(w)
-	key := compareKey(other, cur, files)
+	key := compareKey(v.git.repo, other, cur, files)
 	for _, d := range v.docs {
 		if d.path == key {
 			v.cur = d
 			return
 		}
 	}
-	d := &fileDoc{path: key, comp: &compareDoc{other: other, cur: cur, files: files}, started: true}
+	d := &fileDoc{path: key, comp: &compareDoc{root: v.git.repo, other: other, cur: cur, files: files}, started: true}
 	v.insertDoc(d)
 	a.loadCompare(v, d)
 }
@@ -78,15 +80,17 @@ func (a *app) openCompare(w *workspace, v *filesView, other, cur string, files b
 // 同一项目的工作区共用引用，别的工作区里开着的也要重读。
 func (a *app) refsChanged(projectID string) {
 	for _, w := range a.byProject[projectID] {
-		if tr := a.track[w.ID]; tr != nil {
-			tr.poll = panelPoll{}
-		}
 		v := a.files[w.ID]
 		if v == nil {
 			continue
 		}
-		if v.git.branches.list != nil {
-			a.loadBranches(v)
+		for _, g := range v.repos.list {
+			if tr := a.track[trackKey(&w, g.repo)]; tr != nil {
+				tr.poll = panelPoll{}
+			}
+			if g.branches.list != nil {
+				a.loadBranches(g)
+			}
 		}
 		for _, d := range v.docs {
 			switch {
@@ -105,7 +109,8 @@ func (a *app) refsChanged(projectID string) {
 }
 
 func (a *app) loadCompare(v *filesView, d *fileDoc) {
-	cd, root := d.comp, v.git.repo
+	cd := d.comp
+	root := cd.root
 	other, cur := cd.other, cd.cur
 	go func() {
 		ctx := context.Background()
@@ -138,10 +143,9 @@ func (a *app) loadCompare(v *filesView, d *fileDoc) {
 }
 
 // selectCommit 选中提交，在后台读它改的文件。
-func (a *app) selectCommit(v *filesView, holder **commitView, c gitx.CommitInfo) {
-	cv := &commitView{info: c}
+func (a *app) selectCommit(root string, holder **commitView, c gitx.CommitInfo) {
+	cv := &commitView{info: c, root: root}
 	*holder = cv
-	root := v.git.repo
 	go func() {
 		files, err := gitx.CommitFiles(context.Background(), root, c.Hash)
 		a.update(func() {
@@ -154,7 +158,7 @@ func (a *app) selectCommit(v *filesView, holder **commitView, c gitx.CommitInfo)
 }
 
 // commitSpecs 是一个提交里各文件的 diff：父提交对比这个提交，根提交的旧一边是空的。
-func commitSpecs(c gitx.CommitInfo, files []gitx.FileChange) []diffSpec {
+func commitSpecs(root string, c gitx.CommitInfo, files []gitx.FileChange) []diffSpec {
 	parent := ""
 	if len(c.Parents) > 0 {
 		parent = c.Parents[0]
@@ -165,7 +169,7 @@ func commitSpecs(c gitx.CommitInfo, files []gitx.FileChange) []diffSpec {
 		if f.Status == 'A' {
 			old = ""
 		}
-		out[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: old, newRev: c.Hash, label: c.Hash[:7]}
+		out[i] = diffSpec{root: root, rel: f.Path, orig: f.Orig, oldRev: old, newRev: c.Hash, label: c.Hash[:7]}
 	}
 	return out
 }
@@ -176,7 +180,7 @@ func (a *app) compareView(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 	if cd.files {
 		specs := make([]diffSpec, len(cd.changes))
 		for i, f := range cd.changes {
-			specs[i] = diffSpec{rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → " + L(c).GitWorkspace()}
+			specs[i] = diffSpec{root: cd.root, rel: f.Path, orig: f.Orig, oldRev: cd.other, label: cd.other + " → " + L(c).GitWorkspace()}
 		}
 		ui.Row(c).Height(sz(36)).Shrink(0).Padding(0, 16).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, L(c).CompareWorkspaceFiles(cd.other, len(cd.changes))).FontSize(fsBody).FontWeight(fwMedium)
@@ -262,7 +266,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 		a.comparePick(c, w, v, cd)
 		if pressable(iconButtonSized(c, iconSwap, L(c).CompareSwap(), compactBox(), smallIcon())).Clicked() {
 			// 对调后的比较已经开着就切过去，不留两个同样的标签
-			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.cur, cd.other, false) }); i >= 0 {
+			if i := slices.IndexFunc(v.docs, func(x *fileDoc) bool { return x.path == compareKey(cd.root, cd.cur, cd.other, false) }); i >= 0 {
 				v.cur = v.docs[i]
 				return
 			}
@@ -270,7 +274,7 @@ func (a *app) compareActions(c *ui.Context, w *workspace, v *filesView, d *fileD
 			cd.onlyOther, cd.onlyCur = cd.onlyCur, cd.onlyOther
 			cd.listOther, cd.listCur = cd.listCur, cd.listOther
 			cd.queryOther, cd.queryCur = cd.queryCur, cd.queryOther
-			d.path = compareKey(cd.other, cd.cur, false)
+			d.path = compareKey(cd.root, cd.other, cd.cur, false)
 		}
 		if pressable(iconButtonSized(c, iconRefresh, L(c).CommonRefresh(), compactBox(), smallIcon())).Clicked() {
 			a.loadCompare(v, d)
@@ -320,7 +324,7 @@ func (a *app) comparePick(c *ui.Context, w *workspace, v *filesView, cd *compare
 	}
 	if b.Clicked() {
 		a.guardAgent(m, w, "Cherry-pick", func() {
-			a.gitDo(m, v, "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
+			a.gitDo(m, v.repoOrGone(cd.root), "Cherry-pick", func(ctx context.Context, root string) error { return gitx.CherryPick(ctx, root, hashes...) })
 		})
 	}
 }
@@ -355,7 +359,7 @@ func (a *app) clickCommit(v *filesView, cd *compareDoc, all, shown []gitx.Commit
 				// 右边换成还选着的一个，不然只剩一个时就当没选
 				i := slices.IndexFunc(shown, func(x gitx.CommitInfo) bool { return slices.Contains(cd.picked, x.Hash) })
 				if i >= 0 {
-					a.selectCommit(v, &cd.commit, shown[i])
+					a.selectCommit(cd.root, &cd.commit, shown[i])
 				}
 			}
 			return
@@ -375,7 +379,7 @@ func (a *app) clickCommit(v *filesView, cd *compareDoc, all, shown []gitx.Commit
 	default:
 		cd.picked, cd.anchor = nil, ci.Hash
 	}
-	a.selectCommit(v, &cd.commit, ci)
+	a.selectCommit(cd.root, &cd.commit, ci)
 }
 
 // matchCommit 报告提交的信息、作者里有没有 q（不分大小写），或者哈希以 q 开头。q 已经是小写。
@@ -557,7 +561,7 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 	case cv.files == nil:
 		ui.Text(c, L(c).CommonLoading()).FontSize(fsSmall).TextColor(t.TextMuted).Padding(6, 16)
 	default:
-		selected, open := a.tabDiffs(w, v, commitSpecs(ci, cv.files))
+		selected, open := a.tabDiffs(w, v, commitSpecs(cv.root, ci, cv.files))
 		nav := fileListNav{focus: &cv.focus, back: back}
 		if !live {
 			nav.cursor = &cv.cursor
@@ -568,7 +572,7 @@ func (a *app) commitDetail(c *ui.Context, w *workspace, v *filesView, cv *commit
 
 // tabDiffs 让文件列表点开的 diff 进文档区的 diff 标签，F7 在这组里跳。
 func (a *app) tabDiffs(w *workspace, v *filesView, specs []diffSpec) (selected func(int) bool, open func(int)) {
-	selected = func(i int) bool { return v.cur != nil && v.cur.path == diffKey(v.git.absPath(specs[i].rel), specs[i]) }
+	selected = func(i int) bool { return v.cur != nil && v.cur.path == diffKey(specs[i].abs(), specs[i]) }
 	open = func(i int) { a.openDiff(w, specs[i], specs, true) }
 	return selected, open
 }
@@ -694,6 +698,7 @@ func (nav fileListNav) keys(c *ui.Context, list *ui.ListState, rows []treeRow, f
 
 type pushState struct {
 	ws      string
+	root    string // 推送的仓库
 	branch  string
 	plan    gitx.PushPlan
 	loaded  bool
@@ -706,29 +711,28 @@ type pushState struct {
 
 // openPush 推送当前分支。
 func (a *app) openPush(m locales.Messages, w *workspace) {
-	// 直接读 HEAD：文件栏没打开过时没有状态，w.Branch 在游离时是哈希
-	branch, detached := gitx.HeadRef(w.Path)
-	if branch == "" || detached {
-		a.err = m.CompareDetachedPush()
-		return
-	}
-	a.openPushBranch(w, branch)
+	v := a.filesFor(w)
+	a.withRepos(v, func() {
+		// 直接读 HEAD：文件栏没打开过时没有状态，w.Branch 在游离时是哈希
+		branch, detached := gitx.HeadRef(v.git.repo)
+		if v.git.repo == "" || branch == "" || detached {
+			a.err = m.CompareDetachedPush()
+			return
+		}
+		a.openPushBranch(w, branch)
+	})
 }
 
 func (a *app) openPushBranch(w *workspace, branch string) {
 	v := a.filesFor(w)
-	ps := &pushState{ws: w.ID, branch: branch}
+	root := v.git.repo
+	ps := &pushState{ws: w.ID, root: root, branch: branch}
 	a.push = ps
 	a.pushBox.reset()
-	ws := v.root
 	go func() {
 		ctx := context.Background()
-		root := repoRoot(ws, gitx.TopLevel(ctx, ws))
 		plan, err := gitx.PushPreview(ctx, root, branch)
 		a.update(func() {
-			if !v.git.checked {
-				v.git.checked, v.git.repo = true, root
-			}
 			ps.plan, ps.loaded = plan, true
 			if err != nil {
 				ps.err = errtext.Text(err)
@@ -806,7 +810,7 @@ func (a *app) pushDialog(c *ui.Context) {
 						ui.Column(c).Children(func() {
 							for i, ci := range plan.Commits {
 								if commitRow(c, ci, ps.commit != nil && ps.commit.info.Hash == ci.Hash, i == 0, i == len(plan.Commits)-1, laneColor(t, 0)).Clicked() {
-									a.selectCommit(v, &ps.commit, ci)
+									a.selectCommit(ps.root, &ps.commit, ci)
 									ps.detail = nil
 								}
 							}
@@ -878,12 +882,12 @@ func (a *app) pushDialog(c *ui.Context) {
 // pushShow 在对话框右边打开选中提交里第 i 个文件的 diff；排版和忽略空白沿用上一个，地方窄，默认上下合并。
 func (a *app) pushShow(v *filesView, ps *pushState, i int, first bool) {
 	cv := ps.commit
-	df := &diffDoc{diffSpec: commitSpecs(cv.info, cv.files)[i], first: first}
+	df := &diffDoc{diffSpec: commitSpecs(ps.root, cv.info, cv.files)[i], first: first}
 	df.state = editor.DiffState{Layout: editor.DiffUnified, IgnoreWhitespace: true}
 	if old := ps.detail; old != nil {
 		df.state.Layout, df.state.IgnoreWhitespace = old.diff.state.Layout, old.diff.state.IgnoreWhitespace
 	}
-	ps.detail = &fileDoc{path: diffKey(v.git.absPath(df.rel), df.diffSpec), diff: df, kind: docLoading, started: true}
+	ps.detail = &fileDoc{path: diffKey(df.abs(), df.diffSpec), diff: df, kind: docLoading, started: true}
 	a.loadDiff(v, ps.detail)
 }
 
@@ -992,7 +996,7 @@ func (a *app) pushDetail(c *ui.Context, v *filesView, ps *pushState) {
 func (a *app) doPush(m locales.Messages, v *filesView, ps *pushState, force bool) {
 	ps.pushing = true
 	plan, tags := ps.plan, ps.tags
-	a.gitDoKind(m, v, gitPush, "Push", func(ctx context.Context, root string) error {
+	a.gitDoKind(m, v.repoOrGone(ps.root), gitPush, "Push", func(ctx context.Context, root string) error {
 		err := gitx.Push(ctx, root, plan, force, tags)
 		a.update(func() {
 			ps.pushing = false

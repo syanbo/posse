@@ -55,7 +55,7 @@ func init() {
 		{"daemon handoff", "Restart the daemon from this posse binary, keeping every terminal running", "", cmdDaemonHandoff},
 		{"project add", "Add a folder or git repository", "<path> [--name N] [--setup SCRIPT]", cmdProjectAdd},
 		{"project list", "List projects", "", cmdProjectList},
-		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT]", cmdProjectSet},
+		{"project set", "Update a project", "<project> [--name N] [--setup SCRIPT] [--multi-repo on|off]", cmdProjectSet},
 		{"project rm", "Forget a project (files stay)", "<project> [--force]", cmdProjectRm},
 		{"workspace create", "Create a workspace", "<project> <name> [--mode auto|folder|worktree|attach] [--path DIR] [--branch B] [--base REF] [--no-setup] [--agent claude|codex|grok|cursor [--model M] [--effort E]] [--prompt P]", cmdWorkspaceCreate},
 		{"workspace list", "List workspaces", "[--project P] [--dirty]", cmdWorkspaceList},

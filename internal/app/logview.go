@@ -27,6 +27,7 @@ const (
 )
 
 type logDoc struct {
+	root      string // 仓库根目录；整个仓库的日志跟着当前仓库换（useRepo），文件历史一直是文件所在的仓库
 	filter    gitx.LogFilter
 	text      string // 输入框里的文字，停顿后才应用到 filter
 	author    string
@@ -51,9 +52,9 @@ type logDoc struct {
 	readGen   int          // 最近一次开始读日志时的 gen
 }
 
-func logKey(f gitx.LogFilter) string {
+func logKey(root string, f gitx.LogFilter) string {
 	if f.Path != "" {
-		return "log:path:" + f.Path
+		return "log:path:" + filepath.Join(root, f.Path)
 	}
 	return "log:"
 }
@@ -62,12 +63,22 @@ func logKey(f gitx.LogFilter) string {
 // 整个仓库的日志不给 branch 时只看当前分支。
 func (a *app) openLog(w *workspace, branch, path string) {
 	v := a.filesFor(w)
+	a.withRepos(v, func() { a.openLogIn(w, v.git, branch, path) })
+}
+
+// openLogIn 打开仓库 g 的日志（path 为空）或其中一个文件的历史（path 相对 g 的根目录）。
+// 整个仓库的日志只有一个，对着当前仓库：g 不是当前仓库时先换过去。
+func (a *app) openLogIn(w *workspace, g *gitState, branch, path string) {
+	v := a.filesFor(w)
+	if path == "" {
+		a.useRepo(v, g)
+	}
 	f := gitx.LogFilter{Path: path}
 	if branch != "" {
 		f.Branches = []string{branch}
 	}
 	head := branch == "" && path == ""
-	key := logKey(f)
+	key := logKey(g.repo, f)
 	a.setLogPanel(true)
 	v.console = false
 	for _, d := range v.logs {
@@ -80,7 +91,7 @@ func (a *app) openLog(w *workspace, branch, path string) {
 			return
 		}
 	}
-	d := &fileDoc{path: key, log: &logDoc{filter: f, head: head}, started: true}
+	d := &fileDoc{path: key, log: &logDoc{root: g.repo, filter: f, head: head}, started: true}
 	// 整个仓库的日志排在最前面，文件历史按打开的先后排在后面
 	if path == "" {
 		v.logs = slices.Insert(v.logs, 0, d)
@@ -152,7 +163,7 @@ func (a *app) logPanelHeight(avail float32) float32 {
 // 顶上一排是日志和文件历史的小标签，拖上边缘调高度。body 是终端那一栏，按它的高度限制浮层高度。
 func (a *app) logPanel(c *ui.Context, w *workspace, body ui.Element) {
 	open := float32(0)
-	if a.logPanelOpen() && w.Branch != "" {
+	if a.logPanelOpen() && a.gitBranch(w) != "" {
 		open = 1
 	}
 	shown := body.AnimateTo("log-panel", open, ui.Animation{Duration: 200 * time.Millisecond, Ease: ui.EaseOut})
@@ -271,14 +282,11 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 	if more {
 		skip = len(ld.commits)
 	}
-	f, root, ws := ld.filter, v.git.repo, v.root
+	f, root := ld.filter, ld.root
 	head := ld.head
 	ld.head, ld.readGen = false, gen
 	go func() {
 		ctx := context.Background()
-		if root == "" {
-			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
-		}
 		if head && root != "" {
 			// 分离的 HEAD 时 git 给 "HEAD"，就选分支树里的 HEAD 一行
 			if name, err := gitx.CurrentBranch(ctx, root); err == nil && name != "HEAD" {
@@ -287,11 +295,12 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				f.Branches = []string{"HEAD"}
 			}
 		}
-		list, err := gitx.Log(ctx, root, f, skip, limit)
+		var list []gitx.CommitInfo
+		var err error
+		if root != "" {
+			list, err = gitx.Log(ctx, root, f, skip, limit)
+		}
 		a.update(func() {
-			if !v.git.checked {
-				v.git.checked, v.git.repo = true, root
-			}
 			if ld.gen != gen {
 				// 只是输入筛选文字的停顿把 gen 加了一、还没开始新的读：默认选中当前分支留给那一次
 				if head && ld.readGen == gen {
@@ -539,7 +548,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 				ld.focusList = false
 			}
 			// 焦点在列表里（点过一行）时 ↑↓ 换选中的提交，→ 到右边它改的文件，← 回左边的分支树，照 WebStorm 的日志
-			a.commitListKeys(c, v, &ld.list, commits, &ld.commit)
+			a.commitListKeys(c, ld.root, &ld.list, commits, &ld.commit)
 			if ld.list.Shortcut(c, 0, ui.KeyLeft) {
 				ld.refList.Focus(c)
 			}
@@ -554,7 +563,7 @@ func (a *app) logList(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 }
 
 // commitListKeys 是提交列表的方向键：↑↓ 换选中的提交，→ 让右边的文件列表拿焦点。
-func (a *app) commitListKeys(c *ui.Context, v *filesView, list *ui.ListState, commits []gitx.CommitInfo, holder **commitView) {
+func (a *app) commitListKeys(c *ui.Context, root string, list *ui.ListState, commits []gitx.CommitInfo, holder **commitView) {
 	cv := *holder
 	step := 0
 	switch {
@@ -573,7 +582,7 @@ func (a *app) commitListKeys(c *ui.Context, v *filesView, list *ui.ListState, co
 		i = slices.IndexFunc(commits, func(ci gitx.CommitInfo) bool { return ci.Hash == cv.info.Hash })
 	}
 	if j := i + step; j >= 0 && j < len(commits) {
-		a.selectCommit(v, holder, commits[j])
+		a.selectCommit(root, holder, commits[j])
 		list.ScrollIntoView(j)
 	}
 }
@@ -610,11 +619,12 @@ func (a *app) logFilterBar(c *ui.Context, v *filesView, d *fileDoc) {
 				ld.filter.Branches = nil
 				a.loadLog(v, d, false)
 			}
-			if v.git.branches.list == nil {
-				a.loadBranches(v)
+			g := v.repoOrGone(ld.root)
+			if g.branches.list == nil {
+				a.loadBranches(g)
 			}
 			m.Separator()
-			for _, b := range v.git.branches.list {
+			for _, b := range g.branches.list {
 				if m.Item(b.Name).Checked(slices.Contains(ld.filter.Branches, branchRef(b))).Chosen() {
 					ld.filter.Branches = []string{branchRef(b)}
 					a.loadLog(v, d, false)
@@ -694,7 +704,7 @@ func (a *app) logRow(c *ui.Context, w *workspace, v *filesView, d *fileDoc, ci g
 		ui.Text(c, commitTime(L(c), ci.Time)).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Width(commitTimeW(c)).Shrink(0).TextAlign(ui.End).Tooltip(commitStamp(L(c), ci.Time))
 	})
 	if row.Clicked() {
-		a.selectCommit(v, &ld.commit, ci)
+		a.selectCommit(ld.root, &ld.commit, ci)
 		// 行是按钮、不拿焦点；焦点给列表，↑↓ 才能接着换
 		ld.list.Focus(c)
 	}
@@ -794,7 +804,7 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	short := ci.Hash[:7]
 	// 做完由 gitDo 里的 refsChanged 重读日志，翻过的页数一起读回来
 	do := func(what string, fn func(ctx context.Context, root string) error) {
-		a.guardAgent(lm, w, what, func() { a.gitDo(lm, v, what, fn) })
+		a.guardAgent(lm, w, what, func() { a.gitDo(lm, v.repoOrGone(d.log.root), what, fn) })
 	}
 	if m.Item(lm.LogCopyHash()).Chosen() {
 		c.WriteClipboard(ci.Hash)
@@ -830,21 +840,21 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 	}
 	m.Separator()
 	if m.Item(lm.LogRewordEllipsis()).Chosen() {
-		a.guardPushed(lm, v, ci.Hash, func() {
-			a.askMessage(lm, v, lm.LogRewordTitle(short), ci.Hash, "", func(msg string) {
+		a.guardPushed(lm, d.log.root, ci.Hash, func() {
+			a.askMessage(lm, d.log.root, lm.LogRewordTitle(short), ci.Hash, "", func(msg string) {
 				do(lm.LogReword(), func(ctx context.Context, root string) error { return gitx.Reword(ctx, root, ci.Hash, msg) })
 			})
 		})
 	}
 	if len(ci.Parents) == 1 && m.Item(lm.LogSquashEllipsis()).Chosen() {
-		a.guardPushed(lm, v, ci.Parents[0], func() {
-			a.askMessage(lm, v, lm.LogSquashTitle(), ci.Parents[0], ci.Hash, func(msg string) {
+		a.guardPushed(lm, d.log.root, ci.Parents[0], func() {
+			a.askMessage(lm, d.log.root, lm.LogSquashTitle(), ci.Parents[0], ci.Hash, func(msg string) {
 				do(lm.LogSquash(), func(ctx context.Context, root string) error { return gitx.SquashIntoParent(ctx, root, ci.Hash, msg) })
 			})
 		})
 	}
 	if m.Item(lm.LogDropEllipsis()).Chosen() {
-		a.guardPushed(lm, v, ci.Hash, func() {
+		a.guardPushed(lm, d.log.root, ci.Hash, func() {
 			a.confirm(lm.LogDropConfirm(short), lm.LogDropBody(ci.Subject), lm.LogDrop(), func() {
 				a.update(func() {
 					do(lm.LogDrop(), func(ctx context.Context, root string) error { return gitx.Drop(ctx, root, ci.Hash) })
@@ -855,8 +865,7 @@ func (a *app) commitMenu(c *ui.Context, m *popMenu, w *workspace, v *filesView, 
 }
 
 // guardPushed 在改写从 oldest 开始的历史之前查它推送过没有：推送过的先说明之后要强制推送，确认了再继续。
-func (a *app) guardPushed(m locales.Messages, v *filesView, oldest string, then func()) {
-	root := v.git.repo
+func (a *app) guardPushed(m locales.Messages, root, oldest string, then func()) {
 	go func() {
 		remotes := gitx.RemotesContaining(context.Background(), root, oldest)
 		a.update(func() {
@@ -876,8 +885,7 @@ func (a *app) guardPushed(m locales.Messages, v *filesView, oldest string, then 
 }
 
 // askMessage 读出提交信息（两个提交时拼在一起）填进输入框，让用户改完再执行。
-func (a *app) askMessage(m locales.Messages, v *filesView, title, hash, second string, do func(string)) {
-	root := v.git.repo
+func (a *app) askMessage(m locales.Messages, root, title, hash, second string, do func(string)) {
 	go func() {
 		ctx := context.Background()
 		msg := gitx.FullMessage(ctx, root, hash)
@@ -895,6 +903,7 @@ func (a *app) askMessage(m locales.Messages, v *filesView, title, hash, second s
 // blameDoc 是文件标签里开着的 Annotate：每行最后改它的提交，同一个提交的连续几行只在第一行写作者和日期。
 // 和 WebStorm 一样在同一个标签里开关，不另开标签。
 type blameDoc struct {
+	root    string // 仓库根目录
 	rel     string
 	lines   []gitx.BlameLine
 	loading bool
@@ -936,8 +945,8 @@ func (bd *blameDoc) findHits(f *docFind) {
 
 // openBlame 在这个文件的标签里打开 Annotate（文件没开着就先打开）。
 func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs string) {
-	rel := v.git.relPath(abs)
-	if rel == "" {
+	g, rel := v.relIn(abs)
+	if g == nil {
 		a.err = m.LogFileNotRepo()
 		return
 	}
@@ -947,9 +956,9 @@ func (a *app) openBlame(m locales.Messages, w *workspace, v *filesView, abs stri
 	if d == nil || d.path != filepath.Clean(abs) {
 		return
 	}
-	bd := &blameDoc{rel: rel, loading: true}
+	root := g.repo
+	bd := &blameDoc{root: root, rel: rel, loading: true}
 	d.blame = bd
-	root := v.git.repo
 	go func() {
 		lines, err := gitx.Blame(context.Background(), root, rel)
 		a.update(func() {
@@ -1005,7 +1014,7 @@ func (a *app) blameView(c *ui.Context, w *workspace, v *filesView, d *fileDoc) {
 					if !uncommitted {
 						who.Tooltip(l.Hash[:10] + "  " + l.Author + "\n" + l.Summary)
 						if who.Clicked() {
-							a.selectCommit(v, &bd.sel, gitx.CommitInfo{Hash: l.Hash, Author: l.Author, Time: l.Time, Subject: l.Summary})
+							a.selectCommit(bd.root, &bd.sel, gitx.CommitInfo{Hash: l.Hash, Author: l.Author, Time: l.Time, Subject: l.Summary})
 						}
 					}
 					ui.Text(c, fmt.Sprint(i+1)).FontSize(fsSmall).Font(monoFont).TextColor(t.TextMuted).Width(sz(36)).Shrink(0).TextAlign(ui.End)
@@ -1039,13 +1048,13 @@ func blameLine(c *ui.Context, bd *blameDoc, f *docFind, i int) ui.Element {
 
 // gitFileMenu 是文件在 Git 下的操作：文件历史、Annotate。用在文件树和打开的文件上。
 func (a *app) gitFileMenu(lm locales.Messages, m *popMenu, w *workspace, v *filesView, abs string) {
-	rel := v.git.relPath(abs)
-	if rel == "" {
+	g, rel := v.relIn(abs)
+	if g == nil {
 		return
 	}
 	m.Separator()
 	if m.Item(lm.LogFileHistory()).Chosen() {
-		a.openLog(w, "", rel)
+		a.openLogIn(w, g, "", rel)
 	}
 	if m.Item(lm.LogAnnotate()).Chosen() {
 		a.openBlame(lm, w, v, abs)

@@ -235,6 +235,7 @@ func cmdProjectSet(e *env, args []string) error {
 	fs := flag.NewFlagSet("project set", flag.ContinueOnError)
 	name := fs.String("name", "", "")
 	setup := fs.String("setup", "", "")
+	multi := fs.String("multi-repo", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -249,8 +250,13 @@ func cmdProjectSet(e *env, args []string) error {
 			params["name"] = *name
 		case "setup":
 			params["setupScript"] = *setup
+		case "multi-repo":
+			params["singleRepo"] = *multi == "off"
 		}
 	})
+	if _, ok := params["singleRepo"]; ok && *multi != "on" && *multi != "off" {
+		return fmt.Errorf("--multi-repo must be on or off")
+	}
 	var p projectInfo
 	return e.do("project.set", params, &p, func() { fmt.Fprintf(e.out, "updated project %s\n", p.Name) })
 }

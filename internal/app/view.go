@@ -188,10 +188,10 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 		if a.filesPanelOpen() && a.filesFor(w).side == sideChanges && c.FocusWithin(a.filesPanelRef) && a.pressed(c, "rollback") {
 			a.openRollback(a.filesFor(w))
 		}
-		if w.Branch != "" && a.pressed(c, "push") {
+		if a.gitBranch(w) != "" && a.pressed(c, "push") {
 			a.openPush(L(c), w)
 		}
-		if w.Branch != "" && a.pressed(c, "newBranch") {
+		if a.gitBranch(w) != "" && a.pressed(c, "newBranch") {
 			a.askNewBranch(L(c), w, a.filesFor(w), "")
 		}
 		if a.pressed(c, "fileTree") {
@@ -234,7 +234,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 	if a.pressed(c, "toggleSidebar") {
 		a.toggleSidebar()
 	}
-	if w != nil && w.Branch != "" && a.pressed(c, "gitLog") {
+	if w != nil && a.gitBranch(w) != "" && a.pressed(c, "gitLog") {
 		a.toggleLogPanel(w)
 	}
 	// 图片标签在前台时 ⌘= ⌘- ⌘0 缩放图片，文件标签（Markdown 预览也是）、历史页和任务页调编辑器的字号，终端调终端的
@@ -1069,6 +1069,9 @@ func (a *app) workspaceMenu(c *ui.Context, m *popMenu, w workspace) {
 			a.editProjectIcon(*p)
 		}
 	}
+	if p := a.projectByID(w.ProjectID); w.Kind == "main" && p != nil && m.Item(lm.SidebarMultiRepo()).Checked(!p.SingleRepo).Chosen() {
+		a.setSingleRepo(p.ID, !p.SingleRepo)
+	}
 	if m.Item(lm.SidebarNewWorkspaceHere()).Icon(iconPlus).Chosen() {
 		a.openNewWorkspace()
 		a.newProject = w.Project
@@ -1719,7 +1722,7 @@ func (a *app) newTerminalButton(c *ui.Context, w *workspace, i int) {
 
 // tabBarButtons 是标签栏右边的按钮组：分支、Git 日志、各个面板和文件栏的开关。
 func (a *app) tabBarButtons(c *ui.Context, w *workspace) {
-	if w.Branch != "" {
+	if a.gitBranch(w) != "" {
 		a.branchButton(c, w)
 		b := iconButton(c.Key("git-log"), iconGitLog, a.withKey(L(c).GitLogTitle(), "gitLog"))
 		if a.logPanelOpen() {

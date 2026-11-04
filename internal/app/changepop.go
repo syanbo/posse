@@ -60,10 +60,10 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 				d.ed.RevertChange(cp.index)
 				d.change = nil
 			}
-			rel := v.git.relPath(d.path)
-			if rel != "" && pressable(iconButtonSized(c, iconDiff, L(c).GitShowDiff(), compactBox(), smallIcon())).Clicked() {
+			g, rel := v.relIn(d.path)
+			if g != nil && pressable(iconButtonSized(c, iconDiff, L(c).GitShowDiff(), compactBox(), smallIcon())).Clicked() {
 				d.change = nil
-				a.openDiff(w, diffSpec{rel: rel, oldRev: "HEAD"}, nil, true)
+				a.openDiff(w, diffSpec{root: g.repo, rel: rel, oldRev: "HEAD"}, nil, true)
 			}
 			copyOld := pressable(iconButtonSized(c, iconCopy, L(c).GitCopyBefore(), compactBox(), smallIcon()))
 			if ch.Old == "" {
@@ -108,7 +108,10 @@ func (a *app) changePopup(c *ui.Context, w *workspace, v *filesView, d *fileDoc)
 // commitChangeInput 是卡片里的"提交此更改"：写好提交信息回车，只把这一处提交上去，文件里别的改动不动。
 // 提交的是编辑器里这一处的内容，所以有没保存的改动时先保存；合并、rebase 进行中不做。
 func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *changePop, rel string, ch editor.BaseChange) {
-	g := &v.git
+	g := v.repoFor(d.path)
+	if g == nil {
+		return
+	}
 	placeholder := L(c).GitCommitChange()
 	blocked := ""
 	switch {
@@ -134,7 +137,7 @@ func (a *app) commitChangeInput(c *ui.Context, v *filesView, d *fileDoc, cp *cha
 		}
 		content := changeContent(d.headBuf.String(), d.ed.Buffer.String(), ch)
 		m := L(c)
-		a.gitDoKind(m, v, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
+		a.gitDoKind(m, g, gitCommit, m.GitCommitButton(), func(ctx context.Context, root string) error {
 			return gitx.CommitChange(ctx, root, rel, []byte(content), msg)
 		}, func() {
 			if d.change == cp {
