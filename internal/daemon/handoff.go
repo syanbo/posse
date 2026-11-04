@@ -452,7 +452,7 @@ func (in *incoming) close() {
 // adopt 按交接记录重建所有终端。
 func (d *Daemon) adopt(in *incoming) error {
 	for i, ht := range in.batch.Terms {
-		t, err := d.terminalHost().Adopt(host.StartOptions{Scrollback: d.cfg.Scrollback, OnTitle: d.onTitle, OnExit: d.onExit}, ht.Term, in.ptys[i])
+		t, err := d.terminalHost().Adopt(host.StartOptions{Scrollback: d.cfg.Scrollback, OnTitle: d.onTitle, OnExit: d.onExit, OnProgramStatus: d.onProgramStatus}, ht.Term, in.ptys[i])
 		if err != nil {
 			return fmt.Errorf("terminal %s: %w", ht.Term.ID, err)
 		}

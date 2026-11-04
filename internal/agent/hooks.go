@@ -131,7 +131,7 @@ func Parked(st term.AgentState) bool {
 		return false
 	}
 	switch st.Event {
-	case "Stop", "StopFailure", "title":
+	case "Stop", "StopFailure", "title", "osc-stop":
 		return true
 	}
 	return false

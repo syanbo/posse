@@ -44,6 +44,8 @@ type Options struct {
 	CreatedAt   time.Time // 空是现在；重启后恢复的终端沿用原来的，标签顺序不变
 	OnExit      func(t *Terminal, code int)
 	OnTitle     func(t *Terminal, title string)
+	// OnProgramStatus 收到程序经 OSC 7501 报告的状态，在读协程里调用
+	OnProgramStatus func(t *Terminal, st ProgramStatus)
 	// Colors 是起始的默认配色，nil 时按系统外观选
 	Colors *Colors
 }
@@ -129,6 +131,7 @@ type Terminal struct {
 	ended      bool   // PTY 已读到结尾
 	tail       []byte // 读到的输出末尾没写完的转义序列或 UTF-8 字符，交接时带过去
 	titleDirty bool
+	prog       progScanner
 	idle       *time.Timer
 
 	// pmu 串行化调整 PTY 尺寸和关闭 PTY
@@ -147,6 +150,7 @@ type Terminal struct {
 	agent   AgentState
 	closing bool
 	onTitle func(t *Terminal, title string)
+	onProg  func(t *Terminal, st ProgramStatus)
 }
 
 // Subscriber 是一个接入的界面，收到快照之后的全部输出。
@@ -235,6 +239,7 @@ func newTerminal(o Options) *Terminal {
 		changed:     make(chan struct{}),
 		subs:        map[*Subscriber]struct{}{},
 		onTitle:     o.OnTitle,
+		onProg:      o.OnProgramStatus,
 		scrollback:  o.Scrollback,
 	}
 	if o.Colors != nil {
@@ -313,6 +318,21 @@ func (t *Terminal) readLoop() {
 			t.smu.Lock()
 			title := ""
 			t.tail = carry(t.tail, buf[:n])
+			// 在交给内核之前：探测的应答要先于内核对紧跟着的 CSI c 的应答写回去。界面接入时也由这里应答，
+			// 界面的内核同样不认识 7501
+			var reports []ProgramStatus
+			t.prog.feed(buf[:n], func(body []byte) {
+				st, probe, ok := parseProgramStatus(body)
+				switch {
+				case probe:
+					select {
+					case t.replies <- progReply:
+					default:
+					}
+				case ok:
+					reports = append(reports, st)
+				}
+			})
 			if t.emu != nil {
 				tracking := mouseTracking(t.emu)
 				t.emu.Write(buf[:n])
@@ -330,6 +350,11 @@ func (t *Terminal) readLoop() {
 			t.idle.Reset(compressAfter)
 			if title != "" {
 				t.setTitle(title)
+			}
+			if t.onProg != nil {
+				for _, st := range reports {
+					t.onProg(t, st)
+				}
 			}
 			t.notify()
 		}

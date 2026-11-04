@@ -123,7 +123,7 @@ func (d *Daemon) launchTerminal(w store.Workspace, argv []string, agentName stri
 	t, err := d.terminalHost().Start(host.StartOptions{
 		ID: id, WorkspaceID: w.ID, Dir: dir, Command: argv, Env: env,
 		Cols: cols, Rows: rows, Scrollback: d.cfg.Scrollback, CreatedAt: revive.CreatedAt,
-		OnTitle: d.onTitle, OnExit: d.onExit, Colors: d.window.current(),
+		OnTitle: d.onTitle, OnExit: d.onExit, OnProgramStatus: d.onProgramStatus, Colors: d.window.current(),
 	})
 	if err != nil {
 		return nil, err
@@ -155,11 +155,7 @@ func (d *Daemon) onTitle(id, title string) {
 	}
 	d.checkAgentGone(s)
 	// agent 启动时会设标题，在这里顺便看前台换没换成别的 agent
-	name, hooked, changed, sid := s.detectAgent()
-	if changed {
-		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", SessionID: sid, At: time.Now()})
-		s.markRead()
-	}
+	name := d.foreground(s)
 	if name == "" {
 		return
 	}
@@ -171,13 +167,27 @@ func (d *Daemon) onTitle(id, title string) {
 			s.mu.Unlock()
 		}
 	}
+	// 报过 7501 的 agent 不再看标题（Claude 这时也不往标题里写状态了）
+	if s.oscActive() {
+		return
+	}
 	status := agent.TitleStatus
-	if !hooked {
+	if !s.isHooked() {
 		status = agent.TitleOnlyStatus
 	}
 	if st, ok := status(name, title, s.Agent().Status); ok {
 		d.setAgent(s, host.AgentState{Status: st, Event: "title", At: time.Now()})
 	}
+}
+
+// foreground 看前台换没换成别的 agent，换了就重置 agent 状态，返回终端里的 agent。
+func (d *Daemon) foreground(s *session) string {
+	name, _, changed, sid := s.detectAgent()
+	if changed {
+		s.ResetAgent(host.AgentState{Status: agent.StatusIdle, Event: "process", SessionID: sid, At: time.Now()})
+		s.markRead()
+	}
+	return name
 }
 
 func (d *Daemon) onExit(id string, code int) {
@@ -652,6 +662,7 @@ func (d *Daemon) hookEvent(ctx context.Context, raw json.RawMessage) (any, error
 		return map[string]bool{"ignored": true}, nil
 	}
 	st.At = time.Now()
+	st.Status = s.preferOSC(st.Status)
 	res := hookEventResult{}
 	// 任务提醒由 hook 交给 agent：不用等它空闲往终端里打字，也不会和用户的键入撞上
 	if agent.DeliversOn(p.Agent, p.Event, p.Payload) {
@@ -692,6 +703,7 @@ func (d *Daemon) hookPermission(ctx context.Context, raw json.RawMessage) (any, 
 	}
 	if st, ok := agent.MapEvent(p.Agent, p.Event, p.Payload); ok {
 		st.At = time.Now()
+		st.Status = s.preferOSC(st.Status)
 		d.setAgent(s, st)
 	}
 	if d.mobile != nil && p.Agent == "claude" && p.Event == "PermissionRequest" {
@@ -745,7 +757,7 @@ func (d *Daemon) subagentStopped(s *session, id string) {
 		return
 	}
 	switch st.Event {
-	case "Stop", "StopFailure", "title":
+	case "Stop", "StopFailure", "title", eventOSCStopped:
 	default:
 		return
 	}

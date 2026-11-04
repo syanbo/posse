@@ -64,9 +64,15 @@ type session struct {
 	unread   bool      // 本轮完成了还没看（unread.go）
 	viewers  int       // 正看着它的手机页面数
 	runtime  string    // 拉起这个终端的常驻进程所在的副本目录，不在副本里运行时为空；它活着副本就不能删
-	hookSeq  uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
-	turnAt   time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
-	pushAt   time.Time // 上次给手机推送这个终端的时间（push.go）
+	// osc 是经 OSC 7501 报过状态的 agent（不是当前 agent 时不算），oscStatus 是它最近报的、折成 posse 的状态（progstatus.go）
+	osc       string
+	oscStatus string
+	oscAt     time.Time // 开始以 7501 为准的时间
+	oscTurn   bool      // 这之后 hook 报过工作中
+
+	hookSeq uint64    // 收到的 hook 事件计数：本轮结束时交了提醒，靠它看 agent 之后有没有接着做
+	turnAt  time.Time // 这一轮开始工作的时间，痕迹账本凭它判断文件是不是这一轮新建的
+	pushAt  time.Time // 上次给手机推送这个终端的时间（push.go）
 }
 
 func (s *session) userName() string {
@@ -88,7 +94,7 @@ func (s *session) markHooked(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if name != s.agent {
-		s.agentPg = 0
+		s.agentPg, s.osc = 0, ""
 	}
 	s.agent, s.hooked = name, true
 	if isAgent {
@@ -107,7 +113,7 @@ func (s *session) clearAgent(pg int) bool {
 	if s.agent == "" || pg != 0 && pg != s.agentPg {
 		return false
 	}
-	s.agent, s.hooked, s.agentPg = "", false, 0
+	s.agent, s.hooked, s.agentPg, s.osc = "", false, 0, ""
 	return true
 }
 
@@ -169,7 +175,7 @@ func (s *session) detectAgent() (name string, hooked, changed bool, sid string) 
 	case s.hooked && found == s.agent && (s.agentPg == 0 || s.agentPg == pg):
 		s.agentPg = pg
 	case found != s.agent || s.hooked:
-		s.agent, s.hooked, s.agentPg, changed = found, false, pg, true
+		s.agent, s.hooked, s.agentPg, s.osc, changed = found, false, pg, "", true
 		sid = agent.SessionFromArgs(found, args)
 	default:
 		s.agentPg = pg

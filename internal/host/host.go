@@ -18,6 +18,9 @@ type Record = term.State
 // Colors 是终端的默认配色，见 term.Colors
 type Colors = term.Colors
 
+// ProgramStatus 是程序经 OSC 7501 报告的状态，见 term.ProgramStatus
+type ProgramStatus = term.ProgramStatus
+
 // Info 是终端建好后就不变的信息。
 type Info struct {
 	ID          string
@@ -40,6 +43,8 @@ type StartOptions struct {
 	Colors      *Colors   // 起始配色，nil 时按系统外观选
 	OnTitle     func(id, title string)
 	OnExit      func(id string, code int)
+	// OnProgramStatus 收到程序经 OSC 7501 报告的状态
+	OnProgramStatus func(id string, st ProgramStatus)
 }
 
 // Host 托管所有终端。
@@ -149,6 +154,9 @@ func termOptions(o StartOptions) term.Options {
 	}
 	if o.OnExit != nil {
 		opts.OnExit = func(t *term.Terminal, code int) { o.OnExit(t.ID, code) }
+	}
+	if o.OnProgramStatus != nil {
+		opts.OnProgramStatus = func(t *term.Terminal, st term.ProgramStatus) { o.OnProgramStatus(t.ID, st) }
 	}
 	return opts
 }
