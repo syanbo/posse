@@ -127,7 +127,7 @@ class _DeskPageState extends State<DeskPage>
   var _passwordSaved = false;
   final _passwords = const DeskPasswordStore();
   // 勾了记住、刚发出去的密码：Mac 随后解开了才存，输错的不记。
-  // waitTyped 是还没收到 Mac 报整串打完（password_typed）：认密码事件的 Mac 丢掉密码时
+  // waitTyped 是还没收到 Mac 报整串打完（password_typed）：Mac 丢掉密码时
   // 也可能随后解锁（本机 Touch ID 解开的），这时不存
   ({String key, String password, DateTime at, bool waitTyped})? _pendingSave;
   // 切画面的结果（窗口没了回到整块屏），几秒后消失
@@ -1275,6 +1275,7 @@ class _DeskPageState extends State<DeskPage>
   /// 锁屏时输密码：弹层里输入，可以记住或忘掉。
   Future<void> _unlock() async {
     _pokeBar();
+    if (!_canSendPassword()) return;
     final key = _computerKey;
     final answer = await askMacPassword(
       context,
@@ -1299,7 +1300,7 @@ class _DeskPageState extends State<DeskPage>
         key: key,
         password: password,
         at: DateTime.now(),
-        waitTyped: _passwordEvent,
+        waitTyped: true,
       );
     } else if (_passwordSaved) {
       await _passwords.forget(key);
@@ -1329,6 +1330,7 @@ class _DeskPageState extends State<DeskPage>
   /// 用记住的密码解锁。
   Future<void> _unlockSaved() async {
     _pokeBar();
+    if (!_canSendPassword()) return;
     final key = _computerKey;
     if (key == null) return;
     final password = await _passwords.read(key);
@@ -1340,26 +1342,22 @@ class _DeskPageState extends State<DeskPage>
     _sendPassword(password);
   }
 
+  /// 旧电脑不认密码事件：不发。旧的发法（文字加回车）在解锁的那一刻会把密码打进最前面的 App。
+  bool _canSendPassword() {
+    if (_passwordEvent) return true;
+    _note(context.l10n.errorOldDesktop);
+    return false;
+  }
+
   /// 返回是否发了出去。密码不进事件记录（调试面板会显示）。
   bool _sendPassword(String password) {
-    // 输密码的工夫 Mac 在本地解开了：再发就打进了最前面的 App
+    if (!_passwordEvent) return false;
+    // 输密码的工夫 Mac 在本地解开了：发了 Mac 也会丢掉，这里先说
     if (!_macLocked) {
       _note(context.l10n.deskAlreadyUnlocked);
       return false;
     }
-    // 不看 _gen：重新订阅后输入链路还是这一条，Mac 报回锁屏就接着回车，免得字留在密码框里
-    final sent = deskSendPassword(
-      _link,
-      password,
-      passwordEvent: _passwordEvent,
-      stillLocked: () => mounted && _macLocked,
-    );
-    if (sent == null) return false;
-    unawaited(
-      sent.then((_) {
-        if (mounted) _noteInput();
-      }),
-    );
+    if (!_link.password(password)) return false;
     _noteInput();
     return true;
   }

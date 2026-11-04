@@ -6,7 +6,7 @@ import '../ui/theme.dart';
 import 'wire.dart';
 
 /// 勾了记住、发出去的密码在 Mac 报解锁时存不存：15 秒内解开的才存（输错的不记）；
-/// [waitTyped] 是认密码事件的 Mac 还没报整串打完，这时解锁的不是这串密码（比如本机 Touch ID），不存。
+/// [waitTyped] 是 Mac 还没报整串打完，这时解锁的不是这串密码（比如本机 Touch ID），不存。
 bool deskSaveOnUnlock({
   required DateTime sentAt,
   required DateTime now,

@@ -87,84 +87,8 @@ void main() {
     expect(link.needsRetry, isFalse);
   });
 
-  group('sending the unlock password', () {
-    List<DeskWireEvent> sent(List<Uint8List> packets) => [
-      for (final p in packets) ...decodeDeskInput(p)!,
-    ];
-
-    test(
-      'a Mac that knows password events gets one, no text or return',
-      () async {
-        final packets = <Uint8List>[];
-        final link = DeskInputLink(onPacket: packets.add);
-        var asked = false;
-        await deskSendPassword(
-          link,
-          'pw',
-          passwordEvent: true,
-          stillLocked: () => asked = true,
-          delay: Duration.zero,
-        );
-        final events = sent(packets);
-        expect(events.map((e) => e.kind), [deskEventPassword]);
-        expect(events.single.text, 'pw');
-        expect(asked, isFalse);
-      },
-    );
-
-    test('an older Mac gets text, then return while still locked', () async {
-      final packets = <Uint8List>[];
-      final link = DeskInputLink(onPacket: packets.add);
-      await deskSendPassword(
-        link,
-        'pw',
-        passwordEvent: false,
-        stillLocked: () => true,
-        delay: Duration.zero,
-      );
-      final events = sent(packets);
-      expect(events.first.kind, deskEventText);
-      expect(events.first.text, 'pw');
-      expect(events.map((e) => e.kind).toSet(), {
-        deskEventText,
-        deskEventKeyDown,
-        deskEventKeyUp,
-      });
-      expect(events.last.hid, deskKeyHid['Enter']);
-    });
-
-    test('a password too long for one packet is not sent at all', () {
-      final packets = <Uint8List>[];
-      final link = DeskInputLink(onPacket: packets.add);
-      final long = 'é' * (deskPasswordMaxBytes ~/ 2 + 1);
-      for (final passwordEvent in [true, false]) {
-        expect(
-          deskSendPassword(
-            link,
-            long,
-            passwordEvent: passwordEvent,
-            stillLocked: () => true,
-            delay: Duration.zero,
-          ),
-          isNull,
-        );
-      }
-      expect(packets, isEmpty);
-      expect(deskPasswordMaxChars * 4, lessThanOrEqualTo(deskPasswordMaxBytes));
-    });
-
-    test('an older Mac that unlocked meanwhile gets no return', () async {
-      final packets = <Uint8List>[];
-      final link = DeskInputLink(onPacket: packets.add);
-      await deskSendPassword(
-        link,
-        'pw',
-        passwordEvent: false,
-        stillLocked: () => false,
-        delay: Duration.zero,
-      );
-      expect(sent(packets).map((e) => e.kind), [deskEventText]);
-    });
+  test('the password sheet cannot overflow one password event', () {
+    expect(deskPasswordMaxChars * 4, lessThanOrEqualTo(deskPasswordMaxBytes));
   });
 
   test('bad input packets are rejected whole', () {

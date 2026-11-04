@@ -694,36 +694,3 @@ const deskTypingPad = '​​​​';
   }
   return (a.length - same, String.fromCharCodes(b.sublist(same)));
 }
-
-/// 旧 Mac（ready 不带 `password`）上文字和回车之间等多久再看一次锁屏：
-/// 解锁的 state 事件要从 Mac 传过来，等一会儿才赶得上。
-const deskLegacyEnterDelay = Duration(milliseconds: 600);
-
-/// 把锁屏密码交给 Mac，发不出去（空的、太长）时返回 null。
-/// [passwordEvent] 是 Mac 认密码事件，发一条就完，锁屏判断交给 Mac。
-/// 旧 Mac 照旧发文字再回车，回车前等 [delay] 再问 [stillLocked]：这时已经解开就不回车，
-/// 免得把打进最前面 App 的字提交出去。返回的 Future 在回车发出或放弃后完成。
-Future<void>? deskSendPassword(
-  DeskInputLink link,
-  String password, {
-  required bool passwordEvent,
-  required bool Function() stillLocked,
-  Duration delay = deskLegacyEnterDelay,
-}) {
-  if (passwordEvent) {
-    return link.password(password) ? Future<void>.value() : null;
-  }
-  final raw = _utf8(password);
-  if (raw == null || raw.isEmpty || raw.length > deskPasswordMaxBytes) {
-    return null;
-  }
-  link.text(password, 0);
-  return Future<void>.delayed(delay, () {
-    if (!stillLocked()) return;
-    final enter = deskKeyHid['Enter']!;
-    link.batch(() {
-      link.keyDown(enter, 0);
-      link.keyUp(enter, 0);
-    });
-  });
-}
