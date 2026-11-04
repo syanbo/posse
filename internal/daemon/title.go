@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"posse/internal/errtext"
 	"posse/internal/namer"
 	"posse/internal/rpc"
 )
@@ -48,7 +49,7 @@ func (d *Daemon) sessionTitle(ctx context.Context, raw json.RawMessage) (any, er
 	if name == "" {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "no agent session is running in this terminal")
 	}
-	title, err := namer.Normalize(p.Title, time.Now())
+	title, err := namer.Normalize(p.Title, time.Now(), errtext.SystemLang() == errtext.EN)
 	if err != nil {
 		return nil, rpc.Errorf(rpc.CodeBadRequest, "%v", err)
 	}

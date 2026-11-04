@@ -51,7 +51,7 @@ func TestSessionTitleClaude(t *testing.T) {
 	}
 	// 格式不对报错，不改状态
 	raw, _ := json.Marshal(map[string]any{"terminal": s.ID, "title": "随便写写"})
-	if _, err := d.sessionTitle(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "格式不对") {
+	if _, err := d.sessionTitle(context.Background(), raw); err == nil || !strings.Contains(err.Error(), "bad title format") {
 		t.Fatalf("bad format: %v", err)
 	}
 }

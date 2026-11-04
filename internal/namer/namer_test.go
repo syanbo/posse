@@ -14,30 +14,45 @@ import (
 var day = time.Date(2026, 9, 4, 10, 0, 0, 0, time.Local)
 
 func TestNormalize(t *testing.T) {
-	long := strings.Repeat("长", MaxSummary)
-	for _, c := range []struct{ in, want string }{
-		{"0101｜修复｜登录按钮样式", "0904｜修复｜登录按钮样式"}, // 日期换成今天
-		{"文档｜补充 README", "0904｜文档｜补充 README"},
-		{"fix | login button", "0904｜修复｜login button"},
-		{"0904|功能|会话命名", "0904｜开发｜会话命名"},
-		{"0904｜feat｜会话命名", "0904｜开发｜会话命名"},
-		{"0904｜开发｜开发会话命名", "0904｜开发｜会话命名"},
-		{"0904｜配置｜接上 Posse", "0904｜杂项｜接上 Posse"},
-		{"【调研】｜resume 数据源", "0904｜调研｜resume 数据源"},
-		{"0904｜调研｜" + long, "0904｜调研｜" + long},
-		{"0904｜修复｜修复登录按钮样式", "0904｜修复｜登录按钮样式"},
-		{"0904｜文档｜文档", "0904｜文档｜文档"},
-		{"  0904｜杂项｜整理  目录。 ", "0904｜杂项｜整理 目录"},
-		{"0904｜未知｜xx", ""},
-		{"登录按钮样式", ""},
-		{"0904｜修复", ""},
-		{"0904｜调研｜" + long + "长", ""},
-		{"0904｜重构｜拆分路由\n说明", ""},
-		{"   ", ""},
+	long := strings.Repeat("长", MaxSummary(false))
+	for _, c := range []struct {
+		in   string
+		en   bool
+		want string
+	}{
+		{"0101｜修复｜登录按钮样式", false, "0904｜修复｜登录按钮样式"}, // 日期换成今天
+		{"文档｜补充 README", false, "0904｜文档｜补充 README"},
+		{"fix | login button", false, "0904｜修复｜login button"},
+		{"0904|功能|会话命名", false, "0904｜开发｜会话命名"},
+		{"0904｜feat｜会话命名", false, "0904｜开发｜会话命名"},
+		{"0904｜配置｜接上 Posse", false, "0904｜杂项｜接上 Posse"},
+		{"【调研】｜resume 数据源", false, "0904｜调研｜resume 数据源"},
+		{"0904｜调研｜" + long, false, "0904｜调研｜" + long},
+		// 类型词后面跟着分隔符才算重复；连着写的是词的一部分
+		{"0904｜修复｜修复：登录按钮样式", false, "0904｜修复｜登录按钮样式"},
+		{"0904｜修复｜修复率统计", false, "0904｜修复｜修复率统计"},
+		{"0904｜开发｜开发者工具接入", false, "0904｜开发｜开发者工具接入"},
+		{"0904｜文档｜文档", false, "0904｜文档｜文档"},
+		{"  0904｜杂项｜整理  目录。 ", false, "0904｜杂项｜整理 目录"},
+		{"0904｜未知｜xx", false, ""},
+		{"登录按钮样式", false, ""},
+		{"0904｜修复", false, ""},
+		{"0904｜调研｜" + long + "长", false, ""},
+		{"0904｜重构｜拆分路由\n说明", false, ""},
+		{"   ", false, ""},
+		// 英文界面：类型写英文，中文类型词也认，摘要放宽到 40 个字符
+		{"0101｜fix｜login button style", true, "0904｜fix｜login button style"},
+		{"0904｜修复｜login button", true, "0904｜fix｜login button"},
+		{"0904|Feature|session names", true, "0904｜feat｜session names"},
+		{"0904｜配置｜wire up Posse", true, "0904｜chore｜wire up Posse"},
+		{"0904｜fix｜fix: login button", true, "0904｜fix｜login button"},
+		{"0904｜fix｜fixture loader", true, "0904｜fix｜fixture loader"},
+		{"0904｜docs｜" + strings.Repeat("a", MaxSummary(true)), true, "0904｜docs｜" + strings.Repeat("a", MaxSummary(true))},
+		{"0904｜docs｜" + strings.Repeat("a", MaxSummary(true)+1), true, ""},
 	} {
-		got, err := Normalize(c.in, day)
+		got, err := Normalize(c.in, day, c.en)
 		if got != c.want || (c.want == "") != errors.Is(err, ErrFormat) {
-			t.Errorf("Normalize(%q) = %q, %v; want %q", c.in, got, err, c.want)
+			t.Errorf("Normalize(%q, en=%v) = %q, %v; want %q", c.in, c.en, got, err, c.want)
 		}
 	}
 }

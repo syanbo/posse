@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"posse/internal/errtext"
+	"posse/internal/namer"
 )
 
 //go:embed session_guide.md
@@ -19,8 +22,18 @@ func cmdSessionGuide(e *env, args []string) error {
 	if _, err := parse(fs, args); err != nil {
 		return err
 	}
-	fmt.Fprint(e.out, sessionGuide)
+	fmt.Fprint(e.out, guideFor(errtext.SystemLang() == errtext.EN))
 	return nil
+}
+
+// guideFor 按 Posse 的界面语言填起名指南：常驻进程规整标题时用同一种语言（namer.Normalize）。
+func guideFor(en bool) string {
+	lang, note := "Chinese", " Proper nouns and file names may stay in English."
+	if en {
+		lang, note = "English", ""
+	}
+	return strings.NewReplacer("{{LANG}}", lang, "{{TYPES}}", strings.Join(namer.Types(en), " "), "{{ALIASES}}", namer.AliasNote(en),
+		"{{MAX}}", fmt.Sprint(namer.MaxSummary(en)), "{{NOTE}}", note).Replace(sessionGuide)
 }
 
 func cmdSessionTitle(e *env, args []string) error {
