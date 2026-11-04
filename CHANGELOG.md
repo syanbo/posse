@@ -3,6 +3,28 @@
 每个版本一节，标题是 `## <版本>`：发布时这一节写进更新清单，Posse 在设置「关于」里显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：界面是中文时只显示中文条目，其余语言只显示英文小节（没写英文小节的旧版本整节照旧显示）。
 
+## 0.1.24
+
+- 一个工作区目录下有多个 Git 仓库时都能识别（嵌套的、子模块、软链过去的也算），当前仓库跟着打开的文件走，也可以手动换。
+- 改动页按仓库分组，一次提交可以勾选多个仓库的文件。
+- 多仓库目录也能建 worktree 工作区：新建时勾选要带的仓库，每个仓库各建一个 worktree，改动、合并和删除都按仓库来；合并前有仓库会冲突时一个都不合。
+- 改动列表去掉状态字母，文件名按状态上色，悬停显示状态。
+- 文件树右键菜单可以删除文件，确认后移到废纸篓。
+- 用量时间线每项悬停马上出提示，用户发的网址整条显示。
+- 修正手机看桌面时 Mac 解锁后手机一直显示已锁屏。
+- 配合手机端 0.1.15 的按仓库分组改动页。
+
+### English
+
+- Workspaces with several Git repositories are recognized, including nested repositories, submodules and symlinked ones; the current repository follows the open file and can also be switched by hand.
+- The Changes page groups files by repository, and one commit can include files from several repositories.
+- Folders with several repositories can get worktree workspaces: pick the repositories when creating one, and each gets its own worktree; changes, merging and removal work per repository, and nothing is merged if any repository would conflict.
+- The change list drops status letters; file names are colored by status, and hovering shows it.
+- The file tree's context menu can delete a file, moving it to the Trash after confirmation.
+- Usage timeline items show their tooltip immediately on hover, and URLs sent by the user are shown in full.
+- Fixed the phone still showing the Mac as locked after it was unlocked while viewing the desktop.
+- Works with the repository-grouped Changes page in mobile 0.1.15.
+
 ## 0.1.23
 
 - agent 状态更准：支持程序状态协议（OSC 7501），Claude、Codex 按 Esc 中断后马上回到空闲，Grok 也有准确的工作中和等待，提问时带着问题。更新后已经开着的 Claude、Grok 重开一次生效。
