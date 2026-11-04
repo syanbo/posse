@@ -13,14 +13,11 @@ const dirMobileToDesktop = 0;
 const dirDesktopToMobile = 1;
 const kindText = 0;
 const kindBinary = 1;
-const headerLen = 42;
 
 const payloadKinds = ['text', 'binary'];
 
-/// 分帧（握手里的 framing），格式和理由见电脑端 internal/mobile/e2ee.go：
-/// 2 是 Orca 的，帧是 nonce 加密文（明文前有 42 字节帧头），JSON 帧再 base64 走文本帧；
-/// 3 是 Posse 的，都走二进制帧，帧是 u8 kind 加标签和密文，nonce 两端按计数器各自算，每帧开销 17 字节。
-const framingText = 2;
+/// 分帧（握手里的 framing），格式和理由见电脑端 internal/mobile/e2ee.go：只用 3，编号沿用 Orca 协议的分帧表。
+/// 都走二进制帧，帧是 u8 kind 加标签和密文，nonce 两端按计数器各自算，每帧开销 17 字节。
 const framingBinary = 3;
 
 class E2eeException implements Exception {
@@ -131,84 +128,50 @@ class E2eeSession {
   int recvN = 0;
   int sendN = 0;
 
-  /// 握手选定的分帧，见 [framingBinary]。
-  int framing = framingText;
-
-  /// JSON 消息是不是也走二进制帧（不 base64）。
-  bool get binaryMessages => framing == framingBinary;
-
   /// 手机侧收发密钥对调：主机的 send 是手机的 recv。
   E2eeSession asPhone() => E2eeSession(
     recvKey: sendKey,
     sendKey: recvKey,
     id: id,
     transcriptHash: transcriptHash,
-  )..framing = framing;
+  );
 
+  /// 加密一帧：kind 字节加 secretbox 密文。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 在手机上慢约 4.7 倍（mobile/benchmark）。
   Uint8List seal(
     Uint8List payload, {
     required int direction,
     required int kind,
   }) {
-    final n = sendN++;
-    final nonce = frameNonce(id, direction, kind, n);
-    if (binaryMessages) {
-      return quic.secretboxSeal(sendKey, nonce, payload, prefix: 1)..[0] = kind;
-    }
-    final plain = concat([frameHeader(id, direction, kind, n), payload]);
-    return secretboxSeal(sendKey, nonce, plain);
+    final nonce = frameNonce(id, direction, kind, sendN++);
+    return quic.secretboxSeal(sendKey, nonce, payload, prefix: 1)..[0] = kind;
   }
 
+  /// 解开一帧；帧必须按顺序到达，失败不推进计数器。
   Uint8List open(Uint8List frame, {required int direction, required int kind}) {
+    if (frame.isEmpty || frame[0] != kind) throw E2eeException('bad frame');
     final nonce = frameNonce(id, direction, kind, recvN);
-    if (binaryMessages) {
-      if (frame.isEmpty || frame[0] != kind) throw E2eeException('bad frame');
-      final plain = quic.secretboxOpen(
-        recvKey,
-        nonce,
-        Uint8List.sublistView(frame, 1),
-      );
-      if (plain == null) throw E2eeException('bad frame');
-      recvN++;
-      return plain;
-    }
-    if (frame.length < 24 + quic.secretboxOverhead + headerLen ||
-        !bytesEqual(frame.sublist(0, 24), nonce)) {
-      throw E2eeException('bad frame');
-    }
-    final plain = secretboxOpen(recvKey, frame);
-    final header = frameHeader(id, direction, kind, recvN);
-    if (!bytesEqual(plain.sublist(0, headerLen), header)) {
-      throw E2eeException('bad frame');
-    }
+    final plain = quic.secretboxOpen(
+      recvKey,
+      nonce,
+      Uint8List.sublistView(frame, 1),
+    );
+    if (plain == null) throw E2eeException('bad frame');
     recvN++;
-    return Uint8List.sublistView(plain, headerLen);
+    return plain;
   }
 
-  Uint8List openText(Uint8List b64Bytes, {required int direction}) => open(
-    base64.decode(latin1.decode(b64Bytes)),
-    direction: direction,
-    kind: kindText,
-  );
-
-  /// 解开收到的一帧，返回它的 kind（[kindText] 是 JSON）和明文。
+  /// 解开收到的一帧，返回它的 kind（[kindText] 是 JSON）和明文；只收二进制帧。
   (int, Uint8List) openMessage(
     Uint8List bytes, {
     required bool binary,
     required int direction,
   }) {
-    if (binaryMessages) {
-      if (!binary || bytes.isEmpty) throw E2eeException('bad frame');
-      final kind = bytes[0];
-      if (kind != kindText && kind != kindBinary) {
-        throw E2eeException('bad frame');
-      }
-      return (kind, open(bytes, direction: direction, kind: kind));
+    if (!binary || bytes.isEmpty) throw E2eeException('bad frame');
+    final kind = bytes[0];
+    if (kind != kindText && kind != kindBinary) {
+      throw E2eeException('bad frame');
     }
-    if (binary) {
-      return (kindBinary, open(bytes, direction: direction, kind: kindBinary));
-    }
-    return (kindText, openText(bytes, direction: direction));
+    return (kind, open(bytes, direction: direction, kind: kind));
   }
 }
 
@@ -422,19 +385,6 @@ Uint8List hkdfSha256(
   return Uint8List.sublistView(out.takeBytes(), 0, length);
 }
 
-/// Go 的 secretbox.Seal 格式：nonce 拼在密文前面。加解密在 posse_quic 的 Go 里做：纯 Dart 的 TweetNaCl 在手机上慢约 4.7 倍（mobile/benchmark）。
-Uint8List secretboxSeal(Uint8List key, Uint8List nonce, Uint8List plain) =>
-    quic.secretboxSeal(key, nonce, plain, prefix: 24)..setRange(0, 24, nonce);
-
-/// 解开整帧（nonce 加密文），nonce 用帧里的。
-Uint8List secretboxOpen(Uint8List key, Uint8List frame) =>
-    quic.secretboxOpen(
-      key,
-      Uint8List.sublistView(frame, 0, 24),
-      Uint8List.sublistView(frame, 24),
-    ) ??
-    (throw E2eeException('bad frame'));
-
 Uint8List frameNonce(Uint8List id, int direction, int kind, int counter) {
   final out = Uint8List(24);
   out.setRange(0, 12, id);
@@ -442,15 +392,6 @@ Uint8List frameNonce(Uint8List id, int direction, int kind, int counter) {
   out[13] = direction;
   out[14] = kind;
   ByteData.sublistView(out).setUint64(16, counter);
-  return out;
-}
-
-Uint8List frameHeader(Uint8List id, int direction, int kind, int counter) {
-  final out = Uint8List(headerLen);
-  out.setRange(0, 32, id);
-  out[32] = direction;
-  out[33] = kind;
-  ByteData.sublistView(out).setUint64(34, counter);
   return out;
 }
 

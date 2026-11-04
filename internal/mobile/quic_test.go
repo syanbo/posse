@@ -104,7 +104,7 @@ func TestQUICCloseDeliversLastMessage(t *testing.T) {
 	var cn [32]byte
 	hb, _ := json.Marshal(map[string]any{
 		"type": "e2ee_hello", "v": 2, "clientPublicKeyB64": b64(*cpub), "clientNonceB64": b64(cn),
-		"capabilities": map[string]any{"framing": []int{2}, "payloadKinds": []string{"text", "binary"}},
+		"capabilities": map[string]any{"framing": []int{3}, "payloadKinds": []string{"text", "binary"}},
 		"context":      map[string]any{"protocol": "orca-mobile-e2ee", "initiator": "mobile", "responder": "desktop", "transport": "direct"},
 	})
 	w.Write(ctx, websocket.MessageText, hb)

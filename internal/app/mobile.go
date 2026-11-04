@@ -370,7 +370,7 @@ func (a *app) mobilePairCard(c *ui.Context) {
 	})
 }
 
-// mobileDevices 列出配对过的手机。Posse Mobile 报过身份的一台一行；没报过的（旧版 App、Orca App，
+// mobileDevices 列出配对过的手机。Posse Mobile 报过身份的一台一行；没报过的（旧版 App，
 // 或重新扫码后手机已经不用的码）收成一行"其他配对"，展开才逐个列出。
 func (a *app) mobileDevices(c *ui.Context) {
 	t := c.Theme()

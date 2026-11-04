@@ -4,17 +4,17 @@
 
 ## 连接与配对
 
-- 兼容 Orca 的手机 App（App Store / GitHub 上的 APK）：posse 扮演 Orca 桌面端，协议照 stablyai/orca 的 `mobile/` 和 `src/shared/` 实现。不经 Orca 的云端中转（Orca 的 local-only），也不给 Orca App 做推送（它的推送只能经 Orca 的网关；Posse 手机客户端见下面「推送通知」）。手机 App 在前台时每 3 秒轮询 `worktree.ps`，靠它看到"待处理"。
+- 只服务 Posse 手机客户端。握手、方法名和帧格式沿用 Orca 手机协议（stablyai/orca 的 `mobile/` 和 `src/shared/`），Posse 自己的扩展以 `posse.*` 能力声明；Orca 自己的手机 App 已改成从电脑下载网页包运行的壳，连 Posse 会提示"更新电脑上的 Orca"，不再兼容。
 - 常驻进程在 `0.0.0.0:6788` 开明文 WebSocket（避开 Orca 的 6768，两边可同时开），安全靠 E2EE v2（X25519 + HKDF + secretbox）和设备 token。没有配对过的手机时不监听，生成配对码时才开始。
-- 分帧在握手时定（hello 的 `framing`，格式见 `internal/mobile/e2ee.go`）：Orca App 用 2，帧是 nonce 加密文、明文前带 42 字节帧头，每帧固定开销 82 字节，JSON 帧再整帧 base64 走文本帧；Posse 手机客户端用 3，都走二进制帧，帧是 1 字节类型加 secretbox 的标签和密文，nonce 两端按计数器各自算、不上线，每帧固定开销 17 字节，JSON 也不再 base64（体积少四分之一，手机上省掉 base64 编解码）。Posse 手机客户端只报 3，要求电脑端同步升级：旧版电脑读完 hello 以 4001 关连接，手机提示在电脑上更新 Posse。手机端的 secretbox 在 `posse_quic` 的 Go 里做（纯 Dart 的 TweetNaCl 在 iPhone 12 Pro 上慢约 4.7 倍；基准见 `mobile/benchmark`）。
+- 分帧在握手时定（hello 的 `framing`，格式见 `internal/mobile/e2ee.go`），只认 3：都走二进制帧，帧是 1 字节类型加 secretbox 的标签和密文，nonce 两端按计数器各自算、不上线，每帧固定开销 17 字节，JSON 不 base64。编号沿用 Orca 协议的分帧表，2 是 Orca App 的文本帧分帧（JSON 加密后整帧 base64，每帧开销 82 字节），电脑不再接受。手机只报 3，要求电脑端同步升级：旧版电脑读完 hello 以 4001 关连接，手机提示在电脑上更新 Posse。手机端的 secretbox 在 `posse_quic` 的 Go 里做（纯 Dart 的 TweetNaCl 在 iPhone 12 Pro 上慢约 4.7 倍；基准见 `mobile/benchmark`）。
 - 配对码在侧栏顶上的「手机」磁贴、「新建」菜单（侧栏底栏最左边的 +）的「连接手机…」或 `posse mobile pair`：
   - 地址默认自动选（Tailscale 优先，其次局域网）；也可以自定义（配对对话框，或 `posse mobile pair --address`），规则照 Orca 的 `pairing-endpoint.ts`：主机或 主机:端口 拼成 `ws://`，完整 URL 的 http/https 换成 ws/wss、路径保留，用于隧道或反向代理（服务端不看请求路径）。
   - 手机页的地址下拉列出自动、检测到的每个 Tailscale 和局域网地址（取码时刷新）和用过的自定义地址；选的地址和用过的自定义地址存在 ui.json 的 `mobileAddress`、`mobileAddresses`。
-  - 配对码 JSON 另有 `endpoints`：Posse 手机客户端同时连其中所有地址，先握手成功的留下。自动时是本机所有 Tailscale 和局域网地址，选了具体地址时只有它。Orca App 只读 `endpoint`。
+  - 配对码 JSON 另有 `endpoints`：Posse 手机客户端同时连其中所有地址，先握手成功的留下。自动时是本机所有 Tailscale 和局域网地址，选了具体地址时只有它；`endpoint` 是其中的主地址。
 - 配对页和首页的「添加电脑」可以扫码（iOS 用 AVFoundation，安卓用 CameraX 加 ZXing，不依赖 Google Play 服务），只认二维码，安卓深色底的反色码也认：扫到不是配对码的码相机不关，认到配对码才关相机去连；拒绝相机权限或开不了相机时回到配对页粘贴。
 - 连上后底部提示连的是哪台电脑、实际走的哪个地址，电脑列表里当前那台也写实际地址。手机上的电脑按公钥加主地址认：同一台电脑扫远程和局域网的码存成两项，可以来回切，没改过名的名字后面带地址区分。
 - 权限按用到的时候要：国行 iPhone 打开 App 时弹「无线数据」，点扫码要相机，第一次连局域网地址时弹「本地网络」。第一次配对（手机上还没存过电脑）连不上时每秒重试，App 在前台累计 30 秒才放弃（弹窗开着时不计时，点完允许就连上），放弃时提示检查电脑和这两项权限。电脑明确拒绝（密钥不对、拒绝能力声明）不重试；配对过的电脑只连一次。
-- 配对的手机和主机密钥一起存在 `$POSSE_HOME/mobile.json`（0600），手机按公钥认主机（换密钥见 AGENTS.md）。每扫一次码多一个设备 token；Posse 手机客户端每次握手在 `runtime.clientCapabilities.update` 里带 `phone`（安装 ID、型号、它存着的这台电脑的全部 token）：同一台手机的 token 合成一项、名字换成型号，它不再存着的 token（重新扫码换掉、手机上删掉的）作废，没认领的旧 token 在它手里就归过来。Orca App 和旧版客户端不报，手机页收在"其他配对"里，可以全部移除。
+- 配对的手机和主机密钥一起存在 `$POSSE_HOME/mobile.json`（0600），手机按公钥认主机（换密钥见 AGENTS.md）。每扫一次码多一个设备 token；Posse 手机客户端每次握手在 `runtime.clientCapabilities.update` 里带 `phone`（安装 ID、型号、它存着的这台电脑的全部 token）：同一台手机的 token 合成一项、名字换成型号，它不再存着的 token（重新扫码换掉、手机上删掉的）作废，没认领的旧 token 在它手里就归过来。旧版客户端不报，手机页收在"其他配对"里，可以全部移除。
 - 桌面侧栏「手机」磁贴右上角：有手机连着时一个绿点（不止一台时前面写台数），悬停写是哪几台。来自 `daemon.status` 的 `mobileOnline`（同一台手机配对过几次只算一台），不用打开手机页。
 - 主动断开：首页电脑胶囊打开的电脑列表里有"断开连接"（连着或正在连时才有）。断开后配对留着，这次运行里不自动重连；胶囊写"电脑名 · 已断开"、灰点不转圈，首页列出配对过的电脑和台数，点一台就连，底下可以扫码添加。
 - 连不上：一开始就没连上（冷启动、切电脑、点重试都失败），手机不在后台重连，页面中间是报错和「重试」，胶囊写"电脑名 · 连不上"、红点不转圈。只有连上过之后断线才在后台一直重连，胶囊才是琥珀色的「连接断开，正在重连…」。
@@ -22,7 +22,7 @@
 
 ## QUIC 与中转
 
-只有 Posse 手机客户端；Orca App 不认 `posse.quic`，照旧走 WebSocket。
+旧版客户端不调 `posse.quic`，照旧走 WebSocket。
 
 - 手机服务在 WebSocket 同一个端口号上开 UDP 的 QUIC。一条连接只开一条双向流，上面跑和 WebSocket 一样的文本、二进制消息（u8 类型、u32 长度），握手、E2EE、RPC 全部照旧。TLS 只当传输加密，证书每次启动自签、手机不验，身份靠 E2EE。关闭时先发关闭帧（u16 关闭码加原因）再关流，排在正在写的消息后面。电脑读手机的消息上限 4 MB，和 WebSocket 一致。
 - 手机每次连上都调 `posse.quic`，拿到端口、本机的 Tailscale 和局域网地址、中转地址和这台手机的令牌，换成 `hquic://主机:端口`（中转的带 `?relay=令牌`）存进这台电脑的记录，冷启动直接拨。这次走的是 WebSocket 时并发拨号，先握手成功的换掉 WebSocket，都不通就留在 WebSocket。之后的重连 QUIC 先连，WebSocket 晚 2 秒起跑兜底。经隧道的 WebSocket 只剩第一次配对和 UDP 不通的网络。
@@ -37,14 +37,14 @@
 
 - `runtime.clientCapabilities.update` 声明的能力记在这条连接上，没声明能力的连接不收 Posse 扩展推送，也调不到要能力的方法。它还带 `locale`（手机界面的语言，BCP 47），电脑给这条连接的报错和说明按它翻译，没带的按中文。
 - `runtime.ping`：不用声明能力，电脑立刻回空结果。
-- 对话照 Orca 的 `nativeChat.readSession`、`nativeChat.subscribe`、`nativeChat.unsubscribe`，Orca App 和 Posse 手机客户端共用：会话文件解码在 `internal/history/chat.go`（文本块截到 64000 字，工具输出截到 4000 字），订阅按 `subscriptionId` 登记，每 500ms stat 一次会话文件（文件还没出现时从 500ms 翻倍到 5s），追加推 `appended`，变短或换了 inode 推 `replacement`。`terminal.send` 的回复带 `writeSettlement`。
+- 对话照 Orca 协议的 `nativeChat.readSession`、`nativeChat.subscribe`、`nativeChat.unsubscribe`：会话文件解码在 `internal/history/chat.go`（文本块截到 64000 字，工具输出截到 4000 字），订阅按 `subscriptionId` 登记，每 500ms stat 一次会话文件（文件还没出现时从 500ms 翻倍到 5s），追加推 `appended`，变短或换了 inode 推 `replacement`。`terminal.send` 的回复带 `writeSettlement`。
 - `posse.permission.v1`：正在订阅某个终端对话时，Claude 的 PermissionRequest 走 `hook.permission.hold`：往这条对话流推 `{type:permission, requestId, terminal, tool, input}`，等 `agent.permission.decide`；桌面有人键入或 30 秒到了就返回空 behavior，`posse hook` 不输出、TUI 照常弹框。没有带这项能力的手机订阅着时立刻放行。为了挂得住，Claude 设置里 PermissionRequest 的 hook 超时是 40 秒（其余事件 5 秒），`posse hook` 等这次 RPC 35 秒（其余 2 秒），常驻进程交接打断时到新进程上再挂。
 - `posse.git.v1`：只读的 `git.status`（文件带 `submodule`）、`git.diff`（拒绝绝对路径和 `..`；图片的 diff 另带 `images`：HEAD 里的旧图和工作区的新图，base64）。checkout、commit、push 不开放。这两项在常驻进程里，不走窗口进程的 Git 界面。
 - `posse.history.v1`：`history.list`、`history.search`、`history.resume`，转给常驻进程同名的接口；resume 回终端 ID 和手机上的工作区 ID，报错是中文。看会话内容走 `nativeChat.readSession`（按会话文件读，claude、codex、grok、cursor 都认；cursor 的记录没有工具结果，时间只有用户消息开头的 `<timestamp>`）。手机上不能移到废纸篓。
 - `posse.context.v1`：`session.context`（参数同 `nativeChat.readSession`），读会话最后一次请求的上下文，claude、codex 才有。
 - `posse.status.v1`：对话流里另收 `type:status`。终端一有输出，就从屏幕最后一行有字的往上 16 行里认出 agent 的状态行（Claude 的 `✻ Puzzling… (1m 54s · ↓ 9.5k tokens)`、Codex 的 `• Working (12s • esc to interrupt)`），去掉转圈符号、按键提示和"thought for"，变了才推，最多每 500ms 一次；状态行消失时推空串。
 - `posse.draft.v1`：对话流里另收 `type:draft`，是 agent 正在写、会话文件里还没有的那段回复（只做 claude、codex），空串表示撤掉。和状态行共用同一次读屏和 500ms 节流，变了才推；接着上次推的往后长时只推新加的部分（`append`），换了一块、缩回去、撤掉时推全文（`text`）。agent 在干活（hooks 报 working，或屏幕上有状态行：两家流式写正文时都不画状态行）时，从输入框往上找最后一块：Claude 是第一列 `⏺` 开头、下面没有 `⎿` 的块（只有一行 `⏺ Reading 1 file…` 这类以省略号结尾的是刚开始的工具），Codex 是第一列 `•` 开头、不是 `Ran`、`Explored`、`Working` 这类条目的块，截到 `└ Tip`、`Worked for` 之前。两家都整屏重画、回滚区里没有回复（Claude 每次重画连回滚区一起清掉，Codex 在备用屏幕上），回复一长开头就滚出屏幕：每帧只取看得见的部分，在上一帧拼好的行里找这一帧的第一行、后面的行也对得上就从那里接上（正在写的末尾 6 行可以不同，空行不比，Codex 写下一段时才在两段间补空行），接不上时中间写一行 `⋯`。去掉续行缩进，按终端宽度判断折行接回上一行（下一行第一个词接在上一行后面会超宽才算折行，列表项不接），两边都是中日韩文字或全角标点时直接拼、否则补空格；空行保留成段落分隔，框线表格和代码行原样。草稿只当纯文本（TUI 已经吃掉了 `**`、反引号和代码围栏）。会话文件里最近一条助手正文规范成只剩字母数字后包含草稿时不推；同一块缩回去（Codex 写完一段重排时偶尔有一帧画错）最多按住 4 帧。agent 停下、最后一块不是正文、终端不在了时推空串。规则靠录下来的真实屏幕回放测试（`internal/mobile/testdata/draft`，录法见 `docs/plans/chat-draft.md`），Claude、Codex 升级后重录。
-- `posse.bulk.v1`：大块数据走二进制帧。`files.readRange`、`files.readPreview` 的图片、`session.mediaThumb`、`session.mediaRead`、`git.diff` 的图片，这些结果里的字节字段拆成 64 KB 的二进制帧先发，JSON 回复里只写 `blobs: {字段路径: 编号}`，手机按编号拼回。帧头 8 字节：`0x62`、版本 1、操作、0、u32 编号（小端），和 Orca 终端流的 `0x74` 区分。上传时 `clipboard.startImageUpload` 带 `expectedBytes`，电脑回一个编号，手机把原始字节按 64 KB 的二进制帧连续发完再 `commitImageUpload`；电脑边收边写临时文件，最大 1 GB，视频、文件也走它。带 `name`（手机上的文件名）的放进新建的临时目录 `posse-mobile-*/原名`，没带的按开头的字节认扩展名（jpg、gif、webp、heic、mov、mp4，认不出当 png）。
+- `posse.bulk.v1`：大块数据走二进制帧。`files.readRange`、`files.readPreview` 的图片、`session.mediaThumb`、`session.mediaRead`、`git.diff` 的图片，这些结果里的字节字段拆成 64 KB 的二进制帧先发，JSON 回复里只写 `blobs: {字段路径: 编号}`，手机按编号拼回。帧头 8 字节：`0x62`、版本 1、操作、0、u32 编号（小端），和终端流的 `0x74` 区分。上传时 `clipboard.startImageUpload` 带 `expectedBytes`，电脑回一个编号，手机把原始字节按 64 KB 的二进制帧连续发完再 `commitImageUpload`；电脑边收边写临时文件，最大 1 GB，视频、文件也走它。带 `name`（手机上的文件名）的放进新建的临时目录 `posse-mobile-*/原名`，没带的按开头的字节认扩展名（jpg、gif、webp、heic、mov、mp4，认不出当 png）。
 - `posse.media.v1`、`posse.tools.v1`、`posse.desk.v1`：见下面「图片与视频」「技能与工具」「看 Mac 桌面」。
 - 映射：项目 → repo，工作区 → worktree（ID 是 `<项目 ID>::<工作区 ID>`），运行中的终端 → 标签（手机只认 UUID 形状的 leaf，由终端 ID 派生；标签名依次取桌面改的名字、会话标题、终端标题）。agent 状态 waiting → `waiting`（行状态 `permission`），working/starting → `working`，idle → `done`。
 - 电脑按顺序处理同一条连接的请求；要读盘、调 git、等索引或联网的（`files.*`、`git.*`、`history.*`、`session.context`、看图看视频、`usage.refresh`、打洞）各自并发，不挡按键和 ping。一条消息写了 3 秒还没写完、手机也有 10 秒没发任何东西来，就当连接已死马上断开，手机随即重连。
@@ -58,7 +58,7 @@
 - 安卓在首页按返回键只退到后台、不关 Activity，和 iOS 一样连接留着（安卓 16 的预测性返回不经过 App，Activity 照样被关掉）。Activity 关掉时 Flutter 引擎跟着销毁、进程还在，Go 里的 QUIC 连接再调回调就崩溃（小米会冻住后台进程，回到前台解冻时必现），所以 `MainActivity.onDestroy` 先经 JNI 调 `hq_reset`：不再回调、断开所有连接、等正在进行的回调调完；新引擎第一次连接前再调一次兜底。
 - 从后台回到前台（拉下控制中心不算）时马上 ping 一次，2 秒内没有任何回复就断开重连；正在两次重试之间等的马上连。连着的话马上拉一次首页列表，不等 3 秒一轮的轮询。
 - 常驻进程退出（重启、交接）时逐条关掉 QUIC 连接、通知手机：新进程紧接着听同一个端口，手机收不到端口不可达，不通知要等上面的 15–20 秒。手机每换上一条新连接（重连、换到 QUIC 或打洞直连）都马上拉一次首页列表。
-- 首页会话行和会话顶栏的状态照桌面侧栏：常驻进程在会话里另给 `posseStatus`（启动中、工作中、待处理、本轮完成、等待任务、完成没看、未恢复），`state` 照旧按 Orca 的取值给，Orca 的 App 不受影响。等待任务是陶土色波形，完成没看是陶土色铃铛（每 2.4 秒摇一轮），减少动态效果时都不动；看过的本轮完成和桌面一样不画、只留位置（顶栏不留，文字仍写「本轮完成」），也不进汇总；收起的项目行汇总时次序同桌面（待处理、没看、工作中和等待任务、启动中）。完成没看和桌面共用一份（见 `ui.md` 完成未读）：手机开着这个会话的终端页或会话页就算看过，看着时完成的也不提醒。上一个常驻进程留下、还没恢复的终端也列出来，写「未恢复，点开时拉起」，点开订阅终端时常驻进程才拉起它。
+- 首页会话行和会话顶栏的状态照桌面侧栏：常驻进程在会话里另给 `posseStatus`（启动中、工作中、待处理、本轮完成、等待任务、完成没看、未恢复），`state` 照旧按 Orca 协议的取值给。等待任务是陶土色波形，完成没看是陶土色铃铛（每 2.4 秒摇一轮），减少动态效果时都不动；看过的本轮完成和桌面一样不画、只留位置（顶栏不留，文字仍写「本轮完成」），也不进汇总；收起的项目行汇总时次序同桌面（待处理、没看、工作中和等待任务、启动中）。完成没看和桌面共用一份（见 `ui.md` 完成未读）：手机开着这个会话的终端页或会话页就算看过，看着时完成的也不提醒。上一个常驻进程留下、还没恢复的终端也列出来，写「未恢复，点开时拉起」，点开订阅终端时常驻进程才拉起它。
 - 断线时首页按没有状态显示：会话行写「等连上电脑」，等你处理的横幅、收起的项目行上的状态都不显示。
 
 ## 终端页
@@ -67,7 +67,7 @@
 - 改回电脑尺寸：终端被手机占着尺寸时 `terminalInfo.phoneSized` 为真，窗口在终端上方显示一行提示和"改回电脑尺寸"（`terminal.reclaimSize`：放掉所有手机的占用、按界面最后要的尺寸重排；手机的订阅还在，重新打开这个终端才会再占）。要它是因为手机切到后台时连接常常还挂着，电脑上会一直是窄的。
 - 电脑布局：终端的"更多"里有"电脑布局"，订阅时不带手机尺寸，终端保持电脑的列数和行数，手机把格子缩进屏幕宽度（双指放大吸到 0.5–2 的固定档后再滑），不改 PTY 尺寸。上下拖动照常平移。
 - 键盘：弹出、收起不改终端尺寸。快捷键栏贴着键盘上移，终端整体往上挪到最后一行内容（有字或铺了底色的最后一行和光标所在行取靠下的）露在快捷键栏上方，最多挪键盘盖住的高度；shell 刚开、内容在上半屏时不挪。提示和上传进度浮在看得见的那块上。点终端（含电脑布局里格子外的空白）只在键盘收着时弹出，弹着时不收；收起键盘用快捷键栏最前面的键盘键。点链接不动键盘。
-- 画面：弹出、收起键盘或从后台回来后，Claude Code 改尺寸重画时不变的行（分隔线、状态栏）照常画出；程序的同步更新（mode 2026）结束才出帧，最多等一秒，Claude Code 重画时不会画出半截、整屏上下跳；推入动画结束、回到前台、agent 从工作中停下来时重取一次画面；第一份快照到之前终端区域中间显示加载动画，这期间推入动画结束、尺寸没变的布局都不重新订阅，免得丢掉正在路上的快照、空白多等一个来回。终端输出走 Orca 的 16 字节头二进制帧，按 UTF-8 字符边界切块。等宽字体回退链带 App 自带的 Symbols Nerd Font Mono（MIT），提示符里 Nerd Font 的图标能显示。
+- 画面：弹出、收起键盘或从后台回来后，Claude Code 改尺寸重画时不变的行（分隔线、状态栏）照常画出；程序的同步更新（mode 2026）结束才出帧，最多等一秒，Claude Code 重画时不会画出半截、整屏上下跳；推入动画结束、回到前台、agent 从工作中停下来时重取一次画面；第一份快照到之前终端区域中间显示加载动画，这期间推入动画结束、尺寸没变的布局都不重新订阅，免得丢掉正在路上的快照、空白多等一个来回。终端输出走 Orca 协议的 16 字节头二进制帧，按 UTF-8 字符边界切块。等宽字体回退链带 App 自带的 Symbols Nerd Font Mono（MIT），提示符里 Nerd Font 的图标能显示。
 - 选区：长按选中词（不震动），两端有把手，松手后拖把手改范围，点终端空白取消；宽字符按整字选。选区上沿有「复制」和「全选」（放不下就改到这一行下面），全选扩到当前段落（上下遇到空行停下）。复制不带末尾的换行。
 - 粘贴：快捷键栏的粘贴、系统菜单的粘贴、听写这类一次插进好几个字又带换行的输入，都按一次粘贴送进去（开着括号粘贴就包起来），去掉末尾的换行，粘贴完停在输入框里、不直接发出去。
 - 链接：轻点网址交给系统浏览器，指向工作区里文件的路径（含 `file://`）在文件页里打开，工作区外的提示打不开。
@@ -118,7 +118,7 @@
 
 ## 推送通知
 
-只有 Posse 手机客户端的 iOS 版（方案见 `docs/plans/push.md`）。Orca App 和安卓没有。
+只有 iOS 版（方案见 `docs/plans/push.md`），安卓没有。
 
 - 什么时候推：agent 进入等待你处理，或从工作中停下、记成完成没看（`internal/daemon/push.go`）。等 4 秒还是这个状态、仍没看才推；同一个终端 30 秒内只推一次，通知按终端折叠，后一条换掉前一条。这台手机开着 App 连着电脑（报过在前台、12 秒内收到过它的包）、Mac 60 秒内有键鼠输入（HID 空闲时间）时不推。派了任务在等结果的不推。
 - 注册（`posse.push.v1`）：手机每换上一条新连接调 `posse.push.register`，带 APNs token、推送密钥（App 第一次用时生成 32 字节，存在 App Group `group.com.neolabsapp.posse.mobile`）、是否沙盒、两类开关；两项都关或没给通知权限时 token 为空，电脑删掉注册。注册按手机安装 ID 存在 mobile.json 的 `push`，一台手机一条，这台手机的配对都移除时一起删。App 切到后台、回到前台时调 `posse.push.presence`。
@@ -177,5 +177,5 @@ iOS 和安卓。收包、解密、补发、拆 RTP、硬解都在原生插件里
 - 首页的项目和工作区照桌面侧栏命名：只有项目目录的项目行是项目名；有多个工作区时项目目录写「主工作区」，posse 建的 worktree 和同目录的工作区写工作区名，加进来的 worktree 写当前分支（游离时写工作区名），名字由常驻进程给（`displayName`），图标用桌面侧栏的描边图标（`lib/ui/line_icons.dart`）：项目默认文件夹，主工作区房子，worktree（含加进来的，`isWorktree`）分支，同目录的工作区文件夹。逐级等距缩进：工作区和只有一个工作区时的会话对齐到项目名下面，工作区下的会话对齐到工作区名下面；会话的 agent 方块和工作区图标一样大。工作区行的分支和名字一样时不再写一遍。项目行和（有多个工作区时的）工作区行都是点这一行展开收起下面的内容、点右边的圆按钮进工作区页，下面没有会话时点这一行也进；收起的行上显示里面最需要注意的会话状态；收起的项目和工作区按电脑分别记在手机上（`collapsed`、`collapsedWorkspaces`）。用量条下面是「项目 | 运行中」的切换（存在手机设置里，`homeByStatus`）：「运行中」和桌面侧栏的同名看法一样（见 `ui.md` 侧栏一条），所有项目的 agent 会话（含空闲）平铺在一张卡片里，状态前面写「项目 · 工作区」；切进来时按状态排一次，之后新会话插到同状态那一段末尾、已有的不挪；断线时（含重连后还没拉到新会话列表时）先照项目的先后排，拉到新列表后再按状态排一次。顺序只在内存里，换电脑、重开 App 时重排。设置「首页」里「项目显示分支和路径」「工作区显示分支」和桌面设置的同名开关一样，关了只留名字，存在手机设置里（`projectMetaHidden`、`workspaceMetaHidden`）。
 - 新建会话面板只列电脑上能用的 agent（装了、又没在设置里关掉的，`preflight.detectAgents`，顺序照电脑给的），最后是普通终端；列表每条新连接拉一次、打开面板时再拉一次，电脑上刚改的开关打开面板就生效。默认选第一个 agent，用户没点过时跟着列表变，选中的被关掉了也换成第一个。
 - App 图标和桌面同一张原图（`design/icon-art.png`，描边六边形加 `>_`）。
-- 终端区域的颜色（前景、底色、16 色）照电脑窗口里这个终端在用的那套，不跟手机的深浅色：程序按电脑的颜色配色（Codex 只在启动时查一次底色），手机换成另一套时浅底上的深色块、diff 的底色都会变味。外围（顶栏、快捷键栏）照旧跟手机主题，终端外露出的空白接着终端底色。窗口每秒轮询 `daemon.status` 时带着它终端在用的配色，常驻进程变了就换到所有终端上（内核照它应答程序的颜色查询，窗口关掉后也是，交接时带过去），窗口开着时新终端也按它起。手机声明了 `posse.termcolors.v1` 才收配色（Orca App 不收）：订阅时 `subscribed` 带 `colors`，变了推 `{"type":"colors"}`。连着不给配色的旧版常驻进程时，终端底色跟手机，字色和底色不到 3 倍对比度的往黑或白里调到刚够，保留色相。
+- 终端区域的颜色（前景、底色、16 色）照电脑窗口里这个终端在用的那套，不跟手机的深浅色：程序按电脑的颜色配色（Codex 只在启动时查一次底色），手机换成另一套时浅底上的深色块、diff 的底色都会变味。外围（顶栏、快捷键栏）照旧跟手机主题，终端外露出的空白接着终端底色。窗口每秒轮询 `daemon.status` 时带着它终端在用的配色，常驻进程变了就换到所有终端上（内核照它应答程序的颜色查询，窗口关掉后也是，交接时带过去），窗口开着时新终端也按它起。手机声明了 `posse.termcolors.v1` 才收配色（旧版客户端不收）：订阅时 `subscribed` 带 `colors`，变了推 `{"type":"colors"}`。连着不给配色的旧版常驻进程时，终端底色跟手机，字色和底色不到 3 倍对比度的往黑或白里调到刚够，保留色相。
 - 闪屏（设计稿 `design/splash/concepts-3.png` 的 H）：系统闪屏是 `#1A1A19` 底、居中的标志和底部的「A posse of agents.」，接着 Flutter 在同样位置画同样的标志和 slogan、铺满蜂巢格，零星几格按 agent 状态色（琥珀、陶土、绿）陆续亮起，动画只放 0.6 秒；本地设置和电脑列表读完且显示满 0.7 秒后用 0.2 秒淡出到首页。标志和 slogan 是图，导出方法见 `mobile/README.md`。闪屏不跟主题，浅色主题也是暗底：系统闪屏在 App 读到主题设置之前就显示了。

@@ -58,7 +58,7 @@ internal/files      文件标签的纯逻辑：读写文件（原子保存、磁
 internal/skills     技能管理：扫描四家 agent 的技能目录，按各家的读取规则和开关（Claude 的 skillOverrides、Codex 的 [[skills.config]] 和 app-server、Grok 的 [skills]）算谁用得上，体检断链、同名冲突、多余链接和 npx skills 锁文件；界面在 internal/app/skills.go
 internal/media      会话里的图片和视频（粘贴的、agent 生成的），桌面的图片面板和手机共用
 internal/mermaid    Markdown 里的 Mermaid 图（移植自 Mayoi），不依赖 mygo、桌面和手机共用：Pele（`pele.js.gz`，`scripts/pele.sh` 打包）在 QuickJS（modernc，和 sqlite 共用 libc，两边要求的 libc 版本必须一致，升级时一起看）里排版出 SVG，换上主题色、抽出文字，宽度由调用方的量法给；`diagram/` 用 mygo 画（形状交给 mygo 的 SVG、文字由 mygo 排字），手机经 `posse_quic` 的 `hq_mermaid` 调。JS 运行时画第一张图时启动，之后一直留着（约 11 MB，桌面在窗口进程里）
-internal/mobile     让 Orca 手机 App 连到 posse：配对、E2EE v2、它用到的那部分 RPC 和终端二进制流；quic.go 给 Posse 手机客户端在同一端口号的 UDP 上开 QUIC（局域网和中转）
+internal/mobile     给 Posse 手机客户端的服务：配对、E2EE v2、RPC 和终端二进制流，握手、方法名和帧格式沿用 Orca 手机协议（Orca 自己的手机 App 不再兼容）；quic.go 给 Posse 手机客户端在同一端口号的 UDP 上开 QUIC（局域网和中转）
 internal/mquic      手机和 Mac 之间的 QUIC 传输，两端共用：一条流上的消息分帧、关闭帧、向中转登记的 socket、手机拨号
 internal/deskrelay  UDP 中转协议和服务器（看桌面和手机 QUIC 共用：按令牌把手机和 Mac 的包原样互转，只见密文；探测包回来源地址，给打洞用；开了鉴权时只有带签名的 Mac 能开会话，邀请码、管理员码和 desk.json 的读写也在这里），`tools/deskrelay` 是服务器程序，改了协议要重新部署
 tools               desk 的验收工具：`deskrecv`（Swift 收包解码，不补发）、`desksession`（和插件的 `DeskSession.swift` 一起编，跑手机上那份收包、补发、解码）、`deskshape`（本机 UDP 限速、延迟、丢包）、`deskrelay`（部署到公网服务器上的中转）

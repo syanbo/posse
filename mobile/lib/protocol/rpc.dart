@@ -197,11 +197,7 @@ class PhoneRpc {
       if (_closed) throw StateError('closed');
       final frame = session.seal(plain, direction: direction, kind: kind);
       sentBytes += frame.length;
-      if (kind == kindText && !session.binaryMessages) {
-        await socket.sendText(base64.encode(frame));
-      } else {
-        await socket.sendBinary(frame);
-      }
+      await socket.sendBinary(frame);
     });
     _tail = result.then((_) {}, onError: (_) {});
     return result;

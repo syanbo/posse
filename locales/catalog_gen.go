@@ -13733,13 +13733,13 @@ func (msgs Messages) MobileOthers(count int) string {
 	return Catalog.Format(msgs.locale, "mobileOthers", map[string]any{"count": count})
 }
 
-// MobileOthersNote says "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updatin…"
+// MobileOthersNote says "Connected from an older app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, …"
 // in the language the app shows.
 //
 // Mobile page: explanation under Other Pairings.
 func MobileOthersNote() string { return In(i18n.Locale()).MobileOthersNote() }
 
-// MobileOthersNote says "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updatin…"
+// MobileOthersNote says "Connected from an older app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, …"
 // in the language of msgs.
 //
 // Mobile page: explanation under Other Pairings.
@@ -13747,13 +13747,13 @@ func (msgs Messages) MobileOthersNote() string {
 	return Catalog.Format(msgs.locale, "mobileOthersNote", nil)
 }
 
-// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; cod…"
+// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app; codes a phone stopp…"
 // in the language the app shows.
 //
 // Mobile page: explanation under Other Pairings when some are connected.
 func MobileOthersNoteOnline(count int) string { return In(i18n.Locale()).MobileOthersNoteOnline(count) }
 
-// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; cod…"
+// MobileOthersNoteOnline says "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app; codes a phone stopp…"
 // in the language of msgs.
 //
 // Mobile page: explanation under Other Pairings when some are connected.

@@ -117,7 +117,7 @@ type phoneWire interface {
 	CloseNow() error
 }
 
-// phone 扮演 Orca 手机 App 的连接。
+// phone 扮演 Posse 手机客户端的连接。
 type phone struct {
 	t      *testing.T
 	ws     phoneWire
@@ -127,8 +127,6 @@ type phone struct {
 	binary chan []byte
 	resp   chan map[string]any
 	held   []map[string]any
-	// 握手选的分帧：Posse 手机客户端是 framingBinary，Orca App 是 framingText
-	framing int
 }
 
 type testOffer struct {
@@ -157,19 +155,15 @@ func dialPhone(t *testing.T, srv *Server, info PairInfo) *phone {
 	return handshakePhone(t, ws, offer)
 }
 
-// handshakePhone 在连好的传输上走 hello、ready、auth，和 Posse 手机客户端一样用 framingBinary。
+// handshakePhone 在连好的传输上走 hello、ready、auth。
 func handshakePhone(t *testing.T, ws phoneWire, offer testOffer) *phone {
-	return handshakeFraming(t, ws, offer, framingBinary)
-}
-
-func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) *phone {
 	ctx := context.Background()
 	cpub, cpriv, _ := box.GenerateKey(rand.Reader)
 	var cn [32]byte
 	rand.Read(cn[:])
 	hb, _ := json.Marshal(map[string]any{
 		"type": "e2ee_hello", "v": 2, "clientPublicKeyB64": b64(*cpub), "clientNonceB64": b64(cn),
-		"capabilities": map[string]any{"framing": []int{framing}, "payloadKinds": []string{"text", "binary"}},
+		"capabilities": map[string]any{"framing": []int{framingBinary}, "payloadKinds": []string{"text", "binary"}},
 		"context":      map[string]any{"protocol": "orca-mobile-e2ee", "initiator": "mobile", "responder": "desktop", "transport": "direct"},
 	})
 	ws.Write(ctx, websocket.MessageText, hb)
@@ -179,8 +173,8 @@ func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) 
 	}
 	var r ready
 	json.Unmarshal(rb, &r)
-	if r.Selection.Framing != framing {
-		t.Fatalf("ready selected framing %d, want %d", r.Selection.Framing, framing)
+	if r.Selection.Framing != framingBinary {
+		t.Fatalf("ready selected framing %d", r.Selection.Framing)
 	}
 	if r.DesktopPublicKeyB64 != offer.PublicKeyB64 {
 		t.Fatalf("ready key %s does not match offer", r.DesktopPublicKeyB64)
@@ -191,14 +185,14 @@ func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) 
 	var shared [32]byte
 	box.Precompute(&shared, &hostPub, cpriv)
 	s := newSession(shared, transcript(h, r), cn, dn)
-	p := &phone{t: t, ws: ws, sess: s, token: offer.DeviceToken, binary: make(chan []byte, 256), resp: make(chan map[string]any, 256), framing: framing}
+	p := &phone{t: t, ws: ws, sess: s, token: offer.DeviceToken, binary: make(chan []byte, 256), resp: make(chan map[string]any, 256)}
 	p.sendRaw(map[string]any{"type": "e2ee_auth", "v": 2, "transcriptHashB64": b64(s.transcriptHash), "deviceToken": offer.DeviceToken})
 	at, ab, err := ws.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := p.messageType(); at != want {
-		t.Fatalf("auth reply came as %v, want %v", at, want)
+	if at != websocket.MessageBinary {
+		t.Fatalf("auth reply came as %v", at)
 	}
 	plain := p.open(ab, kindText)
 	if !strings.Contains(string(plain), "e2ee_authenticated") {
@@ -211,57 +205,30 @@ func handshakeFraming(t *testing.T, ws phoneWire, offer testOffer, framing int) 
 // 手机方向：发用 mobile→desktop、收用 desktop→mobile；secretbox 密钥同样对调。
 func (p *phone) sendRaw(v any) {
 	b, _ := json.Marshal(v)
-	frame := p.seal(kindText, b)
-	if p.framing == framingBinary {
-		p.ws.Write(context.Background(), websocket.MessageBinary, frame)
-		return
-	}
-	p.ws.Write(context.Background(), websocket.MessageText, []byte(base64.StdEncoding.EncodeToString(frame)))
+	p.ws.Write(context.Background(), websocket.MessageBinary, p.seal(kindText, b))
 }
 
-// seal 按分帧加密手机发出的一帧。借用 recvN 当手机的发送计数，密钥用主机的 recvKey。
+// seal 加密手机发出的一帧。借用 recvN 当手机的发送计数，密钥用主机的 recvKey。
 func (p *phone) seal(kind byte, b []byte) []byte {
 	s := p.sess
 	n := s.recvN
 	s.recvN++
 	nonce := s.nonce(dirMobileToDesktop, kind, n)
-	if p.framing == framingBinary {
-		return secretbox.Seal([]byte{kind}, b, &nonce, &s.recvKey)
-	}
-	return secretbox.Seal(nonce[:], append(s.header(dirMobileToDesktop, kind, n), b...), &nonce, &s.recvKey)
-}
-
-// messageType 是 JSON 消息该走的帧类型。
-func (p *phone) messageType() websocket.MessageType {
-	if p.framing == framingBinary {
-		return websocket.MessageBinary
-	}
-	return websocket.MessageText
+	return secretbox.Seal([]byte{kind}, b, &nonce, &s.recvKey)
 }
 
 func (p *phone) open(raw []byte, kind byte) []byte {
 	s := p.sess
 	nonce := s.nonce(dirDesktopToMobile, kind, s.sendN)
-	if p.framing == framingBinary {
-		if len(raw) < 1 || raw[0] != kind {
-			p.t.Fatalf("host frame %d: kind byte %v, want %d", s.sendN, raw[:min(1, len(raw))], kind)
-		}
-		plain, ok := secretbox.Open(nil, raw[1:], &nonce, &s.sendKey)
-		if !ok {
-			p.t.Fatalf("cannot open host frame %d", s.sendN)
-		}
-		s.sendN++
-		return plain
+	if len(raw) < 1 || raw[0] != kind {
+		p.t.Fatalf("host frame %d: kind byte %v, want %d", s.sendN, raw[:min(1, len(raw))], kind)
 	}
-	if kind == kindText {
-		raw, _ = base64.StdEncoding.DecodeString(string(raw))
-	}
-	plain, ok := secretbox.Open(nil, raw[24:], &nonce, &s.sendKey)
+	plain, ok := secretbox.Open(nil, raw[1:], &nonce, &s.sendKey)
 	if !ok {
 		p.t.Fatalf("cannot open host frame %d", s.sendN)
 	}
 	s.sendN++
-	return plain[headerLen:]
+	return plain
 }
 
 func (p *phone) readLoop() {
@@ -271,15 +238,11 @@ func (p *phone) readLoop() {
 			close(p.resp)
 			return
 		}
-		binary := typ == websocket.MessageBinary
-		if p.framing == framingBinary {
-			if !binary || len(raw) < 1 {
-				p.t.Errorf("framing 3 got a %v frame of %d bytes", typ, len(raw))
-				continue
-			}
-			binary = raw[0] == kindBinary
+		if typ != websocket.MessageBinary || len(raw) < 1 {
+			p.t.Errorf("got a %v frame of %d bytes", typ, len(raw))
+			continue
 		}
-		if binary {
+		if raw[0] == kindBinary {
 			p.binary <- p.open(raw, kindBinary)
 			continue
 		}
@@ -513,36 +476,6 @@ func TestPhoneSession(t *testing.T) {
 	srv.RemoveDevice(dev.ID)
 	if srv.pair.valid(p.token) {
 		t.Fatal("token still valid after removal")
-	}
-}
-
-// Orca App 用 framing 2：JSON 照旧加密后 base64 走文本帧，终端流走二进制帧
-func TestOrcaTextFraming(t *testing.T) {
-	tm, err := term.Start(term.Options{ID: "t_1", Dir: t.TempDir(), Command: []string{"/bin/sh"}, Cols: 80, Rows: 24})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tm.Close(time.Second)
-	srv, err := New(t.TempDir(), &fakeHost{terms: map[string]*term.Terminal{"t_1": tm}, order: []string{"t_1"}}, -1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv.port = 0
-	defer srv.Close()
-	info, err := srv.Pair(false, "127.0.0.1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	offer := parseTestOffer(t, info)
-	ws, _, err := websocket.Dial(context.Background(), offer.Endpoint, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ws.SetReadLimit(8 << 20)
-	p := handshakeFraming(t, ws, offer, framingText)
-	st := result(t, p.next(p.call("status.get", nil)))
-	if st["protocolVersion"] != float64(3) {
-		t.Fatalf("status %v", st)
 	}
 }
 

@@ -5029,11 +5029,11 @@
       }
     }
   },
-  "mobileOthersNote": "Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
+  "mobileOthersNote": "Connected from an older app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
   "@mobileOthersNote": {
     "description": "Mobile page: explanation under Other Pairings."
   },
-  "mobileOthersNoteOnline": "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app or the Orca app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
+  "mobileOthersNoteOnline": "{count, plural, one {# of them is} other {# of them are}} connected. Connected from an older app; codes a phone stopped using after rescanning are here too. After updating Posse Mobile, the ones still in use move to their phones.",
   "@mobileOthersNoteOnline": {
     "description": "Mobile page: explanation under Other Pairings when some are connected.",
     "placeholders": {

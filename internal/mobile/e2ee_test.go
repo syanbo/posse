@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -41,9 +40,9 @@ func TestTranscriptVector(t *testing.T) {
 			t.Errorf("got %x want %s", got, name)
 		}
 	}
-	// 主机发出的第一帧文本。Dart 侧用同一把 sendKey 解开，两边不能各算各的。
+	// 主机发出的第一帧文本：kind 字节加 secretbox 密文，nonce 按会话 ID 和计数器算，两边不能各算各的。
 	frame := s.seal([]byte("hi"), kindText)
-	const wantFrame = "339ae1f2bdff63481857d2810201000000000000000000002f21aaab2d6989389cd450263b93b3c5bf64fd318b70ca4c2844bc702ffd9811d0dfa9fea3f633ad6d946eaba8e61619d0ebdf9658edc1d2f8ded559"
+	const wantFrame = "00869982af5c7f1b336995806e50addaf9e497"
 	if got := hex.EncodeToString(frame); got != wantFrame {
 		t.Fatalf("seal frame %s", got)
 	}
@@ -57,7 +56,7 @@ func TestHandshakeRoundTrip(t *testing.T) {
 	rand.Read(cn[:])
 	raw, _ := json.Marshal(map[string]any{
 		"type": "e2ee_hello", "v": 2, "clientPublicKeyB64": b64(*cliPub), "clientNonceB64": b64(cn),
-		"capabilities": map[string]any{"framing": []int{2}, "payloadKinds": []string{"text", "binary"}},
+		"capabilities": map[string]any{"framing": []int{3}, "payloadKinds": []string{"text", "binary"}},
 		"context":      map[string]any{"protocol": "orca-mobile-e2ee", "initiator": "mobile", "responder": "desktop", "transport": "direct"},
 	})
 	h, ok := parseHello(raw)
@@ -80,17 +79,16 @@ func TestHandshakeRoundTrip(t *testing.T) {
 	for i := range 3 {
 		msg := []byte(`{"n":` + string(rune('0'+i)) + `}`)
 		nonce := phone.nonce(dirMobileToDesktop, kindText, uint64(i))
-		plain := append(phone.header(dirMobileToDesktop, kindText, uint64(i)), msg...)
-		frame := sealWith(nonce, plain, &phone.sendKey)
-		got, err := host.openText([]byte(base64.StdEncoding.EncodeToString(frame)))
-		if err != nil || !bytes.Equal(got, msg) {
+		frame := sealWith(nonce, kindText, msg, &phone.sendKey)
+		kind, got, err := host.openMessage(websocket.MessageBinary, frame)
+		if err != nil || kind != kindText || !bytes.Equal(got, msg) {
 			t.Fatalf("frame %d: %q %v", i, got, err)
 		}
 	}
 	// 重放旧帧要被拒绝
 	nonce := phone.nonce(dirMobileToDesktop, kindText, 0)
-	old := sealWith(nonce, append(phone.header(dirMobileToDesktop, kindText, 0), 'x'), &phone.sendKey)
-	if _, err := host.open(old, kindText); err == nil {
+	old := sealWith(nonce, kindText, []byte("x"), &phone.sendKey)
+	if _, _, err := host.openMessage(websocket.MessageBinary, old); err == nil {
 		t.Fatal("replayed frame accepted")
 	}
 
@@ -98,11 +96,8 @@ func TestHandshakeRoundTrip(t *testing.T) {
 	for i, kind := range []byte{kindText, kindBinary, kindText} {
 		f := host.seal([]byte("hi"), kind)
 		n := phone.nonce(dirDesktopToMobile, kind, uint64(i))
-		if !bytes.Equal(f[:24], n[:]) {
-			t.Fatalf("nonce %d mismatch", i)
-		}
-		plain, ok := openWith(f, &phone.recvKey)
-		if !ok || !bytes.Equal(plain[headerLen:], []byte("hi")) || !bytes.Equal(plain[:headerLen], phone.header(dirDesktopToMobile, kind, uint64(i))) {
+		plain, ok := openWith(f, n, &phone.recvKey)
+		if !ok || f[0] != kind || !bytes.Equal(plain, []byte("hi")) {
 			t.Fatalf("host frame %d undecodable", i)
 		}
 	}
@@ -110,7 +105,7 @@ func TestHandshakeRoundTrip(t *testing.T) {
 
 func TestHelloRejectsRelayAndExtraKeys(t *testing.T) {
 	base := `{"type":"e2ee_hello","v":2,"clientPublicKeyB64":"` + b64(rep32(1)) + `","clientNonceB64":"` + b64(rep32(2)) +
-		`","capabilities":{"framing":[2],"payloadKinds":["text","binary"]},"context":{"protocol":"orca-mobile-e2ee","initiator":"mobile","responder":"desktop","transport":"%s"}%s}`
+		`","capabilities":{"framing":[3],"payloadKinds":["text","binary"]},"context":{"protocol":"orca-mobile-e2ee","initiator":"mobile","responder":"desktop","transport":"%s"}%s}`
 	for _, c := range [][2]string{{"relay", ""}, {"direct", `,"x":1`}} {
 		raw := []byte(sprintf(base, c[0], c[1]))
 		if _, ok := parseHello(raw); ok {
@@ -122,11 +117,11 @@ func TestHelloRejectsRelayAndExtraKeys(t *testing.T) {
 	}
 }
 
-// 分帧只认 2（Orca）和 3（Posse），一次只能报一种
+// 分帧只认 3，一次只能报一种；2（Orca App 的文本帧）不再接受
 func TestHelloFraming(t *testing.T) {
 	base := `{"type":"e2ee_hello","v":2,"clientPublicKeyB64":"` + b64(rep32(1)) + `","clientNonceB64":"` + b64(rep32(2)) +
 		`","capabilities":{"framing":%s,"payloadKinds":["text","binary"]},"context":{"protocol":"orca-mobile-e2ee","initiator":"mobile","responder":"desktop","transport":"direct"}}`
-	for f, want := range map[string]bool{"[2]": true, "[3]": true, "[1]": false, "[4]": false, "[2,3]": false, "[]": false} {
+	for f, want := range map[string]bool{"[3]": true, "[2]": false, "[1]": false, "[4]": false, "[2,3]": false, "[3,2]": false, "[]": false} {
 		h, ok := parseHello([]byte(sprintf(base, f)))
 		if ok != want {
 			t.Errorf("framing %s: accepted=%v", f, ok)
@@ -134,28 +129,26 @@ func TestHelloFraming(t *testing.T) {
 		}
 		if ok {
 			pub, priv, _ := box.GenerateKey(rand.Reader)
-			r, s := accept(h, pub, priv)
-			if r.Selection.Framing != h.Capabilities.Framing[0] || s.framing != r.Selection.Framing {
-				t.Errorf("framing %s: selected %d, session %d", f, r.Selection.Framing, s.framing)
+			if r, _ := accept(h, pub, priv); r.Selection.Framing != framingBinary {
+				t.Errorf("framing %s: selected %d", f, r.Selection.Framing)
 			}
 		}
 	}
 }
 
-func sealWith(nonce [24]byte, plain []byte, key *[32]byte) []byte {
-	return secretbox.Seal(nonce[:], plain, &nonce, key)
+func sealWith(nonce [24]byte, kind byte, plain []byte, key *[32]byte) []byte {
+	return secretbox.Seal([]byte{kind}, plain, &nonce, key)
 }
 
-func openWith(frame []byte, key *[32]byte) ([]byte, bool) {
-	nonce := [24]byte(frame[:24])
-	return secretbox.Open(nil, frame[24:], &nonce, key)
+func openWith(frame []byte, nonce [24]byte, key *[32]byte) ([]byte, bool) {
+	return secretbox.Open(nil, frame[1:], &nonce, key)
 }
 
 func sprintf(f string, a ...any) string { return fmt.Sprintf(f, a...) }
 
-// 分帧 3 下 openMessage 的拒绝路径：失败都不推进计数器
+// openMessage 的拒绝路径：失败都不推进计数器
 func TestOpenMessageBinaryFraming(t *testing.T) {
-	s := &session{framing: framingBinary}
+	s := &session{}
 	rand.Read(s.recvKey[:])
 	rand.Read(s.id[:])
 	sealAs := func(id [32]byte, kind byte, n uint64, payload string) []byte {
@@ -200,13 +193,11 @@ func TestOpenMessageBinaryFraming(t *testing.T) {
 	}
 }
 
-// 分帧 3 每帧固定开销 17 字节（kind + Poly1305 标签），分帧 2 是 82 字节
+// 每帧固定开销 17 字节（kind + Poly1305 标签）
 func TestFrameOverhead(t *testing.T) {
 	payload := make([]byte, 10)
-	for framing, want := range map[int]int{framingBinary: 17, framingText: 24 + secretbox.Overhead + headerLen} {
-		s := &session{framing: framing}
-		if got := len(s.seal(payload, kindBinary)) - len(payload); got != want {
-			t.Errorf("framing %d: overhead %d, want %d", framing, got, want)
-		}
+	s := &session{}
+	if got := len(s.seal(payload, kindBinary)) - len(payload); got != 17 {
+		t.Errorf("overhead %d, want 17", got)
 	}
 }

@@ -1,7 +1,6 @@
 package mobile
 
 import (
-	"bytes"
 	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,7 +14,7 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-// 这里实现 Orca 手机 App 的 E2EE v2（stablyai/orca 的 src/shared/mobile-e2ee-v2-*.ts）：
+// 握手沿用 Orca 手机协议的 E2EE v2（stablyai/orca 的 src/shared/mobile-e2ee-v2-*.ts，Posse 手机客户端照它实现）：
 // X25519 + HSalsa20 得到共享密钥，按握手记录做 HKDF 派生两个方向的密钥和会话 ID，
 // 帧是 XSalsa20-Poly1305 secretbox，nonce 由会话 ID、方向、类型和计数器构成。
 
@@ -66,17 +65,13 @@ type session struct {
 	id               [32]byte
 	recvN, sendN     uint64
 	transcriptHash   [32]byte
-	framing          int // 握手选定的分帧，见 framingText、framingBinary
 }
 
-// 分帧：Orca App 只会 2，帧是 nonce、密文（明文前有 42 字节的帧头），JSON 帧再整帧 base64 放进文本帧。
-// 3 是 Posse 手机客户端的：所有帧都走二进制帧，内容是 u8 kind 加 secretbox 的密文（16 字节标签在前），
-// 每帧固定开销 17 字节（2 是 82 字节）。nonce 不上线、明文不带帧头：两端按计数器各自算 nonce，
-// 它含会话 ID、方向、kind 和计数器，改了 kind、重放、乱序都解不开，帧头里的这些信息是多余的。
-const (
-	framingText   = 2
-	framingBinary = 3
-)
+// 分帧只认 3，编号沿用 Orca 协议的分帧表（2 是 Orca App 的文本帧分帧，JSON 加密后整帧 base64，不再支持）：
+// 所有帧都走二进制帧，内容是 u8 kind 加 secretbox 的密文（16 字节标签在前），每帧固定开销 17 字节。
+// nonce 不上线、明文不带帧头：两端按计数器各自算 nonce，它含会话 ID、方向、kind 和计数器，
+// 改了 kind、重放、乱序都解不开。
+const framingBinary = 3
 
 const (
 	dirMobileToDesktop = 0
@@ -125,8 +120,7 @@ func parseHello(raw []byte) (hello, bool) {
 	c := h.Context
 	if h.Type != "e2ee_hello" || h.V != 2 ||
 		!exactKeys(obj.Capabilities, "framing", "payloadKinds") ||
-		len(h.Capabilities.Framing) != 1 ||
-		(h.Capabilities.Framing[0] != framingText && h.Capabilities.Framing[0] != framingBinary) ||
+		len(h.Capabilities.Framing) != 1 || h.Capabilities.Framing[0] != framingBinary ||
 		!equalStrings(h.Capabilities.PayloadKinds, payloadKinds) ||
 		!exactKeys(obj.Context, "protocol", "initiator", "responder", "transport") ||
 		c.Protocol != "orca-mobile-e2ee" || c.Initiator != "mobile" || c.Responder != "desktop" || c.Transport != "direct" {
@@ -162,16 +156,14 @@ func accept(h hello, pub, priv *[32]byte) (ready, *session) {
 		DesktopPublicKeyB64: base64.StdEncoding.EncodeToString(pub[:]),
 		ClientNonceB64:      h.ClientNonceB64,
 		DesktopNonceB64:     base64.StdEncoding.EncodeToString(nonce[:]),
-		Selection:           readySelection{Framing: h.Capabilities.Framing[0], PayloadKinds: payloadKinds},
+		Selection:           readySelection{Framing: framingBinary, PayloadKinds: payloadKinds},
 		Context:             h.Context,
 	}
 	clientPub, _ := decode32(h.ClientPublicKeyB64)
 	var shared [32]byte
 	box.Precompute(&shared, &clientPub, priv)
 	cn, _ := decode32(h.ClientNonceB64)
-	s := newSession(shared, transcript(h, r), cn, nonce)
-	s.framing = r.Selection.Framing
-	return r, s
+	return r, newSession(shared, transcript(h, r), cn, nonce)
 }
 
 func newSession(shared [32]byte, t []byte, cn, dn [32]byte) *session {
@@ -254,8 +246,6 @@ func transcript(h hello, r ready) []byte {
 	return out
 }
 
-const headerLen = 32 + 1 + 1 + 8
-
 func (s *session) nonce(dir, kind byte, n uint64) [24]byte {
 	var out [24]byte
 	copy(out[:12], s.id[:12])
@@ -266,87 +256,30 @@ func (s *session) nonce(dir, kind byte, n uint64) [24]byte {
 	return out
 }
 
-func (s *session) header(dir, kind byte, n uint64) []byte {
-	h := make([]byte, 0, headerLen)
-	h = append(h, s.id[:]...)
-	h = append(h, dir, kind)
-	return binary.BigEndian.AppendUint64(h, n)
-}
-
-// seal 按握手选的分帧加密一帧发给手机。
+// seal 加密一帧发给手机：kind 字节加 secretbox 密文。
 func (s *session) seal(payload []byte, kind byte) []byte {
 	n := s.sendN
 	s.sendN++
 	nonce := s.nonce(dirDesktopToMobile, kind, n)
-	if s.framing == framingBinary {
-		return secretbox.Seal([]byte{kind}, payload, &nonce, &s.sendKey)
-	}
-	plain := append(s.header(dirDesktopToMobile, kind, n), payload...)
-	return secretbox.Seal(nonce[:], plain, &nonce, &s.sendKey)
+	return secretbox.Seal([]byte{kind}, payload, &nonce, &s.sendKey)
 }
 
 var errFrame = errors.New("bad frame")
 
-// open 解密手机发来的一帧；帧必须按顺序到达。
-func (s *session) open(frame []byte, kind byte) ([]byte, error) {
-	nonce := s.nonce(dirMobileToDesktop, kind, s.recvN)
-	if len(frame) < 24+secretbox.Overhead+headerLen || !bytes.Equal(frame[:24], nonce[:]) {
-		return nil, errFrame
+// openMessage 解开手机发来的一帧，返回它的 kind（kindText 是 JSON）；帧必须按顺序到达，失败不推进计数器。
+func (s *session) openMessage(typ websocket.MessageType, raw []byte) (byte, []byte, error) {
+	if typ != websocket.MessageBinary || len(raw) < 1+secretbox.Overhead {
+		return 0, nil, errFrame
 	}
-	plain, ok := secretbox.Open(nil, frame[24:], &nonce, &s.recvKey)
-	if !ok || !bytes.Equal(plain[:headerLen], s.header(dirMobileToDesktop, kind, s.recvN)) {
-		return nil, errFrame
+	kind := raw[0]
+	if kind != kindText && kind != kindBinary {
+		return 0, nil, errFrame
+	}
+	nonce := s.nonce(dirMobileToDesktop, kind, s.recvN)
+	p, ok := secretbox.Open(nil, raw[1:], &nonce, &s.recvKey)
+	if !ok {
+		return kind, nil, errFrame
 	}
 	s.recvN++
-	return plain[headerLen:], nil
-}
-
-// sealMessage 加密一条 JSON 消息，返回该用的帧类型和帧内容。
-func (s *session) sealMessage(p []byte) (websocket.MessageType, []byte) {
-	if s.framing == framingBinary {
-		return websocket.MessageBinary, s.seal(p, kindText)
-	}
-	return websocket.MessageText, s.sealText(p)
-}
-
-// openMessage 解开手机发来的一帧，返回它的 kind（kindText 是 JSON）。
-func (s *session) openMessage(typ websocket.MessageType, raw []byte) (byte, []byte, error) {
-	if s.framing == framingBinary {
-		if typ != websocket.MessageBinary || len(raw) < 1+secretbox.Overhead {
-			return 0, nil, errFrame
-		}
-		kind := raw[0]
-		if kind != kindText && kind != kindBinary {
-			return 0, nil, errFrame
-		}
-		nonce := s.nonce(dirMobileToDesktop, kind, s.recvN)
-		p, ok := secretbox.Open(nil, raw[1:], &nonce, &s.recvKey)
-		if !ok {
-			return kind, nil, errFrame
-		}
-		s.recvN++
-		return kind, p, nil
-	}
-	if typ == websocket.MessageText {
-		p, err := s.openText(raw)
-		return kindText, p, err
-	}
-	p, err := s.open(raw, kindBinary)
-	return kindBinary, p, err
-}
-
-// sealText 加密 JSON 文本，结果是放进 WebSocket 文本帧的 base64。
-func (s *session) sealText(p []byte) []byte {
-	f := s.seal(p, kindText)
-	out := make([]byte, base64.StdEncoding.EncodedLen(len(f)))
-	base64.StdEncoding.Encode(out, f)
-	return out
-}
-
-func (s *session) openText(b64 []byte) ([]byte, error) {
-	f, err := base64.StdEncoding.Strict().DecodeString(string(b64))
-	if err != nil {
-		return nil, errFrame
-	}
-	return s.open(f, kindText)
+	return kind, p, nil
 }

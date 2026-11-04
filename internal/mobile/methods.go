@@ -129,7 +129,7 @@ func displayName(st State, w Workspace) string {
 	return w.Name
 }
 
-// agentState 把 posse 的 agent 状态换成 Orca 的；没在运行的 agent 不显示。
+// agentState 把 posse 的 agent 状态换成 Orca 协议里 state 的取值；没在运行的 agent 不显示。
 func agentState(t Terminal) string {
 	switch t.Status {
 	case "starting", "working":
@@ -142,7 +142,7 @@ func agentState(t Terminal) string {
 	return ""
 }
 
-// posseStatus 是桌面侧栏上的状态，Posse 手机照它画。Orca 的 App 只认 state，不认这些值，所以单独一个字段。
+// posseStatus 是桌面侧栏上的状态，手机照它画；state 只有 Orca 协议的三个取值，不够分，所以单独一个字段。
 func posseStatus(t Terminal) string {
 	switch {
 	case t.Lost:
@@ -224,8 +224,8 @@ func nilIfEmpty(s string) any {
 }
 
 func worktreeRow(st State, w Workspace, now time.Time) map[string]any {
-	// liveTerminalCount 只数在跑的（Orca 的 App 据此当作有终端）；posseTerminalCount 连还没恢复的也算，
-	// Posse 手机据此决定拉不拉这个工作区的会话列表，全是未恢复的终端时也能列出来
+	// liveTerminalCount 只数在跑的（Orca 协议的字段）；posseTerminalCount 连还没恢复的也算，
+	// 手机据此决定拉不拉这个工作区的会话列表，全是未恢复的终端时也能列出来
 	var agents []map[string]any
 	live, waiting, working, done := 0, false, false, false
 	var last time.Time

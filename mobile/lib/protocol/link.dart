@@ -67,7 +67,7 @@ Future<PhoneRpc> handshake({
       transcript: transcript,
       clientNonce: clientNonce,
       desktopNonce: ready.desktopNonce,
-    ).asPhone()..framing = ready.framing;
+    ).asPhone();
     final rpc = PhoneRpc(
       socket: socket,
       session: session,

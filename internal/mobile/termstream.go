@@ -11,7 +11,7 @@ import (
 	"posse/internal/host"
 )
 
-// 终端输出流用 Orca 的二进制帧（src/shared/terminal-stream-protocol.ts）：16 字节头 + 负载，加密后走 WebSocket 二进制帧。
+// 终端输出流的二进制帧沿用 Orca 协议（src/shared/terminal-stream-protocol.ts）：16 字节头 + 负载，加密后走二进制帧。
 const (
 	opOutput        = 1
 	opSnapshotStart = 2
@@ -69,7 +69,7 @@ func (c *conn) subscribeTerminal(id string, p json.RawMessage) error {
 	}
 	// HoldSize 的 key 要能区分同时看着的几路流；之后宿主独立成进程时它会跨进程传，所以用字符串
 	key := fmt.Sprintf("mobile:%p", new(byte))
-	// 和 Orca 一样，手机看着的时候终端按手机屏幕排版，离开后恢复成界面的尺寸
+	// 手机看着的时候终端按手机屏幕排版，离开后恢复成界面的尺寸
 	if v := a.Viewport; v != nil && v.Cols >= 20 && v.Rows >= 8 && t.Running() {
 		t.HoldSize(key, min(v.Cols, 500), min(v.Rows, 200))
 	}
@@ -85,7 +85,7 @@ func (c *conn) terminalStream(ctx context.Context, id string, t host.Terminal, k
 	var seq uint64
 	kind := "scrollback"
 	// colors 是程序按它配色的那套（窗口终端在用的），手机照它画终端；变了推一条 colors。
-	// 只给声明了 posse.termcolors.v1 的手机：Orca App 不认这条消息
+	// 只给声明了 posse.termcolors.v1 的手机：旧版客户端不认这条消息
 	colors, withColors := t.Colors(), c.hasCapability(termColorsCap)
 	for {
 		snap, sub := t.Watch()

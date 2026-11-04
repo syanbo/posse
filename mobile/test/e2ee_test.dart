@@ -13,19 +13,19 @@ void main() {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
     );
-    // Go 那边的固定向量是 Orca 的分帧 2
+    // 固定向量来自 Orca 的 fixture，握手记录里写的是它的分帧 2；帧本身按分帧 3 封
     final hello = Hello(
       clientPublicKey: repeated(1, 32),
       clientNonce: repeated(2, 32),
       context: context,
-      framing: framingText,
+      framing: 2,
     );
     final ready = Ready(
       desktopPublicKey: repeated(3, 32),
       clientNonce: repeated(2, 32),
       desktopNonce: repeated(4, 32),
       context: context,
-      framing: framingText,
+      framing: 2,
     );
     final transcript = encodeTranscript(hello, ready);
     expect(transcript.length, 1347);
@@ -57,10 +57,7 @@ void main() {
       direction: dirDesktopToMobile,
       kind: kindText,
     );
-    expect(
-      hexOf(frame),
-      '339ae1f2bdff63481857d2810201000000000000000000002f21aaab2d6989389cd450263b93b3c5bf64fd318b70ca4c2844bc702ffd9811d0dfa9fea3f633ad6d946eaba8e61619d0ebdf9658edc1d2f8ded559',
-    );
+    expect(hexOf(frame), '00869982af5c7f1b336995806e50addaf9e497');
     final phone = session.asPhone();
     // 主机已经把发送计数加到 1。手机是另一套计数，从 0 解开这一帧。
     expect(
@@ -112,6 +109,7 @@ void main() {
     ).asPhone();
     expect(hexOf(host.recvKey), hexOf(phone.sendKey));
 
+    final frames = <Uint8List>[];
     for (var i = 0; i < 3; i++) {
       final payload = Uint8List.fromList(utf8.encode('{"n":$i}'));
       final frame = phone.seal(
@@ -119,6 +117,7 @@ void main() {
         direction: dirMobileToDesktop,
         kind: kindText,
       );
+      frames.add(frame);
       expect(
         utf8.decode(
           host.open(frame, direction: dirMobileToDesktop, kind: kindText),
@@ -126,16 +125,9 @@ void main() {
         '{"n":$i}',
       );
     }
-    final replay = secretboxSeal(
-      phone.sendKey,
-      frameNonce(phone.id, dirMobileToDesktop, kindText, 0),
-      concat([
-        frameHeader(phone.id, dirMobileToDesktop, kindText, 0),
-        Uint8List.fromList([120]),
-      ]),
-    );
+    // 重放旧帧要被拒绝
     expect(
-      () => host.open(replay, direction: dirMobileToDesktop, kind: kindText),
+      () => host.open(frames[0], direction: dirMobileToDesktop, kind: kindText),
       throwsA(isA<E2eeException>()),
     );
 
@@ -217,27 +209,22 @@ void main() {
       parseReady(jsonEncode(ready(framingBinary).toJson()), hello)?.framing,
       framingBinary,
     );
-    expect(parseReady(jsonEncode(ready(framingText).toJson()), hello), isNull);
+    expect(parseReady(jsonEncode(ready(2).toJson()), hello), isNull);
   });
 
-  test('binary framing adds 17 bytes per frame, the Orca framing 82', () {
-    for (final (framing, overhead) in [
-      (framingBinary, 17),
-      (framingText, 82),
-    ]) {
-      final s = E2eeSession(
-        recvKey: repeated(1, 32),
-        sendKey: repeated(2, 32),
-        id: repeated(9, 32),
-        transcriptHash: Uint8List(32),
-      )..framing = framing;
-      final frame = s.seal(
-        Uint8List(10),
-        direction: dirDesktopToMobile,
-        kind: kindBinary,
-      );
-      expect(frame.length - 10, overhead);
-    }
+  test('a frame adds 17 bytes', () {
+    final s = E2eeSession(
+      recvKey: repeated(1, 32),
+      sendKey: repeated(2, 32),
+      id: repeated(9, 32),
+      transcriptHash: Uint8List(32),
+    );
+    final frame = s.seal(
+      Uint8List(10),
+      direction: dirDesktopToMobile,
+      kind: kindBinary,
+    );
+    expect(frame.length - 10, 17);
   });
 
   test(
@@ -248,7 +235,7 @@ void main() {
         sendKey: repeated(2, 32),
         id: repeated(9, 32),
         transcriptHash: Uint8List(32),
-      )..framing = framingBinary;
+      );
       final host = make();
       final phone = host.asPhone();
       Uint8List next(String text) => host.seal(
@@ -286,10 +273,9 @@ void main() {
       sendKey: repeated(2, 32),
       id: repeated(9, 32),
       transcriptHash: Uint8List(32),
-    )..framing = framingBinary;
+    );
     final host = make();
     final phone = host.asPhone();
-    expect(phone.binaryMessages, isTrue);
     for (final kind in [kindText, kindBinary, kindBinary, kindText]) {
       final frame = host.seal(
         Uint8List.fromList(utf8.encode('k$kind')),
@@ -316,7 +302,7 @@ void main() {
           phone.openMessage(frame, binary: true, direction: dirDesktopToMobile),
       throwsA(isA<E2eeException>()),
     );
-    // 分帧 3 下不收文本帧
+    // 不收文本帧
     final next = host.seal(
       Uint8List.fromList([2]),
       direction: dirDesktopToMobile,

@@ -162,7 +162,7 @@ Architecture and development conventions are in [`AGENTS.md`](AGENTS.md), and ho
 
 - [MyGo](https://github.com/egoist/mygo): the native UI framework.
 - [Ghostty](https://github.com/ghostty-org/ghostty): libghostty-vt, the terminal core.
-- [Orca](https://github.com/stablyai/orca): much of the interaction is modeled on it, and the phone side is compatible with its app.
+- [Orca](https://github.com/stablyai/orca): much of the interaction is modeled on it, and the phone protocol keeps its handshake, method names and frame format.
 - [WebStorm](https://www.jetbrains.com/webstorm/): the Git interface is modeled on its interactions and naming.
 - [herdr](https://github.com/herdrdev/herdr), [cmux](https://github.com/manaflow-ai/cmux): the Dock badge and notifications, the web tab for agents, terminal splits and more were inspired by them.
 - [libghostty for Dart, flterm](https://github.com/elias8/libghostty): the terminal engine bindings and terminal widget on mobile (`mobile/third_party/flterm` is a modified copy).

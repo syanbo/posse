@@ -162,7 +162,7 @@ go tool mygo build -platform darwin/arm64 -skip-dmg -sign - -skip-notarize   # �
 
 - [MyGo](https://github.com/egoist/mygo)：原生界面框架。
 - [Ghostty](https://github.com/ghostty-org/ghostty)：终端内核 libghostty-vt。
-- [Orca](https://github.com/stablyai/orca)：很多交互参考了它，手机端兼容它的 App。
+- [Orca](https://github.com/stablyai/orca)：很多交互参考了它，手机协议沿用它的握手、方法名和帧格式。
 - [WebStorm](https://www.jetbrains.com/webstorm/)：Git 界面的交互和叫法参考了它。
 - [herdr](https://github.com/herdrdev/herdr)、[cmux](https://github.com/manaflow-ai/cmux)：Dock 角标和通知、给 agent 用的网页标签、终端分屏等参考了它们。
 - [libghostty for Dart、flterm](https://github.com/elias8/libghostty)：手机端的终端内核绑定和终端组件（`mobile/third_party/flterm` 是带改动的副本）。

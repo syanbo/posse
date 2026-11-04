@@ -80,7 +80,19 @@ Uint8List tweetOpen(Uint8List key, Uint8List nonce, Uint8List box) {
   );
 }
 
-// 分帧 2：明文前 42 字节帧头，nonce 拼在帧前，整帧 base64 走 WebSocket 文本帧（String）。
+// legacy 是 Orca App 用的分帧 2，App 和电脑都已不再支持，这里留一份只为对照：
+// 明文前 42 字节帧头（会话 ID、方向、kind、计数器），nonce 拼在帧前，整帧 base64 走 WebSocket 文本帧（String）。
+const headerLen = 42;
+
+Uint8List frameHeader(Uint8List id, int direction, int kind, int counter) {
+  final out = Uint8List(headerLen);
+  out.setRange(0, 32, id);
+  out[32] = direction;
+  out[33] = kind;
+  ByteData.sublistView(out).setUint64(34, counter);
+  return out;
+}
+
 String legacySend(E2eeSession s, Map<String, Object?> msg) {
   final payload = Uint8List.fromList(utf8.encode(jsonEncode(msg)));
   final n = s.sendN++;
@@ -126,12 +138,12 @@ List<BenchRow> runE2eeBench([void Function(BenchRow)? onRow]) {
     onRow?.call(row);
   }
 
-  E2eeSession session(int framing) => E2eeSession(
+  E2eeSession session() => E2eeSession(
     recvKey: randomBytes(32),
     sendKey: randomBytes(32),
     id: randomBytes(32),
     transcriptHash: randomBytes(32),
-  )..framing = framing;
+  );
 
   for (final size in sizes) {
     final key = randomBytes(32);
@@ -150,15 +162,10 @@ List<BenchRow> runE2eeBench([void Function(BenchRow)? onRow]) {
 
     // 一条 JSON 消息：发送从 Map 到上线的字节，接收从收到的字节到 Map
     final msg = message(size);
-    final legacy = session(framingText);
+    final legacy = session();
     final legacyFrame = _deskSend(msg, legacy.recvKey, legacy.id);
-    final now = session(framingBinary);
-    final desk = E2eeSession(
-      recvKey: now.sendKey,
-      sendKey: now.recvKey,
-      id: now.id,
-      transcriptHash: now.transcriptHash,
-    )..framing = framingBinary;
+    final now = session();
+    final desk = now.asPhone();
     final frame = desk.seal(
       utf8.encode(jsonEncode(msg)),
       direction: dirDesktopToMobile,

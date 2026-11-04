@@ -1161,7 +1161,7 @@ Future<void> _serve(
     transcript: encodeTranscript(hello, ready),
     clientNonce: clientNonce,
     desktopNonce: desktopNonce,
-  )..framing = ready.framing;
+  );
   final authEvent = await reader.next(CancelToken());
   final authPlain = utf8.decode(
     session

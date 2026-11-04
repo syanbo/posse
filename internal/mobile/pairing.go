@@ -27,7 +27,7 @@ import (
 
 // Device 是一个配对码换来的设备 token。LastSeen 为零表示二维码已生成、还没有手机用它连上来。
 // 同一台手机每扫一次码就多一个 token（重新扫码、远程和局域网各存一份），Posse 客户端连上后报上
-// 自己的安装 ID（Phone），列表按它合成一台手机；Orca App 不报，一个 token 算一台。
+// 自己的安装 ID（Phone），列表按它合成一台手机；旧版客户端不报，一个 token 算一台。
 type Device struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
@@ -306,9 +306,8 @@ func (p *pairing) remove(id string) []string {
 	return removed
 }
 
-// offerCode 是二维码里 orca://pair?code= 后面的部分：Orca 手机 App 的配对信息，base64url 不补位。
-// endpoints 是给 Posse 自己的客户端并发握手用的地址列表，主 endpoint 放在第一位。
-// Orca 的 PairingOfferSchema 不是 strict，多出来的字段会被忽略。
+// offerCode 是二维码里 orca://pair?code= 后面的部分（前缀和字段沿用 Orca 协议的配对码），base64url 不补位。
+// endpoints 是手机并发握手用的地址列表，主 endpoint 放在第一位。
 func offerCode(endpoint string, endpoints []string, token string, pub [32]byte, deviceID string) string {
 	b, _ := json.Marshal(map[string]any{
 		"v": 2, "endpoint": endpoint, "endpoints": uniqueEndpoints(endpoint, endpoints),
