@@ -642,6 +642,18 @@ func TestPreview(t *testing.T) {
 		a.indexTasks()
 		savePNG(t, newPreviewTester(a, dark), "sidebar-worker-link-"+suffix+".png")
 
+		// 任务都做完了、派发方空闲没有状态图形：worker 的竖线顶端拐过来接到派发方的 agent 图标
+		a = previewApp(t)
+		a.workspaces[0].Terminals[0].AgentState = state("idle")
+		a.workspaces[0].Terminals[3].AgentState = state("idle")
+		a.workspaces[0].Terminals = append(a.workspaces[0].Terminals,
+			terminalInfo{ID: "t7", Agent: "codex", Name: "整理图片方案", Running: true, AgentState: state("idle")})
+		a.tasks[0].Status = "done"
+		a.tasks = append(a.tasks, taskInfo{ID: "k5", Title: "整理图片方案", Agent: "codex", WorkspaceID: "w1", Worker: "t7", Status: "done", Coordinator: "t1", CreatedAt: time.Now()})
+		a.indexWorkspaces()
+		a.indexTasks()
+		savePNG(t, newPreviewTester(a, dark), "sidebar-worker-head-"+suffix+".png")
+
 		// 会话按钮收成右边缘的把手
 		a = previewApp(t)
 		a.state.SessionButtonsHidden = true

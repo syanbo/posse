@@ -121,6 +121,22 @@ func drawGuide(p *ui.Painter, r ui.Rect, g treeGuide, hasStatus bool, gap float3
 	p.StrokePolyline(pts, width, c)
 }
 
+// drawGuideHead 在第 depth 层的派发方行 r 里画 worker 竖线的顶端：派发方没有状态图形时，
+// 竖线从它的 agent 图标前横着出来，圆角拐下去，接上下一行的竖线（和跨工作区的连线一个画法）。
+func drawGuideHead(p *ui.Painter, r ui.Rect, depth int, c ui.Color) {
+	x, mid := snap(r.X+guideColumn(depth)), snap(r.Y+r.H/2)
+	end := r.X + guideEnd(depth, false)
+	radius := float32(rRow)
+	pts := [][2]float32{{end, mid}}
+	const steps = 8 // 四分之一圆分几段折线
+	for i := 0; i <= steps; i++ {
+		a := math.Pi*1.5 - float64(i)/steps*math.Pi/2
+		pts = append(pts, [2]float32{x + radius + radius*float32(math.Cos(a)), mid + radius + radius*float32(math.Sin(a))})
+	}
+	pts = append(pts, [2]float32{x, r.Y + r.H})
+	p.StrokePolyline(pts, guideWidth, c)
+}
+
 // snap 把线的坐标对到半个点上，1 点粗的线落在整像素里不发虚。
 func snap(v float32) float32 { return float32(math.Round(float64(v)*2)) / 2 }
 

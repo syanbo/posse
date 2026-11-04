@@ -932,10 +932,15 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 	}
 	line := ui.Row(c.Key(key)).AlignItems(ui.Center).Radius(rControl).Shrink(0).Label(detail).Role(ui.RoleButton)
 	selectedBg(c, line, selected)
-	if depth > 0 {
+	// 展开着 worker、自己又没有状态图形时，下面 worker 的竖线没有东西可接，顶端拐过来接到自己的 agent 图标
+	head := open != nil && *open && status == ""
+	if depth > 0 || head {
 		color, hasStatus := colors(c.Theme()).guide, status != ""
 		line.Draw(func(p *ui.Painter, r ui.Rect) {
 			drawGuide(p, r, guide, hasStatus, navRowGap, color)
+			if head {
+				drawGuideHead(p, r, depth, color)
+			}
 		})
 	}
 	line.Children(func() {
