@@ -422,12 +422,19 @@ func TestLogBlameAndReword(t *testing.T) {
 	a.openLog(w, "", "")
 	v := a.files[w.ID]
 	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && tt.HasText("fix: 本地修复") })
+	ld := v.logCur.log
+	// 默认只看当前分支，feat 上的提交不列
+	if !slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) || tt.HasText("feat: 新功能") {
+		t.Fatalf("default filter %v", ld.filter.Branches)
+	}
+	ld.filter.Branches = nil
+	a.loadLog(v, v.logCur, false)
+	until(t, tt, "all branches", func() bool { return !ld.loading && tt.HasText("feat: 新功能") })
 	for _, want := range []string{"feat: 新功能", "work", "base", "main", "origin/main"} {
 		if !tt.HasText(want) {
 			t.Fatalf("log lacks %q: %v", want, tt.Texts())
 		}
 	}
-	ld := v.logCur.log
 	// 按文字筛选
 	ld.text = "新功能"
 	a.applyLogFilter(v, v.logCur)
@@ -640,18 +647,26 @@ func TestLogRefTree(t *testing.T) {
 	v := a.files["w1"]
 	until(t, tt, "log", func() bool { return v.logCur.kind == docLog && v.git.branches.list != nil })
 	ld := v.logCur.log
+	// 默认选中当前分支
+	until(t, tt, "current branch", func() bool {
+		return slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) && !ld.loading
+	})
+	main := len(ld.commits)
 	settle(tt) // 浮层滑上来之后位置才固定，再去点
-	all := len(ld.commits)
 	if !tt.HasText("本地") || !tt.HasText("远程") {
 		t.Fatalf("ref tree missing: %v", tt.Texts())
 	}
 	if err := tt.Click("本地分支 main"); err != nil {
 		t.Fatal(err)
 	}
+	until(t, tt, "all", func() bool { return len(ld.filter.Branches) == 0 && !ld.loading && len(ld.commits) > main })
+	all := len(ld.commits)
+	if err := tt.Click("本地分支 main"); err != nil {
+		t.Fatal(err)
+	}
 	until(t, tt, "filtered", func() bool {
-		return slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) && !ld.loading && len(ld.commits) < all
+		return slices.Equal(ld.filter.Branches, []string{"refs/heads/main"}) && !ld.loading && len(ld.commits) == main
 	})
-	main := len(ld.commits)
 	// ⌘ 单击再加一个分支：两边的提交都列出来
 	if err := tt.ClickWith(ui.Cmd, "本地分支 feat"); err != nil {
 		t.Fatal(err)

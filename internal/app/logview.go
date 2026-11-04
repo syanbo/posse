@@ -47,6 +47,8 @@ type logDoc struct {
 	err       string       // 上一次读日志的错误（筛选写错、选中的分支被删了），写在列表里
 	notRepo   bool         // 不是 git 仓库：整页报错（d.kind 是 docError）
 	hist      *fileHistory // 文件历史（filter.Path 非空）选中的提交和它的 diff
+	head      bool         // 下次读日志时先读出当前分支，只看它（打开整个仓库的日志时默认选中当前分支）
+	readGen   int          // 最近一次开始读日志时的 gen
 }
 
 func logKey(f gitx.LogFilter) string {
@@ -56,27 +58,29 @@ func logKey(f gitx.LogFilter) string {
 	return "log:"
 }
 
-// openLog 在底部浮层里打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支。
+// openLog 在底部浮层里打开日志；path 非空时是这个文件的历史，branch 非空时只看这个分支，
+// 整个仓库的日志不给 branch 时只看当前分支。
 func (a *app) openLog(w *workspace, branch, path string) {
 	v := a.filesFor(w)
 	f := gitx.LogFilter{Path: path}
 	if branch != "" {
 		f.Branches = []string{branch}
 	}
+	head := branch == "" && path == ""
 	key := logKey(f)
 	a.setLogPanel(true)
 	v.console = false
 	for _, d := range v.logs {
 		if d.path == key {
 			v.logCur = d
-			if !slices.Equal(d.log.filter.Branches, f.Branches) {
-				d.log.filter.Branches = f.Branches
+			if head || !slices.Equal(d.log.filter.Branches, f.Branches) {
+				d.log.filter.Branches, d.log.head = f.Branches, head
 				a.loadLog(v, d, false)
 			}
 			return
 		}
 	}
-	d := &fileDoc{path: key, log: &logDoc{filter: f}, started: true}
+	d := &fileDoc{path: key, log: &logDoc{filter: f, head: head}, started: true}
 	// 整个仓库的日志排在最前面，文件历史按打开的先后排在后面
 	if path == "" {
 		v.logs = slices.Insert(v.logs, 0, d)
@@ -268,10 +272,20 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 		skip = len(ld.commits)
 	}
 	f, root, ws := ld.filter, v.git.repo, v.root
+	head := ld.head
+	ld.head, ld.readGen = false, gen
 	go func() {
 		ctx := context.Background()
 		if root == "" {
 			root = repoRoot(ws, gitx.TopLevel(ctx, ws))
+		}
+		if head && root != "" {
+			// 分离的 HEAD 时 git 给 "HEAD"，就选分支树里的 HEAD 一行
+			if name, err := gitx.CurrentBranch(ctx, root); err == nil && name != "HEAD" {
+				f.Branches = []string{"refs/heads/" + name}
+			} else if err == nil {
+				f.Branches = []string{"HEAD"}
+			}
 		}
 		list, err := gitx.Log(ctx, root, f, skip, limit)
 		a.update(func() {
@@ -279,9 +293,16 @@ func (a *app) readLog(v *filesView, d *fileDoc, more bool, limit int) {
 				v.git.checked, v.git.repo = true, root
 			}
 			if ld.gen != gen {
+				// 只是输入筛选文字的停顿把 gen 加了一、还没开始新的读：默认选中当前分支留给那一次
+				if head && ld.readGen == gen {
+					ld.head = true
+				}
 				return
 			}
 			ld.loading = false
+			if head {
+				ld.filter.Branches = f.Branches
+			}
 			// 出错时筛选栏和分支树照样画，错误写在列表里，改了筛选再读；不是 git 仓库才整页报错
 			if root == "" {
 				d.kind, ld.notRepo = docError, true
