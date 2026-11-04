@@ -146,7 +146,49 @@ func (a *app) pathMenu(c *ui.Context, e ui.Element, w *workspace, v *filesView, 
 		if !dir {
 			a.gitFileMenu(L(c), m, w, v, path)
 		}
+		m.Separator()
+		if m.Item(L(c).CommonDeleteEllipsis()).Icon(iconTrash).Danger().Chosen() {
+			a.askTrashPath(L(c), v, path, dir)
+		}
 	})
+}
+
+// askTrashPath 确认后把文件或目录移到废纸篓（能找回，所以不分有没有被 git 跟踪）。
+// 打开着的、没有未保存改动的文件跟着关掉；有改动的留着，显示已删除，免得丢掉改动。
+func (a *app) askTrashPath(m locales.Messages, v *filesView, path string, dir bool) {
+	name := filepath.Base(path)
+	body := m.FilesTrashBody()
+	if dir {
+		body = m.FilesTrashDirBody()
+	}
+	a.confirm(m.FilesTrashConfirm(name), body, m.CommonMoveToTrash(), func() {
+		err := mygo.Shell.TrashItem(path)
+		a.update(func() {
+			if err != nil {
+				a.err = m.TrashMoveError(errtext.Text(err))
+				return
+			}
+			a.forgetTrashed(v, path, dir)
+		})
+	})
+}
+
+// forgetTrashed 收拾移走的路径：关掉其中没有未保存改动的文件，快速打开的清单下次重列，
+// 有检索结果就重新检索（菜单也在检索结果上）；文件树由轮询发现目录变了再重读。
+func (a *app) forgetTrashed(v *filesView, path string, dir bool) {
+	var gone []*fileDoc
+	for _, d := range v.docs {
+		if !d.virtual() && !d.isModified() && (d.path == path || dir && inDir(d.path, path)) {
+			gone = append(gone, d)
+		}
+	}
+	for _, d := range gone {
+		a.dropDoc(v, d)
+	}
+	v.listAt = time.Time{}
+	if len(v.search.hits) > 0 {
+		a.startSearch(v, 0)
+	}
 }
 
 // --- 检索

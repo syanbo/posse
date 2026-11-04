@@ -1115,3 +1115,32 @@ func TestTreeRootReappears(t *testing.T) {
 	a.pollFiles(v)
 	until(t, tt, "root read", func() bool { return v.tree.Loaded(root) && len(v.tree.Rows()) == 1 })
 }
+
+// 文件树右键"删除…"先确认；移走后关掉其中没改过的文件，改过的留着显示已删除。
+func TestTrashFromTree(t *testing.T) {
+	a := previewApp(t)
+	root := filesWorkspace(t, a)
+	w := &a.workspaces[0]
+	tt := newTester(a.build, 1200, 760)
+	a.openFilesPanel(w, sideFiles)
+	until(t, tt, "tree", func() bool { return tt.HasText("main.go") && a.filesPanelShown == 1 })
+	if err := tt.RightClick("main.go"); err != nil {
+		t.Fatal(err)
+	}
+	chooseMenu(t, tt, "删除…")
+	if !a.confirming || a.confirmTitle != "把 main.go 移到废纸篓？" || a.confirmBody != "文件会移到废纸篓，可以从那里找回。" {
+		t.Fatalf("confirm %v %q %q", a.confirming, a.confirmTitle, a.confirmBody)
+	}
+	a.confirming = false
+
+	v := a.files[w.ID]
+	tree, search := filepath.Join(root, "internal/files/tree.go"), filepath.Join(root, "internal/files/search.go")
+	a.openFile(w, tree, 0, [2]int{})
+	a.openFile(w, search, 0, [2]int{})
+	until(t, tt, "opened", func() bool { return v.doc(search) != nil && v.doc(search).kind == docText })
+	v.doc(search).ed.Insert("x")
+	a.forgetTrashed(v, filepath.Join(root, "internal/files"), true)
+	if v.doc(tree) != nil || v.doc(search) == nil {
+		t.Fatalf("docs left: %d", len(v.docs))
+	}
+}

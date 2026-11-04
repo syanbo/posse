@@ -5091,6 +5091,52 @@ func (msgs Messages) FilesTooLarge(size int) string {
 	return Catalog.Format(msgs.locale, "filesTooLarge", map[string]any{"size": size})
 }
 
+// FilesTrashBody says "The file will be moved to the Trash, where you can recover it."
+// in the language the app shows.
+//
+// Files: confirmation body for moving a file in the file tree to the Trash.
+func FilesTrashBody() string { return In(i18n.Locale()).FilesTrashBody() }
+
+// FilesTrashBody says "The file will be moved to the Trash, where you can recover it."
+// in the language of msgs.
+//
+// Files: confirmation body for moving a file in the file tree to the Trash.
+func (msgs Messages) FilesTrashBody() string {
+	return Catalog.Format(msgs.locale, "filesTrashBody", nil)
+}
+
+// FilesTrashConfirm says "Move {name} to the Trash?"
+// in the language the app shows.
+//
+// Files: confirmation title for moving a file or folder in the file tree to
+// the Trash.
+func FilesTrashConfirm(name string) string { return In(i18n.Locale()).FilesTrashConfirm(name) }
+
+// FilesTrashConfirm says "Move {name} to the Trash?"
+// in the language of msgs.
+//
+// Files: confirmation title for moving a file or folder in the file tree to
+// the Trash.
+func (msgs Messages) FilesTrashConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "filesTrashConfirm", map[string]any{"name": name})
+}
+
+// FilesTrashDirBody says "The folder and everything in it will be moved to the Trash, where you can recover them."
+// in the language the app shows.
+//
+// Files: confirmation body for moving a folder in the file tree to the
+// Trash.
+func FilesTrashDirBody() string { return In(i18n.Locale()).FilesTrashDirBody() }
+
+// FilesTrashDirBody says "The folder and everything in it will be moved to the Trash, where you can recover them."
+// in the language of msgs.
+//
+// Files: confirmation body for moving a folder in the file tree to the
+// Trash.
+func (msgs Messages) FilesTrashDirBody() string {
+	return Catalog.Format(msgs.locale, "filesTrashDirBody", nil)
+}
+
 // FilesUnsavedBody says "If you don’t save, your changes will be lost."
 // in the language the app shows.
 //

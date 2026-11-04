@@ -2032,6 +2032,23 @@
       }
     }
   },
+  "filesTrashBody": "The file will be moved to the Trash, where you can recover it.",
+  "@filesTrashBody": {
+    "description": "Files: confirmation body for moving a file in the file tree to the Trash."
+  },
+  "filesTrashConfirm": "Move {name} to the Trash?",
+  "@filesTrashConfirm": {
+    "description": "Files: confirmation title for moving a file or folder in the file tree to the Trash.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filesTrashDirBody": "The folder and everything in it will be moved to the Trash, where you can recover them.",
+  "@filesTrashDirBody": {
+    "description": "Files: confirmation body for moving a folder in the file tree to the Trash."
+  },
   "filesUnsavedBody": "If you don’t save, your changes will be lost.",
   "@filesUnsavedBody": {
     "description": "Body of the dialog asking to save one unsaved file."
