@@ -3,6 +3,20 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.15
+
+- 工作区下有多个 Git 仓库时，改动页按仓库分组：每组标题写仓库名、文件数、正在进行的合并或变基、分支和领先落后数，点标题收起；从改动打开完整文件会打开对应仓库里的那个文件。
+- 改动列表去掉状态字母，文件名按状态上色。
+- 工具时间线里用户发的网址整条显示。
+- 按仓库分组需要电脑端 0.1.24，连旧版电脑时照旧只显示一个仓库。
+
+### English
+
+- When a workspace has several Git repositories, the Changes page groups files by repository: each header shows the repository name, file count, a merge or rebase in progress, the branch and ahead/behind counts, and tapping it collapses the group; opening the full file from a change opens the file in that repository.
+- The change list drops status letters; file names are colored by status.
+- URLs sent by the user are shown in full in the tool timeline.
+- Grouping by repository requires Posse 0.1.24 on the Mac; with an older Mac, a single repository is shown as before.
+
 ## 0.1.14
 
 - 新建会话只列电脑上能用的 agent（装了、又没在设置里关掉的），默认选第一个；电脑上刚改了开关，打开面板就生效。
