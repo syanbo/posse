@@ -660,25 +660,31 @@ func TestRestartedHelperGetsTheCurrentSettings(t *testing.T) {
 	ctrlW.Close()
 }
 
-// 锁屏时开始看、解锁时采集被停掉子进程重启：新子进程没锁就不报解锁，这边在它的第一个画面配置前替它报；
-// 新子进程还锁着（配置前报了锁屏）就不报
-func TestRestartAfterUnlockReportsUnlocked(t *testing.T) {
-	for _, stillLocked := range []bool{false, true} {
+// 每个子进程启动时报一次锁屏状态，锁屏、解锁只在变了时转给手机：
+// 解锁那一刻子进程重启时，新子进程报的没锁把手机从锁屏放出来；没锁时启动、重启都不报
+func TestLockStateForwardedOnChange(t *testing.T) {
+	locked := Frame{Kind: KindStatus, Payload: []byte{StatusLocked}}
+	unlocked := Frame{Kind: KindStatus, Payload: []byte{StatusUnlocked}}
+	restarted := Frame{Kind: KindStatus, Payload: []byte{StatusRestarted}}
+	config := Frame{Kind: KindConfig, Payload: MarshalConfig(Config{Codec: CodecHEVC, Width: 1920, Height: 1080, FullWidth: 1920, FullHeight: 1080})}
+	for _, tc := range []struct {
+		name   string
+		frames []Frame
+		want   []byte
+	}{
+		{"unlock restarts the helper", []Frame{locked, config, restarted, unlocked, config}, []byte{StatusLocked, StatusUnlocked}},
+		{"restart while locked", []Frame{locked, config, restarted, locked, config}, []byte{StatusLocked}},
+		{"restart while unlocked", []Frame{unlocked, config, restarted, unlocked, config}, nil},
+		{"lock and unlock while watching", []Frame{unlocked, config, locked, unlocked, locked}, []byte{StatusLocked, StatusUnlocked, StatusLocked}},
+	} {
 		statuses := make(chan byte, 8)
 		c := &caster{control: io.Discard, fps: 60, stopped: make(chan struct{}), onStatus: func(b byte) { statuses <- b }}
 		framesR, framesW := io.Pipe()
 		done := make(chan struct{})
 		go func() { c.readFrames(framesR); close(done) }()
-		config := Frame{Kind: KindConfig, Payload: MarshalConfig(Config{Codec: CodecHEVC, Width: 1920, Height: 1080, FullWidth: 1920, FullHeight: 1080})}
-		WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusLocked}})
-		WriteFrame(framesW, config)
-		WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusRestarted}})
-		if stillLocked {
-			WriteFrame(framesW, Frame{Kind: KindStatus, Payload: []byte{StatusLocked}})
+		for _, f := range tc.frames {
+			WriteFrame(framesW, f)
 		}
-		WriteFrame(framesW, config)
-		// 之后再来配置（切屏、改分辨率）不重复报
-		WriteFrame(framesW, config)
 		framesW.Close()
 		<-done
 		close(statuses)
@@ -686,12 +692,8 @@ func TestRestartAfterUnlockReportsUnlocked(t *testing.T) {
 		for b := range statuses {
 			got = append(got, b)
 		}
-		want := []byte{StatusLocked, StatusUnlocked}
-		if stillLocked {
-			want = []byte{StatusLocked, StatusLocked}
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("stillLocked=%v: statuses %v, want %v", stillLocked, got, want)
+		if !bytes.Equal(got, tc.want) {
+			t.Errorf("%s: statuses %v, want %v", tc.name, got, tc.want)
 		}
 	}
 }

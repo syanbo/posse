@@ -319,10 +319,9 @@ func (c *caster) stop(err error) {
 }
 
 func (c *caster) readFrames(frames io.Reader) error {
-	// locked 是最近报给手机的锁屏状态。解锁那一刻采集常被系统停掉、子进程重启，
-	// 旧子进程收不到解锁通知，新的一开始就没锁、不会报解锁：新子进程开始时锁着会在第一个画面配置前报，
-	// 到配置还没报就替它报解锁，不然手机一直停在锁屏
-	var locked, relock bool
+	// locked 是报给手机的锁屏状态，锁屏、解锁只在变了时转给手机。每个子进程启动时都报一次当时的状态：
+	// 解锁那一刻采集常被系统停掉、子进程重启，旧子进程收不到解锁通知，靠新子进程的这一报把手机从锁屏放出来
+	var locked bool
 	for {
 		f, err := ReadFrame(frames)
 		if err != nil {
@@ -330,14 +329,6 @@ func (c *caster) readFrames(frames io.Reader) error {
 		}
 		switch f.Kind {
 		case KindConfig:
-			if relock {
-				relock = false
-				locked = false
-				log.Printf("desk: unlocked while the helper restarted")
-				if c.onStatus != nil {
-					c.onStatus(StatusUnlocked)
-				}
-			}
 			cfg, err := UnmarshalConfig(f.Payload)
 			if err == nil {
 				// 满尺寸没变是我们自己降、升了分辨率（CtrlScale）：码率照旧，编码器重开后按它自己的起始码率跑，
@@ -369,20 +360,20 @@ func (c *caster) readFrames(frames io.Reader) error {
 			}
 		case KindStatus:
 			if len(f.Payload) > 0 && f.Payload[0] == StatusRestarted {
-				relock = locked
 				c.resync()
 				continue
 			}
 			if len(f.Payload) > 0 {
-				switch f.Payload[0] {
-				case StatusLocked:
-					locked, relock = true, false
-				case StatusUnlocked:
-					locked, relock = false, false
+				code := f.Payload[0]
+				if code == StatusLocked || code == StatusUnlocked {
+					if (code == StatusLocked) == locked {
+						continue
+					}
+					locked = code == StatusLocked
 				}
-				log.Printf("desk: status %d", f.Payload[0])
+				log.Printf("desk: status %d", code)
 				if c.onStatus != nil {
-					c.onStatus(f.Payload[0])
+					c.onStatus(code)
 				}
 			}
 		case KindDisplays:

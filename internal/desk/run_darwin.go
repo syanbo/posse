@@ -1245,12 +1245,15 @@ func (e *engine) watchScreen() bool {
 	e.mac.addObserver(center, add, uintptr(obs), uintptr(e.mac.sel("screenLocked:")), uintptr(e.mac.string("com.apple.screenIsLocked")), 0)
 	e.mac.addObserver(center, add, uintptr(obs), uintptr(e.mac.sel("screenUnlocked:")), uintptr(e.mac.string("com.apple.screenIsUnlocked")), 0)
 	e.observer = obs
-	// 先订通知再查：这里在主线程上，通知要等返回后才投递，查完就解锁也不会漏
+	// 先订通知再查：这里在主线程上，通知要等返回后才投递，查完就解锁也不会漏。
+	// 没锁也报：上一个子进程可能死在解锁那一刻、没报解锁，手机要靠这一报离开锁屏（重复的由父进程滤掉）
 	if e.mac.screenLocked() {
 		e.locked.Store(true)
 		e.report(StatusLocked)
 		e.logf("screen is locked")
 		go e.wakeLocked()
+	} else {
+		e.report(StatusUnlocked)
 	}
 	if rc := e.mac.registerDisplay(displayCallback, 0); rc != 0 {
 		e.logf("display reconfiguration callback: %d", rc)
