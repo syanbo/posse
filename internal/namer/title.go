@@ -17,17 +17,19 @@ const Bar = "｜"
 const MaxSummary = 20
 
 // Types 是标题第二段可选的类型。
-var Types = []string{"修复", "feat", "调研", "调试", "重构", "文档", "杂项"}
+var Types = []string{"修复", "开发", "调研", "调试", "重构", "文档", "杂项"}
 
 // typeAliases 把同义词、英文类型映射回 Types，而不是直接拒绝。
 var typeAliases = map[string]string{
 	"fix": "修复", "bugfix": "修复", "bug": "修复", "修bug": "修复", "修复bug": "修复", "修正": "修复",
-	"feat": "feat", "feature": "feat", "功能": "feat", "新功能": "feat", "新增": "feat", "实现": "feat",
+	"开发": "开发", "feat": "开发", "feature": "开发", "dev": "开发", "develop": "开发",
+	"功能": "开发", "新功能": "开发", "新增": "开发", "实现": "开发",
 	"调研": "调研", "research": "调研", "探索": "调研", "investigate": "调研", "分析": "调研", "研究": "调研",
 	"调试": "调试", "debug": "调试", "排查": "调试",
 	"重构": "重构", "refactor": "重构", "优化": "重构", "perf": "重构",
 	"文档": "文档", "docs": "文档", "doc": "文档",
 	"杂项": "杂项", "chore": "杂项", "misc": "杂项", "其他": "杂项", "其它": "杂项",
+	"配置": "杂项", "config": "杂项", "setup": "杂项", "环境": "杂项", "构建": "杂项", "build": "杂项", "ci": "杂项",
 }
 
 var (
@@ -54,7 +56,7 @@ func normalizeType(s string) string {
 }
 
 // ErrFormat 说明标题该怎么写，给 agent 看了重拟。
-var ErrFormat = fmt.Errorf("标题格式不对：需要 MMDD%s类型%s摘要，类型限 %s，摘要不超过 %d 字",
+var ErrFormat = fmt.Errorf("标题格式不对：需要 MMDD%s类型%s摘要，类型限 %s（feat、功能算开发，配置、构建算杂项），摘要不超过 %d 字",
 	Bar, Bar, strings.Join(Types, " "), MaxSummary)
 
 // Normalize 把输入规整成 `MMDD｜类型｜摘要`：日期一律换成 now 的本地日期，
@@ -83,7 +85,7 @@ func Normalize(raw string, now time.Time) (string, error) {
 	summary := strings.Join(strings.Fields(strings.Join(parts[1:], " ")), " ")
 	summary = strings.TrimSpace(strings.TrimRight(summary, trailingPunct))
 	// 「修复｜修复登录按钮」这类重复的类型词去掉一份
-	if typ != "feat" && strings.HasPrefix(summary, typ) && utf8.RuneCountInString(summary) > utf8.RuneCountInString(typ)+1 {
+	if strings.HasPrefix(summary, typ) && utf8.RuneCountInString(summary) > utf8.RuneCountInString(typ)+1 {
 		summary = strings.TrimLeft(strings.TrimPrefix(summary, typ), "：: ，,")
 	}
 	if summary == "" || utf8.RuneCountInString(summary) > MaxSummary {
