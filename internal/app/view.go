@@ -528,7 +528,7 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 		}
 		a.projectHeader(c, p, ws, open)
 		collapsible(c, shown, func() {
-			links := &remoteLinks{}
+			links := &remoteLinks{handles: a.linkHandleMap()}
 			list := ui.Column(c).Gap(2).Padding(0, 0, 0, navIndent)
 			list.Children(func() {
 				for _, w := range ws {
@@ -541,10 +541,10 @@ func (a *app) projectItem(c *ui.Context, p project, ws []workspace, reveal bool)
 				}
 			})
 			if len(links.order) > 0 {
-				var h ui.Handle
-				list.Bind(&h)
+				h := links.handle("list:" + p.ID)
+				list.Bind(h)
 				color := colors(c.Theme()).guide
-				list.DrawOver(func(p *ui.Painter, r ui.Rect) { links.draw(c, p, r, h, color) })
+				list.DrawOver(func(p *ui.Painter, r ui.Rect) { links.draw(c, p, r, *h, color) })
 			}
 		})
 	})
@@ -832,7 +832,8 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo, l
 				}
 				kids := children[term.ID]
 				if len(kids) == 0 || len(g) >= 4 {
-					links.row(term.ID, a.navSession(c, w, term, cur == term.ID, nil, nil, "", g, false))
+					line, hasStatus := a.navSession(c, w, term, cur == term.ID, nil, nil, "", g, false)
+					links.row(term.ID, line, len(g), hasStatus)
 					continue
 				}
 				open := a.workersOpen[term.ID]
@@ -851,7 +852,8 @@ func (a *app) sessionRows(c *ui.Context, w workspace, sessions []terminalInfo, l
 					*open = true
 				}
 				// 收起时当前会话在里面，这一行算选中
-				links.row(term.ID, a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", g, false))
+				line, hasStatus := a.navSession(c, w, term, cur == term.ID || (!*open && hidden), all, open, "", g, false)
+				links.row(term.ID, line, len(g), hasStatus)
 				if *open {
 					rows(kids, g, true)
 				}
@@ -879,8 +881,8 @@ const navRowGap = 2
 // guide 是 worker 的连接线，一层嵌套一列：状态槽之前先缩进这么多层，状态紧挨着自己的 agent 图标，
 // 竖线走在上面几层派发方的状态槽下面。shadow 是派到别的工作区的 worker 的影子行：w 是它真正所在的工作区，
 // 文字淡一些，点了切过去并滚到它真正那一行；方向键不经过它，免得同一个会话走两遍。
-// 返回这一行，给同一项目里跨工作区的连线定位。
-func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, guide treeGuide, shadow bool) linkEnd {
+// 返回这一行和状态槽里有没有图形，给同一项目里跨工作区的连线定位。
+func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected bool, workers []terminalInfo, open *bool, where string, guide treeGuide, shadow bool) (ui.Element, bool) {
 	depth := len(guide)
 	if !shadow {
 		a.navOrder = append(a.navOrder, navTarget{ws: w.ID, term: term.ID})
@@ -984,9 +986,7 @@ func (a *app) navSession(c *ui.Context, w workspace, term terminalInfo, selected
 			a.askClose(l, term)
 		}
 	})
-	var h ui.Handle
-	line.Bind(&h)
-	return linkEnd{row: h, depth: depth, hasStatus: status != ""}
+	return line, status != ""
 }
 
 // statusTasks 是界面自己的状态：会话在等它派出去的任务（阻塞在 posse task wait 上，或者停下来等 Posse 提醒），

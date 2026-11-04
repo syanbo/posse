@@ -2,6 +2,7 @@ package app
 
 import (
 	"cmp"
+	"maps"
 	"math"
 	"slices"
 
@@ -133,7 +134,7 @@ func guideEnd(d int, hasStatus bool) float32 {
 
 // linkEnd 是侧栏里画出来的一行会话，跨工作区连线的一头：depth 是它的嵌套层数，hasStatus 是状态槽里有没有图形。
 type linkEnd struct {
-	row       ui.Handle
+	row       *ui.Handle
 	depth     int
 	hasStatus bool
 }
@@ -145,6 +146,17 @@ type remoteLinks struct {
 	order   []string            // 派发方，按侧栏里出现的先后
 	workers map[string][]string // 派发方 → worker
 	rows    map[string]linkEnd  // 这一帧画出来的会话行
+	handles map[string]*ui.Handle
+}
+
+// handle 是 key 这一行一直复用的 Handle，见 app.linkHandles。
+func (l *remoteLinks) handle(key string) *ui.Handle {
+	h := l.handles[key]
+	if h == nil {
+		h = new(ui.Handle)
+		l.handles[key] = h
+	}
+	return h
 }
 
 func (l *remoteLinks) link(coord, worker string) {
@@ -157,14 +169,40 @@ func (l *remoteLinks) link(coord, worker string) {
 	l.workers[coord] = append(l.workers[coord], worker)
 }
 
-func (l *remoteLinks) row(id string, e linkEnd) {
+// row 记下这一帧画出来的会话行；l 为空（单工作区项目）时不记，也不绑定。
+func (l *remoteLinks) row(id string, line ui.Element, depth int, hasStatus bool) {
 	if l == nil {
 		return
 	}
 	if l.rows == nil {
 		l.rows = map[string]linkEnd{}
 	}
-	l.rows[id] = e
+	h := l.handle(id)
+	line.Bind(h)
+	l.rows[id] = linkEnd{row: h, depth: depth, hasStatus: hasStatus}
+}
+
+// linkHandleMap 是 app.linkHandles，没有时建一个。
+func (a *app) linkHandleMap() map[string]*ui.Handle {
+	if a.linkHandles == nil {
+		a.linkHandles = map[string]*ui.Handle{}
+	}
+	return a.linkHandles
+}
+
+// pruneLinkHandles 删掉已经不在的会话和项目的 Handle，工作区变了时调。
+func (a *app) pruneLinkHandles() {
+	if len(a.linkHandles) == 0 {
+		return
+	}
+	alive := map[string]bool{}
+	for _, w := range a.workspaces {
+		alive["list:"+w.ProjectID] = true
+		for _, t := range w.Terminals {
+			alive[t.ID] = true
+		}
+	}
+	maps.DeleteFunc(a.linkHandles, func(k string, _ *ui.Handle) bool { return !alive[k] })
 }
 
 // linkLaneGap 是几个派发方各自的竖线之间的距离，靠左依次排开。
