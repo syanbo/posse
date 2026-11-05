@@ -836,7 +836,10 @@ func (rc *roomConn) call(method string, params, out any) error {
 			}
 			return rpc.Errorf(rpc.CodeConflict, "%s", ce.Message)
 		}
-		return rpc.Errorf(rpc.CodeConflict, "the host did not answer (%v); your draft is kept, try again", err)
+		// 请求可能已经到了房主、只是应答没回来：说不准有没有做，Data 告诉调用方结果未知
+		e := rpc.Errorf(rpc.CodeConflict, "the host did not answer (%v); it may or may not have done this", err)
+		e.Data = json.RawMessage(`{"unknown":true}`)
+		return e
 	}
 	if err := rc.syncLocked(ctx); err != nil && !errors.Is(err, errStopRoom) {
 		log.Printf("collaboration %s: sync after %s: %v", short(rc.room), method, err)
@@ -878,7 +881,7 @@ func hostOffline(rc *roomConn) error {
 	if st == "" {
 		st = "the host is offline"
 	}
-	return rpc.Errorf(rpc.CodeConflict, "not connected to the host: %s Your draft is kept.", strings.TrimSuffix(st, ".")+".")
+	return rpc.Errorf(rpc.CodeConflict, "not connected to the host: %s Nothing was sent.", strings.TrimSuffix(st, ".")+".")
 }
 
 // upload 把本机文件分块传给房主，返回上传 ID（发消息时引用）。同样内容房主已有时不用传。

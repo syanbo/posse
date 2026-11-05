@@ -889,6 +889,8 @@ type discMemberParams struct {
 	Worktree   string `json:"worktree"` // 为成员新建这个名字的 git worktree，作为它的执行工作区
 	Base       string `json:"base"`
 	ApplyNow   bool   `json:"applyNow"` // 改配置后马上关掉旧 worker，下一轮按新配置启动
+	// ClientID 是这次添加的请求 ID：加入的讨论里经房主加，应答丢了用同一个 ID 重试不会加出两个
+	ClientID string `json:"clientId"`
 }
 
 // memberWorkspace 定下成员的执行工作区：要新建 worktree 时在讨论的项目里建。
@@ -979,11 +981,14 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 		if err != nil {
 			return nil, err
 		}
+		if p.ClientID == "" {
+			p.ClientID = store.NewID("c_") + store.NewID("")
+		}
 		var res struct {
 			Member string `json:"member"`
 		}
-		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort}, &res); err != nil {
-			return nil, err
+		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort, "client": p.ClientID}, &res); err != nil {
+			return nil, withClientID(err, p.ClientID)
 		}
 		own := store.Member{ID: res.Member, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
 			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}
@@ -1004,6 +1009,22 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	d.taskNotify()
 	return d.store.Member(m.ID)
+}
+
+// withClientID 给「结果未知」的错误带上请求 ID：调用方用它重试同一次添加（CLI 的 --client-id）。
+func withClientID(err error, client string) error {
+	var re *rpc.Error
+	if !errors.As(err, &re) || len(re.Data) == 0 {
+		return err
+	}
+	var data map[string]any
+	if json.Unmarshal(re.Data, &data) != nil || data["unknown"] != true {
+		return err
+	}
+	data["clientId"] = client
+	out := *re
+	out.Data, _ = json.Marshal(data)
+	return &out
 }
 
 func (d *Daemon) memberSel(id string) (store.Member, error) {

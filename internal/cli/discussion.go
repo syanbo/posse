@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -8,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"posse/internal/rpc"
 )
 
 // 讨论（docs/features/discussions.md）：用户在讨论里 @ 成员发请求；成员的专用 worker 用
@@ -191,6 +195,7 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 	effort := fs.String("effort", "", "")
 	ws := fs.String("workspace", "", "")
 	worktree := fs.String("worktree", "", "")
+	client := fs.String("client-id", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -200,10 +205,21 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 		return err
 	}
 	var m discMember
-	return e.do("discussion.member.add", map[string]any{"caller": caller(), "discussion": key, "name": *name, "role": *role, "agent": *agentName, "model": *model, "effort": *effort,
-		"workspace": *ws, "worktree": *worktree}, &m, func() {
+	err = e.do("discussion.member.add", map[string]any{"caller": caller(), "discussion": key, "name": *name, "role": *role, "agent": *agentName, "model": *model, "effort": *effort,
+		"workspace": *ws, "worktree": *worktree, "clientId": *client}, &m, func() {
 		fmt.Fprintf(e.out, "added %s (%s) as %s in %s\n", m.Name, m.Agent, m.ID, m.WorkspaceLabel)
 	})
+	// 加入的讨论里房主没回应：可能已经加上了。用同一个请求 ID 重试，加上了就拿回那个，不会加出两个
+	var re *rpc.Error
+	if errors.As(err, &re) && len(re.Data) > 0 {
+		var data struct {
+			ClientID string `json:"clientId"`
+		}
+		if json.Unmarshal(re.Data, &data) == nil && data.ClientID != "" {
+			fmt.Fprintf(e.errOut, "the host may already have added it; retry the same command with --client-id %s so it is not added twice\n", data.ClientID)
+		}
+	}
+	return err
 }
 
 func cmdDiscussionUpdateMember(e *env, args []string) error {

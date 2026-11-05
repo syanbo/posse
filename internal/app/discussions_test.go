@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -557,5 +558,57 @@ func TestRemovePasted(t *testing.T) {
 	}
 	if _, err := os.Stat(other); err != nil {
 		t.Fatal("removed a file that was not pasted")
+	}
+}
+
+// 加成员失败（加入的讨论里房主没回应）：表单和请求 ID 都留着，原样重试用同一个 ID；成功才关掉，新开表单换 ID。
+func TestDiscussionMemberFormKeepsRequestOnFailure(t *testing.T) {
+	var mu sync.Mutex
+	var ids []string
+	fail := true
+	a, tt, _ := discTester(t, map[string]rpc.Handler{"discussion.member.add": func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct{ ClientID string }
+		json.Unmarshal(raw, &p)
+		mu.Lock()
+		defer mu.Unlock()
+		ids = append(ids, p.ClientID)
+		if fail {
+			fail = false
+			return nil, rpc.Errorf(rpc.CodeConflict, "the host did not answer (connection to the host closed); it may or may not have done this")
+		}
+		return map[string]any{"id": "dmb_new"}, nil
+	}})
+	submit := func() {
+		t.Helper()
+		if err := tt.Click("添加"); err != nil {
+			t.Fatalf("%v; texts %v", err, tt.Texts())
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for tt.Frame(); a.disc.form.busy && time.Now().Before(deadline); tt.Frame() {
+			time.Sleep(5 * time.Millisecond)
+		}
+		tt.Frame()
+	}
+	a.openMemberForm(a.disc.d, "")
+	a.disc.form.name = "Win Agent"
+	tt.Frame()
+	submit()
+	if !a.disc.form.open || a.disc.form.name != "Win Agent" || a.err == "" {
+		t.Fatalf("form after a failure: open=%v name=%q err=%q", a.disc.form.open, a.disc.form.name, a.err)
+	}
+	submit()
+	if a.disc.form.open {
+		t.Fatal("form still open after success")
+	}
+	mu.Lock()
+	got := slices.Clone(ids)
+	mu.Unlock()
+	if len(got) != 2 || got[0] == "" || got[0] != got[1] {
+		t.Fatalf("request ids %v, want the same one twice", got)
+	}
+	first := a.disc.form.client
+	a.openMemberForm(a.disc.d, "")
+	if a.disc.form.client == "" || a.disc.form.client == first {
+		t.Fatalf("new form reused request id %q", first)
 	}
 }

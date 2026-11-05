@@ -19,8 +19,11 @@ var zh = [][2]string{
 
 	// 局域网协作
 	{"Could not reach the host. Check that both Macs are on the same network, Posse is running on the host with sharing turned on, and Local Network access is allowed for Posse on both Macs (System Settings › Privacy & Security › Local Network).", "连不上房主。请确认两台 Mac 在同一个网络、房主的 Posse 在运行且开着分享，并在两台 Mac 上允许 Posse 访问本地网络（系统设置 › 隐私与安全性 › 本地网络）。"},
-	{"not connected to the host: %s Your draft is kept.", "没有连上房主：{1} 草稿已保留。"},
+	{"not connected to the host: %s Nothing was sent.", "没有连上房主：{1} 什么都没有发出去。"},
 	{"the host is offline", "房主不在线"},
+	{"the host did not answer (%v); it may or may not have done this", "房主没有回应（{1}），不确定房主做了没有"},
+	{"the agent this request added was removed since; add it again from a new form", "这次添加的 Agent 后来已经移除了；要的话关掉表单重新添加"},
+	{"this request already added an agent with other settings; edit that agent instead", "这次添加已经用别的设置加上了一个 Agent；请改那个 Agent 的设置"},
 	{"the host did not answer (%v); your draft is kept, try again", "房主没有回应（{1}），草稿已保留，请重试"},
 	{"the host turned off sharing for this discussion; you can read what was already synced", "房主关掉了这个讨论的分享，已同步的内容仍可阅读"},
 	{"the host turned off sharing for this discussion", "房主关掉了这个讨论的分享"},

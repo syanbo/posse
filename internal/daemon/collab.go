@@ -338,6 +338,8 @@ func cerr(err error) error {
 		return collaboration.Errorf(collaboration.CodeConflict, "the agent was removed from the discussion")
 	case errors.Is(err, store.ErrRetried):
 		return collaboration.Errorf(collaboration.CodeConflict, "this request was already retried")
+	case errors.Is(err, store.ErrAddGone), errors.Is(err, store.ErrAddChanged):
+		return collaboration.Errorf(collaboration.CodeConflict, "%v", err)
 	case errors.Is(err, store.ErrConflict), errors.Is(err, store.ErrStaleRound):
 		return collaboration.Errorf(collaboration.CodeConflict, "%v", err)
 	}
@@ -485,6 +487,8 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 			Agent  string `json:"agent"`
 			Model  string `json:"model"`
 			Effort string `json:"effort"`
+			// Client 是这次添加的请求 ID：应答丢了重发时不再加一个（AddMemberOnce）
+			Client string `json:"client"`
 		}
 		json.Unmarshal(raw, &p)
 		p.Name, p.Role = strings.TrimSpace(p.Name), strings.TrimSpace(p.Role)
@@ -498,8 +502,12 @@ func (h collabHost) Serve(ctx context.Context, s *collaboration.Session, method 
 			Owner: s.FP, Generation: gen, CreatedAt: time.Now()}
 		if method == "member.add" {
 			m.ID = store.NewID("dmb_") + store.NewID("")
-			if err := d.store.AddMember(m); err != nil {
+			id, dup, err := d.store.AddMemberOnce(m, p.Client)
+			if err != nil {
 				return nil, cerr(err)
+			}
+			if dup {
+				return map[string]any{"member": id, "duplicate": true}, nil
 			}
 		} else if _, err := d.store.OwnerMemberUpdate(room, s.FP, gen, m); err != nil {
 			return nil, cerr(err)

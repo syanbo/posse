@@ -177,6 +177,9 @@ var (
 	ErrBusyDiscuss     = errors.New("discussion has active or queued requests")
 	ErrNotOwner        = errors.New("not the owner")
 	ErrRevoked         = errors.New("access revoked")
+	// 加 Agent 的请求 ID 重发时对不上（AddMemberOnce）：那个 Agent 已经移除或属于上一代资格，或者这次的设置不同
+	ErrAddGone    = errors.New("the agent this request added was removed since; add it again from a new form")
+	ErrAddChanged = errors.New("this request already added an agent with other settings; edit that agent instead")
 )
 
 // pendingStates 和 activeStates 合起来就是挡住归档、移除成员的状态。
@@ -581,30 +584,59 @@ func (s *Store) SetArchived(key string, archived bool, at time.Time) error {
 // --- 成员
 
 func (s *Store) AddMember(m Member) error {
-	return s.withTx(func(tx *sql.Tx) error {
-		if err := activeDiscussion(tx, m.Discussion); err != nil {
-			return err
-		}
-		d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, m.Discussion))
-		if err != nil {
-			return err
-		}
-		if d.Mirror {
-			return fmt.Errorf("%w: agents in a joined discussion are added through its host", ErrConflict)
-		}
-		if m.Owner != "" && m.Owner != d.Host {
-			if err := checkPerson(tx, d.Key, m.Owner, m.Generation); err != nil {
+	return s.withTx(func(tx *sql.Tx) error { return addMember(tx, m, "") })
+}
+
+// AddMemberOnce 是成员电脑经房主加自己的 Agent，client 是这次添加的请求 ID：上次房主加好了、应答却丢了，
+// 拥有者用同一个 ID 重发时返回已经加好的那个（dup），不再加一个。同一个 ID 的 Agent 已经移除、属于这个人之前的资格，
+// 或者设置和这次的不一样时报冲突：不复活、不覆盖。
+func (s *Store) AddMemberOnce(m Member, client string) (id string, dup bool, err error) {
+	err = s.withTx(func(tx *sql.Tx) error {
+		if client != "" {
+			old, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE discussion=? AND owner=? AND client_id=?`, m.Discussion, m.Owner, client))
+			switch {
+			case err == nil:
+				if old.RemovedAt != nil || old.Generation != m.Generation {
+					return ErrAddGone
+				}
+				if ownConfig(old) != ownConfig(m) {
+					return ErrAddChanged
+				}
+				id, dup = old.ID, true
+				return nil
+			case !errors.Is(err, ErrNotFound):
 				return err
 			}
 		}
-		rev, err := bump(tx, m.Discussion)
-		if err != nil {
+		id = m.ID
+		return addMember(tx, m, client)
+	})
+	return id, dup, err
+}
+
+func addMember(tx *sql.Tx, m Member, client string) error {
+	if err := activeDiscussion(tx, m.Discussion); err != nil {
+		return err
+	}
+	d, err := scanDiscussion(tx.QueryRow(`SELECT `+discCols+` FROM discussions WHERE key=?`, m.Discussion))
+	if err != nil {
+		return err
+	}
+	if d.Mirror {
+		return fmt.Errorf("%w: agents in a joined discussion are added through its host", ErrConflict)
+	}
+	if m.Owner != "" && m.Owner != d.Host {
+		if err := checkPerson(tx, d.Key, m.Owner, m.Generation); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at,owner,generation) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?)`,
-			m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt), m.Owner, m.Generation)
+	}
+	rev, err := bump(tx, m.Discussion)
+	if err != nil {
 		return err
-	})
+	}
+	_, err = tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,workspace_label,config_version,rev,created_at,owner,generation,client_id) VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)`,
+		m.ID, m.Discussion, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, rev, ms(m.CreatedAt), m.Owner, m.Generation, client)
+	return err
 }
 
 func (s *Store) Member(id string) (Member, error) {

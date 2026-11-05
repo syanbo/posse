@@ -211,3 +211,90 @@ func TestCollabLegacyOwnConfigNeedsConfirm(t *testing.T) {
 		t.Fatalf("restart cleared the confirmation pause: %q", got.Paused)
 	}
 }
+
+// 成员电脑经房主加 Agent 的应答丢了，用同一个请求 ID 重发：返回已经加好的那个，不加第二个；
+// 同一个 ID 换了设置、Agent 已经移除、换了一代资格都报冲突，别人用同样的 ID 互不相干。
+func TestCollabAddMemberOnce(t *testing.T) {
+	s := openTestStore(t)
+	d, _ := newDiscussion(t, s)
+	if err := s.SetShared(d.Key, true, "Hana", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	join := func(inv, fp string) JoinRequest {
+		t.Helper()
+		if err := s.CreateInvite(d.Key, inv, "h-"+inv, time.Now().Add(10*time.Minute), time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SubmitJoin(d.Key, "h-"+inv, "rq-"+inv, fp, fp, "", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		r, err := s.ApproveRequest("rq-"+inv, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	active := func() (n int) {
+		ms, _ := s.Members(d.Key)
+		for _, m := range ms {
+			if m.RemovedAt == nil {
+				n++
+			}
+		}
+		return n
+	}
+	base := active()
+	a := join("inv1", "fpA")
+	bob := Member{ID: "dmb_1", Discussion: d.Key, Name: "Bob", Role: "review", Agent: "codex", Owner: "fpA", Generation: a.Generation, CreatedAt: time.Now()}
+	if id, dup, err := s.AddMemberOnce(bob, "c1"); err != nil || dup || id != "dmb_1" {
+		t.Fatalf("first add: %s %v %v", id, dup, err)
+	}
+	// 应答丢了，重发同一次添加（房主每次给新 ID）
+	again := bob
+	again.ID = "dmb_2"
+	if id, dup, err := s.AddMemberOnce(again, "c1"); err != nil || !dup || id != "dmb_1" {
+		t.Fatalf("resend: %s %v %v", id, dup, err)
+	}
+	if n := active() - base; n != 1 {
+		t.Fatalf("%d agents after a resend", n)
+	}
+	// 同一个 ID 换了设置：不覆盖、不新加
+	changed := again
+	changed.ID, changed.Model = "dmb_3", "gpt-5"
+	if _, _, err := s.AddMemberOnce(changed, "c1"); !errors.Is(err, ErrAddChanged) {
+		t.Fatalf("same id, other settings: %v", err)
+	}
+	if m, _ := s.Member("dmb_1"); m.Model != "" {
+		t.Fatalf("settings overwritten: %+v", m)
+	}
+	// 别人用同样的 ID：各加各的
+	b := join("inv2", "fpB")
+	carol := Member{ID: "dmb_4", Discussion: d.Key, Name: "Bob", Role: "review", Agent: "codex", Owner: "fpB", Generation: b.Generation, CreatedAt: time.Now()}
+	if id, dup, err := s.AddMemberOnce(carol, "c1"); err != nil || dup || id != "dmb_4" {
+		t.Fatalf("other person, same id: %s %v %v", id, dup, err)
+	}
+	// 移除之后同一个 ID 不把它复活
+	if err := s.OwnerMemberRemove(d.Key, "fpA", a.Generation, "dmb_1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	again.ID = "dmb_5"
+	if _, _, err := s.AddMemberOnce(again, "c1"); !errors.Is(err, ErrAddGone) {
+		t.Fatalf("resend after removal: %v", err)
+	}
+	// 移出再加入是新的一代：上一代的请求 ID 不算数
+	if _, err := s.RevokePerson(d.Key, "fpB", PersonRemoved, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	b2 := join("inv3", "fpB")
+	if b2.Generation == b.Generation {
+		t.Fatalf("rejoin kept generation %d", b2.Generation)
+	}
+	carol.ID, carol.Generation = "dmb_6", b2.Generation
+	if _, _, err := s.AddMemberOnce(carol, "c1"); !errors.Is(err, ErrAddGone) {
+		t.Fatalf("resend from an earlier generation: %v", err)
+	}
+	if n := active() - base; n != 0 {
+		ms, _ := s.Members(d.Key)
+		t.Fatalf("%d agents of members still active, want 0: %+v", n, ms)
+	}
+}

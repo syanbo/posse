@@ -145,7 +145,7 @@ func Open(path string) (*Store, error) {
 		{"disc_messages", "author_id", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "mention", "TEXT NOT NULL DEFAULT ''"},
 		{"disc_messages", "mention_name", "TEXT NOT NULL DEFAULT ''"}, {"disc_messages", "key_by", "TEXT NOT NULL DEFAULT ''"},
 		{"disc_executions", "owner", "TEXT NOT NULL DEFAULT ''"}, {"disc_executions", "generation", "INTEGER NOT NULL DEFAULT 0"},
-		{"disc_members", "own_config", "TEXT NOT NULL DEFAULT ''"},
+		{"disc_members", "own_config", "TEXT NOT NULL DEFAULT ''"}, {"disc_members", "client_id", "TEXT NOT NULL DEFAULT ''"},
 	} {
 		if err := addColumn(db, c[0], c[1], c[2]); err != nil {
 			db.Close()

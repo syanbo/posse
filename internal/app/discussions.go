@@ -297,6 +297,10 @@ type memberForm struct {
 	mode     int // 0 用已有工作区，1 新建 worktree
 	worktree string
 	applyNow bool
+	// client 是这张表单的请求 ID：加入的讨论里添加时，房主没回应就留着表单，用同一个 ID 重试不会加出两个；
+	// 新开一张表单换一个。busy 是提交了、还没有结果
+	client string
+	busy   bool
 }
 
 type discEditForm struct {
@@ -2265,7 +2269,7 @@ func (a *app) editDiscussionDialog(c *ui.Context) {
 }
 
 func (a *app) openMemberForm(d *discDetail, id string) {
-	f := memberForm{open: true, id: id, ws: a.wsLabel(cmp.Or(d.info.WorkspaceID, a.projectMain(d.info.ProjectID)))}
+	f := memberForm{open: true, id: id, ws: a.wsLabel(cmp.Or(d.info.WorkspaceID, a.projectMain(d.info.ProjectID))), client: fmt.Sprintf("c_%x", time.Now().UnixNano())}
 	choices := a.agentChoices()
 	if mem := d.member(id); mem != nil {
 		f.name, f.role, f.model, f.effort, f.ws = mem.Name, mem.Role, mem.Model, mem.Effort, mem.WorkspaceLabel
@@ -2276,6 +2280,20 @@ func (a *app) openMemberForm(d *discDetail, id string) {
 	}
 	f.worktree = "discuss-" + randomSuffix()
 	a.disc.form = f
+}
+
+// submitMemberForm 提交成员表单：成功才关掉；失败留着表单和请求 ID，报错在错误条上，用户可以原样重试。
+func (a *app) submitMemberForm(method string, params map[string]any, client string) {
+	err := a.call(method, params, nil, 30*time.Second)
+	a.update(func() {
+		if f := &a.disc.form; f.client == client {
+			f.busy = false
+			if err == nil {
+				f.open = false
+			}
+		}
+	})
+	a.refresh()
 }
 
 func memberDefaultName(d *discDetail, choices []string, i int) string {
@@ -2383,8 +2401,8 @@ func (a *app) memberDialog(c *ui.Context) {
 				if editing != nil {
 					verb = m.CommonSave()
 				}
-				if pressable(accentButton(c, verb).Disabled(!ready)).Clicked() && ready {
-					f.open = false
+				if pressable(accentButton(c, verb).Disabled(!ready || f.busy)).Clicked() && ready && !f.busy {
+					f.busy = true
 					params := map[string]any{"discussion": d.key, "name": strings.TrimSpace(f.name), "role": strings.TrimSpace(f.role),
 						"agent": choices[f.agent], "model": strings.TrimSpace(f.model), "effort": strings.TrimSpace(f.effort)}
 					if f.mode == 1 && isGit {
@@ -2397,8 +2415,10 @@ func (a *app) memberDialog(c *ui.Context) {
 						method = "discussion.member.update"
 						params["member"] = editing.ID
 						params["applyNow"] = f.applyNow
+					} else {
+						params["clientId"] = f.client
 					}
-					go a.discCall(method, params)
+					go a.submitMemberForm(method, params, f.client)
 				}
 			})
 		})

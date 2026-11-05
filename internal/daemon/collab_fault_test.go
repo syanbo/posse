@@ -6,6 +6,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +17,7 @@ import (
 
 	"posse/internal/agent"
 	"posse/internal/collaboration"
+	"posse/internal/rpc"
 	"posse/internal/store"
 	"posse/internal/term"
 )
@@ -642,5 +645,64 @@ func TestCollabRevokeWhileFetching(t *testing.T) {
 	m.dispatchAll()
 	if x, _ := m.store.Execution(r.Execution.ID); x.TaskID != "" {
 		t.Fatal("revoked round started")
+	}
+}
+
+// 加入的讨论里加自己的 Agent，房主加好了、应答却丢了（这里用成员的连接直接调 member.add 代替那一次）：
+// 本机还没确认，同步下来的这个 Agent 暂停待确认；用同一个请求 ID 重试拿回它、确认本机设置，房主只有一个。
+// 同一个 ID 换了设置报冲突、不覆盖；结果未知的错误带着请求 ID 给 CLI 重试用。
+func TestCollabAddMemberLostReply(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	cli := memberClient(t, p)
+	defer cli.Close()
+	var lost struct{ Member string }
+	if err := cli.Call(context.Background(), "member.add", map[string]string{"name": "Bob", "role": "review", "agent": "codex", "client": "c-lost"}, &lost); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "member syncs the agent", func() bool {
+		mm, err := m.store.Member(lost.Member)
+		return err == nil && mm.Paused == store.NeedsConfirm
+	})
+	bobs := func() (n int) {
+		ms, _ := h.store.Members(p.disc.Key)
+		for _, mm := range ms {
+			if mm.Name == "Bob" && mm.RemovedAt == nil {
+				n++
+			}
+		}
+		return n
+	}
+	got := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "role": "review", "agent": "codex", "workspace": p.mw.ID, "clientId": "c-lost"}).(store.Member)
+	if got.ID != lost.Member || got.Paused != "" || got.WorkspaceID != p.mw.ID {
+		t.Fatalf("retry got %+v, want %s confirmed in the member's workspace", got, lost.Member)
+	}
+	if n := bobs(); n != 1 {
+		t.Fatalf("host has %d Bobs after the retry", n)
+	}
+	if _, err := callErr(m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "role": "review", "agent": "codex", "model": "o3", "workspace": p.mw.ID, "clientId": "c-lost"}); err == nil || !strings.Contains(err.Error(), store.ErrAddChanged.Error()) {
+		t.Fatalf("same request id with other settings: %v", err)
+	}
+	if n := bobs(); n != 1 {
+		t.Fatalf("host has %d Bobs after a conflicting retry", n)
+	}
+	if hm, _ := h.store.Member(lost.Member); hm.Model != "" {
+		t.Fatalf("host copy overwritten: %+v", hm)
+	}
+	// 新的一次添加（新表单、新 ID）照常再加一个
+	call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "role": "review", "agent": "codex", "workspace": p.mw.ID, "clientId": "c-new"})
+	if n := bobs(); n != 2 {
+		t.Fatalf("host has %d Bobs after a new add", n)
+	}
+	// 结果未知的错误带上请求 ID；其他错误不动
+	unknown := rpc.Errorf(rpc.CodeConflict, "the host did not answer (x); it may or may not have done this")
+	unknown.Data = json.RawMessage(`{"unknown":true}`)
+	var re *rpc.Error
+	if err := withClientID(unknown, "c-9"); !errors.As(err, &re) || !strings.Contains(string(re.Data), `"clientId":"c-9"`) {
+		t.Fatalf("unknown result: %v %s", err, re.Data)
+	}
+	plain := rpc.Errorf(rpc.CodeConflict, "busy")
+	if err := withClientID(plain, "c-9"); err != error(plain) {
+		t.Fatalf("plain error changed: %v", err)
 	}
 }
