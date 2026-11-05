@@ -59,6 +59,8 @@
 
 文件图标一律经 `fileicons.go`：文件 `fileGlyph`，目录 `dirGlyph`，Git 文件列表 `changeGlyph`，文件标签 `docIcon`，符号链接仍是 `iconFileLink`。图形和颜色按类型定，文件的颜色只取 `palette.data` 的数据色或 `TextMuted`，普通文件夹是 `Accent`；加新类型往 `fileicons.go` 的表里加。
 
+菜单的对勾与图标共用 `iconSize` 宽的行首槽，未勾选时留空，文字不移位；同一项同时有图标和勾选状态时才分列。
+
 agent 色块：跟在小字旁用 `smallIcon()`，单行列表行首用 `iconSize`，三行的列表项（历史会话）用 `tileMedium()`，空状态和详情页头用 `tileLarge()`。
 
 - 除了文字旁的图标，其余都跟着设置里的「图标大小」变。单独的大图标（视频播放键）写成 `sz(...)`。

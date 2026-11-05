@@ -1784,3 +1784,31 @@ func TestPreviewHour12(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewProjectMenu(t *testing.T) {
+	if os.Getenv("POSSE_PREVIEW_DIR") == "" {
+		t.Skip("set POSSE_PREVIEW_DIR to render previews")
+	}
+	for _, dark := range []bool{false, true} {
+		suffix := "light"
+		if dark {
+			suffix = "dark"
+		}
+		// 项目菜单混排图标和勾选项，检查行首与文字对齐。
+		for _, checked := range []bool{true, false} {
+			a := previewApp(t)
+			a.projects[0].SingleRepo = !checked
+			a.sysMenu.st = menuState{open: true, x: 320, y: 80}
+			tt := newTester(func(c *ui.Context) {
+				c.SetTheme(posseTheme(c.Theme().Dark))
+				contextMenuAt(c, &a.sysMenu.st, func(m *popMenu) {
+					a.workspaceMenu(c, m, a.workspaces[0])
+				})
+			}, 720, 640)
+			tt.SetDark(dark)
+			tt.SetScale(2)
+			settleMenu(tt)
+			savePNG(t, tt, fmt.Sprintf("menu-project-%t-%s.png", checked, suffix))
+		}
+	}
+}

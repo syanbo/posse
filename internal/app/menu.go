@@ -266,11 +266,12 @@ func findItem(items []*menuItem, seq int) *menuItem {
 func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed *int) int {
 	t := c.Theme()
 	p := colors(t)
-	// 有一项可勾选就给勾留出位置，有一项带图标就给图标留出位置，各项的文字才对齐
-	var checks, icons bool
+	// 勾选标记与图标共用行首槽；只有同一项兼有两者时才另外留出勾选列。
+	var checks, icons, separateChecks bool
 	for _, it := range m.items {
 		checks = checks || it.checked != nil
 		icons = icons || it.icon != nil || it.lead != nil
+		separateChecks = separateChecks || it.checked != nil && (it.icon != nil || it.lead != nil)
 	}
 	hot := st.hot
 	if level > 0 {
@@ -317,19 +318,29 @@ func drawMenuItems(c *ui.Context, m *popMenu, st *menuState, level int, pointed 
 			fg, iconFg = t.Danger, t.Danger
 		}
 		row.Children(func() {
-			if checks {
-				box := ui.Box(c).Width(14).Shrink(0).Center()
+			drawCheck := func() {
 				if it.checked != nil && *it.checked {
-					box.Children(func() { ui.Icon(c, iconCheck).FontSize(fsBody).TextColor(t.Accent) })
+					color := t.Accent
+					if it.disabled {
+						color = p.faint
+					}
+					ui.Icon(c, iconCheck).FontSize(iconSize).TextColor(color)
 				}
 			}
-			switch {
-			case it.lead != nil:
-				it.lead()
-			case it.icon != nil:
-				ui.Icon(c, it.icon).FontSize(iconSize).TextColor(iconFg).Shrink(0)
-			case icons:
-				ui.Box(c).Width(15).Shrink(0)
+			if separateChecks {
+				ui.Box(c).Width(iconSize).Shrink(0).Center().Children(drawCheck)
+			}
+			if icons || checks && !separateChecks {
+				ui.Box(c).Width(iconSize).Shrink(0).Center().Children(func() {
+					switch {
+					case it.lead != nil:
+						it.lead()
+					case it.icon != nil:
+						ui.Icon(c, it.icon).FontSize(iconSize).TextColor(iconFg)
+					case !separateChecks:
+						drawCheck()
+					}
+				})
 			}
 			ui.Text(c, it.label).FontSize(fsBody).TextColor(fg).Grow(1).Shrink(1).SingleLine()
 			if it.keys != "" {
