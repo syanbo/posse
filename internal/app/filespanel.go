@@ -147,6 +147,7 @@ func (a *app) openFilesPanel(w *workspace, side int) *filesView {
 // revealInFiles 打开文件栏的文件树，展开到 path 并选中它（链接卡片的"在文件栏中显示"）。
 func (a *app) revealInFiles(w *workspace, path string) {
 	v := a.openFilesPanel(w, sideFiles)
+	a.clearSearch(v)
 	a.loadDirs(v, v.tree.Reveal(path))
 	v.reveal, v.revealCur, v.revealScroll = path, v.cur, true
 }
@@ -166,12 +167,22 @@ func (a *app) revealCurrent(w *workspace) {
 }
 
 // toggleFilesPanel 开着且就在 side 上时关掉，否则打开到 side（⇧⌘E、⇧⌘G）。
+// ⇧⌘E 要的是文件树：正在检索时先清掉检索回到树，不关文件栏。
 func (a *app) toggleFilesPanel(w *workspace, side int) {
-	if a.filesPanelOpen() && a.state.FilesPanelTab == "" && a.filesFor(w).side == side {
+	v := a.filesFor(w)
+	open := a.filesPanelOpen() && a.state.FilesPanelTab == "" && v.side == side
+	if open && side == sideFiles && v.search.active() {
+		a.clearSearch(v)
+		return
+	}
+	if open {
 		a.closeFilesPanel()
 		return
 	}
 	a.openFilesPanel(w, side)
+	if side == sideFiles {
+		a.clearSearch(v)
+	}
 }
 
 func (a *app) closeFilesPanel() {
@@ -262,7 +273,7 @@ func (a *app) filesPanel(c *ui.Context, w *workspace) {
 				a.setFilesPanelTab(tabSkills)
 			}
 			ui.Spacer(c)
-			if tab == "" && !w.Missing && v.side == sideFiles {
+			if tab == "" && !w.Missing && v.side == sideFiles && !v.search.active() {
 				// 没有能定位的文件时置灰：外面包一层先禁用，按钮里的悬停才不亮
 				wrap := ui.Box(c).Shrink(0)
 				if !revealable(v, v.cur) {
@@ -313,23 +324,19 @@ func panelTab(c *ui.Context, icon *ui.SVG, label string, active bool) bool {
 	return b.Clicked() && !active
 }
 
-// filesSide 是文件栏"文件"页：上面一行分段切换文件树、检索、改动。
+// filesSide 是文件栏"文件"页：上面一行分段切换文件、改动。文件页顶上是检索框，
+// 框里有字时下面是检索结果，清空回到文件树。
 func (a *app) filesSide(c *ui.Context, w *workspace, v *filesView) {
 	ui.Row(c).Shrink(0).Padding(8, 12, 4, 12).Children(func() {
 		// 撑满栏宽：分段平分宽度，带计数的"改动"长一些的才放得下
 		ui.Column(c).Grow(1).Children(func() {
-			badges := []int{0, 0, v.changeCount()}
-			if segmentedBadges(c, &v.side, L(c).FilesPanelTitle(), badges, L(c).FilesPanelFilesTab(), L(c).FilesPanelSearchTab(), L(c).FilesPanelChangesTab()) && v.side == sideSearch {
-				v.search.focus = true
-			}
+			badges := []int{0, v.changeCount()}
+			segmentedBadges(c, &v.side, L(c).FilesPanelTitle(), badges, L(c).FilesPanelFilesTab(), L(c).FilesPanelChangesTab())
 		})
 	})
-	switch v.side {
-	case sideFiles:
-		a.treeView(c, w, v)
-	case sideSearch:
+	if v.side == sideFiles {
 		a.searchView(c, w, v)
-	default:
+	} else {
 		a.changesView(c, w, v)
 	}
 }

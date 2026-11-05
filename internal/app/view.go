@@ -159,7 +159,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 			a.openQuick(w)
 		}
 		if a.pressed(c, "searchFiles") {
-			a.openFilesPanel(w, sideSearch).search.focus = true
+			a.openFilesPanel(w, sideFiles).search.focus = true
 		}
 		// 窗口的快捷键先于焦点拿到按键。⌘L 照旧开关文件栏（编辑器的"选中整行"让出），
 		// ⇧⌘G 在编辑器有焦点、Markdown 预览、Annotate 或终端开着查找栏时让给它们的"查找上一个"

@@ -4833,18 +4833,18 @@ func (msgs Messages) FilesPanelHistoryTab() string {
 	return Catalog.Format(msgs.locale, "filesPanelHistoryTab", nil)
 }
 
-// FilesPanelSearchTab says "Search"
+// FieldClear says "Clear"
 // in the language the app shows.
 //
-// Segment in the Files Panel: full-text search.
-func FilesPanelSearchTab() string { return In(i18n.Locale()).FilesPanelSearchTab() }
+// Tooltip of the × button at the end of a search field that empties it.
+func FieldClear() string { return In(i18n.Locale()).FieldClear() }
 
-// FilesPanelSearchTab says "Search"
+// FieldClear says "Clear"
 // in the language of msgs.
 //
-// Segment in the Files Panel: full-text search.
-func (msgs Messages) FilesPanelSearchTab() string {
-	return Catalog.Format(msgs.locale, "filesPanelSearchTab", nil)
+// Tooltip of the × button at the end of a search field that empties it.
+func (msgs Messages) FieldClear() string {
+	return Catalog.Format(msgs.locale, "fieldClear", nil)
 }
 
 // FilesPanelSkillsTab says "Skills"

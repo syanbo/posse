@@ -27,9 +27,8 @@ import (
 
 const (
 	gitPollEvery = 1500 * time.Millisecond
-	sideFiles    = 0
-	sideSearch   = 1
-	sideChanges  = 2
+	sideFiles    = 0 // 文件树和检索
+	sideChanges  = 1
 )
 
 // gitState 是工作区里一个仓库的 Git 状态（找仓库见 repos.go）。

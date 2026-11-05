@@ -292,7 +292,7 @@ func TestQuickOpenAndSearch(t *testing.T) {
 
 	tt.Key(ui.Cmd|ui.Shift, ui.KeyF)
 	tt.Frame()
-	if v.side != sideSearch || !a.filesPanelOpen() {
+	if v.side != sideFiles || !a.filesPanelOpen() {
 		t.Fatal("⇧⌘F should open the files panel on search")
 	}
 	tt.Frame()
@@ -310,6 +310,27 @@ func TestQuickOpenAndSearch(t *testing.T) {
 		d := v.doc(sp)
 		return d != nil && d.kind == docText && d.gotoLine == 0 && d.ed.SelectedText() == "func"
 	})
+
+	// 检索和文件树在同一页：有字时树让给结果，点 × 清空回到树，结果跟着清掉
+	tt.Frame()
+	if tt.HasText("README.md") || !tt.HasText("Aa") {
+		t.Fatalf("searching should replace the tree: %v", tt.Texts())
+	}
+	if err := tt.Click("清空"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if v.search.active() || len(v.search.hits) != 0 || !tt.HasText("README.md") || tt.HasText("Aa") {
+		t.Fatalf("clear should return to the tree: %q %v", v.search.query.Text, tt.Texts())
+	}
+	// ⇧⌘E 在检索时先回到树，不关文件栏
+	v.search.query.Text = "func"
+	a.startSearch(v, 0)
+	tt.Key(ui.Cmd|ui.Shift, ui.KeyE)
+	tt.Frame()
+	if v.search.active() || !a.filesPanelOpen() {
+		t.Fatal("⇧⌘E while searching should show the tree")
+	}
 }
 
 // 打开的文件和展开的目录记进 ui.json，交给写文件的协程的是深拷贝。
@@ -489,14 +510,14 @@ func TestFilesPanelHistoryTab(t *testing.T) {
 		tt.Frame()
 		pass(tt, 20*time.Millisecond)
 	}
-	if !tt.HasText("检索") {
+	if !tt.HasText("改动") {
 		t.Fatal("files tabs missing")
 	}
 	if err := tt.Click("历史"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if a.state.FilesPanelTab != tabHistory || tt.HasText("检索") {
+	if a.state.FilesPanelTab != tabHistory || tt.HasText("改动") {
 		t.Fatalf("history tab: %q", a.state.FilesPanelTab)
 	}
 	a.toggleFilesPanel(w, sideFiles)
@@ -900,7 +921,7 @@ func TestGoToDefinition(t *testing.T) {
 	// 光标就在定义上、别处没有同名的：退化为在检索页按整词找用法
 	v.cur = d
 	a.goToDefinition(locales.In("zh-Hans"), w, v, d, strings.Index(d.ed.Buffer.String(), "init(")+1)
-	until(t, tt, "usages", func() bool { return v.side == sideSearch && v.search.query.Regex })
+	until(t, tt, "usages", func() bool { return v.side == sideFiles && v.search.query.Regex })
 	if v.search.query.Text != `\binit\b` || !a.filesPanelOpen() || v.cur != d {
 		t.Fatalf("query = %+v", v.search.query)
 	}

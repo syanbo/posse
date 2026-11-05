@@ -174,7 +174,7 @@ func (a *app) goToDefinition(m locales.Messages, w *workspace, v *filesView, d *
 
 // searchUsages 在文件栏的检索页按整词搜 word，光标已经在定义上时用。
 func (a *app) searchUsages(w *workspace, v *filesView, word string) {
-	a.openFilesPanel(w, sideSearch)
+	a.openFilesPanel(w, sideFiles)
 	v.search.query = files.Query{Text: `\b` + regexp.QuoteMeta(word) + `\b`, MatchCase: true, Regex: true}
 	a.startSearch(v, 0)
 }

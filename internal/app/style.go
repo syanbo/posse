@@ -321,8 +321,23 @@ func fieldInputWidth(c *ui.Context, value *string, placeholder string, width flo
 
 // fieldInputSized 平时 width 宽，一行放不下时最窄缩到 minWidth，让同一行里的标题不被挤得折行。
 func fieldInputSized(c *ui.Context, value *string, placeholder string, width, minWidth float32) ui.Element {
+	in, _ := fieldBox(c, value, placeholder, width, minWidth, false)
+	return in
+}
+
+// clearableField 是有内容时尾部带清空按钮的 fieldInput（检索框）；cleared 报告这一帧点了清空，
+// 值已经清掉、焦点放回输入框，调用方照按 Esc 清空那样处理。
+func clearableField(c *ui.Context, value *string, placeholder string) (in ui.Element, cleared bool) {
+	return fieldBox(c, value, placeholder, 0, 0, true)
+}
+
+func fieldBox(c *ui.Context, value *string, placeholder string, width, minWidth float32, clearable bool) (ui.Element, bool) {
 	t := c.Theme()
 	box := ui.Row(c).Height(sz(30)).Padding(0, 12).Radius(rControl).Background(colors(t).fill).AlignItems(ui.Center)
+	if clearable {
+		// 清空按钮自带留白，右边距收窄，× 和左边的文字离边一样远
+		box.Padding(0, 4, 0, 12).Gap(2)
+	}
 	if width > 0 {
 		box.Width(width)
 		if minWidth < width {
@@ -332,12 +347,18 @@ func fieldInputSized(c *ui.Context, value *string, placeholder string, width, mi
 		}
 	}
 	var in ui.Element
+	cleared := false
 	box.Children(func() {
 		in = ui.TextInputBase(c, value).Placeholder(placeholder).Label(placeholder).FontSize(fsBody).Grow(1)
+		if clearable && *value != "" && iconButtonSized(c.Key("field-clear"), iconClose, L(c).FieldClear(), compactBox(), smallIcon()).Shrink(0).Clicked() {
+			*value = ""
+			cleared = true
+			in.Focus()
+		}
 	})
 	// 边框算在高度里。聚焦才加上时框会高 2px，包着它的对话框跟着居中，整块跳一下。
 	fieldBorder(box, in.Focused(), colors(t).fill, t.Focus)
-	return in
+	return in, cleared
 }
 
 // fieldArea 是多行的 fieldInput，height 是文字区的高度。

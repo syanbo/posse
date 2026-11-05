@@ -132,7 +132,7 @@ func TestTextInputMenuDrawn(t *testing.T) {
 	filesWorkspace(t, a)
 	w := &a.workspaces[0]
 	a.selected = w.ID
-	a.openFilesPanel(w, sideSearch)
+	a.openFilesPanel(w, sideFiles)
 	tt := newTester(a.build, 1200, 760)
 	tt.Frame()
 	if err := tt.Click("在文件里检索"); err != nil {

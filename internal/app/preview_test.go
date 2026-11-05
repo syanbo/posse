@@ -1124,7 +1124,7 @@ func TestPreview(t *testing.T) {
 
 		a = previewApp(t)
 		v = previewFiles(t, a, "main.go")
-		v.side, v.search.query.Text = 1, "config"
+		v.side, v.search.query.Text = sideFiles, "config"
 		a.startSearch(v, 0)
 		until(t, newTester(a.build, 1200, 760), "search", func() bool { return !v.search.running && len(v.search.hits) > 0 })
 		savePNG(t, newPreviewTester(a, dark), "files-search-"+suffix+".png")

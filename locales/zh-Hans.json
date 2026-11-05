@@ -311,7 +311,7 @@
   "filesPanelFilesTab": "文件",
   "filesPanelHint": "文件栏",
   "filesPanelHistoryTab": "历史",
-  "filesPanelSearchTab": "检索",
+  "fieldClear": "清空",
   "filesPanelSkillsTab": "技能",
   "filesPanelTitle": "文件栏",
   "filesPathNotFound": "找不到 {path}",

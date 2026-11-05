@@ -1929,9 +1929,9 @@
   "@filesPanelHistoryTab": {
     "description": "Tab at the top of the Files Panel: the project’s sessions."
   },
-  "filesPanelSearchTab": "Search",
-  "@filesPanelSearchTab": {
-    "description": "Segment in the Files Panel: full-text search."
+  "fieldClear": "Clear",
+  "@fieldClear": {
+    "description": "Tooltip of the × button at the end of a search field that empties it."
   },
   "filesPanelSkillsTab": "Skills",
   "@filesPanelSkillsTab": {

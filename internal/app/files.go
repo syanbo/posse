@@ -173,6 +173,18 @@ type fileSearch struct {
 	showFilter bool
 }
 
+// active 报告检索框里有字：文件页这时显示检索结果，不显示文件树。
+func (s *fileSearch) active() bool { return strings.TrimSpace(s.query.Text) != "" }
+
+// clearSearch 清空检索框，文件页回到文件树；大小写、正则和筛选的设置留着。
+func (a *app) clearSearch(v *filesView) {
+	if v.search.query.Text == "" {
+		return
+	}
+	v.search.query.Text = ""
+	a.startSearch(v, 0)
+}
+
 // searchRow 是检索结果列表的一行：文件名一行，或其中的一处命中。
 type searchRow struct {
 	hit    int // hits 的下标
@@ -200,7 +212,7 @@ type filesView struct {
 	listing      bool
 	docs         []*fileDoc
 	cur          *fileDoc
-	side         int // 文件栏：sideFiles、sideSearch、sideChanges
+	side         int // 文件栏：sideFiles、sideChanges
 	search       fileSearch
 	poll         panelPoll
 	prevTerm     string     // 切到文件标签前选中的终端，关掉最后一个文件时切回去

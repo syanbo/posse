@@ -193,22 +193,35 @@ func (a *app) forgetTrashed(v *filesView, path string, dir bool) {
 
 // --- 检索
 
+// searchView 是文件页：顶上检索框，框里有字时列检索结果，没字时是文件树。
 func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 	t := c.Theme()
 	s := &v.search
+	filtered := s.query.Include != "" || s.query.Exclude != ""
 	ui.Column(c).Padding(0, 12, 8, 12).Gap(6).Shrink(0).Children(func() {
-		in := fieldInput(c, &s.query.Text, L(c).FilesSearchPlaceholder())
+		in, cleared := clearableField(c, &s.query.Text, L(c).FilesSearchPlaceholder())
 		if s.focus {
 			in.Focus()
 			s.focus = false
 		}
-		if s.query.Text != "" && in.Shortcut(0, ui.KeyEscape) {
-			s.query.Text = ""
+		switch {
+		case cleared:
 			a.startSearch(v, 0)
-		} else if in.Changed() {
-			a.startSearch(v, 200*time.Millisecond)
-		} else if in.Submitted() {
+		case s.query.Text != "" && in.Shortcut(0, ui.KeyEscape):
+			a.clearSearch(v)
+		case in.Changed():
+			// 清空了马上回到文件树，不等防抖
+			delay := 200 * time.Millisecond
+			if !s.active() {
+				delay = 0
+			}
+			a.startSearch(v, delay)
+		case in.Submitted():
 			a.startSearch(v, 0)
+		}
+		// 检索选项只在检索时露出来，平时文件树顶上只有检索框
+		if !s.active() && !s.showFilter && !filtered {
+			return
 		}
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 			if toggleChip(c, "Aa", L(c).FilesMatchCase(), s.query.MatchCase) {
@@ -219,7 +232,6 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 				s.query.Regex = !s.query.Regex
 				a.startSearch(v, 0)
 			}
-			filtered := s.query.Include != "" || s.query.Exclude != ""
 			if toggleChip(c, L(c).FilesFilter(), L(c).FilesFilterTip(), s.showFilter || filtered) {
 				s.showFilter = !s.showFilter
 			}
@@ -240,6 +252,10 @@ func (a *app) searchView(c *ui.Context, w *workspace, v *filesView) {
 			ui.Text(c, msg).FontSize(fsSmall).TextColor(color).LineHeight(1.4).Padding(2, 2, 0, 2)
 		}
 	})
+	if !s.active() {
+		a.treeView(c, w, v)
+		return
+	}
 	if len(s.rows) == 0 {
 		return
 	}
