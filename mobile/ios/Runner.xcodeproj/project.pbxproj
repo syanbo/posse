@@ -28,6 +28,7 @@
 		A1QR00021ED2DC5600515810 /* QrScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1QR00011ED2DC5600515810 /* QrScanView.swift */; };
 		D2A29ED7C740E8D3CB845C4C /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 3E5A6C96642E7CB7CBE1237B /* Localizable.strings */; };
 		E3D92D25308E495BCFDEDC24 /* PushPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2360FDB12D6DE491BADA12 /* PushPlugin.swift */; };
+		B7A1C0DE00000000000000A1 /* BackgroundPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A1C0DE00000000000000A2 /* BackgroundPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -97,6 +98,7 @@
 		A1DSK0071ED2DC5600515810 /* DeskPassword.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DeskPassword.swift; sourceTree = "<group>"; };
 		A1L10N031ED2DC5600515810 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		A1QR00011ED2DC5600515810 /* QrScanView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = QrScanView.swift; sourceTree = "<group>"; };
+		B7A1C0DE00000000000000A2 /* BackgroundPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackgroundPlugin.swift; sourceTree = "<group>"; };
 		AF2360FDB12D6DE491BADA12 /* PushPlugin.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PushPlugin.swift; sourceTree = "<group>"; };
 		B1EFAC205BB00CE59E1ECB48 /* en */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		BB68FE489E50F36DEA1BFC5E /* en */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				AF2360FDB12D6DE491BADA12 /* PushPlugin.swift */,
+				B7A1C0DE00000000000000A2 /* BackgroundPlugin.swift */,
 				E7C7FEFF681744889BB7CF48 /* Runner.entitlements */,
 				83064370BE5CF5FDA6C4FE81 /* Localizable.strings */,
 			);
@@ -424,6 +427,7 @@
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,
 				E3D92D25308E495BCFDEDC24 /* PushPlugin.swift in Sources */,
+				B7A1C0DE00000000000000A1 /* BackgroundPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

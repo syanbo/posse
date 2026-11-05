@@ -1849,6 +1849,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsPushTitle => 'Notifications';
 
   @override
+  String get settingsBackgroundTitle => 'Background';
+
+  @override
+  String get settingsBackgroundKeep => 'Stay Connected in Background';
+
+  @override
+  String get settingsBackgroundKeepOff =>
+      'After you switch away, the connection stays for about 30 seconds; come back within that time and nothing reconnects.';
+
+  @override
+  String get settingsBackgroundKeepOn =>
+      'Plays silent audio mixed with other apps so iOS doesn’t suspend Posse. Terminals keep streaming in the background, which uses more battery; iOS can still close the app when memory is low.';
+
+  @override
   String get settingsPushUnknown => 'Takes effect once connected to a Mac.';
 
   @override

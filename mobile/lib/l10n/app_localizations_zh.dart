@@ -1751,6 +1751,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsPushTitle => '通知';
 
   @override
+  String get settingsBackgroundTitle => '后台';
+
+  @override
+  String get settingsBackgroundKeep => '后台保持连接';
+
+  @override
+  String get settingsBackgroundKeepOff => '切到别的 App 后连接还会留约 30 秒，这期间回来不用重连。';
+
+  @override
+  String get settingsBackgroundKeepOn =>
+      '播放和其他 App 混音的静音音频，系统不会挂起 Posse，终端在后台一直收着输出，更费电；系统内存紧张时仍可能关掉 App。';
+
+  @override
   String get settingsPushUnknown => '连上电脑后生效。';
 
   @override

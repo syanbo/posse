@@ -153,6 +153,7 @@ class AppSettings {
     this.pushWaiting = true,
     this.pushDone = true,
     this.pushAsked = false,
+    this.backgroundKeep = false,
     Map<String, int>? deskDisplays,
     List<BarKey>? barKeys,
   }) : barKeys = barKeys ?? defaultBarKeys(),
@@ -217,6 +218,9 @@ class AppSettings {
   /// 已经弹过系统的通知权限框：用户拒绝后不再每次连上都问，设置页引导去系统设置。
   bool pushAsked;
 
+  /// iOS 切到后台后一直保持连接（播放静音音频不让系统挂起），费电，默认关。关着时也有约 30 秒的宽限。
+  bool backgroundKeep;
+
   /// 终端快捷键栏上的键和顺序（键盘开关除外，它固定在最左边），内置的和自己加的混排。
   List<BarKey> barKeys;
 
@@ -246,6 +250,7 @@ class AppSettings {
     'pushWaiting': pushWaiting,
     'pushDone': pushDone,
     'pushAsked': pushAsked,
+    'backgroundKeep': backgroundKeep,
     'barKeys': [for (final k in barKeys) k.toJson()],
     'barKeysVersion': barKeysVersion,
   };
@@ -327,6 +332,9 @@ class AppSettings {
       }
       if (map['pushDone'] is bool) out.pushDone = map['pushDone'] as bool;
       if (map['pushAsked'] is bool) out.pushAsked = map['pushAsked'] as bool;
+      if (map['backgroundKeep'] is bool) {
+        out.backgroundKeep = map['backgroundKeep'] as bool;
+      }
       final bar = map['barKeys'];
       final custom = map['customKeys'];
       if (bar is List) {

@@ -3158,6 +3158,30 @@ abstract class AppLocalizations {
   /// **'Notifications'**
   String get settingsPushTitle;
 
+  /// Settings: section title for staying connected while the app is in the background (iOS).
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get settingsBackgroundTitle;
+
+  /// Settings › Background: switch that keeps the connection alive indefinitely while the app is in the background.
+  ///
+  /// In en, this message translates to:
+  /// **'Stay Connected in Background'**
+  String get settingsBackgroundKeep;
+
+  /// Settings › Background: note when the switch is off.
+  ///
+  /// In en, this message translates to:
+  /// **'After you switch away, the connection stays for about 30 seconds; come back within that time and nothing reconnects.'**
+  String get settingsBackgroundKeepOff;
+
+  /// Settings › Background: note when the switch is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Plays silent audio mixed with other apps so iOS doesn’t suspend Posse. Terminals keep streaming in the background, which uses more battery; iOS can still close the app when memory is low.'**
+  String get settingsBackgroundKeepOn;
+
   /// Settings › Notifications: note before the phone has connected to a Mac.
   ///
   /// In en, this message translates to:

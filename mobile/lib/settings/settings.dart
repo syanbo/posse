@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
+import '../background.dart';
 import '../desk/plugin.dart';
 import '../desk/unlock.dart';
 import '../l10n/l10n.dart';
@@ -253,6 +254,23 @@ class SettingsScreen extends StatelessWidget {
                         PushStatus.unknown ||
                         PushStatus.unsupported => l.settingsPushUnknown,
                       }),
+                    ],
+                  ),
+                if (backgroundKeepSupported)
+                  Section(
+                    title: l.settingsBackgroundTitle,
+                    children: [
+                      _Toggle(
+                        title: l.settingsBackgroundKeep,
+                        value: s.backgroundKeep,
+                        onChanged: (v) =>
+                            model.updateSettings((s) => s.backgroundKeep = v),
+                      ),
+                      _Note(
+                        s.backgroundKeep
+                            ? l.settingsBackgroundKeepOn
+                            : l.settingsBackgroundKeepOff,
+                      ),
                     ],
                   ),
                 if (deskSupported)

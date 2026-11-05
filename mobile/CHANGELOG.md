@@ -3,6 +3,16 @@
 每个版本一节，标题是 `## <版本>`：发布 iOS、安卓安装包时这一节写进 latest.json 和安装页，App 首页提示更新时显示它。
 一节里先写中文条目，再在 `### English` 小节里写对应的英文条目：中文条目写进 latest.json 的 `notes` 和安装页，英文条目写进 `notes_en`。
 
+## 0.1.17
+
+- iOS 切到别的 App 后连接留约 30 秒，这期间回来不用重连。
+- 设置新增「后台保持连接」：打开后 App 在后台一直保持连接，终端照常收输出；更费电，默认关闭。
+
+### English
+
+- On iOS, the connection now stays for about 30 seconds after you switch to another app, so coming back within that time doesn't reconnect.
+- New Settings option, Stay Connected in Background: keeps the connection alive while the app is in the background so terminals keep streaming. Uses more battery; off by default.
+
 ## 0.1.16
 
 - 工作区和 Git 页面支持查看、搜索并切换分支，多仓库工作区可分别操作；切换结果记入电脑端 Git 操作记录，需要电脑端 0.1.25。

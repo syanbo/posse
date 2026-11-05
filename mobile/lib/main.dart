@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'background.dart';
 import 'l10n/l10n.dart';
 import 'ui/keyboard.dart';
 import 'ui/splash.dart';
@@ -82,6 +83,7 @@ class _PosseAppState extends State<PosseApp> with WidgetsBindingObserver {
   }
 
   void _rebuild() {
+    syncKeepAlive(widget.model.settings.backgroundKeep);
     if (mounted) setState(() {});
   }
 
