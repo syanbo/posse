@@ -200,15 +200,19 @@ func TestDiscussionExecCardButtons(t *testing.T) {
 // 右键引用一条消息，再发送：请求带着引用；有进行中的请求时归档先列出要处理的请求，不发归档。
 func TestDiscussionQuoteAndArchiveBlocked(t *testing.T) {
 	a, tt, f := discTester(t)
-	// 悬停在这条消息上，点它自己那行的引用按钮（行尾，和名字同一行）
+	// 不悬停时没有引用按钮（不留看不见又点不动的按钮）；悬停在这条消息上才出现它自己的那一个
+	if tt.HasText("引用") {
+		t.Fatal("hover buttons exist without hover")
+	}
 	r, ok := tt.Find("先读一下 LoginView.swift，列出要改的地方。")
 	if !ok {
 		t.Fatal("message not shown")
 	}
 	tt.Move(r.X+20, r.Y+r.H/2)
 	tt.Frame()
-	q, _ := tt.Find("引用")
-	tt.ClickAt(q.X+q.W/2, r.Y-30+q.H/2)
+	if err := tt.Click("引用"); err != nil {
+		t.Fatalf("%v; texts %v", err, tt.Texts())
+	}
 	tt.Frame()
 	if a.disc.quote != "m2" {
 		t.Fatalf("quote %q", a.disc.quote)
@@ -292,8 +296,9 @@ func TestDiscussionSearchJumpsToOlder(t *testing.T) {
 		tt.Frame()
 		time.Sleep(10 * time.Millisecond)
 	}
-	if a.disc.d.msg("old20") == nil || a.disc.jump != "old20" || a.disc.follow {
-		t.Fatalf("not jumped: loaded %v jump %q", a.disc.d.msg("old20") != nil, a.disc.jump)
+	tt.Frame()
+	if a.disc.d.msg("old20") == nil || a.disc.revealed != "old20" || a.disc.flash != "old20" {
+		t.Fatalf("not jumped: loaded %v revealed %q flash %q", a.disc.d.msg("old20") != nil, a.disc.revealed, a.disc.flash)
 	}
 	tt.Frame()
 	if !tt.HasText("旧消息 20") {
@@ -322,8 +327,10 @@ func TestDiscussionLoadOlderKeepsPlace(t *testing.T) {
 	if n := len(a.disc.d.msgs); n != 9+discPage {
 		t.Fatalf("%d messages after one page", n)
 	}
-	if a.disc.jump != first || a.disc.follow {
-		t.Fatalf("reading place: jump %q follow %v", a.disc.jump, a.disc.follow)
+	tt.Frame()
+	// 测试窗口放得下全部消息，follow 会照实变回 true；这里只看原来最上面那条被滚回视野、不高亮
+	if a.disc.revealed != first || a.disc.flash != "" {
+		t.Fatalf("reading place: revealed %q flash %q", a.disc.revealed, a.disc.flash)
 	}
 	if !a.disc.d.more {
 		t.Fatal("more pages lost")

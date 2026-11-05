@@ -185,8 +185,12 @@ type discBoard struct {
 	scroll ui.ScrollState
 	follow bool  // 停在底部：新消息来了跟着滚
 	seen   int64 // 用户看到过的最新序号（滚到底时更新），比它新的算新消息提示
-	jump   string
-	jumpAt time.Time
+	// reveal 是下一帧要滚进视野的消息（滚过就清掉，revealed 记下最后滚到的那条）；
+	// flash 是跳过去后高亮两秒的消息（搜索结果、关键消息、引用）
+	reveal   string
+	revealed string
+	flash    string
+	flashAt  time.Time
 	older  bool // 正在取更早的一页
 
 	// 输入区
@@ -681,7 +685,7 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 	if len(d.msgs) > 0 {
 		last = d.msgs[len(d.msgs)-1].Seq
 	}
-	if b.follow && b.jump == "" {
+	if b.follow && b.reveal == "" {
 		s.Y = math.MaxFloat32
 	}
 	if atBottom && last > 0 {
@@ -729,9 +733,9 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 			})
 		}
 	})
-	if b.jump != "" && time.Since(b.jumpAt) > 2*time.Second {
-		b.jump = ""
-	} else if b.jump != "" {
+	if b.flash != "" && time.Since(b.flashAt) > 2*time.Second {
+		b.flash = ""
+	} else if b.flash != "" {
 		c.After(time.Second)
 	}
 }
@@ -751,11 +755,12 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 	b := &a.disc
 	archived := d.info.Status == "archived"
 	row := ui.Row(c.Key(msg.ID)).Gap(12).AlignItems(ui.Start).Padding(6, 8).Radius(rControl)
-	if b.jump == msg.ID {
+	if b.reveal == msg.ID {
+		row.ScrollIntoView()
+		b.reveal, b.revealed = "", msg.ID
+	}
+	if b.flash == msg.ID {
 		row.Background(colors(t).mark)
-		if time.Since(b.jumpAt) < 100*time.Millisecond {
-			row.ScrollIntoView()
-		}
 	} else if row.Hovered() {
 		row.Background(colors(t).wash)
 	}
@@ -771,7 +776,8 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 			})
 		}
 		ui.Column(c).Grow(1).Shrink(1).Basis(0).MinWidth(0).Gap(6).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			// 行高按悬停按钮定好：按钮出现、消失时不跳
+			ui.Row(c).Gap(8).AlignItems(ui.Center).MinHeight(compactBox()).Children(func() {
 				name := m.DiscYou()
 				if msg.Kind == "reply" || msg.Kind == "question" {
 					name = msg.AuthorName
@@ -799,20 +805,20 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 				}
 				ui.Text(c, m.AppTime(msg.CreatedAt.Local())).FontSize(fsSmall).FontFeatures("tnum").TextColor(t.TextMuted).Shrink(0)
 				ui.Spacer(c)
-				// 悬停时的操作：引用、关键、回答
-				ui.Row(c).Gap(2).Opacity(map[bool]float32{true: 1, false: 0}[hovered]).Children(func() {
-					if archived {
-						return
-					}
-					// 没悬停时按钮是透明的：只在看得见时才接点击
-					if iconButtonSized(c.Key("quote-"+msg.ID), iconQuote, m.DiscQuote(), compactBox(), smallIcon()).Clicked() && hovered {
+				// 悬停时才有引用、标关键两个按钮（不悬停时不生成：看不见又点不动的按钮不留在辅助功能里），
+				// 同样的操作在右键菜单里也有
+				if !hovered || archived {
+					return
+				}
+				ui.Row(c).Gap(2).Children(func() {
+					if iconButtonSized(c.Key("quote-"+msg.ID), iconQuote, m.DiscQuote(), compactBox(), smallIcon()).Clicked() {
 						b.quote = msg.ID
 					}
 					tip := m.DiscMarkKey()
 					if msg.KeyAt != nil {
 						tip = m.DiscUnmarkKey()
 					}
-					if iconButtonSized(c.Key("key-"+msg.ID), iconStar, tip, compactBox(), smallIcon()).Clicked() && hovered {
+					if iconButtonSized(c.Key("key-"+msg.ID), iconStar, tip, compactBox(), smallIcon()).Clicked() {
 						go a.discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
 					}
 				})
@@ -861,6 +867,13 @@ func (a *app) discMessageRow(c *ui.Context, d *discDetail, msg discMessage) {
 	contextMenu(c, row, func(pm *popMenu) {
 		if !archived && pm.Item(m.DiscQuote()).Icon(iconQuote).Chosen() {
 			b.quote = msg.ID
+		}
+		keyLabel := m.DiscMarkKey()
+		if msg.KeyAt != nil {
+			keyLabel = m.DiscUnmarkKey()
+		}
+		if !archived && pm.Item(keyLabel).Icon(iconStar).Chosen() {
+			go a.discCall("discussion.key", map[string]any{"message": msg.ID, "on": msg.KeyAt == nil})
 		}
 		if pm.Item(m.CommonCopy()).Icon(iconCopy).Chosen() {
 			mygo.Clipboard.WriteText(msg.Body)
@@ -1379,10 +1392,10 @@ func (a *app) loadOlder(key string, until int64, jump string) {
 			b.d.more = v.More
 			b.follow = false
 			if jump != "" {
-				b.jump, b.jumpAt = jump, time.Now()
+				b.reveal, b.flash, b.flashAt = jump, jump, time.Now()
 			} else if len(add) > 0 {
-				// 留在原来看的地方：原来最上面那条
-				b.jump, b.jumpAt = b.d.msgs[len(add)].ID, time.Now().Add(-2*time.Second+50*time.Millisecond)
+				// 留在原来看的地方：原来最上面那条滚回视野，不高亮
+				b.reveal = b.d.msgs[len(add)].ID
 			}
 		})
 	}()
@@ -1393,7 +1406,7 @@ func (a *app) discJump(d *discDetail, id string, seq int64) {
 	b := &a.disc
 	b.follow = false
 	if d.msg(id) != nil {
-		b.jump, b.jumpAt = id, time.Now()
+		b.reveal, b.flash, b.flashAt = id, id, time.Now()
 		return
 	}
 	if seq > 0 {
