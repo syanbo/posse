@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -704,5 +706,82 @@ func TestCollabAddMemberLostReply(t *testing.T) {
 	plain := rpc.Errorf(rpc.CodeConflict, "busy")
 	if err := withClientID(plain, "c-9"); err != error(plain) {
 		t.Fatalf("plain error changed: %v", err)
+	}
+}
+
+// 旧的添加请求重试（同一个请求 ID）不改这台电脑后来确认的设置：加好后把工作区改到 B，
+// 再重试最初那次（工作区 A），拿回同一个成员，本机仍是 B。
+func TestCollabAddRetryKeepsLaterLocalSettings(t *testing.T) {
+	p := newCollabPair(t)
+	m := p.member
+	add := map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID, "clientId": "c-stale"}
+	first := call(t, m.discMemberAdd, add).(store.Member)
+	b := p.mw
+	b.ID, b.Name, b.Path = "w_later", "later", t.TempDir()
+	if err := m.store.AddWorkspace(b); err != nil {
+		t.Fatal(err)
+	}
+	call(t, m.discMemberUpdate, map[string]any{"member": first.ID, "workspace": b.ID})
+	got := call(t, m.discMemberAdd, add).(store.Member)
+	if got.ID != first.ID || got.WorkspaceID != b.ID || got.Paused != "" {
+		t.Fatalf("stale retry: %+v, want %s still in %s", got, first.ID, b.ID)
+	}
+}
+
+// 带 --worktree 的添加：第一次在本机建好 worktree 后没交到房主（房主没在分享），
+// 同一个命令（同一个请求 ID、同一个 worktree 名）重试用回这个 worktree，房主只加一个；换了名字报错，不接受别的目录。
+func TestCollabAddRetryReusesItsWorktree(t *testing.T) {
+	p := newCollabPair(t)
+	h, m := p.host, p.member
+	proj, err := m.store.FindProject(p.mw.ProjectID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init"}, {"-c", "user.name=T", "-c", "user.email=t@example.invalid", "commit", "--allow-empty", "-m", "init"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = proj.Path
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", err, out)
+		}
+	}
+	proj.Kind = "git"
+	if err := m.store.UpdateProject(proj); err != nil {
+		t.Fatal(err)
+	}
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
+	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
+	add := map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID, "worktree": "bob-wt", "clientId": "c-wt"}
+	if _, err := callErr(m.discMemberAdd, add); err == nil {
+		t.Fatal("added while the host was not sharing")
+	}
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": true})
+	waitFor(t, "member back", func() bool { return m.roomStatus(p.disc.Key).Connected })
+	res, err := callErr(m.discMemberAdd, add)
+	if err != nil {
+		t.Fatalf("same command could not be retried: %v", err)
+	}
+	got := res.(store.Member)
+	w, err := m.store.Workspace(got.WorkspaceID)
+	if err != nil || filepath.Base(w.Path) != "bob-wt" || got.Paused != "" {
+		t.Fatalf("retry got %+v in %+v, want the request's worktree bob-wt", got, w)
+	}
+	again := call(t, m.discMemberAdd, add).(store.Member)
+	if again.ID != got.ID {
+		t.Fatalf("second retry added %s", again.ID)
+	}
+	n := 0
+	ms, _ := h.store.Members(p.disc.Key)
+	for _, mm := range ms {
+		if mm.Name == "Bob" && mm.RemovedAt == nil {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("host has %d Bobs", n)
+	}
+	other := maps.Clone(add)
+	other["worktree"] = "another-wt"
+	if _, err := callErr(m.discMemberAdd, other); err == nil || !strings.Contains(err.Error(), "already created worktree bob-wt") {
+		t.Fatalf("same request with another worktree: %v", err)
 	}
 }

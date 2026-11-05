@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -296,5 +297,57 @@ func TestCollabAddMemberOnce(t *testing.T) {
 	if n := active() - base; n != 0 {
 		ms, _ := s.Members(d.Key)
 		t.Fatalf("%d agents of members still active, want 0: %+v", n, ms)
+	}
+}
+
+// 旧库（没有 client_id 列和它的唯一索引）打开时补上；同一个请求 ID 并发添加只加一个，重开库后仍认得；
+// 别的讨论里同一个 ID 互不相干；旧客户端不带 ID 时照旧每次都加。
+func TestCollabAddMemberOnceMigrationAndConcurrency(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := newDiscussion(t, s)
+	if _, err := s.db.Exec(`DROP INDEX disc_members_client; ALTER TABLE disc_members DROP COLUMN client_id`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if s, err = Open(path); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { s.Close() }()
+	before, _ := s.Members(d.Key)
+	var wg sync.WaitGroup
+	for i := range 12 {
+		wg.Go(func() {
+			m := Member{ID: fmt.Sprintf("dmb_c%d", i), Discussion: d.Key, Owner: d.Host, Name: "Bob", Agent: "codex", CreatedAt: time.Now()}
+			if _, _, err := s.AddMemberOnce(m, "same"); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	if ms, _ := s.Members(d.Key); len(ms) != len(before)+1 {
+		t.Fatalf("%d members after 12 concurrent adds with one id, want %d", len(ms), len(before)+1)
+	}
+	s.Close()
+	if s, err = Open(path); err != nil {
+		t.Fatal(err)
+	}
+	m := Member{ID: "dmb_reopen", Discussion: d.Key, Owner: d.Host, Name: "Bob", Agent: "codex", CreatedAt: time.Now()}
+	if _, dup, err := s.AddMemberOnce(m, "same"); err != nil || !dup {
+		t.Fatalf("after reopening: dup=%v %v", dup, err)
+	}
+	d2, _ := newDiscussion(t, s)
+	m.ID, m.Discussion = "dmb_other_room", d2.Key
+	if _, dup, err := s.AddMemberOnce(m, "same"); err != nil || dup {
+		t.Fatalf("other discussion: dup=%v %v", dup, err)
+	}
+	for _, id := range []string{"dmb_legacy1", "dmb_legacy2"} {
+		m.ID = id
+		if _, dup, err := s.AddMemberOnce(m, ""); err != nil || dup {
+			t.Fatalf("no request id: dup=%v %v", dup, err)
+		}
 	}
 }

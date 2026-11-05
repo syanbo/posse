@@ -612,3 +612,42 @@ func TestDiscussionMemberFormKeepsRequestOnFailure(t *testing.T) {
 		t.Fatalf("new form reused request id %q", first)
 	}
 }
+
+// 提交了还没结果时表单不能改；结果回来时表单若已经不是发出去的那份（比如没被禁用的途径改了），成功也不关，
+// 免得关掉没发出去的修改。
+func TestDiscussionMemberFormLockedWhileSubmitting(t *testing.T) {
+	release := make(chan struct{})
+	a, tt, _ := discTester(t, map[string]rpc.Handler{"discussion.member.add": func(ctx context.Context, raw json.RawMessage) (any, error) {
+		<-release
+		return map[string]any{"id": "dmb_new"}, nil
+	}})
+	a.openMemberForm(a.disc.d, "")
+	a.disc.form.name = "Win Agent"
+	tt.Frame()
+	if err := tt.Click("添加"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.disc.form.busy {
+		t.Fatal("not submitting")
+	}
+	// 提交期间输入框禁用：点职责框打字改不了
+	if err := tt.Click("在讨论里的职责（可选），如：负责安全审查"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("edited")
+	tt.Frame()
+	if a.disc.form.role != "" {
+		t.Fatalf("role changed while submitting: %q", a.disc.form.role)
+	}
+	// 绕过界面改了表单：成功回来也不关，改动留在表单里
+	a.disc.form.role = "changed after sending"
+	close(release)
+	deadline := time.Now().Add(3 * time.Second)
+	for tt.Frame(); a.disc.form.busy && time.Now().Before(deadline); tt.Frame() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !a.disc.form.open || a.disc.form.role != "changed after sending" {
+		t.Fatalf("late success closed a form holding unsent changes: open=%v role=%q", a.disc.form.open, a.disc.form.role)
+	}
+}

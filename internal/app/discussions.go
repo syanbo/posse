@@ -301,6 +301,12 @@ type memberForm struct {
 	// 新开一张表单换一个。busy 是提交了、还没有结果
 	client string
 	busy   bool
+	sent   string // 提交时的内容（content）：成功后表单还是这份才关
+}
+
+// content 是表单里会发出去的内容。
+func (f *memberForm) content() string {
+	return fmt.Sprint(f.name, "\x00", f.role, "\x00", f.agent, "\x00", f.model, "\x00", f.effort, "\x00", f.ws, "\x00", f.mode, "\x00", f.worktree, "\x00", f.applyNow)
 }
 
 type discEditForm struct {
@@ -2288,7 +2294,7 @@ func (a *app) submitMemberForm(method string, params map[string]any, client stri
 	a.update(func() {
 		if f := &a.disc.form; f.client == client {
 			f.busy = false
-			if err == nil {
+			if err == nil && f.content() == f.sent {
 				f.open = false
 			}
 		}
@@ -2331,67 +2337,70 @@ func (a *app) memberDialog(c *ui.Context) {
 			}
 			titleText(c, title, fsTitle)
 			choices := a.agentChoices()
-			if len(choices) == 0 {
-				ui.Text(c, m.TasksNoAgents()).FontSize(fsBody).TextColor(t.TextMuted)
-			} else {
-				var labels []string
-				for _, ag := range choices {
-					labels = append(labels, agentTitle(ag))
-				}
-				prev := f.agent
-				segmented(c, &f.agent, m.DiscAgent(), labels...)
-				if f.agent != prev && editing == nil {
-					f.name = memberDefaultName(d, choices, f.agent)
-				}
-			}
-			fieldInput(c, &f.name, m.DiscMemberNamePlaceholder()).AutoFocus()
-			fieldArea(c, &f.role, m.DiscRolePlaceholder(), 56)
-			ui.Row(c).Gap(8).Children(func() {
-				ui.Box(c).Grow(1).Basis(0).Children(func() { fieldInput(c, &f.model, m.DiscModelPlaceholder()) })
-				ui.Box(c).Grow(1).Basis(0).Children(func() { fieldInput(c, &f.effort, m.DiscEffortPlaceholder()) })
-			})
 			isGit := false
 			for _, p := range a.projects {
 				if p.ID == d.info.ProjectID && p.Kind == "git" {
 					isGit = true
 				}
 			}
-			wsChoices := a.projectWorkspaces(d.info.ProjectID)
-			if d.info.Mirror {
-				// 加入的讨论：工作区在这台电脑上任选，只存本机
-				wsChoices = nil
-				for _, p := range a.projects {
-					wsChoices = append(wsChoices, a.projectWorkspaces(p.ID)...)
-				}
-				if f.ws == "" && len(wsChoices) > 0 {
-					f.ws = wsChoices[0]
-				}
-			}
-			ui.Column(c).Gap(6).Children(func() {
-				if isGit {
-					segmented(c, &f.mode, m.DiscWorkDir(), m.DiscExistingWorkspace(), m.DiscNewWorktree())
-				}
-				if isGit && f.mode == 1 {
-					fieldInput(c, &f.worktree, m.TasksBranchPlaceholder())
-					ui.Text(c, m.DiscWorktreeNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+			// 提交了还没结果时不能改：成功只关掉发出去的那份，不会关掉没发出去的修改
+			ui.Column(c).Gap(12).Disabled(f.busy).Children(func() {
+				if len(choices) == 0 {
+					ui.Text(c, m.TasksNoAgents()).FontSize(fsBody).TextColor(t.TextMuted)
 				} else {
-					ui.Select(c, &f.ws, wsChoices)
-					note := m.DiscSharedDirNote()
-					switch {
-					case d.info.Mirror:
-						note = m.CollabLocalWorkspaceNote()
-					case !isGit:
-						note = m.DiscNoGitNote()
+					var labels []string
+					for _, ag := range choices {
+						labels = append(labels, agentTitle(ag))
 					}
-					ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+					prev := f.agent
+					segmented(c, &f.agent, m.DiscAgent(), labels...)
+					if f.agent != prev && editing == nil {
+						f.name = memberDefaultName(d, choices, f.agent)
+					}
+				}
+				fieldInput(c, &f.name, m.DiscMemberNamePlaceholder()).AutoFocus()
+				fieldArea(c, &f.role, m.DiscRolePlaceholder(), 56)
+				ui.Row(c).Gap(8).Children(func() {
+					ui.Box(c).Grow(1).Basis(0).Children(func() { fieldInput(c, &f.model, m.DiscModelPlaceholder()) })
+					ui.Box(c).Grow(1).Basis(0).Children(func() { fieldInput(c, &f.effort, m.DiscEffortPlaceholder()) })
+				})
+				wsChoices := a.projectWorkspaces(d.info.ProjectID)
+				if d.info.Mirror {
+					// 加入的讨论：工作区在这台电脑上任选，只存本机
+					wsChoices = nil
+					for _, p := range a.projects {
+						wsChoices = append(wsChoices, a.projectWorkspaces(p.ID)...)
+					}
+					if f.ws == "" && len(wsChoices) > 0 {
+						f.ws = wsChoices[0]
+					}
+				}
+				ui.Column(c).Gap(6).Children(func() {
+					if isGit {
+						segmented(c, &f.mode, m.DiscWorkDir(), m.DiscExistingWorkspace(), m.DiscNewWorktree())
+					}
+					if isGit && f.mode == 1 {
+						fieldInput(c, &f.worktree, m.TasksBranchPlaceholder())
+						ui.Text(c, m.DiscWorktreeNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+					} else {
+						ui.Select(c, &f.ws, wsChoices)
+						note := m.DiscSharedDirNote()
+						switch {
+						case d.info.Mirror:
+							note = m.CollabLocalWorkspaceNote()
+						case !isGit:
+							note = m.DiscNoGitNote()
+						}
+						ui.Text(c, note).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+					}
+				})
+				if editing != nil && editing.TaskID != "" {
+					ui.Column(c).Gap(6).Children(func() {
+						ui.Checkbox(c.Key("apply-now"), &f.applyNow, m.DiscApplyNow())
+						ui.Text(c, m.DiscApplyNowNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
+					})
 				}
 			})
-			if editing != nil && editing.TaskID != "" {
-				ui.Column(c).Gap(6).Children(func() {
-					ui.Checkbox(c.Key("apply-now"), &f.applyNow, m.DiscApplyNow())
-					ui.Text(c, m.DiscApplyNowNote()).FontSize(fsSmall).TextColor(t.TextMuted).LineHeight(1.45)
-				})
-			}
 			ready := len(choices) > 0 && strings.TrimSpace(f.name) != "" && (f.mode == 0 || strings.TrimSpace(f.worktree) != "")
 			ui.Row(c).Gap(8).Justify(ui.End).Padding(8, 0, 0, 0).Children(func() {
 				if pressable(textButton(c, m.CommonCancel())).Clicked() {
@@ -2402,7 +2411,7 @@ func (a *app) memberDialog(c *ui.Context) {
 					verb = m.CommonSave()
 				}
 				if pressable(accentButton(c, verb).Disabled(!ready || f.busy)).Clicked() && ready && !f.busy {
-					f.busy = true
+					f.busy, f.sent = true, f.content()
 					params := map[string]any{"discussion": d.key, "name": strings.TrimSpace(f.name), "role": strings.TrimSpace(f.role),
 						"agent": choices[f.agent], "model": strings.TrimSpace(f.model), "effort": strings.TrimSpace(f.effort)}
 					if f.mode == 1 && isGit {

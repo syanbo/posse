@@ -893,6 +893,33 @@ type discMemberParams struct {
 	ClientID string `json:"clientId"`
 }
 
+// addWorkspace 是添加成员时的执行工作区。加入的讨论里要新建 worktree 时，记下它属于这次请求（请求 ID）：
+// 房主没回应、用同一个请求 ID 重试时用回这个 worktree，不再建一次（同名目录已经在了会失败）；
+// 重试换了 worktree 名字报错，不接受别的同名目录。
+func (d *Daemon) addWorkspace(ctx context.Context, disc store.Discussion, p discMemberParams) (store.Workspace, error) {
+	name := strings.TrimSpace(p.Worktree)
+	if !disc.Mirror || name == "" {
+		return d.memberWorkspace(ctx, disc, p)
+	}
+	if id, tree, ok := d.store.AddRequestWorkspace(disc.Key, p.ClientID); ok {
+		if tree != name {
+			return store.Workspace{}, rpc.Errorf(rpc.CodeConflict, "this request already created worktree %s; retry it with the same options", tree)
+		}
+		if w, err := d.store.Workspace(id); err == nil {
+			return w, nil
+		}
+		d.store.SetAddRequestWorkspace(disc.Key, p.ClientID, "", "", time.Now()) // 工作区后来删了：照常新建
+	}
+	w, err := d.memberWorkspace(ctx, disc, p)
+	if err != nil {
+		return w, err
+	}
+	if err := d.store.SetAddRequestWorkspace(disc.Key, p.ClientID, w.ID, name, time.Now()); err != nil {
+		return w, err
+	}
+	return w, nil
+}
+
 // memberWorkspace 定下成员的执行工作区：要新建 worktree 时在讨论的项目里建。
 func (d *Daemon) memberWorkspace(ctx context.Context, disc store.Discussion, p discMemberParams) (store.Workspace, error) {
 	sel := p.Workspace
@@ -971,9 +998,12 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 	if err := d.checkMemberAgent(p.Agent); err != nil {
 		return nil, err
 	}
-	w, err := d.memberWorkspace(ctx, disc, p)
+	if disc.Mirror && p.ClientID == "" {
+		p.ClientID = store.NewID("c_") + store.NewID("")
+	}
+	w, err := d.addWorkspace(ctx, disc, p)
 	if err != nil {
-		return nil, err
+		return nil, withClientID(err, p.ClientID)
 	}
 	if disc.Mirror {
 		// 公开配置交给房主登记，执行工作区只记在这台电脑上
@@ -981,14 +1011,16 @@ func (d *Daemon) discMemberAdd(ctx context.Context, raw json.RawMessage) (any, e
 		if err != nil {
 			return nil, err
 		}
-		if p.ClientID == "" {
-			p.ClientID = store.NewID("c_") + store.NewID("")
-		}
 		var res struct {
-			Member string `json:"member"`
+			Member    string `json:"member"`
+			Duplicate bool   `json:"duplicate"`
 		}
 		if err := rc.call("member.add", map[string]string{"name": p.Name, "role": strings.TrimSpace(p.Role), "agent": p.Agent, "model": p.Model, "effort": p.Effort, "client": p.ClientID}, &res); err != nil {
 			return nil, withClientID(err, p.ClientID)
+		}
+		// 房主早就加好了、这台电脑也确认过（上次的应答其实收到了，或者之后改过设置）：旧请求的重试不改本机后来的设置
+		if res.Duplicate && d.store.OwnConfirmed(res.Member) {
+			return d.store.Member(res.Member)
 		}
 		own := store.Member{ID: res.Member, Name: p.Name, Role: strings.TrimSpace(p.Role), Agent: p.Agent, Model: p.Model, Effort: p.Effort,
 			WorkspaceID: w.ID, WorkspaceLabel: d.workspaceLabel(w)}

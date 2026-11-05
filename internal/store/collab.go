@@ -120,6 +120,17 @@ CREATE TABLE IF NOT EXISTS collab_outbox (
 	PRIMARY KEY(exec, seq)
 );
 CREATE INDEX IF NOT EXISTS collab_outbox_room ON collab_outbox(room, state);
+-- host: one agent per request ID of one person in one discussion (AddMemberOnce)
+CREATE UNIQUE INDEX IF NOT EXISTS disc_members_client ON disc_members(discussion, owner, client_id) WHERE client_id <> '';
+-- member: the worktree an add request created, reused when the same request is retried
+CREATE TABLE IF NOT EXISTS collab_add_workspaces (
+	room TEXT NOT NULL,
+	client TEXT NOT NULL,
+	workspace_id TEXT NOT NULL,
+	worktree TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	PRIMARY KEY(room, client)
+);
 `
 
 // 成员资格的状态
@@ -1900,6 +1911,29 @@ func (s *Store) SetOwnConfig(m Member) error {
 			m.Name, m.Role, m.Agent, m.Model, m.Effort, m.WorkspaceID, m.WorkspaceLabel, ownConfig(m), paused, rev, m.ID)
 		return err
 	})
+}
+
+// OwnConfirmed 报告这台电脑是否确认过自己这个 Agent 的配置（SetOwnConfig 记过）。
+func (s *Store) OwnConfirmed(id string) bool {
+	var own string
+	return s.db.QueryRow(`SELECT own_config FROM disc_members WHERE id=?`, id).Scan(&own) == nil && own != ""
+}
+
+// AddRequestWorkspace 返回这次添加（请求 ID）先前为 Agent 新建的 worktree 工作区和名字。
+func (s *Store) AddRequestWorkspace(room, client string) (workspace, worktree string, ok bool) {
+	err := s.db.QueryRow(`SELECT workspace_id, worktree FROM collab_add_workspaces WHERE room=? AND client=?`, room, client).Scan(&workspace, &worktree)
+	return workspace, worktree, err == nil
+}
+
+// SetAddRequestWorkspace 记下这次添加新建的 worktree 工作区；workspace 为空时删掉记录（工作区已经没了）。
+func (s *Store) SetAddRequestWorkspace(room, client, workspace, worktree string, at time.Time) error {
+	if workspace == "" {
+		_, err := s.db.Exec(`DELETE FROM collab_add_workspaces WHERE room=? AND client=?`, room, client)
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO collab_add_workspaces(room,client,workspace_id,worktree,created_at) VALUES(?,?,?,?,?)
+		ON CONFLICT(room,client) DO UPDATE SET workspace_id=excluded.workspace_id, worktree=excluded.worktree`, room, client, workspace, worktree, ms(at))
+	return err
 }
 
 // NeedsWorkspace 是自己的 Agent 在本机还没有执行工作区时的暂停原因：拥有者配置之前不猜路径。

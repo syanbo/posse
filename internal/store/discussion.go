@@ -599,6 +599,16 @@ func (s *Store) AddMemberOnce(m Member, client string) (id string, dup bool, err
 				if old.RemovedAt != nil || old.Generation != m.Generation {
 					return ErrAddGone
 				}
+				// 和新加一样核对这个人这一代资格还有效（房主自己的 Agent 不查）
+				var host string
+				if err := tx.QueryRow(`SELECT host FROM discussions WHERE key=?`, m.Discussion).Scan(&host); err != nil {
+					return err
+				}
+				if m.Owner != "" && m.Owner != host {
+					if err := checkPerson(tx, m.Discussion, m.Owner, m.Generation); err != nil {
+						return err
+					}
+				}
 				if ownConfig(old) != ownConfig(m) {
 					return ErrAddChanged
 				}
