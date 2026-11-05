@@ -235,6 +235,12 @@ func newDiscDetail(v discView) *discDetail {
 	return d
 }
 
+// stickBottom 回到底部并跟随新消息（整页换上、发出消息、回答之后、跳到最新）：位置和跟随一起设，
+// 不然往上翻着时会被当成用户离开了底部。
+func (b *discBoard) stickBottom() {
+	b.follow, b.scroll.Y = true, math.MaxFloat32
+}
+
 // discBoard 是讨论页在窗口里的状态。
 type discBoard struct {
 	list   []discSummary
@@ -388,7 +394,7 @@ func (a *app) applyDiscussions(p *discPoll) {
 		switch {
 		case !v.Delta:
 			b.d = newDiscDetail(*v)
-			b.follow = true
+			b.stickBottom()
 		case b.d != nil && b.d.key == p.key && b.d.rev == p.since:
 			b.d.merge(*v)
 		}
@@ -843,6 +849,11 @@ func (a *app) discMessages(c *ui.Context, d *discDetail) {
 	last := int64(0)
 	if len(d.msgs) > 0 {
 		last = d.msgs[len(d.msgs)-1].Seq
+	}
+	// 用户往上滚了（滚轮、触控板、滚动条在事件里就改了 s.Y）：先停止跟随，再决定要不要拉到底；
+	// 否则这一帧会按上一帧的跟随把用户的滚动拉回底部。新消息到来不受影响：MaxY 要到下一次布局才变，这时仍在底部
+	if !atBottom {
+		b.follow = false
 	}
 	if b.follow && b.reveal == "" {
 		s.Y = math.MaxFloat32
@@ -1603,7 +1614,7 @@ func (a *app) sendDiscMessage(key string, params map[string]any) {
 		// 常驻进程已经把附件复制成快照：粘贴图片时写的临时文件可以删了
 		removePasted(b.atts)
 		b.text, b.quote, b.atts, b.clientID, b.mention = "", "", nil, "", ""
-		b.follow = true
+		b.stickBottom()
 		a.markDiscRead(key, r.Message.Seq)
 	})
 	a.refresh()
@@ -1616,7 +1627,7 @@ func (a *app) sendDiscAnswer(question, text string) {
 		b.sending = false
 		if err == nil {
 			b.text, b.answerQ = "", ""
-			b.follow = true
+			b.stickBottom()
 		}
 	})
 	a.refresh()
@@ -1755,7 +1766,7 @@ func (a *app) jumpLatest() {
 		return
 	}
 	a.setWantedDisc(b.d.key, 0)
-	b.follow, b.scroll.Y = true, math.MaxFloat32
+	b.stickBottom()
 	a.pollForce.Store(true)
 	if !a.refreshQueued.Swap(true) {
 		go a.refresh()
