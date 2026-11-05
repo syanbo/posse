@@ -169,7 +169,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: _body(c, searching, groups, agent, now),
+      body: SideSafe(child: _body(c, searching, groups, agent, now)),
     );
   }
 
@@ -231,7 +231,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       children: [
         // 写得下时铺满一行、两端对齐，窄屏写不下再横着滑
         Padding(
-          padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+          // 工作区页里和分段、搜索框之间隔 12；下面的组名行自带 6 的上内边距，合起来也是 12
+          padding: EdgeInsets.fromLTRB(0, widget.cwd == null ? 4 : 12, 0, 6),
           child: LayoutBuilder(
             builder: (context, box) => SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -615,53 +616,56 @@ class _HistorySessionScreenState extends State<HistorySessionScreen> {
           child: Divider(height: 1, color: c.line),
         ),
       ),
-      body: Column(
-        children: [
-          if (_error != null) NoticeBar(_error!),
-          Expanded(
-            child: _loading && entries.isEmpty
-                ? const Center(child: PosseLoader())
-                : SelectionArea(
-                    child: Scrollbar(
-                      controller: _scroll,
-                      // 倒着排：一打开就在最新的消息，往上翻到头自动读更早的
-                      child: ListView.builder(
+      body: SideSafe(
+        child: Column(
+          children: [
+            if (_error != null) NoticeBar(_error!),
+            Expanded(
+              child: _loading && entries.isEmpty
+                  ? const Center(child: PosseLoader())
+                  : SelectionArea(
+                      child: Scrollbar(
                         controller: _scroll,
-                        reverse: true,
-                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                        itemCount: rowKeys.length,
-                        findChildIndexCallback: (key) => key is ValueKey<String>
-                            ? rowIndex[key.value]
-                            : null,
-                        itemBuilder: (context, index) => KeyedSubtree(
-                          key: ValueKey(rowKeys[index]),
-                          child: _row(index, entries, s.agent),
+                        // 倒着排：一打开就在最新的消息，往上翻到头自动读更早的
+                        child: ListView.builder(
+                          controller: _scroll,
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                          itemCount: rowKeys.length,
+                          findChildIndexCallback: (key) =>
+                              key is ValueKey<String>
+                              ? rowIndex[key.value]
+                              : null,
+                          itemBuilder: (context, index) => KeyedSubtree(
+                            key: ValueKey(rowKeys[index]),
+                            child: _row(index, entries, s.agent),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _resuming || widget.model.rpc == null
-                      ? null
-                      : _resume,
-                  icon: const Icon(Icons.laptop_mac_rounded, size: Ic.medium),
-                  label: Text(
-                    _resuming
-                        ? context.l10n.historyOpening
-                        : context.l10n.historyContinueOnComputer,
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _resuming || widget.model.rpc == null
+                        ? null
+                        : _resume,
+                    icon: const Icon(Icons.laptop_mac_rounded, size: Ic.medium),
+                    label: Text(
+                      _resuming
+                          ? context.l10n.historyOpening
+                          : context.l10n.historyContinueOnComputer,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

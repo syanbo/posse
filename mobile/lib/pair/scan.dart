@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -219,7 +220,11 @@ class _QrScanPageState extends State<QrScanPage> {
           ),
           LayoutBuilder(
             builder: (context, box) {
-              final side = (box.maxWidth * 0.68).clamp(200.0, 320.0);
+              // 横屏时高度不够：框按高度收小，上面的提示和下面的按钮还放得下
+              final side = math.min(
+                (box.maxWidth * 0.68).clamp(200.0, 320.0),
+                box.maxHeight * 0.5,
+              );
               final frame = Rect.fromCenter(
                 center: Offset(box.maxWidth / 2, box.maxHeight * 0.42),
                 width: side,

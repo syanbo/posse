@@ -121,7 +121,13 @@ class FilesScreen extends StatelessWidget {
           ],
         ),
       ),
-      body: FilesPane(model: model, worktree: worktree),
+      // 工作区页里搜索框贴着分段下面的 12，单独打开时离顶栏留一点
+      body: SideSafe(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: FilesPane(model: model, worktree: worktree),
+        ),
+      ),
     );
   }
 }
@@ -266,7 +272,7 @@ class _FilesPaneState extends State<FilesPane> {
     final c = PosseColors.of(context);
     final rows = _rows();
     final search = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Material(
         color: c.fill,
         borderRadius: BorderRadius.circular(Rd.input),
@@ -592,7 +598,7 @@ class _FileViewerState extends State<FileViewer> {
           const SizedBox(width: 4),
         ],
       ),
-      body: _body(c),
+      body: SideSafe(child: _body(c)),
     );
   }
 

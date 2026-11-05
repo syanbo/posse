@@ -306,9 +306,11 @@ class _ToolsScreenState extends State<ToolsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(titleSpacing: 0, title: Text(context.l10n.chatToolsTitle)),
-      body: ValueListenableBuilder(
-        valueListenable: toolsFilter,
-        builder: (context, filter, _) => _body(context, filter),
+      body: SideSafe(
+        child: ValueListenableBuilder(
+          valueListenable: toolsFilter,
+          builder: (context, filter, _) => _body(context, filter),
+        ),
       ),
     );
   }
@@ -659,47 +661,52 @@ class _StepRow extends StatelessWidget {
         final c = PosseColors.of(sheet);
         return SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: c.code,
-                    borderRadius: BorderRadius.circular(Rd.code),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: c.code,
+                      borderRadius: BorderRadius.circular(Rd.code),
+                    ),
+                    child: SelectableText(
+                      text,
+                      style: mono(Fs.small, color: c.text, height: Lh.body),
+                    ),
                   ),
-                  child: SelectableText(
-                    text,
-                    style: mono(Fs.small, color: c.text, height: Lh.body),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(sheet).pop();
-                    _copy(context, text);
-                  },
-                  child: Text(copyLabel),
-                ),
-                if (url != null) ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton(
+                  const SizedBox(height: 12),
+                  FilledButton(
                     onPressed: () {
                       Navigator.of(sheet).pop();
-                      final uri = Uri.tryParse(url);
-                      if (uri != null) {
-                        unawaited(
-                          launchUrl(uri, mode: LaunchMode.externalApplication),
-                        );
-                      }
+                      _copy(context, text);
                     },
-                    child: Text(context.l10n.chatToolsOpenInBrowser),
+                    child: Text(copyLabel),
                   ),
+                  if (url != null) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(sheet).pop();
+                        final uri = Uri.tryParse(url);
+                        if (uri != null) {
+                          unawaited(
+                            launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            ),
+                          );
+                        }
+                      },
+                      child: Text(context.l10n.chatToolsOpenInBrowser),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         );

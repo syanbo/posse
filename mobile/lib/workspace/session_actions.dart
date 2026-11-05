@@ -83,78 +83,80 @@ Future<String?> showSessionMore(
       final l = sheet.l10n;
       return SafeArea(
         top: false,
-        child: Section(
-          inset: 48,
-          children: [
-            if (switchLabel != null)
-              RowTile(
-                chevron: false,
-                leading: Icon(switchIcon, size: Ic.button, color: c.accent),
-                title: Text(switchLabel),
-                onTap: () => Navigator.of(sheet).pop('switch'),
-              ),
-            if (media)
-              RowTile(
-                chevron: false,
-                leading: Icon(
-                  Icons.photo_library_rounded,
-                  size: Ic.button,
-                  color: c.accent,
+        child: SingleChildScrollView(
+          child: Section(
+            inset: 48,
+            children: [
+              if (switchLabel != null)
+                RowTile(
+                  chevron: false,
+                  leading: Icon(switchIcon, size: Ic.button, color: c.accent),
+                  title: Text(switchLabel),
+                  onTap: () => Navigator.of(sheet).pop('switch'),
                 ),
-                title: Text(l.sessionMedia),
-                subtitle: Text(l.sessionMediaNote),
-                onTap: () => Navigator.of(sheet).pop('media'),
-              ),
-            if (tools)
-              RowTile(
-                chevron: false,
-                leading: Icon(
-                  Icons.extension_rounded,
-                  size: Ic.button,
-                  color: c.accent,
+              if (media)
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.photo_library_rounded,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(l.sessionMedia),
+                  subtitle: Text(l.sessionMediaNote),
+                  onTap: () => Navigator.of(sheet).pop('media'),
                 ),
-                title: Text(l.sessionTools),
-                subtitle: Text(l.sessionToolsNote),
-                onTap: () => Navigator.of(sheet).pop('tools'),
-              ),
-            if (desk != null)
-              StatefulBuilder(
-                builder: (context, setSheet) {
-                  void flip(bool value) {
-                    setSheet(() => on = value);
-                    onDesk?.call(value);
-                  }
+              if (tools)
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.extension_rounded,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(l.sessionTools),
+                  subtitle: Text(l.sessionToolsNote),
+                  onTap: () => Navigator.of(sheet).pop('tools'),
+                ),
+              if (desk != null)
+                StatefulBuilder(
+                  builder: (context, setSheet) {
+                    void flip(bool value) {
+                      setSheet(() => on = value);
+                      onDesk?.call(value);
+                    }
 
-                  return RowTile(
-                    chevron: false,
-                    leading: Icon(
-                      Icons.desktop_mac_rounded,
-                      size: Ic.button,
-                      color: c.accent,
-                    ),
-                    title: Text(l.sessionDeskLayout),
-                    subtitle: Text(l.sessionDeskLayoutNote),
-                    trailing: PosseSwitch(value: on, onChanged: flip),
-                    onTap: () => flip(!on),
-                  );
-                },
+                    return RowTile(
+                      chevron: false,
+                      leading: Icon(
+                        Icons.desktop_mac_rounded,
+                        size: Ic.button,
+                        color: c.accent,
+                      ),
+                      title: Text(l.sessionDeskLayout),
+                      subtitle: Text(l.sessionDeskLayoutNote),
+                      trailing: PosseSwitch(value: on, onChanged: flip),
+                      onTap: () => flip(!on),
+                    );
+                  },
+                ),
+              RowTile(
+                chevron: false,
+                leading: Icon(
+                  Icons.close_rounded,
+                  size: Ic.button,
+                  color: c.danger,
+                ),
+                title: Text(
+                  tab.agent == null
+                      ? l.sessionCloseTerminal
+                      : l.sessionCloseSession,
+                  style: TextStyle(color: c.danger),
+                ),
+                onTap: () => Navigator.of(sheet).pop('close'),
               ),
-            RowTile(
-              chevron: false,
-              leading: Icon(
-                Icons.close_rounded,
-                size: Ic.button,
-                color: c.danger,
-              ),
-              title: Text(
-                tab.agent == null
-                    ? l.sessionCloseTerminal
-                    : l.sessionCloseSession,
-                style: TextStyle(color: c.danger),
-              ),
-              onTap: () => Navigator.of(sheet).pop('close'),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     },

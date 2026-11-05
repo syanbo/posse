@@ -26,46 +26,48 @@ Future<ImageAsk?> askImageSource(BuildContext context) {
       final c = PosseColors.of(sheet);
       return SafeArea(
         top: false,
-        child: Section(
-          inset: 48,
-          children: [
-            RowTile(
-              leading: Icon(
-                Icons.photo_rounded,
-                size: Ic.button,
-                color: c.accent,
+        child: SingleChildScrollView(
+          child: Section(
+            inset: 48,
+            children: [
+              RowTile(
+                leading: Icon(
+                  Icons.photo_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
+                title: Text(sheet.l10n.chatPickFromLibraryMulti),
+                onTap: () => Navigator.of(sheet).pop(ImageAsk.gallery),
               ),
-              title: Text(sheet.l10n.chatPickFromLibraryMulti),
-              onTap: () => Navigator.of(sheet).pop(ImageAsk.gallery),
-            ),
-            RowTile(
-              leading: Icon(
-                Icons.photo_camera_rounded,
-                size: Ic.button,
-                color: c.accent,
+              RowTile(
+                leading: Icon(
+                  Icons.photo_camera_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
+                title: Text(sheet.l10n.chatTakePhoto),
+                onTap: () => Navigator.of(sheet).pop(ImageAsk.camera),
               ),
-              title: Text(sheet.l10n.chatTakePhoto),
-              onTap: () => Navigator.of(sheet).pop(ImageAsk.camera),
-            ),
-            RowTile(
-              leading: Icon(
-                Icons.content_paste_rounded,
-                size: Ic.button,
-                color: c.accent,
+              RowTile(
+                leading: Icon(
+                  Icons.content_paste_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
+                title: Text(sheet.l10n.chatPasteFromClipboard),
+                onTap: () => Navigator.of(sheet).pop(ImageAsk.clipboard),
               ),
-              title: Text(sheet.l10n.chatPasteFromClipboard),
-              onTap: () => Navigator.of(sheet).pop(ImageAsk.clipboard),
-            ),
-            RowTile(
-              leading: Icon(
-                Icons.folder_rounded,
-                size: Ic.button,
-                color: c.accent,
+              RowTile(
+                leading: Icon(
+                  Icons.folder_rounded,
+                  size: Ic.button,
+                  color: c.accent,
+                ),
+                title: Text(sheet.l10n.chatPickFromFiles),
+                onTap: () => Navigator.of(sheet).pop(ImageAsk.files),
               ),
-              title: Text(sheet.l10n.chatPickFromFiles),
-              onTap: () => Navigator.of(sheet).pop(ImageAsk.files),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     },
@@ -123,25 +125,27 @@ Future<FileAsk?> askFileSource(BuildContext context) {
       );
       return SafeArea(
         top: false,
-        child: Section(
-          inset: 48,
-          children: [
-            row(
-              FileAsk.gallery,
-              Icons.photo_library_rounded,
-              sheet.l10n.chatPickFromLibrary,
-            ),
-            row(
-              FileAsk.camera,
-              Icons.photo_camera_rounded,
-              sheet.l10n.chatTakePhoto,
-            ),
-            row(
-              FileAsk.files,
-              Icons.folder_rounded,
-              sheet.l10n.chatPickFromFiles,
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Section(
+            inset: 48,
+            children: [
+              row(
+                FileAsk.gallery,
+                Icons.photo_library_rounded,
+                sheet.l10n.chatPickFromLibrary,
+              ),
+              row(
+                FileAsk.camera,
+                Icons.photo_camera_rounded,
+                sheet.l10n.chatTakePhoto,
+              ),
+              row(
+                FileAsk.files,
+                Icons.folder_rounded,
+                sheet.l10n.chatPickFromFiles,
+              ),
+            ],
+          ),
         ),
       );
     },

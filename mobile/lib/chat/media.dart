@@ -180,7 +180,7 @@ class _MediaScreenState extends State<MediaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(titleSpacing: 0, title: Text(context.l10n.chatMediaTitle)),
-      body: _body(context),
+      body: SideSafe(child: _body(context)),
     );
   }
 
@@ -596,40 +596,42 @@ class _MediaViewerState extends State<MediaViewer> {
           const SizedBox(width: 4),
         ],
       ),
-      body: rpc == null
-          ? EmptyState(
-              icon: Icons.link_off_rounded,
-              text: context.l10n.errorNotConnected,
-              error: true,
-            )
-          : MediaPager(
-              count: items.length,
-              initialIndex: widget.index,
-              onChanged: (i) => setState(() => _index = i),
-              builder: (context, i) {
-                final item = items[i];
-                if (item.video) {
-                  return VideoView(
+      body: SideSafe(
+        child: rpc == null
+            ? EmptyState(
+                icon: Icons.link_off_rounded,
+                text: context.l10n.errorNotConnected,
+                error: true,
+              )
+            : MediaPager(
+                count: items.length,
+                initialIndex: widget.index,
+                onChanged: (i) => setState(() => _index = i),
+                builder: (context, i) {
+                  final item = items[i];
+                  if (item.video) {
+                    return VideoView(
+                      key: ValueKey(item.id),
+                      onReady: (file) => _ready(i, file),
+                      fetch: (cancelled, onProgress) => fetchMedia(
+                        rpc,
+                        tab,
+                        item,
+                        cancelled: cancelled,
+                        onProgress: onProgress,
+                      ),
+                    );
+                  }
+                  return _ImageView(
                     key: ValueKey(item.id),
+                    rpc: rpc,
+                    tab: tab,
+                    item: item,
                     onReady: (file) => _ready(i, file),
-                    fetch: (cancelled, onProgress) => fetchMedia(
-                      rpc,
-                      tab,
-                      item,
-                      cancelled: cancelled,
-                      onProgress: onProgress,
-                    ),
                   );
-                }
-                return _ImageView(
-                  key: ValueKey(item.id),
-                  rpc: rpc,
-                  tab: tab,
-                  item: item,
-                  onReady: (file) => _ready(i, file),
-                );
-              },
-            ),
+                },
+              ),
+      ),
     );
   }
 }

@@ -344,17 +344,22 @@ Future<void> showSaveSheet(
       );
       return SafeArea(
         top: false,
-        child: Section(
-          inset: 48,
-          children: [
-            switch (to) {
-              SaveTo.album => row(to, sheet.l10n.filesSaveToAlbumNote),
-              SaveTo.downloads => row(to, sheet.l10n.filesSaveToDownloadsNote),
-              SaveTo.share => row(to, sheet.l10n.filesShareNote),
-            },
-            if (to != SaveTo.share)
-              row(SaveTo.share, sheet.l10n.filesShareOtherNote),
-          ],
+        child: SingleChildScrollView(
+          child: Section(
+            inset: 48,
+            children: [
+              switch (to) {
+                SaveTo.album => row(to, sheet.l10n.filesSaveToAlbumNote),
+                SaveTo.downloads => row(
+                  to,
+                  sheet.l10n.filesSaveToDownloadsNote,
+                ),
+                SaveTo.share => row(to, sheet.l10n.filesShareNote),
+              },
+              if (to != SaveTo.share)
+                row(SaveTo.share, sheet.l10n.filesShareOtherNote),
+            ],
+          ),
         ),
       );
     },

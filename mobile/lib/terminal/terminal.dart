@@ -967,21 +967,24 @@ class _TerminalScreenState extends State<TerminalScreen>
           final keyboard = MediaQuery.viewInsetsOf(context).bottom;
           final safe = MediaQuery.viewPaddingOf(context).bottom;
           final height = body.maxHeight - _keyBarHeight - safe;
+          // 横屏时刘海和圆角那侧让开：终端只占中间，两边露出的是同色的页面底，快捷键栏自己让
+          final side = MediaQuery.paddingOf(context);
+          final width = body.maxWidth - side.horizontal;
           // 键盘盖住的终端高度：快捷键栏下面的安全区本来就不算终端
           final covered = (keyboard - safe).clamp(0.0, height);
           return Stack(
             children: [
               Positioned(
                 top: 0,
-                left: 0,
-                right: 0,
+                left: side.left,
+                right: side.right,
                 height: height,
                 child: ClipRect(
                   child: ListenableBuilder(
                     listenable: _contentRows,
                     builder: (context, child) {
                       final lift = keyboardLift(
-                        contentBottom: _contentBottom(body.maxWidth),
+                        contentBottom: _contentBottom(width),
                         visible: height - covered,
                         covered: covered,
                       );
@@ -997,8 +1000,8 @@ class _TerminalScreenState extends State<TerminalScreen>
               if (!_painted && _notice == null && !_ended)
                 Positioned(
                   top: 0,
-                  left: 0,
-                  right: 0,
+                  left: side.left,
+                  right: side.right,
                   height: height,
                   child: const IgnorePointer(
                     child: Center(child: PosseLoader()),
@@ -1008,8 +1011,8 @@ class _TerminalScreenState extends State<TerminalScreen>
               // 占布局的话终端会变矮，agent 跟着重排。复制按钮贴着选区，跟着画面挪。
               if (_upload case final done?)
                 Positioned(
-                  left: 0,
-                  right: 0,
+                  left: side.left,
+                  right: side.right,
                   bottom: body.maxHeight - height + covered + 12,
                   child: UploadBar(
                     index: 0,
@@ -1021,19 +1024,23 @@ class _TerminalScreenState extends State<TerminalScreen>
               if (_notice != null)
                 Positioned(
                   top: 12,
-                  left: 4,
-                  right: 4,
+                  left: side.left + 4,
+                  right: side.right + 4,
                   child: NoticeBar(
                     _notice!,
                     floating: true,
                     onClose: () => _flash(null),
                   ),
                 ),
-              Positioned.fill(
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: side.left,
+                right: side.right,
                 child: ListenableBuilder(
                   listenable: _moving,
                   builder: (context, _) =>
-                      _selectionChrome(body.maxWidth, height, covered),
+                      _selectionChrome(width, height, covered),
                 ),
               ),
               Positioned(

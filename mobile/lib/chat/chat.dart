@@ -718,55 +718,59 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Divider(height: 1, color: c.line),
         ),
       ),
-      body: Column(
-        children: [
-          if (!tab.eligible)
-            Expanded(child: Center(child: Text(context.l10n.chatNoTranscript)))
-          else ...[
-            if (_window.pending && _window.messages.isEmpty)
-              const LinearProgressIndicator(minHeight: 2),
-            if (_window.error case final error?)
-              NoticeBar(switch (error) {
-                chatReadFailed => context.l10n.chatReadFailed,
-                chatStreamEnded => context.l10n.chatStreamEnded,
-                _ => error,
-              }),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: NotificationListener<ScrollStartNotification>(
-                      onNotification: (n) {
-                        if (n.dragDetails != null) _stick = false;
-                        return false;
-                      },
-                      child: SelectionArea(
-                        child: Scrollbar(
-                          controller: _scroll,
-                          child: ListViewObserver(
-                            controller: _observer,
-                            child: ListView.builder(
-                              controller: _scroll,
-                              reverse: true,
-                              physics: _listPhysics(context),
-                              padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
-                              // 下标 0 是视觉底部。还有更早的消息时，列表最上面多一行。
-                              // 行按身份认（rowKeys）：展开着的工具组不会在别的行插进来时收起
-                              itemCount: rowKeys.length,
-                              findChildIndexCallback: (key) =>
-                                  key is ValueKey<String>
-                                  ? rowIndex[key.value]
-                                  : null,
-                              itemBuilder: (context, index) => KeyedSubtree(
-                                key: ValueKey(rowKeys[index]),
-                                child: _row(
-                                  c,
-                                  index,
-                                  working: working,
-                                  draft: draft,
-                                  echoes: echoes,
-                                  entries: entries,
-                                  settings: settings,
+      body: SideSafe(
+        child: Column(
+          children: [
+            if (!tab.eligible)
+              Expanded(
+                child: Center(child: Text(context.l10n.chatNoTranscript)),
+              )
+            else ...[
+              if (_window.pending && _window.messages.isEmpty)
+                const LinearProgressIndicator(minHeight: 2),
+              if (_window.error case final error?)
+                NoticeBar(switch (error) {
+                  chatReadFailed => context.l10n.chatReadFailed,
+                  chatStreamEnded => context.l10n.chatStreamEnded,
+                  _ => error,
+                }),
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: NotificationListener<ScrollStartNotification>(
+                        onNotification: (n) {
+                          if (n.dragDetails != null) _stick = false;
+                          return false;
+                        },
+                        child: SelectionArea(
+                          child: Scrollbar(
+                            controller: _scroll,
+                            child: ListViewObserver(
+                              controller: _observer,
+                              child: ListView.builder(
+                                controller: _scroll,
+                                reverse: true,
+                                physics: _listPhysics(context),
+                                padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+                                // 下标 0 是视觉底部。还有更早的消息时，列表最上面多一行。
+                                // 行按身份认（rowKeys）：展开着的工具组不会在别的行插进来时收起
+                                itemCount: rowKeys.length,
+                                findChildIndexCallback: (key) =>
+                                    key is ValueKey<String>
+                                    ? rowIndex[key.value]
+                                    : null,
+                                itemBuilder: (context, index) => KeyedSubtree(
+                                  key: ValueKey(rowKeys[index]),
+                                  child: _row(
+                                    c,
+                                    index,
+                                    working: working,
+                                    draft: draft,
+                                    echoes: echoes,
+                                    entries: entries,
+                                    settings: settings,
+                                  ),
                                 ),
                               ),
                             ),
@@ -774,61 +778,62 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ),
-                  ),
-                  // 提示、上传进度、「新消息」都浮在列表底部，不挤动列表
-                  if (_notice != null || _upload != null || _newBelow)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 12,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_notice != null)
-                            NoticeBar(
-                              _notice!,
-                              floating: true,
-                              onClose: () => _flash(null),
-                            ),
-                          if (_notice != null && (_upload != null || _newBelow))
-                            const SizedBox(height: 8),
-                          if (_upload case (final i, final n, final done))
-                            UploadBar(index: i, count: n, done: done)
-                          else if (_newBelow)
-                            Center(child: _newBelowButton(c)),
-                        ],
+                    // 提示、上传进度、「新消息」都浮在列表底部，不挤动列表
+                    if (_notice != null || _upload != null || _newBelow)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_notice != null)
+                              NoticeBar(
+                                _notice!,
+                                floating: true,
+                                onClose: () => _flash(null),
+                              ),
+                            if (_notice != null &&
+                                (_upload != null || _newBelow))
+                              const SizedBox(height: 8),
+                            if (_upload case (final i, final n, final done))
+                              UploadBar(index: i, count: n, done: done)
+                            else if (_newBelow)
+                              Center(child: _newBelowButton(c)),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
+            ],
+            if (approval != null)
+              ApprovalCard(
+                approval: approval,
+                busy: _sending,
+                onDecision: _decide,
+              )
+            else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
+              QuestionCard(questions: prompt.questions, onSubmit: _answer),
+            ChatComposer(
+              controller: _input,
+              images: _pending,
+              sending: _sending,
+              connected: _rpc != null,
+              ended: _ended,
+              hint: context.l10n.chatReplyHint(
+                chatWho(context.l10n, 'assistant', tab.agent),
+              ),
+              onChanged: (_) => setState(() {}),
+              onSubmit: _submit,
+              onPickImage: _pickImage,
+              onRemoveImage: (index) =>
+                  setState(() => _uploaded.remove(_pending.removeAt(index))),
+              onPaste: () => unawaited(_pasteClipboard()),
+              onContentInserted: _onContentInserted,
             ),
           ],
-          if (approval != null)
-            ApprovalCard(
-              approval: approval,
-              busy: _sending,
-              onDecision: _decide,
-            )
-          else if (prompt != null && prompt.questions.isNotEmpty && !_sending)
-            QuestionCard(questions: prompt.questions, onSubmit: _answer),
-          ChatComposer(
-            controller: _input,
-            images: _pending,
-            sending: _sending,
-            connected: _rpc != null,
-            ended: _ended,
-            hint: context.l10n.chatReplyHint(
-              chatWho(context.l10n, 'assistant', tab.agent),
-            ),
-            onChanged: (_) => setState(() {}),
-            onSubmit: _submit,
-            onPickImage: _pickImage,
-            onRemoveImage: (index) =>
-                setState(() => _uploaded.remove(_pending.removeAt(index))),
-            onPaste: () => unawaited(_pasteClipboard()),
-            onContentInserted: _onContentInserted,
-          ),
-        ],
+        ),
       ),
     );
   }

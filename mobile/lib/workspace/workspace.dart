@@ -530,129 +530,138 @@ class WorkspaceScreen extends StatelessWidget {
           const SizedBox(width: 10),
         ],
       ),
-      body: model.worktrees.isEmpty
-          // 断线重连时还不知道电脑上有没有工作区，不说「还没有工作区」
-          ? (model.connecting || (model.rpc == null && model.link != null)
-                ? const Center(child: PosseLoader())
-                : model.disconnected
-                ? _DisconnectedList(
-                    model: model,
-                    onAdd: () => _addComputer(context),
-                  )
-                : EmptyState(
-                    icon: model.error == null
-                        ? Icons.folder_open_rounded
-                        : Icons.cloud_off_rounded,
-                    text: model.error == null
-                        ? l.homeNoWorkspaces
-                        : friendlyError(model.error!, l),
-                    error: model.error != null,
-                    action: TextButton(
-                      onPressed: model.retry,
-                      child: Text(l.commonRetry),
-                    ),
-                  ))
-          // 长按项目卡片拖动排序，顺序按电脑分别存在手机上。
-          // 报错浮在列表上面、断线写在电脑胶囊里，都不插进列表，免得列表跟着跳
-          : Stack(
-              children: [
-                CustomScrollView(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Column(
-                          children: [
-                            UpdateBanner(model: model),
-                            if (waiting > 0) _WaitingBanner(count: waiting),
-                            UsageCard(model: model),
-                            Padding(
-                              // 和项目卡片同宽
-                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                              child: Segmented(
-                                labels: [l.homeTabProjects, l.homeTabRunning],
-                                selected: byStatus ? 1 : 0,
-                                onChanged: (i) {
-                                  // 每次切进来按当下的状态重排一次
-                                  model.runOrder = null;
-                                  model.updateSettings(
-                                    (s) => s.homeByStatus = i == 1,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+      body: SideSafe(
+        child: model.worktrees.isEmpty
+            // 断线重连时还不知道电脑上有没有工作区，不说「还没有工作区」
+            ? (model.connecting || (model.rpc == null && model.link != null)
+                  ? const Center(child: PosseLoader())
+                  : model.disconnected
+                  ? _DisconnectedList(
+                      model: model,
+                      onAdd: () => _addComputer(context),
+                    )
+                  : EmptyState(
+                      icon: model.error == null
+                          ? Icons.folder_open_rounded
+                          : Icons.cloud_off_rounded,
+                      text: model.error == null
+                          ? l.homeNoWorkspaces
+                          : friendlyError(model.error!, l),
+                      error: model.error != null,
+                      action: TextButton(
+                        onPressed: model.retry,
+                        child: Text(l.commonRetry),
                       ),
+                    ))
+            // 长按项目卡片拖动排序，顺序按电脑分别存在手机上。
+            // 报错浮在列表上面、断线写在电脑胶囊里，都不插进列表，免得列表跟着跳
+            : Stack(
+                children: [
+                  CustomScrollView(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
                     ),
-                    if (byStatus)
+                    slivers: [
                       SliverToBoxAdapter(
-                        child: _running(context, names, projects),
-                      )
-                    else
-                      SliverReorderableList(
-                        itemCount: names.length,
-                        proxyDecorator: (child, _, animation) =>
-                            AnimatedBuilder(
-                              animation: animation,
-                              builder: (context, child) => Transform.scale(
-                                scale:
-                                    1 +
-                                    0.02 *
-                                        Curves.easeOut.transform(
-                                          animation.value,
-                                        ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  elevation: 8 * animation.value,
-                                  shadowColor: PosseColors.lift,
-                                  borderRadius: BorderRadius.circular(Rd.card),
-                                  child: child,
-                                ),
-                              ),
-                              child: child,
-                            ),
-                        onReorderItem: (from, to) {
-                          final order = List.of(names);
-                          order.insert(to, order.removeAt(from));
-                          model.setProjectOrder(order);
-                        },
-                        itemBuilder: (context, i) =>
-                            ReorderableDelayedDragStartListener(
-                              key: ValueKey(names[i]),
-                              index: i,
-                              child: Section(
-                                inset: _dividerInset,
-                                // 左右和卡片之间一样宽
-                                margin: const EdgeInsets.fromLTRB(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Column(
+                            children: [
+                              UpdateBanner(model: model),
+                              if (waiting > 0) _WaitingBanner(count: waiting),
+                              UsageCard(model: model),
+                              Padding(
+                                // 和项目卡片同宽
+                                padding: const EdgeInsets.fromLTRB(
                                   10,
                                   0,
                                   10,
                                   10,
                                 ),
-                                folded: model.isCollapsed(names[i]),
-                                children: _project(
-                                  context,
-                                  names[i],
-                                  projects[names[i]]!,
+                                child: Segmented(
+                                  labels: [l.homeTabProjects, l.homeTabRunning],
+                                  selected: byStatus ? 1 : 0,
+                                  onChanged: (i) {
+                                    // 每次切进来按当下的状态重排一次
+                                    model.runOrder = null;
+                                    model.updateSettings(
+                                      (s) => s.homeByStatus = i == 1,
+                                    );
+                                  },
                                 ),
                               ),
-                            ),
+                            ],
+                          ),
+                        ),
                       ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
-                ),
-                Positioned(
-                  top: 8,
-                  left: 16,
-                  right: 16,
-                  child: _FloatingError(model: model),
-                ),
-              ],
-            ),
+                      if (byStatus)
+                        SliverToBoxAdapter(
+                          child: _running(context, names, projects),
+                        )
+                      else
+                        SliverReorderableList(
+                          itemCount: names.length,
+                          proxyDecorator: (child, _, animation) =>
+                              AnimatedBuilder(
+                                animation: animation,
+                                builder: (context, child) => Transform.scale(
+                                  scale:
+                                      1 +
+                                      0.02 *
+                                          Curves.easeOut.transform(
+                                            animation.value,
+                                          ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    elevation: 8 * animation.value,
+                                    shadowColor: PosseColors.lift,
+                                    borderRadius: BorderRadius.circular(
+                                      Rd.card,
+                                    ),
+                                    child: child,
+                                  ),
+                                ),
+                                child: child,
+                              ),
+                          onReorderItem: (from, to) {
+                            final order = List.of(names);
+                            order.insert(to, order.removeAt(from));
+                            model.setProjectOrder(order);
+                          },
+                          itemBuilder: (context, i) =>
+                              ReorderableDelayedDragStartListener(
+                                key: ValueKey(names[i]),
+                                index: i,
+                                child: Section(
+                                  inset: _dividerInset,
+                                  // 左右和卡片之间一样宽
+                                  margin: const EdgeInsets.fromLTRB(
+                                    10,
+                                    0,
+                                    10,
+                                    10,
+                                  ),
+                                  folded: model.isCollapsed(names[i]),
+                                  children: _project(
+                                    context,
+                                    names[i],
+                                    projects[names[i]]!,
+                                  ),
+                                ),
+                              ),
+                        ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                    ],
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 16,
+                    right: 16,
+                    child: _FloatingError(model: model),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
@@ -1326,34 +1335,36 @@ class _ComputerSheet extends StatelessWidget {
         final c = PosseColors.of(sheet);
         return SafeArea(
           top: false,
-          child: Section(
-            title: model.labelOf(computer),
-            inset: 48,
-            children: [
-              RowTile(
-                chevron: false,
-                leading: Icon(
-                  Icons.edit_rounded,
-                  size: Ic.button,
-                  color: c.accent,
+          child: SingleChildScrollView(
+            child: Section(
+              title: model.labelOf(computer),
+              inset: 48,
+              children: [
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.edit_rounded,
+                    size: Ic.button,
+                    color: c.accent,
+                  ),
+                  title: Text(context.l10n.homeRename),
+                  onTap: () => Navigator.of(sheet).pop('rename'),
                 ),
-                title: Text(context.l10n.homeRename),
-                onTap: () => Navigator.of(sheet).pop('rename'),
-              ),
-              RowTile(
-                chevron: false,
-                leading: Icon(
-                  Icons.link_off_rounded,
-                  size: Ic.button,
-                  color: c.danger,
+                RowTile(
+                  chevron: false,
+                  leading: Icon(
+                    Icons.link_off_rounded,
+                    size: Ic.button,
+                    color: c.danger,
+                  ),
+                  title: Text(
+                    context.l10n.homeForgetComputer,
+                    style: TextStyle(color: c.danger),
+                  ),
+                  onTap: () => Navigator.of(sheet).pop('remove'),
                 ),
-                title: Text(
-                  context.l10n.homeForgetComputer,
-                  style: TextStyle(color: c.danger),
-                ),
-                onTap: () => Navigator.of(sheet).pop('remove'),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -1613,78 +1624,69 @@ class _TabScreenState extends State<TabScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final c = PosseColors.of(context);
     final row = _row;
+    final tabs = Segmented(
+      labels: [
+        context.l10n.workspaceTabChanges,
+        context.l10n.workspaceTabFiles,
+        context.l10n.workspaceTabHistory,
+      ],
+      selected: _page,
+      onChanged: (i) => setState(() {
+        _page = i;
+        _seen.add(i);
+      }),
+    );
+    // 分段放在顶栏里省一行；工作区名挪到改动页的分支卡上
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(worktreeLabel(row), overflow: TextOverflow.ellipsis),
-            Text(
-              row.branch.isNotEmpty ? row.branch : tildePath(row.path),
-              overflow: TextOverflow.ellipsis,
-              // 顶栏标题样式是 600，副标题要显式改回常规字重
-              style: mono(
-                Fs.small,
-                color: c.muted,
-              ).copyWith(fontWeight: Fw.body),
-            ),
-          ],
-        ),
+        centerTitle: false,
+        title: Padding(padding: const EdgeInsets.only(right: 16), child: tabs),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Segmented(
-              labels: [
-                context.l10n.workspaceTabChanges,
-                context.l10n.workspaceTabFiles,
-                context.l10n.workspaceTabHistory,
-              ],
-              selected: _page,
-              onChanged: (i) => setState(() {
-                _page = i;
-                _seen.add(i);
-              }),
-            ),
-          ),
-          Expanded(
-            child: IndexedStack(
-              index: _page,
-              children: [
-                if (!_seen.contains(0))
-                  const SizedBox.shrink()
-                else
-                  GitPane(
-                    active: _page == 0,
-                    loadStatus: () => _git((rpc) => loadGitStatus(rpc, row.id)),
-                    loadDiff: (file) =>
-                        _git((rpc) => loadGitDiff(rpc, row.id, file)),
-                    onOpenFile: (path) => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => FileViewer(
-                          model: widget.model,
-                          worktree: row.id,
-                          path: path,
+      body: SideSafe(
+        child: Column(
+          children: [
+            // 顶栏里的分段上下各空 10，再空 2，和页面里别的块一样隔 12
+            const SizedBox(height: 2),
+            Expanded(
+              child: IndexedStack(
+                index: _page,
+                children: [
+                  if (!_seen.contains(0))
+                    const SizedBox.shrink()
+                  else
+                    GitPane(
+                      active: _page == 0,
+                      title: worktreeLabel(row),
+                      path: tildePath(row.path),
+                      loadStatus: () =>
+                          _git((rpc) => loadGitStatus(rpc, row.id)),
+                      loadDiff: (file) =>
+                          _git((rpc) => loadGitDiff(rpc, row.id, file)),
+                      onOpenFile: (path) => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => FileViewer(
+                            model: widget.model,
+                            worktree: row.id,
+                            path: path,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                if (!_seen.contains(1))
-                  const SizedBox.shrink()
-                else
-                  FilesPane(model: widget.model, worktree: row.id),
-                if (!_seen.contains(2))
-                  const SizedBox.shrink()
-                else
-                  HistoryScreen(model: widget.model, cwd: row.path),
-              ],
+                  if (!_seen.contains(1))
+                    const SizedBox.shrink()
+                  else
+                    FilesPane(model: widget.model, worktree: row.id),
+                  if (!_seen.contains(2))
+                    const SizedBox.shrink()
+                  else
+                    HistoryScreen(model: widget.model, cwd: row.path),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

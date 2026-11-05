@@ -56,10 +56,12 @@ class GitScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: GitPane(
-        loadStatus: loadStatus,
-        loadDiff: loadDiff,
-        onOpenFile: onOpenFile,
+      body: SideSafe(
+        child: GitPane(
+          loadStatus: loadStatus,
+          loadDiff: loadDiff,
+          onOpenFile: onOpenFile,
+        ),
       ),
     );
   }
@@ -79,7 +81,13 @@ class GitPane extends StatefulWidget {
     required this.loadDiff,
     this.onOpenFile,
     this.active = true,
+    this.title,
+    this.path,
   });
+
+  /// 工作区名和路径，写在分支卡上（工作区页的顶栏放了分段，没地方写）；为空时分支卡只写分支。
+  final String? title;
+  final String? path;
 
   /// 这一页看得见：和文件页放在同一个 IndexedStack 里，切走时不刷新。
   final bool active;
@@ -211,7 +219,8 @@ class _GitPaneState extends State<GitPane> {
         SliverList.list(
           children: [
             if (_error != null) NoticeBar(_error!),
-            if (status != null) _BranchCard(status: status),
+            if (status != null)
+              _BranchCard(status: status, title: widget.title),
             if (files.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 32),
@@ -250,6 +259,8 @@ class _GitPaneState extends State<GitPane> {
         SliverList.list(
           children: [
             if (_error != null) NoticeBar(_error!),
+            if (widget.title != null)
+              _NameCard(title: widget.title!, path: widget.path),
             if (shown.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 32),
@@ -383,7 +394,7 @@ class _GitPaneState extends State<GitPane> {
 
   Widget _listHeader(BuildContext context, PosseColors c, int count) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 12),
       child: Row(
         children: [
           Expanded(
@@ -750,9 +761,10 @@ class _Stats extends StatelessWidget {
 }
 
 class _BranchCard extends StatelessWidget {
-  const _BranchCard({required this.status});
+  const _BranchCard({required this.status, this.title});
 
   final GitStatusView status;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -766,13 +778,19 @@ class _BranchCard extends StatelessWidget {
       if (status.operation.isNotEmpty)
         (Icons.warning_amber_rounded, status.operation, c.honey),
     ];
+    // 和上面的分段、下面的列表标题一样隔 12
     return Section(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (title != null) ...[
+                _CardTitle(title!),
+                const SizedBox(height: 6),
+              ],
               Row(
                 children: [
                   Icon(
@@ -817,6 +835,59 @@ class _BranchCard extends StatelessWidget {
                         ],
                       ),
                   ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CardTitle extends StatelessWidget {
+  const _CardTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: Fs.title, fontWeight: Fw.bold, color: c.text),
+    );
+  }
+}
+
+/// 多个仓库时没有单一的分支，卡片只写工作区名和路径，分支写在各仓库的标题行。
+class _NameCard extends StatelessWidget {
+  const _NameCard({required this.title, this.path});
+
+  final String title;
+  final String? path;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = PosseColors.of(context);
+    return Section(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardTitle(title),
+              if (path != null && path!.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  path!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: mono(Fs.small, color: c.muted),
                 ),
               ],
             ],
@@ -885,7 +956,7 @@ class _DiffViewerState extends State<DiffViewer> {
           const SizedBox(width: 4),
         ],
       ),
-      body: _body(),
+      body: SideSafe(child: _body()),
     );
   }
 

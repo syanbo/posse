@@ -1047,3 +1047,15 @@ class SendNowGlyph extends StatelessWidget {
     );
   }
 }
+
+/// 页面内容让开横屏时刘海和圆角那两侧；页面底色照样铺满，顶栏、底栏自己让。
+/// 竖向列表不替子项让左右（只把左右留白交给子项），整页的 body 都要包一层。
+class SideSafe extends StatelessWidget {
+  const SideSafe({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      SafeArea(top: false, bottom: false, child: child);
+}

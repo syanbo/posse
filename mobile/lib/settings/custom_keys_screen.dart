@@ -72,79 +72,81 @@ class CustomKeysScreen extends StatelessWidget {
               const SizedBox(width: 4),
             ],
           ),
-          body: ListView(
-            padding: const EdgeInsets.only(top: 8, bottom: 32),
-            children: [
-              Section(
-                title: l.keysBar,
-                children: [
-                  ReorderableListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    itemCount: keys.length,
-                    proxyDecorator: (child, _, _) => Material(
-                      color: c.raised,
-                      elevation: 6,
-                      borderRadius: BorderRadius.circular(Rd.card),
-                      child: child,
+          body: SideSafe(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 8, bottom: 32),
+              children: [
+                Section(
+                  title: l.keysBar,
+                  children: [
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: keys.length,
+                      proxyDecorator: (child, _, _) => Material(
+                        color: c.raised,
+                        elevation: 6,
+                        borderRadius: BorderRadius.circular(Rd.card),
+                        child: child,
+                      ),
+                      onReorderItem: (from, to) {
+                        final next = List.of(keys);
+                        next.insert(to, next.removeAt(from));
+                        _save(next);
+                      },
+                      itemBuilder: (context, i) => _KeyRow(
+                        key: ValueKey(i),
+                        index: i,
+                        item: keys[i],
+                        divider: i > 0,
+                        onTap: keys[i].custom == null
+                            ? null
+                            : () => _edit(context, index: i),
+                      ),
                     ),
-                    onReorderItem: (from, to) {
-                      final next = List.of(keys);
-                      next.insert(to, next.removeAt(from));
-                      _save(next);
-                    },
-                    itemBuilder: (context, i) => _KeyRow(
-                      key: ValueKey(i),
-                      index: i,
-                      item: keys[i],
-                      divider: i > 0,
-                      onTap: keys[i].custom == null
-                          ? null
-                          : () => _edit(context, index: i),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Text(
+                    l.keysBarNote,
+                    style: TextStyle(
+                      fontSize: Fs.small,
+                      height: Lh.body,
+                      color: c.muted,
                     ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text(
-                  l.keysBarNote,
-                  style: TextStyle(
-                    fontSize: Fs.small,
-                    height: Lh.body,
-                    color: c.muted,
                   ),
                 ),
-              ),
-              Section(
-                children: [
-                  RowTile(
-                    chevron: false,
-                    leading: Icon(
-                      Icons.add_circle_outline_rounded,
-                      size: Ic.button,
-                      color: c.accent,
-                    ),
-                    title: Text(l.keysNew),
-                    subtitle: Text(l.keysNewNote),
-                    onTap: () => _edit(context),
-                  ),
-                  if (_order(keys) != _order(reset))
+                Section(
+                  children: [
                     RowTile(
                       chevron: false,
                       leading: Icon(
-                        Icons.restart_alt_rounded,
+                        Icons.add_circle_outline_rounded,
                         size: Ic.button,
                         color: c.accent,
                       ),
-                      title: Text(l.keysResetOrder),
-                      subtitle: Text(l.keysResetOrderNote),
-                      onTap: () => _save(reset),
+                      title: Text(l.keysNew),
+                      subtitle: Text(l.keysNewNote),
+                      onTap: () => _edit(context),
                     ),
-                ],
-              ),
-            ],
+                    if (_order(keys) != _order(reset))
+                      RowTile(
+                        chevron: false,
+                        leading: Icon(
+                          Icons.restart_alt_rounded,
+                          size: Ic.button,
+                          color: c.accent,
+                        ),
+                        title: Text(l.keysResetOrder),
+                        subtitle: Text(l.keysResetOrderNote),
+                        onTap: () => _save(reset),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
