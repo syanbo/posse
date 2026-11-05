@@ -20,6 +20,7 @@ const (
 	collabLostReason = "connection to the host was lost; confirm to continue"
 	needsWorkspace   = "choose a workspace on this computer"
 	configConflict   = "the host's copy of this agent's settings differs from what you set on this computer; review and save its settings"
+	needsConfirm     = "confirm this agent's settings on this computer before it runs requests"
 )
 
 type discCollab struct {

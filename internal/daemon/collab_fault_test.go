@@ -483,3 +483,164 @@ func TestCollabHandoffDoesNotPause(t *testing.T) {
 		return x2.State == store.ExecRunning
 	})
 }
+
+// newManualFetchPair：成员不在后台下附件，由测试调 fetchRound；房主另开一个共享讨论，关掉这个讨论的分享时服务还在
+// （成员连得上、hello 得到 offline：暂时的错误）。
+func newManualFetchPair(t *testing.T) *collabPair {
+	t.Helper()
+	p := newCollabPair(t)
+	p.member.collab.manualFetch = true
+	ws, _ := p.host.store.Workspaces("")
+	other := call(t, p.host.discCreate, map[string]any{"title": "keeps the service up", "workspace": ws[0].ID}).(store.Discussion)
+	call(t, p.host.collabShare, map[string]any{"discussion": other.Key, "on": true})
+	return p
+}
+
+func memberAttachment(t *testing.T, p *collabPair, msgID string) store.Attachment {
+	t.Helper()
+	var a store.Attachment
+	waitFor(t, "message synced", func() bool {
+		m, err := p.member.store.DiscMessage(msgID)
+		if err != nil || len(m.Attachments) == 0 {
+			return false
+		}
+		a = m.Attachments[0]
+		return true
+	})
+	return a
+}
+
+// N-1：hello 拿到 offline 这类暂时错误不把附件记成永久缺失、不推进游标；恢复后照常下载。
+func TestCollabFetchTemporaryFailureRecovers(t *testing.T) {
+	p := newManualFetchPair(t)
+	h, m := p.host, p.member
+	src := filepath.Join(t.TempDir(), "plan.txt")
+	os.WriteFile(src, []byte("host plan"), 0o600)
+	r := call(t, h.discPost, map[string]any{"discussion": p.disc.Key, "body": "see", "attachments": []map[string]string{{"path": src}}}).(discPostResult)
+	a := memberAttachment(t, p, r.Message.ID)
+	rc := m.roomConnFor(p.disc.Key)
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
+	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
+	rc.closeBulk()
+	rc.fetchRound(context.Background())
+	rc.stmu.Lock()
+	missing := rc.missing[a.ID]
+	rc.stmu.Unlock()
+	if missing {
+		t.Fatal("temporary hello failure marked the attachment missing")
+	}
+	if cur := m.store.AttachmentCursor(p.disc.Key); cur >= r.Message.Seq {
+		t.Fatalf("cursor advanced past an attachment that was not downloaded: %d", cur)
+	}
+	dst := filepath.Join(m.cfg.Home, a.Path)
+	if _, err := os.Stat(dst); err == nil {
+		t.Fatal("downloaded while offline?")
+	}
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": true})
+	rc.poke()
+	waitFor(t, "member online", func() bool { return m.roomStatus(p.disc.Key).Connected })
+	rc.fetchRound(context.Background())
+	if b, err := os.ReadFile(dst); err != nil || string(b) != "host plan" {
+		t.Fatalf("not downloaded after recovery: %v", err)
+	}
+	if cur := m.store.AttachmentCursor(p.disc.Key); cur < r.Message.Seq {
+		t.Fatalf("cursor %d", cur)
+	}
+}
+
+// N-2：请求的附件没下完（断线）就不进本机队列、不启动；恢复后下完才启动，而且只启动一次。
+func TestCollabRequestWaitsForAttachments(t *testing.T) {
+	p := newManualFetchPair(t)
+	h, m := p.host, p.member
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	src := filepath.Join(t.TempDir(), "spec.txt")
+	os.WriteFile(src, []byte("the spec"), 0o600)
+	r := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "use the spec", "target": bob.ID, "clientId": "c-1",
+		"attachments": []map[string]string{{"path": src}}}).(discPostResult)
+	waitFor(t, "claimed, fetching", func() bool { return m.store.AcceptState(r.Execution.ID) == store.AcceptFetching })
+	rc := m.roomConnFor(p.disc.Key)
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": false})
+	waitFor(t, "member offline", func() bool { return !m.roomStatus(p.disc.Key).Connected })
+	rc.closeBulk()
+	rc.fetchRound(context.Background())
+	m.dispatchAll()
+	if st := m.store.AcceptState(r.Execution.ID); st != store.AcceptFetching {
+		t.Fatalf("accepted without its attachment: %s", st)
+	}
+	if x, _ := m.store.Execution(r.Execution.ID); x.TaskID != "" {
+		t.Fatal("started before the attachment arrived")
+	}
+	call(t, h.collabShare, map[string]any{"discussion": p.disc.Key, "on": true})
+	rc.poke()
+	waitFor(t, "member online", func() bool { return m.roomStatus(p.disc.Key).Connected })
+	rc.fetchRound(context.Background())
+	rc.fetchRound(context.Background())
+	var x store.Execution
+	waitFor(t, "runs once", func() bool {
+		m.dispatchAll()
+		x, _ = m.store.Execution(r.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+	text := readAll(t, m, x)
+	if !strings.Contains(text, "spec.txt") || strings.Contains(text, "(missing)") {
+		t.Fatalf("context:\n%s", text)
+	}
+	if ts, _ := m.store.Tasks(store.TaskFilter{}); len(ts) != 1 {
+		t.Fatalf("%d workers started", len(ts))
+	}
+}
+
+// 房主确实没有这个文件（download 返回 not_found）：明确记成不可用，请求照常执行，上下文标 missing。
+func TestCollabMissingAttachmentIsExplicit(t *testing.T) {
+	p := newManualFetchPair(t)
+	h, m := p.host, p.member
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	src := filepath.Join(t.TempDir(), "gone.txt")
+	os.WriteFile(src, []byte("soon gone"), 0o600)
+	r := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "use it", "target": bob.ID, "clientId": "c-1",
+		"attachments": []map[string]string{{"path": src}}}).(discPostResult)
+	hm, _ := h.store.DiscMessage(r.Message.ID)
+	os.Remove(filepath.Join(p.hw.Path, hm.Attachments[0].Path))
+	waitFor(t, "claimed, fetching", func() bool { return m.store.AcceptState(r.Execution.ID) == store.AcceptFetching })
+	rc := m.roomConnFor(p.disc.Key)
+	rc.fetchRound(context.Background())
+	rc.stmu.Lock()
+	missing := rc.missing[hm.Attachments[0].ID]
+	rc.stmu.Unlock()
+	if !missing {
+		t.Fatal("not_found from the host should mark the attachment unavailable")
+	}
+	var x store.Execution
+	waitFor(t, "runs", func() bool {
+		m.dispatchAll()
+		x, _ = m.store.Execution(r.Execution.ID)
+		return x.State == store.ExecRunning
+	})
+	if text := readAll(t, m, x); !strings.Contains(text, "(missing)") {
+		t.Fatalf("context does not say the attachment is unavailable:\n%s", text)
+	}
+}
+
+// 撤销和下载完成并发：撤销之后下载完成也不会把领取转成 accepted。
+func TestCollabRevokeWhileFetching(t *testing.T) {
+	p := newManualFetchPair(t)
+	h, m := p.host, p.member
+	bob := call(t, m.discMemberAdd, map[string]any{"discussion": p.disc.Key, "name": "Bob", "agent": "codex", "workspace": p.mw.ID}).(store.Member)
+	src := filepath.Join(t.TempDir(), "x.txt")
+	os.WriteFile(src, []byte("x"), 0o600)
+	r := call(t, m.discPost, map[string]any{"discussion": p.disc.Key, "body": "go", "target": bob.ID, "clientId": "c-1",
+		"attachments": []map[string]string{{"path": src}}}).(discPostResult)
+	waitFor(t, "claimed, fetching", func() bool { return m.store.AcceptState(r.Execution.ID) == store.AcceptFetching })
+	call(t, h.collabRemovePerson, map[string]any{"discussion": p.disc.Key, "person": m.store.Self()})
+	waitFor(t, "member revoked", func() bool { j, _ := m.store.Joined(p.disc.Key); return j.State == store.PersonRemoved })
+	if st := m.store.AcceptState(r.Execution.ID); st != store.AcceptRevoked {
+		t.Fatalf("fetching ledger after revoke: %s", st)
+	}
+	if ok, _ := m.store.MarkAccepted(r.Execution.ID); ok {
+		t.Fatal("revoked round was accepted")
+	}
+	m.dispatchAll()
+	if x, _ := m.store.Execution(r.Execution.ID); x.TaskID != "" {
+		t.Fatal("revoked round started")
+	}
+}

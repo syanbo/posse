@@ -9805,5 +9805,18 @@
   "collabReviewSettings": "Review settings…",
   "@collabReviewSettings": {
     "description": "Banner button."
+  },
+  "collabConfigConfirm": "Confirm {name}’s settings on this Mac before it runs requests. They came from the host and were never saved here.",
+  "@collabConfigConfirm": {
+    "description": "Banner: own agent has no locally confirmed settings.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "collabListLeaving": "Leaving: finishes when the host is reachable",
+  "@collabListLeaving": {
+    "description": "Discussion list preview while a leave is pending."
   }
 }

@@ -1425,7 +1425,19 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 				removed = ms(*m.RemovedAt)
 			}
 			var own, paused string
-			if err := tx.QueryRow(`SELECT own_config, paused FROM disc_members WHERE id=? AND discussion=?`, m.ID, room).Scan(&own, &paused); err == nil && own != "" && m.Owner == self {
+			found := tx.QueryRow(`SELECT own_config, paused FROM disc_members WHERE id=? AND discussion=?`, m.ID, room).Scan(&own, &paused) == nil
+			if found && own == "" && m.Owner == self {
+				// 自己的 Agent 在本机没有确认过的配置（旧版本加的）：不猜哪份可信，照房主那份显示，但暂停到拥有者确认保存
+				if paused == "" {
+					paused = NeedsConfirm
+				}
+				if _, err := tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, config_version=?, removed_at=?, owner=?, generation=?, paused=?, rev=? WHERE id=?`,
+					m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, m.Owner, m.Generation, paused, rev, m.ID); err != nil {
+					return err
+				}
+				continue
+			}
+			if found && own != "" && m.Owner == self {
 				// 自己的 Agent：配置以本机拥有者设下的为准，房主那份对不上时不照搬，暂停并说明，拥有者重新保存设置即可
 				if ownConfig(m) != own {
 					if paused == "" {
@@ -1446,8 +1458,13 @@ func (s *Store) ApplySync(room, self string, b SyncBatch) (bool, error) {
 				return err
 			}
 			if n, _ := res.RowsAffected(); n == 0 {
-				if _, err := tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,config_version,removed_at,rev,created_at,owner,generation)
-					VALUES(?,?,?,?,?,?,?,'',?,?,?,?,?,?)`, m.ID, room, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, rev, ms(m.CreatedAt), m.Owner, m.Generation); err != nil {
+				// 自己的 Agent 第一次同步下来：在拥有者确认（加成员成功后马上 SetOwnConfig）之前不执行
+				paused := ""
+				if m.Owner == self {
+					paused = NeedsConfirm
+				}
+				if _, err := tx.Exec(`INSERT INTO disc_members(id,discussion,name,role,agent,model,effort,workspace_id,config_version,removed_at,rev,created_at,owner,generation,paused)
+					VALUES(?,?,?,?,?,?,?,'',?,?,?,?,?,?,?)`, m.ID, room, m.Name, m.Role, m.Agent, m.Model, m.Effort, m.ConfigVersion, removed, rev, ms(m.CreatedAt), m.Owner, m.Generation, paused); err != nil {
 					return err
 				}
 			}
@@ -1658,22 +1675,44 @@ func (s *Store) Accept(room, exec string, gen int64, state, reason string, at ti
 	})
 }
 
-// MarkAccepted 把正在下载附件的领取转成 accepted（进本机队列）。
-func (s *Store) MarkAccepted(exec string) error {
-	return s.withTx(func(tx *sql.Tx) error {
+// MarkAccepted 把下完附件的领取转成 accepted（进本机队列）。同一事务里重查：账本仍是 fetching、
+// 仍是加入中的成员、代际没变、Agent 没离开、执行还没开始也没被撤销；不满足就不进队列（撤销和下载完成并发时不复活）。
+func (s *Store) MarkAccepted(exec string) (bool, error) {
+	ok := false
+	err := s.withTx(func(tx *sql.Tx) error {
 		var room string
-		if err := tx.QueryRow(`SELECT room FROM collab_accepts WHERE exec=? AND state='fetching'`, exec).Scan(&room); err != nil {
+		var gen int64
+		if err := tx.QueryRow(`SELECT room, generation FROM collab_accepts WHERE exec=? AND state='fetching'`, exec).Scan(&room, &gen); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil
 			}
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE collab_accepts SET state='accepted' WHERE exec=?`, exec); err != nil {
+		j, err := scanJoined(tx.QueryRow(`SELECT `+joinedCols+` FROM collab_joined WHERE room=?`, room))
+		if err != nil {
 			return err
 		}
-		_, err := bump(tx, room)
-		return err
+		x, err := scanExecution(tx.QueryRow(`SELECT `+execCols+` FROM disc_executions WHERE id=?`, exec))
+		if err != nil {
+			return err
+		}
+		m, err := scanMember(tx.QueryRow(`SELECT `+memberCols+` FROM disc_members WHERE id=?`, x.Member))
+		if err != nil {
+			return err
+		}
+		if j.State != JoinedActive || j.Generation != gen || m.RemovedAt != nil || x.State != ExecQueued && x.State != ExecClaimed {
+			return nil
+		}
+		if _, err := tx.Exec(`UPDATE collab_accepts SET state='accepted' WHERE exec=? AND state='fetching'`, exec); err != nil {
+			return err
+		}
+		if _, err := bump(tx, room); err != nil {
+			return err
+		}
+		ok = true
+		return nil
 	})
+	return ok, err
 }
 
 // Fetching 是房间里领取了、附件还没下完的执行。
@@ -1764,7 +1803,7 @@ func (s *Store) LocalRevoke(room, state, reason string, at time.Time) error {
 		if _, err := tx.Exec(`UPDATE collab_joined SET state=?, error=?, secret='', updated_at=? WHERE room=?`, state, reason, ms(at), room); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE collab_accepts SET state='revoked', reason=? WHERE room=? AND state='accepted'`, reason, room); err != nil {
+		if _, err := tx.Exec(`UPDATE collab_accepts SET state='revoked', reason=? WHERE room=? AND state IN ('accepted','fetching')`, reason, room); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`UPDATE collab_outbox SET state='rejected', error=? WHERE room=? AND state='pending'`, reason, room); err != nil {
@@ -1826,6 +1865,12 @@ func (s *Store) SetMemberPrivate(id, workspaceID, label string) error {
 	})
 }
 
+// NeedsConfirm 是自己的 Agent 在本机没有确认过的配置（旧版本加的、刚同步下来的）时的暂停原因。
+const NeedsConfirm = "confirm this agent's settings on this computer before it runs requests"
+
+// ConfigUntrusted 报告这个暂停原因是不是配置还没被拥有者确认（不能按它发请求、重试）。
+func ConfigUntrusted(paused string) bool { return paused == ConfigConflict || paused == NeedsConfirm }
+
 // ConfigConflict 是房主那份自己 Agent 的配置和本机拥有者设下的不一致时的暂停原因。
 const ConfigConflict = "the host's copy of this agent's settings differs from what you set on this computer; review and save its settings"
 
@@ -1848,7 +1893,7 @@ func (s *Store) SetOwnConfig(m Member) error {
 			return err
 		}
 		paused := old.Paused
-		if paused == ConfigConflict || paused == NeedsWorkspace && m.WorkspaceID != "" {
+		if paused == ConfigConflict || paused == NeedsConfirm || paused == NeedsWorkspace && m.WorkspaceID != "" {
 			paused = ""
 		}
 		_, err = tx.Exec(`UPDATE disc_members SET name=?, role=?, agent=?, model=?, effort=?, workspace_id=?, workspace_label=?, own_config=?, paused=?, rev=? WHERE id=?`,

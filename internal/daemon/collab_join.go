@@ -62,11 +62,14 @@ type roomConn struct {
 	stmu     sync.Mutex
 	status   roomStatus
 	presence map[string]time.Time // 房主告诉的在线的人（收到的时间）
-	failed   map[string]int       // 附件下载失败次数
+	missing  map[string]bool      // 房主说没有这个文件的附件（download 返回 not_found）：显示不可用，不再试
+	retryAt  map[string]time.Time // 暂时下不了的附件下次再试的时间（退避，不会因此变成永久缺失）
+	backoff  map[string]time.Duration
 }
 
 func newRoomConn(d *Daemon, room string) *roomConn {
-	return &roomConn{d: d, room: room, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}), failed: map[string]int{}}
+	return &roomConn{d: d, room: room, pokeCh: make(chan struct{}, 1), fetchCh: make(chan struct{}, 1), done: make(chan struct{}),
+		missing: map[string]bool{}, retryAt: map[string]time.Time{}, backoff: map[string]time.Duration{}}
 }
 
 func (rc *roomConn) stopped() bool {
@@ -332,6 +335,11 @@ func (rc *roomConn) session(ctx context.Context, j store.Joined) error {
 		}
 		if first {
 			first = false
+			// 连接回来了：暂时下不了的附件不用等退避，马上再试
+			rc.stmu.Lock()
+			clear(rc.retryAt)
+			clear(rc.backoff)
+			rc.stmu.Unlock()
 			rc.setStatus(true, cli.Addr, "")
 			rc.d.discKick()
 		}
@@ -611,43 +619,55 @@ func (rc *roomConn) fetchLoop(ctx context.Context) {
 			return
 		case <-rc.fetchCh:
 		}
-		for _, exec := range rc.d.store.Fetching(rc.room) {
-			if x, err := rc.d.store.Execution(exec); err == nil {
-				rc.fetchMessage(ctx, x.Message)
-			}
-			if ctx.Err() != nil {
-				return
-			}
-			rc.d.store.MarkAccepted(exec)
+		if !rc.d.collab.manualFetch {
+			rc.fetchRound(ctx)
+		}
+	}
+}
+
+// fetchRound 是一遍附件处理：领取了等附件的执行，然后按游标的新消息附件。
+func (rc *roomConn) fetchRound(ctx context.Context) {
+	for _, exec := range rc.d.store.Fetching(rc.room) {
+		x, err := rc.d.store.Execution(exec)
+		if err != nil {
+			continue
+		}
+		// 暂时下不了（断线、房主临时出错）：留在 fetching，不进本机队列，下次再试；
+		// 房主确实没有的附件按不可用交给 Agent（上下文里标 missing）
+		if !rc.fetchMessage(ctx, x.Message) || ctx.Err() != nil {
+			continue
+		}
+		if ok, _ := rc.d.store.MarkAccepted(exec); ok {
 			rc.d.taskNotify()
 			rc.d.discKick()
 		}
-		for ctx.Err() == nil {
-			cur := rc.d.store.AttachmentCursor(rc.room)
-			msgs, err := rc.d.store.AttachmentsAfter(rc.room, cur, 20)
-			if err != nil || len(msgs) == 0 {
+	}
+	for ctx.Err() == nil {
+		cur := rc.d.store.AttachmentCursor(rc.room)
+		msgs, err := rc.d.store.AttachmentsAfter(rc.room, cur, 20)
+		if err != nil || len(msgs) == 0 {
+			break
+		}
+		stuck := false
+		for _, m := range msgs {
+			if !rc.fetchAll(ctx, m.Attachments) {
+				stuck = true
 				break
 			}
-			stuck := false
-			for _, m := range msgs {
-				if !rc.fetchAll(ctx, m.Attachments) {
-					stuck = true
-					break
-				}
-				rc.d.store.SetAttachmentCursor(rc.room, m.Seq)
-			}
-			if stuck {
-				break
-			}
+			rc.d.store.SetAttachmentCursor(rc.room, m.Seq)
+		}
+		if stuck {
+			break
 		}
 	}
 }
 
 // fetchMessage 下载一条消息和它引用的消息上的附件（领取时：上下文快照要给本机路径）。
-func (rc *roomConn) fetchMessage(ctx context.Context, msgID string) {
+// 返回是否都到位了（房主确实没有的算到位：按不可用处理）。
+func (rc *roomConn) fetchMessage(ctx context.Context, msgID string) bool {
 	m, err := rc.d.store.DiscMessage(msgID)
 	if err != nil {
-		return
+		return false
 	}
 	atts := m.Attachments
 	if m.Quote != "" {
@@ -655,10 +675,12 @@ func (rc *roomConn) fetchMessage(ctx context.Context, msgID string) {
 			atts = append(atts, q.Attachments...)
 		}
 	}
-	rc.fetchAll(ctx, atts)
+	return rc.fetchAll(ctx, atts)
 }
 
-// fetchAll 下载还没在缓存里的附件；报告有没有暂时下不了的（断线），下不了 3 次的跳过（显示不可用）。
+// fetchAll 下载还没在缓存里的附件，返回是不是都到位了。只有 download 明确返回 not_found（房主没有这个文件）
+// 才记成不可用、不再试；拨号、hello、断线、房主内部错误、内容对不上都是暂时的：按退避重试，不推进游标，
+// 不会因为试的次数多就变成永久缺失。
 func (rc *roomConn) fetchAll(ctx context.Context, atts []store.Attachment) bool {
 	ok := true
 	for _, a := range atts {
@@ -670,22 +692,31 @@ func (rc *roomConn) fetchAll(ctx context.Context, atts []store.Attachment) bool 
 			continue
 		}
 		rc.stmu.Lock()
-		tries := rc.failed[a.ID]
+		missing, wait := rc.missing[a.ID], rc.retryAt[a.ID]
 		rc.stmu.Unlock()
-		if tries >= 3 {
+		if missing {
 			continue
 		}
-		if err := rc.downloadTo(ctx, a, dst); err != nil {
+		if time.Now().Before(wait) {
+			ok = false
+			continue
+		}
+		gone, err := rc.downloadTo(ctx, a, dst)
+		rc.stmu.Lock()
+		switch {
+		case err == nil:
+			delete(rc.retryAt, a.ID)
+			delete(rc.backoff, a.ID)
+		case gone:
+			rc.missing[a.ID] = true
+		default:
+			b := min(max(2*rc.backoff[a.ID], 5*time.Second), 10*time.Minute)
+			rc.backoff[a.ID], rc.retryAt[a.ID] = b, time.Now().Add(b)
+			ok = false
+		}
+		rc.stmu.Unlock()
+		if err != nil {
 			log.Printf("collaboration %s: attachment %s: %v", short(rc.room), a.ID, err)
-			var ce *collaboration.Error
-			rc.stmu.Lock()
-			if errors.As(err, &ce) {
-				rc.failed[a.ID] = 3 // 房主那边没有这个文件：不再试
-			} else {
-				rc.failed[a.ID]++
-			}
-			rc.stmu.Unlock()
-			ok = ok && errors.As(err, &ce)
 			continue
 		}
 		rc.d.taskNotify()
@@ -734,14 +765,16 @@ func (rc *roomConn) closeBulk() {
 	}
 }
 
-func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst string) error {
+// downloadTo 按附件 ID 分块下载到缓存：先写同目录的临时文件，长度和摘要对上再改名。
+// gone 为真只表示 download 本身返回了 not_found（房主没有这个文件）；其余错误都是暂时的。
+func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst string) (gone bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
-		return err
+		return false, err
 	}
 	tmp := dst + ".part"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer os.Remove(tmp)
 	h := sha256.New()
@@ -757,18 +790,18 @@ func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst stri
 		cli, err := rc.bulkClient(ctx)
 		if err != nil {
 			f.Close()
-			return err
+			return false, fmt.Errorf("attachment connection: %v", err)
 		}
 		if err := cli.Call(ctx, "download", map[string]any{"attachment": a.ID, "offset": off}, &r); err != nil {
 			f.Close()
-			return err
+			return collaboration.IsCode(err, collaboration.CodeNotFound), err
 		}
 		if sha == "" {
 			sha = r.SHA
 		}
 		if r.Size > discMaxAttachSize || off+int64(len(r.Data)) > r.Size {
 			f.Close()
-			return fmt.Errorf("attachment is larger than announced")
+			return false, fmt.Errorf("attachment is larger than announced")
 		}
 		f.Write(r.Data)
 		h.Write(r.Data)
@@ -778,12 +811,12 @@ func (rc *roomConn) downloadTo(ctx context.Context, a store.Attachment, dst stri
 		}
 	}
 	if err := f.Close(); err != nil {
-		return err
+		return false, err
 	}
 	if sha != "" && hex.EncodeToString(h.Sum(nil)) != sha {
-		return fmt.Errorf("attachment content does not match its digest")
+		return false, fmt.Errorf("attachment content does not match its digest")
 	}
-	return os.Rename(tmp, dst)
+	return false, os.Rename(tmp, dst)
 }
 
 // call 在连着的时候发一个请求给房主，然后补齐增量（让本机缓存马上有结果）。没连着报房主离线。

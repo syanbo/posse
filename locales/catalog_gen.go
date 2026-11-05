@@ -26852,3 +26852,31 @@ func CollabReviewSettings() string { return In(i18n.Locale()).CollabReviewSettin
 func (msgs Messages) CollabReviewSettings() string {
 	return Catalog.Format(msgs.locale, "collabReviewSettings", nil)
 }
+
+// CollabConfigConfirm says "Confirm {name}’s settings on this Mac before it runs requests. They came from the host and were never saved here."
+// in the language the app shows.
+//
+// Banner: own agent has no locally confirmed settings.
+func CollabConfigConfirm(name string) string { return In(i18n.Locale()).CollabConfigConfirm(name) }
+
+// CollabConfigConfirm says "Confirm {name}’s settings on this Mac before it runs requests. They came from the host and were never saved here."
+// in the language of msgs.
+//
+// Banner: own agent has no locally confirmed settings.
+func (msgs Messages) CollabConfigConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "collabConfigConfirm", map[string]any{"name": name})
+}
+
+// CollabListLeaving says "Leaving: finishes when the host is reachable"
+// in the language the app shows.
+//
+// Discussion list preview while a leave is pending.
+func CollabListLeaving() string { return In(i18n.Locale()).CollabListLeaving() }
+
+// CollabListLeaving says "Leaving: finishes when the host is reachable"
+// in the language of msgs.
+//
+// Discussion list preview while a leave is pending.
+func (msgs Messages) CollabListLeaving() string {
+	return Catalog.Format(msgs.locale, "collabListLeaving", nil)
+}

@@ -32,8 +32,8 @@ func (d *Daemon) mirrorPost(disc store.Discussion, p discPostParams) (any, error
 		if !d.mine(target.Owner) {
 			return nil, notYours(target.Name)
 		}
-		if target.Paused == store.ConfigConflict {
-			return nil, rpc.Errorf(rpc.CodeConflict, "the host's copy of %s's settings differs from yours; review and save its settings first", target.Name)
+		if store.ConfigUntrusted(target.Paused) {
+			return nil, rpc.Errorf(rpc.CodeConflict, "%s's settings on this computer need your review; open its settings and save them first", target.Name)
 		}
 		if target.WorkspaceID == "" {
 			return nil, rpc.Errorf(rpc.CodeConflict, "choose a workspace on this computer for %s first", target.Name)
@@ -101,8 +101,8 @@ func (d *Daemon) mirrorRetry(disc store.Discussion, x store.Execution, abandon b
 	if err != nil {
 		return nil, err
 	}
-	if m.Paused == store.ConfigConflict {
-		return nil, rpc.Errorf(rpc.CodeConflict, "the host's copy of %s's settings differs from yours; review and save its settings first", m.Name)
+	if store.ConfigUntrusted(m.Paused) {
+		return nil, rpc.Errorf(rpc.CodeConflict, "%s's settings on this computer need your review; open its settings and save them first", m.Name)
 	}
 	if err := d.store.SaveIntent(disc.Key, "retry:"+x.ID, x.Member, m.ConfigVersion, "", store.OwnConfigDigest(m), time.Now()); err != nil {
 		return nil, err

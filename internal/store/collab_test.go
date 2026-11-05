@@ -169,3 +169,45 @@ func TestCollabQuotaReservesInFlight(t *testing.T) {
 		t.Fatalf("second in-flight upload over quota: %v", err)
 	}
 }
+
+// 本机没有确认过的配置（旧版本加的成员）：不猜哪份可信，暂停到拥有者保存；重新启动不解除。
+func TestCollabLegacyOwnConfigNeedsConfirm(t *testing.T) {
+	s := openTestStore(t)
+	s.SetSelf("me")
+	room := "hostfp/d_x"
+	if err := s.CreateMirror(Discussion{Key: room, Host: "hostfp", LocalID: "d_x", Title: "t", CreatedAt: time.Now()},
+		Joined{Room: room, Host: "hostfp", State: JoinedActive, JoinedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	m := Member{ID: "dmb_me", Name: "Bob", Agent: "codex", Model: "m1", Owner: "me", Generation: 1, ConfigVersion: 1, CreatedAt: time.Now()}
+	b := SyncBatch{Rev: 1, Discussion: SyncDiscussion{Title: "t", Status: DiscussionActive, Shared: true}, Members: []Member{m}}
+	if _, err := s.ApplySync(room, "me", b); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.Paused != NeedsConfirm {
+		t.Fatalf("own agent from sync not paused: %q", got.Paused)
+	}
+	m.WorkspaceID = "w1"
+	if err := s.SetOwnConfig(m); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.Paused != "" {
+		t.Fatalf("confirmed agent still paused: %q", got.Paused)
+	}
+	// 旧版本留下的：own_config 为空
+	s.db.Exec(`UPDATE disc_members SET own_config='' WHERE id=?`, m.ID)
+	m.Model = "from-host"
+	b = SyncBatch{Rev: 2, Discussion: b.Discussion, Members: []Member{m}}
+	if _, err := s.ApplySync(room, "me", b); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.Paused != NeedsConfirm {
+		t.Fatalf("legacy agent not paused: %q", got.Paused)
+	}
+	if _, err := s.ReleaseWorker(m.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Member(m.ID); got.Paused != NeedsConfirm {
+		t.Fatalf("restart cleared the confirmation pause: %q", got.Paused)
+	}
+}

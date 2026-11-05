@@ -58,6 +58,8 @@ type collabState struct {
 	sessUploads sync.Map
 	// now 是测试换掉的时钟（心跳超时的显示）
 	now func() time.Time
+	// manualFetch 是测试关掉后台附件循环（由测试自己调 fetchRound）
+	manualFetch bool
 	// listen 测试里换成别的地址（端口 0）
 	listenAddr string
 }

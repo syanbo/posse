@@ -666,6 +666,8 @@ func (a *app) discRow(c *ui.Context, s discSummary) {
 				preview, color = m.CollabRequestsBadge(s.Requests), colors(t).honey
 			case s.Joined == "pending":
 				preview, color = m.CollabListPending(), colors(t).honey
+			case s.Joined == "leaving":
+				preview, color = m.CollabListLeaving(), colors(t).honey
 			case s.Joined == "rejected" || s.Joined == "removed" || s.Joined == "left":
 				preview = m.CollabListLeft()
 			}
@@ -1337,10 +1339,14 @@ func (a *app) discPausedBanner(c *ui.Context, d *discDetail) {
 				queued++
 			}
 		}
-		if mem.Paused == configConflict {
+		if mem.Paused == configConflict || mem.Paused == needsConfirm {
 			ui.Row(c.Key("paused-"+mem.ID)).Gap(8).Padding(8, 12).Radius(rControl).Background(soft(t, colors(t).honey)).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, iconHexAlert).FontSize(fsBody).TextColor(colors(t).honey)
-				ui.Text(c, m.CollabConfigConflict(mem.Name)).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
+				text := m.CollabConfigConflict(mem.Name)
+				if mem.Paused == needsConfirm {
+					text = m.CollabConfigConfirm(mem.Name)
+				}
+				ui.Text(c, text).FontSize(fsSmall).LineHeight(1.45).Grow(1).Shrink(1)
 				if pressable(accentButton(c, m.CollabReviewSettings())).Clicked() {
 					a.openMemberForm(d, mem.ID)
 				}

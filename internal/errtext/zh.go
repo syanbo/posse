@@ -66,7 +66,8 @@ var zh = [][2]string{
 	{"leaving the discussion; results already on this computer are sent when the host is reachable", "正在退出讨论：本机已有的结果会在连上房主后交上去"},
 	{"you are leaving this discussion; it finishes when the host is reachable", "你正在退出这个讨论，连上房主后完成"},
 	{"the host's copy of this agent's settings differs from what you set on this computer; review and save its settings", "房主那里这个 Agent 的设置和你在本机设的不一致，请检查后保存设置"},
-	{"the host's copy of %s's settings differs from yours; review and save its settings first", "房主那里 {1} 的设置和你的不一致，请先检查并保存设置"},
+	{"%s's settings on this computer need your review; open its settings and save them first", "{1} 在本机的设置需要你检查，请先打开设置并保存"},
+	{"confirm this agent's settings on this computer before it runs requests", "这个 Agent 的设置要在本机确认后才能执行请求"},
 
 	// 讨论（执行卡上的原因和操作的报错）
 	{"worker terminal exited (code %d) before reporting", "worker 终端在汇报前退出了（退出码 {1}）"},

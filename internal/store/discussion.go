@@ -761,7 +761,9 @@ func (s *Store) ReleaseWorker(id string, force bool) (Member, error) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE disc_members SET task_id='', worker='', worker_config=0, paused='', rev=? WHERE id=?`, rev, id); err != nil {
+		// 重新启动不解除配置没确认的暂停：那要拥有者检查、保存设置
+		if _, err := tx.Exec(`UPDATE disc_members SET task_id='', worker='', worker_config=0, paused=CASE WHEN paused IN (?,?) THEN paused ELSE '' END, rev=? WHERE id=?`,
+			ConfigConflict, NeedsConfirm, rev, id); err != nil {
 			return err
 		}
 		// 受阻的请求回到队列，由新 worker 接着做
