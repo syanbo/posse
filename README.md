@@ -9,9 +9,9 @@
 
 <p align="center">简体中文 · <a href="README.en.md">English</a></p>
 
-<h3 align="center"><a href="https://posse.shaoyan.uk/Posse.dmg">下载 Posse for Mac</a></h3>
+<h3 align="center">下载 Posse for Mac：<a href="https://posse.shaoyan.uk/Posse.dmg">Apple 芯片</a> · <a href="https://posse.shaoyan.uk/Posse-Intel.dmg">Intel 芯片</a></h3>
 
-<p align="center">macOS 13+ · Apple Silicon · 安装包约 12 MB</p>
+<p align="center">macOS 13+ · 安装包约 13 MB</p>
 
 <p align="center">
   <img src="docs/assets/readme/hero.png" alt="Posse：侧栏按项目列出 agent 会话和状态，主区域分栏放着 Claude Code、终端和 README 的预览" width="100%" />

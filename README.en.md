@@ -9,9 +9,9 @@
 
 <p align="center"><a href="README.md">简体中文</a> · English</p>
 
-<h3 align="center"><a href="https://posse.shaoyan.uk/Posse.dmg">Download Posse for Mac</a></h3>
+<h3 align="center">Download Posse for Mac: <a href="https://posse.shaoyan.uk/Posse.dmg">Apple silicon</a> · <a href="https://posse.shaoyan.uk/Posse-Intel.dmg">Intel</a></h3>
 
-<p align="center">macOS 13+ · Apple Silicon · ~12 MB download</p>
+<p align="center">macOS 13+ · ~13 MB download</p>
 
 <p align="center">
   <img src="docs/assets/readme/hero.png" alt="Posse: the sidebar lists agent sessions and their status by project; the main area is split between Claude Code, a terminal and a README preview" width="100%" />
