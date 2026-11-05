@@ -1112,6 +1112,9 @@ func (rt *engine) endFrame() {
 // commit records the laid out frame in the elements' states: their
 // boxes, the hit list in paint order, the focus order.
 func (rt *engine) commit(root *node, w, h float32) {
+	// Cleared, not only cut short: the hits past the length would keep the
+	// states of elements gone since a larger frame alive. (Posse)
+	clear(rt.hits)
 	rt.hits = rt.hits[:0]
 	clear(rt.posed)
 	rt.posed = rt.posed[:0]
