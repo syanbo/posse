@@ -1464,8 +1464,12 @@ func (a *app) askCleanAttachments(m locales.Messages, key string) {
 		}
 		a.confirm(m.DiscCleanConfirm(len(files), humanSize(total)), m.DiscCleanBody(strings.Join(names, "\n")), m.CommonMoveToTrash(), func() {
 			var failed error
+			trash := a.trashItem
+			if trash == nil {
+				trash = mygo.Shell.TrashItem
+			}
 			for _, f := range files {
-				if err := mygo.Shell.TrashItem(f); err != nil {
+				if err := trash(f); err != nil {
 					failed = err
 				}
 			}

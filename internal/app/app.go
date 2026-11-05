@@ -158,6 +158,8 @@ type app struct {
 	discWantRev int64  // 它已有的版本，0 要全量
 	discSeq     atomic.Int64
 	discLoaded  bool // 拿到过一次列表：之后的变化才发通知
+	// trashItem 把文件移到废纸篓，nil 时用 mygo.Shell.TrashItem（要主线程跑着）；测试里换掉
+	trashItem func(path string) error
 	// mainUpdate 把函数交给主线程跑，为 nil 时用 win.Update；测试里直接跑
 	mainUpdate func(func())
 

@@ -199,6 +199,51 @@ func cmdDiscussionAddMember(e *env, args []string) error {
 	})
 }
 
+func cmdDiscussionUpdateMember(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion update-member", flag.ContinueOnError)
+	for _, f := range []string{"name", "role", "agent", "model", "effort", "workspace", "worktree"} {
+		fs.String(f, "", "")
+	}
+	applyNow := fs.Bool("apply-now", false, "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "discussion update-member"); err != nil {
+		return err
+	}
+	var m discMember
+	params := map[string]any{"member": pos[0], "applyNow": *applyNow}
+	// 只带给了的旗标：没给的由常驻进程沿用原值
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name != "apply-now" {
+			params[f.Name] = f.Value.String()
+		}
+	})
+	return e.do("discussion.member.update", params, &m, func() {
+		fmt.Fprintf(e.out, "updated %s (%s) in %s\n", m.Name, m.Agent, m.WorkspaceLabel)
+		if m.TaskID != "" {
+			fmt.Fprintln(e.out, "its current worker keeps the old settings; pass --apply-now to restart it")
+		}
+	})
+}
+
+func cmdDiscussionIsolate(e *env, args []string) error {
+	fs := flag.NewFlagSet("discussion isolate", flag.ContinueOnError)
+	worktree := fs.String("worktree", "", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if err := need(pos, 1, "discussion isolate"); err != nil {
+		return err
+	}
+	var m discMember
+	return e.do("discussion.isolate", map[string]any{"execution": pos[0], "worktree": *worktree}, &m, func() {
+		fmt.Fprintf(e.out, "%s now works in %s; the request runs there\n", m.Name, m.WorkspaceLabel)
+	})
+}
+
 func cmdDiscussionRemoveMember(e *env, args []string) error {
 	fs := flag.NewFlagSet("discussion remove-member", flag.ContinueOnError)
 	pos, err := parse(fs, args)

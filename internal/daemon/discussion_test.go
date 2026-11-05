@@ -568,3 +568,108 @@ func TestPlainTaskUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// 改配置：已有 worker 继续用旧配置；有排队请求时立即应用被拒；没有请求时立即应用关掉旧 worker，下一轮按新配置新开。
+func TestDiscussionApplyNow(t *testing.T) {
+	d, _, disc := newDiscDaemon(t)
+	var models []string
+	launch := d.disc.launch
+	d.disc.launch = func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error) {
+		models = append(models, m.Name)
+		return launch(w, name, m, prompt, env...)
+	}
+	a := call(t, d.discMemberAdd, map[string]any{"discussion": disc.Key, "name": "Alice", "agent": "claude", "model": "haiku"}).(store.Member)
+	r1 := postTo(t, d, disc, "one", a.ID, "")
+	x1 := waitExec(t, d, r1.Execution.ID, store.ExecRunning)
+	readAll(t, d, x1)
+	call(t, d.taskDone, map[string]any{"task": x1.TaskID, "caller": x1.Worker, "execution": x1.ID, "body": "ok"})
+	// 只改配置：旧 worker 照旧
+	m := call(t, d.discMemberUpdate, map[string]any{"member": a.ID, "model": "sonnet"}).(store.Member)
+	if m.ConfigVersion != 2 || m.Model != "sonnet" || m.Role != a.Role || m.TaskID != x1.TaskID {
+		t.Fatalf("member after update %+v", m)
+	}
+	d.setAgent(d.liveSession(x1.Worker), term.AgentState{Status: agent.StatusIdle})
+	r2 := postTo(t, d, disc, "two", a.ID, "")
+	x2 := waitExec(t, d, r2.Execution.ID, store.ExecRunning)
+	if x2.Worker != x1.Worker || x2.Model != "haiku" || x2.ConfigVersion != 1 {
+		t.Fatalf("reused worker should keep the old config: %+v", x2)
+	}
+	// 有进行中的请求：立即应用被拒
+	if _, err := callErr(d.discMemberUpdate, map[string]any{"member": a.ID, "model": "opus", "applyNow": true}); err == nil {
+		t.Fatal("apply now with an active request")
+	}
+	readAll(t, d, x2)
+	call(t, d.taskDone, map[string]any{"task": x2.TaskID, "caller": x2.Worker, "execution": x2.ID, "body": "ok"})
+	call(t, d.discMemberUpdate, map[string]any{"member": a.ID, "model": "opus", "applyNow": true})
+	if s := d.liveSession(x1.Worker); s != nil {
+		t.Fatal("old worker still open after apply now")
+	}
+	if mm, _ := d.store.Member(a.ID); mm.TaskID != "" || mm.Worker != "" {
+		t.Fatalf("member still bound: %+v", mm)
+	}
+	r3 := postTo(t, d, disc, "three", a.ID, "")
+	x3 := waitExec(t, d, r3.Execution.ID, store.ExecRunning)
+	if x3.Worker == x1.Worker || x3.Model != "opus" || x3.ConfigVersion != 3 {
+		t.Fatalf("new worker config %+v", x3)
+	}
+	if len(models) != 2 || models[0] != "haiku" || models[1] != "opus" {
+		t.Fatalf("launched with %v", models)
+	}
+	// 历史里两轮记着各自的配置
+	if old, _ := d.store.Execution(x1.ID); old.Model != "haiku" {
+		t.Fatalf("round 1 config rewritten: %+v", old)
+	}
+}
+
+// 故障注入：终端拉起之后登记失败。刚拉起的终端被关掉，这一轮记失败、队列暂停，不自动再拉起。
+func TestDiscussionBindFailure(t *testing.T) {
+	for _, mode := range []string{"stale", "error"} {
+		t.Run(mode, func(t *testing.T) {
+			d, _, disc := newDiscDaemon(t)
+			launches := 0
+			var started *session
+			launch := d.disc.launch
+			d.disc.launch = func(w store.Workspace, name string, m agent.Model, prompt string, env ...string) (*session, error) {
+				launches++
+				s, err := launch(w, name, m, prompt, env...)
+				started = s
+				var taskID string
+				for _, e := range env {
+					if v, ok := strings.CutPrefix(e, "POSSE_TASK_ID="); ok {
+						taskID = v
+					}
+				}
+				switch mode {
+				case "stale":
+					// 拉起期间轮次被别人改掉（例如对账判成启动失败）
+					xs, _ := d.store.ActiveExecutions()
+					for _, x := range xs {
+						d.store.StartFailed(x.ID, "worker start was interrupted", false)
+					}
+				case "error":
+					// 任务 ID 被占：登记任务的插入失败
+					d.store.AddTask(store.Task{ID: taskID, Title: "x", Spec: "x", WorkspaceID: w.ID, Worker: "t_other", Status: store.TaskDone, CreatedAt: time.Now()})
+				}
+				return s, err
+			}
+			a := addMember(t, d, disc, "Alice", "claude")
+			r := postTo(t, d, disc, "go", a.ID, "")
+			x := waitExec(t, d, r.Execution.ID, store.ExecFailed)
+			if started == nil || d.liveSession(started.ID) != nil {
+				t.Fatal("orphan worker terminal left open")
+			}
+			for range 5 {
+				d.dispatchAll()
+			}
+			if launches != 1 {
+				t.Fatalf("launched %d times", launches)
+			}
+			if mm, _ := d.store.Member(a.ID); mm.Paused == "" || mm.TaskID != "" {
+				t.Fatalf("member after failed bind %+v", mm)
+			}
+			if x.Reason == "" {
+				t.Fatal("no failure reason")
+			}
+		})
+	}
+}

@@ -840,6 +840,17 @@ func (d *Daemon) discMemberUpdate(ctx context.Context, raw json.RawMessage) (any
 	if err != nil {
 		return nil, err
 	}
+	// 没带的字段沿用原值（CLI 只改给了的几项；界面每次都带全）
+	var present map[string]json.RawMessage
+	json.Unmarshal(raw, &present)
+	keep := func(key string, v *string, old string) {
+		if _, ok := present[key]; !ok {
+			*v = old
+		}
+	}
+	keep("role", &p.Role, old.Role)
+	keep("model", &p.Model, old.Model)
+	keep("effort", &p.Effort, old.Effort)
 	if p.Name = strings.TrimSpace(p.Name); p.Name == "" {
 		p.Name = old.Name
 	}
