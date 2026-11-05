@@ -466,14 +466,20 @@ func composer(c *ui.Context, value *string, placeholder, verb string, multiline 
 			}
 		})
 	})
-	if in.Focused() {
+	composerFocus(c, box, in.Focused())
+	return sent && strings.TrimSpace(*value) != ""
+}
+
+// composerFocus 画发送输入区的聚焦框；讨论页自己排输入区时也用它。
+func composerFocus(c *ui.Context, box ui.Element, focused bool) {
+	t := c.Theme()
+	if focused {
 		// 外框和平时一样宽（不挤动内容），再往里描一圈，合起来是 focusRing
 		box.Border(hairline, t.Focus).InsetShadow(0, 0, 0, focusRing-hairline, t.Focus)
 	} else {
 		// 平时画一圈和底同色、看不见的框，和聚焦时一样大
 		elevCard(c, box).Border(hairline, colors(t).card)
 	}
-	return sent && strings.TrimSpace(*value) != ""
 }
 
 // fieldBorder 画聚焦框。没聚焦时用和底一样的颜色，看着没有框，尺寸却和聚焦时相同。

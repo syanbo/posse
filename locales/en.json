@@ -8791,5 +8791,599 @@
   "webUnavailable": "Web pages can’t be opened here",
   "@webUnavailable": {
     "description": "Web tab message when no window can host a web view."
+  },
+  "discAddMember": "Add",
+  "@discAddMember": {
+    "description": "Add Member dialog: default button."
+  },
+  "discAddMemberEllipsis": "Add Member…",
+  "@discAddMemberEllipsis": {
+    "description": "Discussions: menu item and button that open the Add Member dialog."
+  },
+  "discAddMemberTitle": "Add Member",
+  "@discAddMemberTitle": {
+    "description": "Title of the Add Member dialog of a discussion."
+  },
+  "discAgent": "Agent",
+  "@discAgent": {
+    "description": "Add Member dialog: label of the agent choice."
+  },
+  "discAndMore": "and {count} more",
+  "@discAndMore": {
+    "description": "Clean attachments confirmation: how many more files are not listed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discAnswerEllipsis": "Answer…",
+  "@discAnswerEllipsis": {
+    "description": "Discussion message: button under a member's open question that switches the input to answering it."
+  },
+  "discAnsweringTo": "Answering {name}",
+  "@discAnsweringTo": {
+    "description": "Discussion input: header while answering a member's question. name is the member's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discAnswerLabel": "answer",
+  "@discAnswerLabel": {
+    "description": "Discussion message: label after your name on an answer to a question."
+  },
+  "discAnswerPlaceholder": "Your answer",
+  "@discAnswerPlaceholder": {
+    "description": "Discussion input placeholder while answering a question."
+  },
+  "discApplyNow": "Apply now (restart its worker)",
+  "@discApplyNow": {
+    "description": "Edit Member dialog: checkbox that closes the member's worker so the next request uses the new settings."
+  },
+  "discApplyNowNote": "The worker terminal closes and its conversation context is lost. Finish or cancel its requests first. Without this, the current worker keeps its settings and new ones apply when a new worker starts.",
+  "@discApplyNowNote": {
+    "description": "Edit Member dialog: note under Apply now."
+  },
+  "discArchive": "Archive",
+  "@discArchive": {
+    "description": "Discussion: menu item and confirm button that archive the discussion."
+  },
+  "discArchiveBlocked": "Can’t archive yet",
+  "@discArchiveBlocked": {
+    "description": "Title of the notice when a discussion still has requests that block archiving."
+  },
+  "discArchiveBlockedBody": "Finish, stop or cancel these requests first:\n{list}",
+  "@discArchiveBlockedBody": {
+    "description": "Body of the notice listing requests that block archiving. list is one request per line.",
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "discArchiveBody": "It becomes read-only: no new messages, requests, members or key marks. History and attachments stay. Terminals are not closed. You can restore it later.",
+  "@discArchiveBody": {
+    "description": "Archive confirmation body."
+  },
+  "discArchiveConfirm": "Archive “{title}”?",
+  "@discArchiveConfirm": {
+    "description": "Archive confirmation title. title is the discussion title.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "discArchivedBadge": "Archived",
+  "@discArchivedBadge": {
+    "description": "Discussion header: badge of an archived discussion."
+  },
+  "discArchivedNote": "This discussion is archived and read-only.",
+  "@discArchivedNote": {
+    "description": "Discussion: note in place of the input of an archived discussion."
+  },
+  "discAttach": "Attach",
+  "@discAttach": {
+    "description": "Discussion input: button that adds files, and the open dialog's button."
+  },
+  "discAttachTitle": "Attach Files",
+  "@discAttachTitle": {
+    "description": "Title of the open dialog for discussion attachments."
+  },
+  "discAttachmentMissing": "unavailable",
+  "@discAttachmentMissing": {
+    "description": "Discussion attachment chip: the file is gone (moved project or cleaned)."
+  },
+  "discCleanAttachmentsEllipsis": "Clean Up Attachments…",
+  "@discCleanAttachmentsEllipsis": {
+    "description": "Archived discussion menu: list its attachment files and move them to the Trash."
+  },
+  "discCleanBody": "Messages and attachment names stay; the files go to the Trash.\n{list}",
+  "@discCleanBody": {
+    "description": "Clean attachments confirmation body. list is the file names, one per line.",
+    "placeholders": {
+      "list": {
+        "type": "String"
+      }
+    }
+  },
+  "discCleanConfirm": "{count, plural, one {Move # attachment ({size}) to the Trash?} other {Move # attachments ({size}) to the Trash?}}",
+  "@discCleanConfirm": {
+    "description": "Clean attachments confirmation title. size is the total size, as “3.2 MB”.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "discCleanNothing": "No attachment files",
+  "@discCleanNothing": {
+    "description": "Clean attachments: nothing to clean."
+  },
+  "discCleanNothingBody": "This discussion has no attachment files left on disk.",
+  "@discCleanNothingBody": {
+    "description": "Clean attachments: body when nothing is left."
+  },
+  "discColon": ": ",
+  "@discColon": {
+    "description": "Separator between author and text in a discussion preview line."
+  },
+  "discConcurrent": "{name} is running in the same directory. Running both may make them overwrite each other’s changes.",
+  "@discConcurrent": {
+    "description": "Discussion request card: why the request waits for confirmation. name is the other member.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discConfigPending": "New settings apply when a new worker starts.",
+  "@discConfigPending": {
+    "description": "Discussion member list: the member's settings changed but its worker still uses the old ones."
+  },
+  "discContinueAnyway": "Run Anyway",
+  "@discContinueAnyway": {
+    "description": "Discussion request card: run although another member works in the same directory."
+  },
+  "discCopyID": "Copy Message ID",
+  "@discCopyID": {
+    "description": "Discussion message context menu item."
+  },
+  "discCreate": "Create",
+  "@discCreate": {
+    "description": "New Discussion dialog: default button."
+  },
+  "discCreatedAt": "Created {at, date, ::MMMd} {at, date, ::jm}",
+  "@discCreatedAt": {
+    "description": "Discussion details: when it was created.",
+    "placeholders": {
+      "at": {
+        "type": "DateTime"
+      }
+    }
+  },
+  "discDefaultWorkspace": "Default workspace for members",
+  "@discDefaultWorkspace": {
+    "description": "Discussion dialogs: label of the default workspace choice."
+  },
+  "discDefaultWorkspaceNote": "New members work here unless you pick another workspace or a new worktree.",
+  "@discDefaultWorkspaceNote": {
+    "description": "New Discussion dialog: note under the default workspace."
+  },
+  "discDescPlaceholder": "Description (optional): goal, background, constraints",
+  "@discDescPlaceholder": {
+    "description": "Discussion dialogs: placeholder of the description field."
+  },
+  "discDetails": "Details",
+  "@discDetails": {
+    "description": "Discussion side panel: section title."
+  },
+  "discEditEllipsis": "Edit Discussion…",
+  "@discEditEllipsis": {
+    "description": "Discussion menu item that opens the edit dialog."
+  },
+  "discEditMemberEllipsis": "Edit Member…",
+  "@discEditMemberEllipsis": {
+    "description": "Discussion member context menu item."
+  },
+  "discEditMemberTitle": "Edit Member",
+  "@discEditMemberTitle": {
+    "description": "Title of the Edit Member dialog."
+  },
+  "discEditTitle": "Edit Discussion",
+  "@discEditTitle": {
+    "description": "Title of the Edit Discussion dialog."
+  },
+  "discEffortPlaceholder": "Reasoning effort (optional)",
+  "@discEffortPlaceholder": {
+    "description": "Member dialog: effort field placeholder."
+  },
+  "discEmptyBody": "Talk with several agents in one place. @ a member to send it a request; its reply comes back here, and you can open its terminal any time.",
+  "@discEmptyBody": {
+    "description": "Discussions page empty state body."
+  },
+  "discEmptyTitle": "No discussions yet",
+  "@discEmptyTitle": {
+    "description": "Discussions page empty state title."
+  },
+  "discEveryone": "Everyone",
+  "@discEveryone": {
+    "description": "Discussion input: recipient when no member is @-mentioned."
+  },
+  "discEveryoneHint": "Everyone (just a message)",
+  "@discEveryoneHint": {
+    "description": "Discussion recipient menu: item for a plain message that wakes nobody."
+  },
+  "discExecBlocked": "Worker gone",
+  "@discExecBlocked": {
+    "description": "Discussion request card: the member's worker closed between requests."
+  },
+  "discExecCancelled": "Cancelled",
+  "@discExecCancelled": {
+    "description": "Discussion request card status."
+  },
+  "discExecHeld": "Needs confirmation",
+  "@discExecHeld": {
+    "description": "Discussion request card: waits for you because of the same-directory check."
+  },
+  "discExecInterrupted": "Interrupted",
+  "@discExecInterrupted": {
+    "description": "Discussion request card: the worker exited or the daemon restarted during the request."
+  },
+  "discExecQueued": "Queued",
+  "@discExecQueued": {
+    "description": "Discussion request card status."
+  },
+  "discExecStarting": "Starting",
+  "@discExecStarting": {
+    "description": "Discussion request card status and member status."
+  },
+  "discExecWaiting": "Waiting for your answer",
+  "@discExecWaiting": {
+    "description": "Discussion request card: the member asked a question."
+  },
+  "discExistingWorkspace": "Existing workspace",
+  "@discExistingWorkspace": {
+    "description": "Member dialog: choice to work in an existing workspace."
+  },
+  "discHidePanel": "Hide Details",
+  "@discHidePanel": {
+    "description": "Discussion header button tooltip."
+  },
+  "discIsolate": "Use Own Worktree",
+  "@discIsolate": {
+    "description": "Discussion request card: give this member its own worktree instead."
+  },
+  "discKeyMessage": "Key message",
+  "@discKeyMessage": {
+    "description": "Tooltip of the star on a key message."
+  },
+  "discKeyMessages": "Key Messages",
+  "@discKeyMessages": {
+    "description": "Discussion side panel: section title."
+  },
+  "discList": "Discussions",
+  "@discList": {
+    "description": "Accessibility label of the discussion list."
+  },
+  "discLoadOlder": "Load earlier messages",
+  "@discLoadOlder": {
+    "description": "Discussion: button at the top of the loaded messages."
+  },
+  "discMarkKey": "Mark as Key",
+  "@discMarkKey": {
+    "description": "Discussion message action tooltip."
+  },
+  "discMemberCount": "{count, plural, one {# member} other {# members}}",
+  "@discMemberCount": {
+    "description": "Discussion header: number of members.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discMemberIdle": "Idle",
+  "@discMemberIdle": {
+    "description": "Discussion member list: its worker waits at the prompt."
+  },
+  "discMemberNamePlaceholder": "Name in this discussion",
+  "@discMemberNamePlaceholder": {
+    "description": "Member dialog: name field placeholder."
+  },
+  "discMemberNotStarted": "Not started",
+  "@discMemberNotStarted": {
+    "description": "Discussion member list: no worker yet (starts on first @)."
+  },
+  "discMemberPaused": "Paused",
+  "@discMemberPaused": {
+    "description": "Discussion member list: its queue is paused."
+  },
+  "discMembers": "Members",
+  "@discMembers": {
+    "description": "Discussion side panel: section title."
+  },
+  "discMention": "@ Mention",
+  "@discMention": {
+    "description": "Discussion member context menu: make it the recipient of the next message."
+  },
+  "discModelPlaceholder": "Model (optional)",
+  "@discModelPlaceholder": {
+    "description": "Member dialog: model field placeholder."
+  },
+  "discMore": "More",
+  "@discMore": {
+    "description": "Discussion header: more actions button tooltip."
+  },
+  "discNewEllipsis": "New Discussion…",
+  "@discNewEllipsis": {
+    "description": "Discussions page: button that opens the New Discussion dialog."
+  },
+  "discNewMessages": "{count, plural, one {# new message} other {# new messages}}",
+  "@discNewMessages": {
+    "description": "Discussion: pill at the bottom while you read earlier messages.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discNewTitle": "New Discussion",
+  "@discNewTitle": {
+    "description": "Title of the New Discussion dialog."
+  },
+  "discNewWorktree": "New worktree",
+  "@discNewWorktree": {
+    "description": "Member dialog: choice to create a worktree for the member."
+  },
+  "discNoDescription": "No description",
+  "@discNoDescription": {
+    "description": "Discussion details when it has no description."
+  },
+  "discNoGitNote": "This project is not a git repository: members share the directory without worktree isolation.",
+  "@discNoGitNote": {
+    "description": "Member dialog note for non-git projects."
+  },
+  "discNoKeyMessages": "Mark messages with the star to keep conclusions at hand; they are also given to members as context.",
+  "@discNoKeyMessages": {
+    "description": "Discussion side panel: empty key message list."
+  },
+  "discNoMatches": "No matches",
+  "@discNoMatches": {
+    "description": "Discussion search: no results."
+  },
+  "discNoMembers": "Add agents as members, then @ one of them to send it a request.",
+  "@discNoMembers": {
+    "description": "Discussion side panel: empty member list."
+  },
+  "discNoMessages": "No messages yet",
+  "@discNoMessages": {
+    "description": "Discussion list row: preview of an empty discussion."
+  },
+  "discNoMessagesHint": "Write a message below. A plain message wakes nobody; @ a member to send it a request.",
+  "@discNoMessagesHint": {
+    "description": "Discussion: hint in an empty discussion."
+  },
+  "discNoticeFailed": "{name} reported a failure",
+  "@discNoticeFailed": {
+    "description": "System notification title: a discussion member reported a failure.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discNoticeQuestion": "{name} is waiting for your answer",
+  "@discNoticeQuestion": {
+    "description": "System notification title: a discussion member asked a question.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discNoticeReply": "{name} replied",
+  "@discNoticeReply": {
+    "description": "System notification title: a discussion member replied.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discOpen": "Open Discussion",
+  "@discOpen": {
+    "description": "Task detail of a discussion worker: button that opens its discussion."
+  },
+  "discOpenTerminal": "Open Terminal",
+  "@discOpenTerminal": {
+    "description": "Discussion: open the member's worker terminal."
+  },
+  "discPaused": "{name}’s queue is paused ({count, plural, one {# request waiting} other {# requests waiting}}). Its worker stopped or the daemon restarted.",
+  "@discPaused": {
+    "description": "Discussion banner above the input. name is the member.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discPlaceholder": "Message (⌘↩ to send)",
+  "@discPlaceholder": {
+    "description": "Discussion input placeholder for a plain message."
+  },
+  "discPlaceholderTo": "Request for {name} (⌘↩ to send)",
+  "@discPlaceholderTo": {
+    "description": "Discussion input placeholder with a member @-mentioned.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discProject": "Project",
+  "@discProject": {
+    "description": "New Discussion dialog: project label."
+  },
+  "discQuestionLabel": "question",
+  "@discQuestionLabel": {
+    "description": "Discussion message: label of an answered question."
+  },
+  "discQuestionsWaiting": "{count, plural, one {# question waiting for you} other {# questions waiting for you}}",
+  "@discQuestionsWaiting": {
+    "description": "Discussion list row preview when members wait for answers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discQuote": "Quote",
+  "@discQuote": {
+    "description": "Discussion message action."
+  },
+  "discQuotedEarlier": "Earlier message",
+  "@discQuotedEarlier": {
+    "description": "Quote block of a message not loaded yet; click loads it."
+  },
+  "discRemoveMemberBody": "Its messages keep its name. Its worker terminal closes. Adding it again creates a new member that does not reuse the old worker.",
+  "@discRemoveMemberBody": {
+    "description": "Remove member confirmation body."
+  },
+  "discRemoveMemberConfirm": "Remove {name}?",
+  "@discRemoveMemberConfirm": {
+    "description": "Remove member confirmation title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discRemoveMemberEllipsis": "Remove Member…",
+  "@discRemoveMemberEllipsis": {
+    "description": "Discussion member context menu item."
+  },
+  "discReportedFailed": "reported a failure",
+  "@discReportedFailed": {
+    "description": "Discussion message: label after a member's name on a failed reply."
+  },
+  "discRestartContinue": "Restart and Continue",
+  "@discRestartContinue": {
+    "description": "Discussion: start a new worker for the member and continue its queued requests."
+  },
+  "discRetried": "retry",
+  "@discRetried": {
+    "description": "Discussion request card: this round retries an earlier one."
+  },
+  "discRolePlaceholder": "Role in this discussion (optional), as “reviews for security”",
+  "@discRolePlaceholder": {
+    "description": "Member dialog: role field placeholder."
+  },
+  "discSearch": "Search",
+  "@discSearch": {
+    "description": "Discussion header: search button tooltip."
+  },
+  "discSearchPlaceholder": "Search this discussion",
+  "@discSearchPlaceholder": {
+    "description": "Discussion search field placeholder."
+  },
+  "discSectionArchived": "Archived",
+  "@discSectionArchived": {
+    "description": "Discussion list: section of archived discussions."
+  },
+  "discSend": "Send",
+  "@discSend": {
+    "description": "Discussion input: send button."
+  },
+  "discSendTo": "To",
+  "@discSendTo": {
+    "description": "Discussion input: label before the recipient."
+  },
+  "discSharedDirNote": "Members in the same directory may overwrite each other; Posse asks before running two at once there.",
+  "@discSharedDirNote": {
+    "description": "Member dialog note under the workspace choice."
+  },
+  "discShowPanel": "Show Details",
+  "@discShowPanel": {
+    "description": "Discussion header button tooltip."
+  },
+  "discStop": "Stop",
+  "@discStop": {
+    "description": "Discussion request card: stop a running request."
+  },
+  "discStopBody": "This closes the member’s worker terminal. Its next request starts a new worker without this conversation.",
+  "@discStopBody": {
+    "description": "Stop request confirmation body."
+  },
+  "discStopConfirm": "Stop {name}’s request?",
+  "@discStopConfirm": {
+    "description": "Stop request confirmation title.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discTargetNote": "runs as a request",
+  "@discTargetNote": {
+    "description": "Discussion input: note after the @-mentioned recipient."
+  },
+  "discTitle": "Discussions",
+  "@discTitle": {
+    "description": "Sidebar tile name and Discussions page title."
+  },
+  "discTitlePlaceholder": "Title, as “Redesign the login flow”",
+  "@discTitlePlaceholder": {
+    "description": "Discussion dialogs: title placeholder."
+  },
+  "discTooManyAttachments": "At most {count} attachments per message",
+  "@discTooManyAttachments": {
+    "description": "Error when adding too many attachments.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discUnmarkKey": "Unmark Key",
+  "@discUnmarkKey": {
+    "description": "Discussion: remove the key mark."
+  },
+  "discUnreadTip": "{count, plural, one {# unread} other {# unread}}",
+  "@discUnreadTip": {
+    "description": "Tooltip of an unread count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discViewTask": "View Task",
+  "@discViewTask": {
+    "description": "Discussion request card: open the worker's task."
+  },
+  "discWorkDir": "Works in",
+  "@discWorkDir": {
+    "description": "Member dialog: label of the workspace choice."
+  },
+  "discWorktreeNote": "A new git worktree in this project, kept for you to review and merge.",
+  "@discWorktreeNote": {
+    "description": "Member dialog note under the worktree name."
+  },
+  "discYou": "You",
+  "@discYou": {
+    "description": "Discussion: the user's name on their messages."
+  },
+  "discYouInitial": "Y",
+  "@discYouInitial": {
+    "description": "Discussion: the letter in the user's avatar."
   }
 }

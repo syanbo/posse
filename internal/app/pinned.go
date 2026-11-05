@@ -18,7 +18,7 @@ const (
 )
 
 // globalTiles 是不能取消的全局页面，ui.json 里没记顺序时按这个排。
-var globalTiles = []string{taskBoardID, historyBoardID, skillsBoardID, mobileBoardID, chatBoardID}
+var globalTiles = []string{taskBoardID, historyBoardID, skillsBoardID, mobileBoardID, chatBoardID, discBoardID}
 
 // tileDrag 是拖动中的顶上磁贴，wsDrag 是从项目树拖出来的工作区（项目下面的工作区行）。
 type (
@@ -212,6 +212,8 @@ func (a *app) topTile(c *ui.Context, id string) ui.Element {
 		return a.chatSidebarItem(c)
 	case taskBoardID:
 		return a.taskSidebarItem(c)
+	case discBoardID:
+		return a.discSidebarItem(c)
 	case historyBoardID:
 		return a.historySidebarItem(c)
 	case skillsBoardID:

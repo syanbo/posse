@@ -1019,6 +1019,9 @@ func TestPreview(t *testing.T) {
 		a.indexTasks()
 		savePNG(t, newPreviewTester(a, dark), "tasks-empty-"+suffix+".png")
 
+		// 讨论页：列表、消息、执行卡、输入区、右边一栏，窄窗口、回答和搜索、长消息、归档、对话框（preview_disc_test.go）
+		renderDiscussionPreviews(t, dark, suffix)
+
 		a = previewApp(t)
 		previewHistory(a, "")
 		savePNG(t, newPreviewTester(a, dark), "history-"+suffix+".png")
@@ -1789,6 +1792,7 @@ func TestPreviewHour12(t *testing.T) {
 		{"git-console", func(a *app) { previewConsole(t, a) }},
 		{"git-compare", func(a *app) { previewCompare(t, a) }},
 		{"tasks", previewTaskDetail},
+		{"discussions", previewDiscussion},
 		{"history", func(a *app) { previewHistory(a, ""); previewMarkdown(a) }},
 		{"plan", func(a *app) { a.planOpen = true }},
 		{"usage", previewUsagePanel},

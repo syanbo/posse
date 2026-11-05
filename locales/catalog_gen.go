@@ -23976,3 +23976,1747 @@ func WebUnavailable() string { return In(i18n.Locale()).WebUnavailable() }
 func (msgs Messages) WebUnavailable() string {
 	return Catalog.Format(msgs.locale, "webUnavailable", nil)
 }
+
+// DiscAddMember says "Add"
+// in the language the app shows.
+//
+// Add Member dialog: default button.
+func DiscAddMember() string { return In(i18n.Locale()).DiscAddMember() }
+
+// DiscAddMember says "Add"
+// in the language of msgs.
+//
+// Add Member dialog: default button.
+func (msgs Messages) DiscAddMember() string {
+	return Catalog.Format(msgs.locale, "discAddMember", nil)
+}
+
+// DiscAddMemberEllipsis says "Add Member…"
+// in the language the app shows.
+//
+// Discussions: menu item and button that open the Add Member dialog.
+func DiscAddMemberEllipsis() string { return In(i18n.Locale()).DiscAddMemberEllipsis() }
+
+// DiscAddMemberEllipsis says "Add Member…"
+// in the language of msgs.
+//
+// Discussions: menu item and button that open the Add Member dialog.
+func (msgs Messages) DiscAddMemberEllipsis() string {
+	return Catalog.Format(msgs.locale, "discAddMemberEllipsis", nil)
+}
+
+// DiscAddMemberTitle says "Add Member"
+// in the language the app shows.
+//
+// Title of the Add Member dialog of a discussion.
+func DiscAddMemberTitle() string { return In(i18n.Locale()).DiscAddMemberTitle() }
+
+// DiscAddMemberTitle says "Add Member"
+// in the language of msgs.
+//
+// Title of the Add Member dialog of a discussion.
+func (msgs Messages) DiscAddMemberTitle() string {
+	return Catalog.Format(msgs.locale, "discAddMemberTitle", nil)
+}
+
+// DiscAgent says "Agent"
+// in the language the app shows.
+//
+// Add Member dialog: label of the agent choice.
+func DiscAgent() string { return In(i18n.Locale()).DiscAgent() }
+
+// DiscAgent says "Agent"
+// in the language of msgs.
+//
+// Add Member dialog: label of the agent choice.
+func (msgs Messages) DiscAgent() string {
+	return Catalog.Format(msgs.locale, "discAgent", nil)
+}
+
+// DiscAndMore says "and {count} more"
+// in the language the app shows.
+//
+// Clean attachments confirmation: how many more files are not listed.
+func DiscAndMore(count int) string { return In(i18n.Locale()).DiscAndMore(count) }
+
+// DiscAndMore says "and {count} more"
+// in the language of msgs.
+//
+// Clean attachments confirmation: how many more files are not listed.
+func (msgs Messages) DiscAndMore(count int) string {
+	return Catalog.Format(msgs.locale, "discAndMore", map[string]any{"count": count})
+}
+
+// DiscAnswerEllipsis says "Answer…"
+// in the language the app shows.
+//
+// Discussion message: button under a member's open question that switches
+// the input to answering it.
+func DiscAnswerEllipsis() string { return In(i18n.Locale()).DiscAnswerEllipsis() }
+
+// DiscAnswerEllipsis says "Answer…"
+// in the language of msgs.
+//
+// Discussion message: button under a member's open question that switches
+// the input to answering it.
+func (msgs Messages) DiscAnswerEllipsis() string {
+	return Catalog.Format(msgs.locale, "discAnswerEllipsis", nil)
+}
+
+// DiscAnsweringTo says "Answering {name}"
+// in the language the app shows.
+//
+// Discussion input: header while answering a member's question. name is the
+// member's name.
+func DiscAnsweringTo(name string) string { return In(i18n.Locale()).DiscAnsweringTo(name) }
+
+// DiscAnsweringTo says "Answering {name}"
+// in the language of msgs.
+//
+// Discussion input: header while answering a member's question. name is the
+// member's name.
+func (msgs Messages) DiscAnsweringTo(name string) string {
+	return Catalog.Format(msgs.locale, "discAnsweringTo", map[string]any{"name": name})
+}
+
+// DiscAnswerLabel says "answer"
+// in the language the app shows.
+//
+// Discussion message: label after your name on an answer to a question.
+func DiscAnswerLabel() string { return In(i18n.Locale()).DiscAnswerLabel() }
+
+// DiscAnswerLabel says "answer"
+// in the language of msgs.
+//
+// Discussion message: label after your name on an answer to a question.
+func (msgs Messages) DiscAnswerLabel() string {
+	return Catalog.Format(msgs.locale, "discAnswerLabel", nil)
+}
+
+// DiscAnswerPlaceholder says "Your answer"
+// in the language the app shows.
+//
+// Discussion input placeholder while answering a question.
+func DiscAnswerPlaceholder() string { return In(i18n.Locale()).DiscAnswerPlaceholder() }
+
+// DiscAnswerPlaceholder says "Your answer"
+// in the language of msgs.
+//
+// Discussion input placeholder while answering a question.
+func (msgs Messages) DiscAnswerPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discAnswerPlaceholder", nil)
+}
+
+// DiscApplyNow says "Apply now (restart its worker)"
+// in the language the app shows.
+//
+// Edit Member dialog: checkbox that closes the member's worker so the next
+// request uses the new settings.
+func DiscApplyNow() string { return In(i18n.Locale()).DiscApplyNow() }
+
+// DiscApplyNow says "Apply now (restart its worker)"
+// in the language of msgs.
+//
+// Edit Member dialog: checkbox that closes the member's worker so the next
+// request uses the new settings.
+func (msgs Messages) DiscApplyNow() string {
+	return Catalog.Format(msgs.locale, "discApplyNow", nil)
+}
+
+// DiscApplyNowNote says "The worker terminal closes and its conversation context is lost. Finish or cancel its requests first. Without this, t…"
+// in the language the app shows.
+//
+// Edit Member dialog: note under Apply now.
+func DiscApplyNowNote() string { return In(i18n.Locale()).DiscApplyNowNote() }
+
+// DiscApplyNowNote says "The worker terminal closes and its conversation context is lost. Finish or cancel its requests first. Without this, t…"
+// in the language of msgs.
+//
+// Edit Member dialog: note under Apply now.
+func (msgs Messages) DiscApplyNowNote() string {
+	return Catalog.Format(msgs.locale, "discApplyNowNote", nil)
+}
+
+// DiscArchive says "Archive"
+// in the language the app shows.
+//
+// Discussion: menu item and confirm button that archive the discussion.
+func DiscArchive() string { return In(i18n.Locale()).DiscArchive() }
+
+// DiscArchive says "Archive"
+// in the language of msgs.
+//
+// Discussion: menu item and confirm button that archive the discussion.
+func (msgs Messages) DiscArchive() string {
+	return Catalog.Format(msgs.locale, "discArchive", nil)
+}
+
+// DiscArchiveBlocked says "Can’t archive yet"
+// in the language the app shows.
+//
+// Title of the notice when a discussion still has requests that block
+// archiving.
+func DiscArchiveBlocked() string { return In(i18n.Locale()).DiscArchiveBlocked() }
+
+// DiscArchiveBlocked says "Can’t archive yet"
+// in the language of msgs.
+//
+// Title of the notice when a discussion still has requests that block
+// archiving.
+func (msgs Messages) DiscArchiveBlocked() string {
+	return Catalog.Format(msgs.locale, "discArchiveBlocked", nil)
+}
+
+// DiscArchiveBlockedBody says "Finish, stop or cancel these requests first:\n{list}"
+// in the language the app shows.
+//
+// Body of the notice listing requests that block archiving. list is one
+// request per line.
+func DiscArchiveBlockedBody(list string) string {
+	return In(i18n.Locale()).DiscArchiveBlockedBody(list)
+}
+
+// DiscArchiveBlockedBody says "Finish, stop or cancel these requests first:\n{list}"
+// in the language of msgs.
+//
+// Body of the notice listing requests that block archiving. list is one
+// request per line.
+func (msgs Messages) DiscArchiveBlockedBody(list string) string {
+	return Catalog.Format(msgs.locale, "discArchiveBlockedBody", map[string]any{"list": list})
+}
+
+// DiscArchiveBody says "It becomes read-only: no new messages, requests, members or key marks. History and attachments stay. Terminals are no…"
+// in the language the app shows.
+//
+// Archive confirmation body.
+func DiscArchiveBody() string { return In(i18n.Locale()).DiscArchiveBody() }
+
+// DiscArchiveBody says "It becomes read-only: no new messages, requests, members or key marks. History and attachments stay. Terminals are no…"
+// in the language of msgs.
+//
+// Archive confirmation body.
+func (msgs Messages) DiscArchiveBody() string {
+	return Catalog.Format(msgs.locale, "discArchiveBody", nil)
+}
+
+// DiscArchiveConfirm says "Archive “{title}”?"
+// in the language the app shows.
+//
+// Archive confirmation title. title is the discussion title.
+func DiscArchiveConfirm(title string) string { return In(i18n.Locale()).DiscArchiveConfirm(title) }
+
+// DiscArchiveConfirm says "Archive “{title}”?"
+// in the language of msgs.
+//
+// Archive confirmation title. title is the discussion title.
+func (msgs Messages) DiscArchiveConfirm(title string) string {
+	return Catalog.Format(msgs.locale, "discArchiveConfirm", map[string]any{"title": title})
+}
+
+// DiscArchivedBadge says "Archived"
+// in the language the app shows.
+//
+// Discussion header: badge of an archived discussion.
+func DiscArchivedBadge() string { return In(i18n.Locale()).DiscArchivedBadge() }
+
+// DiscArchivedBadge says "Archived"
+// in the language of msgs.
+//
+// Discussion header: badge of an archived discussion.
+func (msgs Messages) DiscArchivedBadge() string {
+	return Catalog.Format(msgs.locale, "discArchivedBadge", nil)
+}
+
+// DiscArchivedNote says "This discussion is archived and read-only."
+// in the language the app shows.
+//
+// Discussion: note in place of the input of an archived discussion.
+func DiscArchivedNote() string { return In(i18n.Locale()).DiscArchivedNote() }
+
+// DiscArchivedNote says "This discussion is archived and read-only."
+// in the language of msgs.
+//
+// Discussion: note in place of the input of an archived discussion.
+func (msgs Messages) DiscArchivedNote() string {
+	return Catalog.Format(msgs.locale, "discArchivedNote", nil)
+}
+
+// DiscAttach says "Attach"
+// in the language the app shows.
+//
+// Discussion input: button that adds files, and the open dialog's button.
+func DiscAttach() string { return In(i18n.Locale()).DiscAttach() }
+
+// DiscAttach says "Attach"
+// in the language of msgs.
+//
+// Discussion input: button that adds files, and the open dialog's button.
+func (msgs Messages) DiscAttach() string {
+	return Catalog.Format(msgs.locale, "discAttach", nil)
+}
+
+// DiscAttachTitle says "Attach Files"
+// in the language the app shows.
+//
+// Title of the open dialog for discussion attachments.
+func DiscAttachTitle() string { return In(i18n.Locale()).DiscAttachTitle() }
+
+// DiscAttachTitle says "Attach Files"
+// in the language of msgs.
+//
+// Title of the open dialog for discussion attachments.
+func (msgs Messages) DiscAttachTitle() string {
+	return Catalog.Format(msgs.locale, "discAttachTitle", nil)
+}
+
+// DiscAttachmentMissing says "unavailable"
+// in the language the app shows.
+//
+// Discussion attachment chip: the file is gone (moved project or cleaned).
+func DiscAttachmentMissing() string { return In(i18n.Locale()).DiscAttachmentMissing() }
+
+// DiscAttachmentMissing says "unavailable"
+// in the language of msgs.
+//
+// Discussion attachment chip: the file is gone (moved project or cleaned).
+func (msgs Messages) DiscAttachmentMissing() string {
+	return Catalog.Format(msgs.locale, "discAttachmentMissing", nil)
+}
+
+// DiscCleanAttachmentsEllipsis says "Clean Up Attachments…"
+// in the language the app shows.
+//
+// Archived discussion menu: list its attachment files and move them to the
+// Trash.
+func DiscCleanAttachmentsEllipsis() string { return In(i18n.Locale()).DiscCleanAttachmentsEllipsis() }
+
+// DiscCleanAttachmentsEllipsis says "Clean Up Attachments…"
+// in the language of msgs.
+//
+// Archived discussion menu: list its attachment files and move them to the
+// Trash.
+func (msgs Messages) DiscCleanAttachmentsEllipsis() string {
+	return Catalog.Format(msgs.locale, "discCleanAttachmentsEllipsis", nil)
+}
+
+// DiscCleanBody says "Messages and attachment names stay; the files go to the Trash.\n{list}"
+// in the language the app shows.
+//
+// Clean attachments confirmation body. list is the file names, one per
+// line.
+func DiscCleanBody(list string) string { return In(i18n.Locale()).DiscCleanBody(list) }
+
+// DiscCleanBody says "Messages and attachment names stay; the files go to the Trash.\n{list}"
+// in the language of msgs.
+//
+// Clean attachments confirmation body. list is the file names, one per
+// line.
+func (msgs Messages) DiscCleanBody(list string) string {
+	return Catalog.Format(msgs.locale, "discCleanBody", map[string]any{"list": list})
+}
+
+// DiscCleanConfirm says "{count, plural, one {Move # attachment ({size}) to the Trash?} other {Move # attachments ({size}) to the Trash?}}"
+// in the language the app shows.
+//
+// Clean attachments confirmation title. size is the total size, as “3.2
+// MB”.
+func DiscCleanConfirm(count int, size string) string {
+	return In(i18n.Locale()).DiscCleanConfirm(count, size)
+}
+
+// DiscCleanConfirm says "{count, plural, one {Move # attachment ({size}) to the Trash?} other {Move # attachments ({size}) to the Trash?}}"
+// in the language of msgs.
+//
+// Clean attachments confirmation title. size is the total size, as “3.2
+// MB”.
+func (msgs Messages) DiscCleanConfirm(count int, size string) string {
+	return Catalog.Format(msgs.locale, "discCleanConfirm", map[string]any{"count": count, "size": size})
+}
+
+// DiscCleanNothing says "No attachment files"
+// in the language the app shows.
+//
+// Clean attachments: nothing to clean.
+func DiscCleanNothing() string { return In(i18n.Locale()).DiscCleanNothing() }
+
+// DiscCleanNothing says "No attachment files"
+// in the language of msgs.
+//
+// Clean attachments: nothing to clean.
+func (msgs Messages) DiscCleanNothing() string {
+	return Catalog.Format(msgs.locale, "discCleanNothing", nil)
+}
+
+// DiscCleanNothingBody says "This discussion has no attachment files left on disk."
+// in the language the app shows.
+//
+// Clean attachments: body when nothing is left.
+func DiscCleanNothingBody() string { return In(i18n.Locale()).DiscCleanNothingBody() }
+
+// DiscCleanNothingBody says "This discussion has no attachment files left on disk."
+// in the language of msgs.
+//
+// Clean attachments: body when nothing is left.
+func (msgs Messages) DiscCleanNothingBody() string {
+	return Catalog.Format(msgs.locale, "discCleanNothingBody", nil)
+}
+
+// DiscColon says ": "
+// in the language the app shows.
+//
+// Separator between author and text in a discussion preview line.
+func DiscColon() string { return In(i18n.Locale()).DiscColon() }
+
+// DiscColon says ": "
+// in the language of msgs.
+//
+// Separator between author and text in a discussion preview line.
+func (msgs Messages) DiscColon() string {
+	return Catalog.Format(msgs.locale, "discColon", nil)
+}
+
+// DiscConcurrent says "{name} is running in the same directory. Running both may make them overwrite each other’s changes."
+// in the language the app shows.
+//
+// Discussion request card: why the request waits for confirmation. name is
+// the other member.
+func DiscConcurrent(name string) string { return In(i18n.Locale()).DiscConcurrent(name) }
+
+// DiscConcurrent says "{name} is running in the same directory. Running both may make them overwrite each other’s changes."
+// in the language of msgs.
+//
+// Discussion request card: why the request waits for confirmation. name is
+// the other member.
+func (msgs Messages) DiscConcurrent(name string) string {
+	return Catalog.Format(msgs.locale, "discConcurrent", map[string]any{"name": name})
+}
+
+// DiscConfigPending says "New settings apply when a new worker starts."
+// in the language the app shows.
+//
+// Discussion member list: the member's settings changed but its worker
+// still uses the old ones.
+func DiscConfigPending() string { return In(i18n.Locale()).DiscConfigPending() }
+
+// DiscConfigPending says "New settings apply when a new worker starts."
+// in the language of msgs.
+//
+// Discussion member list: the member's settings changed but its worker
+// still uses the old ones.
+func (msgs Messages) DiscConfigPending() string {
+	return Catalog.Format(msgs.locale, "discConfigPending", nil)
+}
+
+// DiscContinueAnyway says "Run Anyway"
+// in the language the app shows.
+//
+// Discussion request card: run although another member works in the same
+// directory.
+func DiscContinueAnyway() string { return In(i18n.Locale()).DiscContinueAnyway() }
+
+// DiscContinueAnyway says "Run Anyway"
+// in the language of msgs.
+//
+// Discussion request card: run although another member works in the same
+// directory.
+func (msgs Messages) DiscContinueAnyway() string {
+	return Catalog.Format(msgs.locale, "discContinueAnyway", nil)
+}
+
+// DiscCopyID says "Copy Message ID"
+// in the language the app shows.
+//
+// Discussion message context menu item.
+func DiscCopyID() string { return In(i18n.Locale()).DiscCopyID() }
+
+// DiscCopyID says "Copy Message ID"
+// in the language of msgs.
+//
+// Discussion message context menu item.
+func (msgs Messages) DiscCopyID() string {
+	return Catalog.Format(msgs.locale, "discCopyID", nil)
+}
+
+// DiscCreate says "Create"
+// in the language the app shows.
+//
+// New Discussion dialog: default button.
+func DiscCreate() string { return In(i18n.Locale()).DiscCreate() }
+
+// DiscCreate says "Create"
+// in the language of msgs.
+//
+// New Discussion dialog: default button.
+func (msgs Messages) DiscCreate() string {
+	return Catalog.Format(msgs.locale, "discCreate", nil)
+}
+
+// DiscCreatedAt says "Created {at, date, ::MMMd} {at, date, ::jm}"
+// in the language the app shows.
+//
+// Discussion details: when it was created.
+func DiscCreatedAt(at time.Time) string { return In(i18n.Locale()).DiscCreatedAt(at) }
+
+// DiscCreatedAt says "Created {at, date, ::MMMd} {at, date, ::jm}"
+// in the language of msgs.
+//
+// Discussion details: when it was created.
+func (msgs Messages) DiscCreatedAt(at time.Time) string {
+	return Catalog.Format(msgs.locale, "discCreatedAt", map[string]any{"at": at})
+}
+
+// DiscDefaultWorkspace says "Default workspace for members"
+// in the language the app shows.
+//
+// Discussion dialogs: label of the default workspace choice.
+func DiscDefaultWorkspace() string { return In(i18n.Locale()).DiscDefaultWorkspace() }
+
+// DiscDefaultWorkspace says "Default workspace for members"
+// in the language of msgs.
+//
+// Discussion dialogs: label of the default workspace choice.
+func (msgs Messages) DiscDefaultWorkspace() string {
+	return Catalog.Format(msgs.locale, "discDefaultWorkspace", nil)
+}
+
+// DiscDefaultWorkspaceNote says "New members work here unless you pick another workspace or a new worktree."
+// in the language the app shows.
+//
+// New Discussion dialog: note under the default workspace.
+func DiscDefaultWorkspaceNote() string { return In(i18n.Locale()).DiscDefaultWorkspaceNote() }
+
+// DiscDefaultWorkspaceNote says "New members work here unless you pick another workspace or a new worktree."
+// in the language of msgs.
+//
+// New Discussion dialog: note under the default workspace.
+func (msgs Messages) DiscDefaultWorkspaceNote() string {
+	return Catalog.Format(msgs.locale, "discDefaultWorkspaceNote", nil)
+}
+
+// DiscDescPlaceholder says "Description (optional): goal, background, constraints"
+// in the language the app shows.
+//
+// Discussion dialogs: placeholder of the description field.
+func DiscDescPlaceholder() string { return In(i18n.Locale()).DiscDescPlaceholder() }
+
+// DiscDescPlaceholder says "Description (optional): goal, background, constraints"
+// in the language of msgs.
+//
+// Discussion dialogs: placeholder of the description field.
+func (msgs Messages) DiscDescPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discDescPlaceholder", nil)
+}
+
+// DiscDetails says "Details"
+// in the language the app shows.
+//
+// Discussion side panel: section title.
+func DiscDetails() string { return In(i18n.Locale()).DiscDetails() }
+
+// DiscDetails says "Details"
+// in the language of msgs.
+//
+// Discussion side panel: section title.
+func (msgs Messages) DiscDetails() string {
+	return Catalog.Format(msgs.locale, "discDetails", nil)
+}
+
+// DiscEditEllipsis says "Edit Discussion…"
+// in the language the app shows.
+//
+// Discussion menu item that opens the edit dialog.
+func DiscEditEllipsis() string { return In(i18n.Locale()).DiscEditEllipsis() }
+
+// DiscEditEllipsis says "Edit Discussion…"
+// in the language of msgs.
+//
+// Discussion menu item that opens the edit dialog.
+func (msgs Messages) DiscEditEllipsis() string {
+	return Catalog.Format(msgs.locale, "discEditEllipsis", nil)
+}
+
+// DiscEditMemberEllipsis says "Edit Member…"
+// in the language the app shows.
+//
+// Discussion member context menu item.
+func DiscEditMemberEllipsis() string { return In(i18n.Locale()).DiscEditMemberEllipsis() }
+
+// DiscEditMemberEllipsis says "Edit Member…"
+// in the language of msgs.
+//
+// Discussion member context menu item.
+func (msgs Messages) DiscEditMemberEllipsis() string {
+	return Catalog.Format(msgs.locale, "discEditMemberEllipsis", nil)
+}
+
+// DiscEditMemberTitle says "Edit Member"
+// in the language the app shows.
+//
+// Title of the Edit Member dialog.
+func DiscEditMemberTitle() string { return In(i18n.Locale()).DiscEditMemberTitle() }
+
+// DiscEditMemberTitle says "Edit Member"
+// in the language of msgs.
+//
+// Title of the Edit Member dialog.
+func (msgs Messages) DiscEditMemberTitle() string {
+	return Catalog.Format(msgs.locale, "discEditMemberTitle", nil)
+}
+
+// DiscEditTitle says "Edit Discussion"
+// in the language the app shows.
+//
+// Title of the Edit Discussion dialog.
+func DiscEditTitle() string { return In(i18n.Locale()).DiscEditTitle() }
+
+// DiscEditTitle says "Edit Discussion"
+// in the language of msgs.
+//
+// Title of the Edit Discussion dialog.
+func (msgs Messages) DiscEditTitle() string {
+	return Catalog.Format(msgs.locale, "discEditTitle", nil)
+}
+
+// DiscEffortPlaceholder says "Reasoning effort (optional)"
+// in the language the app shows.
+//
+// Member dialog: effort field placeholder.
+func DiscEffortPlaceholder() string { return In(i18n.Locale()).DiscEffortPlaceholder() }
+
+// DiscEffortPlaceholder says "Reasoning effort (optional)"
+// in the language of msgs.
+//
+// Member dialog: effort field placeholder.
+func (msgs Messages) DiscEffortPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discEffortPlaceholder", nil)
+}
+
+// DiscEmptyBody says "Talk with several agents in one place. @ a member to send it a request; its reply comes back here, and you can open i…"
+// in the language the app shows.
+//
+// Discussions page empty state body.
+func DiscEmptyBody() string { return In(i18n.Locale()).DiscEmptyBody() }
+
+// DiscEmptyBody says "Talk with several agents in one place. @ a member to send it a request; its reply comes back here, and you can open i…"
+// in the language of msgs.
+//
+// Discussions page empty state body.
+func (msgs Messages) DiscEmptyBody() string {
+	return Catalog.Format(msgs.locale, "discEmptyBody", nil)
+}
+
+// DiscEmptyTitle says "No discussions yet"
+// in the language the app shows.
+//
+// Discussions page empty state title.
+func DiscEmptyTitle() string { return In(i18n.Locale()).DiscEmptyTitle() }
+
+// DiscEmptyTitle says "No discussions yet"
+// in the language of msgs.
+//
+// Discussions page empty state title.
+func (msgs Messages) DiscEmptyTitle() string {
+	return Catalog.Format(msgs.locale, "discEmptyTitle", nil)
+}
+
+// DiscEveryone says "Everyone"
+// in the language the app shows.
+//
+// Discussion input: recipient when no member is @-mentioned.
+func DiscEveryone() string { return In(i18n.Locale()).DiscEveryone() }
+
+// DiscEveryone says "Everyone"
+// in the language of msgs.
+//
+// Discussion input: recipient when no member is @-mentioned.
+func (msgs Messages) DiscEveryone() string {
+	return Catalog.Format(msgs.locale, "discEveryone", nil)
+}
+
+// DiscEveryoneHint says "Everyone (just a message)"
+// in the language the app shows.
+//
+// Discussion recipient menu: item for a plain message that wakes nobody.
+func DiscEveryoneHint() string { return In(i18n.Locale()).DiscEveryoneHint() }
+
+// DiscEveryoneHint says "Everyone (just a message)"
+// in the language of msgs.
+//
+// Discussion recipient menu: item for a plain message that wakes nobody.
+func (msgs Messages) DiscEveryoneHint() string {
+	return Catalog.Format(msgs.locale, "discEveryoneHint", nil)
+}
+
+// DiscExecBlocked says "Worker gone"
+// in the language the app shows.
+//
+// Discussion request card: the member's worker closed between requests.
+func DiscExecBlocked() string { return In(i18n.Locale()).DiscExecBlocked() }
+
+// DiscExecBlocked says "Worker gone"
+// in the language of msgs.
+//
+// Discussion request card: the member's worker closed between requests.
+func (msgs Messages) DiscExecBlocked() string {
+	return Catalog.Format(msgs.locale, "discExecBlocked", nil)
+}
+
+// DiscExecCancelled says "Cancelled"
+// in the language the app shows.
+//
+// Discussion request card status.
+func DiscExecCancelled() string { return In(i18n.Locale()).DiscExecCancelled() }
+
+// DiscExecCancelled says "Cancelled"
+// in the language of msgs.
+//
+// Discussion request card status.
+func (msgs Messages) DiscExecCancelled() string {
+	return Catalog.Format(msgs.locale, "discExecCancelled", nil)
+}
+
+// DiscExecHeld says "Needs confirmation"
+// in the language the app shows.
+//
+// Discussion request card: waits for you because of the same-directory
+// check.
+func DiscExecHeld() string { return In(i18n.Locale()).DiscExecHeld() }
+
+// DiscExecHeld says "Needs confirmation"
+// in the language of msgs.
+//
+// Discussion request card: waits for you because of the same-directory
+// check.
+func (msgs Messages) DiscExecHeld() string {
+	return Catalog.Format(msgs.locale, "discExecHeld", nil)
+}
+
+// DiscExecInterrupted says "Interrupted"
+// in the language the app shows.
+//
+// Discussion request card: the worker exited or the daemon restarted during
+// the request.
+func DiscExecInterrupted() string { return In(i18n.Locale()).DiscExecInterrupted() }
+
+// DiscExecInterrupted says "Interrupted"
+// in the language of msgs.
+//
+// Discussion request card: the worker exited or the daemon restarted during
+// the request.
+func (msgs Messages) DiscExecInterrupted() string {
+	return Catalog.Format(msgs.locale, "discExecInterrupted", nil)
+}
+
+// DiscExecQueued says "Queued"
+// in the language the app shows.
+//
+// Discussion request card status.
+func DiscExecQueued() string { return In(i18n.Locale()).DiscExecQueued() }
+
+// DiscExecQueued says "Queued"
+// in the language of msgs.
+//
+// Discussion request card status.
+func (msgs Messages) DiscExecQueued() string {
+	return Catalog.Format(msgs.locale, "discExecQueued", nil)
+}
+
+// DiscExecStarting says "Starting"
+// in the language the app shows.
+//
+// Discussion request card status and member status.
+func DiscExecStarting() string { return In(i18n.Locale()).DiscExecStarting() }
+
+// DiscExecStarting says "Starting"
+// in the language of msgs.
+//
+// Discussion request card status and member status.
+func (msgs Messages) DiscExecStarting() string {
+	return Catalog.Format(msgs.locale, "discExecStarting", nil)
+}
+
+// DiscExecWaiting says "Waiting for your answer"
+// in the language the app shows.
+//
+// Discussion request card: the member asked a question.
+func DiscExecWaiting() string { return In(i18n.Locale()).DiscExecWaiting() }
+
+// DiscExecWaiting says "Waiting for your answer"
+// in the language of msgs.
+//
+// Discussion request card: the member asked a question.
+func (msgs Messages) DiscExecWaiting() string {
+	return Catalog.Format(msgs.locale, "discExecWaiting", nil)
+}
+
+// DiscExistingWorkspace says "Existing workspace"
+// in the language the app shows.
+//
+// Member dialog: choice to work in an existing workspace.
+func DiscExistingWorkspace() string { return In(i18n.Locale()).DiscExistingWorkspace() }
+
+// DiscExistingWorkspace says "Existing workspace"
+// in the language of msgs.
+//
+// Member dialog: choice to work in an existing workspace.
+func (msgs Messages) DiscExistingWorkspace() string {
+	return Catalog.Format(msgs.locale, "discExistingWorkspace", nil)
+}
+
+// DiscHidePanel says "Hide Details"
+// in the language the app shows.
+//
+// Discussion header button tooltip.
+func DiscHidePanel() string { return In(i18n.Locale()).DiscHidePanel() }
+
+// DiscHidePanel says "Hide Details"
+// in the language of msgs.
+//
+// Discussion header button tooltip.
+func (msgs Messages) DiscHidePanel() string {
+	return Catalog.Format(msgs.locale, "discHidePanel", nil)
+}
+
+// DiscIsolate says "Use Own Worktree"
+// in the language the app shows.
+//
+// Discussion request card: give this member its own worktree instead.
+func DiscIsolate() string { return In(i18n.Locale()).DiscIsolate() }
+
+// DiscIsolate says "Use Own Worktree"
+// in the language of msgs.
+//
+// Discussion request card: give this member its own worktree instead.
+func (msgs Messages) DiscIsolate() string {
+	return Catalog.Format(msgs.locale, "discIsolate", nil)
+}
+
+// DiscKeyMessage says "Key message"
+// in the language the app shows.
+//
+// Tooltip of the star on a key message.
+func DiscKeyMessage() string { return In(i18n.Locale()).DiscKeyMessage() }
+
+// DiscKeyMessage says "Key message"
+// in the language of msgs.
+//
+// Tooltip of the star on a key message.
+func (msgs Messages) DiscKeyMessage() string {
+	return Catalog.Format(msgs.locale, "discKeyMessage", nil)
+}
+
+// DiscKeyMessages says "Key Messages"
+// in the language the app shows.
+//
+// Discussion side panel: section title.
+func DiscKeyMessages() string { return In(i18n.Locale()).DiscKeyMessages() }
+
+// DiscKeyMessages says "Key Messages"
+// in the language of msgs.
+//
+// Discussion side panel: section title.
+func (msgs Messages) DiscKeyMessages() string {
+	return Catalog.Format(msgs.locale, "discKeyMessages", nil)
+}
+
+// DiscList says "Discussions"
+// in the language the app shows.
+//
+// Accessibility label of the discussion list.
+func DiscList() string { return In(i18n.Locale()).DiscList() }
+
+// DiscList says "Discussions"
+// in the language of msgs.
+//
+// Accessibility label of the discussion list.
+func (msgs Messages) DiscList() string {
+	return Catalog.Format(msgs.locale, "discList", nil)
+}
+
+// DiscLoadOlder says "Load earlier messages"
+// in the language the app shows.
+//
+// Discussion: button at the top of the loaded messages.
+func DiscLoadOlder() string { return In(i18n.Locale()).DiscLoadOlder() }
+
+// DiscLoadOlder says "Load earlier messages"
+// in the language of msgs.
+//
+// Discussion: button at the top of the loaded messages.
+func (msgs Messages) DiscLoadOlder() string {
+	return Catalog.Format(msgs.locale, "discLoadOlder", nil)
+}
+
+// DiscMarkKey says "Mark as Key"
+// in the language the app shows.
+//
+// Discussion message action tooltip.
+func DiscMarkKey() string { return In(i18n.Locale()).DiscMarkKey() }
+
+// DiscMarkKey says "Mark as Key"
+// in the language of msgs.
+//
+// Discussion message action tooltip.
+func (msgs Messages) DiscMarkKey() string {
+	return Catalog.Format(msgs.locale, "discMarkKey", nil)
+}
+
+// DiscMemberCount says "{count, plural, one {# member} other {# members}}"
+// in the language the app shows.
+//
+// Discussion header: number of members.
+func DiscMemberCount(count int) string { return In(i18n.Locale()).DiscMemberCount(count) }
+
+// DiscMemberCount says "{count, plural, one {# member} other {# members}}"
+// in the language of msgs.
+//
+// Discussion header: number of members.
+func (msgs Messages) DiscMemberCount(count int) string {
+	return Catalog.Format(msgs.locale, "discMemberCount", map[string]any{"count": count})
+}
+
+// DiscMemberIdle says "Idle"
+// in the language the app shows.
+//
+// Discussion member list: its worker waits at the prompt.
+func DiscMemberIdle() string { return In(i18n.Locale()).DiscMemberIdle() }
+
+// DiscMemberIdle says "Idle"
+// in the language of msgs.
+//
+// Discussion member list: its worker waits at the prompt.
+func (msgs Messages) DiscMemberIdle() string {
+	return Catalog.Format(msgs.locale, "discMemberIdle", nil)
+}
+
+// DiscMemberNamePlaceholder says "Name in this discussion"
+// in the language the app shows.
+//
+// Member dialog: name field placeholder.
+func DiscMemberNamePlaceholder() string { return In(i18n.Locale()).DiscMemberNamePlaceholder() }
+
+// DiscMemberNamePlaceholder says "Name in this discussion"
+// in the language of msgs.
+//
+// Member dialog: name field placeholder.
+func (msgs Messages) DiscMemberNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "discMemberNamePlaceholder", nil)
+}
+
+// DiscMemberNotStarted says "Not started"
+// in the language the app shows.
+//
+// Discussion member list: no worker yet (starts on first @).
+func DiscMemberNotStarted() string { return In(i18n.Locale()).DiscMemberNotStarted() }
+
+// DiscMemberNotStarted says "Not started"
+// in the language of msgs.
+//
+// Discussion member list: no worker yet (starts on first @).
+func (msgs Messages) DiscMemberNotStarted() string {
+	return Catalog.Format(msgs.locale, "discMemberNotStarted", nil)
+}
+
+// DiscMemberPaused says "Paused"
+// in the language the app shows.
+//
+// Discussion member list: its queue is paused.
+func DiscMemberPaused() string { return In(i18n.Locale()).DiscMemberPaused() }
+
+// DiscMemberPaused says "Paused"
+// in the language of msgs.
+//
+// Discussion member list: its queue is paused.
+func (msgs Messages) DiscMemberPaused() string {
+	return Catalog.Format(msgs.locale, "discMemberPaused", nil)
+}
+
+// DiscMembers says "Members"
+// in the language the app shows.
+//
+// Discussion side panel: section title.
+func DiscMembers() string { return In(i18n.Locale()).DiscMembers() }
+
+// DiscMembers says "Members"
+// in the language of msgs.
+//
+// Discussion side panel: section title.
+func (msgs Messages) DiscMembers() string {
+	return Catalog.Format(msgs.locale, "discMembers", nil)
+}
+
+// DiscMention says "@ Mention"
+// in the language the app shows.
+//
+// Discussion member context menu: make it the recipient of the next
+// message.
+func DiscMention() string { return In(i18n.Locale()).DiscMention() }
+
+// DiscMention says "@ Mention"
+// in the language of msgs.
+//
+// Discussion member context menu: make it the recipient of the next
+// message.
+func (msgs Messages) DiscMention() string {
+	return Catalog.Format(msgs.locale, "discMention", nil)
+}
+
+// DiscModelPlaceholder says "Model (optional)"
+// in the language the app shows.
+//
+// Member dialog: model field placeholder.
+func DiscModelPlaceholder() string { return In(i18n.Locale()).DiscModelPlaceholder() }
+
+// DiscModelPlaceholder says "Model (optional)"
+// in the language of msgs.
+//
+// Member dialog: model field placeholder.
+func (msgs Messages) DiscModelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discModelPlaceholder", nil)
+}
+
+// DiscMore says "More"
+// in the language the app shows.
+//
+// Discussion header: more actions button tooltip.
+func DiscMore() string { return In(i18n.Locale()).DiscMore() }
+
+// DiscMore says "More"
+// in the language of msgs.
+//
+// Discussion header: more actions button tooltip.
+func (msgs Messages) DiscMore() string {
+	return Catalog.Format(msgs.locale, "discMore", nil)
+}
+
+// DiscNewEllipsis says "New Discussion…"
+// in the language the app shows.
+//
+// Discussions page: button that opens the New Discussion dialog.
+func DiscNewEllipsis() string { return In(i18n.Locale()).DiscNewEllipsis() }
+
+// DiscNewEllipsis says "New Discussion…"
+// in the language of msgs.
+//
+// Discussions page: button that opens the New Discussion dialog.
+func (msgs Messages) DiscNewEllipsis() string {
+	return Catalog.Format(msgs.locale, "discNewEllipsis", nil)
+}
+
+// DiscNewMessages says "{count, plural, one {# new message} other {# new messages}}"
+// in the language the app shows.
+//
+// Discussion: pill at the bottom while you read earlier messages.
+func DiscNewMessages(count int) string { return In(i18n.Locale()).DiscNewMessages(count) }
+
+// DiscNewMessages says "{count, plural, one {# new message} other {# new messages}}"
+// in the language of msgs.
+//
+// Discussion: pill at the bottom while you read earlier messages.
+func (msgs Messages) DiscNewMessages(count int) string {
+	return Catalog.Format(msgs.locale, "discNewMessages", map[string]any{"count": count})
+}
+
+// DiscNewTitle says "New Discussion"
+// in the language the app shows.
+//
+// Title of the New Discussion dialog.
+func DiscNewTitle() string { return In(i18n.Locale()).DiscNewTitle() }
+
+// DiscNewTitle says "New Discussion"
+// in the language of msgs.
+//
+// Title of the New Discussion dialog.
+func (msgs Messages) DiscNewTitle() string {
+	return Catalog.Format(msgs.locale, "discNewTitle", nil)
+}
+
+// DiscNewWorktree says "New worktree"
+// in the language the app shows.
+//
+// Member dialog: choice to create a worktree for the member.
+func DiscNewWorktree() string { return In(i18n.Locale()).DiscNewWorktree() }
+
+// DiscNewWorktree says "New worktree"
+// in the language of msgs.
+//
+// Member dialog: choice to create a worktree for the member.
+func (msgs Messages) DiscNewWorktree() string {
+	return Catalog.Format(msgs.locale, "discNewWorktree", nil)
+}
+
+// DiscNoDescription says "No description"
+// in the language the app shows.
+//
+// Discussion details when it has no description.
+func DiscNoDescription() string { return In(i18n.Locale()).DiscNoDescription() }
+
+// DiscNoDescription says "No description"
+// in the language of msgs.
+//
+// Discussion details when it has no description.
+func (msgs Messages) DiscNoDescription() string {
+	return Catalog.Format(msgs.locale, "discNoDescription", nil)
+}
+
+// DiscNoGitNote says "This project is not a git repository: members share the directory without worktree isolation."
+// in the language the app shows.
+//
+// Member dialog note for non-git projects.
+func DiscNoGitNote() string { return In(i18n.Locale()).DiscNoGitNote() }
+
+// DiscNoGitNote says "This project is not a git repository: members share the directory without worktree isolation."
+// in the language of msgs.
+//
+// Member dialog note for non-git projects.
+func (msgs Messages) DiscNoGitNote() string {
+	return Catalog.Format(msgs.locale, "discNoGitNote", nil)
+}
+
+// DiscNoKeyMessages says "Mark messages with the star to keep conclusions at hand; they are also given to members as context."
+// in the language the app shows.
+//
+// Discussion side panel: empty key message list.
+func DiscNoKeyMessages() string { return In(i18n.Locale()).DiscNoKeyMessages() }
+
+// DiscNoKeyMessages says "Mark messages with the star to keep conclusions at hand; they are also given to members as context."
+// in the language of msgs.
+//
+// Discussion side panel: empty key message list.
+func (msgs Messages) DiscNoKeyMessages() string {
+	return Catalog.Format(msgs.locale, "discNoKeyMessages", nil)
+}
+
+// DiscNoMatches says "No matches"
+// in the language the app shows.
+//
+// Discussion search: no results.
+func DiscNoMatches() string { return In(i18n.Locale()).DiscNoMatches() }
+
+// DiscNoMatches says "No matches"
+// in the language of msgs.
+//
+// Discussion search: no results.
+func (msgs Messages) DiscNoMatches() string {
+	return Catalog.Format(msgs.locale, "discNoMatches", nil)
+}
+
+// DiscNoMembers says "Add agents as members, then @ one of them to send it a request."
+// in the language the app shows.
+//
+// Discussion side panel: empty member list.
+func DiscNoMembers() string { return In(i18n.Locale()).DiscNoMembers() }
+
+// DiscNoMembers says "Add agents as members, then @ one of them to send it a request."
+// in the language of msgs.
+//
+// Discussion side panel: empty member list.
+func (msgs Messages) DiscNoMembers() string {
+	return Catalog.Format(msgs.locale, "discNoMembers", nil)
+}
+
+// DiscNoMessages says "No messages yet"
+// in the language the app shows.
+//
+// Discussion list row: preview of an empty discussion.
+func DiscNoMessages() string { return In(i18n.Locale()).DiscNoMessages() }
+
+// DiscNoMessages says "No messages yet"
+// in the language of msgs.
+//
+// Discussion list row: preview of an empty discussion.
+func (msgs Messages) DiscNoMessages() string {
+	return Catalog.Format(msgs.locale, "discNoMessages", nil)
+}
+
+// DiscNoMessagesHint says "Write a message below. A plain message wakes nobody; @ a member to send it a request."
+// in the language the app shows.
+//
+// Discussion: hint in an empty discussion.
+func DiscNoMessagesHint() string { return In(i18n.Locale()).DiscNoMessagesHint() }
+
+// DiscNoMessagesHint says "Write a message below. A plain message wakes nobody; @ a member to send it a request."
+// in the language of msgs.
+//
+// Discussion: hint in an empty discussion.
+func (msgs Messages) DiscNoMessagesHint() string {
+	return Catalog.Format(msgs.locale, "discNoMessagesHint", nil)
+}
+
+// DiscNoticeFailed says "{name} reported a failure"
+// in the language the app shows.
+//
+// System notification title: a discussion member reported a failure.
+func DiscNoticeFailed(name string) string { return In(i18n.Locale()).DiscNoticeFailed(name) }
+
+// DiscNoticeFailed says "{name} reported a failure"
+// in the language of msgs.
+//
+// System notification title: a discussion member reported a failure.
+func (msgs Messages) DiscNoticeFailed(name string) string {
+	return Catalog.Format(msgs.locale, "discNoticeFailed", map[string]any{"name": name})
+}
+
+// DiscNoticeQuestion says "{name} is waiting for your answer"
+// in the language the app shows.
+//
+// System notification title: a discussion member asked a question.
+func DiscNoticeQuestion(name string) string { return In(i18n.Locale()).DiscNoticeQuestion(name) }
+
+// DiscNoticeQuestion says "{name} is waiting for your answer"
+// in the language of msgs.
+//
+// System notification title: a discussion member asked a question.
+func (msgs Messages) DiscNoticeQuestion(name string) string {
+	return Catalog.Format(msgs.locale, "discNoticeQuestion", map[string]any{"name": name})
+}
+
+// DiscNoticeReply says "{name} replied"
+// in the language the app shows.
+//
+// System notification title: a discussion member replied.
+func DiscNoticeReply(name string) string { return In(i18n.Locale()).DiscNoticeReply(name) }
+
+// DiscNoticeReply says "{name} replied"
+// in the language of msgs.
+//
+// System notification title: a discussion member replied.
+func (msgs Messages) DiscNoticeReply(name string) string {
+	return Catalog.Format(msgs.locale, "discNoticeReply", map[string]any{"name": name})
+}
+
+// DiscOpen says "Open Discussion"
+// in the language the app shows.
+//
+// Task detail of a discussion worker: button that opens its discussion.
+func DiscOpen() string { return In(i18n.Locale()).DiscOpen() }
+
+// DiscOpen says "Open Discussion"
+// in the language of msgs.
+//
+// Task detail of a discussion worker: button that opens its discussion.
+func (msgs Messages) DiscOpen() string {
+	return Catalog.Format(msgs.locale, "discOpen", nil)
+}
+
+// DiscOpenTerminal says "Open Terminal"
+// in the language the app shows.
+//
+// Discussion: open the member's worker terminal.
+func DiscOpenTerminal() string { return In(i18n.Locale()).DiscOpenTerminal() }
+
+// DiscOpenTerminal says "Open Terminal"
+// in the language of msgs.
+//
+// Discussion: open the member's worker terminal.
+func (msgs Messages) DiscOpenTerminal() string {
+	return Catalog.Format(msgs.locale, "discOpenTerminal", nil)
+}
+
+// DiscPaused says "{name}’s queue is paused ({count, plural, one {# request waiting} other {# requests waiting}}). Its worker stopped …"
+// in the language the app shows.
+//
+// Discussion banner above the input. name is the member.
+func DiscPaused(name string, count int) string { return In(i18n.Locale()).DiscPaused(name, count) }
+
+// DiscPaused says "{name}’s queue is paused ({count, plural, one {# request waiting} other {# requests waiting}}). Its worker stopped …"
+// in the language of msgs.
+//
+// Discussion banner above the input. name is the member.
+func (msgs Messages) DiscPaused(name string, count int) string {
+	return Catalog.Format(msgs.locale, "discPaused", map[string]any{"name": name, "count": count})
+}
+
+// DiscPlaceholder says "Message (⌘↩ to send)"
+// in the language the app shows.
+//
+// Discussion input placeholder for a plain message.
+func DiscPlaceholder() string { return In(i18n.Locale()).DiscPlaceholder() }
+
+// DiscPlaceholder says "Message (⌘↩ to send)"
+// in the language of msgs.
+//
+// Discussion input placeholder for a plain message.
+func (msgs Messages) DiscPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discPlaceholder", nil)
+}
+
+// DiscPlaceholderTo says "Request for {name} (⌘↩ to send)"
+// in the language the app shows.
+//
+// Discussion input placeholder with a member @-mentioned.
+func DiscPlaceholderTo(name string) string { return In(i18n.Locale()).DiscPlaceholderTo(name) }
+
+// DiscPlaceholderTo says "Request for {name} (⌘↩ to send)"
+// in the language of msgs.
+//
+// Discussion input placeholder with a member @-mentioned.
+func (msgs Messages) DiscPlaceholderTo(name string) string {
+	return Catalog.Format(msgs.locale, "discPlaceholderTo", map[string]any{"name": name})
+}
+
+// DiscProject says "Project"
+// in the language the app shows.
+//
+// New Discussion dialog: project label.
+func DiscProject() string { return In(i18n.Locale()).DiscProject() }
+
+// DiscProject says "Project"
+// in the language of msgs.
+//
+// New Discussion dialog: project label.
+func (msgs Messages) DiscProject() string {
+	return Catalog.Format(msgs.locale, "discProject", nil)
+}
+
+// DiscQuestionLabel says "question"
+// in the language the app shows.
+//
+// Discussion message: label of an answered question.
+func DiscQuestionLabel() string { return In(i18n.Locale()).DiscQuestionLabel() }
+
+// DiscQuestionLabel says "question"
+// in the language of msgs.
+//
+// Discussion message: label of an answered question.
+func (msgs Messages) DiscQuestionLabel() string {
+	return Catalog.Format(msgs.locale, "discQuestionLabel", nil)
+}
+
+// DiscQuestionsWaiting says "{count, plural, one {# question waiting for you} other {# questions waiting for you}}"
+// in the language the app shows.
+//
+// Discussion list row preview when members wait for answers.
+func DiscQuestionsWaiting(count int) string { return In(i18n.Locale()).DiscQuestionsWaiting(count) }
+
+// DiscQuestionsWaiting says "{count, plural, one {# question waiting for you} other {# questions waiting for you}}"
+// in the language of msgs.
+//
+// Discussion list row preview when members wait for answers.
+func (msgs Messages) DiscQuestionsWaiting(count int) string {
+	return Catalog.Format(msgs.locale, "discQuestionsWaiting", map[string]any{"count": count})
+}
+
+// DiscQuote says "Quote"
+// in the language the app shows.
+//
+// Discussion message action.
+func DiscQuote() string { return In(i18n.Locale()).DiscQuote() }
+
+// DiscQuote says "Quote"
+// in the language of msgs.
+//
+// Discussion message action.
+func (msgs Messages) DiscQuote() string {
+	return Catalog.Format(msgs.locale, "discQuote", nil)
+}
+
+// DiscQuotedEarlier says "Earlier message"
+// in the language the app shows.
+//
+// Quote block of a message not loaded yet; click loads it.
+func DiscQuotedEarlier() string { return In(i18n.Locale()).DiscQuotedEarlier() }
+
+// DiscQuotedEarlier says "Earlier message"
+// in the language of msgs.
+//
+// Quote block of a message not loaded yet; click loads it.
+func (msgs Messages) DiscQuotedEarlier() string {
+	return Catalog.Format(msgs.locale, "discQuotedEarlier", nil)
+}
+
+// DiscRemoveMemberBody says "Its messages keep its name. Its worker terminal closes. Adding it again creates a new member that does not reuse the …"
+// in the language the app shows.
+//
+// Remove member confirmation body.
+func DiscRemoveMemberBody() string { return In(i18n.Locale()).DiscRemoveMemberBody() }
+
+// DiscRemoveMemberBody says "Its messages keep its name. Its worker terminal closes. Adding it again creates a new member that does not reuse the …"
+// in the language of msgs.
+//
+// Remove member confirmation body.
+func (msgs Messages) DiscRemoveMemberBody() string {
+	return Catalog.Format(msgs.locale, "discRemoveMemberBody", nil)
+}
+
+// DiscRemoveMemberConfirm says "Remove {name}?"
+// in the language the app shows.
+//
+// Remove member confirmation title.
+func DiscRemoveMemberConfirm(name string) string {
+	return In(i18n.Locale()).DiscRemoveMemberConfirm(name)
+}
+
+// DiscRemoveMemberConfirm says "Remove {name}?"
+// in the language of msgs.
+//
+// Remove member confirmation title.
+func (msgs Messages) DiscRemoveMemberConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "discRemoveMemberConfirm", map[string]any{"name": name})
+}
+
+// DiscRemoveMemberEllipsis says "Remove Member…"
+// in the language the app shows.
+//
+// Discussion member context menu item.
+func DiscRemoveMemberEllipsis() string { return In(i18n.Locale()).DiscRemoveMemberEllipsis() }
+
+// DiscRemoveMemberEllipsis says "Remove Member…"
+// in the language of msgs.
+//
+// Discussion member context menu item.
+func (msgs Messages) DiscRemoveMemberEllipsis() string {
+	return Catalog.Format(msgs.locale, "discRemoveMemberEllipsis", nil)
+}
+
+// DiscReportedFailed says "reported a failure"
+// in the language the app shows.
+//
+// Discussion message: label after a member's name on a failed reply.
+func DiscReportedFailed() string { return In(i18n.Locale()).DiscReportedFailed() }
+
+// DiscReportedFailed says "reported a failure"
+// in the language of msgs.
+//
+// Discussion message: label after a member's name on a failed reply.
+func (msgs Messages) DiscReportedFailed() string {
+	return Catalog.Format(msgs.locale, "discReportedFailed", nil)
+}
+
+// DiscRestartContinue says "Restart and Continue"
+// in the language the app shows.
+//
+// Discussion: start a new worker for the member and continue its queued
+// requests.
+func DiscRestartContinue() string { return In(i18n.Locale()).DiscRestartContinue() }
+
+// DiscRestartContinue says "Restart and Continue"
+// in the language of msgs.
+//
+// Discussion: start a new worker for the member and continue its queued
+// requests.
+func (msgs Messages) DiscRestartContinue() string {
+	return Catalog.Format(msgs.locale, "discRestartContinue", nil)
+}
+
+// DiscRetried says "retry"
+// in the language the app shows.
+//
+// Discussion request card: this round retries an earlier one.
+func DiscRetried() string { return In(i18n.Locale()).DiscRetried() }
+
+// DiscRetried says "retry"
+// in the language of msgs.
+//
+// Discussion request card: this round retries an earlier one.
+func (msgs Messages) DiscRetried() string {
+	return Catalog.Format(msgs.locale, "discRetried", nil)
+}
+
+// DiscRolePlaceholder says "Role in this discussion (optional), as “reviews for security”"
+// in the language the app shows.
+//
+// Member dialog: role field placeholder.
+func DiscRolePlaceholder() string { return In(i18n.Locale()).DiscRolePlaceholder() }
+
+// DiscRolePlaceholder says "Role in this discussion (optional), as “reviews for security”"
+// in the language of msgs.
+//
+// Member dialog: role field placeholder.
+func (msgs Messages) DiscRolePlaceholder() string {
+	return Catalog.Format(msgs.locale, "discRolePlaceholder", nil)
+}
+
+// DiscSearch says "Search"
+// in the language the app shows.
+//
+// Discussion header: search button tooltip.
+func DiscSearch() string { return In(i18n.Locale()).DiscSearch() }
+
+// DiscSearch says "Search"
+// in the language of msgs.
+//
+// Discussion header: search button tooltip.
+func (msgs Messages) DiscSearch() string {
+	return Catalog.Format(msgs.locale, "discSearch", nil)
+}
+
+// DiscSearchPlaceholder says "Search this discussion"
+// in the language the app shows.
+//
+// Discussion search field placeholder.
+func DiscSearchPlaceholder() string { return In(i18n.Locale()).DiscSearchPlaceholder() }
+
+// DiscSearchPlaceholder says "Search this discussion"
+// in the language of msgs.
+//
+// Discussion search field placeholder.
+func (msgs Messages) DiscSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "discSearchPlaceholder", nil)
+}
+
+// DiscSectionArchived says "Archived"
+// in the language the app shows.
+//
+// Discussion list: section of archived discussions.
+func DiscSectionArchived() string { return In(i18n.Locale()).DiscSectionArchived() }
+
+// DiscSectionArchived says "Archived"
+// in the language of msgs.
+//
+// Discussion list: section of archived discussions.
+func (msgs Messages) DiscSectionArchived() string {
+	return Catalog.Format(msgs.locale, "discSectionArchived", nil)
+}
+
+// DiscSend says "Send"
+// in the language the app shows.
+//
+// Discussion input: send button.
+func DiscSend() string { return In(i18n.Locale()).DiscSend() }
+
+// DiscSend says "Send"
+// in the language of msgs.
+//
+// Discussion input: send button.
+func (msgs Messages) DiscSend() string {
+	return Catalog.Format(msgs.locale, "discSend", nil)
+}
+
+// DiscSendTo says "To"
+// in the language the app shows.
+//
+// Discussion input: label before the recipient.
+func DiscSendTo() string { return In(i18n.Locale()).DiscSendTo() }
+
+// DiscSendTo says "To"
+// in the language of msgs.
+//
+// Discussion input: label before the recipient.
+func (msgs Messages) DiscSendTo() string {
+	return Catalog.Format(msgs.locale, "discSendTo", nil)
+}
+
+// DiscSharedDirNote says "Members in the same directory may overwrite each other; Posse asks before running two at once there."
+// in the language the app shows.
+//
+// Member dialog note under the workspace choice.
+func DiscSharedDirNote() string { return In(i18n.Locale()).DiscSharedDirNote() }
+
+// DiscSharedDirNote says "Members in the same directory may overwrite each other; Posse asks before running two at once there."
+// in the language of msgs.
+//
+// Member dialog note under the workspace choice.
+func (msgs Messages) DiscSharedDirNote() string {
+	return Catalog.Format(msgs.locale, "discSharedDirNote", nil)
+}
+
+// DiscShowPanel says "Show Details"
+// in the language the app shows.
+//
+// Discussion header button tooltip.
+func DiscShowPanel() string { return In(i18n.Locale()).DiscShowPanel() }
+
+// DiscShowPanel says "Show Details"
+// in the language of msgs.
+//
+// Discussion header button tooltip.
+func (msgs Messages) DiscShowPanel() string {
+	return Catalog.Format(msgs.locale, "discShowPanel", nil)
+}
+
+// DiscStop says "Stop"
+// in the language the app shows.
+//
+// Discussion request card: stop a running request.
+func DiscStop() string { return In(i18n.Locale()).DiscStop() }
+
+// DiscStop says "Stop"
+// in the language of msgs.
+//
+// Discussion request card: stop a running request.
+func (msgs Messages) DiscStop() string {
+	return Catalog.Format(msgs.locale, "discStop", nil)
+}
+
+// DiscStopBody says "This closes the member’s worker terminal. Its next request starts a new worker without this conversation."
+// in the language the app shows.
+//
+// Stop request confirmation body.
+func DiscStopBody() string { return In(i18n.Locale()).DiscStopBody() }
+
+// DiscStopBody says "This closes the member’s worker terminal. Its next request starts a new worker without this conversation."
+// in the language of msgs.
+//
+// Stop request confirmation body.
+func (msgs Messages) DiscStopBody() string {
+	return Catalog.Format(msgs.locale, "discStopBody", nil)
+}
+
+// DiscStopConfirm says "Stop {name}’s request?"
+// in the language the app shows.
+//
+// Stop request confirmation title.
+func DiscStopConfirm(name string) string { return In(i18n.Locale()).DiscStopConfirm(name) }
+
+// DiscStopConfirm says "Stop {name}’s request?"
+// in the language of msgs.
+//
+// Stop request confirmation title.
+func (msgs Messages) DiscStopConfirm(name string) string {
+	return Catalog.Format(msgs.locale, "discStopConfirm", map[string]any{"name": name})
+}
+
+// DiscTargetNote says "runs as a request"
+// in the language the app shows.
+//
+// Discussion input: note after the @-mentioned recipient.
+func DiscTargetNote() string { return In(i18n.Locale()).DiscTargetNote() }
+
+// DiscTargetNote says "runs as a request"
+// in the language of msgs.
+//
+// Discussion input: note after the @-mentioned recipient.
+func (msgs Messages) DiscTargetNote() string {
+	return Catalog.Format(msgs.locale, "discTargetNote", nil)
+}
+
+// DiscTitle says "Discussions"
+// in the language the app shows.
+//
+// Sidebar tile name and Discussions page title.
+func DiscTitle() string { return In(i18n.Locale()).DiscTitle() }
+
+// DiscTitle says "Discussions"
+// in the language of msgs.
+//
+// Sidebar tile name and Discussions page title.
+func (msgs Messages) DiscTitle() string {
+	return Catalog.Format(msgs.locale, "discTitle", nil)
+}
+
+// DiscTitlePlaceholder says "Title, as “Redesign the login flow”"
+// in the language the app shows.
+//
+// Discussion dialogs: title placeholder.
+func DiscTitlePlaceholder() string { return In(i18n.Locale()).DiscTitlePlaceholder() }
+
+// DiscTitlePlaceholder says "Title, as “Redesign the login flow”"
+// in the language of msgs.
+//
+// Discussion dialogs: title placeholder.
+func (msgs Messages) DiscTitlePlaceholder() string {
+	return Catalog.Format(msgs.locale, "discTitlePlaceholder", nil)
+}
+
+// DiscTooManyAttachments says "At most {count} attachments per message"
+// in the language the app shows.
+//
+// Error when adding too many attachments.
+func DiscTooManyAttachments(count int) string { return In(i18n.Locale()).DiscTooManyAttachments(count) }
+
+// DiscTooManyAttachments says "At most {count} attachments per message"
+// in the language of msgs.
+//
+// Error when adding too many attachments.
+func (msgs Messages) DiscTooManyAttachments(count int) string {
+	return Catalog.Format(msgs.locale, "discTooManyAttachments", map[string]any{"count": count})
+}
+
+// DiscUnmarkKey says "Unmark Key"
+// in the language the app shows.
+//
+// Discussion: remove the key mark.
+func DiscUnmarkKey() string { return In(i18n.Locale()).DiscUnmarkKey() }
+
+// DiscUnmarkKey says "Unmark Key"
+// in the language of msgs.
+//
+// Discussion: remove the key mark.
+func (msgs Messages) DiscUnmarkKey() string {
+	return Catalog.Format(msgs.locale, "discUnmarkKey", nil)
+}
+
+// DiscUnreadTip says "{count, plural, one {# unread} other {# unread}}"
+// in the language the app shows.
+//
+// Tooltip of an unread count.
+func DiscUnreadTip(count int) string { return In(i18n.Locale()).DiscUnreadTip(count) }
+
+// DiscUnreadTip says "{count, plural, one {# unread} other {# unread}}"
+// in the language of msgs.
+//
+// Tooltip of an unread count.
+func (msgs Messages) DiscUnreadTip(count int) string {
+	return Catalog.Format(msgs.locale, "discUnreadTip", map[string]any{"count": count})
+}
+
+// DiscViewTask says "View Task"
+// in the language the app shows.
+//
+// Discussion request card: open the worker's task.
+func DiscViewTask() string { return In(i18n.Locale()).DiscViewTask() }
+
+// DiscViewTask says "View Task"
+// in the language of msgs.
+//
+// Discussion request card: open the worker's task.
+func (msgs Messages) DiscViewTask() string {
+	return Catalog.Format(msgs.locale, "discViewTask", nil)
+}
+
+// DiscWorkDir says "Works in"
+// in the language the app shows.
+//
+// Member dialog: label of the workspace choice.
+func DiscWorkDir() string { return In(i18n.Locale()).DiscWorkDir() }
+
+// DiscWorkDir says "Works in"
+// in the language of msgs.
+//
+// Member dialog: label of the workspace choice.
+func (msgs Messages) DiscWorkDir() string {
+	return Catalog.Format(msgs.locale, "discWorkDir", nil)
+}
+
+// DiscWorktreeNote says "A new git worktree in this project, kept for you to review and merge."
+// in the language the app shows.
+//
+// Member dialog note under the worktree name.
+func DiscWorktreeNote() string { return In(i18n.Locale()).DiscWorktreeNote() }
+
+// DiscWorktreeNote says "A new git worktree in this project, kept for you to review and merge."
+// in the language of msgs.
+//
+// Member dialog note under the worktree name.
+func (msgs Messages) DiscWorktreeNote() string {
+	return Catalog.Format(msgs.locale, "discWorktreeNote", nil)
+}
+
+// DiscYou says "You"
+// in the language the app shows.
+//
+// Discussion: the user's name on their messages.
+func DiscYou() string { return In(i18n.Locale()).DiscYou() }
+
+// DiscYou says "You"
+// in the language of msgs.
+//
+// Discussion: the user's name on their messages.
+func (msgs Messages) DiscYou() string {
+	return Catalog.Format(msgs.locale, "discYou", nil)
+}
+
+// DiscYouInitial says "Y"
+// in the language the app shows.
+//
+// Discussion: the letter in the user's avatar.
+func DiscYouInitial() string { return In(i18n.Locale()).DiscYouInitial() }
+
+// DiscYouInitial says "Y"
+// in the language of msgs.
+//
+// Discussion: the letter in the user's avatar.
+func (msgs Messages) DiscYouInitial() string {
+	return Catalog.Format(msgs.locale, "discYouInitial", nil)
+}

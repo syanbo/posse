@@ -37,6 +37,9 @@ func (a *app) build(c *ui.Context) {
 	if !board {
 		a.setWantedTask("")
 	}
+	if a.selected != discBoardID {
+		a.setWantedDisc("", 0)
+	}
 	a.setHistoryVisible(a.selected == historyBoardID)
 	a.setMobileVisible(a.selected == mobileBoardID)
 	a.setSkillsVisible(a.selected == skillsBoardID)
@@ -96,6 +99,8 @@ func (a *app) build(c *ui.Context) {
 					a.taskBoard(c)
 				case a.selected == historyBoardID:
 					a.historyBoard(c)
+				case a.selected == discBoardID:
+					a.discBoard(c)
 				case a.selected == mobileBoardID:
 					a.mobileBoard(c)
 				case a.selected == skillsBoardID:
@@ -127,6 +132,9 @@ func (a *app) build(c *ui.Context) {
 	}
 	a.newWorkspaceDialog(c)
 	a.dispatchDialog(c)
+	a.newDiscussionDialog(c)
+	a.editDiscussionDialog(c)
+	a.memberDialog(c)
 	a.quickDialog(c)
 	a.defDialog(c)
 	a.pushDialog(c)
@@ -302,7 +310,7 @@ func (a *app) shortcuts(c *ui.Context, w *workspace, cur *terminalInfo) {
 
 // isBoard 报告选中的是不是任务、历史、技能、手机、设置这几个不属于工作区的页面。
 func isBoard(id string) bool {
-	return id == taskBoardID || id == historyBoardID || id == skillsBoardID || id == mobileBoardID || id == settingsBoardID
+	return id == taskBoardID || id == historyBoardID || id == skillsBoardID || id == mobileBoardID || id == settingsBoardID || id == discBoardID
 }
 
 // closeBoard 关掉当前的任务、历史、手机或设置页，回到上次看的工作区，放掉页面读进来的内容；
@@ -313,6 +321,10 @@ func (a *app) closeBoard() {
 		a.releaseHistory()
 	case taskBoardID:
 		a.detail, a.taskSel, a.taskHome, a.taskScroll = nil, "", false, ""
+	case discBoardID:
+		// 放掉读进来的消息，再打开时重读；草稿跟着讨论走，关页面时不留
+		a.disc = discBoard{list: a.disc.list}
+		a.setWantedDisc("", 0)
 	case mobileBoardID:
 		a.mobile.devices = nil
 	case skillsBoardID:

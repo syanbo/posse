@@ -30,7 +30,8 @@ func (a *app) applyTasks(ts []taskInfo) {
 		key := fmt.Sprintf("%s:%d", t.Status, t.Questions)
 		prev, seen := a.lastTask[t.ID]
 		a.lastTask[t.ID] = key
-		if !seen || prev == key || t.Coordinator != "" {
+		// 讨论 worker 的问题和汇报由讨论发通知（跳到讨论），同一次汇报不发两次
+		if !seen || prev == key || t.Coordinator != "" || t.DiscussionID != "" {
 			continue
 		}
 		var title string
@@ -651,7 +652,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 			if composer(c, &a.replyText, placeholder, m.TasksReplyButton(), true) {
 				go a.reply(q.ID, strings.TrimSpace(a.replyText))
 			}
-		} else if task.Status == "running" && task.Terminal != nil {
+		} else if task.Status == "running" && task.Terminal != nil && task.DiscussionID == "" {
 			if composer(c, &a.noteText, m.TasksNotePlaceholder(), m.TasksSend(), false) {
 				go a.sendNote(task.ID, strings.TrimSpace(a.noteText))
 			}
@@ -674,7 +675,7 @@ func (a *app) taskDetailView(c *ui.Context, task taskInfo) {
 // followable 是用户派发、已汇报、worker 里的 agent 还在的任务：追加的活由常驻进程重新打开任务交给它。
 // agent 派发的任务不在这里追加，免得派发方收到一次不知来由的汇报；要追加就对派发方说，或者直接在 worker 终端里说。
 func followable(task taskInfo) bool {
-	return task.Coordinator == "" && (task.Status == "done" || task.Status == "failed") &&
+	return task.Coordinator == "" && task.DiscussionID == "" && (task.Status == "done" || task.Status == "failed") &&
 		task.Terminal != nil && task.Terminal.Running && task.Terminal.Agent != "" && (task.Agent == "" || task.Terminal.Agent == task.Agent)
 }
 
@@ -697,12 +698,16 @@ func (a *app) coordinatorLabel(m locales.Messages, task taskInfo) string {
 }
 
 func (a *app) taskActions(c *ui.Context, task taskInfo) {
-	if task.Terminal == nil && task.WorkspaceKind != "worktree" {
+	if task.Terminal == nil && task.WorkspaceKind != "worktree" && task.DiscussionID == "" {
 		return
 	}
 	m := L(c)
 	// 英文的按钮长，详情窄时换行
 	ui.Row(c).Gap(8).Wrap().Children(func() {
+		// 讨论成员的 worker：请求在讨论里发和排队，任务页不追加
+		if task.DiscussionID != "" && pressable(textButton(c, m.DiscOpen())).Clicked() {
+			a.openDiscussion(task.DiscussionID)
+		}
 		if task.Terminal != nil {
 			if pressable(textButton(c, m.TasksOpenWorker())).Clicked() {
 				a.openTerminal(task.WorkspaceID, task.Worker)

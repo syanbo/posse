@@ -97,6 +97,9 @@ type uiState struct {
 	Panes map[string]layoutState `json:"panes,omitempty"`
 	// Splits 是以前只能左右两栏时的分屏，读进来换成 Panes
 	Splits map[string]legacySplit `json:"splits,omitempty"`
+	// DiscRead 是各讨论看到的最新消息序号（未读按它算），键是讨论的 roomKey。
+	// 窗口自己的阅读位置，和 agent 的接收记录无关
+	DiscRead map[string]int64 `json:"discRead,omitempty"`
 }
 
 // filesState 是一个工作区的文件标签，路径都是绝对路径。

@@ -49,6 +49,7 @@ internal/app        MyGo 原生窗口：侧栏项目/工作区，标签页终端
 internal/procmem    读取进程 phys_footprint（proc_pid_rusage）
 internal/cheatsheet 各家 agent 内置命令、按键和输入前缀的速查表（手工整理的 cheatsheet.json），以及认出本机 agent 的版本
 internal/projicon   项目自定义图标：窗口里设，存在 $POSSE_HOME/project-icons，常驻进程给手机列工作区时读
+internal/collaboration 讨论的安装身份（$POSSE_HOME/collab.json，Ed25519，指纹给讨论命名 roomKey），和手机密钥无关；第二阶段的局域网协作也放这里。讨论的表和事务在 internal/store/discussion.go，调度和 RPC 在 internal/daemon/discussion.go，见 docs/features/discussions.md
 locales            界面文字的译文表（en.json、zh-Hans.json）和 mygo 生成的取文字函数（catalog_gen.go）
 internal/errtext    报错的界面文字：英文原文按界面语言翻译（译文表如 zh.go），桌面窗口和手机服务显示报错时用
 internal/spawn      拉起常驻进程和桌面采集子进程：新开会话，让它自己对系统授权负责；runtime.go 管常驻进程运行用的包副本（创建、登记、回收）

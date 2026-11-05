@@ -93,6 +93,7 @@ type workspace struct {
 
 type taskInfo struct {
 	ID, Title, Spec, Coordinator, WorkspaceID, Worker, Agent, Status, Summary, Report string
+	DiscussionID                                                                      string // 讨论成员的专用 worker：在讨论里追加，不在任务页
 	Workspace, WorkspaceKind, Branch, BaseRef                                         string
 	Repos                                                                             []wsRepo
 	CreatedAt                                                                         time.Time
@@ -149,6 +150,14 @@ type termView struct {
 type app struct {
 	c   *client.Client
 	win *mygo.Window
+
+	// 讨论页（discussions.go）：轮询在后台协程里读 discWant、discSeq
+	disc        discBoard
+	discMu      sync.Mutex
+	discWant    string // 要取详情的讨论
+	discWantRev int64  // 它已有的版本，0 要全量
+	discSeq     atomic.Int64
+	discLoaded  bool // 拿到过一次列表：之后的变化才发通知
 	// mainUpdate 把函数交给主线程跑，为 nil 时用 win.Update；测试里直接跑
 	mainUpdate func(func())
 
@@ -503,13 +512,15 @@ func Run(c *client.Client) error {
 		a.startUpdates()
 		a.win.Update(a.readPosseSkills)
 		mygo.App.OnNotificationClick(func(id string) {
-			// 通知 ID 形如 posse:<工作区>:<终端> 或 posse-task:<任务>
+			// 通知 ID 形如 posse:<工作区>:<终端>、posse-task:<任务> 或 posse-disc:<讨论>
 			parts := strings.Split(id, ":")
 			switch {
 			case len(parts) == 3 && parts[0] == "posse":
 				a.win.Update(func() { a.openTerminal(parts[1], parts[2]) })
 			case len(parts) == 2 && parts[0] == "posse-task":
 				a.win.Update(func() { a.openTask(parts[1]) })
+			case len(parts) == 2 && parts[0] == "posse-disc":
+				a.win.Update(func() { a.openDiscussion(parts[1]) })
 			default:
 				return
 			}
@@ -575,6 +586,7 @@ type pollResult struct {
 	awake      *awakeStatus
 	usage      *planStatus
 	daemonInfo daemonStatus // 版本、构建、pid、启动时间（设置页的"关于"用），连着的手机
+	disc       *discPoll
 }
 
 func (a *app) refresh() {
@@ -625,6 +637,7 @@ func (a *app) refresh() {
 	}
 	if err == nil {
 		a.pollGitTrace(ctx, st.GitTraceSeq)
+		a.pollDiscussions(&r, func(method string, params, out any) error { return a.c.Call(ctx, method, params, out) })
 	}
 	// 总览里选中的任务：拉完整内容，worktree 的改动统计每 5 秒更新一次
 	if id := a.wantedTask(); err == nil && id != "" {
@@ -701,6 +714,7 @@ func (a *app) refresh() {
 		// apply 会就地排序，r 还要留给下次比较
 		a.apply(slices.Clone(r.projects), slices.Clone(r.workspaces))
 		a.applyTasks(r.tasks)
+		a.applyDiscussions(r.disc)
 		if r.detail != nil && r.detail.ID == a.taskSel {
 			a.detail = r.detail
 		}
@@ -1167,6 +1181,7 @@ func (a *app) saveState() {
 	s.MobileAddresses = slices.Clone(s.MobileAddresses)
 	s.Files = cloneFilesState(s.Files)
 	s.Keys = maps.Clone(s.Keys)
+	s.DiscRead = maps.Clone(s.DiscRead)
 	s.Panes = clonePanes(s.Panes)
 	// 编号在这里取：协程开始的先后不等于发起的先后
 	seq := uiSaveSeq.Add(1)
